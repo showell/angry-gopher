@@ -17,7 +17,7 @@
 
 import type { Card } from "./rules/card.ts";
 import { cardLabel } from "./rules/card.ts";
-import type { Desc } from "./move.ts";
+import type { Desc } from "../bfs/move.ts";
 import type { BoardStack } from "./geometry.ts";
 import { findOpenLoc } from "./geometry.ts";
 import {

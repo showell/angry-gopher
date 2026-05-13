@@ -15,9 +15,7 @@
 import * as fs from "node:fs";
 
 import type { Card } from "../src/rules/card.ts";
-import { classifyStack } from "../src/classified_card_stack.ts";
-import { solveStateWithDescs } from "../src/engine_v2.ts";
-import type { RawBuckets } from "../src/buckets.ts";
+import { solveBoard } from "../bfs/index.ts";
 
 const BUDGETS = [200000, 50000, 20000, 10000, 5000, 2000, 1000];
 
@@ -39,24 +37,19 @@ function asCard(c: number[]): Card {
   return [c[0]!, c[1]!, c[2]!] as const;
 }
 
-function buildInitial(
+function augmentedBoard(
   board: readonly (readonly Card[])[],
   extraStacks: readonly (readonly Card[])[],
-): RawBuckets {
-  const augmented = [...board, ...extraStacks];
-  const helper: (readonly Card[])[] = [];
-  const trouble: (readonly Card[])[] = [];
-  for (const s of augmented) {
-    const ccs = classifyStack(s);
-    if (ccs === null || ccs.n < 3) trouble.push(s);
-    else helper.push(s);
-  }
-  return { helper, trouble, growing: [], complete: [] };
+): readonly (readonly Card[])[] {
+  return [...board, ...extraStacks];
 }
 
-function runProjection(initial: RawBuckets, maxStates: number): { found: boolean; wall: number } {
+function runProjection(
+  board: readonly (readonly Card[])[],
+  maxStates: number,
+): { found: boolean; wall: number } {
   const t0 = performance.now();
-  const result = solveStateWithDescs(initial, { maxTroubleOuter: 10, maxStates });
+  const result = solveBoard(board, { maxTroubleOuter: 10, maxStates });
   const wall = (performance.now() - t0) / 1000;
   return { found: result !== null, wall };
 }
@@ -80,7 +73,7 @@ function main(): void {
   }
 
   interface Case {
-    initial: RawBuckets;
+    board: readonly (readonly Card[])[];
     kind: string;
     capturedFound: boolean;
     capturedWall: number;
@@ -92,7 +85,7 @@ function main(): void {
     for (const proj of snap.projections) {
       const extra = [proj.cards.map(asCard)];
       cases.push({
-        initial: buildInitial(board, extra),
+        board: augmentedBoard(board, extra),
         kind: proj.kind,
         capturedFound: proj.found_plan,
         capturedWall: proj.wall,
@@ -111,7 +104,7 @@ function main(): void {
     let totalWall = 0.0;
     let lost = 0;
     for (const c of cases) {
-      const { found, wall } = runProjection(c.initial, budget);
+      const { found, wall } = runProjection(c.board, budget);
       totalWall += wall;
       if (found) foundNow++;
       else if (c.capturedFound) lost++;

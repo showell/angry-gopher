@@ -23,7 +23,7 @@ import * as path from "node:path";
 
 import { type Card, RANKS, SUITS } from "../src/rules/card.ts";
 import { timeSolver } from "./bench_timing.ts";
-import type { RawBuckets } from "../src/buckets.ts";
+import type { RawBuckets } from "../bfs/buckets.ts";
 
 const BOARD_LABELS: string[][] = [
   ["KS", "AS", "2S", "3S"],

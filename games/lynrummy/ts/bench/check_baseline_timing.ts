@@ -25,7 +25,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 
 import type { Card } from "../src/rules/card.ts";
-import type { RawBuckets } from "../src/buckets.ts";
+import type { RawBuckets } from "../bfs/buckets.ts";
 import { timeSolver } from "./bench_timing.ts";
 
 // TS runs the same corpus ~4× faster than Python — the previous

@@ -39,8 +39,8 @@
 //    on graduation events (len(complete) > parentCompleteCount) is
 //    load-bearing.
 
-import type { Card } from "./rules/card.ts";
-import { RED } from "./rules/card.ts";
+import type { Card } from "../src/rules/card.ts";
+import { RED } from "../src/rules/card.ts";
 import type { Buckets } from "./buckets.ts";
 import type { ClassifiedCardStack } from "./classified_card_stack.ts";
 

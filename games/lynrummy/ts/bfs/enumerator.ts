@@ -9,8 +9,8 @@
 // Iteration order is the cross-language canon — DON'T rearrange for
 // readability. See ENGINE_V2.md § "Iteration order is canon".
 
-import type { Card } from "./rules/card.ts";
-import { RED } from "./rules/card.ts";
+import type { Card } from "../src/rules/card.ts";
+import { RED } from "../src/rules/card.ts";
 import {
   type ClassifiedCardStack,
   type Kind,

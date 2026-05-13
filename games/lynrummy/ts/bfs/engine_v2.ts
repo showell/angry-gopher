@@ -461,7 +461,7 @@ function moveTouchesFocus(desc: Desc, focus: readonly Card[]): boolean {
   return false;
 }
 
-import type { Card } from "./rules/card.ts";
+import type { Card } from "../src/rules/card.ts";
 
 function cardEqual(a: Card, b: Card): boolean {
   return a[0] === b[0] && a[1] === b[1] && a[2] === b[2];

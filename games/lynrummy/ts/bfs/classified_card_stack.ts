@@ -8,8 +8,8 @@
 // input returns null from classify_stack; the caller boundary
 // (classify_buckets, eventually) raises on invalid stacks.
 
-import type { Card } from "./rules/card.ts";
-import { RED } from "./rules/card.ts";
+import type { Card } from "../src/rules/card.ts";
+import { RED } from "../src/rules/card.ts";
 
 export const KIND_RUN = "run";
 export const KIND_RB = "rb";

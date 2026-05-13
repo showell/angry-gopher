@@ -21,7 +21,7 @@ import type {
   Desc, Verb, AbsorberBucket,
   ExtractAbsorbDesc, FreePullDesc, PushDesc,
   ShiftDesc, SpliceDesc, DecomposeDesc,
-} from "../src/move.ts";
+} from "../bfs/move.ts";
 import { physicalPlan } from "../src/physical_plan.ts";
 
 const DSL_PATH = path.resolve(

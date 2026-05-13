@@ -38,7 +38,7 @@ import {
   type ExtenderMap,
   type Kind,
   type SpliceCandidate,
-} from "../src/classified_card_stack.ts";
+} from "../bfs/classified_card_stack.ts";
 
 const ARROW = "→";
 

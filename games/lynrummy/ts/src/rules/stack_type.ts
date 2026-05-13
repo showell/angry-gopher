@@ -8,7 +8,7 @@
 
 import type { Card } from "./card.ts";
 import { isRedSuit } from "./card.ts";
-import { classifyStack } from "../classified_card_stack.ts";
+import { classifyStack } from "../../bfs/classified_card_stack.ts";
 
 function successor(v: number): number {
   // Card value cycle wraps: K → A → 2 → ... → K. K-A-2 IS a legal

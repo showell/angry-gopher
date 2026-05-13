@@ -33,11 +33,11 @@ import type { Primitive } from "../src/primitives.ts";
 import { applyLocally } from "../src/primitives.ts";
 import { primToDslLine } from "../src/wire_json.ts";
 import { expandVerb } from "../src/verbs.ts";
-import { solveStateWithDescs } from "../src/engine_v2.ts";
+import { solveStateWithDescs } from "../bfs/engine_v2.ts";
 import {
   classifyStack,
   KIND_RUN, KIND_RB, KIND_SET,
-} from "../src/classified_card_stack.ts";
+} from "../bfs/classified_card_stack.ts";
 
 // --- Puzzle JSON shape -----------------------------------------------
 

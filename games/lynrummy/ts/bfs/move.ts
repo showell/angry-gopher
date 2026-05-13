@@ -9,8 +9,8 @@
 // python field layout exactly keeps the cross-language plan-line check
 // trivial (string equality, no normalization).
 
-import type { Card } from "./rules/card.ts";
-import { RANKS, SUITS, cardLabel } from "./rules/card.ts";
+import type { Card } from "../src/rules/card.ts";
+import { RANKS, SUITS, cardLabel } from "../src/rules/card.ts";
 
 /** Side discriminator for absorb/splice variants. Mirrors python's
  *  `Side`. Only data-layout-level — no function takes `side` as a

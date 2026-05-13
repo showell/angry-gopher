@@ -29,12 +29,12 @@
 //    represent contention or transient system state, not the solver
 //    itself.
 
-import { solveStateWithDescs, type PlanLine } from "../src/engine_v2.ts";
+import { solveStateWithDescs, type PlanLine } from "../bfs/engine_v2.ts";
 import {
   classifyBuckets,
   type Buckets,
   type RawBuckets,
-} from "../src/buckets.ts";
+} from "../bfs/buckets.ts";
 
 export interface TimingResult {
   readonly plan: readonly PlanLine[] | null;

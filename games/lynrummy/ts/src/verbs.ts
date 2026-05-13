@@ -33,7 +33,7 @@ import type {
   Desc, Side,
   ExtractAbsorbDesc, FreePullDesc, PushDesc,
   ShiftDesc, SpliceDesc, DecomposeDesc,
-} from "./move.ts";
+} from "../bfs/move.ts";
 import {
   type BoardStack, type Loc,
   CARD_PITCH, findOpenLoc, findCrowding,
@@ -44,7 +44,7 @@ import {
   applyLocally, findStackIndex,
   makeSplit, makeMergeStack, makeMergeHand, makeMoveStack,
 } from "./primitives.ts";
-import { classifyStack } from "./classified_card_stack.ts";
+import { classifyStack } from "../bfs/classified_card_stack.ts";
 
 function flipSide(s: Side): Side {
   return s === "left" ? "right" : "left";

@@ -31,11 +31,11 @@ import { parseCardLabel } from "../src/rules/card.ts";
 // canSteal length-2 extension also made some pinned no_plan
 // scenarios solvable; those are itemized in STALE_NO_PLAN.
 import { findPlanForBuckets } from "../src/hand_play.ts";
-import { enumerateMoves } from "../src/enumerator.ts";
-import { describe, narrate, hint, type Desc } from "../src/move.ts";
-import { classifyBuckets, type Buckets, type RawBuckets } from "../src/buckets.ts";
+import { enumerateMoves } from "../bfs/enumerator.ts";
+import { describe, narrate, hint, type Desc } from "../bfs/move.ts";
+import { classifyBuckets, type Buckets, type RawBuckets } from "../bfs/buckets.ts";
 import { findPlay, formatHint } from "../src/hand_play.ts";
-import { classifyStack } from "../src/classified_card_stack.ts";
+import { classifyStack } from "../bfs/classified_card_stack.ts";
 import { findOpenLoc, type BoardStack } from "../src/geometry.ts";
 import { parseConformanceDsl } from "./conformance_dsl.ts";
 

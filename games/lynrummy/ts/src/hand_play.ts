@@ -38,10 +38,11 @@ import {
   KIND_RUN,
   KIND_RB,
   KIND_SET,
-} from "./classified_card_stack.ts";
-import type { Buckets, RawBuckets } from "./buckets.ts";
-import { solveStateWithDescs, type PlanLine, type SolveResult } from "./engine_v2.ts";
-import type { Desc } from "./move.ts";
+} from "../bfs/classified_card_stack.ts";
+import type { Buckets, RawBuckets } from "../bfs/buckets.ts";
+import { solveStateWithDescs } from "../bfs/engine_v2.ts";
+import { solveBoard, type SolveResult } from "../bfs/index.ts";
+import type { Desc } from "../bfs/move.ts";
 
 // Default BFS state budget per projection. Mirrors python
 // `_PROJECTION_MAX_STATES`. Lowered from 200000 → 5000 in Python on
@@ -67,26 +68,22 @@ const HINT_MAX_PLAN_LENGTH = 5;
 const HINT_MAX_TROUBLE_OUTER = 10;
 
 
-/**
- * Single canonical entry point for "given a bucket-shaped board
- * state, find the shortest hint-grade plan." Both the live hint
- * path (`tryProjection`) and the conformance test harness call
- * THIS function — drift-by-construction is impossible because
- * there's only one configuration site for the search.
- *
- * `maxStates` defaults to `PROJECTION_MAX_STATES` but can be
- * overridden by callers that want a different inner budget
- * (e.g. heuristic-tuning experiments).
- */
+// Hint-quality solver options. The live hint path (tryProjection)
+// and the conformance test harness (findPlanForBuckets) both apply
+// these so the two paths can't drift on what "a hint" means.
+const HINT_OPTS = {
+  maxTroubleOuter: HINT_MAX_TROUBLE_OUTER,
+  maxPlanLength: HINT_MAX_PLAN_LENGTH,
+} as const;
+
+/** Bucket-level entry used by the conformance harness (scenarios pin
+ *  specific helper/trouble/growing/complete layouts). Production code
+ *  goes through `solveBoard` instead. */
 export function findPlanForBuckets(
   initial: RawBuckets | Buckets,
   maxStates: number = PROJECTION_MAX_STATES,
 ): SolveResult | null {
-  return solveStateWithDescs(initial, {
-    maxTroubleOuter: HINT_MAX_TROUBLE_OUTER,
-    maxStates,
-    maxPlanLength: HINT_MAX_PLAN_LENGTH,
-  });
+  return solveStateWithDescs(initial, { ...HINT_OPTS, maxStates });
 }
 
 export interface PlayResult {
@@ -312,27 +309,11 @@ function tryProjection(
   kind: "pair" | "singleton",
 ): ProjectionOutcome | null {
   const augmented: (readonly Card[])[] = [...board, ...extraStacks];
-  const helper: (readonly Card[])[] = [];
-  const trouble: (readonly Card[])[] = [];
-  for (const s of augmented) {
-    const ccs = classifyStack(s);
-    if (ccs === null || ccs.n < 3) {
-      trouble.push(s);
-    } else {
-      helper.push(s);
-    }
-  }
-  const initial: RawBuckets = {
-    helper,
-    trouble,
-    growing: [],
-    complete: [],
-  };
   const cards: Card[] = [];
   for (const s of extraStacks) for (const c of s) cards.push(c);
 
   const t0 = performance.now();
-  const result = findPlanForBuckets(initial, maxStates);
+  const result = solveBoard(augmented, { ...HINT_OPTS, maxStates });
   if (stats !== undefined) {
     stats.projections.push({
       kind,

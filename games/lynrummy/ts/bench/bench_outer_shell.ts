@@ -22,9 +22,7 @@
 
 import { type Card, parseCardLabel, cardLabel } from "../src/rules/card.ts";
 import { isPartialOk } from "../src/rules/stack_type.ts";
-import { classifyStack } from "../src/classified_card_stack.ts";
-import { solveStateWithDescs } from "../src/engine_v2.ts";
-import type { RawBuckets } from "../src/buckets.ts";
+import { solveBoard } from "../bfs/index.ts";
 import { findPlay, type PlayResult } from "../src/hand_play.ts";
 
 const N_HANDS = 60;
@@ -97,19 +95,8 @@ function projectSingleton(
   c: Card,
 ): { plan: readonly string[] | null; ms: number } {
   const augmented = [...board, [c]];
-  const helper: (readonly Card[])[] = [];
-  const trouble: (readonly Card[])[] = [];
-  for (const s of augmented) {
-    const ccs = classifyStack(s);
-    if (ccs === null || ccs.n < 3) trouble.push(s);
-    else helper.push(s);
-  }
-  const initial: RawBuckets = { helper, trouble, growing: [], complete: [] };
   const t0 = performance.now();
-  const result = solveStateWithDescs(initial, {
-    maxTroubleOuter: 10,
-    maxStates: MAX_STATES,
-  });
+  const result = solveBoard(augmented, { maxTroubleOuter: 10, maxStates: MAX_STATES });
   const ms = performance.now() - t0;
   if (result === null) return { plan: null, ms };
   return { plan: result.plan.map(p => p.line), ms };

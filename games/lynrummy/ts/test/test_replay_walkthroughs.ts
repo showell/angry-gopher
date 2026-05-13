@@ -26,7 +26,7 @@ import {
 } from "../src/primitives.ts";
 import type { BoardStack, Loc } from "../src/geometry.ts";
 import { findViolation } from "../src/geometry.ts";
-import { classifyStack } from "../src/classified_card_stack.ts";
+import { classifyStack } from "../bfs/classified_card_stack.ts";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);

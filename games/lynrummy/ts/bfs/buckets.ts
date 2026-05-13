@@ -6,7 +6,7 @@
 // converts a raw `Buckets` of card-list stacks into a CCS-shaped one.
 // Inside BFS the "no KIND_OTHER" invariant holds by construction.
 
-import type { Card } from "./rules/card.ts";
+import type { Card } from "../src/rules/card.ts";
 import {
   classifyStack,
   type ClassifiedCardStack,

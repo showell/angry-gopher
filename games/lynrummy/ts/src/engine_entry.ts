@@ -6,14 +6,8 @@
 // translation at the wire boundary.
 
 import type { Card } from "./rules/card.ts";
-import type { PlanLine, SolveResult } from "./engine_v2.ts";
-import { solveStateWithDescs } from "./engine_v2.ts";
-import {
-  classifyStack,
-  KIND_RUN,
-  KIND_RB,
-  KIND_SET,
-} from "./classified_card_stack.ts";
+import type { PlanLine } from "../bfs/engine_v2.ts";
+import { solveBoard as bfsSolveBoard } from "../bfs/index.ts";
 import type { BoardStack } from "./geometry.ts";
 import { applyLocally } from "./primitives.ts";
 import { expandVerb } from "./verbs.ts";
@@ -36,7 +30,7 @@ import { primToWire, type WireActionJson } from "./wire_json.ts";
 export function solveBoard(
   board: readonly (readonly Card[])[],
 ): readonly PlanLine[] | null {
-  const result = solveBucketsFromCardLists(board);
+  const result = bfsSolveBoard(board);
   return result === null ? null : result.plan;
 }
 
@@ -61,7 +55,7 @@ export function agentPlay(
   board: readonly BoardStack[],
 ): readonly { line: string; wire_actions: readonly WireActionJson[] }[] | null {
   const cardLists = board.map(s => s.cards);
-  const result = solveBucketsFromCardLists(cardLists);
+  const result = bfsSolveBoard(cardLists);
   if (result === null) return null;
 
   // Thread sim forward across moves. Each desc expands against the
@@ -79,28 +73,6 @@ export function agentPlay(
     out.push({ line: planLine.line, wire_actions: wireActions });
   }
   return out;
-}
-
-function solveBucketsFromCardLists(
-  board: readonly (readonly Card[])[],
-): SolveResult | null {
-  const helper: Card[][] = [];
-  const trouble: Card[][] = [];
-  for (const stack of board) {
-    const ccs = classifyStack(stack);
-    if (ccs !== null
-      && (ccs.kind === KIND_RUN || ccs.kind === KIND_RB || ccs.kind === KIND_SET)) {
-      helper.push(stack as Card[]);
-    } else {
-      trouble.push(stack as Card[]);
-    }
-  }
-  return solveStateWithDescs({
-    helper,
-    trouble,
-    growing: [],
-    complete: [],
-  });
 }
 
 /**
@@ -122,9 +94,3 @@ export function gameHintLines(
   return formatHint(findPlay(hand, board));
 }
 
-// Re-exports — used by tests and by the full-game loop.
-export { solveStateWithDescs } from "./engine_v2.ts";
-export { findPlay } from "./hand_play.ts";
-export { jsonStack } from "./wire_json.ts";
-export type { PlanLine } from "./engine_v2.ts";
-export type { Card } from "./rules/card.ts";
