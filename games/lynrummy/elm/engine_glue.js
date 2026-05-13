@@ -109,7 +109,7 @@
 
   function solveBoard(board) {
     var stacks = board.map(function (stack) {
-      return stack.map(cardObjectToTuple);
+      return stack.map(cardObjectToRecord);
     });
     var plan = LynRummyEngine.solveBoard(stacks);
     if (plan === null) return null;
@@ -124,20 +124,20 @@
   function gameHint(hand, board) {
     // hand: [{value, suit, origin_deck}, ...] — full game's active hand
     // board: [[{value, suit, origin_deck}, ...], ...]
-    var handTuples = hand.map(cardObjectToTuple);
+    var handCards = hand.map(cardObjectToRecord);
     var stacks = board.map(function (stack) {
-      return stack.map(cardObjectToTuple);
+      return stack.map(cardObjectToRecord);
     });
-    return LynRummyEngine.gameHintLines(handTuples, stacks);
+    return LynRummyEngine.gameHintLines(handCards, stacks);
   }
 
   function agentPlay(board) {
     // board: [{ cards: [{value, suit, origin_deck}, ...], loc: {top, left} }, ...]
-    // The TS bundle's agentPlay expects BoardStack[] = [{cards: Card[], loc}].
-    // Translate cards from object-form to tuple-form here.
+    // The TS bundle's agentPlay expects BoardStack[] = [{cards: Card[], loc}],
+    // where Card is { rank, suit, deck }. Translate field names here.
     var stacks = board.map(function (stack) {
       return {
-        cards: stack.cards.map(cardObjectToTuple),
+        cards: stack.cards.map(cardObjectToRecord),
         loc: stack.loc,
       };
     });
@@ -146,8 +146,11 @@
     // are already in Elm's Lib.WireAction JSON shape — pass through.
   }
 
-  function cardObjectToTuple(c) {
-    return [c.value, c.suit, c.origin_deck];
+  function cardObjectToRecord(c) {
+    // Elm wire shape: { value, suit, origin_deck }.
+    // TS Card shape:  { rank,  suit, deck         }.
+    // Names diverge for historical reasons; the glue translates.
+    return { rank: c.value, suit: c.suit, deck: c.origin_deck };
   }
 
   window.EngineGlue = { attach: attach };
