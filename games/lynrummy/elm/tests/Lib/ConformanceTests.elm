@@ -24,7 +24,6 @@ import Lib.Physics.BoardGeometry as BoardGeometry
         , GeometryErrorKind(..)
         )
 import Lib.Physics.GestureArbitration as GA
-import Lib.Physics.PlaceStack as PlaceStack
 import Lib.Physics.WingOracle as WingOracle
 import Lib.Point exposing (Point)
 import Lib.Rules.Card as Card exposing (Card, OriginDeck(..))
@@ -63,9 +62,6 @@ verify sc =
     case sc.op of
         "stack_height_constant" ->
             BoardGeometry.stackHeight |> Expect.equal 40
-
-        "find_open_loc" ->
-            verifyFindOpenLoc sc
 
         "classify_board_geometry" ->
             verifyClassifyBoardGeometry sc
@@ -140,39 +136,6 @@ stackFromDsl s =
     { boardCards = List.map (\c -> { card = c, state = FirmlyOnBoard }) s.cards
     , loc = s.loc
     }
-
-
-
--- find_open_loc
-
-
-verifyFindOpenLoc : Dsl.Scenario -> Expect.Expectation
-verifyFindOpenLoc sc =
-    case ( sc.cardCount, expectLoc sc ) of
-        ( Just count, Just expected ) ->
-            PlaceStack.findOpenLoc (stacksFromDsl sc.existing) count
-                |> Expect.equal expected
-
-        ( Nothing, _ ) ->
-            Expect.fail "find_open_loc scenario missing card_count"
-
-        ( _, Nothing ) ->
-            Expect.fail "find_open_loc scenario missing expect.loc"
-
-
-expectLoc : Dsl.Scenario -> Maybe { top : Int, left : Int }
-expectLoc sc =
-    case sc.expect of
-        Dsl.ExpectBlock dict ->
-            case Dict.get "loc" dict of
-                Just (Dsl.ExpectLoc loc) ->
-                    Just loc
-
-                _ ->
-                    Nothing
-
-        _ ->
-            Nothing
 
 
 
