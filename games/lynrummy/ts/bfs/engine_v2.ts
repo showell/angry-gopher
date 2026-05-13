@@ -117,9 +117,6 @@ export function solveTurn(
   initial: Buckets,
   opts: SolveOptions & {
     budget?: number;
-    heuristic?: Heuristic;
-    dedup?: boolean;
-    sigKind?: "fast" | "string";
     /** Hard cap on plan length. Branches with `plan.length >=
      *  maxPlanLength` are never pushed. Set this for hint paths
      *  where multi-step plans aren't worth the search cost — humans
@@ -131,13 +128,10 @@ export function solveTurn(
 ): SolveResult | null {
   const budget = opts.budget ?? 50000;
   const maxPlanLength = opts.maxPlanLength;
-  const h = opts.heuristic ?? HEURISTICS.half_debt!;
-  const dedup = opts.dedup !== false;  // dedup defaults to ON
-  const useFastSig = opts.sigKind !== "string";
-  const cardOrderInfo = useFastSig ? buildCardOrder(initial) : null;
-  const sigFn = useFastSig
-    ? (b: Buckets, lin?: Lineage): string => fastStateSig(b, lin, cardOrderInfo!.posOf, cardOrderInfo!.cardOrder.length)
-    : (b: Buckets, lin?: Lineage): string => stateSig(b, lin);
+  const h = HEURISTICS.half_debt!;
+  const cardOrderInfo = buildCardOrder(initial);
+  const sigFn = (b: Buckets, lin?: Lineage): string =>
+    fastStateSig(b, lin, cardOrderInfo.posOf, cardOrderInfo.cardOrder.length);
   const initialQueue: ClassifiedCardStack[] = [...initial.trouble, ...initial.growing];
 
   type Entry = {
@@ -158,11 +152,9 @@ export function solveTurn(
   while (pq.size() > 0 && visits < budget) {
     const cur = pq.pop()!;
     if (best !== null && cur.plan.length >= best.plan.length) continue;
-    if (dedup) {
-      const sig = sigFn(cur.buckets, queueToLineage(cur.queue));
-      if (closed.has(sig)) continue;
-      closed.add(sig);
-    }
+    const sig = sigFn(cur.buckets, queueToLineage(cur.queue));
+    if (closed.has(sig)) continue;
+    closed.add(sig);
     void initialQueue;
     visits++;
     if (cur.queue.length === 0) {
