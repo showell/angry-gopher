@@ -15,17 +15,17 @@
 // execution pass. The verb-level helpers in `verbs.ts` are where the
 // physical-execution decisions live; this module is just the loop.
 
-import type { Card } from "./rules/card.ts";
-import { cardLabel } from "./rules/card.ts";
+import type { Card } from "../src/rules/card.ts";
+import { cardLabel } from "../src/rules/card.ts";
 import type { Desc } from "../bfs/move.ts";
-import type { BoardStack } from "./geometry.ts";
-import { findOpenLoc } from "./geometry.ts";
+import type { BoardStack } from "../src/geometry.ts";
+import { findOpenLoc } from "../src/geometry.ts";
 import {
   type Primitive,
   applyLocally,
   makePlaceHand, makeMergeHand,
-} from "./primitives.ts";
-import { expandVerb } from "./verbs.ts";
+} from "../src/primitives.ts";
+import { expandVerb } from "../src/verbs.ts";
 
 function cardKey(c: Card): string {
   return `${c[0]},${c[1]},${c[2]}`;

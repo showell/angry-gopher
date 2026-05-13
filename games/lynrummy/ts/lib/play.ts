@@ -1,6 +1,6 @@
 import type { Card } from "../src/rules/card.ts";
 import { findPlay } from "../src/hand_play.ts";
-import { physicalPlan } from "../src/physical_plan.ts";
+import { physicalPlan } from "./physical_plan.ts";
 import { applyLocally } from "../src/primitives.ts";
 import type { BoardStack } from "../src/geometry.ts";
 import type { PlayStep } from "./step_types.ts";
