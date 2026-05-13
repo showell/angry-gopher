@@ -44,46 +44,13 @@ import { solveBucketedState } from "../bfs/engine_v2.ts";
 import { solveBoard, type SolveResult } from "../bfs/index.ts";
 import type { Move } from "../bfs/move.ts";
 
-// Default BFS state budget per projection. Mirrors python
-// `_PROJECTION_MAX_STATES`. Lowered from 200000 → 5000 in Python on
-// 2026-04-25 after the doomed-third + state-level doomed-growing
-// filters landed; ported to TS as the card_neighbors liveness prune
-// (2026-05-03), so 5000 is now a comfortable ceiling.
-const PROJECTION_MAX_STATES = 5000;
-
-// Plan-length cap.
-//
-// 2026-05-05: bumped 4 → 5 after the seed-42 turn-10/11 stuck-state
-// experiments. At depth 4 the engine gave up on tantalizing boards
-// where a 5-verb plan exists (concrete cases: agent-only self-play
-// turns 10 and 11 of seed 42); at depth 10 it solved both in 1–2s.
-// Depth 5 is the smallest bump that recovers expert-tenacity plays
-// while keeping the BFS branching tractable. Within reach of an
-// engaged human who's willing to think; well past the give-up
-// point of a casual player.
-const HINT_MAX_PLAN_LENGTH = 5;
-
-// Outer-trouble pre-flight reject. Boards with more than this
-// many trouble cards are presumed unsolvable.
-const HINT_MAX_TROUBLE_OUTER = 10;
-
-
-// Hint-quality solver options. The live hint path (tryProjection)
-// and the conformance test harness (findPlanForBuckets) both apply
-// these so the two paths can't drift on what "a hint" means.
-const HINT_OPTS = {
-  maxTroubleOuter: HINT_MAX_TROUBLE_OUTER,
-  maxPlanLength: HINT_MAX_PLAN_LENGTH,
-} as const;
-
 /** Bucket-level entry used by the conformance harness (scenarios pin
  *  specific helper/trouble/growing/complete layouts). Production code
  *  goes through `solveBoard` instead. */
 export function findPlanForBuckets(
   initial: RawBuckets | Buckets,
-  maxStates: number = PROJECTION_MAX_STATES,
 ): SolveResult | null {
-  return solveBucketedState(initial, { ...HINT_OPTS, maxStates });
+  return solveBucketedState(initial);
 }
 
 export interface PlayResult {
@@ -119,7 +86,6 @@ export interface PlayStats {
 }
 
 export interface PlayOptions {
-  readonly maxStates?: number;
   readonly stats?: PlayStats;
 }
 
@@ -135,7 +101,6 @@ export function findPlay(
   board: readonly (readonly Card[])[],
   opts: PlayOptions = {},
 ): PlayResult | null {
-  const maxStates = opts.maxStates ?? PROJECTION_MAX_STATES;
   const stats = opts.stats;
   const tStart = performance.now();
 
@@ -179,7 +144,7 @@ export function findPlay(
       const c1 = hand[i]!;
       const c2 = hand[j]!;
       if (!isPartialOk([c1, c2])) continue;
-      const proj = tryProjection(board, [[c1, c2]], maxStates, stats, "pair");
+      const proj = tryProjection(board, [[c1, c2]], stats, "pair");
       if (proj !== null) {
         candidates.push({ placements: [c1, c2], ...proj });
       }
@@ -188,7 +153,7 @@ export function findPlay(
 
   // (c) Singleton projections.
   for (const c of hand) {
-    const proj = tryProjection(board, [[c]], maxStates, stats, "singleton");
+    const proj = tryProjection(board, [[c]], stats, "singleton");
     if (proj !== null) {
       candidates.push({ placements: [c], ...proj });
     }
@@ -305,7 +270,6 @@ interface ProjectionOutcome {
 function tryProjection(
   board: readonly (readonly Card[])[],
   extraStacks: readonly (readonly Card[])[],
-  maxStates: number,
   stats: PlayStats | undefined,
   kind: "pair" | "singleton",
 ): ProjectionOutcome | null {
@@ -314,7 +278,7 @@ function tryProjection(
   for (const s of extraStacks) for (const c of s) cards.push(c);
 
   const t0 = performance.now();
-  const result = solveBoard(augmented, { ...HINT_OPTS, maxStates });
+  const result = solveBoard(augmented);
   if (stats !== undefined) {
     stats.projections.push({
       kind,

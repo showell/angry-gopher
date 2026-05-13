@@ -28,7 +28,6 @@ import { findPlay, type PlayResult } from "../src/hand_play.ts";
 const N_HANDS = 60;
 const HAND_SIZE = 6;
 const SEED = 42;
-const MAX_STATES = 5000;
 
 // ── Fixed board (Game 17 opening) ────────────────────────────────────
 
@@ -96,7 +95,7 @@ function projectSingleton(
 ): { result: PlayResult | null; ms: number } {
   const augmented = [...board, [c]];
   const t0 = performance.now();
-  const result = solveBoard(augmented, { maxTroubleOuter: 10, maxStates: MAX_STATES });
+  const result = solveBoard(augmented);
   const ms = performance.now() - t0;
   if (result === null) return { result: null, ms };
   const moves = result.plan.map(p => p.move);
@@ -147,7 +146,7 @@ function findPlayFull(
   board: readonly (readonly Card[])[],
 ): FullResult {
   const t0 = performance.now();
-  const result = findPlay(hand, board, { maxStates: MAX_STATES });
+  const result = findPlay(hand, board);
   const totalMs = performance.now() - t0;
   // Rough projection count for display: valid pairs + singletons.
   let nPairs = 0;
@@ -208,7 +207,7 @@ function main(): void {
   const board = makeBoard();
 
   console.log(
-    `Game 17 board  ·  ${N_HANDS} hands of ${HAND_SIZE} (benchmark size)  ·  seed=${SEED}  ·  max_states=${MAX_STATES}`,
+    `Game 17 board  ·  ${N_HANDS} hands of ${HAND_SIZE} (benchmark size)  ·  seed=${SEED}`,
   );
   console.log();
 

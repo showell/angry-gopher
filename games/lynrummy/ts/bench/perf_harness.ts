@@ -70,7 +70,7 @@ interface Summary {
   nProjections: number;
 }
 
-function timeOne(rec: CapturedSnapshot, repeats: number, maxStates: number): { walls: number[]; lastStats: PlayStats } {
+function timeOne(rec: CapturedSnapshot, repeats: number): { walls: number[]; lastStats: PlayStats } {
   const hand = rec.hand.map(asCard);
   const board = rec.board.map(s => s.map(asCard));
   let lastStats: PlayStats = { totalWallMs: 0, projections: [] };
@@ -78,7 +78,7 @@ function timeOne(rec: CapturedSnapshot, repeats: number, maxStates: number): { w
   for (let i = 0; i < repeats; i++) {
     lastStats = { totalWallMs: 0, projections: [] };
     const t0 = performance.now();
-    findPlay(hand, board, { maxStates, stats: lastStats });
+    findPlay(hand, board, { stats: lastStats });
     walls.push((performance.now() - t0) / 1000); // seconds, to match Python
   }
   return { walls, lastStats };
@@ -123,7 +123,6 @@ interface Args {
   snapshots: string;
   top: number;
   repeats: number;
-  maxStates: number;
   maxCapturedWall: number;
 }
 
@@ -131,20 +130,18 @@ function parseArgs(argv: string[]): Args {
   let snapshots = "";
   let top = 10;
   let repeats = 5;
-  let maxStates = 10000;
   let maxCapturedWall = 30.0;
   for (const a of argv) {
     if (a.startsWith("--top=")) top = parseInt(a.slice("--top=".length), 10);
     else if (a.startsWith("--repeats=")) repeats = parseInt(a.slice("--repeats=".length), 10);
-    else if (a.startsWith("--max-states=")) maxStates = parseInt(a.slice("--max-states=".length), 10);
     else if (a.startsWith("--max-captured-wall=")) maxCapturedWall = parseFloat(a.slice("--max-captured-wall=".length));
     else if (!a.startsWith("--")) snapshots = a;
   }
   if (!snapshots) {
-    process.stderr.write("usage: node bench/perf_harness.ts <snapshots.jsonl> [--top=N --repeats=N --max-states=N]\n");
+    process.stderr.write("usage: node bench/perf_harness.ts <snapshots.jsonl> [--top=N --repeats=N]\n");
     process.exit(2);
   }
-  return { snapshots, top, repeats, maxStates, maxCapturedWall };
+  return { snapshots, top, repeats, maxCapturedWall };
 }
 
 function main(): void {
@@ -159,13 +156,13 @@ function main(): void {
   const top = snaps.slice(0, args.top);
 
   console.log(
-    `Loaded ${snaps.length} snapshots (post-filter); profiling top ${top.length} with ${args.repeats} repeats each, max_states=${args.maxStates}.\n`,
+    `Loaded ${snaps.length} snapshots (post-filter); profiling top ${top.length} with ${args.repeats} repeats each.\n`,
   );
   console.log("Per-case re-times:");
 
   const summaries: Summary[] = [];
   for (let i = 0; i < top.length; i++) {
-    const { walls, lastStats } = timeOne(top[i]!, args.repeats, args.maxStates);
+    const { walls, lastStats } = timeOne(top[i]!, args.repeats);
     const s = summarize(top[i]!, walls, lastStats);
     summaries.push(s);
     printSummary(i + 1, s);

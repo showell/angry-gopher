@@ -109,21 +109,28 @@ export const HEURISTICS: Record<string, Heuristic> = {
   },
 };
 
-export function solveTurn(
-  initial: Buckets,
-  opts: {
-    budget?: number;
-    /** Hard cap on plan length. Branches with `plan.length >=
-     *  maxPlanLength` are never pushed. Set this for hint paths
-     *  where multi-step plans aren't worth the search cost — humans
-     *  who can execute a 5+ step hint usually prefer hunting the
-     *  moves themselves. Leave undefined for "complete" solve work
-     *  (e.g. proving no_plan in conformance tests). */
-    maxPlanLength?: number;
-  } = {},
-): SolveResult | null {
-  const budget = opts.budget ?? 50000;
-  const maxPlanLength = opts.maxPlanLength;
+// Engine parameters — hard-coded as a deliberate design decision after
+// 2026-05-13. Previously these were threaded through opts bags that
+// every layer had to thread; this manufactured the appearance that
+// tests and prod could disagree on the engine config when in fact
+// they shouldn't. The values below are the agent-play parameters
+// empirically validated via generate_game.ts (seed=50, 2.15s wall,
+// max visits in any single search = 936, max plan length found = 4).
+//
+//   MAX_STATES        — A* visit budget per search.
+//   MAX_TROUBLE_OUTER — pre-flight reject above this trouble+growing card count.
+//   MAX_PLAN_LENGTH   — hard cap on plan depth (branches with length >
+//                       cap are never pushed).
+//
+// To change these, edit the constants — don't reintroduce an opts
+// surface. The agent path's empirical headroom (936 / 5000 = 19%) and
+// 4-step plans (well under the 5-cap) say we're not budget-limited at
+// these values.
+const MAX_STATES = 5000;
+const MAX_TROUBLE_OUTER = 10;
+const MAX_PLAN_LENGTH = 5;
+
+export function solveTurn(initial: Buckets): SolveResult | null {
   const h = HEURISTICS.half_debt!;
   const cardOrderInfo = buildCardOrder(initial);
   const sigFn = (b: Buckets, lin?: Lineage): string =>
@@ -145,7 +152,7 @@ export function solveTurn(
 
   let best: SolveResult | null = null;
   let visits = 0;
-  while (pq.size() > 0 && visits < budget) {
+  while (pq.size() > 0 && visits < MAX_STATES) {
     const cur = pq.pop()!;
     if (best !== null && cur.plan.length >= best.plan.length) continue;
     const sig = sigFn(cur.buckets, queueToLineage(cur.queue));
@@ -167,7 +174,7 @@ export function solveTurn(
     for (const cand of candidates) {
       const newPlan = [...cur.plan, { line: describe(cand.move), move: cand.move }];
       if (best !== null && newPlan.length >= best.plan.length) continue;
-      if (maxPlanLength !== undefined && newPlan.length > maxPlanLength) continue;
+      if (newPlan.length > MAX_PLAN_LENGTH) continue;
       // Dynamic doomed-singleton prune: a child state where a group
       // just graduated may have left a trouble singleton stranded
       // (its last partner sealed into COMPLETE). Gate on
@@ -190,14 +197,8 @@ export function solveTurn(
 //
 // `solveBucketedState` auto-classifies raw input, short-circuits
 // trouble-cap + victory + doomed-singleton states, then dispatches to
-// `solveTurn` (A*). `maxStates` maps to `solveTurn`'s visit `budget`;
-// `maxTroubleOuter` is a pre-flight reject for unsolvably-deep inputs.
-
-export interface SolveOptions {
-  readonly maxStates?: number;
-  readonly maxTroubleOuter?: number;
-  readonly maxPlanLength?: number;
-}
+// `solveTurn` (A*). Trouble-cap uses MAX_TROUBLE_OUTER (see the
+// constants near solveTurn).
 
 function isAlreadyClassified(initial: Buckets | RawBuckets): initial is Buckets {
   for (const bucketName of ["helper", "trouble", "growing", "complete"] as const) {
@@ -210,18 +211,12 @@ function isAlreadyClassified(initial: Buckets | RawBuckets): initial is Buckets 
   return true;
 }
 
-export function solveBucketedState(
-  initial: Buckets | RawBuckets,
-  opts: SolveOptions = {},
-): SolveResult | null {
-  const maxStates = opts.maxStates ?? 50000;
-  const maxTroubleOuter = opts.maxTroubleOuter ?? 8;
-
+export function solveBucketedState(initial: Buckets | RawBuckets): SolveResult | null {
   const classified: Buckets = isAlreadyClassified(initial)
     ? initial
     : classifyBuckets(initial as RawBuckets);
 
-  if (troubleCount(classified.trouble, classified.growing) > maxTroubleOuter) {
+  if (troubleCount(classified.trouble, classified.growing) > MAX_TROUBLE_OUTER) {
     return null;
   }
   if (isVictory(classified.trouble, classified.growing)) {
@@ -236,10 +231,7 @@ export function solveBucketedState(
     return null;
   }
 
-  return solveTurn(classified, {
-    budget: maxStates,
-    maxPlanLength: opts.maxPlanLength,
-  });
+  return solveTurn(classified);
 }
 
 class MinHeap<T> {

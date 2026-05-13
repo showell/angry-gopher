@@ -60,7 +60,6 @@ function nowMs(): number {
 export function timeSolver(
   state: Buckets | RawBuckets,
   nRuns: number = 20,
-  maxStates: number = 200000,
 ): TimingResult {
   // Pre-classify so every timed run starts from the same shape.
   const buckets: Buckets = isClassified(state)
@@ -68,19 +67,13 @@ export function timeSolver(
     : classifyBuckets(state as RawBuckets);
 
   // Warmup.
-  let result = solveBucketedState(buckets, {
-    maxTroubleOuter: 10,
-    maxStates,
-  });
+  let result = solveBucketedState(buckets);
 
   let bestMs = Infinity;
   for (let i = 0; i < nRuns; i++) {
     maybeGc();
     const t0 = nowMs();
-    result = solveBucketedState(buckets, {
-      maxTroubleOuter: 10,
-      maxStates,
-    });
+    result = solveBucketedState(buckets);
     const elapsed = nowMs() - t0;
     if (elapsed < bestMs) bestMs = elapsed;
   }
