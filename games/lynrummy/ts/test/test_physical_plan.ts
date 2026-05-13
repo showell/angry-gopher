@@ -177,7 +177,7 @@ function buildMove(vb: VerbBlock): Move {
       extCard: parseOne(f.ext_card!),
       targetBefore: parseList(f.target_before!),
       targetBucketBefore: (f.target_bucket ?? "trouble") as AbsorberBucket,
-      result: [], side, graduated: false, spawned: [],
+      result: [], side, graduated: false, spawned: [], spawnedGrowing: [],
     };
     return d;
   }

@@ -63,7 +63,7 @@ interface ScenarioRaw {
   readonly name: string;
   readonly fields: Record<string, string>;
   readonly board: { top: number; left: number; cards: readonly Card[] }[];
-  readonly primitives: readonly string[];
+  primitives: readonly string[];
 }
 
 function stripInlineComment(line: string): string {
@@ -183,6 +183,7 @@ function buildMove(sc: ScenarioRaw): Move {
       side,
       graduated: false,
       spawned: [],
+      spawnedGrowing: [],
     };
     return move;
   }

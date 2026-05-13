@@ -89,7 +89,7 @@ export function timeSolver(
 
 function isClassified(state: Buckets | RawBuckets): state is Buckets {
   for (const name of ["helper", "trouble", "growing", "complete"] as const) {
-    const bucket = (state as { [k: string]: unknown })[name];
+    const bucket = (state as unknown as { [k: string]: unknown })[name];
     if (Array.isArray(bucket) && bucket.length > 0) {
       const first = bucket[0];
       return typeof first === "object" && first !== null && "kind" in first;

@@ -216,7 +216,7 @@ interface ShimSolveOptions {
 
 function isAlreadyClassified(initial: Buckets | RawBuckets): initial is Buckets {
   for (const bucketName of ["helper", "trouble", "growing", "complete"] as const) {
-    const bucket = (initial as { [k: string]: unknown })[bucketName];
+    const bucket = (initial as unknown as { [k: string]: unknown })[bucketName];
     if (Array.isArray(bucket) && bucket.length > 0) {
       const first = bucket[0];
       return typeof first === "object" && first !== null && "kind" in first;

@@ -67,12 +67,12 @@ function allRemaining(): Card[] {
 }
 
 function dslLabel(c: Card): string {
-  const base = RANKS[c.rank - 1] + SUITS[c.suit];
+  const base = RANKS[c.rank - 1]! + SUITS[c.suit]!;
   return c.deck === Deck.Two ? `${base}'` : base;
 }
 
 function scenarioId(c: Card): string {
-  const base = RANKS[c.rank - 1] + SUITS[c.suit];
+  const base = RANKS[c.rank - 1]! + SUITS[c.suit]!;
   return c.deck === Deck.Two ? `baseline_board_${base}p` : `baseline_board_${base}`;
 }
 

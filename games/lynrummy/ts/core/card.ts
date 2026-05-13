@@ -55,7 +55,12 @@ export const RANKS = "A23456789TJQK";
 export const SUITS = "CDSH";
 export const SUITS_UNICODE = "♣♦♠♥";
 
-export function isRedSuit(s: Suit): boolean {
+/** Predicate on a suit value. Accepts `number` because callers
+ *  frequently iterate `for (let s = 0; s < 4; s++)` and pass the raw
+ *  loop index. The body works for any 0..3 and returns false
+ *  otherwise — the brand is more useful at construction sites
+ *  (`parseCardLabel`) than as a predicate input. */
+export function isRedSuit(s: number): boolean {
   return s === Suit.Diamond || s === Suit.Heart;
 }
 

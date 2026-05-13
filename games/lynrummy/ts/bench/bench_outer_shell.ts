@@ -93,13 +93,19 @@ function sample<T>(rng: () => number, pool: readonly T[], k: number): T[] {
 function projectSingleton(
   board: readonly (readonly Card[])[],
   c: Card,
-): { plan: readonly string[] | null; ms: number } {
+): { result: PlayResult | null; ms: number } {
   const augmented = [...board, [c]];
   const t0 = performance.now();
   const result = solveBoard(augmented, { maxTroubleOuter: 10, maxStates: MAX_STATES });
   const ms = performance.now() - t0;
-  if (result === null) return { plan: null, ms };
-  return { plan: result.plan.map(p => p.line), ms };
+  if (result === null) return { result: null, ms };
+  const moves = result.plan.map(p => p.move);
+  const planLines = result.plan.map(p => p.line);
+  const newBoard: readonly (readonly Card[])[] = [
+    ...result.finalBuckets.helper.map(s => [...s.cards] as readonly Card[]),
+    ...result.finalBuckets.complete.map(s => [...s.cards] as readonly Card[]),
+  ];
+  return { result: { placements: [c], plan: moves, planLines, newBoard }, ms };
 }
 
 interface SingletonResult {
@@ -116,10 +122,10 @@ function findPlaySingletonsOnly(
   let totalMs = 0;
   let projections = 0;
   for (const c of hand) {
-    const { plan, ms } = projectSingleton(board, c);
+    const { result, ms } = projectSingleton(board, c);
     totalMs += ms;
     projections++;
-    if (plan !== null) candidates.push({ placements: [c], plan });
+    if (result !== null) candidates.push(result);
   }
   if (candidates.length === 0) return { result: null, totalMs, projections };
   const result = candidates.reduce((best, cur) =>

@@ -486,7 +486,10 @@ function extractAbsorbPrims(
     out.push(...r.prims);
     sim = r.sim;
     extSingleton = [extCard];
-  } else if (verb === "steal" && (kind === "pair_run" || kind === "pair_rb" || kind === "pair_set" || kind === "other")) {
+  } else if (verb === "steal" && kind === "other") {
+    // classifyLeaf collapses length-<3 stacks (including pair_run /
+    // pair_rb / pair_set) into "other". Length-2 steals from a partial
+    // land here.
     if (source.length !== 2) {
       throw new Error(`steal-from-partial expects length-2 source; got length ${source.length}`);
     }

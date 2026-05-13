@@ -5,6 +5,7 @@
   "private": true,
   "description": "TypeScript port of the Lyn Rummy BFS solver. Sibling to the python/ and elm/ subtrees; consumes the same DSL conformance fixtures.",
   "scripts": {
+    "typecheck": "tsc --noEmit -p .",
     "test:leaf": "node test/test_conformance_leaf.ts",
     "test:engine": "node test/test_engine_conformance.ts",
     "test:verbs": "node test/test_verb_to_primitives.ts",
@@ -19,5 +20,9 @@
     "bench:perf-harness": "node bench/perf_harness.ts",
     "bench:budget-sweep": "node bench/budget_sweep.ts",
     "generate-game": "node generate_game.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^25.7.0",
+    "typescript": "^6.0.3"
   }
 }

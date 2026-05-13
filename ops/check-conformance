@@ -57,6 +57,9 @@ phase() {
 echo "==> embed DSLs for Elm"
 phase "embed-dsls" ./ops/embed_dsls_for_elm.ts
 
+echo "==> TS typecheck"
+phase "ts-typecheck" bash -c "cd games/lynrummy/ts && npm run -s typecheck"
+
 if [ "$SKIP_SLOW" = "1" ]; then
     echo "==> TS conformance (--skip-slow: omitting engine + agent self-play)"
     phase "ts-tests" bash -c "cd games/lynrummy/ts && npm run -s test:skip-slow"
