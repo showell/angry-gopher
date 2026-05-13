@@ -27,11 +27,14 @@ import * as path from "node:path";
 import { type Card, type Rank, type Suit, type Deck } from "../core/card.ts";
 import type { RawBuckets } from "../bfs/buckets.ts";
 import { timeSolver } from "./bench_timing.ts";
+import { parseConformanceDsl } from "../test/conformance_dsl.ts";
 
-// TS runs the same corpus ~4× faster than Python — the previous
-// 200ms cutoff would leave zero hot scenarios. 50ms keeps 2Cp/2Sp
-// in the comparison set; the cheap ones still get measured for
-// thermal-trajectory parity but not compared.
+// 50ms is human-scale: any scenario the solver takes longer than
+// this on is worth gating against regression. Today no baseline
+// scenario is above this (slowest is ~25ms), so the gate is a
+// trip-wire for future drift rather than a continuous measurement.
+// Cheap scenarios still get measured (n=1) so the per-position
+// thermal trajectory matches the gold-capture conditions.
 const MIN_BASELINE_MS = 50.0;
 
 interface FixtureCard {
@@ -66,9 +69,12 @@ function bucketToStacks(bucket: FixtureStack[] | undefined): readonly (readonly 
 }
 
 function loadFixtures(p: string): Map<string, Fixture> {
-  const raw: Fixture[] = JSON.parse(fs.readFileSync(p, "utf8"));
+  const text = fs.readFileSync(p, "utf8");
+  const parsed = parseConformanceDsl(text);
   const out = new Map<string, Fixture>();
-  for (const sc of raw) out.set(sc.name, sc);
+  // ParsedScenario's stack shape is structurally identical to Fixture's:
+  // both expose `helper/trouble/growing/complete: { board_cards: { card: { value, suit, origin_deck }, state } }[]`.
+  for (const sc of parsed) out.set(sc.name, sc as unknown as Fixture);
   return out;
 }
 
@@ -105,7 +111,7 @@ function parseArgs(argv: string[]): { tolerance: number; runs: number; fixtures:
   let tolerance = 0.10;
   let runs = 20;
   const here = path.dirname(new URL(import.meta.url).pathname);
-  let fixtures = path.resolve(here, "../../conformance/fixtures.json");
+  let fixtures = path.resolve(here, "../../conformance/scenarios/baseline_board_81.dsl");
   let baseline = path.resolve(here, "baseline_board_81_gold.txt");
   for (const a of argv) {
     if (a.startsWith("--tolerance=")) tolerance = parseFloat(a.slice("--tolerance=".length));
