@@ -4,7 +4,7 @@
 //   Primitive — one wire-level UI action (place_hand, merge_stack,
 //               …). Same shape as Elm's GameEvent.
 //   play      — placement of ≥1 hand card + the BFS Moves that
-//               clean the augmented board. What findPlay returns.
+//               clean the augmented board. What findLogicalMovesForPlay returns.
 //   turn      — a sequence of plays followed by complete_turn
 //               (the draw). One individual player's turn.
 

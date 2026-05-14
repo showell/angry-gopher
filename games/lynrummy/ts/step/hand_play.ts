@@ -25,7 +25,7 @@ interface MeldablePair {
   readonly card2: Card;
 }
 
-export function findPlay(
+export function findLogicalMovesForPlay(
   hand: readonly Card[],
   board: readonly (readonly Card[])[],
 ): LogicalMovesForPlay | null {

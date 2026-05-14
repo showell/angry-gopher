@@ -33,7 +33,7 @@ import { enumerateMoves } from "../bfs/enumerator.ts";
 import { narrate, hint, type Move } from "../bfs/move.ts";
 import type { Buckets } from "../bfs/buckets.ts";
 import { classifyStack, type ClassifiedCardStack } from "../core/card_stack.ts";
-import { findPlay, formatHint } from "../step/hand_play.ts";
+import { findLogicalMovesForPlay, formatHint } from "../step/hand_play.ts";
 import { findOpenLoc, type BoardStack } from "../core/geometry.ts";
 import { parseConformanceDsl } from "./conformance_dsl.ts";
 
@@ -275,7 +275,7 @@ function runHintForHand(sc: Scenario): RunResult {
   const wantSteps = sc.hint_steps ?? [];
   const hand: Card[] = handTokens.map(parseCardLabel);
   const board: Card[][] = boardTokens.map(stack => stack.map(parseCardLabel));
-  const result = findPlay(hand, board);
+  const result = findLogicalMovesForPlay(hand, board);
   const got = formatHint(result);
   // Strict snapshot match. Per
   // memory/feedback_strict_tests_no_ceiling.md: no "<= pinned"

@@ -11,7 +11,7 @@
 //
 //   full            triple-in-hand first (no BFS), then every valid pair
 //                   as a 2-partial trouble, then every singleton; pick
-//                   shortest plan overall. This is hand_play.findPlay.
+//                   shortest plan overall. This is hand_play.findLogicalMovesForPlay.
 //
 // Usage:
 //   node bench/bench_outer_shell.ts
@@ -19,7 +19,7 @@
 import { type Card, cardLabel } from "../core/card.ts";
 import { isPartialOk } from "../core/card_stack.ts";
 import { solveBoard } from "../bfs/engine_v2.ts";
-import { findPlay, type LogicalMovesForPlay } from "../step/hand_play.ts";
+import { findLogicalMovesForPlay, type LogicalMovesForPlay } from "../step/hand_play.ts";
 import {
   openingBoardCardLists,
   remainingCards,
@@ -105,7 +105,7 @@ function findPlayFull(
   hand: readonly Card[],
   board: readonly (readonly Card[])[],
 ): FullResult {
-  const result = findPlay(hand, board);
+  const result = findLogicalMovesForPlay(hand, board);
   // Rough projection count for display: valid pairs + singletons.
   let nPairs = 0;
   for (let i = 0; i < hand.length; i++) {

@@ -1,5 +1,5 @@
 import type { Card } from "../core/card.ts";
-import { findPlay } from "./hand_play.ts";
+import { findLogicalMovesForPlay } from "./hand_play.ts";
 import { getPrimitivesForLogicalPlay } from "./physical_plan.ts";
 import { applyLocally } from "../game_events/primitives.ts";
 import type { BoardStack } from "../core/geometry.ts";
@@ -13,7 +13,7 @@ export function tryPlay(
   if (hand.length === 0) return null;
 
   const cardLists = board.map(s => s.cards);
-  const logicalPlay = findPlay(hand, cardLists);
+  const logicalPlay = findLogicalMovesForPlay(hand, cardLists);
   if (logicalPlay === null) return null;
 
   const prims = getPrimitivesForLogicalPlay(board, logicalPlay);

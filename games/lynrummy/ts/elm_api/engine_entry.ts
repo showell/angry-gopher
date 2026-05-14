@@ -10,7 +10,7 @@ import { solveBoard as bfsSolveBoard, type PlanLine } from "../bfs/engine_v2.ts"
 import type { BoardStack } from "../core/geometry.ts";
 import { applyLocally } from "../game_events/primitives.ts";
 import { expandVerb } from "../step/verbs.ts";
-import { findPlay, formatHint } from "../step/hand_play.ts";
+import { findLogicalMovesForPlay, formatHint } from "../step/hand_play.ts";
 import { primToWire, type WireActionJson } from "./wire_json.ts";
 
 /**
@@ -80,7 +80,7 @@ function agentPlay(
  * strings: `["place [<cards>] from hand", "<plan-line>", ...]`,
  * or `[]` if no playable hand card was found.
  *
- * Wraps `findPlay` (hand-aware outer loop — triple-in-hand →
+ * Wraps `findLogicalMovesForPlay` (hand-aware outer loop — triple-in-hand →
  * pair projections → singleton projections → shortest plan) and
  * `formatHint` (renderer). The Elm UI displays `lines` verbatim
  * in the status bar; refining hint phrasing belongs in
@@ -90,7 +90,7 @@ export function gameHintLines(
   hand: readonly Card[],
   board: readonly (readonly Card[])[],
 ): readonly string[] {
-  return formatHint(findPlay(hand, board));
+  return formatHint(findLogicalMovesForPlay(hand, board));
 }
 
 // --- Elm-facing wrappers ---------------------------------------------------
