@@ -45,9 +45,6 @@ export const BOARD_MAX_WIDTH = 800;
 export const BOARD_MAX_HEIGHT = 600;
 export const BOARD_MARGIN = 7;
 
-export const BOARD_VIEWPORT_LEFT = 300;
-export const BOARD_VIEWPORT_TOP = 38;
-
 export const PLACE_STEP = 10;
 
 export const PACK_GAP_X = 30;
@@ -215,34 +212,6 @@ function gridSweepOpenLoc(
 export function outOfBounds(stack: BoardStack): boolean {
   const r = stackRect(stack);
   return r.left < 0 || r.top < 0 || r.right > BOARD_MAX_WIDTH || r.bottom > BOARD_MAX_HEIGHT;
-}
-
-/** True iff a stack of `cardCount` cards anchored at `loc` fits in
- *  bounds and doesn't overlap (padded by BOARD_MARGIN) any stack in
- *  `board` except those whose indices are in `excludeIndices`.
- *  Mirrors the referee's two checks. */
-export function locClearsOthers(
-  loc: Loc,
-  cardCount: number,
-  board: readonly BoardStack[],
-  excludeIndices: ReadonlySet<number> = new Set(),
-): boolean {
-  const rect: Rect = {
-    left: loc.left,
-    top: loc.top,
-    right: loc.left + stackWidth(cardCount),
-    bottom: loc.top + CARD_HEIGHT,
-  };
-  if (rect.left < 0 || rect.top < 0
-      || rect.right > BOARD_MAX_WIDTH || rect.bottom > BOARD_MAX_HEIGHT) {
-    return false;
-  }
-  const padded = padRect(rect, BOARD_MARGIN);
-  for (let i = 0; i < board.length; i++) {
-    if (excludeIndices.has(i)) continue;
-    if (rectsOverlap(padded, stackRect(board[i]!))) return false;
-  }
-  return true;
 }
 
 /** Pre-flight comfort threshold. Looser than `BOARD_MARGIN` (the

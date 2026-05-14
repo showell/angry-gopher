@@ -272,13 +272,6 @@ export function applyLocally(
   }
 }
 
-// --- Content-by-tuple lookup (verbs.ts uses this to resolve
-//     stack indices after each primitive applies) -------------------
-
-export function cardsOf(stack: BoardStack): readonly Card[] {
-  return stack.cards;
-}
-
 function cardEq(a: Card, b: Card): boolean {
   return a.rank === b.rank && a.suit === b.suit && a.deck === b.deck;
 }

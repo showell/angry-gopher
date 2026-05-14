@@ -39,18 +39,6 @@ export interface RawBuckets {
  *  cards). Content-based identity for memoization. */
 export type Lineage = readonly (readonly Card[])[];
 
-/** BFS state with attached focus queue. Mirrors python's FocusedState.
- *  `uncommittedPairs` is the set of pair-keys (sorted, joined card
- *  encodings) for pairs that were SPAWNED from helper extracts —
- *  i.e., pairs that aren't real commitments and may legally be
- *  decomposed. Pairs formed by absorb-onto-partial are commitments
- *  and not in this set. */
-export interface FocusedState {
-  readonly buckets: Buckets;
-  readonly lineage: Lineage;
-  readonly uncommittedPairs?: ReadonlySet<string>;
-}
-
 /** Build a canonical pair-key from two cards (order-insensitive). */
 export function pairKey(a: Card, b: Card): string {
   const ka = ((a.rank * 4) + a.suit) * 2 + a.deck;

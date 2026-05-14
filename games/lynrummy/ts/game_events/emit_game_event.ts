@@ -75,7 +75,6 @@ export function moveStackDsl(
 }
 
 export const completeTurnDsl = "complete_turn";
-export const undoDsl = "undo";
 
 
 // --- Shared internals ------------------------------------------------
