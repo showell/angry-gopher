@@ -1,186 +1,91 @@
 // hand_play.ts — hand-aware "what should I play?" outer loop.
 //
-// The BFS engine itself is hand-blind — it sees only the 4-bucket
-// board state. This module is the hand-aware wrapper: given a hand +
-// a board, find a plausible play (which hand cards to place onto the
-// board, plus the BFS plan that cleans up the board afterward).
+// The BFS engine is hand-blind: it sees only the board. This module
+// wraps it. Given a hand + a board, find a play (cards to lay onto
+// the board + a BFS plan that cleans the augmented board to victory).
 //
-// Search order (encodes game preference; no scoring layer):
+// Search order:
+//   1. Triple-in-hand shortcut (clean board only): if a hand pair has
+//      a completing third in the hand, lay the triple down. No plan
+//      needed.
+//   2. Pair projections: for each meldable hand pair, place it as a
+//      2-partial and ask BFS for a plan that clears the result.
+//   3. Singleton projections: same per hand card.
+//   4. Among BFS candidates from (2)+(3), pick the shortest plan.
 //
-//   (a) For each meldable hand pair, try to find a completing third
-//       in the hand → 3 cards leave the hand in one move, no BFS
-//       needed. First success returns.
-//   (b) For each meldable hand pair without a third, project as a
-//       2-partial trouble + run BFS. Collect candidates.
-//   (c) For each remaining hand card, project as a singleton trouble
-//       + run BFS. Collect candidates.
-//   (d) Return the candidate with the shortest plan, or null.
-//
-// **Dirty-board constraint** (`tryProjection`): when projecting a
-// candidate (singleton or pair) onto the board, BFS must clear ALL
-// trouble — not just the newly placed cards. The augmented board is
-// `board + extraStacks`; classify every stack; HELPER stacks pass
-// through; everything else (pre-existing partials AND the newly
-// placed cards) goes into TROUBLE; BFS gets `(helper, trouble, [],
-// [])` and must produce a plan that resolves the entire trouble
-// bucket. If it can't, the placement is rejected. The agent is not
-// allowed to leave the board dirtier than it found it.
-//
-// The dirty-board constraint above is the canonical write-up; no
-// external reference is needed.
+// Dirty-board contract: BFS-derived plans clear ALL trouble on the
+// augmented board (existing partials + new placements), not just the
+// new placement. solveBoard's victory check enforces this.
 
 import type { Card } from "../core/card.ts";
 import { cardLabel } from "../core/card.ts";
-import {
-  isPartialOk,
-  classifyStack,
-  KIND_RUN,
-  KIND_RB,
-  KIND_SET,
-} from "../core/card_stack.ts";
+import { isPartialOk, isCompleteGroup } from "../core/card_stack.ts";
 import type { Buckets } from "../bfs/buckets.ts";
 import { solveBoard } from "../bfs/engine_v2.ts";
 import type { Move } from "../bfs/move.ts";
 
 export interface PlayResult {
   readonly placements: readonly Card[];
-  /** The plan as a list of structured Moves — what physicalPlan
-   *  consumes to emit primitives. */
+  /** The plan as structured Moves — what physicalPlan consumes. */
   readonly plan: readonly Move[];
-  /** Same plan rendered as one-line DSL strings, for hint display
-   *  and conformance pinning. */
+  /** Same plan as one-line DSL strings, for hint display + conformance. */
   readonly planLines: readonly string[];
-  /** The board after the placements + plan are applied. Derived
-   *  from the solver's final buckets so consumers don't re-solve. */
+  /** Board after placements + plan are applied. Derived from the
+   *  solver's final buckets so consumers don't re-solve. */
   readonly newBoard: readonly (readonly Card[])[];
 }
 
-function bucketsToBoard(b: Buckets): readonly (readonly Card[])[] {
-  return [
-    ...b.helper.map(s => [...s.cards] as readonly Card[]),
-    ...b.complete.map(s => [...s.cards] as readonly Card[]),
-  ];
-}
-
-/**
- * Find a plausible play given a hand and a board. Returns
- * `{ placements, plan }` or `null`.
- *
- * `hand` is a list of card tuples. `board` is a list of stacks, each
- * a list of card tuples. Mirrors python `agent_prelude.find_play`.
- */
 export function findPlay(
   hand: readonly Card[],
   board: readonly (readonly Card[])[],
 ): PlayResult | null {
-  // (a) Triple in hand — short-circuit ONLY when the existing
-  //     board is already fully clean (every stack a length-3+
-  //     legal group). On a dirty board, recommending "place this
-  //     triple from hand" leaves the pre-existing trouble
-  //     unaddressed, violating the dirty-board contract. Falling
-  //     through routes the triple through tier (b)/(c) projection
-  //     where BFS verifies the augmented board reaches victory.
-  if (boardIsAllHelper(board)) {
-    for (let i = 0; i < hand.length; i++) {
-      for (let j = i + 1; j < hand.length; j++) {
-        const c1 = hand[i]!;
-        const c2 = hand[j]!;
-        if (!isPartialOk([c1, c2])) continue;
-        const ordered = findCompletingThird([c1, c2], hand, i, j);
-        if (ordered !== null) {
-          // Board was already clean; the new triple is itself a
-          // legal length-3+ group (findCompletingThird checked).
-          // No plan needed: post-play board = existing helpers + new stack.
-          return {
-            placements: ordered,
-            plan: [],
-            planLines: [],
-            newBoard: [...board, ordered],
-          };
-        }
-      }
+  if (boardIsClean(board)) {
+    const triple = findTripleInHand(hand);
+    if (triple !== null) {
+      return {
+        placements: triple,
+        plan: [],
+        planLines: [],
+        newBoard: [...board, triple],
+      };
     }
   }
 
-  // Collect all solvable pair + singleton candidates, then return
-  // the one with the shortest plan (easiest for human).
   const candidates: PlayResult[] = [];
+  for (const pair of meldablePairs(hand)) {
+    const r = projectAndSolve(board, pair);
+    if (r !== null) candidates.push(r);
+  }
+  for (const card of hand) {
+    const r = projectAndSolve(board, [card]);
+    if (r !== null) candidates.push(r);
+  }
+  return candidates.length === 0 ? null : shortestPlan(candidates);
+}
 
-  // (b) Pair projections.
+export function formatHint(result: PlayResult | null): readonly string[] {
+  if (result === null) return [];
+  const labels = result.placements.map(cardLabel).join(" ");
+  return [`place [${labels}] from hand`, ...result.planLines];
+}
+
+// --- Triple-in-hand shortcut --------------------------------------------
+
+function findTripleInHand(hand: readonly Card[]): readonly Card[] | null {
   for (let i = 0; i < hand.length; i++) {
     for (let j = i + 1; j < hand.length; j++) {
-      const c1 = hand[i]!;
-      const c2 = hand[j]!;
-      if (!isPartialOk([c1, c2])) continue;
-      const proj = tryProjection(board, [[c1, c2]]);
-      if (proj !== null) {
-        candidates.push({ placements: [c1, c2], ...proj });
-      }
+      const pair: readonly [Card, Card] = [hand[i]!, hand[j]!];
+      if (!isPartialOk(pair)) continue;
+      const triple = findCompletingThird(pair, hand, i, j);
+      if (triple !== null) return triple;
     }
   }
-
-  // (c) Singleton projections.
-  for (const c of hand) {
-    const proj = tryProjection(board, [[c]]);
-    if (proj !== null) {
-      candidates.push({ placements: [c], ...proj });
-    }
-  }
-
-  if (candidates.length === 0) return null;
-  const chosen = candidates.reduce((best, cur) =>
-    cur.plan.length < best.plan.length ? cur : best,
-  );
-  return validatesCleanFinish(board, chosen) ? chosen : null;
+  return null;
 }
 
-/** Defensive backstop: a hint only counts if it leaves the board
- *  fully clean. BFS-derived plans (tier b/c) are already verified
- *  via `is_victory` at engine termination, but tier (a) and any
- *  future short-circuit path could in principle slip through.
- *  Catches them all in one place: an empty-plan candidate is only
- *  valid when the existing board is already clean AND the
- *  placements form a length-3+ legal group on their own. */
-function validatesCleanFinish(
-  board: readonly (readonly Card[])[],
-  result: PlayResult,
-): boolean {
-  if (result.plan.length > 0) return true;
-  if (!boardIsAllHelper(board)) return false;
-  const ccs = classifyStack(result.placements);
-  if (ccs === null) return false;
-  if (ccs.n < 3) return false;
-  return ccs.kind === KIND_RUN || ccs.kind === KIND_RB || ccs.kind === KIND_SET;
-}
-
-/** True iff every stack on the board is a length-3+ legal group
- *  (run / rb / set). Pre-existing partials, singletons, or
- *  unclassifiable stacks all count as "dirty." */
-function boardIsAllHelper(
-  board: readonly (readonly Card[])[],
-): boolean {
-  for (const stack of board) {
-    const ccs = classifyStack(stack);
-    if (ccs === null) return false;
-    if (ccs.n < 3) return false;
-    if (ccs.kind !== KIND_RUN && ccs.kind !== KIND_RB && ccs.kind !== KIND_SET) {
-      return false;
-    }
-  }
-  return true;
-}
-
-/**
- * Try every position-permutation of (pair + a third hand card)
- * that classifies as a length-3 legal group. Returns the ordered
- * triple, or null. The order matters — runs are consecutive-by-
- * value, so the harness needs to lay the cards down in the legal
- * order. Mirrors python `_find_completing_third`.
- *
- * `pairI`, `pairJ` are the indices of the pair in the hand (so the
- * search skips them rather than relying on object-identity reference
- * equality, which doesn't apply to value-typed Card tuples).
- */
+/** Try every position-permutation of (pair + a hand card) that lands
+ *  a length-3 legal group. Order matters: runs are consecutive-by-
+ *  value, so the harness lays the cards in the legal order. */
 function findCompletingThird(
   pair: readonly [Card, Card],
   hand: readonly Card[],
@@ -190,68 +95,66 @@ function findCompletingThird(
   for (let k = 0; k < hand.length; k++) {
     if (k === pairI || k === pairJ) continue;
     const c = hand[k]!;
-    // Skip if c is value-equal to either pair card (matches python's
-    // post-identity equality skip — pair cards may be re-encountered
-    // as separate value-equal entries in a duplicate-deck hand).
+    // Skip value-equal duplicates of either pair card — same card from
+    // a different deck slot adds no fresh option.
     if (cardEq(c, pair[0]) || cardEq(c, pair[1])) continue;
-    const triples: readonly Card[][] = [
+    const tries: readonly (readonly Card[])[] = [
       [pair[0], pair[1], c],
       [pair[0], c, pair[1]],
       [c, pair[0], pair[1]],
     ];
-    for (const ordered of triples) {
-      const ccs = classifyStack(ordered);
-      if (ccs !== null && ccs.n >= 3) return ordered;
+    for (const ordered of tries) {
+      if (isCompleteGroup(ordered)) return ordered;
     }
   }
   return null;
 }
 
-function cardEq(a: Card, b: Card): boolean {
-  return a.rank === b.rank && a.suit === b.suit && a.deck === b.deck;
+// --- Pair + singleton projections ---------------------------------------
+
+function* meldablePairs(hand: readonly Card[]): Generator<readonly [Card, Card]> {
+  for (let i = 0; i < hand.length; i++) {
+    for (let j = i + 1; j < hand.length; j++) {
+      const pair: readonly [Card, Card] = [hand[i]!, hand[j]!];
+      if (isPartialOk(pair)) yield pair;
+    }
+  }
 }
 
-/**
- * Project `extraStacks` onto `board`, partition into helper / trouble
- * by classification, run BFS with desc tracking. Returns the plan as
- * a string list, or null if no plan within the projection budget.
- * Mirrors python `_try_projection`.
- *
- * The dirty-board constraint applies: BFS must clean every non-
- * helper stack on the augmented board, not just the projected
- * extras. This is enforced by partition + BFS termination on
- * is_victory (empty trouble + every growing.n >= 3).
- */
-interface ProjectionOutcome {
-  readonly plan: readonly Move[];
-  readonly planLines: readonly string[];
-  readonly newBoard: readonly (readonly Card[])[];
-}
-
-function tryProjection(
+function projectAndSolve(
   board: readonly (readonly Card[])[],
-  extraStacks: readonly (readonly Card[])[],
-): ProjectionOutcome | null {
-  const augmented: (readonly Card[])[] = [...board, ...extraStacks];
+  placements: readonly Card[],
+): PlayResult | null {
+  const augmented: (readonly Card[])[] = [...board, placements];
   const result = solveBoard(augmented);
   if (result === null) return null;
   return {
+    placements,
     plan: result.plan.map(p => p.move),
     planLines: result.plan.map(p => p.line),
     newBoard: bucketsToBoard(result.finalBuckets),
   };
 }
 
-/**
- * Render a PlayResult as a [string] step list for display and DSL
- * conformance. Step 0 is always "place [<cards>] from hand"; the
- * remaining steps are the BFS plan-line strings.
- *
- * Returns [] when result is null (stuck — no playable card found).
- * Mirrors python `agent_prelude.format_hint`.
- */
-export function formatHint(result: PlayResult | null): readonly string[] {
-  if (result === null) return [];
-  const labels = result.placements.map(cardLabel).join(" ");
-  return [`place [${labels}] from hand`, ...result.planLines];
+// --- Shared helpers -----------------------------------------------------
+
+function shortestPlan(candidates: readonly PlayResult[]): PlayResult {
+  return candidates.reduce((best, cur) =>
+    cur.plan.length < best.plan.length ? cur : best,
+  );
+}
+
+function boardIsClean(board: readonly (readonly Card[])[]): boolean {
+  return board.every(isCompleteGroup);
+}
+
+function bucketsToBoard(b: Buckets): readonly (readonly Card[])[] {
+  return [
+    ...b.helper.map(s => [...s.cards] as readonly Card[]),
+    ...b.complete.map(s => [...s.cards] as readonly Card[]),
+  ];
+}
+
+function cardEq(a: Card, b: Card): boolean {
+  return a.rank === b.rank && a.suit === b.suit && a.deck === b.deck;
 }
