@@ -45,13 +45,10 @@ import {
   makeSplit, makeMergeStack, makeMergeHand, makeMoveStack,
 } from "../game_events/primitives.ts";
 import { classifyStack } from "../core/card_stack.ts";
+import { cardKey } from "./board.ts";
 
 function flipSide(s: Side): Side {
   return s === "left" ? "right" : "left";
-}
-
-function cardKey(c: Card): string {
-  return `${c.rank},${c.suit},${c.deck}`;
 }
 
 /** Expand one Move into its primitive sequence on the live board.

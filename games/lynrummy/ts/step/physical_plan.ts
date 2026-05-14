@@ -27,10 +27,7 @@ import {
   makePlaceHand, makeMergeHand,
 } from "../game_events/primitives.ts";
 import { expandVerb } from "./verbs.ts";
-
-function cardKey(c: Card): string {
-  return `${c.rank},${c.suit},${c.deck}`;
-}
+import { cardKey } from "./board.ts";
 
 export function physicalPlan(
   initialBoard: readonly BoardStack[],
