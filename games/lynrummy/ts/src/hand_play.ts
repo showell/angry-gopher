@@ -73,22 +73,6 @@ function bucketsToBoard(b: Buckets): readonly (readonly Card[])[] {
   ];
 }
 
-export interface ProjectionRecord {
-  readonly kind: "pair" | "singleton";
-  readonly cards: readonly Card[];
-  readonly wallMs: number;
-  readonly foundPlan: boolean;
-}
-
-export interface PlayStats {
-  totalWallMs: number;
-  projections: ProjectionRecord[];
-}
-
-export interface PlayOptions {
-  readonly stats?: PlayStats;
-}
-
 /**
  * Find a plausible play given a hand and a board. Returns
  * `{ placements, plan }` or `null`.
@@ -99,11 +83,7 @@ export interface PlayOptions {
 export function findPlay(
   hand: readonly Card[],
   board: readonly (readonly Card[])[],
-  opts: PlayOptions = {},
 ): PlayResult | null {
-  const stats = opts.stats;
-  const tStart = performance.now();
-
   // (a) Triple in hand — short-circuit ONLY when the existing
   //     board is already fully clean (every stack a length-3+
   //     legal group). On a dirty board, recommending "place this
@@ -119,7 +99,6 @@ export function findPlay(
         if (!isPartialOk([c1, c2])) continue;
         const ordered = findCompletingThird([c1, c2], hand, i, j);
         if (ordered !== null) {
-          finishStats(stats, tStart);
           // Board was already clean; the new triple is itself a
           // legal length-3+ group (findCompletingThird checked).
           // No plan needed: post-play board = existing helpers + new stack.
@@ -144,7 +123,7 @@ export function findPlay(
       const c1 = hand[i]!;
       const c2 = hand[j]!;
       if (!isPartialOk([c1, c2])) continue;
-      const proj = tryProjection(board, [[c1, c2]], stats, "pair");
+      const proj = tryProjection(board, [[c1, c2]]);
       if (proj !== null) {
         candidates.push({ placements: [c1, c2], ...proj });
       }
@@ -153,13 +132,12 @@ export function findPlay(
 
   // (c) Singleton projections.
   for (const c of hand) {
-    const proj = tryProjection(board, [[c]], stats, "singleton");
+    const proj = tryProjection(board, [[c]]);
     if (proj !== null) {
       candidates.push({ placements: [c], ...proj });
     }
   }
 
-  finishStats(stats, tStart);
   if (candidates.length === 0) return null;
   const chosen = candidates.reduce((best, cur) =>
     cur.plan.length < best.plan.length ? cur : best,
@@ -201,12 +179,6 @@ function boardIsAllHelper(
     }
   }
   return true;
-}
-
-function finishStats(stats: PlayStats | undefined, tStart: number): void {
-  if (stats !== undefined) {
-    stats.totalWallMs = performance.now() - tStart;
-  }
 }
 
 /**
@@ -270,23 +242,9 @@ interface ProjectionOutcome {
 function tryProjection(
   board: readonly (readonly Card[])[],
   extraStacks: readonly (readonly Card[])[],
-  stats: PlayStats | undefined,
-  kind: "pair" | "singleton",
 ): ProjectionOutcome | null {
   const augmented: (readonly Card[])[] = [...board, ...extraStacks];
-  const cards: Card[] = [];
-  for (const s of extraStacks) for (const c of s) cards.push(c);
-
-  const t0 = performance.now();
   const result = solveBoard(augmented);
-  if (stats !== undefined) {
-    stats.projections.push({
-      kind,
-      cards,
-      wallMs: performance.now() - t0,
-      foundPlan: result !== null,
-    });
-  }
   if (result === null) return null;
   return {
     plan: result.plan.map(p => p.move),
