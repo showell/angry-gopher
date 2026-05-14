@@ -4,7 +4,14 @@
 // directory moves: for Go, rewrites import paths + package
 // declarations across all .go files; for Elm, rewrites `module`
 // declarations and any qualified `X.Y` references across all .elm
-// files.
+// files; for TypeScript, rewrites relative-path imports
+// (`./foo.ts`, `../bar.ts`) so every importer's path stays
+// correct after the move.
+//
+// In addition, every run scans .md files for references to the
+// old paths and writes a report (no auto-fix — docs need human
+// scrutiny). Report goes to /tmp/reorg-md-refs-<timestamp>.txt
+// on --execute; in dry-run it's printed to stdout.
 //
 // Usage:
 //   go run cmd/reorg/main.go REORG          # dry-run (default)
@@ -27,9 +34,16 @@
 //   # form.
 //   elm-mv games/lynrummy/elm/src/Game/Card.elm games/lynrummy/elm/src/Game/Rules/Card.elm
 //
+//   # TypeScript file move: rewrites every relative-path import
+//   # in every .ts file so the new layout still resolves. Uses
+//   # `git mv` for the file itself. The src/dst must both end
+//   # in .ts and share a tsconfig.json (walked up from src).
+//   ts-mv games/lynrummy/ts/src/geometry.ts games/lynrummy/ts/core/geometry.ts
+//
 // Dry-run output shows every file that would be touched and every
 // name that would be rewritten. Execute mode applies the changes
-// and runs a per-language verification (go build; elm make).
+// and runs a per-language verification (go build; elm make;
+// npm run typecheck).
 
 package main
 
@@ -42,6 +56,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 )
 
 type moveKind int
@@ -49,6 +64,7 @@ type moveKind int
 const (
 	kindGo moveKind = iota
 	kindElm
+	kindTS
 )
 
 func (k moveKind) String() string {
@@ -57,6 +73,8 @@ func (k moveKind) String() string {
 		return "go"
 	case kindElm:
 		return "elm"
+	case kindTS:
+		return "ts"
 	}
 	return "?"
 }
@@ -83,13 +101,29 @@ type move struct {
 	//     bare prefix (e.g. `import Game.Card` with no follow-up
 	//     chain) since the file IS the leaf module.
 	elmIsFile bool
+
+	// TS-specific (kindTS only). Absolute paths so import-path
+	// math is unambiguous when rewriting relative paths from one
+	// file's perspective to another's.
+	tsAbsSrc       string // absolute path to the source .ts file
+	tsAbsDst       string // absolute path to the destination .ts file
+	tsProjectRoot  string // dir containing the governing tsconfig.json (for verification)
 }
 
 type rewrite struct {
 	file string
 	old  string
 	new  string
-	kind string // "import" | "package" | "elm-module" | "elm-ref" | "elm-ref-file"
+	kind string // "import" | "package" | "elm-module" | "elm-ref" | "elm-ref-file" | "ts-import"
+}
+
+// mdMatch is one .md-file reference to a moved path.
+type mdMatch struct {
+	mdFile     string // path of the .md file
+	line       int    // 1-based line number
+	matchedPat string // the pattern that matched (the old path/basename)
+	lineText   string // the full text of the matched line (trimmed)
+	moveDesc   string // human description of the underlying move (for the report)
 }
 
 func main() {
@@ -161,17 +195,43 @@ func main() {
 		}
 	}
 
+	// TS moves: walk each TS project root once. The same
+	// scanner handles both the moved file's own imports (its
+	// relative paths change because IT moved) and importers'
+	// references to it.
+	tsMoves := movesOfKind(moves, kindTS)
+	if len(tsMoves) > 0 {
+		scannedTSRoots := map[string]bool{}
+		for _, m := range tsMoves {
+			if scannedTSRoots[m.tsProjectRoot] {
+				continue
+			}
+			scannedTSRoots[m.tsProjectRoot] = true
+			for _, f := range findTSFiles(m.tsProjectRoot) {
+				rewrites = append(rewrites, scanTSFile(f, tsMoves)...)
+			}
+		}
+	}
+
+	// Markdown reference scan: read-only. Produces a report;
+	// no auto-fix. Scope is the whole repo (relative paths in
+	// .md files are repo-rooted, not subtree-rooted).
+	mdMatches := scanMarkdownForMoves(moves)
+
 	// Report.
 	if modPath != "" {
 		fmt.Printf("Go module: %s\n", modPath)
 	}
-	fmt.Printf("Moves:  %d  (go=%d, elm=%d)\n", len(moves), len(goMoves), len(moves)-len(goMoves))
+	fmt.Printf("Moves:  %d  (go=%d, elm=%d, ts=%d)\n",
+		len(moves), len(goMoves), len(moves)-len(goMoves)-len(tsMoves), len(tsMoves))
 	fmt.Printf("Rewrites needed: %d\n", len(rewrites))
+	fmt.Printf("Markdown references found: %d (report-only — see end of output)\n", len(mdMatches))
 	fmt.Println()
 
 	for _, m := range moves {
 		srcDisp, dstDisp := m.src, m.dst
-		if !(m.kind == kindElm && m.elmIsFile) {
+		isFileMove := (m.kind == kindElm && m.elmIsFile) || m.kind == kindTS
+		if !isFileMove {
 			srcDisp += "/"
 			dstDisp += "/"
 		}
@@ -187,6 +247,8 @@ func main() {
 				fmt.Printf("        module: %s.* → %s.*  (project root: %s)\n",
 					m.oldModulePrefix, m.newModulePrefix, m.elmProjectRoot)
 			}
+		case kindTS:
+			fmt.Printf("        ts project root: %s\n", m.tsProjectRoot)
 		}
 	}
 	fmt.Println()
@@ -203,6 +265,16 @@ func main() {
 		for _, rw := range pkgRewrites {
 			fmt.Printf("  %-60s  package %s → %s\n", rw.file, rw.old, rw.new)
 		}
+		fmt.Println()
+	}
+
+	// Markdown matches: print in dry-run so reviewers see them
+	// inline. In execute mode we'll also write a file after the
+	// move succeeds (the file path is what the agent uses to
+	// drive the manual sweep).
+	if len(mdMatches) > 0 {
+		fmt.Println("Markdown references (report-only — no auto-fix):")
+		printMarkdownMatches(mdMatches, os.Stdout)
 		fmt.Println()
 	}
 
@@ -226,10 +298,10 @@ func main() {
 		if parent != "." {
 			os.MkdirAll(parent, 0755)
 		}
-		if m.kind == kindElm && m.elmIsFile {
-			// File-level Elm move: git mv keeps git's
-			// rename-detection clean and stages the move
-			// atomically with the rewrites.
+		if (m.kind == kindElm && m.elmIsFile) || m.kind == kindTS {
+			// File-level move: git mv keeps git's rename
+			// detection clean and stages the move atomically
+			// with the rewrites.
 			if err := gitMv(m.src, m.dst); err != nil {
 				fmt.Fprintf(os.Stderr, "error git mv %s → %s: %v\n", m.src, m.dst, err)
 				os.Exit(1)
@@ -286,6 +358,57 @@ func main() {
 		}
 		fmt.Printf("✓ Elm verify succeeded in %s.\n", m.elmProjectRoot)
 	}
+
+	verifiedTSRoots := map[string]bool{}
+	for _, m := range moves {
+		if m.kind != kindTS {
+			continue
+		}
+		if verifiedTSRoots[m.tsProjectRoot] {
+			continue
+		}
+		verifiedTSRoots[m.tsProjectRoot] = true
+		if err := verifyTS(m.tsProjectRoot); err != nil {
+			fmt.Fprintf(os.Stderr, "\n⚠ TS typecheck failed in %s: %v\n", m.tsProjectRoot, err)
+			os.Exit(1)
+		}
+		fmt.Printf("✓ TS typecheck succeeded in %s.\n", m.tsProjectRoot)
+	}
+
+	// Markdown report: always write to /tmp on --execute so the
+	// agent has a concrete path to sweep. Manual review required;
+	// no auto-fix.
+	if len(mdMatches) > 0 {
+		reportPath, err := writeMarkdownReport(mdMatches, moves)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "\n⚠ failed to write markdown report: %v\n", err)
+		} else {
+			fmt.Printf("\nMarkdown reference report: %s\n", reportPath)
+			fmt.Printf("(%d match%s across %s — review and update manually.)\n",
+				len(mdMatches),
+				plural(len(mdMatches), "", "es"),
+				distinctMdFilesPhrase(mdMatches))
+		}
+	}
+}
+
+func plural(n int, sing, plur string) string {
+	if n == 1 {
+		return sing
+	}
+	return plur
+}
+
+func distinctMdFilesPhrase(matches []mdMatch) string {
+	seen := map[string]bool{}
+	for _, m := range matches {
+		seen[m.mdFile] = true
+	}
+	n := len(seen)
+	if n == 1 {
+		return "1 file"
+	}
+	return fmt.Sprintf("%d files", n)
 }
 
 // --- Parsing ---
@@ -346,8 +469,14 @@ func parseScript(path, modPath string) ([]move, error) {
 				return nil, err
 			}
 			moves = append(moves, m)
+		case "ts-mv":
+			m, err := makeTSMove(src, dst, lineNum)
+			if err != nil {
+				return nil, err
+			}
+			moves = append(moves, m)
 		default:
-			return nil, fmt.Errorf("line %d: unknown verb %q (want 'mv' or 'elm-mv')", lineNum, verb)
+			return nil, fmt.Errorf("line %d: unknown verb %q (want 'mv', 'elm-mv', or 'ts-mv')", lineNum, verb)
 		}
 	}
 	return moves, scanner.Err()
@@ -774,6 +903,13 @@ func applyRewrite(rw rewrite) error {
 		// `Game.Cards`. Use a regex instead of ReplaceAll.
 		re := regexp.MustCompile(`\b` + regexp.QuoteMeta(rw.old) + `\b`)
 		newContent = re.ReplaceAllString(content, rw.new)
+	case "ts-import":
+		// rw.old is the full matched fragment including the
+		// surrounding `from "..."` quotes (so ReplaceAll
+		// can't accidentally hit a substring of a different
+		// import path). rw.new is the same fragment with the
+		// path swapped.
+		newContent = strings.ReplaceAll(content, rw.old, rw.new)
 	default:
 		return fmt.Errorf("unknown rewrite kind: %s", rw.kind)
 	}
@@ -801,6 +937,331 @@ func gitMv(src, dst string) error {
 }
 
 // --- Elm verification ---
+
+// --- TS move prep ---
+
+// makeTSMove records a TypeScript file move. Both src and dst must
+// end in .ts; src must exist as a regular file; dst must not exist
+// (validated later). The TS project root is the nearest directory
+// above src containing a tsconfig.json — used for verification via
+// `npm run typecheck`.
+func makeTSMove(src, dst string, line int) (move, error) {
+	if !strings.HasSuffix(src, ".ts") || !strings.HasSuffix(dst, ".ts") {
+		return move{}, fmt.Errorf("line %d: ts-mv requires .ts paths, got %q → %q", line, src, dst)
+	}
+	info, err := os.Stat(src)
+	if err != nil {
+		return move{}, fmt.Errorf("line %d: source %q: %v", line, src, err)
+	}
+	if info.IsDir() {
+		return move{}, fmt.Errorf("line %d: ts-mv source must be a file, got directory %q", line, src)
+	}
+	absSrc, err := filepath.Abs(src)
+	if err != nil {
+		return move{}, fmt.Errorf("line %d: abs(%s): %v", line, src, err)
+	}
+	absDst, err := filepath.Abs(dst)
+	if err != nil {
+		return move{}, fmt.Errorf("line %d: abs(%s): %v", line, dst, err)
+	}
+	root, err := findTSProjectRoot(src)
+	if err != nil {
+		return move{}, fmt.Errorf("line %d: %v", line, err)
+	}
+	dstRoot, err := findTSProjectRoot(filepath.Dir(dst) + "/")
+	if err == nil && dstRoot != root {
+		return move{}, fmt.Errorf("line %d: ts-mv source and destination must share a tsconfig.json (src root: %s; dst root: %s)", line, root, dstRoot)
+	}
+	return move{
+		kind:          kindTS,
+		src:           src,
+		dst:           dst,
+		tsAbsSrc:      absSrc,
+		tsAbsDst:      absDst,
+		tsProjectRoot: root,
+		line:          line,
+	}, nil
+}
+
+// findTSProjectRoot walks upward from a path looking for
+// tsconfig.json. Returns the directory containing it.
+func findTSProjectRoot(start string) (string, error) {
+	clean := filepath.Clean(start)
+	dir := clean
+	for {
+		if _, err := os.Stat(filepath.Join(dir, "tsconfig.json")); err == nil {
+			return dir, nil
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return "", fmt.Errorf("no tsconfig.json found above %q", start)
+		}
+		dir = parent
+	}
+}
+
+// findTSFiles returns every .ts file under root, skipping common
+// non-source directories (node_modules, .git, elm-stuff).
+func findTSFiles(root string) []string {
+	var files []string
+	filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return nil
+		}
+		name := info.Name()
+		if info.IsDir() {
+			if name == ".git" || name == "node_modules" || name == "elm-stuff" {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if strings.HasSuffix(name, ".ts") {
+			files = append(files, path)
+		}
+		return nil
+	})
+	return files
+}
+
+// tsImportRE matches `from "..."` and `from '...'` clauses. Captures
+// the path. Single regex covers `import { x } from "..."`,
+// `import * as x from "..."`, `import type { ... } from "..."`,
+// `export { x } from "..."`, etc. Side-effect imports
+// (`import "foo"`) and dynamic imports (`import("foo")`) are
+// uncommon in this repo and not currently handled.
+var tsImportRE = regexp.MustCompile(`from\s+(["'])([^"']+)["']`)
+
+// scanTSFile records every import in `path` whose target either
+// moves OR whose path needs recomputing because `path` itself
+// moves. The applied rewrite key is the file's CURRENT path
+// (rewrites apply before git mv).
+func scanTSFile(path string, tsMoves []move) []rewrite {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil
+	}
+	content := string(data)
+	absPath, err := filepath.Abs(path)
+	if err != nil {
+		return nil
+	}
+
+	// Build move map: current abs → final abs.
+	moveMap := map[string]string{}
+	for _, m := range tsMoves {
+		moveMap[m.tsAbsSrc] = m.tsAbsDst
+	}
+
+	// File's final location may differ from its current path.
+	fileFinalAbs := absPath
+	if newAbs, moved := moveMap[absPath]; moved {
+		fileFinalAbs = newAbs
+	}
+	fileCurrentDir := filepath.Dir(absPath)
+	fileFinalDir := filepath.Dir(fileFinalAbs)
+
+	matches := tsImportRE.FindAllStringSubmatchIndex(content, -1)
+	var rws []rewrite
+	for _, idx := range matches {
+		fullStart, fullEnd := idx[0], idx[1]
+		pathStart, pathEnd := idx[4], idx[5]
+		full := content[fullStart:fullEnd]
+		importPath := content[pathStart:pathEnd]
+		if !strings.HasPrefix(importPath, "./") && !strings.HasPrefix(importPath, "../") {
+			continue
+		}
+		// Resolve the import target relative to the file's
+		// current dir (where it physically lives now).
+		targetCurrentAbs := filepath.Clean(filepath.Join(fileCurrentDir, importPath))
+		targetFinalAbs := targetCurrentAbs
+		if newAbs, moved := moveMap[targetCurrentAbs]; moved {
+			targetFinalAbs = newAbs
+		}
+		// Compute the new relative path from the file's
+		// FINAL dir to the target's FINAL abs.
+		newRel, err := filepath.Rel(fileFinalDir, targetFinalAbs)
+		if err != nil {
+			continue
+		}
+		// filepath.Rel returns "foo.ts" for same-dir; TS
+		// imports require a leading "./" or "../".
+		if !strings.HasPrefix(newRel, ".") {
+			newRel = "./" + newRel
+		}
+		if newRel == importPath {
+			continue
+		}
+		newFull := strings.Replace(full, importPath, newRel, 1)
+		rws = append(rws, rewrite{
+			file: path,
+			old:  full,
+			new:  newFull,
+			kind: "ts-import",
+		})
+	}
+	return rws
+}
+
+// --- TS verification ---
+
+// verifyTS runs `npm run typecheck` in the TS project root.
+func verifyTS(root string) error {
+	scriptName := "typecheck"
+	// Confirm the script exists in package.json; if not, fall
+	// back to direct tsc invocation.
+	pkgPath := filepath.Join(root, "package.json")
+	if data, err := os.ReadFile(pkgPath); err == nil {
+		if !strings.Contains(string(data), `"typecheck"`) {
+			scriptName = ""
+		}
+	}
+	var cmd *exec.Cmd
+	if scriptName != "" {
+		fmt.Printf("\nRunning npm run %s (in %s)\n", scriptName, root)
+		cmd = exec.Command("npm", "run", scriptName)
+	} else {
+		fmt.Printf("\nRunning tsc --noEmit -p . (in %s)\n", root)
+		cmd = exec.Command("npx", "tsc", "--noEmit", "-p", ".")
+	}
+	cmd.Dir = root
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
+}
+
+// --- Markdown reference scan ---
+
+// scanMarkdownForMoves walks the repo (from cwd) for .md files and
+// flags lines that reference any old src path from `moves`. Read-
+// only; the result drives a manual sweep. Patterns checked per
+// move:
+//   - the exact src string from the script (repo-rooted, e.g.
+//     "games/lynrummy/ts/src/geometry.ts");
+//   - the bare basename of src, but only when it CHANGES (e.g.
+//     "wire_action_dsl.ts" → "emit_game_event.ts" should flag bare
+//     mentions of the old name; "geometry.ts" → "geometry.ts" would
+//     produce noise on every md that mentions the file by basename
+//     and isn't worth the false positives).
+func scanMarkdownForMoves(moves []move) []mdMatch {
+	var patterns []struct {
+		pat     string // literal substring to search for
+		descIdx int    // index into moves[]
+	}
+	for i, m := range moves {
+		patterns = append(patterns, struct {
+			pat     string
+			descIdx int
+		}{pat: m.src, descIdx: i})
+		oldBase := filepath.Base(m.src)
+		newBase := filepath.Base(m.dst)
+		if oldBase != newBase {
+			patterns = append(patterns, struct {
+				pat     string
+				descIdx int
+			}{pat: oldBase, descIdx: i})
+		}
+	}
+
+	mdFiles := findMarkdownFiles(".")
+	var matches []mdMatch
+	for _, f := range mdFiles {
+		data, err := os.ReadFile(f)
+		if err != nil {
+			continue
+		}
+		lines := strings.Split(string(data), "\n")
+		for lineIdx, line := range lines {
+			for _, p := range patterns {
+				if strings.Contains(line, p.pat) {
+					m := moves[p.descIdx]
+					matches = append(matches, mdMatch{
+						mdFile:     f,
+						line:       lineIdx + 1,
+						matchedPat: p.pat,
+						lineText:   strings.TrimSpace(line),
+						moveDesc:   fmt.Sprintf("%s → %s", m.src, m.dst),
+					})
+				}
+			}
+		}
+	}
+	return matches
+}
+
+// findMarkdownFiles returns every .md file under root, skipping
+// vendor / artifact directories.
+func findMarkdownFiles(root string) []string {
+	var files []string
+	filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return nil
+		}
+		name := info.Name()
+		if info.IsDir() {
+			if name == ".git" || name == "node_modules" || name == "elm-stuff" {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if strings.HasSuffix(name, ".md") {
+			files = append(files, path)
+		}
+		return nil
+	})
+	return files
+}
+
+// printMarkdownMatches writes matches grouped by .md file (for
+// readability) to w.
+func printMarkdownMatches(matches []mdMatch, w *os.File) {
+	byFile := map[string][]mdMatch{}
+	var files []string
+	for _, m := range matches {
+		if _, ok := byFile[m.mdFile]; !ok {
+			files = append(files, m.mdFile)
+		}
+		byFile[m.mdFile] = append(byFile[m.mdFile], m)
+	}
+	for _, f := range files {
+		fmt.Fprintf(w, "  %s\n", f)
+		for _, m := range byFile[f] {
+			fmt.Fprintf(w, "    L%d  [%s]  %s\n", m.line, m.moveDesc, truncate(m.lineText, 120))
+		}
+	}
+}
+
+func truncate(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	return s[:n] + "…"
+}
+
+// writeMarkdownReport writes a timestamped report file to /tmp and
+// returns the path. The report's body mirrors what dry-run prints,
+// plus a small explanatory header.
+func writeMarkdownReport(matches []mdMatch, moves []move) (string, error) {
+	ts := time.Now().Format("20060102-150405")
+	out := filepath.Join("/tmp", fmt.Sprintf("reorg-md-refs-%s.txt", ts))
+	f, err := os.Create(out)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+	fmt.Fprintf(f, "# Markdown references that may need manual updates\n")
+	fmt.Fprintf(f, "# Generated by cmd/reorg at %s\n", time.Now().Format(time.RFC3339))
+	fmt.Fprintf(f, "#\n")
+	fmt.Fprintf(f, "# Moves in this run:\n")
+	for _, m := range moves {
+		fmt.Fprintf(f, "#   %s  %s → %s\n", m.kind, m.src, m.dst)
+	}
+	fmt.Fprintf(f, "#\n")
+	fmt.Fprintf(f, "# Below: each .md file with matching lines. Review each line\n")
+	fmt.Fprintf(f, "# and decide whether the reference needs updating.\n")
+	fmt.Fprintf(f, "\n")
+	printMarkdownMatches(matches, f)
+	return out, nil
+}
 
 // verifyElm runs `elm make src/Main.elm --output=/dev/null` in the
 // Elm project root. Uses ./node_modules/.bin/elm if present (the
