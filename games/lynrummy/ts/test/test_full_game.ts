@@ -18,7 +18,6 @@ import { playFullGame } from "../full_game/full_game.ts";
 
 const HAND_SIZE = 15;
 const NUM_PLAYERS = 2;
-const STOP_AT_DECK = 10;
 
 const BOARD_LABELS: string[][] = [
   ["KS", "AS", "2S", "3S"],
@@ -97,7 +96,7 @@ function main(): void {
 
     try {
       const t0 = Date.now();
-      const result = playFullGame(board, hands, deck, { stopAtDeck: STOP_AT_DECK });
+      const result = playFullGame(board, hands, deck);
       const ms = Date.now() - t0;
       console.log(`PASS  seed=${seed}  ${result.turns.length} turns, ${result.stoppedReason}  [${ms}ms]`);
       passed++;

@@ -50,7 +50,6 @@ const TARGET_PLAN_LINES = 3;
 const MAX_SEEDS_TRIED = 200;  // safety cap; we expect 5 puzzles well before this
 const HAND_SIZE = 15;
 const NUM_PLAYERS = 2;
-const STOP_AT_DECK = 10;
 
 // Game 17 opening board — same fixed deal as generate_game.ts and
 // bench/gen_baseline_board.ts. 6 helpers, 23 cards.
@@ -209,7 +208,7 @@ function tryCaptureFromSeed(seed: number): { puzzle: CapturedPuzzle | null; ctx:
 
   // Run the full self-play game first; then walk the recorded
   // turns/plays to find a qualifying capture point.
-  const result = playFullGame(initialBoard, hands, deck, { stopAtDeck: STOP_AT_DECK });
+  const result = playFullGame(initialBoard, hands, deck);
 
   let sim: readonly BoardStack[] = initialBoard;
   for (let ti = 0; ti < result.turns.length; ti++) {

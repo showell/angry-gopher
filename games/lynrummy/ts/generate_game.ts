@@ -9,7 +9,6 @@ import { validateSession } from "./full_game/validate_session.ts";
 
 const HAND_SIZE = 15;
 const NUM_PLAYERS = 2;
-const STOP_AT_DECK = 10;
 const SEED = 50;
 
 // Game 17 opening board. Locations match dealer.go's initial-board
@@ -90,7 +89,7 @@ function main(): void {
   const deck = remaining.slice(NUM_PLAYERS * HAND_SIZE);
   const positioned = makeOpeningBoardPositioned();
 
-  const result = playFullGame(positioned, hands, deck, { stopAtDeck: STOP_AT_DECK });
+  const result = playFullGame(positioned, hands, deck);
 
   const t = writeSession(
     { initialBoard: positioned, initialHands: hands, initialDeck: deck, result },

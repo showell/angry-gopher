@@ -11,19 +11,22 @@ export interface GameResult {
   readonly stoppedReason: "deck_low" | "max_turns" | "hand_and_deck_empty";
 }
 
-export interface PlayGameOptions {
-  readonly stopAtDeck?: number;
-  readonly maxTurns?: number;
-}
+// Game-end conditions, hard-coded as a deliberate design decision.
+//
+//   STOP_AT_DECK — once the draw pile drops to this many cards or
+//                  fewer, the game ends. Matches the kitchen-table
+//                  "deck is running low, let's wrap up" intuition;
+//                  also keeps test runs bounded.
+//   MAX_TURNS    — infinite-loop guard. Real games end via STOP_AT_DECK
+//                  well before this fires.
+const STOP_AT_DECK = 10;
+const MAX_TURNS = 200;
 
 export function playFullGame(
   initialBoard: readonly BoardStack[],
   initialHands: readonly (readonly Card[])[],
   initialDeck: readonly Card[],
-  opts: PlayGameOptions = {},
 ): GameResult {
-  const stopAtDeck = opts.stopAtDeck ?? 10;
-  const maxTurns = opts.maxTurns ?? 200;
 
   let board: readonly BoardStack[] = initialBoard;
   let hands: readonly (readonly Card[])[] = initialHands.map(h => [...h]);
@@ -40,8 +43,8 @@ export function playFullGame(
   let stoppedReason: GameResult["stoppedReason"] = "max_turns";
   let turnNum = 1;
 
-  while (deck.length > stopAtDeck) {
-    if (turnNum > maxTurns) break;
+  while (deck.length > STOP_AT_DECK) {
+    if (turnNum > MAX_TURNS) break;
 
     const result = simulateFullTurn(
       board,
@@ -73,7 +76,7 @@ export function playFullGame(
     turnNum++;
   }
 
-  if (stoppedReason === "max_turns" && deck.length <= stopAtDeck) {
+  if (stoppedReason === "max_turns" && deck.length <= STOP_AT_DECK) {
     stoppedReason = "deck_low";
   }
 
