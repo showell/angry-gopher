@@ -8,12 +8,8 @@ export interface GroomStep {
 
 export interface PlayStep {
   readonly kind: "play";
-  readonly placements: readonly Card[];
+  readonly cardsToPlay: readonly Card[];
   readonly prims: readonly Primitive[];
-  /** Plan-line strings, for hint display + downstream filters
-   *  (puzzle catalog picks plays whose `planLines.length`
-   *  matches a target). Not the primitive count. */
-  readonly planLines: readonly string[];
 }
 
 export interface EndStep {

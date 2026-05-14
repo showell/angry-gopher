@@ -16,17 +16,16 @@ export function tryPlay(
   const play = findPlay(hand, cardLists);
   if (play === null) return null;
 
-  const prims = physicalPlan(board, [...play.placements], play.plan);
+  const prims = physicalPlan(board, [...play.cardsToPlay], play.moves);
   let sim: readonly BoardStack[] = board;
   for (const p of prims) sim = applyLocally(sim, p);
 
-  const placedSet = new Set(play.placements.map(cardKey));
+  const placedSet = new Set(play.cardsToPlay.map(cardKey));
   return {
     step: {
       kind: "play",
-      placements: [...play.placements],
+      cardsToPlay: [...play.cardsToPlay],
       prims,
-      planLines: play.planLines,
     },
     board: sim,
     hand: hand.filter(c => !placedSet.has(cardKey(c))),

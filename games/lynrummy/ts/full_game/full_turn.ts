@@ -67,7 +67,7 @@ export function simulateFullTurn(
     }
     steps.push(result.step);
     if (result.step.kind === "play") {
-      for (const c of result.step.placements) cardsPlayed.push(c);
+      for (const c of result.step.cardsToPlay) cardsPlayed.push(c);
       playsMade++;
     }
   }

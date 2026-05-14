@@ -16,9 +16,9 @@ import { solveBoard } from "../bfs/engine_v2.ts";
 import type { Move } from "../bfs/move.ts";
 
 export interface PlayResult {
-  readonly placements: readonly Card[];
-  readonly plan: readonly Move[];
-  readonly planLines: readonly string[];
+  readonly cardsToPlay: readonly Card[];
+  readonly moves: readonly Move[];
+  readonly moveLines: readonly string[];
   readonly newBoard: readonly (readonly Card[])[];
 }
 
@@ -37,9 +37,9 @@ export function findPlay(
     const triple = findTripleInHand(meldable, hand);
     if (triple !== null) {
       return {
-        placements: triple,
-        plan: [],
-        planLines: [],
+        cardsToPlay: triple,
+        moves: [],
+        moveLines: [],
         newBoard: [...board, triple],
       };
     }
@@ -51,8 +51,8 @@ export function findPlay(
 
 export function formatHint(result: PlayResult | null): readonly string[] {
   if (result === null) return [];
-  const labels = result.placements.map(cardLabel).join(" ");
-  return [`place [${labels}] from hand`, ...result.planLines];
+  const labels = result.cardsToPlay.map(cardLabel).join(" ");
+  return [`place [${labels}] from hand`, ...result.moveLines];
 }
 
 // --- Pair collection ----------------------------------------------------
@@ -110,15 +110,15 @@ function collectProjectionCandidates(
 
 function projectAndSolve(
   board: readonly (readonly Card[])[],
-  placements: readonly Card[],
+  cardsToPlay: readonly Card[],
 ): PlayResult | null {
-  const augmented: (readonly Card[])[] = [...board, placements];
+  const augmented: (readonly Card[])[] = [...board, cardsToPlay];
   const result = solveBoard(augmented);
   if (result === null) return null;
   return {
-    placements,
-    plan: result.plan.map(p => p.move),
-    planLines: result.plan.map(p => p.line),
+    cardsToPlay,
+    moves: result.plan.map(p => p.move),
+    moveLines: result.plan.map(p => p.line),
     newBoard: bucketsToBoard(result.finalBuckets),
   };
 }
@@ -127,7 +127,7 @@ function projectAndSolve(
 
 function shortestPlan(candidates: readonly PlayResult[]): PlayResult {
   return candidates.reduce((best, cur) =>
-    cur.plan.length < best.plan.length ? cur : best,
+    cur.moves.length < best.moves.length ? cur : best,
   );
 }
 

@@ -69,12 +69,12 @@ function projectSingleton(
   const result = solveBoard(augmented);
   if (result === null) return null;
   const moves = result.plan.map(p => p.move);
-  const planLines = result.plan.map(p => p.line);
+  const moveLines = result.plan.map(p => p.line);
   const newBoard: readonly (readonly Card[])[] = [
     ...result.finalBuckets.helper.map(s => [...s.cards] as readonly Card[]),
     ...result.finalBuckets.complete.map(s => [...s.cards] as readonly Card[]),
   ];
-  return { placements: [c], plan: moves, planLines, newBoard };
+  return { cardsToPlay: [c], moves, moveLines, newBoard };
 }
 
 interface SingletonResult {
@@ -93,7 +93,7 @@ function findPlaySingletonsOnly(
   }
   if (candidates.length === 0) return { result: null, projections: hand.length };
   const result = candidates.reduce((best, cur) =>
-    cur.plan.length < best.plan.length ? cur : best,
+    cur.moves.length < best.moves.length ? cur : best,
   );
   return { result, projections: hand.length };
 }
@@ -124,28 +124,28 @@ function findPlayFull(
 
 function fmtResult(result: PlayResult | null): string {
   if (result === null) return "stuck";
-  const placements = result.placements.map(cardLabel).join(" ");
-  const n = result.plan.length;
+  const labels = result.cardsToPlay.map(cardLabel).join(" ");
+  const n = result.moves.length;
   const kind =
-    result.placements.length === 2
+    result.cardsToPlay.length === 2
       ? "pair"
-      : result.placements.length === 3
+      : result.cardsToPlay.length === 3
         ? "triple"
         : "single";
-  return `${kind} [${placements}] → ${n}-step plan`;
+  return `${kind} [${labels}] → ${n}-step plan`;
 }
 
 function planLen(r: PlayResult | null): number {
-  return r === null ? 999 : r.plan.length;
+  return r === null ? 999 : r.moves.length;
 }
 
 function placementCount(r: PlayResult | null): number {
-  return r === null ? 0 : r.placements.length;
+  return r === null ? 0 : r.cardsToPlay.length;
 }
 
 function outcome(r: PlayResult | null): "stuck" | "triple" | "pair" | "single" {
   if (r === null) return "stuck";
-  const n = r.placements.length;
+  const n = r.cardsToPlay.length;
   if (n >= 3) return "triple";
   if (n === 2) return "pair";
   return "single";
