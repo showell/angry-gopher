@@ -39,13 +39,6 @@ export interface RawBuckets {
  *  cards). Content-based identity for memoization. */
 export type Lineage = readonly (readonly Card[])[];
 
-/** Build a canonical pair-key from two cards (order-insensitive). */
-export function pairKey(a: Card, b: Card): string {
-  const ka = ((a.rank * 4) + a.suit) * 2 + a.deck;
-  const kb = ((b.rank * 4) + b.suit) * 2 + b.deck;
-  return ka < kb ? `${ka},${kb}` : `${kb},${ka}`;
-}
-
 // --- State signature -------------------------------------------------------
 //
 // DESIGN DECISION (state_sig hashing strategy):
@@ -78,57 +71,6 @@ export function pairKey(a: Card, b: Card): string {
 // (state_sig, lineage). Encoding both into one string saves the per-key
 // tuple allocation in JS (where small object keys are not hash-friendly).
 
-const CARD_PAD = 4; // packed cards are <= 4 ASCII digits → "0"-"9999"
-
-function encodeCard(c: Card): string {
-  // rank ∈ [1,13], suit ∈ [0,3], deck ∈ [0,1]
-  // packed = ((rank*4) + suit) * 2 + deck → max = 111. Pad to 4 digits
-  // for stable lexicographic ordering when joining sorted stacks.
-  const id = ((c.rank * 4) + c.suit) * 2 + c.deck;
-  return id.toString().padStart(CARD_PAD, "0");
-}
-
-/** Encode a stack's cards (already sorted). */
-function encodeStackCards(cards: readonly Card[]): string {
-  // Stable per-stack ordering: sort by packed id. Within-stack order
-  // doesn't affect identity (the BFS treats stacks as multisets here
-  // because two stacks with the same cards represent the same state
-  // even if iteration order differs).
-  const ids = cards.map(encodeCard);
-  ids.sort();
-  return ids.join(",");
-}
-
-/** Encode a bucket of CCS stacks: sort the per-stack strings and join
- *  with ';'. Within-bucket order doesn't matter; cross-stack identity
- *  is content-based. */
-function encodeBucket(stacks: readonly ClassifiedCardStack[]): string {
-  const stackStrs = stacks.map(s => encodeStackCards(s.cards));
-  stackStrs.sort();
-  return stackStrs.join(";");
-}
-
-/** Encode a lineage (tuple of raw card tuples). Lineage POSITION
- *  matters (lineage[0] is focus), so we DON'T sort the outer list.
- *  Lineage entries are encoded VERBATIM (no per-entry sort) — Python's
- *  seen-set key uses the raw lineage tuple, so same-cards-different-
- *  order entries are distinct states there and must be distinct here.
- *  In practice all lineage entries land in canonical order by
- *  construction (descriptors emit cards sorted), so this is invisible
- *  today; verbatim encoding pins port fidelity if that invariant ever
- *  breaks. */
-function encodeLineage(lineage: Lineage): string {
-  return lineage.map(entry => entry.map(encodeCard).join(",")).join("~");
-}
-
-/**
- * Compute the canonical state signature (memoization key). Bucket order
- * matters (HELPER vs COMPLETE differ in role) but stack order within a
- * bucket doesn't. Result is a string suitable as a `Set` / `Map` key.
- *
- * `lineage` defaults to no lineage; pass it in to fold lineage identity
- * into the same key (matching python's `(state_sig(*b), lineage)`).
- */
 /** Build a position-of-cardId map from a full game's initial state.
  *  Iterates all buckets, collects card-ids in encounter order, and
  *  returns the inverse: posOf[cardId] = position 0..N-1.
@@ -232,23 +174,6 @@ export function fastStateSig(
   }
   return result;
   void buf; void writeBucket;  // silence unused
-}
-
-export function stateSig(
-  b: Buckets,
-  lineage?: Lineage,
-  uncommittedPairs?: ReadonlySet<string>,
-): string {
-  const h = encodeBucket(b.helper);
-  const t = encodeBucket(b.trouble);
-  const g = encodeBucket(b.growing);
-  const c = encodeBucket(b.complete);
-  const base = `${h}|${t}|${g}|${c}`;
-  let withLineage = base;
-  if (lineage !== undefined) withLineage = `${base}@${encodeLineage(lineage)}`;
-  if (uncommittedPairs === undefined || uncommittedPairs.size === 0) return withLineage;
-  const sortedKeys = [...uncommittedPairs].sort();
-  return `${withLineage}#${sortedKeys.join(",")}`;
 }
 
 // --- Bucket-level operations ----------------------------------------------

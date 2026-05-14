@@ -36,7 +36,6 @@ function cardId(c: Card): number {
 
 // --- Bucket tags ------------------------------------------------------
 
-const ABSENT = 0;
 const HELPER = 1;
 const TROUBLE = 2;
 const GROWING = 3;

@@ -11,7 +11,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 
 import { parseCardLabel, cardLabel, type Card } from "../core/card.ts";
-import type { BoardStack, Loc } from "../core/geometry.ts";
+import type { BoardStack } from "../core/geometry.ts";
 import { findViolation } from "../core/geometry.ts";
 import {
   type Primitive,
@@ -86,7 +86,7 @@ function parseDsl(text: string): Scenario[] {
     board?: { top: number; left: number; cards: Card[] }[];
     hand?: Card[]; plan?: VerbBlock[]; primitives?: string[];
   } | null = null;
-  let inBoard = false, inHand = false, inPlan = false, inPrims = false;
+  let inBoard = false, inPlan = false, inPrims = false;
   let curVerb: VerbBlock | null = null;
 
   function commit() {
@@ -109,21 +109,20 @@ function parseDsl(text: string): Scenario[] {
     if (m && raw.match(/^scenario\b/)) {
       commit();
       cur = { name: m[1], board: [], hand: [], plan: [], primitives: [] };
-      inBoard = inHand = inPlan = inPrims = false;
+      inBoard = inPlan = inPrims = false;
       curVerb = null;
       continue;
     }
     if (!cur) continue;
 
-    if (trimmed === "board:") { inBoard = true; inHand = inPlan = inPrims = false; continue; }
-    if (trimmed === "plan:")  { inPlan  = true; inBoard = inHand = inPrims = false; curVerb = null; continue; }
-    if (trimmed === "expect:") { inBoard = inHand = inPlan = false; continue; }
+    if (trimmed === "board:") { inBoard = true; inPlan = inPrims = false; continue; }
+    if (trimmed === "plan:")  { inPlan  = true; inBoard = inPrims = false; curVerb = null; continue; }
+    if (trimmed === "expect:") { inBoard = inPlan = false; continue; }
     if (trimmed === "primitives:") { inPrims = true; continue; }
 
     if (trimmed.startsWith("hand:")) {
       const after = trimmed.slice("hand:".length).trim();
       cur.hand = after.length > 0 ? parseList(after) : [];
-      inHand = false;  // single-line for now
       inBoard = inPlan = inPrims = false;
       continue;
     }

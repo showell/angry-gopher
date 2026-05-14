@@ -31,10 +31,9 @@ import { type Card, type Rank, type Suit, type Deck, parseCardLabel } from "../c
 // scenarios solvable; those are itemized in STALE_NO_PLAN.
 import { findPlanForBuckets } from "../step/hand_play.ts";
 import { enumerateMoves } from "../bfs/enumerator.ts";
-import { describe, narrate, hint, type Move } from "../bfs/move.ts";
-import { classifyBuckets, type Buckets, type RawBuckets } from "../bfs/buckets.ts";
+import { narrate, hint, type Move } from "../bfs/move.ts";
+import { classifyBuckets, type RawBuckets } from "../bfs/buckets.ts";
 import { findPlay, formatHint } from "../step/hand_play.ts";
-import { classifyStack } from "../core/card_stack.ts";
 import { findOpenLoc, type BoardStack } from "../core/geometry.ts";
 import { parseConformanceDsl } from "./conformance_dsl.ts";
 
@@ -176,40 +175,6 @@ const STALE_NO_PLAN: Record<string, string> = {
   extra_011_THp: "same pattern — steal-from-partial newly available",
   extra_012_THp: "same pattern — steal-from-partial newly available",
 };
-
-function applyPlan(initial: Buckets, plan: readonly { move: Move }[]): Buckets {
-  let state: Buckets = initial;
-  for (let step = 0; step < plan.length; step++) {
-    const want = describe(plan[step]!.move);
-    let matched: Buckets | null = null;
-    for (const [m, next] of enumerateMoves(state)) {
-      if (describe(m) === want) { matched = next; break; }
-    }
-    if (matched === null) {
-      throw new Error(`step ${step + 1}: enumerator did not yield matching move "${want}"`);
-    }
-    state = matched;
-  }
-  return state;
-}
-
-function isCleanFinal(b: Buckets): { ok: boolean; msg: string } {
-  if (b.trouble.length > 0) {
-    return { ok: false, msg: `${b.trouble.length} trouble stack(s) remain` };
-  }
-  for (const bucket of [b.helper, b.growing, b.complete]) {
-    for (const stack of bucket) {
-      const ccs = classifyStack(stack.cards);
-      if (ccs === null || ccs.n < 3) {
-        return { ok: false, msg: `final stack [${stack.cards.map(c => `${c.rank},${c.suit},${c.deck}`).join(" ")}] not length-3+ legal` };
-      }
-      if (ccs.kind !== "run" && ccs.kind !== "rb" && ccs.kind !== "set") {
-        return { ok: false, msg: `final stack kind ${ccs.kind} not run/rb/set` };
-      }
-    }
-  }
-  return { ok: true, msg: "" };
-}
 
 function runSolve(sc: Scenario): RunResult {
   const raw = buildRawBuckets(sc);

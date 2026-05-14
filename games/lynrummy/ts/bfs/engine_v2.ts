@@ -8,7 +8,7 @@
 
 import type { Buckets, RawBuckets, Lineage } from "./buckets.ts";
 import {
-  isVictory, stateSig, fastStateSig, buildCardOrder,
+  isVictory, fastStateSig, buildCardOrder,
   classifyBuckets, troubleCount,
 } from "./buckets.ts";
 import type { ClassifiedCardStack } from "../core/card_stack.ts";
@@ -27,10 +27,6 @@ export interface PlanLine {
 export interface SolveResult {
   readonly plan: readonly PlanLine[];
   readonly finalBuckets: Buckets;
-}
-
-interface SolveCtxPlus extends SolveCtx {
-  readonly maxTrouble: number;
 }
 
 type Heuristic = (b: Buckets) => number;
@@ -178,7 +174,6 @@ function solveTurn(initial: Buckets): SolveResult | null {
       pq.push({ buckets: cand.afterBuckets, queue: newQueue, plan: newPlan, score });
     }
   }
-  lastVisits = visits;
   return best;
 }
 
@@ -257,64 +252,6 @@ class MinHeap<T> {
       }
     }
     return top;
-  }
-}
-
-interface SolveCtx {
-  best: PlanLine[] | null;
-  readonly maxDepth: number;
-  visits: number;
-}
-
-let lastVisits = 0;
-
-function solveRec(
-  buckets: Buckets,
-  queue: readonly ClassifiedCardStack[],
-  plan: readonly PlanLine[],
-  doomedPairs: Set<string>,
-  ctx: SolveCtx,
-): void {
-  ctx.visits++;
-  // Pruning: if current plan length already >= best-known length,
-  // any extension is guaranteed worse.
-  if (ctx.best !== null && plan.length >= ctx.best.length) return;
-
-  // Trouble-cap pruning: total trouble + growing card count must
-  // stay within ctx.maxTrouble.
-  const ctxPlus = ctx as SolveCtxPlus;
-  if (ctxPlus.maxTrouble !== undefined) {
-    let n = 0;
-    for (const s of buckets.trouble) n += s.n;
-    for (const s of buckets.growing) n += s.n;
-    if (n > ctxPlus.maxTrouble) return;
-  }
-
-  // Hard depth bound (safety net).
-  if (plan.length > ctx.maxDepth) return;
-
-  if (queue.length === 0) {
-    if (isVictory(buckets.trouble, buckets.growing)) {
-      // Found a complete plan; record if it's the shortest so far.
-      if (ctx.best === null || plan.length < ctx.best.length) {
-        ctx.best = [...plan];
-      }
-    }
-    return;
-  }
-
-  const focus = queue[0]!;
-  const candidates = enumerateForFocus(buckets, focus, doomedPairs);
-  if (candidates.length === 0) return; // QUIT this branch
-
-  for (const cand of candidates) {
-    // Pruning re-check inside the loop in case best updated since
-    // entry (siblings can update it).
-    if (ctx.best !== null && plan.length + 1 >= ctx.best.length) return;
-    const newBuckets = cand.afterBuckets;
-    const newQueue = computeQueueAfter(queue, focus, cand, newBuckets);
-    const newPlan = [...plan, { line: describe(cand.move), move: cand.move }];
-    solveRec(newBuckets, newQueue, newPlan, doomedPairs, ctx);
   }
 }
 

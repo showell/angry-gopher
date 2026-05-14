@@ -466,30 +466,6 @@ export function splitOut(
 // FUNCTIONS named kindsAfterSpliceLeft and kindsAfterSpliceRight, NOT one
 // function with a `side` parameter. Each does its own job.
 
-/** LEFT splice halves: with-card half first, pure slice second. Mirrors
- *  python's `_splice_halves_left`. */
-function spliceHalvesLeft(
-  stack: ClassifiedCardStack,
-  card: Card,
-  position: number,
-): [Card[], Card[]] {
-  const left: Card[] = stack.cards.slice(0, position).concat([card]);
-  const right: Card[] = stack.cards.slice(position);
-  return [left, right];
-}
-
-/** RIGHT splice halves: pure slice first, with-card half second. Mirrors
- *  python's `_splice_halves_right`. */
-function spliceHalvesRight(
-  stack: ClassifiedCardStack,
-  card: Card,
-  position: number,
-): [Card[], Card[]] {
-  const left: Card[] = stack.cards.slice(0, position);
-  const right: Card[] = [card, ...stack.cards.slice(position)];
-  return [left, right];
-}
-
 /** Run/rb-specialized LEFT splice probe. Mirrors python's
  *  `_kinds_after_splice_run_left`. */
 function kindsAfterSpliceRunLeft(

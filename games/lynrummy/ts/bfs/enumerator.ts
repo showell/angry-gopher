@@ -29,7 +29,6 @@ import {
 import {
   type Buckets,
   type BucketName,
-  pairKey,
 } from "./buckets.ts";
 import {
   type Move,
