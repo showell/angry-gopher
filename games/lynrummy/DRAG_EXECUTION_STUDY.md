@@ -121,7 +121,7 @@ without peering into the subject's head:
   happened? Yes = capture is faithful. No = data is suspect and the bug
   is in the capture pipe.
 - Sessions are read post-hoc directly from
-  `games/lynrummy/data/lynrummy-elm/sessions/<id>/actions.jsonl`
+  `games/lynrummy/data/lynrummy-elm/sessions/<id>/actions.dsl`
   for analysis.
 
 ## Replay as validation gate
