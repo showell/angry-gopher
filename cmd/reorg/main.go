@@ -55,6 +55,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 )
@@ -1143,27 +1144,33 @@ func verifyTS(root string) error {
 //     produce noise on every md that mentions the file by basename
 //     and isn't worth the false positives).
 func scanMarkdownForMoves(moves []move) []mdMatch {
-	var patterns []struct {
-		pat     string // literal substring to search for
+	type pat struct {
+		text    string // literal substring to search for
 		descIdx int    // index into moves[]
 	}
+	// For each move, generate progressively-shorter trailing-suffix
+	// patterns plus the bare basename. Prose almost always abbreviates
+	// (gap #1 in feedback_reorg_md_report_gaps.md), and the bare
+	// basename is now emitted unconditionally (gap #2).
+	var patterns []pat
 	for i, m := range moves {
-		patterns = append(patterns, struct {
-			pat     string
-			descIdx int
-		}{pat: m.src, descIdx: i})
-		oldBase := filepath.Base(m.src)
-		newBase := filepath.Base(m.dst)
-		if oldBase != newBase {
-			patterns = append(patterns, struct {
-				pat     string
-				descIdx int
-			}{pat: oldBase, descIdx: i})
+		for _, suffix := range pathSuffixes(m.src) {
+			patterns = append(patterns, pat{text: suffix, descIdx: i})
 		}
+		patterns = append(patterns, pat{text: filepath.Base(m.src), descIdx: i})
 	}
 
 	mdFiles := findMarkdownFiles(".")
-	var matches []mdMatch
+	// A single line may match multiple suffix patterns for the same
+	// move (full path, abbreviated path, basename). Dedup per
+	// (file, line, move), keeping the longest matching pattern as
+	// the canonical match — that's the most specific evidence.
+	type key struct {
+		file string
+		line int
+		idx  int
+	}
+	best := map[key]mdMatch{}
 	for _, f := range mdFiles {
 		data, err := os.ReadFile(f)
 		if err != nil {
@@ -1172,20 +1179,55 @@ func scanMarkdownForMoves(moves []move) []mdMatch {
 		lines := strings.Split(string(data), "\n")
 		for lineIdx, line := range lines {
 			for _, p := range patterns {
-				if strings.Contains(line, p.pat) {
-					m := moves[p.descIdx]
-					matches = append(matches, mdMatch{
-						mdFile:     f,
-						line:       lineIdx + 1,
-						matchedPat: p.pat,
-						lineText:   strings.TrimSpace(line),
-						moveDesc:   fmt.Sprintf("%s → %s", m.src, m.dst),
-					})
+				if !strings.Contains(line, p.text) {
+					continue
+				}
+				k := key{file: f, line: lineIdx + 1, idx: p.descIdx}
+				existing, has := best[k]
+				if has && len(existing.matchedPat) >= len(p.text) {
+					continue
+				}
+				mv := moves[p.descIdx]
+				best[k] = mdMatch{
+					mdFile:     f,
+					line:       lineIdx + 1,
+					matchedPat: p.text,
+					lineText:   strings.TrimSpace(line),
+					moveDesc:   fmt.Sprintf("%s → %s", mv.src, mv.dst),
 				}
 			}
 		}
 	}
+
+	var matches []mdMatch
+	for _, m := range best {
+		matches = append(matches, m)
+	}
+	sort.Slice(matches, func(i, j int) bool {
+		if matches[i].mdFile != matches[j].mdFile {
+			return matches[i].mdFile < matches[j].mdFile
+		}
+		return matches[i].line < matches[j].line
+	})
 	return matches
+}
+
+// pathSuffixes returns every trailing path-component suffix of p
+// excluding the bare basename. For "games/lynrummy/ts/step/x.ts" →
+// ["games/lynrummy/ts/step/x.ts", "lynrummy/ts/step/x.ts",
+//  "ts/step/x.ts", "step/x.ts"]. The bare basename is emitted
+// separately at the call site so it can be deduplicated against
+// a "same-basename" rename (when emitting it would be redundant).
+func pathSuffixes(p string) []string {
+	parts := strings.Split(p, "/")
+	if len(parts) <= 1 {
+		return []string{p}
+	}
+	out := make([]string, 0, len(parts)-1)
+	for i := 0; i < len(parts)-1; i++ {
+		out = append(out, strings.Join(parts[i:], "/"))
+	}
+	return out
 }
 
 // findMarkdownFiles returns every .md file under root, skipping
