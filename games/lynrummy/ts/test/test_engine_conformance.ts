@@ -31,7 +31,8 @@ import { type Card, type Rank, type Suit, type Deck, parseCardLabel } from "../c
 import { solveBoard } from "../bfs/engine_v2.ts";
 import { enumerateMoves } from "../bfs/enumerator.ts";
 import { narrate, hint, type Move } from "../bfs/move.ts";
-import { classifyBuckets, type RawBuckets } from "../bfs/buckets.ts";
+import type { Buckets } from "../bfs/buckets.ts";
+import { classifyStack, type ClassifiedCardStack } from "../core/card_stack.ts";
 import { findPlay, formatHint } from "../step/hand_play.ts";
 import { findOpenLoc, type BoardStack } from "../core/geometry.ts";
 import { parseConformanceDsl } from "./conformance_dsl.ts";
@@ -108,13 +109,38 @@ function fixtureStackToBoardStack(fs: FixtureBoardStack): BoardStack {
   };
 }
 
-function buildRawBuckets(sc: Scenario): RawBuckets {
+function classifyStacks(
+  stacks: readonly (readonly Card[])[],
+  bucketName: string,
+): ClassifiedCardStack[] {
+  return stacks.map((s, i) => {
+    const ccs = classifyStack(s);
+    if (ccs === null) {
+      throw new Error(
+        `invalid stack in ${bucketName}[${i}]: ${JSON.stringify(s)} `
+        + "did not classify as run/rb/set/pair_*/singleton",
+      );
+    }
+    return ccs;
+  });
+}
+
+function buildBuckets(sc: Scenario): Buckets {
   return {
-    helper: bucketToTuples(sc.helper),
-    trouble: bucketToTuples(sc.trouble),
-    growing: bucketToTuples(sc.growing),
-    complete: bucketToTuples(sc.complete),
+    helper: classifyStacks(bucketToTuples(sc.helper), "helper"),
+    trouble: classifyStacks(bucketToTuples(sc.trouble), "trouble"),
+    growing: classifyStacks(bucketToTuples(sc.growing), "growing"),
+    complete: classifyStacks(bucketToTuples(sc.complete), "complete"),
   };
+}
+
+function buildBoard(sc: Scenario): readonly (readonly Card[])[] {
+  return [
+    ...bucketToTuples(sc.helper),
+    ...bucketToTuples(sc.trouble),
+    ...bucketToTuples(sc.growing),
+    ...bucketToTuples(sc.complete),
+  ];
 }
 
 interface RunResult {
@@ -123,7 +149,7 @@ interface RunResult {
 }
 
 function runEnumerateMoves(sc: Scenario): RunResult {
-  const buckets = classifyBuckets(buildRawBuckets(sc));
+  const buckets = buildBuckets(sc);
   const expectedType = (sc.expect["yields"] as string) ?? "";
   const narrateSub = (sc.expect["narrate_contains"] as string) ?? "";
   const hintSub = (sc.expect["hint_contains"] as string) ?? "";
@@ -176,14 +202,10 @@ const STALE_NO_PLAN: Record<string, string> = {
 };
 
 function runSolve(sc: Scenario): RunResult {
-  const raw = buildRawBuckets(sc);
   // solveBoard re-partitions stacks; bucket pins from the DSL collapse
   // into a single flat board. growing/complete are runtime concepts
   // the BFS creates internally, not entry-point inputs.
-  const board: readonly (readonly Card[])[] = [
-    ...raw.helper, ...raw.trouble, ...raw.growing, ...raw.complete,
-  ];
-  const result = solveBoard(board);
+  const result = solveBoard(buildBoard(sc));
   const plan = result === null ? null : result.plan;
 
   const expect = sc.expect;

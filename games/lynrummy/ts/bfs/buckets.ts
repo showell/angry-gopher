@@ -6,32 +6,19 @@
 // KIND_OTHER" invariant holds by construction.
 
 import type { Card } from "../core/card.ts";
-import {
-  classifyStack,
-  type ClassifiedCardStack,
-} from "../core/card_stack.ts";
+import type { ClassifiedCardStack } from "../core/card_stack.ts";
 
 /** Bucket name for absorbers (TROUBLE or GROWING). */
 export type BucketName = "trouble" | "growing";
 
-/** A 4-bucket state. Inside BFS each Stack is a ClassifiedCardStack;
- *  at the boundary it's a raw `readonly Card[]`. The two shapes share
- *  this record because boundary code constructs RawBuckets and BFS
- *  code immediately classifies them via `classifyBuckets`. */
+/** A 4-bucket BFS state. Every stack is classified (kind + n).
+ *  HELPER stacks are length-3+ legal groups; the other three buckets
+ *  are runtime concepts the BFS evolves during search. */
 export interface Buckets {
   readonly helper: readonly ClassifiedCardStack[];
   readonly trouble: readonly ClassifiedCardStack[];
   readonly growing: readonly ClassifiedCardStack[];
   readonly complete: readonly ClassifiedCardStack[];
-}
-
-/** Raw input shape: each bucket holds card-list stacks. The boundary
- *  helper `classifyBuckets` consumes this and produces a `Buckets`. */
-export interface RawBuckets {
-  readonly helper: readonly (readonly Card[])[];
-  readonly trouble: readonly (readonly Card[])[];
-  readonly growing: readonly (readonly Card[])[];
-  readonly complete: readonly (readonly Card[])[];
 }
 
 /** Per-state queue used as part of the memoization-signature key
@@ -166,38 +153,3 @@ export function isVictory(
   return true;
 }
 
-// --- Boundary conversion --------------------------------------------------
-
-function classifyBucket(
-  stacks: readonly (readonly Card[])[],
-  bucketName: string,
-): ClassifiedCardStack[] {
-  const out: ClassifiedCardStack[] = [];
-  for (let i = 0; i < stacks.length; i++) {
-    const ccs = classifyStack(stacks[i]!);
-    if (ccs === null) {
-      throw new Error(
-        `invalid stack in ${bucketName}[${i}]: ${JSON.stringify(stacks[i])} `
-        + "did not classify as run/rb/set/pair_*/singleton",
-      );
-    }
-    out.push(ccs);
-  }
-  return out;
-}
-
-/**
- * Convert a raw `RawBuckets` (lists of lists of cards) into a `Buckets`
- * of CCS. Throws on any stack that fails to classify — those are caller
- * bugs, not BFS bugs.
- *
- * Mirrors python's `classify_buckets`. Use this at every BFS boundary.
- */
-export function classifyBuckets(buckets: RawBuckets): Buckets {
-  return {
-    helper: classifyBucket(buckets.helper, "helper"),
-    trouble: classifyBucket(buckets.trouble, "trouble"),
-    growing: classifyBucket(buckets.growing, "growing"),
-    complete: classifyBucket(buckets.complete, "complete"),
-  };
-}
