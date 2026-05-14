@@ -7,7 +7,7 @@
 
 import type { Card } from "../core/card.ts";
 import { solveBoard as bfsSolveBoard, type PlanLine } from "../bfs/engine_v2.ts";
-import type { BoardStack } from "../core/geometry.ts";
+import type { BoardStack } from "../geometry/geometry.ts";
 import { applyLocally } from "../game_events/primitives.ts";
 import { expandVerb } from "../step/verbs.ts";
 import { findLogicalMovesForPlay, formatHint } from "../step/hand_play.ts";

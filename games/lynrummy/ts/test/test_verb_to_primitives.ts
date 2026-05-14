@@ -29,8 +29,8 @@ import type {
   Verb,
   AbsorberBucket,
 } from "../bfs/move.ts";
-import type { BoardStack, Loc } from "../core/geometry.ts";
-import { findViolation } from "../core/geometry.ts";
+import type { BoardStack, Loc } from "../geometry/geometry.ts";
+import { findViolation } from "../geometry/geometry.ts";
 import { classifyStack } from "../core/card_stack.ts";
 import {
   type Primitive,

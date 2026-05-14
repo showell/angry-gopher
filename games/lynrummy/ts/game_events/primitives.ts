@@ -10,7 +10,7 @@
 // `send_one`.
 
 import type { Card } from "../core/card.ts";
-import { CARD_PITCH, type BoardStack, type Loc } from "../core/geometry.ts";
+import { CARD_PITCH, type BoardStack, type Loc } from "../geometry/geometry.ts";
 import {
   splitDsl,
   mergeStackDsl,
@@ -18,7 +18,7 @@ import {
   placeHandDsl,
   moveStackDsl,
 } from "./emit_game_event.ts";
-import { mergeStackPath, moveStackPath } from "../core/synthesize_board_paths.ts";
+import { mergeStackPath, moveStackPath } from "../geometry/synthesize_board_paths.ts";
 
 export type Side = "left" | "right";
 

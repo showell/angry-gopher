@@ -1,5 +1,5 @@
 import type { Card } from "../core/card.ts";
-import type { BoardStack } from "../core/geometry.ts";
+import type { BoardStack } from "../geometry/geometry.ts";
 import { findGroomPrimitives } from "./groom.ts";
 import { findPlayPrimitives } from "./play.ts";
 import { assertBoardClean } from "./board.ts";

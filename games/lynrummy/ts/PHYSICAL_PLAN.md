@@ -136,7 +136,7 @@ physical decisions per emitted primitive.
 - `game_events/primitives.ts` — primitive types, `applyLocally`, and
   the shared `applyMergeStack` / `applyMergeHand` card-order
   invariant.
-- `core/geometry.ts` — geometry constants, `findOpenLoc`,
+- `geometry/geometry.ts` — geometry constants, `findOpenLoc`,
   `findViolation` (legal-threshold strict overlap), and
   `findCrowding` (pre-flight comfort threshold,
   `PLANNING_MARGIN = 15`).

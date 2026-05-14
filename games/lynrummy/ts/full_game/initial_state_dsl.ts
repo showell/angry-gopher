@@ -27,7 +27,7 @@
 
 import { type Card, parseCardLabel, cardToken } from "../core/card.ts";
 import type { Stack } from "../game_events/emit_game_event.ts";
-import type { BoardStack, Loc } from "../core/geometry.ts";
+import type { BoardStack, Loc } from "../geometry/geometry.ts";
 
 
 interface GameStateForDsl {

@@ -38,7 +38,7 @@ import {
   type BoardStack, type Loc,
   CARD_PITCH, findOpenLoc, findCrowding,
   stackRect, padRect, rectsOverlap, PLANNING_MARGIN,
-} from "../core/geometry.ts";
+} from "../geometry/geometry.ts";
 import {
   type Primitive,
   applyLocally, findStackIndex,

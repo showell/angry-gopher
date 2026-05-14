@@ -21,8 +21,8 @@ import * as path from "node:path";
 
 import type { Card } from "../core/card.ts";
 import { cardLabel } from "../core/card.ts";
-import type { BoardStack } from "../core/geometry.ts";
-import { findViolation } from "../core/geometry.ts";
+import type { BoardStack } from "../geometry/geometry.ts";
+import { findViolation } from "../geometry/geometry.ts";
 import {
   type Primitive,
   applyLocally,

@@ -2,7 +2,7 @@ import type { Card } from "../core/card.ts";
 import { findLogicalMovesForPlay } from "./hand_play.ts";
 import { getPrimitivesForLogicalPlay } from "./physical_plan.ts";
 import { applyLocally } from "../game_events/primitives.ts";
-import type { BoardStack } from "../core/geometry.ts";
+import type { BoardStack } from "../geometry/geometry.ts";
 import type { PrimitivesForPlay } from "./step_types.ts";
 import { cardKey } from "./board.ts";
 

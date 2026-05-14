@@ -34,7 +34,7 @@ import { narrate, hint, type Move } from "../bfs/move.ts";
 import type { Buckets } from "../bfs/buckets.ts";
 import { classifyStack, type ClassifiedCardStack } from "../core/card_stack.ts";
 import { findLogicalMovesForPlay, formatHint } from "../step/hand_play.ts";
-import { findOpenLoc, type BoardStack } from "../core/geometry.ts";
+import { findOpenLoc, type BoardStack } from "../geometry/geometry.ts";
 import { parseConformanceDsl } from "./conformance_dsl.ts";
 
 const __filename = fileURLToPath(import.meta.url);

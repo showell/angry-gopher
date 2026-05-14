@@ -18,8 +18,8 @@
 
 import type { Card } from "../core/card.ts";
 import { cardLabel } from "../core/card.ts";
-import type { BoardStack } from "../core/geometry.ts";
-import { findOpenLoc } from "../core/geometry.ts";
+import type { BoardStack } from "../geometry/geometry.ts";
+import { findOpenLoc } from "../geometry/geometry.ts";
 import {
   type Primitive,
   applyLocally,

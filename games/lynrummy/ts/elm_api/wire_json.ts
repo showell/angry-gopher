@@ -15,7 +15,7 @@
 //     never freshly-played anything, the recency markers are UI-only
 
 import type { Card } from "../core/card.ts";
-import type { BoardStack } from "../core/geometry.ts";
+import type { BoardStack } from "../geometry/geometry.ts";
 import type { Primitive } from "../game_events/primitives.ts";
 
 interface JsonCard { value: number; suit: number; origin_deck: number }

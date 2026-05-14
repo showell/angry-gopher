@@ -8,7 +8,7 @@
 // byte-identical across runtimes.
 
 import { type Card, cardToken } from "../core/card.ts";
-import type { TimeLoc } from "../core/synthesize_board_paths.ts";
+import type { TimeLoc } from "../geometry/synthesize_board_paths.ts";
 
 export { cardToken };
 
