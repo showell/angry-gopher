@@ -35,12 +35,6 @@ export interface PlayResult {
   readonly newBoard: readonly (readonly Card[])[];
 }
 
-interface MeldablePair {
-  readonly pair: readonly [Card, Card];
-  readonly pairI: number;
-  readonly pairJ: number;
-}
-
 export function findPlay(
   hand: readonly Card[],
   board: readonly (readonly Card[])[],
@@ -60,7 +54,7 @@ export function findPlay(
   }
 
   const candidates: PlayResult[] = [];
-  for (const { pair } of meldable) {
+  for (const pair of meldable) {
     const r = projectAndSolve(board, pair);
     if (r !== null) candidates.push(r);
   }
@@ -80,20 +74,20 @@ export function formatHint(result: PlayResult | null): readonly string[] {
 // --- Pair collection ----------------------------------------------------
 
 /** Walk hand positions i < j; for each pair of cards, record it as a
- *  meldable pair in canonical order (the order that isPartialOk
- *  accepts). Either orientation might pass — A-2 is canonical
- *  ascending, but the wrap pair K-A is also canonical (K is the
- *  predecessor of A under the cycle). */
-function collectMeldablePairs(hand: readonly Card[]): readonly MeldablePair[] {
-  const out: MeldablePair[] = [];
+ *  pair in canonical order (the order that isPartialOk accepts).
+ *  Either orientation might pass — A-2 is canonical ascending, but
+ *  the wrap pair K-A is also canonical (K is the predecessor of A
+ *  under the cycle). */
+function collectMeldablePairs(hand: readonly Card[]): readonly (readonly [Card, Card])[] {
+  const out: (readonly [Card, Card])[] = [];
   for (let i = 0; i < hand.length; i++) {
     for (let j = i + 1; j < hand.length; j++) {
       const a = hand[i]!;
       const b = hand[j]!;
       if (isPartialOk([a, b])) {
-        out.push({ pair: [a, b], pairI: i, pairJ: j });
+        out.push([a, b]);
       } else if (isPartialOk([b, a])) {
-        out.push({ pair: [b, a], pairI: i, pairJ: j });
+        out.push([b, a]);
       }
     }
   }
@@ -108,13 +102,13 @@ function collectMeldablePairs(hand: readonly Card[]): readonly MeldablePair[] {
  *  as a *different* meldable pair (e.g., the wrap triple K-A-2 is
  *  discovered via the (K, A) pair, not via (A, 2) trying K-on-left). */
 function findTripleAmongPairs(
-  meldable: readonly MeldablePair[],
+  meldable: readonly (readonly [Card, Card])[],
   hand: readonly Card[],
 ): readonly Card[] | null {
-  for (const { pair, pairI, pairJ } of meldable) {
-    for (let k = 0; k < hand.length; k++) {
-      if (k === pairI || k === pairJ) continue;
-      const triple: readonly Card[] = [pair[0], pair[1], hand[k]!];
+  for (const pair of meldable) {
+    for (const c of hand) {
+      if (c === pair[0] || c === pair[1]) continue;
+      const triple: readonly Card[] = [pair[0], pair[1], c];
       if (isCompleteGroup(triple)) return triple;
     }
   }
