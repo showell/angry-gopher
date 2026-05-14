@@ -1,6 +1,6 @@
 // Vocabulary (load-bearing across the codebase):
 //   Move      — one verb-level step in the BFS's plan (peel, push,
-//               splice, …). Lowered to primitives by physicalPlan.
+//               splice, …). Lowered to primitives by getPrimitivesForLogicalPlay.
 //   Primitive — one wire-level UI action (place_hand, merge_stack,
 //               …). Same shape as Elm's GameEvent.
 //   play      — placement of ≥1 hand card + the BFS Moves that

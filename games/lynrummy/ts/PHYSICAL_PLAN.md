@@ -2,13 +2,13 @@
 
 ## What this layer is
 
-The solver (`src/engine_v2.ts`) plans at the *logical* level:
+The solver (`bfs/engine_v2.ts`) plans at the *logical* level:
 which verbs retire which trouble. It is silent about geometry,
 hand vs. board, and which stack physically moves when two
 combine.
 
-The physical-planning layer (`src/physical_plan.ts` + the
-helpers in `src/verbs.ts`) is the bridge from one solver plan
+The physical-planning layer (`step/physical_plan.ts` + the
+helpers in `step/verbs.ts`) is the bridge from one solver plan
 to a wire-ready `Primitive[]`: the sequence of `place_hand` /
 `merge_hand` / `merge_stack` / `split` / `move_stack` actions
 the UI replays verbatim. It is the only layer that knows:
@@ -40,17 +40,17 @@ an existing stack can absorb it. Concretely:
   physical primitive is
   `merge_hand(handCard → other-stack, flipSide(side))` — same
   physical motion, mirrored grammar. See the shared invariant
-  comment above `applyMergeStack` in `src/primitives.ts`.
+  comment above `applyMergeStack` in `game_events/primitives.ts`.
 
 Multi-card placements (a graduate set/run played from hand,
 or a multi-card stack a verb consumes) are seeded as a
 `place_hand` + `merge_hand` chain at a clean loc before the
 verb loop runs.
 
-Enforcement: `planMerge` in `src/verbs.ts` consults
+Enforcement: `planMerge` in `step/verbs.ts` consults
 `pendingHand` at each merge emission. Multi-placement seeding
-happens at the top of `physicalPlan` in
-`src/physical_plan.ts`.
+happens at the top of `getPrimitivesForLogicalPlay` in
+`step/physical_plan.ts`.
 
 ### R2 — Merges run small-toward-large
 
@@ -82,7 +82,7 @@ downstream primitives to build on, even when the immediate
 post-board doesn't yet overlap.
 
 Enforcement: `planMergeHand`, `planMergeStackOnBoard`, and
-the end-split branch of `planSplitAfter` in `src/verbs.ts`.
+the end-split branch of `planSplitAfter` in `step/verbs.ts`.
 The trigger threshold is `findCrowding`
 (`PLANNING_MARGIN = 15` — between the legal `BOARD_MARGIN = 7`
 and the human-feel `PACK_GAP = 30`), NOT the strict
@@ -96,13 +96,13 @@ picking *new* loc slots — that's a separate concern
 solver (engine_v2) ─→ {placements, planDescs}
                                  │
                                  ▼
-              physicalPlan(initialBoard, hand, planDescs)
+              getPrimitivesForLogicalPlay(initialBoard, hand, planDescs)
                                  │
                                  ▼
                         Primitive[]  ─→  wire / transcript
 ```
 
-Inside `physicalPlan` (`src/physical_plan.ts`):
+Inside `getPrimitivesForLogicalPlay` (`step/physical_plan.ts`):
 
 1. **Multi-placement seed** — when `hand.length >= 2`, lay
    the hand cards down as a single growing stack at a clean
@@ -120,7 +120,7 @@ Inside `physicalPlan` (`src/physical_plan.ts`):
    references and that we didn't seed. That's broken state,
    not a paper-over case; throw.
 
-`expandVerb` and the per-verb functions in `src/verbs.ts`
+`expandVerb` and the per-verb functions in `step/verbs.ts`
 describe the verb's structure (which splits, which merges, in
 what order). The helpers `planMerge`, `planMergeHand`,
 `planMergeStackOnBoard`, and `planSplitAfter` make the
@@ -128,19 +128,19 @@ physical decisions per emitted primitive.
 
 ## Files
 
-- `src/physical_plan.ts` — the loop. Multi-placement seed +
+- `step/physical_plan.ts` — the loop. Multi-placement seed +
   verb walk + hard-fail.
-- `src/verbs.ts` — `expandVerb` (hand-aware) + per-verb
+- `step/verbs.ts` — `expandVerb` (hand-aware) + per-verb
   structure functions + the primitive-emission helpers
   (R1/R2/R3 inline).
-- `src/primitives.ts` — primitive types, `applyLocally`, and
+- `game_events/primitives.ts` — primitive types, `applyLocally`, and
   the shared `applyMergeStack` / `applyMergeHand` card-order
   invariant.
-- `src/geometry.ts` — geometry constants, `findOpenLoc`,
+- `core/geometry.ts` — geometry constants, `findOpenLoc`,
   `findViolation` (legal-threshold strict overlap), and
   `findCrowding` (pre-flight comfort threshold,
   `PLANNING_MARGIN = 15`).
-- `src/transcript.ts` — production caller of `physicalPlan`.
+- `full_game/transcript.ts` — production caller of `getPrimitivesForLogicalPlay`.
   Asserts `findViolation == null` after every emitted
   primitive.
 
@@ -151,7 +151,7 @@ physical decisions per emitted primitive.
   exercise per-verb expansion via `moveToPrimitives` (which
   calls `expandVerb` with empty `pendingHand`).
 - `conformance/scenarios/physical_plan_corpus.dsl` exercises
-  the integration layer — `physicalPlan` with hand cards +
+  the integration layer — `getPrimitivesForLogicalPlay` with hand cards +
   multi-verb plans, including R1/R3 cases.
 - All runners assert `findViolation == null` after every
   emitted primitive, not just at the end. A primitive that

@@ -11,15 +11,13 @@
 import type { Card } from "../core/card.ts";
 import { cardLabel } from "../core/card.ts";
 import { isPartialOk, isCompleteGroup } from "../core/card_stack.ts";
-import type { Buckets } from "../bfs/buckets.ts";
 import { solveBoard } from "../bfs/engine_v2.ts";
 import type { Move } from "../bfs/move.ts";
 
-export interface PlayResult {
+export interface LogicalMovesForPlay {
   readonly cardsToPlay: readonly Card[];
   readonly moves: readonly Move[];
   readonly moveLines: readonly string[];
-  readonly newBoard: readonly (readonly Card[])[];
 }
 
 interface MeldablePair {
@@ -30,7 +28,7 @@ interface MeldablePair {
 export function findPlay(
   hand: readonly Card[],
   board: readonly (readonly Card[])[],
-): PlayResult | null {
+): LogicalMovesForPlay | null {
   const meldable = collectMeldablePairs(hand);
 
   if (boardIsClean(board)) {
@@ -40,7 +38,6 @@ export function findPlay(
         cardsToPlay: triple,
         moves: [],
         moveLines: [],
-        newBoard: [...board, triple],
       };
     }
   }
@@ -49,7 +46,7 @@ export function findPlay(
   return candidates.length === 0 ? null : shortestPlan(candidates);
 }
 
-export function formatHint(result: PlayResult | null): readonly string[] {
+export function formatHint(result: LogicalMovesForPlay | null): readonly string[] {
   if (result === null) return [];
   const labels = result.cardsToPlay.map(cardLabel).join(" ");
   return [`place [${labels}] from hand`, ...result.moveLines];
@@ -95,8 +92,8 @@ function collectProjectionCandidates(
   meldable: readonly MeldablePair[],
   hand: readonly Card[],
   board: readonly (readonly Card[])[],
-): PlayResult[] {
-  const candidates: PlayResult[] = [];
+): LogicalMovesForPlay[] {
+  const candidates: LogicalMovesForPlay[] = [];
   for (const { card1, card2 } of meldable) {
     const r = projectAndSolve(board, [card1, card2]);
     if (r !== null) candidates.push(r);
@@ -111,7 +108,7 @@ function collectProjectionCandidates(
 function projectAndSolve(
   board: readonly (readonly Card[])[],
   cardsToPlay: readonly Card[],
-): PlayResult | null {
+): LogicalMovesForPlay | null {
   const augmented: (readonly Card[])[] = [...board, cardsToPlay];
   const result = solveBoard(augmented);
   if (result === null) return null;
@@ -119,13 +116,12 @@ function projectAndSolve(
     cardsToPlay,
     moves: result.plan.map(p => p.move),
     moveLines: result.plan.map(p => p.line),
-    newBoard: bucketsToBoard(result.finalBuckets),
   };
 }
 
 // --- Shared helpers -----------------------------------------------------
 
-function shortestPlan(candidates: readonly PlayResult[]): PlayResult {
+function shortestPlan(candidates: readonly LogicalMovesForPlay[]): LogicalMovesForPlay {
   return candidates.reduce((best, cur) =>
     cur.moves.length < best.moves.length ? cur : best,
   );
@@ -133,11 +129,4 @@ function shortestPlan(candidates: readonly PlayResult[]): PlayResult {
 
 function boardIsClean(board: readonly (readonly Card[])[]): boolean {
   return board.every(isCompleteGroup);
-}
-
-function bucketsToBoard(b: Buckets): readonly (readonly Card[])[] {
-  return [
-    ...b.helper.map(s => [...s.cards] as readonly Card[]),
-    ...b.complete.map(s => [...s.cards] as readonly Card[]),
-  ];
 }

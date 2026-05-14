@@ -1,12 +1,12 @@
 import type { Card } from "../core/card.ts";
 import type { Primitive } from "../game_events/primitives.ts";
 
-export interface GroomStep {
+export interface PrimitivesForGroom {
   readonly kind: "groom";
   readonly prims: readonly Primitive[];
 }
 
-export interface PlayStep {
+export interface PrimitivesForPlay {
   readonly kind: "play";
   readonly cardsToPlay: readonly Card[];
   readonly prims: readonly Primitive[];
@@ -18,4 +18,4 @@ export interface EndStep {
 }
 
 // EndStep deliberately omitted — it terminates a turn, not composes one.
-export type TurnStep = GroomStep | PlayStep;
+export type TurnStep = PrimitivesForGroom | PrimitivesForPlay;

@@ -9,13 +9,13 @@ import {
 import type { BoardStack } from "../core/geometry.ts";
 import type { Primitive } from "../game_events/primitives.ts";
 import { planMergeStackOnBoard } from "./verbs.ts";
-import type { GroomStep } from "./step_types.ts";
+import type { PrimitivesForGroom } from "./step_types.ts";
 
 const MAX_JOINED_LEN = 15;
 
 export function tryGroom(
   board: readonly BoardStack[],
-): { step: GroomStep; board: readonly BoardStack[] } | null {
+): { step: PrimitivesForGroom; board: readonly BoardStack[] } | null {
   const prims: Primitive[] = [];
   let sim = board;
   while (true) {

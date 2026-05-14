@@ -3,10 +3,10 @@ import type { BoardStack } from "../core/geometry.ts";
 import { tryGroom } from "./groom.ts";
 import { tryPlay } from "./play.ts";
 import { assertBoardClean } from "./board.ts";
-import type { GroomStep, PlayStep, EndStep } from "./step_types.ts";
+import type { PrimitivesForGroom, PrimitivesForPlay, EndStep } from "./step_types.ts";
 
 interface FullStepResult {
-  readonly step: GroomStep | PlayStep | EndStep;
+  readonly step: PrimitivesForGroom | PrimitivesForPlay | EndStep;
   readonly board: readonly BoardStack[];
   readonly hand: readonly Card[];
 }

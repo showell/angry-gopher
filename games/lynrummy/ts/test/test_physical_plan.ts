@@ -1,5 +1,5 @@
 // test_physical_plan — runs `physical_plan_corpus.dsl` scenarios
-// through `physicalPlan` and asserts (a) the emitted primitive
+// through `getPrimitivesForLogicalPlay` and asserts (a) the emitted primitive
 // sequence matches the pinned `expect.primitives`, AND (b)
 // findViolation is null after every applied primitive.
 //
@@ -22,7 +22,7 @@ import type {
   ExtractAbsorbMove, FreePullMove, PushMove,
   ShiftMove, SpliceMove, DecomposeMove,
 } from "../bfs/move.ts";
-import { physicalPlan } from "../step/physical_plan.ts";
+import { getPrimitivesForLogicalPlay } from "../step/physical_plan.ts";
 
 const DSL_PATH = path.resolve(
   path.dirname(new URL(import.meta.url).pathname),
@@ -253,9 +253,13 @@ function runScenario(sc: Scenario): RunResult {
 
   let prims: readonly Primitive[];
   try {
-    prims = physicalPlan(board, sc.hand, moves);
+    prims = getPrimitivesForLogicalPlay(board, {
+      cardsToPlay: sc.hand,
+      moves,
+      moveLines: [],
+    });
   } catch (e) {
-    return { ok: false, msg: `physicalPlan threw: ${(e as Error).message}` };
+    return { ok: false, msg: `getPrimitivesForLogicalPlay threw: ${(e as Error).message}` };
   }
 
   // Walk + per-step overlap check + render.

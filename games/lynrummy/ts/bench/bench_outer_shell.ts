@@ -19,7 +19,7 @@
 import { type Card, cardLabel } from "../core/card.ts";
 import { isPartialOk } from "../core/card_stack.ts";
 import { solveBoard } from "../bfs/engine_v2.ts";
-import { findPlay, type PlayResult } from "../step/hand_play.ts";
+import { findPlay, type LogicalMovesForPlay } from "../step/hand_play.ts";
 import {
   openingBoardCardLists,
   remainingCards,
@@ -64,21 +64,17 @@ function timeMinOfN<T>(work: () => T): { result: T; bestMs: number } {
 function projectSingleton(
   board: readonly (readonly Card[])[],
   c: Card,
-): PlayResult | null {
+): LogicalMovesForPlay | null {
   const augmented = [...board, [c]];
   const result = solveBoard(augmented);
   if (result === null) return null;
   const moves = result.plan.map(p => p.move);
   const moveLines = result.plan.map(p => p.line);
-  const newBoard: readonly (readonly Card[])[] = [
-    ...result.finalBuckets.helper.map(s => [...s.cards] as readonly Card[]),
-    ...result.finalBuckets.complete.map(s => [...s.cards] as readonly Card[]),
-  ];
-  return { cardsToPlay: [c], moves, moveLines, newBoard };
+  return { cardsToPlay: [c], moves, moveLines };
 }
 
 interface SingletonResult {
-  result: PlayResult | null;
+  result: LogicalMovesForPlay | null;
   projections: number;
 }
 
@@ -86,7 +82,7 @@ function findPlaySingletonsOnly(
   hand: readonly Card[],
   board: readonly (readonly Card[])[],
 ): SingletonResult {
-  const candidates: PlayResult[] = [];
+  const candidates: LogicalMovesForPlay[] = [];
   for (const c of hand) {
     const r = projectSingleton(board, c);
     if (r !== null) candidates.push(r);
@@ -101,7 +97,7 @@ function findPlaySingletonsOnly(
 // ── Full mode ───────────────────────────────────────────────────────
 
 interface FullResult {
-  result: PlayResult | null;
+  result: LogicalMovesForPlay | null;
   projections: number;
 }
 
@@ -122,7 +118,7 @@ function findPlayFull(
 
 // ── Formatting ──────────────────────────────────────────────────────
 
-function fmtResult(result: PlayResult | null): string {
+function fmtResult(result: LogicalMovesForPlay | null): string {
   if (result === null) return "stuck";
   const labels = result.cardsToPlay.map(cardLabel).join(" ");
   const n = result.moves.length;
@@ -135,15 +131,15 @@ function fmtResult(result: PlayResult | null): string {
   return `${kind} [${labels}] → ${n}-step plan`;
 }
 
-function planLen(r: PlayResult | null): number {
+function planLen(r: LogicalMovesForPlay | null): number {
   return r === null ? 999 : r.moves.length;
 }
 
-function placementCount(r: PlayResult | null): number {
+function placementCount(r: LogicalMovesForPlay | null): number {
   return r === null ? 0 : r.cardsToPlay.length;
 }
 
-function outcome(r: PlayResult | null): "stuck" | "triple" | "pair" | "single" {
+function outcome(r: LogicalMovesForPlay | null): "stuck" | "triple" | "pair" | "single" {
   if (r === null) return "stuck";
   const n = r.cardsToPlay.length;
   if (n >= 3) return "triple";
@@ -178,7 +174,7 @@ function main(): void {
   // Singleton-only pass — min-of-N per hand.
   console.log("=== singleton-only (no pair/triple) ===");
   const soloTimes: number[] = [];
-  const soloResults: (PlayResult | null)[] = [];
+  const soloResults: (LogicalMovesForPlay | null)[] = [];
   for (let i = 0; i < hands.length; i++) {
     const { result: solo, bestMs } = timeMinOfN(() => findPlaySingletonsOnly(hands[i]!, board));
     soloTimes.push(bestMs);
@@ -193,7 +189,7 @@ function main(): void {
   // Full pass — min-of-N per hand.
   console.log("=== full (triple-in-hand + pair-BFS + singleton) ===");
   const fullTimes: number[] = [];
-  const fullResults: (PlayResult | null)[] = [];
+  const fullResults: (LogicalMovesForPlay | null)[] = [];
   for (let i = 0; i < hands.length; i++) {
     const { result: full, bestMs } = timeMinOfN(() => findPlayFull(hands[i]!, board));
     fullTimes.push(bestMs);
