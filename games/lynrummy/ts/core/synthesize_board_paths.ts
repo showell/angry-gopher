@@ -19,12 +19,14 @@
 
 import type { Card } from "./card.ts";
 import { CARD_PITCH } from "./geometry.ts";
-import type { TimeLoc, Stack } from "../DSL/emit_game_event.ts";
+import type { Stack } from "../DSL/emit_game_event.ts";
 
 
 const DRAG_MS_PER_PIXEL = 2.5;
 const SAMPLES = 20;
 
+
+export interface TimeLoc { tMs: number; left: number; top: number }
 
 export interface Point { x: number; y: number }
 

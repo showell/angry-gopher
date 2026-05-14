@@ -8,10 +8,9 @@
 // byte-identical across runtimes.
 
 import { type Card, cardToken } from "../core/card.ts";
+import type { TimeLoc } from "../core/synthesize_board_paths.ts";
 
 export { cardToken };
-
-export interface TimeLoc { tMs: number; left: number; top: number }
 
 export interface Loc { top: number; left: number }
 export interface Stack { cards: readonly Card[]; loc: Loc }
