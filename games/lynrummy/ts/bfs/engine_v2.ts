@@ -1,10 +1,5 @@
-// engine_v2.ts — kitchen-table algorithm.
-//
-// Same boundary interface as bfs.ts (Buckets in, PlanLine[]|null out)
-// but structured around backtracking + per-card enumeration rather
-// than parallel BFS over a frontier.
-//
-// See claude-steve/random234.md for the algorithmic description.
+// engine_v2.ts — kitchen-table algorithm. See ENGINE_V2.md for the
+// algorithmic description.
 
 import type { Buckets, RawBuckets, Lineage } from "./buckets.ts";
 import {

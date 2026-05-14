@@ -1,10 +1,4 @@
-// enumerator.ts — BFS move generator + focus rule.
-//
-// TS port of python/enumerator.py.
-//
-// Operates on CCS-shaped Buckets internally; the boundary at the BFS
-// entry (`bfs.ts`) classifies raw input once via `classifyBuckets`.
-// Descriptors continue to hold raw card tuples for plan-line stability.
+// enumerator.ts — BFS move generator.
 //
 // Iteration order is the cross-language canon — DON'T rearrange for
 // readability. See ENGINE_V2.md § "Iteration order is canon".

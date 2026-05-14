@@ -35,41 +35,9 @@ export interface RawBuckets {
   readonly complete: readonly (readonly Card[])[];
 }
 
-/** Lineage = focus queue. lineage[0] is the focus (a tuple of raw
- *  cards). Content-based identity for memoization. */
+/** Per-state queue used as part of the memoization-signature key
+ *  in engine_v2's BFS — see `sigFn` / `queueToLineage`. */
 export type Lineage = readonly (readonly Card[])[];
-
-// --- State signature -------------------------------------------------------
-//
-// DESIGN DECISION (state_sig hashing strategy):
-//
-// Python uses tuples-of-tuples-of-cards as `seen` set keys, relying on
-// Python's deep tuple equality. JS Set/Map uses reference equality, so
-// tuple-of-tuples doesn't work as a key. We need a stable, deterministic
-// string encoding.
-//
-// Encoding chosen: pack each card into a single integer (12 bits is
-// plenty: value*4*2 + suit*2 + deck → max = 13*8 + 3*2 + 1 = 111), join
-// cards within a stack with `,`, sort stacks lexicographically within
-// each bucket, join bucket strings with `;`, and join buckets with `|`.
-// Lineage joins separately with `~` and the whole thing concatenates.
-//
-// Why packed-int strings:
-//   - Far cheaper than JSON.stringify (no quotes, escapes, or recursion).
-//   - Maintains determinism: same buckets always hash to same string.
-//   - Lexicographic sort on packed-int strings is canonical because we
-//     pad cards to 3 chars so card 0=A,Cl,d0 sorts before 100=…
-//   - Order-insensitive within a stack (we sort) and within a bucket
-//     (we sort). Order BETWEEN buckets is preserved: HELPER vs COMPLETE
-//     are different roles, so bucket order matters.
-//
-// Tradeoff: a few extra string allocations per state expansion vs.
-// JSON.stringify, but avoids the JSON parser overhead and stays in
-// strict ASCII. Hot-path-acceptable.
-//
-// Lineage is folded INTO the state-sig: in Python, the seen-set key is
-// (state_sig, lineage). Encoding both into one string saves the per-key
-// tuple allocation in JS (where small object keys are not hash-friendly).
 
 /** Build a position-of-cardId map from a full game's initial state.
  *  Iterates all buckets, collects card-ids in encounter order, and

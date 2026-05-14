@@ -23,12 +23,11 @@ import { fileURLToPath } from "node:url";
 
 import { type Card, type Rank, type Suit, type Deck, parseCardLabel } from "../core/card.ts";
 // Engine conformance now exercises engine_v2 (the engine `hand_play.ts`
-// and the full-game loop use). The plan-line equality
-// contract loosens to "any plan that drives the augmented board to
-// victory, length ≤ pinned" — engine_v2 frequently finds different
-// valid plans than the bfs.ts plan-lines the JSON pins. The
-// canSteal length-2 extension also made some pinned no_plan
-// scenarios solvable; those are itemized in STALE_NO_PLAN.
+// and the full-game loop use). The plan-line equality contract loosens
+// to "any plan that drives the augmented board to victory, length ≤
+// pinned" — engine_v2 frequently finds different valid plans than the
+// pinned ones. The canSteal length-2 extension also made some pinned
+// no_plan scenarios solvable; those are itemized in STALE_NO_PLAN.
 import { findPlanForBuckets } from "../step/hand_play.ts";
 import { enumerateMoves } from "../bfs/enumerator.ts";
 import { narrate, hint, type Move } from "../bfs/move.ts";
