@@ -16,7 +16,7 @@ so you don't have to remember flags.
   3. `Puzzle.elm` → `games/lynrummy/elm/puzzle.js`
 
 After editing any `.elm` or any `.ts` file under
-`games/lynrummy/ts/src/`, run `ops/build_elm` and reload the
+`games/lynrummy/ts/`, run `ops/build_elm` and reload the
 browser.
 
 ## Build artifacts
@@ -28,7 +28,7 @@ All three live at `games/lynrummy/elm/` and are served by
 |------|--------|-----------|
 | `elm.js` | `elm/src/Main.elm` | `/gopher/lynrummy-elm/elm.js` |
 | `puzzle.js` | `elm/src/Puzzle.elm` | `/gopher/puzzle/puzzle.js` |
-| `engine.js` | `ts/src/engine_entry.ts` (esbuild bundle) | `/gopher/lynrummy-elm/engine.js` |
+| `engine.js` | `ts/elm_api/engine_entry.ts` (esbuild bundle) | `/gopher/lynrummy-elm/engine.js` |
 
 `engine.js` exposes a single browser global, `LynRummyEngine`,
 with two layers of exports:

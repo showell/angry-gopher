@@ -97,8 +97,8 @@ is finite…"). See
 broader volatility-class discipline this layer sits in.
 
 The TS agent uses the same rule shapes; see
-`../ts/src/rules/card.ts` and
-`../ts/src/classified_card_stack.ts`.
+`../ts/core/card.ts` and
+`../ts/core/card_stack.ts`.
 
 ## Two-host design
 

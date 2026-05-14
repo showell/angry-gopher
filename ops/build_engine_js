@@ -9,7 +9,7 @@
 # /gopher/puzzles/engine.js route. The Elm puzzles client calls
 # the bundle via Elm ports + a thin JS glue (engine_glue.js).
 #
-# Entry point: games/lynrummy/ts/src/engine_entry.ts. Esbuild
+# Entry point: games/lynrummy/ts/elm_api/engine_entry.ts. Esbuild
 # resolves the full closure (engine_v2 + hand_play + buckets +
 # classified_card_stack + rules/* + …) into one IIFE that exposes
 # a single global, `LynRummyEngine`.
@@ -21,7 +21,7 @@ set -e
 
 source "$(dirname "$0")/_paths.sh"
 
-ENTRY="$GOPHER_DIR/games/lynrummy/ts/src/engine_entry.ts"
+ENTRY="$GOPHER_DIR/games/lynrummy/ts/elm_api/engine_entry.ts"
 OUT="$GOPHER_DIR/games/lynrummy/elm/engine.js"
 
 if ! command -v npx >/dev/null 2>&1; then

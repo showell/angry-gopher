@@ -108,7 +108,7 @@
   }
 
   // The functions below call LynRummyEngine.elm* — the Elm-facing
-  // wrappers in ts/src/engine_entry.ts. They're one-liners on the TS
+  // wrappers in ts/elm_api/engine_entry.ts. They're one-liners on the TS
   // side; this layer's job is just wire-shape conversion (Elm sends
   // {value, suit, origin_deck} objects; the TS Card record is
   // {rank, suit, deck}).
