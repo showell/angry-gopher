@@ -4,15 +4,6 @@
 // wraps it. Given a hand + a board, find a play (cards to lay onto
 // the board + a BFS plan that cleans the augmented board to victory).
 //
-// Search order:
-//   1. Triple-in-hand shortcut (clean board only): if a hand pair has
-//      a completing third in the hand, lay the triple down. No plan
-//      needed.
-//   2. Pair projections: for each meldable hand pair, place it as a
-//      2-partial and ask BFS for a plan that clears the result.
-//   3. Singleton projections: same per hand card.
-//   4. Among BFS candidates from (2)+(3), pick the shortest plan.
-//
 // Dirty-board contract: BFS-derived plans clear ALL trouble on the
 // augmented board (existing partials + new placements), not just the
 // new placement. solveBoard's victory check enforces this.
@@ -26,13 +17,14 @@ import type { Move } from "../bfs/move.ts";
 
 export interface PlayResult {
   readonly placements: readonly Card[];
-  /** The plan as structured Moves — what physicalPlan consumes. */
   readonly plan: readonly Move[];
-  /** Same plan as one-line DSL strings, for hint display + conformance. */
   readonly planLines: readonly string[];
-  /** Board after placements + plan are applied. Derived from the
-   *  solver's final buckets so consumers don't re-solve. */
   readonly newBoard: readonly (readonly Card[])[];
+}
+
+interface MeldablePair {
+  readonly card1: Card;
+  readonly card2: Card;
 }
 
 export function findPlay(
@@ -42,7 +34,7 @@ export function findPlay(
   const meldable = collectMeldablePairs(hand);
 
   if (boardIsClean(board)) {
-    const triple = findTripleAmongPairs(meldable, hand);
+    const triple = findTripleInHand(meldable, hand);
     if (triple !== null) {
       return {
         placements: triple,
@@ -53,15 +45,7 @@ export function findPlay(
     }
   }
 
-  const candidates: PlayResult[] = [];
-  for (const pair of meldable) {
-    const r = projectAndSolve(board, pair);
-    if (r !== null) candidates.push(r);
-  }
-  for (const card of hand) {
-    const r = projectAndSolve(board, [card]);
-    if (r !== null) candidates.push(r);
-  }
+  const candidates = collectProjectionCandidates(meldable, hand, board);
   return candidates.length === 0 ? null : shortestPlan(candidates);
 }
 
@@ -73,49 +57,56 @@ export function formatHint(result: PlayResult | null): readonly string[] {
 
 // --- Pair collection ----------------------------------------------------
 
-/** Walk hand positions i < j; for each pair of cards, record it as a
- *  pair in canonical order (the order that isPartialOk accepts).
- *  Either orientation might pass — A-2 is canonical ascending, but
- *  the wrap pair K-A is also canonical (K is the predecessor of A
- *  under the cycle). */
-function collectMeldablePairs(hand: readonly Card[]): readonly (readonly [Card, Card])[] {
-  const out: (readonly [Card, Card])[] = [];
+/** Each hand-position pair (i < j) is tried in both orientations;
+ *  whichever passes isPartialOk is the canonical one. The wrap pair
+ *  K-A is canonical even though rank(K)=13 > rank(A)=1 numerically. */
+function collectMeldablePairs(hand: readonly Card[]): readonly MeldablePair[] {
+  const out: MeldablePair[] = [];
   for (let i = 0; i < hand.length; i++) {
     for (let j = i + 1; j < hand.length; j++) {
       const a = hand[i]!;
       const b = hand[j]!;
-      if (isPartialOk([a, b])) {
-        out.push([a, b]);
-      } else if (isPartialOk([b, a])) {
-        out.push([b, a]);
-      }
+      if (isPartialOk([a, b])) out.push({ card1: a, card2: b });
+      else if (isPartialOk([b, a])) out.push({ card1: b, card2: a });
     }
   }
   return out;
 }
 
-// --- Triple-in-hand shortcut --------------------------------------------
+// --- Phase 1: triple-in-hand --------------------------------------------
 
-/** For each canonical meldable pair (a, b), look for a third hand card
- *  c that extends to the right: [a, b, c] forms a legal length-3
- *  group. Left-extensions don't need a separate check — they emerge
- *  as a *different* meldable pair (e.g., the wrap triple K-A-2 is
- *  discovered via the (K, A) pair, not via (A, 2) trying K-on-left). */
-function findTripleAmongPairs(
-  meldable: readonly (readonly [Card, Card])[],
+function findTripleInHand(
+  meldable: readonly MeldablePair[],
   hand: readonly Card[],
 ): readonly Card[] | null {
-  for (const pair of meldable) {
+  for (const { card1, card2 } of meldable) {
     for (const c of hand) {
-      if (c === pair[0] || c === pair[1]) continue;
-      const triple: readonly Card[] = [pair[0], pair[1], c];
+      if (c === card1 || c === card2) continue;
+      const triple: readonly Card[] = [card1, card2, c];
       if (isCompleteGroup(triple)) return triple;
     }
   }
   return null;
 }
 
-// --- Pair + singleton projections ---------------------------------------
+// --- Phase 2 + 3: pair + singleton projections --------------------------
+
+function collectProjectionCandidates(
+  meldable: readonly MeldablePair[],
+  hand: readonly Card[],
+  board: readonly (readonly Card[])[],
+): PlayResult[] {
+  const candidates: PlayResult[] = [];
+  for (const { card1, card2 } of meldable) {
+    const r = projectAndSolve(board, [card1, card2]);
+    if (r !== null) candidates.push(r);
+  }
+  for (const card of hand) {
+    const r = projectAndSolve(board, [card]);
+    if (r !== null) candidates.push(r);
+  }
+  return candidates;
+}
 
 function projectAndSolve(
   board: readonly (readonly Card[])[],
@@ -150,4 +141,3 @@ function bucketsToBoard(b: Buckets): readonly (readonly Card[])[] {
     ...b.complete.map(s => [...s.cards] as readonly Card[]),
   ];
 }
-
