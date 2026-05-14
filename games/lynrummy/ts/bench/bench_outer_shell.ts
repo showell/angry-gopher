@@ -20,10 +20,16 @@
 // Usage:
 //   node bench/bench_outer_shell.ts
 
-import { type Card, type Rank, type Suit, type Deck, parseCardLabel, cardLabel } from "../core/card.ts";
+import { type Card, cardLabel } from "../core/card.ts";
 import { isPartialOk } from "../core/card_stack.ts";
 import { solveBoard } from "../bfs/index.ts";
 import { findPlay, type PlayResult } from "../step/hand_play.ts";
+import {
+  openingBoardCardLists,
+  remainingCards,
+  mulberry32,
+  shuffle,
+} from "../baseline_deal.ts";
 
 const N_HANDS = 60;
 const HAND_SIZE = 6;
@@ -51,64 +57,6 @@ function timeMinOfN<T>(work: () => T): { result: T; bestMs: number } {
     if (ms < bestMs) bestMs = ms;
   }
   return { result, bestMs };
-}
-
-// ── Fixed board (Game 17 opening) ────────────────────────────────────
-
-const BOARD_LABELS: string[][] = [
-  ["KS", "AS", "2S", "3S"],
-  ["TD", "JD", "QD", "KD"],
-  ["2H", "3H", "4H"],
-  ["7S", "7D", "7C"],
-  ["AC", "AD", "AH"],
-  ["2C", "3D", "4C", "5H", "6S", "7H"],
-];
-
-function makeBoard(): readonly (readonly Card[])[] {
-  return BOARD_LABELS.map(stack => stack.map(parseCardLabel));
-}
-
-function remainingCards(): Card[] {
-  const onBoard = new Set<string>();
-  for (const stack of BOARD_LABELS) {
-    for (const lbl of stack) {
-      const c = parseCardLabel(lbl);
-      onBoard.add(`${c.rank},${c.suit},${c.deck}`);
-    }
-  }
-  const out: Card[] = [];
-  for (let si = 0; si < 4; si++) {
-    for (let vi = 0; vi < 13; vi++) {
-      for (const deck of [0, 1] as const) {
-        const c: Card = { rank: (vi + 1) as Rank, suit: si as Suit, deck: deck as Deck };
-        if (!onBoard.has(`${c.rank},${c.suit},${c.deck}`)) out.push(c);
-      }
-    }
-  }
-  if (out.length !== 81) throw new Error(`expected 81 remaining; got ${out.length}`);
-  return out;
-}
-
-// ── PRNG: mulberry32 (deterministic, seed-driven) ───────────────────
-
-function mulberry32(seed: number): () => number {
-  let a = seed >>> 0;
-  return function next(): number {
-    a = (a + 0x6d2b79f5) >>> 0;
-    let t = a;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
-function sample<T>(rng: () => number, pool: readonly T[], k: number): T[] {
-  const arr = pool.slice();
-  for (let i = arr.length - 1; i > 0; i--) {
-    const j = Math.floor(rng() * (i + 1));
-    [arr[i], arr[j]] = [arr[j]!, arr[i]!];
-  }
-  return arr.slice(0, k);
 }
 
 // ── Singleton-only mode ─────────────────────────────────────────────
@@ -221,8 +169,8 @@ function main(): void {
   const remaining = remainingCards();
   const rng = mulberry32(SEED);
   const hands: Card[][] = [];
-  for (let i = 0; i < N_HANDS; i++) hands.push(sample(rng, remaining, HAND_SIZE));
-  const board = makeBoard();
+  for (let i = 0; i < N_HANDS; i++) hands.push(shuffle(remaining, rng).slice(0, HAND_SIZE));
+  const board = openingBoardCardLists();
 
   console.log(
     `Game 17 board  ·  ${N_HANDS} hands of ${HAND_SIZE} (benchmark size)  ·  seed=${SEED}`,
