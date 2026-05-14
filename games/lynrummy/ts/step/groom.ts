@@ -6,9 +6,9 @@ import {
   KIND_RUN,
   KIND_RB,
 } from "../core/card_stack.ts";
-import type { BoardStack } from "../src/geometry.ts";
-import type { Primitive } from "../src/primitives.ts";
-import { planMergeStackOnBoard } from "../src/verbs.ts";
+import type { BoardStack } from "../core/geometry.ts";
+import type { Primitive } from "../core/primitives.ts";
+import { planMergeStackOnBoard } from "./verbs.ts";
 import type { GroomStep } from "./step_types.ts";
 
 const MAX_JOINED_LEN = 15;

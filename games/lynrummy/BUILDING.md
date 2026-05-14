@@ -51,7 +51,7 @@ JS glue file (`engine_glue.js`) that converts the wire-shape
 ## ops scripts
 
 - `ops/build_engine_js` — esbuild → IIFE bundle. Entry point
-  is `games/lynrummy/ts/src/engine_entry.ts`. Output is
+  is `games/lynrummy/ts/elm_api/engine_entry.ts`. Output is
   `games/lynrummy/elm/engine.js`. ~75KB. Uses `npx --yes
   esbuild` so no local install is needed; the first run is
   slower while npm caches esbuild.

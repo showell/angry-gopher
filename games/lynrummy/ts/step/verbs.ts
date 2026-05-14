@@ -38,12 +38,12 @@ import {
   type BoardStack, type Loc,
   CARD_PITCH, findOpenLoc, findCrowding,
   stackRect, padRect, rectsOverlap, PLANNING_MARGIN,
-} from "./geometry.ts";
+} from "../core/geometry.ts";
 import {
   type Primitive,
   applyLocally, findStackIndex,
   makeSplit, makeMergeStack, makeMergeHand, makeMoveStack,
-} from "./primitives.ts";
+} from "../core/primitives.ts";
 import { classifyStack } from "../core/card_stack.ts";
 
 function flipSide(s: Side): Side {

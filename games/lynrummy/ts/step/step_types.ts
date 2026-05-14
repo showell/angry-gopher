@@ -1,5 +1,5 @@
 import type { Card } from "../core/card.ts";
-import type { Primitive } from "../src/primitives.ts";
+import type { Primitive } from "../core/primitives.ts";
 
 export interface GroomStep {
   readonly kind: "groom";

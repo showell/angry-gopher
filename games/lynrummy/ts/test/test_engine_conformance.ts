@@ -29,13 +29,13 @@ import { type Card, type Rank, type Suit, type Deck, parseCardLabel } from "../c
 // valid plans than the bfs.ts plan-lines the JSON pins. The
 // canSteal length-2 extension also made some pinned no_plan
 // scenarios solvable; those are itemized in STALE_NO_PLAN.
-import { findPlanForBuckets } from "../src/hand_play.ts";
+import { findPlanForBuckets } from "../step/hand_play.ts";
 import { enumerateMoves } from "../bfs/enumerator.ts";
 import { describe, narrate, hint, type Move } from "../bfs/move.ts";
 import { classifyBuckets, type Buckets, type RawBuckets } from "../bfs/buckets.ts";
-import { findPlay, formatHint } from "../src/hand_play.ts";
+import { findPlay, formatHint } from "../step/hand_play.ts";
 import { classifyStack } from "../core/card_stack.ts";
-import { findOpenLoc, type BoardStack } from "../src/geometry.ts";
+import { findOpenLoc, type BoardStack } from "../core/geometry.ts";
 import { parseConformanceDsl } from "./conformance_dsl.ts";
 
 const __filename = fileURLToPath(import.meta.url);

@@ -23,7 +23,7 @@
 import { type Card, type Rank, type Suit, type Deck, parseCardLabel, cardLabel } from "../core/card.ts";
 import { isPartialOk } from "../core/card_stack.ts";
 import { solveBoard } from "../bfs/index.ts";
-import { findPlay, type PlayResult } from "../src/hand_play.ts";
+import { findPlay, type PlayResult } from "../step/hand_play.ts";
 
 const N_HANDS = 60;
 const HAND_SIZE = 6;

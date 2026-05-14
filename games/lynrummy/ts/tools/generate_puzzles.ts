@@ -35,11 +35,11 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 
 import { type Card, type Rank, type Suit, type Deck, parseCardLabel } from "../core/card.ts";
-import type { BoardStack, Loc } from "../src/geometry.ts";
-import { findOpenLoc } from "../src/geometry.ts";
+import type { BoardStack, Loc } from "../core/geometry.ts";
+import { findOpenLoc } from "../core/geometry.ts";
 import { playFullGame } from "../full_game/full_game.ts";
 import type { PlayStep, TurnStep } from "../step/step_types.ts";
-import { applyLocally } from "../src/primitives.ts";
+import { applyLocally } from "../core/primitives.ts";
 import { encodeInitialState, type RemoteStateJson } from "../full_game/transcript.ts";
 
 // --- Tunables (constants, NOT CLI args) -----------------------------

@@ -26,8 +26,8 @@
 // Elm emits.
 
 import { type Card, parseCardLabel, cardToken } from "../core/card.ts";
-import type { Stack } from "../src/wire_action_dsl.ts";
-import type { BoardStack, Loc } from "../src/geometry.ts";
+import type { Stack } from "../DSL/emit_game_event.ts";
+import type { BoardStack, Loc } from "../core/geometry.ts";
 
 
 export interface GameStateForDsl {

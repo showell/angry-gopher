@@ -27,11 +27,11 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 
 import { type Card, type Rank, type Suit, type Deck, cardLabel } from "../core/card.ts";
-import type { BoardStack } from "../src/geometry.ts";
-import type { Primitive } from "../src/primitives.ts";
-import { applyLocally } from "../src/primitives.ts";
-import { primToDslLine } from "../src/wire_json.ts";
-import { expandVerb } from "../src/verbs.ts";
+import type { BoardStack } from "../core/geometry.ts";
+import type { Primitive } from "../core/primitives.ts";
+import { applyLocally } from "../core/primitives.ts";
+import { primToDslLine } from "../elm_api/wire_json.ts";
+import { expandVerb } from "../step/verbs.ts";
 import { solveBucketedState } from "../bfs/engine_v2.ts";
 import {
   classifyStack,

@@ -16,8 +16,8 @@
 
 import type { Card } from "../core/card.ts";
 import { cardLabel } from "../core/card.ts";
-import type { BoardStack } from "./geometry.ts";
-import type { Primitive } from "./primitives.ts";
+import type { BoardStack } from "../core/geometry.ts";
+import type { Primitive } from "../core/primitives.ts";
 
 export interface JsonCard { value: number; suit: number; origin_deck: number }
 export interface JsonBoardCard { card: JsonCard; state: number }

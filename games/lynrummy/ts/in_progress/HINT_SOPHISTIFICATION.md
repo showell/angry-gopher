@@ -205,9 +205,9 @@ later. (C) drops from "design with B" to "wait for a real case."
 - `claude-steve/random267.md` — the framing essay this
   project doc summarizes. Read it for the longer reasoning
   behind the (A)-first recommendation.
-- `games/lynrummy/ts/src/hand_play.ts` — `findPlay`,
+- `games/lynrummy/ts/step/hand_play.ts` — `findPlay`,
   `formatHint`, the dirty-board contract. The TS surface (A),
   (B), and (C) all touch.
-- `games/lynrummy/ts/src/engine_v2.ts` — the BFS engine and
+- `games/lynrummy/ts/bfs/engine_v2.ts` — the BFS engine and
   verb-generator dispatch. (C) extends here.
 - `claude-steve/MINI_PROJECTS.md` — current project index.

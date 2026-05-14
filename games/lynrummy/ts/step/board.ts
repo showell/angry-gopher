@@ -3,7 +3,7 @@ import {
   classifyStack,
   type ClassifiedCardStack,
 } from "../core/card_stack.ts";
-import type { BoardStack } from "../src/geometry.ts";
+import type { BoardStack } from "../core/geometry.ts";
 
 export function cardKey(c: Card): string {
   return `${c.rank},${c.suit},${c.deck}`;

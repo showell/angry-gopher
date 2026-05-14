@@ -29,13 +29,13 @@ import type {
   Verb,
   AbsorberBucket,
 } from "../bfs/move.ts";
-import type { BoardStack, Loc } from "../src/geometry.ts";
-import { findViolation } from "../src/geometry.ts";
+import type { BoardStack, Loc } from "../core/geometry.ts";
+import { findViolation } from "../core/geometry.ts";
 import { classifyStack } from "../core/card_stack.ts";
 import {
   type Primitive,
-} from "../src/primitives.ts";
-import { moveToPrimitives } from "../src/verbs.ts";
+} from "../core/primitives.ts";
+import { moveToPrimitives } from "../step/verbs.ts";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -307,7 +307,7 @@ function applyPrimitiveLocal(
   return applyLocallyForRender(board, p);
 }
 
-import { applyLocally as applyLocallyForRender } from "../src/primitives.ts";
+import { applyLocally as applyLocallyForRender } from "../core/primitives.ts";
 
 void applyPrimitiveLocal; // kept for clarity above; the real call is below.
 

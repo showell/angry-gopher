@@ -19,14 +19,14 @@
 import type { Card } from "../core/card.ts";
 import { cardLabel } from "../core/card.ts";
 import type { Move } from "../bfs/move.ts";
-import type { BoardStack } from "../src/geometry.ts";
-import { findOpenLoc } from "../src/geometry.ts";
+import type { BoardStack } from "../core/geometry.ts";
+import { findOpenLoc } from "../core/geometry.ts";
 import {
   type Primitive,
   applyLocally,
   makePlaceHand, makeMergeHand,
-} from "../src/primitives.ts";
-import { expandVerb } from "../src/verbs.ts";
+} from "../core/primitives.ts";
+import { expandVerb } from "./verbs.ts";
 
 function cardKey(c: Card): string {
   return `${c.rank},${c.suit},${c.deck}`;

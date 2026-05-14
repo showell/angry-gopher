@@ -11,12 +11,12 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 
 import { parseCardLabel, cardLabel, type Card } from "../core/card.ts";
-import type { BoardStack, Loc } from "../src/geometry.ts";
-import { findViolation } from "../src/geometry.ts";
+import type { BoardStack, Loc } from "../core/geometry.ts";
+import { findViolation } from "../core/geometry.ts";
 import {
   type Primitive,
   applyLocally,
-} from "../src/primitives.ts";
+} from "../core/primitives.ts";
 import type {
   Move, Verb, AbsorberBucket,
   ExtractAbsorbMove, FreePullMove, PushMove,

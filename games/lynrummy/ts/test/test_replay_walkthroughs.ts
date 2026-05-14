@@ -23,9 +23,9 @@ import {
   type Primitive, type Side,
   applyLocally, findStackIndex,
   makeSplit, makeMergeStack, makeMergeHand, makeMoveStack, makePlaceHand,
-} from "../src/primitives.ts";
-import type { BoardStack, Loc } from "../src/geometry.ts";
-import { findViolation } from "../src/geometry.ts";
+} from "../core/primitives.ts";
+import type { BoardStack, Loc } from "../core/geometry.ts";
+import { findViolation } from "../core/geometry.ts";
 import { classifyStack } from "../core/card_stack.ts";
 
 const __filename = fileURLToPath(import.meta.url);

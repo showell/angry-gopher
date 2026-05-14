@@ -1,0 +1,11 @@
+# Reorg the TS subtree: dissolve ts/src/ into core/, step/, DSL/, elm_api/.
+
+ts-mv games/lynrummy/ts/src/geometry.ts          games/lynrummy/ts/core/geometry.ts
+ts-mv games/lynrummy/ts/src/primitives.ts        games/lynrummy/ts/core/primitives.ts
+ts-mv games/lynrummy/ts/src/wire_path_synth.ts   games/lynrummy/ts/core/synthesize_board_paths.ts
+ts-mv games/lynrummy/ts/src/hand_play.ts         games/lynrummy/ts/step/hand_play.ts
+ts-mv games/lynrummy/ts/src/verbs.ts             games/lynrummy/ts/step/verbs.ts
+ts-mv games/lynrummy/ts/src/wire_action_dsl.ts   games/lynrummy/ts/DSL/emit_game_event.ts
+ts-mv games/lynrummy/ts/src/wire_action_parser.ts games/lynrummy/ts/DSL/parse_game_event.ts
+ts-mv games/lynrummy/ts/src/engine_entry.ts      games/lynrummy/ts/elm_api/engine_entry.ts
+ts-mv games/lynrummy/ts/src/wire_json.ts         games/lynrummy/ts/elm_api/wire_json.ts

@@ -19,13 +19,13 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 
 import { type Card, type Rank, type Suit, type Deck, cardLabel } from "../core/card.ts";
-import type { BoardStack } from "../src/geometry.ts";
-import type { Primitive, Side } from "../src/primitives.ts";
+import type { BoardStack } from "../core/geometry.ts";
+import type { Primitive, Side } from "../core/primitives.ts";
 import {
   applyLocally,
   makeSplit, makeMergeStack, makeMergeHand, makeMoveStack, makePlaceHand,
-} from "../src/primitives.ts";
-import { primToDslLine } from "../src/wire_json.ts";
+} from "../core/primitives.ts";
+import { primToDslLine } from "../elm_api/wire_json.ts";
 
 interface JsonCard { value: number; suit: number; origin_deck: number }
 interface JsonBoardCard { card: JsonCard; state: number }

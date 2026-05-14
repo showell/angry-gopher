@@ -4,7 +4,7 @@
 
 import type { Card } from "../core/card.ts";
 import { parseCardLabel } from "../core/card.ts";
-import { gameHintLines } from "../src/engine_entry.ts";
+import { gameHintLines } from "../elm_api/engine_entry.ts";
 
 const handLabels = [
   "5C'", "2D", "7D'",
