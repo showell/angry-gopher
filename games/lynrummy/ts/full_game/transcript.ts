@@ -26,9 +26,9 @@ import { findViolation } from "../core/geometry.ts";
 import {
   type Primitive,
   applyLocally,
-} from "../core/primitives.ts";
+} from "../game_events/primitives.ts";
 import type { GameResult } from "./full_game.ts";
-import { completeTurnDsl, seqPrefix } from "../DSL/emit_game_event.ts";
+import { completeTurnDsl, seqPrefix } from "../game_events/emit_game_event.ts";
 import { formatGameState } from "./initial_state_dsl.ts";
 import {
   type JsonCard,

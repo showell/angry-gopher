@@ -14,16 +14,16 @@
 // system going forward, no HTTP. So we skip Python's `to_wire_shape` /
 // `send_one`.
 
-import type { Card } from "./card.ts";
-import { CARD_PITCH, type BoardStack, type Loc } from "./geometry.ts";
+import type { Card } from "../core/card.ts";
+import { CARD_PITCH, type BoardStack, type Loc } from "../core/geometry.ts";
 import {
   splitDsl,
   mergeStackDsl,
   mergeHandDsl,
   placeHandDsl,
   moveStackDsl,
-} from "../DSL/emit_game_event.ts";
-import { mergeStackPath, moveStackPath } from "./synthesize_board_paths.ts";
+} from "./emit_game_event.ts";
+import { mergeStackPath, moveStackPath } from "../core/synthesize_board_paths.ts";
 
 export type Side = "left" | "right";
 

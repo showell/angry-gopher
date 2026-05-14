@@ -20,11 +20,11 @@ import * as path from "node:path";
 
 import { type Card, type Rank, type Suit, type Deck, cardLabel } from "../core/card.ts";
 import type { BoardStack } from "../core/geometry.ts";
-import type { Primitive, Side } from "../core/primitives.ts";
+import type { Primitive, Side } from "../game_events/primitives.ts";
 import {
   applyLocally,
   makeSplit, makeMergeStack, makeMergeHand, makeMoveStack, makePlaceHand,
-} from "../core/primitives.ts";
+} from "../game_events/primitives.ts";
 import { primToDslLine } from "../elm_api/wire_json.ts";
 
 interface JsonCard { value: number; suit: number; origin_deck: number }

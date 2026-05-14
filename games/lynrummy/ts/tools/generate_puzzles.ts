@@ -39,7 +39,7 @@ import type { BoardStack, Loc } from "../core/geometry.ts";
 import { findOpenLoc } from "../core/geometry.ts";
 import { playFullGame } from "../full_game/full_game.ts";
 import type { PlayStep, TurnStep } from "../step/step_types.ts";
-import { applyLocally } from "../core/primitives.ts";
+import { applyLocally } from "../game_events/primitives.ts";
 import { encodeInitialState, type RemoteStateJson } from "../full_game/transcript.ts";
 
 // --- Tunables (constants, NOT CLI args) -----------------------------

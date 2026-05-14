@@ -7,7 +7,7 @@ import {
   KIND_RB,
 } from "../core/card_stack.ts";
 import type { BoardStack } from "../core/geometry.ts";
-import type { Primitive } from "../core/primitives.ts";
+import type { Primitive } from "../game_events/primitives.ts";
 import { planMergeStackOnBoard } from "./verbs.ts";
 import type { GroomStep } from "./step_types.ts";
 

@@ -43,7 +43,7 @@ import {
   type Primitive,
   applyLocally, findStackIndex,
   makeSplit, makeMergeStack, makeMergeHand, makeMoveStack,
-} from "../core/primitives.ts";
+} from "../game_events/primitives.ts";
 import { classifyStack } from "../core/card_stack.ts";
 
 function flipSide(s: Side): Side {

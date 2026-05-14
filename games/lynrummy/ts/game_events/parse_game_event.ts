@@ -18,7 +18,7 @@ import {
   type Primitive, type Side,
   findStackIndex,
   makeSplit, makeMergeStack, makeMergeHand, makeMoveStack, makePlaceHand,
-} from "../core/primitives.ts";
+} from "./primitives.ts";
 import type { BoardStack, Loc } from "../core/geometry.ts";
 import { type Card, parseCardLabel } from "../core/card.ts";
 

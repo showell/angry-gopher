@@ -23,7 +23,7 @@ import {
   type Primitive, type Side,
   applyLocally, findStackIndex,
   makeSplit, makeMergeStack, makeMergeHand, makeMoveStack, makePlaceHand,
-} from "../core/primitives.ts";
+} from "../game_events/primitives.ts";
 import type { BoardStack, Loc } from "../core/geometry.ts";
 import { findViolation } from "../core/geometry.ts";
 import { classifyStack } from "../core/card_stack.ts";

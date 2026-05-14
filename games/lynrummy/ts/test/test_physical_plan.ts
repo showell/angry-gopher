@@ -16,7 +16,7 @@ import { findViolation } from "../core/geometry.ts";
 import {
   type Primitive,
   applyLocally,
-} from "../core/primitives.ts";
+} from "../game_events/primitives.ts";
 import type {
   Move, Verb, AbsorberBucket,
   ExtractAbsorbMove, FreePullMove, PushMove,

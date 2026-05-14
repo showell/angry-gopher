@@ -14,11 +14,11 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 
-import { type Primitive, applyLocally } from "../core/primitives.ts";
+import { type Primitive, applyLocally } from "../game_events/primitives.ts";
 import type { BoardStack } from "../core/geometry.ts";
 import { findViolation } from "../core/geometry.ts";
 import { parseBoardFromMeta } from "./initial_state_dsl.ts";
-import { parseWireActionLine } from "../DSL/parse_game_event.ts";
+import { parseWireActionLine } from "../game_events/parse_game_event.ts";
 
 
 export interface ValidationResult {

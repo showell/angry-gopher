@@ -25,7 +25,7 @@ import {
   type Primitive,
   applyLocally,
   makePlaceHand, makeMergeHand,
-} from "../core/primitives.ts";
+} from "../game_events/primitives.ts";
 import { expandVerb } from "./verbs.ts";
 
 function cardKey(c: Card): string {

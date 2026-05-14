@@ -1,7 +1,7 @@
 import type { Card } from "../core/card.ts";
 import { findPlay } from "./hand_play.ts";
 import { physicalPlan } from "./physical_plan.ts";
-import { applyLocally } from "../core/primitives.ts";
+import { applyLocally } from "../game_events/primitives.ts";
 import type { BoardStack } from "../core/geometry.ts";
 import type { PlayStep } from "./step_types.ts";
 import { cardKey } from "./board.ts";

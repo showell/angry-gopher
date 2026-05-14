@@ -19,7 +19,7 @@
 
 import type { Card } from "./card.ts";
 import { CARD_PITCH } from "./geometry.ts";
-import type { Stack } from "../DSL/emit_game_event.ts";
+import type { Stack } from "../game_events/emit_game_event.ts";
 
 
 const DRAG_MS_PER_PIXEL = 2.5;

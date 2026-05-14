@@ -34,7 +34,7 @@ import { findViolation } from "../core/geometry.ts";
 import { classifyStack } from "../core/card_stack.ts";
 import {
   type Primitive,
-} from "../core/primitives.ts";
+} from "../game_events/primitives.ts";
 import { moveToPrimitives } from "../step/verbs.ts";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -307,7 +307,7 @@ function applyPrimitiveLocal(
   return applyLocallyForRender(board, p);
 }
 
-import { applyLocally as applyLocallyForRender } from "../core/primitives.ts";
+import { applyLocally as applyLocallyForRender } from "../game_events/primitives.ts";
 
 void applyPrimitiveLocal; // kept for clarity above; the real call is below.
 

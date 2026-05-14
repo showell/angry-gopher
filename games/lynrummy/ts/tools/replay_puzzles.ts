@@ -28,8 +28,8 @@ import * as path from "node:path";
 
 import { type Card, type Rank, type Suit, type Deck, cardLabel } from "../core/card.ts";
 import type { BoardStack } from "../core/geometry.ts";
-import type { Primitive } from "../core/primitives.ts";
-import { applyLocally } from "../core/primitives.ts";
+import type { Primitive } from "../game_events/primitives.ts";
+import { applyLocally } from "../game_events/primitives.ts";
 import { primToDslLine } from "../elm_api/wire_json.ts";
 import { expandVerb } from "../step/verbs.ts";
 import { solveBucketedState } from "../bfs/engine_v2.ts";

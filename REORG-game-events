@@ -1,0 +1,6 @@
+# Create ts/game_events/ — co-locate the primitive type with the
+# emitter + parser that wire-format it.
+
+ts-mv games/lynrummy/ts/core/primitives.ts        games/lynrummy/ts/game_events/primitives.ts
+ts-mv games/lynrummy/ts/DSL/emit_game_event.ts    games/lynrummy/ts/game_events/emit_game_event.ts
+ts-mv games/lynrummy/ts/DSL/parse_game_event.ts   games/lynrummy/ts/game_events/parse_game_event.ts
