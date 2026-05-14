@@ -228,8 +228,7 @@ function runSolve(sc: Scenario): RunResult {
   // Strict plan-line snapshot. Per
   // memory/feedback_strict_tests_no_ceiling.md: no "<= pinned"
   // length-ceiling fallback. plan_length-only scenarios that lack
-  // plan_lines are repaired up to plan_lines via --repair the same
-  // way solve scenarios are.
+  // plan_lines must be pinned up to plan_lines manually.
   const planLines = expect["plan_lines"] as string[] | undefined;
   if (planLines !== undefined && planLines.length > 0) {
     if (plan === null) {
@@ -256,7 +255,7 @@ function runSolve(sc: Scenario): RunResult {
   // them (preferred) or removes the scenario.
   return {
     ok: false,
-    msg: "solve scenario missing plan_lines pin (and no_plan not asserted) — repair with --repair",
+    msg: "solve scenario missing plan_lines pin (and no_plan not asserted)",
   };
 }
 
@@ -290,7 +289,7 @@ function runHintForHand(sc: Scenario): RunResult {
   // Strict snapshot match. Per
   // memory/feedback_strict_tests_no_ceiling.md: no "<= pinned"
   // length-ceiling. Different valid hints are caught by the diff
-  // and re-pinned via --repair, not silently accepted.
+  // and re-pinned manually, not silently accepted.
   if (result === null && wantSteps.length === 0) {
     return { ok: true, msg: "OK — null hint, as expected" };
   }
@@ -344,30 +343,7 @@ function loadScenarios(): Scenario[] {
 }
 
 function main(): void {
-  let scenarios: Scenario[] = loadScenarios();
-
-  // CLI parsing — order-insensitive: any non-flag arg is a name
-  // substring filter; `--repair` switches into pin-rewrite mode.
-  const args = process.argv.slice(2);
-  const repair = args.includes("--repair");
-  const filter = args.find(a => !a.startsWith("--"));
-  if (filter !== undefined) {
-    scenarios = scenarios.filter(sc => sc.name.includes(filter));
-    if (scenarios.length === 0) {
-      console.error(`no scenario name matches ${JSON.stringify(filter)}`);
-      process.exit(1);
-    }
-    console.log(`Filtered to ${scenarios.length} scenario(s) matching ${JSON.stringify(filter)}.`);
-  }
-  if (repair) {
-    console.log("REPAIR MODE: solve-scenario plan_lines and hint_for_hand");
-    console.log("expect_steps pins will be rewritten from current engine");
-    console.log("output. Re-run ops/check-conformance after repair.");
-    console.log();
-  }
-  // Repair-mode collection: scenarioName → {kind, lines}.
-  // RepairContent is declared at module scope below.
-  const repairs = new Map<string, RepairContent>();
+  const scenarios: Scenario[] = loadScenarios();
 
   let total = 0;
   let passed = 0;
@@ -386,46 +362,13 @@ function main(): void {
       continue;
     }
     const t0 = Date.now();
-    let res: RunResult | null = null;
+    let res: RunResult;
     if (sc.op === "enumerate_moves") {
       res = runEnumerateMoves(sc);
     } else if (sc.op === "solve") {
-      if (repair) {
-        // In repair mode: run the engine, capture plan-lines for
-        // every non-no_plan solve scenario. Covers two cases:
-        //   - existing plan_lines block: replaced with current engine output
-        //   - existing plan_length pin (no plan_lines): converted to plan_lines
-        if (sc.expect["no_plan"]) {
-          res = runSolve(sc);  // no_plan stays no_plan; nothing to capture
-        } else {
-          const raw = buildRawBuckets(sc);
-          const result = findPlanForBuckets(raw);
-          if (result === null) {
-            res = { ok: false, msg: `REPAIR: engine returned null for pinned scenario` };
-          } else {
-            const plan = result.plan;
-            repairs.set(sc.name, { kind: "plan_lines", lines: plan.map(p => p.line) });
-            res = { ok: true, msg: `REPAIRED — ${plan.length} plan-line(s) recorded` };
-          }
-        }
-      } else {
-        res = runSolve(sc);
-      }
+      res = runSolve(sc);
     } else if (sc.op === "hint_for_hand") {
-      if (repair) {
-        // Capture engine's current hint steps and rewrite the DSL's
-        // expect_steps block.
-        const handTokens = sc.hint_hand ?? [];
-        const boardTokens = sc.hint_board ?? [];
-        const hand: Card[] = handTokens.map(parseCardLabel);
-        const board: Card[][] = boardTokens.map(stack => stack.map(parseCardLabel));
-        const result = findPlay(hand, board);
-        const got = formatHint(result);
-        repairs.set(sc.name, { kind: "expect_steps", lines: [...got] });
-        res = { ok: true, msg: `REPAIRED — ${got.length} step(s) recorded` };
-      } else {
-        res = runHintForHand(sc);
-      }
+      res = runHintForHand(sc);
     } else if (sc.op === "find_open_loc") {
       res = runFindOpenLoc(sc);
     } else {
@@ -449,13 +392,6 @@ function main(): void {
   console.log();
   console.log(`${passed}/${total} passed`);
 
-  if (repair && repairs.size > 0) {
-    console.log();
-    console.log(`Rewriting ${repairs.size} pin block(s) in DSL files...`);
-    rewriteDslPins(repairs);
-    console.log("Done.");
-  }
-
   if (Object.keys(outOfScopeCounts).length > 0) {
     console.log();
     console.log("Out-of-scope by design (handled in Python and/or Elm):");
@@ -477,160 +413,6 @@ function main(): void {
     for (const f of failures) console.log("  " + f);
     process.exit(1);
   }
-}
-
-/**
- * Repair-mode helper: scan every .dsl file in conformance/scenarios/
- * for `scenario <name>` headers, and where the scenario name is in
- * `repairs`, rewrite the appropriate pin block with the captured
- * engine output. Idempotent — re-run is a no-op if the engine still
- * produces the same lines.
- *
- * Two block shapes are handled:
- *
- *   plan_lines (op: solve, indent under `expect:`):
- *     scenario <name>
- *       ...
- *       expect:
- *         plan_lines:
- *           - "<line>"
- *
- *     A scenario carrying `plan_length: N` instead of `plan_lines:`
- *     gets the `plan_length:` line replaced with a `plan_lines:`
- *     block in the same place — converting the relaxed pin into a
- *     strict pin.
- *
- *   expect_steps (op: hint_for_hand, top-level under scenario):
- *     scenario <name>
- *       ...
- *       expect_steps:
- *         - <step>
- *         - <step>
- */
-type RepairContent =
-  | { kind: "plan_lines"; lines: string[] }
-  | { kind: "expect_steps"; lines: string[] };
-
-function rewriteDslPins(repairs: Map<string, RepairContent>): void {
-  const dslDir = path.resolve(__dirname, "../../conformance/scenarios");
-  const dslFiles = fs.readdirSync(dslDir)
-    .filter(f => f.endsWith(".dsl"))
-    .map(f => path.join(dslDir, f));
-
-  let touchedFiles = 0;
-  let touchedScenarios = 0;
-
-  for (const file of dslFiles) {
-    const original = fs.readFileSync(file, "utf8");
-    const lines = original.split("\n");
-    let changed = false;
-
-    let i = 0;
-    while (i < lines.length) {
-      const m = lines[i]!.match(/^scenario\s+(\S+)\s*$/);
-      if (!m) { i++; continue; }
-      const name = m[1]!;
-      const repair = repairs.get(name);
-      if (repair === undefined) { i++; continue; }
-
-      // Scenario block extent: from i+1 up to (but not including)
-      // the next `^scenario ` line or end-of-file.
-      let blockEnd = i + 1;
-      while (blockEnd < lines.length && !lines[blockEnd]!.match(/^scenario\s+\S+\s*$/)) {
-        blockEnd++;
-      }
-
-      if (repair.kind === "plan_lines") {
-        const result = rewritePlanLinesBlock(lines, i + 1, blockEnd, repair.lines);
-        if (result.changed) {
-          changed = true;
-          touchedScenarios++;
-        }
-        i = result.nextI;
-      } else if (repair.kind === "expect_steps") {
-        const result = rewriteExpectStepsBlock(lines, i + 1, blockEnd, repair.lines);
-        if (result.changed) {
-          changed = true;
-          touchedScenarios++;
-        }
-        i = result.nextI;
-      } else {
-        i++;
-      }
-    }
-
-    if (changed) {
-      fs.writeFileSync(file, lines.join("\n"));
-      touchedFiles++;
-      console.log(`  ${path.basename(file)} — updated`);
-    }
-  }
-  console.log(`Touched ${touchedScenarios} scenarios across ${touchedFiles} file(s).`);
-}
-
-/** Rewrite (or convert) the plan_lines/plan_length pin under
- *  `expect:`. `lines` is the file split by lines; `start` and `end`
- *  bound the scenario block. Mutates `lines` in place. */
-function rewritePlanLinesBlock(
-  lines: string[],
-  start: number,
-  end: number,
-  newPlanLines: readonly string[],
-): { changed: boolean; nextI: number } {
-  const replacement = newPlanLines.map(l => `      - ${dslQuoteLine(l)}`);
-
-  // Look first for an existing `plan_lines:` line.
-  for (let j = start; j < end; j++) {
-    if (lines[j]!.match(/^\s*plan_lines:\s*$/)) {
-      let endIdx = j + 1;
-      while (endIdx < lines.length && /^      - ".*"$/.test(lines[endIdx]!)) {
-        endIdx++;
-      }
-      lines.splice(j + 1, endIdx - (j + 1), ...replacement);
-      return { changed: true, nextI: j + 1 + replacement.length };
-    }
-  }
-  // No plan_lines block. Look for a `plan_length: N` line and
-  // convert it to a plan_lines block.
-  for (let j = start; j < end; j++) {
-    if (lines[j]!.match(/^\s*plan_length:\s*\d+\s*$/)) {
-      lines.splice(j, 1, `    plan_lines:`, ...replacement);
-      return { changed: true, nextI: j + 1 + replacement.length };
-    }
-  }
-  return { changed: false, nextI: start };
-}
-
-/** Rewrite the expect_steps pin (hint_for_hand). `start`/`end`
- *  bound the scenario block. Mutates `lines` in place. */
-function rewriteExpectStepsBlock(
-  lines: string[],
-  start: number,
-  end: number,
-  newSteps: readonly string[],
-): { changed: boolean; nextI: number } {
-  const replacement = newSteps.map(s => `    - ${s}`);
-  for (let j = start; j < end; j++) {
-    if (lines[j]!.match(/^\s*expect_steps:\s*$/)) {
-      let endIdx = j + 1;
-      while (endIdx < lines.length && /^    - /.test(lines[endIdx]!)) {
-        endIdx++;
-      }
-      lines.splice(j + 1, endIdx - (j + 1), ...replacement);
-      return { changed: true, nextI: j + 1 + replacement.length };
-    }
-  }
-  return { changed: false, nextI: start };
-}
-
-/**
- * Quote a plan-line string for the DSL `- "..."` form. The DSL
- * uses double-quoted strings; only `"` and `\` need escaping.
- * Plan-line text contains neither in normal output (cards, arrows,
- * brackets, semicolons all pass through unescaped).
- */
-function dslQuoteLine(s: string): string {
-  return '"' + s.replace(/\\/g, "\\\\").replace(/"/g, '\\"') + '"';
 }
 
 main();
