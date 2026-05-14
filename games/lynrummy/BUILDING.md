@@ -64,16 +64,10 @@ JS glue file (`engine_glue.js`) that converts the wire-shape
 
 These don't run on every build — invoke as needed:
 
-- **Puzzle catalogs.** Two TS tools mine boards for puzzle
-  use:
-  - `games/lynrummy/ts/tools/generate_puzzles.ts` writes
-    `games/lynrummy/puzzles/puzzles.json` (the small a3_*
-    catalog used by `planner_puzzles.dsl`).
-  - `games/lynrummy/ts/tools/replay_puzzles.ts` emits
-    `puzzle_walkthroughs.dsl`.
-  The single-puzzle UI host (`/gopher/puzzle/`) reads its
-  featured board from `conformance/mined_seeds.dsl`; the
-  hard-coded `featuredPuzzleName` lives in `views/puzzle.go`.
+- **Puzzle catalogs.** The single-puzzle UI host
+  (`/gopher/puzzle/`) reads its featured board from
+  `conformance/mined_seeds.dsl`; the hard-coded
+  `featuredPuzzleName` lives in `views/puzzle.go`.
 - **Bench baselines.** `npm run bench:gen-baseline` (in `ts/`)
   rebuilds the 81-card baseline DSL suite. Don't regenerate
   unless you're explicitly tracking a perf shift.

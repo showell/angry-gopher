@@ -21,10 +21,8 @@ import type { Primitive } from "../game_events/primitives.ts";
 
 export interface JsonCard { value: number; suit: number; origin_deck: number }
 export interface JsonBoardCard { card: JsonCard; state: number }
-export interface JsonHandCard { card: JsonCard; state: number }
 export interface JsonLoc { top: number; left: number }
 export interface JsonCardStack { board_cards: JsonBoardCard[]; loc: JsonLoc }
-export interface JsonHand { hand_cards: JsonHandCard[] }
 
 /** Floater top-left at a given time, in board frame. Wire mirror
  *  of Elm's `Lib.TimeLoc.TimeLoc`. */
@@ -43,10 +41,6 @@ export function jsonCard(c: Card): JsonCard {
 }
 
 export function jsonBoardCard(c: Card): JsonBoardCard {
-  return { card: jsonCard(c), state: 0 };
-}
-
-export function jsonHandCard(c: Card): JsonHandCard {
   return { card: jsonCard(c), state: 0 };
 }
 

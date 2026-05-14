@@ -54,7 +54,6 @@ const TS_ROUTED_DSLS = [
   "planner_corpus.dsl",
   "planner_corpus_extras.dsl",
   "planner_mined.dsl",
-  "planner_puzzles.dsl",
 ];
 
 const TS_ROUTED_OPS = new Set([

@@ -30,54 +30,6 @@ import {
 import type { GameResult } from "./full_game.ts";
 import { completeTurnDsl, seqPrefix } from "../game_events/emit_game_event.ts";
 import { formatGameState } from "./initial_state_dsl.ts";
-import {
-  type JsonCard,
-  type JsonHand,
-  type JsonCardStack,
-  jsonCard,
-  jsonHandCard,
-  jsonStack,
-} from "../elm_api/wire_json.ts";
-
-
-// --- Puzzle-catalog JSON encoder ------------------------------------
-//
-// Kept for `tools/generate_puzzles.ts`, which writes
-// `mined_seeds.dsl` (the puzzle-catalog data file, consumed by
-// the Go server). The puzzle catalog is DSL; this JSON encoder
-// is kept only because `tools/generate_puzzles.ts` still writes
-// its small a3_* catalog as JSON. Eventually that catalog
-// should follow the same DSL migration.
-
-export interface RemoteStateJson {
-  board: JsonCardStack[];
-  hands: JsonHand[];
-  scores: number[];
-  active_player_index: number;
-  turn_index: number;
-  deck: JsonCard[];
-  cards_played_this_turn: number;
-  victor_awarded: boolean;
-  turn_start_board_score: number;
-}
-
-export function encodeInitialState(
-  board: readonly BoardStack[],
-  hands: readonly (readonly Card[])[],
-  deck: readonly Card[],
-): RemoteStateJson {
-  return {
-    board: board.map(jsonStack),
-    hands: hands.map(h => ({ hand_cards: h.map(jsonHandCard) })),
-    scores: hands.map(() => 0),
-    active_player_index: 0,
-    turn_index: 0,
-    deck: deck.map(jsonCard),
-    cards_played_this_turn: 0,
-    victor_awarded: false,
-    turn_start_board_score: 0,
-  };
-}
 
 
 // --- Invariant: no two stacks ever overlap, ever ---------------------
