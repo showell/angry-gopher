@@ -6,7 +6,7 @@ import type { BoardStack } from "../core/geometry.ts";
 import type { PrimitivesForPlay } from "./step_types.ts";
 import { cardKey } from "./board.ts";
 
-export function tryPlay(
+export function findPlayPrimitives(
   board: readonly BoardStack[],
   hand: readonly Card[],
 ): { step: PrimitivesForPlay; board: readonly BoardStack[]; hand: readonly Card[] } | null {
