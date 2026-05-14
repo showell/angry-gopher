@@ -35,12 +35,20 @@ export interface PlayResult {
   readonly newBoard: readonly (readonly Card[])[];
 }
 
+interface MeldablePair {
+  readonly pair: readonly [Card, Card];
+  readonly pairI: number;
+  readonly pairJ: number;
+}
+
 export function findPlay(
   hand: readonly Card[],
   board: readonly (readonly Card[])[],
 ): PlayResult | null {
+  const meldable = collectMeldablePairs(hand);
+
   if (boardIsClean(board)) {
-    const triple = findTripleInHand(hand);
+    const triple = findTripleAmongPairs(meldable, hand);
     if (triple !== null) {
       return {
         placements: triple,
@@ -52,7 +60,7 @@ export function findPlay(
   }
 
   const candidates: PlayResult[] = [];
-  for (const pair of meldablePairs(hand)) {
+  for (const { pair } of meldable) {
     const r = projectAndSolve(board, pair);
     if (r !== null) candidates.push(r);
   }
@@ -69,57 +77,51 @@ export function formatHint(result: PlayResult | null): readonly string[] {
   return [`place [${labels}] from hand`, ...result.planLines];
 }
 
-// --- Triple-in-hand shortcut --------------------------------------------
+// --- Pair collection ----------------------------------------------------
 
-function findTripleInHand(hand: readonly Card[]): readonly Card[] | null {
+/** Walk hand positions i < j; for each pair of cards, record it as a
+ *  meldable pair in canonical order (the order that isPartialOk
+ *  accepts). Either orientation might pass — A-2 is canonical
+ *  ascending, but the wrap pair K-A is also canonical (K is the
+ *  predecessor of A under the cycle). */
+function collectMeldablePairs(hand: readonly Card[]): readonly MeldablePair[] {
+  const out: MeldablePair[] = [];
   for (let i = 0; i < hand.length; i++) {
     for (let j = i + 1; j < hand.length; j++) {
-      const pair: readonly [Card, Card] = [hand[i]!, hand[j]!];
-      if (!isPartialOk(pair)) continue;
-      const triple = findCompletingThird(pair, hand, i, j);
-      if (triple !== null) return triple;
+      const a = hand[i]!;
+      const b = hand[j]!;
+      if (isPartialOk([a, b])) {
+        out.push({ pair: [a, b], pairI: i, pairJ: j });
+      } else if (isPartialOk([b, a])) {
+        out.push({ pair: [b, a], pairI: i, pairJ: j });
+      }
     }
   }
-  return null;
+  return out;
 }
 
-/** Try every position-permutation of (pair + a hand card) that lands
- *  a length-3 legal group. Order matters: runs are consecutive-by-
- *  value, so the harness lays the cards in the legal order. */
-function findCompletingThird(
-  pair: readonly [Card, Card],
+// --- Triple-in-hand shortcut --------------------------------------------
+
+/** For each canonical meldable pair (a, b), look for a third hand card
+ *  c that extends to the right: [a, b, c] forms a legal length-3
+ *  group. Left-extensions don't need a separate check — they emerge
+ *  as a *different* meldable pair (e.g., the wrap triple K-A-2 is
+ *  discovered via the (K, A) pair, not via (A, 2) trying K-on-left). */
+function findTripleAmongPairs(
+  meldable: readonly MeldablePair[],
   hand: readonly Card[],
-  pairI: number,
-  pairJ: number,
 ): readonly Card[] | null {
-  for (let k = 0; k < hand.length; k++) {
-    if (k === pairI || k === pairJ) continue;
-    const c = hand[k]!;
-    // Skip value-equal duplicates of either pair card — same card from
-    // a different deck slot adds no fresh option.
-    if (cardEq(c, pair[0]) || cardEq(c, pair[1])) continue;
-    const tries: readonly (readonly Card[])[] = [
-      [pair[0], pair[1], c],
-      [pair[0], c, pair[1]],
-      [c, pair[0], pair[1]],
-    ];
-    for (const ordered of tries) {
-      if (isCompleteGroup(ordered)) return ordered;
+  for (const { pair, pairI, pairJ } of meldable) {
+    for (let k = 0; k < hand.length; k++) {
+      if (k === pairI || k === pairJ) continue;
+      const triple: readonly Card[] = [pair[0], pair[1], hand[k]!];
+      if (isCompleteGroup(triple)) return triple;
     }
   }
   return null;
 }
 
 // --- Pair + singleton projections ---------------------------------------
-
-function* meldablePairs(hand: readonly Card[]): Generator<readonly [Card, Card]> {
-  for (let i = 0; i < hand.length; i++) {
-    for (let j = i + 1; j < hand.length; j++) {
-      const pair: readonly [Card, Card] = [hand[i]!, hand[j]!];
-      if (isPartialOk(pair)) yield pair;
-    }
-  }
-}
 
 function projectAndSolve(
   board: readonly (readonly Card[])[],
@@ -155,6 +157,3 @@ function bucketsToBoard(b: Buckets): readonly (readonly Card[])[] {
   ];
 }
 
-function cardEq(a: Card, b: Card): boolean {
-  return a.rank === b.rank && a.suit === b.suit && a.deck === b.deck;
-}
