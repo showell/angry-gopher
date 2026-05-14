@@ -1,6 +1,6 @@
 import type { Card } from "../core/card.ts";
 import type { BoardStack } from "../core/geometry.ts";
-import { tryGroom } from "./groom.ts";
+import { findGroomPrimitives } from "./groom.ts";
 import { findPlayPrimitives } from "./play.ts";
 import { assertBoardClean } from "./board.ts";
 import type { PrimitivesForGroom, PrimitivesForPlay, EndStep } from "./step_types.ts";
@@ -15,7 +15,7 @@ export function fullStep(
   board: readonly BoardStack[],
   hand: readonly Card[],
 ): FullStepResult {
-  const groomed = tryGroom(board);
+  const groomed = findGroomPrimitives(board);
   if (groomed !== null) {
     assertBoardClean(groomed.board, "fullStep after-groom");
     return { step: groomed.step, board: groomed.board, hand };

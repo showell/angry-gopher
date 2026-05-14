@@ -13,7 +13,7 @@ import type { PrimitivesForGroom } from "./step_types.ts";
 
 const MAX_JOINED_LEN = 15;
 
-export function tryGroom(
+export function findGroomPrimitives(
   board: readonly BoardStack[],
 ): { step: PrimitivesForGroom; board: readonly BoardStack[] } | null {
   const prims: Primitive[] = [];
