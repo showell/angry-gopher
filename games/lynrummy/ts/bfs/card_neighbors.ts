@@ -30,17 +30,17 @@ import type { ClassifiedCardStack } from "../core/card_stack.ts";
 
 // --- Card encoding ----------------------------------------------------
 
-export function cardId(c: Card): number {
+function cardId(c: Card): number {
   return (c.rank - 1) * 8 + c.suit * 2 + c.deck;
 }
 
 // --- Bucket tags ------------------------------------------------------
 
-export const ABSENT = 0;
-export const HELPER = 1;
-export const TROUBLE = 2;
-export const GROWING = 3;
-export const COMPLETE = 4;
+const ABSENT = 0;
+const HELPER = 1;
+const TROUBLE = 2;
+const GROWING = 3;
+const COMPLETE = 4;
 
 // --- Neighbor-table construction --------------------------------------
 
@@ -131,7 +131,7 @@ function buildNeighbors(): readonly (readonly (readonly [number, number])[])[] {
   return out;
 }
 
-export const NEIGHBORS: readonly (readonly (readonly [number, number])[])[]
+const NEIGHBORS: readonly (readonly (readonly [number, number])[])[]
   = buildNeighbors();
 
 // --- Card-location array + liveness query -----------------------------
@@ -139,7 +139,7 @@ export const NEIGHBORS: readonly (readonly (readonly [number, number])[])[]
 /** From a Buckets state, return a 104-element Uint8Array mapping
  *  cardId → bucket tag. Cards not on the board are ABSENT (0).
  *  Buckets must be CCS-shaped. */
-export function buildCardLoc(b: Buckets): Uint8Array {
+function buildCardLoc(b: Buckets): Uint8Array {
   const loc = new Uint8Array(104);  // zero-init = ABSENT
   const tag = (stacks: readonly ClassifiedCardStack[], t: number): void => {
     for (const stack of stacks)
@@ -155,7 +155,7 @@ export function buildCardLoc(b: Buckets): Uint8Array {
 /** True iff `c` has at least one pair of accessible partners on the
  *  board (tag in {HELPER, TROUBLE, GROWING}). COMPLETE cards are
  *  sealed and don't count. */
-export function isLive(c: Card, cardLoc: Uint8Array): boolean {
+function isLive(c: Card, cardLoc: Uint8Array): boolean {
   const cid = cardId(c);
   const pairs = NEIGHBORS[cid]!;
   for (const [c1, c2] of pairs) {

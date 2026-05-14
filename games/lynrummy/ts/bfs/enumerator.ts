@@ -444,7 +444,7 @@ function eligibleShiftHelpers(
 // --- Move generator -------------------------------------------------------
 
 /** What `enumerateMoves` yields per legal move. */
-export type MoveYield = readonly [Move, Buckets];
+type MoveYield = readonly [Move, Buckets];
 
 /**
  * Yield every legal 1-line extension. `state` is a Buckets of CCS-shaped

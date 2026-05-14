@@ -28,7 +28,7 @@ const SAMPLES = 20;
 
 export interface TimeLoc { tMs: number; left: number; top: number }
 
-export interface Point { x: number; y: number }
+interface Point { x: number; y: number }
 
 
 /** Synthesize the path Elm's replay would have JIT-built for
@@ -66,7 +66,7 @@ export function mergeStackPath(
 
 /** Quintic smootherstep over 20 samples. Same algorithm Elm
  *  uses for JIT path synthesis. */
-export function easedPath(start: Point, end: Point): TimeLoc[] {
+function easedPath(start: Point, end: Point): TimeLoc[] {
   const dx = end.x - start.x;
   const dy = end.y - start.y;
   const dist = Math.sqrt(dx * dx + dy * dy);

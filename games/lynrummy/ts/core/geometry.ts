@@ -28,7 +28,7 @@ export interface Loc {
   readonly left: number;
 }
 
-export interface Rect {
+interface Rect {
   readonly left: number;
   readonly top: number;
   readonly right: number;
@@ -37,35 +37,35 @@ export interface Rect {
 
 // --- Layout constants — match Elm + Go ---------------------------------
 
-export const CARD_WIDTH = 27;
+const CARD_WIDTH = 27;
 export const CARD_PITCH = CARD_WIDTH + 6;  // 33
-export const CARD_HEIGHT = 40;
+const CARD_HEIGHT = 40;
 
-export const BOARD_MAX_WIDTH = 800;
-export const BOARD_MAX_HEIGHT = 600;
-export const BOARD_MARGIN = 7;
+const BOARD_MAX_WIDTH = 800;
+const BOARD_MAX_HEIGHT = 600;
+const BOARD_MARGIN = 7;
 
-export const PLACE_STEP = 10;
+const PLACE_STEP = 10;
 
-export const PACK_GAP_X = 30;
-export const PACK_GAP_Y = 30;
+const PACK_GAP_X = 30;
+const PACK_GAP_Y = 30;
 
-export const ANTI_ALIGN_PX = 2;
+const ANTI_ALIGN_PX = 2;
 
 /** Empty-board anchor: a little down-and-right from the top-left corner.
  *  Final placement is `(BOARD_START + ANTI_ALIGN_PX) = (26, 26)`. */
-export const BOARD_START: Loc = { left: 24, top: 24 };
+const BOARD_START: Loc = { left: 24, top: 24 };
 
 /** Preferred non-empty-board scan origin (Steve, 2026-04-23): humans
  *  don't land pre-moves near the (0,0) corner; they favor a left-biased
  *  zone with some inset on both axes. Toward-the-hand bias means
  *  preferring LOW x. (50, 90) is the lower-left edge of the observed
  *  human-placement cluster. */
-export const HUMAN_PREFERRED_ORIGIN: Loc = { left: 50, top: 90 };
+const HUMAN_PREFERRED_ORIGIN: Loc = { left: 50, top: 90 };
 
 // --- Geometry primitives ----------------------------------------------
 
-export function stackWidth(cardCount: number): number {
+function stackWidth(cardCount: number): number {
   if (cardCount <= 0) return 0;
   return CARD_WIDTH + (cardCount - 1) * CARD_PITCH;
 }
@@ -209,7 +209,7 @@ function gridSweepOpenLoc(
 
 // --- Bounds + violation checks ----------------------------------------
 
-export function outOfBounds(stack: BoardStack): boolean {
+function outOfBounds(stack: BoardStack): boolean {
   const r = stackRect(stack);
   return r.left < 0 || r.top < 0 || r.right > BOARD_MAX_WIDTH || r.bottom > BOARD_MAX_HEIGHT;
 }

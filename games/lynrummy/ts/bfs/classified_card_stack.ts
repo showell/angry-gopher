@@ -86,7 +86,7 @@ export function kindAfterAbsorbRight(
 
 /** Encode a (value, suit) pair as a single primitive key. value ∈ [1,13],
  *  suit ∈ [0,3]; the product is unique, dense, and comparable in O(1). */
-export type ExtenderShape = number;
+type ExtenderShape = number;
 
 export function shapeId(value: number, suit: number): ExtenderShape {
   return value * 4 + suit;
@@ -99,7 +99,7 @@ export function shapeFrom(id: ExtenderShape): readonly [number, number] {
 }
 
 export type ExtenderMap = Map<ExtenderShape, Kind>;
-export type ExtendersTriple = readonly [ExtenderMap, ExtenderMap, ExtenderMap];
+type ExtendersTriple = readonly [ExtenderMap, ExtenderMap, ExtenderMap];
 
 function extendsForSingleton(only: Card): ExtendersTriple {
   const v = only.rank;
@@ -259,7 +259,7 @@ export function canPeel(stack: ClassifiedCardStack, i: number): boolean {
  *  `peel` (length-4+ source) so the enumerator can tell them apart
  *  in plan-line text and in the spawn-bucket routing. Per Steve,
  *  2026-05-04: avoiding silly split-then-rejoin sequences. */
-export function canSetPeel(stack: ClassifiedCardStack, i: number): boolean {
+function canSetPeel(stack: ClassifiedCardStack, i: number): boolean {
   return stack.kind === KIND_SET && stack.n === 3 && i >= 0 && i < 3;
 }
 

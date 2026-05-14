@@ -1,0 +1,165 @@
+#!/usr/bin/env python3
+"""find-dead-ts-exports — report TS exports with no importing file.
+
+Substitute for ts-prune / knip in this repo. Both upstream tools fail
+on our codebase: ts-prune doesn't resolve `.ts`-extension imports
+(needed by Node's strip-types runtime), and knip crashes on
+oxc-parser's ArrayBuffer allocation in WSL2.
+
+Approach is deliberately simple: text-parse every .ts file for
+exports and imports, then report any export name that isn't imported
+anywhere. We don't try to resolve which file each name came from
+(name collisions across files are rare in this codebase; if any
+appear they need manual triage). Comments are ignored because we
+only parse `import` and `export` keyword lines.
+
+Output format matches ts-prune for compatibility:
+    games/lynrummy/ts/path/file.ts:42 - symbolName
+"""
+
+import os
+import re
+import sys
+import bisect
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+TS_ROOT = REPO_ROOT / "games/lynrummy/ts"
+EXCLUDE_DIRS = {"node_modules"}
+
+# `export function foo`, `export const foo`, `export type Foo`, etc.
+EXPORT_DECL_RE = re.compile(
+    r'^export\s+(?:async\s+)?'
+    r'(?:function\*?|const|let|var|interface|type|class|enum)\s+'
+    r'(\w+)',
+    re.MULTILINE,
+)
+# `export { a, b }` — but NOT `export { a, b } from "..."` (those go
+# through the re-export branch which records both export + import).
+EXPORT_BLOCK_RE = re.compile(
+    r'^export\s*\{([^}]+)\}(?!\s*from)',
+    re.MULTILINE | re.DOTALL,
+)
+# `export { a, b } from "..."` — exports AND imports the named items.
+REEXPORT_BLOCK_RE = re.compile(
+    r'^export\s*\{([^}]+)\}\s*from',
+    re.MULTILINE | re.DOTALL,
+)
+# `export type { Foo }` and `export type { Foo } from "..."`
+EXPORT_TYPE_BLOCK_RE = re.compile(
+    r'^export\s+type\s*\{([^}]+)\}(?!\s*from)',
+    re.MULTILINE | re.DOTALL,
+)
+REEXPORT_TYPE_BLOCK_RE = re.compile(
+    r'^export\s+type\s*\{([^}]+)\}\s*from',
+    re.MULTILINE | re.DOTALL,
+)
+# `import { a, b, type Foo } from "..."`
+IMPORT_BLOCK_RE = re.compile(
+    r'\bimport\s+(?:type\s+)?\{([^}]+)\}\s*from',
+    re.DOTALL,
+)
+
+
+def parse_specifiers(block: str) -> list[str]:
+    """Split `a, type Foo, baz as qux` into ['a', 'Foo', 'baz']."""
+    out = []
+    for part in block.split(','):
+        name = part.strip()
+        if not name:
+            continue
+        name = re.sub(r'^type\s+', '', name)
+        # `foo as bar` — source-side name is what matters.
+        name = name.split(' as ')[0].strip()
+        if name:
+            out.append(name)
+    return out
+
+
+def collect_ts_files(root: Path) -> list[Path]:
+    files = []
+    for dirpath, dirnames, filenames in os.walk(root):
+        dirnames[:] = [d for d in dirnames if d not in EXCLUDE_DIRS]
+        for f in filenames:
+            if f.endswith('.ts'):
+                files.append(Path(dirpath) / f)
+    return sorted(files)
+
+
+def main() -> int:
+    files = collect_ts_files(TS_ROOT)
+
+    # name -> [(file, line)]
+    exports: dict[str, list[tuple[Path, int]]] = {}
+    # any name appearing as an import or re-export specifier
+    imports: set[str] = set()
+
+    for f in files:
+        text = f.read_text()
+        # line-number lookup via bisect on offsets
+        offsets = [0]
+        for line in text.split('\n'):
+            offsets.append(offsets[-1] + len(line) + 1)
+
+        def offset_to_line(off: int) -> int:
+            return bisect.bisect_right(offsets, off)
+
+        for m in EXPORT_DECL_RE.finditer(text):
+            exports.setdefault(m.group(1), []).append(
+                (f, offset_to_line(m.start()))
+            )
+
+        for m in EXPORT_BLOCK_RE.finditer(text):
+            for name in parse_specifiers(m.group(1)):
+                exports.setdefault(name, []).append(
+                    (f, offset_to_line(m.start()))
+                )
+
+        for m in EXPORT_TYPE_BLOCK_RE.finditer(text):
+            for name in parse_specifiers(m.group(1)):
+                exports.setdefault(name, []).append(
+                    (f, offset_to_line(m.start()))
+                )
+
+        # re-exports count as both export AND import of the source name
+        for m in REEXPORT_BLOCK_RE.finditer(text):
+            for name in parse_specifiers(m.group(1)):
+                exports.setdefault(name, []).append(
+                    (f, offset_to_line(m.start()))
+                )
+                imports.add(name)
+
+        for m in REEXPORT_TYPE_BLOCK_RE.finditer(text):
+            for name in parse_specifiers(m.group(1)):
+                exports.setdefault(name, []).append(
+                    (f, offset_to_line(m.start()))
+                )
+                imports.add(name)
+
+        for m in IMPORT_BLOCK_RE.finditer(text):
+            for name in parse_specifiers(m.group(1)):
+                imports.add(name)
+
+    dead: list[tuple[str, int, str]] = []
+    for name, locations in sorted(exports.items()):
+        if name in imports:
+            continue
+        for f, ln in locations:
+            rel = f.relative_to(REPO_ROOT)
+            dead.append((str(rel), ln, name))
+
+    dead.sort()
+    for rel, ln, name in dead:
+        print(f"{rel}:{ln} - {name}")
+
+    distinct = len(set((d[0], d[2]) for d in dead))
+    print(
+        f"\n{len(dead)} flagged ({distinct} distinct symbols) "
+        f"across {len(files)} .ts files.",
+        file=sys.stderr,
+    )
+    return 0
+
+
+if __name__ == '__main__':
+    sys.exit(main())

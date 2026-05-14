@@ -104,7 +104,7 @@ function allocateSessionId(): number {
 
 // --- Top-level writer ------------------------------------------------
 
-export interface TranscriptInputs {
+interface TranscriptInputs {
   readonly initialBoard: readonly BoardStack[];
   readonly initialHands: readonly (readonly Card[])[];
   readonly initialDeck: readonly Card[];
@@ -113,7 +113,7 @@ export interface TranscriptInputs {
   readonly label: string;
 }
 
-export interface TranscriptResult {
+interface TranscriptResult {
   readonly sessionId: number;
   readonly sessionDir: string;
   readonly actionsWritten: number;

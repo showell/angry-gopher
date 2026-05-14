@@ -27,7 +27,7 @@ import { primToWire, type WireActionJson } from "./wire_json.ts";
  * Used by the puzzles HINT button. Locations aren't needed because
  * hint output is text-only — no primitives to lay out.
  */
-export function solveBoard(
+function solveBoard(
   board: readonly (readonly Card[])[],
 ): readonly PlanLine[] | null {
   const result = bfsSolveBoard(board);
@@ -51,7 +51,7 @@ export function solveBoard(
  * aware planning (interior splits relocate, end-splits pre-flight,
  * pushes find open locs, etc.).
  */
-export function agentPlay(
+function agentPlay(
   board: readonly BoardStack[],
 ): readonly { line: string; wire_actions: readonly WireActionJson[] }[] | null {
   const cardLists = board.map(s => s.cards);
@@ -102,9 +102,9 @@ export function gameHintLines(
 //   (b) Narrow the wide return types to what the Elm decoder actually
 //       reads.
 //
-// Real work belongs in solveBoard / agentPlay / gameHintLines above —
-// those keep their unprefixed names because external (non-Elm) callers
-// also consume them via the bundle. Don't grow these wrappers.
+// Heavy lifting lives in solveBoard / agentPlay above (and gameHintLines,
+// which has one direct TS caller in `in_progress/run_hint.ts`). These
+// three are private to the module otherwise. Don't grow these wrappers.
 
 export function elmSolveBoard(
   board: readonly (readonly Card[])[],

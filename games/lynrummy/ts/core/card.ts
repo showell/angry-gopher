@@ -53,7 +53,7 @@ export interface Card {
 
 export const RANKS = "A23456789TJQK";
 export const SUITS = "CDSH";
-export const SUITS_UNICODE = "♣♦♠♥";
+const SUITS_UNICODE = "♣♦♠♥";
 
 /** Predicate on a suit value. Accepts `number` because callers
  *  frequently iterate `for (let s = 0; s < 4; s++)` and pass the raw

@@ -21,7 +21,7 @@ import { parseBoardFromMeta } from "./initial_state_dsl.ts";
 import { parseWireActionLine } from "../game_events/parse_game_event.ts";
 
 
-export interface ValidationResult {
+interface ValidationResult {
   readonly ok: boolean;
   readonly msg: string;
   readonly actionsApplied: number;

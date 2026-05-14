@@ -33,9 +33,9 @@ interface SolveCtxPlus extends SolveCtx {
   readonly maxTrouble: number;
 }
 
-export type Heuristic = (b: Buckets) => number;
+type Heuristic = (b: Buckets) => number;
 
-export const HEURISTICS: Record<string, Heuristic> = {
+const HEURISTICS: Record<string, Heuristic> = {
   /** Lower-bound: each move shrinks trouble+growing by ≤2. Admissible. */
   half_debt: (b) => {
     let n = 0;
@@ -119,7 +119,7 @@ const MAX_STATES = 5000;
 const MAX_TROUBLE_OUTER = 10;
 const MAX_PLAN_LENGTH = 5;
 
-export function solveTurn(initial: Buckets): SolveResult | null {
+function solveTurn(initial: Buckets): SolveResult | null {
   const h = HEURISTICS.half_debt!;
   const cardOrderInfo = buildCardOrder(initial);
   const sigFn = (b: Buckets, lin?: Lineage): string =>
@@ -266,7 +266,7 @@ interface SolveCtx {
   visits: number;
 }
 
-export let lastVisits = 0;
+let lastVisits = 0;
 
 function solveRec(
   buckets: Buckets,

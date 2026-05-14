@@ -36,7 +36,7 @@ import {
   type RawBuckets,
 } from "../bfs/buckets.ts";
 
-export interface TimingResult {
+interface TimingResult {
   readonly plan: readonly PlanLine[] | null;
   readonly bestMs: number;
 }

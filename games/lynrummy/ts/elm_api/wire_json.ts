@@ -18,14 +18,14 @@ import type { Card } from "../core/card.ts";
 import type { BoardStack } from "../core/geometry.ts";
 import type { Primitive } from "../game_events/primitives.ts";
 
-export interface JsonCard { value: number; suit: number; origin_deck: number }
-export interface JsonBoardCard { card: JsonCard; state: number }
-export interface JsonLoc { top: number; left: number }
-export interface JsonCardStack { board_cards: JsonBoardCard[]; loc: JsonLoc }
+interface JsonCard { value: number; suit: number; origin_deck: number }
+interface JsonBoardCard { card: JsonCard; state: number }
+interface JsonLoc { top: number; left: number }
+interface JsonCardStack { board_cards: JsonBoardCard[]; loc: JsonLoc }
 
 /** Floater top-left at a given time, in board frame. Wire mirror
  *  of Elm's `Lib.TimeLoc.TimeLoc`. */
-export interface JsonTimeLoc { t_ms: number; left: number; top: number }
+interface JsonTimeLoc { t_ms: number; left: number; top: number }
 
 export type WireActionJson =
   | { action: "split"; stack: JsonCardStack; card_index: number }
@@ -35,15 +35,15 @@ export type WireActionJson =
   | { action: "move_stack"; stack: JsonCardStack; new_loc: JsonLoc; board_path: JsonTimeLoc[] }
   | { action: "complete_turn" };
 
-export function jsonCard(c: Card): JsonCard {
+function jsonCard(c: Card): JsonCard {
   return { value: c.rank, suit: c.suit, origin_deck: c.deck };
 }
 
-export function jsonBoardCard(c: Card): JsonBoardCard {
+function jsonBoardCard(c: Card): JsonBoardCard {
   return { card: jsonCard(c), state: 0 };
 }
 
-export function jsonStack(s: BoardStack): JsonCardStack {
+function jsonStack(s: BoardStack): JsonCardStack {
   return {
     board_cards: s.cards.map(jsonBoardCard),
     loc: { top: s.loc.top, left: s.loc.left },

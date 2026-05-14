@@ -41,28 +41,28 @@ import { type Card, parseCardLabel } from "../core/card.ts";
 
 // ---- Output shape (matches the snake_case JSON Scenario in test_engine_conformance.ts) ----
 
-export interface ParsedCard {
+interface ParsedCard {
   value: number;
   suit: number;
   origin_deck: number;
 }
 
-export interface ParsedBoardCard {
+interface ParsedBoardCard {
   card: ParsedCard;
   state: number;
 }
 
-export interface ParsedStack {
+interface ParsedStack {
   board_cards: ParsedBoardCard[];
   loc: { top: number; left: number };
 }
 
-export interface ParsedHandCard {
+interface ParsedHandCard {
   card: ParsedCard;
   state: number;
 }
 
-export interface ParsedScenario {
+interface ParsedScenario {
   name: string;
   desc: string;
   op: string;

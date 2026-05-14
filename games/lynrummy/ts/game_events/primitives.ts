@@ -27,14 +27,14 @@ import { mergeStackPath, moveStackPath } from "../core/synthesize_board_paths.ts
 
 export type Side = "left" | "right";
 
-export interface SplitPrim {
+interface SplitPrim {
   readonly action: "split";
   readonly stackIndex: number;
   readonly cardIndex: number;
   readonly dsl: string;
 }
 
-export interface MergeStackPrim {
+interface MergeStackPrim {
   readonly action: "merge_stack";
   readonly sourceStack: number;
   readonly targetStack: number;
@@ -42,7 +42,7 @@ export interface MergeStackPrim {
   readonly dsl: string;
 }
 
-export interface MergeHandPrim {
+interface MergeHandPrim {
   readonly action: "merge_hand";
   readonly targetStack: number;
   readonly handCard: Card;
@@ -50,14 +50,14 @@ export interface MergeHandPrim {
   readonly dsl: string;
 }
 
-export interface MoveStackPrim {
+interface MoveStackPrim {
   readonly action: "move_stack";
   readonly stackIndex: number;
   readonly newLoc: Loc;
   readonly dsl: string;
 }
 
-export interface PlaceHandPrim {
+interface PlaceHandPrim {
   readonly action: "place_hand";
   readonly handCard: Card;
   readonly loc: Loc;

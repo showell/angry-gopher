@@ -30,7 +30,7 @@ import type { Stack } from "../game_events/emit_game_event.ts";
 import type { BoardStack, Loc } from "../core/geometry.ts";
 
 
-export interface GameStateForDsl {
+interface GameStateForDsl {
   readonly board: readonly Stack[];
   /** Length-2 list: [player_one_hand, player_two_hand]. */
   readonly hands: readonly (readonly Card[])[];
@@ -55,12 +55,12 @@ export function formatGameState(s: GameStateForDsl): string {
 
 // --- BOARD -----------------------------------------------------------
 
-export function formatBoardBlock(board: readonly Stack[]): string {
+function formatBoardBlock(board: readonly Stack[]): string {
   const body = board.map(formatBoardLine).join("\n");
   return body === "" ? "board:" : "board:\n" + body;
 }
 
-export function formatBoardLine(stack: Stack): string {
+function formatBoardLine(stack: Stack): string {
   return "  at ("
     + padCoord(stack.loc.top)
     + ", "
@@ -82,12 +82,12 @@ function padCoord(n: number): string {
 
 const SUIT_DISPLAY_ORDER: readonly number[] = [3, 2, 1, 0]; // H, S, D, C
 
-export function formatHandBlock(header: string, hand: readonly Card[]): string {
+function formatHandBlock(header: string, hand: readonly Card[]): string {
   const rows = sortIntoSuitRows(hand).map(formatHandRow);
   return rows.length === 0 ? header + ":" : header + ":\n" + rows.join("\n");
 }
 
-export function sortIntoSuitRows(hand: readonly Card[]): (readonly Card[])[] {
+function sortIntoSuitRows(hand: readonly Card[]): (readonly Card[])[] {
   const rows: (readonly Card[])[] = [];
   for (const suit of SUIT_DISPLAY_ORDER) {
     const inSuit = hand
@@ -105,7 +105,7 @@ function formatHandRow(cards: readonly Card[]): string {
 
 // --- DECK + SCALARS --------------------------------------------------
 
-export function formatDeckLine(deck: readonly Card[]): string {
+function formatDeckLine(deck: readonly Card[]): string {
   return "deck: " + deck.map(cardToken).join(" ");
 }
 
