@@ -18,7 +18,7 @@
 
 import { type Card, cardLabel } from "../core/card.ts";
 import { isPartialOk } from "../core/card_stack.ts";
-import { solveBoard } from "../bfs/index.ts";
+import { solveBoard } from "../bfs/engine_v2.ts";
 import { findPlay, type PlayResult } from "../step/hand_play.ts";
 import {
   openingBoardCardLists,

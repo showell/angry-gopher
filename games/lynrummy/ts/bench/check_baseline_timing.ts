@@ -29,7 +29,6 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 
 import { type Card, type Rank, type Suit, type Deck } from "../core/card.ts";
-import type { RawBuckets } from "../bfs/buckets.ts";
 import { timeSolver } from "./bench_timing.ts";
 import { parseConformanceDsl } from "../test/conformance_dsl.ts";
 
@@ -111,13 +110,13 @@ function loadBaseline(p: string): Map<string, BaselineEntry> {
 }
 
 function timeScenario(sc: Fixture, nRuns: number): number {
-  const state: RawBuckets = {
-    helper: bucketToStacks(sc.helper),
-    trouble: bucketToStacks(sc.trouble),
-    growing: bucketToStacks(sc.growing),
-    complete: bucketToStacks(sc.complete),
-  };
-  const { bestMs } = timeSolver(state, nRuns);
+  const board: readonly (readonly Card[])[] = [
+    ...bucketToStacks(sc.helper),
+    ...bucketToStacks(sc.trouble),
+    ...bucketToStacks(sc.growing),
+    ...bucketToStacks(sc.complete),
+  ];
+  const { bestMs } = timeSolver(board, nRuns);
   return bestMs;
 }
 

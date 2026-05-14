@@ -28,7 +28,7 @@ import { type Card, type Rank, type Suit, type Deck, parseCardLabel } from "../c
 // pinned" — engine_v2 frequently finds different valid plans than the
 // pinned ones. The canSteal length-2 extension also made some pinned
 // no_plan scenarios solvable; those are itemized in STALE_NO_PLAN.
-import { findPlanForBuckets } from "../step/hand_play.ts";
+import { solveBoard } from "../bfs/engine_v2.ts";
 import { enumerateMoves } from "../bfs/enumerator.ts";
 import { narrate, hint, type Move } from "../bfs/move.ts";
 import { classifyBuckets, type RawBuckets } from "../bfs/buckets.ts";
@@ -177,7 +177,13 @@ const STALE_NO_PLAN: Record<string, string> = {
 
 function runSolve(sc: Scenario): RunResult {
   const raw = buildRawBuckets(sc);
-  const result = findPlanForBuckets(raw);
+  // solveBoard re-partitions stacks; bucket pins from the DSL collapse
+  // into a single flat board. growing/complete are runtime concepts
+  // the BFS creates internally, not entry-point inputs.
+  const board: readonly (readonly Card[])[] = [
+    ...raw.helper, ...raw.trouble, ...raw.growing, ...raw.complete,
+  ];
+  const result = solveBoard(board);
   const plan = result === null ? null : result.plan;
 
   const expect = sc.expect;

@@ -6,8 +6,7 @@
 // translation at the wire boundary.
 
 import type { Card } from "../core/card.ts";
-import type { PlanLine } from "../bfs/engine_v2.ts";
-import { solveBoard as bfsSolveBoard } from "../bfs/index.ts";
+import { solveBoard as bfsSolveBoard, type PlanLine } from "../bfs/engine_v2.ts";
 import type { BoardStack } from "../core/geometry.ts";
 import { applyLocally } from "../game_events/primitives.ts";
 import { expandVerb } from "../step/verbs.ts";

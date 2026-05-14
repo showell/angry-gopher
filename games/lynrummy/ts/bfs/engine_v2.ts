@@ -1,12 +1,12 @@
 // engine_v2.ts — kitchen-table algorithm. See ENGINE_V2.md for the
 // algorithmic description.
 
-import type { Buckets, RawBuckets, Lineage } from "./buckets.ts";
+import type { Buckets, Lineage } from "./buckets.ts";
 import {
-  isVictory, fastStateSig, buildCardOrder,
-  classifyBuckets, troubleCount,
+  isVictory, fastStateSig, buildCardOrder, troubleCount,
 } from "./buckets.ts";
-import type { ClassifiedCardStack } from "../core/card_stack.ts";
+import type { Card } from "../core/card.ts";
+import { type ClassifiedCardStack, classifyStack } from "../core/card_stack.ts";
 import { type Move, describe } from "./move.ts";
 import { enumerateMoves } from "./enumerator.ts";
 import {
@@ -174,41 +174,39 @@ function solveTurn(initial: Buckets): SolveResult | null {
 
 // --- Solver entry point -----------------------------------------------------
 //
-// `solveBucketedState` auto-classifies raw input, short-circuits
-// trouble-cap + victory + doomed-singleton states, then dispatches to
-// `solveTurn` (A*). Trouble-cap uses MAX_TROUBLE_OUTER (see the
-// constants near solveTurn).
+// `solveBoard` is the one public entry. It classifies the raw board,
+// partitions stacks into helper (length-3+ legal groups) vs trouble
+// (everything else), runs the pre-flight short-circuits (trouble-cap,
+// victory, doomed-singleton), then dispatches to `solveTurn` (A*).
+// growing / complete are runtime concepts the BFS creates internally
+// via `graduate`; callers don't supply them.
 
-function isAlreadyClassified(initial: Buckets | RawBuckets): initial is Buckets {
-  for (const bucketName of ["helper", "trouble", "growing", "complete"] as const) {
-    const bucket = (initial as unknown as { [k: string]: unknown })[bucketName];
-    if (Array.isArray(bucket) && bucket.length > 0) {
-      const first = bucket[0];
-      return typeof first === "object" && first !== null && "kind" in first;
+export function solveBoard(
+  board: readonly (readonly Card[])[],
+): SolveResult | null {
+  const helper: ClassifiedCardStack[] = [];
+  const trouble: ClassifiedCardStack[] = [];
+  for (const stack of board) {
+    const ccs = classifyStack(stack);
+    if (ccs === null) {
+      throw new Error(`unclassifiable stack: ${JSON.stringify(stack)}`);
+    }
+    if (ccs.n >= 3 && (ccs.kind === "run" || ccs.kind === "rb" || ccs.kind === "set")) {
+      helper.push(ccs);
+    } else {
+      trouble.push(ccs);
     }
   }
-  return true;
-}
+  const classified: Buckets = { helper, trouble, growing: [], complete: [] };
 
-export function solveBucketedState(initial: Buckets | RawBuckets): SolveResult | null {
-  const classified: Buckets = isAlreadyClassified(initial)
-    ? initial
-    : classifyBuckets(initial as RawBuckets);
-
-  if (troubleCount(classified.trouble, classified.growing) > MAX_TROUBLE_OUTER) {
-    return null;
-  }
-  if (isVictory(classified.trouble, classified.growing)) {
-    return { plan: [], finalBuckets: classified };
-  }
+  if (troubleCount(trouble, []) > MAX_TROUBLE_OUTER) return null;
+  if (isVictory(trouble, [])) return { plan: [], finalBuckets: classified };
   // Pre-flight: short-circuit if any trouble singleton has no
   // accessible partner pair anywhere in helper ∪ trouble ∪ growing.
   // Such a state is provably unwinnable; A* can't prove it cheaply on
   // its own. Backed by card_neighbors.NEIGHBORS (constant-time per
   // singleton; only fires when trouble has at least one singleton).
-  if (!allTroubleSingletonsLive(classified)) {
-    return null;
-  }
+  if (!allTroubleSingletonsLive(classified)) return null;
 
   return solveTurn(classified);
 }
@@ -339,8 +337,6 @@ function moveTouchesFocus(move: Move, focus: readonly Card[]): boolean {
   }
   return false;
 }
-
-import type { Card } from "../core/card.ts";
 
 function cardEqual(a: Card, b: Card): boolean {
   return a.rank === b.rank && a.suit === b.suit && a.deck === b.deck;

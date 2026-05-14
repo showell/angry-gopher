@@ -22,7 +22,6 @@ import * as path from "node:path";
 
 import { type Card, type Rank, type Suit, RANKS, SUITS, Deck } from "../core/card.ts";
 import { timeSolver } from "./bench_timing.ts";
-import type { RawBuckets } from "../bfs/buckets.ts";
 
 const BOARD_LABELS: string[][] = [
   ["KS", "AS", "2S", "3S"],
@@ -80,26 +79,16 @@ function helpersAsTuples(): readonly (readonly Card[])[] {
 }
 
 function timeSolve(c: Card): { plan: readonly { line: string }[] | null; ms: number } {
-  const state: RawBuckets = {
-    helper: helpersAsTuples(),
-    trouble: [[c]],
-    growing: [],
-    complete: [],
-  };
-  const { plan, bestMs } = timeSolver(state);
+  const board: readonly (readonly Card[])[] = [...helpersAsTuples(), [c]];
+  const { plan, bestMs } = timeSolver(board);
   return { plan, ms: bestMs };
 }
 
 function warmupFullPass(cards: readonly Card[]): void {
   process.stderr.write("[warmup] priming the suite (untimed pass)...\n");
   for (const c of cards) {
-    const state: RawBuckets = {
-      helper: helpersAsTuples(),
-      trouble: [[c]],
-      growing: [],
-      complete: [],
-    };
-    timeSolver(state, 1);
+    const board: readonly (readonly Card[])[] = [...helpersAsTuples(), [c]];
+    timeSolver(board, 1);
   }
   process.stderr.write(`[warmup] done (${cards.length} scenarios primed).\n`);
 }

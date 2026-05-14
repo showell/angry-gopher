@@ -38,19 +38,9 @@ import {
   KIND_RB,
   KIND_SET,
 } from "../core/card_stack.ts";
-import type { Buckets, RawBuckets } from "../bfs/buckets.ts";
-import { solveBucketedState } from "../bfs/engine_v2.ts";
-import { solveBoard, type SolveResult } from "../bfs/index.ts";
+import type { Buckets } from "../bfs/buckets.ts";
+import { solveBoard } from "../bfs/engine_v2.ts";
 import type { Move } from "../bfs/move.ts";
-
-/** Bucket-level entry used by the conformance harness (scenarios pin
- *  specific helper/trouble/growing/complete layouts). Production code
- *  goes through `solveBoard` instead. */
-export function findPlanForBuckets(
-  initial: RawBuckets | Buckets,
-): SolveResult | null {
-  return solveBucketedState(initial);
-}
 
 export interface PlayResult {
   readonly placements: readonly Card[];

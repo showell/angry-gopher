@@ -28,12 +28,8 @@
 //    represent contention or transient system state, not the solver
 //    itself.
 
-import { solveBucketedState, type PlanLine } from "../bfs/engine_v2.ts";
-import {
-  classifyBuckets,
-  type Buckets,
-  type RawBuckets,
-} from "../bfs/buckets.ts";
+import type { Card } from "../core/card.ts";
+import { solveBoard, type PlanLine } from "../bfs/engine_v2.ts";
 
 interface TimingResult {
   readonly plan: readonly PlanLine[] | null;
@@ -51,41 +47,23 @@ function nowMs(): number {
 }
 
 /**
- * Time `solveBucketedState(state, ...)` and return
- * `{ plan, bestMs }`. `state` is either a classified `Buckets` or a
- * `RawBuckets`; raw shapes are classified once on the way in so the
- * timed runs see identical work.
+ * Time `solveBoard(board)` and return `{ plan, bestMs }`. One warmup
+ * pass + `nRuns` measured invocations; min wins.
  */
 export function timeSolver(
-  state: Buckets | RawBuckets,
+  board: readonly (readonly Card[])[],
   nRuns: number = 20,
 ): TimingResult {
-  // Pre-classify so every timed run starts from the same shape.
-  const buckets: Buckets = isClassified(state)
-    ? state
-    : classifyBuckets(state as RawBuckets);
-
   // Warmup.
-  let result = solveBucketedState(buckets);
+  let result = solveBoard(board);
 
   let bestMs = Infinity;
   for (let i = 0; i < nRuns; i++) {
     maybeGc();
     const t0 = nowMs();
-    result = solveBucketedState(buckets);
+    result = solveBoard(board);
     const elapsed = nowMs() - t0;
     if (elapsed < bestMs) bestMs = elapsed;
   }
   return { plan: result === null ? null : result.plan, bestMs };
-}
-
-function isClassified(state: Buckets | RawBuckets): state is Buckets {
-  for (const name of ["helper", "trouble", "growing", "complete"] as const) {
-    const bucket = (state as unknown as { [k: string]: unknown })[name];
-    if (Array.isArray(bucket) && bucket.length > 0) {
-      const first = bucket[0];
-      return typeof first === "object" && first !== null && "kind" in first;
-    }
-  }
-  return true;
 }
