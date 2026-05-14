@@ -23,14 +23,8 @@ const boardLabels: string[][] = [
   ["9H'", "TC'", "JH"],
 ];
 
-function dslLabelToTs(s: string): string {
-  return s.endsWith("'") ? s.slice(0, -1) + ":1" : s;
-}
-
-const hand: Card[] = handLabels.map(s => parseCardLabel(dslLabelToTs(s)));
-const board: Card[][] = boardLabels.map(stack =>
-  stack.map(s => parseCardLabel(dslLabelToTs(s))),
-);
+const hand: Card[] = handLabels.map(parseCardLabel);
+const board: Card[][] = boardLabels.map(stack => stack.map(parseCardLabel));
 
 const lines = gameHintLines(hand, board);
 console.log("hint lines:", lines.length);

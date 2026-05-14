@@ -30,22 +30,19 @@ const DSL_PATH = path.resolve(
 );
 
 // --- Card label conversion ------------------------------------------
+//
+// DSL uses `'` for deck-2; parseCardLabel and cardLabel both speak
+// that form directly, so no label conversion is needed.
 
-function dslLabelToTs(s: string): string {
-  return s.endsWith("'") ? s.slice(0, -1) + ":1" : s;
-}
-function tsLabelToDsl(s: string): string {
-  return s.endsWith(":1") ? s.slice(0, -2) + "'" : s;
-}
 function parseList(s: string): Card[] {
-  return s.trim().split(/\s+/).filter(Boolean).map(t => parseCardLabel(dslLabelToTs(t)));
+  return s.trim().split(/\s+/).filter(Boolean).map(parseCardLabel);
 }
-function parseOne(s: string): Card { return parseCardLabel(dslLabelToTs(s.trim())); }
+function parseOne(s: string): Card { return parseCardLabel(s.trim()); }
 
 function fmtCs(cs: readonly Card[]): string {
-  return cs.map(c => tsLabelToDsl(cardLabel(c))).join(" ");
+  return cs.map(cardLabel).join(" ");
 }
-function fmtCard(c: Card): string { return tsLabelToDsl(cardLabel(c)); }
+function fmtCard(c: Card): string { return cardLabel(c); }
 
 function fmtPrim(p: Primitive, board: readonly BoardStack[]): string {
   switch (p.action) {

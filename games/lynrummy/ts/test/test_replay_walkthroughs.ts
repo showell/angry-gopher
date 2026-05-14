@@ -33,18 +33,10 @@ const __dirname = path.dirname(__filename);
 const DSL_DIR = path.resolve(__dirname, "../../conformance/scenarios");
 const DSL_PATH = path.join(DSL_DIR, "replay_walkthroughs.dsl");
 
-// --- Card-label conversion (DSL uses ' for deck-1) -----------------
-
-function dslLabelToTsLabel(s: string): string {
-  return s.endsWith("'") ? s.slice(0, -1) + ":1" : s;
-}
-
-function parseDslCard(s: string): Card {
-  return parseCardLabel(dslLabelToTsLabel(s));
-}
+// --- DSL card lists --------------------------------------------------
 
 function parseDslCards(s: string): readonly Card[] {
-  return s.trim().split(/\s+/).map(parseDslCard);
+  return s.trim().split(/\s+/).map(parseCardLabel);
 }
 
 // --- DSL parser -----------------------------------------------------
@@ -144,7 +136,7 @@ function parseActionLine(
     return makeMergeHand(
       board,
       findStackIndex(board, tgt),
-      parseDslCard(m[1]!),
+      parseCardLabel(m[1]!),
       m[3]! as Side,
     );
   }
@@ -152,7 +144,7 @@ function parseActionLine(
   m = line.match(/^place_hand\s+(\S+)\s*->\s*\((-?\d+)\s*,\s*(-?\d+)\)$/);
   if (m) {
     return makePlaceHand(
-      parseDslCard(m[1]!),
+      parseCardLabel(m[1]!),
       { top: parseInt(m[2]!, 10), left: parseInt(m[3]!, 10) },
     );
   }

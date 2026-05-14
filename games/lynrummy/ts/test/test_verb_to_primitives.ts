@@ -45,18 +45,6 @@ const DSL_FILES = [
   "verb_to_primitives_corpus.dsl",
 ];
 
-// Card-label convention. The corpus DSL (and replay_walkthroughs.dsl)
-// uses `'` for deck-1 (`4D'` = 4 of diamonds, deck-1). parseCardLabel
-// expects `:1`. Convert at the parse boundary; emit with `'` so
-// expected/got strings round-trip.
-function dslLabelToTsLabel(s: string): string {
-  return s.endsWith("'") ? s.slice(0, -1) + ":1" : s;
-}
-
-function tsLabelToDslLabel(s: string): string {
-  return s.endsWith(":1") ? s.slice(0, -2) + "'" : s;
-}
-
 // --- DSL parser -------------------------------------------------------
 
 interface ScenarioRaw {
@@ -114,8 +102,7 @@ function parseDsl(contents: string): ScenarioRaw[] {
       if (m) {
         const top = parseInt(m[1]!, 10);
         const left = parseInt(m[2]!, 10);
-        const cards = m[3]!.trim().split(/\s+/)
-          .map(s => parseCardLabel(dslLabelToTsLabel(s)));
+        const cards = m[3]!.trim().split(/\s+/).map(parseCardLabel);
         cur.board.push({ top, left, cards });
         continue;
       }
@@ -143,13 +130,13 @@ function parseDsl(contents: string): ScenarioRaw[] {
 
 function parseCardList(s: string): readonly Card[] {
   if (!s.trim()) return [];
-  return s.trim().split(/\s+/).map(t => parseCardLabel(dslLabelToTsLabel(t)));
+  return s.trim().split(/\s+/).map(parseCardLabel);
 }
 
 function parseSingleCard(s: string): Card {
   const tokens = s.trim().split(/\s+/);
   if (tokens.length !== 1) throw new Error(`expected single card, got "${s}"`);
-  return parseCardLabel(dslLabelToTsLabel(tokens[0]!));
+  return parseCardLabel(tokens[0]!);
 }
 
 function buildBoardStacks(sc: ScenarioRaw): readonly BoardStack[] {
@@ -273,11 +260,11 @@ function buildMove(sc: ScenarioRaw): Move {
 // --- Render primitives back to DSL strings ----------------------------
 
 function fmtCards(cards: readonly Card[]): string {
-  return cards.map(c => tsLabelToDslLabel(cardLabel(c))).join(" ");
+  return cards.map(cardLabel).join(" ");
 }
 
 function fmtCard(c: Card): string {
-  return tsLabelToDslLabel(cardLabel(c));
+  return cardLabel(c);
 }
 
 function fmtPrimitive(p: Primitive, board: readonly BoardStack[]): string {
