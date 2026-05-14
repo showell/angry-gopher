@@ -91,10 +91,13 @@ function main(): void {
 
   const result = playFullGame(positioned, hands, deck);
 
-  const t = writeSession(
-    { initialBoard: positioned, initialHands: hands, initialDeck: deck, result },
-    { label: `agent self-play (seed=${SEED})` },
-  );
+  const t = writeSession({
+    initialBoard: positioned,
+    initialHands: hands,
+    initialDeck: deck,
+    result,
+    label: `agent self-play (seed=${SEED})`,
+  });
   console.log(`wrote session #${t.sessionId} (${t.actionsWritten} actions) to ${t.sessionDir}`);
 
   // Round-trip validation: re-read the emitted files, parse via the

@@ -111,53 +111,54 @@ function assertNoOverlap(
 
 // --- Session-dir layout ----------------------------------------------
 
-const DEFAULT_DATA_DIR = path.resolve(
+const DATA_DIR = path.resolve(
   path.dirname(new URL(import.meta.url).pathname),
   "../../data",
 );
+const SESSIONS_DIR = path.join(DATA_DIR, "lynrummy-elm", "sessions");
+const NEXT_ID_FILE = path.join(DATA_DIR, "next-session-id.txt");
 
-interface Paths {
-  readonly sessionsDir: string;
-  readonly nextIdFile: string;
-}
-
-function paths(dataDir: string): Paths {
-  return {
-    sessionsDir: path.join(dataDir, "lynrummy-elm", "sessions"),
-    nextIdFile: path.join(dataDir, "next-session-id.txt"),
-  };
+/** Defensive check — the data layout must already exist on disk
+ *  before writeSession runs. Silent mkdir would paper over a
+ *  misconfigured deployment; a loud error tells the operator
+ *  exactly what's missing. */
+function assertSessionsDirExists(): void {
+  if (!fs.existsSync(DATA_DIR)) {
+    throw new Error(
+      `[transcript] data dir missing: ${DATA_DIR} — repository layout is broken or this script is running outside the repo`,
+    );
+  }
+  if (!fs.existsSync(SESSIONS_DIR)) {
+    throw new Error(
+      `[transcript] sessions dir missing: ${SESSIONS_DIR} — initialize the deployment before writing session transcripts`,
+    );
+  }
 }
 
 /** Read + increment + write the session-id counter. Mirrors what
  *  `views/lynrummy_elm.go` does, but TS-side (the Go server is
  *  out of the loop for agent-written transcripts). */
-function allocateSessionId(p: Paths): number {
+function allocateSessionId(): number {
   let n = 1;
-  if (fs.existsSync(p.nextIdFile)) {
-    const raw = fs.readFileSync(p.nextIdFile, "utf8").trim();
+  if (fs.existsSync(NEXT_ID_FILE)) {
+    const raw = fs.readFileSync(NEXT_ID_FILE, "utf8").trim();
     const parsed = parseInt(raw, 10);
     if (!Number.isNaN(parsed) && parsed > 0) n = parsed;
   }
-  fs.writeFileSync(p.nextIdFile, String(n + 1) + "\n");
+  fs.writeFileSync(NEXT_ID_FILE, String(n + 1) + "\n");
   return n;
 }
 
 
 // --- Top-level writer ------------------------------------------------
 
-export interface TranscriptOpts {
-  /** Override the data dir (defaults to the repo's
-   *  `games/lynrummy/data`). */
-  readonly dataDir?: string;
-  /** Session label written into meta. */
-  readonly label?: string;
-}
-
 export interface TranscriptInputs {
   readonly initialBoard: readonly BoardStack[];
   readonly initialHands: readonly (readonly Card[])[];
   readonly initialDeck: readonly Card[];
   readonly result: GameResult;
+  /** Human-readable session label written into the meta file. */
+  readonly label: string;
 }
 
 export interface TranscriptResult {
@@ -169,15 +170,11 @@ export interface TranscriptResult {
 
 /** Write an Elm-replayable session for one agent self-play game.
  *  Returns the allocated session id + on-disk path. */
-export function writeSession(
-  inputs: TranscriptInputs,
-  opts: TranscriptOpts = {},
-): TranscriptResult {
-  const dataDir = opts.dataDir ?? DEFAULT_DATA_DIR;
-  const p = paths(dataDir);
-  const sessionId = allocateSessionId(p);
-  const sessionDir = path.join(p.sessionsDir, String(sessionId));
-  fs.mkdirSync(sessionDir, { recursive: true });
+export function writeSession(inputs: TranscriptInputs): TranscriptResult {
+  assertSessionsDirExists();
+  const sessionId = allocateSessionId();
+  const sessionDir = path.join(SESSIONS_DIR, String(sessionId));
+  fs.mkdirSync(sessionDir);
 
   // --- meta ---
   const gameStateDsl = formatGameState({
@@ -191,7 +188,7 @@ export function writeSession(
   });
   const metaBody = formatMeta(
     Math.floor(Date.now() / 1000),
-    opts.label ?? "agent self-play",
+    inputs.label,
     gameStateDsl,
   );
   fs.writeFileSync(path.join(sessionDir, "meta"), metaBody);
