@@ -1,11 +1,10 @@
 // bench_timing.ts — Stable timing primitive for the BFS solver.
 //
-// TS port of python/bench_timing.py. Single source of truth for
-// gen_baseline_board.ts (gold capture) and check_baseline_timing.ts
-// (regression check). Both must use identical methodology or gold and
-// check disagree on noise.
+// Single source of truth for gen_baseline_board.ts (gold capture) and
+// check_baseline_timing.ts (regression check). Both must use identical
+// methodology or gold and check disagree on noise.
 //
-// Methodology (mirrors the Python doc; differences called out):
+// Methodology:
 //
 // 1. **Warmup pass**: one solver invocation before measuring. V8 lazily
 //    optimizes hot functions; the first run pays JIT-tier costs the

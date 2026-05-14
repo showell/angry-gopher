@@ -1,12 +1,8 @@
 // bench_outer_shell.ts — Compare outer-shell modes on random hands.
 //
-// TS port of python/bench_outer_shell.py.
-//
 // Fixed corpus: 60 random 6-card hands drawn from the 81 cards not on
-// the Game 17 opening board (6 helpers, 23 cards), seed 42 — TS-side
-// PRNG (mulberry32). The hand selection therefore differs from the
-// Python version (Python uses Mersenne Twister); this is intentional.
-// Python is being retired; the TS bench has its own gold.
+// the Game 17 opening board (6 helpers, 23 cards), seed 42 — see
+// `baseline_deal.ts` for the canonical PRNG + deal.
 //
 // Two modes compared:
 //

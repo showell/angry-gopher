@@ -1,10 +1,9 @@
 // hand_play.ts — hand-aware "what should I play?" outer loop.
 //
-// TS port of python/agent_prelude.py. The BFS engine itself is hand-
-// blind — it sees only the 4-bucket board state. This module is the
-// hand-aware wrapper: given a hand + a board, find a plausible play
-// (which hand cards to place onto the board, plus the BFS plan that
-// cleans up the board afterward).
+// The BFS engine itself is hand-blind — it sees only the 4-bucket
+// board state. This module is the hand-aware wrapper: given a hand +
+// a board, find a plausible play (which hand cards to place onto the
+// board, plus the BFS plan that cleans up the board afterward).
 //
 // Search order (encodes game preference; no scoring layer):
 //

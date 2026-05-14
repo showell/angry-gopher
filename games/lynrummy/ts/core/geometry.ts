@@ -1,11 +1,7 @@
-// geometry.ts — TS port of python/geometry.py.
-//
-// Pure functions over a board-stacks-with-locations shape. No HTTP,
-// no mutation. Used by the verb→primitive translator (verbs.ts) and
-// the geometry post-pass (geometry_plan.ts) to keep the agent's
-// emitted plays clear of the crowding/overlap thresholds the
-// referee enforces (and stricter human-feel thresholds the agent
-// enforces on its own).
+// geometry.ts — Pure functions over a board-stacks-with-locations
+// shape. Used by `step/verbs.ts` to keep the agent's emitted plays
+// clear of the crowding/overlap thresholds the referee enforces (and
+// stricter human-feel thresholds the agent enforces on its own).
 //
 // Constants must agree with `Lib.Physics.BoardGeometry` (Elm) and
 // the Go server's BoardBounds. Drift between layers is silent and

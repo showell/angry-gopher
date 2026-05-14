@@ -1,10 +1,9 @@
-// buckets.ts — 4-bucket BFS state shape + state_sig + boundary helper.
+// buckets.ts — 4-bucket BFS state shape + boundary helper.
 //
-// TS port of python/buckets.py. Mirrors the Python NamedTuple/Buckets
-// shape with plain readonly objects. Bucket entries inside the BFS are
-// always ClassifiedCardStack — `classifyBuckets` is the boundary that
-// converts a raw `Buckets` of card-list stacks into a CCS-shaped one.
-// Inside BFS the "no KIND_OTHER" invariant holds by construction.
+// Bucket entries inside the BFS are always ClassifiedCardStack —
+// `classifyBuckets` is the boundary that converts a raw `Buckets` of
+// card-list stacks into a CCS-shaped one. Inside BFS the "no
+// KIND_OTHER" invariant holds by construction.
 
 import type { Card } from "../core/card.ts";
 import {

@@ -1,9 +1,8 @@
-// gen_baseline_board.ts — Generate the 81-card baseline gold (TS).
+// gen_baseline_board.ts — Generate the 81-card baseline gold.
 //
-// TS port of python/tools/gen_baseline_board.py. The Game 17 board
-// (6 helpers, 23 cards) is the fixed fixture. For each of the 81
-// remaining cards in the double deck, run the BFS solver and record:
-// solvable/no_plan, plan length, timing.
+// The Game 17 board (6 helpers, 23 cards) is the fixed fixture. For
+// each of the 81 remaining cards in the double deck, run the BFS
+// solver and record: solvable/no_plan, plan length, timing.
 //
 // Output:
 //   ts/bench/baseline_board_81_gold.txt

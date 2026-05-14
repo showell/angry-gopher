@@ -1,11 +1,6 @@
-// primitives.ts — TS port of python/primitives.py + the relevant
-// apply_* helpers from python/strategy.py.
-//
-// Primitives are the atomic UI ops the agent emits: split / merge_stack
-// / merge_hand / move_stack / place_hand. The verb→primitive translator
-// (verbs.ts) emits a deterministic primitive sequence per high-level
-// verb; the geometry post-pass (geometry_plan.ts) injects pre-flight
-// move_stack primitives where crowding would otherwise occur.
+// primitives.ts — atomic UI ops the agent emits: split / merge_stack
+// / merge_hand / move_stack / place_hand. `step/verbs.ts` emits a
+// deterministic primitive sequence per high-level verb.
 //
 // `applyLocally` mirrors what the server does on receipt — lets
 // downstream callers (verbs.ts, geometry_plan.ts, the trace harness)
