@@ -33,17 +33,6 @@ interface SolveCtxPlus extends SolveCtx {
   readonly maxTrouble: number;
 }
 
-/**
- * Top-level entry. Returns the SHORTEST plan found (or null) via
- * iterative deepening: try maxDepth=1, then 2, … up to opts.maxDepth.
- * The first iteration that finds a plan returns it (guaranteed
- * optimal because deeper iterations would only find longer plans
- * via the same search shape).
- *
- * Each iteration is a fresh search — no memoization across the outer
- * loop. Mirrors the kitchen-table "look for 1-motion moves, then
- * 2-motion moves, …" discipline.
- */
 export type Heuristic = (b: Buckets) => number;
 
 export const HEURISTICS: Record<string, Heuristic> = {
