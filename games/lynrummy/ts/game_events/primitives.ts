@@ -1,5 +1,5 @@
 // primitives.ts — atomic UI ops the agent emits: split / merge_stack
-// / merge_hand / move_stack / place_hand. `step/verbs.ts` emits a
+// / merge_hand / move_stack / place_hand. `plan/verbs.ts` emits a
 // deterministic primitive sequence per high-level verb.
 //
 // `applyLocally` mirrors what the server does on receipt — lets

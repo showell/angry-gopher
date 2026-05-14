@@ -392,8 +392,8 @@ in mind, count cards, do single-digit arithmetic, and reason
 spatially. A trick that needs 6–7 physical primitives is
 within comfortable human planning range.
 
-The TS agent's physical-execution layer (`ts/step/verbs.ts` +
-`ts/step/physical_plan.ts`) mimics this. Single loop over the
+The TS agent's physical-execution layer (`ts/plan/verbs.ts` +
+`ts/plan/physical_plan.ts`) mimics this. Single loop over the
 solver's plan with **honest state**: `sim` is the real board
 (no hand cards on it); `pendingHand` tracks cards still in
 the hand. Three rules:

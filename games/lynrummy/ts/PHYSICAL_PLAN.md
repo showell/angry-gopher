@@ -7,8 +7,8 @@ which verbs retire which trouble. It is silent about geometry,
 hand vs. board, and which stack physically moves when two
 combine.
 
-The physical-planning layer (`step/physical_plan.ts` + the
-helpers in `step/verbs.ts`) is the bridge from one solver plan
+The physical-planning layer (`plan/physical_plan.ts` + the
+helpers in `plan/verbs.ts`) is the bridge from one solver plan
 to a wire-ready `Primitive[]`: the sequence of `place_hand` /
 `merge_hand` / `merge_stack` / `split` / `move_stack` actions
 the UI replays verbatim. It is the only layer that knows:
@@ -47,10 +47,10 @@ or a multi-card stack a verb consumes) are seeded as a
 `place_hand` + `merge_hand` chain at a clean loc before the
 verb loop runs.
 
-Enforcement: `planMerge` in `step/verbs.ts` consults
+Enforcement: `planMerge` in `plan/verbs.ts` consults
 `pendingHand` at each merge emission. Multi-placement seeding
 happens at the top of `getPrimitivesForLogicalPlay` in
-`step/physical_plan.ts`.
+`plan/physical_plan.ts`.
 
 ### R2 — Merges run small-toward-large
 
@@ -82,7 +82,7 @@ downstream primitives to build on, even when the immediate
 post-board doesn't yet overlap.
 
 Enforcement: `planMergeHand`, `planMergeStackOnBoard`, and
-the end-split branch of `planSplitAfter` in `step/verbs.ts`.
+the end-split branch of `planSplitAfter` in `plan/verbs.ts`.
 The trigger threshold is `findCrowding`
 (`PLANNING_MARGIN = 15` — between the legal `BOARD_MARGIN = 7`
 and the human-feel `PACK_GAP = 30`), NOT the strict
@@ -102,7 +102,7 @@ solver (engine_v2) ─→ {placements, planDescs}
                         Primitive[]  ─→  wire / transcript
 ```
 
-Inside `getPrimitivesForLogicalPlay` (`step/physical_plan.ts`):
+Inside `getPrimitivesForLogicalPlay` (`plan/physical_plan.ts`):
 
 1. **Multi-placement seed** — when `hand.length >= 2`, lay
    the hand cards down as a single growing stack at a clean
@@ -120,7 +120,7 @@ Inside `getPrimitivesForLogicalPlay` (`step/physical_plan.ts`):
    references and that we didn't seed. That's broken state,
    not a paper-over case; throw.
 
-`expandVerb` and the per-verb functions in `step/verbs.ts`
+`expandVerb` and the per-verb functions in `plan/verbs.ts`
 describe the verb's structure (which splits, which merges, in
 what order). The helpers `planMerge`, `planMergeHand`,
 `planMergeStackOnBoard`, and `planSplitAfter` make the
@@ -128,9 +128,9 @@ physical decisions per emitted primitive.
 
 ## Files
 
-- `step/physical_plan.ts` — the loop. Multi-placement seed +
+- `plan/physical_plan.ts` — the loop. Multi-placement seed +
   verb walk + hard-fail.
-- `step/verbs.ts` — `expandVerb` (hand-aware) + per-verb
+- `plan/verbs.ts` — `expandVerb` (hand-aware) + per-verb
   structure functions + the primitive-emission helpers
   (R1/R2/R3 inline).
 - `game_events/primitives.ts` — primitive types, `applyLocally`, and

@@ -1,5 +1,5 @@
 // geometry.ts — Pure functions over a board-stacks-with-locations
-// shape. Used by `step/verbs.ts` to keep the agent's emitted plays
+// shape. Used by `plan/verbs.ts` to keep the agent's emitted plays
 // clear of the crowding/overlap thresholds the referee enforces (and
 // stricter human-feel thresholds the agent enforces on its own).
 //

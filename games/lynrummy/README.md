@@ -67,8 +67,8 @@ of an Elm-only chunk (cheap insurance, lands intact).
 Treat any phase >15s as worth flagging — per-phase timing is
 printed for exactly this reason. The honest test invariant
 is that conformance calls the same codepath the production
-hint path does (`findPlanForBuckets` in
-`ts/step/hand_play.ts`); divergence in solver options means
+hint path does (`findLogicalMovesForPlay` in
+`ts/plan/hand_play.ts`); divergence in solver options means
 the gate isn't load-bearing.
 
 ## Subsystems

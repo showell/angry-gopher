@@ -19,7 +19,7 @@
 import { type Card, cardLabel } from "../core/card.ts";
 import { isPartialOk } from "../core/card_stack.ts";
 import { solveBoard } from "../bfs/engine_v2.ts";
-import { findLogicalMovesForPlay, type LogicalMovesForPlay } from "../step/hand_play.ts";
+import { findLogicalMovesForPlay, type LogicalMovesForPlay } from "../plan/hand_play.ts";
 import {
   openingBoardCardLists,
   remainingCards,

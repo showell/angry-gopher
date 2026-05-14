@@ -22,7 +22,7 @@ import type {
   ExtractAbsorbMove, FreePullMove, PushMove,
   ShiftMove, SpliceMove, DecomposeMove,
 } from "../bfs/move.ts";
-import { getPrimitivesForLogicalPlay } from "../step/physical_plan.ts";
+import { getPrimitivesForLogicalPlay } from "../plan/physical_plan.ts";
 
 const DSL_PATH = path.resolve(
   path.dirname(new URL(import.meta.url).pathname),

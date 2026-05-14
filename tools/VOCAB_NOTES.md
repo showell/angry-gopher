@@ -55,8 +55,8 @@ after Phase 1.
   of a length-3 run.
 
 ## Verb → Primitive layer
-(Originally `verbs.py`; lives now in `games/lynrummy/ts/step/verbs.ts`.)
-Public: `physicalPlan(initialBoard, hand, planDescs)` over
+(Originally `verbs.py`; lives now in `games/lynrummy/ts/plan/verbs.ts`.)
+Public: `getPrimitivesForLogicalPlay(initialBoard, logicalPlay)` over
 honest state. A "primitive" is a single-action dict with
 shape `{action, stack_index, ...}` — i.e., a WireAction
 without the wire (no session id wrapping).

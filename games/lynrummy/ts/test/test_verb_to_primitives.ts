@@ -35,7 +35,7 @@ import { classifyStack } from "../core/card_stack.ts";
 import {
   type Primitive,
 } from "../game_events/primitives.ts";
-import { moveToPrimitives } from "../step/verbs.ts";
+import { moveToPrimitives } from "../plan/verbs.ts";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
