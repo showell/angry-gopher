@@ -19,7 +19,7 @@ export interface PlanLine {
   readonly move: Move;
 }
 
-export interface SolveResult {
+interface SolveResult {
   readonly plan: readonly PlanLine[];
   readonly finalBuckets: Buckets;
 }

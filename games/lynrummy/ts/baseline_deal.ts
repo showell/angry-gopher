@@ -15,7 +15,7 @@ import type { BoardStack } from "./geometry/geometry.ts";
 // (`top = 20 + row*60; col = (row*3 + 1) % 5; left = 40 + col*30`) so
 // the transcript writer's positioned output matches what Elm renders
 // on a fresh-replay bootstrap.
-export const BOARD_LABELS: readonly (readonly string[])[] = [
+const BOARD_LABELS: readonly (readonly string[])[] = [
   ["KS", "AS", "2S", "3S"],
   ["TD", "JD", "QD", "KD"],
   ["2H", "3H", "4H"],
@@ -24,7 +24,7 @@ export const BOARD_LABELS: readonly (readonly string[])[] = [
   ["2C", "3D", "4C", "5H", "6S", "7H"],
 ];
 
-export function boardLocFor(row: number): { top: number; left: number } {
+function boardLocFor(row: number): { top: number; left: number } {
   const col = (row * 3 + 1) % 5;
   return { top: 20 + row * 60, left: 40 + col * 30 };
 }
