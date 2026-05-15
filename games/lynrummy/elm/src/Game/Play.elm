@@ -148,7 +148,37 @@ update : Msg -> Model -> ( Model, Cmd Msg, Output )
 update msg model =
     case msg of
         PopupOk ->
-            handlePopupOk model
+            let
+                cleared =
+                    { model | popup = Nothing }
+            in
+            if model.agentTurnActive then
+                ( { cleared | agentTurnActive = False }, Cmd.none, NoOutput )
+
+            else if cleared.gameState.activePlayerIndex == 1 then
+                let
+                    reqId =
+                        cleared.nextEngineRequestId
+
+                    hand =
+                        (activeHand cleared.gameState).handCards
+                            |> List.map .card
+
+                    payload =
+                        Engine.buildAgentStepRequest reqId cleared.gameState.board hand
+                in
+                ( { cleared
+                    | agentTurnActive = True
+                    , pendingEngineRequest = Just reqId
+                    , nextEngineRequestId = reqId + 1
+                    , status = { text = "Thinking…", kind = Inform }
+                  }
+                , Cmd.none
+                , EngineSolveRequested payload
+                )
+
+            else
+                ( cleared, Cmd.none, NoOutput )
 
         ActionSent (Ok ()) ->
             ( model, Cmd.none, NoOutput )
@@ -244,8 +274,25 @@ update msg model =
 
         HandCardRectReceived (Ok ( handElement, boardElement, posix )) ->
             let
-                applyMeasurement =
-                    applyHandMeasurement (Time.posixToMillis posix) handElement boardElement
+                tMs =
+                    Time.posixToMillis posix
+
+                applyMeasurement rs =
+                    case rs.phase of
+                        AnimatingHandAction handState ->
+                            { rs
+                                | phase =
+                                    AnimatingHandAction
+                                        (HandDragAnimate.measurementReceived
+                                            tMs
+                                            handElement
+                                            boardElement
+                                            handState
+                                        )
+                            }
+
+                        _ ->
+                            rs
             in
             ( { model
                 | replayState = Maybe.map applyMeasurement model.replayState
@@ -497,62 +544,6 @@ clickHint model =
     )
 
 
-{-| Dismiss the in-flight popup. Three cases:
-
-  - If the popup was the "agent done" modal (`agentTurnActive`
-    is the only signal — the loop ended by setting both `popup`
-    and leaving the flag set), clear the flag and return the
-    baton to P1 visually. The CompleteTurn that returned P2's
-    cards has already been applied to gameState.
-  - If the popup was P1's turn-end modal (active player flipped
-    to P2 by `Game.applyCompleteTurn`), kick off the agent.
-  - Otherwise (turn-rejection admonishment, etc.) just close.
-
--}
-handlePopupOk : Model -> ( Model, Cmd Msg, Output )
-handlePopupOk model =
-    let
-        cleared =
-            { model | popup = Nothing }
-    in
-    if model.agentTurnActive then
-        ( { cleared | agentTurnActive = False }, Cmd.none, NoOutput )
-
-    else if cleared.gameState.activePlayerIndex == 1 then
-        startAgentTurn cleared
-
-    else
-        ( cleared, Cmd.none, NoOutput )
-
-
-{-| Kick off P2's (agent's) turn: mark the flag, fire the first
-`agent_step` request. The response drives the rest of the loop
-via `handleAgentStepResponse`.
--}
-startAgentTurn : Model -> ( Model, Cmd Msg, Output )
-startAgentTurn model =
-    let
-        reqId =
-            model.nextEngineRequestId
-
-        hand =
-            (activeHand model.gameState).handCards
-                |> List.map .card
-
-        payload =
-            Engine.buildAgentStepRequest reqId model.gameState.board hand
-    in
-    ( { model
-        | agentTurnActive = True
-        , pendingEngineRequest = Just reqId
-        , nextEngineRequestId = reqId + 1
-        , status = { text = "Thinking…", kind = Inform }
-      }
-    , Cmd.none
-    , EngineSolveRequested payload
-    )
-
-
 {-| Branches on response variant. Empty events = end-of-turn:
 apply CompleteTurn to gameState, show the "agent done" popup.
 Non-empty events = animate them via the same `AnimationState`
@@ -678,36 +669,6 @@ agentDonePopup =
     { admin = "Oliver"
     , body = "The agent has completed its turn.\n\nYour move!"
     }
-
-
-{-| Apply a hand-card measurement to an in-flight animation
-state. Both Instant Replay and Agent Play funnel measurement
-callbacks through here.
--}
-applyHandMeasurement :
-    Int
-    -> Browser.Dom.Element
-    -> Browser.Dom.Element
-    -> AnimationState
-    -> AnimationState
-applyHandMeasurement tMs handElement boardElement rs =
-    case rs.phase of
-        AnimatingHandAction handState ->
-            { rs
-                | phase =
-                    AnimatingHandAction
-                        (HandDragAnimate.measurementReceived
-                            tMs
-                            handElement
-                            boardElement
-                            handState
-                        )
-            }
-
-        _ ->
-            -- Late measurement: animation either completed or
-            -- pause-toggled past AwaitingMeasurement. Drop.
-            rs
 
 
 handleHintResponse : Encode.Value -> Model -> Model
