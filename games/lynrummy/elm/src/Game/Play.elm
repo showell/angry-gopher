@@ -330,7 +330,26 @@ update msg model =
             ( model, Cmd.none, NoOutput )
 
         ClickHint ->
-            clickHint model
+            let
+                reqId =
+                    model.nextEngineRequestId
+
+                hand =
+                    (activeHand model.gameState).handCards
+                        |> List.map .card
+
+                payload =
+                    Engine.buildGameHintRequest reqId hand model.gameState.board
+            in
+            ( { model
+                | hintedCards = []
+                , pendingEngineRequest = Just reqId
+                , nextEngineRequestId = reqId + 1
+                , status = { text = "Thinking…", kind = Inform }
+              }
+            , Cmd.none
+            , EngineSolveRequested payload
+            )
 
         AgentMoveTick nowPosix ->
             agentMoveTick nowPosix model
@@ -583,30 +602,6 @@ update msg model =
 
 
 -- UPDATE HELPERS
-
-
-clickHint : Model -> ( Model, Cmd Msg, Output )
-clickHint model =
-    let
-        reqId =
-            model.nextEngineRequestId
-
-        hand =
-            (activeHand model.gameState).handCards
-                |> List.map .card
-
-        payload =
-            Engine.buildGameHintRequest reqId hand model.gameState.board
-    in
-    ( { model
-        | hintedCards = []
-        , pendingEngineRequest = Just reqId
-        , nextEngineRequestId = reqId + 1
-        , status = { text = "Thinking…", kind = Inform }
-      }
-    , Cmd.none
-    , EngineSolveRequested payload
-    )
 
 
 {-| Per-frame tick of the agent-move animation. On `Completed`,
