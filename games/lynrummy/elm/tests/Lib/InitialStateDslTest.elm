@@ -121,7 +121,7 @@ expectedSampleRendering : String
 expectedSampleRendering =
     """board:
   at ( 26,  26): 2♥ 3♥ 4♥
-  at (107,  52): 7♠ 7♦ 7♣
+  at ( 52, 107): 7♠ 7♦ 7♣
 
 Player One Hand:
   A♥ 5♥ J♥

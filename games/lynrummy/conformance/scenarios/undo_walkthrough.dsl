@@ -175,13 +175,13 @@ scenario undo_restores_position
       action: move_stack [K♠ A♠ 2♠ 3♠] -> (300,400)
       expect_board_count: 2
       expect_undoable: true
-      expect_loc: (400, 300)
+      expect_loc: (300,400)
     step_3:
       desc: player undoes the move — stack snaps back to exact original position
       action: undo
       expect_board_count: 2
       expect_undoable: false
-      expect_loc: (20, 70)
+      expect_loc: (70,20)
   expect_final_board:
     at (70,20): K♠ A♠ 2♠ 3♠
     at (160,80): T♦ J♦ Q♦ K♦
@@ -202,25 +202,25 @@ scenario undo_split_piece_returns_to_split_position
       action: split [K♠ A♠ 2♠ 3♠]@2
       expect_board_count: 3
       expect_undoable: true
-      expect_loc: (16, 140)
+      expect_loc: (140,16)
     step_3:
       desc: player moves the 2♠-3♠ piece to a distant spot
       action: move_stack [2♠ 3♠] -> (400,500)
       expect_board_count: 3
       expect_undoable: true
-      expect_loc: (500, 400)
+      expect_loc: (400,500)
     step_4:
       desc: undo the move — 2♠-3♠ returns to its split position, not (20, 70)
       action: undo
       expect_board_count: 3
       expect_undoable: true
-      expect_loc: (16, 140)
+      expect_loc: (140,16)
     step_5:
       desc: undo the split — K♠-A♠-2♠-3♠ reassembled at original position
       action: undo
       expect_board_count: 2
       expect_undoable: false
-      expect_loc: (20, 70)
+      expect_loc: (70,20)
   expect_final_board:
     at (70,20): K♠ A♠ 2♠ 3♠
     at (160,80): T♦ J♦ Q♦ K♦

@@ -345,7 +345,7 @@ function applyExpectScalar(out: Record<string, unknown>, key: string, val: strin
       // "(top,left)"
       const m = val.match(/^\((-?\d+)\s*,\s*(-?\d+)\)$/);
       if (!m) throw new Error(`expect.loc: bad syntax: ${val}`);
-      out["loc"] = { top: parseInt(m[1]!, 10), left: parseInt(m[2]!, 10) };
+      out["loc"] = { left: parseInt(m[1]!, 10), top: parseInt(m[2]!, 10) };
       return;
     }
     case "kind":

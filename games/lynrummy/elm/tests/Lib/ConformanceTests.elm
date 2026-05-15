@@ -881,11 +881,11 @@ parseStepAction model raw =
 
 parsePlaceHand : String -> Maybe GameEvent
 parsePlaceHand body =
-    -- "<card> -> (top,left)"
+    -- "<card> -> (left,top)"
     case String.split " -> " body of
         [ cardStr, locStr ] ->
             case ( parseCardTokenForExpect (String.trim cardStr), parseParenIntPair locStr ) of
-                ( Just card, Just ( top, left ) ) ->
+                ( Just card, Just ( left, top ) ) ->
                     Just (GameEvent.PlaceHand { handCard = card, loc = { top = top, left = left } })
 
                 _ ->
@@ -954,7 +954,7 @@ stepExpectation model step =
                     |> Maybe.map (checkHandContains handCards)
                 , Dict.get "expect_loc" step.fields
                     |> Maybe.andThen parseParenIntPair
-                    |> Maybe.map (\( top, left ) -> checkBoardHasLoc board { top = top, left = left })
+                    |> Maybe.map (\( left, top ) -> checkBoardHasLoc board { top = top, left = left })
                 ]
     in
     case checks of
@@ -995,9 +995,9 @@ checkBoardHasLoc board loc =
     else
         Expect.fail
             ("board missing stack at ("
-                ++ String.fromInt loc.top
-                ++ ", "
                 ++ String.fromInt loc.left
+                ++ ", "
+                ++ String.fromInt loc.top
                 ++ ")"
             )
 
@@ -1186,11 +1186,11 @@ parseMergeStack body =
 
 parseMoveStack : String -> Maybe ReplaySpec
 parseMoveStack body =
-    -- "[cards] -> (top,left)"
+    -- "[cards] -> (left,top)"
     case String.split " -> " body of
         [ cardsStr, locStr ] ->
             case ( parseBracketCards cardsStr, parseParenIntPair locStr ) of
-                ( Just cards, Just ( top, left ) ) ->
+                ( Just cards, Just ( left, top ) ) ->
                     Just (SpecMoveStack cards { top = top, left = left })
 
                 _ ->

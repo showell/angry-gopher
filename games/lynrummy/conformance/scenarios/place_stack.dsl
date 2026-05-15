@@ -8,7 +8,7 @@ scenario find_open_loc_empty_board
   op: find_open_loc
   card_count: 3
   expect:
-    loc: (26, 26)
+    loc: (26,26)
 
 
 scenario find_open_loc_one_stack_top_left
@@ -18,7 +18,7 @@ scenario find_open_loc_one_stack_top_left
   existing:
     at (0,0): A♣ A♣ A♣ A♣ A♣
   expect:
-    loc: (92, 52)
+    loc: (52,92)
 
 
 scenario find_open_loc_lots_of_top_row_stacks
@@ -30,7 +30,7 @@ scenario find_open_loc_lots_of_top_row_stacks
     at (200,0): A♣ A♣ A♣ A♣ A♣
     at (400,0): A♣ A♣ A♣ A♣ A♣
   expect:
-    loc: (92, 52)
+    loc: (52,92)
 
 
 scenario find_open_loc_blocking_preferred_origin
@@ -41,7 +41,7 @@ scenario find_open_loc_blocking_preferred_origin
     at (0,0): A♣ A♣ A♣ A♣ A♣
     at (50,90): A♣ A♣ A♣ A♣ A♣
   expect:
-    loc: (167, 52)
+    loc: (52,167)
 
 
 scenario find_open_loc_long_stack
@@ -51,4 +51,4 @@ scenario find_open_loc_long_stack
   existing:
     at (0,0): A♣ A♣ A♣ A♣ A♣
   expect:
-    loc: (92, 52)
+    loc: (52,92)

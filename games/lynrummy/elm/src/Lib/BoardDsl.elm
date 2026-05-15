@@ -75,7 +75,7 @@ parseStackLine raw =
             String.trim raw
     in
     if not (String.startsWith "at " line) then
-        Err ("expected 'at (top, left): cards', got: " ++ raw)
+        Err ("expected 'at (left, top): cards', got: " ++ raw)
 
     else
         let
@@ -117,11 +117,11 @@ parseTopLeft inside =
     case String.split "," inside of
         [ a, b ] ->
             case ( String.toInt (String.trim a), String.toInt (String.trim b) ) of
-                ( Just top, Just left ) ->
+                ( Just left, Just top ) ->
                     Ok { top = top, left = left }
 
                 _ ->
-                    Err ("non-integer (top, left): " ++ inside)
+                    Err ("non-integer (left, top): " ++ inside)
 
         _ ->
             Err ("bad location syntax: (" ++ inside ++ ")")
@@ -216,9 +216,9 @@ cards begin.
 formatStackLine : CardStack -> String
 formatStackLine s =
     "at ("
-        ++ padInt 3 s.loc.top
-        ++ ", "
         ++ padInt 3 s.loc.left
+        ++ ", "
+        ++ padInt 3 s.loc.top
         ++ "): "
         ++ String.join " " (List.map (.card >> Card.cardStr) s.boardCards)
 
