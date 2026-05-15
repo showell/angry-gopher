@@ -37,7 +37,8 @@
 // blocks (replay actions, walkthrough steps, wing expects,
 // etc.) are not handled.
 
-import { type Card, parseCardLabel } from "../core/card.ts";
+import { type Card, parseCardList } from "../core/card.ts";
+import { parseBoardStackLine } from "../geometry/geometry.ts";
 
 // ---- Output shape (matches the snake_case JSON Scenario in test_engine_conformance.ts) ----
 
@@ -272,32 +273,16 @@ function parseStacks(children: Line[]): ParsedStack[] {
 }
 
 function parseStackLine(line: Line): ParsedStack {
-  // "at (top,left): card1 card2 ..."
-  if (!line.content.startsWith("at ")) {
-    throw new Error(`expected "at (t,l): cards" at line ${line.lineNum}: ${line.raw}`);
+  let stack;
+  try {
+    stack = parseBoardStackLine(line.content);
+  } catch (e) {
+    throw new Error(`line ${line.lineNum}: ${(e as Error).message}`);
   }
-  const rest = line.content.slice("at ".length);
-  const close = rest.indexOf(")");
-  if (!rest.startsWith("(") || close < 0) {
-    throw new Error(`bad location at line ${line.lineNum}: ${line.raw}`);
-  }
-  const [topStr, leftStr] = rest.slice(1, close).split(",").map(s => s.trim());
-  const top = parseInt(topStr!, 10);
-  const left = parseInt(leftStr!, 10);
-  const tail = rest.slice(close + 1).trim();
-  if (!tail.startsWith(":")) {
-    throw new Error(`expected ":" after location at line ${line.lineNum}: ${line.raw}`);
-  }
-  const cards = parseCardList(tail.slice(1).trim());
   return {
-    board_cards: cards.map(toBoardCard),
-    loc: { top, left },
+    board_cards: stack.cards.map(toBoardCard),
+    loc: stack.loc,
   };
-}
-
-function parseCardList(s: string): Card[] {
-  if (s.trim() === "") return [];
-  return s.trim().split(/\s+/).filter(Boolean).map(parseCardLabel);
 }
 
 function toBoardCard(c: Card): ParsedBoardCard {

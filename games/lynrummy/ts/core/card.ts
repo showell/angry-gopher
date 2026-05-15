@@ -103,3 +103,10 @@ export function cardToken(c: Card): string {
   const base = RANKS[c.rank - 1]! + SUITS_UNICODE[c.suit]!;
   return c.deck === Deck.One ? base : `${base}'`;
 }
+
+/** Parse a whitespace-separated list of card labels like
+ *  "5H 6H 7H'". Empty / whitespace-only input returns []. */
+export function parseCardList(s: string): Card[] {
+  if (s.trim() === "") return [];
+  return s.trim().split(/\s+/).filter(Boolean).map(parseCardLabel);
+}
