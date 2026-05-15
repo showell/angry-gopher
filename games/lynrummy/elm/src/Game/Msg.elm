@@ -66,6 +66,7 @@ type Msg
     | ClickInstantReplay
     | ClickReplayPauseToggle
     | ReplayTick Time.Posix
+    | AgentMoveTick Time.Posix
     | ActionLogFetched (Result Http.Error ( GameState, List ActionLogEntry ))
     | GameHintReceived Encode.Value
     | AgentStepReceived Encode.Value

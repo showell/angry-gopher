@@ -32,8 +32,10 @@ import Lib.HandDrag as HandDrag
 import Lib.HandGesture as HandGesture
 import Lib.Dealer as Dealer
 import Lib.Game as Game
+import Lib.Physics.BoardGeometry exposing (refereeBounds)
+import Lib.Popup as Popup
 import Lib.Random as Random
-import Lib.Animation.Animate as Animate exposing (Phase(..))
+import Lib.Animation.Animate as Animate exposing (Phase(..), AnimationState)
 import Lib.Animation.HandDragAnimate as HandDragAnimate
 import Html exposing (Html)
 import Json.Encode as Encode
@@ -146,7 +148,7 @@ update : Msg -> Model -> ( Model, Cmd Msg, Output )
 update msg model =
     case msg of
         PopupOk ->
-            ( { model | popup = Nothing }, Cmd.none, NoOutput )
+            handlePopupOk model
 
         ActionSent (Ok ()) ->
             ( model, Cmd.none, NoOutput )
@@ -184,23 +186,30 @@ update msg model =
             ( { model | status = Status.actionLogFetchFailedStatus }, Cmd.none, NoOutput )
 
         ClickInstantReplay ->
-            ( { model
-                | replayState =
-                    Just
-                        (Animate.start
-                            (ActionLog.collapseUndos model.actionLog)
-                            model.initialGameState
-                        )
-                , drag = NotDragging
-                , status = { text = "Replaying…", kind = Inform }
-              }
-            , -- Hand animations measure the board fresh per
-              -- action (bundled with the hand card rect) so
-              -- a scroll between actions doesn't desync the
-              -- two endpoints. Nothing to fetch at click time.
-              Cmd.none
-            , NoOutput
-            )
+            if model.agentTurnActive then
+                -- No-op during agent's turn; the agent's plays
+                -- aren't in actionLog so replaying would skip
+                -- them. View hides the button via `controlsEnabled`.
+                ( model, Cmd.none, NoOutput )
+
+            else
+                ( { model
+                    | replayState =
+                        Just
+                            (Animate.start
+                                (ActionLog.collapseUndos model.actionLog)
+                                model.initialGameState
+                            )
+                    , drag = NotDragging
+                    , status = { text = "Replaying…", kind = Inform }
+                  }
+                , -- Hand animations measure the board fresh per
+                  -- action (bundled with the hand card rect) so
+                  -- a scroll between actions doesn't desync the
+                  -- two endpoints. Nothing to fetch at click time.
+                  Cmd.none
+                , NoOutput
+                )
 
         ClickReplayPauseToggle ->
             ( { model | replayState = Maybe.map Animate.togglePause model.replayState }
@@ -234,32 +243,17 @@ update msg model =
                             )
 
         HandCardRectReceived (Ok ( handElement, boardElement, posix )) ->
-            case model.replayState of
-                Just rs ->
-                    case rs.phase of
-                        AnimatingHandAction handState ->
-                            let
-                                nextPhase =
-                                    AnimatingHandAction
-                                        (HandDragAnimate.measurementReceived
-                                            (Time.posixToMillis posix)
-                                            handElement
-                                            boardElement
-                                            handState
-                                        )
-                            in
-                            ( { model | replayState = Just { rs | phase = nextPhase } }
-                            , Cmd.none
-                            , NoOutput
-                            )
-
-                        _ ->
-                            -- Late measurement: replay either completed or
-                            -- pause-toggled past AwaitingMeasurement. Drop.
-                            ( model, Cmd.none, NoOutput )
-
-                Nothing ->
-                    ( model, Cmd.none, NoOutput )
+            let
+                applyMeasurement =
+                    applyHandMeasurement (Time.posixToMillis posix) handElement boardElement
+            in
+            ( { model
+                | replayState = Maybe.map applyMeasurement model.replayState
+                , agentMoveAnimationState = Maybe.map applyMeasurement model.agentMoveAnimationState
+              }
+            , Cmd.none
+            , NoOutput
+            )
 
         HandCardRectReceived (Err err) ->
             let
@@ -293,7 +287,10 @@ update msg model =
             ( handleHintResponse value model, Cmd.none, NoOutput )
 
         AgentStepReceived value ->
-            ( handleAgentStepResponse value model, Cmd.none, NoOutput )
+            handleAgentStepResponse value model
+
+        AgentMoveTick nowPosix ->
+            agentMoveTick nowPosix model
 
         -- Pointer-gesture + wire-action cluster. MouseDown starts a
         -- drag and kicks off board-rect measurement; MouseMove
@@ -500,33 +497,217 @@ clickHint model =
     )
 
 
-handleAgentStepResponse : Encode.Value -> Model -> Model
+{-| Dismiss the in-flight popup. Three cases:
+
+  - If the popup was the "agent done" modal (`agentTurnActive`
+    is the only signal — the loop ended by setting both `popup`
+    and leaving the flag set), clear the flag and return the
+    baton to P1 visually. The CompleteTurn that returned P2's
+    cards has already been applied to gameState.
+  - If the popup was P1's turn-end modal (active player flipped
+    to P2 by `Game.applyCompleteTurn`), kick off the agent.
+  - Otherwise (turn-rejection admonishment, etc.) just close.
+
+-}
+handlePopupOk : Model -> ( Model, Cmd Msg, Output )
+handlePopupOk model =
+    let
+        cleared =
+            { model | popup = Nothing }
+    in
+    if model.agentTurnActive then
+        ( { cleared | agentTurnActive = False }, Cmd.none, NoOutput )
+
+    else if cleared.gameState.activePlayerIndex == 1 then
+        startAgentTurn cleared
+
+    else
+        ( cleared, Cmd.none, NoOutput )
+
+
+{-| Kick off P2's (agent's) turn: mark the flag, fire the first
+`agent_step` request. The response drives the rest of the loop
+via `handleAgentStepResponse`.
+-}
+startAgentTurn : Model -> ( Model, Cmd Msg, Output )
+startAgentTurn model =
+    let
+        reqId =
+            model.nextEngineRequestId
+
+        hand =
+            (activeHand model.gameState).handCards
+                |> List.map .card
+
+        payload =
+            Engine.buildAgentStepRequest reqId model.gameState.board hand
+    in
+    ( { model
+        | agentTurnActive = True
+        , pendingEngineRequest = Just reqId
+        , nextEngineRequestId = reqId + 1
+        , status = { text = "Thinking…", kind = Inform }
+      }
+    , Cmd.none
+    , EngineSolveRequested payload
+    )
+
+
+{-| Branches on response variant. Empty events = end-of-turn:
+apply CompleteTurn to gameState, show the "agent done" popup.
+Non-empty events = animate them via the same `AnimationState`
+machinery Instant Replay uses, stored in
+`agentMoveAnimationState`; the loop continues on `Completed`.
+
+Per Q1 (2026-05-15), agent events are punted on action-log
+integration — they evolve `model.gameState` only, not the log
+or the wire. Reload-during-or-after-agent-turn drops the
+agent's plays; that's a known V1 limitation.
+-}
+handleAgentStepResponse : Encode.Value -> Model -> ( Model, Cmd Msg, Output )
 handleAgentStepResponse value model =
     case Engine.decodeAgentStepResponse model.pendingEngineRequest value of
         Engine.AgentStepStaleId ->
-            model
+            ( model, Cmd.none, NoOutput )
 
         Engine.AgentStepError detail ->
-            { model
+            ( { model
                 | pendingEngineRequest = Nothing
                 , status = { text = "Agent error: " ++ detail, kind = Scold }
-            }
+              }
+            , Cmd.none
+            , NoOutput
+            )
 
         Engine.AgentStepDecodeError err ->
             let
                 _ =
                     Debug.log "handleAgentStepResponse decode err" err
             in
-            { model
+            ( { model
                 | pendingEngineRequest = Nothing
                 , status = { text = "Agent response could not be decoded — see console.", kind = Scold }
-            }
+              }
+            , Cmd.none
+            , NoOutput
+            )
+
+        Engine.AgentStepEvents [] ->
+            let
+                ( afterTurn, _ ) =
+                    Game.applyCompleteTurn refereeBounds model.gameState
+            in
+            ( { model
+                | pendingEngineRequest = Nothing
+                , gameState = afterTurn
+                , popup = Just agentDonePopup
+                , status = { text = "The agent has completed its turn.", kind = Inform }
+              }
+            , Cmd.none
+            , NoOutput
+            )
 
         Engine.AgentStepEvents events ->
-            { model
+            let
+                entries =
+                    List.map (\e -> { action = e }) events
+
+                anim =
+                    Animate.start entries model.gameState
+            in
+            ( { model
                 | pendingEngineRequest = Nothing
-                , agentPendingEvents = events
+                , agentMoveAnimationState = Just anim
+              }
+            , Cmd.none
+            , NoOutput
+            )
+
+
+{-| Per-frame tick of the agent-move animation. On `Completed`,
+fold the animation's final gameState into `model.gameState` and
+fire the next `agent_step` request — that closes the loop until
+the engine returns no more events.
+-}
+agentMoveTick : Time.Posix -> Model -> ( Model, Cmd Msg, Output )
+agentMoveTick nowPosix model =
+    case model.agentMoveAnimationState of
+        Nothing ->
+            ( model, Cmd.none, NoOutput )
+
+        Just rs ->
+            let
+                config =
+                    { measureMsg = HandCardRectReceived
+                    , gameId = model.gameId
+                    }
+            in
+            case Animate.tick config (Time.posixToMillis nowPosix) rs of
+                Animate.StillReplaying nextRs cmd ->
+                    ( { model | agentMoveAnimationState = Just nextRs }
+                    , cmd
+                    , NoOutput
+                    )
+
+                Animate.Completed ->
+                    let
+                        reqId =
+                            model.nextEngineRequestId
+
+                        hand =
+                            (activeHand rs.gameState).handCards
+                                |> List.map .card
+
+                        payload =
+                            Engine.buildAgentStepRequest reqId rs.gameState.board hand
+                    in
+                    ( { model
+                        | agentMoveAnimationState = Nothing
+                        , gameState = rs.gameState
+                        , pendingEngineRequest = Just reqId
+                        , nextEngineRequestId = reqId + 1
+                        , status = { text = "Thinking…", kind = Inform }
+                      }
+                    , Cmd.none
+                    , EngineSolveRequested payload
+                    )
+
+
+agentDonePopup : Popup.PopupContent
+agentDonePopup =
+    { admin = "Oliver"
+    , body = "The agent has completed its turn.\n\nYour move!"
+    }
+
+
+{-| Apply a hand-card measurement to an in-flight animation
+state. Both Instant Replay and Agent Play funnel measurement
+callbacks through here.
+-}
+applyHandMeasurement :
+    Int
+    -> Browser.Dom.Element
+    -> Browser.Dom.Element
+    -> AnimationState
+    -> AnimationState
+applyHandMeasurement tMs handElement boardElement rs =
+    case rs.phase of
+        AnimatingHandAction handState ->
+            { rs
+                | phase =
+                    AnimatingHandAction
+                        (HandDragAnimate.measurementReceived
+                            tMs
+                            handElement
+                            boardElement
+                            handState
+                        )
             }
+
+        _ ->
+            -- Late measurement: animation either completed or
+            -- pause-toggled past AwaitingMeasurement. Drop.
+            rs
 
 
 handleHintResponse : Encode.Value -> Model -> Model
@@ -575,7 +756,7 @@ subscriptions : Model -> Sub Msg
 subscriptions model =
     Sub.batch
         [ dragSubscriptions model
-        , replaySubscriptions model
+        , animationSubscriptions model
         ]
 
 
@@ -592,19 +773,29 @@ dragSubscriptions model =
                 ]
 
 
-{-| Subscribe to per-frame ticks while a replay is in flight
-and not paused. The handler in `update` extracts `nowMs` and
-delegates to `Animate.tick`.
+{-| Per-frame ticks for whichever animation is in flight —
+Instant Replay or the real-time agent's move. Only one of the
+two AnimationState fields is `Just` at a time (the kickoff path
+gates `ClickInstantReplay` on `agentTurnActive`), so the two
+subscriptions don't double-fire.
 -}
-replaySubscriptions : Model -> Sub Msg
-replaySubscriptions model =
-    case model.replayState of
+animationSubscriptions : Model -> Sub Msg
+animationSubscriptions model =
+    Sub.batch
+        [ animationFrameFor model.replayState ReplayTick
+        , animationFrameFor model.agentMoveAnimationState AgentMoveTick
+        ]
+
+
+animationFrameFor : Maybe AnimationState -> (Time.Posix -> Msg) -> Sub Msg
+animationFrameFor mState tickMsg =
+    case mState of
         Just rs ->
             if rs.paused then
                 Sub.none
 
             else
-                Browser.Events.onAnimationFrame ReplayTick
+                Browser.Events.onAnimationFrame tickMsg
 
         Nothing ->
             Sub.none

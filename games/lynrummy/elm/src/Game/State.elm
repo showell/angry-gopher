@@ -56,6 +56,25 @@ type alias Model =
     -- engine signals `Completed`.
     , replayState : Maybe AnimationState
 
+    -- Sibling of `replayState` driven by the real-time agent
+    -- loop: when an `agent_step` response delivers a non-empty
+    -- event list, the events are wrapped as ActionLogEntries
+    -- and pushed through `Animate.start`. On `Completed` the
+    -- agent loop applies the resulting `gameState` to `model`
+    -- and fires the next `agent_step` request. Same `AnimationState`
+    -- type as Instant Replay — distinct field because "user
+    -- clicked Replay" and "agent is playing" stay semantically
+    -- separate in the model even though they share machinery.
+    , agentMoveAnimationState : Maybe AnimationState
+
+    -- Spans the entire agent turn: from PopupOk kickoff through
+    -- the loop (Thinking…, animations, between-step gaps) and
+    -- across the closing "agent done" popup, cleared on the
+    -- user's Ok. Source of truth for the human-input lockout —
+    -- distinct from `agentMoveAnimationState` because the gaps
+    -- between animations need to lock input too.
+    , agentTurnActive : Bool
+
     -- Constant string forming the board's DOM id (via
     -- `boardDomIdFor`). Multi-Play-per-page hosting retired
     -- with the puzzle gallery; the field survives so the DOM
@@ -73,11 +92,6 @@ type alias Model =
     -- back.
     , nextEngineRequestId : Int
 
-    -- Most recent agent-step response. Populated by
-    -- `AgentStepReceived`; consumed by the (future) agent loop
-    -- that animates these events. Empty list = end of agent's
-    -- turn or no agent activity yet.
-    , agentPendingEvents : List GameEvent
     }
 
 
@@ -147,10 +161,11 @@ baseModel =
     , actionLog = []
     , nextSeq = 1
     , replayState = Nothing
+    , agentMoveAnimationState = Nothing
+    , agentTurnActive = False
     , gameId = "default"
     , pendingEngineRequest = Nothing
     , nextEngineRequestId = 1
-    , agentPendingEvents = []
     }
 
 
