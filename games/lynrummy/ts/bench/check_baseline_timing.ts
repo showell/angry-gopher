@@ -28,9 +28,9 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 
-import { type Card, type Rank, type Suit, type Deck } from "../core/card.ts";
+import type { Card } from "../core/card.ts";
 import { timeSolver } from "./bench_timing.ts";
-import { parseConformanceDsl } from "../test/conformance_dsl.ts";
+import { parseConformanceDsl, type ParsedScenario } from "../test/conformance_dsl.ts";
 
 // 50ms is human-scale: any scenario the solver takes longer than
 // this on is worth gating against regression. Today no baseline
@@ -50,44 +50,10 @@ const TOLERANCE = 0.10;
 // that the full 81-scenario sweep stays under a minute.
 const RUNS = 20;
 
-interface FixtureCard {
-  value: number;
-  suit: number;
-  origin_deck: number;
-}
-interface FixtureBoardCard {
-  card: FixtureCard;
-  state: number;
-}
-interface FixtureStack {
-  board_cards: FixtureBoardCard[];
-  loc?: unknown;
-}
-interface Fixture {
-  name: string;
-  op: string;
-  helper?: FixtureStack[];
-  trouble?: FixtureStack[];
-  growing?: FixtureStack[];
-  complete?: FixtureStack[];
-}
-
-function asCard(c: FixtureCard): Card {
-  return { rank: c.value as Rank, suit: c.suit as Suit, deck: c.origin_deck as Deck };
-}
-
-function bucketToStacks(bucket: FixtureStack[] | undefined): readonly (readonly Card[])[] {
-  if (!bucket) return [];
-  return bucket.map(s => s.board_cards.map(bc => asCard(bc.card)));
-}
-
-function loadFixtures(p: string): Map<string, Fixture> {
+function loadFixtures(p: string): Map<string, ParsedScenario> {
   const text = fs.readFileSync(p, "utf8");
-  const parsed = parseConformanceDsl(text);
-  const out = new Map<string, Fixture>();
-  // ParsedScenario's stack shape is structurally identical to Fixture's:
-  // both expose `helper/trouble/growing/complete: { board_cards: { card: { value, suit, origin_deck }, state } }[]`.
-  for (const sc of parsed) out.set(sc.name, sc as unknown as Fixture);
+  const out = new Map<string, ParsedScenario>();
+  for (const sc of parseConformanceDsl(text)) out.set(sc.name, sc);
   return out;
 }
 
@@ -109,12 +75,13 @@ function loadBaseline(p: string): Map<string, BaselineEntry> {
   return out;
 }
 
-function timeScenario(sc: Fixture, nRuns: number): number {
+function timeScenario(sc: ParsedScenario, nRuns: number): number {
+  const stackCards = (b: typeof sc.helper) => (b ?? []).map(s => [...s.cards]);
   const board: readonly (readonly Card[])[] = [
-    ...bucketToStacks(sc.helper),
-    ...bucketToStacks(sc.trouble),
-    ...bucketToStacks(sc.growing),
-    ...bucketToStacks(sc.complete),
+    ...stackCards(sc.helper),
+    ...stackCards(sc.trouble),
+    ...stackCards(sc.growing),
+    ...stackCards(sc.complete),
   ];
   const { bestMs } = timeSolver(board, nRuns);
   return bestMs;

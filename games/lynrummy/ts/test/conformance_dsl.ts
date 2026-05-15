@@ -1,6 +1,7 @@
-// conformance_dsl.ts — TS-side parser for the conformance DSL,
-// producing the same Scenario shape that test_engine_conformance
-// previously consumed from fixtures.json.
+// conformance_dsl.ts — TS-side parser for the conformance DSL.
+// Returns natural domain shapes (Card, BoardStack) — leaf parsers
+// come from dsl/parse.ts; this file owns scenario-block structure
+// (scenario / desc / op / expect / etc.).
 //
 // Each .dsl scenario looks like:
 //
@@ -37,44 +38,24 @@
 // blocks (replay actions, walkthrough steps, wing expects,
 // etc.) are not handled.
 
-import type { Card } from "../core/card.ts";
+import { type Card, cardLabel } from "../core/card.ts";
+import type { BoardStack } from "../geometry/geometry.ts";
 import { parseCardList, parseBoardStackLine } from "../dsl/parse.ts";
 
-// ---- Output shape (matches the snake_case JSON Scenario in test_engine_conformance.ts) ----
+// ---- Output shape ----
 
-interface ParsedCard {
-  value: number;
-  suit: number;
-  origin_deck: number;
-}
-
-interface ParsedBoardCard {
-  card: ParsedCard;
-  state: number;
-}
-
-interface ParsedStack {
-  board_cards: ParsedBoardCard[];
-  loc: { top: number; left: number };
-}
-
-interface ParsedHandCard {
-  card: ParsedCard;
-  state: number;
-}
-
-interface ParsedScenario {
+export interface ParsedScenario {
   name: string;
   desc: string;
   op: string;
   trick?: string;
-  hand: ParsedHandCard[];
-  board: ParsedStack[];
-  helper?: ParsedStack[];
-  trouble?: ParsedStack[];
-  growing?: ParsedStack[];
-  complete?: ParsedStack[];
-  existing?: ParsedStack[];
+  hand: Card[];
+  board: BoardStack[];
+  helper?: BoardStack[];
+  trouble?: BoardStack[];
+  growing?: BoardStack[];
+  complete?: BoardStack[];
+  existing?: BoardStack[];
   card_count?: number;
   hint_hand?: string[];
   hint_board?: string[][];
@@ -203,15 +184,15 @@ function applyScalarField(sc: ParsedScenario, key: string, val: string): void {
       return;
     case "hand": {
       const cards = parseCardList(val);
-      sc.hand = cards.map(toHandCard);
+      sc.hand = cards;
       // hint_for_hand reads `hint_hand` (label strings); keep it
       // populated whenever `hand` is, so consumers can find it
       // regardless of op.
-      sc.hint_hand = cards.map(cardLabelString);
+      sc.hint_hand = cards.map(cardLabel);
       return;
     }
     case "hint_hand":
-      sc.hint_hand = parseCardList(val).map(cardLabelString);
+      sc.hint_hand = parseCardList(val).map(cardLabel);
       return;
     case "expect":
       // Shorthand: `expect: no_plan` or other simple kinds.
@@ -266,44 +247,18 @@ function applyBlockField(sc: ParsedScenario, key: string, children: Line[]): voi
   }
 }
 
-// ---- Stack and card parsing ----
+// ---- Stack parsing ----
 
-function parseStacks(children: Line[]): ParsedStack[] {
+function parseStacks(children: Line[]): BoardStack[] {
   return children.map(parseStackLine);
 }
 
-function parseStackLine(line: Line): ParsedStack {
-  let stack;
+function parseStackLine(line: Line): BoardStack {
   try {
-    stack = parseBoardStackLine(line.content);
+    return parseBoardStackLine(line.content);
   } catch (e) {
     throw new Error(`line ${line.lineNum}: ${(e as Error).message}`);
   }
-  return {
-    board_cards: stack.cards.map(toBoardCard),
-    loc: stack.loc,
-  };
-}
-
-function toBoardCard(c: Card): ParsedBoardCard {
-  return {
-    card: { value: c.rank, suit: c.suit, origin_deck: c.deck },
-    state: 0,
-  };
-}
-
-function toHandCard(c: Card): ParsedHandCard {
-  return {
-    card: { value: c.rank, suit: c.suit, origin_deck: c.deck },
-    state: 0,
-  };
-}
-
-function cardLabelString(c: Card): string {
-  const RANKS = "A23456789TJQK";
-  const SUITS = "CDSH";
-  const base = RANKS[c.rank - 1]! + SUITS[c.suit]!;
-  return c.deck === 0 ? base : `${base}'`;
 }
 
 function parseDashLines(children: Line[]): string[] {

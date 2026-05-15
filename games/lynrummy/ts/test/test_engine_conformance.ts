@@ -21,7 +21,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { type Card, type Rank, type Suit, type Deck, parseCardLabel } from "../core/card.ts";
+import { type Card, parseCardLabel } from "../core/card.ts";
 // Engine conformance now exercises engine_v2 (the engine `hand_play.ts`
 // and the full-game loop use). The plan-line equality contract loosens
 // to "any plan that drives the augmented board to victory, length ≤
@@ -35,7 +35,7 @@ import type { Buckets } from "../bfs/buckets.ts";
 import { classifyStack, type ClassifiedCardStack } from "../core/card_stack.ts";
 import { findLogicalMovesForPlay, formatHint } from "../plan/hand_play.ts";
 import { findOpenLoc, type BoardStack } from "../geometry/geometry.ts";
-import { parseConformanceDsl } from "./conformance_dsl.ts";
+import { parseConformanceDsl, type ParsedScenario } from "./conformance_dsl.ts";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -62,51 +62,8 @@ const TS_ROUTED_OPS = new Set([
   "hint_for_hand",
 ]);
 
-interface BoardCard {
-  card: { value: number; suit: number; origin_deck: number };
-  state: number;
-}
-
-// Conformance-fixture stack shape (cards-with-state + optional loc).
-// Distinct from `BoardStack` in geometry.ts (bare-card + loc).
-interface FixtureBoardStack {
-  board_cards: BoardCard[];
-  loc?: { top: number; left: number };
-}
-
-interface Scenario {
-  name: string;
-  op: string;
-  helper?: FixtureBoardStack[];
-  trouble?: FixtureBoardStack[];
-  growing?: FixtureBoardStack[];
-  complete?: FixtureBoardStack[];
-  hint_hand?: string[];
-  hint_board?: string[][];
-  hint_steps?: string[];
-  card_count?: number;
-  existing?: FixtureBoardStack[];
-  expect: Record<string, unknown>;
-}
-
-function bcToCard(bc: BoardCard): Card {
-  return {
-    rank: bc.card.value as Rank,
-    suit: bc.card.suit as Suit,
-    deck: bc.card.origin_deck as Deck,
-  };
-}
-
-function bucketToTuples(stacks: FixtureBoardStack[] | undefined): Card[][] {
-  if (!stacks) return [];
-  return stacks.map(s => s.board_cards.map(bcToCard));
-}
-
-function fixtureStackToBoardStack(fs: FixtureBoardStack): BoardStack {
-  return {
-    cards: fs.board_cards.map(bcToCard),
-    loc: fs.loc ?? { top: 0, left: 0 },
-  };
+function bucketCards(stacks: BoardStack[] | undefined): Card[][] {
+  return stacks ? stacks.map(s => [...s.cards]) : [];
 }
 
 function classifyStacks(
@@ -125,21 +82,21 @@ function classifyStacks(
   });
 }
 
-function buildBuckets(sc: Scenario): Buckets {
+function buildBuckets(sc: ParsedScenario): Buckets {
   return {
-    helper: classifyStacks(bucketToTuples(sc.helper), "helper"),
-    trouble: classifyStacks(bucketToTuples(sc.trouble), "trouble"),
-    growing: classifyStacks(bucketToTuples(sc.growing), "growing"),
-    complete: classifyStacks(bucketToTuples(sc.complete), "complete"),
+    helper: classifyStacks(bucketCards(sc.helper), "helper"),
+    trouble: classifyStacks(bucketCards(sc.trouble), "trouble"),
+    growing: classifyStacks(bucketCards(sc.growing), "growing"),
+    complete: classifyStacks(bucketCards(sc.complete), "complete"),
   };
 }
 
-function buildBoard(sc: Scenario): readonly (readonly Card[])[] {
+function buildBoard(sc: ParsedScenario): readonly (readonly Card[])[] {
   return [
-    ...bucketToTuples(sc.helper),
-    ...bucketToTuples(sc.trouble),
-    ...bucketToTuples(sc.growing),
-    ...bucketToTuples(sc.complete),
+    ...bucketCards(sc.helper),
+    ...bucketCards(sc.trouble),
+    ...bucketCards(sc.growing),
+    ...bucketCards(sc.complete),
   ];
 }
 
@@ -148,7 +105,7 @@ interface RunResult {
   msg: string;
 }
 
-function runEnumerateMoves(sc: Scenario): RunResult {
+function runEnumerateMoves(sc: ParsedScenario): RunResult {
   const buckets = buildBuckets(sc);
   const expectedType = (sc.expect["yields"] as string) ?? "";
   const narrateSub = (sc.expect["narrate_contains"] as string) ?? "";
@@ -201,7 +158,7 @@ const STALE_NO_PLAN: Record<string, string> = {
   extra_012_THp: "same pattern — steal-from-partial newly available",
 };
 
-function runSolve(sc: Scenario): RunResult {
+function runSolve(sc: ParsedScenario): RunResult {
   // solveBoard re-partitions stacks; bucket pins from the DSL collapse
   // into a single flat board. growing/complete are runtime concepts
   // the BFS creates internally, not entry-point inputs.
@@ -250,7 +207,7 @@ function runSolve(sc: Scenario): RunResult {
   };
 }
 
-function runFindOpenLoc(sc: Scenario): RunResult {
+function runFindOpenLoc(sc: ParsedScenario): RunResult {
   if (sc.card_count === undefined) {
     return { ok: false, msg: "find_open_loc scenario missing card_count" };
   }
@@ -258,7 +215,7 @@ function runFindOpenLoc(sc: Scenario): RunResult {
   if (!wantLoc || typeof wantLoc.top !== "number" || typeof wantLoc.left !== "number") {
     return { ok: false, msg: "find_open_loc scenario missing expect.loc {top,left}" };
   }
-  const existing = (sc.existing ?? []).map(fixtureStackToBoardStack);
+  const existing = sc.existing ?? [];
   const got = findOpenLoc(existing, sc.card_count);
   if (got.top === wantLoc.top && got.left === wantLoc.left) {
     return { ok: true, msg: `OK — loc (${got.top}, ${got.left})` };
@@ -269,7 +226,7 @@ function runFindOpenLoc(sc: Scenario): RunResult {
   };
 }
 
-function runHintForHand(sc: Scenario): RunResult {
+function runHintForHand(sc: ParsedScenario): RunResult {
   const handTokens = sc.hint_hand ?? [];
   const boardTokens = sc.hint_board ?? [];
   const wantSteps = sc.hint_steps ?? [];
@@ -318,15 +275,15 @@ const TS_HANDLED_OPS = new Set<string>([
 // or don't admit at all.
 const TS_OUT_OF_SCOPE_OPS: Record<string, string> = {};
 
-function loadScenarios(): Scenario[] {
-  const out: Scenario[] = [];
+function loadScenarios(): ParsedScenario[] {
+  const out: ParsedScenario[] = [];
   for (const dslName of TS_ROUTED_DSLS) {
     const dslPath = path.join(SCENARIOS_DIR, dslName);
     const text = fs.readFileSync(dslPath, "utf8");
     const parsed = parseConformanceDsl(text);
     for (const sc of parsed) {
       if (TS_ROUTED_OPS.has(sc.op)) {
-        out.push(sc as unknown as Scenario);
+        out.push(sc);
       }
     }
   }
@@ -334,7 +291,7 @@ function loadScenarios(): Scenario[] {
 }
 
 function main(): void {
-  const scenarios: Scenario[] = loadScenarios();
+  const scenarios: ParsedScenario[] = loadScenarios();
 
   let total = 0;
   let passed = 0;
