@@ -21,7 +21,9 @@ import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import type { Card } from "../core/card.ts";
-import { parseCardLabel, cardLabel } from "../core/card.ts";
+import { parseCardLabel } from "../core/card.ts";
+import { parseCardList } from "../dsl/parse.ts";
+import { formatPrimitive } from "../dsl/emit.ts";
 import type {
   Move, Side,
   ExtractAbsorbMove, FreePullMove, PushMove,
@@ -127,11 +129,6 @@ function parseDsl(contents: string): ScenarioRaw[] {
 }
 
 // --- Build inputs from parsed scenario -------------------------------
-
-function parseCardList(s: string): readonly Card[] {
-  if (!s.trim()) return [];
-  return s.trim().split(/\s+/).map(parseCardLabel);
-}
 
 function parseSingleCard(s: string): Card {
   const tokens = s.trim().split(/\s+/);
@@ -257,46 +254,7 @@ function buildMove(sc: ScenarioRaw): Move {
   throw new Error(`unknown verb ${verb}`);
 }
 
-// --- Render primitives back to DSL strings ----------------------------
-
-function fmtCards(cards: readonly Card[]): string {
-  return cards.map(cardLabel).join(" ");
-}
-
-function fmtCard(c: Card): string {
-  return cardLabel(c);
-}
-
-function fmtPrimitive(p: Primitive, board: readonly BoardStack[]): string {
-  // Convention: coords as (top,left) no-space, matching
-  // replay_walkthroughs.dsl + the corpus DSL.
-  switch (p.action) {
-    case "split":
-      return `split [${fmtCards(board[p.stackIndex]!.cards)}]@${p.cardIndex}`;
-    case "merge_stack":
-      return `merge_stack [${fmtCards(board[p.sourceStack]!.cards)}] -> [${fmtCards(board[p.targetStack]!.cards)}] /${p.side}`;
-    case "merge_hand":
-      return `merge_hand ${fmtCard(p.handCard)} -> [${fmtCards(board[p.targetStack]!.cards)}] /${p.side}`;
-    case "move_stack":
-      return `move_stack [${fmtCards(board[p.stackIndex]!.cards)}] -> (${p.newLoc.top},${p.newLoc.left})`;
-    case "place_hand":
-      return `place_hand ${fmtCard(p.handCard)} -> (${p.loc.top},${p.loc.left})`;
-  }
-}
-
-function applyPrimitiveLocal(
-  board: readonly BoardStack[],
-  p: Primitive,
-): readonly BoardStack[] {
-  // Re-import to avoid circular weirdness in test file.
-  // (Same logic as primitives.applyLocally.)
-  // Defer to the canonical impl.
-  return applyLocallyForRender(board, p);
-}
-
-import { applyLocally as applyLocallyForRender } from "../game_events/primitives.ts";
-
-void applyPrimitiveLocal; // kept for clarity above; the real call is below.
+import { applyLocally } from "../game_events/primitives.ts";
 
 // --- Runner ---------------------------------------------------------
 
@@ -329,8 +287,8 @@ function runScenario(sc: ScenarioRaw): RunResult {
   let sim = board;
   for (let i = 0; i < prims.length; i++) {
     const p = prims[i]!;
-    got.push(fmtPrimitive(p, sim));
-    sim = applyLocallyForRender(sim, p);
+    got.push(formatPrimitive(p, sim));
+    sim = applyLocally(sim, p);
     const v = findViolation(sim);
     if (v !== null) {
       const s = sim[v]!;

@@ -10,7 +10,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 
-import { parseCardLabel, cardLabel, type Card } from "../core/card.ts";
+import { parseCardLabel, type Card } from "../core/card.ts";
 import type { BoardStack } from "../geometry/geometry.ts";
 import { findViolation } from "../geometry/geometry.ts";
 import {
@@ -23,41 +23,15 @@ import type {
   ShiftMove, SpliceMove, DecomposeMove,
 } from "../bfs/move.ts";
 import { getPrimitivesForLogicalPlay } from "../plan/physical_plan.ts";
+import { parseCardList } from "../dsl/parse.ts";
+import { formatPrimitive } from "../dsl/emit.ts";
 
 const DSL_PATH = path.resolve(
   path.dirname(new URL(import.meta.url).pathname),
   "../../conformance/scenarios/physical_plan_corpus.dsl",
 );
 
-// --- Card label conversion ------------------------------------------
-//
-// DSL uses `'` for deck-2; parseCardLabel and cardLabel both speak
-// that form directly, so no label conversion is needed.
-
-function parseList(s: string): Card[] {
-  return s.trim().split(/\s+/).filter(Boolean).map(parseCardLabel);
-}
 function parseOne(s: string): Card { return parseCardLabel(s.trim()); }
-
-function fmtCs(cs: readonly Card[]): string {
-  return cs.map(cardLabel).join(" ");
-}
-function fmtCard(c: Card): string { return cardLabel(c); }
-
-function fmtPrim(p: Primitive, board: readonly BoardStack[]): string {
-  switch (p.action) {
-    case "split":
-      return `split [${fmtCs(board[p.stackIndex]!.cards)}]@${p.cardIndex}`;
-    case "merge_stack":
-      return `merge_stack [${fmtCs(board[p.sourceStack]!.cards)}] -> [${fmtCs(board[p.targetStack]!.cards)}] /${p.side}`;
-    case "merge_hand":
-      return `merge_hand ${fmtCard(p.handCard)} -> [${fmtCs(board[p.targetStack]!.cards)}] /${p.side}`;
-    case "move_stack":
-      return `move_stack [${fmtCs(board[p.stackIndex]!.cards)}] -> (${p.newLoc.top},${p.newLoc.left})`;
-    case "place_hand":
-      return `place_hand ${fmtCard(p.handCard)} -> (${p.loc.top},${p.loc.left})`;
-  }
-}
 
 // --- DSL parser -----------------------------------------------------
 
@@ -119,14 +93,14 @@ function parseDsl(text: string): Scenario[] {
 
     if (trimmed.startsWith("hand:")) {
       const after = trimmed.slice("hand:".length).trim();
-      cur.hand = after.length > 0 ? parseList(after) : [];
+      cur.hand = after.length > 0 ? parseCardList(after) : [];
       inBoard = inPlan = inPrims = false;
       continue;
     }
 
     if (inBoard && trimmed.startsWith("at ")) {
       const bm = trimmed.match(/^at\s*\((-?\d+)\s*,\s*(-?\d+)\)\s*:\s*(.+)$/);
-      if (bm) cur.board!.push({ top: +bm[1]!, left: +bm[2]!, cards: parseList(bm[3]!) });
+      if (bm) cur.board!.push({ top: +bm[1]!, left: +bm[2]!, cards: parseCardList(bm[3]!) });
       continue;
     }
 
@@ -169,9 +143,9 @@ function buildMove(vb: VerbBlock): Move {
     const d: ExtractAbsorbMove = {
       type: "extract_absorb",
       verb: verb as Verb,
-      source: parseList(f.source!),
+      source: parseCardList(f.source!),
       extCard: parseOne(f.ext_card!),
-      targetBefore: parseList(f.target_before!),
+      targetBefore: parseCardList(f.target_before!),
       targetBucketBefore: (f.target_bucket ?? "trouble") as AbsorberBucket,
       result: [], side, graduated: false, spawned: [], spawnedGrowing: [],
     };
@@ -181,7 +155,7 @@ function buildMove(vb: VerbBlock): Move {
     const d: FreePullMove = {
       type: "free_pull",
       loose: parseOne(f.loose!),
-      targetBefore: parseList(f.target_before!),
+      targetBefore: parseCardList(f.target_before!),
       targetBucketBefore: (f.target_bucket ?? "trouble") as AbsorberBucket,
       result: [], side, graduated: false,
     };
@@ -190,8 +164,8 @@ function buildMove(vb: VerbBlock): Move {
   if (verb === "push") {
     const d: PushMove = {
       type: "push",
-      troubleBefore: parseList(f.trouble_before!),
-      targetBefore: parseList(f.target_before!),
+      troubleBefore: parseCardList(f.trouble_before!),
+      targetBefore: parseCardList(f.target_before!),
       result: [], side,
     };
     return d;
@@ -200,7 +174,7 @@ function buildMove(vb: VerbBlock): Move {
     const d: SpliceMove = {
       type: "splice",
       loose: parseOne(f.loose!),
-      source: parseList(f.source!),
+      source: parseCardList(f.source!),
       k: +f.k!, side,
       leftResult: [], rightResult: [],
     };
@@ -211,20 +185,20 @@ function buildMove(vb: VerbBlock): Move {
     const whichEnd = we === "left" ? 0 : we === "right" ? 2 : +we;
     const d: ShiftMove = {
       type: "shift",
-      source: parseList(f.source!),
-      donor: parseList(f.donor!),
+      source: parseCardList(f.source!),
+      donor: parseCardList(f.donor!),
       stolen: parseOne(f.stolen!),
       pCard: parseOne(f.p_card!),
       whichEnd,
       newSource: [], newDonor: [],
-      targetBefore: parseList(f.target_before!),
+      targetBefore: parseCardList(f.target_before!),
       targetBucketBefore: (f.target_bucket ?? "trouble") as AbsorberBucket,
       merged: [], side, graduated: false,
     };
     return d;
   }
   if (verb === "decompose") {
-    const pair = parseList(f.pair_before!);
+    const pair = parseCardList(f.pair_before!);
     const d: DecomposeMove = {
       type: "decompose",
       pairBefore: pair,
@@ -267,7 +241,7 @@ function runScenario(sc: Scenario): RunResult {
   let sim: readonly BoardStack[] = board;
   for (let i = 0; i < prims.length; i++) {
     const p = prims[i]!;
-    got.push(fmtPrim(p, sim));
+    got.push(formatPrimitive(p, sim));
     sim = applyLocally(sim, p);
     const v = findViolation(sim);
     if (v !== null) {

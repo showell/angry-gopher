@@ -7,7 +7,7 @@
 // the Go server's BoardBounds. Drift between layers is silent and
 // load-bearing — when changing one, update all three.
 
-import { type Card, parseCardList } from "../core/card.ts";
+import type { Card } from "../core/card.ts";
 
 // --- Stack shape with position ----------------------------------------
 
@@ -22,30 +22,6 @@ export interface BoardStack {
 export interface Loc {
   readonly top: number;
   readonly left: number;
-}
-
-/** Parse one DSL board-stack line "at (top, left): card1 card2 ..."
- *  into a BoardStack. Single source of truth for the format used by
- *  conformance scenarios + Elm puzzles wrapper. */
-export function parseBoardStackLine(line: string): BoardStack {
-  const trimmed = line.trim();
-  if (!trimmed.startsWith("at ")) {
-    throw new Error(`expected "at (top,left): cards", got: ${JSON.stringify(line)}`);
-  }
-  const rest = trimmed.slice("at ".length);
-  const close = rest.indexOf(")");
-  if (!rest.startsWith("(") || close < 0) {
-    throw new Error(`bad location in: ${JSON.stringify(line)}`);
-  }
-  const [topStr, leftStr] = rest.slice(1, close).split(",").map(s => s.trim());
-  const tail = rest.slice(close + 1).trim();
-  if (!tail.startsWith(":")) {
-    throw new Error(`expected ":" after location in: ${JSON.stringify(line)}`);
-  }
-  return {
-    loc: { top: parseInt(topStr!, 10), left: parseInt(leftStr!, 10) },
-    cards: parseCardList(tail.slice(1).trim()),
-  };
 }
 
 interface Rect {

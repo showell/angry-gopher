@@ -37,8 +37,8 @@
 // blocks (replay actions, walkthrough steps, wing expects,
 // etc.) are not handled.
 
-import { type Card, parseCardList } from "../core/card.ts";
-import { parseBoardStackLine } from "../geometry/geometry.ts";
+import type { Card } from "../core/card.ts";
+import { parseCardList, parseBoardStackLine } from "../dsl/parse.ts";
 
 // ---- Output shape (matches the snake_case JSON Scenario in test_engine_conformance.ts) ----
 
