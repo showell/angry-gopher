@@ -46,6 +46,7 @@ type alias PlayerPanelInfo =
     , sourceCard : Maybe Card
     , hintedCards : List Card
     , canUndo : Bool
+    , controlsEnabled : Bool
     , replayControl : ReplayControl
     }
 
@@ -88,7 +89,11 @@ playerHands info =
                             ]
                             [ Html.text ("Player " ++ String.fromInt (idx + 1) ++ " (your turn)") ]
                         , viewHand info.handIsInteractive info.sourceCard info.hintedCards hand
-                        , viewTurnControls { canUndo = info.canUndo, replayControl = info.replayControl }
+                        , viewTurnControls
+                            { canUndo = info.canUndo
+                            , controlsEnabled = info.controlsEnabled
+                            , replayControl = info.replayControl
+                            }
                         ]
 
                 else
@@ -126,21 +131,31 @@ playerHands info =
 -- TURN CONTROLS
 
 
-viewTurnControls : { canUndo : Bool, replayControl : ReplayControl } -> Html Msg
-viewTurnControls { canUndo, replayControl } =
+viewTurnControls :
+    { canUndo : Bool, controlsEnabled : Bool, replayControl : ReplayControl }
+    -> Html Msg
+viewTurnControls { canUndo, controlsEnabled, replayControl } =
     div
         [ style "margin-top" "12px"
         , style "display" "flex"
         , style "gap" "8px"
         , style "flex-wrap" "wrap"
         ]
-        [ Button.button "Complete turn" ClickCompleteTurn
-        , if canUndo then
+        [ if controlsEnabled then
+            Button.button "Complete turn" ClickCompleteTurn
+
+          else
+            Button.disabledButton "Complete turn"
+        , if canUndo && controlsEnabled then
             Button.button "Undo" ClickUndo
 
           else
             Button.disabledButton "Undo"
-        , Button.button "Hint" ClickHint
+        , if controlsEnabled then
+            Button.button "Hint" ClickHint
+
+          else
+            Button.disabledButton "Hint"
         , viewReplayControl replayControl
         , Button.link "← Lobby" "/gopher/game-lobby"
         ]

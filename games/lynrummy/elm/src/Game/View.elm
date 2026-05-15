@@ -134,6 +134,7 @@ leftSidebar model =
                 , sourceCard = sourceCard
                 , hintedCards = []
                 , canUndo = False
+                , controlsEnabled = False
                 , replayControl =
                     if rs.paused then
                         LeftSidebar.ShowResume
@@ -149,6 +150,7 @@ leftSidebar model =
                 , sourceCard = sourceCard
                 , hintedCards = model.hintedCards
                 , canUndo = canUndoThisTurn model.actionLog
+                , controlsEnabled = True
                 , replayControl = LeftSidebar.ShowReplay
                 }
 
