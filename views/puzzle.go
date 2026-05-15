@@ -22,7 +22,7 @@ var PuzzleJSPath = "games/lynrummy/elm/puzzle.js"
 
 // puzzleSeedsPath — pre-mined puzzles with positioned boards.
 // Catalog is pure DSL: `puzzle <name>` headers, each followed by
-// indented `at (top, left): cards` lines that pass straight
+// indented `at (left, top): cards` lines that pass straight
 // through to Elm's Game.BoardDsl on the wire.
 const puzzleSeedsPath = "games/lynrummy/conformance/mined_seeds.dsl"
 
@@ -87,7 +87,7 @@ func puzzleAppendAction(w http.ResponseWriter, r *http.Request, sessionID int64)
 }
 
 // loadPuzzleBoard reads mined_seeds.dsl and returns the
-// named puzzle's body — the multi-line `at (top, left): cards`
+// named puzzle's body — the multi-line `at (left, top): cards`
 // block that Game.BoardDsl on the Elm side parses. The catalog
 // itself isn't JSON, so this is a thin string scan: find the
 // `puzzle <name>` header line and return the indented body up

@@ -6,7 +6,7 @@ module Lib.BoardDsl exposing
     )
 
 {-| Production-side parser/formatter for board DSL — the
-multi-line `at (top, left): cards` shape used both in
+multi-line `at (left, top): cards` shape used both in
 `.dsl` conformance scenarios and now on the wire for
 initial-state payloads.
 
@@ -91,7 +91,7 @@ parseStackLine raw =
                     tail =
                         String.trim (String.dropLeft (close + 1) afterAt)
                 in
-                case ( parseTopLeft inside, splitColon tail ) of
+                case ( parseLeftTop inside, splitColon tail ) of
                     ( Ok loc, Ok cardsStr ) ->
                         parseCardTokens cardsStr
                             |> Result.map
@@ -112,8 +112,8 @@ parseStackLine raw =
                 Err ("missing ')' in: " ++ raw)
 
 
-parseTopLeft : String -> Result String BoardLocation
-parseTopLeft inside =
+parseLeftTop : String -> Result String BoardLocation
+parseLeftTop inside =
     case String.split "," inside of
         [ a, b ] ->
             case ( String.toInt (String.trim a), String.toInt (String.trim b) ) of
