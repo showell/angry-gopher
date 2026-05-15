@@ -332,12 +332,6 @@ update msg model =
         ClickHint ->
             clickHint model
 
-        GameHintReceived value ->
-            ( handleHintResponse value model, Cmd.none, NoOutput )
-
-        AgentStepReceived value ->
-            handleAgentStepResponse value model
-
         AgentMoveTick nowPosix ->
             agentMoveTick nowPosix model
 
@@ -524,6 +518,69 @@ update msg model =
                     , NoOutput
                     )
 
+        HintLinesReceived [] ->
+            ( { model
+                | pendingEngineRequest = Nothing
+                , hintedCards = []
+                , status = { text = "No hint — no obvious play for this hand on this board.", kind = Inform }
+              }
+            , Cmd.none
+            , NoOutput
+            )
+
+        HintLinesReceived lines ->
+            ( { model
+                | pendingEngineRequest = Nothing
+                , hintedCards = []
+                , status = { text = String.join "\n" lines, kind = Inform }
+              }
+            , Cmd.none
+            , NoOutput
+            )
+
+        AgentMovesReceived [] ->
+            let
+                ( afterTurn, _ ) =
+                    Game.applyCompleteTurn refereeBounds model.gameState
+            in
+            ( { model
+                | pendingEngineRequest = Nothing
+                , gameState = afterTurn
+                , popup = Just { content = agentDonePopup, dismissMsg = ReadyForHumanTurn }
+                , status = { text = "The agent has completed its turn.", kind = Inform }
+              }
+            , Cmd.none
+            , NoOutput
+            )
+
+        AgentMovesReceived events ->
+            let
+                entries =
+                    List.map (\e -> { action = e }) events
+
+                anim =
+                    Animate.start entries model.gameState
+            in
+            ( { model
+                | pendingEngineRequest = Nothing
+                , agentMoveAnimationState = Just anim
+              }
+            , Cmd.none
+            , NoOutput
+            )
+
+        EngineResponseFailed detail ->
+            ( { model
+                | pendingEngineRequest = Nothing
+                , status = { text = detail, kind = Scold }
+              }
+            , Cmd.none
+            , NoOutput
+            )
+
+        EngineResponseStale ->
+            ( model, Cmd.none, NoOutput )
+
 
 -- UPDATE HELPERS
 
@@ -550,77 +607,6 @@ clickHint model =
     , Cmd.none
     , EngineSolveRequested payload
     )
-
-
-{-| Branches on response variant. Empty events = end-of-turn:
-apply CompleteTurn to gameState, show the "agent done" popup.
-Non-empty events = animate them via the same `AnimationState`
-machinery Instant Replay uses, stored in
-`agentMoveAnimationState`; the loop continues on `Completed`.
-
-Per Q1 (2026-05-15), agent events are punted on action-log
-integration — they evolve `model.gameState` only, not the log
-or the wire. Reload-during-or-after-agent-turn drops the
-agent's plays; that's a known V1 limitation.
--}
-handleAgentStepResponse : Encode.Value -> Model -> ( Model, Cmd Msg, Output )
-handleAgentStepResponse value model =
-    case Engine.decodeAgentStepResponse model.pendingEngineRequest value of
-        Engine.AgentStepStaleId ->
-            ( model, Cmd.none, NoOutput )
-
-        Engine.AgentStepError detail ->
-            ( { model
-                | pendingEngineRequest = Nothing
-                , status = { text = "Agent error: " ++ detail, kind = Scold }
-              }
-            , Cmd.none
-            , NoOutput
-            )
-
-        Engine.AgentStepDecodeError err ->
-            let
-                _ =
-                    Debug.log "handleAgentStepResponse decode err" err
-            in
-            ( { model
-                | pendingEngineRequest = Nothing
-                , status = { text = "Agent response could not be decoded — see console.", kind = Scold }
-              }
-            , Cmd.none
-            , NoOutput
-            )
-
-        Engine.AgentStepEvents [] ->
-            let
-                ( afterTurn, _ ) =
-                    Game.applyCompleteTurn refereeBounds model.gameState
-            in
-            ( { model
-                | pendingEngineRequest = Nothing
-                , gameState = afterTurn
-                , popup = Just { content = agentDonePopup, dismissMsg = ReadyForHumanTurn }
-                , status = { text = "The agent has completed its turn.", kind = Inform }
-              }
-            , Cmd.none
-            , NoOutput
-            )
-
-        Engine.AgentStepEvents events ->
-            let
-                entries =
-                    List.map (\e -> { action = e }) events
-
-                anim =
-                    Animate.start entries model.gameState
-            in
-            ( { model
-                | pendingEngineRequest = Nothing
-                , agentMoveAnimationState = Just anim
-              }
-            , Cmd.none
-            , NoOutput
-            )
 
 
 {-| Per-frame tick of the agent-move animation. On `Completed`,
@@ -677,45 +663,6 @@ agentDonePopup =
     { admin = "Oliver"
     , body = "The agent has completed its turn.\n\nYour move!"
     }
-
-
-handleHintResponse : Encode.Value -> Model -> Model
-handleHintResponse value model =
-    case Engine.decodeHintResponse model.pendingEngineRequest value of
-        Engine.HintStaleId ->
-            model
-
-        Engine.HintError detail ->
-            { model
-                | pendingEngineRequest = Nothing
-                , status = { text = "Engine error: " ++ detail, kind = Scold }
-            }
-
-        Engine.HintLines [] ->
-            { model
-                | pendingEngineRequest = Nothing
-                , hintedCards = []
-                , status = { text = "No hint — no obvious play for this hand on this board.", kind = Inform }
-            }
-
-        Engine.HintLines lines ->
-            { model
-                | pendingEngineRequest = Nothing
-                , hintedCards = []
-                , status = { text = String.join "\n" lines, kind = Inform }
-            }
-
-        Engine.HintDecodeError err ->
-            let
-                _ =
-                    Debug.log "handleHintResponse decode err" err
-            in
-            { model
-                | pendingEngineRequest = Nothing
-                , status = { text = "Engine game-hint response could not be decoded — see console.", kind = Scold }
-            }
-
-
 
 
 -- SUBSCRIPTIONS

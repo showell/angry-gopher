@@ -4,9 +4,9 @@ import Browser.Dom
 import Lib.ActionLog exposing (ActionLogEntry)
 import Lib.CardStack exposing (CardStack, HandCard)
 import Lib.Game exposing (GameState)
+import Lib.GameEvent exposing (GameEvent)
 import Lib.Point exposing (Point)
 import Http
-import Json.Encode as Encode
 import Time
 
 
@@ -30,5 +30,7 @@ type Msg
     | ReplayTick Time.Posix
     | AgentMoveTick Time.Posix
     | ActionLogFetched (Result Http.Error ( GameState, List ActionLogEntry ))
-    | GameHintReceived Encode.Value
-    | AgentStepReceived Encode.Value
+    | HintLinesReceived (List String)
+    | AgentMovesReceived (List GameEvent)
+    | EngineResponseFailed String
+    | EngineResponseStale

@@ -13,11 +13,10 @@ Engine ports:
     switches on the payload's `op` field to pick the TS function
     and the response port.
   - `gameHintResponse` (Sub) — full-game hint responses arrive
-    here as `GameHintReceived` Msgs; Play decodes them in
-    `applyGameHintResponse`. Distinct from Puzzles' generic
-    `engineResponse` channel because the two surfaces have
-    different response shapes and we want each Msg to carry
-    only what it needs.
+    here. The subscription decodes the raw value and dispatches
+    one of `HintLinesReceived`, `EngineResponseFailed`, or
+    `EngineResponseStale` so the update workhorse never sees
+    the raw `Encode.Value`.
 
 -}
 
@@ -28,6 +27,7 @@ import Json.Encode as Encode
 import Game.Msg as MainMsg exposing (Msg)
 import Game.Play as Play
 import Game.State exposing (Model)
+import Lib.Engine as Engine
 
 
 {-| Flags from the HTML harness. `initialSessionId` is server-side
@@ -56,16 +56,15 @@ port engineRequest : Encode.Value -> Cmd msg
 
 
 {-| Port: full-game hint response from the TS engine. Carries
-`{ request_id, ok, lines: string[] }`. Subscribed via
-`MainMsg.GameHintReceived`.
+`{ request_id, ok, lines: string[] }`. Decoded in `subscriptions`.
 -}
 port gameHintResponse : (Encode.Value -> msg) -> Sub msg
 
 
 {-| Port: real-time agent-step response. Carries
-`{ request_id, ok, primitives_dsl: string }`. Subscribed via
-`MainMsg.AgentStepReceived`. The agent loop in Game.Play
-issues a request per step and consumes responses in order.
+`{ request_id, ok, primitives_dsl: string }`. Decoded in
+`subscriptions`. The agent loop in Game.Play issues a request
+per step and consumes responses in order.
 -}
 port agentStepResponse : (Encode.Value -> msg) -> Sub msg
 
@@ -133,9 +132,41 @@ subscriptions : Model -> Sub Msg
 subscriptions model =
     Sub.batch
         [ Play.subscriptions model
-        , gameHintResponse MainMsg.GameHintReceived
-        , agentStepResponse MainMsg.AgentStepReceived
+        , gameHintResponse (hintMsgFor << Engine.decodeHintResponse model.pendingEngineRequest)
+        , agentStepResponse (agentStepMsgFor << Engine.decodeAgentStepResponse model.pendingEngineRequest)
         ]
+
+
+hintMsgFor : Engine.HintResponse -> Msg
+hintMsgFor response =
+    case response of
+        Engine.HintLines lines ->
+            MainMsg.HintLinesReceived lines
+
+        Engine.HintError detail ->
+            MainMsg.EngineResponseFailed ("Engine error: " ++ detail)
+
+        Engine.HintDecodeError err ->
+            MainMsg.EngineResponseFailed ("Engine game-hint response could not be decoded: " ++ err)
+
+        Engine.HintStaleId ->
+            MainMsg.EngineResponseStale
+
+
+agentStepMsgFor : Engine.AgentStepResponse -> Msg
+agentStepMsgFor response =
+    case response of
+        Engine.AgentStepEvents events ->
+            MainMsg.AgentMovesReceived events
+
+        Engine.AgentStepError detail ->
+            MainMsg.EngineResponseFailed ("Agent error: " ++ detail)
+
+        Engine.AgentStepDecodeError err ->
+            MainMsg.EngineResponseFailed ("Agent response could not be decoded: " ++ err)
+
+        Engine.AgentStepStaleId ->
+            MainMsg.EngineResponseStale
 
 
 main : Program Flags Model Msg
