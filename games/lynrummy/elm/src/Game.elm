@@ -615,25 +615,24 @@ view model =
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
+    let
+        dragSubscriptions =
+            case model.drag of
+                NotDragging ->
+                    Sub.none
+
+                _ ->
+                    Sub.batch
+                        [ Browser.Events.onMouseMove (PointerInput.mouseMoveDecoder MouseMove)
+                        , Browser.Events.onMouseUp (PointerInput.mouseUpDecoder MouseUp)
+                        ]
+    in
     Sub.batch
-        [ dragSubscriptions model
+        [ dragSubscriptions
         , animationSubscriptions model
         , gameHintResponse (hintMsgFor << Engine.decodeHintResponse model.pendingEngineRequest)
         , agentStepResponse (agentStepMsgFor << Engine.decodeAgentStepResponse model.pendingEngineRequest)
         ]
-
-
-dragSubscriptions : Model -> Sub Msg
-dragSubscriptions model =
-    case model.drag of
-        NotDragging ->
-            Sub.none
-
-        _ ->
-            Sub.batch
-                [ Browser.Events.onMouseMove (PointerInput.mouseMoveDecoder MouseMove)
-                , Browser.Events.onMouseUp (PointerInput.mouseUpDecoder MouseUp)
-                ]
 
 
 {-| Per-frame ticks for whichever animation is in flight —
