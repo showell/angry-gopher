@@ -1,8 +1,9 @@
 module Lib.LeftSidebar exposing
-    ( PlayerOneInfo
-    , PlayerTwoInfo
+    ( AgentTurnInfo
+    , HumanTurnInfo
     , ReplayControl(..)
-    , view
+    , viewAgentTurn
+    , viewHumanTurn
     )
 
 {-| The left sidebar of the play surface — player rows (active
@@ -40,9 +41,11 @@ type ReplayControl
     | ShowResume
 
 
-type alias PlayerOneInfo =
-    { hand : Hand
-    , isActive : Bool
+type alias HumanTurnInfo =
+    { turnIndex : Int
+    , deck : List Card
+    , humanHand : Hand
+    , agentHand : Hand
     , handIsInteractive : Bool
     , sourceCard : Maybe Card
     , hintedCards : List Card
@@ -52,57 +55,31 @@ type alias PlayerOneInfo =
     }
 
 
-type alias PlayerTwoInfo =
-    { hand : Hand
-    , isActive : Bool
-    , handIsInteractive : Bool
-    , sourceCard : Maybe Card
-    , hintedCards : List Card
-    }
-
-
-
--- TOP-LEVEL VIEW
-
-
-view :
+type alias AgentTurnInfo =
     { turnIndex : Int
     , deck : List Card
-    , playerOne : PlayerOneInfo
-    , playerTwo : PlayerTwoInfo
+    , humanHand : Hand
+    , agentHand : Hand
     }
-    -> Html Msg
-view info =
+
+
+
+-- TOP-LEVEL VIEWS
+
+
+viewHumanTurn : HumanTurnInfo -> Html Msg
+viewHumanTurn info =
     div
         [ style "min-width" "240px"
         , style "padding-right" "20px"
         , style "border-right" "1px gray solid"
         ]
-        [ div
-            [ style "color" "#666"
-            , style "font-size" "13px"
-            , style "margin-top" "12px"
-            ]
-            [ Html.text ("Turn " ++ String.fromInt (info.turnIndex + 1)) ]
-        , viewPlayerOne info.playerOne
-        , viewPlayerTwo info.playerTwo
-        , div
-            [ style "color" "#666"
-            , style "font-size" "13px"
-            , style "margin-top" "8px"
-            ]
-            [ Html.text ("Deck: " ++ String.fromInt (List.length info.deck) ++ " cards left") ]
-        ]
-
-
-viewPlayerOne : PlayerOneInfo -> Html Msg
-viewPlayerOne info =
-    if info.isActive then
-        playerPanel
+        [ turnHeader info.turnIndex
+        , playerPanel
             { title = "Player 1 (your turn)"
             , titleColor = Colors.navy
             , body =
-                [ viewHand info.handIsInteractive info.sourceCard info.hintedCards info.hand
+                [ viewHand info.handIsInteractive info.sourceCard info.hintedCards info.humanHand
                 , viewTurnControls
                     { canUndo = info.canUndo
                     , controlsEnabled = info.controlsEnabled
@@ -110,31 +87,55 @@ viewPlayerOne info =
                     }
                 ]
             }
-
-    else
-        playerPanel
-            { title = "Player 1"
-            , titleColor = "#666"
-            , body = [ cardsCount info.hand ]
-            }
-
-
-viewPlayerTwo : PlayerTwoInfo -> Html Msg
-viewPlayerTwo info =
-    if info.isActive then
-        playerPanel
-            { title = "Player 2 (agent's turn)"
-            , titleColor = Colors.navy
-            , body =
-                [ viewHand info.handIsInteractive info.sourceCard info.hintedCards info.hand ]
-            }
-
-    else
-        playerPanel
+        , playerPanel
             { title = "Player 2"
             , titleColor = "#666"
-            , body = [ cardsCount info.hand ]
+            , body = [ cardsCount info.agentHand ]
             }
+        , deckRemaining info.deck
+        ]
+
+
+viewAgentTurn : AgentTurnInfo -> Html Msg
+viewAgentTurn info =
+    div
+        [ style "min-width" "240px"
+        , style "padding-right" "20px"
+        , style "border-right" "1px gray solid"
+        ]
+        [ turnHeader info.turnIndex
+        , playerPanel
+            { title = "Player 1"
+            , titleColor = "#666"
+            , body = [ cardsCount info.humanHand ]
+            }
+        , playerPanel
+            { title = "Player 2 (agent's turn)"
+            , titleColor = Colors.navy
+            , body = [ viewHand False Nothing [] info.agentHand ]
+            }
+        , deckRemaining info.deck
+        ]
+
+
+turnHeader : Int -> Html Msg
+turnHeader turnIndex =
+    div
+        [ style "color" "#666"
+        , style "font-size" "13px"
+        , style "margin-top" "12px"
+        ]
+        [ Html.text ("Turn " ++ String.fromInt (turnIndex + 1)) ]
+
+
+deckRemaining : List Card -> Html Msg
+deckRemaining deck =
+    div
+        [ style "color" "#666"
+        , style "font-size" "13px"
+        , style "margin-top" "8px"
+        ]
+        [ Html.text ("Deck: " ++ String.fromInt (List.length deck) ++ " cards left") ]
 
 
 playerPanel : { title : String, titleColor : String, body : List (Html Msg) } -> Html Msg
