@@ -32,6 +32,7 @@ import Lib.ActionLog exposing (ActionLogEntry)
 import Lib.Game exposing (GameState)
 import Lib.GameEvent as GameEvent exposing (GameEvent)
 import Lib.Hand as Hand
+import Lib.NonEmpty as NonEmpty
 import Lib.Rules.Referee as Referee exposing (RefereeStage(..))
 import Lib.Rules.StackType as StackType
 import Lib.Status as Status
@@ -498,7 +499,7 @@ verifyGestureSplit sc =
                     , originalCursor = { x = 0, y = 0 }
                     , cursor = { x = 0, y = 0 }
                     , floaterTopLeft = pointToLoc floater
-                    , boardPath = []
+                    , boardPath = dummyBoardPath
                     , wings = []
                     }
             in
@@ -546,7 +547,7 @@ verifyGestureMergeStack sc =
                     , originalCursor = { x = -1000, y = 0 }
                     , cursor = { x = 0, y = 0 }
                     , floaterTopLeft = pointToLoc floater
-                    , boardPath = []
+                    , boardPath = dummyBoardPath
                     , wings = [ wing ]
                     }
             in
@@ -631,7 +632,7 @@ verifyGestureMoveStack sc =
                     , originalCursor = { x = -1000, y = 0 }
                     , cursor = cursor
                     , floaterTopLeft = pointToLoc floater
-                    , boardPath = []
+                    , boardPath = dummyBoardPath
                     , wings = []
                     }
 
@@ -1260,18 +1261,28 @@ resolveSpec spec board =
                 { source = findStackByContent src board
                 , target = findStackByContent tgt board
                 , side = side
-                , boardPath = []
+                , boardPath = dummyBoardPath
                 }
 
         SpecMoveStack cards loc ->
             GameEvent.MoveStack
                 { stack = findStackByContent cards board
                 , newLoc = loc
-                , boardPath = []
+                , boardPath = dummyBoardPath
                 }
 
         SpecCompleteTurn ->
             GameEvent.CompleteTurn
+
+
+{-| Placeholder NonEmpty path for tests that build GameEvent
+records but never animate them — `State.applyEvent` ignores the
+path field, so any non-empty value is correct for state-only
+checks.
+-}
+dummyBoardPath : NonEmpty.NonEmpty { tMs : Int, left : Int, top : Int }
+dummyBoardPath =
+    NonEmpty.singleton { tMs = 0, left = 0, top = 0 }
 
 
 isCleanStack : CardStack -> Bool

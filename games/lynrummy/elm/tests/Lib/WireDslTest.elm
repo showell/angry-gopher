@@ -11,6 +11,7 @@ import Expect
 import Lib.BoardActions exposing (Side(..))
 import Lib.CardStack exposing (BoardCardState(..), CardStack)
 import Lib.GameEvent as GameEvent exposing (GameEvent(..))
+import Lib.NonEmpty
 import Lib.Rules.Card exposing (Card, CardValue(..), OriginDeck(..), Suit(..))
 import Lib.WireAction as WA
 import Test exposing (Test, describe, test)
@@ -203,8 +204,8 @@ sampleSeven =
     { value = Seven, suit = Heart, originDeck = DeckTwo }
 
 
-samplePath : List { tMs : Int, left : Int, top : Int }
+samplePath : Lib.NonEmpty.NonEmpty { tMs : Int, left : Int, top : Int }
 samplePath =
-    [ { tMs = 0, left = 10, top = 53 }
-    , { tMs = 500, left = 22, top = 300 }
-    ]
+    { first = { tMs = 0, left = 10, top = 53 }
+    , rest = [ { tMs = 500, left = 22, top = 300 } ]
+    }

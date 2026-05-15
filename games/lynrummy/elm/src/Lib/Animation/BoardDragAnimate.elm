@@ -28,6 +28,7 @@ import Lib.BoardActions exposing (Side)
 import Lib.BoardDragTypes exposing (BoardCardDragInfo)
 import Lib.CardStack exposing (BoardLocation, CardStack)
 import Lib.Execute as Execute
+import Lib.NonEmpty as NonEmpty exposing (NonEmpty)
 import Lib.Point exposing (Point)
 import Lib.TimeLoc exposing (TimeLoc)
 
@@ -36,18 +37,18 @@ type BoardDragAnimateAction
     = Move
         { sourceStack : CardStack
         , newLoc : BoardLocation
-        , boardPath : List TimeLoc
+        , boardPath : NonEmpty TimeLoc
         }
     | Merge
         { sourceStack : CardStack
         , targetStack : CardStack
         , side : Side
-        , boardPath : List TimeLoc
+        , boardPath : NonEmpty TimeLoc
         }
 
 
 type alias State =
-    { path : List TimeLoc
+    { path : NonEmpty TimeLoc
     , startMs : Int
     , pendingAction : BoardDragAnimateAction
     , dragInfo : BoardCardDragInfo
@@ -70,25 +71,19 @@ start { startMs, pendingAction } =
                 Merge m ->
                     ( m.sourceStack, m.boardPath )
     in
-    case path of
-        [] ->
-            Debug.todo
-                "BoardDragAnimate.start: empty path — caller must provide a path"
-
-        first :: _ ->
-            { path = path
-            , startMs = startMs
-            , pendingAction = pendingAction
-            , dragInfo =
-                { stack = sourceStack
-                , cardIndex = 0
-                , originalCursor = { x = 0, y = 0 }
-                , cursor = { x = 0, y = 0 }
-                , floaterTopLeft = { left = first.left, top = first.top }
-                , boardPath = path
-                , wings = []
-                }
-            }
+    { path = path
+    , startMs = startMs
+    , pendingAction = pendingAction
+    , dragInfo =
+        { stack = sourceStack
+        , cardIndex = 0
+        , originalCursor = { x = 0, y = 0 }
+        , cursor = { x = 0, y = 0 }
+        , floaterTopLeft = { left = path.first.left, top = path.first.top }
+        , boardPath = path
+        , wings = []
+        }
+    }
 
 
 {-| Advance one frame. Once `nowMs - startMs` exceeds the
@@ -116,7 +111,7 @@ step nowMs board state =
     else
         let
             p =
-                interp state.path elapsedMs
+                interp (NonEmpty.toList state.path) elapsedMs
 
             info =
                 state.dragInfo
@@ -141,14 +136,18 @@ applyToBoard action board =
             Execute.mergeStack m.sourceStack m.targetStack m.side board
 
 
-duration : List TimeLoc -> Int
+duration : NonEmpty TimeLoc -> Int
 duration path =
-    case ( List.head path, List.head (List.reverse path) ) of
-        ( Just first, Just last ) ->
-            last.tMs - first.tMs
+    let
+        last =
+            case List.reverse path.rest of
+                final :: _ ->
+                    final
 
-        _ ->
-            0
+                [] ->
+                    path.first
+    in
+    last.tMs - path.first.tMs
 
 
 {-| Linear-interpolate cursor position along the path.

@@ -42,16 +42,17 @@ stays stateless:
 
 import Lib.BoardActions exposing (Side(..))
 import Lib.CardStack exposing (BoardLocation, CardStack)
+import Lib.NonEmpty as NonEmpty exposing (NonEmpty)
 import Lib.Rules.Card as Card exposing (Card)
 import Lib.TimeLoc exposing (TimeLoc)
 
 
 type GameEvent
     = Split { stack : CardStack, cardIndex : Int }
-    | MergeStack { source : CardStack, target : CardStack, side : Side, boardPath : List TimeLoc }
+    | MergeStack { source : CardStack, target : CardStack, side : Side, boardPath : NonEmpty TimeLoc }
     | MergeHand { handCard : Card, target : CardStack, side : Side }
     | PlaceHand { handCard : Card, loc : BoardLocation }
-    | MoveStack { stack : CardStack, newLoc : BoardLocation, boardPath : List TimeLoc }
+    | MoveStack { stack : CardStack, newLoc : BoardLocation, boardPath : NonEmpty TimeLoc }
     | CompleteTurn
     | Undo
 
@@ -69,7 +70,7 @@ splitDsl seq stack cardIndex =
         ++ String.fromInt cardIndex
 
 
-mergeStackDsl : Int -> CardStack -> CardStack -> Side -> List TimeLoc -> String
+mergeStackDsl : Int -> CardStack -> CardStack -> Side -> NonEmpty TimeLoc -> String
 mergeStackDsl seq source target side boardPath =
     seqPrefix seq
         ++ "merge_stack "
@@ -101,7 +102,7 @@ placeHandDsl seq handCard loc =
         ++ locStr loc
 
 
-moveStackDsl : Int -> CardStack -> BoardLocation -> List TimeLoc -> String
+moveStackDsl : Int -> CardStack -> BoardLocation -> NonEmpty TimeLoc -> String
 moveStackDsl seq stack newLoc boardPath =
     seqPrefix seq
         ++ "move_stack "
@@ -153,13 +154,9 @@ sideStr s =
             "right"
 
 
-pathSuffix : List TimeLoc -> String
+pathSuffix : NonEmpty TimeLoc -> String
 pathSuffix path =
-    if List.isEmpty path then
-        ""
-
-    else
-        " :: path " ++ String.concat (List.map timeLocStr path)
+    " :: path " ++ String.concat (List.map timeLocStr (NonEmpty.toList path))
 
 
 timeLocStr : TimeLoc -> String

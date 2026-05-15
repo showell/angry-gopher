@@ -20,6 +20,7 @@ without re-deriving the path. The hand-card sibling is
 import Lib.BoardActions exposing (Side)
 import Lib.BoardDragTypes exposing (BoardCardDragInfo)
 import Lib.CardStack as CardStack exposing (BoardLocation, CardStack)
+import Lib.NonEmpty as NonEmpty exposing (NonEmpty)
 import Lib.Physics.BoardGeometry as BG
 import Lib.Physics.GestureArbitration as GA
 import Lib.Physics.WingOracle as WingOracle
@@ -39,8 +40,8 @@ scold case — the user dropped the cards off the board.
 -}
 type BoardMouseUp
     = Split { stack : CardStack, cardIndex : Int }
-    | MergeStack { source : CardStack, target : CardStack, side : Side, boardPath : List TimeLoc }
-    | MoveStack { stack : CardStack, newLoc : BoardLocation, boardPath : List TimeLoc }
+    | MergeStack { source : CardStack, target : CardStack, side : Side, boardPath : NonEmpty TimeLoc }
+    | MoveStack { stack : CardStack, newLoc : BoardLocation, boardPath : NonEmpty TimeLoc }
     | BoardCardOffBoard
 
 
@@ -61,7 +62,7 @@ startBoardDragInfo { stack, cardIndex, cursor, tMs, board } =
     , originalCursor = cursor
     , cursor = cursor
     , floaterTopLeft = stack.loc
-    , boardPath = [ { tMs = tMs, left = stack.loc.left, top = stack.loc.top } ]
+    , boardPath = NonEmpty.singleton { tMs = tMs, left = stack.loc.left, top = stack.loc.top }
     , wings = WingOracle.wingsForStack stack board
     }
 
@@ -90,8 +91,9 @@ handleMouseUp releasePoint tMs d boardRect =
                 | cursor = releasePoint
                 , floaterTopLeft = releaseFloater
                 , boardPath =
-                    d.boardPath
-                        ++ [ { tMs = tMs, left = releaseFloater.left, top = releaseFloater.top } ]
+                    NonEmpty.append
+                        { tMs = tMs, left = releaseFloater.left, top = releaseFloater.top }
+                        d.boardPath
             }
     in
     case resolveBoardCardGesture dFull boardRect of
@@ -170,8 +172,9 @@ mouseMove pos tMs d currentStatus =
             }
 
         nextPath =
-            d.boardPath
-                ++ [ { tMs = tMs, left = nextFloater.left, top = nextFloater.top } ]
+            NonEmpty.append
+                { tMs = tMs, left = nextFloater.left, top = nextFloater.top }
+                d.boardPath
 
         nextD =
             { d

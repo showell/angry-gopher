@@ -25,6 +25,7 @@ participate in `isCardsEqualInOrder`).
 import Lib.BoardActions exposing (Side(..))
 import Lib.CardStack exposing (BoardCardState(..), BoardLocation, CardStack)
 import Lib.GameEvent exposing (GameEvent(..))
+import Lib.NonEmpty as NonEmpty exposing (NonEmpty)
 import Lib.Rules.Card as Card exposing (Card, OriginDeck(..))
 import Lib.TimeLoc exposing (TimeLoc)
 
@@ -374,19 +375,33 @@ parseSide raw =
             )
 
 
-parsePathSuffix : String -> Result String (List TimeLoc)
+{-| Parse the required `:: path (l,t@ms)(...)...` suffix on
+merge_stack / move_stack lines. Both action types need a non-
+empty animation path on the wire (the Elm animator dispatches
+on it). Missing suffix → Err; suffix present but no points → Err.
+-}
+parsePathSuffix : String -> Result String (NonEmpty TimeLoc)
 parsePathSuffix raw =
     let
         s =
             String.trim raw
     in
     if String.isEmpty s then
-        Ok []
+        Err "expected ':: path (...)' suffix"
 
     else
         consume "::" s
             |> Result.andThen (consume "path")
             |> Result.andThen parsePathPoints
+            |> Result.andThen
+                (\points ->
+                    case NonEmpty.fromList points of
+                        Just ne ->
+                            Ok ne
+
+                        Nothing ->
+                            Err "':: path' suffix has no points"
+                )
 
 
 parsePathPoints : String -> Result String (List TimeLoc)
