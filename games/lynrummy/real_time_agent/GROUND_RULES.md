@@ -128,65 +128,32 @@ lost when we move to design:
   else (banner? spinner over the agent's panel? specific
   layout TBD).
 
-## Status (2026-05-15)
+## V1 status
 
-### Landed
+V1 wired end-to-end and Steve has driven it in a browser.
+P1's turn-end modal kicks off the agent (`PopupOk` →
+`startAgentTurn` in `Game.Play`); each `agent_step` response's
+events animate through a sibling `agentMoveAnimationState`
+field (same shape as `replayState`, distinct name); on
+`Animate.Completed` we apply the animation's final gameState
+and fire the next request; empty events apply `CompleteTurn`
+and show an "agent done" popup. Lockout:
+`humanInputLocked = activeAnimation ≠ Nothing || agentTurnActive`,
+consulted by both card handlers and `controlsEnabled`.
 
-- **Replay-time input lockout extended.** `Complete-Turn` and
-  `Hint` buttons are gated on a `controlsEnabled` flag; the
-  view-layer `cardMouseDown` / `handIsInteractive` pattern was
-  already in place for drag/click input.
+### Open
 
-- **Canonical DSL convergence.** ONE shape across conformance
-  fixtures, the live TS↔Elm wire, action-log replay, and
-  transcripts. `(left, top)` coords; Unicode suit glyphs; stack
-  refs decorated with `at (left, top)`. Both runtimes share the
-  same per-primitive parser (TS-side `dsl/parse.ts`, Elm-side
-  `Lib.WireAction.parseEvent`).
-
-- **`agent_step` wire end-to-end.** TS-side
-  `elmAgentStep(boardDsl, handDsl)` → engine_glue `agent_step`
-  op → Elm `agentStepResponse` port →
-  `Lib.Engine.decodeAgentStepResponse`. Decoder runs each
-  response line through `Lib.WireAction.parseEvent`. Unit-tested
-  in `tests/Lib/EngineTest.elm`.
-
-- **V1 trigger + loop + lockout.** `PopupOk` after P1's turn-end
-  modal kicks off the agent (`startAgentTurn`). Each response's
-  events are wrapped as ActionLogEntries and animated via a
-  sibling `agentMoveAnimationState` field (same shape as
-  `replayState`, distinct name per Q2). `agentMoveTick` folds
-  the animation's final state into `model.gameState` on
-  `Completed` and fires the next request. Empty events apply
-  `CompleteTurn` and show an "agent done" popup; PopupOk on
-  that clears `agentTurnActive` and returns the baton.
-  Lockout: `humanInputLocked = activeAnimation ≠ Nothing ||
-  agentTurnActive`, consulted by both card handlers and
-  `controlsEnabled`.
-
-### Known V1 limitations / follow-ups
-
-- **2-second between-step floor not implemented.** Animations
-  inherit `Animate`'s 700ms intra-step beats, but the spec's
-  `max(actual_compute_ms, 2000)` between-step floor is not
-  wired yet. Steve to evaluate whether the natural pacing is
-  acceptable or whether the floor needs to be added.
-- **Action-log integration punted.** Per Q1 (2026-05-15), agent
-  events DON'T append to `model.actionLog`. Reload-during-or-
-  after-agent-turn drops the agent's plays; gameState reflects
-  them in memory only. Steve is undecided on the right
-  serialization shape — possibly NOT via the existing wire
-  (which would change Instant Replay semantics too).
-- **End-of-turn modal wording** is placeholder ("Oliver: The
-  agent has completed its turn. Your move!"). Steve owns the
-  copy.
-- **"Thinking…" status text** is the only thinking indicator
-  today; spec mentions possible banner / panel spinner —
-  deferred.
-
-### Browser smoke-test owed
-
-The conformance gate is green (Elm 464 / TS 6/6 seeds /
-elm-review clean), but the agent loop has not been driven in
-a browser. Next session: start `ops/start`, play a P1 turn,
-click Ok on the modal, observe the agent playing and ending.
+- **Instant Replay is broken.** The path-bearing wire / NonEmpty
+  type changes interact with the existing replay flow in some
+  way that Steve flagged. Diagnose before further polish.
+- **Code cleanup pass owed** (Steve drives).
+- **2-second between-step floor not implemented.** V1 inherits
+  `Animate`'s 700ms intra-step beats but doesn't enforce the
+  spec's `max(actual_compute_ms, 2000)` between-step pause.
+- **Action-log integration deferred.** Agent events evolve
+  `model.gameState` in memory only — they don't append to
+  `model.actionLog` or the on-disk transcript, so reloading
+  during/after P2's turn drops the agent's plays. Steve is
+  undecided on the right serialization shape.
+- **End-of-turn modal copy** is placeholder; Steve owns the
+  wording.
