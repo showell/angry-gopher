@@ -151,7 +151,7 @@ leftSidebar model =
         ( Nothing, Just rs ) ->
             -- Agent-move animation in flight. Replay control
             -- stays at ShowReplay (the click is a no-op during
-            -- agent turn — see Game.Play.update).
+            -- agent turn — see the ClickInstantReplay arm).
             LeftSidebar.view
                 { gameState = rs.gameState
                 , handIsInteractive = handIsInteractive

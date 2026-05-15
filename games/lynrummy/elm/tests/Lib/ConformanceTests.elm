@@ -37,8 +37,8 @@ import Lib.Rules.Referee as Referee exposing (RefereeStage(..))
 import Lib.Rules.StackType as StackType
 import Lib.Status as Status
 import Game.Msg as Msg
-import Game.Play as Play
 import Game.State as State
+import Main as Play
 import Test exposing (Test, describe, test)
 
 
@@ -837,7 +837,7 @@ transitionUndoStep prev step =
 
         Just "undo" ->
             let
-                ( model, _, _ ) =
+                ( model, _ ) =
                     Play.update Msg.ClickUndo prev
             in
             model
