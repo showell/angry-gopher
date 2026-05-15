@@ -101,17 +101,28 @@ view model =
 
 -- LEFT SIDEBAR
 --
--- Slice the Model into a `LeftSidebar.PlayerPanelInfo` and
--- hand it to `Lib.LeftSidebar`. While an animation is in
--- flight (Instant Replay or agent move), the sidebar's
--- gameState comes from the AnimationState's evolving copy;
--- the live `model.gameState` is preserved untouched and snaps
--- back when the animation completes.
+-- Slice the Model into the two PlayerInfo records the sidebar
+-- needs. While an animation is in flight (Instant Replay or
+-- agent move), the rendered gameState comes from the
+-- AnimationState's evolving copy; the live `model.gameState`
+-- is preserved untouched and snaps back when the animation
+-- completes.
 
 
 leftSidebar : Model -> Html Msg
 leftSidebar model =
     let
+        viewGameState =
+            case model.animationState of
+                Just rs ->
+                    rs.gameState
+
+                Nothing ->
+                    model.gameState
+
+        animating =
+            model.animationState /= Nothing
+
         drag =
             case model.animationState of
                 Just rs ->
@@ -130,49 +141,59 @@ leftSidebar model =
 
                 _ ->
                     Nothing
-    in
-    case model.animationState of
-        Just rs ->
-            if model.agentTurnActive then
-                -- Agent-move animation. Replay control stays at
-                -- ShowReplay (the click is a no-op during agent
-                -- turn — see the ClickInstantReplay arm).
-                LeftSidebar.view
-                    { gameState = rs.gameState
-                    , handIsInteractive = handIsInteractive
-                    , sourceCard = sourceCard
-                    , hintedCards = []
-                    , canUndo = False
-                    , controlsEnabled = False
-                    , replayControl = LeftSidebar.ShowReplay
-                    }
+
+        hintedCards =
+            if animating then
+                []
 
             else
-                LeftSidebar.view
-                    { gameState = rs.gameState
-                    , handIsInteractive = handIsInteractive
-                    , sourceCard = sourceCard
-                    , hintedCards = []
-                    , canUndo = False
-                    , controlsEnabled = False
-                    , replayControl =
-                        if rs.paused then
-                            LeftSidebar.ShowResume
+                model.hintedCards
 
-                        else
-                            LeftSidebar.ShowPause
-                    }
+        replayControl =
+            case model.animationState of
+                Just rs ->
+                    if model.agentTurnActive then
+                        -- Agent-move animation. The click is a
+                        -- no-op during agent turn — see the
+                        -- ClickInstantReplay arm.
+                        LeftSidebar.ShowReplay
 
-        Nothing ->
-            LeftSidebar.view
-                { gameState = model.gameState
-                , handIsInteractive = handIsInteractive
-                , sourceCard = sourceCard
-                , hintedCards = model.hintedCards
-                , canUndo = canUndoThisTurn model.actionLog
-                , controlsEnabled = not model.agentTurnActive
-                , replayControl = LeftSidebar.ShowReplay
-                }
+                    else if rs.paused then
+                        LeftSidebar.ShowResume
+
+                    else
+                        LeftSidebar.ShowPause
+
+                Nothing ->
+                    LeftSidebar.ShowReplay
+
+        handAt n =
+            viewGameState.hands
+                |> List.drop n
+                |> List.head
+                |> Maybe.withDefault { handCards = [] }
+    in
+    LeftSidebar.view
+        { turnIndex = viewGameState.turnIndex
+        , deck = viewGameState.deck
+        , playerOne =
+            { hand = handAt 0
+            , isActive = viewGameState.activePlayerIndex == 0
+            , handIsInteractive = handIsInteractive
+            , sourceCard = sourceCard
+            , hintedCards = hintedCards
+            , canUndo = not animating && canUndoThisTurn model.actionLog
+            , controlsEnabled = not animating && not model.agentTurnActive
+            , replayControl = replayControl
+            }
+        , playerTwo =
+            { hand = handAt 1
+            , isActive = viewGameState.activePlayerIndex == 1
+            , handIsInteractive = handIsInteractive
+            , sourceCard = sourceCard
+            , hintedCards = hintedCards
+            }
+        }
 
 
 

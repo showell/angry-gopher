@@ -1,5 +1,6 @@
 module Lib.LeftSidebar exposing
-    ( PlayerPanelInfo
+    ( PlayerOneInfo
+    , PlayerTwoInfo
     , ReplayControl(..)
     , view
     )
@@ -20,7 +21,6 @@ import Html.Attributes exposing (id, style)
 import Lib.Button as Button
 import Lib.CardStack exposing (HandCard, HandCardState(..))
 import Lib.Colors as Colors
-import Lib.Game exposing (GameState)
 import Lib.Hand as Hand exposing (Hand)
 import Lib.HandLayout as HandLayout
 import Lib.Physics.BoardGeometry as BG
@@ -40,8 +40,9 @@ type ReplayControl
     | ShowResume
 
 
-type alias PlayerPanelInfo =
-    { gameState : GameState
+type alias PlayerOneInfo =
+    { hand : Hand
+    , isActive : Bool
     , handIsInteractive : Bool
     , sourceCard : Maybe Card
     , hintedCards : List Card
@@ -51,57 +52,57 @@ type alias PlayerPanelInfo =
     }
 
 
+type alias PlayerTwoInfo =
+    { hand : Hand
+    , isActive : Bool
+    , handIsInteractive : Bool
+    , sourceCard : Maybe Card
+    , hintedCards : List Card
+    }
+
+
 
 -- TOP-LEVEL VIEW
 
 
-view : PlayerPanelInfo -> Html Msg
+view :
+    { turnIndex : Int
+    , deck : List Card
+    , playerOne : PlayerOneInfo
+    , playerTwo : PlayerTwoInfo
+    }
+    -> Html Msg
 view info =
     div
         [ style "min-width" "240px"
         , style "padding-right" "20px"
         , style "border-right" "1px gray solid"
         ]
-        (playerHands info)
-
-
-playerHands : PlayerPanelInfo -> List (Html Msg)
-playerHands info =
-    let
-        activeIdx =
-            info.gameState.activePlayerIndex
-
-        handAt n =
-            info.gameState.hands
-                |> List.drop n
-                |> List.head
-                |> Maybe.withDefault { handCards = [] }
-    in
-    [ div
-        [ style "color" "#666"
-        , style "font-size" "13px"
-        , style "margin-top" "12px"
+        [ div
+            [ style "color" "#666"
+            , style "font-size" "13px"
+            , style "margin-top" "12px"
+            ]
+            [ Html.text ("Turn " ++ String.fromInt (info.turnIndex + 1)) ]
+        , viewPlayerOne info.playerOne
+        , viewPlayerTwo info.playerTwo
+        , div
+            [ style "color" "#666"
+            , style "font-size" "13px"
+            , style "margin-top" "8px"
+            ]
+            [ Html.text ("Deck: " ++ String.fromInt (List.length info.deck) ++ " cards left") ]
         ]
-        [ Html.text ("Turn " ++ String.fromInt (info.gameState.turnIndex + 1)) ]
-    , viewPlayerOne info (activeIdx == 0) (handAt 0)
-    , viewPlayerTwo info (activeIdx == 1) (handAt 1)
-    , div
-        [ style "color" "#666"
-        , style "font-size" "13px"
-        , style "margin-top" "8px"
-        ]
-        [ Html.text ("Deck: " ++ String.fromInt (List.length info.gameState.deck) ++ " cards left") ]
-    ]
 
 
-viewPlayerOne : PlayerPanelInfo -> Bool -> Hand -> Html Msg
-viewPlayerOne info isActive hand =
-    if isActive then
+viewPlayerOne : PlayerOneInfo -> Html Msg
+viewPlayerOne info =
+    if info.isActive then
         playerPanel
             { title = "Player 1 (your turn)"
             , titleColor = Colors.navy
             , body =
-                [ viewHand info.handIsInteractive info.sourceCard info.hintedCards hand
+                [ viewHand info.handIsInteractive info.sourceCard info.hintedCards info.hand
                 , viewTurnControls
                     { canUndo = info.canUndo
                     , controlsEnabled = info.controlsEnabled
@@ -114,25 +115,25 @@ viewPlayerOne info isActive hand =
         playerPanel
             { title = "Player 1"
             , titleColor = "#666"
-            , body = [ cardsCount hand ]
+            , body = [ cardsCount info.hand ]
             }
 
 
-viewPlayerTwo : PlayerPanelInfo -> Bool -> Hand -> Html Msg
-viewPlayerTwo info isActive hand =
-    if isActive then
+viewPlayerTwo : PlayerTwoInfo -> Html Msg
+viewPlayerTwo info =
+    if info.isActive then
         playerPanel
             { title = "Player 2 (agent's turn)"
             , titleColor = Colors.navy
             , body =
-                [ viewHand info.handIsInteractive info.sourceCard info.hintedCards hand ]
+                [ viewHand info.handIsInteractive info.sourceCard info.hintedCards info.hand ]
             }
 
     else
         playerPanel
             { title = "Player 2"
             , titleColor = "#666"
-            , body = [ cardsCount hand ]
+            , body = [ cardsCount info.hand ]
             }
 
 
