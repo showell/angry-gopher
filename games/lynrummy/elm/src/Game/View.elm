@@ -2,7 +2,7 @@ module Game.View exposing (view)
 
 {-| The full-game view layer — composes the status bar, left
 sidebar, board column, and popup into a 1100×700 div
-(`position: relative`). Main.elm wraps this in a viewport-
+(`position: relative`). Game.elm wraps this in a viewport-
 filling outer shell.
 
 `boardViewportLeft/Top` name the documentary position of the

@@ -38,7 +38,7 @@ import Lib.Rules.StackType as StackType
 import Lib.Status as Status
 import Game.Msg as Msg
 import Game.State as State
-import Main as Play
+import Game as Play
 import Test exposing (Test, describe, test)
 
 

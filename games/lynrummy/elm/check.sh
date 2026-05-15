@@ -26,9 +26,8 @@ fi
 
 # Type-check every .elm under src/Game/ standalone. Glob-driven
 # so new modules (tricks, domain types) are picked up without
-# editing this script. src/Main/ is excluded intentionally — Main
-# modules are exercised by the full `elm make src/Main.elm`
-# build below.
+# editing this script. src/Game.elm (the entry point) is
+# exercised by the full `elm make` build below.
 echo "==> Type-checking standalone"
 t0=$SECONDS
 n=0
@@ -47,10 +46,10 @@ if [ -n "$slow_lines" ]; then
   printf '%s' "$slow_lines"
 fi
 
-echo "==> Building Main"
+echo "==> Building Game"
 t0=$SECONDS
-"$ELM_BIN" make src/Main.elm --output=elm.js >/dev/null
-echo "    [phase] build-main: $((SECONDS - t0))s"
+"$ELM_BIN" make src/Game.elm --output=elm.js >/dev/null
+echo "    [phase] build-game: $((SECONDS - t0))s"
 
 echo "==> Running LynRummy tests"
 t0=$SECONDS

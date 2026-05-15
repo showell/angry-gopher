@@ -13,7 +13,7 @@ primitives in place (`Lib.PlayerTurn`, `Lib.Hand`,
 `CardStack.agedFromPriorTurn`).
 
 The `GameState` is defined as an extensible record so the host
-Model (Main.elm) can embed these fields alongside its UI-only
+Model (Game.elm) can embed these fields alongside its UI-only
 ones (drag, popup, replay progress) and call transitions
 without unwrapping.
 

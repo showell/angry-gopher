@@ -1,4 +1,4 @@
-port module Main exposing (main, update)
+port module Game exposing (main, update)
 
 import Browser
 import Browser.Dom

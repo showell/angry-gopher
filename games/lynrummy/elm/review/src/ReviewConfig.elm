@@ -7,7 +7,7 @@ module ReviewConfig exposing (config)
     yes | npx elm-review --fix-all  -- auto-fix everything safe
 
 This is the unified Elm project after the 2026-04-27
-unification — both `src/Main.elm` (full-game client) and
+unification — both `src/Game.elm` (full-game client) and
 `src/Puzzles.elm` (Puzzles gallery) compile from this directory.
 elm-review sees everything, no cross-project false positives.
 
