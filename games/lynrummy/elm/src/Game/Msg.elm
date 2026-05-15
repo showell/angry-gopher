@@ -25,7 +25,11 @@ import Time
     detection is computed in Elm on every MouseMove from the
     floater's rect, not dispatched by DOM events.
   - **Button clicks** — ClickCompleteTurn, ClickUndo, ClickHint,
-    ClickInstantReplay, ClickReplayPauseToggle, PopupOk.
+    ClickInstantReplay, ClickReplayPauseToggle, ReadyForAgentTurn,
+    ReadyForHumanTurn. The two `ReadyFor*` are popup-dismiss
+    messages: each popup launch site picks the variant that
+    matches what the dismiss is confirming, so the update arms
+    don't have to sniff model state to figure it out.
   - **HTTP responses** — ActionSent (fire-and-forget),
     SessionReceived, ActionLogFetched.
   - **Replay** — ReplayTick (per-frame timer while a replay
@@ -62,7 +66,8 @@ type Msg
     | ClickCompleteTurn
     | ClickUndo
     | ClickHint
-    | PopupOk
+    | ReadyForAgentTurn
+    | ReadyForHumanTurn
     | ClickInstantReplay
     | ClickReplayPauseToggle
     | ReplayTick Time.Posix

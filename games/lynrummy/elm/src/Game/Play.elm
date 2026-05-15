@@ -147,38 +147,34 @@ init config =
 update : Msg -> Model -> ( Model, Cmd Msg, Output )
 update msg model =
     case msg of
-        PopupOk ->
+        ReadyForAgentTurn ->
             let
-                cleared =
-                    { model | popup = Nothing }
+                reqId =
+                    model.nextEngineRequestId
+
+                hand =
+                    (activeHand model.gameState).handCards
+                        |> List.map .card
+
+                payload =
+                    Engine.buildAgentStepRequest reqId model.gameState.board hand
             in
-            if model.agentTurnActive then
-                ( { cleared | agentTurnActive = False }, Cmd.none, NoOutput )
+            ( { model
+                | popup = Nothing
+                , agentTurnActive = True
+                , pendingEngineRequest = Just reqId
+                , nextEngineRequestId = reqId + 1
+                , status = { text = "Thinking…", kind = Inform }
+              }
+            , Cmd.none
+            , EngineSolveRequested payload
+            )
 
-            else if cleared.gameState.activePlayerIndex == 1 then
-                let
-                    reqId =
-                        cleared.nextEngineRequestId
-
-                    hand =
-                        (activeHand cleared.gameState).handCards
-                            |> List.map .card
-
-                    payload =
-                        Engine.buildAgentStepRequest reqId cleared.gameState.board hand
-                in
-                ( { cleared
-                    | agentTurnActive = True
-                    , pendingEngineRequest = Just reqId
-                    , nextEngineRequestId = reqId + 1
-                    , status = { text = "Thinking…", kind = Inform }
-                  }
-                , Cmd.none
-                , EngineSolveRequested payload
-                )
-
-            else
-                ( cleared, Cmd.none, NoOutput )
+        ReadyForHumanTurn ->
+            ( { model | popup = Nothing, agentTurnActive = False }
+            , Cmd.none
+            , NoOutput
+            )
 
         ActionSent (Ok ()) ->
             ( model, Cmd.none, NoOutput )
@@ -478,7 +474,13 @@ update msg model =
         ClickCompleteTurn ->
             case TurnControl.attemptCompleteTurn { gameState = model.gameState, nextSeq = model.nextSeq } of
                 TurnControl.TurnRejected r ->
-                    ( { model | status = r.status, popup = Just r.popup }, Cmd.none, NoOutput )
+                    ( { model
+                        | status = r.status
+                        , popup = Just { content = r.popup, dismissMsg = ReadyForHumanTurn }
+                      }
+                    , Cmd.none
+                    , NoOutput
+                    )
 
                 TurnControl.TurnCompleted r ->
                     ( { model
@@ -486,7 +488,7 @@ update msg model =
                         , actionLog = model.actionLog ++ [ r.appendedEntry ]
                         , nextSeq = model.nextSeq + 1
                         , status = r.status
-                        , popup = Just r.popup
+                        , popup = Just { content = r.popup, dismissMsg = ReadyForAgentTurn }
                       }
                     , Wire.sendAction model.sessionId r.outboundPayload
                     , NoOutput
@@ -591,7 +593,7 @@ handleAgentStepResponse value model =
             ( { model
                 | pendingEngineRequest = Nothing
                 , gameState = afterTurn
-                , popup = Just agentDonePopup
+                , popup = Just { content = agentDonePopup, dismissMsg = ReadyForHumanTurn }
                 , status = { text = "The agent has completed its turn.", kind = Inform }
               }
             , Cmd.none

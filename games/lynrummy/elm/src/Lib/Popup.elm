@@ -90,8 +90,9 @@ popupFromOutcome { result, cardsDrawn } =
             }
 
 
-{-| Render the popup. Caller passes the dismiss `msg` (typically
-`PopupOk` from `Game.Msg`) so this module stays Msg-agnostic.
+{-| Render the popup. Caller passes the dismiss `msg` so this
+module stays Msg-agnostic; each launch site picks the variant
+that matches what the dismiss is confirming.
 -}
 viewPopup : msg -> Maybe PopupContent -> Html msg
 viewPopup dismissMsg maybePopup =

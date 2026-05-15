@@ -10,6 +10,7 @@ module Game.State exposing
 {-| All application-wide data types and the initial Model.
 -}
 
+import Game.Msg exposing (Msg)
 import Lib.ActionLog as ActionLog exposing (ActionLogEntry)
 import Lib.Animation.Animate exposing (AnimationState)
 import Lib.Dealer
@@ -46,7 +47,7 @@ type alias Model =
     , sessionId : Maybe Int
     , status : StatusMessage
     , hintedCards : List Card
-    , popup : Maybe PopupContent
+    , popup : Maybe { content : PopupContent, dismissMsg : Msg }
     , actionLog : List ActionLogEntry
     , nextSeq : Int
 
@@ -67,12 +68,13 @@ type alias Model =
     -- separate in the model even though they share machinery.
     , agentMoveAnimationState : Maybe AnimationState
 
-    -- Spans the entire agent turn: from PopupOk kickoff through
-    -- the loop (Thinking…, animations, between-step gaps) and
-    -- across the closing "agent done" popup, cleared on the
-    -- user's Ok. Source of truth for the human-input lockout —
-    -- distinct from `agentMoveAnimationState` because the gaps
-    -- between animations need to lock input too.
+    -- Spans the entire agent turn: from ReadyForAgentTurn
+    -- kickoff through the loop (Thinking…, animations,
+    -- between-step gaps) and across the closing "agent done"
+    -- popup, cleared on ReadyForHumanTurn. Source of truth for
+    -- the human-input lockout — distinct from
+    -- `agentMoveAnimationState` because the gaps between
+    -- animations need to lock input too.
     , agentTurnActive : Bool
 
     -- Constant string forming the board's DOM id (via

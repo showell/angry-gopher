@@ -87,7 +87,12 @@ view model =
             , style "left" (String.fromInt BoardGeometry.boardViewportLeft ++ "px")
             ]
             [ rightSidebar model ]
-         , Popup.viewPopup PopupOk model.popup
+         , case model.popup of
+            Nothing ->
+                Html.text ""
+
+            Just { content, dismissMsg } ->
+                Popup.viewPopup dismissMsg (Just content)
          ]
             ++ handFloaters
         )
