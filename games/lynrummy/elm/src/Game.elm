@@ -17,7 +17,7 @@ import Html exposing (Html, div)
 import Html.Attributes exposing (style)
 import Json.Encode as Encode
 import Lib.ActionLog as ActionLog
-import Lib.Animation.Animate as Animate exposing (AnimationState, Phase(..))
+import Lib.Animation.Animate as Animate exposing (Phase(..))
 import Lib.Animation.HandDragAnimate as HandDragAnimate
 import Lib.BoardDrag as BoardDrag
 import Lib.BoardGesture as BoardGesture
@@ -191,7 +191,7 @@ update msg model =
 
             else
                 ( { model
-                    | replayState =
+                    | animationState =
                         Just
                             (Animate.start
                                 (ActionLog.collapseUndos model.actionLog)
@@ -208,33 +208,9 @@ update msg model =
                 )
 
         ClickReplayPauseToggle ->
-            ( { model | replayState = Maybe.map Animate.togglePause model.replayState }
+            ( { model | animationState = Maybe.map Animate.togglePause model.animationState }
             , Cmd.none
             )
-
-        ReplayTick nowPosix ->
-            case model.replayState of
-                Nothing ->
-                    ( model, Cmd.none )
-
-                Just rs ->
-                    let
-                        config =
-                            { measureMsg = HandCardRectReceived
-                            , gameId = model.gameId
-                            }
-                    in
-                    case Animate.tick config (Time.posixToMillis nowPosix) rs of
-                        Animate.StillReplaying nextRs cmd ->
-                            ( { model | replayState = Just nextRs }, cmd )
-
-                        Animate.Completed ->
-                            ( { model
-                                | replayState = Nothing
-                                , status = { text = "Replay completed! Continue playing.", kind = Inform }
-                              }
-                            , Cmd.none
-                            )
 
         HandCardRectReceived (Ok ( handElement, boardElement, posix )) ->
             let
@@ -258,10 +234,7 @@ update msg model =
                         _ ->
                             rs
             in
-            ( { model
-                | replayState = Maybe.map applyMeasurement model.replayState
-                , agentMoveAnimationState = Maybe.map applyMeasurement model.agentMoveAnimationState
-              }
+            ( { model | animationState = Maybe.map applyMeasurement model.animationState }
             , Cmd.none
             )
 
@@ -311,8 +284,8 @@ update msg model =
             , engineRequest payload
             )
 
-        AgentMoveTick nowPosix ->
-            case model.agentMoveAnimationState of
+        AnimationTick nowPosix ->
+            case model.animationState of
                 Nothing ->
                     ( model, Cmd.none )
 
@@ -325,29 +298,38 @@ update msg model =
                     in
                     case Animate.tick config (Time.posixToMillis nowPosix) rs of
                         Animate.StillReplaying nextRs cmd ->
-                            ( { model | agentMoveAnimationState = Just nextRs }, cmd )
+                            ( { model | animationState = Just nextRs }, cmd )
 
                         Animate.Completed ->
-                            let
-                                reqId =
-                                    model.nextEngineRequestId
+                            if model.agentTurnActive then
+                                let
+                                    reqId =
+                                        model.nextEngineRequestId
 
-                                hand =
-                                    (activeHand rs.gameState).handCards
-                                        |> List.map .card
+                                    hand =
+                                        (activeHand rs.gameState).handCards
+                                            |> List.map .card
 
-                                payload =
-                                    Engine.buildAgentStepRequest reqId rs.gameState.board hand
-                            in
-                            ( { model
-                                | agentMoveAnimationState = Nothing
-                                , gameState = rs.gameState
-                                , pendingEngineRequest = Just reqId
-                                , nextEngineRequestId = reqId + 1
-                                , status = { text = "Thinking…", kind = Inform }
-                              }
-                            , engineRequest payload
-                            )
+                                    payload =
+                                        Engine.buildAgentStepRequest reqId rs.gameState.board hand
+                                in
+                                ( { model
+                                    | animationState = Nothing
+                                    , gameState = rs.gameState
+                                    , pendingEngineRequest = Just reqId
+                                    , nextEngineRequestId = reqId + 1
+                                    , status = { text = "Thinking…", kind = Inform }
+                                  }
+                                , engineRequest payload
+                                )
+
+                            else
+                                ( { model
+                                    | animationState = Nothing
+                                    , status = { text = "Replay completed! Continue playing.", kind = Inform }
+                                  }
+                                , Cmd.none
+                                )
 
         -- Pointer-gesture + wire-action cluster. MouseDown starts a
         -- drag and kicks off board-rect measurement; MouseMove
@@ -571,7 +553,7 @@ update msg model =
             in
             ( { model
                 | pendingEngineRequest = Nothing
-                , agentMoveAnimationState = Just anim
+                , animationState = Just anim
               }
             , Cmd.none
             )
@@ -626,41 +608,25 @@ subscriptions model =
                         [ Browser.Events.onMouseMove (PointerInput.mouseMoveDecoder MouseMove)
                         , Browser.Events.onMouseUp (PointerInput.mouseUpDecoder MouseUp)
                         ]
+
+        animationSubscription =
+            case model.animationState of
+                Nothing ->
+                    Sub.none
+
+                Just rs ->
+                    if rs.paused then
+                        Sub.none
+
+                    else
+                        Browser.Events.onAnimationFrame AnimationTick
     in
     Sub.batch
         [ dragSubscriptions
-        , animationSubscriptions model
+        , animationSubscription
         , gameHintResponse (hintMsgFor << Engine.decodeHintResponse model.pendingEngineRequest)
         , agentStepResponse (agentStepMsgFor << Engine.decodeAgentStepResponse model.pendingEngineRequest)
         ]
-
-
-{-| Per-frame ticks for whichever animation is in flight —
-Instant Replay or the real-time agent's move. Only one of the
-two AnimationState fields is `Just` at a time (the kickoff path
-gates `ClickInstantReplay` on `agentTurnActive`), so the two
-subscriptions don't double-fire.
--}
-animationSubscriptions : Model -> Sub Msg
-animationSubscriptions model =
-    Sub.batch
-        [ animationFrameFor model.replayState ReplayTick
-        , animationFrameFor model.agentMoveAnimationState AgentMoveTick
-        ]
-
-
-animationFrameFor : Maybe AnimationState -> (Time.Posix -> Msg) -> Sub Msg
-animationFrameFor mState tickMsg =
-    case mState of
-        Just rs ->
-            if rs.paused then
-                Sub.none
-
-            else
-                Browser.Events.onAnimationFrame tickMsg
-
-        Nothing ->
-            Sub.none
 
 
 hintMsgFor : Engine.HintResponse -> Msg

@@ -44,7 +44,7 @@ view model =
     -- overlay parallel to the popup.
     let
         drag =
-            case activeAnimation model of
+            case model.animationState of
                 Just rs ->
                     replayDrag rs
 
@@ -102,18 +102,18 @@ view model =
 -- LEFT SIDEBAR
 --
 -- Slice the Model into a `LeftSidebar.PlayerPanelInfo` and
--- hand it to `Lib.LeftSidebar`. During Instant Replay, the
--- sidebar's gameState comes from `model.replayState`'s
--- evolving copy; the live `model.gameState` is preserved
--- untouched and snaps back when `ReplayCompleted` clears
--- `replayState`.
+-- hand it to `Lib.LeftSidebar`. While an animation is in
+-- flight (Instant Replay or agent move), the sidebar's
+-- gameState comes from the AnimationState's evolving copy;
+-- the live `model.gameState` is preserved untouched and snaps
+-- back when the animation completes.
 
 
 leftSidebar : Model -> Html Msg
 leftSidebar model =
     let
         drag =
-            case activeAnimation model of
+            case model.animationState of
                 Just rs ->
                     replayDrag rs
 
@@ -131,38 +131,39 @@ leftSidebar model =
                 _ ->
                     Nothing
     in
-    case ( model.replayState, activeAnimation model ) of
-        ( Just rs, _ ) ->
-            LeftSidebar.view
-                { gameState = rs.gameState
-                , handIsInteractive = handIsInteractive
-                , sourceCard = sourceCard
-                , hintedCards = []
-                , canUndo = False
-                , controlsEnabled = False
-                , replayControl =
-                    if rs.paused then
-                        LeftSidebar.ShowResume
+    case model.animationState of
+        Just rs ->
+            if model.agentTurnActive then
+                -- Agent-move animation. Replay control stays at
+                -- ShowReplay (the click is a no-op during agent
+                -- turn — see the ClickInstantReplay arm).
+                LeftSidebar.view
+                    { gameState = rs.gameState
+                    , handIsInteractive = handIsInteractive
+                    , sourceCard = sourceCard
+                    , hintedCards = []
+                    , canUndo = False
+                    , controlsEnabled = False
+                    , replayControl = LeftSidebar.ShowReplay
+                    }
 
-                    else
-                        LeftSidebar.ShowPause
-                }
+            else
+                LeftSidebar.view
+                    { gameState = rs.gameState
+                    , handIsInteractive = handIsInteractive
+                    , sourceCard = sourceCard
+                    , hintedCards = []
+                    , canUndo = False
+                    , controlsEnabled = False
+                    , replayControl =
+                        if rs.paused then
+                            LeftSidebar.ShowResume
 
-        ( Nothing, Just rs ) ->
-            -- Agent-move animation in flight. Replay control
-            -- stays at ShowReplay (the click is a no-op during
-            -- agent turn — see the ClickInstantReplay arm).
-            LeftSidebar.view
-                { gameState = rs.gameState
-                , handIsInteractive = handIsInteractive
-                , sourceCard = sourceCard
-                , hintedCards = []
-                , canUndo = False
-                , controlsEnabled = False
-                , replayControl = LeftSidebar.ShowReplay
-                }
+                        else
+                            LeftSidebar.ShowPause
+                    }
 
-        ( Nothing, Nothing ) ->
+        Nothing ->
             LeftSidebar.view
                 { gameState = model.gameState
                 , handIsInteractive = handIsInteractive
@@ -187,7 +188,7 @@ rightSidebar : Model -> Html Msg
 rightSidebar model =
     let
         drag =
-            case activeAnimation model of
+            case model.animationState of
                 Just rs ->
                     replayDrag rs
 
@@ -195,7 +196,7 @@ rightSidebar model =
                     model.drag
 
         board =
-            case activeAnimation model of
+            case model.animationState of
                 Just rs ->
                     rs.gameState.board
 
@@ -284,21 +285,6 @@ rightSidebar model =
 
 
 
-{-| Whichever AnimationState is in flight, if either. Instant
-Replay and the real-time agent move share the same machinery
-but live in distinct model fields; the view collapses them to
-a single "is something animating right now?" for rendering.
--}
-activeAnimation : Model -> Maybe AnimationState
-activeAnimation model =
-    case model.replayState of
-        Just _ ->
-            model.replayState
-
-        Nothing ->
-            model.agentMoveAnimationState
-
-
 {-| True when the human shouldn't be able to interact: any
 animation in flight (replay or agent), or the agent's turn is
 active even between animations / under the end-of-turn modal.
@@ -307,7 +293,7 @@ consult `controlsEnabled` directly in `leftSidebar`.
 -}
 humanInputLocked : Model -> Bool
 humanInputLocked model =
-    activeAnimation model /= Nothing || model.agentTurnActive
+    model.animationState /= Nothing || model.agentTurnActive
 
 
 {-| The drag state the View should render during a replay.

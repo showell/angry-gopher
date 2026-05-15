@@ -51,30 +51,20 @@ type alias Model =
     , actionLog : List ActionLogEntry
     , nextSeq : Int
 
-    -- When `Just`, an Instant Replay is in flight. Owned end-
-    -- to-end by `Lib.Animation.Animate`; Main only plumbs Msgs
-    -- in and out of it. Cleared back to `Nothing` when the
-    -- engine signals `Completed`.
-    , replayState : Maybe AnimationState
-
-    -- Sibling of `replayState` driven by the real-time agent
-    -- loop: when an `agent_step` response delivers a non-empty
-    -- event list, the events are wrapped as ActionLogEntries
-    -- and pushed through `Animate.start`. On `Completed` the
-    -- agent loop applies the resulting `gameState` to `model`
-    -- and fires the next `agent_step` request. Same `AnimationState`
-    -- type as Instant Replay — distinct field because "user
-    -- clicked Replay" and "agent is playing" stay semantically
-    -- separate in the model even though they share machinery.
-    , agentMoveAnimationState : Maybe AnimationState
+    -- The single in-flight animation, if any. Two flavors fill
+    -- it: Instant Replay (user-initiated, only outside an agent
+    -- turn) or the real-time agent move (during an agent turn,
+    -- one Animate.start per agent_step response). They're
+    -- mutually exclusive — `agentTurnActive` discriminates on
+    -- Completed.
+    , animationState : Maybe AnimationState
 
     -- Spans the entire agent turn: from ReadyForAgentTurn
     -- kickoff through the loop (Thinking…, animations,
     -- between-step gaps) and across the closing "agent done"
     -- popup, cleared on ReadyForHumanTurn. Source of truth for
-    -- the human-input lockout — distinct from
-    -- `agentMoveAnimationState` because the gaps between
-    -- animations need to lock input too.
+    -- the human-input lockout — and the discriminator for
+    -- AnimationTick's Completed branch (agent move vs replay).
     , agentTurnActive : Bool
 
     -- Constant string forming the board's DOM id (via
@@ -162,8 +152,7 @@ baseModel =
     , popup = Nothing
     , actionLog = []
     , nextSeq = 1
-    , replayState = Nothing
-    , agentMoveAnimationState = Nothing
+    , animationState = Nothing
     , agentTurnActive = False
     , gameId = "default"
     , pendingEngineRequest = Nothing

@@ -27,8 +27,7 @@ type Msg
     | ContinueHumanTurn
     | ClickInstantReplay
     | ClickReplayPauseToggle
-    | ReplayTick Time.Posix
-    | AgentMoveTick Time.Posix
+    | AnimationTick Time.Posix
     | ActionLogFetched (Result Http.Error ( GameState, List ActionLogEntry ))
     | HintLinesReceived (List String)
     | AgentMovesReceived (List GameEvent)
