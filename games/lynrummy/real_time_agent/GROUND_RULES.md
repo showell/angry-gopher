@@ -127,3 +127,77 @@ lost when we move to design:
 - Whether "Thinking…" appears in the status bar or somewhere
   else (banner? spinner over the agent's panel? specific
   layout TBD).
+
+## Status (2026-05-15)
+
+### Landed
+
+- **Replay-time input lockout extended.** `Complete-Turn` and
+  `Hint` buttons are now gated on a `controlsEnabled` flag.
+  During Instant Replay both are disabled; the same flag will
+  fire during agent turns. Drag/click input on cards was
+  already gated via the view-layer `cardMouseDown` /
+  `handIsInteractive` pattern.
+
+- **Canonical DSL convergence.** ONE shape across conformance
+  fixtures, the live TS↔Elm wire, action-log replay, and
+  transcripts. `(left, top)` coords; Unicode suit glyphs; stack
+  refs decorated with `at (left, top)`. Both runtimes share the
+  same per-primitive parser (TS-side `dsl/parse.ts`, Elm-side
+  `Lib.WireAction.parseEvent`). 528 + 459 + 81 test scenarios
+  green after the migration.
+
+- **`agent_step` wire plumbed end-to-end.** TS-side
+  `elmAgentStep(boardDsl, handDsl)` → engine_glue `agent_step`
+  op → Elm `agentStepResponse` port → `Lib.Engine.decodeAgentStepResponse`
+  → `Game.State.agentPendingEvents`. Decoder runs each response
+  line through `Lib.WireAction.parseEvent` so the same code
+  path serves agent-step + action-log replay. Unit-tested in
+  `tests/Lib/EngineTest.elm` (encoder round-trip, decoder
+  happy path, stale-id, and engine-error paths).
+
+### Remaining
+
+5. **UI trigger.** Hook the existing turn-end modal: when the
+   modal closes and P1's turn was just completed, fire the
+   first agent_step request. The modal's Ok button is the
+   sequential boundary the spec calls out.
+
+6. **Agent loop.** On `AgentStepReceived` with a non-empty
+   event list, push the events through the existing instant-
+   replay animation machinery (`Animate.AnimationState` /
+   `ReplayTick`). When the animation completes, wait for
+   `max(actual_compute_ms, 2000)` and fire the next request.
+   When the response is `AgentStepEvents []`, drop the agent
+   state and show the end-of-turn modal.
+
+7. **End-of-turn modal + baton return.** Mirror the existing
+   turn-end modal shape; close → P1 turn begins.
+
+8. **Lockout extension.** Replace the bare `replayState`
+   check at the view layer with a derived "agent or replay
+   active" predicate so the `Thinking…` gaps between steps
+   also lock human input. The lockout extension should
+   probably ride on a new `agentSession : Maybe AgentSession`
+   field, since "agent is playing" is semantically distinct
+   from "user clicked Instant Replay."
+
+### Design choices to nail down on resumption
+
+- **Action-log integration.** The agent's emitted primitives
+  are real game events. Each should be appended to
+  `model.actionLog` with a fresh seq so the session record
+  stays honest and replays work uniformly — same shape
+  human-driven plays use today.
+- **Animation reuse vs sibling.** The replay machinery is
+  exactly the right shape for agent animation, but
+  semantically conflating "replay" and "agent" risks
+  surprises later. Likely answer: keep replayState as the
+  animation primitive, add a sibling `agentSession` that
+  drives the loop and SETS replayState for each step's
+  animation.
+- **Stale TS-side state.** `Game.State.agentPendingEvents`
+  was added as a model field for the wire smoke-test, but
+  once the agent loop lands the events flow straight into
+  the animation queue. The field may be redundant; revisit
+  during step 6.
