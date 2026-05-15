@@ -26,13 +26,12 @@
 // Elm emits.
 
 import { type Card, cardLabel } from "../core/card.ts";
-import type { Stack } from "../game_events/emit_game_event.ts";
 import type { BoardStack } from "../geometry/geometry.ts";
 import { parseBoardStackLine } from "../dsl/parse.ts";
 
 
 interface GameStateForDsl {
-  readonly board: readonly Stack[];
+  readonly board: readonly BoardStack[];
   /** Length-2 list: [player_one_hand, player_two_hand]. */
   readonly hands: readonly (readonly Card[])[];
   readonly deck: readonly Card[];
@@ -56,12 +55,12 @@ export function formatGameState(s: GameStateForDsl): string {
 
 // --- BOARD -----------------------------------------------------------
 
-function formatBoardBlock(board: readonly Stack[]): string {
+function formatBoardBlock(board: readonly BoardStack[]): string {
   const body = board.map(formatBoardLine).join("\n");
   return body === "" ? "board:" : "board:\n" + body;
 }
 
-function formatBoardLine(stack: Stack): string {
+function formatBoardLine(stack: BoardStack): string {
   return "  at ("
     + padCoord(stack.loc.left)
     + ", "

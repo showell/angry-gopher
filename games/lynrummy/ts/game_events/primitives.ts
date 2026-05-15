@@ -12,13 +12,10 @@
 import type { Card } from "../core/card.ts";
 import { CARD_PITCH, type BoardStack, type Loc } from "../geometry/geometry.ts";
 import {
-  splitDsl,
-  mergeStackDsl,
-  mergeHandDsl,
-  placeHandDsl,
-  moveStackDsl,
-} from "./emit_game_event.ts";
-import { mergeStackPath, moveStackPath } from "../geometry/synthesize_board_paths.ts";
+  type BoardPath,
+  mergeStackPath,
+  moveStackPath,
+} from "../geometry/synthesize_board_paths.ts";
 
 export type Side = "left" | "right";
 
@@ -26,7 +23,6 @@ interface SplitPrim {
   readonly action: "split";
   readonly stackIndex: number;
   readonly cardIndex: number;
-  readonly dsl: string;
 }
 
 interface MergeStackPrim {
@@ -34,7 +30,7 @@ interface MergeStackPrim {
   readonly sourceStack: number;
   readonly targetStack: number;
   readonly side: Side;
-  readonly dsl: string;
+  readonly path: BoardPath;
 }
 
 interface MergeHandPrim {
@@ -42,21 +38,19 @@ interface MergeHandPrim {
   readonly targetStack: number;
   readonly handCard: Card;
   readonly side: Side;
-  readonly dsl: string;
 }
 
 interface MoveStackPrim {
   readonly action: "move_stack";
   readonly stackIndex: number;
   readonly newLoc: Loc;
-  readonly dsl: string;
+  readonly path: BoardPath;
 }
 
 interface PlaceHandPrim {
   readonly action: "place_hand";
   readonly handCard: Card;
   readonly loc: Loc;
-  readonly dsl: string;
 }
 
 export type Primitive =
@@ -66,19 +60,23 @@ export type Primitive =
   | MoveStackPrim
   | PlaceHandPrim;
 
-// --- Builders (bake DSL at construction) ------------------------------
+// --- Builders --------------------------------------------------------
+//
+// Merge_stack and move_stack carry a synthesized non-empty `path`
+// (sample list the Elm animator consumes). The other variants are
+// path-less; their wire DSL is fully determined by the primitive shape
+// + the board snapshot at emission time, so `dsl/emit.ts:formatPrimitive`
+// produces the canonical DSL line for all five variants.
 
 export function makeSplit(
-  sim: readonly BoardStack[],
+  _sim: readonly BoardStack[],
   stackIndex: number,
   cardIndex: number,
 ): SplitPrim {
-  const stack = sim[stackIndex]!;
   return {
     action: "split",
     stackIndex,
     cardIndex,
-    dsl: splitDsl(stack, cardIndex),
   };
 }
 
@@ -95,23 +93,21 @@ export function makeMergeStack(
     sourceStack,
     targetStack,
     side,
-    dsl: mergeStackDsl(source, target, side, mergeStackPath(source, target, side)),
+    path: mergeStackPath(source, target, side),
   };
 }
 
 export function makeMergeHand(
-  sim: readonly BoardStack[],
+  _sim: readonly BoardStack[],
   targetStack: number,
   handCard: Card,
   side: Side,
 ): MergeHandPrim {
-  const target = sim[targetStack]!;
   return {
     action: "merge_hand",
     targetStack,
     handCard,
     side,
-    dsl: mergeHandDsl(handCard, target, side),
   };
 }
 
@@ -125,7 +121,7 @@ export function makeMoveStack(
     action: "move_stack",
     stackIndex,
     newLoc,
-    dsl: moveStackDsl(stack, newLoc, moveStackPath(stack, newLoc)),
+    path: moveStackPath(stack, newLoc),
   };
 }
 
@@ -137,7 +133,6 @@ export function makePlaceHand(
     action: "place_hand",
     handCard,
     loc,
-    dsl: placeHandDsl(handCard, loc),
   };
 }
 

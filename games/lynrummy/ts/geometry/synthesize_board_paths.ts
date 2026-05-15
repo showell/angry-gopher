@@ -18,8 +18,7 @@
 // duration is what drives animation pacing.
 
 import type { Card } from "../core/card.ts";
-import { CARD_PITCH } from "./geometry.ts";
-import type { Stack } from "../game_events/emit_game_event.ts";
+import { CARD_PITCH, type BoardStack } from "./geometry.ts";
 
 
 const DRAG_MS_PER_PIXEL = 2.5;
@@ -28,12 +27,19 @@ const SAMPLES = 20;
 
 export interface TimeLoc { tMs: number; left: number; top: number }
 
+/** A non-empty sample list. The animator (Elm) requires at
+ *  least one point — encoded in the type so a path-less merge/
+ *  move can't be constructed by accident. SAMPLES is 20, so
+ *  every synthesized path is comfortably non-empty in practice.
+ */
+export type BoardPath = readonly [TimeLoc, ...readonly TimeLoc[]];
+
 interface Point { x: number; y: number }
 
 
 /** Synthesize the path Elm's replay would have JIT-built for
  *  a move_stack action. `source.loc` → `newLoc`. */
-export function moveStackPath(source: Stack, newLoc: { left: number; top: number }): TimeLoc[] {
+export function moveStackPath(source: BoardStack, newLoc: { left: number; top: number }): BoardPath {
   return easedPath(
     { x: source.loc.left, y: source.loc.top },
     { x: newLoc.left, y: newLoc.top },
@@ -47,10 +53,10 @@ export function moveStackPath(source: Stack, newLoc: { left: number; top: number
  *  same +2/-2 jitter the Elm boardEndpoints uses (lands inside
  *  the wing-snap tolerance). */
 export function mergeStackPath(
-  source: Stack,
-  target: Stack,
+  source: BoardStack,
+  target: BoardStack,
   side: "left" | "right",
-): TimeLoc[] {
+): BoardPath {
   const srcSize = source.cards.length;
   const tgtSize = target.cards.length;
   const endLeft =
@@ -65,24 +71,30 @@ export function mergeStackPath(
 
 
 /** Quintic smootherstep over 20 samples. Same algorithm Elm
- *  uses for JIT path synthesis. */
-function easedPath(start: Point, end: Point): TimeLoc[] {
+ *  uses for JIT path synthesis. Returns a non-empty path
+ *  (SAMPLES = 20, so always 20 points). */
+function easedPath(start: Point, end: Point): BoardPath {
   const dx = end.x - start.x;
   const dy = end.y - start.y;
   const dist = Math.sqrt(dx * dx + dy * dy);
   const duration = Math.max(100, dist * DRAG_MS_PER_PIXEL);
 
-  const out: TimeLoc[] = [];
-  for (let i = 0; i < SAMPLES; i++) {
+  const sample = (i: number): TimeLoc => {
     const frac = i / (SAMPLES - 1);
     const pos = quinticEase(frac);
-    out.push({
+    return {
       tMs: Math.round(frac * duration),
       left: Math.round(start.x + dx * pos),
       top: Math.round(start.y + dy * pos),
-    });
+    };
+  };
+
+  const first = sample(0);
+  const rest: TimeLoc[] = [];
+  for (let i = 1; i < SAMPLES; i++) {
+    rest.push(sample(i));
   }
-  return out;
+  return [first, ...rest];
 }
 
 

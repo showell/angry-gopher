@@ -28,7 +28,7 @@ import {
   applyLocally,
 } from "../game_events/primitives.ts";
 import type { GameResult } from "./full_game.ts";
-import { completeTurnDsl, seqPrefix } from "../game_events/emit_game_event.ts";
+import { completeTurnDsl, formatPrimitive, seqPrefix } from "../dsl/emit.ts";
 import { formatGameState } from "./initial_state_dsl.ts";
 
 
@@ -146,10 +146,9 @@ export function writeSession(inputs: TranscriptInputs): TranscriptResult {
   fs.writeFileSync(path.join(sessionDir, "meta"), metaBody);
 
   // --- actions.dsl ---
-  // Each primitive already carries its own DSL body (baked at
-  // construction by `primitives.ts:make*` helpers). The writer
-  // just prepends seq, appends line, advances sim, runs the
-  // no-overlap belt.
+  // Render each primitive via dsl/emit's canonical formatter. The
+  // formatter takes the live board snapshot at this primitive's
+  // moment so stack refs reflect post-prior-primitive state.
   const actionsPath = path.join(sessionDir, "actions.dsl");
   fs.writeFileSync(actionsPath, "");
   const seqRef = { n: 1 };
@@ -158,7 +157,7 @@ export function writeSession(inputs: TranscriptInputs): TranscriptResult {
     actSim: readonly BoardStack[],
     prim: Primitive,
   ): readonly BoardStack[] => {
-    fs.appendFileSync(actionsPath, seqPrefix(seqRef.n) + prim.dsl + "\n");
+    fs.appendFileSync(actionsPath, seqPrefix(seqRef.n) + formatPrimitive(prim, actSim) + "\n");
     seqRef.n++;
     const next = applyLocally(actSim, prim);
     assertNoOverlap(next, `after-primitive ${prim.action}`);
