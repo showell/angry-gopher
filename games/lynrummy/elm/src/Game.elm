@@ -545,6 +545,12 @@ update msg model =
             let
                 ( afterTurn, _ ) =
                     Game.applyCompleteTurn refereeBounds model.gameState
+
+                agentDonePopup : Popup.PopupContent
+                agentDonePopup =
+                    { admin = "Oliver"
+                    , body = "The agent has completed its turn.\n\nYour move!"
+                    }
             in
             ( { model
                 | pendingEngineRequest = Nothing
@@ -580,13 +586,6 @@ update msg model =
 
         EngineResponseStale ->
             ( model, Cmd.none )
-
-
-agentDonePopup : Popup.PopupContent
-agentDonePopup =
-    { admin = "Oliver"
-    , body = "The agent has completed its turn.\n\nYour move!"
-    }
 
 
 
