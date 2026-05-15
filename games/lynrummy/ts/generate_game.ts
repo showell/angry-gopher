@@ -14,7 +14,7 @@ import {
 
 const HAND_SIZE = 15;
 const NUM_PLAYERS = 2;
-const SEED = 50;
+const SEED = 73;
 
 function main(): void {
   const rand = mulberry32(SEED);
