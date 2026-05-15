@@ -67,64 +67,100 @@ view info =
 
 playerHands : PlayerPanelInfo -> List (Html Msg)
 playerHands info =
-    (div
+    let
+        activeIdx =
+            info.gameState.activePlayerIndex
+
+        handAt n =
+            info.gameState.hands
+                |> List.drop n
+                |> List.head
+                |> Maybe.withDefault { handCards = [] }
+    in
+    [ div
         [ style "color" "#666"
         , style "font-size" "13px"
         , style "margin-top" "12px"
         ]
         [ Html.text ("Turn " ++ String.fromInt (info.gameState.turnIndex + 1)) ]
-        :: List.indexedMap
-            (\idx hand ->
-                if idx == info.gameState.activePlayerIndex then
-                    div
-                        [ style "padding-bottom" "15px"
-                        , style "margin-bottom" "12px"
-                        , style "border-bottom" "1px #000080 solid"
-                        ]
-                        [ div
-                            [ style "font-weight" "bold"
-                            , style "font-size" "16px"
-                            , style "color" Colors.navy
-                            , style "margin-top" "8px"
-                            ]
-                            [ Html.text ("Player " ++ String.fromInt (idx + 1) ++ " (your turn)") ]
-                        , viewHand info.handIsInteractive info.sourceCard info.hintedCards hand
-                        , viewTurnControls
-                            { canUndo = info.canUndo
-                            , controlsEnabled = info.controlsEnabled
-                            , replayControl = info.replayControl
-                            }
-                        ]
+    , viewPlayerOne info (activeIdx == 0) (handAt 0)
+    , viewPlayerTwo info (activeIdx == 1) (handAt 1)
+    , div
+        [ style "color" "#666"
+        , style "font-size" "13px"
+        , style "margin-top" "8px"
+        ]
+        [ Html.text ("Deck: " ++ String.fromInt (List.length info.gameState.deck) ++ " cards left") ]
+    ]
 
-                else
-                    div
-                        [ style "padding-bottom" "15px"
-                        , style "margin-bottom" "12px"
-                        , style "border-bottom" "1px #000080 solid"
-                        ]
-                        [ div
-                            [ style "font-weight" "bold"
-                            , style "font-size" "16px"
-                            , style "color" "#666"
-                            , style "margin-top" "8px"
-                            ]
-                            [ Html.text ("Player " ++ String.fromInt (idx + 1)) ]
-                        , div
-                            [ style "color" "#888"
-                            , style "font-size" "13px"
-                            ]
-                            [ Html.text (String.fromInt (List.length hand.handCards) ++ " cards") ]
-                        ]
-            )
-            info.gameState.hands
-    )
-        ++ [ div
-                [ style "color" "#666"
-                , style "font-size" "13px"
-                , style "margin-top" "8px"
+
+viewPlayerOne : PlayerPanelInfo -> Bool -> Hand -> Html Msg
+viewPlayerOne info isActive hand =
+    if isActive then
+        playerPanel
+            { title = "Player 1 (your turn)"
+            , titleColor = Colors.navy
+            , body =
+                [ viewHand info.handIsInteractive info.sourceCard info.hintedCards hand
+                , viewTurnControls
+                    { canUndo = info.canUndo
+                    , controlsEnabled = info.controlsEnabled
+                    , replayControl = info.replayControl
+                    }
                 ]
-                [ Html.text ("Deck: " ++ String.fromInt (List.length info.gameState.deck) ++ " cards left") ]
-           ]
+            }
+
+    else
+        playerPanel
+            { title = "Player 1"
+            , titleColor = "#666"
+            , body = [ cardsCount hand ]
+            }
+
+
+viewPlayerTwo : PlayerPanelInfo -> Bool -> Hand -> Html Msg
+viewPlayerTwo info isActive hand =
+    if isActive then
+        playerPanel
+            { title = "Player 2 (agent's turn)"
+            , titleColor = Colors.navy
+            , body =
+                [ viewHand info.handIsInteractive info.sourceCard info.hintedCards hand ]
+            }
+
+    else
+        playerPanel
+            { title = "Player 2"
+            , titleColor = "#666"
+            , body = [ cardsCount hand ]
+            }
+
+
+playerPanel : { title : String, titleColor : String, body : List (Html Msg) } -> Html Msg
+playerPanel { title, titleColor, body } =
+    div
+        [ style "padding-bottom" "15px"
+        , style "margin-bottom" "12px"
+        , style "border-bottom" "1px #000080 solid"
+        ]
+        (div
+            [ style "font-weight" "bold"
+            , style "font-size" "16px"
+            , style "color" titleColor
+            , style "margin-top" "8px"
+            ]
+            [ Html.text title ]
+            :: body
+        )
+
+
+cardsCount : Hand -> Html Msg
+cardsCount hand =
+    div
+        [ style "color" "#888"
+        , style "font-size" "13px"
+        ]
+        [ Html.text (String.fromInt (List.length hand.handCards) ++ " cards") ]
 
 
 
