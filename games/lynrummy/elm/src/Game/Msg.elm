@@ -1,11 +1,5 @@
 module Game.Msg exposing (Msg(..))
 
-{-| The `Msg` type — every way the Elm runtime can nudge the
-update function. Lives in its own module so `Game.Wire`,
-`Game.View`, and `Main.elm` can all reference its constructors
-without cyclic imports.
--}
-
 import Browser.Dom
 import Lib.ActionLog exposing (ActionLogEntry)
 import Lib.CardStack exposing (CardStack, HandCard)
@@ -16,47 +10,6 @@ import Json.Encode as Encode
 import Time
 
 
-{-| Four flavours of constructor, grouped here for scan-ability:
-
-  - **Pointer gestures** — MouseDownOnBoardCard,
-    MouseDownOnHandCard, MouseMove (carries MouseEvent
-    timeStamp for behaviorist telemetry), MouseUp,
-    BoardRectReceived. Wing hover is NOT a Msg — wing
-    detection is computed in Elm on every MouseMove from the
-    floater's rect, not dispatched by DOM events.
-  - **Button clicks** — ClickCompleteTurn, ClickUndo, ClickHint,
-    ClickInstantReplay, ClickReplayPauseToggle, ReadyForAgentTurn,
-    ReadyForHumanTurn, ContinueHumanTurn. The three popup-dismiss
-    messages let each popup launch site name what the dismiss is
-    confirming, so the update arms don't have to sniff model
-    state to figure it out: `ReadyForAgentTurn` after P1's
-    turn-end, `ReadyForHumanTurn` after the agent's turn-end,
-    `ContinueHumanTurn` after a turn-rejection admonishment
-    (no transition).
-  - **HTTP responses** — ActionSent (fire-and-forget),
-    SessionReceived, ActionLogFetched.
-  - **Replay** — ReplayTick (per-frame timer while a replay
-    is unpaused; `Lib.Animation.Animate.tick` decides whether
-    to advance).
-
--}
-{- MouseMove and MouseUp deliberately drop the `MouseDownOn*`
-   prefix family. The two `MouseDownOn*` siblings share a
-   prefix because each one names which target the press
-   landed on (board card vs hand card) — the target is
-   load-bearing for `update`'s dispatch. MouseMove and MouseUp
-   carry no per-target distinction: while a drag is live, the
-   only listeners are the document-level `Browser.Events`
-   subscriptions, and the gesture's target is already pinned in
-   `model.drag`. Renaming them to `MouseUpAnywhere` etc. would
-   be lying about a sub-pattern that doesn't exist.
-
-   Per `union_naming_three_calls.md` rule U3: when two siblings
-   share a prefix that encodes a sub-pattern, every sibling
-   that fits the sub-pattern should follow it, OR the prefix
-   should be dropped entirely on those that don't fit, with a
-   comment. This is the comment.
--}
 type Msg
     = MouseDownOnBoardCard { stack : CardStack, cardIndex : Int, point : Point, time : Int }
     | MouseDownOnHandCard { handCard : HandCard, point : Point }
