@@ -176,6 +176,12 @@ update msg model =
             , NoOutput
             )
 
+        ContinueHumanTurn ->
+            ( { model | popup = Nothing }
+            , Cmd.none
+            , NoOutput
+            )
+
         ActionSent (Ok ()) ->
             ( model, Cmd.none, NoOutput )
 
@@ -476,7 +482,7 @@ update msg model =
                 TurnControl.TurnRejected r ->
                     ( { model
                         | status = r.status
-                        , popup = Just { content = r.popup, dismissMsg = ReadyForHumanTurn }
+                        , popup = Just { content = r.popup, dismissMsg = ContinueHumanTurn }
                       }
                     , Cmd.none
                     , NoOutput

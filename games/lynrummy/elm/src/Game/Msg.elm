@@ -26,10 +26,13 @@ import Time
     floater's rect, not dispatched by DOM events.
   - **Button clicks** — ClickCompleteTurn, ClickUndo, ClickHint,
     ClickInstantReplay, ClickReplayPauseToggle, ReadyForAgentTurn,
-    ReadyForHumanTurn. The two `ReadyFor*` are popup-dismiss
-    messages: each popup launch site picks the variant that
-    matches what the dismiss is confirming, so the update arms
-    don't have to sniff model state to figure it out.
+    ReadyForHumanTurn, ContinueHumanTurn. The three popup-dismiss
+    messages let each popup launch site name what the dismiss is
+    confirming, so the update arms don't have to sniff model
+    state to figure it out: `ReadyForAgentTurn` after P1's
+    turn-end, `ReadyForHumanTurn` after the agent's turn-end,
+    `ContinueHumanTurn` after a turn-rejection admonishment
+    (no transition).
   - **HTTP responses** — ActionSent (fire-and-forget),
     SessionReceived, ActionLogFetched.
   - **Replay** — ReplayTick (per-frame timer while a replay
@@ -68,6 +71,7 @@ type Msg
     | ClickHint
     | ReadyForAgentTurn
     | ReadyForHumanTurn
+    | ContinueHumanTurn
     | ClickInstantReplay
     | ClickReplayPauseToggle
     | ReplayTick Time.Posix
