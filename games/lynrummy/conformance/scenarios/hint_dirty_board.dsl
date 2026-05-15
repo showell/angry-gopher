@@ -11,15 +11,15 @@
 # length-3 legal triple, the triple-place short-circuit must
 # NOT fire.
 #
-# Pinned for TS_ELM_INTEGRATION Phase 1 (2026-05-05) after a
+# Pinned for T♠_ELM_INTEGRATION Phase 1 (2026-05-05) after a
 # real-play observation that hints could surface a "place
 # triple" recommendation while a partial sat on the board
 # from earlier in the same turn.
 
 scenario triple_in_hand_with_dirty_board_returns_no_hint
-  desc: hand contains a triple [7D 8D 9D] but the board has a dangling partial [5C 6C] that no card on the board OR in hand can complete. The triple-in-hand short-circuit MUST NOT fire — placing the triple alone would leave [5C 6C] dirty. With no completing third reachable for [5C 6C], findPlay returns null and the hint is empty.
+  desc: hand contains a triple [7♦ 8♦ 9♦] but the board has a dangling partial [5♣ 6♣] that no card on the board OR in hand can complete. The triple-in-hand short-circuit MUST NOT fire — placing the triple alone would leave [5♣ 6♣] dirty. With no completing third reachable for [5♣ 6♣], findPlay returns null and the hint is empty.
   op: hint_for_hand
-  hand: 7D 8D 9D
+  hand: 7♦ 8♦ 9♦
   board:
-    - 5C 6C
+    - 5♣ 6♣
   expect_steps:

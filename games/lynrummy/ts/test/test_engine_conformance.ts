@@ -151,11 +151,11 @@ function runEnumerateMoves(sc: ParsedScenario): RunResult {
 // stale claim. Listed loudly per
 // memory/feedback_silent_skipping_is_rot.md.
 const STALE_NO_PLAN: Record<string, string> = {
-  extra_003_5D_6C: "canSteal length-2 unlocks a steal-from-partial path that was previously rejected",
-  extra_004_5D_6C: "same pattern — steal-from-partial newly available",
-  extra_008_4S_5Dp: "same pattern — steal-from-partial newly available",
-  extra_011_THp: "same pattern — steal-from-partial newly available",
-  extra_012_THp: "same pattern — steal-from-partial newly available",
+  "extra_003_5♦_6♣": "canSteal length-2 unlocks a steal-from-partial path that was previously rejected",
+  "extra_004_5♦_6♣": "same pattern — steal-from-partial newly available",
+  "extra_008_4♠_5♦p": "same pattern — steal-from-partial newly available",
+  "extra_011_T♥p": "same pattern — steal-from-partial newly available",
+  "extra_012_T♥p": "same pattern — steal-from-partial newly available",
 };
 
 function runSolve(sc: ParsedScenario): RunResult {

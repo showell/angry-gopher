@@ -3,670 +3,670 @@
 # eager applier agree on the final model AND that the puzzle ends
 # in victory.
 
-scenario walkthrough_mined_001_4S_4Cp1
-  desc: Full agent-play walkthrough for mined_001_4S_4Cp1; bootstrapFromBundle reconstructs to a victory board.
+scenario walkthrough_mined_001_4♠_4♣p1
+  desc: Full agent-play walkthrough for mined_001_4♠_4♣p1; bootstrapFromBundle reconstructs to a victory board.
   op: resume_walkthrough
   board:
-    at (26,26): 2H 3H 4H
-    at (107,52): 7S 7D 7C
-    at (182,52): AC AD AH
-    at (257,52): 2C 3D 4C 5H 6S 7H
-    at (332,52): 2D' 3S' 4D'
-    at (407,52): AS 2S 3S
-    at (482,52): KD' KH' KS
-    at (92,187): JD QD KD
-    at (167,187): TS TC' TD
-    at (332,187): 4S 4C'
+    at (26,26): 2♥ 3♥ 4♥
+    at (52,107): 7♠ 7♦ 7♣
+    at (52,182): A♣ A♦ A♥
+    at (52,257): 2♣ 3♦ 4♣ 5♥ 6♠ 7♥
+    at (52,332): 2♦' 3♠' 4♦'
+    at (52,407): A♠ 2♠ 3♠
+    at (52,482): K♦' K♥' K♠
+    at (187,92): J♦ Q♦ K♦
+    at (187,167): T♠ T♣' T♦
+    at (187,332): 4♠ 4♣'
   actions:
-    - split [2D' 3S' 4D']@2
-    - merge_stack [4D'] -> [4S 4C'] /right
-    - split [AC AD AH]@0
-    - move_stack [AD AH] -> (407,187)
-    - split [AD AH]@0
-    - merge_stack [AC] -> [2D' 3S'] /left
-    - merge_stack [AD] -> [2C 3D 4C 5H 6S 7H] /left
-    - move_stack [2H 3H 4H] -> (482,220)
-    - merge_stack [AH] -> [2H 3H 4H] /left
+    - split [2♦' 3♠' 4♦']@2
+    - merge_stack [4♦'] -> [4♠ 4♣'] /right
+    - split [A♣ A♦ A♥]@0
+    - move_stack [A♦ A♥] -> (187,407)
+    - split [A♦ A♥]@0
+    - merge_stack [A♣] -> [2♦' 3♠'] /left
+    - merge_stack [A♦] -> [2♣ 3♦ 4♣ 5♥ 6♠ 7♥] /left
+    - move_stack [2♥ 3♥ 4♥] -> (220,482)
+    - merge_stack [A♥] -> [2♥ 3♥ 4♥] /left
   expect:
     final_board_victory: true
 
-scenario walkthrough_mined_002_QDp1
-  desc: Full agent-play walkthrough for mined_002_QDp1; bootstrapFromBundle reconstructs to a victory board.
+scenario walkthrough_mined_002_Q♦p1
+  desc: Full agent-play walkthrough for mined_002_Q♦p1; bootstrapFromBundle reconstructs to a victory board.
   op: resume_walkthrough
   board:
-    at (26,26): 7S 7D 7C
-    at (107,52): AS 2S 3S
-    at (182,52): KD' KH' KS
-    at (257,52): JD QD KD
-    at (332,52): TS TC' TD
-    at (407,52): 4S 4C' 4D'
-    at (482,52): AC 2D' 3S'
-    at (92,187): AH 2H 3H 4H
-    at (167,187): AD 2C 3D 4C
-    at (242,187): 6S 7H 8S
-    at (317,187): 5C 5D 5H
-    at (392,187): QD'
+    at (26,26): 7♠ 7♦ 7♣
+    at (52,107): A♠ 2♠ 3♠
+    at (52,182): K♦' K♥' K♠
+    at (52,257): J♦ Q♦ K♦
+    at (52,332): T♠ T♣' T♦
+    at (52,407): 4♠ 4♣' 4♦'
+    at (52,482): A♣ 2♦' 3♠'
+    at (187,92): A♥ 2♥ 3♥ 4♥
+    at (187,167): A♦ 2♣ 3♦ 4♣
+    at (187,242): 6♠ 7♥ 8♠
+    at (187,317): 5♣ 5♦ 5♥
+    at (187,392): Q♦'
   actions:
-    - split [AD 2C 3D 4C]@0
-    - move_stack [JD QD KD] -> (467,187)
-    - merge_stack [AD] -> [JD QD KD] /right
-    - split [JD QD KD AD]@0
-    - move_stack [QD'] -> (257,85)
-    - merge_stack [JD] -> [QD'] /left
-    - split [KD' KH' KS]@0
-    - move_stack [KH' KS] -> (392,187)
-    - split [KH' KS]@0
-    - merge_stack [KD'] -> [JD QD'] /right
-    - merge_stack [KH'] -> [AC 2D' 3S'] /left
-    - merge_stack [KS] -> [AS 2S 3S] /left
+    - split [A♦ 2♣ 3♦ 4♣]@0
+    - move_stack [J♦ Q♦ K♦] -> (187,467)
+    - merge_stack [A♦] -> [J♦ Q♦ K♦] /right
+    - split [J♦ Q♦ K♦ A♦]@0
+    - move_stack [Q♦'] -> (85,257)
+    - merge_stack [J♦] -> [Q♦'] /left
+    - split [K♦' K♥' K♠]@0
+    - move_stack [K♥' K♠] -> (187,392)
+    - split [K♥' K♠]@0
+    - merge_stack [K♦'] -> [J♦ Q♦'] /right
+    - merge_stack [K♥'] -> [A♣ 2♦' 3♠'] /left
+    - merge_stack [K♠] -> [A♠ 2♠ 3♠] /left
   expect:
     final_board_victory: true
 
-scenario walkthrough_mined_003_6D
-  desc: Full agent-play walkthrough for mined_003_6D; bootstrapFromBundle reconstructs to a victory board.
+scenario walkthrough_mined_003_6♦
+  desc: Full agent-play walkthrough for mined_003_6♦; bootstrapFromBundle reconstructs to a victory board.
   op: resume_walkthrough
   board:
-    at (26,26): 2H 3H 4H
-    at (107,52): 7S 7D 7C
-    at (182,52): AC AD AH
-    at (257,52): 3D 4C 5H 6S 7H
-    at (332,52): 2D' 2H' 2C
-    at (407,52): JD QD KD
-    at (482,52): 8D' 9C TD
-    at (92,187): 7H' 8S 9H'
-    at (167,187): QS' QC' QH
-    at (332,187): AS 2S 3S
-    at (407,187): KD' KC' KS
-    at (482,187): 6D
+    at (26,26): 2♥ 3♥ 4♥
+    at (52,107): 7♠ 7♦ 7♣
+    at (52,182): A♣ A♦ A♥
+    at (52,257): 3♦ 4♣ 5♥ 6♠ 7♥
+    at (52,332): 2♦' 2♥' 2♣
+    at (52,407): J♦ Q♦ K♦
+    at (52,482): 8♦' 9♣ T♦
+    at (187,92): 7♥' 8♠ 9♥'
+    at (187,167): Q♠' Q♣' Q♥
+    at (187,332): A♠ 2♠ 3♠
+    at (187,407): K♦' K♣' K♠
+    at (187,482): 6♦
   actions:
-    - split [7S 7D 7C]@2
-    - move_stack [7S 7D] -> (242,247)
-    - split [7S 7D]@0
-    - merge_stack [7C] -> [6D] /right
-    - move_stack [8D' 9C TD] -> (482,358)
-    - merge_stack [6D 7C] -> [8D' 9C TD] /left
-    - merge_stack [7D] -> [7S] /right
-    - split [3D 4C 5H 6S 7H]@4
-    - merge_stack [7H] -> [7S 7D] /right
+    - split [7♠ 7♦ 7♣]@2
+    - move_stack [7♠ 7♦] -> (247,242)
+    - split [7♠ 7♦]@0
+    - merge_stack [7♣] -> [6♦] /right
+    - move_stack [8♦' 9♣ T♦] -> (358,482)
+    - merge_stack [6♦ 7♣] -> [8♦' 9♣ T♦] /left
+    - merge_stack [7♦] -> [7♠] /right
+    - split [3♦ 4♣ 5♥ 6♠ 7♥]@4
+    - merge_stack [7♥] -> [7♠ 7♦] /right
   expect:
     final_board_victory: true
 
-scenario walkthrough_mined_004_5C_6Dp1
-  desc: Full agent-play walkthrough for mined_004_5C_6Dp1; bootstrapFromBundle reconstructs to a victory board.
+scenario walkthrough_mined_004_5♣_6♦p1
+  desc: Full agent-play walkthrough for mined_004_5♣_6♦p1; bootstrapFromBundle reconstructs to a victory board.
   op: resume_walkthrough
   board:
-    at (26,26): KS AS 2S 3S
-    at (107,52): TD JD QD KD
-    at (182,52): 2H 3H 4H
-    at (257,52): 7S 7D 7C
-    at (332,52): AC AD AH
-    at (407,52): 2C 3D 4C 5H 6S 7H
-    at (482,52): 4S' 5D' 6C
-    at (182,187): 5C 6D'
+    at (26,26): K♠ A♠ 2♠ 3♠
+    at (52,107): T♦ J♦ Q♦ K♦
+    at (52,182): 2♥ 3♥ 4♥
+    at (52,257): 7♠ 7♦ 7♣
+    at (52,332): A♣ A♦ A♥
+    at (52,407): 2♣ 3♦ 4♣ 5♥ 6♠ 7♥
+    at (52,482): 4♠' 5♦' 6♣
+    at (187,182): 5♣ 6♦'
   actions:
-    - split [7S 7D 7C]@2
-    - move_stack [7S 7D] -> (257,187)
-    - split [7S 7D]@0
-    - merge_stack [7C] -> [5C 6D'] /right
-    - merge_stack [7D] -> [7S] /right
-    - split [2C 3D 4C 5H 6S 7H]@5
-    - merge_stack [7H] -> [7S 7D] /right
+    - split [7♠ 7♦ 7♣]@2
+    - move_stack [7♠ 7♦] -> (187,257)
+    - split [7♠ 7♦]@0
+    - merge_stack [7♣] -> [5♣ 6♦'] /right
+    - merge_stack [7♦] -> [7♠] /right
+    - split [2♣ 3♦ 4♣ 5♥ 6♠ 7♥]@5
+    - merge_stack [7♥] -> [7♠ 7♦] /right
   expect:
     final_board_victory: true
 
-scenario walkthrough_mined_005_2Hp1
-  desc: Full agent-play walkthrough for mined_005_2Hp1; bootstrapFromBundle reconstructs to a victory board.
+scenario walkthrough_mined_005_2♥p1
+  desc: Full agent-play walkthrough for mined_005_2♥p1; bootstrapFromBundle reconstructs to a victory board.
   op: resume_walkthrough
   board:
-    at (26,26): KS AS 2S 3S
-    at (107,52): TD JD QD KD
-    at (182,52): 2H 3H 4H
-    at (257,52): AC AD AH
-    at (332,52): 4S' 5D' 6C
-    at (407,52): 5C 6D' 7C
-    at (482,52): 2C 3D 4C 5H 6S
-    at (182,187): 7S 7D 7H
-    at (257,187): 2H'
+    at (26,26): K♠ A♠ 2♠ 3♠
+    at (52,107): T♦ J♦ Q♦ K♦
+    at (52,182): 2♥ 3♥ 4♥
+    at (52,257): A♣ A♦ A♥
+    at (52,332): 4♠' 5♦' 6♣
+    at (52,407): 5♣ 6♦' 7♣
+    at (52,482): 2♣ 3♦ 4♣ 5♥ 6♠
+    at (187,182): 7♠ 7♦ 7♥
+    at (187,257): 2♥'
   actions:
-    - split [KS AS 2S 3S]@3
-    - merge_stack [3S] -> [2H'] /right
-    - split [AC AD AH]@0
-    - move_stack [AD AH] -> (332,187)
-    - split [AD AH]@0
-    - merge_stack [AC] -> [2H' 3S] /left
-    - merge_stack [AD] -> [TD JD QD KD] /right
-    - merge_stack [AH] -> [2H 3H 4H] /left
+    - split [K♠ A♠ 2♠ 3♠]@3
+    - merge_stack [3♠] -> [2♥'] /right
+    - split [A♣ A♦ A♥]@0
+    - move_stack [A♦ A♥] -> (187,332)
+    - split [A♦ A♥]@0
+    - merge_stack [A♣] -> [2♥' 3♠] /left
+    - merge_stack [A♦] -> [T♦ J♦ Q♦ K♦] /right
+    - merge_stack [A♥] -> [2♥ 3♥ 4♥] /left
   expect:
     final_board_victory: true
 
-scenario walkthrough_mined_006_6Cp1
-  desc: Full agent-play walkthrough for mined_006_6Cp1; bootstrapFromBundle reconstructs to a victory board.
+scenario walkthrough_mined_006_6♣p1
+  desc: Full agent-play walkthrough for mined_006_6♣p1; bootstrapFromBundle reconstructs to a victory board.
   op: resume_walkthrough
   board:
-    at (26,26): 4S' 5D' 6C
-    at (107,52): 5C 6D' 7C
-    at (182,52): 7S 7D 7H
-    at (257,52): KS AS 2S
-    at (332,52): 3D 4C 5H 6S
-    at (407,52): KS' AD 2C
-    at (482,52): TD JD QD
-    at (92,187): AH 2H 3H
-    at (167,187): QC KD AC
-    at (242,187): AC' 2H' 3S 4H
-    at (407,187): 6C'
+    at (26,26): 4♠' 5♦' 6♣
+    at (52,107): 5♣ 6♦' 7♣
+    at (52,182): 7♠ 7♦ 7♥
+    at (52,257): K♠ A♠ 2♠
+    at (52,332): 3♦ 4♣ 5♥ 6♠
+    at (52,407): K♠' A♦ 2♣
+    at (52,482): T♦ J♦ Q♦
+    at (187,92): A♥ 2♥ 3♥
+    at (187,167): Q♣ K♦ A♣
+    at (187,242): A♣' 2♥' 3♠ 4♥
+    at (187,407): 6♣'
   actions:
-    - split [3D 4C 5H 6S]@3
-    - merge_stack [6S] -> [6C'] /right
-    - split [5C 6D' 7C]@0
-    - split [6D' 7C]@0
-    - merge_stack [6D'] -> [6C' 6S] /right
-    - merge_stack [5C] -> [AC' 2H' 3S 4H] /right
-    - move_stack [7S 7D 7H] -> (482,187)
-    - merge_stack [7C] -> [7S 7D 7H] /right
+    - split [3♦ 4♣ 5♥ 6♠]@3
+    - merge_stack [6♠] -> [6♣'] /right
+    - split [5♣ 6♦' 7♣]@0
+    - split [6♦' 7♣]@0
+    - merge_stack [6♦'] -> [6♣' 6♠] /right
+    - merge_stack [5♣] -> [A♣' 2♥' 3♠ 4♥] /right
+    - move_stack [7♠ 7♦ 7♥] -> (187,482)
+    - merge_stack [7♣] -> [7♠ 7♦ 7♥] /right
   expect:
     final_board_victory: true
 
-scenario walkthrough_mined_007_5Cp1_6C
-  desc: Full agent-play walkthrough for mined_007_5Cp1_6C; bootstrapFromBundle reconstructs to a victory board.
+scenario walkthrough_mined_007_5♣p1_6♣
+  desc: Full agent-play walkthrough for mined_007_5♣p1_6♣; bootstrapFromBundle reconstructs to a victory board.
   op: resume_walkthrough
   board:
-    at (26,26): KS AS 2S 3S
-    at (107,52): TD JD QD KD
-    at (182,52): 2H 3H 4H
-    at (257,52): 7S 7D 7C
-    at (332,52): AC AD AH
-    at (407,52): 2C 3D 4C 5H 6S 7H
-    at (482,52): 9H' TC' JH
-    at (182,187): 5C' 6C
+    at (26,26): K♠ A♠ 2♠ 3♠
+    at (52,107): T♦ J♦ Q♦ K♦
+    at (52,182): 2♥ 3♥ 4♥
+    at (52,257): 7♠ 7♦ 7♣
+    at (52,332): A♣ A♦ A♥
+    at (52,407): 2♣ 3♦ 4♣ 5♥ 6♠ 7♥
+    at (52,482): 9♥' T♣' J♥
+    at (187,182): 5♣' 6♣
   actions:
-    - split [7S 7D 7C]@2
-    - move_stack [7S 7D] -> (257,187)
-    - split [7S 7D]@0
-    - merge_stack [7C] -> [5C' 6C] /right
-    - merge_stack [7D] -> [7S] /right
-    - split [2C 3D 4C 5H 6S 7H]@5
-    - merge_stack [7H] -> [7S 7D] /right
+    - split [7♠ 7♦ 7♣]@2
+    - move_stack [7♠ 7♦] -> (187,257)
+    - split [7♠ 7♦]@0
+    - merge_stack [7♣] -> [5♣' 6♣] /right
+    - merge_stack [7♦] -> [7♠] /right
+    - split [2♣ 3♦ 4♣ 5♥ 6♠ 7♥]@5
+    - merge_stack [7♥] -> [7♠ 7♦] /right
   expect:
     final_board_victory: true
 
-scenario walkthrough_mined_008_QHp1
-  desc: Full agent-play walkthrough for mined_008_QHp1; bootstrapFromBundle reconstructs to a victory board.
+scenario walkthrough_mined_008_Q♥p1
+  desc: Full agent-play walkthrough for mined_008_Q♥p1; bootstrapFromBundle reconstructs to a victory board.
   op: resume_walkthrough
   board:
-    at (26,26): TD JD QD KD
-    at (107,52): 2H 3H 4H
-    at (182,52): AC AD AH
-    at (257,52): 9H' TC' JH
-    at (332,52): 5C' 6C 7C
-    at (407,52): 2C 3D 4C 5H 6S
-    at (482,52): 7S 7D 7H
-    at (92,187): AS 2S 3S
-    at (167,187): JS' QS' KS
-    at (242,187): QH'
+    at (26,26): T♦ J♦ Q♦ K♦
+    at (52,107): 2♥ 3♥ 4♥
+    at (52,182): A♣ A♦ A♥
+    at (52,257): 9♥' T♣' J♥
+    at (52,332): 5♣' 6♣ 7♣
+    at (52,407): 2♣ 3♦ 4♣ 5♥ 6♠
+    at (52,482): 7♠ 7♦ 7♥
+    at (187,92): A♠ 2♠ 3♠
+    at (187,167): J♠' Q♠' K♠
+    at (187,242): Q♥'
   actions:
-    - split [JS' QS' KS]@0
-    - move_stack [QH'] -> (242,220)
-    - merge_stack [JS'] -> [QH'] /left
-    - split [TD JD QD KD]@0
-    - move_stack [JS' QH'] -> (242,220)
-    - merge_stack [TD] -> [JS' QH'] /left
-    - move_stack [AS 2S 3S] -> (92,253)
-    - merge_stack [QS' KS] -> [AS 2S 3S] /left
+    - split [J♠' Q♠' K♠]@0
+    - move_stack [Q♥'] -> (220,242)
+    - merge_stack [J♠'] -> [Q♥'] /left
+    - split [T♦ J♦ Q♦ K♦]@0
+    - move_stack [J♠' Q♥'] -> (220,242)
+    - merge_stack [T♦] -> [J♠' Q♥'] /left
+    - move_stack [A♠ 2♠ 3♠] -> (253,92)
+    - merge_stack [Q♠' K♠] -> [A♠ 2♠ 3♠] /left
   expect:
     final_board_victory: true
 
-scenario walkthrough_mined_009_JC
-  desc: Full agent-play walkthrough for mined_009_JC; bootstrapFromBundle reconstructs to a victory board.
+scenario walkthrough_mined_009_J♣
+  desc: Full agent-play walkthrough for mined_009_J♣; bootstrapFromBundle reconstructs to a victory board.
   op: resume_walkthrough
   board:
-    at (26,26): AC AD AH
-    at (107,52): 9H' TC' JH
-    at (182,52): 5C' 6C 7C
-    at (257,52): 2C 3D 4C 5H 6S
-    at (332,52): 7S 7D 7H
-    at (407,52): JD QD KD
-    at (482,52): QS' KS AS 2S 3S
-    at (92,187): 9S TD JS' QH'
-    at (167,187): 2H 3H 4H 5H'
-    at (332,187): JC
+    at (26,26): A♣ A♦ A♥
+    at (52,107): 9♥' T♣' J♥
+    at (52,182): 5♣' 6♣ 7♣
+    at (52,257): 2♣ 3♦ 4♣ 5♥ 6♠
+    at (52,332): 7♠ 7♦ 7♥
+    at (52,407): J♦ Q♦ K♦
+    at (52,482): Q♠' K♠ A♠ 2♠ 3♠
+    at (187,92): 9♠ T♦ J♠' Q♥'
+    at (187,167): 2♥ 3♥ 4♥ 5♥'
+    at (187,332): J♣
   actions:
-    - split [9S TD JS' QH']@3
-    - merge_stack [QH'] -> [JC] /right
-    - split [QS' KS AS 2S 3S]@0
-    - split [KS AS 2S 3S]@0
-    - merge_stack [KS] -> [JC QH'] /right
-    - move_stack [9H' TC' JH] -> (407,187)
-    - merge_stack [QS'] -> [9H' TC' JH] /right
+    - split [9♠ T♦ J♠' Q♥']@3
+    - merge_stack [Q♥'] -> [J♣] /right
+    - split [Q♠' K♠ A♠ 2♠ 3♠]@0
+    - split [K♠ A♠ 2♠ 3♠]@0
+    - merge_stack [K♠] -> [J♣ Q♥'] /right
+    - move_stack [9♥' T♣' J♥] -> (187,407)
+    - merge_stack [Q♠'] -> [9♥' T♣' J♥] /right
   expect:
     final_board_victory: true
 
-scenario walkthrough_mined_010_3Hp1
-  desc: Full agent-play walkthrough for mined_010_3Hp1; bootstrapFromBundle reconstructs to a victory board.
+scenario walkthrough_mined_010_3♥p1
+  desc: Full agent-play walkthrough for mined_010_3♥p1; bootstrapFromBundle reconstructs to a victory board.
   op: resume_walkthrough
   board:
-    at (26,26): TD JD QD KD
-    at (107,52): 2H 3H 4H
-    at (182,52): 7S 7D 7C
-    at (257,52): AC AD AH
-    at (332,52): 9H' 9C 9D
-    at (407,52): 2C 3D 4C 5H 6S
-    at (482,52): 5D' 6C' 7H
-    at (92,187): AS 2S 3S
-    at (167,187): KC' KD' KS
-    at (242,187): TC' JD' QS
-    at (317,187): 3H'
+    at (26,26): T♦ J♦ Q♦ K♦
+    at (52,107): 2♥ 3♥ 4♥
+    at (52,182): 7♠ 7♦ 7♣
+    at (52,257): A♣ A♦ A♥
+    at (52,332): 9♥' 9♣ 9♦
+    at (52,407): 2♣ 3♦ 4♣ 5♥ 6♠
+    at (52,482): 5♦' 6♣' 7♥
+    at (187,92): A♠ 2♠ 3♠
+    at (187,167): K♣' K♦' K♠
+    at (187,242): T♣' J♦' Q♠
+    at (187,317): 3♥'
   actions:
-    - split [2C 3D 4C 5H 6S]@0
-    - move_stack [3H'] -> (317,220)
-    - merge_stack [2C] -> [3H'] /left
-    - split [AC AD AH]@0
-    - move_stack [AD AH] -> (482,187)
-    - split [AD AH]@0
-    - move_stack [2C 3H'] -> (317,220)
-    - merge_stack [AD] -> [2C 3H'] /left
-    - split [TD JD QD KD]@3
-    - merge_stack [KD] -> [AC] /left
-    - merge_stack [KD AC] -> [TC' JD' QS] /right
-    - merge_stack [AH] -> [2H 3H 4H] /left
+    - split [2♣ 3♦ 4♣ 5♥ 6♠]@0
+    - move_stack [3♥'] -> (220,317)
+    - merge_stack [2♣] -> [3♥'] /left
+    - split [A♣ A♦ A♥]@0
+    - move_stack [A♦ A♥] -> (187,482)
+    - split [A♦ A♥]@0
+    - move_stack [2♣ 3♥'] -> (220,317)
+    - merge_stack [A♦] -> [2♣ 3♥'] /left
+    - split [T♦ J♦ Q♦ K♦]@3
+    - merge_stack [K♦] -> [A♣] /left
+    - merge_stack [K♦ A♣] -> [T♣' J♦' Q♠] /right
+    - merge_stack [A♥] -> [2♥ 3♥ 4♥] /left
   expect:
     final_board_victory: true
 
-scenario walkthrough_mined_011_JC
-  desc: Full agent-play walkthrough for mined_011_JC; bootstrapFromBundle reconstructs to a victory board.
+scenario walkthrough_mined_011_J♣
+  desc: Full agent-play walkthrough for mined_011_J♣; bootstrapFromBundle reconstructs to a victory board.
   op: resume_walkthrough
   board:
-    at (26,26): 7S 7D 7C
-    at (107,52): 9H' 9C 9D
-    at (182,52): AS 2S 3S
-    at (257,52): KC' KD' KS
-    at (332,52): AD 2C 3H'
-    at (407,52): TD JD QD
-    at (482,52): TC' JD' QS KD AC
-    at (92,187): AH 2H 3H 4H
-    at (167,187): 4C 5H 6S
-    at (242,187): 6C' 7H 8S
-    at (317,187): 3D 4D 5D'
-    at (392,187): JC
+    at (26,26): 7♠ 7♦ 7♣
+    at (52,107): 9♥' 9♣ 9♦
+    at (52,182): A♠ 2♠ 3♠
+    at (52,257): K♣' K♦' K♠
+    at (52,332): A♦ 2♣ 3♥'
+    at (52,407): T♦ J♦ Q♦
+    at (52,482): T♣' J♦' Q♠ K♦ A♣
+    at (187,92): A♥ 2♥ 3♥ 4♥
+    at (187,167): 4♣ 5♥ 6♠
+    at (187,242): 6♣' 7♥ 8♠
+    at (187,317): 3♦ 4♦ 5♦'
+    at (187,392): J♣
   actions:
-    - split [TC' JD' QS KD AC]@0
-    - move_stack [JC] -> (392,220)
-    - merge_stack [TC'] -> [JC] /left
-    - split [9H' 9C 9D]@0
-    - move_stack [9C 9D] -> (467,262)
-    - split [9C 9D]@0
-    - move_stack [TC' JC] -> (392,220)
-    - merge_stack [9C] -> [TC' JC] /left
-    - merge_stack [9H'] -> [6C' 7H 8S] /right
-    - merge_stack [9D] -> [TD JD QD] /left
+    - split [T♣' J♦' Q♠ K♦ A♣]@0
+    - move_stack [J♣] -> (220,392)
+    - merge_stack [T♣'] -> [J♣] /left
+    - split [9♥' 9♣ 9♦]@0
+    - move_stack [9♣ 9♦] -> (262,467)
+    - split [9♣ 9♦]@0
+    - move_stack [T♣' J♣] -> (220,392)
+    - merge_stack [9♣] -> [T♣' J♣] /left
+    - merge_stack [9♥'] -> [6♣' 7♥ 8♠] /right
+    - merge_stack [9♦] -> [T♦ J♦ Q♦] /left
   expect:
     final_board_victory: true
 
-scenario walkthrough_mined_012_QC_KC
-  desc: Full agent-play walkthrough for mined_012_QC_KC; bootstrapFromBundle reconstructs to a victory board.
+scenario walkthrough_mined_012_Q♣_K♣
+  desc: Full agent-play walkthrough for mined_012_Q♣_K♣; bootstrapFromBundle reconstructs to a victory board.
   op: resume_walkthrough
   board:
-    at (26,26): KS AS 2S 3S
-    at (107,52): TD JD QD KD
-    at (182,52): 2H 3H 4H
-    at (257,52): 7S 7D 7C
-    at (332,52): AC AD AH
-    at (407,52): 2C 3D 4C 5H 6S 7H
-    at (482,52): 4D' 5S 6D'
-    at (182,187): QC KC
+    at (26,26): K♠ A♠ 2♠ 3♠
+    at (52,107): T♦ J♦ Q♦ K♦
+    at (52,182): 2♥ 3♥ 4♥
+    at (52,257): 7♠ 7♦ 7♣
+    at (52,332): A♣ A♦ A♥
+    at (52,407): 2♣ 3♦ 4♣ 5♥ 6♠ 7♥
+    at (52,482): 4♦' 5♠ 6♦'
+    at (187,182): Q♣ K♣
   actions:
-    - split [AC AD AH]@0
-    - move_stack [AD AH] -> (332,112)
-    - split [AD AH]@0
-    - merge_stack [AC] -> [QC KC] /right
-    - merge_stack [AD] -> [TD JD QD KD] /right
-    - merge_stack [AH] -> [2H 3H 4H] /left
+    - split [A♣ A♦ A♥]@0
+    - move_stack [A♦ A♥] -> (112,332)
+    - split [A♦ A♥]@0
+    - merge_stack [A♣] -> [Q♣ K♣] /right
+    - merge_stack [A♦] -> [T♦ J♦ Q♦ K♦] /right
+    - merge_stack [A♥] -> [2♥ 3♥ 4♥] /left
   expect:
     final_board_victory: true
 
-scenario walkthrough_mined_013_AHp1
-  desc: Full agent-play walkthrough for mined_013_AHp1; bootstrapFromBundle reconstructs to a victory board.
+scenario walkthrough_mined_013_A♥p1
+  desc: Full agent-play walkthrough for mined_013_A♥p1; bootstrapFromBundle reconstructs to a victory board.
   op: resume_walkthrough
   board:
-    at (26,26): KS AS 2S 3S
-    at (107,52): 7S 7D 7C
-    at (182,52): TD JD QD KD AD
-    at (257,52): AH 2H 3H
-    at (332,52): 4S' 4D 4H
-    at (407,52): 2D 3C' 4D' 5S 6D'
-    at (482,52): 3D 4C 5H 6S 7H
-    at (92,187): KC AC 2C
-    at (257,187): TC' JH QC
-    at (332,187): AH'
+    at (26,26): K♠ A♠ 2♠ 3♠
+    at (52,107): 7♠ 7♦ 7♣
+    at (52,182): T♦ J♦ Q♦ K♦ A♦
+    at (52,257): A♥ 2♥ 3♥
+    at (52,332): 4♠' 4♦ 4♥
+    at (52,407): 2♦ 3♣' 4♦' 5♠ 6♦'
+    at (52,482): 3♦ 4♣ 5♥ 6♠ 7♥
+    at (187,92): K♣ A♣ 2♣
+    at (187,257): T♣' J♥ Q♣
+    at (187,332): A♥'
   actions:
-    - split [KS AS 2S 3S]@0
-    - move_stack [AH'] -> (332,220)
-    - merge_stack [KS] -> [AH'] /left
-    - split [AS 2S 3S]@0
-    - split [2S 3S]@0
-    - merge_stack [2S] -> [KS AH'] /right
-    - merge_stack [AS] -> [2D 3C' 4D' 5S 6D'] /left
-    - move_stack [AS 2D 3C' 4D' 5S 6D'] -> (407,52)
-    - split [AS 2D 3C' 4D' 5S 6D']@1
-    - move_stack [AS 2D] -> (167,247)
-    - merge_stack [3S] -> [AS 2D] /right
+    - split [K♠ A♠ 2♠ 3♠]@0
+    - move_stack [A♥'] -> (220,332)
+    - merge_stack [K♠] -> [A♥'] /left
+    - split [A♠ 2♠ 3♠]@0
+    - split [2♠ 3♠]@0
+    - merge_stack [2♠] -> [K♠ A♥'] /right
+    - merge_stack [A♠] -> [2♦ 3♣' 4♦' 5♠ 6♦'] /left
+    - move_stack [A♠ 2♦ 3♣' 4♦' 5♠ 6♦'] -> (52,407)
+    - split [A♠ 2♦ 3♣' 4♦' 5♠ 6♦']@1
+    - move_stack [A♠ 2♦] -> (247,167)
+    - merge_stack [3♠] -> [A♠ 2♦] /right
   expect:
     final_board_victory: true
 
-scenario walkthrough_mined_014_5C
-  desc: Full agent-play walkthrough for mined_014_5C; bootstrapFromBundle reconstructs to a victory board.
+scenario walkthrough_mined_014_5♣
+  desc: Full agent-play walkthrough for mined_014_5♣; bootstrapFromBundle reconstructs to a victory board.
   op: resume_walkthrough
   board:
-    at (26,26): 7S 7D 7C
-    at (107,52): TD JD QD KD AD
-    at (182,52): AH 2H 3H
-    at (257,52): 4S' 4D 4H
-    at (332,52): 3D 4C 5H 6S 7H
-    at (407,52): KC AC 2C
-    at (482,52): TC' JH QC
-    at (182,187): KS AH' 2S
-    at (257,187): 3C' 4D' 5S 6D'
-    at (407,187): AS 2D 3S
-    at (482,187): 5C
+    at (26,26): 7♠ 7♦ 7♣
+    at (52,107): T♦ J♦ Q♦ K♦ A♦
+    at (52,182): A♥ 2♥ 3♥
+    at (52,257): 4♠' 4♦ 4♥
+    at (52,332): 3♦ 4♣ 5♥ 6♠ 7♥
+    at (52,407): K♣ A♣ 2♣
+    at (52,482): T♣' J♥ Q♣
+    at (187,182): K♠ A♥' 2♠
+    at (187,257): 3♣' 4♦' 5♠ 6♦'
+    at (187,407): A♠ 2♦ 3♠
+    at (187,482): 5♣
   actions:
-    - split [3C' 4D' 5S 6D']@3
-    - merge_stack [6D'] -> [5C] /right
-    - split [7S 7D 7C]@2
-    - move_stack [7S 7D] -> (92,247)
-    - split [7S 7D]@0
-    - merge_stack [7C] -> [5C 6D'] /right
-    - merge_stack [7D] -> [7S] /right
-    - split [3D 4C 5H 6S 7H]@4
-    - merge_stack [7H] -> [7S 7D] /right
+    - split [3♣' 4♦' 5♠ 6♦']@3
+    - merge_stack [6♦'] -> [5♣] /right
+    - split [7♠ 7♦ 7♣]@2
+    - move_stack [7♠ 7♦] -> (247,92)
+    - split [7♠ 7♦]@0
+    - merge_stack [7♣] -> [5♣ 6♦'] /right
+    - merge_stack [7♦] -> [7♠] /right
+    - split [3♦ 4♣ 5♥ 6♠ 7♥]@4
+    - merge_stack [7♥] -> [7♠ 7♦] /right
   expect:
     final_board_victory: true
 
-scenario walkthrough_mined_015_3Cp1
-  desc: Full agent-play walkthrough for mined_015_3Cp1; bootstrapFromBundle reconstructs to a victory board.
+scenario walkthrough_mined_015_3♣p1
+  desc: Full agent-play walkthrough for mined_015_3♣p1; bootstrapFromBundle reconstructs to a victory board.
   op: resume_walkthrough
   board:
-    at (26,26): KS AS 2S 3S
-    at (107,52): 2H 3H 4H
-    at (182,52): 7S 7D 7C
-    at (257,52): AC AD AH
-    at (332,52): 2C 3D 4C 5H 6S 7H
-    at (407,52): 9S TS' JS
-    at (482,52): JD QD KD
-    at (92,187): 8D 9D TD
-    at (167,187): 2H' 2C' 2D
-    at (242,187): 3C'
+    at (26,26): K♠ A♠ 2♠ 3♠
+    at (52,107): 2♥ 3♥ 4♥
+    at (52,182): 7♠ 7♦ 7♣
+    at (52,257): A♣ A♦ A♥
+    at (52,332): 2♣ 3♦ 4♣ 5♥ 6♠ 7♥
+    at (52,407): 9♠ T♠' J♠
+    at (52,482): J♦ Q♦ K♦
+    at (187,92): 8♦ 9♦ T♦
+    at (187,167): 2♥' 2♣' 2♦
+    at (187,242): 3♣'
   actions:
-    - split [2C 3D 4C 5H 6S 7H]@0
-    - move_stack [3C'] -> (242,220)
-    - merge_stack [2C] -> [3C'] /left
-    - split [AC AD AH]@0
-    - move_stack [AD AH] -> (407,187)
-    - split [AD AH]@0
-    - merge_stack [AC] -> [2C 3C'] /left
-    - merge_stack [AD] -> [JD QD KD] /right
-    - merge_stack [AH] -> [2H 3H 4H] /left
+    - split [2♣ 3♦ 4♣ 5♥ 6♠ 7♥]@0
+    - move_stack [3♣'] -> (220,242)
+    - merge_stack [2♣] -> [3♣'] /left
+    - split [A♣ A♦ A♥]@0
+    - move_stack [A♦ A♥] -> (187,407)
+    - split [A♦ A♥]@0
+    - merge_stack [A♣] -> [2♣ 3♣'] /left
+    - merge_stack [A♦] -> [J♦ Q♦ K♦] /right
+    - merge_stack [A♥] -> [2♥ 3♥ 4♥] /left
   expect:
     final_board_victory: true
 
-scenario walkthrough_mined_016_TCp1
-  desc: Full agent-play walkthrough for mined_016_TCp1; bootstrapFromBundle reconstructs to a victory board.
+scenario walkthrough_mined_016_T♣p1
+  desc: Full agent-play walkthrough for mined_016_T♣p1; bootstrapFromBundle reconstructs to a victory board.
   op: resume_walkthrough
   board:
-    at (26,26): 7S 7D 7C
-    at (107,52): 8D 9D TD
-    at (182,52): 2H' 2C' 2D
-    at (257,52): 3D 4C 5H 6S 7H
-    at (332,52): AC 2C 3C'
-    at (407,52): AH 2H 3H 4H
-    at (482,52): AS 2S 3S
-    at (92,187): JD QD KD
-    at (167,187): QH KS AD
-    at (332,187): 9S TS' JS QS
-    at (482,187): TC'
+    at (26,26): 7♠ 7♦ 7♣
+    at (52,107): 8♦ 9♦ T♦
+    at (52,182): 2♥' 2♣' 2♦
+    at (52,257): 3♦ 4♣ 5♥ 6♠ 7♥
+    at (52,332): A♣ 2♣ 3♣'
+    at (52,407): A♥ 2♥ 3♥ 4♥
+    at (52,482): A♠ 2♠ 3♠
+    at (187,92): J♦ Q♦ K♦
+    at (187,167): Q♥ K♠ A♦
+    at (187,332): 9♠ T♠' J♠ Q♠
+    at (187,482): T♣'
   actions:
-    - split [JD QD KD]@0
-    - merge_stack [JD] -> [TC'] /right
-    - split [9S TS' JS QS]@3
-    - merge_stack [QS] -> [TC' JD] /right
-    - split [QH KS AD]@2
-    - merge_stack [AD] -> [QD KD] /right
-    - split [AH 2H 3H 4H]@0
-    - merge_stack [AH] -> [QH KS] /right
+    - split [J♦ Q♦ K♦]@0
+    - merge_stack [J♦] -> [T♣'] /right
+    - split [9♠ T♠' J♠ Q♠]@3
+    - merge_stack [Q♠] -> [T♣' J♦] /right
+    - split [Q♥ K♠ A♦]@2
+    - merge_stack [A♦] -> [Q♦ K♦] /right
+    - split [A♥ 2♥ 3♥ 4♥]@0
+    - merge_stack [A♥] -> [Q♥ K♠] /right
   expect:
     final_board_victory: true
 
-scenario walkthrough_mined_017_5Dp1_6Dp1
-  desc: Full agent-play walkthrough for mined_017_5Dp1_6Dp1; bootstrapFromBundle reconstructs to a victory board.
+scenario walkthrough_mined_017_5♦p1_6♦p1
+  desc: Full agent-play walkthrough for mined_017_5♦p1_6♦p1; bootstrapFromBundle reconstructs to a victory board.
   op: resume_walkthrough
   board:
-    at (26,26): KS AS 2S 3S
-    at (107,52): TD JD QD KD
-    at (182,52): 2H 3H 4H
-    at (257,52): 7S 7D 7C
-    at (332,52): AC AD AH
-    at (407,52): 2C 3D 4C 5H 6S 7H
-    at (482,52): 5D' 6D'
+    at (26,26): K♠ A♠ 2♠ 3♠
+    at (52,107): T♦ J♦ Q♦ K♦
+    at (52,182): 2♥ 3♥ 4♥
+    at (52,257): 7♠ 7♦ 7♣
+    at (52,332): A♣ A♦ A♥
+    at (52,407): 2♣ 3♦ 4♣ 5♥ 6♠ 7♥
+    at (52,482): 5♦' 6♦'
   actions:
-    - split [7S 7D 7C]@0
-    - move_stack [7D 7C] -> (257,112)
-    - split [7D 7C]@0
-    - merge_stack [7D] -> [5D' 6D'] /right
-    - merge_stack [7C] -> [7S] /right
-    - split [2C 3D 4C 5H 6S 7H]@5
-    - merge_stack [7H] -> [7S 7C] /right
+    - split [7♠ 7♦ 7♣]@0
+    - move_stack [7♦ 7♣] -> (112,257)
+    - split [7♦ 7♣]@0
+    - merge_stack [7♦] -> [5♦' 6♦'] /right
+    - merge_stack [7♣] -> [7♠] /right
+    - split [2♣ 3♦ 4♣ 5♥ 6♠ 7♥]@5
+    - merge_stack [7♥] -> [7♠ 7♣] /right
   expect:
     final_board_victory: true
 
-scenario walkthrough_mined_018_2Sp1_3Hp1
-  desc: Full agent-play walkthrough for mined_018_2Sp1_3Hp1; bootstrapFromBundle reconstructs to a victory board.
+scenario walkthrough_mined_018_2♠p1_3♥p1
+  desc: Full agent-play walkthrough for mined_018_2♠p1_3♥p1; bootstrapFromBundle reconstructs to a victory board.
   op: resume_walkthrough
   board:
-    at (26,26): KS AS 2S 3S
-    at (107,52): 2H 3H 4H
-    at (182,52): 7S 7D 7C
-    at (257,52): AC AD AH
-    at (332,52): 2C 3D 4C 5H 6S 7H
-    at (407,52): 7S' 8D' 9C'
-    at (482,52): 3C' 4H' 5S'
-    at (92,187): JD QD KD
-    at (167,187): TS TC TD
-    at (242,187): 2S' 3H'
+    at (26,26): K♠ A♠ 2♠ 3♠
+    at (52,107): 2♥ 3♥ 4♥
+    at (52,182): 7♠ 7♦ 7♣
+    at (52,257): A♣ A♦ A♥
+    at (52,332): 2♣ 3♦ 4♣ 5♥ 6♠ 7♥
+    at (52,407): 7♠' 8♦' 9♣'
+    at (52,482): 3♣' 4♥' 5♠'
+    at (187,92): J♦ Q♦ K♦
+    at (187,167): T♠ T♣ T♦
+    at (187,242): 2♠' 3♥'
   actions:
-    - split [AC AD AH]@0
-    - move_stack [AD AH] -> (407,187)
-    - split [AD AH]@0
-    - merge_stack [AD] -> [2S' 3H'] /left
-    - split [2C 3D 4C 5H 6S 7H]@0
-    - move_stack [AC] -> (482,187)
-    - merge_stack [2C] -> [AC] /right
-    - split [3C' 4H' 5S']@0
-    - merge_stack [3C'] -> [AC 2C] /right
-    - merge_stack [AH] -> [2H 3H 4H] /left
-    - split [KS AS 2S 3S]@3
-    - merge_stack [3S] -> [4H' 5S'] /left
+    - split [A♣ A♦ A♥]@0
+    - move_stack [A♦ A♥] -> (187,407)
+    - split [A♦ A♥]@0
+    - merge_stack [A♦] -> [2♠' 3♥'] /left
+    - split [2♣ 3♦ 4♣ 5♥ 6♠ 7♥]@0
+    - move_stack [A♣] -> (187,482)
+    - merge_stack [2♣] -> [A♣] /right
+    - split [3♣' 4♥' 5♠']@0
+    - merge_stack [3♣'] -> [A♣ 2♣] /right
+    - merge_stack [A♥] -> [2♥ 3♥ 4♥] /left
+    - split [K♠ A♠ 2♠ 3♠]@3
+    - merge_stack [3♠] -> [4♥' 5♠'] /left
   expect:
     final_board_victory: true
 
-scenario walkthrough_mined_019_2D
-  desc: Full agent-play walkthrough for mined_019_2D; bootstrapFromBundle reconstructs to a victory board.
+scenario walkthrough_mined_019_2♦
+  desc: Full agent-play walkthrough for mined_019_2♦; bootstrapFromBundle reconstructs to a victory board.
   op: resume_walkthrough
   board:
-    at (26,26): 7S 7D 7C
-    at (107,52): JD QD KD
-    at (182,52): TC' TH TD
-    at (257,52): 5C' 6D 7C'
-    at (332,52): 6S 7H 8C'
-    at (407,52): AC 2D' 3S'
-    at (482,52): AS 2S 3S
-    at (92,187): KS AD 2C'
-    at (167,187): 2H 3H 4H 5H
-    at (242,187): AH 2C 3D 4C
-    at (317,187): 2D
+    at (26,26): 7♠ 7♦ 7♣
+    at (52,107): J♦ Q♦ K♦
+    at (52,182): T♣' T♥ T♦
+    at (52,257): 5♣' 6♦ 7♣'
+    at (52,332): 6♠ 7♥ 8♣'
+    at (52,407): A♣ 2♦' 3♠'
+    at (52,482): A♠ 2♠ 3♠
+    at (187,92): K♠ A♦ 2♣'
+    at (187,167): 2♥ 3♥ 4♥ 5♥
+    at (187,242): A♥ 2♣ 3♦ 4♣
+    at (187,317): 2♦
   actions:
-    - split [KS AD 2C']@0
-    - split [AD 2C']@0
-    - move_stack [2D] -> (317,220)
-    - merge_stack [AD] -> [2D] /left
-    - move_stack [JD QD KD] -> (467,187)
-    - merge_stack [AD 2D] -> [JD QD KD] /right
-    - move_stack [AH 2C 3D 4C] -> (242,220)
-    - merge_stack [KS] -> [AH 2C 3D 4C] /left
-    - split [KS AH 2C 3D 4C]@1
-    - move_stack [KS AH] -> (107,52)
-    - merge_stack [2C'] -> [KS AH] /right
+    - split [K♠ A♦ 2♣']@0
+    - split [A♦ 2♣']@0
+    - move_stack [2♦] -> (220,317)
+    - merge_stack [A♦] -> [2♦] /left
+    - move_stack [J♦ Q♦ K♦] -> (187,467)
+    - merge_stack [A♦ 2♦] -> [J♦ Q♦ K♦] /right
+    - move_stack [A♥ 2♣ 3♦ 4♣] -> (220,242)
+    - merge_stack [K♠] -> [A♥ 2♣ 3♦ 4♣] /left
+    - split [K♠ A♥ 2♣ 3♦ 4♣]@1
+    - move_stack [K♠ A♥] -> (52,107)
+    - merge_stack [2♣'] -> [K♠ A♥] /right
   expect:
     final_board_victory: true
 
-scenario walkthrough_mined_020_2Dp1_3Cp1
-  desc: Full agent-play walkthrough for mined_020_2Dp1_3Cp1; bootstrapFromBundle reconstructs to a victory board.
+scenario walkthrough_mined_020_2♦p1_3♣p1
+  desc: Full agent-play walkthrough for mined_020_2♦p1_3♣p1; bootstrapFromBundle reconstructs to a victory board.
   op: resume_walkthrough
   board:
-    at (26,26): KS AS 2S 3S
-    at (107,52): 2H 3H 4H
-    at (182,52): 7S 7D 7C
-    at (257,52): AC AD AH
-    at (332,52): 2C 3D 4C 5H 6S 7H
-    at (407,52): JD QD KD
-    at (482,52): TC TH TD
-    at (92,187): 9D 9C' 9S'
-    at (167,187): 2D' 3C'
+    at (26,26): K♠ A♠ 2♠ 3♠
+    at (52,107): 2♥ 3♥ 4♥
+    at (52,182): 7♠ 7♦ 7♣
+    at (52,257): A♣ A♦ A♥
+    at (52,332): 2♣ 3♦ 4♣ 5♥ 6♠ 7♥
+    at (52,407): J♦ Q♦ K♦
+    at (52,482): T♣ T♥ T♦
+    at (187,92): 9♦ 9♣' 9♠'
+    at (187,167): 2♦' 3♣'
   actions:
-    - split [AC AD AH]@0
-    - move_stack [AD AH] -> (257,112)
-    - split [AD AH]@0
-    - move_stack [2D' 3C'] -> (167,220)
-    - merge_stack [AC] -> [2D' 3C'] /left
-    - merge_stack [AD] -> [2C 3D 4C 5H 6S 7H] /left
-    - merge_stack [AH] -> [2H 3H 4H] /left
+    - split [A♣ A♦ A♥]@0
+    - move_stack [A♦ A♥] -> (112,257)
+    - split [A♦ A♥]@0
+    - move_stack [2♦' 3♣'] -> (220,167)
+    - merge_stack [A♣] -> [2♦' 3♣'] /left
+    - merge_stack [A♦] -> [2♣ 3♦ 4♣ 5♥ 6♠ 7♥] /left
+    - merge_stack [A♥] -> [2♥ 3♥ 4♥] /left
   expect:
     final_board_victory: true
 
-scenario walkthrough_mined_021_8Dp1
-  desc: Full agent-play walkthrough for mined_021_8Dp1; bootstrapFromBundle reconstructs to a victory board.
+scenario walkthrough_mined_021_8♦p1
+  desc: Full agent-play walkthrough for mined_021_8♦p1; bootstrapFromBundle reconstructs to a victory board.
   op: resume_walkthrough
   board:
-    at (26,26): KS AS 2S 3S
-    at (107,52): TD JD QD KD
-    at (182,52): 2H 3H 4H
-    at (257,52): 7S 7D 7C
-    at (332,52): AC AD AH
-    at (407,52): 2C 3D 4C 5H 6S 7H
-    at (482,52): JH' JD' JC
-    at (182,187): 4H' 5C' 6D'
-    at (257,187): 6S' 7H' 8C' 9H
-    at (332,187): 8D'
+    at (26,26): K♠ A♠ 2♠ 3♠
+    at (52,107): T♦ J♦ Q♦ K♦
+    at (52,182): 2♥ 3♥ 4♥
+    at (52,257): 7♠ 7♦ 7♣
+    at (52,332): A♣ A♦ A♥
+    at (52,407): 2♣ 3♦ 4♣ 5♥ 6♠ 7♥
+    at (52,482): J♥' J♦' J♣
+    at (187,182): 4♥' 5♣' 6♦'
+    at (187,257): 6♠' 7♥' 8♣' 9♥
+    at (187,332): 8♦'
   actions:
-    - split [7S 7D 7C]@2
-    - move_stack [7S 7D] -> (482,187)
-    - split [7S 7D]@0
-    - move_stack [8D'] -> (332,220)
-    - merge_stack [7C] -> [8D'] /left
-    - split [KS AS 2S 3S]@3
-    - move_stack [4H' 5C' 6D'] -> (182,220)
-    - merge_stack [3S] -> [4H' 5C' 6D'] /left
-    - split [3S 4H' 5C' 6D']@3
-    - merge_stack [6D'] -> [7C 8D'] /left
-    - merge_stack [7D] -> [7S] /right
-    - split [2C 3D 4C 5H 6S 7H]@5
-    - merge_stack [7H] -> [7S 7D] /right
+    - split [7♠ 7♦ 7♣]@2
+    - move_stack [7♠ 7♦] -> (187,482)
+    - split [7♠ 7♦]@0
+    - move_stack [8♦'] -> (220,332)
+    - merge_stack [7♣] -> [8♦'] /left
+    - split [K♠ A♠ 2♠ 3♠]@3
+    - move_stack [4♥' 5♣' 6♦'] -> (220,182)
+    - merge_stack [3♠] -> [4♥' 5♣' 6♦'] /left
+    - split [3♠ 4♥' 5♣' 6♦']@3
+    - merge_stack [6♦'] -> [7♣ 8♦'] /left
+    - merge_stack [7♦] -> [7♠] /right
+    - split [2♣ 3♦ 4♣ 5♥ 6♠ 7♥]@5
+    - merge_stack [7♥] -> [7♠ 7♦] /right
   expect:
     final_board_victory: true
 
-scenario walkthrough_mined_022_AHp1_ADp1
-  desc: Full agent-play walkthrough for mined_022_AHp1_ADp1; bootstrapFromBundle reconstructs to a victory board.
+scenario walkthrough_mined_022_A♥p1_A♦p1
+  desc: Full agent-play walkthrough for mined_022_A♥p1_A♦p1; bootstrapFromBundle reconstructs to a victory board.
   op: resume_walkthrough
   board:
-    at (26,26): KS AS 2S 3S
-    at (107,52): TD JD QD KD
-    at (182,52): 2H 3H 4H
-    at (257,52): 7S 7D 7C
-    at (332,52): AC AD AH
-    at (407,52): 2C 3D 4C 5H 6S 7H
-    at (482,52): 9C TH JS
-    at (182,187): AH' AD'
+    at (26,26): K♠ A♠ 2♠ 3♠
+    at (52,107): T♦ J♦ Q♦ K♦
+    at (52,182): 2♥ 3♥ 4♥
+    at (52,257): 7♠ 7♦ 7♣
+    at (52,332): A♣ A♦ A♥
+    at (52,407): 2♣ 3♦ 4♣ 5♥ 6♠ 7♥
+    at (52,482): 9♣ T♥ J♠
+    at (187,182): A♥' A♦'
   actions:
-    - split [AC AD AH]@0
-    - move_stack [AD AH] -> (332,112)
-    - split [AD AH]@0
-    - merge_stack [AC] -> [AH' AD'] /right
-    - merge_stack [AD] -> [TD JD QD KD] /right
-    - merge_stack [AH] -> [2H 3H 4H] /left
+    - split [A♣ A♦ A♥]@0
+    - move_stack [A♦ A♥] -> (112,332)
+    - split [A♦ A♥]@0
+    - merge_stack [A♣] -> [A♥' A♦'] /right
+    - merge_stack [A♦] -> [T♦ J♦ Q♦ K♦] /right
+    - merge_stack [A♥] -> [2♥ 3♥ 4♥] /left
   expect:
     final_board_victory: true
 
-scenario walkthrough_mined_023_3C
-  desc: Full agent-play walkthrough for mined_023_3C; bootstrapFromBundle reconstructs to a victory board.
+scenario walkthrough_mined_023_3♣
+  desc: Full agent-play walkthrough for mined_023_3♣; bootstrapFromBundle reconstructs to a victory board.
   op: resume_walkthrough
   board:
-    at (26,26): KS AS 2S 3S
-    at (107,52): 9C TH JS
-    at (182,52): AH' AD' AC
-    at (257,52): TD JD QD KD AD
-    at (332,52): AH 2H 3H 4H
-    at (407,52): 7S 7D 7C 7H'
-    at (482,52): 4C 5H 6S 7H
-    at (92,187): 2C 3D 4S'
-    at (167,187): 3C
+    at (26,26): K♠ A♠ 2♠ 3♠
+    at (52,107): 9♣ T♥ J♠
+    at (52,182): A♥' A♦' A♣
+    at (52,257): T♦ J♦ Q♦ K♦ A♦
+    at (52,332): A♥ 2♥ 3♥ 4♥
+    at (52,407): 7♠ 7♦ 7♣ 7♥'
+    at (52,482): 4♣ 5♥ 6♠ 7♥
+    at (187,92): 2♣ 3♦ 4♠'
+    at (187,167): 3♣
   actions:
-    - split [4C 5H 6S 7H]@0
-    - merge_stack [4C] -> [3C] /right
-    - split [2C 3D 4S']@0
-    - move_stack [3C 4C] -> (167,220)
-    - merge_stack [2C] -> [3C 4C] /left
-    - merge_stack [3D 4S'] -> [5H 6S 7H] /left
+    - split [4♣ 5♥ 6♠ 7♥]@0
+    - merge_stack [4♣] -> [3♣] /right
+    - split [2♣ 3♦ 4♠']@0
+    - move_stack [3♣ 4♣] -> (220,167)
+    - merge_stack [2♣] -> [3♣ 4♣] /left
+    - merge_stack [3♦ 4♠'] -> [5♥ 6♠ 7♥] /left
   expect:
     final_board_victory: true
 
-scenario walkthrough_mined_024_2D
-  desc: Full agent-play walkthrough for mined_024_2D; bootstrapFromBundle reconstructs to a victory board.
+scenario walkthrough_mined_024_2♦
+  desc: Full agent-play walkthrough for mined_024_2♦; bootstrapFromBundle reconstructs to a victory board.
   op: resume_walkthrough
   board:
-    at (26,26): KS AS 2S 3S
-    at (107,52): TD JD QD KD
-    at (182,52): 2H 3H 4H
-    at (257,52): 7S 7D 7C
-    at (332,52): AC AD AH
-    at (407,52): 2C 3D 4C 5H 6S 7H
-    at (482,52): 8H 9S TH'
-    at (182,187): 9C TH JC
-    at (257,187): 2D
+    at (26,26): K♠ A♠ 2♠ 3♠
+    at (52,107): T♦ J♦ Q♦ K♦
+    at (52,182): 2♥ 3♥ 4♥
+    at (52,257): 7♠ 7♦ 7♣
+    at (52,332): A♣ A♦ A♥
+    at (52,407): 2♣ 3♦ 4♣ 5♥ 6♠ 7♥
+    at (52,482): 8♥ 9♠ T♥'
+    at (187,182): 9♣ T♥ J♣
+    at (187,257): 2♦
   actions:
-    - split [KS AS 2S 3S]@3
-    - merge_stack [3S] -> [2D] /right
-    - split [AC AD AH]@0
-    - move_stack [AD AH] -> (332,112)
-    - split [AD AH]@0
-    - move_stack [2D 3S] -> (257,220)
-    - merge_stack [AC] -> [2D 3S] /left
-    - merge_stack [AD] -> [TD JD QD KD] /right
-    - merge_stack [AH] -> [2H 3H 4H] /left
+    - split [K♠ A♠ 2♠ 3♠]@3
+    - merge_stack [3♠] -> [2♦] /right
+    - split [A♣ A♦ A♥]@0
+    - move_stack [A♦ A♥] -> (112,332)
+    - split [A♦ A♥]@0
+    - move_stack [2♦ 3♠] -> (220,257)
+    - merge_stack [A♣] -> [2♦ 3♠] /left
+    - merge_stack [A♦] -> [T♦ J♦ Q♦ K♦] /right
+    - merge_stack [A♥] -> [2♥ 3♥ 4♥] /left
   expect:
     final_board_victory: true
 
-scenario walkthrough_mined_025_TSp1
-  desc: Full agent-play walkthrough for mined_025_TSp1; bootstrapFromBundle reconstructs to a victory board.
+scenario walkthrough_mined_025_T♠p1
+  desc: Full agent-play walkthrough for mined_025_T♠p1; bootstrapFromBundle reconstructs to a victory board.
   op: resume_walkthrough
   board:
-    at (26,26): 7S 7D 7C
-    at (107,52): 2C 3D 4C 5H 6S 7H
-    at (182,52): 8H 9S TH'
-    at (257,52): 9C TH JC
-    at (332,52): KS AS 2S
-    at (407,52): AC 2D 3S
-    at (482,52): TD JD QD KD AD
-    at (182,187): AH 2H 3H
-    at (257,187): 4D 4S' 4H
-    at (332,187): TS'
+    at (26,26): 7♠ 7♦ 7♣
+    at (52,107): 2♣ 3♦ 4♣ 5♥ 6♠ 7♥
+    at (52,182): 8♥ 9♠ T♥'
+    at (52,257): 9♣ T♥ J♣
+    at (52,332): K♠ A♠ 2♠
+    at (52,407): A♣ 2♦ 3♠
+    at (52,482): T♦ J♦ Q♦ K♦ A♦
+    at (187,182): A♥ 2♥ 3♥
+    at (187,257): 4♦ 4♠' 4♥
+    at (187,332): T♠'
   actions:
-    - split [TD JD QD KD AD]@0
-    - merge_stack [TD] -> [TS'] /right
-    - split [8H 9S TH']@2
-    - merge_stack [TH'] -> [TS' TD] /right
-    - split [7S 7D 7C]@2
-    - move_stack [7S 7D] -> (407,187)
-    - split [7S 7D]@0
-    - merge_stack [7C] -> [8H 9S] /left
-    - merge_stack [7D] -> [7S] /right
-    - split [2C 3D 4C 5H 6S 7H]@5
-    - merge_stack [7H] -> [7S 7D] /right
+    - split [T♦ J♦ Q♦ K♦ A♦]@0
+    - merge_stack [T♦] -> [T♠'] /right
+    - split [8♥ 9♠ T♥']@2
+    - merge_stack [T♥'] -> [T♠' T♦] /right
+    - split [7♠ 7♦ 7♣]@2
+    - move_stack [7♠ 7♦] -> (187,407)
+    - split [7♠ 7♦]@0
+    - merge_stack [7♣] -> [8♥ 9♠] /left
+    - merge_stack [7♦] -> [7♠] /right
+    - split [2♣ 3♦ 4♣ 5♥ 6♠ 7♥]@5
+    - merge_stack [7♥] -> [7♠ 7♦] /right
   expect:
     final_board_victory: true

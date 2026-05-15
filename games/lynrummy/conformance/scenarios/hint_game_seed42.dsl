@@ -2,47 +2,47 @@
 
 scenario turn_1_hint
   op: hint_for_hand
-  hand: 3S' 4S 8D' JD' 4C' 6D QD'
+  hand: 3♠' 4♠ 8♦' J♦' 4♣' 6♦ Q♦'
   board:
-    - KS AS 2S 3S
-    - TD JD QD KD
-    - 2H 3H 4H
-    - 7S 7D 7C
-    - AC AD AH
-    - 2C 3D 4C 5H 6S 7H
+    - K♠ A♠ 2♠ 3♠
+    - T♦ J♦ Q♦ K♦
+    - 2♥ 3♥ 4♥
+    - 7♠ 7♦ 7♣
+    - A♣ A♦ A♥
+    - 2♣ 3♦ 4♣ 5♥ 6♠ 7♥
   expect_steps:
-    - place [JD' QD'] from hand
-    - peel TD from HELPER [TD JD QD KD], absorb onto [JD' QD'] → [TD JD' QD'] [→COMPLETE]
+    - place [J♦' Q♦'] from hand
+    - peel T♦ from HELPER [T♦ J♦ Q♦ K♦], absorb onto [J♦' Q♦'] → [T♦ J♦' Q♦'] [→COMPLETE]
 
 scenario turn_2_hint
   op: hint_for_hand
-  hand: 3S' 4S 8D' 4C' 6D 8H JS'
+  hand: 3♠' 4♠ 8♦' 4♣' 6♦ 8♥ J♠'
   board:
-    - KS AS 2S 3S
-    - TD JD QD KD
-    - 2H 3H 4H
-    - 7S 7D 7C
-    - AC AD AH
-    - 2C 3D 4C 5H 6S 7H
-    - JD' QD'
+    - K♠ A♠ 2♠ 3♠
+    - T♦ J♦ Q♦ K♦
+    - 2♥ 3♥ 4♥
+    - 7♠ 7♦ 7♣
+    - A♣ A♦ A♥
+    - 2♣ 3♦ 4♣ 5♥ 6♠ 7♥
+    - J♦' Q♦'
   expect_steps:
-    - place [4S] from hand
-    - peel TD from HELPER [TD JD QD KD], absorb onto [JD' QD'] → [TD JD' QD'] [→COMPLETE]
-    - push [4S] onto HELPER [KS AS 2S 3S] → [KS AS 2S 3S 4S]
+    - place [4♠] from hand
+    - peel T♦ from HELPER [T♦ J♦ Q♦ K♦], absorb onto [J♦' Q♦'] → [T♦ J♦' Q♦'] [→COMPLETE]
+    - push [4♠] onto HELPER [K♠ A♠ 2♠ 3♠] → [K♠ A♠ 2♠ 3♠ 4♠]
 
 scenario turn_3_hint
   op: hint_for_hand
-  hand: 3S' 8D' 4C' 6D 8H JS' 2S' 2D'
+  hand: 3♠' 8♦' 4♣' 6♦ 8♥ J♠' 2♠' 2♦'
   board:
-    - KS AS 2S 3S
-    - TD JD QD KD
-    - 2H 3H 4H
-    - 7S 7D 7C
-    - AC AD AH
-    - 2C 3D 4C 5H 6S 7H
-    - JD' QD'
-    - 4S
+    - K♠ A♠ 2♠ 3♠
+    - T♦ J♦ Q♦ K♦
+    - 2♥ 3♥ 4♥
+    - 7♠ 7♦ 7♣
+    - A♣ A♦ A♥
+    - 2♣ 3♦ 4♣ 5♥ 6♠ 7♥
+    - J♦' Q♦'
+    - 4♠
   expect_steps:
-    - place [2S' 3S'] from hand
-    - peel TD from HELPER [TD JD QD KD], absorb onto [JD' QD'] → [TD JD' QD'] [→COMPLETE]
-    - pull 4S onto [2S' 3S'] → [2S' 3S' 4S] [→COMPLETE]
+    - place [2♠' 3♠'] from hand
+    - peel T♦ from HELPER [T♦ J♦ Q♦ K♦], absorb onto [J♦' Q♦'] → [T♦ J♦' Q♦'] [→COMPLETE]
+    - pull 4♠ onto [2♠' 3♠'] → [2♠' 3♠' 4♠] [→COMPLETE]

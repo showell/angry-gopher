@@ -27,6 +27,7 @@ import {
 import type { BoardStack, Loc } from "../geometry/geometry.ts";
 import { findViolation } from "../geometry/geometry.ts";
 import { classifyStack } from "../core/card_stack.ts";
+import { parseBoardStackLine } from "../dsl/parse.ts";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -75,12 +76,8 @@ function parseDsl(contents: string): Walkthrough[] {
     if (trimmed === "expect:") { inBoard = false; inActions = false; continue; }
 
     if (inBoard) {
-      const m = trimmed.match(/^at\s*\((-?\d+)\s*,\s*(-?\d+)\)\s*:\s*(.+)$/);
-      if (m) {
-        const top = parseInt(m[1]!, 10);
-        const left = parseInt(m[2]!, 10);
-        const cards = parseDslCards(m[3]!);
-        cur.board.push({ cards, loc: { top, left } as Loc });
+      if (trimmed.startsWith("at ")) {
+        cur.board.push(parseBoardStackLine(trimmed));
       }
       continue;
     }
@@ -119,14 +116,14 @@ function parseActionLine(
       m[3]! as Side,
     );
   }
-  // move_stack [content] -> (top,left)
+  // move_stack [content] -> (left,top)
   m = line.match(/^move_stack\s+\[([^\]]+)\]\s*->\s*\((-?\d+)\s*,\s*(-?\d+)\)$/);
   if (m) {
     const cards = parseDslCards(m[1]!);
     return makeMoveStack(
       board,
       findStackIndex(board, cards),
-      { top: parseInt(m[2]!, 10), left: parseInt(m[3]!, 10) },
+      { left: parseInt(m[2]!, 10), top: parseInt(m[3]!, 10) },
     );
   }
   // merge_hand <card> -> [tgt] /side
@@ -140,12 +137,12 @@ function parseActionLine(
       m[3]! as Side,
     );
   }
-  // place_hand <card> -> (top,left)
+  // place_hand <card> -> (left,top)
   m = line.match(/^place_hand\s+(\S+)\s*->\s*\((-?\d+)\s*,\s*(-?\d+)\)$/);
   if (m) {
     return makePlaceHand(
       parseCardLabel(m[1]!),
-      { top: parseInt(m[2]!, 10), left: parseInt(m[3]!, 10) },
+      { left: parseInt(m[2]!, 10), top: parseInt(m[3]!, 10) },
     );
   }
   throw new Error(`unparseable action: ${line}`);

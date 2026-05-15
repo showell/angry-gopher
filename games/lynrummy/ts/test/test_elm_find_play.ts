@@ -10,6 +10,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 
 import { elmFindPlay } from "../elm_api/elm_find_play.ts";
+import { REPIN, rewritePrimitives } from "./repin_pins.ts";
 
 const DSL_PATH = path.resolve(
   path.dirname(new URL(import.meta.url).pathname),
@@ -97,6 +98,11 @@ function runScenario(sc: Scenario): RunResult {
     got = elmFindPlay(sc.boardDsl, sc.handDsl);
   } catch (e) {
     return { ok: false, msg: `elmFindPlay threw: ${(e as Error).message}` };
+  }
+  if (REPIN) {
+    const gotLines = got === "" ? [] : got.split("\n");
+    rewritePrimitives(DSL_PATH, sc.name, gotLines);
+    return { ok: true, msg: `REPIN — wrote ${gotLines.length} primitive(s)` };
   }
   const want = sc.expectedPrimitives.join("\n");
   if (got !== want) {

@@ -3,178 +3,178 @@
 
 
 
-scenario mined_mined_001_2Hp1
-  desc: Mined puzzle mined_001_2Hp1.
+scenario mined_mined_001_2♥p1
+  desc: Mined puzzle mined_001_2♥p1.
   op: solve
   helper:
-    at (0,0): 2H 3H 4H
-    at (0,0): 7S 7D 7C
-    at (0,0): AC AD AH
-    at (0,0): KS AS 2S
-    at (0,0): AS' 2D 3S
-    at (0,0): JH QH' KH
-    at (0,0): 4S' 5D' 6S'
-    at (0,0): TD JD QD KD
-    at (0,0): 8S' 9D TS
-    at (0,0): 4C 5H 6S 7H
-    at (0,0): 2C 3D 4S
+    at (0,0): 2♥ 3♥ 4♥
+    at (0,0): 7♠ 7♦ 7♣
+    at (0,0): A♣ A♦ A♥
+    at (0,0): K♠ A♠ 2♠
+    at (0,0): A♠' 2♦ 3♠
+    at (0,0): J♥ Q♥' K♥
+    at (0,0): 4♠' 5♦' 6♠'
+    at (0,0): T♦ J♦ Q♦ K♦
+    at (0,0): 8♠' 9♦ T♠
+    at (0,0): 4♣ 5♥ 6♠ 7♥
+    at (0,0): 2♣ 3♦ 4♠
   trouble:
-    at (0,0): 2H'
+    at (0,0): 2♥'
   expect:
     plan_lines:
-      - "steal AC from HELPER [AC AD AH], absorb onto [2H'] → [AC 2H'] ; spawn [AD], [AH]"
-      - "push [AD] onto HELPER [2C 3D 4S] → [AD 2C 3D 4S]"
-      - "push [AH] onto HELPER [2H 3H 4H] → [AH 2H 3H 4H]"
-      - "shift KD to pop 3S [TD JD QD -> KD + AS' 2D]; absorb onto [AC 2H'] → [AC 2H' 3S] [→COMPLETE]"
+      - "steal A♣ from HELPER [A♣ A♦ A♥], absorb onto [2♥'] → [A♣ 2♥'] ; spawn [A♦], [A♥]"
+      - "push [A♦] onto HELPER [2♣ 3♦ 4♠] → [A♦ 2♣ 3♦ 4♠]"
+      - "push [A♥] onto HELPER [2♥ 3♥ 4♥] → [A♥ 2♥ 3♥ 4♥]"
+      - "shift K♦ to pop 3♠ [T♦ J♦ Q♦ -> K♦ + A♠' 2♦]; absorb onto [A♣ 2♥'] → [A♣ 2♥' 3♠] [→COMPLETE]"
 
-scenario mined_mined_002_5D_5C
-  desc: Mined puzzle mined_002_5D_5C.
+scenario mined_mined_002_5♦_5♣
+  desc: Mined puzzle mined_002_5♦_5♣.
   op: solve
   helper:
-    at (0,0): KS AS 2S 3S
-    at (0,0): TD JD QD KD
-    at (0,0): 2H 3H 4H
-    at (0,0): 7S 7D 7C
-    at (0,0): AC AD AH
-    at (0,0): 2C 3D 4C 5H 6S 7H
-    at (0,0): 3C' 4D 5C'
-    at (0,0): 8H 8C 8D'
-    at (0,0): 7H' 8S 9D
+    at (0,0): K♠ A♠ 2♠ 3♠
+    at (0,0): T♦ J♦ Q♦ K♦
+    at (0,0): 2♥ 3♥ 4♥
+    at (0,0): 7♠ 7♦ 7♣
+    at (0,0): A♣ A♦ A♥
+    at (0,0): 2♣ 3♦ 4♣ 5♥ 6♠ 7♥
+    at (0,0): 3♣' 4♦ 5♣'
+    at (0,0): 8♥ 8♣ 8♦'
+    at (0,0): 7♥' 8♠ 9♦
   trouble:
-    at (0,0): 5D 5C
+    at (0,0): 5♦ 5♣
   expect:
     plan_lines:
-      - "yank 5H from HELPER [2C 3D 4C 5H 6S 7H], absorb onto [5D 5C] → [5D 5C 5H] [→COMPLETE] ; spawn [6S 7H]"
-      - "split_out 8S from HELPER [7H' 8S 9D], absorb onto [6S 7H] → [6S 7H 8S] [→COMPLETE] ; spawn [7H'], [9D]"
-      - "push [7H'] onto HELPER [7S 7D 7C] → [7H' 7S 7D 7C]"
-      - "push [9D] onto HELPER [TD JD QD KD] → [9D TD JD QD KD]"
+      - "yank 5♥ from HELPER [2♣ 3♦ 4♣ 5♥ 6♠ 7♥], absorb onto [5♦ 5♣] → [5♦ 5♣ 5♥] [→COMPLETE] ; spawn [6♠ 7♥]"
+      - "split_out 8♠ from HELPER [7♥' 8♠ 9♦], absorb onto [6♠ 7♥] → [6♠ 7♥ 8♠] [→COMPLETE] ; spawn [7♥'], [9♦]"
+      - "push [7♥'] onto HELPER [7♠ 7♦ 7♣] → [7♥' 7♠ 7♦ 7♣]"
+      - "push [9♦] onto HELPER [T♦ J♦ Q♦ K♦] → [9♦ T♦ J♦ Q♦ K♦]"
 
-scenario mined_mined_003_JCp1
-  desc: Mined puzzle mined_003_JCp1.
+scenario mined_mined_003_J♣p1
+  desc: Mined puzzle mined_003_J♣p1.
   op: solve
   helper:
-    at (0,0): 8H 8C 8D'
-    at (0,0): 5D 5C 5H
-    at (0,0): 6S 7H 8S
-    at (0,0): 7S 7D 7C 7H'
-    at (0,0): 9D TD JD QD KD
-    at (0,0): AD 2S' 3H
-    at (0,0): KS AS 2S
-    at (0,0): AC 2H 3C' 4D
-    at (0,0): AH 2C 3D 4C
-    at (0,0): 3S 4H 5C' 6H'
+    at (0,0): 8♥ 8♣ 8♦'
+    at (0,0): 5♦ 5♣ 5♥
+    at (0,0): 6♠ 7♥ 8♠
+    at (0,0): 7♠ 7♦ 7♣ 7♥'
+    at (0,0): 9♦ T♦ J♦ Q♦ K♦
+    at (0,0): A♦ 2♠' 3♥
+    at (0,0): K♠ A♠ 2♠
+    at (0,0): A♣ 2♥ 3♣' 4♦
+    at (0,0): A♥ 2♣ 3♦ 4♣
+    at (0,0): 3♠ 4♥ 5♣' 6♥'
   trouble:
-    at (0,0): JC'
+    at (0,0): J♣'
   expect:
     plan_lines:
-      - "yank QD from HELPER [9D TD JD QD KD], absorb onto [JC'] → [JC' QD] ; spawn [KD]"
-      - "push [KD] onto HELPER [AC 2H 3C' 4D] → [KD AC 2H 3C' 4D]"
-      - "shift 3S to pop KS [4H 5C' 6H' -> AS 2S + 3S]; absorb onto [JC' QD] → [JC' QD KS] [→COMPLETE]"
+      - "yank Q♦ from HELPER [9♦ T♦ J♦ Q♦ K♦], absorb onto [J♣'] → [J♣' Q♦] ; spawn [K♦]"
+      - "push [K♦] onto HELPER [A♣ 2♥ 3♣' 4♦] → [K♦ A♣ 2♥ 3♣' 4♦]"
+      - "shift 3♠ to pop K♠ [4♥ 5♣' 6♥' -> A♠ 2♠ + 3♠]; absorb onto [J♣' Q♦] → [J♣' Q♦ K♠] [→COMPLETE]"
 
-scenario mined_mined_004_6H
-  desc: Mined puzzle mined_004_6H.
+scenario mined_mined_004_6♥
+  desc: Mined puzzle mined_004_6♥.
   op: solve
   helper:
-    at (0,0): 8H 8C 8D'
-    at (0,0): 5D 5C 5H
-    at (0,0): 6S 7H 8S
-    at (0,0): 7S 7D 7C 7H'
-    at (0,0): AD 2S' 3H
-    at (0,0): AH 2C 3D 4C
-    at (0,0): 9D TD JD
-    at (0,0): 4H 5C' 6H'
-    at (0,0): AS 2S 3S
-    at (0,0): JC' QD KS
-    at (0,0): KD AC 2H 3C' 4D
+    at (0,0): 8♥ 8♣ 8♦'
+    at (0,0): 5♦ 5♣ 5♥
+    at (0,0): 6♠ 7♥ 8♠
+    at (0,0): 7♠ 7♦ 7♣ 7♥'
+    at (0,0): A♦ 2♠' 3♥
+    at (0,0): A♥ 2♣ 3♦ 4♣
+    at (0,0): 9♦ T♦ J♦
+    at (0,0): 4♥ 5♣' 6♥'
+    at (0,0): A♠ 2♠ 3♠
+    at (0,0): J♣' Q♦ K♠
+    at (0,0): K♦ A♣ 2♥ 3♣' 4♦
   trouble:
-    at (0,0): 6H
+    at (0,0): 6♥
   expect:
     plan_lines:
-      - "steal 5H from HELPER [5D 5C 5H], absorb onto [6H] → [5H 6H] ; spawn [5D], [5C]"
-      - "push [5D] onto HELPER [6S 7H 8S] → [5D 6S 7H 8S]"
-      - "push [5C] onto HELPER [KD AC 2H 3C' 4D] → [KD AC 2H 3C' 4D 5C]"
-      - "peel 7H' from HELPER [7S 7D 7C 7H'], absorb onto [5H 6H] → [5H 6H 7H'] [→COMPLETE]"
+      - "steal 5♥ from HELPER [5♦ 5♣ 5♥], absorb onto [6♥] → [5♥ 6♥] ; spawn [5♦], [5♣]"
+      - "push [5♦] onto HELPER [6♠ 7♥ 8♠] → [5♦ 6♠ 7♥ 8♠]"
+      - "push [5♣] onto HELPER [K♦ A♣ 2♥ 3♣' 4♦] → [K♦ A♣ 2♥ 3♣' 4♦ 5♣]"
+      - "peel 7♥' from HELPER [7♠ 7♦ 7♣ 7♥'], absorb onto [5♥ 6♥] → [5♥ 6♥ 7♥'] [→COMPLETE]"
 
-scenario mined_mined_005_7Cp1_7Hp1
-  desc: Mined puzzle mined_005_7Cp1_7Hp1.
+scenario mined_mined_005_7♣p1_7♥p1
+  desc: Mined puzzle mined_005_7♣p1_7♥p1.
   op: solve
   helper:
-    at (0,0): KS AS 2S 3S
-    at (0,0): TD JD QD KD
-    at (0,0): 2H 3H 4H
-    at (0,0): 7S 7D 7C
-    at (0,0): AC AD AH
-    at (0,0): 2C 3D 4C 5H 6S 7H
-    at (0,0): KH' KD' KC'
+    at (0,0): K♠ A♠ 2♠ 3♠
+    at (0,0): T♦ J♦ Q♦ K♦
+    at (0,0): 2♥ 3♥ 4♥
+    at (0,0): 7♠ 7♦ 7♣
+    at (0,0): A♣ A♦ A♥
+    at (0,0): 2♣ 3♦ 4♣ 5♥ 6♠ 7♥
+    at (0,0): K♥' K♦' K♣'
   trouble:
-    at (0,0): 7C' 7H'
+    at (0,0): 7♣' 7♥'
   expect:
     plan_lines:
-      - "set_peel 7D from HELPER [7S 7D 7C], absorb onto [7C' 7H'] → [7C' 7H' 7D] [→COMPLETE] ; spawn [7S 7C]"
-      - "peel 7H from HELPER [2C 3D 4C 5H 6S 7H], absorb onto [7S 7C] → [7H 7S 7C] [→COMPLETE]"
+      - "set_peel 7♦ from HELPER [7♠ 7♦ 7♣], absorb onto [7♣' 7♥'] → [7♣' 7♥' 7♦] [→COMPLETE] ; spawn [7♠ 7♣]"
+      - "peel 7♥ from HELPER [2♣ 3♦ 4♣ 5♥ 6♠ 7♥], absorb onto [7♠ 7♣] → [7♥ 7♠ 7♣] [→COMPLETE]"
 
-scenario mined_mined_006_2Cp1
-  desc: Mined puzzle mined_006_2Cp1.
+scenario mined_mined_006_2♣p1
+  desc: Mined puzzle mined_006_2♣p1.
   op: solve
   helper:
-    at (0,0): KS AS 2S 3S
-    at (0,0): TD JD QD KD
-    at (0,0): 2H 3H 4H
-    at (0,0): AC AD AH
-    at (0,0): 4S 5D 6C
-    at (0,0): 2C 3D 4C 5H
-    at (0,0): 6D 6C' 6S
-    at (0,0): 7S 7D 7C 7H
+    at (0,0): K♠ A♠ 2♠ 3♠
+    at (0,0): T♦ J♦ Q♦ K♦
+    at (0,0): 2♥ 3♥ 4♥
+    at (0,0): A♣ A♦ A♥
+    at (0,0): 4♠ 5♦ 6♣
+    at (0,0): 2♣ 3♦ 4♣ 5♥
+    at (0,0): 6♦ 6♣' 6♠
+    at (0,0): 7♠ 7♦ 7♣ 7♥
   trouble:
-    at (0,0): 2C'
+    at (0,0): 2♣'
   expect:
     plan_lines:
-      - "split_out 3H from HELPER [2H 3H 4H], absorb onto [2C'] → [2C' 3H] ; spawn [2H], [4H]"
-      - "peel 3S from HELPER [KS AS 2S 3S], absorb onto [2H] → [2H 3S]"
-      - "pull 4H onto [2H 3S] → [2H 3S 4H] [→COMPLETE]"
-      - "shift 7D to pop 4S [7S 7C 7H -> 5D 6C + 7D]; absorb onto [2C' 3H] → [2C' 3H 4S] [→COMPLETE]"
+      - "split_out 3♥ from HELPER [2♥ 3♥ 4♥], absorb onto [2♣'] → [2♣' 3♥] ; spawn [2♥], [4♥]"
+      - "peel 3♠ from HELPER [K♠ A♠ 2♠ 3♠], absorb onto [2♥] → [2♥ 3♠]"
+      - "pull 4♥ onto [2♥ 3♠] → [2♥ 3♠ 4♥] [→COMPLETE]"
+      - "shift 7♦ to pop 4♠ [7♠ 7♣ 7♥ -> 5♦ 6♣ + 7♦]; absorb onto [2♣' 3♥] → [2♣' 3♥ 4♠] [→COMPLETE]"
 
-scenario mined_mined_007_4D
-  desc: Mined puzzle mined_007_4D.
+scenario mined_mined_007_4♦
+  desc: Mined puzzle mined_007_4♦.
   op: solve
   helper:
-    at (0,0): TD JD QD KD
-    at (0,0): AC AD AH
-    at (0,0): 2C 3D 4C 5H
-    at (0,0): 6D 6C' 6S
-    at (0,0): 7S 7C 7H
-    at (0,0): 5D 6C 7D
-    at (0,0): 2C' 3H 4S
-    at (0,0): KS AS 2S
-    at (0,0): 2H 3S 4H
+    at (0,0): T♦ J♦ Q♦ K♦
+    at (0,0): A♣ A♦ A♥
+    at (0,0): 2♣ 3♦ 4♣ 5♥
+    at (0,0): 6♦ 6♣' 6♠
+    at (0,0): 7♠ 7♣ 7♥
+    at (0,0): 5♦ 6♣ 7♦
+    at (0,0): 2♣' 3♥ 4♠
+    at (0,0): K♠ A♠ 2♠
+    at (0,0): 2♥ 3♠ 4♥
   trouble:
-    at (0,0): 4D
+    at (0,0): 4♦
   expect:
     plan_lines:
-      - "steal 4H from HELPER [2H 3S 4H], absorb onto [4D] → [4D 4H] ; spawn [2H 3S]"
-      - "steal AC from HELPER [AC AD AH], absorb onto [2H 3S] → [AC 2H 3S] [→COMPLETE] ; spawn [AD], [AH]"
-      - "steal 4S from HELPER [2C' 3H 4S], absorb onto [4D 4H] → [4S 4D 4H] [→COMPLETE] ; spawn [2C' 3H]"
-      - "pull AD onto [2C' 3H] → [AD 2C' 3H] [→COMPLETE]"
-      - "push [AH] onto HELPER [2C 3D 4C 5H] → [AH 2C 3D 4C 5H]"
+      - "steal 4♥ from HELPER [2♥ 3♠ 4♥], absorb onto [4♦] → [4♦ 4♥] ; spawn [2♥ 3♠]"
+      - "steal A♣ from HELPER [A♣ A♦ A♥], absorb onto [2♥ 3♠] → [A♣ 2♥ 3♠] [→COMPLETE] ; spawn [A♦], [A♥]"
+      - "steal 4♠ from HELPER [2♣' 3♥ 4♠], absorb onto [4♦ 4♥] → [4♠ 4♦ 4♥] [→COMPLETE] ; spawn [2♣' 3♥]"
+      - "pull A♦ onto [2♣' 3♥] → [A♦ 2♣' 3♥] [→COMPLETE]"
+      - "push [A♥] onto HELPER [2♣ 3♦ 4♣ 5♥] → [A♥ 2♣ 3♦ 4♣ 5♥]"
 
-scenario mined_mined_008_QDp1
-  desc: Mined puzzle mined_008_QDp1.
+scenario mined_mined_008_Q♦p1
+  desc: Mined puzzle mined_008_Q♦p1.
   op: solve
   helper:
-    at (0,0): TD JD QD KD
-    at (0,0): 6D 6C' 6S
-    at (0,0): 7S 7C 7H
-    at (0,0): 5D 6C 7D
-    at (0,0): KS AS 2S
-    at (0,0): 4D 4S 4H
-    at (0,0): AD 2C' 3H
-    at (0,0): AH 2C 3D 4C 5H
-    at (0,0): KH' AC 2H 3S 4D'
+    at (0,0): T♦ J♦ Q♦ K♦
+    at (0,0): 6♦ 6♣' 6♠
+    at (0,0): 7♠ 7♣ 7♥
+    at (0,0): 5♦ 6♣ 7♦
+    at (0,0): K♠ A♠ 2♠
+    at (0,0): 4♦ 4♠ 4♥
+    at (0,0): A♦ 2♣' 3♥
+    at (0,0): A♥ 2♣ 3♦ 4♣ 5♥
+    at (0,0): K♥' A♣ 2♥ 3♠ 4♦'
   trouble:
-    at (0,0): QD'
+    at (0,0): Q♦'
   expect:
     plan_lines:
-      - "peel KD from HELPER [TD JD QD KD], absorb onto [QD'] → [QD' KD]"
-      - "steal AD from HELPER [AD 2C' 3H], absorb onto [QD' KD] → [QD' KD AD] [→COMPLETE] ; spawn [2C' 3H]"
-      - "peel AH from HELPER [AH 2C 3D 4C 5H], absorb onto [2C' 3H] → [AH 2C' 3H] [→COMPLETE]"
+      - "peel K♦ from HELPER [T♦ J♦ Q♦ K♦], absorb onto [Q♦'] → [Q♦' K♦]"
+      - "steal A♦ from HELPER [A♦ 2♣' 3♥], absorb onto [Q♦' K♦] → [Q♦' K♦ A♦] [→COMPLETE] ; spawn [2♣' 3♥]"
+      - "peel A♥ from HELPER [A♥ 2♣ 3♦ 4♣ 5♥], absorb onto [2♣' 3♥] → [A♥ 2♣' 3♥] [→COMPLETE]"
 

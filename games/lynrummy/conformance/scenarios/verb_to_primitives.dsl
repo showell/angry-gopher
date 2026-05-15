@@ -15,7 +15,7 @@
 #
 # Coordinate convention: `at (top, left)` matches the established
 # DSL shape (replay_walkthroughs, board_geometry, etc.). Card labels
-# use the canonical SUITS="CDSH" with trailing apostrophe for deck-1.
+# use the canonical SUIT♠="CDSH" with trailing apostrophe for deck-1.
 #
 # Primitive line syntax mirrors `replay_walkthroughs.dsl`:
 #   - split [content]@k             — split stack at card_index k
@@ -26,139 +26,125 @@
 
 
 scenario peel_left_edge_then_merge
-  desc: Peel 5H from [5H 6H 7H 8H] right-side onto [4H]; remnant [6H 7H 8H] stays a clean run.
+  desc: Peel 5♥ from [5♥ 6♥ 7♥ 8♥] right-side onto [4♥]; remnant [6♥ 7♥ 8♥] stays a clean run.
   op: verb_to_primitives
   board:
-    at (100, 100): 5H 6H 7H 8H
-    at (100, 400): 4H
+    at (100,100): 5♥ 6♥ 7♥ 8♥
+    at (400,100): 4♥
   verb: peel
-  source: 5H 6H 7H 8H
-  ext_card: 5H
-  target_before: 4H
+  source: 5♥ 6♥ 7♥ 8♥
+  ext_card: 5♥
+  target_before: 4♥
   side: right
   expect:
     primitives:
-      - split [5H 6H 7H 8H]@0
-      - merge_stack [5H] -> [4H] /right
-
-
+      - split [5♥ 6♥ 7♥ 8♥] at (100,100) @0
+      - merge_stack [5♥] at (98,96) -> [4♥] at (400,100) /right
 scenario pluck_interior_premoves_donor
-  desc: Plucking 7H from a 5-card run forces a pre-flight move on the donor (interior splits get pre-cleared per 2026-04-23). After the first split, [7H 8H 9H] sits adjacent to [5H 6H]; a second pre-flight relocates it before the next split.
+  desc: Plucking 7♥ from a 5-card run forces a pre-flight move on the donor (interior splits get pre-cleared per 2026-04-23). After the first split, [7♥ 8♥ 9♥] sits adjacent to [5♥ 6♥]; a second pre-flight relocates it before the next split.
   op: verb_to_primitives
   board:
-    at (100, 100): 5H 6H 7H 8H 9H
-    at (100, 500): 7S
+    at (100,100): 5♥ 6♥ 7♥ 8♥ 9♥
+    at (500,100): 7♠
   verb: pluck
-  source: 5H 6H 7H 8H 9H
-  ext_card: 7H
-  target_before: 7S
+  source: 5♥ 6♥ 7♥ 8♥ 9♥
+  ext_card: 7♥
+  target_before: 7♠
   side: right
   expect:
     primitives:
-      - split [5H 6H 7H 8H 9H]@1
-      - split [7H 8H 9H]@0
-      - merge_stack [7H] -> [7S] /right
-
-
+      - split [5♥ 6♥ 7♥ 8♥ 9♥] at (100,100) @1
+      - split [7♥ 8♥ 9♥] at (174,100) @0
+      - merge_stack [7♥] at (172,96) -> [7♠] at (500,100) /right
 scenario free_pull_in_place
   desc: Free-pull of trouble singleton onto target — no geometry pre-flight needed.
   op: verb_to_primitives
   board:
-    at (100, 100): KC KH
-    at (100, 300): KS
+    at (100,100): K♣ K♥
+    at (300,100): K♠
   verb: free_pull
-  loose: KS
-  target_before: KC KH
+  loose: K♠
+  target_before: K♣ K♥
   side: right
   expect:
     primitives:
-      - merge_stack [KS] -> [KC KH] /right
-
-
+      - merge_stack [K♠] at (300,100) -> [K♣ K♥] at (100,100) /right
 scenario push_partial_in_place
   desc: Push a 2-partial onto a clean helper run — no pre-flight.
   op: verb_to_primitives
   board:
-    at (100, 100): 2C 3D 4C
-    at (100, 350): 5H 6S
+    at (100,100): 2♣ 3♦ 4♣
+    at (350,100): 5♥ 6♠
   verb: push
-  trouble_before: 5H 6S
-  target_before: 2C 3D 4C
+  trouble_before: 5♥ 6♠
+  target_before: 2♣ 3♦ 4♣
   side: right
   expect:
     primitives:
-      - merge_stack [5H 6S] -> [2C 3D 4C] /right
-
-
+      - merge_stack [5♥ 6♠] at (350,100) -> [2♣ 3♦ 4♣] at (100,100) /right
 scenario splice_run
-  desc: Splice 4S into [2C 3D 4C 5H 6S] at k=2; left half + 4S becomes new piece. The 5-card source's split is interior (k=2 of n=5 → leftCount=2, neither end), so it pre-flights; the post-split left half [2C 3D] then needs another pre-flight before the merge.
+  desc: Splice 4♠ into [2♣ 3♦ 4♣ 5♥ 6♠] at k=2; left half + 4♠ becomes new piece. The 5-card source's split is interior (k=2 of n=5 → leftCount=2, neither end), so it pre-flights; the post-split left half [2♣ 3♦] then needs another pre-flight before the merge.
   op: verb_to_primitives
   board:
-    at (100, 100): 2C 3D 4C 5H 6S
-    at (100, 450): 4S
+    at (100,100): 2♣ 3♦ 4♣ 5♥ 6♠
+    at (450,100): 4♠
   verb: splice
-  loose: 4S
-  source: 2C 3D 4C 5H 6S
+  loose: 4♠
+  source: 2♣ 3♦ 4♣ 5♥ 6♠
   k: 2
   side: left
   expect:
     primitives:
-      - move_stack [2C 3D 4C 5H 6S] -> (92,52)
-      - split [2C 3D 4C 5H 6S]@1
-      - move_stack [2C 3D] -> (167,52)
-      - merge_stack [4S] -> [2C 3D] /right
-
-
+      - move_stack [2♣ 3♦ 4♣ 5♥ 6♠] at (100,100) -> (52,92)
+      - split [2♣ 3♦ 4♣ 5♥ 6♠] at (52,92) @1
+      - move_stack [2♣ 3♦] at (50,88) -> (52,167)
+      - merge_stack [4♠] at (450,100) -> [2♣ 3♦] at (52,167) /right
 scenario shift_right_end
   desc: Shift K (which wraps to A) into source's right end while popping the existing left card off, then merge that card onto target.
   op: verb_to_primitives
   board:
-    at (100, 100): JH QC KC
-    at (100, 350): TC TS TD
-    at (100, 600): 9D
+    at (100,100): J♥ Q♣ K♣
+    at (350,100): T♣ T♠ T♦
+    at (600,100): 9♦
   verb: shift
-  source: JH QC KC
-  donor: TC TS TD
-  stolen: JH
-  p_card: TS
+  source: J♥ Q♣ K♣
+  donor: T♣ T♠ T♦
+  stolen: J♥
+  p_card: T♠
   which_end: 0
-  target_before: 9D
+  target_before: 9♦
   side: right
   expect:
     primitives:
-      - split [TC TS TD]@0
-      - split [TS TD]@0
-      - move_stack [TC] -> (182,52)
-      - merge_stack [TD] -> [TC] /right
-      - merge_stack [TS] -> [JH QC KC] /right
-      - split [JH QC KC TS]@0
-      - merge_stack [JH] -> [9D] /right
-
-
+      - split [T♣ T♠ T♦] at (350,100) @0
+      - split [T♠ T♦] at (391,100) @0
+      - move_stack [T♣] at (348,96) -> (52,182)
+      - merge_stack [T♦] at (432,100) -> [T♣] at (52,182) /right
+      - merge_stack [T♠] at (389,96) -> [J♥ Q♣ K♣] at (100,100) /right
+      - split [J♥ Q♣ K♣ T♠] at (100,100) @0
+      - merge_stack [J♥] at (98,96) -> [9♦] at (600,100) /right
 scenario steal_from_partial_left
-  desc: Steal AS from [AS 2S] (a length-2 partial source). Single split-at-1 separates the two cards; AS absorbs onto target.
+  desc: Steal A♠ from [A♠ 2♠] (a length-2 partial source). Single split-at-1 separates the two cards; A♠ absorbs onto target.
   op: verb_to_primitives
   board:
-    at (100, 100): AS 2S
-    at (100, 300): AC AD
+    at (100,100): A♠ 2♠
+    at (300,100): A♣ A♦
   verb: steal
-  source: AS 2S
-  ext_card: AS
-  target_before: AC AD
+  source: A♠ 2♠
+  ext_card: A♠
+  target_before: A♣ A♦
   side: right
   expect:
     primitives:
-      - split [AS 2S]@0
-      - merge_stack [AS] -> [AC AD] /right
-
-
+      - split [A♠ 2♠] at (100,100) @0
+      - merge_stack [A♠] at (98,96) -> [A♣ A♦] at (300,100) /right
 scenario decompose_pair
-  desc: Decompose a TROUBLE pair [3H 3D] into two singletons. Single split-at-1.
+  desc: Decompose a TROUBLE pair [3♥ 3♦] into two singletons. Single split-at-1.
   op: verb_to_primitives
   board:
-    at (100, 100): 3H 3D
+    at (100,100): 3♥ 3♦
   verb: decompose
-  pair_before: 3H 3D
+  pair_before: 3♥ 3♦
   expect:
     primitives:
-      - split [3H 3D]@0
+      - split [3♥ 3♦] at (100,100) @0

@@ -65,7 +65,7 @@ function allRemaining(): Card[] {
 }
 
 function scenarioId(c: Card): string {
-  const base = RANKS[c.rank - 1]! + SUITS[c.suit]!;
+  const base = cardLabel({ ...c, deck: Deck.One }); // canonical glyph form, no apostrophe
   return c.deck === Deck.Two ? `baseline_board_${base}p` : `baseline_board_${base}`;
 }
 

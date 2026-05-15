@@ -23,8 +23,9 @@ import type {
   ShiftMove, SpliceMove, DecomposeMove,
 } from "../bfs/move.ts";
 import { getPrimitivesForLogicalPlay } from "../plan/physical_plan.ts";
-import { parseCardList } from "../dsl/parse.ts";
+import { parseCardList, parseBoardStackLine } from "../dsl/parse.ts";
 import { formatPrimitive } from "../dsl/emit.ts";
+import { REPIN, rewritePrimitives } from "./repin_pins.ts";
 
 const DSL_PATH = path.resolve(
   path.dirname(new URL(import.meta.url).pathname),
@@ -43,7 +44,7 @@ interface VerbBlock {
 interface Scenario {
   readonly name: string;
   readonly desc: string;
-  readonly board: { top: number; left: number; cards: Card[] }[];
+  readonly board: BoardStack[];
   readonly hand: Card[];
   readonly plan: VerbBlock[];
   readonly primitives: string[];
@@ -54,7 +55,7 @@ function parseDsl(text: string): Scenario[] {
   const out: Scenario[] = [];
   let cur: Partial<Scenario> & {
     name?: string; desc?: string;
-    board?: { top: number; left: number; cards: Card[] }[];
+    board?: BoardStack[];
     hand?: Card[]; plan?: VerbBlock[]; primitives?: string[];
   } | null = null;
   let inBoard = false, inPlan = false, inPrims = false;
@@ -99,8 +100,7 @@ function parseDsl(text: string): Scenario[] {
     }
 
     if (inBoard && trimmed.startsWith("at ")) {
-      const bm = trimmed.match(/^at\s*\((-?\d+)\s*,\s*(-?\d+)\)\s*:\s*(.+)$/);
-      if (bm) cur.board!.push({ top: +bm[1]!, left: +bm[2]!, cards: parseCardList(bm[3]!) });
+      cur.board!.push(parseBoardStackLine(trimmed));
       continue;
     }
 
@@ -215,9 +215,7 @@ function buildMove(vb: VerbBlock): Move {
 interface RunResult { ok: boolean; msg: string }
 
 function runScenario(sc: Scenario): RunResult {
-  const board: BoardStack[] = sc.board.map(b => ({
-    cards: b.cards, loc: { top: b.top, left: b.left },
-  }));
+  const board: readonly BoardStack[] = sc.board;
   let moves: Move[];
   try {
     moves = sc.plan.map(buildMove);
@@ -252,6 +250,11 @@ function runScenario(sc: Scenario): RunResult {
           + `at stack ${v} [${s.cards.map(c => `${c.rank},${c.suit},${c.deck}`).join(" ")}] @ (${s.loc.top},${s.loc.left})`,
       };
     }
+  }
+
+  if (REPIN) {
+    rewritePrimitives(DSL_PATH, sc.name, got);
+    return { ok: true, msg: `REPIN — wrote ${got.length} primitive(s)` };
   }
 
   if (got.length !== sc.primitives.length) {

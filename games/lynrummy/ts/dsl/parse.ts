@@ -19,21 +19,21 @@ export function parseCardList(s: string): Card[] {
   return s.trim().split(/\s+/).filter(Boolean).map(parseCardLabel);
 }
 
-/** One DSL board-stack line: "at (top, left): card1 card2 ...".
+/** One DSL board-stack line: "at (left, top): card1 card2 ...".
  *  Throws on malformed input — the message includes the offending
  *  line for debugging, but no line-number context (callers that
  *  have line numbers should add them via try/catch). */
 export function parseBoardStackLine(line: string): BoardStack {
   const trimmed = line.trim();
   if (!trimmed.startsWith("at ")) {
-    throw new Error(`expected "at (top,left): cards", got: ${JSON.stringify(line)}`);
+    throw new Error(`expected "at (left,top): cards", got: ${JSON.stringify(line)}`);
   }
   const rest = trimmed.slice("at ".length);
   const close = rest.indexOf(")");
   if (!rest.startsWith("(") || close < 0) {
     throw new Error(`bad location in: ${JSON.stringify(line)}`);
   }
-  const [topStr, leftStr] = rest.slice(1, close).split(",").map(s => s.trim());
+  const [leftStr, topStr] = rest.slice(1, close).split(",").map(s => s.trim());
   const tail = rest.slice(close + 1).trim();
   if (!tail.startsWith(":")) {
     throw new Error(`expected ":" after location in: ${JSON.stringify(line)}`);
@@ -45,7 +45,7 @@ export function parseBoardStackLine(line: string): BoardStack {
 }
 
 /** Multi-line DSL board: each non-blank, non-comment line is one
- *  "at (top, left): cards" entry. `#` to end-of-line is a comment. */
+ *  "at (left, top): cards" entry. `#` to end-of-line is a comment. */
 export function parseBoardDsl(dsl: string): BoardStack[] {
   const out: BoardStack[] = [];
   for (const raw of dsl.split("\n")) {

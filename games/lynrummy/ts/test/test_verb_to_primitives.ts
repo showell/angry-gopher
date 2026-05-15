@@ -22,8 +22,9 @@ import { fileURLToPath } from "node:url";
 
 import type { Card } from "../core/card.ts";
 import { parseCardLabel } from "../core/card.ts";
-import { parseCardList } from "../dsl/parse.ts";
+import { parseCardList, parseBoardStackLine } from "../dsl/parse.ts";
 import { formatPrimitive } from "../dsl/emit.ts";
+import { REPIN, rewritePrimitives } from "./repin_pins.ts";
 import type {
   Move, Side,
   ExtractAbsorbMove, FreePullMove, PushMove,
@@ -31,7 +32,7 @@ import type {
   Verb,
   AbsorberBucket,
 } from "../bfs/move.ts";
-import type { BoardStack, Loc } from "../geometry/geometry.ts";
+import type { BoardStack } from "../geometry/geometry.ts";
 import { findViolation } from "../geometry/geometry.ts";
 import { classifyStack } from "../core/card_stack.ts";
 import {
@@ -52,7 +53,7 @@ const DSL_FILES = [
 interface ScenarioRaw {
   readonly name: string;
   readonly fields: Record<string, string>;
-  readonly board: { top: number; left: number; cards: readonly Card[] }[];
+  readonly board: BoardStack[];
   primitives: readonly string[];
 }
 
@@ -99,15 +100,9 @@ function parseDsl(contents: string): ScenarioRaw[] {
     if (trimmed === "expect:") { inExpect = true; continue; }
     if (inExpect && trimmed === "primitives:") { inPrimitives = true; continue; }
 
-    if (inBoard) {
-      const m = trimmed.match(/^at\s*\((-?\d+)\s*,\s*(-?\d+)\)\s*:\s*(.+)$/);
-      if (m) {
-        const top = parseInt(m[1]!, 10);
-        const left = parseInt(m[2]!, 10);
-        const cards = m[3]!.trim().split(/\s+/).map(parseCardLabel);
-        cur.board.push({ top, left, cards });
-        continue;
-      }
+    if (inBoard && trimmed.startsWith("at ")) {
+      cur.board.push(parseBoardStackLine(trimmed));
+      continue;
     }
 
     if (inPrimitives) {
@@ -137,10 +132,7 @@ function parseSingleCard(s: string): Card {
 }
 
 function buildBoardStacks(sc: ScenarioRaw): readonly BoardStack[] {
-  return sc.board.map(b => ({
-    cards: b.cards,
-    loc: { top: b.top, left: b.left } as Loc,
-  }));
+  return sc.board;
 }
 
 function buildMove(sc: ScenarioRaw): Move {
@@ -263,7 +255,7 @@ interface RunResult {
   readonly msg: string;
 }
 
-function runScenario(sc: ScenarioRaw): RunResult {
+function runScenario(sc: ScenarioRaw, dslPath: string): RunResult {
   let move: Move;
   try {
     move = buildMove(sc);
@@ -298,6 +290,10 @@ function runScenario(sc: ScenarioRaw): RunResult {
           + `at stack ${v} [${s.cards.map(c => `${c.rank},${c.suit},${c.deck}`).join(" ")}] @ (${s.loc.top},${s.loc.left})`,
       };
     }
+  }
+  if (REPIN) {
+    rewritePrimitives(dslPath, sc.name, got);
+    return { ok: true, msg: `REPIN — wrote ${got.length} primitive(s)` };
   }
   const want = sc.primitives;
 
@@ -376,7 +372,7 @@ function main(): void {
     let filePassed = 0;
     let fileFailed = 0;
     for (const sc of scenarios) {
-      const res = runScenario(sc);
+      const res = runScenario(sc, filepath);
       if (res.ok) {
         filePassed++;
         if (!quietCorpus) console.log(`PASS  ${sc.name.padEnd(50)}  ${res.msg}`);

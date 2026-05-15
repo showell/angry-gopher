@@ -10,9 +10,9 @@
 #     drag's `floaterTopLeft` equals the source stack's `loc`
 #     in board frame.
 #
-# Layout note: stackAt "2C,3D,4C" (at left=100 top=200) means
+# Layout note: stackAt "2♣,3♦,4♣" (at left=100 top=200) means
 # the stack's loc = { left=100, top=200 }.  In DSL board notation
-# that is `at (200, 100)` (top first, left second).
+# that is `at (100,200)` (top first, left second).
 #
 # Cursor points use (x, y) — x is horizontal, y is vertical.
 
@@ -21,7 +21,7 @@ scenario drag_invariant_floater_shift
   desc: floaterTopLeft shifts by exactly the cursor delta (mousedown to mousemove).
   op: floater_top_left
   board:
-    at (200, 100): 2C 3D 4C
+    at (100,200): 2♣ 3♦ 4♣
   card_index: 2
   mousedown: (540, 310)
   mousemove_delta: (20, -5)
@@ -33,7 +33,7 @@ scenario drag_invariant_grab_point_invariant
   desc: Two different grab points produce the same floater shift for the same delta.
   op: floater_top_left
   board:
-    at (200, 100): 2C 3D 4C
+    at (100,200): 2♣ 3♦ 4♣
   mousedown_a: (410, 310)
   mousedown_b: (500, 320)
   delta: (15, 8)
@@ -45,7 +45,7 @@ scenario drag_invariant_board_drag_initial_floater
   desc: intra-board drag initial floaterTopLeft equals stack.loc in board frame.
   op: floater_top_left
   board:
-    at (200, 100): 2C 3D 4C
+    at (100,200): 2♣ 3♦ 4♣
   card_index: 0
   mousedown: (410, 310)
   expect:

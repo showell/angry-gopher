@@ -7,10 +7,8 @@
 // emitters consistently use unicode so the wire stream is
 // byte-identical across runtimes.
 
-import { type Card, cardToken } from "../core/card.ts";
+import { type Card, cardLabel } from "../core/card.ts";
 import type { TimeLoc } from "../geometry/synthesize_board_paths.ts";
-
-export { cardToken };
 
 export interface Loc { top: number; left: number }
 export interface Stack { cards: readonly Card[]; loc: Loc }
@@ -49,7 +47,7 @@ export function mergeHandDsl(
   side: Side,
 ): string {
   return "merge_hand "
-    + cardToken(handCard)
+    + cardLabel(handCard)
     + " -> "
     + stackRef(target)
     + " /" + side;
@@ -57,7 +55,7 @@ export function mergeHandDsl(
 
 export function placeHandDsl(handCard: Card, loc: Loc): string {
   return "place_hand "
-    + cardToken(handCard)
+    + cardLabel(handCard)
     + " -> "
     + locStr(loc);
 }
@@ -80,7 +78,7 @@ export const completeTurnDsl = "complete_turn";
 // --- Shared internals ------------------------------------------------
 
 function stackRef(s: Stack): string {
-  return "[" + s.cards.map(cardToken).join(" ") + "] at " + locStr(s.loc);
+  return "[" + s.cards.map(cardLabel).join(" ") + "] at " + locStr(s.loc);
 }
 
 function locStr(loc: Loc): string {

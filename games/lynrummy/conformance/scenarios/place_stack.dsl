@@ -12,11 +12,11 @@ scenario find_open_loc_empty_board
 
 
 scenario find_open_loc_one_stack_top_left
-  desc: A single short stack at (0, 0). Preferred origin (50, 90) clears it; placer lands at (90+ANTI_ALIGN, 50+ANTI_ALIGN) = (92, 52).
+  desc: A single short stack at (0,0). Preferred origin (50, 90) clears it; placer lands at (90+ANTI_ALIGN, 50+ANTI_ALIGN) = (92, 52).
   op: find_open_loc
   card_count: 3
   existing:
-    at (0,0): AC AC AC AC AC
+    at (0,0): A♣ A♣ A♣ A♣ A♣
   expect:
     loc: (92, 52)
 
@@ -26,9 +26,9 @@ scenario find_open_loc_lots_of_top_row_stacks
   op: find_open_loc
   card_count: 3
   existing:
-    at (0,0): AC AC AC AC AC
-    at (0,200): AC AC AC AC AC
-    at (0,400): AC AC AC AC AC
+    at (0,0): A♣ A♣ A♣ A♣ A♣
+    at (200,0): A♣ A♣ A♣ A♣ A♣
+    at (400,0): A♣ A♣ A♣ A♣ A♣
   expect:
     loc: (92, 52)
 
@@ -38,8 +38,8 @@ scenario find_open_loc_blocking_preferred_origin
   op: find_open_loc
   card_count: 3
   existing:
-    at (0,0): AC AC AC AC AC
-    at (90,50): AC AC AC AC AC
+    at (0,0): A♣ A♣ A♣ A♣ A♣
+    at (50,90): A♣ A♣ A♣ A♣ A♣
   expect:
     loc: (167, 52)
 
@@ -49,6 +49,6 @@ scenario find_open_loc_long_stack
   op: find_open_loc
   card_count: 12
   existing:
-    at (0,0): AC AC AC AC AC
+    at (0,0): A♣ A♣ A♣ A♣ A♣
   expect:
     loc: (92, 52)

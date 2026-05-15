@@ -90,16 +90,12 @@ export function parseCardLabel(label: string): Card {
   return { rank: (rankIdx + 1) as Rank, suit: suitIdx as Suit, deck };
 }
 
-/** Render a Card as an ASCII label like "5H" or "TC'". Deck Two
- *  cards get a trailing apostrophe. */
+/** Render a Card as its canonical label: rank letter + Unicode suit
+ *  glyph (♣ ♦ ♠ ♥), with a trailing apostrophe for deck-2. Used
+ *  everywhere card identity is serialized — DSL, narrate / hint
+ *  prose, transcripts, status text. ASCII suit letters are accepted
+ *  on the parse side for legacy input. */
 export function cardLabel(c: Card): string {
-  const base = RANKS[c.rank - 1]! + SUITS[c.suit]!;
-  return c.deck === Deck.One ? base : `${base}'`;
-}
-
-/** Card token with unicode suit glyph; deck-2 cards get a trailing
- *  `'`. Used by the wire-DSL emitters. */
-export function cardToken(c: Card): string {
   const base = RANKS[c.rank - 1]! + SUITS_UNICODE[c.suit]!;
   return c.deck === Deck.One ? base : `${base}'`;
 }

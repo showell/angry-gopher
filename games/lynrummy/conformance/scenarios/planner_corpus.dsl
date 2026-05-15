@@ -4,611 +4,611 @@
 
 
 scenario corpus_sid_108
-  desc: Corpus session 108, trouble QD'.
+  desc: Corpus session 108, trouble Q♦'.
   op: solve
   helper:
-    at (0,0): AC AD AH
-    at (0,0): 3S 3C 3D'
-    at (0,0): 8D 9S' TD
-    at (0,0): 9C TC' JC'
-    at (0,0): 5H 5D' 5S'
-    at (0,0): 6H 6S 6C' 6D'
-    at (0,0): 7S 7D 7C 7H'
-    at (0,0): QS' KS' AS 2S
-    at (0,0): 8C 8D' 8S 8H'
-    at (0,0): JD QD KD
-    at (0,0): TD' TH' TC
-    at (0,0): 2C 3D 4C 5D 6C 7D' 8S'
-    at (0,0): TS JS QS
-    at (0,0): AH' 2H 3H 4H 5H' 6H' 7H 8H 9H TH
-    at (0,0): KS KH KD'
-    at (0,0): AC' 2D' 3C' 4D'
+    at (0,0): A♣ A♦ A♥
+    at (0,0): 3♠ 3♣ 3♦'
+    at (0,0): 8♦ 9♠' T♦
+    at (0,0): 9♣ T♣' J♣'
+    at (0,0): 5♥ 5♦' 5♠'
+    at (0,0): 6♥ 6♠ 6♣' 6♦'
+    at (0,0): 7♠ 7♦ 7♣ 7♥'
+    at (0,0): Q♠' K♠' A♠ 2♠
+    at (0,0): 8♣ 8♦' 8♠ 8♥'
+    at (0,0): J♦ Q♦ K♦
+    at (0,0): T♦' T♥' T♣
+    at (0,0): 2♣ 3♦ 4♣ 5♦ 6♣ 7♦' 8♠'
+    at (0,0): T♠ J♠ Q♠
+    at (0,0): A♥' 2♥ 3♥ 4♥ 5♥' 6♥' 7♥ 8♥ 9♥ T♥
+    at (0,0): K♠ K♥ K♦'
+    at (0,0): A♣' 2♦' 3♣' 4♦'
   trouble:
-    at (0,0): QD'
+    at (0,0): Q♦'
   expect:
     plan_lines:
-      - "shift 8C to pop JC' [8D' 8S 8H' -> 8C + 9C TC']; absorb onto [QD'] → [JC' QD']"
-      - "peel TH from HELPER [AH' 2H 3H 4H 5H' 6H' 7H 8H 9H TH], absorb onto [JC' QD'] → [TH JC' QD'] [→COMPLETE]"
+      - "shift 8♣ to pop J♣' [8♦' 8♠ 8♥' -> 8♣ + 9♣ T♣']; absorb onto [Q♦'] → [J♣' Q♦']"
+      - "peel T♥ from HELPER [A♥' 2♥ 3♥ 4♥ 5♥' 6♥' 7♥ 8♥ 9♥ T♥], absorb onto [J♣' Q♦'] → [T♥ J♣' Q♦'] [→COMPLETE]"
 
 scenario corpus_sid_110
-  desc: Corpus session 110, trouble TC.
+  desc: Corpus session 110, trouble T♣.
   op: solve
   helper:
-    at (0,0): AC AD AH
-    at (0,0): 4D' 5D 6D
-    at (0,0): 2C 2S' 2D'
-    at (0,0): JC JD' JS
-    at (0,0): 3D 3S' 3H'
-    at (0,0): QD QH' QC
-    at (0,0): 2H 3H 4H
-    at (0,0): 7S 7D 7C
-    at (0,0): 8D 9D' TD
-    at (0,0): 7S' 8S' 9S'
-    at (0,0): KS AS 2S 3S
-    at (0,0): 2C' 3C' 4C 5C'
-    at (0,0): TC' JD QS' KH' AC'
-    at (0,0): 4C' 5H 6S 7H 8C'
-    at (0,0): KD AD' 2D
-    at (0,0): TH' JC' QD' KS'
-    at (0,0): 4H' 5H' 6H' 7H' 8H' 9H TH
+    at (0,0): A♣ A♦ A♥
+    at (0,0): 4♦' 5♦ 6♦
+    at (0,0): 2♣ 2♠' 2♦'
+    at (0,0): J♣ J♦' J♠
+    at (0,0): 3♦ 3♠' 3♥'
+    at (0,0): Q♦ Q♥' Q♣
+    at (0,0): 2♥ 3♥ 4♥
+    at (0,0): 7♠ 7♦ 7♣
+    at (0,0): 8♦ 9♦' T♦
+    at (0,0): 7♠' 8♠' 9♠'
+    at (0,0): K♠ A♠ 2♠ 3♠
+    at (0,0): 2♣' 3♣' 4♣ 5♣'
+    at (0,0): T♣' J♦ Q♠' K♥' A♣'
+    at (0,0): 4♣' 5♥ 6♠ 7♥ 8♣'
+    at (0,0): K♦ A♦' 2♦
+    at (0,0): T♥' J♣' Q♦' K♠'
+    at (0,0): 4♥' 5♥' 6♥' 7♥' 8♥' 9♥ T♥
   trouble:
-    at (0,0): TC
+    at (0,0): T♣
   expect:
     plan_lines:
-      - "peel TH' from HELPER [TH' JC' QD' KS'], absorb onto [TC] → [TC TH']"
-      - "steal TD from HELPER [8D 9D' TD], absorb onto [TC TH'] → [TD TC TH'] [→COMPLETE] ; spawn [8D 9D']"
-      - "set_peel 7D from HELPER [7S 7D 7C], absorb onto [8D 9D'] → [7D 8D 9D'] [→COMPLETE] ; spawn [7S 7C]"
-      - "pluck 7H' from HELPER [4H' 5H' 6H' 7H' 8H' 9H TH], absorb onto [7S 7C] → [7S 7C 7H'] [→COMPLETE]"
+      - "peel T♥' from HELPER [T♥' J♣' Q♦' K♠'], absorb onto [T♣] → [T♣ T♥']"
+      - "steal T♦ from HELPER [8♦ 9♦' T♦], absorb onto [T♣ T♥'] → [T♦ T♣ T♥'] [→COMPLETE] ; spawn [8♦ 9♦']"
+      - "set_peel 7♦ from HELPER [7♠ 7♦ 7♣], absorb onto [8♦ 9♦'] → [7♦ 8♦ 9♦'] [→COMPLETE] ; spawn [7♠ 7♣]"
+      - "pluck 7♥' from HELPER [4♥' 5♥' 6♥' 7♥' 8♥' 9♥ T♥], absorb onto [7♠ 7♣] → [7♠ 7♣ 7♥'] [→COMPLETE]"
 
 scenario corpus_sid_112
-  desc: Corpus session 112, trouble 3C.
+  desc: Corpus session 112, trouble 3♣.
   op: solve
   helper:
-    at (0,0): AC AD AH
-    at (0,0): 9S' 9C' 9D'
-    at (0,0): 8H' 9H' TH
-    at (0,0): 5C' 6H' 7S' 8H
-    at (0,0): JD' JH JS'
-    at (0,0): JC QC' KC
-    at (0,0): TD TH' TC'
-    at (0,0): 8S' 9S TS'
-    at (0,0): KS AS 2S 3S 4S 5S' 6S
-    at (0,0): QS QH QD'
-    at (0,0): QH' KS' AD' 2C' 3D 4C 5D' 6C' 7H 8C' 9H TS JH' QS' KD AC' 2D' 3C'
-    at (0,0): 7S 7C 7H'
-    at (0,0): 6D 7D 8D'
-    at (0,0): 2H' 2C 2S' 2D
-    at (0,0): 4S' 4D' 4C'
-    at (0,0): 3H 4H' 5H'
-    at (0,0): KH AH' 2H 3H' 4H 5H
-    at (0,0): 9C TC JC' QC
-    at (0,0): TD' JD QD
-    at (0,0): KC' KD' KH'
-    at (0,0): 6S' 7D' 8C
-    at (0,0): 6D' 7C' 8D
-    at (0,0): 5D 5S 5C
+    at (0,0): A♣ A♦ A♥
+    at (0,0): 9♠' 9♣' 9♦'
+    at (0,0): 8♥' 9♥' T♥
+    at (0,0): 5♣' 6♥' 7♠' 8♥
+    at (0,0): J♦' J♥ J♠'
+    at (0,0): J♣ Q♣' K♣
+    at (0,0): T♦ T♥' T♣'
+    at (0,0): 8♠' 9♠ T♠'
+    at (0,0): K♠ A♠ 2♠ 3♠ 4♠ 5♠' 6♠
+    at (0,0): Q♠ Q♥ Q♦'
+    at (0,0): Q♥' K♠' A♦' 2♣' 3♦ 4♣ 5♦' 6♣' 7♥ 8♣' 9♥ T♠ J♥' Q♠' K♦ A♣' 2♦' 3♣'
+    at (0,0): 7♠ 7♣ 7♥'
+    at (0,0): 6♦ 7♦ 8♦'
+    at (0,0): 2♥' 2♣ 2♠' 2♦
+    at (0,0): 4♠' 4♦' 4♣'
+    at (0,0): 3♥ 4♥' 5♥'
+    at (0,0): K♥ A♥' 2♥ 3♥' 4♥ 5♥
+    at (0,0): 9♣ T♣ J♣' Q♣
+    at (0,0): T♦' J♦ Q♦
+    at (0,0): K♣' K♦' K♥'
+    at (0,0): 6♠' 7♦' 8♣
+    at (0,0): 6♦' 7♣' 8♦
+    at (0,0): 5♦ 5♠ 5♣
   trouble:
-    at (0,0): 3C
+    at (0,0): 3♣
   expect:
     plan_lines:
-      - "pluck 3S from HELPER [KS AS 2S 3S 4S 5S' 6S], absorb onto [3C] → [3S 3C]"
-      - "pluck 3D from HELPER [QH' KS' AD' 2C' 3D 4C 5D' 6C' 7H 8C' 9H TS JH' QS' KD AC' 2D' 3C'], absorb onto [3S 3C] → [3S 3C 3D] [→COMPLETE]"
+      - "pluck 3♠ from HELPER [K♠ A♠ 2♠ 3♠ 4♠ 5♠' 6♠], absorb onto [3♣] → [3♠ 3♣]"
+      - "pluck 3♦ from HELPER [Q♥' K♠' A♦' 2♣' 3♦ 4♣ 5♦' 6♣' 7♥ 8♣' 9♥ T♠ J♥' Q♠' K♦ A♣' 2♦' 3♣'], absorb onto [3♠ 3♣] → [3♠ 3♣ 3♦] [→COMPLETE]"
 
 scenario corpus_sid_114
-  desc: Corpus session 114, trouble 6D.
+  desc: Corpus session 114, trouble 6♦.
   op: solve
   helper:
-    at (0,0): 5C 5D 5S'
-    at (0,0): JC JD' JS'
-    at (0,0): 7S 7D 7C 7H'
-    at (0,0): 3S 3D' 3C'
-    at (0,0): 2C 2S 2D
-    at (0,0): AC AS' AD'
-    at (0,0): 3S' 4D' 5S 6H 7S'
-    at (0,0): 8H 9H TH
-    at (0,0): KD AD 2D'
-    at (0,0): 9D' TD JD
-    at (0,0): KH AH 2H 3H 4H
-    at (0,0): QD QH QS
-    at (0,0): 9C' TC JC'
-    at (0,0): 4C' 5C' 6C' 7C'
-    at (0,0): QS' KS AS 2S'
-    at (0,0): KD' KH' KS'
-    at (0,0): KC AC' 2C'
-    at (0,0): TH' JS QH'
-    at (0,0): 3D 4C 5H 6S 7H 8C'
-    at (0,0): 9C 9D 9S
+    at (0,0): 5♣ 5♦ 5♠'
+    at (0,0): J♣ J♦' J♠'
+    at (0,0): 7♠ 7♦ 7♣ 7♥'
+    at (0,0): 3♠ 3♦' 3♣'
+    at (0,0): 2♣ 2♠ 2♦
+    at (0,0): A♣ A♠' A♦'
+    at (0,0): 3♠' 4♦' 5♠ 6♥ 7♠'
+    at (0,0): 8♥ 9♥ T♥
+    at (0,0): K♦ A♦ 2♦'
+    at (0,0): 9♦' T♦ J♦
+    at (0,0): K♥ A♥ 2♥ 3♥ 4♥
+    at (0,0): Q♦ Q♥ Q♠
+    at (0,0): 9♣' T♣ J♣'
+    at (0,0): 4♣' 5♣' 6♣' 7♣'
+    at (0,0): Q♠' K♠ A♠ 2♠'
+    at (0,0): K♦' K♥' K♠'
+    at (0,0): K♣ A♣' 2♣'
+    at (0,0): T♥' J♠ Q♥'
+    at (0,0): 3♦ 4♣ 5♥ 6♠ 7♥ 8♣'
+    at (0,0): 9♣ 9♦ 9♠
   trouble:
-    at (0,0): 6D
+    at (0,0): 6♦
   expect:
     plan_lines:
-      - "peel 7C' from HELPER [4C' 5C' 6C' 7C'], absorb onto [6D] → [6D 7C']"
-      - "steal 5S' from HELPER [5C 5D 5S'], absorb onto [6D 7C'] → [5S' 6D 7C'] [→COMPLETE] ; spawn [5C], [5D]"
-      - "splice [5C] into HELPER [3S' 4D' 5S 6H 7S'] → [3S' 4D' 5S] + [5C 6H 7S']"
-      - "splice [5D] into HELPER [3D 4C 5H 6S 7H 8C'] → [3D 4C 5D] + [5H 6S 7H 8C']"
+      - "peel 7♣' from HELPER [4♣' 5♣' 6♣' 7♣'], absorb onto [6♦] → [6♦ 7♣']"
+      - "steal 5♠' from HELPER [5♣ 5♦ 5♠'], absorb onto [6♦ 7♣'] → [5♠' 6♦ 7♣'] [→COMPLETE] ; spawn [5♣], [5♦]"
+      - "splice [5♣] into HELPER [3♠' 4♦' 5♠ 6♥ 7♠'] → [3♠' 4♦' 5♠] + [5♣ 6♥ 7♠']"
+      - "splice [5♦] into HELPER [3♦ 4♣ 5♥ 6♠ 7♥ 8♣'] → [3♦ 4♣ 5♦] + [5♥ 6♠ 7♥ 8♣']"
 
 scenario corpus_sid_116
-  desc: Corpus session 116, trouble JS.
+  desc: Corpus session 116, trouble J♠.
   op: solve
   helper:
-    at (0,0): 7S 7D 7C
-    at (0,0): 6S 7H 8S
-    at (0,0): 2C 3D 4C
-    at (0,0): KD KS KC
-    at (0,0): KH' AH' 2H'
-    at (0,0): 2D 3D' 4D'
-    at (0,0): AS AD' AC'
-    at (0,0): TS JS' QS
-    at (0,0): JD QD KD'
-    at (0,0): TD TS' TH TC'
-    at (0,0): 5S 5D 5C
-    at (0,0): 2H 3H 4H 5H 6H
-    at (0,0): AD AH AS'
-    at (0,0): AC 2C' 3C'
-    at (0,0): 7S' 8H' 9C' TD' JC'
-    at (0,0): 9S TH' JC
-    at (0,0): 6D' 7D' 8D'
-    at (0,0): 3S' 4H' 5C'
-    at (0,0): 2S 3S 4S' 5S'
+    at (0,0): 7♠ 7♦ 7♣
+    at (0,0): 6♠ 7♥ 8♠
+    at (0,0): 2♣ 3♦ 4♣
+    at (0,0): K♦ K♠ K♣
+    at (0,0): K♥' A♥' 2♥'
+    at (0,0): 2♦ 3♦' 4♦'
+    at (0,0): A♠ A♦' A♣'
+    at (0,0): T♠ J♠' Q♠
+    at (0,0): J♦ Q♦ K♦'
+    at (0,0): T♦ T♠' T♥ T♣'
+    at (0,0): 5♠ 5♦ 5♣
+    at (0,0): 2♥ 3♥ 4♥ 5♥ 6♥
+    at (0,0): A♦ A♥ A♠'
+    at (0,0): A♣ 2♣' 3♣'
+    at (0,0): 7♠' 8♥' 9♣' T♦' J♣'
+    at (0,0): 9♠ T♥' J♣
+    at (0,0): 6♦' 7♦' 8♦'
+    at (0,0): 3♠' 4♥' 5♣'
+    at (0,0): 2♠ 3♠ 4♠' 5♠'
   trouble:
-    at (0,0): JS
+    at (0,0): J♠
   expect:
     plan_lines:
-      - "steal JD from HELPER [JD QD KD'], absorb onto [JS] → [JS JD] ; spawn [QD KD']"
-      - "steal AD' from HELPER [AS AD' AC'], absorb onto [QD KD'] → [QD KD' AD'] [→COMPLETE] ; spawn [AS], [AC']"
-      - "peel JC' from HELPER [7S' 8H' 9C' TD' JC'], absorb onto [JS JD] → [JS JD JC'] [→COMPLETE]"
-      - "push [AS] onto HELPER [2S 3S 4S' 5S'] → [AS 2S 3S 4S' 5S']"
-      - "push [AC'] onto HELPER [AD AH AS'] → [AD AH AS' AC']"
+      - "steal J♦ from HELPER [J♦ Q♦ K♦'], absorb onto [J♠] → [J♠ J♦] ; spawn [Q♦ K♦']"
+      - "steal A♦' from HELPER [A♠ A♦' A♣'], absorb onto [Q♦ K♦'] → [Q♦ K♦' A♦'] [→COMPLETE] ; spawn [A♠], [A♣']"
+      - "peel J♣' from HELPER [7♠' 8♥' 9♣' T♦' J♣'], absorb onto [J♠ J♦] → [J♠ J♦ J♣'] [→COMPLETE]"
+      - "push [A♠] onto HELPER [2♠ 3♠ 4♠' 5♠'] → [A♠ 2♠ 3♠ 4♠' 5♠']"
+      - "push [A♣'] onto HELPER [A♦ A♥ A♠'] → [A♦ A♥ A♠' A♣']"
 
 scenario corpus_sid_118
-  desc: Corpus session 118, trouble QC'.
+  desc: Corpus session 118, trouble Q♣'.
   op: solve
   helper:
-    at (0,0): 2H 3H 4H
-    at (0,0): 9D 9H 9C'
-    at (0,0): QC KC AC 2C
-    at (0,0): TD TS TH
-    at (0,0): 2C' 3D' 4C' 5D
-    at (0,0): 5S' 6S' 7S'
-    at (0,0): 3D 3S' 3H'
-    at (0,0): 7D 7C 7H'
-    at (0,0): 4C 5H 6S
-    at (0,0): 7S 7H 7D'
-    at (0,0): TD' JD QD KD AD'
-    at (0,0): 5C 6D' 7C' 8D'
-    at (0,0): JC' JH' JD'
-    at (0,0): AD AH AC'
-    at (0,0): TS' JS' QS KS AS 2S
-    at (0,0): AS' 2S' 3S
+    at (0,0): 2♥ 3♥ 4♥
+    at (0,0): 9♦ 9♥ 9♣'
+    at (0,0): Q♣ K♣ A♣ 2♣
+    at (0,0): T♦ T♠ T♥
+    at (0,0): 2♣' 3♦' 4♣' 5♦
+    at (0,0): 5♠' 6♠' 7♠'
+    at (0,0): 3♦ 3♠' 3♥'
+    at (0,0): 7♦ 7♣ 7♥'
+    at (0,0): 4♣ 5♥ 6♠
+    at (0,0): 7♠ 7♥ 7♦'
+    at (0,0): T♦' J♦ Q♦ K♦ A♦'
+    at (0,0): 5♣ 6♦' 7♣' 8♦'
+    at (0,0): J♣' J♥' J♦'
+    at (0,0): A♦ A♥ A♣'
+    at (0,0): T♠' J♠' Q♠ K♠ A♠ 2♠
+    at (0,0): A♠' 2♠' 3♠
   trouble:
-    at (0,0): QC'
+    at (0,0): Q♣'
   expect:
     plan_lines:
-      - "set_peel JD' from HELPER [JC' JH' JD'], absorb onto [QC'] → [JD' QC'] ; spawn [JC' JH']"
-      - "yank JS' from HELPER [TS' JS' QS KS AS 2S], absorb onto [JC' JH'] → [JC' JH' JS'] [→COMPLETE] ; spawn [TS']"
-      - "pull TS' onto [JD' QC'] → [TS' JD' QC'] [→COMPLETE]"
+      - "set_peel J♦' from HELPER [J♣' J♥' J♦'], absorb onto [Q♣'] → [J♦' Q♣'] ; spawn [J♣' J♥']"
+      - "yank J♠' from HELPER [T♠' J♠' Q♠ K♠ A♠ 2♠], absorb onto [J♣' J♥'] → [J♣' J♥' J♠'] [→COMPLETE] ; spawn [T♠']"
+      - "pull T♠' onto [J♦' Q♣'] → [T♠' J♦' Q♣'] [→COMPLETE]"
 
 scenario corpus_sid_120
-  desc: Corpus session 120, trouble JC'.
+  desc: Corpus session 120, trouble J♣'.
   op: solve
   helper:
-    at (0,0): AC AD AH
-    at (0,0): 9C' 9S' 9H
-    at (0,0): AS 2S 3S
-    at (0,0): TD JD QD
-    at (0,0): 2C 2H 2D'
-    at (0,0): QD' QS QH
-    at (0,0): 3H 4H 5H
-    at (0,0): 6H 6C' 6D
-    at (0,0): KS KD KC
-    at (0,0): 3D 4C 5D
-    at (0,0): 7D 7H' 7S'
-    at (0,0): 5C' 6C 7C
-    at (0,0): 8H 8S 8D
-    at (0,0): 5S 6S 7S
-    at (0,0): 5H' 6H' 7H 8H'
-    at (0,0): 9H' TC' JD'
-    at (0,0): 9C TD' JS'
-    at (0,0): 4D' 5C 6D'
-    at (0,0): TS JH QC
-    at (0,0): TH JH' QH'
-    at (0,0): KD' KH KC'
+    at (0,0): A♣ A♦ A♥
+    at (0,0): 9♣' 9♠' 9♥
+    at (0,0): A♠ 2♠ 3♠
+    at (0,0): T♦ J♦ Q♦
+    at (0,0): 2♣ 2♥ 2♦'
+    at (0,0): Q♦' Q♠ Q♥
+    at (0,0): 3♥ 4♥ 5♥
+    at (0,0): 6♥ 6♣' 6♦
+    at (0,0): K♠ K♦ K♣
+    at (0,0): 3♦ 4♣ 5♦
+    at (0,0): 7♦ 7♥' 7♠'
+    at (0,0): 5♣' 6♣ 7♣
+    at (0,0): 8♥ 8♠ 8♦
+    at (0,0): 5♠ 6♠ 7♠
+    at (0,0): 5♥' 6♥' 7♥ 8♥'
+    at (0,0): 9♥' T♣' J♦'
+    at (0,0): 9♣ T♦' J♠'
+    at (0,0): 4♦' 5♣ 6♦'
+    at (0,0): T♠ J♥ Q♣
+    at (0,0): T♥ J♥' Q♥'
+    at (0,0): K♦' K♥ K♣'
   trouble:
-    at (0,0): JC'
+    at (0,0): J♣'
   expect: no_plan
 
 scenario corpus_sid_122
-  desc: Corpus session 122, trouble TH'.
+  desc: Corpus session 122, trouble T♥'.
   op: solve
   helper:
-    at (0,0): AC AD AH
-    at (0,0): KC KS' KH
-    at (0,0): 2C 2S' 2D'
-    at (0,0): QC' QH' QD'
-    at (0,0): TD JD QD
-    at (0,0): 9D' 9H 9C
-    at (0,0): 2D 3D 4D
-    at (0,0): KH' AH' 2H 3H 4H
-    at (0,0): 4C 5H 6S 7H
-    at (0,0): QC KD AC'
-    at (0,0): JS JH JD'
-    at (0,0): 7C' 8C' 9C' TC'
-    at (0,0): 5H' 6S' 7D'
-    at (0,0): 9S' TD' JS'
-    at (0,0): 5C' 6H' 7S'
-    at (0,0): 8S' 8H 8D
-    at (0,0): QS KS AS 2S 3S 4S'
-    at (0,0): 7D 7C 7H'
-    at (0,0): 5S' 6D' 7S
+    at (0,0): A♣ A♦ A♥
+    at (0,0): K♣ K♠' K♥
+    at (0,0): 2♣ 2♠' 2♦'
+    at (0,0): Q♣' Q♥' Q♦'
+    at (0,0): T♦ J♦ Q♦
+    at (0,0): 9♦' 9♥ 9♣
+    at (0,0): 2♦ 3♦ 4♦
+    at (0,0): K♥' A♥' 2♥ 3♥ 4♥
+    at (0,0): 4♣ 5♥ 6♠ 7♥
+    at (0,0): Q♣ K♦ A♣'
+    at (0,0): J♠ J♥ J♦'
+    at (0,0): 7♣' 8♣' 9♣' T♣'
+    at (0,0): 5♥' 6♠' 7♦'
+    at (0,0): 9♠' T♦' J♠'
+    at (0,0): 5♣' 6♥' 7♠'
+    at (0,0): 8♠' 8♥ 8♦
+    at (0,0): Q♠ K♠ A♠ 2♠ 3♠ 4♠'
+    at (0,0): 7♦ 7♣ 7♥'
+    at (0,0): 5♠' 6♦' 7♠
   trouble:
-    at (0,0): TH'
+    at (0,0): T♥'
   expect:
     plan_lines:
-      - "peel TC' from HELPER [7C' 8C' 9C' TC'], absorb onto [TH'] → [TH' TC']"
-      - "split_out TD' from HELPER [9S' TD' JS'], absorb onto [TH' TC'] → [TD' TH' TC'] [→COMPLETE] ; spawn [9S'], [JS']"
-      - "push [9S'] onto HELPER [9D' 9H 9C] → [9D' 9H 9C 9S']"
-      - "push [JS'] onto HELPER [QS KS AS 2S 3S 4S'] → [JS' QS KS AS 2S 3S 4S']"
+      - "peel T♣' from HELPER [7♣' 8♣' 9♣' T♣'], absorb onto [T♥'] → [T♥' T♣']"
+      - "split_out T♦' from HELPER [9♠' T♦' J♠'], absorb onto [T♥' T♣'] → [T♦' T♥' T♣'] [→COMPLETE] ; spawn [9♠'], [J♠']"
+      - "push [9♠'] onto HELPER [9♦' 9♥ 9♣] → [9♦' 9♥ 9♣ 9♠']"
+      - "push [J♠'] onto HELPER [Q♠ K♠ A♠ 2♠ 3♠ 4♠'] → [J♠' Q♠ K♠ A♠ 2♠ 3♠ 4♠']"
 
 scenario corpus_sid_124
-  desc: Corpus session 124, trouble 6S'.
+  desc: Corpus session 124, trouble 6♠'.
   op: solve
   helper:
-    at (0,0): AC AD AH
-    at (0,0): 9C' 9S' 9H
-    at (0,0): 7S 7C 7H' 7D'
-    at (0,0): 5D' 5S 5H'
-    at (0,0): JD JS JC
-    at (0,0): 2D' 2S 2C'
-    at (0,0): QH' KH AH' 2H
-    at (0,0): 3H 4C' 5H 6S 7H 8C' 9H'
-    at (0,0): QS' KS AS 2S'
-    at (0,0): 7D 8D' 9D' TD JD' QD
-    at (0,0): KD KS' KH'
-    at (0,0): AD' 2C 3D
-    at (0,0): 5C' 6D 7S'
-    at (0,0): QC' KD' AC' 2H' 3S
-    at (0,0): 4C 4H 4D'
+    at (0,0): A♣ A♦ A♥
+    at (0,0): 9♣' 9♠' 9♥
+    at (0,0): 7♠ 7♣ 7♥' 7♦'
+    at (0,0): 5♦' 5♠ 5♥'
+    at (0,0): J♦ J♠ J♣
+    at (0,0): 2♦' 2♠ 2♣'
+    at (0,0): Q♥' K♥ A♥' 2♥
+    at (0,0): 3♥ 4♣' 5♥ 6♠ 7♥ 8♣' 9♥'
+    at (0,0): Q♠' K♠ A♠ 2♠'
+    at (0,0): 7♦ 8♦' 9♦' T♦ J♦' Q♦
+    at (0,0): K♦ K♠' K♥'
+    at (0,0): A♦' 2♣ 3♦
+    at (0,0): 5♣' 6♦ 7♠'
+    at (0,0): Q♣' K♦' A♣' 2♥' 3♠
+    at (0,0): 4♣ 4♥ 4♦'
   trouble:
-    at (0,0): 6S'
+    at (0,0): 6♠'
   expect:
     plan_lines:
-      - "splice [6S'] into HELPER [3H 4C' 5H 6S 7H 8C' 9H'] → [3H 4C' 5H 6S'] + [6S 7H 8C' 9H']"
+      - "splice [6♠'] into HELPER [3♥ 4♣' 5♥ 6♠ 7♥ 8♣' 9♥'] → [3♥ 4♣' 5♥ 6♠'] + [6♠ 7♥ 8♣' 9♥']"
 
 scenario corpus_sid_126
-  desc: Corpus session 126, trouble 5C'.
+  desc: Corpus session 126, trouble 5♣'.
   op: solve
   helper:
-    at (0,0): KS' AS 2S 3S 4S'
-    at (0,0): TC' TS' TH'
-    at (0,0): 7D' 8D 9D TD' JD
-    at (0,0): 7S 8S' 9S'
-    at (0,0): 7D 7C 7H' 7S'
-    at (0,0): 4C 5H 6S 7H 8C'
-    at (0,0): 3D 3S' 3C'
-    at (0,0): KH' AH' 2H'
-    at (0,0): 2H 3H 4H
-    at (0,0): KS KD KH
-    at (0,0): AD AH AS'
-    at (0,0): QC' KC AC
-    at (0,0): 2C 3H' 4C' 5H'
-    at (0,0): 9C' TD JS' QH KC'
-    at (0,0): JD' QD KD' AD' 2D'
+    at (0,0): K♠' A♠ 2♠ 3♠ 4♠'
+    at (0,0): T♣' T♠' T♥'
+    at (0,0): 7♦' 8♦ 9♦ T♦' J♦
+    at (0,0): 7♠ 8♠' 9♠'
+    at (0,0): 7♦ 7♣ 7♥' 7♠'
+    at (0,0): 4♣ 5♥ 6♠ 7♥ 8♣'
+    at (0,0): 3♦ 3♠' 3♣'
+    at (0,0): K♥' A♥' 2♥'
+    at (0,0): 2♥ 3♥ 4♥
+    at (0,0): K♠ K♦ K♥
+    at (0,0): A♦ A♥ A♠'
+    at (0,0): Q♣' K♣ A♣
+    at (0,0): 2♣ 3♥' 4♣' 5♥'
+    at (0,0): 9♣' T♦ J♠' Q♥ K♣'
+    at (0,0): J♦' Q♦ K♦' A♦' 2♦'
   trouble:
-    at (0,0): 5C'
+    at (0,0): 5♣'
   expect: no_plan
 
 scenario corpus_sid_128
-  desc: Corpus session 128, trouble 5S.
+  desc: Corpus session 128, trouble 5♠.
   op: solve
   helper:
-    at (0,0): 7S 7D 7C
-    at (0,0): AC AD AH
-    at (0,0): 3H' 4C' 5D 6C'
-    at (0,0): 3D 4C 5H 6S 7H
-    at (0,0): 8C 9C TC
-    at (0,0): 3D' 3S 3C'
-    at (0,0): 4S' 5D' 6C
-    at (0,0): 2H' 2D 2S'
-    at (0,0): 2C 2S 2D'
-    at (0,0): 9D' TS' JD'
-    at (0,0): QH' QS QC
-    at (0,0): 7S' 8H 9S TH' JC QD'
-    at (0,0): TS JS' QS' KS AS
-    at (0,0): 9D TD JD QD
-    at (0,0): 3H 4H 5H'
-    at (0,0): KD AC' 2H
+    at (0,0): 7♠ 7♦ 7♣
+    at (0,0): A♣ A♦ A♥
+    at (0,0): 3♥' 4♣' 5♦ 6♣'
+    at (0,0): 3♦ 4♣ 5♥ 6♠ 7♥
+    at (0,0): 8♣ 9♣ T♣
+    at (0,0): 3♦' 3♠ 3♣'
+    at (0,0): 4♠' 5♦' 6♣
+    at (0,0): 2♥' 2♦ 2♠'
+    at (0,0): 2♣ 2♠ 2♦'
+    at (0,0): 9♦' T♠' J♦'
+    at (0,0): Q♥' Q♠ Q♣
+    at (0,0): 7♠' 8♥ 9♠ T♥' J♣ Q♦'
+    at (0,0): T♠ J♠' Q♠' K♠ A♠
+    at (0,0): 9♦ T♦ J♦ Q♦
+    at (0,0): 3♥ 4♥ 5♥'
+    at (0,0): K♦ A♣' 2♥
   trouble:
-    at (0,0): 5S
+    at (0,0): 5♠
   expect:
     plan_lines:
-      - "shift 7H to pop 4S' [3D 4C 5H 6S -> 5D' 6C + 7H]; absorb onto [5S] → [4S' 5S]"
-      - "peel 6S from HELPER [3D 4C 5H 6S], absorb onto [4S' 5S] → [4S' 5S 6S] [→COMPLETE]"
+      - "shift 7♥ to pop 4♠' [3♦ 4♣ 5♥ 6♠ -> 5♦' 6♣ + 7♥]; absorb onto [5♠] → [4♠' 5♠]"
+      - "peel 6♠ from HELPER [3♦ 4♣ 5♥ 6♠], absorb onto [4♠' 5♠] → [4♠' 5♠ 6♠] [→COMPLETE]"
 
 scenario corpus_sid_130
-  desc: Corpus session 130, trouble JH.
+  desc: Corpus session 130, trouble J♥.
   op: solve
   helper:
-    at (0,0): AC AD AH
-    at (0,0): TC' TS' TH
-    at (0,0): JD QD KD
-    at (0,0): 7S 7C 7H'
-    at (0,0): AH' 2H 3H
-    at (0,0): 7D 8D 9D
-    at (0,0): 3S 4D' 5C'
-    at (0,0): 8S 9S TS
-    at (0,0): KS AS 2S
-    at (0,0): QS' QC' QH
-    at (0,0): 2D' 3D' 4D 5D'
-    at (0,0): 4C' 5D 6S
-    at (0,0): KC KD' KS'
-    at (0,0): 8H 9C' TD JC' QH'
-    at (0,0): KC' AC' 2C 3C'
-    at (0,0): 5H' 6H 7H 8H'
-    at (0,0): 9H 9S' 9C 9D'
-    at (0,0): 3C 4H 5S
-    at (0,0): 6C 6D 6S'
-    at (0,0): 2C' 3D 4C 5H 6C'
+    at (0,0): A♣ A♦ A♥
+    at (0,0): T♣' T♠' T♥
+    at (0,0): J♦ Q♦ K♦
+    at (0,0): 7♠ 7♣ 7♥'
+    at (0,0): A♥' 2♥ 3♥
+    at (0,0): 7♦ 8♦ 9♦
+    at (0,0): 3♠ 4♦' 5♣'
+    at (0,0): 8♠ 9♠ T♠
+    at (0,0): K♠ A♠ 2♠
+    at (0,0): Q♠' Q♣' Q♥
+    at (0,0): 2♦' 3♦' 4♦ 5♦'
+    at (0,0): 4♣' 5♦ 6♠
+    at (0,0): K♣ K♦' K♠'
+    at (0,0): 8♥ 9♣' T♦ J♣' Q♥'
+    at (0,0): K♣' A♣' 2♣ 3♣'
+    at (0,0): 5♥' 6♥ 7♥ 8♥'
+    at (0,0): 9♥ 9♠' 9♣ 9♦'
+    at (0,0): 3♣ 4♥ 5♠
+    at (0,0): 6♣ 6♦ 6♠'
+    at (0,0): 2♣' 3♦ 4♣ 5♥ 6♣'
   trouble:
-    at (0,0): JH
+    at (0,0): J♥
   expect:
     plan_lines:
-      - "steal TS from HELPER [8S 9S TS], absorb onto [JH] → [TS JH] ; spawn [8S 9S]"
-      - "steal 7S from HELPER [7S 7C 7H'], absorb onto [8S 9S] → [7S 8S 9S] [→COMPLETE] ; spawn [7C], [7H']"
-      - "peel 9D' from HELPER [9H 9S' 9C 9D'], absorb onto [TS JH] → [9D' TS JH] [→COMPLETE]"
-      - "push [7C] onto HELPER [8H 9C' TD JC' QH'] → [7C 8H 9C' TD JC' QH']"
-      - "push [7H'] onto HELPER [4C' 5D 6S] → [4C' 5D 6S 7H']"
+      - "steal T♠ from HELPER [8♠ 9♠ T♠], absorb onto [J♥] → [T♠ J♥] ; spawn [8♠ 9♠]"
+      - "steal 7♠ from HELPER [7♠ 7♣ 7♥'], absorb onto [8♠ 9♠] → [7♠ 8♠ 9♠] [→COMPLETE] ; spawn [7♣], [7♥']"
+      - "peel 9♦' from HELPER [9♥ 9♠' 9♣ 9♦'], absorb onto [T♠ J♥] → [9♦' T♠ J♥] [→COMPLETE]"
+      - "push [7♣] onto HELPER [8♥ 9♣' T♦ J♣' Q♥'] → [7♣ 8♥ 9♣' T♦ J♣' Q♥']"
+      - "push [7♥'] onto HELPER [4♣' 5♦ 6♠] → [4♣' 5♦ 6♠ 7♥']"
 
 scenario corpus_sid_132
-  desc: Corpus session 132, trouble QC.
+  desc: Corpus session 132, trouble Q♣.
   op: solve
   helper:
-    at (0,0): 7S 7D 7C
-    at (0,0): AC AD AH
-    at (0,0): 4H' 5H' 6H'
-    at (0,0): 7H 7D' 7C'
-    at (0,0): 2C 2H 2D
-    at (0,0): 4H 5H 6H
-    at (0,0): 3H 3S' 3D'
-    at (0,0): JD' QD' KD'
-    at (0,0): 4S' 5S 6S
-    at (0,0): TS' JS QS' KS AS 2S
-    at (0,0): 8D' 9C' TH'
-    at (0,0): 5S' 6D 7S' 8H 9C
-    at (0,0): 2C' 3D 4C 5D'
-    at (0,0): 6D' 6S' 6C'
-    at (0,0): TH JH' QH'
-    at (0,0): KH KD KC'
-    at (0,0): QC' KH' AC' 2H' 3S 4D 5C'
-    at (0,0): 8D 9D TD JD
-    at (0,0): 8H' 9S' TD' JS' QD KC
+    at (0,0): 7♠ 7♦ 7♣
+    at (0,0): A♣ A♦ A♥
+    at (0,0): 4♥' 5♥' 6♥'
+    at (0,0): 7♥ 7♦' 7♣'
+    at (0,0): 2♣ 2♥ 2♦
+    at (0,0): 4♥ 5♥ 6♥
+    at (0,0): 3♥ 3♠' 3♦'
+    at (0,0): J♦' Q♦' K♦'
+    at (0,0): 4♠' 5♠ 6♠
+    at (0,0): T♠' J♠ Q♠' K♠ A♠ 2♠
+    at (0,0): 8♦' 9♣' T♥'
+    at (0,0): 5♠' 6♦ 7♠' 8♥ 9♣
+    at (0,0): 2♣' 3♦ 4♣ 5♦'
+    at (0,0): 6♦' 6♠' 6♣'
+    at (0,0): T♥ J♥' Q♥'
+    at (0,0): K♥ K♦ K♣'
+    at (0,0): Q♣' K♥' A♣' 2♥' 3♠ 4♦ 5♣'
+    at (0,0): 8♦ 9♦ T♦ J♦
+    at (0,0): 8♥' 9♠' T♦' J♠' Q♦ K♣
   trouble:
-    at (0,0): QC
+    at (0,0): Q♣
   expect:
     plan_lines:
-      - "peel JD from HELPER [8D 9D TD JD], absorb onto [QC] → [JD QC]"
-      - "peel TS' from HELPER [TS' JS QS' KS AS 2S], absorb onto [JD QC] → [TS' JD QC] [→COMPLETE]"
+      - "peel J♦ from HELPER [8♦ 9♦ T♦ J♦], absorb onto [Q♣] → [J♦ Q♣]"
+      - "peel T♠' from HELPER [T♠' J♠ Q♠' K♠ A♠ 2♠], absorb onto [J♦ Q♣] → [T♠' J♦ Q♣] [→COMPLETE]"
 
 scenario corpus_sid_134
-  desc: Corpus session 134, trouble 6H'.
+  desc: Corpus session 134, trouble 6♥'.
   op: solve
   helper:
-    at (0,0): AC AD AH
-    at (0,0): KS KH KD'
-    at (0,0): JD JS JH'
-    at (0,0): 2C' 3D' 4S
-    at (0,0): 7S 7D 7H'
-    at (0,0): 3D 3C' 3S'
-    at (0,0): KS' AS 2S 3S 4S'
-    at (0,0): QS QD' QC'
-    at (0,0): QD KD AD' 2D'
-    at (0,0): 8D' 8H' 8C'
-    at (0,0): 9S' TH JS'
-    at (0,0): AC' 2C 3C 4C' 5C' 6C 7C 8C 9C TC JC QC
-    at (0,0): AH' 2H 3H 4H
-    at (0,0): 5D 6D' 7D' 8D
-    at (0,0): 4C 5H 6S 7H 8S 9H
-    at (0,0): TC' TD TS'
-    at (0,0): 4D' 5C 6H 7S' 8H 9S
+    at (0,0): A♣ A♦ A♥
+    at (0,0): K♠ K♥ K♦'
+    at (0,0): J♦ J♠ J♥'
+    at (0,0): 2♣' 3♦' 4♠
+    at (0,0): 7♠ 7♦ 7♥'
+    at (0,0): 3♦ 3♣' 3♠'
+    at (0,0): K♠' A♠ 2♠ 3♠ 4♠'
+    at (0,0): Q♠ Q♦' Q♣'
+    at (0,0): Q♦ K♦ A♦' 2♦'
+    at (0,0): 8♦' 8♥' 8♣'
+    at (0,0): 9♠' T♥ J♠'
+    at (0,0): A♣' 2♣ 3♣ 4♣' 5♣' 6♣ 7♣ 8♣ 9♣ T♣ J♣ Q♣
+    at (0,0): A♥' 2♥ 3♥ 4♥
+    at (0,0): 5♦ 6♦' 7♦' 8♦
+    at (0,0): 4♣ 5♥ 6♠ 7♥ 8♠ 9♥
+    at (0,0): T♣' T♦ T♠'
+    at (0,0): 4♦' 5♣ 6♥ 7♠' 8♥ 9♠
   trouble:
-    at (0,0): 6H'
+    at (0,0): 6♥'
   expect:
     plan_lines:
-      - "splice [6H'] into HELPER [4D' 5C 6H 7S' 8H 9S] → [4D' 5C 6H'] + [6H 7S' 8H 9S]"
+      - "splice [6♥'] into HELPER [4♦' 5♣ 6♥ 7♠' 8♥ 9♠] → [4♦' 5♣ 6♥'] + [6♥ 7♠' 8♥ 9♠]"
 
 scenario corpus_sid_136
-  desc: Corpus session 136, trouble 5D.
+  desc: Corpus session 136, trouble 5♦.
   op: solve
   helper:
-    at (0,0): AC AD AH
-    at (0,0): 7D 7C 7H'
-    at (0,0): 3D 4C 5H 6S 7H
-    at (0,0): 3H 4H 5H'
-    at (0,0): 2C 2H 2D'
-    at (0,0): 5D' 6C' 7D'
-    at (0,0): 3C' 4D' 5C
-    at (0,0): KS AS 2S 3S 4S' 5S
-    at (0,0): 7S 8S' 9S'
-    at (0,0): TS' TC' TH
-    at (0,0): TC JH' QS KH
-    at (0,0): 7C' 8D 9C TD
-    at (0,0): TD' JD QD KD
-    at (0,0): 8H 9C' TH' JC QH' KC'
-    at (0,0): QD' KD' AD' 2D
+    at (0,0): A♣ A♦ A♥
+    at (0,0): 7♦ 7♣ 7♥'
+    at (0,0): 3♦ 4♣ 5♥ 6♠ 7♥
+    at (0,0): 3♥ 4♥ 5♥'
+    at (0,0): 2♣ 2♥ 2♦'
+    at (0,0): 5♦' 6♣' 7♦'
+    at (0,0): 3♣' 4♦' 5♣
+    at (0,0): K♠ A♠ 2♠ 3♠ 4♠' 5♠
+    at (0,0): 7♠ 8♠' 9♠'
+    at (0,0): T♠' T♣' T♥
+    at (0,0): T♣ J♥' Q♠ K♥
+    at (0,0): 7♣' 8♦ 9♣ T♦
+    at (0,0): T♦' J♦ Q♦ K♦
+    at (0,0): 8♥ 9♣' T♥' J♣ Q♥' K♣'
+    at (0,0): Q♦' K♦' A♦' 2♦
   trouble:
-    at (0,0): 5D
+    at (0,0): 5♦
   expect:
     plan_lines:
-      - "splice [5D] into HELPER [3D 4C 5H 6S 7H] → [3D 4C 5D] + [5H 6S 7H]"
+      - "splice [5♦] into HELPER [3♦ 4♣ 5♥ 6♠ 7♥] → [3♦ 4♣ 5♦] + [5♥ 6♠ 7♥]"
 
 scenario corpus_sid_138
-  desc: Corpus session 138, trouble TC'.
+  desc: Corpus session 138, trouble T♣'.
   op: solve
   helper:
-    at (0,0): 7S 7D 7C
-    at (0,0): KC AC 2C 3C
-    at (0,0): 9D' 9H 9C
-    at (0,0): 2H 3H 4H
-    at (0,0): TS' JS' QS'
-    at (0,0): 5H' 5C' 5D
-    at (0,0): AD AS' AC'
-    at (0,0): 4D 5D' 6D'
-    at (0,0): 5C 6D 7S' 8H' 9S' TD'
-    at (0,0): QS KS AS 2S 3S
-    at (0,0): JC' JS JH'
-    at (0,0): JH QH' KH' AH 2H'
-    at (0,0): JD QD KD AD' 2D 3D 4D'
-    at (0,0): TH' TD TC
-    at (0,0): 3S' 4S 5S'
-    at (0,0): 6S 6C' 6H
-    at (0,0): 2C' 3D' 4C 5H 6S' 7H
-    at (0,0): 8C' 8S 8D'
+    at (0,0): 7♠ 7♦ 7♣
+    at (0,0): K♣ A♣ 2♣ 3♣
+    at (0,0): 9♦' 9♥ 9♣
+    at (0,0): 2♥ 3♥ 4♥
+    at (0,0): T♠' J♠' Q♠'
+    at (0,0): 5♥' 5♣' 5♦
+    at (0,0): A♦ A♠' A♣'
+    at (0,0): 4♦ 5♦' 6♦'
+    at (0,0): 5♣ 6♦ 7♠' 8♥' 9♠' T♦'
+    at (0,0): Q♠ K♠ A♠ 2♠ 3♠
+    at (0,0): J♣' J♠ J♥'
+    at (0,0): J♥ Q♥' K♥' A♥ 2♥'
+    at (0,0): J♦ Q♦ K♦ A♦' 2♦ 3♦ 4♦'
+    at (0,0): T♥' T♦ T♣
+    at (0,0): 3♠' 4♠ 5♠'
+    at (0,0): 6♠ 6♣' 6♥
+    at (0,0): 2♣' 3♦' 4♣ 5♥ 6♠' 7♥
+    at (0,0): 8♣' 8♠ 8♦'
   trouble:
-    at (0,0): TC'
+    at (0,0): T♣'
   expect:
     plan_lines:
-      - "peel JH from HELPER [JH QH' KH' AH 2H'], absorb onto [TC'] → [TC' JH]"
-      - "peel QS from HELPER [QS KS AS 2S 3S], absorb onto [TC' JH] → [TC' JH QS] [→COMPLETE]"
+      - "peel J♥ from HELPER [J♥ Q♥' K♥' A♥ 2♥'], absorb onto [T♣'] → [T♣' J♥]"
+      - "peel Q♠ from HELPER [Q♠ K♠ A♠ 2♠ 3♠], absorb onto [T♣' J♥] → [T♣' J♥ Q♠] [→COMPLETE]"
 
 scenario corpus_sid_140
-  desc: Corpus session 140, trouble JH.
+  desc: Corpus session 140, trouble J♥.
   op: solve
   helper:
-    at (0,0): 7S 7D 7C
-    at (0,0): 4D 5D 6D
-    at (0,0): JC' JD' JH'
-    at (0,0): 8C 8H 8S'
-    at (0,0): 8H' 8C' 8D
-    at (0,0): AH' 2H 3H
-    at (0,0): 6S' 7S' 8S 9S
-    at (0,0): TD' JS QD' KC
-    at (0,0): TD JD QD KD AD' 2D'
-    at (0,0): 9C' 9D 9H'
-    at (0,0): AD AH AS'
-    at (0,0): 2D 3S 4H' 5C
-    at (0,0): 3D 4C 5H 6S
-    at (0,0): 5H' 6H' 7H
-    at (0,0): 4S 4H 4D'
-    at (0,0): 3C 4C' 5C'
-    at (0,0): QC KC' AC
-    at (0,0): QS' KS AS 2S 3S'
-    at (0,0): 2C 3H' 4S'
+    at (0,0): 7♠ 7♦ 7♣
+    at (0,0): 4♦ 5♦ 6♦
+    at (0,0): J♣' J♦' J♥'
+    at (0,0): 8♣ 8♥ 8♠'
+    at (0,0): 8♥' 8♣' 8♦
+    at (0,0): A♥' 2♥ 3♥
+    at (0,0): 6♠' 7♠' 8♠ 9♠
+    at (0,0): T♦' J♠ Q♦' K♣
+    at (0,0): T♦ J♦ Q♦ K♦ A♦' 2♦'
+    at (0,0): 9♣' 9♦ 9♥'
+    at (0,0): A♦ A♥ A♠'
+    at (0,0): 2♦ 3♠ 4♥' 5♣
+    at (0,0): 3♦ 4♣ 5♥ 6♠
+    at (0,0): 5♥' 6♥' 7♥
+    at (0,0): 4♠ 4♥ 4♦'
+    at (0,0): 3♣ 4♣' 5♣'
+    at (0,0): Q♣ K♣' A♣
+    at (0,0): Q♠' K♠ A♠ 2♠ 3♠'
+    at (0,0): 2♣ 3♥' 4♠'
   trouble:
-    at (0,0): JH
+    at (0,0): J♥
   expect:
     plan_lines:
-      - "peel QS' from HELPER [QS' KS AS 2S 3S'], absorb onto [JH] → [JH QS']"
-      - "yank KD from HELPER [TD JD QD KD AD' 2D'], absorb onto [JH QS'] → [JH QS' KD] [→COMPLETE] ; spawn [AD' 2D']"
-      - "peel 3D from HELPER [3D 4C 5H 6S], absorb onto [AD' 2D'] → [AD' 2D' 3D] [→COMPLETE]"
+      - "peel Q♠' from HELPER [Q♠' K♠ A♠ 2♠ 3♠'], absorb onto [J♥] → [J♥ Q♠']"
+      - "yank K♦ from HELPER [T♦ J♦ Q♦ K♦ A♦' 2♦'], absorb onto [J♥ Q♠'] → [J♥ Q♠' K♦] [→COMPLETE] ; spawn [A♦' 2♦']"
+      - "peel 3♦ from HELPER [3♦ 4♣ 5♥ 6♠], absorb onto [A♦' 2♦'] → [A♦' 2♦' 3♦] [→COMPLETE]"
 
 scenario corpus_sid_142
-  desc: Corpus session 142, trouble 8H'.
+  desc: Corpus session 142, trouble 8♥'.
   op: solve
   helper:
-    at (0,0): AC AD AH
-    at (0,0): TD TC' TH'
-    at (0,0): 7D 7C 7H'
-    at (0,0): 5H 5S 5D
-    at (0,0): 8S 9S' TS
-    at (0,0): AS 2S 3S 4S
-    at (0,0): JS' JH JC' JD'
-    at (0,0): QD' QH QS
-    at (0,0): KS KH' KD'
-    at (0,0): JD QD KD AD' 2D
-    at (0,0): 3C' 3D' 3H'
-    at (0,0): 4D 5C' 6H 7S 8H
-    at (0,0): QS' KS' AS' 2S' 3S' 4S' 5S' 6S
-    at (0,0): 7H 8S' 9D'
-    at (0,0): 2C 3D 4C 5H' 6C 7D' 8C
-    at (0,0): 8C' 9C TC JC QC KC' AC' 2C' 3C 4C'
-    at (0,0): 6D 7C' 8D 9S
-    at (0,0): 2H' 3H 4H
-    at (0,0): QH' KH AH' 2H
-    at (0,0): 5C 6D' 7S' 8D' 9C' TH
+    at (0,0): A♣ A♦ A♥
+    at (0,0): T♦ T♣' T♥'
+    at (0,0): 7♦ 7♣ 7♥'
+    at (0,0): 5♥ 5♠ 5♦
+    at (0,0): 8♠ 9♠' T♠
+    at (0,0): A♠ 2♠ 3♠ 4♠
+    at (0,0): J♠' J♥ J♣' J♦'
+    at (0,0): Q♦' Q♥ Q♠
+    at (0,0): K♠ K♥' K♦'
+    at (0,0): J♦ Q♦ K♦ A♦' 2♦
+    at (0,0): 3♣' 3♦' 3♥'
+    at (0,0): 4♦ 5♣' 6♥ 7♠ 8♥
+    at (0,0): Q♠' K♠' A♠' 2♠' 3♠' 4♠' 5♠' 6♠
+    at (0,0): 7♥ 8♠' 9♦'
+    at (0,0): 2♣ 3♦ 4♣ 5♥' 6♣ 7♦' 8♣
+    at (0,0): 8♣' 9♣ T♣ J♣ Q♣ K♣' A♣' 2♣' 3♣ 4♣'
+    at (0,0): 6♦ 7♣' 8♦ 9♠
+    at (0,0): 2♥' 3♥ 4♥
+    at (0,0): Q♥' K♥ A♥' 2♥
+    at (0,0): 5♣ 6♦' 7♠' 8♦' 9♣' T♥
   trouble:
-    at (0,0): 8H'
+    at (0,0): 8♥'
   expect:
     plan_lines:
-      - "splice [8H'] into HELPER [5C 6D' 7S' 8D' 9C' TH] → [5C 6D' 7S' 8H'] + [8D' 9C' TH]"
+      - "splice [8♥'] into HELPER [5♣ 6♦' 7♠' 8♦' 9♣' T♥] → [5♣ 6♦' 7♠' 8♥'] + [8♦' 9♣' T♥]"
 
 scenario corpus_sid_144
-  desc: Corpus session 144, trouble 5C'.
+  desc: Corpus session 144, trouble 5♣'.
   op: solve
   helper:
-    at (0,0): 8D' 9D TD JD QD KD
-    at (0,0): KC KD' KH
-    at (0,0): 2C 2H' 2S'
-    at (0,0): 7H 8C' 9H' TS
-    at (0,0): 6S 6H' 6D
-    at (0,0): AH' 2H 3H
-    at (0,0): 3S' 4S' 5S 6S' 7S'
-    at (0,0): JS QS' KS AS 2S 3S
-    at (0,0): 7S 7D 7C 7H'
-    at (0,0): 3D 4C 5H
-    at (0,0): 4H 5S' 6H 7C' 8D
-    at (0,0): AC' 2C' 3C
-    at (0,0): AC AD AH AS'
-    at (0,0): 8H' 9H TH JH'
-    at (0,0): TH' JC' QD'
+    at (0,0): 8♦' 9♦ T♦ J♦ Q♦ K♦
+    at (0,0): K♣ K♦' K♥
+    at (0,0): 2♣ 2♥' 2♠'
+    at (0,0): 7♥ 8♣' 9♥' T♠
+    at (0,0): 6♠ 6♥' 6♦
+    at (0,0): A♥' 2♥ 3♥
+    at (0,0): 3♠' 4♠' 5♠ 6♠' 7♠'
+    at (0,0): J♠ Q♠' K♠ A♠ 2♠ 3♠
+    at (0,0): 7♠ 7♦ 7♣ 7♥'
+    at (0,0): 3♦ 4♣ 5♥
+    at (0,0): 4♥ 5♠' 6♥ 7♣' 8♦
+    at (0,0): A♣' 2♣' 3♣
+    at (0,0): A♣ A♦ A♥ A♠'
+    at (0,0): 8♥' 9♥ T♥ J♥'
+    at (0,0): T♥' J♣' Q♦'
   trouble:
-    at (0,0): 5C'
+    at (0,0): 5♣'
   expect:
     plan_lines:
-      - "peel 4H from HELPER [4H 5S' 6H 7C' 8D], absorb onto [5C'] → [4H 5C']"
-      - "peel 3S' from HELPER [3S' 4S' 5S 6S' 7S'], absorb onto [4H 5C'] → [3S' 4H 5C'] [→COMPLETE]"
+      - "peel 4♥ from HELPER [4♥ 5♠' 6♥ 7♣' 8♦], absorb onto [5♣'] → [4♥ 5♣']"
+      - "peel 3♠' from HELPER [3♠' 4♠' 5♠ 6♠' 7♠'], absorb onto [4♥ 5♣'] → [3♠' 4♥ 5♣'] [→COMPLETE]"
 
 scenario corpus_sid_146
-  desc: Corpus session 146, trouble AC'.
+  desc: Corpus session 146, trouble A♣'.
   op: solve
   helper:
-    at (0,0): 7S 7D 7C
-    at (0,0): AC AD AH
-    at (0,0): KS AS 2S
-    at (0,0): 2H 2C' 2D'
-    at (0,0): 2S' 3S 4S
-    at (0,0): 2C 3D 4C
-    at (0,0): 2H' 3H 4H 5H' 6H
-    at (0,0): 5S' 5H 5D' 5C'
-    at (0,0): 4S' 5S 6S
-    at (0,0): 4H' 5C 6D 7S' 8H'
-    at (0,0): TD JD QD
-    at (0,0): 8D 9S TD' JS QH'
-    at (0,0): 9S' 9D' 9C' 9H
-    at (0,0): QD' KD AD' 2D
-    at (0,0): 6C' 7H 8S 9D TS' JD' QC
+    at (0,0): 7♠ 7♦ 7♣
+    at (0,0): A♣ A♦ A♥
+    at (0,0): K♠ A♠ 2♠
+    at (0,0): 2♥ 2♣' 2♦'
+    at (0,0): 2♠' 3♠ 4♠
+    at (0,0): 2♣ 3♦ 4♣
+    at (0,0): 2♥' 3♥ 4♥ 5♥' 6♥
+    at (0,0): 5♠' 5♥ 5♦' 5♣'
+    at (0,0): 4♠' 5♠ 6♠
+    at (0,0): 4♥' 5♣ 6♦ 7♠' 8♥'
+    at (0,0): T♦ J♦ Q♦
+    at (0,0): 8♦ 9♠ T♦' J♠ Q♥'
+    at (0,0): 9♠' 9♦' 9♣' 9♥
+    at (0,0): Q♦' K♦ A♦' 2♦
+    at (0,0): 6♣' 7♥ 8♠ 9♦ T♠' J♦' Q♣
   trouble:
-    at (0,0): AC'
+    at (0,0): A♣'
   expect:
     plan_lines:
-      - "peel 2H' from HELPER [2H' 3H 4H 5H' 6H], absorb onto [AC'] → [AC' 2H']"
-      - "split_out 3S from HELPER [2S' 3S 4S], absorb onto [AC' 2H'] → [AC' 2H' 3S] [→COMPLETE] ; spawn [2S'], [4S]"
-      - "peel 3H from HELPER [3H 4H 5H' 6H], absorb onto [2S'] → [2S' 3H]"
-      - "pull 4S onto [2S' 3H] → [2S' 3H 4S] [→COMPLETE]"
+      - "peel 2♥' from HELPER [2♥' 3♥ 4♥ 5♥' 6♥], absorb onto [A♣'] → [A♣' 2♥']"
+      - "split_out 3♠ from HELPER [2♠' 3♠ 4♠], absorb onto [A♣' 2♥'] → [A♣' 2♥' 3♠] [→COMPLETE] ; spawn [2♠'], [4♠]"
+      - "peel 3♥ from HELPER [3♥ 4♥ 5♥' 6♥], absorb onto [2♠'] → [2♠' 3♥]"
+      - "pull 4♠ onto [2♠' 3♥] → [2♠' 3♥ 4♠] [→COMPLETE]"
 
 scenario corpus_sid_148
-  desc: Corpus session 148, trouble 2D.
+  desc: Corpus session 148, trouble 2♦.
   op: solve
   helper:
-    at (0,0): AC AD AH
-    at (0,0): TD TC' TS'
-    at (0,0): JC JH JD'
-    at (0,0): KS AD' 2C' 3H'
-    at (0,0): QH' QD' QS
-    at (0,0): 2C 3D 4C
-    at (0,0): KH' AC' 2D' 3C 4D
-    at (0,0): 6S 7D' 8S'
-    at (0,0): 2H 3C' 4H' 5S 6H' 7S'
-    at (0,0): 7S 7D 7H
-    at (0,0): 5C 6C' 7C
-    at (0,0): AS 2S 3S
-    at (0,0): 3S' 4S 5S' 6S'
-    at (0,0): 2H' 3H 4H 5H
-    at (0,0): 6H 6C 6D'
-    at (0,0): JD QD KD
-    at (0,0): 7C' 8C 9C'
-    at (0,0): TD' TC TS
+    at (0,0): A♣ A♦ A♥
+    at (0,0): T♦ T♣' T♠'
+    at (0,0): J♣ J♥ J♦'
+    at (0,0): K♠ A♦' 2♣' 3♥'
+    at (0,0): Q♥' Q♦' Q♠
+    at (0,0): 2♣ 3♦ 4♣
+    at (0,0): K♥' A♣' 2♦' 3♣ 4♦
+    at (0,0): 6♠ 7♦' 8♠'
+    at (0,0): 2♥ 3♣' 4♥' 5♠ 6♥' 7♠'
+    at (0,0): 7♠ 7♦ 7♥
+    at (0,0): 5♣ 6♣' 7♣
+    at (0,0): A♠ 2♠ 3♠
+    at (0,0): 3♠' 4♠ 5♠' 6♠'
+    at (0,0): 2♥' 3♥ 4♥ 5♥
+    at (0,0): 6♥ 6♣ 6♦'
+    at (0,0): J♦ Q♦ K♦
+    at (0,0): 7♣' 8♣ 9♣'
+    at (0,0): T♦' T♣ T♠
   trouble:
-    at (0,0): 2D
+    at (0,0): 2♦
   expect:
     plan_lines:
-      - "splice [2D] into HELPER [KH' AC' 2D' 3C 4D] → [KH' AC' 2D] + [2D' 3C 4D]"
+      - "splice [2♦] into HELPER [K♥' A♣' 2♦' 3♣ 4♦] → [K♥' A♣' 2♦] + [2♦' 3♣ 4♦]"
 

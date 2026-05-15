@@ -11,49 +11,46 @@
 # lowering).
 
 scenario seed_extend_partial_run
-  desc: 5H from hand free-pulls onto partial [3H 4H]; one merge_hand primitive.
+  desc: 5♥ from hand free-pulls onto partial [3♥ 4♥]; one merge_hand primitive.
   board:
-    at (100, 100): 3H 4H
-    at (200, 100): QC QD QH
-  hand: 5H
+    at (100,100): 3♥ 4♥
+    at (100,200): Q♣ Q♦ Q♥
+  hand: 5♥
   expect:
     primitives:
-      - merge_hand 5H -> [3H 4H] /right
-
+      - merge_hand 5♥ -> [3♥ 4♥] at (100,100) /right
 scenario triple_in_hand_clean_board
-  desc: hand contains a complete set [5S 5D 5C]; board is all helpers (clean). The triple-in-hand short-circuit fires — no BFS plan, just lay the three cards down at a fresh open loc as a seed chain.
+  desc: hand contains a complete set [5♠ 5♦ 5♣]; board is all helpers (clean). The triple-in-hand short-circuit fires — no BFS plan, just lay the three cards down at a fresh open loc as a seed chain.
   board:
-    at (100, 100): KS AS 2S 3S
-    at (200, 100): TD JD QD KD
-  hand: 5S 5D 5C
+    at (100,100): K♠ A♠ 2♠ 3♠
+    at (100,200): T♦ J♦ Q♦ K♦
+  hand: 5♠ 5♦ 5♣
   expect:
     primitives:
-      - place_hand 5S -> (272,52)
-      - merge_hand 5D -> [5S] /right
-      - merge_hand 5C -> [5S 5D] /right
-
+      - place_hand 5♠ -> (52,272)
+      - merge_hand 5♦ -> [5♠] at (52,272) /right
+      - merge_hand 5♣ -> [5♠ 5♦] at (52,272) /right
 scenario pair_from_hand_then_peel
-  desc: pair [JD' QD'] placed at fresh loc (multi-placement seed), then BFS plan peels TD off the helper run [TD JD QD KD] and merges it left onto the hand-laid pair to form the complete run [TD JD' QD'].
+  desc: pair [J♦' Q♦'] placed at fresh loc (multi-placement seed), then BFS plan peels T♦ off the helper run [T♦ J♦ Q♦ K♦] and merges it left onto the hand-laid pair to form the complete run [T♦ J♦' Q♦'].
   board:
-    at (100, 100): TD JD QD KD
-    at (200, 100): KS AS 2S 3S
-  hand: JD' QD'
+    at (100,100): T♦ J♦ Q♦ K♦
+    at (100,200): K♠ A♠ 2♠ 3♠
+  hand: J♦' Q♦'
   expect:
     primitives:
-      - place_hand JD' -> (272,52)
-      - merge_hand QD' -> [JD'] /right
-      - split [TD JD QD KD]@0
-      - merge_stack [TD] -> [JD' QD'] /left
-
+      - place_hand J♦' -> (52,272)
+      - merge_hand Q♦' -> [J♦'] at (52,272) /right
+      - split [T♦ J♦ Q♦ K♦] at (100,100) @0
+      - merge_stack [T♦] at (98,96) -> [J♦' Q♦'] at (52,272) /left
 scenario single_card_two_verb_plan
-  desc: 4S from hand; the augmented board has two troubles ([JD' QD'] partial + the new 4S singleton). BFS finds a 2-move plan — peel TD onto [JD' QD'] completes it, then push 4S onto [KS AS 2S 3S] as a merge_hand, consuming the hand card directly.
+  desc: 4♠ from hand; the augmented board has two troubles ([J♦' Q♦'] partial + the new 4♠ singleton). BFS finds a 2-move plan — peel T♦ onto [J♦' Q♦'] completes it, then push 4♠ onto [K♠ A♠ 2♠ 3♠] as a merge_hand, consuming the hand card directly.
   board:
-    at (100, 100): KS AS 2S 3S
-    at (200, 100): TD JD QD KD
-    at (300, 100): JD' QD'
-  hand: 4S
+    at (100,100): K♠ A♠ 2♠ 3♠
+    at (100,200): T♦ J♦ Q♦ K♦
+    at (100,300): J♦' Q♦'
+  hand: 4♠
   expect:
     primitives:
-      - split [TD JD QD KD]@0
-      - merge_stack [TD] -> [JD' QD'] /left
-      - merge_hand 4S -> [KS AS 2S 3S] /right
+      - split [T♦ J♦ Q♦ K♦] at (100,200) @0
+      - merge_stack [T♦] at (98,196) -> [J♦' Q♦'] at (100,300) /left
+      - merge_hand 4♠ -> [K♠ A♠ 2♠ 3♠] at (100,100) /right

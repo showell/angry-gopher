@@ -51,11 +51,11 @@ function assertNoOverlap(
     const labels = stack.cards.map(cardLabel).join(" ");
     const dump = board.map((s, i) => {
       const w = 27 + (s.cards.length - 1) * 33;
-      return `  [${i}] (${s.loc.top},${s.loc.left})..(${s.loc.top + 40},${s.loc.left + w}) ${s.cards.map(cardLabel).join(" ")}`;
+      return `  [${i}] (${s.loc.left},${s.loc.top})..(${s.loc.left + w},${s.loc.top + 40}) ${s.cards.map(cardLabel).join(" ")}`;
     }).join("\n");
     throw new Error(
       `[transcript ${ctx}] geometry violation at stack ${violation} `
-      + `[${labels}] @ (${stack.loc.top},${stack.loc.left}). Full board:\n${dump}`,
+      + `[${labels}] @ (${stack.loc.left},${stack.loc.top}). Full board:\n${dump}`,
     );
   }
 }

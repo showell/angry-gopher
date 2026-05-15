@@ -4,462 +4,462 @@
 
 
 
-scenario extra_001_JC_JDp
-  desc: extra_001_JC_JDp. asserts BFS proves no plan.
+scenario extra_001_J♣_J♦p
+  desc: extra_001_J♣_J♦p. asserts BFS proves no plan.
   op: solve
   helper:
-    at (0,0): KS AS 2S 3S
-    at (0,0): TD JD QD KD
-    at (0,0): 2H 3H 4H
-    at (0,0): AC AD AH
-    at (0,0): 9S' TS JS
-    at (0,0): 7H' 7C' 7D
-    at (0,0): 2C 3D 4C 5H 6S
-    at (0,0): 7S 7C 7H
+    at (0,0): K♠ A♠ 2♠ 3♠
+    at (0,0): T♦ J♦ Q♦ K♦
+    at (0,0): 2♥ 3♥ 4♥
+    at (0,0): A♣ A♦ A♥
+    at (0,0): 9♠' T♠ J♠
+    at (0,0): 7♥' 7♣' 7♦
+    at (0,0): 2♣ 3♦ 4♣ 5♥ 6♠
+    at (0,0): 7♠ 7♣ 7♥
   trouble:
-    at (0,0): JC JD'
+    at (0,0): J♣ J♦'
   expect: no_plan
 
-scenario extra_002_JC_JDp
-  desc: extra_002_JC_JDp. asserts BFS proves no plan.
+scenario extra_002_J♣_J♦p
+  desc: extra_002_J♣_J♦p. asserts BFS proves no plan.
   op: solve
   helper:
-    at (0,0): KS AS 2S 3S
-    at (0,0): TD JD QD KD
-    at (0,0): 2H 3H 4H
-    at (0,0): AC AD AH
-    at (0,0): 9S' TS JS
-    at (0,0): 7H' 7C' 7D
-    at (0,0): 2C 3D 4C 5H 6S
-    at (0,0): 7S 7C 7H
-    at (0,0): 3S' 4D 5C
+    at (0,0): K♠ A♠ 2♠ 3♠
+    at (0,0): T♦ J♦ Q♦ K♦
+    at (0,0): 2♥ 3♥ 4♥
+    at (0,0): A♣ A♦ A♥
+    at (0,0): 9♠' T♠ J♠
+    at (0,0): 7♥' 7♣' 7♦
+    at (0,0): 2♣ 3♦ 4♣ 5♥ 6♠
+    at (0,0): 7♠ 7♣ 7♥
+    at (0,0): 3♠' 4♦ 5♣
   trouble:
-    at (0,0): JC JD'
+    at (0,0): J♣ J♦'
   expect: no_plan
 
-scenario extra_003_5D_6C
-  desc: extra_003_5D_6C. asserts BFS proves no plan.
+scenario extra_003_5♦_6♣
+  desc: extra_003_5♦_6♣. asserts BFS proves no plan.
   op: solve
   helper:
-    at (0,0): KS AS 2S 3S
-    at (0,0): 2H 3H 4H
-    at (0,0): AC AD AH
-    at (0,0): 9S' TS JS
-    at (0,0): 7H' 7C' 7D
-    at (0,0): 2C 3D 4C 5H 6S
-    at (0,0): 7S 7C 7H
-    at (0,0): 3S' 4D 5C
-    at (0,0): TD JD QD
-    at (0,0): JD' QS KD
+    at (0,0): K♠ A♠ 2♠ 3♠
+    at (0,0): 2♥ 3♥ 4♥
+    at (0,0): A♣ A♦ A♥
+    at (0,0): 9♠' T♠ J♠
+    at (0,0): 7♥' 7♣' 7♦
+    at (0,0): 2♣ 3♦ 4♣ 5♥ 6♠
+    at (0,0): 7♠ 7♣ 7♥
+    at (0,0): 3♠' 4♦ 5♣
+    at (0,0): T♦ J♦ Q♦
+    at (0,0): J♦' Q♠ K♦
   trouble:
-    at (0,0): 5D 6C
+    at (0,0): 5♦ 6♣
   expect: no_plan
 
-scenario extra_004_5D_6C
-  desc: extra_004_5D_6C. asserts BFS proves no plan.
+scenario extra_004_5♦_6♣
+  desc: extra_004_5♦_6♣. asserts BFS proves no plan.
   op: solve
   helper:
-    at (0,0): KS AS 2S 3S
-    at (0,0): 2H 3H 4H
-    at (0,0): AC AD AH
-    at (0,0): 9S' TS JS
-    at (0,0): 7H' 7C' 7D
-    at (0,0): 7S 7C 7H
-    at (0,0): 3S' 4D 5C
-    at (0,0): TD JD QD
-    at (0,0): JD' QS KD
-    at (0,0): AD' 2C 3D 4C 5H 6S
+    at (0,0): K♠ A♠ 2♠ 3♠
+    at (0,0): 2♥ 3♥ 4♥
+    at (0,0): A♣ A♦ A♥
+    at (0,0): 9♠' T♠ J♠
+    at (0,0): 7♥' 7♣' 7♦
+    at (0,0): 7♠ 7♣ 7♥
+    at (0,0): 3♠' 4♦ 5♣
+    at (0,0): T♦ J♦ Q♦
+    at (0,0): J♦' Q♠ K♦
+    at (0,0): A♦' 2♣ 3♦ 4♣ 5♥ 6♠
   trouble:
-    at (0,0): 5D 6C
+    at (0,0): 5♦ 6♣
   expect: no_plan
 
-scenario extra_005_JC
-  desc: extra_005_JC. asserts BFS proves no plan.
+scenario extra_005_J♣
+  desc: extra_005_J♣. asserts BFS proves no plan.
   op: solve
   helper:
-    at (0,0): KS AS 2S 3S
-    at (0,0): AC AD AH
-    at (0,0): 9S' TS JS
-    at (0,0): 7H' 7C' 7D
-    at (0,0): 7S 7C 7H
-    at (0,0): 3S' 4D 5C
-    at (0,0): TD JD QD
-    at (0,0): JD' QS KD
-    at (0,0): AD' 2C 3D
-    at (0,0): 4C 5D 6S
-    at (0,0): 2H 3H 4H 5H
+    at (0,0): K♠ A♠ 2♠ 3♠
+    at (0,0): A♣ A♦ A♥
+    at (0,0): 9♠' T♠ J♠
+    at (0,0): 7♥' 7♣' 7♦
+    at (0,0): 7♠ 7♣ 7♥
+    at (0,0): 3♠' 4♦ 5♣
+    at (0,0): T♦ J♦ Q♦
+    at (0,0): J♦' Q♠ K♦
+    at (0,0): A♦' 2♣ 3♦
+    at (0,0): 4♣ 5♦ 6♠
+    at (0,0): 2♥ 3♥ 4♥ 5♥
   trouble:
-    at (0,0): JC
+    at (0,0): J♣
   expect: no_plan
 
-scenario extra_006_JC
-  desc: extra_006_JC. asserts BFS proves no plan.
+scenario extra_006_J♣
+  desc: extra_006_J♣. asserts BFS proves no plan.
   op: solve
   helper:
-    at (0,0): KS AS 2S 3S
-    at (0,0): AC AD AH
-    at (0,0): 9S' TS JS
-    at (0,0): TD JD QD
-    at (0,0): JD' QS KD
-    at (0,0): AD' 2C 3D
-    at (0,0): 3H 4H 5H
-    at (0,0): 2H 3S' 4D
-    at (0,0): 5C 6C 7C'
-    at (0,0): 4C 5D 6S 7H'
-    at (0,0): 7S 7C 7H 7D
+    at (0,0): K♠ A♠ 2♠ 3♠
+    at (0,0): A♣ A♦ A♥
+    at (0,0): 9♠' T♠ J♠
+    at (0,0): T♦ J♦ Q♦
+    at (0,0): J♦' Q♠ K♦
+    at (0,0): A♦' 2♣ 3♦
+    at (0,0): 3♥ 4♥ 5♥
+    at (0,0): 2♥ 3♠' 4♦
+    at (0,0): 5♣ 6♣ 7♣'
+    at (0,0): 4♣ 5♦ 6♠ 7♥'
+    at (0,0): 7♠ 7♣ 7♥ 7♦
   trouble:
-    at (0,0): JC
+    at (0,0): J♣
   expect: no_plan
 
-scenario extra_007_4S_5Dp
-  desc: extra_007_4S_5Dp. asserts BFS proves no plan.
+scenario extra_007_4♠_5♦p
+  desc: extra_007_4♠_5♦p. asserts BFS proves no plan.
   op: solve
   helper:
-    at (0,0): TD JD QD KD
-    at (0,0): 2H 3H 4H
-    at (0,0): AC AD AH
-    at (0,0): 2C 3D 4C 5H
-    at (0,0): 6H 6D' 6S
-    at (0,0): 7S 7D 7C 7H
-    at (0,0): KS AS 2S
-    at (0,0): AS' 2S' 3S
-    at (0,0): 8C 9D' TS'
+    at (0,0): T♦ J♦ Q♦ K♦
+    at (0,0): 2♥ 3♥ 4♥
+    at (0,0): A♣ A♦ A♥
+    at (0,0): 2♣ 3♦ 4♣ 5♥
+    at (0,0): 6♥ 6♦' 6♠
+    at (0,0): 7♠ 7♦ 7♣ 7♥
+    at (0,0): K♠ A♠ 2♠
+    at (0,0): A♠' 2♠' 3♠
+    at (0,0): 8♣ 9♦' T♠'
   trouble:
-    at (0,0): 4S 5D'
+    at (0,0): 4♠ 5♦'
   expect: no_plan
 
-scenario extra_008_4S_5Dp
-  desc: extra_008_4S_5Dp. asserts BFS proves no plan.
+scenario extra_008_4♠_5♦p
+  desc: extra_008_4♠_5♦p. asserts BFS proves no plan.
   op: solve
   helper:
-    at (0,0): TD JD QD KD
-    at (0,0): 2H 3H 4H
-    at (0,0): AC AD AH
-    at (0,0): 6H 6D' 6S
-    at (0,0): KS AS 2S
-    at (0,0): AS' 2S' 3S
-    at (0,0): 8C 9D' TS'
-    at (0,0): 2C 3D 4C
-    at (0,0): 7S 7D 7C
-    at (0,0): 5H 6H' 7H
+    at (0,0): T♦ J♦ Q♦ K♦
+    at (0,0): 2♥ 3♥ 4♥
+    at (0,0): A♣ A♦ A♥
+    at (0,0): 6♥ 6♦' 6♠
+    at (0,0): K♠ A♠ 2♠
+    at (0,0): A♠' 2♠' 3♠
+    at (0,0): 8♣ 9♦' T♠'
+    at (0,0): 2♣ 3♦ 4♣
+    at (0,0): 7♠ 7♦ 7♣
+    at (0,0): 5♥ 6♥' 7♥
   trouble:
-    at (0,0): 4S 5D'
+    at (0,0): 4♠ 5♦'
   expect: no_plan
 
-scenario extra_009_KHp
-  desc: extra_009_KHp. asserts BFS proves no plan.
+scenario extra_009_K♥p
+  desc: extra_009_K♥p. asserts BFS proves no plan.
   op: solve
   helper:
-    at (0,0): AC AD AH
-    at (0,0): 6H 6D' 6S
-    at (0,0): KS AS 2S
-    at (0,0): 2C 3D 4C
-    at (0,0): 7S 7D 7C
-    at (0,0): TD JC QD
-    at (0,0): 8C 9D' TS' JD
-    at (0,0): 2S' 3S 4S
-    at (0,0): KD AS' 2H
-    at (0,0): 3H 4H 5H 6H' 7H
+    at (0,0): A♣ A♦ A♥
+    at (0,0): 6♥ 6♦' 6♠
+    at (0,0): K♠ A♠ 2♠
+    at (0,0): 2♣ 3♦ 4♣
+    at (0,0): 7♠ 7♦ 7♣
+    at (0,0): T♦ J♣ Q♦
+    at (0,0): 8♣ 9♦' T♠' J♦
+    at (0,0): 2♠' 3♠ 4♠
+    at (0,0): K♦ A♠' 2♥
+    at (0,0): 3♥ 4♥ 5♥ 6♥' 7♥
   trouble:
-    at (0,0): KH'
+    at (0,0): K♥'
   expect: no_plan
 
-scenario extra_010_KHp
-  desc: extra_010_KHp. asserts BFS proves no plan.
+scenario extra_010_K♥p
+  desc: extra_010_K♥p. asserts BFS proves no plan.
   op: solve
   helper:
-    at (0,0): AC AD AH
-    at (0,0): 6H 6D' 6S
-    at (0,0): KS AS 2S
-    at (0,0): 2C 3D 4C
-    at (0,0): 7S 7D 7C
-    at (0,0): TD JC QD
-    at (0,0): 2S' 3S 4S
-    at (0,0): KD AS' 2H
-    at (0,0): 9D' TS' JD
-    at (0,0): 3H 4H 5H 6H'
-    at (0,0): 7H 8C 9D
+    at (0,0): A♣ A♦ A♥
+    at (0,0): 6♥ 6♦' 6♠
+    at (0,0): K♠ A♠ 2♠
+    at (0,0): 2♣ 3♦ 4♣
+    at (0,0): 7♠ 7♦ 7♣
+    at (0,0): T♦ J♣ Q♦
+    at (0,0): 2♠' 3♠ 4♠
+    at (0,0): K♦ A♠' 2♥
+    at (0,0): 9♦' T♠' J♦
+    at (0,0): 3♥ 4♥ 5♥ 6♥'
+    at (0,0): 7♥ 8♣ 9♦
   trouble:
-    at (0,0): KH'
+    at (0,0): K♥'
   expect: no_plan
 
-scenario extra_011_THp
-  desc: extra_011_THp. asserts BFS proves no plan.
+scenario extra_011_T♥p
+  desc: extra_011_T♥p. asserts BFS proves no plan.
   op: solve
   helper:
-    at (0,0): 6H 6D' 6S
-    at (0,0): 7S 7D 7C
-    at (0,0): TD JC QD
-    at (0,0): 9D' TS' JD
-    at (0,0): 7H 8C 9D
-    at (0,0): KD AS' 2D
-    at (0,0): KH' AC 2H
-    at (0,0): AD 2C 3D 4C
-    at (0,0): 4H 5H 6H'
-    at (0,0): AH 2S 3H
-    at (0,0): KS AS 2S' 3S 4S
+    at (0,0): 6♥ 6♦' 6♠
+    at (0,0): 7♠ 7♦ 7♣
+    at (0,0): T♦ J♣ Q♦
+    at (0,0): 9♦' T♠' J♦
+    at (0,0): 7♥ 8♣ 9♦
+    at (0,0): K♦ A♠' 2♦
+    at (0,0): K♥' A♣ 2♥
+    at (0,0): A♦ 2♣ 3♦ 4♣
+    at (0,0): 4♥ 5♥ 6♥'
+    at (0,0): A♥ 2♠ 3♥
+    at (0,0): K♠ A♠ 2♠' 3♠ 4♠
   trouble:
-    at (0,0): TH'
+    at (0,0): T♥'
   expect: no_plan
 
-scenario extra_012_THp
-  desc: extra_012_THp. asserts BFS proves no plan.
+scenario extra_012_T♥p
+  desc: extra_012_T♥p. asserts BFS proves no plan.
   op: solve
   helper:
-    at (0,0): 6H 6D' 6S
-    at (0,0): 7S 7D 7C
-    at (0,0): TD JC QD
-    at (0,0): 9D' TS' JD
-    at (0,0): 7H 8C 9D
-    at (0,0): KD AS' 2D
-    at (0,0): KH' AC 2H
-    at (0,0): 4H 5H 6H'
-    at (0,0): AH 2S 3H
-    at (0,0): KS AS 2S' 3S 4S
-    at (0,0): AD 2C 3D 4C 5D'
+    at (0,0): 6♥ 6♦' 6♠
+    at (0,0): 7♠ 7♦ 7♣
+    at (0,0): T♦ J♣ Q♦
+    at (0,0): 9♦' T♠' J♦
+    at (0,0): 7♥ 8♣ 9♦
+    at (0,0): K♦ A♠' 2♦
+    at (0,0): K♥' A♣ 2♥
+    at (0,0): 4♥ 5♥ 6♥'
+    at (0,0): A♥ 2♠ 3♥
+    at (0,0): K♠ A♠ 2♠' 3♠ 4♠
+    at (0,0): A♦ 2♣ 3♦ 4♣ 5♦'
   trouble:
-    at (0,0): TH'
+    at (0,0): T♥'
   expect: no_plan
 
-scenario extra_013_8D_8C
-  desc: extra_013_8D_8C. asserts BFS proves no plan.
+scenario extra_013_8♦_8♣
+  desc: extra_013_8♦_8♣. asserts BFS proves no plan.
   op: solve
   helper:
-    at (0,0): KS AS 2S 3S
-    at (0,0): 7S 7D 7C
-    at (0,0): 2C 3D 4C 5H 6S 7H
-    at (0,0): QC' KC' AC
-    at (0,0): TD JD QD KD AD
-    at (0,0): AH 2H 3H 4H
+    at (0,0): K♠ A♠ 2♠ 3♠
+    at (0,0): 7♠ 7♦ 7♣
+    at (0,0): 2♣ 3♦ 4♣ 5♥ 6♠ 7♥
+    at (0,0): Q♣' K♣' A♣
+    at (0,0): T♦ J♦ Q♦ K♦ A♦
+    at (0,0): A♥ 2♥ 3♥ 4♥
   trouble:
-    at (0,0): 8D 8C
+    at (0,0): 8♦ 8♣
   expect: no_plan
 
-scenario extra_014_8D_8C
-  desc: extra_014_8D_8C. asserts BFS proves no plan.
+scenario extra_014_8♦_8♣
+  desc: extra_014_8♦_8♣. asserts BFS proves no plan.
   op: solve
   helper:
-    at (0,0): KS AS 2S 3S
-    at (0,0): 7S 7D 7C
-    at (0,0): QC' KC' AC
-    at (0,0): TD JD QD KD AD
-    at (0,0): AH 2H 3H 4H
-    at (0,0): 2C 3D 4C 5H 6S
-    at (0,0): 5D' 6C' 7H
+    at (0,0): K♠ A♠ 2♠ 3♠
+    at (0,0): 7♠ 7♦ 7♣
+    at (0,0): Q♣' K♣' A♣
+    at (0,0): T♦ J♦ Q♦ K♦ A♦
+    at (0,0): A♥ 2♥ 3♥ 4♥
+    at (0,0): 2♣ 3♦ 4♣ 5♥ 6♠
+    at (0,0): 5♦' 6♣' 7♥
   trouble:
-    at (0,0): 8D 8C
+    at (0,0): 8♦ 8♣
   expect: no_plan
 
-scenario extra_015_8D_8C
-  desc: extra_015_8D_8C. asserts BFS proves no plan.
+scenario extra_015_8♦_8♣
+  desc: extra_015_8♦_8♣. asserts BFS proves no plan.
   op: solve
   helper:
-    at (0,0): KS AS 2S 3S
-    at (0,0): 7S 7D 7C
-    at (0,0): QC' KC' AC
-    at (0,0): AH 2H 3H 4H
-    at (0,0): 2C 3D 4C 5H 6S
-    at (0,0): 5D' 6C' 7H
-    at (0,0): JD QD KD AD
-    at (0,0): TS' TC TD
+    at (0,0): K♠ A♠ 2♠ 3♠
+    at (0,0): 7♠ 7♦ 7♣
+    at (0,0): Q♣' K♣' A♣
+    at (0,0): A♥ 2♥ 3♥ 4♥
+    at (0,0): 2♣ 3♦ 4♣ 5♥ 6♠
+    at (0,0): 5♦' 6♣' 7♥
+    at (0,0): J♦ Q♦ K♦ A♦
+    at (0,0): T♠' T♣ T♦
   trouble:
-    at (0,0): 8D 8C
+    at (0,0): 8♦ 8♣
   expect: no_plan
 
-scenario extra_016_7Hp_7Cp
-  desc: extra_016_7Hp_7Cp.
+scenario extra_016_7♥p_7♣p
+  desc: extra_016_7♥p_7♣p.
   op: solve
   helper:
-    at (0,0): KS AS 2S 3S
-    at (0,0): TD JD QD KD
-    at (0,0): 2H 3H 4H
-    at (0,0): 7S 7D 7C
-    at (0,0): AC AD AH
-    at (0,0): 2C 3D 4C 5H 6S 7H
-    at (0,0): 9S' TS JS
+    at (0,0): K♠ A♠ 2♠ 3♠
+    at (0,0): T♦ J♦ Q♦ K♦
+    at (0,0): 2♥ 3♥ 4♥
+    at (0,0): 7♠ 7♦ 7♣
+    at (0,0): A♣ A♦ A♥
+    at (0,0): 2♣ 3♦ 4♣ 5♥ 6♠ 7♥
+    at (0,0): 9♠' T♠ J♠
   trouble:
-    at (0,0): 7H' 7C'
+    at (0,0): 7♥' 7♣'
   expect:
     plan_lines:
-      - "set_peel 7D from HELPER [7S 7D 7C], absorb onto [7H' 7C'] → [7H' 7C' 7D] [→COMPLETE] ; spawn [7S 7C]"
-      - "peel 7H from HELPER [2C 3D 4C 5H 6S 7H], absorb onto [7S 7C] → [7H 7S 7C] [→COMPLETE]"
+      - "set_peel 7♦ from HELPER [7♠ 7♦ 7♣], absorb onto [7♥' 7♣'] → [7♥' 7♣' 7♦] [→COMPLETE] ; spawn [7♠ 7♣]"
+      - "peel 7♥ from HELPER [2♣ 3♦ 4♣ 5♥ 6♠ 7♥], absorb onto [7♠ 7♣] → [7♥ 7♠ 7♣] [→COMPLETE]"
 
-scenario extra_017_6H_6Dp
-  desc: extra_017_6H_6Dp.
+scenario extra_017_6♥_6♦p
+  desc: extra_017_6♥_6♦p.
   op: solve
   helper:
-    at (0,0): KS AS 2S 3S
-    at (0,0): TD JD QD KD
-    at (0,0): 2H 3H 4H
-    at (0,0): 7S 7D 7C
-    at (0,0): AC AD AH
-    at (0,0): 2C 3D 4C 5H 6S 7H
+    at (0,0): K♠ A♠ 2♠ 3♠
+    at (0,0): T♦ J♦ Q♦ K♦
+    at (0,0): 2♥ 3♥ 4♥
+    at (0,0): 7♠ 7♦ 7♣
+    at (0,0): A♣ A♦ A♥
+    at (0,0): 2♣ 3♦ 4♣ 5♥ 6♠ 7♥
   trouble:
-    at (0,0): 6H 6D'
+    at (0,0): 6♥ 6♦'
   expect:
     plan_lines:
-      - "yank 6S from HELPER [2C 3D 4C 5H 6S 7H], absorb onto [6H 6D'] → [6H 6D' 6S] [→COMPLETE] ; spawn [7H]"
-      - "push [7H] onto HELPER [7S 7D 7C] → [7S 7D 7C 7H]"
+      - "yank 6♠ from HELPER [2♣ 3♦ 4♣ 5♥ 6♠ 7♥], absorb onto [6♥ 6♦'] → [6♥ 6♦' 6♠] [→COMPLETE] ; spawn [7♥]"
+      - "push [7♥] onto HELPER [7♠ 7♦ 7♣] → [7♠ 7♦ 7♣ 7♥]"
 
-scenario extra_018_ASp_2Sp
-  desc: extra_018_ASp_2Sp.
+scenario extra_018_A♠p_2♠p
+  desc: extra_018_A♠p_2♠p.
   op: solve
   helper:
-    at (0,0): KS AS 2S 3S
-    at (0,0): TD JD QD KD
-    at (0,0): 2H 3H 4H
-    at (0,0): AC AD AH
-    at (0,0): 2C 3D 4C 5H
-    at (0,0): 6H 6D' 6S
-    at (0,0): 7S 7D 7C 7H
+    at (0,0): K♠ A♠ 2♠ 3♠
+    at (0,0): T♦ J♦ Q♦ K♦
+    at (0,0): 2♥ 3♥ 4♥
+    at (0,0): A♣ A♦ A♥
+    at (0,0): 2♣ 3♦ 4♣ 5♥
+    at (0,0): 6♥ 6♦' 6♠
+    at (0,0): 7♠ 7♦ 7♣ 7♥
   trouble:
-    at (0,0): AS' 2S'
+    at (0,0): A♠' 2♠'
   expect:
     plan_lines:
-      - "peel 3S from HELPER [KS AS 2S 3S], absorb onto [AS' 2S'] → [AS' 2S' 3S] [→COMPLETE]"
+      - "peel 3♠ from HELPER [K♠ A♠ 2♠ 3♠], absorb onto [A♠' 2♠'] → [A♠' 2♠' 3♠] [→COMPLETE]"
 
-scenario extra_019_JC
-  desc: extra_019_JC.
+scenario extra_019_J♣
+  desc: extra_019_J♣.
   op: solve
   helper:
-    at (0,0): TD JD QD KD
-    at (0,0): 2H 3H 4H
-    at (0,0): AC AD AH
-    at (0,0): 6H 6D' 6S
-    at (0,0): KS AS 2S
-    at (0,0): 8C 9D' TS'
-    at (0,0): 2C 3D 4C
-    at (0,0): 7S 7D 7C
-    at (0,0): 5H 6H' 7H
-    at (0,0): AS' 2S' 3S 4S
+    at (0,0): T♦ J♦ Q♦ K♦
+    at (0,0): 2♥ 3♥ 4♥
+    at (0,0): A♣ A♦ A♥
+    at (0,0): 6♥ 6♦' 6♠
+    at (0,0): K♠ A♠ 2♠
+    at (0,0): 8♣ 9♦' T♠'
+    at (0,0): 2♣ 3♦ 4♣
+    at (0,0): 7♠ 7♦ 7♣
+    at (0,0): 5♥ 6♥' 7♥
+    at (0,0): A♠' 2♠' 3♠ 4♠
   trouble:
-    at (0,0): JC
+    at (0,0): J♣
   expect: no_plan
 
-scenario extra_020_KHp
-  desc: extra_020_KHp.
+scenario extra_020_K♥p
+  desc: extra_020_K♥p.
   op: solve
   helper:
-    at (0,0): AC AD AH
-    at (0,0): 6H 6D' 6S
-    at (0,0): KS AS 2S
-    at (0,0): 2C 3D 4C
-    at (0,0): 7S 7D 7C
-    at (0,0): TD JC QD
-    at (0,0): 2S' 3S 4S
-    at (0,0): 9D' TS' JD
-    at (0,0): 7H 8C 9D
-    at (0,0): KD AS' 2D
-    at (0,0): 2H 3H 4H 5H 6H'
+    at (0,0): A♣ A♦ A♥
+    at (0,0): 6♥ 6♦' 6♠
+    at (0,0): K♠ A♠ 2♠
+    at (0,0): 2♣ 3♦ 4♣
+    at (0,0): 7♠ 7♦ 7♣
+    at (0,0): T♦ J♣ Q♦
+    at (0,0): 2♠' 3♠ 4♠
+    at (0,0): 9♦' T♠' J♦
+    at (0,0): 7♥ 8♣ 9♦
+    at (0,0): K♦ A♠' 2♦
+    at (0,0): 2♥ 3♥ 4♥ 5♥ 6♥'
   trouble:
-    at (0,0): KH'
+    at (0,0): K♥'
   expect: no_plan
 
-scenario extra_021_2D
-  desc: extra_021_2D.
+scenario extra_021_2♦
+  desc: extra_021_2♦.
   op: solve
   helper:
-    at (0,0): KS AS 2S 3S
-    at (0,0): 7S 7D 7C
-    at (0,0): AH 2H 3H 4H
-    at (0,0): 5D' 6C' 7H
-    at (0,0): JD QD KD AD
-    at (0,0): TS' TC TD
-    at (0,0): 3D 4C 5H 6S
-    at (0,0): KC' AC 2C
-    at (0,0): QH' QS' QC'
+    at (0,0): K♠ A♠ 2♠ 3♠
+    at (0,0): 7♠ 7♦ 7♣
+    at (0,0): A♥ 2♥ 3♥ 4♥
+    at (0,0): 5♦' 6♣' 7♥
+    at (0,0): J♦ Q♦ K♦ A♦
+    at (0,0): T♠' T♣ T♦
+    at (0,0): 3♦ 4♣ 5♥ 6♠
+    at (0,0): K♣' A♣ 2♣
+    at (0,0): Q♥' Q♠' Q♣'
   trouble:
-    at (0,0): 2D
+    at (0,0): 2♦
   expect:
     plan_lines:
-      - "push [2D] onto HELPER [JD QD KD AD] → [JD QD KD AD 2D]"
+      - "push [2♦] onto HELPER [J♦ Q♦ K♦ A♦] → [J♦ Q♦ K♦ A♦ 2♦]"
 
-scenario extra_022_3Hp
-  desc: extra_022_3Hp.
+scenario extra_022_3♥p
+  desc: extra_022_3♥p.
   op: solve
   helper:
-    at (0,0): KS AS 2S 3S
-    at (0,0): 7S 7D 7C
-    at (0,0): AH 2H 3H 4H
-    at (0,0): 5D' 6C' 7H
-    at (0,0): TS' TC TD
-    at (0,0): 3D 4C 5H 6S
-    at (0,0): KC' AC 2C
-    at (0,0): QH' QS' QC'
-    at (0,0): JD QD KD AD 2D
+    at (0,0): K♠ A♠ 2♠ 3♠
+    at (0,0): 7♠ 7♦ 7♣
+    at (0,0): A♥ 2♥ 3♥ 4♥
+    at (0,0): 5♦' 6♣' 7♥
+    at (0,0): T♠' T♣ T♦
+    at (0,0): 3♦ 4♣ 5♥ 6♠
+    at (0,0): K♣' A♣ 2♣
+    at (0,0): Q♥' Q♠' Q♣'
+    at (0,0): J♦ Q♦ K♦ A♦ 2♦
   trouble:
-    at (0,0): 3H'
+    at (0,0): 3♥'
   expect:
     plan_lines:
-      - "peel 3D from HELPER [3D 4C 5H 6S], absorb onto [3H'] → [3H' 3D]"
-      - "peel 3S from HELPER [KS AS 2S 3S], absorb onto [3H' 3D] → [3S 3H' 3D] [→COMPLETE]"
+      - "peel 3♦ from HELPER [3♦ 4♣ 5♥ 6♠], absorb onto [3♥'] → [3♥' 3♦]"
+      - "peel 3♠ from HELPER [K♠ A♠ 2♠ 3♠], absorb onto [3♥' 3♦] → [3♠ 3♥' 3♦] [→COMPLETE]"
 
-scenario extra_023_TCp
-  desc: extra_023_TCp.
+scenario extra_023_T♣p
+  desc: extra_023_T♣p.
   op: solve
   helper:
-    at (0,0): 7S 7D 7C
-    at (0,0): AH 2H 3H 4H
-    at (0,0): 5D' 6C' 7H
-    at (0,0): TS' TC TD
-    at (0,0): KC' AC 2C
-    at (0,0): QH' QS' QC'
-    at (0,0): JD QD KD AD 2D
-    at (0,0): 4C 5H 6S
-    at (0,0): KS AS 2S
-    at (0,0): 3H' 3D 3S
+    at (0,0): 7♠ 7♦ 7♣
+    at (0,0): A♥ 2♥ 3♥ 4♥
+    at (0,0): 5♦' 6♣' 7♥
+    at (0,0): T♠' T♣ T♦
+    at (0,0): K♣' A♣ 2♣
+    at (0,0): Q♥' Q♠' Q♣'
+    at (0,0): J♦ Q♦ K♦ A♦ 2♦
+    at (0,0): 4♣ 5♥ 6♠
+    at (0,0): K♠ A♠ 2♠
+    at (0,0): 3♥' 3♦ 3♠
   trouble:
-    at (0,0): TC'
+    at (0,0): T♣'
   expect:
     plan_lines:
-      - "peel JD from HELPER [JD QD KD AD 2D], absorb onto [TC'] → [TC' JD]"
-      - "set_peel QC' from HELPER [QH' QS' QC'], absorb onto [TC' JD] → [TC' JD QC'] [→COMPLETE] ; spawn [QH' QS']"
-      - "peel QD from HELPER [QD KD AD 2D], absorb onto [QH' QS'] → [QD QH' QS'] [→COMPLETE]"
+      - "peel J♦ from HELPER [J♦ Q♦ K♦ A♦ 2♦], absorb onto [T♣'] → [T♣' J♦]"
+      - "set_peel Q♣' from HELPER [Q♥' Q♠' Q♣'], absorb onto [T♣' J♦] → [T♣' J♦ Q♣'] [→COMPLETE] ; spawn [Q♥' Q♠']"
+      - "peel Q♦ from HELPER [Q♦ K♦ A♦ 2♦], absorb onto [Q♥' Q♠'] → [Q♦ Q♥' Q♠'] [→COMPLETE]"
 
-scenario extra_024_2Cp
-  desc: extra_024_2Cp.
+scenario extra_024_2♣p
+  desc: extra_024_2♣p.
   op: solve
   helper:
-    at (0,0): 7S 7D 7C
-    at (0,0): AH 2H 3H 4H
-    at (0,0): 5D' 6C' 7H
-    at (0,0): TS' TC TD
-    at (0,0): KC' AC 2C
-    at (0,0): 4C 5H 6S
-    at (0,0): KS AS 2S
-    at (0,0): 3H' 3D 3S
-    at (0,0): TC' JD QC'
-    at (0,0): KD AD 2D
-    at (0,0): QH' QS' QD
+    at (0,0): 7♠ 7♦ 7♣
+    at (0,0): A♥ 2♥ 3♥ 4♥
+    at (0,0): 5♦' 6♣' 7♥
+    at (0,0): T♠' T♣ T♦
+    at (0,0): K♣' A♣ 2♣
+    at (0,0): 4♣ 5♥ 6♠
+    at (0,0): K♠ A♠ 2♠
+    at (0,0): 3♥' 3♦ 3♠
+    at (0,0): T♣' J♦ Q♣'
+    at (0,0): K♦ A♦ 2♦
+    at (0,0): Q♥' Q♠' Q♦
   trouble:
-    at (0,0): 2C'
+    at (0,0): 2♣'
   expect:
     plan_lines:
-      - "peel AH from HELPER [AH 2H 3H 4H], absorb onto [2C'] → [AH 2C']"
-      - "steal 3H' from HELPER [3H' 3D 3S], absorb onto [AH 2C'] → [AH 2C' 3H'] [→COMPLETE] ; spawn [3D], [3S]"
-      - "push [3D] onto HELPER [4C 5H 6S] → [3D 4C 5H 6S]"
-      - "push [3S] onto HELPER [KS AS 2S] → [KS AS 2S 3S]"
+      - "peel A♥ from HELPER [A♥ 2♥ 3♥ 4♥], absorb onto [2♣'] → [A♥ 2♣']"
+      - "steal 3♥' from HELPER [3♥' 3♦ 3♠], absorb onto [A♥ 2♣'] → [A♥ 2♣' 3♥'] [→COMPLETE] ; spawn [3♦], [3♠]"
+      - "push [3♦] onto HELPER [4♣ 5♥ 6♠] → [3♦ 4♣ 5♥ 6♠]"
+      - "push [3♠] onto HELPER [K♠ A♠ 2♠] → [K♠ A♠ 2♠ 3♠]"
 
-scenario extra_025_8C
-  desc: extra_025_8C.
+scenario extra_025_8♣
+  desc: extra_025_8♣.
   op: solve
   helper:
-    at (0,0): 7S 7D 7C
-    at (0,0): 5D' 6C' 7H
-    at (0,0): TS' TC TD
-    at (0,0): KC' AC 2C
-    at (0,0): TC' JD QC'
-    at (0,0): KD AD 2D
-    at (0,0): QH' QS' QD
-    at (0,0): 2H 3H 4H
-    at (0,0): AH 2C' 3D
-    at (0,0): 3H' 4C 5H 6S
-    at (0,0): KS AS 2S 3S
+    at (0,0): 7♠ 7♦ 7♣
+    at (0,0): 5♦' 6♣' 7♥
+    at (0,0): T♠' T♣ T♦
+    at (0,0): K♣' A♣ 2♣
+    at (0,0): T♣' J♦ Q♣'
+    at (0,0): K♦ A♦ 2♦
+    at (0,0): Q♥' Q♠' Q♦
+    at (0,0): 2♥ 3♥ 4♥
+    at (0,0): A♥ 2♣' 3♦
+    at (0,0): 3♥' 4♣ 5♥ 6♠
+    at (0,0): K♠ A♠ 2♠ 3♠
   trouble:
-    at (0,0): 8C
+    at (0,0): 8♣
   expect:
     plan_lines:
-      - "push [8C] onto HELPER [5D' 6C' 7H] → [5D' 6C' 7H 8C]"
+      - "push [8♣] onto HELPER [5♦' 6♣' 7♥] → [5♦' 6♣' 7♥ 8♣]"
 
 # Hand-added 2026-04-30: game 17 initial board, singleton projections.
 # Benchmarks the "live-but-hard" slow class for SOLVER_SPEED work.
@@ -467,44 +467,44 @@ scenario extra_025_8C
 # All three cards are theoretically live (valid group exists in pool)
 # but no plan exists on this specific board \u2014 BFS exhausts all caps.
 
-scenario extra_026_2Sp
-  desc: Game 17 board, trouble 2S'. Live singleton, no plan. SOLVER_SPEED benchmark.
+scenario extra_026_2♠p
+  desc: Game 17 board, trouble 2♠'. Live singleton, no plan. SOLVER_SPEED benchmark.
   op: solve
   helper:
-    at (0,0): KS AS 2S 3S
-    at (0,0): TD JD QD KD
-    at (0,0): 2H 3H 4H
-    at (0,0): 7S 7D 7C
-    at (0,0): AC AD AH
-    at (0,0): 2C 3D 4C 5H 6S 7H
+    at (0,0): K♠ A♠ 2♠ 3♠
+    at (0,0): T♦ J♦ Q♦ K♦
+    at (0,0): 2♥ 3♥ 4♥
+    at (0,0): 7♠ 7♦ 7♣
+    at (0,0): A♣ A♦ A♥
+    at (0,0): 2♣ 3♦ 4♣ 5♥ 6♠ 7♥
   trouble:
-    at (0,0): 2S'
+    at (0,0): 2♠'
   expect: no_plan
 
-scenario extra_027_3Hp
-  desc: Game 17 board, trouble 3H'. Live singleton, no plan. SOLVER_SPEED benchmark.
+scenario extra_027_3♥p
+  desc: Game 17 board, trouble 3♥'. Live singleton, no plan. SOLVER_SPEED benchmark.
   op: solve
   helper:
-    at (0,0): KS AS 2S 3S
-    at (0,0): TD JD QD KD
-    at (0,0): 2H 3H 4H
-    at (0,0): 7S 7D 7C
-    at (0,0): AC AD AH
-    at (0,0): 2C 3D 4C 5H 6S 7H
+    at (0,0): K♠ A♠ 2♠ 3♠
+    at (0,0): T♦ J♦ Q♦ K♦
+    at (0,0): 2♥ 3♥ 4♥
+    at (0,0): 7♠ 7♦ 7♣
+    at (0,0): A♣ A♦ A♥
+    at (0,0): 2♣ 3♦ 4♣ 5♥ 6♠ 7♥
   trouble:
-    at (0,0): 3H'
+    at (0,0): 3♥'
   expect: no_plan
 
-scenario extra_028_KDp
-  desc: Game 17 board, trouble KD'. Live singleton, no plan. SOLVER_SPEED benchmark.
+scenario extra_028_K♦p
+  desc: Game 17 board, trouble K♦'. Live singleton, no plan. SOLVER_SPEED benchmark.
   op: solve
   helper:
-    at (0,0): KS AS 2S 3S
-    at (0,0): TD JD QD KD
-    at (0,0): 2H 3H 4H
-    at (0,0): 7S 7D 7C
-    at (0,0): AC AD AH
-    at (0,0): 2C 3D 4C 5H 6S 7H
+    at (0,0): K♠ A♠ 2♠ 3♠
+    at (0,0): T♦ J♦ Q♦ K♦
+    at (0,0): 2♥ 3♥ 4♥
+    at (0,0): 7♠ 7♦ 7♣
+    at (0,0): A♣ A♦ A♥
+    at (0,0): 2♣ 3♦ 4♣ 5♥ 6♠ 7♥
   trouble:
-    at (0,0): KD'
+    at (0,0): K♦'
   expect: no_plan

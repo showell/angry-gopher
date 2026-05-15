@@ -9,2351 +9,2258 @@
 # verb category with explicit edge cases. This corpus file is the
 # bulk regression contract.
 #
-# Card label convention: `4D'` = deck-1 4D (mirrors the existing
-# replay_walkthroughs.dsl). TS runner accepts `'` natively (legacy `:1` also tolerated) at
+# Card label convention: `4♦'` = deck-1 4♦ (mirrors the existing
+# replay_walkthroughs.dsl). T♠ runner accepts `'` natively (legacy `:1` also tolerated) at
 # the parse boundary.
 #
 # Coordinate convention: `at (top, left)` per established DSL shape.
 
-scenario mined_001_4S_4Cp1_step_01
-  desc: mined_001_4S_4Cp1 step 1 (extract_absorb/steal).
+scenario mined_001_4♠_4♣p1_step_01
+  desc: mined_001_4♠_4♣p1 step 1 (extract_absorb/steal).
   op: verb_to_primitives
   board:
-    at (26, 26): 2H 3H 4H
-    at (107, 52): 7S 7D 7C
-    at (182, 52): AC AD AH
-    at (257, 52): 2C 3D 4C 5H 6S 7H
-    at (332, 52): 2D' 3S' 4D'
-    at (407, 52): AS 2S 3S
-    at (482, 52): KD' KH' KS
-    at (92, 187): JD QD KD
-    at (167, 187): TS TC' TD
-    at (332, 187): 4S 4C'
+    at (26,26): 2♥ 3♥ 4♥
+    at (52,107): 7♠ 7♦ 7♣
+    at (52,182): A♣ A♦ A♥
+    at (52,257): 2♣ 3♦ 4♣ 5♥ 6♠ 7♥
+    at (52,332): 2♦' 3♠' 4♦'
+    at (52,407): A♠ 2♠ 3♠
+    at (52,482): K♦' K♥' K♠
+    at (187,92): J♦ Q♦ K♦
+    at (187,167): T♠ T♣' T♦
+    at (187,332): 4♠ 4♣'
   verb: steal
-  source: 2D' 3S' 4D'
-  ext_card: 4D'
-  target_before: 4S 4C'
+  source: 2♦' 3♠' 4♦'
+  ext_card: 4♦'
+  target_before: 4♠ 4♣'
   target_bucket: trouble
   side: right
   expect:
     primitives:
-      - split [2D' 3S' 4D']@2
-      - merge_stack [4D'] -> [4S 4C'] /right
-
-scenario mined_001_4S_4Cp1_step_02
-  desc: mined_001_4S_4Cp1 step 2 (extract_absorb/steal).
+      - split [2♦' 3♠' 4♦'] at (52,332) @2
+      - merge_stack [4♦'] at (122,328) -> [4♠ 4♣'] at (187,332) /right
+scenario mined_001_4♠_4♣p1_step_02
+  desc: mined_001_4♠_4♣p1 step 2 (extract_absorb/steal).
   op: verb_to_primitives
   board:
-    at (26, 26): 2H 3H 4H
-    at (107, 52): 7S 7D 7C
-    at (182, 52): AC AD AH
-    at (257, 52): 2C 3D 4C 5H 6S 7H
-    at (407, 52): AS 2S 3S
-    at (482, 52): KD' KH' KS
-    at (92, 187): JD QD KD
-    at (167, 187): TS TC' TD
-    at (332, 44): 2D' 3S'
-    at (332, 187): 4S 4C' 4D'
+    at (26,26): 2♥ 3♥ 4♥
+    at (52,107): 7♠ 7♦ 7♣
+    at (52,182): A♣ A♦ A♥
+    at (52,257): 2♣ 3♦ 4♣ 5♥ 6♠ 7♥
+    at (52,407): A♠ 2♠ 3♠
+    at (52,482): K♦' K♥' K♠
+    at (187,92): J♦ Q♦ K♦
+    at (187,167): T♠ T♣' T♦
+    at (44,332): 2♦' 3♠'
+    at (187,332): 4♠ 4♣' 4♦'
   verb: steal
-  source: AC AD AH
-  ext_card: AC
-  target_before: 2D' 3S'
+  source: A♣ A♦ A♥
+  ext_card: A♣
+  target_before: 2♦' 3♠'
   target_bucket: trouble
   side: left
   expect:
     primitives:
-      - split [AC AD AH]@0
-      - move_stack [AD AH] -> (407,187)
-      - split [AD AH]@0
-      - merge_stack [AC] -> [2D' 3S'] /left
-
-scenario mined_001_4S_4Cp1_step_03
-  desc: mined_001_4S_4Cp1 step 3 (push).
+      - split [A♣ A♦ A♥] at (52,182) @0
+      - move_stack [A♦ A♥] at (93,182) -> (187,407)
+      - split [A♦ A♥] at (187,407) @0
+      - merge_stack [A♣] at (50,178) -> [2♦' 3♠'] at (44,332) /left
+scenario mined_001_4♠_4♣p1_step_03
+  desc: mined_001_4♠_4♣p1 step 3 (push).
   op: verb_to_primitives
   board:
-    at (26, 26): 2H 3H 4H
-    at (107, 52): 7S 7D 7C
-    at (257, 52): 2C 3D 4C 5H 6S 7H
-    at (407, 52): AS 2S 3S
-    at (482, 52): KD' KH' KS
-    at (92, 187): JD QD KD
-    at (167, 187): TS TC' TD
-    at (332, 187): 4S 4C' 4D'
-    at (403, 185): AD
-    at (407, 228): AH
-    at (332, 11): AC 2D' 3S'
+    at (26,26): 2♥ 3♥ 4♥
+    at (52,107): 7♠ 7♦ 7♣
+    at (52,257): 2♣ 3♦ 4♣ 5♥ 6♠ 7♥
+    at (52,407): A♠ 2♠ 3♠
+    at (52,482): K♦' K♥' K♠
+    at (187,92): J♦ Q♦ K♦
+    at (187,167): T♠ T♣' T♦
+    at (187,332): 4♠ 4♣' 4♦'
+    at (185,403): A♦
+    at (228,407): A♥
+    at (11,332): A♣ 2♦' 3♠'
   verb: push
-  trouble_before: AD
-  target_before: 2C 3D 4C 5H 6S 7H
+  trouble_before: A♦
+  target_before: 2♣ 3♦ 4♣ 5♥ 6♠ 7♥
   side: left
   expect:
     primitives:
-      - merge_stack [AD] -> [2C 3D 4C 5H 6S 7H] /left
-
-scenario mined_001_4S_4Cp1_step_04
-  desc: mined_001_4S_4Cp1 step 4 (push).
+      - merge_stack [A♦] at (185,403) -> [2♣ 3♦ 4♣ 5♥ 6♠ 7♥] at (52,257) /left
+scenario mined_001_4♠_4♣p1_step_04
+  desc: mined_001_4♠_4♣p1 step 4 (push).
   op: verb_to_primitives
   board:
-    at (26, 26): 2H 3H 4H
-    at (107, 52): 7S 7D 7C
-    at (407, 52): AS 2S 3S
-    at (482, 52): KD' KH' KS
-    at (92, 187): JD QD KD
-    at (167, 187): TS TC' TD
-    at (332, 187): 4S 4C' 4D'
-    at (407, 228): AH
-    at (332, 11): AC 2D' 3S'
-    at (257, 19): AD 2C 3D 4C 5H 6S 7H
+    at (26,26): 2♥ 3♥ 4♥
+    at (52,107): 7♠ 7♦ 7♣
+    at (52,407): A♠ 2♠ 3♠
+    at (52,482): K♦' K♥' K♠
+    at (187,92): J♦ Q♦ K♦
+    at (187,167): T♠ T♣' T♦
+    at (187,332): 4♠ 4♣' 4♦'
+    at (228,407): A♥
+    at (11,332): A♣ 2♦' 3♠'
+    at (19,257): A♦ 2♣ 3♦ 4♣ 5♥ 6♠ 7♥
   verb: push
-  trouble_before: AH
-  target_before: 2H 3H 4H
+  trouble_before: A♥
+  target_before: 2♥ 3♥ 4♥
   side: left
   expect:
     primitives:
-      - move_stack [2H 3H 4H] -> (482,220)
-      - merge_stack [AH] -> [2H 3H 4H] /left
-
-scenario mined_002_QDp1_step_01
-  desc: mined_002_QDp1 step 1 (shift).
+      - move_stack [2♥ 3♥ 4♥] at (26,26) -> (220,482)
+      - merge_stack [A♥] at (228,407) -> [2♥ 3♥ 4♥] at (220,482) /left
+scenario mined_002_Q♦p1_step_01
+  desc: mined_002_Q♦p1 step 1 (shift).
   op: verb_to_primitives
   board:
-    at (26, 26): 7S 7D 7C
-    at (107, 52): AS 2S 3S
-    at (182, 52): KD' KH' KS
-    at (257, 52): JD QD KD
-    at (332, 52): TS TC' TD
-    at (407, 52): 4S 4C' 4D'
-    at (482, 52): AC 2D' 3S'
-    at (92, 187): AH 2H 3H 4H
-    at (167, 187): AD 2C 3D 4C
-    at (242, 187): 6S 7H 8S
-    at (317, 187): 5C 5D 5H
-    at (392, 187): QD'
+    at (26,26): 7♠ 7♦ 7♣
+    at (52,107): A♠ 2♠ 3♠
+    at (52,182): K♦' K♥' K♠
+    at (52,257): J♦ Q♦ K♦
+    at (52,332): T♠ T♣' T♦
+    at (52,407): 4♠ 4♣' 4♦'
+    at (52,482): A♣ 2♦' 3♠'
+    at (187,92): A♥ 2♥ 3♥ 4♥
+    at (187,167): A♦ 2♣ 3♦ 4♣
+    at (187,242): 6♠ 7♥ 8♠
+    at (187,317): 5♣ 5♦ 5♥
+    at (187,392): Q♦'
   verb: shift
-  source: JD QD KD
-  donor: AD 2C 3D 4C
-  stolen: JD
-  p_card: AD
+  source: J♦ Q♦ K♦
+  donor: A♦ 2♣ 3♦ 4♣
+  stolen: J♦
+  p_card: A♦
   which_end: left
-  target_before: QD'
+  target_before: Q♦'
   target_bucket: trouble
   side: left
   expect:
     primitives:
-      - split [AD 2C 3D 4C]@0
-      - move_stack [JD QD KD] -> (467,187)
-      - merge_stack [AD] -> [JD QD KD] /right
-      - split [JD QD KD AD]@0
-      - move_stack [QD'] -> (257,85)
-      - merge_stack [JD] -> [QD'] /left
-
-scenario mined_002_QDp1_step_02
-  desc: mined_002_QDp1 step 2 (extract_absorb/steal).
+      - split [A♦ 2♣ 3♦ 4♣] at (187,167) @0
+      - move_stack [J♦ Q♦ K♦] at (52,257) -> (187,467)
+      - merge_stack [A♦] at (185,163) -> [J♦ Q♦ K♦] at (187,467) /right
+      - split [J♦ Q♦ K♦ A♦] at (187,467) @0
+      - move_stack [Q♦'] at (187,392) -> (85,257)
+      - merge_stack [J♦] at (185,463) -> [Q♦'] at (85,257) /left
+scenario mined_002_Q♦p1_step_02
+  desc: mined_002_Q♦p1 step 2 (extract_absorb/steal).
   op: verb_to_primitives
   board:
-    at (26, 26): 7S 7D 7C
-    at (107, 52): AS 2S 3S
-    at (182, 52): KD' KH' KS
-    at (332, 52): TS TC' TD
-    at (407, 52): 4S 4C' 4D'
-    at (482, 52): AC 2D' 3S'
-    at (92, 187): AH 2H 3H 4H
-    at (242, 187): 6S 7H 8S
-    at (317, 187): 5C 5D 5H
-    at (167, 228): 2C 3D 4C
-    at (467, 228): QD KD AD
-    at (257, 52): JD QD'
+    at (26,26): 7♠ 7♦ 7♣
+    at (52,107): A♠ 2♠ 3♠
+    at (52,182): K♦' K♥' K♠
+    at (52,332): T♠ T♣' T♦
+    at (52,407): 4♠ 4♣' 4♦'
+    at (52,482): A♣ 2♦' 3♠'
+    at (187,92): A♥ 2♥ 3♥ 4♥
+    at (187,242): 6♠ 7♥ 8♠
+    at (187,317): 5♣ 5♦ 5♥
+    at (228,167): 2♣ 3♦ 4♣
+    at (228,467): Q♦ K♦ A♦
+    at (52,257): J♦ Q♦'
   verb: steal
-  source: KD' KH' KS
-  ext_card: KD'
-  target_before: JD QD'
+  source: K♦' K♥' K♠
+  ext_card: K♦'
+  target_before: J♦ Q♦'
   target_bucket: growing
   side: right
   expect:
     primitives:
-      - split [KD' KH' KS]@0
-      - move_stack [KH' KS] -> (392,187)
-      - split [KH' KS]@0
-      - merge_stack [KD'] -> [JD QD'] /right
-
-scenario mined_002_QDp1_step_03
-  desc: mined_002_QDp1 step 3 (push).
+      - split [K♦' K♥' K♠] at (52,182) @0
+      - move_stack [K♥' K♠] at (93,182) -> (187,392)
+      - split [K♥' K♠] at (187,392) @0
+      - merge_stack [K♦'] at (50,178) -> [J♦ Q♦'] at (52,257) /right
+scenario mined_002_Q♦p1_step_03
+  desc: mined_002_Q♦p1 step 3 (push).
   op: verb_to_primitives
   board:
-    at (26, 26): 7S 7D 7C
-    at (107, 52): AS 2S 3S
-    at (332, 52): TS TC' TD
-    at (407, 52): 4S 4C' 4D'
-    at (482, 52): AC 2D' 3S'
-    at (92, 187): AH 2H 3H 4H
-    at (242, 187): 6S 7H 8S
-    at (317, 187): 5C 5D 5H
-    at (167, 228): 2C 3D 4C
-    at (467, 228): QD KD AD
-    at (388, 185): KH'
-    at (392, 228): KS
-    at (257, 52): JD QD' KD'
+    at (26,26): 7♠ 7♦ 7♣
+    at (52,107): A♠ 2♠ 3♠
+    at (52,332): T♠ T♣' T♦
+    at (52,407): 4♠ 4♣' 4♦'
+    at (52,482): A♣ 2♦' 3♠'
+    at (187,92): A♥ 2♥ 3♥ 4♥
+    at (187,242): 6♠ 7♥ 8♠
+    at (187,317): 5♣ 5♦ 5♥
+    at (228,167): 2♣ 3♦ 4♣
+    at (228,467): Q♦ K♦ A♦
+    at (185,388): K♥'
+    at (228,392): K♠
+    at (52,257): J♦ Q♦' K♦'
   verb: push
-  trouble_before: KH'
-  target_before: AC 2D' 3S'
+  trouble_before: K♥'
+  target_before: A♣ 2♦' 3♠'
   side: left
   expect:
     primitives:
-      - merge_stack [KH'] -> [AC 2D' 3S'] /left
-
-scenario mined_002_QDp1_step_04
-  desc: mined_002_QDp1 step 4 (push).
+      - merge_stack [K♥'] at (185,388) -> [A♣ 2♦' 3♠'] at (52,482) /left
+scenario mined_002_Q♦p1_step_04
+  desc: mined_002_Q♦p1 step 4 (push).
   op: verb_to_primitives
   board:
-    at (26, 26): 7S 7D 7C
-    at (107, 52): AS 2S 3S
-    at (332, 52): TS TC' TD
-    at (407, 52): 4S 4C' 4D'
-    at (92, 187): AH 2H 3H 4H
-    at (242, 187): 6S 7H 8S
-    at (317, 187): 5C 5D 5H
-    at (167, 228): 2C 3D 4C
-    at (467, 228): QD KD AD
-    at (392, 228): KS
-    at (257, 52): JD QD' KD'
-    at (482, 19): KH' AC 2D' 3S'
+    at (26,26): 7♠ 7♦ 7♣
+    at (52,107): A♠ 2♠ 3♠
+    at (52,332): T♠ T♣' T♦
+    at (52,407): 4♠ 4♣' 4♦'
+    at (187,92): A♥ 2♥ 3♥ 4♥
+    at (187,242): 6♠ 7♥ 8♠
+    at (187,317): 5♣ 5♦ 5♥
+    at (228,167): 2♣ 3♦ 4♣
+    at (228,467): Q♦ K♦ A♦
+    at (228,392): K♠
+    at (52,257): J♦ Q♦' K♦'
+    at (19,482): K♥' A♣ 2♦' 3♠'
   verb: push
-  trouble_before: KS
-  target_before: AS 2S 3S
+  trouble_before: K♠
+  target_before: A♠ 2♠ 3♠
   side: left
   expect:
     primitives:
-      - merge_stack [KS] -> [AS 2S 3S] /left
-
-scenario mined_003_6D_step_01
-  desc: mined_003_6D step 1 (extract_absorb/steal).
+      - merge_stack [K♠] at (228,392) -> [A♠ 2♠ 3♠] at (52,107) /left
+scenario mined_003_6♦_step_01
+  desc: mined_003_6♦ step 1 (extract_absorb/steal).
   op: verb_to_primitives
   board:
-    at (26, 26): 2H 3H 4H
-    at (107, 52): 7S 7D 7C
-    at (182, 52): AC AD AH
-    at (257, 52): 3D 4C 5H 6S 7H
-    at (332, 52): 2D' 2H' 2C
-    at (407, 52): JD QD KD
-    at (482, 52): 8D' 9C TD
-    at (92, 187): 7H' 8S 9H'
-    at (167, 187): QS' QC' QH
-    at (332, 187): AS 2S 3S
-    at (407, 187): KD' KC' KS
-    at (482, 187): 6D
+    at (26,26): 2♥ 3♥ 4♥
+    at (52,107): 7♠ 7♦ 7♣
+    at (52,182): A♣ A♦ A♥
+    at (52,257): 3♦ 4♣ 5♥ 6♠ 7♥
+    at (52,332): 2♦' 2♥' 2♣
+    at (52,407): J♦ Q♦ K♦
+    at (52,482): 8♦' 9♣ T♦
+    at (187,92): 7♥' 8♠ 9♥'
+    at (187,167): Q♠' Q♣' Q♥
+    at (187,332): A♠ 2♠ 3♠
+    at (187,407): K♦' K♣' K♠
+    at (187,482): 6♦
   verb: steal
-  source: 7S 7D 7C
-  ext_card: 7C
-  target_before: 6D
+  source: 7♠ 7♦ 7♣
+  ext_card: 7♣
+  target_before: 6♦
   target_bucket: trouble
   side: right
   expect:
     primitives:
-      - split [7S 7D 7C]@2
-      - move_stack [7S 7D] -> (242,247)
-      - split [7S 7D]@0
-      - merge_stack [7C] -> [6D] /right
-
-scenario mined_003_6D_step_02
-  desc: mined_003_6D step 2 (push).
+      - split [7♠ 7♦ 7♣] at (52,107) @2
+      - move_stack [7♠ 7♦] at (44,107) -> (247,242)
+      - split [7♠ 7♦] at (247,242) @0
+      - merge_stack [7♣] at (122,103) -> [6♦] at (187,482) /right
+scenario mined_003_6♦_step_02
+  desc: mined_003_6♦ step 2 (push).
   op: verb_to_primitives
   board:
-    at (26, 26): 2H 3H 4H
-    at (182, 52): AC AD AH
-    at (257, 52): 3D 4C 5H 6S 7H
-    at (332, 52): 2D' 2H' 2C
-    at (407, 52): JD QD KD
-    at (482, 52): 8D' 9C TD
-    at (92, 187): 7H' 8S 9H'
-    at (167, 187): QS' QC' QH
-    at (332, 187): AS 2S 3S
-    at (407, 187): KD' KC' KS
-    at (238, 245): 7S
-    at (242, 288): 7D
-    at (482, 187): 6D 7C
+    at (26,26): 2♥ 3♥ 4♥
+    at (52,182): A♣ A♦ A♥
+    at (52,257): 3♦ 4♣ 5♥ 6♠ 7♥
+    at (52,332): 2♦' 2♥' 2♣
+    at (52,407): J♦ Q♦ K♦
+    at (52,482): 8♦' 9♣ T♦
+    at (187,92): 7♥' 8♠ 9♥'
+    at (187,167): Q♠' Q♣' Q♥
+    at (187,332): A♠ 2♠ 3♠
+    at (187,407): K♦' K♣' K♠
+    at (245,238): 7♠
+    at (288,242): 7♦
+    at (187,482): 6♦ 7♣
   verb: push
-  trouble_before: 6D 7C
-  target_before: 8D' 9C TD
+  trouble_before: 6♦ 7♣
+  target_before: 8♦' 9♣ T♦
   side: left
   expect:
     primitives:
-      - move_stack [8D' 9C TD] -> (482,358)
-      - merge_stack [6D 7C] -> [8D' 9C TD] /left
-
-scenario mined_003_6D_step_03
-  desc: mined_003_6D step 3 (free_pull).
+      - move_stack [8♦' 9♣ T♦] at (52,482) -> (358,482)
+      - merge_stack [6♦ 7♣] at (187,482) -> [8♦' 9♣ T♦] at (358,482) /left
+scenario mined_003_6♦_step_03
+  desc: mined_003_6♦ step 3 (free_pull).
   op: verb_to_primitives
   board:
-    at (26, 26): 2H 3H 4H
-    at (182, 52): AC AD AH
-    at (257, 52): 3D 4C 5H 6S 7H
-    at (332, 52): 2D' 2H' 2C
-    at (407, 52): JD QD KD
-    at (92, 187): 7H' 8S 9H'
-    at (167, 187): QS' QC' QH
-    at (332, 187): AS 2S 3S
-    at (407, 187): KD' KC' KS
-    at (238, 245): 7S
-    at (242, 288): 7D
-    at (482, 52): 6D 7C 8D' 9C TD
+    at (26,26): 2♥ 3♥ 4♥
+    at (52,182): A♣ A♦ A♥
+    at (52,257): 3♦ 4♣ 5♥ 6♠ 7♥
+    at (52,332): 2♦' 2♥' 2♣
+    at (52,407): J♦ Q♦ K♦
+    at (187,92): 7♥' 8♠ 9♥'
+    at (187,167): Q♠' Q♣' Q♥
+    at (187,332): A♠ 2♠ 3♠
+    at (187,407): K♦' K♣' K♠
+    at (245,238): 7♠
+    at (288,242): 7♦
+    at (52,482): 6♦ 7♣ 8♦' 9♣ T♦
   verb: free_pull
-  loose: 7D
-  target_before: 7S
+  loose: 7♦
+  target_before: 7♠
   target_bucket: trouble
   side: right
   expect:
     primitives:
-      - merge_stack [7D] -> [7S] /right
-
-scenario mined_003_6D_step_04
-  desc: mined_003_6D step 4 (extract_absorb/peel).
+      - merge_stack [7♦] at (288,242) -> [7♠] at (245,238) /right
+scenario mined_003_6♦_step_04
+  desc: mined_003_6♦ step 4 (extract_absorb/peel).
   op: verb_to_primitives
   board:
-    at (26, 26): 2H 3H 4H
-    at (182, 52): AC AD AH
-    at (257, 52): 3D 4C 5H 6S 7H
-    at (332, 52): 2D' 2H' 2C
-    at (407, 52): JD QD KD
-    at (92, 187): 7H' 8S 9H'
-    at (167, 187): QS' QC' QH
-    at (332, 187): AS 2S 3S
-    at (407, 187): KD' KC' KS
-    at (482, 52): 6D 7C 8D' 9C TD
-    at (238, 245): 7S 7D
+    at (26,26): 2♥ 3♥ 4♥
+    at (52,182): A♣ A♦ A♥
+    at (52,257): 3♦ 4♣ 5♥ 6♠ 7♥
+    at (52,332): 2♦' 2♥' 2♣
+    at (52,407): J♦ Q♦ K♦
+    at (187,92): 7♥' 8♠ 9♥'
+    at (187,167): Q♠' Q♣' Q♥
+    at (187,332): A♠ 2♠ 3♠
+    at (187,407): K♦' K♣' K♠
+    at (52,482): 6♦ 7♣ 8♦' 9♣ T♦
+    at (245,238): 7♠ 7♦
   verb: peel
-  source: 3D 4C 5H 6S 7H
-  ext_card: 7H
-  target_before: 7S 7D
+  source: 3♦ 4♣ 5♥ 6♠ 7♥
+  ext_card: 7♥
+  target_before: 7♠ 7♦
   target_bucket: growing
   side: right
   expect:
     primitives:
-      - split [3D 4C 5H 6S 7H]@4
-      - merge_stack [7H] -> [7S 7D] /right
-
-scenario mined_004_5C_6Dp1_step_01
-  desc: mined_004_5C_6Dp1 step 1 (extract_absorb/steal).
+      - split [3♦ 4♣ 5♥ 6♠ 7♥] at (52,257) @4
+      - merge_stack [7♥] at (188,253) -> [7♠ 7♦] at (245,238) /right
+scenario mined_004_5♣_6♦p1_step_01
+  desc: mined_004_5♣_6♦p1 step 1 (extract_absorb/steal).
   op: verb_to_primitives
   board:
-    at (26, 26): KS AS 2S 3S
-    at (107, 52): TD JD QD KD
-    at (182, 52): 2H 3H 4H
-    at (257, 52): 7S 7D 7C
-    at (332, 52): AC AD AH
-    at (407, 52): 2C 3D 4C 5H 6S 7H
-    at (482, 52): 4S' 5D' 6C
-    at (182, 187): 5C 6D'
+    at (26,26): K♠ A♠ 2♠ 3♠
+    at (52,107): T♦ J♦ Q♦ K♦
+    at (52,182): 2♥ 3♥ 4♥
+    at (52,257): 7♠ 7♦ 7♣
+    at (52,332): A♣ A♦ A♥
+    at (52,407): 2♣ 3♦ 4♣ 5♥ 6♠ 7♥
+    at (52,482): 4♠' 5♦' 6♣
+    at (187,182): 5♣ 6♦'
   verb: steal
-  source: 7S 7D 7C
-  ext_card: 7C
-  target_before: 5C 6D'
+  source: 7♠ 7♦ 7♣
+  ext_card: 7♣
+  target_before: 5♣ 6♦'
   target_bucket: trouble
   side: right
   expect:
     primitives:
-      - split [7S 7D 7C]@2
-      - move_stack [7S 7D] -> (257,187)
-      - split [7S 7D]@0
-      - merge_stack [7C] -> [5C 6D'] /right
-
-scenario mined_004_5C_6Dp1_step_02
-  desc: mined_004_5C_6Dp1 step 2 (free_pull).
+      - split [7♠ 7♦ 7♣] at (52,257) @2
+      - move_stack [7♠ 7♦] at (44,257) -> (187,257)
+      - split [7♠ 7♦] at (187,257) @0
+      - merge_stack [7♣] at (122,253) -> [5♣ 6♦'] at (187,182) /right
+scenario mined_004_5♣_6♦p1_step_02
+  desc: mined_004_5♣_6♦p1 step 2 (free_pull).
   op: verb_to_primitives
   board:
-    at (26, 26): KS AS 2S 3S
-    at (107, 52): TD JD QD KD
-    at (182, 52): 2H 3H 4H
-    at (332, 52): AC AD AH
-    at (407, 52): 2C 3D 4C 5H 6S 7H
-    at (482, 52): 4S' 5D' 6C
-    at (253, 185): 7S
-    at (257, 228): 7D
-    at (182, 187): 5C 6D' 7C
+    at (26,26): K♠ A♠ 2♠ 3♠
+    at (52,107): T♦ J♦ Q♦ K♦
+    at (52,182): 2♥ 3♥ 4♥
+    at (52,332): A♣ A♦ A♥
+    at (52,407): 2♣ 3♦ 4♣ 5♥ 6♠ 7♥
+    at (52,482): 4♠' 5♦' 6♣
+    at (185,253): 7♠
+    at (228,257): 7♦
+    at (187,182): 5♣ 6♦' 7♣
   verb: free_pull
-  loose: 7D
-  target_before: 7S
+  loose: 7♦
+  target_before: 7♠
   target_bucket: trouble
   side: right
   expect:
     primitives:
-      - merge_stack [7D] -> [7S] /right
-
-scenario mined_004_5C_6Dp1_step_03
-  desc: mined_004_5C_6Dp1 step 3 (extract_absorb/peel).
+      - merge_stack [7♦] at (228,257) -> [7♠] at (185,253) /right
+scenario mined_004_5♣_6♦p1_step_03
+  desc: mined_004_5♣_6♦p1 step 3 (extract_absorb/peel).
   op: verb_to_primitives
   board:
-    at (26, 26): KS AS 2S 3S
-    at (107, 52): TD JD QD KD
-    at (182, 52): 2H 3H 4H
-    at (332, 52): AC AD AH
-    at (407, 52): 2C 3D 4C 5H 6S 7H
-    at (482, 52): 4S' 5D' 6C
-    at (182, 187): 5C 6D' 7C
-    at (253, 185): 7S 7D
+    at (26,26): K♠ A♠ 2♠ 3♠
+    at (52,107): T♦ J♦ Q♦ K♦
+    at (52,182): 2♥ 3♥ 4♥
+    at (52,332): A♣ A♦ A♥
+    at (52,407): 2♣ 3♦ 4♣ 5♥ 6♠ 7♥
+    at (52,482): 4♠' 5♦' 6♣
+    at (187,182): 5♣ 6♦' 7♣
+    at (185,253): 7♠ 7♦
   verb: peel
-  source: 2C 3D 4C 5H 6S 7H
-  ext_card: 7H
-  target_before: 7S 7D
+  source: 2♣ 3♦ 4♣ 5♥ 6♠ 7♥
+  ext_card: 7♥
+  target_before: 7♠ 7♦
   target_bucket: growing
   side: right
   expect:
     primitives:
-      - split [2C 3D 4C 5H 6S 7H]@5
-      - merge_stack [7H] -> [7S 7D] /right
-
-scenario mined_005_2Hp1_step_01
-  desc: mined_005_2Hp1 step 1 (extract_absorb/peel).
+      - split [2♣ 3♦ 4♣ 5♥ 6♠ 7♥] at (52,407) @5
+      - merge_stack [7♥] at (221,403) -> [7♠ 7♦] at (185,253) /right
+scenario mined_005_2♥p1_step_01
+  desc: mined_005_2♥p1 step 1 (extract_absorb/peel).
   op: verb_to_primitives
   board:
-    at (26, 26): KS AS 2S 3S
-    at (107, 52): TD JD QD KD
-    at (182, 52): 2H 3H 4H
-    at (257, 52): AC AD AH
-    at (332, 52): 4S' 5D' 6C
-    at (407, 52): 5C 6D' 7C
-    at (482, 52): 2C 3D 4C 5H 6S
-    at (182, 187): 7S 7D 7H
-    at (257, 187): 2H'
+    at (26,26): K♠ A♠ 2♠ 3♠
+    at (52,107): T♦ J♦ Q♦ K♦
+    at (52,182): 2♥ 3♥ 4♥
+    at (52,257): A♣ A♦ A♥
+    at (52,332): 4♠' 5♦' 6♣
+    at (52,407): 5♣ 6♦' 7♣
+    at (52,482): 2♣ 3♦ 4♣ 5♥ 6♠
+    at (187,182): 7♠ 7♦ 7♥
+    at (187,257): 2♥'
   verb: peel
-  source: KS AS 2S 3S
-  ext_card: 3S
-  target_before: 2H'
+  source: K♠ A♠ 2♠ 3♠
+  ext_card: 3♠
+  target_before: 2♥'
   target_bucket: trouble
   side: right
   expect:
     primitives:
-      - split [KS AS 2S 3S]@3
-      - merge_stack [3S] -> [2H'] /right
-
-scenario mined_005_2Hp1_step_02
-  desc: mined_005_2Hp1 step 2 (extract_absorb/steal).
+      - split [K♠ A♠ 2♠ 3♠] at (26,26) @3
+      - merge_stack [3♠] at (129,22) -> [2♥'] at (187,257) /right
+scenario mined_005_2♥p1_step_02
+  desc: mined_005_2♥p1 step 2 (extract_absorb/steal).
   op: verb_to_primitives
   board:
-    at (107, 52): TD JD QD KD
-    at (182, 52): 2H 3H 4H
-    at (257, 52): AC AD AH
-    at (332, 52): 4S' 5D' 6C
-    at (407, 52): 5C 6D' 7C
-    at (482, 52): 2C 3D 4C 5H 6S
-    at (182, 187): 7S 7D 7H
-    at (26, 18): KS AS 2S
-    at (257, 187): 2H' 3S
+    at (52,107): T♦ J♦ Q♦ K♦
+    at (52,182): 2♥ 3♥ 4♥
+    at (52,257): A♣ A♦ A♥
+    at (52,332): 4♠' 5♦' 6♣
+    at (52,407): 5♣ 6♦' 7♣
+    at (52,482): 2♣ 3♦ 4♣ 5♥ 6♠
+    at (187,182): 7♠ 7♦ 7♥
+    at (18,26): K♠ A♠ 2♠
+    at (187,257): 2♥' 3♠
   verb: steal
-  source: AC AD AH
-  ext_card: AC
-  target_before: 2H' 3S
+  source: A♣ A♦ A♥
+  ext_card: A♣
+  target_before: 2♥' 3♠
   target_bucket: growing
   side: left
   expect:
     primitives:
-      - split [AC AD AH]@0
-      - move_stack [AD AH] -> (332,187)
-      - split [AD AH]@0
-      - merge_stack [AC] -> [2H' 3S] /left
-
-scenario mined_005_2Hp1_step_03
-  desc: mined_005_2Hp1 step 3 (push).
+      - split [A♣ A♦ A♥] at (52,257) @0
+      - move_stack [A♦ A♥] at (93,257) -> (187,332)
+      - split [A♦ A♥] at (187,332) @0
+      - merge_stack [A♣] at (50,253) -> [2♥' 3♠] at (187,257) /left
+scenario mined_005_2♥p1_step_03
+  desc: mined_005_2♥p1 step 3 (push).
   op: verb_to_primitives
   board:
-    at (107, 52): TD JD QD KD
-    at (182, 52): 2H 3H 4H
-    at (332, 52): 4S' 5D' 6C
-    at (407, 52): 5C 6D' 7C
-    at (482, 52): 2C 3D 4C 5H 6S
-    at (182, 187): 7S 7D 7H
-    at (26, 18): KS AS 2S
-    at (328, 185): AD
-    at (332, 228): AH
-    at (257, 154): AC 2H' 3S
+    at (52,107): T♦ J♦ Q♦ K♦
+    at (52,182): 2♥ 3♥ 4♥
+    at (52,332): 4♠' 5♦' 6♣
+    at (52,407): 5♣ 6♦' 7♣
+    at (52,482): 2♣ 3♦ 4♣ 5♥ 6♠
+    at (187,182): 7♠ 7♦ 7♥
+    at (18,26): K♠ A♠ 2♠
+    at (185,328): A♦
+    at (228,332): A♥
+    at (154,257): A♣ 2♥' 3♠
   verb: push
-  trouble_before: AD
-  target_before: TD JD QD KD
+  trouble_before: A♦
+  target_before: T♦ J♦ Q♦ K♦
   side: right
   expect:
     primitives:
-      - merge_stack [AD] -> [TD JD QD KD] /right
-
-scenario mined_005_2Hp1_step_04
-  desc: mined_005_2Hp1 step 4 (push).
+      - merge_stack [A♦] at (185,328) -> [T♦ J♦ Q♦ K♦] at (52,107) /right
+scenario mined_005_2♥p1_step_04
+  desc: mined_005_2♥p1 step 4 (push).
   op: verb_to_primitives
   board:
-    at (182, 52): 2H 3H 4H
-    at (332, 52): 4S' 5D' 6C
-    at (407, 52): 5C 6D' 7C
-    at (482, 52): 2C 3D 4C 5H 6S
-    at (182, 187): 7S 7D 7H
-    at (26, 18): KS AS 2S
-    at (332, 228): AH
-    at (257, 154): AC 2H' 3S
-    at (107, 52): TD JD QD KD AD
+    at (52,182): 2♥ 3♥ 4♥
+    at (52,332): 4♠' 5♦' 6♣
+    at (52,407): 5♣ 6♦' 7♣
+    at (52,482): 2♣ 3♦ 4♣ 5♥ 6♠
+    at (187,182): 7♠ 7♦ 7♥
+    at (18,26): K♠ A♠ 2♠
+    at (228,332): A♥
+    at (154,257): A♣ 2♥' 3♠
+    at (52,107): T♦ J♦ Q♦ K♦ A♦
   verb: push
-  trouble_before: AH
-  target_before: 2H 3H 4H
+  trouble_before: A♥
+  target_before: 2♥ 3♥ 4♥
   side: left
   expect:
     primitives:
-      - merge_stack [AH] -> [2H 3H 4H] /left
-
-scenario mined_006_6Cp1_step_01
-  desc: mined_006_6Cp1 step 1 (extract_absorb/peel).
+      - merge_stack [A♥] at (228,332) -> [2♥ 3♥ 4♥] at (52,182) /left
+scenario mined_006_6♣p1_step_01
+  desc: mined_006_6♣p1 step 1 (extract_absorb/peel).
   op: verb_to_primitives
   board:
-    at (26, 26): 4S' 5D' 6C
-    at (107, 52): 5C 6D' 7C
-    at (182, 52): 7S 7D 7H
-    at (257, 52): KS AS 2S
-    at (332, 52): 3D 4C 5H 6S
-    at (407, 52): KS' AD 2C
-    at (482, 52): TD JD QD
-    at (92, 187): AH 2H 3H
-    at (167, 187): QC KD AC
-    at (242, 187): AC' 2H' 3S 4H
-    at (407, 187): 6C'
+    at (26,26): 4♠' 5♦' 6♣
+    at (52,107): 5♣ 6♦' 7♣
+    at (52,182): 7♠ 7♦ 7♥
+    at (52,257): K♠ A♠ 2♠
+    at (52,332): 3♦ 4♣ 5♥ 6♠
+    at (52,407): K♠' A♦ 2♣
+    at (52,482): T♦ J♦ Q♦
+    at (187,92): A♥ 2♥ 3♥
+    at (187,167): Q♣ K♦ A♣
+    at (187,242): A♣' 2♥' 3♠ 4♥
+    at (187,407): 6♣'
   verb: peel
-  source: 3D 4C 5H 6S
-  ext_card: 6S
-  target_before: 6C'
+  source: 3♦ 4♣ 5♥ 6♠
+  ext_card: 6♠
+  target_before: 6♣'
   target_bucket: trouble
   side: right
   expect:
     primitives:
-      - split [3D 4C 5H 6S]@3
-      - merge_stack [6S] -> [6C'] /right
-
-scenario mined_006_6Cp1_step_02
-  desc: mined_006_6Cp1 step 2 (extract_absorb/split_out).
+      - split [3♦ 4♣ 5♥ 6♠] at (52,332) @3
+      - merge_stack [6♠] at (155,328) -> [6♣'] at (187,407) /right
+scenario mined_006_6♣p1_step_02
+  desc: mined_006_6♣p1 step 2 (extract_absorb/split_out).
   op: verb_to_primitives
   board:
-    at (26, 26): 4S' 5D' 6C
-    at (107, 52): 5C 6D' 7C
-    at (182, 52): 7S 7D 7H
-    at (257, 52): KS AS 2S
-    at (407, 52): KS' AD 2C
-    at (482, 52): TD JD QD
-    at (92, 187): AH 2H 3H
-    at (167, 187): QC KD AC
-    at (242, 187): AC' 2H' 3S 4H
-    at (332, 44): 3D 4C 5H
-    at (407, 187): 6C' 6S
+    at (26,26): 4♠' 5♦' 6♣
+    at (52,107): 5♣ 6♦' 7♣
+    at (52,182): 7♠ 7♦ 7♥
+    at (52,257): K♠ A♠ 2♠
+    at (52,407): K♠' A♦ 2♣
+    at (52,482): T♦ J♦ Q♦
+    at (187,92): A♥ 2♥ 3♥
+    at (187,167): Q♣ K♦ A♣
+    at (187,242): A♣' 2♥' 3♠ 4♥
+    at (44,332): 3♦ 4♣ 5♥
+    at (187,407): 6♣' 6♠
   verb: split_out
-  source: 5C 6D' 7C
-  ext_card: 6D'
-  target_before: 6C' 6S
+  source: 5♣ 6♦' 7♣
+  ext_card: 6♦'
+  target_before: 6♣' 6♠
   target_bucket: growing
   side: right
   expect:
     primitives:
-      - split [5C 6D' 7C]@0
-      - split [6D' 7C]@0
-      - merge_stack [6D'] -> [6C' 6S] /right
-
-scenario mined_006_6Cp1_step_03
-  desc: mined_006_6Cp1 step 3 (push).
+      - split [5♣ 6♦' 7♣] at (52,107) @0
+      - split [6♦' 7♣] at (93,107) @0
+      - merge_stack [6♦'] at (91,103) -> [6♣' 6♠] at (187,407) /right
+scenario mined_006_6♣p1_step_03
+  desc: mined_006_6♣p1 step 3 (push).
   op: verb_to_primitives
   board:
-    at (26, 26): 4S' 5D' 6C
-    at (182, 52): 7S 7D 7H
-    at (257, 52): KS AS 2S
-    at (407, 52): KS' AD 2C
-    at (482, 52): TD JD QD
-    at (92, 187): AH 2H 3H
-    at (167, 187): QC KD AC
-    at (242, 187): AC' 2H' 3S 4H
-    at (332, 44): 3D 4C 5H
-    at (103, 50): 5C
-    at (332, 213): 7C
-    at (407, 187): 6C' 6S 6D'
+    at (26,26): 4♠' 5♦' 6♣
+    at (52,182): 7♠ 7♦ 7♥
+    at (52,257): K♠ A♠ 2♠
+    at (52,407): K♠' A♦ 2♣
+    at (52,482): T♦ J♦ Q♦
+    at (187,92): A♥ 2♥ 3♥
+    at (187,167): Q♣ K♦ A♣
+    at (187,242): A♣' 2♥' 3♠ 4♥
+    at (44,332): 3♦ 4♣ 5♥
+    at (50,103): 5♣
+    at (213,332): 7♣
+    at (187,407): 6♣' 6♠ 6♦'
   verb: push
-  trouble_before: 5C
-  target_before: AC' 2H' 3S 4H
+  trouble_before: 5♣
+  target_before: A♣' 2♥' 3♠ 4♥
   side: right
   expect:
     primitives:
-      - merge_stack [5C] -> [AC' 2H' 3S 4H] /right
-
-scenario mined_006_6Cp1_step_04
-  desc: mined_006_6Cp1 step 4 (push).
+      - merge_stack [5♣] at (50,103) -> [A♣' 2♥' 3♠ 4♥] at (187,242) /right
+scenario mined_006_6♣p1_step_04
+  desc: mined_006_6♣p1 step 4 (push).
   op: verb_to_primitives
   board:
-    at (26, 26): 4S' 5D' 6C
-    at (182, 52): 7S 7D 7H
-    at (257, 52): KS AS 2S
-    at (407, 52): KS' AD 2C
-    at (482, 52): TD JD QD
-    at (92, 187): AH 2H 3H
-    at (167, 187): QC KD AC
-    at (332, 44): 3D 4C 5H
-    at (332, 213): 7C
-    at (407, 187): 6C' 6S 6D'
-    at (242, 187): AC' 2H' 3S 4H 5C
+    at (26,26): 4♠' 5♦' 6♣
+    at (52,182): 7♠ 7♦ 7♥
+    at (52,257): K♠ A♠ 2♠
+    at (52,407): K♠' A♦ 2♣
+    at (52,482): T♦ J♦ Q♦
+    at (187,92): A♥ 2♥ 3♥
+    at (187,167): Q♣ K♦ A♣
+    at (44,332): 3♦ 4♣ 5♥
+    at (213,332): 7♣
+    at (187,407): 6♣' 6♠ 6♦'
+    at (187,242): A♣' 2♥' 3♠ 4♥ 5♣
   verb: push
-  trouble_before: 7C
-  target_before: 7S 7D 7H
+  trouble_before: 7♣
+  target_before: 7♠ 7♦ 7♥
   side: right
   expect:
     primitives:
-      - move_stack [7S 7D 7H] -> (482,187)
-      - merge_stack [7C] -> [7S 7D 7H] /right
-
-scenario mined_007_5Cp1_6C_step_01
-  desc: mined_007_5Cp1_6C step 1 (extract_absorb/steal).
+      - move_stack [7♠ 7♦ 7♥] at (52,182) -> (187,482)
+      - merge_stack [7♣] at (213,332) -> [7♠ 7♦ 7♥] at (187,482) /right
+scenario mined_007_5♣p1_6♣_step_01
+  desc: mined_007_5♣p1_6♣ step 1 (extract_absorb/steal).
   op: verb_to_primitives
   board:
-    at (26, 26): KS AS 2S 3S
-    at (107, 52): TD JD QD KD
-    at (182, 52): 2H 3H 4H
-    at (257, 52): 7S 7D 7C
-    at (332, 52): AC AD AH
-    at (407, 52): 2C 3D 4C 5H 6S 7H
-    at (482, 52): 9H' TC' JH
-    at (182, 187): 5C' 6C
+    at (26,26): K♠ A♠ 2♠ 3♠
+    at (52,107): T♦ J♦ Q♦ K♦
+    at (52,182): 2♥ 3♥ 4♥
+    at (52,257): 7♠ 7♦ 7♣
+    at (52,332): A♣ A♦ A♥
+    at (52,407): 2♣ 3♦ 4♣ 5♥ 6♠ 7♥
+    at (52,482): 9♥' T♣' J♥
+    at (187,182): 5♣' 6♣
   verb: steal
-  source: 7S 7D 7C
-  ext_card: 7C
-  target_before: 5C' 6C
+  source: 7♠ 7♦ 7♣
+  ext_card: 7♣
+  target_before: 5♣' 6♣
   target_bucket: trouble
   side: right
   expect:
     primitives:
-      - split [7S 7D 7C]@2
-      - move_stack [7S 7D] -> (257,187)
-      - split [7S 7D]@0
-      - merge_stack [7C] -> [5C' 6C] /right
-
-scenario mined_007_5Cp1_6C_step_02
-  desc: mined_007_5Cp1_6C step 2 (free_pull).
+      - split [7♠ 7♦ 7♣] at (52,257) @2
+      - move_stack [7♠ 7♦] at (44,257) -> (187,257)
+      - split [7♠ 7♦] at (187,257) @0
+      - merge_stack [7♣] at (122,253) -> [5♣' 6♣] at (187,182) /right
+scenario mined_007_5♣p1_6♣_step_02
+  desc: mined_007_5♣p1_6♣ step 2 (free_pull).
   op: verb_to_primitives
   board:
-    at (26, 26): KS AS 2S 3S
-    at (107, 52): TD JD QD KD
-    at (182, 52): 2H 3H 4H
-    at (332, 52): AC AD AH
-    at (407, 52): 2C 3D 4C 5H 6S 7H
-    at (482, 52): 9H' TC' JH
-    at (253, 185): 7S
-    at (257, 228): 7D
-    at (182, 187): 5C' 6C 7C
+    at (26,26): K♠ A♠ 2♠ 3♠
+    at (52,107): T♦ J♦ Q♦ K♦
+    at (52,182): 2♥ 3♥ 4♥
+    at (52,332): A♣ A♦ A♥
+    at (52,407): 2♣ 3♦ 4♣ 5♥ 6♠ 7♥
+    at (52,482): 9♥' T♣' J♥
+    at (185,253): 7♠
+    at (228,257): 7♦
+    at (187,182): 5♣' 6♣ 7♣
   verb: free_pull
-  loose: 7D
-  target_before: 7S
+  loose: 7♦
+  target_before: 7♠
   target_bucket: trouble
   side: right
   expect:
     primitives:
-      - merge_stack [7D] -> [7S] /right
-
-scenario mined_007_5Cp1_6C_step_03
-  desc: mined_007_5Cp1_6C step 3 (extract_absorb/peel).
+      - merge_stack [7♦] at (228,257) -> [7♠] at (185,253) /right
+scenario mined_007_5♣p1_6♣_step_03
+  desc: mined_007_5♣p1_6♣ step 3 (extract_absorb/peel).
   op: verb_to_primitives
   board:
-    at (26, 26): KS AS 2S 3S
-    at (107, 52): TD JD QD KD
-    at (182, 52): 2H 3H 4H
-    at (332, 52): AC AD AH
-    at (407, 52): 2C 3D 4C 5H 6S 7H
-    at (482, 52): 9H' TC' JH
-    at (182, 187): 5C' 6C 7C
-    at (253, 185): 7S 7D
+    at (26,26): K♠ A♠ 2♠ 3♠
+    at (52,107): T♦ J♦ Q♦ K♦
+    at (52,182): 2♥ 3♥ 4♥
+    at (52,332): A♣ A♦ A♥
+    at (52,407): 2♣ 3♦ 4♣ 5♥ 6♠ 7♥
+    at (52,482): 9♥' T♣' J♥
+    at (187,182): 5♣' 6♣ 7♣
+    at (185,253): 7♠ 7♦
   verb: peel
-  source: 2C 3D 4C 5H 6S 7H
-  ext_card: 7H
-  target_before: 7S 7D
+  source: 2♣ 3♦ 4♣ 5♥ 6♠ 7♥
+  ext_card: 7♥
+  target_before: 7♠ 7♦
   target_bucket: growing
   side: right
   expect:
     primitives:
-      - split [2C 3D 4C 5H 6S 7H]@5
-      - merge_stack [7H] -> [7S 7D] /right
-
-scenario mined_008_QHp1_step_01
-  desc: mined_008_QHp1 step 1 (extract_absorb/steal).
+      - split [2♣ 3♦ 4♣ 5♥ 6♠ 7♥] at (52,407) @5
+      - merge_stack [7♥] at (221,403) -> [7♠ 7♦] at (185,253) /right
+scenario mined_008_Q♥p1_step_01
+  desc: mined_008_Q♥p1 step 1 (extract_absorb/steal).
   op: verb_to_primitives
   board:
-    at (26, 26): TD JD QD KD
-    at (107, 52): 2H 3H 4H
-    at (182, 52): AC AD AH
-    at (257, 52): 9H' TC' JH
-    at (332, 52): 5C' 6C 7C
-    at (407, 52): 2C 3D 4C 5H 6S
-    at (482, 52): 7S 7D 7H
-    at (92, 187): AS 2S 3S
-    at (167, 187): JS' QS' KS
-    at (242, 187): QH'
+    at (26,26): T♦ J♦ Q♦ K♦
+    at (52,107): 2♥ 3♥ 4♥
+    at (52,182): A♣ A♦ A♥
+    at (52,257): 9♥' T♣' J♥
+    at (52,332): 5♣' 6♣ 7♣
+    at (52,407): 2♣ 3♦ 4♣ 5♥ 6♠
+    at (52,482): 7♠ 7♦ 7♥
+    at (187,92): A♠ 2♠ 3♠
+    at (187,167): J♠' Q♠' K♠
+    at (187,242): Q♥'
   verb: steal
-  source: JS' QS' KS
-  ext_card: JS'
-  target_before: QH'
+  source: J♠' Q♠' K♠
+  ext_card: J♠'
+  target_before: Q♥'
   target_bucket: trouble
   side: left
   expect:
     primitives:
-      - split [JS' QS' KS]@0
-      - move_stack [QH'] -> (242,220)
-      - merge_stack [JS'] -> [QH'] /left
-
-scenario mined_008_QHp1_step_02
-  desc: mined_008_QHp1 step 2 (extract_absorb/peel).
+      - split [J♠' Q♠' K♠] at (187,167) @0
+      - move_stack [Q♥'] at (187,242) -> (220,242)
+      - merge_stack [J♠'] at (185,163) -> [Q♥'] at (220,242) /left
+scenario mined_008_Q♥p1_step_02
+  desc: mined_008_Q♥p1 step 2 (extract_absorb/peel).
   op: verb_to_primitives
   board:
-    at (26, 26): TD JD QD KD
-    at (107, 52): 2H 3H 4H
-    at (182, 52): AC AD AH
-    at (257, 52): 9H' TC' JH
-    at (332, 52): 5C' 6C 7C
-    at (407, 52): 2C 3D 4C 5H 6S
-    at (482, 52): 7S 7D 7H
-    at (92, 187): AS 2S 3S
-    at (167, 228): QS' KS
-    at (242, 187): JS' QH'
+    at (26,26): T♦ J♦ Q♦ K♦
+    at (52,107): 2♥ 3♥ 4♥
+    at (52,182): A♣ A♦ A♥
+    at (52,257): 9♥' T♣' J♥
+    at (52,332): 5♣' 6♣ 7♣
+    at (52,407): 2♣ 3♦ 4♣ 5♥ 6♠
+    at (52,482): 7♠ 7♦ 7♥
+    at (187,92): A♠ 2♠ 3♠
+    at (228,167): Q♠' K♠
+    at (187,242): J♠' Q♥'
   verb: peel
-  source: TD JD QD KD
-  ext_card: TD
-  target_before: JS' QH'
+  source: T♦ J♦ Q♦ K♦
+  ext_card: T♦
+  target_before: J♠' Q♥'
   target_bucket: growing
   side: left
   expect:
     primitives:
-      - split [TD JD QD KD]@0
-      - move_stack [JS' QH'] -> (242,220)
-      - merge_stack [TD] -> [JS' QH'] /left
-
-scenario mined_008_QHp1_step_03
-  desc: mined_008_QHp1 step 3 (push).
+      - split [T♦ J♦ Q♦ K♦] at (26,26) @0
+      - move_stack [J♠' Q♥'] at (187,242) -> (220,242)
+      - merge_stack [T♦] at (24,22) -> [J♠' Q♥'] at (220,242) /left
+scenario mined_008_Q♥p1_step_03
+  desc: mined_008_Q♥p1 step 3 (push).
   op: verb_to_primitives
   board:
-    at (107, 52): 2H 3H 4H
-    at (182, 52): AC AD AH
-    at (257, 52): 9H' TC' JH
-    at (332, 52): 5C' 6C 7C
-    at (407, 52): 2C 3D 4C 5H 6S
-    at (482, 52): 7S 7D 7H
-    at (92, 187): AS 2S 3S
-    at (167, 228): QS' KS
-    at (317, 228): JD QD KD
-    at (242, 187): TD JS' QH'
+    at (52,107): 2♥ 3♥ 4♥
+    at (52,182): A♣ A♦ A♥
+    at (52,257): 9♥' T♣' J♥
+    at (52,332): 5♣' 6♣ 7♣
+    at (52,407): 2♣ 3♦ 4♣ 5♥ 6♠
+    at (52,482): 7♠ 7♦ 7♥
+    at (187,92): A♠ 2♠ 3♠
+    at (228,167): Q♠' K♠
+    at (228,317): J♦ Q♦ K♦
+    at (187,242): T♦ J♠' Q♥'
   verb: push
-  trouble_before: QS' KS
-  target_before: AS 2S 3S
+  trouble_before: Q♠' K♠
+  target_before: A♠ 2♠ 3♠
   side: left
   expect:
     primitives:
-      - move_stack [AS 2S 3S] -> (92,253)
-      - merge_stack [QS' KS] -> [AS 2S 3S] /left
-
-scenario mined_009_JC_step_01
-  desc: mined_009_JC step 1 (extract_absorb/peel).
+      - move_stack [A♠ 2♠ 3♠] at (187,92) -> (253,92)
+      - merge_stack [Q♠' K♠] at (228,167) -> [A♠ 2♠ 3♠] at (253,92) /left
+scenario mined_009_J♣_step_01
+  desc: mined_009_J♣ step 1 (extract_absorb/peel).
   op: verb_to_primitives
   board:
-    at (26, 26): AC AD AH
-    at (107, 52): 9H' TC' JH
-    at (182, 52): 5C' 6C 7C
-    at (257, 52): 2C 3D 4C 5H 6S
-    at (332, 52): 7S 7D 7H
-    at (407, 52): JD QD KD
-    at (482, 52): QS' KS AS 2S 3S
-    at (92, 187): 9S TD JS' QH'
-    at (167, 187): 2H 3H 4H 5H'
-    at (332, 187): JC
+    at (26,26): A♣ A♦ A♥
+    at (52,107): 9♥' T♣' J♥
+    at (52,182): 5♣' 6♣ 7♣
+    at (52,257): 2♣ 3♦ 4♣ 5♥ 6♠
+    at (52,332): 7♠ 7♦ 7♥
+    at (52,407): J♦ Q♦ K♦
+    at (52,482): Q♠' K♠ A♠ 2♠ 3♠
+    at (187,92): 9♠ T♦ J♠' Q♥'
+    at (187,167): 2♥ 3♥ 4♥ 5♥'
+    at (187,332): J♣
   verb: peel
-  source: 9S TD JS' QH'
-  ext_card: QH'
-  target_before: JC
+  source: 9♠ T♦ J♠' Q♥'
+  ext_card: Q♥'
+  target_before: J♣
   target_bucket: trouble
   side: right
   expect:
     primitives:
-      - split [9S TD JS' QH']@3
-      - merge_stack [QH'] -> [JC] /right
-
-scenario mined_009_JC_step_02
-  desc: mined_009_JC step 2 (extract_absorb/yank).
+      - split [9♠ T♦ J♠' Q♥'] at (187,92) @3
+      - merge_stack [Q♥'] at (290,88) -> [J♣] at (187,332) /right
+scenario mined_009_J♣_step_02
+  desc: mined_009_J♣ step 2 (extract_absorb/yank).
   op: verb_to_primitives
   board:
-    at (26, 26): AC AD AH
-    at (107, 52): 9H' TC' JH
-    at (182, 52): 5C' 6C 7C
-    at (257, 52): 2C 3D 4C 5H 6S
-    at (332, 52): 7S 7D 7H
-    at (407, 52): JD QD KD
-    at (482, 52): QS' KS AS 2S 3S
-    at (167, 187): 2H 3H 4H 5H'
-    at (92, 179): 9S TD JS'
-    at (332, 187): JC QH'
+    at (26,26): A♣ A♦ A♥
+    at (52,107): 9♥' T♣' J♥
+    at (52,182): 5♣' 6♣ 7♣
+    at (52,257): 2♣ 3♦ 4♣ 5♥ 6♠
+    at (52,332): 7♠ 7♦ 7♥
+    at (52,407): J♦ Q♦ K♦
+    at (52,482): Q♠' K♠ A♠ 2♠ 3♠
+    at (187,167): 2♥ 3♥ 4♥ 5♥'
+    at (179,92): 9♠ T♦ J♠'
+    at (187,332): J♣ Q♥'
   verb: yank
-  source: QS' KS AS 2S 3S
-  ext_card: KS
-  target_before: JC QH'
+  source: Q♠' K♠ A♠ 2♠ 3♠
+  ext_card: K♠
+  target_before: J♣ Q♥'
   target_bucket: growing
   side: right
   expect:
     primitives:
-      - split [QS' KS AS 2S 3S]@0
-      - split [KS AS 2S 3S]@0
-      - merge_stack [KS] -> [JC QH'] /right
-
-scenario mined_009_JC_step_03
-  desc: mined_009_JC step 3 (push).
+      - split [Q♠' K♠ A♠ 2♠ 3♠] at (52,482) @0
+      - split [K♠ A♠ 2♠ 3♠] at (93,482) @0
+      - merge_stack [K♠] at (91,478) -> [J♣ Q♥'] at (187,332) /right
+scenario mined_009_J♣_step_03
+  desc: mined_009_J♣ step 3 (push).
   op: verb_to_primitives
   board:
-    at (26, 26): AC AD AH
-    at (107, 52): 9H' TC' JH
-    at (182, 52): 5C' 6C 7C
-    at (257, 52): 2C 3D 4C 5H 6S
-    at (332, 52): 7S 7D 7H
-    at (407, 52): JD QD KD
-    at (167, 187): 2H 3H 4H 5H'
-    at (92, 179): 9S TD JS'
-    at (478, 50): QS'
-    at (482, 153): AS 2S 3S
-    at (332, 187): JC QH' KS
+    at (26,26): A♣ A♦ A♥
+    at (52,107): 9♥' T♣' J♥
+    at (52,182): 5♣' 6♣ 7♣
+    at (52,257): 2♣ 3♦ 4♣ 5♥ 6♠
+    at (52,332): 7♠ 7♦ 7♥
+    at (52,407): J♦ Q♦ K♦
+    at (187,167): 2♥ 3♥ 4♥ 5♥'
+    at (179,92): 9♠ T♦ J♠'
+    at (50,478): Q♠'
+    at (153,482): A♠ 2♠ 3♠
+    at (187,332): J♣ Q♥' K♠
   verb: push
-  trouble_before: QS'
-  target_before: 9H' TC' JH
+  trouble_before: Q♠'
+  target_before: 9♥' T♣' J♥
   side: right
   expect:
     primitives:
-      - move_stack [9H' TC' JH] -> (407,187)
-      - merge_stack [QS'] -> [9H' TC' JH] /right
-
-scenario mined_010_3Hp1_step_01
-  desc: mined_010_3Hp1 step 1 (extract_absorb/peel).
+      - move_stack [9♥' T♣' J♥] at (52,107) -> (187,407)
+      - merge_stack [Q♠'] at (50,478) -> [9♥' T♣' J♥] at (187,407) /right
+scenario mined_010_3♥p1_step_01
+  desc: mined_010_3♥p1 step 1 (extract_absorb/peel).
   op: verb_to_primitives
   board:
-    at (26, 26): TD JD QD KD
-    at (107, 52): 2H 3H 4H
-    at (182, 52): 7S 7D 7C
-    at (257, 52): AC AD AH
-    at (332, 52): 9H' 9C 9D
-    at (407, 52): 2C 3D 4C 5H 6S
-    at (482, 52): 5D' 6C' 7H
-    at (92, 187): AS 2S 3S
-    at (167, 187): KC' KD' KS
-    at (242, 187): TC' JD' QS
-    at (317, 187): 3H'
+    at (26,26): T♦ J♦ Q♦ K♦
+    at (52,107): 2♥ 3♥ 4♥
+    at (52,182): 7♠ 7♦ 7♣
+    at (52,257): A♣ A♦ A♥
+    at (52,332): 9♥' 9♣ 9♦
+    at (52,407): 2♣ 3♦ 4♣ 5♥ 6♠
+    at (52,482): 5♦' 6♣' 7♥
+    at (187,92): A♠ 2♠ 3♠
+    at (187,167): K♣' K♦' K♠
+    at (187,242): T♣' J♦' Q♠
+    at (187,317): 3♥'
   verb: peel
-  source: 2C 3D 4C 5H 6S
-  ext_card: 2C
-  target_before: 3H'
+  source: 2♣ 3♦ 4♣ 5♥ 6♠
+  ext_card: 2♣
+  target_before: 3♥'
   target_bucket: trouble
   side: left
   expect:
     primitives:
-      - split [2C 3D 4C 5H 6S]@0
-      - move_stack [3H'] -> (317,220)
-      - merge_stack [2C] -> [3H'] /left
-
-scenario mined_010_3Hp1_step_02
-  desc: mined_010_3Hp1 step 2 (extract_absorb/steal).
+      - split [2♣ 3♦ 4♣ 5♥ 6♠] at (52,407) @0
+      - move_stack [3♥'] at (187,317) -> (220,317)
+      - merge_stack [2♣] at (50,403) -> [3♥'] at (220,317) /left
+scenario mined_010_3♥p1_step_02
+  desc: mined_010_3♥p1 step 2 (extract_absorb/steal).
   op: verb_to_primitives
   board:
-    at (26, 26): TD JD QD KD
-    at (107, 52): 2H 3H 4H
-    at (182, 52): 7S 7D 7C
-    at (257, 52): AC AD AH
-    at (332, 52): 9H' 9C 9D
-    at (482, 52): 5D' 6C' 7H
-    at (92, 187): AS 2S 3S
-    at (167, 187): KC' KD' KS
-    at (242, 187): TC' JD' QS
-    at (407, 93): 3D 4C 5H 6S
-    at (317, 187): 2C 3H'
+    at (26,26): T♦ J♦ Q♦ K♦
+    at (52,107): 2♥ 3♥ 4♥
+    at (52,182): 7♠ 7♦ 7♣
+    at (52,257): A♣ A♦ A♥
+    at (52,332): 9♥' 9♣ 9♦
+    at (52,482): 5♦' 6♣' 7♥
+    at (187,92): A♠ 2♠ 3♠
+    at (187,167): K♣' K♦' K♠
+    at (187,242): T♣' J♦' Q♠
+    at (93,407): 3♦ 4♣ 5♥ 6♠
+    at (187,317): 2♣ 3♥'
   verb: steal
-  source: AC AD AH
-  ext_card: AD
-  target_before: 2C 3H'
+  source: A♣ A♦ A♥
+  ext_card: A♦
+  target_before: 2♣ 3♥'
   target_bucket: growing
   side: left
   expect:
     primitives:
-      - split [AC AD AH]@0
-      - move_stack [AD AH] -> (482,187)
-      - split [AD AH]@0
-      - move_stack [2C 3H'] -> (317,220)
-      - merge_stack [AD] -> [2C 3H'] /left
-
-scenario mined_010_3Hp1_step_03
-  desc: mined_010_3Hp1 step 3 (extract_absorb/peel).
+      - split [A♣ A♦ A♥] at (52,257) @0
+      - move_stack [A♦ A♥] at (93,257) -> (187,482)
+      - split [A♦ A♥] at (187,482) @0
+      - move_stack [2♣ 3♥'] at (187,317) -> (220,317)
+      - merge_stack [A♦] at (185,478) -> [2♣ 3♥'] at (220,317) /left
+scenario mined_010_3♥p1_step_03
+  desc: mined_010_3♥p1 step 3 (extract_absorb/peel).
   op: verb_to_primitives
   board:
-    at (26, 26): TD JD QD KD
-    at (107, 52): 2H 3H 4H
-    at (182, 52): 7S 7D 7C
-    at (332, 52): 9H' 9C 9D
-    at (482, 52): 5D' 6C' 7H
-    at (92, 187): AS 2S 3S
-    at (167, 187): KC' KD' KS
-    at (242, 187): TC' JD' QS
-    at (407, 93): 3D 4C 5H 6S
-    at (253, 50): AC
-    at (482, 228): AH
-    at (317, 187): AD 2C 3H'
+    at (26,26): T♦ J♦ Q♦ K♦
+    at (52,107): 2♥ 3♥ 4♥
+    at (52,182): 7♠ 7♦ 7♣
+    at (52,332): 9♥' 9♣ 9♦
+    at (52,482): 5♦' 6♣' 7♥
+    at (187,92): A♠ 2♠ 3♠
+    at (187,167): K♣' K♦' K♠
+    at (187,242): T♣' J♦' Q♠
+    at (93,407): 3♦ 4♣ 5♥ 6♠
+    at (50,253): A♣
+    at (228,482): A♥
+    at (187,317): A♦ 2♣ 3♥'
   verb: peel
-  source: TD JD QD KD
-  ext_card: KD
-  target_before: AC
+  source: T♦ J♦ Q♦ K♦
+  ext_card: K♦
+  target_before: A♣
   target_bucket: trouble
   side: left
   expect:
     primitives:
-      - split [TD JD QD KD]@3
-      - merge_stack [KD] -> [AC] /left
-
-scenario mined_010_3Hp1_step_04
-  desc: mined_010_3Hp1 step 4 (push).
+      - split [T♦ J♦ Q♦ K♦] at (26,26) @3
+      - merge_stack [K♦] at (129,22) -> [A♣] at (50,253) /left
+scenario mined_010_3♥p1_step_04
+  desc: mined_010_3♥p1 step 4 (push).
   op: verb_to_primitives
   board:
-    at (107, 52): 2H 3H 4H
-    at (182, 52): 7S 7D 7C
-    at (332, 52): 9H' 9C 9D
-    at (482, 52): 5D' 6C' 7H
-    at (92, 187): AS 2S 3S
-    at (167, 187): KC' KD' KS
-    at (242, 187): TC' JD' QS
-    at (407, 93): 3D 4C 5H 6S
-    at (482, 228): AH
-    at (317, 187): AD 2C 3H'
-    at (26, 18): TD JD QD
-    at (253, 17): KD AC
+    at (52,107): 2♥ 3♥ 4♥
+    at (52,182): 7♠ 7♦ 7♣
+    at (52,332): 9♥' 9♣ 9♦
+    at (52,482): 5♦' 6♣' 7♥
+    at (187,92): A♠ 2♠ 3♠
+    at (187,167): K♣' K♦' K♠
+    at (187,242): T♣' J♦' Q♠
+    at (93,407): 3♦ 4♣ 5♥ 6♠
+    at (228,482): A♥
+    at (187,317): A♦ 2♣ 3♥'
+    at (18,26): T♦ J♦ Q♦
+    at (17,253): K♦ A♣
   verb: push
-  trouble_before: KD AC
-  target_before: TC' JD' QS
+  trouble_before: K♦ A♣
+  target_before: T♣' J♦' Q♠
   side: right
   expect:
     primitives:
-      - merge_stack [KD AC] -> [TC' JD' QS] /right
-
-scenario mined_010_3Hp1_step_05
-  desc: mined_010_3Hp1 step 5 (push).
+      - merge_stack [K♦ A♣] at (17,253) -> [T♣' J♦' Q♠] at (187,242) /right
+scenario mined_010_3♥p1_step_05
+  desc: mined_010_3♥p1 step 5 (push).
   op: verb_to_primitives
   board:
-    at (107, 52): 2H 3H 4H
-    at (182, 52): 7S 7D 7C
-    at (332, 52): 9H' 9C 9D
-    at (482, 52): 5D' 6C' 7H
-    at (92, 187): AS 2S 3S
-    at (167, 187): KC' KD' KS
-    at (407, 93): 3D 4C 5H 6S
-    at (482, 228): AH
-    at (317, 187): AD 2C 3H'
-    at (26, 18): TD JD QD
-    at (242, 187): TC' JD' QS KD AC
+    at (52,107): 2♥ 3♥ 4♥
+    at (52,182): 7♠ 7♦ 7♣
+    at (52,332): 9♥' 9♣ 9♦
+    at (52,482): 5♦' 6♣' 7♥
+    at (187,92): A♠ 2♠ 3♠
+    at (187,167): K♣' K♦' K♠
+    at (93,407): 3♦ 4♣ 5♥ 6♠
+    at (228,482): A♥
+    at (187,317): A♦ 2♣ 3♥'
+    at (18,26): T♦ J♦ Q♦
+    at (187,242): T♣' J♦' Q♠ K♦ A♣
   verb: push
-  trouble_before: AH
-  target_before: 2H 3H 4H
+  trouble_before: A♥
+  target_before: 2♥ 3♥ 4♥
   side: left
   expect:
     primitives:
-      - merge_stack [AH] -> [2H 3H 4H] /left
-
-scenario mined_011_JC_step_01
-  desc: mined_011_JC step 1 (extract_absorb/peel).
+      - merge_stack [A♥] at (228,482) -> [2♥ 3♥ 4♥] at (52,107) /left
+scenario mined_011_J♣_step_01
+  desc: mined_011_J♣ step 1 (extract_absorb/peel).
   op: verb_to_primitives
   board:
-    at (26, 26): 7S 7D 7C
-    at (107, 52): 9H' 9C 9D
-    at (182, 52): AS 2S 3S
-    at (257, 52): KC' KD' KS
-    at (332, 52): AD 2C 3H'
-    at (407, 52): TD JD QD
-    at (482, 52): TC' JD' QS KD AC
-    at (92, 187): AH 2H 3H 4H
-    at (167, 187): 4C 5H 6S
-    at (242, 187): 6C' 7H 8S
-    at (317, 187): 3D 4D 5D'
-    at (392, 187): JC
+    at (26,26): 7♠ 7♦ 7♣
+    at (52,107): 9♥' 9♣ 9♦
+    at (52,182): A♠ 2♠ 3♠
+    at (52,257): K♣' K♦' K♠
+    at (52,332): A♦ 2♣ 3♥'
+    at (52,407): T♦ J♦ Q♦
+    at (52,482): T♣' J♦' Q♠ K♦ A♣
+    at (187,92): A♥ 2♥ 3♥ 4♥
+    at (187,167): 4♣ 5♥ 6♠
+    at (187,242): 6♣' 7♥ 8♠
+    at (187,317): 3♦ 4♦ 5♦'
+    at (187,392): J♣
   verb: peel
-  source: TC' JD' QS KD AC
-  ext_card: TC'
-  target_before: JC
+  source: T♣' J♦' Q♠ K♦ A♣
+  ext_card: T♣'
+  target_before: J♣
   target_bucket: trouble
   side: left
   expect:
     primitives:
-      - split [TC' JD' QS KD AC]@0
-      - move_stack [JC] -> (392,220)
-      - merge_stack [TC'] -> [JC] /left
-
-scenario mined_011_JC_step_02
-  desc: mined_011_JC step 2 (extract_absorb/steal).
+      - split [T♣' J♦' Q♠ K♦ A♣] at (52,482) @0
+      - move_stack [J♣] at (187,392) -> (220,392)
+      - merge_stack [T♣'] at (50,478) -> [J♣] at (220,392) /left
+scenario mined_011_J♣_step_02
+  desc: mined_011_J♣ step 2 (extract_absorb/steal).
   op: verb_to_primitives
   board:
-    at (26, 26): 7S 7D 7C
-    at (107, 52): 9H' 9C 9D
-    at (182, 52): AS 2S 3S
-    at (257, 52): KC' KD' KS
-    at (332, 52): AD 2C 3H'
-    at (407, 52): TD JD QD
-    at (92, 187): AH 2H 3H 4H
-    at (167, 187): 4C 5H 6S
-    at (242, 187): 6C' 7H 8S
-    at (317, 187): 3D 4D 5D'
-    at (482, 93): JD' QS KD AC
-    at (392, 187): TC' JC
+    at (26,26): 7♠ 7♦ 7♣
+    at (52,107): 9♥' 9♣ 9♦
+    at (52,182): A♠ 2♠ 3♠
+    at (52,257): K♣' K♦' K♠
+    at (52,332): A♦ 2♣ 3♥'
+    at (52,407): T♦ J♦ Q♦
+    at (187,92): A♥ 2♥ 3♥ 4♥
+    at (187,167): 4♣ 5♥ 6♠
+    at (187,242): 6♣' 7♥ 8♠
+    at (187,317): 3♦ 4♦ 5♦'
+    at (93,482): J♦' Q♠ K♦ A♣
+    at (187,392): T♣' J♣
   verb: steal
-  source: 9H' 9C 9D
-  ext_card: 9C
-  target_before: TC' JC
+  source: 9♥' 9♣ 9♦
+  ext_card: 9♣
+  target_before: T♣' J♣
   target_bucket: growing
   side: left
   expect:
     primitives:
-      - split [9H' 9C 9D]@0
-      - move_stack [9C 9D] -> (467,262)
-      - split [9C 9D]@0
-      - move_stack [TC' JC] -> (392,220)
-      - merge_stack [9C] -> [TC' JC] /left
-
-scenario mined_011_JC_step_03
-  desc: mined_011_JC step 3 (push).
+      - split [9♥' 9♣ 9♦] at (52,107) @0
+      - move_stack [9♣ 9♦] at (93,107) -> (262,467)
+      - split [9♣ 9♦] at (262,467) @0
+      - move_stack [T♣' J♣] at (187,392) -> (220,392)
+      - merge_stack [9♣] at (260,463) -> [T♣' J♣] at (220,392) /left
+scenario mined_011_J♣_step_03
+  desc: mined_011_J♣ step 3 (push).
   op: verb_to_primitives
   board:
-    at (26, 26): 7S 7D 7C
-    at (182, 52): AS 2S 3S
-    at (257, 52): KC' KD' KS
-    at (332, 52): AD 2C 3H'
-    at (407, 52): TD JD QD
-    at (92, 187): AH 2H 3H 4H
-    at (167, 187): 4C 5H 6S
-    at (242, 187): 6C' 7H 8S
-    at (317, 187): 3D 4D 5D'
-    at (482, 93): JD' QS KD AC
-    at (103, 50): 9H'
-    at (467, 303): 9D
-    at (392, 187): 9C TC' JC
+    at (26,26): 7♠ 7♦ 7♣
+    at (52,182): A♠ 2♠ 3♠
+    at (52,257): K♣' K♦' K♠
+    at (52,332): A♦ 2♣ 3♥'
+    at (52,407): T♦ J♦ Q♦
+    at (187,92): A♥ 2♥ 3♥ 4♥
+    at (187,167): 4♣ 5♥ 6♠
+    at (187,242): 6♣' 7♥ 8♠
+    at (187,317): 3♦ 4♦ 5♦'
+    at (93,482): J♦' Q♠ K♦ A♣
+    at (50,103): 9♥'
+    at (303,467): 9♦
+    at (187,392): 9♣ T♣' J♣
   verb: push
-  trouble_before: 9H'
-  target_before: 6C' 7H 8S
+  trouble_before: 9♥'
+  target_before: 6♣' 7♥ 8♠
   side: right
   expect:
     primitives:
-      - merge_stack [9H'] -> [6C' 7H 8S] /right
-
-scenario mined_011_JC_step_04
-  desc: mined_011_JC step 4 (push).
+      - merge_stack [9♥'] at (50,103) -> [6♣' 7♥ 8♠] at (187,242) /right
+scenario mined_011_J♣_step_04
+  desc: mined_011_J♣ step 4 (push).
   op: verb_to_primitives
   board:
-    at (26, 26): 7S 7D 7C
-    at (182, 52): AS 2S 3S
-    at (257, 52): KC' KD' KS
-    at (332, 52): AD 2C 3H'
-    at (407, 52): TD JD QD
-    at (92, 187): AH 2H 3H 4H
-    at (167, 187): 4C 5H 6S
-    at (317, 187): 3D 4D 5D'
-    at (482, 93): JD' QS KD AC
-    at (467, 303): 9D
-    at (392, 187): 9C TC' JC
-    at (242, 187): 6C' 7H 8S 9H'
+    at (26,26): 7♠ 7♦ 7♣
+    at (52,182): A♠ 2♠ 3♠
+    at (52,257): K♣' K♦' K♠
+    at (52,332): A♦ 2♣ 3♥'
+    at (52,407): T♦ J♦ Q♦
+    at (187,92): A♥ 2♥ 3♥ 4♥
+    at (187,167): 4♣ 5♥ 6♠
+    at (187,317): 3♦ 4♦ 5♦'
+    at (93,482): J♦' Q♠ K♦ A♣
+    at (303,467): 9♦
+    at (187,392): 9♣ T♣' J♣
+    at (187,242): 6♣' 7♥ 8♠ 9♥'
   verb: push
-  trouble_before: 9D
-  target_before: TD JD QD
+  trouble_before: 9♦
+  target_before: T♦ J♦ Q♦
   side: left
   expect:
     primitives:
-      - merge_stack [9D] -> [TD JD QD] /left
-
-scenario mined_012_QC_KC_step_01
-  desc: mined_012_QC_KC step 1 (extract_absorb/steal).
+      - merge_stack [9♦] at (303,467) -> [T♦ J♦ Q♦] at (52,407) /left
+scenario mined_012_Q♣_K♣_step_01
+  desc: mined_012_Q♣_K♣ step 1 (extract_absorb/steal).
   op: verb_to_primitives
   board:
-    at (26, 26): KS AS 2S 3S
-    at (107, 52): TD JD QD KD
-    at (182, 52): 2H 3H 4H
-    at (257, 52): 7S 7D 7C
-    at (332, 52): AC AD AH
-    at (407, 52): 2C 3D 4C 5H 6S 7H
-    at (482, 52): 4D' 5S 6D'
-    at (182, 187): QC KC
+    at (26,26): K♠ A♠ 2♠ 3♠
+    at (52,107): T♦ J♦ Q♦ K♦
+    at (52,182): 2♥ 3♥ 4♥
+    at (52,257): 7♠ 7♦ 7♣
+    at (52,332): A♣ A♦ A♥
+    at (52,407): 2♣ 3♦ 4♣ 5♥ 6♠ 7♥
+    at (52,482): 4♦' 5♠ 6♦'
+    at (187,182): Q♣ K♣
   verb: steal
-  source: AC AD AH
-  ext_card: AC
-  target_before: QC KC
+  source: A♣ A♦ A♥
+  ext_card: A♣
+  target_before: Q♣ K♣
   target_bucket: trouble
   side: right
   expect:
     primitives:
-      - split [AC AD AH]@0
-      - move_stack [AD AH] -> (332,112)
-      - split [AD AH]@0
-      - merge_stack [AC] -> [QC KC] /right
-
-scenario mined_012_QC_KC_step_02
-  desc: mined_012_QC_KC step 2 (push).
+      - split [A♣ A♦ A♥] at (52,332) @0
+      - move_stack [A♦ A♥] at (93,332) -> (112,332)
+      - split [A♦ A♥] at (112,332) @0
+      - merge_stack [A♣] at (50,328) -> [Q♣ K♣] at (187,182) /right
+scenario mined_012_Q♣_K♣_step_02
+  desc: mined_012_Q♣_K♣ step 2 (push).
   op: verb_to_primitives
   board:
-    at (26, 26): KS AS 2S 3S
-    at (107, 52): TD JD QD KD
-    at (182, 52): 2H 3H 4H
-    at (257, 52): 7S 7D 7C
-    at (407, 52): 2C 3D 4C 5H 6S 7H
-    at (482, 52): 4D' 5S 6D'
-    at (328, 110): AD
-    at (332, 153): AH
-    at (182, 187): QC KC AC
+    at (26,26): K♠ A♠ 2♠ 3♠
+    at (52,107): T♦ J♦ Q♦ K♦
+    at (52,182): 2♥ 3♥ 4♥
+    at (52,257): 7♠ 7♦ 7♣
+    at (52,407): 2♣ 3♦ 4♣ 5♥ 6♠ 7♥
+    at (52,482): 4♦' 5♠ 6♦'
+    at (110,328): A♦
+    at (153,332): A♥
+    at (187,182): Q♣ K♣ A♣
   verb: push
-  trouble_before: AD
-  target_before: TD JD QD KD
+  trouble_before: A♦
+  target_before: T♦ J♦ Q♦ K♦
   side: right
   expect:
     primitives:
-      - merge_stack [AD] -> [TD JD QD KD] /right
-
-scenario mined_012_QC_KC_step_03
-  desc: mined_012_QC_KC step 3 (push).
+      - merge_stack [A♦] at (110,328) -> [T♦ J♦ Q♦ K♦] at (52,107) /right
+scenario mined_012_Q♣_K♣_step_03
+  desc: mined_012_Q♣_K♣ step 3 (push).
   op: verb_to_primitives
   board:
-    at (26, 26): KS AS 2S 3S
-    at (182, 52): 2H 3H 4H
-    at (257, 52): 7S 7D 7C
-    at (407, 52): 2C 3D 4C 5H 6S 7H
-    at (482, 52): 4D' 5S 6D'
-    at (332, 153): AH
-    at (182, 187): QC KC AC
-    at (107, 52): TD JD QD KD AD
+    at (26,26): K♠ A♠ 2♠ 3♠
+    at (52,182): 2♥ 3♥ 4♥
+    at (52,257): 7♠ 7♦ 7♣
+    at (52,407): 2♣ 3♦ 4♣ 5♥ 6♠ 7♥
+    at (52,482): 4♦' 5♠ 6♦'
+    at (153,332): A♥
+    at (187,182): Q♣ K♣ A♣
+    at (52,107): T♦ J♦ Q♦ K♦ A♦
   verb: push
-  trouble_before: AH
-  target_before: 2H 3H 4H
+  trouble_before: A♥
+  target_before: 2♥ 3♥ 4♥
   side: left
   expect:
     primitives:
-      - merge_stack [AH] -> [2H 3H 4H] /left
-
-scenario mined_013_AHp1_step_01
-  desc: mined_013_AHp1 step 1 (extract_absorb/peel).
+      - merge_stack [A♥] at (153,332) -> [2♥ 3♥ 4♥] at (52,182) /left
+scenario mined_013_A♥p1_step_01
+  desc: mined_013_A♥p1 step 1 (extract_absorb/peel).
   op: verb_to_primitives
   board:
-    at (26, 26): KS AS 2S 3S
-    at (107, 52): 7S 7D 7C
-    at (182, 52): TD JD QD KD AD
-    at (257, 52): AH 2H 3H
-    at (332, 52): 4S' 4D 4H
-    at (407, 52): 2D 3C' 4D' 5S 6D'
-    at (482, 52): 3D 4C 5H 6S 7H
-    at (92, 187): KC AC 2C
-    at (257, 187): TC' JH QC
-    at (332, 187): AH'
+    at (26,26): K♠ A♠ 2♠ 3♠
+    at (52,107): 7♠ 7♦ 7♣
+    at (52,182): T♦ J♦ Q♦ K♦ A♦
+    at (52,257): A♥ 2♥ 3♥
+    at (52,332): 4♠' 4♦ 4♥
+    at (52,407): 2♦ 3♣' 4♦' 5♠ 6♦'
+    at (52,482): 3♦ 4♣ 5♥ 6♠ 7♥
+    at (187,92): K♣ A♣ 2♣
+    at (187,257): T♣' J♥ Q♣
+    at (187,332): A♥'
   verb: peel
-  source: KS AS 2S 3S
-  ext_card: KS
-  target_before: AH'
+  source: K♠ A♠ 2♠ 3♠
+  ext_card: K♠
+  target_before: A♥'
   target_bucket: trouble
   side: left
   expect:
     primitives:
-      - split [KS AS 2S 3S]@0
-      - move_stack [AH'] -> (332,220)
-      - merge_stack [KS] -> [AH'] /left
-
-scenario mined_013_AHp1_step_02
-  desc: mined_013_AHp1 step 2 (extract_absorb/split_out).
+      - split [K♠ A♠ 2♠ 3♠] at (26,26) @0
+      - move_stack [A♥'] at (187,332) -> (220,332)
+      - merge_stack [K♠] at (24,22) -> [A♥'] at (220,332) /left
+scenario mined_013_A♥p1_step_02
+  desc: mined_013_A♥p1 step 2 (extract_absorb/split_out).
   op: verb_to_primitives
   board:
-    at (107, 52): 7S 7D 7C
-    at (182, 52): TD JD QD KD AD
-    at (257, 52): AH 2H 3H
-    at (332, 52): 4S' 4D 4H
-    at (407, 52): 2D 3C' 4D' 5S 6D'
-    at (482, 52): 3D 4C 5H 6S 7H
-    at (92, 187): KC AC 2C
-    at (257, 187): TC' JH QC
-    at (167, 288): AS 2S 3S
-    at (332, 187): KS AH'
+    at (52,107): 7♠ 7♦ 7♣
+    at (52,182): T♦ J♦ Q♦ K♦ A♦
+    at (52,257): A♥ 2♥ 3♥
+    at (52,332): 4♠' 4♦ 4♥
+    at (52,407): 2♦ 3♣' 4♦' 5♠ 6♦'
+    at (52,482): 3♦ 4♣ 5♥ 6♠ 7♥
+    at (187,92): K♣ A♣ 2♣
+    at (187,257): T♣' J♥ Q♣
+    at (288,167): A♠ 2♠ 3♠
+    at (187,332): K♠ A♥'
   verb: split_out
-  source: AS 2S 3S
-  ext_card: 2S
-  target_before: KS AH'
+  source: A♠ 2♠ 3♠
+  ext_card: 2♠
+  target_before: K♠ A♥'
   target_bucket: growing
   side: right
   expect:
     primitives:
-      - split [AS 2S 3S]@0
-      - split [2S 3S]@0
-      - merge_stack [2S] -> [KS AH'] /right
-
-scenario mined_013_AHp1_step_03
-  desc: mined_013_AHp1 step 3 (push).
+      - split [A♠ 2♠ 3♠] at (288,167) @0
+      - split [2♠ 3♠] at (329,167) @0
+      - merge_stack [2♠] at (327,163) -> [K♠ A♥'] at (187,332) /right
+scenario mined_013_A♥p1_step_03
+  desc: mined_013_A♥p1 step 3 (push).
   op: verb_to_primitives
   board:
-    at (107, 52): 7S 7D 7C
-    at (182, 52): TD JD QD KD AD
-    at (257, 52): AH 2H 3H
-    at (332, 52): 4S' 4D 4H
-    at (407, 52): 2D 3C' 4D' 5S 6D'
-    at (482, 52): 3D 4C 5H 6S 7H
-    at (92, 187): KC AC 2C
-    at (257, 187): TC' JH QC
-    at (163, 286): AS
-    at (407, 288): 3S
-    at (332, 187): KS AH' 2S
+    at (52,107): 7♠ 7♦ 7♣
+    at (52,182): T♦ J♦ Q♦ K♦ A♦
+    at (52,257): A♥ 2♥ 3♥
+    at (52,332): 4♠' 4♦ 4♥
+    at (52,407): 2♦ 3♣' 4♦' 5♠ 6♦'
+    at (52,482): 3♦ 4♣ 5♥ 6♠ 7♥
+    at (187,92): K♣ A♣ 2♣
+    at (187,257): T♣' J♥ Q♣
+    at (286,163): A♠
+    at (288,407): 3♠
+    at (187,332): K♠ A♥' 2♠
   verb: push
-  trouble_before: AS
-  target_before: 2D 3C' 4D' 5S 6D'
+  trouble_before: A♠
+  target_before: 2♦ 3♣' 4♦' 5♠ 6♦'
   side: left
   expect:
     primitives:
-      - merge_stack [AS] -> [2D 3C' 4D' 5S 6D'] /left
-
-scenario mined_013_AHp1_step_04
-  desc: mined_013_AHp1 step 4 (splice).
+      - merge_stack [A♠] at (286,163) -> [2♦ 3♣' 4♦' 5♠ 6♦'] at (52,407) /left
+scenario mined_013_A♥p1_step_04
+  desc: mined_013_A♥p1 step 4 (splice).
   op: verb_to_primitives
   board:
-    at (107, 52): 7S 7D 7C
-    at (182, 52): TD JD QD KD AD
-    at (257, 52): AH 2H 3H
-    at (332, 52): 4S' 4D 4H
-    at (482, 52): 3D 4C 5H 6S 7H
-    at (92, 187): KC AC 2C
-    at (257, 187): TC' JH QC
-    at (407, 288): 3S
-    at (332, 187): KS AH' 2S
-    at (407, 19): AS 2D 3C' 4D' 5S 6D'
+    at (52,107): 7♠ 7♦ 7♣
+    at (52,182): T♦ J♦ Q♦ K♦ A♦
+    at (52,257): A♥ 2♥ 3♥
+    at (52,332): 4♠' 4♦ 4♥
+    at (52,482): 3♦ 4♣ 5♥ 6♠ 7♥
+    at (187,92): K♣ A♣ 2♣
+    at (187,257): T♣' J♥ Q♣
+    at (288,407): 3♠
+    at (187,332): K♠ A♥' 2♠
+    at (19,407): A♠ 2♦ 3♣' 4♦' 5♠ 6♦'
   verb: splice
-  loose: 3S
-  source: AS 2D 3C' 4D' 5S 6D'
+  loose: 3♠
+  source: A♠ 2♦ 3♣' 4♦' 5♠ 6♦'
   k: 2
   side: left
   expect:
     primitives:
-      - move_stack [AS 2D 3C' 4D' 5S 6D'] -> (407,52)
-      - split [AS 2D 3C' 4D' 5S 6D']@1
-      - move_stack [AS 2D] -> (167,247)
-      - merge_stack [3S] -> [AS 2D] /right
-
-scenario mined_014_5C_step_01
-  desc: mined_014_5C step 1 (extract_absorb/peel).
+      - move_stack [A♠ 2♦ 3♣' 4♦' 5♠ 6♦'] at (19,407) -> (52,407)
+      - split [A♠ 2♦ 3♣' 4♦' 5♠ 6♦'] at (52,407) @1
+      - move_stack [A♠ 2♦] at (50,403) -> (247,167)
+      - merge_stack [3♠] at (288,407) -> [A♠ 2♦] at (247,167) /right
+scenario mined_014_5♣_step_01
+  desc: mined_014_5♣ step 1 (extract_absorb/peel).
   op: verb_to_primitives
   board:
-    at (26, 26): 7S 7D 7C
-    at (107, 52): TD JD QD KD AD
-    at (182, 52): AH 2H 3H
-    at (257, 52): 4S' 4D 4H
-    at (332, 52): 3D 4C 5H 6S 7H
-    at (407, 52): KC AC 2C
-    at (482, 52): TC' JH QC
-    at (182, 187): KS AH' 2S
-    at (257, 187): 3C' 4D' 5S 6D'
-    at (407, 187): AS 2D 3S
-    at (482, 187): 5C
+    at (26,26): 7♠ 7♦ 7♣
+    at (52,107): T♦ J♦ Q♦ K♦ A♦
+    at (52,182): A♥ 2♥ 3♥
+    at (52,257): 4♠' 4♦ 4♥
+    at (52,332): 3♦ 4♣ 5♥ 6♠ 7♥
+    at (52,407): K♣ A♣ 2♣
+    at (52,482): T♣' J♥ Q♣
+    at (187,182): K♠ A♥' 2♠
+    at (187,257): 3♣' 4♦' 5♠ 6♦'
+    at (187,407): A♠ 2♦ 3♠
+    at (187,482): 5♣
   verb: peel
-  source: 3C' 4D' 5S 6D'
-  ext_card: 6D'
-  target_before: 5C
+  source: 3♣' 4♦' 5♠ 6♦'
+  ext_card: 6♦'
+  target_before: 5♣
   target_bucket: trouble
   side: right
   expect:
     primitives:
-      - split [3C' 4D' 5S 6D']@3
-      - merge_stack [6D'] -> [5C] /right
-
-scenario mined_014_5C_step_02
-  desc: mined_014_5C step 2 (extract_absorb/steal).
+      - split [3♣' 4♦' 5♠ 6♦'] at (187,257) @3
+      - merge_stack [6♦'] at (290,253) -> [5♣] at (187,482) /right
+scenario mined_014_5♣_step_02
+  desc: mined_014_5♣ step 2 (extract_absorb/steal).
   op: verb_to_primitives
   board:
-    at (26, 26): 7S 7D 7C
-    at (107, 52): TD JD QD KD AD
-    at (182, 52): AH 2H 3H
-    at (257, 52): 4S' 4D 4H
-    at (332, 52): 3D 4C 5H 6S 7H
-    at (407, 52): KC AC 2C
-    at (482, 52): TC' JH QC
-    at (182, 187): KS AH' 2S
-    at (407, 187): AS 2D 3S
-    at (257, 179): 3C' 4D' 5S
-    at (482, 187): 5C 6D'
+    at (26,26): 7♠ 7♦ 7♣
+    at (52,107): T♦ J♦ Q♦ K♦ A♦
+    at (52,182): A♥ 2♥ 3♥
+    at (52,257): 4♠' 4♦ 4♥
+    at (52,332): 3♦ 4♣ 5♥ 6♠ 7♥
+    at (52,407): K♣ A♣ 2♣
+    at (52,482): T♣' J♥ Q♣
+    at (187,182): K♠ A♥' 2♠
+    at (187,407): A♠ 2♦ 3♠
+    at (179,257): 3♣' 4♦' 5♠
+    at (187,482): 5♣ 6♦'
   verb: steal
-  source: 7S 7D 7C
-  ext_card: 7C
-  target_before: 5C 6D'
+  source: 7♠ 7♦ 7♣
+  ext_card: 7♣
+  target_before: 5♣ 6♦'
   target_bucket: growing
   side: right
   expect:
     primitives:
-      - split [7S 7D 7C]@2
-      - move_stack [7S 7D] -> (92,247)
-      - split [7S 7D]@0
-      - merge_stack [7C] -> [5C 6D'] /right
-
-scenario mined_014_5C_step_03
-  desc: mined_014_5C step 3 (free_pull).
+      - split [7♠ 7♦ 7♣] at (26,26) @2
+      - move_stack [7♠ 7♦] at (18,26) -> (247,92)
+      - split [7♠ 7♦] at (247,92) @0
+      - merge_stack [7♣] at (96,22) -> [5♣ 6♦'] at (187,482) /right
+scenario mined_014_5♣_step_03
+  desc: mined_014_5♣ step 3 (free_pull).
   op: verb_to_primitives
   board:
-    at (107, 52): TD JD QD KD AD
-    at (182, 52): AH 2H 3H
-    at (257, 52): 4S' 4D 4H
-    at (332, 52): 3D 4C 5H 6S 7H
-    at (407, 52): KC AC 2C
-    at (482, 52): TC' JH QC
-    at (182, 187): KS AH' 2S
-    at (407, 187): AS 2D 3S
-    at (257, 179): 3C' 4D' 5S
-    at (88, 245): 7S
-    at (92, 288): 7D
-    at (482, 187): 5C 6D' 7C
+    at (52,107): T♦ J♦ Q♦ K♦ A♦
+    at (52,182): A♥ 2♥ 3♥
+    at (52,257): 4♠' 4♦ 4♥
+    at (52,332): 3♦ 4♣ 5♥ 6♠ 7♥
+    at (52,407): K♣ A♣ 2♣
+    at (52,482): T♣' J♥ Q♣
+    at (187,182): K♠ A♥' 2♠
+    at (187,407): A♠ 2♦ 3♠
+    at (179,257): 3♣' 4♦' 5♠
+    at (245,88): 7♠
+    at (288,92): 7♦
+    at (187,482): 5♣ 6♦' 7♣
   verb: free_pull
-  loose: 7D
-  target_before: 7S
+  loose: 7♦
+  target_before: 7♠
   target_bucket: trouble
   side: right
   expect:
     primitives:
-      - merge_stack [7D] -> [7S] /right
-
-scenario mined_014_5C_step_04
-  desc: mined_014_5C step 4 (extract_absorb/peel).
+      - merge_stack [7♦] at (288,92) -> [7♠] at (245,88) /right
+scenario mined_014_5♣_step_04
+  desc: mined_014_5♣ step 4 (extract_absorb/peel).
   op: verb_to_primitives
   board:
-    at (107, 52): TD JD QD KD AD
-    at (182, 52): AH 2H 3H
-    at (257, 52): 4S' 4D 4H
-    at (332, 52): 3D 4C 5H 6S 7H
-    at (407, 52): KC AC 2C
-    at (482, 52): TC' JH QC
-    at (182, 187): KS AH' 2S
-    at (407, 187): AS 2D 3S
-    at (257, 179): 3C' 4D' 5S
-    at (482, 187): 5C 6D' 7C
-    at (88, 245): 7S 7D
+    at (52,107): T♦ J♦ Q♦ K♦ A♦
+    at (52,182): A♥ 2♥ 3♥
+    at (52,257): 4♠' 4♦ 4♥
+    at (52,332): 3♦ 4♣ 5♥ 6♠ 7♥
+    at (52,407): K♣ A♣ 2♣
+    at (52,482): T♣' J♥ Q♣
+    at (187,182): K♠ A♥' 2♠
+    at (187,407): A♠ 2♦ 3♠
+    at (179,257): 3♣' 4♦' 5♠
+    at (187,482): 5♣ 6♦' 7♣
+    at (245,88): 7♠ 7♦
   verb: peel
-  source: 3D 4C 5H 6S 7H
-  ext_card: 7H
-  target_before: 7S 7D
+  source: 3♦ 4♣ 5♥ 6♠ 7♥
+  ext_card: 7♥
+  target_before: 7♠ 7♦
   target_bucket: growing
   side: right
   expect:
     primitives:
-      - split [3D 4C 5H 6S 7H]@4
-      - merge_stack [7H] -> [7S 7D] /right
-
-scenario mined_015_3Cp1_step_01
-  desc: mined_015_3Cp1 step 1 (extract_absorb/peel).
+      - split [3♦ 4♣ 5♥ 6♠ 7♥] at (52,332) @4
+      - merge_stack [7♥] at (188,328) -> [7♠ 7♦] at (245,88) /right
+scenario mined_015_3♣p1_step_01
+  desc: mined_015_3♣p1 step 1 (extract_absorb/peel).
   op: verb_to_primitives
   board:
-    at (26, 26): KS AS 2S 3S
-    at (107, 52): 2H 3H 4H
-    at (182, 52): 7S 7D 7C
-    at (257, 52): AC AD AH
-    at (332, 52): 2C 3D 4C 5H 6S 7H
-    at (407, 52): 9S TS' JS
-    at (482, 52): JD QD KD
-    at (92, 187): 8D 9D TD
-    at (167, 187): 2H' 2C' 2D
-    at (242, 187): 3C'
+    at (26,26): K♠ A♠ 2♠ 3♠
+    at (52,107): 2♥ 3♥ 4♥
+    at (52,182): 7♠ 7♦ 7♣
+    at (52,257): A♣ A♦ A♥
+    at (52,332): 2♣ 3♦ 4♣ 5♥ 6♠ 7♥
+    at (52,407): 9♠ T♠' J♠
+    at (52,482): J♦ Q♦ K♦
+    at (187,92): 8♦ 9♦ T♦
+    at (187,167): 2♥' 2♣' 2♦
+    at (187,242): 3♣'
   verb: peel
-  source: 2C 3D 4C 5H 6S 7H
-  ext_card: 2C
-  target_before: 3C'
+  source: 2♣ 3♦ 4♣ 5♥ 6♠ 7♥
+  ext_card: 2♣
+  target_before: 3♣'
   target_bucket: trouble
   side: left
   expect:
     primitives:
-      - split [2C 3D 4C 5H 6S 7H]@0
-      - move_stack [3C'] -> (242,220)
-      - merge_stack [2C] -> [3C'] /left
-
-scenario mined_015_3Cp1_step_02
-  desc: mined_015_3Cp1 step 2 (extract_absorb/steal).
+      - split [2♣ 3♦ 4♣ 5♥ 6♠ 7♥] at (52,332) @0
+      - move_stack [3♣'] at (187,242) -> (220,242)
+      - merge_stack [2♣] at (50,328) -> [3♣'] at (220,242) /left
+scenario mined_015_3♣p1_step_02
+  desc: mined_015_3♣p1 step 2 (extract_absorb/steal).
   op: verb_to_primitives
   board:
-    at (26, 26): KS AS 2S 3S
-    at (107, 52): 2H 3H 4H
-    at (182, 52): 7S 7D 7C
-    at (257, 52): AC AD AH
-    at (407, 52): 9S TS' JS
-    at (482, 52): JD QD KD
-    at (92, 187): 8D 9D TD
-    at (167, 187): 2H' 2C' 2D
-    at (332, 93): 3D 4C 5H 6S 7H
-    at (242, 187): 2C 3C'
+    at (26,26): K♠ A♠ 2♠ 3♠
+    at (52,107): 2♥ 3♥ 4♥
+    at (52,182): 7♠ 7♦ 7♣
+    at (52,257): A♣ A♦ A♥
+    at (52,407): 9♠ T♠' J♠
+    at (52,482): J♦ Q♦ K♦
+    at (187,92): 8♦ 9♦ T♦
+    at (187,167): 2♥' 2♣' 2♦
+    at (93,332): 3♦ 4♣ 5♥ 6♠ 7♥
+    at (187,242): 2♣ 3♣'
   verb: steal
-  source: AC AD AH
-  ext_card: AC
-  target_before: 2C 3C'
+  source: A♣ A♦ A♥
+  ext_card: A♣
+  target_before: 2♣ 3♣'
   target_bucket: growing
   side: left
   expect:
     primitives:
-      - split [AC AD AH]@0
-      - move_stack [AD AH] -> (407,187)
-      - split [AD AH]@0
-      - merge_stack [AC] -> [2C 3C'] /left
-
-scenario mined_015_3Cp1_step_03
-  desc: mined_015_3Cp1 step 3 (push).
+      - split [A♣ A♦ A♥] at (52,257) @0
+      - move_stack [A♦ A♥] at (93,257) -> (187,407)
+      - split [A♦ A♥] at (187,407) @0
+      - merge_stack [A♣] at (50,253) -> [2♣ 3♣'] at (187,242) /left
+scenario mined_015_3♣p1_step_03
+  desc: mined_015_3♣p1 step 3 (push).
   op: verb_to_primitives
   board:
-    at (26, 26): KS AS 2S 3S
-    at (107, 52): 2H 3H 4H
-    at (182, 52): 7S 7D 7C
-    at (407, 52): 9S TS' JS
-    at (482, 52): JD QD KD
-    at (92, 187): 8D 9D TD
-    at (167, 187): 2H' 2C' 2D
-    at (332, 93): 3D 4C 5H 6S 7H
-    at (403, 185): AD
-    at (407, 228): AH
-    at (257, 52): AC 2C 3C'
+    at (26,26): K♠ A♠ 2♠ 3♠
+    at (52,107): 2♥ 3♥ 4♥
+    at (52,182): 7♠ 7♦ 7♣
+    at (52,407): 9♠ T♠' J♠
+    at (52,482): J♦ Q♦ K♦
+    at (187,92): 8♦ 9♦ T♦
+    at (187,167): 2♥' 2♣' 2♦
+    at (93,332): 3♦ 4♣ 5♥ 6♠ 7♥
+    at (185,403): A♦
+    at (228,407): A♥
+    at (52,257): A♣ 2♣ 3♣'
   verb: push
-  trouble_before: AD
-  target_before: JD QD KD
+  trouble_before: A♦
+  target_before: J♦ Q♦ K♦
   side: right
   expect:
     primitives:
-      - merge_stack [AD] -> [JD QD KD] /right
-
-scenario mined_015_3Cp1_step_04
-  desc: mined_015_3Cp1 step 4 (push).
+      - merge_stack [A♦] at (185,403) -> [J♦ Q♦ K♦] at (52,482) /right
+scenario mined_015_3♣p1_step_04
+  desc: mined_015_3♣p1 step 4 (push).
   op: verb_to_primitives
   board:
-    at (26, 26): KS AS 2S 3S
-    at (107, 52): 2H 3H 4H
-    at (182, 52): 7S 7D 7C
-    at (407, 52): 9S TS' JS
-    at (92, 187): 8D 9D TD
-    at (167, 187): 2H' 2C' 2D
-    at (332, 93): 3D 4C 5H 6S 7H
-    at (407, 228): AH
-    at (257, 52): AC 2C 3C'
-    at (482, 52): JD QD KD AD
+    at (26,26): K♠ A♠ 2♠ 3♠
+    at (52,107): 2♥ 3♥ 4♥
+    at (52,182): 7♠ 7♦ 7♣
+    at (52,407): 9♠ T♠' J♠
+    at (187,92): 8♦ 9♦ T♦
+    at (187,167): 2♥' 2♣' 2♦
+    at (93,332): 3♦ 4♣ 5♥ 6♠ 7♥
+    at (228,407): A♥
+    at (52,257): A♣ 2♣ 3♣'
+    at (52,482): J♦ Q♦ K♦ A♦
   verb: push
-  trouble_before: AH
-  target_before: 2H 3H 4H
+  trouble_before: A♥
+  target_before: 2♥ 3♥ 4♥
   side: left
   expect:
     primitives:
-      - merge_stack [AH] -> [2H 3H 4H] /left
-
-scenario mined_016_TCp1_step_01
-  desc: mined_016_TCp1 step 1 (extract_absorb/steal).
+      - merge_stack [A♥] at (228,407) -> [2♥ 3♥ 4♥] at (52,107) /left
+scenario mined_016_T♣p1_step_01
+  desc: mined_016_T♣p1 step 1 (extract_absorb/steal).
   op: verb_to_primitives
   board:
-    at (26, 26): 7S 7D 7C
-    at (107, 52): 8D 9D TD
-    at (182, 52): 2H' 2C' 2D
-    at (257, 52): 3D 4C 5H 6S 7H
-    at (332, 52): AC 2C 3C'
-    at (407, 52): AH 2H 3H 4H
-    at (482, 52): AS 2S 3S
-    at (92, 187): JD QD KD
-    at (167, 187): QH KS AD
-    at (332, 187): 9S TS' JS QS
-    at (482, 187): TC'
+    at (26,26): 7♠ 7♦ 7♣
+    at (52,107): 8♦ 9♦ T♦
+    at (52,182): 2♥' 2♣' 2♦
+    at (52,257): 3♦ 4♣ 5♥ 6♠ 7♥
+    at (52,332): A♣ 2♣ 3♣'
+    at (52,407): A♥ 2♥ 3♥ 4♥
+    at (52,482): A♠ 2♠ 3♠
+    at (187,92): J♦ Q♦ K♦
+    at (187,167): Q♥ K♠ A♦
+    at (187,332): 9♠ T♠' J♠ Q♠
+    at (187,482): T♣'
   verb: steal
-  source: JD QD KD
-  ext_card: JD
-  target_before: TC'
+  source: J♦ Q♦ K♦
+  ext_card: J♦
+  target_before: T♣'
   target_bucket: trouble
   side: right
   expect:
     primitives:
-      - split [JD QD KD]@0
-      - merge_stack [JD] -> [TC'] /right
-
-scenario mined_016_TCp1_step_02
-  desc: mined_016_TCp1 step 2 (extract_absorb/peel).
+      - split [J♦ Q♦ K♦] at (187,92) @0
+      - merge_stack [J♦] at (185,88) -> [T♣'] at (187,482) /right
+scenario mined_016_T♣p1_step_02
+  desc: mined_016_T♣p1 step 2 (extract_absorb/peel).
   op: verb_to_primitives
   board:
-    at (26, 26): 7S 7D 7C
-    at (107, 52): 8D 9D TD
-    at (182, 52): 2H' 2C' 2D
-    at (257, 52): 3D 4C 5H 6S 7H
-    at (332, 52): AC 2C 3C'
-    at (407, 52): AH 2H 3H 4H
-    at (482, 52): AS 2S 3S
-    at (167, 187): QH KS AD
-    at (332, 187): 9S TS' JS QS
-    at (92, 228): QD KD
-    at (482, 187): TC' JD
+    at (26,26): 7♠ 7♦ 7♣
+    at (52,107): 8♦ 9♦ T♦
+    at (52,182): 2♥' 2♣' 2♦
+    at (52,257): 3♦ 4♣ 5♥ 6♠ 7♥
+    at (52,332): A♣ 2♣ 3♣'
+    at (52,407): A♥ 2♥ 3♥ 4♥
+    at (52,482): A♠ 2♠ 3♠
+    at (187,167): Q♥ K♠ A♦
+    at (187,332): 9♠ T♠' J♠ Q♠
+    at (228,92): Q♦ K♦
+    at (187,482): T♣' J♦
   verb: peel
-  source: 9S TS' JS QS
-  ext_card: QS
-  target_before: TC' JD
+  source: 9♠ T♠' J♠ Q♠
+  ext_card: Q♠
+  target_before: T♣' J♦
   target_bucket: growing
   side: right
   expect:
     primitives:
-      - split [9S TS' JS QS]@3
-      - merge_stack [QS] -> [TC' JD] /right
-
-scenario mined_016_TCp1_step_03
-  desc: mined_016_TCp1 step 3 (extract_absorb/steal).
+      - split [9♠ T♠' J♠ Q♠] at (187,332) @3
+      - merge_stack [Q♠] at (290,328) -> [T♣' J♦] at (187,482) /right
+scenario mined_016_T♣p1_step_03
+  desc: mined_016_T♣p1 step 3 (extract_absorb/steal).
   op: verb_to_primitives
   board:
-    at (26, 26): 7S 7D 7C
-    at (107, 52): 8D 9D TD
-    at (182, 52): 2H' 2C' 2D
-    at (257, 52): 3D 4C 5H 6S 7H
-    at (332, 52): AC 2C 3C'
-    at (407, 52): AH 2H 3H 4H
-    at (482, 52): AS 2S 3S
-    at (167, 187): QH KS AD
-    at (92, 228): QD KD
-    at (332, 179): 9S TS' JS
-    at (482, 187): TC' JD QS
+    at (26,26): 7♠ 7♦ 7♣
+    at (52,107): 8♦ 9♦ T♦
+    at (52,182): 2♥' 2♣' 2♦
+    at (52,257): 3♦ 4♣ 5♥ 6♠ 7♥
+    at (52,332): A♣ 2♣ 3♣'
+    at (52,407): A♥ 2♥ 3♥ 4♥
+    at (52,482): A♠ 2♠ 3♠
+    at (187,167): Q♥ K♠ A♦
+    at (228,92): Q♦ K♦
+    at (179,332): 9♠ T♠' J♠
+    at (187,482): T♣' J♦ Q♠
   verb: steal
-  source: QH KS AD
-  ext_card: AD
-  target_before: QD KD
+  source: Q♥ K♠ A♦
+  ext_card: A♦
+  target_before: Q♦ K♦
   target_bucket: trouble
   side: right
   expect:
     primitives:
-      - split [QH KS AD]@2
-      - merge_stack [AD] -> [QD KD] /right
-
-scenario mined_016_TCp1_step_04
-  desc: mined_016_TCp1 step 4 (extract_absorb/peel).
+      - split [Q♥ K♠ A♦] at (187,167) @2
+      - merge_stack [A♦] at (257,163) -> [Q♦ K♦] at (228,92) /right
+scenario mined_016_T♣p1_step_04
+  desc: mined_016_T♣p1 step 4 (extract_absorb/peel).
   op: verb_to_primitives
   board:
-    at (26, 26): 7S 7D 7C
-    at (107, 52): 8D 9D TD
-    at (182, 52): 2H' 2C' 2D
-    at (257, 52): 3D 4C 5H 6S 7H
-    at (332, 52): AC 2C 3C'
-    at (407, 52): AH 2H 3H 4H
-    at (482, 52): AS 2S 3S
-    at (332, 179): 9S TS' JS
-    at (482, 187): TC' JD QS
-    at (167, 179): QH KS
-    at (92, 228): QD KD AD
+    at (26,26): 7♠ 7♦ 7♣
+    at (52,107): 8♦ 9♦ T♦
+    at (52,182): 2♥' 2♣' 2♦
+    at (52,257): 3♦ 4♣ 5♥ 6♠ 7♥
+    at (52,332): A♣ 2♣ 3♣'
+    at (52,407): A♥ 2♥ 3♥ 4♥
+    at (52,482): A♠ 2♠ 3♠
+    at (179,332): 9♠ T♠' J♠
+    at (187,482): T♣' J♦ Q♠
+    at (179,167): Q♥ K♠
+    at (228,92): Q♦ K♦ A♦
   verb: peel
-  source: AH 2H 3H 4H
-  ext_card: AH
-  target_before: QH KS
+  source: A♥ 2♥ 3♥ 4♥
+  ext_card: A♥
+  target_before: Q♥ K♠
   target_bucket: trouble
   side: right
   expect:
     primitives:
-      - split [AH 2H 3H 4H]@0
-      - merge_stack [AH] -> [QH KS] /right
-
-scenario mined_017_5Dp1_6Dp1_step_01
-  desc: mined_017_5Dp1_6Dp1 step 1 (extract_absorb/steal).
+      - split [A♥ 2♥ 3♥ 4♥] at (52,407) @0
+      - merge_stack [A♥] at (50,403) -> [Q♥ K♠] at (179,167) /right
+scenario mined_017_5♦p1_6♦p1_step_01
+  desc: mined_017_5♦p1_6♦p1 step 1 (extract_absorb/steal).
   op: verb_to_primitives
   board:
-    at (26, 26): KS AS 2S 3S
-    at (107, 52): TD JD QD KD
-    at (182, 52): 2H 3H 4H
-    at (257, 52): 7S 7D 7C
-    at (332, 52): AC AD AH
-    at (407, 52): 2C 3D 4C 5H 6S 7H
-    at (482, 52): 5D' 6D'
+    at (26,26): K♠ A♠ 2♠ 3♠
+    at (52,107): T♦ J♦ Q♦ K♦
+    at (52,182): 2♥ 3♥ 4♥
+    at (52,257): 7♠ 7♦ 7♣
+    at (52,332): A♣ A♦ A♥
+    at (52,407): 2♣ 3♦ 4♣ 5♥ 6♠ 7♥
+    at (52,482): 5♦' 6♦'
   verb: steal
-  source: 7S 7D 7C
-  ext_card: 7D
-  target_before: 5D' 6D'
+  source: 7♠ 7♦ 7♣
+  ext_card: 7♦
+  target_before: 5♦' 6♦'
   target_bucket: trouble
   side: right
   expect:
     primitives:
-      - split [7S 7D 7C]@0
-      - move_stack [7D 7C] -> (257,112)
-      - split [7D 7C]@0
-      - merge_stack [7D] -> [5D' 6D'] /right
-
-scenario mined_017_5Dp1_6Dp1_step_02
-  desc: mined_017_5Dp1_6Dp1 step 2 (free_pull).
+      - split [7♠ 7♦ 7♣] at (52,257) @0
+      - move_stack [7♦ 7♣] at (93,257) -> (112,257)
+      - split [7♦ 7♣] at (112,257) @0
+      - merge_stack [7♦] at (110,253) -> [5♦' 6♦'] at (52,482) /right
+scenario mined_017_5♦p1_6♦p1_step_02
+  desc: mined_017_5♦p1_6♦p1 step 2 (free_pull).
   op: verb_to_primitives
   board:
-    at (26, 26): KS AS 2S 3S
-    at (107, 52): TD JD QD KD
-    at (182, 52): 2H 3H 4H
-    at (332, 52): AC AD AH
-    at (407, 52): 2C 3D 4C 5H 6S 7H
-    at (253, 50): 7S
-    at (257, 153): 7C
-    at (482, 52): 5D' 6D' 7D
+    at (26,26): K♠ A♠ 2♠ 3♠
+    at (52,107): T♦ J♦ Q♦ K♦
+    at (52,182): 2♥ 3♥ 4♥
+    at (52,332): A♣ A♦ A♥
+    at (52,407): 2♣ 3♦ 4♣ 5♥ 6♠ 7♥
+    at (50,253): 7♠
+    at (153,257): 7♣
+    at (52,482): 5♦' 6♦' 7♦
   verb: free_pull
-  loose: 7C
-  target_before: 7S
+  loose: 7♣
+  target_before: 7♠
   target_bucket: trouble
   side: right
   expect:
     primitives:
-      - merge_stack [7C] -> [7S] /right
-
-scenario mined_017_5Dp1_6Dp1_step_03
-  desc: mined_017_5Dp1_6Dp1 step 3 (extract_absorb/peel).
+      - merge_stack [7♣] at (153,257) -> [7♠] at (50,253) /right
+scenario mined_017_5♦p1_6♦p1_step_03
+  desc: mined_017_5♦p1_6♦p1 step 3 (extract_absorb/peel).
   op: verb_to_primitives
   board:
-    at (26, 26): KS AS 2S 3S
-    at (107, 52): TD JD QD KD
-    at (182, 52): 2H 3H 4H
-    at (332, 52): AC AD AH
-    at (407, 52): 2C 3D 4C 5H 6S 7H
-    at (482, 52): 5D' 6D' 7D
-    at (253, 50): 7S 7C
+    at (26,26): K♠ A♠ 2♠ 3♠
+    at (52,107): T♦ J♦ Q♦ K♦
+    at (52,182): 2♥ 3♥ 4♥
+    at (52,332): A♣ A♦ A♥
+    at (52,407): 2♣ 3♦ 4♣ 5♥ 6♠ 7♥
+    at (52,482): 5♦' 6♦' 7♦
+    at (50,253): 7♠ 7♣
   verb: peel
-  source: 2C 3D 4C 5H 6S 7H
-  ext_card: 7H
-  target_before: 7S 7C
+  source: 2♣ 3♦ 4♣ 5♥ 6♠ 7♥
+  ext_card: 7♥
+  target_before: 7♠ 7♣
   target_bucket: growing
   side: right
   expect:
     primitives:
-      - split [2C 3D 4C 5H 6S 7H]@5
-      - merge_stack [7H] -> [7S 7C] /right
-
-scenario mined_018_2Sp1_3Hp1_step_01
-  desc: mined_018_2Sp1_3Hp1 step 1 (extract_absorb/steal).
+      - split [2♣ 3♦ 4♣ 5♥ 6♠ 7♥] at (52,407) @5
+      - merge_stack [7♥] at (221,403) -> [7♠ 7♣] at (50,253) /right
+scenario mined_018_2♠p1_3♥p1_step_01
+  desc: mined_018_2♠p1_3♥p1 step 1 (extract_absorb/steal).
   op: verb_to_primitives
   board:
-    at (26, 26): KS AS 2S 3S
-    at (107, 52): 2H 3H 4H
-    at (182, 52): 7S 7D 7C
-    at (257, 52): AC AD AH
-    at (332, 52): 2C 3D 4C 5H 6S 7H
-    at (407, 52): 7S' 8D' 9C'
-    at (482, 52): 3C' 4H' 5S'
-    at (92, 187): JD QD KD
-    at (167, 187): TS TC TD
-    at (242, 187): 2S' 3H'
+    at (26,26): K♠ A♠ 2♠ 3♠
+    at (52,107): 2♥ 3♥ 4♥
+    at (52,182): 7♠ 7♦ 7♣
+    at (52,257): A♣ A♦ A♥
+    at (52,332): 2♣ 3♦ 4♣ 5♥ 6♠ 7♥
+    at (52,407): 7♠' 8♦' 9♣'
+    at (52,482): 3♣' 4♥' 5♠'
+    at (187,92): J♦ Q♦ K♦
+    at (187,167): T♠ T♣ T♦
+    at (187,242): 2♠' 3♥'
   verb: steal
-  source: AC AD AH
-  ext_card: AD
-  target_before: 2S' 3H'
+  source: A♣ A♦ A♥
+  ext_card: A♦
+  target_before: 2♠' 3♥'
   target_bucket: trouble
   side: left
   expect:
     primitives:
-      - split [AC AD AH]@0
-      - move_stack [AD AH] -> (407,187)
-      - split [AD AH]@0
-      - merge_stack [AD] -> [2S' 3H'] /left
-
-scenario mined_018_2Sp1_3Hp1_step_02
-  desc: mined_018_2Sp1_3Hp1 step 2 (extract_absorb/peel).
+      - split [A♣ A♦ A♥] at (52,257) @0
+      - move_stack [A♦ A♥] at (93,257) -> (187,407)
+      - split [A♦ A♥] at (187,407) @0
+      - merge_stack [A♦] at (185,403) -> [2♠' 3♥'] at (187,242) /left
+scenario mined_018_2♠p1_3♥p1_step_02
+  desc: mined_018_2♠p1_3♥p1 step 2 (extract_absorb/peel).
   op: verb_to_primitives
   board:
-    at (26, 26): KS AS 2S 3S
-    at (107, 52): 2H 3H 4H
-    at (182, 52): 7S 7D 7C
-    at (332, 52): 2C 3D 4C 5H 6S 7H
-    at (407, 52): 7S' 8D' 9C'
-    at (482, 52): 3C' 4H' 5S'
-    at (92, 187): JD QD KD
-    at (167, 187): TS TC TD
-    at (253, 50): AC
-    at (407, 228): AH
-    at (257, 112): AD 2S' 3H'
+    at (26,26): K♠ A♠ 2♠ 3♠
+    at (52,107): 2♥ 3♥ 4♥
+    at (52,182): 7♠ 7♦ 7♣
+    at (52,332): 2♣ 3♦ 4♣ 5♥ 6♠ 7♥
+    at (52,407): 7♠' 8♦' 9♣'
+    at (52,482): 3♣' 4♥' 5♠'
+    at (187,92): J♦ Q♦ K♦
+    at (187,167): T♠ T♣ T♦
+    at (50,253): A♣
+    at (228,407): A♥
+    at (112,257): A♦ 2♠' 3♥'
   verb: peel
-  source: 2C 3D 4C 5H 6S 7H
-  ext_card: 2C
-  target_before: AC
+  source: 2♣ 3♦ 4♣ 5♥ 6♠ 7♥
+  ext_card: 2♣
+  target_before: A♣
   target_bucket: trouble
   side: right
   expect:
     primitives:
-      - split [2C 3D 4C 5H 6S 7H]@0
-      - move_stack [AC] -> (482,187)
-      - merge_stack [2C] -> [AC] /right
-
-scenario mined_018_2Sp1_3Hp1_step_03
-  desc: mined_018_2Sp1_3Hp1 step 3 (extract_absorb/steal).
+      - split [2♣ 3♦ 4♣ 5♥ 6♠ 7♥] at (52,332) @0
+      - move_stack [A♣] at (50,253) -> (187,482)
+      - merge_stack [2♣] at (50,328) -> [A♣] at (187,482) /right
+scenario mined_018_2♠p1_3♥p1_step_03
+  desc: mined_018_2♠p1_3♥p1 step 3 (extract_absorb/steal).
   op: verb_to_primitives
   board:
-    at (26, 26): KS AS 2S 3S
-    at (107, 52): 2H 3H 4H
-    at (182, 52): 7S 7D 7C
-    at (407, 52): 7S' 8D' 9C'
-    at (482, 52): 3C' 4H' 5S'
-    at (92, 187): JD QD KD
-    at (167, 187): TS TC TD
-    at (407, 228): AH
-    at (257, 112): AD 2S' 3H'
-    at (332, 93): 3D 4C 5H 6S 7H
-    at (482, 187): AC 2C
+    at (26,26): K♠ A♠ 2♠ 3♠
+    at (52,107): 2♥ 3♥ 4♥
+    at (52,182): 7♠ 7♦ 7♣
+    at (52,407): 7♠' 8♦' 9♣'
+    at (52,482): 3♣' 4♥' 5♠'
+    at (187,92): J♦ Q♦ K♦
+    at (187,167): T♠ T♣ T♦
+    at (228,407): A♥
+    at (112,257): A♦ 2♠' 3♥'
+    at (93,332): 3♦ 4♣ 5♥ 6♠ 7♥
+    at (187,482): A♣ 2♣
   verb: steal
-  source: 3C' 4H' 5S'
-  ext_card: 3C'
-  target_before: AC 2C
+  source: 3♣' 4♥' 5♠'
+  ext_card: 3♣'
+  target_before: A♣ 2♣
   target_bucket: growing
   side: right
   expect:
     primitives:
-      - split [3C' 4H' 5S']@0
-      - merge_stack [3C'] -> [AC 2C] /right
-
-scenario mined_018_2Sp1_3Hp1_step_04
-  desc: mined_018_2Sp1_3Hp1 step 4 (push).
+      - split [3♣' 4♥' 5♠'] at (52,482) @0
+      - merge_stack [3♣'] at (50,478) -> [A♣ 2♣] at (187,482) /right
+scenario mined_018_2♠p1_3♥p1_step_04
+  desc: mined_018_2♠p1_3♥p1 step 4 (push).
   op: verb_to_primitives
   board:
-    at (26, 26): KS AS 2S 3S
-    at (107, 52): 2H 3H 4H
-    at (182, 52): 7S 7D 7C
-    at (407, 52): 7S' 8D' 9C'
-    at (92, 187): JD QD KD
-    at (167, 187): TS TC TD
-    at (407, 228): AH
-    at (257, 112): AD 2S' 3H'
-    at (332, 93): 3D 4C 5H 6S 7H
-    at (482, 93): 4H' 5S'
-    at (482, 187): AC 2C 3C'
+    at (26,26): K♠ A♠ 2♠ 3♠
+    at (52,107): 2♥ 3♥ 4♥
+    at (52,182): 7♠ 7♦ 7♣
+    at (52,407): 7♠' 8♦' 9♣'
+    at (187,92): J♦ Q♦ K♦
+    at (187,167): T♠ T♣ T♦
+    at (228,407): A♥
+    at (112,257): A♦ 2♠' 3♥'
+    at (93,332): 3♦ 4♣ 5♥ 6♠ 7♥
+    at (93,482): 4♥' 5♠'
+    at (187,482): A♣ 2♣ 3♣'
   verb: push
-  trouble_before: AH
-  target_before: 2H 3H 4H
+  trouble_before: A♥
+  target_before: 2♥ 3♥ 4♥
   side: left
   expect:
     primitives:
-      - merge_stack [AH] -> [2H 3H 4H] /left
-
-scenario mined_018_2Sp1_3Hp1_step_05
-  desc: mined_018_2Sp1_3Hp1 step 5 (extract_absorb/peel).
+      - merge_stack [A♥] at (228,407) -> [2♥ 3♥ 4♥] at (52,107) /left
+scenario mined_018_2♠p1_3♥p1_step_05
+  desc: mined_018_2♠p1_3♥p1 step 5 (extract_absorb/peel).
   op: verb_to_primitives
   board:
-    at (26, 26): KS AS 2S 3S
-    at (182, 52): 7S 7D 7C
-    at (407, 52): 7S' 8D' 9C'
-    at (92, 187): JD QD KD
-    at (167, 187): TS TC TD
-    at (257, 112): AD 2S' 3H'
-    at (332, 93): 3D 4C 5H 6S 7H
-    at (482, 93): 4H' 5S'
-    at (482, 187): AC 2C 3C'
-    at (107, 19): AH 2H 3H 4H
+    at (26,26): K♠ A♠ 2♠ 3♠
+    at (52,182): 7♠ 7♦ 7♣
+    at (52,407): 7♠' 8♦' 9♣'
+    at (187,92): J♦ Q♦ K♦
+    at (187,167): T♠ T♣ T♦
+    at (112,257): A♦ 2♠' 3♥'
+    at (93,332): 3♦ 4♣ 5♥ 6♠ 7♥
+    at (93,482): 4♥' 5♠'
+    at (187,482): A♣ 2♣ 3♣'
+    at (19,107): A♥ 2♥ 3♥ 4♥
   verb: peel
-  source: KS AS 2S 3S
-  ext_card: 3S
-  target_before: 4H' 5S'
+  source: K♠ A♠ 2♠ 3♠
+  ext_card: 3♠
+  target_before: 4♥' 5♠'
   target_bucket: trouble
   side: left
   expect:
     primitives:
-      - split [KS AS 2S 3S]@3
-      - merge_stack [3S] -> [4H' 5S'] /left
-
-scenario mined_019_2D_step_01
-  desc: mined_019_2D step 1 (extract_absorb/split_out).
+      - split [K♠ A♠ 2♠ 3♠] at (26,26) @3
+      - merge_stack [3♠] at (129,22) -> [4♥' 5♠'] at (93,482) /left
+scenario mined_019_2♦_step_01
+  desc: mined_019_2♦ step 1 (extract_absorb/split_out).
   op: verb_to_primitives
   board:
-    at (26, 26): 7S 7D 7C
-    at (107, 52): JD QD KD
-    at (182, 52): TC' TH TD
-    at (257, 52): 5C' 6D 7C'
-    at (332, 52): 6S 7H 8C'
-    at (407, 52): AC 2D' 3S'
-    at (482, 52): AS 2S 3S
-    at (92, 187): KS AD 2C'
-    at (167, 187): 2H 3H 4H 5H
-    at (242, 187): AH 2C 3D 4C
-    at (317, 187): 2D
+    at (26,26): 7♠ 7♦ 7♣
+    at (52,107): J♦ Q♦ K♦
+    at (52,182): T♣' T♥ T♦
+    at (52,257): 5♣' 6♦ 7♣'
+    at (52,332): 6♠ 7♥ 8♣'
+    at (52,407): A♣ 2♦' 3♠'
+    at (52,482): A♠ 2♠ 3♠
+    at (187,92): K♠ A♦ 2♣'
+    at (187,167): 2♥ 3♥ 4♥ 5♥
+    at (187,242): A♥ 2♣ 3♦ 4♣
+    at (187,317): 2♦
   verb: split_out
-  source: KS AD 2C'
-  ext_card: AD
-  target_before: 2D
+  source: K♠ A♦ 2♣'
+  ext_card: A♦
+  target_before: 2♦
   target_bucket: trouble
   side: left
   expect:
     primitives:
-      - split [KS AD 2C']@0
-      - split [AD 2C']@0
-      - move_stack [2D] -> (317,220)
-      - merge_stack [AD] -> [2D] /left
-
-scenario mined_019_2D_step_02
-  desc: mined_019_2D step 2 (push).
+      - split [K♠ A♦ 2♣'] at (187,92) @0
+      - split [A♦ 2♣'] at (228,92) @0
+      - move_stack [2♦] at (187,317) -> (220,317)
+      - merge_stack [A♦] at (226,88) -> [2♦] at (220,317) /left
+scenario mined_019_2♦_step_02
+  desc: mined_019_2♦ step 2 (push).
   op: verb_to_primitives
   board:
-    at (26, 26): 7S 7D 7C
-    at (107, 52): JD QD KD
-    at (182, 52): TC' TH TD
-    at (257, 52): 5C' 6D 7C'
-    at (332, 52): 6S 7H 8C'
-    at (407, 52): AC 2D' 3S'
-    at (482, 52): AS 2S 3S
-    at (167, 187): 2H 3H 4H 5H
-    at (242, 187): AH 2C 3D 4C
-    at (88, 185): KS
-    at (392, 228): 2C'
-    at (317, 187): AD 2D
+    at (26,26): 7♠ 7♦ 7♣
+    at (52,107): J♦ Q♦ K♦
+    at (52,182): T♣' T♥ T♦
+    at (52,257): 5♣' 6♦ 7♣'
+    at (52,332): 6♠ 7♥ 8♣'
+    at (52,407): A♣ 2♦' 3♠'
+    at (52,482): A♠ 2♠ 3♠
+    at (187,167): 2♥ 3♥ 4♥ 5♥
+    at (187,242): A♥ 2♣ 3♦ 4♣
+    at (185,88): K♠
+    at (228,392): 2♣'
+    at (187,317): A♦ 2♦
   verb: push
-  trouble_before: AD 2D
-  target_before: JD QD KD
+  trouble_before: A♦ 2♦
+  target_before: J♦ Q♦ K♦
   side: right
   expect:
     primitives:
-      - move_stack [JD QD KD] -> (467,187)
-      - merge_stack [AD 2D] -> [JD QD KD] /right
-
-scenario mined_019_2D_step_03
-  desc: mined_019_2D step 3 (push).
+      - move_stack [J♦ Q♦ K♦] at (52,107) -> (187,467)
+      - merge_stack [A♦ 2♦] at (187,317) -> [J♦ Q♦ K♦] at (187,467) /right
+scenario mined_019_2♦_step_03
+  desc: mined_019_2♦ step 3 (push).
   op: verb_to_primitives
   board:
-    at (26, 26): 7S 7D 7C
-    at (182, 52): TC' TH TD
-    at (257, 52): 5C' 6D 7C'
-    at (332, 52): 6S 7H 8C'
-    at (407, 52): AC 2D' 3S'
-    at (482, 52): AS 2S 3S
-    at (167, 187): 2H 3H 4H 5H
-    at (242, 187): AH 2C 3D 4C
-    at (88, 185): KS
-    at (392, 228): 2C'
-    at (317, 187): JD QD KD AD 2D
+    at (26,26): 7♠ 7♦ 7♣
+    at (52,182): T♣' T♥ T♦
+    at (52,257): 5♣' 6♦ 7♣'
+    at (52,332): 6♠ 7♥ 8♣'
+    at (52,407): A♣ 2♦' 3♠'
+    at (52,482): A♠ 2♠ 3♠
+    at (187,167): 2♥ 3♥ 4♥ 5♥
+    at (187,242): A♥ 2♣ 3♦ 4♣
+    at (185,88): K♠
+    at (228,392): 2♣'
+    at (187,317): J♦ Q♦ K♦ A♦ 2♦
   verb: push
-  trouble_before: KS
-  target_before: AH 2C 3D 4C
+  trouble_before: K♠
+  target_before: A♥ 2♣ 3♦ 4♣
   side: left
   expect:
     primitives:
-      - move_stack [AH 2C 3D 4C] -> (242,220)
-      - merge_stack [KS] -> [AH 2C 3D 4C] /left
-
-scenario mined_019_2D_step_04
-  desc: mined_019_2D step 4 (splice).
+      - move_stack [A♥ 2♣ 3♦ 4♣] at (187,242) -> (220,242)
+      - merge_stack [K♠] at (185,88) -> [A♥ 2♣ 3♦ 4♣] at (220,242) /left
+scenario mined_019_2♦_step_04
+  desc: mined_019_2♦ step 4 (splice).
   op: verb_to_primitives
   board:
-    at (26, 26): 7S 7D 7C
-    at (182, 52): TC' TH TD
-    at (257, 52): 5C' 6D 7C'
-    at (332, 52): 6S 7H 8C'
-    at (407, 52): AC 2D' 3S'
-    at (482, 52): AS 2S 3S
-    at (167, 187): 2H 3H 4H 5H
-    at (392, 228): 2C'
-    at (317, 187): JD QD KD AD 2D
-    at (92, 157): KS AH 2C 3D 4C
+    at (26,26): 7♠ 7♦ 7♣
+    at (52,182): T♣' T♥ T♦
+    at (52,257): 5♣' 6♦ 7♣'
+    at (52,332): 6♠ 7♥ 8♣'
+    at (52,407): A♣ 2♦' 3♠'
+    at (52,482): A♠ 2♠ 3♠
+    at (187,167): 2♥ 3♥ 4♥ 5♥
+    at (228,392): 2♣'
+    at (187,317): J♦ Q♦ K♦ A♦ 2♦
+    at (157,92): K♠ A♥ 2♣ 3♦ 4♣
   verb: splice
-  loose: 2C'
-  source: KS AH 2C 3D 4C
+  loose: 2♣'
+  source: K♠ A♥ 2♣ 3♦ 4♣
   k: 2
   side: left
   expect:
     primitives:
-      - split [KS AH 2C 3D 4C]@1
-      - move_stack [KS AH] -> (107,52)
-      - merge_stack [2C'] -> [KS AH] /right
-
-scenario mined_020_2Dp1_3Cp1_step_01
-  desc: mined_020_2Dp1_3Cp1 step 1 (extract_absorb/steal).
+      - split [K♠ A♥ 2♣ 3♦ 4♣] at (157,92) @1
+      - move_stack [K♠ A♥] at (155,88) -> (52,107)
+      - merge_stack [2♣'] at (228,392) -> [K♠ A♥] at (52,107) /right
+scenario mined_020_2♦p1_3♣p1_step_01
+  desc: mined_020_2♦p1_3♣p1 step 1 (extract_absorb/steal).
   op: verb_to_primitives
   board:
-    at (26, 26): KS AS 2S 3S
-    at (107, 52): 2H 3H 4H
-    at (182, 52): 7S 7D 7C
-    at (257, 52): AC AD AH
-    at (332, 52): 2C 3D 4C 5H 6S 7H
-    at (407, 52): JD QD KD
-    at (482, 52): TC TH TD
-    at (92, 187): 9D 9C' 9S'
-    at (167, 187): 2D' 3C'
+    at (26,26): K♠ A♠ 2♠ 3♠
+    at (52,107): 2♥ 3♥ 4♥
+    at (52,182): 7♠ 7♦ 7♣
+    at (52,257): A♣ A♦ A♥
+    at (52,332): 2♣ 3♦ 4♣ 5♥ 6♠ 7♥
+    at (52,407): J♦ Q♦ K♦
+    at (52,482): T♣ T♥ T♦
+    at (187,92): 9♦ 9♣' 9♠'
+    at (187,167): 2♦' 3♣'
   verb: steal
-  source: AC AD AH
-  ext_card: AC
-  target_before: 2D' 3C'
+  source: A♣ A♦ A♥
+  ext_card: A♣
+  target_before: 2♦' 3♣'
   target_bucket: trouble
   side: left
   expect:
     primitives:
-      - split [AC AD AH]@0
-      - move_stack [AD AH] -> (257,112)
-      - split [AD AH]@0
-      - move_stack [2D' 3C'] -> (167,220)
-      - merge_stack [AC] -> [2D' 3C'] /left
-
-scenario mined_020_2Dp1_3Cp1_step_02
-  desc: mined_020_2Dp1_3Cp1 step 2 (push).
+      - split [A♣ A♦ A♥] at (52,257) @0
+      - move_stack [A♦ A♥] at (93,257) -> (112,257)
+      - split [A♦ A♥] at (112,257) @0
+      - move_stack [2♦' 3♣'] at (187,167) -> (220,167)
+      - merge_stack [A♣] at (50,253) -> [2♦' 3♣'] at (220,167) /left
+scenario mined_020_2♦p1_3♣p1_step_02
+  desc: mined_020_2♦p1_3♣p1 step 2 (push).
   op: verb_to_primitives
   board:
-    at (26, 26): KS AS 2S 3S
-    at (107, 52): 2H 3H 4H
-    at (182, 52): 7S 7D 7C
-    at (332, 52): 2C 3D 4C 5H 6S 7H
-    at (407, 52): JD QD KD
-    at (482, 52): TC TH TD
-    at (92, 187): 9D 9C' 9S'
-    at (253, 110): AD
-    at (257, 153): AH
-    at (167, 187): AC 2D' 3C'
+    at (26,26): K♠ A♠ 2♠ 3♠
+    at (52,107): 2♥ 3♥ 4♥
+    at (52,182): 7♠ 7♦ 7♣
+    at (52,332): 2♣ 3♦ 4♣ 5♥ 6♠ 7♥
+    at (52,407): J♦ Q♦ K♦
+    at (52,482): T♣ T♥ T♦
+    at (187,92): 9♦ 9♣' 9♠'
+    at (110,253): A♦
+    at (153,257): A♥
+    at (187,167): A♣ 2♦' 3♣'
   verb: push
-  trouble_before: AD
-  target_before: 2C 3D 4C 5H 6S 7H
+  trouble_before: A♦
+  target_before: 2♣ 3♦ 4♣ 5♥ 6♠ 7♥
   side: left
   expect:
     primitives:
-      - merge_stack [AD] -> [2C 3D 4C 5H 6S 7H] /left
-
-scenario mined_020_2Dp1_3Cp1_step_03
-  desc: mined_020_2Dp1_3Cp1 step 3 (push).
+      - merge_stack [A♦] at (110,253) -> [2♣ 3♦ 4♣ 5♥ 6♠ 7♥] at (52,332) /left
+scenario mined_020_2♦p1_3♣p1_step_03
+  desc: mined_020_2♦p1_3♣p1 step 3 (push).
   op: verb_to_primitives
   board:
-    at (26, 26): KS AS 2S 3S
-    at (107, 52): 2H 3H 4H
-    at (182, 52): 7S 7D 7C
-    at (407, 52): JD QD KD
-    at (482, 52): TC TH TD
-    at (92, 187): 9D 9C' 9S'
-    at (257, 153): AH
-    at (167, 187): AC 2D' 3C'
-    at (332, 19): AD 2C 3D 4C 5H 6S 7H
+    at (26,26): K♠ A♠ 2♠ 3♠
+    at (52,107): 2♥ 3♥ 4♥
+    at (52,182): 7♠ 7♦ 7♣
+    at (52,407): J♦ Q♦ K♦
+    at (52,482): T♣ T♥ T♦
+    at (187,92): 9♦ 9♣' 9♠'
+    at (153,257): A♥
+    at (187,167): A♣ 2♦' 3♣'
+    at (19,332): A♦ 2♣ 3♦ 4♣ 5♥ 6♠ 7♥
   verb: push
-  trouble_before: AH
-  target_before: 2H 3H 4H
+  trouble_before: A♥
+  target_before: 2♥ 3♥ 4♥
   side: left
   expect:
     primitives:
-      - merge_stack [AH] -> [2H 3H 4H] /left
-
-scenario mined_021_8Dp1_step_01
-  desc: mined_021_8Dp1 step 1 (extract_absorb/steal).
+      - merge_stack [A♥] at (153,257) -> [2♥ 3♥ 4♥] at (52,107) /left
+scenario mined_021_8♦p1_step_01
+  desc: mined_021_8♦p1 step 1 (extract_absorb/steal).
   op: verb_to_primitives
   board:
-    at (26, 26): KS AS 2S 3S
-    at (107, 52): TD JD QD KD
-    at (182, 52): 2H 3H 4H
-    at (257, 52): 7S 7D 7C
-    at (332, 52): AC AD AH
-    at (407, 52): 2C 3D 4C 5H 6S 7H
-    at (482, 52): JH' JD' JC
-    at (182, 187): 4H' 5C' 6D'
-    at (257, 187): 6S' 7H' 8C' 9H
-    at (332, 187): 8D'
+    at (26,26): K♠ A♠ 2♠ 3♠
+    at (52,107): T♦ J♦ Q♦ K♦
+    at (52,182): 2♥ 3♥ 4♥
+    at (52,257): 7♠ 7♦ 7♣
+    at (52,332): A♣ A♦ A♥
+    at (52,407): 2♣ 3♦ 4♣ 5♥ 6♠ 7♥
+    at (52,482): J♥' J♦' J♣
+    at (187,182): 4♥' 5♣' 6♦'
+    at (187,257): 6♠' 7♥' 8♣' 9♥
+    at (187,332): 8♦'
   verb: steal
-  source: 7S 7D 7C
-  ext_card: 7C
-  target_before: 8D'
+  source: 7♠ 7♦ 7♣
+  ext_card: 7♣
+  target_before: 8♦'
   target_bucket: trouble
   side: left
   expect:
     primitives:
-      - split [7S 7D 7C]@2
-      - move_stack [7S 7D] -> (482,187)
-      - split [7S 7D]@0
-      - move_stack [8D'] -> (332,220)
-      - merge_stack [7C] -> [8D'] /left
-
-scenario mined_021_8Dp1_step_02
-  desc: mined_021_8Dp1 step 2 (shift).
+      - split [7♠ 7♦ 7♣] at (52,257) @2
+      - move_stack [7♠ 7♦] at (44,257) -> (187,482)
+      - split [7♠ 7♦] at (187,482) @0
+      - move_stack [8♦'] at (187,332) -> (220,332)
+      - merge_stack [7♣] at (122,253) -> [8♦'] at (220,332) /left
+scenario mined_021_8♦p1_step_02
+  desc: mined_021_8♦p1 step 2 (shift).
   op: verb_to_primitives
   board:
-    at (26, 26): KS AS 2S 3S
-    at (107, 52): TD JD QD KD
-    at (182, 52): 2H 3H 4H
-    at (332, 52): AC AD AH
-    at (407, 52): 2C 3D 4C 5H 6S 7H
-    at (482, 52): JH' JD' JC
-    at (182, 187): 4H' 5C' 6D'
-    at (257, 187): 6S' 7H' 8C' 9H
-    at (478, 185): 7S
-    at (482, 228): 7D
-    at (257, 52): 7C 8D'
+    at (26,26): K♠ A♠ 2♠ 3♠
+    at (52,107): T♦ J♦ Q♦ K♦
+    at (52,182): 2♥ 3♥ 4♥
+    at (52,332): A♣ A♦ A♥
+    at (52,407): 2♣ 3♦ 4♣ 5♥ 6♠ 7♥
+    at (52,482): J♥' J♦' J♣
+    at (187,182): 4♥' 5♣' 6♦'
+    at (187,257): 6♠' 7♥' 8♣' 9♥
+    at (185,478): 7♠
+    at (228,482): 7♦
+    at (52,257): 7♣ 8♦'
   verb: shift
-  source: 4H' 5C' 6D'
-  donor: KS AS 2S 3S
-  stolen: 6D'
-  p_card: 3S
+  source: 4♥' 5♣' 6♦'
+  donor: K♠ A♠ 2♠ 3♠
+  stolen: 6♦'
+  p_card: 3♠
   which_end: right
-  target_before: 7C 8D'
+  target_before: 7♣ 8♦'
   target_bucket: growing
   side: left
   expect:
     primitives:
-      - split [KS AS 2S 3S]@3
-      - move_stack [4H' 5C' 6D'] -> (182,220)
-      - merge_stack [3S] -> [4H' 5C' 6D'] /left
-      - split [3S 4H' 5C' 6D']@3
-      - merge_stack [6D'] -> [7C 8D'] /left
-
-scenario mined_021_8Dp1_step_03
-  desc: mined_021_8Dp1 step 3 (free_pull).
+      - split [K♠ A♠ 2♠ 3♠] at (26,26) @3
+      - move_stack [4♥' 5♣' 6♦'] at (187,182) -> (220,182)
+      - merge_stack [3♠] at (129,22) -> [4♥' 5♣' 6♦'] at (220,182) /left
+      - split [3♠ 4♥' 5♣' 6♦'] at (187,182) @3
+      - merge_stack [6♦'] at (290,178) -> [7♣ 8♦'] at (52,257) /left
+scenario mined_021_8♦p1_step_03
+  desc: mined_021_8♦p1 step 3 (free_pull).
   op: verb_to_primitives
   board:
-    at (107, 52): TD JD QD KD
-    at (182, 52): 2H 3H 4H
-    at (332, 52): AC AD AH
-    at (407, 52): 2C 3D 4C 5H 6S 7H
-    at (482, 52): JH' JD' JC
-    at (257, 187): 6S' 7H' 8C' 9H
-    at (478, 185): 7S
-    at (482, 228): 7D
-    at (26, 18): KS AS 2S
-    at (182, 179): 3S 4H' 5C'
-    at (257, 19): 6D' 7C 8D'
+    at (52,107): T♦ J♦ Q♦ K♦
+    at (52,182): 2♥ 3♥ 4♥
+    at (52,332): A♣ A♦ A♥
+    at (52,407): 2♣ 3♦ 4♣ 5♥ 6♠ 7♥
+    at (52,482): J♥' J♦' J♣
+    at (187,257): 6♠' 7♥' 8♣' 9♥
+    at (185,478): 7♠
+    at (228,482): 7♦
+    at (18,26): K♠ A♠ 2♠
+    at (179,182): 3♠ 4♥' 5♣'
+    at (19,257): 6♦' 7♣ 8♦'
   verb: free_pull
-  loose: 7D
-  target_before: 7S
+  loose: 7♦
+  target_before: 7♠
   target_bucket: trouble
   side: right
   expect:
     primitives:
-      - merge_stack [7D] -> [7S] /right
-
-scenario mined_021_8Dp1_step_04
-  desc: mined_021_8Dp1 step 4 (extract_absorb/peel).
+      - merge_stack [7♦] at (228,482) -> [7♠] at (185,478) /right
+scenario mined_021_8♦p1_step_04
+  desc: mined_021_8♦p1 step 4 (extract_absorb/peel).
   op: verb_to_primitives
   board:
-    at (107, 52): TD JD QD KD
-    at (182, 52): 2H 3H 4H
-    at (332, 52): AC AD AH
-    at (407, 52): 2C 3D 4C 5H 6S 7H
-    at (482, 52): JH' JD' JC
-    at (257, 187): 6S' 7H' 8C' 9H
-    at (26, 18): KS AS 2S
-    at (182, 179): 3S 4H' 5C'
-    at (257, 19): 6D' 7C 8D'
-    at (478, 185): 7S 7D
+    at (52,107): T♦ J♦ Q♦ K♦
+    at (52,182): 2♥ 3♥ 4♥
+    at (52,332): A♣ A♦ A♥
+    at (52,407): 2♣ 3♦ 4♣ 5♥ 6♠ 7♥
+    at (52,482): J♥' J♦' J♣
+    at (187,257): 6♠' 7♥' 8♣' 9♥
+    at (18,26): K♠ A♠ 2♠
+    at (179,182): 3♠ 4♥' 5♣'
+    at (19,257): 6♦' 7♣ 8♦'
+    at (185,478): 7♠ 7♦
   verb: peel
-  source: 2C 3D 4C 5H 6S 7H
-  ext_card: 7H
-  target_before: 7S 7D
+  source: 2♣ 3♦ 4♣ 5♥ 6♠ 7♥
+  ext_card: 7♥
+  target_before: 7♠ 7♦
   target_bucket: growing
   side: right
   expect:
     primitives:
-      - split [2C 3D 4C 5H 6S 7H]@5
-      - merge_stack [7H] -> [7S 7D] /right
-
-scenario mined_022_AHp1_ADp1_step_01
-  desc: mined_022_AHp1_ADp1 step 1 (extract_absorb/steal).
+      - split [2♣ 3♦ 4♣ 5♥ 6♠ 7♥] at (52,407) @5
+      - merge_stack [7♥] at (221,403) -> [7♠ 7♦] at (185,478) /right
+scenario mined_022_A♥p1_A♦p1_step_01
+  desc: mined_022_A♥p1_A♦p1 step 1 (extract_absorb/steal).
   op: verb_to_primitives
   board:
-    at (26, 26): KS AS 2S 3S
-    at (107, 52): TD JD QD KD
-    at (182, 52): 2H 3H 4H
-    at (257, 52): 7S 7D 7C
-    at (332, 52): AC AD AH
-    at (407, 52): 2C 3D 4C 5H 6S 7H
-    at (482, 52): 9C TH JS
-    at (182, 187): AH' AD'
+    at (26,26): K♠ A♠ 2♠ 3♠
+    at (52,107): T♦ J♦ Q♦ K♦
+    at (52,182): 2♥ 3♥ 4♥
+    at (52,257): 7♠ 7♦ 7♣
+    at (52,332): A♣ A♦ A♥
+    at (52,407): 2♣ 3♦ 4♣ 5♥ 6♠ 7♥
+    at (52,482): 9♣ T♥ J♠
+    at (187,182): A♥' A♦'
   verb: steal
-  source: AC AD AH
-  ext_card: AC
-  target_before: AH' AD'
+  source: A♣ A♦ A♥
+  ext_card: A♣
+  target_before: A♥' A♦'
   target_bucket: trouble
   side: right
   expect:
     primitives:
-      - split [AC AD AH]@0
-      - move_stack [AD AH] -> (332,112)
-      - split [AD AH]@0
-      - merge_stack [AC] -> [AH' AD'] /right
-
-scenario mined_022_AHp1_ADp1_step_02
-  desc: mined_022_AHp1_ADp1 step 2 (push).
+      - split [A♣ A♦ A♥] at (52,332) @0
+      - move_stack [A♦ A♥] at (93,332) -> (112,332)
+      - split [A♦ A♥] at (112,332) @0
+      - merge_stack [A♣] at (50,328) -> [A♥' A♦'] at (187,182) /right
+scenario mined_022_A♥p1_A♦p1_step_02
+  desc: mined_022_A♥p1_A♦p1 step 2 (push).
   op: verb_to_primitives
   board:
-    at (26, 26): KS AS 2S 3S
-    at (107, 52): TD JD QD KD
-    at (182, 52): 2H 3H 4H
-    at (257, 52): 7S 7D 7C
-    at (407, 52): 2C 3D 4C 5H 6S 7H
-    at (482, 52): 9C TH JS
-    at (328, 110): AD
-    at (332, 153): AH
-    at (182, 187): AH' AD' AC
+    at (26,26): K♠ A♠ 2♠ 3♠
+    at (52,107): T♦ J♦ Q♦ K♦
+    at (52,182): 2♥ 3♥ 4♥
+    at (52,257): 7♠ 7♦ 7♣
+    at (52,407): 2♣ 3♦ 4♣ 5♥ 6♠ 7♥
+    at (52,482): 9♣ T♥ J♠
+    at (110,328): A♦
+    at (153,332): A♥
+    at (187,182): A♥' A♦' A♣
   verb: push
-  trouble_before: AD
-  target_before: TD JD QD KD
+  trouble_before: A♦
+  target_before: T♦ J♦ Q♦ K♦
   side: right
   expect:
     primitives:
-      - merge_stack [AD] -> [TD JD QD KD] /right
-
-scenario mined_022_AHp1_ADp1_step_03
-  desc: mined_022_AHp1_ADp1 step 3 (push).
+      - merge_stack [A♦] at (110,328) -> [T♦ J♦ Q♦ K♦] at (52,107) /right
+scenario mined_022_A♥p1_A♦p1_step_03
+  desc: mined_022_A♥p1_A♦p1 step 3 (push).
   op: verb_to_primitives
   board:
-    at (26, 26): KS AS 2S 3S
-    at (182, 52): 2H 3H 4H
-    at (257, 52): 7S 7D 7C
-    at (407, 52): 2C 3D 4C 5H 6S 7H
-    at (482, 52): 9C TH JS
-    at (332, 153): AH
-    at (182, 187): AH' AD' AC
-    at (107, 52): TD JD QD KD AD
+    at (26,26): K♠ A♠ 2♠ 3♠
+    at (52,182): 2♥ 3♥ 4♥
+    at (52,257): 7♠ 7♦ 7♣
+    at (52,407): 2♣ 3♦ 4♣ 5♥ 6♠ 7♥
+    at (52,482): 9♣ T♥ J♠
+    at (153,332): A♥
+    at (187,182): A♥' A♦' A♣
+    at (52,107): T♦ J♦ Q♦ K♦ A♦
   verb: push
-  trouble_before: AH
-  target_before: 2H 3H 4H
+  trouble_before: A♥
+  target_before: 2♥ 3♥ 4♥
   side: left
   expect:
     primitives:
-      - merge_stack [AH] -> [2H 3H 4H] /left
-
-scenario mined_023_3C_step_01
-  desc: mined_023_3C step 1 (extract_absorb/peel).
+      - merge_stack [A♥] at (153,332) -> [2♥ 3♥ 4♥] at (52,182) /left
+scenario mined_023_3♣_step_01
+  desc: mined_023_3♣ step 1 (extract_absorb/peel).
   op: verb_to_primitives
   board:
-    at (26, 26): KS AS 2S 3S
-    at (107, 52): 9C TH JS
-    at (182, 52): AH' AD' AC
-    at (257, 52): TD JD QD KD AD
-    at (332, 52): AH 2H 3H 4H
-    at (407, 52): 7S 7D 7C 7H'
-    at (482, 52): 4C 5H 6S 7H
-    at (92, 187): 2C 3D 4S'
-    at (167, 187): 3C
+    at (26,26): K♠ A♠ 2♠ 3♠
+    at (52,107): 9♣ T♥ J♠
+    at (52,182): A♥' A♦' A♣
+    at (52,257): T♦ J♦ Q♦ K♦ A♦
+    at (52,332): A♥ 2♥ 3♥ 4♥
+    at (52,407): 7♠ 7♦ 7♣ 7♥'
+    at (52,482): 4♣ 5♥ 6♠ 7♥
+    at (187,92): 2♣ 3♦ 4♠'
+    at (187,167): 3♣
   verb: peel
-  source: 4C 5H 6S 7H
-  ext_card: 4C
-  target_before: 3C
+  source: 4♣ 5♥ 6♠ 7♥
+  ext_card: 4♣
+  target_before: 3♣
   target_bucket: trouble
   side: right
   expect:
     primitives:
-      - split [4C 5H 6S 7H]@0
-      - merge_stack [4C] -> [3C] /right
-
-scenario mined_023_3C_step_02
-  desc: mined_023_3C step 2 (extract_absorb/steal).
+      - split [4♣ 5♥ 6♠ 7♥] at (52,482) @0
+      - merge_stack [4♣] at (50,478) -> [3♣] at (187,167) /right
+scenario mined_023_3♣_step_02
+  desc: mined_023_3♣ step 2 (extract_absorb/steal).
   op: verb_to_primitives
   board:
-    at (26, 26): KS AS 2S 3S
-    at (107, 52): 9C TH JS
-    at (182, 52): AH' AD' AC
-    at (257, 52): TD JD QD KD AD
-    at (332, 52): AH 2H 3H 4H
-    at (407, 52): 7S 7D 7C 7H'
-    at (92, 187): 2C 3D 4S'
-    at (482, 93): 5H 6S 7H
-    at (167, 187): 3C 4C
+    at (26,26): K♠ A♠ 2♠ 3♠
+    at (52,107): 9♣ T♥ J♠
+    at (52,182): A♥' A♦' A♣
+    at (52,257): T♦ J♦ Q♦ K♦ A♦
+    at (52,332): A♥ 2♥ 3♥ 4♥
+    at (52,407): 7♠ 7♦ 7♣ 7♥'
+    at (187,92): 2♣ 3♦ 4♠'
+    at (93,482): 5♥ 6♠ 7♥
+    at (187,167): 3♣ 4♣
   verb: steal
-  source: 2C 3D 4S'
-  ext_card: 2C
-  target_before: 3C 4C
+  source: 2♣ 3♦ 4♠'
+  ext_card: 2♣
+  target_before: 3♣ 4♣
   target_bucket: growing
   side: left
   expect:
     primitives:
-      - split [2C 3D 4S']@0
-      - move_stack [3C 4C] -> (167,220)
-      - merge_stack [2C] -> [3C 4C] /left
-
-scenario mined_023_3C_step_03
-  desc: mined_023_3C step 3 (push).
+      - split [2♣ 3♦ 4♠'] at (187,92) @0
+      - move_stack [3♣ 4♣] at (187,167) -> (220,167)
+      - merge_stack [2♣] at (185,88) -> [3♣ 4♣] at (220,167) /left
+scenario mined_023_3♣_step_03
+  desc: mined_023_3♣ step 3 (push).
   op: verb_to_primitives
   board:
-    at (26, 26): KS AS 2S 3S
-    at (107, 52): 9C TH JS
-    at (182, 52): AH' AD' AC
-    at (257, 52): TD JD QD KD AD
-    at (332, 52): AH 2H 3H 4H
-    at (407, 52): 7S 7D 7C 7H'
-    at (482, 93): 5H 6S 7H
-    at (92, 228): 3D 4S'
-    at (167, 187): 2C 3C 4C
+    at (26,26): K♠ A♠ 2♠ 3♠
+    at (52,107): 9♣ T♥ J♠
+    at (52,182): A♥' A♦' A♣
+    at (52,257): T♦ J♦ Q♦ K♦ A♦
+    at (52,332): A♥ 2♥ 3♥ 4♥
+    at (52,407): 7♠ 7♦ 7♣ 7♥'
+    at (93,482): 5♥ 6♠ 7♥
+    at (228,92): 3♦ 4♠'
+    at (187,167): 2♣ 3♣ 4♣
   verb: push
-  trouble_before: 3D 4S'
-  target_before: 5H 6S 7H
+  trouble_before: 3♦ 4♠'
+  target_before: 5♥ 6♠ 7♥
   side: left
   expect:
     primitives:
-      - merge_stack [3D 4S'] -> [5H 6S 7H] /left
-
-scenario mined_024_2D_step_01
-  desc: mined_024_2D step 1 (extract_absorb/peel).
+      - merge_stack [3♦ 4♠'] at (228,92) -> [5♥ 6♠ 7♥] at (93,482) /left
+scenario mined_024_2♦_step_01
+  desc: mined_024_2♦ step 1 (extract_absorb/peel).
   op: verb_to_primitives
   board:
-    at (26, 26): KS AS 2S 3S
-    at (107, 52): TD JD QD KD
-    at (182, 52): 2H 3H 4H
-    at (257, 52): 7S 7D 7C
-    at (332, 52): AC AD AH
-    at (407, 52): 2C 3D 4C 5H 6S 7H
-    at (482, 52): 8H 9S TH'
-    at (182, 187): 9C TH JC
-    at (257, 187): 2D
+    at (26,26): K♠ A♠ 2♠ 3♠
+    at (52,107): T♦ J♦ Q♦ K♦
+    at (52,182): 2♥ 3♥ 4♥
+    at (52,257): 7♠ 7♦ 7♣
+    at (52,332): A♣ A♦ A♥
+    at (52,407): 2♣ 3♦ 4♣ 5♥ 6♠ 7♥
+    at (52,482): 8♥ 9♠ T♥'
+    at (187,182): 9♣ T♥ J♣
+    at (187,257): 2♦
   verb: peel
-  source: KS AS 2S 3S
-  ext_card: 3S
-  target_before: 2D
+  source: K♠ A♠ 2♠ 3♠
+  ext_card: 3♠
+  target_before: 2♦
   target_bucket: trouble
   side: right
   expect:
     primitives:
-      - split [KS AS 2S 3S]@3
-      - merge_stack [3S] -> [2D] /right
-
-scenario mined_024_2D_step_02
-  desc: mined_024_2D step 2 (extract_absorb/steal).
+      - split [K♠ A♠ 2♠ 3♠] at (26,26) @3
+      - merge_stack [3♠] at (129,22) -> [2♦] at (187,257) /right
+scenario mined_024_2♦_step_02
+  desc: mined_024_2♦ step 2 (extract_absorb/steal).
   op: verb_to_primitives
   board:
-    at (107, 52): TD JD QD KD
-    at (182, 52): 2H 3H 4H
-    at (257, 52): 7S 7D 7C
-    at (332, 52): AC AD AH
-    at (407, 52): 2C 3D 4C 5H 6S 7H
-    at (482, 52): 8H 9S TH'
-    at (182, 187): 9C TH JC
-    at (26, 18): KS AS 2S
-    at (257, 187): 2D 3S
+    at (52,107): T♦ J♦ Q♦ K♦
+    at (52,182): 2♥ 3♥ 4♥
+    at (52,257): 7♠ 7♦ 7♣
+    at (52,332): A♣ A♦ A♥
+    at (52,407): 2♣ 3♦ 4♣ 5♥ 6♠ 7♥
+    at (52,482): 8♥ 9♠ T♥'
+    at (187,182): 9♣ T♥ J♣
+    at (18,26): K♠ A♠ 2♠
+    at (187,257): 2♦ 3♠
   verb: steal
-  source: AC AD AH
-  ext_card: AC
-  target_before: 2D 3S
+  source: A♣ A♦ A♥
+  ext_card: A♣
+  target_before: 2♦ 3♠
   target_bucket: growing
   side: left
   expect:
     primitives:
-      - split [AC AD AH]@0
-      - move_stack [AD AH] -> (332,112)
-      - split [AD AH]@0
-      - move_stack [2D 3S] -> (257,220)
-      - merge_stack [AC] -> [2D 3S] /left
-
-scenario mined_024_2D_step_03
-  desc: mined_024_2D step 3 (push).
+      - split [A♣ A♦ A♥] at (52,332) @0
+      - move_stack [A♦ A♥] at (93,332) -> (112,332)
+      - split [A♦ A♥] at (112,332) @0
+      - move_stack [2♦ 3♠] at (187,257) -> (220,257)
+      - merge_stack [A♣] at (50,328) -> [2♦ 3♠] at (220,257) /left
+scenario mined_024_2♦_step_03
+  desc: mined_024_2♦ step 3 (push).
   op: verb_to_primitives
   board:
-    at (107, 52): TD JD QD KD
-    at (182, 52): 2H 3H 4H
-    at (257, 52): 7S 7D 7C
-    at (407, 52): 2C 3D 4C 5H 6S 7H
-    at (482, 52): 8H 9S TH'
-    at (182, 187): 9C TH JC
-    at (26, 18): KS AS 2S
-    at (328, 110): AD
-    at (332, 153): AH
-    at (257, 187): AC 2D 3S
+    at (52,107): T♦ J♦ Q♦ K♦
+    at (52,182): 2♥ 3♥ 4♥
+    at (52,257): 7♠ 7♦ 7♣
+    at (52,407): 2♣ 3♦ 4♣ 5♥ 6♠ 7♥
+    at (52,482): 8♥ 9♠ T♥'
+    at (187,182): 9♣ T♥ J♣
+    at (18,26): K♠ A♠ 2♠
+    at (110,328): A♦
+    at (153,332): A♥
+    at (187,257): A♣ 2♦ 3♠
   verb: push
-  trouble_before: AD
-  target_before: TD JD QD KD
+  trouble_before: A♦
+  target_before: T♦ J♦ Q♦ K♦
   side: right
   expect:
     primitives:
-      - merge_stack [AD] -> [TD JD QD KD] /right
-
-scenario mined_024_2D_step_04
-  desc: mined_024_2D step 4 (push).
+      - merge_stack [A♦] at (110,328) -> [T♦ J♦ Q♦ K♦] at (52,107) /right
+scenario mined_024_2♦_step_04
+  desc: mined_024_2♦ step 4 (push).
   op: verb_to_primitives
   board:
-    at (182, 52): 2H 3H 4H
-    at (257, 52): 7S 7D 7C
-    at (407, 52): 2C 3D 4C 5H 6S 7H
-    at (482, 52): 8H 9S TH'
-    at (182, 187): 9C TH JC
-    at (26, 18): KS AS 2S
-    at (332, 153): AH
-    at (257, 187): AC 2D 3S
-    at (107, 52): TD JD QD KD AD
+    at (52,182): 2♥ 3♥ 4♥
+    at (52,257): 7♠ 7♦ 7♣
+    at (52,407): 2♣ 3♦ 4♣ 5♥ 6♠ 7♥
+    at (52,482): 8♥ 9♠ T♥'
+    at (187,182): 9♣ T♥ J♣
+    at (18,26): K♠ A♠ 2♠
+    at (153,332): A♥
+    at (187,257): A♣ 2♦ 3♠
+    at (52,107): T♦ J♦ Q♦ K♦ A♦
   verb: push
-  trouble_before: AH
-  target_before: 2H 3H 4H
+  trouble_before: A♥
+  target_before: 2♥ 3♥ 4♥
   side: left
   expect:
     primitives:
-      - merge_stack [AH] -> [2H 3H 4H] /left
-
-scenario mined_025_TSp1_step_01
-  desc: mined_025_TSp1 step 1 (extract_absorb/peel).
+      - merge_stack [A♥] at (153,332) -> [2♥ 3♥ 4♥] at (52,182) /left
+scenario mined_025_T♠p1_step_01
+  desc: mined_025_T♠p1 step 1 (extract_absorb/peel).
   op: verb_to_primitives
   board:
-    at (26, 26): 7S 7D 7C
-    at (107, 52): 2C 3D 4C 5H 6S 7H
-    at (182, 52): 8H 9S TH'
-    at (257, 52): 9C TH JC
-    at (332, 52): KS AS 2S
-    at (407, 52): AC 2D 3S
-    at (482, 52): TD JD QD KD AD
-    at (182, 187): AH 2H 3H
-    at (257, 187): 4D 4S' 4H
-    at (332, 187): TS'
+    at (26,26): 7♠ 7♦ 7♣
+    at (52,107): 2♣ 3♦ 4♣ 5♥ 6♠ 7♥
+    at (52,182): 8♥ 9♠ T♥'
+    at (52,257): 9♣ T♥ J♣
+    at (52,332): K♠ A♠ 2♠
+    at (52,407): A♣ 2♦ 3♠
+    at (52,482): T♦ J♦ Q♦ K♦ A♦
+    at (187,182): A♥ 2♥ 3♥
+    at (187,257): 4♦ 4♠' 4♥
+    at (187,332): T♠'
   verb: peel
-  source: TD JD QD KD AD
-  ext_card: TD
-  target_before: TS'
+  source: T♦ J♦ Q♦ K♦ A♦
+  ext_card: T♦
+  target_before: T♠'
   target_bucket: trouble
   side: right
   expect:
     primitives:
-      - split [TD JD QD KD AD]@0
-      - merge_stack [TD] -> [TS'] /right
-
-scenario mined_025_TSp1_step_02
-  desc: mined_025_TSp1 step 2 (extract_absorb/steal).
+      - split [T♦ J♦ Q♦ K♦ A♦] at (52,482) @0
+      - merge_stack [T♦] at (50,478) -> [T♠'] at (187,332) /right
+scenario mined_025_T♠p1_step_02
+  desc: mined_025_T♠p1 step 2 (extract_absorb/steal).
   op: verb_to_primitives
   board:
-    at (26, 26): 7S 7D 7C
-    at (107, 52): 2C 3D 4C 5H 6S 7H
-    at (182, 52): 8H 9S TH'
-    at (257, 52): 9C TH JC
-    at (332, 52): KS AS 2S
-    at (407, 52): AC 2D 3S
-    at (182, 187): AH 2H 3H
-    at (257, 187): 4D 4S' 4H
-    at (482, 93): JD QD KD AD
-    at (332, 187): TS' TD
+    at (26,26): 7♠ 7♦ 7♣
+    at (52,107): 2♣ 3♦ 4♣ 5♥ 6♠ 7♥
+    at (52,182): 8♥ 9♠ T♥'
+    at (52,257): 9♣ T♥ J♣
+    at (52,332): K♠ A♠ 2♠
+    at (52,407): A♣ 2♦ 3♠
+    at (187,182): A♥ 2♥ 3♥
+    at (187,257): 4♦ 4♠' 4♥
+    at (93,482): J♦ Q♦ K♦ A♦
+    at (187,332): T♠' T♦
   verb: steal
-  source: 8H 9S TH'
-  ext_card: TH'
-  target_before: TS' TD
+  source: 8♥ 9♠ T♥'
+  ext_card: T♥'
+  target_before: T♠' T♦
   target_bucket: growing
   side: right
   expect:
     primitives:
-      - split [8H 9S TH']@2
-      - merge_stack [TH'] -> [TS' TD] /right
-
-scenario mined_025_TSp1_step_03
-  desc: mined_025_TSp1 step 3 (extract_absorb/steal).
+      - split [8♥ 9♠ T♥'] at (52,182) @2
+      - merge_stack [T♥'] at (122,178) -> [T♠' T♦] at (187,332) /right
+scenario mined_025_T♠p1_step_03
+  desc: mined_025_T♠p1 step 3 (extract_absorb/steal).
   op: verb_to_primitives
   board:
-    at (26, 26): 7S 7D 7C
-    at (107, 52): 2C 3D 4C 5H 6S 7H
-    at (257, 52): 9C TH JC
-    at (332, 52): KS AS 2S
-    at (407, 52): AC 2D 3S
-    at (182, 187): AH 2H 3H
-    at (257, 187): 4D 4S' 4H
-    at (482, 93): JD QD KD AD
-    at (182, 44): 8H 9S
-    at (332, 187): TS' TD TH'
+    at (26,26): 7♠ 7♦ 7♣
+    at (52,107): 2♣ 3♦ 4♣ 5♥ 6♠ 7♥
+    at (52,257): 9♣ T♥ J♣
+    at (52,332): K♠ A♠ 2♠
+    at (52,407): A♣ 2♦ 3♠
+    at (187,182): A♥ 2♥ 3♥
+    at (187,257): 4♦ 4♠' 4♥
+    at (93,482): J♦ Q♦ K♦ A♦
+    at (44,182): 8♥ 9♠
+    at (187,332): T♠' T♦ T♥'
   verb: steal
-  source: 7S 7D 7C
-  ext_card: 7C
-  target_before: 8H 9S
+  source: 7♠ 7♦ 7♣
+  ext_card: 7♣
+  target_before: 8♥ 9♠
   target_bucket: trouble
   side: left
   expect:
     primitives:
-      - split [7S 7D 7C]@2
-      - move_stack [7S 7D] -> (407,187)
-      - split [7S 7D]@0
-      - merge_stack [7C] -> [8H 9S] /left
-
-scenario mined_025_TSp1_step_04
-  desc: mined_025_TSp1 step 4 (free_pull).
+      - split [7♠ 7♦ 7♣] at (26,26) @2
+      - move_stack [7♠ 7♦] at (18,26) -> (187,407)
+      - split [7♠ 7♦] at (187,407) @0
+      - merge_stack [7♣] at (96,22) -> [8♥ 9♠] at (44,182) /left
+scenario mined_025_T♠p1_step_04
+  desc: mined_025_T♠p1 step 4 (free_pull).
   op: verb_to_primitives
   board:
-    at (107, 52): 2C 3D 4C 5H 6S 7H
-    at (257, 52): 9C TH JC
-    at (332, 52): KS AS 2S
-    at (407, 52): AC 2D 3S
-    at (182, 187): AH 2H 3H
-    at (257, 187): 4D 4S' 4H
-    at (482, 93): JD QD KD AD
-    at (332, 187): TS' TD TH'
-    at (403, 185): 7S
-    at (407, 228): 7D
-    at (182, 11): 7C 8H 9S
+    at (52,107): 2♣ 3♦ 4♣ 5♥ 6♠ 7♥
+    at (52,257): 9♣ T♥ J♣
+    at (52,332): K♠ A♠ 2♠
+    at (52,407): A♣ 2♦ 3♠
+    at (187,182): A♥ 2♥ 3♥
+    at (187,257): 4♦ 4♠' 4♥
+    at (93,482): J♦ Q♦ K♦ A♦
+    at (187,332): T♠' T♦ T♥'
+    at (185,403): 7♠
+    at (228,407): 7♦
+    at (11,182): 7♣ 8♥ 9♠
   verb: free_pull
-  loose: 7D
-  target_before: 7S
+  loose: 7♦
+  target_before: 7♠
   target_bucket: trouble
   side: right
   expect:
     primitives:
-      - merge_stack [7D] -> [7S] /right
-
-scenario mined_025_TSp1_step_05
-  desc: mined_025_TSp1 step 5 (extract_absorb/peel).
+      - merge_stack [7♦] at (228,407) -> [7♠] at (185,403) /right
+scenario mined_025_T♠p1_step_05
+  desc: mined_025_T♠p1 step 5 (extract_absorb/peel).
   op: verb_to_primitives
   board:
-    at (107, 52): 2C 3D 4C 5H 6S 7H
-    at (257, 52): 9C TH JC
-    at (332, 52): KS AS 2S
-    at (407, 52): AC 2D 3S
-    at (182, 187): AH 2H 3H
-    at (257, 187): 4D 4S' 4H
-    at (482, 93): JD QD KD AD
-    at (332, 187): TS' TD TH'
-    at (182, 11): 7C 8H 9S
-    at (403, 185): 7S 7D
+    at (52,107): 2♣ 3♦ 4♣ 5♥ 6♠ 7♥
+    at (52,257): 9♣ T♥ J♣
+    at (52,332): K♠ A♠ 2♠
+    at (52,407): A♣ 2♦ 3♠
+    at (187,182): A♥ 2♥ 3♥
+    at (187,257): 4♦ 4♠' 4♥
+    at (93,482): J♦ Q♦ K♦ A♦
+    at (187,332): T♠' T♦ T♥'
+    at (11,182): 7♣ 8♥ 9♠
+    at (185,403): 7♠ 7♦
   verb: peel
-  source: 2C 3D 4C 5H 6S 7H
-  ext_card: 7H
-  target_before: 7S 7D
+  source: 2♣ 3♦ 4♣ 5♥ 6♠ 7♥
+  ext_card: 7♥
+  target_before: 7♠ 7♦
   target_bucket: growing
   side: right
   expect:
     primitives:
-      - split [2C 3D 4C 5H 6S 7H]@5
-      - merge_stack [7H] -> [7S 7D] /right
+      - split [2♣ 3♦ 4♣ 5♥ 6♠ 7♥] at (52,107) @5
+      - merge_stack [7♥] at (221,103) -> [7♠ 7♦] at (185,403) /right

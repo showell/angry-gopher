@@ -8,62 +8,62 @@
 # --- extract_absorb (pull) -----------------------------------
 
 scenario peel_left_edge_into_singleton_trouble
-  desc: 5H peeled from a length-4 pure run absorbs onto trouble [4H].
+  desc: 5♥ peeled from a length-4 pure run absorbs onto trouble [4♥].
   op: enumerate_moves
   helper:
-    at (0,0): 5H 6H 7H 8H
+    at (0,0): 5♥ 6♥ 7♥ 8♥
   trouble:
-    at (0,0): 4H
+    at (0,0): 4♥
   expect:
     yields: extract_absorb
 
 # --- free_pull -----------------------------------------------
 
 scenario free_pull_singleton_onto_run_growing
-  desc: A loose [4H] singleton in TROUBLE absorbs onto a 2-partial GROWING build.
+  desc: A loose [4♥] singleton in TROUBLE absorbs onto a 2-partial GROWING build.
   op: enumerate_moves
   helper:
   trouble:
-    at (0,0): 4H
-    at (0,0): 5H
+    at (0,0): 4♥
+    at (0,0): 5♥
   growing:
-    at (0,0): 6H 7H
+    at (0,0): 6♥ 7♥
   expect:
     yields: free_pull
 
 # --- push (TROUBLE → HELPER) ---------------------------------
 
 scenario push_partial_pair_onto_helper_run
-  desc: TROUBLE 2-partial [QC KC] pushes onto a helper run that legalizes both halves.
+  desc: TROUBLE 2-partial [Q♣ K♣] pushes onto a helper run that legalizes both halves.
   op: enumerate_moves
   helper:
-    at (0,0): 9C TC JC
+    at (0,0): 9♣ T♣ J♣
   trouble:
-    at (0,0): QC KC
+    at (0,0): Q♣ K♣
   expect:
     yields: push
 
 # --- engulf (b': GROWING → HELPER, graduate to COMPLETE) -----
 
 scenario engulf_growing_2partial_into_legal_run
-  desc: GROWING [AC 2D] engulfs HELPER [3S 4D 5C] → length-5 rb-run, graduates.
+  desc: GROWING [A♣ 2♦] engulfs HELPER [3♠ 4♦ 5♣] → length-5 rb-run, graduates.
   op: enumerate_moves
   helper:
-    at (0,0): 3S 4D 5C
+    at (0,0): 3♠ 4♦ 5♣
   growing:
-    at (0,0): AC 2D
+    at (0,0): A♣ 2♦
   expect:
     yields: push
 
 # --- splice --------------------------------------------------
 
 scenario splice_dup_5d_into_pure_diamonds
-  desc: A second-deck 5D' splices into a length-6 pure-diamond run between 4D and 5D.
+  desc: A second-deck 5♦' splices into a length-6 pure-diamond run between 4♦ and 5♦.
   op: enumerate_moves
   helper:
-    at (0,0): 3D 4D 5D 6D 7D 8D
+    at (0,0): 3♦ 4♦ 5♦ 6♦ 7♦ 8♦
   trouble:
-    at (0,0): 5D'
+    at (0,0): 5♦'
   expect:
     yields: splice
 
@@ -74,115 +74,115 @@ scenario solve_lone_singleton_no_plan
   op: solve
   helper:
   trouble:
-    at (0,0): 5H
+    at (0,0): 5♥
   expect: no_plan
 
 scenario solve_disjoint_helper_no_plan
-  desc: Trouble 5H plus a helper run J-Q-K-A spades that has no value-overlap with 5H. No move fires.
+  desc: Trouble 5♥ plus a helper run J-Q-K-A spades that has no value-overlap with 5♥. No move fires.
   op: solve
   helper:
-    at (0,0): JS QS KS AS
+    at (0,0): J♠ Q♠ K♠ A♠
   trouble:
-    at (0,0): 5H
+    at (0,0): 5♥
   expect: no_plan
 
 scenario solve_set_partial_uncompletable
-  desc: Trouble [AH AS] needs a third Ace; board has no third A and no A-adjacent extracts.
+  desc: Trouble [A♥ A♠] needs a third Ace; board has no third A and no A-adjacent extracts.
   op: solve
   helper:
-    at (0,0): JS QS KS
+    at (0,0): J♠ Q♠ K♠
   trouble:
-    at (0,0): AH AS
+    at (0,0): A♥ A♠
   expect: no_plan
 
 scenario solve_two_unrelated_singletons
-  desc: Trouble [5H] + [JC] share no group; neither completable from any helper.
+  desc: Trouble [5♥] + [J♣] share no group; neither completable from any helper.
   op: solve
   helper:
   trouble:
-    at (0,0): 5H
-    at (0,0): JC
+    at (0,0): 5♥
+    at (0,0): J♣
   expect: no_plan
 
 scenario solve_run_partial_uncompletable
-  desc: Trouble pair [5H 6H] is a pure-run partial; needs 4H or 7H, board has neither.
+  desc: Trouble pair [5♥ 6♥] is a pure-run partial; needs 4♥ or 7♥, board has neither.
   op: solve
   helper:
-    at (0,0): JS QS KS
+    at (0,0): J♠ Q♠ K♠
   trouble:
-    at (0,0): 5H 6H
+    at (0,0): 5♥ 6♥
   expect: no_plan
 
 scenario solve_partial_completable_but_stranded
-  desc: Trouble [5H] + helper [3C 4C 5C 6C]. Peel 6C produces partial [5H 6C] but no further extract leads to victory; an unrelated helper [JS QS KS AS] adds noise but no path.
+  desc: Trouble [5♥] + helper [3♣ 4♣ 5♣ 6♣]. Peel 6♣ produces partial [5♥ 6♣] but no further extract leads to victory; an unrelated helper [J♠ Q♠ K♠ A♠] adds noise but no path.
   op: solve
   helper:
-    at (0,0): 3C 4C 5C 6C
-    at (0,0): JS QS KS AS
+    at (0,0): 3♣ 4♣ 5♣ 6♣
+    at (0,0): J♠ Q♠ K♠ A♠
   trouble:
-    at (0,0): 5H
+    at (0,0): 5♥
   expect: no_plan
 
 scenario solve_lonely_trouble_amid_rich_helpers
-  desc: Trouble 5H surrounded by length-4 helpers whose end cards are not 5H neighbors. Helpers exist but no extract verb fires for 5H.
+  desc: Trouble 5♥ surrounded by length-4 helpers whose end cards are not 5♥ neighbors. Helpers exist but no extract verb fires for 5♥.
   op: solve
   helper:
-    at (0,0): AS 2S 3S 4S
-    at (0,0): JC QC KC AC
-    at (0,0): 8D 9D TD JD
+    at (0,0): A♠ 2♠ 3♠ 4♠
+    at (0,0): J♣ Q♣ K♣ A♣
+    at (0,0): 8♦ 9♦ T♦ J♦
   trouble:
-    at (0,0): 5H
+    at (0,0): 5♥
   expect: no_plan
 
 scenario solve_two_partial_troubles_no_paths
-  desc: Two unsolvable trouble pairs (AH AS needs another A; 5H 6H needs 4H or 7H). Helpers don't carry the missing values.
+  desc: Two unsolvable trouble pairs (A♥ A♠ needs another A; 5♥ 6♥ needs 4♥ or 7♥). Helpers don't carry the missing values.
   op: solve
   helper:
-    at (0,0): 8D 9D TD
-    at (0,0): 8S 9S TS
+    at (0,0): 8♦ 9♦ T♦
+    at (0,0): 8♠ 9♠ T♠
   trouble:
-    at (0,0): AH AS
-    at (0,0): 5H 6H
+    at (0,0): A♥ A♠
+    at (0,0): 5♥ 6♥
   expect: no_plan
 
 # --- solve: positive cases ----------------------------------
 
 scenario solve_engulf_in_one_line
-  desc: GROWING [AC 2D] engulfs HELPER [3S 4D 5C] for a 1-line plan.
+  desc: GROWING [A♣ 2♦] engulfs HELPER [3♠ 4♦ 5♣] for a 1-line plan.
   op: solve
   helper:
-    at (0,0): 3S 4D 5C
+    at (0,0): 3♠ 4♦ 5♣
   growing:
-    at (0,0): AC 2D
+    at (0,0): A♣ 2♦
   expect:
     plan_lines:
-      - "push [AC 2D] onto HELPER [3S 4D 5C] → [AC 2D 3S 4D 5C]"
+      - "push [A♣ 2♦] onto HELPER [3♠ 4♦ 5♣] → [A♣ 2♦ 3♠ 4♦ 5♣]"
 
 scenario solve_simple_peel_in_one_line
-  desc: Trouble [4H] absorbs 5H peeled from a length-4 helper run for a 1-line plan.
+  desc: Trouble [4♥] absorbs 5♥ peeled from a length-4 helper run for a 1-line plan.
   op: solve
   helper:
-    at (0,0): 5H 6H 7H 8H
+    at (0,0): 5♥ 6♥ 7♥ 8♥
   trouble:
-    at (0,0): 4H
+    at (0,0): 4♥
   expect:
     plan_lines:
-      - "push [4H] onto HELPER [5H 6H 7H 8H] → [4H 5H 6H 7H 8H]"
+      - "push [4♥] onto HELPER [5♥ 6♥ 7♥ 8♥] → [4♥ 5♥ 6♥ 7♥ 8♥]"
 
 # --- narrate / hint renderings ------------------------------
 # Each layer has a different audience:
-#   narrate(desc) — Steve-facing, evocative ("engulf [3S 4D 5C]
-#     into [AC 2D]"). Used in Claude's verbose-mode log.
+#   narrate(desc) — Steve-facing, evocative ("engulf [3♠ 4♦ 5♣]
+#     into [A♣ 2♦]"). Used in Claude's verbose-mode log.
 #   hint(desc) — player-facing, vague-but-useful ("You can
-#     splice the 7H into a red-black run.")
+#     splice the 7♥ into a red-black run.")
 
 scenario narrate_engulf_phrasing
   desc: An engulf push narrates as 'engulf … into …' (Steve sees the chunk-level intent).
   op: enumerate_moves
   helper:
-    at (0,0): 3S 4D 5C
+    at (0,0): 3♠ 4♦ 5♣
   growing:
-    at (0,0): AC 2D
+    at (0,0): A♣ 2♦
   expect:
     narrate_contains: engulf
 
@@ -190,56 +190,56 @@ scenario hint_splice_red_black_run
   desc: Player-facing splice hint names the verb + the run kind. (Steve's reference phrasing.)
   op: enumerate_moves
   helper:
-    at (0,0): 5H 6S 7H 8S 9H TS
+    at (0,0): 5♥ 6♠ 7♥ 8♠ 9♥ T♠
   trouble:
-    at (0,0): 7H'
+    at (0,0): 7♥'
   expect:
     hint_contains: red-black run
 
 scenario hint_pop_via_shift
-  desc: Player-facing shift hint says you can pop a card via shifting. KC supplies a completion candidate so the merged partial isn't doomed.
+  desc: Player-facing shift hint says you can pop a card via shifting. K♣ supplies a completion candidate so the merged partial isn't doomed.
   op: enumerate_moves
   helper:
-    at (0,0): 9C TC JC
-    at (0,0): 8D 8S 8H 8C
-    at (0,0): KC AC 2C
+    at (0,0): 9♣ T♣ J♣
+    at (0,0): 8♦ 8♠ 8♥ 8♣
+    at (0,0): K♣ A♣ 2♣
   trouble:
-    at (0,0): QH
+    at (0,0): Q♥
   expect:
-    hint_contains: pop the JC
+    hint_contains: pop the J♣
 
-# --- shift (8C-pops-JC idiom) --------------------------------
+# --- shift (8♣-pops-J♣ idiom) --------------------------------
 
 scenario shift_eight_clubs_pops_jack_clubs
-  desc: Length-3 run [9C TC JC] steals JC; donor [8D 8S 8H 8C] supplies 8C. KC is on the board so the resulting [QH JC] partial isn't doomed.
+  desc: Length-3 run [9♣ T♣ J♣] steals J♣; donor [8♦ 8♠ 8♥ 8♣] supplies 8♣. K♣ is on the board so the resulting [Q♥ J♣] partial isn't doomed.
   op: enumerate_moves
   helper:
-    at (0,0): 9C TC JC
-    at (0,0): 8D 8S 8H 8C
-    at (0,0): KC AC 2C
+    at (0,0): 9♣ T♣ J♣
+    at (0,0): 8♦ 8♠ 8♥ 8♣
+    at (0,0): K♣ A♣ 2♣
   trouble:
-    at (0,0): QH
+    at (0,0): Q♥
   expect:
     yields: shift
 
 scenario solve_shift_subproblem_capture_59
-  desc: Tighter subproblem from xcheck capture #59 — state after place [5S] + steal 4H + steal AH. Board-only; tests that shift can deliver 3S to [4H 5S] without stranding [AS 2S]. [4H 5S] is in trouble (not growing) so initialLineage puts it first as the focus; the trouble-vs-growing distinction is bookkeeping anyway.
+  desc: Tighter subproblem from xcheck capture #59 — state after place [5♠] + steal 4♥ + steal A♥. Board-only; tests that shift can deliver 3♠ to [4♥ 5♠] without stranding [A♠ 2♠]. [4♥ 5♠] is in trouble (not growing) so initialLineage puts it first as the focus; the trouble-vs-growing distinction is bookkeeping anyway.
   op: solve
   helper:
-    at (0,0): 3C 4C' 5C'
-    at (0,0): AS 2S 3S
-    at (0,0): 3D 4C 5H 6S 7D'
-    at (0,0): 7S 7D 7C 7H
-    at (0,0): KH AC 2H'
-    at (0,0): KS AD' 2C 3D'
-    at (0,0): TD JD QD KD
+    at (0,0): 3♣ 4♣' 5♣'
+    at (0,0): A♠ 2♠ 3♠
+    at (0,0): 3♦ 4♣ 5♥ 6♠ 7♦'
+    at (0,0): 7♠ 7♦ 7♣ 7♥
+    at (0,0): K♥ A♣ 2♥'
+    at (0,0): K♠ A♦' 2♣ 3♦'
+    at (0,0): T♦ J♦ Q♦ K♦
   trouble:
-    at (0,0): 4H 5S
-    at (0,0): AC'
-    at (0,0): AD
+    at (0,0): 4♥ 5♠
+    at (0,0): A♣'
+    at (0,0): A♦
   expect:
     plan_lines:
-      - "steal 3S from HELPER [AS 2S 3S], absorb onto [4H 5S] → [3S 4H 5S] [→COMPLETE] ; spawn [AS 2S]"
-      - "steal AS from HELPER [AS 2S], absorb onto [AC'] → [AC' AS] ; spawn [2S]"
-      - "pull AD onto [AC' AS] → [AC' AS AD] [→COMPLETE]"
-      - "push [2S] onto HELPER [3D 4C 5H 6S 7D'] → [2S 3D 4C 5H 6S 7D']"
+      - "steal 3♠ from HELPER [A♠ 2♠ 3♠], absorb onto [4♥ 5♠] → [3♠ 4♥ 5♠] [→COMPLETE] ; spawn [A♠ 2♠]"
+      - "steal A♠ from HELPER [A♠ 2♠], absorb onto [A♣'] → [A♣' A♠] ; spawn [2♠]"
+      - "pull A♦ onto [A♣' A♠] → [A♣' A♠ A♦] [→COMPLETE]"
+      - "push [2♠] onto HELPER [3♦ 4♣ 5♥ 6♠ 7♦'] → [2♠ 3♦ 4♣ 5♥ 6♠ 7♦']"

@@ -25,9 +25,10 @@
 // in unicode form so the wire stream is byte-identical to what
 // Elm emits.
 
-import { type Card, parseCardLabel, cardToken } from "../core/card.ts";
+import { type Card, cardLabel } from "../core/card.ts";
 import type { Stack } from "../game_events/emit_game_event.ts";
-import type { BoardStack, Loc } from "../geometry/geometry.ts";
+import type { BoardStack } from "../geometry/geometry.ts";
+import { parseBoardStackLine } from "../dsl/parse.ts";
 
 
 interface GameStateForDsl {
@@ -62,11 +63,11 @@ function formatBoardBlock(board: readonly Stack[]): string {
 
 function formatBoardLine(stack: Stack): string {
   return "  at ("
-    + padCoord(stack.loc.top)
-    + ", "
     + padCoord(stack.loc.left)
+    + ", "
+    + padCoord(stack.loc.top)
     + "): "
-    + stack.cards.map(cardToken).join(" ");
+    + stack.cards.map(cardLabel).join(" ");
 }
 
 function padCoord(n: number): string {
@@ -99,14 +100,14 @@ function sortIntoSuitRows(hand: readonly Card[]): (readonly Card[])[] {
 }
 
 function formatHandRow(cards: readonly Card[]): string {
-  return "  " + cards.map(cardToken).join(" ");
+  return "  " + cards.map(cardLabel).join(" ");
 }
 
 
 // --- DECK + SCALARS --------------------------------------------------
 
 function formatDeckLine(deck: readonly Card[]): string {
-  return "deck: " + deck.map(cardToken).join(" ");
+  return "deck: " + deck.map(cardLabel).join(" ");
 }
 
 function formatScalars(s: GameStateForDsl): string {
@@ -129,7 +130,7 @@ function formatScalars(s: GameStateForDsl): string {
 
 /** Extract the board stacks from a meta DSL document. Walks
  *  lines, takes the `board:` block, parses each indented
- *  `at (top, left): cards` line. */
+ *  `at (left, top): cards` line. */
 export function parseBoardFromMeta(metaDsl: string): readonly BoardStack[] {
   const lines = metaDsl.split("\n");
   const out: BoardStack[] = [];
@@ -142,21 +143,8 @@ export function parseBoardFromMeta(metaDsl: string): readonly BoardStack[] {
     }
     if (inBoard) {
       if (trimmed === "" || !raw.startsWith(" ")) break;
-      const m = trimmed.match(/^at\s*\(\s*(-?\d+)\s*,\s*(-?\d+)\s*\)\s*:\s*(.+)$/);
-      if (!m) {
-        throw new Error(`board line did not parse: ${trimmed}`);
-      }
-      const top = parseInt(m[1]!, 10);
-      const left = parseInt(m[2]!, 10);
-      const cards = m[3]!.trim().split(/\s+/).map(parseMetaCard);
-      out.push({ cards, loc: { top, left } as Loc });
+      out.push(parseBoardStackLine(trimmed));
     }
   }
   return out;
-}
-
-
-function parseMetaCard(s: string): Card {
-  const tsLabel = s.endsWith("'") ? s.slice(0, -1) + ":1" : s;
-  return parseCardLabel(tsLabel);
 }
