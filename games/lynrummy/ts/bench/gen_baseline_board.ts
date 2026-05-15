@@ -20,7 +20,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 
-import { type Card, type Rank, type Suit, RANKS, SUITS, Deck } from "../core/card.ts";
+import { type Card, type Rank, type Suit, RANKS, SUITS, Deck, cardLabel } from "../core/card.ts";
 import { timeSolver } from "./bench_timing.ts";
 
 const BOARD_LABELS: string[][] = [
@@ -62,11 +62,6 @@ function allRemaining(): Card[] {
     }
   }
   return out;
-}
-
-function dslLabel(c: Card): string {
-  const base = RANKS[c.rank - 1]! + SUITS[c.suit]!;
-  return c.deck === Deck.Two ? `${base}'` : base;
 }
 
 function scenarioId(c: Card): string {
@@ -117,7 +112,7 @@ function main(): void {
   const rows: { sid: string; ms: number; result: string }[] = [];
   for (let i = 0; i < cards.length; i++) {
     const c = cards[i]!;
-    const label = dslLabel(c);
+    const label = cardLabel(c);
     const sid = scenarioId(c);
     process.stdout.write(`[${String(i + 1).padStart(2)}/81] ${label.padEnd(5)} ... `);
 
