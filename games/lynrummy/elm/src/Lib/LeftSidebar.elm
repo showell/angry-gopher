@@ -98,6 +98,16 @@ viewHumanTurn info =
 
 viewAgentTurn : AgentTurnInfo -> Html Msg
 viewAgentTurn info =
+    let
+        handIsInteractive =
+            False
+
+        sourceCard =
+            Nothing
+
+        hintedCards =
+            []
+    in
     div
         [ style "min-width" "240px"
         , style "padding-right" "20px"
@@ -112,7 +122,7 @@ viewAgentTurn info =
         , playerPanel
             { title = "Player 2 (agent's turn)"
             , titleColor = Colors.navy
-            , body = [ viewHand False Nothing [] info.agentHand ]
+            , body = [ viewHand handIsInteractive sourceCard hintedCards info.agentHand ]
             }
         , deckRemaining info.deck
         ]
