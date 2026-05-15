@@ -1,6 +1,9 @@
 module Lib.Engine exposing
-    ( HintResponse(..)
+    ( AgentStepResponse(..)
+    , HintResponse(..)
+    , buildAgentStepRequest
     , buildGameHintRequest
+    , decodeAgentStepResponse
     , decodeHintResponse
     )
 
@@ -11,15 +14,24 @@ the request-encoding / response-decoding shape; Game.Play
 owns the Model bookkeeping (pendingEngineRequest counter,
 status, hintedCards).
 
+Two ops live here today:
+
+  - `game_hint`     — Hint button. Text-only response.
+  - `agent_step`    — one play of real-time agent play.
+                      Response is a primitive-DSL string the
+                      caller parses + animates.
+
 Request/response carry a `request_id` for stale-response
 detection — Elm matches against the in-flight id and discards
-mismatches. Future agent-play ops will join this module as
-sibling builders / decoders sharing the same wire.
+mismatches.
 
 -}
 
+import Lib.BoardDsl as BoardDsl
 import Lib.CardStack exposing (CardStack)
+import Lib.GameEvent exposing (GameEvent)
 import Lib.Rules.Card as Card exposing (Card)
+import Lib.WireAction as WireAction
 import Json.Decode as Decode
 import Json.Encode as Encode exposing (Value)
 
@@ -97,3 +109,115 @@ decodeHintResponse pendingId value =
 
             else
                 HintLines (Maybe.withDefault [] r.lines)
+
+
+
+-- ---- AGENT_STEP ------------------------------------------------------
+
+
+{-| Decoded shape of an `agent_step` response.
+
+  - `AgentStepEvents` carries the parsed primitive sequence for
+    one play. Empty list = the agent yielded a stuck/end signal
+    (the TS side returned ""); callers treat that as
+    end-of-turn.
+  - `AgentStepError` carries the engine's error string when
+    `ok` is false.
+  - `AgentStepStaleId` signals that the response was for an
+    earlier request — caller should drop it.
+  - `AgentStepDecodeError` covers shape mismatches.
+
+-}
+type AgentStepResponse
+    = AgentStepEvents (List GameEvent)
+    | AgentStepError String
+    | AgentStepStaleId
+    | AgentStepDecodeError String
+
+
+{-| Build the `agent_step` request payload. Board and hand are
+serialized to the canonical DSL on the way out — same shape the
+TS conformance corpus uses, parsed by the engine's
+`elmAgentStep` wrapper.
+-}
+buildAgentStepRequest : Int -> List CardStack -> List Card -> Value
+buildAgentStepRequest reqId board hand =
+    Encode.object
+        [ ( "request_id", Encode.int reqId )
+        , ( "op", Encode.string "agent_step" )
+        , ( "board_dsl", Encode.string (BoardDsl.formatBoard board) )
+        , ( "hand_dsl", Encode.string (formatHandLine hand) )
+        ]
+
+
+formatHandLine : List Card -> String
+formatHandLine hand =
+    String.join " " (List.map Card.cardStr hand)
+
+
+{-| Decode an `agent_step` response. Splits the returned DSL
+string into lines and parses each through `Lib.WireAction.parseEvent`.
+-}
+decodeAgentStepResponse : Maybe Int -> Value -> AgentStepResponse
+decodeAgentStepResponse pendingId value =
+    let
+        envelopeDecoder =
+            Decode.map3 (\rid ok mDsl -> { rid = rid, ok = ok, dsl = mDsl })
+                (Decode.field "request_id" Decode.int)
+                (Decode.field "ok" Decode.bool)
+                (Decode.maybe (Decode.field "primitives_dsl" Decode.string))
+
+        errDecoder =
+            Decode.field "error" Decode.string
+    in
+    case Decode.decodeValue envelopeDecoder value of
+        Err err ->
+            AgentStepDecodeError (Decode.errorToString err)
+
+        Ok r ->
+            if pendingId /= Just r.rid then
+                AgentStepStaleId
+
+            else if not r.ok then
+                let
+                    detail =
+                        Decode.decodeValue errDecoder value
+                            |> Result.withDefault "(no detail)"
+                in
+                AgentStepError detail
+
+            else
+                parseEventLines (Maybe.withDefault "" r.dsl)
+
+
+parseEventLines : String -> AgentStepResponse
+parseEventLines dsl =
+    let
+        lines =
+            String.lines dsl
+                |> List.map String.trim
+                |> List.filter (\s -> s /= "")
+    in
+    case foldResults (List.map WireAction.parseEvent lines) of
+        Ok events ->
+            AgentStepEvents events
+
+        Err msg ->
+            AgentStepDecodeError ("primitive DSL parse: " ++ msg)
+
+
+foldResults : List (Result String a) -> Result String (List a)
+foldResults =
+    List.foldr
+        (\r acc ->
+            case ( r, acc ) of
+                ( Ok x, Ok xs ) ->
+                    Ok (x :: xs)
+
+                ( Err e, _ ) ->
+                    Err e
+
+                ( _, Err e ) ->
+                    Err e
+        )
+        (Ok [])

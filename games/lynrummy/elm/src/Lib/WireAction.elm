@@ -1,8 +1,17 @@
-module Lib.WireAction exposing (ParsedLine, parseDsl)
+module Lib.WireAction exposing (ParsedLine, parseDsl, parseEvent)
 
-{-| Wire parser for action-log entries. Reads one DSL line and
-returns the seq number and the matching `GameEvent`. The
-per-event emitters live in `Lib.GameEvent` (`splitDsl`,
+{-| Wire parser for action-log entries. Two entry points share
+the same per-event grammar; the only difference is whether a
+`seq) ` prefix is required:
+
+  - `parseDsl "45) merge_stack ... /right"` → `ParsedLine`
+    (seq + event). Used by action-log replay.
+  - `parseEvent "merge_stack ... /right"` → `GameEvent`. Used
+    by transport surfaces that don't carry seq numbers (the
+    agent-step response from the TS engine — seqs are assigned
+    by the consumer when the events land in the action log).
+
+Per-event emitters live in `Lib.GameEvent` (`splitDsl`,
 `mergeStackDsl`, etc.).
 
 Each stack reference on the wire carries `[cards] at (left,top)`

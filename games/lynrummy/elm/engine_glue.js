@@ -9,6 +9,19 @@
 //               and board = [[{value, suit, origin_deck}, ...], ...]
 //     response: { request_id, op: "game_hint", ok, lines: string[] }
 //             — sent on `gameHintResponse`
+//
+//   agent_step (real-time agent play):
+//     request:  { request_id, op: "agent_step",
+//                 board_dsl: string, hand_dsl: string }
+//             where board_dsl is the canonical multi-line
+//             "at (left,top): cards" form and hand_dsl is a
+//             single space-separated card-token line.
+//     response: { request_id, op: "agent_step", ok,
+//                 primitives_dsl: string }
+//             — sent on `agentStepResponse`. Empty
+//             primitives_dsl means the agent is stuck (end of
+//             turn). Non-empty = one play's primitive sequence,
+//             newline-separated.
 
 (function () {
   'use strict';
@@ -28,20 +41,29 @@
       var requestId = req.request_id;
       var op = req.op;
       try {
-        if (op !== 'game_hint') {
+        if (op === 'game_hint') {
+          app.ports.gameHintResponse.send({
+            request_id: requestId,
+            op: op,
+            ok: true,
+            lines: gameHint(req.hand, req.board),
+          });
+        } else if (op === 'agent_step') {
+          app.ports.agentStepResponse.send({
+            request_id: requestId,
+            op: op,
+            ok: true,
+            primitives_dsl: agentStep(req.board_dsl, req.hand_dsl),
+          });
+        } else {
           throw new Error('unknown op: ' + op);
         }
-        app.ports.gameHintResponse.send({
-          request_id: requestId,
-          op: op,
-          ok: true,
-          lines: gameHint(req.hand, req.board),
-        });
       } catch (err) {
         var msg = String(err && err.message ? err.message : err);
-        app.ports.gameHintResponse.send({
-          request_id: requestId, op: op, ok: false, error: msg,
-        });
+        var port = (op === 'agent_step')
+          ? app.ports.agentStepResponse
+          : app.ports.gameHintResponse;
+        port.send({ request_id: requestId, op: op, ok: false, error: msg });
       }
     });
   }
@@ -52,6 +74,10 @@
       return stack.map(cardObjectToRecord);
     });
     return LynRummyEngine.elmGameHint(handCards, stacks);
+  }
+
+  function agentStep(boardDsl, handDsl) {
+    return LynRummyEngine.elmAgentStep(boardDsl, handDsl);
   }
 
   function cardObjectToRecord(c) {

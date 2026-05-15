@@ -72,6 +72,12 @@ type alias Model =
     -- each time we fire a request so the response can be matched
     -- back.
     , nextEngineRequestId : Int
+
+    -- Most recent agent-step response. Populated by
+    -- `AgentStepReceived`; consumed by the (future) agent loop
+    -- that animates these events. Empty list = end of agent's
+    -- turn or no agent activity yet.
+    , agentPendingEvents : List GameEvent
     }
 
 
@@ -144,6 +150,7 @@ baseModel =
     , gameId = "default"
     , pendingEngineRequest = Nothing
     , nextEngineRequestId = 1
+    , agentPendingEvents = []
     }
 
 

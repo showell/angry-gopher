@@ -292,6 +292,9 @@ update msg model =
         GameHintReceived value ->
             ( handleHintResponse value model, Cmd.none, NoOutput )
 
+        AgentStepReceived value ->
+            ( handleAgentStepResponse value model, Cmd.none, NoOutput )
+
         -- Pointer-gesture + wire-action cluster. MouseDown starts a
         -- drag and kicks off board-rect measurement; MouseMove
         -- advances the dragInfo's floater; MouseUp resolves into a
@@ -495,6 +498,35 @@ clickHint model =
     , Cmd.none
     , EngineSolveRequested payload
     )
+
+
+handleAgentStepResponse : Encode.Value -> Model -> Model
+handleAgentStepResponse value model =
+    case Engine.decodeAgentStepResponse model.pendingEngineRequest value of
+        Engine.AgentStepStaleId ->
+            model
+
+        Engine.AgentStepError detail ->
+            { model
+                | pendingEngineRequest = Nothing
+                , status = { text = "Agent error: " ++ detail, kind = Scold }
+            }
+
+        Engine.AgentStepDecodeError err ->
+            let
+                _ =
+                    Debug.log "handleAgentStepResponse decode err" err
+            in
+            { model
+                | pendingEngineRequest = Nothing
+                , status = { text = "Agent response could not be decoded — see console.", kind = Scold }
+            }
+
+        Engine.AgentStepEvents events ->
+            { model
+                | pendingEngineRequest = Nothing
+                , agentPendingEvents = events
+            }
 
 
 handleHintResponse : Encode.Value -> Model -> Model

@@ -1,9 +1,9 @@
 // engine_entry.ts — browser-bundle entry point for the TS engine.
-// Re-exports the Elm-facing surface (currently just the full-game
-// hint path) for esbuild → IIFE bundling.
+// Re-exports the Elm-facing surface for esbuild → IIFE bundling.
 
 import type { Card } from "../core/card.ts";
 import { findLogicalMovesForPlay, formatHint } from "../plan/hand_play.ts";
+import { elmFindPlay } from "./elm_find_play.ts";
 
 /** Full-game hint entry point. Given the active player's hand and
  *  the live board, returns the rendered hint as a flat list of step
@@ -25,4 +25,12 @@ export function elmGameHint(
   board: readonly (readonly Card[])[],
 ): readonly string[] {
   return gameHintLines(hand, board);
+}
+
+/** Elm-facing wrapper for real-time agent play. Takes board + hand
+ *  as canonical DSL strings (same format used by the conformance
+ *  corpus) and returns the next play's primitive sequence as a DSL
+ *  string — or "" when the agent is stuck (the turn's end signal). */
+export function elmAgentStep(boardDsl: string, handDsl: string): string {
+  return elmFindPlay(boardDsl, handDsl);
 }

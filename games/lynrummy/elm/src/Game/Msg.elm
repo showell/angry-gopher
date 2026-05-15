@@ -68,3 +68,4 @@ type Msg
     | ReplayTick Time.Posix
     | ActionLogFetched (Result Http.Error ( GameState, List ActionLogEntry ))
     | GameHintReceived Encode.Value
+    | AgentStepReceived Encode.Value

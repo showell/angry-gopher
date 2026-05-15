@@ -62,6 +62,14 @@ port engineRequest : Encode.Value -> Cmd msg
 port gameHintResponse : (Encode.Value -> msg) -> Sub msg
 
 
+{-| Port: real-time agent-step response. Carries
+`{ request_id, ok, primitives_dsl: string }`. Subscribed via
+`MainMsg.AgentStepReceived`. The agent loop in Game.Play
+issues a request per step and consumes responses in order.
+-}
+port agentStepResponse : (Encode.Value -> msg) -> Sub msg
+
+
 init : Flags -> ( Model, Cmd Msg )
 init flags =
     Play.init (configFromFlags flags)
@@ -126,6 +134,7 @@ subscriptions model =
     Sub.batch
         [ Play.subscriptions model
         , gameHintResponse MainMsg.GameHintReceived
+        , agentStepResponse MainMsg.AgentStepReceived
         ]
 
 
