@@ -1,33 +1,82 @@
 module Lib.CompleteTurn exposing
-    ( CompleteTurnOutcome
+    ( CompleteTurnAttempt(..)
+    , CompleteTurnOutcome
     , applyCompleteTurn
+    , attemptCompleteTurn
     , popupForCompleteTurn
     , statusForCompleteTurn
     )
 
-{-| The pure CompleteTurn state transition + its outcome type
-+ the popup-content and status-bar builders that narrate the
-outcome to the user. Mirrors the Go-side
-`games/lynrummy/replay.go` `applyCompleteTurn` step-for-step.
+{-| Everything CompleteTurn: the pure state transition
+(`applyCompleteTurn`), the outcome type, the popup/status
+content builders that narrate the outcome, and the host-facing
+wrapper (`attemptCompleteTurn`) that bundles the transition
+with the status / popup / wire payload the UI needs. Mirrors
+the Go-side `games/lynrummy/replay.go` `applyCompleteTurn`
+step-for-step.
 
-`Lib.Popup` and `Lib.Status` are now pure view-chrome
-(`viewPopup` / `viewStatusBar` + the `PopupContent` /
-`StatusMessage` records). Outcome-specific content lives here
-so dependency arrows run `CompleteTurn → {Popup, Status}` and
-not the other way.
+`Lib.Popup` and `Lib.Status` are pure view-chrome (`viewPopup`
+/ `viewStatusBar` + the `PopupContent` / `StatusMessage`
+records). Outcome-specific content lives here so dependency
+arrows run `CompleteTurn → {Popup, Status}` and not the other
+way. The companion undo wrapper lives in `Lib.Undo`.
 
 -}
 
 import Game.Util exposing (pluralize)
+import Lib.ActionLog exposing (ActionLogEntry)
 import Lib.CardStack as CardStack exposing (HandCardState(..))
+import Lib.GameEvent as GameEvent
 import Lib.GameState exposing (GameState)
 import Lib.Hand as Hand
-import Lib.Physics.BoardGeometry exposing (BoardBounds)
+import Lib.Physics.BoardGeometry exposing (BoardBounds, refereeBounds)
 import Lib.PlayerTurn as PlayerTurn exposing (CompleteTurnResult(..))
 import Lib.Popup exposing (PopupContent)
 import Lib.Rules.Card exposing (Card)
 import Lib.Rules.Referee as Referee
 import Lib.Status exposing (StatusKind(..), StatusMessage)
+
+
+type CompleteTurnAttempt
+    = TurnRejected
+        { status : StatusMessage
+        , popup : PopupContent
+        }
+    | TurnCompleted
+        { newGameState : GameState
+        , appendedEntry : ActionLogEntry
+        , status : StatusMessage
+        , popup : PopupContent
+        , outboundPayload : String
+        }
+
+
+attemptCompleteTurn :
+    { gameState : GameState, nextSeq : Int }
+    -> CompleteTurnAttempt
+attemptCompleteTurn { gameState, nextSeq } =
+    let
+        ( afterTurn, turnOutcome ) =
+            applyCompleteTurn refereeBounds gameState
+
+        status =
+            statusForCompleteTurn (Ok turnOutcome)
+
+        popup =
+            popupForCompleteTurn (Ok turnOutcome)
+    in
+    case turnOutcome.result of
+        Failure ->
+            TurnRejected { status = status, popup = popup }
+
+        _ ->
+            TurnCompleted
+                { newGameState = afterTurn
+                , appendedEntry = { action = GameEvent.CompleteTurn }
+                , status = status
+                , popup = popup
+                , outboundPayload = GameEvent.completeTurnDsl nextSeq
+                }
 
 
 {-| What `applyCompleteTurn` produced, beyond the new state:

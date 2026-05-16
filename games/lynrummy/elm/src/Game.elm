@@ -36,7 +36,6 @@ import Lib.PointerInput as PointerInput
 import Lib.Popup as Popup
 import Lib.Random as Random
 import Lib.Status as Status exposing (StatusKind(..))
-import Lib.TurnControl as TurnControl
 import Lib.Undo as Undo
 import Task
 import Time
@@ -485,8 +484,8 @@ update msg model =
                     )
 
         ClickCompleteTurn ->
-            case TurnControl.attemptCompleteTurn { gameState = model.gameState, nextSeq = model.nextSeq } of
-                TurnControl.TurnRejected r ->
+            case CompleteTurn.attemptCompleteTurn { gameState = model.gameState, nextSeq = model.nextSeq } of
+                CompleteTurn.TurnRejected r ->
                     ( { model
                         | status = r.status
                         , popup = Just { content = r.popup, dismissMsg = ContinueHumanTurn }
@@ -494,7 +493,7 @@ update msg model =
                     , Cmd.none
                     )
 
-                TurnControl.TurnCompleted r ->
+                CompleteTurn.TurnCompleted r ->
                     -- Show the popup with P1's hand still in
                     -- view; the dismiss Msg carries the
                     -- transition payload and the actual
