@@ -36,6 +36,7 @@ phase "verbs"      node test/test_verb_to_primitives.ts
 phase "plan"       node test/test_physical_plan.ts
 phase "replay"     node test/test_replay_walkthroughs.ts
 phase "find-play"  node test/test_elm_find_play.ts
+phase "puzzles"    node test/test_curated_puzzles.ts
 cd "$REPO_DIR"
 
 echo "==> Dead-export scan"
