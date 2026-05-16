@@ -34,7 +34,8 @@ calls into `HandDragAnimate.measurementReceived`.
 
 import Lib.ActionLog exposing (ActionLogEntry)
 import Lib.Execute as Execute
-import Lib.Game as Game exposing (GameState)
+import Lib.Game as Game
+import Lib.GameState exposing (GameState)
 import Lib.GameEvent as GameEvent
 import Lib.Physics.BoardGeometry exposing (refereeBounds)
 import Lib.Animation.BoardDragAnimate as BoardDragAnimate

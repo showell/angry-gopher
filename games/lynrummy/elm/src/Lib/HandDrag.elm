@@ -7,7 +7,7 @@ module Lib.HandDrag exposing
 import Lib.ActionLog exposing (ActionLogEntry)
 import Lib.CardStack exposing (CardStack)
 import Lib.Execute as Execute
-import Lib.Game exposing (GameState)
+import Lib.GameState exposing (GameState)
 import Lib.GameEvent as GameEvent
 import Lib.Hand exposing (Hand)
 import Lib.HandDragTypes exposing (HandCardDragInfo)

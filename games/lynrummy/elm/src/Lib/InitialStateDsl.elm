@@ -37,7 +37,7 @@ section headers and assembles the resulting `GameState`.
 
 import Lib.BoardDsl as BoardDsl
 import Lib.CardStack exposing (CardStack)
-import Lib.Game exposing (GameState)
+import Lib.GameState exposing (GameState)
 import Lib.Hand as Hand exposing (Hand)
 import Lib.HandDsl as HandDsl
 import Lib.Rules.Card as Card exposing (Card)

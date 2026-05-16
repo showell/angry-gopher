@@ -29,7 +29,7 @@ import Lib.Point exposing (Point)
 import Lib.Rules.Card as Card exposing (Card, OriginDeck(..))
 import Lib.WingView as WingView
 import Lib.ActionLog exposing (ActionLogEntry)
-import Lib.Game exposing (GameState)
+import Lib.GameState exposing (GameState)
 import Lib.GameEvent as GameEvent exposing (GameEvent)
 import Lib.Hand as Hand
 import Lib.NonEmpty as NonEmpty

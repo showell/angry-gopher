@@ -19,7 +19,7 @@ divergence cascades downstream and gets harder to trace.
 
 import Lib.BoardActions as BoardActions exposing (Side)
 import Lib.CardStack as CardStack exposing (BoardLocation, CardStack, findStack, isStacksEqual)
-import Lib.Game exposing (GameState)
+import Lib.GameState exposing (GameState)
 import Lib.GameEvent exposing (GameEvent(..))
 import Lib.Hand as Hand
 import Lib.Rules.Card exposing (Card)

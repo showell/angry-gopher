@@ -3,7 +3,7 @@ module Game.Msg exposing (Msg(..))
 import Browser.Dom
 import Lib.ActionLog exposing (ActionLogEntry)
 import Lib.CardStack exposing (CardStack, HandCard)
-import Lib.Game exposing (GameState)
+import Lib.GameState exposing (GameState)
 import Lib.GameEvent exposing (GameEvent)
 import Lib.Point exposing (Point)
 import Http

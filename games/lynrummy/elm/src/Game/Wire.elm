@@ -17,7 +17,7 @@ splits and parses each half.
 -}
 
 import Lib.ActionLog exposing (ActionLogEntry)
-import Lib.Game exposing (GameState)
+import Lib.GameState exposing (GameState)
 import Lib.InitialStateDsl as InitialStateDsl
 import Lib.WireAction as WA
 import Http

@@ -27,6 +27,7 @@ import Lib.Drag exposing (DragState(..))
 import Lib.Engine as Engine
 import Lib.Game as Game
 import Lib.GameEvent as GameEvent
+import Lib.GameState exposing (GameState)
 import Lib.Hand exposing (activeHand)
 import Lib.HandDrag as HandDrag
 import Lib.HandGesture as HandGesture
@@ -90,7 +91,7 @@ init flags =
                 setup =
                     Dealer.dealFullGame (Random.initSeed flags.seedSource)
 
-                initialRS : Game.GameState
+                initialRS : GameState
                 initialRS =
                     { board = setup.board
                     , hands = setup.hands

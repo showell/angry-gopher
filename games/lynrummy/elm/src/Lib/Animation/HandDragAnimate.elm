@@ -51,7 +51,7 @@ import Lib.BoardActions as BoardActions exposing (Side)
 import Lib.BoardView as BoardView
 import Lib.CardStack as CardStack exposing (BoardLocation, CardStack)
 import Lib.Execute as Execute
-import Lib.Game exposing (GameState)
+import Lib.GameState exposing (GameState)
 import Lib.HandDragTypes exposing (HandCardDragInfo)
 import Lib.HandLayout as HandLayout
 import Lib.Physics.BoardGeometry as BG

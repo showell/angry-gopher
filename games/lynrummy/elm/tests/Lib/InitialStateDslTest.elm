@@ -3,7 +3,7 @@ module Lib.InitialStateDslTest exposing (suite)
 import Expect
 import Lib.CardStack exposing (BoardCardState(..), HandCardState(..))
 import Lib.Dealer as Dealer
-import Lib.Game exposing (GameState)
+import Lib.GameState exposing (GameState)
 import Lib.Hand as Hand
 import Lib.InitialStateDsl as InitialStateDsl
 import Lib.Random

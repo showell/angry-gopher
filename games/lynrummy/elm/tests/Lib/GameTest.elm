@@ -22,7 +22,8 @@ everything is deterministic.
 import Expect
 import Lib.Rules.Card exposing (Card, CardValue(..), OriginDeck(..), Suit(..))
 import Lib.CardStack exposing (BoardCardState(..), CardStack, HandCard, HandCardState(..))
-import Lib.Game as Game exposing (GameState)
+import Lib.Game as Game
+import Lib.GameState exposing (GameState)
 import Lib.Hand as Hand
 import Lib.Physics.BoardGeometry exposing (BoardBounds)
 import Lib.PlayerTurn exposing (CompleteTurnResult(..))

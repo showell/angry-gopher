@@ -16,7 +16,8 @@ import Lib.Animation.Animate exposing (AnimationState)
 import Lib.Dealer
 import Lib.Drag exposing (DragState(..))
 import Lib.Execute as Execute
-import Lib.Game as Game exposing (GameState)
+import Lib.Game as Game
+import Lib.GameState exposing (GameState)
 import Lib.GameEvent exposing (GameEvent(..))
 import Lib.Hand as Hand
 import Lib.Physics.BoardGeometry exposing (refereeBounds)

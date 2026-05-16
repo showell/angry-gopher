@@ -1,6 +1,5 @@
 module Lib.Game exposing
     ( CompleteTurnOutcome
-    , GameState
     , applyCompleteTurn
     )
 
@@ -24,23 +23,13 @@ to the incoming party. In the Go path that decision flows from
 
 -}
 
-import Lib.CardStack as CardStack exposing (CardStack, HandCardState(..))
-import Lib.Hand as Hand exposing (Hand)
+import Lib.CardStack as CardStack exposing (HandCardState(..))
+import Lib.GameState exposing (GameState)
+import Lib.Hand as Hand
 import Lib.Physics.BoardGeometry exposing (BoardBounds)
 import Lib.PlayerTurn as PlayerTurn exposing (CompleteTurnResult(..))
 import Lib.Rules.Card exposing (Card)
 import Lib.Rules.Referee as Referee
-
-
-type alias GameState =
-    { board : List CardStack
-    , hands : List Hand
-    , activePlayerIndex : Int
-    , turnIndex : Int
-    , deck : List Card
-    , cardsPlayedThisTurn : Int
-    , victorAwarded : Bool
-    }
 
 
 {-| What `applyCompleteTurn` produced, beyond the new state:
