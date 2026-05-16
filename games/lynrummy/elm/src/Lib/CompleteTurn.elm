@@ -1,24 +1,28 @@
 module Lib.CompleteTurn exposing
     ( CompleteTurnOutcome
     , applyCompleteTurn
+    , popupForCompleteTurn
     )
 
-{-| The pure CompleteTurn state transition + its outcome type.
-Mirrors the Go-side `games/lynrummy/replay.go` `applyCompleteTurn`
-step-for-step.
+{-| The pure CompleteTurn state transition + its outcome type
++ the popup-content builder that narrates the outcome to the
+user. Mirrors the Go-side `games/lynrummy/replay.go`
+`applyCompleteTurn` step-for-step.
 
-The host-facing wrapper (status + popup + wire payload) lives
-in `Lib.TurnControl` as `attemptCompleteTurn`, kept separate so
-this module stays Popup/Status-free and unidirectional under
-them.
+`Lib.Popup` is now pure view-chrome (`viewPopup` + the
+`PopupContent` record). Outcome-specific popup content lives
+here so the dependency arrow runs `CompleteTurn → Popup` and
+not the other way.
 
 -}
 
+import Game.Util exposing (pluralize)
 import Lib.CardStack as CardStack exposing (HandCardState(..))
 import Lib.GameState exposing (GameState)
 import Lib.Hand as Hand
 import Lib.Physics.BoardGeometry exposing (BoardBounds)
 import Lib.PlayerTurn as PlayerTurn exposing (CompleteTurnResult(..))
+import Lib.Popup exposing (PopupContent)
 import Lib.Rules.Card exposing (Card)
 import Lib.Rules.Referee as Referee
 
@@ -32,6 +36,67 @@ type alias CompleteTurnOutcome =
     , cardsDrawn : Int
     , dealtCards : List Card
     }
+
+
+{-| Build the popup the user should see after a CompleteTurn
+attempt. `Err` (wire failure) gets a generic Angry Cat scold;
+`Ok` branches into per-result narration.
+-}
+popupForCompleteTurn : Result outcome CompleteTurnOutcome -> PopupContent
+popupForCompleteTurn result =
+    case result of
+        Ok outcome ->
+            popupFromOutcome outcome
+
+        Err _ ->
+            { admin = "Angry Cat"
+            , body = "Couldn't reach the server to complete your turn."
+            }
+
+
+popupFromOutcome : CompleteTurnOutcome -> PopupContent
+popupFromOutcome { result, cardsDrawn } =
+    case result of
+        Failure ->
+            { admin = "Angry Cat"
+            , body =
+                "The board is not clean!\n\n(nor is my litter box)\n\n"
+                    ++ "Drag stacks back where they belong."
+            }
+
+        SuccessButNeedsCards ->
+            { admin = "Oliver"
+            , body =
+                "Sorry you couldn't find a move.\n\n"
+                    ++ "I'm going back to my nap!\n\n"
+                    ++ "We have dealt you "
+                    ++ pluralize cardsDrawn "more card"
+                    ++ " for your next turn."
+            }
+
+        SuccessAsVictor ->
+            { admin = "Steve"
+            , body =
+                "You are the first person to play all their cards!\n\n"
+                    ++ "We have dealt you "
+                    ++ pluralize cardsDrawn "more card"
+                    ++ " for your next turn.\n\n"
+                    ++ "Keep winning!"
+            }
+
+        SuccessWithHandEmptied ->
+            { admin = "Steve"
+            , body =
+                "Good job — hand emptied!\n\n"
+                    ++ "We have dealt you "
+                    ++ pluralize cardsDrawn "more card"
+                    ++ " for your next turn."
+            }
+
+        Success ->
+            { admin = "Steve"
+            , body = "The board is growing!"
+            }
 
 
 {-| The full CompleteTurn transition, deterministic from the

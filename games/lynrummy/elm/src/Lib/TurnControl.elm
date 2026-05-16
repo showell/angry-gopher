@@ -18,7 +18,7 @@ import Lib.GameEvent as GameEvent
 import Lib.GameState exposing (GameState)
 import Lib.Physics.BoardGeometry exposing (refereeBounds)
 import Lib.PlayerTurn exposing (CompleteTurnResult(..))
-import Lib.Popup as Popup exposing (PopupContent)
+import Lib.Popup exposing (PopupContent)
 import Lib.Status as Status exposing (StatusMessage)
 
 
@@ -48,7 +48,7 @@ attemptCompleteTurn { gameState, nextSeq } =
             Status.statusForCompleteTurn (Ok turnOutcome)
 
         popup =
-            Popup.popupForCompleteTurn (Ok turnOutcome)
+            CompleteTurn.popupForCompleteTurn (Ok turnOutcome)
     in
     case turnOutcome.result of
         Failure ->
