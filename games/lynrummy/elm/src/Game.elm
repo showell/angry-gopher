@@ -117,30 +117,48 @@ init flags =
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
-        ReadyForAgentTurn ->
+        ReadyForAgentTurn { afterTurn, outboundPayload } ->
+            -- Commit P1's turn-end (gameState flip, actionLog
+            -- entry, wire send) deferred from ClickCompleteTurn
+            -- so the popup launched on the still-P1 hand.
             let
                 reqId =
                     model.nextEngineRequestId
 
                 hand =
-                    (activeHand model.gameState).handCards
+                    (activeHand afterTurn).handCards
                         |> List.map .card
 
                 payload =
-                    Engine.buildAgentStepRequest reqId model.gameState.board hand
+                    Engine.buildAgentStepRequest reqId afterTurn.board hand
             in
             ( { model
                 | popup = Nothing
+                , gameState = afterTurn
+                , actionLog = model.actionLog ++ [ { action = GameEvent.CompleteTurn } ]
+                , nextSeq = model.nextSeq + 1
                 , agentTurnActive = True
                 , pendingEngineRequest = Just reqId
                 , nextEngineRequestId = reqId + 1
                 , status = { text = "Thinking…", kind = Inform }
               }
-            , engineRequest payload
+            , Cmd.batch
+                [ Wire.sendAction model.sessionId outboundPayload
+                , engineRequest payload
+                ]
             )
 
-        ReadyForHumanTurn ->
-            ( { model | popup = Nothing, agentTurnActive = False }
+        ReadyForHumanTurn { afterTurn } ->
+            -- Commit the agent's turn-end (gameState flip + the
+            -- CompleteTurn entry) deferred from AgentMovesReceived
+            -- [] so the popup launched on the still-P2 hand.
+            ( { model
+                | popup = Nothing
+                , gameState = afterTurn
+                , actionLog = model.actionLog ++ [ { action = GameEvent.CompleteTurn } ]
+                , nextSeq = model.nextSeq + 1
+                , agentTurnActive = False
+              }
             , Cmd.none
             )
 
@@ -476,14 +494,24 @@ update msg model =
                     )
 
                 TurnControl.TurnCompleted r ->
+                    -- Show the popup with P1's hand still in
+                    -- view; the dismiss Msg carries the
+                    -- transition payload and the actual
+                    -- gameState flip + wire send happen in the
+                    -- ReadyForAgentTurn arm.
                     ( { model
-                        | gameState = r.newGameState
-                        , actionLog = model.actionLog ++ [ r.appendedEntry ]
-                        , nextSeq = model.nextSeq + 1
-                        , status = r.status
-                        , popup = Just { content = r.popup, dismissMsg = ReadyForAgentTurn }
+                        | status = r.status
+                        , popup =
+                            Just
+                                { content = r.popup
+                                , dismissMsg =
+                                    ReadyForAgentTurn
+                                        { afterTurn = r.newGameState
+                                        , outboundPayload = r.outboundPayload
+                                        }
+                                }
                       }
-                    , Wire.sendAction model.sessionId r.outboundPayload
+                    , Cmd.none
                     )
 
         ClickUndo ->
@@ -528,6 +556,10 @@ update msg model =
             )
 
         AgentMovesReceived [] ->
+            -- Show the popup with P2's hand still in view;
+            -- the dismiss Msg carries the post-CompleteTurn
+            -- gameState and the actual flip + actionLog append
+            -- happen in the ReadyForHumanTurn arm.
             let
                 ( afterTurn, _ ) =
                     Game.applyCompleteTurn refereeBounds model.gameState
@@ -540,10 +572,11 @@ update msg model =
             in
             ( { model
                 | pendingEngineRequest = Nothing
-                , gameState = afterTurn
-                , actionLog = model.actionLog ++ [ { action = GameEvent.CompleteTurn } ]
-                , nextSeq = model.nextSeq + 1
-                , popup = Just { content = agentDonePopup, dismissMsg = ReadyForHumanTurn }
+                , popup =
+                    Just
+                        { content = agentDonePopup
+                        , dismissMsg = ReadyForHumanTurn { afterTurn = afterTurn }
+                        }
                 , status = { text = "The agent has completed its turn.", kind = Inform }
               }
             , Cmd.none
