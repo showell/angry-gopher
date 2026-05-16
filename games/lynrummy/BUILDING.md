@@ -57,8 +57,9 @@ JS glue file (`engine_glue.js`) that converts the wire-shape
   slower while npm caches esbuild.
 - `ops/build_elm` — the umbrella. Calls `ops/build_engine_js`
   first, then compiles both Elm entry points.
-- `ops/check-conformance` — runs the cross-language DSL
-  conformance suite (Elm + TS).
+- `ops/check` — pre-commit gate. Composes `ops/test_ts` +
+  `ops/test_elm` + `ops/test_go` (~20s warm). `ops/check_full`
+  adds the agent self-play suite (~50s warm total).
 
 ## Other regenerators
 

@@ -1,25 +1,35 @@
 #!/bin/bash
 # CANONICAL DEV-LOOP SCRIPT — DO NOT REINVENT.
-# Before writing a new ops/* script or composing an ad-hoc
-# shell command for build / launch / test / regen, run
-# `ops/list` to see what already exists. Drifted ops scripts
-# are how an hour disappears resurrecting things.
+# Before writing a new ops/* script or composing an ad-hoc shell
+# command for build / launch / test / regen, run `ops/list` to see
+# what already exists.
 #
-# Full-repo preflight: regenerate conformance fixtures, run
-# every test suite. If any target (Go build, TS, Elm) stops
-# being wired up, this script fails loudly instead of silently
-# skipping.
+# THE PRE-COMMIT GATE. Runs the three per-language fast gates
+# (~24s warm total). Every check inside is <20s individually. Wired
+# to git's pre-commit hook via `ops/install-hooks`.
+#
+# For the >20s tier (currently test_full_game.ts — agent self-play
+# across 6 seeds), use `ops/check_full` instead. Run that before
+# pushing changes that touch the BFS engine, the agent loop, or
+# the bucket pipeline.
 
 set -e
 
 REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$REPO_DIR"
 
-echo "==> conformance gate (TS + Elm)"
-./ops/check-conformance
+t0_total=$SECONDS
 
-echo "==> go build ./..."
-go build ./...
+echo "===== ops/test_ts ====="
+./ops/test_ts
 
 echo
-echo "All preflight checks passed."
+echo "===== ops/test_elm ====="
+./ops/test_elm
+
+echo
+echo "===== ops/test_go ====="
+./ops/test_go
+
+echo
+echo "All gates passed in $((SECONDS - t0_total))s."

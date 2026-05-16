@@ -50,8 +50,8 @@ reference. Read
 `conformance/scenarios/undo_walkthrough.dsl` for the most
 compact tour, and any other `.dsl` under
 `conformance/scenarios/` for the rest. For the conformance
-pipeline (one entry point: `ops/check-conformance`), see
-[`BUILDING.md`](BUILDING.md).
+pipeline (entry points: `ops/check` pre-commit, `ops/check_full`
+milestone), see [`BUILDING.md`](BUILDING.md).
 
 ## Events are the system
 

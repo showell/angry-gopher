@@ -1,0 +1,36 @@
+#!/bin/bash
+# CANONICAL DEV-LOOP SCRIPT — DO NOT REINVENT.
+# Before writing a new ops/* script or composing an ad-hoc shell
+# command for build / launch / test / regen, run `ops/list` to see
+# what already exists.
+#
+# Full gate (~50s warm). Runs `ops/check` plus the >20s test tier
+# (currently just test_full_game.ts — agent self-play across 6
+# seeds, ~30s warm).
+#
+# Run before pushing changes that touch the BFS engine, the agent
+# loop, or the bucket pipeline. The fast gate is enough for most
+# commits; this is for milestone-level confidence.
+
+set -e
+
+REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$REPO_DIR"
+
+t0_total=$SECONDS
+
+./ops/check
+
+echo
+echo "===== Slow tier ====="
+phase() {
+    local label="$1"
+    shift
+    local t0=$SECONDS
+    "$@"
+    echo "    [phase] ${label}: $((SECONDS - t0))s"
+}
+phase "full-game" bash -c "cd games/lynrummy/ts && node test/test_full_game.ts"
+
+echo
+echo "Full gate passed in $((SECONDS - t0_total))s."

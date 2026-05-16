@@ -124,9 +124,9 @@ belongs in MINI_PROJECTS or it rots.
 Numbers like "214/214 leaf scenarios" or "189 scenarios, 770 tests"
 are correct at write-time and wrong by next week. If a number is a
 property of generated artifacts, do one of:
-- **Link to the artifact.** "See `npm test` output."
+- **Link to the artifact.** "See `ops/check` output."
 - **Link to the script that prints the number.** "Run
-  `ops/check-conformance` and read the summary."
+  `ops/check` and read the summary."
 - **Date it.** "(214 as of 2026-05-02.)"
 
 Never bare numbers in reference prose.

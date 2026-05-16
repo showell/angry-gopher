@@ -43,7 +43,8 @@ The Elm and TS sides implement the same engine independently
 (no shared code), and both must pass scenario-by-scenario.
 Divergent pass/fail counts are a hard failure surface — the
 bridge fires when one side drifts from the other. The
-`ops/check-conformance` script is the forced agreement check.
+`ops/check` script is the forced agreement check (it runs
+`ops/test_ts` + `ops/test_elm` + `ops/test_go`).
 
 This is the load-bearing example: when adding a cross-
 language behavior, build the bridge first (DSL scenarios +

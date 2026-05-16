@@ -1,0 +1,28 @@
+#!/bin/bash
+# CANONICAL DEV-LOOP SCRIPT — DO NOT REINVENT.
+# Before writing a new ops/* script or composing an ad-hoc shell
+# command for build / launch / test / regen, run `ops/list` to see
+# what already exists.
+#
+# Fast Go gate (~5s warm). Builds every Go package in the repo —
+# fails on any compile error, no runtime tests yet. Called by
+# `ops/check` and run individually during Go-side iteration.
+
+set -e
+
+REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$REPO_DIR"
+
+phase() {
+    local label="$1"
+    shift
+    local t0=$SECONDS
+    "$@"
+    echo "    [phase] ${label}: $((SECONDS - t0))s"
+}
+
+echo "==> Go build"
+phase "go-build" go build ./...
+
+echo
+echo "Go gate passed."

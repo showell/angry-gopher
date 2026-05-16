@@ -1,0 +1,45 @@
+#!/bin/bash
+# CANONICAL DEV-LOOP SCRIPT — DO NOT REINVENT.
+# Before writing a new ops/* script or composing an ad-hoc shell
+# command for build / launch / test / regen, run `ops/list` to see
+# what already exists.
+#
+# Fast TS gate (~15s warm). Runs the TypeScript typechecker, every
+# fast TS test, and the dead-export report. Called by `ops/check`
+# and run individually during TS-side iteration.
+#
+# Anything that takes >20s warm lives in `ops/check_full` instead
+# (currently just test_full_game.ts — agent self-play across 6
+# seeds).
+
+set -e
+
+REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$REPO_DIR"
+
+phase() {
+    local label="$1"
+    shift
+    local t0=$SECONDS
+    "$@"
+    echo "    [phase] ${label}: $((SECONDS - t0))s"
+}
+
+echo "==> TS typecheck"
+phase "typecheck" bash -c "cd games/lynrummy/ts && npm run -s typecheck"
+
+echo "==> TS fast tests"
+cd games/lynrummy/ts
+phase "leaf"       node test/test_conformance_leaf.ts
+phase "engine"     node test/test_engine_conformance.ts
+phase "verbs"      node test/test_verb_to_primitives.ts
+phase "plan"       node test/test_physical_plan.ts
+phase "replay"     node test/test_replay_walkthroughs.ts
+phase "find-play"  node test/test_elm_find_play.ts
+cd "$REPO_DIR"
+
+echo "==> Dead-export scan"
+phase "dead-ts" ./ops/find-dead-ts-exports
+
+echo
+echo "TS gate passed."

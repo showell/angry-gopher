@@ -1,28 +1,52 @@
 #!/bin/bash
 # List available ops commands.
-echo "Available ops commands (run from repo root):"
-echo ""
-echo "  ops/start              Start Gopher server (9000) + Angry Cat (8000)."
-echo "                         Kills stale processes on both ports first, rebuilds"
-echo "                         the Go binary, recompiles Elm bundles, regenerates"
-echo "                         the Puzzles catalog, then waits until both ports"
-echo "                         respond. Do not replace with ad-hoc 'go run' or"
-echo "                         'nohup ./gopher-server' — you will skip all of that."
-echo ""
-echo "  ops/build_elm          Compile Game.elm + Puzzle.elm into elm.js and"
-echo "                         puzzle.js. Both bundles share one elm.json +"
-echo "                         node_modules; a single npm install covers both."
-echo "                         Called automatically by ops/start."
-echo ""
-echo "  ops/check-conformance  Conformance gate: embed DSLs into Elm,"
-echo "                         TS conformance runner, Elm check.sh (elm-test +"
-echo "                         elm-review + elm make). Run after every non-trivial"
-echo "                         Elm edit and before reporting a task done."
-echo "                         elm-review catches dead constructors that elm-test"
-echo "                         alone misses — skipping it is how orphaned code"
-echo "                         survives undetected."
-echo ""
-echo "  ops/check              Full preflight: ops/check-conformance + 'go build'"
-echo "                         + Python unit tests. Run before any PR or milestone."
-echo ""
-echo "Credentials convention: store in ~/AngryGopher/ (non-hidden, outside git)."
+cat <<'EOF'
+Available ops commands (run from repo root):
+
+  THE GATES
+  ---------
+  ops/check              Pre-commit gate (~20s warm). Runs test_ts +
+                         test_elm + test_go. Every check inside is
+                         <20s individually. Wired to git pre-commit
+                         via ops/install-hooks.
+
+  ops/check_full         Milestone gate (~50s warm). ops/check plus
+                         test_full_game.ts (agent self-play, 6 seeds,
+                         ~30s warm). Run before pushing changes that
+                         touch the BFS engine, agent loop, or bucket
+                         pipeline.
+
+  ops/test_ts            Fast TS gate (~15s). Typecheck + every fast
+                         TS test + dead-export scan.
+  ops/test_elm           Fast Elm gate (~4s). Embed DSLs + standalone
+                         typecheck + elm make + elm-test + elm-review.
+  ops/test_go            Fast Go gate (~5s). go build ./...
+
+  BUILD & RUN
+  -----------
+  ops/start              Start Gopher server (port 9000). Kills any
+                         stale process, rebuilds the Go binary,
+                         recompiles Elm bundles, waits until ready.
+                         Do not replace with ad-hoc 'go run' — you
+                         will skip those steps.
+
+  ops/build_elm          Compile Game.elm + Puzzle.elm into elm.js and
+                         puzzle.js. Calls ops/build_engine_js first.
+                         Called automatically by ops/start.
+  ops/build_engine_js    Bundle the TS engine into elm/engine.js via
+                         esbuild. Run after any games/lynrummy/ts/
+                         edit before testing the live Elm UI.
+
+  REGEN & TOOLS
+  -------------
+  ops/embed_dsls_for_elm.ts   Embed .dsl scenarios into Lib.DslContent
+                              for elm-test. Called by ops/test_elm.
+  ops/find-dead-ts-exports    Report TS exports with no importing file.
+                              Called by ops/test_ts.
+
+  ops/install-hooks      One-time per clone: enable the tracked
+                         pre-commit hook (sets core.hooksPath).
+  ops/list               This screen.
+
+Credentials convention: store in ~/AngryGopher/ (non-hidden, outside git).
+EOF

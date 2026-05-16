@@ -55,22 +55,22 @@ See its README.md for more details.
 
 ## Conformance test surfaces
 
-From `games/lynrummy/elm/`:
+The single canonical run point is **`ops/check`** (~20s warm)
+from the repo root. It composes:
 
-- `npx elm-test` — full Elm suite. Mix of unit tests
-  (e.g., `Lib.PlaceStackTest`) and DSL conformance.
-- `npx elm-review` — `NoUnused.*` rules with generated-tests
-  + test-Exports exemptions.
+- `ops/test_ts` — TS typecheck + leaf + engine cross-check + verbs
+  + physical_plan + walkthroughs + elmFindPlay + dead-export scan.
+- `ops/test_elm` — embed DSLs + standalone Elm typecheck +
+  elm make + elm-test + elm-review.
+- `ops/test_go` — `go build ./...`.
 
-From `games/lynrummy/ts/`:
+`ops/check_full` adds `test/test_full_game.ts` (agent self-play
+across 6 seeds, ~28s) — the only >20s test in the repo.
 
-- `npm test` — leaf conformance + engine cross-check + verb
-  fixtures + physical_plan + walkthroughs + agent self-play.
-  The canonical conformance run point.
-
-The single canonical run point for both elm-test and
-elm-review is `games/lynrummy/elm/`. The puzzle host shares
-this single project.
+Run individual gates (`ops/test_ts` / `ops/test_elm` /
+`ops/test_go`) during language-focused iteration. The bare
+elm-test / elm-review / tsc / go build commands work too but
+skip the cross-language sequencing the scripts encode.
 
 See also: [`elm/README.md`](./elm/README.md) — links here
 for the current map of entry points.

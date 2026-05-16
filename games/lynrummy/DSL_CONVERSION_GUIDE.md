@@ -30,12 +30,12 @@ games/lynrummy/conformance/scenarios/*.dsl
         ↓  (parsed natively at test time by both runners)
 TS: games/lynrummy/ts/test/conformance_dsl.ts + per-test consumers
 Elm: tests/Lib/ConformanceDsl.elm  →  tests/Lib/ConformanceTests.elm
-        ↓  (ops/check-conformance runs everything)
-elm-test + TS conformance suite + elm-review
+        ↓  (ops/check runs everything <20s; ops/check_full adds the slow tier)
+elm-test + TS conformance suite + elm-review + go build
 ```
 
-The canonical command is `ops/check-conformance`. Always run it before reporting
-done. It compiles Elm, runs all tests, and runs elm-review.
+The canonical command is `ops/check` (pre-commit gate, ~20s). Always run it before
+reporting done. It runs `ops/test_ts` + `ops/test_elm` + `ops/test_go`.
 
 Each `op:` in a `.dsl` scenario dispatches at test time to a hand-written
 verifier — in Elm via the `verify` case-match in
@@ -100,7 +100,8 @@ rule genuinely needs its own shape.
    confusing lookup failure — the `wings_for_stack` verifier is the canonical
    pattern.
 
-6. **Run `ops/check-conformance`.** Gate must be green before calling it done.
+6. **Run `ops/check`.** Gate must be green before calling it done. If the change
+   touches BFS / agent / bucket pipeline code, run `ops/check_full` instead.
 
 7. **SUPERSEDED marker:** if the entire Elm test file is now covered by DSL, add
    `-- SUPERSEDED by <dsl-file>.dsl` at the top. Deletion comes later, once

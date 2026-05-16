@@ -37,38 +37,34 @@ The TS agent at `ts/` owns three end-to-end jobs:
   before returning — agent transcripts can't ship broken.
 - **Hint generation.** The full game's Hint button calls
   into `hand_play.ts:findPlay` over Elm ports.
-- **Conformance + perf gates.** `ops/check-conformance` runs
-  the TS suite (leaf primitives + engine cross-check + verb
-  fixtures + physical-plan integration + replay walkthroughs
-  + agent self-play) alongside the Elm suite. Bench gold
-  files at `ts/bench/*_gold.txt` lock baseline wall-time
+- **Conformance + perf gates.** `ops/check` runs the TS gate
+  (typecheck + leaf primitives + engine cross-check + verb
+  fixtures + physical-plan + replay walkthroughs + elmFindPlay
+  + dead-export scan), the Elm gate, and `go build`. Add
+  `ops/check_full` for agent self-play across 6 seeds. Bench
+  gold files at `ts/bench/*_gold.txt` lock baseline wall-time
   per scenario.
 
 ## Gating & testing
 
-Two gate modes.
+The rule: anything that runs <20s warm is in the pre-commit
+gate. Anything longer is opt-in.
 
-**`ops/check-conformance --skip-slow` (~10s).** Default for
-day-to-day Elm iteration. Runs Elm standalone + tests +
-elm-review + the cross-language integration suites (leaf
-primitives, verb fixtures, physical_plan, replay
-walkthroughs). Skips the two TS-only suites that are
-essentially engine-workouts — `test_engine_conformance.ts`
-and `test_full_game.ts`. Both stress the BFS solver and
-run byte-identical when the engine hasn't changed; running
-them after an Elm-only edit is wasted budget.
+**`ops/check` (~20s warm).** The pre-commit gate. Composes
+`ops/test_ts` + `ops/test_elm` + `ops/test_go`. Every check
+inside is <20s individually (the heaviest is
+`test_engine_conformance.ts` at ~8s). Wired to the tracked
+pre-commit hook via `ops/install-hooks`.
 
-**`ops/check-conformance` no flag (~75s).** Full gate. Run
-before committing changes that touch the engine, the agent
-loop, or the bucket pipeline — anything that could plausibly
-shift solver behavior. Also run as a final pass at the end
-of an Elm-only chunk (cheap insurance, lands intact).
+**`ops/check_full` (~50s warm).** Adds `test_full_game.ts`
+(agent self-play across 6 seeds, ~28s warm — the only
+>20s test in the repo). Run before pushing changes that
+touch the BFS engine, the agent loop, or the bucket
+pipeline.
 
-Treat any phase >15s as worth flagging — per-phase timing is
-printed for exactly this reason. The honest test invariant
-is that conformance calls the same codepath the production
-hint path does (`findLogicalMovesForPlay` in
-`ts/plan/hand_play.ts`); divergence in solver options means
+The honest test invariant is that conformance calls the same
+codepath the production hint path does (`findLogicalMovesForPlay`
+in `ts/plan/hand_play.ts`); divergence in solver options means
 the gate isn't load-bearing.
 
 ## Subsystems

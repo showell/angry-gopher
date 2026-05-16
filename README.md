@@ -62,7 +62,8 @@ board:
 Full grammar tour + 2-3 examples + the run-mechanism live in
 [`games/lynrummy/ARCHITECTURE.md`](games/lynrummy/ARCHITECTURE.md)
 under "DSL is the lingua franca". Most parsing happens at
-test time; conformance is gated by `ops/check-conformance`.
+test time; conformance is gated by `ops/check` (pre-commit) or
+`ops/check_full` (adds the ~30s agent self-play suite).
 
 ## HTML views
 
@@ -84,8 +85,14 @@ Server-rendered pages at `/gopher/*` with Basic auth:
 ```
 ops/start              Start Gopher (9000) + Angry Cat (8000)
 ops/list               List ops commands
-ops/check              Full preflight (conformance + Go build)
-ops/check-conformance  Conformance gate (TS + Elm)
+ops/check              Pre-commit gate (~20s warm). Runs test_ts +
+                       test_elm + test_go — every check inside is
+                       <20s individually.
+ops/check_full         Milestone gate (~50s warm). ops/check plus
+                       test_full_game.ts (agent self-play, ~30s).
+ops/test_ts            Fast TS gate (~15s).
+ops/test_elm           Fast Elm gate (~4s).
+ops/test_go            Fast Go gate (~5s).
 ```
 
 Do not hand-compose `go test ./...` or `elm make` calls — the

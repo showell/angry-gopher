@@ -1,0 +1,38 @@
+#!/bin/bash
+# CANONICAL DEV-LOOP SCRIPT — DO NOT REINVENT.
+# Before writing a new ops/* script or composing an ad-hoc shell
+# command for build / launch / test / regen, run `ops/list` to see
+# what already exists.
+#
+# Fast Elm gate (~4s warm). Embeds the .dsl conformance fixtures
+# into Lib.DslContent.elm, then runs the in-repo elm/check.sh
+# pipeline (standalone typecheck → elm make Game.elm → elm-test →
+# elm-review). Called by `ops/check` and run individually during
+# Elm-side iteration.
+#
+# embed_dsls_for_elm.ts has to run BEFORE elm-test sees Lib.
+# ConformanceTests — that test consumes Lib.DslContent.allFiles
+# directly. Skipping the embed step means elm-test reads a stale
+# embedding.
+
+set -e
+
+REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$REPO_DIR"
+
+phase() {
+    local label="$1"
+    shift
+    local t0=$SECONDS
+    "$@"
+    echo "    [phase] ${label}: $((SECONDS - t0))s"
+}
+
+echo "==> Embed DSLs for Elm"
+phase "embed-dsls" ./ops/embed_dsls_for_elm.ts
+
+echo "==> Elm check (standalone typecheck + elm make + elm-test + elm-review)"
+phase "elm-check" bash -c "cd games/lynrummy/elm && ./check.sh"
+
+echo
+echo "Elm gate passed."
