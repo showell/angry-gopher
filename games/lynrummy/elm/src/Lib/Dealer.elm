@@ -33,7 +33,8 @@ players' 15-card hands, and the remaining draw deck.
 -}
 type alias GameSetup =
     { board : List CardStack
-    , hands : List Hand
+    , humanHand : Hand
+    , agentHand : Hand
     , deck : List Card
     }
 
@@ -95,8 +96,8 @@ Steps (matches the Go counterpart's shape):
     the shuffled deck carries both deck identities, so the
     pull is a by-value/suit/deck equality match.
 3.  Deal 15 cards from the front of the remaining deck to
-    player 0, then 15 more to player 1.
-4.  Return { board, hands = [P0, P1], deck = leftover }.
+    the human, then 15 more to the agent.
+4.  Return { board, humanHand, agentHand, deck = leftover }.
 
 -}
 dealFullGame : Random.Seed -> GameSetup
@@ -108,21 +109,16 @@ dealFullGame seed =
         ( board, afterBoard ) =
             buildBoardFromDeck shuffled
 
-        ( hand0Cards, afterHand0 ) =
+        ( humanCards, afterHuman ) =
             takeN 15 afterBoard
 
-        ( hand1Cards, afterHand1 ) =
-            takeN 15 afterHand0
-
-        hand0 =
-            Hand.addCards hand0Cards CardStack.HandNormal Hand.empty
-
-        hand1 =
-            Hand.addCards hand1Cards CardStack.HandNormal Hand.empty
+        ( agentCards, afterAgent ) =
+            takeN 15 afterHuman
     in
     { board = board
-    , hands = [ hand0, hand1 ]
-    , deck = afterHand1
+    , humanHand = Hand.addCards humanCards CardStack.HandNormal Hand.empty
+    , agentHand = Hand.addCards agentCards CardStack.HandNormal Hand.empty
+    , deck = afterAgent
     }
 
 

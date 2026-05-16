@@ -39,6 +39,7 @@ import Lib.CardStack exposing (CardStack)
 import Lib.GameState exposing (GameState)
 import Lib.Hand as Hand exposing (Hand)
 import Lib.HandDsl as HandDsl
+import Lib.Player exposing (Player(..))
 import Lib.Rules.Card as Card exposing (Card)
 
 
@@ -48,19 +49,13 @@ import Lib.Rules.Card as Card exposing (Card)
 
 formatGameState : GameState -> String
 formatGameState gs =
-    let
-        hands =
-            gs.hands
-                |> List.indexedMap formatHandBlock
-                |> List.filter (\s -> s /= "")
-    in
     String.join "\n\n"
-        ([ formatBoardBlock gs.board ]
-            ++ hands
-            ++ [ formatDeckLine gs.deck
-               , formatScalarBlock gs
-               ]
-        )
+        [ formatBoardBlock gs.board
+        , formatHandBlock "Player One Hand:" gs.humanHand
+        , formatHandBlock "Player Two Hand:" gs.agentHand
+        , formatDeckLine gs.deck
+        , formatScalarBlock gs
+        ]
 
 
 formatBoardBlock : List CardStack -> String
@@ -68,12 +63,9 @@ formatBoardBlock board =
     "board:\n" ++ indentLines (BoardDsl.formatBoard board)
 
 
-formatHandBlock : Int -> Hand -> String
-formatHandBlock idx hand =
+formatHandBlock : String -> Hand -> String
+formatHandBlock header hand =
     let
-        header =
-            "Player " ++ ordinalWord idx ++ " Hand:"
-
         body =
             HandDsl.formatHandBody hand
     in
@@ -84,20 +76,6 @@ formatHandBlock idx hand =
         header ++ "\n" ++ body
 
 
-ordinalWord : Int -> String
-ordinalWord idx =
-    case idx of
-        0 ->
-            "One"
-
-        1 ->
-            "Two"
-
-        _ ->
-            -- Lyn Rummy is solo + one agent — two hands max.
-            "Player" ++ String.fromInt (idx + 1)
-
-
 formatDeckLine : List Card -> String
 formatDeckLine deck =
     "deck: " ++ String.join " " (List.map Card.cardStr deck)
@@ -106,11 +84,38 @@ formatDeckLine deck =
 formatScalarBlock : GameState -> String
 formatScalarBlock gs =
     String.join "\n"
-        [ "active_player: " ++ String.fromInt gs.activePlayerIndex
+        [ "active_player: " ++ playerToWireInt gs.activePlayer
         , "turn_index: " ++ String.fromInt gs.turnIndex
         , "cards_played_this_turn: " ++ String.fromInt gs.cardsPlayedThisTurn
         , "victor_awarded: " ++ boolStr gs.victorAwarded
         ]
+
+
+{-| DSL convention: the human is "Player One" (0), the agent
+is "Player Two" (1). Kept as Int on the wire so existing
+session files and conformance fixtures parse unchanged.
+-}
+playerToWireInt : Player -> String
+playerToWireInt p =
+    case p of
+        Human ->
+            "0"
+
+        Agent ->
+            "1"
+
+
+playerFromWireInt : Int -> Result String Player
+playerFromWireInt n =
+    case n of
+        0 ->
+            Ok Human
+
+        1 ->
+            Ok Agent
+
+        _ ->
+            Err ("active_player must be 0 or 1, got " ++ String.fromInt n)
 
 
 boolStr : Bool -> String
@@ -146,8 +151,9 @@ parseGameState src =
 emptyState : GameState
 emptyState =
     { board = []
-    , hands = [ Hand.empty, Hand.empty ]
-    , activePlayerIndex = 0
+    , humanHand = Hand.empty
+    , agentHand = Hand.empty
+    , activePlayer = Human
     , turnIndex = 0
     , deck = []
     , cardsPlayedThisTurn = 0
@@ -230,33 +236,15 @@ dispatchSection header body gs =
             |> Result.map (\b -> { gs | board = b })
 
     else if String.startsWith "Player One Hand" header then
-        parseHandInto 0 body gs
+        HandDsl.parseHandBody (String.join "\n" body)
+            |> Result.map (\h -> { gs | humanHand = h })
 
     else if String.startsWith "Player Two Hand" header then
-        parseHandInto 1 body gs
+        HandDsl.parseHandBody (String.join "\n" body)
+            |> Result.map (\h -> { gs | agentHand = h })
 
     else
         Err ("unknown section header: " ++ header)
-
-
-parseHandInto : Int -> List String -> GameState -> Result String GameState
-parseHandInto idx body gs =
-    HandDsl.parseHandBody (String.join "\n" body)
-        |> Result.map (\h -> { gs | hands = setHandAt idx h gs.hands })
-
-
-setHandAt : Int -> Hand -> List Hand -> List Hand
-setHandAt idx newHand hands =
-    -- The empty state preallocates two hands; we replace in place.
-    List.indexedMap
-        (\i h ->
-            if i == idx then
-                newHand
-
-            else
-                h
-        )
-        hands
 
 
 applyScalarLine : String -> GameState -> Result String GameState
@@ -299,7 +287,8 @@ setScalar key val gs =
         "active_player" ->
             String.toInt val
                 |> Result.fromMaybe ("active_player not an integer: " ++ val)
-                |> Result.map (\n -> { gs | activePlayerIndex = n })
+                |> Result.andThen playerFromWireInt
+                |> Result.map (\p -> { gs | activePlayer = p })
 
         "turn_index" ->
             String.toInt val

@@ -17,6 +17,7 @@ import Lib.GameEvent exposing (GameEvent(..))
 import Lib.Hand as Hand
 import Lib.Physics.BoardGeometry exposing (refereeBounds)
 import Lib.Physics.GestureArbitration as GA
+import Lib.Player exposing (Player(..))
 import Lib.Popup exposing (PopupContent)
 import Lib.Rules.Card exposing (Card)
 import Lib.Status exposing (StatusKind(..), StatusMessage)
@@ -51,20 +52,12 @@ type alias Model =
     -- it: Instant Replay (user-initiated, only outside an agent
     -- turn) or the real-time agent move (during an agent turn,
     -- one Animate.start per agent_step response). They're
-    -- mutually exclusive — `agentTurnActive` discriminates on
-    -- Completed. During an agent move, the animation's
-    -- `entries` field carries the actions being played; the
-    -- AnimationTick Completed branch pushes them onto
-    -- `actionLog` at the moment `gameState` catches up.
+    -- mutually exclusive — `gameState.activePlayer == Agent`
+    -- discriminates on Completed. During an agent move, the
+    -- animation's `entries` field carries the actions being
+    -- played; the AnimationTick Completed branch pushes them
+    -- onto `actionLog` at the moment `gameState` catches up.
     , animationState : Maybe AnimationState
-
-    -- Spans the entire agent turn: from ReadyForAgentTurn
-    -- kickoff through the loop (Thinking…, animations,
-    -- between-step gaps) and across the closing "agent done"
-    -- popup, cleared on ReadyForHumanTurn. Source of truth for
-    -- the human-input lockout — and the discriminator for
-    -- AnimationTick's Completed branch (agent move vs replay).
-    , agentTurnActive : Bool
 
     -- Constant string forming the board's DOM id (via
     -- `boardDomIdFor`). Multi-Play-per-page hosting retired
@@ -100,8 +93,9 @@ baseModel =
     let
         emptyGameState =
             { board = Lib.Dealer.initialBoard
-            , hands = [ Hand.empty, Hand.empty ]
-            , activePlayerIndex = 0
+            , humanHand = Hand.empty
+            , agentHand = Hand.empty
+            , activePlayer = Human
             , turnIndex = 0
             , deck = []
             , cardsPlayedThisTurn = 0
@@ -119,7 +113,6 @@ baseModel =
     , actionLog = []
     , nextSeq = 1
     , animationState = Nothing
-    , agentTurnActive = False
     , gameId = "default"
     , pendingEngineRequest = Nothing
     , nextEngineRequestId = 1

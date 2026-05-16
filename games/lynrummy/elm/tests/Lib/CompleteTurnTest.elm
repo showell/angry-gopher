@@ -26,6 +26,7 @@ import Lib.CompleteTurn as CompleteTurn
 import Lib.GameState exposing (GameState)
 import Lib.Hand as Hand
 import Lib.Physics.BoardGeometry exposing (BoardBounds)
+import Lib.Player exposing (Player(..))
 import Lib.PlayerTurn exposing (CompleteTurnResult(..))
 import Test exposing (Test, describe, test)
 
@@ -78,8 +79,9 @@ via the record accessor.
 baseState : GameState
 baseState =
     { board = []
-    , hands = [ lonelyHand, Hand.empty ]
-    , activePlayerIndex = 0
+    , humanHand = lonelyHand
+    , agentHand = Hand.empty
+    , activePlayer = Human
     , turnIndex = 0
     , deck = []
     , cardsPlayedThisTurn = 0
@@ -122,18 +124,18 @@ suite =
 seatAndTurn : Test
 seatAndTurn =
     describe "always flips seat and increments turn"
-        [ test "seat flips 0 → 1" <|
+        [ test "seat flips Human → Agent" <|
             \_ ->
                 { baseState | cardsPlayedThisTurn = 0 }
                     |> applyTurn
-                    |> .activePlayerIndex
-                    |> Expect.equal 1
-        , test "seat flips 1 → 0" <|
+                    |> .activePlayer
+                    |> Expect.equal Agent
+        , test "seat flips Agent → Human" <|
             \_ ->
-                { baseState | activePlayerIndex = 1, cardsPlayedThisTurn = 0 }
+                { baseState | activePlayer = Agent, cardsPlayedThisTurn = 0 }
                     |> applyTurn
-                    |> .activePlayerIndex
-                    |> Expect.equal 0
+                    |> .activePlayer
+                    |> Expect.equal Human
         , test "turnIndex 0 → 1" <|
             \_ ->
                 { baseState | cardsPlayedThisTurn = 0 }
@@ -152,35 +154,37 @@ cardsPlayedBranches =
             \_ ->
                 { baseState | deck = deckOfThree, cardsPlayedThisTurn = 0 }
                     |> applyTurn
-                    |> (\s -> s.hands |> List.head |> Maybe.map Hand.size)
+                    |> (\s -> Just (Hand.size s.humanHand))
                     |> Expect.equal (Just (1 + 3))
         , test "played cards, hand non-empty → Success (draws 0)" <|
             \_ ->
                 { baseState | deck = deckOfThree, cardsPlayedThisTurn = 2 }
                     |> applyTurn
-                    |> (\s -> s.hands |> List.head |> Maybe.map Hand.size)
+                    |> (\s -> Just (Hand.size s.humanHand))
                     |> Expect.equal (Just 1)
         , test "played cards, hand empty, no prior victor → SuccessAsVictor (draws 5)" <|
             \_ ->
                 { baseState
-                    | hands = [ Hand.empty, Hand.empty ]
+                    | humanHand = Hand.empty
+                    , agentHand = Hand.empty
                     , deck = deckOfFive
                     , cardsPlayedThisTurn = 3
                     , victorAwarded = False
                 }
                     |> applyTurn
-                    |> (\s -> s.hands |> List.head |> Maybe.map Hand.size)
+                    |> (\s -> Just (Hand.size s.humanHand))
                     |> Expect.equal (Just 5)
         , test "played cards, hand empty, prior victor → SuccessWithHandEmptied (draws 5)" <|
             \_ ->
                 { baseState
-                    | hands = [ Hand.empty, Hand.empty ]
+                    | humanHand = Hand.empty
+                    , agentHand = Hand.empty
                     , deck = deckOfFive
                     , cardsPlayedThisTurn = 3
                     , victorAwarded = True
                 }
                     |> applyTurn
-                    |> (\s -> s.hands |> List.head |> Maybe.map Hand.size)
+                    |> (\s -> Just (Hand.size s.humanHand))
                     |> Expect.equal (Just 5)
         ]
 
@@ -209,7 +213,8 @@ victorAwardedOnce =
         [ test "flips to True on SuccessAsVictor" <|
             \_ ->
                 { baseState
-                    | hands = [ Hand.empty, Hand.empty ]
+                    | humanHand = Hand.empty
+                    , agentHand = Hand.empty
                     , deck = deckOfFive
                     , cardsPlayedThisTurn = 3
                     , victorAwarded = False

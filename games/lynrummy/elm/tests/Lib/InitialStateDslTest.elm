@@ -6,6 +6,7 @@ import Lib.Dealer as Dealer
 import Lib.GameState exposing (GameState)
 import Lib.Hand as Hand
 import Lib.InitialStateDsl as InitialStateDsl
+import Lib.Player exposing (Player(..))
 import Lib.Random
 import Lib.Rules.Card exposing (Card, CardValue(..), OriginDeck(..), Suit(..))
 import Test exposing (Test, describe, test)
@@ -19,8 +20,9 @@ suite =
                 let
                     empty =
                         { board = []
-                        , hands = [ Hand.empty, Hand.empty ]
-                        , activePlayerIndex = 0
+                        , humanHand = Hand.empty
+                        , agentHand = Hand.empty
+                        , activePlayer = Human
                         , turnIndex = 0
                         , deck = []
                         , cardsPlayedThisTurn = 0
@@ -61,8 +63,9 @@ suite =
 
                     dealtState =
                         { board = setup.board
-                        , hands = setup.hands
-                        , activePlayerIndex = 0
+                        , humanHand = setup.humanHand
+                        , agentHand = setup.agentHand
+                        , activePlayer = Human
                         , turnIndex = 0
                         , deck = setup.deck
                         , cardsPlayedThisTurn = 0
@@ -98,17 +101,17 @@ sampleState =
           , loc = { top = 107, left = 52 }
           }
         ]
-    , hands =
-        [ { handCards =
-                [ handCard Ace Heart
-                , handCard Five Heart
-                , handCard Jack Heart
-                , handCard King Spade
-                ]
-          }
-        , { handCards = [ handCard Three Heart, handCard Four Heart ] }
-        ]
-    , activePlayerIndex = 1
+    , humanHand =
+        { handCards =
+            [ handCard Ace Heart
+            , handCard Five Heart
+            , handCard Jack Heart
+            , handCard King Spade
+            ]
+        }
+    , agentHand =
+        { handCards = [ handCard Three Heart, handCard Four Heart ] }
+    , activePlayer = Agent
     , turnIndex = 5
     , deck =
         [ card King Club, card Queen Club, card Jack Club, card Two Diamond ]

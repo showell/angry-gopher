@@ -30,6 +30,7 @@ import Lib.GameState exposing (GameState)
 import Lib.Hand exposing (activeHand)
 import Lib.HandDrag as HandDrag
 import Lib.HandGesture as HandGesture
+import Lib.Player exposing (Player(..))
 import Lib.InitialStateDsl as InitialStateDsl
 import Lib.Physics.BoardGeometry exposing (refereeBounds)
 import Lib.PointerInput as PointerInput
@@ -93,8 +94,9 @@ init flags =
                 initialRS : GameState
                 initialRS =
                     { board = setup.board
-                    , hands = setup.hands
-                    , activePlayerIndex = 0
+                    , humanHand = setup.humanHand
+                    , agentHand = setup.agentHand
+                    , activePlayer = Human
                     , turnIndex = 0
                     , deck = setup.deck
                     , cardsPlayedThisTurn = 0
@@ -137,7 +139,6 @@ update msg model =
                 , gameState = afterTurn
                 , actionLog = model.actionLog ++ [ { action = GameEvent.CompleteTurn } ]
                 , nextSeq = model.nextSeq + 1
-                , agentTurnActive = True
                 , pendingEngineRequest = Just reqId
                 , nextEngineRequestId = reqId + 1
                 , status = { text = "Thinking…", kind = Inform }
@@ -157,7 +158,6 @@ update msg model =
                 , gameState = afterTurn
                 , actionLog = model.actionLog ++ [ { action = GameEvent.CompleteTurn } ]
                 , nextSeq = model.nextSeq + 1
-                , agentTurnActive = False
               }
             , Cmd.none
             )
@@ -202,7 +202,7 @@ update msg model =
             ( { model | status = Status.actionLogFetchFailedStatus }, Cmd.none )
 
         ClickInstantReplay ->
-            if model.agentTurnActive then
+            if model.gameState.activePlayer == Agent then
                 -- No-op during agent's turn — replay and the
                 -- agent's move share the single animationState
                 -- slot. View hides the button via
@@ -321,7 +321,7 @@ update msg model =
                             ( { model | animationState = Just nextRs }, cmd )
 
                         Animate.Completed ->
-                            if model.agentTurnActive then
+                            if model.gameState.activePlayer == Agent then
                                 let
                                     reqId =
                                         model.nextEngineRequestId
@@ -471,7 +471,8 @@ update msg model =
                         , gameState =
                             { gs0
                                 | board = outcome.board
-                                , hands = outcome.hands
+                                , humanHand = outcome.humanHand
+                                , agentHand = outcome.agentHand
                                 , cardsPlayedThisTurn = outcome.cardsPlayedThisTurn
                             }
                         , status = outcome.status

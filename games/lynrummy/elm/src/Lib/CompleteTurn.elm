@@ -30,6 +30,7 @@ import Lib.GameEvent as GameEvent
 import Lib.GameState exposing (GameState)
 import Lib.Hand as Hand
 import Lib.Physics.BoardGeometry exposing (BoardBounds, refereeBounds)
+import Lib.Player as Player
 import Lib.PlayerTurn as PlayerTurn exposing (CompleteTurnResult(..))
 import Lib.Popup exposing (PopupContent)
 import Lib.Rules.Card exposing (Card)
@@ -230,39 +231,18 @@ applyCompleteTurn bounds state =
 applyValidTurn : GameState -> ( GameState, CompleteTurnOutcome )
 applyValidTurn state =
     let
-        outgoingIdx =
-            state.activePlayerIndex
+        outgoingHand =
+            Hand.activeHand state
 
         outgoingHandSize =
-            case listAt outgoingIdx state.hands of
-                Just h ->
-                    Hand.size h
+            Hand.size outgoingHand
 
-                Nothing ->
-                    let
-                        _ =
-                            Debug.log
-                                ("[applyValidTurn] no hand at active index "
-                                    ++ String.fromInt outgoingIdx
-                                    ++ " (have "
-                                    ++ String.fromInt (List.length state.hands)
-                                    ++ " hands) — bridge bug"
-                                )
-                                ()
-                    in
-                    0
-
-        -- Build a PlayerTurn accumulator for classification.
-        -- Load in the cards-played counter the state has been
-        -- tracking.
         turnBase =
             let
                 seed =
                     PlayerTurn.new
             in
-            { seed
-                | cardsPlayedDuringTurn = state.cardsPlayedThisTurn
-            }
+            { seed | cardsPlayedDuringTurn = state.cardsPlayedThisTurn }
 
         turnWithBonuses =
             if outgoingHandSize == 0 && state.cardsPlayedThisTurn > 0 then
@@ -291,60 +271,22 @@ applyValidTurn state =
                 Failure ->
                     0
 
-        -- Outgoing player: reset card states, then draw.
-        ( newOutgoingHand, remainingDeck, drawnCards ) =
-            case listAt outgoingIdx state.hands of
-                Just h ->
-                    let
-                        reset =
-                            Hand.resetState h
+        ( drawnCards, remainingDeck ) =
+            takeDeck drawCount state.deck
 
-                        ( cards, leftover ) =
-                            takeDeck drawCount state.deck
+        newOutgoingHand =
+            outgoingHand
+                |> Hand.resetState
+                |> Hand.addCards drawnCards FreshlyDrawn
 
-                        afterDraw =
-                            Hand.addCards cards FreshlyDrawn reset
-                    in
-                    ( afterDraw, leftover, cards )
-
-                Nothing ->
-                    let
-                        _ =
-                            Debug.log
-                                ("[applyValidTurn] outgoing player at index "
-                                    ++ String.fromInt outgoingIdx
-                                    ++ " has no hand record — skipping draw (bridge bug)"
-                                )
-                                ()
-                    in
-                    ( { handCards = [] }, state.deck, [] )
-
-        newHands =
-            List.indexedMap
-                (\i h ->
-                    if i == outgoingIdx then
-                        newOutgoingHand
-
-                    else
-                        h
-                )
-                state.hands
-
-        agedBoard =
-            List.map CardStack.agedFromPriorTurn state.board
-
-        nHands =
-            max 1 (List.length state.hands)
-
-        nextActive =
-            modBy nHands (outgoingIdx + 1)
+        stateWithNewHand =
+            Hand.setActiveHand newOutgoingHand state
 
         newState =
-            { state
-                | board = agedBoard
-                , hands = newHands
+            { stateWithNewHand
+                | board = List.map CardStack.agedFromPriorTurn state.board
                 , deck = remainingDeck
-                , activePlayerIndex = nextActive
+                , activePlayer = Player.otherPlayer state.activePlayer
                 , turnIndex = state.turnIndex + 1
                 , cardsPlayedThisTurn = 0
                 , victorAwarded = state.victorAwarded || result == SuccessAsVictor
@@ -357,15 +299,6 @@ applyValidTurn state =
             }
     in
     ( newState, outcome )
-
-
-
--- HELPERS
-
-
-listAt : Int -> List a -> Maybe a
-listAt i xs =
-    List.head (List.drop i xs)
 
 
 takeDeck : Int -> List Card -> ( List Card, List Card )

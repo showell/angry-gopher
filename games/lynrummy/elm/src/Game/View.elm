@@ -26,6 +26,7 @@ import Html exposing (Html, div)
 import Html.Attributes exposing (style)
 import Game.Msg exposing (Msg(..))
 import Game.Model exposing (Model)
+import Lib.Player exposing (Player(..))
 import Lib.Undo exposing (canUndoThisTurn)
 
 
@@ -115,70 +116,66 @@ leftSidebar model =
                 Nothing ->
                     model.gameState
 
-        handAt n =
-            viewGameState.hands
-                |> List.drop n
-                |> List.head
-                |> Maybe.withDefault { handCards = [] }
     in
-    if viewGameState.activePlayerIndex == 0 then
-        let
-            animating =
-                model.animationState /= Nothing
+    case viewGameState.activePlayer of
+        Human ->
+            let
+                animating =
+                    model.animationState /= Nothing
 
-            drag =
-                case model.animationState of
-                    Just rs ->
-                        replayDrag rs
+                drag =
+                    case model.animationState of
+                        Just rs ->
+                            replayDrag rs
 
-                    Nothing ->
-                        model.drag
+                        Nothing ->
+                            model.drag
 
-            sourceCard =
-                case drag of
-                    DraggingHandCard d ->
-                        Just d.card
+                sourceCard =
+                    case drag of
+                        DraggingHandCard d ->
+                            Just d.card
 
-                    _ ->
-                        Nothing
+                        _ ->
+                            Nothing
 
-            replayControl =
-                case model.animationState of
-                    Just rs ->
-                        if rs.paused then
-                            LeftSidebar.ShowResume
+                replayControl =
+                    case model.animationState of
+                        Just rs ->
+                            if rs.paused then
+                                LeftSidebar.ShowResume
 
-                        else
-                            LeftSidebar.ShowPause
+                            else
+                                LeftSidebar.ShowPause
 
-                    Nothing ->
-                        LeftSidebar.ShowReplay
-        in
-        LeftSidebar.viewHumanTurn
-            { turnIndex = viewGameState.turnIndex
-            , deck = viewGameState.deck
-            , humanHand = handAt 0
-            , agentHand = handAt 1
-            , handIsInteractive = drag == NotDragging && not (humanInputLocked model)
-            , sourceCard = sourceCard
-            , hintedCards =
-                if animating then
-                    []
+                        Nothing ->
+                            LeftSidebar.ShowReplay
+            in
+            LeftSidebar.viewHumanTurn
+                { turnIndex = viewGameState.turnIndex
+                , deck = viewGameState.deck
+                , humanHand = viewGameState.humanHand
+                , agentHand = viewGameState.agentHand
+                , handIsInteractive = drag == NotDragging && not (humanInputLocked model)
+                , sourceCard = sourceCard
+                , hintedCards =
+                    if animating then
+                        []
 
-                else
-                    model.hintedCards
-            , canUndo = not animating && canUndoThisTurn model.actionLog
-            , controlsEnabled = not animating && not model.agentTurnActive
-            , replayControl = replayControl
-            }
+                    else
+                        model.hintedCards
+                , canUndo = not animating && canUndoThisTurn model.actionLog
+                , controlsEnabled = not animating
+                , replayControl = replayControl
+                }
 
-    else
-        LeftSidebar.viewAgentTurn
-            { turnIndex = viewGameState.turnIndex
-            , deck = viewGameState.deck
-            , humanHand = handAt 0
-            , agentHand = handAt 1
-            }
+        Agent ->
+            LeftSidebar.viewAgentTurn
+                { turnIndex = viewGameState.turnIndex
+                , deck = viewGameState.deck
+                , humanHand = viewGameState.humanHand
+                , agentHand = viewGameState.agentHand
+                }
 
 
 
@@ -299,7 +296,7 @@ consult `controlsEnabled` directly in `leftSidebar`.
 -}
 humanInputLocked : Model -> Bool
 humanInputLocked model =
-    model.animationState /= Nothing || model.agentTurnActive
+    model.animationState /= Nothing || model.gameState.activePlayer == Agent
 
 
 {-| The drag state the View should render during a replay.

@@ -18,6 +18,7 @@ list of `HandCard`s; operations add, remove, reset state, and
 query.
 -}
 
+import Lib.Player exposing (Player(..))
 import Lib.Rules.Card as Card exposing (Card, Suit)
 import Lib.CardStack exposing (HandCard, HandCardState(..), isHandCardSameCard)
 
@@ -38,38 +39,27 @@ findHandCard card hand =
         |> List.head
 
 
-{-| Active hand of any state record carrying `hands` and
-`activePlayerIndex`. Empty-hand fallback keeps callers
-resilient if state hasn't populated yet (the bridge-bug log
-happens at the call sites that care).
--}
-activeHand : { a | activePlayerIndex : Int, hands : List Hand } -> Hand
+activeHand : { a | activePlayer : Player, humanHand : Hand, agentHand : Hand } -> Hand
 activeHand state =
-    state.hands
-        |> List.drop state.activePlayerIndex
-        |> List.head
-        |> Maybe.withDefault empty
+    case state.activePlayer of
+        Human ->
+            state.humanHand
+
+        Agent ->
+            state.agentHand
 
 
-{-| Replace the active player's hand on the state.
--}
 setActiveHand :
     Hand
-    -> { a | activePlayerIndex : Int, hands : List Hand }
-    -> { a | activePlayerIndex : Int, hands : List Hand }
+    -> { a | activePlayer : Player, humanHand : Hand, agentHand : Hand }
+    -> { a | activePlayer : Player, humanHand : Hand, agentHand : Hand }
 setActiveHand newHand state =
-    { state
-        | hands =
-            List.indexedMap
-                (\i h ->
-                    if i == state.activePlayerIndex then
-                        newHand
+    case state.activePlayer of
+        Human ->
+            { state | humanHand = newHand }
 
-                    else
-                        h
-                )
-                state.hands
-    }
+        Agent ->
+            { state | agentHand = newHand }
 
 
 empty : Hand

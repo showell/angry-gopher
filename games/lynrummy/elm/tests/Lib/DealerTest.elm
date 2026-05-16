@@ -49,9 +49,7 @@ cardConservation =
                         |> List.sum
 
                 handsCount =
-                    setup.hands
-                        |> List.map Hand.size
-                        |> List.sum
+                    Hand.size setup.humanHand + Hand.size setup.agentHand
 
                 deckCount =
                     List.length setup.deck
@@ -104,23 +102,21 @@ stackShapes =
 
 handSizes : Test
 handSizes =
-    describe "two hands, 15 cards each"
-        [ test "hand count = 2" <|
+    describe "each hand has 15 cards"
+        [ test "humanHand has 15 cards" <|
             \_ ->
                 let
                     setup =
                         Dealer.dealFullGame (Random.initSeed 7)
                 in
-                Expect.equal 2 (List.length setup.hands)
-        , test "each hand has 15 cards" <|
+                Hand.size setup.humanHand |> Expect.equal 15
+        , test "agentHand has 15 cards" <|
             \_ ->
                 let
                     setup =
                         Dealer.dealFullGame (Random.initSeed 7)
                 in
-                setup.hands
-                    |> List.map Hand.size
-                    |> Expect.equal [ 15, 15 ]
+                Hand.size setup.agentHand |> Expect.equal 15
         ]
 
 
@@ -156,5 +152,6 @@ seedSensitivity =
 -}
 handCards : Dealer.GameSetup -> List (List Card.Card)
 handCards setup =
-    setup.hands
-        |> List.map (\h -> List.map .card h.handCards)
+    [ List.map .card setup.humanHand.handCards
+    , List.map .card setup.agentHand.handCards
+    ]

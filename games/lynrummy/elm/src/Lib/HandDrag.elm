@@ -36,7 +36,8 @@ mutates (`hands` write-back, `cardsPlayedThisTurn` bump).
 -}
 type alias HandOutcome =
     { board : List CardStack
-    , hands : List Hand
+    , humanHand : Hand
+    , agentHand : Hand
     , cardsPlayedThisTurn : Int
     , status : StatusMessage
     , actionLog : List ActionLogEntry
@@ -58,7 +59,8 @@ handleMouseUp releasePoint d input =
                     Execute.mergeHand p.handCard p.target p.side input.gameState
             in
             { board = nextState.board
-            , hands = nextState.hands
+            , humanHand = nextState.humanHand
+            , agentHand = nextState.agentHand
             , cardsPlayedThisTurn = nextState.cardsPlayedThisTurn
             , status = Status.geometryFeedback input.gameState.board nextState.board |> Maybe.withDefault (Status.mergeStatus nextState.board)
             , actionLog =
@@ -77,7 +79,8 @@ handleMouseUp releasePoint d input =
                     { text = "On the board!", kind = Status.Inform }
             in
             { board = nextState.board
-            , hands = nextState.hands
+            , humanHand = nextState.humanHand
+            , agentHand = nextState.agentHand
             , cardsPlayedThisTurn = nextState.cardsPlayedThisTurn
             , status = Status.geometryFeedback input.gameState.board nextState.board |> Maybe.withDefault placeHandStatus
             , actionLog =
@@ -89,7 +92,8 @@ handleMouseUp releasePoint d input =
 
         HandGesture.HandCardOffBoard ->
             { board = input.gameState.board
-            , hands = input.gameState.hands
+            , humanHand = input.gameState.humanHand
+            , agentHand = input.gameState.agentHand
             , cardsPlayedThisTurn = input.gameState.cardsPlayedThisTurn
             , status = Status.offBoardScold
             , actionLog = input.actionLog
@@ -99,7 +103,8 @@ handleMouseUp releasePoint d input =
 
         HandGesture.HandNothing ->
             { board = input.gameState.board
-            , hands = input.gameState.hands
+            , humanHand = input.gameState.humanHand
+            , agentHand = input.gameState.agentHand
             , cardsPlayedThisTurn = input.gameState.cardsPlayedThisTurn
             , status = Status.handNothingStatus
             , actionLog = input.actionLog
