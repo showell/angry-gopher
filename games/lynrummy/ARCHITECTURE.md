@@ -18,9 +18,10 @@ covers principles; that one covers the artifacts.
   [`ts/README.md`](./ts/README.md).
 - **Elm is the autonomous client.** Deals, referees, replays,
   renders. `games/lynrummy/elm/`. Two surfaces — the full
-  game (`Main.elm`, embedding `Game.Play`) and the
-  single-board puzzle (`Puzzle.elm`, a dedicated host that
-  composes `Game.*` primitives directly). The full game's
+  game (`Game.elm`) and the single-board puzzle (`Puzzle.elm`).
+  Both are port modules with their own update/view/subscriptions,
+  sharing the `Lib.*` and (for the full game) `Game.*`
+  modules. The full game's
   Hint button routes through the TS engine over Elm ports +
   the JS glue. No Elm code path computes a hint or runs the
   BFS itself.
@@ -230,8 +231,8 @@ Consequences:
 ## The cast of components
 
 - **Elm UI.** The autonomous client. Two surfaces — full
-  game (`Main.elm`, embedding `Game.Play`) and the
-  single-board puzzle (`Puzzle.elm`, dedicated host).
+  game (`Game.elm`) and the single-board puzzle (`Puzzle.elm`),
+  each a port module with its own update/view.
   Deals locally (`Lib.Dealer.dealFullGame seed`), runs its
   own referee, appends to its own action log, can replay at
   any time. Originates events from drags, from the **TS
@@ -457,7 +458,7 @@ All build, launch, and test ops go through `ops/` scripts
 - `ops/start` — kill stale processes, rebuild Go, recompile
   Elm, start both servers, wait for ready.
 - `ops/build_elm` — bundle the TS engine to `engine.js` (via
-  `ops/build_engine_js`), then compile Main.elm + Puzzle.elm.
+  `ops/build_engine_js`), then compile Game.elm + Puzzle.elm.
   Full build steps documented in
   [`BUILDING.md`](./BUILDING.md).
 - `ops/check-conformance` — **the commit gate for Elm
@@ -477,9 +478,8 @@ Don't hand-compose `go run .`, `elm make`, or `go test ./...`
   [`./ts/PHYSICAL_PLAN.md`](./ts/PHYSICAL_PLAN.md) and
   [`./ts/ENGINE_V2.md`](./ts/ENGINE_V2.md).
 - [`./elm/README.md`](./elm/README.md) — Elm UI. Two
-  surfaces: the full game (`Main.elm`, embedding
-  `Game.Play`) and the single-board puzzle (`Puzzle.elm`,
-  dedicated host). Hints route through the TS engine.
+  surfaces: the full game (`Game.elm`) and the single-board
+  puzzle (`Puzzle.elm`). Hints route through the TS engine.
 
 ### Cross-cutting
 
@@ -518,27 +518,25 @@ ones worth naming inline:
 - **`doctrine_eliminate_dont_paper_over.md`** — change the
   shape, not the adapter.
 
-## Two host shapes for two domains
+## Two entry points for two domains
 
-The repo has two browser entry points, each with the host
-shape its domain wants:
+The repo has two browser entry points, each a port module
+with its own update/view/subscriptions:
 
-- **Embedding (full game).** `Main.elm` is a thin harness;
-  `Game.Play` is the embeddable component. Exposes
-  `init / update / view / subscriptions` + a typed `Output`
-  union for the few things the host legitimately needs.
-  Extracted so a future host (tutorial, side-by-side
-  agent-vs-human viewer) can host it without rebuilding.
-- **Dedicated host (puzzle).** `Puzzle.elm` composes
-  `Game.*` primitives directly without going through
-  `Game.Play`. Carries its own `Msg` / `Model` / replay
-  engine. The puzzle's domain (board only, no hand, no turn
-  cycle) made unified-Msg/Model contortions Maybe-everywhere;
-  going dedicated dropped that complexity.
+- **`Game.elm` — full game.** Owns the engine ports
+  (`engineRequest`, `gameHintResponse`, `agentStepResponse`)
+  and the URL-pinning port (`setSessionPath`). Decodes engine
+  responses at the subscription, dispatches typed Msgs into
+  the update workhorse. Imports `Game.*` and `Lib.*` modules.
+- **`Puzzle.elm` — single-board puzzle.** Composes `Lib.*`
+  primitives directly. Carries its own `Msg` / `Model` /
+  replay engine. The puzzle's domain (board only, no hand,
+  no turn cycle) doesn't share enough with the full game to
+  justify a unified Model.
 
-Choose by domain. If a new surface plausibly wants
-full-game semantics, embed `Game.Play`; if its domain is
-materially narrower, follow `Puzzle.elm`'s pattern.
+Choose by domain. If a new surface plausibly wants full-game
+semantics, extend `Game.elm`; if its domain is materially
+narrower, follow `Puzzle.elm`'s pattern.
 
 ## The puzzle host
 

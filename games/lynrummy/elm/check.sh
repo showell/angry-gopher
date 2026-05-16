@@ -1,10 +1,6 @@
 #!/usr/bin/env bash
 # Type-check every durable LynRummy module standalone, then
-# run the test suite. Keeps the durable code from bit-rotting
-# regardless of which host shell imports it.
-#
-# Host shell (Main.elm + gesture studies) was ripped
-# 2026-04-17 — only the durable model remains here.
+# build the Game.elm entry point, then run the test suite.
 
 set -euo pipefail
 

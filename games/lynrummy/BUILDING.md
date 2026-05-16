@@ -12,7 +12,7 @@ so you don't have to remember flags.
 - **`ops/build_elm`** — rebuilds **everything the browser
   needs**, in order:
   1. `ops/build_engine_js` (TS engine → JS bundle)
-  2. `Main.elm` → `games/lynrummy/elm/elm.js`
+  2. `Game.elm` → `games/lynrummy/elm/elm.js`
   3. `Puzzle.elm` → `games/lynrummy/elm/puzzle.js`
 
 After editing any `.elm` or any `.ts` file under
@@ -26,7 +26,7 @@ All three live at `games/lynrummy/elm/` and are served by
 
 | File | Source | Served at |
 |------|--------|-----------|
-| `elm.js` | `elm/src/Main.elm` | `/gopher/lynrummy-elm/elm.js` |
+| `elm.js` | `elm/src/Game.elm` | `/gopher/lynrummy-elm/elm.js` |
 | `puzzle.js` | `elm/src/Puzzle.elm` | `/gopher/puzzle/puzzle.js` |
 | `engine.js` | `ts/elm_api/engine_entry.ts` (esbuild bundle) | `/gopher/lynrummy-elm/engine.js` |
 

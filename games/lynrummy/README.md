@@ -76,7 +76,7 @@ the gate isn't load-bearing.
 - `ts/` — the TypeScript agent (solver, verb pipeline,
   self-play, transcript writer, browser bundle). See
   [`ts/README.md`](./ts/README.md).
-- `elm/` — the in-browser UI: full game (`Main.elm`) and
+- `elm/` — the in-browser UI: full game (`Game.elm`) and
   the single-board puzzle (`Puzzle.elm`). See
   [`elm/README.md`](./elm/README.md).
 - `conformance/mined_seeds.dsl` — positioned mid-game boards

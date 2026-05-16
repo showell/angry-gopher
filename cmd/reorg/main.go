@@ -1305,7 +1305,7 @@ func writeMarkdownReport(matches []mdMatch, moves []move) (string, error) {
 	return out, nil
 }
 
-// verifyElm runs `elm make src/Main.elm --output=/dev/null` in the
+// verifyElm runs `elm make src/Game.elm --output=/dev/null` in the
 // Elm project root. Uses ./node_modules/.bin/elm if present (the
 // pinned local install), otherwise falls back to `elm` on $PATH.
 func verifyElm(root string) error {
@@ -1316,9 +1316,9 @@ func verifyElm(root string) error {
 	if _, err := os.Stat(filepath.Join(root, "node_modules", ".bin", "elm")); err != nil {
 		elmBin = "elm"
 	}
-	mainPath := "src/Main.elm"
+	mainPath := "src/Game.elm"
 	if _, err := os.Stat(filepath.Join(root, mainPath)); err != nil {
-		return fmt.Errorf("no src/Main.elm in %s to verify with", root)
+		return fmt.Errorf("no src/Game.elm in %s to verify with", root)
 	}
 	fmt.Printf("\nRunning %s make %s --output=/dev/null (in %s)\n", elmBin, mainPath, root)
 	cmd := exec.Command(elmBin, "make", mainPath, "--output=/dev/null")

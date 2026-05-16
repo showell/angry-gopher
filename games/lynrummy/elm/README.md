@@ -3,9 +3,9 @@
 The Elm LynRummy client. Renders the board + hand, captures
 live drag gestures, runs its own referee, keeps its own
 action log, replays stored logs. Two surfaces — the full
-game (`Main.elm`, embedding `Game.Play`) and the
-single-board puzzle (`Puzzle.elm`, a dedicated host that
-composes `Lib.*` primitives directly).
+game (`Game.elm`) and the single-board puzzle (`Puzzle.elm`).
+Both are port modules; the full game pulls in `Game.*` and
+`Lib.*` modules, the puzzle composes `Lib.*` directly.
 
 ## Setup
 
@@ -105,20 +105,21 @@ The TS agent uses the same rule shapes; see
 Two browser entry points share the rendering primitives in
 `Lib.*` but otherwise own their own `Msg` / `Model` shapes:
 
-- **`Main.elm`** (full game) — owns the embeddable
-  `Game.Play` component. `Game.State.Model` carries
-  GameState + drag + action log + replay state; `Game.Msg`
-  is the unified Msg.
-- **`Puzzle.elm`** (single-board puzzle) — dedicated host.
-  Composes `Lib.*` primitives directly: `Lib.BoardView`,
-  `Lib.BoardGesture`, `Lib.BoardDrag`, `Lib.Drag`,
-  `Lib.PointerInput`, `Lib.ActionLog`, `Lib.Execute`,
-  plus its sibling replay engine `Puzzle.Replay`. Doesn't
-  import `Main.*`.
+- **`Game.elm`** (full game) — port module owning the engine
+  + URL-pinning ports. `Game.State.Model` carries GameState +
+  drag + action log + animation state; `Game.Msg` is the
+  unified Msg. The update workhorse + view + subscriptions
+  all live here.
+- **`Puzzle.elm`** (single-board puzzle) — separate port
+  module. Composes `Lib.*` primitives directly:
+  `Lib.BoardView`, `Lib.BoardGesture`, `Lib.BoardDrag`,
+  `Lib.Drag`, `Lib.PointerInput`, `Lib.ActionLog`,
+  `Lib.Execute`, plus its sibling replay engine
+  `Puzzle.Replay`. Doesn't import `Game.*`.
 
-The dedicated-host pattern (vs. embedding) was the right
-shape once the puzzle's domain (board only, no hand, no
-turn cycle) made unified-Msg/Model contortions
-Maybe-everywhere. New surfaces with a different domain
-should follow `Puzzle.elm`'s pattern; new surfaces that
-genuinely want full-game semantics can embed `Game.Play`.
+The two-entry-point pattern was the right shape once the
+puzzle's domain (board only, no hand, no turn cycle) made
+unified-Msg/Model contortions Maybe-everywhere. New surfaces
+with a different domain should follow `Puzzle.elm`'s
+pattern; new surfaces that genuinely want full-game semantics
+should extend `Game.elm`.

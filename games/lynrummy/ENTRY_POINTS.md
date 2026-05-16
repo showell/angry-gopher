@@ -16,7 +16,7 @@ Two Elm `Browser.element` boots, both compiled from
 
 | Source | Output | URL | Role |
 |---|---|---|---|
-| `src/Main.elm` | `elm.js` | `/gopher/lynrummy-elm/` | Full Lyn Rummy game client |
+| `src/Game.elm` | `elm.js` | `/gopher/lynrummy-elm/` | Full Lyn Rummy game client |
 | `src/Puzzle.elm` | `puzzle.js` | `/gopher/puzzle/` | Single-board puzzle |
 
 ## Server-side handlers (Go)
