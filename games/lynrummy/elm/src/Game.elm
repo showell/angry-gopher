@@ -9,7 +9,6 @@ import Game.State
         ( Model
         , baseModel
         , bootstrapFromBundle
-        , lastUndoableAction
         )
 import Game.View as View
 import Game.Wire as Wire exposing (fetchActionLog, fetchNewSession)
@@ -38,6 +37,7 @@ import Lib.Popup as Popup
 import Lib.Random as Random
 import Lib.Status as Status exposing (StatusKind(..))
 import Lib.TurnControl as TurnControl
+import Lib.Undo as Undo
 import Task
 import Time
 
@@ -517,16 +517,16 @@ update msg model =
 
         ClickUndo ->
             case
-                TurnControl.attemptUndo
+                Undo.attemptUndo
                     { gameState = model.gameState
-                    , lastUndoableAction = lastUndoableAction model.actionLog
+                    , actionLog = model.actionLog
                     , nextSeq = model.nextSeq
                     }
             of
-                TurnControl.NothingToUndo ->
+                Undo.NothingToUndo ->
                     ( model, Cmd.none )
 
-                TurnControl.DidUndo r ->
+                Undo.DidUndo r ->
                     ( { model
                         | gameState = r.newGameState
                         , actionLog = model.actionLog ++ [ r.appendedEntry ]

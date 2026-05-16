@@ -25,11 +25,8 @@ import Lib.WingView as WingView
 import Html exposing (Html, div)
 import Html.Attributes exposing (style)
 import Game.Msg exposing (Msg(..))
-import Game.State
-    exposing
-        ( Model
-        , canUndoThisTurn
-        )
+import Game.State exposing (Model)
+import Lib.Undo exposing (canUndoThisTurn)
 
 
 

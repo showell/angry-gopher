@@ -28,7 +28,7 @@ the extras.
 
 `CompleteTurn` is not special-cased here: it can be
 undone like any other action. The UI gate against undoing
-across a turn boundary lives in `Game.State.lastUndoableAction`,
+across a turn boundary lives in `Lib.Undo.lastUndoableAction`,
 which is where it belongs (it's a UX policy, not a data
 invariant).
 

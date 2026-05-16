@@ -34,6 +34,7 @@ import Lib.GameEvent as GameEvent exposing (GameEvent)
 import Lib.Hand as Hand
 import Lib.NonEmpty as NonEmpty
 import Lib.Rules.Referee as Referee exposing (RefereeStage(..))
+import Lib.Undo as Undo
 import Lib.Rules.StackType as StackType
 import Lib.Status as Status
 import Game.Msg as Msg
@@ -947,7 +948,7 @@ stepExpectation model step =
                     |> Maybe.map (\n -> List.length handCards |> Expect.equal n)
                 , Dict.get "expect_undoable" step.fields
                     |> Maybe.andThen parseBool
-                    |> Maybe.map (\b -> State.canUndoThisTurn model.actionLog |> Expect.equal b)
+                    |> Maybe.map (\b -> Undo.canUndoThisTurn model.actionLog |> Expect.equal b)
                 , Dict.get "expect_stack" step.fields
                     |> Maybe.map (checkBoardHasStack board)
                 , Dict.get "expect_hand_contains" step.fields

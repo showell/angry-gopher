@@ -3,8 +3,6 @@ module Game.State exposing
     , applyEvent
     , baseModel
     , bootstrapFromBundle
-    , canUndoThisTurn
-    , lastUndoableAction
     )
 
 {-| All application-wide data types and the initial Model.
@@ -92,39 +90,6 @@ type alias Model =
 
 
 
--- ACTION LOG HELPERS
-
-
-{-| True when clicking Undo would do something — the effective
-action list has at least one non-CompleteTurn entry in the
-current turn.
--}
-canUndoThisTurn : List ActionLogEntry -> Bool
-canUndoThisTurn log =
-    lastUndoableAction log /= Nothing
-
-
-{-| The most recent action eligible for undo, or Nothing.
-"Eligible" = top of `collapseUndos`'s effective list AND not a
-CompleteTurn (turn flips can't be undone).
--}
-lastUndoableAction : List ActionLogEntry -> Maybe GameEvent
-lastUndoableAction log =
-    case List.reverse (ActionLog.collapseUndos log) of
-        [] ->
-            Nothing
-
-        last :: _ ->
-            case last.action of
-                CompleteTurn ->
-                    Nothing
-
-                _ ->
-                    Just last.action
-
-
-
--- ACTIVE HAND
 -- INIT STATE
 
 

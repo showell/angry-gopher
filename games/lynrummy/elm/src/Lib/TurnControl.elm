@@ -1,21 +1,21 @@
 module Lib.TurnControl exposing
     ( CompleteTurnAttempt(..)
-    , UndoAttempt(..)
     , attemptCompleteTurn
-    , attemptUndo
     )
 
-{-| The two turn-boundary actions: "Complete turn" and "Undo."
-Each returns a typed variant the caller dispatches on. DSL
-wire lines are returned as `outboundPayload : String` — the
-host wraps them in `Wire.sendAction` at the call site.
+{-| Host-facing wrapper around `Lib.CompleteTurn.applyCompleteTurn`:
+bundles the transition with the status / popup / wire payload
+the UI needs. Kept separate from `Lib.CompleteTurn` because the
+wrapper imports `Lib.Popup` and `Lib.Status`, both of which
+depend on `Lib.CompleteTurn` for the outcome type — merging
+would form a cycle. The companion undo wrapper lives in
+`Lib.Undo`.
 -}
 
 import Lib.ActionLog exposing (ActionLogEntry)
-import Lib.Execute as Execute
 import Lib.CompleteTurn as CompleteTurn
+import Lib.GameEvent as GameEvent
 import Lib.GameState exposing (GameState)
-import Lib.GameEvent as GameEvent exposing (GameEvent)
 import Lib.Physics.BoardGeometry exposing (refereeBounds)
 import Lib.PlayerTurn exposing (CompleteTurnResult(..))
 import Lib.Popup as Popup exposing (PopupContent)
@@ -34,19 +34,6 @@ type CompleteTurnAttempt
         , popup : PopupContent
         , outboundPayload : String
         }
-
-
-type UndoAttempt
-    = NothingToUndo
-    | DidUndo
-        { newGameState : GameState
-        , appendedEntry : ActionLogEntry
-        , outboundPayload : String
-        }
-
-
-
--- COMPLETE TURN
 
 
 attemptCompleteTurn :
@@ -75,34 +62,3 @@ attemptCompleteTurn { gameState, nextSeq } =
                 , popup = popup
                 , outboundPayload = GameEvent.completeTurnDsl nextSeq
                 }
-
-
-
--- UNDO
-
-
-attemptUndo :
-    { gameState : GameState
-    , lastUndoableAction : Maybe GameEvent
-    , nextSeq : Int
-    }
-    -> UndoAttempt
-attemptUndo { gameState, lastUndoableAction, nextSeq } =
-    case lastUndoableAction of
-        Nothing ->
-            NothingToUndo
-
-        Just lastAction ->
-            DidUndo
-                { newGameState = undoEvent lastAction gameState
-                , appendedEntry = { action = GameEvent.Undo }
-                , outboundPayload = GameEvent.undoDsl nextSeq
-                }
-
-
-{-| Re-export under a local name to avoid an extra import in
-the caller. (Lib.Execute.undoEvent is the canonical apply.)
--}
-undoEvent : GameEvent -> GameState -> GameState
-undoEvent =
-    Execute.undoEvent
