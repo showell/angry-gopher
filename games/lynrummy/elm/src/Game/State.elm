@@ -56,7 +56,10 @@ type alias Model =
     -- turn) or the real-time agent move (during an agent turn,
     -- one Animate.start per agent_step response). They're
     -- mutually exclusive — `agentTurnActive` discriminates on
-    -- Completed.
+    -- Completed. During an agent move, the animation's
+    -- `entries` field carries the actions being played; the
+    -- AnimationTick Completed branch pushes them onto
+    -- `actionLog` at the moment `gameState` catches up.
     , animationState : Maybe AnimationState
 
     -- Spans the entire agent turn: from ReadyForAgentTurn

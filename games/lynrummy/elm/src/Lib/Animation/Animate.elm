@@ -84,7 +84,8 @@ are private to this module.
 
 -}
 type alias AnimationState =
-    { queue : List ActionLogEntry
+    { entries : List ActionLogEntry
+    , queue : List ActionLogEntry
     , gameState : GameState
     , paused : Bool
     , phase : Phase
@@ -106,8 +107,9 @@ beatMs =
 
 
 start : List ActionLogEntry -> GameState -> AnimationState
-start queue gameState =
-    { queue = queue
+start entries gameState =
+    { entries = entries
+    , queue = entries
     , gameState = gameState
     , paused = False
     , phase = Starting

@@ -26,6 +26,7 @@ import Lib.Dealer as Dealer
 import Lib.Drag exposing (DragState(..))
 import Lib.Engine as Engine
 import Lib.Game as Game
+import Lib.GameEvent as GameEvent
 import Lib.Hand exposing (activeHand)
 import Lib.HandDrag as HandDrag
 import Lib.HandGesture as HandGesture
@@ -184,9 +185,10 @@ update msg model =
 
         ClickInstantReplay ->
             if model.agentTurnActive then
-                -- No-op during agent's turn; the agent's plays
-                -- aren't in actionLog so replaying would skip
-                -- them. View hides the button via `controlsEnabled`.
+                -- No-op during agent's turn — replay and the
+                -- agent's move share the single animationState
+                -- slot. View hides the button via
+                -- `controlsEnabled` so this is double-protection.
                 ( model, Cmd.none )
 
             else
@@ -316,6 +318,8 @@ update msg model =
                                 ( { model
                                     | animationState = Nothing
                                     , gameState = rs.gameState
+                                    , actionLog = model.actionLog ++ rs.entries
+                                    , nextSeq = model.nextSeq + List.length rs.entries
                                     , pendingEngineRequest = Just reqId
                                     , nextEngineRequestId = reqId + 1
                                     , status = { text = "Thinking…", kind = Inform }
@@ -537,6 +541,8 @@ update msg model =
             ( { model
                 | pendingEngineRequest = Nothing
                 , gameState = afterTurn
+                , actionLog = model.actionLog ++ [ { action = GameEvent.CompleteTurn } ]
+                , nextSeq = model.nextSeq + 1
                 , popup = Just { content = agentDonePopup, dismissMsg = ReadyForHumanTurn }
                 , status = { text = "The agent has completed its turn.", kind = Inform }
               }
