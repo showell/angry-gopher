@@ -2,16 +2,18 @@ module Lib.CompleteTurn exposing
     ( CompleteTurnOutcome
     , applyCompleteTurn
     , popupForCompleteTurn
+    , statusForCompleteTurn
     )
 
 {-| The pure CompleteTurn state transition + its outcome type
-+ the popup-content builder that narrates the outcome to the
-user. Mirrors the Go-side `games/lynrummy/replay.go`
-`applyCompleteTurn` step-for-step.
++ the popup-content and status-bar builders that narrate the
+outcome to the user. Mirrors the Go-side
+`games/lynrummy/replay.go` `applyCompleteTurn` step-for-step.
 
-`Lib.Popup` is now pure view-chrome (`viewPopup` + the
-`PopupContent` record). Outcome-specific popup content lives
-here so the dependency arrow runs `CompleteTurn → Popup` and
+`Lib.Popup` and `Lib.Status` are now pure view-chrome
+(`viewPopup` / `viewStatusBar` + the `PopupContent` /
+`StatusMessage` records). Outcome-specific content lives here
+so dependency arrows run `CompleteTurn → {Popup, Status}` and
 not the other way.
 
 -}
@@ -25,6 +27,7 @@ import Lib.PlayerTurn as PlayerTurn exposing (CompleteTurnResult(..))
 import Lib.Popup exposing (PopupContent)
 import Lib.Rules.Card exposing (Card)
 import Lib.Rules.Referee as Referee
+import Lib.Status exposing (StatusKind(..), StatusMessage)
 
 
 {-| What `applyCompleteTurn` produced, beyond the new state:
@@ -36,6 +39,30 @@ type alias CompleteTurnOutcome =
     , cardsDrawn : Int
     , dealtCards : List Card
     }
+
+
+statusForCompleteTurn : Result outcome CompleteTurnOutcome -> StatusMessage
+statusForCompleteTurn outcome =
+    case outcome of
+        Ok o ->
+            case o.result of
+                Success ->
+                    { text = "Turn complete. Board is growing!", kind = Celebrate }
+
+                SuccessButNeedsCards ->
+                    { text = "Turn complete, but you didn't play any cards.", kind = Inform }
+
+                SuccessAsVictor ->
+                    { text = "Hand emptied — victor!", kind = Celebrate }
+
+                SuccessWithHandEmptied ->
+                    { text = "Hand emptied — nice.", kind = Celebrate }
+
+                Failure ->
+                    { text = "Board isn't clean — tidy up before ending the turn.", kind = Scold }
+
+        Err _ ->
+            { text = "Couldn't reach the server to complete the turn.", kind = Scold }
 
 
 {-| Build the popup the user should see after a CompleteTurn

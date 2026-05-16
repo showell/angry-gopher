@@ -8,17 +8,18 @@ module Lib.Status exposing
     , mergeStatus
     , offBoardScold
     , sessionAllocFailedStatus
-    , statusForCompleteTurn
     , viewStatusBar
     )
 
 {-| Status messages, the helpers that build them, and the
-status-bar renderer. -}
+status-bar renderer. Outcome-specific status builders live in
+the modules whose outcomes they narrate (e.g.
+`Lib.CompleteTurn.statusForCompleteTurn`); the chrome here
+just renders a `StatusMessage`.
+-}
 
 import Lib.CardStack as CardStack exposing (CardStack)
-import Lib.CompleteTurn exposing (CompleteTurnOutcome)
 import Lib.Physics.BoardGeometry as BoardGeometry exposing (BoardGeometryStatus(..))
-import Lib.PlayerTurn exposing (CompleteTurnResult(..))
 import Lib.Rules.Card
 import Lib.Rules.StackType as StackType
 import Html exposing (Html, div)
@@ -57,30 +58,6 @@ viewStatusBar status =
         , style "white-space" "pre-wrap"
         ]
         [ Html.text status.text ]
-
-
-statusForCompleteTurn : Result outcome CompleteTurnOutcome -> StatusMessage
-statusForCompleteTurn outcome =
-    case outcome of
-        Ok o ->
-            case o.result of
-                Success ->
-                    { text = "Turn complete. Board is growing!", kind = Celebrate }
-
-                SuccessButNeedsCards ->
-                    { text = "Turn complete, but you didn't play any cards.", kind = Inform }
-
-                SuccessAsVictor ->
-                    { text = "Hand emptied — victor!", kind = Celebrate }
-
-                SuccessWithHandEmptied ->
-                    { text = "Hand emptied — nice.", kind = Celebrate }
-
-                Failure ->
-                    { text = "Board isn't clean — tidy up before ending the turn.", kind = Scold }
-
-        Err _ ->
-            { text = "Couldn't reach the server to complete the turn.", kind = Scold }
 
 
 {-| Surface a board-geometry tidiness change as a status

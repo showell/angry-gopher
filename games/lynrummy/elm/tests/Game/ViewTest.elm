@@ -11,9 +11,9 @@ this suite exists to keep it alive.
 -}
 
 import Expect
-import Lib.CompleteTurn exposing (CompleteTurnOutcome, popupForCompleteTurn)
+import Lib.CompleteTurn exposing (CompleteTurnOutcome, popupForCompleteTurn, statusForCompleteTurn)
 import Lib.PlayerTurn exposing (CompleteTurnResult(..))
-import Lib.Status exposing (StatusKind(..), statusForCompleteTurn)
+import Lib.Status exposing (StatusKind(..))
 import Test exposing (Test, describe, test)
 
 
