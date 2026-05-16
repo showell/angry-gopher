@@ -388,7 +388,7 @@ func lynrummyElmPlayWithSession(w http.ResponseWriter, sessionID int64) {
 <script src="/gopher/lynrummy-elm/engine_glue.js"></script>
 <script>
   var initialSessionId = %s;
-  var app = Elm.Main.init({
+  var app = Elm.Game.init({
     node: document.getElementById("root"),
     flags: {
       initialSessionId: initialSessionId,
@@ -410,7 +410,7 @@ func lynrummyElmJS(w http.ResponseWriter) {
 	path := filepath.Join(ElmLynRummyDir, "elm.js")
 	data, err := os.ReadFile(path)
 	if err != nil {
-		http.Error(w, "elm.js not found — run `elm make src/Main.elm --output=elm.js` in "+ElmLynRummyDir, http.StatusNotFound)
+		http.Error(w, "elm.js not found — run `elm make src/Game.elm --output=elm.js` in "+ElmLynRummyDir, http.StatusNotFound)
 		return
 	}
 	w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
