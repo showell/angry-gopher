@@ -4,7 +4,7 @@ import Browser
 import Browser.Dom
 import Browser.Events
 import Game.Msg exposing (Msg(..))
-import Game.State
+import Game.Model
     exposing
         ( Model
         , baseModel

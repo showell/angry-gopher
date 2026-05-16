@@ -1,12 +1,9 @@
-module Game.State exposing
+module Game.Model exposing
     ( Model
     , applyEvent
     , baseModel
     , bootstrapFromBundle
     )
-
-{-| All application-wide data types and the initial Model.
--}
 
 import Game.Msg exposing (Msg)
 import Lib.ActionLog as ActionLog exposing (ActionLogEntry)

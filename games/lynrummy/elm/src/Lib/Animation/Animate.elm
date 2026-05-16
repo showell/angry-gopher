@@ -73,16 +73,11 @@ type Phase
     | AnimatingHandAction HandDragAnimate.State
 
 
-{-| Instant Replay's working state. Lives on `Game.State.Model`
-as `Maybe AnimationState`: `Just _` while a replay is in flight,
-`Nothing` otherwise.
-
-The View reads `gameState` (to render the replay's evolving
-board + sidebar), `paused` (to pick the Pause/Resume button
-label), and inspects `phase` to source the drag floater
+{-| Instant Replay's working state. The View reads `gameState`
+(replay's evolving board + sidebar), `paused` (Pause/Resume
+button label), and inspects `phase` to source the drag floater
 during board-drag and hand-drag animations. All other fields
 are private to this module.
-
 -}
 type alias AnimationState =
     { entries : List ActionLogEntry

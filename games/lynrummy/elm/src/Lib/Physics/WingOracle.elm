@@ -15,8 +15,7 @@ the mirror. The target anchors the merge: the merged stack's
 position derives from the target, not the source, matching
 the drop-onto-target UX.
 
-`WingId` identifies its target by CardStack value (same
-representation as the wire and the Game.State drag model).
+`WingId` identifies its target by CardStack value.
 -}
 
 import Lib.BoardActions as BoardActions exposing (Side(..))

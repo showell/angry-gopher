@@ -38,7 +38,7 @@ import Lib.Undo as Undo
 import Lib.Rules.StackType as StackType
 import Lib.Status as Status
 import Game.Msg as Msg
-import Game.State as State
+import Game.Model exposing (Model, applyEvent, baseModel, bootstrapFromBundle)
 import Game as Play
 import Test exposing (Test, describe, test)
 
@@ -758,7 +758,7 @@ verifyGestureFloaterOverWing sc =
 -- Walks a sequence of steps, each producing a (model, expectations)
 -- transition. Steps come in five shapes:
 --   undo:                Play.update Msg.ClickUndo
---   place_hand X -> loc: GameEvent.PlaceHand, log, State.applyEvent
+--   place_hand X -> loc: GameEvent.PlaceHand, log, applyEvent
 --   merge_hand X -> [t] /side: GameEvent.MergeHand, log, applyEvent
 --   board verbs:         ReplaySpec → resolveSpec → log → applyEvent
 --   no action:           alias previous model (observation only)
@@ -771,7 +771,7 @@ verifyUndoWalkthrough sc =
             stacksFromDsl sc.board
 
         base =
-            State.baseModel
+            baseModel
 
         gs0 =
             base.gameState
@@ -809,7 +809,7 @@ verifyUndoWalkthrough sc =
         ()
 
 
-applyUndoSteps : State.Model -> List Dsl.Step -> ( State.Model, List Expect.Expectation )
+applyUndoSteps : Model -> List Dsl.Step -> ( Model, List Expect.Expectation )
 applyUndoSteps initial steps =
     let
         loop model expectations remaining =
@@ -830,7 +830,7 @@ applyUndoSteps initial steps =
     loop initial [] steps
 
 
-transitionUndoStep : State.Model -> Dsl.Step -> State.Model
+transitionUndoStep : Model -> Dsl.Step -> Model
 transitionUndoStep prev step =
     case Dict.get "action" step.fields of
         Nothing ->
@@ -847,7 +847,7 @@ transitionUndoStep prev step =
             applyTransitionAction prev raw
 
 
-applyTransitionAction : State.Model -> String -> State.Model
+applyTransitionAction : Model -> String -> Model
 applyTransitionAction prev raw =
     case parseStepAction prev raw of
         Just action ->
@@ -856,7 +856,7 @@ applyTransitionAction prev raw =
                     { action = action }
 
                 next =
-                    { prev | gameState = State.applyEvent action prev.gameState }
+                    { prev | gameState = applyEvent action prev.gameState }
             in
             { next | actionLog = prev.actionLog ++ [ entry ] }
 
@@ -864,7 +864,7 @@ applyTransitionAction prev raw =
             prev
 
 
-parseStepAction : State.Model -> String -> Maybe GameEvent
+parseStepAction : Model -> String -> Maybe GameEvent
 parseStepAction model raw =
     let
         s =
@@ -929,7 +929,7 @@ parseMergeHand board body =
             Nothing
 
 
-stepExpectation : State.Model -> Dsl.Step -> Expect.Expectation
+stepExpectation : Model -> Dsl.Step -> Expect.Expectation
 stepExpectation model step =
     let
         board =
@@ -1036,7 +1036,7 @@ parseBool s =
 
 -- RESUME WALKTHROUGH
 --
--- Drive `State.bootstrapFromBundle` over a full agent-play action
+-- Drive `bootstrapFromBundle` over a full agent-play action
 -- log and assert the reconstructed final board is all-clean. This
 -- is the live production path for resuming a session: the server
 -- ships meta + actions.dsl, Elm decodes them and calls
@@ -1045,7 +1045,7 @@ parseBool s =
 -- The test catches:
 --   - regressions in `bootstrapFromBundle` itself (the resume
 --     pipeline),
---   - regressions in `State.applyEvent`'s verb dispatch (Split /
+--   - regressions in `applyEvent`'s verb dispatch (Split /
 --     MergeStack / MoveStack / CompleteTurn),
 --   - regressions in `Execute.{split, mergeStack, moveStack,
 --     mergeHand, placeHand}` and the geometry / hand bookkeeping
@@ -1061,7 +1061,7 @@ verifyResumeWalkthrough : Dsl.Scenario -> Expect.Expectation
 verifyResumeWalkthrough sc =
     let
         baseGameState =
-            State.baseModel.gameState
+            baseModel.gameState
 
         initialState =
             { baseGameState | board = stacksFromDsl sc.board }
@@ -1074,7 +1074,7 @@ verifyResumeWalkthrough sc =
             buildActionLog initialState (List.filterMap parseReplaySpec sc.actions)
 
         finalModel =
-            State.bootstrapFromBundle initialState actionLog State.baseModel
+            bootstrapFromBundle initialState actionLog baseModel
 
         wantVictory =
             case sc.expect of
@@ -1108,7 +1108,7 @@ buildActionLog initialState specs =
                             resolveSpec spec state.board
 
                         nextState =
-                            State.applyEvent action state
+                            applyEvent action state
                     in
                     loop nextState ({ action = action } :: acc) rest
     in
@@ -1277,7 +1277,7 @@ resolveSpec spec board =
 
 
 {-| Placeholder NonEmpty path for tests that build GameEvent
-records but never animate them — `State.applyEvent` ignores the
+records but never animate them — `applyEvent` ignores the
 path field, so any non-empty value is correct for state-only
 checks.
 -}

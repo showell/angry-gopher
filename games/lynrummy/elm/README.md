@@ -106,10 +106,9 @@ Two browser entry points share the rendering primitives in
 `Lib.*` but otherwise own their own `Msg` / `Model` shapes:
 
 - **`Game.elm`** (full game) — port module owning the engine
-  + URL-pinning ports. `Game.State.Model` carries GameState +
-  drag + action log + animation state; `Game.Msg` is the
-  unified Msg. The update workhorse + view + subscriptions
-  all live here.
+  + URL-pinning ports + the update workhorse + view +
+  subscriptions. `Game.Model` holds the Model record;
+  `Game.Msg` holds the Msg type.
 - **`Puzzle.elm`** (single-board puzzle) — separate port
   module. Composes `Lib.*` primitives directly:
   `Lib.BoardView`, `Lib.BoardGesture`, `Lib.BoardDrag`,
