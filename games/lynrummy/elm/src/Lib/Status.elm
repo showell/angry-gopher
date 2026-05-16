@@ -16,7 +16,7 @@ module Lib.Status exposing
 status-bar renderer. -}
 
 import Lib.CardStack as CardStack exposing (CardStack)
-import Lib.Game exposing (CompleteTurnOutcome)
+import Lib.CompleteTurn exposing (CompleteTurnOutcome)
 import Lib.Physics.BoardGeometry as BoardGeometry exposing (BoardGeometryStatus(..))
 import Lib.PlayerTurn exposing (CompleteTurnResult(..))
 import Lib.Rules.Card

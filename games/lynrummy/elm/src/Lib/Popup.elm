@@ -14,7 +14,7 @@ Msg, so this module doesn't need to know about `Game.Msg`.
 
 -}
 
-import Lib.Game exposing (CompleteTurnOutcome)
+import Lib.CompleteTurn exposing (CompleteTurnOutcome)
 import Lib.PlayerTurn exposing (CompleteTurnResult(..))
 import Lib.Colors as Colors
 import Html exposing (Html, div)

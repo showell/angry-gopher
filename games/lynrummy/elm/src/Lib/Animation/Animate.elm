@@ -34,7 +34,7 @@ calls into `HandDragAnimate.measurementReceived`.
 
 import Lib.ActionLog exposing (ActionLogEntry)
 import Lib.Execute as Execute
-import Lib.Game as Game
+import Lib.CompleteTurn as CompleteTurn
 import Lib.GameState exposing (GameState)
 import Lib.GameEvent as GameEvent
 import Lib.Physics.BoardGeometry exposing (refereeBounds)
@@ -285,7 +285,7 @@ startNextAction nowMs entry gameState =
             }
 
         GameEvent.CompleteTurn ->
-            { gameState = Tuple.first (Game.applyCompleteTurn refereeBounds gameState)
+            { gameState = Tuple.first (CompleteTurn.applyCompleteTurn refereeBounds gameState)
             , phase = ActionCompleted
             }
 

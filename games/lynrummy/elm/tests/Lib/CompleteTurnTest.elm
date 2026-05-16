@@ -1,7 +1,7 @@
-module Lib.GameTest exposing (suite)
+module Lib.CompleteTurnTest exposing (suite)
 
-{-| Tests for Lib.Game.applyCompleteTurn — the autonomous
-CompleteTurn transition. Covers:
+{-| Tests for Lib.CompleteTurn.applyCompleteTurn — the
+autonomous CompleteTurn transition. Covers:
 
   - Classification of each turn-result branch
     (Success / SuccessButNeedsCards / SuccessAsVictor /
@@ -22,7 +22,7 @@ everything is deterministic.
 import Expect
 import Lib.Rules.Card exposing (Card, CardValue(..), OriginDeck(..), Suit(..))
 import Lib.CardStack exposing (BoardCardState(..), CardStack, HandCard, HandCardState(..))
-import Lib.Game as Game
+import Lib.CompleteTurn as CompleteTurn
 import Lib.GameState exposing (GameState)
 import Lib.Hand as Hand
 import Lib.Physics.BoardGeometry exposing (BoardBounds)
@@ -40,13 +40,13 @@ wideBounds =
 
 
 {-| Thin wrapper for tests that only care about the post-turn
-state. `Game.applyCompleteTurn` returns
+state. `CompleteTurn.applyCompleteTurn` returns
 `(GameState, CompleteTurnOutcome)`; most tests here only
 inspect the state.
 -}
 applyTurn : GameState -> GameState
 applyTurn =
-    Tuple.first << Game.applyCompleteTurn wideBounds
+    Tuple.first << CompleteTurn.applyCompleteTurn wideBounds
 
 
 
@@ -109,7 +109,7 @@ deckOfFive =
 
 suite : Test
 suite =
-    describe "Lib.Game.applyCompleteTurn"
+    describe "Lib.CompleteTurn.applyCompleteTurn"
         [ seatAndTurn
         , cardsPlayedBranches
         , deckDrawBranches
@@ -268,13 +268,13 @@ dirtyBoardBranch =
     describe "dirty board → Failure, state unchanged"
         [ test "result is Failure" <|
             \_ ->
-                Game.applyCompleteTurn wideBounds dirtyState
+                CompleteTurn.applyCompleteTurn wideBounds dirtyState
                     |> Tuple.second
                     |> .result
                     |> Expect.equal Failure
         , test "state is unchanged (turn does not advance)" <|
             \_ ->
-                Game.applyCompleteTurn wideBounds dirtyState
+                CompleteTurn.applyCompleteTurn wideBounds dirtyState
                     |> Tuple.first
                     |> .turnIndex
                     |> Expect.equal dirtyState.turnIndex

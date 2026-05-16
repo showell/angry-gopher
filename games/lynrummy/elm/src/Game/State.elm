@@ -16,7 +16,7 @@ import Lib.Animation.Animate exposing (AnimationState)
 import Lib.Dealer
 import Lib.Drag exposing (DragState(..))
 import Lib.Execute as Execute
-import Lib.Game as Game
+import Lib.CompleteTurn as CompleteTurn
 import Lib.GameState exposing (GameState)
 import Lib.GameEvent exposing (GameEvent(..))
 import Lib.Hand as Hand
@@ -214,7 +214,7 @@ applyEvent event state =
             Execute.placeHand p.handCard p.loc state
 
         CompleteTurn ->
-            Tuple.first (Game.applyCompleteTurn refereeBounds state)
+            Tuple.first (CompleteTurn.applyCompleteTurn refereeBounds state)
 
         Undo ->
             state

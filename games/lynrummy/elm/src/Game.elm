@@ -25,7 +25,7 @@ import Lib.BoardView exposing (boardDomIdFor)
 import Lib.Dealer as Dealer
 import Lib.Drag exposing (DragState(..))
 import Lib.Engine as Engine
-import Lib.Game as Game
+import Lib.CompleteTurn as CompleteTurn
 import Lib.GameEvent as GameEvent
 import Lib.GameState exposing (GameState)
 import Lib.Hand exposing (activeHand)
@@ -563,7 +563,7 @@ update msg model =
             -- happen in the ReadyForHumanTurn arm.
             let
                 ( afterTurn, _ ) =
-                    Game.applyCompleteTurn refereeBounds model.gameState
+                    CompleteTurn.applyCompleteTurn refereeBounds model.gameState
 
                 agentDonePopup : Popup.PopupContent
                 agentDonePopup =

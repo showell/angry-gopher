@@ -149,7 +149,7 @@ stackDebugStr s =
 
 
 
--- STRINGIFY (production: Lib.Game uses this for human-readable error display)
+-- STRINGIFY (production: Lib.CompleteTurn uses this for human-readable error display)
 
 
 refereeStageToString : RefereeStage -> String

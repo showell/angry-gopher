@@ -1,25 +1,16 @@
-module Lib.Game exposing
+module Lib.CompleteTurn exposing
     ( CompleteTurnOutcome
     , applyCompleteTurn
     )
 
-{-| The autonomous LynRummy game state and its pure transitions.
+{-| The pure CompleteTurn state transition + its outcome type.
+Mirrors the Go-side `games/lynrummy/replay.go` `applyCompleteTurn`
+step-for-step.
 
-This is the core of the client — the full game logic that can
-run standalone without any server. Mirrors the Go-side
-`games/lynrummy/replay.go` `applyCompleteTurn`, with the Elm
-primitives in place (`Lib.PlayerTurn`, `Lib.Hand`,
-`CardStack.agedFromPriorTurn`).
-
-The `GameState` is defined as an extensible record so the host
-Model (Game.elm) can embed these fields alongside its UI-only
-ones (drag, popup, replay progress) and call transitions
-without unwrapping.
-
-Intentional divergence from Go: `applyCompleteTurn` takes a
-pre-decided `Bool` for whether this empty-hand wins are awarded
-to the incoming party. In the Go path that decision flows from
-`state.VictorAwarded`; same here, stored on the record.
+The host-facing wrapper (status + popup + wire payload) lives
+in `Lib.TurnControl` as `attemptCompleteTurn`, kept separate so
+this module stays Popup/Status-free and unidirectional under
+them.
 
 -}
 
