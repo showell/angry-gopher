@@ -1794,8 +1794,8 @@ scenario turn_1_hint
     - A♣ A♦ A♥
     - 2♣ 3♦ 4♣ 5♥ 6♠ 7♥
   expect_steps:
-    - place [J♦' Q♦'] from hand
-    - peel T♦ from HELPER [T♦ J♦ Q♦ K♦], absorb onto [J♦' Q♦'] → [T♦ J♦' Q♦'] [→COMPLETE]
+    - place [4♠] from hand
+    - push [4♠] onto HELPER [K♠ A♠ 2♠ 3♠] → [K♠ A♠ 2♠ 3♠ 4♠]
 
 scenario turn_2_hint
   op: hint_for_hand
@@ -1826,9 +1826,10 @@ scenario turn_3_hint
     - J♦' Q♦'
     - 4♠
   expect_steps:
-    - place [2♠' 3♠'] from hand
-    - peel T♦ from HELPER [T♦ J♦ Q♦ K♦], absorb onto [J♦' Q♦'] → [T♦ J♦' Q♦'] [→COMPLETE]
-    - pull 4♠ onto [2♠' 3♠'] → [2♠' 3♠' 4♠] [→COMPLETE]
+    - place [4♣'] from hand
+    - peel K♦ from HELPER [T♦ J♦ Q♦ K♦], absorb onto [J♦' Q♦'] → [J♦' Q♦' K♦] [→COMPLETE]
+    - push [4♠] onto HELPER [K♠ A♠ 2♠ 3♠] → [K♠ A♠ 2♠ 3♠ 4♠]
+    - splice [4♣'] into HELPER [2♣ 3♦ 4♣ 5♥ 6♠ 7♥] → [2♣ 3♦ 4♣'] + [4♣ 5♥ 6♠ 7♥]
 """
       )
     , ( "physical_plan_corpus.dsl"

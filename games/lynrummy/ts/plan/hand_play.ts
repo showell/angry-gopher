@@ -42,8 +42,19 @@ export function findLogicalMovesForPlay(
     }
   }
 
-  const candidates = collectProjectionCandidates(meldable, hand, board);
-  return candidates.length === 0 ? null : shortestPlan(candidates);
+  // Prefer singletons over pairs absolutely, irrespective of plan
+  // length. Singletons read more naturally as a "play" (one card
+  // placed) and give the player more remaining-hand flexibility for
+  // the next play. Falling back to pairs only when no singleton
+  // works also skips the expensive pair-BFS calls that dominate
+  // late-game turns (see random354.md — seed 42 turn 11 drill).
+  const singletons = collectSingletonCandidates(hand, board);
+  if (singletons.length > 0) return shortestPlan(singletons);
+
+  const pairs = collectPairCandidates(meldable, board);
+  if (pairs.length > 0) return shortestPlan(pairs);
+
+  return null;
 }
 
 export function formatHint(result: LogicalMovesForPlay | null): readonly string[] {
@@ -86,20 +97,29 @@ function findTripleInHand(
   return null;
 }
 
-// --- Phase 2 + 3: pair + singleton projections --------------------------
+// --- Phase 2: singleton projections (always tried first) ----------------
 
-function collectProjectionCandidates(
-  meldable: readonly MeldablePair[],
+function collectSingletonCandidates(
   hand: readonly Card[],
+  board: readonly (readonly Card[])[],
+): LogicalMovesForPlay[] {
+  const candidates: LogicalMovesForPlay[] = [];
+  for (const card of hand) {
+    const r = projectAndSolve(board, [card]);
+    if (r !== null) candidates.push(r);
+  }
+  return candidates;
+}
+
+// --- Phase 3: pair projections (fallback only) --------------------------
+
+function collectPairCandidates(
+  meldable: readonly MeldablePair[],
   board: readonly (readonly Card[])[],
 ): LogicalMovesForPlay[] {
   const candidates: LogicalMovesForPlay[] = [];
   for (const { card1, card2 } of meldable) {
     const r = projectAndSolve(board, [card1, card2]);
-    if (r !== null) candidates.push(r);
-  }
-  for (const card of hand) {
-    const r = projectAndSolve(board, [card]);
     if (r !== null) candidates.push(r);
   }
   return candidates;
