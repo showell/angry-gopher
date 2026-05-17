@@ -35,6 +35,7 @@ import Lib.BoardGesture as BoardGesture
 import Lib.BoardView as BoardView
 import Lib.Button as Button
 import Lib.CardStack as CardStack exposing (CardStack)
+import Lib.Colors as Colors
 import Lib.Drag as Drag exposing (DragState(..))
 import Lib.Execute as Execute
 import Lib.GameEvent as GameEvent exposing (GameEvent(..))
@@ -43,8 +44,9 @@ import Lib.Point exposing (Point)
 import Lib.PointerInput as PointerInput
 import Lib.Status as Status exposing (StatusKind(..))
 import Lib.WingView as WingView
-import Html exposing (Html, div, text)
-import Html.Attributes exposing (style)
+import Html exposing (Html, div, form, text)
+import Html.Attributes as Attr exposing (style)
+import Html.Events as Events
 import Http
 import Json.Decode as Decode
 import Puzzle.Animate as Animate
@@ -109,7 +111,8 @@ type Msg
     | ClickUndo
     | ClickInstantReplay
     | ClickReplayPauseToggle
-    | ClickDismissCongrats
+    | ClickStayHere
+    | CongratsFocusResult
     | ReplayTick Time.Posix
     | ActionSent (Result Http.Error ())
 
@@ -333,11 +336,14 @@ update msg model =
                                 , nextSeq = state.nextSeq
                                 }
 
+                        nowClean =
+                            Status.isCleanBoard outcome.board
+
                         nextModel =
                             { model
                                 | drag = NotDragging
                                 , status = outcome.status
-                                , congratsVisible = Status.isCleanBoard outcome.board
+                                , congratsVisible = nowClean
                             }
                                 |> withCurrentState
                                     (\s ->
@@ -347,13 +353,21 @@ update msg model =
                                             , nextSeq = outcome.nextSeq
                                         }
                                     )
+
+                        focusCmd =
+                            if nowClean then
+                                Browser.Dom.focus congratsNextButtonId
+                                    |> Task.attempt (\_ -> CongratsFocusResult)
+
+                            else
+                                Cmd.none
                     in
                     case outcome.outboundPayload of
                         Just payload ->
-                            sendActionForCurrentPuzzle payload ( nextModel, Cmd.none )
+                            sendActionForCurrentPuzzle payload ( nextModel, focusCmd )
 
                         Nothing ->
-                            ( nextModel, Cmd.none )
+                            ( nextModel, focusCmd )
 
         ClickPrevPuzzle ->
             ( navigateTo (stepIndex -1 model) model, Cmd.none )
@@ -361,8 +375,13 @@ update msg model =
         ClickNextPuzzle ->
             ( navigateTo (stepIndex 1 model) model, Cmd.none )
 
-        ClickDismissCongrats ->
+        ClickStayHere ->
             ( { model | congratsVisible = False }, Cmd.none )
+
+        CongratsFocusResult ->
+            -- Focus failures are silently ignored; the popup is
+            -- still visible and clickable either way.
+            ( model, Cmd.none )
 
         ClickUndo ->
             let
@@ -676,39 +695,97 @@ view model =
         ]
 
 
-{-| Floating celebration card, shown when the user makes a
-move that leaves every stack a valid meld. Non-modal — the
-nav header and the board stay clickable so the user can move
-on without dismissing. OK button just hides the popup.
+{-| DOM id for the popup's default-action button. We focus
+this on every transition to congratsVisible=True so keyboard
+users can hit Enter to advance.
+-}
+congratsNextButtonId : String
+congratsNextButtonId =
+    "puzzle-congrats-next"
+
+
+{-| Floating celebration card. Compact, near the top of the
+viewport, conservative styling (navy border, white background,
+black text). The Next-puzzle button is focused by default;
+hitting Enter submits the form and fires ClickNextPuzzle.
+Non-modal — the nav header and board stay clickable.
 -}
 congratsPopup : Model -> Html Msg
 congratsPopup model =
     if not model.congratsVisible then
-        Html.text ""
+        text ""
 
     else
-        div
-            [ style "position" "fixed"
-            , style "top" "40%"
+        form
+            [ Events.onSubmit ClickNextPuzzle
+            , style "position" "fixed"
+            , style "top" "70px"
             , style "left" "50%"
-            , style "transform" "translate(-50%, -50%)"
-            , style "background" "#fff"
-            , style "border" "2px solid #4caf50"
-            , style "border-radius" "8px"
-            , style "padding" "24px 32px"
-            , style "box-shadow" "0 8px 24px rgba(0,0,0,0.18)"
+            , style "transform" "translateX(-50%)"
+            , style "background" "white"
+            , style "color" "black"
+            , style "border" ("2px solid " ++ Colors.navy)
+            , style "border-radius" "4px"
+            , style "padding" "14px 20px"
+            , style "box-shadow" "0 4px 12px rgba(0,0,0,0.15)"
             , style "z-index" "1000"
             , style "text-align" "center"
-            , style "min-width" "280px"
+            , style "min-width" "320px"
+            , style "margin" "0"
             ]
             [ div
-                [ style "font-size" "18px"
-                , style "color" "#1b5e20"
-                , style "margin-bottom" "16px"
+                [ style "font-size" "15px"
+                , style "margin-bottom" "12px"
                 ]
                 [ text "You solved it! Hit Prev or Next for the next puzzle." ]
-            , Button.button "OK" ClickDismissCongrats
+            , div
+                [ style "display" "flex"
+                , style "gap" "12px"
+                , style "justify-content" "center"
+                ]
+                [ stayHereButton
+                , nextPuzzleButton
+                ]
             ]
+
+
+stayHereButton : Html Msg
+stayHereButton =
+    Html.button
+        [ Attr.type_ "button"
+        , Events.onClick ClickStayHere
+        , style "padding" "6px 14px"
+        , style "font-size" "14px"
+        , style "border" ("1px solid " ++ Colors.navy)
+        , style "background" "white"
+        , style "color" Colors.navy
+        , style "border-radius" "3px"
+        , style "cursor" "pointer"
+        ]
+        [ text "Stay here" ]
+
+
+nextPuzzleButton : Html Msg
+nextPuzzleButton =
+    Html.button
+        [ Attr.type_ "submit"
+        , Attr.id congratsNextButtonId
+        , Attr.autofocus True
+        , style "padding" "6px 14px"
+        , style "font-size" "14px"
+        , style "font-weight" "600"
+        , style "border" "2px solid #1b5e20"
+        , style "background" "#2e7d32"
+        , style "color" "white"
+        , style "border-radius" "3px"
+        , style "cursor" "pointer"
+
+        -- A clear focus ring so the default-selected button is
+        -- obvious to keyboard users at a glance.
+        , style "outline" "3px solid #a5d6a7"
+        , style "outline-offset" "1px"
+        ]
+        [ text "Next puzzle" ]
 
 
 {-| Header strip above the board: Prev — counter + name — Next.
