@@ -338,7 +338,7 @@ update msg model =
                                 , nextSeq = state.nextSeq
                                 }
 
-                        nextModel =
+                        modelAfterDrag =
                             { model | drag = NotDragging, status = outcome.status }
                                 |> withCurrentState
                                     (\s ->
@@ -348,20 +348,37 @@ update msg model =
                                             , nextSeq = outcome.nextSeq
                                         }
                                     )
-
-                        solvedCmd =
-                            if Status.isCleanBoard outcome.board then
-                                Task.succeed () |> Task.perform (always PuzzleSolved)
-
-                            else
-                                Cmd.none
                     in
                     case outcome.outboundPayload of
-                        Just payload ->
-                            sendActionForCurrentPuzzle payload ( nextModel, solvedCmd )
-
                         Nothing ->
-                            ( nextModel, solvedCmd )
+                            -- Drag rejected (off-board). The scold
+                            -- status in modelAfterDrag is the only
+                            -- visible response.
+                            ( modelAfterDrag, Cmd.none )
+
+                        Just payload ->
+                            let
+                                httpPostForAction =
+                                    Http.post
+                                        { url = "/gopher/puzzle/sessions/" ++ String.fromInt model.sessionId ++ "/actions"
+                                        , body = Http.stringBody "text/plain" (puzzleBlockBody model payload)
+                                        , expect = Http.expectWhatever ActionSent
+                                        }
+
+                                postedModel =
+                                    { modelAfterDrag | lastPostedIndex = Just model.currentIndex }
+                            in
+                            case Status.isCleanBoard outcome.board of
+                                False ->
+                                    ( postedModel, httpPostForAction )
+
+                                True ->
+                                    ( postedModel
+                                    , Cmd.batch
+                                        [ httpPostForAction
+                                        , Task.succeed () |> Task.perform (always PuzzleSolved)
+                                        ]
+                                    )
 
         ClickPrevPuzzle ->
             ( navigateTo (stepIndex -1 model) model, Cmd.none )
@@ -389,7 +406,10 @@ update msg model =
                 state =
                     currentState model
             in
-            if canUndo state.actionLog then
+            if not (canUndo state.actionLog) then
+                ( model, Cmd.none )
+
+            else
                 let
                     nextLog =
                         state.actionLog ++ [ { action = GameEvent.Undo } ]
@@ -401,7 +421,10 @@ update msg model =
                         (currentPuzzle model).initialBoard
 
                     nextModel =
-                        { model | congratsVisible = False }
+                        { model
+                            | congratsVisible = False
+                            , lastPostedIndex = Just model.currentIndex
+                        }
                             |> withCurrentState
                                 (\s ->
                                     { s
@@ -413,12 +436,15 @@ update msg model =
                                         , nextSeq = s.nextSeq + 1
                                     }
                                 )
-                in
-                sendActionForCurrentPuzzle (GameEvent.undoDsl state.nextSeq)
-                    ( nextModel, Cmd.none )
 
-            else
-                ( model, Cmd.none )
+                    httpPostForAction =
+                        Http.post
+                            { url = "/gopher/puzzle/sessions/" ++ String.fromInt model.sessionId ++ "/actions"
+                            , body = Http.stringBody "text/plain" (puzzleBlockBody model (GameEvent.undoDsl state.nextSeq))
+                            , expect = Http.expectWhatever ActionSent
+                            }
+                in
+                ( nextModel, httpPostForAction )
 
         ClickInstantReplay ->
             let
@@ -510,10 +536,11 @@ applyForPuzzle event board =
 -- WIRE
 
 
-{-| POST one action line to the session's actions.dsl. If the
-puzzle context has shifted since the last POST, prepend a
-`puzzle <idx>` header line so the on-disk file is readable as
-interleaved per-puzzle blocks:
+{-| Format one action line for the session's actions.dsl POST.
+When the active puzzle matches the one we last posted under,
+the body is just the indented action; when it shifted (or this
+is the first post of the session), a `puzzle <idx>` header
+opens a fresh block:
 
     puzzle 0
       1) split [A♣ A♦ A♥] at (130,260) @2
@@ -524,40 +551,22 @@ interleaved per-puzzle blocks:
       3) split [...] at ...
 
 Per-puzzle seq is monotonic across re-entry (puzzle 0's third
-action stays `3)`, not `1)`), which keeps the file replayable
-puzzle-by-puzzle just by re-walking each block in order.
+action stays `3)`, not `1)`), so each block is replayable just
+by re-walking it in order.
 
-Updates `lastPostedIndex` on every POST so the next POST knows
-whether to emit a fresh header.
+Callers are responsible for updating `lastPostedIndex` after
+firing the POST.
 -}
-sendActionForCurrentPuzzle : String -> ( Model, Cmd Msg ) -> ( Model, Cmd Msg )
-sendActionForCurrentPuzzle line ( model, extraCmd ) =
-    let
-        needsHeader =
-            model.lastPostedIndex /= Just model.currentIndex
+puzzleBlockBody : Model -> String -> String
+puzzleBlockBody model line =
+    if model.lastPostedIndex == Just model.currentIndex then
+        "  " ++ line
 
-        body =
-            if needsHeader then
-                "puzzle "
-                    ++ String.fromInt model.currentIndex
-                    ++ "\n  "
-                    ++ line
-
-            else
-                "  " ++ line
-    in
-    ( { model | lastPostedIndex = Just model.currentIndex }
-    , Cmd.batch [ extraCmd, postActionBody model.sessionId body ]
-    )
-
-
-postActionBody : Int -> String -> Cmd Msg
-postActionBody sessionId body =
-    Http.post
-        { url = "/gopher/puzzle/sessions/" ++ String.fromInt sessionId ++ "/actions"
-        , body = Http.stringBody "text/plain" body
-        , expect = Http.expectWhatever ActionSent
-        }
+    else
+        "puzzle "
+            ++ String.fromInt model.currentIndex
+            ++ "\n  "
+            ++ line
 
 
 
