@@ -1,26 +1,9 @@
 module Puzzle exposing (main)
 
-{-| Puzzle V3 — drag-aware single-puzzle surface.
-
-Dedicated host: own Msg, own Model, no `Game.*` imports.
-Composes `Lib.*` building blocks directly. Supports
-board-card drag (move + merge + click=split) and Undo.
-
-The HTML page (served by `views/puzzle.go`) bakes both
-`session_id` and `initial_board` into the Elm flags — the
-client starts ready-to-play with no follow-up round trip
-before the first action can ship.
-
-Each subsequent action (board drag outcome or Undo) is shipped
-to `/gopher/puzzle/sessions/<id>/actions` as a `{seq, action}`
-envelope — same wire shape as the full game's. The agent reads
-these on disk to study Steve's solutions.
-
-Undo follows the full-game model: clicking Undo appends a
-`GameEvent.Undo` token to `actionLog`; `collapseUndos` derives
-the effective sequence; the board is recomputed by folding
-`applyForPuzzle` over that sequence from `initialBoard`.
-
+{-| The action log written to
+games/lynrummy/data/puzzle/sessions/<id>/puzzle_<idx>/actions.dsl
+has one consumer: the in-repo agent. No external clients, so
+the wire format is ours to change whenever the code needs.
 -}
 
 import Array exposing (Array)
@@ -182,18 +165,16 @@ init flagsValue =
 
 currentPuzzle : Model -> Puzzle
 currentPuzzle model =
-    Array.get model.currentIndex model.puzzles
-        |> Maybe.withDefault emptyPuzzle
+    case Array.get model.currentIndex model.puzzles of
+        Just p ->
+            p
 
-
-emptyPuzzle : Puzzle
-emptyPuzzle =
-    -- Init guards on an empty catalog, so this is the
-    -- unreachable branch of the Array.get above. Kept harmless
-    -- rather than Debug.todo so the type-check stays clean.
-    { name = "(empty)"
-    , initialBoard = []
-    }
+        Nothing ->
+            Debug.todo
+                ("Puzzle.currentPuzzle: currentIndex "
+                    ++ String.fromInt model.currentIndex
+                    ++ " out of bounds (init refuses empty catalogs; stepIndex uses modBy)"
+                )
 
 
 currentState : Model -> PuzzleState
@@ -510,10 +491,9 @@ canUndo log =
     not (List.isEmpty (ActionLog.collapseUndos log))
 
 
-{-| Apply one event to the puzzle's board. The puzzle's
-universe of actions is just the three board verbs; any other
-variant in the log signals a real bug, so we log loudly (the
-existing convention in `Lib.Execute`).
+{-| Apply one event to the puzzle's board. Only the three
+board verbs ever land here — Undo tokens get stripped by
+`ActionLog.collapseUndos` before the foldl.
 -}
 applyForPuzzle : GameEvent -> List CardStack -> List CardStack
 applyForPuzzle event board =
@@ -528,11 +508,10 @@ applyForPuzzle event board =
             Execute.moveStack p.stack p.newLoc board
 
         _ ->
-            let
-                _ =
-                    Debug.log "puzzle.applyForPuzzle: unexpected event in log" event
-            in
-            board
+            Debug.todo
+                ("Puzzle.applyForPuzzle: non-board-verb event reached foldl (collapseUndos should have stripped Undo); got "
+                    ++ Debug.toString event
+                )
 
 
 -- SUBSCRIPTIONS
@@ -596,8 +575,6 @@ view model =
                 _ ->
                     []
 
-        -- Puzzles never have hand drags; dispatches are just the
-        -- board-card branch + empty fallback.
         wings =
             case drag of
                 DraggingBoardCard d ->
@@ -670,22 +647,17 @@ view model =
         ]
 
 
-{-| DOM id for the popup's default-action button. We focus
-this on every transition to congratsVisible=True so keyboard
-users can hit Enter to advance.
+{-| Focused on every transition to congratsVisible=True so
+keyboard users can hit Enter to advance.
 -}
 congratsNextButtonId : String
 congratsNextButtonId =
     "puzzle-congrats-next"
 
 
-{-| Floating celebration card. Compact, near the top of the
-viewport, conservative styling (navy border, white background,
-black text). The Next-puzzle button is focused on every
-transition to congratsVisible=True (see PuzzleSolved handler),
-so the keyboard default action — Enter activates the focused
-button — fires ClickAdvanceFromSolvedPuzzle. Non-modal: the
-nav header and board stay clickable.
+{-| Non-modal: nav header and board stay clickable behind it.
+Enter activates the focused Next button (browser default for a
+focused HTML button), firing ClickAdvanceFromSolvedPuzzle.
 -}
 congratsPopup : Model -> Html Msg
 congratsPopup model =
@@ -764,11 +736,6 @@ nextPuzzleButton =
         [ text "Next puzzle" ]
 
 
-{-| Header strip above the board: Prev — counter + name — Next.
-Counter is 1-indexed for humans ("3 / 21" reads cleaner than "2
-/ 21"). Buttons are disabled when the catalog has 0 or 1
-entries (nothing to navigate to).
--}
 puzzleNavHeader : Model -> Html Msg
 puzzleNavHeader model =
     let
@@ -821,10 +788,6 @@ puzzleNavHeader model =
         ]
 
 
-{-| Drag the View should render during a replay. Animating
-phases surface the sub-machine's dragInfo; idle phases show
-no floater.
--}
 replayDrag : Animate.AnimationState -> Drag.DragState
 replayDrag rs =
     case rs.phase of
