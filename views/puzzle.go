@@ -20,16 +20,16 @@ import (
 // alongside elm.js in the unified Elm project.
 var PuzzleJSPath = "games/lynrummy/elm/puzzle.js"
 
-// puzzleSeedsPath — pre-mined puzzles with positioned boards.
-// Catalog is pure DSL: `puzzle <name>` headers, each followed by
-// indented `at (left, top): cards` lines that pass straight
-// through to Elm's Game.BoardDsl on the wire.
-const puzzleSeedsPath = "games/lynrummy/conformance/mined_seeds.dsl"
+// puzzleSeedsPath — curated puzzle catalog with positioned
+// boards. Catalog is pure DSL: `puzzle <name>` headers, each
+// followed by indented `at (left, top): cards` lines that pass
+// straight through to Elm's Game.BoardDsl on the wire.
+const puzzleSeedsPath = "games/lynrummy/conformance/curated_4line_puzzles.dsl"
 
 // featuredPuzzleName — the puzzle every visit currently
 // receives. Hardcoded; rotation / catalog selection can be
 // added later without changing the wire.
-const featuredPuzzleName = "mined_002_5D_5C"
+const featuredPuzzleName = "4line_peel_push_push_steal_s1t1p0"
 
 // HandlePuzzle dispatches /gopher/puzzle/*.
 func HandlePuzzle(w http.ResponseWriter, r *http.Request) {
@@ -86,7 +86,7 @@ func puzzleAppendAction(w http.ResponseWriter, r *http.Request, sessionID int64)
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// loadPuzzleBoard reads mined_seeds.dsl and returns the
+// loadPuzzleBoard reads the puzzle catalog and returns the
 // named puzzle's body — the multi-line `at (left, top): cards`
 // block that Game.BoardDsl on the Elm side parses. The catalog
 // itself isn't JSON, so this is a thin string scan: find the
