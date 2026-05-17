@@ -90,7 +90,6 @@ type alias Model =
     { puzzles : Array Puzzle
     , currentIndex : Int
     , puzzleState : Dict Int PuzzleState
-    , lastPostedIndex : Maybe Int
     , drag : DragState
     , boardRect : Maybe GA.Rect
     , status : Status.StatusMessage
@@ -151,7 +150,6 @@ init flagsValue =
             ( { puzzles = Array.fromList flags.puzzles
               , currentIndex = 0
               , puzzleState = Dict.empty
-              , lastPostedIndex = Nothing
               , drag = NotDragging
               , boardRect = Nothing
               , status = { text = "Drag stacks to merge or move them.", kind = Inform }
@@ -360,20 +358,22 @@ update msg model =
                             let
                                 httpPostForAction =
                                     Http.post
-                                        { url = "/gopher/puzzle/sessions/" ++ String.fromInt model.sessionId ++ "/actions"
-                                        , body = Http.stringBody "text/plain" (puzzleBlockBody model payload)
+                                        { url =
+                                            "/gopher/puzzle/sessions/"
+                                                ++ String.fromInt model.sessionId
+                                                ++ "/puzzles/"
+                                                ++ String.fromInt model.currentIndex
+                                                ++ "/actions"
+                                        , body = Http.stringBody "text/plain" payload
                                         , expect = Http.expectWhatever ActionSent
                                         }
-
-                                postedModel =
-                                    { modelAfterDrag | lastPostedIndex = Just model.currentIndex }
                             in
                             case Status.isCleanBoard outcome.board of
                                 False ->
-                                    ( postedModel, httpPostForAction )
+                                    ( modelAfterDrag, httpPostForAction )
 
                                 True ->
-                                    ( postedModel
+                                    ( modelAfterDrag
                                     , Cmd.batch
                                         [ httpPostForAction
                                         , Task.succeed () |> Task.perform (always PuzzleSolved)
@@ -421,10 +421,7 @@ update msg model =
                         (currentPuzzle model).initialBoard
 
                     nextModel =
-                        { model
-                            | congratsVisible = False
-                            , lastPostedIndex = Just model.currentIndex
-                        }
+                        { model | congratsVisible = False }
                             |> withCurrentState
                                 (\s ->
                                     { s
@@ -439,8 +436,13 @@ update msg model =
 
                     httpPostForAction =
                         Http.post
-                            { url = "/gopher/puzzle/sessions/" ++ String.fromInt model.sessionId ++ "/actions"
-                            , body = Http.stringBody "text/plain" (puzzleBlockBody model (GameEvent.undoDsl state.nextSeq))
+                            { url =
+                                "/gopher/puzzle/sessions/"
+                                    ++ String.fromInt model.sessionId
+                                    ++ "/puzzles/"
+                                    ++ String.fromInt model.currentIndex
+                                    ++ "/actions"
+                            , body = Http.stringBody "text/plain" (GameEvent.undoDsl state.nextSeq)
                             , expect = Http.expectWhatever ActionSent
                             }
                 in
@@ -531,43 +533,6 @@ applyForPuzzle event board =
                     Debug.log "puzzle.applyForPuzzle: unexpected event in log" event
             in
             board
-
-
--- WIRE
-
-
-{-| Format one action line for the session's actions.dsl POST.
-When the active puzzle matches the one we last posted under,
-the body is just the indented action; when it shifted (or this
-is the first post of the session), a `puzzle <idx>` header
-opens a fresh block:
-
-    puzzle 0
-      1) split [A♣ A♦ A♥] at (130,260) @2
-      2) merge_stack [A♥] at ...
-    puzzle 3
-      1) push [...] at ...
-    puzzle 0
-      3) split [...] at ...
-
-Per-puzzle seq is monotonic across re-entry (puzzle 0's third
-action stays `3)`, not `1)`), so each block is replayable just
-by re-walking it in order.
-
-Callers are responsible for updating `lastPostedIndex` after
-firing the POST.
--}
-puzzleBlockBody : Model -> String -> String
-puzzleBlockBody model line =
-    if model.lastPostedIndex == Just model.currentIndex then
-        "  " ++ line
-
-    else
-        "puzzle "
-            ++ String.fromInt model.currentIndex
-            ++ "\n  "
-            ++ line
-
 
 
 -- SUBSCRIPTIONS

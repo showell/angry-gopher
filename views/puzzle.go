@@ -1,7 +1,10 @@
-// Puzzle V3 — drag-aware single-puzzle surface. Standard
-// golang routing applies; storage shape mirrors the full game
-// (`meta` DSL + `actions.dsl`), under
-// `games/lynrummy/data/puzzle/sessions/<id>/`.
+// Puzzle V3 — drag-aware multi-puzzle surface. Catalog ships
+// at page load; navigation lives entirely in the Elm client.
+// On-disk shape under `games/lynrummy/data/puzzle/sessions/<id>/`:
+//
+//   meta                       — session-level: created_at + catalog snapshot
+//   puzzle_<idx>/actions.dsl   — one file per puzzle the user touched;
+//                                lines are `<seq>) <action>` only.
 
 package views
 
@@ -46,27 +49,32 @@ func HandlePuzzle(w http.ResponseWriter, r *http.Request) {
 
 func handlePuzzleSessionRoute(w http.ResponseWriter, r *http.Request, rest string) {
 	parts := strings.Split(rest, "/")
-	idStr := parts[0]
-	id, err := strconv.ParseInt(idStr, 10, 64)
-	if err != nil || id <= 0 {
+	sessionID, err := strconv.ParseInt(parts[0], 10, 64)
+	if err != nil || sessionID <= 0 {
 		http.NotFound(w, r)
 		return
 	}
-	switch {
-	case len(parts) == 2 && parts[1] == "actions":
-		if r.Method == http.MethodPost {
-			puzzleAppendAction(w, r, id)
-		} else {
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	// Only route: POST /sessions/<id>/puzzles/<idx>/actions.
+	// Each puzzle's actions append to its own actions.dsl
+	// under sessions/<id>/puzzle_<idx>/, so the file shape is
+	// just `<seq>) <action>` lines — no cross-puzzle
+	// interleaving, no header bookkeeping.
+	if len(parts) == 4 && parts[1] == "puzzles" && parts[3] == "actions" && r.Method == http.MethodPost {
+		puzzleIdx, err := strconv.Atoi(parts[2])
+		if err != nil || puzzleIdx < 0 {
+			http.NotFound(w, r)
+			return
 		}
-	default:
-		http.NotFound(w, r)
+		puzzleAppendAction(w, r, sessionID, puzzleIdx)
+		return
 	}
+	http.NotFound(w, r)
 }
 
 // puzzleAppendAction appends the POST body verbatim as one
-// line in `actions.dsl`. The seq prefix is Elm-authored.
-func puzzleAppendAction(w http.ResponseWriter, r *http.Request, sessionID int64) {
+// line in <session>/puzzle_<idx>/actions.dsl. Storage helper
+// creates the per-puzzle directory on first append.
+func puzzleAppendAction(w http.ResponseWriter, r *http.Request, sessionID int64, puzzleIdx int) {
 	if !PuzzleSessionExists(sessionID) {
 		http.NotFound(w, r)
 		return
@@ -76,7 +84,8 @@ func puzzleAppendAction(w http.ResponseWriter, r *http.Request, sessionID int64)
 		http.Error(w, "read body: "+err.Error(), http.StatusBadRequest)
 		return
 	}
-	if err := AppendPuzzleSessionDslLine(sessionID, "actions.dsl", body); err != nil {
+	rel := fmt.Sprintf("puzzle_%d/actions.dsl", puzzleIdx)
+	if err := AppendPuzzleSessionDslLine(sessionID, rel, body); err != nil {
 		http.Error(w, "append: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
