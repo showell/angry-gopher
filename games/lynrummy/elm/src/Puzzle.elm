@@ -23,9 +23,11 @@ the effective sequence; the board is recomputed by folding
 
 -}
 
+import Array exposing (Array)
 import Browser
 import Browser.Dom
 import Browser.Events
+import Dict exposing (Dict)
 import Lib.ActionLog as ActionLog exposing (ActionLogEntry)
 import Lib.BoardDrag as BoardDrag
 import Lib.PuzzleFlagDsl as PuzzleFlagDsl
@@ -50,26 +52,48 @@ import Task
 import Time
 
 
-{-| Server-baked flags. The Go handler picks the puzzle, allocates
-a session, and emits `{session_id, initial_board}` in the page's
-`Elm.Puzzle.init` call. We decode it once at boot.
+{-| Server-baked flags. The Go handler allocates a session and
+emits `{session_id, puzzles}` in the page's `Elm.Puzzle.init`
+call — `puzzles` is the entire curated catalog. We decode it
+once at boot; navigation never refetches.
 -}
 type alias DecodedFlags =
     { sessionId : Int
+    , puzzles : List Puzzle
+    }
+
+
+{-| One catalog entry. `initialBoard` is the dirty board the
+user starts each attempt from. The name is shown in the header.
+-}
+type alias Puzzle =
+    { name : String
     , initialBoard : List CardStack
     }
 
 
-type alias Model =
-    { initialBoard : List CardStack
-    , board : List CardStack
+{-| Per-puzzle working state. When the user navigates away and
+back, this dict-lookup preserves their progress on every puzzle
+they've touched. Fresh puzzles synthesize a default state
+(initial board, empty log, seq=1) on first read.
+-}
+type alias PuzzleState =
+    { board : List CardStack
     , actionLog : List ActionLogEntry
+    , nextSeq : Int
+    }
+
+
+type alias Model =
+    { puzzles : Array Puzzle
+    , currentIndex : Int
+    , puzzleState : Dict Int PuzzleState
+    , lastPostedIndex : Maybe Int
     , drag : DragState
     , boardRect : Maybe GA.Rect
     , status : Status.StatusMessage
     , gameId : String
     , sessionId : Int
-    , nextSeq : Int
     , replayState : Maybe Animate.AnimationState
     }
 
@@ -93,19 +117,18 @@ flagsDecoder =
             (\dsl ->
                 case PuzzleFlagDsl.parsePuzzleFlag dsl of
                     Ok flag ->
-                        -- SHIM: until the model holds the full catalog,
-                        -- pin the first puzzle's board as the active
-                        -- one. Full multi-puzzle wiring lands in the
-                        -- next commit.
                         case flag.puzzles of
-                            firstPuzzle :: _ ->
-                                Decode.succeed
-                                    { sessionId = flag.sessionId
-                                    , initialBoard = firstPuzzle.board
-                                    }
-
                             [] ->
                                 Decode.fail "puzzle flag: catalog is empty"
+
+                            puzzles ->
+                                Decode.succeed
+                                    { sessionId = flag.sessionId
+                                    , puzzles =
+                                        List.map
+                                            (\p -> { name = p.name, initialBoard = p.board })
+                                            puzzles
+                                    }
 
                     Err msg ->
                         Decode.fail msg
@@ -116,15 +139,15 @@ init : Decode.Value -> ( Model, Cmd Msg )
 init flagsValue =
     case Decode.decodeValue flagsDecoder flagsValue of
         Ok flags ->
-            ( { initialBoard = flags.initialBoard
-              , board = flags.initialBoard
-              , actionLog = []
+            ( { puzzles = Array.fromList flags.puzzles
+              , currentIndex = 0
+              , puzzleState = Dict.empty
+              , lastPostedIndex = Nothing
               , drag = NotDragging
               , boardRect = Nothing
               , status = { text = "Drag stacks to merge or move them.", kind = Inform }
               , gameId = "puzzle"
               , sessionId = flags.sessionId
-              , nextSeq = 1
               , replayState = Nothing
               }
             , Cmd.none
@@ -138,6 +161,53 @@ init flagsValue =
                 ("Puzzle flags failed to decode: "
                     ++ Decode.errorToString err
                 )
+
+
+
+-- CURRENT-PUZZLE HELPERS
+--
+-- All per-puzzle reads/writes route through these. `currentPuzzle`
+-- returns the catalog entry at `currentIndex`; `currentState` returns
+-- the user's working state for that puzzle, synthesizing a fresh
+-- state on first read. `withCurrentState` writes back to the dict.
+
+
+currentPuzzle : Model -> Puzzle
+currentPuzzle model =
+    Array.get model.currentIndex model.puzzles
+        |> Maybe.withDefault emptyPuzzle
+
+
+emptyPuzzle : Puzzle
+emptyPuzzle =
+    -- Init guards on an empty catalog, so this is the
+    -- unreachable branch of the Array.get above. Kept harmless
+    -- rather than Debug.todo so the type-check stays clean.
+    { name = "(empty)"
+    , initialBoard = []
+    }
+
+
+currentState : Model -> PuzzleState
+currentState model =
+    Dict.get model.currentIndex model.puzzleState
+        |> Maybe.withDefault (freshState (currentPuzzle model))
+
+
+freshState : Puzzle -> PuzzleState
+freshState puzzle =
+    { board = puzzle.initialBoard
+    , actionLog = []
+    , nextSeq = 1
+    }
+
+
+withCurrentState : (PuzzleState -> PuzzleState) -> Model -> Model
+withCurrentState f model =
+    { model
+        | puzzleState =
+            Dict.insert model.currentIndex (f (currentState model)) model.puzzleState
+    }
 
 
 
@@ -174,7 +244,7 @@ update msg model =
                                     , cardIndex = cardIndex
                                     , cursor = point
                                     , tMs = time
-                                    , board = model.board
+                                    , board = (currentState model).board
                                     }
                                 )
                       }
@@ -212,58 +282,78 @@ update msg model =
 
                 DraggingBoardCard d ->
                     let
+                        state =
+                            currentState model
+
                         outcome =
                             BoardDrag.handleMouseUp releasePoint
                                 tMs
                                 d
-                                { board = model.board
+                                { board = state.board
                                 , boardRect = model.boardRect
-                                , actionLog = model.actionLog
-                                , nextSeq = model.nextSeq
+                                , actionLog = state.actionLog
+                                , nextSeq = state.nextSeq
                                 }
                     in
-                    ( { model
-                        | drag = NotDragging
-                        , board = outcome.board
-                        , actionLog = outcome.actionLog
-                        , status = outcome.status
-                        , nextSeq = outcome.nextSeq
-                      }
+                    ( { model | drag = NotDragging, status = outcome.status }
+                        |> withCurrentState
+                            (\s ->
+                                { s
+                                    | board = outcome.board
+                                    , actionLog = outcome.actionLog
+                                    , nextSeq = outcome.nextSeq
+                                }
+                            )
                     , outcome.outboundPayload
                         |> Maybe.map (sendAction model.sessionId)
                         |> Maybe.withDefault Cmd.none
                     )
 
         ClickUndo ->
-            if canUndo model.actionLog then
+            let
+                state =
+                    currentState model
+            in
+            if canUndo state.actionLog then
                 let
                     nextLog =
-                        model.actionLog ++ [ { action = GameEvent.Undo } ]
+                        state.actionLog ++ [ { action = GameEvent.Undo } ]
 
                     effective =
                         ActionLog.collapseUndos nextLog
+
+                    initialBoard =
+                        (currentPuzzle model).initialBoard
                 in
-                ( { model
-                    | actionLog = nextLog
-                    , board =
-                        List.foldl applyForPuzzle
-                            model.initialBoard
-                            (List.map .action effective)
-                    , nextSeq = model.nextSeq + 1
-                  }
-                , sendAction model.sessionId (GameEvent.undoDsl model.nextSeq)
+                ( model
+                    |> withCurrentState
+                        (\s ->
+                            { s
+                                | actionLog = nextLog
+                                , board =
+                                    List.foldl applyForPuzzle
+                                        initialBoard
+                                        (List.map .action effective)
+                                , nextSeq = s.nextSeq + 1
+                            }
+                        )
+                , sendAction model.sessionId (GameEvent.undoDsl state.nextSeq)
                 )
 
             else
                 ( model, Cmd.none )
 
         ClickInstantReplay ->
+            let
+                state =
+                    currentState model
+            in
             ( { model
                 | replayState =
                     Just
                         (Animate.start
-                            (ActionLog.collapseUndos model.actionLog)
-                            model.initialBoard
+                            (ActionLog.collapseUndos state.actionLog)
+                            (currentPuzzle model).initialBoard
                         )
                 , drag = NotDragging
                 , status = { text = "Replaying…", kind = Inform }
@@ -403,7 +493,7 @@ view model =
                     ( rs.board, replayDrag rs )
 
                 Nothing ->
-                    ( model.board, model.drag )
+                    ( (currentState model).board, model.drag )
 
         boardFloaters =
             case drag of
@@ -499,7 +589,7 @@ replayDrag rs =
 
 undoButton : Model -> Html Msg
 undoButton model =
-    if model.replayState == Nothing && canUndo model.actionLog then
+    if model.replayState == Nothing && canUndo (currentState model).actionLog then
         Button.button "Undo" ClickUndo
 
     else
@@ -520,7 +610,7 @@ replayButton model =
             -- Compare against the post-collapse log so a fully
             -- undone session reports "nothing to replay" rather
             -- than firing an immediate Completed.
-            if List.isEmpty (ActionLog.collapseUndos model.actionLog) then
+            if List.isEmpty (ActionLog.collapseUndos (currentState model).actionLog) then
                 Button.disabledButton "Replay"
 
             else
