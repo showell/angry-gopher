@@ -351,7 +351,7 @@ update msg model =
 
                         solvedCmd =
                             if Status.isCleanBoard outcome.board then
-                                dispatchPuzzleSolved
+                                Task.succeed () |> Task.perform (always PuzzleSolved)
 
                             else
                                 Cmd.none
@@ -505,18 +505,6 @@ applyForPuzzle event board =
                     Debug.log "puzzle.applyForPuzzle: unexpected event in log" event
             in
             board
-
-
-{-| Round-trip a PuzzleSolved Msg through Elm's event loop so
-the puzzle-solved state transition (open popup, focus the Next
-button) lives entirely in its own update branch instead of
-being inlined into MouseUp. The one-frame delay is acceptable;
-the legibility win is worth it.
--}
-dispatchPuzzleSolved : Cmd Msg
-dispatchPuzzleSolved =
-    Task.succeed () |> Task.perform (always PuzzleSolved)
-
 
 
 -- WIRE
