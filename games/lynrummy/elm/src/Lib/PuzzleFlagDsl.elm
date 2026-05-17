@@ -1,5 +1,6 @@
 module Lib.PuzzleFlagDsl exposing
-    ( PuzzleFlag
+    ( Puzzle
+    , PuzzleFlag
     , parsePuzzleFlag
     )
 
@@ -8,15 +9,21 @@ Go server bakes into the `Elm.Puzzle.init` call. Shape:
 
     session_id: 17
 
-    board:
-      at ( 26,  26): K♠ A♠ 2♠ 3♠
-      at (107,  52): T♦ J♦ Q♦ K♦
-      ...
+    catalog:
+      puzzle 4line_peel_push_push_steal_s1t1p0
+        at (100,140): 2♥ 3♥ 4♥
+        at (40,200): 7♠ 7♦ 7♣
+        ...
+      puzzle 4line_peel_steal_steal_steal_s2t3p1
+        at (...): ...
+        ...
 
-`session_id` is server-allocated and shipped as a scalar at
-the top; the `board:` block is exactly what `BoardDsl.parseBoard`
-already consumes, so that's where the real parsing happens. This
-module is the thin glue.
+`session_id` is server-allocated and shipped as a scalar at the
+top; the `catalog:` block is a sequence of `puzzle <name>`
+chunks. Each chunk's body is the same `at (left, top): cards`
+grammar `BoardDsl.parseBoard` already consumes — this module
+just slices the catalog into chunks and delegates the per-puzzle
+parse.
 
 -}
 
@@ -24,42 +31,48 @@ import Lib.BoardDsl as BoardDsl
 import Lib.CardStack exposing (CardStack)
 
 
+type alias Puzzle =
+    { name : String
+    , board : List CardStack
+    }
+
+
 type alias PuzzleFlag =
     { sessionId : Int
-    , board : List CardStack
+    , puzzles : List Puzzle
     }
 
 
 parsePuzzleFlag : String -> Result String PuzzleFlag
 parsePuzzleFlag src =
     let
-        ( scalarLines, boardBody ) =
-            splitOnBoardHeader (String.lines src)
+        ( scalarLines, catalogBody ) =
+            splitOnCatalogHeader (String.lines src)
     in
     Result.map2 PuzzleFlag
         (findInt "session_id" scalarLines)
-        (BoardDsl.parseBoard (String.join "\n" boardBody))
+        (parseCatalog catalogBody)
 
 
-{-| Split the document into pre-`board:` lines and the indented
-body that follows. Anything between is comment / whitespace and
-is included in scalarLines (where it's ignored by `findInt`).
-The `board:` header line itself is consumed.
+{-| Split the document into pre-`catalog:` lines and the
+indented body that follows. Anything between is comment /
+whitespace and is included in scalarLines (where it's ignored
+by `findInt`). The `catalog:` header line itself is consumed.
 -}
-splitOnBoardHeader : List String -> ( List String, List String )
-splitOnBoardHeader lines =
+splitOnCatalogHeader : List String -> ( List String, List String )
+splitOnCatalogHeader lines =
     case lines of
         [] ->
             ( [], [] )
 
         line :: rest ->
-            if String.trim line == "board:" then
+            if String.trim line == "catalog:" then
                 ( [], List.map dropLeadingIndent rest )
 
             else
                 let
                     ( pre, body ) =
-                        splitOnBoardHeader rest
+                        splitOnCatalogHeader rest
                 in
                 ( line :: pre, body )
 
@@ -71,6 +84,68 @@ dropLeadingIndent s =
 
     else
         s
+
+
+{-| Walk the catalog body (already de-indented one level), open
+a new puzzle chunk on each `puzzle <name>` header line, collect
+subsequent lines into that chunk, and parse each chunk's body
+via `BoardDsl.parseBoard`. Puzzle order in the input is
+preserved.
+-}
+parseCatalog : List String -> Result String (List Puzzle)
+parseCatalog lines =
+    sliceChunks lines []
+        |> List.reverse
+        |> traverse parseChunk
+
+
+sliceChunks : List String -> List ( String, List String ) -> List ( String, List String )
+sliceChunks lines acc =
+    case lines of
+        [] ->
+            acc
+
+        line :: rest ->
+            case parsePuzzleHeader (String.trim line) of
+                Just name ->
+                    sliceChunks rest (( name, [] ) :: acc)
+
+                Nothing ->
+                    case acc of
+                        ( name, body ) :: tail ->
+                            sliceChunks rest (( name, line :: body ) :: tail)
+
+                        [] ->
+                            -- Bare content before the first puzzle
+                            -- header — silently skip (comments, blank
+                            -- lines, etc).
+                            sliceChunks rest acc
+
+
+parsePuzzleHeader : String -> Maybe String
+parsePuzzleHeader line =
+    if String.startsWith "puzzle " line then
+        Just (String.trim (String.dropLeft 7 line))
+
+    else
+        Nothing
+
+
+parseChunk : ( String, List String ) -> Result String Puzzle
+parseChunk ( name, reversedBody ) =
+    BoardDsl.parseBoard (String.join "\n" (List.reverse reversedBody))
+        |> Result.map (\board -> { name = name, board = board })
+        |> Result.mapError (\msg -> "puzzle " ++ name ++ ": " ++ msg)
+
+
+traverse : (a -> Result e b) -> List a -> Result e (List b)
+traverse f xs =
+    case xs of
+        [] ->
+            Ok []
+
+        x :: rest ->
+            Result.map2 (::) (f x) (traverse f rest)
 
 
 findInt : String -> List String -> Result String Int

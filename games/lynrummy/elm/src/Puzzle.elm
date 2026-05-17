@@ -93,10 +93,19 @@ flagsDecoder =
             (\dsl ->
                 case PuzzleFlagDsl.parsePuzzleFlag dsl of
                     Ok flag ->
-                        Decode.succeed
-                            { sessionId = flag.sessionId
-                            , initialBoard = flag.board
-                            }
+                        -- SHIM: until the model holds the full catalog,
+                        -- pin the first puzzle's board as the active
+                        -- one. Full multi-puzzle wiring lands in the
+                        -- next commit.
+                        case flag.puzzles of
+                            firstPuzzle :: _ ->
+                                Decode.succeed
+                                    { sessionId = flag.sessionId
+                                    , initialBoard = firstPuzzle.board
+                                    }
+
+                            [] ->
+                                Decode.fail "puzzle flag: catalog is empty"
 
                     Err msg ->
                         Decode.fail msg
