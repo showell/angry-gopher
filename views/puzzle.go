@@ -20,16 +20,13 @@ import (
 // alongside elm.js in the unified Elm project.
 var PuzzleJSPath = "games/lynrummy/elm/puzzle.js"
 
-// puzzleSeedsPath — curated puzzle catalog with positioned
+// puzzleCatalogPath — curated puzzle catalog with positioned
 // boards. Catalog is pure DSL: `puzzle <name>` headers, each
 // followed by indented `at (left, top): cards` lines that pass
-// straight through to Elm's Game.BoardDsl on the wire.
-const puzzleSeedsPath = "games/lynrummy/conformance/curated_4line_puzzles.dsl"
-
-// featuredPuzzleName — the puzzle every visit currently
-// receives. Hardcoded; rotation / catalog selection can be
-// added later without changing the wire.
-const featuredPuzzleName = "4line_peel_push_push_steal_s1t1p0"
+// straight through to Elm's Lib.BoardDsl on the wire. The whole
+// file ships at page load; the Elm client renders one puzzle at
+// a time with Prev/Next navigation.
+const puzzleCatalogPath = "games/lynrummy/conformance/curated_4line_puzzles.dsl"
 
 // HandlePuzzle dispatches /gopher/puzzle/*.
 func HandlePuzzle(w http.ResponseWriter, r *http.Request) {
@@ -86,15 +83,9 @@ func puzzleAppendAction(w http.ResponseWriter, r *http.Request, sessionID int64)
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// loadPuzzleBoard reads the puzzle catalog and returns the
-// named puzzle's body — the multi-line `at (left, top): cards`
-// block that Game.BoardDsl on the Elm side parses. The catalog
-// itself isn't JSON, so this is a thin string scan: find the
-// `puzzle <name>` header line and return the indented body up
-// to the next blank line or `puzzle ` header.
-// indentLines prefixes every line of `src` with two spaces —
-// turns a flat block of `at (...)` lines into a body under a
-// `board:` header. Trailing blank lines are preserved as-is.
+// indentLines prefixes every non-empty line of `src` with two
+// spaces — turns a flat block into a body under a `<key>:`
+// header. Empty lines pass through unchanged.
 func indentLines(src string) string {
 	lines := strings.Split(src, "\n")
 	for i, l := range lines {
@@ -105,45 +96,46 @@ func indentLines(src string) string {
 	return strings.Join(lines, "\n")
 }
 
-
-func loadPuzzleBoard(name string) (string, error) {
-	data, err := os.ReadFile(puzzleSeedsPath)
+// loadCatalog reads the catalog file and returns its body —
+// `puzzle <name>` headers + indented `at (...)` lines, with
+// comments and blank lines stripped. The Elm client parses
+// this verbatim under a `catalog:` block in the page flag.
+func loadCatalog() (string, error) {
+	data, err := os.ReadFile(puzzleCatalogPath)
 	if err != nil {
-		return "", fmt.Errorf("read %s: %w", puzzleSeedsPath, err)
+		return "", fmt.Errorf("read %s: %w", puzzleCatalogPath, err)
 	}
-	header := "puzzle " + name
-	var body []string
-	inBlock := false
-	for _, line := range strings.Split(string(data), "\n") {
-		if inBlock {
-			if line == "" || strings.HasPrefix(line, "puzzle ") {
-				break
-			}
-			body = append(body, strings.TrimLeft(line, " "))
+	var kept []string
+	for _, raw := range strings.Split(string(data), "\n") {
+		// Strip line comments (matches the DSL parsers
+		// downstream so what we ship matches what gets parsed).
+		line := raw
+		if i := strings.Index(line, "#"); i >= 0 {
+			line = line[:i]
+		}
+		line = strings.TrimRight(line, " \t")
+		if strings.TrimSpace(line) == "" {
 			continue
 		}
-		if line == header {
-			inBlock = true
-		}
+		kept = append(kept, line)
 	}
-	if !inBlock {
-		return "", fmt.Errorf("puzzle %q not found in %s", name, puzzleSeedsPath)
-	}
-	return strings.Join(body, "\n"), nil
+	return strings.Join(kept, "\n"), nil
 }
 
-// puzzlePage allocates a puzzle session, loads the featured
-// puzzle's initial board, writes meta.json, and renders the
-// HTML host with both `session_id` and `initial_board` baked
-// into the Elm flags. Zero post-load round trips before play.
+// puzzlePage allocates a puzzle session, loads the full puzzle
+// catalog, writes meta, and renders the HTML host with both
+// `session_id` and the full catalog baked into the Elm flags.
+// Zero post-load round trips before play.
 //
-// `initial_board` is the multi-line DSL string parsed by
-// Game.BoardDsl on the Elm side — same grammar as the .dsl
-// fixtures and the action-log wire.
+// The flag carries a `catalog:` block — a sequence of
+// `puzzle <name>` chunks each followed by indented
+// `at (left, top): cards` lines. Elm's Lib.PuzzleFlagDsl slices
+// the block into per-puzzle boards and lets the user navigate
+// among them with Prev/Next.
 func puzzlePage(w http.ResponseWriter) {
-	boardDSL, err := loadPuzzleBoard(featuredPuzzleName)
+	catalogDSL, err := loadCatalog()
 	if err != nil {
-		http.Error(w, "load puzzle: "+err.Error(), http.StatusInternalServerError)
+		http.Error(w, "load catalog: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -153,15 +145,15 @@ func puzzlePage(w http.ResponseWriter) {
 		return
 	}
 
-	// meta DSL: server-owned scalars at the top, then the
-	// `board:` block. Same shape the full-game flow uses, so
-	// `cat`-ing the file shows the entire session header in one
-	// view — no JSON escaping around the board content.
+	// meta DSL: server-owned scalars at the top, then a
+	// snapshot of the catalog this session was bound to. The
+	// catalog file can change between sessions; snapshotting
+	// keeps each session replayable by `puzzle <idx>` index
+	// even after the on-disk catalog drifts.
 	metaDSL := fmt.Sprintf(
-		"created_at: %d\npuzzle_name: %s\n\nboard:\n%s\n",
+		"created_at: %d\n\ncatalog:\n%s\n",
 		time.Now().Unix(),
-		featuredPuzzleName,
-		indentLines(boardDSL),
+		indentLines(catalogDSL),
 	)
 	if err := WritePuzzleSessionFile(id, "meta", []byte(metaDSL)); err != nil {
 		http.Error(w, "write meta: "+err.Error(), http.StatusInternalServerError)
@@ -169,13 +161,11 @@ func puzzlePage(w http.ResponseWriter) {
 	}
 
 	// Flag is one DSL string — `session_id:` scalar then a
-	// `board:` block. Elm's Game.PuzzleFlagDsl parses it whole.
-	// Same single-string shape the resume bundle uses for full
-	// games, so the JS boundary carries the same canonical text.
+	// `catalog:` block. Elm's Lib.PuzzleFlagDsl parses it whole.
 	flagDSL := fmt.Sprintf(
-		"session_id: %d\n\nboard:\n%s\n",
+		"session_id: %d\n\ncatalog:\n%s\n",
 		id,
-		indentLines(boardDSL),
+		indentLines(catalogDSL),
 	)
 	flagJSON, err := json.Marshal(flagDSL)
 	if err != nil {
