@@ -43,7 +43,7 @@ import Lib.Point exposing (Point)
 import Lib.PointerInput as PointerInput
 import Lib.Status as Status exposing (StatusKind(..))
 import Lib.WingView as WingView
-import Html exposing (Html, div)
+import Html exposing (Html, div, text)
 import Html.Attributes exposing (style)
 import Http
 import Json.Decode as Decode
@@ -103,6 +103,8 @@ type Msg
     | MouseMove Point Int
     | MouseUp Point Int
     | BoardRectReceived (Result Browser.Dom.Error Browser.Dom.Element)
+    | ClickPrevPuzzle
+    | ClickNextPuzzle
     | ClickUndo
     | ClickInstantReplay
     | ClickReplayPauseToggle
@@ -210,6 +212,38 @@ withCurrentState f model =
     }
 
 
+{-| Wrap-around step. `+1` → next, `-1` → prev, modulo catalog
+size. Always returns a valid index because init guards on an
+empty catalog.
+-}
+stepIndex : Int -> Model -> Int
+stepIndex delta model =
+    let
+        n =
+            Array.length model.puzzles
+    in
+    if n == 0 then
+        0
+
+    else
+        modBy n (model.currentIndex + delta)
+
+
+{-| Switch to a different puzzle. Drops in-flight UI state
+(drag, replay) since they belong to the puzzle you're leaving;
+per-puzzle game state (board, log, seq) is preserved in the
+dict. The status bar resets to the play prompt.
+-}
+navigateTo : Int -> Model -> Model
+navigateTo idx model =
+    { model
+        | currentIndex = idx
+        , drag = NotDragging
+        , replayState = Nothing
+        , status = { text = "Drag stacks to merge or move them.", kind = Inform }
+    }
+
+
 
 -- UPDATE
 
@@ -308,6 +342,12 @@ update msg model =
                         |> Maybe.map (sendAction model.sessionId)
                         |> Maybe.withDefault Cmd.none
                     )
+
+        ClickPrevPuzzle ->
+            ( navigateTo (stepIndex -1 model) model, Cmd.none )
+
+        ClickNextPuzzle ->
+            ( navigateTo (stepIndex 1 model) model, Cmd.none )
 
         ClickUndo ->
             let
@@ -546,6 +586,7 @@ view model =
     div
         [ style "font-family" "system-ui, sans-serif" ]
         [ Status.viewStatusBar model.status
+        , puzzleNavHeader model
         , div
             [ style "padding" "20px"
             , style "display" "flex"
@@ -570,6 +611,63 @@ view model =
                 , boardFloaters = boardFloaters
                 }
             ]
+        ]
+
+
+{-| Header strip above the board: Prev — counter + name — Next.
+Counter is 1-indexed for humans ("3 / 21" reads cleaner than "2
+/ 21"). Buttons are disabled when the catalog has 0 or 1
+entries (nothing to navigate to).
+-}
+puzzleNavHeader : Model -> Html Msg
+puzzleNavHeader model =
+    let
+        n =
+            Array.length model.puzzles
+
+        navigable =
+            n > 1
+
+        prev =
+            if navigable then
+                Button.button "‹ Prev" ClickPrevPuzzle
+
+            else
+                Button.disabledButton "‹ Prev"
+
+        next =
+            if navigable then
+                Button.button "Next ›" ClickNextPuzzle
+
+            else
+                Button.disabledButton "Next ›"
+
+        label =
+            "puzzle "
+                ++ String.fromInt (model.currentIndex + 1)
+                ++ " / "
+                ++ String.fromInt n
+                ++ " — "
+                ++ (currentPuzzle model).name
+    in
+    div
+        [ style "padding" "12px 20px"
+        , style "display" "flex"
+        , style "align-items" "center"
+        , style "gap" "16px"
+        , style "border-bottom" "1px solid #ddd"
+        , style "background" "#fafaf5"
+        ]
+        [ prev
+        , div
+            [ style "flex" "1"
+            , style "text-align" "center"
+            , style "font-family" "monospace"
+            , style "font-size" "14px"
+            , style "color" "#333"
+            ]
+            [ text label ]
+        , next
         ]
 
 
