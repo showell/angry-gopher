@@ -1,5 +1,5 @@
 module Lib.PuzzleFlagDsl exposing
-    ( Puzzle
+    ( CatalogEntry
     , PuzzleFlag
     , parsePuzzleFlag
     )
@@ -31,7 +31,7 @@ import Lib.BoardDsl as BoardDsl
 import Lib.CardStack exposing (CardStack)
 
 
-type alias Puzzle =
+type alias CatalogEntry =
     { name : String
     , board : List CardStack
     }
@@ -39,7 +39,7 @@ type alias Puzzle =
 
 type alias PuzzleFlag =
     { sessionId : Int
-    , puzzles : List Puzzle
+    , puzzles : List CatalogEntry
     }
 
 
@@ -92,7 +92,7 @@ subsequent lines into that chunk, and parse each chunk's body
 via `BoardDsl.parseBoard`. Puzzle order in the input is
 preserved.
 -}
-parseCatalog : List String -> Result String (List Puzzle)
+parseCatalog : List String -> Result String (List CatalogEntry)
 parseCatalog lines =
     sliceChunks lines []
         |> List.reverse
@@ -131,7 +131,7 @@ parsePuzzleHeader line =
         Nothing
 
 
-parseChunk : ( String, List String ) -> Result String Puzzle
+parseChunk : ( String, List String ) -> Result String CatalogEntry
 parseChunk ( name, reversedBody ) =
     BoardDsl.parseBoard (String.join "\n" (List.reverse reversedBody))
         |> Result.map (\board -> { name = name, board = board })

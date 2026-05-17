@@ -10,7 +10,6 @@ import Array exposing (Array)
 import Browser
 import Browser.Dom
 import Browser.Events
-import Dict exposing (Dict)
 import Lib.ActionLog as ActionLog exposing (ActionLogEntry)
 import Lib.BoardDrag as BoardDrag
 import Lib.PuzzleFlagDsl as PuzzleFlagDsl
@@ -48,22 +47,16 @@ type alias DecodedFlags =
     }
 
 
-{-| One catalog entry. `initialBoard` is the dirty board the
-user starts each attempt from. The name is shown in the header.
+{-| Catalog entry + the user's in-flight progress on that
+puzzle, fused. `name` and `initialBoard` are immutable; `board`,
+`actionLog`, and `nextSeq` change as the user plays. A fresh
+puzzle (just-decoded, untouched) starts with
+`board == initialBoard`, `actionLog == []`, `nextSeq == 1`.
 -}
 type alias Puzzle =
     { name : String
     , initialBoard : List CardStack
-    }
-
-
-{-| Per-puzzle working state. When the user navigates away and
-back, this dict-lookup preserves their progress on every puzzle
-they've touched. Fresh puzzles synthesize a default state
-(initial board, empty log, seq=1) on first read.
--}
-type alias PuzzleState =
-    { board : List CardStack
+    , board : List CardStack
     , actionLog : List ActionLogEntry
     , nextSeq : Int
     }
@@ -72,7 +65,6 @@ type alias PuzzleState =
 type alias Model =
     { puzzles : Array Puzzle
     , currentIndex : Int
-    , puzzleState : Dict Int PuzzleState
     , drag : DragState
     , boardRect : Maybe GA.Rect
     , status : Status.StatusMessage
@@ -112,18 +104,25 @@ flagsDecoder =
                             [] ->
                                 Decode.fail "puzzle flag: catalog is empty"
 
-                            puzzles ->
+                            entries ->
                                 Decode.succeed
                                     { sessionId = flag.sessionId
-                                    , puzzles =
-                                        List.map
-                                            (\p -> { name = p.name, initialBoard = p.board })
-                                            puzzles
+                                    , puzzles = List.map freshPuzzle entries
                                     }
 
                     Err msg ->
                         Decode.fail msg
             )
+
+
+freshPuzzle : PuzzleFlagDsl.CatalogEntry -> Puzzle
+freshPuzzle entry =
+    { name = entry.name
+    , initialBoard = entry.board
+    , board = entry.board
+    , actionLog = []
+    , nextSeq = 1
+    }
 
 
 init : Decode.Value -> ( Model, Cmd Msg )
@@ -132,7 +131,6 @@ init flagsValue =
         Ok flags ->
             ( { puzzles = Array.fromList flags.puzzles
               , currentIndex = 0
-              , puzzleState = Dict.empty
               , drag = NotDragging
               , boardRect = Nothing
               , status = { text = "Drag stacks to merge or move them.", kind = Inform }
@@ -156,11 +154,6 @@ init flagsValue =
 
 
 -- CURRENT-PUZZLE HELPERS
---
--- All per-puzzle reads/writes route through these. `currentPuzzle`
--- returns the catalog entry at `currentIndex`; `currentState` returns
--- the user's working state for that puzzle, synthesizing a fresh
--- state on first read. `withCurrentState` writes back to the dict.
 
 
 currentPuzzle : Model -> Puzzle
@@ -177,25 +170,11 @@ currentPuzzle model =
                 )
 
 
-currentState : Model -> PuzzleState
-currentState model =
-    Dict.get model.currentIndex model.puzzleState
-        |> Maybe.withDefault (freshState (currentPuzzle model))
-
-
-freshState : Puzzle -> PuzzleState
-freshState puzzle =
-    { board = puzzle.initialBoard
-    , actionLog = []
-    , nextSeq = 1
-    }
-
-
-withCurrentState : (PuzzleState -> PuzzleState) -> Model -> Model
-withCurrentState f model =
+withCurrentPuzzle : (Puzzle -> Puzzle) -> Model -> Model
+withCurrentPuzzle f model =
     { model
-        | puzzleState =
-            Dict.insert model.currentIndex (f (currentState model)) model.puzzleState
+        | puzzles =
+            Array.set model.currentIndex (f (currentPuzzle model)) model.puzzles
     }
 
 
@@ -266,7 +245,7 @@ update msg model =
                                     , cardIndex = cardIndex
                                     , cursor = point
                                     , tMs = time
-                                    , board = (currentState model).board
+                                    , board = (currentPuzzle model).board
                                     }
                                 )
                       }
@@ -304,24 +283,24 @@ update msg model =
 
                 DraggingBoardCard d ->
                     let
-                        state =
-                            currentState model
+                        puzzle =
+                            currentPuzzle model
 
                         outcome =
                             BoardDrag.handleMouseUp releasePoint
                                 tMs
                                 d
-                                { board = state.board
+                                { board = puzzle.board
                                 , boardRect = model.boardRect
-                                , actionLog = state.actionLog
-                                , nextSeq = state.nextSeq
+                                , actionLog = puzzle.actionLog
+                                , nextSeq = puzzle.nextSeq
                                 }
 
                         modelAfterDrag =
                             { model | drag = NotDragging, status = outcome.status }
-                                |> withCurrentState
-                                    (\s ->
-                                        { s
+                                |> withCurrentPuzzle
+                                    (\p ->
+                                        { p
                                             | board = outcome.board
                                             , actionLog = outcome.actionLog
                                             , nextSeq = outcome.nextSeq
@@ -384,34 +363,31 @@ update msg model =
 
         ClickUndo ->
             let
-                state =
-                    currentState model
+                puzzle =
+                    currentPuzzle model
             in
-            if not (canUndo state.actionLog) then
+            if not (canUndo puzzle.actionLog) then
                 ( model, Cmd.none )
 
             else
                 let
                     nextLog =
-                        state.actionLog ++ [ { action = GameEvent.Undo } ]
+                        puzzle.actionLog ++ [ { action = GameEvent.Undo } ]
 
                     effective =
                         ActionLog.collapseUndos nextLog
 
-                    initialBoard =
-                        (currentPuzzle model).initialBoard
-
                     nextModel =
                         { model | congratsVisible = False }
-                            |> withCurrentState
-                                (\s ->
-                                    { s
+                            |> withCurrentPuzzle
+                                (\p ->
+                                    { p
                                         | actionLog = nextLog
                                         , board =
                                             List.foldl applyForPuzzle
-                                                initialBoard
+                                                puzzle.initialBoard
                                                 (List.map .action effective)
-                                        , nextSeq = s.nextSeq + 1
+                                        , nextSeq = p.nextSeq + 1
                                     }
                                 )
 
@@ -423,7 +399,7 @@ update msg model =
                                     ++ "/puzzles/"
                                     ++ String.fromInt model.currentIndex
                                     ++ "/actions"
-                            , body = Http.stringBody "text/plain" (GameEvent.undoDsl state.nextSeq)
+                            , body = Http.stringBody "text/plain" (GameEvent.undoDsl puzzle.nextSeq)
                             , expect = Http.expectWhatever ActionSent
                             }
                 in
@@ -431,15 +407,15 @@ update msg model =
 
         ClickInstantReplay ->
             let
-                state =
-                    currentState model
+                puzzle =
+                    currentPuzzle model
             in
             ( { model
                 | replayState =
                     Just
                         (Animate.start
-                            (ActionLog.collapseUndos state.actionLog)
-                            (currentPuzzle model).initialBoard
+                            (ActionLog.collapseUndos puzzle.actionLog)
+                            puzzle.initialBoard
                         )
                 , drag = NotDragging
                 , status = { text = "Replaying…", kind = Inform }
@@ -565,7 +541,7 @@ view model =
                     ( rs.board, replayDrag rs )
 
                 Nothing ->
-                    ( (currentState model).board, model.drag )
+                    ( (currentPuzzle model).board, model.drag )
 
         boardFloaters =
             case drag of
@@ -800,7 +776,7 @@ replayDrag rs =
 
 undoButton : Model -> Html Msg
 undoButton model =
-    if model.replayState == Nothing && canUndo (currentState model).actionLog then
+    if model.replayState == Nothing && canUndo (currentPuzzle model).actionLog then
         Button.button "Undo" ClickUndo
 
     else
@@ -821,7 +797,7 @@ replayButton model =
             -- Compare against the post-collapse log so a fully
             -- undone session reports "nothing to replay" rather
             -- than firing an immediate Completed.
-            if List.isEmpty (ActionLog.collapseUndos (currentState model).actionLog) then
+            if List.isEmpty (ActionLog.collapseUndos (currentPuzzle model).actionLog) then
                 Button.disabledButton "Replay"
 
             else
