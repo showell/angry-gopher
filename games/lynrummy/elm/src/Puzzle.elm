@@ -44,7 +44,7 @@ import Lib.Point exposing (Point)
 import Lib.PointerInput as PointerInput
 import Lib.Status as Status exposing (StatusKind(..))
 import Lib.WingView as WingView
-import Html exposing (Html, div, form, text)
+import Html exposing (Html, div, text)
 import Html.Attributes as Attr exposing (style)
 import Html.Events as Events
 import Http
@@ -111,8 +111,10 @@ type Msg
     | ClickUndo
     | ClickInstantReplay
     | ClickReplayPauseToggle
-    | ClickStayHere
-    | CongratsFocusResult
+    | PuzzleSolved
+    | ClickStayOnSolvedPuzzle
+    | ClickAdvanceFromSolvedPuzzle
+    | NextPuzzleButtonFocused
     | ReplayTick Time.Posix
     | ActionSent (Result Http.Error ())
 
@@ -336,15 +338,8 @@ update msg model =
                                 , nextSeq = state.nextSeq
                                 }
 
-                        nowClean =
-                            Status.isCleanBoard outcome.board
-
                         nextModel =
-                            { model
-                                | drag = NotDragging
-                                , status = outcome.status
-                                , congratsVisible = nowClean
-                            }
+                            { model | drag = NotDragging, status = outcome.status }
                                 |> withCurrentState
                                     (\s ->
                                         { s
@@ -354,20 +349,19 @@ update msg model =
                                         }
                                     )
 
-                        focusCmd =
-                            if nowClean then
-                                Browser.Dom.focus congratsNextButtonId
-                                    |> Task.attempt (\_ -> CongratsFocusResult)
+                        solvedCmd =
+                            if Status.isCleanBoard outcome.board then
+                                dispatchPuzzleSolved
 
                             else
                                 Cmd.none
                     in
                     case outcome.outboundPayload of
                         Just payload ->
-                            sendActionForCurrentPuzzle payload ( nextModel, focusCmd )
+                            sendActionForCurrentPuzzle payload ( nextModel, solvedCmd )
 
                         Nothing ->
-                            ( nextModel, focusCmd )
+                            ( nextModel, solvedCmd )
 
         ClickPrevPuzzle ->
             ( navigateTo (stepIndex -1 model) model, Cmd.none )
@@ -375,12 +369,19 @@ update msg model =
         ClickNextPuzzle ->
             ( navigateTo (stepIndex 1 model) model, Cmd.none )
 
-        ClickStayHere ->
+        PuzzleSolved ->
+            ( { model | congratsVisible = True }
+            , Browser.Dom.focus congratsNextButtonId
+                |> Task.attempt (always NextPuzzleButtonFocused)
+            )
+
+        ClickStayOnSolvedPuzzle ->
             ( { model | congratsVisible = False }, Cmd.none )
 
-        CongratsFocusResult ->
-            -- Focus failures are silently ignored; the popup is
-            -- still visible and clickable either way.
+        ClickAdvanceFromSolvedPuzzle ->
+            ( navigateTo (stepIndex 1 model) model, Cmd.none )
+
+        NextPuzzleButtonFocused ->
             ( model, Cmd.none )
 
         ClickUndo ->
@@ -504,6 +505,18 @@ applyForPuzzle event board =
                     Debug.log "puzzle.applyForPuzzle: unexpected event in log" event
             in
             board
+
+
+{-| Round-trip a PuzzleSolved Msg through Elm's event loop so
+the puzzle-solved state transition (open popup, focus the Next
+button) lives entirely in its own update branch instead of
+being inlined into MouseUp. The one-frame delay is acceptable;
+the legibility win is worth it.
+-}
+dispatchPuzzleSolved : Cmd Msg
+dispatchPuzzleSolved =
+    Task.succeed () |> Task.perform (always PuzzleSolved)
+
 
 
 -- WIRE
@@ -706,9 +719,11 @@ congratsNextButtonId =
 
 {-| Floating celebration card. Compact, near the top of the
 viewport, conservative styling (navy border, white background,
-black text). The Next-puzzle button is focused by default;
-hitting Enter submits the form and fires ClickNextPuzzle.
-Non-modal — the nav header and board stay clickable.
+black text). The Next-puzzle button is focused on every
+transition to congratsVisible=True (see PuzzleSolved handler),
+so the keyboard default action — Enter activates the focused
+button — fires ClickAdvanceFromSolvedPuzzle. Non-modal: the
+nav header and board stay clickable.
 -}
 congratsPopup : Model -> Html Msg
 congratsPopup model =
@@ -716,9 +731,8 @@ congratsPopup model =
         text ""
 
     else
-        form
-            [ Events.onSubmit ClickNextPuzzle
-            , style "position" "fixed"
+        div
+            [ style "position" "fixed"
             , style "top" "70px"
             , style "left" "50%"
             , style "transform" "translateX(-50%)"
@@ -731,7 +745,6 @@ congratsPopup model =
             , style "z-index" "1000"
             , style "text-align" "center"
             , style "min-width" "320px"
-            , style "margin" "0"
             ]
             [ div
                 [ style "font-size" "15px"
@@ -753,7 +766,7 @@ stayHereButton : Html Msg
 stayHereButton =
     Html.button
         [ Attr.type_ "button"
-        , Events.onClick ClickStayHere
+        , Events.onClick ClickStayOnSolvedPuzzle
         , style "padding" "6px 14px"
         , style "font-size" "14px"
         , style "border" ("1px solid " ++ Colors.navy)
@@ -768,9 +781,10 @@ stayHereButton =
 nextPuzzleButton : Html Msg
 nextPuzzleButton =
     Html.button
-        [ Attr.type_ "submit"
+        [ Attr.type_ "button"
         , Attr.id congratsNextButtonId
         , Attr.autofocus True
+        , Events.onClick ClickAdvanceFromSolvedPuzzle
         , style "padding" "6px 14px"
         , style "font-size" "14px"
         , style "font-weight" "600"
@@ -780,7 +794,7 @@ nextPuzzleButton =
         , style "border-radius" "3px"
         , style "cursor" "pointer"
 
-        -- A clear focus ring so the default-selected button is
+        -- Clear focus ring so the default-selected button is
         -- obvious to keyboard users at a glance.
         , style "outline" "3px solid #a5d6a7"
         , style "outline-offset" "1px"
