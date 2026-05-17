@@ -632,8 +632,8 @@ view model =
     in
     div
         [ style "font-family" "system-ui, sans-serif" ]
-        [ Status.viewStatusBar model.status
-        , puzzleNavHeader model
+        [ puzzleNavHeader model
+        , Status.viewStatusBar model.status
         , div
             [ style "padding" "20px"
             , style "display" "flex"
