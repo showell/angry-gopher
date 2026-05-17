@@ -328,20 +328,24 @@ update msg model =
                                 , actionLog = state.actionLog
                                 , nextSeq = state.nextSeq
                                 }
+
+                        nextModel =
+                            { model | drag = NotDragging, status = outcome.status }
+                                |> withCurrentState
+                                    (\s ->
+                                        { s
+                                            | board = outcome.board
+                                            , actionLog = outcome.actionLog
+                                            , nextSeq = outcome.nextSeq
+                                        }
+                                    )
                     in
-                    ( { model | drag = NotDragging, status = outcome.status }
-                        |> withCurrentState
-                            (\s ->
-                                { s
-                                    | board = outcome.board
-                                    , actionLog = outcome.actionLog
-                                    , nextSeq = outcome.nextSeq
-                                }
-                            )
-                    , outcome.outboundPayload
-                        |> Maybe.map (sendAction model.sessionId)
-                        |> Maybe.withDefault Cmd.none
-                    )
+                    case outcome.outboundPayload of
+                        Just payload ->
+                            sendActionForCurrentPuzzle payload ( nextModel, Cmd.none )
+
+                        Nothing ->
+                            ( nextModel, Cmd.none )
 
         ClickPrevPuzzle ->
             ( navigateTo (stepIndex -1 model) model, Cmd.none )
@@ -364,21 +368,23 @@ update msg model =
 
                     initialBoard =
                         (currentPuzzle model).initialBoard
+
+                    nextModel =
+                        model
+                            |> withCurrentState
+                                (\s ->
+                                    { s
+                                        | actionLog = nextLog
+                                        , board =
+                                            List.foldl applyForPuzzle
+                                                initialBoard
+                                                (List.map .action effective)
+                                        , nextSeq = s.nextSeq + 1
+                                    }
+                                )
                 in
-                ( model
-                    |> withCurrentState
-                        (\s ->
-                            { s
-                                | actionLog = nextLog
-                                , board =
-                                    List.foldl applyForPuzzle
-                                        initialBoard
-                                        (List.map .action effective)
-                                , nextSeq = s.nextSeq + 1
-                            }
-                        )
-                , sendAction model.sessionId (GameEvent.undoDsl state.nextSeq)
-                )
+                sendActionForCurrentPuzzle (GameEvent.undoDsl state.nextSeq)
+                    ( nextModel, Cmd.none )
 
             else
                 ( model, Cmd.none )
@@ -472,11 +478,52 @@ applyForPuzzle event board =
 -- WIRE
 
 
-sendAction : Int -> String -> Cmd Msg
-sendAction sessionId line =
+{-| POST one action line to the session's actions.dsl. If the
+puzzle context has shifted since the last POST, prepend a
+`puzzle <idx>` header line so the on-disk file is readable as
+interleaved per-puzzle blocks:
+
+    puzzle 0
+      1) split [A♣ A♦ A♥] at (130,260) @2
+      2) merge_stack [A♥] at ...
+    puzzle 3
+      1) push [...] at ...
+    puzzle 0
+      3) split [...] at ...
+
+Per-puzzle seq is monotonic across re-entry (puzzle 0's third
+action stays `3)`, not `1)`), which keeps the file replayable
+puzzle-by-puzzle just by re-walking each block in order.
+
+Updates `lastPostedIndex` on every POST so the next POST knows
+whether to emit a fresh header.
+-}
+sendActionForCurrentPuzzle : String -> ( Model, Cmd Msg ) -> ( Model, Cmd Msg )
+sendActionForCurrentPuzzle line ( model, extraCmd ) =
+    let
+        needsHeader =
+            model.lastPostedIndex /= Just model.currentIndex
+
+        body =
+            if needsHeader then
+                "puzzle "
+                    ++ String.fromInt model.currentIndex
+                    ++ "\n  "
+                    ++ line
+
+            else
+                "  " ++ line
+    in
+    ( { model | lastPostedIndex = Just model.currentIndex }
+    , Cmd.batch [ extraCmd, postActionBody model.sessionId body ]
+    )
+
+
+postActionBody : Int -> String -> Cmd Msg
+postActionBody sessionId body =
     Http.post
         { url = "/gopher/puzzle/sessions/" ++ String.fromInt sessionId ++ "/actions"
-        , body = Http.stringBody "text/plain" line
+        , body = Http.stringBody "text/plain" body
         , expect = Http.expectWhatever ActionSent
         }
 
