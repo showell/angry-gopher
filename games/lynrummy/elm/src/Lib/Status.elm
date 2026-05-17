@@ -5,6 +5,7 @@ module Lib.Status exposing
     , actionRejectedStatus
     , geometryFeedback
     , handNothingStatus
+    , isCleanBoard
     , mergeStatus
     , offBoardScold
     , sessionAllocFailedStatus

@@ -95,6 +95,7 @@ type alias Model =
     , gameId : String
     , sessionId : Int
     , replayState : Maybe Animate.AnimationState
+    , congratsVisible : Bool
     }
 
 
@@ -108,6 +109,7 @@ type Msg
     | ClickUndo
     | ClickInstantReplay
     | ClickReplayPauseToggle
+    | ClickDismissCongrats
     | ReplayTick Time.Posix
     | ActionSent (Result Http.Error ())
 
@@ -151,6 +153,7 @@ init flagsValue =
               , gameId = "puzzle"
               , sessionId = flags.sessionId
               , replayState = Nothing
+              , congratsVisible = False
               }
             , Cmd.none
             )
@@ -241,6 +244,7 @@ navigateTo idx model =
         , drag = NotDragging
         , replayState = Nothing
         , status = { text = "Drag stacks to merge or move them.", kind = Inform }
+        , congratsVisible = False
     }
 
 
@@ -330,7 +334,11 @@ update msg model =
                                 }
 
                         nextModel =
-                            { model | drag = NotDragging, status = outcome.status }
+                            { model
+                                | drag = NotDragging
+                                , status = outcome.status
+                                , congratsVisible = Status.isCleanBoard outcome.board
+                            }
                                 |> withCurrentState
                                     (\s ->
                                         { s
@@ -353,6 +361,9 @@ update msg model =
         ClickNextPuzzle ->
             ( navigateTo (stepIndex 1 model) model, Cmd.none )
 
+        ClickDismissCongrats ->
+            ( { model | congratsVisible = False }, Cmd.none )
+
         ClickUndo ->
             let
                 state =
@@ -370,7 +381,7 @@ update msg model =
                         (currentPuzzle model).initialBoard
 
                     nextModel =
-                        model
+                        { model | congratsVisible = False }
                             |> withCurrentState
                                 (\s ->
                                     { s
@@ -403,6 +414,7 @@ update msg model =
                         )
                 , drag = NotDragging
                 , status = { text = "Replaying…", kind = Inform }
+                , congratsVisible = False
               }
             , Cmd.none
             )
@@ -631,7 +643,9 @@ view model =
             List.map (\w -> ( w, hoveredWing == Just w )) wings
     in
     div
-        [ style "font-family" "system-ui, sans-serif" ]
+        [ style "font-family" "system-ui, sans-serif"
+        , style "position" "relative"
+        ]
         [ puzzleNavHeader model
         , Status.viewStatusBar model.status
         , div
@@ -658,7 +672,43 @@ view model =
                 , boardFloaters = boardFloaters
                 }
             ]
+        , congratsPopup model
         ]
+
+
+{-| Floating celebration card, shown when the user makes a
+move that leaves every stack a valid meld. Non-modal — the
+nav header and the board stay clickable so the user can move
+on without dismissing. OK button just hides the popup.
+-}
+congratsPopup : Model -> Html Msg
+congratsPopup model =
+    if not model.congratsVisible then
+        Html.text ""
+
+    else
+        div
+            [ style "position" "fixed"
+            , style "top" "40%"
+            , style "left" "50%"
+            , style "transform" "translate(-50%, -50%)"
+            , style "background" "#fff"
+            , style "border" "2px solid #4caf50"
+            , style "border-radius" "8px"
+            , style "padding" "24px 32px"
+            , style "box-shadow" "0 8px 24px rgba(0,0,0,0.18)"
+            , style "z-index" "1000"
+            , style "text-align" "center"
+            , style "min-width" "280px"
+            ]
+            [ div
+                [ style "font-size" "18px"
+                , style "color" "#1b5e20"
+                , style "margin-bottom" "16px"
+                ]
+                [ text "You solved it! Hit Prev or Next for the next puzzle." ]
+            , Button.button "OK" ClickDismissCongrats
+            ]
 
 
 {-| Header strip above the board: Prev — counter + name — Next.
