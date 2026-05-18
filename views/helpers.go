@@ -37,10 +37,6 @@ const AppChromeCSS = `
 .app-top-areas a { color: #000080; text-decoration: none; font-size: 14px; }
 .app-top-areas a:hover { text-decoration: underline; }
 .app-top-areas .current { font-weight: bold; background: #fff3a8; padding: 1px 6px; border-radius: 3px; }
-.app-bottom { border-top: 1px solid #c9bfa7; padding: 10px 24px; font-size: 12px;
-              color: #888; text-align: center; font-family: sans-serif; }
-.app-bottom a { color: #000080; text-decoration: none; }
-.app-bottom a:hover { text-decoration: underline; }
 `
 
 // AppChromeTop emits the global top bar. `current` should be one of
@@ -61,10 +57,6 @@ func AppChromeTop(w http.ResponseWriter, current string) {
 	fmt.Fprint(w, `</div></header>`)
 }
 
-// AppChromeBottom emits the global bottom footer.
-func AppChromeBottom(w http.ResponseWriter) {
-	fmt.Fprint(w, `<footer class="app-bottom"><a href="/admin/">Admin</a></footer>`)
-}
 
 // PageHeaderArea writes the HTML boilerplate and opens the body.
 // `area` is the top-bar highlight key: "games", "claude", or "" for
@@ -131,9 +123,7 @@ func PageSubtitle(w http.ResponseWriter, text string) {
 
 // PageFooter closes the HTML.
 func PageFooter(w http.ResponseWriter) {
-	fmt.Fprint(w, `</div>`)
-	AppChromeBottom(w)
-	fmt.Fprint(w, `</body></html>`)
+	fmt.Fprint(w, `</div></body></html>`)
 }
 
 // HandleIndex serves /gopher/ — the portal. Two top-level categories:
@@ -196,7 +186,5 @@ h1 { color: #000080; font-size: 34px; margin-bottom: 4px; }
   </div>
 
 </div>
-</div>`)
-	AppChromeBottom(w)
-	fmt.Fprint(w, `</body></html>`)
+</div></body></html>`)
 }

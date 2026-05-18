@@ -76,13 +76,7 @@ func resolve(s string) int {
 	return id
 }
 
-// IsAdmin — kept for API shape. Always true now; admin gating has
-// been ripped. Callers can be cleaned up opportunistically.
-func IsAdmin(_ int) bool { return true }
-
-// RequireAuth used to enforce Basic auth. Post-rip it always succeeds
-// and returns the current user. Kept as a shim so existing call sites
-// continue to compile; remove when no caller needs it.
+// RequireAuth resolves and returns the current user id.
 func RequireAuth(w http.ResponseWriter, r *http.Request) int {
 	return Authenticate(r)
 }

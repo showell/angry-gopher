@@ -1,7 +1,5 @@
-// Angry Gopher — HTTP server for the LynRummy Elm client, plus a
-// wiki/source browser and small admin surface. The older
-// Zulip-compatible messaging API (events, users, DMs, channels)
-// was ripped 2026-04-21; this is a LynRummy server now.
+// Angry Gopher — HTTP server for the LynRummy Elm client (full
+// game + puzzle surface) and the Claude-essay pointer page.
 
 package main
 
@@ -25,9 +23,6 @@ func buildMux() *http.ServeMux {
 	// HTML views (Basic auth, no middleware). Single source of truth.
 	views.RegisterPages(mux)
 
-	mux.HandleFunc("/admin/login", handleAdminLogin)
-	mux.HandleFunc("/admin/health", handleHealthCheck)
-	mux.HandleFunc("/admin/", adminHandler)
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/" {
 			http.Redirect(w, r, "/gopher/", http.StatusFound)
@@ -95,7 +90,6 @@ Backup the production database:
 	fmt.Printf("  Root:     %s\n", config.Root)
 	fmt.Printf("  Database: %s\n", config.DBPath())
 	fmt.Printf("  Listening on %s\n", config.ListenAddr())
-	fmt.Printf("  Admin UI: http://localhost:%d/admin/\n", config.Port)
 	log.Fatal(http.ListenAndServe(config.ListenAddr(), mux))
 }
 
