@@ -368,43 +368,46 @@ update msg model =
 
                 actionLog =
                     puzzle.actionLog
+
+                liveActions =
+                    ActionLog.collapseUndos actionLog
             in
-            if not (canUndo actionLog) then
-                ( model, Cmd.none )
+            case List.reverse liveActions of
+                [] ->
+                    ( model, Cmd.none )
 
-            else
-                let
-                    nextLog =
-                        actionLog ++ [ { action = GameEvent.Undo } ]
+                lastLive :: _ ->
+                    let
+                        nextLog =
+                            actionLog ++ [ { action = GameEvent.Undo } ]
 
-                    nextBoard =
-                        replayFromInitial puzzle.initialBoard
-                            (ActionLog.collapseUndos nextLog)
+                        nextBoard =
+                            undoForPuzzle lastLive.action puzzle.board
 
-                    nextModel =
-                        { model | congratsVisible = False }
-                            |> withCurrentPuzzle
-                                (\p ->
-                                    { p
-                                        | actionLog = nextLog
-                                        , board = nextBoard
-                                        , nextSeq = p.nextSeq + 1
-                                    }
-                                )
+                        nextModel =
+                            { model | congratsVisible = False }
+                                |> withCurrentPuzzle
+                                    (\p ->
+                                        { p
+                                            | actionLog = nextLog
+                                            , board = nextBoard
+                                            , nextSeq = p.nextSeq + 1
+                                        }
+                                    )
 
-                    httpPostForAction =
-                        Http.post
-                            { url =
-                                "/gopher/puzzle/sessions/"
-                                    ++ String.fromInt model.sessionId
-                                    ++ "/puzzles/"
-                                    ++ String.fromInt model.currentIndex
-                                    ++ "/actions"
-                            , body = Http.stringBody "text/plain" (GameEvent.undoDsl puzzle.nextSeq)
-                            , expect = Http.expectWhatever ActionSent
-                            }
-                in
-                ( nextModel, httpPostForAction )
+                        httpPostForAction =
+                            Http.post
+                                { url =
+                                    "/gopher/puzzle/sessions/"
+                                        ++ String.fromInt model.sessionId
+                                        ++ "/puzzles/"
+                                        ++ String.fromInt model.currentIndex
+                                        ++ "/actions"
+                                , body = Http.stringBody "text/plain" (GameEvent.undoDsl puzzle.nextSeq)
+                                , expect = Http.expectWhatever ActionSent
+                                }
+                    in
+                    ( nextModel, httpPostForAction )
 
         ClickInstantReplay ->
             let
@@ -468,39 +471,29 @@ canUndo log =
     not (List.isEmpty (ActionLog.collapseUndos log))
 
 
-{-| Apply one event to the puzzle's board. Only the three
-board verbs ever land here — Undo tokens get stripped by
-`ActionLog.collapseUndos` before the foldl.
+{-| Reverse one board verb against the puzzle's board. Only
+the three board verbs ever land here — Undo tokens get
+stripped by `ActionLog.collapseUndos` upstream, and the puzzle
+pipeline never appends the hand verbs (MergeHand / PlaceHand)
+or CompleteTurn.
 -}
-applyForPuzzle : GameEvent -> List CardStack -> List CardStack
-applyForPuzzle event board =
+undoForPuzzle : GameEvent -> List CardStack -> List CardStack
+undoForPuzzle event board =
     case event of
         Split p ->
-            Execute.split p.stack p.cardIndex board
+            Execute.undoSplit p.stack p.cardIndex board
 
         MergeStack p ->
-            Execute.mergeStack p.source p.target p.side board
+            Execute.undoMergeStack p.source p.target p.side board
 
         MoveStack p ->
-            Execute.moveStack p.stack p.newLoc board
+            Execute.undoMoveStack p.stack p.newLoc board
 
         _ ->
             Debug.todo
-                ("Puzzle.applyForPuzzle: non-board-verb event reached foldl (collapseUndos should have stripped Undo); got "
+                ("Puzzle.undoForPuzzle: non-board-verb event reached undo (collapseUndos should have stripped Undo); got "
                     ++ Debug.toString event
                 )
-
-
-{-| Recompute the puzzle's board by replaying the entire log
-from initialBoard. We chose this O(N)-per-undo approach over
-the O(1) alternative (push board snapshots, pop on undo)
-because N is small (< 30 actions per solve) and it keeps the
-board strictly derived — `initialBoard + actionLog` is the
-only ground truth, the board never has to stay in sync.
--}
-replayFromInitial : List CardStack -> List ActionLogEntry -> List CardStack
-replayFromInitial initialBoard entries =
-    List.foldl (.action >> applyForPuzzle) initialBoard entries
 
 
 -- SUBSCRIPTIONS

@@ -1,14 +1,32 @@
-module Lib.Execute exposing (mergeHand, mergeStack, moveStack, placeHand, split, undoEvent)
+module Lib.Execute exposing
+    ( mergeHand
+    , mergeStack
+    , moveStack
+    , placeHand
+    , split
+    , undoEvent
+    , undoMergeStack
+    , undoMoveStack
+    , undoSplit
+    )
 
 {-| Honest mutators for the game's primitive actions.
 
 Board-only verbs (`split`, `mergeStack`, `moveStack`) take and
-return a board. Hand verbs (`mergeHand`, `placeHand`) take and
-return a full `GameState` because the action must update
-board + active hand + `cardsPlayedThisTurn` atomically — a card
-can only be in one place at a time, so the post-call state has
-to be the consistent one (not an intermediate `{ board, hand }`
-the caller would need to splice back).
+return a board; each has a matching `undoX` that reverses it
+the same way (board-only, O(1)-per-undo). Hand verbs
+(`mergeHand`, `placeHand`) take and return a full `GameState`
+because the action must update board + active hand +
+`cardsPlayedThisTurn` atomically — a card can only be in one
+place at a time, so the post-call state has to be the
+consistent one (not an intermediate `{ board, hand }` the
+caller would need to splice back).
+
+`undoEvent` is the GameState-level dispatcher: it routes board
+verbs to the board-level undo helpers and handles the hand
+verbs inline. Direct callers that only need a board (e.g.
+the puzzle host) can skip `undoEvent` and call
+`undoSplit`/`undoMoveStack`/`undoMergeStack` directly.
 
 Bridge-bug failures (referenced card or stack not present) log
 via `Debug.log` and return the input unchanged. The log is the
@@ -36,44 +54,13 @@ undoEvent : GameEvent -> GameState -> GameState
 undoEvent event state =
     case event of
         MoveStack { stack, newLoc } ->
-            let
-                change =
-                    { stacksToRemove = [ { stack | loc = newLoc } ]
-                    , stacksToAdd = [ stack ]
-                    , handCardsToRelease = []
-                    }
-            in
-            { state | board = applyBoardChange change state.board }
+            { state | board = undoMoveStack stack newLoc state.board }
 
         Split { stack, cardIndex } ->
-            let
-                change =
-                    { stacksToRemove = CardStack.split cardIndex stack
-                    , stacksToAdd = [ stack ]
-                    , handCardsToRelease = []
-                    }
-            in
-            { state | board = applyBoardChange change state.board }
+            { state | board = undoSplit stack cardIndex state.board }
 
         MergeStack { source, target, side } ->
-            case BoardActions.tryStackMerge target source side of
-                Just mergeChange ->
-                    case mergeChange.stacksToAdd of
-                        [ merged ] ->
-                            let
-                                change =
-                                    { stacksToRemove = [ merged ]
-                                    , stacksToAdd = [ target, source ]
-                                    , handCardsToRelease = []
-                                    }
-                            in
-                            { state | board = applyBoardChange change state.board }
-
-                        _ ->
-                            state
-
-                Nothing ->
-                    state
+            { state | board = undoMergeStack source target side state.board }
 
         MergeHand { handCard, target, side } ->
             let
@@ -153,6 +140,22 @@ split stack cardIndex board =
             board
 
 
+{-| Reverse a prior `split` of the same stack at the same
+cardIndex: remove the two split pieces from the board and put
+the original back. O(1)-per-undo (no board-replay needed).
+-}
+undoSplit : CardStack -> Int -> List CardStack -> List CardStack
+undoSplit stack cardIndex board =
+    let
+        change =
+            { stacksToRemove = CardStack.split cardIndex stack
+            , stacksToAdd = [ stack ]
+            , handCardsToRelease = []
+            }
+    in
+    applyBoardChange change board
+
+
 {-| Move the given stack to `newLoc`, returning a new board
 with the original stack removed and the relocated stack
 appended. Bridge-bug case: stack not on board → log + board
@@ -171,6 +174,22 @@ moveStack stack newLoc board =
                     Debug.log "[Execute.moveStack] stack not on board — skipping (bridge bug)" stack
             in
             board
+
+
+{-| Reverse a prior `moveStack` of the same stack to the same
+newLoc: remove the relocated stack and put the original loc
+copy back. O(1)-per-undo.
+-}
+undoMoveStack : CardStack -> BoardLocation -> List CardStack -> List CardStack
+undoMoveStack stack newLoc board =
+    let
+        change =
+            { stacksToRemove = [ { stack | loc = newLoc } ]
+            , stacksToAdd = [ stack ]
+            , handCardsToRelease = []
+            }
+    in
+    applyBoardChange change board
 
 
 {-| Merge `source` onto `target` from the given side, returning
@@ -208,6 +227,38 @@ mergeStack source target side board =
                 _ =
                     Debug.log "[Execute.mergeStack] target stack not on board — skipping (bridge bug)" target
             in
+            board
+
+
+{-| Reverse a prior `mergeStack` of `source` onto `target` from
+`side`: remove the merged stack and put `target` and `source`
+back as separate stacks. O(1)-per-undo.
+
+Re-derives the merged stack by re-running `BoardActions.tryStackMerge`
+on the same inputs — keeps this helper self-contained (no need
+to thread the merged stack through the caller). Falls back to
+the original board on a bridge bug (tryStackMerge changes its
+mind or surfaces multiple stacksToAdd).
+-}
+undoMergeStack : CardStack -> CardStack -> Side -> List CardStack -> List CardStack
+undoMergeStack source target side board =
+    case BoardActions.tryStackMerge target source side of
+        Just mergeChange ->
+            case mergeChange.stacksToAdd of
+                [ merged ] ->
+                    let
+                        change =
+                            { stacksToRemove = [ merged ]
+                            , stacksToAdd = [ target, source ]
+                            , handCardsToRelease = []
+                            }
+                    in
+                    applyBoardChange change board
+
+                _ ->
+                    board
+
+        Nothing ->
             board
 
 
