@@ -83,12 +83,11 @@ cardPitch =
 
 
 {-| Where the 800×600 board div sits in the viewport. Pinned
-so that Python (which has no DOM) and Elm agree on the
-viewport coordinate of every board stack: viewport = loc +
-(boardViewportLeft, boardViewportTop).
-
-If you change these, update `geometry.py` to match.
-
+so that Elm and the canonical TS engine agree on the viewport
+coordinate of every board stack: viewport = loc +
+(boardViewportLeft, boardViewportTop). The status bar above
+the board takes ~31px (padding 6px × 2 + font line ≈18 + 1px
+border); top = 34 leaves ~3px of breathing room.
 -}
 boardViewportLeft : Int
 boardViewportLeft =
@@ -97,7 +96,7 @@ boardViewportLeft =
 
 boardViewportTop : Int
 boardViewportTop =
-    38
+    34
 
 
 stackWidth : Int -> Int

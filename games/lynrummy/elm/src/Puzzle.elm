@@ -634,7 +634,7 @@ view model =
         [ puzzleNavHeader model
         , Status.viewStatusBar model.status
         , div
-            [ style "padding" "20px"
+            [ style "padding" "3px 20px 20px 20px"
             , style "display" "flex"
             , style "gap" "20px"
             , style "align-items" "flex-start"
@@ -760,20 +760,6 @@ puzzleNavHeader model =
         navigable =
             n > 1
 
-        prev =
-            if navigable then
-                Button.button "‹ Prev" ClickPrevPuzzle
-
-            else
-                Button.disabledButton "‹ Prev"
-
-        next =
-            if navigable then
-                Button.button "Next ›" ClickNextPuzzle
-
-            else
-                Button.disabledButton "Next ›"
-
         label =
             "puzzle "
                 ++ String.fromInt (model.currentIndex + 1)
@@ -783,24 +769,61 @@ puzzleNavHeader model =
                 ++ (currentPuzzle model).name
     in
     div
-        [ style "padding" "12px 20px"
+        [ style "padding" "2px 12px"
         , style "display" "flex"
         , style "align-items" "center"
-        , style "gap" "16px"
+        , style "gap" "12px"
         , style "border-bottom" "1px solid #ddd"
         , style "background" "#fafaf5"
         ]
-        [ prev
+        [ tightNavButton "‹ Prev" navigable ClickPrevPuzzle
         , div
             [ style "flex" "1"
             , style "text-align" "center"
             , style "font-family" "monospace"
-            , style "font-size" "14px"
+            , style "font-size" "13px"
             , style "color" "#333"
             ]
             [ text label ]
-        , next
+        , tightNavButton "Next ›" navigable ClickNextPuzzle
         ]
+
+
+{-| Tight Prev/Next button tailored for the nav header — same
+navy theme as Lib.Button but minimal padding so the strip
+stays short. Disabled when nav isn't possible (catalog of 0
+or 1).
+-}
+tightNavButton : String -> Bool -> Msg -> Html Msg
+tightNavButton label enabled msg =
+    let
+        baseAttrs =
+            [ style "padding" "1px 8px"
+            , style "font-size" "13px"
+            , style "border-radius" "3px"
+            ]
+    in
+    if enabled then
+        Html.button
+            (Events.onClick msg
+                :: style "border" ("1px solid " ++ Colors.navy)
+                :: style "background" "white"
+                :: style "color" Colors.navy
+                :: style "cursor" "pointer"
+                :: baseAttrs
+            )
+            [ text label ]
+
+    else
+        Html.button
+            (Attr.disabled True
+                :: style "border" "1px solid #bbb"
+                :: style "background" "#f5f5f5"
+                :: style "color" "#bbb"
+                :: style "cursor" "not-allowed"
+                :: baseAttrs
+            )
+            [ text label ]
 
 
 replayDrag : Animate.AnimationState -> Drag.DragState
