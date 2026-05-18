@@ -159,7 +159,7 @@ update msg model =
                 , actionLog = model.actionLog ++ [ { action = GameEvent.CompleteTurn } ]
                 , nextSeq = model.nextSeq + 1
               }
-            , Cmd.none
+            , Wire.sendAction model.sessionId (GameEvent.completeTurnDsl model.nextSeq)
             )
 
         ContinueHumanTurn ->
