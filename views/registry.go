@@ -34,17 +34,8 @@ func RegisterPages(mux *http.ServeMux) {
 	for _, p := range GetPages() {
 		mux.HandleFunc(p.Path, p.Handler)
 	}
-	mux.HandleFunc("/gopher/tour", HandleTour)
-	mux.HandleFunc("/gopher/quicknav", HandleQuickNav)
-	mux.HandleFunc("/gopher/nav", func(w http.ResponseWriter, r *http.Request) {
-		http.ServeFile(w, r, "views/static_nav.html")
-	})
 	mux.HandleFunc("/gopher/claude", HandleClaudeLanding)
 	mux.HandleFunc("/gopher/claude/", HandleClaudeLanding)
-	mux.HandleFunc("/gopher/docs/", HandleDocs)
-	mux.HandleFunc("/gopher/docs", HandleDocs)
-	mux.HandleFunc("/gopher/wiki/", HandleWikiLegacy)
-	mux.HandleFunc("/gopher/wiki", HandleWikiLegacy)
 	mux.HandleFunc("/gopher/lynrummy-elm/", HandleLynRummyElm)
 	mux.HandleFunc("/gopher/lynrummy-elm", HandleLynRummyElm)
 	mux.HandleFunc("/gopher/puzzle/", HandlePuzzle)

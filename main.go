@@ -25,8 +25,6 @@ func buildMux() *http.ServeMux {
 	// HTML views (Basic auth, no middleware). Single source of truth.
 	views.RegisterPages(mux)
 
-	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("views/static"))))
-
 	mux.HandleFunc("/admin/login", handleAdminLogin)
 	mux.HandleFunc("/admin/health", handleHealthCheck)
 	mux.HandleFunc("/admin/", adminHandler)

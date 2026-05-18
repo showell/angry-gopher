@@ -1,6 +1,5 @@
-// Package views serves HTML CRUD pages for authenticated users.
-// Each page is a thin layer over the corresponding API, rendered
-// as server-side HTML with Basic auth (browser caches credentials).
+// Package views serves the Angry Gopher HTML pages: the Games
+// surface (LynRummy + Puzzles) and the Claude essay-pointer.
 package views
 
 import (
@@ -8,14 +7,11 @@ import (
 	"fmt"
 	"html"
 	"net/http"
-	"time"
 
 	"angry-gopher/auth"
 )
 
 var DB *sql.DB
-var RenderMarkdown func(string) string
-var lastAuthUserID int // set by RequireAuth, read by PageHeader
 
 // RequireAuth returns the authenticated user ID or writes a 401
 // response that triggers the browser's Basic auth prompt.
@@ -26,15 +22,7 @@ func RequireAuth(w http.ResponseWriter, r *http.Request) int {
 		http.Error(w, "Login required", http.StatusUnauthorized)
 		return 0
 	}
-	lastAuthUserID = userID
 	return userID
-}
-
-// currentUserName looks up the name for display in the nav.
-func currentUserName(userID int) string {
-	var name string
-	DB.QueryRow(`SELECT full_name FROM users WHERE id = ?`, userID).Scan(&name)
-	return name
 }
 
 // AppChromeCSS is the shared stylesheet for the app-wide top and
@@ -56,12 +44,10 @@ const AppChromeCSS = `
 `
 
 // AppChromeTop emits the global top bar. `current` should be one of
-// "games" / "docs" / "claude" / "" (when not in any area).
-// Pass empty for the home page or un-tagged pages.
+// "games" / "claude" / "" (when not in any area).
 func AppChromeTop(w http.ResponseWriter, current string) {
 	areas := []struct{ key, label, href string }{
 		{"games", "Games", "/gopher/game-lobby"},
-		{"docs", "Docs", "/gopher/docs/"},
 		{"claude", "Claude", "/gopher/claude"},
 	}
 	fmt.Fprint(w, `<header class="app-top"><div class="app-top-home"><a href="/gopher/">← Gopher Home</a></div><div class="app-top-areas">`)
@@ -77,17 +63,12 @@ func AppChromeTop(w http.ResponseWriter, current string) {
 
 // AppChromeBottom emits the global bottom footer.
 func AppChromeBottom(w http.ResponseWriter) {
-	fmt.Fprint(w, `<footer class="app-bottom"><a href="/gopher/tour">All CRUD pages</a>&nbsp;·&nbsp;<a href="/admin/">Admin</a></footer>`)
+	fmt.Fprint(w, `<footer class="app-bottom"><a href="/admin/">Admin</a></footer>`)
 }
 
-// PageHeader writes the HTML boilerplate and opens the body. Use
-// PageHeaderArea if this page belongs to one of the four major areas
-// (Games/Claude/Docs/Code) so the top bar can highlight it.
-func PageHeader(w http.ResponseWriter, title string) { PageHeaderArea(w, title, "") }
-
-// PageHeaderArea is PageHeader plus an "area" key for top-bar
-// highlighting. Pass "games" / "claude" / "docs" / "code", or ""
-// for pages that don't belong to one.
+// PageHeaderArea writes the HTML boilerplate and opens the body.
+// `area` is the top-bar highlight key: "games", "claude", or "" for
+// pages that don't belong to either.
 func PageHeaderArea(w http.ResponseWriter, title, area string) {
 	fmt.Fprintf(w, `<!DOCTYPE html>
 <html><head><title>%s — Angry Gopher</title>`, title)
@@ -155,66 +136,8 @@ func PageFooter(w http.ResponseWriter) {
 	fmt.Fprint(w, `</body></html>`)
 }
 
-// FlashFromRequest checks for a flash= query param and renders it.
-func FlashFromRequest(w http.ResponseWriter, r *http.Request) {
-	msg := r.URL.Query().Get("flash")
-	if msg != "" {
-		fmt.Fprintf(w, `<div class="flash">%s</div>`, html.EscapeString(msg))
-	}
-}
-
-// Breadcrumb renders a breadcrumb trail.
-func Breadcrumb(w http.ResponseWriter, crumbs ...string) {
-	// crumbs alternate: label, url, label, url, ..., final label (no url)
-	fmt.Fprint(w, `<div class="breadcrumb">`)
-	for i := 0; i < len(crumbs); i += 2 {
-		if i > 0 {
-			fmt.Fprint(w, ` <span>&rsaquo;</span> `)
-		}
-		label := crumbs[i]
-		if i+1 < len(crumbs) {
-			url := crumbs[i+1]
-			fmt.Fprintf(w, `<a href="%s">%s</a>`, html.EscapeString(url), html.EscapeString(label))
-		} else {
-			fmt.Fprintf(w, `%s`, html.EscapeString(label))
-		}
-	}
-	fmt.Fprint(w, `</div>`)
-}
-
-// TimeAgo returns a human-friendly relative time string.
-func TimeAgo(timestamp int64) string {
-	seconds := time.Now().Unix() - timestamp
-	if seconds < 60 {
-		return "just now"
-	}
-	minutes := seconds / 60
-	if minutes < 60 {
-		return fmt.Sprintf("%dm ago", minutes)
-	}
-	hours := minutes / 60
-	if hours < 24 {
-		return fmt.Sprintf("%dh ago", hours)
-	}
-	days := hours / 24
-	if days < 30 {
-		return fmt.Sprintf("%dd ago", days)
-	}
-	return time.Unix(timestamp, 0).Format("Jan 2")
-}
-
-// UserLink returns an HTML link to the user's page.
-func UserLink(userID int, name string) string {
-	return fmt.Sprintf(`<a href="/gopher/users?id=%d">%s</a>`, userID, html.EscapeString(name))
-}
-
-// ChannelLink returns an HTML link to the channel's topics page.
-func ChannelLink(channelID int, name string) string {
-	return fmt.Sprintf(`<a href="/gopher/messages?channel_id=%d">#%s</a>`, channelID, html.EscapeString(name))
-}
-
-// HandleIndex serves /gopher/ — the portal. Two top-level categories
-// (Games, Wiki); secondary pages linked via /gopher/tour.
+// HandleIndex serves /gopher/ — the portal. Two top-level categories:
+// Games and Claude.
 func HandleIndex(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/gopher/" {
 		http.NotFound(w, r)
@@ -248,7 +171,7 @@ h1 { color: #000080; font-size: 34px; margin-bottom: 4px; }
 	AppChromeTop(w, "")
 	fmt.Fprint(w, `<div class="app-body-wrap">
 <h1>Angry Gopher</h1>
-<div class="tag">Critter-sized server for games, docs, and small-team chat.</div>`)
+<div class="tag">Critter-sized server for LynRummy and Steve-Claude essays.</div>`)
 	fmt.Fprint(w, `
 
 <div class="cards">
@@ -260,14 +183,6 @@ h1 { color: #000080; font-size: 34px; margin-bottom: 4px; }
       <li><a href="/gopher/lynrummy-elm/">Play</a></li>
       <li><a href="/gopher/lynrummy-elm/sessions">Sessions</a></li>
       <li><a href="/gopher/puzzle/">Puzzle</a></li>
-    </ul>
-  </div>
-
-  <div class="card">
-    <h2><a href="/gopher/docs/">Docs</a></h2>
-    <p>Curated markdown — repo READMEs and architecture notes.</p>
-    <ul>
-      <li><a href="/gopher/docs/">Docs home</a></li>
     </ul>
   </div>
 
