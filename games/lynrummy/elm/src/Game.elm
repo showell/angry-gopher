@@ -591,25 +591,25 @@ update msg model =
                 anim =
                     Animate.start entries model.gameState
 
-                -- One POST per agent step, consecutive seqs
-                -- starting at model.nextSeq. The DSL line is
-                -- already what the TS engine emitted; we just
-                -- prepend a session-level seq prefix. The
-                -- animation's Completed branch commits the
-                -- matching actionLog + nextSeq bump.
-                wirePosts =
-                    List.indexedMap
-                        (\i s ->
-                            Wire.sendAction model.sessionId
-                                (String.fromInt (model.nextSeq + i) ++ ") " ++ s.dsl)
-                        )
-                        steps
+                -- One POST per agent TURN, with all steps as
+                -- newline-separated lines in a single body. The
+                -- server appends the whole body as one chunk, so
+                -- the lines land in file order even though N
+                -- parallel Cmd.batch requests would otherwise
+                -- race. Seqs start at model.nextSeq and increment
+                -- in lockstep with the animation's Completed
+                -- branch (which commits actionLog + nextSeq).
+                batchedBody =
+                    steps
+                        |> List.indexedMap
+                            (\i s -> String.fromInt (model.nextSeq + i) ++ ") " ++ s.dsl)
+                        |> String.join "\n"
             in
             ( { model
                 | pendingEngineRequest = Nothing
                 , animationState = Just anim
               }
-            , Cmd.batch wirePosts
+            , Wire.sendAction model.sessionId batchedBody
             )
 
         EngineResponseFailed detail ->
