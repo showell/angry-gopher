@@ -590,12 +590,25 @@ update msg model =
 
                 anim =
                     Animate.start entries model.gameState
+
+                -- One POST per agent event, consecutive seqs
+                -- starting at model.nextSeq. The animation's
+                -- Completed branch commits the matching actionLog
+                -- + nextSeq bump, so the wire and the local state
+                -- agree on the same seq range.
+                wirePosts =
+                    List.indexedMap
+                        (\i evt ->
+                            Wire.sendAction model.sessionId
+                                (GameEvent.eventDsl (model.nextSeq + i) evt)
+                        )
+                        events
             in
             ( { model
                 | pendingEngineRequest = Nothing
                 , animationState = Just anim
               }
-            , Cmd.none
+            , Cmd.batch wirePosts
             )
 
         EngineResponseFailed detail ->
