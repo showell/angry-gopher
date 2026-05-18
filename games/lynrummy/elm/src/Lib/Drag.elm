@@ -31,7 +31,7 @@ own events.
 
 -}
 
-import Lib.BoardDragTypes exposing (BoardCardDragInfo)
+import Lib.BoardDragTypes exposing (BoardCardDragInfo, PressPendingInfo)
 import Lib.HandDragTypes exposing (HandCardDragInfo)
 import Lib.StackView as StackView
 import Html exposing (Html)
@@ -40,6 +40,7 @@ import Html.Attributes exposing (style)
 
 type DragState
     = NotDragging
+    | PressPending PressPendingInfo
     | DraggingBoardCard BoardCardDragInfo
     | DraggingHandCard HandCardDragInfo
 

@@ -242,7 +242,7 @@ rightSidebar model =
                 DraggingHandCard d ->
                     d.wings
 
-                NotDragging ->
+                _ ->
                     []
 
         -- Hover detection needs the floater in board frame.
@@ -271,7 +271,7 @@ rightSidebar model =
                         Nothing ->
                             Nothing
 
-                NotDragging ->
+                _ ->
                     Nothing
 
         wingsWithHover =
@@ -326,4 +326,7 @@ replayDrag rs =
             Drag.NotDragging
 
         ActionCompleted ->
+            Drag.NotDragging
+
+        ActionCompletedNoBeat ->
             Drag.NotDragging

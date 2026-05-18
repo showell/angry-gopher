@@ -1,10 +1,12 @@
 module Lib.Execute exposing
-    ( mergeHand
+    ( isolate
+    , mergeHand
     , mergeStack
     , moveStack
     , placeHand
     , split
     , undoEvent
+    , undoIsolate
     , undoMergeStack
     , undoMoveStack
     , undoSplit
@@ -58,6 +60,9 @@ undoEvent event state =
 
         Split { stack, cardIndex } ->
             { state | board = undoSplit stack cardIndex state.board }
+
+        Isolate { stack, cardIndex } ->
+            { state | board = undoIsolate stack cardIndex state.board }
 
         MergeStack { source, target, side } ->
             { state | board = undoMergeStack source target side state.board }
@@ -149,6 +154,43 @@ undoSplit stack cardIndex board =
     let
         change =
             { stacksToRemove = CardStack.split cardIndex stack
+            , stacksToAdd = [ stack ]
+            , handCardsToRelease = []
+            }
+    in
+    applyBoardChange change board
+
+
+{-| Isolate the card at `cardIndex` from the rest of the
+stack — splits the stack into up to three pieces (before /
+held / after) with a 2px split on each side. The held card
+becomes a singleton at its original screen position. Bridge-
+bug case: stack not on board → log + board unchanged.
+-}
+isolate : CardStack -> Int -> List CardStack -> List CardStack
+isolate stack cardIndex board =
+    case findStack stack board of
+        Just real ->
+            List.filter (not << isStacksEqual real) board
+                ++ CardStack.isolate cardIndex real
+
+        Nothing ->
+            let
+                _ =
+                    Debug.log "[Execute.isolate] stack not on board — skipping (bridge bug)" stack
+            in
+            board
+
+
+{-| Reverse a prior `isolate`: remove the three isolated
+pieces from the board and put the original stack back. Same
+shape as `undoSplit`.
+-}
+undoIsolate : CardStack -> Int -> List CardStack -> List CardStack
+undoIsolate stack cardIndex board =
+    let
+        change =
+            { stacksToRemove = CardStack.isolate cardIndex stack
             , stacksToAdd = [ stack ]
             , handCardsToRelease = []
             }

@@ -69,6 +69,7 @@ type Phase
     = Starting
     | InBeat { nextBeatMs : Int }
     | ActionCompleted
+    | ActionCompletedNoBeat
     | AnimatingBoardAction BoardDragAnimate.State
     | AnimatingHandAction HandDragAnimate.State
 
@@ -161,6 +162,27 @@ tick config nowMs rs =
 
         ActionCompleted ->
             StillReplaying { rs | phase = InBeat { nextBeatMs = nowMs + beatMs } } Cmd.none
+
+        ActionCompletedNoBeat ->
+            -- Used by Isolate to chain straight into the next
+            -- queued action (the drag the user did on the freshly-
+            -- isolated singleton) with no inter-action pause.
+            case rs.queue of
+                [] ->
+                    Completed
+
+                entry :: rest ->
+                    let
+                        dispatched =
+                            startNextAction nowMs entry rs.gameState
+                    in
+                    StillReplaying
+                        { rs
+                            | queue = rest
+                            , gameState = dispatched.gameState
+                            , phase = dispatched.phase
+                        }
+                        Cmd.none
 
         AnimatingBoardAction dragState ->
             case BoardDragAnimate.step nowMs rs.gameState.board dragState of
@@ -277,6 +299,12 @@ startNextAction nowMs entry gameState =
             { gameState =
                 { gameState | board = Execute.split p.stack p.cardIndex gameState.board }
             , phase = ActionCompleted
+            }
+
+        GameEvent.Isolate p ->
+            { gameState =
+                { gameState | board = Execute.isolate p.stack p.cardIndex gameState.board }
+            , phase = ActionCompletedNoBeat
             }
 
         GameEvent.CompleteTurn ->

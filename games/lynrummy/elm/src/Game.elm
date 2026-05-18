@@ -23,13 +23,16 @@ import Lib.BoardGesture as BoardGesture
 import Lib.BoardView exposing (boardDomIdFor)
 import Lib.Dealer as Dealer
 import Lib.Drag exposing (DragState(..))
+import Lib.CardStack as CardStack
 import Lib.Engine as Engine
 import Lib.CompleteTurn as CompleteTurn
+import Lib.Execute as Execute
 import Lib.GameEvent as GameEvent
 import Lib.GameState exposing (GameState)
 import Lib.Hand exposing (activeHand)
 import Lib.HandDrag as HandDrag
 import Lib.HandGesture as HandGesture
+import Lib.LongPress as LongPress
 import Lib.Player exposing (Player(..))
 import Lib.InitialStateDsl as InitialStateDsl
 import Lib.Physics.BoardGeometry exposing (refereeBounds)
@@ -361,8 +364,8 @@ update msg model =
             case model.drag of
                 NotDragging ->
                     let
-                        dragInfo =
-                            BoardGesture.startBoardDragInfo
+                        pending =
+                            BoardGesture.startPressPending
                                 { stack = stack
                                 , cardIndex = cardIndex
                                 , cursor = point
@@ -370,10 +373,56 @@ update msg model =
                                 , board = model.gameState.board
                                 }
                     in
-                    ( { model | drag = DraggingBoardCard dragInfo }
-                    , Browser.Dom.getElement (boardDomIdFor model.gameId)
-                        |> Task.attempt BoardRectReceived
+                    ( { model | drag = PressPending pending }
+                    , Cmd.batch
+                        [ Browser.Dom.getElement (boardDomIdFor model.gameId)
+                            |> Task.attempt BoardRectReceived
+                        , LongPress.scheduleTimer LongPressTimerFired time
+                        ]
                     )
+
+                _ ->
+                    ( model, Cmd.none )
+
+        LongPressTimerFired startTimeMs ->
+            case model.drag of
+                PressPending p ->
+                    if p.startTimeMs == startTimeMs then
+                        let
+                            newBoard =
+                                Execute.isolate p.stack p.cardIndex model.gameState.board
+
+                            singleton =
+                                CardStack.isolatedSingleton p.cardIndex p.stack
+
+                            dragInfo =
+                                BoardGesture.startBoardDragInfo
+                                    { stack = singleton
+                                    , cardIndex = 0
+                                    , cursor = p.originalCursor
+                                    , tMs = p.startTimeMs
+                                    , board = newBoard
+                                    }
+
+                            event =
+                                GameEvent.Isolate { stack = p.stack, cardIndex = p.cardIndex }
+
+                            gs0 =
+                                model.gameState
+                        in
+                        ( { model
+                            | drag = DraggingBoardCard dragInfo
+                            , gameState = { gs0 | board = newBoard }
+                            , actionLog = model.actionLog ++ [ { action = event } ]
+                            , nextSeq = model.nextSeq + 1
+                            , status = { text = "Isolated — drag to move.", kind = Status.Inform }
+                          }
+                        , Wire.sendAction model.sessionId
+                            (GameEvent.isolateDsl model.nextSeq p.stack p.cardIndex)
+                        )
+
+                    else
+                        ( model, Cmd.none )
 
                 _ ->
                     ( model, Cmd.none )
@@ -399,6 +448,22 @@ update msg model =
 
         MouseMove pos tMs ->
             case model.drag of
+                PressPending p ->
+                    if BoardGesture.pressPendingEscaped pos p then
+                        let
+                            upgraded =
+                                BoardGesture.upgradePressToBoardDrag p
+
+                            ( nextD, nextStatus ) =
+                                BoardGesture.mouseMove pos tMs upgraded model.status
+                        in
+                        ( { model | drag = DraggingBoardCard nextD, status = nextStatus }
+                        , Cmd.none
+                        )
+
+                    else
+                        ( model, Cmd.none )
+
                 DraggingBoardCard d ->
                     let
                         ( nextD, nextStatus ) =
@@ -424,6 +489,39 @@ update msg model =
             case model.drag of
                 NotDragging ->
                     ( model, Cmd.none )
+
+                PressPending p ->
+                    -- Click-without-escape: upgrade to whole-stack
+                    -- drag and let BoardDrag emit Split (cursor is
+                    -- still at originalCursor, so distSquared = 0).
+                    let
+                        upgraded =
+                            BoardGesture.upgradePressToBoardDrag p
+
+                        outcome =
+                            BoardDrag.handleMouseUp pos
+                                tMs
+                                upgraded
+                                { board = model.gameState.board
+                                , boardRect = model.boardRect
+                                , actionLog = model.actionLog
+                                , nextSeq = model.nextSeq
+                                }
+
+                        gs0 =
+                            model.gameState
+                    in
+                    ( { model
+                        | drag = NotDragging
+                        , gameState = { gs0 | board = outcome.board }
+                        , status = outcome.status
+                        , actionLog = outcome.actionLog
+                        , nextSeq = outcome.nextSeq
+                      }
+                    , outcome.outboundPayload
+                        |> Maybe.map (Wire.sendAction model.sessionId)
+                        |> Maybe.withDefault Cmd.none
+                    )
 
                 DraggingBoardCard d ->
                     let

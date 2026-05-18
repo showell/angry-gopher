@@ -1,6 +1,7 @@
 module Lib.GameEvent exposing
     ( GameEvent(..)
     , completeTurnDsl
+    , isolateDsl
     , mergeHandDsl
     , mergeStackDsl
     , moveStackDsl
@@ -49,6 +50,7 @@ import Lib.TimeLoc exposing (TimeLoc)
 
 type GameEvent
     = Split { stack : CardStack, cardIndex : Int }
+    | Isolate { stack : CardStack, cardIndex : Int }
     | MergeStack { source : CardStack, target : CardStack, side : Side, boardPath : NonEmpty TimeLoc }
     | MergeHand { handCard : Card, target : CardStack, side : Side }
     | PlaceHand { handCard : Card, loc : BoardLocation }
@@ -65,6 +67,15 @@ splitDsl : Int -> CardStack -> Int -> String
 splitDsl seq stack cardIndex =
     seqPrefix seq
         ++ "split "
+        ++ stackRef stack
+        ++ " @"
+        ++ String.fromInt cardIndex
+
+
+isolateDsl : Int -> CardStack -> Int -> String
+isolateDsl seq stack cardIndex =
+    seqPrefix seq
+        ++ "isolate "
         ++ stackRef stack
         ++ " @"
         ++ String.fromInt cardIndex

@@ -156,6 +156,9 @@ applyEvent event state =
         Split p ->
             { state | board = Execute.split p.stack p.cardIndex state.board }
 
+        Isolate p ->
+            { state | board = Execute.isolate p.stack p.cardIndex state.board }
+
         MergeStack p ->
             { state | board = Execute.mergeStack p.source p.target p.side state.board }
 

@@ -15,6 +15,8 @@ module Lib.CardStack exposing
     , isStacksEqual
     , leftMerge
     , rightMerge
+    , isolate
+    , isolatedSingleton
     , size
     , split
     , stackDisplayWidth
@@ -394,6 +396,67 @@ rightSplit leftCount s =
     [ { boardCards = leftCards, loc = leftLoc }
     , { boardCards = rightCards, loc = rightLoc }
     ]
+
+
+{-| Isolate the card at `cardIndex` from the rest of the
+stack. Splits the stack into up to three pieces — the cards
+before the held one, the held one alone, and the cards after.
+The left piece slides 2px left, the right piece 2px right;
+the isolated card stays at its original screen position. If
+the held card is at either end, the corresponding side piece
+is omitted (so a 2-card stack always returns 2 pieces, never
+an empty side).
+-}
+isolate : Int -> CardStack -> List CardStack
+isolate cardIndex s =
+    if size s <= 1 then
+        [ s ]
+
+    else
+        let
+            beforeCards =
+                List.take cardIndex s.boardCards
+
+            afterCards =
+                List.drop (cardIndex + 1) s.boardCards
+
+            middle =
+                isolatedSingleton cardIndex s
+
+            leftPiece =
+                if List.isEmpty beforeCards then
+                    []
+
+                else
+                    [ { boardCards = beforeCards
+                      , loc = { top = s.loc.top, left = s.loc.left - 2 }
+                      }
+                    ]
+
+            afterPiece =
+                if List.isEmpty afterCards then
+                    []
+
+                else
+                    [ { boardCards = afterCards
+                      , loc = { top = s.loc.top, left = middle.loc.left + stackPitch + 2 }
+                      }
+                    ]
+        in
+        leftPiece ++ [ middle ] ++ afterPiece
+
+
+{-| The middle piece from `isolate` — the held card alone,
+positioned at its original screen slot within the source
+stack. Exposed so callers can grab the singleton as a drag
+handle immediately after the isolate fires (long-press →
+drag without releasing).
+-}
+isolatedSingleton : Int -> CardStack -> CardStack
+isolatedSingleton cardIndex s =
+    { boardCards = List.drop cardIndex s.boardCards |> List.take 1
+    , loc = { top = s.loc.top, left = s.loc.left + cardIndex * stackPitch }
+    }
 
 
 

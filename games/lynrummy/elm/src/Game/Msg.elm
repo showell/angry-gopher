@@ -15,6 +15,7 @@ type Msg
     | MouseDownOnHandCard { handCard : HandCard, point : Point }
     | MouseMove Point Int
     | MouseUp Point Int
+    | LongPressTimerFired Int
     | BoardRectReceived (Result Browser.Dom.Error Browser.Dom.Element)
     | HandCardRectReceived (Result Browser.Dom.Error ( Browser.Dom.Element, Browser.Dom.Element, Time.Posix ))
     | ActionSent (Result Http.Error ())

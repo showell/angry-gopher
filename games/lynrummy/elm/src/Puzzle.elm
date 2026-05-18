@@ -12,6 +12,7 @@ import Browser.Dom
 import Browser.Events
 import Lib.ActionLog as ActionLog exposing (ActionLogEntry)
 import Lib.BoardDrag as BoardDrag
+import Lib.BoardDragTypes exposing (BoardCardDragInfo, PressPendingInfo)
 import Lib.PuzzleFlagDsl as PuzzleFlagDsl
 import Lib.BoardGesture as BoardGesture
 import Lib.BoardView as BoardView
@@ -21,6 +22,7 @@ import Lib.Colors as Colors
 import Lib.Drag as Drag exposing (DragState(..))
 import Lib.Execute as Execute
 import Lib.GameEvent as GameEvent exposing (GameEvent(..))
+import Lib.LongPress as LongPress
 import Lib.Physics.GestureArbitration as GA
 import Lib.Point exposing (Point)
 import Lib.PointerInput as PointerInput
@@ -79,6 +81,7 @@ type Msg
     = MouseDownOnBoardCard { stack : CardStack, cardIndex : Int, point : Point, time : Int }
     | MouseMove Point Int
     | MouseUp Point Int
+    | LongPressTimerFired Int
     | BoardRectReceived (Result Browser.Dom.Error Browser.Dom.Element)
     | ClickPrevPuzzle
     | ClickNextPuzzle
@@ -237,27 +240,57 @@ update msg model =
         MouseDownOnBoardCard { stack, cardIndex, point, time } ->
             case model.drag of
                 NotDragging ->
-                    ( { model
-                        | drag =
-                            DraggingBoardCard
-                                (BoardGesture.startBoardDragInfo
-                                    { stack = stack
-                                    , cardIndex = cardIndex
-                                    , cursor = point
-                                    , tMs = time
-                                    , board = (currentPuzzle model).board
-                                    }
-                                )
-                      }
-                    , Browser.Dom.getElement (BoardView.boardDomIdFor model.gameId)
-                        |> Task.attempt BoardRectReceived
+                    let
+                        pending =
+                            BoardGesture.startPressPending
+                                { stack = stack
+                                , cardIndex = cardIndex
+                                , cursor = point
+                                , tMs = time
+                                , board = (currentPuzzle model).board
+                                }
+                    in
+                    ( { model | drag = PressPending pending }
+                    , Cmd.batch
+                        [ Browser.Dom.getElement (BoardView.boardDomIdFor model.gameId)
+                            |> Task.attempt BoardRectReceived
+                        , LongPress.scheduleTimer LongPressTimerFired time
+                        ]
                     )
+
+                _ ->
+                    ( model, Cmd.none )
+
+        LongPressTimerFired startTimeMs ->
+            case model.drag of
+                PressPending p ->
+                    if p.startTimeMs == startTimeMs then
+                        applyIsolate model p
+
+                    else
+                        ( model, Cmd.none )
 
                 _ ->
                     ( model, Cmd.none )
 
         MouseMove pos tMs ->
             case model.drag of
+                PressPending p ->
+                    if BoardGesture.pressPendingEscaped pos p then
+                        let
+                            upgraded =
+                                BoardGesture.upgradePressToBoardDrag p
+
+                            ( nextD, nextStatus ) =
+                                BoardGesture.mouseMove pos tMs upgraded model.status
+                        in
+                        ( { model | drag = DraggingBoardCard nextD, status = nextStatus }
+                        , Cmd.none
+                        )
+
+                    else
+                        ( model, Cmd.none )
+
                 DraggingBoardCard d ->
                     let
                         ( nextD, nextStatus ) =
@@ -281,64 +314,17 @@ update msg model =
                 DraggingHandCard _ ->
                     ( { model | drag = NotDragging }, Cmd.none )
 
+                PressPending p ->
+                    -- Click-without-escape: upgrade to whole-stack
+                    -- drag and let BoardDrag emit Split (cursor is
+                    -- still at originalCursor, so distSquared = 0).
+                    handleBoardMouseUp model
+                        releasePoint
+                        tMs
+                        (BoardGesture.upgradePressToBoardDrag p)
+
                 DraggingBoardCard d ->
-                    let
-                        puzzle =
-                            currentPuzzle model
-
-                        outcome =
-                            BoardDrag.handleMouseUp releasePoint
-                                tMs
-                                d
-                                { board = puzzle.board
-                                , boardRect = model.boardRect
-                                , actionLog = puzzle.actionLog
-                                , nextSeq = puzzle.nextSeq
-                                }
-
-                        modelAfterDrag =
-                            { model | drag = NotDragging, status = outcome.status }
-                                |> withCurrentPuzzle
-                                    (\p ->
-                                        { p
-                                            | board = outcome.board
-                                            , actionLog = outcome.actionLog
-                                            , nextSeq = outcome.nextSeq
-                                        }
-                                    )
-                    in
-                    case outcome.outboundPayload of
-                        Nothing ->
-                            -- Drag rejected (off-board). The scold
-                            -- status in modelAfterDrag is the only
-                            -- visible response.
-                            ( modelAfterDrag, Cmd.none )
-
-                        Just payload ->
-                            let
-                                httpPostForAction =
-                                    Http.post
-                                        { url =
-                                            "/gopher/puzzle/sessions/"
-                                                ++ String.fromInt model.sessionId
-                                                ++ "/puzzles/"
-                                                ++ String.fromInt model.currentIndex
-                                                ++ "/actions"
-                                        , body = Http.stringBody "text/plain" payload
-                                        , expect = Http.expectWhatever ActionSent
-                                        }
-                            in
-                            case Status.isCleanBoard outcome.board of
-                                False ->
-                                    ( modelAfterDrag, httpPostForAction )
-
-                                True ->
-                                    ( modelAfterDrag
-                                    , Cmd.batch
-                                        [ httpPostForAction
-                                        , Task.succeed () |> Task.perform (always PuzzleSolved)
-                                        ]
-                                    )
+                    handleBoardMouseUp model releasePoint tMs d
 
         ClickPrevPuzzle ->
             ( navigateTo (stepIndex -1 model) model, Cmd.none )
@@ -498,6 +484,127 @@ update msg model =
             )
 
 
+{-| Apply a long-press isolate: split the held stack into
+three pieces, log the GameEvent, POST to the wire, and hand
+the new singleton off to the existing whole-stack drag so
+the user keeps dragging without releasing.
+-}
+applyIsolate : Model -> PressPendingInfo -> ( Model, Cmd Msg )
+applyIsolate model p =
+    let
+        puzzle =
+            currentPuzzle model
+
+        newBoard =
+            Execute.isolate p.stack p.cardIndex puzzle.board
+
+        singleton =
+            CardStack.isolatedSingleton p.cardIndex p.stack
+
+        dragInfo =
+            BoardGesture.startBoardDragInfo
+                { stack = singleton
+                , cardIndex = 0
+                , cursor = p.originalCursor
+                , tMs = p.startTimeMs
+                , board = newBoard
+                }
+
+        event =
+            GameEvent.Isolate { stack = p.stack, cardIndex = p.cardIndex }
+
+        modelAfter =
+            { model
+                | drag = DraggingBoardCard dragInfo
+                , status = { text = "Isolated — drag to move.", kind = Inform }
+            }
+                |> withCurrentPuzzle
+                    (\pz ->
+                        { pz
+                            | board = newBoard
+                            , actionLog = pz.actionLog ++ [ { action = event } ]
+                            , nextSeq = pz.nextSeq + 1
+                        }
+                    )
+
+        httpPostForAction =
+            Http.post
+                { url =
+                    "/gopher/puzzle/sessions/"
+                        ++ String.fromInt model.sessionId
+                        ++ "/puzzles/"
+                        ++ String.fromInt model.currentIndex
+                        ++ "/actions"
+                , body = Http.stringBody "text/plain" (GameEvent.isolateDsl puzzle.nextSeq p.stack p.cardIndex)
+                , expect = Http.expectWhatever ActionSent
+                }
+    in
+    ( modelAfter, httpPostForAction )
+
+
+{-| Resolve a board-card mouseup. Shared between the click-as-
+PressPending case (release inside the quiet window) and the
+DraggingBoardCard case (cursor already escaped to whole-stack
+drag).
+-}
+handleBoardMouseUp : Model -> Point -> Int -> BoardCardDragInfo -> ( Model, Cmd Msg )
+handleBoardMouseUp model releasePoint tMs d =
+    let
+        puzzle =
+            currentPuzzle model
+
+        outcome =
+            BoardDrag.handleMouseUp releasePoint
+                tMs
+                d
+                { board = puzzle.board
+                , boardRect = model.boardRect
+                , actionLog = puzzle.actionLog
+                , nextSeq = puzzle.nextSeq
+                }
+
+        modelAfterDrag =
+            { model | drag = NotDragging, status = outcome.status }
+                |> withCurrentPuzzle
+                    (\p ->
+                        { p
+                            | board = outcome.board
+                            , actionLog = outcome.actionLog
+                            , nextSeq = outcome.nextSeq
+                        }
+                    )
+    in
+    case outcome.outboundPayload of
+        Nothing ->
+            ( modelAfterDrag, Cmd.none )
+
+        Just payload ->
+            let
+                httpPostForAction =
+                    Http.post
+                        { url =
+                            "/gopher/puzzle/sessions/"
+                                ++ String.fromInt model.sessionId
+                                ++ "/puzzles/"
+                                ++ String.fromInt model.currentIndex
+                                ++ "/actions"
+                        , body = Http.stringBody "text/plain" payload
+                        , expect = Http.expectWhatever ActionSent
+                        }
+            in
+            case Status.isCleanBoard outcome.board of
+                False ->
+                    ( modelAfterDrag, httpPostForAction )
+
+                True ->
+                    ( modelAfterDrag
+                    , Cmd.batch
+                        [ httpPostForAction
+                        , Task.succeed () |> Task.perform (always PuzzleSolved)
+                        ]
+                    )
+
+
 canUndo : List ActionLogEntry -> Bool
 canUndo log =
     not (List.isEmpty (ActionLog.collapseUndos log))
@@ -514,6 +621,9 @@ undoForPuzzle event board =
     case event of
         Split p ->
             Execute.undoSplit p.stack p.cardIndex board
+
+        Isolate p ->
+            Execute.undoIsolate p.stack p.cardIndex board
 
         MergeStack p ->
             Execute.undoMergeStack p.source p.target p.side board

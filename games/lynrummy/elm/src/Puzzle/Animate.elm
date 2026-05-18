@@ -10,8 +10,8 @@ module Puzzle.Animate exposing
 {-| Sibling of `Lib.Animation.Animate`. Simpler: replays
 operate on a board (`List CardStack`) directly — puzzles
 have no hand, no turn cycle, no DOM measurement. Only
-`MergeStack`, `MoveStack`, and `Split` are expected in the
-queue; anything else is a contract violation.
+`MergeStack`, `MoveStack`, `Split`, and `Isolate` are
+expected in the queue; anything else is a contract violation.
 
 -}
 
@@ -26,6 +26,7 @@ type Phase
     = Starting
     | InBeat { nextBeatMs : Int }
     | ActionCompleted
+    | ActionCompletedNoBeat
     | AnimatingBoardAction BoardDragAnimate.State
 
 
@@ -100,6 +101,27 @@ tick nowMs rs =
         ActionCompleted ->
             StillAnimating { rs | phase = InBeat { nextBeatMs = nowMs + beatMs } }
 
+        ActionCompletedNoBeat ->
+            -- Used by Isolate to chain straight into the next
+            -- queued action (typically the drag the user did on
+            -- the freshly-isolated singleton) with no inter-
+            -- action pause.
+            case rs.queue of
+                [] ->
+                    Completed
+
+                entry :: rest ->
+                    let
+                        dispatched =
+                            startNextAction nowMs entry rs.board
+                    in
+                    StillAnimating
+                        { rs
+                            | queue = rest
+                            , board = dispatched.board
+                            , phase = dispatched.phase
+                        }
+
         AnimatingBoardAction dragState ->
             case BoardDragAnimate.step nowMs rs.board dragState of
                 BoardDragAnimate.InProgress nextDragState ->
@@ -157,6 +179,11 @@ startNextAction nowMs entry board =
             , phase = ActionCompleted
             }
 
+        GameEvent.Isolate p ->
+            { board = Execute.isolate p.stack p.cardIndex board
+            , phase = ActionCompletedNoBeat
+            }
+
         _ ->
             Debug.todo
-                "Puzzle.Animate: unexpected event variant — puzzles only emit Split / MergeStack / MoveStack"
+                "Puzzle.Animate: unexpected event variant — puzzles only emit Split / Isolate / MergeStack / MoveStack"

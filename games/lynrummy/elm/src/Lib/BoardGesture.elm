@@ -2,8 +2,11 @@ module Lib.BoardGesture exposing
     ( BoardMouseUp(..)
     , handleMouseUp
     , mouseMove
+    , pressPendingEscaped
     , resolveBoardCardGesture
     , startBoardDragInfo
+    , startPressPending
+    , upgradePressToBoardDrag
     )
 
 {-| Per-side resolution for board-card mouseup gestures.
@@ -18,7 +21,7 @@ without re-deriving the path. The hand-card sibling is
 -}
 
 import Lib.BoardActions exposing (Side)
-import Lib.BoardDragTypes exposing (BoardCardDragInfo)
+import Lib.BoardDragTypes exposing (BoardCardDragInfo, PressPendingInfo)
 import Lib.CardStack as CardStack exposing (BoardLocation, CardStack)
 import Lib.NonEmpty as NonEmpty exposing (NonEmpty)
 import Lib.Physics.BoardGeometry as BG
@@ -43,6 +46,54 @@ type BoardMouseUp
     | MergeStack { source : CardStack, target : CardStack, side : Side, boardPath : NonEmpty TimeLoc }
     | MoveStack { stack : CardStack, newLoc : BoardLocation, boardPath : NonEmpty TimeLoc }
     | BoardCardOffBoard
+
+
+{-| Construct a `PressPendingInfo` from a mousedown — the
+quiet phase before either (a) cursor escapes clickThreshold
+and upgrades to a whole-stack drag, or (b) the long-press
+timer fires and triggers an isolate.
+-}
+startPressPending :
+    { stack : CardStack
+    , cardIndex : Int
+    , cursor : Point
+    , tMs : Int
+    , board : List CardStack
+    }
+    -> PressPendingInfo
+startPressPending { stack, cardIndex, cursor, tMs, board } =
+    { stack = stack
+    , cardIndex = cardIndex
+    , originalCursor = cursor
+    , startTimeMs = tMs
+    , board = board
+    }
+
+
+{-| True iff the cursor has moved enough from the original
+mousedown position to escape the long-press quiet phase. Same
+threshold the click-vs-drag arbiter uses at mouseup.
+-}
+pressPendingEscaped : Point -> PressPendingInfo -> Bool
+pressPendingEscaped cursor p =
+    GA.distSquared cursor p.originalCursor > GA.clickThreshold
+
+
+{-| Upgrade a `PressPendingInfo` to a whole-stack
+`BoardCardDragInfo` once the cursor has escaped the quiet
+threshold. Equivalent to having entered `DraggingBoardCard`
+on mousedown directly, with the recorded mousedown timestamp
+seeding the gesture path.
+-}
+upgradePressToBoardDrag : PressPendingInfo -> BoardCardDragInfo
+upgradePressToBoardDrag p =
+    startBoardDragInfo
+        { stack = p.stack
+        , cardIndex = p.cardIndex
+        , cursor = p.originalCursor
+        , tMs = p.startTimeMs
+        , board = p.board
+        }
 
 
 {-| Construct a fresh `BoardCardDragInfo` from a mousedown.
