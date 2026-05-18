@@ -30,11 +30,13 @@ var PuzzleJSPath = "games/lynrummy/elm/puzzle.js"
 // Elm's Lib.BoardDsl on the wire. The Elm client renders one
 // puzzle at a time with Prev/Next navigation; the 1-indexed
 // "Puzzle N" label reflects the concatenated order, so the
-// 4-line catalog occupies Puzzle 1..21 and the 5-line catalog
-// continues at Puzzle 22.
+// 4-line catalog occupies Puzzle 1..21, the 5-line catalog
+// continues at Puzzle 22..32, and the 6-line catalog rounds it
+// out at Puzzle 33..47.
 var puzzleCatalogPaths = []string{
 	"games/lynrummy/conformance/curated_4line_puzzles.dsl",
 	"games/lynrummy/conformance/curated_5line_puzzles.dsl",
+	"games/lynrummy/conformance/curated_6line_puzzles.dsl",
 }
 
 // HandlePuzzle dispatches /gopher/puzzle/*.

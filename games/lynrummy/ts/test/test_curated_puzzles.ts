@@ -26,6 +26,10 @@ import { parseBoardStackLine } from "../dsl/parse.ts";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+// 6-line catalog (curated_6line_puzzles.dsl) is deliberately
+// excluded: the production MAX_PLAN_LENGTH cap is 5, and adding
+// 6 here would silently encourage that cap to drift. The 6-line
+// puzzles ship for the UI's difficulty stretch only.
 const PLAN_LENGTHS: readonly number[] = [4, 5];
 
 function catalogPath(planLength: number): string {
