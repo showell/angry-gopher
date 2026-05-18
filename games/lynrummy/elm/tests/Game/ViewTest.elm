@@ -1,17 +1,12 @@
 module Game.ViewTest exposing (suite)
 
-{-| Tests for the turn-ceremony helpers in Lib.Status and
-Lib.Popup: `statusForCompleteTurn` and `popupForCompleteTurn`.
-
-These are the functions that translate a CompleteTurnOutcome into
-the status bar message and popup the player sees. Each
-CompleteTurnResult branch gets a test, plus the Err path (server
-unreachable). Before LEAN_PASS the Failure branch was dead code —
-this suite exists to keep it alive.
+{-| Tests for `statusForCompleteTurn` — keeps every
+CompleteTurnResult branch (including Failure, which was dead
+code before LEAN_PASS) wired to its status kind.
 -}
 
 import Expect
-import Lib.CompleteTurn exposing (CompleteTurnOutcome, popupForCompleteTurn, statusForCompleteTurn)
+import Lib.CompleteTurn exposing (CompleteTurnOutcome, statusForCompleteTurn)
 import Lib.PlayerTurn exposing (CompleteTurnResult(..))
 import Lib.Status exposing (StatusKind(..))
 import Test exposing (Test, describe, test)
@@ -24,10 +19,7 @@ outcome result =
 
 suite : Test
 suite =
-    describe "Game.View turn-ceremony helpers"
-        [ statusTests
-        , popupTests
-        ]
+    statusTests
 
 
 statusTests : Test
@@ -66,37 +58,3 @@ statusTests =
         ]
 
 
-popupTests : Test
-popupTests =
-    describe "popupForCompleteTurn"
-        [ test "Failure → Angry Cat scolds dirty board" <|
-            \_ ->
-                popupForCompleteTurn (Ok (outcome Failure))
-                    |> .admin
-                    |> Expect.equal "Angry Cat"
-        , test "SuccessButNeedsCards → Oliver sympathizes" <|
-            \_ ->
-                popupForCompleteTurn (Ok (outcome SuccessButNeedsCards))
-                    |> .admin
-                    |> Expect.equal "Oliver"
-        , test "Success → Steve celebrates" <|
-            \_ ->
-                popupForCompleteTurn (Ok (outcome Success))
-                    |> .admin
-                    |> Expect.equal "Steve"
-        , test "SuccessAsVictor → Steve celebrates" <|
-            \_ ->
-                popupForCompleteTurn (Ok (outcome SuccessAsVictor))
-                    |> .admin
-                    |> Expect.equal "Steve"
-        , test "SuccessWithHandEmptied → Steve celebrates" <|
-            \_ ->
-                popupForCompleteTurn (Ok (outcome SuccessWithHandEmptied))
-                    |> .admin
-                    |> Expect.equal "Steve"
-        , test "Err → Angry Cat (server unreachable)" <|
-            \_ ->
-                popupForCompleteTurn (Err ())
-                    |> .admin
-                    |> Expect.equal "Angry Cat"
-        ]

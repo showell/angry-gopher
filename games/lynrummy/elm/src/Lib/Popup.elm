@@ -4,8 +4,8 @@ module Lib.Popup exposing
     )
 
 {-| Popup view-chrome. The popup is the modal that appears at
-turn-end (and other ack moments) with one of the admins
-narrating. Single OK button, no focus trap or ESC handler.
+turn-end (and other ack moments). Single OK button, no focus
+trap or ESC handler.
 
 `viewPopup` is msg-polymorphic — caller passes the dismiss
 Msg, so this module stays Msg-agnostic. Outcome-specific
@@ -22,9 +22,7 @@ import Html.Events as Events
 
 
 type alias PopupContent =
-    { admin : String
-    , body : String
-    }
+    { body : String }
 
 
 viewPopup : msg -> Maybe PopupContent -> Html msg
@@ -33,7 +31,7 @@ viewPopup dismissMsg maybePopup =
         Nothing ->
             Html.text ""
 
-        Just { admin, body } ->
+        Just { body } ->
             div
                 [ style "position" "fixed"
                 , style "inset" "0"
@@ -51,14 +49,7 @@ viewPopup dismissMsg maybePopup =
                     , style "max-width" "420px"
                     , style "box-shadow" "0 10px 30px rgba(0, 0, 0, 0.25)"
                     ]
-                    [ div
-                        [ style "font-weight" "bold"
-                        , style "color" Colors.navy
-                        , style "font-size" "15px"
-                        , style "margin-bottom" "10px"
-                        ]
-                        [ Html.text admin ]
-                    , Html.pre
+                    [ Html.pre
                         [ style "font-family" "inherit"
                         , style "white-space" "pre-wrap"
                         , style "margin" "0 0 18px 0"

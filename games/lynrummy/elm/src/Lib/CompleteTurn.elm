@@ -3,7 +3,6 @@ module Lib.CompleteTurn exposing
     , CompleteTurnOutcome
     , applyCompleteTurn
     , attemptCompleteTurn
-    , popupForCompleteTurn
     , statusForCompleteTurn
     )
 
@@ -126,34 +125,28 @@ popupForCompleteTurn result =
             popupFromOutcome outcome
 
         Err _ ->
-            { admin = "Angry Cat"
-            , body = "Couldn't reach the server to complete your turn."
-            }
+            { body = "Couldn't reach the server to complete your turn." }
 
 
 popupFromOutcome : CompleteTurnOutcome -> PopupContent
 popupFromOutcome { result, cardsDrawn } =
     case result of
         Failure ->
-            { admin = "Angry Cat"
-            , body =
-                "The board is not clean!\n\n(nor is my litter box)\n\n"
+            { body =
+                "The board is not clean!\n\n"
                     ++ "Drag stacks back where they belong."
             }
 
         SuccessButNeedsCards ->
-            { admin = "Oliver"
-            , body =
+            { body =
                 "Sorry you couldn't find a move.\n\n"
-                    ++ "I'm going back to my nap!\n\n"
                     ++ "We have dealt you "
                     ++ pluralize cardsDrawn "more card"
                     ++ " for your next turn."
             }
 
         SuccessAsVictor ->
-            { admin = "Steve"
-            , body =
+            { body =
                 "You are the first person to play all their cards!\n\n"
                     ++ "We have dealt you "
                     ++ pluralize cardsDrawn "more card"
@@ -162,8 +155,7 @@ popupFromOutcome { result, cardsDrawn } =
             }
 
         SuccessWithHandEmptied ->
-            { admin = "Steve"
-            , body =
+            { body =
                 "Good job — hand emptied!\n\n"
                     ++ "We have dealt you "
                     ++ pluralize cardsDrawn "more card"
@@ -171,9 +163,7 @@ popupFromOutcome { result, cardsDrawn } =
             }
 
         Success ->
-            { admin = "Steve"
-            , body = "The board is growing!"
-            }
+            { body = "The board is growing!" }
 
 
 {-| The full CompleteTurn transition, deterministic from the

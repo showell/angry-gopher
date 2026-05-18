@@ -567,9 +567,7 @@ update msg model =
 
                 agentDonePopup : Popup.PopupContent
                 agentDonePopup =
-                    { admin = "Oliver"
-                    , body = "The agent has completed its turn.\n\nYour move!"
-                    }
+                    { body = "The agent has completed its turn.\n\nYour move!" }
             in
             ( { model
                 | pendingEngineRequest = Nothing
