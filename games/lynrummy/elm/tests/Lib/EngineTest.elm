@@ -57,8 +57,13 @@ suite =
                                 ]
                     in
                     case Engine.decodeAgentStepResponse (Just 3) value of
-                        Engine.AgentStepEvents [ MergeHand _ ] ->
-                            Expect.pass
+                        Engine.AgentStepEvents [ { event } ] ->
+                            case event of
+                                MergeHand _ ->
+                                    Expect.pass
+
+                                _ ->
+                                    Expect.fail ("expected one MergeHand event, got: " ++ Debug.toString event)
 
                         other ->
                             Expect.fail ("expected one MergeHand event, got: " ++ Debug.toString other)

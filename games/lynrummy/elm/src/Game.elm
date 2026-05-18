@@ -583,26 +583,27 @@ update msg model =
             , Cmd.none
             )
 
-        AgentMovesReceived events ->
+        AgentMovesReceived steps ->
             let
                 entries =
-                    List.map (\e -> { action = e }) events
+                    List.map (\s -> { action = s.event }) steps
 
                 anim =
                     Animate.start entries model.gameState
 
-                -- One POST per agent event, consecutive seqs
-                -- starting at model.nextSeq. The animation's
-                -- Completed branch commits the matching actionLog
-                -- + nextSeq bump, so the wire and the local state
-                -- agree on the same seq range.
+                -- One POST per agent step, consecutive seqs
+                -- starting at model.nextSeq. The DSL line is
+                -- already what the TS engine emitted; we just
+                -- prepend a session-level seq prefix. The
+                -- animation's Completed branch commits the
+                -- matching actionLog + nextSeq bump.
                 wirePosts =
                     List.indexedMap
-                        (\i evt ->
+                        (\i s ->
                             Wire.sendAction model.sessionId
-                                (GameEvent.eventDsl (model.nextSeq + i) evt)
+                                (String.fromInt (model.nextSeq + i) ++ ") " ++ s.dsl)
                         )
-                        events
+                        steps
             in
             ( { model
                 | pendingEngineRequest = Nothing

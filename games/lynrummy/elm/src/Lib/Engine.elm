@@ -1,5 +1,6 @@
 module Lib.Engine exposing
-    ( AgentStepResponse(..)
+    ( AgentStep
+    , AgentStepResponse(..)
     , HintResponse(..)
     , buildAgentStepRequest
     , buildGameHintRequest
@@ -115,6 +116,17 @@ decodeHintResponse pendingId value =
 -- ---- AGENT_STEP ------------------------------------------------------
 
 
+{-| One agent move with both the parsed event (for animating)
+and the raw DSL line (for forwarding to actions.dsl with a seq
+prefix). Pairing them prevents the lists from drifting out of
+sync.
+-}
+type alias AgentStep =
+    { event : GameEvent
+    , dsl : String
+    }
+
+
 {-| Decoded shape of an `agent_step` response.
 
   - `AgentStepEvents` carries the parsed primitive sequence for
@@ -129,7 +141,7 @@ decodeHintResponse pendingId value =
 
 -}
 type AgentStepResponse
-    = AgentStepEvents (List GameEvent)
+    = AgentStepEvents (List AgentStep)
     | AgentStepError String
     | AgentStepStaleId
     | AgentStepDecodeError String
@@ -197,10 +209,14 @@ parseEventLines dsl =
             String.lines dsl
                 |> List.map String.trim
                 |> List.filter (\s -> s /= "")
+
+        parseOne line =
+            WireAction.parseEvent line
+                |> Result.map (\event -> { event = event, dsl = line })
     in
-    case foldResults (List.map WireAction.parseEvent lines) of
-        Ok events ->
-            AgentStepEvents events
+    case foldResults (List.map parseOne lines) of
+        Ok steps ->
+            AgentStepEvents steps
 
         Err msg ->
             AgentStepDecodeError ("primitive DSL parse: " ++ msg)

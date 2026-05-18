@@ -4,7 +4,7 @@ import Browser.Dom
 import Lib.ActionLog exposing (ActionLogEntry)
 import Lib.CardStack exposing (CardStack, HandCard)
 import Lib.GameState exposing (GameState)
-import Lib.GameEvent exposing (GameEvent)
+import Lib.Engine exposing (AgentStep)
 import Lib.Point exposing (Point)
 import Http
 import Time
@@ -30,6 +30,6 @@ type Msg
     | AnimationTick Time.Posix
     | ActionLogFetched (Result Http.Error ( GameState, List ActionLogEntry ))
     | HintLinesReceived (List String)
-    | AgentMovesReceived (List GameEvent)
+    | AgentMovesReceived (List AgentStep)
     | EngineResponseFailed String
     | EngineResponseStale

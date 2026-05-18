@@ -1,7 +1,6 @@
 module Lib.GameEvent exposing
     ( GameEvent(..)
     , completeTurnDsl
-    , eventDsl
     , mergeHandDsl
     , mergeStackDsl
     , moveStackDsl
@@ -22,13 +21,10 @@ index. Cards are globally unique in the double deck, so a card
 list identifies a stack unambiguously AND stays stable under
 the reducer's reordering.
 
-Per-event wire emitters live here. The default is to call the
-specific encoder at each dispatch site, where the caller has
-earned knowledge of which event fired (no GameEvent value
-built just to re-dispatch on it). For sites that *receive* a
-List GameEvent from outside (e.g. the agent's turn-step
-response from the TS engine), `eventDsl` is the explicit
-dispatcher. The matching parser lives in `Lib.WireAction`.
+Per-event wire emitters live here. Each dispatch site already
+has earned knowledge of which event fired, so it calls the
+specific encoder (no GameEvent value built just to re-dispatch
+on it). The matching parser lives in `Lib.WireAction`.
 
 Grammar — each line is `N) action_body[ :: path (...)]`,
 where stack references carry their loc inline so the parser
@@ -124,37 +120,6 @@ completeTurnDsl seq =
 undoDsl : Int -> String
 undoDsl seq =
     seqPrefix seq ++ "undo"
-
-
-{-| Dispatch a GameEvent onto its matching per-variant emitter.
-Use this only when you have a GameEvent value handed to you
-from elsewhere (e.g. an engine response, a replay buffer); at
-sites where you're producing the event yourself, call the
-specific encoder directly.
--}
-eventDsl : Int -> GameEvent -> String
-eventDsl seq event =
-    case event of
-        Split p ->
-            splitDsl seq p.stack p.cardIndex
-
-        MergeStack p ->
-            mergeStackDsl seq p.source p.target p.side p.boardPath
-
-        MoveStack p ->
-            moveStackDsl seq p.stack p.newLoc p.boardPath
-
-        MergeHand p ->
-            mergeHandDsl seq p.handCard p.target p.side
-
-        PlaceHand p ->
-            placeHandDsl seq p.handCard p.loc
-
-        CompleteTurn ->
-            completeTurnDsl seq
-
-        Undo ->
-            undoDsl seq
 
 
 
