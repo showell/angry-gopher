@@ -52,7 +52,7 @@ viewStatusBar status =
                     "red"
     in
     div
-        [ style "padding" "6px 20px"
+        [ style "padding" "4px 20px"
         , style "font-size" "15px"
         , style "color" color
         , style "border-bottom" "1px solid #eee"
