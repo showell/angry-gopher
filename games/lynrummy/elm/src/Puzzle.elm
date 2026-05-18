@@ -365,17 +365,21 @@ update msg model =
             let
                 puzzle =
                     currentPuzzle model
+
+                actionLog =
+                    puzzle.actionLog
             in
-            if not (canUndo puzzle.actionLog) then
+            if not (canUndo actionLog) then
                 ( model, Cmd.none )
 
             else
                 let
                     nextLog =
-                        puzzle.actionLog ++ [ { action = GameEvent.Undo } ]
+                        actionLog ++ [ { action = GameEvent.Undo } ]
 
-                    effective =
-                        ActionLog.collapseUndos nextLog
+                    nextBoard =
+                        replayFromInitial puzzle.initialBoard
+                            (ActionLog.collapseUndos nextLog)
 
                     nextModel =
                         { model | congratsVisible = False }
@@ -383,10 +387,7 @@ update msg model =
                                 (\p ->
                                     { p
                                         | actionLog = nextLog
-                                        , board =
-                                            List.foldl applyForPuzzle
-                                                puzzle.initialBoard
-                                                (List.map .action effective)
+                                        , board = nextBoard
                                         , nextSeq = p.nextSeq + 1
                                     }
                                 )
@@ -488,6 +489,18 @@ applyForPuzzle event board =
                 ("Puzzle.applyForPuzzle: non-board-verb event reached foldl (collapseUndos should have stripped Undo); got "
                     ++ Debug.toString event
                 )
+
+
+{-| Recompute the puzzle's board by replaying the entire log
+from initialBoard. We chose this O(N)-per-undo approach over
+the O(1) alternative (push board snapshots, pop on undo)
+because N is small (< 30 actions per solve) and it keeps the
+board strictly derived — `initialBoard + actionLog` is the
+only ground truth, the board never has to stay in sync.
+-}
+replayFromInitial : List CardStack -> List ActionLogEntry -> List CardStack
+replayFromInitial initialBoard entries =
+    List.foldl (.action >> applyForPuzzle) initialBoard entries
 
 
 -- SUBSCRIPTIONS
