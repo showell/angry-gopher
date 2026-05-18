@@ -75,7 +75,6 @@ boardShell { board, gameId, sourceStack, cardMouseDown, wingsWithHover, boardFlo
         , style "width" "800px"
         , style "min-width" "800px"
         , style "height" "600px"
-        , style "margin-top" "8px"
         ]
         (stackNodes ++ wingNodes ++ boardFloaters)
 

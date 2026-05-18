@@ -631,8 +631,7 @@ view model =
         [ style "font-family" "system-ui, sans-serif"
         , style "position" "relative"
         ]
-        [ puzzleNavHeader model
-        , Status.viewStatusBar model.status
+        [ Status.viewStatusBar model.status
         , div
             [ style "padding" "3px 20px 20px 20px"
             , style "display" "flex"
@@ -645,9 +644,12 @@ view model =
                 , style "flex-direction" "column"
                 , style "gap" "8px"
                 ]
-                [ undoButton model
+                [ puzzleTitle model
+                , undoButton model
                 , replayButton model
                 , resetButton model
+                , prevButton model
+                , nextButton model
                 ]
             , BoardView.boardShell
                 { board = board
@@ -751,79 +753,33 @@ nextPuzzleButton =
         [ text "Next" ]
 
 
-puzzleNavHeader : Model -> Html Msg
-puzzleNavHeader model =
-    let
-        n =
-            Array.length model.puzzles
-
-        navigable =
-            n > 1
-
-        label =
-            "puzzle "
-                ++ String.fromInt (model.currentIndex + 1)
-                ++ " / "
-                ++ String.fromInt n
-                ++ " — "
-                ++ (currentPuzzle model).name
-    in
+puzzleTitle : Model -> Html Msg
+puzzleTitle model =
     div
-        [ style "padding" "2px 12px"
-        , style "display" "flex"
-        , style "align-items" "center"
-        , style "gap" "12px"
-        , style "border-bottom" "1px solid #ddd"
-        , style "background" "#fafaf5"
+        [ style "font-size" "17px"
+        , style "color" Colors.navy
+        , style "font-weight" "600"
+        , style "padding-bottom" "4px"
         ]
-        [ tightNavButton "‹ Prev" navigable ClickPrevPuzzle
-        , div
-            [ style "flex" "1"
-            , style "text-align" "center"
-            , style "font-family" "monospace"
-            , style "font-size" "13px"
-            , style "color" "#333"
-            ]
-            [ text label ]
-        , tightNavButton "Next ›" navigable ClickNextPuzzle
-        ]
+        [ text ("Puzzle " ++ String.fromInt (model.currentIndex + 1)) ]
 
 
-{-| Tight Prev/Next button tailored for the nav header — same
-navy theme as Lib.Button but minimal padding so the strip
-stays short. Disabled when nav isn't possible (catalog of 0
-or 1).
--}
-tightNavButton : String -> Bool -> Msg -> Html Msg
-tightNavButton label enabled msg =
-    let
-        baseAttrs =
-            [ style "padding" "1px 8px"
-            , style "font-size" "13px"
-            , style "border-radius" "3px"
-            ]
-    in
-    if enabled then
-        Html.button
-            (Events.onClick msg
-                :: style "border" ("1px solid " ++ Colors.navy)
-                :: style "background" "white"
-                :: style "color" Colors.navy
-                :: style "cursor" "pointer"
-                :: baseAttrs
-            )
-            [ text label ]
+prevButton : Model -> Html Msg
+prevButton model =
+    if Array.length model.puzzles > 1 then
+        Button.button "‹ Prev" ClickPrevPuzzle
 
     else
-        Html.button
-            (Attr.disabled True
-                :: style "border" "1px solid #bbb"
-                :: style "background" "#f5f5f5"
-                :: style "color" "#bbb"
-                :: style "cursor" "not-allowed"
-                :: baseAttrs
-            )
-            [ text label ]
+        Button.disabledButton "‹ Prev"
+
+
+nextButton : Model -> Html Msg
+nextButton model =
+    if Array.length model.puzzles > 1 then
+        Button.button "Next ›" ClickNextPuzzle
+
+    else
+        Button.disabledButton "Next ›"
 
 
 replayDrag : Animate.AnimationState -> Drag.DragState
