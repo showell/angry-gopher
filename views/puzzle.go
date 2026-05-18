@@ -23,13 +23,19 @@ import (
 // alongside elm.js in the unified Elm project.
 var PuzzleJSPath = "games/lynrummy/elm/puzzle.js"
 
-// puzzleCatalogPath — curated puzzle catalog with positioned
-// boards. Catalog is pure DSL: `puzzle <name>` headers, each
-// followed by indented `at (left, top): cards` lines that pass
-// straight through to Elm's Lib.BoardDsl on the wire. The whole
-// file ships at page load; the Elm client renders one puzzle at
-// a time with Prev/Next navigation.
-const puzzleCatalogPath = "games/lynrummy/conformance/curated_4line_puzzles.dsl"
+// puzzleCatalogPaths — curated puzzle catalogs concatenated in
+// order to form the catalog shipped at page load. Catalogs are
+// pure DSL: `puzzle <name>` headers, each followed by indented
+// `at (left, top): cards` lines that pass straight through to
+// Elm's Lib.BoardDsl on the wire. The Elm client renders one
+// puzzle at a time with Prev/Next navigation; the 1-indexed
+// "Puzzle N" label reflects the concatenated order, so the
+// 4-line catalog occupies Puzzle 1..21 and the 5-line catalog
+// continues at Puzzle 22.
+var puzzleCatalogPaths = []string{
+	"games/lynrummy/conformance/curated_4line_puzzles.dsl",
+	"games/lynrummy/conformance/curated_5line_puzzles.dsl",
+}
 
 // HandlePuzzle dispatches /gopher/puzzle/*.
 func HandlePuzzle(w http.ResponseWriter, r *http.Request) {
@@ -105,28 +111,30 @@ func indentLines(src string) string {
 	return strings.Join(lines, "\n")
 }
 
-// loadCatalog reads the catalog file and returns its body —
-// `puzzle <name>` headers + indented `at (...)` lines, with
-// comments and blank lines stripped. The Elm client parses
-// this verbatim under a `catalog:` block in the page flag.
+// loadCatalog reads each catalog file in puzzleCatalogPaths,
+// strips comments and blank lines, and concatenates the
+// surviving lines. The Elm client parses the result verbatim
+// under a `catalog:` block in the page flag.
 func loadCatalog() (string, error) {
-	data, err := os.ReadFile(puzzleCatalogPath)
-	if err != nil {
-		return "", fmt.Errorf("read %s: %w", puzzleCatalogPath, err)
-	}
 	var kept []string
-	for _, raw := range strings.Split(string(data), "\n") {
-		// Strip line comments (matches the DSL parsers
-		// downstream so what we ship matches what gets parsed).
-		line := raw
-		if i := strings.Index(line, "#"); i >= 0 {
-			line = line[:i]
+	for _, p := range puzzleCatalogPaths {
+		data, err := os.ReadFile(p)
+		if err != nil {
+			return "", fmt.Errorf("read %s: %w", p, err)
 		}
-		line = strings.TrimRight(line, " \t")
-		if strings.TrimSpace(line) == "" {
-			continue
+		for _, raw := range strings.Split(string(data), "\n") {
+			// Strip line comments (matches the DSL parsers
+			// downstream so what we ship matches what gets parsed).
+			line := raw
+			if i := strings.Index(line, "#"); i >= 0 {
+				line = line[:i]
+			}
+			line = strings.TrimRight(line, " \t")
+			if strings.TrimSpace(line) == "" {
+				continue
+			}
+			kept = append(kept, line)
 		}
-		kept = append(kept, line)
 	}
 	return strings.Join(kept, "\n"), nil
 }
