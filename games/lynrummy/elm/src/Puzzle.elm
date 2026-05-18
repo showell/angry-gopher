@@ -83,10 +83,10 @@ type Msg
     | ClickPrevPuzzle
     | ClickNextPuzzle
     | ClickUndo
+    | ClickReset
     | ClickInstantReplay
     | ClickReplayPauseToggle
     | PuzzleSolved
-    | ClickStayOnSolvedPuzzle
     | ClickAdvanceFromSolvedPuzzle
     | NextPuzzleButtonFocused
     | ReplayTick Time.Posix
@@ -352,9 +352,6 @@ update msg model =
                 |> Task.attempt (always NextPuzzleButtonFocused)
             )
 
-        ClickStayOnSolvedPuzzle ->
-            ( { model | congratsVisible = False }, Cmd.none )
-
         ClickAdvanceFromSolvedPuzzle ->
             ( navigateTo (stepIndex 1 model) model, Cmd.none )
 
@@ -408,6 +405,41 @@ update msg model =
                                 }
                     in
                     ( nextModel, httpPostForAction )
+
+        ClickReset ->
+            let
+                puzzle =
+                    currentPuzzle model
+
+                nextModel =
+                    { model
+                        | congratsVisible = False
+                        , drag = NotDragging
+                        , replayState = Nothing
+                        , status = { text = "Reset.", kind = Inform }
+                    }
+                        |> withCurrentPuzzle
+                            (\p ->
+                                { p
+                                    | board = p.initialBoard
+                                    , actionLog = []
+                                    , nextSeq = p.nextSeq + 1
+                                }
+                            )
+
+                httpPostForAction =
+                    Http.post
+                        { url =
+                            "/gopher/puzzle/sessions/"
+                                ++ String.fromInt model.sessionId
+                                ++ "/puzzles/"
+                                ++ String.fromInt model.currentIndex
+                                ++ "/actions"
+                        , body = Http.stringBody "text/plain" (String.fromInt puzzle.nextSeq ++ ") reset")
+                        , expect = Http.expectWhatever ActionSent
+                        }
+            in
+            ( nextModel, httpPostForAction )
 
         ClickInstantReplay ->
             let
@@ -615,6 +647,7 @@ view model =
                 ]
                 [ undoButton model
                 , replayButton model
+                , resetButton model
                 ]
             , BoardView.boardShell
                 { board = board
@@ -666,23 +699,23 @@ congratsPopup model =
                 [ style "font-size" "15px"
                 , style "margin-bottom" "12px"
                 ]
-                [ text "You solved it! Hit Prev or Next for the next puzzle." ]
+                [ text "You solved it!" ]
             , div
                 [ style "display" "flex"
                 , style "gap" "12px"
                 , style "justify-content" "center"
                 ]
-                [ stayHereButton
+                [ replayCongratsButton
                 , nextPuzzleButton
                 ]
             ]
 
 
-stayHereButton : Html Msg
-stayHereButton =
+replayCongratsButton : Html Msg
+replayCongratsButton =
     Html.button
         [ Attr.type_ "button"
-        , Events.onClick ClickStayOnSolvedPuzzle
+        , Events.onClick ClickInstantReplay
         , style "padding" "6px 14px"
         , style "font-size" "14px"
         , style "border" ("1px solid " ++ Colors.navy)
@@ -691,7 +724,7 @@ stayHereButton =
         , style "border-radius" "3px"
         , style "cursor" "pointer"
         ]
-        [ text "Stay here" ]
+        [ text "Replay" ]
 
 
 nextPuzzleButton : Html Msg
@@ -715,7 +748,7 @@ nextPuzzleButton =
         , style "outline" "3px solid #a5d6a7"
         , style "outline-offset" "1px"
         ]
-        [ text "Next puzzle" ]
+        [ text "Next" ]
 
 
 puzzleNavHeader : Model -> Html Msg
@@ -808,6 +841,15 @@ replayButton model =
 
             else
                 Button.button "Replay" ClickInstantReplay
+
+
+resetButton : Model -> Html Msg
+resetButton model =
+    if model.replayState == Nothing && not (List.isEmpty (currentPuzzle model).actionLog) then
+        Button.button "Reset" ClickReset
+
+    else
+        Button.disabledButton "Reset"
 
 
 main : Program Decode.Value Model Msg
