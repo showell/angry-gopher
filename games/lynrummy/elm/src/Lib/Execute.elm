@@ -133,9 +133,9 @@ pieces appended. Bridge-bug case: stack not on board → log
 split : CardStack -> Int -> List CardStack -> List CardStack
 split stack cardIndex board =
     case findStack stack board of
-        Just real ->
-            List.filter (not << isStacksEqual real) board
-                ++ CardStack.split cardIndex real
+        Just originalStack ->
+            List.filter (not << isStacksEqual originalStack) board
+                ++ CardStack.split cardIndex originalStack
 
         Nothing ->
             let
@@ -171,12 +171,12 @@ it on the board.
 isolate : CardStack -> Int -> List CardStack -> { board : List CardStack, singleton : CardStack }
 isolate stack cardIndex board =
     case findStack stack board of
-        Just real ->
+        Just originalStack ->
             let
                 result =
-                    CardStack.isolate cardIndex real
+                    CardStack.isolate cardIndex originalStack
             in
-            { board = List.filter (not << isStacksEqual real) board ++ result.pieces
+            { board = List.filter (not << isStacksEqual originalStack) board ++ result.pieces
             , singleton = result.singleton
             }
 
@@ -211,9 +211,9 @@ unchanged.
 moveStack : CardStack -> BoardLocation -> List CardStack -> List CardStack
 moveStack stack newLoc board =
     case findStack stack board of
-        Just real ->
-            List.filter (not << isStacksEqual real) board
-                ++ [ { real | loc = newLoc } ]
+        Just originalStack ->
+            List.filter (not << isStacksEqual originalStack) board
+                ++ [ { originalStack | loc = newLoc } ]
 
         Nothing ->
             let
