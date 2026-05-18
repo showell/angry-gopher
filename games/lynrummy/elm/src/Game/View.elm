@@ -242,7 +242,10 @@ rightSidebar model =
                 DraggingHandCard d ->
                     d.wings
 
-                _ ->
+                NotDragging ->
+                    []
+
+                PressPending _ ->
                     []
 
         -- Hover detection needs the floater in board frame.
@@ -271,7 +274,10 @@ rightSidebar model =
                         Nothing ->
                             Nothing
 
-                _ ->
+                NotDragging ->
+                    Nothing
+
+                PressPending _ ->
                     Nothing
 
         wingsWithHover =

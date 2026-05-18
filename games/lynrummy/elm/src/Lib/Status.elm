@@ -6,6 +6,7 @@ module Lib.Status exposing
     , geometryFeedback
     , handNothingStatus
     , isCleanBoard
+    , isolatedStatus
     , mergeStatus
     , offBoardScold
     , sessionAllocFailedStatus
@@ -162,6 +163,11 @@ handNothingStatus =
     { text = "Drop on a stack to merge, or on open space to place."
     , kind = Inform
     }
+
+
+isolatedStatus : StatusMessage
+isolatedStatus =
+    { text = "Isolated — drag to move.", kind = Inform }
 
 
 actionRejectedStatus : StatusMessage

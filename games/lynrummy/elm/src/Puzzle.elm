@@ -495,11 +495,8 @@ applyIsolate model p =
         puzzle =
             currentPuzzle model
 
-        newBoard =
+        { board, singleton } =
             Execute.isolate p.stack p.cardIndex puzzle.board
-
-        singleton =
-            CardStack.isolatedSingleton p.cardIndex p.stack
 
         dragInfo =
             BoardGesture.startBoardDragInfo
@@ -507,7 +504,7 @@ applyIsolate model p =
                 , cardIndex = 0
                 , cursor = p.originalCursor
                 , tMs = p.startTimeMs
-                , board = newBoard
+                , board = board
                 }
 
         event =
@@ -516,12 +513,12 @@ applyIsolate model p =
         modelAfter =
             { model
                 | drag = DraggingBoardCard dragInfo
-                , status = { text = "Isolated — drag to move.", kind = Inform }
+                , status = Status.isolatedStatus
             }
                 |> withCurrentPuzzle
                     (\pz ->
                         { pz
-                            | board = newBoard
+                            | board = board
                             , actionLog = pz.actionLog ++ [ { action = event } ]
                             , nextSeq = pz.nextSeq + 1
                         }

@@ -16,7 +16,6 @@ module Lib.CardStack exposing
     , leftMerge
     , rightMerge
     , isolate
-    , isolatedSingleton
     , size
     , split
     , stackDisplayWidth
@@ -399,18 +398,23 @@ rightSplit leftCount s =
 
 
 {-| Isolate the card at `cardIndex` from the rest of the
-stack. Splits the stack into up to three pieces — the cards
-before the held one, the held one alone, and the cards after.
-The left piece slides 2px left, the right piece 2px right;
-the isolated card stays at its original screen position. If
-the held card is at either end, the corresponding side piece
-is omitted (so a 2-card stack always returns 2 pieces, never
-an empty side).
+stack. The left piece slides 2px left, the right piece 2px
+right; the isolated card stays at its original screen
+position. If the held card is at either end, the corresponding
+side piece is omitted.
+
+Returns the up-to-three `pieces` for the caller to splice
+into the board, plus a direct reference to the `singleton`
+(the same record that appears in `pieces`) so callers can
+grab it as a drag handle without re-deriving its position.
+Singleton's `boardCards` is `[s]` for a 1-card input; in
+that degenerate case `pieces` is `[ s ]` and `singleton` is
+the original stack.
 -}
-isolate : Int -> CardStack -> List CardStack
+isolate : Int -> CardStack -> { pieces : List CardStack, singleton : CardStack }
 isolate cardIndex s =
     if size s <= 1 then
-        [ s ]
+        { pieces = [ s ], singleton = s }
 
     else
         let
@@ -420,8 +424,10 @@ isolate cardIndex s =
             afterCards =
                 List.drop (cardIndex + 1) s.boardCards
 
-            middle =
-                isolatedSingleton cardIndex s
+            singleton =
+                { boardCards = List.drop cardIndex s.boardCards |> List.take 1
+                , loc = { top = s.loc.top, left = s.loc.left + cardIndex * stackPitch }
+                }
 
             leftPiece =
                 if List.isEmpty beforeCards then
@@ -439,24 +445,13 @@ isolate cardIndex s =
 
                 else
                     [ { boardCards = afterCards
-                      , loc = { top = s.loc.top, left = middle.loc.left + stackPitch + 2 }
+                      , loc = { top = s.loc.top, left = singleton.loc.left + stackPitch + 2 }
                       }
                     ]
         in
-        leftPiece ++ [ middle ] ++ afterPiece
-
-
-{-| The middle piece from `isolate` — the held card alone,
-positioned at its original screen slot within the source
-stack. Exposed so callers can grab the singleton as a drag
-handle immediately after the isolate fires (long-press →
-drag without releasing).
--}
-isolatedSingleton : Int -> CardStack -> CardStack
-isolatedSingleton cardIndex s =
-    { boardCards = List.drop cardIndex s.boardCards |> List.take 1
-    , loc = { top = s.loc.top, left = s.loc.left + cardIndex * stackPitch }
-    }
+        { pieces = leftPiece ++ [ singleton ] ++ afterPiece
+        , singleton = singleton
+        }
 
 
 

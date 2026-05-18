@@ -162,35 +162,40 @@ undoSplit stack cardIndex board =
 
 
 {-| Isolate the card at `cardIndex` from the rest of the
-stack — splits the stack into up to three pieces (before /
-held / after) with a 2px split on each side. The held card
-becomes a singleton at its original screen position. Bridge-
-bug case: stack not on board → log + board unchanged.
+stack — splits it into up to three pieces (before / held /
+after) with a 2px split on each side. Returns the new
+`board` and a reference to the freshly-created `singleton`
+so callers can hand it straight to a drag without re-finding
+it on the board.
 -}
-isolate : CardStack -> Int -> List CardStack -> List CardStack
+isolate : CardStack -> Int -> List CardStack -> { board : List CardStack, singleton : CardStack }
 isolate stack cardIndex board =
     case findStack stack board of
         Just real ->
-            List.filter (not << isStacksEqual real) board
-                ++ CardStack.isolate cardIndex real
+            let
+                result =
+                    CardStack.isolate cardIndex real
+            in
+            { board = List.filter (not << isStacksEqual real) board ++ result.pieces
+            , singleton = result.singleton
+            }
 
         Nothing ->
             let
                 _ =
-                    Debug.log "[Execute.isolate] stack not on board — skipping (bridge bug)" stack
+                    Debug.log "[Execute.isolate] stack not on board — skipping" stack
             in
-            board
+            { board = board, singleton = stack }
 
 
-{-| Reverse a prior `isolate`: remove the three isolated
-pieces from the board and put the original stack back. Same
-shape as `undoSplit`.
+{-| Reverse a prior `isolate`: remove the isolated pieces
+from the board and put the original stack back.
 -}
 undoIsolate : CardStack -> Int -> List CardStack -> List CardStack
 undoIsolate stack cardIndex board =
     let
         change =
-            { stacksToRemove = CardStack.isolate cardIndex stack
+            { stacksToRemove = (CardStack.isolate cardIndex stack).pieces
             , stacksToAdd = [ stack ]
             , handCardsToRelease = []
             }

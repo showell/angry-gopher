@@ -23,7 +23,6 @@ import Lib.BoardGesture as BoardGesture
 import Lib.BoardView exposing (boardDomIdFor)
 import Lib.Dealer as Dealer
 import Lib.Drag exposing (DragState(..))
-import Lib.CardStack as CardStack
 import Lib.Engine as Engine
 import Lib.CompleteTurn as CompleteTurn
 import Lib.Execute as Execute
@@ -389,11 +388,8 @@ update msg model =
                 PressPending p ->
                     if p.startTimeMs == startTimeMs then
                         let
-                            newBoard =
+                            { board, singleton } =
                                 Execute.isolate p.stack p.cardIndex model.gameState.board
-
-                            singleton =
-                                CardStack.isolatedSingleton p.cardIndex p.stack
 
                             dragInfo =
                                 BoardGesture.startBoardDragInfo
@@ -401,7 +397,7 @@ update msg model =
                                     , cardIndex = 0
                                     , cursor = p.originalCursor
                                     , tMs = p.startTimeMs
-                                    , board = newBoard
+                                    , board = board
                                     }
 
                             event =
@@ -412,10 +408,10 @@ update msg model =
                         in
                         ( { model
                             | drag = DraggingBoardCard dragInfo
-                            , gameState = { gs0 | board = newBoard }
+                            , gameState = { gs0 | board = board }
                             , actionLog = model.actionLog ++ [ { action = event } ]
                             , nextSeq = model.nextSeq + 1
-                            , status = { text = "Isolated — drag to move.", kind = Status.Inform }
+                            , status = Status.isolatedStatus
                           }
                         , Wire.sendAction model.sessionId
                             (GameEvent.isolateDsl model.nextSeq p.stack p.cardIndex)

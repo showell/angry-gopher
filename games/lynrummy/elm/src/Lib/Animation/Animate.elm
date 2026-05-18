@@ -303,7 +303,7 @@ startNextAction nowMs entry gameState =
 
         GameEvent.Isolate p ->
             { gameState =
-                { gameState | board = Execute.isolate p.stack p.cardIndex gameState.board }
+                { gameState | board = (Execute.isolate p.stack p.cardIndex gameState.board).board }
             , phase = ActionCompletedNoBeat
             }
 

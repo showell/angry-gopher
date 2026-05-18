@@ -180,7 +180,7 @@ startNextAction nowMs entry board =
             }
 
         GameEvent.Isolate p ->
-            { board = Execute.isolate p.stack p.cardIndex board
+            { board = (Execute.isolate p.stack p.cardIndex board).board
             , phase = ActionCompletedNoBeat
             }
 
