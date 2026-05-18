@@ -1,15 +1,14 @@
 // test_curated_puzzles.ts — conformance for the curated puzzle
-// catalog. For each `puzzle <name>` block in
-// games/lynrummy/conformance/curated_4line_puzzles.dsl, parse
-// the board, run solveBoard, and assert:
+// catalogs. For each plan length in PLAN_LENGTHS, opens the
+// matching `games/lynrummy/conformance/curated_<N>line_puzzles.dsl`
+// file, parses every `puzzle <name>` block, runs solveBoard,
+// and asserts:
 //
 //   - the BFS finds a non-null plan (puzzle is solvable)
-//   - the plan length is exactly EXPECTED_PLAN_LENGTH
+//   - the plan length is exactly N
 //
-// The expected length is a per-FILE constant — this runner is
-// for the 4-line catalog specifically. If we add a 3-line or
-// 5-line catalog later, each gets its own runner OR this one
-// gets parameterized by filename.
+// To add a new catalog (e.g. 3-line), drop the seed file at the
+// matching path and add the length to PLAN_LENGTHS.
 //
 // Format note: the puzzle DSL is the UI-consumable shape from
 // mined_seeds.dsl — `puzzle X` headers + indented `at (left,
@@ -27,11 +26,14 @@ import { parseBoardStackLine } from "../dsl/parse.ts";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const PUZZLE_DSL_PATH = path.resolve(
-  __dirname,
-  "../../conformance/curated_4line_puzzles.dsl",
-);
-const EXPECTED_PLAN_LENGTH = 4;
+const PLAN_LENGTHS: readonly number[] = [4, 5];
+
+function catalogPath(planLength: number): string {
+  return path.resolve(
+    __dirname,
+    `../../conformance/curated_${planLength}line_puzzles.dsl`,
+  );
+}
 
 interface ParsedPuzzle {
   readonly name: string;
@@ -74,57 +76,65 @@ interface RunResult {
   readonly msg: string;
 }
 
-function runPuzzle(p: ParsedPuzzle): RunResult {
+function runPuzzle(p: ParsedPuzzle, expectedLength: number): RunResult {
   const result = solveBoard(p.board);
   if (result === null) {
-    return { ok: false, msg: "no plan found (expected plan of length 4)" };
+    return { ok: false, msg: `no plan found (expected plan of length ${expectedLength})` };
   }
-  if (result.plan.length !== EXPECTED_PLAN_LENGTH) {
+  if (result.plan.length !== expectedLength) {
     return {
       ok: false,
-      msg: `plan length ${result.plan.length}, expected ${EXPECTED_PLAN_LENGTH}`,
+      msg: `plan length ${result.plan.length}, expected ${expectedLength}`,
     };
   }
   return { ok: true, msg: `OK — plan of length ${result.plan.length}` };
 }
 
-export function main(): void {
-  if (!fs.existsSync(PUZZLE_DSL_PATH)) {
-    console.error(`missing puzzle DSL: ${PUZZLE_DSL_PATH}`);
+function runCatalog(planLength: number, failures: string[]): { passed: number; total: number } {
+  const dslPath = catalogPath(planLength);
+  if (!fs.existsSync(dslPath)) {
+    console.error(`missing puzzle DSL: ${dslPath}`);
     process.exit(1);
   }
-  const text = fs.readFileSync(PUZZLE_DSL_PATH, "utf8");
-  const puzzles = parsePuzzles(text);
-
+  const puzzles = parsePuzzles(fs.readFileSync(dslPath, "utf8"));
   if (puzzles.length === 0) {
-    console.error(`no puzzles parsed from ${PUZZLE_DSL_PATH}`);
+    console.error(`no puzzles parsed from ${dslPath}`);
     process.exit(1);
   }
 
+  console.log(`\n${planLength}-line catalog (${puzzles.length} puzzles):`);
   let passed = 0;
-  let failed = 0;
-  const failures: string[] = [];
-
   for (const p of puzzles) {
     const t0 = Date.now();
-    const r = runPuzzle(p);
+    const r = runPuzzle(p, planLength);
     const ms = Date.now() - t0;
     const tag = ms >= 100 ? `  [${ms}ms]` : "";
+    const status = r.ok ? "PASS" : "FAIL";
+    const line = `  ${status}  ${p.name.padEnd(60)}  ${r.msg}${tag}`;
+    console.log(line);
     if (r.ok) {
       passed++;
-      console.log(`PASS  ${p.name.padEnd(60)}  ${r.msg}${tag}`);
     } else {
-      failed++;
-      const line = `FAIL  ${p.name.padEnd(60)}  ${r.msg}${tag}`;
-      console.log(line);
       failures.push(line);
     }
   }
+  return { passed, total: puzzles.length };
+}
+
+export function main(): void {
+  const failures: string[] = [];
+  let totalPassed = 0;
+  let totalCount = 0;
+  for (const planLength of PLAN_LENGTHS) {
+    const { passed, total } = runCatalog(planLength, failures);
+    totalPassed += passed;
+    totalCount += total;
+  }
 
   console.log();
-  console.log(`${passed}/${puzzles.length} curated puzzles passed`);
+  console.log(`${totalPassed}/${totalCount} curated puzzles passed`);
 
-  if (failed > 0) {
+  if (failures.length > 0) {
     console.log();
     console.log("FAILURES:");
     for (const f of failures) console.log("  " + f);
