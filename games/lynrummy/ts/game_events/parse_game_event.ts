@@ -17,7 +17,7 @@
 import {
   type Primitive, type Side,
   findStackIndex,
-  makeSplit, makeMergeStack, makeMergeHand, makeMoveStack, makePlaceHand,
+  makeSplit, makeIsolate, makeMergeStack, makeMergeHand, makeMoveStack, makePlaceHand,
 } from "./primitives.ts";
 import type { BoardStack, Loc } from "../geometry/geometry.ts";
 import { type Card, parseCardLabel } from "../core/card.ts";
@@ -55,13 +55,41 @@ function parseStripped(
     throw new Error("undo action not valid in agent transcripts");
   }
 
-  let m = line.match(/^split\s+\[([^\]]+)\]\s*@\s*(-?\d+)$/);
-  if (m) {
-    const cards = parseCards(m[1]!);
-    return makeSplit(board, findStackIndex(board, cards), parseInt(m[2]!, 10));
+  // split <left> / <right> at (l,t)
+  if (line.startsWith("split ")) {
+    const { body, loc } = stripTrailingLoc(line.slice("split ".length), line);
+    const chunks = body.split("/").map(s => s.trim());
+    if (chunks.length !== 2) {
+      throw new Error(`split needs left/right chunks: ${rawForError(line)}`);
+    }
+    const left = parseCards(chunks[0]!);
+    const right = parseCards(chunks[1]!);
+    const cards = [...left, ...right];
+    return makeSplit(board, findStackByContentAndLoc(board, cards, loc, line), left.length);
   }
 
-  m = line.match(/^merge_stack\s+\[([^\]]+)\]\s*->\s*\[([^\]]+)\]\s*\/(left|right)$/);
+  // isolate <before> ( <held> ) <after> at (l,t)
+  if (line.startsWith("isolate ")) {
+    const { body, loc } = stripTrailingLoc(line.slice("isolate ".length), line);
+    const open = body.indexOf("(");
+    const close = body.indexOf(")", open + 1);
+    if (open < 0 || close < 0) {
+      throw new Error(`isolate needs ( <held> ) chunk: ${rawForError(line)}`);
+    }
+    const beforeStr = body.slice(0, open).trim();
+    const heldStr = body.slice(open + 1, close).trim();
+    const afterStr = body.slice(close + 1).trim();
+    const before = beforeStr === "" ? [] : parseCards(beforeStr);
+    const held = parseCards(heldStr);
+    const after = afterStr === "" ? [] : parseCards(afterStr);
+    if (held.length !== 1) {
+      throw new Error(`isolate held chunk must have exactly one card: ${rawForError(line)}`);
+    }
+    const cards = [...before, held[0]!, ...after];
+    return makeIsolate(board, findStackByContentAndLoc(board, cards, loc, line), before.length);
+  }
+
+  let m = line.match(/^merge_stack\s+\[([^\]]+)\]\s*->\s*\[([^\]]+)\]\s*\/(left|right)$/);
   if (m) {
     const src = parseCards(m[1]!);
     const tgt = parseCards(m[2]!);
@@ -121,4 +149,44 @@ function parseCard(s: string): Card {
   // DSL uses trailing `'` for deck-1; internal label uses `:1`.
   const tsLabel = s.endsWith("'") ? s.slice(0, -1) + ":1" : s;
   return parseCardLabel(tsLabel);
+}
+
+
+function stripTrailingLoc(body: string, line: string): { body: string; loc: Loc } {
+  const m = body.match(/^(.*)\s+at\s+\((-?\d+)\s*,\s*(-?\d+)\)\s*$/);
+  if (!m) {
+    throw new Error(`missing trailing 'at (l,t)' loc on action: ${rawForError(line)}`);
+  }
+  return {
+    body: m[1]!.trim(),
+    loc: { left: parseInt(m[2]!, 10), top: parseInt(m[3]!, 10) },
+  };
+}
+
+
+/** Find the stack on `board` whose cards AND loc match. Loc-strict
+ *  match catches stale stack references loudly instead of silently
+ *  picking a same-content stack at the wrong place. */
+function findStackByContentAndLoc(
+  board: readonly BoardStack[],
+  cards: readonly Card[],
+  loc: Loc,
+  line: string,
+): number {
+  for (let i = 0; i < board.length; i++) {
+    const s = board[i]!;
+    if (s.loc.left !== loc.left || s.loc.top !== loc.top) continue;
+    if (s.cards.length !== cards.length) continue;
+    let same = true;
+    for (let j = 0; j < cards.length; j++) {
+      const a = s.cards[j]!;
+      const b = cards[j]!;
+      if (a.rank !== b.rank || a.suit !== b.suit || a.deck !== b.deck) {
+        same = false;
+        break;
+      }
+    }
+    if (same) return i;
+  }
+  throw new Error(`stack not found at loc (${loc.left},${loc.top}): ${rawForError(line)}`);
 }

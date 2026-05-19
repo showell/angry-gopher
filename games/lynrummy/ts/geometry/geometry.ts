@@ -205,7 +205,7 @@ function gridSweepOpenLoc(
 
 // --- Bounds + violation checks ----------------------------------------
 
-function outOfBounds(stack: BoardStack): boolean {
+export function outOfBounds(stack: BoardStack): boolean {
   const r = stackRect(stack);
   return r.left < 0 || r.top < 0 || r.right > BOARD_MAX_WIDTH || r.bottom > BOARD_MAX_HEIGHT;
 }

@@ -38,6 +38,7 @@ import {
   type BoardStack, type Loc,
   CARD_PITCH, findOpenLoc, findCrowding,
   stackRect, padRect, rectsOverlap, PLANNING_MARGIN,
+  outOfBounds,
 } from "../geometry/geometry.ts";
 import {
   type Primitive,
@@ -318,12 +319,16 @@ function planIsolate(
       }
     }
   }
-  if (!hasExternalCrowding(inPlace.sim, productIndices)) {
+  if (!hasExternalCrowding(inPlace.sim, productIndices) && !anyOutOfBounds(inPlace.sim)) {
     return inPlace;
   }
 
-  // External crowding: relocate source up front, then isolate at
-  // the new home.
+  // External crowding OR a piece would go off the board: relocate
+  // source up front, then isolate at the new home. The OOB case
+  // bites stacks at the right edge — `applyIsolate` widens the
+  // host's right edge by 2px (after piece slides +2), which can
+  // push a stack that was sitting at exactly BOARD_MAX_WIDTH over
+  // the line.
   const n = stackContent.length;
   const si = findStackIndex(sim, stackContent);
   const others = sim.filter((_, i) => i !== si);
@@ -346,6 +351,13 @@ function sameContent(a: readonly Card[], b: readonly Card[]): boolean {
     if (ca.rank !== cb.rank || ca.suit !== cb.suit || ca.deck !== cb.deck) return false;
   }
   return true;
+}
+
+function anyOutOfBounds(board: readonly BoardStack[]): boolean {
+  for (const s of board) {
+    if (outOfBounds(s)) return true;
+  }
+  return false;
 }
 
 /** Crowding check that ignores pairs where BOTH stacks are in
