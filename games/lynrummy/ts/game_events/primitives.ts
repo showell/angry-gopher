@@ -25,6 +25,12 @@ interface SplitPrim {
   readonly cardIndex: number;
 }
 
+interface IsolatePrim {
+  readonly action: "isolate";
+  readonly stackIndex: number;
+  readonly cardIndex: number;
+}
+
 interface MergeStackPrim {
   readonly action: "merge_stack";
   readonly sourceStack: number;
@@ -55,6 +61,7 @@ interface PlaceHandPrim {
 
 export type Primitive =
   | SplitPrim
+  | IsolatePrim
   | MergeStackPrim
   | MergeHandPrim
   | MoveStackPrim
@@ -75,6 +82,18 @@ export function makeSplit(
 ): SplitPrim {
   return {
     action: "split",
+    stackIndex,
+    cardIndex,
+  };
+}
+
+export function makeIsolate(
+  _sim: readonly BoardStack[],
+  stackIndex: number,
+  cardIndex: number,
+): IsolatePrim {
+  return {
+    action: "isolate",
     stackIndex,
     cardIndex,
   };
@@ -172,6 +191,30 @@ function applySplit(board: readonly BoardStack[], si: number, ci: number): Board
   return [...board.slice(0, si), ...board.slice(si + 1), left, right];
 }
 
+/** Apply an isolate: the stack at index `si` is replaced by up to
+ *  three pieces (before / held / after), with the held card centered
+ *  at its original screen slot and the side pieces offset ±2px.
+ *  Geometry mirrors Elm's `Lib.CardStack.isolate`. Held-card-at-end
+ *  cases drop the empty side piece (so a 2-card stack always yields
+ *  2 pieces). 1-card stacks return unchanged. */
+function applyIsolate(board: readonly BoardStack[], si: number, ci: number): BoardStack[] {
+  const stack = board[si]!;
+  const n = stack.cards.length;
+  if (n <= 1) return [...board];
+  const srcLeft = stack.loc.left;
+  const srcTop = stack.loc.top;
+  const before = stack.cards.slice(0, ci);
+  const held = stack.cards.slice(ci, ci + 1);
+  const after = stack.cards.slice(ci + 1);
+  const heldLoc: Loc = { top: srcTop, left: srcLeft + ci * CARD_PITCH };
+  const pieces: BoardStack[] = [];
+  if (before.length > 0) pieces.push({ cards: before, loc: { top: srcTop, left: srcLeft - 2 } });
+  pieces.push({ cards: held, loc: heldLoc });
+  if (after.length > 0) pieces.push({ cards: after, loc: { top: srcTop, left: heldLoc.left + CARD_PITCH + 2 } });
+  return [...board.slice(0, si), ...board.slice(si + 1), ...pieces];
+}
+
+
 function applyMove(board: readonly BoardStack[], si: number, newLoc: Loc): BoardStack[] {
   const s = board[si]!;
   const moved: BoardStack = { cards: s.cards, loc: { ...newLoc } };
@@ -251,6 +294,8 @@ export function applyLocally(
   switch (prim.action) {
     case "split":
       return applySplit(board, prim.stackIndex, prim.cardIndex);
+    case "isolate":
+      return applyIsolate(board, prim.stackIndex, prim.cardIndex);
     case "move_stack":
       return applyMove(board, prim.stackIndex, prim.newLoc);
     case "merge_stack":

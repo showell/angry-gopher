@@ -5,6 +5,7 @@
 // `Lib.GameEvent` / `Lib.WireAction` on the Elm side:
 //
 //   split [<cards>] at (<l>,<t>) @<index>
+//   isolate [<cards>] at (<l>,<t>) @<index>
 //   merge_stack [<src>] at (<l>,<t>) -> [<tgt>] at (<l>,<t>) /<side> :: path (...)
 //   merge_hand <card> -> [<tgt>] at (<l>,<t>) /<side>
 //   move_stack [<cards>] at (<l>,<t>) -> (<l>,<t>) :: path (...)
@@ -36,6 +37,8 @@ export function formatPrimitive(p: Primitive, board: readonly BoardStack[]): str
   switch (p.action) {
     case "split":
       return `split ${formatStackRef(board[p.stackIndex]!)} @${p.cardIndex}`;
+    case "isolate":
+      return `isolate ${formatStackRef(board[p.stackIndex]!)} @${p.cardIndex}`;
     case "merge_stack":
       return `merge_stack ${formatStackRef(board[p.sourceStack]!)} -> ${formatStackRef(board[p.targetStack]!)} /${p.side}${formatPathSuffix(p.path)}`;
     case "merge_hand":

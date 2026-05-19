@@ -63,6 +63,9 @@ parseEvent s =
     else if String.startsWith "split " s then
         parseSplit (String.dropLeft 6 s)
 
+    else if String.startsWith "isolate " s then
+        parseIsolate (String.dropLeft 8 s)
+
     else if String.startsWith "merge_stack " s then
         parseMergeStack (String.dropLeft 12 s)
 
@@ -96,6 +99,24 @@ parseSplit s =
                                 |> Result.map
                                     (\_ ->
                                         Split { stack = stack, cardIndex = cardIndex }
+                                    )
+                        )
+            )
+
+
+parseIsolate : String -> Result String GameEvent
+parseIsolate s =
+    parseStackRef s
+        |> Result.andThen
+            (\( stack, rest ) ->
+                consume "@" rest
+                    |> Result.andThen parseInt
+                    |> Result.andThen
+                        (\( cardIndex, tail ) ->
+                            expectEmpty tail
+                                |> Result.map
+                                    (\_ ->
+                                        Isolate { stack = stack, cardIndex = cardIndex }
                                     )
                         )
             )

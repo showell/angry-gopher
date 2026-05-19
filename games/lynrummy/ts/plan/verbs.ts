@@ -42,7 +42,7 @@ import {
 import {
   type Primitive,
   applyLocally, findStackIndex,
-  makeSplit, makeMergeStack, makeMergeHand, makeMoveStack,
+  makeSplit, makeIsolate, makeMergeStack, makeMergeHand, makeMoveStack,
 } from "../game_events/primitives.ts";
 import { classifyStack } from "../core/card_stack.ts";
 import { cardKey } from "./board.ts";
@@ -305,25 +305,25 @@ function isolateCard(
   };
 }
 
-/** Two-splits-as-a-unit. Try in place; if the post-state would
- *  be crowded WITH RESPECT TO OTHER STACKS, relocate the source up
- *  front and do both splits at the new loc. Crowding among the
- *  three split products themselves is expected (the per-split
- *  auto-displacement keeps them close by design — that's a human
- *  player's natural shape) and is NOT counted. Both branches emit
- *  two splits sequentially; what differs is whether a single
- *  move_stack precedes them. */
+/** Interior extraction as a single `isolate` primitive. Try in
+ *  place; if the post-state would be crowded WITH RESPECT TO OTHER
+ *  STACKS, relocate the source up front and isolate at the new loc.
+ *  Crowding among the three isolate products themselves is expected
+ *  (the ±2px nudges keep them close by design) and is NOT counted.
+ *  Pre-isolate, the lowering emitted two splits here; the isolate
+ *  primitive landed 2026-05-18 (long-press feature) and collapses
+ *  that into one physical action. */
 function planInteriorIsolate(
   sim: readonly BoardStack[],
   stackContent: readonly Card[],
   ci: number,
 ): { prims: Primitive[]; sim: readonly BoardStack[] } {
-  const inPlace = doTwoSplitsAt(sim, stackContent, ci);
+  const inPlace = doIsolateAt(sim, stackContent, ci);
 
-  // Identify the three split products by content. Crowding INSIDE
-  // this set is expected and ignored; only crowding WITH a stack
-  // outside the set means the source's neighborhood was already
-  // populated and we need to relocate.
+  // Identify the isolate products by content. Crowding INSIDE this
+  // set is expected and ignored; only crowding WITH a stack outside
+  // the set means the source's neighborhood was already populated
+  // and we need to relocate.
   const productContents: readonly (readonly Card[])[] = [
     stackContent.slice(0, ci),
     [stackContent[ci]!],
@@ -343,8 +343,8 @@ function planInteriorIsolate(
     return inPlace;
   }
 
-  // External crowding: relocate source up front, then both splits
-  // at the new home.
+  // External crowding: relocate source up front, then isolate at
+  // the new home.
   const n = stackContent.length;
   const si = findStackIndex(sim, stackContent);
   const others = sim.filter((_, i) => i !== si);
@@ -355,8 +355,8 @@ function planInteriorIsolate(
   }
   const move = makeMoveStack(sim, si, newLoc);
   const afterMove = applyLocally(sim, move);
-  const splits = doTwoSplitsAt(afterMove, stackContent, ci);
-  return { prims: [move, ...splits.prims], sim: splits.sim };
+  const isolated = doIsolateAt(afterMove, stackContent, ci);
+  return { prims: [move, ...isolated.prims], sim: isolated.sim };
 }
 
 function sameContent(a: readonly Card[], b: readonly Card[]): boolean {
@@ -387,33 +387,18 @@ function hasExternalCrowding(
   return false;
 }
 
-/** Emit both splits without any geometry pre-flight. The cardIndex
- *  derivations mirror `planSplitAfter`'s "split-after k" → applySplit
- *  cardIndex convention. Returns the prim pair + the post-sim. */
-function doTwoSplitsAt(
+/** Emit a single `isolate` primitive without geometry pre-flight.
+ *  Pulls the card at `ci` out of `stackContent` and leaves the host
+ *  split into up to three pieces with the ±2px offsets. */
+function doIsolateAt(
   sim: readonly BoardStack[],
   stackContent: readonly Card[],
   ci: number,
 ): { prims: Primitive[]; sim: readonly BoardStack[] } {
-  const n = stackContent.length;
-  // Split A: split-after k=ci → left = [s[:ci]], right = [s[ci:]].
-  const kA = ci;
-  const ciA = kA <= Math.floor(n / 2) ? kA - 1 : kA;
-  const siA = findStackIndex(sim, stackContent);
-  const splitA = makeSplit(sim, siA, ciA);
-  const afterA = applyLocally(sim, splitA);
-
-  // Split B: from right chunk = [s[ci:]], split-after k=1 →
-  // left = [s[ci]], right = [s[ci+1:]].
-  const rightChunk = stackContent.slice(ci);
-  const nB = rightChunk.length;
-  const kB = 1;
-  const ciB = kB <= Math.floor(nB / 2) ? kB - 1 : kB;
-  const siB = findStackIndex(afterA, rightChunk);
-  const splitB = makeSplit(afterA, siB, ciB);
-  const afterB = applyLocally(afterA, splitB);
-
-  return { prims: [splitA, splitB], sim: afterB };
+  const si = findStackIndex(sim, stackContent);
+  const iso = makeIsolate(sim, si, ci);
+  const after = applyLocally(sim, iso);
+  return { prims: [iso], sim: after };
 }
 
 function indexOfCard(arr: readonly Card[], target: Card): number {
