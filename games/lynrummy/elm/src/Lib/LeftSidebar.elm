@@ -60,6 +60,7 @@ type alias AgentTurnInfo =
     , deck : List Card
     , humanHand : Hand
     , agentHand : Hand
+    , sourceCard : Maybe Card
     }
 
 
@@ -102,9 +103,6 @@ viewAgentTurn info =
         handIsInteractive =
             False
 
-        sourceCard =
-            Nothing
-
         hintedCards =
             []
     in
@@ -122,7 +120,7 @@ viewAgentTurn info =
         , playerPanel
             { title = "Player 2 (agent's turn)"
             , titleColor = Colors.navy
-            , body = [ viewHand handIsInteractive sourceCard hintedCards info.agentHand ]
+            , body = [ viewHand handIsInteractive info.sourceCard hintedCards info.agentHand ]
             }
         , deckRemaining info.deck
         ]

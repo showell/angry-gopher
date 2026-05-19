@@ -170,11 +170,26 @@ leftSidebar model =
                 }
 
         Agent ->
+            let
+                agentSourceCard =
+                    case model.animationState of
+                        Just rs ->
+                            case replayDrag rs of
+                                DraggingHandCard d ->
+                                    Just d.card
+
+                                _ ->
+                                    Nothing
+
+                        Nothing ->
+                            Nothing
+            in
             LeftSidebar.viewAgentTurn
                 { turnIndex = viewGameState.turnIndex
                 , deck = viewGameState.deck
                 , humanHand = viewGameState.humanHand
                 , agentHand = viewGameState.agentHand
+                , sourceCard = agentSourceCard
                 }
 
 
