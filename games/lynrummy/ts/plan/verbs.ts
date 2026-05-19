@@ -427,26 +427,18 @@ function extractAbsorbPrims(
     sim = iso.sim;
     extSingleton = iso.extSingleton;
   } else if (verb === "steal" && kind === "set") {
-    // Detach extCard FIRST (split at the end where it sits), then
-    // dismantle the same-value pair so subsequent BFS-planned moves
-    // (push spawned singletons) can find them.
-    const n = source.length;
-    let residue: readonly Card[];
-    if (ci === n - 1) {
-      const r = planSplitAfter(sim, source, n - 1);
-      out.push(...r.prims);
-      sim = r.sim;
-      residue = source.slice(0, n - 1);
-    } else {
-      const r = planSplitAfter(sim, source, 1);
-      out.push(...r.prims);
-      sim = r.sim;
-      residue = source.slice(1);
-    }
-    const r = planSplitAfter(sim, residue, 1);
-    out.push(...r.prims);
-    sim = r.sim;
-    extSingleton = [extCard];
+    // Detach extCard from the [P,P,X]-shaped source, then dismantle
+    // the same-value pair so subsequent BFS-planned moves (push
+    // spawned singletons) can find them. Both steps are singleton
+    // extractions → isolate at the held position.
+    const iso1 = isolateCard(sim, source, ci);
+    out.push(...iso1.prims);
+    sim = iso1.sim;
+    const pair = iso1.remnants[0]!;
+    const iso2 = isolateCard(sim, pair, 0);
+    out.push(...iso2.prims);
+    sim = iso2.sim;
+    extSingleton = iso1.extSingleton;
   } else if (verb === "steal" && kind === "other") {
     // classifyLeaf collapses length-<3 stacks (including pair_run /
     // pair_rb / pair_set) into "other". Length-2 steals from a partial
@@ -454,10 +446,10 @@ function extractAbsorbPrims(
     if (source.length !== 2) {
       throw new Error(`steal-from-partial expects length-2 source; got length ${source.length}`);
     }
-    const r = planSplitAfter(sim, source, 1);
-    out.push(...r.prims);
-    sim = r.sim;
-    extSingleton = [extCard];
+    const iso = isolateCard(sim, source, ci);
+    out.push(...iso.prims);
+    sim = iso.sim;
+    extSingleton = iso.extSingleton;
   } else {
     throw new Error(`verb ${verb} kind ${kind} unsupported`);
   }
@@ -544,23 +536,23 @@ function shiftPrims(
 
   // 2. Merge p_card onto source on the OPPOSITE side from stolen.
   let augmentedSource: readonly Card[];
-  let splitK: number;
+  let stolenCi: number;
   if (whichEnd === 0) {
     const r = planMerge(sim, [pCard], source, "right", pendingHand);
     out.push(...r.prims);
     sim = r.sim;
     augmentedSource = [...source, pCard];
-    splitK = 1;
+    stolenCi = 0;
   } else {
     const r = planMerge(sim, [pCard], source, "left", pendingHand);
     out.push(...r.prims);
     sim = r.sim;
     augmentedSource = [pCard, ...source];
-    splitK = source.length;
+    stolenCi = augmentedSource.length - 1;
   }
 
-  // 3. Pop stolen off the augmented source.
-  const a = planSplitAfter(sim, augmentedSource, splitK);
+  // 3. Pop the stolen singleton off the augmented source via isolate.
+  const a = isolateCard(sim, augmentedSource, stolenCi);
   out.push(...a.prims);
   sim = a.sim;
 
@@ -576,6 +568,7 @@ function decomposePrims(
   move: DecomposeMove,
   board: readonly BoardStack[],
 ): Primitive[] {
-  const r = planSplitAfter(board, move.pairBefore, 1);
+  // Pair → two singletons: isolating either card produces both.
+  const r = isolateCard(board, move.pairBefore, 0);
   return r.prims;
 }
