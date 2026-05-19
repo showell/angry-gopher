@@ -1,4 +1,4 @@
-// bench_outer_shell.ts — Per-hand timing of findLogicalMovesForPlay.
+// bench_6_card_hands.ts — Per-hand timing of findLogicalMovesForPlay.
 //
 // Fixed corpus: 60 random 6-card hands drawn from the 81 cards not on
 // the Game 17 opening board (6 helpers, 23 cards), seed 42 — see
@@ -11,7 +11,7 @@
 // long it took (min-of-N).
 //
 // Usage:
-//   node bench/bench_outer_shell.ts
+//   node bench/bench_6_card_hands.ts
 
 import { type Card, cardLabel } from "../core/card.ts";
 import { findLogicalMovesForPlay, type LogicalMovesForPlay } from "../plan/hand_play.ts";

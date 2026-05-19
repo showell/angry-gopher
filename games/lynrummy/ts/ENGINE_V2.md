@@ -50,9 +50,9 @@ reasoning.
   harness; runs once for review-able output. Driver:
   `npm run generate-game`.
 - `bench/bench_timing.ts` — auxiliary timing helper.
-- `bench/bench_outer_shell.ts` — singleton-only vs full
-  outer-shell mode comparison on a fixed 60-hand corpus; has
-  its own gold (`bench/bench_outer_shell_gold.txt`).
+- `bench/bench_6_card_hands.ts` — per-hand timing of
+  `findLogicalMovesForPlay` on a fixed 60-hand corpus, with
+  its own gold (`bench/bench_6_card_hands_gold.txt`).
 
 ## Optimization levers
 

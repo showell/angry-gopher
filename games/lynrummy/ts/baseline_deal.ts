@@ -3,7 +3,7 @@
 // pick reproducible hands from those 81.
 //
 // Consumed by `generate_game.ts` (full self-play transcript), the bench
-// suite (`bench/bench_outer_shell.ts`), and the full-game tests
+// suite (`bench/bench_6_card_hands.ts`), and the full-game tests
 // (`test/test_full_game.ts`). All three need the same opening board and
 // the same deterministic PRNG so seeds reproduce across drivers.
 
