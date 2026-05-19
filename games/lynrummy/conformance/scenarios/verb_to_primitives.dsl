@@ -38,8 +38,8 @@ scenario peel_left_edge_then_merge
   side: right
   expect:
     primitives:
-      - split [5♥ 6♥ 7♥ 8♥] at (100,100) @0
-      - merge_stack [5♥] at (98,96) -> [4♥] at (400,100) /right :: path (98,96@0)(98,96@44)(101,96@89)(108,96@133)(120,96@177)(138,96@222)(160,96@266)(187,97@310)(217,97@355)(250,97@399)(283,97@443)(316,97@488)(346,97@532)(373,98@576)(395,98@621)(413,98@665)(425,98@709)(432,98@754)(435,98@798)(435,98@843)
+      - isolate [5♥ 6♥ 7♥ 8♥] at (100,100) @0
+      - merge_stack [5♥] at (100,100) -> [4♥] at (400,100) /right :: path (100,100@0)(100,100@44)(103,100@88)(110,100@132)(122,100@176)(139,100@220)(162,100@264)(189,99@309)(219,99@353)(251,99@397)(284,99@441)(316,99@485)(346,99@529)(373,98@573)(396,98@617)(413,98@661)(425,98@705)(432,98@749)(435,98@793)(435,98@838)
 scenario pluck_interior_premoves_donor
   desc: Plucking 7♥ from a 5-card run forces a pre-flight move on the donor (interior splits get pre-cleared per 2026-04-23). After the first split, [7♥ 8♥ 9♥] sits adjacent to [5♥ 6♥]; a second pre-flight relocates it before the next split.
   op: verb_to_primitives

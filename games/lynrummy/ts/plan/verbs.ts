@@ -254,10 +254,12 @@ function classifyLeaf(cards: readonly Card[]): LeafKind {
 
 // --- extract + absorb -------------------------------------------------
 
-/** Generate the splits needed to leave the card at index `ci` of
- *  `stackContent` as a singleton. Returns prims, post-sim, the ext
- *  singleton card, and the remnant pieces (1 for end-extraction; 2 for
- *  interior). */
+/** Emit the primitives needed to leave the card at index `ci` of
+ *  `stackContent` as a singleton. One `isolate` primitive does the
+ *  whole job at any position — end or interior — because that's the
+ *  same UI gesture Steve uses (long-press + drag). Returns prims,
+ *  post-sim, the ext singleton card, and the non-empty remnant
+ *  pieces (1 for end-extraction; 2 for interior). */
 function isolateCard(
   sim: readonly BoardStack[],
   stackContent: readonly Card[],
@@ -268,52 +270,28 @@ function isolateCard(
   extSingleton: readonly Card[];
   remnants: readonly (readonly Card[])[];
 } {
-  const n = stackContent.length;
   const extCard = stackContent[ci]!;
-  const out: Primitive[] = [];
-
-  if (ci === 0 && n > 1) {
-    const r = planSplitAfter(sim, stackContent, 1);
-    out.push(...r.prims);
-    return {
-      prims: out, sim: r.sim, extSingleton: [extCard],
-      remnants: [stackContent.slice(1)],
-    };
-  }
-  if (ci === n - 1 && n > 1) {
-    const r = planSplitAfter(sim, stackContent, n - 1);
-    out.push(...r.prims);
-    return {
-      prims: out, sim: r.sim, extSingleton: [extCard],
-      remnants: [stackContent.slice(0, n - 1)],
-    };
-  }
-  // Interior: split after ci → [s[:ci]], [s[ci:]]; then split
-  // [s[ci:]] after 1 → [s[ci]] + [s[ci+1:]].
-  //
-  // Single up-front geometry decision (per Steve's human idiom):
-  // relocate the SOURCE up front if the in-place split-split would
-  // crowd, otherwise do both splits in place. Never put a move_stack
-  // BETWEEN the two splits — a human player wouldn't relocate the
-  // residue mid-yank, they'd do both clicks in the same area or
-  // move the whole stack first.
-  const r = planInteriorIsolate(sim, stackContent, ci);
-  out.push(...r.prims);
+  const r = planIsolate(sim, stackContent, ci);
+  const before = stackContent.slice(0, ci);
+  const after = stackContent.slice(ci + 1);
+  const remnants: (readonly Card[])[] = [];
+  if (before.length > 0) remnants.push(before);
+  if (after.length > 0) remnants.push(after);
   return {
-    prims: out, sim: r.sim, extSingleton: [extCard],
-    remnants: [stackContent.slice(0, ci), stackContent.slice(ci + 1)],
+    prims: r.prims, sim: r.sim, extSingleton: [extCard], remnants,
   };
 }
 
-/** Interior extraction as a single `isolate` primitive. Try in
- *  place; if the post-state would be crowded WITH RESPECT TO OTHER
- *  STACKS, relocate the source up front and isolate at the new loc.
- *  Crowding among the three isolate products themselves is expected
+/** Extraction as a single `isolate` primitive. Try in place; if the
+ *  post-state would be crowded WITH RESPECT TO OTHER STACKS,
+ *  relocate the source up front and isolate at the new loc. Crowding
+ *  among the (up to three) isolate products themselves is expected
  *  (the ±2px nudges keep them close by design) and is NOT counted.
- *  Pre-isolate, the lowering emitted two splits here; the isolate
- *  primitive landed 2026-05-18 (long-press feature) and collapses
- *  that into one physical action. */
-function planInteriorIsolate(
+ *  Pre-2026-05-18, end-position extractions lowered to one `split`
+ *  and interior ones to two splits; the `isolate` primitive
+ *  collapses both shapes into one physical action that matches the
+ *  long-press UI gesture. */
+function planIsolate(
   sim: readonly BoardStack[],
   stackContent: readonly Card[],
   ci: number,
@@ -323,7 +301,8 @@ function planInteriorIsolate(
   // Identify the isolate products by content. Crowding INSIDE this
   // set is expected and ignored; only crowding WITH a stack outside
   // the set means the source's neighborhood was already populated
-  // and we need to relocate.
+  // and we need to relocate. Empty before/after slices (end
+  // positions) won't match any real stack — harmless.
   const productContents: readonly (readonly Card[])[] = [
     stackContent.slice(0, ci),
     [stackContent[ci]!],

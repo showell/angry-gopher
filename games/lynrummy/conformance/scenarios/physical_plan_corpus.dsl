@@ -55,8 +55,9 @@ scenario r1b_peel_hand_card_as_target
       side: right
   expect:
     primitives:
-      - split [3♥ 4♥ 5♥] at (100,100) @0
-      - merge_hand 2♥ -> [3♥] at (98,96) /left
+      - isolate [3♥ 4♥ 5♥] at (100,100) @0
+      - move_stack [3♥] at (100,100) -> (85,182) :: path (100,100@0)(100,100@11)(100,101@22)(100,103@33)(99,105@44)(98,110@55)(97,115@66)(96,122@77)(95,129@88)(93,137@99)(92,145@110)(90,153@121)(89,160@132)(88,167@143)(87,172@154)(86,177@165)(85,179@175)(85,181@186)(85,182@197)(85,182@208)
+      - merge_hand 2♥ -> [3♥] at (85,182) /left
 scenario r3_no_move_when_legal_room
   desc: target [K♠ A♠ 2♠ 3♠] at (70,20) sits 20px above [T♦ J♦ Q♦ K♦] at (160,80); merge_hand Q♠ /left grows leftward and doesn't change vertical, so legal-threshold is fine. No move_stack — Steve's bug case.
   op: physical_plan
