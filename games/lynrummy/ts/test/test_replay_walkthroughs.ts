@@ -22,12 +22,13 @@ import { parseCardLabel, cardLabel } from "../core/card.ts";
 import {
   type Primitive, type Side,
   applyLocally, findStackIndex,
-  makeSplit, makeMergeStack, makeMergeHand, makeMoveStack, makePlaceHand,
+  makeSplit, makeIsolate, makeMergeStack, makeMergeHand, makeMoveStack, makePlaceHand,
 } from "../game_events/primitives.ts";
 import type { BoardStack } from "../geometry/geometry.ts";
 import { findViolation } from "../geometry/geometry.ts";
 import { classifyStack } from "../core/card_stack.ts";
 import { parseBoardStackLine } from "../dsl/parse.ts";
+import { splitCardIndexFromLeftCount } from "../dsl/emit.ts";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -37,7 +38,28 @@ const DSL_PATH = path.join(DSL_DIR, "replay_walkthroughs.dsl");
 // --- DSL card lists --------------------------------------------------
 
 function parseDslCards(s: string): readonly Card[] {
-  return s.trim().split(/\s+/).map(parseCardLabel);
+  const trimmed = s.trim();
+  if (trimmed.length === 0) return [];
+  return trimmed.split(/\s+/).map(parseCardLabel);
+}
+
+/** Split a chunk-list body on " / " separators, trimming each
+ *  chunk. */
+function splitOnSlash(body: string): string[] {
+  return body.split("/").map(s => s.trim());
+}
+
+/** Carve "before ( held ) after" into the three components.
+ *  Returns null if the parenthesized held chunk isn't found. */
+function splitOnParens(body: string): { before: string; held: string; after: string } | null {
+  const open = body.indexOf("(");
+  const close = body.indexOf(")", open + 1);
+  if (open < 0 || close < 0) return null;
+  return {
+    before: body.slice(0, open).trim(),
+    held: body.slice(open + 1, close).trim(),
+    after: body.slice(close + 1).trim(),
+  };
 }
 
 // --- DSL parser -----------------------------------------------------
@@ -98,11 +120,32 @@ function parseActionLine(
   line: string,
   board: readonly BoardStack[],
 ): Primitive {
-  // split [content]@k
-  let m = line.match(/^split\s+\[([^\]]+)\]@(-?\d+)$/);
-  if (m) {
-    const cards = parseDslCards(m[1]!);
-    return makeSplit(board, findStackIndex(board, cards), parseInt(m[2]!, 10));
+  // split <left-cards> / <right-cards>
+  let m = line.match(/^split\s+(.*)$/);
+  if (m && line.startsWith("split ")) {
+    const chunks = splitOnSlash(m[1]!);
+    if (chunks.length === 2) {
+      const left = parseDslCards(chunks[0]!);
+      const right = parseDslCards(chunks[1]!);
+      const cards = [...left, ...right];
+      const ci = splitCardIndexFromLeftCount(left.length, cards.length);
+      return makeSplit(board, findStackIndex(board, cards), ci);
+    }
+  }
+  // isolate <before> ( <held> ) <after>
+  m = line.match(/^isolate\s+(.*)$/);
+  if (m && line.startsWith("isolate ")) {
+    const parts = splitOnParens(m[1]!);
+    if (parts) {
+      const before = parseDslCards(parts.before);
+      const held = parseDslCards(parts.held);
+      const after = parseDslCards(parts.after);
+      if (held.length !== 1) {
+        throw new Error(`isolate held chunk must have exactly one card: ${line}`);
+      }
+      const cards = [...before, held[0]!, ...after];
+      return makeIsolate(board, findStackIndex(board, cards), before.length);
+    }
   }
   // merge_stack [src] -> [tgt] /side
   m = line.match(/^merge_stack\s+\[([^\]]+)\]\s*->\s*\[([^\]]+)\]\s*\/(left|right)$/);

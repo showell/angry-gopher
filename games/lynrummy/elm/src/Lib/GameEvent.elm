@@ -6,6 +6,7 @@ module Lib.GameEvent exposing
     , mergeStackDsl
     , moveStackDsl
     , placeHandDsl
+    , splitCardIndexFromLeftCount
     , splitDsl
     , undoDsl
     )
@@ -27,17 +28,25 @@ has earned knowledge of which event fired, so it calls the
 specific encoder (no GameEvent value built just to re-dispatch
 on it). The matching parser lives in `Lib.WireAction`.
 
-Grammar — each line is `N) action_body[ :: path (...)]`,
-where stack references carry their loc inline so the parser
-stays stateless:
+Grammar — each line is `N) action_body[ :: path (...)]`.
+Stack references on most events carry their loc inline; split
+and isolate show their result chunks directly (no loc needed —
+cards are globally unique so they identify the source stack):
 
     44) move_stack [A♥ 2♥ 3♥'] at (10,53) -> (22,300) :: path (10,53@0)(22,300@500)
     45) merge_stack [4♦'] at (407,200) -> [4♠ 4♣'] at (200,100) /right :: path (...)
-    46) split [2♦' 3♠' 4♦'] at (332,52) @2
-    47) merge_hand 7♥' -> [7♠ 7♦ 7♣] at (107,52) /right
-    48) place_hand 7♥' -> (400,300)
-    49) complete_turn
-    50) undo
+    46) split 2♦' / 3♠' 4♦'
+    47) isolate 2♦' ( 3♠' ) 4♦'
+    48) merge_hand 7♥' -> [7♠ 7♦ 7♣] at (107,52) /right
+    49) place_hand 7♥' -> (400,300)
+    50) complete_turn
+    51) undo
+
+The held card in isolate is parenthesized; end positions drop
+the empty side:
+
+    52) isolate ( 7♥' ) 8♥' 9♥'    (held at left end)
+    53) isolate 7♥' 8♥' ( 9♥' )    (held at right end)
 
 -}
 
@@ -65,20 +74,87 @@ type GameEvent
 
 splitDsl : Int -> CardStack -> Int -> String
 splitDsl seq stack cardIndex =
+    let
+        cards =
+            List.map .card stack.boardCards
+
+        leftCount =
+            splitLeftCount cardIndex (List.length cards)
+
+        left =
+            List.take leftCount cards
+
+        right =
+            List.drop leftCount cards
+    in
     seqPrefix seq
         ++ "split "
-        ++ stackRef stack
-        ++ " @"
-        ++ String.fromInt cardIndex
+        ++ cardListStr left
+        ++ " / "
+        ++ cardListStr right
 
 
 isolateDsl : Int -> CardStack -> Int -> String
 isolateDsl seq stack cardIndex =
+    let
+        cards =
+            List.map .card stack.boardCards
+
+        before =
+            List.take cardIndex cards
+
+        held =
+            cards |> List.drop cardIndex |> List.take 1
+
+        after =
+            List.drop (cardIndex + 1) cards
+
+        beforePart =
+            if List.isEmpty before then
+                ""
+
+            else
+                " " ++ cardListStr before
+
+        afterPart =
+            if List.isEmpty after then
+                ""
+
+            else
+                " " ++ cardListStr after
+    in
     seqPrefix seq
-        ++ "isolate "
-        ++ stackRef stack
-        ++ " @"
-        ++ String.fromInt cardIndex
+        ++ "isolate"
+        ++ beforePart
+        ++ " ( "
+        ++ cardListStr held
+        ++ " )"
+        ++ afterPart
+
+
+{-| Number of cards in the LEFT piece after a split at `cardIndex`
+of a stack of size `n`. Mirrors the asymmetric rule in
+`Lib.CardStack.split` and `ts/game_events/primitives.ts:applySplit`.
+-}
+splitLeftCount : Int -> Int -> Int
+splitLeftCount cardIndex n =
+    if cardIndex + 1 <= n // 2 then
+        cardIndex + 1
+
+    else
+        cardIndex
+
+
+{-| Inverse of `splitLeftCount` — recover the GameEvent cardIndex
+from the left-piece length on the wire.
+-}
+splitCardIndexFromLeftCount : Int -> Int -> Int
+splitCardIndexFromLeftCount leftCount n =
+    if leftCount <= n // 2 then
+        leftCount - 1
+
+    else
+        leftCount
 
 
 mergeStackDsl : Int -> CardStack -> CardStack -> Side -> NonEmpty TimeLoc -> String
@@ -144,10 +220,12 @@ seqPrefix n =
 
 stackRef : CardStack -> String
 stackRef s =
-    "["
-        ++ String.join " " (List.map (.card >> Card.cardStr) s.boardCards)
-        ++ "] at "
-        ++ locStr s.loc
+    "[" ++ cardListStr (List.map .card s.boardCards) ++ "] at " ++ locStr s.loc
+
+
+cardListStr : List Card -> String
+cardListStr cards =
+    String.join " " (List.map Card.cardStr cards)
 
 
 locStr : BoardLocation -> String

@@ -24,7 +24,7 @@ participate in `isCardsEqualInOrder`).
 
 import Lib.BoardActions exposing (Side(..))
 import Lib.CardStack exposing (BoardCardState(..), BoardLocation, CardStack)
-import Lib.GameEvent exposing (GameEvent(..))
+import Lib.GameEvent as GameEvent exposing (GameEvent(..))
 import Lib.NonEmpty as NonEmpty exposing (NonEmpty)
 import Lib.Rules.Card as Card exposing (Card, OriginDeck(..))
 import Lib.TimeLoc exposing (TimeLoc)
@@ -88,38 +88,105 @@ parseEvent s =
 
 parseSplit : String -> Result String GameEvent
 parseSplit s =
-    parseStackRef s
-        |> Result.andThen
-            (\( stack, rest ) ->
-                consume "@" rest
-                    |> Result.andThen parseInt
-                    |> Result.andThen
-                        (\( cardIndex, tail ) ->
-                            expectEmpty tail
-                                |> Result.map
-                                    (\_ ->
-                                        Split { stack = stack, cardIndex = cardIndex }
-                                    )
-                        )
-            )
+    case splitOnSlash s of
+        [ leftStr, rightStr ] ->
+            Result.map2
+                (\left right ->
+                    let
+                        cards =
+                            left ++ right
+
+                        cardIndex =
+                            GameEvent.splitCardIndexFromLeftCount
+                                (List.length left)
+                                (List.length cards)
+                    in
+                    Split
+                        { stack = stackOfCards cards
+                        , cardIndex = cardIndex
+                        }
+                )
+                (parseCardList leftStr)
+                (parseCardList rightStr)
+
+        _ ->
+            Err ("expected 'split <left> / <right>' in: " ++ s)
 
 
 parseIsolate : String -> Result String GameEvent
 parseIsolate s =
-    parseStackRef s
+    case splitOnParens s of
+        Just { before, held, after } ->
+            parseCardList before
+                |> Result.andThen
+                    (\b ->
+                        parseHeldCard held
+                            |> Result.andThen
+                                (\h ->
+                                    parseCardList after
+                                        |> Result.map
+                                            (\a ->
+                                                Isolate
+                                                    { stack = stackOfCards (b ++ [ h ] ++ a)
+                                                    , cardIndex = List.length b
+                                                    }
+                                            )
+                                )
+                    )
+
+        Nothing ->
+            Err ("expected 'isolate <before> ( <held> ) <after>' in: " ++ s)
+
+
+splitOnParens : String -> Maybe { before : String, held : String, after : String }
+splitOnParens body =
+    case String.indexes "(" body of
+        open :: _ ->
+            case String.indexes ")" (String.dropLeft (open + 1) body) of
+                offset :: _ ->
+                    let
+                        close =
+                            open + 1 + offset
+                    in
+                    Just
+                        { before = String.left open body |> String.trim
+                        , held =
+                            String.slice (open + 1) close body |> String.trim
+                        , after = String.dropLeft (close + 1) body |> String.trim
+                        }
+
+                [] ->
+                    Nothing
+
+        [] ->
+            Nothing
+
+
+parseHeldCard : String -> Result String Card
+parseHeldCard s =
+    parseCardList s
         |> Result.andThen
-            (\( stack, rest ) ->
-                consume "@" rest
-                    |> Result.andThen parseInt
-                    |> Result.andThen
-                        (\( cardIndex, tail ) ->
-                            expectEmpty tail
-                                |> Result.map
-                                    (\_ ->
-                                        Isolate { stack = stack, cardIndex = cardIndex }
-                                    )
-                        )
+            (\cards ->
+                case cards of
+                    [ c ] ->
+                        Ok c
+
+                    _ ->
+                        Err ("isolate held chunk must have exactly one card: " ++ s)
             )
+
+
+splitOnSlash : String -> List String
+splitOnSlash s =
+    String.split "/" s |> List.map String.trim
+
+
+stackOfCards : List Card -> CardStack
+stackOfCards cards =
+    { boardCards =
+        List.map (\c -> { card = c, state = FirmlyOnBoard }) cards
+    , loc = { left = 0, top = 0 }
+    }
 
 
 parseMergeStack : String -> Result String GameEvent
@@ -489,58 +556,6 @@ parseTimeLoc raw =
                     [] ->
                         Err ("missing ')' for timeLoc in: " ++ raw)
             )
-
-
-parseInt : String -> Result String ( Int, String )
-parseInt raw =
-    let
-        s =
-            String.trimLeft raw
-
-        ( digits, rest ) =
-            spanDigits s
-    in
-    case String.toInt digits of
-        Just n ->
-            Ok ( n, String.trimLeft rest )
-
-        Nothing ->
-            Err ("expected integer at: " ++ raw)
-
-
-spanDigits : String -> ( String, String )
-spanDigits s =
-    let
-        chars =
-            String.toList s
-
-        ( hd, tl ) =
-            spanList isDigitChar chars
-    in
-    ( String.fromList hd, String.fromList tl )
-
-
-spanList : (a -> Bool) -> List a -> ( List a, List a )
-spanList pred xs =
-    case xs of
-        [] ->
-            ( [], [] )
-
-        x :: rest ->
-            if pred x then
-                let
-                    ( hd, tl ) =
-                        spanList pred rest
-                in
-                ( x :: hd, tl )
-
-            else
-                ( [], xs )
-
-
-isDigitChar : Char -> Bool
-isDigitChar c =
-    Char.isDigit c || c == '-'
 
 
 consume : String -> String -> Result String String

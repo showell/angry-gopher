@@ -1591,7 +1591,7 @@ scenario pair_from_hand_then_peel
     primitives:
       - place_hand J♦' -> (52,272)
       - merge_hand Q♦' -> [J♦'] at (52,272) /right
-      - isolate [T♦ J♦ Q♦ K♦] at (100,100) @0
+      - isolate ( T♦ ) J♦ Q♦ K♦
       - merge_stack [T♦] at (100,100) -> [J♦' Q♦'] at (52,272) /left :: path (100,100@0)(100,100@25)(99,102@49)(98,105@74)(95,111@99)(91,120@123)(85,131@148)(79,145@173)(72,160@197)(64,177@222)(57,193@247)(49,210@271)(42,225@296)(36,239@321)(30,250@345)(26,259@370)(23,265@395)(22,268@419)(21,270@444)(21,270@469)
 scenario single_card_two_verb_plan
   desc: 4♠ from hand; the augmented board has two troubles ([J♦' Q♦'] partial + the new 4♠ singleton). BFS finds a 2-move plan — peel T♦ onto [J♦' Q♦'] completes it, then push 4♠ onto [K♠ A♠ 2♠ 3♠] as a merge_hand, consuming the hand card directly.
@@ -1602,7 +1602,7 @@ scenario single_card_two_verb_plan
   hand: 4♠
   expect:
     primitives:
-      - isolate [T♦ J♦ Q♦ K♦] at (100,200) @0
+      - isolate ( T♦ ) J♦ Q♦ K♦
       - merge_stack [T♦] at (100,200) -> [J♦' Q♦'] at (100,300) /left :: path (100,200@0)(100,200@14)(100,201@27)(99,203@41)(98,206@54)(96,212@68)(94,218@81)(92,226@95)(89,235@108)(86,244@122)(83,254@135)(80,263@149)(77,272@162)(75,280@176)(73,286@189)(71,292@203)(70,295@216)(69,297@230)(69,298@243)(69,298@257)
       - merge_hand 4♠ -> [K♠ A♠ 2♠ 3♠] at (100,100) /right"""
       )
@@ -1892,7 +1892,7 @@ scenario r1b_peel_hand_card_as_target
       side: right
   expect:
     primitives:
-      - isolate [3♥ 4♥ 5♥] at (100,100) @0
+      - isolate ( 3♥ ) 4♥ 5♥
       - move_stack [3♥] at (100,100) -> (85,182) :: path (100,100@0)(100,100@11)(100,101@22)(100,103@33)(99,105@44)(98,110@55)(97,115@66)(96,122@77)(95,129@88)(93,137@99)(92,145@110)(90,153@121)(89,160@132)(88,167@143)(87,172@154)(86,177@165)(85,179@175)(85,181@186)(85,182@197)(85,182@208)
       - merge_hand 2♥ -> [3♥] at (85,182) /left
 scenario r3_no_move_when_legal_room
@@ -3590,11 +3590,11 @@ scenario walkthrough_mined_001_4♠_4♣p1
     at (187,167): T♠ T♣' T♦
     at (187,332): 4♠ 4♣'
   actions:
-    - split [2♦' 3♠' 4♦']@2
+    - split 2♦' 3♠' / 4♦'
     - merge_stack [4♦'] -> [4♠ 4♣'] /right
-    - split [A♣ A♦ A♥]@0
+    - split A♣ / A♦ A♥
     - move_stack [A♦ A♥] -> (187,407)
-    - split [A♦ A♥]@0
+    - split A♦ / A♥
     - merge_stack [A♣] -> [2♦' 3♠'] /left
     - merge_stack [A♦] -> [2♣ 3♦ 4♣ 5♥ 6♠ 7♥] /left
     - move_stack [2♥ 3♥ 4♥] -> (220,482)
@@ -3619,15 +3619,15 @@ scenario walkthrough_mined_002_Q♦p1
     at (187,317): 5♣ 5♦ 5♥
     at (187,392): Q♦'
   actions:
-    - split [A♦ 2♣ 3♦ 4♣]@0
+    - split A♦ / 2♣ 3♦ 4♣
     - move_stack [J♦ Q♦ K♦] -> (187,467)
     - merge_stack [A♦] -> [J♦ Q♦ K♦] /right
-    - split [J♦ Q♦ K♦ A♦]@0
+    - split J♦ / Q♦ K♦ A♦
     - move_stack [Q♦'] -> (85,257)
     - merge_stack [J♦] -> [Q♦'] /left
-    - split [K♦' K♥' K♠]@0
+    - split K♦' / K♥' K♠
     - move_stack [K♥' K♠] -> (187,392)
-    - split [K♥' K♠]@0
+    - split K♥' / K♠
     - merge_stack [K♦'] -> [J♦ Q♦'] /right
     - merge_stack [K♥'] -> [A♣ 2♦' 3♠'] /left
     - merge_stack [K♠] -> [A♠ 2♠ 3♠] /left
@@ -3651,14 +3651,14 @@ scenario walkthrough_mined_003_6♦
     at (187,407): K♦' K♣' K♠
     at (187,482): 6♦
   actions:
-    - split [7♠ 7♦ 7♣]@2
+    - split 7♠ 7♦ / 7♣
     - move_stack [7♠ 7♦] -> (247,242)
-    - split [7♠ 7♦]@0
+    - split 7♠ / 7♦
     - merge_stack [7♣] -> [6♦] /right
     - move_stack [8♦' 9♣ T♦] -> (358,482)
     - merge_stack [6♦ 7♣] -> [8♦' 9♣ T♦] /left
     - merge_stack [7♦] -> [7♠] /right
-    - split [3♦ 4♣ 5♥ 6♠ 7♥]@4
+    - split 3♦ 4♣ 5♥ 6♠ / 7♥
     - merge_stack [7♥] -> [7♠ 7♦] /right
   expect:
     final_board_victory: true
@@ -3676,12 +3676,12 @@ scenario walkthrough_mined_004_5♣_6♦p1
     at (52,482): 4♠' 5♦' 6♣
     at (187,182): 5♣ 6♦'
   actions:
-    - split [7♠ 7♦ 7♣]@2
+    - split 7♠ 7♦ / 7♣
     - move_stack [7♠ 7♦] -> (187,257)
-    - split [7♠ 7♦]@0
+    - split 7♠ / 7♦
     - merge_stack [7♣] -> [5♣ 6♦'] /right
     - merge_stack [7♦] -> [7♠] /right
-    - split [2♣ 3♦ 4♣ 5♥ 6♠ 7♥]@5
+    - split 2♣ 3♦ 4♣ 5♥ 6♠ / 7♥
     - merge_stack [7♥] -> [7♠ 7♦] /right
   expect:
     final_board_victory: true
@@ -3700,11 +3700,11 @@ scenario walkthrough_mined_005_2♥p1
     at (187,182): 7♠ 7♦ 7♥
     at (187,257): 2♥'
   actions:
-    - split [K♠ A♠ 2♠ 3♠]@3
+    - split K♠ A♠ 2♠ / 3♠
     - merge_stack [3♠] -> [2♥'] /right
-    - split [A♣ A♦ A♥]@0
+    - split A♣ / A♦ A♥
     - move_stack [A♦ A♥] -> (187,332)
-    - split [A♦ A♥]@0
+    - split A♦ / A♥
     - merge_stack [A♣] -> [2♥' 3♠] /left
     - merge_stack [A♦] -> [T♦ J♦ Q♦ K♦] /right
     - merge_stack [A♥] -> [2♥ 3♥ 4♥] /left
@@ -3727,10 +3727,10 @@ scenario walkthrough_mined_006_6♣p1
     at (187,242): A♣' 2♥' 3♠ 4♥
     at (187,407): 6♣'
   actions:
-    - split [3♦ 4♣ 5♥ 6♠]@3
+    - split 3♦ 4♣ 5♥ / 6♠
     - merge_stack [6♠] -> [6♣'] /right
-    - split [5♣ 6♦' 7♣]@0
-    - split [6♦' 7♣]@0
+    - split 5♣ / 6♦' 7♣
+    - split 6♦' / 7♣
     - merge_stack [6♦'] -> [6♣' 6♠] /right
     - merge_stack [5♣] -> [A♣' 2♥' 3♠ 4♥] /right
     - move_stack [7♠ 7♦ 7♥] -> (187,482)
@@ -3751,12 +3751,12 @@ scenario walkthrough_mined_007_5♣p1_6♣
     at (52,482): 9♥' T♣' J♥
     at (187,182): 5♣' 6♣
   actions:
-    - split [7♠ 7♦ 7♣]@2
+    - split 7♠ 7♦ / 7♣
     - move_stack [7♠ 7♦] -> (187,257)
-    - split [7♠ 7♦]@0
+    - split 7♠ / 7♦
     - merge_stack [7♣] -> [5♣' 6♣] /right
     - merge_stack [7♦] -> [7♠] /right
-    - split [2♣ 3♦ 4♣ 5♥ 6♠ 7♥]@5
+    - split 2♣ 3♦ 4♣ 5♥ 6♠ / 7♥
     - merge_stack [7♥] -> [7♠ 7♦] /right
   expect:
     final_board_victory: true
@@ -3776,10 +3776,10 @@ scenario walkthrough_mined_008_Q♥p1
     at (187,167): J♠' Q♠' K♠
     at (187,242): Q♥'
   actions:
-    - split [J♠' Q♠' K♠]@0
+    - split J♠' / Q♠' K♠
     - move_stack [Q♥'] -> (220,242)
     - merge_stack [J♠'] -> [Q♥'] /left
-    - split [T♦ J♦ Q♦ K♦]@0
+    - split T♦ / J♦ Q♦ K♦
     - move_stack [J♠' Q♥'] -> (220,242)
     - merge_stack [T♦] -> [J♠' Q♥'] /left
     - move_stack [A♠ 2♠ 3♠] -> (253,92)
@@ -3802,10 +3802,10 @@ scenario walkthrough_mined_009_J♣
     at (187,167): 2♥ 3♥ 4♥ 5♥'
     at (187,332): J♣
   actions:
-    - split [9♠ T♦ J♠' Q♥']@3
+    - split 9♠ T♦ J♠' / Q♥'
     - merge_stack [Q♥'] -> [J♣] /right
-    - split [Q♠' K♠ A♠ 2♠ 3♠]@0
-    - split [K♠ A♠ 2♠ 3♠]@0
+    - split Q♠' / K♠ A♠ 2♠ 3♠
+    - split K♠ / A♠ 2♠ 3♠
     - merge_stack [K♠] -> [J♣ Q♥'] /right
     - move_stack [9♥' T♣' J♥] -> (187,407)
     - merge_stack [Q♠'] -> [9♥' T♣' J♥] /right
@@ -3828,15 +3828,15 @@ scenario walkthrough_mined_010_3♥p1
     at (187,242): T♣' J♦' Q♠
     at (187,317): 3♥'
   actions:
-    - split [2♣ 3♦ 4♣ 5♥ 6♠]@0
+    - split 2♣ / 3♦ 4♣ 5♥ 6♠
     - move_stack [3♥'] -> (220,317)
     - merge_stack [2♣] -> [3♥'] /left
-    - split [A♣ A♦ A♥]@0
+    - split A♣ / A♦ A♥
     - move_stack [A♦ A♥] -> (187,482)
-    - split [A♦ A♥]@0
+    - split A♦ / A♥
     - move_stack [2♣ 3♥'] -> (220,317)
     - merge_stack [A♦] -> [2♣ 3♥'] /left
-    - split [T♦ J♦ Q♦ K♦]@3
+    - split T♦ J♦ Q♦ / K♦
     - merge_stack [K♦] -> [A♣] /left
     - merge_stack [K♦ A♣] -> [T♣' J♦' Q♠] /right
     - merge_stack [A♥] -> [2♥ 3♥ 4♥] /left
@@ -3860,12 +3860,12 @@ scenario walkthrough_mined_011_J♣
     at (187,317): 3♦ 4♦ 5♦'
     at (187,392): J♣
   actions:
-    - split [T♣' J♦' Q♠ K♦ A♣]@0
+    - split T♣' / J♦' Q♠ K♦ A♣
     - move_stack [J♣] -> (220,392)
     - merge_stack [T♣'] -> [J♣] /left
-    - split [9♥' 9♣ 9♦]@0
+    - split 9♥' / 9♣ 9♦
     - move_stack [9♣ 9♦] -> (262,467)
-    - split [9♣ 9♦]@0
+    - split 9♣ / 9♦
     - move_stack [T♣' J♣] -> (220,392)
     - merge_stack [9♣] -> [T♣' J♣] /left
     - merge_stack [9♥'] -> [6♣' 7♥ 8♠] /right
@@ -3886,9 +3886,9 @@ scenario walkthrough_mined_012_Q♣_K♣
     at (52,482): 4♦' 5♠ 6♦'
     at (187,182): Q♣ K♣
   actions:
-    - split [A♣ A♦ A♥]@0
+    - split A♣ / A♦ A♥
     - move_stack [A♦ A♥] -> (112,332)
-    - split [A♦ A♥]@0
+    - split A♦ / A♥
     - merge_stack [A♣] -> [Q♣ K♣] /right
     - merge_stack [A♦] -> [T♦ J♦ Q♦ K♦] /right
     - merge_stack [A♥] -> [2♥ 3♥ 4♥] /left
@@ -3910,15 +3910,15 @@ scenario walkthrough_mined_013_A♥p1
     at (187,257): T♣' J♥ Q♣
     at (187,332): A♥'
   actions:
-    - split [K♠ A♠ 2♠ 3♠]@0
+    - split K♠ / A♠ 2♠ 3♠
     - move_stack [A♥'] -> (220,332)
     - merge_stack [K♠] -> [A♥'] /left
-    - split [A♠ 2♠ 3♠]@0
-    - split [2♠ 3♠]@0
+    - split A♠ / 2♠ 3♠
+    - split 2♠ / 3♠
     - merge_stack [2♠] -> [K♠ A♥'] /right
     - merge_stack [A♠] -> [2♦ 3♣' 4♦' 5♠ 6♦'] /left
     - move_stack [A♠ 2♦ 3♣' 4♦' 5♠ 6♦'] -> (52,407)
-    - split [A♠ 2♦ 3♣' 4♦' 5♠ 6♦']@1
+    - split A♠ 2♦ / 3♣' 4♦' 5♠ 6♦'
     - move_stack [A♠ 2♦] -> (247,167)
     - merge_stack [3♠] -> [A♠ 2♦] /right
   expect:
@@ -3940,14 +3940,14 @@ scenario walkthrough_mined_014_5♣
     at (187,407): A♠ 2♦ 3♠
     at (187,482): 5♣
   actions:
-    - split [3♣' 4♦' 5♠ 6♦']@3
+    - split 3♣' 4♦' 5♠ / 6♦'
     - merge_stack [6♦'] -> [5♣] /right
-    - split [7♠ 7♦ 7♣]@2
+    - split 7♠ 7♦ / 7♣
     - move_stack [7♠ 7♦] -> (247,92)
-    - split [7♠ 7♦]@0
+    - split 7♠ / 7♦
     - merge_stack [7♣] -> [5♣ 6♦'] /right
     - merge_stack [7♦] -> [7♠] /right
-    - split [3♦ 4♣ 5♥ 6♠ 7♥]@4
+    - split 3♦ 4♣ 5♥ 6♠ / 7♥
     - merge_stack [7♥] -> [7♠ 7♦] /right
   expect:
     final_board_victory: true
@@ -3967,12 +3967,12 @@ scenario walkthrough_mined_015_3♣p1
     at (187,167): 2♥' 2♣' 2♦
     at (187,242): 3♣'
   actions:
-    - split [2♣ 3♦ 4♣ 5♥ 6♠ 7♥]@0
+    - split 2♣ / 3♦ 4♣ 5♥ 6♠ 7♥
     - move_stack [3♣'] -> (220,242)
     - merge_stack [2♣] -> [3♣'] /left
-    - split [A♣ A♦ A♥]@0
+    - split A♣ / A♦ A♥
     - move_stack [A♦ A♥] -> (187,407)
-    - split [A♦ A♥]@0
+    - split A♦ / A♥
     - merge_stack [A♣] -> [2♣ 3♣'] /left
     - merge_stack [A♦] -> [J♦ Q♦ K♦] /right
     - merge_stack [A♥] -> [2♥ 3♥ 4♥] /left
@@ -3995,13 +3995,13 @@ scenario walkthrough_mined_016_T♣p1
     at (187,332): 9♠ T♠' J♠ Q♠
     at (187,482): T♣'
   actions:
-    - split [J♦ Q♦ K♦]@0
+    - split J♦ / Q♦ K♦
     - merge_stack [J♦] -> [T♣'] /right
-    - split [9♠ T♠' J♠ Q♠]@3
+    - split 9♠ T♠' J♠ / Q♠
     - merge_stack [Q♠] -> [T♣' J♦] /right
-    - split [Q♥ K♠ A♦]@2
+    - split Q♥ K♠ / A♦
     - merge_stack [A♦] -> [Q♦ K♦] /right
-    - split [A♥ 2♥ 3♥ 4♥]@0
+    - split A♥ / 2♥ 3♥ 4♥
     - merge_stack [A♥] -> [Q♥ K♠] /right
   expect:
     final_board_victory: true
@@ -4018,12 +4018,12 @@ scenario walkthrough_mined_017_5♦p1_6♦p1
     at (52,407): 2♣ 3♦ 4♣ 5♥ 6♠ 7♥
     at (52,482): 5♦' 6♦'
   actions:
-    - split [7♠ 7♦ 7♣]@0
+    - split 7♠ / 7♦ 7♣
     - move_stack [7♦ 7♣] -> (112,257)
-    - split [7♦ 7♣]@0
+    - split 7♦ / 7♣
     - merge_stack [7♦] -> [5♦' 6♦'] /right
     - merge_stack [7♣] -> [7♠] /right
-    - split [2♣ 3♦ 4♣ 5♥ 6♠ 7♥]@5
+    - split 2♣ 3♦ 4♣ 5♥ 6♠ / 7♥
     - merge_stack [7♥] -> [7♠ 7♣] /right
   expect:
     final_board_victory: true
@@ -4043,17 +4043,17 @@ scenario walkthrough_mined_018_2♠p1_3♥p1
     at (187,167): T♠ T♣ T♦
     at (187,242): 2♠' 3♥'
   actions:
-    - split [A♣ A♦ A♥]@0
+    - split A♣ / A♦ A♥
     - move_stack [A♦ A♥] -> (187,407)
-    - split [A♦ A♥]@0
+    - split A♦ / A♥
     - merge_stack [A♦] -> [2♠' 3♥'] /left
-    - split [2♣ 3♦ 4♣ 5♥ 6♠ 7♥]@0
+    - split 2♣ / 3♦ 4♣ 5♥ 6♠ 7♥
     - move_stack [A♣] -> (187,482)
     - merge_stack [2♣] -> [A♣] /right
-    - split [3♣' 4♥' 5♠']@0
+    - split 3♣' / 4♥' 5♠'
     - merge_stack [3♣'] -> [A♣ 2♣] /right
     - merge_stack [A♥] -> [2♥ 3♥ 4♥] /left
-    - split [K♠ A♠ 2♠ 3♠]@3
+    - split K♠ A♠ 2♠ / 3♠
     - merge_stack [3♠] -> [4♥' 5♠'] /left
   expect:
     final_board_victory: true
@@ -4074,15 +4074,15 @@ scenario walkthrough_mined_019_2♦
     at (187,242): A♥ 2♣ 3♦ 4♣
     at (187,317): 2♦
   actions:
-    - split [K♠ A♦ 2♣']@0
-    - split [A♦ 2♣']@0
+    - split K♠ / A♦ 2♣'
+    - split A♦ / 2♣'
     - move_stack [2♦] -> (220,317)
     - merge_stack [A♦] -> [2♦] /left
     - move_stack [J♦ Q♦ K♦] -> (187,467)
     - merge_stack [A♦ 2♦] -> [J♦ Q♦ K♦] /right
     - move_stack [A♥ 2♣ 3♦ 4♣] -> (220,242)
     - merge_stack [K♠] -> [A♥ 2♣ 3♦ 4♣] /left
-    - split [K♠ A♥ 2♣ 3♦ 4♣]@1
+    - split K♠ A♥ / 2♣ 3♦ 4♣
     - move_stack [K♠ A♥] -> (52,107)
     - merge_stack [2♣'] -> [K♠ A♥] /right
   expect:
@@ -4102,9 +4102,9 @@ scenario walkthrough_mined_020_2♦p1_3♣p1
     at (187,92): 9♦ 9♣' 9♠'
     at (187,167): 2♦' 3♣'
   actions:
-    - split [A♣ A♦ A♥]@0
+    - split A♣ / A♦ A♥
     - move_stack [A♦ A♥] -> (112,257)
-    - split [A♦ A♥]@0
+    - split A♦ / A♥
     - move_stack [2♦' 3♣'] -> (220,167)
     - merge_stack [A♣] -> [2♦' 3♣'] /left
     - merge_stack [A♦] -> [2♣ 3♦ 4♣ 5♥ 6♠ 7♥] /left
@@ -4127,18 +4127,18 @@ scenario walkthrough_mined_021_8♦p1
     at (187,257): 6♠' 7♥' 8♣' 9♥
     at (187,332): 8♦'
   actions:
-    - split [7♠ 7♦ 7♣]@2
+    - split 7♠ 7♦ / 7♣
     - move_stack [7♠ 7♦] -> (187,482)
-    - split [7♠ 7♦]@0
+    - split 7♠ / 7♦
     - move_stack [8♦'] -> (220,332)
     - merge_stack [7♣] -> [8♦'] /left
-    - split [K♠ A♠ 2♠ 3♠]@3
+    - split K♠ A♠ 2♠ / 3♠
     - move_stack [4♥' 5♣' 6♦'] -> (220,182)
     - merge_stack [3♠] -> [4♥' 5♣' 6♦'] /left
-    - split [3♠ 4♥' 5♣' 6♦']@3
+    - split 3♠ 4♥' 5♣' / 6♦'
     - merge_stack [6♦'] -> [7♣ 8♦'] /left
     - merge_stack [7♦] -> [7♠] /right
-    - split [2♣ 3♦ 4♣ 5♥ 6♠ 7♥]@5
+    - split 2♣ 3♦ 4♣ 5♥ 6♠ / 7♥
     - merge_stack [7♥] -> [7♠ 7♦] /right
   expect:
     final_board_victory: true
@@ -4156,9 +4156,9 @@ scenario walkthrough_mined_022_A♥p1_A♦p1
     at (52,482): 9♣ T♥ J♠
     at (187,182): A♥' A♦'
   actions:
-    - split [A♣ A♦ A♥]@0
+    - split A♣ / A♦ A♥
     - move_stack [A♦ A♥] -> (112,332)
-    - split [A♦ A♥]@0
+    - split A♦ / A♥
     - merge_stack [A♣] -> [A♥' A♦'] /right
     - merge_stack [A♦] -> [T♦ J♦ Q♦ K♦] /right
     - merge_stack [A♥] -> [2♥ 3♥ 4♥] /left
@@ -4179,9 +4179,9 @@ scenario walkthrough_mined_023_3♣
     at (187,92): 2♣ 3♦ 4♠'
     at (187,167): 3♣
   actions:
-    - split [4♣ 5♥ 6♠ 7♥]@0
+    - split 4♣ / 5♥ 6♠ 7♥
     - merge_stack [4♣] -> [3♣] /right
-    - split [2♣ 3♦ 4♠']@0
+    - split 2♣ / 3♦ 4♠'
     - move_stack [3♣ 4♣] -> (220,167)
     - merge_stack [2♣] -> [3♣ 4♣] /left
     - merge_stack [3♦ 4♠'] -> [5♥ 6♠ 7♥] /left
@@ -4202,11 +4202,11 @@ scenario walkthrough_mined_024_2♦
     at (187,182): 9♣ T♥ J♣
     at (187,257): 2♦
   actions:
-    - split [K♠ A♠ 2♠ 3♠]@3
+    - split K♠ A♠ 2♠ / 3♠
     - merge_stack [3♠] -> [2♦] /right
-    - split [A♣ A♦ A♥]@0
+    - split A♣ / A♦ A♥
     - move_stack [A♦ A♥] -> (112,332)
-    - split [A♦ A♥]@0
+    - split A♦ / A♥
     - move_stack [2♦ 3♠] -> (220,257)
     - merge_stack [A♣] -> [2♦ 3♠] /left
     - merge_stack [A♦] -> [T♦ J♦ Q♦ K♦] /right
@@ -4229,16 +4229,16 @@ scenario walkthrough_mined_025_T♠p1
     at (187,257): 4♦ 4♠' 4♥
     at (187,332): T♠'
   actions:
-    - split [T♦ J♦ Q♦ K♦ A♦]@0
+    - split T♦ / J♦ Q♦ K♦ A♦
     - merge_stack [T♦] -> [T♠'] /right
-    - split [8♥ 9♠ T♥']@2
+    - split 8♥ 9♠ / T♥'
     - merge_stack [T♥'] -> [T♠' T♦] /right
-    - split [7♠ 7♦ 7♣]@2
+    - split 7♠ 7♦ / 7♣
     - move_stack [7♠ 7♦] -> (187,407)
-    - split [7♠ 7♦]@0
+    - split 7♠ / 7♦
     - merge_stack [7♣] -> [8♥ 9♠] /left
     - merge_stack [7♦] -> [7♠] /right
-    - split [2♣ 3♦ 4♣ 5♥ 6♠ 7♥]@5
+    - split 2♣ 3♦ 4♣ 5♥ 6♠ / 7♥
     - merge_stack [7♥] -> [7♠ 7♦] /right
   expect:
     final_board_victory: true
@@ -4270,7 +4270,7 @@ scenario undo_walkthrough_split_then_move
       expect_undoable: false
     step_2:
       desc: player splits the K♠-A♠-2♠-3♠ run at the midpoint
-      action: split [K♠ A♠ 2♠ 3♠]@2
+      action: split K♠ A♠ / 2♠ 3♠
       expect_board_count: 7
       expect_undoable: true
     step_3:
@@ -4445,11 +4445,11 @@ scenario undo_split_piece_returns_to_split_position
       expect_board_count: 2
       expect_undoable: false
     step_2:
-      desc: player splits K♠-A♠-2♠-3♠ at midpoint — 2♠-3♠ lands at its split position (top=16, left=140)
-      action: split [K♠ A♠ 2♠ 3♠]@2
+      desc: player splits K♠-A♠-2♠-3♠ at midpoint — 2♠-3♠ lands at its leftSplit position (top=20, left=144)
+      action: split K♠ A♠ / 2♠ 3♠
       expect_board_count: 3
       expect_undoable: true
-      expect_loc: (140,16)
+      expect_loc: (144,20)
     step_3:
       desc: player moves the 2♠-3♠ piece to a distant spot
       action: move_stack [2♠ 3♠] -> (400,500)
@@ -4461,7 +4461,7 @@ scenario undo_split_piece_returns_to_split_position
       action: undo
       expect_board_count: 3
       expect_undoable: true
-      expect_loc: (140,16)
+      expect_loc: (144,20)
     step_5:
       desc: undo the split — K♠-A♠-2♠-3♠ reassembled at original position
       action: undo
@@ -4494,7 +4494,8 @@ scenario undo_split_piece_returns_to_split_position
 # use the canonical SUIT♠="CDSH" with trailing apostrophe for deck-1.
 #
 # Primitive line syntax mirrors `replay_walkthroughs.dsl`:
-#   - split [content]@k             — split stack at card_index k
+#   - split <left-cards> / <right-cards>
+#   - isolate <before-cards> ( <held-card> ) <after-cards>
 #   - merge_stack [src] -> [tgt] /side
 #   - move_stack [content] -> (top,left)
 #
@@ -4514,7 +4515,7 @@ scenario peel_left_edge_then_merge
   side: right
   expect:
     primitives:
-      - isolate [5♥ 6♥ 7♥ 8♥] at (100,100) @0
+      - isolate ( 5♥ ) 6♥ 7♥ 8♥
       - merge_stack [5♥] at (100,100) -> [4♥] at (400,100) /right :: path (100,100@0)(100,100@44)(103,100@88)(110,100@132)(122,100@176)(139,100@220)(162,100@264)(189,99@309)(219,99@353)(251,99@397)(284,99@441)(316,99@485)(346,99@529)(373,98@573)(396,98@617)(413,98@661)(425,98@705)(432,98@749)(435,98@793)(435,98@838)
 scenario pluck_interior_premoves_donor
   desc: Plucking 7♥ from a 5-card run forces a pre-flight move on the donor (interior splits get pre-cleared per 2026-04-23). After the first split, [7♥ 8♥ 9♥] sits adjacent to [5♥ 6♥]; a second pre-flight relocates it before the next split.
@@ -4529,7 +4530,7 @@ scenario pluck_interior_premoves_donor
   side: right
   expect:
     primitives:
-      - isolate [5♥ 6♥ 7♥ 8♥ 9♥] at (100,100) @2
+      - isolate 5♥ 6♥ ( 7♥ ) 8♥ 9♥
       - merge_stack [7♥] at (166,100) -> [7♠] at (500,100) /right :: path (166,100@0)(166,100@49)(170,100@97)(177,100@146)(190,100@194)(209,100@243)(234,100@291)(264,99@340)(297,99@388)(332,99@437)(369,99@486)(404,99@534)(437,99@583)(467,98@631)(492,98@680)(511,98@728)(524,98@777)(531,98@825)(535,98@874)(535,98@923)
 scenario free_pull_in_place
   desc: Free-pull of trouble singleton onto target — no geometry pre-flight needed.
@@ -4571,7 +4572,7 @@ scenario splice_run
   expect:
     primitives:
       - move_stack [2♣ 3♦ 4♣ 5♥ 6♠] at (100,100) -> (52,92) :: path (100,100@0)(100,100@6)(100,100@13)(99,100@19)(97,99@26)(94,99@32)(91,99@38)(87,98@45)(83,97@51)(78,96@58)(74,96@64)(69,95@70)(65,94@77)(61,93@83)(58,93@90)(55,93@96)(53,92@102)(52,92@109)(52,92@115)(52,92@122)
-      - split [2♣ 3♦ 4♣ 5♥ 6♠] at (52,92) @1
+      - split 2♣ 3♦ / 4♣ 5♥ 6♠
       - move_stack [2♣ 3♦] at (50,88) -> (52,167) :: path (50,88@0)(50,88@10)(50,89@21)(50,90@31)(50,93@42)(50,97@52)(50,103@62)(51,109@73)(51,116@83)(51,124@94)(51,131@104)(51,139@114)(51,146@125)(52,152@135)(52,158@146)(52,162@156)(52,165@166)(52,166@177)(52,167@187)(52,167@198)
       - merge_stack [4♠] at (450,100) -> [2♣ 3♦] at (52,167) /right :: path (450,100@0)(450,100@44)(447,101@89)(440,102@133)(428,104@177)(411,108@221)(389,112@266)(363,117@310)(333,123@354)(301,129@398)(269,136@443)(237,142@487)(207,148@531)(181,153@575)(159,157@620)(142,161@664)(130,163@708)(123,164@752)(120,165@797)(120,165@841)
 scenario shift_right_end
@@ -4591,11 +4592,11 @@ scenario shift_right_end
   side: right
   expect:
     primitives:
-      - isolate [T♣ T♠ T♦] at (350,100) @1
+      - isolate T♣ ( T♠ ) T♦
       - move_stack [T♣] at (348,100) -> (52,182) :: path (348,100@0)(348,100@40)(345,101@81)(339,103@121)(328,105@162)(313,110@202)(293,115@242)(270,122@283)(243,129@323)(215,137@364)(185,145@404)(157,153@445)(130,160@485)(107,167@525)(87,172@566)(72,177@606)(61,179@647)(55,181@687)(52,182@727)(52,182@768)
       - merge_stack [T♦] at (418,100) -> [T♣] at (52,182) /right :: path (418,100@0)(418,100@45)(415,101@90)(408,102@134)(396,105@179)(379,109@224)(357,115@269)(330,121@314)(301,128@358)(269,136@403)(236,144@448)(204,152@493)(175,159@538)(148,165@582)(126,171@627)(109,175@672)(97,178@717)(90,179@762)(87,180@807)(87,180@851)
       - merge_stack [T♠] at (383,100) -> [J♥ Q♣ K♣] at (100,100) /right :: path (383,100@0)(383,100@24)(381,100@48)(377,100@72)(371,100@96)(362,100@120)(349,100@144)(335,99@168)(318,99@192)(301,99@216)(283,99@239)(266,99@263)(249,99@287)(235,98@311)(222,98@335)(213,98@359)(207,98@383)(203,98@407)(201,98@431)(201,98@455)
-      - split [J♥ Q♣ K♣ T♠] at (100,100) @0
+      - split J♥ / Q♣ K♣ T♠
       - merge_stack [J♥] at (98,96) -> [9♦] at (600,100) /right :: path (98,96@0)(99,96@71)(103,96@141)(114,96@212)(134,96@283)(161,96@353)(197,96@424)(240,97@495)(288,97@565)(340,97@636)(393,97@707)(445,97@777)(493,97@848)(536,98@919)(572,98@989)(599,98@1060)(619,98@1131)(630,98@1201)(634,98@1272)(635,98@1343)
 scenario steal_from_partial_left
   desc: Steal A♠ from [A♠ 2♠] (a length-2 partial source). Single split-at-1 separates the two cards; A♠ absorbs onto target.
@@ -4610,7 +4611,7 @@ scenario steal_from_partial_left
   side: right
   expect:
     primitives:
-      - split [A♠ 2♠] at (100,100) @0
+      - split A♠ / 2♠
       - merge_stack [A♠] at (98,96) -> [A♣ A♦] at (300,100) /right :: path (98,96@0)(98,96@36)(101,96@71)(106,96@107)(116,96@142)(130,96@178)(148,96@213)(169,97@249)(194,97@284)(220,97@320)(246,97@355)(272,97@391)(297,97@426)(318,98@462)(336,98@497)(350,98@533)(360,98@568)(365,98@604)(368,98@639)(368,98@675)
 scenario decompose_pair
   desc: Decompose a TROUBLE pair [3♥ 3♦] into two singletons. Single split-at-1.
@@ -4621,7 +4622,7 @@ scenario decompose_pair
   pair_before: 3♥ 3♦
   expect:
     primitives:
-      - split [3♥ 3♦] at (100,100) @0"""
+      - split 3♥ / 3♦"""
       )
     , ( "verb_to_primitives_corpus.dsl"
       , """# verb_to_primitives_corpus — corpus of verb→primitive scenarios.
@@ -4663,7 +4664,7 @@ scenario mined_001_4♠_4♣p1_step_01
   side: right
   expect:
     primitives:
-      - isolate [2♦' 3♠' 4♦'] at (52,332) @2
+      - isolate 2♦' 3♠' ( 4♦' )
       - merge_stack [4♦'] at (118,332) -> [4♠ 4♣'] at (187,332) /right :: path (118,332@0)(118,332@18)(119,332@36)(122,332@54)(127,332@72)(134,332@90)(143,332@108)(154,331@126)(167,331@144)(180,331@162)(193,331@180)(206,331@198)(219,331@216)(230,330@234)(239,330@252)(246,330@270)(251,330@288)(254,330@306)(255,330@325)(255,330@343)
 scenario mined_001_4♠_4♣p1_step_02
   desc: mined_001_4♠_4♣p1 step 2 (extract_absorb/steal).
@@ -4687,9 +4688,9 @@ scenario mined_001_4♠_4♣p1_step_02
   side: left
   expect:
     primitives:
-      - split [A♣ A♦ A♥] at (52,182) @0
+      - split A♣ / A♦ A♥
       - move_stack [A♦ A♥] at (93,182) -> (187,407) :: path (93,182@0)(93,182@32)(94,184@64)(96,189@96)(99,197@128)(104,209@160)(110,224@193)(118,241@225)(126,262@257)(135,283@289)(145,306@321)(154,327@353)(162,348@385)(170,365@417)(176,380@449)(181,392@481)(184,400@513)(186,405@545)(187,407@578)(187,407@610)
-      - split [A♦ A♥] at (187,407) @0
+      - split A♦ / A♥
       - merge_stack [A♣] at (50,178) -> [2♦' 3♠'] at (44,332) /left :: path (50,178@0)(50,178@21)(50,180@41)(49,183@62)(48,188@82)(46,196@103)(43,206@124)(40,218@144)(37,232@165)(33,247@185)(30,261@206)(26,276@226)(23,290@247)(20,302@268)(17,312@288)(15,320@309)(14,325@329)(13,328@350)(13,330@371)(13,330@391)
 scenario mined_001_4♠_4♣p1_step_03
   desc: mined_001_4♠_4♣p1 step 3 (push).
@@ -4762,10 +4763,10 @@ scenario mined_002_Q♦p1_step_01
   side: left
   expect:
     primitives:
-      - isolate [A♦ 2♣ 3♦ 4♣] at (187,167) @0
+      - isolate ( A♦ ) 2♣ 3♦ 4♣
       - move_stack [J♦ Q♦ K♦] at (52,257) -> (187,467) :: path (52,257@0)(52,257@33)(53,259@66)(56,263@99)(61,271@131)(68,282@164)(77,296@197)(88,313@230)(100,331@263)(113,352@296)(126,372@328)(139,393@361)(151,411@394)(162,428@427)(171,442@460)(178,453@493)(183,461@526)(186,465@558)(187,467@591)(187,467@624)
       - merge_stack [A♦] at (187,167) -> [J♦ Q♦ K♦] at (187,467) /right :: path (187,167@0)(187,167@41)(188,170@83)(190,176@124)(194,187@166)(199,202@207)(206,222@248)(214,246@290)(223,273@331)(233,301@373)(242,331@414)(252,359@455)(261,386@497)(269,410@538)(276,430@580)(281,445@621)(285,456@662)(287,462@704)(288,465@745)(288,465@787)
-      - split [J♦ Q♦ K♦ A♦] at (187,467) @0
+      - split J♦ / Q♦ K♦ A♦
       - move_stack [Q♦'] at (187,392) -> (85,257) :: path (187,392@0)(187,392@22)(186,391@45)(184,388@67)(180,383@89)(175,376@111)(168,367@134)(160,356@156)(151,344@178)(141,331@200)(131,318@223)(121,305@245)(112,293@267)(104,282@289)(97,273@312)(92,266@334)(88,261@356)(86,258@378)(85,257@401)(85,257@423)
       - merge_stack [J♦] at (185,463) -> [Q♦'] at (85,257) /left :: path (185,463@0)(185,463@32)(184,461@65)(181,457@97)(176,449@129)(170,438@162)(161,425@194)(150,408@226)(139,389@259)(126,369@291)(113,349@323)(100,329@356)(89,310@388)(78,293@420)(69,280@453)(63,269@485)(58,261@518)(55,257@550)(54,255@582)(54,255@615)
 scenario mined_002_Q♦p1_step_02
@@ -4792,9 +4793,9 @@ scenario mined_002_Q♦p1_step_02
   side: right
   expect:
     primitives:
-      - split [K♦' K♥' K♠] at (52,182) @0
+      - split K♦' / K♥' K♠
       - move_stack [K♥' K♠] at (93,182) -> (187,392) :: path (93,182@0)(93,182@30)(94,184@61)(96,188@91)(99,196@121)(104,207@151)(110,221@182)(118,238@212)(126,256@242)(135,277@272)(145,297@303)(154,318@333)(162,336@363)(170,353@394)(176,367@424)(181,378@454)(184,386@484)(186,390@515)(187,392@545)(187,392@575)
-      - split [K♥' K♠] at (187,392) @0
+      - split K♥' / K♠
       - merge_stack [K♦'] at (50,178) -> [J♦ Q♦'] at (52,257) /right :: path (50,178@0)(50,178@14)(51,179@27)(52,180@41)(55,183@55)(58,187@68)(63,192@82)(69,198@96)(75,205@110)(82,213@123)(88,220@137)(95,228@151)(101,235@164)(107,241@178)(112,246@192)(115,250@205)(118,253@219)(119,254@233)(120,255@246)(120,255@260)
 scenario mined_002_Q♦p1_step_03
   desc: mined_002_Q♦p1 step 3 (push).
@@ -4867,9 +4868,9 @@ scenario mined_003_6♦_step_01
   side: right
   expect:
     primitives:
-      - split [7♠ 7♦ 7♣] at (52,107) @2
+      - split 7♠ 7♦ / 7♣
       - move_stack [7♠ 7♦] at (44,107) -> (247,242) :: path (44,107@0)(44,107@32)(46,108@64)(50,111@96)(57,116@128)(68,123@160)(81,132@192)(98,143@225)(116,155@257)(136,168@289)(155,181@321)(175,194@353)(193,206@385)(210,217@417)(223,226@449)(234,233@481)(241,238@513)(245,241@545)(247,242@577)(247,242@609)
-      - split [7♠ 7♦] at (247,242) @0
+      - split 7♠ / 7♦
       - merge_stack [7♣] at (122,103) -> [6♦] at (187,482) /right :: path (122,103@0)(122,104@51)(123,107@103)(125,115@154)(129,128@205)(134,147@257)(140,173@308)(148,203@359)(157,237@411)(167,273@462)(177,310@513)(187,346@565)(196,380@616)(204,410@667)(210,436@718)(215,455@770)(219,468@821)(221,476@872)(222,479@924)(222,480@975)
 scenario mined_003_6♦_step_02
   desc: mined_003_6♦ step 2 (push).
@@ -4943,7 +4944,7 @@ scenario mined_003_6♦_step_04
   side: right
   expect:
     primitives:
-      - isolate [3♦ 4♣ 5♥ 6♠ 7♥] at (52,257) @4
+      - isolate 3♦ 4♣ 5♥ 6♠ ( 7♥ )
       - merge_stack [7♥] at (184,257) -> [7♠ 7♦] at (245,238) /right :: path (184,257@0)(184,257@17)(185,257@34)(188,256@52)(193,256@69)(199,255@86)(208,253@103)(218,251@120)(230,250@138)(242,248@155)(255,245@172)(267,243@189)(279,242@206)(289,240@224)(298,238@241)(304,237@258)(309,237@275)(312,236@292)(313,236@310)(313,236@327)
 scenario mined_004_5♣_6♦p1_step_01
   desc: mined_004_5♣_6♦p1 step 1 (extract_absorb/steal).
@@ -4965,9 +4966,9 @@ scenario mined_004_5♣_6♦p1_step_01
   side: right
   expect:
     primitives:
-      - split [7♠ 7♦ 7♣] at (52,257) @2
+      - split 7♠ 7♦ / 7♣
       - move_stack [7♠ 7♦] at (44,257) -> (187,257) :: path (44,257@0)(44,257@19)(45,257@38)(48,257@56)(53,257@75)(61,257@94)(70,257@113)(82,257@132)(95,257@151)(108,257@169)(123,257@188)(136,257@207)(149,257@226)(161,257@245)(170,257@263)(178,257@282)(183,257@301)(186,257@320)(187,257@339)(187,257@358)
-      - split [7♠ 7♦] at (187,257) @0
+      - split 7♠ / 7♦
       - merge_stack [7♣] at (122,253) -> [5♣ 6♦'] at (187,182) /right :: path (122,253@0)(122,253@20)(123,252@40)(126,251@60)(131,248@80)(138,244@100)(147,240@120)(157,234@140)(169,227@160)(182,220@180)(195,213@200)(208,206@220)(220,199@240)(230,193@260)(239,189@279)(246,185@299)(251,182@319)(254,181@339)(255,180@359)(255,180@379)
 scenario mined_004_5♣_6♦p1_step_02
   desc: mined_004_5♣_6♦p1 step 2 (free_pull).
@@ -5010,7 +5011,7 @@ scenario mined_004_5♣_6♦p1_step_03
   side: right
   expect:
     primitives:
-      - isolate [2♣ 3♦ 4♣ 5♥ 6♠ 7♥] at (52,407) @5
+      - isolate 2♣ 3♦ 4♣ 5♥ 6♠ ( 7♥ )
       - merge_stack [7♥] at (217,407) -> [7♠ 7♦] at (185,253) /right :: path (217,407@0)(217,407@21)(217,405@42)(218,402@63)(219,397@84)(221,389@105)(224,378@126)(227,366@147)(230,352@169)(233,337@190)(237,321@211)(240,306@232)(243,292@253)(246,280@274)(249,269@295)(251,261@316)(252,256@337)(253,253@358)(253,251@379)(253,251@400)
 scenario mined_005_2♥p1_step_01
   desc: mined_005_2♥p1 step 1 (extract_absorb/peel).
@@ -5033,7 +5034,7 @@ scenario mined_005_2♥p1_step_01
   side: right
   expect:
     primitives:
-      - isolate [K♠ A♠ 2♠ 3♠] at (26,26) @3
+      - isolate K♠ A♠ 2♠ ( 3♠ )
       - merge_stack [3♠] at (125,26) -> [2♥'] at (187,257) /right :: path (125,26@0)(125,26@33)(126,28@65)(128,33@98)(131,41@131)(136,53@164)(143,68@196)(151,87@229)(159,107@262)(169,129@295)(178,152@327)(188,174@360)(196,194@393)(204,213@425)(211,228@458)(216,240@491)(219,248@524)(221,253@556)(222,255@589)(222,255@622)
 scenario mined_005_2♥p1_step_02
   desc: mined_005_2♥p1 step 2 (extract_absorb/steal).
@@ -5056,9 +5057,9 @@ scenario mined_005_2♥p1_step_02
   side: left
   expect:
     primitives:
-      - split [A♣ A♦ A♥] at (52,257) @0
+      - split A♣ / A♦ A♥
       - move_stack [A♦ A♥] at (93,257) -> (187,332) :: path (93,257@0)(93,257@16)(94,258@32)(96,259@47)(99,262@63)(104,266@79)(110,271@95)(118,277@111)(126,284@127)(135,291@142)(145,298@158)(154,305@174)(162,312@190)(170,318@206)(176,323@222)(181,327@237)(184,330@253)(186,331@269)(187,332@285)(187,332@301)
-      - split [A♦ A♥] at (187,332) @0
+      - split A♦ / A♥
       - merge_stack [A♣] at (50,253) -> [2♥' 3♠] at (187,257) /left :: path (50,253@0)(50,253@14)(51,253@28)(53,253@42)(57,253@56)(62,253@70)(70,253@84)(78,254@98)(88,254@112)(98,254@126)(108,254@139)(118,254@153)(128,254@167)(136,255@181)(144,255@195)(149,255@209)(153,255@223)(155,255@237)(156,255@251)(156,255@265)
 scenario mined_005_2♥p1_step_03
   desc: mined_005_2♥p1 step 3 (push).
@@ -5124,7 +5125,7 @@ scenario mined_006_6♣p1_step_01
   side: right
   expect:
     primitives:
-      - isolate [3♦ 4♣ 5♥ 6♠] at (52,332) @3
+      - isolate 3♦ 4♣ 5♥ ( 6♠ )
       - merge_stack [6♠] at (151,332) -> [6♣'] at (187,407) /right :: path (151,332@0)(151,332@13)(152,333@27)(153,334@40)(156,337@54)(159,341@67)(164,345@80)(170,351@94)(176,358@107)(183,365@121)(190,372@134)(197,379@147)(203,386@161)(209,392@174)(214,396@188)(217,400@201)(220,403@214)(221,404@228)(222,405@241)(222,405@255)
 scenario mined_006_6♣p1_step_02
   desc: mined_006_6♣p1 step 2 (extract_absorb/split_out).
@@ -5149,7 +5150,7 @@ scenario mined_006_6♣p1_step_02
   side: right
   expect:
     primitives:
-      - isolate [5♣ 6♦' 7♣] at (52,107) @1
+      - isolate 5♣ ( 6♦' ) 7♣
       - merge_stack [6♦'] at (85,107) -> [6♣' 6♠] at (187,407) /right :: path (85,107@0)(85,107@45)(87,110@90)(90,116@135)(96,127@181)(105,142@226)(116,162@271)(130,186@316)(145,213@361)(162,241@406)(178,271@451)(195,299@497)(210,326@542)(224,350@587)(235,370@632)(244,385@677)(250,396@722)(253,402@767)(255,405@813)(255,405@858)
 scenario mined_006_6♣p1_step_03
   desc: mined_006_6♣p1 step 3 (push).
@@ -5217,9 +5218,9 @@ scenario mined_007_5♣p1_6♣_step_01
   side: right
   expect:
     primitives:
-      - split [7♠ 7♦ 7♣] at (52,257) @2
+      - split 7♠ 7♦ / 7♣
       - move_stack [7♠ 7♦] at (44,257) -> (187,257) :: path (44,257@0)(44,257@19)(45,257@38)(48,257@56)(53,257@75)(61,257@94)(70,257@113)(82,257@132)(95,257@151)(108,257@169)(123,257@188)(136,257@207)(149,257@226)(161,257@245)(170,257@263)(178,257@282)(183,257@301)(186,257@320)(187,257@339)(187,257@358)
-      - split [7♠ 7♦] at (187,257) @0
+      - split 7♠ / 7♦
       - merge_stack [7♣] at (122,253) -> [5♣' 6♣] at (187,182) /right :: path (122,253@0)(122,253@20)(123,252@40)(126,251@60)(131,248@80)(138,244@100)(147,240@120)(157,234@140)(169,227@160)(182,220@180)(195,213@200)(208,206@220)(220,199@240)(230,193@260)(239,189@279)(246,185@299)(251,182@319)(254,181@339)(255,180@359)(255,180@379)
 scenario mined_007_5♣p1_6♣_step_02
   desc: mined_007_5♣p1_6♣ step 2 (free_pull).
@@ -5262,7 +5263,7 @@ scenario mined_007_5♣p1_6♣_step_03
   side: right
   expect:
     primitives:
-      - isolate [2♣ 3♦ 4♣ 5♥ 6♠ 7♥] at (52,407) @5
+      - isolate 2♣ 3♦ 4♣ 5♥ 6♠ ( 7♥ )
       - merge_stack [7♥] at (217,407) -> [7♠ 7♦] at (185,253) /right :: path (217,407@0)(217,407@21)(217,405@42)(218,402@63)(219,397@84)(221,389@105)(224,378@126)(227,366@147)(230,352@169)(233,337@190)(237,321@211)(240,306@232)(243,292@253)(246,280@274)(249,269@295)(251,261@316)(252,256@337)(253,253@358)(253,251@379)(253,251@400)
 scenario mined_008_Q♥p1_step_01
   desc: mined_008_Q♥p1 step 1 (extract_absorb/steal).
@@ -5286,7 +5287,7 @@ scenario mined_008_Q♥p1_step_01
   side: left
   expect:
     primitives:
-      - isolate [J♠' Q♠' K♠] at (187,167) @0
+      - isolate ( J♠' ) Q♠' K♠
       - move_stack [Q♥'] at (187,242) -> (220,242) :: path (187,242@0)(187,242@5)(187,242@11)(188,242@16)(189,242@21)(191,242@26)(193,242@32)(196,242@37)(199,242@42)(202,242@47)(205,242@53)(208,242@58)(211,242@63)(214,242@68)(216,242@74)(218,242@79)(219,242@84)(220,242@89)(220,242@95)(220,242@100)
       - merge_stack [J♠'] at (187,167) -> [Q♥'] at (220,242) /left :: path (187,167@0)(187,167@10)(187,168@19)(187,169@29)(187,172@38)(187,176@48)(187,180@58)(188,186@67)(188,193@77)(188,200@86)(188,207@96)(188,214@106)(188,221@115)(189,227@125)(189,231@135)(189,235@144)(189,238@154)(189,239@163)(189,240@173)(189,240@183)
 scenario mined_008_Q♥p1_step_02
@@ -5311,7 +5312,7 @@ scenario mined_008_Q♥p1_step_02
   side: left
   expect:
     primitives:
-      - isolate [T♦ J♦ Q♦ K♦] at (26,26) @0
+      - isolate ( T♦ ) J♦ Q♦ K♦
       - move_stack [J♠' Q♥'] at (187,242) -> (220,242) :: path (187,242@0)(187,242@5)(187,242@11)(188,242@16)(189,242@21)(191,242@26)(193,242@32)(196,242@37)(199,242@42)(202,242@47)(205,242@53)(208,242@58)(211,242@63)(214,242@68)(216,242@74)(218,242@79)(219,242@84)(220,242@89)(220,242@95)(220,242@100)
       - merge_stack [T♦] at (26,26) -> [J♠' Q♥'] at (220,242) /left :: path (26,26@0)(26,26@35)(28,28@71)(31,33@106)(37,40@142)(45,51@177)(56,66@212)(69,83@248)(84,102@283)(99,122@319)(116,144@354)(131,164@389)(146,183@425)(159,200@460)(170,215@496)(178,226@531)(184,233@566)(187,238@602)(189,240@637)(189,240@673)
 scenario mined_008_Q♥p1_step_03
@@ -5358,7 +5359,7 @@ scenario mined_009_J♣_step_01
   side: right
   expect:
     primitives:
-      - isolate [9♠ T♦ J♠' Q♥'] at (187,92) @3
+      - isolate 9♠ T♦ J♠' ( Q♥' )
       - merge_stack [Q♥'] at (286,92) -> [J♣] at (187,332) /right :: path (286,92@0)(286,92@32)(285,94@65)(284,99@97)(282,108@130)(278,120@162)(274,136@195)(269,155@227)(263,176@259)(257,199@292)(251,223@324)(245,246@357)(239,267@389)(234,286@422)(230,302@454)(226,314@486)(224,323@519)(223,328@551)(222,330@584)(222,330@616)
 scenario mined_009_J♣_step_02
   desc: mined_009_J♣ step 2 (extract_absorb/yank).
@@ -5382,7 +5383,7 @@ scenario mined_009_J♣_step_02
   side: right
   expect:
     primitives:
-      - isolate [Q♠' K♠ A♠ 2♠ 3♠] at (52,482) @1
+      - isolate Q♠' ( K♠ ) A♠ 2♠ 3♠
       - merge_stack [K♠] at (85,482) -> [J♣ Q♥'] at (187,332) /right :: path (85,482@0)(85,482@30)(87,480@60)(90,477@90)(96,472@120)(105,464@150)(116,454@180)(130,442@210)(145,428@240)(162,413@270)(178,399@300)(195,384@330)(210,370@360)(224,358@390)(235,348@420)(244,340@450)(250,335@480)(253,332@510)(255,330@540)(255,330@570)
 scenario mined_009_J♣_step_03
   desc: mined_009_J♣ step 3 (push).
@@ -5430,7 +5431,7 @@ scenario mined_010_3♥p1_step_01
   side: left
   expect:
     primitives:
-      - isolate [2♣ 3♦ 4♣ 5♥ 6♠] at (52,407) @0
+      - isolate ( 2♣ ) 3♦ 4♣ 5♥ 6♠
       - move_stack [3♥'] at (187,317) -> (220,317) :: path (187,317@0)(187,317@5)(187,317@11)(188,317@16)(189,317@21)(191,317@26)(193,317@32)(196,317@37)(199,317@42)(202,317@47)(205,317@53)(208,317@58)(211,317@63)(214,317@68)(216,317@74)(218,317@79)(219,317@84)(220,317@89)(220,317@95)(220,317@100)
       - merge_stack [2♣] at (52,407) -> [3♥'] at (220,317) /left :: path (52,407@0)(52,407@22)(53,406@43)(56,404@65)(61,401@87)(68,396@109)(77,390@130)(88,383@152)(101,374@174)(114,366@195)(127,356@217)(140,348@239)(153,339@261)(164,332@282)(173,326@304)(180,321@326)(185,318@347)(188,316@369)(189,315@391)(189,315@413)
 scenario mined_010_3♥p1_step_02
@@ -5456,9 +5457,9 @@ scenario mined_010_3♥p1_step_02
   side: left
   expect:
     primitives:
-      - split [A♣ A♦ A♥] at (52,257) @0
+      - split A♣ / A♦ A♥
       - move_stack [A♦ A♥] at (93,257) -> (187,482) :: path (93,257@0)(93,257@32)(94,259@64)(96,264@96)(99,272@128)(104,284@160)(110,299@193)(118,316@225)(126,337@257)(135,358@289)(145,381@321)(154,402@353)(162,423@385)(170,440@417)(176,455@449)(181,467@481)(184,475@513)(186,480@545)(187,482@578)(187,482@610)
-      - split [A♦ A♥] at (187,482) @0
+      - split A♦ / A♥
       - move_stack [2♣ 3♥'] at (187,317) -> (220,317) :: path (187,317@0)(187,317@5)(187,317@11)(188,317@16)(189,317@21)(191,317@26)(193,317@32)(196,317@37)(199,317@42)(202,317@47)(205,317@53)(208,317@58)(211,317@63)(214,317@68)(216,317@74)(218,317@79)(219,317@84)(220,317@89)(220,317@95)(220,317@100)
       - merge_stack [A♦] at (185,478) -> [2♣ 3♥'] at (220,317) /left :: path (185,478@0)(185,478@21)(185,476@43)(185,473@64)(185,467@86)(185,459@107)(186,448@129)(186,435@150)(186,420@172)(187,405@193)(187,388@215)(188,373@236)(188,358@257)(188,345@279)(189,334@300)(189,326@322)(189,320@343)(189,317@365)(189,315@386)(189,315@408)
 scenario mined_010_3♥p1_step_03
@@ -5485,7 +5486,7 @@ scenario mined_010_3♥p1_step_03
   side: left
   expect:
     primitives:
-      - isolate [T♦ J♦ Q♦ K♦] at (26,26) @3
+      - isolate T♦ J♦ Q♦ ( K♦ )
       - merge_stack [K♦] at (125,26) -> [A♣] at (50,253) /left :: path (125,26@0)(125,26@33)(124,28@65)(122,33@98)(118,41@131)(113,53@164)(105,68@196)(97,85@229)(87,106@262)(77,127@295)(67,150@327)(57,171@360)(47,192@393)(39,209@425)(31,224@458)(26,236@491)(22,244@524)(20,249@556)(19,251@589)(19,251@622)
 scenario mined_010_3♥p1_step_04
   desc: mined_010_3♥p1 step 4 (push).
@@ -5556,7 +5557,7 @@ scenario mined_011_J♣_step_01
   side: left
   expect:
     primitives:
-      - isolate [T♣' J♦' Q♠ K♦ A♣] at (52,482) @0
+      - isolate ( T♣' ) J♦' Q♠ K♦ A♣
       - move_stack [J♣] at (187,392) -> (220,392) :: path (187,392@0)(187,392@5)(187,392@11)(188,392@16)(189,392@21)(191,392@26)(193,392@32)(196,392@37)(199,392@42)(202,392@47)(205,392@53)(208,392@58)(211,392@63)(214,392@68)(216,392@74)(218,392@79)(219,392@84)(220,392@89)(220,392@95)(220,392@100)
       - merge_stack [T♣'] at (52,482) -> [J♣] at (220,392) /left :: path (52,482@0)(52,482@22)(53,481@43)(56,479@65)(61,476@87)(68,471@109)(77,465@130)(88,458@152)(101,449@174)(114,441@195)(127,431@217)(140,423@239)(153,414@261)(164,407@282)(173,401@304)(180,396@326)(185,393@347)(188,391@369)(189,390@391)(189,390@413)
 scenario mined_011_J♣_step_02
@@ -5583,9 +5584,9 @@ scenario mined_011_J♣_step_02
   side: left
   expect:
     primitives:
-      - split [9♥' 9♣ 9♦] at (52,107) @0
+      - split 9♥' / 9♣ 9♦
       - move_stack [9♣ 9♦] at (93,107) -> (262,467) :: path (93,107@0)(93,107@52)(95,111@105)(98,118@157)(104,131@209)(113,149@262)(124,173@314)(138,202@366)(153,235@419)(169,269@471)(186,305@523)(202,339@576)(217,372@628)(231,401@680)(242,425@733)(251,443@785)(257,456@837)(260,463@890)(262,467@942)(262,467@994)
-      - split [9♣ 9♦] at (262,467) @0
+      - split 9♣ / 9♦
       - move_stack [T♣' J♣] at (187,392) -> (220,392) :: path (187,392@0)(187,392@5)(187,392@11)(188,392@16)(189,392@21)(191,392@26)(193,392@32)(196,392@37)(199,392@42)(202,392@47)(205,392@53)(208,392@58)(211,392@63)(214,392@68)(216,392@74)(218,392@79)(219,392@84)(220,392@89)(220,392@95)(220,392@100)
       - merge_stack [9♣] at (260,463) -> [T♣' J♣] at (220,392) /left :: path (260,463@0)(260,463@13)(259,462@27)(258,461@40)(255,458@54)(252,454@67)(247,450@80)(241,444@94)(235,437@107)(228,430@121)(221,423@134)(214,416@147)(208,409@161)(202,403@174)(197,399@188)(194,395@201)(191,392@214)(190,391@228)(189,390@241)(189,390@255)
 scenario mined_011_J♣_step_03
@@ -5655,9 +5656,9 @@ scenario mined_012_Q♣_K♣_step_01
   side: right
   expect:
     primitives:
-      - split [A♣ A♦ A♥] at (52,332) @0
+      - split A♣ / A♦ A♥
       - move_stack [A♦ A♥] at (93,332) -> (112,332) :: path (93,332@0)(93,332@5)(93,332@11)(94,332@16)(94,332@21)(95,332@26)(97,332@32)(98,332@37)(100,332@42)(102,332@47)(103,332@53)(105,332@58)(107,332@63)(108,332@68)(110,332@74)(111,332@79)(111,332@84)(112,332@89)(112,332@95)(112,332@100)
-      - split [A♦ A♥] at (112,332) @0
+      - split A♦ / A♥
       - merge_stack [A♣] at (50,328) -> [Q♣ K♣] at (187,182) /right :: path (50,328@0)(50,328@33)(52,327@67)(56,323@100)(64,318@133)(74,311@166)(88,301@200)(104,289@233)(123,276@266)(142,261@299)(163,247@333)(182,232@366)(201,219@399)(217,207@432)(231,197@466)(241,190@499)(249,185@532)(253,181@566)(255,180@599)(255,180@632)
 scenario mined_012_Q♣_K♣_step_02
   desc: mined_012_Q♣_K♣ step 2 (push).
@@ -5720,7 +5721,7 @@ scenario mined_013_A♥p1_step_01
   side: left
   expect:
     primitives:
-      - isolate [K♠ A♠ 2♠ 3♠] at (26,26) @0
+      - isolate ( K♠ ) A♠ 2♠ 3♠
       - move_stack [A♥'] at (187,332) -> (220,332) :: path (187,332@0)(187,332@5)(187,332@11)(188,332@16)(189,332@21)(191,332@26)(193,332@32)(196,332@37)(199,332@42)(202,332@47)(205,332@53)(208,332@58)(211,332@63)(214,332@68)(216,332@74)(218,332@79)(219,332@84)(220,332@89)(220,332@95)(220,332@100)
       - merge_stack [K♠] at (26,26) -> [A♥'] at (220,332) /left :: path (26,26@0)(26,26@45)(28,29@91)(31,35@136)(37,46@182)(45,62@227)(56,82@272)(69,106@318)(84,134@363)(99,163@408)(116,193@454)(131,222@499)(146,250@545)(159,274@590)(170,294@635)(178,310@681)(184,321@726)(187,327@772)(189,330@817)(189,330@862)
 scenario mined_013_A♥p1_step_02
@@ -5745,7 +5746,7 @@ scenario mined_013_A♥p1_step_02
   side: right
   expect:
     primitives:
-      - isolate [A♠ 2♠ 3♠] at (288,167) @1
+      - isolate A♠ ( 2♠ ) 3♠
       - merge_stack [2♠] at (321,167) -> [K♠ A♥'] at (187,332) /right :: path (321,167@0)(321,167@23)(320,169@46)(319,172@69)(317,178@93)(313,186@116)(309,197@139)(304,210@162)(298,225@185)(291,240@208)(285,257@231)(278,272@255)(272,287@278)(267,300@301)(263,311@324)(259,319@347)(257,325@370)(256,328@393)(255,330@416)(255,330@440)
 scenario mined_013_A♥p1_step_03
   desc: mined_013_A♥p1 step 3 (push).
@@ -5791,7 +5792,7 @@ scenario mined_013_A♥p1_step_04
   expect:
     primitives:
       - move_stack [A♠ 2♦ 3♣' 4♦' 5♠ 6♦'] at (19,407) -> (52,407) :: path (19,407@0)(19,407@5)(19,407@11)(20,407@16)(21,407@21)(23,407@26)(25,407@32)(28,407@37)(31,407@42)(34,407@47)(37,407@53)(40,407@58)(43,407@63)(46,407@68)(48,407@74)(50,407@79)(51,407@84)(52,407@89)(52,407@95)(52,407@100)
-      - split [A♠ 2♦ 3♣' 4♦' 5♠ 6♦'] at (52,407) @1
+      - split A♠ 2♦ / 3♣' 4♦' 5♠ 6♦'
       - move_stack [A♠ 2♦] at (50,403) -> (247,167) :: path (50,403@0)(50,403@40)(52,401@81)(56,396@121)(63,387@162)(73,375@202)(86,359@243)(102,341@283)(120,319@324)(139,297@364)(158,273@404)(177,251@445)(195,229@485)(211,211@526)(224,195@566)(234,183@607)(241,174@647)(245,169@688)(247,167@728)(247,167@769)
       - merge_stack [3♠] at (288,407) -> [A♠ 2♦] at (247,167) /right :: path (288,407@0)(288,407@32)(288,405@64)(289,400@96)(290,391@128)(291,378@160)(293,362@192)(295,343@224)(298,321@256)(300,298@288)(303,274@320)(305,251@352)(308,229@384)(310,210@417)(312,194@449)(313,181@481)(314,172@513)(315,167@545)(315,165@577)(315,165@609)
 scenario mined_014_5♣_step_01
@@ -5817,7 +5818,7 @@ scenario mined_014_5♣_step_01
   side: right
   expect:
     primitives:
-      - isolate [3♣' 4♦' 5♠ 6♦'] at (187,257) @3
+      - isolate 3♣' 4♦' 5♠ ( 6♦' )
       - merge_stack [6♦'] at (286,257) -> [5♣] at (187,482) /right :: path (286,257@0)(286,257@31)(285,259@61)(284,264@92)(282,272@122)(278,283@153)(274,298@183)(269,316@214)(263,336@244)(257,358@275)(251,379@305)(245,401@336)(239,421@366)(234,439@397)(230,454@427)(226,465@458)(224,473@488)(223,478@519)(222,480@549)(222,480@580)
 scenario mined_014_5♣_step_02
   desc: mined_014_5♣ step 2 (extract_absorb/steal).
@@ -5842,9 +5843,9 @@ scenario mined_014_5♣_step_02
   side: right
   expect:
     primitives:
-      - split [7♠ 7♦ 7♣] at (26,26) @2
+      - split 7♠ 7♦ / 7♣
       - move_stack [7♠ 7♦] at (18,26) -> (247,92) :: path (18,26@0)(18,26@31)(20,27@63)(25,28@94)(33,30@125)(45,34@157)(60,38@188)(79,43@220)(99,49@251)(121,56@282)(144,62@314)(166,69@345)(186,75@376)(205,80@408)(220,84@439)(232,88@470)(240,90@502)(245,91@533)(247,92@564)(247,92@596)
-      - split [7♠ 7♦] at (247,92) @0
+      - split 7♠ / 7♦
       - merge_stack [7♣] at (96,22) -> [5♣ 6♦'] at (187,482) /right :: path (96,22@0)(96,23@64)(98,27@128)(101,36@191)(107,52@255)(115,76@319)(125,107@383)(138,143@447)(152,184@510)(168,228@574)(183,274@638)(199,318@702)(213,359@765)(226,395@829)(236,426@893)(244,450@957)(250,466@1021)(253,475@1084)(255,479@1148)(255,480@1212)
 scenario mined_014_5♣_step_03
   desc: mined_014_5♣ step 3 (free_pull).
@@ -5893,7 +5894,7 @@ scenario mined_014_5♣_step_04
   side: right
   expect:
     primitives:
-      - isolate [3♦ 4♣ 5♥ 6♠ 7♥] at (52,332) @4
+      - isolate 3♦ 4♣ 5♥ 6♠ ( 7♥ )
       - merge_stack [7♥] at (184,332) -> [7♠ 7♦] at (245,88) /right :: path (184,332@0)(184,332@37)(185,330@73)(188,324@110)(193,316@146)(199,303@183)(208,287@219)(218,267@256)(230,245@292)(242,221@329)(255,197@365)(267,173@402)(279,151@439)(289,131@475)(298,115@512)(304,102@548)(309,94@585)(312,88@621)(313,86@658)(313,86@694)
 scenario mined_015_3♣p1_step_01
   desc: mined_015_3♣p1 step 1 (extract_absorb/peel).
@@ -5917,7 +5918,7 @@ scenario mined_015_3♣p1_step_01
   side: left
   expect:
     primitives:
-      - isolate [2♣ 3♦ 4♣ 5♥ 6♠ 7♥] at (52,332) @0
+      - isolate ( 2♣ ) 3♦ 4♣ 5♥ 6♠ 7♥
       - move_stack [3♣'] at (187,242) -> (220,242) :: path (187,242@0)(187,242@5)(187,242@11)(188,242@16)(189,242@21)(191,242@26)(193,242@32)(196,242@37)(199,242@42)(202,242@47)(205,242@53)(208,242@58)(211,242@63)(214,242@68)(216,242@74)(218,242@79)(219,242@84)(220,242@89)(220,242@95)(220,242@100)
       - merge_stack [2♣] at (52,332) -> [3♣'] at (220,242) /left :: path (52,332@0)(52,332@22)(53,331@43)(56,329@65)(61,326@87)(68,321@109)(77,315@130)(88,308@152)(101,299@174)(114,291@195)(127,281@217)(140,273@239)(153,264@261)(164,257@282)(173,251@304)(180,246@326)(185,243@347)(188,241@369)(189,240@391)(189,240@413)
 scenario mined_015_3♣p1_step_02
@@ -5942,9 +5943,9 @@ scenario mined_015_3♣p1_step_02
   side: left
   expect:
     primitives:
-      - split [A♣ A♦ A♥] at (52,257) @0
+      - split A♣ / A♦ A♥
       - move_stack [A♦ A♥] at (93,257) -> (187,407) :: path (93,257@0)(93,257@23)(94,258@47)(96,262@70)(99,267@93)(104,275@116)(110,285@140)(118,297@163)(126,310@186)(135,325@210)(145,339@233)(154,354@256)(162,367@280)(170,379@303)(176,389@326)(181,397@349)(184,402@373)(186,406@396)(187,407@419)(187,407@443)
-      - split [A♦ A♥] at (187,407) @0
+      - split A♦ / A♥
       - merge_stack [A♣] at (50,253) -> [2♣ 3♣'] at (187,242) /left :: path (50,253@0)(50,253@14)(51,253@28)(53,253@42)(57,252@56)(62,251@70)(70,251@84)(78,250@98)(88,248@112)(98,247@126)(108,246@141)(118,245@155)(128,243@169)(136,242@183)(144,242@197)(149,241@211)(153,240@225)(155,240@239)(156,240@253)(156,240@267)
 scenario mined_015_3♣p1_step_03
   desc: mined_015_3♣p1 step 3 (push).
@@ -6012,7 +6013,7 @@ scenario mined_016_T♣p1_step_01
   side: right
   expect:
     primitives:
-      - isolate [J♦ Q♦ K♦] at (187,92) @0
+      - isolate ( J♦ ) Q♦ K♦
       - merge_stack [J♦] at (187,92) -> [T♣'] at (187,482) /right :: path (187,92@0)(187,93@51)(187,96@103)(188,104@154)(189,118@205)(191,138@256)(193,164@308)(196,195@359)(199,230@410)(203,267@461)(206,305@513)(210,342@564)(213,377@615)(216,408@666)(218,434@718)(220,454@769)(221,468@820)(222,476@871)(222,479@923)(222,480@974)
 scenario mined_016_T♣p1_step_02
   desc: mined_016_T♣p1 step 2 (extract_absorb/peel).
@@ -6037,7 +6038,7 @@ scenario mined_016_T♣p1_step_02
   side: right
   expect:
     primitives:
-      - isolate [9♠ T♠' J♠ Q♠] at (187,332) @3
+      - isolate 9♠ T♠' J♠ ( Q♠ )
       - merge_stack [Q♠] at (286,332) -> [T♣' J♦] at (187,482) /right :: path (286,332@0)(286,332@20)(286,333@40)(285,337@60)(284,342@80)(282,349@99)(280,359@119)(278,371@139)(275,384@159)(272,399@179)(269,413@199)(266,428@219)(263,441@239)(261,453@259)(259,463@279)(257,470@298)(256,475@318)(255,479@338)(255,480@358)(255,480@378)
 scenario mined_016_T♣p1_step_03
   desc: mined_016_T♣p1 step 3 (extract_absorb/steal).
@@ -6062,7 +6063,7 @@ scenario mined_016_T♣p1_step_03
   side: right
   expect:
     primitives:
-      - isolate [Q♥ K♠ A♦] at (187,167) @2
+      - isolate Q♥ K♠ ( A♦ )
       - merge_stack [A♦] at (253,167) -> [Q♦ K♦] at (228,92) /right :: path (253,167@0)(253,167@12)(253,166@23)(254,165@35)(256,162@46)(258,158@58)(261,153@70)(264,147@81)(268,140@93)(272,132@104)(277,125@116)(281,117@128)(285,110@139)(288,104@151)(291,99@162)(293,95@174)(295,92@186)(296,91@197)(296,90@209)(296,90@220)
 scenario mined_016_T♣p1_step_04
   desc: mined_016_T♣p1 step 4 (extract_absorb/peel).
@@ -6087,7 +6088,7 @@ scenario mined_016_T♣p1_step_04
   side: right
   expect:
     primitives:
-      - isolate [A♥ 2♥ 3♥ 4♥] at (52,407) @0
+      - isolate ( A♥ ) 2♥ 3♥ 4♥
       - merge_stack [A♥] at (52,407) -> [Q♥ K♠] at (179,167) /right :: path (52,407@0)(52,407@41)(54,405@82)(58,400@123)(65,391@164)(75,378@204)(88,362@245)(104,343@286)(121,321@327)(140,298@368)(159,274@409)(178,251@450)(195,229@491)(211,210@532)(224,194@573)(234,181@613)(241,172@654)(245,167@695)(247,165@736)(247,165@777)
 scenario mined_017_5♦p1_6♦p1_step_01
   desc: mined_017_5♦p1_6♦p1 step 1 (extract_absorb/steal).
@@ -6108,9 +6109,9 @@ scenario mined_017_5♦p1_6♦p1_step_01
   side: right
   expect:
     primitives:
-      - split [7♠ 7♦ 7♣] at (52,257) @0
+      - split 7♠ / 7♦ 7♣
       - move_stack [7♦ 7♣] at (93,257) -> (112,257) :: path (93,257@0)(93,257@5)(93,257@11)(94,257@16)(94,257@21)(95,257@26)(97,257@32)(98,257@37)(100,257@42)(102,257@47)(103,257@53)(105,257@58)(107,257@63)(108,257@68)(110,257@74)(111,257@79)(111,257@84)(112,257@89)(112,257@95)(112,257@100)
-      - split [7♦ 7♣] at (112,257) @0
+      - split 7♦ / 7♣
       - merge_stack [7♦] at (110,253) -> [5♦' 6♦'] at (52,482) /right :: path (110,253@0)(110,253@30)(110,255@60)(110,260@90)(111,268@120)(111,280@149)(112,295@179)(113,313@209)(114,333@239)(115,355@269)(115,378@299)(116,400@329)(117,420@359)(118,438@389)(119,453@419)(119,465@448)(120,473@478)(120,478@508)(120,480@538)(120,480@568)
 scenario mined_017_5♦p1_6♦p1_step_02
   desc: mined_017_5♦p1_6♦p1 step 2 (free_pull).
@@ -6151,7 +6152,7 @@ scenario mined_017_5♦p1_6♦p1_step_03
   side: right
   expect:
     primitives:
-      - isolate [2♣ 3♦ 4♣ 5♥ 6♠ 7♥] at (52,407) @5
+      - isolate 2♣ 3♦ 4♣ 5♥ 6♠ ( 7♥ )
       - merge_stack [7♥] at (217,407) -> [7♠ 7♣] at (50,253) /right :: path (217,407@0)(217,407@24)(216,405@49)(214,402@73)(210,397@97)(205,389@122)(199,378@146)(191,366@170)(182,352@194)(172,337@219)(163,321@243)(153,306@267)(144,292@292)(136,280@316)(130,269@340)(125,261@365)(121,256@389)(119,253@413)(118,251@438)(118,251@462)
 scenario mined_018_2♠p1_3♥p1_step_01
   desc: mined_018_2♠p1_3♥p1 step 1 (extract_absorb/steal).
@@ -6175,9 +6176,9 @@ scenario mined_018_2♠p1_3♥p1_step_01
   side: left
   expect:
     primitives:
-      - split [A♣ A♦ A♥] at (52,257) @0
+      - split A♣ / A♦ A♥
       - move_stack [A♦ A♥] at (93,257) -> (187,407) :: path (93,257@0)(93,257@23)(94,258@47)(96,262@70)(99,267@93)(104,275@116)(110,285@140)(118,297@163)(126,310@186)(135,325@210)(145,339@233)(154,354@256)(162,367@280)(170,379@303)(176,389@326)(181,397@349)(184,402@373)(186,406@396)(187,407@419)(187,407@443)
-      - split [A♦ A♥] at (187,407) @0
+      - split A♦ / A♥
       - merge_stack [A♦] at (185,403) -> [2♠' 3♥'] at (187,242) /left :: path (185,403@0)(185,403@22)(185,401@44)(184,398@65)(183,392@87)(182,384@109)(180,373@131)(177,360@152)(175,345@174)(172,330@196)(169,313@218)(166,298@240)(164,283@261)(161,270@283)(159,259@305)(158,251@327)(157,245@349)(156,242@370)(156,240@392)(156,240@414)
 scenario mined_018_2♠p1_3♥p1_step_02
   desc: mined_018_2♠p1_3♥p1 step 2 (extract_absorb/peel).
@@ -6202,7 +6203,7 @@ scenario mined_018_2♠p1_3♥p1_step_02
   side: right
   expect:
     primitives:
-      - isolate [2♣ 3♦ 4♣ 5♥ 6♠ 7♥] at (52,332) @0
+      - isolate ( 2♣ ) 3♦ 4♣ 5♥ 6♠ 7♥
       - move_stack [A♣] at (50,253) -> (187,482) :: path (50,253@0)(50,253@35)(51,255@70)(54,260@105)(59,268@140)(66,280@176)(75,295@211)(86,314@246)(99,334@281)(112,356@316)(125,379@351)(138,401@386)(151,421@421)(162,440@456)(171,455@492)(178,467@527)(183,475@562)(186,480@597)(187,482@632)(187,482@667)
       - merge_stack [2♣] at (52,332) -> [A♣] at (187,482) /right :: path (52,332@0)(52,332@30)(54,333@59)(57,337@89)(63,342@119)(72,349@148)(83,359@178)(97,371@208)(112,384@237)(129,399@267)(145,413@297)(162,428@326)(177,441@356)(191,453@386)(202,463@415)(211,470@445)(217,475@475)(220,479@504)(222,480@534)(222,480@563)
 scenario mined_018_2♠p1_3♥p1_step_03
@@ -6228,7 +6229,7 @@ scenario mined_018_2♠p1_3♥p1_step_03
   side: right
   expect:
     primitives:
-      - isolate [3♣' 4♥' 5♠'] at (52,482) @0
+      - isolate ( 3♣' ) 4♥' 5♠'
       - merge_stack [3♣'] at (52,482) -> [A♣ 2♣] at (187,482) /right :: path (52,482@0)(52,482@27)(54,482@53)(58,482@80)(65,482@107)(76,482@134)(89,482@160)(106,481@187)(124,481@214)(144,481@240)(163,481@267)(183,481@294)(201,481@321)(218,480@347)(231,480@374)(242,480@401)(249,480@427)(253,480@454)(255,480@481)(255,480@508)
 scenario mined_018_2♠p1_3♥p1_step_04
   desc: mined_018_2♠p1_3♥p1 step 4 (push).
@@ -6274,7 +6275,7 @@ scenario mined_018_2♠p1_3♥p1_step_05
   side: left
   expect:
     primitives:
-      - isolate [K♠ A♠ 2♠ 3♠] at (26,26) @3
+      - isolate K♠ A♠ 2♠ ( 3♠ )
       - merge_stack [3♠] at (125,26) -> [4♥' 5♠'] at (93,482) /left :: path (125,26@0)(125,27@60)(124,30@121)(123,40@181)(121,56@241)(118,80@302)(113,110@362)(108,146@422)(103,187@482)(97,231@543)(90,275@603)(84,319@663)(79,360@724)(74,396@784)(69,426@844)(66,450@905)(64,466@965)(63,476@1025)(62,479@1086)(62,480@1146)
 scenario mined_019_2♦_step_01
   desc: mined_019_2♦ step 1 (extract_absorb/split_out).
@@ -6299,7 +6300,7 @@ scenario mined_019_2♦_step_01
   side: left
   expect:
     primitives:
-      - isolate [K♠ A♦ 2♣'] at (187,92) @1
+      - isolate K♠ ( A♦ ) 2♣'
       - move_stack [2♦] at (187,317) -> (220,317) :: path (187,317@0)(187,317@5)(187,317@11)(188,317@16)(189,317@21)(191,317@26)(193,317@32)(196,317@37)(199,317@42)(202,317@47)(205,317@53)(208,317@58)(211,317@63)(214,317@68)(216,317@74)(218,317@79)(219,317@84)(220,317@89)(220,317@95)(220,317@100)
       - merge_stack [A♦] at (220,92) -> [2♦] at (220,317) /left :: path (220,92@0)(220,92@30)(220,94@59)(219,99@89)(218,107@118)(216,118@148)(214,133@178)(212,151@207)(209,171@237)(206,193@267)(203,214@296)(200,236@326)(197,256@355)(195,274@385)(193,289@415)(191,300@444)(190,308@474)(189,313@504)(189,315@533)(189,315@563)
 scenario mined_019_2♦_step_02
@@ -6370,7 +6371,7 @@ scenario mined_019_2♦_step_04
   side: left
   expect:
     primitives:
-      - split [K♠ A♥ 2♣ 3♦ 4♣] at (157,92) @1
+      - split K♠ A♥ / 2♣ 3♦ 4♣
       - move_stack [K♠ A♥] at (155,88) -> (52,107) :: path (155,88@0)(155,88@14)(154,88@28)(152,89@41)(148,89@55)(143,90@69)(136,92@83)(128,93@96)(118,95@110)(109,97@124)(98,98@138)(89,100@152)(79,102@165)(71,103@179)(64,105@193)(59,106@207)(55,106@221)(53,107@234)(52,107@248)(52,107@262)
       - merge_stack [2♣'] at (228,392) -> [K♠ A♥] at (52,107) /right :: path (228,392@0)(228,392@40)(227,389@81)(225,383@121)(221,373@161)(215,358@202)(208,339@242)(199,316@282)(190,290@323)(179,263@363)(169,234@403)(158,207@444)(149,181@484)(140,158@525)(133,139@565)(127,124@605)(123,114@646)(121,108@686)(120,105@726)(120,105@767)
 scenario mined_020_2♦p1_3♣p1_step_01
@@ -6394,9 +6395,9 @@ scenario mined_020_2♦p1_3♣p1_step_01
   side: left
   expect:
     primitives:
-      - split [A♣ A♦ A♥] at (52,257) @0
+      - split A♣ / A♦ A♥
       - move_stack [A♦ A♥] at (93,257) -> (112,257) :: path (93,257@0)(93,257@5)(93,257@11)(94,257@16)(94,257@21)(95,257@26)(97,257@32)(98,257@37)(100,257@42)(102,257@47)(103,257@53)(105,257@58)(107,257@63)(108,257@68)(110,257@74)(111,257@79)(111,257@84)(112,257@89)(112,257@95)(112,257@100)
-      - split [A♦ A♥] at (112,257) @0
+      - split A♦ / A♥
       - move_stack [2♦' 3♣'] at (187,167) -> (220,167) :: path (187,167@0)(187,167@5)(187,167@11)(188,167@16)(189,167@21)(191,167@26)(193,167@32)(196,167@37)(199,167@42)(202,167@47)(205,167@53)(208,167@58)(211,167@63)(214,167@68)(216,167@74)(218,167@79)(219,167@84)(220,167@89)(220,167@95)(220,167@100)
       - merge_stack [A♣] at (50,253) -> [2♦' 3♣'] at (220,167) /left :: path (50,253@0)(50,253@22)(51,252@43)(54,250@65)(59,247@87)(66,243@108)(76,237@130)(87,230@152)(99,222@173)(113,213@195)(126,205@216)(140,196@238)(152,188@260)(163,181@281)(173,175@303)(180,171@325)(185,168@346)(188,166@368)(189,165@390)(189,165@411)
 scenario mined_020_2♦p1_3♣p1_step_02
@@ -6462,9 +6463,9 @@ scenario mined_021_8♦p1_step_01
   side: left
   expect:
     primitives:
-      - split [7♠ 7♦ 7♣] at (52,257) @2
+      - split 7♠ 7♦ / 7♣
       - move_stack [7♠ 7♦] at (44,257) -> (187,482) :: path (44,257@0)(44,257@35)(45,259@70)(48,264@105)(53,272@140)(61,284@175)(70,299@210)(82,316@246)(95,337@281)(108,358@316)(123,381@351)(136,402@386)(149,423@421)(161,440@456)(170,455@491)(178,467@526)(183,475@561)(186,480@596)(187,482@631)(187,482@666)
-      - split [7♠ 7♦] at (187,482) @0
+      - split 7♠ / 7♦
       - move_stack [8♦'] at (187,332) -> (220,332) :: path (187,332@0)(187,332@5)(187,332@11)(188,332@16)(189,332@21)(191,332@26)(193,332@32)(196,332@37)(199,332@42)(202,332@47)(205,332@53)(208,332@58)(211,332@63)(214,332@68)(216,332@74)(218,332@79)(219,332@84)(220,332@89)(220,332@95)(220,332@100)
       - merge_stack [7♣] at (122,253) -> [8♦'] at (220,332) /left :: path (122,253@0)(122,253@13)(123,254@27)(124,255@40)(126,258@54)(130,262@67)(134,267@81)(140,273@94)(146,280@107)(152,288@121)(159,295@134)(165,303@148)(171,310@161)(177,316@175)(181,321@188)(185,325@201)(187,328@215)(188,329@228)(189,330@242)(189,330@255)
 scenario mined_021_8♦p1_step_02
@@ -6493,10 +6494,10 @@ scenario mined_021_8♦p1_step_02
   side: left
   expect:
     primitives:
-      - isolate [K♠ A♠ 2♠ 3♠] at (26,26) @3
+      - isolate K♠ A♠ 2♠ ( 3♠ )
       - move_stack [4♥' 5♣' 6♦'] at (187,182) -> (220,182) :: path (187,182@0)(187,182@5)(187,182@11)(188,182@16)(189,182@21)(191,182@26)(193,182@32)(196,182@37)(199,182@42)(202,182@47)(205,182@53)(208,182@58)(211,182@63)(214,182@68)(216,182@74)(218,182@79)(219,182@84)(220,182@89)(220,182@95)(220,182@100)
       - merge_stack [3♠] at (125,26) -> [4♥' 5♣' 6♦'] at (220,182) /left :: path (125,26@0)(125,26@22)(126,28@44)(127,31@66)(129,36@88)(133,44@110)(137,54@132)(142,67@154)(148,81@176)(154,95@197)(160,111@219)(166,125@241)(172,139@263)(177,152@285)(181,162@307)(185,170@329)(187,175@351)(188,178@373)(189,180@395)(189,180@417)
-      - split [3♠ 4♥' 5♣' 6♦'] at (187,182) @3
+      - split 3♠ 4♥' 5♣' / 6♦'
       - merge_stack [6♦'] at (290,178) -> [7♣ 8♦'] at (52,257) /left :: path (290,178@0)(290,178@37)(287,179@74)(282,180@110)(272,183@147)(258,187@184)(240,192@221)(219,198@258)(195,205@295)(169,213@331)(142,220@368)(116,228@405)(92,235@442)(71,241@479)(53,246@515)(39,250@552)(29,253@589)(24,254@626)(21,255@663)(21,255@700)
 scenario mined_021_8♦p1_step_03
   desc: mined_021_8♦p1 step 3 (free_pull).
@@ -6543,7 +6544,7 @@ scenario mined_021_8♦p1_step_04
   side: right
   expect:
     primitives:
-      - isolate [2♣ 3♦ 4♣ 5♥ 6♠ 7♥] at (52,407) @5
+      - isolate 2♣ 3♦ 4♣ 5♥ 6♠ ( 7♥ )
       - merge_stack [7♥] at (217,407) -> [7♠ 7♦] at (185,478) /right :: path (217,407@0)(217,407@10)(217,408@20)(218,409@31)(219,412@41)(221,415@51)(224,420@61)(227,425@72)(230,431@82)(233,438@92)(237,445@102)(240,452@113)(243,458@123)(246,463@133)(249,468@143)(251,471@154)(252,474@164)(253,475@174)(253,476@184)(253,476@195)
 scenario mined_022_A♥p1_A♦p1_step_01
   desc: mined_022_A♥p1_A♦p1 step 1 (extract_absorb/steal).
@@ -6565,9 +6566,9 @@ scenario mined_022_A♥p1_A♦p1_step_01
   side: right
   expect:
     primitives:
-      - split [A♣ A♦ A♥] at (52,332) @0
+      - split A♣ / A♦ A♥
       - move_stack [A♦ A♥] at (93,332) -> (112,332) :: path (93,332@0)(93,332@5)(93,332@11)(94,332@16)(94,332@21)(95,332@26)(97,332@32)(98,332@37)(100,332@42)(102,332@47)(103,332@53)(105,332@58)(107,332@63)(108,332@68)(110,332@74)(111,332@79)(111,332@84)(112,332@89)(112,332@95)(112,332@100)
-      - split [A♦ A♥] at (112,332) @0
+      - split A♦ / A♥
       - merge_stack [A♣] at (50,328) -> [A♥' A♦'] at (187,182) /right :: path (50,328@0)(50,328@33)(52,327@67)(56,323@100)(64,318@133)(74,311@166)(88,301@200)(104,289@233)(123,276@266)(142,261@299)(163,247@333)(182,232@366)(201,219@399)(217,207@432)(231,197@466)(241,190@499)(249,185@532)(253,181@566)(255,180@599)(255,180@632)
 scenario mined_022_A♥p1_A♦p1_step_02
   desc: mined_022_A♥p1_A♦p1 step 2 (push).
@@ -6629,7 +6630,7 @@ scenario mined_023_3♣_step_01
   side: right
   expect:
     primitives:
-      - isolate [4♣ 5♥ 6♠ 7♥] at (52,482) @0
+      - isolate ( 4♣ ) 5♥ 6♠ 7♥
       - merge_stack [4♣] at (52,482) -> [3♣] at (187,167) /right :: path (52,482@0)(52,482@47)(54,479@95)(57,472@142)(63,461@189)(72,445@237)(83,423@284)(97,398@331)(112,370@379)(129,339@426)(145,308@473)(162,277@521)(177,249@568)(191,224@615)(202,202@663)(211,186@710)(217,175@757)(220,168@805)(222,165@852)(222,165@899)
 scenario mined_023_3♣_step_02
   desc: mined_023_3♣ step 2 (extract_absorb/steal).
@@ -6652,7 +6653,7 @@ scenario mined_023_3♣_step_02
   side: left
   expect:
     primitives:
-      - isolate [2♣ 3♦ 4♠'] at (187,92) @0
+      - isolate ( 2♣ ) 3♦ 4♠'
       - move_stack [3♣ 4♣] at (187,167) -> (220,167) :: path (187,167@0)(187,167@5)(187,167@11)(188,167@16)(189,167@21)(191,167@26)(193,167@32)(196,167@37)(199,167@42)(202,167@47)(205,167@53)(208,167@58)(211,167@63)(214,167@68)(216,167@74)(218,167@79)(219,167@84)(220,167@89)(220,167@95)(220,167@100)
       - merge_stack [2♣] at (187,92) -> [3♣ 4♣] at (220,167) /left :: path (187,92@0)(187,92@10)(187,93@19)(187,94@29)(187,97@38)(187,101@48)(187,105@58)(188,111@67)(188,118@77)(188,125@86)(188,132@96)(188,139@106)(188,146@115)(189,152@125)(189,156@135)(189,160@144)(189,163@154)(189,164@163)(189,165@173)(189,165@183)
 scenario mined_023_3♣_step_03
@@ -6696,7 +6697,7 @@ scenario mined_024_2♦_step_01
   side: right
   expect:
     primitives:
-      - isolate [K♠ A♠ 2♠ 3♠] at (26,26) @3
+      - isolate K♠ A♠ 2♠ ( 3♠ )
       - merge_stack [3♠] at (125,26) -> [2♦] at (187,257) /right :: path (125,26@0)(125,26@33)(126,28@65)(128,33@98)(131,41@131)(136,53@164)(143,68@196)(151,87@229)(159,107@262)(169,129@295)(178,152@327)(188,174@360)(196,194@393)(204,213@425)(211,228@458)(216,240@491)(219,248@524)(221,253@556)(222,255@589)(222,255@622)
 scenario mined_024_2♦_step_02
   desc: mined_024_2♦ step 2 (extract_absorb/steal).
@@ -6719,9 +6720,9 @@ scenario mined_024_2♦_step_02
   side: left
   expect:
     primitives:
-      - split [A♣ A♦ A♥] at (52,332) @0
+      - split A♣ / A♦ A♥
       - move_stack [A♦ A♥] at (93,332) -> (112,332) :: path (93,332@0)(93,332@5)(93,332@11)(94,332@16)(94,332@21)(95,332@26)(97,332@32)(98,332@37)(100,332@42)(102,332@47)(103,332@53)(105,332@58)(107,332@63)(108,332@68)(110,332@74)(111,332@79)(111,332@84)(112,332@89)(112,332@95)(112,332@100)
-      - split [A♦ A♥] at (112,332) @0
+      - split A♦ / A♥
       - move_stack [2♦ 3♠] at (187,257) -> (220,257) :: path (187,257@0)(187,257@5)(187,257@11)(188,257@16)(189,257@21)(191,257@26)(193,257@32)(196,257@37)(199,257@42)(202,257@47)(205,257@53)(208,257@58)(211,257@63)(214,257@68)(216,257@74)(218,257@79)(219,257@84)(220,257@89)(220,257@95)(220,257@100)
       - merge_stack [A♣] at (50,328) -> [2♦ 3♠] at (220,257) /left :: path (50,328@0)(50,328@21)(51,327@41)(54,326@62)(59,323@83)(66,319@103)(76,315@124)(87,309@145)(99,302@165)(113,295@186)(126,288@207)(140,281@227)(152,274@248)(163,268@269)(173,264@289)(180,260@310)(185,257@331)(188,256@351)(189,255@372)(189,255@393)
 scenario mined_024_2♦_step_03
@@ -6787,7 +6788,7 @@ scenario mined_025_T♠p1_step_01
   side: right
   expect:
     primitives:
-      - isolate [T♦ J♦ Q♦ K♦ A♦] at (52,482) @0
+      - isolate ( T♦ ) J♦ Q♦ K♦ A♦
       - merge_stack [T♦] at (52,482) -> [T♠'] at (187,332) /right :: path (52,482@0)(52,482@30)(54,480@60)(57,477@90)(63,472@120)(72,464@150)(83,454@180)(97,442@210)(112,428@240)(129,413@270)(145,399@300)(162,384@330)(177,370@360)(191,358@390)(202,348@420)(211,340@450)(217,335@480)(220,332@510)(222,330@540)(222,330@570)
 scenario mined_025_T♠p1_step_02
   desc: mined_025_T♠p1 step 2 (extract_absorb/steal).
@@ -6811,7 +6812,7 @@ scenario mined_025_T♠p1_step_02
   side: right
   expect:
     primitives:
-      - isolate [8♥ 9♠ T♥'] at (52,182) @2
+      - isolate 8♥ 9♠ ( T♥' )
       - merge_stack [T♥'] at (118,182) -> [T♠' T♦] at (187,332) /right :: path (118,182@0)(118,182@27)(119,183@53)(122,187@80)(127,192@106)(134,199@133)(143,209@159)(154,221@186)(167,234@212)(180,249@239)(193,263@265)(206,278@292)(219,291@318)(230,303@345)(239,313@372)(246,320@398)(251,325@425)(254,329@451)(255,330@478)(255,330@504)
 scenario mined_025_T♠p1_step_03
   desc: mined_025_T♠p1 step 3 (extract_absorb/steal).
@@ -6835,9 +6836,9 @@ scenario mined_025_T♠p1_step_03
   side: left
   expect:
     primitives:
-      - split [7♠ 7♦ 7♣] at (26,26) @2
+      - split 7♠ 7♦ / 7♣
       - move_stack [7♠ 7♦] at (18,26) -> (187,407) :: path (18,26@0)(18,27@55)(20,30@110)(23,38@165)(29,51@219)(38,71@274)(49,96@329)(63,127@384)(78,161@439)(94,198@494)(111,235@548)(127,272@603)(142,306@658)(156,337@713)(167,362@768)(176,382@823)(182,395@877)(185,403@932)(187,406@987)(187,407@1042)
-      - split [7♠ 7♦] at (187,407) @0
+      - split 7♠ / 7♦
       - merge_stack [7♣] at (96,22) -> [8♥ 9♠] at (44,182) /left :: path (96,22@0)(96,22@23)(95,24@47)(93,27@70)(90,32@94)(86,41@117)(81,51@141)(74,64@164)(67,78@188)(59,93@211)(50,109@235)(42,124@258)(35,138@282)(28,151@305)(23,161@329)(19,170@352)(16,175@376)(14,178@399)(13,180@423)(13,180@446)
 scenario mined_025_T♠p1_step_04
   desc: mined_025_T♠p1 step 4 (free_pull).
@@ -6884,7 +6885,7 @@ scenario mined_025_T♠p1_step_05
   side: right
   expect:
     primitives:
-      - isolate [2♣ 3♦ 4♣ 5♥ 6♠ 7♥] at (52,107) @5
+      - isolate 2♣ 3♦ 4♣ 5♥ 6♠ ( 7♥ )
       - merge_stack [7♥] at (217,107) -> [7♠ 7♦] at (185,403) /right :: path (217,107@0)(217,107@39)(217,110@78)(218,116@117)(219,126@156)(221,142@195)(224,161@234)(227,185@273)(230,211@312)(233,240@351)(237,268@390)(240,297@429)(243,323@468)(246,347@507)(249,366@546)(251,382@585)(252,392@624)(253,398@663)(253,401@702)(253,401@740)"""
       )
     , ( "wing_oracle.dsl"

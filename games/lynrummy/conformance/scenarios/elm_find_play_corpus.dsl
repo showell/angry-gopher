@@ -40,7 +40,7 @@ scenario pair_from_hand_then_peel
     primitives:
       - place_hand J♦' -> (52,272)
       - merge_hand Q♦' -> [J♦'] at (52,272) /right
-      - isolate [T♦ J♦ Q♦ K♦] at (100,100) @0
+      - isolate ( T♦ ) J♦ Q♦ K♦
       - merge_stack [T♦] at (100,100) -> [J♦' Q♦'] at (52,272) /left :: path (100,100@0)(100,100@25)(99,102@49)(98,105@74)(95,111@99)(91,120@123)(85,131@148)(79,145@173)(72,160@197)(64,177@222)(57,193@247)(49,210@271)(42,225@296)(36,239@321)(30,250@345)(26,259@370)(23,265@395)(22,268@419)(21,270@444)(21,270@469)
 scenario single_card_two_verb_plan
   desc: 4♠ from hand; the augmented board has two troubles ([J♦' Q♦'] partial + the new 4♠ singleton). BFS finds a 2-move plan — peel T♦ onto [J♦' Q♦'] completes it, then push 4♠ onto [K♠ A♠ 2♠ 3♠] as a merge_hand, consuming the hand card directly.
@@ -51,6 +51,6 @@ scenario single_card_two_verb_plan
   hand: 4♠
   expect:
     primitives:
-      - isolate [T♦ J♦ Q♦ K♦] at (100,200) @0
+      - isolate ( T♦ ) J♦ Q♦ K♦
       - merge_stack [T♦] at (100,200) -> [J♦' Q♦'] at (100,300) /left :: path (100,200@0)(100,200@14)(100,201@27)(99,203@41)(98,206@54)(96,212@68)(94,218@81)(92,226@95)(89,235@108)(86,244@122)(83,254@135)(80,263@149)(77,272@162)(75,280@176)(73,286@189)(71,292@203)(70,295@216)(69,297@230)(69,298@243)(69,298@257)
       - merge_hand 4♠ -> [K♠ A♠ 2♠ 3♠] at (100,100) /right

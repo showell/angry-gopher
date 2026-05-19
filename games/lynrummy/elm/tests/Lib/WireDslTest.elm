@@ -32,10 +32,26 @@ suite =
 literalShapes : Test
 literalShapes =
     describe "encoder literal output"
-        [ test "split" <|
+        [ test "split (leftSplit branch)" <|
             \_ ->
-                GameEvent.splitDsl 42 sampleStackAceTwoThree 1
-                    |> Expect.equal "42) split [A♥ 2♥ 3♥'] at (10,53) @1"
+                GameEvent.splitDsl 42 sampleStackAceTwoThree 0
+                    |> Expect.equal "42) split A♥ / 2♥ 3♥'"
+        , test "split (rightSplit branch)" <|
+            \_ ->
+                GameEvent.splitDsl 42 sampleStackAceTwoThree 2
+                    |> Expect.equal "42) split A♥ 2♥ / 3♥'"
+        , test "isolate interior" <|
+            \_ ->
+                GameEvent.isolateDsl 43 sampleStackAceTwoThree 1
+                    |> Expect.equal "43) isolate A♥ ( 2♥ ) 3♥'"
+        , test "isolate left end" <|
+            \_ ->
+                GameEvent.isolateDsl 44 sampleStackAceTwoThree 0
+                    |> Expect.equal "44) isolate ( A♥ ) 2♥ 3♥'"
+        , test "isolate right end" <|
+            \_ ->
+                GameEvent.isolateDsl 45 sampleStackAceTwoThree 2
+                    |> Expect.equal "45) isolate A♥ 2♥ ( 3♥' )"
         , test "merge_stack with path" <|
             \_ ->
                 GameEvent.mergeStackDsl 43 sampleStackFour sampleStackAceTwoThree Right samplePath
@@ -72,18 +88,55 @@ literalShapes =
 roundTrips : Test
 roundTrips =
     describe "encoder → parser round-trip"
-        [ test "split" <|
+        [ test "split (leftSplit branch)" <|
             \_ ->
                 let
                     encoded =
-                        GameEvent.splitDsl 1 sampleStackAceTwoThree 1
+                        GameEvent.splitDsl 1 sampleStackAceTwoThree 0
                 in
                 WA.parseDsl encoded
                     |> Expect.equal
                         (Ok
                             { seq = 1
                             , event =
-                                Split { stack = sampleStackAceTwoThree, cardIndex = 1 }
+                                Split
+                                    { stack = stackWithDefaultLoc sampleStackAceTwoThree
+                                    , cardIndex = 0
+                                    }
+                            }
+                        )
+        , test "split (rightSplit branch)" <|
+            \_ ->
+                let
+                    encoded =
+                        GameEvent.splitDsl 2 sampleStackAceTwoThree 2
+                in
+                WA.parseDsl encoded
+                    |> Expect.equal
+                        (Ok
+                            { seq = 2
+                            , event =
+                                Split
+                                    { stack = stackWithDefaultLoc sampleStackAceTwoThree
+                                    , cardIndex = 2
+                                    }
+                            }
+                        )
+        , test "isolate" <|
+            \_ ->
+                let
+                    encoded =
+                        GameEvent.isolateDsl 9 sampleStackAceTwoThree 1
+                in
+                WA.parseDsl encoded
+                    |> Expect.equal
+                        (Ok
+                            { seq = 9
+                            , event =
+                                Isolate
+                                    { stack = stackWithDefaultLoc sampleStackAceTwoThree
+                                    , cardIndex = 1
+                                    }
                             }
                         )
         , test "merge_stack" <|
@@ -164,12 +217,15 @@ roundTrips =
                     |> Expect.equal (Ok { seq = 7, event = Undo })
         , test "parser accepts ASCII suit chars too" <|
             \_ ->
-                WA.parseDsl "8) split [AH 2H 3H'] at (10,53) @1"
+                WA.parseDsl "8) split AH / 2H 3H'"
                     |> Expect.equal
                         (Ok
                             { seq = 8
                             , event =
-                                Split { stack = sampleStackAceTwoThree, cardIndex = 1 }
+                                Split
+                                    { stack = stackWithDefaultLoc sampleStackAceTwoThree
+                                    , cardIndex = 0
+                                    }
                             }
                         )
         ]
@@ -188,6 +244,15 @@ sampleStackAceTwoThree =
         ]
     , loc = { left = 10, top = 53 }
     }
+
+
+{-| split / isolate wire shapes no longer carry a loc; the parser
+defaults to (0,0). Downstream `findStack` matches by card content
+so the loc difference doesn't matter at runtime, but the round-trip
+test has to expect the default. -}
+stackWithDefaultLoc : CardStack -> CardStack
+stackWithDefaultLoc s =
+    { s | loc = { left = 0, top = 0 } }
 
 
 sampleStackFour : CardStack

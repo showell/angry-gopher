@@ -23,7 +23,7 @@ scenario undo_walkthrough_split_then_move
       expect_undoable: false
     step_2:
       desc: player splits the K♠-A♠-2♠-3♠ run at the midpoint
-      action: split [K♠ A♠ 2♠ 3♠]@2
+      action: split K♠ A♠ / 2♠ 3♠
       expect_board_count: 7
       expect_undoable: true
     step_3:
@@ -198,11 +198,11 @@ scenario undo_split_piece_returns_to_split_position
       expect_board_count: 2
       expect_undoable: false
     step_2:
-      desc: player splits K♠-A♠-2♠-3♠ at midpoint — 2♠-3♠ lands at its split position (top=16, left=140)
-      action: split [K♠ A♠ 2♠ 3♠]@2
+      desc: player splits K♠-A♠-2♠-3♠ at midpoint — 2♠-3♠ lands at its leftSplit position (top=20, left=144)
+      action: split K♠ A♠ / 2♠ 3♠
       expect_board_count: 3
       expect_undoable: true
-      expect_loc: (140,16)
+      expect_loc: (144,20)
     step_3:
       desc: player moves the 2♠-3♠ piece to a distant spot
       action: move_stack [2♠ 3♠] -> (400,500)
@@ -214,7 +214,7 @@ scenario undo_split_piece_returns_to_split_position
       action: undo
       expect_board_count: 3
       expect_undoable: true
-      expect_loc: (140,16)
+      expect_loc: (144,20)
     step_5:
       desc: undo the split — K♠-A♠-2♠-3♠ reassembled at original position
       action: undo

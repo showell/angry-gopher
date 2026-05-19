@@ -4,8 +4,8 @@
 // canonical shape — the action-log format spoken by
 // `Lib.GameEvent` / `Lib.WireAction` on the Elm side:
 //
-//   split [<cards>] at (<l>,<t>) @<index>
-//   isolate [<cards>] at (<l>,<t>) @<index>
+//   split <left-cards> / <right-cards>
+//   isolate <before-cards> ( <held-card> ) <after-cards>
 //   merge_stack [<src>] at (<l>,<t>) -> [<tgt>] at (<l>,<t>) /<side> :: path (...)
 //   merge_hand <card> -> [<tgt>] at (<l>,<t>) /<side>
 //   move_stack [<cards>] at (<l>,<t>) -> (<l>,<t>) :: path (...)
@@ -14,7 +14,12 @@
 // Conventions across every emitter:
 //   - Coordinates as (left, top) — left first.
 //   - Card glyphs as Unicode suits (♣ ♦ ♠ ♥); deck-2 trailing `'`.
-//   - Stack references always carry their `at (l,t)`.
+//   - split and isolate show their result chunks directly (no loc
+//     needed — cards uniquely identify the source stack). The held
+//     card in isolate is parenthesized, so end positions look like:
+//       isolate ( <held> ) <after>     (held at left end)
+//       isolate <before> ( <held> )    (held at right end)
+//   - Other stack references carry `[cards] at (l,t)`.
 //   - merge_stack and move_stack always carry their `:: path (...)`
 //     suffix — the Elm animator requires a non-empty path; the
 //     primitive type carries it as `BoardPath` (non-empty by
@@ -35,10 +40,15 @@ import type { BoardPath } from "../geometry/synthesize_board_paths.ts";
  *  applyLocally) before formatting the next. */
 export function formatPrimitive(p: Primitive, board: readonly BoardStack[]): string {
   switch (p.action) {
-    case "split":
-      return `split ${formatStackRef(board[p.stackIndex]!)} @${p.cardIndex}`;
-    case "isolate":
-      return `isolate ${formatStackRef(board[p.stackIndex]!)} @${p.cardIndex}`;
+    case "split": {
+      const cards = board[p.stackIndex]!.cards;
+      const leftCount = splitLeftCount(p.cardIndex, cards.length);
+      return `split ${formatCardList(cards.slice(0, leftCount))} / ${formatCardList(cards.slice(leftCount))}`;
+    }
+    case "isolate": {
+      const cards = board[p.stackIndex]!.cards;
+      return formatIsolateLine(cards, p.cardIndex);
+    }
     case "merge_stack":
       return `merge_stack ${formatStackRef(board[p.sourceStack]!)} -> ${formatStackRef(board[p.targetStack]!)} /${p.side}${formatPathSuffix(p.path)}`;
     case "merge_hand":
@@ -48,6 +58,31 @@ export function formatPrimitive(p: Primitive, board: readonly BoardStack[]): str
     case "place_hand":
       return `place_hand ${cardLabel(p.handCard)} -> ${formatLoc(p.loc)}`;
   }
+}
+
+/** Number of cards in the LEFT piece after a split at `cardIndex`
+ *  of a stack of size `n`. Mirrors the asymmetric rule in
+ *  primitives.ts:applySplit and Lib.CardStack.split: leftSplit if
+ *  the cut sits in the first half, rightSplit otherwise. */
+export function splitLeftCount(cardIndex: number, n: number): number {
+  return cardIndex + 1 <= Math.floor(n / 2) ? cardIndex + 1 : cardIndex;
+}
+
+/** Inverse of splitLeftCount — recover the GameEvent cardIndex
+ *  from the left-piece length emitted on the wire. */
+export function splitCardIndexFromLeftCount(leftCount: number, n: number): number {
+  return leftCount <= Math.floor(n / 2) ? leftCount - 1 : leftCount;
+}
+
+function formatIsolateLine(cards: readonly Card[], ci: number): string {
+  const before = formatCardList(cards.slice(0, ci));
+  const held = cardLabel(cards[ci]!);
+  const after = formatCardList(cards.slice(ci + 1));
+  let s = "isolate";
+  if (before.length > 0) s += " " + before;
+  s += " ( " + held + " )";
+  if (after.length > 0) s += " " + after;
+  return s;
 }
 
 /** Seq-number prefix used by transcripts and the action log:

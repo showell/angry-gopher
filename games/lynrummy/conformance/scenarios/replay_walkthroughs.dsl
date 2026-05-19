@@ -18,11 +18,11 @@ scenario walkthrough_mined_001_4♠_4♣p1
     at (187,167): T♠ T♣' T♦
     at (187,332): 4♠ 4♣'
   actions:
-    - split [2♦' 3♠' 4♦']@2
+    - split 2♦' 3♠' / 4♦'
     - merge_stack [4♦'] -> [4♠ 4♣'] /right
-    - split [A♣ A♦ A♥]@0
+    - split A♣ / A♦ A♥
     - move_stack [A♦ A♥] -> (187,407)
-    - split [A♦ A♥]@0
+    - split A♦ / A♥
     - merge_stack [A♣] -> [2♦' 3♠'] /left
     - merge_stack [A♦] -> [2♣ 3♦ 4♣ 5♥ 6♠ 7♥] /left
     - move_stack [2♥ 3♥ 4♥] -> (220,482)
@@ -47,15 +47,15 @@ scenario walkthrough_mined_002_Q♦p1
     at (187,317): 5♣ 5♦ 5♥
     at (187,392): Q♦'
   actions:
-    - split [A♦ 2♣ 3♦ 4♣]@0
+    - split A♦ / 2♣ 3♦ 4♣
     - move_stack [J♦ Q♦ K♦] -> (187,467)
     - merge_stack [A♦] -> [J♦ Q♦ K♦] /right
-    - split [J♦ Q♦ K♦ A♦]@0
+    - split J♦ / Q♦ K♦ A♦
     - move_stack [Q♦'] -> (85,257)
     - merge_stack [J♦] -> [Q♦'] /left
-    - split [K♦' K♥' K♠]@0
+    - split K♦' / K♥' K♠
     - move_stack [K♥' K♠] -> (187,392)
-    - split [K♥' K♠]@0
+    - split K♥' / K♠
     - merge_stack [K♦'] -> [J♦ Q♦'] /right
     - merge_stack [K♥'] -> [A♣ 2♦' 3♠'] /left
     - merge_stack [K♠] -> [A♠ 2♠ 3♠] /left
@@ -79,14 +79,14 @@ scenario walkthrough_mined_003_6♦
     at (187,407): K♦' K♣' K♠
     at (187,482): 6♦
   actions:
-    - split [7♠ 7♦ 7♣]@2
+    - split 7♠ 7♦ / 7♣
     - move_stack [7♠ 7♦] -> (247,242)
-    - split [7♠ 7♦]@0
+    - split 7♠ / 7♦
     - merge_stack [7♣] -> [6♦] /right
     - move_stack [8♦' 9♣ T♦] -> (358,482)
     - merge_stack [6♦ 7♣] -> [8♦' 9♣ T♦] /left
     - merge_stack [7♦] -> [7♠] /right
-    - split [3♦ 4♣ 5♥ 6♠ 7♥]@4
+    - split 3♦ 4♣ 5♥ 6♠ / 7♥
     - merge_stack [7♥] -> [7♠ 7♦] /right
   expect:
     final_board_victory: true
@@ -104,12 +104,12 @@ scenario walkthrough_mined_004_5♣_6♦p1
     at (52,482): 4♠' 5♦' 6♣
     at (187,182): 5♣ 6♦'
   actions:
-    - split [7♠ 7♦ 7♣]@2
+    - split 7♠ 7♦ / 7♣
     - move_stack [7♠ 7♦] -> (187,257)
-    - split [7♠ 7♦]@0
+    - split 7♠ / 7♦
     - merge_stack [7♣] -> [5♣ 6♦'] /right
     - merge_stack [7♦] -> [7♠] /right
-    - split [2♣ 3♦ 4♣ 5♥ 6♠ 7♥]@5
+    - split 2♣ 3♦ 4♣ 5♥ 6♠ / 7♥
     - merge_stack [7♥] -> [7♠ 7♦] /right
   expect:
     final_board_victory: true
@@ -128,11 +128,11 @@ scenario walkthrough_mined_005_2♥p1
     at (187,182): 7♠ 7♦ 7♥
     at (187,257): 2♥'
   actions:
-    - split [K♠ A♠ 2♠ 3♠]@3
+    - split K♠ A♠ 2♠ / 3♠
     - merge_stack [3♠] -> [2♥'] /right
-    - split [A♣ A♦ A♥]@0
+    - split A♣ / A♦ A♥
     - move_stack [A♦ A♥] -> (187,332)
-    - split [A♦ A♥]@0
+    - split A♦ / A♥
     - merge_stack [A♣] -> [2♥' 3♠] /left
     - merge_stack [A♦] -> [T♦ J♦ Q♦ K♦] /right
     - merge_stack [A♥] -> [2♥ 3♥ 4♥] /left
@@ -155,10 +155,10 @@ scenario walkthrough_mined_006_6♣p1
     at (187,242): A♣' 2♥' 3♠ 4♥
     at (187,407): 6♣'
   actions:
-    - split [3♦ 4♣ 5♥ 6♠]@3
+    - split 3♦ 4♣ 5♥ / 6♠
     - merge_stack [6♠] -> [6♣'] /right
-    - split [5♣ 6♦' 7♣]@0
-    - split [6♦' 7♣]@0
+    - split 5♣ / 6♦' 7♣
+    - split 6♦' / 7♣
     - merge_stack [6♦'] -> [6♣' 6♠] /right
     - merge_stack [5♣] -> [A♣' 2♥' 3♠ 4♥] /right
     - move_stack [7♠ 7♦ 7♥] -> (187,482)
@@ -179,12 +179,12 @@ scenario walkthrough_mined_007_5♣p1_6♣
     at (52,482): 9♥' T♣' J♥
     at (187,182): 5♣' 6♣
   actions:
-    - split [7♠ 7♦ 7♣]@2
+    - split 7♠ 7♦ / 7♣
     - move_stack [7♠ 7♦] -> (187,257)
-    - split [7♠ 7♦]@0
+    - split 7♠ / 7♦
     - merge_stack [7♣] -> [5♣' 6♣] /right
     - merge_stack [7♦] -> [7♠] /right
-    - split [2♣ 3♦ 4♣ 5♥ 6♠ 7♥]@5
+    - split 2♣ 3♦ 4♣ 5♥ 6♠ / 7♥
     - merge_stack [7♥] -> [7♠ 7♦] /right
   expect:
     final_board_victory: true
@@ -204,10 +204,10 @@ scenario walkthrough_mined_008_Q♥p1
     at (187,167): J♠' Q♠' K♠
     at (187,242): Q♥'
   actions:
-    - split [J♠' Q♠' K♠]@0
+    - split J♠' / Q♠' K♠
     - move_stack [Q♥'] -> (220,242)
     - merge_stack [J♠'] -> [Q♥'] /left
-    - split [T♦ J♦ Q♦ K♦]@0
+    - split T♦ / J♦ Q♦ K♦
     - move_stack [J♠' Q♥'] -> (220,242)
     - merge_stack [T♦] -> [J♠' Q♥'] /left
     - move_stack [A♠ 2♠ 3♠] -> (253,92)
@@ -230,10 +230,10 @@ scenario walkthrough_mined_009_J♣
     at (187,167): 2♥ 3♥ 4♥ 5♥'
     at (187,332): J♣
   actions:
-    - split [9♠ T♦ J♠' Q♥']@3
+    - split 9♠ T♦ J♠' / Q♥'
     - merge_stack [Q♥'] -> [J♣] /right
-    - split [Q♠' K♠ A♠ 2♠ 3♠]@0
-    - split [K♠ A♠ 2♠ 3♠]@0
+    - split Q♠' / K♠ A♠ 2♠ 3♠
+    - split K♠ / A♠ 2♠ 3♠
     - merge_stack [K♠] -> [J♣ Q♥'] /right
     - move_stack [9♥' T♣' J♥] -> (187,407)
     - merge_stack [Q♠'] -> [9♥' T♣' J♥] /right
@@ -256,15 +256,15 @@ scenario walkthrough_mined_010_3♥p1
     at (187,242): T♣' J♦' Q♠
     at (187,317): 3♥'
   actions:
-    - split [2♣ 3♦ 4♣ 5♥ 6♠]@0
+    - split 2♣ / 3♦ 4♣ 5♥ 6♠
     - move_stack [3♥'] -> (220,317)
     - merge_stack [2♣] -> [3♥'] /left
-    - split [A♣ A♦ A♥]@0
+    - split A♣ / A♦ A♥
     - move_stack [A♦ A♥] -> (187,482)
-    - split [A♦ A♥]@0
+    - split A♦ / A♥
     - move_stack [2♣ 3♥'] -> (220,317)
     - merge_stack [A♦] -> [2♣ 3♥'] /left
-    - split [T♦ J♦ Q♦ K♦]@3
+    - split T♦ J♦ Q♦ / K♦
     - merge_stack [K♦] -> [A♣] /left
     - merge_stack [K♦ A♣] -> [T♣' J♦' Q♠] /right
     - merge_stack [A♥] -> [2♥ 3♥ 4♥] /left
@@ -288,12 +288,12 @@ scenario walkthrough_mined_011_J♣
     at (187,317): 3♦ 4♦ 5♦'
     at (187,392): J♣
   actions:
-    - split [T♣' J♦' Q♠ K♦ A♣]@0
+    - split T♣' / J♦' Q♠ K♦ A♣
     - move_stack [J♣] -> (220,392)
     - merge_stack [T♣'] -> [J♣] /left
-    - split [9♥' 9♣ 9♦]@0
+    - split 9♥' / 9♣ 9♦
     - move_stack [9♣ 9♦] -> (262,467)
-    - split [9♣ 9♦]@0
+    - split 9♣ / 9♦
     - move_stack [T♣' J♣] -> (220,392)
     - merge_stack [9♣] -> [T♣' J♣] /left
     - merge_stack [9♥'] -> [6♣' 7♥ 8♠] /right
@@ -314,9 +314,9 @@ scenario walkthrough_mined_012_Q♣_K♣
     at (52,482): 4♦' 5♠ 6♦'
     at (187,182): Q♣ K♣
   actions:
-    - split [A♣ A♦ A♥]@0
+    - split A♣ / A♦ A♥
     - move_stack [A♦ A♥] -> (112,332)
-    - split [A♦ A♥]@0
+    - split A♦ / A♥
     - merge_stack [A♣] -> [Q♣ K♣] /right
     - merge_stack [A♦] -> [T♦ J♦ Q♦ K♦] /right
     - merge_stack [A♥] -> [2♥ 3♥ 4♥] /left
@@ -338,15 +338,15 @@ scenario walkthrough_mined_013_A♥p1
     at (187,257): T♣' J♥ Q♣
     at (187,332): A♥'
   actions:
-    - split [K♠ A♠ 2♠ 3♠]@0
+    - split K♠ / A♠ 2♠ 3♠
     - move_stack [A♥'] -> (220,332)
     - merge_stack [K♠] -> [A♥'] /left
-    - split [A♠ 2♠ 3♠]@0
-    - split [2♠ 3♠]@0
+    - split A♠ / 2♠ 3♠
+    - split 2♠ / 3♠
     - merge_stack [2♠] -> [K♠ A♥'] /right
     - merge_stack [A♠] -> [2♦ 3♣' 4♦' 5♠ 6♦'] /left
     - move_stack [A♠ 2♦ 3♣' 4♦' 5♠ 6♦'] -> (52,407)
-    - split [A♠ 2♦ 3♣' 4♦' 5♠ 6♦']@1
+    - split A♠ 2♦ / 3♣' 4♦' 5♠ 6♦'
     - move_stack [A♠ 2♦] -> (247,167)
     - merge_stack [3♠] -> [A♠ 2♦] /right
   expect:
@@ -368,14 +368,14 @@ scenario walkthrough_mined_014_5♣
     at (187,407): A♠ 2♦ 3♠
     at (187,482): 5♣
   actions:
-    - split [3♣' 4♦' 5♠ 6♦']@3
+    - split 3♣' 4♦' 5♠ / 6♦'
     - merge_stack [6♦'] -> [5♣] /right
-    - split [7♠ 7♦ 7♣]@2
+    - split 7♠ 7♦ / 7♣
     - move_stack [7♠ 7♦] -> (247,92)
-    - split [7♠ 7♦]@0
+    - split 7♠ / 7♦
     - merge_stack [7♣] -> [5♣ 6♦'] /right
     - merge_stack [7♦] -> [7♠] /right
-    - split [3♦ 4♣ 5♥ 6♠ 7♥]@4
+    - split 3♦ 4♣ 5♥ 6♠ / 7♥
     - merge_stack [7♥] -> [7♠ 7♦] /right
   expect:
     final_board_victory: true
@@ -395,12 +395,12 @@ scenario walkthrough_mined_015_3♣p1
     at (187,167): 2♥' 2♣' 2♦
     at (187,242): 3♣'
   actions:
-    - split [2♣ 3♦ 4♣ 5♥ 6♠ 7♥]@0
+    - split 2♣ / 3♦ 4♣ 5♥ 6♠ 7♥
     - move_stack [3♣'] -> (220,242)
     - merge_stack [2♣] -> [3♣'] /left
-    - split [A♣ A♦ A♥]@0
+    - split A♣ / A♦ A♥
     - move_stack [A♦ A♥] -> (187,407)
-    - split [A♦ A♥]@0
+    - split A♦ / A♥
     - merge_stack [A♣] -> [2♣ 3♣'] /left
     - merge_stack [A♦] -> [J♦ Q♦ K♦] /right
     - merge_stack [A♥] -> [2♥ 3♥ 4♥] /left
@@ -423,13 +423,13 @@ scenario walkthrough_mined_016_T♣p1
     at (187,332): 9♠ T♠' J♠ Q♠
     at (187,482): T♣'
   actions:
-    - split [J♦ Q♦ K♦]@0
+    - split J♦ / Q♦ K♦
     - merge_stack [J♦] -> [T♣'] /right
-    - split [9♠ T♠' J♠ Q♠]@3
+    - split 9♠ T♠' J♠ / Q♠
     - merge_stack [Q♠] -> [T♣' J♦] /right
-    - split [Q♥ K♠ A♦]@2
+    - split Q♥ K♠ / A♦
     - merge_stack [A♦] -> [Q♦ K♦] /right
-    - split [A♥ 2♥ 3♥ 4♥]@0
+    - split A♥ / 2♥ 3♥ 4♥
     - merge_stack [A♥] -> [Q♥ K♠] /right
   expect:
     final_board_victory: true
@@ -446,12 +446,12 @@ scenario walkthrough_mined_017_5♦p1_6♦p1
     at (52,407): 2♣ 3♦ 4♣ 5♥ 6♠ 7♥
     at (52,482): 5♦' 6♦'
   actions:
-    - split [7♠ 7♦ 7♣]@0
+    - split 7♠ / 7♦ 7♣
     - move_stack [7♦ 7♣] -> (112,257)
-    - split [7♦ 7♣]@0
+    - split 7♦ / 7♣
     - merge_stack [7♦] -> [5♦' 6♦'] /right
     - merge_stack [7♣] -> [7♠] /right
-    - split [2♣ 3♦ 4♣ 5♥ 6♠ 7♥]@5
+    - split 2♣ 3♦ 4♣ 5♥ 6♠ / 7♥
     - merge_stack [7♥] -> [7♠ 7♣] /right
   expect:
     final_board_victory: true
@@ -471,17 +471,17 @@ scenario walkthrough_mined_018_2♠p1_3♥p1
     at (187,167): T♠ T♣ T♦
     at (187,242): 2♠' 3♥'
   actions:
-    - split [A♣ A♦ A♥]@0
+    - split A♣ / A♦ A♥
     - move_stack [A♦ A♥] -> (187,407)
-    - split [A♦ A♥]@0
+    - split A♦ / A♥
     - merge_stack [A♦] -> [2♠' 3♥'] /left
-    - split [2♣ 3♦ 4♣ 5♥ 6♠ 7♥]@0
+    - split 2♣ / 3♦ 4♣ 5♥ 6♠ 7♥
     - move_stack [A♣] -> (187,482)
     - merge_stack [2♣] -> [A♣] /right
-    - split [3♣' 4♥' 5♠']@0
+    - split 3♣' / 4♥' 5♠'
     - merge_stack [3♣'] -> [A♣ 2♣] /right
     - merge_stack [A♥] -> [2♥ 3♥ 4♥] /left
-    - split [K♠ A♠ 2♠ 3♠]@3
+    - split K♠ A♠ 2♠ / 3♠
     - merge_stack [3♠] -> [4♥' 5♠'] /left
   expect:
     final_board_victory: true
@@ -502,15 +502,15 @@ scenario walkthrough_mined_019_2♦
     at (187,242): A♥ 2♣ 3♦ 4♣
     at (187,317): 2♦
   actions:
-    - split [K♠ A♦ 2♣']@0
-    - split [A♦ 2♣']@0
+    - split K♠ / A♦ 2♣'
+    - split A♦ / 2♣'
     - move_stack [2♦] -> (220,317)
     - merge_stack [A♦] -> [2♦] /left
     - move_stack [J♦ Q♦ K♦] -> (187,467)
     - merge_stack [A♦ 2♦] -> [J♦ Q♦ K♦] /right
     - move_stack [A♥ 2♣ 3♦ 4♣] -> (220,242)
     - merge_stack [K♠] -> [A♥ 2♣ 3♦ 4♣] /left
-    - split [K♠ A♥ 2♣ 3♦ 4♣]@1
+    - split K♠ A♥ / 2♣ 3♦ 4♣
     - move_stack [K♠ A♥] -> (52,107)
     - merge_stack [2♣'] -> [K♠ A♥] /right
   expect:
@@ -530,9 +530,9 @@ scenario walkthrough_mined_020_2♦p1_3♣p1
     at (187,92): 9♦ 9♣' 9♠'
     at (187,167): 2♦' 3♣'
   actions:
-    - split [A♣ A♦ A♥]@0
+    - split A♣ / A♦ A♥
     - move_stack [A♦ A♥] -> (112,257)
-    - split [A♦ A♥]@0
+    - split A♦ / A♥
     - move_stack [2♦' 3♣'] -> (220,167)
     - merge_stack [A♣] -> [2♦' 3♣'] /left
     - merge_stack [A♦] -> [2♣ 3♦ 4♣ 5♥ 6♠ 7♥] /left
@@ -555,18 +555,18 @@ scenario walkthrough_mined_021_8♦p1
     at (187,257): 6♠' 7♥' 8♣' 9♥
     at (187,332): 8♦'
   actions:
-    - split [7♠ 7♦ 7♣]@2
+    - split 7♠ 7♦ / 7♣
     - move_stack [7♠ 7♦] -> (187,482)
-    - split [7♠ 7♦]@0
+    - split 7♠ / 7♦
     - move_stack [8♦'] -> (220,332)
     - merge_stack [7♣] -> [8♦'] /left
-    - split [K♠ A♠ 2♠ 3♠]@3
+    - split K♠ A♠ 2♠ / 3♠
     - move_stack [4♥' 5♣' 6♦'] -> (220,182)
     - merge_stack [3♠] -> [4♥' 5♣' 6♦'] /left
-    - split [3♠ 4♥' 5♣' 6♦']@3
+    - split 3♠ 4♥' 5♣' / 6♦'
     - merge_stack [6♦'] -> [7♣ 8♦'] /left
     - merge_stack [7♦] -> [7♠] /right
-    - split [2♣ 3♦ 4♣ 5♥ 6♠ 7♥]@5
+    - split 2♣ 3♦ 4♣ 5♥ 6♠ / 7♥
     - merge_stack [7♥] -> [7♠ 7♦] /right
   expect:
     final_board_victory: true
@@ -584,9 +584,9 @@ scenario walkthrough_mined_022_A♥p1_A♦p1
     at (52,482): 9♣ T♥ J♠
     at (187,182): A♥' A♦'
   actions:
-    - split [A♣ A♦ A♥]@0
+    - split A♣ / A♦ A♥
     - move_stack [A♦ A♥] -> (112,332)
-    - split [A♦ A♥]@0
+    - split A♦ / A♥
     - merge_stack [A♣] -> [A♥' A♦'] /right
     - merge_stack [A♦] -> [T♦ J♦ Q♦ K♦] /right
     - merge_stack [A♥] -> [2♥ 3♥ 4♥] /left
@@ -607,9 +607,9 @@ scenario walkthrough_mined_023_3♣
     at (187,92): 2♣ 3♦ 4♠'
     at (187,167): 3♣
   actions:
-    - split [4♣ 5♥ 6♠ 7♥]@0
+    - split 4♣ / 5♥ 6♠ 7♥
     - merge_stack [4♣] -> [3♣] /right
-    - split [2♣ 3♦ 4♠']@0
+    - split 2♣ / 3♦ 4♠'
     - move_stack [3♣ 4♣] -> (220,167)
     - merge_stack [2♣] -> [3♣ 4♣] /left
     - merge_stack [3♦ 4♠'] -> [5♥ 6♠ 7♥] /left
@@ -630,11 +630,11 @@ scenario walkthrough_mined_024_2♦
     at (187,182): 9♣ T♥ J♣
     at (187,257): 2♦
   actions:
-    - split [K♠ A♠ 2♠ 3♠]@3
+    - split K♠ A♠ 2♠ / 3♠
     - merge_stack [3♠] -> [2♦] /right
-    - split [A♣ A♦ A♥]@0
+    - split A♣ / A♦ A♥
     - move_stack [A♦ A♥] -> (112,332)
-    - split [A♦ A♥]@0
+    - split A♦ / A♥
     - move_stack [2♦ 3♠] -> (220,257)
     - merge_stack [A♣] -> [2♦ 3♠] /left
     - merge_stack [A♦] -> [T♦ J♦ Q♦ K♦] /right
@@ -657,16 +657,16 @@ scenario walkthrough_mined_025_T♠p1
     at (187,257): 4♦ 4♠' 4♥
     at (187,332): T♠'
   actions:
-    - split [T♦ J♦ Q♦ K♦ A♦]@0
+    - split T♦ / J♦ Q♦ K♦ A♦
     - merge_stack [T♦] -> [T♠'] /right
-    - split [8♥ 9♠ T♥']@2
+    - split 8♥ 9♠ / T♥'
     - merge_stack [T♥'] -> [T♠' T♦] /right
-    - split [7♠ 7♦ 7♣]@2
+    - split 7♠ 7♦ / 7♣
     - move_stack [7♠ 7♦] -> (187,407)
-    - split [7♠ 7♦]@0
+    - split 7♠ / 7♦
     - merge_stack [7♣] -> [8♥ 9♠] /left
     - merge_stack [7♦] -> [7♠] /right
-    - split [2♣ 3♦ 4♣ 5♥ 6♠ 7♥]@5
+    - split 2♣ 3♦ 4♣ 5♥ 6♠ / 7♥
     - merge_stack [7♥] -> [7♠ 7♦] /right
   expect:
     final_board_victory: true

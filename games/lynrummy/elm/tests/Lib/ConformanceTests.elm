@@ -1117,6 +1117,7 @@ buildActionLog initialState specs =
 
 type ReplaySpec
     = SpecSplit (List Card) Int
+    | SpecIsolate (List Card) Int
     | SpecMergeStack (List Card) (List Card) Side
     | SpecMoveStack (List Card) BoardLocation
     | SpecCompleteTurn
@@ -1134,6 +1135,9 @@ parseReplaySpec raw =
     else if String.startsWith "split " s then
         parseSplit (String.dropLeft 6 s)
 
+    else if String.startsWith "isolate " s then
+        parseIsolate (String.dropLeft 8 s)
+
     else if String.startsWith "merge_stack " s then
         parseMergeStack (String.dropLeft 12 s)
 
@@ -1146,18 +1150,103 @@ parseReplaySpec raw =
 
 parseSplit : String -> Maybe ReplaySpec
 parseSplit body =
-    -- "[cards]@idx"
-    case splitOnLast "@" body of
-        Just ( head, tail ) ->
-            case ( parseBracketCards head, String.toInt (String.trim tail) ) of
-                ( Just cards, Just idx ) ->
-                    Just (SpecSplit cards idx)
+    -- "<left-cards> / <right-cards>"
+    case splitOnSlash body of
+        [ leftStr, rightStr ] ->
+            Maybe.map2
+                (\left right ->
+                    let
+                        cards =
+                            left ++ right
 
-                _ ->
-                    Nothing
+                        cardIndex =
+                            GameEvent.splitCardIndexFromLeftCount
+                                (List.length left)
+                                (List.length cards)
+                    in
+                    SpecSplit cards cardIndex
+                )
+                (parseLooseCards leftStr)
+                (parseLooseCards rightStr)
+
+        _ ->
+            Nothing
+
+
+parseIsolate : String -> Maybe ReplaySpec
+parseIsolate body =
+    -- "<before> ( <held> ) <after>"
+    case splitOnParens body of
+        Just parts ->
+            Maybe.map3
+                (\before held after ->
+                    Maybe.map
+                        (\heldCard ->
+                            SpecIsolate
+                                (before ++ [ heldCard ] ++ after)
+                                (List.length before)
+                        )
+                        (singleton held)
+                )
+                (parseLooseCards parts.before)
+                (parseLooseCards parts.held)
+                (parseLooseCards parts.after)
+                |> Maybe.andThen identity
 
         Nothing ->
             Nothing
+
+
+splitOnParens : String -> Maybe { before : String, held : String, after : String }
+splitOnParens body =
+    case String.indexes "(" body of
+        open :: _ ->
+            case String.indexes ")" (String.dropLeft (open + 1) body) of
+                offset :: _ ->
+                    let
+                        close =
+                            open + 1 + offset
+                    in
+                    Just
+                        { before = String.left open body |> String.trim
+                        , held =
+                            String.slice (open + 1) close body |> String.trim
+                        , after = String.dropLeft (close + 1) body |> String.trim
+                        }
+
+                [] ->
+                    Nothing
+
+        [] ->
+            Nothing
+
+
+singleton : List a -> Maybe a
+singleton xs =
+    case xs of
+        [ x ] ->
+            Just x
+
+        _ ->
+            Nothing
+
+
+splitOnSlash : String -> List String
+splitOnSlash s =
+    String.split "/" s |> List.map String.trim
+
+
+parseLooseCards : String -> Maybe (List Card)
+parseLooseCards s =
+    let
+        t =
+            String.trim s
+    in
+    if String.isEmpty t then
+        Just []
+
+    else
+        Just (parseCardTokens t)
 
 
 parseMergeStack : String -> Maybe ReplaySpec
@@ -1228,19 +1317,6 @@ parseLowerSide s =
             Nothing
 
 
-splitOnLast : String -> String -> Maybe ( String, String )
-splitOnLast sep s =
-    case List.reverse (String.indexes sep s) of
-        last :: _ ->
-            Just
-                ( String.left last s
-                , String.dropLeft (last + String.length sep) s
-                )
-
-        [] ->
-            Nothing
-
-
 findStackByContent : List Card -> List CardStack -> CardStack
 findStackByContent cards board =
     case List.filter (\s -> List.map .card s.boardCards == cards) board of
@@ -1256,6 +1332,9 @@ resolveSpec spec board =
     case spec of
         SpecSplit cards idx ->
             GameEvent.Split { stack = findStackByContent cards board, cardIndex = idx }
+
+        SpecIsolate cards idx ->
+            GameEvent.Isolate { stack = findStackByContent cards board, cardIndex = idx }
 
         SpecMergeStack src tgt side ->
             GameEvent.MergeStack
