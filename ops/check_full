@@ -31,6 +31,7 @@ phase() {
     echo "    [phase] ${label}: $((SECONDS - t0))s"
 }
 phase "full-game" bash -c "cd games/lynrummy/ts && node test/test_full_game.ts"
+phase "6-card-hands" bash -c "cd games/lynrummy/ts && node bench/check_6_card_hands.ts"
 
 echo
 echo "Full gate passed in $((SECONDS - t0_total))s."

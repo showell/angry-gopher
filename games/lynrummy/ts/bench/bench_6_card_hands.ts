@@ -1,6 +1,6 @@
 // bench_6_card_hands.ts — Per-hand timing of findLogicalMovesForPlay.
 //
-// Fixed corpus: 60 random 6-card hands drawn from the 81 cards not on
+// Fixed corpus: 100 random 6-card hands drawn from the 81 cards not on
 // the Game 17 opening board (6 helpers, 23 cards), seed 42 — see
 // `baseline_deal.ts` for the canonical PRNG + deal.
 //
@@ -12,6 +12,12 @@
 //
 // Usage:
 //   node bench/bench_6_card_hands.ts
+//
+// The corpus constants + `timeMinOfN` + `buildCorpus` are exported
+// so `check_6_card_hands.ts` can re-run the exact same setup and
+// compare against the gold within tolerance.
+
+import { fileURLToPath } from "node:url";
 
 import { type Card, cardLabel } from "../core/card.ts";
 import { findLogicalMovesForPlay, type LogicalMovesForPlay } from "../plan/hand_play.ts";
@@ -22,18 +28,18 @@ import {
   shuffle,
 } from "../baseline_deal.ts";
 
-const N_HANDS = 60;
-const HAND_SIZE = 6;
-const SEED = 42;
+export const N_HANDS = 100;
+export const HAND_SIZE = 6;
+export const SEED = 42;
 
 // Per-hand min-of-N timing parameters. Single-shot is too noisy
 // (individual swings 30-200% on a loaded system); min-of-N with a
 // warmup stabilizes the gold so it can serve as a real timing
 // trip-wire, not just a snapshot.
-const TIMING_WARMUP_RUNS = 1;
-const TIMING_MIN_OF_N = 5;
+export const TIMING_WARMUP_RUNS = 1;
+export const TIMING_MIN_OF_N = 10;
 
-function timeMinOfN<T>(work: () => T): { result: T; bestMs: number } {
+export function timeMinOfN<T>(work: () => T): { result: T; bestMs: number } {
   for (let i = 0; i < TIMING_WARMUP_RUNS; i++) work();
   let bestMs = Infinity;
   let result!: T;
@@ -67,12 +73,22 @@ function fmtMs(ms: number): string {
   return ms.toFixed(1).padStart(7, " ");
 }
 
-function main(): void {
+/** Build the (deterministic) hands + board for the corpus. Both
+ *  the bench and the checker call this so they agree on the
+ *  inputs measured. */
+export function buildCorpus(): {
+  hands: readonly (readonly Card[])[];
+  board: readonly (readonly Card[])[];
+} {
   const remaining = remainingCards();
   const rng = mulberry32(SEED);
   const hands: Card[][] = [];
   for (let i = 0; i < N_HANDS; i++) hands.push(shuffle(remaining, rng).slice(0, HAND_SIZE));
-  const board = openingBoardCardLists();
+  return { hands, board: openingBoardCardLists() };
+}
+
+function main(): void {
+  const { hands, board } = buildCorpus();
 
   console.log(
     `Game 17 board  ·  ${N_HANDS} hands of ${HAND_SIZE} (benchmark size)  ·  seed=${SEED}`,
@@ -87,7 +103,7 @@ function main(): void {
     times.push(bestMs);
     results.push(result);
     const desc = pad(fmtResult(result), col);
-    console.log(`  hand ${String(i + 1).padStart(2, " ")}  ${desc}  ${fmtMs(bestMs)}ms`);
+    console.log(`  hand ${String(i + 1).padStart(3, " ")}  ${desc}  ${fmtMs(bestMs)}ms`);
   }
 
   const total = times.reduce((a, b) => a + b, 0);
@@ -103,4 +119,4 @@ function main(): void {
   console.log(`  outcomes:    triple=${counts.triple}  pair=${counts.pair}  single=${counts.single}  stuck=${counts.stuck}`);
 }
 
-main();
+if (process.argv[1] === fileURLToPath(import.meta.url)) main();
