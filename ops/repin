@@ -1,0 +1,35 @@
+#!/bin/bash
+# CANONICAL DEV-LOOP SCRIPT — DO NOT REINVENT.
+# Before writing a new ops/* script or composing an ad-hoc shell
+# command for build / launch / test / regen, run `ops/list` to see
+# what already exists.
+#
+# Re-pin every REPIN-aware fixture in one shot. Runs the three
+# primitive-pinning tests with REPIN=1 set so their `expect`
+# blocks get overwritten with freshly-emitted primitive lines.
+#
+# Use when a verb→primitive or DSL-format change has shifted the
+# emitter output and you need the fixtures to catch up. Pairs
+# naturally with a subsequent `ops/check_full` to confirm the new
+# pins still pass without REPIN.
+
+set -e
+
+REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$REPO_DIR/games/lynrummy/ts"
+
+phase() {
+    local label="$1"
+    shift
+    local t0=$SECONDS
+    "$@"
+    echo "    [phase] ${label}: $((SECONDS - t0))s"
+}
+
+echo "==> REPIN primitive fixtures"
+phase "verb_to_primitives"  bash -c "REPIN=1 node test/test_verb_to_primitives.ts"
+phase "physical_plan"       bash -c "REPIN=1 node test/test_physical_plan.ts"
+phase "elm_find_play"       bash -c "REPIN=1 node test/test_elm_find_play.ts"
+
+echo
+echo "REPIN done. Run ops/check_full to verify the new pins pass."

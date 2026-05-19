@@ -39,6 +39,10 @@ Available ops commands (run from repo root):
 
   REGEN & TOOLS
   -------------
+  ops/repin                   Re-pin every REPIN-aware primitive
+                              fixture in one shot (verb_to_primitives,
+                              physical_plan, elm_find_play). Use after
+                              an emitter or DSL-format change.
   ops/embed_dsls_for_elm.ts   Embed .dsl scenarios into Lib.DslContent
                               for elm-test. Called by ops/test_elm.
   ops/find-dead-ts-exports    Report TS exports with no importing file.
