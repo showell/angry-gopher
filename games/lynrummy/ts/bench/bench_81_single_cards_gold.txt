@@ -1,54 +1,54 @@
 Game 17 board  ·  81 single-card scenarios  ·  min-of-20
 
-  A♣'     no_plan            5.4ms
-  2♣'     no_plan           16.7ms
-  3♣      4-step plan        4.2ms
-  3♣'     4-step plan        4.5ms
+  A♣'     no_plan            6.1ms
+  2♣'     no_plan           15.7ms
+  3♣      4-step plan        4.3ms
+  3♣'     4-step plan        4.4ms
   4♣'     1-step plan        0.2ms
-  5♣      no_plan            1.0ms
+  5♣      no_plan            1.1ms
   5♣'     no_plan            0.9ms
-  6♣      no_plan            0.5ms
-  6♣'     no_plan            0.5ms
-  7♣'     no_plan            1.5ms
+  6♣      no_plan            0.6ms
+  6♣'     no_plan            0.6ms
+  7♣'     no_plan            1.9ms
   8♣      1-step plan        0.2ms
   8♣'     1-step plan        0.2ms
   9♣      no_plan            0.0ms
   9♣'     no_plan            0.0ms
   T♣      no_plan            0.0ms
   T♣'     no_plan            0.0ms
-  J♣      no_plan            0.1ms
-  J♣'     no_plan            0.1ms
-  Q♣      4-step plan        0.5ms
-  Q♣'     4-step plan        0.9ms
-  K♣      2-step plan        0.5ms
-  K♣'     2-step plan        0.6ms
-  A♦'     1-step plan        0.2ms
-  2♦      4-step plan        5.7ms
-  2♦'     4-step plan        6.9ms
-  3♦'     no_plan            3.7ms
-  4♦      no_plan            2.1ms
-  4♦'     no_plan            2.1ms
+  J♣      no_plan            0.2ms
+  J♣'     no_plan            0.2ms
+  Q♣      4-step plan        0.6ms
+  Q♣'     4-step plan        0.5ms
+  K♣      2-step plan        0.7ms
+  K♣'     2-step plan        1.2ms
+  A♦'     1-step plan        0.3ms
+  2♦      4-step plan        7.6ms
+  2♦'     4-step plan        6.5ms
+  3♦'     no_plan            3.6ms
+  4♦      no_plan            1.9ms
+  4♦'     no_plan            1.8ms
   5♦      1-step plan        0.2ms
-  5♦'     1-step plan        0.2ms
+  5♦'     1-step plan        0.1ms
   6♦      no_plan            0.0ms
   6♦'     no_plan            0.0ms
-  7♦'     3-step plan        2.9ms
+  7♦'     3-step plan        2.2ms
   8♦      no_plan            0.0ms
   8♦'     no_plan            0.0ms
   9♦      1-step plan        0.1ms
   9♦'     1-step plan        0.1ms
-  T♦'     no_plan            0.1ms
+  T♦'     no_plan            0.0ms
   J♦'     no_plan            0.1ms
   Q♦'     no_plan            3.3ms
-  K♦'     no_plan            4.0ms
-  A♠'     1-step plan        0.3ms
-  2♠'     no_plan           17.5ms
-  3♠'     no_plan            3.4ms
+  K♦'     no_plan            3.8ms
+  A♠'     1-step plan        0.2ms
+  2♠'     no_plan           15.7ms
+  3♠'     no_plan            3.3ms
   4♠      1-step plan        0.3ms
   4♠'     1-step plan        0.3ms
   5♠      3-step plan        0.6ms
-  5♠'     3-step plan        0.8ms
-  6♠'     no_plan            0.7ms
+  5♠'     3-step plan        0.6ms
+  6♠'     no_plan            0.5ms
   7♠'     no_plan            2.2ms
   8♠      1-step plan        0.2ms
   8♠'     1-step plan        0.1ms
@@ -56,19 +56,19 @@ Game 17 board  ·  81 single-card scenarios  ·  min-of-20
   9♠'     no_plan            0.0ms
   T♠      no_plan            0.0ms
   T♠'     no_plan            0.0ms
-  J♠      no_plan            0.1ms
-  J♠'     no_plan            0.1ms
+  J♠      no_plan            0.2ms
+  J♠'     no_plan            0.2ms
   Q♠      1-step plan        0.1ms
   Q♠'     1-step plan        0.1ms
-  K♠'     no_plan            3.5ms
+  K♠'     no_plan            3.7ms
   A♥'     1-step plan        0.3ms
-  2♥'     4-step plan        4.7ms
-  3♥'     no_plan            8.4ms
+  2♥'     4-step plan        4.3ms
+  3♥'     no_plan            9.4ms
   4♥'     no_plan            0.5ms
   5♥'     1-step plan        0.2ms
   6♥      no_plan            0.1ms
   6♥'     no_plan            0.2ms
-  7♥'     1-step plan        0.3ms
+  7♥'     1-step plan        0.2ms
   8♥      no_plan            0.0ms
   8♥'     no_plan            0.0ms
   9♥      no_plan            0.0ms
@@ -77,11 +77,11 @@ Game 17 board  ·  81 single-card scenarios  ·  min-of-20
   T♥'     no_plan            0.0ms
   J♥      no_plan            0.0ms
   J♥'     no_plan            0.0ms
-  Q♥      no_plan            3.3ms
-  Q♥'     no_plan            3.7ms
-  K♥      2-step plan        0.7ms
-  K♥'     2-step plan        0.8ms
+  Q♥      no_plan            2.9ms
+  Q♥'     no_plan            3.5ms
+  K♥      2-step plan        1.0ms
+  K♥'     2-step plan        0.5ms
 
 === summary ===
-  total wall:    124ms
+  total wall:    123ms
   outcomes:    solvable=32  no_plan=49

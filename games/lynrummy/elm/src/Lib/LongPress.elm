@@ -12,7 +12,7 @@ import Task
 
 holdMs : Float
 holdMs =
-    350
+    400
 
 
 scheduleTimer : (Int -> msg) -> Int -> Cmd msg

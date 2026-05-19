@@ -22,7 +22,7 @@ export type Side = "left" | "right";
 interface SplitPrim {
   readonly action: "split";
   readonly stackIndex: number;
-  readonly cardIndex: number;
+  readonly leftCount: number;
 }
 
 interface IsolatePrim {
@@ -78,12 +78,12 @@ export type Primitive =
 export function makeSplit(
   _sim: readonly BoardStack[],
   stackIndex: number,
-  cardIndex: number,
+  leftCount: number,
 ): SplitPrim {
   return {
     action: "split",
     stackIndex,
-    cardIndex,
+    leftCount,
   };
 }
 
@@ -157,37 +157,26 @@ export function makePlaceHand(
 
 // --- Local apply (mirrors server-side state evolution) ----------------
 
-/** Apply a split: the source stack at index `si` is replaced by two
- *  halves (left = cards[..ci+1], right = cards[ci+1..]). Locations
- *  follow Go CardStack.Split: half-asymmetric nudges based on whether
- *  the split point is in the first or second half. */
-function applySplit(board: readonly BoardStack[], si: number, ci: number): BoardStack[] {
+/** Apply a split: mirrors `Lib.CardStack.split` on the Elm side.
+ *  One rule: the smaller chunk nudges up by 4; on a tie, the right
+ *  chunk wins. Both pieces slide out from the cut line — left by 2
+ *  left of the original loc, right by 2 right of where it would have
+ *  naturally sat. */
+function applySplit(board: readonly BoardStack[], si: number, leftCount: number): BoardStack[] {
   const stack = board[si]!;
   const size = stack.cards.length;
   const srcLeft = stack.loc.left;
   const srcTop = stack.loc.top;
-  let leftCount: number;
-  let leftLoc: Loc;
-  let rightLoc: Loc;
-  if (ci + 1 <= Math.floor(size / 2)) {
-    // leftSplit: left stays high/left, right hops right + 8.
-    leftCount = ci + 1;
-    leftLoc = { top: srcTop - 4, left: srcLeft - 2 };
-    rightLoc = { top: srcTop, left: srcLeft + leftCount * CARD_PITCH + 8 };
-  } else {
-    // rightSplit: left nudges left -8, right hops right + 4.
-    leftCount = ci;
-    leftLoc = { top: srcTop, left: srcLeft - 8 };
-    rightLoc = { top: srcTop - 4, left: srcLeft + leftCount * CARD_PITCH + 4 };
-  }
-  const left: BoardStack = {
-    cards: stack.cards.slice(0, leftCount),
-    loc: leftLoc,
+  const rightCount = size - leftCount;
+  const leftUpDelta = leftCount < rightCount ? -4 : 0;
+  const rightUpDelta = leftCount < rightCount ? 0 : -4;
+  const leftLoc: Loc = { top: srcTop + leftUpDelta, left: srcLeft - 2 };
+  const rightLoc: Loc = {
+    top: srcTop + rightUpDelta,
+    left: srcLeft + leftCount * CARD_PITCH + 2,
   };
-  const right: BoardStack = {
-    cards: stack.cards.slice(leftCount),
-    loc: rightLoc,
-  };
+  const left: BoardStack = { cards: stack.cards.slice(0, leftCount), loc: leftLoc };
+  const right: BoardStack = { cards: stack.cards.slice(leftCount), loc: rightLoc };
   return [...board.slice(0, si), ...board.slice(si + 1), left, right];
 }
 
@@ -293,7 +282,7 @@ export function applyLocally(
 ): readonly BoardStack[] {
   switch (prim.action) {
     case "split":
-      return applySplit(board, prim.stackIndex, prim.cardIndex);
+      return applySplit(board, prim.stackIndex, prim.leftCount);
     case "isolate":
       return applyIsolate(board, prim.stackIndex, prim.cardIndex);
     case "move_stack":

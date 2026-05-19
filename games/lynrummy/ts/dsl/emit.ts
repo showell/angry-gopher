@@ -42,8 +42,7 @@ export function formatPrimitive(p: Primitive, board: readonly BoardStack[]): str
   switch (p.action) {
     case "split": {
       const cards = board[p.stackIndex]!.cards;
-      const leftCount = splitLeftCount(p.cardIndex, cards.length);
-      return `split ${formatCardList(cards.slice(0, leftCount))} / ${formatCardList(cards.slice(leftCount))}`;
+      return `split ${formatCardList(cards.slice(0, p.leftCount))} / ${formatCardList(cards.slice(p.leftCount))}`;
     }
     case "isolate": {
       const cards = board[p.stackIndex]!.cards;
@@ -58,20 +57,6 @@ export function formatPrimitive(p: Primitive, board: readonly BoardStack[]): str
     case "place_hand":
       return `place_hand ${cardLabel(p.handCard)} -> ${formatLoc(p.loc)}`;
   }
-}
-
-/** Number of cards in the LEFT piece after a split at `cardIndex`
- *  of a stack of size `n`. Mirrors the asymmetric rule in
- *  primitives.ts:applySplit and Lib.CardStack.split: leftSplit if
- *  the cut sits in the first half, rightSplit otherwise. */
-export function splitLeftCount(cardIndex: number, n: number): number {
-  return cardIndex + 1 <= Math.floor(n / 2) ? cardIndex + 1 : cardIndex;
-}
-
-/** Inverse of splitLeftCount — recover the GameEvent cardIndex
- *  from the left-piece length emitted on the wire. */
-export function splitCardIndexFromLeftCount(leftCount: number, n: number): number {
-  return leftCount <= Math.floor(n / 2) ? leftCount - 1 : leftCount;
 }
 
 function formatIsolateLine(cards: readonly Card[], ci: number): string {

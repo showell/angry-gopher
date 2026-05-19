@@ -80,21 +80,21 @@ export function moveToPrimitives(
 
 // --- Primitive emission helpers ---------------------------------------
 
-/** Emit a split. For end-splits, probe the post-board and pre-flight
- *  only when needed. For interior splits, pre-flight unconditionally. */
+/** Emit a split that leaves `leftCount` cards in the left piece.
+ *  For end-splits (one piece is a singleton), probe the post-board
+ *  and pre-flight only when needed. For interior splits (both pieces
+ *  multi-card), pre-flight unconditionally. */
 function planSplitAfter(
   sim: readonly BoardStack[],
   stackContent: readonly Card[],
-  k: number,
+  leftCount: number,
 ): { prims: Primitive[]; sim: readonly BoardStack[] } {
   const n = stackContent.length;
-  if (!(k >= 1 && k <= n - 1)) {
-    throw new Error(`split-after k=${k} out of range for n=${n}`);
+  if (!(leftCount >= 1 && leftCount <= n - 1)) {
+    throw new Error(`split leftCount=${leftCount} out of range for n=${n}`);
   }
-  // Mirror applySplit's left_count derivation: ci=k-1 if k <= n/2, else ci=k.
-  const ci = k <= Math.floor(n / 2) ? k - 1 : k;
   const si = findStackIndex(sim, stackContent);
-  const isInterior = ci !== 0 && ci !== n - 1;
+  const isInterior = leftCount !== 1 && leftCount !== n - 1;
 
   // Interior splits: always relocate source to a 4-side-clear region.
   // Siblings will sit in tight quarters that downstream primitives
@@ -107,14 +107,14 @@ function planSplitAfter(
       const move = makeMoveStack(sim, si, newLoc);
       const afterMove = applyLocally(sim, move);
       const newSi = findStackIndex(afterMove, stackContent);
-      const split = makeSplit(afterMove, newSi, ci);
+      const split = makeSplit(afterMove, newSi, leftCount);
       const post = applyLocally(afterMove, split);
       return { prims: [move, split], sim: post };
     }
   }
 
   // End-split (or interior-already-clear): try in place.
-  const split = makeSplit(sim, si, ci);
+  const split = makeSplit(sim, si, leftCount);
   const post = applyLocally(sim, split);
   if (findCrowding(post) === null) {
     return { prims: [split], sim: post };
@@ -130,7 +130,7 @@ function planSplitAfter(
   const move = makeMoveStack(sim, si, newLoc);
   const afterMove = applyLocally(sim, move);
   const newSi = findStackIndex(afterMove, stackContent);
-  const newSplit = makeSplit(afterMove, newSi, ci);
+  const newSplit = makeSplit(afterMove, newSi, leftCount);
   const post2 = applyLocally(afterMove, newSplit);
   return { prims: [move, newSplit], sim: post2 };
 }

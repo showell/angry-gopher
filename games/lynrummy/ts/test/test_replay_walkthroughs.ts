@@ -28,7 +28,6 @@ import type { BoardStack } from "../geometry/geometry.ts";
 import { findViolation } from "../geometry/geometry.ts";
 import { classifyStack } from "../core/card_stack.ts";
 import { parseBoardStackLine } from "../dsl/parse.ts";
-import { splitCardIndexFromLeftCount } from "../dsl/emit.ts";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -128,8 +127,7 @@ function parseActionLine(
       const left = parseDslCards(chunks[0]!);
       const right = parseDslCards(chunks[1]!);
       const cards = [...left, ...right];
-      const ci = splitCardIndexFromLeftCount(left.length, cards.length);
-      return makeSplit(board, findStackIndex(board, cards), ci);
+      return makeSplit(board, findStackIndex(board, cards), left.length);
     }
   }
   // isolate <before> ( <held> ) <after>
