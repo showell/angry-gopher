@@ -315,10 +315,10 @@ fromShorthand shorthand deck loc =
 
 
 {-| Slice `s` after the first `leftCount` cards and assign each piece
-its post-split screen position. The physics branch is chosen
-deterministically from `leftCount` alone: when `leftCount` sits in the
-first half, the left piece is the "small" one (small nudge, residue
-hops); otherwise the right piece is.
+its post-split screen position. One rule: the smaller piece nudges
+up by 4; on a tie, the right piece nudges up. Both pieces slide
+out from the cut line — left by 2 to the left of the original
+loc, right by 2 to the right of where it would have naturally sat.
 
 `leftCount` must be in `[1, size s - 1]`. Size-1 stacks return
 unchanged (caller responsibility, preserves TS-port total-function
@@ -329,79 +329,44 @@ split leftCount s =
     if size s <= 1 then
         [ s ]
 
-    else if leftCount <= size s // 2 then
-        leftSplit leftCount s
-
     else
-        rightSplit leftCount s
+        let
+            leftCards =
+                List.take leftCount s.boardCards
 
+            rightCards =
+                List.drop leftCount s.boardCards
 
-{-| Split with the left piece as the "primary" (stays near origin).
-Offsets from original loc: left piece top-=4 left-=2; right piece top+=0 left+=leftCount\*stackPitch+8.
-Example: stack at (top=20,left=70), leftCount=2 → left at (16,68), right at (20,136).
--}
-leftSplit : Int -> CardStack -> List CardStack
-leftSplit leftCount s =
-    let
-        leftCards =
-            List.take leftCount s.boardCards
+            rightCount =
+                size s - leftCount
 
-        rightCards =
-            List.drop leftCount s.boardCards
+            leftUpDelta =
+                if leftCount < rightCount then
+                    -4
 
-        leftSideOffset =
-            -2
+                else
+                    0
 
-        rightSideOffset =
-            leftCount * (cardWidth + 6) + 8
+            rightUpDelta =
+                if leftCount < rightCount then
+                    0
 
-        leftLoc =
-            { top = s.loc.top - 4
-            , left = s.loc.left + leftSideOffset
-            }
+                else
+                    -4
 
-        rightLoc =
-            { top = s.loc.top
-            , left = s.loc.left + rightSideOffset
-            }
-    in
-    [ { boardCards = leftCards, loc = leftLoc }
-    , { boardCards = rightCards, loc = rightLoc }
-    ]
+            leftLoc =
+                { top = s.loc.top + leftUpDelta
+                , left = s.loc.left - 2
+                }
 
-
-{-| Split with the right piece as the "primary" (stays near origin).
-Offsets from original loc: left piece top+=0 left-=8; right piece top-=4 left+=leftCount\*stackPitch+4.
-Example: stack at (top=20,left=70), leftCount=2 → left at (20,62), right at (16,140).
--}
-rightSplit : Int -> CardStack -> List CardStack
-rightSplit leftCount s =
-    let
-        leftCards =
-            List.take leftCount s.boardCards
-
-        rightCards =
-            List.drop leftCount s.boardCards
-
-        leftSideOffset =
-            -8
-
-        rightSideOffset =
-            leftCount * (cardWidth + 6) + 4
-
-        leftLoc =
-            { top = s.loc.top
-            , left = s.loc.left + leftSideOffset
-            }
-
-        rightLoc =
-            { top = s.loc.top - 4
-            , left = s.loc.left + rightSideOffset
-            }
-    in
-    [ { boardCards = leftCards, loc = leftLoc }
-    , { boardCards = rightCards, loc = rightLoc }
-    ]
+            rightLoc =
+                { top = s.loc.top + rightUpDelta
+                , left = s.loc.left + leftCount * (cardWidth + 6) + 2
+                }
+        in
+        [ { boardCards = leftCards, loc = leftLoc }
+        , { boardCards = rightCards, loc = rightLoc }
+        ]
 
 
 {-| Isolate the card at `cardIndex` from the rest of the
