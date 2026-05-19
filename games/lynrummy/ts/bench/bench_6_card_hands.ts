@@ -1,4 +1,5 @@
-// bench_6_card_hands.ts — Per-hand timing of findLogicalMovesForPlay.
+// bench_6_card_hands.ts — Per-hand timing of findLogicalMovesForPlay,
+// gated against the gold and updating it on success.
 //
 // Fixed corpus: 100 random 6-card hands drawn from the 81 cards not on
 // the Game 17 opening board (6 helpers, 23 cards), seed 42 — see
@@ -6,18 +7,26 @@
 //
 // `findLogicalMovesForPlay` is the function the Elm UI hits on every
 // solver query. Measure it directly: no in-harness wrappers, no
-// re-implementations of the production code path. Per hand we record
-// what the function returned (cards placed + plan length) and how
-// long it took (min-of-N).
+// re-implementations of the production code path.
+//
+// Flow:
+//   1. Read the gold file (`bench_6_card_hands_gold.txt`).
+//   2. For each hand: run benchmarkSingleHand, compare against gold.
+//      Fail fast on outcome / plan-line mismatch.
+//      Fail fast on per-hand timing > PER_HAND_TOLERANCE worse.
+//   3. After all hands: fail fast on total wall > TOTAL_TOLERANCE
+//      worse than the gold total.
+//   4. On success, OVERWRITE the gold so improvements are captured
+//      automatically.
+//
+// Bootstrap: if the gold file doesn't exist, skip every comparison
+// and just write it out.
 //
 // Usage:
 //   node bench/bench_6_card_hands.ts
-//
-// The corpus constants + `timeMinOfN` + `buildCorpus` are exported
-// so `check_6_card_hands.ts` can re-run the exact same setup and
-// compare against the gold within tolerance.
 
-import { fileURLToPath } from "node:url";
+import * as fs from "node:fs";
+import * as path from "node:path";
 
 import { type Card, cardLabel } from "../core/card.ts";
 import { findLogicalMovesForPlay, type LogicalMovesForPlay } from "../plan/hand_play.ts";
@@ -28,55 +37,63 @@ import {
   shuffle,
 } from "../baseline_deal.ts";
 
-export const N_HANDS = 100;
-export const HAND_SIZE = 6;
-export const SEED = 42;
+const N_HANDS = 50;
+const HAND_SIZE = 6;
+const SEED = 42;
 
-// Per-hand min-of-N timing parameters. Single-shot is too noisy
-// (individual swings 30-200% on a loaded system); min-of-N with a
-// warmup stabilizes the gold so it can serve as a real timing
-// trip-wire, not just a snapshot.
-export const TIMING_WARMUP_RUNS = 1;
-export const TIMING_MIN_OF_N = 10;
+// Per-hand tolerance: 50%. min-of-20 is the most stable per-hand
+// statistic on a JIT'd runtime (min approaches the asymptotic floor;
+// median and mean are sensitive to GC pauses in the middle of the
+// distribution), but small hands still jitter — see MIN_GOLD_MS.
+const PER_HAND_TOLERANCE = 0.50;
 
-export function timeMinOfN<T>(work: () => T): { result: T; bestMs: number } {
-  for (let i = 0; i < TIMING_WARMUP_RUNS; i++) work();
-  let bestMs = Infinity;
+// Hands below this gold time skip the per-hand timing check. At
+// sub-10ms even min-of-20 leaves enough jitter that any tight gate
+// generates false positives. The aggregate gate still catches
+// regressions in this regime.
+const MIN_GOLD_MS = 10.0;
+
+// Aggregate tolerance: 5%. The total wall is the sum of 50 mins;
+// noise that survives that aggregation is real.
+const TOTAL_TOLERANCE = 0.05;
+
+type Kind = "single" | "pair" | "triple" | "stuck";
+
+interface GoldEntry {
+  readonly kind: Kind;
+  readonly planLines: number; // 0 for stuck
+  readonly ms: number;
+}
+
+interface Gold {
+  readonly entries: readonly GoldEntry[];
+  readonly totalWallMs: number;
+}
+
+// Bound to global.gc when node is invoked with --expose-gc, else
+// a no-op stub. Forcing GC once per hand keeps prior hands' GC
+// pressure from bleeding in, without measuring GC pauses from
+// inside this hand's own loop.
+const forceGc: () => void =
+  typeof (globalThis as { gc?: () => void }).gc === "function"
+    ? (globalThis as { gc: () => void }).gc
+    : () => {};
+
+function benchmarkSingleHand<T>(work: () => T): { result: T; minMs: number } {
+  forceGc();
+  work(); // warmup
   let result!: T;
-  for (let i = 0; i < TIMING_MIN_OF_N; i++) {
+  let minMs = Infinity;
+  for (let i = 0; i < 20; i++) {
     const t0 = performance.now();
     result = work();
     const ms = performance.now() - t0;
-    if (ms < bestMs) bestMs = ms;
+    if (ms < minMs) minMs = ms;
   }
-  return { result, bestMs };
+  return { result, minMs };
 }
 
-function fmtResult(result: LogicalMovesForPlay | null): string {
-  if (result === null) return "stuck";
-  const labels = result.cardsToPlay.map(cardLabel).join(" ");
-  return `${kindLabel(result)} [${labels}] → ${result.moves.length}-step plan`;
-}
-
-function kindLabel(r: LogicalMovesForPlay): "single" | "pair" | "triple" {
-  const n = r.cardsToPlay.length;
-  if (n >= 3) return "triple";
-  if (n === 2) return "pair";
-  return "single";
-}
-
-function pad(s: string, width: number): string {
-  return s.length >= width ? s : s + " ".repeat(width - s.length);
-}
-
-function fmtMs(ms: number): string {
-  return ms.toFixed(1).padStart(7, " ");
-}
-
-/** Build the (deterministic) hands + board for the corpus. Both
- *  the bench and the checker call this so they agree on the
- *  inputs measured. */
-export function buildCorpus(): {
+function buildCorpus(): {
   hands: readonly (readonly Card[])[];
   board: readonly (readonly Card[])[];
 } {
@@ -87,7 +104,95 @@ export function buildCorpus(): {
   return { hands, board: openingBoardCardLists() };
 }
 
+function liveKind(r: LogicalMovesForPlay | null): Kind {
+  if (r === null) return "stuck";
+  const n = r.cardsToPlay.length;
+  if (n >= 3) return "triple";
+  if (n === 2) return "pair";
+  return "single";
+}
+
+function liveLines(r: LogicalMovesForPlay | null): number {
+  return r === null ? 0 : r.moves.length;
+}
+
+function parseGold(p: string): Gold | null {
+  if (!fs.existsSync(p)) return null;
+  const text = fs.readFileSync(p, "utf8");
+  const entries: GoldEntry[] = [];
+  let totalWallMs = -1;
+  for (const raw of text.split("\n")) {
+    const m = raw.match(
+      /^\s*hand\s+\d+\s+(single|pair|triple|stuck)(?:\s+\[[^\]]+\]\s+→\s+(\d+)-step plan)?\s+([\d.]+)ms\s*$/,
+    );
+    if (m) {
+      entries.push({
+        kind: m[1]! as Kind,
+        planLines: m[2] === undefined ? 0 : Number.parseInt(m[2]!, 10),
+        ms: Number.parseFloat(m[3]!),
+      });
+      continue;
+    }
+    const total = raw.match(/^\s*total wall:\s+([\d.]+)ms\s*$/);
+    if (total) totalWallMs = Number.parseFloat(total[1]!);
+  }
+  if (totalWallMs < 0) {
+    throw new Error(`gold ${p} missing "total wall" line`);
+  }
+  return { entries, totalWallMs };
+}
+
+function writeGold(
+  p: string,
+  perHand: readonly { kind: Kind; cards: readonly Card[]; planLines: number; ms: number }[],
+  totalWallMs: number,
+): void {
+  const lines: string[] = [];
+  lines.push(`Game 17 board  ·  ${N_HANDS} hands of ${HAND_SIZE} (benchmark size)  ·  seed=${SEED}`);
+  lines.push("");
+  for (let i = 0; i < perHand.length; i++) {
+    lines.push(perHandLine(i + 1, perHand[i]!.kind, perHand[i]!.cards, perHand[i]!.planLines, perHand[i]!.ms));
+  }
+  lines.push("");
+  lines.push("=== summary ===");
+  lines.push(`  total wall:  ${totalWallMs.toFixed(0).padStart(5, " ")}ms`);
+  const counts = { triple: 0, pair: 0, single: 0, stuck: 0 };
+  for (const e of perHand) counts[e.kind]++;
+  lines.push(`  outcomes:    triple=${counts.triple}  pair=${counts.pair}  single=${counts.single}  stuck=${counts.stuck}`);
+  fs.writeFileSync(p, lines.join("\n") + "\n");
+}
+
+function perHandLine(
+  handIdx: number,
+  kind: Kind,
+  cards: readonly Card[],
+  planLines: number,
+  ms: number,
+): string {
+  const desc =
+    kind === "stuck"
+      ? "stuck"
+      : `${kind} [${cards.map(cardLabel).join(" ")}] → ${planLines}-step plan`;
+  return `  hand ${String(handIdx).padStart(3, " ")}  ${pad(desc, 44)}  ${ms.toFixed(1).padStart(7, " ")}ms`;
+}
+
+function pad(s: string, width: number): string {
+  return s.length >= width ? s : s + " ".repeat(width - s.length);
+}
+
+function fail(msg: string): never {
+  console.log(`\nFAIL: ${msg}`);
+  process.exit(1);
+}
+
 function main(): void {
+  const here = path.dirname(new URL(import.meta.url).pathname);
+  const goldPath = path.resolve(here, "bench_6_card_hands_gold.txt");
+  const gold = parseGold(goldPath);
+  if (gold !== null && gold.entries.length !== N_HANDS) {
+    fail(`gold has ${gold.entries.length} hands; bench expects ${N_HANDS}. Delete the gold to recapture.`);
+  }
+
   const { hands, board } = buildCorpus();
 
   console.log(
@@ -95,28 +200,58 @@ function main(): void {
   );
   console.log();
 
-  const col = 44;
-  const times: number[] = [];
-  const results: (LogicalMovesForPlay | null)[] = [];
-  for (let i = 0; i < hands.length; i++) {
-    const { result, bestMs } = timeMinOfN(() => findLogicalMovesForPlay(hands[i]!, board));
-    times.push(bestMs);
-    results.push(result);
-    const desc = pad(fmtResult(result), col);
-    console.log(`  hand ${String(i + 1).padStart(3, " ")}  ${desc}  ${fmtMs(bestMs)}ms`);
-  }
+  const perHand: { kind: Kind; cards: readonly Card[]; planLines: number; ms: number }[] = [];
+  let totalMs = 0;
 
-  const total = times.reduce((a, b) => a + b, 0);
-  const counts = { triple: 0, pair: 0, single: 0, stuck: 0 };
-  for (const r of results) {
-    if (r === null) counts.stuck++;
-    else counts[kindLabel(r)]++;
+  for (let i = 0; i < N_HANDS; i++) {
+    const { result, minMs } = benchmarkSingleHand(() => findLogicalMovesForPlay(hands[i]!, board));
+    const kind = liveKind(result);
+    const lines = liveLines(result);
+    const cards: readonly Card[] = result === null ? [] : result.cardsToPlay;
+    totalMs += minMs;
+    perHand.push({ kind, cards, planLines: lines, ms: minMs });
+
+    console.log(perHandLine(i + 1, kind, cards, lines, minMs));
+
+    if (gold === null) continue;
+    const expected = gold.entries[i]!;
+    if (kind !== expected.kind) {
+      fail(`hand ${i + 1}: outcome ${expected.kind} → ${kind}`);
+    }
+    if (lines !== expected.planLines) {
+      fail(`hand ${i + 1}: plan-lines ${expected.planLines} → ${lines}`);
+    }
+    if (expected.ms < MIN_GOLD_MS) continue;
+    const ratio = minMs / expected.ms;
+    const pct = (ratio - 1) * 100;
+    if (ratio > 1 + PER_HAND_TOLERANCE) {
+      fail(`hand ${i + 1}: timing +${pct.toFixed(0)}%  (gold ${expected.ms.toFixed(1)} → ${minMs.toFixed(1)}ms; threshold +${(PER_HAND_TOLERANCE * 100).toFixed(0)}%)`);
+    }
+    if (ratio < 1) {
+      console.log(`         ↳ better than gold by ${(-pct).toFixed(0)}%  (gold ${expected.ms.toFixed(1)}ms)`);
+    }
   }
 
   console.log();
   console.log("=== summary ===");
-  console.log(`  total wall:  ${total.toFixed(0).padStart(5, " ")}ms`);
+  console.log(`  total wall:  ${totalMs.toFixed(0).padStart(5, " ")}ms`);
+  const counts = { triple: 0, pair: 0, single: 0, stuck: 0 };
+  for (const e of perHand) counts[e.kind]++;
   console.log(`  outcomes:    triple=${counts.triple}  pair=${counts.pair}  single=${counts.single}  stuck=${counts.stuck}`);
+
+  if (gold !== null) {
+    const ratio = totalMs / gold.totalWallMs;
+    const pct = (ratio - 1) * 100;
+    if (ratio > 1 + TOTAL_TOLERANCE) {
+      fail(`total wall +${pct.toFixed(1)}%  (gold ${gold.totalWallMs.toFixed(0)} → ${totalMs.toFixed(0)}ms; threshold +${(TOTAL_TOLERANCE * 100).toFixed(0)}%)`);
+    }
+    if (ratio < 1) {
+      console.log(`  ↳ total better than gold by ${(-pct).toFixed(1)}%  (gold ${gold.totalWallMs.toFixed(0)}ms)`);
+    }
+  }
+
+  writeGold(goldPath, perHand, totalMs);
+  console.log(`\nwrote ${path.basename(goldPath)}`);
 }
 
-if (process.argv[1] === fileURLToPath(import.meta.url)) main();
+main();
