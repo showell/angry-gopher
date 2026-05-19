@@ -41,18 +41,19 @@ reasoning.
 - `src/buckets.ts` — `fastStateSig` / `buildCardOrder` for
   position-indexed dedup keys (~1.2× faster than a
   string-based sig at the same dedup decisions).
-- `bench/check_baseline_timing.ts` — 81-card timing
-  regression check (the standing perf gate).
-- `bench/gen_baseline_board.ts` — regenerates the gold after
-  a deliberate solver change.
+- `bench/bench_81_single_cards.ts` — per-card timing of
+  `solveBoard` on the Game 17 board with each of the 81
+  remaining cards projected as a singleton trouble. Bench +
+  gold check in one program; gold is overwritten on success
+  so improvements are captured automatically.
+- `bench/bench_6_card_hands.ts` — per-hand timing of
+  `findLogicalMovesForPlay` on a fixed 100-hand corpus, with
+  its own gold (`bench/bench_6_card_hands_gold.txt`). Same
+  shape as the 81-card bench.
 - `generate_game.ts` (top-level) — plays one full game (seed
   42) and writes an Elm-replayable DSL transcript. Not a perf
   harness; runs once for review-able output. Driver:
   `npm run generate-game`.
-- `bench/bench_timing.ts` — auxiliary timing helper.
-- `bench/bench_6_card_hands.ts` — per-hand timing of
-  `findLogicalMovesForPlay` on a fixed 60-hand corpus, with
-  its own gold (`bench/bench_6_card_hands_gold.txt`).
 
 ## Optimization levers
 

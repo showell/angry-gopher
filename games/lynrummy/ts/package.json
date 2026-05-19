@@ -7,8 +7,7 @@
   "scripts": {
     "typecheck": "tsc --noEmit -p .",
     "bench:6-card-hands": "node --expose-gc bench/bench_6_card_hands.ts",
-    "bench:gen-baseline": "node bench/gen_baseline_board.ts",
-    "bench:check-baseline": "node bench/check_baseline_timing.ts",
+    "bench:81-single-cards": "node --expose-gc bench/bench_81_single_cards.ts",
     "generate-game": "node generate_game.ts"
   },
   "devDependencies": {

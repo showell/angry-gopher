@@ -69,9 +69,12 @@ These don't run on every build — invoke as needed:
   (`/gopher/puzzle/`) reads its featured board from
   `conformance/mined_seeds.dsl`; the hard-coded
   `featuredPuzzleName` lives in `views/puzzle.go`.
-- **Bench baselines.** `npm run bench:gen-baseline` (in `ts/`)
-  rebuilds the 81-card baseline DSL suite. Don't regenerate
-  unless you're explicitly tracking a perf shift.
+- **Bench gold.** `npm run bench:81-single-cards` and
+  `npm run bench:6-card-hands` (in `ts/`) each run a perf
+  bench that compares against and rewrites its own gold file
+  on success. Run after deliberate solver changes; on
+  noisy machines, re-run once before treating a failure as
+  a real regression.
 
 ## Prerequisites
 

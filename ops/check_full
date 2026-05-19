@@ -32,6 +32,7 @@ phase() {
 }
 phase "full-game" bash -c "cd games/lynrummy/ts && node test/test_full_game.ts"
 phase "6-card-hands" bash -c "cd games/lynrummy/ts && node --expose-gc bench/bench_6_card_hands.ts"
+phase "81-single-cards" bash -c "cd games/lynrummy/ts && node --expose-gc bench/bench_81_single_cards.ts"
 
 echo
 echo "Full gate passed in $((SECONDS - t0_total))s."
