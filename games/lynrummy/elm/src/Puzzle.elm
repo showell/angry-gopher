@@ -617,7 +617,7 @@ undoForPuzzle : GameEvent -> List CardStack -> List CardStack
 undoForPuzzle event board =
     case event of
         Split p ->
-            Execute.undoSplit p.stack p.cardIndex board
+            Execute.undoSplit p.stack p.leftCount board
 
         Isolate p ->
             Execute.undoIsolate p.stack p.cardIndex board

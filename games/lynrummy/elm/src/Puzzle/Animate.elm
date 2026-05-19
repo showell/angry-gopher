@@ -175,7 +175,7 @@ startNextAction nowMs entry board =
             }
 
         GameEvent.Split p ->
-            { board = Execute.split p.stack p.cardIndex board
+            { board = Execute.split p.stack p.leftCount board
             , phase = ActionCompleted
             }
 

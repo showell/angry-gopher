@@ -297,7 +297,7 @@ startNextAction nowMs entry gameState =
 
         GameEvent.Split p ->
             { gameState =
-                { gameState | board = Execute.split p.stack p.cardIndex gameState.board }
+                { gameState | board = Execute.split p.stack p.leftCount gameState.board }
             , phase = ActionCompleted
             }
 

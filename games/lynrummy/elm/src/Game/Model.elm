@@ -154,7 +154,7 @@ applyEvent : GameEvent -> GameState -> GameState
 applyEvent event state =
     case event of
         Split p ->
-            { state | board = Execute.split p.stack p.cardIndex state.board }
+            { state | board = Execute.split p.stack p.leftCount state.board }
 
         Isolate p ->
             { state | board = (Execute.isolate p.stack p.cardIndex state.board).board }

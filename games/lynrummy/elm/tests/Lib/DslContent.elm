@@ -1618,14 +1618,14 @@ scenario single_card_two_verb_plan
 
 
 scenario gesture_split_surviving_click_intent
-  desc: board-stack source with surviving clickIntent yields Split.
+  desc: board-stack source with surviving clickIntent yields Split. Click on card_index 3 of a 6-card stack → second-half click, so clicked card joins the right chunk → left_count = 3.
   op: gesture_split
   board:
     at (20,20): 2♣ 3♦ 4♣ 5♥ 6♠ 7♥
   floater_at: (20, 20)
   gesture_click_intent: 3
   expect:
-    card_index: 3
+    left_count: 3
 
 
 scenario gesture_merge_stack_234_onto_567_left

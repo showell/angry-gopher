@@ -58,8 +58,8 @@ undoEvent event state =
         MoveStack { stack, newLoc } ->
             { state | board = undoMoveStack stack newLoc state.board }
 
-        Split { stack, cardIndex } ->
-            { state | board = undoSplit stack cardIndex state.board }
+        Split { stack, leftCount } ->
+            { state | board = undoSplit stack leftCount state.board }
 
         Isolate { stack, cardIndex } ->
             { state | board = undoIsolate stack cardIndex state.board }
@@ -125,17 +125,17 @@ undoEvent event state =
             state
 
 
-{-| Split the given stack at `cardIndex`, returning a new
-board with the original stack removed and its two split
-pieces appended. Bridge-bug case: stack not on board → log
-+ board unchanged.
+{-| Split the given stack after the first `leftCount` cards,
+returning a new board with the original stack removed and its
+two split pieces appended. Bridge-bug case: stack not on board
+→ log + board unchanged.
 -}
 split : CardStack -> Int -> List CardStack -> List CardStack
-split stack cardIndex board =
+split stack leftCount board =
     case findStack stack board of
         Just originalStack ->
             List.filter (not << isStacksEqual originalStack) board
-                ++ CardStack.split cardIndex originalStack
+                ++ CardStack.split leftCount originalStack
 
         Nothing ->
             let
@@ -146,14 +146,14 @@ split stack cardIndex board =
 
 
 {-| Reverse a prior `split` of the same stack at the same
-cardIndex: remove the two split pieces from the board and put
-the original back. O(1)-per-undo (no board-replay needed).
+`leftCount`: remove the two split pieces from the board and
+put the original back. O(1)-per-undo (no board-replay needed).
 -}
 undoSplit : CardStack -> Int -> List CardStack -> List CardStack
-undoSplit stack cardIndex board =
+undoSplit stack leftCount board =
     let
         change =
-            { stacksToRemove = CardStack.split cardIndex stack
+            { stacksToRemove = CardStack.split leftCount stack
             , stacksToAdd = [ stack ]
             , handCardsToRelease = []
             }

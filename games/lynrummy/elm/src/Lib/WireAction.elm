@@ -24,7 +24,7 @@ participate in `isCardsEqualInOrder`).
 
 import Lib.BoardActions exposing (Side(..))
 import Lib.CardStack exposing (BoardCardState(..), BoardLocation, CardStack)
-import Lib.GameEvent as GameEvent exposing (GameEvent(..))
+import Lib.GameEvent exposing (GameEvent(..))
 import Lib.NonEmpty as NonEmpty exposing (NonEmpty)
 import Lib.Rules.Card as Card exposing (Card, OriginDeck(..))
 import Lib.TimeLoc exposing (TimeLoc)
@@ -92,18 +92,9 @@ parseSplit s =
         [ leftStr, rightStr ] ->
             Result.map2
                 (\left right ->
-                    let
-                        cards =
-                            left ++ right
-
-                        cardIndex =
-                            GameEvent.splitCardIndexFromLeftCount
-                                (List.length left)
-                                (List.length cards)
-                    in
                     Split
-                        { stack = stackOfCards cards
-                        , cardIndex = cardIndex
+                        { stack = stackOfCards (left ++ right)
+                        , leftCount = List.length left
                         }
                 )
                 (parseCardList leftStr)

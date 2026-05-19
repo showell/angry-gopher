@@ -506,10 +506,10 @@ verifyGestureSplit sc =
             in
             case BoardGesture.resolveBoardCardGesture d Nothing of
                 Just (BoardGesture.Split p) ->
-                    expectStr "card_index" sc
+                    expectStr "left_count" sc
                         |> Maybe.andThen String.toInt
-                        |> Maybe.map (\n -> p.cardIndex |> Expect.equal n)
-                        |> Maybe.withDefault (Expect.fail "gesture_split missing expect.card_index")
+                        |> Maybe.map (\n -> p.leftCount |> Expect.equal n)
+                        |> Maybe.withDefault (Expect.fail "gesture_split missing expect.left_count")
 
                 other ->
                     Expect.fail ("expected Split; got " ++ Debug.toString other)
@@ -1155,16 +1155,7 @@ parseSplit body =
         [ leftStr, rightStr ] ->
             Maybe.map2
                 (\left right ->
-                    let
-                        cards =
-                            left ++ right
-
-                        cardIndex =
-                            GameEvent.splitCardIndexFromLeftCount
-                                (List.length left)
-                                (List.length cards)
-                    in
-                    SpecSplit cards cardIndex
+                    SpecSplit (left ++ right) (List.length left)
                 )
                 (parseLooseCards leftStr)
                 (parseLooseCards rightStr)
@@ -1330,8 +1321,8 @@ findStackByContent cards board =
 resolveSpec : ReplaySpec -> List CardStack -> GameEvent
 resolveSpec spec board =
     case spec of
-        SpecSplit cards idx ->
-            GameEvent.Split { stack = findStackByContent cards board, cardIndex = idx }
+        SpecSplit cards leftCount ->
+            GameEvent.Split { stack = findStackByContent cards board, leftCount = leftCount }
 
         SpecIsolate cards idx ->
             GameEvent.Isolate { stack = findStackByContent cards board, cardIndex = idx }

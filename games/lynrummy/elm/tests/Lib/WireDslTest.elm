@@ -32,11 +32,11 @@ suite =
 literalShapes : Test
 literalShapes =
     describe "encoder literal output"
-        [ test "split (leftSplit branch)" <|
+        [ test "split (leftCount=1)" <|
             \_ ->
-                GameEvent.splitDsl 42 sampleStackAceTwoThree 0
+                GameEvent.splitDsl 42 sampleStackAceTwoThree 1
                     |> Expect.equal "42) split A♥ / 2♥ 3♥'"
-        , test "split (rightSplit branch)" <|
+        , test "split (leftCount=2)" <|
             \_ ->
                 GameEvent.splitDsl 42 sampleStackAceTwoThree 2
                     |> Expect.equal "42) split A♥ 2♥ / 3♥'"
@@ -88,11 +88,11 @@ literalShapes =
 roundTrips : Test
 roundTrips =
     describe "encoder → parser round-trip"
-        [ test "split (leftSplit branch)" <|
+        [ test "split (leftCount=1)" <|
             \_ ->
                 let
                     encoded =
-                        GameEvent.splitDsl 1 sampleStackAceTwoThree 0
+                        GameEvent.splitDsl 1 sampleStackAceTwoThree 1
                 in
                 WA.parseDsl encoded
                     |> Expect.equal
@@ -101,11 +101,11 @@ roundTrips =
                             , event =
                                 Split
                                     { stack = stackWithDefaultLoc sampleStackAceTwoThree
-                                    , cardIndex = 0
+                                    , leftCount = 1
                                     }
                             }
                         )
-        , test "split (rightSplit branch)" <|
+        , test "split (leftCount=2)" <|
             \_ ->
                 let
                     encoded =
@@ -118,7 +118,7 @@ roundTrips =
                             , event =
                                 Split
                                     { stack = stackWithDefaultLoc sampleStackAceTwoThree
-                                    , cardIndex = 2
+                                    , leftCount = 2
                                     }
                             }
                         )
@@ -224,7 +224,7 @@ roundTrips =
                             , event =
                                 Split
                                     { stack = stackWithDefaultLoc sampleStackAceTwoThree
-                                    , cardIndex = 0
+                                    , leftCount = 1
                                     }
                             }
                         )

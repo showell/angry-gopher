@@ -6,7 +6,6 @@ module Lib.GameEvent exposing
     , mergeStackDsl
     , moveStackDsl
     , placeHandDsl
-    , splitCardIndexFromLeftCount
     , splitDsl
     , undoDsl
     )
@@ -58,7 +57,7 @@ import Lib.TimeLoc exposing (TimeLoc)
 
 
 type GameEvent
-    = Split { stack : CardStack, cardIndex : Int }
+    = Split { stack : CardStack, leftCount : Int }
     | Isolate { stack : CardStack, cardIndex : Int }
     | MergeStack { source : CardStack, target : CardStack, side : Side, boardPath : NonEmpty TimeLoc }
     | MergeHand { handCard : Card, target : CardStack, side : Side }
@@ -73,13 +72,10 @@ type GameEvent
 
 
 splitDsl : Int -> CardStack -> Int -> String
-splitDsl seq stack cardIndex =
+splitDsl seq stack leftCount =
     let
         cards =
             List.map .card stack.boardCards
-
-        leftCount =
-            splitLeftCount cardIndex (List.length cards)
 
         left =
             List.take leftCount cards
@@ -130,31 +126,6 @@ isolateDsl seq stack cardIndex =
         ++ cardListStr held
         ++ " )"
         ++ afterPart
-
-
-{-| Number of cards in the LEFT piece after a split at `cardIndex`
-of a stack of size `n`. Mirrors the asymmetric rule in
-`Lib.CardStack.split` and `ts/game_events/primitives.ts:applySplit`.
--}
-splitLeftCount : Int -> Int -> Int
-splitLeftCount cardIndex n =
-    if cardIndex + 1 <= n // 2 then
-        cardIndex + 1
-
-    else
-        cardIndex
-
-
-{-| Inverse of `splitLeftCount` — recover the GameEvent cardIndex
-from the left-piece length on the wire.
--}
-splitCardIndexFromLeftCount : Int -> Int -> Int
-splitCardIndexFromLeftCount leftCount n =
-    if leftCount <= n // 2 then
-        leftCount - 1
-
-    else
-        leftCount
 
 
 mergeStackDsl : Int -> CardStack -> CardStack -> Side -> NonEmpty TimeLoc -> String

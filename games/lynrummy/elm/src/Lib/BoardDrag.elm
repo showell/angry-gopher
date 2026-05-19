@@ -54,7 +54,7 @@ handleMouseUp releasePoint tMs d input =
         BoardGesture.Split p ->
             let
                 newBoard =
-                    Execute.split p.stack p.cardIndex input.board
+                    Execute.split p.stack p.leftCount input.board
 
                 splitStatus =
                     { text = "Be careful with splitting! Splits only pay off when you get more cards on the board or make prettier piles."
@@ -65,7 +65,7 @@ handleMouseUp releasePoint tMs d input =
             , status = Status.geometryFeedback input.board newBoard |> Maybe.withDefault splitStatus
             , actionLog = input.actionLog ++ [ { action = GameEvent.Split p } ]
             , nextSeq = input.nextSeq + 1
-            , outboundPayload = Just (GameEvent.splitDsl input.nextSeq p.stack p.cardIndex)
+            , outboundPayload = Just (GameEvent.splitDsl input.nextSeq p.stack p.leftCount)
             }
 
         BoardGesture.MergeStack p ->

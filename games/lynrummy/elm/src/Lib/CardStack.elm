@@ -314,19 +314,26 @@ fromShorthand shorthand deck loc =
 -- different `loc` adjustments (same TS behavior).
 
 
+{-| Slice `s` after the first `leftCount` cards and assign each piece
+its post-split screen position. The physics branch is chosen
+deterministically from `leftCount` alone: when `leftCount` sits in the
+first half, the left piece is the "small" one (small nudge, residue
+hops); otherwise the right piece is.
+
+`leftCount` must be in `[1, size s - 1]`. Size-1 stacks return
+unchanged (caller responsibility, preserves TS-port total-function
+semantics).
+-}
 split : Int -> CardStack -> List CardStack
-split cardIndex s =
+split leftCount s =
     if size s <= 1 then
-        -- Caller is expected to check this. Preserve the TS
-        -- "throw" semantics here by returning the stack unchanged
-        -- (the Elm port favors total functions over exceptions).
         [ s ]
 
-    else if cardIndex + 1 <= size s // 2 then
-        leftSplit (cardIndex + 1) s
+    else if leftCount <= size s // 2 then
+        leftSplit leftCount s
 
     else
-        rightSplit cardIndex s
+        rightSplit leftCount s
 
 
 {-| Split with the left piece as the "primary" (stays near origin).

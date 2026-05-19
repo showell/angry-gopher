@@ -36,13 +36,14 @@ import Lib.WingView as WingView
 {-| Result of resolving a board-card mouseup. `MergeStack` and
 `MoveStack` carry the captured `boardPath` (in board frame)
 so `Game.Play.update` can both apply the event and send the
-wire payload without re-deriving anything. `Split` is the
-click case (cursor stayed within `clickThreshold` of mousedown),
-so it has no meaningful gesture. `BoardCardOffBoard` is the
-scold case — the user dropped the cards off the board.
+wire payload without re-deriving anything. `Split` carries the
+already-decided `leftCount` (logical split — clicked card joins
+the smaller chunk); downstream sees a single unambiguous
+number, no rule to re-apply. `BoardCardOffBoard` is the scold
+case — the user dropped the cards off the board.
 -}
 type BoardMouseUp
-    = Split { stack : CardStack, cardIndex : Int }
+    = Split { stack : CardStack, leftCount : Int }
     | MergeStack { source : CardStack, target : CardStack, side : Side, boardPath : NonEmpty TimeLoc }
     | MoveStack { stack : CardStack, newLoc : BoardLocation, boardPath : NonEmpty TimeLoc }
     | BoardCardOffBoard
@@ -158,13 +159,19 @@ handleMouseUp releasePoint tMs d boardRect =
 {-| Resolve a completed board-card drag into the action variant
 (if any) it should produce. Click-vs-drag check: if the cursor
 is still within `clickThreshold` of `originalCursor`, emit a
-`Split` at the captured `cardIndex`. Returns Nothing only for
-the off-board case — caller maps that to `BoardCardOffBoard`.
+`Split` with the gesture-time logical leftCount (the clicked
+card joins whichever chunk is smaller). Returns Nothing only
+for the off-board case — caller maps that to `BoardCardOffBoard`.
 -}
 resolveBoardCardGesture : BoardCardDragInfo -> Maybe GA.Rect -> Maybe BoardMouseUp
 resolveBoardCardGesture d boardRect =
     if GA.distSquared d.cursor d.originalCursor <= GA.clickThreshold then
-        Just (Split { stack = d.stack, cardIndex = d.cardIndex })
+        Just
+            (Split
+                { stack = d.stack
+                , leftCount = clickToLeftCount d.cardIndex (CardStack.size d.stack)
+                }
+            )
 
     else
         let
@@ -296,3 +303,21 @@ isDropFootprintInBounds cardCount loc =
         && (loc.top >= 0)
         && (loc.left + BG.stackWidth cardCount <= bounds.maxWidth)
         && (loc.top + BG.cardHeight <= bounds.maxHeight)
+
+
+{-| Translate "user clicked card at index `cardIndex`" into the
+logical `leftCount` of the resulting split. The clicked card
+joins whichever chunk is smaller — first-half click → clicked
+card ends the left chunk (leftCount = cardIndex + 1);
+second-half click → clicked card starts the right chunk
+(leftCount = cardIndex). This is the one gesture-time decision
+about which side the user meant; downstream physics
+(`Lib.CardStack.split`) only sees `leftCount`.
+-}
+clickToLeftCount : Int -> Int -> Int
+clickToLeftCount cardIndex stackSize =
+    if cardIndex + 1 <= stackSize // 2 then
+        cardIndex + 1
+
+    else
+        cardIndex
