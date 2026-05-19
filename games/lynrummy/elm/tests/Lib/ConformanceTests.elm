@@ -13,6 +13,7 @@ case-match is the live op registry.
 import Dict
 import Expect
 import Lib.BoardActions exposing (Side(..))
+import Lib.BoardDsl as BoardDsl
 import Lib.BoardGesture as BoardGesture
 import Lib.CardStack as CardStack exposing (BoardCardState(..), BoardLocation, CardStack, HandCard, HandCardState(..))
 import Lib.ConformanceDsl as Dsl
@@ -103,6 +104,9 @@ verify sc =
 
         "undo_walkthrough" ->
             verifyUndoWalkthrough sc
+
+        "split_physics" ->
+            verifySplitPhysics sc
 
         _ ->
             -- Verifier not yet ported from fixturegen. The legacy
@@ -750,6 +754,104 @@ verifyGestureFloaterOverWing sc =
 
         ( _, _, Nothing ) ->
             Expect.fail "gesture_floater_over_wing scenario missing floater_at"
+
+
+
+-- SPLIT PHYSICS
+--
+-- Both-languages-as-producers conformance for `Lib.CardStack.split`
+-- and its TS twin `ts/game_events/primitives.ts:applySplit`. Each
+-- scenario carries a single input stack at a loc, a `left_count`,
+-- and the two expected pieces (`expect_left:` / `expect_right:`,
+-- each one `at (l,t): cards` line). Drift between TS and Elm
+-- physics fails its own gate immediately.
+
+
+verifySplitPhysics : Dsl.Scenario -> Expect.Expectation
+verifySplitPhysics sc =
+    case ( sc.board, Dict.get "left_count" sc.otherScalars |> Maybe.andThen String.toInt ) of
+        ( inputStack :: _, Just leftCount ) ->
+            let
+                expectedPair =
+                    Maybe.map2 Tuple.pair
+                        (Dict.get "expect_left" sc.otherBlocks |> Maybe.andThen parseSingleStackBlock)
+                        (Dict.get "expect_right" sc.otherBlocks |> Maybe.andThen parseSingleStackBlock)
+            in
+            case expectedPair of
+                Just ( expectLeft, expectRight ) ->
+                    let
+                        pieces =
+                            CardStack.split leftCount (stackFromDsl inputStack)
+                    in
+                    case pieces of
+                        [ gotLeft, gotRight ] ->
+                            if cardsAndLocEqual gotLeft expectLeft && cardsAndLocEqual gotRight expectRight then
+                                Expect.pass
+
+                            else
+                                Expect.fail
+                                    ("split mismatch: expected "
+                                        ++ dslStackStr expectLeft
+                                        ++ " / "
+                                        ++ dslStackStr expectRight
+                                        ++ "; got "
+                                        ++ cardStackStr gotLeft
+                                        ++ " / "
+                                        ++ cardStackStr gotRight
+                                    )
+
+                        _ ->
+                            Expect.fail ("CardStack.split returned " ++ String.fromInt (List.length pieces) ++ " pieces, expected 2")
+
+                Nothing ->
+                    Expect.fail "split_physics scenario missing expect_left or expect_right block (or parse failed)"
+
+        ( [], _ ) ->
+            Expect.fail "split_physics scenario missing board: input stack"
+
+        ( _, Nothing ) ->
+            Expect.fail "split_physics scenario missing left_count: scalar"
+
+
+parseSingleStackBlock : List String -> Maybe Dsl.Stack
+parseSingleStackBlock lines =
+    case lines of
+        [ line ] ->
+            case BoardDsl.parseStackLine line of
+                Ok cs ->
+                    Just { cards = List.map .card cs.boardCards, loc = cs.loc }
+
+                Err _ ->
+                    Nothing
+
+        _ ->
+            Nothing
+
+
+cardsAndLocEqual : CardStack -> Dsl.Stack -> Bool
+cardsAndLocEqual got expected =
+    let
+        gotCards =
+            List.map .card got.boardCards
+    in
+    got.loc.left == expected.loc.left
+        && got.loc.top == expected.loc.top
+        && gotCards == expected.cards
+
+
+dslStackStr : Dsl.Stack -> String
+dslStackStr s =
+    "[" ++ String.join " " (List.map Debug.toString s.cards) ++ "] at (" ++ locStrSimple s.loc ++ ")"
+
+
+cardStackStr : CardStack -> String
+cardStackStr s =
+    "[" ++ String.join " " (List.map (.card >> Debug.toString) s.boardCards) ++ "] at (" ++ locStrSimple s.loc ++ ")"
+
+
+locStrSimple : BoardLocation -> String
+locStrSimple loc =
+    String.fromInt loc.left ++ "," ++ String.fromInt loc.top
 
 
 
