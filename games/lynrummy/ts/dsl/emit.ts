@@ -4,8 +4,8 @@
 // canonical shape — the action-log format spoken by
 // `Lib.GameEvent` / `Lib.WireAction` on the Elm side:
 //
-//   split <left-cards> / <right-cards>
-//   isolate <before-cards> ( <held-card> ) <after-cards>
+//   split <left-cards> / <right-cards> at (<l>,<t>)
+//   isolate <before-cards> ( <held-card> ) <after-cards> at (<l>,<t>)
 //   merge_stack [<src>] at (<l>,<t>) -> [<tgt>] at (<l>,<t>) /<side> :: path (...)
 //   merge_hand <card> -> [<tgt>] at (<l>,<t>) /<side>
 //   move_stack [<cards>] at (<l>,<t>) -> (<l>,<t>) :: path (...)
@@ -14,12 +14,17 @@
 // Conventions across every emitter:
 //   - Coordinates as (left, top) — left first.
 //   - Card glyphs as Unicode suits (♣ ♦ ♠ ♥); deck-2 trailing `'`.
-//   - split and isolate show their result chunks directly (no loc
-//     needed — cards uniquely identify the source stack). The held
-//     card in isolate is parenthesized, so end positions look like:
-//       isolate ( <held> ) <after>     (held at left end)
-//       isolate <before> ( <held> )    (held at right end)
-//   - Other stack references carry `[cards] at (l,t)`.
+//   - Every stack reference carries its loc inline (loc AFTER cards,
+//     matching the merge_stack / move_stack convention). For split
+//     and isolate the loc is the SOURCE stack's pre-action loc; the
+//     post-action piece locs are derivable from the physics rule
+//     in primitives.ts:applySplit / applyIsolate. The held card in
+//     isolate is parenthesized, so end positions look like:
+//       isolate ( <held> ) <after> at (l,t)     (held at left end)
+//       isolate <before> ( <held> ) at (l,t)    (held at right end)
+//   - The loc is load-bearing: `findStack` on the receiving side
+//     checks loc as well as cards, turning stale stack references
+//     into loud failures instead of silent geometry drift.
 //   - merge_stack and move_stack always carry their `:: path (...)`
 //     suffix — the Elm animator requires a non-empty path; the
 //     primitive type carries it as `BoardPath` (non-empty by
@@ -41,12 +46,12 @@ import type { BoardPath } from "../geometry/synthesize_board_paths.ts";
 export function formatPrimitive(p: Primitive, board: readonly BoardStack[]): string {
   switch (p.action) {
     case "split": {
-      const cards = board[p.stackIndex]!.cards;
-      return `split ${formatCardList(cards.slice(0, p.leftCount))} / ${formatCardList(cards.slice(p.leftCount))}`;
+      const stack = board[p.stackIndex]!;
+      return `split ${formatCardList(stack.cards.slice(0, p.leftCount))} / ${formatCardList(stack.cards.slice(p.leftCount))} at ${formatLoc(stack.loc)}`;
     }
     case "isolate": {
-      const cards = board[p.stackIndex]!.cards;
-      return formatIsolateLine(cards, p.cardIndex);
+      const stack = board[p.stackIndex]!;
+      return `${formatIsolateLine(stack.cards, p.cardIndex)} at ${formatLoc(stack.loc)}`;
     }
     case "merge_stack":
       return `merge_stack ${formatStackRef(board[p.sourceStack]!)} -> ${formatStackRef(board[p.targetStack]!)} /${p.side}${formatPathSuffix(p.path)}`;

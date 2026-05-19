@@ -23,7 +23,7 @@ scenario undo_walkthrough_split_then_move
       expect_undoable: false
     step_2:
       desc: player splits the K♠-A♠-2♠-3♠ run at the midpoint
-      action: split K♠ A♠ / 2♠ 3♠
+      action: split K♠ A♠ / 2♠ 3♠ at (70,20)
       expect_board_count: 7
       expect_undoable: true
     step_3:
@@ -199,7 +199,7 @@ scenario undo_split_piece_returns_to_split_position
       expect_undoable: false
     step_2:
       desc: player splits K♠-A♠-2♠-3♠ at midpoint — tie on chunk size, so the right [2♠ 3♠] nudges up to (top=16, left=138).
-      action: split K♠ A♠ / 2♠ 3♠
+      action: split K♠ A♠ / 2♠ 3♠ at (70,20)
       expect_board_count: 3
       expect_undoable: true
       expect_loc: (138,16)

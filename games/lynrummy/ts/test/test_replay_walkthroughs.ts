@@ -61,6 +61,48 @@ function splitOnParens(body: string): { before: string; held: string; after: str
   };
 }
 
+/** Pull `at (l,t)` off the end of a body string. Required — throws
+ *  if absent. Used by split / isolate parsers where the source loc
+ *  is the load-bearing back-half of the stack reference. */
+function stripTrailingLoc(body: string, line: string): { body: string; loc: { left: number; top: number } } {
+  const m = body.match(/^(.*)\s+at\s+\((-?\d+)\s*,\s*(-?\d+)\)\s*$/);
+  if (!m) {
+    throw new Error(`missing trailing 'at (l,t)' loc on action: ${line}`);
+  }
+  return {
+    body: m[1]!.trim(),
+    loc: { left: parseInt(m[2]!, 10), top: parseInt(m[3]!, 10) },
+  };
+}
+
+/** Find the stack on `board` whose cards AND loc match. Stale
+ *  references (right content, wrong place — caused by a prior
+ *  action having moved/replaced the stack) become loud errors
+ *  here rather than silent geometry drift downstream. */
+function findStackByContentAndLoc(
+  board: readonly BoardStack[],
+  cards: readonly Card[],
+  loc: { left: number; top: number },
+  line: string,
+): number {
+  for (let i = 0; i < board.length; i++) {
+    const s = board[i]!;
+    if (s.loc.left !== loc.left || s.loc.top !== loc.top) continue;
+    if (s.cards.length !== cards.length) continue;
+    let same = true;
+    for (let j = 0; j < cards.length; j++) {
+      const a = s.cards[j]!;
+      const b = cards[j]!;
+      if (a.rank !== b.rank || a.suit !== b.suit || a.deck !== b.deck) {
+        same = false;
+        break;
+      }
+    }
+    if (same) return i;
+  }
+  throw new Error(`stack not found at loc (${loc.left},${loc.top}): ${line}`);
+}
+
 // --- DSL parser -----------------------------------------------------
 
 interface Walkthrough {
@@ -119,32 +161,35 @@ function parseActionLine(
   line: string,
   board: readonly BoardStack[],
 ): Primitive {
-  // split <left-cards> / <right-cards>
-  let m = line.match(/^split\s+(.*)$/);
-  if (m && line.startsWith("split ")) {
-    const chunks = splitOnSlash(m[1]!);
-    if (chunks.length === 2) {
-      const left = parseDslCards(chunks[0]!);
-      const right = parseDslCards(chunks[1]!);
-      const cards = [...left, ...right];
-      return makeSplit(board, findStackIndex(board, cards), left.length);
+  // split <left-cards> / <right-cards> at (l,t)
+  if (line.startsWith("split ")) {
+    const { body, loc } = stripTrailingLoc(line.slice("split ".length), line);
+    const chunks = splitOnSlash(body);
+    if (chunks.length !== 2) {
+      throw new Error(`split needs left/right chunks: ${line}`);
     }
+    const left = parseDslCards(chunks[0]!);
+    const right = parseDslCards(chunks[1]!);
+    const cards = [...left, ...right];
+    return makeSplit(board, findStackByContentAndLoc(board, cards, loc, line), left.length);
   }
-  // isolate <before> ( <held> ) <after>
-  m = line.match(/^isolate\s+(.*)$/);
-  if (m && line.startsWith("isolate ")) {
-    const parts = splitOnParens(m[1]!);
-    if (parts) {
-      const before = parseDslCards(parts.before);
-      const held = parseDslCards(parts.held);
-      const after = parseDslCards(parts.after);
-      if (held.length !== 1) {
-        throw new Error(`isolate held chunk must have exactly one card: ${line}`);
-      }
-      const cards = [...before, held[0]!, ...after];
-      return makeIsolate(board, findStackIndex(board, cards), before.length);
+  // isolate <before> ( <held> ) <after> at (l,t)
+  if (line.startsWith("isolate ")) {
+    const { body, loc } = stripTrailingLoc(line.slice("isolate ".length), line);
+    const parts = splitOnParens(body);
+    if (!parts) {
+      throw new Error(`isolate needs ( <held> ) chunk: ${line}`);
     }
+    const before = parseDslCards(parts.before);
+    const held = parseDslCards(parts.held);
+    const after = parseDslCards(parts.after);
+    if (held.length !== 1) {
+      throw new Error(`isolate held chunk must have exactly one card: ${line}`);
+    }
+    const cards = [...before, held[0]!, ...after];
+    return makeIsolate(board, findStackByContentAndLoc(board, cards, loc, line), before.length);
   }
+  let m: RegExpMatchArray | null = null;
   // merge_stack [src] -> [tgt] /side
   m = line.match(/^merge_stack\s+\[([^\]]+)\]\s*->\s*\[([^\]]+)\]\s*\/(left|right)$/);
   if (m) {

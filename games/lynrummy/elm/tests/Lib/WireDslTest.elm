@@ -35,23 +35,23 @@ literalShapes =
         [ test "split (leftCount=1)" <|
             \_ ->
                 GameEvent.splitDsl 42 sampleStackAceTwoThree 1
-                    |> Expect.equal "42) split A♥ / 2♥ 3♥'"
+                    |> Expect.equal "42) split A♥ / 2♥ 3♥' at (10,53)"
         , test "split (leftCount=2)" <|
             \_ ->
                 GameEvent.splitDsl 42 sampleStackAceTwoThree 2
-                    |> Expect.equal "42) split A♥ 2♥ / 3♥'"
+                    |> Expect.equal "42) split A♥ 2♥ / 3♥' at (10,53)"
         , test "isolate interior" <|
             \_ ->
                 GameEvent.isolateDsl 43 sampleStackAceTwoThree 1
-                    |> Expect.equal "43) isolate A♥ ( 2♥ ) 3♥'"
+                    |> Expect.equal "43) isolate A♥ ( 2♥ ) 3♥' at (10,53)"
         , test "isolate left end" <|
             \_ ->
                 GameEvent.isolateDsl 44 sampleStackAceTwoThree 0
-                    |> Expect.equal "44) isolate ( A♥ ) 2♥ 3♥'"
+                    |> Expect.equal "44) isolate ( A♥ ) 2♥ 3♥' at (10,53)"
         , test "isolate right end" <|
             \_ ->
                 GameEvent.isolateDsl 45 sampleStackAceTwoThree 2
-                    |> Expect.equal "45) isolate A♥ 2♥ ( 3♥' )"
+                    |> Expect.equal "45) isolate A♥ 2♥ ( 3♥' ) at (10,53)"
         , test "merge_stack with path" <|
             \_ ->
                 GameEvent.mergeStackDsl 43 sampleStackFour sampleStackAceTwoThree Right samplePath
@@ -100,7 +100,7 @@ roundTrips =
                             { seq = 1
                             , event =
                                 Split
-                                    { stack = stackWithDefaultLoc sampleStackAceTwoThree
+                                    { stack = sampleStackAceTwoThree
                                     , leftCount = 1
                                     }
                             }
@@ -117,7 +117,7 @@ roundTrips =
                             { seq = 2
                             , event =
                                 Split
-                                    { stack = stackWithDefaultLoc sampleStackAceTwoThree
+                                    { stack = sampleStackAceTwoThree
                                     , leftCount = 2
                                     }
                             }
@@ -134,7 +134,7 @@ roundTrips =
                             { seq = 9
                             , event =
                                 Isolate
-                                    { stack = stackWithDefaultLoc sampleStackAceTwoThree
+                                    { stack = sampleStackAceTwoThree
                                     , cardIndex = 1
                                     }
                             }
@@ -217,13 +217,13 @@ roundTrips =
                     |> Expect.equal (Ok { seq = 7, event = Undo })
         , test "parser accepts ASCII suit chars too" <|
             \_ ->
-                WA.parseDsl "8) split AH / 2H 3H'"
+                WA.parseDsl "8) split AH / 2H 3H' at (10,53)"
                     |> Expect.equal
                         (Ok
                             { seq = 8
                             , event =
                                 Split
-                                    { stack = stackWithDefaultLoc sampleStackAceTwoThree
+                                    { stack = sampleStackAceTwoThree
                                     , leftCount = 1
                                     }
                             }
@@ -246,13 +246,6 @@ sampleStackAceTwoThree =
     }
 
 
-{-| split / isolate wire shapes no longer carry a loc; the parser
-defaults to (0,0). Downstream `findStack` matches by card content
-so the loc difference doesn't matter at runtime, but the round-trip
-test has to expect the default. -}
-stackWithDefaultLoc : CardStack -> CardStack
-stackWithDefaultLoc s =
-    { s | loc = { left = 0, top = 0 } }
 
 
 sampleStackFour : CardStack

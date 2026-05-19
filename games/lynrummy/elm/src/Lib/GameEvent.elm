@@ -28,24 +28,27 @@ specific encoder (no GameEvent value built just to re-dispatch
 on it). The matching parser lives in `Lib.WireAction`.
 
 Grammar — each line is `N) action_body[ :: path (...)]`.
-Stack references on most events carry their loc inline; split
-and isolate show their result chunks directly (no loc needed —
-cards are globally unique so they identify the source stack):
+Every stack reference carries its loc inline (after the cards,
+matching the merge_stack / move_stack convention). For split
+and isolate the loc is the SOURCE stack's pre-action loc; the
+loc is load-bearing because the receiver's `findStack` matches
+on cards AND loc — a stale reference fails loudly instead of
+silently picking the wrong stack:
 
     44) move_stack [A♥ 2♥ 3♥'] at (10,53) -> (22,300) :: path (10,53@0)(22,300@500)
     45) merge_stack [4♦'] at (407,200) -> [4♠ 4♣'] at (200,100) /right :: path (...)
-    46) split 2♦' / 3♠' 4♦'
-    47) isolate 2♦' ( 3♠' ) 4♦'
+    46) split 2♦' / 3♠' 4♦' at (332,52)
+    47) isolate 2♦' ( 3♠' ) 4♦' at (332,52)
     48) merge_hand 7♥' -> [7♠ 7♦ 7♣] at (107,52) /right
     49) place_hand 7♥' -> (400,300)
     50) complete_turn
     51) undo
 
 The held card in isolate is parenthesized; end positions drop
-the empty side:
+the empty side (no leading/trailing slash):
 
-    52) isolate ( 7♥' ) 8♥' 9♥'    (held at left end)
-    53) isolate 7♥' 8♥' ( 9♥' )    (held at right end)
+    52) isolate ( 7♥' ) 8♥' 9♥' at (107,52)    (held at left end)
+    53) isolate 7♥' 8♥' ( 9♥' ) at (107,52)    (held at right end)
 
 -}
 
@@ -88,6 +91,8 @@ splitDsl seq stack leftCount =
         ++ cardListStr left
         ++ " / "
         ++ cardListStr right
+        ++ " at "
+        ++ locStr stack.loc
 
 
 isolateDsl : Int -> CardStack -> Int -> String
@@ -126,6 +131,8 @@ isolateDsl seq stack cardIndex =
         ++ cardListStr held
         ++ " )"
         ++ afterPart
+        ++ " at "
+        ++ locStr stack.loc
 
 
 mergeStackDsl : Int -> CardStack -> CardStack -> Side -> NonEmpty TimeLoc -> String

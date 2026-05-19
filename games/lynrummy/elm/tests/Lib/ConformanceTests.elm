@@ -1150,41 +1150,71 @@ parseReplaySpec raw =
 
 parseSplit : String -> Maybe ReplaySpec
 parseSplit body =
-    -- "<left-cards> / <right-cards>"
-    case splitOnSlash body of
-        [ leftStr, rightStr ] ->
-            Maybe.map2
-                (\left right ->
-                    SpecSplit (left ++ right) (List.length left)
-                )
-                (parseLooseCards leftStr)
-                (parseLooseCards rightStr)
+    -- "<left-cards> / <right-cards> at (l,t)"
+    case stripTrailingLoc body of
+        Just inner ->
+            case splitOnSlash inner of
+                [ leftStr, rightStr ] ->
+                    Maybe.map2
+                        (\left right ->
+                            SpecSplit (left ++ right) (List.length left)
+                        )
+                        (parseLooseCards leftStr)
+                        (parseLooseCards rightStr)
 
-        _ ->
+                _ ->
+                    Nothing
+
+        Nothing ->
             Nothing
 
 
 parseIsolate : String -> Maybe ReplaySpec
 parseIsolate body =
-    -- "<before> ( <held> ) <after>"
-    case splitOnParens body of
-        Just parts ->
-            Maybe.map3
-                (\before held after ->
-                    Maybe.map
-                        (\heldCard ->
-                            SpecIsolate
-                                (before ++ [ heldCard ] ++ after)
-                                (List.length before)
+    -- "<before> ( <held> ) <after> at (l,t)"
+    case stripTrailingLoc body of
+        Just inner ->
+            case splitOnParens inner of
+                Just parts ->
+                    Maybe.map3
+                        (\before held after ->
+                            Maybe.map
+                                (\heldCard ->
+                                    SpecIsolate
+                                        (before ++ [ heldCard ] ++ after)
+                                        (List.length before)
+                                )
+                                (singleton held)
                         )
-                        (singleton held)
-                )
-                (parseLooseCards parts.before)
-                (parseLooseCards parts.held)
-                (parseLooseCards parts.after)
-                |> Maybe.andThen identity
+                        (parseLooseCards parts.before)
+                        (parseLooseCards parts.held)
+                        (parseLooseCards parts.after)
+                        |> Maybe.andThen identity
+
+                Nothing ->
+                    Nothing
 
         Nothing ->
+            Nothing
+
+
+{-| Drop the trailing `at (l,t)` from a split / isolate action body.
+The ReplaySpec consumer here resolves stacks by content (it's a
+test-side replay over a sim board), so it doesn't need the loc —
+but the wire format requires it, and silently tolerating its
+absence would mask drift. Returns Nothing when missing.
+-}
+stripTrailingLoc : String -> Maybe String
+stripTrailingLoc raw =
+    let
+        s =
+            String.trim raw
+    in
+    case List.reverse (String.indexes " at " s) of
+        atIdx :: _ ->
+            Just (String.left atIdx s |> String.trim)
+
+        [] ->
             Nothing
 
 

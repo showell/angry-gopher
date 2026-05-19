@@ -18,10 +18,10 @@
 # use the canonical SUIT♠="CDSH" with trailing apostrophe for deck-1.
 #
 # Primitive line syntax mirrors `replay_walkthroughs.dsl`:
-#   - split <left-cards> / <right-cards>
-#   - isolate <before-cards> ( <held-card> ) <after-cards>
-#   - merge_stack [src] -> [tgt] /side
-#   - move_stack [content] -> (top,left)
+#   - split <left-cards> / <right-cards> at (left,top)
+#   - isolate <before-cards> ( <held-card> ) <after-cards> at (left,top)
+#   - merge_stack [src] at (l,t) -> [tgt] at (l,t) /side
+#   - move_stack [content] at (l,t) -> (left,top)
 #
 # Authored 2026-05-03 alongside the verbs.ts port.
 
@@ -39,7 +39,7 @@ scenario peel_left_edge_then_merge
   side: right
   expect:
     primitives:
-      - isolate ( 5♥ ) 6♥ 7♥ 8♥
+      - isolate ( 5♥ ) 6♥ 7♥ 8♥ at (100,100)
       - merge_stack [5♥] at (100,100) -> [4♥] at (400,100) /right :: path (100,100@0)(100,100@44)(103,100@88)(110,100@132)(122,100@176)(139,100@220)(162,100@264)(189,99@309)(219,99@353)(251,99@397)(284,99@441)(316,99@485)(346,99@529)(373,98@573)(396,98@617)(413,98@661)(425,98@705)(432,98@749)(435,98@793)(435,98@838)
 scenario pluck_interior_premoves_donor
   desc: Plucking 7♥ from a 5-card run forces a pre-flight move on the donor (interior splits get pre-cleared per 2026-04-23). After the first split, [7♥ 8♥ 9♥] sits adjacent to [5♥ 6♥]; a second pre-flight relocates it before the next split.
@@ -54,7 +54,7 @@ scenario pluck_interior_premoves_donor
   side: right
   expect:
     primitives:
-      - isolate 5♥ 6♥ ( 7♥ ) 8♥ 9♥
+      - isolate 5♥ 6♥ ( 7♥ ) 8♥ 9♥ at (100,100)
       - merge_stack [7♥] at (166,100) -> [7♠] at (500,100) /right :: path (166,100@0)(166,100@49)(170,100@97)(177,100@146)(190,100@194)(209,100@243)(234,100@291)(264,99@340)(297,99@388)(332,99@437)(369,99@486)(404,99@534)(437,99@583)(467,98@631)(492,98@680)(511,98@728)(524,98@777)(531,98@825)(535,98@874)(535,98@923)
 scenario free_pull_in_place
   desc: Free-pull of trouble singleton onto target — no geometry pre-flight needed.
@@ -96,7 +96,7 @@ scenario splice_run
   expect:
     primitives:
       - move_stack [2♣ 3♦ 4♣ 5♥ 6♠] at (100,100) -> (52,92) :: path (100,100@0)(100,100@6)(100,100@13)(99,100@19)(97,99@26)(94,99@32)(91,99@38)(87,98@45)(83,97@51)(78,96@58)(74,96@64)(69,95@70)(65,94@77)(61,93@83)(58,93@90)(55,93@96)(53,92@102)(52,92@109)(52,92@115)(52,92@122)
-      - split 2♣ 3♦ / 4♣ 5♥ 6♠
+      - split 2♣ 3♦ / 4♣ 5♥ 6♠ at (52,92)
       - move_stack [2♣ 3♦] at (50,88) -> (52,167) :: path (50,88@0)(50,88@10)(50,89@21)(50,90@31)(50,93@42)(50,97@52)(50,103@62)(51,109@73)(51,116@83)(51,124@94)(51,131@104)(51,139@114)(51,146@125)(52,152@135)(52,158@146)(52,162@156)(52,165@166)(52,166@177)(52,167@187)(52,167@198)
       - merge_stack [4♠] at (450,100) -> [2♣ 3♦] at (52,167) /right :: path (450,100@0)(450,100@44)(447,101@89)(440,102@133)(428,104@177)(411,108@221)(389,112@266)(363,117@310)(333,123@354)(301,129@398)(269,136@443)(237,142@487)(207,148@531)(181,153@575)(159,157@620)(142,161@664)(130,163@708)(123,164@752)(120,165@797)(120,165@841)
 scenario shift_right_end
@@ -116,11 +116,11 @@ scenario shift_right_end
   side: right
   expect:
     primitives:
-      - isolate T♣ ( T♠ ) T♦
+      - isolate T♣ ( T♠ ) T♦ at (350,100)
       - move_stack [T♣] at (348,100) -> (52,182) :: path (348,100@0)(348,100@40)(345,101@81)(339,103@121)(328,105@162)(313,110@202)(293,115@242)(270,122@283)(243,129@323)(215,137@364)(185,145@404)(157,153@445)(130,160@485)(107,167@525)(87,172@566)(72,177@606)(61,179@647)(55,181@687)(52,182@727)(52,182@768)
       - merge_stack [T♦] at (418,100) -> [T♣] at (52,182) /right :: path (418,100@0)(418,100@45)(415,101@90)(408,102@134)(396,105@179)(379,109@224)(357,115@269)(330,121@314)(301,128@358)(269,136@403)(236,144@448)(204,152@493)(175,159@538)(148,165@582)(126,171@627)(109,175@672)(97,178@717)(90,179@762)(87,180@807)(87,180@851)
       - merge_stack [T♠] at (383,100) -> [J♥ Q♣ K♣] at (100,100) /right :: path (383,100@0)(383,100@24)(381,100@48)(377,100@72)(371,100@96)(362,100@120)(349,100@144)(335,99@168)(318,99@192)(301,99@216)(283,99@239)(266,99@263)(249,99@287)(235,98@311)(222,98@335)(213,98@359)(207,98@383)(203,98@407)(201,98@431)(201,98@455)
-      - isolate ( J♥ ) Q♣ K♣ T♠
+      - isolate ( J♥ ) Q♣ K♣ T♠ at (100,100)
       - merge_stack [J♥] at (100,100) -> [9♦] at (600,100) /right :: path (100,100@0)(101,100@70)(105,100@141)(116,100@211)(135,100@282)(163,100@352)(199,100@422)(241,99@493)(290,99@563)(341,99@634)(394,99@704)(445,99@774)(494,99@845)(536,98@915)(572,98@986)(600,98@1056)(619,98@1126)(630,98@1197)(634,98@1267)(635,98@1338)
 scenario steal_from_partial_left
   desc: Steal A♠ from [A♠ 2♠] (a length-2 partial source). Single split-at-1 separates the two cards; A♠ absorbs onto target.
@@ -135,7 +135,7 @@ scenario steal_from_partial_left
   side: right
   expect:
     primitives:
-      - isolate ( A♠ ) 2♠
+      - isolate ( A♠ ) 2♠ at (100,100)
       - merge_stack [A♠] at (100,100) -> [A♣ A♦] at (300,100) /right :: path (100,100@0)(100,100@35)(103,100@71)(108,100@106)(118,100@141)(132,100@176)(149,100@212)(171,99@247)(195,99@282)(221,99@317)(247,99@353)(273,99@388)(297,99@423)(319,98@458)(336,98@494)(350,98@529)(360,98@564)(365,98@599)(368,98@635)(368,98@670)
 scenario decompose_pair
   desc: Decompose a TROUBLE pair [3♥ 3♦] into two singletons. Single split-at-1.
@@ -146,4 +146,4 @@ scenario decompose_pair
   pair_before: 3♥ 3♦
   expect:
     primitives:
-      - isolate ( 3♥ ) 3♦
+      - isolate ( 3♥ ) 3♦ at (100,100)

@@ -1,56 +1,56 @@
 Game 17 board  ·  50 hands of 6 (benchmark size)  ·  seed=42
 
-  hand   1  single [Q♠] → 1-step plan                         1.8ms
-  hand   2  single [K♥'] → 2-step plan                       12.3ms
-  hand   3  single [Q♣'] → 4-step plan                        8.2ms
+  hand   1  single [Q♠] → 1-step plan                         2.0ms
+  hand   2  single [K♥'] → 2-step plan                       11.1ms
+  hand   3  single [Q♣'] → 4-step plan                        8.5ms
   hand   4  triple [J♥' J♣ J♠] → 0-step plan                  0.0ms
-  hand   5  single [A♥'] → 1-step plan                       21.0ms
-  hand   6  single [K♥'] → 2-step plan                        4.9ms
+  hand   5  single [A♥'] → 1-step plan                       24.8ms
+  hand   6  single [K♥'] → 2-step plan                        6.5ms
   hand   7  triple [J♥ J♠ J♣'] → 0-step plan                  0.0ms
-  hand   8  single [A♦'] → 1-step plan                        6.1ms
-  hand   9  single [8♣'] → 1-step plan                       11.0ms
+  hand   8  single [A♦'] → 1-step plan                        6.6ms
+  hand   9  single [8♣'] → 1-step plan                        9.7ms
   hand  10  triple [3♦' 4♣' 5♥'] → 0-step plan                0.0ms
-  hand  11  single [5♥'] → 1-step plan                        4.3ms
-  hand  12  single [8♣'] → 1-step plan                        7.1ms
-  hand  13  single [9♦] → 1-step plan                         4.9ms
-  hand  14  single [5♦'] → 1-step plan                        4.7ms
+  hand  11  single [5♥'] → 1-step plan                        3.8ms
+  hand  12  single [8♣'] → 1-step plan                        5.8ms
+  hand  13  single [9♦] → 1-step plan                         4.5ms
+  hand  14  single [5♦'] → 1-step plan                        4.6ms
   hand  15  single [8♠] → 1-step plan                         1.0ms
-  hand  16  single [8♣] → 1-step plan                         2.9ms
-  hand  17  single [Q♠] → 1-step plan                        14.6ms
+  hand  16  single [8♣] → 1-step plan                         3.1ms
+  hand  17  single [Q♠] → 1-step plan                        14.5ms
   hand  18  triple [2♦ 3♠' 4♦] → 0-step plan                  0.0ms
   hand  19  triple [4♦' 5♠' 6♥'] → 0-step plan                0.0ms
   hand  20  single [Q♠] → 1-step plan                         2.1ms
   hand  21  triple [7♣' 8♣' 9♣'] → 0-step plan                0.0ms
-  hand  22  single [A♥'] → 1-step plan                        5.9ms
-  hand  23  single [8♠'] → 1-step plan                        4.9ms
+  hand  22  single [A♥'] → 1-step plan                        5.8ms
+  hand  23  single [8♠'] → 1-step plan                        4.6ms
   hand  24  triple [T♠ J♠ Q♠'] → 0-step plan                  0.0ms
   hand  25  triple [K♦' K♠' K♣'] → 0-step plan                0.0ms
-  hand  26  single [7♥'] → 1-step plan                        1.5ms
-  hand  27  single [5♦] → 1-step plan                         6.9ms
-  hand  28  single [Q♠] → 1-step plan                         4.7ms
-  hand  29  stuck                                            22.8ms
+  hand  26  single [7♥'] → 1-step plan                        1.6ms
+  hand  27  single [5♦] → 1-step plan                         5.5ms
+  hand  28  single [Q♠] → 1-step plan                         4.2ms
+  hand  29  stuck                                            22.4ms
   hand  30  triple [T♥ J♠ Q♥] → 0-step plan                   0.0ms
-  hand  31  single [A♦'] → 1-step plan                        0.4ms
-  hand  32  single [A♦'] → 1-step plan                        5.6ms
-  hand  33  single [Q♣'] → 4-step plan                        4.0ms
+  hand  31  single [A♦'] → 1-step plan                        0.6ms
+  hand  32  single [A♦'] → 1-step plan                        7.2ms
+  hand  33  single [Q♣'] → 4-step plan                        4.2ms
   hand  34  single [A♠'] → 1-step plan                        1.3ms
-  hand  35  single [2♦] → 4-step plan                        24.2ms
+  hand  35  single [2♦] → 4-step plan                        23.8ms
   hand  36  triple [6♠' 7♦' 8♠'] → 0-step plan                0.0ms
-  hand  37  single [8♠] → 1-step plan                         6.8ms
-  hand  38  single [K♣'] → 2-step plan                        6.6ms
-  hand  39  single [Q♠'] → 1-step plan                        4.9ms
+  hand  37  single [8♠] → 1-step plan                         6.4ms
+  hand  38  single [K♣'] → 2-step plan                        6.7ms
+  hand  39  single [Q♠'] → 1-step plan                        4.8ms
   hand  40  triple [3♣' 4♦' 5♣] → 0-step plan                 0.0ms
   hand  41  single [8♣'] → 1-step plan                        2.5ms
   hand  42  triple [6♦ 7♣' 8♥'] → 0-step plan                 0.0ms
   hand  43  triple [Q♥' Q♠ Q♣] → 0-step plan                  0.0ms
-  hand  44  single [2♦] → 4-step plan                         8.9ms
-  hand  45  single [8♠'] → 1-step plan                       18.0ms
-  hand  46  single [5♦'] → 1-step plan                        4.6ms
-  hand  47  single [Q♠] → 1-step plan                         0.9ms
+  hand  44  single [2♦] → 4-step plan                         8.8ms
+  hand  45  single [8♠'] → 1-step plan                       16.1ms
+  hand  46  single [5♦'] → 1-step plan                        5.3ms
+  hand  47  single [Q♠] → 1-step plan                         1.1ms
   hand  48  triple [K♥ A♣' 2♥'] → 0-step plan                 0.0ms
-  hand  49  single [K♥] → 2-step plan                        10.7ms
-  hand  50  single [7♥'] → 1-step plan                        8.6ms
+  hand  49  single [K♥] → 2-step plan                        12.0ms
+  hand  50  single [7♥'] → 1-step plan                        8.9ms
 
 === summary ===
-  total wall:    261ms
+  total wall:    262ms
   outcomes:    triple=14  pair=0  single=35  stuck=1

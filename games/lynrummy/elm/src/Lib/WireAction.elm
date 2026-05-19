@@ -88,45 +88,53 @@ parseEvent s =
 
 parseSplit : String -> Result String GameEvent
 parseSplit s =
-    case splitOnSlash s of
-        [ leftStr, rightStr ] ->
-            Result.map2
-                (\left right ->
-                    Split
-                        { stack = stackOfCards (left ++ right)
-                        , leftCount = List.length left
-                        }
-                )
-                (parseCardList leftStr)
-                (parseCardList rightStr)
+    stripTrailingLoc s
+        |> Result.andThen
+            (\( body, loc ) ->
+                case splitOnSlash body of
+                    [ leftStr, rightStr ] ->
+                        Result.map2
+                            (\left right ->
+                                Split
+                                    { stack = stackOfCardsAt loc (left ++ right)
+                                    , leftCount = List.length left
+                                    }
+                            )
+                            (parseCardList leftStr)
+                            (parseCardList rightStr)
 
-        _ ->
-            Err ("expected 'split <left> / <right>' in: " ++ s)
+                    _ ->
+                        Err ("expected 'split <left> / <right> at (l,t)' in: " ++ s)
+            )
 
 
 parseIsolate : String -> Result String GameEvent
 parseIsolate s =
-    case splitOnParens s of
-        Just { before, held, after } ->
-            parseCardList before
-                |> Result.andThen
-                    (\b ->
-                        parseHeldCard held
+    stripTrailingLoc s
+        |> Result.andThen
+            (\( body, loc ) ->
+                case splitOnParens body of
+                    Just { before, held, after } ->
+                        parseCardList before
                             |> Result.andThen
-                                (\h ->
-                                    parseCardList after
-                                        |> Result.map
-                                            (\a ->
-                                                Isolate
-                                                    { stack = stackOfCards (b ++ [ h ] ++ a)
-                                                    , cardIndex = List.length b
-                                                    }
+                                (\b ->
+                                    parseHeldCard held
+                                        |> Result.andThen
+                                            (\h ->
+                                                parseCardList after
+                                                    |> Result.map
+                                                        (\a ->
+                                                            Isolate
+                                                                { stack = stackOfCardsAt loc (b ++ [ h ] ++ a)
+                                                                , cardIndex = List.length b
+                                                                }
+                                                        )
                                             )
                                 )
-                    )
 
-        Nothing ->
-            Err ("expected 'isolate <before> ( <held> ) <after>' in: " ++ s)
+                    Nothing ->
+                        Err ("expected 'isolate <before> ( <held> ) <after> at (l,t)' in: " ++ s)
+            )
 
 
 splitOnParens : String -> Maybe { before : String, held : String, after : String }
@@ -172,12 +180,48 @@ splitOnSlash s =
     String.split "/" s |> List.map String.trim
 
 
-stackOfCards : List Card -> CardStack
-stackOfCards cards =
+{-| Carry the parsed source loc through to the reconstructed
+CardStack. `findStack` on the apply side matches loc as well as
+cards, so a wire reference with the wrong loc fails loudly
+instead of silently picking up another stack with the same
+cards.
+-}
+stackOfCardsAt : BoardLocation -> List Card -> CardStack
+stackOfCardsAt loc cards =
     { boardCards =
         List.map (\c -> { card = c, state = FirmlyOnBoard }) cards
-    , loc = { left = 0, top = 0 }
+    , loc = loc
     }
+
+
+{-| Pull the required `at (l,t)` suffix off the end of a split /
+isolate body. Returns Err when absent — both wire formats must
+carry the source loc for the apply-side findStack to do its job.
+-}
+stripTrailingLoc : String -> Result String ( String, BoardLocation )
+stripTrailingLoc raw =
+    let
+        s =
+            String.trim raw
+    in
+    case List.reverse (String.indexes " at " s) of
+        atIdx :: _ ->
+            let
+                body =
+                    String.left atIdx s |> String.trim
+
+                tail =
+                    String.dropLeft (atIdx + 4) s |> String.trim
+            in
+            parseLoc tail
+                |> Result.map (\( loc, _ ) -> ( body, loc ))
+                |> Result.mapError
+                    (\msg ->
+                        "expected trailing 'at (l,t)' in: " ++ raw ++ " (" ++ msg ++ ")"
+                    )
+
+        [] ->
+            Err ("missing trailing 'at (l,t)' in: " ++ raw)
 
 
 parseMergeStack : String -> Result String GameEvent
