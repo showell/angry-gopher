@@ -76,6 +76,9 @@ type alias Model =
     -- back.
     , nextEngineRequestId : Int
 
+    -- The logged-in player's display name, passed in via flags.
+    -- Shown in the sidebar player panels ("steve (your turn)").
+    , playerName : String
     }
 
 
@@ -116,6 +119,7 @@ baseModel =
     , gameId = "default"
     , pendingEngineRequest = Nothing
     , nextEngineRequestId = 1
+    , playerName = "Player 1"
     }
 
 

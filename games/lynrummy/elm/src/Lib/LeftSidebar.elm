@@ -43,6 +43,7 @@ type ReplayControl
 
 type alias HumanTurnInfo =
     { turnIndex : Int
+    , playerName : String
     , deck : List Card
     , humanHand : Hand
     , agentHand : Hand
@@ -57,6 +58,7 @@ type alias HumanTurnInfo =
 
 type alias AgentTurnInfo =
     { turnIndex : Int
+    , playerName : String
     , deck : List Card
     , humanHand : Hand
     , agentHand : Hand
@@ -77,7 +79,7 @@ viewHumanTurn info =
         ]
         [ turnHeader info.turnIndex
         , playerPanel
-            { title = "Player 1 (your turn)"
+            { title = info.playerName ++ " (your turn)"
             , titleColor = Colors.navy
             , body =
                 [ viewHand info.handIsInteractive info.sourceCard info.hintedCards info.humanHand
@@ -89,7 +91,7 @@ viewHumanTurn info =
                 ]
             }
         , playerPanel
-            { title = "Player 2"
+            { title = "Agent"
             , titleColor = "#666"
             , body = [ cardsCount info.agentHand ]
             }
@@ -114,12 +116,12 @@ viewAgentTurn info =
         ]
         [ turnHeader info.turnIndex
         , playerPanel
-            { title = "Player 1"
+            { title = info.playerName
             , titleColor = "#666"
             , body = [ cardsCount info.humanHand ]
             }
         , playerPanel
-            { title = "Player 2 (agent's turn)"
+            { title = "Agent (their turn)"
             , titleColor = Colors.navy
             , body = [ viewHand handIsInteractive info.sourceCard hintedCards info.agentHand ]
             }

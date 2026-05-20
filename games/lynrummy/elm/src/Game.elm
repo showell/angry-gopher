@@ -51,6 +51,7 @@ import Time
 type alias Flags =
     { initialSessionId : Maybe Int
     , seedSource : Int
+    , playerName : String
     }
 
 
@@ -80,6 +81,7 @@ init flags =
         Just sid ->
             ( { baseModel
                 | sessionId = Just sid
+                , playerName = flags.playerName
                 , status =
                     { text = "Resuming session " ++ String.fromInt sid ++ "…"
                     , kind = Inform
@@ -109,6 +111,7 @@ init flags =
                     { baseModel
                         | gameState = initialRS
                         , initialGameState = initialRS
+                        , playerName = flags.playerName
                     }
             in
             ( dealtModel, fetchNewSession (InitialStateDsl.formatGameState initialRS) )

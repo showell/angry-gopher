@@ -47,7 +47,7 @@ func HandleGame(w http.ResponseWriter, r *http.Request) {
 	user := CurrentUser(r)
 	switch {
 	case sub == "" || sub == "/":
-		lynrummyElmPlay(w)
+		lynrummyElmPlay(w, user)
 	case sub == "elm.js":
 		lynrummyElmJS(w)
 	case sub == "engine.js":
@@ -69,7 +69,7 @@ func HandleGame(w http.ResponseWriter, r *http.Request) {
 			http.NotFound(w, r)
 			return
 		}
-		lynrummyElmPlayWithSession(w, id)
+		lynrummyElmPlayWithSession(w, user, id)
 	}
 }
 
@@ -344,16 +344,17 @@ func labelSuffix(label string) string {
 
 // --- Static ---
 
-func lynrummyElmPlay(w http.ResponseWriter) {
-	lynrummyElmPlayWithSession(w, 0)
+func lynrummyElmPlay(w http.ResponseWriter, user string) {
+	lynrummyElmPlayWithSession(w, user, 0)
 }
 
-func lynrummyElmPlayWithSession(w http.ResponseWriter, sessionID int64) {
+func lynrummyElmPlayWithSession(w http.ResponseWriter, user string, sessionID int64) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	flag := "null"
 	if sessionID > 0 {
 		flag = strconv.FormatInt(sessionID, 10)
 	}
+	playerNameJSON, _ := json.Marshal(user)
 	fmt.Fprintf(w, `<!doctype html>
 <html><head><meta charset="utf-8"><title>LynRummy (Elm)</title>
 <style>
@@ -380,6 +381,7 @@ func lynrummyElmPlayWithSession(w http.ResponseWriter, sessionID int64) {
     flags: {
       initialSessionId: initialSessionId,
       seedSource: Date.now(),
+      playerName: %s,
     },
   });
   app.ports.setSessionPath.subscribe(function(sid) {
@@ -389,7 +391,7 @@ func lynrummyElmPlayWithSession(w http.ResponseWriter, sessionID int64) {
   EngineGlue.attach(app);
 </script>
 </div>
-</body></html>`, flag)
+</body></html>`, flag, playerNameJSON)
 }
 
 func lynrummyElmJS(w http.ResponseWriter) {

@@ -153,6 +153,7 @@ leftSidebar model =
             in
             LeftSidebar.viewHumanTurn
                 { turnIndex = viewGameState.turnIndex
+                , playerName = model.playerName
                 , deck = viewGameState.deck
                 , humanHand = viewGameState.humanHand
                 , agentHand = viewGameState.agentHand
@@ -186,6 +187,7 @@ leftSidebar model =
             in
             LeftSidebar.viewAgentTurn
                 { turnIndex = viewGameState.turnIndex
+                , playerName = model.playerName
                 , deck = viewGameState.deck
                 , humanHand = viewGameState.humanHand
                 , agentHand = viewGameState.agentHand
