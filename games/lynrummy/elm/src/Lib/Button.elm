@@ -1,7 +1,6 @@
 module Lib.Button exposing
     ( button
     , disabledButton
-    , link
     )
 
 {-| Shared button styling. The seam is "how do I draw a
@@ -17,7 +16,7 @@ back-channeling into full-game concerns.
 
 import Lib.Colors exposing (navy)
 import Html exposing (Html)
-import Html.Attributes as Attr exposing (href, style)
+import Html.Attributes as Attr exposing (style)
 import Html.Events as Events
 
 
@@ -40,15 +39,6 @@ disabledButton label =
         (Attr.disabled True :: disabledAttrs)
         [ Html.text label ]
 
-
-{-| Anchor styled to match. Used for navigation that's a
-real URL hop (e.g. "← Lobby"), not an in-app Msg.
--}
-link : String -> String -> Html msg
-link label url =
-    Html.a
-        (href url :: style "text-decoration" "none" :: themedAttrs)
-        [ Html.text label ]
 
 
 

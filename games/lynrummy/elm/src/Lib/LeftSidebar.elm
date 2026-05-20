@@ -18,7 +18,7 @@ directly. Puzzles never call into here.
 
 import Game.Msg exposing (Msg(..))
 import Html exposing (Html, div)
-import Html.Attributes exposing (id, style)
+import Html.Attributes exposing (href, id, style)
 import Lib.Button as Button
 import Lib.CardStack exposing (HandCard, HandCardState(..))
 import Lib.Colors as Colors
@@ -94,6 +94,7 @@ viewHumanTurn info =
             , body = [ cardsCount info.agentHand ]
             }
         , deckRemaining info.deck
+        , homeLink
         ]
 
 
@@ -123,6 +124,7 @@ viewAgentTurn info =
             , body = [ viewHand handIsInteractive info.sourceCard hintedCards info.agentHand ]
             }
         , deckRemaining info.deck
+        , homeLink
         ]
 
 
@@ -203,8 +205,17 @@ viewTurnControls { canUndo, controlsEnabled, replayControl } =
           else
             Button.disabledButton "Hint"
         , viewReplayControl replayControl
-        , Button.link "← Home" "/"
         ]
+
+
+{-| A plain text link back home, shown at the bottom of the sidebar
+on both the human's and the agent's turn. Deliberately not a button
+— the buttons are reserved for gameplay actions.
+-}
+homeLink : Html Msg
+homeLink =
+    div [ style "margin-top" "16px", style "font-size" "13px" ]
+        [ Html.a [ href "/" ] [ Html.text "Go back home" ] ]
 
 
 viewReplayControl : ReplayControl -> Html Msg

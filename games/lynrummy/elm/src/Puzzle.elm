@@ -757,6 +757,7 @@ view model =
                 , resetButton model
                 , prevButton model
                 , nextButton model
+                , homeLink
                 ]
             , BoardView.boardShell
                 { board = board
@@ -769,6 +770,15 @@ view model =
             ]
         , congratsPopup model
         ]
+
+
+{-| A plain text link back home, below the gameplay buttons.
+Deliberately not a button — buttons are reserved for gameplay.
+-}
+homeLink : Html Msg
+homeLink =
+    div [ style "margin-top" "8px", style "font-size" "13px" ]
+        [ Html.a [ Attr.href "/" ] [ text "Go back home" ] ]
 
 
 {-| Focused on every transition to congratsVisible=True so
