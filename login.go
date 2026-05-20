@@ -35,6 +35,25 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 	renderLoginPage(w, auth.CurrentUser(r), "")
 }
 
+// handleLogout clears the cookie server-side and the name from
+// localStorage client-side, then sends the player back to /login.
+func handleLogout(w http.ResponseWriter, r *http.Request) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     "gopher_user",
+		Value:    "",
+		Path:     "/",
+		MaxAge:   -1,
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+	})
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	fmt.Fprint(w, `<!doctype html><meta charset="utf-8">
+<script>
+  localStorage.removeItem('gopher_user');
+  location.replace('/login');
+</script>`)
+}
+
 func renderLoginPage(w http.ResponseWriter, current, errMsg string) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 

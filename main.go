@@ -9,13 +9,15 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
+	"angry-gopher/auth"
 	"angry-gopher/views"
 	"angry-gopher/zulip"
 )
 
-func buildMux() *http.ServeMux {
+func buildMux() http.Handler {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/version", handleVersion)
@@ -23,15 +25,39 @@ func buildMux() *http.ServeMux {
 	// HTML pages, incl. the home/lobby at "/". Single source of truth.
 	views.RegisterPages(mux)
 
-	// Name login (sets the gopher_user cookie + fires a Zulip ping).
+	// Name login/logout (login sets the gopher_user cookie + fires a
+	// Zulip ping; logout clears it).
 	mux.HandleFunc("/login", handleLogin)
+	mux.HandleFunc("/logout", handleLogout)
 
 	// Admin overview (session stats from the filesystem). Protect via
 	// the reverse proxy (e.g. nginx basic-auth) in front of Gopher.
 	mux.HandleFunc("/admin", views.HandleAdmin)
 	mux.HandleFunc("/admin/", views.HandleAdmin)
 
-	return mux
+	return withLoginGate(mux)
+}
+
+// withLoginGate makes login mandatory: any request without a valid
+// gopher_user cookie is redirected to /login, except for a few
+// exempt paths (login/logout itself, the health check, and /admin,
+// which the reverse proxy guards instead).
+func withLoginGate(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if loginExempt(r.URL.Path) || auth.CurrentUser(r) != auth.DefaultUser {
+			next.ServeHTTP(w, r)
+			return
+		}
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
+	})
+}
+
+func loginExempt(path string) bool {
+	switch path {
+	case "/login", "/logout", "/version":
+		return true
+	}
+	return strings.HasPrefix(path, "/admin")
 }
 
 func main() {
@@ -78,7 +104,7 @@ Usage:
 		Topic:  config.ZulipTopic,
 	})
 
-	mux := buildMux()
+	handler := buildMux()
 
 	fmt.Printf("Angry Gopher\n")
 	fmt.Printf("  Data dir: %s\n", config.DataDir)
@@ -89,7 +115,7 @@ Usage:
 	// limits beyond our per-handler caps, and rate-limiting.
 	srv := &http.Server{
 		Addr:              config.ListenAddr(),
-		Handler:           mux,
+		Handler:           handler,
 		ReadHeaderTimeout: 10 * time.Second,
 		ReadTimeout:       30 * time.Second,
 		WriteTimeout:      30 * time.Second,
