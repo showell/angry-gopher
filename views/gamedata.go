@@ -24,26 +24,48 @@ import (
 	"sync"
 )
 
-// GameDataRoot is the on-disk root for all LynRummy session
-// data. Relative to repo root; Go server runs from there.
-const GameDataRoot = "games/lynrummy/data"
+// GameDataRoot is the on-disk root for all LynRummy session data,
+// set by SetDataRoot at startup. The default is repo-relative, for
+// tooling/tests that run without a config. One level down is the
+// username: everything for a player lives under {root}/{user}/.
+var GameDataRoot = "games/lynrummy/data"
 
-const lynrummyElmRoot = GameDataRoot + "/lynrummy-elm"
+// currentUser is the player whose sessions the write path reads and
+// writes. Hard-coded until login lands; see auth.CurrentUser.
+var currentUser = "Steve"
 
-// puzzleRoot is the on-disk root for puzzle session data.
-// Parallel namespace to the full-game sessions; the agent
-// reads on-disk solutions to learn from past plays — same
-// motivation as the full-game corpus.
-const puzzleRoot = GameDataRoot + "/puzzle"
+// SetDataRoot points session storage at the configured data dir.
+// Called once at startup from main.
+func SetDataRoot(root string) {
+	GameDataRoot = root
+}
 
-// nextSessionIDPath is the full-game counter file. A single
-// file rather than per-table sequences keeps allocation cheap
-// and visible.
-var nextSessionIDPath = filepath.Join(GameDataRoot, "next-session-id.txt")
+// userRoot is {GameDataRoot}/{currentUser} — the per-player subtree.
+func userRoot() string {
+	return filepath.Join(GameDataRoot, currentUser)
+}
 
-// nextPuzzleIDPath is the puzzle counter file. Distinct from
-// the full-game counter so the two id streams don't collide.
-var nextPuzzleIDPath = filepath.Join(GameDataRoot, "next-puzzle-id.txt")
+// lynrummyElmRoot is the full-game namespace for the current user.
+func lynrummyElmRoot() string {
+	return filepath.Join(userRoot(), "lynrummy-elm")
+}
+
+// puzzleRoot is the puzzle namespace for the current user. The agent
+// reads on-disk solutions to learn from past plays — same motivation
+// as the full-game corpus.
+func puzzleRoot() string {
+	return filepath.Join(userRoot(), "puzzle")
+}
+
+// nextSessionIDPath is the current user's full-game counter file.
+func nextSessionIDPath() string {
+	return filepath.Join(userRoot(), "next-session-id.txt")
+}
+
+// nextPuzzleIDPath is the current user's puzzle counter file.
+func nextPuzzleIDPath() string {
+	return filepath.Join(userRoot(), "next-puzzle-id.txt")
+}
 
 // sessionIDMu serializes counter increments. Single-process
 // server; a mutex is sufficient.
@@ -56,7 +78,7 @@ func allocateID(path string) (int64, error) {
 	sessionIDMu.Lock()
 	defer sessionIDMu.Unlock()
 
-	if err := os.MkdirAll(GameDataRoot, 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
 		return 0, err
 	}
 
@@ -81,20 +103,20 @@ func allocateID(path string) (int64, error) {
 // session id, 1-based, persisted via
 // games/lynrummy/data/next-session-id.txt.
 func AllocateSessionID() (int64, error) {
-	return allocateID(nextSessionIDPath)
+	return allocateID(nextSessionIDPath())
 }
 
 // AllocatePuzzleSessionID returns the next sequential puzzle
 // session id, 1-based, persisted via
 // games/lynrummy/data/next-puzzle-id.txt.
 func AllocatePuzzleSessionID() (int64, error) {
-	return allocateID(nextPuzzleIDPath)
+	return allocateID(nextPuzzleIDPath())
 }
 
 // PuzzleSessionDir returns the on-disk directory for a puzzle
 // session.
 func PuzzleSessionDir(sessionID int64) string {
-	return filepath.Join(puzzleRoot, "sessions", strconv.FormatInt(sessionID, 10))
+	return filepath.Join(puzzleRoot(), "sessions", strconv.FormatInt(sessionID, 10))
 }
 
 // WritePuzzleSessionFile writes body to <puzzle-session-dir>/<rel>,
@@ -123,7 +145,7 @@ func AppendPuzzleSessionLine(sessionID int64, rel string, body []byte) error {
 // SessionDir returns the on-disk directory for a full-game
 // session.
 func SessionDir(sessionID int64) string {
-	return filepath.Join(lynrummyElmRoot, "sessions", strconv.FormatInt(sessionID, 10))
+	return filepath.Join(lynrummyElmRoot(), "sessions", strconv.FormatInt(sessionID, 10))
 }
 
 // WriteSessionFile writes body to <session-dir>/<rel>, creating
@@ -268,7 +290,7 @@ func CountSessionActions(sessionID int64) (int, error) {
 // ListSessionIDs returns every full-game session-id directory
 // currently on disk, sorted ascending.
 func ListSessionIDs() ([]int64, error) {
-	root := filepath.Join(lynrummyElmRoot, "sessions")
+	root := filepath.Join(lynrummyElmRoot(), "sessions")
 	if _, err := os.Stat(root); os.IsNotExist(err) {
 		return nil, nil
 	}

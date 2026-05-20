@@ -69,6 +69,7 @@ Usage:
 	}
 
 	serverConfig = config
+	views.SetDataRoot(config.SessionsDataRoot())
 
 	mux := buildMux()
 
