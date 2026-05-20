@@ -11,7 +11,6 @@ package views
 import (
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"os"
 	"strconv"
@@ -88,9 +87,8 @@ func puzzleAppendAction(w http.ResponseWriter, r *http.Request, user string, ses
 		http.NotFound(w, r)
 		return
 	}
-	body, err := io.ReadAll(r.Body)
-	if err != nil {
-		http.Error(w, "read body: "+err.Error(), http.StatusBadRequest)
+	body, ok := readLimitedBody(w, r, user, maxAppendBytes)
+	if !ok {
 		return
 	}
 	rel := fmt.Sprintf("puzzle_%d/actions.dsl", puzzleIdx)

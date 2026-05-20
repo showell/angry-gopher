@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"angry-gopher/views"
+	"angry-gopher/zulip"
 )
 
 func buildMux() *http.ServeMux {
@@ -76,15 +77,33 @@ Usage:
 		os.Exit(1)
 	}
 
-	serverConfig = config
 	views.SetDataRoot(config.SessionsDataRoot())
+	zulip.Configure(zulip.Config{
+		URL:    config.ZulipURL,
+		Email:  config.ZulipEmail,
+		APIKey: config.ZulipAPIKey,
+		Stream: config.ZulipStream,
+		Topic:  config.ZulipTopic,
+	})
 
 	mux := buildMux()
 
 	fmt.Printf("Angry Gopher\n")
 	fmt.Printf("  Data dir: %s\n", config.DataDir)
 	fmt.Printf("  Listening on %s\n", config.ListenAddr())
-	log.Fatal(http.ListenAndServe(config.ListenAddr(), mux))
+
+	// Timeouts bound how long a slow/idle client can tie up a
+	// connection (slowloris). nginx fronts the server for TLS, body
+	// limits beyond our per-handler caps, and rate-limiting.
+	srv := &http.Server{
+		Addr:              config.ListenAddr(),
+		Handler:           mux,
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       120 * time.Second,
+	}
+	log.Fatal(srv.ListenAndServe())
 }
 
 func handleVersion(w http.ResponseWriter, r *http.Request) {
@@ -94,9 +113,6 @@ func handleVersion(w http.ResponseWriter, r *http.Request) {
 		"version": "0.1",
 	})
 }
-
-// Set by main() so the admin/ops dashboard can show server info.
-var serverConfig *ServerConfig
 
 // Set at build time via -ldflags "-X main.gitCommit=...".
 var gitCommit = "dev"

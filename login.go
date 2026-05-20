@@ -10,6 +10,7 @@ import (
 	"net/http"
 
 	"angry-gopher/auth"
+	"angry-gopher/zulip"
 )
 
 func handleLogin(w http.ResponseWriter, r *http.Request) {
@@ -27,7 +28,7 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 			HttpOnly: true,
 			SameSite: http.SameSiteLaxMode,
 		})
-		go notifyLogin(name)
+		go zulip.NotifyLogin(name)
 		http.Redirect(w, r, "/gopher/", http.StatusSeeOther)
 		return
 	}

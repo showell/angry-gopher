@@ -22,7 +22,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"html"
-	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -125,9 +124,8 @@ func lynrummyElmNewSession(w http.ResponseWriter, r *http.Request, user string) 
 		return
 	}
 
-	gameStateDSL, err := io.ReadAll(r.Body)
-	if err != nil {
-		http.Error(w, "read body: "+err.Error(), http.StatusBadRequest)
+	gameStateDSL, ok := readLimitedBody(w, r, user, maxNewSessionBytes)
+	if !ok {
 		return
 	}
 
@@ -168,9 +166,8 @@ func lynrummyElmAppendSessionLine(w http.ResponseWriter, r *http.Request, user s
 		http.NotFound(w, r)
 		return
 	}
-	body, err := io.ReadAll(r.Body)
-	if err != nil {
-		http.Error(w, "read body: "+err.Error(), http.StatusBadRequest)
+	body, ok := readLimitedBody(w, r, user, maxAppendBytes)
+	if !ok {
 		return
 	}
 	// Actions are wire-DSL text lines (rel="actions" → actions.dsl).
