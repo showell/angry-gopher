@@ -22,6 +22,9 @@ func buildMux() *http.ServeMux {
 	// HTML views (Basic auth, no middleware). Single source of truth.
 	views.RegisterPages(mux)
 
+	// Name login (sets the gopher_user cookie + fires a Zulip ping).
+	mux.HandleFunc("/gopher/login", handleLogin)
+
 	// Admin overview (session stats from the filesystem). Protect via
 	// the reverse proxy (e.g. nginx basic-auth) in front of Gopher.
 	mux.HandleFunc("/admin", views.HandleAdmin)

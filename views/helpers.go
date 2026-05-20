@@ -154,6 +154,11 @@ h1 { color: #000080; font-size: 34px; margin-bottom: 4px; }
 	fmt.Fprint(w, `<div class="app-body-wrap">
 <h1>Angry Gopher</h1>
 <div class="tag">Critter-sized server for LynRummy and Steve-Claude essays.</div>`)
+	if user := CurrentUser(r); user == auth.DefaultUser {
+		fmt.Fprint(w, `<div class="tag"><a href="/gopher/login">Log in with your name →</a></div>`)
+	} else {
+		fmt.Fprintf(w, `<div class="tag">Playing as <strong>%s</strong> · <a href="/gopher/login">change</a></div>`, html.EscapeString(user))
+	}
 	fmt.Fprint(w, `
 
 <div class="cards">

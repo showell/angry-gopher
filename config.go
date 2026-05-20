@@ -36,6 +36,8 @@ type ServerConfig struct {
 	ZulipURL    string
 	ZulipEmail  string
 	ZulipAPIKey string
+	ZulipStream string
+	ZulipTopic  string
 }
 
 func (c *ServerConfig) ListenAddr() string {
@@ -96,6 +98,10 @@ func loadConfig(path string) (*ServerConfig, error) {
 			c.ZulipEmail = val
 		case "zulip_api_key":
 			c.ZulipAPIKey = val
+		case "zulip_stream":
+			c.ZulipStream = val
+		case "zulip_topic":
+			c.ZulipTopic = val
 		default:
 			fmt.Fprintf(os.Stderr, "config: ignoring unknown key %q (line %d)\n", key, lineNo)
 		}
