@@ -164,6 +164,30 @@ update msg model =
             , Wire.sendAction model.sessionId (GameEvent.completeTurnDsl model.nextSeq)
             )
 
+        ResumeAgentTurn ->
+            -- Kick the agent loop after a mid-agent-turn resume. Same
+            -- engine request ReadyForAgentTurn fires, but the human's
+            -- turn-end was already committed before the game was saved.
+            let
+                reqId =
+                    model.nextEngineRequestId
+
+                hand =
+                    (activeHand model.gameState).handCards
+                        |> List.map .card
+
+                payload =
+                    Engine.buildAgentStepRequest reqId model.gameState.board hand
+            in
+            ( { model
+                | popup = Nothing
+                , pendingEngineRequest = Just reqId
+                , nextEngineRequestId = reqId + 1
+                , status = { text = "Thinking…", kind = Inform }
+              }
+            , engineRequest payload
+            )
+
         ContinueHumanTurn ->
             ( { model | popup = Nothing }
             , Cmd.none
@@ -194,7 +218,27 @@ update msg model =
             ( { model | status = Status.sessionAllocFailedStatus }, Cmd.none )
 
         ActionLogFetched (Ok ( initialState, actions )) ->
-            ( bootstrapFromBundle initialState actions model, Cmd.none )
+            let
+                bootstrapped =
+                    bootstrapFromBundle initialState actions model
+            in
+            -- A game saved mid-agent-turn (e.g. the human navigated
+            -- away while the agent was thinking) resumes with no
+            -- engine request in flight, so the agent would never
+            -- move. Pop an ack modal; OK kicks the agent loop.
+            if bootstrapped.gameState.activePlayer == Agent then
+                ( { bootstrapped
+                    | popup =
+                        Just
+                            { content = { body = "Allow agent to continue now, please." }
+                            , dismissMsg = ResumeAgentTurn
+                            }
+                  }
+                , Cmd.none
+                )
+
+            else
+                ( bootstrapped, Cmd.none )
 
         ActionLogFetched (Err err) ->
             let

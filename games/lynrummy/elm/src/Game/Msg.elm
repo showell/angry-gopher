@@ -25,6 +25,7 @@ type Msg
     | ClickHint
     | ReadyForAgentTurn { afterTurn : GameState, outboundPayload : String }
     | ReadyForHumanTurn { afterTurn : GameState }
+    | ResumeAgentTurn
     | ContinueHumanTurn
     | ClickInstantReplay
     | ClickReplayPauseToggle
