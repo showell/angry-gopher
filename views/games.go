@@ -17,7 +17,7 @@ func HandleGames(w http.ResponseWriter, r *http.Request) {
 	PageSubtitle(w, "Jump straight into a LynRummy game or browse your recent sessions.")
 
 	renderGamesHero(w)
-	renderRecentSessions(w)
+	renderRecentSessions(w, CurrentUser(r))
 
 	PageFooter(w)
 }
@@ -68,8 +68,8 @@ func renderGamesHero(w http.ResponseWriter) {
 // renderRecentSessions lists the 10 most recent session
 // directories under games/lynrummy/data/. Each links to
 // /gopher/lynrummy-elm/play/N so the URL is reload-safe.
-func renderRecentSessions(w http.ResponseWriter) {
-	ids, err := ListSessionIDs()
+func renderRecentSessions(w http.ResponseWriter, user string) {
+	ids, err := ListSessionIDs(user)
 	if err != nil {
 		return
 	}
@@ -91,8 +91,8 @@ func renderRecentSessions(w http.ResponseWriter) {
 		fmt.Fprint(w, `<tr><td colspan="5" class="muted">No sessions yet — click Play LynRummy above to start one.</td></tr>`)
 	}
 	for _, id := range ids {
-		meta, _ := ReadSessionMeta(id)
-		count, _ := CountSessionActions(id)
+		meta, _ := ReadSessionMeta(user, id)
+		count, _ := CountSessionActions(user, id)
 		ts := ""
 		if t := SessionCreatedAt(meta); t > 0 {
 			ts = time.Unix(t, 0).In(eastern).Format("Jan 2, 2006 · 3:04 PM MST")

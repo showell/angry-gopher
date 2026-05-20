@@ -53,6 +53,7 @@ var EngineGlueJSPath = "games/lynrummy/elm/engine_glue.js"
 func HandleLynRummyElm(w http.ResponseWriter, r *http.Request) {
 	sub := strings.TrimPrefix(r.URL.Path, "/gopher/lynrummy-elm")
 	sub = strings.TrimPrefix(sub, "/")
+	user := CurrentUser(r)
 	switch {
 	case sub == "" || sub == "/":
 		lynrummyElmPlay(w)
@@ -63,11 +64,11 @@ func HandleLynRummyElm(w http.ResponseWriter, r *http.Request) {
 	case sub == "engine_glue.js":
 		serveJS(w, EngineGlueJSPath, "engine_glue.js not found — check the file exists at "+EngineGlueJSPath)
 	case sub == "new-session":
-		lynrummyElmNewSession(w, r)
+		lynrummyElmNewSession(w, r, user)
 	case sub == "sessions":
-		lynrummyElmSessionsList(w)
+		lynrummyElmSessionsList(w, user)
 	case sub == "api/sessions":
-		lynrummyElmSessionsJSON(w)
+		lynrummyElmSessionsJSON(w, user)
 	case strings.HasPrefix(sub, "play/"):
 		idStr := strings.TrimRight(strings.TrimPrefix(sub, "play/"), "/")
 		id, err := strconv.ParseInt(idStr, 10, 64)
@@ -77,7 +78,7 @@ func HandleLynRummyElm(w http.ResponseWriter, r *http.Request) {
 		}
 		lynrummyElmPlayWithSession(w, id)
 	case strings.HasPrefix(sub, "sessions/"):
-		handleSessionRoute(w, r, strings.TrimPrefix(sub, "sessions/"))
+		handleSessionRoute(w, r, user, strings.TrimPrefix(sub, "sessions/"))
 	default:
 		http.NotFound(w, r)
 	}
@@ -85,7 +86,7 @@ func HandleLynRummyElm(w http.ResponseWriter, r *http.Request) {
 
 // handleSessionRoute fans out the per-session URL space. The
 // switch below is the route table.
-func handleSessionRoute(w http.ResponseWriter, r *http.Request, rest string) {
+func handleSessionRoute(w http.ResponseWriter, r *http.Request, user, rest string) {
 	parts := strings.Split(rest, "/")
 	idStr := parts[0]
 	id, err := strconv.ParseInt(idStr, 10, 64)
@@ -96,15 +97,15 @@ func handleSessionRoute(w http.ResponseWriter, r *http.Request, rest string) {
 
 	switch {
 	case len(parts) == 1:
-		lynrummyElmSessionDetail(w, id)
+		lynrummyElmSessionDetail(w, user, id)
 	case len(parts) == 2 && parts[1] == "actions":
 		if r.Method == http.MethodPost {
-			lynrummyElmAppendSessionLine(w, r, id, "actions")
+			lynrummyElmAppendSessionLine(w, r, user, id, "actions")
 		} else {
-			lynrummyElmSessionBootstrap(w, id)
+			lynrummyElmSessionBootstrap(w, user, id)
 		}
 	case len(parts) == 2 && parts[1] == "annotations":
-		lynrummyElmAppendSessionLine(w, r, id, "annotations")
+		lynrummyElmAppendSessionLine(w, r, user, id, "annotations")
 	default:
 		http.NotFound(w, r)
 	}
@@ -118,7 +119,7 @@ func handleSessionRoute(w http.ResponseWriter, r *http.Request, rest string) {
 // writes the merged DSL to <session>/meta, and returns the id
 // as JSON. The game-state DSL itself is stored verbatim — the
 // server doesn't parse or validate it.
-func lynrummyElmNewSession(w http.ResponseWriter, r *http.Request) {
+func lynrummyElmNewSession(w http.ResponseWriter, r *http.Request, user string) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -130,7 +131,7 @@ func lynrummyElmNewSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	id, err := AllocateSessionID()
+	id, err := AllocateSessionID(user)
 	if err != nil {
 		http.Error(w, "alloc id: "+err.Error(), http.StatusInternalServerError)
 		return
@@ -141,7 +142,7 @@ func lynrummyElmNewSession(w http.ResponseWriter, r *http.Request) {
 		Label:        "",
 		GameStateDSL: string(gameStateDSL),
 	}
-	if err := WriteSessionFile(id, "meta", []byte(FormatSessionMeta(meta))); err != nil {
+	if err := WriteSessionFile(user, id, "meta", []byte(FormatSessionMeta(meta))); err != nil {
 		http.Error(w, "write meta: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -158,12 +159,12 @@ func lynrummyElmNewSession(w http.ResponseWriter, r *http.Request) {
 // <session>/<rel>.jsonl. No parsing, no validation beyond
 // "session must exist." `rel` is "actions" or "annotations";
 // the seq Elm assigned rides inside the body.
-func lynrummyElmAppendSessionLine(w http.ResponseWriter, r *http.Request, sessionID int64, rel string) {
+func lynrummyElmAppendSessionLine(w http.ResponseWriter, r *http.Request, user string, sessionID int64, rel string) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	if !SessionExists(sessionID) {
+	if !SessionExists(user, sessionID) {
 		http.NotFound(w, r)
 		return
 	}
@@ -176,9 +177,9 @@ func lynrummyElmAppendSessionLine(w http.ResponseWriter, r *http.Request, sessio
 	// Annotations stay JSONL — separate concern, different consumer.
 	var err2 error
 	if rel == "actions" {
-		err2 = AppendSessionDslLine(sessionID, rel+".dsl", body)
+		err2 = AppendSessionDslLine(user, sessionID, rel+".dsl", body)
 	} else {
-		err2 = AppendSessionLine(sessionID, rel+".jsonl", body)
+		err2 = AppendSessionLine(user, sessionID, rel+".jsonl", body)
 	}
 	if err2 != nil {
 		http.Error(w, "append: "+err2.Error(), http.StatusInternalServerError)
@@ -193,17 +194,17 @@ func lynrummyElmAppendSessionLine(w http.ResponseWriter, r *http.Request, sessio
 // text/plain document: the meta DSL (everything the on-disk
 // `meta` file holds), a separator line `---`, then the action
 // log DSL. Elm splits on the separator and parses each half.
-func lynrummyElmSessionBootstrap(w http.ResponseWriter, sessionID int64) {
-	if !SessionExists(sessionID) {
+func lynrummyElmSessionBootstrap(w http.ResponseWriter, user string, sessionID int64) {
+	if !SessionExists(user, sessionID) {
 		http.NotFound(w, nil)
 		return
 	}
-	metaBytes, err := ReadSessionFile(sessionID, "meta")
+	metaBytes, err := ReadSessionFile(user, sessionID, "meta")
 	if err != nil && !os.IsNotExist(err) {
 		http.Error(w, "read meta: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
-	actionsBytes, err := ReadSessionFile(sessionID, "actions.dsl")
+	actionsBytes, err := ReadSessionFile(user, sessionID, "actions.dsl")
 	if err != nil && !os.IsNotExist(err) {
 		http.Error(w, "read actions: "+err.Error(), http.StatusInternalServerError)
 		return
@@ -221,8 +222,8 @@ func lynrummyElmSessionBootstrap(w http.ResponseWriter, sessionID int64) {
 // lynrummyElmSessionsList is the HTML browser of full-game
 // session dirs. Puzzle sessions live in a separate namespace
 // and are not surfaced here.
-func lynrummyElmSessionsList(w http.ResponseWriter) {
-	ids, err := ListSessionIDs()
+func lynrummyElmSessionsList(w http.ResponseWriter, user string) {
+	ids, err := ListSessionIDs(user)
 	if err != nil {
 		http.Error(w, "list: "+err.Error(), http.StatusInternalServerError)
 		return
@@ -257,8 +258,8 @@ a { color: #000080; }
 		fmt.Fprint(w, `<tr><td colspan="4" class="muted">No sessions yet.</td></tr>`)
 	}
 	for _, id := range ids {
-		meta, _ := ReadSessionMeta(id)
-		count, _ := CountSessionActions(id)
+		meta, _ := ReadSessionMeta(user, id)
+		count, _ := CountSessionActions(user, id)
 		ts := ""
 		if t := SessionCreatedAt(meta); t > 0 {
 			ts = time.Unix(t, 0).In(eastern).Format("Jan 2, 2006 · 3:04 PM MST")
@@ -271,8 +272,8 @@ a { color: #000080; }
 }
 
 // lynrummyElmSessionsJSON is the api/sessions equivalent.
-func lynrummyElmSessionsJSON(w http.ResponseWriter) {
-	ids, err := ListSessionIDs()
+func lynrummyElmSessionsJSON(w http.ResponseWriter, user string) {
+	ids, err := ListSessionIDs(user)
 	if err != nil {
 		http.Error(w, "list: "+err.Error(), http.StatusInternalServerError)
 		return
@@ -287,8 +288,8 @@ func lynrummyElmSessionsJSON(w http.ResponseWriter) {
 	}
 	out := []entry{}
 	for _, id := range ids {
-		meta, _ := ReadSessionMeta(id)
-		count, _ := CountSessionActions(id)
+		meta, _ := ReadSessionMeta(user, id)
+		count, _ := CountSessionActions(user, id)
 		out = append(out, entry{
 			ID:          id,
 			CreatedAt:   SessionCreatedAt(meta),
@@ -302,14 +303,14 @@ func lynrummyElmSessionsJSON(w http.ResponseWriter) {
 
 // lynrummyElmSessionDetail renders a debug view for a session
 // dir. No replay, no score — just lists what's on disk.
-func lynrummyElmSessionDetail(w http.ResponseWriter, sessionID int64) {
-	if !SessionExists(sessionID) {
+func lynrummyElmSessionDetail(w http.ResponseWriter, user string, sessionID int64) {
+	if !SessionExists(user, sessionID) {
 		http.NotFound(w, nil)
 		return
 	}
-	meta, _ := ReadSessionMeta(sessionID)
-	actionCount, _ := CountSessionActions(sessionID)
-	annotationCount, _ := CountTextLines(filepath.Join(SessionDir(sessionID), "annotations.jsonl"))
+	meta, _ := ReadSessionMeta(user, sessionID)
+	actionCount, _ := CountSessionActions(user, sessionID)
+	annotationCount, _ := CountTextLines(filepath.Join(SessionDir(user, sessionID), "annotations.jsonl"))
 
 	eastern, _ := time.LoadLocation("America/New_York")
 	ts := ""
@@ -337,7 +338,7 @@ pre { background: #f4f4ec; padding: 12px; border: 1px solid #ddd; overflow-x: au
 <p class="sub">Started %s%s</p>
 <h3>meta</h3>`,
 		sessionID, sessionID, html.EscapeString(ts), labelSuffix(SessionLabel(meta)))
-	if rawMeta, err := ReadSessionFile(sessionID, "meta"); err == nil {
+	if rawMeta, err := ReadSessionFile(user, sessionID, "meta"); err == nil {
 		fmt.Fprintf(w, `<pre>%s</pre>`, html.EscapeString(string(rawMeta)))
 	} else {
 		fmt.Fprint(w, `<p class="muted">no meta file</p>`)
