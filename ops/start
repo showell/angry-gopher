@@ -28,7 +28,7 @@ go build -ldflags "-X main.gitCommit=$COMMIT" -o gopher-server .
 # was retired with the rest of the python/ subtree on
 # 2026-05-04).
 
-GOPHER_CONFIG=~/AngryGopher/prod.json nohup ./gopher-server > /tmp/angry-gopher.log 2>&1 &
+GOPHER_CONFIG=~/AngryGopher/gopher.conf nohup ./gopher-server > /tmp/angry-gopher.log 2>&1 &
 
 # Wait for the server to be ready.
 for i in $(seq 1 10); do

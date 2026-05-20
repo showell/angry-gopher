@@ -37,23 +37,22 @@ func main() {
 	configPath := os.Getenv("GOPHER_CONFIG")
 	if configPath == "" {
 		os.Stderr.WriteString(`
-Angry Gopher requires GOPHER_CONFIG pointing to a JSON config file.
+Angry Gopher requires GOPHER_CONFIG pointing to a config file.
 
-Example config (~/AngryGopher/prod.json):
+Example config (~/AngryGopher/gopher.conf):
 
-  {
-      "mode": "prod",
-      "root": "/home/steve/AngryGopher/prod",
-      "port": 9000
-  }
+  # Angry Gopher server config
+  port     = 9000
+  data_dir = /home/steve/AngryGopher/prod
+
+  # Zulip login pings
+  zulip_url     = https://example.zulipchat.com
+  zulip_email   = bot@example.com
+  zulip_api_key = ...
 
 Usage:
 
-  GOPHER_CONFIG=~/AngryGopher/prod.json ./gopher-server
-
-Backup the production database:
-
-  cp ~/AngryGopher/prod/gopher.db ~/AngryGopher/prod/backup_$(date +%Y%m%d).db
+  GOPHER_CONFIG=~/AngryGopher/gopher.conf ./gopher-server
 `)
 		os.Exit(1)
 	}
@@ -73,8 +72,8 @@ Backup the production database:
 
 	mux := buildMux()
 
-	fmt.Printf("Angry Gopher [%s mode]\n", config.Mode)
-	fmt.Printf("  Root:     %s\n", config.Root)
+	fmt.Printf("Angry Gopher\n")
+	fmt.Printf("  Data dir: %s\n", config.DataDir)
 	fmt.Printf("  Listening on %s\n", config.ListenAddr())
 	log.Fatal(http.ListenAndServe(config.ListenAddr(), mux))
 }
