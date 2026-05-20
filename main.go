@@ -22,6 +22,11 @@ func buildMux() *http.ServeMux {
 	// HTML views (Basic auth, no middleware). Single source of truth.
 	views.RegisterPages(mux)
 
+	// Admin overview (session stats from the filesystem). Protect via
+	// the reverse proxy (e.g. nginx basic-auth) in front of Gopher.
+	mux.HandleFunc("/admin", views.HandleAdmin)
+	mux.HandleFunc("/admin/", views.HandleAdmin)
+
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/" {
 			http.Redirect(w, r, "/gopher/", http.StatusFound)
