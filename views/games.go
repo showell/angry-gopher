@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"html"
 	"net/http"
+	"sort"
 	"time"
 )
 
@@ -68,19 +69,40 @@ func renderGamesHero(w http.ResponseWriter) {
 </div>`)
 }
 
-// renderRecentSessions lists the player's 10 most recent sessions.
-// Each links to /game/N so the URL is reload-safe.
-func renderRecentSessions(w http.ResponseWriter, user string) {
-	ids, err := ListSessionIDs(user)
-	if err != nil {
-		return
+// renderRecentSessions lists the 10 most recent full-game sessions
+// across ALL players (any player may see others' games), newest
+// first, with a Player column. The Resume link shows only on the
+// viewer's own rows — the per-user routing can't open someone else's
+// session.
+func renderRecentSessions(w http.ResponseWriter, viewer string) {
+	type sessionRow struct {
+		player  string
+		id      int64
+		created int64
+		label   string
+		actions int
 	}
-	// Newest first, cap at 10.
-	for i, j := 0, len(ids)-1; i < j; i, j = i+1, j-1 {
-		ids[i], ids[j] = ids[j], ids[i]
+	var rows []sessionRow
+	for _, p := range listUsers() {
+		ids, err := ListSessionIDs(p)
+		if err != nil {
+			continue
+		}
+		for _, id := range ids {
+			meta, _ := ReadSessionMeta(p, id)
+			count, _ := CountSessionActions(p, id)
+			rows = append(rows, sessionRow{
+				player:  p,
+				id:      id,
+				created: SessionCreatedAt(meta),
+				label:   SessionLabel(meta),
+				actions: count,
+			})
+		}
 	}
-	if len(ids) > 10 {
-		ids = ids[:10]
+	sort.Slice(rows, func(i, j int) bool { return rows[i].created > rows[j].created })
+	if len(rows) > 10 {
+		rows = rows[:10]
 	}
 
 	eastern, _ := time.LoadLocation("America/New_York")
@@ -88,27 +110,28 @@ func renderRecentSessions(w http.ResponseWriter, user string) {
 	fmt.Fprint(w, `<div class="sessions-section">
 <h3>Recent sessions</h3>
 <table class="sessions-table">
-<tr><th>#</th><th>Created</th><th>Label</th><th class="n">Actions</th><th></th></tr>`)
-	if len(ids) == 0 {
-		fmt.Fprint(w, `<tr><td colspan="5" class="muted">No sessions yet — click Play a game above to start one.</td></tr>`)
+<tr><th>Player</th><th>#</th><th>Created</th><th>Label</th><th class="n">Actions</th><th></th></tr>`)
+	if len(rows) == 0 {
+		fmt.Fprint(w, `<tr><td colspan="6" class="muted">No sessions yet — click Play a game above to start one.</td></tr>`)
 	}
-	for _, id := range ids {
-		meta, _ := ReadSessionMeta(user, id)
-		count, _ := CountSessionActions(user, id)
+	for _, row := range rows {
 		ts := ""
-		if t := SessionCreatedAt(meta); t > 0 {
-			ts = time.Unix(t, 0).In(eastern).Format("Jan 2, 2006 · 3:04 PM MST")
+		if row.created > 0 {
+			ts = time.Unix(row.created, 0).In(eastern).Format("Jan 2, 2006 · 3:04 PM MST")
 		}
-		labelCell := SessionLabel(meta)
+		labelCell := row.label
 		if labelCell == "" {
 			labelCell = `<span class="muted">—</span>`
 		} else {
 			labelCell = html.EscapeString(labelCell)
 		}
+		resumeCell := `<span class="muted">—</span>`
+		if row.player == viewer {
+			resumeCell = fmt.Sprintf(`<a href="/game/%d">Resume →</a>`, row.id)
+		}
 		fmt.Fprintf(w,
-			`<tr><td>%d</td><td>%s</td><td>%s</td><td class="n">%d</td>`+
-				`<td><a href="/game/%d">Resume →</a></td></tr>`,
-			id, html.EscapeString(ts), labelCell, count, id,
+			`<tr><td>%s</td><td>%d</td><td>%s</td><td>%s</td><td class="n">%d</td><td>%s</td></tr>`,
+			html.EscapeString(row.player), row.id, html.EscapeString(ts), labelCell, row.actions, resumeCell,
 		)
 	}
 	fmt.Fprint(w, `</table></div>`)
