@@ -27,7 +27,6 @@ type Msg
     | ReadyForHumanTurn { afterTurn : GameState }
     | ResumeAgentTurn
     | ContinueHumanTurn
-    | FocusedPopupOk
     | ClickInstantReplay
     | ClickReplayPauseToggle
     | AnimationTick Time.Posix

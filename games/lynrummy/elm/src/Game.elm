@@ -14,6 +14,7 @@ import Game.View as View
 import Game.Wire as Wire exposing (fetchActionLog, fetchNewSession)
 import Html exposing (Html, div)
 import Html.Attributes exposing (style)
+import Json.Decode as Decode
 import Json.Encode as Encode
 import Lib.ActionLog as ActionLog
 import Lib.Animation.Animate as Animate exposing (Phase(..))
@@ -121,45 +122,9 @@ init flags =
 -- UPDATE
 
 
-{-| Thin wrapper around `updateMsg`: whenever the step just opened
-the popup (Nothing → Just), also focus its OK button so Enter
-dismisses the modal. Centralized here so every popup-creation site
-gets the behavior for free.
--}
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
-    let
-        ( newModel, cmd ) =
-            updateMsg msg model
-    in
-    if popupIsOpen newModel.popup && not (popupIsOpen model.popup) then
-        ( newModel, Cmd.batch [ cmd, focusPopupOk ] )
-
-    else
-        ( newModel, cmd )
-
-
-popupIsOpen : Maybe a -> Bool
-popupIsOpen popup =
-    case popup of
-        Just _ ->
-            True
-
-        Nothing ->
-            False
-
-
-focusPopupOk : Cmd Msg
-focusPopupOk =
-    Task.attempt (\_ -> FocusedPopupOk) (Browser.Dom.focus Popup.popupOkButtonId)
-
-
-updateMsg : Msg -> Model -> ( Model, Cmd Msg )
-updateMsg msg model =
     case msg of
-        FocusedPopupOk ->
-            ( model, Cmd.none )
-
         ReadyForAgentTurn { afterTurn, outboundPayload } ->
             -- Commit P1's turn-end (gameState flip, actionLog
             -- entry, wire send) deferred from ClickCompleteTurn
@@ -849,10 +814,33 @@ subscriptions model =
 
                     else
                         Browser.Events.onAnimationFrame AnimationTick
+
+        -- While a popup is up, Enter dismisses it by firing the
+        -- popup's own dismiss Msg. No focus juggling: the key
+        -- listener routes straight to the action the OK button
+        -- would take.
+        popupKeySubscription =
+            case model.popup of
+                Nothing ->
+                    Sub.none
+
+                Just { dismissMsg } ->
+                    Browser.Events.onKeyDown
+                        (Decode.field "key" Decode.string
+                            |> Decode.andThen
+                                (\key ->
+                                    if key == "Enter" then
+                                        Decode.succeed dismissMsg
+
+                                    else
+                                        Decode.fail "non-Enter key"
+                                )
+                        )
     in
     Sub.batch
         [ dragSubscriptions
         , animationSubscription
+        , popupKeySubscription
         , gameHintResponse (hintMsgFor << Engine.decodeHintResponse model.pendingEngineRequest)
         , agentStepResponse (agentStepMsgFor << Engine.decodeAgentStepResponse model.pendingEngineRequest)
         ]
