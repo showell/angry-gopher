@@ -121,9 +121,45 @@ init flags =
 -- UPDATE
 
 
+{-| Thin wrapper around `updateMsg`: whenever the step just opened
+the popup (Nothing → Just), also focus its OK button so Enter
+dismisses the modal. Centralized here so every popup-creation site
+gets the behavior for free.
+-}
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
+    let
+        ( newModel, cmd ) =
+            updateMsg msg model
+    in
+    if popupIsOpen newModel.popup && not (popupIsOpen model.popup) then
+        ( newModel, Cmd.batch [ cmd, focusPopupOk ] )
+
+    else
+        ( newModel, cmd )
+
+
+popupIsOpen : Maybe a -> Bool
+popupIsOpen popup =
+    case popup of
+        Just _ ->
+            True
+
+        Nothing ->
+            False
+
+
+focusPopupOk : Cmd Msg
+focusPopupOk =
+    Task.attempt (\_ -> FocusedPopupOk) (Browser.Dom.focus Popup.popupOkButtonId)
+
+
+updateMsg : Msg -> Model -> ( Model, Cmd Msg )
+updateMsg msg model =
     case msg of
+        FocusedPopupOk ->
+            ( model, Cmd.none )
+
         ReadyForAgentTurn { afterTurn, outboundPayload } ->
             -- Commit P1's turn-end (gameState flip, actionLog
             -- entry, wire send) deferred from ClickCompleteTurn

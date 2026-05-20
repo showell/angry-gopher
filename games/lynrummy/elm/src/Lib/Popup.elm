@@ -1,5 +1,6 @@
 module Lib.Popup exposing
     ( PopupContent
+    , popupOkButtonId
     , viewPopup
     )
 
@@ -17,12 +18,22 @@ renders a `PopupContent`.
 
 import Lib.Colors as Colors
 import Html exposing (Html, div)
-import Html.Attributes exposing (style)
+import Html.Attributes exposing (id, style)
 import Html.Events as Events
 
 
 type alias PopupContent =
     { body : String }
+
+
+{-| DOM id of the OK button. Exported so the host (`Game`) can
+focus it via `Browser.Dom.focus` when the popup opens, making
+Enter dismiss the modal. Single source for the id keeps the
+focus task and the rendered element in lockstep.
+-}
+popupOkButtonId : String
+popupOkButtonId =
+    "popup-ok-button"
 
 
 viewPopup : msg -> Maybe PopupContent -> Html msg
@@ -59,6 +70,7 @@ viewPopup dismissMsg maybePopup =
                         [ Html.text body ]
                     , Html.button
                         [ Events.onClick dismissMsg
+                        , id popupOkButtonId
                         , style "background" Colors.navy
                         , style "color" "white"
                         , style "border" "none"
