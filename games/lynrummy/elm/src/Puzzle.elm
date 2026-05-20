@@ -1,9 +1,9 @@
 module Puzzle exposing (main)
 
-{-| The action log written to
-games/lynrummy/data/puzzle/sessions/<id>/puzzle_<idx>/actions.dsl
-has one consumer: the in-repo agent. No external clients, so
-the wire format is ours to change whenever the code needs.
+{-| The action log written to each player's
+puzzle/sessions/<id>/puzzle_<idx>/actions.dsl has one consumer:
+the in-repo agent. No external clients, so the wire format is
+ours to change whenever the code needs.
 -}
 
 import Array exposing (Array)
@@ -381,7 +381,7 @@ update msg model =
                         httpPostForAction =
                             Http.post
                                 { url =
-                                    "/gopher/puzzle/sessions/"
+                                    "/puzzles/sessions/"
                                         ++ String.fromInt model.sessionId
                                         ++ "/puzzles/"
                                         ++ String.fromInt model.currentIndex
@@ -416,7 +416,7 @@ update msg model =
                 httpPostForAction =
                     Http.post
                         { url =
-                            "/gopher/puzzle/sessions/"
+                            "/puzzles/sessions/"
                                 ++ String.fromInt model.sessionId
                                 ++ "/puzzles/"
                                 ++ String.fromInt model.currentIndex
@@ -527,7 +527,7 @@ applyIsolate model p =
         httpPostForAction =
             Http.post
                 { url =
-                    "/gopher/puzzle/sessions/"
+                    "/puzzles/sessions/"
                         ++ String.fromInt model.sessionId
                         ++ "/puzzles/"
                         ++ String.fromInt model.currentIndex
@@ -580,7 +580,7 @@ handleBoardMouseUp model releasePoint tMs d =
                 httpPostForAction =
                     Http.post
                         { url =
-                            "/gopher/puzzle/sessions/"
+                            "/puzzles/sessions/"
                                 ++ String.fromInt model.sessionId
                                 ++ "/puzzles/"
                                 ++ String.fromInt model.currentIndex

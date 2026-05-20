@@ -37,7 +37,7 @@ scalars and persists the result verbatim in `meta`.
 fetchNewSession : String -> Cmd Msg
 fetchNewSession initialState =
     Http.post
-        { url = "/gopher/lynrummy-elm/new-session"
+        { url = "/game/new-session"
         , body = Http.stringBody "text/plain" initialState
         , expect = Http.expectJson SessionReceived sessionIdDecoder
         }
@@ -46,7 +46,7 @@ fetchNewSession initialState =
 fetchActionLog : Int -> Cmd Msg
 fetchActionLog sid =
     Http.get
-        { url = "/gopher/lynrummy-elm/sessions/" ++ String.fromInt sid ++ "/actions"
+        { url = "/game/sessions/" ++ String.fromInt sid ++ "/actions"
         , expect = Http.expectStringResponse ActionLogFetched parseResumeBundle
         }
 
@@ -56,7 +56,7 @@ sendAction maybeSessionId line =
     case maybeSessionId of
         Just sid ->
             Http.post
-                { url = "/gopher/lynrummy-elm/sessions/" ++ String.fromInt sid ++ "/actions"
+                { url = "/game/sessions/" ++ String.fromInt sid ++ "/actions"
                 , body = Http.stringBody "text/plain" line
                 , expect = Http.expectWhatever ActionSent
                 }

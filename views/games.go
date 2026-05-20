@@ -7,23 +7,26 @@ import (
 	"time"
 )
 
-// HandleGames serves /gopher/game-lobby. Minimal launch-pad for
-// the playable Elm LynRummy client. No legacy game-event
-// system; the Elm client owns its own sessions via
-// lynrummy_elm_sessions.
-func HandleGames(w http.ResponseWriter, r *http.Request) {
+// HandleHome serves the site root "/": the Lyn Rummy launch-pad
+// (play a game, solve puzzles, resume recent sessions). The Elm
+// client owns its own sessions on disk.
+func HandleHome(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path != "/" {
+		http.NotFound(w, r)
+		return
+	}
+	user := CurrentUser(r)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	PageHeaderArea(w, "Games", "games")
-	PageSubtitle(w, "Jump straight into a LynRummy game or browse your recent sessions.")
+	PageHeader(w, "Lyn Rummy", user)
+	PageSubtitle(w, "Jump straight into a game or browse your recent sessions.")
 
 	renderGamesHero(w)
-	renderRecentSessions(w, CurrentUser(r))
+	renderRecentSessions(w, user)
 
 	PageFooter(w)
 }
 
-// renderGamesHero: tiles for the LynRummy full game and its
-// daily puzzle. Critter studies were ripped 2026-04-20.
+// renderGamesHero: tiles for the full game and the puzzles surface.
 func renderGamesHero(w http.ResponseWriter) {
 	fmt.Fprint(w, `<style>
 .games-hero { margin:20px 0 28px; display:grid; grid-template-columns:1fr 1fr; gap:20px; }
@@ -49,25 +52,24 @@ func renderGamesHero(w http.ResponseWriter) {
 </style>
 <div class="games-hero">
   <div class="games-tile">
-    <h2>LynRummy</h2>
+    <h2>Game</h2>
     <p>Two-player rummy with a real referee. Drag cards from your hand to the board, build runs and sets, hit Complete Turn when you're happy with your play.</p>
     <div class="cta">
-      <a class="play-btn" href="/gopher/lynrummy-elm/">Play LynRummy →</a>
+      <a class="play-btn" href="/game">Play a game →</a>
     </div>
   </div>
   <div class="games-tile">
-    <h2>Puzzle</h2>
+    <h2>Puzzles</h2>
     <p>A single board, mid-game. Drag stacks to merge or split your way to a clean meld layout. Solo, no opponent — undo is free, and Replay walks back through your moves.</p>
     <div class="cta">
-      <a class="play-btn" href="/gopher/puzzle/">Solve the puzzle →</a>
+      <a class="play-btn" href="/puzzles">Solve puzzles →</a>
     </div>
   </div>
 </div>`)
 }
 
-// renderRecentSessions lists the 10 most recent session
-// directories under games/lynrummy/data/. Each links to
-// /gopher/lynrummy-elm/play/N so the URL is reload-safe.
+// renderRecentSessions lists the player's 10 most recent sessions.
+// Each links to /game/N so the URL is reload-safe.
 func renderRecentSessions(w http.ResponseWriter, user string) {
 	ids, err := ListSessionIDs(user)
 	if err != nil {
@@ -88,7 +90,7 @@ func renderRecentSessions(w http.ResponseWriter, user string) {
 <table class="sessions-table">
 <tr><th>#</th><th>Created</th><th>Label</th><th class="n">Actions</th><th></th></tr>`)
 	if len(ids) == 0 {
-		fmt.Fprint(w, `<tr><td colspan="5" class="muted">No sessions yet — click Play LynRummy above to start one.</td></tr>`)
+		fmt.Fprint(w, `<tr><td colspan="5" class="muted">No sessions yet — click Play a game above to start one.</td></tr>`)
 	}
 	for _, id := range ids {
 		meta, _ := ReadSessionMeta(user, id)
@@ -105,7 +107,7 @@ func renderRecentSessions(w http.ResponseWriter, user string) {
 		}
 		fmt.Fprintf(w,
 			`<tr><td>%d</td><td>%s</td><td>%s</td><td class="n">%d</td>`+
-				`<td><a href="/gopher/lynrummy-elm/play/%d">Resume →</a></td></tr>`,
+				`<td><a href="/game/%d">Resume →</a></td></tr>`,
 			id, html.EscapeString(ts), labelCell, count, id,
 		)
 	}

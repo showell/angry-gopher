@@ -18,26 +18,18 @@ import (
 func buildMux() *http.ServeMux {
 	mux := http.NewServeMux()
 
-	mux.HandleFunc("/gopher/version", handleVersion)
+	mux.HandleFunc("/version", handleVersion)
 
-	// HTML views (Basic auth, no middleware). Single source of truth.
+	// HTML pages, incl. the home/lobby at "/". Single source of truth.
 	views.RegisterPages(mux)
 
 	// Name login (sets the gopher_user cookie + fires a Zulip ping).
-	mux.HandleFunc("/gopher/login", handleLogin)
+	mux.HandleFunc("/login", handleLogin)
 
 	// Admin overview (session stats from the filesystem). Protect via
 	// the reverse proxy (e.g. nginx basic-auth) in front of Gopher.
 	mux.HandleFunc("/admin", views.HandleAdmin)
 	mux.HandleFunc("/admin/", views.HandleAdmin)
-
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/" {
-			http.Redirect(w, r, "/gopher/", http.StatusFound)
-			return
-		}
-		http.NotFound(w, r)
-	})
 
 	return mux
 }

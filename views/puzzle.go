@@ -1,6 +1,6 @@
-// Puzzle V3 — drag-aware multi-puzzle surface. Catalog ships
-// at page load; navigation lives entirely in the Elm client.
-// On-disk shape under `games/lynrummy/data/puzzle/sessions/<id>/`:
+// Puzzles — drag-aware multi-puzzle surface. Catalog ships at page
+// load; navigation lives entirely in the Elm client. On-disk shape
+// under each player's puzzle/sessions/<id>/:
 //
 //   meta                       — session-level: created_at + catalog snapshot
 //   puzzle_<idx>/actions.dsl   — one file per puzzle the user touched;
@@ -38,9 +38,9 @@ var puzzleCatalogPaths = []string{
 	"games/lynrummy/conformance/curated_6line_puzzles.dsl",
 }
 
-// HandlePuzzle dispatches /gopher/puzzle/*.
-func HandlePuzzle(w http.ResponseWriter, r *http.Request) {
-	sub := strings.TrimPrefix(r.URL.Path, "/gopher/puzzle")
+// HandlePuzzles dispatches /puzzles/*.
+func HandlePuzzles(w http.ResponseWriter, r *http.Request) {
+	sub := strings.TrimPrefix(r.URL.Path, "/puzzles")
 	sub = strings.TrimPrefix(sub, "/")
 	user := CurrentUser(r)
 	switch {
@@ -199,7 +199,7 @@ func puzzlePage(w http.ResponseWriter, user string) {
 </style>
 </head><body>
 <div id="root"></div>
-<script src="/gopher/puzzle/puzzle.js"></script>
+<script src="/puzzles/puzzle.js"></script>
 <script>
   Elm.Puzzle.init({ node: document.getElementById("root"), flags: %s });
 </script>

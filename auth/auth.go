@@ -1,7 +1,7 @@
 // Package auth resolves "who is this request acting as" for Gopher.
 //
 // Identity is a username read from the gopher_user cookie (set by the
-// /gopher/login endpoint) and sanitized — the name becomes a session
+// /login endpoint) and sanitized — the name becomes a session
 // directory segment and is embedded in HTML and Zulip messages, so it
 // is scrubbed to a safe character set here. No password: this is an
 // open game; the name is provenance, not a security boundary.

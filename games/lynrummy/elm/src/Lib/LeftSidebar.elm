@@ -203,7 +203,7 @@ viewTurnControls { canUndo, controlsEnabled, replayControl } =
           else
             Button.disabledButton "Hint"
         , viewReplayControl replayControl
-        , Button.link "← Lobby" "/gopher/game-lobby"
+        , Button.link "← Home" "/"
         ]
 
 

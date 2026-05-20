@@ -56,7 +56,7 @@ tr:hover td { background: #f0f0ff; }
 .muted { color: #888; }
 </style>
 </head><body>
-<nav><a href="/gopher/">← Gopher home</a></nav>
+<nav><a href="/">← Home</a></nav>
 <h1>🐹 Angry Gopher Admin</h1>
 <p class="muted">Sessions generated per player. Read straight from %s.</p>
 <table>

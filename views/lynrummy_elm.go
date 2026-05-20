@@ -1,21 +1,15 @@
-// LynRummy Elm client view. Serves the compiled Elm app and
-// exposes a deliberately-dumb HTTP surface for full-game
-// session data.
+// Full-game Elm client view. Serves the compiled Elm app and
+// exposes a deliberately-dumb HTTP surface for session data.
 //
-// As of 2026-04-28 (LEAN_PASS): the server is a URL-keyed
-// file store. Elm POSTs land at paths under
-// games/lynrummy/data/lynrummy-elm/sessions/ that mirror the
-// URL. Last-write-wins per URL. Sequential session-id
-// allocation is the ONE smart exception. Replay/score/state
-// computation retired — Elm derives current state locally;
-// agents read the on-disk action log directly when they need
-// state.
+// The server is a URL-keyed file store: Elm POSTs land under the
+// player's session subtree (last-write-wins per URL), with
+// sequential session-id allocation the ONE smart exception. Elm
+// derives current state locally; agents read the on-disk action log
+// directly when they need state.
 //
-// This module owns the full-game surface
-// (`/gopher/lynrummy-elm/...`). It also hosts the TS engine
-// JS bundle constants (`EngineJSPath`, `EngineGlueJSPath`)
-// because the full-game Hint button is the surviving consumer
-// after the puzzle gallery retired.
+// This module owns the full-game surface (`/game/...`). It also
+// hosts the TS engine JS bundle constants (`EngineJSPath`,
+// `EngineGlueJSPath`) for the full-game Hint button.
 package views
 
 import (
@@ -38,19 +32,17 @@ var ElmLynRummyDir = "games/lynrummy/elm"
 
 // EngineJSPath — esbuild-bundled TS engine. Built by
 // ops/build_engine_js (called transitively by ops/build_elm).
-// Served at /gopher/lynrummy-elm/engine.js for the full-game
-// Hint button.
+// Served at /game/engine.js for the full-game Hint button.
 var EngineJSPath = "games/lynrummy/elm/engine.js"
 
 // EngineGlueJSPath — small JS shim that bridges Elm ports to
 // the TS engine bundle. Lives next to engine.js.
 var EngineGlueJSPath = "games/lynrummy/elm/engine_glue.js"
 
-// HandleLynRummyElm dispatches /gopher/lynrummy-elm/*. The
-// switch below is the route table; per-handler comments name
-// each route's wire shape.
-func HandleLynRummyElm(w http.ResponseWriter, r *http.Request) {
-	sub := strings.TrimPrefix(r.URL.Path, "/gopher/lynrummy-elm")
+// HandleGame dispatches /game/*. The switch below is the route
+// table; per-handler comments name each route's wire shape.
+func HandleGame(w http.ResponseWriter, r *http.Request) {
+	sub := strings.TrimPrefix(r.URL.Path, "/game")
 	sub = strings.TrimPrefix(sub, "/")
 	user := CurrentUser(r)
 	switch {
@@ -68,18 +60,16 @@ func HandleLynRummyElm(w http.ResponseWriter, r *http.Request) {
 		lynrummyElmSessionsList(w, user)
 	case sub == "api/sessions":
 		lynrummyElmSessionsJSON(w, user)
-	case strings.HasPrefix(sub, "play/"):
-		idStr := strings.TrimRight(strings.TrimPrefix(sub, "play/"), "/")
-		id, err := strconv.ParseInt(idStr, 10, 64)
+	case strings.HasPrefix(sub, "sessions/"):
+		handleSessionRoute(w, r, user, strings.TrimPrefix(sub, "sessions/"))
+	default:
+		// /game/<id> — resume a session by numeric id.
+		id, err := strconv.ParseInt(strings.TrimRight(sub, "/"), 10, 64)
 		if err != nil || id <= 0 {
 			http.NotFound(w, r)
 			return
 		}
 		lynrummyElmPlayWithSession(w, id)
-	case strings.HasPrefix(sub, "sessions/"):
-		handleSessionRoute(w, r, user, strings.TrimPrefix(sub, "sessions/"))
-	default:
-		http.NotFound(w, r)
 	}
 }
 
@@ -247,9 +237,9 @@ a { color: #000080; }
 .n { text-align: right; font-variant-numeric: tabular-nums; }
 </style>
 </head><body>
-<nav><a href="/gopher/">← Gopher home</a> &nbsp;·&nbsp; <a href="/gopher/lynrummy-elm/">Play</a></nav>
-<h1>LynRummy Elm sessions</h1>
-<p class="muted">Newest first. Sourced from games/lynrummy/data/lynrummy-elm/sessions/.</p>
+<nav><a href="/">← Home</a> &nbsp;·&nbsp; <a href="/game">Play</a></nav>
+<h1>Your sessions</h1>
+<p class="muted">Newest first.</p>
 <table><tr><th>id</th><th>created</th><th class="n">actions</th><th>label</th></tr>`)
 	if len(ids) == 0 {
 		fmt.Fprint(w, `<tr><td colspan="4" class="muted">No sessions yet.</td></tr>`)
@@ -262,7 +252,7 @@ a { color: #000080; }
 			ts = time.Unix(t, 0).In(eastern).Format("Jan 2, 2006 · 3:04 PM MST")
 		}
 		fmt.Fprintf(w,
-			`<tr><td><a href="/gopher/lynrummy-elm/sessions/%d">#%d</a></td><td>%s</td><td class="n">%d</td><td>%s</td></tr>`,
+			`<tr><td><a href="/game/sessions/%d">#%d</a></td><td>%s</td><td class="n">%d</td><td>%s</td></tr>`,
 			id, id, html.EscapeString(ts), count, html.EscapeString(SessionLabel(meta)))
 	}
 	fmt.Fprint(w, `</table></body></html>`)
@@ -330,7 +320,7 @@ li { padding: 2px 0; }
 pre { background: #f4f4ec; padding: 12px; border: 1px solid #ddd; overflow-x: auto; }
 </style>
 </head><body>
-<nav><a href="/gopher/lynrummy-elm/sessions">← All sessions</a> &nbsp;·&nbsp; <a href="/gopher/lynrummy-elm/">Play</a></nav>
+<nav><a href="/game/sessions">← All sessions</a> &nbsp;·&nbsp; <a href="/game">Play</a></nav>
 <h1>Session #%d</h1>
 <p class="sub">Started %s%s</p>
 <h3>meta</h3>`,
@@ -375,15 +365,14 @@ func lynrummyElmPlayWithSession(w http.ResponseWriter, sessionID int64) {
 </style>
 </head><body>
 <div class="app-nav">
-  <a href="/gopher/">← Gopher home</a>
-  <a href="/gopher/game-lobby">Game lobby</a>
-  <a href="/gopher/lynrummy-elm/sessions">Sessions</a>
+  <a href="/">← Home</a>
+  <a href="/game/sessions">Sessions</a>
 </div>
 <div class="app-main">
 <div id="root"></div>
-<script src="/gopher/lynrummy-elm/engine.js"></script>
-<script src="/gopher/lynrummy-elm/elm.js"></script>
-<script src="/gopher/lynrummy-elm/engine_glue.js"></script>
+<script src="/game/engine.js"></script>
+<script src="/game/elm.js"></script>
+<script src="/game/engine_glue.js"></script>
 <script>
   var initialSessionId = %s;
   var app = Elm.Game.init({
@@ -394,8 +383,7 @@ func lynrummyElmPlayWithSession(w http.ResponseWriter, sessionID int64) {
     },
   });
   app.ports.setSessionPath.subscribe(function(sid) {
-    var url = sid === "" ? "/gopher/lynrummy-elm/"
-                         : "/gopher/lynrummy-elm/play/" + sid;
+    var url = sid === "" ? "/game" : "/game/" + sid;
     history.replaceState(null, "", url);
   });
   EngineGlue.attach(app);

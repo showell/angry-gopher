@@ -29,7 +29,7 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 			SameSite: http.SameSiteLaxMode,
 		})
 		go zulip.NotifyLogin(name)
-		http.Redirect(w, r, "/gopher/", http.StatusSeeOther)
+		http.Redirect(w, r, "/", http.StatusSeeOther)
 		return
 	}
 	renderLoginPage(w, auth.CurrentUser(r), "")
@@ -60,14 +60,12 @@ input { font-size: 16px; padding: 8px; width: 100%%; box-sizing: border-box; mar
 button { background: #000080; color: white; border: none; padding: 10px 20px;
          font-size: 15px; border-radius: 4px; cursor: pointer; }
 button:hover { background: #0000a0; }
-nav { font-size: 13px; margin-bottom: 16px; } nav a { color: #000080; }
 </style>
 </head><body>
-<nav><a href="/gopher/">← Gopher home</a></nav>
 <h1>Log in to Lyn Rummy</h1>
 <p class="muted">No password — just a name so your games are saved under it.</p>
 %s%s
-<form id="f" method="post" action="/gopher/login">
+<form id="f" method="post" action="/login">
   <input id="name" name="name" type="text" maxlength="40" placeholder="Your name" autofocus>
   <button type="submit">Continue</button>
 </form>
