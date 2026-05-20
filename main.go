@@ -11,7 +11,6 @@ import (
 	"os"
 	"time"
 
-	"angry-gopher/auth"
 	"angry-gopher/views"
 )
 
@@ -32,11 +31,6 @@ func buildMux() *http.ServeMux {
 	})
 
 	return mux
-}
-
-func wireDB() {
-	auth.DB = DB
-	views.DB = DB
 }
 
 func main() {
@@ -77,18 +71,10 @@ Backup the production database:
 
 	serverConfig = config
 
-	initDB(config.DBPath())
-	wireDB()
-
-	// Always seed the two canonical users (Steve=1, Claude=2) so the
-	// empty-DB case still yields a playable system.
-	seedData()
-
 	mux := buildMux()
 
 	fmt.Printf("Angry Gopher [%s mode]\n", config.Mode)
 	fmt.Printf("  Root:     %s\n", config.Root)
-	fmt.Printf("  Database: %s\n", config.DBPath())
 	fmt.Printf("  Listening on %s\n", config.ListenAddr())
 	log.Fatal(http.ListenAndServe(config.ListenAddr(), mux))
 }

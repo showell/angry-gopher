@@ -3,7 +3,6 @@
 package views
 
 import (
-	"database/sql"
 	"fmt"
 	"html"
 	"net/http"
@@ -11,18 +10,11 @@ import (
 	"angry-gopher/auth"
 )
 
-var DB *sql.DB
-
-// RequireAuth returns the authenticated user ID or writes a 401
-// response that triggers the browser's Basic auth prompt.
-func RequireAuth(w http.ResponseWriter, r *http.Request) int {
-	userID := auth.Authenticate(r)
-	if userID == 0 {
-		w.Header().Set("WWW-Authenticate", `Basic realm="Angry Gopher"`)
-		http.Error(w, "Login required", http.StatusUnauthorized)
-		return 0
-	}
-	return userID
+// CurrentUser returns the username the request acts as. Hard-coded
+// to Steve until login lands; this is the single seam every page
+// goes through to learn who it's serving.
+func CurrentUser(r *http.Request) string {
+	return auth.CurrentUser(r)
 }
 
 // AppChromeCSS is the shared stylesheet for the app-wide top and

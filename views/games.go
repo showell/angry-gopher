@@ -12,11 +12,6 @@ import (
 // system; the Elm client owns its own sessions via
 // lynrummy_elm_sessions.
 func HandleGames(w http.ResponseWriter, r *http.Request) {
-	userID := RequireAuth(w, r)
-	if userID == 0 {
-		return
-	}
-
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	PageHeaderArea(w, "Games", "games")
 	PageSubtitle(w, "Jump straight into a LynRummy game or browse your recent sessions.")
