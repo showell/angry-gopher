@@ -1,0 +1,43 @@
+#!/bin/bash
+# CANONICAL DEPLOY SCRIPT — DO NOT REINVENT.
+#
+# Build the Lyn Rummy server + front-end bundles locally, rsync the
+# minimal runtime tree to the production droplet, then restart the
+# systemd service. The host has no Go/Node/Elm — it only runs the
+# binary + serves the shipped static files.
+#
+# Host coordinates live in deploy/deploy.conf. One-time host setup
+# (Caddy, systemd unit, gopher.conf) is documented in deploy/README.md.
+set -e
+
+source "$(dirname "$0")/_paths.sh"
+source "$GOPHER_DIR/deploy/deploy.conf"
+
+cd "$GOPHER_DIR"
+COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo unknown)
+
+echo "Building gopher-server ($COMMIT)..."
+go build -ldflags "-X main.gitCommit=$COMMIT" -o gopher-server .
+
+echo "Building Elm/TS bundles..."
+"$GOPHER_DIR/ops/build_elm"
+
+# The 7 runtime files the server reads from disk (CWD-relative on
+# the host), plus the binary. --relative preserves the games/...
+# directory structure under DEPLOY_DIR.
+echo "Syncing to $DEPLOY_HOST:$DEPLOY_DIR ..."
+rsync -avz --relative \
+	gopher-server \
+	games/lynrummy/elm/elm.js \
+	games/lynrummy/elm/puzzle.js \
+	games/lynrummy/elm/engine.js \
+	games/lynrummy/elm/engine_glue.js \
+	games/lynrummy/conformance/curated_4line_puzzles.dsl \
+	games/lynrummy/conformance/curated_5line_puzzles.dsl \
+	games/lynrummy/conformance/curated_6line_puzzles.dsl \
+	"$DEPLOY_HOST:$DEPLOY_DIR/"
+
+echo "Restarting $DEPLOY_SERVICE ..."
+ssh "$DEPLOY_HOST" "sudo systemctl restart $DEPLOY_SERVICE && sleep 1 && systemctl is-active $DEPLOY_SERVICE"
+
+echo "Deploy complete: http://162.243.1.123/version"

@@ -1,0 +1,28 @@
+# Angry Gopher (Lyn Rummy) reverse proxy.
+#
+# v1: plain HTTP on :80 so it works on the bare droplet IP, before
+# the domain exists. When DNS for lynrummy.com points at this box,
+# change the site address `:80` below to `lynrummy.com` and reload —
+# Caddy then fetches a Let's Encrypt cert and redirects HTTP->HTTPS
+# automatically. At that point also uncomment the HSTS header (.com
+# is not HSTS-preloaded, unlike .app, so we set it ourselves).
+:80 {
+	encode gzip
+
+	# /admin is guarded here at the proxy; the Go app deliberately
+	# leaves it open and expects the reverse proxy to protect it.
+	@admin path /admin /admin/*
+	basic_auth @admin {
+		admin REPLACE_WITH_BCRYPT_HASH
+	}
+
+	# Coarse outer cap. The Go handlers enforce tighter per-route
+	# limits (256 KB new-session, 64 KB append/puzzle).
+	request_body {
+		max_size 1MB
+	}
+
+	# header Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+
+	reverse_proxy localhost:9000
+}

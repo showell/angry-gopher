@@ -1,0 +1,15 @@
+[Unit]
+Description=Angry Gopher (Lyn Rummy) game server
+After=network.target
+
+[Service]
+User=steve
+Group=steve
+WorkingDirectory=/home/steve/angry-gopher
+Environment=GOPHER_CONFIG=/home/steve/AngryGopher/gopher.conf
+ExecStart=/home/steve/angry-gopher/gopher-server
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target
