@@ -36,7 +36,7 @@ import Lib.LongPress as LongPress
 import Lib.Player exposing (Player(..))
 import Lib.InitialStateDsl as InitialStateDsl
 import Lib.Physics.BoardGeometry exposing (refereeBounds)
-import Lib.PointerInput as PointerInput
+import Lib.PointerPorts as PointerPorts
 import Lib.Popup as Popup
 import Lib.Random as Random
 import Lib.Status as Status exposing (StatusKind(..))
@@ -407,7 +407,7 @@ update msg model =
         -- drag and kicks off board-rect measurement; MouseMove
         -- advances the dragInfo's floater; MouseUp resolves into a
         -- wire action via BoardDrag / HandDrag.
-        MouseDownOnBoardCard { stack, cardIndex, point, time } ->
+        MouseDownOnBoardCard { stack, cardIndex, point, time, pointerId } ->
             case model.drag of
                 NotDragging ->
                     let
@@ -425,6 +425,7 @@ update msg model =
                         [ Browser.Dom.getElement (boardDomIdFor model.gameId)
                             |> Task.attempt BoardRectReceived
                         , LongPress.scheduleTimer LongPressTimerFired time
+                        , PointerPorts.trackPointer pointerId
                         ]
                     )
 
@@ -471,7 +472,7 @@ update msg model =
                 _ ->
                     ( model, Cmd.none )
 
-        MouseDownOnHandCard { handCard, point } ->
+        MouseDownOnHandCard { handCard, point, pointerId } ->
             case model.drag of
                 NotDragging ->
                     let
@@ -483,8 +484,11 @@ update msg model =
                                 }
                     in
                     ( { model | drag = DraggingHandCard dragInfo }
-                    , Browser.Dom.getElement (boardDomIdFor model.gameId)
-                        |> Task.attempt BoardRectReceived
+                    , Cmd.batch
+                        [ Browser.Dom.getElement (boardDomIdFor model.gameId)
+                            |> Task.attempt BoardRectReceived
+                        , PointerPorts.trackPointer pointerId
+                        ]
                     )
 
                 _ ->
@@ -799,8 +803,8 @@ subscriptions model =
 
                 _ ->
                     Sub.batch
-                        [ Browser.Events.onMouseMove (PointerInput.mouseMoveDecoder MouseMove)
-                        , Browser.Events.onMouseUp (PointerInput.mouseUpDecoder MouseUp)
+                        [ PointerPorts.pointerMoved (\s -> MouseMove { x = s.x, y = s.y } s.t)
+                        , PointerPorts.pointerUp (\s -> MouseUp { x = s.x, y = s.y } s.t)
                         ]
 
         animationSubscription =

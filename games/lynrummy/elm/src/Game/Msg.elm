@@ -11,8 +11,8 @@ import Time
 
 
 type Msg
-    = MouseDownOnBoardCard { stack : CardStack, cardIndex : Int, point : Point, time : Int }
-    | MouseDownOnHandCard { handCard : HandCard, point : Point }
+    = MouseDownOnBoardCard { stack : CardStack, cardIndex : Int, point : Point, time : Int, pointerId : Int }
+    | MouseDownOnHandCard { handCard : HandCard, point : Point, pointerId : Int }
     | MouseMove Point Int
     | MouseUp Point Int
     | LongPressTimerFired Int
