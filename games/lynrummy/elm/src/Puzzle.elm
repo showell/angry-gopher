@@ -26,6 +26,7 @@ import Lib.LongPress as LongPress
 import Lib.Physics.GestureArbitration as GA
 import Lib.Point exposing (Point)
 import Lib.PointerInput as PointerInput
+import Lib.PointerPorts as PointerPorts
 import Lib.Status as Status exposing (StatusKind(..))
 import Lib.WingView as WingView
 import Html exposing (Html, div, text)
@@ -654,8 +655,8 @@ dragSubscriptions model =
 
         _ ->
             Sub.batch
-                [ Browser.Events.onMouseMove (PointerInput.mouseMoveDecoder MouseMove)
-                , Browser.Events.onMouseUp (PointerInput.mouseUpDecoder MouseUp)
+                [ PointerPorts.pointerMoved (\s -> MouseMove { x = s.x, y = s.y } s.t)
+                , PointerPorts.pointerUp (\s -> MouseUp { x = s.x, y = s.y } s.t)
                 ]
 
 

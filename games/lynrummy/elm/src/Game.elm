@@ -36,7 +36,7 @@ import Lib.LongPress as LongPress
 import Lib.Player exposing (Player(..))
 import Lib.InitialStateDsl as InitialStateDsl
 import Lib.Physics.BoardGeometry exposing (refereeBounds)
-import Lib.PointerInput as PointerInput
+import Lib.PointerPorts as PointerPorts
 import Lib.Popup as Popup
 import Lib.Random as Random
 import Lib.Status as Status exposing (StatusKind(..))
@@ -799,8 +799,8 @@ subscriptions model =
 
                 _ ->
                     Sub.batch
-                        [ Browser.Events.onMouseMove (PointerInput.mouseMoveDecoder MouseMove)
-                        , Browser.Events.onMouseUp (PointerInput.mouseUpDecoder MouseUp)
+                        [ PointerPorts.pointerMoved (\s -> MouseMove { x = s.x, y = s.y } s.t)
+                        , PointerPorts.pointerUp (\s -> MouseUp { x = s.x, y = s.y } s.t)
                         ]
 
         animationSubscription =

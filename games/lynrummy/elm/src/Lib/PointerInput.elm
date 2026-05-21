@@ -1,14 +1,14 @@
 module Lib.PointerInput exposing
     ( cardMouseDown
     , handCardMouseDown
-    , mouseMoveDecoder
-    , mouseUpDecoder
     )
 
-{-| Pointer-event decoders + the board-card mousedown attr
-builder. Shared between the full-game and puzzle hosts.
-Msg-polymorphic where relevant — callers pass their own
-constructors.
+{-| Pointerdown attr-builders for board + hand cards. Move/up are
+forwarded from the host JS shim over `Lib.PointerPorts` (`Browser.Events`
+has no pointer subscriptions, and the shim adds pointer capture so a
+drag survives leaving the card). The `...MouseDown` names are historical
+— the events are pointer events. Msg-polymorphic — callers pass their
+own constructors.
 
 -}
 
@@ -26,11 +26,8 @@ pointDecoder =
         (Decode.field "clientY" Decode.float)
 
 
-{-| `MouseEvent.timeStamp` is a `DOMHighResTimeStamp` — JS
-gives us a Float (modern browsers clamp the fractional part to
-~1ms for Spectre mitigation anyway). We floor to Int once here
-at the JS↔Elm boundary so the rest of the codebase only sees
-integer milliseconds.
+{-| `PointerEvent.timeStamp` is a `DOMHighResTimeStamp` (Float). Floor
+to Int once here so the rest of the code sees integer milliseconds.
 -}
 timeStampDecoder : Decoder Int
 timeStampDecoder =
@@ -40,35 +37,13 @@ timeStampDecoder =
 
 pointAndTimeDecoder : Decoder ( Point, Int )
 pointAndTimeDecoder =
-    Decode.map2 Tuple.pair
-        pointDecoder
-        timeStampDecoder
+    Decode.map2 Tuple.pair pointDecoder timeStampDecoder
 
 
-{-| Document-level mousemove decoder. Wired into
-`Browser.Events.onMouseMove` while a drag is live. Caller
-supplies its own `Point -> Int -> msg` constructor.
--}
-mouseMoveDecoder : (Point -> Int -> msg) -> Decoder msg
-mouseMoveDecoder toMsg =
-    Decode.map2 toMsg
-        pointDecoder
-        timeStampDecoder
-
-
-{-| Document-level mouseup decoder. Wired into
-`Browser.Events.onMouseUp` while a drag is live.
--}
-mouseUpDecoder : (Point -> Int -> msg) -> Decoder msg
-mouseUpDecoder toMsg =
-    Decode.map2 toMsg
-        pointDecoder
-        timeStampDecoder
-
-
-{-| Mousedown attr-builder for a board card. Caller passes a
-record-shaped constructor (`MouseDownOnBoardCard` or its
-puzzle-host equivalent).
+{-| Pointerdown attr-builder for a board card. `preventDefault` stops a
+touch browser from synthesizing mouse events, selecting text, or
+popping a long-press callout during our own 400ms long-press. Pointer
+capture is handled by the host shim.
 -}
 cardMouseDown :
     ({ stack : CardStack, cardIndex : Int, point : Point, time : Int } -> msg)
@@ -76,28 +51,27 @@ cardMouseDown :
     -> Int
     -> List (Html.Attribute msg)
 cardMouseDown toMsg stack cardIdx =
-    [ Events.on "mousedown"
+    [ Events.preventDefaultOn "pointerdown"
         (Decode.map
             (\( p, t ) ->
-                toMsg { stack = stack, cardIndex = cardIdx, point = p, time = t }
+                ( toMsg { stack = stack, cardIndex = cardIdx, point = p, time = t }, True )
             )
             pointAndTimeDecoder
         )
     ]
 
 
-{-| Mousedown attr-builder for a hand card. Mirror of
-`cardMouseDown` minus the time stamp (hand drags don't capture
-a gesture path).
+{-| Pointerdown attr-builder for a hand card. Mirror of `cardMouseDown`
+minus the timestamp (hand drags don't capture a gesture path).
 -}
 handCardMouseDown :
     ({ handCard : HandCard, point : Point } -> msg)
     -> HandCard
     -> List (Html.Attribute msg)
 handCardMouseDown toMsg hc =
-    [ Events.on "mousedown"
+    [ Events.preventDefaultOn "pointerdown"
         (Decode.map
-            (\p -> toMsg { handCard = hc, point = p })
+            (\p -> ( toMsg { handCard = hc, point = p }, True ))
             pointDecoder
         )
     ]

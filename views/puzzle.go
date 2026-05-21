@@ -192,15 +192,45 @@ func puzzlePage(w http.ResponseWriter, user string) {
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	fmt.Fprintf(w, `<!doctype html>
-<html><head><meta charset="utf-8"><title>♦️ Lyn Rummy ♥️</title>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"><title>♦️ Lyn Rummy ♥️</title>
 <style>
-  body { margin: 0; font-family: sans-serif; background: #f4f4ec; }
+  body { margin: 0; font-family: sans-serif; background: #f4f4ec;
+         touch-action: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
 </style>
 </head><body>
 <div id="root"></div>
 <script src="/puzzles/puzzle.js"></script>
 <script>
-  Elm.Puzzle.init({ node: document.getElementById("root"), flags: %s });
+  var app = Elm.Puzzle.init({ node: document.getElementById("root"), flags: %s });
+  // Pointer transport: pointerdown captures the pointer; move/up are
+  // forwarded to Elm. Capture set synchronously (no Elm round-trip) so
+  // fast taps aren't missed; only the active pointer is forwarded.
+  (function () {
+    var captureEl = document.documentElement;
+    var tracked = null;
+    function sample(e) {
+      return { x: Math.round(e.clientX), y: Math.round(e.clientY), t: Math.floor(e.timeStamp) };
+    }
+    document.addEventListener("pointerdown", function (e) {
+      tracked = e.pointerId;
+      // Capture touch/pen so a finger-drag survives the card re-rendering
+      // mid-drag. Mouse needs no capture (document sees every move) and
+      // capturing a mouse pointer can interfere with button clicks.
+      if (e.pointerType !== "mouse") {
+        try { captureEl.setPointerCapture(e.pointerId); } catch (err) {}
+      }
+    });
+    document.addEventListener("pointermove", function (e) {
+      if (e.pointerId === tracked) app.ports.pointerMoved.send(sample(e));
+    });
+    function end(e) {
+      if (e.pointerId !== tracked) return;
+      tracked = null;
+      app.ports.pointerUp.send(sample(e));
+    }
+    document.addEventListener("pointerup", end);
+    document.addEventListener("pointercancel", end);
+  })();
 </script>
 </body></html>`, flagJSON)
 }

@@ -355,9 +355,10 @@ func lynrummyElmPlayWithSession(w http.ResponseWriter, user string, sessionID in
 	}
 	playerNameJSON, _ := json.Marshal(user)
 	fmt.Fprintf(w, `<!doctype html>
-<html><head><meta charset="utf-8"><title>♦️ Lyn Rummy ♥️</title>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"><title>♦️ Lyn Rummy ♥️</title>
 <style>
-  body { margin: 0; font-family: sans-serif; background: #f4f4ec; }
+  body { margin: 0; font-family: sans-serif; background: #f4f4ec;
+         touch-action: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
   .app-nav { padding: 8px 16px; background: #000080; color: white; font-size: 13px; }
   .app-nav a { color: white; text-decoration: none; margin-right: 14px; }
   .app-nav a:hover { text-decoration: underline; }
@@ -388,6 +389,37 @@ func lynrummyElmPlayWithSession(w http.ResponseWriter, user string, sessionID in
     history.replaceState(null, "", url);
   });
   EngineGlue.attach(app);
+  // Pointer transport: a pointerdown inside the board captures the
+  // pointer (so a mouse/finger drag survives leaving the card) and its
+  // move/up are forwarded to Elm — Browser.Events has no pointer subs.
+  // Capture is set synchronously here on pointerdown (no Elm round-trip)
+  // so fast taps aren't missed; only the active pointer is forwarded.
+  (function () {
+    var captureEl = document.documentElement;
+    var tracked = null;
+    function sample(e) {
+      return { x: Math.round(e.clientX), y: Math.round(e.clientY), t: Math.floor(e.timeStamp) };
+    }
+    document.addEventListener("pointerdown", function (e) {
+      tracked = e.pointerId;
+      // Capture touch/pen so a finger-drag survives the card re-rendering
+      // mid-drag. Mouse needs no capture (document sees every move) and
+      // capturing a mouse pointer can interfere with button clicks.
+      if (e.pointerType !== "mouse") {
+        try { captureEl.setPointerCapture(e.pointerId); } catch (err) {}
+      }
+    });
+    document.addEventListener("pointermove", function (e) {
+      if (e.pointerId === tracked) app.ports.pointerMoved.send(sample(e));
+    });
+    function end(e) {
+      if (e.pointerId !== tracked) return;
+      tracked = null;
+      app.ports.pointerUp.send(sample(e));
+    }
+    document.addEventListener("pointerup", end);
+    document.addEventListener("pointercancel", end);
+  })();
 </script>
 </div>
 </body></html>`, flag, playerNameJSON)
