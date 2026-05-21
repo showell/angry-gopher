@@ -41,6 +41,18 @@ func userRoot(user string) string {
 	return filepath.Join(GameDataRoot, user)
 }
 
+// DeleteUserData removes a player's entire on-disk subtree — all game
+// + puzzle sessions and their id counters. Used by the admin "Delete
+// sessions" action to clear out retired players. Refuses an empty user
+// so it can never target the data root itself; callers must also
+// sanitize the name (it becomes the directory segment).
+func DeleteUserData(user string) error {
+	if strings.TrimSpace(user) == "" {
+		return fmt.Errorf("refusing to delete: empty user")
+	}
+	return os.RemoveAll(userRoot(user))
+}
+
 // lynrummyElmRoot is the full-game namespace for a player.
 func lynrummyElmRoot(user string) string {
 	return filepath.Join(userRoot(user), "lynrummy-elm")
