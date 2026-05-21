@@ -1,0 +1,19 @@
+#!/bin/bash
+# Pull a timestamped snapshot of the production data_dir
+# (~/AngryGopher/prod on the droplet) down to this machine. Game
+# sessions are append-only logs, so a gzipped tar per run is cheap
+# and gives point-in-time recovery against droplet loss or accidental
+# deletion. Run ad hoc; snapshots accrue in ~/AngryGopher/backups
+# (prune old ones by hand as needed). Host comes from deploy.conf.
+set -e
+
+source "$(dirname "$0")/_paths.sh"
+source "$GOPHER_DIR/deploy/deploy.conf"
+
+DEST="$HOME/AngryGopher/backups"
+mkdir -p "$DEST"
+OUT="$DEST/prod-$(date +%Y%m%d-%H%M%S).tar.gz"
+
+echo "Pulling $DEPLOY_HOST:~/AngryGopher/prod -> $OUT"
+ssh "$DEPLOY_HOST" 'tar -czf - -C "$HOME/AngryGopher" prod' > "$OUT"
+echo "Backup complete: $OUT ($(du -h "$OUT" | cut -f1))"
