@@ -25,10 +25,9 @@ import (
 	"time"
 )
 
-// ElmLynRummyDir is the repo-relative directory containing the
-// Elm source + compiled elm.js. Set by main; default assumes
-// Gopher runs from the angry-gopher repo root.
-var ElmLynRummyDir = "games/lynrummy/elm"
+// ElmJSPath — the compiled full-game Elm client, embedded in the
+// binary (see embed.go). Built by ops/build_elm.
+var ElmJSPath = "games/lynrummy/elm/elm.js"
 
 // EngineJSPath — esbuild-bundled TS engine. Built by
 // ops/build_engine_js (called transitively by ops/build_elm).
@@ -395,10 +394,9 @@ func lynrummyElmPlayWithSession(w http.ResponseWriter, user string, sessionID in
 }
 
 func lynrummyElmJS(w http.ResponseWriter) {
-	path := filepath.Join(ElmLynRummyDir, "elm.js")
-	data, err := os.ReadFile(path)
+	data, err := readAsset(ElmJSPath)
 	if err != nil {
-		http.Error(w, "elm.js not found — run `elm make src/Game.elm --output=elm.js` in "+ElmLynRummyDir, http.StatusNotFound)
+		http.Error(w, "elm.js missing from the binary — run `ops/build_elm` before `go build`", http.StatusNotFound)
 		return
 	}
 	w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
@@ -410,7 +408,7 @@ func lynrummyElmJS(w http.ResponseWriter) {
 // message (intended to point the developer at the build step
 // that produces the asset).
 func serveJS(w http.ResponseWriter, path string, missingMsg string) {
-	data, err := os.ReadFile(path)
+	data, err := readAsset(path)
 	if err != nil {
 		http.Error(w, missingMsg, http.StatusNotFound)
 		return

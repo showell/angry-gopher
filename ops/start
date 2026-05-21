@@ -14,13 +14,13 @@ lsof -ti:9000 | xargs kill -9 2>/dev/null || true
 sleep 0.5
 
 cd "$GOPHER_DIR"
+
+# Build the Elm/TS bundles FIRST: `go build` embeds them into the
+# binary (see embed.go), so they must exist and be current.
+"$(dirname "$0")/build_elm"
+
 COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 go build -ldflags "-X main.gitCommit=$COMMIT" -o gopher-server .
-
-# Compile the LynRummy Elm clients via ops/build_elm. Failures
-# are warnings — the matching HTTP routes 404 with an actionable
-# error pointing back at the build script.
-"$(dirname "$0")/build_elm" || echo "Warning: ops/build_elm failed; /gopher/lynrummy-elm/ and /gopher/puzzles/ will 404 on their JS bundles"
 
 # Puzzles catalog is frozen — served from the committed
 # games/lynrummy/puzzles/puzzles.json. To refresh, write a TS

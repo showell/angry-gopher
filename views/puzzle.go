@@ -12,7 +12,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -119,7 +118,7 @@ func indentLines(src string) string {
 func loadCatalog() (string, error) {
 	var kept []string
 	for _, p := range puzzleCatalogPaths {
-		data, err := os.ReadFile(p)
+		data, err := readAsset(p)
 		if err != nil {
 			return "", fmt.Errorf("read %s: %w", p, err)
 		}

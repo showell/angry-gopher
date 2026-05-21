@@ -4,10 +4,13 @@ The production host is a DigitalOcean droplet (NYC3, Ubuntu 24.04,
 x86_64). Caddy fronts the Go server for TLS, `/admin` basic-auth,
 and a body cap; the Go server listens on `localhost:9000`.
 
-The host runs **no Go/Node/Elm** — we build locally and ship the
-binary plus the seven static files the server reads at runtime
-(three gitignored Elm/TS bundles, `engine_glue.js`, and the three
-puzzle-catalog `.dsl` files). See `ops/deploy`.
+The host runs **no Go/Node/Elm** — we build locally and ship a
+**single self-contained binary**: the Elm/TS bundles + puzzle
+catalogs are baked in via `go:embed` (see `embed.go`), so there are
+no runtime file dependencies and no working-dir assumptions. Because
+the bundles are embedded at compile time, `ops/build_elm` must run
+*before* `go build` (the build scripts handle this ordering). See
+`ops/deploy`.
 
 ## Repeat deploys
 

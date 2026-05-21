@@ -13,6 +13,13 @@ set -e
 REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$REPO_DIR"
 
+# The server embeds the front-end bundles (see embed.go), so the main
+# package will not compile without them. Fail with a pointer to the
+# build step rather than a cryptic "no matching files" embed error.
+for f in games/lynrummy/elm/elm.js games/lynrummy/elm/puzzle.js games/lynrummy/elm/engine.js; do
+    [ -f "$f" ] || { echo "Error: $f missing — run ops/build_elm first (its bundles are embedded by go build)."; exit 1; }
+done
+
 phase() {
     local label="$1"
     shift
