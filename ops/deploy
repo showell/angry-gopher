@@ -6,6 +6,9 @@
 # systemd service. The host has no Go/Node/Elm — it only runs the
 # binary + serves the shipped static files.
 #
+# Refuses to run with a dirty working tree and pushes HEAD to GitHub
+# first, so we never deploy code that isn't committed AND pushed.
+#
 # Host coordinates live in deploy/deploy.conf. One-time host setup
 # (Caddy, systemd unit, gopher.conf) is documented in deploy/README.md.
 set -e
@@ -14,6 +17,15 @@ source "$(dirname "$0")/_paths.sh"
 source "$GOPHER_DIR/deploy/deploy.conf"
 
 cd "$GOPHER_DIR"
+
+# Never deploy code that isn't committed AND pushed to GitHub.
+if [ -n "$(git status --porcelain)" ]; then
+    echo "Error: uncommitted changes in the working tree — commit before deploying." >&2
+    exit 1
+fi
+echo "Pushing HEAD to GitHub..."
+git push
+
 COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo unknown)
 
 # Build the Elm/TS bundles FIRST — go build embeds them (see embed.go).
