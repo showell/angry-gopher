@@ -23,7 +23,12 @@ lynrummy.com {
 		max_size 1MB
 	}
 
-	header Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		X-Frame-Options "SAMEORIGIN"
+	}
 
 	reverse_proxy localhost:9000
 }

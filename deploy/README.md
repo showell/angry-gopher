@@ -68,9 +68,23 @@ the SSH key was added at droplet creation).
    ssh steve@<IP> 'sudo mv /tmp/Caddyfile /etc/caddy/Caddyfile && sudo systemctl reload caddy'
    ```
 
-## Going from IP to domain (later)
+## Hardening (applied 2026-05-21)
 
-Once `lynrummy.com` resolves to the droplet, edit
-`/etc/caddy/Caddyfile` on the host: change the site address `:80`
-to `lynrummy.com`, uncomment the HSTS header, `sudo systemctl
-reload caddy`. Caddy provisions the cert on first request.
+- **TLS:** live on `https://lynrummy.com` (Let's Encrypt via Caddy,
+  auto-renew); HTTP→HTTPS redirect; HSTS.
+- **Security headers** (Caddyfile): HSTS, `X-Content-Type-Options`,
+  `Referrer-Policy`, `X-Frame-Options`.
+- **SSH:** key-only (password auth off via cloud-init drop-ins);
+  root login disabled (`/etc/ssh/sshd_config.d/99-hardening.conf` →
+  `PermitRootLogin no`). Log in as `steve`.
+- **Auto updates:** `unattended-upgrades` enabled (DO image default).
+- **Firewall:** ufw allows 22/80/443 only.
+- **Backups:** `ops/backup` pulls a timestamped `data_dir` tarball to
+  `~/AngryGopher/backups` on the dev box. Also worth enabling
+  DigitalOcean weekly droplet backups in the control panel for
+  whole-droplet recovery.
+
+### Deferred to the guests phase
+
+`go:embed` self-contained binary; a dedicated least-privilege service
+user; Caddy rate-limiting (`xcaddy` + `caddy-ratelimit`).
