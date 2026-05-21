@@ -26,7 +26,6 @@ import Lib.LongPress as LongPress
 import Lib.Physics.GestureArbitration as GA
 import Lib.Point exposing (Point)
 import Lib.PointerInput as PointerInput
-import Lib.PointerPorts as PointerPorts
 import Lib.Status as Status exposing (StatusKind(..))
 import Lib.WingView as WingView
 import Html exposing (Html, div, text)
@@ -79,7 +78,7 @@ type alias Model =
 
 
 type Msg
-    = MouseDownOnBoardCard { stack : CardStack, cardIndex : Int, point : Point, time : Int, pointerId : Int }
+    = MouseDownOnBoardCard { stack : CardStack, cardIndex : Int, point : Point, time : Int }
     | MouseMove Point Int
     | MouseUp Point Int
     | LongPressTimerFired Int
@@ -238,7 +237,7 @@ update msg model =
         BoardRectReceived (Err _) ->
             ( model, Cmd.none )
 
-        MouseDownOnBoardCard { stack, cardIndex, point, time, pointerId } ->
+        MouseDownOnBoardCard { stack, cardIndex, point, time } ->
             case model.drag of
                 NotDragging ->
                     let
@@ -256,7 +255,6 @@ update msg model =
                         [ Browser.Dom.getElement (BoardView.boardDomIdFor model.gameId)
                             |> Task.attempt BoardRectReceived
                         , LongPress.scheduleTimer LongPressTimerFired time
-                        , PointerPorts.trackPointer pointerId
                         ]
                     )
 
@@ -656,8 +654,8 @@ dragSubscriptions model =
 
         _ ->
             Sub.batch
-                [ PointerPorts.pointerMoved (\s -> MouseMove { x = s.x, y = s.y } s.t)
-                , PointerPorts.pointerUp (\s -> MouseUp { x = s.x, y = s.y } s.t)
+                [ Browser.Events.onMouseMove (PointerInput.mouseMoveDecoder MouseMove)
+                , Browser.Events.onMouseUp (PointerInput.mouseUpDecoder MouseUp)
                 ]
 
 

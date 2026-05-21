@@ -192,40 +192,15 @@ func puzzlePage(w http.ResponseWriter, user string) {
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	fmt.Fprintf(w, `<!doctype html>
-<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"><title>♦️ Lyn Rummy ♥️</title>
+<html><head><meta charset="utf-8"><title>♦️ Lyn Rummy ♥️</title>
 <style>
-  body { margin: 0; font-family: sans-serif; background: #f4f4ec;
-         touch-action: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+  body { margin: 0; font-family: sans-serif; background: #f4f4ec; }
 </style>
 </head><body>
 <div id="root"></div>
 <script src="/puzzles/puzzle.js"></script>
 <script>
-  var app = Elm.Puzzle.init({ node: document.getElementById("root"), flags: %s });
-  // Pointer transport: capture the active pointer and forward its
-  // move/up to Elm. Only the tracked id is forwarded (multitouch-safe).
-  (function () {
-    var root = document.getElementById("root");
-    var tracked = null;
-    function sample(e) {
-      return { x: Math.round(e.clientX), y: Math.round(e.clientY), t: Math.floor(e.timeStamp) };
-    }
-    app.ports.trackPointer.subscribe(function (pid) {
-      tracked = pid;
-      try { root.setPointerCapture(pid); } catch (e) {}
-    });
-    root.addEventListener("pointermove", function (e) {
-      if (e.pointerId === tracked) app.ports.pointerMoved.send(sample(e));
-    });
-    function end(e) {
-      if (e.pointerId !== tracked) return;
-      tracked = null;
-      app.ports.pointerUp.send(sample(e));
-      try { root.releasePointerCapture(e.pointerId); } catch (e2) {}
-    }
-    root.addEventListener("pointerup", end);
-    root.addEventListener("pointercancel", end);
-  })();
+  Elm.Puzzle.init({ node: document.getElementById("root"), flags: %s });
 </script>
 </body></html>`, flagJSON)
 }

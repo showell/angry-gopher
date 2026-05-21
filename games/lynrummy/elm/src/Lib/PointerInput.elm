@@ -1,14 +1,14 @@
 module Lib.PointerInput exposing
     ( cardMouseDown
     , handCardMouseDown
+    , mouseMoveDecoder
+    , mouseUpDecoder
     )
 
-{-| Pointerdown attr-builders for board + hand cards. Move/up no
-longer flow through here: `Browser.Events` has no pointer
-subscriptions, so once a press starts the host's JS shim captures
-the pointer and forwards move/up over `Lib.PointerPorts`. (The
-`...MouseDown` names are historical — the events are pointer events.)
-Msg-polymorphic — callers pass their own constructors.
+{-| Pointer-event decoders + the board-card mousedown attr
+builder. Shared between the full-game and puzzle hosts.
+Msg-polymorphic where relevant — callers pass their own
+constructors.
 
 -}
 
@@ -26,9 +26,10 @@ pointDecoder =
         (Decode.field "clientY" Decode.float)
 
 
-{-| `PointerEvent.timeStamp` is a `DOMHighResTimeStamp` (Float;
-browsers clamp the fractional part to ~1ms anyway). Floor to Int
-once here at the JS↔Elm boundary so the rest of the code sees
+{-| `MouseEvent.timeStamp` is a `DOMHighResTimeStamp` — JS
+gives us a Float (modern browsers clamp the fractional part to
+~1ms for Spectre mitigation anyway). We floor to Int once here
+at the JS↔Elm boundary so the rest of the codebase only sees
 integer milliseconds.
 -}
 timeStampDecoder : Decoder Int
@@ -37,47 +38,66 @@ timeStampDecoder =
         |> Decode.map floor
 
 
-pointerIdDecoder : Decoder Int
-pointerIdDecoder =
-    Decode.field "pointerId" Decode.int
+pointAndTimeDecoder : Decoder ( Point, Int )
+pointAndTimeDecoder =
+    Decode.map2 Tuple.pair
+        pointDecoder
+        timeStampDecoder
 
 
-{-| Pointerdown attr-builder for a board card. `preventDefault`
-stops a touch browser from synthesizing mouse events, selecting
-text, or popping a long-press callout during our own 400ms
-long-press. The pointer id rides along so the host can capture it.
+{-| Document-level mousemove decoder. Wired into
+`Browser.Events.onMouseMove` while a drag is live. Caller
+supplies its own `Point -> Int -> msg` constructor.
+-}
+mouseMoveDecoder : (Point -> Int -> msg) -> Decoder msg
+mouseMoveDecoder toMsg =
+    Decode.map2 toMsg
+        pointDecoder
+        timeStampDecoder
+
+
+{-| Document-level mouseup decoder. Wired into
+`Browser.Events.onMouseUp` while a drag is live.
+-}
+mouseUpDecoder : (Point -> Int -> msg) -> Decoder msg
+mouseUpDecoder toMsg =
+    Decode.map2 toMsg
+        pointDecoder
+        timeStampDecoder
+
+
+{-| Mousedown attr-builder for a board card. Caller passes a
+record-shaped constructor (`MouseDownOnBoardCard` or its
+puzzle-host equivalent).
 -}
 cardMouseDown :
-    ({ stack : CardStack, cardIndex : Int, point : Point, time : Int, pointerId : Int } -> msg)
+    ({ stack : CardStack, cardIndex : Int, point : Point, time : Int } -> msg)
     -> CardStack
     -> Int
     -> List (Html.Attribute msg)
 cardMouseDown toMsg stack cardIdx =
-    [ Events.preventDefaultOn "pointerdown"
-        (Decode.map3
-            (\p t pid ->
-                ( toMsg { stack = stack, cardIndex = cardIdx, point = p, time = t, pointerId = pid }, True )
+    [ Events.on "mousedown"
+        (Decode.map
+            (\( p, t ) ->
+                toMsg { stack = stack, cardIndex = cardIdx, point = p, time = t }
             )
-            pointDecoder
-            timeStampDecoder
-            pointerIdDecoder
+            pointAndTimeDecoder
         )
     ]
 
 
-{-| Pointerdown attr-builder for a hand card. Mirror of
-`cardMouseDown` minus the timestamp (hand drags don't capture a
-gesture path).
+{-| Mousedown attr-builder for a hand card. Mirror of
+`cardMouseDown` minus the time stamp (hand drags don't capture
+a gesture path).
 -}
 handCardMouseDown :
-    ({ handCard : HandCard, point : Point, pointerId : Int } -> msg)
+    ({ handCard : HandCard, point : Point } -> msg)
     -> HandCard
     -> List (Html.Attribute msg)
 handCardMouseDown toMsg hc =
-    [ Events.preventDefaultOn "pointerdown"
-        (Decode.map2
-            (\p pid -> ( toMsg { handCard = hc, point = p, pointerId = pid }, True ))
+    [ Events.on "mousedown"
+        (Decode.map
+            (\p -> toMsg { handCard = hc, point = p })
             pointDecoder
-            pointerIdDecoder
         )
     ]
