@@ -55,7 +55,7 @@ echo "    [phase] elm-test: $((SECONDS - t0))s"
 if [ -x "$ELM_REVIEW_BIN" ]; then
   echo "==> elm-review"
   t0=$SECONDS
-  "$ELM_REVIEW_BIN" --compiler "$ELM_BIN" 2>&1 | tail -3
+  "$ELM_REVIEW_BIN" --compiler "$ELM_BIN" 2>&1
   echo "    [phase] elm-review: $((SECONDS - t0))s"
 fi
 
