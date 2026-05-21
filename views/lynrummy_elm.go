@@ -222,7 +222,7 @@ func lynrummyElmSessionsList(w http.ResponseWriter, user string) {
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	fmt.Fprint(w, `<!DOCTYPE html>
-<html><head><title>LynRummy Elm sessions</title>
+<html><head><meta charset="utf-8"><title>♦️ Lyn Rummy ♥️</title>
 <style>
 body { font-family: sans-serif; margin: 60px auto; max-width: 820px; padding: 0 24px; }
 h1 { color: #000080; }
@@ -307,7 +307,7 @@ func lynrummyElmSessionDetail(w http.ResponseWriter, user string, sessionID int6
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	fmt.Fprintf(w, `<!DOCTYPE html>
-<html><head><title>LynRummy Elm session #%d</title>
+<html><head><meta charset="utf-8"><title>♦️ Lyn Rummy ♥️</title>
 <style>
 body { font-family: sans-serif; margin: 60px auto; max-width: 860px; padding: 0 24px; }
 h1 { color: #000080; margin-bottom: 4px; }
@@ -324,7 +324,7 @@ pre { background: #f4f4ec; padding: 12px; border: 1px solid #ddd; overflow-x: au
 <h1>Session #%d</h1>
 <p class="sub">Started %s%s</p>
 <h3>meta</h3>`,
-		sessionID, sessionID, html.EscapeString(ts), labelSuffix(SessionLabel(meta)))
+		sessionID, html.EscapeString(ts), labelSuffix(SessionLabel(meta)))
 	if rawMeta, err := ReadSessionFile(user, sessionID, "meta"); err == nil {
 		fmt.Fprintf(w, `<pre>%s</pre>`, html.EscapeString(string(rawMeta)))
 	} else {
@@ -356,7 +356,7 @@ func lynrummyElmPlayWithSession(w http.ResponseWriter, user string, sessionID in
 	}
 	playerNameJSON, _ := json.Marshal(user)
 	fmt.Fprintf(w, `<!doctype html>
-<html><head><meta charset="utf-8"><title>LynRummy (Elm)</title>
+<html><head><meta charset="utf-8"><title>♦️ Lyn Rummy ♥️</title>
 <style>
   body { margin: 0; font-family: sans-serif; background: #f4f4ec; }
   .app-nav { padding: 8px 16px; background: #000080; color: white; font-size: 13px; }

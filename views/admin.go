@@ -41,7 +41,7 @@ func HandleAdmin(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	fmt.Fprintf(w, `<!DOCTYPE html>
-<html><head><title>Angry Gopher Admin</title>
+<html><head><meta charset="utf-8"><title>♦️ Lyn Rummy ♥️</title>
 <style>
 body { font-family: sans-serif; margin: 40px; max-width: 820px; }
 h1 { color: #000080; }

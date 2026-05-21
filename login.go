@@ -69,7 +69,7 @@ func renderLoginPage(w http.ResponseWriter, current, errMsg string) {
 	}
 
 	fmt.Fprintf(w, `<!DOCTYPE html>
-<html><head><meta charset="utf-8"><title>Log in — Angry Gopher</title>
+<html><head><meta charset="utf-8"><title>♦️ Lyn Rummy ♥️</title>
 <style>
 body { font-family: sans-serif; margin: 80px auto; max-width: 420px; padding: 0 24px; }
 h1 { color: #000080; }

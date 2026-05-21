@@ -39,8 +39,8 @@ func AppChromeTop(w http.ResponseWriter, user string) {
 
 // PageHeader writes the HTML boilerplate, top bar, and opens the body.
 func PageHeader(w http.ResponseWriter, title, user string) {
-	fmt.Fprintf(w, `<!DOCTYPE html>
-<html><head><title>%s — Angry Gopher</title>`, title)
+	fmt.Fprint(w, `<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>♦️ Lyn Rummy ♥️</title>`)
 	fmt.Fprint(w, `
 <style>
 body { font-family: sans-serif; margin: 0; padding: 0;

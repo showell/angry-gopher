@@ -193,7 +193,7 @@ func puzzlePage(w http.ResponseWriter, user string) {
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	fmt.Fprintf(w, `<!doctype html>
-<html><head><meta charset="utf-8"><title>Puzzle</title>
+<html><head><meta charset="utf-8"><title>♦️ Lyn Rummy ♥️</title>
 <style>
   body { margin: 0; font-family: sans-serif; background: #f4f4ec; }
 </style>
