@@ -1,12 +1,13 @@
 # Angry Gopher (Lyn Rummy) reverse proxy.
 #
-# v1: plain HTTP on :80 so it works on the bare droplet IP, before
-# the domain exists. When DNS for lynrummy.com points at this box,
-# change the site address `:80` below to `lynrummy.com` and reload —
-# Caddy then fetches a Let's Encrypt cert and redirects HTTP->HTTPS
-# automatically. At that point also uncomment the HSTS header (.com
-# is not HSTS-preloaded, unlike .app, so we set it ourselves).
-:80 {
+# Live at https://lynrummy.com — Caddy auto-provisions and renews the
+# Let's Encrypt cert and redirects HTTP->HTTPS. (.com is not HSTS-
+# preloaded, unlike .app, so we set the HSTS header ourselves below.)
+#
+# The repo copy keeps the /admin password as a placeholder; the real
+# bcrypt hash lives only in /etc/caddy/Caddyfile on the droplet.
+# To test on the bare droplet IP (no TLS), set the site address to `:80`.
+lynrummy.com {
 	encode gzip
 
 	# /admin is guarded here at the proxy; the Go app deliberately
@@ -22,7 +23,7 @@
 		max_size 1MB
 	}
 
-	# header Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+	header Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
 
 	reverse_proxy localhost:9000
 }
