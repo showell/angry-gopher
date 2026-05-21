@@ -11,10 +11,10 @@ import Time
 
 
 type Msg
-    = MouseDownOnBoardCard { stack : CardStack, cardIndex : Int, point : Point, time : Int }
-    | MouseDownOnHandCard { handCard : HandCard, point : Point }
-    | MouseMove Point Int
-    | MouseUp Point Int
+    = PointerDownOnBoardCard { stack : CardStack, cardIndex : Int, point : Point, time : Int }
+    | PointerDownOnHandCard { handCard : HandCard, point : Point }
+    | PointerMove Point Int
+    | PointerUp Point Int
     | LongPressTimerFired Int
     | BoardRectReceived (Result Browser.Dom.Error Browser.Dom.Element)
     | HandCardRectReceived (Result Browser.Dom.Error ( Browser.Dom.Element, Browser.Dom.Element, Time.Posix ))

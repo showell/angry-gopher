@@ -79,9 +79,9 @@ type alias Model =
 
 
 type Msg
-    = MouseDownOnBoardCard { stack : CardStack, cardIndex : Int, point : Point, time : Int }
-    | MouseMove Point Int
-    | MouseUp Point Int
+    = PointerDownOnBoardCard { stack : CardStack, cardIndex : Int, point : Point, time : Int }
+    | PointerMove Point Int
+    | PointerUp Point Int
     | LongPressTimerFired Int
     | BoardRectReceived (Result Browser.Dom.Error Browser.Dom.Element)
     | ClickPrevPuzzle
@@ -238,7 +238,7 @@ update msg model =
         BoardRectReceived (Err _) ->
             ( model, Cmd.none )
 
-        MouseDownOnBoardCard { stack, cardIndex, point, time } ->
+        PointerDownOnBoardCard { stack, cardIndex, point, time } ->
             case model.drag of
                 NotDragging ->
                     let
@@ -274,7 +274,7 @@ update msg model =
                 _ ->
                     ( model, Cmd.none )
 
-        MouseMove pos tMs ->
+        PointerMove pos tMs ->
             case model.drag of
                 PressPending p ->
                     if BoardGesture.pressPendingEscaped pos p then
@@ -307,7 +307,7 @@ update msg model =
                 NotDragging ->
                     ( model, Cmd.none )
 
-        MouseUp releasePoint tMs ->
+        PointerUp releasePoint tMs ->
             case model.drag of
                 NotDragging ->
                     ( model, Cmd.none )
@@ -319,13 +319,13 @@ update msg model =
                     -- Click-without-escape: upgrade to whole-stack
                     -- drag and let BoardDrag emit Split (cursor is
                     -- still at originalCursor, so distSquared = 0).
-                    handleBoardMouseUp model
+                    handleBoardPointerUp model
                         releasePoint
                         tMs
                         (BoardGesture.upgradePressToBoardDrag p)
 
                 DraggingBoardCard d ->
-                    handleBoardMouseUp model releasePoint tMs d
+                    handleBoardPointerUp model releasePoint tMs d
 
         ClickPrevPuzzle ->
             ( navigateTo (stepIndex -1 model) model, Cmd.none )
@@ -545,14 +545,14 @@ PressPending case (release inside the quiet window) and the
 DraggingBoardCard case (cursor already escaped to whole-stack
 drag).
 -}
-handleBoardMouseUp : Model -> Point -> Int -> BoardCardDragInfo -> ( Model, Cmd Msg )
-handleBoardMouseUp model releasePoint tMs d =
+handleBoardPointerUp : Model -> Point -> Int -> BoardCardDragInfo -> ( Model, Cmd Msg )
+handleBoardPointerUp model releasePoint tMs d =
     let
         puzzle =
             currentPuzzle model
 
         outcome =
-            BoardDrag.handleMouseUp releasePoint
+            BoardDrag.handlePointerUp releasePoint
                 tMs
                 d
                 { board = puzzle.board
@@ -655,8 +655,8 @@ dragSubscriptions model =
 
         _ ->
             Sub.batch
-                [ PointerPorts.pointerMoved (\s -> MouseMove { x = s.x, y = s.y } s.t)
-                , PointerPorts.pointerUp (\s -> MouseUp { x = s.x, y = s.y } s.t)
+                [ PointerPorts.pointerMoved (\s -> PointerMove { x = s.x, y = s.y } s.t)
+                , PointerPorts.pointerUp (\s -> PointerUp { x = s.x, y = s.y } s.t)
                 ]
 
 
@@ -724,10 +724,10 @@ view model =
                 _ ->
                     Nothing
 
-        cardMouseDown =
+        cardPointerDown =
             case drag of
                 NotDragging ->
-                    Just (PointerInput.cardMouseDown MouseDownOnBoardCard)
+                    Just (PointerInput.cardPointerDown PointerDownOnBoardCard)
 
                 _ ->
                     Nothing
@@ -764,7 +764,7 @@ view model =
                 { board = board
                 , gameId = model.gameId
                 , sourceStack = sourceStack
-                , cardMouseDown = cardMouseDown
+                , cardPointerDown = cardPointerDown
                 , wingsWithHover = wingsWithHover
                 , boardFloaters = boardFloaters
                 }

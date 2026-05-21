@@ -107,7 +107,7 @@ Two coordinate frames; nobody should confuse them.
   Stack `loc` and any board-level reasoning live here. The
   TS agent uses board frame natively.
 - **Viewport frame.** Origin at the browser window's
-  top-left. Mouse coords and the live drag floater live
+  top-left. Pointer coords and the live drag floater live
   here.
 
 Elm translates board → viewport at render time using the

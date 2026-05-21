@@ -1,16 +1,16 @@
 module Lib.HandGesture exposing
-    ( HandMouseUp(..)
-    , handleMouseUp
+    ( HandPointerUp(..)
+    , handlePointerUp
     , mouseMove
     , resolveHandCardGesture
     , startHandDragInfo
     )
 
-{-| Per-side resolution for hand-card mouseup gestures.
+{-| Per-side resolution for hand-card pointerup gestures.
 Symmetric to `Lib.BoardGesture`. Hand-origin actions ship
 pathless (replay re-synthesizes via DOM).
 
-`handleMouseUp` returns a `HandMouseUp` value that flows up to
+`handlePointerUp` returns a `HandPointerUp` value that flows up to
 `Game.Play.update` for dispatch.
 
 -}
@@ -27,27 +27,27 @@ import Lib.Status as Status
 import Lib.WingView as WingView
 
 
-{-| Result of resolving a hand-card mouseup. `MergeHand` and
+{-| Result of resolving a hand-card pointerup. `MergeHand` and
 `PlaceHand` carry the same payloads as their `GameEvent`
 cousins; update in `Game.Play` translates and feeds them to
 `Apply.applyAction`. `HandCardOffBoard` is the scold case.
 `HandNothing` covers the rect-not-measured race (the user
 released before `BoardRectReceived` arrived) — drop is not
 geometrically interpretable yet. Mirror of
-`BoardGesture.BoardMouseUp`, minus the path.
+`BoardGesture.BoardPointerUp`, minus the path.
 -}
-type HandMouseUp
+type HandPointerUp
     = MergeHand { handCard : Card, target : CardStack, side : Side }
     | PlaceHand { handCard : Card, loc : BoardLocation }
     | HandCardOffBoard
     | HandNothing
 
 
-{-| Construct a fresh `HandCardDragInfo` from a mousedown.
+{-| Construct a fresh `HandCardDragInfo` from a pointerdown.
 Mirror of `BoardGesture.startBoardDragInfo`. The initial
 floater seed is "slightly above-and-left of the cursor" —
 hand-origin drags don't capture the source rect, so the seed
-is a heuristic that gets overwritten on the first MouseMove.
+is a heuristic that gets overwritten on the first PointerMove.
 -}
 startHandDragInfo :
     { handCard : HandCard
@@ -66,14 +66,14 @@ startHandDragInfo { handCard, cursor, board } =
     }
 
 
-{-| Mouseup handler for a hand-card drag. Caller has
+{-| Pointerup handler for a hand-card drag. Caller has
 pattern-matched out the `HandCardDragInfo` and passes it in
 along with the live board rect. Hand drags don't capture a
-gesture path, so no `tMs` parameter. Returns a `HandMouseUp`
+gesture path, so no `tMs` parameter. Returns a `HandPointerUp`
 that the caller dispatches on.
 -}
-handleMouseUp : Point -> HandCardDragInfo -> Maybe GA.Rect -> HandMouseUp
-handleMouseUp releasePoint d maybeRect =
+handlePointerUp : Point -> HandCardDragInfo -> Maybe GA.Rect -> HandPointerUp
+handlePointerUp releasePoint d maybeRect =
     let
         delta =
             { x = releasePoint.x - d.cursor.x
@@ -119,7 +119,7 @@ the wing-hover hit-test (lifting board-frame eventual landings
 into viewport frame) and the drop-loc translation. With no rect
 yet, no honest action is possible — return Nothing.
 -}
-resolveHandCardGesture : HandCardDragInfo -> Maybe GA.Rect -> Maybe HandMouseUp
+resolveHandCardGesture : HandCardDragInfo -> Maybe GA.Rect -> Maybe HandPointerUp
 resolveHandCardGesture d maybeRect =
     case maybeRect of
         Nothing ->
@@ -157,7 +157,7 @@ resolveHandCardGesture d maybeRect =
                         Nothing
 
 
-{-| Mousemove handler for a hand-card drag. Caller wraps the
+{-| Pointermove handler for a hand-card drag. Caller wraps the
 returned `Info` into `DraggingHandCard`. Hand drags don't
 capture a gesture path, so no `tMs`.
 -}

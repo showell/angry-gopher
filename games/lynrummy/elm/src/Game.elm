@@ -403,11 +403,11 @@ update msg model =
                                 , Cmd.none
                                 )
 
-        -- Pointer-gesture + wire-action cluster. MouseDown starts a
-        -- drag and kicks off board-rect measurement; MouseMove
-        -- advances the dragInfo's floater; MouseUp resolves into a
+        -- Pointer-gesture + wire-action cluster. PointerDown starts a
+        -- drag and kicks off board-rect measurement; PointerMove
+        -- advances the dragInfo's floater; PointerUp resolves into a
         -- wire action via BoardDrag / HandDrag.
-        MouseDownOnBoardCard { stack, cardIndex, point, time } ->
+        PointerDownOnBoardCard { stack, cardIndex, point, time } ->
             case model.drag of
                 NotDragging ->
                     let
@@ -471,7 +471,7 @@ update msg model =
                 _ ->
                     ( model, Cmd.none )
 
-        MouseDownOnHandCard { handCard, point } ->
+        PointerDownOnHandCard { handCard, point } ->
             case model.drag of
                 NotDragging ->
                     let
@@ -490,7 +490,7 @@ update msg model =
                 _ ->
                     ( model, Cmd.none )
 
-        MouseMove pos tMs ->
+        PointerMove pos tMs ->
             case model.drag of
                 PressPending p ->
                     if BoardGesture.pressPendingEscaped pos p then
@@ -529,7 +529,7 @@ update msg model =
                 NotDragging ->
                     ( model, Cmd.none )
 
-        MouseUp pos tMs ->
+        PointerUp pos tMs ->
             case model.drag of
                 NotDragging ->
                     ( model, Cmd.none )
@@ -543,7 +543,7 @@ update msg model =
                             BoardGesture.upgradePressToBoardDrag p
 
                         outcome =
-                            BoardDrag.handleMouseUp pos
+                            BoardDrag.handlePointerUp pos
                                 tMs
                                 upgraded
                                 { board = model.gameState.board
@@ -570,7 +570,7 @@ update msg model =
                 DraggingBoardCard d ->
                     let
                         outcome =
-                            BoardDrag.handleMouseUp pos
+                            BoardDrag.handlePointerUp pos
                                 tMs
                                 d
                                 { board = model.gameState.board
@@ -597,7 +597,7 @@ update msg model =
                 DraggingHandCard d ->
                     let
                         outcome =
-                            HandDrag.handleMouseUp pos
+                            HandDrag.handlePointerUp pos
                                 d
                                 { gameState = model.gameState
                                 , boardRect = model.boardRect
@@ -799,8 +799,8 @@ subscriptions model =
 
                 _ ->
                     Sub.batch
-                        [ PointerPorts.pointerMoved (\s -> MouseMove { x = s.x, y = s.y } s.t)
-                        , PointerPorts.pointerUp (\s -> MouseUp { x = s.x, y = s.y } s.t)
+                        [ PointerPorts.pointerMoved (\s -> PointerMove { x = s.x, y = s.y } s.t)
+                        , PointerPorts.pointerUp (\s -> PointerUp { x = s.x, y = s.y } s.t)
                         ]
 
         animationSubscription =

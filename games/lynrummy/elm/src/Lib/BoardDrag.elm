@@ -1,7 +1,7 @@
 module Lib.BoardDrag exposing
     ( BoardOutcome
-    , HandleMouseUpInput
-    , handleMouseUp
+    , HandlePointerUpInput
+    , handlePointerUp
     )
 
 import Lib.ActionLog exposing (ActionLogEntry)
@@ -15,10 +15,10 @@ import Lib.Point exposing (Point)
 import Lib.Status as Status exposing (StatusMessage)
 
 
-{-| Inputs `handleMouseUp` reads from the host model. Caller
+{-| Inputs `handlePointerUp` reads from the host model. Caller
 patches the resulting `BoardOutcome` back onto its own state.
 -}
-type alias HandleMouseUpInput =
+type alias HandlePointerUpInput =
     { board : List CardStack
     , boardRect : Maybe GA.Rect
     , actionLog : List ActionLogEntry
@@ -26,7 +26,7 @@ type alias HandleMouseUpInput =
     }
 
 
-{-| Result of resolving a board-card mouseup. The caller patches
+{-| Result of resolving a board-card pointerup. The caller patches
 `board / status / actionLog / nextSeq` onto its model and (if
 present) ships `outboundPayload` over the wire — this module
 doesn't know about Cmd or session ids, keeping it host-
@@ -41,16 +41,16 @@ type alias BoardOutcome =
     }
 
 
-{-| Resolve a board-card mouseup. Each action variant produces
+{-| Resolve a board-card pointerup. Each action variant produces
 the new board state, an action-log append, and (for accepted
 actions) the DSL line the host should ship to the agent. Each
 case constructs the DSL line directly via the matching
 `GameEvent.*Dsl` helper — no GameEvent value built just to
 re-dispatch on it.
 -}
-handleMouseUp : Point -> Int -> BoardCardDragInfo -> HandleMouseUpInput -> BoardOutcome
-handleMouseUp releasePoint tMs d input =
-    case BoardGesture.handleMouseUp releasePoint tMs d input.boardRect of
+handlePointerUp : Point -> Int -> BoardCardDragInfo -> HandlePointerUpInput -> BoardOutcome
+handlePointerUp releasePoint tMs d input =
+    case BoardGesture.handlePointerUp releasePoint tMs d input.boardRect of
         BoardGesture.Split p ->
             let
                 newBoard =

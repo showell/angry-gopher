@@ -330,34 +330,14 @@ what they are: `set_absorb`, not `absorb_either_side`.
 
 A function type wrapped in `Maybe` is a binary decision in
 disguise IF the absent arm doesn't really depend on the
-function's input:
-
-```elm
-cardMouseDown : Maybe (HandCard -> List Attr)
-```
-
-- `Just builder` — real per-card mousedown attrs
-- `Nothing` — the caller has to do `\_ -> [pointer-events: none]`,
-  which **ignores the HandCard entirely**
+function's input.
 
 The signature claims "two cases, both depend on the input."
 Reality: only one case does. The function shape is lying about
 its second arm.
 
 The honest split: a `Bool` (or sum type) for the discrete
-state, plus a real per-input function used only when relevant:
-
-```elm
-isInteractive : Bool
-cardMouseDown : HandCard -> List Attr  -- always the real builder
-
-eventAttrs =
-    if isInteractive then
-        cardMouseDown hc
-    else
-        [ style "pointer-events" "none" ]
-```
-
+state, plus a real per-input function used only when relevant.
 Both branches read honestly — the function is invoked only in
 the case where the argument matters.
 
@@ -585,9 +565,9 @@ don't need to read each one to apply the rules.
 | Pass smallest type | floaterOverWing collapse (8 twins → 4), viewBoard narrowing | 2026-05-06 |
 | Unit of consistency (too narrow) | Execute.placeHand widening to GameState→GameState | 2026-05-11 |
 | Don't extract record-shape | applyEntry / armBeat / boardDragInputs inlining | 2026-05-09 |
-| Workhorse pattern | Game.Play.update structure; MouseUp three-workhorse chain | 2026-05-06 |
+| Workhorse pattern | Game.Play.update structure; PointerUp three-workhorse chain | 2026-05-06 |
 | Explicit phases | Lib.Animation 2-phase → 4-phase | 2026-05-09 |
-| Split along the noun | finalizeMouseUp → per-side ladder | 2026-05-07 |
+| Split along the noun | finalizePointerUp → per-side ladder | 2026-05-07 |
 | `side` parameter | left_merge / right_merge split in Lyn Rummy absorbs | 2026-05-02 |
 | Function-as-disguised-Bool | cardEventAttrs Maybe-function → Bool + always-real function | 2026-05-11 |
 | Duplication vs decoupling | Lib.Button vs Lib.LeftSidebar; full-game vs puzzle replay | 2026-05-09 |

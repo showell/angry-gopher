@@ -1,7 +1,7 @@
 module Lib.HandDrag exposing
     ( HandOutcome
-    , HandleMouseUpInput
-    , handleMouseUp
+    , HandlePointerUpInput
+    , handlePointerUp
     )
 
 import Lib.ActionLog exposing (ActionLogEntry)
@@ -17,11 +17,11 @@ import Lib.Point exposing (Point)
 import Lib.Status as Status exposing (StatusMessage)
 
 
-{-| Inputs `handleMouseUp` reads. The hand variant needs the
+{-| Inputs `handlePointerUp` reads. The hand variant needs the
 whole `gameState` because it touches `board`, `hands`, and
 `cardsPlayedThisTurn`.
 -}
-type alias HandleMouseUpInput =
+type alias HandlePointerUpInput =
     { gameState : GameState
     , boardRect : Maybe GA.Rect
     , actionLog : List ActionLogEntry
@@ -29,7 +29,7 @@ type alias HandleMouseUpInput =
     }
 
 
-{-| Result of resolving a hand-card mouseup. Mirrors
+{-| Result of resolving a hand-card pointerup. Mirrors
 `BoardOutcome` but with the additional fields a hand action
 mutates (`hands` write-back, `cardsPlayedThisTurn` bump).
 `outboundPayload` is `Nothing` for the no-op variants.
@@ -46,13 +46,13 @@ type alias HandOutcome =
     }
 
 
-{-| Resolve a hand-card mouseup. Hand actions ship pathless
+{-| Resolve a hand-card pointerup. Hand actions ship pathless
 (no `gesture_metadata`); replay re-synthesizes via DOM
 measurement on the resume path.
 -}
-handleMouseUp : Point -> HandCardDragInfo -> HandleMouseUpInput -> HandOutcome
-handleMouseUp releasePoint d input =
-    case HandGesture.handleMouseUp releasePoint d input.boardRect of
+handlePointerUp : Point -> HandCardDragInfo -> HandlePointerUpInput -> HandOutcome
+handlePointerUp releasePoint d input =
+    case HandGesture.handlePointerUp releasePoint d input.boardRect of
         HandGesture.MergeHand p ->
             let
                 nextState =

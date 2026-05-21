@@ -200,7 +200,7 @@ leftSidebar model =
 --
 -- Slice the Model into the inputs `Lib.BoardView.boardShell`
 -- needs: a board (replay's or live), drag-derived per-stack
--- info (sourceStack, cardMouseDown), and drag-derived overlay
+-- info (sourceStack, cardPointerDown), and drag-derived overlay
 -- info (boardFloaters, wingsWithHover).
 
 
@@ -231,14 +231,14 @@ rightSidebar model =
                 _ ->
                     Nothing
 
-        cardMouseDown =
+        cardPointerDown =
             if humanInputLocked model then
                 Nothing
 
             else
                 case drag of
                     NotDragging ->
-                        Just (PointerInput.cardMouseDown MouseDownOnBoardCard)
+                        Just (PointerInput.cardPointerDown PointerDownOnBoardCard)
 
                     _ ->
                         Nothing
@@ -304,7 +304,7 @@ rightSidebar model =
         { board = board
         , gameId = model.gameId
         , sourceStack = sourceStack
-        , cardMouseDown = cardMouseDown
+        , cardPointerDown = cardPointerDown
         , wingsWithHover = wingsWithHover
         , boardFloaters = boardFloaters
         }

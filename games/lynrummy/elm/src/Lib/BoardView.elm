@@ -43,12 +43,12 @@ boardShell :
     { board : List CardStack
     , gameId : String
     , sourceStack : Maybe CardStack
-    , cardMouseDown : Maybe (CardStack -> Int -> List (Html.Attribute msg))
+    , cardPointerDown : Maybe (CardStack -> Int -> List (Html.Attribute msg))
     , wingsWithHover : List ( WingId, Bool )
     , boardFloaters : List (Html msg)
     }
     -> Html msg
-boardShell { board, gameId, sourceStack, cardMouseDown, wingsWithHover, boardFloaters } =
+boardShell { board, gameId, sourceStack, cardPointerDown, wingsWithHover, boardFloaters } =
     let
         -- Source stack of an in-flight board drag is filtered
         -- out — the floater renders in its place.
@@ -61,7 +61,7 @@ boardShell { board, gameId, sourceStack, cardMouseDown, wingsWithHover, boardFlo
                     board
 
         stackNodes =
-            List.map (viewStackForBoard cardMouseDown) visibleStacks
+            List.map (viewStackForBoard cardPointerDown) visibleStacks
 
         wingNodes =
             List.map WingView.renderWingWithHover wingsWithHover
@@ -79,15 +79,15 @@ boardShell { board, gameId, sourceStack, cardMouseDown, wingsWithHover, boardFlo
         (stackNodes ++ wingNodes ++ boardFloaters)
 
 
-{-| Render a board stack. Per-card mousedown attrs are attached
-iff `cardMouseDown` is `Just` (i.e. no drag is in flight).
+{-| Render a board stack. Per-card pointerdown attrs are attached
+iff `cardPointerDown` is `Just` (i.e. no drag is in flight).
 -}
 viewStackForBoard :
     Maybe (CardStack -> Int -> List (Html.Attribute msg))
     -> CardStack
     -> Html msg
-viewStackForBoard cardMouseDown stack =
-    case cardMouseDown of
+viewStackForBoard cardPointerDown stack =
+    case cardPointerDown of
         Just attrs ->
             StackView.viewStackWithCardAttrs (attrs stack) stack
 

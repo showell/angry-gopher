@@ -52,7 +52,7 @@ viewStackWithAttrs extraAttrs stack =
 
 
 {-| Same as `viewStack` but with extra attributes on each
-**individual card** (e.g. a `Html.Events.onMouseDown` for
+**individual card** (e.g. a `Html.Events.onPointerDown` for
 click-or-drag initiation, indexed by the card's position in
 the stack).
 -}

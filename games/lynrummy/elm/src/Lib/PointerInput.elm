@@ -1,13 +1,12 @@
 module Lib.PointerInput exposing
-    ( cardMouseDown
-    , handCardMouseDown
+    ( cardPointerDown
+    , handCardPointerDown
     )
 
 {-| Pointerdown attr-builders for board + hand cards. Move/up are
 forwarded from the host JS shim over `Lib.PointerPorts` (`Browser.Events`
 has no pointer subscriptions, and the shim adds pointer capture so a
-drag survives leaving the card). The `...MouseDown` names are historical
-— the events are pointer events. Msg-polymorphic — callers pass their
+drag survives leaving the card). Msg-polymorphic — callers pass their
 own constructors.
 
 -}
@@ -45,12 +44,12 @@ touch browser from synthesizing mouse events, selecting text, or
 popping a long-press callout during our own 400ms long-press. Pointer
 capture is handled by the host shim.
 -}
-cardMouseDown :
+cardPointerDown :
     ({ stack : CardStack, cardIndex : Int, point : Point, time : Int } -> msg)
     -> CardStack
     -> Int
     -> List (Html.Attribute msg)
-cardMouseDown toMsg stack cardIdx =
+cardPointerDown toMsg stack cardIdx =
     [ Events.preventDefaultOn "pointerdown"
         (Decode.map
             (\( p, t ) ->
@@ -61,14 +60,14 @@ cardMouseDown toMsg stack cardIdx =
     ]
 
 
-{-| Pointerdown attr-builder for a hand card. Mirror of `cardMouseDown`
+{-| Pointerdown attr-builder for a hand card. Mirror of `cardPointerDown`
 minus the timestamp (hand drags don't capture a gesture path).
 -}
-handCardMouseDown :
+handCardPointerDown :
     ({ handCard : HandCard, point : Point } -> msg)
     -> HandCard
     -> List (Html.Attribute msg)
-handCardMouseDown toMsg hc =
+handCardPointerDown toMsg hc =
     [ Events.preventDefaultOn "pointerdown"
         (Decode.map
             (\p -> ( toMsg { handCard = hc, point = p }, True ))

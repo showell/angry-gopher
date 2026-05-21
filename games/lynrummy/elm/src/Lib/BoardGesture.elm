@@ -1,6 +1,6 @@
 module Lib.BoardGesture exposing
-    ( BoardMouseUp(..)
-    , handleMouseUp
+    ( BoardPointerUp(..)
+    , handlePointerUp
     , mouseMove
     , pressPendingEscaped
     , resolveBoardCardGesture
@@ -9,9 +9,9 @@ module Lib.BoardGesture exposing
     , upgradePressToBoardDrag
     )
 
-{-| Per-side resolution for board-card mouseup gestures.
+{-| Per-side resolution for board-card pointerup gestures.
 
-`handleMouseUp` returns a `BoardMouseUp` value — a parallel-to-
+`handlePointerUp` returns a `BoardPointerUp` value — a parallel-to-
 `GameEvent` outcome shape that flows up to `Game.Play.update`,
 which dispatches on the variant. Drag variants carry the
 captured `boardPath` inline so `Play` can fire `Wire.sendAction`
@@ -33,7 +33,7 @@ import Lib.TimeLoc exposing (TimeLoc)
 import Lib.WingView as WingView
 
 
-{-| Result of resolving a board-card mouseup. `MergeStack` and
+{-| Result of resolving a board-card pointerup. `MergeStack` and
 `MoveStack` carry the captured `boardPath` (in board frame)
 so `Game.Play.update` can both apply the event and send the
 wire payload without re-deriving anything. `Split` carries the
@@ -42,7 +42,7 @@ the smaller chunk); downstream sees a single unambiguous
 number, no rule to re-apply. `BoardCardOffBoard` is the scold
 case — the user dropped the cards off the board.
 -}
-type BoardMouseUp
+type BoardPointerUp
     = Split { stack : CardStack, leftCount : Int }
     | MergeStack { source : CardStack, target : CardStack, side : Side, boardPath : NonEmpty TimeLoc }
     | MoveStack { stack : CardStack, newLoc : BoardLocation, boardPath : NonEmpty TimeLoc }
@@ -119,14 +119,14 @@ startBoardDragInfo { stack, cardIndex, cursor, tMs, board } =
     }
 
 
-{-| Mouseup handler for a board-card drag. Caller has
+{-| Pointerup handler for a board-card drag. Caller has
 pattern-matched out the `BoardCardDragInfo` and passes it in
 along with the live board rect. Builds the final info (release
 point + closing gesture sample), then resolves into a
-`BoardMouseUp` that the caller dispatches on.
+`BoardPointerUp` that the caller dispatches on.
 -}
-handleMouseUp : Point -> Int -> BoardCardDragInfo -> Maybe GA.Rect -> BoardMouseUp
-handleMouseUp releasePoint tMs d boardRect =
+handlePointerUp : Point -> Int -> BoardCardDragInfo -> Maybe GA.Rect -> BoardPointerUp
+handlePointerUp releasePoint tMs d boardRect =
     let
         delta =
             { x = releasePoint.x - d.cursor.x
@@ -163,7 +163,7 @@ is still within `clickThreshold` of `originalCursor`, emit a
 card joins whichever chunk is smaller). Returns Nothing only
 for the off-board case — caller maps that to `BoardCardOffBoard`.
 -}
-resolveBoardCardGesture : BoardCardDragInfo -> Maybe GA.Rect -> Maybe BoardMouseUp
+resolveBoardCardGesture : BoardCardDragInfo -> Maybe GA.Rect -> Maybe BoardPointerUp
 resolveBoardCardGesture d boardRect =
     if GA.distSquared d.cursor d.originalCursor <= GA.clickThreshold then
         Just
@@ -201,14 +201,14 @@ resolveBoardCardGesture d boardRect =
                     Nothing
 
 
-{-| Mousemove handler for a board-card drag. Pure state
+{-| Pointermove handler for a board-card drag. Pure state
 transformation — advances cursor + floater + gesture path,
 recomputes hover status. Caller (the dispatcher in `Game.Play`)
 wraps the returned `Info` into `DraggingBoardCard` and patches
 the model.
 
 Returns just the bits that change — there's no `Cmd Msg` slot
-because mousemove never emits commands.
+because pointermove never emits commands.
 
 -}
 mouseMove :

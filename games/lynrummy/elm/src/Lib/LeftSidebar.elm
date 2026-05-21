@@ -345,7 +345,7 @@ viewPlacedHandCard handIsInteractive sourceCard hintedCards slot =
 
         eventAttrs =
             if handIsInteractive then
-                PointerInput.handCardMouseDown MouseDownOnHandCard hc
+                PointerInput.handCardPointerDown PointerDownOnHandCard hc
 
             else
                 [ style "pointer-events" "none" ]
