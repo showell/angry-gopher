@@ -5,12 +5,27 @@ shared board where players assemble runs and sets out of cards
 from their hands. For the rules, see
 [`RULES.md`](./RULES.md).
 
+The game is named for **Lyn** — Steve's aunt (his mother's sister),
+who taught the family to play.
+
 ## Status
 
-**Internal alpha.** The game is fully playable end-to-end:
-deal, play, hint, agent-play, replay, resume. There is no
-public release yet. Steve plays solo or against the agent
-through the in-browser UI; everything runs locally.
+**Live in production** at https://lynrummy.com — a DigitalOcean
+droplet running the Go server behind Caddy (Let's Encrypt TLS,
+name-login). Real players (family + friends) can log in and play.
+Keep that in mind when changing what ships — but calibrate the
+stakes: it's a small card game, not critical infrastructure, so stay
+methodical without ceremony or paranoia.
+
+**Day-to-day work is still local.** Develop and test with `ops/start`;
+deploying is an occasional, deliberate `ops/deploy` (build locally,
+rsync the self-contained binary, restart). Host setup + redeploy
+steps live in [`../../deploy/README.md`](../../deploy/README.md) —
+read it when touching deployment, not for everyday work.
+
+The game is fully playable end-to-end: deal, play, hint, agent-play,
+replay, resume. Steve plays solo or against the agent through the
+in-browser UI.
 
 The TS solver is wired into the live-game Hint button so
 the strongest available player is always one click away.
