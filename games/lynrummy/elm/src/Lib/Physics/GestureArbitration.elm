@@ -12,7 +12,7 @@ made pure has been pulled here so elm-test can reach it.
 
 The rule:
 
-  - A board-card mousedown captures a "click intent" naming the
+  - A board-card pointerdown captures a "click intent" naming the
     card index within the stack.
   - Pointer movement past `clickThreshold` (squared distance)
     kills the intent. Once dead, it stays dead for the gesture.

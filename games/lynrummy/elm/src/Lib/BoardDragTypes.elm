@@ -21,7 +21,7 @@ type alias BoardCardDragInfo =
     }
 
 
-{-| Quiet phase between mousedown and either (a) cursor escape
+{-| Quiet phase between pointerdown and either (a) cursor escape
 → whole-stack drag, or (b) long-press timer fire → isolate.
 The `startTimeMs` echo is race protection on the timer Msg —
 a stale fire from a prior press lands here with a mismatched

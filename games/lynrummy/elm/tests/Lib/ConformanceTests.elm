@@ -1595,7 +1595,7 @@ parseRefereeStage s =
 --
 -- Three sub-cases distinguished by which expect-field is present:
 --   shift_equals_delta: floater.shift == cursor.delta after a
---     single mouseMove.
+--     single pointerMove.
 --   grab_point_invariant: two distinct mousedown grab points
 --     produce the same floater shift for the same delta.
 --   initial_floater_at: BoardGesture.startBoardDragInfo's
@@ -1649,7 +1649,7 @@ verifyShiftEqualsDelta sc stack cardIndex =
                         }
 
                 ( after, _ ) =
-                    BoardGesture.mouseMove
+                    BoardGesture.pointerMove
                         { x = mousedown.x + delta.x, y = mousedown.y + delta.y }
                         100
                         before
@@ -1687,7 +1687,7 @@ verifyGrabPointInvariant sc stack =
                                 }
 
                         ( after, _ ) =
-                            BoardGesture.mouseMove
+                            BoardGesture.pointerMove
                                 { x = down.x + delta.x, y = down.y + delta.y }
                                 100
                                 before

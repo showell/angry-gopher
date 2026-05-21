@@ -1,7 +1,7 @@
 module Lib.HandGesture exposing
     ( HandPointerUp(..)
     , handlePointerUp
-    , mouseMove
+    , pointerMove
     , resolveHandCardGesture
     , startHandDragInfo
     )
@@ -161,13 +161,13 @@ resolveHandCardGesture d maybeRect =
 returned `Info` into `DraggingHandCard`. Hand drags don't
 capture a gesture path, so no `tMs`.
 -}
-mouseMove :
+pointerMove :
     Point
     -> HandCardDragInfo
     -> Maybe GA.Rect
     -> Status.StatusMessage
     -> ( HandCardDragInfo, Status.StatusMessage )
-mouseMove pos d maybeBoardRect currentStatus =
+pointerMove pos d maybeBoardRect currentStatus =
     let
         delta =
             { x = pos.x - d.cursor.x

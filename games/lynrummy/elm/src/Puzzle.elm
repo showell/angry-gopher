@@ -283,7 +283,7 @@ update msg model =
                                 BoardGesture.upgradePressToBoardDrag p
 
                             ( nextD, nextStatus ) =
-                                BoardGesture.mouseMove pos tMs upgraded model.status
+                                BoardGesture.pointerMove pos tMs upgraded model.status
                         in
                         ( { model | drag = DraggingBoardCard nextD, status = nextStatus }
                         , Cmd.none
@@ -295,7 +295,7 @@ update msg model =
                 DraggingBoardCard d ->
                     let
                         ( nextD, nextStatus ) =
-                            BoardGesture.mouseMove pos tMs d model.status
+                            BoardGesture.pointerMove pos tMs d model.status
                     in
                     ( { model | drag = DraggingBoardCard nextD, status = nextStatus }
                     , Cmd.none
@@ -540,7 +540,7 @@ applyIsolate model p =
     ( modelAfter, httpPostForAction )
 
 
-{-| Resolve a board-card mouseup. Shared between the click-as-
+{-| Resolve a board-card pointerup. Shared between the click-as-
 PressPending case (release inside the quiet window) and the
 DraggingBoardCard case (cursor already escaped to whole-stack
 drag).

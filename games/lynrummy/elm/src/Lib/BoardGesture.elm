@@ -1,7 +1,7 @@
 module Lib.BoardGesture exposing
     ( BoardPointerUp(..)
     , handlePointerUp
-    , mouseMove
+    , pointerMove
     , pressPendingEscaped
     , resolveBoardCardGesture
     , startBoardDragInfo
@@ -49,7 +49,7 @@ type BoardPointerUp
     | BoardCardOffBoard
 
 
-{-| Construct a `PressPendingInfo` from a mousedown — the
+{-| Construct a `PressPendingInfo` from a pointerdown — the
 quiet phase before either (a) cursor escapes clickThreshold
 and upgrades to a whole-stack drag, or (b) the long-press
 timer fires and triggers an isolate.
@@ -72,8 +72,8 @@ startPressPending { stack, cardIndex, cursor, tMs, board } =
 
 
 {-| True iff the cursor has moved enough from the original
-mousedown position to escape the long-press quiet phase. Same
-threshold the click-vs-drag arbiter uses at mouseup.
+pointerdown position to escape the long-press quiet phase. Same
+threshold the click-vs-drag arbiter uses at pointerup.
 -}
 pressPendingEscaped : Point -> PressPendingInfo -> Bool
 pressPendingEscaped cursor p =
@@ -83,7 +83,7 @@ pressPendingEscaped cursor p =
 {-| Upgrade a `PressPendingInfo` to a whole-stack
 `BoardCardDragInfo` once the cursor has escaped the quiet
 threshold. Equivalent to having entered `DraggingBoardCard`
-on mousedown directly, with the recorded mousedown timestamp
+on pointerdown directly, with the recorded pointerdown timestamp
 seeding the gesture path.
 -}
 upgradePressToBoardDrag : PressPendingInfo -> BoardCardDragInfo
@@ -97,7 +97,7 @@ upgradePressToBoardDrag p =
         }
 
 
-{-| Construct a fresh `BoardCardDragInfo` from a mousedown.
+{-| Construct a fresh `BoardCardDragInfo` from a pointerdown.
 Wings are computed once at start and pinned.
 -}
 startBoardDragInfo :
@@ -211,13 +211,13 @@ Returns just the bits that change — there's no `Cmd Msg` slot
 because pointermove never emits commands.
 
 -}
-mouseMove :
+pointerMove :
     Point
     -> Int
     -> BoardCardDragInfo
     -> Status.StatusMessage
     -> ( BoardCardDragInfo, Status.StatusMessage )
-mouseMove pos tMs d currentStatus =
+pointerMove pos tMs d currentStatus =
     let
         delta =
             { x = pos.x - d.cursor.x

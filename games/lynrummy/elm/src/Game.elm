@@ -499,7 +499,7 @@ update msg model =
                                 BoardGesture.upgradePressToBoardDrag p
 
                             ( nextD, nextStatus ) =
-                                BoardGesture.mouseMove pos tMs upgraded model.status
+                                BoardGesture.pointerMove pos tMs upgraded model.status
                         in
                         ( { model | drag = DraggingBoardCard nextD, status = nextStatus }
                         , Cmd.none
@@ -511,7 +511,7 @@ update msg model =
                 DraggingBoardCard d ->
                     let
                         ( nextD, nextStatus ) =
-                            BoardGesture.mouseMove pos tMs d model.status
+                            BoardGesture.pointerMove pos tMs d model.status
                     in
                     ( { model | drag = DraggingBoardCard nextD, status = nextStatus }
                     , Cmd.none
@@ -520,7 +520,7 @@ update msg model =
                 DraggingHandCard d ->
                     let
                         ( nextD, nextStatus ) =
-                            HandGesture.mouseMove pos d model.boardRect model.status
+                            HandGesture.pointerMove pos d model.boardRect model.status
                     in
                     ( { model | drag = DraggingHandCard nextD, status = nextStatus }
                     , Cmd.none

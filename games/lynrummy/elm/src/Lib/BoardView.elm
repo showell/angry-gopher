@@ -9,9 +9,9 @@ supplied `boardFloaters`. The viewport-frame floater for
 hand-origin drags is rendered at the host level (`position:
 fixed` is DOM-position-independent).
 
-A drag is rendered immediately on mousedown; the source stack
+A drag is rendered immediately on pointerdown; the source stack
 hides and the floater takes over at the same screen position.
-Click-vs-drag arbitration is a mouseup-time outcome judgment,
+Click-vs-drag arbitration is a pointerup-time outcome judgment,
 not a state the View needs to know about.
 
 -}

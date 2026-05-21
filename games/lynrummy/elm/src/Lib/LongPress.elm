@@ -1,7 +1,7 @@
 module Lib.LongPress exposing (scheduleTimer)
 
 {-| Long-press timer: the `Cmd` that fires the host's
-`LongPressTimerFired` Msg after `holdMs`. The mousedown
+`LongPressTimerFired` Msg after `holdMs`. The pointerdown
 timestamp is echoed back so a late-firing timer can be
 distinguished from the press it was scheduled for.
 -}

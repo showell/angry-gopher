@@ -11,10 +11,10 @@ variant tag IS the discriminator; pattern-matching on it
 gives every site only the data relevant to its kind.
 
 `BoardCardDragInfo` always carries `cardIndex` and
-`originalCursor`. At mouseup the resolver decides Split
+`originalCursor`. At pointerup the resolver decides Split
 vs. drag by computing `distSquared(cursor, originalCursor)`
 against a tight radius — the click-vs-drag question is a
-mouseup-time outcome judgment, not a state machine.
+pointerup-time outcome judgment, not a state machine.
 
 `HandCardDragInfo` has no `cardIndex` (hand cards have no
 Split semantic) and no `originalCursor` (no click-vs-drag

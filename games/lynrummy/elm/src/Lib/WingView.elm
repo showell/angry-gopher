@@ -61,7 +61,7 @@ cardHeightPx =
 
 {-| Half a card-pitch of slop in each axis around the eventual
 landing. Tight enough that the floater must be visually
-adjacent to the target; loose enough to tolerate normal mouse
+adjacent to the target; loose enough to tolerate normal pointer
 wiggle.
 -}
 wingSnapTolerance : Int

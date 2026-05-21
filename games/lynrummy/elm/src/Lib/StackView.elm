@@ -131,7 +131,7 @@ viewBoardCardAt cardAttrs index bc =
 -- CARD
 
 
-{-| Single playing card with extra attributes (mousedown
+{-| Single playing card with extra attributes (pointerdown
 handler, margin overrides, background color).
 -}
 viewCardWithAttrs : List (Html.Attribute msg) -> Card -> Html msg
