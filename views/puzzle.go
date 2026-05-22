@@ -27,11 +27,13 @@ var PuzzleJSPath = "games/lynrummy/elm/puzzle.js"
 // `at (left, top): cards` lines that pass straight through to
 // Elm's Lib.BoardDsl on the wire. The Elm client renders one
 // puzzle at a time with Prev/Next navigation; the 1-indexed
-// "Puzzle N" label reflects the concatenated order, so the
-// 4-line catalog occupies Puzzle 1..21, the 5-line catalog
-// continues at Puzzle 22..32, and the 6-line catalog rounds it
-// out at Puzzle 33..47.
+// "Puzzle N" label reflects the concatenated order. Catalogs are
+// listed easiest-first (by BFS plan length), so the ranges are:
+// 2-line Puzzle 1..10, 3-line 11..20, 4-line 21..41, 5-line
+// 42..52, and 6-line 53..67.
 var puzzleCatalogPaths = []string{
+	"games/lynrummy/conformance/curated_2line_puzzles.dsl",
+	"games/lynrummy/conformance/curated_3line_puzzles.dsl",
 	"games/lynrummy/conformance/curated_4line_puzzles.dsl",
 	"games/lynrummy/conformance/curated_5line_puzzles.dsl",
 	"games/lynrummy/conformance/curated_6line_puzzles.dsl",
