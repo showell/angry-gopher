@@ -50,13 +50,24 @@ func (c *ServerConfig) SessionsDataRoot() string {
 	return filepath.Join(c.DataDir, "lynrummy")
 }
 
-// EnsureDirectories creates data_dir and the sessions root if absent.
+// ChatDataRoot is the root for conversation files — a sibling of the
+// game/puzzle tree so chat is a self-contained subtree. See
+// views.SetChatRoot.
+func (c *ServerConfig) ChatDataRoot() string {
+	return filepath.Join(c.DataDir, "chat")
+}
+
+// EnsureDirectories creates data_dir and the sessions/chat roots if
+// absent.
 func (c *ServerConfig) EnsureDirectories() error {
 	if err := os.MkdirAll(c.DataDir, 0o755); err != nil {
 		return fmt.Errorf("cannot create data_dir: %w", err)
 	}
 	if err := os.MkdirAll(c.SessionsDataRoot(), 0o755); err != nil {
 		return fmt.Errorf("cannot create sessions root: %w", err)
+	}
+	if err := os.MkdirAll(c.ChatDataRoot(), 0o755); err != nil {
+		return fmt.Errorf("cannot create chat root: %w", err)
 	}
 	return nil
 }

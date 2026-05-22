@@ -96,6 +96,7 @@ Usage:
 	}
 
 	views.SetDataRoot(config.SessionsDataRoot())
+	views.SetChatRoot(config.ChatDataRoot())
 	views.SetAssets(assets)
 	zulip.Configure(zulip.Config{
 		URL:    config.ZulipURL,
