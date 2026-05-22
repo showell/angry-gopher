@@ -90,6 +90,7 @@ func renderChatConversation(w http.ResponseWriter, user, partner string) {
 
 	PageHeader(w, "Chat with "+partner, user)
 	fmt.Fprint(w, chatCSS)
+	fmt.Fprint(w, `<p class="chat-rawtoggle"><a href="#" id="chat-raw-toggle">View raw</a></p>`)
 
 	fmt.Fprint(w, `<div class="chat-layout"><div class="chat-history" id="chat-history">`)
 	if len(msgs) == 0 {
@@ -124,9 +125,10 @@ func writeChatBubble(w io.Writer, msg ChatMessage, me string) {
 		cls = "mine"
 	}
 	fmt.Fprintf(w,
-		`<div class="chat-msg %s"><div class="chat-meta">%s · %s</div><div class="chat-body">%s</div></div>`,
+		`<div class="chat-msg %s"><div class="chat-meta">%s · %s</div>`+
+			`<div class="chat-body">%s</div><div class="chat-raw">%s</div></div>`,
 		cls, html.EscapeString(msg.From), html.EscapeString(formatChatTime(msg.At)),
-		RenderChatMarkdown(msg.Body))
+		RenderChatMarkdown(msg.Body), html.EscapeString(msg.Body))
 }
 
 // HandleChatSend appends a posted message. Async (fetch) callers send
@@ -252,6 +254,7 @@ type chatWireMsg struct {
 	From  string `json:"from"`
 	Time  string `json:"time"`
 	HTML  string `json:"html"`
+	Raw   string `json:"raw"`
 	Mine  bool   `json:"mine"`
 }
 
@@ -261,6 +264,7 @@ func writeChatEvent(w io.Writer, rc *http.ResponseController, evt chatEvent, me 
 		From:  evt.Msg.From,
 		Time:  formatChatTime(evt.Msg.At),
 		HTML:  string(RenderChatMarkdown(evt.Msg.Body)),
+		Raw:   evt.Msg.Body,
 		Mine:  evt.Msg.From == me,
 	}
 	data, err := json.Marshal(wire)
@@ -289,6 +293,12 @@ const chatCSS = `<style>
 .chat-body p:first-child { margin-top:0; }
 .chat-body p:last-child { margin-bottom:0; }
 .chat-body pre { background:#f4f4ec; padding:8px; border-radius:4px; overflow-x:auto; }
+.chat-raw { display:none; white-space:pre-wrap; overflow-wrap:anywhere;
+            font-family:ui-monospace,Menlo,Consolas,monospace; font-size:13px;
+            color:#333; background:#f4f4ec; padding:8px; border-radius:4px; }
+.chat-history.show-raw .chat-body { display:none; }
+.chat-history.show-raw .chat-raw { display:block; }
+.chat-rawtoggle { margin:-6px 0 12px; font-size:13px; }
 .chat-hint { font-size:12px; color:#999; margin-top:8px; }
 .chat-status { font-size:12px; color:#b00020; min-height:16px; margin-top:6px; }
 @media (max-width: 640px) {
@@ -304,6 +314,7 @@ const chatScript = `<script>(function(){
   var form=document.getElementById('chat-form');
   var textarea=document.getElementById('chat-body');
   var status=document.getElementById('chat-status');
+  var rawToggle=document.getElementById('chat-raw-toggle');
   function atBottom(){ return history.scrollHeight-history.scrollTop-history.clientHeight < 40; }
   function toBottom(){ history.scrollTop=history.scrollHeight; }
   function addBubble(m){
@@ -314,8 +325,26 @@ const chatScript = `<script>(function(){
     meta.textContent=m.from+' · '+m.time;
     var body=document.createElement('div'); body.className='chat-body';
     body.innerHTML=m.html; /* sanitized server-side */
-    div.appendChild(meta); div.appendChild(body); history.appendChild(div);
+    var raw=document.createElement('div'); raw.className='chat-raw';
+    raw.textContent=m.raw;
+    div.appendChild(meta); div.appendChild(body); div.appendChild(raw);
+    history.appendChild(div);
   }
+  function topMessage(){
+    var msgs=history.querySelectorAll('.chat-msg');
+    var htop=history.getBoundingClientRect().top;
+    for(var i=0;i<msgs.length;i++){
+      if(msgs[i].getBoundingClientRect().bottom > htop+1) return msgs[i];
+    }
+    return msgs.length ? msgs[msgs.length-1] : null;
+  }
+  rawToggle.addEventListener('click',function(e){
+    e.preventDefault();
+    var anchor=topMessage(); /* keep the same message in view, not the same pixel */
+    var showing=history.classList.toggle('show-raw');
+    rawToggle.textContent=showing?'View rendered':'View raw';
+    if(anchor){ history.scrollTop+=anchor.getBoundingClientRect().top-history.getBoundingClientRect().top; }
+  });
   toBottom();
   var es=new EventSource('/chat/stream?with='+encodeURIComponent(PARTNER)+'&since='+SINCE);
   es.onmessage=function(e){ var stick=atBottom(); addBubble(JSON.parse(e.data)); if(stick) toBottom(); };
