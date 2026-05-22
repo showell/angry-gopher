@@ -12,6 +12,7 @@ import "embed"
 //go:embed games/lynrummy/elm/puzzle.js
 //go:embed games/lynrummy/elm/engine.js
 //go:embed games/lynrummy/elm/engine_glue.js
+//go:embed games/lynrummy/conformance/curated_1line_puzzles.dsl
 //go:embed games/lynrummy/conformance/curated_2line_puzzles.dsl
 //go:embed games/lynrummy/conformance/curated_3line_puzzles.dsl
 //go:embed games/lynrummy/conformance/curated_4line_puzzles.dsl
