@@ -90,16 +90,23 @@ func renderChatConversation(w http.ResponseWriter, user, partner string) {
 
 	PageHeader(w, "Chat with "+partner, user)
 	fmt.Fprint(w, chatCSS)
-	fmt.Fprint(w, `<p class="chat-rawtoggle"><a href="#" id="chat-raw-toggle">View raw</a></p>`)
+	fmt.Fprint(w, `<p class="chat-views" id="chat-views">`+
+		`<a href="#" data-view="rendered" class="active">Rendered</a> · `+
+		`<a href="#" data-view="raw">Raw</a> · `+
+		`<a href="#" data-view="transcript">Transcript</a></p>`)
 
-	fmt.Fprint(w, `<div class="chat-layout"><div class="chat-history" id="chat-history">`)
+	fmt.Fprint(w, `<div class="chat-layout"><div class="chat-history view-rendered" id="chat-history"><div class="chat-bubbles" id="chat-bubbles">`)
 	if len(msgs) == 0 {
 		fmt.Fprint(w, `<p class="muted" id="chat-empty">No messages yet. Say hello 👋</p>`)
 	}
-	for _, m := range msgs {
-		writeChatBubble(w, m, user)
+	for i, m := range msgs {
+		writeChatBubble(w, m, user, i)
 	}
-	fmt.Fprintf(w, `</div>
+	fmt.Fprint(w, `</div><pre class="chat-transcript" id="chat-transcript">`)
+	for i, m := range msgs {
+		fmt.Fprintf(w, `<span data-i="%d">%s</span>`, i, html.EscapeString(encodeChatBlock(m)))
+	}
+	fmt.Fprintf(w, `</pre></div>
 <div class="chat-compose">
   <form id="chat-form">
     <textarea id="chat-body" placeholder="Write a message…  Markdown is supported, and longer posts are welcome."></textarea>
@@ -119,15 +126,15 @@ func renderChatConversation(w http.ResponseWriter, user, partner string) {
 // writeChatBubble renders one message; the JS poller builds the same
 // shape from the SSE payload, so server- and live-rendered messages
 // match.
-func writeChatBubble(w io.Writer, msg ChatMessage, me string) {
+func writeChatBubble(w io.Writer, msg ChatMessage, me string, idx int) {
 	cls := "theirs"
 	if msg.From == me {
 		cls = "mine"
 	}
 	fmt.Fprintf(w,
-		`<div class="chat-msg %s"><div class="chat-meta">%s · %s</div>`+
+		`<div class="chat-msg %s" data-i="%d"><div class="chat-meta">%s · %s</div>`+
 			`<div class="chat-body">%s</div><div class="chat-raw">%s</div></div>`,
-		cls, html.EscapeString(msg.From), html.EscapeString(formatChatTime(msg.At)),
+		cls, idx, html.EscapeString(msg.From), html.EscapeString(formatChatTime(msg.At)),
 		RenderChatMarkdown(msg.Body), html.EscapeString(msg.Body))
 }
 
@@ -255,6 +262,7 @@ type chatWireMsg struct {
 	Time  string `json:"time"`
 	HTML  string `json:"html"`
 	Raw   string `json:"raw"`
+	Enc   string `json:"enc"`
 	Mine  bool   `json:"mine"`
 }
 
@@ -265,6 +273,7 @@ func writeChatEvent(w io.Writer, rc *http.ResponseController, evt chatEvent, me 
 		Time:  formatChatTime(evt.Msg.At),
 		HTML:  string(RenderChatMarkdown(evt.Msg.Body)),
 		Raw:   evt.Msg.Body,
+		Enc:   encodeChatBlock(evt.Msg),
 		Mine:  evt.Msg.From == me,
 	}
 	data, err := json.Marshal(wire)
@@ -296,9 +305,15 @@ const chatCSS = `<style>
 .chat-raw { display:none; white-space:pre-wrap; overflow-wrap:anywhere;
             font-family:ui-monospace,Menlo,Consolas,monospace; font-size:13px;
             color:#333; background:#f4f4ec; padding:8px; border-radius:4px; }
-.chat-history.show-raw .chat-body { display:none; }
-.chat-history.show-raw .chat-raw { display:block; }
-.chat-rawtoggle { margin:-6px 0 12px; font-size:13px; }
+.chat-history.view-raw .chat-body { display:none; }
+.chat-history.view-raw .chat-raw { display:block; }
+.chat-transcript { display:none; margin:0; white-space:pre-wrap; overflow-wrap:anywhere;
+                   font-family:ui-monospace,Menlo,Consolas,monospace; font-size:13px; color:#333; }
+.chat-history.view-transcript #chat-bubbles { display:none; }
+.chat-history.view-transcript .chat-transcript { display:block; }
+.chat-views { margin:-6px 0 12px; font-size:13px; }
+.chat-views a { text-decoration:none; }
+.chat-views a.active { font-weight:bold; color:#000; cursor:default; }
 .chat-hint { font-size:12px; color:#999; margin-top:8px; }
 .chat-status { font-size:12px; color:#b00020; min-height:16px; margin-top:6px; }
 @media (max-width: 640px) {
@@ -311,16 +326,19 @@ const chatCSS = `<style>
 const chatScript = `<script>(function(){
   var ME=%s, PARTNER=%s, SINCE=%d;
   var history=document.getElementById('chat-history');
+  var bubbles=document.getElementById('chat-bubbles');
+  var transcript=document.getElementById('chat-transcript');
+  var views=document.getElementById('chat-views');
   var form=document.getElementById('chat-form');
   var textarea=document.getElementById('chat-body');
   var status=document.getElementById('chat-status');
-  var rawToggle=document.getElementById('chat-raw-toggle');
   function atBottom(){ return history.scrollHeight-history.scrollTop-history.clientHeight < 40; }
   function toBottom(){ history.scrollTop=history.scrollHeight; }
-  function addBubble(m){
+  function addMessage(m){
     var empty=document.getElementById('chat-empty'); if(empty) empty.remove();
     var div=document.createElement('div');
     div.className='chat-msg '+(m.mine?'mine':'theirs');
+    div.setAttribute('data-i',m.index);
     var meta=document.createElement('div'); meta.className='chat-meta';
     meta.textContent=m.from+' · '+m.time;
     var body=document.createElement('div'); body.className='chat-body';
@@ -328,26 +346,44 @@ const chatScript = `<script>(function(){
     var raw=document.createElement('div'); raw.className='chat-raw';
     raw.textContent=m.raw;
     div.appendChild(meta); div.appendChild(body); div.appendChild(raw);
-    history.appendChild(div);
+    bubbles.appendChild(div);
+    var span=document.createElement('span'); span.setAttribute('data-i',m.index);
+    span.textContent=m.enc; transcript.appendChild(span); /* literal on-disk block */
   }
-  function topMessage(){
-    var msgs=history.querySelectorAll('.chat-msg');
-    var htop=history.getBoundingClientRect().top;
-    for(var i=0;i<msgs.length;i++){
-      if(msgs[i].getBoundingClientRect().bottom > htop+1) return msgs[i];
+  /* Anchor scrolling on the same MESSAGE across view switches: find the
+     topmost visible [data-i] element, then bring that same index back to
+     the top after the layout changes (rendered/raw/transcript differ). */
+  function topIndex(){
+    var els=history.querySelectorAll('[data-i]'), htop=history.getBoundingClientRect().top;
+    for(var i=0;i<els.length;i++){
+      if(els[i].offsetParent===null) continue;
+      if(els[i].getBoundingClientRect().bottom>htop+1) return els[i].getAttribute('data-i');
     }
-    return msgs.length ? msgs[msgs.length-1] : null;
+    return null;
   }
-  rawToggle.addEventListener('click',function(e){
-    e.preventDefault();
-    var anchor=topMessage(); /* keep the same message in view, not the same pixel */
-    var showing=history.classList.toggle('show-raw');
-    rawToggle.textContent=showing?'View rendered':'View raw';
-    if(anchor){ history.scrollTop+=anchor.getBoundingClientRect().top-history.getBoundingClientRect().top; }
+  function scrollToIndex(idx){
+    if(idx===null) return;
+    var els=history.querySelectorAll('[data-i="'+idx+'"]');
+    for(var i=0;i<els.length;i++){
+      if(els[i].offsetParent===null) continue;
+      history.scrollTop+=els[i].getBoundingClientRect().top-history.getBoundingClientRect().top;
+      return;
+    }
+  }
+  function setView(v){
+    var idx=topIndex();
+    history.className='chat-history view-'+v;
+    var links=views.querySelectorAll('a');
+    for(var i=0;i<links.length;i++){ links[i].className=(links[i].getAttribute('data-view')===v)?'active':''; }
+    scrollToIndex(idx);
+  }
+  views.addEventListener('click',function(e){
+    var a=e.target.closest('a[data-view]'); if(!a) return;
+    e.preventDefault(); setView(a.getAttribute('data-view'));
   });
   toBottom();
   var es=new EventSource('/chat/stream?with='+encodeURIComponent(PARTNER)+'&since='+SINCE);
-  es.onmessage=function(e){ var stick=atBottom(); addBubble(JSON.parse(e.data)); if(stick) toBottom(); };
+  es.onmessage=function(e){ var stick=atBottom(); addMessage(JSON.parse(e.data)); if(stick) toBottom(); };
   function send(){
     var text=textarea.value;
     if(!text.trim()) return;
