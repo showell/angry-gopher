@@ -9,6 +9,54 @@
 # `at (left,top): cards` body. UI: views/puzzle.go consumes directly.
 # Conformance: test/test_curated_puzzles.ts asserts plan_length === 4.
 
+puzzle 4line_peel_push_push_steal_s9t1p0
+  at (70,20): K♠ A♠ 2♠ 3♠
+  at (160,80): T♦ J♦ Q♦ K♦
+  at (100,140): 2♥ 3♥ 4♥
+  at (40,200): 7♠ 7♦ 7♣
+  at (130,260): A♣ A♦ A♥
+  at (52,467): 8♦' 9♠' T♦' J♣' Q♥ K♣
+  at (126,332): 4♣ 5♥ 6♠ 7♥
+  at (52,542): 2♣ 3♦ 4♣'
+  at (52,272): 2♦'
+
+puzzle 4line_peel_push_push_split_out_s10t1p0
+  at (70,20): K♠ A♠ 2♠ 3♠
+  at (160,80): T♦ J♦ Q♦ K♦
+  at (40,200): 7♠ 7♦ 7♣
+  at (130,260): A♣ A♦ A♥
+  at (68,316): 2♣ 3♦ 4♣
+  at (92,140): 2♥ 3♥ 4♥ 5♥
+  at (93,392): T♦' J♦' Q♦'
+  at (259,320): 7♥ 8♣ 9♦'
+  at (236,136): 6♥ 6♦' 6♠
+  at (52,467): 9♣
+
+puzzle 4line_push_set_peel_steal_steal_s5t1p0
+  at (160,80): T♦ J♦ Q♦ K♦
+  at (100,140): 2♥ 3♥ 4♥
+  at (40,200): 7♠ 7♦ 7♣
+  at (52,392): 6♣' 7♥' 8♠
+  at (111,20): A♠ 2♠ 3♠
+  at (52,467): A♣ A♥ A♠'
+  at (52,272): 3♦ 3♣ 3♥'
+  at (36,542): Q♥ K♠ A♦
+  at (274,272): 5♥ 6♠ 7♥
+  at (147,538): 2♣ 3♣' 4♣
+  at (187,212): K♥
+
+puzzle 4line_peel_push_push_steal_s10t1p0
+  at (70,20): K♠ A♠ 2♠ 3♠
+  at (130,260): A♣ A♦ A♥
+  at (68,316): 2♣ 3♦ 4♣
+  at (92,140): 2♥ 3♥ 4♥ 5♥
+  at (93,392): T♦' J♦' Q♦'
+  at (236,136): 6♥ 6♦' 6♠
+  at (127,80): 9♦' T♦ J♦ Q♦ K♦
+  at (52,542): 7♠ 7♦ 7♥
+  at (19,467): 7♣ 8♣ 9♣
+  at (52,212): 2♦'
+
 puzzle 4line_peel_push_push_steal_s1t1p0
   at (100,140): 2♥ 3♥ 4♥
   at (40,200): 7♠ 7♦ 7♣
@@ -20,6 +68,30 @@ puzzle 4line_peel_push_push_steal_s1t1p0
   at (19,542): K♠ K♥' K♦
   at (152,80): T♦ J♦ Q♦ K♦'
   at (157,542): Q♣'
+
+puzzle 4line_set_peel_splice_steal_steal_s8t1p0
+  at (100,140): 2♥ 3♥ 4♥
+  at (130,260): A♣ A♦ A♥
+  at (52,392): J♣ J♥ J♠'
+  at (52,467): 5♦' 5♠ 5♥'
+  at (111,20): A♠ 2♠ 3♠
+  at (152,80): T♦ J♦ Q♦ K♦
+  at (32,200): 7♠ 7♦ 7♣
+  at (44,542): Q♥ K♠ A♦' 2♣ 3♦ 4♣ 5♥ 6♠
+  at (187,332): 7♦' 7♥ 7♣'
+  at (52,272): 2♥'
+
+puzzle 4line_peel_peel_pull_split_out_s9t1p0
+  at (40,200): 7♠ 7♦ 7♣
+  at (52,467): 8♦' 9♠' T♦' J♣' Q♥ K♣
+  at (126,332): 4♣ 5♥ 6♠ 7♥
+  at (52,542): 2♣ 3♦ 4♣'
+  at (62,20): K♠ A♠ 2♠
+  at (246,212): Q♦ K♦ A♦
+  at (232,92): T♦ J♦ Q♦'
+  at (59,140): A♥ 2♥ 3♥
+  at (187,542): A♣ 2♦' 3♠ 4♥ 5♠
+  at (52,272): 2♠'
 
 puzzle 4line_push_steal_steal_steal_s1t1p0
   at (40,200): 7♠ 7♦ 7♣
@@ -35,43 +107,31 @@ puzzle 4line_push_steal_steal_steal_s1t1p0
   at (172,212): 4♥ 4♦ 4♣
   at (187,467): 2♠'
 
-puzzle 4line_peel_push_push_steal_s1t2p1
+puzzle 4line_push_push_shift_steal_s6t1p0
   at (40,200): 7♠ 7♦ 7♣
-  at (19,542): K♠ K♥' K♦
-  at (144,80): T♦ J♦ Q♦
-  at (172,212): 4♥ 4♦ 4♣
-  at (43,316): A♥ 2♣ 3♦
-  at (187,467): A♦ 2♠' 3♥
-  at (192,392): 3♣' 4♥' 5♠ 6♦
-  at (157,542): Q♣' K♦' A♣ 2♥ 3♠'
-  at (52,392): A♦' 2♦ 3♦'
-  at (185,320): 5♥ 6♠ 7♥ 8♠'
-  at (307,167): 9♠ T♠' J♠' Q♠ K♠' A♠ 2♠ 3♠
-  at (52,92): 6♠'
-
-puzzle 4line_push_push_push_steal_s2t8p1
   at (130,260): A♣ A♦ A♥
-  at (52,392): T♥ T♣' T♠
-  at (152,20): 2♠ 3♠ 4♠
-  at (322,467): 5♦ 5♠ 5♣
-  at (262,227): 2♣ 2♠' 2♥
-  at (19,92): 7♦' 8♣ 9♥'
-  at (322,542): 7♠ 7♦ 7♥'
-  at (352,377): 6♦' 7♣ 8♥
-  at (427,302): 4♦' 5♣' 6♦
-  at (483,92): Q♥' Q♦' Q♠
-  at (118,467): 8♦ 9♣' T♥'
-  at (187,542): J♣ Q♣ K♣
-  at (93,167): 4♥ 5♥' 6♥
-  at (457,452): 2♣' 3♥ 4♠'
-  at (269,152): 6♠ 7♠' 8♠'
-  at (389,227): 3♦ 4♣ 5♥ 6♠' 7♥ 8♠
-  at (262,302): 9♦ 9♠' 9♥
-  at (457,527): J♥ Q♥ K♥'
-  at (479,377): 9♦' T♦ J♦ Q♦
-  at (44,542): K♠ K♣' K♦'
-  at (201,388): J♥' Q♣' K♦ A♠
-  at (52,242): 4♥'
+  at (52,392): J♥ Q♠ K♥'
+  at (52,467): 5♦' 6♦' 7♦'
+  at (127,80): 9♦' T♦ J♦ Q♦ K♦
+  at (126,542): 4♣ 5♥ 6♠ 7♥
+  at (187,332): 2♣ 3♦ 4♣'
+  at (59,140): A♥' 2♥ 3♥
+  at (62,20): K♠ A♠ 2♠
+  at (187,152): 3♠ 4♥ 5♠' 6♥'
+  at (52,272): Q♦'
+
+puzzle 4line_peel_push_push_steal_s8t1p0
+  at (100,140): 2♥ 3♥ 4♥
+  at (52,392): J♣ J♥ J♠'
+  at (52,467): 5♦' 5♠ 5♥'
+  at (152,80): T♦ J♦ Q♦ K♦
+  at (32,200): 7♠ 7♦ 7♣
+  at (187,332): 7♦' 7♥ 7♣'
+  at (171,260): A♦ A♥ A♠
+  at (159,542): 2♣ 3♦ 4♣ 5♥ 6♠
+  at (187,407): Q♥ K♠ A♦' 2♠
+  at (232,152): Q♣ K♦' A♣ 2♥' 3♠
+  at (52,272): 9♣'
 
 puzzle 4line_peel_push_push_steal_s4t1p0
   at (160,80): T♦ J♦ Q♦ K♦
@@ -86,18 +146,19 @@ puzzle 4line_peel_push_push_steal_s4t1p0
   at (187,467): 2♣ 3♦ 4♣ 5♥ 6♠ 7♦' 8♣
   at (52,272): Q♣'
 
-puzzle 4line_push_set_peel_steal_steal_s5t1p0
-  at (160,80): T♦ J♦ Q♦ K♦
-  at (100,140): 2♥ 3♥ 4♥
+puzzle 4line_peel_push_push_steal_s1t2p1
   at (40,200): 7♠ 7♦ 7♣
-  at (52,392): 6♣' 7♥' 8♠
-  at (111,20): A♠ 2♠ 3♠
-  at (52,467): A♣ A♥ A♠'
-  at (52,272): 3♦ 3♣ 3♥'
-  at (36,542): Q♥ K♠ A♦
-  at (274,272): 5♥ 6♠ 7♥
-  at (147,538): 2♣ 3♣' 4♣
-  at (187,212): K♥
+  at (19,542): K♠ K♥' K♦
+  at (144,80): T♦ J♦ Q♦
+  at (172,212): 4♥ 4♦ 4♣
+  at (43,316): A♥ 2♣ 3♦
+  at (187,467): A♦ 2♠' 3♥
+  at (192,392): 3♣' 4♥' 5♠ 6♦
+  at (157,542): Q♣' K♦' A♣ 2♥ 3♠'
+  at (52,392): A♦' 2♦ 3♦'
+  at (185,320): 5♥ 6♠ 7♥ 8♠'
+  at (307,167): 9♠ T♠' J♠' Q♠ K♠' A♠ 2♠ 3♠
+  at (52,92): 6♠'
 
 puzzle 4line_peel_push_push_split_out_s5t2p1
   at (40,200): 7♠ 7♦ 7♣
@@ -196,19 +257,6 @@ puzzle 4line_push_set_peel_steal_steal_s5t7p0
   at (543,167): 6♣ 7♥ 8♣' 9♥ T♣
   at (52,92): K♦'
 
-puzzle 4line_push_push_shift_steal_s6t1p0
-  at (40,200): 7♠ 7♦ 7♣
-  at (130,260): A♣ A♦ A♥
-  at (52,392): J♥ Q♠ K♥'
-  at (52,467): 5♦' 6♦' 7♦'
-  at (127,80): 9♦' T♦ J♦ Q♦ K♦
-  at (126,542): 4♣ 5♥ 6♠ 7♥
-  at (187,332): 2♣ 3♦ 4♣'
-  at (59,140): A♥' 2♥ 3♥
-  at (62,20): K♠ A♠ 2♠
-  at (187,152): 3♠ 4♥ 5♠' 6♥'
-  at (52,272): Q♦'
-
 puzzle 4line_peel_peel_pull_split_out_s7t7p0
   at (130,260): A♣ A♦ A♥
   at (187,467): Q♠ Q♦' Q♥'
@@ -227,54 +275,6 @@ puzzle 4line_peel_peel_pull_split_out_s7t7p0
   at (262,302): A♥' 2♥ 3♥ 4♥
   at (52,92): 9♣
 
-puzzle 4line_set_peel_splice_steal_steal_s8t1p0
-  at (100,140): 2♥ 3♥ 4♥
-  at (130,260): A♣ A♦ A♥
-  at (52,392): J♣ J♥ J♠'
-  at (52,467): 5♦' 5♠ 5♥'
-  at (111,20): A♠ 2♠ 3♠
-  at (152,80): T♦ J♦ Q♦ K♦
-  at (32,200): 7♠ 7♦ 7♣
-  at (44,542): Q♥ K♠ A♦' 2♣ 3♦ 4♣ 5♥ 6♠
-  at (187,332): 7♦' 7♥ 7♣'
-  at (52,272): 2♥'
-
-puzzle 4line_peel_push_push_steal_s8t1p0
-  at (100,140): 2♥ 3♥ 4♥
-  at (52,392): J♣ J♥ J♠'
-  at (52,467): 5♦' 5♠ 5♥'
-  at (152,80): T♦ J♦ Q♦ K♦
-  at (32,200): 7♠ 7♦ 7♣
-  at (187,332): 7♦' 7♥ 7♣'
-  at (171,260): A♦ A♥ A♠
-  at (159,542): 2♣ 3♦ 4♣ 5♥ 6♠
-  at (187,407): Q♥ K♠ A♦' 2♠
-  at (232,152): Q♣ K♦' A♣ 2♥' 3♠
-  at (52,272): 9♣'
-
-puzzle 4line_peel_push_push_steal_s9t1p0
-  at (70,20): K♠ A♠ 2♠ 3♠
-  at (160,80): T♦ J♦ Q♦ K♦
-  at (100,140): 2♥ 3♥ 4♥
-  at (40,200): 7♠ 7♦ 7♣
-  at (130,260): A♣ A♦ A♥
-  at (52,467): 8♦' 9♠' T♦' J♣' Q♥ K♣
-  at (126,332): 4♣ 5♥ 6♠ 7♥
-  at (52,542): 2♣ 3♦ 4♣'
-  at (52,272): 2♦'
-
-puzzle 4line_peel_peel_pull_split_out_s9t1p0
-  at (40,200): 7♠ 7♦ 7♣
-  at (52,467): 8♦' 9♠' T♦' J♣' Q♥ K♣
-  at (126,332): 4♣ 5♥ 6♠ 7♥
-  at (52,542): 2♣ 3♦ 4♣'
-  at (62,20): K♠ A♠ 2♠
-  at (246,212): Q♦ K♦ A♦
-  at (232,92): T♦ J♦ Q♦'
-  at (59,140): A♥ 2♥ 3♥
-  at (187,542): A♣ 2♦' 3♠ 4♥ 5♠
-  at (52,272): 2♠'
-
 puzzle 4line_peel_peel_set_peel_yank_s9t7p0
   at (246,212): Q♦ K♦ A♦
   at (52,542): K♣ A♣ 2♣
@@ -290,30 +290,6 @@ puzzle 4line_peel_peel_set_peel_yank_s9t7p0
   at (382,167): T♠ J♠' Q♠ K♠ A♠ 2♠'
   at (9,9): 7♣ 8♦' 9♠' T♦' J♣' Q♥ K♠' A♥' 2♣' 3♦ 4♣ 5♥ 6♠
   at (52,272): 9♥
-
-puzzle 4line_peel_push_push_split_out_s10t1p0
-  at (70,20): K♠ A♠ 2♠ 3♠
-  at (160,80): T♦ J♦ Q♦ K♦
-  at (40,200): 7♠ 7♦ 7♣
-  at (130,260): A♣ A♦ A♥
-  at (68,316): 2♣ 3♦ 4♣
-  at (92,140): 2♥ 3♥ 4♥ 5♥
-  at (93,392): T♦' J♦' Q♦'
-  at (259,320): 7♥ 8♣ 9♦'
-  at (236,136): 6♥ 6♦' 6♠
-  at (52,467): 9♣
-
-puzzle 4line_peel_push_push_steal_s10t1p0
-  at (70,20): K♠ A♠ 2♠ 3♠
-  at (130,260): A♣ A♦ A♥
-  at (68,316): 2♣ 3♦ 4♣
-  at (92,140): 2♥ 3♥ 4♥ 5♥
-  at (93,392): T♦' J♦' Q♦'
-  at (236,136): 6♥ 6♦' 6♠
-  at (127,80): 9♦' T♦ J♦ Q♦ K♦
-  at (52,542): 7♠ 7♦ 7♥
-  at (19,467): 7♣ 8♣ 9♣
-  at (52,212): 2♦'
 
 puzzle 4line_peel_peel_push_yank_s10t7p0
   at (236,136): 6♥ 6♦' 6♠
@@ -334,3 +310,26 @@ puzzle 4line_peel_peel_push_yank_s10t7p0
   at (455,212): Q♥' K♠' A♦ 2♣ 3♦ 4♣'
   at (322,287): J♥
 
+puzzle 4line_push_push_push_steal_s2t8p1
+  at (130,260): A♣ A♦ A♥
+  at (52,392): T♥ T♣' T♠
+  at (152,20): 2♠ 3♠ 4♠
+  at (322,467): 5♦ 5♠ 5♣
+  at (262,227): 2♣ 2♠' 2♥
+  at (19,92): 7♦' 8♣ 9♥'
+  at (322,542): 7♠ 7♦ 7♥'
+  at (352,377): 6♦' 7♣ 8♥
+  at (427,302): 4♦' 5♣' 6♦
+  at (483,92): Q♥' Q♦' Q♠
+  at (118,467): 8♦ 9♣' T♥'
+  at (187,542): J♣ Q♣ K♣
+  at (93,167): 4♥ 5♥' 6♥
+  at (457,452): 2♣' 3♥ 4♠'
+  at (269,152): 6♠ 7♠' 8♠'
+  at (389,227): 3♦ 4♣ 5♥ 6♠' 7♥ 8♠
+  at (262,302): 9♦ 9♠' 9♥
+  at (457,527): J♥ Q♥ K♥'
+  at (479,377): 9♦' T♦ J♦ Q♦
+  at (44,542): K♠ K♣' K♦'
+  at (201,388): J♥' Q♣' K♦ A♠
+  at (52,242): 4♥'
