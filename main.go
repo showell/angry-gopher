@@ -44,11 +44,23 @@ func buildMux() http.Handler {
 // which the reverse proxy guards instead).
 func withLoginGate(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if loginExempt(r.URL.Path) || auth.CurrentUser(r) != auth.DefaultUser {
+		if loginExempt(r.URL.Path) {
 			next.ServeHTTP(w, r)
 			return
 		}
-		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		user := auth.CurrentUser(r)
+		if user == auth.DefaultUser {
+			http.Redirect(w, r, "/login", http.StatusSeeOther)
+			return
+		}
+		// Any logged-in identity is implicitly registered: ensure the
+		// account directory exists so the player shows up in the roster
+		// (and the message picker), and a cookie whose account was
+		// removed re-registers itself rather than becoming a ghost.
+		if !views.UserExists(user) {
+			_ = views.ClaimUser(user)
+		}
+		next.ServeHTTP(w, r)
 	})
 }
 
