@@ -322,11 +322,15 @@ const chatCSS = `<style>
 .chat-compose-actions button { margin-top:0; }
 .chat-body img { max-width:100%; max-height:320px; display:block; margin:6px 0;
                  border-radius:6px; cursor:zoom-in; }
-.chat-img-dialog { border:1px solid #000080; border-radius:10px; padding:12px;
-                   max-width:92vw; max-height:92vh; display:flex; flex-direction:column; gap:8px; }
+.chat-img-dialog { border:1px solid #000080; border-radius:10px; padding:10px;
+                   display:flex; flex-direction:column; gap:8px; }
 .chat-img-dialog::backdrop { background:rgba(0,0,0,0.55); }
-.chat-img-scroll { overflow:auto; max-width:88vw; max-height:80vh; }
-.chat-img-scroll img { display:block; width:auto; }
+.chat-img-controls { display:flex; align-items:center; gap:10px; }
+.chat-img-controls input[type=range] { flex:1; }
+/* Fixed viewport: never resizes, so the slider stays put. The image is
+   scaled in px inside it and overflows into scrollbars when zoomed in. */
+.chat-img-scroll { width:70vw; height:70vh; overflow:auto; background:#faf9f5; border-radius:6px; }
+.chat-img-scroll img { display:block; }
 .chat-hint { font-size:12px; color:#999; margin-top:8px; }
 .chat-status { font-size:12px; color:#b00020; min-height:16px; margin-top:6px; }
 @media (max-width: 640px) {
@@ -443,15 +447,34 @@ const chatScript = `<script>(function(){
   /* --- click any image to zoom (range slider scales height; scroll to pan) --- */
   function showImagePopup(src){
     var dlg=document.createElement('dialog'); dlg.className='chat-img-dialog';
-    var range=document.createElement('input'); range.type='range'; range.min='10'; range.max='500'; range.value='70';
-    var scroll=document.createElement('div'); scroll.className='chat-img-scroll';
-    var img=document.createElement('img'); img.src=src; img.style.height='70vh';
-    range.addEventListener('input',function(){ img.style.height=range.value+'vh'; });
+    var controls=document.createElement('div'); controls.className='chat-img-controls';
+    var range=document.createElement('input'); range.type='range';
+    range.min='1'; range.max='8'; range.step='0.05'; range.value='1';
     var close=document.createElement('button'); close.type='button'; close.textContent='Close';
     close.addEventListener('click',function(){ dlg.close(); });
-    scroll.appendChild(img); dlg.appendChild(range); dlg.appendChild(scroll); dlg.appendChild(close);
+    controls.appendChild(range); controls.appendChild(close);
+    var scroll=document.createElement('div'); scroll.className='chat-img-scroll';
+    var img=document.createElement('img'); img.alt='';
+    scroll.appendChild(img);
+    dlg.appendChild(controls); dlg.appendChild(scroll);
     dlg.addEventListener('close',function(){ dlg.remove(); });
-    document.body.appendChild(dlg); dlg.showModal();
+    document.body.appendChild(dlg);
+    /* fitW/fitH = largest size that fits the fixed container (computed once
+       the image's natural size + the container size are known); the slider
+       then multiplies that, overflowing into scroll when >1. */
+    var fitW=0, fitH=0;
+    function applyZoom(){ if(!fitW) return; var z=parseFloat(range.value); img.style.width=(fitW*z)+'px'; img.style.height=(fitH*z)+'px'; }
+    function fit(){
+      var cw=scroll.clientWidth, ch=scroll.clientHeight, nw=img.naturalWidth, nh=img.naturalHeight;
+      if(!cw||!ch||!nw||!nh) return;
+      var s=Math.min(cw/nw, ch/nh);
+      fitW=nw*s; fitH=nh*s; applyZoom();
+    }
+    range.addEventListener('input', applyZoom);
+    dlg.showModal();
+    img.addEventListener('load', fit);
+    img.src=src;
+    if(img.complete) fit();
   }
   bubbles.addEventListener('click',function(e){
     var t=e.target;
