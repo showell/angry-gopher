@@ -110,10 +110,14 @@ func renderChatConversation(w http.ResponseWriter, user, partner string) {
 <div class="chat-compose">
   <form id="chat-form">
     <textarea id="chat-body" placeholder="Write a message…  Markdown is supported, and longer posts are welcome."></textarea>
-    <button type="submit">Send</button>
+    <div class="chat-compose-actions">
+      <button type="submit">Send</button>
+      <button type="button" id="chat-image-btn">Image</button>
+    </div>
   </form>
+  <input type="file" id="chat-file" accept="image/png,image/jpeg,image/gif,image/webp" style="display:none">
   <div class="chat-status" id="chat-status"></div>
-  <div class="chat-hint">Markdown supported · Ctrl/⌘-Enter to send · Enter for a new line</div>
+  <div class="chat-hint">Markdown supported · paste or attach an image · Ctrl/⌘-Enter to send</div>
 </div></div>`)
 
 	meJSON, _ := json.Marshal(user)
@@ -314,6 +318,15 @@ const chatCSS = `<style>
 .chat-views { margin:-6px 0 12px; font-size:13px; }
 .chat-views a { text-decoration:none; }
 .chat-views a.active { font-weight:bold; color:#000; cursor:default; }
+.chat-compose-actions { display:flex; gap:8px; margin-top:8px; }
+.chat-compose-actions button { margin-top:0; }
+.chat-body img { max-width:100%; max-height:320px; display:block; margin:6px 0;
+                 border-radius:6px; cursor:zoom-in; }
+.chat-img-dialog { border:1px solid #000080; border-radius:10px; padding:12px;
+                   max-width:92vw; max-height:92vh; display:flex; flex-direction:column; gap:8px; }
+.chat-img-dialog::backdrop { background:rgba(0,0,0,0.55); }
+.chat-img-scroll { overflow:auto; max-width:88vw; max-height:80vh; }
+.chat-img-scroll img { display:block; width:auto; }
 .chat-hint { font-size:12px; color:#999; margin-top:8px; }
 .chat-status { font-size:12px; color:#b00020; min-height:16px; margin-top:6px; }
 @media (max-width: 640px) {
@@ -332,6 +345,8 @@ const chatScript = `<script>(function(){
   var form=document.getElementById('chat-form');
   var textarea=document.getElementById('chat-body');
   var status=document.getElementById('chat-status');
+  var imageBtn=document.getElementById('chat-image-btn');
+  var fileInput=document.getElementById('chat-file');
   function atBottom(){ return history.scrollHeight-history.scrollTop-history.clientHeight < 40; }
   function toBottom(){ history.scrollTop=history.scrollHeight; }
   function addMessage(m){
@@ -397,6 +412,50 @@ const chatScript = `<script>(function(){
   form.addEventListener('submit',function(e){ e.preventDefault(); send(); });
   textarea.addEventListener('keydown',function(e){
     if((e.ctrlKey||e.metaKey)&&e.key==='Enter'){ e.preventDefault(); send(); }
+  });
+  /* --- image upload (button + clipboard paste) --- */
+  function insertAtCursor(text){
+    var s=textarea.selectionStart, e=textarea.selectionEnd, v=textarea.value;
+    textarea.value=v.slice(0,s)+text+v.slice(e);
+    textarea.selectionStart=textarea.selectionEnd=s+text.length; textarea.focus();
+  }
+  function uploadImage(file){
+    if(!file) return;
+    status.style.color='#888'; status.textContent='Uploading image…';
+    var fd=new FormData(); fd.append('file',file);
+    fetch('/chat/upload?with='+encodeURIComponent(PARTNER),{method:'POST',body:fd})
+      .then(function(r){ if(!r.ok) throw new Error('status '+r.status); return r.json(); })
+      .then(function(d){
+        var alt=(d.name||'image').replace(/[\[\]\r\n]/g,'');
+        insertAtCursor('!['+alt+']('+d.url+')');
+        status.textContent=''; status.style.color='';
+      })
+      .catch(function(){ status.style.color=''; status.textContent='Image upload failed.'; });
+  }
+  imageBtn.addEventListener('click',function(){ fileInput.click(); });
+  fileInput.addEventListener('change',function(){ uploadImage(fileInput.files[0]); fileInput.value=''; });
+  textarea.addEventListener('paste',function(e){
+    var files=e.clipboardData&&e.clipboardData.files;
+    if(files) for(var i=0;i<files.length;i++){
+      if(files[i].type.indexOf('image/')===0){ e.preventDefault(); uploadImage(files[i]); return; }
+    }
+  });
+  /* --- click any image to zoom (range slider scales height; scroll to pan) --- */
+  function showImagePopup(src){
+    var dlg=document.createElement('dialog'); dlg.className='chat-img-dialog';
+    var range=document.createElement('input'); range.type='range'; range.min='10'; range.max='500'; range.value='70';
+    var scroll=document.createElement('div'); scroll.className='chat-img-scroll';
+    var img=document.createElement('img'); img.src=src; img.style.height='70vh';
+    range.addEventListener('input',function(){ img.style.height=range.value+'vh'; });
+    var close=document.createElement('button'); close.type='button'; close.textContent='Close';
+    close.addEventListener('click',function(){ dlg.close(); });
+    scroll.appendChild(img); dlg.appendChild(range); dlg.appendChild(scroll); dlg.appendChild(close);
+    dlg.addEventListener('close',function(){ dlg.remove(); });
+    document.body.appendChild(dlg); dlg.showModal();
+  }
+  bubbles.addEventListener('click',function(e){
+    var t=e.target;
+    if(t&&t.tagName==='IMG'&&t.closest('.chat-body')) showImagePopup(t.src);
   });
   textarea.focus();
 })();</script>`
