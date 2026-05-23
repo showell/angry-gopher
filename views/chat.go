@@ -106,7 +106,9 @@ func renderChatConversation(w http.ResponseWriter, user, partner string) {
 		`<button type="button" id="chat-lock" class="chat-lock" aria-pressed="false">🔓 Unlocked</button>`+
 		`</div>`)
 
-	fmt.Fprint(w, `<div class="chat-layout"><div class="chat-history view-rendered" id="chat-history"><div class="chat-bubbles" id="chat-bubbles">`)
+	fmt.Fprint(w, `<div class="chat-layout"><div class="chat-main">`+
+		`<div class="chat-navbar"><button type="button" id="chat-back" class="chat-back" title="Back to where you were before the last jump" disabled>&gt;</button></div>`+
+		`<div class="chat-history view-rendered" id="chat-history"><div class="chat-bubbles" id="chat-bubbles">`)
 	if len(msgs) == 0 {
 		fmt.Fprint(w, `<p class="muted" id="chat-empty">No messages yet. Say hello 👋</p>`)
 	}
@@ -117,7 +119,7 @@ func renderChatConversation(w http.ResponseWriter, user, partner string) {
 	for i, m := range msgs {
 		fmt.Fprintf(w, `<span data-i="%d">%s</span>`, i, html.EscapeString(chatStoredForm(i, m)))
 	}
-	fmt.Fprintf(w, `</pre></div>
+	fmt.Fprintf(w, `</pre></div></div>
 <div class="chat-compose">
   <form id="chat-form">
     <textarea id="chat-body" placeholder="Write a message…  Markdown is supported, and longer posts are welcome."></textarea>
@@ -308,7 +310,13 @@ func writeChatEvent(w io.Writer, rc *http.ResponseController, evt chatEvent, me 
 
 const chatCSS = `<style>
 .chat-layout { display:flex; gap:20px; }
-.chat-history { flex:1; min-width:0; max-height:62vh; overflow-y:auto;
+.chat-main { min-width:0; }
+.chat-navbar { margin-bottom:8px; }
+.chat-back { font-size:14px; line-height:1; padding:3px 11px; background:#eee; color:#333;
+             border:1px solid #ccc; border-radius:4px; cursor:pointer; }
+.chat-back:hover:enabled { background:#e3e3e3; }
+.chat-back:disabled { opacity:0.4; cursor:default; }
+.chat-history { min-width:0; max-height:62vh; overflow-y:auto;
                 border:1px solid #ddd; border-radius:8px; padding:12px; background:#fcfcf8; }
 .chat-compose form { margin:0; }
 .chat-compose textarea { width:100%; min-height:200px; resize:vertical; box-sizing:border-box;
@@ -364,6 +372,7 @@ const chatCSS = `<style>
 /* Wide (landscape): side by side — conversation left, compose on the RIGHT. */
 @media (orientation: landscape) {
   .chat-layout { flex-direction:row; align-items:flex-start; }
+  .chat-main { flex:1; }
   .chat-compose { width:320px; flex:none; position:sticky; top:16px; }
 }
 /* Tall (portrait): single column with the compose box at the BOTTOM. */
@@ -388,6 +397,7 @@ const chatScript = `<script>(function(){
   var imageBtn=document.getElementById('chat-image-btn');
   var fileInput=document.getElementById('chat-file');
   var lockBtn=document.getElementById('chat-lock');
+  var backBtn=document.getElementById('chat-back');
   var locked=false;
   function toBottom(){ history.scrollTop=history.scrollHeight; }
   function addMessage(m){
@@ -523,6 +533,26 @@ const chatScript = `<script>(function(){
     if(img.complete) fit();
   }
   function flashMsg(el){ el.classList.remove('msg-flash'); void el.offsetWidth; el.classList.add('msg-flash'); }
+  /* Back-nav stack: jumping to a MSG_ link remembers where you were (the
+     first message whose top is visible); the ">" button returns you there,
+     one step per chained jump. */
+  var navStack=[];
+  function updateBack(){ backBtn.disabled = navStack.length===0; }
+  function firstTopVisibleIndex(){
+    var els=bubbles.querySelectorAll('.chat-msg'), htop=history.getBoundingClientRect().top;
+    for(var i=0;i<els.length;i++){
+      if(els[i].getBoundingClientRect().top >= htop-1) return els[i].getAttribute('data-i');
+    }
+    return els.length ? els[els.length-1].getAttribute('data-i') : null;
+  }
+  function scrollIndexToTop(idx){
+    if(idx===null||idx===undefined) return;
+    var el=bubbles.querySelector('.chat-msg[data-i="'+idx+'"]');
+    if(!el||el.offsetParent===null) return;
+    history.scrollTop += el.getBoundingClientRect().top - history.getBoundingClientRect().top;
+  }
+  backBtn.addEventListener('click',function(){ if(navStack.length){ scrollIndexToTop(navStack.pop()); updateBack(); } });
+  updateBack();
   bubbles.addEventListener('click',function(e){
     var t=e.target;
     var rb=t.closest&&t.closest('.msg-refer');
@@ -530,7 +560,8 @@ const chatScript = `<script>(function(){
     var a=t.closest&&t.closest('a.msg-ref');
     if(a){ e.preventDefault();
       var tgt=document.getElementById(a.getAttribute('href').slice(1));
-      if(tgt){ tgt.scrollIntoView({block:'center',behavior:'smooth'}); flashMsg(tgt); }
+      if(tgt){ navStack.push(firstTopVisibleIndex()); updateBack();
+        tgt.scrollIntoView({block:'center',behavior:'smooth'}); flashMsg(tgt); }
       return; }
     if(t&&t.tagName==='IMG'&&t.closest('.chat-body')) showImagePopup(t.src);
   });
