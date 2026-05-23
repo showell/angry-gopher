@@ -6,11 +6,13 @@
 // <hr>) in any markdown viewer; a body line that would collide with it
 // gets one extra backslash on write, stripped back on read.
 //
-// One file per conversation keyed by the sorted pair of usernames, so
-// both participants read and append to the same file. Appends are
-// serialized by chatMu — a single-process server makes a mutex
-// sufficient, and it's needed because a long post can exceed PIPE_BUF,
-// past which POSIX append-atomicity no longer holds.
+// One directory per conversation, keyed by the pair (see chatPairKey):
+// messages.md is the transcript both participants append to, and
+// uploads/ holds its image uploads — so a conversation is one
+// self-contained, access-controllable unit. Appends are serialized by
+// chatMu — a single-process server makes a mutex sufficient, and it's
+// needed because a long post can exceed PIPE_BUF, past which POSIX
+// append-atomicity no longer holds.
 //
 // chatMu also guards the in-memory subscriber registry, so an SSE
 // client can read the current backlog and subscribe for future
@@ -65,18 +67,58 @@ var (
 	chatSubs = map[string]map[chan chatEvent]struct{}{}
 )
 
-// chatPairKey is the canonical conversation key: the two usernames
-// sorted, joined by `__` (impossible inside a username, so unambiguous).
+// chatPairKey is the canonical conversation key: the two usernames,
+// case-insensitively alphabetized (case-sensitive tiebreak so distinct
+// names like "Steve"/"steve" don't collide), joined by "_". Usernames
+// can't contain "_", so the key always splits back unambiguously.
 func chatPairKey(a, b string) string {
-	if a <= b {
-		return a + "__" + b
-	}
-	return b + "__" + a
+	x, y := chatPairOrder(a, b)
+	return x + "_" + y
 }
 
-// chatPath is the conversation file for a pair.
-func chatPath(a, b string) string {
-	return filepath.Join(ChatDataRoot, chatPairKey(a, b)+".md")
+func chatPairOrder(a, b string) (string, string) {
+	al, bl := strings.ToLower(a), strings.ToLower(b)
+	if al < bl || (al == bl && a <= b) {
+		return a, b
+	}
+	return b, a
+}
+
+// chatConvDir is a conversation's own directory; everything for the pair
+// (messages + uploads) lives under it, so a conversation is one
+// self-contained, ACL-able unit.
+func chatConvDir(a, b string) string {
+	return filepath.Join(ChatDataRoot, chatPairKey(a, b))
+}
+
+// chatMessagesPath is the conversation transcript file.
+func chatMessagesPath(a, b string) string {
+	return filepath.Join(chatConvDir(a, b), "messages.md")
+}
+
+// chatUploadsDir is where a conversation's image uploads live.
+func chatUploadsDir(a, b string) string {
+	return filepath.Join(chatConvDir(a, b), "uploads")
+}
+
+// ChatUploadsDirForKey is the uploads dir addressed by a conversation
+// key (used by the serving path, which knows the key, not the pair).
+func ChatUploadsDirForKey(key string) string {
+	return filepath.Join(ChatDataRoot, key, "uploads")
+}
+
+// ChatKeyParticipant reports whether `user` is in the conversation named
+// by `key`, and that `key` is in canonical form. The serving path uses
+// this to enforce per-conversation access on image URLs.
+func ChatKeyParticipant(key, user string) bool {
+	x, y, found := strings.Cut(key, "_")
+	if !found || x == "" || y == "" {
+		return false
+	}
+	if chatPairKey(x, y) != key {
+		return false
+	}
+	return user == x || user == y
 }
 
 // escapeBodyLine protects a body line that would collide with the
@@ -167,7 +209,7 @@ func readChatFileLocked(path string) ([]ChatMessage, error) {
 func ReadChatMessages(a, b string) ([]ChatMessage, error) {
 	chatMu.Lock()
 	defer chatMu.Unlock()
-	return readChatFileLocked(chatPath(a, b))
+	return readChatFileLocked(chatMessagesPath(a, b))
 }
 
 // AppendChatMessage stores a message from `from` to `partner` and
@@ -175,7 +217,7 @@ func ReadChatMessages(a, b string) ([]ChatMessage, error) {
 // (with its normalized timestamp).
 func AppendChatMessage(from, partner, body string) (ChatMessage, error) {
 	key := chatPairKey(from, partner)
-	path := chatPath(from, partner)
+	path := chatMessagesPath(from, partner)
 	msg := ChatMessage{From: from, At: time.Now().UTC(), Body: body}
 
 	chatMu.Lock()
@@ -220,7 +262,7 @@ func OpenChatStream(a, b string, since int) (backlog []chatEvent, ch <-chan chat
 	chatMu.Lock()
 	defer chatMu.Unlock()
 
-	all, _ := readChatFileLocked(chatPath(a, b))
+	all, _ := readChatFileLocked(chatMessagesPath(a, b))
 	for i := since; i >= 0 && i < len(all); i++ {
 		backlog = append(backlog, chatEvent{Index: i, Msg: all[i]})
 	}
