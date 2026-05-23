@@ -3,9 +3,11 @@
 // deleting an account) leaves no name-keyed backdoor to the data.
 //
 // One dir per user under {data_dir}/users/<id>/:
-//   name      — display name (mutable)
-//   password  — bcrypt hash; its existence == the user is a member
-//   admin     — its existence == the user has admin powers
+//
+//	name      — display name (mutable)
+//	password  — bcrypt hash; its existence == the user is a member
+//	admin     — its existence == the user has admin powers
+//
 // {data_dir}/users/next-id.txt is the id counter.
 //
 // Guests get an id too (allocated at login). Members are looked up by
@@ -18,6 +20,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"golang.org/x/crypto/bcrypt"
@@ -39,7 +42,7 @@ type User struct {
 	Admin  bool
 }
 
-func userDir(id string) string  { return filepath.Join(UsersRoot, id) }
+func userDir(id string) string     { return filepath.Join(UsersRoot, id) }
 func userFile(id, f string) string { return filepath.Join(UsersRoot, id, f) }
 
 // AllocateUser creates a new user with the given name and returns its id.
@@ -151,6 +154,32 @@ func UserLastActive(id string) (time.Time, bool) {
 		return time.Time{}, false
 	}
 	return time.Unix(n, 0), true
+}
+
+var uploadBytesMu sync.Mutex
+
+// UserUploadBytes returns the cumulative bytes a user has ever uploaded.
+func UserUploadBytes(id string) int64 {
+	b, err := os.ReadFile(userFile(id, "upload-bytes"))
+	if err != nil {
+		return 0
+	}
+	n, _ := strconv.ParseInt(strings.TrimSpace(string(b)), 10, 64)
+	return n
+}
+
+// ReserveUploadBytes atomically adds n to a user's lifetime upload total if
+// that stays within cap, returning true; otherwise it changes nothing and
+// returns false. Serialized so concurrent uploads can't both slip past.
+func ReserveUploadBytes(id string, n, cap int64) bool {
+	uploadBytesMu.Lock()
+	defer uploadBytesMu.Unlock()
+	total := UserUploadBytes(id) + n
+	if total > cap {
+		return false
+	}
+	_ = os.WriteFile(userFile(id, "upload-bytes"), []byte(strconv.FormatInt(total, 10)), 0o644)
+	return true
 }
 
 // LoadUser resolves a full User from an id (zero User if absent).

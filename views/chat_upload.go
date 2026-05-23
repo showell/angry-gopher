@@ -13,6 +13,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -20,11 +21,17 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
-
 )
 
-// maxChatUploadBytes caps a single uploaded image.
-const maxChatUploadBytes = 10 << 20 // 10 MB
+// maxChatUploadBytes caps a single uploaded image. Caddy's per-route body
+// cap (deploy/Caddyfile) must stay at or above this so Gopher is the one
+// that enforces it, with a clean message.
+const maxChatUploadBytes = 10 << 20 // 10 MiB
+
+// maxChatUploadLifetimeBytes caps the cumulative bytes one user may ever
+// upload — a runaway/abuse backstop, not a tight quota (the droplet has
+// tens of GB free). Easy to raise.
+const maxChatUploadLifetimeBytes = 1 << 30 // 1 GiB per user, lifetime
 
 // chatUploadName is the strict on-disk/served filename: 32 hex chars
 // (our random token) plus an allowed image extension. Used to reject
@@ -90,7 +97,7 @@ func HandleChatUpload(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		var maxErr *http.MaxBytesError
 		if errors.As(err, &maxErr) {
-			http.Error(w, "image too large", http.StatusRequestEntityTooLarge)
+			http.Error(w, "Image too large — the limit is 10 MB.", http.StatusRequestEntityTooLarge)
 			return
 		}
 		http.Error(w, "no file", http.StatusBadRequest)
@@ -104,12 +111,19 @@ func HandleChatUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(data) > maxChatUploadBytes {
-		http.Error(w, "image too large", http.StatusRequestEntityTooLarge)
+		http.Error(w, "Image too large — the limit is 10 MB.", http.StatusRequestEntityTooLarge)
 		return
 	}
 	ext, ok := detectImageExt(data)
 	if !ok {
 		http.Error(w, "unsupported image type (png, jpeg, gif, webp only)", http.StatusUnsupportedMediaType)
+		return
+	}
+
+	// Lifetime per-user upload backstop (reserve before storing).
+	if !ReserveUploadBytes(user.ID, int64(len(data)), maxChatUploadLifetimeBytes) {
+		http.Error(w, fmt.Sprintf("Upload limit reached — you've used your %d GB image allowance.",
+			maxChatUploadLifetimeBytes>>30), http.StatusForbidden)
 		return
 	}
 

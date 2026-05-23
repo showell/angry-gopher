@@ -93,35 +93,36 @@
     textarea.value=v.slice(0,s)+text+v.slice(e);
     textarea.selectionStart=textarea.selectionEnd=s+text.length; textarea.focus();
   }
-  /* Reject oversized images up front with a clear message — the server is
-     fronted by a 1 MB body cap, so a big upload otherwise fails opaquely.
-     Keep MAX_IMAGE_BYTES in sync with Caddy's request_body max_size. */
-  var MAX_IMAGE_BYTES = 1000000;
+  /* Reject oversized images up front (the per-image limit), and otherwise
+     surface the server's own message — e.g. the lifetime upload cap.
+     MAX_IMAGE_BYTES must match Gopher's maxChatUploadBytes (and stay under
+     Caddy's upload body cap). */
+  var MAX_IMAGE_BYTES = 10*1024*1024;
   function uploadImage(file){
     if(!file) return;
     if(file.size > MAX_IMAGE_BYTES){
       status.style.color='';
-      status.textContent='That image is '+(file.size/1048576).toFixed(1)+' MB — too big to send (limit 1 MB). Try compressing or resizing it.';
+      status.textContent='That image is '+(file.size/1048576).toFixed(1)+' MB — too big to send (limit 10 MB). Try compressing or resizing it.';
       return;
     }
     status.style.color='#888'; status.textContent='Uploading image…';
     var fd=new FormData(); fd.append('file',file);
     fetch('/chat/upload?with='+encodeURIComponent(PARTNER),{method:'POST',body:fd})
       .then(function(r){
-        if(r.status===413||r.status===403) throw 'toobig';
-        if(!r.ok) throw 'failed';
-        return r.json();
+        if(r.ok) return r.json();
+        return r.text().then(function(t){
+          t=(t||'').trim();
+          throw (t && t.charAt(0)!=='<' && t.length<200) ? t : 'Image upload failed.';
+        });
       })
       .then(function(d){
         var alt=(d.name||'image').replace(/[\[\]\r\n]/g,'');
         insertAtCursor('!['+alt+']('+d.url+')');
         status.textContent=''; status.style.color='';
       })
-      .catch(function(e){
+      .catch(function(msg){
         status.style.color='';
-        status.textContent = (e==='toobig')
-          ? 'That image is too big to send (limit 1 MB). Try compressing or resizing it.'
-          : 'Image upload failed.';
+        status.textContent = (typeof msg==='string' && msg) ? msg : 'Image upload failed.';
       });
   }
   imageBtn.addEventListener('click',function(){ fileInput.click(); });

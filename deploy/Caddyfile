@@ -10,9 +10,16 @@
 lynrummy.com {
 	encode gzip
 
-	# Coarse outer cap. The Go handlers enforce tighter per-route
-	# limits (256 KB new-session, 64 KB append/puzzle).
-	request_body {
+	# Coarse outer caps. The Go handlers enforce tighter per-route limits
+	# (256 KB new-session, 64 KB append/puzzle). Chat image uploads need
+	# headroom: Gopher caps the decoded image at 10 MiB, so give /chat/upload
+	# 12 MB and keep everything else tight.
+	@upload path /chat/upload
+	request_body @upload {
+		max_size 12MB
+	}
+	@notupload not path /chat/upload
+	request_body @notupload {
 		max_size 1MB
 	}
 
