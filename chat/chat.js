@@ -93,18 +93,36 @@
     textarea.value=v.slice(0,s)+text+v.slice(e);
     textarea.selectionStart=textarea.selectionEnd=s+text.length; textarea.focus();
   }
+  /* Reject oversized images up front with a clear message — the server is
+     fronted by a 1 MB body cap, so a big upload otherwise fails opaquely.
+     Keep MAX_IMAGE_BYTES in sync with Caddy's request_body max_size. */
+  var MAX_IMAGE_BYTES = 1000000;
   function uploadImage(file){
     if(!file) return;
+    if(file.size > MAX_IMAGE_BYTES){
+      status.style.color='';
+      status.textContent='That image is '+(file.size/1048576).toFixed(1)+' MB — too big to send (limit 1 MB). Try compressing or resizing it.';
+      return;
+    }
     status.style.color='#888'; status.textContent='Uploading image…';
     var fd=new FormData(); fd.append('file',file);
     fetch('/chat/upload?with='+encodeURIComponent(PARTNER),{method:'POST',body:fd})
-      .then(function(r){ if(!r.ok) throw new Error('status '+r.status); return r.json(); })
+      .then(function(r){
+        if(r.status===413||r.status===403) throw 'toobig';
+        if(!r.ok) throw 'failed';
+        return r.json();
+      })
       .then(function(d){
         var alt=(d.name||'image').replace(/[\[\]\r\n]/g,'');
         insertAtCursor('!['+alt+']('+d.url+')');
         status.textContent=''; status.style.color='';
       })
-      .catch(function(){ status.style.color=''; status.textContent='Image upload failed.'; });
+      .catch(function(e){
+        status.style.color='';
+        status.textContent = (e==='toobig')
+          ? 'That image is too big to send (limit 1 MB). Try compressing or resizing it.'
+          : 'Image upload failed.';
+      });
   }
   imageBtn.addEventListener('click',function(){ fileInput.click(); });
   fileInput.addEventListener('change',function(){ uploadImage(fileInput.files[0]); fileInput.value=''; });
