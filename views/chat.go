@@ -82,10 +82,28 @@ func validChatPartner(userID, partnerID string) bool {
 	return partnerID != "" && partnerID != userID && UserIsMember(partnerID)
 }
 
+// chatNav renders the chat-subsystem sub-nav shared by its three pages:
+// the people list (chat home), a conversation, and settings. The app
+// chrome's "Lyn Rummy" link is the way back to the top-level home; this
+// moves within the chat subsystem. active is "people", "settings", or ""
+// (a conversation, which lives under the people area).
+func chatNav(w http.ResponseWriter, active string) {
+	item := func(href, label, key string) string {
+		if active == key {
+			return fmt.Sprintf(`<strong>%s</strong>`, label)
+		}
+		return fmt.Sprintf(`<a href="%s">%s</a>`, href, label)
+	}
+	fmt.Fprintf(w, `<div class="chat-nav">💬 %s · %s</div>`,
+		item("/chat", "People", "people"),
+		item("/settings", "Settings", "settings"))
+}
+
 // renderChatPicker lists the members you can message (everyone with a
 // password), minus yourself — linked by id, shown by name.
 func renderChatPicker(w http.ResponseWriter, user User) {
 	PageHeader(w, "Messages", user)
+	chatNav(w, "people")
 	fmt.Fprint(w, `<p class="muted">Pick a member to message:</p><ul>`)
 	n := 0
 	for _, m := range ListMembers() {
@@ -112,6 +130,7 @@ func renderChatConversation(w http.ResponseWriter, user User, partnerID string) 
 	partnerName := GetUserName(partnerID)
 
 	PageHeader(w, "Chat with "+partnerName, user)
+	chatNav(w, "")
 	fmt.Fprint(w, chatCSS)
 	fmt.Fprintf(w, `<div id="chat-root" data-partner="%s">`, html.EscapeString(partnerID))
 	fmt.Fprint(w, `<div class="chat-views" id="chat-views">`+

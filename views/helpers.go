@@ -75,6 +75,7 @@ h2 { color: #000080; margin-top: 24px; }
 a { color: #000080; }
 nav { margin-bottom: 16px; font-size: 13px; }
 nav a { margin-right: 12px; }
+.chat-nav { margin: -4px 0 16px; font-size: 14px; }
 table { border-collapse: collapse; margin-top: 8px; width: 100%%; }
 th { background: #000080; color: white; padding: 6px 12px; text-align: left; }
 td { border-bottom: 1px solid #ccc; padding: 6px 12px; }

@@ -226,12 +226,13 @@ func handleAdminAPIKey(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "generate: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
-	renderAPIKeyShown(w, id, key)
+	renderAPIKeyShown(w, id, key, "/admin", "Admin")
 }
 
 // renderAPIKeyShown displays a freshly generated key once, with a copy
-// warning and usage hint.
-func renderAPIKeyShown(w http.ResponseWriter, id, key string) {
+// warning and usage hint. backURL/backLabel point the "← back" link at
+// whichever surface generated it (admin or the member's own settings).
+func renderAPIKeyShown(w http.ResponseWriter, id, key, backURL, backLabel string) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	fmt.Fprintf(w, `<!DOCTYPE html>
 <html><head><meta charset="utf-8"><title>♦️ Lyn Rummy ♥️</title>
@@ -247,15 +248,16 @@ code.key { font-family: ui-monospace,Menlo,Consolas,monospace; font-size: 15px;
 .muted { color: #888; font-size: 13px; }
 </style>
 </head><body>
-<nav><a href="/admin">← Admin</a></nav>
+<nav><a href="%s">← %s</a></nav>
 <h1>API key for &ldquo;%s&rdquo;</h1>
 <div class="box">
 <p class="warn"><strong>Copy this now — it won't be shown again.</strong> (Regenerating makes a new one; this exact key can't be recovered.)</p>
 <code class="key">%s</code>
 <p class="muted">Read-only. The bot sends it as <code>Authorization: Bearer &lt;key&gt;</code>.
-Hand it to the bot via the <code>GOPHER_API_KEY</code> env var, not in the prompt. Revoke anytime from the Admin page.</p>
+Hand it to the bot via the <code>GOPHER_API_KEY</code> env var, not in the prompt. Revoke anytime.</p>
 </div>
-</body></html>`, html.EscapeString(GetUserName(id)), html.EscapeString(key))
+</body></html>`, html.EscapeString(backURL), html.EscapeString(backLabel),
+		html.EscapeString(GetUserName(id)), html.EscapeString(key))
 }
 
 func writeStatsRow(w http.ResponseWriter, st UserStats, cls, actionsCell string) {
