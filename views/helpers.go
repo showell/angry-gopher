@@ -43,6 +43,14 @@ const AppChromeCSS = `
 .app-top-home a:hover { text-decoration: underline; }
 .app-top-user { font-size: 13px; color: #444; }
 .app-top-user a { color: #000080; }
+.chat-top .chat-top-left { display: flex; align-items: baseline; gap: 14px;
+                           flex-wrap: wrap; min-width: 0; }
+.chat-top-home { color: #000080; text-decoration: none; font-size: 13px; }
+.chat-top-home:hover { text-decoration: underline; }
+.chat-top-title { font-weight: bold; color: #000080; }
+.chat-top-links { font-size: 13px; }
+.chat-top-links a { color: #000080; text-decoration: none; }
+.chat-top-links a:hover { text-decoration: underline; }
 `
 
 // AppChromeTop emits the top bar: a home link, who you're playing as, an
@@ -58,8 +66,37 @@ func AppChromeTop(w http.ResponseWriter, user User) {
 		html.EscapeString(user.Name), adminLink)
 }
 
-// PageHeader writes the HTML boilerplate, top bar, and opens the body.
-func PageHeader(w http.ResponseWriter, title string, user User) {
+// chatChromeTop emits the chat-subsystem top bar: a small Home link, the
+// page/conversation title, the People/Settings sub-nav, and identity +
+// (admin) + log out on the right. In chat there's no "Lyn Rummy" branding —
+// the small Home link is the only way back to the top-level home. active is
+// "people" | "settings" | "" (a conversation).
+func chatChromeTop(w http.ResponseWriter, user User, title, active string) {
+	navLink := func(href, label, key string) string {
+		if active == key {
+			return fmt.Sprintf(`<strong>%s</strong>`, label)
+		}
+		return fmt.Sprintf(`<a href="%s">%s</a>`, href, label)
+	}
+	adminLink := ""
+	if user.Admin {
+		adminLink = ` · <a href="/admin">Admin</a>`
+	}
+	fmt.Fprintf(w,
+		`<header class="app-top chat-top"><div class="chat-top-left">`+
+			`<a class="chat-top-home" href="/">Home</a>`+
+			`<span class="chat-top-title">%s</span>`+
+			`<span class="chat-top-links">%s · %s</span></div>`+
+			`<div class="app-top-user"><strong>%s</strong>%s · <a href="/logout">Log out</a></div></header>`,
+		html.EscapeString(title),
+		navLink("/chat", "People", "people"), navLink("/settings", "Settings", "settings"),
+		html.EscapeString(user.Name), adminLink)
+}
+
+// pageHeadAndStyle emits the doctype, head, shared stylesheet, and opens
+// <body> — everything before the page's top chrome. Shared by PageHeader
+// (generic app chrome) and chatPageHeader (chat-subsystem chrome).
+func pageHeadAndStyle(w http.ResponseWriter) {
 	fmt.Fprint(w, `<!DOCTYPE html>
 <html><head><meta charset="utf-8"><title>♦️ Lyn Rummy ♥️</title>`)
 	fmt.Fprint(w, `
@@ -75,7 +112,6 @@ h2 { color: #000080; margin-top: 24px; }
 a { color: #000080; }
 nav { margin-bottom: 16px; font-size: 13px; }
 nav a { margin-right: 12px; }
-.chat-nav { margin: -4px 0 16px; font-size: 14px; }
 table { border-collapse: collapse; margin-top: 8px; width: 100%%; }
 th { background: #000080; color: white; padding: 6px 12px; text-align: left; }
 td { border-bottom: 1px solid #ccc; padding: 6px 12px; }
@@ -111,8 +147,23 @@ button:hover { background: #0000a0; }
 </style>
 </head><body>
 `)
+}
+
+// PageHeader writes the boilerplate, the generic app top bar, and opens the
+// body with the page title as an <h1>.
+func PageHeader(w http.ResponseWriter, title string, user User) {
+	pageHeadAndStyle(w)
 	AppChromeTop(w, user)
 	fmt.Fprintf(w, `<div class="app-body-wrap"><h1>%s</h1>`, html.EscapeString(title))
+}
+
+// chatPageHeader writes the page with the chat-subsystem top bar (Home +
+// title + People/Settings + identity) and opens the body WITHOUT an <h1> —
+// the title lives in the bar. active is "people" | "settings" | "".
+func chatPageHeader(w http.ResponseWriter, title string, user User, active string) {
+	pageHeadAndStyle(w)
+	chatChromeTop(w, user, title, active)
+	fmt.Fprint(w, `<div class="app-body-wrap">`)
 }
 
 // PageSubtitle renders a brief help/marketing blurb below the title.

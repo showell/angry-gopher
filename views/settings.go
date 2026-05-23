@@ -1,5 +1,5 @@
 // User settings. The first setting is a read-only API key for bots,
-// reached from the chat subsystem (see chatNav). Self-service is safe
+// reached from the chat subsystem (see chatChromeTop). Self-service is safe
 // because the endpoint acts on the SESSION identity — never a user id from
 // the request — so a member can only manage their OWN key, and that key
 // grants a strict subset of the session's own access (read-only,
@@ -65,8 +65,7 @@ func HandleSettingsAPIKey(w http.ResponseWriter, r *http.Request) {
 }
 
 func renderSettings(w http.ResponseWriter, r *http.Request, user User) {
-	PageHeader(w, "Settings", user)
-	chatNav(w, "settings")
+	chatPageHeader(w, "Settings", user, "settings")
 
 	if r.URL.Query().Get("keyrevoked") == "1" {
 		fmt.Fprint(w, `<p class="flash">Your API key was revoked.</p>`)

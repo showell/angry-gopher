@@ -82,28 +82,10 @@ func validChatPartner(userID, partnerID string) bool {
 	return partnerID != "" && partnerID != userID && UserIsMember(partnerID)
 }
 
-// chatNav renders the chat-subsystem sub-nav shared by its three pages:
-// the people list (chat home), a conversation, and settings. The app
-// chrome's "Lyn Rummy" link is the way back to the top-level home; this
-// moves within the chat subsystem. active is "people", "settings", or ""
-// (a conversation, which lives under the people area).
-func chatNav(w http.ResponseWriter, active string) {
-	item := func(href, label, key string) string {
-		if active == key {
-			return fmt.Sprintf(`<strong>%s</strong>`, label)
-		}
-		return fmt.Sprintf(`<a href="%s">%s</a>`, href, label)
-	}
-	fmt.Fprintf(w, `<div class="chat-nav">💬 %s · %s</div>`,
-		item("/chat", "People", "people"),
-		item("/settings", "Settings", "settings"))
-}
-
 // renderChatPicker lists the members you can message (everyone with a
 // password), minus yourself — linked by id, shown by name.
 func renderChatPicker(w http.ResponseWriter, user User) {
-	PageHeader(w, "Messages", user)
-	chatNav(w, "people")
+	chatPageHeader(w, "People", user, "people")
 	fmt.Fprint(w, `<p class="muted">Pick a member to message:</p><ul>`)
 	n := 0
 	for _, m := range ListMembers() {
@@ -129,8 +111,7 @@ func renderChatConversation(w http.ResponseWriter, user User, partnerID string) 
 	}
 	partnerName := GetUserName(partnerID)
 
-	PageHeader(w, "Chat with "+partnerName, user)
-	chatNav(w, "")
+	chatPageHeader(w, "Chat with "+partnerName, user, "")
 	fmt.Fprint(w, chatCSS)
 	fmt.Fprintf(w, `<div id="chat-root" data-partner="%s">`, html.EscapeString(partnerID))
 	fmt.Fprint(w, `<div class="chat-views" id="chat-views">`+
@@ -326,14 +307,25 @@ func writeChatEvent(w io.Writer, rc *http.ResponseController, evt chatEvent, me 
 }
 
 const chatCSS = `<style>
-.chat-layout { display:flex; gap:20px; }
-.chat-main { min-width:0; }
+/* The conversation page fills the viewport; only the message history
+   scrolls. The title lives in the top bar, so there's no in-body heading.
+   overflow stays visible — a flex mishap degrades to a page scrollbar,
+   never clipped content. */
+html, body { height:100%; }
+.app-body-wrap { margin:10px auto; padding:0 24px 10px; min-height:0;
+                 display:flex; flex-direction:column; }
+/* #chat-root wraps the views row + layout; it must carry the fill down the
+   flex chain (without this it sizes to content, collapsing the compose box
+   when the feed is empty). */
+#chat-root { flex:1; min-height:0; display:flex; flex-direction:column; }
+.chat-layout { display:flex; gap:20px; flex:1; min-height:0; }
+.chat-main { min-width:0; flex:1; display:flex; flex-direction:column; min-height:0; }
 .chat-navbar { margin-bottom:8px; }
 .chat-back { font-size:14px; line-height:1; padding:3px 11px; background:#eee; color:#333;
              border:1px solid #ccc; border-radius:4px; cursor:pointer; }
 .chat-back:hover:enabled { background:#e3e3e3; }
 .chat-back:disabled { opacity:0.4; cursor:default; }
-.chat-history { min-width:0; max-height:62vh; overflow-y:auto;
+.chat-history { min-width:0; flex:1; min-height:0; overflow-y:auto;
                 border:1px solid #ddd; border-radius:8px; padding:12px; background:#fcfcf8; }
 .chat-compose form { margin:0; }
 .chat-compose textarea { width:100%; min-height:200px; resize:vertical; box-sizing:border-box;
@@ -359,7 +351,7 @@ const chatCSS = `<style>
                    font-family:ui-monospace,Menlo,Consolas,monospace; font-size:13px; color:#333; }
 .chat-history.view-transcript #chat-bubbles { display:none; }
 .chat-history.view-transcript .chat-transcript { display:block; }
-.chat-views { margin:-6px 0 12px; font-size:13px; display:flex; justify-content:space-between; align-items:center; gap:12px; }
+.chat-views { margin:0 0 8px; font-size:13px; display:flex; justify-content:space-between; align-items:center; gap:12px; }
 .chat-views a { text-decoration:none; }
 .chat-views a.active { font-weight:bold; color:#000; cursor:default; }
 .chat-lock { font-size:12px; padding:2px 9px; background:#eee; color:#333; border:1px solid #ccc;
@@ -381,18 +373,21 @@ const chatCSS = `<style>
 .chat-img-scroll img { display:block; }
 .chat-hint { font-size:12px; color:#999; margin-top:8px; }
 .chat-status { font-size:12px; color:#b00020; min-height:16px; margin-top:6px; }
-/* Wide (landscape): side by side — conversation left, compose on the RIGHT. */
+/* Wide (landscape): side by side — conversation left, compose on the RIGHT.
+   The compose column is full height; its textarea flexes so Send/Image stay
+   pinned and visible. */
 @media (orientation: landscape) {
-  .chat-layout { flex-direction:row; align-items:flex-start; }
+  .chat-layout { flex-direction:row; align-items:stretch; }
   .chat-main { flex:1; }
-  .chat-compose { width:320px; flex:none; position:sticky; top:16px; }
-  .chat-compose textarea { min-height:65vh; }
+  .chat-compose { width:320px; flex:none; display:flex; flex-direction:column; min-height:0; }
+  .chat-compose form { display:flex; flex-direction:column; flex:1; min-height:0; }
+  .chat-compose textarea { flex:1; min-height:0; }
 }
-/* Tall (portrait): single column with the compose box at the BOTTOM. */
+/* Tall (portrait): single column — history fills, compose sits at the
+   BOTTOM at a fixed height (both stay on screen). */
 @media (orientation: portrait) {
   .chat-layout { flex-direction:column; align-items:stretch; }
   .chat-compose { width:auto; flex:none; }
-  .chat-history { max-height:50vh; }
-  .chat-compose textarea { min-height:140px; }
+  .chat-compose textarea { min-height:120px; }
 }
 </style>`
