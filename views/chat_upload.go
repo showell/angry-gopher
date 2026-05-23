@@ -75,7 +75,7 @@ func HandleChatUpload(w http.ResponseWriter, r *http.Request) {
 	}
 	user := CurrentUser(r)
 	partner := auth.SanitizeUser(r.URL.Query().Get("with"))
-	if partner == "" || partner == user || !UserExists(partner) {
+	if !validChatPartner(user, partner) {
 		http.Error(w, "unknown conversation partner", http.StatusBadRequest)
 		return
 	}

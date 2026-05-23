@@ -53,15 +53,23 @@ func HandleChat(w http.ResponseWriter, r *http.Request) {
 	partner := auth.SanitizeUser(r.URL.Query().Get("with"))
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 
-	if partner == "" || partner == user || !UserExists(partner) {
+	if !validChatPartner(user, partner) {
 		renderChatPicker(w, user)
 		return
 	}
 	renderChatConversation(w, user, partner)
 }
 
-// renderChatPicker lists everyone you can message (the roster minus
-// yourself). The all-users story is mostly this list growing.
+// validChatPartner reports whether `partner` is a usable conversation
+// partner for `user`: a registered player (everyone who has logged in is
+// implicitly registered), and not yourself or the reserved guest name.
+// No free-form chat to a name nobody has logged in as.
+func validChatPartner(user, partner string) bool {
+	return partner != "" && partner != user && partner != auth.DefaultUser && UserExists(partner)
+}
+
+// renderChatPicker lists the players you can message — everyone who has
+// logged in (and is thus implicitly registered), minus yourself.
 func renderChatPicker(w http.ResponseWriter, user string) {
 	PageHeader(w, "Messages", user)
 	fmt.Fprint(w, `<p class="muted">Pick someone to message:</p><ul>`)
@@ -173,7 +181,7 @@ func HandleChatSend(w http.ResponseWriter, r *http.Request) {
 	body := strings.TrimSpace(r.FormValue("body"))
 	async := r.Header.Get("X-Chat-Async") == "1"
 
-	if partner == "" || partner == user || !UserExists(partner) {
+	if !validChatPartner(user, partner) {
 		http.Error(w, "unknown conversation partner", http.StatusBadRequest)
 		return
 	}
@@ -202,7 +210,7 @@ func chatSendDone(w http.ResponseWriter, r *http.Request, partner string, async 
 func HandleChatStream(w http.ResponseWriter, r *http.Request) {
 	user := CurrentUser(r)
 	partner := auth.SanitizeUser(r.URL.Query().Get("with"))
-	if partner == "" || partner == user || !UserExists(partner) {
+	if !validChatPartner(user, partner) {
 		http.Error(w, "unknown conversation partner", http.StatusBadRequest)
 		return
 	}
