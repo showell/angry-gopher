@@ -25,9 +25,7 @@
     refer.title='Reference this message'; refer.textContent='refer'; meta.appendChild(refer);
     var body=document.createElement('div'); body.className='chat-body';
     body.innerHTML=m.html; /* sanitized server-side */
-    var raw=document.createElement('div'); raw.className='chat-raw';
-    raw.textContent=m.raw;
-    div.appendChild(meta); div.appendChild(body); div.appendChild(raw);
+    div.appendChild(meta); div.appendChild(body);
     bubbles.appendChild(div);
     var span=document.createElement('span'); span.setAttribute('data-i',m.index);
     span.textContent=m.enc; transcript.appendChild(span); /* literal on-disk block */

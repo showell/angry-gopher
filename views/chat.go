@@ -117,7 +117,6 @@ func renderChatConversation(w http.ResponseWriter, user User, partnerID string) 
 	fmt.Fprint(w, `<div class="chat-views" id="chat-views">`+
 		`<span class="chat-view-tabs">`+
 		`<a href="#" data-view="rendered" class="active">Rendered</a> · `+
-		`<a href="#" data-view="raw">Raw</a> · `+
 		`<a href="#" data-view="transcript">Transcript</a></span>`+
 		`<button type="button" id="chat-lock" class="chat-lock" aria-pressed="false">🔓 Unlocked</button>`+
 		`</div>`)
@@ -282,7 +281,6 @@ type chatWireMsg struct {
 	From  string `json:"from"`
 	Time  string `json:"time"`
 	HTML  string `json:"html"`
-	Raw   string `json:"raw"`
 	Enc   string `json:"enc"`
 	Hash  string `json:"hash"`
 	Mine  bool   `json:"mine"`
@@ -294,7 +292,6 @@ func writeChatEvent(w io.Writer, rc *http.ResponseController, evt chatEvent, me 
 		From:  evt.Msg.From,
 		Time:  formatChatTime(evt.Msg.At),
 		HTML:  string(RenderChatMarkdown(evt.Msg.Body)),
-		Raw:   evt.Msg.Body,
 		Enc:   chatStoredForm(evt.Index, evt.Msg),
 		Hash:  evt.Msg.Hash,
 		Mine:  evt.Msg.From == me,
@@ -339,11 +336,6 @@ const chatCSS = `<style>
 .chat-body p:first-child { margin-top:0; }
 .chat-body p:last-child { margin-bottom:0; }
 .chat-body pre { background:#f4f4ec; padding:8px; border-radius:4px; overflow-x:auto; }
-.chat-raw { display:none; white-space:pre-wrap; overflow-wrap:anywhere;
-            font-family:ui-monospace,Menlo,Consolas,monospace; font-size:13px;
-            color:#333; background:#f4f4ec; padding:8px; border-radius:4px; }
-.chat-history.view-raw .chat-body { display:none; }
-.chat-history.view-raw .chat-raw { display:block; }
 .chat-transcript { display:none; margin:0; white-space:pre-wrap; overflow-wrap:anywhere;
                    font-family:ui-monospace,Menlo,Consolas,monospace; font-size:13px; color:#333; }
 .chat-history.view-transcript #chat-bubbles { display:none; }
