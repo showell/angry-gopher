@@ -92,10 +92,13 @@ func renderChatConversation(w http.ResponseWriter, user, partner string) {
 
 	PageHeader(w, "Chat with "+partner, user)
 	fmt.Fprint(w, chatCSS)
-	fmt.Fprint(w, `<p class="chat-views" id="chat-views">`+
+	fmt.Fprint(w, `<div class="chat-views" id="chat-views">`+
+		`<span class="chat-view-tabs">`+
 		`<a href="#" data-view="rendered" class="active">Rendered</a> · `+
 		`<a href="#" data-view="raw">Raw</a> · `+
-		`<a href="#" data-view="transcript">Transcript</a></p>`)
+		`<a href="#" data-view="transcript">Transcript</a></span>`+
+		`<button type="button" id="chat-lock" class="chat-lock" aria-pressed="false">🔓 Unlocked</button>`+
+		`</div>`)
 
 	fmt.Fprint(w, `<div class="chat-layout"><div class="chat-history view-rendered" id="chat-history"><div class="chat-bubbles" id="chat-bubbles">`)
 	if len(msgs) == 0 {
@@ -340,9 +343,13 @@ const chatCSS = `<style>
                    font-family:ui-monospace,Menlo,Consolas,monospace; font-size:13px; color:#333; }
 .chat-history.view-transcript #chat-bubbles { display:none; }
 .chat-history.view-transcript .chat-transcript { display:block; }
-.chat-views { margin:-6px 0 12px; font-size:13px; }
+.chat-views { margin:-6px 0 12px; font-size:13px; display:flex; justify-content:space-between; align-items:center; gap:12px; }
 .chat-views a { text-decoration:none; }
 .chat-views a.active { font-weight:bold; color:#000; cursor:default; }
+.chat-lock { font-size:12px; padding:2px 9px; background:#eee; color:#333; border:1px solid #ccc;
+             border-radius:4px; cursor:pointer; white-space:nowrap; }
+.chat-lock:hover { background:#e6e6e6; }
+.chat-lock.locked { background:#ffe0b2; border-color:#e0a000; color:#7a4d00; }
 .chat-compose-actions { display:flex; gap:8px; margin-top:8px; }
 .chat-compose-actions button { margin-top:0; }
 .chat-body img { max-width:100%; max-height:320px; display:block; margin:6px 0;
@@ -376,7 +383,8 @@ const chatScript = `<script>(function(){
   var status=document.getElementById('chat-status');
   var imageBtn=document.getElementById('chat-image-btn');
   var fileInput=document.getElementById('chat-file');
-  function atBottom(){ return history.scrollHeight-history.scrollTop-history.clientHeight < 40; }
+  var lockBtn=document.getElementById('chat-lock');
+  var locked=false;
   function toBottom(){ history.scrollTop=history.scrollHeight; }
   function addMessage(m){
     var empty=document.getElementById('chat-empty'); if(empty) empty.remove();
@@ -427,9 +435,16 @@ const chatScript = `<script>(function(){
     var a=e.target.closest('a[data-view]'); if(!a) return;
     e.preventDefault(); setView(a.getAttribute('data-view'));
   });
+  lockBtn.addEventListener('click',function(){
+    locked=!locked;
+    lockBtn.textContent=locked?'🔒 Locked':'🔓 Unlocked';
+    lockBtn.setAttribute('aria-pressed',locked?'true':'false');
+    lockBtn.classList.toggle('locked',locked);
+    if(!locked) toBottom(); /* unlocking catches up to the latest */
+  });
   toBottom();
   var es=new EventSource('/chat/stream?with='+encodeURIComponent(PARTNER)+'&since='+SINCE);
-  es.onmessage=function(e){ var stick=atBottom(); addMessage(JSON.parse(e.data)); if(stick) toBottom(); };
+  es.onmessage=function(e){ addMessage(JSON.parse(e.data)); if(!locked) toBottom(); };
   function send(){
     var text=textarea.value;
     if(!text.trim()) return;
