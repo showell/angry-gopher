@@ -12,3 +12,11 @@ var assetFS fs.FS
 func SetAssets(f fs.FS) { assetFS = f }
 
 func readAsset(path string) ([]byte, error) { return fs.ReadFile(assetFS, path) }
+
+// assetVersion is the build id (git commit), used as a ?v= cache-buster on
+// served assets so a deploy reliably invalidates the browser cache. Set by
+// main via SetVersion; "dev" until then.
+var assetVersion = "dev"
+
+// SetVersion wires the build id at startup.
+func SetVersion(v string) { assetVersion = v }

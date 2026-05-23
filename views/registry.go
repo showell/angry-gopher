@@ -11,6 +11,7 @@ func RegisterPages(mux *http.ServeMux) {
 	mux.HandleFunc("/puzzles", HandlePuzzles)
 	mux.HandleFunc("/puzzles/", HandlePuzzles)
 	mux.HandleFunc("/chat", HandleChat)
+	mux.HandleFunc("/chat/chat.js", HandleChatJS)
 	mux.HandleFunc("/chat/send", HandleChatSend)
 	mux.HandleFunc("/chat/stream", HandleChatStream)
 	mux.HandleFunc("/chat/upload", HandleChatUpload)

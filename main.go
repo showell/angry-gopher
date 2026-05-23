@@ -101,6 +101,7 @@ Usage:
 	views.SetChatRoot(config.ChatDataRoot())
 	views.SetUsersRoot(config.UsersDataRoot())
 	views.SetAssets(assets)
+	views.SetVersion(gitCommit)
 
 	handler := buildMux()
 
