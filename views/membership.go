@@ -49,6 +49,19 @@ func CheckMemberPassword(name, password string) bool {
 	return bcrypt.CompareHashAndPassword(hash, []byte(password)) == nil
 }
 
+// HashPassword returns a bcrypt hash. Used to carry an unconfirmed
+// password between the two account-creation steps without ever putting
+// the plaintext in the page.
+func HashPassword(password string) (string, error) {
+	h, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	return string(h), err
+}
+
+// PasswordMatchesHash reports whether a password matches a bcrypt hash.
+func PasswordMatchesHash(hash, password string) bool {
+	return bcrypt.CompareHashAndPassword([]byte(hash), []byte(password)) == nil
+}
+
 // ReleaseMember removes a member's password, freeing the reserved name.
 func ReleaseMember(name string) error {
 	if strings.TrimSpace(name) == "" {

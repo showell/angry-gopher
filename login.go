@@ -95,8 +95,20 @@ func handleLoginFull(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		} else {
-			if r.FormValue("confirm") != password {
-				renderFullLoginPage(w, name, next, "The two passwords don't match.")
+			// New name — require a confirmation step. The first entry is
+			// carried as a bcrypt hash (never plaintext), then re-entered.
+			pending := r.FormValue("pending")
+			if pending == "" {
+				h, err := views.HashPassword(password)
+				if err != nil {
+					http.Error(w, "hash: "+err.Error(), http.StatusInternalServerError)
+					return
+				}
+				renderCreateConfirmPage(w, name, next, h, "")
+				return
+			}
+			if !views.PasswordMatchesHash(pending, password) {
+				renderCreateConfirmPage(w, name, next, pending, "That didn't match — re-enter the same password.")
 				return
 			}
 			if err := views.SetMemberPassword(name, password); err != nil {
@@ -249,18 +261,51 @@ button { background: #000080; color: white; border: none; padding: 10px 20px;
 a { color: #000080; }
 </style></head><body>
 <h1>Log in to chat</h1>
-<p class="muted">Chat needs a password-protected name. New here? Pick a password to reserve your name. Returning? Enter your password.</p>
+<p class="muted">Chat needs a password-protected name. New here? Your name + password reserves it. Returning? Enter your password.</p>
 %s
 <form method="post" action="/login/full">
   <input type="hidden" name="next" value="%s">
   <input name="name" type="text" maxlength="40" placeholder="Your name" value="%s" autofocus>
   <input name="password" type="password" placeholder="Password">
-  <label>Confirm password (new accounts only)</label>
-  <input name="confirm" type="password" placeholder="Confirm password">
   <button type="submit">Continue</button>
 </form>
 <p class="muted" style="margin-top:16px"><a href="/">← Back</a> · Just want to play? <a href="/login">Play as a guest</a></p>
 </body></html>`, errLine, html.EscapeString(next), html.EscapeString(name))
+}
+
+// renderCreateConfirmPage is the second step of new-account creation: the
+// member re-enters the password they just chose (the first entry rides
+// along as a bcrypt hash in `pending`, never as plaintext).
+func renderCreateConfirmPage(w http.ResponseWriter, name, next, pending, errMsg string) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	errLine := ""
+	if errMsg != "" {
+		errLine = fmt.Sprintf(`<p class="err">%s</p>`, html.EscapeString(errMsg))
+	}
+	fmt.Fprintf(w, `<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>♦️ Lyn Rummy ♥️</title>
+<style>
+body { font-family: sans-serif; margin: 80px auto; max-width: 420px; padding: 0 24px; }
+h1 { color: #000080; }
+.muted { color: #888; font-size: 14px; }
+.err { color: #b00020; font-size: 14px; }
+input[type=password] { font-size: 16px; padding: 8px; width: 100%%; box-sizing: border-box; margin: 8px 0; }
+button { background: #000080; color: white; border: none; padding: 10px 20px;
+         font-size: 15px; border-radius: 4px; cursor: pointer; }
+a { color: #000080; }
+</style></head><body>
+<h1>Create your account</h1>
+<p class="muted">New name “%s” — re-enter your password to confirm and create the account.</p>
+%s
+<form method="post" action="/login/full">
+  <input type="hidden" name="name" value="%s">
+  <input type="hidden" name="next" value="%s">
+  <input type="hidden" name="pending" value="%s">
+  <input name="password" type="password" placeholder="Re-enter password" autofocus>
+  <button type="submit">Create account</button>
+</form>
+<p class="muted" style="margin-top:16px"><a href="/login/full">← Start over</a></p>
+</body></html>`, html.EscapeString(name), errLine, html.EscapeString(name), html.EscapeString(next), html.EscapeString(pending))
 }
 
 // renderLogoutPage shows the logout confirmation with the release
