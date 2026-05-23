@@ -9,6 +9,7 @@ package views
 
 import (
 	"fmt"
+	"html"
 	"net/http"
 	"net/url"
 )
@@ -76,20 +77,30 @@ func renderSettings(w http.ResponseWriter, r *http.Request, user User) {
 it can't send messages or change your account. Hand it to the bot via the
 <code>GOPHER_API_KEY</code> environment variable, not in a prompt; revoke it here anytime.</p>`)
 
-	status, gen := "You don't have an API key yet.", "Generate key"
-	if UserHasAPIKey(user.ID) {
-		status = "You have an API key. For security, the key itself is shown only once — when you generate it."
-		gen = "Regenerate key"
+	if !UserHasAPIKey(user.ID) {
+		fmt.Fprint(w, `<p>You don't have an API key yet.</p>
+<form method="post" action="/settings/apikey" style="display:inline"><button type="submit">Generate key</button></form>`)
+		PageFooter(w)
+		return
 	}
-	fmt.Fprintf(w, `<p>%s</p>
-<form method="post" action="/settings/apikey" style="display:inline">
-  <button type="submit">%s</button>
-</form>`, status, gen)
-	if UserHasAPIKey(user.ID) {
-		fmt.Fprint(w, ` <form method="post" action="/settings/apikey" style="display:inline">
-  <input type="hidden" name="revoke" value="1">
-  <button type="submit" style="background:#b00020">Revoke key</button>
-</form>`)
+
+	// Has a key. Reveal it when ?show=1; otherwise just offer the buttons.
+	if r.URL.Query().Get("show") == "1" {
+		if key, ok := GetUserAPIKey(user.ID); ok {
+			fmt.Fprintf(w, `<p>Your API key (copy it somewhere safe):</p>
+<code style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:15px;background:#f4f4ec;`+
+				`border:1px solid #ccc;padding:8px 12px;border-radius:4px;display:inline-block;`+
+				`user-select:all;word-break:break-all">%s</code>`, html.EscapeString(key))
+		} else {
+			fmt.Fprint(w, `<p class="muted">This key predates the show feature — regenerate it to see the value.</p>`)
+		}
+	} else {
+		fmt.Fprint(w, `<p>You have an API key.</p>`)
 	}
+	fmt.Fprint(w, `<p>
+<form method="get" action="/settings" style="display:inline"><input type="hidden" name="show" value="1"><button type="submit">Show key</button></form>
+<form method="post" action="/settings/apikey" style="display:inline"><button type="submit">Regenerate key</button></form>
+<form method="post" action="/settings/apikey" style="display:inline"><input type="hidden" name="revoke" value="1"><button type="submit" style="background:#b00020">Revoke key</button></form>
+</p>`)
 	PageFooter(w)
 }

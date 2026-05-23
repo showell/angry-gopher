@@ -254,7 +254,7 @@ code.key { font-family: ui-monospace,Menlo,Consolas,monospace; font-size: 15px;
 <nav><a href="%s">← %s</a></nav>
 <h1>API key for &ldquo;%s&rdquo;</h1>
 <div class="box">
-<p class="warn"><strong>Copy this now — it won't be shown again.</strong> (Regenerating makes a new one; this exact key can't be recovered.)</p>
+<p class="warn"><strong>Copy this for the bot.</strong></p>
 <code class="key">%s</code>
 <p class="muted">Read-only. The bot sends it as <code>Authorization: Bearer &lt;key&gt;</code>.
 Hand it to the bot via the <code>GOPHER_API_KEY</code> env var, not in the prompt. Revoke anytime.</p>
