@@ -12,13 +12,12 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
-	"sort"
-
-	"angry-gopher/auth"
+	"strings"
 )
 
 // UserStats is a per-player rollup of on-disk session data.
 type UserStats struct {
+	ID             string
 	Name           string
 	GameSessions   int
 	PuzzleSessions int
@@ -26,9 +25,13 @@ type UserStats struct {
 	DiskBytes      int64
 }
 
-// HandleAdmin dispatches the admin surface: the read-only overview at
-// /admin and the destructive delete-a-player flow at /admin/delete.
+// HandleAdmin dispatches the admin surface. Admin powers are tied to the
+// user (the admin flag); non-admins get a 404 (don't reveal it exists).
 func HandleAdmin(w http.ResponseWriter, r *http.Request) {
+	if !CurrentUser(r).Admin {
+		http.NotFound(w, r)
+		return
+	}
 	if r.URL.Path == "/admin/delete" {
 		handleAdminDelete(w, r)
 		return
@@ -38,13 +41,13 @@ func HandleAdmin(w http.ResponseWriter, r *http.Request) {
 
 // renderAdminOverview renders the per-player stats table.
 func renderAdminOverview(w http.ResponseWriter, r *http.Request) {
-	users := listUsers()
+	ids := ListUserIDs()
 
 	var grand UserStats
 	grand.Name = "All players"
-	rows := make([]UserStats, 0, len(users))
-	for _, u := range users {
-		st := gatherUserStats(u)
+	rows := make([]UserStats, 0, len(ids))
+	for _, id := range ids {
+		st := gatherUserStats(id)
 		rows = append(rows, st)
 		grand.GameSessions += st.GameSessions
 		grand.PuzzleSessions += st.PuzzleSessions
@@ -53,9 +56,9 @@ func renderAdminOverview(w http.ResponseWriter, r *http.Request) {
 	}
 
 	flash := ""
-	if deleted := auth.SanitizeUser(r.URL.Query().Get("deleted")); deleted != "" {
-		flash = fmt.Sprintf(`<p class="flash">Deleted all data for <strong>%s</strong>.</p>`,
-			html.EscapeString(deleted))
+	if deleted := strings.TrimSpace(r.URL.Query().Get("deleted")); deleted != "" {
+		flash = fmt.Sprintf(`<p class="flash">Deleted game data for <strong>%s</strong>.</p>`,
+			html.EscapeString(GetUserName(deleted)))
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -90,7 +93,7 @@ a.del:hover { text-decoration: underline; }
 	}
 	for _, st := range rows {
 		del := fmt.Sprintf(`<a class="del" href="/admin/delete?user=%s">Delete sessions</a>`,
-			url.QueryEscape(st.Name))
+			url.QueryEscape(st.ID))
 		writeStatsRow(w, st, "", del)
 	}
 	if len(rows) > 1 {
@@ -111,34 +114,29 @@ func writeStatsRow(w http.ResponseWriter, st UserStats, cls, actionsCell string)
 }
 
 // handleAdminDelete confirms (GET) and performs (POST) deletion of one
-// player's on-disk data. The user param goes through the same sanitizer
-// as login, so it can never escape GameDataRoot.
+// player's on-disk game data, by user id.
 func handleAdminDelete(w http.ResponseWriter, r *http.Request) {
-	user := auth.SanitizeUser(r.FormValue("user"))
-	if user == "" {
-		http.Redirect(w, r, "/admin", http.StatusSeeOther)
-		return
-	}
-	if _, err := os.Stat(filepath.Join(GameDataRoot, user)); err != nil {
-		// Already gone (or never existed) — nothing to confirm or delete.
+	id := strings.TrimSpace(r.FormValue("user")) // user id
+	if id == "" || !UserExists(id) {
 		http.Redirect(w, r, "/admin", http.StatusSeeOther)
 		return
 	}
 	if r.Method == http.MethodPost {
-		if err := DeleteUserData(user); err != nil {
+		if err := DeleteUserData(id); err != nil {
 			http.Error(w, "delete: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
-		http.Redirect(w, r, "/admin?deleted="+url.QueryEscape(user), http.StatusSeeOther)
+		http.Redirect(w, r, "/admin?deleted="+url.QueryEscape(id), http.StatusSeeOther)
 		return
 	}
-	renderDeleteConfirm(w, user)
+	renderDeleteConfirm(w, id)
 }
 
 // renderDeleteConfirm is the "are you sure" page: it spells out exactly
 // what will be removed before the POST that does it.
-func renderDeleteConfirm(w http.ResponseWriter, user string) {
-	st := gatherUserStats(user)
+func renderDeleteConfirm(w http.ResponseWriter, id string) {
+	st := gatherUserStats(id)
+	name := GetUserName(id)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	fmt.Fprintf(w, `<!DOCTYPE html>
 <html><head><meta charset="utf-8"><title>♦️ Lyn Rummy ♥️</title>
@@ -168,25 +166,8 @@ button.danger:hover { background: #8a0019; }
 </form>
 </div>
 </body></html>`,
-		html.EscapeString(user), st.GameSessions, st.PuzzleSessions, st.TotalActions,
-		humanBytes(st.DiskBytes), html.EscapeString(user))
-}
-
-// listUsers returns the player directories directly under
-// GameDataRoot, sorted.
-func listUsers() []string {
-	entries, err := os.ReadDir(GameDataRoot)
-	if err != nil {
-		return nil
-	}
-	users := make([]string, 0, len(entries))
-	for _, e := range entries {
-		if e.IsDir() {
-			users = append(users, e.Name())
-		}
-	}
-	sort.Strings(users)
-	return users
+		html.EscapeString(name), st.GameSessions, st.PuzzleSessions, st.TotalActions,
+		humanBytes(st.DiskBytes), html.EscapeString(id))
 }
 
 // gatherUserStats walks one player's subtree. Independent of the
@@ -197,7 +178,8 @@ func gatherUserStats(user string) UserStats {
 	puzzlesDir := filepath.Join(uRoot, "puzzle", "sessions")
 
 	st := UserStats{
-		Name:           user,
+		ID:             user,
+		Name:           GetUserName(user),
 		GameSessions:   countSubdirs(gamesDir),
 		PuzzleSessions: countSubdirs(puzzlesDir),
 		DiskBytes:      dirBytes(uRoot),

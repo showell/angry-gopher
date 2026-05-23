@@ -45,14 +45,14 @@ var puzzleCatalogPaths = []string{
 func HandlePuzzles(w http.ResponseWriter, r *http.Request) {
 	sub := strings.TrimPrefix(r.URL.Path, "/puzzles")
 	sub = strings.TrimPrefix(sub, "/")
-	user := CurrentUser(r)
+	uid := CurrentUser(r).ID // storage key
 	switch {
 	case sub == "" || sub == "/":
-		puzzlePage(w, user)
+		puzzlePage(w, uid)
 	case sub == "puzzle.js":
 		serveJS(w, PuzzleJSPath, "puzzle.js not found — run `ops/build_elm`")
 	case strings.HasPrefix(sub, "sessions/"):
-		handlePuzzleSessionRoute(w, r, user, strings.TrimPrefix(sub, "sessions/"))
+		handlePuzzleSessionRoute(w, r, uid, strings.TrimPrefix(sub, "sessions/"))
 	default:
 		http.NotFound(w, r)
 	}

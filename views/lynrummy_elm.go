@@ -43,10 +43,10 @@ var EngineGlueJSPath = "games/lynrummy/elm/engine_glue.js"
 func HandleGame(w http.ResponseWriter, r *http.Request) {
 	sub := strings.TrimPrefix(r.URL.Path, "/game")
 	sub = strings.TrimPrefix(sub, "/")
-	user := CurrentUser(r)
+	uid := CurrentUser(r).ID // storage key
 	switch {
 	case sub == "" || sub == "/":
-		lynrummyElmPlay(w, user)
+		lynrummyElmPlay(w, uid)
 	case sub == "elm.js":
 		lynrummyElmJS(w)
 	case sub == "engine.js":
@@ -54,13 +54,13 @@ func HandleGame(w http.ResponseWriter, r *http.Request) {
 	case sub == "engine_glue.js":
 		serveJS(w, EngineGlueJSPath, "engine_glue.js not found — check the file exists at "+EngineGlueJSPath)
 	case sub == "new-session":
-		lynrummyElmNewSession(w, r, user)
+		lynrummyElmNewSession(w, r, uid)
 	case sub == "sessions":
-		lynrummyElmSessionsList(w, user)
+		lynrummyElmSessionsList(w, uid)
 	case sub == "api/sessions":
-		lynrummyElmSessionsJSON(w, user)
+		lynrummyElmSessionsJSON(w, uid)
 	case strings.HasPrefix(sub, "sessions/"):
-		handleSessionRoute(w, r, user, strings.TrimPrefix(sub, "sessions/"))
+		handleSessionRoute(w, r, uid, strings.TrimPrefix(sub, "sessions/"))
 	default:
 		// /game/<id> — resume a session by numeric id.
 		id, err := strconv.ParseInt(strings.TrimRight(sub, "/"), 10, 64)
@@ -68,7 +68,7 @@ func HandleGame(w http.ResponseWriter, r *http.Request) {
 			http.NotFound(w, r)
 			return
 		}
-		lynrummyElmPlayWithSession(w, user, id)
+		lynrummyElmPlayWithSession(w, uid, id)
 	}
 }
 
@@ -353,7 +353,7 @@ func lynrummyElmPlayWithSession(w http.ResponseWriter, user string, sessionID in
 	if sessionID > 0 {
 		flag = strconv.FormatInt(sessionID, 10)
 	}
-	playerNameJSON, _ := json.Marshal(user)
+	playerNameJSON, _ := json.Marshal(GetUserName(user)) // user is the id; show the name
 	fmt.Fprintf(w, `<!doctype html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"><title>♦️ Lyn Rummy ♥️</title>
 <style>

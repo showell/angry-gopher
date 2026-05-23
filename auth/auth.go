@@ -1,11 +1,9 @@
-// Package auth resolves "who is this request acting as" for Gopher.
+// Package auth holds name validation and reads the raw identity claim.
 //
-// Identity is a username read from the gopher_user cookie (set by the
-// /login endpoint) and sanitized — the name becomes a session
-// directory segment and is embedded in HTML, so it
-// is scrubbed to a safe character set here. No password yet: this is an
-// open game and the name is the honor-system identity, not a security
-// boundary. (Passwords are a planned future addition.)
+// Identity is now a numeric user id from the gopher_uid cookie; the
+// display name is a mutable attribute resolved against the registry (see
+// views). Names are still validated/sanitized here because they become a
+// directory-free attribute and are embedded in HTML.
 package auth
 
 import (
@@ -14,23 +12,24 @@ import (
 	"unicode"
 )
 
-// DefaultUser is who a request acts as before anyone has logged in. It
-// is reserved — ValidateUserName refuses it as a chosen name so it can
-// never collide with the logged-out sentinel.
-const DefaultUser = "guest"
-
 // maxUserLen caps a username's length.
 const maxUserLen = 40
 
-// CurrentUser returns the sanitized username from the gopher_user
-// cookie, or DefaultUser when there's no usable cookie.
-func CurrentUser(r *http.Request) string {
-	if c, err := r.Cookie("gopher_user"); err == nil {
-		if name := SanitizeUser(c.Value); name != "" {
-			return name
+// CurrentUID returns the numeric user id from the gopher_uid cookie, or
+// "" when there's no usable cookie. It's the raw identity claim; the
+// caller resolves it against the registry (and for members the signed
+// session cookie is authoritative — see views.CurrentUser).
+func CurrentUID(r *http.Request) string {
+	c, err := r.Cookie("gopher_uid")
+	if err != nil || c.Value == "" {
+		return ""
+	}
+	for _, ch := range c.Value {
+		if ch < '0' || ch > '9' {
+			return ""
 		}
 	}
-	return DefaultUser
+	return c.Value
 }
 
 // allowedNameChar reports whether r may appear in a username: letters,
@@ -105,9 +104,6 @@ func ValidateUserName(raw string) (name, errMsg string) {
 	out := strings.TrimRight(b.String(), " ")
 	if !hasAlnum {
 		return "", "Please enter a name with at least one letter or number."
-	}
-	if strings.EqualFold(out, DefaultUser) {
-		return "", "That name is reserved — please choose another."
 	}
 	return out, ""
 }

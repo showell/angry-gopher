@@ -21,7 +21,6 @@ import (
 	"regexp"
 	"strings"
 
-	"angry-gopher/auth"
 )
 
 // maxChatUploadBytes caps a single uploaded image.
@@ -78,8 +77,8 @@ func HandleChatUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	user := CurrentUser(r)
-	partner := auth.SanitizeUser(r.URL.Query().Get("with"))
-	if !validChatPartner(user, partner) {
+	partner := strings.TrimSpace(r.URL.Query().Get("with")) // partner user id
+	if !validChatPartner(user.ID, partner) {
 		http.Error(w, "unknown conversation partner", http.StatusBadRequest)
 		return
 	}
@@ -120,7 +119,7 @@ func HandleChatUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	name := token + "." + ext
-	dir := chatUploadsDir(user, partner)
+	dir := chatUploadsDir(user.ID, partner)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		http.Error(w, "mkdir: "+err.Error(), http.StatusInternalServerError)
 		return
@@ -130,7 +129,7 @@ func HandleChatUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	key := chatPairKey(user, partner)
+	key := chatPairKey(user.ID, partner)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{
 		"url":  "/chat/uploads/" + url.PathEscape(key) + "/" + name,
@@ -148,7 +147,7 @@ func HandleChatFile(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	if !ChatKeyParticipant(key, user) {
+	if !ChatKeyParticipant(key, user.ID) {
 		http.NotFound(w, r) // don't reveal whether it exists
 		return
 	}

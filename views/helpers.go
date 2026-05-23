@@ -10,15 +10,20 @@ import (
 	"angry-gopher/auth"
 )
 
-// CurrentUser returns the username the request acts as. A valid member
-// session is authoritative (so a member's identity can't be spoofed by
-// editing the plaintext gopher_user cookie); otherwise it's the
-// honor-system guest name from the cookie.
-func CurrentUser(r *http.Request) string {
-	if name, ok := SessionUser(r); ok {
-		return name
+// CurrentUser resolves the identity a request acts as. A valid member
+// session is authoritative. Otherwise it's the guest named by the
+// gopher_uid cookie — but only if that id is a NON-member; a uid pointing
+// at a member without a session is a forge attempt and is ignored.
+// Returns the zero User (ID == "") when there's no valid identity.
+func CurrentUser(r *http.Request) User {
+	if id, ok := SessionUser(r); ok {
+		return LoadUser(id)
 	}
-	return auth.CurrentUser(r)
+	id := auth.CurrentUID(r)
+	if id != "" && UserExists(id) && !UserIsMember(id) {
+		return LoadUser(id)
+	}
+	return User{}
 }
 
 // AppChromeCSS is the shared stylesheet for the app top bar.
@@ -32,17 +37,21 @@ const AppChromeCSS = `
 .app-top-user a { color: #000080; }
 `
 
-// AppChromeTop emits the top bar: a home link and who you're playing
-// as.
-func AppChromeTop(w http.ResponseWriter, user string) {
+// AppChromeTop emits the top bar: a home link, who you're playing as, an
+// Admin link for admins, and logout.
+func AppChromeTop(w http.ResponseWriter, user User) {
+	adminLink := ""
+	if user.Admin {
+		adminLink = ` · <a href="/admin">Admin</a>`
+	}
 	fmt.Fprintf(w,
 		`<header class="app-top"><div class="app-top-home"><a href="/">Lyn Rummy</a></div>`+
-			`<div class="app-top-user">Playing as <strong>%s</strong> · <a href="/logout">Log out</a></div></header>`,
-		html.EscapeString(user))
+			`<div class="app-top-user">Playing as <strong>%s</strong>%s · <a href="/logout">Log out</a></div></header>`,
+		html.EscapeString(user.Name), adminLink)
 }
 
 // PageHeader writes the HTML boilerplate, top bar, and opens the body.
-func PageHeader(w http.ResponseWriter, title, user string) {
+func PageHeader(w http.ResponseWriter, title string, user User) {
 	fmt.Fprint(w, `<!DOCTYPE html>
 <html><head><meta charset="utf-8"><title>♦️ Lyn Rummy ♥️</title>`)
 	fmt.Fprint(w, `

@@ -36,42 +36,19 @@ func SetDataRoot(root string) {
 	GameDataRoot = root
 }
 
-// userRoot is {GameDataRoot}/{user} — a player's whole subtree.
+// userRoot is {GameDataRoot}/{id} — a player's whole game subtree, keyed
+// by user id. Created lazily on first write.
 func userRoot(user string) string {
 	return filepath.Join(GameDataRoot, user)
 }
 
-// DeleteUserData removes a player's entire on-disk subtree — all game
-// + puzzle sessions and their id counters. Used by the admin "Delete
-// sessions" action and by logout-with-release to clear out a player.
-// Refuses an empty user so it can never target the data root itself;
-// callers must also sanitize the name (it becomes the directory segment).
+// DeleteUserData removes a player's entire game/puzzle subtree by id.
+// Refuses an empty id so it can never target the data root itself.
 func DeleteUserData(user string) error {
 	if strings.TrimSpace(user) == "" {
 		return fmt.Errorf("refusing to delete: empty user")
 	}
 	return os.RemoveAll(userRoot(user))
-}
-
-// UserExists reports whether a player directory already exists — i.e.,
-// the name is claimed. A name becomes "taken" the moment its directory
-// is created at login (see ClaimUser).
-func UserExists(user string) bool {
-	if strings.TrimSpace(user) == "" {
-		return false
-	}
-	info, err := os.Stat(userRoot(user))
-	return err == nil && info.IsDir()
-}
-
-// ClaimUser creates a player's top-level directory, reserving the name
-// before any game or puzzle is played. Called at login so uniqueness is
-// enforced on a real on-disk marker rather than waiting for a first move.
-func ClaimUser(user string) error {
-	if strings.TrimSpace(user) == "" {
-		return fmt.Errorf("refusing to claim: empty user")
-	}
-	return os.MkdirAll(userRoot(user), 0755)
 }
 
 // lynrummyElmRoot is the full-game namespace for a player.

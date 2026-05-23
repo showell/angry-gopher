@@ -47,7 +47,13 @@ func (c *ServerConfig) ChatDataRoot() string {
 	return filepath.Join(c.DataDir, "chat")
 }
 
-// EnsureDirectories creates data_dir and the sessions/chat roots if
+// UsersDataRoot is the root for the user registry (one dir per numeric
+// user id). See views.SetUsersRoot.
+func (c *ServerConfig) UsersDataRoot() string {
+	return filepath.Join(c.DataDir, "users")
+}
+
+// EnsureDirectories creates data_dir and the sessions/chat/users roots if
 // absent.
 func (c *ServerConfig) EnsureDirectories() error {
 	if err := os.MkdirAll(c.DataDir, 0o755); err != nil {
@@ -58,6 +64,9 @@ func (c *ServerConfig) EnsureDirectories() error {
 	}
 	if err := os.MkdirAll(c.ChatDataRoot(), 0o755); err != nil {
 		return fmt.Errorf("cannot create chat root: %w", err)
+	}
+	if err := os.MkdirAll(c.UsersDataRoot(), 0o755); err != nil {
+		return fmt.Errorf("cannot create users root: %w", err)
 	}
 	return nil
 }

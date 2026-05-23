@@ -76,21 +76,14 @@ var (
 	chatSubs = map[string]map[chan chatEvent]struct{}{}
 )
 
-// chatPairKey is the canonical conversation key: the two usernames,
-// case-insensitively alphabetized (case-sensitive tiebreak so distinct
-// names like "Steve"/"steve" don't collide), joined by "_". Usernames
-// can't contain "_", so the key always splits back unambiguously.
+// chatPairKey is the canonical conversation key: the two user ids sorted
+// numerically, joined by "_" (e.g. "1_2"). Ids are digits-only, so the
+// key always splits back unambiguously.
 func chatPairKey(a, b string) string {
-	x, y := chatPairOrder(a, b)
-	return x + "_" + y
-}
-
-func chatPairOrder(a, b string) (string, string) {
-	al, bl := strings.ToLower(a), strings.ToLower(b)
-	if al < bl || (al == bl && a <= b) {
-		return a, b
+	if atoiOr0(a) <= atoiOr0(b) {
+		return a + "_" + b
 	}
-	return b, a
+	return b + "_" + a
 }
 
 // chatConvDir is a conversation's own directory; everything for the pair
@@ -116,9 +109,9 @@ func ChatUploadsDirForKey(key string) string {
 	return filepath.Join(ChatDataRoot, key, "uploads")
 }
 
-// ChatKeyParticipant reports whether `user` is in the conversation named
-// by `key`, and that `key` is in canonical form. The serving path uses
-// this to enforce per-conversation access on image URLs.
+// ChatKeyParticipant reports whether user id `user` is in the
+// conversation named by `key`, and that `key` is in canonical form. The
+// serving path uses this to enforce per-conversation access on images.
 func ChatKeyParticipant(key, user string) bool {
 	x, y, found := strings.Cut(key, "_")
 	if !found || x == "" || y == "" {
@@ -248,13 +241,14 @@ func ReadChatMessages(a, b string) ([]ChatMessage, error) {
 	return readChatFileLocked(chatMessagesPath(a, b))
 }
 
-// AppendChatMessage stores a message from `from` to `partner` and
-// publishes it to any live subscribers. Returns the stored message
-// (with its normalized timestamp).
-func AppendChatMessage(from, partner, body string) (ChatMessage, error) {
-	key := chatPairKey(from, partner)
-	path := chatMessagesPath(from, partner)
-	msg := ChatMessage{From: from, At: time.Now().UTC(), Body: body}
+// AppendChatMessage stores a message from `from` to the partner id and
+// publishes it to any live subscribers. The conversation is keyed by the
+// two ids; the message records the sender's display name. Returns the
+// stored message (with its normalized timestamp).
+func AppendChatMessage(from User, partnerID, body string) (ChatMessage, error) {
+	key := chatPairKey(from.ID, partnerID)
+	path := chatMessagesPath(from.ID, partnerID)
+	msg := ChatMessage{From: from.Name, At: time.Now().UTC(), Body: body}
 
 	chatMu.Lock()
 	defer chatMu.Unlock()

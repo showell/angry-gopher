@@ -9,10 +9,8 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"strings"
 	"time"
 
-	"angry-gopher/auth"
 	"angry-gopher/views"
 )
 
@@ -24,7 +22,7 @@ func buildMux() http.Handler {
 	// HTML pages, incl. the home/lobby at "/". Single source of truth.
 	views.RegisterPages(mux)
 
-	// Name login/logout (login sets the gopher_user cookie; logout
+	// Name login/logout (login sets the gopher_uid cookie; logout
 	// clears it). /login/full sets a member password session.
 	mux.HandleFunc("/login", handleLogin)
 	mux.HandleFunc("/login/full", handleLoginFull)
@@ -38,36 +36,22 @@ func buildMux() http.Handler {
 	return withLoginGate(mux)
 }
 
-// withLoginGate makes login mandatory: any request without a valid
-// gopher_user cookie is redirected to /login, except for a few
-// exempt paths (login/logout itself, the health check, and /admin,
-// which the reverse proxy guards instead).
+// withLoginGate makes login mandatory: any request without a resolvable
+// identity is redirected to /login, except for the exempt paths (login/
+// logout, the version check).
 func withLoginGate(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if loginExempt(r.URL.Path) {
 			next.ServeHTTP(w, r)
 			return
 		}
-		// A valid member session is always allowed; the signed name is
-		// the authoritative identity.
-		if name, ok := views.SessionUser(r); ok {
-			if !views.UserExists(name) {
-				_ = views.ClaimUser(name)
-			}
-			next.ServeHTTP(w, r)
-			return
-		}
-		// Otherwise a guest: needs a non-reserved identity. A reserved
-		// name without a session (stale/forged cookie) isn't honored —
-		// send it to log in. Any other logged-in name is implicitly
-		// registered so it shows up in the roster.
-		guest := auth.CurrentUser(r)
-		if guest == auth.DefaultUser || views.IsReserved(guest) {
+		// views.CurrentUser resolves the identity (member session is
+		// authoritative; a guest uid is honored only if it's a real
+		// non-member user; a member uid without a session is a forge
+		// attempt and resolves to none). No identity → log in.
+		if views.CurrentUser(r).ID == "" {
 			http.Redirect(w, r, "/login", http.StatusSeeOther)
 			return
-		}
-		if !views.UserExists(guest) {
-			_ = views.ClaimUser(guest)
 		}
 		next.ServeHTTP(w, r)
 	})
@@ -78,7 +62,9 @@ func loginExempt(path string) bool {
 	case "/login", "/login/full", "/logout", "/version":
 		return true
 	}
-	return strings.HasPrefix(path, "/admin")
+	// /admin is no longer exempt: it goes through the gate and then
+	// requires the admin flag (see views.HandleAdmin).
+	return false
 }
 
 func main() {
@@ -113,6 +99,7 @@ Usage:
 
 	views.SetDataRoot(config.SessionsDataRoot())
 	views.SetChatRoot(config.ChatDataRoot())
+	views.SetUsersRoot(config.UsersDataRoot())
 	views.SetAssets(assets)
 
 	handler := buildMux()

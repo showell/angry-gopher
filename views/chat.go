@@ -19,7 +19,6 @@ import (
 	"strings"
 	"time"
 
-	"angry-gopher/auth"
 )
 
 // maxChatMessageBytes caps a single posted message. Generous — we want
@@ -58,35 +57,35 @@ func HandleChat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	user := CurrentUser(r)
-	partner := auth.SanitizeUser(r.URL.Query().Get("with"))
+	partner := strings.TrimSpace(r.URL.Query().Get("with")) // partner user id
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 
-	if !validChatPartner(user, partner) {
+	if !validChatPartner(user.ID, partner) {
 		renderChatPicker(w, user)
 		return
 	}
 	renderChatConversation(w, user, partner)
 }
 
-// validChatPartner reports whether `partner` is a usable conversation
-// partner for `user`: another member (chat is members-only), and not
-// yourself or the reserved guest name.
-func validChatPartner(user, partner string) bool {
-	return partner != "" && partner != user && partner != auth.DefaultUser && IsReserved(partner)
+// validChatPartner reports whether partner id is a usable conversation
+// partner for user id: another member (chat is members-only), not
+// yourself or empty.
+func validChatPartner(userID, partnerID string) bool {
+	return partnerID != "" && partnerID != userID && UserIsMember(partnerID)
 }
 
 // renderChatPicker lists the members you can message (everyone with a
-// password), minus yourself.
-func renderChatPicker(w http.ResponseWriter, user string) {
+// password), minus yourself — linked by id, shown by name.
+func renderChatPicker(w http.ResponseWriter, user User) {
 	PageHeader(w, "Messages", user)
 	fmt.Fprint(w, `<p class="muted">Pick a member to message:</p><ul>`)
 	n := 0
-	for _, u := range ListMembers() {
-		if u == user {
+	for _, m := range ListMembers() {
+		if m.ID == user.ID {
 			continue
 		}
 		fmt.Fprintf(w, `<li><a href="/chat?with=%s">%s</a></li>`,
-			url.QueryEscape(u), html.EscapeString(u))
+			url.QueryEscape(m.ID), html.EscapeString(m.Name))
 		n++
 	}
 	if n == 0 {
@@ -96,14 +95,15 @@ func renderChatPicker(w http.ResponseWriter, user string) {
 	PageFooter(w)
 }
 
-func renderChatConversation(w http.ResponseWriter, user, partner string) {
-	msgs, err := ReadChatMessages(user, partner)
+func renderChatConversation(w http.ResponseWriter, user User, partnerID string) {
+	msgs, err := ReadChatMessages(user.ID, partnerID)
 	if err != nil {
 		http.Error(w, "read conversation: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
+	partnerName := GetUserName(partnerID)
 
-	PageHeader(w, "Chat with "+partner, user)
+	PageHeader(w, "Chat with "+partnerName, user)
 	fmt.Fprint(w, chatCSS)
 	fmt.Fprint(w, `<div class="chat-views" id="chat-views">`+
 		`<span class="chat-view-tabs">`+
@@ -120,7 +120,7 @@ func renderChatConversation(w http.ResponseWriter, user, partner string) {
 		fmt.Fprint(w, `<p class="muted" id="chat-empty">No messages yet. Say hello 👋</p>`)
 	}
 	for i, m := range msgs {
-		writeChatBubble(w, m, user, i)
+		writeChatBubble(w, m, user.Name, i)
 	}
 	fmt.Fprint(w, `</div><pre class="chat-transcript" id="chat-transcript">`)
 	for i, m := range msgs {
@@ -140,9 +140,8 @@ func renderChatConversation(w http.ResponseWriter, user, partner string) {
   <div class="chat-hint">Markdown supported · paste or attach an image · Ctrl/⌘-Enter to send</div>
 </div></div>`)
 
-	meJSON, _ := json.Marshal(user)
-	partnerJSON, _ := json.Marshal(partner)
-	fmt.Fprintf(w, chatScript, meJSON, partnerJSON, len(msgs))
+	partnerJSON, _ := json.Marshal(partnerID)
+	fmt.Fprintf(w, chatScript, partnerJSON, len(msgs))
 
 	PageFooter(w)
 }
@@ -190,11 +189,11 @@ func HandleChatSend(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	partner := auth.SanitizeUser(r.FormValue("with"))
+	partner := strings.TrimSpace(r.FormValue("with")) // partner user id
 	body := strings.TrimSpace(r.FormValue("body"))
 	async := r.Header.Get("X-Chat-Async") == "1"
 
-	if !validChatPartner(user, partner) {
+	if !validChatPartner(user.ID, partner) {
 		http.Error(w, "unknown conversation partner", http.StatusBadRequest)
 		return
 	}
@@ -226,8 +225,8 @@ func HandleChatStream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	user := CurrentUser(r)
-	partner := auth.SanitizeUser(r.URL.Query().Get("with"))
-	if !validChatPartner(user, partner) {
+	partner := strings.TrimSpace(r.URL.Query().Get("with")) // partner user id
+	if !validChatPartner(user.ID, partner) {
 		http.Error(w, "unknown conversation partner", http.StatusBadRequest)
 		return
 	}
@@ -253,11 +252,11 @@ func HandleChatStream(w http.ResponseWriter, r *http.Request) {
 	// so it isn't torn down mid-stream.
 	_ = rc.SetWriteDeadline(time.Time{})
 
-	backlog, ch, cancel := OpenChatStream(user, partner, since)
+	backlog, ch, cancel := OpenChatStream(user.ID, partner, since)
 	defer cancel()
 
 	for _, evt := range backlog {
-		if writeChatEvent(w, rc, evt, user) != nil {
+		if writeChatEvent(w, rc, evt, user.Name) != nil {
 			return
 		}
 	}
@@ -276,7 +275,7 @@ func HandleChatStream(w http.ResponseWriter, r *http.Request) {
 			if !ok {
 				return
 			}
-			if writeChatEvent(w, rc, evt, user) != nil {
+			if writeChatEvent(w, rc, evt, user.Name) != nil {
 				return
 			}
 		case <-ticker.C:
@@ -399,9 +398,9 @@ const chatCSS = `<style>
 }
 </style>`
 
-// chatScript takes ME (json), PARTNER (json), SINCE (int).
+// chatScript takes PARTNER (json id), SINCE (int).
 const chatScript = `<script>(function(){
-  var ME=%s, PARTNER=%s, SINCE=%d;
+  var PARTNER=%s, SINCE=%d;
   var history=document.getElementById('chat-history');
   var bubbles=document.getElementById('chat-bubbles');
   var transcript=document.getElementById('chat-transcript');

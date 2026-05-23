@@ -23,7 +23,7 @@ func HandleHome(w http.ResponseWriter, r *http.Request) {
 
 	renderGamesHero(w)
 	renderChatLink(w)
-	renderRecentSessions(w, user)
+	renderRecentSessions(w, user.ID)
 
 	PageFooter(w)
 }
@@ -91,7 +91,7 @@ func renderRecentSessions(w http.ResponseWriter, viewer string) {
 		actions int
 	}
 	var rows []sessionRow
-	for _, p := range listUsers() {
+	for _, p := range ListUserIDs() {
 		ids, err := ListSessionIDs(p)
 		if err != nil {
 			continue
@@ -139,7 +139,7 @@ func renderRecentSessions(w http.ResponseWriter, viewer string) {
 		}
 		fmt.Fprintf(w,
 			`<tr><td>%s</td><td>%d</td><td>%s</td><td>%s</td><td class="n">%d</td><td>%s</td></tr>`,
-			html.EscapeString(row.player), row.id, html.EscapeString(ts), labelCell, row.actions, resumeCell,
+			html.EscapeString(GetUserName(row.player)), row.id, html.EscapeString(ts), labelCell, row.actions, resumeCell,
 		)
 	}
 	fmt.Fprint(w, `</table></div>`)

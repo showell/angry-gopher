@@ -1,9 +1,11 @@
-// Name login: no password yet, just a name (honor system). A name is
-// unique — claimed by creating the player's directory at login. Logging
-// in with a free name claims it; with a taken name, we ask whether the
-// player is the existing owner on another device (Yes resumes that
-// account, No sends them back to pick another). Logout optionally
-// releases the account (deletes all data, frees the name).
+// Login. Two tiers, both keyed by a numeric user id (the cookie carries
+// the id, not the name):
+//   /login       — guests: pick a non-reserved name; a fresh login
+//                  allocates a new user id. Plays Lyn Rummy, no chat.
+//   /login/full  — members: name + password. An existing member name
+//                  verifies; a new name creates an account (confirm step)
+//                  and reserves the name. Members get a signed session.
+// Logout clears the cookies; release also deletes the user's data + record.
 
 package main
 
@@ -22,47 +24,41 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodPost {
 		name, errMsg := auth.ValidateUserName(r.FormValue("name"))
 		if errMsg != "" {
-			renderLoginPage(w, auth.CurrentUser(r), errMsg)
+			renderLoginPage(w, views.CurrentUser(r).Name, errMsg)
 			return
 		}
-		if views.IsReserved(name) {
+		if views.IsNameReserved(name) {
 			// Password-protected name — guests can't claim it.
 			renderReservedNotice(w, name)
 			return
 		}
-		// Guests are honor-system: any non-reserved name just logs in
-		// (claimed on first use). To protect a name, become a member.
-		if !views.UserExists(name) {
-			if err := views.ClaimUser(name); err != nil {
-				http.Error(w, "claim user: "+err.Error(), http.StatusInternalServerError)
-				return
-			}
+		// Guests are honor-system: a fresh login allocates a new user id
+		// with this name. Identity is the cookie; protect a name by
+		// becoming a member.
+		id, err := views.AllocateUser(name)
+		if err != nil {
+			http.Error(w, "allocate user: "+err.Error(), http.StatusInternalServerError)
+			return
 		}
-		loginAs(w, r, name)
+		loginAsGuest(w, r, id)
 		return
 	}
-
-	// GET: a blank form, or a "that name is taken" nudge after a "No".
-	msg := ""
-	if taken := auth.SanitizeUser(r.URL.Query().Get("taken")); taken != "" {
-		msg = fmt.Sprintf("“%s” is taken. Please pick another name.", taken)
-	}
-	renderLoginPage(w, auth.CurrentUser(r), msg)
+	renderLoginPage(w, views.CurrentUser(r).Name, "")
 }
 
-// loginAs logs in a guest: sets the identity cookie, clears any stale
-// member session, and sends the player home.
-func loginAs(w http.ResponseWriter, r *http.Request, name string) {
-	setIdentityCookie(w, name)
+// loginAsGuest sets the identity cookie to a passwordless user id, clears
+// any stale member session, and sends the player home.
+func loginAsGuest(w http.ResponseWriter, r *http.Request, id string) {
+	setUIDCookie(w, id)
 	views.ClearAuthCookie(w) // a guest login is not an authenticated member
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
-// setIdentityCookie sets the long-lived plaintext identity cookie.
-func setIdentityCookie(w http.ResponseWriter, name string) {
+// setUIDCookie sets the long-lived identity cookie (the user id).
+func setUIDCookie(w http.ResponseWriter, id string) {
 	http.SetCookie(w, &http.Cookie{
-		Name:     "gopher_user",
-		Value:    name,
+		Name:     "gopher_uid",
+		Value:    id,
 		Path:     "/",
 		MaxAge:   60 * 60 * 24 * 365,
 		HttpOnly: true,
@@ -70,10 +66,10 @@ func setIdentityCookie(w http.ResponseWriter, name string) {
 	})
 }
 
-// handleLoginFull is the password login for chat members. A reserved name
-// must enter its password; a free name sets one (creating the account and
-// reserving the name). On success it issues a member session and returns
-// to `next`.
+// handleLoginFull is the password login for chat members. An existing
+// member name verifies its password; a free name creates an account (with
+// a confirm step) and reserves the name. On success it issues a member
+// session for that user id and returns to `next`.
 func handleLoginFull(w http.ResponseWriter, r *http.Request) {
 	next := sanitizeNext(r.FormValue("next"))
 	if r.Method == http.MethodPost {
@@ -87,40 +83,52 @@ func handleLoginFull(w http.ResponseWriter, r *http.Request) {
 			renderFullLoginPage(w, name, next, "Please enter a password.")
 			return
 		}
-		if views.IsReserved(name) {
-			if !views.CheckMemberPassword(name, password) {
+		if id, ok := views.FindMemberByName(name); ok {
+			// Returning member — verify; no confirm step.
+			if !views.CheckUserPassword(id, password) {
 				renderFullLoginPage(w, name, next, fmt.Sprintf("Wrong password for “%s”.", name))
 				return
 			}
-		} else {
-			// New name — require a confirmation step. The first entry is
-			// carried as a bcrypt hash (never plaintext), then re-entered.
-			pending := r.FormValue("pending")
-			if pending == "" {
-				h, err := views.HashPassword(password)
-				if err != nil {
-					http.Error(w, "hash: "+err.Error(), http.StatusInternalServerError)
-					return
-				}
-				renderCreateConfirmPage(w, name, next, h, "")
-				return
-			}
-			if !views.PasswordMatchesHash(pending, password) {
-				renderCreateConfirmPage(w, name, next, pending, "That didn't match — re-enter the same password.")
-				return
-			}
-			if err := views.SetMemberPassword(name, password); err != nil {
-				http.Error(w, "set password: "+err.Error(), http.StatusInternalServerError)
-				return
-			}
+			loginAsMember(w, r, id, next)
+			return
 		}
-		_ = views.ClaimUser(name)
-		setIdentityCookie(w, name)
-		views.SetAuthCookie(w, name)
-		http.Redirect(w, r, next, http.StatusSeeOther)
+		// New name — require a confirmation step (first entry carried as a
+		// bcrypt hash, never plaintext), then create the account.
+		pending := r.FormValue("pending")
+		if pending == "" {
+			h, err := views.HashPassword(password)
+			if err != nil {
+				http.Error(w, "hash: "+err.Error(), http.StatusInternalServerError)
+				return
+			}
+			renderCreateConfirmPage(w, name, next, h, "")
+			return
+		}
+		if !views.PasswordMatchesHash(pending, password) {
+			renderCreateConfirmPage(w, name, next, pending, "That didn't match — re-enter the same password.")
+			return
+		}
+		id, err := views.AllocateUser(name)
+		if err != nil {
+			http.Error(w, "allocate user: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if err := views.SetUserPassword(id, password); err != nil {
+			http.Error(w, "set password: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		loginAsMember(w, r, id, next)
 		return
 	}
 	renderFullLoginPage(w, auth.SanitizeUser(r.URL.Query().Get("name")), next, "")
+}
+
+// loginAsMember sets the identity cookie + signed member session for a
+// user id and returns to `next`.
+func loginAsMember(w http.ResponseWriter, r *http.Request, id, next string) {
+	setUIDCookie(w, id)
+	views.SetAuthCookie(w, id)
+	http.Redirect(w, r, next, http.StatusSeeOther)
 }
 
 // sanitizeNext keeps only internal redirect targets, to avoid open
@@ -139,12 +147,14 @@ func sanitizeNext(next string) string {
 func handleLogout(w http.ResponseWriter, r *http.Request) {
 	user := views.CurrentUser(r)
 	if r.Method == http.MethodPost {
-		if r.FormValue("release") == "yes" && user != auth.DefaultUser {
-			if err := views.DeleteUserData(user); err != nil {
-				log.Printf("logout release for %q: %v", user, err)
+		if r.FormValue("release") == "yes" && user.ID != "" {
+			// Release: delete game data and the user record (frees the
+			// name; no id is ever reissued, so no name-backdoor remains).
+			if err := views.DeleteUserData(user.ID); err != nil {
+				log.Printf("logout release game data %q: %v", user.ID, err)
 			}
-			if err := views.ReleaseMember(user); err != nil {
-				log.Printf("release member %q: %v", user, err)
+			if err := views.DeleteUserRecord(user.ID); err != nil {
+				log.Printf("logout release record %q: %v", user.ID, err)
 			}
 		}
 		clearUserCookie(w)
@@ -152,16 +162,16 @@ func handleLogout(w http.ResponseWriter, r *http.Request) {
 		renderLogoutComplete(w)
 		return
 	}
-	if user == auth.DefaultUser {
+	if user.ID == "" {
 		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
 	}
-	renderLogoutPage(w, user)
+	renderLogoutPage(w, user.Name)
 }
 
 func clearUserCookie(w http.ResponseWriter) {
 	http.SetCookie(w, &http.Cookie{
-		Name:     "gopher_user",
+		Name:     "gopher_uid",
 		Value:    "",
 		Path:     "/",
 		MaxAge:   -1,
@@ -174,7 +184,7 @@ func renderLoginPage(w http.ResponseWriter, current, errMsg string) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 
 	currentLine := ""
-	if current != "" && current != auth.DefaultUser {
+	if current != "" {
 		currentLine = fmt.Sprintf(
 			`<p class="muted">Currently playing as <strong>%s</strong>.</p>`,
 			html.EscapeString(current))
