@@ -326,14 +326,22 @@ func writeChatEvent(w io.Writer, rc *http.ResponseController, evt chatEvent, me 
 }
 
 const chatCSS = `<style>
-.chat-layout { display:flex; gap:20px; }
-.chat-main { min-width:0; }
+/* The conversation page fills the viewport exactly; only the message
+   history scrolls. Trim the shared page chrome to reclaim vertical space. */
+html, body { height:100%; }
+body { overflow:hidden; }
+.app-body-wrap { margin:10px auto; padding:0 24px 10px; min-height:0;
+                 display:flex; flex-direction:column; }
+.app-body-wrap > h1 { font-size:17px; margin:0 0 6px; }
+.chat-nav { margin:0 0 6px; }
+.chat-layout { display:flex; gap:20px; flex:1; min-height:0; }
+.chat-main { min-width:0; flex:1; display:flex; flex-direction:column; min-height:0; }
 .chat-navbar { margin-bottom:8px; }
 .chat-back { font-size:14px; line-height:1; padding:3px 11px; background:#eee; color:#333;
              border:1px solid #ccc; border-radius:4px; cursor:pointer; }
 .chat-back:hover:enabled { background:#e3e3e3; }
 .chat-back:disabled { opacity:0.4; cursor:default; }
-.chat-history { min-width:0; max-height:62vh; overflow-y:auto;
+.chat-history { min-width:0; flex:1; min-height:0; overflow-y:auto;
                 border:1px solid #ddd; border-radius:8px; padding:12px; background:#fcfcf8; }
 .chat-compose form { margin:0; }
 .chat-compose textarea { width:100%; min-height:200px; resize:vertical; box-sizing:border-box;
@@ -359,7 +367,7 @@ const chatCSS = `<style>
                    font-family:ui-monospace,Menlo,Consolas,monospace; font-size:13px; color:#333; }
 .chat-history.view-transcript #chat-bubbles { display:none; }
 .chat-history.view-transcript .chat-transcript { display:block; }
-.chat-views { margin:-6px 0 12px; font-size:13px; display:flex; justify-content:space-between; align-items:center; gap:12px; }
+.chat-views { margin:0 0 6px; font-size:13px; display:flex; justify-content:space-between; align-items:center; gap:12px; }
 .chat-views a { text-decoration:none; }
 .chat-views a.active { font-weight:bold; color:#000; cursor:default; }
 .chat-lock { font-size:12px; padding:2px 9px; background:#eee; color:#333; border:1px solid #ccc;
@@ -381,18 +389,21 @@ const chatCSS = `<style>
 .chat-img-scroll img { display:block; }
 .chat-hint { font-size:12px; color:#999; margin-top:8px; }
 .chat-status { font-size:12px; color:#b00020; min-height:16px; margin-top:6px; }
-/* Wide (landscape): side by side — conversation left, compose on the RIGHT. */
+/* Wide (landscape): side by side — conversation left, compose on the RIGHT.
+   The compose column is full height; its textarea flexes so Send/Image
+   stay pinned and visible. */
 @media (orientation: landscape) {
-  .chat-layout { flex-direction:row; align-items:flex-start; }
+  .chat-layout { flex-direction:row; align-items:stretch; }
   .chat-main { flex:1; }
-  .chat-compose { width:320px; flex:none; position:sticky; top:16px; }
-  .chat-compose textarea { min-height:65vh; }
+  .chat-compose { width:320px; flex:none; display:flex; flex-direction:column; min-height:0; }
+  .chat-compose form { display:flex; flex-direction:column; flex:1; min-height:0; }
+  .chat-compose textarea { flex:1; min-height:0; }
 }
-/* Tall (portrait): single column with the compose box at the BOTTOM. */
+/* Tall (portrait): single column — history fills, compose sits at the
+   BOTTOM at a fixed height (both stay on screen). */
 @media (orientation: portrait) {
   .chat-layout { flex-direction:column; align-items:stretch; }
   .chat-compose { width:auto; flex:none; }
-  .chat-history { max-height:50vh; }
-  .chat-compose textarea { min-height:140px; }
+  .chat-compose textarea { min-height:120px; }
 }
 </style>`
