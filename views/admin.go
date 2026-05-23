@@ -148,11 +148,11 @@ func renderMembersTable(w http.ResponseWriter) {
 	})
 
 	fmt.Fprint(w, `<h2>Official users</h2>
-<p class="muted">Members (password holders), time since last activity, and a read-only bot API key.</p>
+<p class="muted">Members (password holders): time since last activity, lifetime image-upload total (vs the per-user cap), and a read-only bot API key.</p>
 <table>
-<tr><th>Name</th><th>Last active</th><th>API key</th></tr>`)
+<tr><th>Name</th><th>Last active</th><th class="n">Images</th><th>API key</th></tr>`)
 	if len(rows) == 0 {
-		fmt.Fprint(w, `<tr><td colspan="3" class="muted">No members yet.</td></tr>`)
+		fmt.Fprint(w, `<tr><td colspan="4" class="muted">No members yet.</td></tr>`)
 	}
 	for _, row := range rows {
 		name := html.EscapeString(row.user.Name)
@@ -163,7 +163,10 @@ func renderMembersTable(w http.ResponseWriter) {
 		if row.ever {
 			since = humanizeSince(row.active)
 		}
-		fmt.Fprintf(w, `<tr><td>%s</td><td>%s</td><td>%s</td></tr>`, name, since, apiKeyCell(row.user.ID))
+		images := fmt.Sprintf("%s / %s",
+			humanBytes(UserUploadBytes(row.user.ID)), humanBytes(maxChatUploadLifetimeBytes))
+		fmt.Fprintf(w, `<tr><td>%s</td><td>%s</td><td class="n">%s</td><td>%s</td></tr>`,
+			name, since, images, apiKeyCell(row.user.ID))
 	}
 	fmt.Fprint(w, `</table>`)
 }
