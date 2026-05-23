@@ -1,10 +1,11 @@
 // Chat storage + live-notify layer. A conversation between two players
-// is one append-only `.md` file, kept deliberately human-readable: a
-// short header (from/date), a blank line, then the message body as
-// VERBATIM markdown, terminated by a `\----------` separator line. The
-// leading backslash makes the separator render as literal text (not an
-// <hr>) in any markdown viewer; a body line that would collide with it
-// gets one extra backslash on write, stripped back on read.
+// is one append-only `.md` file, kept deliberately human-readable. Each
+// message is a block: a MSG_<hash> id line, a from/date header, a blank
+// line, then the message body as VERBATIM markdown. Blocks are joined by
+// chatSep ("\n\n-------------\n", a 13-hyphen rule); a body line that
+// would itself be 13 hyphens gets one extra backslash on write, stripped
+// back on read (see escapeBodyLine), so it can't be mistaken for the
+// separator.
 //
 // One directory per conversation, keyed by the pair (see chatPairKey):
 // messages.md is the transcript both participants append to, and
