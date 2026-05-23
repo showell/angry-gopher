@@ -49,6 +49,14 @@ func HandleChat(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	if !IsMember(r) {
+		next := "/chat"
+		if r.URL.RawQuery != "" {
+			next += "?" + r.URL.RawQuery
+		}
+		http.Redirect(w, r, "/login/full?next="+url.QueryEscape(next), http.StatusSeeOther)
+		return
+	}
 	user := CurrentUser(r)
 	partner := auth.SanitizeUser(r.URL.Query().Get("with"))
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -61,20 +69,19 @@ func HandleChat(w http.ResponseWriter, r *http.Request) {
 }
 
 // validChatPartner reports whether `partner` is a usable conversation
-// partner for `user`: a registered player (everyone who has logged in is
-// implicitly registered), and not yourself or the reserved guest name.
-// No free-form chat to a name nobody has logged in as.
+// partner for `user`: another member (chat is members-only), and not
+// yourself or the reserved guest name.
 func validChatPartner(user, partner string) bool {
-	return partner != "" && partner != user && partner != auth.DefaultUser && UserExists(partner)
+	return partner != "" && partner != user && partner != auth.DefaultUser && IsReserved(partner)
 }
 
-// renderChatPicker lists the players you can message — everyone who has
-// logged in (and is thus implicitly registered), minus yourself.
+// renderChatPicker lists the members you can message (everyone with a
+// password), minus yourself.
 func renderChatPicker(w http.ResponseWriter, user string) {
 	PageHeader(w, "Messages", user)
-	fmt.Fprint(w, `<p class="muted">Pick someone to message:</p><ul>`)
+	fmt.Fprint(w, `<p class="muted">Pick a member to message:</p><ul>`)
 	n := 0
-	for _, u := range listUsers() {
+	for _, u := range ListMembers() {
 		if u == user {
 			continue
 		}
@@ -83,7 +90,7 @@ func renderChatPicker(w http.ResponseWriter, user string) {
 		n++
 	}
 	if n == 0 {
-		fmt.Fprint(w, `<li class="muted">No one else has logged in yet.</li>`)
+		fmt.Fprint(w, `<li class="muted">No other members yet.</li>`)
 	}
 	fmt.Fprint(w, `</ul>`)
 	PageFooter(w)
@@ -166,6 +173,10 @@ func HandleChatSend(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+	if !IsMember(r) {
+		http.Error(w, "chat requires a member account", http.StatusForbidden)
+		return
+	}
 	user := CurrentUser(r)
 
 	r.Body = http.MaxBytesReader(w, r.Body, maxChatMessageBytes)
@@ -210,6 +221,10 @@ func chatSendDone(w http.ResponseWriter, r *http.Request, partner string, async 
 // Last-Event-ID on reconnect) and then streams live messages until the
 // client disconnects.
 func HandleChatStream(w http.ResponseWriter, r *http.Request) {
+	if !IsMember(r) {
+		http.Error(w, "chat requires a member account", http.StatusForbidden)
+		return
+	}
 	user := CurrentUser(r)
 	partner := auth.SanitizeUser(r.URL.Query().Get("with"))
 	if !validChatPartner(user, partner) {

@@ -28,6 +28,7 @@ func buildMux() http.Handler {
 	// Name login/logout (login sets the gopher_user cookie + fires a
 	// Zulip ping; logout clears it).
 	mux.HandleFunc("/login", handleLogin)
+	mux.HandleFunc("/login/full", handleLoginFull)
 	mux.HandleFunc("/logout", handleLogout)
 
 	// Admin overview (session stats from the filesystem). Protect via
@@ -48,17 +49,26 @@ func withLoginGate(next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
-		user := auth.CurrentUser(r)
-		if user == auth.DefaultUser {
+		// A valid member session is always allowed; the signed name is
+		// the authoritative identity.
+		if name, ok := views.SessionUser(r); ok {
+			if !views.UserExists(name) {
+				_ = views.ClaimUser(name)
+			}
+			next.ServeHTTP(w, r)
+			return
+		}
+		// Otherwise a guest: needs a non-reserved identity. A reserved
+		// name without a session (stale/forged cookie) isn't honored —
+		// send it to log in. Any other logged-in name is implicitly
+		// registered so it shows up in the roster.
+		guest := auth.CurrentUser(r)
+		if guest == auth.DefaultUser || views.IsReserved(guest) {
 			http.Redirect(w, r, "/login", http.StatusSeeOther)
 			return
 		}
-		// Any logged-in identity is implicitly registered: ensure the
-		// account directory exists so the player shows up in the roster
-		// (and the message picker), and a cookie whose account was
-		// removed re-registers itself rather than becoming a ghost.
-		if !views.UserExists(user) {
-			_ = views.ClaimUser(user)
+		if !views.UserExists(guest) {
+			_ = views.ClaimUser(guest)
 		}
 		next.ServeHTTP(w, r)
 	})
@@ -66,7 +76,7 @@ func withLoginGate(next http.Handler) http.Handler {
 
 func loginExempt(path string) bool {
 	switch path {
-	case "/login", "/logout", "/version":
+	case "/login", "/login/full", "/logout", "/version":
 		return true
 	}
 	return strings.HasPrefix(path, "/admin")

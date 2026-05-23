@@ -73,6 +73,10 @@ func HandleChatUpload(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+	if !IsMember(r) {
+		http.Error(w, "chat requires a member account", http.StatusForbidden)
+		return
+	}
 	user := CurrentUser(r)
 	partner := auth.SanitizeUser(r.URL.Query().Get("with"))
 	if !validChatPartner(user, partner) {

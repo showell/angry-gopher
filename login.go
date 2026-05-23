@@ -12,7 +12,7 @@ import (
 	"html"
 	"log"
 	"net/http"
-	"net/url"
+	"strings"
 
 	"angry-gopher/auth"
 	"angry-gopher/views"
@@ -26,24 +26,20 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 			renderLoginPage(w, auth.CurrentUser(r), errMsg)
 			return
 		}
-		switch {
-		case !views.UserExists(name):
-			// Free name — claim the directory (reserving it before any
-			// game is played), then log in.
+		if views.IsReserved(name) {
+			// Password-protected name — guests can't claim it.
+			renderReservedNotice(w, name)
+			return
+		}
+		// Guests are honor-system: any non-reserved name just logs in
+		// (claimed on first use). To protect a name, become a member.
+		if !views.UserExists(name) {
 			if err := views.ClaimUser(name); err != nil {
 				http.Error(w, "claim user: "+err.Error(), http.StatusInternalServerError)
 				return
 			}
-			loginAs(w, r, name)
-		case r.FormValue("confirm_existing") == "yes" || auth.CurrentUser(r) == name:
-			// Taken name, honor-system confirmed (or already them):
-			// resume that account.
-			loginAs(w, r, name)
-		default:
-			// Taken and unconfirmed — ask whether they're the existing
-			// owner logging in from another device.
-			renderExistingUserConfirm(w, name)
 		}
+		loginAs(w, r, name)
 		return
 	}
 
@@ -55,9 +51,17 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 	renderLoginPage(w, auth.CurrentUser(r), msg)
 }
 
-// loginAs sets the identity cookie, fires the Zulip ping, and sends the
-// player home.
+// loginAs logs in a guest: sets the identity cookie, clears any stale
+// member session, fires the Zulip ping, and sends the player home.
 func loginAs(w http.ResponseWriter, r *http.Request, name string) {
+	setIdentityCookie(w, name)
+	views.ClearAuthCookie(w) // a guest login is not an authenticated member
+	go zulip.NotifyLogin(name)
+	http.Redirect(w, r, "/", http.StatusSeeOther)
+}
+
+// setIdentityCookie sets the long-lived plaintext identity cookie.
+func setIdentityCookie(w http.ResponseWriter, name string) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     "gopher_user",
 		Value:    name,
@@ -66,8 +70,57 @@ func loginAs(w http.ResponseWriter, r *http.Request, name string) {
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
 	})
-	go zulip.NotifyLogin(name)
-	http.Redirect(w, r, "/", http.StatusSeeOther)
+}
+
+// handleLoginFull is the password login for chat members. A reserved name
+// must enter its password; a free name sets one (creating the account and
+// reserving the name). On success it issues a member session and returns
+// to `next`.
+func handleLoginFull(w http.ResponseWriter, r *http.Request) {
+	next := sanitizeNext(r.FormValue("next"))
+	if r.Method == http.MethodPost {
+		name, errMsg := auth.ValidateUserName(r.FormValue("name"))
+		if errMsg != "" {
+			renderFullLoginPage(w, r.FormValue("name"), next, errMsg)
+			return
+		}
+		password := r.FormValue("password")
+		if password == "" {
+			renderFullLoginPage(w, name, next, "Please enter a password.")
+			return
+		}
+		if views.IsReserved(name) {
+			if !views.CheckMemberPassword(name, password) {
+				renderFullLoginPage(w, name, next, fmt.Sprintf("Wrong password for “%s”.", name))
+				return
+			}
+		} else {
+			if r.FormValue("confirm") != password {
+				renderFullLoginPage(w, name, next, "The two passwords don't match.")
+				return
+			}
+			if err := views.SetMemberPassword(name, password); err != nil {
+				http.Error(w, "set password: "+err.Error(), http.StatusInternalServerError)
+				return
+			}
+		}
+		_ = views.ClaimUser(name)
+		setIdentityCookie(w, name)
+		views.SetAuthCookie(w, name)
+		go zulip.NotifyLogin(name)
+		http.Redirect(w, r, next, http.StatusSeeOther)
+		return
+	}
+	renderFullLoginPage(w, auth.SanitizeUser(r.URL.Query().Get("name")), next, "")
+}
+
+// sanitizeNext keeps only internal redirect targets, to avoid open
+// redirects.
+func sanitizeNext(next string) string {
+	if strings.HasPrefix(next, "/") && !strings.HasPrefix(next, "//") {
+		return next
+	}
+	return "/"
 }
 
 // handleLogout shows the logout page (GET) and performs logout (POST).
@@ -75,14 +128,18 @@ func loginAs(w http.ResponseWriter, r *http.Request, name string) {
 // name; unchecked (the default) just clears the cookie and keeps the
 // data so the player can log back in later.
 func handleLogout(w http.ResponseWriter, r *http.Request) {
-	user := auth.CurrentUser(r)
+	user := views.CurrentUser(r)
 	if r.Method == http.MethodPost {
 		if r.FormValue("release") == "yes" && user != auth.DefaultUser {
 			if err := views.DeleteUserData(user); err != nil {
 				log.Printf("logout release for %q: %v", user, err)
 			}
+			if err := views.ReleaseMember(user); err != nil {
+				log.Printf("release member %q: %v", user, err)
+			}
 		}
 		clearUserCookie(w)
+		views.ClearAuthCookie(w)
 		renderLogoutComplete(w)
 		return
 	}
@@ -148,9 +205,9 @@ button:hover { background: #0000a0; }
 </body></html>`, currentLine, errLine)
 }
 
-// renderExistingUserConfirm asks whether the player is the existing
-// owner of a taken name, logging in from another device (honor system).
-func renderExistingUserConfirm(w http.ResponseWriter, name string) {
+// renderReservedNotice tells a guest that a name belongs to a member,
+// offering the password login or a different name.
+func renderReservedNotice(w http.ResponseWriter, name string) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	esc := html.EscapeString(name)
 	fmt.Fprintf(w, `<!DOCTYPE html>
@@ -159,23 +216,51 @@ func renderExistingUserConfirm(w http.ResponseWriter, name string) {
 body { font-family: sans-serif; margin: 80px auto; max-width: 440px; padding: 0 24px; }
 h1 { color: #000080; font-size: 22px; }
 .muted { color: #888; font-size: 14px; }
-.row { margin-top: 16px; }
 button { background: #000080; color: white; border: none; padding: 10px 20px;
          font-size: 15px; border-radius: 4px; cursor: pointer; }
-button:hover { background: #0000a0; }
 a { color: #000080; }
-</style>
-</head><body>
-<h1>“%s” is already taken</h1>
-<p>Are you <strong>%s</strong>, logging in from another device?</p>
-<p class="muted">No passwords yet — this is on the honor system.</p>
-<form class="row" method="post" action="/login">
-  <input type="hidden" name="name" value="%s">
-  <input type="hidden" name="confirm_existing" value="yes">
-  <button type="submit">Yes, that's me — log me in</button>
+</style></head><body>
+<h1>“%s” is reserved</h1>
+<p>That name belongs to a registered member.</p>
+<form method="get" action="/login/full"><input type="hidden" name="name" value="%s">
+  <button type="submit">Log in with your password</button></form>
+<p class="muted" style="margin-top:16px"><a href="/login">← Pick a different name</a></p>
+</body></html>`, esc, esc)
+}
+
+// renderFullLoginPage is the member (password) login screen.
+func renderFullLoginPage(w http.ResponseWriter, name, next, errMsg string) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	errLine := ""
+	if errMsg != "" {
+		errLine = fmt.Sprintf(`<p class="err">%s</p>`, html.EscapeString(errMsg))
+	}
+	fmt.Fprintf(w, `<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>♦️ Lyn Rummy ♥️</title>
+<style>
+body { font-family: sans-serif; margin: 80px auto; max-width: 420px; padding: 0 24px; }
+h1 { color: #000080; }
+.muted { color: #888; font-size: 14px; }
+.err { color: #b00020; font-size: 14px; }
+input[type=text], input[type=password] { font-size: 16px; padding: 8px; width: 100%%; box-sizing: border-box; margin: 8px 0; }
+label { font-size: 13px; color: #444; }
+button { background: #000080; color: white; border: none; padding: 10px 20px;
+         font-size: 15px; border-radius: 4px; cursor: pointer; }
+a { color: #000080; }
+</style></head><body>
+<h1>Log in to chat</h1>
+<p class="muted">Chat needs a password-protected name. New here? Pick a password to reserve your name. Returning? Enter your password.</p>
+%s
+<form method="post" action="/login/full">
+  <input type="hidden" name="next" value="%s">
+  <input name="name" type="text" maxlength="40" placeholder="Your name" value="%s" autofocus>
+  <input name="password" type="password" placeholder="Password">
+  <label>Confirm password (new accounts only)</label>
+  <input name="confirm" type="password" placeholder="Confirm password">
+  <button type="submit">Continue</button>
 </form>
-<p class="row"><a href="/login?taken=%s">No — I'll pick another name</a></p>
-</body></html>`, esc, esc, esc, url.QueryEscape(name))
+<p class="muted" style="margin-top:16px"><a href="/">← Back</a> · Just want to play? <a href="/login">Play as a guest</a></p>
+</body></html>`, errLine, html.EscapeString(next), html.EscapeString(name))
 }
 
 // renderLogoutPage shows the logout confirmation with the release
