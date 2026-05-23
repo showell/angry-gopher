@@ -313,7 +313,7 @@ const chatCSS = `<style>
    never clipped content. */
 html, body { height:100%; }
 .app-body-wrap { margin:10px auto; padding:0 24px 10px; min-height:0;
-                 display:flex; flex-direction:column; }
+                 max-width:890px; display:flex; flex-direction:column; }
 /* #chat-root wraps the views row + layout; it must carry the fill down the
    flex chain (without this it sizes to content, collapsing the compose box
    when the feed is empty). */
@@ -334,6 +334,9 @@ html, body { height:100%; }
 .chat-msg { margin:0 0 12px; padding:8px 10px; border-radius:8px; max-width:88%; }
 .chat-msg.mine { background:#e7e7ff; margin-left:auto; }
 .chat-msg.theirs { background:#f0f0e6; margin-right:auto; }
+/* Break long unbreakable runs (e.g. URLs) so they wrap inside the bubble
+   instead of overflowing it — alignment-independent. */
+.chat-body { overflow-wrap:anywhere; }
 .chat-meta { font-size:11px; color:#888; margin-bottom:3px; }
 .chat-meta .msg-refer { font-size:10px; color:#888; background:none; border:none;
                         padding:0 2px; cursor:pointer; text-decoration:underline; }
