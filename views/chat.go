@@ -8,8 +8,6 @@
 package views
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -109,7 +107,7 @@ func renderChatConversation(w http.ResponseWriter, user, partner string) {
 	}
 	fmt.Fprint(w, `</div><pre class="chat-transcript" id="chat-transcript">`)
 	for i, m := range msgs {
-		fmt.Fprintf(w, `<span data-i="%d">%s</span>`, i, html.EscapeString(encodeChatBlock(m)))
+		fmt.Fprintf(w, `<span data-i="%d">%s</span>`, i, html.EscapeString(chatStoredForm(i, m)))
 	}
 	fmt.Fprintf(w, `</pre></div>
 <div class="chat-compose">
@@ -132,15 +130,6 @@ func renderChatConversation(w http.ResponseWriter, user, partner string) {
 	PageFooter(w)
 }
 
-// chatMsgHash is a message's stable 6-hex-uppercase id, used for MSG_
-// references. Derived from the (immutable, append-only) index + author +
-// timestamp + body, so it's deterministic and need not be stored on disk.
-func chatMsgHash(index int, msg ChatMessage) string {
-	sum := sha256.Sum256([]byte(fmt.Sprintf("%d\x00%s\x00%s\x00%s",
-		index, msg.From, msg.At.UTC().Format(time.RFC3339), msg.Body)))
-	return strings.ToUpper(hex.EncodeToString(sum[:3]))
-}
-
 // writeChatBubble renders one message; the JS poller builds the same
 // shape from the SSE payload, so server- and live-rendered messages
 // match.
@@ -149,7 +138,7 @@ func writeChatBubble(w io.Writer, msg ChatMessage, me string, idx int) {
 	if msg.From == me {
 		cls = "mine"
 	}
-	hash := chatMsgHash(idx, msg)
+	hash := msg.Hash
 	fmt.Fprintf(w,
 		`<div class="chat-msg %s" id="msg-%s" data-i="%d" data-hash="%s">`+
 			`<div class="chat-meta">%s · %s <button type="button" class="msg-refer" title="Reference this message">refer</button></div>`+
@@ -295,8 +284,8 @@ func writeChatEvent(w io.Writer, rc *http.ResponseController, evt chatEvent, me 
 		Time:  formatChatTime(evt.Msg.At),
 		HTML:  string(RenderChatMarkdown(evt.Msg.Body)),
 		Raw:   evt.Msg.Body,
-		Enc:   encodeChatBlock(evt.Msg),
-		Hash:  chatMsgHash(evt.Index, evt.Msg),
+		Enc:   chatStoredForm(evt.Index, evt.Msg),
+		Hash:  evt.Msg.Hash,
 		Mine:  evt.Msg.From == me,
 	}
 	data, err := json.Marshal(wire)

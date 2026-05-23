@@ -22,6 +22,8 @@
 package views
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -39,20 +41,27 @@ var ChatDataRoot = "games/lynrummy/chat-data"
 // SetChatRoot points conversation storage at the configured dir.
 func SetChatRoot(root string) { ChatDataRoot = root }
 
-// chatSep is the message separator line: a backslash then ten hyphens.
-const chatSep = `\----------`
+// chatSep separates messages in the file: a blank line, a 13-hyphen
+// rule, then a newline. Concatenating each message's stored form (the
+// block, preceded by this for all but the first) reproduces the file
+// byte-for-byte, which is what the Transcript view shows.
+const chatSep = "\n\n-------------\n"
 
-// sepLineRe matches a line of one-or-more backslashes followed by
-// exactly ten hyphens — the separator and its escaped forms. A bare
-// `----------` (a real markdown rule) has zero backslashes and is left
-// untouched.
-var sepLineRe = regexp.MustCompile(`^\\+----------$`)
+// A body line of exactly 13 hyphens would collide with the separator, so
+// it's escaped with a leading backslash on write (and an already-
+// backslashed run of them gets one more); the read path strips one back.
+var (
+	sepEscapeRe   = regexp.MustCompile(`^\\*-------------$`)
+	sepUnescapeRe = regexp.MustCompile(`^\\+-------------$`)
+)
 
-// ChatMessage is one stored message.
+// ChatMessage is one stored message. Hash is the 6-hex id written as the
+// MSG_ line atop the block and used for MSG_ references.
 type ChatMessage struct {
 	From string
 	At   time.Time
 	Body string
+	Hash string
 }
 
 // chatEvent is a message plus its 0-based index in the conversation,
@@ -124,7 +133,7 @@ func ChatKeyParticipant(key, user string) bool {
 // escapeBodyLine protects a body line that would collide with the
 // separator by prepending a backslash.
 func escapeBodyLine(line string) string {
-	if sepLineRe.MatchString(line) {
+	if sepEscapeRe.MatchString(line) {
 		return `\` + line
 	}
 	return line
@@ -132,29 +141,51 @@ func escapeBodyLine(line string) string {
 
 // unescapeBodyLine reverses escapeBodyLine.
 func unescapeBodyLine(line string) string {
-	if sepLineRe.MatchString(line) {
+	if sepUnescapeRe.MatchString(line) {
 		return line[1:]
 	}
 	return line
 }
 
-// encodeChatBlock renders one message to its on-disk block.
+// chatMsgHash is a message's stable 6-hex-uppercase id. Derived from the
+// (immutable, append-only) index + author + timestamp + body; computed
+// once at append time and then stored as the block's MSG_ line.
+func chatMsgHash(index int, msg ChatMessage) string {
+	sum := sha256.Sum256([]byte(fmt.Sprintf("%d\x00%s\x00%s\x00%s",
+		index, msg.From, msg.At.UTC().Format(time.RFC3339), msg.Body)))
+	return strings.ToUpper(hex.EncodeToString(sum[:3]))
+}
+
+// encodeChatBlock renders one message to its on-disk block: the MSG_
+// hash line, the from/date header, a blank line, then the verbatim
+// markdown body. No separator — chatStoredForm adds that.
 func encodeChatBlock(msg ChatMessage) string {
 	bodyLines := strings.Split(msg.Body, "\n")
 	for i, line := range bodyLines {
 		bodyLines[i] = escapeBodyLine(line)
 	}
-	return fmt.Sprintf("from: %s\ndate: %s\n\n%s\n%s\n",
-		msg.From, msg.At.UTC().Format(time.RFC3339),
-		strings.Join(bodyLines, "\n"), chatSep)
+	return fmt.Sprintf("MSG_%s\nfrom: %s\ndate: %s\n\n%s",
+		msg.Hash, msg.From, msg.At.UTC().Format(time.RFC3339),
+		strings.Join(bodyLines, "\n"))
+}
+
+// chatStoredForm is exactly what message `index` contributes to the file:
+// its block, preceded by the separator for every message after the
+// first. Concatenated over a conversation these reproduce the file, so
+// the Transcript view (built from these) mirrors storage byte-for-byte.
+func chatStoredForm(index int, msg ChatMessage) string {
+	if index == 0 {
+		return encodeChatBlock(msg)
+	}
+	return chatSep + encodeChatBlock(msg)
 }
 
 // decodeChatFile parses a whole conversation file into messages.
 func decodeChatFile(data []byte) []ChatMessage {
 	text := string(data)
-	// Each block ends with "\n" + chatSep + "\n"; splitting on that
-	// literal yields one piece per message plus a trailing "".
-	pieces := strings.Split(text, "\n"+chatSep+"\n")
+	// Messages are joined by chatSep (no trailing separator), so splitting
+	// on it yields one piece per message.
+	pieces := strings.Split(text, chatSep)
 	var out []ChatMessage
 	for _, piece := range pieces {
 		if strings.TrimSpace(piece) == "" {
@@ -165,11 +196,16 @@ func decodeChatFile(data []byte) []ChatMessage {
 	return out
 }
 
-// decodeChatBlock parses one block (header lines, blank, body).
+// decodeChatBlock parses one block (MSG_ hash line, header lines, blank,
+// body).
 func decodeChatBlock(piece string) ChatMessage {
 	lines := strings.Split(piece, "\n")
 	var msg ChatMessage
 	i := 0
+	if i < len(lines) && strings.HasPrefix(lines[i], "MSG_") {
+		msg.Hash = strings.TrimPrefix(lines[i], "MSG_")
+		i++
+	}
 	for ; i < len(lines); i++ {
 		if lines[i] == "" {
 			break // blank line ends the header
@@ -227,6 +263,9 @@ func AppendChatMessage(from, partner, body string) (ChatMessage, error) {
 	if err != nil {
 		return msg, err
 	}
+	index := len(existing)
+	msg.Hash = chatMsgHash(index, msg)
+
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return msg, err
 	}
@@ -234,7 +273,7 @@ func AppendChatMessage(from, partner, body string) (ChatMessage, error) {
 	if err != nil {
 		return msg, err
 	}
-	if _, err := f.WriteString(encodeChatBlock(msg)); err != nil {
+	if _, err := f.WriteString(chatStoredForm(index, msg)); err != nil {
 		f.Close()
 		return msg, err
 	}
@@ -242,7 +281,7 @@ func AppendChatMessage(from, partner, body string) (ChatMessage, error) {
 		return msg, err
 	}
 
-	evt := chatEvent{Index: len(existing), Msg: msg}
+	evt := chatEvent{Index: index, Msg: msg}
 	for ch := range chatSubs[key] {
 		select {
 		case ch <- evt:
