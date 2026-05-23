@@ -40,5 +40,6 @@ func RenderChatMarkdown(src string) template.HTML {
 	if err := chatMarkdown.Convert([]byte(src), &buf); err != nil {
 		return template.HTML(template.HTMLEscapeString(src))
 	}
-	return template.HTML(chatSanitizer.SanitizeBytes(buf.Bytes()))
+	safe := chatSanitizer.SanitizeBytes(buf.Bytes())
+	return template.HTML(linkifyMsgRefs(string(safe)))
 }

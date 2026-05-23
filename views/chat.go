@@ -8,6 +8,8 @@
 package views
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -127,6 +129,15 @@ func renderChatConversation(w http.ResponseWriter, user, partner string) {
 	PageFooter(w)
 }
 
+// chatMsgHash is a message's stable 6-hex-uppercase id, used for MSG_
+// references. Derived from the (immutable, append-only) index + author +
+// timestamp + body, so it's deterministic and need not be stored on disk.
+func chatMsgHash(index int, msg ChatMessage) string {
+	sum := sha256.Sum256([]byte(fmt.Sprintf("%d\x00%s\x00%s\x00%s",
+		index, msg.From, msg.At.UTC().Format(time.RFC3339), msg.Body)))
+	return strings.ToUpper(hex.EncodeToString(sum[:3]))
+}
+
 // writeChatBubble renders one message; the JS poller builds the same
 // shape from the SSE payload, so server- and live-rendered messages
 // match.
@@ -135,10 +146,13 @@ func writeChatBubble(w io.Writer, msg ChatMessage, me string, idx int) {
 	if msg.From == me {
 		cls = "mine"
 	}
+	hash := chatMsgHash(idx, msg)
 	fmt.Fprintf(w,
-		`<div class="chat-msg %s" data-i="%d"><div class="chat-meta">%s · %s</div>`+
+		`<div class="chat-msg %s" id="msg-%s" data-i="%d" data-hash="%s">`+
+			`<div class="chat-meta">%s · %s <button type="button" class="msg-refer" title="Reference this message">refer</button></div>`+
 			`<div class="chat-body">%s</div><div class="chat-raw">%s</div></div>`,
-		cls, idx, html.EscapeString(msg.From), html.EscapeString(formatChatTime(msg.At)),
+		cls, hash, idx, hash,
+		html.EscapeString(msg.From), html.EscapeString(formatChatTime(msg.At)),
 		RenderChatMarkdown(msg.Body), html.EscapeString(msg.Body))
 }
 
@@ -267,6 +281,7 @@ type chatWireMsg struct {
 	HTML  string `json:"html"`
 	Raw   string `json:"raw"`
 	Enc   string `json:"enc"`
+	Hash  string `json:"hash"`
 	Mine  bool   `json:"mine"`
 }
 
@@ -278,6 +293,7 @@ func writeChatEvent(w io.Writer, rc *http.ResponseController, evt chatEvent, me 
 		HTML:  string(RenderChatMarkdown(evt.Msg.Body)),
 		Raw:   evt.Msg.Body,
 		Enc:   encodeChatBlock(evt.Msg),
+		Hash:  chatMsgHash(evt.Index, evt.Msg),
 		Mine:  evt.Msg.From == me,
 	}
 	data, err := json.Marshal(wire)
@@ -303,6 +319,15 @@ const chatCSS = `<style>
 .chat-msg.mine { background:#e7e7ff; margin-left:auto; }
 .chat-msg.theirs { background:#f0f0e6; margin-right:auto; }
 .chat-meta { font-size:11px; color:#888; margin-bottom:3px; }
+.chat-meta .msg-refer { font-size:10px; color:#888; background:none; border:none;
+                        padding:0 2px; cursor:pointer; text-decoration:underline; }
+.chat-meta .msg-refer:hover { color:#000080; }
+.chat-body a.msg-ref { font-family:ui-monospace,Menlo,Consolas,monospace; font-size:0.9em;
+                       background:#eaeaff; color:#000080; padding:0 4px; border-radius:3px;
+                       text-decoration:none; }
+.chat-body a.msg-ref:hover { background:#d8d8ff; }
+.msg-flash { animation: msgflash 1.6s ease-out; }
+@keyframes msgflash { 0%,12% { box-shadow:0 0 0 3px #ffcf3a; } 100% { box-shadow:0 0 0 3px transparent; } }
 .chat-body p:first-child { margin-top:0; }
 .chat-body p:last-child { margin-bottom:0; }
 .chat-body pre { background:#f4f4ec; padding:8px; border-radius:4px; overflow-x:auto; }
@@ -357,9 +382,11 @@ const chatScript = `<script>(function(){
     var empty=document.getElementById('chat-empty'); if(empty) empty.remove();
     var div=document.createElement('div');
     div.className='chat-msg '+(m.mine?'mine':'theirs');
-    div.setAttribute('data-i',m.index);
+    div.id='msg-'+m.hash; div.setAttribute('data-i',m.index); div.setAttribute('data-hash',m.hash);
     var meta=document.createElement('div'); meta.className='chat-meta';
-    meta.textContent=m.from+' · '+m.time;
+    meta.appendChild(document.createTextNode(m.from+' · '+m.time+' '));
+    var refer=document.createElement('button'); refer.type='button'; refer.className='msg-refer';
+    refer.title='Reference this message'; refer.textContent='refer'; meta.appendChild(refer);
     var body=document.createElement('div'); body.className='chat-body';
     body.innerHTML=m.html; /* sanitized server-side */
     var raw=document.createElement('div'); raw.className='chat-raw';
@@ -476,8 +503,16 @@ const chatScript = `<script>(function(){
     img.src=src;
     if(img.complete) fit();
   }
+  function flashMsg(el){ el.classList.remove('msg-flash'); void el.offsetWidth; el.classList.add('msg-flash'); }
   bubbles.addEventListener('click',function(e){
     var t=e.target;
+    var rb=t.closest&&t.closest('.msg-refer');
+    if(rb){ var mm=rb.closest('.chat-msg'); if(mm) insertAtCursor('MSG_'+mm.getAttribute('data-hash')+' '); return; }
+    var a=t.closest&&t.closest('a.msg-ref');
+    if(a){ e.preventDefault();
+      var tgt=document.getElementById(a.getAttribute('href').slice(1));
+      if(tgt){ tgt.scrollIntoView({block:'center',behavior:'smooth'}); flashMsg(tgt); }
+      return; }
     if(t&&t.tagName==='IMG'&&t.closest('.chat-body')) showImagePopup(t.src);
   });
   textarea.focus();
