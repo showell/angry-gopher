@@ -4,18 +4,11 @@
 # Let's Encrypt cert and redirects HTTP->HTTPS. (.com is not HSTS-
 # preloaded, unlike .app, so we set the HSTS header ourselves below.)
 #
-# The repo copy keeps the /admin password as a placeholder; the real
-# bcrypt hash lives only in /etc/caddy/Caddyfile on the droplet.
-# To test on the bare droplet IP (no TLS), set the site address to `:80`.
+# /admin is gated by the Go app (the admin flag on the user); no proxy
+# basic-auth. To test on the bare droplet IP (no TLS), set the site
+# address to `:80`.
 lynrummy.com {
 	encode gzip
-
-	# /admin is guarded here at the proxy; the Go app deliberately
-	# leaves it open and expects the reverse proxy to protect it.
-	@admin path /admin /admin/*
-	basic_auth @admin {
-		admin REPLACE_WITH_BCRYPT_HASH
-	}
 
 	# Coarse outer cap. The Go handlers enforce tighter per-route
 	# limits (256 KB new-session, 64 KB append/puzzle).

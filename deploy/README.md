@@ -1,8 +1,9 @@
 # Deploying Angry Gopher (Lyn Rummy)
 
 The production host is a DigitalOcean droplet (NYC3, Ubuntu 24.04,
-x86_64). Caddy fronts the Go server for TLS, `/admin` basic-auth,
-and a body cap; the Go server listens on `localhost:9000`.
+x86_64). Caddy fronts the Go server for TLS and a body cap; the Go
+server listens on `localhost:9000`. (`/admin` is gated by the app's
+per-user admin flag, not the proxy.)
 
 The host runs **no Go/Node/Elm** — we build locally and ship a
 **single self-contained binary**: the Elm/TS bundles + puzzle
@@ -62,8 +63,7 @@ the SSH key was added at droplet creation).
      sudo apt-get update && sudo apt-get install -y caddy'
    ```
 
-   Then install the Caddyfile (with the real `/admin` bcrypt hash
-   substituted in — generate with `caddy hash-password`):
+   Then install the Caddyfile:
 
    ```
    scp deploy/Caddyfile steve@<IP>:/tmp/
