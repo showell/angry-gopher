@@ -533,18 +533,11 @@ const chatScript = `<script>(function(){
     if(img.complete) fit();
   }
   function flashMsg(el){ el.classList.remove('msg-flash'); void el.offsetWidth; el.classList.add('msg-flash'); }
-  /* Back-nav stack: jumping to a MSG_ link remembers where you were (the
-     first message whose top is visible); the ">" button returns you there,
-     one step per chained jump. */
+  /* Back-nav stack: jumping to a MSG_ link remembers the message you
+     clicked FROM; the ← button scrolls back to it (and flashes it), one
+     step per chained jump. */
   var navStack=[];
   function updateBack(){ backBtn.disabled = navStack.length===0; }
-  function firstTopVisibleIndex(){
-    var els=bubbles.querySelectorAll('.chat-msg'), htop=history.getBoundingClientRect().top;
-    for(var i=0;i<els.length;i++){
-      if(els[i].getBoundingClientRect().top >= htop-1) return els[i].getAttribute('data-i');
-    }
-    return els.length ? els[els.length-1].getAttribute('data-i') : null;
-  }
   function scrollIndexToTop(idx){
     if(idx===null||idx===undefined) return null;
     var el=bubbles.querySelector('.chat-msg[data-i="'+idx+'"]');
@@ -564,8 +557,9 @@ const chatScript = `<script>(function(){
     if(rb){ var mm=rb.closest('.chat-msg'); if(mm) insertAtCursor('MSG_'+mm.getAttribute('data-hash')+' '); return; }
     var a=t.closest&&t.closest('a.msg-ref');
     if(a){ e.preventDefault();
+      var src=a.closest('.chat-msg'); /* the message we're clicking from */
       var tgt=document.getElementById(a.getAttribute('href').slice(1));
-      if(tgt){ navStack.push(firstTopVisibleIndex()); updateBack();
+      if(tgt){ if(src) navStack.push(src.getAttribute('data-i')); updateBack();
         tgt.scrollIntoView({block:'center',behavior:'smooth'}); flashMsg(tgt); }
       return; }
     if(t&&t.tagName==='IMG'&&t.closest('.chat-body')) showImagePopup(t.src);
