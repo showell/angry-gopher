@@ -25,10 +25,13 @@ var chatMarkdown = goldmark.New(
 
 // chatSanitizer is the user-generated-content policy: standard formatting
 // tags (incl. img), safe link schemes, nothing executable. Relative URLs
-// are allowed so uploaded images (/chat/uploads/...) survive.
+// are allowed so uploaded images (/chat/uploads/...) survive. External
+// (fully-qualified) links open in a new tab with rel=noopener; MSG_ refs
+// are relative #fragments added after sanitization, so they're unaffected.
 var chatSanitizer = func() *bluemonday.Policy {
 	p := bluemonday.UGCPolicy()
 	p.AllowRelativeURLs(true)
+	p.AddTargetBlankToFullyQualifiedLinks(true)
 	return p
 }()
 
