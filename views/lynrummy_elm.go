@@ -171,6 +171,9 @@ func lynrummyElmAppendSessionLine(w http.ResponseWriter, r *http.Request, user s
 		http.Error(w, "append: "+err2.Error(), http.StatusInternalServerError)
 		return
 	}
+	if rel == "actions" {
+		TouchUser(user) // a Lyn Rummy move counts as activity
+	}
 	w.WriteHeader(http.StatusNoContent)
 }
 

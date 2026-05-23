@@ -128,6 +128,7 @@ func handleLoginFull(w http.ResponseWriter, r *http.Request) {
 func loginAsMember(w http.ResponseWriter, r *http.Request, id, next string) {
 	setUIDCookie(w, id)
 	views.SetAuthCookie(w, id)
+	views.TouchUser(id) // logging on counts as activity
 	http.Redirect(w, r, next, http.StatusSeeOther)
 }
 

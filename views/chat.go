@@ -205,6 +205,7 @@ func HandleChatSend(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "save message: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
+	TouchUser(user.ID) // sending a message counts as activity
 	chatSendDone(w, r, partner, async)
 }
 

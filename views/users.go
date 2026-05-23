@@ -18,6 +18,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"golang.org/x/crypto/bcrypt"
 )
@@ -126,6 +127,30 @@ func SetUserAdmin(id string, admin bool) error {
 func UserIsAdmin(id string) bool {
 	_, err := os.Stat(userFile(id, "admin"))
 	return err == nil
+}
+
+// TouchUser records "now" as a user's last-activity time (bumped on
+// login, a chat message, or a Lyn Rummy move). Best-effort — a write
+// failure isn't worth surfacing.
+func TouchUser(id string) {
+	if strings.TrimSpace(id) == "" {
+		return
+	}
+	_ = os.WriteFile(userFile(id, "last-active"),
+		[]byte(strconv.FormatInt(time.Now().Unix(), 10)), 0o644)
+}
+
+// UserLastActive returns a user's last-activity time, ok=false if never.
+func UserLastActive(id string) (time.Time, bool) {
+	b, err := os.ReadFile(userFile(id, "last-active"))
+	if err != nil {
+		return time.Time{}, false
+	}
+	n, err := strconv.ParseInt(strings.TrimSpace(string(b)), 10, 64)
+	if err != nil {
+		return time.Time{}, false
+	}
+	return time.Unix(n, 0), true
 }
 
 // LoadUser resolves a full User from an id (zero User if absent).
