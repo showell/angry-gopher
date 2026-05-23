@@ -389,6 +389,7 @@ const chatCSS = `<style>
   .chat-layout { flex-direction:row; align-items:flex-start; }
   .chat-main { flex:1; }
   .chat-compose { width:320px; flex:none; position:sticky; top:16px; }
+  .chat-compose textarea { min-height:65vh; }
 }
 /* Tall (portrait): single column with the compose box at the BOTTOM. */
 @media (orientation: portrait) {
