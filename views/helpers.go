@@ -10,10 +10,14 @@ import (
 	"angry-gopher/auth"
 )
 
-// CurrentUser returns the username the request acts as. Hard-coded
-// to Steve until login lands; this is the single seam every page
-// goes through to learn who it's serving.
+// CurrentUser returns the username the request acts as. A valid member
+// session is authoritative (so a member's identity can't be spoofed by
+// editing the plaintext gopher_user cookie); otherwise it's the
+// honor-system guest name from the cookie.
 func CurrentUser(r *http.Request) string {
+	if name, ok := SessionUser(r); ok {
+		return name
+	}
 	return auth.CurrentUser(r)
 }
 
