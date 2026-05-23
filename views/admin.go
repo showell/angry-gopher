@@ -38,6 +38,10 @@ func HandleAdmin(w http.ResponseWriter, r *http.Request) {
 		handleAdminDelete(w, r)
 		return
 	}
+	if r.URL.Path == "/admin/apikey" {
+		handleAdminAPIKey(w, r)
+		return
+	}
 	renderAdminOverview(w, r)
 }
 
@@ -62,6 +66,10 @@ func renderAdminOverview(w http.ResponseWriter, r *http.Request) {
 		flash = fmt.Sprintf(`<p class="flash">Deleted game data for <strong>%s</strong>.</p>`,
 			html.EscapeString(GetUserName(deleted)))
 	}
+	if revoked := strings.TrimSpace(r.URL.Query().Get("keyrevoked")); revoked != "" {
+		flash = fmt.Sprintf(`<p class="flash">Revoked the API key for <strong>%s</strong>.</p>`,
+			html.EscapeString(GetUserName(revoked)))
+	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	fmt.Fprintf(w, `<!DOCTYPE html>
@@ -82,6 +90,12 @@ tr:hover td { background: #f0f0ff; }
 .flash { background: #c6f6c6; color: #1a7a3a; padding: 8px 12px; border-radius: 4px; }
 a.del { color: #b00020; text-decoration: none; }
 a.del:hover { text-decoration: underline; }
+form.inline { display: inline; margin: 0; }
+button.key { background: #000080; color: white; border: none; padding: 3px 9px;
+             font-size: 12px; border-radius: 4px; cursor: pointer; }
+button.key:hover { background: #0000a0; }
+button.key.revoke { background: #b00020; }
+button.key.revoke:hover { background: #8a0019; }
 </style>
 </head><body>
 <nav><a href="/">← Home</a></nav>
@@ -134,11 +148,11 @@ func renderMembersTable(w http.ResponseWriter) {
 	})
 
 	fmt.Fprint(w, `<h2>Official users</h2>
-<p class="muted">Members (password holders) and time since last activity.</p>
+<p class="muted">Members (password holders), time since last activity, and a read-only bot API key.</p>
 <table>
-<tr><th>Name</th><th>Last active</th></tr>`)
+<tr><th>Name</th><th>Last active</th><th>API key</th></tr>`)
 	if len(rows) == 0 {
-		fmt.Fprint(w, `<tr><td colspan="2" class="muted">No members yet.</td></tr>`)
+		fmt.Fprint(w, `<tr><td colspan="3" class="muted">No members yet.</td></tr>`)
 	}
 	for _, row := range rows {
 		name := html.EscapeString(row.user.Name)
@@ -149,7 +163,7 @@ func renderMembersTable(w http.ResponseWriter) {
 		if row.ever {
 			since = humanizeSince(row.active)
 		}
-		fmt.Fprintf(w, `<tr><td>%s</td><td>%s</td></tr>`, name, since)
+		fmt.Fprintf(w, `<tr><td>%s</td><td>%s</td><td>%s</td></tr>`, name, since, apiKeyCell(row.user.ID))
 	}
 	fmt.Fprint(w, `</table>`)
 }
@@ -167,6 +181,81 @@ func humanizeSince(t time.Time) string {
 	default:
 		return fmt.Sprintf("%dd ago", int(d.Hours()/24))
 	}
+}
+
+// apiKeyCell renders the API-key controls for one member: a Generate
+// button (Regenerate + Revoke once a key exists). All POST to
+// /admin/apikey; generating shows the plaintext key once.
+func apiKeyCell(id string) string {
+	gen := "Generate"
+	extra := ""
+	if UserHasAPIKey(id) {
+		gen = "Regenerate"
+		extra = fmt.Sprintf(
+			` <form class="inline" method="post" action="/admin/apikey">`+
+				`<input type="hidden" name="user" value="%s"><input type="hidden" name="revoke" value="1">`+
+				`<button class="key revoke" type="submit">Revoke</button></form>`,
+			html.EscapeString(id))
+	}
+	return fmt.Sprintf(
+		`<form class="inline" method="post" action="/admin/apikey">`+
+			`<input type="hidden" name="user" value="%s">`+
+			`<button class="key" type="submit">%s</button></form>%s`,
+		html.EscapeString(id), gen, extra)
+}
+
+// handleAdminAPIKey generates (POST) or revokes (POST revoke=1) a member's
+// API key. Generating renders the plaintext key once; it can't be
+// recovered afterward.
+func handleAdminAPIKey(w http.ResponseWriter, r *http.Request) {
+	id := strings.TrimSpace(r.FormValue("user"))
+	if r.Method != http.MethodPost || id == "" || !UserExists(id) || !UserIsMember(id) {
+		http.Redirect(w, r, "/admin", http.StatusSeeOther)
+		return
+	}
+	if r.FormValue("revoke") == "1" {
+		if err := ClearUserAPIKey(id); err != nil {
+			http.Error(w, "revoke: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		http.Redirect(w, r, "/admin?keyrevoked="+url.QueryEscape(id), http.StatusSeeOther)
+		return
+	}
+	key, err := SetUserAPIKey(id)
+	if err != nil {
+		http.Error(w, "generate: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	renderAPIKeyShown(w, id, key)
+}
+
+// renderAPIKeyShown displays a freshly generated key once, with a copy
+// warning and usage hint.
+func renderAPIKeyShown(w http.ResponseWriter, id, key string) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	fmt.Fprintf(w, `<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>♦️ Lyn Rummy ♥️</title>
+<style>
+body { font-family: sans-serif; margin: 40px; max-width: 640px; }
+h1 { color: #000080; font-size: 22px; }
+nav a { color: #000080; }
+.warn { color: #b00020; }
+.box { background: #f4f4ec; border: 1px solid #ccc; border-radius: 6px; padding: 16px 20px; }
+code.key { font-family: ui-monospace,Menlo,Consolas,monospace; font-size: 15px;
+           background: #fff; border: 1px solid #ccc; padding: 8px 12px; border-radius: 4px;
+           display: block; user-select: all; word-break: break-all; }
+.muted { color: #888; font-size: 13px; }
+</style>
+</head><body>
+<nav><a href="/admin">← Admin</a></nav>
+<h1>API key for &ldquo;%s&rdquo;</h1>
+<div class="box">
+<p class="warn"><strong>Copy this now — it won't be shown again.</strong> (Regenerating makes a new one; this exact key can't be recovered.)</p>
+<code class="key">%s</code>
+<p class="muted">Read-only. The bot sends it as <code>Authorization: Bearer &lt;key&gt;</code>.
+Hand it to the bot via the <code>GOPHER_API_KEY</code> env var, not in the prompt. Revoke anytime from the Admin page.</p>
+</div>
+</body></html>`, html.EscapeString(GetUserName(id)), html.EscapeString(key))
 }
 
 func writeStatsRow(w http.ResponseWriter, st UserStats, cls, actionsCell string) {
