@@ -12,7 +12,9 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
+	"time"
 )
 
 // UserStats is a per-player rollup of on-disk session data.
@@ -67,6 +69,7 @@ func renderAdminOverview(w http.ResponseWriter, r *http.Request) {
 <style>
 body { font-family: sans-serif; margin: 40px; max-width: 880px; }
 h1 { color: #000080; }
+h2 { color: #000080; font-size: 18px; margin-top: 32px; }
 nav { font-size: 13px; margin-bottom: 16px; }
 nav a { color: #000080; }
 table { border-collapse: collapse; width: 100%%; margin-top: 12px; }
@@ -83,10 +86,15 @@ a.del:hover { text-decoration: underline; }
 </head><body>
 <nav><a href="/">← Home</a></nav>
 <h1>🐹 Angry Gopher Admin</h1>
-%s<p class="muted">Sessions generated per player. Read straight from %s.</p>
+%s`, flash)
+
+	renderMembersTable(w)
+
+	fmt.Fprintf(w, `<h2>Sessions per player</h2>
+<p class="muted">Read straight from %s.</p>
 <table>
 <tr><th>Player</th><th class="n">Games</th><th class="n">Puzzles</th><th class="n">Actions</th><th class="n">Disk</th><th></th></tr>`,
-		flash, html.EscapeString(GameDataRoot))
+		html.EscapeString(GameDataRoot))
 
 	if len(rows) == 0 {
 		fmt.Fprint(w, `<tr><td colspan="6" class="muted">No players yet.</td></tr>`)
@@ -100,6 +108,65 @@ a.del:hover { text-decoration: underline; }
 		writeStatsRow(w, grand, "total", "")
 	}
 	fmt.Fprint(w, `</table></body></html>`)
+}
+
+// renderMembersTable lists the official users (those with a password) and
+// how long since each was last active, most-recent first. Members who have
+// never registered any activity sort to the bottom.
+func renderMembersTable(w http.ResponseWriter) {
+	members := ListMembers()
+
+	type memberRow struct {
+		user   User
+		active time.Time
+		ever   bool
+	}
+	rows := make([]memberRow, 0, len(members))
+	for _, m := range members {
+		t, ok := UserLastActive(m.ID)
+		rows = append(rows, memberRow{user: m, active: t, ever: ok})
+	}
+	sort.SliceStable(rows, func(i, j int) bool {
+		if rows[i].ever != rows[j].ever {
+			return rows[i].ever // active-ever sorts above never-active
+		}
+		return rows[i].active.After(rows[j].active)
+	})
+
+	fmt.Fprint(w, `<h2>Official users</h2>
+<p class="muted">Members (password holders) and time since last activity.</p>
+<table>
+<tr><th>Name</th><th>Last active</th></tr>`)
+	if len(rows) == 0 {
+		fmt.Fprint(w, `<tr><td colspan="2" class="muted">No members yet.</td></tr>`)
+	}
+	for _, row := range rows {
+		name := html.EscapeString(row.user.Name)
+		if row.user.Admin {
+			name += ` <span class="muted">(admin)</span>`
+		}
+		since := "never"
+		if row.ever {
+			since = humanizeSince(row.active)
+		}
+		fmt.Fprintf(w, `<tr><td>%s</td><td>%s</td></tr>`, name, since)
+	}
+	fmt.Fprint(w, `</table>`)
+}
+
+// humanizeSince renders elapsed time since t as a coarse relative string.
+func humanizeSince(t time.Time) string {
+	d := time.Since(t)
+	switch {
+	case d < time.Minute:
+		return "just now"
+	case d < time.Hour:
+		return fmt.Sprintf("%dm ago", int(d.Minutes()))
+	case d < 24*time.Hour:
+		return fmt.Sprintf("%dh ago", int(d.Hours()))
+	default:
+		return fmt.Sprintf("%dd ago", int(d.Hours()/24))
+	}
 }
 
 func writeStatsRow(w http.ResponseWriter, st UserStats, cls, actionsCell string) {
