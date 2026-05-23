@@ -113,8 +113,7 @@ func renderChatConversation(w http.ResponseWriter, user User, partnerID string) 
 
 	PageHeader(w, "Chat with "+partnerName, user)
 	fmt.Fprint(w, chatCSS)
-	fmt.Fprintf(w, `<div id="chat-root" data-partner="%s" data-since="%d">`,
-		html.EscapeString(partnerID), len(msgs))
+	fmt.Fprintf(w, `<div id="chat-root" data-partner="%s">`, html.EscapeString(partnerID))
 	fmt.Fprint(w, `<div class="chat-views" id="chat-views">`+
 		`<span class="chat-view-tabs">`+
 		`<a href="#" data-view="rendered" class="active">Rendered</a> · `+
@@ -129,14 +128,9 @@ func renderChatConversation(w http.ResponseWriter, user User, partnerID string) 
 	if len(msgs) == 0 {
 		fmt.Fprint(w, `<p class="muted" id="chat-empty">No messages yet. Say hello 👋</p>`)
 	}
-	for i, m := range msgs {
-		writeChatBubble(w, m, user.Name, i)
-	}
-	fmt.Fprint(w, `</div><pre class="chat-transcript" id="chat-transcript">`)
-	for i, m := range msgs {
-		fmt.Fprintf(w, `<span data-i="%d">%s</span>`, i, html.EscapeString(chatStoredForm(i, m)))
-	}
-	fmt.Fprintf(w, `</pre></div></div>
+	// The feed (bubbles + transcript) is built client-side from the SSE
+	// replay; the server ships only this skeleton.
+	fmt.Fprint(w, `</div><pre class="chat-transcript" id="chat-transcript"></pre></div></div>
 <div class="chat-compose">
   <form id="chat-form">
     <textarea id="chat-body" placeholder="Write a message…  Markdown is supported, and longer posts are welcome."></textarea>
@@ -154,24 +148,6 @@ func renderChatConversation(w http.ResponseWriter, user User, partnerID string) 
 		url.QueryEscape(assetVersion))
 
 	PageFooter(w)
-}
-
-// writeChatBubble renders one message; the JS poller builds the same
-// shape from the SSE payload, so server- and live-rendered messages
-// match.
-func writeChatBubble(w io.Writer, msg ChatMessage, me string, idx int) {
-	cls := "theirs"
-	if msg.From == me {
-		cls = "mine"
-	}
-	hash := msg.Hash
-	fmt.Fprintf(w,
-		`<div class="chat-msg %s" id="msg-%s" data-i="%d" data-hash="%s">`+
-			`<div class="chat-meta">%s · %s <button type="button" class="msg-refer" title="Reference this message">refer</button></div>`+
-			`<div class="chat-body">%s</div><div class="chat-raw">%s</div></div>`,
-		cls, hash, idx, hash,
-		html.EscapeString(msg.From), html.EscapeString(formatChatTime(msg.At)),
-		RenderChatMarkdown(msg.Body), html.EscapeString(msg.Body))
 }
 
 // HandleChatSend appends a posted message. Async (fetch) callers send

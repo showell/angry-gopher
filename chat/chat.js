@@ -1,6 +1,6 @@
 (function(){
   var root=document.getElementById('chat-root');
-  var PARTNER=root.dataset.partner, SINCE=parseInt(root.dataset.since,10);
+  var PARTNER=root.dataset.partner;
   var history=document.getElementById('chat-history');
   var bubbles=document.getElementById('chat-bubbles');
   var transcript=document.getElementById('chat-transcript');
@@ -71,7 +71,9 @@
     if(!locked) toBottom(); /* unlocking catches up to the latest */
   });
   toBottom();
-  var es=new EventSource('/chat/stream?with='+encodeURIComponent(PARTNER)+'&since='+SINCE);
+  /* Always replay the full backlog (since=0); reconnects resume from
+     Last-Event-ID automatically. The client builds the whole feed. */
+  var es=new EventSource('/chat/stream?with='+encodeURIComponent(PARTNER)+'&since=0');
   es.onmessage=function(e){ addMessage(JSON.parse(e.data)); if(!locked) toBottom(); };
   function send(){
     var text=textarea.value;
