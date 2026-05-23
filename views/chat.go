@@ -307,10 +307,9 @@ func writeChatEvent(w io.Writer, rc *http.ResponseController, evt chatEvent, me 
 }
 
 const chatCSS = `<style>
-.chat-layout { display:flex; gap:20px; align-items:flex-start; }
+.chat-layout { display:flex; gap:20px; }
 .chat-history { flex:1; min-width:0; max-height:62vh; overflow-y:auto;
                 border:1px solid #ddd; border-radius:8px; padding:12px; background:#fcfcf8; }
-.chat-compose { width:300px; flex:none; position:sticky; top:16px; }
 .chat-compose form { margin:0; }
 .chat-compose textarea { width:100%; min-height:200px; resize:vertical; box-sizing:border-box;
                          font-family:inherit; font-size:14px; padding:8px; }
@@ -362,9 +361,17 @@ const chatCSS = `<style>
 .chat-img-scroll img { display:block; }
 .chat-hint { font-size:12px; color:#999; margin-top:8px; }
 .chat-status { font-size:12px; color:#b00020; min-height:16px; margin-top:6px; }
-@media (max-width: 640px) {
-  .chat-layout { flex-direction:column; }
-  .chat-compose { width:auto; position:static; }
+/* Wide (landscape): compose on the LEFT, conversation fills the right. */
+@media (orientation: landscape) {
+  .chat-layout { flex-direction:row-reverse; align-items:flex-start; }
+  .chat-compose { width:320px; flex:none; position:sticky; top:16px; }
+}
+/* Tall (portrait): single column with the compose box at the BOTTOM. */
+@media (orientation: portrait) {
+  .chat-layout { flex-direction:column; align-items:stretch; }
+  .chat-compose { width:auto; flex:none; }
+  .chat-history { max-height:50vh; }
+  .chat-compose textarea { min-height:140px; }
 }
 </style>`
 
