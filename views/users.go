@@ -194,18 +194,6 @@ func ListMembers() []User {
 	return out
 }
 
-// HashPassword returns a bcrypt hash (used to carry an unconfirmed
-// password between the two account-creation steps without plaintext).
-func HashPassword(password string) (string, error) {
-	h, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
-	return string(h), err
-}
-
-// PasswordMatchesHash reports whether a password matches a bcrypt hash.
-func PasswordMatchesHash(hash, password string) bool {
-	return bcrypt.CompareHashAndPassword([]byte(hash), []byte(password)) == nil
-}
-
 // FindMemberByName returns the id of the member currently using `name`.
 func FindMemberByName(name string) (string, bool) {
 	for _, id := range ListUserIDs() {

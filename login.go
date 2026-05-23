@@ -66,61 +66,79 @@ func setUIDCookie(w http.ResponseWriter, id string) {
 	})
 }
 
-// handleLoginFull is the password login for chat members. An existing
-// member name verifies its password; a free name creates an account (with
-// a confirm step) and reserves the name. On success it issues a member
-// session for that user id and returns to `next`.
+// handleLoginFull is the password gate for chat. The name is fixed to the
+// identity you already have — your guest name, or an explicit ?name= from
+// the reserved-name notice; there's no name editing here. A returning
+// member verifies their password; a guest completes registration by
+// entering a password twice on one screen, which reserves their name. On
+// success it issues a member session and returns to `next`.
 func handleLoginFull(w http.ResponseWriter, r *http.Request) {
 	next := sanitizeNext(r.FormValue("next"))
-	if r.Method == http.MethodPost {
-		name, errMsg := auth.ValidateUserName(r.FormValue("name"))
-		if errMsg != "" {
-			renderFullLoginPage(w, r.FormValue("name"), next, errMsg)
-			return
-		}
-		password := r.FormValue("password")
-		if password == "" {
-			renderFullLoginPage(w, name, next, "Please enter a password.")
-			return
-		}
-		if id, ok := views.FindMemberByName(name); ok {
-			// Returning member — verify; no confirm step.
-			if !views.CheckUserPassword(id, password) {
-				renderFullLoginPage(w, name, next, fmt.Sprintf("Wrong password for “%s”.", name))
-				return
-			}
-			loginAsMember(w, r, id, next)
-			return
-		}
-		// New name — require a confirmation step (first entry carried as a
-		// bcrypt hash, never plaintext), then create the account.
-		pending := r.FormValue("pending")
-		if pending == "" {
-			h, err := views.HashPassword(password)
-			if err != nil {
-				http.Error(w, "hash: "+err.Error(), http.StatusInternalServerError)
-				return
-			}
-			renderCreateConfirmPage(w, name, next, h, "")
-			return
-		}
-		if !views.PasswordMatchesHash(pending, password) {
-			renderCreateConfirmPage(w, name, next, pending, "That didn't match — re-enter the same password.")
-			return
-		}
-		id, err := views.AllocateUser(name)
-		if err != nil {
-			http.Error(w, "allocate user: "+err.Error(), http.StatusInternalServerError)
-			return
-		}
-		if err := views.SetUserPassword(id, password); err != nil {
-			http.Error(w, "set password: "+err.Error(), http.StatusInternalServerError)
-			return
-		}
-		loginAsMember(w, r, id, next)
+
+	// The name is fixed: an explicit name (reserved-name notice) wins, else
+	// the current guest's name. With no usable name, identify first.
+	raw := auth.SanitizeUser(r.FormValue("name"))
+	if raw == "" {
+		raw = views.CurrentUser(r).Name
+	}
+	name, errMsg := auth.ValidateUserName(raw)
+	if errMsg != "" {
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
 	}
-	renderFullLoginPage(w, auth.SanitizeUser(r.URL.Query().Get("name")), next, "")
+
+	memberID, isMember := views.FindMemberByName(name)
+
+	if r.Method != http.MethodPost {
+		if isMember {
+			renderFullLoginPage(w, name, next, "")
+		} else {
+			renderRegisterPage(w, name, next, "")
+		}
+		return
+	}
+
+	password := r.FormValue("password")
+	if isMember {
+		// Returning member — verify their password.
+		if !views.CheckUserPassword(memberID, password) {
+			renderFullLoginPage(w, name, next, fmt.Sprintf("Wrong password for “%s”.", name))
+			return
+		}
+		loginAsMember(w, r, memberID, next)
+		return
+	}
+
+	// Registration — the same password in both boxes, on one screen.
+	if password == "" {
+		renderRegisterPage(w, name, next, "Please enter a password.")
+		return
+	}
+	if password != r.FormValue("confirm") {
+		renderRegisterPage(w, name, next, "The two passwords don't match — please re-enter them.")
+		return
+	}
+	id, err := registerMember(r, name, password)
+	if err != nil {
+		http.Error(w, "register: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	loginAsMember(w, r, id, next)
+}
+
+// registerMember turns `name` into a password member and returns its id. If
+// the current guest IS this name (not yet a member), it upgrades that
+// guest's id in place so their identity and data carry over; otherwise it
+// allocates a fresh id.
+func registerMember(r *http.Request, name, password string) (string, error) {
+	if cur := views.CurrentUser(r); cur.ID != "" && !cur.Member && cur.Name == name {
+		return cur.ID, views.SetUserPassword(cur.ID, password)
+	}
+	id, err := views.AllocateUser(name)
+	if err != nil {
+		return "", err
+	}
+	return id, views.SetUserPassword(id, password)
 }
 
 // loginAsMember sets the identity cookie + signed member session for a
@@ -248,7 +266,22 @@ a { color: #000080; }
 </body></html>`, esc, esc)
 }
 
-// renderFullLoginPage is the member (password) login screen.
+// loginFullCSS is the shared stylesheet for the chat password screens.
+const loginFullCSS = `<style>
+body { font-family: sans-serif; margin: 80px auto; max-width: 420px; padding: 0 24px; }
+h1 { color: #000080; font-size: 24px; }
+.muted { color: #888; font-size: 14px; }
+.err { color: #b00020; font-size: 14px; }
+.name { font-size: 18px; font-weight: bold; color: #000080; margin: 12px 0 4px; }
+label { display: block; font-size: 13px; color: #444; margin-top: 10px; }
+input[type=password] { font-size: 16px; padding: 8px; width: 100%; box-sizing: border-box; margin: 4px 0; }
+button { background: #000080; color: white; border: none; padding: 10px 20px;
+         font-size: 15px; border-radius: 4px; cursor: pointer; margin-top: 12px; }
+a { color: #000080; }
+</style>`
+
+// renderFullLoginPage is the returning-member screen: a fixed (read-only)
+// name and one password to verify.
 func renderFullLoginPage(w http.ResponseWriter, name, next, errMsg string) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	errLine := ""
@@ -257,34 +290,25 @@ func renderFullLoginPage(w http.ResponseWriter, name, next, errMsg string) {
 	}
 	fmt.Fprintf(w, `<!DOCTYPE html>
 <html><head><meta charset="utf-8"><title>♦️ Lyn Rummy ♥️</title>
-<style>
-body { font-family: sans-serif; margin: 80px auto; max-width: 420px; padding: 0 24px; }
-h1 { color: #000080; }
-.muted { color: #888; font-size: 14px; }
-.err { color: #b00020; font-size: 14px; }
-input[type=text], input[type=password] { font-size: 16px; padding: 8px; width: 100%%; box-sizing: border-box; margin: 8px 0; }
-label { font-size: 13px; color: #444; }
-button { background: #000080; color: white; border: none; padding: 10px 20px;
-         font-size: 15px; border-radius: 4px; cursor: pointer; }
-a { color: #000080; }
-</style></head><body>
+%s</head><body>
 <h1>Log in to chat</h1>
-<p class="muted">Chat needs a password-protected name. New here? Your name + password reserves it. Returning? Enter your password.</p>
+<p class="muted">Enter the password for this name.</p>
+<div class="name">%s</div>
 %s
 <form method="post" action="/login/full">
+  <input type="hidden" name="name" value="%s">
   <input type="hidden" name="next" value="%s">
-  <input name="name" type="text" maxlength="40" placeholder="Your name" value="%s" autofocus>
-  <input name="password" type="password" placeholder="Password">
-  <button type="submit">Continue</button>
+  <label>Password</label>
+  <input name="password" type="password" autofocus>
+  <button type="submit">Log in</button>
 </form>
-<p class="muted" style="margin-top:16px"><a href="/">← Back</a> · Just want to play? <a href="/login">Play as a guest</a></p>
-</body></html>`, errLine, html.EscapeString(next), html.EscapeString(name))
+<p class="muted" style="margin-top:16px"><a href="/login">← Use a different name</a></p>
+</body></html>`, loginFullCSS, html.EscapeString(name), errLine, html.EscapeString(name), html.EscapeString(next))
 }
 
-// renderCreateConfirmPage is the second step of new-account creation: the
-// member re-enters the password they just chose (the first entry rides
-// along as a bcrypt hash in `pending`, never as plaintext).
-func renderCreateConfirmPage(w http.ResponseWriter, name, next, pending, errMsg string) {
+// renderRegisterPage is the guest→member screen: the name is fixed
+// (read-only) and the password is entered twice on one screen.
+func renderRegisterPage(w http.ResponseWriter, name, next, errMsg string) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	errLine := ""
 	if errMsg != "" {
@@ -292,28 +316,22 @@ func renderCreateConfirmPage(w http.ResponseWriter, name, next, pending, errMsg 
 	}
 	fmt.Fprintf(w, `<!DOCTYPE html>
 <html><head><meta charset="utf-8"><title>♦️ Lyn Rummy ♥️</title>
-<style>
-body { font-family: sans-serif; margin: 80px auto; max-width: 420px; padding: 0 24px; }
-h1 { color: #000080; }
-.muted { color: #888; font-size: 14px; }
-.err { color: #b00020; font-size: 14px; }
-input[type=password] { font-size: 16px; padding: 8px; width: 100%%; box-sizing: border-box; margin: 8px 0; }
-button { background: #000080; color: white; border: none; padding: 10px 20px;
-         font-size: 15px; border-radius: 4px; cursor: pointer; }
-a { color: #000080; }
-</style></head><body>
-<h1>Create your account</h1>
-<p class="muted">New name “%s” — re-enter your password to confirm and create the account.</p>
+%s</head><body>
+<h1>Complete registration with password</h1>
+<p class="muted">Chat needs a password. This reserves your name so only you can use it.</p>
+<div class="name">%s</div>
 %s
 <form method="post" action="/login/full">
   <input type="hidden" name="name" value="%s">
   <input type="hidden" name="next" value="%s">
-  <input type="hidden" name="pending" value="%s">
-  <input name="password" type="password" placeholder="Re-enter password" autofocus>
-  <button type="submit">Create account</button>
+  <label>Password</label>
+  <input name="password" type="password" autofocus>
+  <label>Confirm password</label>
+  <input name="confirm" type="password">
+  <button type="submit">Complete registration</button>
 </form>
-<p class="muted" style="margin-top:16px"><a href="/login/full">← Start over</a></p>
-</body></html>`, html.EscapeString(name), errLine, html.EscapeString(name), html.EscapeString(next), html.EscapeString(pending))
+<p class="muted" style="margin-top:16px"><a href="/">← Back</a> · Just want to play? <a href="/login">Play as a guest</a></p>
+</body></html>`, loginFullCSS, html.EscapeString(name), errLine, html.EscapeString(name), html.EscapeString(next))
 }
 
 // renderLogoutPage shows the logout confirmation with the release
