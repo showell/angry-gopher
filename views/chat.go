@@ -107,7 +107,7 @@ func renderChatConversation(w http.ResponseWriter, user, partner string) {
 		`</div>`)
 
 	fmt.Fprint(w, `<div class="chat-layout"><div class="chat-main">`+
-		`<div class="chat-navbar"><button type="button" id="chat-back" class="chat-back" title="Back to where you were before the last jump" disabled>&gt;</button></div>`+
+		`<div class="chat-navbar"><button type="button" id="chat-back" class="chat-back" title="Back to where you were before the last jump" disabled>&larr;</button></div>`+
 		`<div class="chat-history view-rendered" id="chat-history"><div class="chat-bubbles" id="chat-bubbles">`)
 	if len(msgs) == 0 {
 		fmt.Fprint(w, `<p class="muted" id="chat-empty">No messages yet. Say hello 👋</p>`)
@@ -546,12 +546,17 @@ const chatScript = `<script>(function(){
     return els.length ? els[els.length-1].getAttribute('data-i') : null;
   }
   function scrollIndexToTop(idx){
-    if(idx===null||idx===undefined) return;
+    if(idx===null||idx===undefined) return null;
     var el=bubbles.querySelector('.chat-msg[data-i="'+idx+'"]');
-    if(!el||el.offsetParent===null) return;
-    history.scrollTop += el.getBoundingClientRect().top - history.getBoundingClientRect().top;
+    if(!el||el.offsetParent===null) return null;
+    el.scrollIntoView({block:'start',behavior:'smooth'});
+    return el;
   }
-  backBtn.addEventListener('click',function(){ if(navStack.length){ scrollIndexToTop(navStack.pop()); updateBack(); } });
+  backBtn.addEventListener('click',function(){
+    if(!navStack.length) return;
+    var el=scrollIndexToTop(navStack.pop()); updateBack();
+    if(el) flashMsg(el); /* highlight the message we returned to */
+  });
   updateBack();
   bubbles.addEventListener('click',function(e){
     var t=e.target;
