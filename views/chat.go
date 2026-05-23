@@ -361,9 +361,9 @@ const chatCSS = `<style>
 .chat-img-scroll img { display:block; }
 .chat-hint { font-size:12px; color:#999; margin-top:8px; }
 .chat-status { font-size:12px; color:#b00020; min-height:16px; margin-top:6px; }
-/* Wide (landscape): compose on the LEFT, conversation fills the right. */
+/* Wide (landscape): side by side — conversation left, compose on the RIGHT. */
 @media (orientation: landscape) {
-  .chat-layout { flex-direction:row-reverse; align-items:flex-start; }
+  .chat-layout { flex-direction:row; align-items:flex-start; }
   .chat-compose { width:320px; flex:none; position:sticky; top:16px; }
 }
 /* Tall (portrait): single column with the compose box at the BOTTOM. */
