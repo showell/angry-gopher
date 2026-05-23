@@ -11,11 +11,6 @@
 //   port     = 9000
 //   data_dir = /home/steve/AngryGopher/prod
 //
-//   # Zulip login pings
-//   zulip_url     = https://example.zulipchat.com
-//   zulip_email   = bot@example.com
-//   zulip_api_key = ...
-//
 // data_dir holds gopher's writable state; session data lives under
 // {data_dir}/lynrummy/{user}/.
 
@@ -31,13 +26,8 @@ import (
 )
 
 type ServerConfig struct {
-	Port        int
-	DataDir     string
-	ZulipURL    string
-	ZulipEmail  string
-	ZulipAPIKey string
-	ZulipStream string
-	ZulipTopic  string
+	Port    int
+	DataDir string
 }
 
 func (c *ServerConfig) ListenAddr() string {
@@ -103,16 +93,6 @@ func loadConfig(path string) (*ServerConfig, error) {
 			c.Port = n
 		case "data_dir":
 			c.DataDir = expandHome(val)
-		case "zulip_url":
-			c.ZulipURL = val
-		case "zulip_email":
-			c.ZulipEmail = val
-		case "zulip_api_key":
-			c.ZulipAPIKey = val
-		case "zulip_stream":
-			c.ZulipStream = val
-		case "zulip_topic":
-			c.ZulipTopic = val
 		default:
 			fmt.Fprintf(os.Stderr, "config: ignoring unknown key %q (line %d)\n", key, lineNo)
 		}

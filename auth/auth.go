@@ -2,7 +2,7 @@
 //
 // Identity is a username read from the gopher_user cookie (set by the
 // /login endpoint) and sanitized — the name becomes a session
-// directory segment and is embedded in HTML and Zulip messages, so it
+// directory segment and is embedded in HTML, so it
 // is scrubbed to a safe character set here. No password yet: this is an
 // open game and the name is the honor-system identity, not a security
 // boundary. (Passwords are a planned future addition.)

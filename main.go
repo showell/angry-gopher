@@ -14,7 +14,6 @@ import (
 
 	"angry-gopher/auth"
 	"angry-gopher/views"
-	"angry-gopher/zulip"
 )
 
 func buildMux() http.Handler {
@@ -25,8 +24,8 @@ func buildMux() http.Handler {
 	// HTML pages, incl. the home/lobby at "/". Single source of truth.
 	views.RegisterPages(mux)
 
-	// Name login/logout (login sets the gopher_user cookie + fires a
-	// Zulip ping; logout clears it).
+	// Name login/logout (login sets the gopher_user cookie; logout
+	// clears it). /login/full sets a member password session.
 	mux.HandleFunc("/login", handleLogin)
 	mux.HandleFunc("/login/full", handleLoginFull)
 	mux.HandleFunc("/logout", handleLogout)
@@ -94,11 +93,6 @@ Example config (~/AngryGopher/gopher.conf):
   port     = 9000
   data_dir = /home/steve/AngryGopher/prod
 
-  # Zulip login pings
-  zulip_url     = https://example.zulipchat.com
-  zulip_email   = bot@example.com
-  zulip_api_key = ...
-
 Usage:
 
   GOPHER_CONFIG=~/AngryGopher/gopher.conf ./gopher-server
@@ -120,13 +114,6 @@ Usage:
 	views.SetDataRoot(config.SessionsDataRoot())
 	views.SetChatRoot(config.ChatDataRoot())
 	views.SetAssets(assets)
-	zulip.Configure(zulip.Config{
-		URL:    config.ZulipURL,
-		Email:  config.ZulipEmail,
-		APIKey: config.ZulipAPIKey,
-		Stream: config.ZulipStream,
-		Topic:  config.ZulipTopic,
-	})
 
 	handler := buildMux()
 

@@ -113,7 +113,7 @@ func lynrummyElmNewSession(w http.ResponseWriter, r *http.Request, user string) 
 		return
 	}
 
-	gameStateDSL, ok := readLimitedBody(w, r, user, maxNewSessionBytes)
+	gameStateDSL, ok := readLimitedBody(w, r, maxNewSessionBytes)
 	if !ok {
 		return
 	}
@@ -155,7 +155,7 @@ func lynrummyElmAppendSessionLine(w http.ResponseWriter, r *http.Request, user s
 		http.NotFound(w, r)
 		return
 	}
-	body, ok := readLimitedBody(w, r, user, maxAppendBytes)
+	body, ok := readLimitedBody(w, r, maxAppendBytes)
 	if !ok {
 		return
 	}

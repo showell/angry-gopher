@@ -90,7 +90,7 @@ func puzzleAppendAction(w http.ResponseWriter, r *http.Request, user string, ses
 		http.NotFound(w, r)
 		return
 	}
-	body, ok := readLimitedBody(w, r, user, maxAppendBytes)
+	body, ok := readLimitedBody(w, r, maxAppendBytes)
 	if !ok {
 		return
 	}

@@ -33,8 +33,7 @@ the SSH key was added at droplet creation).
    ```
 
 2. **Config** — copy the local `gopher.conf` and repoint `data_dir`.
-   The Zulip API key rides along; it lives only on the host, never
-   in git.
+   The config (`port`, `data_dir`) lives only on the host, never in git.
 
    ```
    scp ~/AngryGopher/gopher.conf steve@<IP>:~/AngryGopher/gopher.conf

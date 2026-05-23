@@ -16,7 +16,6 @@ import (
 
 	"angry-gopher/auth"
 	"angry-gopher/views"
-	"angry-gopher/zulip"
 )
 
 func handleLogin(w http.ResponseWriter, r *http.Request) {
@@ -52,11 +51,10 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 }
 
 // loginAs logs in a guest: sets the identity cookie, clears any stale
-// member session, fires the Zulip ping, and sends the player home.
+// member session, and sends the player home.
 func loginAs(w http.ResponseWriter, r *http.Request, name string) {
 	setIdentityCookie(w, name)
 	views.ClearAuthCookie(w) // a guest login is not an authenticated member
-	go zulip.NotifyLogin(name)
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
@@ -119,7 +117,6 @@ func handleLoginFull(w http.ResponseWriter, r *http.Request) {
 		_ = views.ClaimUser(name)
 		setIdentityCookie(w, name)
 		views.SetAuthCookie(w, name)
-		go zulip.NotifyLogin(name)
 		http.Redirect(w, r, next, http.StatusSeeOther)
 		return
 	}
