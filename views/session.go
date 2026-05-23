@@ -92,9 +92,13 @@ func SessionUser(r *http.Request) (string, bool) {
 	return id, true
 }
 
-// IsMember reports whether the request is an authenticated member.
+// IsMember reports whether the request is an authenticated member — by a
+// session cookie (browser) or a valid API key (bot, read-only).
 func IsMember(r *http.Request) bool {
-	_, ok := SessionUser(r)
+	if _, ok := SessionUser(r); ok {
+		return true
+	}
+	_, ok := apiKeyUser(r)
 	return ok
 }
 

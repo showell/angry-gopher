@@ -19,6 +19,14 @@ func CurrentUser(r *http.Request) User {
 	if id, ok := SessionUser(r); ok {
 		return LoadUser(id)
 	}
+	// An API key authenticates a member for read-only access; it is never
+	// an admin credential, so strip Admin (the login gate also blocks any
+	// non-GET key request).
+	if id, ok := apiKeyUser(r); ok {
+		u := LoadUser(id)
+		u.Admin = false
+		return u
+	}
 	id := auth.CurrentUID(r)
 	if id != "" && UserExists(id) && !UserIsMember(id) {
 		return LoadUser(id)
