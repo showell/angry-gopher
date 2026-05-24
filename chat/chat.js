@@ -14,17 +14,44 @@
   var backBtn=document.getElementById('chat-back');
   var locked=false;
   function toBottom(){ history.scrollTop=history.scrollHeight; }
-  /* Persistent "selected message" (Zulip-style cursor). At most one message
-     is selected; it shows a steady highlight ring. The selection moves when
-     you click a MSG_ link or the back button, and otherwise FOLLOWS scrolling:
-     the topmost message fully in view, or — when one message is too tall for
-     any to be fully visible — the topmost whose beginning (top edge) shows. */
+  /* Persistent "selected message" (Zulip-style cursor) + a navigation undo
+     stack. At most one message is selected; it shows a steady highlight ring.
+     The selection moves when you click a message / MSG_ link, and otherwise
+     FOLLOWS scrolling: the topmost message fully in view, or — when one
+     message is too tall for any to be fully visible — the topmost whose
+     beginning (top edge) shows.
+
+     navStack records the trail of *committed* selections so the ← button can
+     walk back. A click/link jump commits immediately; a scroll-driven change
+     commits only after a 700ms pause — so scrolling past messages to find one
+     doesn't churn the stack, only the message you settle on is recorded. */
   var selected=null, suppressSyncUntil=0;
+  function idxOf(el){ return el?el.getAttribute('data-i'):null; }
   function selectMsg(el){
     if(!el||el===selected) return;
     if(selected) selected.classList.remove('selected');
     selected=el; el.classList.add('selected');
   }
+  var navStack=[], commitTimer=null;
+  function canGoBack(){
+    if(!navStack.length) return false;
+    if(idxOf(selected)===navStack[navStack.length-1]) return navStack.length>=2;
+    return true; /* selection has drifted away from the last stable one */
+  }
+  function updateBack(){ backBtn.disabled=!canGoBack(); }
+  function pushCommit(idx){
+    if(idx===null) return;
+    if(navStack.length && navStack[navStack.length-1]===idx) return; /* no consecutive dup */
+    navStack.push(idx); updateBack();
+  }
+  function commitSelection(idx, immediate){
+    if(commitTimer){ clearTimeout(commitTimer); commitTimer=null; }
+    if(immediate) pushCommit(idx);
+    else commitTimer=setTimeout(function(){ commitTimer=null; pushCommit(idx); }, 700);
+  }
+  /* Select + record on the nav stack: immediate=true for a click/link jump,
+     false to debounce a scroll-driven change. */
+  function selectAndCommit(el, immediate){ if(el){ selectMsg(el); commitSelection(idxOf(el), immediate); } }
   function selectionCandidate(){
     var els=bubbles.querySelectorAll('.chat-msg'), hr=history.getBoundingClientRect();
     var beginningVisible=null, straddler=null;
@@ -37,9 +64,13 @@
     }
     return beginningVisible||straddler||null;
   }
-  /* A link/back jump sets selection explicitly, then suppresses scroll-driven
-     reselection briefly so the smooth-scroll animation doesn't steal it back. */
-  function syncSelectionToScroll(){ if(Date.now()>=suppressSyncUntil) selectMsg(selectionCandidate()); }
+  /* A link/back jump suppresses scroll-driven reselection briefly so the
+     smooth-scroll animation doesn't steal the selection back. */
+  function syncSelectionToScroll(){
+    if(Date.now()<suppressSyncUntil) return;
+    var el=selectionCandidate();
+    if(el && el!==selected){ selectAndCommit(el, false); updateBack(); } /* enables ← as you drift away */
+  }
   var rafPending=false;
   history.addEventListener('scroll',function(){
     if(rafPending) return; rafPending=true;
@@ -196,11 +227,10 @@
     img.src=src;
     if(img.complete) fit();
   }
-  /* Back-nav stack: jumping to a MSG_ link remembers the message you
-     clicked FROM; the ← button scrolls back to it (and selects it), one
-     step per chained jump. */
-  var navStack=[];
-  function updateBack(){ backBtn.disabled = navStack.length===0; }
+  /* The ← button walks back through the committed-selection trail. If you've
+     scrolled away without settling (selection != top of stack), it first
+     snaps you back to that last stable selection; once you're on it, each
+     press steps to the previous committed selection. */
   function scrollIndexToTop(idx){
     if(idx===null||idx===undefined) return null;
     var el=bubbles.querySelector('.chat-msg[data-i="'+idx+'"]');
@@ -210,8 +240,18 @@
   }
   backBtn.addEventListener('click',function(){
     if(!navStack.length) return;
-    var el=scrollIndexToTop(navStack.pop()); updateBack();
-    if(el){ suppressSyncUntil=Date.now()+800; selectMsg(el); } /* select the message we returned to */
+    if(commitTimer){ clearTimeout(commitTimer); commitTimer=null; } /* drop a pending scroll-commit */
+    var cur=idxOf(selected), top=navStack[navStack.length-1], target;
+    if(cur===top){
+      if(navStack.length<2) return;          /* already at the oldest committed selection */
+      navStack.pop();                         /* leave the current one... */
+      target=navStack[navStack.length-1];     /* ...and go to the previous */
+    } else {
+      target=top;                             /* transient scroll-away: snap back to the last stable */
+    }
+    suppressSyncUntil=Date.now()+800;
+    var el=scrollIndexToTop(target); if(el) selectMsg(el);
+    updateBack();
   });
   updateBack();
   bubbles.addEventListener('click',function(e){
@@ -220,14 +260,12 @@
     if(rb){ var mm=rb.closest('.chat-msg'); if(mm) insertAtCursor('MSG_'+mm.getAttribute('data-hash')+' '); return; }
     var a=t.closest&&t.closest('a.msg-ref');
     if(a){ e.preventDefault();
-      var src=a.closest('.chat-msg'); /* the message we're clicking from */
       var tgt=document.getElementById(a.getAttribute('href').slice(1));
-      if(tgt){ if(src) navStack.push(src.getAttribute('data-i')); updateBack();
-        suppressSyncUntil=Date.now()+800;
-        tgt.scrollIntoView({block:'center',behavior:'smooth'}); selectMsg(tgt); }
+      if(tgt){ suppressSyncUntil=Date.now()+800;
+        tgt.scrollIntoView({block:'center',behavior:'smooth'}); selectAndCommit(tgt,true); }
       return; }
     var msg=t.closest&&t.closest('.chat-msg'); /* a plain click (incl. on an image) selects the message */
-    if(msg) selectMsg(msg);
+    if(msg) selectAndCommit(msg,true);
     if(t&&t.tagName==='IMG'&&t.closest('.chat-body')) showImagePopup(t.src);
   });
   textarea.focus();
