@@ -10,7 +10,7 @@
 // This module owns the full-game surface (`/game/...`). It also
 // hosts the TS engine JS bundle constants (`EngineJSPath`,
 // `EngineGlueJSPath`) for the full-game Hint button.
-package views
+package lynrummy
 
 import (
 	"angry-gopher/server/web"
@@ -51,9 +51,9 @@ func HandleGame(w http.ResponseWriter, r *http.Request) {
 	case sub == "elm.js":
 		lynrummyElmJS(w)
 	case sub == "engine.js":
-		serveJS(w, EngineJSPath, "engine.js not found — run `ops/build_engine_js`")
+		web.ServeJS(w, EngineJSPath, "engine.js not found — run `ops/build_engine_js`")
 	case sub == "engine_glue.js":
-		serveJS(w, EngineGlueJSPath, "engine_glue.js not found — check the file exists at "+EngineGlueJSPath)
+		web.ServeJS(w, EngineGlueJSPath, "engine_glue.js not found — check the file exists at "+EngineGlueJSPath)
 	case sub == "new-session":
 		lynrummyElmNewSession(w, r, uid)
 	case sub == "sessions":
@@ -433,20 +433,6 @@ func lynrummyElmJS(w http.ResponseWriter) {
 	data, err := web.ReadAsset(ElmJSPath)
 	if err != nil {
 		http.Error(w, "elm.js missing from the binary — run `ops/build_elm` before `go build`", http.StatusNotFound)
-		return
-	}
-	w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
-	w.Write(data)
-}
-
-// serveJS reads `path` and writes it as application/javascript.
-// On read failure, returns a 404 with the supplied missing-file
-// message (intended to point the developer at the build step
-// that produces the asset).
-func serveJS(w http.ResponseWriter, path string, missingMsg string) {
-	data, err := web.ReadAsset(path)
-	if err != nil {
-		http.Error(w, missingMsg, http.StatusNotFound)
 		return
 	}
 	w.Header().Set("Content-Type", "application/javascript; charset=utf-8")

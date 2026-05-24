@@ -1,6 +1,7 @@
 package views
 
 import (
+	"angry-gopher/server/lynrummy"
 	"angry-gopher/server/web"
 	"fmt"
 	"html"
@@ -93,18 +94,18 @@ func renderRecentSessions(w http.ResponseWriter, viewer string) {
 	}
 	var rows []sessionRow
 	for _, p := range web.ListUserIDs() {
-		ids, err := ListSessionIDs(p)
+		ids, err := lynrummy.ListSessionIDs(p)
 		if err != nil {
 			continue
 		}
 		for _, id := range ids {
-			meta, _ := ReadSessionMeta(p, id)
-			count, _ := CountSessionActions(p, id)
+			meta, _ := lynrummy.ReadSessionMeta(p, id)
+			count, _ := lynrummy.CountSessionActions(p, id)
 			rows = append(rows, sessionRow{
 				player:  p,
 				id:      id,
-				created: SessionCreatedAt(meta),
-				label:   SessionLabel(meta),
+				created: lynrummy.SessionCreatedAt(meta),
+				label:   lynrummy.SessionLabel(meta),
 				actions: count,
 			})
 		}

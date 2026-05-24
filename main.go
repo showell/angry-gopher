@@ -11,6 +11,7 @@ import (
 	"os"
 	"time"
 
+	"angry-gopher/server/lynrummy"
 	"angry-gopher/server/web"
 	"angry-gopher/views"
 )
@@ -105,7 +106,7 @@ Usage:
 		os.Exit(1)
 	}
 
-	views.SetDataRoot(config.SessionsDataRoot())
+	lynrummy.SetDataRoot(config.SessionsDataRoot())
 	views.SetChatRoot(config.ChatDataRoot())
 	web.SetUsersRoot(config.UsersDataRoot())
 	web.SetSessionSecretDir(config.ChatDataRoot())

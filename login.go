@@ -17,8 +17,8 @@ import (
 	"strings"
 
 	"angry-gopher/auth"
+	"angry-gopher/server/lynrummy"
 	"angry-gopher/server/web"
-	"angry-gopher/views"
 )
 
 func handleLogin(w http.ResponseWriter, r *http.Request) {
@@ -170,7 +170,7 @@ func handleLogout(w http.ResponseWriter, r *http.Request) {
 		if r.FormValue("release") == "yes" && user.ID != "" {
 			// Release: delete game data and the user record (frees the
 			// name; no id is ever reissued, so no name-backdoor remains).
-			if err := views.DeleteUserData(user.ID); err != nil {
+			if err := lynrummy.DeleteUserData(user.ID); err != nil {
 				log.Printf("logout release game data %q: %v", user.ID, err)
 			}
 			if err := web.DeleteUserRecord(user.ID); err != nil {

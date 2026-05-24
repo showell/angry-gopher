@@ -6,7 +6,7 @@
 //   puzzle_<idx>/actions.dsl   — one file per puzzle the user touched;
 //                                lines are `<seq>) <action>` only.
 
-package views
+package lynrummy
 
 import (
 	"angry-gopher/server/web"
@@ -51,7 +51,7 @@ func HandlePuzzles(w http.ResponseWriter, r *http.Request) {
 	case sub == "" || sub == "/":
 		puzzlePage(w, uid)
 	case sub == "puzzle.js":
-		serveJS(w, PuzzleJSPath, "puzzle.js not found — run `ops/build_elm`")
+		web.ServeJS(w, PuzzleJSPath, "puzzle.js not found — run `ops/build_elm`")
 	case strings.HasPrefix(sub, "sessions/"):
 		handlePuzzleSessionRoute(w, r, uid, strings.TrimPrefix(sub, "sessions/"))
 	default:

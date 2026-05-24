@@ -1,6 +1,6 @@
 // Per-request body-size limits for the session write paths. Caddy
 // caps body size in front too, but these are the in-process backstop.
-package views
+package lynrummy
 
 import (
 	"errors"

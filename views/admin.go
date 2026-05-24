@@ -5,6 +5,7 @@
 package views
 
 import (
+	"angry-gopher/server/lynrummy"
 	"angry-gopher/server/web"
 	"fmt"
 	"html"
@@ -109,7 +110,7 @@ button.key.revoke:hover { background: #8a0019; }
 <p class="muted">Read straight from %s.</p>
 <table>
 <tr><th>Player</th><th class="n">Games</th><th class="n">Puzzles</th><th class="n">Actions</th><th class="n">Disk</th><th></th></tr>`,
-		html.EscapeString(GameDataRoot))
+		html.EscapeString(lynrummy.GameDataRoot))
 
 	if len(rows) == 0 {
 		fmt.Fprint(w, `<tr><td colspan="6" class="muted">No players yet.</td></tr>`)
@@ -284,7 +285,7 @@ func handleAdminDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.Method == http.MethodPost {
-		if err := DeleteUserData(id); err != nil {
+		if err := lynrummy.DeleteUserData(id); err != nil {
 			http.Error(w, "delete: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -335,7 +336,7 @@ button.danger:hover { background: #8a0019; }
 // gatherUserStats walks one player's subtree. Independent of the
 // currentUser write-path machinery so it can report on every player.
 func gatherUserStats(user string) UserStats {
-	uRoot := filepath.Join(GameDataRoot, user)
+	uRoot := filepath.Join(lynrummy.GameDataRoot, user)
 	gamesDir := filepath.Join(uRoot, "lynrummy-elm", "sessions")
 	puzzlesDir := filepath.Join(uRoot, "puzzle", "sessions")
 
@@ -351,7 +352,7 @@ func gatherUserStats(user string) UserStats {
 			if !e.IsDir() {
 				continue
 			}
-			n, _ := CountTextLines(filepath.Join(gamesDir, e.Name(), "actions.dsl"))
+			n, _ := lynrummy.CountTextLines(filepath.Join(gamesDir, e.Name(), "actions.dsl"))
 			st.TotalActions += n
 		}
 	}

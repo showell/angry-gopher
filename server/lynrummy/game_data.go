@@ -9,7 +9,7 @@
 //
 // Helpers below are thin (append / read with auto-mkdir);
 // handlers compose them.
-package views
+package lynrummy
 
 import (
 	"angry-gopher/server/web"

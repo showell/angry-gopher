@@ -1,4 +1,4 @@
-package views
+package lynrummy
 
 import (
 	"bufio"

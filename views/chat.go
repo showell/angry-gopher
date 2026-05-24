@@ -73,7 +73,7 @@ var ChatJSPath = "chat/chat.js"
 
 // HandleChatJS serves the chat client script from the embedded assets.
 func HandleChatJS(w http.ResponseWriter, r *http.Request) {
-	serveJS(w, ChatJSPath, "chat.js missing from the binary")
+	web.ServeJS(w, ChatJSPath, "chat.js missing from the binary")
 }
 
 // validChatPartner reports whether partner id is a usable conversation
