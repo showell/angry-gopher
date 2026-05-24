@@ -62,20 +62,27 @@ The TS agent at `ts/` owns three end-to-end jobs:
 
 ## Gating & testing
 
-The rule: anything that runs <20s warm is in the pre-commit
-gate. Anything longer is opt-in.
+The gates mirror the package split (one server, two subsystems —
+Lyn Rummy + Chat — over a shared base). Each leaf runs <20s warm;
+composite gates pick the right leaves.
 
-**`ops/check` (~20s warm).** The pre-commit gate. Composes
-`ops/test_ts` + `ops/test_elm` + `ops/test_go`. Every check
-inside is <20s individually (the heaviest is
-`test_engine_conformance.ts` at ~8s). Wired to the tracked
-pre-commit hook via `ops/install-hooks`.
+**`ops/check_lynrummy` (~30s warm).** The Lyn Rummy subsystem gate:
+the shared base (`go build` + a doc-link check) plus the Elm client
+and TS solver/engine suites. Use this while working on Lyn Rummy; it
+skips the chat lint.
 
-**`ops/check_full` (~50s warm).** Adds `test_full_game.ts`
-(agent self-play across 6 seeds, ~28s warm — the only
->20s test in the repo). Run before pushing changes that
-touch the BFS engine, the agent loop, or the bucket
-pipeline.
+**`ops/check` (~35s warm).** The full pre-commit gate — the base plus
+BOTH subsystems (adds the chat client lint). Each leaf is <20s; the
+composite is ~35s. Wired to the tracked pre-commit hook via
+`ops/install-hooks`.
+
+**`ops/check_full` (~75s warm).** Adds the slow Lyn Rummy tier: agent
+self-play across 6 seeds + the perf benches (`ops/bench`). Run before
+pushing changes that touch the BFS engine, the agent loop, or the
+bucket pipeline.
+
+(Chat-only work has its own ~6s gate, `ops/check_chat` — see the repo
+[`../../README.md`](../../README.md) and `ops/list`.)
 
 The honest test invariant is that conformance calls the same
 codepath the production hint path does (`findLogicalMovesForPlay`
