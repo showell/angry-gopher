@@ -2,6 +2,12 @@
 // home/lobby, the full-game and puzzles surfaces, login, and admin.
 package views
 
+// chrome.go holds the shared page chrome — the HTML shell every page
+// renders into: <head> + styles, the top nav, the page header/subtitle,
+// the footer, plus CurrentUser. This is NOT a junk drawer. Keep it
+// focused on chrome and layout; a screen's handler, its storage, or any
+// feature logic belongs in its own file, not here.
+
 import (
 	"fmt"
 	"html"
