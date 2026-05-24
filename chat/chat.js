@@ -226,9 +226,9 @@
         suppressSyncUntil=Date.now()+800;
         tgt.scrollIntoView({block:'center',behavior:'smooth'}); selectMsg(tgt); }
       return; }
-    if(t&&t.tagName==='IMG'&&t.closest('.chat-body')){ showImagePopup(t.src); return; }
-    var msg=t.closest&&t.closest('.chat-msg'); /* a plain click selects the message */
+    var msg=t.closest&&t.closest('.chat-msg'); /* a plain click (incl. on an image) selects the message */
     if(msg) selectMsg(msg);
+    if(t&&t.tagName==='IMG'&&t.closest('.chat-body')) showImagePopup(t.src);
   });
   textarea.focus();
 })();
