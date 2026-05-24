@@ -5,6 +5,7 @@
 package views
 
 import (
+	"angry-gopher/server/web"
 	"fmt"
 	"html"
 	"io/fs"
@@ -30,7 +31,7 @@ type UserStats struct {
 // HandleAdmin dispatches the admin surface. Admin powers are tied to the
 // user (the admin flag); non-admins get a 404 (don't reveal it exists).
 func HandleAdmin(w http.ResponseWriter, r *http.Request) {
-	if !CurrentUser(r).Admin {
+	if !web.CurrentUser(r).Admin {
 		http.NotFound(w, r)
 		return
 	}
@@ -47,7 +48,7 @@ func HandleAdmin(w http.ResponseWriter, r *http.Request) {
 
 // renderAdminOverview renders the per-player stats table.
 func renderAdminOverview(w http.ResponseWriter, r *http.Request) {
-	ids := ListUserIDs()
+	ids := web.ListUserIDs()
 
 	var grand UserStats
 	grand.Name = "All players"
@@ -64,11 +65,11 @@ func renderAdminOverview(w http.ResponseWriter, r *http.Request) {
 	flash := ""
 	if deleted := strings.TrimSpace(r.URL.Query().Get("deleted")); deleted != "" {
 		flash = fmt.Sprintf(`<p class="flash">Deleted game data for <strong>%s</strong>.</p>`,
-			html.EscapeString(GetUserName(deleted)))
+			html.EscapeString(web.GetUserName(deleted)))
 	}
 	if revoked := strings.TrimSpace(r.URL.Query().Get("keyrevoked")); revoked != "" {
 		flash = fmt.Sprintf(`<p class="flash">Revoked the API key for <strong>%s</strong>.</p>`,
-			html.EscapeString(GetUserName(revoked)))
+			html.EscapeString(web.GetUserName(revoked)))
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -128,16 +129,16 @@ button.key.revoke:hover { background: #8a0019; }
 // how long since each was last active, most-recent first. Members who have
 // never registered any activity sort to the bottom.
 func renderMembersTable(w http.ResponseWriter) {
-	members := ListMembers()
+	members := web.ListMembers()
 
 	type memberRow struct {
-		user   User
+		user   web.User
 		active time.Time
 		ever   bool
 	}
 	rows := make([]memberRow, 0, len(members))
 	for _, m := range members {
-		t, ok := UserLastActive(m.ID)
+		t, ok := web.UserLastActive(m.ID)
 		rows = append(rows, memberRow{user: m, active: t, ever: ok})
 	}
 	sort.SliceStable(rows, func(i, j int) bool {
@@ -164,7 +165,7 @@ func renderMembersTable(w http.ResponseWriter) {
 			since = humanizeSince(row.active)
 		}
 		images := fmt.Sprintf("%s / %s",
-			humanBytes(UserUploadBytes(row.user.ID)), humanBytes(maxChatUploadLifetimeBytes))
+			humanBytes(web.UserUploadBytes(row.user.ID)), humanBytes(maxChatUploadLifetimeBytes))
 		fmt.Fprintf(w, `<tr><td>%s</td><td>%s</td><td class="n">%s</td><td>%s</td></tr>`,
 			name, since, images, apiKeyCell(row.user.ID))
 	}
@@ -192,7 +193,7 @@ func humanizeSince(t time.Time) string {
 func apiKeyCell(id string) string {
 	gen := "Generate"
 	extra := ""
-	if UserHasAPIKey(id) {
+	if web.UserHasAPIKey(id) {
 		gen = "Regenerate"
 		extra = fmt.Sprintf(
 			` <form class="inline" method="post" action="/admin/apikey">`+
@@ -212,19 +213,19 @@ func apiKeyCell(id string) string {
 // recovered afterward.
 func handleAdminAPIKey(w http.ResponseWriter, r *http.Request) {
 	id := strings.TrimSpace(r.FormValue("user"))
-	if r.Method != http.MethodPost || id == "" || !UserExists(id) || !UserIsMember(id) {
+	if r.Method != http.MethodPost || id == "" || !web.UserExists(id) || !web.UserIsMember(id) {
 		http.Redirect(w, r, "/admin", http.StatusSeeOther)
 		return
 	}
 	if r.FormValue("revoke") == "1" {
-		if err := ClearUserAPIKey(id); err != nil {
+		if err := web.ClearUserAPIKey(id); err != nil {
 			http.Error(w, "revoke: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
 		http.Redirect(w, r, "/admin?keyrevoked="+url.QueryEscape(id), http.StatusSeeOther)
 		return
 	}
-	key, err := SetUserAPIKey(id)
+	key, err := web.SetUserAPIKey(id)
 	if err != nil {
 		http.Error(w, "generate: "+err.Error(), http.StatusInternalServerError)
 		return
@@ -260,7 +261,7 @@ code.key { font-family: ui-monospace,Menlo,Consolas,monospace; font-size: 15px;
 Hand it to the bot via the <code>GOPHER_API_KEY</code> env var, not in the prompt. Revoke anytime.</p>
 </div>
 </body></html>`, html.EscapeString(backURL), html.EscapeString(backLabel),
-		html.EscapeString(GetUserName(id)), html.EscapeString(key))
+		html.EscapeString(web.GetUserName(id)), html.EscapeString(key))
 }
 
 func writeStatsRow(w http.ResponseWriter, st UserStats, cls, actionsCell string) {
@@ -278,7 +279,7 @@ func writeStatsRow(w http.ResponseWriter, st UserStats, cls, actionsCell string)
 // player's on-disk game data, by user id.
 func handleAdminDelete(w http.ResponseWriter, r *http.Request) {
 	id := strings.TrimSpace(r.FormValue("user")) // user id
-	if id == "" || !UserExists(id) {
+	if id == "" || !web.UserExists(id) {
 		http.Redirect(w, r, "/admin", http.StatusSeeOther)
 		return
 	}
@@ -297,7 +298,7 @@ func handleAdminDelete(w http.ResponseWriter, r *http.Request) {
 // what will be removed before the POST that does it.
 func renderDeleteConfirm(w http.ResponseWriter, id string) {
 	st := gatherUserStats(id)
-	name := GetUserName(id)
+	name := web.GetUserName(id)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	fmt.Fprintf(w, `<!DOCTYPE html>
 <html><head><meta charset="utf-8"><title>♦️ Lyn Rummy ♥️</title>
@@ -340,7 +341,7 @@ func gatherUserStats(user string) UserStats {
 
 	st := UserStats{
 		ID:             user,
-		Name:           GetUserName(user),
+		Name:           web.GetUserName(user),
 		GameSessions:   countSubdirs(gamesDir),
 		PuzzleSessions: countSubdirs(puzzlesDir),
 		DiskBytes:      dirBytes(uRoot),

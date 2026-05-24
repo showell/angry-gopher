@@ -12,6 +12,7 @@
 package views
 
 import (
+	"angry-gopher/server/web"
 	"bufio"
 	"bytes"
 	"encoding/json"
@@ -21,7 +22,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"sync"
 )
 
 // GameDataRoot is the on-disk root for all LynRummy session data,
@@ -73,48 +73,16 @@ func nextPuzzleIDPath(user string) string {
 	return filepath.Join(userRoot(user), "next-puzzle-id.txt")
 }
 
-// sessionIDMu serializes counter increments. Single-process
-// server; a mutex is sufficient.
-var sessionIDMu sync.Mutex
-
-// allocateID is the shared counter-bump primitive. Reads the
-// counter file, returns the current value, writes value+1.
-// Auto-creates the file on first call.
-func allocateID(path string) (int64, error) {
-	sessionIDMu.Lock()
-	defer sessionIDMu.Unlock()
-
-	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
-		return 0, err
-	}
-
-	var n int64
-	body, err := os.ReadFile(path)
-	if err == nil {
-		if parsed, perr := strconv.ParseInt(strings.TrimSpace(string(body)), 10, 64); perr == nil {
-			n = parsed
-		}
-	}
-	if n < 1 {
-		n = 1
-	}
-	next := n + 1
-	if err := os.WriteFile(path, []byte(strconv.FormatInt(next, 10)+"\n"), 0644); err != nil {
-		return 0, err
-	}
-	return n, nil
-}
-
 // AllocateSessionID returns the next sequential full-game session
 // id for a player, 1-based, persisted via their next-session-id.txt.
 func AllocateSessionID(user string) (int64, error) {
-	return allocateID(nextSessionIDPath(user))
+	return web.AllocateID(nextSessionIDPath(user))
 }
 
 // AllocatePuzzleSessionID returns the next sequential puzzle session
 // id for a player, 1-based, persisted via their next-puzzle-id.txt.
 func AllocatePuzzleSessionID(user string) (int64, error) {
-	return allocateID(nextPuzzleIDPath(user))
+	return web.AllocateID(nextPuzzleIDPath(user))
 }
 
 // PuzzleSessionDir returns the on-disk directory for a puzzle

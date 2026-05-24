@@ -9,6 +9,7 @@
 package views
 
 import (
+	"angry-gopher/server/web"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -45,7 +46,7 @@ var puzzleCatalogPaths = []string{
 func HandlePuzzles(w http.ResponseWriter, r *http.Request) {
 	sub := strings.TrimPrefix(r.URL.Path, "/puzzles")
 	sub = strings.TrimPrefix(sub, "/")
-	uid := CurrentUser(r).ID // storage key
+	uid := web.CurrentUser(r).ID // storage key
 	switch {
 	case sub == "" || sub == "/":
 		puzzlePage(w, uid)
@@ -122,7 +123,7 @@ func indentLines(src string) string {
 func loadCatalog() (string, error) {
 	var kept []string
 	for _, p := range puzzleCatalogPaths {
-		data, err := readAsset(p)
+		data, err := web.ReadAsset(p)
 		if err != nil {
 			return "", fmt.Errorf("read %s: %w", p, err)
 		}

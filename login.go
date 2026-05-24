@@ -17,6 +17,7 @@ import (
 	"strings"
 
 	"angry-gopher/auth"
+	"angry-gopher/server/web"
 	"angry-gopher/views"
 )
 
@@ -24,10 +25,10 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodPost {
 		name, errMsg := auth.ValidateUserName(r.FormValue("name"))
 		if errMsg != "" {
-			renderLoginPage(w, views.CurrentUser(r).Name, errMsg)
+			renderLoginPage(w, web.CurrentUser(r).Name, errMsg)
 			return
 		}
-		if views.IsNameReserved(name) {
+		if web.IsNameReserved(name) {
 			// Password-protected name — guests can't claim it.
 			renderReservedNotice(w, name)
 			return
@@ -35,7 +36,7 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 		// Guests are honor-system: a fresh login allocates a new user id
 		// with this name. Identity is the cookie; protect a name by
 		// becoming a member.
-		id, err := views.AllocateUser(name)
+		id, err := web.AllocateUser(name)
 		if err != nil {
 			http.Error(w, "allocate user: "+err.Error(), http.StatusInternalServerError)
 			return
@@ -43,14 +44,14 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 		loginAsGuest(w, r, id)
 		return
 	}
-	renderLoginPage(w, views.CurrentUser(r).Name, "")
+	renderLoginPage(w, web.CurrentUser(r).Name, "")
 }
 
 // loginAsGuest sets the identity cookie to a passwordless user id, clears
 // any stale member session, and sends the player home.
 func loginAsGuest(w http.ResponseWriter, r *http.Request, id string) {
 	setUIDCookie(w, id)
-	views.ClearAuthCookie(w) // a guest login is not an authenticated member
+	web.ClearAuthCookie(w) // a guest login is not an authenticated member
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
@@ -79,7 +80,7 @@ func handleLoginFull(w http.ResponseWriter, r *http.Request) {
 	// the current guest's name. With no usable name, identify first.
 	raw := auth.SanitizeUser(r.FormValue("name"))
 	if raw == "" {
-		raw = views.CurrentUser(r).Name
+		raw = web.CurrentUser(r).Name
 	}
 	name, errMsg := auth.ValidateUserName(raw)
 	if errMsg != "" {
@@ -87,7 +88,7 @@ func handleLoginFull(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	memberID, isMember := views.FindMemberByName(name)
+	memberID, isMember := web.FindMemberByName(name)
 
 	if r.Method != http.MethodPost {
 		if isMember {
@@ -101,7 +102,7 @@ func handleLoginFull(w http.ResponseWriter, r *http.Request) {
 	password := r.FormValue("password")
 	if isMember {
 		// Returning member — verify their password.
-		if !views.CheckUserPassword(memberID, password) {
+		if !web.CheckUserPassword(memberID, password) {
 			renderFullLoginPage(w, name, next, fmt.Sprintf("Wrong password for “%s”.", name))
 			return
 		}
@@ -131,22 +132,22 @@ func handleLoginFull(w http.ResponseWriter, r *http.Request) {
 // guest's id in place so their identity and data carry over; otherwise it
 // allocates a fresh id.
 func registerMember(r *http.Request, name, password string) (string, error) {
-	if cur := views.CurrentUser(r); cur.ID != "" && !cur.Member && cur.Name == name {
-		return cur.ID, views.SetUserPassword(cur.ID, password)
+	if cur := web.CurrentUser(r); cur.ID != "" && !cur.Member && cur.Name == name {
+		return cur.ID, web.SetUserPassword(cur.ID, password)
 	}
-	id, err := views.AllocateUser(name)
+	id, err := web.AllocateUser(name)
 	if err != nil {
 		return "", err
 	}
-	return id, views.SetUserPassword(id, password)
+	return id, web.SetUserPassword(id, password)
 }
 
 // loginAsMember sets the identity cookie + signed member session for a
 // user id and returns to `next`.
 func loginAsMember(w http.ResponseWriter, r *http.Request, id, next string) {
 	setUIDCookie(w, id)
-	views.SetAuthCookie(w, id)
-	views.TouchUser(id) // logging on counts as activity
+	web.SetAuthCookie(w, id)
+	web.TouchUser(id) // logging on counts as activity
 	http.Redirect(w, r, next, http.StatusSeeOther)
 }
 
@@ -164,7 +165,7 @@ func sanitizeNext(next string) string {
 // name; unchecked (the default) just clears the cookie and keeps the
 // data so the player can log back in later.
 func handleLogout(w http.ResponseWriter, r *http.Request) {
-	user := views.CurrentUser(r)
+	user := web.CurrentUser(r)
 	if r.Method == http.MethodPost {
 		if r.FormValue("release") == "yes" && user.ID != "" {
 			// Release: delete game data and the user record (frees the
@@ -172,12 +173,12 @@ func handleLogout(w http.ResponseWriter, r *http.Request) {
 			if err := views.DeleteUserData(user.ID); err != nil {
 				log.Printf("logout release game data %q: %v", user.ID, err)
 			}
-			if err := views.DeleteUserRecord(user.ID); err != nil {
+			if err := web.DeleteUserRecord(user.ID); err != nil {
 				log.Printf("logout release record %q: %v", user.ID, err)
 			}
 		}
 		clearUserCookie(w)
-		views.ClearAuthCookie(w)
+		web.ClearAuthCookie(w)
 		renderLogoutComplete(w)
 		return
 	}

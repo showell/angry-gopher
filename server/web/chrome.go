@@ -1,6 +1,8 @@
-// Package views serves the Angry Gopher HTML pages: the Lyn Rummy
-// home/lobby, the full-game and puzzles surfaces, login, and admin.
-package views
+// Package web is the shared server platform: identity (the user
+// registry), authenticated sessions, bot API keys, embedded assets, and
+// the general page chrome. The Lyn Rummy and Chat subsystem packages
+// both build on it; it imports neither.
+package web
 
 // chrome.go holds the shared page chrome — the HTML shell every page
 // renders into: <head> + styles, the top nav, the page header/subtitle,
@@ -72,37 +74,10 @@ func AppChromeTop(w http.ResponseWriter, user User) {
 		html.EscapeString(user.Name), adminLink)
 }
 
-// chatChromeTop emits the chat-subsystem top bar: a small Home link, the
-// page/conversation title, the People/Settings sub-nav, and identity +
-// (admin) + log out on the right. In chat there's no "Lyn Rummy" branding —
-// the small Home link is the only way back to the top-level home. active is
-// "people" | "settings" | "" (a conversation).
-func chatChromeTop(w http.ResponseWriter, user User, title, active string) {
-	navLink := func(href, label, key string) string {
-		if active == key {
-			return fmt.Sprintf(`<strong>%s</strong>`, label)
-		}
-		return fmt.Sprintf(`<a href="%s">%s</a>`, href, label)
-	}
-	adminLink := ""
-	if user.Admin {
-		adminLink = ` · <a href="/admin">Admin</a>`
-	}
-	fmt.Fprintf(w,
-		`<header class="app-top chat-top"><div class="chat-top-left">`+
-			`<a class="chat-top-home" href="/">Home</a>`+
-			`<span class="chat-top-title">%s</span>`+
-			`<span class="chat-top-links">%s · %s</span></div>`+
-			`<div class="app-top-user"><strong>%s</strong>%s · <a href="/logout">Log out</a></div></header>`,
-		html.EscapeString(title),
-		navLink("/chat", "People", "people"), navLink("/settings", "Settings", "settings"),
-		html.EscapeString(user.Name), adminLink)
-}
-
-// pageHeadAndStyle emits the doctype, head, shared stylesheet, and opens
+// PageHeadAndStyle emits the doctype, head, shared stylesheet, and opens
 // <body> — everything before the page's top chrome. Shared by PageHeader
 // (generic app chrome) and chatPageHeader (chat-subsystem chrome).
-func pageHeadAndStyle(w http.ResponseWriter) {
+func PageHeadAndStyle(w http.ResponseWriter) {
 	fmt.Fprint(w, `<!DOCTYPE html>
 <html><head><meta charset="utf-8"><title>♦️ Lyn Rummy ♥️</title>`)
 	fmt.Fprint(w, `
@@ -158,18 +133,9 @@ button:hover { background: #0000a0; }
 // PageHeader writes the boilerplate, the generic app top bar, and opens the
 // body with the page title as an <h1>.
 func PageHeader(w http.ResponseWriter, title string, user User) {
-	pageHeadAndStyle(w)
+	PageHeadAndStyle(w)
 	AppChromeTop(w, user)
 	fmt.Fprintf(w, `<div class="app-body-wrap"><h1>%s</h1>`, html.EscapeString(title))
-}
-
-// chatPageHeader writes the page with the chat-subsystem top bar (Home +
-// title + People/Settings + identity) and opens the body WITHOUT an <h1> —
-// the title lives in the bar. active is "people" | "settings" | "".
-func chatPageHeader(w http.ResponseWriter, title string, user User, active string) {
-	pageHeadAndStyle(w)
-	chatChromeTop(w, user, title, active)
-	fmt.Fprint(w, `<div class="app-body-wrap">`)
 }
 
 // PageSubtitle renders a brief help/marketing blurb below the title.

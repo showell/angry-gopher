@@ -23,6 +23,7 @@
 package views
 
 import (
+	"angry-gopher/server/web"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
@@ -81,7 +82,7 @@ var (
 // numerically, joined by "_" (e.g. "1_2"). Ids are digits-only, so the
 // key always splits back unambiguously.
 func chatPairKey(a, b string) string {
-	if atoiOr0(a) <= atoiOr0(b) {
+	if web.AtoiOr0(a) <= web.AtoiOr0(b) {
 		return a + "_" + b
 	}
 	return b + "_" + a
@@ -246,7 +247,7 @@ func ReadChatMessages(a, b string) ([]ChatMessage, error) {
 // publishes it to any live subscribers. The conversation is keyed by the
 // two ids; the message records the sender's display name. Returns the
 // stored message (with its normalized timestamp).
-func AppendChatMessage(from User, partnerID, body string) (ChatMessage, error) {
+func AppendChatMessage(from web.User, partnerID, body string) (ChatMessage, error) {
 	key := chatPairKey(from.ID, partnerID)
 	path := chatMessagesPath(from.ID, partnerID)
 	msg := ChatMessage{From: from.Name, At: time.Now().UTC(), Body: body}

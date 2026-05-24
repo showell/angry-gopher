@@ -13,7 +13,7 @@
 // CurrentUser resolves it to the member (with admin stripped — a key is
 // never an admin credential), and the login gate enforces read-only by
 // rejecting any non-GET request that authenticated via a key.
-package views
+package web
 
 import (
 	"crypto/rand"

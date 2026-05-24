@@ -12,7 +12,7 @@
 //
 // Guests get an id too (allocated at login). Members are looked up by
 // name (a small scan); a name is "reserved" iff some member has it.
-package views
+package web
 
 import (
 	"os"
@@ -47,7 +47,7 @@ func userFile(id, f string) string { return filepath.Join(UsersRoot, id, f) }
 
 // AllocateUser creates a new user with the given name and returns its id.
 func AllocateUser(name string) (string, error) {
-	n, err := allocateID(filepath.Join(UsersRoot, "next-id.txt"))
+	n, err := AllocateID(filepath.Join(UsersRoot, "next-id.txt"))
 	if err != nil {
 		return "", err
 	}
@@ -205,11 +205,11 @@ func ListUserIDs() []string {
 			ids = append(ids, e.Name())
 		}
 	}
-	sort.Slice(ids, func(i, j int) bool { return atoiOr0(ids[i]) < atoiOr0(ids[j]) })
+	sort.Slice(ids, func(i, j int) bool { return AtoiOr0(ids[i]) < AtoiOr0(ids[j]) })
 	return ids
 }
 
-func atoiOr0(s string) int { n, _ := strconv.Atoi(s); return n }
+func AtoiOr0(s string) int { n, _ := strconv.Atoi(s); return n }
 
 // ListMembers returns every member (users with a password), sorted by id
 // — the roster of who you can chat with.

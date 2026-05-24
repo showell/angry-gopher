@@ -13,6 +13,7 @@
 package views
 
 import (
+	"angry-gopher/server/web"
 	"encoding/json"
 	"fmt"
 	"html"
@@ -43,7 +44,7 @@ var EngineGlueJSPath = "games/lynrummy/elm/engine_glue.js"
 func HandleGame(w http.ResponseWriter, r *http.Request) {
 	sub := strings.TrimPrefix(r.URL.Path, "/game")
 	sub = strings.TrimPrefix(sub, "/")
-	uid := CurrentUser(r).ID // storage key
+	uid := web.CurrentUser(r).ID // storage key
 	switch {
 	case sub == "" || sub == "/":
 		lynrummyElmPlay(w, uid)
@@ -172,7 +173,7 @@ func lynrummyElmAppendSessionLine(w http.ResponseWriter, r *http.Request, user s
 		return
 	}
 	if rel == "actions" {
-		TouchUser(user) // a Lyn Rummy move counts as activity
+		web.TouchUser(user) // a Lyn Rummy move counts as activity
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -356,7 +357,7 @@ func lynrummyElmPlayWithSession(w http.ResponseWriter, user string, sessionID in
 	if sessionID > 0 {
 		flag = strconv.FormatInt(sessionID, 10)
 	}
-	playerNameJSON, _ := json.Marshal(GetUserName(user)) // user is the id; show the name
+	playerNameJSON, _ := json.Marshal(web.GetUserName(user)) // user is the id; show the name
 	fmt.Fprintf(w, `<!doctype html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"><title>♦️ Lyn Rummy ♥️</title>
 <style>
@@ -429,7 +430,7 @@ func lynrummyElmPlayWithSession(w http.ResponseWriter, user string, sessionID in
 }
 
 func lynrummyElmJS(w http.ResponseWriter) {
-	data, err := readAsset(ElmJSPath)
+	data, err := web.ReadAsset(ElmJSPath)
 	if err != nil {
 		http.Error(w, "elm.js missing from the binary — run `ops/build_elm` before `go build`", http.StatusNotFound)
 		return
@@ -443,7 +444,7 @@ func lynrummyElmJS(w http.ResponseWriter) {
 // message (intended to point the developer at the build step
 // that produces the asset).
 func serveJS(w http.ResponseWriter, path string, missingMsg string) {
-	data, err := readAsset(path)
+	data, err := web.ReadAsset(path)
 	if err != nil {
 		http.Error(w, missingMsg, http.StatusNotFound)
 		return

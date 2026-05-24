@@ -11,6 +11,7 @@ import (
 	"os"
 	"time"
 
+	"angry-gopher/server/web"
 	"angry-gopher/views"
 )
 
@@ -44,7 +45,7 @@ func withLoginGate(next http.Handler) http.Handler {
 		// API keys are read-only: a request that authenticates via a key
 		// may only GET/HEAD. Enforced centrally so no mutating endpoint
 		// can be reached with a key, whatever it is.
-		if views.IsAPIKeyAuth(r) && r.Method != http.MethodGet && r.Method != http.MethodHead {
+		if web.IsAPIKeyAuth(r) && r.Method != http.MethodGet && r.Method != http.MethodHead {
 			http.Error(w, "API keys are read-only", http.StatusForbidden)
 			return
 		}
@@ -56,7 +57,7 @@ func withLoginGate(next http.Handler) http.Handler {
 		// authoritative; a guest uid is honored only if it's a real
 		// non-member user; a member uid without a session is a forge
 		// attempt and resolves to none). No identity → log in.
-		if views.CurrentUser(r).ID == "" {
+		if web.CurrentUser(r).ID == "" {
 			http.Redirect(w, r, "/login", http.StatusSeeOther)
 			return
 		}
@@ -106,9 +107,10 @@ Usage:
 
 	views.SetDataRoot(config.SessionsDataRoot())
 	views.SetChatRoot(config.ChatDataRoot())
-	views.SetUsersRoot(config.UsersDataRoot())
-	views.SetAssets(assets)
-	views.SetVersion(gitCommit)
+	web.SetUsersRoot(config.UsersDataRoot())
+	web.SetSessionSecretDir(config.ChatDataRoot())
+	web.SetAssets(assets)
+	web.SetVersion(gitCommit)
 
 	handler := buildMux()
 

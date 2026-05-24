@@ -1,6 +1,7 @@
 package views
 
 import (
+	"angry-gopher/server/web"
 	"fmt"
 	"html"
 	"net/http"
@@ -16,16 +17,16 @@ func HandleHome(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	user := CurrentUser(r)
+	user := web.CurrentUser(r)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	PageHeader(w, "Lyn Rummy", user)
-	PageSubtitle(w, "Jump straight into a game or browse your recent sessions.")
+	web.PageHeader(w, "Lyn Rummy", user)
+	web.PageSubtitle(w, "Jump straight into a game or browse your recent sessions.")
 
 	renderGamesHero(w)
 	renderChatLink(w)
 	renderRecentSessions(w, user.ID)
 
-	PageFooter(w)
+	web.PageFooter(w)
 }
 
 // renderGamesHero: tiles for the full game and the puzzles surface.
@@ -91,7 +92,7 @@ func renderRecentSessions(w http.ResponseWriter, viewer string) {
 		actions int
 	}
 	var rows []sessionRow
-	for _, p := range ListUserIDs() {
+	for _, p := range web.ListUserIDs() {
 		ids, err := ListSessionIDs(p)
 		if err != nil {
 			continue
@@ -139,7 +140,7 @@ func renderRecentSessions(w http.ResponseWriter, viewer string) {
 		}
 		fmt.Fprintf(w,
 			`<tr><td>%s</td><td>%d</td><td>%s</td><td>%s</td><td class="n">%d</td><td>%s</td></tr>`,
-			html.EscapeString(GetUserName(row.player)), row.id, html.EscapeString(ts), labelCell, row.actions, resumeCell,
+			html.EscapeString(web.GetUserName(row.player)), row.id, html.EscapeString(ts), labelCell, row.actions, resumeCell,
 		)
 	}
 	fmt.Fprint(w, `</table></div>`)

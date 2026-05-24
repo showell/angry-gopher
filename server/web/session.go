@@ -4,7 +4,7 @@
 // can't be forged by editing the plaintext gopher_uid cookie. The HMAC
 // secret is generated once and persisted at {chat}/_session_secret
 // (mode 0600, never in git) so sessions survive restarts.
-package views
+package web
 
 import (
 	"crypto/hmac"
@@ -26,20 +26,29 @@ const sessionMaxAge = 365 * 24 * time.Hour
 var (
 	sessionSecretOnce sync.Once
 	sessionSecretVal  []byte
+	// sessionSecretDir is where the signing secret is persisted. Set by
+	// main via SetSessionSecretDir. Historically this is the chat data
+	// dir (sessions were born in chat); kept there so existing sessions
+	// stay valid.
+	sessionSecretDir string
 )
+
+// SetSessionSecretDir tells the session layer where to read/write its
+// signing secret. Must be called at startup before any session is signed.
+func SetSessionSecretDir(dir string) { sessionSecretDir = dir }
 
 func sessionSecret() []byte {
 	sessionSecretOnce.Do(func() {
-		path := filepath.Join(ChatDataRoot, "_session_secret")
+		path := filepath.Join(sessionSecretDir, "_session_secret")
 		if b, err := os.ReadFile(path); err == nil && len(b) >= 32 {
 			sessionSecretVal = b
 			return
 		}
 		secret := make([]byte, 32)
 		if _, err := rand.Read(secret); err != nil {
-			panic("chat session secret: " + err.Error())
+			panic("session secret: " + err.Error())
 		}
-		_ = os.MkdirAll(ChatDataRoot, 0o755)
+		_ = os.MkdirAll(sessionSecretDir, 0o755)
 		_ = os.WriteFile(path, secret, 0o600)
 		sessionSecretVal = secret
 	})

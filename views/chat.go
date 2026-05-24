@@ -8,6 +8,7 @@
 package views
 
 import (
+	"angry-gopher/server/web"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -47,7 +48,7 @@ func HandleChat(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	if !IsMember(r) {
+	if !web.IsMember(r) {
 		next := "/chat"
 		if r.URL.RawQuery != "" {
 			next += "?" + r.URL.RawQuery
@@ -55,7 +56,7 @@ func HandleChat(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/login/full?next="+url.QueryEscape(next), http.StatusSeeOther)
 		return
 	}
-	user := CurrentUser(r)
+	user := web.CurrentUser(r)
 	partner := strings.TrimSpace(r.URL.Query().Get("with")) // partner user id
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 
@@ -79,16 +80,16 @@ func HandleChatJS(w http.ResponseWriter, r *http.Request) {
 // partner for user id: another member (chat is members-only), not
 // yourself or empty.
 func validChatPartner(userID, partnerID string) bool {
-	return partnerID != "" && partnerID != userID && UserIsMember(partnerID)
+	return partnerID != "" && partnerID != userID && web.UserIsMember(partnerID)
 }
 
 // renderChatPicker lists the members you can message (everyone with a
 // password), minus yourself — linked by id, shown by name.
-func renderChatPicker(w http.ResponseWriter, user User) {
+func renderChatPicker(w http.ResponseWriter, user web.User) {
 	chatPageHeader(w, "People", user, "people")
 	fmt.Fprint(w, `<p class="muted">Pick a member to message:</p><ul>`)
 	n := 0
-	for _, m := range ListMembers() {
+	for _, m := range web.ListMembers() {
 		if m.ID == user.ID {
 			continue
 		}
@@ -100,16 +101,16 @@ func renderChatPicker(w http.ResponseWriter, user User) {
 		fmt.Fprint(w, `<li class="muted">No other members yet.</li>`)
 	}
 	fmt.Fprint(w, `</ul>`)
-	PageFooter(w)
+	web.PageFooter(w)
 }
 
-func renderChatConversation(w http.ResponseWriter, user User, partnerID string) {
+func renderChatConversation(w http.ResponseWriter, user web.User, partnerID string) {
 	msgs, err := ReadChatMessages(user.ID, partnerID)
 	if err != nil {
 		http.Error(w, "read conversation: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
-	partnerName := GetUserName(partnerID)
+	partnerName := web.GetUserName(partnerID)
 
 	chatPageHeader(w, "Chat with "+partnerName, user, "")
 	fmt.Fprint(w, chatCSS)
@@ -144,9 +145,9 @@ func renderChatConversation(w http.ResponseWriter, user User, partnerID string) 
 </div></div>`)
 
 	fmt.Fprintf(w, `</div><script src="/chat/chat.js?v=%s"></script>`,
-		url.QueryEscape(assetVersion))
+		url.QueryEscape(web.AssetVersion))
 
-	PageFooter(w)
+	web.PageFooter(w)
 }
 
 // HandleChatSend appends a posted message. Async (fetch) callers send
@@ -157,11 +158,11 @@ func HandleChatSend(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	if !IsMember(r) {
+	if !web.IsMember(r) {
 		http.Error(w, "chat requires a member account", http.StatusForbidden)
 		return
 	}
-	user := CurrentUser(r)
+	user := web.CurrentUser(r)
 
 	r.Body = http.MaxBytesReader(w, r.Body, maxChatMessageBytes)
 	if err := r.ParseForm(); err != nil {
@@ -190,7 +191,7 @@ func HandleChatSend(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "save message: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
-	TouchUser(user.ID) // sending a message counts as activity
+	web.TouchUser(user.ID) // sending a message counts as activity
 	chatSendDone(w, r, partner, async)
 }
 
@@ -206,11 +207,11 @@ func chatSendDone(w http.ResponseWriter, r *http.Request, partner string, async 
 // Last-Event-ID on reconnect) and then streams live messages until the
 // client disconnects.
 func HandleChatStream(w http.ResponseWriter, r *http.Request) {
-	if !IsMember(r) {
+	if !web.IsMember(r) {
 		http.Error(w, "chat requires a member account", http.StatusForbidden)
 		return
 	}
-	user := CurrentUser(r)
+	user := web.CurrentUser(r)
 	partner := strings.TrimSpace(r.URL.Query().Get("with")) // partner user id
 	if !validChatPartner(user.ID, partner) {
 		http.Error(w, "unknown conversation partner", http.StatusBadRequest)
