@@ -29,7 +29,7 @@ In `views/`:
 
 - `lynrummy_elm.go`
 - `puzzle.go`
-- `gamedata.go`
+- `game_data.go`
 - The broader `views/wiki_*.go` and friends host the rest of
   Angry Gopher. Unrelated to Lyn Rummy.
 
