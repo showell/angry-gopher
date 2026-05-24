@@ -2,7 +2,7 @@
 // player has generated, plus a guarded action to delete a player's
 // data. No DB — it walks {GameDataRoot}/{user}/ directly, which is
 // also the on-disk partition layout (one top-level dir per user).
-package views
+package admin
 
 import (
 	"angry-gopher/server/chat"

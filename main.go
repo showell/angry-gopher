@@ -11,10 +11,10 @@ import (
 	"os"
 	"time"
 
+	"angry-gopher/server/admin"
 	"angry-gopher/server/chat"
 	"angry-gopher/server/lynrummy"
 	"angry-gopher/server/web"
-	"angry-gopher/views"
 )
 
 func buildMux() http.Handler {
@@ -23,7 +23,7 @@ func buildMux() http.Handler {
 	mux.HandleFunc("/version", handleVersion)
 
 	// HTML pages, incl. the home/lobby at "/". Single source of truth.
-	views.RegisterPages(mux)
+	RegisterPages(mux)
 
 	// Name login/logout (login sets the gopher_uid cookie; logout
 	// clears it). /login/full sets a member password session.
@@ -33,8 +33,8 @@ func buildMux() http.Handler {
 
 	// Admin overview (session stats from the filesystem). Goes through
 	// the login gate, then requires the user's admin flag (see HandleAdmin).
-	mux.HandleFunc("/admin", views.HandleAdmin)
-	mux.HandleFunc("/admin/", views.HandleAdmin)
+	mux.HandleFunc("/admin", admin.HandleAdmin)
+	mux.HandleFunc("/admin/", admin.HandleAdmin)
 
 	return withLoginGate(mux)
 }

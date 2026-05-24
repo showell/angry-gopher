@@ -1,5 +1,5 @@
 // Page registry. Mounts every HTML route the server serves.
-package views
+package main
 
 import (
 	"angry-gopher/server/chat"
