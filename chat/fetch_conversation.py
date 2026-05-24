@@ -8,12 +8,21 @@ metadata) — and pretty-prints each. Authenticates with a member's
 the key into a prompt or hard-code it here.
 
 Usage:
-    GOPHER_API_KEY=<key> python3 fetch_conversation.py <partner_id> [base_url]
+    GOPHER_API_KEY=<key> python3 fetch_conversation.py <base_url> <partner_id>
 
-`partner_id` is the numeric id of the other member. `base_url` defaults to
-https://lynrummy.com. The stream replays the full backlog (since=0) then
-goes live; this tool exits after the first idle gap, so it's a one-shot
-look at what the API returns. Stdlib only — no install step.
+Both args are required. `base_url` is explicit on purpose — there is no
+default, so you always state whether you're hitting your local dev server
+(http://localhost:9000) or production (https://lynrummy.com) rather than
+relying on a silent default. `partner_id` is the numeric id of the other
+member.
+
+For the prod Steve<->Apoorva transcript, prefer the zero-arg wrapper
+`ops/fetch_prod_transcript`, which supplies the prod URL + the read-only
+key for you (Steve hates remembering command-line arguments).
+
+The stream replays the full backlog (since=0) then goes live; this tool
+exits after the first idle gap, so it's a one-shot look at what the API
+returns. Stdlib only — no install step.
 """
 import json, os, socket, sys, urllib.error, urllib.request
 
@@ -22,10 +31,11 @@ def main():
     key = os.environ.get("GOPHER_API_KEY")
     if not key:
         sys.exit("set GOPHER_API_KEY to a read-only chat API key")
-    if len(sys.argv) < 2:
-        sys.exit("usage: fetch_conversation.py <partner_id> [base_url]")
-    partner = sys.argv[1]
-    base = sys.argv[2] if len(sys.argv) > 2 else "https://lynrummy.com"
+    if len(sys.argv) != 3:
+        sys.exit("usage: fetch_conversation.py <base_url> <partner_id>\n"
+                 "       (for the prod transcript, prefer: ops/fetch_prod_transcript)")
+    base = sys.argv[1].rstrip("/")
+    partner = sys.argv[2]
 
     url = f"{base}/chat/stream?with={partner}&since=0"
     req = urllib.request.Request(url, headers={"Authorization": f"Bearer {key}"})

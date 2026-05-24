@@ -54,5 +54,15 @@ Available ops commands (run from repo root):
                          pre-commit hook (sets core.hooksPath).
   ops/list               This screen.
 
+  PRODUCTION (occasional; see deploy/README.md)
+  ---------------------------------------------
+  ops/deploy             Build + ship the self-contained binary to the
+                         droplet + restart. Refuses a dirty tree.
+  ops/backup             Pull a timestamped data_dir snapshot from prod.
+  ops/fetch_prod_transcript
+                         Print the prod chat transcript (Steve<->Apoorva)
+                         via the read-only API (delegates to
+                         chat/fetch_conversation.py; needs ~/.gopher_api_key).
+
 Credentials convention: store in ~/AngryGopher/ (non-hidden, outside git).
 EOF
