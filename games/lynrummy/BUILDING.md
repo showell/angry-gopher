@@ -23,7 +23,7 @@ browser.
 ## Build artifacts
 
 All three live at `games/lynrummy/elm/` and are served by
-`views/lynrummy_elm.go` and `views/puzzle.go`:
+`server/lynrummy/lynrummy_elm.go` and `server/lynrummy/puzzle.go`:
 
 | File | Source | Served at |
 |------|--------|-----------|
@@ -69,7 +69,7 @@ These don't run on every build — invoke as needed:
 - **Puzzle catalogs.** The single-puzzle UI host
   (`/puzzles`) reads its featured board from
   `conformance/mined_seeds.dsl`; the hard-coded
-  `featuredPuzzleName` lives in `views/puzzle.go`.
+  `featuredPuzzleName` lives in `server/lynrummy/puzzle.go`.
 - **Bench gold.** `npm run bench:81-single-cards` and
   `npm run bench:6-card-hands` (in `ts/`) each run a perf
   bench that compares against and rewrites its own gold file

@@ -25,14 +25,16 @@ The Go server is dumb URL-keyed file storage for LynRummy
 session data. No referee, no replay, no dealer — Elm owns
 all of that now.
 
-In `views/`:
+The Lyn Rummy server lives in its own package, `server/lynrummy/`:
 
-- `lynrummy_elm.go`
-- `puzzle.go`
-- `game_data.go`
-- The non-game surfaces (chat, settings, admin, the user
-  registry, login) live in their own `views/*.go` files —
-  unrelated to Lyn Rummy. See the repo `README.md`.
+- `lynrummy_elm.go` — the `/game` surface
+- `puzzle.go` — the `/puzzles` surface
+- `game_data.go` — session/puzzle file storage
+
+It builds on the shared `server/web/` base (identity, sessions,
+chrome, assets). Chat is a separate sibling package
+(`server/chat/`); the two share no symbols. See the repo
+`README.md` for the package map.
 
 ## CLI / agent tooling
 

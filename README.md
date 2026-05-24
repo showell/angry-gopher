@@ -46,10 +46,13 @@ read-only** — a keyed request may only GET/HEAD.
 
 | Where | Role |
 |---|---|
-| `main.go`, `config.go`, `login.go`, `embed.go` | server entry: config, mux + login gate, name login/logout, embedded assets |
+| `main.go`, `config.go`, `login.go`, `embed.go`, `home.go`, `registry.go` | server entry: config, mux + login gate, name login/logout, embedded assets, the home launch-pad, route registry |
 | `auth/` | username validation + the raw identity claim (the numeric user id) |
-| `views/` | all HTTP handlers + the file-backed storage (games, chat, users) |
-| `chat/` | the embedded chat client (`chat.js`) + an example read-only bot (`fetch_conversation.py`) |
+| `server/web/` | shared base: identity (user registry), sessions, bot API keys, page chrome, embedded-asset serving. Imports neither subsystem. |
+| `server/lynrummy/` | Lyn Rummy server: `/game` + `/puzzles` handlers + session file storage. Builds on `web`. |
+| `server/chat/` | chat server: handlers, SSE hub + storage, markdown, image uploads, `/settings`. Builds on `web`. |
+| `server/admin/` | the cross-cutting `/admin` overview (imports `web` + both subsystems) |
+| `chat/` | the embedded chat **client** (`chat.js`) + an example read-only bot (`fetch_conversation.py`) |
 | `games/lynrummy/elm/` | the autonomous Elm client (dealer + referee + UI) |
 | `games/lynrummy/ts/` | the TypeScript agent — the strategic brain (solver + self-play) |
 | `ops/` | the build / run / test scripts (`ops/list` enumerates them) |
