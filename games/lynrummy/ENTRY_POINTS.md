@@ -16,8 +16,8 @@ Two Elm `Browser.element` boots, both compiled from
 
 | Source | Output | URL | Role |
 |---|---|---|---|
-| `src/Game.elm` | `elm.js` | `/gopher/lynrummy-elm/` | Full Lyn Rummy game client |
-| `src/Puzzle.elm` | `puzzle.js` | `/gopher/puzzle/` | Single-board puzzle |
+| `src/Game.elm` | `elm.js` | `/game` | Full Lyn Rummy game client |
+| `src/Puzzle.elm` | `puzzle.js` | `/puzzles` | Single-board puzzle |
 
 ## Server-side handlers (Go)
 
@@ -30,8 +30,9 @@ In `views/`:
 - `lynrummy_elm.go`
 - `puzzle.go`
 - `game_data.go`
-- The broader `views/wiki_*.go` and friends host the rest of
-  Angry Gopher. Unrelated to Lyn Rummy.
+- The non-game surfaces (chat, settings, admin, the user
+  registry, login) live in their own `views/*.go` files —
+  unrelated to Lyn Rummy. See the repo `README.md`.
 
 ## CLI / agent tooling
 

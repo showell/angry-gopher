@@ -6,9 +6,10 @@ so you don't have to remember flags.
 
 ## Dev-loop entry points
 
-- **`ops/start`** — launches the dev server (Go on `:9000`,
-  reload-on-write). Reads from already-built artifacts; does
-  not rebuild.
+- **`ops/start`** — launches the dev server (Go on `:9000`).
+  Rebuilds first — it calls `ops/build_elm` (Elm + TS bundles)
+  and `go build`, then relaunches — so a plain `ops/start`
+  picks up source edits.
 - **`ops/build_elm`** — rebuilds **everything the browser
   needs**, in order:
   1. `ops/build_engine_js` (TS engine → JS bundle)
@@ -26,9 +27,9 @@ All three live at `games/lynrummy/elm/` and are served by
 
 | File | Source | Served at |
 |------|--------|-----------|
-| `elm.js` | `elm/src/Game.elm` | `/gopher/lynrummy-elm/elm.js` |
-| `puzzle.js` | `elm/src/Puzzle.elm` | `/gopher/puzzle/puzzle.js` |
-| `engine.js` | `ts/elm_api/engine_entry.ts` (esbuild bundle) | `/gopher/lynrummy-elm/engine.js` |
+| `elm.js` | `elm/src/Game.elm` | `/game/elm.js` |
+| `puzzle.js` | `elm/src/Puzzle.elm` | `/puzzles/puzzle.js` |
+| `engine.js` | `ts/elm_api/engine_entry.ts` (esbuild bundle) | `/game/engine.js` |
 
 `engine.js` exposes a single browser global, `LynRummyEngine`,
 with two layers of exports:
@@ -66,7 +67,7 @@ JS glue file (`engine_glue.js`) that converts the wire-shape
 These don't run on every build — invoke as needed:
 
 - **Puzzle catalogs.** The single-puzzle UI host
-  (`/gopher/puzzle/`) reads its featured board from
+  (`/puzzles`) reads its featured board from
   `conformance/mined_seeds.dsl`; the hard-coded
   `featuredPuzzleName` lives in `views/puzzle.go`.
 - **Bench gold.** `npm run bench:81-single-cards` and

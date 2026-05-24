@@ -7,7 +7,7 @@
 #
 # Compile the LynRummy Elm client (Game.elm) into
 # games/lynrummy/elm/elm.js, the JS bundle served by
-# /gopher/lynrummy-elm/elm.js. Also bundles the TS engine
+# /game/elm.js. Also bundles the TS engine
 # (engine.js) — the Elm client loads it alongside elm.js and
 # calls into it via the Hint port.
 #
