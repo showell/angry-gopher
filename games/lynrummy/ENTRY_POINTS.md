@@ -64,6 +64,8 @@ from the repo root. It composes:
 - `ops/test_elm` — embed DSLs + standalone Elm typecheck +
   elm make + elm-test + elm-review.
 - `ops/test_go` — `go build ./...`.
+- `ops/test_docs` — `doc_xref --all`: flags Markdown links/paths
+  pointing at files that no longer exist.
 
 `ops/check_full` adds `test/test_full_game.ts` (agent self-play
 across 6 seeds, ~28s) — the only >20s test in the repo.

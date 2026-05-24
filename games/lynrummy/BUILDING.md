@@ -59,8 +59,8 @@ JS glue file (`engine_glue.js`) that converts the wire-shape
 - `ops/build_elm` — the umbrella. Calls `ops/build_engine_js`
   first, then compiles both Elm entry points.
 - `ops/check` — pre-commit gate. Composes `ops/test_ts` +
-  `ops/test_elm` + `ops/test_go` (~20s warm). `ops/check_full`
-  adds the agent self-play suite (~50s warm total).
+  `ops/test_elm` + `ops/test_go` + `ops/test_docs` (~20s warm).
+  `ops/check_full` adds the agent self-play suite (~50s warm total).
 
 ## Other regenerators
 

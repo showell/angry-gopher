@@ -75,8 +75,12 @@ IDENT_DENYLIST = {
     "string", "int", "bool", "void", "any",
 }
 
-# Doc roots scanned in --all mode.
-DOC_ROOTS = ["games/lynrummy"]
+# Doc roots scanned in --all mode (the maintained-doc set). The
+# repo-root README.md is added explicitly below — it's the front door
+# and lives outside any doc-root dir. Personal/historical trees
+# (showell/, tools/VOCAB_NOTES.md) are deliberately left out.
+DOC_ROOTS = ["games/lynrummy", "deploy"]
+ALSO_SCAN = ["README.md"]  # individual files, relative to REPO
 EXCLUDE_DIRS = {".git", "node_modules", "elm-stuff", "__pycache__", "data"}
 
 
@@ -87,6 +91,10 @@ def find_docs(roots: Iterable[str]) -> list[Path]:
         for p in base.rglob("*.md"):
             if any(part in EXCLUDE_DIRS for part in p.parts):
                 continue
+            out.append(p)
+    for rel in ALSO_SCAN:
+        p = REPO / rel
+        if p.exists():
             out.append(p)
     return sorted(out)
 

@@ -84,11 +84,12 @@ conformance is gated by `ops/check`.
 ```
 ops/start              Start Gopher on :9000 (rebuild + relaunch)
 ops/list               List ops commands
-ops/check              Pre-commit gate (~20s warm): test_ts + test_elm + test_go
+ops/check              Pre-commit gate (~20s warm): test_ts + test_elm + test_go + test_docs
 ops/check_full         Milestone gate (~50s warm): ops/check + agent self-play
 ops/test_ts            Fast TS gate (~15s)
 ops/test_elm           Fast Elm gate (~4s)
 ops/test_go            Fast Go gate (~5s)
+ops/test_docs          Fast docs gate (~1s): doc_xref --all (dead links/paths)
 ops/deploy             Build + ship to the prod droplet (see deploy/README.md)
 ```
 

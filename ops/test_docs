@@ -1,0 +1,26 @@
+#!/bin/bash
+# CANONICAL DEV-LOOP SCRIPT — DO NOT REINVENT.
+# Before writing a new ops/* script or composing an ad-hoc shell
+# command for build / launch / test / regen, run `ops/list` to see
+# what already exists.
+#
+# Fast docs gate (~1s). Runs tools/doc_xref.py --all — the heuristic
+# drift detector that flags Markdown links + backtick paths pointing
+# at files that no longer exist. Covers the maintained doc set (root
+# README, deploy/, games/lynrummy/). Exits non-zero on any drift.
+# Called by `ops/check` and run individually during doc work.
+#
+# Catches shallow doc-rot only (dead paths/links). Deep rot — prose
+# that lies — is on the author; when a doc is too stale to fix in
+# place, stub it (see memory: stale-docs-ruthless-or-stub).
+
+set -e
+
+REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$REPO_DIR"
+
+echo "==> doc_xref --all"
+python3 tools/doc_xref.py --all --quiet
+
+echo
+echo "Docs gate passed."
