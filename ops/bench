@@ -1,0 +1,39 @@
+#!/bin/bash
+# CANONICAL DEV-LOOP SCRIPT — DO NOT REINVENT.
+# Before writing a new ops/* script or composing an ad-hoc shell
+# command for build / launch / test / regen, run `ops/list` to see
+# what already exists.
+#
+# The Lyn Rummy TS perf benchmarks (engine timing trip-wires). Each
+# bench warms up, takes min-of-N timings, compares against its committed
+# gold, and REWRITES the gold on success (the benchmark pattern) — so a
+# passing run intentionally updates bench_*_gold.txt. Don't commit those
+# rewrites unless you mean to re-baseline.
+#
+# Use after a deliberate solver/engine change, or to re-confirm that a
+# timing blip from `ops/check_full` is just machine noise — re-run once
+# before treating a timing failure as a real regression. A real logic
+# regression shows up as a plan/step diff, not a %-time delta. These same
+# benches run inside `ops/check_full`.
+
+set -e
+
+REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$REPO_DIR/games/lynrummy/ts"
+
+phase() {
+    local label="$1"
+    shift
+    local t0=$SECONDS
+    "$@"
+    echo "    [phase] ${label}: $((SECONDS - t0))s"
+}
+
+echo "==> bench: 6-card hands"
+phase "6-card-hands" node --expose-gc bench/bench_6_card_hands.ts
+
+echo "==> bench: 81 single cards"
+phase "81-single-cards" node --expose-gc bench/bench_81_single_cards.ts
+
+echo
+echo "Benches done (gold rewritten on success)."

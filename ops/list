@@ -25,6 +25,9 @@ Available ops commands (run from repo root):
   ops/test_chat          Chat client lint (~1s): chat.js + fetch_conversation.py.
   ops/test_go            go build ./... (~5s) — common (whole binary).
   ops/test_docs          doc_xref --all (~1s) — common.
+  ops/bench              Lyn Rummy perf benches (engine timing trip-wires).
+                         Rewrites gold on pass; also run by check_full. Use
+                         after engine changes / to re-confirm timing noise.
 
   BUILD & RUN
   -----------
