@@ -47,7 +47,7 @@ function main(): void {
     throw new Error(`session #${t.sessionId} validation failed: ${v.msg}`);
   }
   console.log(`validated session #${t.sessionId} (${v.actionsApplied} actions replayed clean)`);
-  console.log(`review at http://localhost:9000/gopher/lynrummy-elm/play/${t.sessionId}`);
+  console.log(`review at http://localhost:9000/game/${t.sessionId}`);
 }
 
 main();
