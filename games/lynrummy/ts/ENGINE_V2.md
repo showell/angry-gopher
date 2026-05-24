@@ -37,8 +37,8 @@ reasoning.
 
 ## Files
 
-- `src/engine_v2.ts` — engine + heuristics + min-heap.
-- `src/buckets.ts` — `fastStateSig` / `buildCardOrder` for
+- `bfs/engine_v2.ts` — engine + heuristics + min-heap.
+- `bfs/buckets.ts` — `fastStateSig` / `buildCardOrder` for
   position-indexed dedup keys (~1.2× faster than a
   string-based sig at the same dedup decisions).
 - `bench/bench_81_single_cards.ts` — per-card timing of

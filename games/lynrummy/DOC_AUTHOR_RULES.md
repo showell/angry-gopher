@@ -89,7 +89,7 @@ prose; nobody swept for it; the doc rotted in place for weeks.
 A claim about the code is one of:
 1. **General principle** — "BFS retires at most 2 cards per move."
    No citation needed.
-2. **Citation** — "`src/engine_v2.ts` ranks states by `f =
+2. **Citation** — "`ts/bfs/engine_v2.ts` ranks states by `f =
    plan_length + heuristic`." Path/line is checkable.
 3. **Dated** — "As of 2026-05-02, the production path is `bfs.ts`."
 
@@ -98,7 +98,7 @@ is the failure mode. A reader can't tell whether the claim is still
 true; six months from now nobody can either.
 
 For symbol or path mentions, prefer backticks
-(`` `src/engine_v2.ts` ``) — `tools/doc_xref.py` then verifies them
+(`` `ts/bfs/engine_v2.ts` ``) — `tools/doc_xref.py` then verifies them
 automatically.
 
 ---
