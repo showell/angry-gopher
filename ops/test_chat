@@ -1,0 +1,33 @@
+#!/bin/bash
+# CANONICAL DEV-LOOP SCRIPT — DO NOT REINVENT.
+# Before writing a new ops/* script or composing an ad-hoc shell
+# command for build / launch / test / regen, run `ops/list` to see
+# what already exists.
+#
+# Chat subsystem leaf gate (~1s). The chat SERVER (server/chat) is Go,
+# so it's covered by `go build` in ops/test_go; this leaf lints the chat
+# CLIENT artifacts that nothing else checks — the embedded chat.js and
+# the example bot client. No Go unit tests for chat yet: we're iterating
+# fast and dogfooding catches the shallow bugs.
+
+set -e
+
+REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$REPO_DIR"
+
+phase() {
+    local label="$1"
+    shift
+    local t0=$SECONDS
+    "$@"
+    echo "    [phase] ${label}: $((SECONDS - t0))s"
+}
+
+echo "==> chat.js syntax"
+phase "chat-js" node --check chat/chat.js
+
+echo "==> fetch_conversation.py syntax"
+phase "chat-py" python3 -m py_compile chat/fetch_conversation.py
+
+echo
+echo "Chat gate passed."

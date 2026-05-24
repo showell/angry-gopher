@@ -1,0 +1,23 @@
+#!/bin/bash
+# CANONICAL DEV-LOOP SCRIPT — DO NOT REINVENT.
+# Before writing a new ops/* script or composing an ad-hoc shell
+# command for build / launch / test / regen, run `ops/list` to see
+# what already exists.
+#
+# Shared base gate both subsystems need: the whole binary compiles
+# (go build, which covers server/web + lynrummy + chat + admin) and the
+# docs have no dead links. This is the "diamond floor" — composed by
+# ops/check_chat, ops/check_lynrummy, and ops/check. Mirrors the
+# server/web base that server/lynrummy and server/chat both build on.
+
+set -e
+
+REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$REPO_DIR"
+
+echo "===== ops/test_go ====="
+./ops/test_go
+
+echo
+echo "===== ops/test_docs ====="
+./ops/test_docs

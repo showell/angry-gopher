@@ -1,0 +1,27 @@
+#!/bin/bash
+# CANONICAL DEV-LOOP SCRIPT — DO NOT REINVENT.
+# Before writing a new ops/* script or composing an ad-hoc shell
+# command for build / launch / test / regen, run `ops/list` to see
+# what already exists.
+#
+# Chat-subsystem gate (~6s warm): the common base (build + docs) plus the
+# chat client lint. Use this while working on chat — it deliberately
+# SKIPS the Lyn Rummy solver + Elm suites (the slow part). Run the full
+# `ops/check` before a commit that touches both subsystems. Mirrors
+# server/web <- server/chat.
+
+set -e
+
+REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$REPO_DIR"
+
+t0_total=$SECONDS
+
+./ops/check_common
+
+echo
+echo "===== ops/test_chat ====="
+./ops/test_chat
+
+echo
+echo "Chat gate passed in $((SECONDS - t0_total))s."

@@ -4,14 +4,15 @@
 # command for build / launch / test / regen, run `ops/list` to see
 # what already exists.
 #
-# THE PRE-COMMIT GATE. Runs the three per-language fast gates plus
-# the docs gate (~24s warm total). Every check inside is <20s
-# individually. Wired to git's pre-commit hook via `ops/install-hooks`.
+# THE PRE-COMMIT GATE (~35s warm). The whole thing: the common base
+# (build + docs) plus BOTH subsystems (Lyn Rummy = Elm + TS solver,
+# Chat = client lint). Each leaf runs once — no double-common. Wired to
+# git's pre-commit hook via `ops/install-hooks`.
 #
-# For the >20s tier (currently test_full_game.ts — agent self-play
-# across 6 seeds), use `ops/check_full` instead. Run that before
-# pushing changes that touch the BFS engine, the agent loop, or
-# the bucket pipeline.
+# While iterating on ONE subsystem, run the cheaper subsystem gate
+# instead: `ops/check_chat` (~6s, skips the Lyn Rummy suites) or
+# `ops/check_lynrummy` (~30s, skips the chat lint). For the slow tier
+# (agent self-play + perf benches) use `ops/check_full`.
 
 set -e
 
@@ -20,20 +21,22 @@ cd "$REPO_DIR"
 
 t0_total=$SECONDS
 
-echo "===== ops/test_ts ====="
-./ops/test_ts
+# Diamond floor: build + docs (shared by both subsystem gates).
+./ops/check_common
 
+# Lyn Rummy subsystem.
 echo
 echo "===== ops/test_elm ====="
 ./ops/test_elm
 
 echo
-echo "===== ops/test_go ====="
-./ops/test_go
+echo "===== ops/test_ts ====="
+./ops/test_ts
 
+# Chat subsystem.
 echo
-echo "===== ops/test_docs ====="
-./ops/test_docs
+echo "===== ops/test_chat ====="
+./ops/test_chat
 
 echo
 echo "All gates passed in $((SECONDS - t0_total))s."
