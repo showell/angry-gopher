@@ -137,7 +137,6 @@ frame coords. Replay branches on path presence.
 
 - **Redundancy as asset.** Two independent representations
   + an automated agreement check > a single canonical one.
-  See [`../../BRIDGES.md`](../../BRIDGES.md).
 - **Each actor owns its own view.** No coordinator above
   the actors.
 - **Record facts, decide later.** The wire carries what
@@ -163,8 +162,6 @@ frame coords. Replay branches on path presence.
 - [`./elm/README.md`](./elm/README.md) — Elm client.
 - [`ENTRY_POINTS.md`](ENTRY_POINTS.md) — boot points + URLs.
 - [`BUILDING.md`](BUILDING.md) — build pipeline.
-- [`../../BRIDGES.md`](../../BRIDGES.md) — bridge inventory.
-- [`../../GLOSSARY.md`](../../GLOSSARY.md) — vocabulary.
 - `conformance/scenarios/*.dsl` — DSL examples = spec.
 - `~/.claude/projects/-home-steve-showell-repos-angry-gopher/memory/MEMORY.md`
   — durable doctrines + working-style feedback.

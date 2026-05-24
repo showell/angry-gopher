@@ -24,8 +24,6 @@ Prod DB at `~/AngryGopher/prod/gopher.db`.
 |---|---|
 | LynRummy game (in browser) | http://localhost:9000/gopher/lynrummy-elm/ |
 | LynRummy docs (top of tree) | [`games/lynrummy/README.md`](games/lynrummy/README.md) |
-| Cross-language bridge paradigm | [`BRIDGES.md`](BRIDGES.md) |
-| Working-vocabulary glossary | [`GLOSSARY.md`](GLOSSARY.md) |
 | Agent-collaboration conventions | `~/showell_repos/claude-collab/agent_collab/` |
 
 Per-file domain knowledge lives in module top-of-file
