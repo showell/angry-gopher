@@ -1,54 +1,70 @@
 # Angry Gopher
 
-A small Go server that hosts **LynRummy** (a single-human
-card game, Elm client + TypeScript agent), plus a wiki /
-source browser and small admin surface. Backed by SQLite.
+A small, dependency-light Go server that hosts **Lyn Rummy** (a
+single-human card game — Elm client + TypeScript agent) and a private
+**chat** surface, plus a small admin view. Storage is plain files on
+disk — **no database**. In prod it ships as one self-contained
+`go:embed` binary behind Caddy (TLS) under systemd; see
+[`deploy/README.md`](deploy/README.md).
 
 ## Quick start
 
 ```bash
-bash ops/start        # Gopher 9000 + Angry Cat 8000
+bash ops/start        # Gopher on :9000
 ```
 
-Always use `ops/start`; do not invent ad-hoc `go run` /
-`nohup ./gopher-server` invocations. The script kills any
-process on 9000/8000, rebuilds the Go binary, recompiles
-the Elm clients, and waits until both ports respond before
-exiting.
+`ops/start` is the canonical dev loop: it kills anything on :9000,
+rebuilds the Elm/TS bundles (`ops/build_elm`) and the Go binary —
+which embeds those bundles (see `embed.go`) — then relaunches and waits
+for the port to respond. Always use it; don't hand-roll `go run` /
+`nohup ./gopher-server`.
 
-Prod DB at `~/AngryGopher/prod/gopher.db`.
+The server needs `GOPHER_CONFIG` pointing at a config file (port +
+`data_dir`); `ops/start` uses `~/AngryGopher/gopher.conf`. All
+persistent data lives under that `data_dir`, outside the source tree —
+the tree is freely rm-able without touching data, and vice versa.
 
-## Where to find what
+## Routes
 
-| Looking for… | Read |
+| Path | What |
 |---|---|
-| LynRummy game (in browser) | http://localhost:9000/gopher/lynrummy-elm/ |
-| LynRummy docs (top of tree) | [`games/lynrummy/README.md`](games/lynrummy/README.md) |
-| Agent-collaboration conventions | `~/showell_repos/claude-collab/agent_collab/` |
+| `/` | Home / launch pad |
+| `/game`, `/game/<id>`, `/game/sessions` | Full-game Elm client + session storage |
+| `/puzzles` | Single-board puzzle client |
+| `/chat` | Private one-on-one chat (members only) |
+| `/settings` | Per-user settings (read-only bot API key) |
+| `/login`, `/login/full`, `/logout` | Guest name login / member password login |
+| `/admin` | Session + user overview (requires the admin flag) |
+| `/version` | Build version JSON |
 
-Per-file domain knowledge lives in module top-of-file
-docstrings/comments and the subsystem READMEs. Commit
-history is the authoritative design-decision record.
+Every request goes through a login gate (`main.go`): no resolvable
+identity → redirect to `/login`. Login sets a `gopher_uid` cookie;
+members additionally get a signed session cookie. Bot **API keys are
+read-only** — a keyed request may only GET/HEAD.
 
-## Packages
+## Layout
 
-| Package | Role |
+| Where | Role |
 |---|---|
-| `auth` | HTTP Basic auth |
-| `schema` | Schema for the seeded `users` table |
-| `views` | HTTP handlers: HTML pages + LynRummy session-data file storage |
+| `main.go`, `config.go`, `login.go`, `embed.go` | server entry: config, mux + login gate, name login/logout, embedded assets |
+| `auth/` | username validation + the raw identity claim (the numeric user id) |
+| `views/` | all HTTP handlers + the file-backed storage (games, chat, users) |
+| `chat/` | the embedded chat client (`chat.js`) + an example read-only bot (`fetch_conversation.py`) |
+| `games/lynrummy/elm/` | the autonomous Elm client (dealer + referee + UI) |
+| `games/lynrummy/ts/` | the TypeScript agent — the strategic brain (solver + self-play) |
+| `ops/` | the build / run / test scripts (`ops/list` enumerates them) |
+| `deploy/` | Caddyfile, systemd unit, deploy runbook |
 
-The Go server is dumb URL-keyed file storage for LynRummy
-session data. The strategic brain is the **TypeScript
-agent** at `games/lynrummy/ts/`; the Elm client at
-`games/lynrummy/elm/` is the autonomous dealer + referee +
-UI.
+The Go server is dumb URL-keyed file storage; the strategic brain is the
+TS agent, and the Elm client owns the full game (dealer, referee, UI).
 
-A short, canonical DSL is the **lingua franca** across all
-three runtimes — same grammar carries conformance fixtures,
-on-disk session files (`meta`, `actions.dsl`), the new-session
-wire body, the resume bundle, and agent transcripts. Sample
-session header:
+## The DSL is the lingua franca
+
+One short, canonical DSL carries the same grammar across all three
+runtimes — conformance fixtures, on-disk session files (`meta`,
+`actions.dsl`), the new-session wire body, the resume bundle, and agent
+transcripts. Sample session header:
+
 ```
 created_at: 1778500538
 label:
@@ -57,53 +73,39 @@ board:
   at ( 20,  70): K♠ A♠ 2♠ 3♠
   ...
 ```
-Full grammar tour + 2-3 examples + the run-mechanism live in
+
+Full grammar tour + examples live in
 [`games/lynrummy/ARCHITECTURE.md`](games/lynrummy/ARCHITECTURE.md)
-under "DSL is the lingua franca". Most parsing happens at
-test time; conformance is gated by `ops/check` (pre-commit) or
-`ops/check_full` (adds the ~30s agent self-play suite).
-
-## HTML views
-
-Server-rendered pages at `/gopher/*` with Basic auth:
-
-| Page | Description |
-|---|---|
-| `/gopher/` | Landing page |
-| `/gopher/game-lobby` | Games launch pad (LynRummy) |
-| `/gopher/lynrummy-elm/` | Elm LynRummy client |
-| `/gopher/puzzle/` | Single-board LynRummy puzzle |
-| `/gopher/wiki/` | Wiki viewer over repo source |
-| `/gopher/docs/` | Markdown essay viewer |
-| `/gopher/claude/` | Pointer-out to claude-collab (port 9100) |
-| `/gopher/tour` | All CRUD pages |
+under "DSL is the lingua franca". Most parsing happens at test time;
+conformance is gated by `ops/check`.
 
 ## Ops & testing
 
 ```
-ops/start              Start Gopher (9000) + Angry Cat (8000)
+ops/start              Start Gopher on :9000 (rebuild + relaunch)
 ops/list               List ops commands
-ops/check              Pre-commit gate (~20s warm). Runs test_ts +
-                       test_elm + test_go — every check inside is
-                       <20s individually.
-ops/check_full         Milestone gate (~50s warm). ops/check plus
-                       test_full_game.ts (agent self-play, ~30s).
-ops/test_ts            Fast TS gate (~15s).
-ops/test_elm           Fast Elm gate (~4s).
-ops/test_go            Fast Go gate (~5s).
+ops/check              Pre-commit gate (~20s warm): test_ts + test_elm + test_go
+ops/check_full         Milestone gate (~50s warm): ops/check + agent self-play
+ops/test_ts            Fast TS gate (~15s)
+ops/test_elm           Fast Elm gate (~4s)
+ops/test_go            Fast Go gate (~5s)
+ops/deploy             Build + ship to the prod droplet (see deploy/README.md)
 ```
 
-Do not hand-compose `go test ./...` or `elm make` calls — the
-ops scripts handle sequencing, prerequisites, and
-cross-language consistency checks that bare commands silently
-skip.
+Don't hand-compose `go test ./...` / `elm make` / `tsc` — the ops
+scripts encode sequencing, prerequisites, and the cross-language
+consistency checks that bare commands silently skip.
 
-## Operational notes
+## Where to find more
 
-- **Data lives outside code.** DB and uploads under
-  `~/AngryGopher/prod/`. The source tree is freely rm-able
-  without affecting data, and vice versa.
-- **No migrations.** Schema in `schema/schema.go` is the
-  single source of truth. On schema change: back up the
-  DB, apply the diff by hand (ALTER TABLE) or re-seed,
-  deploy new code.
+| Looking for… | Read |
+|---|---|
+| Lyn Rummy docs (top of tree) | [`games/lynrummy/README.md`](games/lynrummy/README.md) |
+| Rules of the game | [`games/lynrummy/RULES.md`](games/lynrummy/RULES.md) |
+| Load-bearing design decisions | [`games/lynrummy/ARCHITECTURE.md`](games/lynrummy/ARCHITECTURE.md) |
+| Build pipeline | [`games/lynrummy/BUILDING.md`](games/lynrummy/BUILDING.md) |
+| Deploy / host setup | [`deploy/README.md`](deploy/README.md) |
+| Agent-collaboration conventions | `~/showell_repos/claude-collab/agent_collab/` |
+
+Per-file domain knowledge lives in module top-of-file comments. Commit
+history is the authoritative design-decision record.
