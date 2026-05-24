@@ -28,8 +28,8 @@ func buildMux() http.Handler {
 	mux.HandleFunc("/login/full", handleLoginFull)
 	mux.HandleFunc("/logout", handleLogout)
 
-	// Admin overview (session stats from the filesystem). Protect via
-	// the reverse proxy (e.g. nginx basic-auth) in front of Gopher.
+	// Admin overview (session stats from the filesystem). Goes through
+	// the login gate, then requires the user's admin flag (see HandleAdmin).
 	mux.HandleFunc("/admin", views.HandleAdmin)
 	mux.HandleFunc("/admin/", views.HandleAdmin)
 
@@ -117,8 +117,8 @@ Usage:
 	fmt.Printf("  Listening on %s\n", config.ListenAddr())
 
 	// Timeouts bound how long a slow/idle client can tie up a
-	// connection (slowloris). nginx fronts the server for TLS, body
-	// limits beyond our per-handler caps, and rate-limiting.
+	// connection (slowloris). Caddy fronts the server for TLS and
+	// outer body limits beyond our per-handler caps.
 	srv := &http.Server{
 		Addr:              config.ListenAddr(),
 		Handler:           handler,
