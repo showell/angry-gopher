@@ -8,7 +8,7 @@
 // span or an existing link is left alone. The injected anchor is a fixed
 // safe shape (the hash is [0-9A-F]{6}), so running after sanitization is
 // safe.
-package views
+package chat
 
 import (
 	"regexp"

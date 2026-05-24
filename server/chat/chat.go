@@ -5,7 +5,7 @@
 // user plus the chosen partner, so there is no route to a conversation
 // you are not part of. Markdown bodies are rendered + sanitized server
 // side (see chat_markdown.go) before they reach either browser.
-package views
+package chat
 
 import (
 	"angry-gopher/server/web"

@@ -1,4 +1,4 @@
-package views
+package chat
 
 import (
 	"angry-gopher/server/web"

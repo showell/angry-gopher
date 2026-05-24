@@ -5,7 +5,7 @@
 // conversation key. GET /chat/uploads/<key>/<file> serves it, enforcing
 // that the requester is a participant of that conversation — so image
 // access matches message access.
-package views
+package chat
 
 import (
 	"angry-gopher/server/web"
@@ -29,10 +29,10 @@ import (
 // that enforces it, with a clean message.
 const maxChatUploadBytes = 10 << 20 // 10 MiB
 
-// maxChatUploadLifetimeBytes caps the cumulative bytes one user may ever
+// MaxChatUploadLifetimeBytes caps the cumulative bytes one user may ever
 // upload — a runaway/abuse backstop, not a tight quota (the droplet has
 // tens of GB free). Easy to raise.
-const maxChatUploadLifetimeBytes = 1 << 30 // 1 GiB per user, lifetime
+const MaxChatUploadLifetimeBytes = 1 << 30 // 1 GiB per user, lifetime
 
 // chatUploadName is the strict on-disk/served filename: 32 hex chars
 // (our random token) plus an allowed image extension. Used to reject
@@ -122,9 +122,9 @@ func HandleChatUpload(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Lifetime per-user upload backstop (reserve before storing).
-	if !web.ReserveUploadBytes(user.ID, int64(len(data)), maxChatUploadLifetimeBytes) {
+	if !web.ReserveUploadBytes(user.ID, int64(len(data)), MaxChatUploadLifetimeBytes) {
 		http.Error(w, fmt.Sprintf("Upload limit reached — you've used your %d GB image allowance.",
-			maxChatUploadLifetimeBytes>>30), http.StatusForbidden)
+			MaxChatUploadLifetimeBytes>>30), http.StatusForbidden)
 		return
 	}
 

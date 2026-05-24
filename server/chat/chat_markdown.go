@@ -4,7 +4,7 @@
 // each side renders the other's text). goldmark already declines to emit
 // raw HTML; bluemonday is the belt-and-suspenders pass that also strips
 // dangerous link schemes (javascript:, data:) from any links.
-package views
+package chat
 
 import (
 	"bytes"

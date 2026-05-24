@@ -20,7 +20,7 @@
 // messages atomically: any concurrent append is serialized either
 // fully before (and thus in the backlog) or fully after (and thus
 // delivered on the channel) — never lost in the gap.
-package views
+package chat
 
 import (
 	"angry-gopher/server/web"

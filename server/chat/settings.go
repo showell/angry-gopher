@@ -5,7 +5,7 @@
 // grants a strict subset of the session's own access (read-only,
 // admin-stripped). More settings (display name, password, prefs) will
 // slot in as sections here.
-package views
+package chat
 
 import (
 	"angry-gopher/server/web"
@@ -63,7 +63,7 @@ func HandleSettingsAPIKey(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "generate: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
-	renderAPIKeyShown(w, user.ID, key, "/settings", "Settings")
+	web.RenderAPIKeyShown(w, user.ID, key, "/settings", "Settings")
 }
 
 func renderSettings(w http.ResponseWriter, r *http.Request, user web.User) {

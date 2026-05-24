@@ -2,6 +2,7 @@
 package views
 
 import (
+	"angry-gopher/server/chat"
 	"angry-gopher/server/lynrummy"
 	"net/http"
 )
@@ -13,12 +14,12 @@ func RegisterPages(mux *http.ServeMux) {
 	mux.HandleFunc("/game/", lynrummy.HandleGame)
 	mux.HandleFunc("/puzzles", lynrummy.HandlePuzzles)
 	mux.HandleFunc("/puzzles/", lynrummy.HandlePuzzles)
-	mux.HandleFunc("/settings", HandleSettings)
-	mux.HandleFunc("/settings/apikey", HandleSettingsAPIKey)
-	mux.HandleFunc("/chat", HandleChat)
-	mux.HandleFunc("/chat/chat.js", HandleChatJS)
-	mux.HandleFunc("/chat/send", HandleChatSend)
-	mux.HandleFunc("/chat/stream", HandleChatStream)
-	mux.HandleFunc("/chat/upload", HandleChatUpload)
-	mux.HandleFunc("/chat/uploads/", HandleChatFile)
+	mux.HandleFunc("/settings", chat.HandleSettings)
+	mux.HandleFunc("/settings/apikey", chat.HandleSettingsAPIKey)
+	mux.HandleFunc("/chat", chat.HandleChat)
+	mux.HandleFunc("/chat/chat.js", chat.HandleChatJS)
+	mux.HandleFunc("/chat/send", chat.HandleChatSend)
+	mux.HandleFunc("/chat/stream", chat.HandleChatStream)
+	mux.HandleFunc("/chat/upload", chat.HandleChatUpload)
+	mux.HandleFunc("/chat/uploads/", chat.HandleChatFile)
 }
