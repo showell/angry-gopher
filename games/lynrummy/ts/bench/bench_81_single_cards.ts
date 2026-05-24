@@ -14,8 +14,12 @@
 //      Fail fast on per-card timing > PER_CARD_TOLERANCE worse.
 //   3. After all cards: fail fast on total wall > TOTAL_TOLERANCE
 //      worse than the gold total.
-//   4. On success, OVERWRITE the gold so improvements are captured
-//      automatically.
+//   4. RATCHET the gold: overwrite it ONLY when this run is faster, so
+//      improvements are captured automatically but the baseline NEVER
+//      drifts slower on its own. A slower run within tolerance passes
+//      and leaves the gold untouched. Re-baselining to a slower number
+//      (e.g. a slower machine) is an explicit decision: delete the gold
+//      file and re-run (see Bootstrap).
 //
 // Bootstrap: if the gold file doesn't exist, skip every comparison
 // and just write it out.
@@ -242,6 +246,12 @@ function main(): void {
   const solvable = perCard.filter(e => e.planLines > 0).length;
   console.log(`  outcomes:    solvable=${solvable}  no_plan=${perCard.length - solvable}`);
 
+  // Gold updates are a RATCHET: auto-write ONLY when this run is faster
+  // (or when bootstrapping a missing gold). A slower run within tolerance
+  // PASSES but leaves the gold untouched — we never let the baseline drift
+  // slower automatically. To deliberately re-baseline (e.g. a slower
+  // machine), delete the gold file and re-run; the bootstrap path recaptures.
+  let faster = gold === null;
   if (gold !== null) {
     const ratio = totalMs / gold.totalWallMs;
     const pct = (ratio - 1) * 100;
@@ -249,12 +259,17 @@ function main(): void {
       fail(`total wall +${pct.toFixed(1)}%  (gold ${gold.totalWallMs.toFixed(0)} → ${totalMs.toFixed(0)}ms; threshold +${(TOTAL_TOLERANCE * 100).toFixed(0)}%)`);
     }
     if (ratio < 1) {
-      console.log(`  ↳ total better than gold by ${(-pct).toFixed(1)}%  (gold ${gold.totalWallMs.toFixed(0)}ms)`);
+      console.log(`  ↳ total better than gold by ${(-pct).toFixed(1)}%  (gold ${gold.totalWallMs.toFixed(0)}ms) — updating gold`);
+      faster = true;
+    } else {
+      console.log(`  total +${pct.toFixed(1)}% (within tolerance, not faster) — gold unchanged`);
     }
   }
 
-  writeGold(goldPath, perCard, totalMs);
-  console.log(`\nwrote ${path.basename(goldPath)}`);
+  if (faster) {
+    writeGold(goldPath, perCard, totalMs);
+    console.log(`\nwrote ${path.basename(goldPath)}`);
+  }
 }
 
 main();
