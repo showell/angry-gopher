@@ -1,10 +1,7 @@
-# Build outputs (binaries produced by go build in repo root)
+# Build outputs (binaries produced by go build in repo root).
+# Kept deliberately slim: only outputs a current workflow actually produces.
+# Any other stray binary should stand out in `git status`, not hide here.
 /gopher-server
-/health_check
-/stress
-/import
-/crudgen
-/db_query
 /reorg
 
 # Claude Code per-session state (scheduled_tasks.lock, settings.local.json)
