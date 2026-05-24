@@ -14,6 +14,37 @@
   var backBtn=document.getElementById('chat-back');
   var locked=false;
   function toBottom(){ history.scrollTop=history.scrollHeight; }
+  /* Persistent "selected message" (Zulip-style cursor). At most one message
+     is selected; it shows a steady highlight ring. The selection moves when
+     you click a MSG_ link or the back button, and otherwise FOLLOWS scrolling:
+     the topmost message fully in view, or — when one message is too tall for
+     any to be fully visible — the topmost whose beginning (top edge) shows. */
+  var selected=null, suppressSyncUntil=0;
+  function selectMsg(el){
+    if(!el||el===selected) return;
+    if(selected) selected.classList.remove('selected');
+    selected=el; el.classList.add('selected');
+  }
+  function selectionCandidate(){
+    var els=bubbles.querySelectorAll('.chat-msg'), hr=history.getBoundingClientRect();
+    var beginningVisible=null, straddler=null;
+    for(var i=0;i<els.length;i++){
+      var el=els[i]; if(el.offsetParent===null) continue;
+      var r=el.getBoundingClientRect();
+      if(r.top>=hr.top-1 && r.bottom<=hr.bottom+1) return el;                  /* topmost fully in view */
+      if(!beginningVisible && r.top>=hr.top-1 && r.top<hr.bottom) beginningVisible=el; /* its top edge shows */
+      if(!straddler && r.top<hr.top && r.bottom>hr.top) straddler=el;          /* covers the viewport top */
+    }
+    return beginningVisible||straddler||null;
+  }
+  /* A link/back jump sets selection explicitly, then suppresses scroll-driven
+     reselection briefly so the smooth-scroll animation doesn't steal it back. */
+  function syncSelectionToScroll(){ if(Date.now()>=suppressSyncUntil) selectMsg(selectionCandidate()); }
+  var rafPending=false;
+  history.addEventListener('scroll',function(){
+    if(rafPending) return; rafPending=true;
+    requestAnimationFrame(function(){ rafPending=false; syncSelectionToScroll(); });
+  });
   function addMessage(m){
     var empty=document.getElementById('chat-empty'); if(empty) empty.remove();
     var div=document.createElement('div');
@@ -72,7 +103,7 @@
   /* Always replay the full backlog (since=0); reconnects resume from
      Last-Event-ID automatically. The client builds the whole feed. */
   var es=new EventSource('/chat/stream?with='+encodeURIComponent(PARTNER)+'&since=0');
-  es.onmessage=function(e){ addMessage(JSON.parse(e.data)); if(!locked) toBottom(); };
+  es.onmessage=function(e){ addMessage(JSON.parse(e.data)); if(!locked) toBottom(); syncSelectionToScroll(); };
   function send(){
     var text=textarea.value;
     if(!text.trim()) return;
@@ -165,9 +196,8 @@
     img.src=src;
     if(img.complete) fit();
   }
-  function flashMsg(el){ el.classList.remove('msg-flash'); void el.offsetWidth; el.classList.add('msg-flash'); }
   /* Back-nav stack: jumping to a MSG_ link remembers the message you
-     clicked FROM; the ← button scrolls back to it (and flashes it), one
+     clicked FROM; the ← button scrolls back to it (and selects it), one
      step per chained jump. */
   var navStack=[];
   function updateBack(){ backBtn.disabled = navStack.length===0; }
@@ -181,7 +211,7 @@
   backBtn.addEventListener('click',function(){
     if(!navStack.length) return;
     var el=scrollIndexToTop(navStack.pop()); updateBack();
-    if(el) flashMsg(el); /* highlight the message we returned to */
+    if(el){ suppressSyncUntil=Date.now()+800; selectMsg(el); } /* select the message we returned to */
   });
   updateBack();
   bubbles.addEventListener('click',function(e){
@@ -193,7 +223,8 @@
       var src=a.closest('.chat-msg'); /* the message we're clicking from */
       var tgt=document.getElementById(a.getAttribute('href').slice(1));
       if(tgt){ if(src) navStack.push(src.getAttribute('data-i')); updateBack();
-        tgt.scrollIntoView({block:'center',behavior:'smooth'}); flashMsg(tgt); }
+        suppressSyncUntil=Date.now()+800;
+        tgt.scrollIntoView({block:'center',behavior:'smooth'}); selectMsg(tgt); }
       return; }
     if(t&&t.tagName==='IMG'&&t.closest('.chat-body')) showImagePopup(t.src);
   });

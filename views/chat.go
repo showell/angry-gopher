@@ -345,8 +345,8 @@ html, body { height:100%; }
                        background:#eaeaff; color:#000080; padding:0 4px; border-radius:3px;
                        text-decoration:none; }
 .chat-body a.msg-ref:hover { background:#d8d8ff; }
-.msg-flash { animation: msgflash 1.6s ease-out; }
-@keyframes msgflash { 0%,12% { box-shadow:0 0 0 3px #ffcf3a; } 100% { box-shadow:0 0 0 3px transparent; } }
+/* The selected message keeps a steady highlight ring (was a brief flash). */
+.chat-msg.selected { box-shadow:0 0 0 2px #ffcf3a; }
 .chat-body p:first-child { margin-top:0; }
 .chat-body p:last-child { margin-bottom:0; }
 .chat-body pre { background:#f4f4ec; padding:8px; border-radius:4px; overflow-x:auto; }
