@@ -158,6 +158,7 @@
     for(var i=0;i<links.length;i++){ links[i].className=(links[i].getAttribute('data-view')===v)?'active':''; }
     scrollToIndex(idx);
   }
+  function toggleView(){ setView(history.className.indexOf('view-transcript')>=0?'rendered':'transcript'); }
   views.addEventListener('click',function(e){
     var a=e.target.closest('a[data-view]'); if(!a) return;
     e.preventDefault(); setView(a.getAttribute('data-view'));
@@ -351,6 +352,7 @@
       case 'c': e.preventDefault(); openCompose(); return;
       case 'b': e.preventDefault(); backBtn.click(); return; /* disabled buttons ignore click */
       case 'f': e.preventDefault(); fwdBtn.click(); return;
+      case 't': e.preventDefault(); toggleView(); return;
       case 'r': if(selected){ e.preventDefault(); quoteReply(selected); } return;
       case 'ArrowDown': e.preventDefault(); moveCursor(1); return;
       case 'ArrowUp':   e.preventDefault(); moveCursor(-1); return;

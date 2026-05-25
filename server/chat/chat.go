@@ -116,7 +116,7 @@ func renderChatConversation(w http.ResponseWriter, user web.User, partnerID stri
 	fmt.Fprint(w, chatCSS)
 	fmt.Fprintf(w, `<div id="chat-root" data-partner="%s">`, html.EscapeString(partnerID))
 	fmt.Fprint(w, `<div class="chat-views" id="chat-views">`+
-		`<span class="chat-view-tabs">`+
+		`<span class="chat-view-tabs" title="Toggle with t">`+
 		`<a href="#" data-view="rendered" class="active">Rendered</a> · `+
 		`<a href="#" data-view="transcript">Transcript</a></span>`+
 		`</div>`)
@@ -151,6 +151,7 @@ func renderChatConversation(w http.ResponseWriter, user web.User, partnerID stri
       <div class="chat-key"><kbd>r</kbd> reply to the selected message</div>
       <div class="chat-key"><kbd>b</kbd> back</div>
       <div class="chat-key"><kbd>f</kbd> forward</div>
+      <div class="chat-key"><kbd>t</kbd> toggle rendered / transcript</div>
     </div>
   </div>
 </div></div>`)
