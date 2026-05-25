@@ -11,6 +11,7 @@
   var imageBtn=document.getElementById('chat-image-btn');
   var fileInput=document.getElementById('chat-file');
   var backBtn=document.getElementById('chat-back');
+  var fwdBtn=document.getElementById('chat-fwd');
   var composeBox=document.getElementById('chat-compose');
   var openComposeBtn=document.getElementById('chat-open-compose');
   function toBottom(){ history.scrollTop=history.scrollHeight; }
@@ -33,17 +34,20 @@
     }
     return true; /* empty feed → stick, so the first messages land at the bottom */
   }
-  /* Persistent "selected message" (Zulip-style cursor) + a navigation undo
-     stack. At most one message is selected; it shows a steady highlight ring.
-     The selection moves when you click a message / MSG_ link, and otherwise
-     FOLLOWS scrolling: the topmost message fully in view, or — when one
-     message is too tall for any to be fully visible — the topmost whose
-     beginning (top edge) shows.
+  /* Persistent "selected message" (Zulip-style cursor) + a navigation history.
+     At most one message is selected; it shows a steady highlight ring. The
+     selection moves when you click a message / MSG_ link, and otherwise FOLLOWS
+     scrolling: the topmost message fully in view, or — when one message is too
+     tall for any to be fully visible — the topmost whose beginning (top edge)
+     shows.
 
-     navStack records the trail of *committed* selections so the ← button can
-     walk back. A click/link jump commits immediately; a scroll-driven change
-     commits only after a 700ms pause — so scrolling past messages to find one
-     doesn't churn the stack, only the message you settle on is recorded. */
+     Navigation history has browser back/forward semantics: `entries` is the
+     trail of *committed* selections and `pos` points at the current one. ←/→
+     move `pos` without mutating the trail; any FRESH navigation (recordNav)
+     drops the forward tail and appends — so going back and then navigating
+     elsewhere resets the forward stack. A click/link jump commits immediately;
+     a scroll- or arrow-driven change commits only after a 700ms pause, so
+     scrolling past messages doesn't churn the trail — only where you settle. */
   var selected=null, suppressSyncUntil=0;
   function idxOf(el){ return el?el.getAttribute('data-i'):null; }
   function selectMsg(el){
@@ -51,25 +55,26 @@
     if(selected) selected.classList.remove('selected');
     selected=el; el.classList.add('selected');
   }
-  var navStack=[], commitTimer=null;
-  function canGoBack(){
-    if(!navStack.length) return false;
-    if(idxOf(selected)===navStack[navStack.length-1]) return navStack.length>=2;
-    return true; /* selection has drifted away from the last stable one */
+  var entries=[], pos=-1, commitTimer=null;
+  function curEntry(){ return pos>=0?entries[pos]:null; }
+  function drifted(){ return selected&&idxOf(selected)!==curEntry(); } /* scrolled away from the committed pos */
+  function updateNav(){
+    backBtn.disabled=!(pos>0||drifted()); /* drift enables ← as a "recover to where I was" */
+    fwdBtn.disabled=!(pos<entries.length-1);
   }
-  function updateBack(){ backBtn.disabled=!canGoBack(); }
-  function pushCommit(idx){
-    if(idx===null) return;
-    if(navStack.length && navStack[navStack.length-1]===idx) return; /* no consecutive dup */
-    navStack.push(idx); updateBack();
+  function recordNav(idx){
+    if(idx===null||idx===curEntry()) return; /* ignore re-selecting the current entry */
+    entries.length=pos+1;                    /* drop the forward tail — fresh nav resets it */
+    entries.push(idx); pos=entries.length-1;
+    updateNav();
   }
   function commitSelection(idx, immediate){
     if(commitTimer){ clearTimeout(commitTimer); commitTimer=null; }
-    if(immediate) pushCommit(idx);
-    else commitTimer=setTimeout(function(){ commitTimer=null; pushCommit(idx); }, 700);
+    if(immediate) recordNav(idx);
+    else commitTimer=setTimeout(function(){ commitTimer=null; recordNav(idx); }, 700);
   }
-  /* Select + record on the nav stack: immediate=true for a click/link jump,
-     false to debounce a scroll-driven change. */
+  /* Select + record: immediate=true for a click/link jump, false to debounce
+     a scroll- or arrow-driven change. */
   function selectAndCommit(el, immediate){ if(el){ selectMsg(el); commitSelection(idxOf(el), immediate); } }
   function selectionCandidate(){
     var els=bubbles.querySelectorAll('.chat-msg'), hr=history.getBoundingClientRect();
@@ -88,7 +93,7 @@
   function syncSelectionToScroll(){
     if(Date.now()<suppressSyncUntil) return;
     var el=selectionCandidate();
-    if(el && el!==selected){ selectAndCommit(el, false); updateBack(); } /* enables ← as you drift away */
+    if(el && el!==selected){ selectAndCommit(el, false); updateNav(); } /* enables ← as you drift away */
   }
   var rafPending=false;
   history.addEventListener('scroll',function(){
@@ -253,10 +258,6 @@
     img.src=src;
     if(img.complete) fit();
   }
-  /* The ← button walks back through the committed-selection trail. If you've
-     scrolled away without settling (selection != top of stack), it first
-     snaps you back to that last stable selection; once you're on it, each
-     press steps to the previous committed selection. */
   function scrollIndexToTop(idx){
     if(idx===null||idx===undefined) return null;
     var el=bubbles.querySelector('.chat-msg[data-i="'+idx+'"]');
@@ -264,22 +265,28 @@
     el.scrollIntoView({block:'start',behavior:'smooth'});
     return el;
   }
-  backBtn.addEventListener('click',function(){
-    if(!navStack.length) return;
-    if(commitTimer){ clearTimeout(commitTimer); commitTimer=null; } /* drop a pending scroll-commit */
-    var cur=idxOf(selected), top=navStack[navStack.length-1], target;
-    if(cur===top){
-      if(navStack.length<2) return;          /* already at the oldest committed selection */
-      navStack.pop();                         /* leave the current one... */
-      target=navStack[navStack.length-1];     /* ...and go to the previous */
-    } else {
-      target=top;                             /* transient scroll-away: snap back to the last stable */
-    }
+  /* Navigate to entries[pos] without recording it, so ←/→ don't create new
+     history themselves (and the scroll they trigger is suppressed). */
+  function goToEntry(){
+    if(pos<0) return;
     suppressSyncUntil=Date.now()+800;
-    var el=scrollIndexToTop(target); if(el) selectMsg(el);
-    updateBack();
+    var el=scrollIndexToTop(entries[pos]); if(el) selectMsg(el);
+    updateNav();
+  }
+  /* ← walks back through the committed trail. If you've scrolled away without
+     settling, the first press recovers your committed position (and drops the
+     pending commit, so the forward tail survives); from there each press steps
+     back one. → redoes a back, as long as nothing fresh has reset the tail. */
+  backBtn.addEventListener('click',function(){
+    if(commitTimer){ clearTimeout(commitTimer); commitTimer=null; }
+    if(drifted()){ goToEntry(); return; } /* recover to entries[pos] */
+    if(pos>0){ pos--; goToEntry(); }
   });
-  updateBack();
+  fwdBtn.addEventListener('click',function(){
+    if(commitTimer){ clearTimeout(commitTimer); commitTimer=null; }
+    if(pos<entries.length-1){ pos++; goToEntry(); }
+  });
+  updateNav();
   bubbles.addEventListener('click',function(e){
     var t=e.target;
     var qb=t.closest&&t.closest('.msg-quote');
@@ -316,14 +323,14 @@
     if(idx<0){ var c=selectionCandidate(); idx=c?msgs.indexOf(c):0; if(idx<0) idx=0; }
     else idx=Math.max(0,Math.min(msgs.length-1,idx+delta));
     suppressSyncUntil=Date.now()+400;
-    selectAndCommit(msgs[idx],false); revealInFeed(msgs[idx]); updateBack();
+    selectAndCommit(msgs[idx],false); revealInFeed(msgs[idx]); updateNav();
   }
   /* Jump cursor + feed to the very top (bottom=false) or bottom (bottom=true). */
   function cursorToExtreme(bottom){
     history.scrollTop=bottom?history.scrollHeight:0;
     var msgs=visibleMsgs(); if(!msgs.length) return;
     suppressSyncUntil=Date.now()+400;
-    selectAndCommit(bottom?msgs[msgs.length-1]:msgs[0],true); updateBack();
+    selectAndCommit(bottom?msgs[msgs.length-1]:msgs[0],true); updateNav();
   }
   /* PgUp/PgDn: page the feed if it can scroll that way (cursor follows the
      scroll via the scroll listener); if it can't, send the cursor to the extreme. */

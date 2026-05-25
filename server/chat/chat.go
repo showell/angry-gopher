@@ -122,7 +122,8 @@ func renderChatConversation(w http.ResponseWriter, user web.User, partnerID stri
 		`</div>`)
 
 	fmt.Fprint(w, `<div class="chat-layout"><div class="chat-main">`+
-		`<div class="chat-navbar"><button type="button" id="chat-back" class="chat-back" title="Back to where you were before the last jump" disabled>&larr;</button>`+
+		`<div class="chat-navbar"><button type="button" id="chat-back" class="chat-back" title="Back to the previous selection" disabled>&larr;</button>`+
+		`<button type="button" id="chat-fwd" class="chat-back" title="Forward (redo a Back)" disabled>&rarr;</button>`+
 		` <button type="button" id="chat-open-compose" class="chat-open-compose" style="display:none">Open compose box (c)</button></div>`+
 		`<div class="chat-history view-rendered" id="chat-history" tabindex="-1"><div class="chat-bubbles" id="chat-bubbles">`)
 	if len(msgs) == 0 {
@@ -329,6 +330,7 @@ html, body { height:100%; }
 .chat-open-compose:hover { background:#dcdcff; }
 .chat-back { font-size:14px; line-height:1; padding:3px 11px; background:#eee; color:#333;
              border:1px solid #ccc; border-radius:4px; cursor:pointer; }
+#chat-fwd { margin-left:4px; }
 .chat-back:hover:enabled { background:#e3e3e3; }
 .chat-back:disabled { opacity:0.4; cursor:default; }
 .chat-history { min-width:0; flex:1; min-height:0; overflow-y:auto;
