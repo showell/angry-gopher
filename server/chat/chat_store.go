@@ -67,10 +67,14 @@ type ChatMessage struct {
 }
 
 // chatEvent is a message plus its 0-based index in the conversation,
-// used as the SSE event id so a reconnecting client can resume.
+// used as the SSE event id so a reconnecting client can resume. Cid is the
+// sender's client-correlation id, carried on the LIVE broadcast only (never
+// stored, so it's absent on backlog/replay) — it lets the sending client
+// confirm its message round-tripped (saved + echoed).
 type chatEvent struct {
 	Index int
 	Msg   ChatMessage
+	Cid   string
 }
 
 var (
@@ -247,7 +251,7 @@ func ReadChatMessages(a, b string) ([]ChatMessage, error) {
 // publishes it to any live subscribers. The conversation is keyed by the
 // two ids; the message records the sender's display name. Returns the
 // stored message (with its normalized timestamp).
-func AppendChatMessage(from web.User, partnerID, body string) (ChatMessage, error) {
+func AppendChatMessage(from web.User, partnerID, body, cid string) (ChatMessage, error) {
 	key := chatPairKey(from.ID, partnerID)
 	path := chatMessagesPath(from.ID, partnerID)
 	msg := ChatMessage{From: from.Name, At: time.Now().UTC(), Body: body}
@@ -277,7 +281,7 @@ func AppendChatMessage(from web.User, partnerID, body string) (ChatMessage, erro
 		return msg, err
 	}
 
-	evt := chatEvent{Index: index, Msg: msg}
+	evt := chatEvent{Index: index, Msg: msg, Cid: cid}
 	for ch := range chatSubs[key] {
 		select {
 		case ch <- evt:

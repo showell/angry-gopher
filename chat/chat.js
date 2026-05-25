@@ -143,7 +143,7 @@
      line linkifies back to the original; the ~~~ quote fence keeps the quoted
      text verbatim (its own MSG_ refs aren't re-linked, being inside a fence). */
   function quoteReply(el){
-    if(!el) return;
+    if(!el||pendingCid) return; /* don't disturb a send awaiting its ack */
     var hash=el.getAttribute('data-hash'), mine=el.classList.contains('mine');
     var body=el._body!=null?el._body:'';
     openCompose(); /* ensure it's visible before we type into it */
@@ -155,7 +155,7 @@
      original content. Append-only + transparent — it's just a new message that
      references the original (no copy/paste, automatic backlink). */
   function editMessage(el){
-    if(!el) return;
+    if(!el||pendingCid) return; /* don't disturb a send awaiting its ack */
     var prefix='Edit of MSG_'+el.getAttribute('data-hash')+'\n\n';
     openCompose();
     textarea.value=prefix+(el._body!=null?el._body:'');
@@ -197,16 +197,58 @@
   /* Always replay the full backlog (since=0); reconnects resume from
      Last-Event-ID automatically. The client builds the whole feed. */
   var es=new EventSource('/chat/stream?with='+encodeURIComponent(PARTNER)+'&since=0');
-  es.onmessage=function(e){ var stick=caughtUp(); addMessage(JSON.parse(e.data)); if(stick) toBottom(); syncSelectionToScroll(); };
+  es.onmessage=function(e){
+    var stick=caughtUp(); var m=JSON.parse(e.data);
+    addMessage(m);
+    if(stick) toBottom(); syncSelectionToScroll();
+    if(pendingCid&&m.cid===pendingCid) ackSend(); /* our message round-tripped: saved + echoed */
+  };
+  /* Resilient send: a send is confirmed only when our own message echoes back
+     over SSE carrying the same client-id (proof it was both saved AND
+     broadcast). Until then the compose box stays disabled with its text kept;
+     if no echo arrives within the timeout (or the POST itself fails), we pop a
+     "host may be down" modal and re-enable for a manual retry. No auto-retry —
+     the point is just to make an outage transparent. */
+  var pendingCid=null, pendingTimer=null;
+  function newCid(){ return (window.crypto&&crypto.randomUUID)?crypto.randomUUID():Date.now()+'-'+Math.random().toString(16).slice(2); }
+  function setComposeEnabled(on){
+    textarea.disabled=!on;
+    var btns=form.querySelectorAll('button'); for(var i=0;i<btns.length;i++) btns[i].disabled=!on;
+  }
+  function ackSend(){ /* echo arrived: clear the box and re-enable */
+    if(pendingTimer){ clearTimeout(pendingTimer); pendingTimer=null; }
+    pendingCid=null; textarea.value=''; status.textContent=''; status.style.color='';
+    setComposeEnabled(true); textarea.focus();
+  }
+  function hostDown(){ /* no echo / POST failed: keep the text, re-enable, tell the user */
+    if(!pendingCid) return; /* already resolved (echo beat us) */
+    if(pendingTimer){ clearTimeout(pendingTimer); pendingTimer=null; }
+    pendingCid=null; status.textContent=''; status.style.color='';
+    setComposeEnabled(true);
+    showAlert('The host may be down. Please retry your send.'); textarea.focus();
+  }
+  function showAlert(msg){
+    var dlg=document.createElement('dialog'); dlg.className='chat-alert-dialog';
+    var p=document.createElement('p'); p.textContent=msg;
+    var ok=document.createElement('button'); ok.type='button'; ok.textContent='OK';
+    ok.addEventListener('click',function(){ dlg.close(); });
+    dlg.appendChild(p); dlg.appendChild(ok);
+    dlg.addEventListener('close',function(){ dlg.remove(); });
+    document.body.appendChild(dlg); dlg.showModal();
+  }
   function send(){
+    if(pendingCid) return; /* already awaiting an ack */
     var text=textarea.value;
     if(!text.trim()) return;
-    textarea.value=''; status.textContent='';
+    var cid=newCid(); pendingCid=cid;
+    setComposeEnabled(false); /* keep the text until the host acks */
+    status.style.color='#888'; status.textContent='Sending…';
+    pendingTimer=setTimeout(hostDown, 10000);
     fetch('/chat/send',{ method:'POST',
       headers:{'Content-Type':'application/x-www-form-urlencoded','X-Chat-Async':'1'},
-      body:'with='+encodeURIComponent(PARTNER)+'&body='+encodeURIComponent(text)
-    }).then(function(r){ if(!r.ok) throw new Error('status '+r.status); textarea.focus(); })
-      .catch(function(){ textarea.value=text; status.textContent='Failed to send — your text is preserved.'; });
+      body:'with='+encodeURIComponent(PARTNER)+'&body='+encodeURIComponent(text)+'&cid='+encodeURIComponent(cid)
+    }).then(function(r){ if(!r.ok) throw new Error('status '+r.status); /* success is confirmed by the SSE echo */ })
+      .catch(hostDown);
   }
   form.addEventListener('submit',function(e){ e.preventDefault(); send(); });
   textarea.addEventListener('keydown',function(e){

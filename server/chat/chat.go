@@ -190,6 +190,7 @@ func HandleChatSend(w http.ResponseWriter, r *http.Request) {
 
 	partner := strings.TrimSpace(r.FormValue("with")) // partner user id
 	body := strings.TrimSpace(r.FormValue("body"))
+	cid := strings.TrimSpace(r.FormValue("cid")) // client-correlation id, echoed on the SSE broadcast
 	async := r.Header.Get("X-Chat-Async") == "1"
 
 	if !validChatPartner(user.ID, partner) {
@@ -200,7 +201,7 @@ func HandleChatSend(w http.ResponseWriter, r *http.Request) {
 		chatSendDone(w, r, partner, async)
 		return
 	}
-	if _, err := AppendChatMessage(user, partner, body); err != nil {
+	if _, err := AppendChatMessage(user, partner, body, cid); err != nil {
 		http.Error(w, "save message: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -299,6 +300,7 @@ type chatWireMsg struct {
 	Body  string `json:"body"` // raw markdown source, for client-side quote-reply
 	Hash  string `json:"hash"`
 	Mine  bool   `json:"mine"`
+	Cid   string `json:"cid,omitempty"` // sender's correlation id (live broadcast only)
 }
 
 func writeChatEvent(w io.Writer, rc *http.ResponseController, evt chatEvent, me string) error {
@@ -311,6 +313,7 @@ func writeChatEvent(w io.Writer, rc *http.ResponseController, evt chatEvent, me 
 		Body:  evt.Msg.Body,
 		Hash:  evt.Msg.Hash,
 		Mine:  evt.Msg.From == me,
+		Cid:   evt.Cid,
 	}
 	data, err := json.Marshal(wire)
 	if err != nil {
@@ -424,6 +427,11 @@ html, body { height:100%; }
 .chat-code-view { flex:1; min-height:0; min-width:0; overflow:auto; margin:0; padding:14px 16px;
                   font-family:ui-monospace,Menlo,Consolas,monospace; font-size:14px;
                   line-height:1.45; white-space:pre; color:#222; cursor:auto; }
+/* Plain message-box modal (e.g. the "host may be down" notice). */
+.chat-alert-dialog { max-width:90vw; border:1px solid #bbb; border-radius:8px; padding:18px 20px; }
+.chat-alert-dialog::backdrop { background:rgba(0,0,0,0.4); }
+.chat-alert-dialog p { margin:0 0 14px; }
+.chat-alert-dialog button { padding:5px 16px; }
 .chat-hint { font-size:12px; color:#999; margin-top:8px; }
 .chat-status { font-size:12px; color:#b00020; min-height:16px; margin-top:6px; }
 /* Wide (landscape): side by side — conversation left, compose on the RIGHT.
