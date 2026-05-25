@@ -118,6 +118,25 @@
     bubbles.appendChild(div);
     var span=document.createElement('span'); span.setAttribute('data-i',m.index);
     span.textContent=m.enc; transcript.appendChild(span); /* literal on-disk block */
+    var em=(m.body||'').match(EDIT_RE); /* "Edit of MSG_<hash>" → supersede that original */
+    if(em){ var orig=document.getElementById('msg-'+em[1]); if(orig) markEdited(orig, m.hash); }
+  }
+  /* A message whose body starts with "Edit of MSG_<hash>" supersedes that
+     original: render a forward "Edited in MSG_<this>" link on the original and
+     demote its content to a small verbatim quote. Append-only — the stored
+     record is untouched; this is purely the rendered view (Transcript still
+     shows both messages byte-for-byte). */
+  var EDIT_RE=/^Edit of MSG_([0-9A-F]{6})\b/;
+  function markEdited(origEl, editHash){
+    var bodyEl=origEl.querySelector('.chat-body'); if(!bodyEl) return;
+    bodyEl.textContent='';
+    var note=document.createElement('div'); note.className='chat-edited-note';
+    note.appendChild(document.createTextNode('Edited in '));
+    var link=document.createElement('a'); link.className='msg-ref'; link.href='#msg-'+editHash;
+    link.textContent='MSG_'+editHash; note.appendChild(link);
+    var orig=document.createElement('div'); orig.className='chat-edited-orig';
+    orig.textContent=origEl._body!=null?origEl._body:'';
+    bodyEl.appendChild(note); bodyEl.appendChild(orig);
   }
   /* Quote-reply: drop the target message into the compose box as a fenced
      block and focus it, ready to type the reply underneath. The MSG_ header

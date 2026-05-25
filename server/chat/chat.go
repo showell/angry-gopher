@@ -377,6 +377,11 @@ html, body { height:100%; }
                        background:#eaeaff; color:#000080; padding:0 4px; border-radius:3px;
                        text-decoration:none; }
 .chat-body a.msg-ref:hover { background:#d8d8ff; }
+/* A superseded (edited) message: forward link to the edit + its original
+   markdown demoted to a small, quiet quote. */
+.chat-edited-note { font-size:12px; color:#888; margin-bottom:4px; }
+.chat-edited-orig { font-size:11px; color:#999; white-space:pre-wrap; overflow-wrap:anywhere;
+                    border-left:3px solid #ddd; padding:2px 0 2px 8px; }
 /* The selected message keeps a steady highlight ring (was a brief flash). */
 .chat-msg.selected { box-shadow:0 0 0 2px #ffcf3a; }
 .chat-body p:first-child { margin-top:0; }
