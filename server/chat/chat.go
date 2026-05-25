@@ -369,13 +369,17 @@ html, body { height:100%; }
 .chat-back:disabled { opacity:0.4; cursor:default; }
 /* Search modal: a two-phase palette — token autocomplete, then message
    results (raw markdown snippets with the term highlighted). */
-.chat-search-modal { width:600px; max-width:92vw; max-height:80vh; padding:0; border:1px solid #b9b9e0;
-                     border-radius:10px; background:#fff; display:flex; flex-direction:column; }
+/* Pinned to a fixed top offset (≈ the Rendered/Transcript tabs row) and grows
+   downward as results fill in — never vertically re-centering. */
+.chat-search-modal { position:fixed; top:56px; bottom:auto; left:0; right:0; margin:0 auto;
+                     width:600px; max-width:92vw; max-height:calc(100vh - 80px); padding:0;
+                     border:1px solid #b9b9e0; border-radius:10px; background:#fff;
+                     display:flex; flex-direction:column; }
 .chat-search-modal::backdrop { background:rgba(0,0,0,0.4); }
 .chat-sr-input { margin:0; border:none; border-bottom:1px solid #e3e3ef; border-radius:10px 10px 0 0;
                  font-size:16px; padding:12px 16px; font-family:inherit; outline:none; }
 .chat-sr-status { font-size:12px; color:#888; padding:6px 16px; border-bottom:1px solid #f0f0f4; flex:none; }
-.chat-sr-list { overflow-y:auto; padding:4px 0; }
+.chat-sr-list { overflow-y:auto; padding:4px 0; flex:1 1 auto; min-height:0; }
 .chat-sr-row { padding:7px 16px; cursor:pointer; border-left:3px solid transparent; }
 .chat-sr-row.sel { background:#eef0ff; border-left-color:#000080; }
 .chat-sr-row:hover { background:#f6f6fb; }
