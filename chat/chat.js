@@ -342,6 +342,7 @@
     if(qb){ var mm=qb.closest('.chat-msg'); if(mm) quoteReply(mm); return; }
     var a=t.closest&&t.closest('a.msg-ref');
     if(a){ e.preventDefault();
+      var src=a.closest('.chat-msg'); if(src) selectAndCommit(src,true); /* record where we jumped FROM, so Back returns here */
       var tgt=document.getElementById(a.getAttribute('href').slice(1));
       if(tgt){ suppressSyncUntil=Date.now()+800;
         tgt.scrollIntoView({block:'center',behavior:'smooth'}); selectAndCommit(tgt,true); }
