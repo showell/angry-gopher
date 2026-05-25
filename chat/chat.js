@@ -157,6 +157,7 @@
      references the original (no copy/paste, automatic backlink). */
   function editMessage(el){
     if(!el||pendingCid) return; /* don't disturb a send awaiting its ack */
+    selectAndCommit(el,true); /* record the edited message on the nav stack */
     var prefix='Edit of MSG_'+el.getAttribute('data-hash')+'\n\n';
     openCompose();
     textarea.value=prefix+(el._body!=null?el._body:'');
