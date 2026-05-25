@@ -380,7 +380,7 @@ html, body { height:100%; }
 .chat-msg.selected { box-shadow:0 0 0 2px #ffcf3a; }
 .chat-body p:first-child { margin-top:0; }
 .chat-body p:last-child { margin-bottom:0; }
-.chat-body pre { background:#f4f4ec; padding:8px; border-radius:4px; overflow-x:auto; }
+.chat-body pre { background:#f4f4ec; padding:8px; border-radius:4px; overflow-x:auto; cursor:pointer; }
 /* A ~~~ quote fence (quote-reply) renders verbatim but reads as a quote, not
    code: proportional font, left rule, soft tint, wrapping preserved. */
 .chat-body pre.chat-quote { font-family:inherit; white-space:pre-wrap; overflow-wrap:anywhere;
@@ -407,6 +407,17 @@ html, body { height:100%; }
    scaled in px inside it and overflows into scrollbars when zoomed in. */
 .chat-img-scroll { width:70vw; height:70vh; overflow:auto; background:#faf9f5; border-radius:6px; }
 .chat-img-scroll img { display:block; }
+/* Code/pre viewer: the dialog is fit-content (its UA default) capped at
+   80vw/80vh, so it hugs small snippets and stops at 80% for big ones; the
+   <pre> then scrolls in whichever direction overflows. */
+.chat-code-dialog { max-width:80vw; max-height:80vh; padding:0; border:1px solid #bbb;
+                    border-radius:8px; background:#fff; display:flex; flex-direction:column; }
+.chat-code-dialog::backdrop { background:rgba(0,0,0,0.45); }
+.chat-code-controls { flex:none; display:flex; justify-content:flex-end; padding:6px 8px;
+                      border-bottom:1px solid #eee; background:#faf9f5; }
+.chat-code-view { flex:1; min-height:0; min-width:0; overflow:auto; margin:0; padding:14px 16px;
+                  font-family:ui-monospace,Menlo,Consolas,monospace; font-size:14px;
+                  line-height:1.45; white-space:pre; color:#222; cursor:auto; }
 .chat-hint { font-size:12px; color:#999; margin-top:8px; }
 .chat-status { font-size:12px; color:#b00020; min-height:16px; margin-top:6px; }
 /* Wide (landscape): side by side — conversation left, compose on the RIGHT.

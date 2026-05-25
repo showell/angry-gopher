@@ -261,6 +261,22 @@
     img.src=src;
     if(img.complete) fit();
   }
+  /* --- click any code/pre block to view it full-size in a monospace modal --- */
+  function showCodePopup(text){
+    var dlg=document.createElement('dialog'); dlg.className='chat-code-dialog';
+    var controls=document.createElement('div'); controls.className='chat-code-controls';
+    var close=document.createElement('button'); close.type='button'; close.textContent='Close';
+    close.addEventListener('click',function(){ dlg.close(); });
+    controls.appendChild(close);
+    var pre=document.createElement('pre'); pre.className='chat-code-view'; pre.textContent=text;
+    dlg.appendChild(controls); dlg.appendChild(pre);
+    /* The dialog is fit-content (CSS) capped at 80vw/80vh; the <pre> scrolls
+       when the code is larger. Esc (native) or a backdrop click also close it. */
+    dlg.addEventListener('close',function(){ dlg.remove(); });
+    dlg.addEventListener('click',function(e){ if(e.target===dlg) dlg.close(); });
+    document.body.appendChild(dlg);
+    dlg.showModal();
+  }
   function scrollIndexToTop(idx){
     if(idx===null||idx===undefined) return null;
     var el=bubbles.querySelector('.chat-msg[data-i="'+idx+'"]');
@@ -300,9 +316,11 @@
       if(tgt){ suppressSyncUntil=Date.now()+800;
         tgt.scrollIntoView({block:'center',behavior:'smooth'}); selectAndCommit(tgt,true); }
       return; }
-    var msg=t.closest&&t.closest('.chat-msg'); /* a plain click (incl. on an image) selects the message */
+    var msg=t.closest&&t.closest('.chat-msg'); /* a plain click (incl. on an image / pre) selects the message */
     if(msg) selectAndCommit(msg,true);
     if(t&&t.tagName==='IMG'&&t.closest('.chat-body')) showImagePopup(t.src);
+    var pre=t.closest&&t.closest('pre');
+    if(pre&&t.closest('.chat-body')) showCodePopup(pre.textContent); /* any code/quote block → full-size view */
   });
   /* --- keyboard navigation of the feed (cursor-aware) --- */
   function visibleMsgs(){
