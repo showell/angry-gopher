@@ -123,7 +123,7 @@ func renderChatConversation(w http.ResponseWriter, user web.User, partnerID stri
 
 	fmt.Fprint(w, `<div class="chat-layout"><div class="chat-main">`+
 		`<div class="chat-navbar"><button type="button" id="chat-back" class="chat-back" title="Back to where you were before the last jump" disabled>&larr;</button></div>`+
-		`<div class="chat-history view-rendered" id="chat-history"><div class="chat-bubbles" id="chat-bubbles">`)
+		`<div class="chat-history view-rendered" id="chat-history" tabindex="-1"><div class="chat-bubbles" id="chat-bubbles">`)
 	if len(msgs) == 0 {
 		fmt.Fprint(w, `<p class="muted" id="chat-empty">No messages yet. Say hello 👋</p>`)
 	}
@@ -329,6 +329,9 @@ html, body { height:100%; }
 .chat-back:disabled { opacity:0.4; cursor:default; }
 .chat-history { min-width:0; flex:1; min-height:0; overflow-y:auto;
                 border:1px solid #ddd; border-radius:8px; padding:12px; background:#fcfcf8; }
+/* The feed is click-focusable so keyboard nav works; the selected-message
+   ring is the visible cursor, so no focus outline on the container itself. */
+.chat-history:focus { outline:none; }
 .chat-compose form { margin:0; }
 .chat-compose textarea { width:100%; min-height:200px; resize:vertical; box-sizing:border-box;
                          font-family:inherit; font-size:14px; padding:8px; }

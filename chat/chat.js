@@ -284,14 +284,59 @@
     if(msg) selectAndCommit(msg,true);
     if(t&&t.tagName==='IMG'&&t.closest('.chat-body')) showImagePopup(t.src);
   });
-  /* "r" while reading the feed (not typing) quote-replies the selected
-     message and jumps focus to compose. */
+  /* --- keyboard navigation of the feed (cursor-aware) --- */
+  function visibleMsgs(){
+    var out=[], els=bubbles.querySelectorAll('.chat-msg');
+    for(var i=0;i<els.length;i++) if(els[i].offsetParent!==null) out.push(els[i]);
+    return out;
+  }
+  /* Scroll the feed (only the feed, never the page) just enough to bring el
+     fully into view — a "nearest" reveal. */
+  function revealInFeed(el){
+    var hr=history.getBoundingClientRect(), r=el.getBoundingClientRect();
+    if(r.top<hr.top) history.scrollTop+=r.top-hr.top;
+    else if(r.bottom>hr.bottom) history.scrollTop+=r.bottom-hr.bottom;
+  }
+  /* Move the cursor by delta messages (clamped), revealing it. Scroll-driven
+     reselection is briefly suppressed so our explicit pick isn't overridden. */
+  function moveCursor(delta){
+    var msgs=visibleMsgs();
+    if(!msgs.length){ history.scrollTop+=delta*40; return; } /* transcript view: just scroll */
+    var idx=selected?msgs.indexOf(selected):-1;
+    if(idx<0){ var c=selectionCandidate(); idx=c?msgs.indexOf(c):0; if(idx<0) idx=0; }
+    else idx=Math.max(0,Math.min(msgs.length-1,idx+delta));
+    suppressSyncUntil=Date.now()+400;
+    selectAndCommit(msgs[idx],false); revealInFeed(msgs[idx]); updateBack();
+  }
+  /* Jump cursor + feed to the very top (bottom=false) or bottom (bottom=true). */
+  function cursorToExtreme(bottom){
+    history.scrollTop=bottom?history.scrollHeight:0;
+    var msgs=visibleMsgs(); if(!msgs.length) return;
+    suppressSyncUntil=Date.now()+400;
+    selectAndCommit(bottom?msgs[msgs.length-1]:msgs[0],true); updateBack();
+  }
+  /* PgUp/PgDn: page the feed if it can scroll that way (cursor follows the
+     scroll via the scroll listener); if it can't, send the cursor to the extreme. */
+  function pageNav(dir){
+    var canScroll=dir<0 ? history.scrollTop>0
+                        : history.scrollTop+history.clientHeight<history.scrollHeight-1;
+    if(canScroll) history.scrollTop+=dir*Math.max(40,history.clientHeight-40);
+    else cursorToExtreme(dir>0);
+  }
+  /* Override these keys when reading the feed (not when typing in compose). */
   document.addEventListener('keydown',function(e){
-    if(e.key!=='r'||e.ctrlKey||e.metaKey||e.altKey) return;
     var ae=document.activeElement;
     if(ae&&(ae.tagName==='TEXTAREA'||ae.tagName==='INPUT'||ae.isContentEditable)) return;
-    if(!selected) return;
-    e.preventDefault(); quoteReply(selected);
+    if(e.ctrlKey||e.metaKey||e.altKey) return;
+    switch(e.key){
+      case 'r': if(selected){ e.preventDefault(); quoteReply(selected); } return;
+      case 'ArrowDown': e.preventDefault(); moveCursor(1); return;
+      case 'ArrowUp':   e.preventDefault(); moveCursor(-1); return;
+      case 'Home':      e.preventDefault(); cursorToExtreme(false); return;
+      case 'End':       e.preventDefault(); cursorToExtreme(true); return;
+      case 'PageDown':  e.preventDefault(); pageNav(1); return;
+      case 'PageUp':    e.preventDefault(); pageNav(-1); return;
+    }
   });
   textarea.focus();
 })();
