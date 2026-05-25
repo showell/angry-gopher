@@ -50,7 +50,7 @@
      elsewhere resets the forward stack. A click/link jump commits immediately;
      a scroll- or arrow-driven change commits only after a 700ms pause, so
      scrolling past messages doesn't churn the trail — only where you settle. */
-  var selected=null, suppressSyncUntil=0;
+  var selected=null;
   function idxOf(el){ return el?el.getAttribute('data-i'):null; }
   function selectMsg(el){
     if(!el||el===selected) return;
@@ -90,15 +90,33 @@
     }
     return beginningVisible||straddler||null;
   }
-  /* A link/back jump suppresses scroll-driven reselection briefly so the
-     smooth-scroll animation doesn't steal the selection back. */
+  /* A programmatic jump (MSG_ link, back/forward, search, arrow, paging)
+     suppresses scroll-driven reselection so the smooth-scroll animation can't
+     steal the selection back. We suppress until the scroll actually goes QUIET,
+     not for a fixed window: a far jump animates well past any time guess, and a
+     centered target means the "topmost visible" the detector would pick isn't
+     the target anyway — so a fixed window let the detector wake mid-flight and
+     land on the wrong message. armScrollSuppress() must be called right before
+     each programmatic scroll. */
+  var progScroll=false, progScrollTimer=null;
+  function endProgScroll(){ progScroll=false; progScrollTimer=null; }
+  function armScrollSuppress(){
+    progScroll=true;
+    if(progScrollTimer) clearTimeout(progScrollTimer);
+    progScrollTimer=setTimeout(endProgScroll, 150); /* re-armed by each scroll event below */
+  }
   function syncSelectionToScroll(){
-    if(Date.now()<suppressSyncUntil) return;
+    if(progScroll) return;
     var el=selectionCandidate();
     if(el && el!==selected){ selectAndCommit(el, false); updateNav(); } /* enables ← as you drift away */
   }
   var rafPending=false;
   history.addEventListener('scroll',function(){
+    if(progScroll){ /* our own animated scroll: stay suppressed until it's idle for 150ms */
+      if(progScrollTimer) clearTimeout(progScrollTimer);
+      progScrollTimer=setTimeout(endProgScroll, 150);
+      return;
+    }
     if(rafPending) return; rafPending=true;
     requestAnimationFrame(function(){ rafPending=false; syncSelectionToScroll(); });
   });
@@ -363,7 +381,7 @@
      history themselves (and the scroll they trigger is suppressed). */
   function goToEntry(){
     if(pos<0) return;
-    suppressSyncUntil=Date.now()+800;
+    armScrollSuppress();
     var el=scrollIndexToTop(entries[pos]); if(el) selectMsg(el);
     updateNav();
   }
@@ -389,7 +407,7 @@
     if(a){ e.preventDefault();
       var src=a.closest('.chat-msg'); if(src) selectAndCommit(src,true); /* record where we jumped FROM, so Back returns here */
       var tgt=document.getElementById(a.getAttribute('href').slice(1));
-      if(tgt){ suppressSyncUntil=Date.now()+800;
+      if(tgt){ armScrollSuppress();
         tgt.scrollIntoView({block:'center',behavior:'smooth'}); selectAndCommit(tgt,true); }
       return; }
     var msg=t.closest&&t.closest('.chat-msg'); /* a plain click (incl. on an image / pre) selects the message */
@@ -419,14 +437,14 @@
     var idx=selected?msgs.indexOf(selected):-1;
     if(idx<0){ var c=selectionCandidate(); idx=c?msgs.indexOf(c):0; if(idx<0) idx=0; }
     else idx=Math.max(0,Math.min(msgs.length-1,idx+delta));
-    suppressSyncUntil=Date.now()+400;
+    armScrollSuppress();
     selectAndCommit(msgs[idx],false); revealInFeed(msgs[idx]); updateNav();
   }
   /* Jump cursor + feed to the very top (bottom=false) or bottom (bottom=true). */
   function cursorToExtreme(bottom){
     history.scrollTop=bottom?history.scrollHeight:0;
     var msgs=visibleMsgs(); if(!msgs.length) return;
-    suppressSyncUntil=Date.now()+400;
+    armScrollSuppress();
     selectAndCommit(bottom?msgs[msgs.length-1]:msgs[0],true); updateNav();
   }
   /* PgUp/PgDn: page the feed if it can scroll that way (cursor follows the
@@ -573,7 +591,7 @@
     if(SR.sel<0||!SR.items[SR.sel]) return;
     var el=SR.items[SR.sel].el;
     closeSearchModal();
-    suppressSyncUntil=Date.now()+800;
+    armScrollSuppress();
     selectAndCommit(el,true); scrollToIndex(idxOf(el)); updateNav(); /* jump + push nav stack */
   }
   function onSearchKey(e){
