@@ -559,7 +559,7 @@
       var row=document.createElement('div'); row.className='chat-sr-row'; row.setAttribute('data-i',k);
       var head=document.createElement('div'); head.className='chat-sr-rhead';
       head.textContent=(meta&&meta.firstChild?meta.firstChild.nodeValue:'').trim();
-      var body=document.createElement('div'); body.className='chat-sr-rbody'; appendSnippet(body, el._body||'', term);
+      var body=document.createElement('div'); body.className='chat-sr-rbody'; highlightInto(body, el._body||'', term); /* full message once navigating */
       row.appendChild(head); row.appendChild(body);
       SR.list.appendChild(row); SR.items.push({el:el});
     }

@@ -383,8 +383,9 @@ html, body { height:100%; }
 .chat-sr-cnt { font-weight:normal; font-size:11px; color:#999; }
 .chat-sr-rhead { font-size:11px; color:#888; margin-bottom:2px; }
 .chat-sr-ctx, .chat-sr-rbody { font-family:ui-monospace,Menlo,Consolas,monospace; font-size:12px; color:#555;
-                               white-space:pre-wrap; overflow-wrap:anywhere; margin-top:3px;
-                               max-height:4.6em; overflow:hidden; }
+                               white-space:pre-wrap; overflow-wrap:anywhere; margin-top:3px; }
+.chat-sr-ctx { max-height:4.6em; overflow:hidden; } /* phase 1: limited context while typing */
+.chat-sr-rbody { color:#333; } /* phase 2: full message while navigating choices */
 .chat-search-modal mark { background:#ffe680; color:inherit; border-radius:2px; padding:0 1px; }
 .chat-history { min-width:0; flex:1; min-height:0; overflow-y:auto;
                 border:1px solid #ddd; border-radius:8px; padding:12px; background:#fcfcf8; }
