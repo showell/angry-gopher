@@ -149,6 +149,7 @@ func renderChatConversation(w http.ResponseWriter, user web.User, partnerID stri
     <div class="chat-keyhelp">
       <div class="chat-keyhelp-title">Keyboard</div>
       <div class="chat-key"><kbd>r</kbd> reply to the selected message</div>
+      <div class="chat-key"><kbd>e</kbd> edit the selected message</div>
       <div class="chat-key"><kbd>b</kbd> back</div>
       <div class="chat-key"><kbd>f</kbd> forward</div>
       <div class="chat-key"><kbd>t</kbd> toggle rendered / transcript</div>

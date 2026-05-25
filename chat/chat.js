@@ -131,6 +131,17 @@
     insertAtCursor('In MSG_'+hash+' '+(mine?'I said':'you said')+':\n~~~ quote\n'+body+'\n~~~\n\n');
     textarea.focus();
   }
+  /* Edit: load the message back into compose with a transparent
+     "Edit of MSG_<hash>" backlink prepended and the caret at the start of the
+     original content. Append-only + transparent — it's just a new message that
+     references the original (no copy/paste, automatic backlink). */
+  function editMessage(el){
+    if(!el) return;
+    var prefix='Edit of MSG_'+el.getAttribute('data-hash')+'\n\n';
+    openCompose();
+    textarea.value=prefix+(el._body!=null?el._body:'');
+    textarea.setSelectionRange(prefix.length, prefix.length); /* caret at the start of the content */
+  }
   /* Anchor scrolling on the same MESSAGE across view switches: find the
      topmost visible [data-i] element, then bring that same index back to
      the top after the layout changes (rendered/raw/transcript differ). */
@@ -372,6 +383,7 @@
       case 'f': e.preventDefault(); fwdBtn.click(); return;
       case 't': e.preventDefault(); toggleView(); return;
       case 'r': if(selected){ e.preventDefault(); quoteReply(selected); } return;
+      case 'e': if(selected){ e.preventDefault(); editMessage(selected); } return;
       case 'ArrowDown': e.preventDefault(); moveCursor(1); return;
       case 'ArrowUp':   e.preventDefault(); moveCursor(-1); return;
       case 'Home':      e.preventDefault(); cursorToExtreme(false); return;
