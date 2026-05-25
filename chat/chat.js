@@ -92,16 +92,28 @@
     var div=document.createElement('div');
     div.className='chat-msg '+(m.mine?'mine':'theirs');
     div.id='msg-'+m.hash; div.setAttribute('data-i',m.index); div.setAttribute('data-hash',m.hash);
+    div._body=m.body; /* raw markdown source, kept for quote-reply */
     var meta=document.createElement('div'); meta.className='chat-meta';
     meta.appendChild(document.createTextNode(m.from+' · '+m.time+' '));
-    var refer=document.createElement('button'); refer.type='button'; refer.className='msg-refer';
-    refer.title='Reference this message'; refer.textContent='refer'; meta.appendChild(refer);
+    var quote=document.createElement('button'); quote.type='button'; quote.className='msg-quote';
+    quote.title='Quote this message in a reply (or press r)'; quote.textContent='quote-reply'; meta.appendChild(quote);
     var body=document.createElement('div'); body.className='chat-body';
     body.innerHTML=m.html; /* sanitized server-side */
     div.appendChild(meta); div.appendChild(body);
     bubbles.appendChild(div);
     var span=document.createElement('span'); span.setAttribute('data-i',m.index);
     span.textContent=m.enc; transcript.appendChild(span); /* literal on-disk block */
+  }
+  /* Quote-reply: drop the target message into the compose box as a fenced
+     block and focus it, ready to type the reply underneath. The MSG_ header
+     line linkifies back to the original; the ~~~ quote fence keeps the quoted
+     text verbatim (its own MSG_ refs aren't re-linked, being inside a fence). */
+  function quoteReply(el){
+    if(!el) return;
+    var hash=el.getAttribute('data-hash'), mine=el.classList.contains('mine');
+    var body=el._body!=null?el._body:'';
+    insertAtCursor('In MSG_'+hash+' '+(mine?'I said':'you said')+':\n~~~ quote\n'+body+'\n~~~\n\n');
+    textarea.focus();
   }
   /* Anchor scrolling on the same MESSAGE across view switches: find the
      topmost visible [data-i] element, then bring that same index back to
@@ -260,8 +272,8 @@
   updateBack();
   bubbles.addEventListener('click',function(e){
     var t=e.target;
-    var rb=t.closest&&t.closest('.msg-refer');
-    if(rb){ var mm=rb.closest('.chat-msg'); if(mm) insertAtCursor('MSG_'+mm.getAttribute('data-hash')+' '); return; }
+    var qb=t.closest&&t.closest('.msg-quote');
+    if(qb){ var mm=qb.closest('.chat-msg'); if(mm) quoteReply(mm); return; }
     var a=t.closest&&t.closest('a.msg-ref');
     if(a){ e.preventDefault();
       var tgt=document.getElementById(a.getAttribute('href').slice(1));
@@ -271,6 +283,15 @@
     var msg=t.closest&&t.closest('.chat-msg'); /* a plain click (incl. on an image) selects the message */
     if(msg) selectAndCommit(msg,true);
     if(t&&t.tagName==='IMG'&&t.closest('.chat-body')) showImagePopup(t.src);
+  });
+  /* "r" while reading the feed (not typing) quote-replies the selected
+     message and jumps focus to compose. */
+  document.addEventListener('keydown',function(e){
+    if(e.key!=='r'||e.ctrlKey||e.metaKey||e.altKey) return;
+    var ae=document.activeElement;
+    if(ae&&(ae.tagName==='TEXTAREA'||ae.tagName==='INPUT'||ae.isContentEditable)) return;
+    if(!selected) return;
+    e.preventDefault(); quoteReply(selected);
   });
   textarea.focus();
 })();

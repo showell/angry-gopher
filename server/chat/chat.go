@@ -282,6 +282,7 @@ type chatWireMsg struct {
 	Time  string `json:"time"`
 	HTML  string `json:"html"`
 	Enc   string `json:"enc"`
+	Body  string `json:"body"` // raw markdown source, for client-side quote-reply
 	Hash  string `json:"hash"`
 	Mine  bool   `json:"mine"`
 }
@@ -293,6 +294,7 @@ func writeChatEvent(w io.Writer, rc *http.ResponseController, evt chatEvent, me 
 		Time:  formatChatTime(evt.Msg.At),
 		HTML:  string(RenderChatMarkdown(evt.Msg.Body)),
 		Enc:   chatStoredForm(evt.Index, evt.Msg),
+		Body:  evt.Msg.Body,
 		Hash:  evt.Msg.Hash,
 		Mine:  evt.Msg.From == me,
 	}
@@ -338,9 +340,9 @@ html, body { height:100%; }
    instead of overflowing it — alignment-independent. */
 .chat-body { overflow-wrap:anywhere; }
 .chat-meta { font-size:11px; color:#888; margin-bottom:3px; }
-.chat-meta .msg-refer { font-size:10px; color:#888; background:none; border:none;
+.chat-meta .msg-quote { font-size:10px; color:#888; background:none; border:none;
                         padding:0 2px; cursor:pointer; text-decoration:underline; }
-.chat-meta .msg-refer:hover { color:#000080; }
+.chat-meta .msg-quote:hover { color:#000080; }
 .chat-body a.msg-ref { font-family:ui-monospace,Menlo,Consolas,monospace; font-size:0.9em;
                        background:#eaeaff; color:#000080; padding:0 4px; border-radius:3px;
                        text-decoration:none; }
