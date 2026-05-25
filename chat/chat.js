@@ -226,15 +226,15 @@
     if(pendingTimer){ clearTimeout(pendingTimer); pendingTimer=null; }
     pendingCid=null; status.textContent=''; status.style.color='';
     setComposeEnabled(true);
-    showAlert('The host may be down. Please retry your send.'); textarea.focus();
+    showAlert('The host may be down. Please retry your send.', function(){ textarea.focus(); });
   }
-  function showAlert(msg){
+  function showAlert(msg, onClose){
     var dlg=document.createElement('dialog'); dlg.className='chat-alert-dialog';
     var p=document.createElement('p'); p.textContent=msg;
     var ok=document.createElement('button'); ok.type='button'; ok.textContent='OK';
     ok.addEventListener('click',function(){ dlg.close(); });
     dlg.appendChild(p); dlg.appendChild(ok);
-    dlg.addEventListener('close',function(){ dlg.remove(); });
+    dlg.addEventListener('close',function(){ dlg.remove(); if(onClose) onClose(); }); /* focus lands after the modal releases it */
     document.body.appendChild(dlg); dlg.showModal();
   }
   function send(){
