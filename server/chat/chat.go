@@ -352,6 +352,12 @@ html, body { height:100%; }
 .chat-body p:first-child { margin-top:0; }
 .chat-body p:last-child { margin-bottom:0; }
 .chat-body pre { background:#f4f4ec; padding:8px; border-radius:4px; overflow-x:auto; }
+/* A ~~~ quote fence (quote-reply) renders verbatim but reads as a quote, not
+   code: proportional font, left rule, soft tint, wrapping preserved. */
+.chat-body pre.chat-quote { font-family:inherit; white-space:pre-wrap; overflow-wrap:anywhere;
+                            background:#f6f6fb; border-left:3px solid #b9b9e0;
+                            border-radius:0 4px 4px 0; margin:6px 0; padding:6px 10px;
+                            color:#444; overflow-x:visible; }
 .chat-transcript { display:none; margin:0; white-space:pre-wrap; overflow-wrap:anywhere;
                    font-family:ui-monospace,Menlo,Consolas,monospace; font-size:13px; color:#333; }
 .chat-history.view-transcript #chat-bubbles { display:none; }

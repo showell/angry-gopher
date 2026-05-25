@@ -9,19 +9,75 @@ package chat
 import (
 	"bytes"
 	"html/template"
+	"regexp"
 
 	"github.com/microcosm-cc/bluemonday"
 	"github.com/yuin/goldmark"
+	"github.com/yuin/goldmark/ast"
 	"github.com/yuin/goldmark/extension"
+	"github.com/yuin/goldmark/renderer"
 	gmhtml "github.com/yuin/goldmark/renderer/html"
+	"github.com/yuin/goldmark/util"
 )
 
 // chatMarkdown renders with GFM (autolinks, strikethrough, tables) and
 // hard wraps — in chat a single newline means a line break, not a space.
+// quoteFenceRenderer (priority below the default 1000) overrides fenced-code
+// rendering so a ```quote block becomes a styled quote instead of a code block.
 var chatMarkdown = goldmark.New(
 	goldmark.WithExtensions(extension.GFM),
-	goldmark.WithRendererOptions(gmhtml.WithHardWraps()),
+	goldmark.WithRendererOptions(
+		gmhtml.WithHardWraps(),
+		renderer.WithNodeRenderers(util.Prioritized(quoteFenceRenderer{}, 100)),
+	),
 )
+
+// quoteFenceRenderer renders a ```quote fenced block as a styled quote
+// (verbatim text in <pre class="chat-quote">) and lets every other fenced
+// block fall through to the standard <pre><code class="language-…"> output.
+// Verbatim, like a code block: the quoted text's own markdown and MSG_ refs
+// are shown literally (the <pre> keeps linkifyMsgRefs from touching them).
+type quoteFenceRenderer struct{}
+
+func (quoteFenceRenderer) RegisterFuncs(reg renderer.NodeRendererFuncRegisterer) {
+	reg.Register(ast.KindFencedCodeBlock, renderFencedCodeBlock)
+}
+
+func renderFencedCodeBlock(w util.BufWriter, source []byte, node ast.Node, entering bool) (ast.WalkStatus, error) {
+	n := node.(*ast.FencedCodeBlock)
+	lang := n.Language(source)
+	if string(lang) == "quote" {
+		if entering {
+			w.WriteString(`<pre class="chat-quote">`)
+			writeCodeLines(w, source, n)
+		} else {
+			w.WriteString("</pre>\n")
+		}
+		return ast.WalkContinue, nil
+	}
+	// Mirror goldmark's default fenced-code rendering for every other block.
+	if entering {
+		w.WriteString("<pre><code")
+		if lang != nil {
+			w.WriteString(` class="language-`)
+			gmhtml.DefaultWriter.Write(w, lang)
+			w.WriteString(`"`)
+		}
+		w.WriteByte('>')
+		writeCodeLines(w, source, n)
+	} else {
+		w.WriteString("</code></pre>\n")
+	}
+	return ast.WalkContinue, nil
+}
+
+func writeCodeLines(w util.BufWriter, source []byte, n ast.Node) {
+	lines := n.Lines()
+	for i := 0; i < lines.Len(); i++ {
+		line := lines.At(i)
+		gmhtml.DefaultWriter.RawWrite(w, line.Value(source))
+	}
+}
 
 // chatSanitizer is the user-generated-content policy: standard formatting
 // tags (incl. img), safe link schemes, nothing executable. Relative URLs
@@ -32,6 +88,9 @@ var chatSanitizer = func() *bluemonday.Policy {
 	p := bluemonday.UGCPolicy()
 	p.AllowRelativeURLs(true)
 	p.AddTargetBlankToFullyQualifiedLinks(true)
+	// Keep the marker class on quote blocks (see quoteFenceRenderer) so the
+	// CSS can style them; the value is fixed, so this opens no real surface.
+	p.AllowAttrs("class").Matching(regexp.MustCompile(`^chat-quote$`)).OnElements("pre")
 	return p
 }()
 
