@@ -201,6 +201,12 @@ func HandleChatSend(w http.ResponseWriter, r *http.Request) {
 		chatSendDone(w, r, partner, async)
 		return
 	}
+	if strings.HasPrefix(body, "DROP_ON_FLOOR") {
+		// Test back door: accept the POST but neither save nor broadcast, so no
+		// SSE echo returns and the sender's client exercises its timeout path.
+		chatSendDone(w, r, partner, async)
+		return
+	}
 	if _, err := AppendChatMessage(user, partner, body, cid); err != nil {
 		http.Error(w, "save message: "+err.Error(), http.StatusInternalServerError)
 		return

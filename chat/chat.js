@@ -144,6 +144,7 @@
      text verbatim (its own MSG_ refs aren't re-linked, being inside a fence). */
   function quoteReply(el){
     if(!el||pendingCid) return; /* don't disturb a send awaiting its ack */
+    selectAndCommit(el,true); /* record the quoted message on the nav stack */
     var hash=el.getAttribute('data-hash'), mine=el.classList.contains('mine');
     var body=el._body!=null?el._body:'';
     openCompose(); /* ensure it's visible before we type into it */
@@ -243,7 +244,7 @@
     var cid=newCid(); pendingCid=cid;
     setComposeEnabled(false); /* keep the text until the host acks */
     status.style.color='#888'; status.textContent='Sending…';
-    pendingTimer=setTimeout(hostDown, 10000);
+    pendingTimer=setTimeout(hostDown, 3000);
     fetch('/chat/send',{ method:'POST',
       headers:{'Content-Type':'application/x-www-form-urlencoded','X-Chat-Async':'1'},
       body:'with='+encodeURIComponent(PARTNER)+'&body='+encodeURIComponent(text)+'&cid='+encodeURIComponent(cid)
