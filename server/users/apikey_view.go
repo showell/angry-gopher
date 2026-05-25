@@ -30,8 +30,9 @@ code.key { font-family: ui-monospace,Menlo,Consolas,monospace; font-size: 15px;
 <div class="box">
 <p class="warn"><strong>Copy this for the bot.</strong></p>
 <code class="key">%s</code>
-<p class="muted">Read-only. The bot sends it as <code>Authorization: Bearer &lt;key&gt;</code>.
-Hand it to the bot via the <code>GOPHER_API_KEY</code> env var, not in the prompt. Revoke anytime.</p>
+<p class="muted">Acts as you (read + send), but not admin — treat it like your password.
+The bot sends it as <code>Authorization: Bearer &lt;key&gt;</code>; hand it over via the
+<code>GOPHER_API_KEY</code> env var, not in the prompt. Revoke anytime.</p>
 </div>
 </body></html>`, html.EscapeString(backURL), html.EscapeString(backLabel),
 		html.EscapeString(GetUserName(id)), html.EscapeString(key))

@@ -66,8 +66,11 @@ Available ops commands (run from repo root):
   ops/backup             Pull a timestamped data_dir snapshot from prod.
   ops/fetch_prod_transcript
                          Print the prod chat transcript (Steve<->Apoorva)
-                         via the read-only API (delegates to
+                         via the API (delegates to
                          chat/fetch_conversation.py; needs ~/.gopher_api_key).
+  ops/post_summary <md>  Post a summary to the prod chat (Steve->Apoorva),
+                         one message per blank-line paragraph, via the API
+                         key (needs ~/.gopher_api_key). Irreversible.
 
 Credentials convention: store in ~/AngryGopher/ (non-hidden, outside git).
 EOF

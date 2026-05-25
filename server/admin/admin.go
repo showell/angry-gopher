@@ -150,7 +150,7 @@ func renderMembersTable(w http.ResponseWriter) {
 	})
 
 	fmt.Fprint(w, `<h2>Official users</h2>
-<p class="muted">Members (password holders): time since last activity, lifetime image-upload total (vs the per-user cap), and a read-only bot API key.</p>
+<p class="muted">Members (password holders): time since last activity, lifetime image-upload total (vs the per-user cap), and a bot API key (acts as the member, no admin).</p>
 <table>
 <tr><th>Name</th><th>Last active</th><th class="n">Images</th><th>API key</th></tr>`)
 	if len(rows) == 0 {

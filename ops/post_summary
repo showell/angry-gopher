@@ -1,0 +1,43 @@
+#!/bin/bash
+# Post a summary to the PRODUCTION chat (Steve -> Apoorva), one message per
+# blank-line-separated paragraph, via the dogfooded API key. As of the
+# read+write key change, the key acts as the member, so it can POST.
+#
+# Mirrors ops/fetch_prod_transcript: the prod URL + key + partner are wired
+# here once, deliberately. The one argument is the markdown file to post —
+# a genuine axis (which summary), required and explicit, no silent default.
+#
+#   Usage: ops/post_summary <summary.md>
+#
+# Paragraphs (separated by one or more blank lines) each become one message,
+# in file order. So write multi-line within a message with single newlines;
+# a blank line starts the next message. Posting is irreversible (the feed is
+# append-only), so review the file first. Exercising this keeps the WRITE
+# side of the API + key from bit-rotting, same as fetch keeps the read side.
+set -e
+
+source "$(dirname "$0")/_paths.sh"
+
+FILE="$1"
+[ -n "$FILE" ] && [ -f "$FILE" ] || { echo "usage: ops/post_summary <summary.md>"; exit 1; }
+KEY_FILE="$HOME/.gopher_api_key"
+[ -f "$KEY_FILE" ] || { echo "missing $KEY_FILE — the prod API key"; exit 1; }
+KEY="$(cat "$KEY_FILE")"
+URL="https://lynrummy.com"
+PARTNER=2   # Apoorva — the only prod conversation today
+
+n=0
+while IFS= read -r -d '' para; do
+  [ -z "${para//[$'\n\t ']/}" ] && continue            # skip an empty trailing record
+  n=$((n + 1))
+  code=$(curl -sS -o /dev/null -w '%{http_code}' -X POST "$URL/chat/send" \
+    -H "Authorization: Bearer $KEY" -H "X-Chat-Async: 1" \
+    --data-urlencode "with=$PARTNER" --data-urlencode "body=$para")
+  if [ "$code" = "204" ]; then
+    echo "  [$n] posted: $(printf '%s' "$para" | tr '\n' ' ' | head -c 60)…"
+  else
+    echo "  [$n] FAILED (HTTP $code) — stopping"; exit 1
+  fi
+done < <(awk 'BEGIN { RS = ""; ORS = "\0" } { print }' "$FILE")
+
+echo "posted $n message(s) to partner $PARTNER on $URL"

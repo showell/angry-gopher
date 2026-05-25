@@ -46,13 +46,6 @@ func buildMux() http.Handler {
 // logout, the version check).
 func withLoginGate(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// API keys are read-only: a request that authenticates via a key
-		// may only GET/HEAD. Enforced centrally so no mutating endpoint
-		// can be reached with a key, whatever it is.
-		if users.IsAPIKeyAuth(r) && r.Method != http.MethodGet && r.Method != http.MethodHead {
-			http.Error(w, "API keys are read-only", http.StatusForbidden)
-			return
-		}
 		if loginExempt(r.URL.Path) {
 			next.ServeHTTP(w, r)
 			return

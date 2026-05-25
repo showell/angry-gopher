@@ -1,9 +1,9 @@
-// User settings. The first setting is a read-only API key for bots,
-// reached from the chat subsystem (see chatChromeTop). Self-service is safe
-// because the endpoint acts on the SESSION identity — never a user id from
-// the request — so a member can only manage their OWN key, and that key
-// grants a strict subset of the session's own access (read-only,
-// admin-stripped). More settings (display name, password, prefs) will
+// User settings. The first setting is a bot API key, reached from the chat
+// subsystem (see chatChromeTop). Self-service is safe because the endpoint
+// acts on the SESSION identity — never a user id from the request — so a
+// member can only manage their OWN key. The key acts as the member (read +
+// write, like their password) but is admin-stripped, so it's a subset of
+// the session's powers. More settings (display name, password, prefs) will
 // slot in as sections here.
 package chat
 
@@ -75,9 +75,10 @@ func renderSettings(w http.ResponseWriter, r *http.Request, user users.User) {
 	}
 
 	fmt.Fprint(w, `<h2>API key</h2>
-<p class="muted">A read-only key lets a bot read your conversations through the chat API —
-it can't send messages or change your account. Hand it to the bot via the
-<code>GOPHER_API_KEY</code> environment variable, not in a prompt; revoke it here anytime.</p>`)
+<p class="muted">An API key lets a bot act as you through the chat API — read your
+conversations <strong>and send on your behalf</strong>. It can't reach admin, but otherwise
+treat it like your password. Hand it to the bot via the <code>GOPHER_API_KEY</code>
+environment variable, not in a prompt; revoke it here anytime.</p>`)
 
 	if !users.UserHasAPIKey(user.ID) {
 		fmt.Fprint(w, `<p>You don't have an API key yet.</p>

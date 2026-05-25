@@ -1,18 +1,18 @@
-// API keys: a member can hold one bot key for programmatic, READ-ONLY
-// access to their own data (the dogfooded chat API). The key is
-// "<id>-<secret>" (secret = 32 hex from crypto/rand). We store the key
-// in plaintext so the member can view it again (Settings → Show key);
-// this adds ~no marginal risk — the key only grants read access to
-// conversations stored in the same data dir, so anyone who could read the
-// key file could already read those conversations directly. Embedding the
-// id makes lookup O(1): parse the id, load that user's key, constant-time
-// compare (no scan, no index). Legacy keys stored as a bare sha256 hash
-// (no "-") still authenticate but can't be shown — regenerate to view.
+// API keys: a member can hold one bot key for programmatic access to their
+// own data (the dogfooded chat API). The key acts as the member — it can
+// read AND write on their behalf (post messages, upload), just like their
+// password — but it is NOT an admin credential (CurrentUser strips Admin),
+// so a key can never reach the /admin panel. Treat it like a password.
+// The key is "<id>-<secret>" (secret = 32 hex from crypto/rand). We store
+// it in plaintext so the member can view it again (Settings → Show key);
+// this adds ~no marginal risk — anyone who could read the key file already
+// has the data dir. Embedding the id makes lookup O(1): parse the id, load
+// that user's key, constant-time compare (no scan, no index). Legacy keys
+// stored as a bare sha256 hash (no "-") still authenticate but can't be
+// shown — regenerate to view.
 //
-// Auth flow: a request carries the key as `Authorization: Bearer <key>`.
-// CurrentUser resolves it to the member (with admin stripped — a key is
-// never an admin credential), and the login gate enforces read-only by
-// rejecting any non-GET request that authenticated via a key.
+// Auth flow: a request carries the key as `Authorization: Bearer <key>`;
+// CurrentUser resolves it to the member (admin stripped).
 package users
 
 import (
@@ -114,12 +114,4 @@ func apiKeyUser(r *http.Request) (string, bool) {
 		return "", false
 	}
 	return CheckAPIKey(key)
-}
-
-// IsAPIKeyAuth reports whether the request authenticated via a valid API
-// key. The login gate uses this to enforce read-only (key requests may
-// only GET).
-func IsAPIKeyAuth(r *http.Request) bool {
-	_, ok := apiKeyUser(r)
-	return ok
 }

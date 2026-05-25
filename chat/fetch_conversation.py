@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Example read-only bot client for the Lyn Rummy chat API.
+"""Example read-side bot client for the Lyn Rummy chat API.
 
 Streams one conversation's messages — the same JSON payloads the web
 client consumes (rendered `html`, the on-disk `enc`/transcript form, plus
-metadata) — and pretty-prints each. Authenticates with a member's
-*read-only* API key: set GOPHER_API_KEY in the environment, never paste
-the key into a prompt or hard-code it here.
+metadata) — and pretty-prints each. This tool only reads, but the API key
+itself acts as the member (read + write); set GOPHER_API_KEY in the
+environment, never paste the key into a prompt or hard-code it here.
 
 Usage:
     GOPHER_API_KEY=<key> python3 fetch_conversation.py <base_url> <partner_id>
@@ -17,8 +17,8 @@ relying on a silent default. `partner_id` is the numeric id of the other
 member.
 
 For the prod Steve<->Apoorva transcript, prefer the zero-arg wrapper
-`ops/fetch_prod_transcript`, which supplies the prod URL + the read-only
-key for you (Steve hates remembering command-line arguments).
+`ops/fetch_prod_transcript`, which supplies the prod URL + the key for you
+(Steve hates remembering command-line arguments).
 
 The stream replays the full backlog (since=0) then goes live; this tool
 exits after the first idle gap, so it's a one-shot look at what the API
@@ -30,7 +30,7 @@ import json, os, socket, sys, urllib.error, urllib.request
 def main():
     key = os.environ.get("GOPHER_API_KEY")
     if not key:
-        sys.exit("set GOPHER_API_KEY to a read-only chat API key")
+        sys.exit("set GOPHER_API_KEY to a chat API key")
     if len(sys.argv) != 3:
         sys.exit("usage: fetch_conversation.py <base_url> <partner_id>\n"
                  "       (for the prod transcript, prefer: ops/fetch_prod_transcript)")
