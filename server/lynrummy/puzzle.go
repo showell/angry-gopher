@@ -47,20 +47,20 @@ var puzzleCatalogPaths = []string{
 func HandlePuzzles(w http.ResponseWriter, r *http.Request) {
 	sub := strings.TrimPrefix(r.URL.Path, "/puzzles")
 	sub = strings.TrimPrefix(sub, "/")
-	uid := web.CurrentUser(r).ID // storage key
+	userID := web.CurrentUser(r).ID // storage key
 	switch {
 	case sub == "" || sub == "/":
-		puzzlePage(w, uid)
+		puzzlePage(w, userID)
 	case sub == "puzzle.js":
 		web.ServeJS(w, PuzzleJSPath, "puzzle.js not found — run `ops/build_elm`")
 	case strings.HasPrefix(sub, "sessions/"):
-		handlePuzzleSessionRoute(w, r, uid, strings.TrimPrefix(sub, "sessions/"))
+		handlePuzzleSessionRoute(w, r, userID, strings.TrimPrefix(sub, "sessions/"))
 	default:
 		http.NotFound(w, r)
 	}
 }
 
-func handlePuzzleSessionRoute(w http.ResponseWriter, r *http.Request, user, rest string) {
+func handlePuzzleSessionRoute(w http.ResponseWriter, r *http.Request, userID, rest string) {
 	parts := strings.Split(rest, "/")
 	sessionID, err := strconv.ParseInt(parts[0], 10, 64)
 	if err != nil || sessionID <= 0 {
@@ -78,7 +78,7 @@ func handlePuzzleSessionRoute(w http.ResponseWriter, r *http.Request, user, rest
 			http.NotFound(w, r)
 			return
 		}
-		puzzleAppendAction(w, r, user, sessionID, puzzleIdx)
+		puzzleAppendAction(w, r, userID, sessionID, puzzleIdx)
 		return
 	}
 	http.NotFound(w, r)
@@ -87,8 +87,8 @@ func handlePuzzleSessionRoute(w http.ResponseWriter, r *http.Request, user, rest
 // puzzleAppendAction appends the POST body verbatim as one
 // line in <session>/puzzle_<idx>/actions.dsl. Storage helper
 // creates the per-puzzle directory on first append.
-func puzzleAppendAction(w http.ResponseWriter, r *http.Request, user string, sessionID int64, puzzleIdx int) {
-	if !PuzzleSessionExists(user, sessionID) {
+func puzzleAppendAction(w http.ResponseWriter, r *http.Request, userID string, sessionID int64, puzzleIdx int) {
+	if !PuzzleSessionExists(userID, sessionID) {
 		http.NotFound(w, r)
 		return
 	}
@@ -97,7 +97,7 @@ func puzzleAppendAction(w http.ResponseWriter, r *http.Request, user string, ses
 		return
 	}
 	rel := fmt.Sprintf("puzzle_%d/actions.dsl", puzzleIdx)
-	if err := AppendPuzzleSessionDslLine(user, sessionID, rel, body); err != nil {
+	if err := AppendPuzzleSessionDslLine(userID, sessionID, rel, body); err != nil {
 		http.Error(w, "append: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -155,14 +155,14 @@ func loadCatalog() (string, error) {
 // `at (left, top): cards` lines. Elm's Lib.PuzzleFlagDsl slices
 // the block into per-puzzle boards and lets the user navigate
 // among them with Prev/Next.
-func puzzlePage(w http.ResponseWriter, user string) {
+func puzzlePage(w http.ResponseWriter, userID string) {
 	catalogDSL, err := loadCatalog()
 	if err != nil {
 		http.Error(w, "load catalog: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	id, err := AllocatePuzzleSessionID(user)
+	id, err := AllocatePuzzleSessionID(userID)
 	if err != nil {
 		http.Error(w, "alloc id: "+err.Error(), http.StatusInternalServerError)
 		return
@@ -178,7 +178,7 @@ func puzzlePage(w http.ResponseWriter, user string) {
 		time.Now().Unix(),
 		indentLines(catalogDSL),
 	)
-	if err := WritePuzzleSessionFile(user, id, "meta", []byte(metaDSL)); err != nil {
+	if err := WritePuzzleSessionFile(userID, id, "meta", []byte(metaDSL)); err != nil {
 		http.Error(w, "write meta: "+err.Error(), http.StatusInternalServerError)
 		return
 	}

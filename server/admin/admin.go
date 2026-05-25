@@ -305,14 +305,14 @@ button.danger:hover { background: #8a0019; }
 
 // gatherUserStats walks one player's subtree. Independent of the
 // currentUser write-path machinery so it can report on every player.
-func gatherUserStats(user string) UserStats {
-	uRoot := filepath.Join(lynrummy.GameDataRoot, user)
+func gatherUserStats(userID string) UserStats {
+	uRoot := filepath.Join(lynrummy.GameDataRoot, userID)
 	gamesDir := filepath.Join(uRoot, "lynrummy-elm", "sessions")
 	puzzlesDir := filepath.Join(uRoot, "puzzle", "sessions")
 
 	st := UserStats{
-		ID:             user,
-		Name:           web.GetUserName(user),
+		ID:             userID,
+		Name:           web.GetUserName(userID),
 		GameSessions:   countSubdirs(gamesDir),
 		PuzzleSessions: countSubdirs(puzzlesDir),
 		DiskBytes:      dirBytes(uRoot),

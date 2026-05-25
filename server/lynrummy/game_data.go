@@ -38,63 +38,63 @@ func SetDataRoot(root string) {
 
 // userRoot is {GameDataRoot}/{id} — a player's whole game subtree, keyed
 // by user id. Created lazily on first write.
-func userRoot(user string) string {
-	return filepath.Join(GameDataRoot, user)
+func userRoot(userID string) string {
+	return filepath.Join(GameDataRoot, userID)
 }
 
 // DeleteUserData removes a player's entire game/puzzle subtree by id.
 // Refuses an empty id so it can never target the data root itself.
-func DeleteUserData(user string) error {
-	if strings.TrimSpace(user) == "" {
-		return fmt.Errorf("refusing to delete: empty user")
+func DeleteUserData(userID string) error {
+	if strings.TrimSpace(userID) == "" {
+		return fmt.Errorf("refusing to delete: empty user id")
 	}
-	return os.RemoveAll(userRoot(user))
+	return os.RemoveAll(userRoot(userID))
 }
 
 // lynrummyElmRoot is the full-game namespace for a player.
-func lynrummyElmRoot(user string) string {
-	return filepath.Join(userRoot(user), "lynrummy-elm")
+func lynrummyElmRoot(userID string) string {
+	return filepath.Join(userRoot(userID), "lynrummy-elm")
 }
 
 // puzzleRoot is the puzzle namespace for a player. The agent reads
 // on-disk solutions to learn from past plays — same motivation as
 // the full-game corpus.
-func puzzleRoot(user string) string {
-	return filepath.Join(userRoot(user), "puzzle")
+func puzzleRoot(userID string) string {
+	return filepath.Join(userRoot(userID), "puzzle")
 }
 
 // nextSessionIDPath is a player's full-game counter file.
-func nextSessionIDPath(user string) string {
-	return filepath.Join(userRoot(user), "next-session-id.txt")
+func nextSessionIDPath(userID string) string {
+	return filepath.Join(userRoot(userID), "next-session-id.txt")
 }
 
 // nextPuzzleIDPath is a player's puzzle counter file.
-func nextPuzzleIDPath(user string) string {
-	return filepath.Join(userRoot(user), "next-puzzle-id.txt")
+func nextPuzzleIDPath(userID string) string {
+	return filepath.Join(userRoot(userID), "next-puzzle-id.txt")
 }
 
 // AllocateSessionID returns the next sequential full-game session
 // id for a player, 1-based, persisted via their next-session-id.txt.
-func AllocateSessionID(user string) (int64, error) {
-	return web.AllocateID(nextSessionIDPath(user))
+func AllocateSessionID(userID string) (int64, error) {
+	return web.AllocateID(nextSessionIDPath(userID))
 }
 
 // AllocatePuzzleSessionID returns the next sequential puzzle session
 // id for a player, 1-based, persisted via their next-puzzle-id.txt.
-func AllocatePuzzleSessionID(user string) (int64, error) {
-	return web.AllocateID(nextPuzzleIDPath(user))
+func AllocatePuzzleSessionID(userID string) (int64, error) {
+	return web.AllocateID(nextPuzzleIDPath(userID))
 }
 
 // PuzzleSessionDir returns the on-disk directory for a puzzle
 // session.
-func PuzzleSessionDir(user string, sessionID int64) string {
-	return filepath.Join(puzzleRoot(user), "sessions", strconv.FormatInt(sessionID, 10))
+func PuzzleSessionDir(userID string, sessionID int64) string {
+	return filepath.Join(puzzleRoot(userID), "sessions", strconv.FormatInt(sessionID, 10))
 }
 
 // WritePuzzleSessionFile writes body to <puzzle-session-dir>/<rel>,
 // creating parent dirs as needed.
-func WritePuzzleSessionFile(user string, sessionID int64, rel string, body []byte) error {
-	full := filepath.Join(PuzzleSessionDir(user, sessionID), rel)
+func WritePuzzleSessionFile(userID string, sessionID int64, rel string, body []byte) error {
+	full := filepath.Join(PuzzleSessionDir(userID, sessionID), rel)
 	if err := os.MkdirAll(filepath.Dir(full), 0755); err != nil {
 		return err
 	}
@@ -103,27 +103,27 @@ func WritePuzzleSessionFile(user string, sessionID int64, rel string, body []byt
 
 // PuzzleSessionExists reports whether a puzzle session
 // directory is on disk.
-func PuzzleSessionExists(user string, sessionID int64) bool {
-	info, err := os.Stat(PuzzleSessionDir(user, sessionID))
+func PuzzleSessionExists(userID string, sessionID int64) bool {
+	info, err := os.Stat(PuzzleSessionDir(userID, sessionID))
 	return err == nil && info.IsDir()
 }
 
 // AppendPuzzleSessionLine appends one line to
 // <puzzle-session-dir>/<rel>.
-func AppendPuzzleSessionLine(user string, sessionID int64, rel string, body []byte) error {
-	return AppendJSONLLine(filepath.Join(PuzzleSessionDir(user, sessionID), rel), body)
+func AppendPuzzleSessionLine(userID string, sessionID int64, rel string, body []byte) error {
+	return AppendJSONLLine(filepath.Join(PuzzleSessionDir(userID, sessionID), rel), body)
 }
 
 // SessionDir returns the on-disk directory for a full-game
 // session.
-func SessionDir(user string, sessionID int64) string {
-	return filepath.Join(lynrummyElmRoot(user), "sessions", strconv.FormatInt(sessionID, 10))
+func SessionDir(userID string, sessionID int64) string {
+	return filepath.Join(lynrummyElmRoot(userID), "sessions", strconv.FormatInt(sessionID, 10))
 }
 
 // WriteSessionFile writes body to <session-dir>/<rel>, creating
 // parent dirs as needed. `rel` is a relative path like `meta`.
-func WriteSessionFile(user string, sessionID int64, rel string, body []byte) error {
-	full := filepath.Join(SessionDir(user, sessionID), rel)
+func WriteSessionFile(userID string, sessionID int64, rel string, body []byte) error {
+	full := filepath.Join(SessionDir(userID, sessionID), rel)
 	if err := os.MkdirAll(filepath.Dir(full), 0755); err != nil {
 		return err
 	}
@@ -132,15 +132,15 @@ func WriteSessionFile(user string, sessionID int64, rel string, body []byte) err
 
 // ReadSessionFile reads <session-dir>/<rel>. Returns
 // (nil, os.ErrNotExist) when the session or file is missing.
-func ReadSessionFile(user string, sessionID int64, rel string) ([]byte, error) {
-	full := filepath.Join(SessionDir(user, sessionID), rel)
+func ReadSessionFile(userID string, sessionID int64, rel string) ([]byte, error) {
+	full := filepath.Join(SessionDir(userID, sessionID), rel)
 	return os.ReadFile(full)
 }
 
 // SessionExists reports whether a full-game session directory
 // is on disk.
-func SessionExists(user string, sessionID int64) bool {
-	info, err := os.Stat(SessionDir(user, sessionID))
+func SessionExists(userID string, sessionID int64) bool {
+	info, err := os.Stat(SessionDir(userID, sessionID))
 	return err == nil && info.IsDir()
 }
 
@@ -171,8 +171,8 @@ func AppendJSONLLine(path string, body []byte) error {
 // AppendSessionLine appends one JSON-encoded line to
 // <session-dir>/<rel>; the wire-DSL path uses
 // AppendSessionDslLine instead.
-func AppendSessionLine(user string, sessionID int64, rel string, body []byte) error {
-	return AppendJSONLLine(filepath.Join(SessionDir(user, sessionID), rel), body)
+func AppendSessionLine(userID string, sessionID int64, rel string, body []byte) error {
+	return AppendJSONLLine(filepath.Join(SessionDir(userID, sessionID), rel), body)
 }
 
 // AppendTextLine appends `body` followed by a newline to `path`.
@@ -196,14 +196,14 @@ func AppendTextLine(path string, body []byte) error {
 
 // AppendSessionDslLine appends one DSL line to <session-dir>/<rel>
 // for a full-game session. Used for actions.dsl on the wire.
-func AppendSessionDslLine(user string, sessionID int64, rel string, body []byte) error {
-	return AppendTextLine(filepath.Join(SessionDir(user, sessionID), rel), body)
+func AppendSessionDslLine(userID string, sessionID int64, rel string, body []byte) error {
+	return AppendTextLine(filepath.Join(SessionDir(userID, sessionID), rel), body)
 }
 
 // AppendPuzzleSessionDslLine appends one DSL line to a puzzle
 // session's <rel> file.
-func AppendPuzzleSessionDslLine(user string, sessionID int64, rel string, body []byte) error {
-	return AppendTextLine(filepath.Join(PuzzleSessionDir(user, sessionID), rel), body)
+func AppendPuzzleSessionDslLine(userID string, sessionID int64, rel string, body []byte) error {
+	return AppendTextLine(filepath.Join(PuzzleSessionDir(userID, sessionID), rel), body)
 }
 
 // ReadTextLines returns the non-empty lines of `path`, or
@@ -228,8 +228,8 @@ func ReadTextLines(path string) ([]string, error) {
 
 // ReadSessionActionLines reads <session>/actions.dsl as a list
 // of raw DSL lines.
-func ReadSessionActionLines(user string, sessionID int64) ([]string, error) {
-	return ReadTextLines(filepath.Join(SessionDir(user, sessionID), "actions.dsl"))
+func ReadSessionActionLines(userID string, sessionID int64) ([]string, error) {
+	return ReadTextLines(filepath.Join(SessionDir(userID, sessionID), "actions.dsl"))
 }
 
 // CountTextLines returns the number of non-empty lines in
@@ -255,14 +255,14 @@ func CountTextLines(path string) (int, error) {
 }
 
 // CountSessionActions counts the lines in <session>/actions.dsl.
-func CountSessionActions(user string, sessionID int64) (int, error) {
-	return CountTextLines(filepath.Join(SessionDir(user, sessionID), "actions.dsl"))
+func CountSessionActions(userID string, sessionID int64) (int, error) {
+	return CountTextLines(filepath.Join(SessionDir(userID, sessionID), "actions.dsl"))
 }
 
 // ListSessionIDs returns every full-game session-id directory for a
 // player currently on disk, sorted ascending.
-func ListSessionIDs(user string) ([]int64, error) {
-	root := filepath.Join(lynrummyElmRoot(user), "sessions")
+func ListSessionIDs(userID string) ([]int64, error) {
+	root := filepath.Join(lynrummyElmRoot(userID), "sessions")
 	if _, err := os.Stat(root); os.IsNotExist(err) {
 		return nil, nil
 	}
@@ -289,8 +289,8 @@ func ListSessionIDs(user string) ([]int64, error) {
 // parses out the server-owned scalars. The game-state DSL stays
 // verbatim in SessionMeta.GameStateDSL — server never edits it.
 // Returns (zero, os.ErrNotExist) when missing.
-func ReadSessionMeta(user string, sessionID int64) (SessionMeta, error) {
-	body, err := ReadSessionFile(user, sessionID, "meta")
+func ReadSessionMeta(userID string, sessionID int64) (SessionMeta, error) {
+	body, err := ReadSessionFile(userID, sessionID, "meta")
 	if err != nil {
 		return SessionMeta{}, err
 	}
