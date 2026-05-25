@@ -390,7 +390,7 @@ html, body { height:100%; }
                                white-space:pre-wrap; overflow-wrap:anywhere; margin-top:3px; }
 .chat-sr-ctx { max-height:4.6em; overflow:hidden; } /* phase 1: limited context while typing */
 .chat-sr-rbody { color:#333; } /* phase 2: full message while navigating choices */
-.chat-search-modal mark { background:#ffe680; color:inherit; border-radius:2px; padding:0 1px; }
+.chat-search-modal mark { background:#ffe680; color:inherit; border-radius:2px; padding:0; }
 .chat-history { min-width:0; flex:1; min-height:0; overflow-y:auto;
                 border:1px solid #ddd; border-radius:8px; padding:12px; background:#fcfcf8; }
 /* The feed is click-focusable so keyboard nav works; the selected-message
