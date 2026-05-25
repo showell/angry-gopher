@@ -122,7 +122,8 @@ func renderChatConversation(w http.ResponseWriter, user web.User, partnerID stri
 		`</div>`)
 
 	fmt.Fprint(w, `<div class="chat-layout"><div class="chat-main">`+
-		`<div class="chat-navbar"><button type="button" id="chat-back" class="chat-back" title="Back to where you were before the last jump" disabled>&larr;</button></div>`+
+		`<div class="chat-navbar"><button type="button" id="chat-back" class="chat-back" title="Back to where you were before the last jump" disabled>&larr;</button>`+
+		` <button type="button" id="chat-open-compose" class="chat-open-compose" style="display:none">Open compose box (c)</button></div>`+
 		`<div class="chat-history view-rendered" id="chat-history" tabindex="-1"><div class="chat-bubbles" id="chat-bubbles">`)
 	if len(msgs) == 0 {
 		fmt.Fprint(w, `<p class="muted" id="chat-empty">No messages yet. Say hello 👋</p>`)
@@ -130,7 +131,7 @@ func renderChatConversation(w http.ResponseWriter, user web.User, partnerID stri
 	// The feed (bubbles + transcript) is built client-side from the SSE
 	// replay; the server ships only this skeleton.
 	fmt.Fprint(w, `</div><pre class="chat-transcript" id="chat-transcript"></pre></div></div>
-<div class="chat-compose">
+<div class="chat-compose" id="chat-compose">
   <form id="chat-form">
     <textarea id="chat-body" placeholder="Write a message…  Markdown is supported, and longer posts are welcome."></textarea>
     <div class="chat-compose-actions">
@@ -323,6 +324,9 @@ html, body { height:100%; }
 .chat-layout { display:flex; gap:20px; flex:1; min-height:0; }
 .chat-main { min-width:0; flex:1; display:flex; flex-direction:column; min-height:0; }
 .chat-navbar { margin-bottom:8px; }
+.chat-open-compose { font-size:13px; padding:4px 12px; background:#e7e7ff; color:#23235a;
+                     border:1px solid #b9b9e0; border-radius:6px; cursor:pointer; }
+.chat-open-compose:hover { background:#dcdcff; }
 .chat-back { font-size:14px; line-height:1; padding:3px 11px; background:#eee; color:#333;
              border:1px solid #ccc; border-radius:4px; cursor:pointer; }
 .chat-back:hover:enabled { background:#e3e3e3; }

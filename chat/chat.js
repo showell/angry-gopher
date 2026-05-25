@@ -11,7 +11,15 @@
   var imageBtn=document.getElementById('chat-image-btn');
   var fileInput=document.getElementById('chat-file');
   var backBtn=document.getElementById('chat-back');
+  var composeBox=document.getElementById('chat-compose');
+  var openComposeBtn=document.getElementById('chat-open-compose');
   function toBottom(){ history.scrollTop=history.scrollHeight; }
+  /* Compose is closeable: Esc on an empty box closes it and hands focus back
+     to the feed; "c" (or the navbar button) reopens it. Closed, the feed
+     fills the space and keyboard nav has the keys to itself. */
+  function openCompose(){ openComposeBtn.style.display='none'; composeBox.style.display=''; textarea.focus(); }
+  function closeCompose(){ composeBox.style.display='none'; openComposeBtn.style.display=''; history.focus({preventScroll:true}); }
+  openComposeBtn.addEventListener('click',openCompose);
   /* "Caught up": the end of the last message in the feed is visible, so a new
      message should follow it down. If you've scrolled up into history, the
      last message's bottom is below the fold and we leave you where you are.
@@ -112,6 +120,7 @@
     if(!el) return;
     var hash=el.getAttribute('data-hash'), mine=el.classList.contains('mine');
     var body=el._body!=null?el._body:'';
+    openCompose(); /* ensure it's visible before we type into it */
     insertAtCursor('In MSG_'+hash+' '+(mine?'I said':'you said')+':\n~~~ quote\n'+body+'\n~~~\n\n');
     textarea.focus();
   }
@@ -163,7 +172,8 @@
   }
   form.addEventListener('submit',function(e){ e.preventDefault(); send(); });
   textarea.addEventListener('keydown',function(e){
-    if((e.ctrlKey||e.metaKey)&&e.key==='Enter'){ e.preventDefault(); send(); }
+    if((e.ctrlKey||e.metaKey)&&e.key==='Enter'){ e.preventDefault(); send(); return; }
+    if(e.key==='Escape'&&textarea.value.trim()===''){ e.preventDefault(); closeCompose(); } /* empty only — never lose a draft */
   });
   /* --- image upload (button + clipboard paste) --- */
   function insertAtCursor(text){
@@ -329,6 +339,7 @@
     if(ae&&(ae.tagName==='TEXTAREA'||ae.tagName==='INPUT'||ae.isContentEditable)) return;
     if(e.ctrlKey||e.metaKey||e.altKey) return;
     switch(e.key){
+      case 'c': e.preventDefault(); openCompose(); return;
       case 'r': if(selected){ e.preventDefault(); quoteReply(selected); } return;
       case 'ArrowDown': e.preventDefault(); moveCursor(1); return;
       case 'ArrowUp':   e.preventDefault(); moveCursor(-1); return;
