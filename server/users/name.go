@@ -1,10 +1,9 @@
-// Package auth holds name validation and reads the raw identity claim.
-//
-// Identity is now a numeric user id from the gopher_uid cookie; the
-// display name is a mutable attribute resolved against the registry (see
-// web.CurrentUser). Names are still validated/sanitized here because they
-// are a directory-free attribute and are embedded in HTML.
-package auth
+// name.go — name validation and the raw identity claim (the gopher_uid
+// cookie). Identity is a numeric user id; the display name is a mutable
+// attribute resolved against the registry (see CurrentUser). Names are
+// still validated/sanitized here because they are a directory-free
+// attribute and are embedded in HTML.
+package users
 
 import (
 	"net/http"
@@ -18,7 +17,7 @@ const maxUserLen = 40
 // CurrentUID returns the numeric user id from the gopher_uid cookie, or
 // "" when there's no usable cookie. It's the raw identity claim; the
 // caller resolves it against the registry (and for members the signed
-// session cookie is authoritative — see web.CurrentUser).
+// session cookie is authoritative — see CurrentUser).
 func CurrentUID(r *http.Request) string {
 	c, err := r.Cookie("gopher_uid")
 	if err != nil || c.Value == "" {

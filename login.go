@@ -16,14 +16,13 @@ import (
 	"net/http"
 	"strings"
 
-	"angry-gopher/auth"
 	"angry-gopher/server/lynrummy"
 	"angry-gopher/server/users"
 )
 
 func handleLogin(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodPost {
-		name, errMsg := auth.ValidateUserName(r.FormValue("name"))
+		name, errMsg := users.ValidateUserName(r.FormValue("name"))
 		if errMsg != "" {
 			renderLoginPage(w, users.CurrentUser(r).Name, errMsg)
 			return
@@ -78,11 +77,11 @@ func handleLoginFull(w http.ResponseWriter, r *http.Request) {
 
 	// The name is fixed: an explicit name (reserved-name notice) wins, else
 	// the current guest's name. With no usable name, identify first.
-	raw := auth.SanitizeUser(r.FormValue("name"))
+	raw := users.SanitizeUser(r.FormValue("name"))
 	if raw == "" {
 		raw = users.CurrentUser(r).Name
 	}
-	name, errMsg := auth.ValidateUserName(raw)
+	name, errMsg := users.ValidateUserName(raw)
 	if errMsg != "" {
 		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return

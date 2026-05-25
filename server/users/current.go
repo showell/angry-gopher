@@ -2,8 +2,6 @@ package users
 
 import (
 	"net/http"
-
-	"angry-gopher/auth"
 )
 
 // CurrentUser resolves the identity a request acts as. A valid member
@@ -23,7 +21,7 @@ func CurrentUser(r *http.Request) User {
 		u.Admin = false
 		return u
 	}
-	id := auth.CurrentUID(r)
+	id := CurrentUID(r)
 	if id != "" && UserExists(id) && !UserIsMember(id) {
 		return LoadUser(id)
 	}
