@@ -125,10 +125,7 @@ func renderChatConversation(w http.ResponseWriter, user users.User, partnerID st
 	fmt.Fprint(w, `<div class="chat-layout"><div class="chat-main">`+
 		`<div class="chat-navbar"><button type="button" id="chat-back" class="chat-back" title="Back to the previous selection (b)" disabled>&larr;</button>`+
 		`<button type="button" id="chat-fwd" class="chat-back" title="Forward — redo a Back (f)" disabled>&rarr;</button>`+
-		`<button type="button" id="chat-search-btn" class="chat-back" title="Search messages (/)">🔍</button>`+
-		`<span class="chat-search" id="chat-search" hidden>`+
-		`<input type="text" id="chat-search-input" placeholder="Search messages…" title="Enter: next · Shift-Enter: previous · Esc: close" autocomplete="off">`+
-		`<span class="chat-search-count" id="chat-search-count"></span></span></div>`+
+		`<button type="button" id="chat-search-btn" class="chat-back" title="Search messages (/)">🔍</button></div>`+
 		`<div class="chat-history view-rendered" id="chat-history" tabindex="-1"><div class="chat-bubbles" id="chat-bubbles">`)
 	if len(msgs) == 0 {
 		fmt.Fprint(w, `<p class="muted" id="chat-empty">No messages yet. Say hello 👋</p>`)
@@ -370,12 +367,25 @@ html, body { height:100%; }
 #chat-fwd { margin-left:4px; }
 .chat-back:hover:enabled { background:#e3e3e3; }
 .chat-back:disabled { opacity:0.4; cursor:default; }
-.chat-search { display:inline-flex; align-items:center; gap:8px; margin-left:8px; }
-.chat-search[hidden] { display:none; }
-.chat-search input { font-size:13px; padding:3px 8px; border:1px solid #b9b9e0; border-radius:4px;
-                     width:240px; max-width:50vw; font-family:inherit; }
-.chat-search-count { font-size:12px; color:#888; white-space:nowrap; }
-.chat-search-count.none { color:#b00020; }
+/* Search modal: a two-phase palette — token autocomplete, then message
+   results (raw markdown snippets with the term highlighted). */
+.chat-search-modal { width:600px; max-width:92vw; max-height:80vh; padding:0; border:1px solid #b9b9e0;
+                     border-radius:10px; background:#fff; display:flex; flex-direction:column; }
+.chat-search-modal::backdrop { background:rgba(0,0,0,0.4); }
+.chat-sr-input { margin:0; border:none; border-bottom:1px solid #e3e3ef; border-radius:10px 10px 0 0;
+                 font-size:16px; padding:12px 16px; font-family:inherit; outline:none; }
+.chat-sr-status { font-size:12px; color:#888; padding:6px 16px; border-bottom:1px solid #f0f0f4; flex:none; }
+.chat-sr-list { overflow-y:auto; padding:4px 0; }
+.chat-sr-row { padding:7px 16px; cursor:pointer; border-left:3px solid transparent; }
+.chat-sr-row.sel { background:#eef0ff; border-left-color:#000080; }
+.chat-sr-row:hover { background:#f6f6fb; }
+.chat-sr-tok { font-weight:bold; color:#23235a; display:flex; align-items:baseline; gap:8px; }
+.chat-sr-cnt { font-weight:normal; font-size:11px; color:#999; }
+.chat-sr-rhead { font-size:11px; color:#888; margin-bottom:2px; }
+.chat-sr-ctx, .chat-sr-rbody { font-family:ui-monospace,Menlo,Consolas,monospace; font-size:12px; color:#555;
+                               white-space:pre-wrap; overflow-wrap:anywhere; margin-top:3px;
+                               max-height:4.6em; overflow:hidden; }
+.chat-search-modal mark { background:#ffe680; color:inherit; border-radius:2px; padding:0 1px; }
 .chat-history { min-width:0; flex:1; min-height:0; overflow-y:auto;
                 border:1px solid #ddd; border-radius:8px; padding:12px; background:#fcfcf8; }
 /* The feed is click-focusable so keyboard nav works; the selected-message

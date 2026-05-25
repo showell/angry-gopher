@@ -204,7 +204,7 @@
     addMessage(m);
     if(stick) toBottom(); syncSelectionToScroll();
     if(pendingCid&&m.cid===pendingCid) ackSend(); /* our message round-tripped: saved + echoed */
-    if(searchOpen()) rescanSearch(); /* keep an open search current as messages stream in */
+    if(searchModalOpen()) refreshOpenSearch(); /* keep an open search current as messages stream in */
   };
   /* Resilient send: a send is confirmed only when our own message echoes back
      over SSE carrying the same client-id (proof it was both saved AND
@@ -437,67 +437,160 @@
     if(canScroll) history.scrollTop+=dir*Math.max(40,history.clientHeight-40);
     else cursorToExtreme(dir>0);
   }
-  /* --- search: dumb literal substring over raw message bodies (el._body),
-     slick because the whole conversation is already client-side. Smart-case:
-     case-sensitive only if the query has an uppercase. Searching the raw
-     source (not rendered HTML) is what keeps it literal — URLs, code, and
-     punctuation are all findable verbatim, no tokenizer to fool. No index:
-     a re-scan per keystroke over the in-memory nodes is sub-millisecond at
-     any size a 1:1 chat reaches. Matches drive the existing cursor + nav
-     stack (so a landing is Back-able); typing previews with the debounced
-     commit, Enter/Shift-Enter step + commit immediately. */
-  var searchBox=document.getElementById('chat-search');
-  var searchInput=document.getElementById('chat-search-input');
-  var searchCount=document.getElementById('chat-search-count');
+  /* --- search modal: a two-phase palette over the WHOLE transcript.
+     Phase 1 autocompletes against the EXACT tokens present in the conversation
+     (type "apo" → "apoorva", and "aporva" too if that typo exists somewhere) —
+     suggestions are real corpus words, so it's autocomplete without stemming.
+     Phase 2 (Enter) lists every message containing the chosen term as a raw-
+     markdown snippet with the term highlighted, newest first (you're usually
+     looking back); ↑↓ choose, Enter jumps there (closing the modal, pushing
+     the nav stack). The final match is always a literal substring, so URLs,
+     code, and punctuation are findable verbatim. No index: the token map is
+     rebuilt on open (milliseconds) and the message scan is one linear pass. */
   var searchBtn=document.getElementById('chat-search-btn');
-  var searchMatches=[], searchPos=-1;
-  function searchOpen(){ return !searchBox.hidden; }
-  function smartCaseHit(body,q){
-    return /[A-Z]/.test(q) ? body.indexOf(q)>=0 : body.toLowerCase().indexOf(q.toLowerCase())>=0;
+  var SEARCH_MIN=2, SUGGEST_CAP=10, SNIPPET_PAD=90;
+  /* smart-case: case-sensitive only if the query carries an uppercase letter */
+  function smartIndexOf(hay,q,from){ return /[A-Z]/.test(q)?hay.indexOf(q,from||0):hay.toLowerCase().indexOf(q.toLowerCase(),from||0); }
+  function smartHit(body,q){ return smartIndexOf(body,q,0)>=0; }
+  /* tokens = whitespace-delimited words with surrounding punctuation trimmed
+     (internal punctuation kept, so "foo.com" / "https://x" survive as tokens). */
+  function tokenize(body){
+    var raw=body.split(/\s+/), out=[];
+    for(var i=0;i<raw.length;i++){
+      var w=raw[i].replace(/^[^\p{L}\p{N}]+/u,'').replace(/[^\p{L}\p{N}]+$/u,'').toLowerCase();
+      if(w.length>=2) out.push(w);
+    }
+    return out;
   }
-  function scanSearch(){ /* populate searchMatches for the current query; no navigation */
-    var q=searchInput.value, els=bubbles.querySelectorAll('.chat-msg');
-    searchMatches=[];
-    if(q) for(var i=0;i<els.length;i++){ if(smartCaseHit(els[i]._body||'',q)) searchMatches.push(els[i]); }
+  function buildTokenIndex(){
+    var map=Object.create(null), els=bubbles.querySelectorAll('.chat-msg');
+    for(var i=0;i<els.length;i++){
+      var toks=tokenize(els[i]._body||''), seen=Object.create(null);
+      for(var j=0;j<toks.length;j++){
+        var t=toks[j]; if(seen[t]) continue; seen[t]=1;
+        if(map[t]){ map[t].count++; map[t].sample=els[i]; } else map[t]={count:1,sample:els[i]}; /* sample = most recent msg with it */
+      }
+    }
+    return map;
   }
-  function updateSearchCount(){
-    if(!searchInput.value){ searchCount.textContent=''; searchCount.className='chat-search-count'; return; }
-    if(!searchMatches.length){ searchCount.textContent='no matches'; searchCount.className='chat-search-count none'; return; }
-    searchCount.textContent=searchPos>=0?(searchPos+1)+' / '+searchMatches.length:searchMatches.length+' matches';
-    searchCount.className='chat-search-count';
+  function suggestTokens(map,q){
+    q=q.toLowerCase(); var pre=[], sub=[];
+    for(var t in map){ var k=t.indexOf(q); if(k===0) pre.push(t); else if(k>0) sub.push(t); }
+    function byCount(a,b){ return map[b].count-map[a].count || (a<b?-1:1); }
+    pre.sort(byCount); sub.sort(byCount); return pre.concat(sub); /* prefix matches first */
   }
-  function jumpToMatch(immediate){
-    if(searchPos<0||!searchMatches.length){ updateSearchCount(); return; }
-    var el=searchMatches[searchPos];
+  /* append `text` to `node` with every occurrence of `term` wrapped in <mark>
+     (built as DOM nodes, never innerHTML — the raw body is untrusted text). */
+  function highlightInto(node,text,term){
+    if(!term){ node.appendChild(document.createTextNode(text)); return; }
+    var pos=0,m;
+    while((m=smartIndexOf(text,term,pos))>=0){
+      if(m>pos) node.appendChild(document.createTextNode(text.slice(pos,m)));
+      var mk=document.createElement('mark'); mk.textContent=text.slice(m,m+term.length); node.appendChild(mk);
+      pos=m+term.length;
+    }
+    if(pos<text.length) node.appendChild(document.createTextNode(text.slice(pos)));
+  }
+  function appendSnippet(node,body,term){
+    var idx=smartIndexOf(body,term,0), start=0, end=body.length;
+    if(idx>=0){ start=Math.max(0,idx-SNIPPET_PAD); end=Math.min(body.length,idx+term.length+SNIPPET_PAD); }
+    else end=Math.min(body.length,180);
+    if(start>0) node.appendChild(document.createTextNode('…'));
+    highlightInto(node, body.slice(start,end), term);
+    if(end<body.length) node.appendChild(document.createTextNode('…'));
+  }
+  /* active modal state, or null when closed:
+     { dlg, input, list, status, phase:'suggest'|'results', map, items, sel, term } */
+  var SR=null;
+  function searchModalOpen(){ return !!SR; }
+  function openSearchModal(){
+    if(SR){ SR.input.focus(); return; }
+    var dlg=document.createElement('dialog'); dlg.className='chat-search-modal';
+    var input=document.createElement('input'); input.type='text'; input.className='chat-sr-input';
+    input.placeholder='Search messages…'; input.autocomplete='off';
+    var status=document.createElement('div'); status.className='chat-sr-status';
+    var list=document.createElement('div'); list.className='chat-sr-list';
+    dlg.appendChild(input); dlg.appendChild(status); dlg.appendChild(list);
+    document.body.appendChild(dlg);
+    SR={ dlg:dlg, input:input, list:list, status:status, phase:'suggest', map:buildTokenIndex(), items:[], sel:-1, term:'' };
+    input.addEventListener('input', function(){ SR.phase='suggest'; renderSuggest(); });
+    dlg.addEventListener('keydown', onSearchKey);
+    dlg.addEventListener('cancel', function(e){ e.preventDefault(); escSearch(); }); /* own the Esc */
+    dlg.addEventListener('click', onSearchClick);
+    dlg.addEventListener('close', function(){ dlg.remove(); SR=null; history.focus({preventScroll:true}); });
+    dlg.showModal(); input.focus(); renderSuggest();
+  }
+  function closeSearchModal(){ if(SR) SR.dlg.close(); }
+  function escSearch(){ if(!SR) return; if(SR.phase==='results'){ SR.phase='suggest'; SR.input.focus(); renderSuggest(); } else closeSearchModal(); }
+  function paintSel(){
+    var rows=SR.list.querySelectorAll('.chat-sr-row');
+    for(var i=0;i<rows.length;i++) rows[i].classList.toggle('sel', i===SR.sel);
+    if(SR.sel>=0 && rows[SR.sel]) rows[SR.sel].scrollIntoView({block:'nearest'});
+  }
+  function renderSuggest(){
+    var q=SR.input.value.trim(); SR.list.textContent=''; SR.items=[]; SR.sel=-1;
+    if(q.length<SEARCH_MIN){ SR.status.textContent='Type at least '+SEARCH_MIN+' characters to search…'; return; }
+    var toks=suggestTokens(SR.map,q);
+    if(!toks.length){ SR.status.textContent='No matching words — press Enter to search “'+q+'” literally.'; return; }
+    SR.status.textContent = toks.length>SUGGEST_CAP ? (toks.length+' words match — keep typing to narrow') : (toks.length+(toks.length===1?' word':' words')+' · ↑↓ choose, Enter to search');
+    var shown=toks.slice(0,SUGGEST_CAP);
+    for(var i=0;i<shown.length;i++){
+      var t=shown[i], info=SR.map[t];
+      var row=document.createElement('div'); row.className='chat-sr-row'; row.setAttribute('data-i',i);
+      var head=document.createElement('div'); head.className='chat-sr-tok';
+      highlightInto(head, t, q.toLowerCase());
+      var cnt=document.createElement('span'); cnt.className='chat-sr-cnt'; cnt.textContent=info.count+(info.count===1?' msg':' msgs');
+      head.appendChild(cnt);
+      var ctx=document.createElement('div'); ctx.className='chat-sr-ctx'; appendSnippet(ctx, info.sample._body||'', t);
+      row.appendChild(head); row.appendChild(ctx);
+      SR.list.appendChild(row); SR.items.push({tok:t});
+    }
+    SR.sel=0; paintSel();
+  }
+  function runResults(term){
+    SR.term=term; SR.phase='results'; SR.list.textContent=''; SR.items=[]; SR.sel=-1;
+    var els=bubbles.querySelectorAll('.chat-msg'), res=[];
+    for(var i=0;i<els.length;i++){ if(smartHit(els[i]._body||'', term)) res.push(els[i]); }
+    res.reverse(); /* newest first — searching back through history is the common case */
+    if(!res.length){ SR.status.textContent='No messages contain “'+term+'”. Esc to refine.'; return; }
+    SR.status.textContent=res.length+(res.length===1?' message — Enter to go':' messages — ↑↓ choose, Enter to go')+' · Esc to refine';
+    for(var k=0;k<res.length;k++){
+      var el=res[k], meta=el.querySelector('.chat-meta');
+      var row=document.createElement('div'); row.className='chat-sr-row'; row.setAttribute('data-i',k);
+      var head=document.createElement('div'); head.className='chat-sr-rhead';
+      head.textContent=(meta&&meta.firstChild?meta.firstChild.nodeValue:'').trim();
+      var body=document.createElement('div'); body.className='chat-sr-rbody'; appendSnippet(body, el._body||'', term);
+      row.appendChild(head); row.appendChild(body);
+      SR.list.appendChild(row); SR.items.push({el:el});
+    }
+    SR.sel=0; paintSel();
+  }
+  function finalizeSearch(){
+    var term=(SR.sel>=0 && SR.items[SR.sel] && SR.items[SR.sel].tok) ? SR.items[SR.sel].tok : SR.input.value.trim();
+    if(term) runResults(term);
+  }
+  function chooseResult(){
+    if(SR.sel<0||!SR.items[SR.sel]) return;
+    var el=SR.items[SR.sel].el;
+    closeSearchModal();
     suppressSyncUntil=Date.now()+800;
-    selectAndCommit(el,immediate); /* cursor ring + nav stack (debounced unless immediate) */
-    scrollToIndex(idxOf(el));      /* align match to top; works in rendered AND transcript view */
-    updateNav(); updateSearchCount();
+    selectAndCommit(el,true); scrollToIndex(idxOf(el)); updateNav(); /* jump + push nav stack */
   }
-  function runSearch(){ /* typing: rescan, preview-jump to the first match at/after the cursor */
-    scanSearch();
-    if(!searchMatches.length){ searchPos=-1; updateSearchCount(); return; }
-    var cur=selected?parseInt(idxOf(selected),10):-1; searchPos=0;
-    for(var j=0;j<searchMatches.length;j++){ if(parseInt(idxOf(searchMatches[j]),10)>=cur){ searchPos=j; break; } }
-    jumpToMatch(false);
+  function onSearchKey(e){
+    if(e.key==='ArrowDown'){ e.preventDefault(); if(SR.items.length){ SR.sel=Math.min(SR.items.length-1,SR.sel+1); paintSel(); } }
+    else if(e.key==='ArrowUp'){ e.preventDefault(); if(SR.items.length){ SR.sel=Math.max(0,SR.sel-1); paintSel(); } }
+    else if(e.key==='Enter'){ e.preventDefault(); if(SR.phase==='suggest') finalizeSearch(); else chooseResult(); }
   }
-  function stepMatch(delta){
-    if(!searchMatches.length) return;
-    searchPos=(searchPos+delta+searchMatches.length)%searchMatches.length;
-    jumpToMatch(true);
+  function onSearchClick(e){
+    var row=e.target.closest && e.target.closest('.chat-sr-row');
+    if(row){ SR.sel=parseInt(row.getAttribute('data-i'),10); paintSel(); if(SR.phase==='suggest') finalizeSearch(); else chooseResult(); return; }
+    if(e.target===SR.dlg) closeSearchModal(); /* backdrop click */
   }
-  function rescanSearch(){ /* a message arrived while open: refresh matches, keep place, don't jump */
-    var curEl=searchPos>=0?searchMatches[searchPos]:null;
-    scanSearch(); searchPos=curEl?searchMatches.indexOf(curEl):-1; updateSearchCount();
+  function refreshOpenSearch(){ /* a message streamed in while the modal is open */
+    if(!SR) return; SR.map=buildTokenIndex();
+    if(SR.phase==='suggest') renderSuggest(); else runResults(SR.term);
   }
-  function openSearch(){ searchBox.hidden=false; searchInput.focus(); searchInput.select(); if(searchInput.value) runSearch(); }
-  function closeSearch(){ searchBox.hidden=true; history.focus({preventScroll:true}); }
-  searchBtn.addEventListener('click',function(){ searchOpen()?closeSearch():openSearch(); });
-  searchInput.addEventListener('input',runSearch);
-  searchInput.addEventListener('keydown',function(e){
-    if(e.key==='Enter'){ e.preventDefault(); stepMatch(e.shiftKey?-1:1); }
-    else if(e.key==='Escape'){ e.preventDefault(); closeSearch(); }
-  });
+  searchBtn.addEventListener('click', openSearchModal);
   /* Override these keys when reading the feed (not when typing in compose). */
   document.addEventListener('keydown',function(e){
     var ae=document.activeElement;
@@ -508,7 +601,7 @@
       case 'b': e.preventDefault(); backBtn.click(); return; /* disabled buttons ignore click */
       case 'f': e.preventDefault(); fwdBtn.click(); return;
       case 't': e.preventDefault(); toggleView(); return;
-      case '/': e.preventDefault(); openSearch(); return;
+      case '/': e.preventDefault(); openSearchModal(); return;
       case 'r': if(selected){ e.preventDefault(); quoteReply(selected); } return;
       case 'e': if(selected){ e.preventDefault(); editMessage(selected); } return;
       case 'ArrowDown': e.preventDefault(); moveCursor(1); return;
