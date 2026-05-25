@@ -13,6 +13,7 @@ import (
 
 	"angry-gopher/server/admin"
 	"angry-gopher/server/chat"
+	"angry-gopher/server/login"
 	"angry-gopher/server/lynrummy"
 	"angry-gopher/server/users"
 	"angry-gopher/server/web"
@@ -28,9 +29,9 @@ func buildMux() http.Handler {
 
 	// Name login/logout (login sets the gopher_uid cookie; logout
 	// clears it). /login/full sets a member password session.
-	mux.HandleFunc("/login", handleLogin)
-	mux.HandleFunc("/login/full", handleLoginFull)
-	mux.HandleFunc("/logout", handleLogout)
+	mux.HandleFunc("/login", login.HandleLogin)
+	mux.HandleFunc("/login/full", login.HandleLoginFull)
+	mux.HandleFunc("/logout", login.HandleLogout)
 
 	// Admin overview (session stats from the filesystem). Goes through
 	// the login gate, then requires the user's admin flag (see HandleAdmin).

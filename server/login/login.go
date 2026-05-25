@@ -7,7 +7,7 @@
 //                  and reserves the name. Members get a signed session.
 // Logout clears the cookies; release also deletes the user's data + record.
 
-package main
+package login
 
 import (
 	"fmt"
@@ -20,7 +20,7 @@ import (
 	"angry-gopher/server/users"
 )
 
-func handleLogin(w http.ResponseWriter, r *http.Request) {
+func HandleLogin(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodPost {
 		name, errMsg := users.ValidateUserName(r.FormValue("name"))
 		if errMsg != "" {
@@ -72,7 +72,7 @@ func setUIDCookie(w http.ResponseWriter, id string) {
 // member verifies their password; a guest completes registration by
 // entering a password twice on one screen, which reserves their name. On
 // success it issues a member session and returns to `next`.
-func handleLoginFull(w http.ResponseWriter, r *http.Request) {
+func HandleLoginFull(w http.ResponseWriter, r *http.Request) {
 	next := sanitizeNext(r.FormValue("next"))
 
 	// The name is fixed: an explicit name (reserved-name notice) wins, else
@@ -163,7 +163,7 @@ func sanitizeNext(next string) string {
 // A "release" checkbox deletes the account and all its data, freeing the
 // name; unchecked (the default) just clears the cookie and keeps the
 // data so the player can log back in later.
-func handleLogout(w http.ResponseWriter, r *http.Request) {
+func HandleLogout(w http.ResponseWriter, r *http.Request) {
 	user := users.CurrentUser(r)
 	if r.Method == http.MethodPost {
 		if r.FormValue("release") == "yes" && user.ID != "" {

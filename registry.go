@@ -4,13 +4,14 @@ package main
 
 import (
 	"angry-gopher/server/chat"
+	"angry-gopher/server/home"
 	"angry-gopher/server/lynrummy"
 	"net/http"
 )
 
 // RegisterPages wires the page and chat handlers into the mux.
 func RegisterPages(mux *http.ServeMux) {
-	mux.HandleFunc("/", HandleHome)
+	mux.HandleFunc("/", home.HandleHome)
 	mux.HandleFunc("/game", lynrummy.HandleGame)
 	mux.HandleFunc("/game/", lynrummy.HandleGame)
 	mux.HandleFunc("/puzzles", lynrummy.HandlePuzzles)
