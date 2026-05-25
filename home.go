@@ -20,7 +20,7 @@ func HandleHome(w http.ResponseWriter, r *http.Request) {
 	}
 	user := web.CurrentUser(r)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	web.PageHeader(w, "Lyn Rummy", user)
+	web.PageHeader(w, "Lyn Rummy", user.Name, user.Admin)
 	web.PageSubtitle(w, "Jump straight into a game or browse your recent sessions.")
 
 	renderGamesHero(w)

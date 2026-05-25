@@ -62,16 +62,18 @@ const AppChromeCSS = `
 `
 
 // AppChromeTop emits the top bar: a home link, who you're playing as, an
-// Admin link for admins, and logout.
-func AppChromeTop(w http.ResponseWriter, user User) {
+// Admin link for admins, and logout. It takes the two identity fields it
+// renders (name, admin) rather than a whole User — this platform layer
+// renders chrome, it doesn't model users.
+func AppChromeTop(w http.ResponseWriter, name string, isAdmin bool) {
 	adminLink := ""
-	if user.Admin {
+	if isAdmin {
 		adminLink = ` · <a href="/admin">Admin</a>`
 	}
 	fmt.Fprintf(w,
 		`<header class="app-top"><div class="app-top-home"><a href="/">Lyn Rummy</a></div>`+
 			`<div class="app-top-user">Playing as <strong>%s</strong>%s · <a href="/logout">Log out</a></div></header>`,
-		html.EscapeString(user.Name), adminLink)
+		html.EscapeString(name), adminLink)
 }
 
 // PageHeadAndStyle emits the doctype, head, shared stylesheet, and opens
@@ -132,9 +134,9 @@ button:hover { background: #0000a0; }
 
 // PageHeader writes the boilerplate, the generic app top bar, and opens the
 // body with the page title as an <h1>.
-func PageHeader(w http.ResponseWriter, title string, user User) {
+func PageHeader(w http.ResponseWriter, title, name string, isAdmin bool) {
 	PageHeadAndStyle(w)
-	AppChromeTop(w, user)
+	AppChromeTop(w, name, isAdmin)
 	fmt.Fprintf(w, `<div class="app-body-wrap"><h1>%s</h1>`, html.EscapeString(title))
 }
 
