@@ -124,7 +124,11 @@ func renderChatConversation(w http.ResponseWriter, user users.User, partnerID st
 
 	fmt.Fprint(w, `<div class="chat-layout"><div class="chat-main">`+
 		`<div class="chat-navbar"><button type="button" id="chat-back" class="chat-back" title="Back to the previous selection (b)" disabled>&larr;</button>`+
-		`<button type="button" id="chat-fwd" class="chat-back" title="Forward — redo a Back (f)" disabled>&rarr;</button></div>`+
+		`<button type="button" id="chat-fwd" class="chat-back" title="Forward — redo a Back (f)" disabled>&rarr;</button>`+
+		`<button type="button" id="chat-search-btn" class="chat-back" title="Search messages (/)">🔍</button>`+
+		`<span class="chat-search" id="chat-search" hidden>`+
+		`<input type="text" id="chat-search-input" placeholder="Search messages…" title="Enter: next · Shift-Enter: previous · Esc: close" autocomplete="off">`+
+		`<span class="chat-search-count" id="chat-search-count"></span></span></div>`+
 		`<div class="chat-history view-rendered" id="chat-history" tabindex="-1"><div class="chat-bubbles" id="chat-bubbles">`)
 	if len(msgs) == 0 {
 		fmt.Fprint(w, `<p class="muted" id="chat-empty">No messages yet. Say hello 👋</p>`)
@@ -154,6 +158,7 @@ func renderChatConversation(w http.ResponseWriter, user users.User, partnerID st
       <div class="chat-key"><kbd>b</kbd> back</div>
       <div class="chat-key"><kbd>f</kbd> forward</div>
       <div class="chat-key"><kbd>t</kbd> toggle rendered / transcript</div>
+      <div class="chat-key"><kbd>/</kbd> search messages</div>
     </div>
   </div>
 </div></div>`)
@@ -365,6 +370,12 @@ html, body { height:100%; }
 #chat-fwd { margin-left:4px; }
 .chat-back:hover:enabled { background:#e3e3e3; }
 .chat-back:disabled { opacity:0.4; cursor:default; }
+.chat-search { display:inline-flex; align-items:center; gap:8px; margin-left:8px; }
+.chat-search[hidden] { display:none; }
+.chat-search input { font-size:13px; padding:3px 8px; border:1px solid #b9b9e0; border-radius:4px;
+                     width:240px; max-width:50vw; font-family:inherit; }
+.chat-search-count { font-size:12px; color:#888; white-space:nowrap; }
+.chat-search-count.none { color:#b00020; }
 .chat-history { min-width:0; flex:1; min-height:0; overflow-y:auto;
                 border:1px solid #ddd; border-radius:8px; padding:12px; background:#fcfcf8; }
 /* The feed is click-focusable so keyboard nav works; the selected-message

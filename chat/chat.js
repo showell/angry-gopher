@@ -204,6 +204,7 @@
     addMessage(m);
     if(stick) toBottom(); syncSelectionToScroll();
     if(pendingCid&&m.cid===pendingCid) ackSend(); /* our message round-tripped: saved + echoed */
+    if(searchOpen()) rescanSearch(); /* keep an open search current as messages stream in */
   };
   /* Resilient send: a send is confirmed only when our own message echoes back
      over SSE carrying the same client-id (proof it was both saved AND
@@ -436,6 +437,67 @@
     if(canScroll) history.scrollTop+=dir*Math.max(40,history.clientHeight-40);
     else cursorToExtreme(dir>0);
   }
+  /* --- search: dumb literal substring over raw message bodies (el._body),
+     slick because the whole conversation is already client-side. Smart-case:
+     case-sensitive only if the query has an uppercase. Searching the raw
+     source (not rendered HTML) is what keeps it literal — URLs, code, and
+     punctuation are all findable verbatim, no tokenizer to fool. No index:
+     a re-scan per keystroke over the in-memory nodes is sub-millisecond at
+     any size a 1:1 chat reaches. Matches drive the existing cursor + nav
+     stack (so a landing is Back-able); typing previews with the debounced
+     commit, Enter/Shift-Enter step + commit immediately. */
+  var searchBox=document.getElementById('chat-search');
+  var searchInput=document.getElementById('chat-search-input');
+  var searchCount=document.getElementById('chat-search-count');
+  var searchBtn=document.getElementById('chat-search-btn');
+  var searchMatches=[], searchPos=-1;
+  function searchOpen(){ return !searchBox.hidden; }
+  function smartCaseHit(body,q){
+    return /[A-Z]/.test(q) ? body.indexOf(q)>=0 : body.toLowerCase().indexOf(q.toLowerCase())>=0;
+  }
+  function scanSearch(){ /* populate searchMatches for the current query; no navigation */
+    var q=searchInput.value, els=bubbles.querySelectorAll('.chat-msg');
+    searchMatches=[];
+    if(q) for(var i=0;i<els.length;i++){ if(smartCaseHit(els[i]._body||'',q)) searchMatches.push(els[i]); }
+  }
+  function updateSearchCount(){
+    if(!searchInput.value){ searchCount.textContent=''; searchCount.className='chat-search-count'; return; }
+    if(!searchMatches.length){ searchCount.textContent='no matches'; searchCount.className='chat-search-count none'; return; }
+    searchCount.textContent=searchPos>=0?(searchPos+1)+' / '+searchMatches.length:searchMatches.length+' matches';
+    searchCount.className='chat-search-count';
+  }
+  function jumpToMatch(immediate){
+    if(searchPos<0||!searchMatches.length){ updateSearchCount(); return; }
+    var el=searchMatches[searchPos];
+    suppressSyncUntil=Date.now()+800;
+    selectAndCommit(el,immediate); /* cursor ring + nav stack (debounced unless immediate) */
+    scrollToIndex(idxOf(el));      /* align match to top; works in rendered AND transcript view */
+    updateNav(); updateSearchCount();
+  }
+  function runSearch(){ /* typing: rescan, preview-jump to the first match at/after the cursor */
+    scanSearch();
+    if(!searchMatches.length){ searchPos=-1; updateSearchCount(); return; }
+    var cur=selected?parseInt(idxOf(selected),10):-1; searchPos=0;
+    for(var j=0;j<searchMatches.length;j++){ if(parseInt(idxOf(searchMatches[j]),10)>=cur){ searchPos=j; break; } }
+    jumpToMatch(false);
+  }
+  function stepMatch(delta){
+    if(!searchMatches.length) return;
+    searchPos=(searchPos+delta+searchMatches.length)%searchMatches.length;
+    jumpToMatch(true);
+  }
+  function rescanSearch(){ /* a message arrived while open: refresh matches, keep place, don't jump */
+    var curEl=searchPos>=0?searchMatches[searchPos]:null;
+    scanSearch(); searchPos=curEl?searchMatches.indexOf(curEl):-1; updateSearchCount();
+  }
+  function openSearch(){ searchBox.hidden=false; searchInput.focus(); searchInput.select(); if(searchInput.value) runSearch(); }
+  function closeSearch(){ searchBox.hidden=true; history.focus({preventScroll:true}); }
+  searchBtn.addEventListener('click',function(){ searchOpen()?closeSearch():openSearch(); });
+  searchInput.addEventListener('input',runSearch);
+  searchInput.addEventListener('keydown',function(e){
+    if(e.key==='Enter'){ e.preventDefault(); stepMatch(e.shiftKey?-1:1); }
+    else if(e.key==='Escape'){ e.preventDefault(); closeSearch(); }
+  });
   /* Override these keys when reading the feed (not when typing in compose). */
   document.addEventListener('keydown',function(e){
     var ae=document.activeElement;
@@ -446,6 +508,7 @@
       case 'b': e.preventDefault(); backBtn.click(); return; /* disabled buttons ignore click */
       case 'f': e.preventDefault(); fwdBtn.click(); return;
       case 't': e.preventDefault(); toggleView(); return;
+      case '/': e.preventDefault(); openSearch(); return;
       case 'r': if(selected){ e.preventDefault(); quoteReply(selected); } return;
       case 'e': if(selected){ e.preventDefault(); editMessage(selected); } return;
       case 'ArrowDown': e.preventDefault(); moveCursor(1); return;
