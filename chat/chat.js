@@ -13,14 +13,15 @@
   var backBtn=document.getElementById('chat-back');
   var fwdBtn=document.getElementById('chat-fwd');
   var composeBody=document.getElementById('chat-compose-body');
+  var closedPanel=document.getElementById('chat-closed-panel');
   var openComposeBtn=document.getElementById('chat-open-compose');
   function toBottom(){ history.scrollTop=history.scrollHeight; }
   /* Compose is closeable: Esc on an empty box closes it and hands focus back
-     to the feed; "c" (or the right-panel button) reopens it. We hide only the
-     compose *body*, leaving its panel in place, so the feed never changes
-     width or position — the closed panel is just whitespace + the reopen button. */
-  function openCompose(){ openComposeBtn.style.display='none'; composeBody.style.display=''; textarea.focus(); }
-  function closeCompose(){ composeBody.style.display='none'; openComposeBtn.style.display=''; history.focus({preventScroll:true}); }
+     to the feed; "c" (or the panel button) reopens it. Closing swaps the
+     compose body for a panel with the reopen button + a keyboard cheatsheet,
+     while the panel itself stays put — so the feed never changes width/position. */
+  function openCompose(){ closedPanel.style.display='none'; composeBody.style.display=''; textarea.focus(); }
+  function closeCompose(){ composeBody.style.display='none'; closedPanel.style.display=''; history.focus({preventScroll:true}); }
   openComposeBtn.addEventListener('click',openCompose);
   /* "Caught up": the end of the last message in the feed is visible, so a new
      message should follow it down. If you've scrolled up into history, the
@@ -348,6 +349,8 @@
     if(e.ctrlKey||e.metaKey||e.altKey) return;
     switch(e.key){
       case 'c': e.preventDefault(); openCompose(); return;
+      case 'b': e.preventDefault(); backBtn.click(); return; /* disabled buttons ignore click */
+      case 'f': e.preventDefault(); fwdBtn.click(); return;
       case 'r': if(selected){ e.preventDefault(); quoteReply(selected); } return;
       case 'ArrowDown': e.preventDefault(); moveCursor(1); return;
       case 'ArrowUp':   e.preventDefault(); moveCursor(-1); return;

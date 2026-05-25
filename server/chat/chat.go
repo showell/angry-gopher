@@ -122,8 +122,8 @@ func renderChatConversation(w http.ResponseWriter, user web.User, partnerID stri
 		`</div>`)
 
 	fmt.Fprint(w, `<div class="chat-layout"><div class="chat-main">`+
-		`<div class="chat-navbar"><button type="button" id="chat-back" class="chat-back" title="Back to the previous selection" disabled>&larr;</button>`+
-		`<button type="button" id="chat-fwd" class="chat-back" title="Forward (redo a Back)" disabled>&rarr;</button></div>`+
+		`<div class="chat-navbar"><button type="button" id="chat-back" class="chat-back" title="Back to the previous selection (b)" disabled>&larr;</button>`+
+		`<button type="button" id="chat-fwd" class="chat-back" title="Forward — redo a Back (f)" disabled>&rarr;</button></div>`+
 		`<div class="chat-history view-rendered" id="chat-history" tabindex="-1"><div class="chat-bubbles" id="chat-bubbles">`)
 	if len(msgs) == 0 {
 		fmt.Fprint(w, `<p class="muted" id="chat-empty">No messages yet. Say hello 👋</p>`)
@@ -144,7 +144,15 @@ func renderChatConversation(w http.ResponseWriter, user web.User, partnerID stri
     <div class="chat-status" id="chat-status"></div>
     <div class="chat-hint">Markdown supported · paste or attach an image · Ctrl/⌘-Enter to send</div>
   </div>
-  <button type="button" id="chat-open-compose" class="chat-open-compose" style="display:none">Open compose box (c)</button>
+  <div class="chat-closed-panel" id="chat-closed-panel" style="display:none">
+    <button type="button" id="chat-open-compose" class="chat-open-compose">Open compose box (c)</button>
+    <div class="chat-keyhelp">
+      <div class="chat-keyhelp-title">Keyboard</div>
+      <div class="chat-key"><kbd>r</kbd> reply to the selected message</div>
+      <div class="chat-key"><kbd>b</kbd> back</div>
+      <div class="chat-key"><kbd>f</kbd> forward</div>
+    </div>
+  </div>
 </div></div>`)
 
 	fmt.Fprintf(w, `</div><script src="/chat/chat.js?v=%s"></script>`,
@@ -330,6 +338,15 @@ html, body { height:100%; }
 .chat-open-compose { font-size:13px; padding:4px 12px; background:#e7e7ff; color:#23235a;
                      border:1px solid #b9b9e0; border-radius:6px; cursor:pointer; }
 .chat-open-compose:hover { background:#dcdcff; }
+/* Keyboard cheatsheet shown in the freed compose space (closed state). Only
+   command keys (r/b/f) — movement keys are meant to be discovered naturally. */
+.chat-keyhelp { margin-top:18px; font-size:13px; color:#555; }
+.chat-keyhelp-title { font-weight:bold; color:#333; margin-bottom:7px; }
+.chat-key { margin:5px 0; }
+.chat-keyhelp kbd { display:inline-block; min-width:1.1em; text-align:center; padding:1px 6px;
+                    font-family:ui-monospace,Menlo,Consolas,monospace; font-size:12px; color:#333;
+                    background:#fff; border:1px solid #ccc; border-bottom-width:2px; border-radius:4px;
+                    margin-right:7px; }
 .chat-back { font-size:14px; line-height:1; padding:3px 11px; background:#eee; color:#333;
              border:1px solid #ccc; border-radius:4px; cursor:pointer; }
 #chat-fwd { margin-left:4px; }
@@ -401,9 +418,6 @@ html, body { height:100%; }
   .chat-compose-body { display:flex; flex-direction:column; flex:1; min-height:0; }
   .chat-compose form { display:flex; flex-direction:column; flex:1; min-height:0; }
   .chat-compose textarea { flex:1; min-height:0; }
-  /* When compose is closed the 320px column stays reserved (the feed keeps its
-     width) — just the compact reopen button shows, the rest is whitespace. */
-  .chat-open-compose { align-self:flex-start; }
 }
 /* Tall (portrait): single column — history fills, compose sits at the
    BOTTOM at a fixed height (both stay on screen). */
