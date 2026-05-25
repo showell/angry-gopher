@@ -10,10 +10,21 @@
   var status=document.getElementById('chat-status');
   var imageBtn=document.getElementById('chat-image-btn');
   var fileInput=document.getElementById('chat-file');
-  var lockBtn=document.getElementById('chat-lock');
   var backBtn=document.getElementById('chat-back');
-  var locked=false;
   function toBottom(){ history.scrollTop=history.scrollHeight; }
+  /* "Caught up": the end of the last message in the feed is visible, so a new
+     message should follow it down. If you've scrolled up into history, the
+     last message's bottom is below the fold and we leave you where you are.
+     (A last message taller than the viewport still counts as caught-up once
+     you've scrolled to its bottom edge.) */
+  function caughtUp(){
+    var els=history.querySelectorAll('[data-i]');
+    for(var i=els.length-1;i>=0;i--){
+      if(els[i].offsetParent===null) continue; /* the hidden view (rendered vs transcript) */
+      return els[i].getBoundingClientRect().bottom<=history.getBoundingClientRect().bottom+1;
+    }
+    return true; /* empty feed → stick, so the first messages land at the bottom */
+  }
   /* Persistent "selected message" (Zulip-style cursor) + a navigation undo
      stack. At most one message is selected; it shows a steady highlight ring.
      The selection moves when you click a message / MSG_ link, and otherwise
@@ -123,18 +134,11 @@
     var a=e.target.closest('a[data-view]'); if(!a) return;
     e.preventDefault(); setView(a.getAttribute('data-view'));
   });
-  lockBtn.addEventListener('click',function(){
-    locked=!locked;
-    lockBtn.textContent=locked?'🔒 Locked':'🔓 Unlocked';
-    lockBtn.setAttribute('aria-pressed',locked?'true':'false');
-    lockBtn.classList.toggle('locked',locked);
-    if(!locked) toBottom(); /* unlocking catches up to the latest */
-  });
   toBottom();
   /* Always replay the full backlog (since=0); reconnects resume from
      Last-Event-ID automatically. The client builds the whole feed. */
   var es=new EventSource('/chat/stream?with='+encodeURIComponent(PARTNER)+'&since=0');
-  es.onmessage=function(e){ addMessage(JSON.parse(e.data)); if(!locked) toBottom(); syncSelectionToScroll(); };
+  es.onmessage=function(e){ var stick=caughtUp(); addMessage(JSON.parse(e.data)); if(stick) toBottom(); syncSelectionToScroll(); };
   function send(){
     var text=textarea.value;
     if(!text.trim()) return;
