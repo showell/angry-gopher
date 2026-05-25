@@ -165,6 +165,11 @@ func UserLastActive(id string) (time.Time, bool) {
 	return time.Unix(n, 0), true
 }
 
+// MaxUploadLifetimeBytes caps the cumulative bytes one user may ever
+// upload — a runaway/abuse backstop, not a tight quota (the droplet has
+// tens of GB free). Easy to raise.
+const MaxUploadLifetimeBytes = 1 << 30 // 1 GiB per user, lifetime
+
 var uploadBytesMu sync.Mutex
 
 // UserUploadBytes returns the cumulative bytes a user has ever uploaded.

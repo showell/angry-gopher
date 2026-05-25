@@ -26,13 +26,9 @@ import (
 
 // maxChatUploadBytes caps a single uploaded image. Caddy's per-route body
 // cap (deploy/Caddyfile) must stay at or above this so Gopher is the one
-// that enforces it, with a clean message.
+// that enforces it, with a clean message. The cumulative per-user cap is
+// users.MaxUploadLifetimeBytes (a user-layer limit).
 const maxChatUploadBytes = 10 << 20 // 10 MiB
-
-// MaxChatUploadLifetimeBytes caps the cumulative bytes one user may ever
-// upload — a runaway/abuse backstop, not a tight quota (the droplet has
-// tens of GB free). Easy to raise.
-const MaxChatUploadLifetimeBytes = 1 << 30 // 1 GiB per user, lifetime
 
 // chatUploadName is the strict on-disk/served filename: 32 hex chars
 // (our random token) plus an allowed image extension. Used to reject
@@ -122,9 +118,9 @@ func HandleChatUpload(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Lifetime per-user upload backstop (reserve before storing).
-	if !users.ReserveUploadBytes(user.ID, int64(len(data)), MaxChatUploadLifetimeBytes) {
+	if !users.ReserveUploadBytes(user.ID, int64(len(data)), users.MaxUploadLifetimeBytes) {
 		http.Error(w, fmt.Sprintf("Upload limit reached — you've used your %d GB image allowance.",
-			MaxChatUploadLifetimeBytes>>30), http.StatusForbidden)
+			users.MaxUploadLifetimeBytes>>30), http.StatusForbidden)
 		return
 	}
 

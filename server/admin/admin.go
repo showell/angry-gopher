@@ -5,7 +5,6 @@
 package admin
 
 import (
-	"angry-gopher/server/chat"
 	"angry-gopher/server/lynrummy"
 	"angry-gopher/server/users"
 	"fmt"
@@ -167,7 +166,7 @@ func renderMembersTable(w http.ResponseWriter) {
 			since = humanizeSince(row.active)
 		}
 		images := fmt.Sprintf("%s / %s",
-			humanBytes(users.UserUploadBytes(row.user.ID)), humanBytes(chat.MaxChatUploadLifetimeBytes))
+			humanBytes(users.UserUploadBytes(row.user.ID)), humanBytes(users.MaxUploadLifetimeBytes))
 		fmt.Fprintf(w, `<tr><td>%s</td><td>%s</td><td class="n">%s</td><td>%s</td></tr>`,
 			name, since, images, apiKeyCell(row.user.ID))
 	}
