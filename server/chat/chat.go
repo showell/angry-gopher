@@ -123,8 +123,7 @@ func renderChatConversation(w http.ResponseWriter, user web.User, partnerID stri
 
 	fmt.Fprint(w, `<div class="chat-layout"><div class="chat-main">`+
 		`<div class="chat-navbar"><button type="button" id="chat-back" class="chat-back" title="Back to the previous selection" disabled>&larr;</button>`+
-		`<button type="button" id="chat-fwd" class="chat-back" title="Forward (redo a Back)" disabled>&rarr;</button>`+
-		` <button type="button" id="chat-open-compose" class="chat-open-compose" style="display:none">Open compose box (c)</button></div>`+
+		`<button type="button" id="chat-fwd" class="chat-back" title="Forward (redo a Back)" disabled>&rarr;</button></div>`+
 		`<div class="chat-history view-rendered" id="chat-history" tabindex="-1"><div class="chat-bubbles" id="chat-bubbles">`)
 	if len(msgs) == 0 {
 		fmt.Fprint(w, `<p class="muted" id="chat-empty">No messages yet. Say hello 👋</p>`)
@@ -133,16 +132,19 @@ func renderChatConversation(w http.ResponseWriter, user web.User, partnerID stri
 	// replay; the server ships only this skeleton.
 	fmt.Fprint(w, `</div><pre class="chat-transcript" id="chat-transcript"></pre></div></div>
 <div class="chat-compose" id="chat-compose">
-  <form id="chat-form">
-    <textarea id="chat-body" placeholder="Write a message…  Markdown is supported, and longer posts are welcome."></textarea>
-    <div class="chat-compose-actions">
-      <button type="submit">Send</button>
-      <button type="button" id="chat-image-btn">Image</button>
-    </div>
-  </form>
-  <input type="file" id="chat-file" accept="image/png,image/jpeg,image/gif,image/webp" style="display:none">
-  <div class="chat-status" id="chat-status"></div>
-  <div class="chat-hint">Markdown supported · paste or attach an image · Ctrl/⌘-Enter to send</div>
+  <div class="chat-compose-body" id="chat-compose-body">
+    <form id="chat-form">
+      <textarea id="chat-body" placeholder="Write a message…  Markdown is supported, and longer posts are welcome."></textarea>
+      <div class="chat-compose-actions">
+        <button type="submit">Send</button>
+        <button type="button" id="chat-image-btn">Image</button>
+      </div>
+    </form>
+    <input type="file" id="chat-file" accept="image/png,image/jpeg,image/gif,image/webp" style="display:none">
+    <div class="chat-status" id="chat-status"></div>
+    <div class="chat-hint">Markdown supported · paste or attach an image · Ctrl/⌘-Enter to send</div>
+  </div>
+  <button type="button" id="chat-open-compose" class="chat-open-compose" style="display:none">Open compose box (c)</button>
 </div></div>`)
 
 	fmt.Fprintf(w, `</div><script src="/chat/chat.js?v=%s"></script>`,
@@ -396,8 +398,12 @@ html, body { height:100%; }
   .chat-layout { flex-direction:row; align-items:stretch; }
   .chat-main { flex:1; }
   .chat-compose { width:320px; flex:none; display:flex; flex-direction:column; min-height:0; }
+  .chat-compose-body { display:flex; flex-direction:column; flex:1; min-height:0; }
   .chat-compose form { display:flex; flex-direction:column; flex:1; min-height:0; }
   .chat-compose textarea { flex:1; min-height:0; }
+  /* When compose is closed the 320px column stays reserved (the feed keeps its
+     width) — just the compact reopen button shows, the rest is whitespace. */
+  .chat-open-compose { align-self:flex-start; }
 }
 /* Tall (portrait): single column — history fills, compose sits at the
    BOTTOM at a fixed height (both stay on screen). */
