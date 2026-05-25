@@ -1,6 +1,13 @@
-// The user registry: numeric ids are the primary key for everything
-// per-user. A name is just a mutable attribute, so changing it (or
-// deleting an account) leaves no name-keyed backdoor to the data.
+// Package users is the user layer — one-stop shopping for who someone is
+// and what they may do: the registry (identity, names, membership, admin,
+// activity, upload accounting), authenticated sessions, bot API keys, and
+// CurrentUser, the request-identity resolver. Per-user features (e.g.
+// private chat annotations, scoped to an id) belong here too. It builds on
+// the web platform layer (the id counter) and nothing else of ours.
+//
+// The registry: numeric ids are the primary key for everything per-user.
+// A name is just a mutable attribute, so changing it (or deleting an
+// account) leaves no name-keyed backdoor to the data.
 //
 // One dir per user under {data_dir}/users/<id>/:
 //
@@ -12,7 +19,7 @@
 //
 // Guests get an id too (allocated at login). Members are looked up by
 // name (a small scan); a name is "reserved" iff some member has it.
-package web
+package users
 
 import (
 	"os"
@@ -22,6 +29,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"angry-gopher/server/web"
 
 	"golang.org/x/crypto/bcrypt"
 )
@@ -47,7 +56,7 @@ func userFile(id, f string) string { return filepath.Join(UsersRoot, id, f) }
 
 // AllocateUser creates a new user with the given name and returns its id.
 func AllocateUser(name string) (string, error) {
-	n, err := AllocateID(filepath.Join(UsersRoot, "next-id.txt"))
+	n, err := web.AllocateID(filepath.Join(UsersRoot, "next-id.txt"))
 	if err != nil {
 		return "", err
 	}

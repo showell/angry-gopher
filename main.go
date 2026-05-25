@@ -14,6 +14,7 @@ import (
 	"angry-gopher/server/admin"
 	"angry-gopher/server/chat"
 	"angry-gopher/server/lynrummy"
+	"angry-gopher/server/users"
 	"angry-gopher/server/web"
 )
 
@@ -47,7 +48,7 @@ func withLoginGate(next http.Handler) http.Handler {
 		// API keys are read-only: a request that authenticates via a key
 		// may only GET/HEAD. Enforced centrally so no mutating endpoint
 		// can be reached with a key, whatever it is.
-		if web.IsAPIKeyAuth(r) && r.Method != http.MethodGet && r.Method != http.MethodHead {
+		if users.IsAPIKeyAuth(r) && r.Method != http.MethodGet && r.Method != http.MethodHead {
 			http.Error(w, "API keys are read-only", http.StatusForbidden)
 			return
 		}
@@ -55,11 +56,11 @@ func withLoginGate(next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
-		// web.CurrentUser resolves the identity (member session is
+		// users.CurrentUser resolves the identity (member session is
 		// authoritative; a guest uid is honored only if it's a real
 		// non-member user; a member uid without a session is a forge
 		// attempt and resolves to none). No identity → log in.
-		if web.CurrentUser(r).ID == "" {
+		if users.CurrentUser(r).ID == "" {
 			http.Redirect(w, r, "/login", http.StatusSeeOther)
 			return
 		}
@@ -109,8 +110,8 @@ Usage:
 
 	lynrummy.SetDataRoot(config.SessionsDataRoot())
 	chat.SetChatRoot(config.ChatDataRoot())
-	web.SetUsersRoot(config.UsersDataRoot())
-	web.SetSessionSecretDir(config.ChatDataRoot())
+	users.SetUsersRoot(config.UsersDataRoot())
+	users.SetSessionSecretDir(config.ChatDataRoot())
 	web.SetAssets(assets)
 	web.SetVersion(gitCommit)
 

@@ -9,6 +9,7 @@
 package lynrummy
 
 import (
+	"angry-gopher/server/users"
 	"angry-gopher/server/web"
 	"encoding/json"
 	"fmt"
@@ -47,7 +48,7 @@ var puzzleCatalogPaths = []string{
 func HandlePuzzles(w http.ResponseWriter, r *http.Request) {
 	sub := strings.TrimPrefix(r.URL.Path, "/puzzles")
 	sub = strings.TrimPrefix(sub, "/")
-	userID := web.CurrentUser(r).ID // storage key
+	userID := users.CurrentUser(r).ID // storage key
 	switch {
 	case sub == "" || sub == "/":
 		puzzlePage(w, userID)

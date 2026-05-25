@@ -4,7 +4,7 @@
 // can't be forged by editing the plaintext gopher_uid cookie. The HMAC
 // secret is generated once and persisted at {chat}/_session_secret
 // (mode 0600, never in git) so sessions survive restarts.
-package web
+package users
 
 import (
 	"crypto/hmac"

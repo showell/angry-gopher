@@ -1,46 +1,19 @@
-// Package web is the shared server platform: identity (the user
-// registry), authenticated sessions, bot API keys, embedded assets, and
-// the general page chrome. The Lyn Rummy and Chat subsystem packages
-// both build on it; it imports neither.
+// Package web is the server platform layer: embedded-asset serving, the
+// shared page chrome, and the id counter. It imports none of our other
+// packages — the Lyn Rummy, Chat, and users packages all build on it.
 package web
 
 // chrome.go holds the shared page chrome — the HTML shell every page
 // renders into: <head> + styles, the top nav, the page header/subtitle,
-// the footer, plus CurrentUser. This is NOT a junk drawer. Keep it
-// focused on chrome and layout; a screen's handler, its storage, or any
-// feature logic belongs in its own file, not here.
+// the footer. This is NOT a junk drawer. Keep it focused on chrome and
+// layout; a screen's handler, its storage, or any feature logic belongs
+// in its own file, not here.
 
 import (
 	"fmt"
 	"html"
 	"net/http"
-
-	"angry-gopher/auth"
 )
-
-// CurrentUser resolves the identity a request acts as. A valid member
-// session is authoritative. Otherwise it's the guest named by the
-// gopher_uid cookie — but only if that id is a NON-member; a uid pointing
-// at a member without a session is a forge attempt and is ignored.
-// Returns the zero User (ID == "") when there's no valid identity.
-func CurrentUser(r *http.Request) User {
-	if id, ok := SessionUser(r); ok {
-		return LoadUser(id)
-	}
-	// An API key authenticates a member for read-only access; it is never
-	// an admin credential, so strip Admin (the login gate also blocks any
-	// non-GET key request).
-	if id, ok := apiKeyUser(r); ok {
-		u := LoadUser(id)
-		u.Admin = false
-		return u
-	}
-	id := auth.CurrentUID(r)
-	if id != "" && UserExists(id) && !UserIsMember(id) {
-		return LoadUser(id)
-	}
-	return User{}
-}
 
 // AppChromeCSS is the shared stylesheet for the app top bar.
 const AppChromeCSS = `

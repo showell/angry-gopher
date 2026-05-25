@@ -13,6 +13,7 @@
 package lynrummy
 
 import (
+	"angry-gopher/server/users"
 	"angry-gopher/server/web"
 	"encoding/json"
 	"fmt"
@@ -44,7 +45,7 @@ var EngineGlueJSPath = "games/lynrummy/elm/engine_glue.js"
 func HandleGame(w http.ResponseWriter, r *http.Request) {
 	sub := strings.TrimPrefix(r.URL.Path, "/game")
 	sub = strings.TrimPrefix(sub, "/")
-	userID := web.CurrentUser(r).ID // storage key
+	userID := users.CurrentUser(r).ID // storage key
 	switch {
 	case sub == "" || sub == "/":
 		lynrummyElmPlay(w, userID)
@@ -173,7 +174,7 @@ func lynrummyElmAppendSessionLine(w http.ResponseWriter, r *http.Request, userID
 		return
 	}
 	if rel == "actions" {
-		web.TouchUser(userID) // a Lyn Rummy move counts as activity
+		users.TouchUser(userID) // a Lyn Rummy move counts as activity
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -357,7 +358,7 @@ func lynrummyElmPlayWithSession(w http.ResponseWriter, userID string, sessionID 
 	if sessionID > 0 {
 		flag = strconv.FormatInt(sessionID, 10)
 	}
-	playerNameJSON, _ := json.Marshal(web.GetUserName(userID)) // user is the id; show the name
+	playerNameJSON, _ := json.Marshal(users.GetUserName(userID)) // user is the id; show the name
 	fmt.Fprintf(w, `<!doctype html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"><title>♦️ Lyn Rummy ♥️</title>
 <style>

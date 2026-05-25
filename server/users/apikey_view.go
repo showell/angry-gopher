@@ -1,4 +1,4 @@
-package web
+package users
 
 import (
 	"fmt"

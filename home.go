@@ -2,6 +2,7 @@ package main
 
 import (
 	"angry-gopher/server/lynrummy"
+	"angry-gopher/server/users"
 	"angry-gopher/server/web"
 	"fmt"
 	"html"
@@ -18,7 +19,7 @@ func HandleHome(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	user := web.CurrentUser(r)
+	user := users.CurrentUser(r)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	web.PageHeader(w, "Lyn Rummy", user.Name, user.Admin)
 	web.PageSubtitle(w, "Jump straight into a game or browse your recent sessions.")
@@ -93,7 +94,7 @@ func renderRecentSessions(w http.ResponseWriter, viewer string) {
 		actions int
 	}
 	var rows []sessionRow
-	for _, p := range web.ListUserIDs() {
+	for _, p := range users.ListUserIDs() {
 		ids, err := lynrummy.ListSessionIDs(p)
 		if err != nil {
 			continue
@@ -141,7 +142,7 @@ func renderRecentSessions(w http.ResponseWriter, viewer string) {
 		}
 		fmt.Fprintf(w,
 			`<tr><td>%s</td><td>%d</td><td>%s</td><td>%s</td><td class="n">%d</td><td>%s</td></tr>`,
-			html.EscapeString(web.GetUserName(row.player)), row.id, html.EscapeString(ts), labelCell, row.actions, resumeCell,
+			html.EscapeString(users.GetUserName(row.player)), row.id, html.EscapeString(ts), labelCell, row.actions, resumeCell,
 		)
 	}
 	fmt.Fprint(w, `</table></div>`)

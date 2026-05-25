@@ -1,6 +1,7 @@
 package chat
 
 import (
+	"angry-gopher/server/users"
 	"angry-gopher/server/web"
 	"fmt"
 	"html"
@@ -12,7 +13,7 @@ import (
 // (admin) + log out on the right. In chat there's no "Lyn Rummy" branding —
 // the small Home link is the only way back to the top-level home. active is
 // "people" | "settings" | "" (a conversation).
-func chatChromeTop(w http.ResponseWriter, user web.User, title, active string) {
+func chatChromeTop(w http.ResponseWriter, user users.User, title, active string) {
 	navLink := func(href, label, key string) string {
 		if active == key {
 			return fmt.Sprintf(`<strong>%s</strong>`, label)
@@ -37,7 +38,7 @@ func chatChromeTop(w http.ResponseWriter, user web.User, title, active string) {
 // chatPageHeader writes the page with the chat-subsystem top bar (Home +
 // title + People/Settings + identity) and opens the body WITHOUT an <h1> —
 // the title lives in the bar. active is "people" | "settings" | "".
-func chatPageHeader(w http.ResponseWriter, title string, user web.User, active string) {
+func chatPageHeader(w http.ResponseWriter, title string, user users.User, active string) {
 	web.PageHeadAndStyle(w)
 	chatChromeTop(w, user, title, active)
 	fmt.Fprint(w, `<div class="app-body-wrap">`)

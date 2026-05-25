@@ -8,6 +8,7 @@
 package chat
 
 import (
+	"angry-gopher/server/users"
 	"angry-gopher/server/web"
 	"encoding/json"
 	"errors"
@@ -48,7 +49,7 @@ func HandleChat(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	if !web.IsMember(r) {
+	if !users.IsMember(r) {
 		next := "/chat"
 		if r.URL.RawQuery != "" {
 			next += "?" + r.URL.RawQuery
@@ -56,7 +57,7 @@ func HandleChat(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/login/full?next="+url.QueryEscape(next), http.StatusSeeOther)
 		return
 	}
-	user := web.CurrentUser(r)
+	user := users.CurrentUser(r)
 	partner := strings.TrimSpace(r.URL.Query().Get("with")) // partner user id
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 
@@ -80,16 +81,16 @@ func HandleChatJS(w http.ResponseWriter, r *http.Request) {
 // partner for user id: another member (chat is members-only), not
 // yourself or empty.
 func validChatPartner(userID, partnerID string) bool {
-	return partnerID != "" && partnerID != userID && web.UserIsMember(partnerID)
+	return partnerID != "" && partnerID != userID && users.UserIsMember(partnerID)
 }
 
 // renderChatPicker lists the members you can message (everyone with a
 // password), minus yourself — linked by id, shown by name.
-func renderChatPicker(w http.ResponseWriter, user web.User) {
+func renderChatPicker(w http.ResponseWriter, user users.User) {
 	chatPageHeader(w, "People", user, "people")
 	fmt.Fprint(w, `<p class="muted">Pick a member to message:</p><ul>`)
 	n := 0
-	for _, m := range web.ListMembers() {
+	for _, m := range users.ListMembers() {
 		if m.ID == user.ID {
 			continue
 		}
@@ -104,13 +105,13 @@ func renderChatPicker(w http.ResponseWriter, user web.User) {
 	web.PageFooter(w)
 }
 
-func renderChatConversation(w http.ResponseWriter, user web.User, partnerID string) {
+func renderChatConversation(w http.ResponseWriter, user users.User, partnerID string) {
 	msgs, err := ReadChatMessages(user.ID, partnerID)
 	if err != nil {
 		http.Error(w, "read conversation: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
-	partnerName := web.GetUserName(partnerID)
+	partnerName := users.GetUserName(partnerID)
 
 	chatPageHeader(w, "Chat with "+partnerName, user, "")
 	fmt.Fprint(w, chatCSS)
@@ -171,11 +172,11 @@ func HandleChatSend(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	if !web.IsMember(r) {
+	if !users.IsMember(r) {
 		http.Error(w, "chat requires a member account", http.StatusForbidden)
 		return
 	}
-	user := web.CurrentUser(r)
+	user := users.CurrentUser(r)
 
 	r.Body = http.MaxBytesReader(w, r.Body, maxChatMessageBytes)
 	if err := r.ParseForm(); err != nil {
@@ -211,7 +212,7 @@ func HandleChatSend(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "save message: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
-	web.TouchUser(user.ID) // sending a message counts as activity
+	users.TouchUser(user.ID) // sending a message counts as activity
 	chatSendDone(w, r, partner, async)
 }
 
@@ -227,11 +228,11 @@ func chatSendDone(w http.ResponseWriter, r *http.Request, partner string, async 
 // Last-Event-ID on reconnect) and then streams live messages until the
 // client disconnects.
 func HandleChatStream(w http.ResponseWriter, r *http.Request) {
-	if !web.IsMember(r) {
+	if !users.IsMember(r) {
 		http.Error(w, "chat requires a member account", http.StatusForbidden)
 		return
 	}
-	user := web.CurrentUser(r)
+	user := users.CurrentUser(r)
 	partner := strings.TrimSpace(r.URL.Query().Get("with")) // partner user id
 	if !validChatPartner(user.ID, partner) {
 		http.Error(w, "unknown conversation partner", http.StatusBadRequest)

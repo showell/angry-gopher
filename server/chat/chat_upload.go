@@ -8,7 +8,7 @@
 package chat
 
 import (
-	"angry-gopher/server/web"
+	"angry-gopher/server/users"
 	"bytes"
 	"crypto/rand"
 	"encoding/hex"
@@ -80,11 +80,11 @@ func HandleChatUpload(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	if !web.IsMember(r) {
+	if !users.IsMember(r) {
 		http.Error(w, "chat requires a member account", http.StatusForbidden)
 		return
 	}
-	user := web.CurrentUser(r)
+	user := users.CurrentUser(r)
 	partner := strings.TrimSpace(r.URL.Query().Get("with")) // partner user id
 	if !validChatPartner(user.ID, partner) {
 		http.Error(w, "unknown conversation partner", http.StatusBadRequest)
@@ -122,7 +122,7 @@ func HandleChatUpload(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Lifetime per-user upload backstop (reserve before storing).
-	if !web.ReserveUploadBytes(user.ID, int64(len(data)), MaxChatUploadLifetimeBytes) {
+	if !users.ReserveUploadBytes(user.ID, int64(len(data)), MaxChatUploadLifetimeBytes) {
 		http.Error(w, fmt.Sprintf("Upload limit reached — you've used your %d GB image allowance.",
 			MaxChatUploadLifetimeBytes>>30), http.StatusForbidden)
 		return
@@ -155,7 +155,7 @@ func HandleChatUpload(w http.ResponseWriter, r *http.Request) {
 // HandleChatFile serves an uploaded image, gated to participants of the
 // conversation named in the URL.
 func HandleChatFile(w http.ResponseWriter, r *http.Request) {
-	user := web.CurrentUser(r)
+	user := users.CurrentUser(r)
 	rest := strings.TrimPrefix(r.URL.Path, "/chat/uploads/")
 	key, name, found := strings.Cut(rest, "/")
 	if !found || !chatUploadName.MatchString(name) {

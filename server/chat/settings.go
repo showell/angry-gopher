@@ -8,6 +8,7 @@
 package chat
 
 import (
+	"angry-gopher/server/users"
 	"angry-gopher/server/web"
 	"fmt"
 	"html"
@@ -17,12 +18,12 @@ import (
 
 // requireMember returns the authenticated member, or the zero User after
 // redirecting a non-member to the full login (carrying `next`).
-func requireMember(w http.ResponseWriter, r *http.Request, next string) web.User {
-	if !web.IsMember(r) {
+func requireMember(w http.ResponseWriter, r *http.Request, next string) users.User {
+	if !users.IsMember(r) {
 		http.Redirect(w, r, "/login/full?next="+url.QueryEscape(next), http.StatusSeeOther)
-		return web.User{}
+		return users.User{}
 	}
-	return web.CurrentUser(r)
+	return users.CurrentUser(r)
 }
 
 // HandleSettings serves the member settings page.
@@ -51,22 +52,22 @@ func HandleSettingsAPIKey(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.FormValue("revoke") == "1" {
-		if err := web.ClearUserAPIKey(user.ID); err != nil {
+		if err := users.ClearUserAPIKey(user.ID); err != nil {
 			http.Error(w, "revoke: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
 		http.Redirect(w, r, "/settings?keyrevoked=1", http.StatusSeeOther)
 		return
 	}
-	key, err := web.SetUserAPIKey(user.ID)
+	key, err := users.SetUserAPIKey(user.ID)
 	if err != nil {
 		http.Error(w, "generate: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
-	web.RenderAPIKeyShown(w, user.ID, key, "/settings", "Settings")
+	users.RenderAPIKeyShown(w, user.ID, key, "/settings", "Settings")
 }
 
-func renderSettings(w http.ResponseWriter, r *http.Request, user web.User) {
+func renderSettings(w http.ResponseWriter, r *http.Request, user users.User) {
 	chatPageHeader(w, "Settings", user, "settings")
 
 	if r.URL.Query().Get("keyrevoked") == "1" {
@@ -78,7 +79,7 @@ func renderSettings(w http.ResponseWriter, r *http.Request, user web.User) {
 it can't send messages or change your account. Hand it to the bot via the
 <code>GOPHER_API_KEY</code> environment variable, not in a prompt; revoke it here anytime.</p>`)
 
-	if !web.UserHasAPIKey(user.ID) {
+	if !users.UserHasAPIKey(user.ID) {
 		fmt.Fprint(w, `<p>You don't have an API key yet.</p>
 <form method="post" action="/settings/apikey" style="display:inline"><button type="submit">Generate key</button></form>`)
 		web.PageFooter(w)
@@ -87,7 +88,7 @@ it can't send messages or change your account. Hand it to the bot via the
 
 	// Has a key. Reveal it when ?show=1; otherwise just offer the buttons.
 	if r.URL.Query().Get("show") == "1" {
-		if key, ok := web.GetUserAPIKey(user.ID); ok {
+		if key, ok := users.GetUserAPIKey(user.ID); ok {
 			fmt.Fprintf(w, `<p>Your API key (copy it somewhere safe):</p>
 <code style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:15px;background:#f4f4ec;`+
 				`border:1px solid #ccc;padding:8px 12px;border-radius:4px;display:inline-block;`+
