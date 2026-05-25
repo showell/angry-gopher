@@ -18,8 +18,8 @@ import (
 	"time"
 )
 
-// PuzzleJSPath — the Puzzle V2 client's compiled JS lives
-// alongside elm.js in the unified Elm project.
+// PuzzleJSPath — the Puzzles client's compiled JS, built by
+// ops/build_elm alongside elm.js in the unified Elm project.
 var PuzzleJSPath = "games/lynrummy/elm/puzzle.js"
 
 // puzzleCatalogPaths — curated puzzle catalogs concatenated in
@@ -29,10 +29,11 @@ var PuzzleJSPath = "games/lynrummy/elm/puzzle.js"
 // Elm's Lib.BoardDsl on the wire. The Elm client renders one
 // puzzle at a time with Prev/Next navigation; the 1-indexed
 // "Puzzle N" label reflects the concatenated order. Catalogs are
-// listed easiest-first, so the ranges are: 1-line Puzzle 1..10,
-// 2-line 11..20, 3-line 21..30, 4-line 31..51, 5-line 52..62, and
-// 6-line 63..77. The 1-line tier is hand-crafted and kept in its own
-// teaching order (not card-count sorted like the mined tiers).
+// listed easiest-first (1-line first … 6-line last), so the numbering
+// runs easiest→hardest; the exact per-tier ranges shift as catalogs
+// gain or lose puzzles, so count the files rather than trust a pinned
+// range. The 1-line tier is hand-crafted in its own teaching order
+// (the mined tiers are card-count sorted).
 var puzzleCatalogPaths = []string{
 	"games/lynrummy/conformance/curated_1line_puzzles.dsl",
 	"games/lynrummy/conformance/curated_2line_puzzles.dsl",

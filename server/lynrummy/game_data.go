@@ -27,7 +27,7 @@ import (
 // GameDataRoot is the on-disk root for all LynRummy session data,
 // set by SetDataRoot at startup. The default is repo-relative, for
 // tooling/tests that run without a config. One level down is the
-// username: everything for a player lives under {root}/{user}/.
+// user id: everything for a player lives under {root}/{id}/.
 var GameDataRoot = "games/lynrummy/data"
 
 // SetDataRoot points session storage at the configured data dir.

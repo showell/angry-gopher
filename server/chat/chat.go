@@ -349,8 +349,9 @@ html, body { height:100%; }
 .chat-open-compose { font-size:13px; padding:4px 12px; background:#e7e7ff; color:#23235a;
                      border:1px solid #b9b9e0; border-radius:6px; cursor:pointer; }
 .chat-open-compose:hover { background:#dcdcff; }
-/* Keyboard cheatsheet shown in the freed compose space (closed state). Only
-   command keys (r/b/f) — movement keys are meant to be discovered naturally. */
+/* Keyboard cheatsheet shown in the freed compose space (closed state). Lists
+   only the command keys you couldn't guess — movement keys (arrows, Home/End,
+   paging, Esc) are meant to be discovered naturally. */
 .chat-keyhelp { margin-top:18px; font-size:13px; color:#555; }
 .chat-keyhelp-title { font-weight:bold; color:#333; margin-bottom:7px; }
 .chat-key { margin:5px 0; }
@@ -391,7 +392,7 @@ html, body { height:100%; }
 .chat-edited-note { font-size:12px; color:#888; margin-bottom:4px; }
 .chat-edited-orig { font-size:11px; color:#999; white-space:pre-wrap; overflow-wrap:anywhere;
                     border-left:3px solid #ddd; padding:2px 0 2px 8px; }
-/* The selected message keeps a steady highlight ring (was a brief flash). */
+/* The selected message keeps a steady highlight ring. */
 .chat-msg.selected { box-shadow:0 0 0 2px #ffcf3a; }
 .chat-body p:first-child { margin-top:0; }
 .chat-body p:last-child { margin-bottom:0; }

@@ -35,20 +35,20 @@ func (c *ServerConfig) ListenAddr() string {
 }
 
 // SessionsDataRoot is the root for all on-disk game/puzzle session
-// data. One level down is the username; see views.SetDataRoot.
+// data. One level down is the user id; see lynrummy.SetDataRoot.
 func (c *ServerConfig) SessionsDataRoot() string {
 	return filepath.Join(c.DataDir, "lynrummy")
 }
 
 // ChatDataRoot is the root for conversation files — a sibling of the
 // game/puzzle tree so chat is a self-contained subtree. See
-// views.SetChatRoot.
+// chat.SetChatRoot.
 func (c *ServerConfig) ChatDataRoot() string {
 	return filepath.Join(c.DataDir, "chat")
 }
 
 // UsersDataRoot is the root for the user registry (one dir per numeric
-// user id). See views.SetUsersRoot.
+// user id). See web.SetUsersRoot.
 func (c *ServerConfig) UsersDataRoot() string {
 	return filepath.Join(c.DataDir, "users")
 }

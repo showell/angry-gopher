@@ -23,7 +23,8 @@ import (
 // chatMarkdown renders with GFM (autolinks, strikethrough, tables) and
 // hard wraps — in chat a single newline means a line break, not a space.
 // quoteFenceRenderer (priority below the default 1000) overrides fenced-code
-// rendering so a ```quote block becomes a styled quote instead of a code block.
+// rendering so a fenced block tagged `quote` becomes a styled quote instead
+// of a code block.
 var chatMarkdown = goldmark.New(
 	goldmark.WithExtensions(extension.GFM),
 	goldmark.WithRendererOptions(
@@ -32,7 +33,7 @@ var chatMarkdown = goldmark.New(
 	),
 )
 
-// quoteFenceRenderer renders a ```quote fenced block as a styled quote
+// quoteFenceRenderer renders a fenced block tagged `quote` as a styled quote
 // (verbatim text in <pre class="chat-quote">) and lets every other fenced
 // block fall through to the standard <pre><code class="language-…"> output.
 // Verbatim, like a code block: the quoted text's own markdown and MSG_ refs

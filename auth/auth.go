@@ -2,8 +2,8 @@
 //
 // Identity is now a numeric user id from the gopher_uid cookie; the
 // display name is a mutable attribute resolved against the registry (see
-// views). Names are still validated/sanitized here because they become a
-// directory-free attribute and are embedded in HTML.
+// web.CurrentUser). Names are still validated/sanitized here because they
+// are a directory-free attribute and are embedded in HTML.
 package auth
 
 import (
@@ -18,7 +18,7 @@ const maxUserLen = 40
 // CurrentUID returns the numeric user id from the gopher_uid cookie, or
 // "" when there's no usable cookie. It's the raw identity claim; the
 // caller resolves it against the registry (and for members the signed
-// session cookie is authoritative — see views.CurrentUser).
+// session cookie is authoritative — see web.CurrentUser).
 func CurrentUID(r *http.Request) string {
 	c, err := r.Cookie("gopher_uid")
 	if err != nil || c.Value == "" {
@@ -39,11 +39,12 @@ func allowedNameChar(r rune) bool {
 	return unicode.IsLetter(r) || unicode.IsNumber(r) || r == ' ' || r == '\''
 }
 
-// SanitizeUser scrubs a name into a safe directory segment: keeps the
-// allowed characters, collapses whitespace runs, caps length. It is
-// lenient (strips rather than rejects) because it also runs on raw
-// cookie values and admin params; the login path uses ValidateUserName
-// for user-facing validation. Returns "" if nothing usable remains.
+// SanitizeUser scrubs a name into a clean attribute value: keeps the
+// allowed characters, collapses whitespace runs, caps length. Lenient
+// (strips rather than rejects) because it runs on a name handed through
+// from the reserved-name notice; the login path then re-checks it with
+// ValidateUserName for user-facing validation. Returns "" if nothing
+// usable remains.
 func SanitizeUser(name string) string {
 	var b strings.Builder
 	lastSpace := false
@@ -67,10 +68,9 @@ func SanitizeUser(name string) string {
 
 // ValidateUserName cleans and checks a login-supplied name. It trims,
 // collapses internal whitespace, and requires only letters, digits,
-// spaces, and apostrophes, with at least one letter or digit, and
-// rejects the reserved DefaultUser name. Returns the cleaned name with
-// an empty error message on success, or ("", message) describing the
-// fix to show the player.
+// spaces, and apostrophes, with at least one letter or digit. Returns
+// the cleaned name with an empty error message on success, or
+// ("", message) describing the fix to show the player.
 func ValidateUserName(raw string) (name, errMsg string) {
 	trimmed := strings.TrimSpace(raw)
 	if trimmed == "" {

@@ -1,5 +1,5 @@
 // Authenticated chat sessions. A member who proves their password gets a
-// signed cookie (gopher_auth = base64(name).issued.HMAC) — stateless, so
+// signed cookie (gopher_auth = base64(id).issued.HMAC) — stateless, so
 // it works across devices with no session store, and a member's identity
 // can't be forged by editing the plaintext gopher_uid cookie. The HMAC
 // secret is generated once and persisted at {chat}/_session_secret
@@ -55,9 +55,9 @@ func sessionSecret() []byte {
 	return sessionSecretVal
 }
 
-func sessionMAC(name, issued string) string {
+func sessionMAC(id, issued string) string {
 	mac := hmac.New(sha256.New, sessionSecret())
-	mac.Write([]byte(name + "\n" + issued))
+	mac.Write([]byte(id + "\n" + issued))
 	return base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
 }
 

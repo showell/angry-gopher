@@ -1,5 +1,5 @@
-// Angry Gopher — HTTP server for the LynRummy Elm client (full
-// game + puzzle surface) and the Claude-essay pointer page.
+// Angry Gopher — HTTP server for Lyn Rummy: the Elm client (full
+// game + puzzle surface), private chat, login, and admin.
 
 package main
 
@@ -55,7 +55,7 @@ func withLoginGate(next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
-		// views.CurrentUser resolves the identity (member session is
+		// web.CurrentUser resolves the identity (member session is
 		// authoritative; a guest uid is honored only if it's a real
 		// non-member user; a member uid without a session is a forge
 		// attempt and resolves to none). No identity → log in.
@@ -72,8 +72,8 @@ func loginExempt(path string) bool {
 	case "/login", "/login/full", "/logout", "/version":
 		return true
 	}
-	// /admin is no longer exempt: it goes through the gate and then
-	// requires the admin flag (see views.HandleAdmin).
+	// /admin is intentionally not exempt: it goes through the gate and
+	// then requires the admin flag (see admin.HandleAdmin).
 	return false
 }
 
@@ -144,4 +144,3 @@ func handleVersion(w http.ResponseWriter, r *http.Request) {
 
 // Set at build time via -ldflags "-X main.gitCommit=...".
 var gitCommit = "dev"
-var serverStartTime = time.Now()

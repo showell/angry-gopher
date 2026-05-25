@@ -1,4 +1,5 @@
-// Page registry. Mounts every HTML route the server serves.
+// Route registry for the page and chat handlers (login, admin, and
+// /version are wired separately in buildMux).
 package main
 
 import (
@@ -7,7 +8,7 @@ import (
 	"net/http"
 )
 
-// RegisterPages wires all page handlers into the mux.
+// RegisterPages wires the page and chat handlers into the mux.
 func RegisterPages(mux *http.ServeMux) {
 	mux.HandleFunc("/", HandleHome)
 	mux.HandleFunc("/game", lynrummy.HandleGame)
