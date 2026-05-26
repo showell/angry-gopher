@@ -479,10 +479,12 @@
      Phase 1 autocompletes against the EXACT tokens present in the conversation
      (type "apo" → "apoorva", and "aporva" too if that typo exists somewhere) —
      suggestions are real corpus words, so it's autocomplete without stemming.
-     Phase 2 (Enter) lists every message containing the chosen term as a raw-
-     markdown snippet with the term highlighted, newest first (you're usually
-     looking back); ↑↓ choose, Enter jumps there (closing the modal, pushing
-     the nav stack). The final match is always a literal substring, so URLs,
+     Phase 2 (Enter) lists every message containing the chosen term, RENDERED
+     (a clone of the feed's server HTML) with the term highlighted, newest first
+     (you're usually looking back); ↑↓ choose, Enter jumps there (closing the
+     modal, pushing the nav stack). Inside a rendered result, images/code pop the
+     same modals (stacked over search), external links open in a new tab, and
+     MSG_ refs are inert. The match is always a literal substring, so URLs,
      code, and punctuation are findable verbatim. No index: the token map is
      rebuilt on open (milliseconds) and the message scan is one linear pass. */
   var searchBtn=document.getElementById('chat-search-btn');
@@ -528,6 +530,22 @@
       pos=m+term.length;
     }
     if(pos<text.length) node.appendChild(document.createTextNode(text.slice(pos)));
+  }
+  /* Highlight `term` inside an already-rendered subtree, wrapping matches in
+     <mark> by walking TEXT NODES only — so links, images, and code markup
+     survive untouched. (highlightInto above builds from plain text; this is its
+     rendered-HTML sibling, used for phase-2 results.) */
+  function highlightRendered(root,term){
+    if(!term) return;
+    var walk=document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null, false), nodes=[], n;
+    while((n=walk.nextNode())) nodes.push(n);
+    for(var i=0;i<nodes.length;i++){
+      var node=nodes[i], text=node.nodeValue;
+      if(smartIndexOf(text,term,0)<0) continue;
+      var frag=document.createDocumentFragment();
+      highlightInto(frag, text, term);
+      node.parentNode.replaceChild(frag, node);
+    }
   }
   function appendSnippet(node,body,term){
     var idx=smartIndexOf(body,term,0), start=0, end=body.length;
@@ -597,7 +615,10 @@
       var row=document.createElement('div'); row.className='chat-sr-row'; row.setAttribute('data-i',k);
       var head=document.createElement('div'); head.className='chat-sr-rhead';
       head.textContent=(meta&&meta.firstChild?meta.firstChild.nodeValue:'').trim();
-      var body=document.createElement('div'); body.className='chat-sr-rbody'; highlightInto(body, el._body||'', term); /* full message once navigating */
+      var body=document.createElement('div'); body.className='chat-sr-rbody';
+      var src=el.querySelector('.chat-body'); /* reuse the feed's server-rendered HTML */
+      if(src){ var clone=src.cloneNode(true); highlightRendered(clone, term); body.appendChild(clone); }
+      else highlightInto(body, el._body||'', term); /* defensive: no rendered body */
       row.appendChild(head); row.appendChild(body);
       SR.list.appendChild(row); SR.items.push({el:el});
     }
@@ -620,9 +641,17 @@
     else if(e.key==='Enter'){ e.preventDefault(); if(SR.phase==='suggest') finalizeSearch(); else chooseResult(); }
   }
   function onSearchClick(e){
-    var row=e.target.closest && e.target.closest('.chat-sr-row');
-    if(row){ SR.sel=parseInt(row.getAttribute('data-i'),10); paintSel(); if(SR.phase==='suggest') finalizeSearch(); else chooseResult(); return; }
-    if(e.target===SR.dlg) closeSearchModal(); /* backdrop click */
+    if(e.target===SR.dlg){ closeSearchModal(); return; } /* backdrop click */
+    var row=e.target.closest && e.target.closest('.chat-sr-row'); if(!row) return;
+    SR.sel=parseInt(row.getAttribute('data-i'),10); paintSel();
+    if(SR.phase==='suggest'){ finalizeSearch(); return; }
+    /* results: a click inside the rendered body acts in place; the two
+       behaviors that differ from the feed live here and nowhere else. */
+    var hit=hitInBody(e.target);
+    if(hit.kind==='msgref'){ e.preventDefault(); return; } /* search: MSG_ refs are inert */
+    if(openHitMedia(hit)) return;                          /* image→zoom, pre→code (stacked) */
+    if(hit.kind==='link') return;                          /* external link → new tab */
+    chooseResult();                                        /* plain click → go to this message */
   }
   function refreshOpenSearch(){ /* a message streamed in while the modal is open */
     if(!SR) return; SR.map=buildTokenIndex();

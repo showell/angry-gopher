@@ -368,7 +368,7 @@ html, body { height:100%; }
 .chat-back:hover:enabled { background:#e3e3e3; }
 .chat-back:disabled { opacity:0.4; cursor:default; }
 /* Search modal: a two-phase palette — token autocomplete, then message
-   results (raw markdown snippets with the term highlighted). */
+   results (the term highlighted in each message rendered like the feed). */
 /* Pinned to a fixed top offset (≈ the Rendered/Transcript tabs row) and grows
    downward as results fill in — never vertically re-centering. */
 .chat-search-modal { position:fixed; top:56px; bottom:auto; left:0; right:0; margin:0 auto;
@@ -386,10 +386,13 @@ html, body { height:100%; }
 .chat-sr-tok { font-weight:bold; color:#23235a; display:flex; align-items:baseline; gap:8px; }
 .chat-sr-cnt { font-weight:normal; font-size:11px; color:#999; }
 .chat-sr-rhead { font-size:11px; color:#888; margin-bottom:2px; }
-.chat-sr-ctx, .chat-sr-rbody { font-family:ui-monospace,Menlo,Consolas,monospace; font-size:12px; color:#555;
-                               white-space:pre-wrap; overflow-wrap:anywhere; margin-top:3px; }
-.chat-sr-ctx { max-height:4.6em; overflow:hidden; } /* phase 1: limited context while typing */
-.chat-sr-rbody { color:#333; } /* phase 2: full message while navigating choices */
+.chat-sr-ctx { font-family:ui-monospace,Menlo,Consolas,monospace; font-size:12px; color:#555;
+               white-space:pre-wrap; overflow-wrap:anywhere; margin-top:3px;
+               max-height:4.6em; overflow:hidden; } /* phase 1: limited RAW context while typing */
+.chat-sr-rbody { margin-top:3px; color:#333; font-size:13px; overflow-wrap:anywhere; } /* phase 2: full RENDERED message */
+/* MSG_ refs are inert inside results (they'd jump the hidden feed, not the
+   modal), so drop the link affordance. */
+.chat-sr-rbody a.msg-ref { cursor:default; }
 .chat-search-modal mark { background:#ffe680; color:inherit; border-radius:2px; padding:0; }
 .chat-history { min-width:0; flex:1; min-height:0; overflow-y:auto;
                 border:1px solid #ddd; border-radius:8px; padding:12px; background:#fcfcf8; }
