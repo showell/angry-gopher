@@ -594,7 +594,10 @@
       var t=shown[i], info=SR.map[t];
       var row=document.createElement('div'); row.className='chat-sr-row'; row.setAttribute('data-i',i);
       var head=document.createElement('div'); head.className='chat-sr-tok';
-      highlightInto(head, t, q.toLowerCase());
+      /* Wrap the highlighted token in ONE child so the flex row's gap:8px
+         only sits between token-and-count, never between <mark> and the
+         rest of the token (which would print "pro" + " " + "bably"). */
+      var tok=document.createElement('span'); highlightInto(tok, t, q.toLowerCase()); head.appendChild(tok);
       var cnt=document.createElement('span'); cnt.className='chat-sr-cnt'; cnt.textContent=info.count+(info.count===1?' msg':' msgs');
       head.appendChild(cnt);
       var ctx=document.createElement('div'); ctx.className='chat-sr-ctx'; appendSnippet(ctx, info.sample._body||'', t);
