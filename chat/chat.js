@@ -370,6 +370,33 @@
     document.body.appendChild(dlg);
     dlg.showModal();
   }
+  /* Classify a click inside a rendered message body into a semantic target, so
+     every surface that renders a body (the feed, the search-results modal)
+     shares ONE notion of "what did you click" and only has to decide the few
+     behaviors that genuinely differ between them. */
+  function hitInBody(t){
+    if(t.tagName==='IMG') return {kind:'image', src:t.src};
+    var pre=t.closest&&t.closest('pre'); if(pre) return {kind:'pre', text:pre.textContent};
+    if(t.closest&&t.closest('a.msg-ref')) return {kind:'msgref', el:t.closest('a.msg-ref')};
+    if(t.closest&&t.closest('a')) return {kind:'link'}; /* external link: server-baked target=_blank, no JS */
+    return {kind:'plain'};
+  }
+  /* Image + code popups are identical on every surface: they're native
+     <dialog>s, so opened over the search modal they stack and closing returns
+     to it. Returns true if it handled the hit. */
+  function openHitMedia(hit){
+    if(hit.kind==='image'){ showImagePopup(hit.src); return true; }
+    if(hit.kind==='pre'){ showCodePopup(hit.text); return true; }
+    return false;
+  }
+  /* Feed-only: jump to a MSG_ ref's target and select it. The caller records
+     the source first so Back returns there. */
+  function navigateRef(ref){
+    var tgt=document.getElementById(ref.getAttribute('href').slice(1));
+    if(!tgt) return;
+    armScrollSuppress();
+    tgt.scrollIntoView({block:'center',behavior:'smooth'}); selectAndCommit(tgt,true);
+  }
   function scrollIndexToTop(idx){
     if(idx===null||idx===undefined) return null;
     var el=bubbles.querySelector('.chat-msg[data-i="'+idx+'"]');
@@ -403,18 +430,11 @@
     var t=e.target;
     var qb=t.closest&&t.closest('.msg-quote');
     if(qb){ var mm=qb.closest('.chat-msg'); if(mm) quoteReply(mm); return; }
-    var a=t.closest&&t.closest('a.msg-ref');
-    if(a){ e.preventDefault();
-      var src=a.closest('.chat-msg'); if(src) selectAndCommit(src,true); /* record where we jumped FROM, so Back returns here */
-      var tgt=document.getElementById(a.getAttribute('href').slice(1));
-      if(tgt){ armScrollSuppress();
-        tgt.scrollIntoView({block:'center',behavior:'smooth'}); selectAndCommit(tgt,true); }
-      return; }
-    var msg=t.closest&&t.closest('.chat-msg'); /* a plain click (incl. on an image / pre) selects the message */
+    var msg=t.closest&&t.closest('.chat-msg'); /* any click on a bubble selects it (incl. image / pre / MSG_ ref source) */
     if(msg) selectAndCommit(msg,true);
-    if(t&&t.tagName==='IMG'&&t.closest('.chat-body')) showImagePopup(t.src);
-    var pre=t.closest&&t.closest('pre');
-    if(pre&&t.closest('.chat-body')) showCodePopup(pre.textContent); /* any code/quote block → full-size view */
+    var hit=hitInBody(t);
+    if(hit.kind==='msgref'){ e.preventDefault(); navigateRef(hit.el); return; } /* feed: jump to the target */
+    openHitMedia(hit); /* image→zoom, pre→code; link/plain need nothing more */
   });
   /* --- keyboard navigation of the feed (cursor-aware) --- */
   function visibleMsgs(){
