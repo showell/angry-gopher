@@ -5,8 +5,9 @@
 # what already exists.
 #
 # Shared base gate both subsystems need: the whole binary compiles
-# (go build, which covers server/web + lynrummy + chat + admin) and the
-# docs have no dead links. This is the "diamond floor" — composed by
+# (go build, which covers server/web + lynrummy + chat + admin), the
+# docs have no dead links, and every CSS class in any <style> block is
+# still referenced. This is the "diamond floor" — composed by
 # ops/check_chat, ops/check_lynrummy, and ops/check. Mirrors the
 # server/web base that server/lynrummy and server/chat both build on.
 
@@ -21,3 +22,7 @@ echo "===== ops/test_go ====="
 echo
 echo "===== ops/test_docs ====="
 ./ops/test_docs
+
+echo
+echo "===== ops/test_css ====="
+./ops/test_css

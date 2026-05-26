@@ -1,0 +1,22 @@
+#!/bin/bash
+# CANONICAL DEV-LOOP SCRIPT — DO NOT REINVENT.
+# Before writing a new ops/* script or composing an ad-hoc shell
+# command for build / launch / test / regen, run `ops/list` to see
+# what already exists.
+#
+# Fast CSS-hygiene gate (~1s). Runs tools/check_css.py — flags class
+# selectors defined in any server/**/*.go <style> block that no Go/JS/
+# Elm/MD/HTML file outside that block references. Exits non-zero on any
+# unused class. Called by ops/check_common (so it runs in both subsystem
+# gates and the full pre-commit gate).
+
+set -e
+
+REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$REPO_DIR"
+
+echo "==> check_css"
+python3 tools/check_css.py
+
+echo
+echo "CSS gate passed."

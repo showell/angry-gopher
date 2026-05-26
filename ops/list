@@ -19,12 +19,15 @@ Available ops commands (run from repo root):
                          solver. SKIPS the chat lint.
 
   Leaves (composed by the gates above):
-  ops/check_common       Shared base = test_go + test_docs (diamond floor).
+  ops/check_common       Shared base = test_go + test_docs + test_css (diamond floor).
   ops/test_ts            TS solver/engine suite (~20s) — Lyn Rummy.
   ops/test_elm           Elm client suite (~5s) — Lyn Rummy.
   ops/test_chat          Chat client lint (~1s): chat.js + fetch_conversation.py.
   ops/test_go            go build ./... (~5s) — common (whole binary).
   ops/test_docs          doc_xref --all (~1s) — common.
+  ops/test_css           check_css (~1s) — common. Flag CSS classes defined
+                         in any server/**/*.go <style> block that no Go/JS/
+                         Elm/MD/HTML file outside the block references.
   ops/bench              Lyn Rummy perf benches (engine timing trip-wires).
                          Rewrites gold on pass; also run by check_full. Use
                          after engine changes / to re-confirm timing noise.
