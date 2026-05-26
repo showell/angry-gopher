@@ -73,21 +73,14 @@ th { background: #000080; color: white; padding: 6px 12px; text-align: left; }
 td { border-bottom: 1px solid #ccc; padding: 6px 12px; }
 tr:hover td { background: #f0f0ff; }
 .muted { color: #888; }
-.msg-content { padding: 4px 0; }
 textarea { width: 100%%; height: 60px; padding: 6px; box-sizing: border-box; margin: 8px 0; }
 button { background: #000080; color: white; border: none; padding: 8px 16px;
          font-size: 14px; cursor: pointer; border-radius: 4px; }
 button:hover { background: #0000a0; }
 .back { margin-bottom: 16px; display: inline-block; }
-.breadcrumb { margin-bottom: 12px; font-size: 13px; color: #888; }
-.breadcrumb a { color: #000080; }
-.breadcrumb span { margin: 0 4px; }
 .flash { background: #c6f6c6; color: #1a7a3a; padding: 8px 12px; border-radius: 4px;
          margin-bottom: 12px; animation: fadeout 3s forwards; }
 @keyframes fadeout { 0%% { opacity: 1; } 70%% { opacity: 1; } 100%% { opacity: 0; } }
-.new-msg { border-left: 3px solid violet; padding-left: 8px; }
-.compose-sticky { position: sticky; bottom: 0; background: white; padding: 8px 0;
-                   border-top: 1px solid #ccc; margin-top: 12px; }
 .cards { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 20px; }
 @media (max-width: 640px) { .cards { grid-template-columns: 1fr; } }
 .card { border: 1px solid #ccc; border-radius: 6px; padding: 20px; background: #fcfcf8; }
