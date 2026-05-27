@@ -59,13 +59,41 @@ func HandleChat(w http.ResponseWriter, r *http.Request) {
 	}
 	user := users.CurrentUser(r)
 	partner := strings.TrimSpace(r.URL.Query().Get("with")) // partner user id
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 
+	// Optimize for the common case: most members have exactly one other
+	// member to talk to (the only prod conversation today is Steve↔Apoorva).
+	// With one possible partner, the picker is pure friction — skip it.
 	if !validChatPartner(user.ID, partner) {
+		if only, ok := onlyOtherMember(user.ID); ok {
+			http.Redirect(w, r, "/chat?with="+url.QueryEscape(only), http.StatusSeeOther)
+			return
+		}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		renderChatPicker(w, user)
 		return
 	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	renderChatConversation(w, user, partner)
+}
+
+// onlyOtherMember returns the partner id when there is exactly one other
+// member you could talk to, plus ok=true. Otherwise (zero or two+), ok is
+// false and the caller falls back to the picker.
+func onlyOtherMember(uid string) (string, bool) {
+	var only string
+	for _, m := range users.ListMembers() {
+		if m.ID == uid {
+			continue
+		}
+		if only != "" {
+			return "", false // two+ others — picker is meaningful
+		}
+		only = m.ID
+	}
+	if only == "" {
+		return "", false
+	}
+	return only, true
 }
 
 // ChatJSPath is the embedded chat client bundle (committed, hand-written;
@@ -87,7 +115,7 @@ func validChatPartner(userID, partnerID string) bool {
 // renderChatPicker lists the members you can message (everyone with a
 // password), minus yourself — linked by id, shown by name.
 func renderChatPicker(w http.ResponseWriter, user users.User) {
-	chatPageHeader(w, "People", user, "people")
+	chatPageHeader(w, "Chat", user, "chat")
 	fmt.Fprint(w, `<p class="muted">Pick a member to message:</p><ul>`)
 	n := 0
 	for _, m := range users.ListMembers() {
