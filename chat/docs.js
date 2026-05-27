@@ -27,10 +27,20 @@
     status.textContent=text||'';
   }
 
+  /* Posts go as application/x-www-form-urlencoded (matching chat.js).
+     FormData would send multipart, which Go's ParseForm doesn't touch —
+     FormValue then tries ParseMultipartForm, but our MaxBytesReader wrap
+     makes that fail silently, so the server would see empty fields. */
+  var FORM_HDR={'Content-Type':'application/x-www-form-urlencoded'};
+  function encodeForm(pairs){
+    var parts=[];
+    for(var k in pairs) parts.push(encodeURIComponent(k)+'='+encodeURIComponent(pairs[k]));
+    return parts.join('&');
+  }
+
   function doRender(){
-    var body=ta.value;
-    var fd=new FormData(); fd.append('body', body);
-    fetch('/chat/docs/render', {method:'POST', body:fd})
+    fetch('/chat/docs/render', {method:'POST', headers:FORM_HDR,
+                                body:encodeForm({body:ta.value})})
       .then(function(r){ return r.ok?r.text():Promise.reject(r.status); })
       .then(function(html){ preview.innerHTML=html; })
       .catch(function(){ /* render failures are silent — keep the last preview */ });
@@ -38,10 +48,9 @@
 
   function doSave(){
     pendingSave=false;
-    var body=ta.value;
     setStatus('saving', 'Saving…');
-    var fd=new FormData(); fd.append('slug', slug); fd.append('body', body);
-    fetch('/chat/docs/save', {method:'POST', body:fd})
+    fetch('/chat/docs/save', {method:'POST', headers:FORM_HDR,
+                              body:encodeForm({slug:slug, body:ta.value})})
       .then(function(r){
         if(r.status===204) setStatus('saved', 'Saved ✓');
         else setStatus('error', 'Save failed ('+r.status+')');
@@ -60,10 +69,12 @@
 
   /* Synchronous flush on unload: a pending save would otherwise be lost
      if the tab closes mid-debounce. sendBeacon is exactly this contract —
-     a queued POST the browser ships during teardown. */
+     a queued POST the browser ships during teardown. Wrap the body in a
+     Blob with form-urlencoded content-type to match the regular save. */
   window.addEventListener('beforeunload', function(){
     if(!pendingSave) return;
-    var fd=new FormData(); fd.append('slug', slug); fd.append('body', ta.value);
-    try { navigator.sendBeacon('/chat/docs/save', fd); } catch(e){}
+    var blob=new Blob([encodeForm({slug:slug, body:ta.value})],
+                      {type:'application/x-www-form-urlencoded'});
+    try { navigator.sendBeacon('/chat/docs/save', blob); } catch(e){}
   });
 })();
