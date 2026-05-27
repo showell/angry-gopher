@@ -130,6 +130,9 @@
     meta.appendChild(document.createTextNode(m.from+' · '+m.time+' '));
     var quote=document.createElement('button'); quote.type='button'; quote.className='msg-quote';
     quote.title='Quote this message in a reply (or press r)'; quote.textContent='quote-reply'; meta.appendChild(quote);
+    meta.appendChild(document.createTextNode(' '));
+    var refer=document.createElement('button'); refer.type='button'; refer.className='msg-refer';
+    refer.title='Drop a "See MSG_…" reference into the compose box without quoting'; refer.textContent='refer'; meta.appendChild(refer);
     var body=document.createElement('div'); body.className='chat-body';
     body.innerHTML=m.html; /* sanitized server-side */
     div.appendChild(meta); div.appendChild(body);
@@ -160,6 +163,16 @@
      block and focus it, ready to type the reply underneath. The MSG_ header
      line linkifies back to the original; the ~~~ quote fence keeps the quoted
      text verbatim (its own MSG_ refs aren't re-linked, being inside a fence). */
+  /* Drop a bare "See MSG_<hash>" reference into the compose box — the
+     lightweight cousin of quoteReply when you just want to point at a
+     message without dragging its body into the reply. */
+  function referReply(el){
+    if(!el||pendingCid) return;
+    selectAndCommit(el,true); /* record the referenced message on the nav stack */
+    var hash=el.getAttribute('data-hash');
+    openCompose();
+    insertAtCursor('See MSG_'+hash+' ');
+  }
   function quoteReply(el){
     if(!el||pendingCid) return; /* don't disturb a send awaiting its ack */
     selectAndCommit(el,true); /* record the quoted message on the nav stack */
@@ -448,6 +461,8 @@
     var t=e.target;
     var qb=t.closest&&t.closest('.msg-quote');
     if(qb){ var mm=qb.closest('.chat-msg'); if(mm) quoteReply(mm); return; }
+    var rb=t.closest&&t.closest('.msg-refer');
+    if(rb){ var rmm=rb.closest('.chat-msg'); if(rmm) referReply(rmm); return; }
     var msg=t.closest&&t.closest('.chat-msg'); /* any click on a bubble selects it (incl. image / pre / MSG_ ref source) */
     if(msg) selectAndCommit(msg,true);
     var hit=hitInBody(t);

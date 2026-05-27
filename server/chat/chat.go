@@ -438,9 +438,11 @@ html, body { height:100%; }
    instead of overflowing it — alignment-independent. */
 .chat-body { overflow-wrap:anywhere; }
 .chat-meta { font-size:11px; color:#888; margin-bottom:3px; }
-.chat-meta .msg-quote { font-size:10px; color:#888; background:none; border:none;
+.chat-meta .msg-quote,
+.chat-meta .msg-refer { font-size:10px; color:#888; background:none; border:none;
                         padding:0 2px; cursor:pointer; text-decoration:underline; }
-.chat-meta .msg-quote:hover { color:#000080; }
+.chat-meta .msg-quote:hover,
+.chat-meta .msg-refer:hover { color:#000080; }
 .chat-body a.msg-ref { font-family:ui-monospace,Menlo,Consolas,monospace; font-size:0.9em;
                        background:#eaeaff; color:#000080; padding:0 4px; border-radius:3px;
                        text-decoration:none; }
