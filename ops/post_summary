@@ -14,6 +14,12 @@
 # a blank line starts the next message. Posting is irreversible (the feed is
 # append-only), so review the file first. Exercising this keeps the WRITE
 # side of the API + key from bit-rotting, same as fetch keeps the read side.
+#
+# Enforced summary requirements (sloppy prompts otherwise let them drift):
+#   - The first posted message is prepended with "Claude summary:" so the
+#     reader sees what they're getting before the body.
+#   - The summary must contain at least 3 MSG_<hash> references, so the
+#     recap is anchored to actual messages instead of hand-wavy paraphrase.
 set -e
 
 source "$(dirname "$0")/_paths.sh"
@@ -26,10 +32,22 @@ KEY="$(cat "$KEY_FILE")"
 URL="https://lynrummy.com"
 PARTNER=2   # Apoorva — the only prod conversation today
 
+# Anchor requirement: a summary without MSG_ links is paraphrase, not recap.
+MSG_REFS=$(grep -oE 'MSG_[A-F0-9]+' "$FILE" | wc -l)
+MIN_REFS=3
+if [ "$MSG_REFS" -lt "$MIN_REFS" ]; then
+  echo "refusing to post: $FILE has $MSG_REFS MSG_ reference(s), need at least $MIN_REFS"
+  echo "  (anchor the summary to specific messages — see ops/fetch_prod_transcript)"
+  exit 1
+fi
+
 n=0
 while IFS= read -r -d '' para; do
   [ -z "${para//[$'\n\t ']/}" ] && continue            # skip an empty trailing record
   n=$((n + 1))
+  if [ "$n" = "1" ]; then
+    para=$'Claude summary:\n\n'"$para"
+  fi
   code=$(curl -sS -o /dev/null -w '%{http_code}' -X POST "$URL/chat/send" \
     -H "Authorization: Bearer $KEY" -H "X-Chat-Async: 1" \
     --data-urlencode "with=$PARTNER" --data-urlencode "body=$para")
