@@ -451,11 +451,12 @@
      resolves it normally). */
   function revealInFeed(el){
     var hr=history.getBoundingClientRect(), r=el.getBoundingClientRect();
-    var pad=48; /* selected-border + ~one line of the next bubble */
-    if(r.top<hr.top) history.scrollTop+=r.top-hr.top;
-    else if(r.bottom>hr.bottom-pad){
-      var delta=r.bottom-(hr.bottom-pad);
-      if(r.top-delta<hr.top) delta=r.top-hr.top; /* taller than window: pin top */
+    var padBot=48; /* selected-border + a peek of the next bubble */
+    var padTop=6;  /* just enough breathing room to see the top selected-border */
+    if(r.top<hr.top+padTop) history.scrollTop+=r.top-hr.top-padTop;
+    else if(r.bottom>hr.bottom-padBot){
+      var delta=r.bottom-(hr.bottom-padBot);
+      if(r.top-delta<hr.top+padTop) delta=r.top-hr.top-padTop; /* taller than window: pin top with breathing room */
       history.scrollTop+=delta;
     }
   }
