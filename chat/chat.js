@@ -443,11 +443,21 @@
     return out;
   }
   /* Scroll the feed (only the feed, never the page) just enough to bring el
-     fully into view — a "nearest" reveal. */
+     into view. When scrolling down, leave a small pad below so the selected-
+     border isn't clipped at the viewport edge and a sliver of the next
+     message peeks through — easier to tell you aren't at the bottom. If the
+     message is taller than viewport-minus-pad, pin its top instead so its
+     top stays visible (the bottom can overflow; arrow-down again from there
+     resolves it normally). */
   function revealInFeed(el){
     var hr=history.getBoundingClientRect(), r=el.getBoundingClientRect();
+    var pad=48; /* selected-border + ~one line of the next bubble */
     if(r.top<hr.top) history.scrollTop+=r.top-hr.top;
-    else if(r.bottom>hr.bottom) history.scrollTop+=r.bottom-hr.bottom;
+    else if(r.bottom>hr.bottom-pad){
+      var delta=r.bottom-(hr.bottom-pad);
+      if(r.top-delta<hr.top) delta=r.top-hr.top; /* taller than window: pin top */
+      history.scrollTop+=delta;
+    }
   }
   /* Move the cursor by delta messages (clamped), revealing it. Scroll-driven
      reselection is briefly suppressed so our explicit pick isn't overridden. */
