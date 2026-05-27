@@ -6,14 +6,15 @@ import "embed"
 // self-contained — no working-dir or relative-path dependency at
 // runtime, and the "missing elm.js" failure mode is gone. The three
 // .js bundles are produced by ops/build_elm and MUST exist before
-// `go build`; engine_glue.js, chat.js, and the puzzle catalogs are
-// committed.
+// `go build`; engine_glue.js, chat.js, docs.js, and the puzzle catalogs
+// are committed.
 //
 //go:embed games/lynrummy/elm/elm.js
 //go:embed games/lynrummy/elm/puzzle.js
 //go:embed games/lynrummy/elm/engine.js
 //go:embed games/lynrummy/elm/engine_glue.js
 //go:embed chat/chat.js
+//go:embed chat/docs.js
 //go:embed games/lynrummy/conformance/curated_1line_puzzles.dsl
 //go:embed games/lynrummy/conformance/curated_2line_puzzles.dsl
 //go:embed games/lynrummy/conformance/curated_3line_puzzles.dsl
