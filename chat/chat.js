@@ -332,16 +332,29 @@
   });
   es.onmessage=function(e){
     var m=JSON.parse(e.data);
-    addMessage(m);
     if(inBacklog){
+      addMessage(m);
       backlogSeen++;
       if(backlogSize!==null && backlogSeen>=backlogSize) finishBacklog();
       return; /* skip per-message scroll/select/refresh during backlog */
     }
-    /* Live path: an individual message arriving post-backlog. */
+    /* Live path: capture caughtUp BEFORE the append (the just-arrived
+       bubble is by definition off-screen until we scroll to it, so a
+       post-append check would always read false). */
     var stick=caughtUp();
-    if(stick) toBottom();
-    syncSelectionToScroll();
+    addMessage(m);
+    if(stick){
+      toBottom();
+      /* Same as finishBacklog's anchor-to-bottom path: when the feed
+         anchors to the bottom, the cursor should land on the newest
+         message — not on the topmost-fully-in-view that syncSelection-
+         ToScroll would pick. Debounced commit so a burst of incoming
+         messages doesn't flood the back/forward stack. */
+      var msgs=visibleMsgs();
+      if(msgs.length) selectAndCommit(msgs[msgs.length-1], false);
+    } else {
+      syncSelectionToScroll();
+    }
     if(pendingCid&&m.cid===pendingCid) ackSend(); /* our message round-tripped: saved + echoed */
     if(searchModalOpen()) refreshOpenSearch(); /* keep an open search current as messages stream in */
   };
