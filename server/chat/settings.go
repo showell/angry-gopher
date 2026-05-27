@@ -19,7 +19,7 @@ import (
 // requireMember returns the authenticated member, or the zero User after
 // redirecting a non-member to the full login (carrying `next`).
 func requireMember(w http.ResponseWriter, r *http.Request, next string) users.User {
-	if !users.IsMember(r) {
+	if !users.IsAuthorized(r) {
 		http.Redirect(w, r, "/login/full?next="+url.QueryEscape(next), http.StatusSeeOther)
 		return users.User{}
 	}

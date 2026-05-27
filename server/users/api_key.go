@@ -1,8 +1,11 @@
-// API keys: a member can hold one bot key for programmatic access to their
-// own data (the dogfooded chat API). The key acts as the member — it can
-// read AND write on their behalf (post messages, upload), just like their
-// password — but it is NOT an admin credential (CurrentUser strips Admin),
-// so a key can never reach the /admin panel. Treat it like a password.
+// API keys: any authorized principal (a password member OR an agent) can
+// hold one bot key for programmatic access to their own data (the
+// dogfooded chat API). The key acts as the principal — it can read AND
+// write on their behalf (post messages, upload), just like a password —
+// but it is NOT an admin credential (CurrentUser strips Admin), so a key
+// can never reach the /admin panel. For agents (no password), the API
+// key is the only credential and must be treated as such. Treat it like
+// a password.
 // The key is "<id>-<secret>" (secret = 32 hex from crypto/rand). We store
 // it in plaintext so the member can view it again (Settings → Show key);
 // this adds ~no marginal risk — anyone who could read the key file already
@@ -74,7 +77,7 @@ func ClearUserAPIKey(id string) error {
 // as a bare sha256 hash compare against sha256(presented). Constant-time.
 func CheckAPIKey(presented string) (string, bool) {
 	id, _, found := strings.Cut(presented, "-")
-	if !found || id == "" || !UserIsMember(id) {
+	if !found || id == "" || !UserIsAuthorized(id) {
 		return "", false
 	}
 	b, err := os.ReadFile(apiKeyFile(id))

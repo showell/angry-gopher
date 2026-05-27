@@ -126,11 +126,11 @@ button.key.revoke:hover { background: #8a0019; }
 	fmt.Fprint(w, `</table></body></html>`)
 }
 
-// renderMembersTable lists the official users (those with a password) and
-// how long since each was last active, most-recent first. Members who have
-// never registered any activity sort to the bottom.
+// renderMembersTable lists the official principals (password members
+// plus agents) and how long since each was last active, most-recent
+// first. Principals with no recorded activity sort to the bottom.
 func renderMembersTable(w http.ResponseWriter) {
-	members := users.ListMembers()
+	members := users.ListAuthorized()
 
 	type memberRow struct {
 		user   users.User
@@ -160,6 +160,9 @@ func renderMembersTable(w http.ResponseWriter) {
 		name := html.EscapeString(row.user.Name)
 		if row.user.Admin {
 			name += ` <span class="muted">(admin)</span>`
+		}
+		if row.user.Agent {
+			name += ` <span class="muted">(agent)</span>`
 		}
 		since := "never"
 		if row.ever {
@@ -214,7 +217,7 @@ func apiKeyCell(id string) string {
 // recovered afterward.
 func handleAdminAPIKey(w http.ResponseWriter, r *http.Request) {
 	id := strings.TrimSpace(r.FormValue("user"))
-	if r.Method != http.MethodPost || id == "" || !users.UserExists(id) || !users.UserIsMember(id) {
+	if r.Method != http.MethodPost || id == "" || !users.UserExists(id) || !users.UserIsAuthorized(id) {
 		http.Redirect(w, r, "/admin", http.StatusSeeOther)
 		return
 	}

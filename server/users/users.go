@@ -43,11 +43,14 @@ var UsersRoot = "games/lynrummy/users-data"
 func SetUsersRoot(root string) { UsersRoot = root }
 
 // User is a resolved identity. ID is the storage key; the rest are
-// attributes for display/authorization.
+// attributes for display/authorization. Member means "human with a
+// password"; Agent means "bot principal authenticated by API key only"
+// — exactly one is true for any authorized user.
 type User struct {
 	ID     string
 	Name   string
 	Member bool
+	Agent  bool
 	Admin  bool
 }
 
@@ -201,7 +204,10 @@ func LoadUser(id string) User {
 	if !UserExists(id) {
 		return User{}
 	}
-	return User{ID: id, Name: GetUserName(id), Member: UserIsMember(id), Admin: UserIsAdmin(id)}
+	return User{
+		ID: id, Name: GetUserName(id),
+		Member: UserIsMember(id), Agent: IsAgent(id), Admin: UserIsAdmin(id),
+	}
 }
 
 // ListUserIDs returns all user ids, sorted numerically.

@@ -49,7 +49,7 @@ func HandleChat(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	if !users.IsMember(r) {
+	if !users.IsAuthorized(r) {
 		next := "/chat"
 		if r.URL.RawQuery != "" {
 			next += "?" + r.URL.RawQuery
@@ -64,7 +64,7 @@ func HandleChat(w http.ResponseWriter, r *http.Request) {
 	// member to talk to (the only prod conversation today is Steve↔Apoorva).
 	// With one possible partner, the picker is pure friction — skip it.
 	if !validChatPartner(user.ID, partner) {
-		if only, ok := onlyOtherMember(user.ID); ok {
+		if only, ok := onlyOtherPartner(user.ID); ok {
 			http.Redirect(w, r, "/chat?with="+url.QueryEscape(only), http.StatusSeeOther)
 			return
 		}
@@ -76,12 +76,13 @@ func HandleChat(w http.ResponseWriter, r *http.Request) {
 	renderChatConversation(w, user, partner)
 }
 
-// onlyOtherMember returns the partner id when there is exactly one other
-// member you could talk to, plus ok=true. Otherwise (zero or two+), ok is
-// false and the caller falls back to the picker.
-func onlyOtherMember(uid string) (string, bool) {
+// onlyOtherPartner returns the partner id when there is exactly one
+// other authorized principal (member or agent) you could talk to, plus
+// ok=true. Otherwise (zero or two+), ok is false and the caller falls
+// back to the picker.
+func onlyOtherPartner(uid string) (string, bool) {
 	var only string
-	for _, m := range users.ListMembers() {
+	for _, m := range users.ListAuthorized() {
 		if m.ID == uid {
 			continue
 		}
@@ -106,19 +107,19 @@ func HandleChatJS(w http.ResponseWriter, r *http.Request) {
 }
 
 // validChatPartner reports whether partner id is a usable conversation
-// partner for user id: another member (chat is members-only), not
-// yourself or empty.
+// partner for user id: another authorized principal (member or agent),
+// not yourself or empty.
 func validChatPartner(userID, partnerID string) bool {
-	return partnerID != "" && partnerID != userID && users.UserIsMember(partnerID)
+	return partnerID != "" && partnerID != userID && users.UserIsAuthorized(partnerID)
 }
 
-// renderChatPicker lists the members you can message (everyone with a
-// password), minus yourself — linked by id, shown by name.
+// renderChatPicker lists the principals you can message (members + the
+// Claude agent), minus yourself — linked by id, shown by name.
 func renderChatPicker(w http.ResponseWriter, user users.User) {
 	chatPageHeader(w, "Chat", user, "chat")
-	fmt.Fprint(w, `<p class="muted">Pick a member to message:</p><ul>`)
+	fmt.Fprint(w, `<p class="muted">Pick someone to message:</p><ul>`)
 	n := 0
-	for _, m := range users.ListMembers() {
+	for _, m := range users.ListAuthorized() {
 		if m.ID == user.ID {
 			continue
 		}
@@ -202,7 +203,7 @@ func HandleChatSend(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	if !users.IsMember(r) {
+	if !users.IsAuthorized(r) {
 		http.Error(w, "chat requires a member account", http.StatusForbidden)
 		return
 	}
@@ -258,7 +259,7 @@ func chatSendDone(w http.ResponseWriter, r *http.Request, partner string, async 
 // Last-Event-ID on reconnect) and then streams live messages until the
 // client disconnects.
 func HandleChatStream(w http.ResponseWriter, r *http.Request) {
-	if !users.IsMember(r) {
+	if !users.IsAuthorized(r) {
 		http.Error(w, "chat requires a member account", http.StatusForbidden)
 		return
 	}

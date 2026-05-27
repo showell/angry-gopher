@@ -80,7 +80,7 @@ func HandleChatUpload(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	if !users.IsMember(r) {
+	if !users.IsAuthorized(r) {
 		http.Error(w, "chat requires a member account", http.StatusForbidden)
 		return
 	}

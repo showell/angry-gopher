@@ -206,7 +206,7 @@ func HandleDocsRender(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	if !users.IsMember(r) {
+	if !users.IsAuthorized(r) {
 		http.Error(w, "members only", http.StatusForbidden)
 		return
 	}

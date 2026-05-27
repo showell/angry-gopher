@@ -101,9 +101,10 @@ func SessionUser(r *http.Request) (string, bool) {
 	return id, true
 }
 
-// IsMember reports whether the request is an authenticated member — by a
-// session cookie (browser) or a valid API key (bot).
-func IsMember(r *http.Request) bool {
+// IsAuthorized reports whether the request acts as a real principal —
+// either a password member via a session cookie (browser) or any
+// authorized principal (member or agent) via a valid API key (bot).
+func IsAuthorized(r *http.Request) bool {
 	if _, ok := SessionUser(r); ok {
 		return true
 	}
