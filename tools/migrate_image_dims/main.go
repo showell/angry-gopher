@@ -9,6 +9,14 @@
 // this tool retrofits the same to existing messages so the whole feed
 // renders without layout shift.
 //
+// Legacy-key healing: an older identity migration (numeric user ids,
+// 2026-05-23) renamed the on-disk conv dirs (e.g. apoorva_Steve → 1_2)
+// but did not rewrite URLs in prior messages, so older image refs are
+// now 404-ing in the live UI. When the URL's stated key dir is missing
+// but the bare filename exists under another conv dir on disk, we
+// rewrite the URL to the canonical key in the same pass — the upload
+// filename is a 32-hex random token, so a cross-dir match is unique.
+//
 // One-shot, idempotent: a message already in HTML form is left alone.
 // Safe to re-run.
 //
@@ -61,7 +69,13 @@ func main() {
 		os.Exit(1)
 	}
 
-	totalConvs, totalRewrites, totalSkipped, totalErrors := 0, 0, 0, 0
+	// Index every upload file across all conv dirs once, so the legacy-key
+	// fallback (file lookup by bare name) is O(1) per ref instead of
+	// O(dirs). Names are 32-hex random tokens — collisions across dirs
+	// would be a real cryptographic event, not a bug to handle.
+	uploadsByName := indexUploads(root)
+
+	totalConvs, totalRewrites, totalRehealed, totalSkipped, totalErrors := 0, 0, 0, 0, 0
 	for _, d := range convDirs {
 		if !d.IsDir() {
 			continue
@@ -77,92 +91,147 @@ func main() {
 			continue
 		}
 		totalConvs++
-		rewrites, skipped, errs := migrateFile(path, root, d.Name())
+		// The conv-dir name IS the canonical key — that's where we rewrite
+		// legacy URLs to point (the file already lives under it on disk).
+		canonicalKey := d.Name()
+		rewrites, rehealed, skipped, errs := migrateFile(path, root, canonicalKey, uploadsByName)
 		totalRewrites += rewrites
+		totalRehealed += rehealed
 		totalSkipped += skipped
 		totalErrors += errs
-		if rewrites > 0 || errs > 0 {
-			fmt.Printf("  %s: rewrote %d, skipped %d, errors %d\n",
-				path, rewrites, skipped, errs)
+		if rewrites > 0 || rehealed > 0 || errs > 0 {
+			fmt.Printf("  %s: rewrote %d (incl. %d URL-key-rehealed), skipped %d, errors %d\n",
+				path, rewrites, rehealed, skipped, errs)
 		}
 	}
-	fmt.Printf("done: %d conversation(s), %d rewrite(s), %d already-HTML, %d error(s)\n",
-		totalConvs, totalRewrites, totalSkipped, totalErrors)
+	fmt.Printf("done: %d conversation(s), %d rewrite(s) (%d URL-key-rehealed), %d already-HTML, %d error(s)\n",
+		totalConvs, totalRewrites, totalRehealed, totalSkipped, totalErrors)
 	if totalErrors > 0 {
 		os.Exit(2)
 	}
 }
 
+// indexUploads scans every <root>/<conv>/uploads/<file> and returns a
+// map from bare filename to the conv key it lives under. Used to heal
+// legacy URLs whose stated key dir no longer exists on disk.
+func indexUploads(root string) map[string]string {
+	out := map[string]string{}
+	dirs, err := os.ReadDir(root)
+	if err != nil {
+		return out
+	}
+	for _, d := range dirs {
+		if !d.IsDir() || d.Name() == "users" {
+			continue
+		}
+		ud := filepath.Join(root, d.Name(), "uploads")
+		files, err := os.ReadDir(ud)
+		if err != nil {
+			continue
+		}
+		for _, f := range files {
+			if f.IsDir() {
+				continue
+			}
+			out[f.Name()] = d.Name()
+		}
+	}
+	return out
+}
+
 // migrateFile rewrites one messages.md in place. Returns (rewrites,
-// alreadyHTMLcount, errors). "Errors" are per-image-ref decode failures —
+// rehealed, alreadyHTMLcount, errors). "Rehealed" is the subset of
+// rewrites whose URL key was changed because the original key dir was
+// missing (legacy form). "Errors" are per-image-ref decode failures —
 // they're logged but don't abort: we still write the file with the
 // other rewrites applied. Decode failures leave the original markdown
 // untouched, so a re-run will retry.
-func migrateFile(path, root, convDir string) (int, int, int) {
+func migrateFile(path, root, canonicalKey string, uploadsByName map[string]string) (int, int, int, int) {
 	src, err := os.ReadFile(path)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "    read %s: %v\n", path, err)
-		return 0, 0, 1
+		return 0, 0, 0, 1
 	}
-	rewrites, errs := 0, 0
+	rewrites, rehealed, errs := 0, 0, 0
 	out := markdownImageRe.ReplaceAllFunc(src, func(match []byte) []byte {
 		m := markdownImageRe.FindSubmatch(match)
 		alt := string(m[1])
 		ref := string(m[2]) // /chat/uploads/<key>/<file>
-		filePath, ok := resolveUploadPath(root, ref)
+		urlKey, fileName, ok := splitUploadRef(ref)
 		if !ok {
 			errs++
-			fmt.Fprintf(os.Stderr, "    %s: unresolvable upload ref %q (left as markdown)\n", path, ref)
+			fmt.Fprintf(os.Stderr, "    %s: unrecognized upload ref %q (left as markdown)\n", path, ref)
 			return match
 		}
-		w, h, derr := decodeImageDims(filePath)
+		// Try the URL's stated key first. If the file isn't there but it
+		// IS somewhere on disk, heal the URL to the canonical key for THIS
+		// conv (that's where messages.md lives, so the file should live
+		// under the same conv key).
+		diskPath := filepath.Join(root, urlKey, "uploads", fileName)
+		healedRef := ""
+		if _, err := os.Stat(diskPath); err != nil {
+			foundKey, ok := uploadsByName[fileName]
+			if !ok {
+				errs++
+				fmt.Fprintf(os.Stderr, "    %s: file %q not found anywhere (left as markdown)\n", path, fileName)
+				return match
+			}
+			diskPath = filepath.Join(root, foundKey, "uploads", fileName)
+			healedRef = "/chat/uploads/" + canonicalKey + "/" + fileName
+		}
+		w, h, derr := decodeImageDims(diskPath)
 		if derr != nil {
 			errs++
-			fmt.Fprintf(os.Stderr, "    %s: decode %s: %v (left as markdown)\n", path, filePath, derr)
+			fmt.Fprintf(os.Stderr, "    %s: decode %s: %v (left as markdown)\n", path, diskPath, derr)
 			return match
 		}
 		rewrites++
-		return []byte(buildHTMLImg(ref, alt, w, h))
+		emitRef := ref
+		if healedRef != "" {
+			emitRef = healedRef
+			rehealed++
+		}
+		return []byte(buildHTMLImg(emitRef, alt, w, h))
 	})
 	if rewrites == 0 && errs == 0 {
 		// Nothing to do; don't even rewrite the file (preserves mtime).
 		alreadyHTML := bytes.Count(src, []byte(`<img src="/chat/uploads/`))
-		return 0, alreadyHTML, 0
+		return 0, 0, alreadyHTML, 0
 	}
 	// Atomic-ish write: write to temp + rename so a crash doesn't leave a
 	// half-rewritten file. Same dir so rename is atomic on the same fs.
 	tmp := path + ".migrate-tmp"
 	if err := os.WriteFile(tmp, out, 0o644); err != nil {
 		fmt.Fprintf(os.Stderr, "    write %s: %v\n", tmp, err)
-		return rewrites, 0, errs + 1
+		return rewrites, rehealed, 0, errs + 1
 	}
 	if err := os.Rename(tmp, path); err != nil {
 		fmt.Fprintf(os.Stderr, "    rename %s: %v\n", tmp, err)
 		_ = os.Remove(tmp)
-		return rewrites, 0, errs + 1
+		return rewrites, rehealed, 0, errs + 1
 	}
-	return rewrites, 0, errs
+	return rewrites, rehealed, 0, errs
 }
 
-// resolveUploadPath maps "/chat/uploads/<key>/<file>" to the on-disk
-// "<root>/<key>/uploads/<file>". The key in the URL is path-escaped;
-// the on-disk dir name is the unescaped form (matches chatPairKey).
-func resolveUploadPath(root, ref string) (string, bool) {
+// splitUploadRef parses "/chat/uploads/<key>/<file>" into (key, file).
+// The key in the URL is path-escaped; we return the unescaped form so it
+// matches the on-disk dir name (chatPairKey output).
+func splitUploadRef(ref string) (string, string, bool) {
 	const prefix = "/chat/uploads/"
 	if !strings.HasPrefix(ref, prefix) {
-		return "", false
+		return "", "", false
 	}
 	rest := strings.TrimPrefix(ref, prefix)
 	slash := strings.IndexByte(rest, '/')
 	if slash < 0 {
-		return "", false
+		return "", "", false
 	}
 	keyEscaped, name := rest[:slash], rest[slash+1:]
 	key, err := url.PathUnescape(keyEscaped)
 	if err != nil {
-		return "", false
+		return "", "", false
 	}
-	return filepath.Join(root, key, "uploads", name), true
+	return key, name, true
 }
 
 func decodeImageDims(path string) (int, int, error) {
