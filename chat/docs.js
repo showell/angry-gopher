@@ -1,12 +1,10 @@
 /* docs.js — autosave + live-render for the /chat/docs editor.
  *
- * Two independently-debounced jobs share the textarea:
- *   - render (~250ms): POST body → /chat/docs/render → swap preview HTML.
- *     Short debounce so the right pane keeps pace with typing.
- *   - save   (~800ms): POST slug+body → /chat/docs/save → 204.
- *     Longer debounce because hitting disk on every keystroke is wasteful;
- *     800ms is barely perceptible and survives short pauses for word
- *     choice.
+ * Two independently-debounced jobs share the textarea, each at 1200ms.
+ * Render and save fire at the same cadence — there's no benefit to making
+ * the preview "feel live" if it costs a request per word; a single
+ * natural pause flushes both. Conservative enough to ride out short
+ * mid-word pauses without burning network on bursts.
  *
  * On unload, we synchronously fire any pending save so closing the tab
  * mid-keystroke doesn't lose the last edit.
@@ -62,9 +60,9 @@
     pendingSave=true;
     setStatus('saving', 'Editing…');
     if(renderTimer) clearTimeout(renderTimer);
-    renderTimer=setTimeout(doRender, 250);
+    renderTimer=setTimeout(doRender, 1200);
     if(saveTimer) clearTimeout(saveTimer);
-    saveTimer=setTimeout(doSave, 800);
+    saveTimer=setTimeout(doSave, 1200);
   });
 
   /* Synchronous flush on unload: a pending save would otherwise be lost
@@ -86,7 +84,7 @@
   var dlg=document.getElementById('docs-posted-dialog');
   var dlgOk=document.getElementById('docs-posted-ok');
   if(postBtn && dlg && dlgOk){
-    var partnerAfter=null;
+    var partnerAfter=null, hashAfter=null;
     function flushPendingSave(){
       if(!pendingSave) return Promise.resolve();
       if(saveTimer){ clearTimeout(saveTimer); saveTimer=null; }
@@ -100,9 +98,9 @@
       flushPendingSave()
         .then(function(){ return fetch('/chat/docs/post', {method:'POST', headers:FORM_HDR,
                                                            body:encodeForm({slug:slug})}); })
-        .then(function(r){ return r.ok?r.text():Promise.reject(r.status); })
-        .then(function(partner){
-          partnerAfter=partner;
+        .then(function(r){ return r.ok?r.json():Promise.reject(r.status); })
+        .then(function(j){
+          partnerAfter=j.partner; hashAfter=j.hash;
           setStatus('saved', 'Posted ✓');
           dlg.showModal();
           dlgOk.focus(); /* Enter dismisses; click also works */
@@ -114,7 +112,14 @@
     });
     dlgOk.addEventListener('click', function(){
       dlg.close();
-      if(partnerAfter) location.href='/chat?with='+encodeURIComponent(partnerAfter);
+      if(partnerAfter){
+        /* #msg-<hash> matches the existing MSG_ ref fragment scheme;
+           chat.js's wantFocus path will scroll + select + push to the
+           back/forward stack once the message renders. */
+        var url='/chat?with='+encodeURIComponent(partnerAfter);
+        if(hashAfter) url += '#msg-'+hashAfter;
+        location.href=url;
+      }
     });
   }
 })();

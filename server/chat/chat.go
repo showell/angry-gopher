@@ -162,7 +162,7 @@ func renderChatConversation(w http.ResponseWriter, user users.User, partnerID st
 	// replay; the server ships only this skeleton.
 	fmt.Fprint(w, `</div><pre class="chat-transcript" id="chat-transcript"></pre></div></div>
 <div class="chat-compose" id="chat-compose">
-  <div class="chat-compose-body" id="chat-compose-body">
+  <div class="chat-compose-body" id="chat-compose-body" style="display:none">
     <form id="chat-form">
       <textarea id="chat-body" placeholder="Write a message…  Markdown is supported, and longer posts are welcome."></textarea>
       <div class="chat-compose-actions">
@@ -174,7 +174,7 @@ func renderChatConversation(w http.ResponseWriter, user users.User, partnerID st
     <div class="chat-status" id="chat-status"></div>
     <div class="chat-hint">Markdown supported · paste or attach an image · Ctrl/⌘-Enter to send</div>
   </div>
-  <div class="chat-closed-panel" id="chat-closed-panel" style="display:none">
+  <div class="chat-closed-panel" id="chat-closed-panel">
     <button type="button" id="chat-open-compose" class="chat-open-compose">Open compose box (c)</button>
     <div class="chat-keyhelp">
       <div class="chat-keyhelp-title">Keyboard</div>

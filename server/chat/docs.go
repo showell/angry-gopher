@@ -12,6 +12,7 @@ package chat
 import (
 	"angry-gopher/server/users"
 	"angry-gopher/server/web"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"html"
@@ -132,10 +133,11 @@ func HandleDocsSave(w http.ResponseWriter, r *http.Request) {
 }
 
 // HandleDocsPost appends the doc's current body as a chat message to the
-// caller's default chat partner, and returns that partner id so the
-// client can navigate there after the user dismisses the "doc sent"
-// modal. Today the default is hard-wired by the identity model: Steve
-// (id 1) talks to Apoorva (id 2); everyone else talks to Steve.
+// caller's default chat partner, and returns the partner id plus the
+// new message's hash so the client can navigate to
+// /chat?with=<partner>#msg-<hash> and land on the posted message.
+// Today the default is hard-wired by the identity model: Steve (id 1)
+// talks to Apoorva (id 2); everyone else talks to Steve.
 func HandleDocsPost(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -169,13 +171,17 @@ func HandleDocsPost(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "no default chat partner available", http.StatusBadRequest)
 		return
 	}
-	if _, err := AppendChatMessage(user, partner, body, ""); err != nil {
+	msg, err := AppendChatMessage(user, partner, body, "")
+	if err != nil {
 		http.Error(w, "send to chat: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 	users.TouchUser(user.ID)
-	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-	_, _ = io.WriteString(w, partner)
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]string{
+		"partner": partner,
+		"hash":    msg.Hash,
+	})
 }
 
 // defaultChatPartner picks the partner id for a "post to chat" action.

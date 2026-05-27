@@ -214,12 +214,30 @@
     e.preventDefault(); setView(a.getAttribute('data-view'));
   });
   toBottom();
+  /* If we arrived with a #msg-<hash> fragment (e.g. from Docs' Post-to-chat),
+     remember the target so we can scroll+select+push it onto the nav stack
+     as soon as the matching message renders during the SSE backlog. We
+     suppress the default toBottom for that round so we land on the target,
+     not the bottom of the feed. */
+  var wantFocusHash=(function(){
+    var m=(location.hash||'').match(/^#msg-([0-9A-Fa-f]+)$/);
+    return m ? m[1].toUpperCase() : null;
+  })();
   /* Always replay the full backlog (since=0); reconnects resume from
      Last-Event-ID automatically. The client builds the whole feed. */
   var es=new EventSource('/chat/stream?with='+encodeURIComponent(PARTNER)+'&since=0');
   es.onmessage=function(e){
     var stick=caughtUp(); var m=JSON.parse(e.data);
     addMessage(m);
+    if(wantFocusHash && m.hash===wantFocusHash){
+      var el=document.getElementById('msg-'+m.hash);
+      if(el){
+        armScrollSuppress();
+        el.scrollIntoView({block:'center',behavior:'smooth'});
+        selectAndCommit(el,true); /* pushes the message onto the back/forward stack */
+      }
+      wantFocusHash=null; stick=false; /* don't toBottom past the focused message */
+    }
     if(stick) toBottom(); syncSelectionToScroll();
     if(pendingCid&&m.cid===pendingCid) ackSend(); /* our message round-tripped: saved + echoed */
     if(searchModalOpen()) refreshOpenSearch(); /* keep an open search current as messages stream in */
