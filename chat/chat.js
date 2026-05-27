@@ -228,30 +228,58 @@
   });
   toBottom();
   /* If we arrived with a #msg-<hash> fragment (e.g. from Docs' Post-to-chat),
-     remember the target so we can scroll+select+push it onto the nav stack
-     as soon as the matching message renders during the SSE backlog. We
-     suppress the default toBottom for that round so we land on the target,
-     not the bottom of the feed. */
+     remember the target so finishBacklog can scroll+select+push it onto
+     the nav stack once the backlog has fully landed. */
   var wantFocusHash=(function(){
     var m=(location.hash||'').match(/^#msg-([0-9A-Fa-f]+)$/);
     return m ? m[1].toUpperCase() : null;
   })();
-  /* Always replay the full backlog (since=0); reconnects resume from
-     Last-Event-ID automatically. The client builds the whole feed. */
-  var es=new EventSource('/chat/stream?with='+encodeURIComponent(PARTNER)+'&since=0');
-  es.onmessage=function(e){
-    var stick=caughtUp(); var m=JSON.parse(e.data);
-    addMessage(m);
-    if(wantFocusHash && m.hash===wantFocusHash){
-      var el=document.getElementById('msg-'+m.hash);
+  /* Backlog phase: the server sends a `backlog-size` preamble before
+     replaying any messages, so we know how many to expect. While
+     inBacklog is true we ONLY append to the DOM — no toBottom, no
+     syncSelectionToScroll, no ack/search-refresh work. One final scroll
+     happens in finishBacklog. Eliminates the per-message scroll avalanche
+     that made 1000-message conversations crawl on initial load.
+     The same path runs on EventSource reconnects (the server re-sends
+     the preamble for the post-Last-Event-ID slice); reconnect backlogs
+     only auto-scroll if the user was caught up before the gap. */
+  var inBacklog=true, backlogSize=null, backlogSeen=0;
+  var wasCaughtUpAtBacklogStart=true;
+  function finishBacklog(){
+    inBacklog=false;
+    if(wantFocusHash){
+      var el=document.getElementById('msg-'+wantFocusHash);
       if(el){
         armScrollSuppress();
         el.scrollIntoView({block:'center',behavior:'smooth'});
         selectAndCommit(el,true); /* pushes the message onto the back/forward stack */
       }
-      wantFocusHash=null; stick=false; /* don't toBottom past the focused message */
+      wantFocusHash=null; /* consumed; reconnect backlogs use the caughtUp fallback below */
+    } else if(wasCaughtUpAtBacklogStart){
+      toBottom();
     }
-    if(stick) toBottom(); syncSelectionToScroll();
+    syncSelectionToScroll();
+  }
+  var es=new EventSource('/chat/stream?with='+encodeURIComponent(PARTNER)+'&since=0');
+  es.addEventListener('backlog-size', function(e){
+    /* Reset per-connection: fires on initial load AND on every reconnect. */
+    wasCaughtUpAtBacklogStart=caughtUp();
+    inBacklog=true; backlogSeen=0;
+    backlogSize=parseInt(e.data,10) || 0;
+    if(backlogSize===0) finishBacklog(); /* nothing to wait for */
+  });
+  es.onmessage=function(e){
+    var m=JSON.parse(e.data);
+    addMessage(m);
+    if(inBacklog){
+      backlogSeen++;
+      if(backlogSize!==null && backlogSeen>=backlogSize) finishBacklog();
+      return; /* skip per-message scroll/select/refresh during backlog */
+    }
+    /* Live path: an individual message arriving post-backlog. */
+    var stick=caughtUp();
+    if(stick) toBottom();
+    syncSelectionToScroll();
     if(pendingCid&&m.cid===pendingCid) ackSend(); /* our message round-tripped: saved + echoed */
     if(searchModalOpen()) refreshOpenSearch(); /* keep an open search current as messages stream in */
   };

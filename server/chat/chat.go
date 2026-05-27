@@ -293,6 +293,19 @@ func HandleChatStream(w http.ResponseWriter, r *http.Request) {
 	backlog, ch, cancel := OpenChatStream(user.ID, partner, since)
 	defer cancel()
 
+	// Preamble: tell the client how many backlog events to expect so it can
+	// suppress per-message scroll work until the whole backlog has landed.
+	// Without this, a 1000-message conversation scrolls visibly on each
+	// message during initial load. Named SSE event ("backlog-size") routes
+	// to a separate addEventListener on the client; the unnamed message
+	// events for actual chat messages keep going to onmessage.
+	if _, err := fmt.Fprintf(w, "event: backlog-size\ndata: %d\n\n", len(backlog)); err != nil {
+		return
+	}
+	if rc.Flush() != nil {
+		return
+	}
+
 	for _, evt := range backlog {
 		if writeChatEvent(w, rc, evt, user.Name) != nil {
 			return
