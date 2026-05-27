@@ -15,7 +15,7 @@
   var composeBody=document.getElementById('chat-compose-body');
   var closedPanel=document.getElementById('chat-closed-panel');
   var openComposeBtn=document.getElementById('chat-open-compose');
-  function toBottom(){ history.scrollTop=history.scrollHeight; }
+  function toBottom(){ armScrollSuppress(); history.scrollTop=history.scrollHeight; }
   /* Compose is closeable: Esc on an empty box closes it and hands focus back
      to the feed; "c" (or the panel button) reopens it. Closing swaps the
      compose body for a panel with the reopen button + a keyboard cheatsheet,
@@ -111,12 +111,22 @@
     if(el && el!==selected){ selectAndCommit(el, false); updateNav(); } /* enables ← as you drift away */
   }
   var rafPending=false;
+  /* True iff the user has scrolled the feed themselves (not us via
+     toBottom / scrollIntoView). The post-backlog stabilizer reads this
+     to decide when to stop chasing layout growth — position-distance
+     heuristics are no good here because image loads grow scrollHeight
+     out from under us, which looks indistinguishable from a user scroll
+     if you only watch scrollTop. progScroll is the source of truth:
+     while it's set (a 150ms window after each armScrollSuppress), every
+     scroll event is ours; outside that, it's the user. */
+  var userScrolledFeed=false;
   history.addEventListener('scroll',function(){
     if(progScroll){ /* our own animated scroll: stay suppressed until it's idle for 150ms */
       if(progScrollTimer) clearTimeout(progScrollTimer);
       progScrollTimer=setTimeout(endProgScroll, 150);
       return;
     }
+    userScrolledFeed=true;
     if(rafPending) return; rafPending=true;
     requestAnimationFrame(function(){ rafPending=false; syncSelectionToScroll(); });
   });
@@ -254,6 +264,11 @@
     } else if(wasCaughtUpAtBacklogStart){
       anchorToBottom=true;
     }
+    /* Reset the user-scroll flag right before the initial anchor: from
+       here on, only an INTENTIONAL post-anchor user scroll should stop
+       the stabilizer. armScrollSuppress on every programmatic scrollTop
+       keeps our own activity from tripping it. */
+    userScrolledFeed=false;
     if(focusEl){
       armScrollSuppress();
       focusEl.scrollIntoView({block:'center',behavior:'auto'});
@@ -262,25 +277,24 @@
       toBottom();
     }
     syncSelectionToScroll();
-    /* Belt-and-suspenders: even with width/height on every <img>, fonts
-       still settle and there's no guarantee every image has dims. Keep
-       re-anchoring as each image fires `load`, plus a few rAF passes, up
-       to a 5s cap. We stop early if the user has scrolled away from the
-       anchor (so the helper never fights an intentional scroll). */
+    /* Belt-and-suspenders: re-anchor as each <img> fires `load` (plus a
+       few rAF passes), up to a 5s cap. We stop the moment the user
+       scrolls intentionally — userScrolledFeed is set by the scroll
+       listener only outside our armScrollSuppress windows, so layout
+       growth from image decode (which moves the bottom without moving
+       scrollTop) doesn't get misread as a user scroll. */
     if(focusEl) stabilizeOn(focusEl, anchorOnFocus);
     else if(anchorToBottom) stabilizeOn(null, anchorOnBottom);
   }
   function anchorOnFocus(el){
-    var r=el.getBoundingClientRect(), hr=history.getBoundingClientRect();
-    if(r.bottom<hr.top || r.top>hr.bottom) return false; /* user scrolled away */
+    if(userScrolledFeed) return false;
     armScrollSuppress();
     el.scrollIntoView({block:'center',behavior:'auto'});
     return true;
   }
   function anchorOnBottom(){
-    /* Within ~half a viewport of the bottom counts as "still anchored." */
-    var slack=history.clientHeight/2;
-    if(history.scrollHeight-history.clientHeight-history.scrollTop > slack) return false;
+    if(userScrolledFeed) return false;
+    armScrollSuppress();
     history.scrollTop=history.scrollHeight;
     return true;
   }
