@@ -485,8 +485,13 @@ html, body { height:100%; }
 .chat-views a.active { font-weight:bold; color:#000; cursor:default; }
 .chat-compose-actions { display:flex; gap:8px; margin-top:8px; }
 .chat-compose-actions button { margin-top:0; }
-.chat-body img { max-width:100%; max-height:320px; display:block; margin:6px 0;
-                 border-radius:6px; cursor:zoom-in; }
+/* width/height:auto so the HTML width/height attrs (set by the upload
+   handler) only seed the aspect-ratio hint — CSS max-* still controls
+   actual size. The point of the HTML attrs is to reserve correctly-
+   proportioned space before the image decodes, so the feed doesn't
+   reflow upward and yank "scroll-to-bottom" off-target. */
+.chat-body img { max-width:100%; max-height:320px; width:auto; height:auto;
+                 display:block; margin:6px 0; border-radius:6px; cursor:zoom-in; }
 .chat-img-dialog { border:1px solid #000080; border-radius:10px; padding:10px;
                    display:flex; flex-direction:column; gap:8px; }
 .chat-img-dialog::backdrop { background:rgba(0,0,0,0.55); }

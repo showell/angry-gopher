@@ -1,9 +1,12 @@
 // Markdown rendering for chat. goldmark turns a message body into HTML;
 // bluemonday then sanitizes it, so a message from one player is safe to
 // drop into another player's browser (stored-XSS is a real risk here —
-// each side renders the other's text). goldmark already declines to emit
-// raw HTML; bluemonday is the belt-and-suspenders pass that also strips
-// dangerous link schemes (javascript:, data:) from any links.
+// each side renders the other's text). goldmark passes raw HTML through
+// (WithUnsafe — needed so the upload handler can emit an <img> tag with
+// width/height attrs, which it does so the browser can reserve correctly-
+// proportioned space before the image decodes); bluemonday is the real
+// safety net, with UGCPolicy stripping anything dangerous (scripts, event
+// handlers, javascript:/data: URLs).
 package chat
 
 import (
@@ -29,6 +32,7 @@ var chatMarkdown = goldmark.New(
 	goldmark.WithExtensions(extension.GFM),
 	goldmark.WithRendererOptions(
 		gmhtml.WithHardWraps(),
+		gmhtml.WithUnsafe(), // raw HTML through; bluemonday sanitizes
 		renderer.WithNodeRenderers(util.Prioritized(quoteFenceRenderer{}, 100)),
 	),
 )

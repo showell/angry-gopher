@@ -247,18 +247,58 @@
   var wasCaughtUpAtBacklogStart=true;
   function finishBacklog(){
     inBacklog=false;
+    var focusEl=null, anchorToBottom=false;
     if(wantFocusHash){
-      var el=document.getElementById('msg-'+wantFocusHash);
-      if(el){
-        armScrollSuppress();
-        el.scrollIntoView({block:'center',behavior:'smooth'});
-        selectAndCommit(el,true); /* pushes the message onto the back/forward stack */
-      }
+      focusEl=document.getElementById('msg-'+wantFocusHash);
       wantFocusHash=null; /* consumed; reconnect backlogs use the caughtUp fallback below */
     } else if(wasCaughtUpAtBacklogStart){
+      anchorToBottom=true;
+    }
+    if(focusEl){
+      armScrollSuppress();
+      focusEl.scrollIntoView({block:'center',behavior:'auto'});
+      selectAndCommit(focusEl,true); /* pushes the message onto the back/forward stack */
+    } else if(anchorToBottom){
       toBottom();
     }
     syncSelectionToScroll();
+    /* Belt-and-suspenders: even with width/height on every <img>, fonts
+       still settle and there's no guarantee every image has dims. Keep
+       re-anchoring as each image fires `load`, plus a few rAF passes, up
+       to a 5s cap. We stop early if the user has scrolled away from the
+       anchor (so the helper never fights an intentional scroll). */
+    if(focusEl) stabilizeOn(focusEl, anchorOnFocus);
+    else if(anchorToBottom) stabilizeOn(null, anchorOnBottom);
+  }
+  function anchorOnFocus(el){
+    var r=el.getBoundingClientRect(), hr=history.getBoundingClientRect();
+    if(r.bottom<hr.top || r.top>hr.bottom) return false; /* user scrolled away */
+    armScrollSuppress();
+    el.scrollIntoView({block:'center',behavior:'auto'});
+    return true;
+  }
+  function anchorOnBottom(){
+    /* Within ~half a viewport of the bottom counts as "still anchored." */
+    var slack=history.clientHeight/2;
+    if(history.scrollHeight-history.clientHeight-history.scrollTop > slack) return false;
+    history.scrollTop=history.scrollHeight;
+    return true;
+  }
+  function stabilizeOn(focusEl, reapply){
+    var stopAt=Date.now()+5000;
+    function fire(){
+      if(Date.now()>stopAt) return;
+      reapply(focusEl); /* if it returns false, we just stop calling — image listeners are once-only */
+    }
+    var imgs=bubbles.querySelectorAll('img');
+    for(var i=0;i<imgs.length;i++){
+      if(!imgs[i].complete){
+        imgs[i].addEventListener('load', fire, {once:true});
+        imgs[i].addEventListener('error', fire, {once:true});
+      }
+    }
+    /* Two rAF passes catch non-image layout settling (font load, etc.). */
+    requestAnimationFrame(function(){ fire(); requestAnimationFrame(fire); });
   }
   var es=new EventSource('/chat/stream?with='+encodeURIComponent(PARTNER)+'&since=0');
   es.addEventListener('backlog-size', function(e){
@@ -364,8 +404,16 @@
         });
       })
       .then(function(d){
-        var alt=(d.name||'image').replace(/[\[\]\r\n]/g,'');
-        insertAtCursor('!['+alt+']('+d.url+')');
+        /* HTML <img> instead of markdown image syntax so the width/height
+           the server decoded ride along with the message body. Modern
+           browsers use those attrs to reserve correctly-proportioned space
+           before the image decodes, so the feed doesn't reflow when
+           "scroll to bottom" lands. Server may return 0 for unknown dims
+           (e.g. webp without a stdlib decoder); in that case we omit the
+           attrs and fall back to the old no-dims behavior. */
+        var alt=(d.name||'image').replace(/["<>\r\n]/g,'');
+        var dims=(d.width>0 && d.height>0) ? ' width="'+d.width+'" height="'+d.height+'"' : '';
+        insertAtCursor('<img src="'+d.url+'" alt="'+alt+'"'+dims+'>');
         status.textContent=''; status.style.color='';
       })
       .catch(function(msg){

@@ -15,6 +15,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"image"
+	_ "image/gif"  // register the gif decoder for image.DecodeConfig
+	_ "image/jpeg" // register the jpeg decoder
+	_ "image/png"  // register the png decoder
 	"io"
 	"net/http"
 	"net/url"
@@ -140,11 +144,25 @@ func HandleChatUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Decode pixel dimensions from the header bytes (no full-image alloc).
+	// Width+height ride along in the JSON so the client can write a width/
+	// height-bearing <img> tag — modern browsers use those attrs as an
+	// aspect-ratio hint while the image decodes, reserving the right space
+	// in the layout. That kills the "scroll lands too high because images
+	// haven't loaded yet" jank on initial chat load. webp isn't stdlib;
+	// if decode fails we just omit dims and degrade to the old behavior.
+	width, height := 0, 0
+	if cfg, _, derr := image.DecodeConfig(bytes.NewReader(data)); derr == nil {
+		width, height = cfg.Width, cfg.Height
+	}
+
 	key := chatPairKey(user.ID, partner)
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{
-		"url":  "/chat/uploads/" + url.PathEscape(key) + "/" + name,
-		"name": header.Filename,
+	json.NewEncoder(w).Encode(map[string]any{
+		"url":    "/chat/uploads/" + url.PathEscape(key) + "/" + name,
+		"name":   header.Filename,
+		"width":  width,
+		"height": height,
 	})
 }
 
