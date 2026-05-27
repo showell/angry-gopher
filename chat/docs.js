@@ -77,4 +77,44 @@
                       {type:'application/x-www-form-urlencoded'});
     try { navigator.sendBeacon('/chat/docs/save', blob); } catch(e){}
   });
+
+  /* "Post to chat" — send the doc body as a chat message to the default
+     partner (server picks based on identity, returns the partner id as the
+     response body), confirm via modal, then navigate to the chat on OK.
+     Flush any pending autosave first so disk + chat carry the same bytes. */
+  var postBtn=document.getElementById('docs-post-btn');
+  var dlg=document.getElementById('docs-posted-dialog');
+  var dlgOk=document.getElementById('docs-posted-ok');
+  if(postBtn && dlg && dlgOk){
+    var partnerAfter=null;
+    function flushPendingSave(){
+      if(!pendingSave) return Promise.resolve();
+      if(saveTimer){ clearTimeout(saveTimer); saveTimer=null; }
+      pendingSave=false;
+      return fetch('/chat/docs/save', {method:'POST', headers:FORM_HDR,
+                                       body:encodeForm({slug:slug, body:ta.value})});
+    }
+    postBtn.addEventListener('click', function(){
+      postBtn.disabled=true;
+      setStatus('saving', 'Posting…');
+      flushPendingSave()
+        .then(function(){ return fetch('/chat/docs/post', {method:'POST', headers:FORM_HDR,
+                                                           body:encodeForm({slug:slug})}); })
+        .then(function(r){ return r.ok?r.text():Promise.reject(r.status); })
+        .then(function(partner){
+          partnerAfter=partner;
+          setStatus('saved', 'Posted ✓');
+          dlg.showModal();
+          dlgOk.focus(); /* Enter dismisses; click also works */
+        })
+        .catch(function(s){
+          setStatus('error', 'Post failed'+(s?' ('+s+')':''));
+          postBtn.disabled=false;
+        });
+    });
+    dlgOk.addEventListener('click', function(){
+      dlg.close();
+      if(partnerAfter) location.href='/chat?with='+encodeURIComponent(partnerAfter);
+    });
+  }
 })();

@@ -131,6 +131,66 @@ func HandleDocsSave(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// HandleDocsPost appends the doc's current body as a chat message to the
+// caller's default chat partner, and returns that partner id so the
+// client can navigate there after the user dismisses the "doc sent"
+// modal. Today the default is hard-wired by the identity model: Steve
+// (id 1) talks to Apoorva (id 2); everyone else talks to Steve.
+func HandleDocsPost(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	user := requireMember(w, r, "/chat/docs")
+	if user.ID == "" {
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, maxDocBytes)
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	slug := strings.TrimSpace(r.FormValue("slug"))
+	if !validDocSlug(slug) {
+		http.Error(w, "bad slug", http.StatusBadRequest)
+		return
+	}
+	body, err := ReadUserDoc(user.ID, slug)
+	if err != nil {
+		http.Error(w, "read doc: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if strings.TrimSpace(body) == "" {
+		http.Error(w, "doc is empty", http.StatusBadRequest)
+		return
+	}
+	partner := defaultChatPartner(user.ID)
+	if !validChatPartner(user.ID, partner) {
+		http.Error(w, "no default chat partner available", http.StatusBadRequest)
+		return
+	}
+	if _, err := AppendChatMessage(user, partner, body, ""); err != nil {
+		http.Error(w, "send to chat: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	users.TouchUser(user.ID)
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	_, _ = io.WriteString(w, partner)
+}
+
+// defaultChatPartner picks the partner id for a "post to chat" action.
+// Hard-wired today (Steve talks to Apoorva; everyone else to Steve) —
+// fits the current two-member reality. Generalize when there's actually
+// a third member, not before.
+func defaultChatPartner(uid string) string {
+	const steveID = "1"
+	const apoorvaID = "2"
+	if uid == steveID {
+		return apoorvaID
+	}
+	return steveID
+}
+
 // HandleDocsRender renders posted markdown to HTML for the live-preview
 // pane. Reuses RenderChatMarkdown (goldmark + bluemonday + linkifyMsgRefs)
 // so docs and chat messages render identically, including the same XSS
@@ -204,6 +264,7 @@ func renderDocsPage(w http.ResponseWriter, user users.User, docs []DocSummary, s
 		}
 	} else {
 		fmt.Fprintf(w, `<div class="docs-title-row"><span class="docs-title">%s</span>`+
+			`<button type="button" id="docs-post-btn" class="docs-post-btn">Post to chat</button>`+
 			`<span class="docs-status" id="docs-status"></span></div>`,
 			html.EscapeString(titleFromSlug(slug)))
 		fmt.Fprintf(w, `<textarea id="docs-body" data-slug="%s" spellcheck="true">%s</textarea>`,
@@ -221,7 +282,15 @@ func renderDocsPage(w http.ResponseWriter, user users.User, docs []DocSummary, s
 	fmt.Fprint(w, `</section>`)
 
 	fmt.Fprint(w, `</div>`) // .docs-layout
+
+	// "Doc sent to chat" confirmation modal — shown by docs.js after a
+	// successful POST to /chat/docs/post; OK navigates to the chat with
+	// the partner id the server returned.
 	if slug != "" {
+		fmt.Fprint(w, `<dialog id="docs-posted-dialog" class="docs-alert-dialog">`+
+			`<p>Doc sent to chat.</p>`+
+			`<button type="button" id="docs-posted-ok">OK</button>`+
+			`</dialog>`)
 		fmt.Fprintf(w, `<script src="/chat/docs.js?v=%s"></script>`,
 			url.QueryEscape(web.AssetVersion))
 	}
@@ -253,11 +322,17 @@ html, body { height:100%; }
 .docs-edit { display:flex; flex-direction:column; min-width:0; min-height:0; gap:6px; }
 .docs-title-row { display:flex; align-items:baseline; justify-content:space-between; gap:8px; }
 .docs-title { font-size:15px; font-weight:bold; color:#000080; overflow:hidden;
-              text-overflow:ellipsis; white-space:nowrap; }
+              text-overflow:ellipsis; white-space:nowrap; flex:1; min-width:0; }
+.docs-post-btn { padding:4px 12px; font-size:12px; flex:none; }
 .docs-status { font-size:12px; color:#888; flex:none; }
 .docs-status.saving { color:#888; }
 .docs-status.saved  { color:#1a7a3a; }
 .docs-status.error  { color:#b00020; }
+.docs-alert-dialog { max-width:90vw; border:1px solid #bbb; border-radius:8px;
+                     padding:18px 20px; }
+.docs-alert-dialog::backdrop { background:rgba(0,0,0,0.4); }
+.docs-alert-dialog p { margin:0 0 14px; }
+.docs-alert-dialog button { padding:5px 16px; }
 #docs-body { flex:1; min-height:0; width:100%; box-sizing:border-box;
              font-family:ui-monospace,Menlo,Consolas,monospace; font-size:14px;
              line-height:1.45; padding:10px; border:1px solid #ccc;

@@ -29,4 +29,5 @@ func RegisterPages(mux *http.ServeMux) {
 	mux.HandleFunc("/chat/docs/new", chat.HandleDocsNew)
 	mux.HandleFunc("/chat/docs/save", chat.HandleDocsSave)
 	mux.HandleFunc("/chat/docs/render", chat.HandleDocsRender)
+	mux.HandleFunc("/chat/docs/post", chat.HandleDocsPost)
 }
