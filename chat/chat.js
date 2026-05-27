@@ -537,13 +537,13 @@
     var tgt=document.getElementById(ref.getAttribute('href').slice(1));
     if(!tgt) return;
     armScrollSuppress();
-    tgt.scrollIntoView({block:'center',behavior:'smooth'}); selectAndCommit(tgt,true);
+    tgt.scrollIntoView({block:'center',behavior:'auto'}); selectAndCommit(tgt,true);
   }
   function scrollIndexToTop(idx){
     if(idx===null||idx===undefined) return null;
     var el=bubbles.querySelector('.chat-msg[data-i="'+idx+'"]');
     if(!el||el.offsetParent===null) return null;
-    el.scrollIntoView({block:'start',behavior:'smooth'});
+    el.scrollIntoView({block:'start',behavior:'auto'});
     return el;
   }
   /* Navigate to entries[pos] without recording it, so ←/→ don't create new
