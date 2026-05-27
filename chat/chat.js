@@ -275,8 +275,16 @@
       selectAndCommit(focusEl,true); /* pushes the message onto the back/forward stack */
     } else if(anchorToBottom){
       toBottom();
+      /* Mirror cursorToExtreme(true) (the End-key path): explicitly select
+         the LAST message rather than relying on syncSelectionToScroll, which
+         picks the topmost-fully-in-view — that's the wrong choice when the
+         user just landed at the bottom of the feed. */
+      var msgs=visibleMsgs();
+      if(msgs.length) selectAndCommit(msgs[msgs.length-1], true);
+    } else {
+      /* Reconnect case: keep whatever scroll/selection the user had. */
+      syncSelectionToScroll();
     }
-    syncSelectionToScroll();
     /* Belt-and-suspenders: re-anchor as each <img> fires `load` (plus a
        few rAF passes), up to a 5s cap. We stop the moment the user
        scrolls intentionally — userScrolledFeed is set by the scroll
