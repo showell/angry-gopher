@@ -84,13 +84,12 @@ func HandleChatUpload(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "chat requires a member account", http.StatusForbidden)
 		return
 	}
-	user := users.CurrentUser(r)
-	partner := strings.TrimSpace(r.URL.Query().Get("with")) // partner user id
-	if !validChatPartner(user.ID, partner) {
-		http.Error(w, "unknown conversation partner", http.StatusBadRequest)
+	user, conv, ok := chatPathParticipant(w, r)
+	if !ok {
 		return
 	}
-	sessionID := requestSession(r, user.ID, partner)
+	partner, _ := OtherInConv(user.ID, conv)
+	sessionID := r.PathValue("sid")
 
 	// Cap the body (with a little slack for multipart framing); enforce
 	// the real image-size limit on the decoded bytes below.
@@ -157,10 +156,9 @@ func HandleChatUpload(w http.ResponseWriter, r *http.Request) {
 		width, height = cfg.Width, cfg.Height
 	}
 
-	key := chatPairKey(user.ID, partner)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{
-		"url":    "/chat/uploads/" + url.PathEscape(key) + "/" + url.PathEscape(sessionID) + "/" + name,
+		"url":    "/chat/c/" + conv + "/" + url.PathEscape(sessionID) + "/uploads/" + name,
 		"name":   header.Filename,
 		"width":  width,
 		"height": height,
@@ -169,27 +167,21 @@ func HandleChatUpload(w http.ResponseWriter, r *http.Request) {
 
 // HandleChatFile serves an uploaded image, gated to participants of the
 // conversation named in the URL. URL shape:
-// /chat/uploads/<conv-key>/<session-id>/<filename>.
+// /chat/c/<conv>/<sid>/uploads/<filename>.
 func HandleChatFile(w http.ResponseWriter, r *http.Request) {
-	user := users.CurrentUser(r)
-	rest := strings.TrimPrefix(r.URL.Path, "/chat/uploads/")
-	key, rest2, found := strings.Cut(rest, "/")
-	if !found {
-		http.NotFound(w, r)
+	_, conv, ok := chatPathParticipant(w, r)
+	if !ok {
 		return
 	}
-	sessionID, name, found := strings.Cut(rest2, "/")
-	if !found || sessionID == "" || !chatUploadName.MatchString(name) {
+	sessionID := r.PathValue("sid")
+	name := r.PathValue("file")
+	if !chatUploadName.MatchString(name) {
 		http.NotFound(w, r)
-		return
-	}
-	if !ChatKeyParticipant(key, user.ID) {
-		http.NotFound(w, r) // don't reveal whether it exists
 		return
 	}
 	ext := name[strings.LastIndexByte(name, '.')+1:]
 	w.Header().Set("Content-Type", chatImageContentType[ext])
 	w.Header().Set("Cache-Control", "private, max-age=31536000, immutable")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
-	http.ServeFile(w, r, filepath.Join(ChatSessionUploadsDirForKey(key, sessionID), name))
+	http.ServeFile(w, r, filepath.Join(ChatSessionUploadsDirForKey(conv, sessionID), name))
 }

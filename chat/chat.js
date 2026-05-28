@@ -1,7 +1,11 @@
 (function(){
   var root=document.getElementById('chat-root');
   var PARTNER=root.dataset.partner;
+  var CONV=root.dataset.conv;
   var SESSION=root.dataset.session;
+  /* All API endpoints live under the session's URL prefix (mirrors the
+     on-disk path under {ChatDataRoot}/<conv>/sessions/<sid>). */
+  var SESSION_BASE='/chat/c/'+encodeURIComponent(CONV)+'/'+encodeURIComponent(SESSION);
   var history=document.getElementById('chat-history');
   var bubbles=document.getElementById('chat-bubbles');
   var transcript=document.getElementById('chat-transcript');
@@ -323,7 +327,7 @@
     /* Two rAF passes catch non-image layout settling (font load, etc.). */
     requestAnimationFrame(function(){ fire(); requestAnimationFrame(fire); });
   }
-  var es=new EventSource('/chat/stream?with='+encodeURIComponent(PARTNER)+'&session='+encodeURIComponent(SESSION)+'&since=0');
+  var es=new EventSource(SESSION_BASE+'/stream?since=0');
   es.addEventListener('backlog-size', function(e){
     /* Reset per-connection: fires on initial load AND on every reconnect. */
     wasCaughtUpAtBacklogStart=caughtUp();
@@ -400,9 +404,9 @@
     setComposeEnabled(false); /* keep the text until the host acks */
     status.style.color='#888'; status.textContent='Sending…';
     pendingTimer=setTimeout(hostDown, 3000);
-    fetch('/chat/send',{ method:'POST',
+    fetch(SESSION_BASE+'/send',{ method:'POST',
       headers:{'Content-Type':'application/x-www-form-urlencoded','X-Chat-Async':'1'},
-      body:'with='+encodeURIComponent(PARTNER)+'&session='+encodeURIComponent(SESSION)+'&body='+encodeURIComponent(text)+'&cid='+encodeURIComponent(cid)
+      body:'body='+encodeURIComponent(text)+'&cid='+encodeURIComponent(cid)
     }).then(function(r){ if(!r.ok) throw new Error('status '+r.status); /* success is confirmed by the SSE echo */ })
       .catch(hostDown);
   }
@@ -431,7 +435,7 @@
     }
     status.style.color='#888'; status.textContent='Uploading image…';
     var fd=new FormData(); fd.append('file',file);
-    fetch('/chat/upload?with='+encodeURIComponent(PARTNER)+'&session='+encodeURIComponent(SESSION),{method:'POST',body:fd})
+    fetch(SESSION_BASE+'/upload',{method:'POST',body:fd})
       .then(function(r){
         if(r.ok) return r.json();
         return r.text().then(function(t){

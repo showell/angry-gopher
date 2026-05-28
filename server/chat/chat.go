@@ -42,104 +42,122 @@ func formatChatTime(t time.Time) string {
 	return t.In(easternLoc).Format("Jan 2 · 3:04 PM")
 }
 
-// HandleChat serves /chat: a conversation when ?with=<partner> names a
-// valid partner, otherwise a small people-picker. The session being
-// viewed is the user's last-viewed session for the conv (TBD; for now
-// always the newest), addressable explicitly via ?session=<id>.
+// URL space (mirrors the on-disk layout under {ChatDataRoot}/<conv>/sessions/):
+//
+//	/chat                                   picker; or one-partner shortcut
+//	                                        to /chat/default
+//	/chat/default                           303 to the user's last (conv, sid)
+//	/chat/c/<conv>                          303 to /chat/c/<conv>/<default-sid>
+//	/chat/c/<conv>/<sid>                    conversation page (one session)
+//	/chat/c/<conv>/<sid>/stream             SSE
+//	/chat/c/<conv>/<sid>/send               POST a message
+//	/chat/c/<conv>/<sid>/upload             POST an image
+//	/chat/c/<conv>/<sid>/uploads/<file>     serve an uploaded image
+//
+// Conv keys are always "<a>_<b>" with the smaller numeric id first
+// (chatPairKey); the path-only URL space means the server enforces
+// participant access (ChatKeyParticipant) rather than trusting the
+// caller's chosen partner id.
+
+// HandleChat serves /chat itself: either the people-picker, or a
+// shortcut redirect when there's exactly one other principal to talk to
+// (the common case today). Conversations live under /chat/c/...
 func HandleChat(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/chat" {
 		http.NotFound(w, r)
 		return
 	}
 	if !users.IsAuthorized(r) {
-		next := "/chat"
-		if r.URL.RawQuery != "" {
-			next += "?" + r.URL.RawQuery
-		}
-		http.Redirect(w, r, "/login/full?next="+url.QueryEscape(next), http.StatusSeeOther)
+		http.Redirect(w, r, "/login/full?next="+url.QueryEscape("/chat"), http.StatusSeeOther)
 		return
 	}
 	user := users.CurrentUser(r)
-	partner := strings.TrimSpace(r.URL.Query().Get("with")) // partner user id
-
-	// Optimize for the common case: most members have exactly one other
-	// principal to talk to (Steve↔Apoorva, Steve↔Claude). With one
-	// possible partner, the picker is pure friction — skip it.
-	if !validChatPartner(user.ID, partner) {
-		if only, ok := onlyOtherPartner(user.ID); ok {
-			http.Redirect(w, r, "/chat?with="+url.QueryEscape(only), http.StatusSeeOther)
-			return
-		}
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		renderChatPicker(w, user)
-		return
-	}
-	explicitSession := strings.TrimSpace(r.URL.Query().Get("session"))
-	sessionID := requestSession(r, user.ID, partner)
-	SetUserLastSession(user.ID, user.ID, partner, sessionID)
-	// If the URL didn't name a session, redirect to one that does, so the
-	// URL bar reflects which session is on screen (and bookmarks /
-	// back-forward navigation carry the session, not just the partner).
-	if explicitSession == "" {
-		http.Redirect(w, r,
-			"/chat?with="+url.QueryEscape(partner)+"&session="+url.QueryEscape(sessionID),
-			http.StatusSeeOther)
+	// One-partner shortcut: skip the picker, drop into that conv (which
+	// itself redirects to the default session).
+	if only, ok := onlyOtherPartner(user.ID); ok {
+		http.Redirect(w, r, "/chat/c/"+chatPairKey(user.ID, only), http.StatusSeeOther)
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	renderChatConversation(w, user, partner, sessionID)
+	renderChatPicker(w, user)
 }
 
-// requestSession picks the session a chat request is acting on:
-// prefers an explicit ?session=<id> (if it exists on disk), falls back
-// to this user's last-viewed session for the conv (chat_state.go),
-// then to the conv's newest session, and as a last resort returns
-// today's date for a brand-new conv with no sessions yet (so the
-// first message auto-creates one). The form value is also honored
-// for POST endpoints.
-func requestSession(r *http.Request, a, b string) string {
-	sid := strings.TrimSpace(r.URL.Query().Get("session"))
-	if sid == "" {
-		sid = strings.TrimSpace(r.FormValue("session"))
+// chatPathParticipant resolves and authorizes the {conv} path
+// parameter against the current request. ok=false means an HTTP
+// response has already been written (login redirect, 404, etc); the
+// caller should just return.
+func chatPathParticipant(w http.ResponseWriter, r *http.Request) (user users.User, conv string, ok bool) {
+	if !users.IsAuthorized(r) {
+		http.Redirect(w, r, "/login/full?next="+url.QueryEscape(r.URL.Path), http.StatusSeeOther)
+		return
 	}
-	if sid != "" && ChatSessionExists(a, b, sid) {
-		return sid
+	user = users.CurrentUser(r)
+	conv = r.PathValue("conv")
+	if !ChatKeyParticipant(conv, user.ID) {
+		http.NotFound(w, r) // don't reveal whether the conv exists
+		return
 	}
-	if last := LastUserSession(a, a, b); last != "" && ChatSessionExists(a, b, last) {
+	ok = true
+	return
+}
+
+// HandleChatConv serves /chat/c/<conv>: redirects to the right session
+// for this user (their last-viewed, falling back to newest, falling
+// back to today).
+func HandleChatConv(w http.ResponseWriter, r *http.Request) {
+	user, conv, ok := chatPathParticipant(w, r)
+	if !ok {
+		return
+	}
+	partner, _ := OtherInConv(user.ID, conv)
+	sid := resolveSessionForUser(user.ID, partner)
+	http.Redirect(w, r, "/chat/c/"+conv+"/"+url.PathEscape(sid), http.StatusSeeOther)
+}
+
+// HandleChatPage serves /chat/c/<conv>/<sid>: renders one session.
+func HandleChatPage(w http.ResponseWriter, r *http.Request) {
+	user, conv, ok := chatPathParticipant(w, r)
+	if !ok {
+		return
+	}
+	partner, _ := OtherInConv(user.ID, conv)
+	sid := r.PathValue("sid")
+	SetUserLastSession(user.ID, user.ID, partner, sid)
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	renderChatConversation(w, user, partner, conv, sid)
+}
+
+// resolveSessionForUser picks the session a user lands on when only
+// the conv is named (no explicit sid in the URL). Order: user's
+// last-viewed -> conv's newest -> today's date (so a brand-new conv
+// auto-creates today's session on first post).
+func resolveSessionForUser(uid, partner string) string {
+	if last := LastUserSession(uid, uid, partner); last != "" && ChatSessionExists(uid, partner, last) {
 		return last
 	}
-	if def := DefaultChatSession(a, b); def != "" {
+	if def := DefaultChatSession(uid, partner); def != "" {
 		return def
 	}
 	return time.Now().UTC().Format("2006-01-02")
 }
 
 // HandleChatDefault redirects to the user's most-recently-viewed
-// (conv, session) — the "take me back where I was" landing page.
-// Falls back to /chat (the picker / single-partner shortcut) if the
-// user has never been to any conv.
+// (conv, session). Falls back to /chat (the picker / one-partner
+// shortcut) if the user has never been to any conv.
 func HandleChatDefault(w http.ResponseWriter, r *http.Request) {
 	if !users.IsAuthorized(r) {
 		http.Redirect(w, r, "/login/full?next="+url.QueryEscape("/chat/default"), http.StatusSeeOther)
 		return
 	}
 	user := users.CurrentUser(r)
-	convKey := LastUserConv(user.ID)
-	if convKey == "" {
+	conv := LastUserConv(user.ID)
+	if conv == "" || !ChatKeyParticipant(conv, user.ID) {
 		http.Redirect(w, r, "/chat", http.StatusSeeOther)
 		return
 	}
-	partner, ok := OtherInConv(user.ID, convKey)
-	if !ok {
-		http.Redirect(w, r, "/chat", http.StatusSeeOther)
-		return
-	}
-	sid := LastUserSession(user.ID, user.ID, partner)
-	target := "/chat?with=" + url.QueryEscape(partner)
-	if sid != "" {
-		target += "&session=" + url.QueryEscape(sid)
-	}
-	http.Redirect(w, r, target, http.StatusSeeOther)
+	partner, _ := OtherInConv(user.ID, conv)
+	sid := resolveSessionForUser(user.ID, partner)
+	http.Redirect(w, r, "/chat/c/"+conv+"/"+url.PathEscape(sid), http.StatusSeeOther)
 }
 
 // onlyOtherPartner returns the partner id when there is exactly one
@@ -189,8 +207,8 @@ func renderChatPicker(w http.ResponseWriter, user users.User) {
 		if m.ID == user.ID {
 			continue
 		}
-		fmt.Fprintf(w, `<li><a href="/chat?with=%s">%s</a></li>`,
-			url.QueryEscape(m.ID), html.EscapeString(m.Name))
+		fmt.Fprintf(w, `<li><a href="/chat/c/%s">%s</a></li>`,
+			chatPairKey(user.ID, m.ID), html.EscapeString(m.Name))
 		n++
 	}
 	if n == 0 {
@@ -200,7 +218,7 @@ func renderChatPicker(w http.ResponseWriter, user users.User) {
 	web.PageFooter(w)
 }
 
-func renderChatConversation(w http.ResponseWriter, user users.User, partnerID, sessionID string) {
+func renderChatConversation(w http.ResponseWriter, user users.User, partnerID, conv, sessionID string) {
 	msgs, err := ReadChatSession(user.ID, partnerID, sessionID)
 	if err != nil {
 		http.Error(w, "read conversation: "+err.Error(), http.StatusInternalServerError)
@@ -210,8 +228,11 @@ func renderChatConversation(w http.ResponseWriter, user users.User, partnerID, s
 
 	chatPageHeader(w, "Chat with "+partnerName, user, "")
 	fmt.Fprint(w, chatCSS)
-	fmt.Fprintf(w, `<div id="chat-root" data-partner="%s" data-session="%s">`,
-		html.EscapeString(partnerID), html.EscapeString(sessionID))
+	// data-conv + data-session let chat.js build the API URLs
+	// (/chat/c/<conv>/<sid>/{stream,send,upload}) without re-deriving
+	// the pair key. data-partner stays for display labels (mine vs theirs).
+	fmt.Fprintf(w, `<div id="chat-root" data-conv="%s" data-session="%s" data-partner="%s">`,
+		html.EscapeString(conv), html.EscapeString(sessionID), html.EscapeString(partnerID))
 	fmt.Fprint(w, `<div class="chat-views" id="chat-views">`+
 		`<span class="chat-view-tabs" title="Toggle with t">`+
 		`<a href="#" data-view="rendered" class="active">Rendered</a> · `+
@@ -262,19 +283,21 @@ func renderChatConversation(w http.ResponseWriter, user users.User, partnerID, s
 	web.PageFooter(w)
 }
 
-// HandleChatSend appends a posted message. Async (fetch) callers send
+// HandleChatSend appends a posted message to the session named in the
+// path (/chat/c/<conv>/<sid>/send). Async (fetch) callers send
 // X-Chat-Async and get 204; a plain form post gets a redirect back to
-// the conversation (no-JS fallback).
+// the conversation page (no-JS fallback).
 func HandleChatSend(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	if !users.IsAuthorized(r) {
-		http.Error(w, "chat requires a member account", http.StatusForbidden)
+	user, conv, ok := chatPathParticipant(w, r)
+	if !ok {
 		return
 	}
-	user := users.CurrentUser(r)
+	partner, _ := OtherInConv(user.ID, conv)
+	sessionID := r.PathValue("sid")
 
 	r.Body = http.MaxBytesReader(w, r.Body, maxChatMessageBytes)
 	if err := r.ParseForm(); err != nil {
@@ -286,25 +309,18 @@ func HandleChatSend(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return
 	}
-
-	partner := strings.TrimSpace(r.FormValue("with")) // partner user id
 	body := strings.TrimSpace(r.FormValue("body"))
 	cid := strings.TrimSpace(r.FormValue("cid")) // client-correlation id, echoed on the SSE broadcast
 	async := r.Header.Get("X-Chat-Async") == "1"
 
-	if !validChatPartner(user.ID, partner) {
-		http.Error(w, "unknown conversation partner", http.StatusBadRequest)
-		return
-	}
-	sessionID := requestSession(r, user.ID, partner)
 	if body == "" {
-		chatSendDone(w, r, partner, sessionID, async)
+		chatSendDone(w, r, conv, sessionID, async)
 		return
 	}
 	if strings.HasPrefix(body, "DROP_ON_FLOOR") {
 		// Test back door: accept the POST but neither save nor broadcast, so no
 		// SSE echo returns and the sender's client exercises its timeout path.
-		chatSendDone(w, r, partner, sessionID, async)
+		chatSendDone(w, r, conv, sessionID, async)
 		return
 	}
 	if _, err := AppendChatMessage(user, partner, sessionID, body, cid); err != nil {
@@ -313,35 +329,27 @@ func HandleChatSend(w http.ResponseWriter, r *http.Request) {
 	}
 	SetUserLastSession(user.ID, user.ID, partner, sessionID)
 	users.TouchUser(user.ID) // sending a message counts as activity
-	chatSendDone(w, r, partner, sessionID, async)
+	chatSendDone(w, r, conv, sessionID, async)
 }
 
-func chatSendDone(w http.ResponseWriter, r *http.Request, partner, sessionID string, async bool) {
+func chatSendDone(w http.ResponseWriter, r *http.Request, conv, sessionID string, async bool) {
 	if async {
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
-	http.Redirect(w, r,
-		"/chat?with="+url.QueryEscape(partner)+"&session="+url.QueryEscape(sessionID),
-		http.StatusSeeOther)
+	http.Redirect(w, r, "/chat/c/"+conv+"/"+url.PathEscape(sessionID), http.StatusSeeOther)
 }
 
-// HandleChatStream is the SSE endpoint. It replays from `since` (or the
-// Last-Event-ID on reconnect) and then streams live messages until the
-// client disconnects.
+// HandleChatStream is the SSE endpoint for /chat/c/<conv>/<sid>/stream.
+// It replays from `since` (or the Last-Event-ID on reconnect) and then
+// streams live messages until the client disconnects.
 func HandleChatStream(w http.ResponseWriter, r *http.Request) {
-	if !users.IsAuthorized(r) {
-		http.Error(w, "chat requires a member account", http.StatusForbidden)
+	user, conv, ok := chatPathParticipant(w, r)
+	if !ok {
 		return
 	}
-	user := users.CurrentUser(r)
-	partner := strings.TrimSpace(r.URL.Query().Get("with")) // partner user id
-	if !validChatPartner(user.ID, partner) {
-		http.Error(w, "unknown conversation partner", http.StatusBadRequest)
-		return
-	}
-
-	sessionID := requestSession(r, user.ID, partner)
+	partner, _ := OtherInConv(user.ID, conv)
+	sessionID := r.PathValue("sid")
 
 	since := 0
 	if lei := strings.TrimSpace(r.Header.Get("Last-Event-ID")); lei != "" {

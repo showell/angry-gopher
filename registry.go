@@ -18,13 +18,19 @@ func RegisterPages(mux *http.ServeMux) {
 	mux.HandleFunc("/puzzles/", lynrummy.HandlePuzzles)
 	mux.HandleFunc("/settings", chat.HandleSettings)
 	mux.HandleFunc("/settings/apikey", chat.HandleSettingsAPIKey)
+	// Path-style URL space (mirrors the on-disk layout):
+	//   /chat/c/<conv>/<sid>{,/stream,/send,/upload,/uploads/<file>}
+	// /chat/docs* + /chat/chat.js are reserved sub-routes; conv keys are
+	// digits-only so they can't collide with those literal names.
 	mux.HandleFunc("/chat", chat.HandleChat)
 	mux.HandleFunc("/chat/default", chat.HandleChatDefault)
 	mux.HandleFunc("/chat/chat.js", chat.HandleChatJS)
-	mux.HandleFunc("/chat/send", chat.HandleChatSend)
-	mux.HandleFunc("/chat/stream", chat.HandleChatStream)
-	mux.HandleFunc("/chat/upload", chat.HandleChatUpload)
-	mux.HandleFunc("/chat/uploads/", chat.HandleChatFile)
+	mux.HandleFunc("/chat/c/{conv}", chat.HandleChatConv)
+	mux.HandleFunc("/chat/c/{conv}/{sid}", chat.HandleChatPage)
+	mux.HandleFunc("/chat/c/{conv}/{sid}/stream", chat.HandleChatStream)
+	mux.HandleFunc("/chat/c/{conv}/{sid}/send", chat.HandleChatSend)
+	mux.HandleFunc("/chat/c/{conv}/{sid}/upload", chat.HandleChatUpload)
+	mux.HandleFunc("/chat/c/{conv}/{sid}/uploads/{file}", chat.HandleChatFile)
 	mux.HandleFunc("/chat/docs", chat.HandleDocs)
 	mux.HandleFunc("/chat/docs.js", chat.HandleDocsJS)
 	mux.HandleFunc("/chat/docs/new", chat.HandleDocsNew)
