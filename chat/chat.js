@@ -144,10 +144,13 @@
     var meta=document.createElement('div'); meta.className='chat-meta';
     meta.appendChild(document.createTextNode(m.from+' · '+m.time+' '));
     var quote=document.createElement('button'); quote.type='button'; quote.className='msg-quote';
-    quote.title='Quote this message in a reply (or press r)'; quote.textContent='quote-reply'; meta.appendChild(quote);
+    quote.title='Quote this message in a reply (q)'; quote.textContent='quote-reply'; meta.appendChild(quote);
     meta.appendChild(document.createTextNode(' '));
     var refer=document.createElement('button'); refer.type='button'; refer.className='msg-refer';
-    refer.title='Drop a "See MSG_…" reference into the compose box without quoting'; refer.textContent='refer'; meta.appendChild(refer);
+    refer.title='Drop a "See MSG_…" reference into the compose box without quoting (r)'; refer.textContent='refer'; meta.appendChild(refer);
+    meta.appendChild(document.createTextNode(' '));
+    var edit=document.createElement('button'); edit.type='button'; edit.className='msg-edit';
+    edit.title='Load this message back into compose with an "Edit of MSG_…" backlink (e)'; edit.textContent='edit'; meta.appendChild(edit);
     var body=document.createElement('div'); body.className='chat-body';
     body.innerHTML=m.html; /* sanitized server-side */
     div.appendChild(meta); div.appendChild(body);
@@ -596,6 +599,8 @@
     if(qb){ var mm=qb.closest('.chat-msg'); if(mm) quoteReply(mm); return; }
     var rb=t.closest&&t.closest('.msg-refer');
     if(rb){ var rmm=rb.closest('.chat-msg'); if(rmm) referReply(rmm); return; }
+    var eb=t.closest&&t.closest('.msg-edit');
+    if(eb){ var emm=eb.closest('.chat-msg'); if(emm) editMessage(emm); return; }
     var msg=t.closest&&t.closest('.chat-msg'); /* any click on a bubble selects it (incl. image / pre / MSG_ ref source) */
     if(msg) selectAndCommit(msg,true);
     var hit=hitInBody(t);
@@ -849,7 +854,8 @@
       case 'f': e.preventDefault(); fwdBtn.click(); return;
       case 't': e.preventDefault(); toggleView(); return;
       case '/': e.preventDefault(); openSearchModal(); return;
-      case 'r': if(selected){ e.preventDefault(); quoteReply(selected); } return;
+      case 'q': if(selected){ e.preventDefault(); quoteReply(selected); } return;
+      case 'r': if(selected){ e.preventDefault(); referReply(selected); } return;
       case 'e': if(selected){ e.preventDefault(); editMessage(selected); } return;
       case 'ArrowDown': e.preventDefault(); moveCursor(1); return;
       case 'ArrowUp':   e.preventDefault(); moveCursor(-1); return;

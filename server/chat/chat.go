@@ -269,7 +269,8 @@ func renderChatConversation(w http.ResponseWriter, user users.User, partnerID, c
     <button type="button" id="chat-open-compose" class="chat-open-compose">Open compose box (c)</button>
     <div class="chat-keyhelp">
       <div class="chat-keyhelp-title">Keyboard</div>
-      <div class="chat-key"><kbd>r</kbd> reply to the selected message</div>
+      <div class="chat-key"><kbd>q</kbd> quote-reply to the selected message</div>
+      <div class="chat-key"><kbd>r</kbd> refer (drop a "See MSG_…" link)</div>
       <div class="chat-key"><kbd>e</kbd> edit the selected message</div>
       <div class="chat-key"><kbd>b</kbd> back</div>
       <div class="chat-key"><kbd>f</kbd> forward</div>
@@ -599,10 +600,12 @@ html, body { height:100%; }
 .chat-body { overflow-wrap:anywhere; }
 .chat-meta { font-size:11px; color:#888; margin-bottom:3px; }
 .chat-meta .msg-quote,
-.chat-meta .msg-refer { font-size:10px; color:#888; background:none; border:none;
-                        padding:0 2px; cursor:pointer; text-decoration:underline; }
+.chat-meta .msg-refer,
+.chat-meta .msg-edit { font-size:10px; color:#888; background:none; border:none;
+                       padding:0 2px; cursor:pointer; text-decoration:underline; }
 .chat-meta .msg-quote:hover,
-.chat-meta .msg-refer:hover { color:#000080; }
+.chat-meta .msg-refer:hover,
+.chat-meta .msg-edit:hover { color:#000080; }
 .chat-body a.msg-ref { font-family:ui-monospace,Menlo,Consolas,monospace; font-size:0.9em;
                        background:#eaeaff; color:#000080; padding:0 4px; border-radius:3px;
                        text-decoration:none; }
