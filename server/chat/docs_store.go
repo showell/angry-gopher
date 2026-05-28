@@ -47,6 +47,14 @@ func validDocSlug(slug string) bool {
 	return len(slug) >= 1 && len(slug) <= 80 && docSlugRe.MatchString(slug)
 }
 
+// reservedDocSlugs would collide with the literal /chat/docs/<verb> routes
+// (list, new, save, render, post): /chat/docs/<name> must route to the verb,
+// not a doc. Creation steps over these names; they're still valid as URL
+// input (no such file exists, so a read just 404s).
+var reservedDocSlugs = map[string]bool{
+	"list": true, "new": true, "save": true, "render": true, "post": true,
+}
+
 // slugifyTitle reduces a free-form title to a filename slug: lowercase,
 // non-alphanumerics collapsed to single hyphens, trimmed. Returns
 // "untitled" if the title is empty or all-symbol.
@@ -80,13 +88,13 @@ func slugifyTitle(title string) string {
 // races (no lock around create), but a collision there just means the
 // second writer overwrites — acceptable for the single-author surface.
 func uniqueDocSlug(uid, base string) string {
-	if !fileExists(filepath.Join(userDocsDir(uid), base+".md")) {
+	if !reservedDocSlugs[base] && !fileExists(filepath.Join(userDocsDir(uid), base+".md")) {
 		return base
 	}
 	for n := 2; n < 1000; n++ {
 		cand := fmt.Sprintf("%s-%d", base, n)
 		if !fileExists(filepath.Join(userDocsDir(uid), cand+".md")) {
-			return cand
+			return cand // suffixed candidates can't hit a reserved name
 		}
 	}
 	return base // give up; caller will just overwrite

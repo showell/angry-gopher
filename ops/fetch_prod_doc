@@ -1,0 +1,22 @@
+#!/bin/bash
+# Print one PRODUCTION doc's raw markdown — the literal <slug>.md file — by
+# delegating to the dogfooded reference client, chat/chat_client.py.
+#
+# Required arg: the doc slug (from `ops/list_prod_docs`). The slug is a
+# genuine axis, so it's explicit and required — no silent default.
+#
+#   Usage: ops/fetch_prod_doc <slug>
+#
+# Wires the prod URL + key once; exercising it keeps the docs read API from
+# bit-rotting. Key at ~/.gopher_api_key.
+set -e
+
+source "$(dirname "$0")/_paths.sh"
+
+SLUG="$1"
+[ -n "$SLUG" ] || { echo "usage: ops/fetch_prod_doc <slug>  (slugs: ops/list_prod_docs)"; exit 1; }
+KEY_FILE="$HOME/.gopher_api_key"
+[ -f "$KEY_FILE" ] || { echo "missing $KEY_FILE — the prod API key"; exit 1; }
+
+GOPHER_API_KEY="$(cat "$KEY_FILE")" \
+  python3 "$GOPHER_DIR/chat/chat_client.py" docs-read https://lynrummy.com "$SLUG"

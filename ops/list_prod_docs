@@ -1,0 +1,20 @@
+#!/bin/bash
+# List the PRODUCTION docs the key-holder can see — slug + title for each
+# of your own /chat/docs entries — by delegating to the dogfooded reference
+# client, chat/chat_client.py.
+#
+# Zero arguments on purpose: this is the docs discovery entry point. It
+# prints the JSON from GET /chat/docs/list. Pick a slug from here, then read
+# it with `ops/fetch_prod_doc <slug>`.
+#
+# Like its siblings it wires the prod URL + key once; exercising it keeps the
+# docs API from bit-rotting. Key at ~/.gopher_api_key.
+set -e
+
+source "$(dirname "$0")/_paths.sh"
+
+KEY_FILE="$HOME/.gopher_api_key"
+[ -f "$KEY_FILE" ] || { echo "missing $KEY_FILE — the prod API key"; exit 1; }
+
+GOPHER_API_KEY="$(cat "$KEY_FILE")" \
+  python3 "$GOPHER_DIR/chat/chat_client.py" docs-list https://lynrummy.com

@@ -26,15 +26,60 @@ import (
 // pieces — but bounded so a runaway client can't fill the disk.
 const maxDocBytes = 1 << 20 // 1 MiB
 
-// HandleDocs serves /chat/docs: the three-pane page. ?d=<slug> picks an
-// existing doc; omitted or unknown slug shows the editor empty (with a
-// "pick or create one" nudge if there are no docs yet).
+// HandleDocs serves /chat/docs: the editor with no doc selected (doc list
+// in the sidebar, a "pick or create" nudge in the middle). Individual docs
+// live at /chat/docs/<slug> (HandleDocsItem); the list as JSON is at
+// /chat/docs/list (HandleDocsList).
 func HandleDocs(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/chat/docs" {
 		http.NotFound(w, r)
 		return
 	}
-	user := requireMember(w, r, "/chat/docs")
+	renderDocsEditor(w, r, "")
+}
+
+// HandleDocsItem serves /chat/docs/<slug> (the editor focused on one doc,
+// for browsers) and /chat/docs/<slug>.md (the raw markdown — the literal
+// file, for API clients). The .md form mirrors the on-disk path
+// users/<uid>/docs/<slug>.md, with the uid implicit (the authenticated
+// principal).
+func HandleDocsItem(w http.ResponseWriter, r *http.Request) {
+	slug := r.PathValue("slug")
+	if strings.HasSuffix(slug, ".md") {
+		serveRawDoc(w, r, strings.TrimSuffix(slug, ".md"))
+		return
+	}
+	renderDocsEditor(w, r, slug)
+}
+
+// serveRawDoc returns a doc's raw markdown body. API-shaped auth (401, not
+// an HTML login redirect) since this is the raw/bot path; acts on
+// CurrentUser only, so you only ever read your own docs.
+func serveRawDoc(w http.ResponseWriter, r *http.Request, slug string) {
+	if !users.IsAuthorized(r) {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+	user := users.CurrentUser(r)
+	path, err := docPath(user.ID, slug) // re-validates the slug
+	if err != nil || !fileExists(path) {
+		http.NotFound(w, r)
+		return
+	}
+	body, err := ReadUserDoc(user.ID, slug)
+	if err != nil {
+		http.Error(w, "read doc: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "text/markdown; charset=utf-8")
+	_, _ = io.WriteString(w, body)
+}
+
+// renderDocsEditor renders the three-pane editor for the given slug ("" =
+// no doc selected). Browser-facing, so unauthorized redirects to login and
+// an unknown/invalid slug drops back to the bare editor.
+func renderDocsEditor(w http.ResponseWriter, r *http.Request, slug string) {
+	user := requireMember(w, r, r.URL.Path)
 	if user.ID == "" {
 		return
 	}
@@ -43,13 +88,8 @@ func HandleDocs(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "list docs: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
-	slug := strings.TrimSpace(r.URL.Query().Get("d"))
-	if slug != "" && !validDocSlug(slug) {
-		http.Redirect(w, r, "/chat/docs", http.StatusSeeOther)
-		return
-	}
-	// Unknown slug → drop the ?d= so the page state stays consistent.
-	if slug != "" && !docExists(docs, slug) {
+	slug = strings.TrimSpace(slug)
+	if slug != "" && (!validDocSlug(slug) || !docExists(docs, slug)) {
 		http.Redirect(w, r, "/chat/docs", http.StatusSeeOther)
 		return
 	}
@@ -61,6 +101,40 @@ func HandleDocs(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	renderDocsPage(w, user, docs, slug, body)
+}
+
+// HandleDocsList serves GET /chat/docs/list: a JSON listing of the
+// authenticated principal's docs (slug + display title) for API-key
+// clients. Passive read, acts on CurrentUser only. The browser reads the
+// sidebar in the editor instead.
+func HandleDocsList(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if !users.IsAuthorized(r) {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+	user := users.CurrentUser(r)
+	docs, err := ListUserDocs(user.ID)
+	if err != nil {
+		http.Error(w, "list docs: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	type docEntry struct {
+		Slug  string `json:"slug"`
+		Title string `json:"title"`
+	}
+	entries := make([]docEntry, 0, len(docs))
+	for _, d := range docs {
+		entries = append(entries, docEntry{Slug: d.Slug, Title: d.Title})
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(struct {
+		Me   string     `json:"me"`
+		Docs []docEntry `json:"docs"`
+	}{Me: user.ID, Docs: entries})
 }
 
 func docExists(docs []DocSummary, slug string) bool {
@@ -93,7 +167,7 @@ func HandleDocsNew(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "create doc: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
-	http.Redirect(w, r, "/chat/docs?d="+url.QueryEscape(slug), http.StatusSeeOther)
+	http.Redirect(w, r, "/chat/docs/"+url.PathEscape(slug), http.StatusSeeOther)
 }
 
 // HandleDocsSave overwrites an existing doc's body (autosave target).
@@ -133,11 +207,10 @@ func HandleDocsSave(w http.ResponseWriter, r *http.Request) {
 }
 
 // HandleDocsPost appends the doc's current body as a chat message to the
-// caller's default chat partner, and returns the partner id plus the
-// new message's hash so the client can navigate to
-// /chat?with=<partner>#msg-<hash> and land on the posted message.
-// Today the default is hard-wired by the identity model: Steve (id 1)
-// talks to Apoorva (id 2); everyone else talks to Steve.
+// caller's default chat partner, and returns {conv, session, id} so the
+// client can navigate to /chat/c/<conv>/<sid>#msg-<id> and land on the
+// posted message. Today the default is hard-wired by the identity model:
+// Steve (id 1) talks to Apoorva (id 2); everyone else talks to Steve.
 func HandleDocsPost(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -256,8 +329,8 @@ func renderDocsPage(w http.ResponseWriter, user users.User, docs []DocSummary, s
 			if d.Slug == slug {
 				cls += " active"
 			}
-			fmt.Fprintf(w, `<li class="%s"><a href="/chat/docs?d=%s">%s</a></li>`,
-				cls, url.QueryEscape(d.Slug), html.EscapeString(d.Title))
+			fmt.Fprintf(w, `<li class="%s"><a href="/chat/docs/%s">%s</a></li>`,
+				cls, url.PathEscape(d.Slug), html.EscapeString(d.Title))
 		}
 		fmt.Fprint(w, `</ul>`)
 	}

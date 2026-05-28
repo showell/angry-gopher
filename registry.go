@@ -34,8 +34,13 @@ func RegisterPages(mux *http.ServeMux) {
 	mux.HandleFunc("/chat/c/{conv}/{sid}/uploads/{file}", chat.HandleChatFile)
 	mux.HandleFunc("/chat/docs", chat.HandleDocs)
 	mux.HandleFunc("/chat/docs.js", chat.HandleDocsJS)
+	mux.HandleFunc("/chat/docs/list", chat.HandleDocsList)
 	mux.HandleFunc("/chat/docs/new", chat.HandleDocsNew)
 	mux.HandleFunc("/chat/docs/save", chat.HandleDocsSave)
 	mux.HandleFunc("/chat/docs/render", chat.HandleDocsRender)
 	mux.HandleFunc("/chat/docs/post", chat.HandleDocsPost)
+	// Path-style doc URLs (mirror users/<uid>/docs/<slug>.md): /chat/docs/<slug>
+	// is the editor, /chat/docs/<slug>.md the raw file. Registered after the
+	// literal verbs above, which Go 1.22's ServeMux prefers over this wildcard.
+	mux.HandleFunc("/chat/docs/{slug}", chat.HandleDocsItem)
 }

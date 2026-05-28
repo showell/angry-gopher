@@ -25,12 +25,19 @@ principal (read + write, never admin); set GOPHER_API_KEY in the
 environment — never hard-code or paste a key. base_url is explicit (no
 default) so localhost-vs-prod is never silent.
 
+Docs (the per-user authoring surface) ride the same key + base_url:
+
+  docs()           GET /chat/docs/list       the key-holder's docs (slug+title)
+  read_doc(slug)   GET /chat/docs/<slug>.md  one doc's raw markdown (the file)
+
 CLI (the ops/ wrappers call these; you normally run the wrappers):
 
     GOPHER_API_KEY=… python3 chat_client.py conversations <base_url>
     GOPHER_API_KEY=… python3 chat_client.py fetch <base_url> <partner> [<sid>]
     GOPHER_API_KEY=… python3 chat_client.py post  <base_url> <partner> [<sid>]
                                                     (message body on stdin)
+    GOPHER_API_KEY=… python3 chat_client.py docs-list <base_url>
+    GOPHER_API_KEY=… python3 chat_client.py docs-read <base_url> <slug>
 
 `partner` is the other principal's numeric id; the conv key and the default
 session are taken from the matrix, so the client never re-derives them.
@@ -118,6 +125,24 @@ class ChatClient:
         except urllib.error.HTTPError as e:
             sys.exit(f"post failed: {e.code} {e.reason}")
 
+    def docs(self):
+        """List the key-holder's docs (slug + display title)."""
+        req = self._request("/chat/docs/list")
+        try:
+            with urllib.request.urlopen(req, timeout=RPC_TIMEOUT) as resp:
+                return json.load(resp)
+        except urllib.error.HTTPError as e:
+            sys.exit(f"docs list failed: {e.code} {e.reason}")
+
+    def read_doc(self, slug):
+        """Return one doc's raw markdown — the literal <slug>.md file."""
+        path = f"/chat/docs/{urllib.parse.quote(slug)}.md"
+        try:
+            with urllib.request.urlopen(self._request(path), timeout=RPC_TIMEOUT) as resp:
+                return resp.read().decode("utf-8")
+        except urllib.error.HTTPError as e:
+            sys.exit(f"doc read failed: {e.code} {e.reason}")
+
 
 def _new_client(base_url):
     key = os.environ.get("GOPHER_API_KEY")
@@ -129,14 +154,24 @@ def _new_client(base_url):
 def main():
     argv = sys.argv[1:]
     if len(argv) < 2:
-        sys.exit("usage: chat_client.py <conversations|fetch|post> <base_url> [partner] [sid]\n"
+        sys.exit("usage: chat_client.py <conversations|fetch|post|docs-list|docs-read> <base_url> [arg]\n"
                  "       (for prod, prefer the ops/ wrappers: list_prod_sessions,\n"
-                 "        fetch_prod_transcript, post_summary)")
+                 "        fetch_prod_transcript, post_summary, list_prod_docs, fetch_prod_doc)")
     cmd, base = argv[0], argv[1]
     client = _new_client(base)
 
     if cmd == "conversations":
         print(json.dumps(client.conversations(), indent=2, ensure_ascii=False))
+        return
+
+    if cmd == "docs-list":
+        print(json.dumps(client.docs(), indent=2, ensure_ascii=False))
+        return
+
+    if cmd == "docs-read":
+        if len(argv) < 3:
+            sys.exit("usage: chat_client.py docs-read <base_url> <slug>")
+        sys.stdout.write(client.read_doc(argv[2]))
         return
 
     if cmd in ("fetch", "post"):

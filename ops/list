@@ -79,6 +79,12 @@ Available ops commands (run from repo root):
   ops/post_summary <md>  Post a summary to the prod chat (Steve->Apoorva),
                          one message per blank-line paragraph, via the API
                          key (needs ~/.gopher_api_key). Irreversible.
+  ops/list_prod_docs     Print the prod docs you can see (slug + title);
+                         discovery for /chat/docs. Pick a slug from here.
+                         Delegates to chat/chat_client.py.
+  ops/fetch_prod_doc <slug>
+                         Print one prod doc's raw markdown (the <slug>.md
+                         file). Delegates to chat/chat_client.py.
 
 Credentials convention: store in ~/AngryGopher/ (non-hidden, outside git).
 EOF
