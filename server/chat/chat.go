@@ -74,8 +74,18 @@ func HandleChat(w http.ResponseWriter, r *http.Request) {
 		renderChatPicker(w, user)
 		return
 	}
+	explicitSession := strings.TrimSpace(r.URL.Query().Get("session"))
 	sessionID := requestSession(r, user.ID, partner)
 	SetUserLastSession(user.ID, user.ID, partner, sessionID)
+	// If the URL didn't name a session, redirect to one that does, so the
+	// URL bar reflects which session is on screen (and bookmarks /
+	// back-forward navigation carry the session, not just the partner).
+	if explicitSession == "" {
+		http.Redirect(w, r,
+			"/chat?with="+url.QueryEscape(partner)+"&session="+url.QueryEscape(sessionID),
+			http.StatusSeeOther)
+		return
+	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	renderChatConversation(w, user, partner, sessionID)
 }
@@ -288,13 +298,13 @@ func HandleChatSend(w http.ResponseWriter, r *http.Request) {
 	}
 	sessionID := requestSession(r, user.ID, partner)
 	if body == "" {
-		chatSendDone(w, r, partner, async)
+		chatSendDone(w, r, partner, sessionID, async)
 		return
 	}
 	if strings.HasPrefix(body, "DROP_ON_FLOOR") {
 		// Test back door: accept the POST but neither save nor broadcast, so no
 		// SSE echo returns and the sender's client exercises its timeout path.
-		chatSendDone(w, r, partner, async)
+		chatSendDone(w, r, partner, sessionID, async)
 		return
 	}
 	if _, err := AppendChatMessage(user, partner, sessionID, body, cid); err != nil {
@@ -303,15 +313,17 @@ func HandleChatSend(w http.ResponseWriter, r *http.Request) {
 	}
 	SetUserLastSession(user.ID, user.ID, partner, sessionID)
 	users.TouchUser(user.ID) // sending a message counts as activity
-	chatSendDone(w, r, partner, async)
+	chatSendDone(w, r, partner, sessionID, async)
 }
 
-func chatSendDone(w http.ResponseWriter, r *http.Request, partner string, async bool) {
+func chatSendDone(w http.ResponseWriter, r *http.Request, partner, sessionID string, async bool) {
 	if async {
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
-	http.Redirect(w, r, "/chat?with="+url.QueryEscape(partner), http.StatusSeeOther)
+	http.Redirect(w, r,
+		"/chat?with="+url.QueryEscape(partner)+"&session="+url.QueryEscape(sessionID),
+		http.StatusSeeOther)
 }
 
 // HandleChatStream is the SSE endpoint. It replays from `since` (or the
