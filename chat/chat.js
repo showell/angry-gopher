@@ -1,6 +1,5 @@
 (function(){
   var root=document.getElementById('chat-root');
-  var PARTNER=root.dataset.partner;
   var CONV=root.dataset.conv;
   var SESSION=root.dataset.session;
   /* All API endpoints live under the session's URL prefix (mirrors the
@@ -20,7 +19,7 @@
   var composeBody=document.getElementById('chat-compose-body');
   var closedPanel=document.getElementById('chat-closed-panel');
   var openComposeBtn=document.getElementById('chat-open-compose');
-  function toBottom(){ armScrollSuppress(); history.scrollTop=history.scrollHeight; }
+  function toBottom(){ armedScroll(function(){ history.scrollTop=history.scrollHeight; }); }
   /* Compose is closeable: Esc on an empty box closes it and hands focus back
      to the feed; "c" (or the panel button) reopens it. Closing swaps the
      compose body for a panel with the reopen button + a keyboard cheatsheet,
@@ -101,8 +100,8 @@
      not for a fixed window: a far jump animates well past any time guess, and a
      centered target means the "topmost visible" the detector would pick isn't
      the target anyway — so a fixed window let the detector wake mid-flight and
-     land on the wrong message. armScrollSuppress() must be called right before
-     each programmatic scroll. */
+     land on the wrong message. Every programmatic scroll must arm suppression
+     first — route them all through armedScroll() so the arm can't be forgotten. */
   var progScroll=false, progScrollTimer=null;
   function endProgScroll(){ progScroll=false; progScrollTimer=null; }
   function armScrollSuppress(){
@@ -110,6 +109,10 @@
     if(progScrollTimer) clearTimeout(progScrollTimer);
     progScrollTimer=setTimeout(endProgScroll, 150); /* re-armed by each scroll event below */
   }
+  /* The one way to scroll programmatically: arm suppression, then scroll.
+     Bundling them means no call site can do the scroll while forgetting the
+     arm (which would let the scroll listener steal the selection mid-flight). */
+  function armedScroll(scroll){ armScrollSuppress(); scroll(); }
   function syncSelectionToScroll(){
     if(progScroll) return;
     var el=selectionCandidate();
@@ -278,8 +281,7 @@
        keeps our own activity from tripping it. */
     userScrolledFeed=false;
     if(focusEl){
-      armScrollSuppress();
-      focusEl.scrollIntoView({block:'center',behavior:'auto'});
+      armedScroll(function(){ focusEl.scrollIntoView({block:'center',behavior:'auto'}); });
       selectAndCommit(focusEl,true); /* pushes the message onto the back/forward stack */
     } else if(anchorToBottom){
       toBottom();
@@ -304,14 +306,12 @@
   }
   function anchorOnFocus(el){
     if(userScrolledFeed) return false;
-    armScrollSuppress();
-    el.scrollIntoView({block:'center',behavior:'auto'});
+    armedScroll(function(){ el.scrollIntoView({block:'center',behavior:'auto'}); });
     return true;
   }
   function anchorOnBottom(){
     if(userScrolledFeed) return false;
-    armScrollSuppress();
-    history.scrollTop=history.scrollHeight;
+    toBottom();
     return true;
   }
   function stabilizeOn(focusEl, reapply){
@@ -550,8 +550,8 @@
     var hashTarget=ref.getAttribute('href').replace(/^#/, '');
     var tgt=document.getElementById(hashTarget);
     if(tgt){
-      armScrollSuppress();
-      tgt.scrollIntoView({block:'center',behavior:'auto'}); selectAndCommit(tgt,true);
+      armedScroll(function(){ tgt.scrollIntoView({block:'center',behavior:'auto'}); });
+      selectAndCommit(tgt,true);
       return;
     }
     /* Parse <session-id>_<n> out of msg-<id>; session is everything
@@ -575,8 +575,7 @@
      history themselves (and the scroll they trigger is suppressed). */
   function goToEntry(){
     if(pos<0) return;
-    armScrollSuppress();
-    var el=scrollIndexToTop(entries[pos]); if(el) selectMsg(el);
+    var el; armedScroll(function(){ el=scrollIndexToTop(entries[pos]); }); if(el) selectMsg(el);
     updateNav();
   }
   /* ← walks back through the committed trail. If you've scrolled away without
@@ -639,14 +638,12 @@
     var idx=selected?msgs.indexOf(selected):-1;
     if(idx<0){ var c=selectionCandidate(); idx=c?msgs.indexOf(c):0; if(idx<0) idx=0; }
     else idx=Math.max(0,Math.min(msgs.length-1,idx+delta));
-    armScrollSuppress();
-    selectAndCommit(msgs[idx],false); revealInFeed(msgs[idx]); updateNav();
+    selectAndCommit(msgs[idx],false); armedScroll(function(){ revealInFeed(msgs[idx]); }); updateNav();
   }
   /* Jump cursor + feed to the very top (bottom=false) or bottom (bottom=true). */
   function cursorToExtreme(bottom){
-    history.scrollTop=bottom?history.scrollHeight:0;
+    armedScroll(function(){ history.scrollTop=bottom?history.scrollHeight:0; });
     var msgs=visibleMsgs(); if(!msgs.length) return;
-    armScrollSuppress();
     selectAndCommit(bottom?msgs[msgs.length-1]:msgs[0],true); updateNav();
   }
   /* PgUp/PgDn: page the feed if it can scroll that way (cursor follows the
@@ -817,8 +814,7 @@
     if(SR.sel<0||!SR.items[SR.sel]) return;
     var el=SR.items[SR.sel].el;
     closeSearchModal();
-    armScrollSuppress();
-    selectAndCommit(el,true); scrollToIndex(idxOf(el)); updateNav(); /* jump + push nav stack */
+    selectAndCommit(el,true); armedScroll(function(){ scrollToIndex(idxOf(el)); }); updateNav(); /* jump + push nav stack */
   }
   function onSearchKey(e){
     if(e.key==='ArrowDown'){ e.preventDefault(); if(SR.items.length){ SR.sel=Math.min(SR.items.length-1,SR.sel+1); paintSel(); } }
