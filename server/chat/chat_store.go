@@ -1,35 +1,50 @@
 // Chat storage + live-notify layer. A conversation between two players
-// is one append-only `.md` file, kept deliberately human-readable. Each
-// message is a block: a MSG_<hash> id line, a from/date header, a blank
-// line, then the message body as VERBATIM markdown. Blocks are joined by
-// chatSep ("\n\n-------------\n", a 13-hyphen rule); a body line that
-// would itself be 13 hyphens gets one extra backslash on write, stripped
-// back on read (see escapeBodyLine), so it can't be mistaken for the
-// separator.
+// lives in one directory under {ChatDataRoot}/<conv-key>/; sessions
+// within that conversation are individual files under sessions/. Each
+// session file is the same append-only `.md` shape we've always used —
+// a block per message: a MSG_<id> id line, a from/date header, a blank
+// line, then the message body as VERBATIM markdown. Blocks are joined
+// by chatSep ("\n\n-------------\n", a 13-hyphen rule); a body line
+// that would itself be 13 hyphens gets one extra backslash on write,
+// stripped back on read (see escapeBodyLine), so it can't be mistaken
+// for the separator.
 //
 // One directory per conversation, keyed by the pair (see chatPairKey):
-// messages.md is the transcript both participants append to, and
-// uploads/ holds its image uploads — so a conversation is one
-// self-contained, access-controllable unit. Appends are serialized by
-// chatMu — a single-process server makes a mutex sufficient, and it's
-// needed because a long post can exceed PIPE_BUF, past which POSIX
-// append-atomicity no longer holds.
+//
+//	<root>/<conv>/sessions/<session-id>.md         — the session transcript
+//	<root>/<conv>/sessions/<session-id>.uploads/   — its image uploads
+//
+// Sessions are identified by date-prefixed slugs (e.g. "2026-05-23")
+// so they sort lexicographically by recency. The newest session is the
+// default landing target; a per-user pointer (chat_state.go) tracks
+// what each user was last looking at.
+//
+// Message ids are MSG_<session-id>_<n>, where n is the 1-based index
+// within the session. The id is computed at append time and stored as
+// the block's MSG_ line. This means session-ids may NOT contain
+// underscores (the trailing _<n> would be ambiguous); date-prefixed
+// slugs satisfy that naturally.
+//
+// Appends are serialized by chatMu — a single-process server makes a
+// mutex sufficient, and it's needed because a long post can exceed
+// PIPE_BUF, past which POSIX append-atomicity no longer holds.
 //
 // chatMu also guards the in-memory subscriber registry, so an SSE
 // client can read the current backlog and subscribe for future
 // messages atomically: any concurrent append is serialized either
 // fully before (and thus in the backlog) or fully after (and thus
-// delivered on the channel) — never lost in the gap.
+// delivered on the channel) — never lost in the gap. The subscriber
+// registry is keyed by (conv, session) so a subscriber on session X
+// doesn't see messages appended to session Y in the same conv.
 package chat
 
 import (
 	"angry-gopher/server/users"
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -57,20 +72,21 @@ var (
 	sepUnescapeRe = regexp.MustCompile(`^\\+-------------$`)
 )
 
-// ChatMessage is one stored message. Hash is the 6-hex id written as the
-// MSG_ line atop the block and used for MSG_ references.
+// ChatMessage is one stored message. ID is the full MSG_ id written as
+// the MSG_ line atop the block, e.g. "2026-05-23_42" for message #42
+// in session 2026-05-23, and is what MSG_ references resolve to.
 type ChatMessage struct {
 	From string
 	At   time.Time
 	Body string
-	Hash string
+	ID   string
 }
 
-// chatEvent is a message plus its 0-based index in the conversation,
-// used as the SSE event id so a reconnecting client can resume. Cid is the
-// sender's client-correlation id, carried on the LIVE broadcast only (never
-// stored, so it's absent on backlog/replay) — it lets the sending client
-// confirm its message round-tripped (saved + echoed).
+// chatEvent is a message plus its 0-based index in the session, used
+// as the SSE event id so a reconnecting client can resume. Cid is the
+// sender's client-correlation id, carried on the LIVE broadcast only
+// (never stored, so it's absent on backlog/replay) — it lets the
+// sending client confirm its message round-tripped (saved + echoed).
 type chatEvent struct {
 	Index int
 	Msg   ChatMessage
@@ -78,7 +94,9 @@ type chatEvent struct {
 }
 
 var (
-	chatMu   sync.Mutex
+	chatMu sync.Mutex
+	// chatSubs is keyed by "<conv-key>/<session-id>" so subscribers on
+	// session X don't see messages appended to session Y in the same conv.
 	chatSubs = map[string]map[chan chatEvent]struct{}{}
 )
 
@@ -93,26 +111,35 @@ func chatPairKey(a, b string) string {
 }
 
 // chatConvDir is a conversation's own directory; everything for the pair
-// (messages + uploads) lives under it, so a conversation is one
+// (sessions + their uploads) lives under it, so a conversation is one
 // self-contained, ACL-able unit.
 func chatConvDir(a, b string) string {
 	return filepath.Join(ChatDataRoot, chatPairKey(a, b))
 }
 
-// chatMessagesPath is the conversation transcript file.
-func chatMessagesPath(a, b string) string {
-	return filepath.Join(chatConvDir(a, b), "messages.md")
+// chatSessionsDir is where a conversation's session files live.
+func chatSessionsDir(a, b string) string {
+	return filepath.Join(chatConvDir(a, b), "sessions")
 }
 
-// chatUploadsDir is where a conversation's image uploads live.
-func chatUploadsDir(a, b string) string {
-	return filepath.Join(chatConvDir(a, b), "uploads")
+// chatSessionPath is the on-disk transcript for one session of a
+// conversation.
+func chatSessionPath(a, b, sessionID string) string {
+	return filepath.Join(chatSessionsDir(a, b), sessionID+".md")
 }
 
-// ChatUploadsDirForKey is the uploads dir addressed by a conversation
-// key (used by the serving path, which knows the key, not the pair).
-func ChatUploadsDirForKey(key string) string {
-	return filepath.Join(ChatDataRoot, key, "uploads")
+// chatSessionUploadsDir is where a session's image uploads live — a
+// sidecar dir alongside the session file, so each session owns its
+// own uploads cleanly.
+func chatSessionUploadsDir(a, b, sessionID string) string {
+	return filepath.Join(chatSessionsDir(a, b), sessionID+".uploads")
+}
+
+// ChatSessionUploadsDirForKey is the uploads dir addressed by a
+// conversation key (used by the serving path, which knows the key,
+// not the pair).
+func ChatSessionUploadsDirForKey(key, sessionID string) string {
+	return filepath.Join(ChatDataRoot, key, "sessions", sessionID+".uploads")
 }
 
 // ChatKeyParticipant reports whether user id `user` is in the
@@ -127,6 +154,52 @@ func ChatKeyParticipant(key, user string) bool {
 		return false
 	}
 	return user == x || user == y
+}
+
+// ListChatSessions returns every session id for a conversation, sorted
+// newest-first (which, given date-prefixed slugs, means lexicographic
+// descending). An empty list = no sessions on disk yet.
+func ListChatSessions(a, b string) []string {
+	entries, err := os.ReadDir(chatSessionsDir(a, b))
+	if err != nil {
+		return nil
+	}
+	var out []string
+	for _, e := range entries {
+		if e.IsDir() {
+			continue // .uploads dirs
+		}
+		name := e.Name()
+		if !strings.HasSuffix(name, ".md") {
+			continue
+		}
+		out = append(out, strings.TrimSuffix(name, ".md"))
+	}
+	sort.Sort(sort.Reverse(sort.StringSlice(out)))
+	return out
+}
+
+// DefaultChatSession returns the newest session id for a conversation,
+// or "" if none exist yet.
+func DefaultChatSession(a, b string) string {
+	if list := ListChatSessions(a, b); len(list) > 0 {
+		return list[0]
+	}
+	return ""
+}
+
+// ChatSessionExists reports whether the given session id has a file
+// on disk for this conversation pair.
+func ChatSessionExists(a, b, sessionID string) bool {
+	_, err := os.Stat(chatSessionPath(a, b, sessionID))
+	return err == nil
+}
+
+// chatMsgID is the message's stable id: the session id, an underscore,
+// and the 1-based index of this message within that session. Stored as
+// the block's MSG_ line.
+func chatMsgID(sessionID string, index int) string {
+	return fmt.Sprintf("%s_%d", sessionID, index+1)
 }
 
 // escapeBodyLine protects a body line that would collide with the
@@ -146,17 +219,8 @@ func unescapeBodyLine(line string) string {
 	return line
 }
 
-// chatMsgHash is a message's stable 6-hex-uppercase id. Derived from the
-// (immutable, append-only) index + author + timestamp + body; computed
-// once at append time and then stored as the block's MSG_ line.
-func chatMsgHash(index int, msg ChatMessage) string {
-	sum := sha256.Sum256([]byte(fmt.Sprintf("%d\x00%s\x00%s\x00%s",
-		index, msg.From, msg.At.UTC().Format(time.RFC3339), msg.Body)))
-	return strings.ToUpper(hex.EncodeToString(sum[:3]))
-}
-
 // encodeChatBlock renders one message to its on-disk block: the MSG_
-// hash line, the from/date header, a blank line, then the verbatim
+// id line, the from/date header, a blank line, then the verbatim
 // markdown body. No separator — chatStoredForm adds that.
 func encodeChatBlock(msg ChatMessage) string {
 	bodyLines := strings.Split(msg.Body, "\n")
@@ -164,13 +228,13 @@ func encodeChatBlock(msg ChatMessage) string {
 		bodyLines[i] = escapeBodyLine(line)
 	}
 	return fmt.Sprintf("MSG_%s\nfrom: %s\ndate: %s\n\n%s",
-		msg.Hash, msg.From, msg.At.UTC().Format(time.RFC3339),
+		msg.ID, msg.From, msg.At.UTC().Format(time.RFC3339),
 		strings.Join(bodyLines, "\n"))
 }
 
 // chatStoredForm is exactly what message `index` contributes to the file:
 // its block, preceded by the separator for every message after the
-// first. Concatenated over a conversation these reproduce the file, so
+// first. Concatenated over a session these reproduce the file, so
 // the Transcript view (built from these) mirrors storage byte-for-byte.
 func chatStoredForm(index int, msg ChatMessage) string {
 	if index == 0 {
@@ -179,7 +243,7 @@ func chatStoredForm(index int, msg ChatMessage) string {
 	return chatSep + encodeChatBlock(msg)
 }
 
-// decodeChatFile parses a whole conversation file into messages.
+// decodeChatFile parses a whole session file into messages.
 func decodeChatFile(data []byte) []ChatMessage {
 	text := string(data)
 	// Messages are joined by chatSep (no trailing separator), so splitting
@@ -195,14 +259,14 @@ func decodeChatFile(data []byte) []ChatMessage {
 	return out
 }
 
-// decodeChatBlock parses one block (MSG_ hash line, header lines, blank,
+// decodeChatBlock parses one block (MSG_ id line, header lines, blank,
 // body).
 func decodeChatBlock(piece string) ChatMessage {
 	lines := strings.Split(piece, "\n")
 	var msg ChatMessage
 	i := 0
 	if i < len(lines) && strings.HasPrefix(lines[i], "MSG_") {
-		msg.Hash = strings.TrimPrefix(lines[i], "MSG_")
+		msg.ID = strings.TrimPrefix(lines[i], "MSG_")
 		i++
 	}
 	for ; i < len(lines); i++ {
@@ -227,8 +291,8 @@ func decodeChatBlock(piece string) ChatMessage {
 	return msg
 }
 
-// readChatFileLocked reads + parses a conversation file. Caller holds
-// chatMu. A missing file is an empty conversation.
+// readChatFileLocked reads + parses one session file. Caller holds
+// chatMu. A missing file is an empty session.
 func readChatFileLocked(path string) ([]ChatMessage, error) {
 	data, err := os.ReadFile(path)
 	if os.IsNotExist(err) {
@@ -240,20 +304,22 @@ func readChatFileLocked(path string) ([]ChatMessage, error) {
 	return decodeChatFile(data), nil
 }
 
-// ReadChatMessages returns the whole conversation between two players.
-func ReadChatMessages(a, b string) ([]ChatMessage, error) {
+// ReadChatSession returns every message in one session of a
+// conversation.
+func ReadChatSession(a, b, sessionID string) ([]ChatMessage, error) {
 	chatMu.Lock()
 	defer chatMu.Unlock()
-	return readChatFileLocked(chatMessagesPath(a, b))
+	return readChatFileLocked(chatSessionPath(a, b, sessionID))
 }
 
-// AppendChatMessage stores a message from `from` to the partner id and
-// publishes it to any live subscribers. The conversation is keyed by the
-// two ids; the message records the sender's display name. Returns the
-// stored message (with its normalized timestamp).
-func AppendChatMessage(from users.User, partnerID, body, cid string) (ChatMessage, error) {
-	key := chatPairKey(from.ID, partnerID)
-	path := chatMessagesPath(from.ID, partnerID)
+// AppendChatMessage stores a message from `from` to the partner id,
+// writing it to the named session, and publishes it to any live
+// subscribers of that (conv, session). Returns the stored message
+// (with its normalized timestamp + id).
+func AppendChatMessage(from users.User, partnerID, sessionID, body, cid string) (ChatMessage, error) {
+	convKey := chatPairKey(from.ID, partnerID)
+	subKey := convKey + "/" + sessionID
+	path := chatSessionPath(from.ID, partnerID, sessionID)
 	msg := ChatMessage{From: from.Name, At: time.Now().UTC(), Body: body}
 
 	chatMu.Lock()
@@ -264,7 +330,7 @@ func AppendChatMessage(from users.User, partnerID, body, cid string) (ChatMessag
 		return msg, err
 	}
 	index := len(existing)
-	msg.Hash = chatMsgHash(index, msg)
+	msg.ID = chatMsgID(sessionID, index)
 
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return msg, err
@@ -282,7 +348,7 @@ func AppendChatMessage(from users.User, partnerID, body, cid string) (ChatMessag
 	}
 
 	evt := chatEvent{Index: index, Msg: msg, Cid: cid}
-	for ch := range chatSubs[key] {
+	for ch := range chatSubs[subKey] {
 		select {
 		case ch <- evt:
 		default: // slow subscriber; it will replay on reconnect
@@ -291,35 +357,37 @@ func AppendChatMessage(from users.User, partnerID, body, cid string) (ChatMessag
 	return msg, nil
 }
 
-// OpenChatStream atomically snapshots the backlog from `since` onward
-// and registers a subscriber for future messages. The returned cancel
-// must be called to unsubscribe (and close the channel).
-func OpenChatStream(a, b string, since int) (backlog []chatEvent, ch <-chan chatEvent, cancel func()) {
-	key := chatPairKey(a, b)
+// OpenChatStream atomically snapshots one session's backlog from
+// `since` onward and registers a subscriber for future messages in
+// that session. The returned cancel must be called to unsubscribe
+// (and close the channel).
+func OpenChatStream(a, b, sessionID string, since int) (backlog []chatEvent, ch <-chan chatEvent, cancel func()) {
+	convKey := chatPairKey(a, b)
+	subKey := convKey + "/" + sessionID
 	out := make(chan chatEvent, 32)
 
 	chatMu.Lock()
 	defer chatMu.Unlock()
 
-	all, _ := readChatFileLocked(chatMessagesPath(a, b))
+	all, _ := readChatFileLocked(chatSessionPath(a, b, sessionID))
 	for i := since; i >= 0 && i < len(all); i++ {
 		backlog = append(backlog, chatEvent{Index: i, Msg: all[i]})
 	}
-	if chatSubs[key] == nil {
-		chatSubs[key] = map[chan chatEvent]struct{}{}
+	if chatSubs[subKey] == nil {
+		chatSubs[subKey] = map[chan chatEvent]struct{}{}
 	}
-	chatSubs[key][out] = struct{}{}
+	chatSubs[subKey][out] = struct{}{}
 
 	cancel = func() {
 		chatMu.Lock()
 		defer chatMu.Unlock()
-		if subs := chatSubs[key]; subs != nil {
+		if subs := chatSubs[subKey]; subs != nil {
 			if _, ok := subs[out]; ok {
 				delete(subs, out)
 				close(out)
 			}
 			if len(subs) == 0 {
-				delete(chatSubs, key)
+				delete(chatSubs, subKey)
 			}
 		}
 	}

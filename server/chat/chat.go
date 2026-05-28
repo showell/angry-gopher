@@ -43,7 +43,9 @@ func formatChatTime(t time.Time) string {
 }
 
 // HandleChat serves /chat: a conversation when ?with=<partner> names a
-// valid partner, otherwise a small people-picker.
+// valid partner, otherwise a small people-picker. The session being
+// viewed is the user's last-viewed session for the conv (TBD; for now
+// always the newest), addressable explicitly via ?session=<id>.
 func HandleChat(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/chat" {
 		http.NotFound(w, r)
@@ -61,8 +63,8 @@ func HandleChat(w http.ResponseWriter, r *http.Request) {
 	partner := strings.TrimSpace(r.URL.Query().Get("with")) // partner user id
 
 	// Optimize for the common case: most members have exactly one other
-	// member to talk to (the only prod conversation today is Steve↔Apoorva).
-	// With one possible partner, the picker is pure friction — skip it.
+	// principal to talk to (Steve↔Apoorva, Steve↔Claude). With one
+	// possible partner, the picker is pure friction — skip it.
 	if !validChatPartner(user.ID, partner) {
 		if only, ok := onlyOtherPartner(user.ID); ok {
 			http.Redirect(w, r, "/chat?with="+url.QueryEscape(only), http.StatusSeeOther)
@@ -72,8 +74,62 @@ func HandleChat(w http.ResponseWriter, r *http.Request) {
 		renderChatPicker(w, user)
 		return
 	}
+	sessionID := requestSession(r, user.ID, partner)
+	SetUserLastSession(user.ID, user.ID, partner, sessionID)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	renderChatConversation(w, user, partner)
+	renderChatConversation(w, user, partner, sessionID)
+}
+
+// requestSession picks the session a chat request is acting on:
+// prefers an explicit ?session=<id> (if it exists on disk), falls back
+// to this user's last-viewed session for the conv (chat_state.go),
+// then to the conv's newest session, and as a last resort returns
+// today's date for a brand-new conv with no sessions yet (so the
+// first message auto-creates one). The form value is also honored
+// for POST endpoints.
+func requestSession(r *http.Request, a, b string) string {
+	sid := strings.TrimSpace(r.URL.Query().Get("session"))
+	if sid == "" {
+		sid = strings.TrimSpace(r.FormValue("session"))
+	}
+	if sid != "" && ChatSessionExists(a, b, sid) {
+		return sid
+	}
+	if last := LastUserSession(a, a, b); last != "" && ChatSessionExists(a, b, last) {
+		return last
+	}
+	if def := DefaultChatSession(a, b); def != "" {
+		return def
+	}
+	return time.Now().UTC().Format("2006-01-02")
+}
+
+// HandleChatDefault redirects to the user's most-recently-viewed
+// (conv, session) — the "take me back where I was" landing page.
+// Falls back to /chat (the picker / single-partner shortcut) if the
+// user has never been to any conv.
+func HandleChatDefault(w http.ResponseWriter, r *http.Request) {
+	if !users.IsAuthorized(r) {
+		http.Redirect(w, r, "/login/full?next="+url.QueryEscape("/chat/default"), http.StatusSeeOther)
+		return
+	}
+	user := users.CurrentUser(r)
+	convKey := LastUserConv(user.ID)
+	if convKey == "" {
+		http.Redirect(w, r, "/chat", http.StatusSeeOther)
+		return
+	}
+	partner, ok := OtherInConv(user.ID, convKey)
+	if !ok {
+		http.Redirect(w, r, "/chat", http.StatusSeeOther)
+		return
+	}
+	sid := LastUserSession(user.ID, user.ID, partner)
+	target := "/chat?with=" + url.QueryEscape(partner)
+	if sid != "" {
+		target += "&session=" + url.QueryEscape(sid)
+	}
+	http.Redirect(w, r, target, http.StatusSeeOther)
 }
 
 // onlyOtherPartner returns the partner id when there is exactly one
@@ -134,8 +190,8 @@ func renderChatPicker(w http.ResponseWriter, user users.User) {
 	web.PageFooter(w)
 }
 
-func renderChatConversation(w http.ResponseWriter, user users.User, partnerID string) {
-	msgs, err := ReadChatMessages(user.ID, partnerID)
+func renderChatConversation(w http.ResponseWriter, user users.User, partnerID, sessionID string) {
+	msgs, err := ReadChatSession(user.ID, partnerID, sessionID)
 	if err != nil {
 		http.Error(w, "read conversation: "+err.Error(), http.StatusInternalServerError)
 		return
@@ -144,7 +200,8 @@ func renderChatConversation(w http.ResponseWriter, user users.User, partnerID st
 
 	chatPageHeader(w, "Chat with "+partnerName, user, "")
 	fmt.Fprint(w, chatCSS)
-	fmt.Fprintf(w, `<div id="chat-root" data-partner="%s">`, html.EscapeString(partnerID))
+	fmt.Fprintf(w, `<div id="chat-root" data-partner="%s" data-session="%s">`,
+		html.EscapeString(partnerID), html.EscapeString(sessionID))
 	fmt.Fprint(w, `<div class="chat-views" id="chat-views">`+
 		`<span class="chat-view-tabs" title="Toggle with t">`+
 		`<a href="#" data-view="rendered" class="active">Rendered</a> · `+
@@ -229,6 +286,7 @@ func HandleChatSend(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "unknown conversation partner", http.StatusBadRequest)
 		return
 	}
+	sessionID := requestSession(r, user.ID, partner)
 	if body == "" {
 		chatSendDone(w, r, partner, async)
 		return
@@ -239,10 +297,11 @@ func HandleChatSend(w http.ResponseWriter, r *http.Request) {
 		chatSendDone(w, r, partner, async)
 		return
 	}
-	if _, err := AppendChatMessage(user, partner, body, cid); err != nil {
+	if _, err := AppendChatMessage(user, partner, sessionID, body, cid); err != nil {
 		http.Error(w, "save message: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
+	SetUserLastSession(user.ID, user.ID, partner, sessionID)
 	users.TouchUser(user.ID) // sending a message counts as activity
 	chatSendDone(w, r, partner, async)
 }
@@ -270,6 +329,8 @@ func HandleChatStream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	sessionID := requestSession(r, user.ID, partner)
+
 	since := 0
 	if lei := strings.TrimSpace(r.Header.Get("Last-Event-ID")); lei != "" {
 		if n, err := strconv.Atoi(lei); err == nil {
@@ -291,7 +352,7 @@ func HandleChatStream(w http.ResponseWriter, r *http.Request) {
 	// so it isn't torn down mid-stream.
 	_ = rc.SetWriteDeadline(time.Time{})
 
-	backlog, ch, cancel := OpenChatStream(user.ID, partner, since)
+	backlog, ch, cancel := OpenChatStream(user.ID, partner, sessionID, since)
 	defer cancel()
 
 	// Preamble: tell the client how many backlog events to expect so it can
@@ -341,7 +402,9 @@ func HandleChatStream(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// chatWireMsg is the JSON payload of one SSE message event.
+// chatWireMsg is the JSON payload of one SSE message event. `id` is the
+// full MSG_ id (e.g. "2026-05-23_42"); the client uses it for #msg-<id>
+// anchors and for MSG_ref click resolution.
 type chatWireMsg struct {
 	Index int    `json:"index"`
 	From  string `json:"from"`
@@ -349,7 +412,7 @@ type chatWireMsg struct {
 	HTML  string `json:"html"`
 	Enc   string `json:"enc"`
 	Body  string `json:"body"` // raw markdown source, for client-side quote-reply
-	Hash  string `json:"hash"`
+	ID    string `json:"id"`
 	Mine  bool   `json:"mine"`
 	Cid   string `json:"cid,omitempty"` // sender's correlation id (live broadcast only)
 }
@@ -362,7 +425,7 @@ func writeChatEvent(w io.Writer, rc *http.ResponseController, evt chatEvent, me 
 		HTML:  string(RenderChatMarkdown(evt.Msg.Body)),
 		Enc:   chatStoredForm(evt.Index, evt.Msg),
 		Body:  evt.Msg.Body,
-		Hash:  evt.Msg.Hash,
+		ID:    evt.Msg.ID,
 		Mine:  evt.Msg.From == me,
 		Cid:   evt.Cid,
 	}

@@ -171,7 +171,8 @@ func HandleDocsPost(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "no default chat partner available", http.StatusBadRequest)
 		return
 	}
-	msg, err := AppendChatMessage(user, partner, body, "")
+	sessionID := requestSession(r, user.ID, partner)
+	msg, err := AppendChatMessage(user, partner, sessionID, body, "")
 	if err != nil {
 		http.Error(w, "send to chat: "+err.Error(), http.StatusInternalServerError)
 		return
@@ -180,7 +181,8 @@ func HandleDocsPost(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]string{
 		"partner": partner,
-		"hash":    msg.Hash,
+		"session": sessionID,
+		"id":      msg.ID,
 	})
 }
 

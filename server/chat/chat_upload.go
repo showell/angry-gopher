@@ -90,6 +90,7 @@ func HandleChatUpload(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "unknown conversation partner", http.StatusBadRequest)
 		return
 	}
+	sessionID := requestSession(r, user.ID, partner)
 
 	// Cap the body (with a little slack for multipart framing); enforce
 	// the real image-size limit on the decoded bytes below.
@@ -134,7 +135,7 @@ func HandleChatUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	name := token + "." + ext
-	dir := chatUploadsDir(user.ID, partner)
+	dir := chatSessionUploadsDir(user.ID, partner, sessionID)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		http.Error(w, "mkdir: "+err.Error(), http.StatusInternalServerError)
 		return
@@ -159,7 +160,7 @@ func HandleChatUpload(w http.ResponseWriter, r *http.Request) {
 	key := chatPairKey(user.ID, partner)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{
-		"url":    "/chat/uploads/" + url.PathEscape(key) + "/" + name,
+		"url":    "/chat/uploads/" + url.PathEscape(key) + "/" + url.PathEscape(sessionID) + "/" + name,
 		"name":   header.Filename,
 		"width":  width,
 		"height": height,
@@ -167,12 +168,18 @@ func HandleChatUpload(w http.ResponseWriter, r *http.Request) {
 }
 
 // HandleChatFile serves an uploaded image, gated to participants of the
-// conversation named in the URL.
+// conversation named in the URL. URL shape:
+// /chat/uploads/<conv-key>/<session-id>/<filename>.
 func HandleChatFile(w http.ResponseWriter, r *http.Request) {
 	user := users.CurrentUser(r)
 	rest := strings.TrimPrefix(r.URL.Path, "/chat/uploads/")
-	key, name, found := strings.Cut(rest, "/")
-	if !found || !chatUploadName.MatchString(name) {
+	key, rest2, found := strings.Cut(rest, "/")
+	if !found {
+		http.NotFound(w, r)
+		return
+	}
+	sessionID, name, found := strings.Cut(rest2, "/")
+	if !found || sessionID == "" || !chatUploadName.MatchString(name) {
 		http.NotFound(w, r)
 		return
 	}
@@ -184,5 +191,5 @@ func HandleChatFile(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", chatImageContentType[ext])
 	w.Header().Set("Cache-Control", "private, max-age=31536000, immutable")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
-	http.ServeFile(w, r, filepath.Join(ChatUploadsDirForKey(key), name))
+	http.ServeFile(w, r, filepath.Join(ChatSessionUploadsDirForKey(key, sessionID), name))
 }

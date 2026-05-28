@@ -84,7 +84,7 @@
   var dlg=document.getElementById('docs-posted-dialog');
   var dlgOk=document.getElementById('docs-posted-ok');
   if(postBtn && dlg && dlgOk){
-    var partnerAfter=null, hashAfter=null;
+    var partnerAfter=null, sessionAfter=null, idAfter=null;
     function flushPendingSave(){
       if(!pendingSave) return Promise.resolve();
       if(saveTimer){ clearTimeout(saveTimer); saveTimer=null; }
@@ -100,7 +100,7 @@
                                                            body:encodeForm({slug:slug})}); })
         .then(function(r){ return r.ok?r.json():Promise.reject(r.status); })
         .then(function(j){
-          partnerAfter=j.partner; hashAfter=j.hash;
+          partnerAfter=j.partner; sessionAfter=j.session; idAfter=j.id;
           setStatus('saved', 'Posted ✓');
           dlg.showModal();
           dlgOk.focus(); /* Enter dismisses; click also works */
@@ -113,11 +113,12 @@
     dlgOk.addEventListener('click', function(){
       dlg.close();
       if(partnerAfter){
-        /* #msg-<hash> matches the existing MSG_ ref fragment scheme;
+        /* #msg-<id> matches the MSG_<session>_<n> fragment scheme;
            chat.js's wantFocus path will scroll + select + push to the
            back/forward stack once the message renders. */
         var url='/chat?with='+encodeURIComponent(partnerAfter);
-        if(hashAfter) url += '#msg-'+hashAfter;
+        if(sessionAfter) url += '&session='+encodeURIComponent(sessionAfter);
+        if(idAfter) url += '#msg-'+idAfter;
         location.href=url;
       }
     });

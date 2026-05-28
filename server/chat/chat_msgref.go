@@ -1,13 +1,13 @@
-// Linkifies message references: a MSG_<6 hex> token in a message becomes
-// a link to #msg-<hash>. Done as a post-pass over the already-sanitized
-// HTML rather than a goldmark extension: goldmark splits text at the
-// underscore in MSG_ (it's an emphasis delimiter), so "MSG_" and the hex
-// land in separate text nodes, defeating both an inline parser and an AST
-// transformer. We instead tokenize the rendered HTML into tags vs. text
-// and rewrite only text outside <code>/<pre>/<a>, so a MSG_ inside a code
-// span or an existing link is left alone. The injected anchor is a fixed
-// safe shape (the hash is [0-9A-F]{6}), so running after sanitization is
-// safe.
+// Linkifies message references: a MSG_<session-id>_<n> token in a
+// message becomes a link to #msg-<id>. Done as a post-pass over the
+// already-sanitized HTML rather than a goldmark extension: goldmark
+// splits text at the underscore in MSG_ (it's an emphasis delimiter),
+// so "MSG_" and the rest land in separate text nodes, defeating both
+// an inline parser and an AST transformer. We instead tokenize the
+// rendered HTML into tags vs. text and rewrite only text outside
+// <code>/<pre>/<a>, so a MSG_ inside a code span or an existing link
+// is left alone. The injected anchor is a fixed safe shape (slug +
+// digits, all URL-safe), so running after sanitization is safe.
 package chat
 
 import (
@@ -16,8 +16,10 @@ import (
 )
 
 // msgRefRe matches a MSG_ reference token on word boundaries (so it won't
-// fire inside a longer token like FOOMSG_ABC123 or MSG_ABC1234).
-var msgRefRe = regexp.MustCompile(`\bMSG_([0-9A-F]{6})\b`)
+// fire inside a longer token). The id has shape <session-slug>_<n>,
+// where session-slug is date-prefixed alphanumeric-with-hyphens (no
+// underscores; that's the parsing constraint) and n is 1+ digits.
+var msgRefRe = regexp.MustCompile(`\bMSG_([A-Za-z0-9-]+_[0-9]+)\b`)
 
 // linkifyMsgRefs rewrites MSG_<hash> tokens in HTML text into reference
 // links, skipping the contents of <code>, <pre>, and <a> elements.

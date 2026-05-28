@@ -19,6 +19,7 @@ func RegisterPages(mux *http.ServeMux) {
 	mux.HandleFunc("/settings", chat.HandleSettings)
 	mux.HandleFunc("/settings/apikey", chat.HandleSettingsAPIKey)
 	mux.HandleFunc("/chat", chat.HandleChat)
+	mux.HandleFunc("/chat/default", chat.HandleChatDefault)
 	mux.HandleFunc("/chat/chat.js", chat.HandleChatJS)
 	mux.HandleFunc("/chat/send", chat.HandleChatSend)
 	mux.HandleFunc("/chat/stream", chat.HandleChatStream)

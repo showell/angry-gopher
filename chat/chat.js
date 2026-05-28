@@ -1,6 +1,7 @@
 (function(){
   var root=document.getElementById('chat-root');
   var PARTNER=root.dataset.partner;
+  var SESSION=root.dataset.session;
   var history=document.getElementById('chat-history');
   var bubbles=document.getElementById('chat-bubbles');
   var transcript=document.getElementById('chat-transcript');
@@ -134,7 +135,7 @@
     var empty=document.getElementById('chat-empty'); if(empty) empty.remove();
     var div=document.createElement('div');
     div.className='chat-msg '+(m.mine?'mine':'theirs');
-    div.id='msg-'+m.hash; div.setAttribute('data-i',m.index); div.setAttribute('data-hash',m.hash);
+    div.id='msg-'+m.id; div.setAttribute('data-i',m.index); div.setAttribute('data-id',m.id);
     div._body=m.body; /* raw markdown source, kept for quote-reply */
     var meta=document.createElement('div'); meta.className='chat-meta';
     meta.appendChild(document.createTextNode(m.from+' · '+m.time+' '));
@@ -150,21 +151,21 @@
     var span=document.createElement('span'); span.setAttribute('data-i',m.index);
     span.textContent=m.enc; transcript.appendChild(span); /* literal on-disk block */
     var em=(m.body||'').match(EDIT_RE); /* "Edit of MSG_<hash>" → supersede that original */
-    if(em){ var orig=document.getElementById('msg-'+em[1]); if(orig) markEdited(orig, m.hash); }
+    if(em){ var orig=document.getElementById('msg-'+em[1]); if(orig) markEdited(orig, m.id); }
   }
   /* A message whose body starts with "Edit of MSG_<hash>" supersedes that
      original: render a forward "Edited in MSG_<this>" link on the original and
      demote its content to a small verbatim quote. Append-only — the stored
      record is untouched; this is purely the rendered view (Transcript still
      shows both messages byte-for-byte). */
-  var EDIT_RE=/^Edit of MSG_([0-9A-F]{6})\b/;
-  function markEdited(origEl, editHash){
+  var EDIT_RE=/^Edit of MSG_([A-Za-z0-9-]+_[0-9]+)\b/;
+  function markEdited(origEl, editID){
     var bodyEl=origEl.querySelector('.chat-body'); if(!bodyEl) return;
     bodyEl.textContent='';
     var note=document.createElement('div'); note.className='chat-edited-note';
     note.appendChild(document.createTextNode('Edited in '));
-    var link=document.createElement('a'); link.className='msg-ref'; link.href='#msg-'+editHash;
-    link.textContent='MSG_'+editHash; note.appendChild(link);
+    var link=document.createElement('a'); link.className='msg-ref'; link.href='#msg-'+editID;
+    link.textContent='MSG_'+editID; note.appendChild(link);
     var orig=document.createElement('div'); orig.className='chat-edited-orig';
     orig.textContent=origEl._body!=null?origEl._body:'';
     bodyEl.appendChild(note); bodyEl.appendChild(orig);
@@ -179,14 +180,14 @@
   function referReply(el){
     if(!el||pendingCid) return;
     selectAndCommit(el,true); /* record the referenced message on the nav stack */
-    var hash=el.getAttribute('data-hash');
+    var hash=el.getAttribute('data-id');
     openCompose();
     insertAtCursor('See MSG_'+hash+' ');
   }
   function quoteReply(el){
     if(!el||pendingCid) return; /* don't disturb a send awaiting its ack */
     selectAndCommit(el,true); /* record the quoted message on the nav stack */
-    var hash=el.getAttribute('data-hash'), mine=el.classList.contains('mine');
+    var hash=el.getAttribute('data-id'), mine=el.classList.contains('mine');
     var body=el._body!=null?el._body:'';
     openCompose(); /* ensure it's visible before we type into it */
     insertAtCursor('In MSG_'+hash+' '+(mine?'I said':'you said')+':\n~~~ quote\n'+body+'\n~~~\n\n');
@@ -199,7 +200,7 @@
   function editMessage(el){
     if(!el||pendingCid) return; /* don't disturb a send awaiting its ack */
     selectAndCommit(el,true); /* record the edited message on the nav stack */
-    var prefix='Edit of MSG_'+el.getAttribute('data-hash')+'\n\n';
+    var prefix='Edit of MSG_'+el.getAttribute('data-id')+'\n\n';
     openCompose();
     textarea.value=prefix+(el._body!=null?el._body:'');
     textarea.setSelectionRange(prefix.length, prefix.length); /* caret at the start of the content */
@@ -240,9 +241,9 @@
   /* If we arrived with a #msg-<hash> fragment (e.g. from Docs' Post-to-chat),
      remember the target so finishBacklog can scroll+select+push it onto
      the nav stack once the backlog has fully landed. */
-  var wantFocusHash=(function(){
-    var m=(location.hash||'').match(/^#msg-([0-9A-Fa-f]+)$/);
-    return m ? m[1].toUpperCase() : null;
+  var wantFocusID=(function(){
+    var m=(location.hash||'').match(/^#msg-([A-Za-z0-9_-]+)$/);
+    return m ? m[1] : null;
   })();
   /* Backlog phase: the server sends a `backlog-size` preamble before
      replaying any messages, so we know how many to expect. While
@@ -258,9 +259,9 @@
   function finishBacklog(){
     inBacklog=false;
     var focusEl=null, anchorToBottom=false;
-    if(wantFocusHash){
-      focusEl=document.getElementById('msg-'+wantFocusHash);
-      wantFocusHash=null; /* consumed; reconnect backlogs use the caughtUp fallback below */
+    if(wantFocusID){
+      focusEl=document.getElementById('msg-'+wantFocusID);
+      wantFocusID=null; /* consumed; reconnect backlogs use the caughtUp fallback below */
     } else if(wasCaughtUpAtBacklogStart){
       anchorToBottom=true;
     }
@@ -322,7 +323,7 @@
     /* Two rAF passes catch non-image layout settling (font load, etc.). */
     requestAnimationFrame(function(){ fire(); requestAnimationFrame(fire); });
   }
-  var es=new EventSource('/chat/stream?with='+encodeURIComponent(PARTNER)+'&since=0');
+  var es=new EventSource('/chat/stream?with='+encodeURIComponent(PARTNER)+'&session='+encodeURIComponent(SESSION)+'&since=0');
   es.addEventListener('backlog-size', function(e){
     /* Reset per-connection: fires on initial load AND on every reconnect. */
     wasCaughtUpAtBacklogStart=caughtUp();
@@ -401,7 +402,7 @@
     pendingTimer=setTimeout(hostDown, 3000);
     fetch('/chat/send',{ method:'POST',
       headers:{'Content-Type':'application/x-www-form-urlencoded','X-Chat-Async':'1'},
-      body:'with='+encodeURIComponent(PARTNER)+'&body='+encodeURIComponent(text)+'&cid='+encodeURIComponent(cid)
+      body:'with='+encodeURIComponent(PARTNER)+'&session='+encodeURIComponent(SESSION)+'&body='+encodeURIComponent(text)+'&cid='+encodeURIComponent(cid)
     }).then(function(r){ if(!r.ok) throw new Error('status '+r.status); /* success is confirmed by the SSE echo */ })
       .catch(hostDown);
   }
@@ -430,7 +431,7 @@
     }
     status.style.color='#888'; status.textContent='Uploading image…';
     var fd=new FormData(); fd.append('file',file);
-    fetch('/chat/upload?with='+encodeURIComponent(PARTNER),{method:'POST',body:fd})
+    fetch('/chat/upload?with='+encodeURIComponent(PARTNER)+'&session='+encodeURIComponent(SESSION),{method:'POST',body:fd})
       .then(function(r){
         if(r.ok) return r.json();
         return r.text().then(function(t){
