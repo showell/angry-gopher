@@ -523,7 +523,7 @@ html, body { height:100%; }
 /* chat-main is the message column itself; cap it at ~the pre-sidebar
    width so long lines stay readable. Excess horizontal space sits to
    the right (after compose), not as symmetric gutters. */
-.chat-main { min-width:0; flex:1; max-width:520px; display:flex; flex-direction:column; min-height:0; }
+.chat-main { min-width:0; flex:1; max-width:600px; display:flex; flex-direction:column; min-height:0; }
 .chat-sidebar { width:180px; flex-shrink:0; overflow-y:auto; border-right:1px solid #ddd;
                 padding-right:14px; font-size:13px; }
 .chat-sidebar-section { margin-bottom:18px; }
