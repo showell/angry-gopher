@@ -136,6 +136,54 @@ func HandleChatConv(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/chat/c/"+conv+"/"+url.PathEscape(sid), http.StatusSeeOther)
 }
 
+// HandleChatNewTopic creates a topic — a session with a custom name — in the
+// conversation named in the path (/chat/c/<conv>/new), and seeds it with a
+// "hi" from the creator so it exists on disk and shows up immediately. A
+// topic is just a session, so once created it behaves exactly like a date
+// one. Any participant of the conv may create one (existence under the conv
+// dir IS the participation grant). Returns {conv, sid} so the client can
+// switch straight to it.
+func HandleChatNewTopic(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	user, conv, ok := chatPathParticipant(w, r)
+	if !ok {
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	topic := strings.TrimSpace(r.FormValue("topic"))
+	if !validSessionID(topic) {
+		http.Error(w, "Topic must be letters, digits, and hyphens only — no spaces, underscores, or punctuation.", http.StatusBadRequest)
+		return
+	}
+	if topic == "new" {
+		http.Error(w, `"new" is reserved — pick another topic name.`, http.StatusBadRequest)
+		return
+	}
+	partner, ok := OtherInConv(user.ID, conv)
+	if !ok {
+		http.Error(w, "bad conversation", http.StatusBadRequest)
+		return
+	}
+	if ChatSessionExists(user.ID, partner, topic) {
+		http.Error(w, "That topic already exists.", http.StatusConflict)
+		return
+	}
+	if _, err := AppendChatMessage(user, partner, topic, "hi", ""); err != nil {
+		http.Error(w, "create topic: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	SetUserLastSession(user.ID, user.ID, partner, topic)
+	users.TouchUser(user.ID)
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]string{"conv": conv, "sid": topic})
+}
+
 // HandleChatPage serves /chat/c/<conv>/<sid>: renders one session.
 func HandleChatPage(w http.ResponseWriter, r *http.Request) {
 	user, conv, sid, ok := chatPathSession(w, r)
@@ -401,7 +449,13 @@ func renderChatSidebar(w http.ResponseWriter, user users.User, partnerID, conv, 
 		fmt.Fprintf(w, `<li><a href="/chat/c/%s/%s"%s>%s</a></li>`,
 			conv, url.PathEscape(sid), cls, html.EscapeString(sid))
 	}
-	fmt.Fprint(w, `</ul></div></aside>`)
+	fmt.Fprint(w, `</ul>`)
+	// Add a topic = create a new session with a custom name in THIS conv.
+	fmt.Fprint(w, `<form id="chat-add-topic" class="chat-add-topic">`+
+		`<input type="text" id="chat-topic-name" placeholder="new-topic" autocomplete="off" maxlength="80" spellcheck="false">`+
+		`<button type="submit">Add Topic</button>`+
+		`<div class="chat-add-topic-err" id="chat-topic-err"></div></form>`)
+	fmt.Fprint(w, `</div></aside>`)
 }
 
 // HandleChatSend appends a posted message to the session named in the
@@ -611,6 +665,11 @@ html, body { height:100%; }
 .chat-sidebar-list li a:hover { background:#f0f0ff; }
 .chat-sidebar-list li a.active { background:#000080; color:white; font-weight:bold; }
 .chat-sidebar-list li.muted { color:#888; padding:4px 8px; font-style:italic; }
+.chat-add-topic { display:flex; flex-wrap:wrap; gap:4px; margin-top:8px; }
+.chat-add-topic input { flex:1; min-width:0; padding:3px 6px; font-size:12px;
+                        border:1px solid #ccc; border-radius:3px; font-family:inherit; }
+.chat-add-topic button { padding:3px 8px; font-size:12px; flex:none; }
+.chat-add-topic-err { flex-basis:100%; color:#b00020; font-size:11px; }
 .chat-navbar { margin-bottom:8px; }
 .chat-open-compose { font-size:13px; padding:4px 12px; background:#e7e7ff; color:#23235a;
                      border:1px solid #b9b9e0; border-radius:6px; cursor:pointer; }

@@ -156,13 +156,15 @@ func ChatKeyParticipant(key, user string) bool {
 	return user == x || user == y
 }
 
-// chatSessionIDRe is the canonical session-id shape: a kebab slug (lowercase
-// a-z0-9 and hyphens, no leading/trailing hyphen), 1..80 chars. Both date
-// slugs (2026-05-23) and topic slugs (working-with-claude) match it; the
-// underscore is excluded because it's the MSG_<sid>_<n> separator. A matching
-// id has no '/', '.', or '..', so this doubles as the path-traversal guard
-// for any sid that flows into a sessions/<sid> filesystem path.
-var chatSessionIDRe = regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`)
+// chatSessionIDRe is the canonical session-id shape: alphanumerics joined by
+// single hyphens (no leading/trailing/double hyphen), 1..80 chars. It matches
+// the linkify char class [A-Za-z0-9-] exactly, so a topic id always linkifies
+// as MSG_<sid>_<n>. Date slugs (2026-05-23) and topic names (working-with-claude,
+// General3) both qualify. Excluded on purpose: underscore (the MSG_<sid>_<n>
+// separator), and '.', '/', whitespace — so a matching id is a safe, URL-clean
+// filename and this doubles as the path-traversal guard for any sid that flows
+// into a sessions/<sid> filesystem path.
+var chatSessionIDRe = regexp.MustCompile(`^[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*$`)
 
 // validSessionID reports whether sid is a well-formed session id. It's the
 // chokepoint for "being in a session": a request whose {sid} fails this is

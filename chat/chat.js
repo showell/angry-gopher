@@ -839,6 +839,35 @@
     if(SR.phase==='suggest') renderSuggest(); else runResults(SR.term);
   }
   searchBtn.addEventListener('click', openSearchModal);
+  /* --- add a topic: a session with a custom name in THIS conversation.
+     Validate the name (letters/digits/hyphens, matching the server), POST it,
+     then optimistically switch to the new topic — it renders just like any
+     other session, with the server-seeded "hi" already in it. --- */
+  var addTopicForm=document.getElementById('chat-add-topic');
+  if(addTopicForm){
+    var topicInput=document.getElementById('chat-topic-name');
+    var topicErr=document.getElementById('chat-topic-err');
+    var TOPIC_RE=/^[A-Za-z0-9]+(-[A-Za-z0-9]+)*$/;
+    addTopicForm.addEventListener('submit',function(e){
+      e.preventDefault();
+      var name=topicInput.value.trim();
+      if(!TOPIC_RE.test(name)){ topicErr.textContent='Letters, digits, and hyphens only.'; return; }
+      topicErr.textContent='';
+      var btn=addTopicForm.querySelector('button'); btn.disabled=true;
+      fetch('/chat/c/'+encodeURIComponent(CONV)+'/new',{ method:'POST',
+        headers:{'Content-Type':'application/x-www-form-urlencoded'},
+        body:'topic='+encodeURIComponent(name)
+      }).then(function(r){
+        if(r.ok) return r.json();
+        return r.text().then(function(t){ throw (t&&t.trim())||('error '+r.status); });
+      }).then(function(j){
+        location.href='/chat/c/'+encodeURIComponent(j.conv)+'/'+encodeURIComponent(j.sid);
+      }).catch(function(msg){
+        topicErr.textContent=(typeof msg==='string'?msg:'Could not add topic.');
+        btn.disabled=false;
+      });
+    });
+  }
   /* Override these keys when reading the feed (not when typing in compose). */
   document.addEventListener('keydown',function(e){
     var ae=document.activeElement;
