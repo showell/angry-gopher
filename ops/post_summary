@@ -33,7 +33,7 @@ URL="https://lynrummy.com"
 PARTNER=2   # Apoorva — the only prod conversation today
 
 # Anchor requirement: a summary without MSG_ links is paraphrase, not recap.
-MSG_REFS=$(grep -oE 'MSG_[A-F0-9]+' "$FILE" | wc -l)
+MSG_REFS=$(grep -oE 'MSG_[A-Za-z0-9-]+_[0-9]+' "$FILE" | wc -l)
 MIN_REFS=3
 if [ "$MSG_REFS" -lt "$MIN_REFS" ]; then
   echo "refusing to post: $FILE has $MSG_REFS MSG_ reference(s), need at least $MIN_REFS"
