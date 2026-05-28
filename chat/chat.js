@@ -537,12 +537,29 @@
     return false;
   }
   /* Feed-only: jump to a MSG_ ref's target and select it. The caller records
-     the source first so Back returns there. */
+     the source first so Back returns there. If the ref points at a message
+     in ANOTHER session (id prefix differs from current SESSION), we
+     full-page navigate to that session — the receiving page's wantFocusID
+     path (location.hash → scroll+select after backlog) finishes the trip.
+     MPA-style; cross-session refs are uncommon enough that a page load
+     isn't worth avoiding. */
   function navigateRef(ref){
-    var tgt=document.getElementById(ref.getAttribute('href').slice(1));
-    if(!tgt) return;
-    armScrollSuppress();
-    tgt.scrollIntoView({block:'center',behavior:'auto'}); selectAndCommit(tgt,true);
+    var hashTarget=ref.getAttribute('href').replace(/^#/, '');
+    var tgt=document.getElementById(hashTarget);
+    if(tgt){
+      armScrollSuppress();
+      tgt.scrollIntoView({block:'center',behavior:'auto'}); selectAndCommit(tgt,true);
+      return;
+    }
+    /* Parse <session-id>_<n> out of msg-<id>; session is everything
+       before the LAST underscore (session-ids may contain hyphens but
+       no underscores by construction). */
+    var id=hashTarget.replace(/^msg-/, '');
+    var cut=id.lastIndexOf('_');
+    if(cut<=0) return;
+    var targetSession=id.substring(0,cut);
+    if(targetSession===SESSION) return; /* same session, target just missing — give up */
+    location.href='/chat/c/'+encodeURIComponent(CONV)+'/'+encodeURIComponent(targetSession)+'#msg-'+id;
   }
   function scrollIndexToTop(idx){
     if(idx===null||idx===undefined) return null;
