@@ -11,18 +11,15 @@
 //   - the per-user last-session pointers (users/<uid>/last-sessions/<conv>).
 //
 // The per-message `date:` headers and any prose mention of the date are left
-// alone — they stay truthful; only the session's *name* changes. An optional
-// description is written to <new>.meta.json (the topic's human-readable
-// blurb; the slug stays the source of truth).
+// alone — they stay truthful; only the session's *name* changes.
 //
 // One-way (a rename), but safe to mis-run: it refuses unless <old>.md exists
 // and <new> is a fresh, valid session slug.
 //
-//   go run ./tools/rename_chat_session/ <chat-data-root> <conv> <old-sid> <new-sid> [description]
+//   go run ./tools/rename_chat_session/ <chat-data-root> <conv> <old-sid> <new-sid>
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -30,21 +27,17 @@ import (
 	"strings"
 )
 
-// A session id (date slug or topic slug) is kebab-case with no underscores —
-// the underscore is reserved as the MSG_<sid>_<n> separator.
-var sidRe = regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`)
+// A session/topic id: alphanumerics joined by single hyphens, no underscores
+// (the MSG_<sid>_<n> separator). Matches the server's validSessionID.
+var sidRe = regexp.MustCompile(`^[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*$`)
 
 func main() {
 	args := os.Args[1:]
-	if len(args) < 4 || len(args) > 5 {
-		fmt.Fprintln(os.Stderr, "usage: rename_chat_session <chat-data-root> <conv> <old-sid> <new-sid> [description]")
+	if len(args) != 4 {
+		fmt.Fprintln(os.Stderr, "usage: rename_chat_session <chat-data-root> <conv> <old-sid> <new-sid>")
 		os.Exit(1)
 	}
 	root, conv, oldSid, newSid := args[0], args[1], args[2], args[3]
-	desc := ""
-	if len(args) == 5 {
-		desc = args[4]
-	}
 
 	sessionsDir := filepath.Join(root, conv, "sessions")
 	oldMd := filepath.Join(sessionsDir, oldSid+".md")
@@ -128,16 +121,6 @@ func main() {
 				fmt.Printf("  repointed users/%s/last-sessions/%s -> %s\n", u.Name(), conv, newSid)
 			}
 		}
-	}
-
-	// 4) Write the topic description sidecar (the slug stays canonical).
-	if desc != "" {
-		metaPath := filepath.Join(sessionsDir, newSid+".meta.json")
-		blob, _ := json.MarshalIndent(map[string]string{"description": desc}, "", "  ")
-		if err := os.WriteFile(metaPath, append(blob, '\n'), 0o644); err != nil {
-			fail("write %s: %v", metaPath, err)
-		}
-		fmt.Printf("  wrote %s.meta.json\n", newSid)
 	}
 
 	fmt.Printf("done: %s -> %s (%d files, %d ids, %d urls)\n", oldSid, newSid, filesTouched, totalIDs, totalURLs)
