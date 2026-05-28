@@ -86,7 +86,7 @@ func writeCodeLines(w util.BufWriter, source []byte, n ast.Node) {
 
 // chatSanitizer is the user-generated-content policy: standard formatting
 // tags (incl. img), safe link schemes, nothing executable. Relative URLs
-// are allowed so uploaded images (/chat/uploads/...) survive. External
+// are allowed so uploaded images (/chat/c/<conv>/<sid>/uploads/...) survive. External
 // (fully-qualified) links open in a new tab with rel=noopener; MSG_ refs
 // are relative #fragments added after sanitization, so they're unaffected.
 var chatSanitizer = func() *bluemonday.Policy {

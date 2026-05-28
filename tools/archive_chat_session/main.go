@@ -10,6 +10,13 @@
 // Image URLs in bodies get their session-id segment inserted too
 // (/chat/uploads/<conv>/<file> -> /chat/uploads/<conv>/<archive-id>/<file>).
 //
+// NOTE (2026-05-28): that rewrite below targets the WRONG form — the live
+// serving route is /chat/c/<conv>/<sid>/uploads/<file>, not
+// /chat/uploads/<conv>/<sid>/<file>, so the URLs it emits 404. This tool is
+// one-shot and already ran; tools/migrate_upload_urls corrects the stranded
+// URLs after the fact. If this tool is ever resurrected, fix the target form
+// here too (emit /chat/c/<conv>/<archive-id>/uploads/<file>).
+//
 // One-shot, not idempotent — designed to be run exactly once per conv
 // during the introduction of sessions. Refuses to clobber a sessions/
 // directory that already exists.

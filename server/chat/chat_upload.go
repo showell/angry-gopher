@@ -1,10 +1,10 @@
-// Chat image uploads. POST /chat/upload?with=<partner> stores an image
-// in that conversation's uploads/ dir under a random unguessable name
-// (extension derived from sniffed magic bytes, never the client's
-// filename) and returns a viewer-independent URL that embeds the
-// conversation key. GET /chat/uploads/<key>/<file> serves it, enforcing
-// that the requester is a participant of that conversation — so image
-// access matches message access.
+// Chat image uploads. POST /chat/c/<conv>/<sid>/upload stores an image in
+// that session's uploads sidecar (sessions/<sid>.uploads/) under a random
+// unguessable name (extension derived from sniffed magic bytes, never the
+// client's filename) and returns the path-style URL
+// /chat/c/<conv>/<sid>/uploads/<file>. GET on that URL serves it, enforcing
+// that the requester is a participant of the conversation — so image access
+// matches message access.
 package chat
 
 import (
