@@ -41,6 +41,10 @@ if [ "$MSG_REFS" -lt "$MIN_REFS" ]; then
   exit 1
 fi
 
+# Post each paragraph as its own message via the shared reference client
+# (chat/chat_client.py), which resolves the conversation's CURRENT session
+# from the /chat/conversations matrix and POSTs path-style. Routing through
+# the one client is what stops the write side drifting from the read side.
 n=0
 while IFS= read -r -d '' para; do
   [ -z "${para//[$'\n\t ']/}" ] && continue            # skip an empty trailing record
@@ -48,13 +52,11 @@ while IFS= read -r -d '' para; do
   if [ "$n" = "1" ]; then
     para=$'Claude summary:\n\n'"$para"
   fi
-  code=$(curl -sS -o /dev/null -w '%{http_code}' -X POST "$URL/chat/send" \
-    -H "Authorization: Bearer $KEY" -H "X-Chat-Async: 1" \
-    --data-urlencode "with=$PARTNER" --data-urlencode "body=$para")
-  if [ "$code" = "204" ]; then
+  if printf '%s' "$para" | GOPHER_API_KEY="$KEY" \
+       python3 "$GOPHER_DIR/chat/chat_client.py" post "$URL" "$PARTNER" >/dev/null; then
     echo "  [$n] posted: $(printf '%s' "$para" | tr '\n' ' ' | head -c 60)…"
   else
-    echo "  [$n] FAILED (HTTP $code) — stopping"; exit 1
+    echo "  [$n] FAILED — stopping"; exit 1
   fi
 done < <(awk 'BEGIN { RS = ""; ORS = "\0" } { print }' "$FILE")
 

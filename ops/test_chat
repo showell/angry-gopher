@@ -29,8 +29,8 @@ phase "chat-js" node --check chat/chat.js
 echo "==> docs.js syntax"
 phase "docs-js" node --check chat/docs.js
 
-echo "==> fetch_conversation.py syntax"
-phase "chat-py" python3 -m py_compile chat/fetch_conversation.py
+echo "==> chat_client.py syntax"
+phase "chat-py" python3 -m py_compile chat/chat_client.py
 
 echo
 echo "Chat gate passed."

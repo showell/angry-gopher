@@ -52,7 +52,7 @@ read-only** — a keyed request may only GET/HEAD.
 | `server/lynrummy/` | Lyn Rummy server: `/game` + `/puzzles` handlers + session file storage. Builds on `web`. |
 | `server/chat/` | chat server: handlers, SSE hub + storage, markdown, image uploads, `/settings`. Builds on `web`. |
 | `server/admin/` | the cross-cutting `/admin` overview (imports `web` + both subsystems) |
-| `chat/` | the embedded chat **client** (`chat.js`) + an example read-only bot (`fetch_conversation.py`) |
+| `chat/` | the embedded chat **client** (`chat.js`) + the reference API client / example bot (`chat_client.py`: discover, read, post) |
 | `games/lynrummy/elm/` | the autonomous Elm client (dealer + referee + UI) |
 | `games/lynrummy/ts/` | the TypeScript agent — the strategic brain (solver + self-play) |
 | `ops/` | the build / run / test scripts (`ops/list` enumerates them) |

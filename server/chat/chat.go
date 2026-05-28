@@ -47,6 +47,9 @@ func formatChatTime(t time.Time) string {
 //	/chat                                   picker; or one-partner shortcut
 //	                                        to /chat/default
 //	/chat/default                           303 to the user's last (conv, sid)
+//	/chat/conversations                     JSON: the whole (partner × time)
+//	                                        matrix for the key-holder (API
+//	                                        discovery; browsers use the pages)
 //	/chat/c/<conv>                          303 to /chat/c/<conv>/<default-sid>
 //	/chat/c/<conv>/<sid>                    conversation page (one session)
 //	/chat/c/<conv>/<sid>/stream             SSE
@@ -158,6 +161,61 @@ func HandleChatDefault(w http.ResponseWriter, r *http.Request) {
 	partner, _ := OtherInConv(user.ID, conv)
 	sid := resolveSessionForUser(user.ID, partner)
 	http.Redirect(w, r, "/chat/c/"+conv+"/"+url.PathEscape(sid), http.StatusSeeOther)
+}
+
+// HandleChatConversations serves GET /chat/conversations: a JSON view of
+// the whole (partner × time) matrix for the authenticated principal —
+// every other authorized principal they can talk to, each with that
+// conversation's sessions (newest-first) and the session a bare
+// /chat/c/<conv> would land on. This is the discovery entry point for
+// API-key clients (browsers navigate the HTML pages instead); it's a
+// passive read with no side effects. The matrix is small (a few convs ×
+// a few sessions), so one call returns the lot — a client reads it once,
+// picks a (conv, sid), then uses the uniform /stream and /send endpoints.
+func HandleChatConversations(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if !users.IsAuthorized(r) {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+	me := users.CurrentUser(r)
+
+	type convPartner struct {
+		ID   string `json:"id"`
+		Name string `json:"name"`
+	}
+	type convEntry struct {
+		Conv     string      `json:"conv"`
+		Partner  convPartner `json:"partner"`
+		Default  string      `json:"default"`
+		Sessions []string    `json:"sessions"`
+	}
+	out := struct {
+		Me            string      `json:"me"`
+		Conversations []convEntry `json:"conversations"`
+	}{Me: me.ID, Conversations: []convEntry{}}
+
+	for _, partner := range users.ListAuthorized() {
+		if partner.ID == me.ID {
+			continue
+		}
+		sessions := ListChatSessions(me.ID, partner.ID)
+		if sessions == nil {
+			sessions = []string{} // encode as [] not null
+		}
+		out.Conversations = append(out.Conversations, convEntry{
+			Conv:     chatPairKey(me.ID, partner.ID),
+			Partner:  convPartner{ID: partner.ID, Name: partner.Name},
+			Default:  resolveSessionForUser(me.ID, partner.ID),
+			Sessions: sessions,
+		})
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(out)
 }
 
 // onlyOtherPartner returns the partner id when there is exactly one

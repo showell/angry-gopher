@@ -1,14 +1,15 @@
 #!/bin/bash
-# Fetch the PRODUCTION chat transcript (Steve <-> Apoorva) by delegating
-# to the dogfooded read-only bot client, chat/fetch_conversation.py.
+# Fetch a PRODUCTION chat transcript (Steve <-> Apoorva) by delegating to
+# the dogfooded reference client, chat/chat_client.py.
 #
-# Zero arguments on purpose. The Python client REQUIRES base_url be passed
-# (no default), so localhost-vs-prod is never silent; this script is where
-# the prod choice is made once, deliberately. It wires the explicit prod
-# URL + the read-only API key so callers don't have to remember either.
+# Optional arg: a session id (e.g. 2026-05-23) to read a specific archived
+# session. With no arg you get the CURRENT session (the dominant case) —
+# the client resolves it from the /chat/conversations matrix. The Python
+# client REQUIRES base_url (no default), so localhost-vs-prod is never
+# silent; this script makes the prod choice once and wires the API key.
 #
 # Exercising this (rather than raw SSH/curl into the droplet) is the point:
-# it keeps the read-only API and its reference client from bit-rotting.
+# it keeps the read side of the API + its reference client from bit-rotting.
 # The key lives at ~/.gopher_api_key (mode 600). See deploy/README.md and
 # the chat-transcript-fetch memory.
 set -e
@@ -16,8 +17,9 @@ set -e
 source "$(dirname "$0")/_paths.sh"
 
 KEY_FILE="$HOME/.gopher_api_key"
-[ -f "$KEY_FILE" ] || { echo "missing $KEY_FILE — the read-only prod API key"; exit 1; }
+[ -f "$KEY_FILE" ] || { echo "missing $KEY_FILE — the prod API key"; exit 1; }
 
-# Apoorva is user id 2 — the only prod conversation today.
+# Apoorva is user id 2 — the only prod conversation today. ${1:+"$1"} passes
+# a session id through only when one was given, else fetches the current one.
 GOPHER_API_KEY="$(cat "$KEY_FILE")" \
-  python3 "$GOPHER_DIR/chat/fetch_conversation.py" https://lynrummy.com 2
+  python3 "$GOPHER_DIR/chat/chat_client.py" fetch https://lynrummy.com 2 ${1:+"$1"}

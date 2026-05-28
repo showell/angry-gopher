@@ -24,6 +24,7 @@ func RegisterPages(mux *http.ServeMux) {
 	// digits-only so they can't collide with those literal names.
 	mux.HandleFunc("/chat", chat.HandleChat)
 	mux.HandleFunc("/chat/default", chat.HandleChatDefault)
+	mux.HandleFunc("/chat/conversations", chat.HandleChatConversations)
 	mux.HandleFunc("/chat/chat.js", chat.HandleChatJS)
 	mux.HandleFunc("/chat/c/{conv}", chat.HandleChatConv)
 	mux.HandleFunc("/chat/c/{conv}/{sid}", chat.HandleChatPage)
