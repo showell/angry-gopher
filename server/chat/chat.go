@@ -509,8 +509,12 @@ const chatCSS = `<style>
    overflow stays visible — a flex mishap degrades to a page scrollbar,
    never clipped content. */
 html, body { height:100%; }
+/* Chat overrides the platform's narrow text-page wrap — with the
+   sidebar + main + compose, 890px squeezes the message feed. Let it
+   fill the viewport; chat-msg's own max-width keeps bubbles from
+   becoming ridiculously wide on ultrawide screens. */
 .app-body-wrap { margin:10px auto; padding:0 24px 10px; min-height:0;
-                 max-width:890px; display:flex; flex-direction:column; }
+                 max-width:none; display:flex; flex-direction:column; }
 /* #chat-root wraps the views row + layout; it must carry the fill down the
    flex chain (without this it sizes to content, collapsing the compose box
    when the feed is empty). */
@@ -584,7 +588,8 @@ html, body { height:100%; }
 .chat-compose textarea { width:100%; min-height:200px; resize:vertical; box-sizing:border-box;
                          font-family:inherit; font-size:14px; padding:8px; }
 .chat-compose button { margin-top:8px; }
-.chat-msg { margin:0 0 12px; padding:8px 10px; border-radius:8px; max-width:88%; }
+.chat-msg { margin:0 0 12px; padding:8px 10px; border-radius:8px;
+             max-width:min(88%, 820px); }
 .chat-msg.mine { background:#e7e7ff; margin-left:auto; }
 .chat-msg.theirs { background:#f0f0e6; margin-right:auto; }
 /* Break long unbreakable runs (e.g. URLs) so they wrap inside the bubble
