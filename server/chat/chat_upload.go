@@ -84,12 +84,11 @@ func HandleChatUpload(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "chat requires a member account", http.StatusForbidden)
 		return
 	}
-	user, conv, ok := chatPathParticipant(w, r)
+	user, conv, sessionID, ok := chatPathSession(w, r)
 	if !ok {
 		return
 	}
 	partner, _ := OtherInConv(user.ID, conv)
-	sessionID := r.PathValue("sid")
 
 	// Cap the body (with a little slack for multipart framing); enforce
 	// the real image-size limit on the decoded bytes below.
@@ -169,11 +168,10 @@ func HandleChatUpload(w http.ResponseWriter, r *http.Request) {
 // conversation named in the URL. URL shape:
 // /chat/c/<conv>/<sid>/uploads/<filename>.
 func HandleChatFile(w http.ResponseWriter, r *http.Request) {
-	_, conv, ok := chatPathParticipant(w, r)
+	_, conv, sessionID, ok := chatPathSession(w, r)
 	if !ok {
 		return
 	}
-	sessionID := r.PathValue("sid")
 	name := r.PathValue("file")
 	if !chatUploadName.MatchString(name) {
 		http.NotFound(w, r)

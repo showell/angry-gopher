@@ -156,6 +156,23 @@ func ChatKeyParticipant(key, user string) bool {
 	return user == x || user == y
 }
 
+// chatSessionIDRe is the canonical session-id shape: a kebab slug (lowercase
+// a-z0-9 and hyphens, no leading/trailing hyphen), 1..80 chars. Both date
+// slugs (2026-05-23) and topic slugs (working-with-claude) match it; the
+// underscore is excluded because it's the MSG_<sid>_<n> separator. A matching
+// id has no '/', '.', or '..', so this doubles as the path-traversal guard
+// for any sid that flows into a sessions/<sid> filesystem path.
+var chatSessionIDRe = regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`)
+
+// validSessionID reports whether sid is a well-formed session id. It's the
+// chokepoint for "being in a session": a request whose {sid} fails this is
+// 404'd before the id reaches the filesystem (see chatPathSession). A topic
+// name is just a session id, so this is also what makes user-created topics
+// safe by construction.
+func validSessionID(sid string) bool {
+	return len(sid) >= 1 && len(sid) <= 80 && chatSessionIDRe.MatchString(sid)
+}
+
 // ListChatSessions returns every session id for a conversation, sorted
 // newest-first (which, given date-prefixed slugs, means lexicographic
 // descending). An empty list = no sessions on disk yet.

@@ -104,6 +104,25 @@ func chatPathParticipant(w http.ResponseWriter, r *http.Request) (user users.Use
 	return
 }
 
+// chatPathSession is chatPathParticipant plus validation of the {sid} path
+// param: a malformed session id 404s exactly like a non-participant conv. It
+// keeps "being in a session" safe for ANY id — sid flows straight into a
+// sessions/<sid> filesystem path, and a topic name is user-supplied — so
+// every sid-bearing handler funnels through this one gate.
+func chatPathSession(w http.ResponseWriter, r *http.Request) (user users.User, conv, sid string, ok bool) {
+	user, conv, ok = chatPathParticipant(w, r)
+	if !ok {
+		return
+	}
+	sid = r.PathValue("sid")
+	if !validSessionID(sid) {
+		http.NotFound(w, r) // don't reveal whether the session exists
+		ok = false
+		return
+	}
+	return
+}
+
 // HandleChatConv serves /chat/c/<conv>: redirects to the right session
 // for this user (their last-viewed, falling back to newest, falling
 // back to today).
@@ -119,12 +138,11 @@ func HandleChatConv(w http.ResponseWriter, r *http.Request) {
 
 // HandleChatPage serves /chat/c/<conv>/<sid>: renders one session.
 func HandleChatPage(w http.ResponseWriter, r *http.Request) {
-	user, conv, ok := chatPathParticipant(w, r)
+	user, conv, sid, ok := chatPathSession(w, r)
 	if !ok {
 		return
 	}
 	partner, _ := OtherInConv(user.ID, conv)
-	sid := r.PathValue("sid")
 	SetUserLastSession(user.ID, user.ID, partner, sid)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	renderChatConversation(w, user, partner, conv, sid)
@@ -395,12 +413,11 @@ func HandleChatSend(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	user, conv, ok := chatPathParticipant(w, r)
+	user, conv, sessionID, ok := chatPathSession(w, r)
 	if !ok {
 		return
 	}
 	partner, _ := OtherInConv(user.ID, conv)
-	sessionID := r.PathValue("sid")
 
 	r.Body = http.MaxBytesReader(w, r.Body, maxChatMessageBytes)
 	if err := r.ParseForm(); err != nil {
@@ -447,12 +464,11 @@ func chatSendDone(w http.ResponseWriter, r *http.Request, conv, sessionID string
 // It replays from `since` (or the Last-Event-ID on reconnect) and then
 // streams live messages until the client disconnects.
 func HandleChatStream(w http.ResponseWriter, r *http.Request) {
-	user, conv, ok := chatPathParticipant(w, r)
+	user, conv, sessionID, ok := chatPathSession(w, r)
 	if !ok {
 		return
 	}
 	partner, _ := OtherInConv(user.ID, conv)
-	sessionID := r.PathValue("sid")
 
 	since := 0
 	if lei := strings.TrimSpace(r.Header.Get("Last-Event-ID")); lei != "" {
