@@ -239,7 +239,9 @@ func renderChatConversation(w http.ResponseWriter, user users.User, partnerID, c
 		`<a href="#" data-view="transcript">Transcript</a></span>`+
 		`</div>`)
 
-	fmt.Fprint(w, `<div class="chat-layout"><div class="chat-main">`+
+	fmt.Fprint(w, `<div class="chat-layout">`)
+	renderChatSidebar(w, user, partnerID, conv, sessionID)
+	fmt.Fprint(w, `<div class="chat-main">`+
 		`<div class="chat-navbar"><button type="button" id="chat-back" class="chat-back" title="Back to the previous selection (b)" disabled>&larr;</button>`+
 		`<button type="button" id="chat-fwd" class="chat-back" title="Forward — redo a Back (f)" disabled>&rarr;</button>`+
 		`<button type="button" id="chat-search-btn" class="chat-back" title="Search messages (/)">🔍</button></div>`+
@@ -281,6 +283,48 @@ func renderChatConversation(w http.ResponseWriter, user users.User, partnerID, c
 		url.QueryEscape(web.AssetVersion))
 
 	web.PageFooter(w)
+}
+
+// renderChatSidebar emits the left-rail nav: the user's conversations
+// (one row per other authorized principal) above the sessions of the
+// current conv. Active conv + session are bolded. Server-rendered, no
+// JS — picking a conv goes to /chat/c/<conv> which itself redirects to
+// the user's default session for that pair.
+func renderChatSidebar(w http.ResponseWriter, user users.User, partnerID, conv, sessionID string) {
+	fmt.Fprint(w, `<aside class="chat-sidebar">`)
+
+	// Conversations: every other authorized principal as a row.
+	fmt.Fprint(w, `<div class="chat-sidebar-section"><div class="chat-sidebar-title">Conversations</div><ul class="chat-sidebar-list">`)
+	for _, m := range users.ListAuthorized() {
+		if m.ID == user.ID {
+			continue
+		}
+		theirConv := chatPairKey(user.ID, m.ID)
+		cls := ""
+		if theirConv == conv {
+			cls = ` class="active"`
+		}
+		fmt.Fprintf(w, `<li><a href="/chat/c/%s"%s>%s</a></li>`,
+			theirConv, cls, html.EscapeString(m.Name))
+	}
+	fmt.Fprint(w, `</ul></div>`)
+
+	// Sessions: every session of THIS conv (newest first).
+	a, b := user.ID, partnerID
+	fmt.Fprint(w, `<div class="chat-sidebar-section"><div class="chat-sidebar-title">Sessions</div><ul class="chat-sidebar-list">`)
+	sessions := ListChatSessions(a, b)
+	if len(sessions) == 0 {
+		fmt.Fprint(w, `<li class="muted">No sessions yet</li>`)
+	}
+	for _, sid := range sessions {
+		cls := ""
+		if sid == sessionID {
+			cls = ` class="active"`
+		}
+		fmt.Fprintf(w, `<li><a href="/chat/c/%s/%s"%s>%s</a></li>`,
+			conv, url.PathEscape(sid), cls, html.EscapeString(sid))
+	}
+	fmt.Fprint(w, `</ul></div></aside>`)
 }
 
 // HandleChatSend appends a posted message to the session named in the
@@ -473,6 +517,18 @@ html, body { height:100%; }
 #chat-root { flex:1; min-height:0; display:flex; flex-direction:column; }
 .chat-layout { display:flex; gap:20px; flex:1; min-height:0; }
 .chat-main { min-width:0; flex:1; display:flex; flex-direction:column; min-height:0; }
+.chat-sidebar { width:180px; flex-shrink:0; overflow-y:auto; border-right:1px solid #ddd;
+                padding-right:14px; font-size:13px; }
+.chat-sidebar-section { margin-bottom:18px; }
+.chat-sidebar-title { font-size:11px; text-transform:uppercase; letter-spacing:0.05em;
+                       color:#888; margin-bottom:6px; font-weight:bold; }
+.chat-sidebar-list { list-style:none; padding:0; margin:0; }
+.chat-sidebar-list li { margin:0; }
+.chat-sidebar-list li a { display:block; padding:4px 8px; border-radius:3px;
+                           color:#000080; text-decoration:none; }
+.chat-sidebar-list li a:hover { background:#f0f0ff; }
+.chat-sidebar-list li a.active { background:#000080; color:white; font-weight:bold; }
+.chat-sidebar-list li.muted { color:#888; padding:4px 8px; font-style:italic; }
 .chat-navbar { margin-bottom:8px; }
 .chat-open-compose { font-size:13px; padding:4px 12px; background:#e7e7ff; color:#23235a;
                      border:1px solid #b9b9e0; border-radius:6px; cursor:pointer; }
@@ -615,9 +671,12 @@ html, body { height:100%; }
   .chat-compose textarea { flex:1; min-height:0; }
 }
 /* Tall (portrait): single column — history fills, compose sits at the
-   BOTTOM at a fixed height (both stay on screen). */
+   BOTTOM at a fixed height (both stay on screen). The sidebar would
+   eat too much vertical space stacked on top; hide it (use the picker
+   or back-out to /chat to switch convs on portrait). */
 @media (orientation: portrait) {
   .chat-layout { flex-direction:column; align-items:stretch; }
+  .chat-sidebar { display:none; }
   .chat-compose { width:auto; flex:none; }
   .chat-compose textarea { min-height:120px; }
 }
