@@ -392,7 +392,7 @@ func renderChatConversation(w http.ResponseWriter, user users.User, partnerID, c
 	}
 	partnerName := users.GetUserName(partnerID)
 
-	chatPageHeader(w, "Chat with "+partnerName, user, "")
+	chatPageHeader(w, "Chat w/"+partnerName+": "+sessionID, user, "")
 	fmt.Fprint(w, chatCSS)
 	// data-conv + data-session let chat.js build the API URLs
 	// (/chat/c/<conv>/<sid>/{stream,send,upload}) without re-deriving
