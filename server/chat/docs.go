@@ -313,6 +313,9 @@ func HandleDocsJS(w http.ResponseWriter, r *http.Request) {
 func renderDocsPage(w http.ResponseWriter, user users.User, docs []DocSummary, slug, body string) {
 	chatPageHeader(w, "Docs", user, "docs")
 	fmt.Fprint(w, docsCSS)
+	// Cross-session new-message strip + favicon-violet alert, shared with
+	// chat via /chat/notify.js. Empty (zero-height) until a ping arrives.
+	fmt.Fprint(w, `<div class="docs-notify chat-notify" id="chat-notify"></div>`)
 	fmt.Fprint(w, `<div class="docs-layout">`)
 
 	// Left pane: doc list + "+ New" form.
@@ -376,6 +379,10 @@ func renderDocsPage(w http.ResponseWriter, user users.User, docs []DocSummary, s
 		fmt.Fprintf(w, `<script src="/chat/docs.js?v=%s"></script>`,
 			url.QueryEscape(web.AssetVersion))
 	}
+	// notify.js loads even when no doc is open — the favicon-violet alert
+	// and the #chat-notify status strip should work on the docs landing too.
+	fmt.Fprintf(w, `<script src="/chat/notify.js?v=%s"></script>`,
+		url.QueryEscape(web.AssetVersion))
 	web.PageFooter(w)
 }
 
@@ -385,6 +392,7 @@ const docsCSS = `<style>
 html, body { height:100%; }
 .app-body-wrap { margin:10px auto; padding:0 18px 10px; min-height:0;
                  max-width:1400px; display:flex; flex-direction:column; flex:1; }
+.docs-notify:not(:empty) { margin-bottom:6px; }
 .docs-layout { display:grid; grid-template-columns:220px 1fr 1fr; gap:14px;
                flex:1; min-height:0; }
 .docs-list { border:1px solid #ddd; border-radius:8px; background:#fcfcf8;

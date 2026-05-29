@@ -27,6 +27,7 @@ func RegisterPages(mux *http.ServeMux) {
 	mux.HandleFunc("/chat/conversations", chat.HandleChatConversations)
 	mux.HandleFunc("/chat/notifications", chat.HandleChatNotifications)
 	mux.HandleFunc("/chat/chat.js", chat.HandleChatJS)
+	mux.HandleFunc("/chat/notify.js", chat.HandleNotifyJS)
 	mux.HandleFunc("/chat/c/{conv}", chat.HandleChatConv)
 	mux.HandleFunc("/chat/c/{conv}/new", chat.HandleChatNewTopic) // literal beats {sid}; "new" reserved
 	mux.HandleFunc("/chat/c/{conv}/{sid}", chat.HandleChatPage)

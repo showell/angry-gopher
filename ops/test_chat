@@ -29,6 +29,9 @@ phase "chat-js" node --check chat/chat.js
 echo "==> docs.js syntax"
 phase "docs-js" node --check chat/docs.js
 
+echo "==> notify.js syntax"
+phase "notify-js" node --check chat/notify.js
+
 echo "==> chat_client.py syntax"
 phase "chat-py" python3 -m py_compile chat/chat_client.py
 

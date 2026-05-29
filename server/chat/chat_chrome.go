@@ -43,7 +43,20 @@ func chatChromeTop(w http.ResponseWriter, user users.User, title, active string)
 // <h1> — the title lives in the bar. active is "chat" | "docs" |
 // "settings" | "".
 func chatPageHeader(w http.ResponseWriter, title string, user users.User, active string) {
-	web.PageHeadAndStyle(w)
+	web.PageHeadAndStyle(w, chatTabTitle(active))
 	chatChromeTop(w, user, title, active)
 	fmt.Fprint(w, `<div class="app-body-wrap">`)
+}
+
+// chatTabTitle picks the browser-tab text from which chat-subsystem page
+// you're on. Mirrors the nav: "Docs"/"Settings" for those, "Chat" for the
+// conversation page (active="") and the people list (active="chat").
+func chatTabTitle(active string) string {
+	switch active {
+	case "docs":
+		return "Docs"
+	case "settings":
+		return "Settings"
+	}
+	return "Chat"
 }

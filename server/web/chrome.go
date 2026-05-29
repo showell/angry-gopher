@@ -32,6 +32,10 @@ const AppChromeCSS = `
 .chat-top-links { font-size: 13px; }
 .chat-top-links a { color: #000080; text-decoration: none; }
 .chat-top-links a:hover { text-decoration: underline; }
+.chat-notify { font-size:13px; color:#1a5fb4; overflow:hidden; text-overflow:ellipsis;
+               white-space:nowrap; min-width:0; }
+.chat-notify a { color:inherit; }
+.chat-notify a:hover { text-decoration:underline; }
 `
 
 // AppChromeTop emits the top bar: a home link, who you're playing as, an
@@ -51,10 +55,12 @@ func AppChromeTop(w http.ResponseWriter, name string, isAdmin bool) {
 
 // PageHeadAndStyle emits the doctype, head, shared stylesheet, and opens
 // <body> — everything before the page's top chrome. Shared by PageHeader
-// (generic app chrome) and chatPageHeader (chat-subsystem chrome).
-func PageHeadAndStyle(w http.ResponseWriter) {
-	fmt.Fprint(w, `<!DOCTYPE html>
-<html><head><meta charset="utf-8"><title>♦️ Lyn Rummy ♥️</title>`)
+// (generic app chrome) and chatPageHeader (chat-subsystem chrome). tabTitle
+// is the browser-tab text — "♦️ Lyn Rummy ♥️" on the lobby/game pages,
+// "Chat"/"Docs"/"Settings" inside the chat subsystem.
+func PageHeadAndStyle(w http.ResponseWriter, tabTitle string) {
+	fmt.Fprintf(w, `<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>%s</title>`, html.EscapeString(tabTitle))
 	fmt.Fprint(w, `
 <style>
 body { font-family: sans-serif; margin: 0; padding: 0;
@@ -101,7 +107,7 @@ button:hover { background: #0000a0; }
 // PageHeader writes the boilerplate, the generic app top bar, and opens the
 // body with the page title as an <h1>.
 func PageHeader(w http.ResponseWriter, title, name string, isAdmin bool) {
-	PageHeadAndStyle(w)
+	PageHeadAndStyle(w, "♦️ Lyn Rummy ♥️")
 	AppChromeTop(w, name, isAdmin)
 	fmt.Fprintf(w, `<div class="app-body-wrap"><h1>%s</h1>`, html.EscapeString(title))
 }

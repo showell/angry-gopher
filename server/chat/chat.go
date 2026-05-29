@@ -356,6 +356,15 @@ func HandleChatJS(w http.ResponseWriter, r *http.Request) {
 	web.ServeJS(w, ChatJSPath, "chat.js missing from the binary")
 }
 
+// NotifyJSPath is the shared cross-page notify + tab-alert module, loaded
+// on both the chat conversation page and the docs page.
+var NotifyJSPath = "chat/notify.js"
+
+// HandleNotifyJS serves the shared notify module from the embedded assets.
+func HandleNotifyJS(w http.ResponseWriter, r *http.Request) {
+	web.ServeJS(w, NotifyJSPath, "notify.js missing from the binary")
+}
+
 // validChatPartner reports whether partner id is a usable conversation
 // partner for user id: another authorized principal (member or agent),
 // not yourself or empty.
@@ -447,8 +456,8 @@ func renderChatConversation(w http.ResponseWriter, user users.User, partnerID, c
   </div>
 </div></div>`)
 
-	fmt.Fprintf(w, `</div><script src="/chat/chat.js?v=%s"></script>`,
-		url.QueryEscape(web.AssetVersion))
+	fmt.Fprintf(w, `</div><script src="/chat/chat.js?v=%s"></script><script src="/chat/notify.js?v=%s"></script>`,
+		url.QueryEscape(web.AssetVersion), url.QueryEscape(web.AssetVersion))
 
 	web.PageFooter(w)
 }
@@ -848,10 +857,6 @@ html, body { height:100%; }
 .chat-views { margin:0 0 8px; font-size:13px; display:flex; align-items:center; gap:12px; }
 .chat-views a { text-decoration:none; }
 .chat-views a.active { font-weight:bold; color:#000; cursor:default; }
-.chat-notify { font-size:13px; color:#1a5fb4; overflow:hidden; text-overflow:ellipsis;
-               white-space:nowrap; min-width:0; }
-.chat-notify a { color:inherit; }
-.chat-notify a:hover { text-decoration:underline; }
 .chat-compose-actions { display:flex; gap:8px; margin-top:8px; }
 .chat-compose-actions button { margin-top:0; }
 /* width/height:auto so the HTML width/height attrs (set by the upload
