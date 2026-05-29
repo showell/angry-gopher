@@ -145,7 +145,7 @@
     div.id='msg-'+m.id; div.setAttribute('data-i',m.index); div.setAttribute('data-id',m.id);
     div._body=m.body; /* raw markdown source, kept for quote-reply */
     var meta=document.createElement('div'); meta.className='chat-meta';
-    meta.appendChild(document.createTextNode(m.from+' · '+m.time+' '));
+    meta.appendChild(document.createTextNode('#'+(m.index+1)+' '+m.from+' · '+m.time+' '));
     var quote=document.createElement('button'); quote.type='button'; quote.className='msg-quote';
     quote.title='Quote this message in a reply (q)'; quote.textContent='quote-reply'; meta.appendChild(quote);
     meta.appendChild(document.createTextNode(' '));
