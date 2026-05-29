@@ -96,6 +96,16 @@ func HandleChatNotifications(w http.ResponseWriter, r *http.Request) {
 	ch, cancel := openNotify(user.ID)
 	defer cancel()
 
+	// Flush immediately so the response headers go out and the client's
+	// EventSource is established now — not 25s from now on the first keepalive.
+	// (The message stream does the same via its backlog-size preamble.)
+	if _, err := fmt.Fprint(w, ": ok\n\n"); err != nil {
+		return
+	}
+	if rc.Flush() != nil {
+		return
+	}
+
 	ticker := time.NewTicker(25 * time.Second)
 	defer ticker.Stop()
 	ctx := r.Context()
