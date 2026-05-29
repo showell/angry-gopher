@@ -921,7 +921,15 @@
       if(!drag.started){
         if(Math.hypot(e.clientX-drag.x0, e.clientY-drag.y0) < DRAG_THRESHOLD) return;
         drag.started=true; drag.item.classList.add('dragging');
+        /* a ghost chip that follows the cursor; pointer-events:none so it
+           doesn't shadow elementFromPoint's hit-test of the drop section. */
+        drag.ghost=document.createElement('div');
+        drag.ghost.className='chat-drag-ghost';
+        drag.ghost.textContent=drag.item.textContent.trim();
+        document.body.appendChild(drag.ghost);
       }
+      drag.ghost.style.left=(e.clientX+12)+'px';
+      drag.ghost.style.top=(e.clientY+10)+'px';
       clearActive();
       var sec=sectionAt(e.clientX, e.clientY);
       if(sec && sec!==drag.sourceUl) sec.classList.add('drop-active');
@@ -931,6 +939,7 @@
       var d=drag; drag=null;
       try{ d.item.releasePointerCapture(e.pointerId); }catch(_){}
       d.item.classList.remove('dragging'); clearActive();
+      if(d.ghost) d.ghost.remove();
       if(!d.started) return; /* a tap, not a drag — let the link navigate */
       d.item.dataset.justDragged='1'; /* suppress the click that follows the drag */
       var target=sectionAt(e.clientX, e.clientY);

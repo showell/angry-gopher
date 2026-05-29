@@ -714,6 +714,10 @@ html, body { height:100%; }
 .chat-session-drop { min-height:14px; border-radius:4px; }
 .chat-session-drop.drop-active { outline:2px dashed #1a5fb4; outline-offset:-2px; background:#eef3fb; }
 .chat-pin-hint { font-size:11px; }
+.chat-drag-ghost { position:fixed; z-index:1000; pointer-events:none; background:#000080;
+                   color:#fff; font-size:12px; padding:3px 9px; border-radius:4px;
+                   box-shadow:0 2px 8px rgba(0,0,0,0.35); opacity:0.92; white-space:nowrap;
+                   max-width:170px; overflow:hidden; text-overflow:ellipsis; }
 .chat-add-topic { display:flex; flex-wrap:wrap; gap:4px; margin-top:8px; }
 .chat-add-topic input { flex:1; min-width:0; padding:3px 6px; font-size:12px;
                         border:1px solid #ccc; border-radius:3px; font-family:inherit; }
