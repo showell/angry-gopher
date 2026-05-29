@@ -12,13 +12,15 @@ lynrummy.com {
 
 	# Coarse outer caps. The Go handlers enforce tighter per-route limits
 	# (256 KB new-session, 64 KB append/puzzle). Chat image uploads need
-	# headroom: Gopher caps the decoded image at 10 MiB, so give /chat/upload
-	# 12 MB and keep everything else tight.
-	@upload path /chat/upload
+	# headroom: Gopher caps the decoded image at 10 MiB, so give the upload
+	# route 12 MB and keep everything else tight. The route is path-style —
+	# POST /chat/c/<conv>/<sid>/upload — so match it with a regexp; the two
+	# matchers are exact complements, so precisely one cap applies per request.
+	@upload path_regexp up ^/chat/c/[^/]+/[^/]+/upload$
 	request_body @upload {
 		max_size 12MB
 	}
-	@notupload not path /chat/upload
+	@notupload not path_regexp nup ^/chat/c/[^/]+/[^/]+/upload$
 	request_body @notupload {
 		max_size 1MB
 	}
