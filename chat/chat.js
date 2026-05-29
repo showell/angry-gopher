@@ -176,9 +176,12 @@
     note.appendChild(document.createTextNode('Edited in '));
     var link=document.createElement('a'); link.className='msg-ref'; link.href='#msg-'+editID;
     link.textContent='MSG_'+editID; note.appendChild(link);
+    var spoiler=document.createElement('details'); spoiler.className='chat-edited-spoiler';
+    var summary=document.createElement('summary'); summary.textContent='original'; spoiler.appendChild(summary);
     var orig=document.createElement('div'); orig.className='chat-edited-orig';
     orig.textContent=origEl._body!=null?origEl._body:'';
-    bodyEl.appendChild(note); bodyEl.appendChild(orig);
+    spoiler.appendChild(orig);
+    bodyEl.appendChild(note); bodyEl.appendChild(spoiler);
   }
   /* Quote-reply: drop the target message into the compose box as a fenced
      block and focus it, ready to type the reply underneath. The MSG_ header
