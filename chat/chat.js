@@ -913,14 +913,19 @@
       if(e.button>0) return; /* primary button / touch / pen only */
       var item=e.currentTarget;
       delete item.dataset.justDragged; /* clear any stale suppress flag */
-      drag={ item:item, sid:item.getAttribute('data-sid'), sourceUl:item.closest('[data-section]'), x0:e.clientX, y0:e.clientY, started:false };
-      item.setPointerCapture(e.pointerId);
+      drag={ item:item, sid:item.getAttribute('data-sid'), sourceUl:item.closest('[data-section]'),
+             x0:e.clientX, y0:e.clientY, pointerId:e.pointerId, started:false };
+      /* Do NOT capture here — capturing on pointerdown steals the click from
+         the <a>, so plain taps stop navigating. We capture once a drag starts. */
     }
     function onMove(e){
       if(!drag) return;
       if(!drag.started){
         if(Math.hypot(e.clientX-drag.x0, e.clientY-drag.y0) < DRAG_THRESHOLD) return;
         drag.started=true; drag.item.classList.add('dragging');
+        /* Now that it's a real drag, capture the pointer so moves keep coming
+           even as the cursor leaves the item (and releases at pointerup). */
+        try{ drag.item.setPointerCapture(drag.pointerId); }catch(_){}
         /* a ghost chip that follows the cursor; pointer-events:none so it
            doesn't shadow elementFromPoint's hit-test of the drop section. */
         drag.ghost=document.createElement('div');
@@ -937,7 +942,7 @@
     function onUp(e){
       if(!drag) return;
       var d=drag; drag=null;
-      try{ d.item.releasePointerCapture(e.pointerId); }catch(_){}
+      if(d.started){ try{ d.item.releasePointerCapture(e.pointerId); }catch(_){} }
       d.item.classList.remove('dragging'); clearActive();
       if(d.ghost) d.ghost.remove();
       if(!d.started) return; /* a tap, not a drag — let the link navigate */
