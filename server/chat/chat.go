@@ -184,6 +184,23 @@ func HandleChatNewTopic(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(map[string]string{"conv": conv, "sid": topic})
 }
 
+// HandleChatPin toggles whether a session is in the caller's Pinned group for
+// this conversation. Two routes hang off the session like send/stream do:
+// POST /chat/c/<conv>/<sid>/pin and .../unpin. Per-user state; conv-level auth
+// (any participant pins their own view); the sid is validated by chatPathSession.
+func HandleChatPin(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	user, conv, sid, ok := chatPathSession(w, r)
+	if !ok {
+		return
+	}
+	SetSessionPinned(user.ID, conv, sid, !strings.HasSuffix(r.URL.Path, "/unpin"))
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // HandleChatPage serves /chat/c/<conv>/<sid>: renders one session.
 func HandleChatPage(w http.ResponseWriter, r *http.Request) {
 	user, conv, sid, ok := chatPathSession(w, r)
@@ -435,20 +452,46 @@ func renderChatSidebar(w http.ResponseWriter, user users.User, partnerID, conv, 
 	}
 	fmt.Fprint(w, `</ul></div>`)
 
-	// Sessions: every session of THIS conv (newest first).
+	// Sessions of THIS conv, split into the user's Pinned group (above) and
+	// the rest. Both alphabetical (ListChatSessions is sorted); pins are
+	// per-user, and the two <ul>s are pointer drag/drop targets (chat.js).
 	a, b := user.ID, partnerID
-	fmt.Fprint(w, `<div class="chat-sidebar-section"><div class="chat-sidebar-title">Sessions</div><ul class="chat-sidebar-list">`)
 	sessions := ListChatSessions(a, b)
-	if len(sessions) == 0 {
-		fmt.Fprint(w, `<li class="muted">No sessions yet</li>`)
-	}
-	for _, sid := range sessions {
-		cls := ""
+	pinned := PinnedSessions(user.ID, conv)
+	item := func(sid string) {
+		acls := ""
 		if sid == sessionID {
-			cls = ` class="active"`
+			acls = ` class="active"`
 		}
-		fmt.Fprintf(w, `<li><a href="/chat/c/%s/%s"%s>%s</a></li>`,
-			conv, url.PathEscape(sid), cls, html.EscapeString(sid))
+		fmt.Fprintf(w, `<li class="chat-session-item" data-sid="%s"><a href="/chat/c/%s/%s"%s draggable="false">%s</a></li>`,
+			html.EscapeString(sid), conv, url.PathEscape(sid), acls, html.EscapeString(sid))
+	}
+
+	fmt.Fprint(w, `<div class="chat-sidebar-section"><div class="chat-sidebar-title">Pinned Sessions</div>`+
+		`<ul class="chat-sidebar-list chat-session-drop" data-section="pinned">`)
+	nPinned := 0
+	for _, sid := range sessions {
+		if pinned[sid] {
+			item(sid)
+			nPinned++
+		}
+	}
+	if nPinned == 0 {
+		fmt.Fprint(w, `<li class="muted chat-pin-hint">Drag a session here to pin it</li>`)
+	}
+	fmt.Fprint(w, `</ul></div>`)
+
+	fmt.Fprint(w, `<div class="chat-sidebar-section"><div class="chat-sidebar-title">Sessions</div>`+
+		`<ul class="chat-sidebar-list chat-session-drop" data-section="sessions">`)
+	nUnpinned := 0
+	for _, sid := range sessions {
+		if !pinned[sid] {
+			item(sid)
+			nUnpinned++
+		}
+	}
+	if nUnpinned == 0 {
+		fmt.Fprint(w, `<li class="muted">No sessions yet</li>`)
 	}
 	fmt.Fprint(w, `</ul>`)
 	// Add a topic = create a new session with a custom name in THIS conv.
@@ -666,6 +709,11 @@ html, body { height:100%; }
 .chat-sidebar-list li a:hover { background:#f0f0ff; }
 .chat-sidebar-list li a.active { background:#000080; color:white; font-weight:bold; }
 .chat-sidebar-list li.muted { color:#888; padding:4px 8px; font-style:italic; }
+.chat-session-item { touch-action:none; cursor:grab; user-select:none; -webkit-user-select:none; }
+.chat-session-item.dragging { opacity:0.5; cursor:grabbing; }
+.chat-session-drop { min-height:14px; border-radius:4px; }
+.chat-session-drop.drop-active { outline:2px dashed #1a5fb4; outline-offset:-2px; background:#eef3fb; }
+.chat-pin-hint { font-size:11px; }
 .chat-add-topic { display:flex; flex-wrap:wrap; gap:4px; margin-top:8px; }
 .chat-add-topic input { flex:1; min-width:0; padding:3px 6px; font-size:12px;
                         border:1px solid #ccc; border-radius:3px; font-family:inherit; }

@@ -887,6 +887,74 @@
       });
     });
   }
+  /* --- Pinned/Sessions drag-and-drop (pointer API).
+     Drag a session item between the two <ul data-section> groups to pin/unpin
+     it. pointerdown captures the pointer on the item; a >5px move starts the
+     drag (so a plain tap still navigates the link); pointerup picks the drop
+     section via elementFromPoint, POSTs .../<sid>/pin or /unpin (path-style,
+     like send/stream), and optimistically moves the item (kept A-Z). --- */
+  (function(){
+    var DRAG_THRESHOLD=5, drag=null;
+    function sectionAt(x,y){ var el=document.elementFromPoint(x,y); return el?el.closest('[data-section]'):null; }
+    function clearActive(){ var a=document.querySelectorAll('.chat-session-drop.drop-active'); for(var i=0;i<a.length;i++) a[i].classList.remove('drop-active'); }
+    function insertSorted(ul, li){
+      var sid=li.getAttribute('data-sid'), items=ul.querySelectorAll('.chat-session-item');
+      for(var i=0;i<items.length;i++){ if(items[i].getAttribute('data-sid')>sid){ ul.insertBefore(li, items[i]); return; } }
+      ul.appendChild(li);
+    }
+    /* The Pinned group shows a hint <li> only while it has no items. */
+    function syncPinHint(){
+      var ul=document.querySelector('[data-section="pinned"]'); if(!ul) return;
+      var has=ul.querySelector('.chat-session-item'), hint=ul.querySelector('.chat-pin-hint');
+      if(has && hint) hint.remove();
+      else if(!has && !hint){ var li=document.createElement('li'); li.className='muted chat-pin-hint'; li.textContent='Drag a session here to pin it'; ul.appendChild(li); }
+    }
+    function onDown(e){
+      if(e.button>0) return; /* primary button / touch / pen only */
+      var item=e.currentTarget;
+      delete item.dataset.justDragged; /* clear any stale suppress flag */
+      drag={ item:item, sid:item.getAttribute('data-sid'), sourceUl:item.closest('[data-section]'), x0:e.clientX, y0:e.clientY, started:false };
+      item.setPointerCapture(e.pointerId);
+    }
+    function onMove(e){
+      if(!drag) return;
+      if(!drag.started){
+        if(Math.hypot(e.clientX-drag.x0, e.clientY-drag.y0) < DRAG_THRESHOLD) return;
+        drag.started=true; drag.item.classList.add('dragging');
+      }
+      clearActive();
+      var sec=sectionAt(e.clientX, e.clientY);
+      if(sec && sec!==drag.sourceUl) sec.classList.add('drop-active');
+    }
+    function onUp(e){
+      if(!drag) return;
+      var d=drag; drag=null;
+      try{ d.item.releasePointerCapture(e.pointerId); }catch(_){}
+      d.item.classList.remove('dragging'); clearActive();
+      if(!d.started) return; /* a tap, not a drag — let the link navigate */
+      d.item.dataset.justDragged='1'; /* suppress the click that follows the drag */
+      var target=sectionAt(e.clientX, e.clientY);
+      if(!target || target===d.sourceUl) return; /* dropped back / outside */
+      var pin = target.getAttribute('data-section')==='pinned';
+      insertSorted(target, d.item); syncPinHint(); /* optimistic */
+      fetch('/chat/c/'+encodeURIComponent(CONV)+'/'+encodeURIComponent(d.sid)+'/'+(pin?'pin':'unpin'), {method:'POST'})
+        .then(function(r){ if(!r.ok) throw 0; })
+        .catch(function(){ insertSorted(d.sourceUl, d.item); syncPinHint(); }); /* revert on failure */
+    }
+    function onClick(e){
+      var item=e.currentTarget;
+      if(item.dataset.justDragged){ delete item.dataset.justDragged; e.preventDefault(); e.stopPropagation(); }
+    }
+    var items=document.querySelectorAll('.chat-session-item');
+    for(var i=0;i<items.length;i++){
+      var it=items[i];
+      it.addEventListener('pointerdown', onDown);
+      it.addEventListener('pointermove', onMove);
+      it.addEventListener('pointerup', onUp);
+      it.addEventListener('pointercancel', onUp);
+      it.addEventListener('click', onClick);
+    }
+  })();
   /* Override these keys when reading the feed (not when typing in compose). */
   document.addEventListener('keydown',function(e){
     var ae=document.activeElement;

@@ -176,8 +176,8 @@ func validSessionID(sid string) bool {
 }
 
 // ListChatSessions returns every session id for a conversation, sorted
-// newest-first (which, given date-prefixed slugs, means lexicographic
-// descending). An empty list = no sessions on disk yet.
+// alphabetically (ascending) — the order the sidebar + /chat/conversations
+// matrix display them. An empty list = no sessions on disk yet.
 func ListChatSessions(a, b string) []string {
 	entries, err := os.ReadDir(chatSessionsDir(a, b))
 	if err != nil {
@@ -194,12 +194,13 @@ func ListChatSessions(a, b string) []string {
 		}
 		out = append(out, strings.TrimSuffix(name, ".md"))
 	}
-	sort.Sort(sort.Reverse(sort.StringSlice(out)))
+	sort.Strings(out)
 	return out
 }
 
-// DefaultChatSession returns the newest session id for a conversation,
-// or "" if none exist yet.
+// DefaultChatSession returns the alphabetically-first session id for a
+// conversation, or "" if none exist yet. It's the fallback landing for
+// resolveSessionForUser when the user has no last-viewed pointer.
 func DefaultChatSession(a, b string) string {
 	if list := ListChatSessions(a, b); len(list) > 0 {
 		return list[0]
