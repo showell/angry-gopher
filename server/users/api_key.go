@@ -28,7 +28,9 @@ import (
 	"strings"
 )
 
-func apiKeyFile(id string) string { return userFile(id, "api-key") }
+// The api key is account data — it lives in the shared AuthRoot (alongside
+// name + password), not the gopher-private user dir.
+func apiKeyFile(id string) string { return authFile(id, "api-key") }
 
 // SetUserAPIKey generates a fresh key for a member, stores it (plaintext),
 // and returns it.
@@ -38,6 +40,7 @@ func SetUserAPIKey(id string) (string, error) {
 		return "", err
 	}
 	key := id + "-" + hex.EncodeToString(b[:])
+	_ = os.MkdirAll(authDir(id), 0o755)
 	if err := os.WriteFile(apiKeyFile(id), []byte(key), 0o600); err != nil {
 		return "", err
 	}

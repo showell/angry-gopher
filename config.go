@@ -28,6 +28,11 @@ import (
 type ServerConfig struct {
 	Port    int
 	DataDir string
+	// AuthDir holds the shared account store (name + password + api-key),
+	// deliberately OUTSIDE DataDir so (a) it's excluded from the data_dir
+	// backup tarball and (b) a sibling app (Granite) can share accounts
+	// without reaching into AngryGopher. Defaults to ~/Auth if unset.
+	AuthDir string
 }
 
 func (c *ServerConfig) ListenAddr() string {
@@ -47,10 +52,21 @@ func (c *ServerConfig) ChatDataRoot() string {
 	return filepath.Join(c.DataDir, "chat")
 }
 
-// UsersDataRoot is the root for the user registry (one dir per numeric
-// user id). See web.SetUsersRoot.
+// UsersDataRoot is the root for gopher-private per-user data (admin flag,
+// last-seen, upload accounting) — one dir per numeric user id, created on
+// demand. The account itself (name + credentials) lives in AuthDataRoot.
 func (c *ServerConfig) UsersDataRoot() string {
 	return filepath.Join(c.DataDir, "users")
+}
+
+// AuthDataRoot is the shared account store: {auth_dir}/<id>/{name,password,
+// api-key} + next-id.txt. Outside DataDir (so it's not in the backup and a
+// sibling app can share it). Defaults to ~/Auth when auth_dir is unset.
+func (c *ServerConfig) AuthDataRoot() string {
+	if c.AuthDir != "" {
+		return c.AuthDir
+	}
+	return expandHome("~/Auth")
 }
 
 // EnsureDirectories creates data_dir and the sessions/chat/users roots if
@@ -67,6 +83,9 @@ func (c *ServerConfig) EnsureDirectories() error {
 	}
 	if err := os.MkdirAll(c.UsersDataRoot(), 0o755); err != nil {
 		return fmt.Errorf("cannot create users root: %w", err)
+	}
+	if err := os.MkdirAll(c.AuthDataRoot(), 0o755); err != nil {
+		return fmt.Errorf("cannot create auth root: %w", err)
 	}
 	return nil
 }
@@ -102,6 +121,8 @@ func loadConfig(path string) (*ServerConfig, error) {
 			c.Port = n
 		case "data_dir":
 			c.DataDir = expandHome(val)
+		case "auth_dir":
+			c.AuthDir = expandHome(val)
 		default:
 			fmt.Fprintf(os.Stderr, "config: ignoring unknown key %q (line %d)\n", key, lineNo)
 		}

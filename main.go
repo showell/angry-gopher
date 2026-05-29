@@ -105,6 +105,7 @@ Usage:
 	lynrummy.SetDataRoot(config.SessionsDataRoot())
 	chat.SetChatRoot(config.ChatDataRoot())
 	users.SetUsersRoot(config.UsersDataRoot())
+	users.SetAuthRoot(config.AuthDataRoot())
 	users.SetSessionSecretDir(config.ChatDataRoot())
 	web.SetAssets(assets)
 	web.SetVersion(gitCommit)

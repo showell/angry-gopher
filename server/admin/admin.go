@@ -139,7 +139,7 @@ func renderMembersTable(w http.ResponseWriter) {
 	}
 	rows := make([]memberRow, 0, len(members))
 	for _, m := range members {
-		t, ok := users.UserLastActive(m.ID)
+		t, ok := users.UserLastSeen(m.ID)
 		rows = append(rows, memberRow{user: m, active: t, ever: ok})
 	}
 	sort.SliceStable(rows, func(i, j int) bool {

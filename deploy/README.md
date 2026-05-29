@@ -85,6 +85,14 @@ the SSH key was added at droplet creation).
   `~/AngryGopher/backups` on the dev box. Also worth enabling
   DigitalOcean weekly droplet backups in the control panel for
   whole-droplet recovery.
+- **Account store (`~/Auth`):** the shared account data — `name`, `password`,
+  `api-key`, and `next-id.txt` — lives under `~/Auth` (config `auth_dir`,
+  default `~/Auth`), deliberately OUTSIDE `data_dir`. So it is **not** in the
+  `ops/backup` tarball (back it up separately — it holds credentials), and a
+  sibling app can share accounts without reaching into `~/AngryGopher`.
+  gopher-private per-user data (admin, last-seen, upload-bytes) stays under
+  `{data_dir}/users/<id>/`. One-time migration of an existing host:
+  `tools/split_auth_data <data_dir> <auth_dir>` (run with the server stopped).
 
 ### Deferred to the guests phase
 
