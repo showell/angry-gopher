@@ -331,15 +331,14 @@
     requestAnimationFrame(function(){ fire(); requestAnimationFrame(fire); });
   }
   var es=new EventSource(SESSION_BASE+'/stream?since=0');
-  /* Chat is MPA — every session switch / link click is a full navigation, so
-     these long-lived SSE streams are always mid-flight when we leave. Close
-     them on pagehide so the teardown is an intentional close, not an abort
-     the browser logs as "connection interrupted while the page was loading".
-     nes (the notification feed, set up below) is closed here too. */
-  window.addEventListener('pagehide', function(){
-    try{ es.close(); }catch(_){}
-    if(typeof nes!=='undefined' && nes){ try{ nes.close(); }catch(_){} }
-  });
+  /* Back/forward can restore this page from the bfcache — frozen, including
+     these SSE streams, which the browser tore down when it cached the page.
+     A restored page would show a dead feed (no new messages, no notifications).
+     So if we were restored from bfcache (pageshow persisted), reload to get
+     live streams back. Open EventSources usually block bfcache outright (so
+     back is a normal reload that reconnects + replays the backlog); this is the
+     belt-and-suspenders for browsers that cache anyway. */
+  window.addEventListener('pageshow', function(e){ if(e.persisted) location.reload(); });
   es.addEventListener('backlog-size', function(e){
     /* Reset per-connection: fires on initial load AND on every reconnect. */
     wasCaughtUpAtBacklogStart=caughtUp();
