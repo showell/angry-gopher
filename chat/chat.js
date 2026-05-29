@@ -331,6 +331,15 @@
     requestAnimationFrame(function(){ fire(); requestAnimationFrame(fire); });
   }
   var es=new EventSource(SESSION_BASE+'/stream?since=0');
+  /* Chat is MPA — every session switch / link click is a full navigation, so
+     these long-lived SSE streams are always mid-flight when we leave. Close
+     them on pagehide so the teardown is an intentional close, not an abort
+     the browser logs as "connection interrupted while the page was loading".
+     nes (the notification feed, set up below) is closed here too. */
+  window.addEventListener('pagehide', function(){
+    try{ es.close(); }catch(_){}
+    if(typeof nes!=='undefined' && nes){ try{ nes.close(); }catch(_){} }
+  });
   es.addEventListener('backlog-size', function(e){
     /* Reset per-connection: fires on initial load AND on every reconnect. */
     wasCaughtUpAtBacklogStart=caughtUp();
