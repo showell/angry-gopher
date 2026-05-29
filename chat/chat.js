@@ -839,6 +839,25 @@
     if(SR.phase==='suggest') renderSuggest(); else runResults(SR.term);
   }
   searchBtn.addEventListener('click', openSearchModal);
+  /* --- cross-session notifications: a SECOND, per-user SSE feed (separate
+     from the per-session message stream above). It pings when a message lands
+     in ANY of your sessions, so the status line by Rendered/Transcript can
+     show "Apoorva sent you a message on general2". We suppress the ping for
+     the session you're currently viewing — you already see it arrive. --- */
+  var notifyEl=document.getElementById('chat-notify');
+  if(notifyEl){
+    var nes=new EventSource('/chat/notifications');
+    nes.onmessage=function(e){
+      var n; try{ n=JSON.parse(e.data); }catch(_){ return; }
+      if(!n||!n.session) return;
+      if(n.conv===CONV && n.session===SESSION) return; /* current session: already in the feed */
+      notifyEl.textContent='';
+      var a=document.createElement('a'); /* textContent, never innerHTML — from/session are untrusted */
+      a.href='/chat/c/'+encodeURIComponent(n.conv)+'/'+encodeURIComponent(n.session);
+      a.textContent=n.from+' sent you a message on '+n.session;
+      notifyEl.appendChild(a);
+    };
+  }
   /* --- add a topic: a session with a custom name in THIS conversation.
      Validate the name (letters/digits/hyphens, matching the server), POST it,
      then optimistically switch to the new topic — it renders just like any
