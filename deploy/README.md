@@ -91,8 +91,9 @@ the SSH key was added at droplet creation).
   `ops/backup` tarball (back it up separately — it holds credentials), and a
   sibling app can share accounts without reaching into `~/AngryGopher`.
   gopher-private per-user data (admin, last-seen, upload-bytes) stays under
-  `{data_dir}/users/<id>/`. One-time migration of an existing host:
-  `tools/split_auth_data <data_dir> <auth_dir>` (run with the server stopped).
+  `{data_dir}/users/<id>/`. A fresh host starts already-split; the prod host
+  was migrated 2026-05-29 (the one-shot migration tool has since been removed —
+  pull it from git history if another existing host ever needs it).
 
 ### Deferred to the guests phase
 
