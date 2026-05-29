@@ -136,6 +136,23 @@ func HandleChatConv(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/chat/c/"+conv+"/"+url.PathEscape(sid), http.StatusSeeOther)
 }
 
+// highestGeneralSession returns the general<N> session with the largest N in
+// the conversation (the "most recent general stream"), or "" if there is
+// none. Computed on the fly from the session list — no stored pointer, just
+// the equivalent of `ls general*` picking the highest number.
+func highestGeneralSession(a, b string) string {
+	best, bestN := "", -1
+	for _, sid := range ListChatSessions(a, b) {
+		if !strings.HasPrefix(sid, "general") {
+			continue
+		}
+		if n, err := strconv.Atoi(sid[len("general"):]); err == nil && n > bestN {
+			bestN, best = n, sid
+		}
+	}
+	return best
+}
+
 // HandleChatNewTopic creates a topic — a session with a custom name — in the
 // conversation named in the path (/chat/c/<conv>/new), and seeds it with a
 // "hi" from the creator so it exists on disk and shows up immediately. A
@@ -180,6 +197,14 @@ func HandleChatNewTopic(w http.ResponseWriter, r *http.Request) {
 	}
 	SetUserLastSession(user.ID, user.ID, partner, topic)
 	users.TouchUser(user.ID)
+	// Announce the new topic in the most recent general stream (highest
+	// general<N>, computed on the fly), so the partner sees it where they
+	// already watch — and gets the notification ping there. Best-effort; skip
+	// if there's no general stream, or the new topic itself is the one.
+	if gen := highestGeneralSession(user.ID, partner); gen != "" && gen != topic {
+		_, _ = AppendChatMessage(user, partner, gen,
+			"New topic: ["+topic+"](/chat/c/"+conv+"/"+topic+")", "")
+	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]string{"conv": conv, "sid": topic})
 }
