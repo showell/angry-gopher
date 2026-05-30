@@ -54,9 +54,21 @@ func HandleRecent(w http.ResponseWriter, r *http.Request) {
 	items := gatherRecentItems(user)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	chatPageHeader(w, "Recent", user, "recent")
+	fmt.Fprint(w, recentCSS)
 	renderRecentList(w, items)
 	web.PageFooter(w)
 }
+
+// recentCSS scopes the When column's right-align + tabular-nums to the
+// recent page. The shared chrome already styles the table (border, hover,
+// header color); this only adds what's specific to recent's first column.
+const recentCSS = `<style>
+.recent-table th.recent-when, .recent-table td.recent-when {
+  text-align: right; font-variant-numeric: tabular-nums;
+  white-space: nowrap; width: 1%;
+}
+.recent-table td.recent-when { color: #888; }
+</style>`
 
 // gatherRecentItems walks every conv that includes the viewer plus their
 // docs dir, statting each file for its mtime. Returned newest-first.
@@ -107,22 +119,25 @@ func renderRecentList(w http.ResponseWriter, items []recentItem) {
 		fmt.Fprint(w, `<p class="muted">Nothing yet.</p>`)
 		return
 	}
-	fmt.Fprint(w, `<ul class="recent-list">`)
+	fmt.Fprint(w, `<table class="recent-table">`+
+		`<tr><th class="recent-when">When</th><th>What</th></tr>`)
 	for _, it := range items {
 		age := web.HumanizeSince(it.at)
 		switch it.kind {
 		case recentChat:
 			href := "/chat/c/" + it.conv + "/" + url.PathEscape(it.sid)
 			fmt.Fprintf(w,
-				`<li><span class="recent-age muted">%s</span> · New message in <a href="%s">%s</a> <span class="muted">(with %s)</span></li>`,
+				`<tr><td class="recent-when">%s</td>`+
+					`<td>New message in <a href="%s">%s</a> <span class="muted">(with %s)</span></td></tr>`,
 				html.EscapeString(age), href,
 				html.EscapeString(it.sid), html.EscapeString(it.partner))
 		case recentDoc:
 			href := "/chat/docs/" + url.PathEscape(it.slug)
 			fmt.Fprintf(w,
-				`<li><span class="recent-age muted">%s</span> · You edited <a href="%s">%s</a></li>`,
+				`<tr><td class="recent-when">%s</td>`+
+					`<td>You edited <a href="%s">%s</a></td></tr>`,
 				html.EscapeString(age), href, html.EscapeString(it.title))
 		}
 	}
-	fmt.Fprint(w, `</ul>`)
+	fmt.Fprint(w, `</table>`)
 }
