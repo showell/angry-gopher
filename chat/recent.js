@@ -12,6 +12,11 @@
   var emptyEl=document.getElementById('recent-empty');
   var tableEl=document.getElementById('recent-table');
   if(!tableEl) return;
+  /* Rows live under <tbody>, not directly under <table>. Server emits it
+     explicitly; tableEl.insertBefore(tr, otherTr) would throw because
+     otherTr's parent is the tbody, not the table. */
+  var tbodyEl=tableEl.querySelector('tbody');
+  if(!tbodyEl) return;
 
   function humanize(iso){
     var d=Date.now()-new Date(iso).getTime();
@@ -24,7 +29,7 @@
   }
 
   function rePaintAges(){
-    var rows=tableEl.querySelectorAll('tr[data-ts]');
+    var rows=tbodyEl.querySelectorAll('tr[data-ts]');
     for(var i=0;i<rows.length;i++){
       var tr=rows[i], ts=tr.dataset.ts; if(!ts) continue;
       var when=tr.querySelector('td.recent-when');
@@ -64,24 +69,24 @@
   }
 
   /* Insert tr so rows stay sorted by data-ts desc (newest first). The
-     header is the first row in tableEl; we skip it. Equal timestamps tie-
-     break stably by inserting the new row above the older one of the
-     same instant. */
+     <thead> holds the column-header tr (no data-ts), so we only scan tbody
+     rows. Equal timestamps tie-break stably by inserting the new row
+     above the older one of the same instant. */
   function insertSorted(tr){
     var ts=tr.dataset.ts;
-    var rows=tableEl.querySelectorAll('tr[data-ts]');
+    var rows=tbodyEl.querySelectorAll('tr[data-ts]');
     for(var i=0;i<rows.length;i++){
       if(rows[i].dataset.ts < ts){
-        tableEl.insertBefore(tr, rows[i]);
+        tbodyEl.insertBefore(tr, rows[i]);
         return;
       }
     }
-    tableEl.appendChild(tr);
+    tbodyEl.appendChild(tr);
   }
 
   function upsert(evt){
     var key=evt.kind==='chat' ? 'chat:'+evt.conv+'/'+evt.sid : 'doc:'+evt.slug;
-    var existing=tableEl.querySelector('tr[data-key="'+key+'"]');
+    var existing=tbodyEl.querySelector('tr[data-key="'+key+'"]');
     if(existing) existing.remove();
     var tr=buildRow(evt); if(!tr) return;
     insertSorted(tr);

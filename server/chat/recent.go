@@ -133,19 +133,25 @@ func gatherRecentItems(user users.User) []recentItem {
 // data-ts (RFC3339, so the 20s client tick can re-humanize the When cell
 // without a server round-trip). The empty-state <p> uses id="recent-empty"
 // so SSE can swap it out for the table on first event.
+//
+// <thead> + <tbody> are emitted EXPLICITLY: browsers auto-wrap loose <tr>s
+// in a tbody anyway, and the JS targets that tbody when inserting new
+// rows. Pretending the tbody doesn't exist in the source means JS that
+// queries `table > tr` is structurally wrong but coincidentally works
+// for queries-as-descendants — and crashes on insertBefore.
 func renderRecentList(w http.ResponseWriter, items []recentItem) {
+	fmt.Fprint(w, `<table class="recent-table" id="recent-table"`)
 	if len(items) == 0 {
-		fmt.Fprint(w, `<p class="muted" id="recent-empty">Nothing yet.</p>`+
-			`<table class="recent-table" id="recent-table" hidden>`+
-			`<tr><th class="recent-when">When</th><th>What</th></tr></table>`)
-		return
+		fmt.Fprint(w, ` hidden`)
 	}
-	fmt.Fprint(w, `<table class="recent-table" id="recent-table">`+
-		`<tr><th class="recent-when">When</th><th>What</th></tr>`)
+	fmt.Fprint(w, `><thead><tr><th class="recent-when">When</th><th>What</th></tr></thead><tbody>`)
 	for _, it := range items {
 		writeRecentRow(w, it)
 	}
-	fmt.Fprint(w, `</table>`)
+	fmt.Fprint(w, `</tbody></table>`)
+	if len(items) == 0 {
+		fmt.Fprint(w, `<p class="muted" id="recent-empty">Nothing yet.</p>`)
+	}
 }
 
 func writeRecentRow(w http.ResponseWriter, it recentItem) {
