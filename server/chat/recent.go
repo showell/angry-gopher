@@ -11,9 +11,19 @@
 //     from each row's data-ts (so "5m ago" rolls to "6m ago" without a
 //     server round-trip).
 //
-// Per-user subscriber map mirrors chat_notify.go (the cross-session
-// "you have activity" feed) — same shape, same flush + ping rhythm, just
-// a richer event payload (kind + identity fields for the destination link).
+// SSE landscape (three streams, one file each):
+//   - chat-message  chat_stream.go:  /chat/c/{conv}/{sid}/stream
+//                                    (full rendered messages for ONE open session)
+//   - notify        chat_notify.go:  /chat/notifications
+//                                    (per-user pings + favicon-violet)
+//   - recent        (HERE):          /chat/recent/stream
+//                                    (per-user row upserts for the Recent page)
+//
+// Publish chokepoints: chat_store.go::AppendChatMessage publishes for
+// chat events (to BOTH participants); docs_store.go::WriteUserDoc and
+// CreateUserDoc publish for doc events (author only). Per-user
+// subscriber map mirrors chat_notify.go — same shape, same flush + ping
+// rhythm, just a richer event payload (kind + identity fields).
 
 package chat
 

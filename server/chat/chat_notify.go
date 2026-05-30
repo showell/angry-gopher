@@ -1,11 +1,20 @@
-// Cross-session notifications — a per-USER activity feed, separate from the
-// per-(conv,session) message stream in chat_store.go. That one carries full
-// message content for the transcript you're viewing; this one carries a tiny
-// "you have activity over there" ping for every conversation/session you're
-// in, so a status line can light up wherever you are. AppendChatMessage
-// publishes one ping to the RECIPIENT for every message, whatever its source
-// (composer, Docs "post to chat", the API). Live-only: no backlog, no
-// read-state — it fires while you're connected and that's it.
+// Notify — the per-user "you have activity over there" SSE feed. Drives
+// the #chat-notify status strip + favicon-violet on every page that
+// includes notify.js (chat, docs, recent). Carries a tiny ping (from,
+// conv, session) — no message body — so the user sees there's something
+// to read and a link to get to it. Live-only: no backlog, no read-state.
+//
+// SSE landscape (three streams, one file each):
+//   - chat-message  chat_stream.go: /chat/c/{conv}/{sid}/stream
+//                                   (full rendered messages for ONE open session)
+//   - notify        (HERE):         /chat/notifications
+//                                   (per-user pings + favicon-violet)
+//   - recent        recent.go:      /chat/recent/stream
+//                                   (per-user row upserts for the Recent page)
+//
+// Publish chokepoint: chat_store.go::AppendChatMessage pings the RECIPIENT
+// (and only the recipient) for every message, whatever its source
+// (composer, Docs "post to chat", the API).
 package chat
 
 import (
