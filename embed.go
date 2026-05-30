@@ -14,7 +14,10 @@ import "embed"
 //go:embed games/lynrummy/elm/engine.js
 //go:embed games/lynrummy/elm/engine_glue.js
 //go:embed chat/chat.js
+//go:embed chat/chat_compose.js
+//go:embed chat/chat_help.js
 //go:embed chat/chat_left_sidebar.js
+//go:embed chat/chat_right_sidebar.js
 //go:embed chat/chat_search.js
 //go:embed chat/docs.js
 //go:embed chat/notify.js

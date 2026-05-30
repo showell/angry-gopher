@@ -32,6 +32,15 @@ phase "chat-search-js" node --check chat/chat_search.js
 echo "==> chat_left_sidebar.js syntax"
 phase "chat-left-sidebar-js" node --check chat/chat_left_sidebar.js
 
+echo "==> chat_right_sidebar.js syntax"
+phase "chat-right-sidebar-js" node --check chat/chat_right_sidebar.js
+
+echo "==> chat_compose.js syntax"
+phase "chat-compose-js" node --check chat/chat_compose.js
+
+echo "==> chat_help.js syntax"
+phase "chat-help-js" node --check chat/chat_help.js
+
 echo "==> docs.js syntax"
 phase "docs-js" node --check chat/docs.js
 

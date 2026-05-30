@@ -33,6 +33,9 @@ func RegisterPages(mux *http.ServeMux) {
 	mux.HandleFunc("/chat/chat.js", chat.HandleChatJS)
 	mux.HandleFunc("/chat/chat_search.js", chat.HandleChatSearchJS)
 	mux.HandleFunc("/chat/chat_left_sidebar.js", chat.HandleChatLeftSidebarJS)
+	mux.HandleFunc("/chat/chat_right_sidebar.js", chat.HandleChatRightSidebarJS)
+	mux.HandleFunc("/chat/chat_compose.js", chat.HandleChatComposeJS)
+	mux.HandleFunc("/chat/chat_help.js", chat.HandleChatHelpJS)
 	mux.HandleFunc("/chat/notify.js", chat.HandleNotifyJS)
 	mux.HandleFunc("/chat/c/{conv}", chat.HandleChatConv)
 	mux.HandleFunc("/chat/c/{conv}/new", chat.HandleChatNewTopic) // literal beats {sid}; "new" reserved

@@ -376,6 +376,33 @@ func HandleChatLeftSidebarJS(w http.ResponseWriter, r *http.Request) {
 	web.ServeJS(w, ChatLeftSidebarJSPath, "chat_left_sidebar.js missing from the binary")
 }
 
+// ChatRightSidebarJSPath is the embedded right-sidebar client — slim
+// shell that toggles between the open-compose and closed-panel states.
+var ChatRightSidebarJSPath = "chat/chat_right_sidebar.js"
+
+// HandleChatRightSidebarJS serves the right-sidebar script from the embedded assets.
+func HandleChatRightSidebarJS(w http.ResponseWriter, r *http.Request) {
+	web.ServeJS(w, ChatRightSidebarJSPath, "chat_right_sidebar.js missing from the binary")
+}
+
+// ChatComposeJSPath is the embedded compose client — form submit,
+// send-state machine, image upload, alerts.
+var ChatComposeJSPath = "chat/chat_compose.js"
+
+// HandleChatComposeJS serves the compose script from the embedded assets.
+func HandleChatComposeJS(w http.ResponseWriter, r *http.Request) {
+	web.ServeJS(w, ChatComposeJSPath, "chat_compose.js missing from the binary")
+}
+
+// ChatHelpJSPath is the embedded global keyboard-dispatcher — the keys
+// it handles are the same ones documented in the chat-keyhelp panel.
+var ChatHelpJSPath = "chat/chat_help.js"
+
+// HandleChatHelpJS serves the keyboard-dispatcher script from the embedded assets.
+func HandleChatHelpJS(w http.ResponseWriter, r *http.Request) {
+	web.ServeJS(w, ChatHelpJSPath, "chat_help.js missing from the binary")
+}
+
 // NotifyJSPath is the shared cross-page notify + tab-alert module, loaded
 // on both the chat conversation page and the docs page.
 var NotifyJSPath = "chat/notify.js"
@@ -476,18 +503,20 @@ func renderChatConversation(w http.ResponseWriter, user users.User, partnerID, c
   </div>
 </div></div>`)
 
-	// chat_search.js + chat_left_sidebar.js must load BEFORE chat.js —
-	// chat.js's IIFE calls ChatSearch.init + ChatLeftSidebar.init at the
-	// bottom, and the browser executes <script> tags in document order
-	// for these non-module siblings.
+	// All five sibling modules must load BEFORE chat.js — chat.js's IIFE
+	// calls each .init at the bottom, and the browser executes <script>
+	// tags in document order for these non-module siblings. notify.js
+	// loads after chat.js (no init dependency on it; chat.js doesn't
+	// reference it).
+	v := url.QueryEscape(web.AssetVersion)
 	fmt.Fprintf(w, `</div><script src="/chat/chat_search.js?v=%s"></script>`+
 		`<script src="/chat/chat_left_sidebar.js?v=%s"></script>`+
+		`<script src="/chat/chat_right_sidebar.js?v=%s"></script>`+
+		`<script src="/chat/chat_compose.js?v=%s"></script>`+
+		`<script src="/chat/chat_help.js?v=%s"></script>`+
 		`<script src="/chat/chat.js?v=%s"></script>`+
 		`<script src="/chat/notify.js?v=%s"></script>`,
-		url.QueryEscape(web.AssetVersion),
-		url.QueryEscape(web.AssetVersion),
-		url.QueryEscape(web.AssetVersion),
-		url.QueryEscape(web.AssetVersion))
+		v, v, v, v, v, v, v)
 
 	web.PageFooter(w)
 }

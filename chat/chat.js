@@ -18,15 +18,12 @@
   var fwdBtn=document.getElementById('chat-fwd');
   var composeBody=document.getElementById('chat-compose-body');
   var closedPanel=document.getElementById('chat-closed-panel');
-  var openComposeBtn=document.getElementById('chat-open-compose');
   function toBottom(){ armedScroll(function(){ history.scrollTop=history.scrollHeight; }); }
   /* Compose is closeable: Esc on an empty box closes it and hands focus back
-     to the feed; "c" (or the panel button) reopens it. Closing swaps the
-     compose body for a panel with the reopen button + a keyboard cheatsheet,
-     while the panel itself stays put — so the feed never changes width/position. */
-  function openCompose(){ closedPanel.style.display='none'; composeBody.style.display=''; textarea.focus(); }
-  function closeCompose(){ composeBody.style.display='none'; closedPanel.style.display=''; history.focus({preventScroll:true}); }
-  openComposeBtn.addEventListener('click',openCompose);
+     to the feed; "c" (or the panel button) reopens it. The open/closed
+     toggle moved to chat_right_sidebar.js; the form behavior moved to
+     chat_compose.js; the keyboard dispatcher (including "c") moved to
+     chat_help.js. All three are wired at the bottom of this IIFE. */
   /* "Caught up": the end of the last message in the feed is visible, so a new
      message should follow it down. If you've scrolled up into history, the
      last message's bottom is below the fold and we leave you where you are.
@@ -191,32 +188,30 @@
      lightweight cousin of quoteReply when you just want to point at a
      message without dragging its body into the reply. */
   function referReply(el){
-    if(!el||pendingCid) return;
+    if(!el||ChatCompose.isPending()) return;
     selectAndCommit(el,true); /* record the referenced message on the nav stack */
     var hash=el.getAttribute('data-id');
-    openCompose();
-    insertAtCursor('See MSG_'+hash+' ');
+    ChatRightSidebar.openCompose();
+    ChatCompose.insertAtCursor('See MSG_'+hash+' ');
   }
   function quoteReply(el){
-    if(!el||pendingCid) return; /* don't disturb a send awaiting its ack */
+    if(!el||ChatCompose.isPending()) return; /* don't disturb a send awaiting its ack */
     selectAndCommit(el,true); /* record the quoted message on the nav stack */
     var hash=el.getAttribute('data-id'), mine=el.classList.contains('mine');
     var body=el._body!=null?el._body:'';
-    openCompose(); /* ensure it's visible before we type into it */
-    insertAtCursor('In MSG_'+hash+' '+(mine?'I said':'you said')+':\n~~~ quote\n'+body+'\n~~~\n\n');
-    textarea.focus();
+    ChatRightSidebar.openCompose(); /* ensure it's visible before we type into it */
+    ChatCompose.insertAtCursor('In MSG_'+hash+' '+(mine?'I said':'you said')+':\n~~~ quote\n'+body+'\n~~~\n\n');
   }
   /* Edit: load the message back into compose with a transparent
      "Edit of MSG_<hash>" backlink prepended and the caret at the start of the
      original content. Append-only + transparent — it's just a new message that
      references the original (no copy/paste, automatic backlink). */
   function editMessage(el){
-    if(!el||pendingCid) return; /* don't disturb a send awaiting its ack */
+    if(!el||ChatCompose.isPending()) return; /* don't disturb a send awaiting its ack */
     selectAndCommit(el,true); /* record the edited message on the nav stack */
     var prefix='Edit of MSG_'+el.getAttribute('data-id')+'\n\n';
-    openCompose();
-    textarea.value=prefix+(el._body!=null?el._body:'');
-    textarea.setSelectionRange(prefix.length, prefix.length); /* caret at the start of the content */
+    ChatRightSidebar.openCompose();
+    ChatCompose.setBody(prefix+(el._body!=null?el._body:''), prefix.length); /* caret at the start of the content */
   }
   /* Anchor scrolling on the same MESSAGE across view switches: find the
      topmost visible [data-i] element, then bring that same index back to
@@ -374,115 +369,13 @@
     } else {
       syncSelectionToScroll();
     }
-    if(pendingCid&&m.cid===pendingCid) ackSend(); /* our message round-tripped: saved + echoed */
+    if(m.cid) ChatCompose.ackIfPending(m.cid); /* our message round-tripped: saved + echoed */
     if(ChatSearch.isOpen()) ChatSearch.refreshIfOpen(); /* keep an open search current as messages stream in */
   };
-  /* Resilient send: a send is confirmed only when our own message echoes back
-     over SSE carrying the same client-id (proof it was both saved AND
-     broadcast). Until then the compose box stays disabled with its text kept;
-     if no echo arrives within the timeout (or the POST itself fails), we pop a
-     "host may be down" modal and re-enable for a manual retry. No auto-retry —
-     the point is just to make an outage transparent. */
-  var pendingCid=null, pendingTimer=null;
-  function newCid(){ return (window.crypto&&crypto.randomUUID)?crypto.randomUUID():Date.now()+'-'+Math.random().toString(16).slice(2); }
-  function setComposeEnabled(on){
-    textarea.disabled=!on;
-    var btns=form.querySelectorAll('button'); for(var i=0;i<btns.length;i++) btns[i].disabled=!on;
-  }
-  function ackSend(){ /* echo arrived: clear the box and re-enable */
-    if(pendingTimer){ clearTimeout(pendingTimer); pendingTimer=null; }
-    pendingCid=null; textarea.value=''; status.textContent=''; status.style.color='';
-    setComposeEnabled(true); textarea.focus();
-  }
-  function hostDown(){ /* no echo / POST failed: keep the text, re-enable, tell the user */
-    if(!pendingCid) return; /* already resolved (echo beat us) */
-    if(pendingTimer){ clearTimeout(pendingTimer); pendingTimer=null; }
-    pendingCid=null; status.textContent=''; status.style.color='';
-    setComposeEnabled(true);
-    showAlert('The host may be down. Please retry your send.', function(){ textarea.focus(); });
-  }
-  function showAlert(msg, onClose){
-    var dlg=document.createElement('dialog'); dlg.className='chat-alert-dialog';
-    var p=document.createElement('p'); p.textContent=msg;
-    var ok=document.createElement('button'); ok.type='button'; ok.textContent='OK';
-    ok.addEventListener('click',function(){ dlg.close(); });
-    dlg.appendChild(p); dlg.appendChild(ok);
-    dlg.addEventListener('close',function(){ dlg.remove(); if(onClose) onClose(); }); /* focus lands after the modal releases it */
-    document.body.appendChild(dlg); dlg.showModal();
-  }
-  function send(){
-    if(pendingCid) return; /* already awaiting an ack */
-    var text=textarea.value;
-    if(!text.trim()) return;
-    var cid=newCid(); pendingCid=cid;
-    setComposeEnabled(false); /* keep the text until the host acks */
-    status.style.color='#888'; status.textContent='Sending…';
-    pendingTimer=setTimeout(hostDown, 3000);
-    fetch(SESSION_BASE+'/send',{ method:'POST',
-      headers:{'Content-Type':'application/x-www-form-urlencoded','X-Chat-Async':'1'},
-      body:'body='+encodeURIComponent(text)+'&cid='+encodeURIComponent(cid)
-    }).then(function(r){ if(!r.ok) throw new Error('status '+r.status); /* success is confirmed by the SSE echo */ })
-      .catch(hostDown);
-  }
-  form.addEventListener('submit',function(e){ e.preventDefault(); send(); });
-  textarea.addEventListener('keydown',function(e){
-    if((e.ctrlKey||e.metaKey)&&e.key==='Enter'){ e.preventDefault(); send(); return; }
-    if(e.key==='Escape'&&textarea.value.trim()===''){ e.preventDefault(); closeCompose(); } /* empty only — never lose a draft */
-  });
-  /* --- image upload (button + clipboard paste) --- */
-  function insertAtCursor(text){
-    var s=textarea.selectionStart, e=textarea.selectionEnd, v=textarea.value;
-    textarea.value=v.slice(0,s)+text+v.slice(e);
-    textarea.selectionStart=textarea.selectionEnd=s+text.length; textarea.focus();
-  }
-  /* Reject oversized images up front (the per-image limit), and otherwise
-     surface the server's own message — e.g. the lifetime upload cap.
-     MAX_IMAGE_BYTES must match Gopher's maxChatUploadBytes (and stay under
-     Caddy's upload body cap). */
-  var MAX_IMAGE_BYTES = 10*1024*1024;
-  function uploadImage(file){
-    if(!file) return;
-    if(file.size > MAX_IMAGE_BYTES){
-      status.style.color='';
-      status.textContent='That image is '+(file.size/1048576).toFixed(1)+' MB — too big to send (limit 10 MB). Try compressing or resizing it.';
-      return;
-    }
-    status.style.color='#888'; status.textContent='Uploading image…';
-    var fd=new FormData(); fd.append('file',file);
-    fetch(SESSION_BASE+'/upload',{method:'POST',body:fd})
-      .then(function(r){
-        if(r.ok) return r.json();
-        return r.text().then(function(t){
-          t=(t||'').trim();
-          throw (t && t.charAt(0)!=='<' && t.length<200) ? t : 'Image upload failed.';
-        });
-      })
-      .then(function(d){
-        /* HTML <img> instead of markdown image syntax so the width/height
-           the server decoded ride along with the message body. Modern
-           browsers use those attrs to reserve correctly-proportioned space
-           before the image decodes, so the feed doesn't reflow when
-           "scroll to bottom" lands. Server may return 0 for unknown dims
-           (e.g. webp without a stdlib decoder); in that case we omit the
-           attrs and fall back to the old no-dims behavior. */
-        var alt=(d.name||'image').replace(/["<>\r\n]/g,'');
-        var dims=(d.width>0 && d.height>0) ? ' width="'+d.width+'" height="'+d.height+'"' : '';
-        insertAtCursor('<img src="'+d.url+'" alt="'+alt+'"'+dims+'>');
-        status.textContent=''; status.style.color='';
-      })
-      .catch(function(msg){
-        status.style.color='';
-        status.textContent = (typeof msg==='string' && msg) ? msg : 'Image upload failed.';
-      });
-  }
-  imageBtn.addEventListener('click',function(){ fileInput.click(); });
-  fileInput.addEventListener('change',function(){ uploadImage(fileInput.files[0]); fileInput.value=''; });
-  textarea.addEventListener('paste',function(e){
-    var files=e.clipboardData&&e.clipboardData.files;
-    if(files) for(var i=0;i<files.length;i++){
-      if(files[i].type.indexOf('image/')===0){ e.preventDefault(); uploadImage(files[i]); return; }
-    }
-  });
+  /* Resilient send + image upload moved to chat_compose.js (see init at
+     the bottom of this IIFE). chat.js stays responsible for the SSE
+     echo path that acks a send — ChatCompose.ackIfPending(m.cid) is
+     called from the stream handler above. */
   /* --- click any image to zoom (range slider scales height; scroll to pan) --- */
   function showImagePopup(src){
     var dlg=document.createElement('dialog'); dlg.className='chat-img-dialog';
@@ -677,30 +570,34 @@
     hitInBody: hitInBody, openHitMedia: openHitMedia,
   });
   /* The left sidebar (Conversations / Pinned / Sessions / Add Topic
-     form + pointer drag-to-pin) moved to chat_left_sidebar.js. Its
-     only dep on chat.js is CONV (POST URLs), handed over here. */
+     form + pointer drag-to-pin + sidebar SSE consumer) — only dep is
+     CONV. */
   ChatLeftSidebar.init({ conv: CONV });
-  /* Override these keys when reading the feed (not when typing in compose). */
-  document.addEventListener('keydown',function(e){
-    var ae=document.activeElement;
-    if(ae&&(ae.tagName==='TEXTAREA'||ae.tagName==='INPUT'||ae.isContentEditable)) return;
-    if(e.ctrlKey||e.metaKey||e.altKey) return;
-    switch(e.key){
-      case 'c': e.preventDefault(); openCompose(); return;
-      case 'b': e.preventDefault(); backBtn.click(); return; /* disabled buttons ignore click */
-      case 'f': e.preventDefault(); fwdBtn.click(); return;
-      case 't': e.preventDefault(); toggleView(); return;
-      case '/': e.preventDefault(); ChatSearch.open(); return;
-      case 'q': if(selected){ e.preventDefault(); quoteReply(selected); } return;
-      case 'r': if(selected){ e.preventDefault(); referReply(selected); } return;
-      case 'e': if(selected){ e.preventDefault(); editMessage(selected); } return;
-      case 'ArrowDown': e.preventDefault(); moveCursor(1); return;
-      case 'ArrowUp':   e.preventDefault(); moveCursor(-1); return;
-      case 'Home':      e.preventDefault(); cursorToExtreme(false); return;
-      case 'End':       e.preventDefault(); cursorToExtreme(true); return;
-      case 'PageDown':  e.preventDefault(); pageNav(1); return;
-      case 'PageUp':    e.preventDefault(); pageNav(-1); return;
-    }
+  /* Right sidebar (slim by design): owns the open/closed toggle of the
+     right pane. Compose calls closeCompose for Esc-empty; chat.js calls
+     openCompose for quote/refer/edit; chat_help.js calls openCompose
+     for the "c" keybind. */
+  ChatRightSidebar.init({
+    composeBody: composeBody, closedPanel: closedPanel,
+    textarea: textarea, history: history,
+  });
+  /* Compose: form submit, send-state machine, image upload, alerts. */
+  ChatCompose.init({
+    textarea: textarea, form: form, status: status,
+    imageBtn: imageBtn, fileInput: fileInput,
+    sessionBase: SESSION_BASE,
+    closeCompose: ChatRightSidebar.closeCompose,
+  });
+  /* Global keydown dispatcher — keys map 1:1 to the chat-keyhelp panel
+     visible on the closed-compose side. Filters: feed-focused only
+     (text inputs skipped), no chord modifiers. */
+  ChatHelp.init({
+    openCompose: ChatRightSidebar.openCompose,
+    backBtn: backBtn, fwdBtn: fwdBtn,
+    toggleView: toggleView,
+    getSelected: function(){ return selected; },
+    quoteReply: quoteReply, referReply: referReply, editMessage: editMessage,
+    moveCursor: moveCursor, cursorToExtreme: cursorToExtreme, pageNav: pageNav,
   });
   textarea.focus();
 })();
