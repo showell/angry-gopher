@@ -484,6 +484,14 @@
     hitInBody: hitInBody, openHitMedia: openHitMedia,
   });
   ChatLeftSidebar.init({ conv: CONV });
+  /* PRODUCT_DECISION: ChatCompose initializes first because it builds + injects
+     #chat-compose-body, which ChatRightSidebar then looks up. The Esc-empty
+     callback is a function reference on RightSidebar's IIFE return, available
+     before its init runs. */
+  ChatCompose.init({
+    sessionBase: SESSION_BASE,
+    closeCompose: ChatRightSidebar.closeCompose,
+  });
   /* PRODUCT_DECISION: chat.js opens compose for quote/refer/edit; chat_help opens
      for the "c" keybind; compose closes itself on Esc-empty. onOpen/onClose are
      focus-orchestration callbacks — RightSidebar owns the toggle, but where focus
@@ -491,10 +499,6 @@
   ChatRightSidebar.init({
     onOpen: function(){ ChatCompose.focus(); },
     onClose: function(){ history.focus({preventScroll:true}); },
-  });
-  ChatCompose.init({
-    sessionBase: SESSION_BASE,
-    closeCompose: ChatRightSidebar.closeCompose,
   });
   /* PRODUCT_DECISION: keys map 1:1 to the chat-keyhelp panel on the closed-compose side. */
   ChatHelp.init({

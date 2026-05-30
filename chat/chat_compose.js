@@ -98,13 +98,54 @@ window.ChatCompose = (function(){
 
   function focus(){ textarea.focus(); }
 
+  /* PRODUCT_DECISION: compose owns its DOM — Go ships only the right-sidebar
+     wrapper; the compose-body markup (form, textarea, send/image buttons,
+     file input, status line, markdown hint) gets built here at init time
+     and inserted before the closed-panel inside #chat-right-sidebar. */
+  function buildComposeBody(){
+    var body = document.createElement('div');
+    body.id = 'chat-compose-body'; body.className = 'chat-compose-body';
+    body.style.display = 'none';
+
+    var form = document.createElement('form'); form.id = 'chat-form';
+    var ta = document.createElement('textarea'); ta.id = 'chat-body';
+    ta.placeholder = 'Write a message…  Markdown is supported, and longer posts are welcome.';
+    form.appendChild(ta);
+
+    var actions = document.createElement('div'); actions.className = 'chat-compose-actions';
+    var sendBtn = document.createElement('button'); sendBtn.type = 'submit'; sendBtn.textContent = 'Send';
+    var imgBtn = document.createElement('button'); imgBtn.type = 'button'; imgBtn.id = 'chat-image-btn'; imgBtn.textContent = 'Image';
+    actions.appendChild(sendBtn); actions.appendChild(imgBtn);
+    form.appendChild(actions);
+    body.appendChild(form);
+
+    var file = document.createElement('input');
+    file.type = 'file'; file.id = 'chat-file';
+    file.accept = 'image/png,image/jpeg,image/gif,image/webp';
+    file.style.display = 'none';
+    body.appendChild(file);
+
+    var statusEl = document.createElement('div'); statusEl.id = 'chat-status'; statusEl.className = 'chat-status';
+    body.appendChild(statusEl);
+
+    var hint = document.createElement('div'); hint.className = 'chat-hint';
+    hint.textContent = 'Markdown supported · paste or attach an image · Ctrl/⌘-Enter to send';
+    body.appendChild(hint);
+
+    return { body:body, form:form, textarea:ta, imageBtn:imgBtn, fileInput:file, status:statusEl };
+  }
+
   function init(deps){
-    textarea=document.getElementById('chat-body');
-    form=document.getElementById('chat-form');
-    status=document.getElementById('chat-status');
-    imageBtn=document.getElementById('chat-image-btn');
-    fileInput=document.getElementById('chat-file');
-    SESSION_BASE=deps.sessionBase; closeCompose=deps.closeCompose;
+    var built = buildComposeBody();
+    textarea = built.textarea; form = built.form; status = built.status;
+    imageBtn = built.imageBtn; fileInput = built.fileInput;
+    SESSION_BASE = deps.sessionBase; closeCompose = deps.closeCompose;
+
+    /* PRODUCT_DECISION: insert before the closed-panel so the open state
+       shows above the keyhelp side. Right-sidebar wrapper is server-rendered. */
+    var rightSidebar = document.getElementById('chat-right-sidebar');
+    var closedPanel = document.getElementById('chat-closed-panel');
+    rightSidebar.insertBefore(built.body, closedPanel);
 
     form.addEventListener('submit', function(e){ e.preventDefault(); send(); });
     textarea.addEventListener('keydown', function(e){
