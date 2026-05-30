@@ -5,24 +5,24 @@
 window.ChatRightSidebar = (function(){
   'use strict';
 
-  var composeBody, closedPanel, textarea, history;
+  var composeBody, closedPanel;
+  var onOpen, onClose;
 
   function openCompose(){
     closedPanel.style.display='none';
     composeBody.style.display='';
-    textarea.focus();
+    if(onOpen) onOpen();
   }
   function closeCompose(){
     composeBody.style.display='none';
     closedPanel.style.display='';
-    history.focus({preventScroll:true});
+    if(onClose) onClose();
   }
 
   function init(deps){
-    composeBody=deps.composeBody;
-    closedPanel=deps.closedPanel;
-    textarea=deps.textarea;
-    history=deps.history;
+    composeBody=document.getElementById('chat-compose-body');
+    closedPanel=document.getElementById('chat-closed-panel');
+    onOpen=deps.onOpen; onClose=deps.onClose;
     var btn=document.getElementById('chat-open-compose');
     if(btn) btn.addEventListener('click', openCompose);
   }

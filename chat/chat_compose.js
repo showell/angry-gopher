@@ -96,9 +96,14 @@ window.ChatCompose = (function(){
       });
   }
 
+  function focus(){ textarea.focus(); }
+
   function init(deps){
-    textarea=deps.textarea; form=deps.form; status=deps.status;
-    imageBtn=deps.imageBtn; fileInput=deps.fileInput;
+    textarea=document.getElementById('chat-body');
+    form=document.getElementById('chat-form');
+    status=document.getElementById('chat-status');
+    imageBtn=document.getElementById('chat-image-btn');
+    fileInput=document.getElementById('chat-file');
     SESSION_BASE=deps.sessionBase; closeCompose=deps.closeCompose;
 
     form.addEventListener('submit', function(e){ e.preventDefault(); send(); });
@@ -119,5 +124,5 @@ window.ChatCompose = (function(){
   function ackIfPending(cid){ if(pendingCid && cid===pendingCid) ackSend(); }
 
   return { init:init, isPending:isPending, ackIfPending:ackIfPending,
-           insertAtCursor:insertAtCursor, setBody:setBody };
+           insertAtCursor:insertAtCursor, setBody:setBody, focus:focus };
 })();

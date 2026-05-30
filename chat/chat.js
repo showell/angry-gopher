@@ -8,15 +8,8 @@
   var bubbles=document.getElementById('chat-bubbles');
   var transcript=document.getElementById('chat-transcript');
   var views=document.getElementById('chat-views');
-  var form=document.getElementById('chat-form');
-  var textarea=document.getElementById('chat-body');
-  var status=document.getElementById('chat-status');
-  var imageBtn=document.getElementById('chat-image-btn');
-  var fileInput=document.getElementById('chat-file');
   var backBtn=document.getElementById('chat-back');
   var fwdBtn=document.getElementById('chat-fwd');
-  var composeBody=document.getElementById('chat-compose-body');
-  var closedPanel=document.getElementById('chat-closed-panel');
   function toBottom(){ armedScroll(function(){ history.scrollTop=history.scrollHeight; }); }
   function caughtUp(){
     var els=history.querySelectorAll('[data-i]');
@@ -492,14 +485,14 @@
   });
   ChatLeftSidebar.init({ conv: CONV });
   /* PRODUCT_DECISION: chat.js opens compose for quote/refer/edit; chat_help opens
-     for the "c" keybind; compose closes itself on Esc-empty. */
+     for the "c" keybind; compose closes itself on Esc-empty. onOpen/onClose are
+     focus-orchestration callbacks — RightSidebar owns the toggle, but where focus
+     lands is the feed's (chat.js's) and compose's call. */
   ChatRightSidebar.init({
-    composeBody: composeBody, closedPanel: closedPanel,
-    textarea: textarea, history: history,
+    onOpen: function(){ ChatCompose.focus(); },
+    onClose: function(){ history.focus({preventScroll:true}); },
   });
   ChatCompose.init({
-    textarea: textarea, form: form, status: status,
-    imageBtn: imageBtn, fileInput: fileInput,
     sessionBase: SESSION_BASE,
     closeCompose: ChatRightSidebar.closeCompose,
   });
@@ -512,5 +505,5 @@
     quoteReply: quoteReply, referReply: referReply, editMessage: editMessage,
     moveCursor: moveCursor, cursorToExtreme: cursorToExtreme, pageNav: pageNav,
   });
-  textarea.focus();
+  ChatCompose.focus();
 })();
