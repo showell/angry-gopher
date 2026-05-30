@@ -797,7 +797,7 @@
       case 'b': e.preventDefault(); backBtn.click(); return; /* disabled buttons ignore click */
       case 'f': e.preventDefault(); fwdBtn.click(); return;
       case 't': e.preventDefault(); toggleView(); return;
-      case '/': e.preventDefault(); openSearchModal(); return;
+      case '/': e.preventDefault(); ChatSearch.open(); return;
       case 'q': if(selected){ e.preventDefault(); quoteReply(selected); } return;
       case 'r': if(selected){ e.preventDefault(); referReply(selected); } return;
       case 'e': if(selected){ e.preventDefault(); editMessage(selected); } return;

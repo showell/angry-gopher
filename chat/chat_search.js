@@ -210,5 +210,5 @@ window.ChatSearch = (function(){
   function isOpen(){ return !!SR; }
   function refreshIfOpen(){ if(SR) refreshOpenSearch(); }
 
-  return { init:init, isOpen:isOpen, refreshIfOpen:refreshIfOpen };
+  return { init:init, open:openSearchModal, isOpen:isOpen, refreshIfOpen:refreshIfOpen };
 })();
