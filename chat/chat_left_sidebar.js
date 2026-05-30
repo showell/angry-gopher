@@ -209,7 +209,7 @@ window.ChatLeftSidebar = (function(){
   function wireSidebarStream(){
     var es=new EventSource('/chat/sidebar/stream');
     es.onmessage=function(e){
-      var evt; try{ evt=JSON.parse(e.data); }catch(_){ return; }
+      var evt; try{ evt=JSON.parse(e.data); }catch(err){ console.error('sidebar: malformed JSON from /chat/sidebar/stream', e.data, err); return; }
       if(!evt||!evt.kind) return;
       if(evt.kind==='user-arrived') upsertPartner(evt);
       else if(evt.kind==='topic-added') upsertSession(evt);

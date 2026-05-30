@@ -95,7 +95,7 @@
 
   var es=new EventSource('/chat/recent/stream');
   es.onmessage=function(e){
-    var evt; try{ evt=JSON.parse(e.data); }catch(_){ return; }
+    var evt; try{ evt=JSON.parse(e.data); }catch(err){ console.error('recent: malformed JSON from /chat/recent/stream', e.data, err); return; }
     if(!evt||!evt.kind||!evt.at) return;
     upsert(evt);
   };

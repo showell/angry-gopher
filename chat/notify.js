@@ -33,7 +33,7 @@
 
   var nes=new EventSource('/chat/notifications');
   nes.onmessage=function(e){
-    var n; try{ n=JSON.parse(e.data); }catch(_){ return; }
+    var n; try{ n=JSON.parse(e.data); }catch(err){ console.error('notify: malformed JSON from /chat/notifications', e.data, err); return; }
     if(!n||!n.session) return;
     if(n.conv===CONV && n.session===SESSION) return; /* already in the open feed */
     notifyEl.textContent='';

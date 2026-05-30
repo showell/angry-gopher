@@ -73,7 +73,7 @@
     if(!pendingSave) return;
     var blob=new Blob([encodeForm({slug:slug, body:ta.value})],
                       {type:'application/x-www-form-urlencoded'});
-    try { navigator.sendBeacon('/chat/docs/save', blob); } catch(e){}
+    try { navigator.sendBeacon('/chat/docs/save', blob); } catch(err){ console.error('docs: sendBeacon failed at unload (size limit, quota, or rate)', err); }
   });
 
   /* "Post to chat" — send the doc body as a chat message to the default

@@ -66,7 +66,7 @@
     fwdBtn.disabled=!(pos<entries.length-1);
   }
   function recordNav(idx){
-    if(idx===null||idx===curEntry()) return; /* ignore re-selecting the current entry */
+    if(idx===null||idx===curEntry()) return; /* ignore re-selecting; curEntry()=null when nav-history empty. lint:null-undefined-check legit-absence-sentinel */
     entries.length=pos+1;                    /* drop the forward tail — fresh nav resets it */
     entries.push(idx); pos=entries.length-1;
     updateNav();
@@ -176,7 +176,7 @@
     var spoiler=document.createElement('details'); spoiler.className='chat-edited-spoiler';
     var summary=document.createElement('summary'); summary.textContent='original'; spoiler.appendChild(summary);
     var orig=document.createElement('div'); orig.className='chat-edited-orig';
-    orig.textContent=origEl._body!=null?origEl._body:'';
+    orig.textContent=origEl._body;
     spoiler.appendChild(orig);
     bodyEl.appendChild(note); bodyEl.appendChild(spoiler);
   }
@@ -198,7 +198,7 @@
     if(!el||ChatCompose.isPending()) return; /* don't disturb a send awaiting its ack */
     selectAndCommit(el,true); /* record the quoted message on the nav stack */
     var hash=el.getAttribute('data-id'), mine=el.classList.contains('mine');
-    var body=el._body!=null?el._body:'';
+    var body=el._body;
     ChatRightSidebar.openCompose(); /* ensure it's visible before we type into it */
     ChatCompose.insertAtCursor('In MSG_'+hash+' '+(mine?'I said':'you said')+':\n~~~ quote\n'+body+'\n~~~\n\n');
   }
@@ -211,7 +211,7 @@
     selectAndCommit(el,true); /* record the edited message on the nav stack */
     var prefix='Edit of MSG_'+el.getAttribute('data-id')+'\n\n';
     ChatRightSidebar.openCompose();
-    ChatCompose.setBody(prefix+(el._body!=null?el._body:''), prefix.length); /* caret at the start of the content */
+    ChatCompose.setBody(prefix+el._body, prefix.length); /* caret at the start of the content */
   }
   /* Anchor scrolling on the same MESSAGE across view switches: find the
      topmost visible [data-i] element, then bring that same index back to
@@ -225,7 +225,7 @@
     return null;
   }
   function scrollToIndex(idx){
-    if(idx===null) return;
+    if(idx===null) return; // lint:null-undefined-check topIndex-returns-null-on-empty-feed
     var els=history.querySelectorAll('[data-i="'+idx+'"]');
     for(var i=0;i<els.length;i++){
       if(els[i].offsetParent===null) continue;
@@ -349,7 +349,7 @@
     if(inBacklog){
       addMessage(m);
       backlogSeen++;
-      if(backlogSize!==null && backlogSeen>=backlogSize) finishBacklog();
+      if(backlogSize!==null && backlogSeen>=backlogSize) finishBacklog(); // lint:null-undefined-check backlogSize-null-until-preamble-arrives
       return; /* skip per-message scroll/select/refresh during backlog */
     }
     /* Live path: capture caughtUp BEFORE the append (the just-arrived
@@ -469,7 +469,6 @@
     location.href='/chat/c/'+encodeURIComponent(CONV)+'/'+encodeURIComponent(targetSession)+'#msg-'+id;
   }
   function scrollIndexToTop(idx){
-    if(idx===null||idx===undefined) return null;
     var el=bubbles.querySelector('.chat-msg[data-i="'+idx+'"]');
     if(!el||el.offsetParent===null) return null;
     el.scrollIntoView({block:'start',behavior:'auto'});
