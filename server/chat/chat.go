@@ -357,6 +357,15 @@ func HandleChatJS(w http.ResponseWriter, r *http.Request) {
 	web.ServeJS(w, ChatJSPath, "chat.js missing from the binary")
 }
 
+// ChatSearchJSPath is the embedded search-modal client (committed,
+// hand-written). Loaded as a sibling of chat.js on the conversation page.
+var ChatSearchJSPath = "chat/chat_search.js"
+
+// HandleChatSearchJS serves the search-modal script from the embedded assets.
+func HandleChatSearchJS(w http.ResponseWriter, r *http.Request) {
+	web.ServeJS(w, ChatSearchJSPath, "chat_search.js missing from the binary")
+}
+
 // NotifyJSPath is the shared cross-page notify + tab-alert module, loaded
 // on both the chat conversation page and the docs page.
 var NotifyJSPath = "chat/notify.js"
@@ -457,8 +466,15 @@ func renderChatConversation(w http.ResponseWriter, user users.User, partnerID, c
   </div>
 </div></div>`)
 
-	fmt.Fprintf(w, `</div><script src="/chat/chat.js?v=%s"></script><script src="/chat/notify.js?v=%s"></script>`,
-		url.QueryEscape(web.AssetVersion), url.QueryEscape(web.AssetVersion))
+	// chat_search.js must load BEFORE chat.js — chat.js's IIFE calls
+	// ChatSearch.init at the bottom, and the browser executes <script>
+	// tags in document order for these non-module siblings.
+	fmt.Fprintf(w, `</div><script src="/chat/chat_search.js?v=%s"></script>`+
+		`<script src="/chat/chat.js?v=%s"></script>`+
+		`<script src="/chat/notify.js?v=%s"></script>`,
+		url.QueryEscape(web.AssetVersion),
+		url.QueryEscape(web.AssetVersion),
+		url.QueryEscape(web.AssetVersion))
 
 	web.PageFooter(w)
 }

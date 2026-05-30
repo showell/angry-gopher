@@ -26,6 +26,9 @@ phase() {
 echo "==> chat.js syntax"
 phase "chat-js" node --check chat/chat.js
 
+echo "==> chat_search.js syntax"
+phase "chat-search-js" node --check chat/chat_search.js
+
 echo "==> docs.js syntax"
 phase "docs-js" node --check chat/docs.js
 
