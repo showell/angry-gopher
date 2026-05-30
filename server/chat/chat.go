@@ -366,6 +366,16 @@ func HandleChatSearchJS(w http.ResponseWriter, r *http.Request) {
 	web.ServeJS(w, ChatSearchJSPath, "chat_search.js missing from the binary")
 }
 
+// ChatLeftSidebarJSPath is the embedded left-sidebar client (committed,
+// hand-written). Drives add-topic + drag-to-pin behavior on the
+// server-rendered sidebar markup.
+var ChatLeftSidebarJSPath = "chat/chat_left_sidebar.js"
+
+// HandleChatLeftSidebarJS serves the left-sidebar script from the embedded assets.
+func HandleChatLeftSidebarJS(w http.ResponseWriter, r *http.Request) {
+	web.ServeJS(w, ChatLeftSidebarJSPath, "chat_left_sidebar.js missing from the binary")
+}
+
 // NotifyJSPath is the shared cross-page notify + tab-alert module, loaded
 // on both the chat conversation page and the docs page.
 var NotifyJSPath = "chat/notify.js"
@@ -466,12 +476,15 @@ func renderChatConversation(w http.ResponseWriter, user users.User, partnerID, c
   </div>
 </div></div>`)
 
-	// chat_search.js must load BEFORE chat.js — chat.js's IIFE calls
-	// ChatSearch.init at the bottom, and the browser executes <script>
-	// tags in document order for these non-module siblings.
+	// chat_search.js + chat_left_sidebar.js must load BEFORE chat.js —
+	// chat.js's IIFE calls ChatSearch.init + ChatLeftSidebar.init at the
+	// bottom, and the browser executes <script> tags in document order
+	// for these non-module siblings.
 	fmt.Fprintf(w, `</div><script src="/chat/chat_search.js?v=%s"></script>`+
+		`<script src="/chat/chat_left_sidebar.js?v=%s"></script>`+
 		`<script src="/chat/chat.js?v=%s"></script>`+
 		`<script src="/chat/notify.js?v=%s"></script>`,
+		url.QueryEscape(web.AssetVersion),
 		url.QueryEscape(web.AssetVersion),
 		url.QueryEscape(web.AssetVersion),
 		url.QueryEscape(web.AssetVersion))

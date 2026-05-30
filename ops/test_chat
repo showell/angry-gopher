@@ -29,6 +29,9 @@ phase "chat-js" node --check chat/chat.js
 echo "==> chat_search.js syntax"
 phase "chat-search-js" node --check chat/chat_search.js
 
+echo "==> chat_left_sidebar.js syntax"
+phase "chat-left-sidebar-js" node --check chat/chat_left_sidebar.js
+
 echo "==> docs.js syntax"
 phase "docs-js" node --check chat/docs.js
 
