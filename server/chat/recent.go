@@ -76,10 +76,15 @@ func HandleRecent(w http.ResponseWriter, r *http.Request) {
 	items := gatherRecentItems(user)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	chatPageHeader(w, "Recent", user, "recent")
+	// Cross-page user-attention strip + favicon-violet on incoming chat
+	// pings (notify.js no-ops when this div is absent). Recent users tend
+	// to camp here waiting for activity, so the tab needs to alert too.
+	fmt.Fprint(w, `<div class="chat-notify" id="chat-notify"></div>`)
 	fmt.Fprint(w, recentCSS)
 	renderRecentList(w, items)
-	fmt.Fprintf(w, `<script src="/chat/recent.js?v=%s"></script>`,
-		url.QueryEscape(web.AssetVersion))
+	fmt.Fprintf(w, `<script src="/chat/recent.js?v=%s"></script>`+
+		`<script src="/chat/notify.js?v=%s"></script>`,
+		url.QueryEscape(web.AssetVersion), url.QueryEscape(web.AssetVersion))
 	web.PageFooter(w)
 }
 
