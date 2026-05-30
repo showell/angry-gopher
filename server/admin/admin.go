@@ -7,6 +7,7 @@ package admin
 import (
 	"angry-gopher/server/lynrummy"
 	"angry-gopher/server/users"
+	"angry-gopher/server/web"
 	"fmt"
 	"html"
 	"io/fs"
@@ -166,7 +167,7 @@ func renderMembersTable(w http.ResponseWriter) {
 		}
 		since := "never"
 		if row.ever {
-			since = humanizeSince(row.active)
+			since = web.HumanizeSince(row.active)
 		}
 		images := fmt.Sprintf("%s / %s",
 			humanBytes(users.UserUploadBytes(row.user.ID)), humanBytes(users.MaxUploadLifetimeBytes))
@@ -174,21 +175,6 @@ func renderMembersTable(w http.ResponseWriter) {
 			name, since, images, apiKeyCell(row.user.ID))
 	}
 	fmt.Fprint(w, `</table>`)
-}
-
-// humanizeSince renders elapsed time since t as a coarse relative string.
-func humanizeSince(t time.Time) string {
-	d := time.Since(t)
-	switch {
-	case d < time.Minute:
-		return "just now"
-	case d < time.Hour:
-		return fmt.Sprintf("%dm ago", int(d.Minutes()))
-	case d < 24*time.Hour:
-		return fmt.Sprintf("%dh ago", int(d.Hours()))
-	default:
-		return fmt.Sprintf("%dd ago", int(d.Hours()/24))
-	}
 }
 
 // apiKeyCell renders the API-key controls for one member: a Generate
