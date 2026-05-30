@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 """
-Paper-over linter for Claude's dialect of JS.
+Linter for Claude's dialect of JS, riding on tools/jsparse.py's AST.
 
-Two rules, both flagging the same antipattern from a different angle:
-defensive code that silently absorbs a problem instead of being
-transparent when an invariant is broken. The principle: defensive
-programming is fine — silent defensive programming hides bugs.
+The point is to automate the kinds of checks Steve already does by
+grep — without comment-text false positives — and add a couple of
+patterns grep can't easily express (like "every name in the AST that's
+declared but never used").
+
+Three rules today:
 
   silent-catch          try{...}catch(_){ return; } or catch(_){} —
                         a thrown exception is swallowed with no log,
@@ -15,32 +17,38 @@ programming is fine — silent defensive programming hides bugs.
                         Catches the explicit null-or-undefined guard
                         pattern. Half of these are real "absence is
                         legitimate" sentinels; half are paper-over for
-                        an invariant that holds. Reading the call site
+                        an invariant that holds — reading the call site
                         is the only way to tell, and that's the point.
+
+  dead-code             A `function foo(){...}` or `var foo=...` whose
+                        name is never referenced as a free identifier
+                        anywhere else in the same file. (Member access
+                        `x.foo` doesn't count — different namespace.)
+                        Per-file, not per-scope; shadowing is rare in
+                        this dialect, and a false positive is cheaper
+                        than the scope analysis would be.
 
 Escape hatches, in order of preference:
 
-  1. Allowlist (preferred). Two small allowlists at the top of this file:
+  1. Allowlist (preferred). Small named sets at the top of this file:
 
        SILENT_CATCH_METHOD_ALLOWLIST    method names whose browser-API
                                         contract documents the throw
        NULL_CHECK_PROPERTY_ALLOWLIST    DOM property names whose API
                                         contract returns null as a
                                         legitimate value
-
-     A try block whose every top-level statement is a method call
-     against an allowlisted method, or a null-check whose other side is
-     a member access on an allowlisted property, passes.
+       DEAD_CODE_NAME_ALLOWLIST         identifier names that are only
+                                        referenced dynamically (a rare
+                                        breed in this codebase)
 
   2. Inline `lint:<rule-name> <reason>` comment annotation on the
-     same line as the violation. Required reason — at least one
-     whitespace-separated word after the rule name. The reason is the
-     contract the next reader is held to; rotting it is the next
-     reader's job.
+     same line as the violation. Required reason — one alphanumeric
+     word minimum. The reason is the contract the next reader is held
+     to; rotting it is the next reader's job.
 
-Run zero-arg: parses chat/*.js, prints `file:line:col: <rule>: <src>`
+Run zero-arg: parses chat/*.js, prints `file:line:col: <rule>: <msg>`
 for each violation, exits 1 on any. Allowlist + annotation expansions
-happen here, not at the lint script's call site.
+happen here, not at the script's call site.
 """
 
 import re
@@ -73,6 +81,13 @@ NULL_CHECK_PROPERTY_ALLOWLIST = {
     # detached). Code checking it for null is reading the documented
     # "is this rendered?" signal.
     "offsetParent",
+}
+
+DEAD_CODE_NAME_ALLOWLIST: set[str] = {
+    # Add here only when an identifier is referenced dynamically (e.g.
+    # called via a string name through an event-handler-attribute, or
+    # picked up by reflection). Each addition gets a comment with the
+    # actual receipt.
 }
 
 
@@ -117,7 +132,7 @@ def check_silent_catch(try_node, lines, path):
         return None
     return {
         "rule": "silent-catch", "file": path,
-        "line": line, "col": col, "src": src,
+        "line": line, "col": col, "msg": src,
     }
 
 
@@ -164,8 +179,39 @@ def check_null_undefined(binary_node, lines, path):
         return None
     return {
         "rule": "null-undefined-check", "file": path,
-        "line": line, "col": col, "src": src,
+        "line": line, "col": col, "msg": src,
     }
+
+
+def check_dead_code(prog, lines, path):
+    """Per-file scan: collect every FunctionDecl + VarDeclarator name,
+    collect every Identifier reference, flag declarations whose name has
+    no Identifier site anywhere in the file. Per-file (not per-scope) on
+    purpose — this dialect rarely shadows, and the few false positives
+    are cheaper than the scope analysis would be."""
+    decls: list[tuple[str, str, dict]] = []  # (kind_label, name, loc)
+    used: set[str] = set()
+    for n in jsparse.walk(prog):
+        if n["kind"] == "FunctionDecl":
+            decls.append(("function", n["name"], n["loc"]))
+        elif n["kind"] == "VarDeclarator":
+            decls.append(("var", n["name"], n["loc"]))
+        elif n["kind"] == "Identifier":
+            used.add(n["name"])
+    out = []
+    for decl_kind, name, (line, col) in decls:
+        if name in used:
+            continue
+        if name in DEAD_CODE_NAME_ALLOWLIST:
+            continue
+        if has_lint_annotation(lines[line - 1], "dead-code"):
+            continue
+        out.append({
+            "rule": "dead-code", "file": path,
+            "line": line, "col": col,
+            "msg": f"{decl_kind} '{name}' declared but never referenced  |  {lines[line - 1].strip()}",
+        })
+    return out
 
 
 # ---------------------------------------------------------------------------
@@ -184,6 +230,7 @@ def find_violations(path: pathlib.Path) -> list[dict]:
         elif node["kind"] == "Binary":
             v = check_null_undefined(node, lines, path)
             if v: out.append(v)
+    out.extend(check_dead_code(prog, lines, path))
     return out
 
 
@@ -195,20 +242,20 @@ def main() -> int:
     all_violations.sort(key=lambda v: (str(v["file"]), v["line"], v["col"]))
     for v in all_violations:
         rel = v["file"].relative_to(REPO)
-        print(f"{rel}:{v['line']}:{v['col']}: {v['rule']}: {v['src']}")
+        print(f"{rel}:{v['line']}:{v['col']}: {v['rule']}: {v['msg']}")
     if all_violations:
         from collections import Counter
         by_rule = Counter(v["rule"] for v in all_violations)
         print(file=sys.stderr)
-        print(f"{len(all_violations)} paper-over violation(s):", file=sys.stderr)
+        print(f"{len(all_violations)} lint violation(s):", file=sys.stderr)
         for rule, count in sorted(by_rule.items()):
             print(f"  {count:3d} {rule}", file=sys.stderr)
         print(file=sys.stderr)
         print("Exemption options: add to the allowlist at the top of", file=sys.stderr)
-        print("tools/lint_paper_over.py, or annotate the line with", file=sys.stderr)
+        print("tools/lint.py, or annotate the line with", file=sys.stderr)
         print("`// lint:<rule-name> <reason>`.", file=sys.stderr)
         return 1
-    print(f"No paper-over violations across {len(files)} files.")
+    print(f"No lint violations across {len(files)} files.")
     return 0
 
 
