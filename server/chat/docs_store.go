@@ -20,6 +20,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"time"
 )
 
 // userDocsDir is one user's private docs directory.
@@ -180,7 +181,11 @@ func WriteUserDoc(uid, slug, body string) error {
 	if !fileExists(path) {
 		return fmt.Errorf("doc %q does not exist", slug)
 	}
-	return os.WriteFile(path, []byte(body), 0o644)
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+		return err
+	}
+	PublishDocRecent(uid, slug, time.Now().UTC())
+	return nil
 }
 
 // CreateUserDoc creates a new empty doc with a title-derived, collision-
@@ -197,5 +202,6 @@ func CreateUserDoc(uid, title string) (string, error) {
 	if err := os.WriteFile(path, []byte(""), 0o644); err != nil {
 		return "", err
 	}
+	PublishDocRecent(uid, slug, time.Now().UTC())
 	return slug, nil
 }

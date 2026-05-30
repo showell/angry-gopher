@@ -16,6 +16,7 @@ import "embed"
 //go:embed chat/chat.js
 //go:embed chat/docs.js
 //go:embed chat/notify.js
+//go:embed chat/recent.js
 //go:embed games/lynrummy/conformance/curated_1line_puzzles.dsl
 //go:embed games/lynrummy/conformance/curated_2line_puzzles.dsl
 //go:embed games/lynrummy/conformance/curated_3line_puzzles.dsl
