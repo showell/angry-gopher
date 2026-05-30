@@ -1,34 +1,7 @@
-/* Chat right sidebar — the right column shell on the conversation page,
-   which switches between two states: the OPEN compose form (chat_compose.js)
-   and the CLOSED panel (the "Open compose box" button + the keyboard
-   shortcut reference that's currently server-rendered HTML).
-
-   This module is comically slim by design — its only job is to flip
-   visibility between #chat-compose-body and #chat-closed-panel and to
-   wire the "Open compose box" button. The parallel with the left sidebar
-   is intentional: nearly every chat UI partitions the conversation page
-   into left rail / center feed / right rail, and we want future-Claude
-   to find each rail in a predictable file even when the right one is
-   trivial.
-
-   Boundary:
-     CONSUMERS (callers of openCompose / closeCompose)
-       - chat.js: quote-reply / refer / edit each open compose so the
-         next keystroke goes into the textarea.
-       - chat_help.js: the 'c' keybind calls openCompose.
-       - chat_compose.js: the textarea's Esc-empty handler calls
-         closeCompose (passed in as a dep at init time to keep the
-         direction sibling → sibling, not circular).
-     OWNS
-       - the OPEN/CLOSED visibility toggle of #chat-compose-body and
-         #chat-closed-panel.
-       - the #chat-open-compose click binding.
-     DOES NOT OWN
-       - what's inside the compose form (chat_compose.js).
-       - what's inside the closed-panel's help UI (server-rendered HTML;
-         no JS counterpart yet — see chat_help.js for the future seam).
-
-   Loaded as a sibling of chat.js (BEFORE chat.js). */
+/* PRODUCT_DECISION: slim by design — only flips visibility between
+   #chat-compose-body and #chat-closed-panel and wires the open-compose button.
+   Parallels chat_left_sidebar.js so future-Claude finds each rail in a
+   predictable file. */
 window.ChatRightSidebar = (function(){
   'use strict';
 

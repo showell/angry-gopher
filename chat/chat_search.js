@@ -1,39 +1,23 @@
-/* Chat search modal — a two-phase palette over the WHOLE transcript.
-   Phase 1 autocompletes against the EXACT tokens present in the conversation
-   (type "apo" → "apoorva", and "aporva" too if that typo exists somewhere) —
-   suggestions are real corpus words, so it's autocomplete without stemming.
-   Phase 2 (Enter) lists every message containing the chosen term, RENDERED
-   (a clone of the feed's server HTML) with the term highlighted, newest first
-   (you're usually looking back); ↑↓ choose, Enter jumps there (closing the
-   modal, pushing the nav stack). Inside a rendered result, images/code pop the
-   same modals (stacked over search), external links open in a new tab, and
-   MSG_ refs are inert. The match is always a literal substring, so URLs,
-   code, and punctuation are findable verbatim. No index: the token map is
-   rebuilt on open (milliseconds) and the message scan is one linear pass.
-
-   Loaded as a sibling of chat.js. chat.js calls ChatSearch.init(deps) once
-   the conversation page DOM + the shared helpers are in place; on every
-   incoming SSE message chat.js also calls ChatSearch.refreshIfOpen() so an
-   open search stays current with newly streamed messages.
-
-   Why a sibling file: search is ~180 lines of independent UI that almost
-   never changes once it's working, and keeping it out of chat.js means the
-   feed code (which DOES iterate) reads in isolation. The cost is a small
-   init-time dependency table; the deps are stable. */
+/* PRODUCT_DECISION: two-phase search palette.
+   Phase 1 autocompletes against EXACT corpus tokens (no stemming).
+   Phase 2 (Enter) lists messages containing the chosen term as literal
+   substrings, RENDERED with highlighting, newest first.
+   No index: token map rebuilds on open + linear scan on Enter — milliseconds. */
 window.ChatSearch = (function(){
   'use strict';
 
-  /* host-supplied refs and helpers, populated by init() */
+  /* PRODUCT_DECISION: host-supplied refs/helpers populated by init(). */
   var bubbles, history;
   var selectAndCommit, armedScroll, scrollToIndex, updateNav, idxOf;
   var hitInBody, openHitMedia;
 
   var SEARCH_MIN=2, SUGGEST_CAP=10, SNIPPET_PAD=90;
-  /* smart-case: case-sensitive only if the query carries an uppercase letter */
+  /* PRODUCT_DECISION: smart-case — case-sensitive only if the query has uppercase. */
   function smartIndexOf(hay,q,from){ return /[A-Z]/.test(q)?hay.indexOf(q,from||0):hay.toLowerCase().indexOf(q.toLowerCase(),from||0); }
   function smartHit(body,q){ return smartIndexOf(body,q,0)>=0; }
-  /* tokens = whitespace-delimited words with surrounding punctuation trimmed
-     (internal punctuation kept, so "foo.com" / "https://x" survive as tokens). */
+  /* PRODUCT_DECISION: tokens are whitespace-delimited words with edge
+     punctuation trimmed; internal punctuation kept so "foo.com" / "https://x"
+     survive as one token. */
   function tokenize(body){
     var raw=body.split(/\s+/), out=[];
     for(var i=0;i<raw.length;i++){
@@ -48,7 +32,7 @@ window.ChatSearch = (function(){
       var toks=tokenize(els[i]._body||''), seen=Object.create(null);
       for(var j=0;j<toks.length;j++){
         var t=toks[j]; if(seen[t]) continue; seen[t]=1;
-        if(map[t]){ map[t].count++; map[t].sample=els[i]; } else map[t]={count:1,sample:els[i]}; /* sample = most recent msg with it */
+        if(map[t]){ map[t].count++; map[t].sample=els[i]; } else map[t]={count:1,sample:els[i]}; /* PRODUCT_DECISION: sample = most recent msg with this token. */
       }
     }
     return map;
@@ -57,10 +41,10 @@ window.ChatSearch = (function(){
     q=q.toLowerCase(); var pre=[], sub=[];
     for(var t in map){ var k=t.indexOf(q); if(k===0) pre.push(t); else if(k>0) sub.push(t); }
     function byCount(a,b){ return map[b].count-map[a].count || (a<b?-1:1); }
-    pre.sort(byCount); sub.sort(byCount); return pre.concat(sub); /* prefix matches first */
+    pre.sort(byCount); sub.sort(byCount); return pre.concat(sub); /* PRODUCT_DECISION: prefix matches first. */
   }
-  /* append `text` to `node` with every occurrence of `term` wrapped in <mark>
-     (built as DOM nodes, never innerHTML — the raw body is untrusted text). */
+  /* PRODUCT_DECISION: builds <mark>s as DOM nodes (never innerHTML) — the raw
+     body is untrusted text. */
   function highlightInto(node,text,term){
     if(!term){ node.appendChild(document.createTextNode(text)); return; }
     var pos=0,m;
@@ -71,10 +55,8 @@ window.ChatSearch = (function(){
     }
     if(pos<text.length) node.appendChild(document.createTextNode(text.slice(pos)));
   }
-  /* Highlight `term` inside an already-rendered subtree, wrapping matches in
-     <mark> by walking TEXT NODES only — so links, images, and code markup
-     survive untouched. (highlightInto above builds from plain text; this is its
-     rendered-HTML sibling, used for phase-2 results.) */
+  /* PRODUCT_DECISION: walks TEXT NODES only so links/images/code markup survive
+     untouched. Rendered-HTML sibling of highlightInto (which builds from plain text). */
   function highlightRendered(root,term){
     if(!term) return;
     var walk=document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null, false), nodes=[], n;
@@ -95,7 +77,7 @@ window.ChatSearch = (function(){
     highlightInto(node, body.slice(start,end), term);
     if(end<body.length) node.appendChild(document.createTextNode('…'));
   }
-  /* active modal state, or null when closed:
+  /* PRODUCT_DECISION: SR is the live modal state or null. Shape:
      { dlg, input, list, status, phase:'suggest'|'results', map, items, sel, term } */
   var SR=null;
   function openSearchModal(){
@@ -110,7 +92,7 @@ window.ChatSearch = (function(){
     SR={ dlg:dlg, input:input, list:list, status:status, phase:'suggest', map:buildTokenIndex(), items:[], sel:-1, term:'' };
     input.addEventListener('input', function(){ SR.phase='suggest'; renderSuggest(); });
     dlg.addEventListener('keydown', onSearchKey);
-    dlg.addEventListener('cancel', function(e){ e.preventDefault(); escSearch(); }); /* own the Esc */
+    dlg.addEventListener('cancel', function(e){ e.preventDefault(); escSearch(); }); /* PRODUCT_DECISION: own the Esc. */
     dlg.addEventListener('click', onSearchClick);
     dlg.addEventListener('close', function(){ dlg.remove(); SR=null; history.focus({preventScroll:true}); });
     dlg.showModal(); input.focus(); renderSuggest();
@@ -133,9 +115,9 @@ window.ChatSearch = (function(){
       var t=shown[i], info=SR.map[t];
       var row=document.createElement('div'); row.className='chat-sr-row'; row.setAttribute('data-i',i);
       var head=document.createElement('div'); head.className='chat-sr-tok';
-      /* Wrap the highlighted token in ONE child so the flex row's gap:8px
-         only sits between token-and-count, never between <mark> and the
-         rest of the token (which would print "pro" + " " + "bably"). */
+      /* BROWSER_WORKAROUND: wrap the highlighted token in ONE child so the flex
+         row's gap:8px only sits between token-and-count, never between <mark>
+         and the rest of the token (which would print "pro" + " " + "bably"). */
       var tok=document.createElement('span'); highlightInto(tok, t, q.toLowerCase()); head.appendChild(tok);
       var cnt=document.createElement('span'); cnt.className='chat-sr-cnt'; cnt.textContent=info.count+(info.count===1?' msg':' msgs');
       head.appendChild(cnt);
@@ -149,7 +131,7 @@ window.ChatSearch = (function(){
     SR.term=term; SR.phase='results'; SR.list.textContent=''; SR.items=[]; SR.sel=-1;
     var els=bubbles.querySelectorAll('.chat-msg'), res=[];
     for(var i=0;i<els.length;i++){ if(smartHit(els[i]._body||'', term)) res.push(els[i]); }
-    res.reverse(); /* newest first — searching back through history is the common case */
+    res.reverse(); /* PRODUCT_DECISION: newest first — searching back is the common case. */
     if(!res.length){ SR.status.textContent='No messages contain “'+term+'”. Esc to refine.'; return; }
     SR.status.textContent=res.length+(res.length===1?' message — Enter to go':' messages — ↑↓ choose, Enter to go')+' · Esc to refine';
     for(var k=0;k<res.length;k++){
@@ -158,9 +140,9 @@ window.ChatSearch = (function(){
       var head=document.createElement('div'); head.className='chat-sr-rhead';
       head.textContent=(meta&&meta.firstChild?meta.firstChild.nodeValue:'').trim();
       var body=document.createElement('div'); body.className='chat-sr-rbody';
-      var src=el.querySelector('.chat-body'); /* reuse the feed's server-rendered HTML */
+      var src=el.querySelector('.chat-body'); /* PRODUCT_DECISION: reuse the feed's server-rendered HTML. */
       if(src){ var clone=src.cloneNode(true); highlightRendered(clone, term); body.appendChild(clone); }
-      else highlightInto(body, el._body||'', term); /* defensive: no rendered body */
+      else highlightInto(body, el._body||'', term); /* APOLOGY: defensive fallback for missing rendered body. */
       row.appendChild(head); row.appendChild(body);
       SR.list.appendChild(row); SR.items.push({el:el});
     }
@@ -174,7 +156,7 @@ window.ChatSearch = (function(){
     if(SR.sel<0||!SR.items[SR.sel]) return;
     var el=SR.items[SR.sel].el;
     closeSearchModal();
-    selectAndCommit(el,true); armedScroll(function(){ scrollToIndex(idxOf(el)); }); updateNav(); /* jump + push nav stack */
+    selectAndCommit(el,true); armedScroll(function(){ scrollToIndex(idxOf(el)); }); updateNav(); /* PRODUCT_DECISION: jump + push nav stack. */
   }
   function onSearchKey(e){
     if(e.key==='ArrowDown'){ e.preventDefault(); if(SR.items.length){ SR.sel=Math.min(SR.items.length-1,SR.sel+1); paintSel(); } }
@@ -182,19 +164,19 @@ window.ChatSearch = (function(){
     else if(e.key==='Enter'){ e.preventDefault(); if(SR.phase==='suggest') finalizeSearch(); else chooseResult(); }
   }
   function onSearchClick(e){
-    if(e.target===SR.dlg){ closeSearchModal(); return; } /* backdrop click */
+    if(e.target===SR.dlg){ closeSearchModal(); return; } /* PRODUCT_DECISION: backdrop click closes. */
     var row=e.target.closest && e.target.closest('.chat-sr-row'); if(!row) return;
     SR.sel=parseInt(row.getAttribute('data-i'),10); paintSel();
     if(SR.phase==='suggest'){ finalizeSearch(); return; }
-    /* results: a click inside the rendered body acts in place; the two
-       behaviors that differ from the feed live here and nowhere else. */
+    /* PRODUCT_DECISION: results-mode click behavior differs from the feed only here. */
     var hit=hitInBody(e.target);
-    if(hit.kind==='msgref'){ e.preventDefault(); return; } /* search: MSG_ refs are inert */
-    if(openHitMedia(hit)) return;                          /* image→zoom, pre→code (stacked) */
-    if(hit.kind==='link') return;                          /* external link → new tab */
-    chooseResult();                                        /* plain click → go to this message */
+    if(hit.kind==='msgref'){ e.preventDefault(); return; } /* PRODUCT_DECISION: MSG_ refs inert inside search. */
+    if(openHitMedia(hit)) return;                          /* PRODUCT_DECISION: image→zoom, pre→code (stacked). */
+    if(hit.kind==='link') return;                          /* PRODUCT_DECISION: external link → new tab. */
+    chooseResult();                                        /* PRODUCT_DECISION: plain click → jump to this message. */
   }
-  function refreshOpenSearch(){ /* a message streamed in while the modal is open */
+  function refreshOpenSearch(){
+    /* PRODUCT_DECISION: triggered by chat.js when a message streamed in while the modal was open. */
     if(!SR) return; SR.map=buildTokenIndex();
     if(SR.phase==='suggest') renderSuggest(); else runResults(SR.term);
   }

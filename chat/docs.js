@@ -1,23 +1,16 @@
-/* docs.js — autosave + live-render for the /chat/docs editor.
- *
- * Two independently-debounced jobs share the textarea, each at 1200ms.
- * Render and save fire at the same cadence — there's no benefit to making
- * the preview "feel live" if it costs a request per word; a single
- * natural pause flushes both. Conservative enough to ride out short
- * mid-word pauses without burning network on bursts.
- *
- * On unload, we synchronously fire any pending save so closing the tab
- * mid-keystroke doesn't lose the last edit.
- */
+/* PRODUCT_DECISION: autosave + live-render at the same 1200ms debounce — no
+   benefit to a "live" preview costing a request per word; one natural pause
+   flushes both. Sync sendBeacon flush on unload so closing mid-keystroke
+   doesn't lose the last edit. */
 (function(){
   var ta=document.getElementById('docs-body');
-  if(!ta) return; /* the no-doc-selected page omits the textarea entirely */
+  if(!ta) return; /* PRODUCT_DECISION: the no-doc-selected page omits the textarea. */
   var slug=ta.getAttribute('data-slug');
   var preview=document.getElementById('docs-preview');
   var status=document.getElementById('docs-status');
 
   var renderTimer=null, saveTimer=null;
-  var pendingSave=false; /* used by the unload flush */
+  var pendingSave=false; /* PRODUCT_DECISION: read by the unload flush. */
 
   function setStatus(cls, text){
     if(!status) return;
@@ -25,10 +18,9 @@
     status.textContent=text||'';
   }
 
-  /* Posts go as application/x-www-form-urlencoded (matching chat.js).
-     FormData would send multipart, which Go's ParseForm doesn't touch —
-     FormValue then tries ParseMultipartForm, but our MaxBytesReader wrap
-     makes that fail silently, so the server would see empty fields. */
+  /* BROWSER_WORKAROUND: x-www-form-urlencoded only. FormData sends multipart,
+     which Go's ParseForm doesn't touch — FormValue's ParseMultipartForm fails
+     silently under our MaxBytesReader wrap, so the server sees empty fields. */
   var FORM_HDR={'Content-Type':'application/x-www-form-urlencoded'};
   function encodeForm(pairs){
     var parts=[];
@@ -41,7 +33,7 @@
                                 body:encodeForm({body:ta.value})})
       .then(function(r){ return r.ok?r.text():Promise.reject(r.status); })
       .then(function(html){ preview.innerHTML=html; })
-      .catch(function(){ /* render failures are silent — keep the last preview */ });
+      .catch(function(){ /* PRODUCT_DECISION: silent on render failure — keep the last preview. */ });
   }
 
   function doSave(){
@@ -65,10 +57,8 @@
     saveTimer=setTimeout(doSave, 1200);
   });
 
-  /* Synchronous flush on unload: a pending save would otherwise be lost
-     if the tab closes mid-debounce. sendBeacon is exactly this contract —
-     a queued POST the browser ships during teardown. Wrap the body in a
-     Blob with form-urlencoded content-type to match the regular save. */
+  /* BROWSER_WORKAROUND: sendBeacon ships a queued POST during teardown — its
+     exact contract. Blob with form-urlencoded type to match the regular save. */
   window.addEventListener('beforeunload', function(){
     if(!pendingSave) return;
     var blob=new Blob([encodeForm({slug:slug, body:ta.value})],
@@ -76,10 +66,9 @@
     try { navigator.sendBeacon('/chat/docs/save', blob); } catch(err){ console.error('docs: sendBeacon failed at unload (size limit, quota, or rate)', err); }
   });
 
-  /* "Post to chat" — send the doc body as a chat message to the default
-     partner (server picks based on identity, returns the partner id as the
-     response body), confirm via modal, then navigate to the chat on OK.
-     Flush any pending autosave first so disk + chat carry the same bytes. */
+  /* PRODUCT_DECISION: "Post to chat" flushes pending autosave first so disk
+     and chat carry the same bytes, then posts via the default-partner
+     endpoint (server picks the partner from identity). */
   var postBtn=document.getElementById('docs-post-btn');
   var dlg=document.getElementById('docs-posted-dialog');
   var dlgOk=document.getElementById('docs-posted-ok');
@@ -103,7 +92,7 @@
           convAfter=j.conv; sessionAfter=j.session; idAfter=j.id;
           setStatus('saved', 'Posted ✓');
           dlg.showModal();
-          dlgOk.focus(); /* Enter dismisses; click also works */
+          dlgOk.focus(); /* PRODUCT_DECISION: Enter dismisses; click also works. */
         })
         .catch(function(s){
           setStatus('error', 'Post failed'+(s?' ('+s+')':''));
@@ -113,9 +102,8 @@
     dlgOk.addEventListener('click', function(){
       dlg.close();
       if(convAfter && sessionAfter){
-        /* #msg-<id> matches the MSG_<session>_<n> fragment scheme;
-           chat.js's wantFocus path will scroll + select + push to the
-           back/forward stack once the message renders. */
+        /* PRODUCT_DECISION: #msg-<id> matches MSG_<session>_<n>; chat.js's
+           wantFocus path scrolls + selects + pushes to back/forward. */
         var url='/chat/c/'+encodeURIComponent(convAfter)+'/'+encodeURIComponent(sessionAfter);
         if(idAfter) url += '#msg-'+idAfter;
         location.href=url;

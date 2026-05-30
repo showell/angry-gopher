@@ -109,6 +109,17 @@ def has_lint_annotation(line_text: str, rule: str) -> bool:
     return False
 
 
+def line_or_predecessor_annotation(lines: list[str], line_num: int, rule: str) -> bool:
+    """Annotations may live on the same line as the violation (trailing
+    comment) OR on the line immediately above (leading comment). Both
+    forms read naturally."""
+    if has_lint_annotation(lines[line_num - 1], rule):
+        return True
+    if line_num >= 2 and has_lint_annotation(lines[line_num - 2], rule):
+        return True
+    return False
+
+
 # ---------------------------------------------------------------------------
 # Rule checkers. Each returns a violation dict or None.
 # ---------------------------------------------------------------------------
@@ -128,7 +139,7 @@ def check_silent_catch(try_node, lines, path):
         return None
     line, col = try_node["loc"]
     src = lines[line - 1].strip()
-    if has_lint_annotation(lines[line - 1], "silent-catch"):
+    if line_or_predecessor_annotation(lines, line, "silent-catch"):
         return None
     return {
         "rule": "silent-catch", "file": path,
@@ -175,7 +186,7 @@ def check_null_undefined(binary_node, lines, path):
             return None
     line, col = binary_node["loc"]
     src = lines[line - 1].strip()
-    if has_lint_annotation(lines[line - 1], "null-undefined-check"):
+    if line_or_predecessor_annotation(lines, line, "null-undefined-check"):
         return None
     return {
         "rule": "null-undefined-check", "file": path,
@@ -204,7 +215,7 @@ def check_dead_code(prog, lines, path):
             continue
         if name in DEAD_CODE_NAME_ALLOWLIST:
             continue
-        if has_lint_annotation(lines[line - 1], "dead-code"):
+        if line_or_predecessor_annotation(lines, line, "dead-code"):
             continue
         out.append({
             "rule": "dead-code", "file": path,

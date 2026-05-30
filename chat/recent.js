@@ -1,20 +1,16 @@
-/* /chat/recent client. Two jobs:
-   - tick every 20s, re-humanize each row's When cell from its data-ts so
-     "5m ago" rolls to "6m ago" without reloading the page;
-   - hold an EventSource on /chat/recent/stream and upsert one row per
-     pushed event (insertion at the right sorted slot, or replace-in-place
-     for an existing key, then re-paint the When cell). No client-side
-     state — the DOM is the model. Keys mirror the server-emitted
-     data-key: "chat:<conv>/<sid>" or "doc:<slug>". */
+/* PRODUCT_DECISION: two jobs on /chat/recent — 20s tick re-humanizes When
+   cells from data-ts, and an EventSource on /chat/recent/stream upserts one
+   row per pushed event (replace-in-place by data-key, insert sorted by
+   data-ts desc). DOM is the model; no client-side cache. */
 (function(){
   'use strict';
 
   var emptyEl=document.getElementById('recent-empty');
   var tableEl=document.getElementById('recent-table');
   if(!tableEl) return;
-  /* Rows live under <tbody>, not directly under <table>. Server emits it
-     explicitly; tableEl.insertBefore(tr, otherTr) would throw because
-     otherTr's parent is the tbody, not the table. */
+  /* BROWSER_WORKAROUND: rows live under <tbody>, not directly under <table>.
+     tableEl.insertBefore(tr, otherTr) throws because otherTr's parent is the
+     tbody, not the table. Server emits the <tbody> explicitly. */
   var tbodyEl=tableEl.querySelector('tbody');
   if(!tbodyEl) return;
 
@@ -68,10 +64,8 @@
     return tr;
   }
 
-  /* Insert tr so rows stay sorted by data-ts desc (newest first). The
-     <thead> holds the column-header tr (no data-ts), so we only scan tbody
-     rows. Equal timestamps tie-break stably by inserting the new row
-     above the older one of the same instant. */
+  /* PRODUCT_DECISION: data-ts desc (newest first); equal timestamps tie-break
+     stably by inserting above the older row of the same instant. */
   function insertSorted(tr){
     var ts=tr.dataset.ts;
     var rows=tbodyEl.querySelectorAll('tr[data-ts]');

@@ -1,46 +1,13 @@
-/* Chat compose — the form behavior on the conversation page: the
-   textarea + send button, image upload (button + clipboard paste), the
-   resilient-send state machine (cid → optimistic disable → ack-on-echo
-   / hostDown-on-timeout), and the inline alert modal for "host down"
-   warnings.
-
-   Boundary:
-     CONSUMERS
-       - chat.js: hands the incoming SSE message's `cid` to
-         ackIfPending(); calls isPending() to gate quote/refer/edit (a
-         pending send shouldn't be disturbed); calls insertAtCursor() to
-         drop "See MSG_…" / "In MSG_…" snippets; calls setBody() to
-         load a message back into compose for edit.
-       - chat_help.js: no direct calls — keyboard shortcuts for compose
-         (Ctrl/⌘-Enter to send, Esc to close when empty) live on the
-         textarea itself and are wired here, not in the global keydown
-         dispatcher.
-     PRODUCERS (server-mutating)
-       - send:    POST /chat/c/<conv>/<sid>/send  body=body=<text>&cid=<uuid>
-                  the SSE echo of this message with matching cid is what
-                  acks the send (see chat.js's stream handler);
-                  hostDown fires after a 3s timeout if no ack arrives.
-       - upload:  POST /chat/c/<conv>/<sid>/upload  multipart
-                  on success, inserts an <img> tag (with dims) at the
-                  caret so the user can post it with their message.
-     DEPENDS ON
-       - SESSION_BASE for the POST URLs.
-       - chat_right_sidebar's closeCompose for the Esc-empty handler
-         (passed in at init, sibling-to-sibling, not circular).
-     OWNS
-       - pendingCid + pendingTimer + setComposeEnabled — the send state
-         machine. NOT exposed outside this module; chat.js calls
-         ackIfPending() and lets compose decide.
-
-   Loaded as a sibling of chat.js (BEFORE chat.js). */
+/* PRODUCT_DECISION: compose owns the send state machine — cid round-trip,
+   optimistic disable, ack on SSE echo, hostDown timeout. Image upload (button
+   + clipboard paste) lives here too. */
 window.ChatCompose = (function(){
   'use strict';
 
   var textarea, form, status, imageBtn, fileInput;
   var SESSION_BASE, closeCompose;
   var pendingCid=null, pendingTimer=null;
-  /* MAX_IMAGE_BYTES must match Gopher's maxChatUploadBytes (and stay
-     under Caddy's upload body cap). */
+  /* PRODUCT_DECISION: must match Gopher's maxChatUploadBytes and stay under Caddy's body cap. */
   var MAX_IMAGE_BYTES=10*1024*1024;
 
   function newCid(){ return (window.crypto&&crypto.randomUUID)?crypto.randomUUID():Date.now()+'-'+Math.random().toString(16).slice(2); }
@@ -48,13 +15,15 @@ window.ChatCompose = (function(){
     textarea.disabled=!on;
     var btns=form.querySelectorAll('button'); for(var i=0;i<btns.length;i++) btns[i].disabled=!on;
   }
-  function ackSend(){ /* echo arrived: clear the box and re-enable */
+  /* PRODUCT_DECISION: SSE echo arrived — clear the box and re-enable. */
+  function ackSend(){
     if(pendingTimer){ clearTimeout(pendingTimer); pendingTimer=null; }
     pendingCid=null; textarea.value=''; status.textContent=''; status.style.color='';
     setComposeEnabled(true); textarea.focus();
   }
-  function hostDown(){ /* no echo / POST failed: keep the text, re-enable, tell the user */
-    if(!pendingCid) return; /* already resolved (echo beat us) */
+  /* PRODUCT_DECISION: no echo / POST failed — keep the text, re-enable, alert the user. */
+  function hostDown(){
+    if(!pendingCid) return; /* PRODUCT_DECISION: already resolved — echo beat us to the timer. */
     if(pendingTimer){ clearTimeout(pendingTimer); pendingTimer=null; }
     pendingCid=null; status.textContent=''; status.style.color='';
     setComposeEnabled(true);
@@ -66,21 +35,21 @@ window.ChatCompose = (function(){
     var ok=document.createElement('button'); ok.type='button'; ok.textContent='OK';
     ok.addEventListener('click',function(){ dlg.close(); });
     dlg.appendChild(p); dlg.appendChild(ok);
-    dlg.addEventListener('close',function(){ dlg.remove(); if(onClose) onClose(); }); /* focus lands after the modal releases it */
+    dlg.addEventListener('close',function(){ dlg.remove(); if(onClose) onClose(); }); /* PRODUCT_DECISION: focus lands after the modal releases it. */
     document.body.appendChild(dlg); dlg.showModal();
   }
   function send(){
-    if(pendingCid) return; /* already awaiting an ack */
+    if(pendingCid) return;
     var text=textarea.value;
     if(!text.trim()) return;
     var cid=newCid(); pendingCid=cid;
-    setComposeEnabled(false); /* keep the text until the host acks */
+    setComposeEnabled(false); /* PRODUCT_DECISION: keep the text disabled until the host acks. */
     status.style.color='#888'; status.textContent='Sending…';
     pendingTimer=setTimeout(hostDown, 3000);
     fetch(SESSION_BASE+'/send',{ method:'POST',
       headers:{'Content-Type':'application/x-www-form-urlencoded','X-Chat-Async':'1'},
       body:'body='+encodeURIComponent(text)+'&cid='+encodeURIComponent(cid)
-    }).then(function(r){ if(!r.ok) throw new Error('status '+r.status); /* success is confirmed by the SSE echo */ })
+    }).then(function(r){ if(!r.ok) throw new Error('status '+r.status); /* PRODUCT_DECISION: real confirmation is the SSE echo. */ })
       .catch(hostDown);
   }
   function insertAtCursor(text){
@@ -92,8 +61,8 @@ window.ChatCompose = (function(){
     textarea.value=text;
     if(typeof caretAt==='number') textarea.setSelectionRange(caretAt, caretAt);
   }
-  /* Reject oversized images up front (the per-image limit), and otherwise
-     surface the server's own message — e.g. the lifetime upload cap. */
+  /* PRODUCT_DECISION: reject oversized images up front (per-image limit);
+     otherwise surface the server's own message (e.g. lifetime upload cap). */
   function uploadImage(file){
     if(!file) return;
     if(file.size > MAX_IMAGE_BYTES){
@@ -112,13 +81,10 @@ window.ChatCompose = (function(){
         });
       })
       .then(function(d){
-        /* HTML <img> instead of markdown image syntax so the width/height
-           the server decoded ride along with the message body. Modern
-           browsers use those attrs to reserve correctly-proportioned space
-           before the image decodes, so the feed doesn't reflow when
-           "scroll to bottom" lands. Server may return 0 for unknown dims
-           (e.g. webp without a stdlib decoder); in that case we omit the
-           attrs and fall back to the old no-dims behavior. */
+        /* BROWSER_WORKAROUND: HTML <img> with width/height so browsers reserve
+           layout space before decode — keeps "scroll to bottom" stable when
+           the image lands. Server may return 0 for unknown dims (e.g. webp
+           without stdlib decoder); we omit the attrs in that case. */
         var alt=(d.name||'image').replace(/["<>\r\n]/g,'');
         var dims=(d.width>0 && d.height>0) ? ' width="'+d.width+'" height="'+d.height+'"' : '';
         insertAtCursor('<img src="'+d.url+'" alt="'+alt+'"'+dims+'>');
@@ -138,7 +104,7 @@ window.ChatCompose = (function(){
     form.addEventListener('submit', function(e){ e.preventDefault(); send(); });
     textarea.addEventListener('keydown', function(e){
       if((e.ctrlKey||e.metaKey)&&e.key==='Enter'){ e.preventDefault(); send(); return; }
-      if(e.key==='Escape'&&textarea.value.trim()===''){ e.preventDefault(); closeCompose(); } /* empty only — never lose a draft */
+      if(e.key==='Escape'&&textarea.value.trim()===''){ e.preventDefault(); closeCompose(); } /* PRODUCT_DECISION: Esc closes only when empty — never lose a draft. */
     });
     imageBtn.addEventListener('click', function(){ fileInput.click(); });
     fileInput.addEventListener('change', function(){ uploadImage(fileInput.files[0]); fileInput.value=''; });

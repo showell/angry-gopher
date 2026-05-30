@@ -2,8 +2,7 @@
   var root=document.getElementById('chat-root');
   var CONV=root.dataset.conv;
   var SESSION=root.dataset.session;
-  /* All API endpoints live under the session's URL prefix (mirrors the
-     on-disk path under {ChatDataRoot}/<conv>/sessions/<sid>). */
+  /* PRODUCT_DECISION: API URL space mirrors disk layout under {ChatDataRoot}/<conv>/sessions/<sid>. */
   var SESSION_BASE='/chat/c/'+encodeURIComponent(CONV)+'/'+encodeURIComponent(SESSION);
   var history=document.getElementById('chat-history');
   var bubbles=document.getElementById('chat-bubbles');
@@ -19,38 +18,17 @@
   var composeBody=document.getElementById('chat-compose-body');
   var closedPanel=document.getElementById('chat-closed-panel');
   function toBottom(){ armedScroll(function(){ history.scrollTop=history.scrollHeight; }); }
-  /* Compose is closeable: Esc on an empty box closes it and hands focus back
-     to the feed; "c" (or the panel button) reopens it. The open/closed
-     toggle moved to chat_right_sidebar.js; the form behavior moved to
-     chat_compose.js; the keyboard dispatcher (including "c") moved to
-     chat_help.js. All three are wired at the bottom of this IIFE. */
-  /* "Caught up": the end of the last message in the feed is visible, so a new
-     message should follow it down. If you've scrolled up into history, the
-     last message's bottom is below the fold and we leave you where you are.
-     (A last message taller than the viewport still counts as caught-up once
-     you've scrolled to its bottom edge.) */
   function caughtUp(){
     var els=history.querySelectorAll('[data-i]');
     for(var i=els.length-1;i>=0;i--){
-      if(els[i].offsetParent===null) continue; /* the hidden view (rendered vs transcript) */
+      if(els[i].offsetParent===null) continue; /* BROWSER_WORKAROUND: offsetParent===null skips the hidden view (rendered vs transcript). */
       return els[i].getBoundingClientRect().bottom<=history.getBoundingClientRect().bottom+1;
     }
-    return true; /* empty feed → stick, so the first messages land at the bottom */
+    return true; /* PRODUCT_DECISION: empty feed sticks, so first messages land at the bottom. */
   }
-  /* Persistent "selected message" (Zulip-style cursor) + a navigation history.
-     At most one message is selected; it shows a steady highlight ring. The
-     selection moves when you click a message / MSG_ link, and otherwise FOLLOWS
-     scrolling: the topmost message fully in view, or — when one message is too
-     tall for any to be fully visible — the topmost whose beginning (top edge)
-     shows.
-
-     Navigation history has browser back/forward semantics: `entries` is the
-     trail of *committed* selections and `pos` points at the current one. ←/→
-     move `pos` without mutating the trail; any FRESH navigation (recordNav)
-     drops the forward tail and appends — so going back and then navigating
-     elsewhere resets the forward stack. A click/link jump commits immediately;
-     a scroll- or arrow-driven change commits only after a 700ms pause, so
-     scrolling past messages doesn't churn the trail — only where you settle. */
+  /* PRODUCT_DECISION: nav-history has browser back/forward semantics. Click/link
+     jumps commit immediately; scroll/arrow-driven changes debounce 700ms so
+     scrolling past messages doesn't churn the trail. */
   var selected=null;
   function idxOf(el){ return el?el.getAttribute('data-i'):null; }
   function selectMsg(el){
@@ -60,14 +38,15 @@
   }
   var entries=[], pos=-1, commitTimer=null;
   function curEntry(){ return pos>=0?entries[pos]:null; }
-  function drifted(){ return selected&&idxOf(selected)!==curEntry(); } /* scrolled away from the committed pos */
+  function drifted(){ return selected&&idxOf(selected)!==curEntry(); }
   function updateNav(){
-    backBtn.disabled=!(pos>0||drifted()); /* drift enables ← as a "recover to where I was" */
+    backBtn.disabled=!(pos>0||drifted()); /* PRODUCT_DECISION: drift enables ← as "recover to where I was". */
     fwdBtn.disabled=!(pos<entries.length-1);
   }
   function recordNav(idx){
-    if(idx===null||idx===curEntry()) return; /* ignore re-selecting; curEntry()=null when nav-history empty. lint:null-undefined-check legit-absence-sentinel */
-    entries.length=pos+1;                    /* drop the forward tail — fresh nav resets it */
+    /* PRODUCT_DECISION: curEntry()=null when nav-history empty; ignore re-select. lint:null-undefined-check legit-absence-sentinel */
+    if(idx===null||idx===curEntry()) return;
+    entries.length=pos+1; /* PRODUCT_DECISION: drop the forward tail — fresh nav resets it. */
     entries.push(idx); pos=entries.length-1;
     updateNav();
   }
@@ -76,8 +55,7 @@
     if(immediate) recordNav(idx);
     else commitTimer=setTimeout(function(){ commitTimer=null; recordNav(idx); }, 700);
   }
-  /* Select + record: immediate=true for a click/link jump, false to debounce
-     a scroll- or arrow-driven change. */
+  /* PRODUCT_DECISION: immediate=true for click/link jumps; false to debounce scroll/arrow changes. */
   function selectAndCommit(el, immediate){ if(el){ selectMsg(el); commitSelection(idxOf(el), immediate); } }
   function selectionCandidate(){
     var els=bubbles.querySelectorAll('.chat-msg'), hr=history.getBoundingClientRect();
@@ -85,48 +63,35 @@
     for(var i=0;i<els.length;i++){
       var el=els[i]; if(el.offsetParent===null) continue;
       var r=el.getBoundingClientRect();
-      if(r.top>=hr.top-1 && r.bottom<=hr.bottom+1) return el;                  /* topmost fully in view */
-      if(!beginningVisible && r.top>=hr.top-1 && r.top<hr.bottom) beginningVisible=el; /* its top edge shows */
-      if(!straddler && r.top<hr.top && r.bottom>hr.top) straddler=el;          /* covers the viewport top */
+      if(r.top>=hr.top-1 && r.bottom<=hr.bottom+1) return el; /* PRODUCT_DECISION: topmost fully in view. */
+      if(!beginningVisible && r.top>=hr.top-1 && r.top<hr.bottom) beginningVisible=el; /* PRODUCT_DECISION: top edge shows. */
+      if(!straddler && r.top<hr.top && r.bottom>hr.top) straddler=el; /* PRODUCT_DECISION: covers viewport top. */
     }
     return beginningVisible||straddler||null;
   }
-  /* A programmatic jump (MSG_ link, back/forward, search, arrow, paging)
-     suppresses scroll-driven reselection so the smooth-scroll animation can't
-     steal the selection back. We suppress until the scroll actually goes QUIET,
-     not for a fixed window: a far jump animates well past any time guess, and a
-     centered target means the "topmost visible" the detector would pick isn't
-     the target anyway — so a fixed window let the detector wake mid-flight and
-     land on the wrong message. Every programmatic scroll must arm suppression
-     first — route them all through armedScroll() so the arm can't be forgotten. */
+  /* PRODUCT_DECISION: programmatic jumps suppress scroll-driven reselection until
+     the scroll actually goes quiet (not for a fixed window) — a far jump animates
+     past any time guess. armedScroll() bundles arm + scroll so call sites can't forget. */
   var progScroll=false, progScrollTimer=null;
   function endProgScroll(){ progScroll=false; progScrollTimer=null; }
   function armScrollSuppress(){
     progScroll=true;
     if(progScrollTimer) clearTimeout(progScrollTimer);
-    progScrollTimer=setTimeout(endProgScroll, 150); /* re-armed by each scroll event below */
+    progScrollTimer=setTimeout(endProgScroll, 150); /* PRODUCT_DECISION: re-armed by each scroll event below. */
   }
-  /* The one way to scroll programmatically: arm suppression, then scroll.
-     Bundling them means no call site can do the scroll while forgetting the
-     arm (which would let the scroll listener steal the selection mid-flight). */
   function armedScroll(scroll){ armScrollSuppress(); scroll(); }
   function syncSelectionToScroll(){
     if(progScroll) return;
     var el=selectionCandidate();
-    if(el && el!==selected){ selectAndCommit(el, false); updateNav(); } /* enables ← as you drift away */
+    if(el && el!==selected){ selectAndCommit(el, false); updateNav(); }
   }
+  /* BROWSER_WORKAROUND: image loads grow scrollHeight from under us, indistinguishable
+     from a user scroll via scrollTop. progScroll is the source of truth: while set,
+     scrolls are ours; outside that 150ms window, the user's. */
   var rafPending=false;
-  /* True iff the user has scrolled the feed themselves (not us via
-     toBottom / scrollIntoView). The post-backlog stabilizer reads this
-     to decide when to stop chasing layout growth — position-distance
-     heuristics are no good here because image loads grow scrollHeight
-     out from under us, which looks indistinguishable from a user scroll
-     if you only watch scrollTop. progScroll is the source of truth:
-     while it's set (a 150ms window after each armScrollSuppress), every
-     scroll event is ours; outside that, it's the user. */
   var userScrolledFeed=false;
   history.addEventListener('scroll',function(){
-    if(progScroll){ /* our own animated scroll: stay suppressed until it's idle for 150ms */
+    if(progScroll){
       if(progScrollTimer) clearTimeout(progScrollTimer);
       progScrollTimer=setTimeout(endProgScroll, 150);
       return;
@@ -140,7 +105,7 @@
     var div=document.createElement('div');
     div.className='chat-msg '+(m.mine?'mine':'theirs');
     div.id='msg-'+m.id; div.setAttribute('data-i',m.index); div.setAttribute('data-id',m.id);
-    div._body=m.body; /* raw markdown source, kept for quote-reply */
+    div._body=m.body; /* PRODUCT_DECISION: keep raw markdown source on the element for quote-reply. */
     var meta=document.createElement('div'); meta.className='chat-meta';
     meta.appendChild(document.createTextNode('#'+(m.index+1)+' '+m.from+' · '+m.time+' '));
     var quote=document.createElement('button'); quote.type='button'; quote.className='msg-quote';
@@ -152,19 +117,18 @@
     var edit=document.createElement('button'); edit.type='button'; edit.className='msg-edit';
     edit.title='Load this message back into compose with an "Edit of MSG_…" backlink (e)'; edit.textContent='edit'; meta.appendChild(edit);
     var body=document.createElement('div'); body.className='chat-body';
-    body.innerHTML=m.html; /* sanitized server-side */
+    body.innerHTML=m.html; /* PRODUCT_DECISION: m.html is sanitized server-side. */
     div.appendChild(meta); div.appendChild(body);
     bubbles.appendChild(div);
     var span=document.createElement('span'); span.setAttribute('data-i',m.index);
-    span.textContent=m.enc; transcript.appendChild(span); /* literal on-disk block */
-    var em=(m.body||'').match(EDIT_RE); /* "Edit of MSG_<hash>" → supersede that original */
+    span.textContent=m.enc; transcript.appendChild(span); /* PRODUCT_DECISION: literal on-disk block for transcript view. */
+    var em=(m.body||'').match(EDIT_RE);
     if(em){ var orig=document.getElementById('msg-'+em[1]); if(orig) markEdited(orig, m.id); }
   }
-  /* A message whose body starts with "Edit of MSG_<hash>" supersedes that
-     original: render a forward "Edited in MSG_<this>" link on the original and
-     demote its content to a small verbatim quote. Append-only — the stored
-     record is untouched; this is purely the rendered view (Transcript still
-     shows both messages byte-for-byte). */
+  /* PRODUCT_DECISION: a body starting with "Edit of MSG_<hash>" supersedes that
+     original — render an "Edited in MSG_<this>" link there, demote its content
+     to a spoiler. Append-only: the on-disk record stays untouched, only the
+     rendered view changes (transcript still shows both byte-for-byte). */
   var EDIT_RE=/^Edit of MSG_([A-Za-z0-9-]+_[0-9]+)\b/;
   function markEdited(origEl, editID){
     var bodyEl=origEl.querySelector('.chat-body'); if(!bodyEl) return;
@@ -180,42 +144,34 @@
     spoiler.appendChild(orig);
     bodyEl.appendChild(note); bodyEl.appendChild(spoiler);
   }
-  /* Quote-reply: drop the target message into the compose box as a fenced
-     block and focus it, ready to type the reply underneath. The MSG_ header
-     line linkifies back to the original; the ~~~ quote fence keeps the quoted
-     text verbatim (its own MSG_ refs aren't re-linked, being inside a fence). */
-  /* Drop a bare "See MSG_<hash>" reference into the compose box — the
-     lightweight cousin of quoteReply when you just want to point at a
-     message without dragging its body into the reply. */
   function referReply(el){
     if(!el||ChatCompose.isPending()) return;
-    selectAndCommit(el,true); /* record the referenced message on the nav stack */
+    selectAndCommit(el,true);
     var hash=el.getAttribute('data-id');
     ChatRightSidebar.openCompose();
     ChatCompose.insertAtCursor('See MSG_'+hash+' ');
   }
   function quoteReply(el){
-    if(!el||ChatCompose.isPending()) return; /* don't disturb a send awaiting its ack */
-    selectAndCommit(el,true); /* record the quoted message on the nav stack */
+    if(!el||ChatCompose.isPending()) return; /* PRODUCT_DECISION: don't disturb a send awaiting its ack. */
+    selectAndCommit(el,true);
     var hash=el.getAttribute('data-id'), mine=el.classList.contains('mine');
     var body=el._body;
-    ChatRightSidebar.openCompose(); /* ensure it's visible before we type into it */
+    ChatRightSidebar.openCompose();
     ChatCompose.insertAtCursor('In MSG_'+hash+' '+(mine?'I said':'you said')+':\n~~~ quote\n'+body+'\n~~~\n\n');
   }
-  /* Edit: load the message back into compose with a transparent
-     "Edit of MSG_<hash>" backlink prepended and the caret at the start of the
-     original content. Append-only + transparent — it's just a new message that
-     references the original (no copy/paste, automatic backlink). */
+  /* PRODUCT_DECISION: Edit composes a NEW message with an "Edit of MSG_<hash>"
+     backlink and the caret at the start of the original body. Append-only +
+     transparent — no copy/paste, the backlink wires the relation. */
   function editMessage(el){
-    if(!el||ChatCompose.isPending()) return; /* don't disturb a send awaiting its ack */
-    selectAndCommit(el,true); /* record the edited message on the nav stack */
+    if(!el||ChatCompose.isPending()) return;
+    selectAndCommit(el,true);
     var prefix='Edit of MSG_'+el.getAttribute('data-id')+'\n\n';
     ChatRightSidebar.openCompose();
-    ChatCompose.setBody(prefix+el._body, prefix.length); /* caret at the start of the content */
+    ChatCompose.setBody(prefix+el._body, prefix.length); /* PRODUCT_DECISION: caret at the start of the original content. */
   }
-  /* Anchor scrolling on the same MESSAGE across view switches: find the
-     topmost visible [data-i] element, then bring that same index back to
-     the top after the layout changes (rendered/raw/transcript differ). */
+  /* PRODUCT_DECISION: anchor scrolling on the same MESSAGE across view switches
+     (rendered/raw/transcript). topIndex captures the currently-topmost data-i,
+     scrollToIndex brings it back after the layout changes. */
   function topIndex(){
     var els=history.querySelectorAll('[data-i]'), htop=history.getBoundingClientRect().top;
     for(var i=0;i<els.length;i++){
@@ -246,22 +202,16 @@
     e.preventDefault(); setView(a.getAttribute('data-view'));
   });
   toBottom();
-  /* If we arrived with a #msg-<hash> fragment (e.g. from Docs' Post-to-chat),
-     remember the target so finishBacklog can scroll+select+push it onto
-     the nav stack once the backlog has fully landed. */
+  /* PRODUCT_DECISION: #msg-<hash> fragments (e.g. from Docs' Post-to-chat) get
+     remembered, then consumed by finishBacklog once the backlog has landed. */
   var wantFocusID=(function(){
     var m=(location.hash||'').match(/^#msg-([A-Za-z0-9_-]+)$/);
     return m ? m[1] : null;
   })();
-  /* Backlog phase: the server sends a `backlog-size` preamble before
-     replaying any messages, so we know how many to expect. While
-     inBacklog is true we ONLY append to the DOM — no toBottom, no
-     syncSelectionToScroll, no ack/search-refresh work. One final scroll
-     happens in finishBacklog. Eliminates the per-message scroll avalanche
-     that made 1000-message conversations crawl on initial load.
-     The same path runs on EventSource reconnects (the server re-sends
-     the preamble for the post-Last-Event-ID slice); reconnect backlogs
-     only auto-scroll if the user was caught up before the gap. */
+  /* PRODUCT_DECISION: backlog phase batches DOM-only appends to skip per-message
+     scroll/select/refresh — 1000-message conversations crawled without this.
+     One final scroll happens in finishBacklog. The same path runs on EventSource
+     reconnects (server re-sends preamble + post-Last-Event-ID slice). */
   var inBacklog=true, backlogSize=null, backlogSeen=0;
   var wasCaughtUpAtBacklogStart=true;
   function finishBacklog(){
@@ -269,36 +219,32 @@
     var focusEl=null, anchorToBottom=false;
     if(wantFocusID){
       focusEl=document.getElementById('msg-'+wantFocusID);
-      wantFocusID=null; /* consumed; reconnect backlogs use the caughtUp fallback below */
+      wantFocusID=null; /* PRODUCT_DECISION: consumed; reconnect backlogs fall through to caughtUp. */
     } else if(wasCaughtUpAtBacklogStart){
       anchorToBottom=true;
     }
-    /* Reset the user-scroll flag right before the initial anchor: from
-       here on, only an INTENTIONAL post-anchor user scroll should stop
-       the stabilizer. armScrollSuppress on every programmatic scrollTop
-       keeps our own activity from tripping it. */
+    /* PRODUCT_DECISION: from here on only INTENTIONAL post-anchor user scrolls
+       stop the stabilizer. armScrollSuppress on every programmatic scroll keeps
+       our own activity from tripping it. */
     userScrolledFeed=false;
     if(focusEl){
       armedScroll(function(){ focusEl.scrollIntoView({block:'center',behavior:'auto'}); });
-      selectAndCommit(focusEl,true); /* pushes the message onto the back/forward stack */
+      selectAndCommit(focusEl,true);
     } else if(anchorToBottom){
       toBottom();
-      /* Mirror cursorToExtreme(true) (the End-key path): explicitly select
-         the LAST message rather than relying on syncSelectionToScroll, which
-         picks the topmost-fully-in-view — that's the wrong choice when the
-         user just landed at the bottom of the feed. */
+      /* PRODUCT_DECISION: explicit pick of the LAST message, mirroring End-key path.
+         syncSelectionToScroll would pick topmost-fully-in-view — wrong when the
+         user just landed at the bottom. */
       var msgs=visibleMsgs();
       if(msgs.length) selectAndCommit(msgs[msgs.length-1], true);
     } else {
-      /* Reconnect case: keep whatever scroll/selection the user had. */
+      /* PRODUCT_DECISION: reconnect case — keep whatever scroll/selection the user had. */
       syncSelectionToScroll();
     }
-    /* Belt-and-suspenders: re-anchor as each <img> fires `load` (plus a
-       few rAF passes), up to a 5s cap. We stop the moment the user
-       scrolls intentionally — userScrolledFeed is set by the scroll
-       listener only outside our armScrollSuppress windows, so layout
-       growth from image decode (which moves the bottom without moving
-       scrollTop) doesn't get misread as a user scroll. */
+    /* BROWSER_WORKAROUND: image decode grows scrollHeight without moving scrollTop,
+       so we re-anchor on each <img> load (plus a couple rAF passes), up to 5s.
+       userScrolledFeed is set only outside our armScrollSuppress window, so
+       layout growth from image decode doesn't get misread as a user scroll. */
     if(focusEl) stabilizeOn(focusEl, anchorOnFocus);
     else if(anchorToBottom) stabilizeOn(null, anchorOnBottom);
   }
@@ -316,7 +262,7 @@
     var stopAt=Date.now()+5000;
     function fire(){
       if(Date.now()>stopAt) return;
-      reapply(focusEl); /* if it returns false, we just stop calling — image listeners are once-only */
+      reapply(focusEl); /* PRODUCT_DECISION: returning false stops calls — image listeners are once-only. */
     }
     var imgs=bubbles.querySelectorAll('img');
     for(var i=0;i<imgs.length;i++){
@@ -325,24 +271,20 @@
         imgs[i].addEventListener('error', fire, {once:true});
       }
     }
-    /* Two rAF passes catch non-image layout settling (font load, etc.). */
+    /* BROWSER_WORKAROUND: two rAF passes catch non-image layout settling (font load, etc.). */
     requestAnimationFrame(function(){ fire(); requestAnimationFrame(fire); });
   }
   var es=new EventSource(SESSION_BASE+'/stream?since=0');
-  /* Back/forward can restore this page from the bfcache — frozen, including
-     these SSE streams, which the browser tore down when it cached the page.
-     A restored page would show a dead feed (no new messages, no notifications).
-     So if we were restored from bfcache (pageshow persisted), reload to get
-     live streams back. Open EventSources usually block bfcache outright (so
-     back is a normal reload that reconnects + replays the backlog); this is the
-     belt-and-suspenders for browsers that cache anyway. */
+  /* BROWSER_WORKAROUND: bfcache restores frozen pages including the torn-down
+     SSE streams (dead feed, no live messages). Open EventSources usually block
+     bfcache outright, but this is belt-and-suspenders for browsers that cache anyway. */
   window.addEventListener('pageshow', function(e){ if(e.persisted) location.reload(); });
   es.addEventListener('backlog-size', function(e){
-    /* Reset per-connection: fires on initial load AND on every reconnect. */
+    /* PRODUCT_DECISION: per-connection reset — fires on initial load AND every reconnect. */
     wasCaughtUpAtBacklogStart=caughtUp();
     inBacklog=true; backlogSeen=0;
     backlogSize=parseInt(e.data,10) || 0;
-    if(backlogSize===0) finishBacklog(); /* nothing to wait for */
+    if(backlogSize===0) finishBacklog();
   });
   es.onmessage=function(e){
     var m=JSON.parse(e.data);
@@ -350,33 +292,25 @@
       addMessage(m);
       backlogSeen++;
       if(backlogSize!==null && backlogSeen>=backlogSize) finishBacklog(); // lint:null-undefined-check backlogSize-null-until-preamble-arrives
-      return; /* skip per-message scroll/select/refresh during backlog */
+      return;
     }
-    /* Live path: capture caughtUp BEFORE the append (the just-arrived
-       bubble is by definition off-screen until we scroll to it, so a
-       post-append check would always read false). */
+    /* PRODUCT_DECISION: capture caughtUp BEFORE the append — the just-arrived
+       bubble is off-screen until we scroll, so a post-append check always reads false. */
     var stick=caughtUp();
     addMessage(m);
     if(stick){
       toBottom();
-      /* Same as finishBacklog's anchor-to-bottom path: when the feed
-         anchors to the bottom, the cursor should land on the newest
-         message — not on the topmost-fully-in-view that syncSelection-
-         ToScroll would pick. Debounced commit so a burst of incoming
-         messages doesn't flood the back/forward stack. */
+      /* PRODUCT_DECISION: pick the LAST message (not syncSelectionToScroll's
+         topmost-fully-in-view). Debounced commit so a burst doesn't flood the
+         back/forward stack. */
       var msgs=visibleMsgs();
       if(msgs.length) selectAndCommit(msgs[msgs.length-1], false);
     } else {
       syncSelectionToScroll();
     }
-    if(m.cid) ChatCompose.ackIfPending(m.cid); /* our message round-tripped: saved + echoed */
-    if(ChatSearch.isOpen()) ChatSearch.refreshIfOpen(); /* keep an open search current as messages stream in */
+    if(m.cid) ChatCompose.ackIfPending(m.cid); /* PRODUCT_DECISION: our message round-tripped (saved + echoed). */
+    if(ChatSearch.isOpen()) ChatSearch.refreshIfOpen();
   };
-  /* Resilient send + image upload moved to chat_compose.js (see init at
-     the bottom of this IIFE). chat.js stays responsible for the SSE
-     echo path that acks a send — ChatCompose.ackIfPending(m.cid) is
-     called from the stream handler above. */
-  /* --- click any image to zoom (range slider scales height; scroll to pan) --- */
   function showImagePopup(src){
     var dlg=document.createElement('dialog'); dlg.className='chat-img-dialog';
     var controls=document.createElement('div'); controls.className='chat-img-controls';
@@ -391,9 +325,8 @@
     dlg.appendChild(controls); dlg.appendChild(scroll);
     dlg.addEventListener('close',function(){ dlg.remove(); });
     document.body.appendChild(dlg);
-    /* fitW/fitH = largest size that fits the fixed container (computed once
-       the image's natural size + the container size are known); the slider
-       then multiplies that, overflowing into scroll when >1. */
+    /* PRODUCT_DECISION: fitW/fitH = largest size that fits the fixed container
+       (computed once natural + container sizes are known); the slider multiplies. */
     var fitW=0, fitH=0;
     function applyZoom(){ if(!fitW) return; var z=parseFloat(range.value); img.style.width=(fitW*z)+'px'; img.style.height=(fitH*z)+'px'; }
     function fit(){
@@ -408,7 +341,6 @@
     img.src=src;
     if(img.complete) fit();
   }
-  /* --- click any code/pre block to view it full-size in a monospace modal --- */
   function showCodePopup(text){
     var dlg=document.createElement('dialog'); dlg.className='chat-code-dialog';
     var controls=document.createElement('div'); controls.className='chat-code-controls';
@@ -417,38 +349,33 @@
     controls.appendChild(close);
     var pre=document.createElement('pre'); pre.className='chat-code-view'; pre.textContent=text;
     dlg.appendChild(controls); dlg.appendChild(pre);
-    /* The dialog is fit-content (CSS) capped at 80vw/80vh; the <pre> scrolls
-       when the code is larger. Esc (native) or a backdrop click also close it. */
+    /* PRODUCT_DECISION: dialog is fit-content (CSS) capped at 80vw/80vh; the <pre>
+       scrolls when the code is larger. */
     dlg.addEventListener('close',function(){ dlg.remove(); });
     dlg.addEventListener('click',function(e){ if(e.target===dlg) dlg.close(); });
     document.body.appendChild(dlg);
     dlg.showModal();
   }
-  /* Classify a click inside a rendered message body into a semantic target, so
-     every surface that renders a body (the feed, the search-results modal)
-     shares ONE notion of "what did you click" and only has to decide the few
-     behaviors that genuinely differ between them. */
+  /* PRODUCT_DECISION: shared click classifier so every body-rendering surface
+     (feed, search results) has ONE notion of "what did you click" and only
+     decides what differs. */
   function hitInBody(t){
     if(t.tagName==='IMG') return {kind:'image', src:t.src};
     var pre=t.closest&&t.closest('pre'); if(pre) return {kind:'pre', text:pre.textContent};
     if(t.closest&&t.closest('a.msg-ref')) return {kind:'msgref', el:t.closest('a.msg-ref')};
-    if(t.closest&&t.closest('a')) return {kind:'link'}; /* external link: server-baked target=_blank, no JS */
+    if(t.closest&&t.closest('a')) return {kind:'link'}; /* PRODUCT_DECISION: external link, server-baked target=_blank, no JS needed. */
     return {kind:'plain'};
   }
-  /* Image + code popups are identical on every surface: they're native
-     <dialog>s, so opened over the search modal they stack and closing returns
-     to it. Returns true if it handled the hit. */
+  /* BROWSER_WORKAROUND: native <dialog>s stack — popups opened over the search
+     modal close back to it. Returns true if the hit was handled. */
   function openHitMedia(hit){
     if(hit.kind==='image'){ showImagePopup(hit.src); return true; }
     if(hit.kind==='pre'){ showCodePopup(hit.text); return true; }
     return false;
   }
-  /* Feed-only: jump to a MSG_ ref's target and select it. The caller records
-     the source first so Back returns there. If the ref points at a message
-     in ANOTHER session (id prefix differs from current SESSION), we
-     full-page navigate to that session — the receiving page's wantFocusID
-     path (location.hash → scroll+select after backlog) finishes the trip.
-     MPA-style; cross-session refs are uncommon enough that a page load
+  /* PRODUCT_DECISION: MSG_ refs whose target lives in another session full-page
+     navigate, MPA-style. The receiving page's wantFocusID path finishes the trip
+     via location.hash. Cross-session refs are rare enough that the page load
      isn't worth avoiding. */
   function navigateRef(ref){
     var hashTarget=ref.getAttribute('href').replace(/^#/, '');
@@ -458,14 +385,14 @@
       selectAndCommit(tgt,true);
       return;
     }
-    /* Parse <session-id>_<n> out of msg-<id>; session is everything
-       before the LAST underscore (session-ids may contain hyphens but
-       no underscores by construction). */
+    /* PRODUCT_DECISION: parse <session>_<n> out of msg-<id>; session is everything
+       before the LAST underscore (session ids may contain hyphens but no
+       underscores by construction). */
     var id=hashTarget.replace(/^msg-/, '');
     var cut=id.lastIndexOf('_');
     if(cut<=0) return;
     var targetSession=id.substring(0,cut);
-    if(targetSession===SESSION) return; /* same session, target just missing — give up */
+    if(targetSession===SESSION) return; /* PRODUCT_DECISION: same session but target missing — give up. */
     location.href='/chat/c/'+encodeURIComponent(CONV)+'/'+encodeURIComponent(targetSession)+'#msg-'+id;
   }
   function scrollIndexToTop(idx){
@@ -474,20 +401,17 @@
     el.scrollIntoView({block:'start',behavior:'auto'});
     return el;
   }
-  /* Navigate to entries[pos] without recording it, so ←/→ don't create new
-     history themselves (and the scroll they trigger is suppressed). */
   function goToEntry(){
     if(pos<0) return;
     var el; armedScroll(function(){ el=scrollIndexToTop(entries[pos]); }); if(el) selectMsg(el);
     updateNav();
   }
-  /* ← walks back through the committed trail. If you've scrolled away without
-     settling, the first press recovers your committed position (and drops the
-     pending commit, so the forward tail survives); from there each press steps
-     back one. → redoes a back, as long as nothing fresh has reset the tail. */
+  /* PRODUCT_DECISION: ← walks the committed trail. If drifted, the first press
+     recovers entries[pos] (and drops the pending commit, so the forward tail
+     survives); from there each press steps back. → redoes a back. */
   backBtn.addEventListener('click',function(){
     if(commitTimer){ clearTimeout(commitTimer); commitTimer=null; }
-    if(drifted()){ goToEntry(); return; } /* recover to entries[pos] */
+    if(drifted()){ goToEntry(); return; }
     if(pos>0){ pos--; goToEntry(); }
   });
   fwdBtn.addEventListener('click',function(){
@@ -503,93 +427,71 @@
     if(rb){ var rmm=rb.closest('.chat-msg'); if(rmm) referReply(rmm); return; }
     var eb=t.closest&&t.closest('.msg-edit');
     if(eb){ var emm=eb.closest('.chat-msg'); if(emm) editMessage(emm); return; }
-    var msg=t.closest&&t.closest('.chat-msg'); /* any click on a bubble selects it (incl. image / pre / MSG_ ref source) */
+    var msg=t.closest&&t.closest('.chat-msg'); /* PRODUCT_DECISION: any click on a bubble selects it (image / pre / MSG_ ref included). */
     if(msg) selectAndCommit(msg,true);
     var hit=hitInBody(t);
-    if(hit.kind==='msgref'){ e.preventDefault(); navigateRef(hit.el); return; } /* feed: jump to the target */
-    openHitMedia(hit); /* image→zoom, pre→code; link/plain need nothing more */
+    if(hit.kind==='msgref'){ e.preventDefault(); navigateRef(hit.el); return; }
+    openHitMedia(hit);
   });
-  /* --- keyboard navigation of the feed (cursor-aware) --- */
   function visibleMsgs(){
     var out=[], els=bubbles.querySelectorAll('.chat-msg');
     for(var i=0;i<els.length;i++) if(els[i].offsetParent!==null) out.push(els[i]);
     return out;
   }
-  /* Scroll the feed (only the feed, never the page) just enough to bring el
-     into view. When scrolling down, leave a small pad below so the selected-
-     border isn't clipped at the viewport edge and a sliver of the next
-     message peeks through — easier to tell you aren't at the bottom. If the
-     message is taller than viewport-minus-pad, pin its top instead so its
-     top stays visible (the bottom can overflow; arrow-down again from there
-     resolves it normally). */
+  /* PRODUCT_DECISION: scroll only the feed (never the page), with a pad below so
+     the selected-border isn't clipped and the next bubble peeks through.
+     Taller-than-window: pin top instead. */
   function revealInFeed(el){
     var hr=history.getBoundingClientRect(), r=el.getBoundingClientRect();
-    var padBot=48; /* selected-border + a peek of the next bubble */
-    var padTop=6;  /* just enough breathing room to see the top selected-border */
+    var padBot=48; /* PRODUCT_DECISION: selected-border + peek of next bubble. */
+    var padTop=6;  /* PRODUCT_DECISION: breathing room above the top selected-border. */
     if(r.top<hr.top+padTop) history.scrollTop+=r.top-hr.top-padTop;
     else if(r.bottom>hr.bottom-padBot){
       var delta=r.bottom-(hr.bottom-padBot);
-      if(r.top-delta<hr.top+padTop) delta=r.top-hr.top-padTop; /* taller than window: pin top with breathing room */
+      if(r.top-delta<hr.top+padTop) delta=r.top-hr.top-padTop; /* PRODUCT_DECISION: taller than window — pin top. */
       history.scrollTop+=delta;
     }
   }
-  /* Move the cursor by delta messages (clamped), revealing it. Scroll-driven
-     reselection is briefly suppressed so our explicit pick isn't overridden. */
   function moveCursor(delta){
     var msgs=visibleMsgs();
-    if(!msgs.length){ history.scrollTop+=delta*40; return; } /* transcript view: just scroll */
+    if(!msgs.length){ history.scrollTop+=delta*40; return; } /* PRODUCT_DECISION: transcript view — just scroll. */
     var idx=selected?msgs.indexOf(selected):-1;
     if(idx<0){ var c=selectionCandidate(); idx=c?msgs.indexOf(c):0; if(idx<0) idx=0; }
     else idx=Math.max(0,Math.min(msgs.length-1,idx+delta));
     selectAndCommit(msgs[idx],false); armedScroll(function(){ revealInFeed(msgs[idx]); }); updateNav();
   }
-  /* Jump cursor + feed to the very top (bottom=false) or bottom (bottom=true). */
   function cursorToExtreme(bottom){
     armedScroll(function(){ history.scrollTop=bottom?history.scrollHeight:0; });
     var msgs=visibleMsgs(); if(!msgs.length) return;
     selectAndCommit(bottom?msgs[msgs.length-1]:msgs[0],true); updateNav();
   }
-  /* PgUp/PgDn: page the feed if it can scroll that way (cursor follows the
-     scroll via the scroll listener); if it can't, send the cursor to the extreme. */
+  /* PRODUCT_DECISION: PgUp/PgDn pages the feed if scrollable; if not, sends the cursor to the extreme. */
   function pageNav(dir){
     var canScroll=dir<0 ? history.scrollTop>0
                         : history.scrollTop+history.clientHeight<history.scrollHeight-1;
     if(canScroll) history.scrollTop+=dir*Math.max(40,history.clientHeight-40);
     else cursorToExtreme(dir>0);
   }
-  /* The search modal (~180 lines) moved to chat_search.js so the feed
-     code reads in isolation; chat.js hands it the shared helpers + DOM
-     refs at init time. The cross-session notification feed + favicon-
-     tab-alert is in notify.js (loaded as a third sibling on this and
-     every other chat-subsystem page). */
   ChatSearch.init({
     bubbles: bubbles, history: history,
     selectAndCommit: selectAndCommit, armedScroll: armedScroll,
     scrollToIndex: scrollToIndex, updateNav: updateNav, idxOf: idxOf,
     hitInBody: hitInBody, openHitMedia: openHitMedia,
   });
-  /* The left sidebar (Conversations / Pinned / Sessions / Add Topic
-     form + pointer drag-to-pin + sidebar SSE consumer) — only dep is
-     CONV. */
   ChatLeftSidebar.init({ conv: CONV });
-  /* Right sidebar (slim by design): owns the open/closed toggle of the
-     right pane. Compose calls closeCompose for Esc-empty; chat.js calls
-     openCompose for quote/refer/edit; chat_help.js calls openCompose
-     for the "c" keybind. */
+  /* PRODUCT_DECISION: chat.js opens compose for quote/refer/edit; chat_help opens
+     for the "c" keybind; compose closes itself on Esc-empty. */
   ChatRightSidebar.init({
     composeBody: composeBody, closedPanel: closedPanel,
     textarea: textarea, history: history,
   });
-  /* Compose: form submit, send-state machine, image upload, alerts. */
   ChatCompose.init({
     textarea: textarea, form: form, status: status,
     imageBtn: imageBtn, fileInput: fileInput,
     sessionBase: SESSION_BASE,
     closeCompose: ChatRightSidebar.closeCompose,
   });
-  /* Global keydown dispatcher — keys map 1:1 to the chat-keyhelp panel
-     visible on the closed-compose side. Filters: feed-focused only
-     (text inputs skipped), no chord modifiers. */
+  /* PRODUCT_DECISION: keys map 1:1 to the chat-keyhelp panel on the closed-compose side. */
   ChatHelp.init({
     openCompose: ChatRightSidebar.openCompose,
     backBtn: backBtn, fwdBtn: fwdBtn,
