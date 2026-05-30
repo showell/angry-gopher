@@ -382,6 +382,13 @@ func AppendChatMessage(from users.User, partnerID, sessionID, body, cid string) 
 	// upserts this (conv, session) row to the top. Same lock order as
 	// notify — recentMu is a leaf.
 	PublishChatRecent(convKey, sessionID, msg.At)
+	// First message in this session → the session is brand new (covers both
+	// HandleChatNewTopic's seeded "hi" and date sessions auto-created on
+	// first send). Ping BOTH participants' /chat/sidebar streams so an open
+	// conversation page upserts a Sessions row without a reload.
+	if index == 0 {
+		PublishTopicAdded(convKey, sessionID)
+	}
 	return msg, nil
 }
 

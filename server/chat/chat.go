@@ -501,7 +501,7 @@ func renderChatSidebar(w http.ResponseWriter, user users.User, partnerID, conv, 
 	fmt.Fprint(w, `<aside class="chat-sidebar">`)
 
 	// Conversations: every other authorized principal as a row.
-	fmt.Fprint(w, `<div class="chat-sidebar-section"><div class="chat-sidebar-title">Conversations</div><ul class="chat-sidebar-list">`)
+	fmt.Fprint(w, `<div class="chat-sidebar-section"><div class="chat-sidebar-title">Conversations</div><ul class="chat-sidebar-list" data-section="conversations">`)
 	for _, m := range users.ListAuthorized() {
 		if m.ID == user.ID {
 			continue
@@ -511,8 +511,8 @@ func renderChatSidebar(w http.ResponseWriter, user users.User, partnerID, conv, 
 		if theirConv == conv {
 			cls = ` class="active"`
 		}
-		fmt.Fprintf(w, `<li><a href="/chat/c/%s"%s>%s</a></li>`,
-			theirConv, cls, html.EscapeString(m.Name))
+		fmt.Fprintf(w, `<li data-uid="%s"><a href="/chat/c/%s"%s>%s</a></li>`,
+			html.EscapeString(m.ID), theirConv, cls, html.EscapeString(m.Name))
 	}
 	fmt.Fprint(w, `</ul></div>`)
 

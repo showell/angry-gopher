@@ -123,6 +123,11 @@ func HandleLoginFull(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "register: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
+	// Notify subscribers (currently: chat's sidebar SSE) that a new
+	// authorized principal exists. Whether this was a fresh allocation
+	// or a guest→member promotion, they were NOT a chat partner before
+	// and ARE one now — that's what the sidebar cares about.
+	users.FireNewMember(id, name)
 	loginAsMember(w, r, id, next)
 }
 
