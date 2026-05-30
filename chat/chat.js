@@ -43,12 +43,21 @@
     backBtn.disabled=!(pos>0||drifted()); /* PRODUCT_DECISION: drift enables ← as "recover to where I was". */
     fwdBtn.disabled=!(pos<entries.length-1);
   }
+  /* PRODUCT_DECISION: keep location.hash in sync with the selected message via
+     history.replaceState — visible in the URL bar (copy/share works, refresh
+     re-uses the wantFocusID path), but doesn't add browser-history entries so
+     the native back button stays sparse. */
+  function updateHash(){
+    if(!selected) return;
+    history.replaceState({}, '', '#msg-'+selected.getAttribute('data-id'));
+  }
   function recordNav(idx){
     /* PRODUCT_DECISION: curEntry()=null when nav-history empty; ignore re-select. lint:null-undefined-check legit-absence-sentinel */
     if(idx===null||idx===curEntry()) return;
     entries.length=pos+1; /* PRODUCT_DECISION: drop the forward tail — fresh nav resets it. */
     entries.push(idx); pos=entries.length-1;
     updateNav();
+    updateHash();
   }
   function commitSelection(idx, immediate){
     if(commitTimer){ clearTimeout(commitTimer); commitTimer=null; }
@@ -373,10 +382,10 @@
     if(hit.kind==='pre'){ showCodePopup(hit.text); return true; }
     return false;
   }
-  /* PRODUCT_DECISION: MSG_ refs whose target lives in another session full-page
-     navigate, MPA-style. The receiving page's wantFocusID path finishes the trip
-     via location.hash. Cross-session refs are rare enough that the page load
-     isn't worth avoiding. */
+  /* PRODUCT_DECISION: cross-session MSG_ refs open in a new tab — the source
+     tab stays parked, no nav-stack to engineer, closing the new tab is the
+     back button. The destination uses the same wantFocusID hash-driven scroll
+     as any first-load. Same-session refs stay in-page. */
   function navigateRef(ref){
     var hashTarget=ref.getAttribute('href').replace(/^#/, '');
     var tgt=document.getElementById(hashTarget);
@@ -393,7 +402,7 @@
     if(cut<=0) return;
     var targetSession=id.substring(0,cut);
     if(targetSession===SESSION) return; /* PRODUCT_DECISION: same session but target missing — give up. */
-    location.href='/chat/c/'+encodeURIComponent(CONV)+'/'+encodeURIComponent(targetSession)+'#msg-'+id;
+    window.open('/chat/c/'+encodeURIComponent(CONV)+'/'+encodeURIComponent(targetSession)+'#msg-'+id, '_blank');
   }
   function scrollIndexToTop(idx){
     var el=bubbles.querySelector('.chat-msg[data-i="'+idx+'"]');
@@ -405,6 +414,7 @@
     if(pos<0) return;
     var el; armedScroll(function(){ el=scrollIndexToTop(entries[pos]); }); if(el) selectMsg(el);
     updateNav();
+    updateHash();
   }
   /* PRODUCT_DECISION: ← walks the committed trail. If drifted, the first press
      recovers entries[pos] (and drops the pending commit, so the forward tail
