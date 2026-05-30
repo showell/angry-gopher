@@ -49,7 +49,9 @@
      the native back button stays sparse. */
   function updateHash(){
     if(!selected) return;
-    history.replaceState({}, '', '#msg-'+selected.getAttribute('data-id'));
+    /* BROWSER_WORKAROUND: window.history — chat.js shadows the global `history`
+       with the #chat-history DOM element near the top of this IIFE. */
+    window.history.replaceState({}, '', '#msg-'+selected.getAttribute('data-id'));
   }
   function recordNav(idx){
     /* PRODUCT_DECISION: curEntry()=null when nav-history empty; ignore re-select. lint:null-undefined-check legit-absence-sentinel */
