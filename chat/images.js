@@ -11,13 +11,39 @@
   var emptyEl = document.getElementById('images-empty');
   if(!listEl) return;
 
+  var MONTHS = ['January','February','March','April','May','June',
+                'July','August','September','October','November','December'];
+  // lint:called-once date-formatter
+  function formatWhen(iso){
+    /* PRODUCT_DECISION: matches the server-side renderer ("January 2, 2006 15:04",
+       UTC) — initial render + SSE upserts share one format so the page reads
+       consistently when both old + new entries are visible. */
+    var d = new Date(iso);
+    var hh = d.getUTCHours(), mm = d.getUTCMinutes();
+    return MONTHS[d.getUTCMonth()] + ' ' + d.getUTCDate() + ', ' + d.getUTCFullYear() + ' ' +
+           (hh < 10 ? '0' : '') + hh + ':' + (mm < 10 ? '0' : '') + mm;
+  }
+
   function buildEntry(evt){
     var li = document.createElement('li');
     li.className = 'images-entry';
     li.setAttribute('data-source-id', evt.source_id);
+
     var meta = document.createElement('div');
     meta.className = 'images-entry-meta';
-    meta.appendChild(document.createTextNode('From '));
+
+    var line1 = document.createElement('div'); line1.className = 'images-entry-meta-line';
+    var from = document.createElement('span'); from.className = 'images-entry-meta-from';
+    from.textContent = 'Sent by ' + evt.from;
+    line1.appendChild(from);
+    meta.appendChild(line1);
+
+    var line2 = document.createElement('div'); line2.className = 'images-entry-meta-line';
+    line2.textContent = formatWhen(evt.at);
+    meta.appendChild(line2);
+
+    var line3 = document.createElement('div'); line3.className = 'images-entry-meta-line';
+    line3.appendChild(document.createTextNode('From '));
     var a = document.createElement('a');
     /* PRODUCT_DECISION: split source_id into <sid>_<n> on the LAST underscore
        (sids may contain hyphens but no underscores by construction). */
@@ -26,8 +52,9 @@
     a.href = '/chat/c/' + encodeURIComponent(evt.conv) +
              (sid ? '/' + encodeURIComponent(sid) + '#msg-' + evt.source_id : '');
     a.textContent = 'MSG_' + evt.source_id;
-    meta.appendChild(a);
-    meta.appendChild(document.createTextNode(' by ' + evt.from + ' in ' + evt.conv));
+    line3.appendChild(a);
+    meta.appendChild(line3);
+
     li.appendChild(meta);
     var imgs = document.createElement('div');
     imgs.className = 'images-entry-imgs';

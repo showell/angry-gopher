@@ -68,10 +68,13 @@ func userImagesPath(uid string) string {
 }
 
 // formatImagesEntry serializes an entry to its on-disk text form (no
-// leading or trailing separator — caller joins with imagesSep).
+// leading or trailing separator — caller joins with imagesSep). The
+// header line carries all metadata; rendering composes the visual
+// 3-line header from these fields.
 func formatImagesEntry(e imagesEntry) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "From MSG_%s by %s in %s:\n", e.SourceID, e.From, e.Conv)
+	fmt.Fprintf(&b, "Sent by %s at %s, source MSG_%s in %s:\n",
+		e.From, e.At.UTC().Format(time.RFC3339), e.SourceID, e.Conv)
 	for _, tag := range e.Images {
 		b.WriteString(tag)
 		b.WriteString("\n")
@@ -87,7 +90,7 @@ func parseImagesFile(text string) []imagesEntry {
 	}
 	blocks := strings.Split(text, imagesSep)
 	out := make([]imagesEntry, 0, len(blocks))
-	headerRe := regexp.MustCompile(`^From MSG_(\S+) by (.+) in (\S+):$`)
+	headerRe := regexp.MustCompile(`^Sent by (.+) at (\S+), source MSG_(\S+) in (\S+):$`)
 	for _, block := range blocks {
 		block = strings.TrimSpace(block)
 		if block == "" {
@@ -101,10 +104,12 @@ func parseImagesFile(text string) []imagesEntry {
 		if m == nil {
 			continue // malformed entry, skip
 		}
+		at, _ := time.Parse(time.RFC3339, m[2])
 		out = append(out, imagesEntry{
-			SourceID: m[1],
-			From:     m[2],
-			Conv:     m[3],
+			SourceID: m[3],
+			From:     m[1],
+			Conv:     m[4],
+			At:       at,
 			Images:   imageTagRe.FindAllString(strings.Join(lines[1:], "\n"), -1),
 		})
 	}
@@ -247,6 +252,7 @@ func HandleImages(w http.ResponseWriter, r *http.Request) {
 	chatPageHeader(w, "Images", user, "images")
 	fmt.Fprint(w, `<div class="chat-notify" id="chat-notify"></div>`)
 	fmt.Fprint(w, imagesCSS)
+	fmt.Fprint(w, imagePopupCSS)
 	renderImagesList(w, entries)
 	fmt.Fprintf(w,
 		`<script src="/chat/chat_image_popup.js?v=%s"></script>`+
@@ -272,12 +278,18 @@ func readImagesForUser(uid string) ([]imagesEntry, error) {
 }
 
 const imagesCSS = `<style>
-.images-list { list-style: none; padding: 0; margin: 0; }
-.images-entry { margin: 0 0 24px 0; padding: 12px 14px; border: 1px solid #e0e0e0; border-radius: 6px; background: #fafafa; }
-.images-entry-meta { font-size: 12px; color: #888; margin-bottom: 8px; }
-.images-entry-meta a { color: #444; text-decoration: none; }
+/* PRODUCT_DECISION: 600px cap matches chat-main, so images render at the
+   same widths the user remembers from the feed (natural aspect ratio,
+   height-capped at 320px). */
+.images-list { list-style: none; padding: 0; margin: 0 auto; max-width: 600px; }
+.images-entry { margin: 0 0 28px 0; padding: 14px 16px; border: 1px solid #e0e0e0; border-radius: 6px; background: #fafafa; }
+.images-entry-meta { font-size: 15px; color: #333; margin-bottom: 10px; line-height: 1.5; }
+.images-entry-meta-line { margin: 1px 0; }
+.images-entry-meta a { color: #333; text-decoration: none; }
 .images-entry-meta a:hover { text-decoration: underline; }
-.images-entry-imgs img { max-width: 200px; max-height: 200px; margin: 0 8px 8px 0; vertical-align: middle; border-radius: 4px; cursor: pointer; }
+.images-entry-meta-from { font-weight: 600; }
+.images-entry-imgs img { max-width: 100%; max-height: 320px; width: auto; height: auto;
+                         display: block; margin: 6px 0; border-radius: 6px; cursor: zoom-in; }
 </style>`
 
 // renderImagesList emits the page body in forward-chronological order
@@ -306,10 +318,18 @@ func writeImagesEntry(w http.ResponseWriter, e imagesEntry) {
 	if ok {
 		href += "/" + url.PathEscape(sid) + "#msg-" + e.SourceID
 	}
+	when := e.At.UTC().Format("January 2, 2006 15:04")
 	fmt.Fprintf(w,
-		`<li class="images-entry" data-source-id="%s"><div class="images-entry-meta">From <a href="%s">MSG_%s</a> by %s in %s</div><div class="images-entry-imgs">`,
-		html.EscapeString(e.SourceID), href, html.EscapeString(e.SourceID),
-		html.EscapeString(e.From), html.EscapeString(e.Conv))
+		`<li class="images-entry" data-source-id="%s"`+
+			`><div class="images-entry-meta">`+
+			`<div class="images-entry-meta-line"><span class="images-entry-meta-from">Sent by %s</span></div>`+
+			`<div class="images-entry-meta-line">%s</div>`+
+			`<div class="images-entry-meta-line">From <a href="%s">MSG_%s</a></div>`+
+			`</div><div class="images-entry-imgs">`,
+		html.EscapeString(e.SourceID),
+		html.EscapeString(e.From),
+		html.EscapeString(when),
+		href, html.EscapeString(e.SourceID))
 	for _, tag := range e.Images {
 		fmt.Fprint(w, tag)
 	}
