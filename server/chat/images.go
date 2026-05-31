@@ -8,23 +8,19 @@
 //
 // Each on-disk entry follows the chat-transcript format pattern (text +
 // "\n-------------\n" separators), so the file is human-readable. Header
-// line names the source MSG_<sid>_<n>, the sender, the conv; image
+// line names sender, timestamp, source MSG_<sid>_<n>, and conv; image
 // tag(s) follow on subsequent lines.
 //
-//   From MSG_obsidianweb_42 by apoorva in 1_2:
+//   Sent by apoorva at 2026-05-29T01:56:58Z, source MSG_obsidianweb_42 in 1_2:
 //   <img src="..." alt="...">
 //   -------------
-//   From MSG_general1_5 by Steve in 1_2:
+//   Sent by Steve at 2026-05-30T14:46:10Z, source MSG_general1_5 in 1_2:
 //   <img src="...">
 //   <img src="...">
 //
-// Two write paths:
-//   - Lazy migration: first GET to /chat/images for a user with no
-//     images.md walks every conv they participate in, every session,
-//     every message, extracts img tags, builds the file.
-//   - Live append: AppendChatMessage looks for <img> tags in each new
-//     body and writes to BOTH conv participants' images.md, publishing
-//     an SSE event per write.
+// Write path: AppendChatMessage calls PublishChatImage on every message;
+// if the body contains <img> tags, the entry appends to BOTH conv
+// participants' images.md and an SSE event publishes to any live viewer.
 //
 // Read path: page render reads the file, splits on separator, emits in
 // on-disk order (oldest first).
@@ -42,7 +38,6 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -144,62 +139,6 @@ func appendImagesEntryLocked(uid string, e imagesEntry) error {
 	return nil
 }
 
-// migrateImagesForUser walks every conv the user participates in + every
-// session in each, collects every image-bearing message, sorts the whole
-// set chronologically (oldest first), and writes them out as one stream.
-// Idempotent on the file's existence: if the file already exists, this
-// is a no-op.
-//
-// PRODUCT_DECISION: collect-then-sort, not per-conv concatenation. A
-// user with 3 active convs would otherwise see [conv1 chrono][conv2
-// chrono][conv3 chrono] — Jan/Feb/Mar from one source followed by
-// Jan/Feb/Mar from the next, instead of one true timeline.
-func migrateImagesForUser(uid string) error {
-	path := userImagesPath(uid)
-	if _, err := os.Stat(path); err == nil {
-		return nil // already migrated
-	}
-	imagesMuFor(uid).Lock()
-	defer imagesMuFor(uid).Unlock()
-	// Re-check under lock.
-	if _, err := os.Stat(path); err == nil {
-		return nil
-	}
-	var entries []imagesEntry
-	for _, partner := range users.ListAuthorized() {
-		if partner.ID == uid {
-			continue
-		}
-		conv := chatPairKey(uid, partner.ID)
-		for _, sid := range ListChatSessions(uid, partner.ID) {
-			msgs, err := ReadChatSession(uid, partner.ID, sid)
-			if err != nil {
-				continue
-			}
-			for _, msg := range msgs {
-				tags := imageTagRe.FindAllString(msg.Body, -1)
-				if len(tags) == 0 {
-					continue
-				}
-				entries = append(entries, imagesEntry{
-					SourceID: msg.ID,
-					From:     msg.From,
-					Conv:     conv,
-					At:       msg.At,
-					Images:   tags,
-				})
-			}
-		}
-	}
-	sort.Slice(entries, func(i, j int) bool { return entries[i].At.Before(entries[j].At) })
-	for _, e := range entries {
-		if err := appendImagesEntryLocked(uid, e); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 // PublishChatImage fans an image-bearing chat message out to BOTH conv
 // participants' images.md files + their live SSE streams. Called from
 // AppendChatMessage when the body contains <img ...> tags. Lock order:
@@ -250,10 +189,6 @@ func HandleImages(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	user := users.CurrentUser(r)
-	if err := migrateImagesForUser(user.ID); err != nil {
-		http.Error(w, "migration failed: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
 	entries, err := readImagesForUser(user.ID)
 	if err != nil {
 		http.Error(w, "read failed: "+err.Error(), http.StatusInternalServerError)
