@@ -6,10 +6,12 @@
 window.ChatSearch = (function(){
   'use strict';
 
-  /* PRODUCT_DECISION: host-supplied refs/helpers populated by init(). */
+  /* PRODUCT_DECISION: host-supplied refs/helpers populated by init().
+     jumpToEl(el) is the one feed-side callback — given a feed bubble DOM,
+     scroll it into focus + select it + record on nav stack. Body-click
+     classification + popups come from Message.* statics (no callbacks). */
   var bubbles, history;
-  var selectAndCommit, armedScroll, scrollToIndex, updateNav, idxOf;
-  var hitInBody, openHitMedia;
+  var jumpToEl;
 
   var SEARCH_MIN=2, SUGGEST_CAP=10, SNIPPET_PAD=90;
   /* PRODUCT_DECISION: smart-case — case-sensitive only if the query has uppercase. */
@@ -156,7 +158,7 @@ window.ChatSearch = (function(){
     if(SR.sel<0||!SR.items[SR.sel]) return;
     var el=SR.items[SR.sel].el;
     closeSearchModal();
-    selectAndCommit(el,true); armedScroll(function(){ scrollToIndex(idxOf(el)); }); updateNav(); /* PRODUCT_DECISION: jump + push nav stack. */
+    jumpToEl(el); /* PRODUCT_DECISION: jump + push nav stack. */
   }
   function onSearchKey(e){
     if(e.key==='ArrowDown'){ e.preventDefault(); if(SR.items.length){ SR.sel=Math.min(SR.items.length-1,SR.sel+1); paintSel(); } }
@@ -169,9 +171,10 @@ window.ChatSearch = (function(){
     SR.sel=parseInt(row.getAttribute('data-i'),10); paintSel();
     if(SR.phase==='suggest'){ finalizeSearch(); return; }
     /* PRODUCT_DECISION: results-mode click behavior differs from the feed only here. */
-    var hit=hitInBody(e.target);
+    var hit=Message.classifyBodyClick(e.target);
     if(hit.kind==='msgref'){ e.preventDefault(); return; } /* PRODUCT_DECISION: MSG_ refs inert inside search. */
-    if(openHitMedia(hit)) return;                          /* PRODUCT_DECISION: image→zoom, pre→code (stacked). */
+    if(hit.kind==='image'){  Message.showImagePopup(hit.src);   return; }
+    if(hit.kind==='pre'){    Message.showCodePopup(hit.text);   return; }
     if(hit.kind==='link') return;                          /* PRODUCT_DECISION: external link → new tab. */
     chooseResult();                                        /* PRODUCT_DECISION: plain click → jump to this message. */
   }
@@ -183,9 +186,7 @@ window.ChatSearch = (function(){
 
   function init(deps){
     bubbles=deps.bubbles; history=deps.history;
-    selectAndCommit=deps.selectAndCommit; armedScroll=deps.armedScroll;
-    scrollToIndex=deps.scrollToIndex; updateNav=deps.updateNav; idxOf=deps.idxOf;
-    hitInBody=deps.hitInBody; openHitMedia=deps.openHitMedia;
+    jumpToEl=deps.jumpToEl;
     var searchBtn=document.getElementById('chat-search-btn');
     if(searchBtn) searchBtn.addEventListener('click', openSearchModal);
   }

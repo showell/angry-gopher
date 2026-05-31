@@ -412,6 +412,27 @@ func HandleNotifyJS(w http.ResponseWriter, r *http.Request) {
 	web.ServeJS(w, NotifyJSPath, "notify.js missing from the binary")
 }
 
+// MessageJSPath is the per-bubble Message class — owns the bubble DOM,
+// click routing, image/code popups, and in-place "Edit of MSG_*"
+// supersession. Exposes Message.classifyBodyClick / showImagePopup /
+// showCodePopup as module-level statics so search results can reuse them.
+var MessageJSPath = "chat/message.js"
+
+// HandleMessageJS serves the Message module from the embedded assets.
+func HandleMessageJS(w http.ResponseWriter, r *http.Request) {
+	web.ServeJS(w, MessageJSPath, "message.js missing from the binary")
+}
+
+// MessageViewJSPath is the list-of-bubbles widget — owns selection state,
+// scroll-driven re-selection, arrow/Home/End/PgUp/PgDn keys, backlog
+// batch mode, and the image-decode stabilizer.
+var MessageViewJSPath = "chat/message_view.js"
+
+// HandleMessageViewJS serves the MessageView module from the embedded assets.
+func HandleMessageViewJS(w http.ResponseWriter, r *http.Request) {
+	web.ServeJS(w, MessageViewJSPath, "message_view.js missing from the binary")
+}
+
 // validChatPartner reports whether partner id is a usable conversation
 // partner for user id: another authorized principal (member or agent),
 // not yourself or empty.
@@ -481,20 +502,22 @@ func renderChatConversation(w http.ResponseWriter, user users.User, partnerID, c
   </div>
 </div></div>`)
 
-	// All five sibling modules must load BEFORE chat.js — chat.js's IIFE
-	// calls each .init at the bottom, and the browser executes <script>
-	// tags in document order for these non-module siblings. notify.js
-	// loads after chat.js (no init dependency on it; chat.js doesn't
-	// reference it).
+	// All sibling modules load BEFORE chat.js — chat.js's IIFE calls each
+	// .init/use at the bottom, and the browser executes <script> tags in
+	// document order for these non-module siblings. message.js and
+	// message_view.js are foundational (used by chat.js's IIFE itself, not
+	// just via init). notify.js loads after chat.js (no init dep).
 	v := url.QueryEscape(web.AssetVersion)
-	fmt.Fprintf(w, `</div><script src="/chat/chat_search.js?v=%s"></script>`+
+	fmt.Fprintf(w, `</div><script src="/chat/message.js?v=%s"></script>`+
+		`<script src="/chat/message_view.js?v=%s"></script>`+
+		`<script src="/chat/chat_search.js?v=%s"></script>`+
 		`<script src="/chat/chat_left_sidebar.js?v=%s"></script>`+
 		`<script src="/chat/chat_right_sidebar.js?v=%s"></script>`+
 		`<script src="/chat/chat_compose.js?v=%s"></script>`+
 		`<script src="/chat/chat_help.js?v=%s"></script>`+
 		`<script src="/chat/chat.js?v=%s"></script>`+
 		`<script src="/chat/notify.js?v=%s"></script>`,
-		v, v, v, v, v, v, v)
+		v, v, v, v, v, v, v, v, v)
 
 	web.PageFooter(w)
 }

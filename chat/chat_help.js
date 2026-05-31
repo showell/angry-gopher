@@ -24,7 +24,7 @@ window.ChatHelp = (function(){
      a selection passes through to the browser, no preventDefault). */
   function dispatch(entry, deps){
     if(entry.requiresSelection){
-      var s = deps.getSelected();
+      var s = deps.getSelectedMessage();
       if(!s) return false;
       entry.action(s);
     } else {
@@ -66,20 +66,10 @@ window.ChatHelp = (function(){
       if(ae && (ae.tagName==='TEXTAREA' || ae.tagName==='INPUT' || ae.isContentEditable)) return;
       if(e.ctrlKey || e.metaKey || e.altKey) return;
       var entry = byKey[e.key];
-      if(entry){
-        if(dispatch(entry, deps)) e.preventDefault();
-        return;
-      }
-      /* PRODUCT_DECISION: cursor-nav keys aren't in the keyhelp panel — they're
-         self-documenting and don't need clickable buttons. */
-      switch(e.key){
-        case 'ArrowDown': e.preventDefault(); deps.moveCursor(1); return;
-        case 'ArrowUp':   e.preventDefault(); deps.moveCursor(-1); return;
-        case 'Home':      e.preventDefault(); deps.cursorToExtreme(false); return;
-        case 'End':       e.preventDefault(); deps.cursorToExtreme(true); return;
-        case 'PageDown':  e.preventDefault(); deps.pageNav(1); return;
-        case 'PageUp':    e.preventDefault(); deps.pageNav(-1); return;
-      }
+      if(entry && dispatch(entry, deps)) e.preventDefault();
+      /* PRODUCT_DECISION: cursor-nav keys (Arrow/Home/End/PgUp/PgDn) are NOT
+         handled here — MessageView owns them. ChatHelp dispatches the letter
+         shortcuts (panel-visible) only. */
     });
   }
   return { init:init };

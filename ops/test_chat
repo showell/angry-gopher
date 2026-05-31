@@ -41,6 +41,12 @@ phase "chat-compose-js" node --check chat/chat_compose.js
 echo "==> chat_help.js syntax"
 phase "chat-help-js" node --check chat/chat_help.js
 
+echo "==> message.js syntax"
+phase "message-js" node --check chat/message.js
+
+echo "==> message_view.js syntax"
+phase "message-view-js" node --check chat/message_view.js
+
 echo "==> docs.js syntax"
 phase "docs-js" node --check chat/docs.js
 
@@ -52,6 +58,9 @@ phase "recent-js" node --check chat/recent.js
 
 echo "==> chat_client.py syntax"
 phase "chat-py" python3 -m py_compile chat/chat_client.py
+
+echo "==> JS paper-over + dead-code lint"
+phase "js-lint" python3 tools/lint.py
 
 echo
 echo "Chat gate passed."
