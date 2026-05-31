@@ -77,38 +77,57 @@ func userCodePath(uid string) string {
 // PRODUCT_DECISION: tilde fences are included EXCEPT `~~~ quote` (the
 // quote-reply marker). Steve sometimes types `~~~ go` or `~~~ python`
 // to introduce a code block; those count too.
+//
+// PRODUCT_DECISION: per CommonMark, a closing fence is the marker char(s)
+// only — info text is NOT allowed on the close. So `~~~quote` (info text
+// "quote") is NOT a closing fence; it's content. This matters for a
+// `~~~ quote\n~~~quote\n...\n~~~\n` quote-of-a-quote pattern, where the
+// outer fence's body legitimately contains a line starting with `~~~`.
 func extractCodeBlocks(body string) []codeBlock {
 	var out []codeBlock
 	lines := strings.Split(body, "\n")
 	i := 0
 	for i < len(lines) {
 		line := lines[i]
-		var marker, lang string
+		var markerChar byte
+		var lang string
 		switch {
 		case strings.HasPrefix(line, "```"):
-			marker = "```"
+			markerChar = '`'
 			lang = strings.TrimSpace(line[3:])
 		case strings.HasPrefix(line, "~~~"):
-			marker = "~~~"
+			markerChar = '~'
 			lang = strings.TrimSpace(line[3:])
 		default:
 			i++
 			continue
 		}
-		// Scan forward to a closing fence (any line that starts with the
-		// same marker) or end-of-body.
+		// Scan forward to a closing fence or end-of-body.
 		start := i + 1
 		j := start
-		for j < len(lines) && !strings.HasPrefix(lines[j], marker) {
+		for j < len(lines) && !isCloseFence(lines[j], markerChar) {
 			j++
 		}
 		content := strings.Join(lines[start:j], "\n")
-		if !(marker == "~~~" && lang == "quote") {
+		if !(markerChar == '~' && lang == "quote") {
 			out = append(out, codeBlock{Lang: lang, Body: content})
 		}
 		i = j + 1
 	}
 	return out
+}
+
+func isCloseFence(line string, markerChar byte) bool {
+	stripped := strings.TrimRight(line, " \t")
+	if len(stripped) < 3 {
+		return false
+	}
+	for i := 0; i < len(stripped); i++ {
+		if stripped[i] != markerChar {
+			return false
+		}
+	}
+	return true
 }
 
 func formatCodeEntry(e codeEntry) string {
