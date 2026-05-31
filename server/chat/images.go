@@ -42,6 +42,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -144,9 +145,15 @@ func appendImagesEntryLocked(uid string, e imagesEntry) error {
 }
 
 // migrateImagesForUser walks every conv the user participates in + every
-// session in each, builds the images.md file in chronological order.
+// session in each, collects every image-bearing message, sorts the whole
+// set chronologically (oldest first), and writes them out as one stream.
 // Idempotent on the file's existence: if the file already exists, this
 // is a no-op.
+//
+// PRODUCT_DECISION: collect-then-sort, not per-conv concatenation. A
+// user with 3 active convs would otherwise see [conv1 chrono][conv2
+// chrono][conv3 chrono] — Jan/Feb/Mar from one source followed by
+// Jan/Feb/Mar from the next, instead of one true timeline.
 func migrateImagesForUser(uid string) error {
 	path := userImagesPath(uid)
 	if _, err := os.Stat(path); err == nil {
@@ -158,6 +165,7 @@ func migrateImagesForUser(uid string) error {
 	if _, err := os.Stat(path); err == nil {
 		return nil
 	}
+	var entries []imagesEntry
 	for _, partner := range users.ListAuthorized() {
 		if partner.ID == uid {
 			continue
@@ -173,17 +181,20 @@ func migrateImagesForUser(uid string) error {
 				if len(tags) == 0 {
 					continue
 				}
-				e := imagesEntry{
+				entries = append(entries, imagesEntry{
 					SourceID: msg.ID,
 					From:     msg.From,
 					Conv:     conv,
 					At:       msg.At,
 					Images:   tags,
-				}
-				if err := appendImagesEntryLocked(uid, e); err != nil {
-					return err
-				}
+				})
 			}
+		}
+	}
+	sort.Slice(entries, func(i, j int) bool { return entries[i].At.Before(entries[j].At) })
+	for _, e := range entries {
+		if err := appendImagesEntryLocked(uid, e); err != nil {
+			return err
 		}
 	}
 	return nil
