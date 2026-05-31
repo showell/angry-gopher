@@ -386,6 +386,10 @@ func AppendChatMessage(from users.User, partnerID, sessionID, body, cid string) 
 	// <img ...> tags + ping their /chat/images streams. Lock order:
 	// chatMu (held) → imagesFileMu (leaf, per-user).
 	PublishChatImage(convKey, sessionID, msg)
+	// Same shape for code: append to BOTH participants' code transcripts if
+	// the body contains triple-backtick fenced code blocks + ping their
+	// /chat/code streams. Lock order: chatMu (held) → codeFileMu (leaf).
+	PublishChatCode(convKey, sessionID, msg)
 	// First message in this session → the session is brand new (covers both
 	// HandleChatNewTopic's seeded "hi" and date sessions auto-created on
 	// first send). Ping BOTH participants' /chat/sidebar streams so an open

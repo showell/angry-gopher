@@ -182,8 +182,8 @@ window.ChatSearch = (function(){
     /* PRODUCT_DECISION: results-mode click behavior differs from the feed only here. */
     var hit=Message.classifyBodyClick(e.target);
     if(hit.kind==='msgref'){ e.preventDefault(); return; } /* PRODUCT_DECISION: MSG_ refs inert inside search. */
-    if(hit.kind==='image'){  ChatImagePopup.show(hit.src);   return; }
-    if(hit.kind==='pre'){    Message.showCodePopup(hit.text);   return; }
+    if(hit.kind==='image'){  ChatImagePopup.show(hit.src);    return; }
+    if(hit.kind==='pre'){    ChatCodePopup.show(hit.text);    return; }
     if(hit.kind==='link') return;                          /* PRODUCT_DECISION: external link → new tab. */
     chooseResult();                                        /* PRODUCT_DECISION: plain click → jump to this message. */
   }

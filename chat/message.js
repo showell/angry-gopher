@@ -7,7 +7,7 @@
    surface so other rendering surfaces (search results) can reuse them.
 
    Click routing summary:
-     image / pre inside body  → internal (showImagePopup / showCodePopup)
+     image / pre inside body  → ChatImagePopup.show / ChatCodePopup.show
      msg-ref link inside body → deps.onMsgRef(linkEl)   (domain navigation)
      quote-reply button       → deps.onQuote(msg)        (affects compose)
      refer button             → deps.onRefer(msg)        (affects compose)
@@ -52,26 +52,9 @@ window.Message = (function(){
     return {kind:'plain'};
   }
 
-  /* ===== module-level code popup =====
-     Image popup lives in chat_image_popup.js (shared with the Images
-     transcript view). Use ChatImagePopup.show(src) directly. */
-
-  /* PRODUCT_DECISION: code popup — dialog is fit-content (CSS) capped at
-     80vw/80vh; the <pre> scrolls when the code is larger. Backdrop click
-     and Esc both close. */
-  function showCodePopup(text){
-    var dlg=document.createElement('dialog'); dlg.className='chat-code-dialog';
-    var controls=document.createElement('div'); controls.className='chat-code-controls';
-    var close=document.createElement('button'); close.type='button'; close.textContent='Close';
-    close.addEventListener('click', function(){ dlg.close(); });
-    controls.appendChild(close);
-    var pre=document.createElement('pre'); pre.className='chat-code-view'; pre.textContent=text;
-    dlg.appendChild(controls); dlg.appendChild(pre);
-    dlg.addEventListener('close', function(){ dlg.remove(); });
-    dlg.addEventListener('click', function(e){ if(e.target===dlg) dlg.close(); });
-    document.body.appendChild(dlg);
-    dlg.showModal();
-  }
+  /* Image popup lives in chat_image_popup.js; code popup lives in
+     chat_code_popup.js. Both are shared with their respective transcript
+     views. Use ChatImagePopup.show(src) / ChatCodePopup.show(text) directly. */
 
   /* ===== instance factory ===== */
 
@@ -113,7 +96,7 @@ window.Message = (function(){
       if(!t.closest || !t.closest('.chat-body')) return;
       var hit = classifyBodyClick(t);
       if(hit.kind === 'image'){ ChatImagePopup.show(hit.src); return; }
-      if(hit.kind === 'pre'){   showCodePopup(hit.text); return; }
+      if(hit.kind === 'pre'){   ChatCodePopup.show(hit.text); return; }
       if(hit.kind === 'msgref'){ e.preventDefault(); onMsgRef(hit.el); return; }
       /* PRODUCT_DECISION: external link uses server-baked target=_blank; plain hit does nothing. */
     }
@@ -167,6 +150,5 @@ window.Message = (function(){
   return {
     create:             create,
     classifyBodyClick:  classifyBodyClick,
-    showCodePopup:      showCodePopup,
   };
 })();

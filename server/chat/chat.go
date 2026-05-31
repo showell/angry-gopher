@@ -442,6 +442,15 @@ func HandleChatImagePopupJS(w http.ResponseWriter, r *http.Request) {
 	web.ServeJS(w, ChatImagePopupJSPath, "chat_image_popup.js missing from the binary")
 }
 
+// ChatCodePopupJSPath is the shared code-monospace dialog — reused by chat
+// bubbles (via Message), search results, and the Code transcript view.
+var ChatCodePopupJSPath = "chat/chat_code_popup.js"
+
+// HandleChatCodePopupJS serves the shared code-popup module.
+func HandleChatCodePopupJS(w http.ResponseWriter, r *http.Request) {
+	web.ServeJS(w, ChatCodePopupJSPath, "chat_code_popup.js missing from the binary")
+}
+
 // validChatPartner reports whether partner id is a usable conversation
 // partner for user id: another authorized principal (member or agent),
 // not yourself or empty.
@@ -481,6 +490,7 @@ func renderChatConversation(w http.ResponseWriter, user users.User, partnerID, c
 	chatPageHeader(w, "Chat w/"+partnerName+": "+sessionID, user, "")
 	fmt.Fprint(w, chatCSS)
 	fmt.Fprint(w, imagePopupCSS)
+	fmt.Fprint(w, codePopupCSS)
 	// data-conv + data-session let chat.js build the API URLs
 	// (/chat/c/<conv>/<sid>/{stream,send,upload}) without re-deriving
 	// the pair key. data-partner stays for display labels (mine vs theirs).
@@ -519,6 +529,7 @@ func renderChatConversation(w http.ResponseWriter, user users.User, partnerID, c
 	// just via init). notify.js loads after chat.js (no init dep).
 	v := url.QueryEscape(web.AssetVersion)
 	fmt.Fprintf(w, `</div><script src="/chat/chat_image_popup.js?v=%s"></script>`+
+		`<script src="/chat/chat_code_popup.js?v=%s"></script>`+
 		`<script src="/chat/message.js?v=%s"></script>`+
 		`<script src="/chat/message_view.js?v=%s"></script>`+
 		`<script src="/chat/chat_search.js?v=%s"></script>`+
@@ -528,7 +539,7 @@ func renderChatConversation(w http.ResponseWriter, user users.User, partnerID, c
 		`<script src="/chat/chat_help.js?v=%s"></script>`+
 		`<script src="/chat/chat.js?v=%s"></script>`+
 		`<script src="/chat/notify.js?v=%s"></script>`,
-		v, v, v, v, v, v, v, v, v, v)
+		v, v, v, v, v, v, v, v, v, v, v)
 
 	web.PageFooter(w)
 }
@@ -662,6 +673,23 @@ func chatSendDone(w http.ResponseWriter, r *http.Request, conv, sessionID string
 	}
 	http.Redirect(w, r, "/chat/c/"+conv+"/"+url.PathEscape(sessionID), http.StatusSeeOther)
 }
+
+// codePopupCSS styles the shared <dialog> opened by ChatCodePopup.show.
+// Emitted on every page that loads chat_code_popup.js — currently the
+// chat conversation page and the Code transcript.
+const codePopupCSS = `<style>
+/* PRODUCT_DECISION: fit-content (its UA default) capped at 80vw/80vh, so it
+   hugs small snippets and stops at 80% for big ones; the <pre> scrolls in
+   whichever direction overflows. */
+.chat-code-dialog { max-width:80vw; max-height:80vh; padding:0; border:1px solid #bbb;
+                    border-radius:8px; background:#fff; display:flex; flex-direction:column; }
+.chat-code-dialog::backdrop { background:rgba(0,0,0,0.45); }
+.chat-code-controls { flex:none; display:flex; justify-content:flex-end; padding:6px 8px;
+                      border-bottom:1px solid #eee; background:#faf9f5; }
+.chat-code-view { flex:1; min-height:0; min-width:0; overflow:auto; margin:0; padding:14px 16px;
+                  font-family:ui-monospace,Menlo,Consolas,monospace; font-size:14px;
+                  line-height:1.45; white-space:pre; color:#222; cursor:auto; }
+</style>`
 
 // imagePopupCSS styles the shared <dialog> opened by ChatImagePopup.show.
 // Emitted on every page that loads chat_image_popup.js — currently the
@@ -841,17 +869,8 @@ html, body { height:100%; }
 /* Image popup rules live in imagePopupCSS — emitted on both the chat
    conversation page and the Images transcript page since both surfaces
    open the same dialog via ChatImagePopup.show. */
-/* Code/pre viewer: the dialog is fit-content (its UA default) capped at
-   80vw/80vh, so it hugs small snippets and stops at 80% for big ones; the
-   <pre> then scrolls in whichever direction overflows. */
-.chat-code-dialog { max-width:80vw; max-height:80vh; padding:0; border:1px solid #bbb;
-                    border-radius:8px; background:#fff; display:flex; flex-direction:column; }
-.chat-code-dialog::backdrop { background:rgba(0,0,0,0.45); }
-.chat-code-controls { flex:none; display:flex; justify-content:flex-end; padding:6px 8px;
-                      border-bottom:1px solid #eee; background:#faf9f5; }
-.chat-code-view { flex:1; min-height:0; min-width:0; overflow:auto; margin:0; padding:14px 16px;
-                  font-family:ui-monospace,Menlo,Consolas,monospace; font-size:14px;
-                  line-height:1.45; white-space:pre; color:#222; cursor:auto; }
+/* Code popup rules live in codePopupCSS — emitted on every page that
+   loads chat_code_popup.js (chat conversation + Code transcript). */
 /* Plain message-box modal (e.g. the "host may be down" notice). */
 .chat-alert-dialog { max-width:90vw; border:1px solid #bbb; border-radius:8px; padding:18px 20px; }
 .chat-alert-dialog::backdrop { background:rgba(0,0,0,0.4); }
