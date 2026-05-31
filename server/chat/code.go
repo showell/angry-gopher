@@ -48,9 +48,15 @@ import (
 	"time"
 )
 
-// codeBlockRe captures (language, body) from a triple-backtick fenced
-// block in markdown source. Multiline DOTALL.
-var codeBlockRe = regexp.MustCompile("(?s)```([A-Za-z0-9_+-]*)\\n(.*?)\\n```")
+// codeFenceRe matches triple-backtick OR triple-tilde fenced blocks.
+// Multiline DOTALL. For backtick matches groups (1,2) = (lang, body);
+// for tilde matches groups (3,4) = (lang, body). Disambiguate via the
+// match's first character.
+//
+// PRODUCT_DECISION: tilde fences are included EXCEPT `~~~ quote` (the
+// quote-reply marker). Steve sometimes types `~~~ go` or `~~~ python`
+// to introduce a code block; those count too.
+var codeFenceRe = regexp.MustCompile("(?s)```([^\\n`]*)\\n(.*?)\\n```|~~~ ?([^\\n~]*)\\n(.*?)\\n~~~")
 
 const codeSep = "\n\n-------------\n\n"
 
@@ -72,13 +78,21 @@ func userCodePath(uid string) string {
 }
 
 func extractCodeBlocks(body string) []codeBlock {
-	matches := codeBlockRe.FindAllStringSubmatch(body, -1)
+	matches := codeFenceRe.FindAllStringSubmatch(body, -1)
 	if len(matches) == 0 {
 		return nil
 	}
 	out := make([]codeBlock, 0, len(matches))
 	for _, m := range matches {
-		out = append(out, codeBlock{Lang: m[1], Body: m[2]})
+		if strings.HasPrefix(m[0], "```") {
+			out = append(out, codeBlock{Lang: m[1], Body: m[2]})
+		} else {
+			lang := strings.TrimSpace(m[3])
+			if lang == "quote" {
+				continue
+			}
+			out = append(out, codeBlock{Lang: lang, Body: m[4]})
+		}
 	}
 	return out
 }
