@@ -102,14 +102,30 @@ func extractCodeBlocks(body string) []codeBlock {
 			i++
 			continue
 		}
-		// Scan forward to a closing fence or end-of-body.
+		isQuote := markerChar == '~' && lang == "quote"
 		start := i + 1
 		j := start
-		for j < len(lines) && !isCloseFence(lines[j], markerChar) {
-			j++
+		if isQuote {
+			// Nesting-aware close: handles `~~~ quote\n~~~quote\n...\n~~~\n...\n~~~`.
+			depth := 1
+			for j < len(lines) {
+				if isCloseFence(lines[j], markerChar) {
+					depth--
+					if depth == 0 {
+						break
+					}
+				} else if strings.HasPrefix(lines[j], "~~~") {
+					depth++
+				}
+				j++
+			}
+		} else {
+			for j < len(lines) && !isCloseFence(lines[j], markerChar) {
+				j++
+			}
 		}
-		content := strings.Join(lines[start:j], "\n")
-		if !(markerChar == '~' && lang == "quote") {
+		if !isQuote {
+			content := strings.Join(lines[start:j], "\n")
 			out = append(out, codeBlock{Lang: lang, Body: content})
 		}
 		i = j + 1
