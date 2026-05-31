@@ -47,6 +47,9 @@ phase "message-js" node --check chat/message.js
 echo "==> message_view.js syntax"
 phase "message-view-js" node --check chat/message_view.js
 
+echo "==> chat_image_popup.js syntax"
+phase "chat-image-popup-js" node --check chat/chat_image_popup.js
+
 echo "==> docs.js syntax"
 phase "docs-js" node --check chat/docs.js
 
@@ -55,6 +58,9 @@ phase "notify-js" node --check chat/notify.js
 
 echo "==> recent.js syntax"
 phase "recent-js" node --check chat/recent.js
+
+echo "==> images.js syntax"
+phase "images-js" node --check chat/images.js
 
 echo "==> chat_client.py syntax"
 phase "chat-py" python3 -m py_compile chat/chat_client.py

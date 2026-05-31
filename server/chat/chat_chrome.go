@@ -9,12 +9,12 @@ import (
 )
 
 // chatChromeTop emits the chat-subsystem top bar: a small Home link, the
-// page/conversation title, the Chat/Docs/Recent/Settings sub-nav, and
-// identity + (admin) + log out on the right. In chat there's no "Lyn
-// Rummy" branding — the small Home link is the only way back to the
-// top-level home. active is "chat" | "docs" | "recent" | "settings" | ""
-// (a conversation — the link is deliberately not highlighted once you're
-// inside one).
+// page/conversation title, the Chat/Docs/Recent/Images/Settings sub-nav,
+// and identity + (admin) + log out on the right. In chat there's no
+// "Lyn Rummy" branding — the small Home link is the only way back to
+// the top-level home. active is "chat" | "docs" | "recent" | "images" |
+// "settings" | "" (a conversation — the link is deliberately not
+// highlighted once you're inside one).
 func chatChromeTop(w http.ResponseWriter, user users.User, title, active string) {
 	navLink := func(href, label, key string) string {
 		if active == key {
@@ -30,12 +30,13 @@ func chatChromeTop(w http.ResponseWriter, user users.User, title, active string)
 		`<header class="app-top chat-top"><div class="chat-top-left">`+
 			`<a class="chat-top-home" href="/">Home</a>`+
 			`<span class="chat-top-title">%s</span>`+
-			`<span class="chat-top-links">%s · %s · %s · %s</span></div>`+
+			`<span class="chat-top-links">%s · %s · %s · %s · %s</span></div>`+
 			`<div class="app-top-user"><strong>%s</strong>%s · <a href="/logout">Log out</a></div></header>`,
 		html.EscapeString(title),
 		navLink("/chat", "Chat", "chat"),
 		navLink("/chat/docs", "Docs", "docs"),
 		navLink("/chat/recent", "Recent", "recent"),
+		navLink("/chat/images", "Images", "images"),
 		navLink("/settings", "Settings", "settings"),
 		html.EscapeString(user.Name), adminLink)
 }
@@ -60,6 +61,8 @@ func chatTabTitle(active string) string {
 		return "Docs"
 	case "recent":
 		return "Recent"
+	case "images":
+		return "Images"
 	case "settings":
 		return "Settings"
 	}

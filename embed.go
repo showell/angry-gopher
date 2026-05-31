@@ -15,6 +15,7 @@ import "embed"
 //go:embed games/lynrummy/elm/engine_glue.js
 //go:embed chat/chat.js
 //go:embed chat/chat_compose.js
+//go:embed chat/chat_image_popup.js
 //go:embed chat/chat_help.js
 //go:embed chat/message.js
 //go:embed chat/message_view.js
@@ -24,6 +25,7 @@ import "embed"
 //go:embed chat/docs.js
 //go:embed chat/notify.js
 //go:embed chat/recent.js
+//go:embed chat/images.js
 //go:embed games/lynrummy/conformance/curated_1line_puzzles.dsl
 //go:embed games/lynrummy/conformance/curated_2line_puzzles.dsl
 //go:embed games/lynrummy/conformance/curated_3line_puzzles.dsl

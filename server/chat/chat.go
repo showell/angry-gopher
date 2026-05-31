@@ -433,6 +433,15 @@ func HandleMessageViewJS(w http.ResponseWriter, r *http.Request) {
 	web.ServeJS(w, MessageViewJSPath, "message_view.js missing from the binary")
 }
 
+// ChatImagePopupJSPath is the shared image-zoom dialog — reused by chat
+// bubbles (via Message), search results, and the Images transcript view.
+var ChatImagePopupJSPath = "chat/chat_image_popup.js"
+
+// HandleChatImagePopupJS serves the shared image-popup module.
+func HandleChatImagePopupJS(w http.ResponseWriter, r *http.Request) {
+	web.ServeJS(w, ChatImagePopupJSPath, "chat_image_popup.js missing from the binary")
+}
+
 // validChatPartner reports whether partner id is a usable conversation
 // partner for user id: another authorized principal (member or agent),
 // not yourself or empty.
@@ -508,7 +517,8 @@ func renderChatConversation(w http.ResponseWriter, user users.User, partnerID, c
 	// message_view.js are foundational (used by chat.js's IIFE itself, not
 	// just via init). notify.js loads after chat.js (no init dep).
 	v := url.QueryEscape(web.AssetVersion)
-	fmt.Fprintf(w, `</div><script src="/chat/message.js?v=%s"></script>`+
+	fmt.Fprintf(w, `</div><script src="/chat/chat_image_popup.js?v=%s"></script>`+
+		`<script src="/chat/message.js?v=%s"></script>`+
 		`<script src="/chat/message_view.js?v=%s"></script>`+
 		`<script src="/chat/chat_search.js?v=%s"></script>`+
 		`<script src="/chat/chat_left_sidebar.js?v=%s"></script>`+
@@ -517,7 +527,7 @@ func renderChatConversation(w http.ResponseWriter, user users.User, partnerID, c
 		`<script src="/chat/chat_help.js?v=%s"></script>`+
 		`<script src="/chat/chat.js?v=%s"></script>`+
 		`<script src="/chat/notify.js?v=%s"></script>`,
-		v, v, v, v, v, v, v, v, v)
+		v, v, v, v, v, v, v, v, v, v)
 
 	web.PageFooter(w)
 }

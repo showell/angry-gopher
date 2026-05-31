@@ -1,7 +1,7 @@
 /* PRODUCT_DECISION: two-phase search palette.
    Phase 1 autocompletes against EXACT corpus tokens (no stemming).
    Phase 2 (Enter) lists messages containing the chosen term as literal
-   substrings, RENDERED with highlighting, newest first.
+   substrings, RENDERED with highlighting, forward-chronological.
    No index: token map rebuilds on open + linear scan on Enter — milliseconds. */
 window.ChatSearch = (function(){
   'use strict';
@@ -141,7 +141,8 @@ window.ChatSearch = (function(){
     SR.term=term; SR.phase='results'; SR.list.textContent=''; SR.items=[]; SR.sel=-1;
     var els=bubbles.querySelectorAll('.chat-msg'), res=[];
     for(var i=0;i<els.length;i++){ if(smartIndexOf(els[i]._body||'', term, 0) >= 0) res.push(els[i]); }
-    res.reverse(); /* PRODUCT_DECISION: newest first — searching back is the common case. */
+    /* PRODUCT_DECISION: forward-chronological — matches the rest of the chat
+       system (transcript, Images), which reads more naturally than newest-first. */
     if(!res.length){ SR.status.textContent='No messages contain “'+term+'”. Esc to refine.'; return; }
     SR.status.textContent=res.length+(res.length===1?' message — Enter to go':' messages — ↑↓ choose, Enter to go')+' · Esc to refine';
     for(var k=0;k<res.length;k++){
@@ -181,7 +182,7 @@ window.ChatSearch = (function(){
     /* PRODUCT_DECISION: results-mode click behavior differs from the feed only here. */
     var hit=Message.classifyBodyClick(e.target);
     if(hit.kind==='msgref'){ e.preventDefault(); return; } /* PRODUCT_DECISION: MSG_ refs inert inside search. */
-    if(hit.kind==='image'){  Message.showImagePopup(hit.src);   return; }
+    if(hit.kind==='image'){  ChatImagePopup.show(hit.src);   return; }
     if(hit.kind==='pre'){    Message.showCodePopup(hit.text);   return; }
     if(hit.kind==='link') return;                          /* PRODUCT_DECISION: external link → new tab. */
     chooseResult();                                        /* PRODUCT_DECISION: plain click → jump to this message. */
