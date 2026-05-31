@@ -53,10 +53,15 @@ import (
 // for tilde matches groups (3,4) = (lang, body). Disambiguate via the
 // match's first character.
 //
+// PRODUCT_DECISION: closing fence OR end-of-body — unclosed fences
+// render as code through end-of-message in goldmark, and historical
+// chat has plenty of those. Matching that behavior keeps live + history
+// consistent.
+//
 // PRODUCT_DECISION: tilde fences are included EXCEPT `~~~ quote` (the
 // quote-reply marker). Steve sometimes types `~~~ go` or `~~~ python`
 // to introduce a code block; those count too.
-var codeFenceRe = regexp.MustCompile("(?s)```([^\\n`]*)\\n(.*?)\\n```|~~~ ?([^\\n~]*)\\n(.*?)\\n~~~")
+var codeFenceRe = regexp.MustCompile("(?s)```([^\\n`]*)\\n(.*?)(?:\\n```|\\z)|~~~ ?([^\\n~]*)\\n(.*?)(?:\\n~~~|\\z)")
 
 const codeSep = "\n\n-------------\n\n"
 
