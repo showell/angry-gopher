@@ -48,21 +48,6 @@ import (
 	"time"
 )
 
-// codeFenceRe matches triple-backtick OR triple-tilde fenced blocks.
-// Multiline DOTALL. For backtick matches groups (1,2) = (lang, body);
-// for tilde matches groups (3,4) = (lang, body). Disambiguate via the
-// match's first character.
-//
-// PRODUCT_DECISION: closing fence OR end-of-body — unclosed fences
-// render as code through end-of-message in goldmark, and historical
-// chat has plenty of those. Matching that behavior keeps live + history
-// consistent.
-//
-// PRODUCT_DECISION: tilde fences are included EXCEPT `~~~ quote` (the
-// quote-reply marker). Steve sometimes types `~~~ go` or `~~~ python`
-// to introduce a code block; those count too.
-var codeFenceRe = regexp.MustCompile("(?s)```([^\\n`]*)\\n(.*?)(?:\\n```|\\z)|~~~ ?([^\\n~]*)\\n(.*?)(?:\\n~~~|\\z)")
-
 const codeSep = "\n\n-------------\n\n"
 
 type codeBlock struct {
@@ -82,22 +67,46 @@ func userCodePath(uid string) string {
 	return filepath.Join(ChatDataRoot, "users", uid, "code.md")
 }
 
+// extractCodeBlocks walks `body` line by line, tracking fence state.
+//
+// PRODUCT_DECISION: line-based walker, not a regex. Fences are line-anchored
+// (must start at column 0); open/close pairing is a state machine, not a
+// pattern. Naturally handles unclosed fences (content extends to end-of-body,
+// matching goldmark's rendering) and quote-reply skip (state, not pattern).
+//
+// PRODUCT_DECISION: tilde fences are included EXCEPT `~~~ quote` (the
+// quote-reply marker). Steve sometimes types `~~~ go` or `~~~ python`
+// to introduce a code block; those count too.
 func extractCodeBlocks(body string) []codeBlock {
-	matches := codeFenceRe.FindAllStringSubmatch(body, -1)
-	if len(matches) == 0 {
-		return nil
-	}
-	out := make([]codeBlock, 0, len(matches))
-	for _, m := range matches {
-		if strings.HasPrefix(m[0], "```") {
-			out = append(out, codeBlock{Lang: m[1], Body: m[2]})
-		} else {
-			lang := strings.TrimSpace(m[3])
-			if lang == "quote" {
-				continue
-			}
-			out = append(out, codeBlock{Lang: lang, Body: m[4]})
+	var out []codeBlock
+	lines := strings.Split(body, "\n")
+	i := 0
+	for i < len(lines) {
+		line := lines[i]
+		var marker, lang string
+		switch {
+		case strings.HasPrefix(line, "```"):
+			marker = "```"
+			lang = strings.TrimSpace(line[3:])
+		case strings.HasPrefix(line, "~~~"):
+			marker = "~~~"
+			lang = strings.TrimSpace(line[3:])
+		default:
+			i++
+			continue
 		}
+		// Scan forward to a closing fence (any line that starts with the
+		// same marker) or end-of-body.
+		start := i + 1
+		j := start
+		for j < len(lines) && !strings.HasPrefix(lines[j], marker) {
+			j++
+		}
+		content := strings.Join(lines[start:j], "\n")
+		if !(marker == "~~~" && lang == "quote") {
+			out = append(out, codeBlock{Lang: lang, Body: content})
+		}
+		i = j + 1
 	}
 	return out
 }
