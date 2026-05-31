@@ -6,6 +6,7 @@
 window.ChatHelp = (function(){
   'use strict';
 
+  // lint:called-once keymap-source-of-truth
   function shortcuts(deps){
     return [
       { key: 'b', label: 'back',                                requiresSelection: false, action: function(){ deps.backBtn.click(); } },
@@ -33,6 +34,7 @@ window.ChatHelp = (function(){
     return true;
   }
 
+  // lint:called-once panel-renderer
   function renderKeyhelp(entries, deps){
     var box = document.createElement('div');
     box.className = 'chat-keyhelp';

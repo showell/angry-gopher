@@ -118,6 +118,7 @@ window.Message = (function(){
 
     var bubble = null;
 
+    // lint:called-once dom-builder-abstraction
     function buildMeta(){
       var meta=document.createElement('div'); meta.className='chat-meta';
       meta.appendChild(document.createTextNode('#'+(data.index+1)+' '+data.from+' · '+data.time+' '));
@@ -134,12 +135,6 @@ window.Message = (function(){
       meta.appendChild(edit);
       return meta;
     }
-    function buildBody(){
-      var body=document.createElement('div'); body.className='chat-body';
-      body.innerHTML=data.html; /* PRODUCT_DECISION: data.html is sanitized server-side. */
-      return body;
-    }
-
     /* PRODUCT_DECISION: one listener per bubble. The walk-up classification
        happens inside the handler; never stops propagation, so a container
        listener (e.g. MessageView) still sees the click for its own purposes
@@ -164,7 +159,9 @@ window.Message = (function(){
       bubble.setAttribute('data-i',  data.index);
       bubble.setAttribute('data-id', data.id);
       bubble.appendChild(buildMeta());
-      bubble.appendChild(buildBody());
+      var body=document.createElement('div'); body.className='chat-body';
+      body.innerHTML=data.html; /* PRODUCT_DECISION: data.html is sanitized server-side. */
+      bubble.appendChild(body);
       bubble.addEventListener('click', handleClick);
       return bubble;
     }

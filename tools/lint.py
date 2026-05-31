@@ -28,6 +28,16 @@ Three rules today:
                         this dialect, and a false positive is cheaper
                         than the scope analysis would be.
 
+  called-once           A `function foo(){...}` whose name appears
+                        exactly once elsewhere — i.e. it has a single
+                        call site. Usually a candidate for inlining
+                        (the indirection costs a hop without naming a
+                        non-obvious concept; see
+                        games/lynrummy/BOUNDARIES.md). Exempted when
+                        the single reference is via an IIFE export
+                        object (`return { foo: foo }` = key + value =
+                        2 references, so exports don't fire).
+
 Escape hatches, in order of preference:
 
   1. Allowlist (preferred). Small named sets at the top of this file:
@@ -88,6 +98,13 @@ DEAD_CODE_NAME_ALLOWLIST: set[str] = {
     # called via a string name through an event-handler-attribute, or
     # picked up by reflection). Each addition gets a comment with the
     # actual receipt.
+}
+
+CALLED_ONCE_NAME_ALLOWLIST: set[str] = {
+    # Add here only when the single-call function is genuinely
+    # load-bearing for naming an abstraction (the name IS the
+    # documentation), not just a convenience wrapper. Each addition
+    # gets a comment.
 }
 
 
@@ -229,6 +246,58 @@ def check_dead_code(prog, lines, path):
 # File walker + driver
 # ---------------------------------------------------------------------------
 
+def _walk_with_parents(node, parent=None):
+    """Like jsparse.walk but yields (node, parent) so checks can ask
+    about syntactic context (e.g. is this Identifier the callee of a
+    Call, or just one of its args / a property value)."""
+    if isinstance(node, dict) and "kind" in node:
+        yield node, parent
+        for v in node.values():
+            yield from _walk_with_parents(v, node)
+    elif isinstance(node, list):
+        for item in node:
+            yield from _walk_with_parents(item, parent)
+
+
+def check_called_once(prog, lines, path):
+    """Flag every FunctionDecl that has exactly ONE direct call site and
+    no other references. "Direct call" = Identifier appears as a Call's
+    callee (`foo()`); callback uses (`addEventListener('x', foo)`),
+    property values (`{ x: foo }`), and timer arguments (`setTimeout(foo)`)
+    don't count as direct calls and naturally exempt callbacks from
+    firing. See games/lynrummy/BOUNDARIES.md diagnostic 3 for the
+    inline-vs-extract calibration."""
+    from collections import Counter
+    decls: list[tuple[str, dict]] = []
+    direct_calls: Counter[str] = Counter()
+    all_refs:    Counter[str] = Counter()
+    for n, parent in _walk_with_parents(prog):
+        if not isinstance(n, dict): continue
+        if n.get("kind") == "FunctionDecl":
+            decls.append((n["name"], n["loc"]))
+        elif n.get("kind") == "Identifier":
+            name = n["name"]
+            all_refs[name] += 1
+            if (parent is not None
+                    and parent.get("kind") == "Call"
+                    and parent.get("callee") is n):
+                direct_calls[name] += 1
+    out = []
+    for name, (line, col) in decls:
+        if direct_calls[name] != 1 or all_refs[name] != 1:
+            continue
+        if name in CALLED_ONCE_NAME_ALLOWLIST:
+            continue
+        if line_or_predecessor_annotation(lines, line, "called-once"):
+            continue
+        out.append({
+            "rule": "called-once", "file": path,
+            "line": line, "col": col,
+            "msg": f"function '{name}' called exactly once  |  {lines[line - 1].strip()}",
+        })
+    return out
+
+
 def find_violations(path: pathlib.Path) -> list[dict]:
     src = path.read_text()
     lines = src.splitlines()
@@ -242,6 +311,7 @@ def find_violations(path: pathlib.Path) -> list[dict]:
             v = check_null_undefined(node, lines, path)
             if v: out.append(v)
     out.extend(check_dead_code(prog, lines, path))
+    out.extend(check_called_once(prog, lines, path))
     return out
 
 

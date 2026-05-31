@@ -120,12 +120,12 @@ window.MessageView = (function(){
     /* ---- programmatic-scroll suppression ---- */
 
     function endProgScroll(){ progScroll = false; progScrollTimer = null; }
-    function armProgScroll(){
+    function armedScroll(fn){
       progScroll = true;
       if(progScrollTimer) clearTimeout(progScrollTimer);
       progScrollTimer = setTimeout(endProgScroll, scrollQuietMs);
+      fn();
     }
-    function armedScroll(fn){ armProgScroll(); fn(); }
 
     /* ---- visibility + reveal ---- */
 

@@ -16,10 +16,10 @@ window.ChatSearch = (function(){
   var SEARCH_MIN=2, SUGGEST_CAP=10, SNIPPET_PAD=90;
   /* PRODUCT_DECISION: smart-case — case-sensitive only if the query has uppercase. */
   function smartIndexOf(hay,q,from){ return /[A-Z]/.test(q)?hay.indexOf(q,from||0):hay.toLowerCase().indexOf(q.toLowerCase(),from||0); }
-  function smartHit(body,q){ return smartIndexOf(body,q,0)>=0; }
   /* PRODUCT_DECISION: tokens are whitespace-delimited words with edge
      punctuation trimmed; internal punctuation kept so "foo.com" / "https://x"
      survive as one token. */
+  // lint:called-once named-algorithm
   function tokenize(body){
     var raw=body.split(/\s+/), out=[];
     for(var i=0;i<raw.length;i++){
@@ -39,6 +39,7 @@ window.ChatSearch = (function(){
     }
     return map;
   }
+  // lint:called-once named-algorithm
   function suggestTokens(map,q){
     q=q.toLowerCase(); var pre=[], sub=[];
     for(var t in map){ var k=t.indexOf(q); if(k===0) pre.push(t); else if(k>0) sub.push(t); }
@@ -59,6 +60,7 @@ window.ChatSearch = (function(){
   }
   /* PRODUCT_DECISION: walks TEXT NODES only so links/images/code markup survive
      untouched. Rendered-HTML sibling of highlightInto (which builds from plain text). */
+  // lint:called-once named-algorithm
   function highlightRendered(root,term){
     if(!term) return;
     var walk=document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null, false), nodes=[], n;
@@ -71,6 +73,7 @@ window.ChatSearch = (function(){
       node.parentNode.replaceChild(frag, node);
     }
   }
+  // lint:called-once named-algorithm
   function appendSnippet(node,body,term){
     var idx=smartIndexOf(body,term,0), start=0, end=body.length;
     if(idx>=0){ start=Math.max(0,idx-SNIPPET_PAD); end=Math.min(body.length,idx+term.length+SNIPPET_PAD); }
@@ -94,13 +97,18 @@ window.ChatSearch = (function(){
     SR={ dlg:dlg, input:input, list:list, status:status, phase:'suggest', map:buildTokenIndex(), items:[], sel:-1, term:'' };
     input.addEventListener('input', function(){ SR.phase='suggest'; renderSuggest(); });
     dlg.addEventListener('keydown', onSearchKey);
-    dlg.addEventListener('cancel', function(e){ e.preventDefault(); escSearch(); }); /* PRODUCT_DECISION: own the Esc. */
+    /* PRODUCT_DECISION: own the Esc. Results-phase: step back to suggest. Suggest-phase: close. */
+    dlg.addEventListener('cancel', function(e){
+      e.preventDefault();
+      if(!SR) return;
+      if(SR.phase==='results'){ SR.phase='suggest'; SR.input.focus(); renderSuggest(); }
+      else closeSearchModal();
+    });
     dlg.addEventListener('click', onSearchClick);
     dlg.addEventListener('close', function(){ dlg.remove(); SR=null; history.focus({preventScroll:true}); });
     dlg.showModal(); input.focus(); renderSuggest();
   }
   function closeSearchModal(){ if(SR) SR.dlg.close(); }
-  function escSearch(){ if(!SR) return; if(SR.phase==='results'){ SR.phase='suggest'; SR.input.focus(); renderSuggest(); } else closeSearchModal(); }
   function paintSel(){
     var rows=SR.list.querySelectorAll('.chat-sr-row');
     for(var i=0;i<rows.length;i++) rows[i].classList.toggle('sel', i===SR.sel);
@@ -132,7 +140,7 @@ window.ChatSearch = (function(){
   function runResults(term){
     SR.term=term; SR.phase='results'; SR.list.textContent=''; SR.items=[]; SR.sel=-1;
     var els=bubbles.querySelectorAll('.chat-msg'), res=[];
-    for(var i=0;i<els.length;i++){ if(smartHit(els[i]._body||'', term)) res.push(els[i]); }
+    for(var i=0;i<els.length;i++){ if(smartIndexOf(els[i]._body||'', term, 0) >= 0) res.push(els[i]); }
     res.reverse(); /* PRODUCT_DECISION: newest first — searching back is the common case. */
     if(!res.length){ SR.status.textContent='No messages contain “'+term+'”. Esc to refine.'; return; }
     SR.status.textContent=res.length+(res.length===1?' message — Enter to go':' messages — ↑↓ choose, Enter to go')+' · Esc to refine';
@@ -178,6 +186,7 @@ window.ChatSearch = (function(){
     if(hit.kind==='link') return;                          /* PRODUCT_DECISION: external link → new tab. */
     chooseResult();                                        /* PRODUCT_DECISION: plain click → jump to this message. */
   }
+  // lint:called-once external-trigger-from-chat-js
   function refreshOpenSearch(){
     /* PRODUCT_DECISION: triggered by chat.js when a message streamed in while the modal was open. */
     if(!SR) return; SR.map=buildTokenIndex();

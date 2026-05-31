@@ -74,6 +74,7 @@
   var dlgOk=document.getElementById('docs-posted-ok');
   if(postBtn && dlg && dlgOk){
     var convAfter=null, sessionAfter=null, idAfter=null;
+    // lint:called-once named-flow
     function flushPendingSave(){
       if(!pendingSave) return Promise.resolve();
       if(saveTimer){ clearTimeout(saveTimer); saveTimer=null; }

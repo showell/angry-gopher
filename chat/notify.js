@@ -18,6 +18,7 @@
     l.type='image/png'; l.href=c.toDataURL('image/png');
     document.head.appendChild(l);
   }
+  // lint:called-once semantic-wrapper
   function alertTab(){ paintFavicon('#8a2be2'); }
   function clearTab(){ paintFavicon(null); }
 

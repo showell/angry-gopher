@@ -19,6 +19,7 @@ window.ChatLeftSidebar = (function(){
     else if(!has && !hint){ var li=document.createElement('li'); li.className='muted chat-pin-hint'; li.textContent='Drag a session here to pin it'; ul.appendChild(li); }
   }
 
+  // lint:called-once init-section
   function wireAddTopic(){
     var addTopicForm=document.getElementById('chat-add-topic');
     if(!addTopicForm) return;
@@ -107,6 +108,7 @@ window.ChatLeftSidebar = (function(){
     item.addEventListener('pointercancel', onUp);
     item.addEventListener('click', onClick);
   }
+  // lint:called-once init-section
   function wireDragToPin(){
     var items=document.querySelectorAll('.chat-session-item');
     for(var i=0;i<items.length;i++) attachDragHandlers(items[i]);
@@ -115,6 +117,7 @@ window.ChatLeftSidebar = (function(){
   /* PRODUCT_DECISION: server pre-resolves evt.conv to the canonical pair-key
      from THIS recipient's perspective, so we just build the link. Idempotent
      on data-uid. */
+  // lint:called-once sse-event-handler
   function upsertPartner(evt){
     if(!evt.user_id || !evt.conv) return;
     var ul=document.querySelector('[data-section="conversations"]'); if(!ul) return;
@@ -128,6 +131,7 @@ window.ChatLeftSidebar = (function(){
 
   /* PRODUCT_DECISION: only act on events matching our CONV; idempotent on
      data-sid (covers both drag-to-pin's existing item AND a duplicate event). */
+  // lint:called-once sse-event-handler
   function upsertSession(evt){
     if(!evt.conv || !evt.sid || evt.conv!==CONV) return;
     if(document.querySelector('.chat-session-item[data-sid="'+evt.sid+'"]')) return;
@@ -144,6 +148,7 @@ window.ChatLeftSidebar = (function(){
     attachDragHandlers(li);
   }
 
+  // lint:called-once init-section
   function wireSidebarStream(){
     var es=new EventSource('/chat/sidebar/stream');
     es.onmessage=function(e){

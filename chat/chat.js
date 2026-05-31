@@ -84,29 +84,10 @@
     backBtn.disabled=!(pos>0||drifted()); /* PRODUCT_DECISION: drift enables ← as "recover to where I was". */
     fwdBtn.disabled=!(pos<entries.length-1);
   }
-  function recordNav(idx){
-    if(idx<=0 || idx===curEntry()) return;
-    entries.length=pos+1; /* PRODUCT_DECISION: drop the forward tail — fresh nav resets it. */
-    entries.push(idx); pos=entries.length-1;
-    updateNav();
-  }
   function goToEntry(){
     if(pos<0) return;
     view.focusBubble(entries[pos], {silent:true}); /* PRODUCT_DECISION: silent — walk doesn't push back onto the stack. */
     updateNav();
-  }
-
-  /* ===== URL hash mirrors the selected bubble =====
-     PRODUCT_DECISION: every settled selection updates location.hash via
-     history.replaceState (URL stays transparent; no browser-history bloat;
-     refresh re-uses the wantFocusID path). */
-  function updateHash(idx){
-    if(idx<=0) return;
-    var msg=messages[idx-1];
-    if(!msg) return;
-    /* BROWSER_WORKAROUND: window.history — chat.js shadows the global `history`
-       with the #chat-history DOM element near the top of this IIFE. */
-    window.history.replaceState({}, '', '#msg-'+msg.getId());
   }
 
   /* ===== "is the feed scrolled to the bottom" =====
@@ -123,31 +104,29 @@
 
   /* ===== view switching (rendered / transcript) =====
      PRODUCT_DECISION: anchor scrolling on the same MESSAGE across view
-     switches. topIndex captures the currently-topmost data-i (across both
-     bubble and transcript spans); scrollToIndex brings it back. */
-  function topIndex(){
-    var els=history.querySelectorAll('[data-i]'), htop=history.getBoundingClientRect().top;
-    for(var i=0;i<els.length;i++){
-      if(els[i].offsetParent===null) continue;
-      if(els[i].getBoundingClientRect().bottom>htop+1) return els[i].getAttribute('data-i');
-    }
-    return null;
-  }
-  function scrollToIndex(idx){
-    if(idx===null) return; // lint:null-undefined-check topIndex-returns-null-on-empty-feed
-    var els=history.querySelectorAll('[data-i="'+idx+'"]');
-    for(var i=0;i<els.length;i++){
-      if(els[i].offsetParent===null) continue;
-      history.scrollTop+=els[i].getBoundingClientRect().top-history.getBoundingClientRect().top;
-      return;
-    }
-  }
+     switches. We capture the topmost data-i BEFORE the view change
+     (matching across both bubble + transcript spans, since both have
+     data-i), then scroll the NEW view's element with that data-i to
+     the top. */
   function setView(v){
-    var idx=topIndex();
+    var htop=history.getBoundingClientRect().top;
+    var anchorIdx=null;
+    var probes=history.querySelectorAll('[data-i]');
+    for(var i=0;i<probes.length;i++){
+      if(probes[i].offsetParent===null) continue;
+      if(probes[i].getBoundingClientRect().bottom>htop+1){ anchorIdx=probes[i].getAttribute('data-i'); break; }
+    }
     history.className='chat-history view-'+v;
     var links=views.querySelectorAll('a');
     for(var i=0;i<links.length;i++){ links[i].className=(links[i].getAttribute('data-view')===v)?'active':''; }
-    scrollToIndex(idx);
+    if(anchorIdx!==null){ // lint:null-undefined-check anchorIdx-null-when-feed-empty
+      var targets=history.querySelectorAll('[data-i="'+anchorIdx+'"]');
+      for(var j=0;j<targets.length;j++){
+        if(targets[j].offsetParent===null) continue;
+        history.scrollTop+=targets[j].getBoundingClientRect().top-history.getBoundingClientRect().top;
+        break;
+      }
+    }
   }
   function toggleView(){ setView(history.className.indexOf('view-transcript')>=0?'rendered':'transcript'); }
   views.addEventListener('click',function(e){
@@ -170,8 +149,17 @@
       return msg.render();
     },
     setSelectedBubble: function(idx){
-      updateHash(idx);
-      recordNav(idx);
+      if(idx<=0) return;
+      var msg=messages[idx-1];
+      if(!msg) return;
+      /* BROWSER_WORKAROUND: window.history — chat.js shadows the global `history`
+         with the #chat-history DOM element near the top of this IIFE. */
+      window.history.replaceState({}, '', '#msg-'+msg.getId());
+      /* PRODUCT_DECISION: nav-stack push — drop the forward tail, append, update btns. */
+      if(idx===curEntry()) return;
+      entries.length=pos+1;
+      entries.push(idx); pos=entries.length-1;
+      updateNav();
     },
   });
 
@@ -185,36 +173,21 @@
   });
   updateNav();
 
-  /* ===== EDIT_RE supersession =====
-     PRODUCT_DECISION: a body starting with "Edit of MSG_<hash>" supersedes
-     that original. The original Message handles the in-place DOM mutation
-     (render an "Edited in MSG_<this>" link, demote its content to a spoiler).
-     Append-only — the on-disk record + transcript view still show both. */
+  /* ===== one append wraps view + transcript + supersession + empty-removal =====
+     PRODUCT_DECISION: transcript span — literal on-disk block, sibling DOM tree
+     to #chat-bubbles inside #chat-history; managed directly here because
+     MessageView is rectangle-list-only. EDIT_RE supersession: a body starting
+     with "Edit of MSG_<hash>" causes the original Message to redraw in-place;
+     append-only on disk, only the rendered view changes. */
   var EDIT_RE=/^Edit of MSG_([A-Za-z0-9-]+_[0-9]+)\b/;
-  function maybeMarkEdited(m){
-    var em=(m.body||'').match(EDIT_RE);
-    if(!em) return;
-    var orig=findById(em[1]);
-    if(orig) orig.markEdited(m.id);
-  }
-
-  /* ===== transcript span (parallel surface, not in the bubble list) =====
-     PRODUCT_DECISION: the literal on-disk block is shown in transcript view.
-     It's a sibling DOM tree to #chat-bubbles inside #chat-history; chat.js
-     manages it directly because MessageView is rectangle-list-only. */
-  function appendTranscriptSpan(m){
-    var span=document.createElement('span');
-    span.setAttribute('data-i', m.index);
-    span.textContent=m.enc;
-    transcript.appendChild(span);
-  }
-
-  /* ===== one append wraps view + transcript + supersession + empty-removal ===== */
   function appendMessage(m){
     var empty=document.getElementById('chat-empty'); if(empty) empty.remove();
     view.append(m);
-    appendTranscriptSpan(m);
-    maybeMarkEdited(m);
+    var span=document.createElement('span');
+    span.setAttribute('data-i', m.index); span.textContent=m.enc;
+    transcript.appendChild(span);
+    var em=(m.body||'').match(EDIT_RE);
+    if(em){ var orig=findById(em[1]); if(orig) orig.markEdited(m.id); }
   }
 
   /* ===== entry-point fragment (#msg-<id>) ===== */

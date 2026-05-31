@@ -34,6 +34,7 @@
   }
   setInterval(rePaintAges, 20000);
 
+  // lint:called-once row-factory
   function buildRow(evt){
     var tr=document.createElement('tr');
     var when=document.createElement('td'); when.className='recent-when';
@@ -66,6 +67,7 @@
 
   /* PRODUCT_DECISION: data-ts desc (newest first); equal timestamps tie-break
      stably by inserting above the older row of the same instant. */
+  // lint:called-once named-algorithm
   function insertSorted(tr){
     var ts=tr.dataset.ts;
     var rows=tbodyEl.querySelectorAll('tr[data-ts]');
@@ -78,6 +80,7 @@
     tbodyEl.appendChild(tr);
   }
 
+  // lint:called-once sse-handler
   function upsert(evt){
     var key=evt.kind==='chat' ? 'chat:'+evt.conv+'/'+evt.sid : 'doc:'+evt.slug;
     var existing=tbodyEl.querySelector('tr[data-key="'+key+'"]');

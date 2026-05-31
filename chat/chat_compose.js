@@ -10,16 +10,9 @@ window.ChatCompose = (function(){
   /* PRODUCT_DECISION: must match Gopher's maxChatUploadBytes and stay under Caddy's body cap. */
   var MAX_IMAGE_BYTES=10*1024*1024;
 
-  function newCid(){ return (window.crypto&&crypto.randomUUID)?crypto.randomUUID():Date.now()+'-'+Math.random().toString(16).slice(2); }
   function setComposeEnabled(on){
     textarea.disabled=!on;
     var btns=form.querySelectorAll('button'); for(var i=0;i<btns.length;i++) btns[i].disabled=!on;
-  }
-  /* PRODUCT_DECISION: SSE echo arrived — clear the box and re-enable. */
-  function ackSend(){
-    if(pendingTimer){ clearTimeout(pendingTimer); pendingTimer=null; }
-    pendingCid=null; textarea.value=''; status.textContent=''; status.style.color='';
-    setComposeEnabled(true); textarea.focus();
   }
   /* PRODUCT_DECISION: no echo / POST failed — keep the text, re-enable, alert the user. */
   function hostDown(){
@@ -29,6 +22,7 @@ window.ChatCompose = (function(){
     setComposeEnabled(true);
     showAlert('The host may be down. Please retry your send.', function(){ textarea.focus(); });
   }
+  // lint:called-once popup-builder-abstraction
   function showAlert(msg, onClose){
     var dlg=document.createElement('dialog'); dlg.className='chat-alert-dialog';
     var p=document.createElement('p'); p.textContent=msg;
@@ -42,7 +36,8 @@ window.ChatCompose = (function(){
     if(pendingCid) return;
     var text=textarea.value;
     if(!text.trim()) return;
-    var cid=newCid(); pendingCid=cid;
+    var cid=(window.crypto&&crypto.randomUUID)?crypto.randomUUID():Date.now()+'-'+Math.random().toString(16).slice(2);
+    pendingCid=cid;
     setComposeEnabled(false); /* PRODUCT_DECISION: keep the text disabled until the host acks. */
     status.style.color='#888'; status.textContent='Sending…';
     pendingTimer=setTimeout(hostDown, 3000);
@@ -102,6 +97,7 @@ window.ChatCompose = (function(){
      wrapper; the compose-body markup (form, textarea, send/image buttons,
      file input, status line, markdown hint) gets built here at init time
      and inserted before the closed-panel inside #chat-right-sidebar. */
+  // lint:called-once dom-scaffold-abstraction
   function buildComposeBody(){
     var body = document.createElement('div');
     body.id = 'chat-compose-body'; body.className = 'chat-compose-body';
@@ -162,7 +158,13 @@ window.ChatCompose = (function(){
     });
   }
   function isPending(){ return !!pendingCid; }
-  function ackIfPending(cid){ if(pendingCid && cid===pendingCid) ackSend(); }
+  /* PRODUCT_DECISION: SSE echo arrived for our pending cid — clear the box and re-enable. */
+  function ackIfPending(cid){
+    if(!(pendingCid && cid===pendingCid)) return;
+    if(pendingTimer){ clearTimeout(pendingTimer); pendingTimer=null; }
+    pendingCid=null; textarea.value=''; status.textContent=''; status.style.color='';
+    setComposeEnabled(true); textarea.focus();
+  }
 
   return { init:init, isPending:isPending, ackIfPending:ackIfPending,
            insertAtCursor:insertAtCursor, setBody:setBody, focus:focus };
