@@ -303,29 +303,35 @@
       background: COLORS.surface, padding: '14px 16px', marginTop: '10px',
     });
 
-    /* Twelve opaque bubbles in three colors, various widths + heights —
+    /* Three colors, twelve-entry size cycle repeated to 36 bubbles —
        enough to overflow a short scroll container so the reader sees
-       scroll-driven selection in action. */
+       scroll-driven selection in action, and to feel the burst-of-
+       keypresses → 700ms debounce in the log. */
     var palette = ['#e74c3c', '#27ae60', '#3498db']; // red, green, blue
-    var dims = [
+    var sizeCycle = [
       [120, 36], [180, 52], [ 90, 30], [220, 64], [150, 44], [110, 38],
       [200, 56], [ 80, 32], [170, 60], [140, 42], [190, 48], [100, 34],
     ];
+    var dims = [];
+    for(var i = 0; i < 36; i++) dims.push(sizeCycle[i % sizeCycle.length]);
 
     /* Scroll surface — tabindex so it can hold keyboard focus when the
        reader clicks, since MessageView's keydown listener is scoped to
        the container on this page (no hijacking page-wide arrows). */
+    var SURFACE_HEIGHT = '220px';
     var scroller = setStyles(document.createElement('div'), {
-      maxHeight: '220px', overflow: 'auto',
+      height: SURFACE_HEIGHT, overflow: 'auto',
       border: '1px solid #ccc', borderRadius: '4px',
-      background: '#fff', padding: '8px',
+      background: '#fff', padding: '8px', boxSizing: 'border-box',
     });
     scroller.tabIndex = 0;
 
+    /* Log surface matches the message list's height + auto-scrolls so it
+       feels like a paired stream, not a stack that grows forever. */
     var logBody = setStyles(document.createElement('div'), {
       fontFamily: 'ui-monospace, Menlo, Consolas, monospace', fontSize: '12px',
       background: '#fff', border: '1px solid ' + COLORS.border, borderRadius: '4px',
-      padding: '8px', minHeight: '120px',
+      padding: '8px', height: SURFACE_HEIGHT, overflowY: 'auto', boxSizing: 'border-box',
     });
     function log(line){
       var entry = document.createElement('div');
@@ -365,11 +371,12 @@
     var hint = setStyles(document.createElement('p'), {
       margin: '0 0 10px', color: COLORS.muted, fontSize: '13px',
     });
-    hint.textContent = 'Demo: twelve opaque rectangles instead of chat bubbles. '
-      + 'Click one, scroll the container, or click into it and use the arrow keys. '
-      + 'Each time selection settles, MessageView fires setSelectedBubble — the '
-      + 'log on the right shows the call. That callback is where chat.js pushes the new '
-      + 'selection onto its back/forward stack and rewrites the URL hash.';
+    hint.textContent = 'Demo: 36 opaque rectangles instead of chat bubbles. '
+      + 'Click one, scroll the container, or click into it and hold an arrow key. '
+      + 'The yellow ring follows every press instantly — but setSelectedBubble waits '
+      + 'for a 700ms rest before reporting, so a burst of presses only logs the place '
+      + 'you SETTLED, not every intermediate step. That callback is where chat.js pushes '
+      + 'the new selection onto its back/forward stack and rewrites the URL hash.';
     var logCaption = setStyles(document.createElement('div'), {
       marginBottom: '4px', fontSize: '13px', color: COLORS.muted,
     });
@@ -533,11 +540,17 @@
     + 'selection onto a back/forward nav stack and rewrites the URL hash. The widget itself owns '
     + 'no policy about what selection MEANS.'));
   lesson4Body.appendChild(buildParagraph(
-    'The demo below uses three colors and a dozen rectangles of varying sizes so scrolling is '
+    'The demo below uses three colors and 36 rectangles of varying sizes so scrolling is '
     + 'forced. Click, scroll, or focus the container and press arrows — every settle fires '
     + 'setSelectedBubble, and the page logs it. The selection ring (yellow box-shadow) is '
     + 'MessageView’s own visual: it injects the .mv-selected stylesheet on first create() the '
     + 'same way Message brought its own.'));
+  lesson4Body.appendChild(buildParagraph(
+    'There’s a 700ms debounce between the visible cursor and the setSelectedBubble call. '
+    + 'The cursor (yellow ring) moves on every keystroke so a burst of arrow presses feels '
+    + 'responsive — but the callback only fires after a brief rest, so the nav stack and URL '
+    + 'hash record where you LANDED, not every intermediate stop. The same debounce gates '
+    + 'scroll-driven re-selection: scrolling fast doesn’t fire the callback per frame.'));
   lesson4Body.appendChild(buildSpoiler({
     label:     'Show message_view.js source',
     openLabel: 'Hide source',
