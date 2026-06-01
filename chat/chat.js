@@ -154,7 +154,6 @@
   });
   backBtn.addEventListener('click', nav.back);
   fwdBtn.addEventListener('click', nav.forward);
-  nav.update();
 
   /* ===== one append wraps view + transcript + supersession + empty-removal =====
      PRODUCT_DECISION: transcript span — literal on-disk block, sibling DOM tree

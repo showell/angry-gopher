@@ -23,12 +23,15 @@
        onChange:          function(canBack, canFwd){...} // enable/disable
        currentSelection:  function(){ return liveSelection; } // for drift check
      })
-       → { push, back, forward, update, drifted, curEntry }
+       → { push, back, forward }
 
-   The walk's `silent:true` hint tells the consumer (e.g. MessageView's
-   focusBubble) to skip whatever side effect would re-push onto the
-   stack. Without it, back/forward would each push the destination on
-   arrival and the stack would never shrink. */
+   Three verbs out, three callbacks in. Drift, curEntry, and the button
+   refresh are internal — the module decides when to recompute them
+   (every push/back/forward + once on create). The walk's `silent:true`
+   hint tells the consumer (e.g. MessageView's focusBubble) to skip
+   whatever side effect would re-push onto the stack. Without it,
+   back/forward would each push the destination on arrival and the
+   stack would never shrink. */
 window.NavStack = (function(){
   'use strict';
 
@@ -76,10 +79,11 @@ window.NavStack = (function(){
       if(pos < entries.length - 1){ pos++; goToEntry(); }
     }
 
-    return {
-      push: push, back: back, forward: forward,
-      update: update, drifted: drifted, curEntry: curEntry,
-    };
+    update(); /* PRODUCT_DECISION: fire onChange once at the start with
+                 the empty-stack state, so the caller's buttons
+                 initialize disabled — no init call to remember. */
+
+    return { push: push, back: back, forward: forward };
   }
 
   return { create: create };
