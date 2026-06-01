@@ -656,21 +656,21 @@ func HandleChatSend(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return
 	}
-	body := strings.TrimSpace(r.FormValue("body"))
+	markdown := strings.TrimSpace(r.FormValue("markdown"))
 	cid := strings.TrimSpace(r.FormValue("cid")) // client-correlation id, echoed on the SSE broadcast
 	async := r.Header.Get("X-Chat-Async") == "1"
 
-	if body == "" {
+	if markdown == "" {
 		chatSendDone(w, r, conv, sessionID, async)
 		return
 	}
-	if strings.HasPrefix(body, "DROP_ON_FLOOR") {
+	if strings.HasPrefix(markdown, "DROP_ON_FLOOR") {
 		// Test back door: accept the POST but neither save nor broadcast, so no
 		// SSE echo returns and the sender's client exercises its timeout path.
 		chatSendDone(w, r, conv, sessionID, async)
 		return
 	}
-	if _, err := AppendChatMessage(user, partner, sessionID, body, cid); err != nil {
+	if _, err := AppendChatMessage(user, partner, sessionID, markdown, cid); err != nil {
 		http.Error(w, "save message: "+err.Error(), http.StatusInternalServerError)
 		return
 	}

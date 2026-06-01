@@ -75,11 +75,13 @@ var (
 // ChatMessage is one stored message. ID is the full MSG_ id written as
 // the MSG_ line atop the block, e.g. "2026-05-23_42" for message #42
 // in session 2026-05-23, and is what MSG_ references resolve to.
+// Markdown is the raw user-typed source (also what the SSE wire calls
+// `markdown`); the wire also carries a server-rendered `html` sibling.
 type ChatMessage struct {
-	From string
-	At   time.Time
-	Body string
-	ID   string
+	From     string
+	At       time.Time
+	Markdown string
+	ID       string
 }
 
 // chatEvent is a message plus its 0-based index in the session, used
@@ -260,15 +262,15 @@ func unescapeBodyLine(line string) string {
 
 // encodeChatBlock renders one message to its on-disk block: the MSG_
 // id line, the from/date header, a blank line, then the verbatim
-// markdown body. No separator — chatStoredForm adds that.
+// markdown source. No separator — chatStoredForm adds that.
 func encodeChatBlock(msg ChatMessage) string {
-	bodyLines := strings.Split(msg.Body, "\n")
-	for i, line := range bodyLines {
-		bodyLines[i] = escapeBodyLine(line)
+	mdLines := strings.Split(msg.Markdown, "\n")
+	for i, line := range mdLines {
+		mdLines[i] = escapeBodyLine(line)
 	}
 	return fmt.Sprintf("MSG_%s\nfrom: %s\ndate: %s\n\n%s",
 		msg.ID, msg.From, msg.At.UTC().Format(time.RFC3339),
-		strings.Join(bodyLines, "\n"))
+		strings.Join(mdLines, "\n"))
 }
 
 // chatStoredForm is exactly what message `index` contributes to the file:
@@ -322,11 +324,11 @@ func decodeChatBlock(piece string) ChatMessage {
 			}
 		}
 	}
-	bodyLines := lines[i+1:] // everything after the blank
-	for j, line := range bodyLines {
-		bodyLines[j] = unescapeBodyLine(line)
+	mdLines := lines[i+1:] // everything after the blank
+	for j, line := range mdLines {
+		mdLines[j] = unescapeBodyLine(line)
 	}
-	msg.Body = strings.Join(bodyLines, "\n")
+	msg.Markdown = strings.Join(mdLines, "\n")
 	return msg
 }
 
@@ -355,11 +357,11 @@ func ReadChatSession(a, b, sessionID string) ([]ChatMessage, error) {
 // writing it to the named session, and publishes it to any live
 // subscribers of that (conv, session). Returns the stored message
 // (with its normalized timestamp + id).
-func AppendChatMessage(from users.User, partnerID, sessionID, body, cid string) (ChatMessage, error) {
+func AppendChatMessage(from users.User, partnerID, sessionID, markdown, cid string) (ChatMessage, error) {
 	convKey := chatPairKey(from.ID, partnerID)
 	subKey := convKey + "/" + sessionID
 	path := chatSessionPath(from.ID, partnerID, sessionID)
-	msg := ChatMessage{From: from.Name, At: time.Now().UTC(), Body: body}
+	msg := ChatMessage{From: from.Name, At: time.Now().UTC(), Markdown: markdown}
 
 	chatMu.Lock()
 	defer chatMu.Unlock()

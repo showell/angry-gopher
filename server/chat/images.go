@@ -141,10 +141,10 @@ func appendImagesEntryLocked(uid string, e imagesEntry) error {
 
 // PublishChatImage fans an image-bearing chat message out to BOTH conv
 // participants' images.md files + their live SSE streams. Called from
-// AppendChatMessage when the body contains <img ...> tags. Lock order:
+// AppendChatMessage when the markdown contains <img ...> tags. Lock order:
 // chatMu (held) → imagesMu (per-user, leaf).
 func PublishChatImage(conv, sid string, msg ChatMessage) {
-	tags := imageTagRe.FindAllString(msg.Body, -1)
+	tags := imageTagRe.FindAllString(msg.Markdown, -1)
 	if len(tags) == 0 {
 		return
 	}

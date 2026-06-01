@@ -31,7 +31,7 @@
     ChatRightSidebar.openCompose();
     ChatCompose.insertAtCursor(
       'In MSG_'+msg.getId()+' '+(msg.isMine()?'I said':'you said')+
-      ':\n~~~ quote\n'+msg.getBody()+'\n~~~\n\n'
+      ':\n~~~ quote\n'+msg.getMarkdown()+'\n~~~\n\n'
     );
   }
   function doRefer(msg){
@@ -48,7 +48,7 @@
     pane.focusBubble(msg.getIndex() + 1);
     var prefix='Edit of MSG_'+msg.getId()+'\n\n';
     ChatRightSidebar.openCompose();
-    ChatCompose.setBody(prefix+msg.getBody(), prefix.length);
+    ChatCompose.setMarkdown(prefix+msg.getMarkdown(), prefix.length);
   }
 
   /* ===== cross-session vs same-session MSG_ ref navigation =====
@@ -92,7 +92,7 @@
   });
 
   /* ===== one append wraps view + supersession + empty-removal =====
-     EDIT_RE: a body starting with "Edit of MSG_<hash>" causes the original
+     EDIT_RE: markdown starting with "Edit of MSG_<hash>" causes the original
      Message to redraw in-place; append-only on disk, only the rendered view
      changes. */
   /* PRODUCT_DECISION: empty-state placeholder is a chat-page convention
@@ -110,7 +110,7 @@
   function appendMessage(m){
     var empty=document.getElementById('chat-empty'); if(empty) empty.remove();
     pane.append(m);
-    var em=(m.body||'').match(EDIT_RE);
+    var em=(m.markdown||'').match(EDIT_RE);
     if(em){ var orig=findById(em[1]); if(orig) orig.markEdited(m.id); }
   }
 

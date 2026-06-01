@@ -33,7 +33,7 @@ window.ChatSearch = (function(){
   function buildTokenIndex(){
     var map=Object.create(null), els=bubbles.querySelectorAll('.chat-msg');
     for(var i=0;i<els.length;i++){
-      var toks=tokenize(els[i]._body||''), seen=Object.create(null);
+      var toks=tokenize(els[i]._markdown||''), seen=Object.create(null);
       for(var j=0;j<toks.length;j++){
         var t=toks[j]; if(seen[t]) continue; seen[t]=1;
         if(map[t]){ map[t].count++; map[t].sample=els[i]; } else map[t]={count:1,sample:els[i]}; /* PRODUCT_DECISION: sample = most recent msg with this token. */
@@ -133,7 +133,7 @@ window.ChatSearch = (function(){
       var tok=document.createElement('span'); highlightInto(tok, t, q.toLowerCase()); head.appendChild(tok);
       var cnt=document.createElement('span'); cnt.className='chat-sr-cnt'; cnt.textContent=info.count+(info.count===1?' msg':' msgs');
       head.appendChild(cnt);
-      var ctx=document.createElement('div'); ctx.className='chat-sr-ctx'; appendSnippet(ctx, info.sample._body||'', t);
+      var ctx=document.createElement('div'); ctx.className='chat-sr-ctx'; appendSnippet(ctx, info.sample._markdown||'', t);
       row.appendChild(head); row.appendChild(ctx);
       SR.list.appendChild(row); SR.items.push({tok:t});
     }
@@ -142,7 +142,7 @@ window.ChatSearch = (function(){
   function runResults(term){
     SR.term=term; SR.phase='results'; SR.list.textContent=''; SR.items=[]; SR.sel=-1;
     var els=bubbles.querySelectorAll('.chat-msg'), res=[];
-    for(var i=0;i<els.length;i++){ if(smartIndexOf(els[i]._body||'', term, 0) >= 0) res.push(els[i]); }
+    for(var i=0;i<els.length;i++){ if(smartIndexOf(els[i]._markdown||'', term, 0) >= 0) res.push(els[i]); }
     /* PRODUCT_DECISION: forward-chronological — matches the rest of the chat
        system (transcript, Images), which reads more naturally than newest-first. */
     if(!res.length){ SR.status.textContent='No messages contain “'+term+'”. Esc to refine.'; return; }
@@ -155,7 +155,7 @@ window.ChatSearch = (function(){
       var body=document.createElement('div'); body.className='chat-sr-rbody';
       var src=el.querySelector('.chat-body'); /* PRODUCT_DECISION: reuse the feed's server-rendered HTML. */
       if(src){ var clone=src.cloneNode(true); highlightRendered(clone, term); body.appendChild(clone); }
-      else highlightInto(body, el._body||'', term); /* APOLOGY: defensive fallback for missing rendered body. */
+      else highlightInto(body, el._markdown||'', term); /* APOLOGY: defensive fallback for missing rendered body. */
       row.appendChild(head); row.appendChild(body);
       SR.list.appendChild(row); SR.items.push({el:el});
     }

@@ -226,10 +226,10 @@ func appendCodeEntryLocked(uid string, e codeEntry) error {
 
 // PublishChatCode fans a code-bearing chat message out to BOTH conv
 // participants' code.md files + their live SSE streams. Called from
-// AppendChatMessage when the body contains ``` fenced blocks. Lock
+// AppendChatMessage when the markdown contains ``` fenced blocks. Lock
 // order: chatMu (held) → codeFileMu (per-user, leaf).
 func PublishChatCode(conv, sid string, msg ChatMessage) {
-	blocks := extractCodeBlocks(msg.Body)
+	blocks := extractCodeBlocks(msg.Markdown)
 	if len(blocks) == 0 {
 		return
 	}

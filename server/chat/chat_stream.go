@@ -116,28 +116,29 @@ func HandleChatStream(w http.ResponseWriter, r *http.Request) {
 
 // chatWireMsg is the JSON payload of one SSE message event. `id` is the
 // full MSG_ id (e.g. "2026-05-23_42"); the client uses it for #msg-<id>
-// anchors and for MSG_ref click resolution.
+// anchors and for MSG_ref click resolution. `markdown` is the raw source;
+// `html` is the server-rendered output of that same source.
 type chatWireMsg struct {
-	Index int    `json:"index"`
-	From  string `json:"from"`
-	Time  string `json:"time"`
-	HTML  string `json:"html"`
-	Body  string `json:"body"` // raw markdown source, for client-side quote-reply
-	ID    string `json:"id"`
-	Mine  bool   `json:"mine"`
-	Cid   string `json:"cid,omitempty"` // sender's correlation id (live broadcast only)
+	Index    int    `json:"index"`
+	From     string `json:"from"`
+	Time     string `json:"time"`
+	HTML     string `json:"html"`
+	Markdown string `json:"markdown"` // raw source, for client-side quote-reply / search
+	ID       string `json:"id"`
+	Mine     bool   `json:"mine"`
+	Cid      string `json:"cid,omitempty"` // sender's correlation id (live broadcast only)
 }
 
 func writeChatEvent(w io.Writer, rc *http.ResponseController, evt chatEvent, me string) error {
 	wire := chatWireMsg{
-		Index: evt.Index,
-		From:  evt.Msg.From,
-		Time:  formatChatTime(evt.Msg.At),
-		HTML:  string(RenderChatMarkdown(evt.Msg.Body)),
-		Body:  evt.Msg.Body,
-		ID:    evt.Msg.ID,
-		Mine:  evt.Msg.From == me,
-		Cid:   evt.Cid,
+		Index:    evt.Index,
+		From:     evt.Msg.From,
+		Time:     formatChatTime(evt.Msg.At),
+		HTML:     string(RenderChatMarkdown(evt.Msg.Markdown)),
+		Markdown: evt.Msg.Markdown,
+		ID:       evt.Msg.ID,
+		Mine:     evt.Msg.From == me,
+		Cid:      evt.Cid,
 	}
 	data, err := json.Marshal(wire)
 	if err != nil {

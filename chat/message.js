@@ -187,7 +187,7 @@ window.Message = (function(){
       bubble.id='msg-'+data.id;
       bubble.setAttribute('data-i',  data.index);
       bubble.setAttribute('data-id', data.id);
-      bubble._body = data.body; /* PRODUCT_DECISION: keep raw markdown source on the element — ChatSearch reads it. */
+      bubble._markdown = data.markdown; /* PRODUCT_DECISION: keep raw markdown source on the element — ChatSearch reads it. */
       bubble.appendChild(buildMeta());
       var body=document.createElement('div'); body.className='chat-body';
       body.innerHTML=data.html; /* PRODUCT_DECISION: data.html is sanitized server-side. */
@@ -211,7 +211,7 @@ window.Message = (function(){
       var spoiler=document.createElement('details'); spoiler.className='chat-edited-spoiler';
       var summary=document.createElement('summary'); summary.textContent='original'; spoiler.appendChild(summary);
       var orig=document.createElement('div'); orig.className='chat-edited-orig';
-      orig.textContent=data.body;
+      orig.textContent=data.markdown;
       spoiler.appendChild(orig);
       bodyEl.appendChild(note); bodyEl.appendChild(spoiler);
     }
@@ -222,7 +222,7 @@ window.Message = (function(){
       getElement:  function(){ return bubble; },
       getId:       function(){ return data.id; },
       getIndex:    function(){ return data.index; },
-      getBody:     function(){ return data.body; },
+      getMarkdown: function(){ return data.markdown; },
       isMine:      function(){ return data.mine; },
     };
     return api;

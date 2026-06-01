@@ -43,7 +43,7 @@ window.ChatCompose = (function(){
     pendingTimer=setTimeout(hostDown, 3000);
     fetch(SESSION_BASE+'/send',{ method:'POST',
       headers:{'Content-Type':'application/x-www-form-urlencoded','X-Chat-Async':'1'},
-      body:'body='+encodeURIComponent(text)+'&cid='+encodeURIComponent(cid)
+      body:'markdown='+encodeURIComponent(text)+'&cid='+encodeURIComponent(cid)
     }).then(function(r){ if(!r.ok) throw new Error('status '+r.status); /* PRODUCT_DECISION: real confirmation is the SSE echo. */ })
       .catch(hostDown);
   }
@@ -52,7 +52,7 @@ window.ChatCompose = (function(){
     textarea.value=v.slice(0,s)+text+v.slice(e);
     textarea.selectionStart=textarea.selectionEnd=s+text.length; textarea.focus();
   }
-  function setBody(text, caretAt){
+  function setMarkdown(text, caretAt){
     textarea.value=text;
     if(typeof caretAt==='number') textarea.setSelectionRange(caretAt, caretAt);
   }
@@ -167,5 +167,5 @@ window.ChatCompose = (function(){
   }
 
   return { init:init, isPending:isPending, ackIfPending:ackIfPending,
-           insertAtCursor:insertAtCursor, setBody:setBody, focus:focus };
+           insertAtCursor:insertAtCursor, setMarkdown:setMarkdown, focus:focus };
 })();

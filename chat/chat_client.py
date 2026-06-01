@@ -16,7 +16,7 @@ every call starts from discovery and then acts on a chosen (conv, sid):
   read(conv, sid)          GET  /chat/c/<conv>/<sid>/stream?since=0
       replay one session's transcript (the SSE backlog, then idle-exit).
 
-  post(conv, sid, body)    POST /chat/c/<conv>/<sid>/send   (form field `body`)
+  post(conv, sid, markdown)  POST /chat/c/<conv>/<sid>/send (form field `markdown`)
       append one message.
 
 Discovery is a passive read (no last-viewed pointer is moved), so a bot can
@@ -35,7 +35,7 @@ CLI (the ops/ wrappers call these; you normally run the wrappers):
     GOPHER_API_KEY=… python3 chat_client.py conversations <base_url>
     GOPHER_API_KEY=… python3 chat_client.py fetch <base_url> <partner> [<sid>]
     GOPHER_API_KEY=… python3 chat_client.py post  <base_url> <partner> [<sid>]
-                                                    (message body on stdin)
+                                                    (markdown on stdin)
     GOPHER_API_KEY=… python3 chat_client.py docs-list <base_url>
     GOPHER_API_KEY=… python3 chat_client.py docs-read <base_url> <slug>
 
@@ -106,9 +106,9 @@ class ChatClient:
         except (socket.timeout, TimeoutError):
             pass  # idle gap = end of the one-shot backlog
 
-    def post(self, conv, sid, body):
+    def post(self, conv, sid, markdown):
         """Append one message to a session (raises on a non-204 reply)."""
-        data = urllib.parse.urlencode({"body": body}).encode()
+        data = urllib.parse.urlencode({"markdown": markdown}).encode()
         req = self._request(
             f"/chat/c/{conv}/{urllib.parse.quote(sid)}/send",
             data=data,
@@ -177,7 +177,7 @@ def main():
     if cmd in ("fetch", "post"):
         if len(argv) < 3:
             sys.exit(f"usage: chat_client.py {cmd} <base_url> <partner> [<sid>]"
-                     + ("  (body on stdin)" if cmd == "post" else ""))
+                     + ("  (markdown on stdin)" if cmd == "post" else ""))
         partner = argv[2]
         explicit_sid = argv[3] if len(argv) > 3 else None
         conv, sid = client.resolve(partner, explicit_sid)
