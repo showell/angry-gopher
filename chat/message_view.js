@@ -210,8 +210,13 @@ window.MessageView = (function(){
        Per-bubble action routing (popups, quote/refer/edit) is the Message's
        responsibility — it attaches its own listener that doesn't stop
        propagation, so this one still sees the click. */
+    /* PRODUCT_DECISION: defaultPrevented === "the click already navigated
+       somewhere (e.g. an msg-ref jump)" — Message calls preventDefault
+       on those, and focusBubble has already painted the TARGET bubble.
+       Selecting the source here would overwrite that paint, so bail. */
     container.addEventListener('click', function(e){
       if(inBacklog) return;
+      if(e.defaultPrevented) return;
       var t = e.target, hitIdx = 0;
       for(var i = 0; i < els.length; i++){
         if(els[i] === t || els[i].contains(t)){ hitIdx = i + 1; break; }
