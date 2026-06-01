@@ -452,15 +452,16 @@
 
     var panel = buildLogPanel();
 
-    /* Forward-reference: setSelectedBubble fires nav.push, but nav
-       doesn't exist yet at construction time of the scroller. The
-       callback closes over `nav` (declared, assigned below) — JS
-       hoisting handles it as long as no user click reaches nav.push
-       before nav is assigned. */
+    /* Forward-reference: the callback closes over `nav` (declared
+       here, assigned below). buildColoredScroller runs endBacklog
+       synchronously, which fires setSelectedBubble once for the
+       anchored bubble — before nav exists. Guard the push; the
+       initial selection wasn't a user action anyway, so dropping it
+       on the floor matches the chat page's behavior. */
     var nav;
     var scr = buildColoredScroller(function(idx){
       panel.log('setSelectedBubble(' + idx + ')');
-      nav.push(idx);
+      if(nav) nav.push(idx);
     });
 
     nav = NavStack.create({
