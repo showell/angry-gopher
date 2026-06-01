@@ -187,6 +187,7 @@ window.Message = (function(){
       bubble.id='msg-'+data.id;
       bubble.setAttribute('data-i',  data.index);
       bubble.setAttribute('data-id', data.id);
+      bubble._body = data.body; /* PRODUCT_DECISION: keep raw markdown source on the element — ChatSearch reads it. */
       bubble.appendChild(buildMeta());
       var body=document.createElement('div'); body.className='chat-body';
       body.innerHTML=data.html; /* PRODUCT_DECISION: data.html is sanitized server-side. */
