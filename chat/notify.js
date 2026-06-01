@@ -15,6 +15,10 @@ window.ChatNotify = (function(){
   'use strict';
   var notifyEl = document.getElementById('chat-notify');
   if(!notifyEl) return { show: function(){} };
+  /* Pre-refactor the strip sat inside a wrapper that provided this
+     gap; the wrapper went away with the Rendered/Transcript toggle.
+     Notify owns its own presentation now, including this margin. */
+  notifyEl.style.marginBottom = '8px';
 
   /* BROWSER_WORKAROUND: tab background isn't exposed to JS, so we paint the
      favicon (a 32px canvas, violet on alert / transparent on reset). We
