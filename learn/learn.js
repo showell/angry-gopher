@@ -182,20 +182,20 @@
   var wrap = buildWrap();
   wrap.appendChild(buildIntro());
 
-  /* Lesson 1 — images.js (87 LOC). */
+  /* Lesson 1 — chat_image_popup.js (48 LOC). */
   var lesson1Body = document.createElement('div');
   lesson1Body.appendChild(buildSpoiler({
-    label:     'Show source (87 lines)',
+    label:     'Show source (48 lines)',
     openLabel: 'Hide source',
-    render: function(box){ box.appendChild(buildSourcePanel('/learn/source/images.js')); },
+    render: function(box){ box.appendChild(buildSourcePanel('/learn/source/chat_image_popup.js')); },
   }));
   lesson1Body.appendChild(buildPopupDemo());
 
   wrap.appendChild(buildSection({
-    title: 'Lesson 1: images.js',
-    lede:  'A read-only feed of every image you can see across all your chats. '
-         + 'It owns no popup of its own — it delegates to ChatImagePopup, which the chat bubbles also use. '
-         + 'That’s why the source is short: one EventSource, one render function, one click handler.',
+    title: 'Lesson 1: chat_image_popup.js',
+    lede:  'A tiny shared module that opens an image in a zoomable <dialog>. '
+         + 'The chat feed, the search panel, and the Images transcript all delegate to it via ChatImagePopup.show(src). '
+         + 'Click the cat below to see exactly what those callers see — same module, no chat around it.',
     body:  lesson1Body,
   }));
 

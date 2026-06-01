@@ -49,7 +49,7 @@ func HandleLearnJS(w http.ResponseWriter, r *http.Request) {
 // into learn.js — the explicit allowlist keeps the source endpoint from
 // accidentally exposing anything we didn't curate.
 var learnSourceAllowlist = map[string]string{
-	"images.js": "chat/images.js",
+	"chat_image_popup.js": "chat/chat_image_popup.js",
 }
 
 // HandleLearnSource serves the raw text of an allowlisted JS module so the
