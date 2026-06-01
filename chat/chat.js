@@ -148,7 +148,7 @@
 
   /* ===== nav stack instantiation + back / forward bindings ===== */
   nav = NavStack.create({
-    walk:             view.focusBubble,
+    gotoMessage:      function(idx){ view.focusBubble(idx, {silent:true}); },
     onChange:         function(canBack, canFwd){ backBtn.disabled=!canBack; fwdBtn.disabled=!canFwd; },
     currentSelection: view.getSelected,
   });

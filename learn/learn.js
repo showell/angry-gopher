@@ -464,9 +464,9 @@
     });
 
     nav = NavStack.create({
-      walk: function(entry, opts){
-        panel.log('walk(' + entry + ', silent=' + !!opts.silent + ')');
-        scr.view.focusBubble(entry, opts);
+      gotoMessage: function(entry){
+        panel.log('gotoMessage(' + entry + ')');
+        scr.view.focusBubble(entry, {silent:true});
       },
       onChange: function(canBack, canFwd){
         backBtn.disabled = !canBack;
@@ -668,24 +668,17 @@
      unstyled <button>s. ---- */
   var lesson5Body = document.createElement('div');
   lesson5Body.appendChild(buildParagraph(
-    'NavStack is the cursor-into-history that Back and Forward orbit around. It’s pure state '
-    + 'machine — three callbacks in (walk, onChange, currentSelection), three verbs out (push, '
-    + 'back, forward). Nothing about it knows what an entry IS; the chat conversation uses '
-    + 'bubble indices, but the demo here uses the same indices for the same reason and the '
-    + 'NavStack doesn’t care either way.'));
+    'NavStack is just a stack — push, back, forward — wrapped around a cursor so back and '
+    + 'forward walk it instead of popping. The button-and-hotkey orchestration stays in chat.js '
+    + 'where it belongs (Lesson 6 will cover that). Three callbacks in, three verbs out: '
+    + 'gotoMessage(entry) is "navigate to entry," onChange(canBack, canFwd) is the button-enable '
+    + 'hook, currentSelection() returns the live selection for drift detection.'));
   lesson5Body.appendChild(buildParagraph(
-    'The three callbacks are how the module stays decoupled: walk(entry, opts) is "go to this '
-    + 'entry" — for the chat (and this demo) that’s view.focusBubble; onChange(canBack, canFwd) '
-    + 'is the button-enable hook; currentSelection() returns whatever the live selection is right '
-    + 'now, used for drift detection. The opts.silent flag on walk tells the consumer "don’t '
-    + 're-push on arrival" — without it back/forward would each push the destination as they '
-    + 'land, and the stack would never shrink.'));
-  lesson5Body.appendChild(buildParagraph(
-    'Drift: after a push, the live selection can wander off (the user scrolls, or arrows to a '
-    + 'new bubble without resting long enough for a push). currentSelection() != entries[pos] '
-    + '— that’s drift. The first Back in that state recovers to the marked entry instead of '
-    + 'popping, so Back means "get me back to where I was" first and "pop the stack" second. '
-    + 'Try it in the demo: click bubble #20, then scroll up or down, then click Back.'));
+    'Drift: after a push, the live selection can wander off — the user scrolls, or arrows to a '
+    + 'new bubble without resting long enough for a push to fire. The first Back in that state '
+    + 'recovers to the marked entry instead of popping, so Back means "get me back to where I '
+    + 'was" first and "pop the stack" second. Try it in the demo: click bubble #20, scroll up '
+    + 'or down, then click Back.'));
   lesson5Body.appendChild(buildSpoiler({
     label:     'Show nav_stack.js source',
     openLabel: 'Hide source',
