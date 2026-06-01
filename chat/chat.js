@@ -167,7 +167,14 @@
          cursorToExtreme(true) with stick→false would record-too-fast on a burst. */
       pane.cursorToExtreme(true);
     }
-    if(m.cid) ChatCompose.ackIfPending(m.cid); /* PRODUCT_DECISION: our message round-tripped (saved + echoed). */
+    if(m.cid){
+      /* PRODUCT_DECISION: our message round-tripped (saved + echoed). The
+         status-bar ping doubles as a self-test for #chat-notify — every
+         send exercises the same DOM target the other-conv ping uses, so
+         a regression there shows up the next time you talk to anyone. */
+      ChatCompose.ackIfPending(m.cid);
+      ChatNotify.show('✓ '+m.id+' sent');
+    }
     if(ChatSearch.isOpen()) ChatSearch.refreshIfOpen();
   };
 

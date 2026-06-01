@@ -1,10 +1,20 @@
-/* PRODUCT_DECISION: per-user SSE notification feed, shared across chat + docs.
-   Pings the #chat-notify status line and flips the favicon violet so a
-   backgrounded tab still signals unread. No-op on pages without #chat-notify. */
-(function(){
+/* ChatNotify — owns the #chat-notify status strip + the favicon dot.
+
+   Two write paths land in the strip:
+     1) Incoming-message pings from other conversations (this module's
+        own SSE on /chat/notifications). Triggers a favicon alert
+        because the user is, by definition, NOT looking at that thread.
+     2) Self-confirm pings from chat.js when our own message round-trips
+        the SSE echo (carries our cid). No favicon paint — we're in
+        the tab. Doubles as a low-cost regression check: every send is
+        a working live demo of the status bar wiring.
+
+   No-op on pages without #chat-notify (the docs landing has the strip
+   too via .docs-notify; everything else just doesn't get the element). */
+window.ChatNotify = (function(){
   'use strict';
-  var notifyEl=document.getElementById('chat-notify');
-  if(!notifyEl) return;
+  var notifyEl = document.getElementById('chat-notify');
+  if(!notifyEl) return { show: function(){} };
 
   /* BROWSER_WORKAROUND: tab background isn't exposed to JS, so we paint the
      favicon (a 32px canvas, violet on alert / transparent on reset). We
@@ -22,6 +32,15 @@
   function alertTab(){ paintFavicon('#8a2be2'); }
   function clearTab(){ paintFavicon(null); }
 
+  /* show(content) — replace the strip's body. `content` is a string
+     (plain text) or an Element (e.g. the SSE-ping link). Favicon paint
+     is the caller's job — the self-confirm path doesn't want it. */
+  function show(content){
+    notifyEl.textContent = '';
+    if(typeof content === 'string') notifyEl.textContent = content;
+    else notifyEl.appendChild(content);
+  }
+
   /* PRODUCT_DECISION: suppress pings for the session you're already viewing.
      Only the chat conversation page exposes #chat-root with data-conv/data-session;
      on docs (and elsewhere with #chat-notify) every ping is relevant. */
@@ -33,12 +52,13 @@
     var n; try{ n=JSON.parse(e.data); }catch(err){ console.error('notify: malformed JSON from /chat/notifications', e.data, err); return; }
     if(!n||!n.session) return;
     if(n.conv===CONV && n.session===SESSION) return; /* PRODUCT_DECISION: already in the open feed. */
-    notifyEl.textContent='';
     var a=document.createElement('a'); /* PRODUCT_DECISION: textContent only — from/session are untrusted. */
     a.href='/chat/c/'+encodeURIComponent(n.conv)+'/'+encodeURIComponent(n.session);
     a.textContent=n.from+' sent you a message on '+n.session;
     a.addEventListener('click', clearTab);
-    notifyEl.appendChild(a);
+    show(a);
     alertTab();
   };
+
+  return { show: show };
 })();
