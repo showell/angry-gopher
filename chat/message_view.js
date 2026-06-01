@@ -317,6 +317,20 @@ window.MessageView = (function(){
       if(selected > 0) armedScroll(function(){ revealEl(els[selected - 1]); });
     }
 
+    /* BROWSER_WORKAROUND: element.scrollIntoView walks UP every scrollable
+       ancestor — fine on the chat page (html/body don't scroll) but on
+       any page where the document scrolls (e.g. /learn), centering the
+       bubble in the inner container ALSO scrolls the page to bring that
+       container into view, yanking the rest of the layout around. Compute
+       the centered scrollTop against the container directly so the
+       container is the only thing that moves. */
+    function centerInContainer(el){
+      var cr = container.getBoundingClientRect();
+      var er = el.getBoundingClientRect();
+      var offset = (er.top + er.height / 2) - (cr.top + cr.height / 2);
+      container.scrollTop += offset;
+    }
+
     /* PRODUCT_DECISION: scroll a bubble to view-center (the "deep navigation
        arriving at this message" pattern). silent=true cancels any pending
        settle and applies the class only, no setSelectedBubble fire — used
@@ -325,7 +339,7 @@ window.MessageView = (function(){
       opts = opts || {};
       if(idx < 1 || idx > els.length) return;
       var el = els[idx - 1];
-      armedScroll(function(){ el.scrollIntoView({block:'center', behavior:'auto'}); });
+      armedScroll(function(){ centerInContainer(el); });
       if(opts.silent){
         if(settleTimer){ clearTimeout(settleTimer); settleTimer = null; }
         applySelection(idx);
@@ -356,7 +370,7 @@ window.MessageView = (function(){
         focusBubble(opts.focusIdx);
         stabilize(function(){
           var el = els[opts.focusIdx - 1];
-          armedScroll(function(){ el.scrollIntoView({block:'center', behavior:'auto'}); });
+          armedScroll(function(){ centerInContainer(el); });
         });
       } else if(opts.anchor === 'bottom'){
         armedScroll(function(){ container.scrollTop = container.scrollHeight; });
