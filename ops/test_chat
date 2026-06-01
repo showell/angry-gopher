@@ -68,6 +68,9 @@ phase "images-js" node --check chat/images.js
 echo "==> code.js syntax"
 phase "code-js" node --check chat/code.js
 
+echo "==> learn.js syntax"
+phase "learn-js" node --check learn/learn.js
+
 echo "==> chat_client.py syntax"
 phase "chat-py" python3 -m py_compile chat/chat_client.py
 

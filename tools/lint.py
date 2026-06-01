@@ -316,7 +316,7 @@ def find_violations(path: pathlib.Path) -> list[dict]:
 
 
 def main() -> int:
-    files = sorted((REPO / "chat").glob("*.js"))
+    files = sorted((REPO / "chat").glob("*.js")) + sorted((REPO / "learn").glob("*.js"))
     all_violations: list[dict] = []
     for path in files:
         all_violations.extend(find_violations(path))

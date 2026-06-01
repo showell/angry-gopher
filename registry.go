@@ -5,7 +5,9 @@ package main
 import (
 	"angry-gopher/server/chat"
 	"angry-gopher/server/home"
+	"angry-gopher/server/learn"
 	"angry-gopher/server/lynrummy"
+	"angry-gopher/server/web"
 	"net/http"
 )
 
@@ -67,4 +69,11 @@ func RegisterPages(mux *http.ServeMux) {
 	// is the editor, /chat/docs/<slug>.md the raw file. Registered after the
 	// literal verbs above, which Go 1.22's ServeMux prefers over this wildcard.
 	mux.HandleFunc("/chat/docs/{slug}", chat.HandleDocsItem)
+	// /learn — tutorial page (top-level, unauthed). See server/learn.
+	mux.HandleFunc("/learn", learn.HandleLearn)
+	mux.HandleFunc("/learn/learn.js", learn.HandleLearnJS)
+	mux.HandleFunc("/learn/source/{file}", learn.HandleLearnSource)
+	// /images/<file> — shared brand assets (avatars etc). Explicit
+	// allowlist lives in server/web/images.go.
+	mux.HandleFunc("/images/{file}", web.HandleImage)
 }

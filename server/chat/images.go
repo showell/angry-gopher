@@ -198,7 +198,7 @@ func HandleImages(w http.ResponseWriter, r *http.Request) {
 	chatPageHeader(w, "Images", user, "images")
 	fmt.Fprint(w, `<div class="chat-notify" id="chat-notify"></div>`)
 	fmt.Fprint(w, imagesCSS)
-	fmt.Fprint(w, imagePopupCSS)
+	fmt.Fprint(w, ImagePopupCSS)
 	renderImagesList(w, entries)
 	fmt.Fprintf(w,
 		`<script src="/chat/chat_image_popup.js?v=%s"></script>`+

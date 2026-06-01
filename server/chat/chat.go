@@ -489,7 +489,7 @@ func renderChatConversation(w http.ResponseWriter, user users.User, partnerID, c
 
 	chatPageHeader(w, "Chat w/"+partnerName+": "+sessionID, user, "")
 	fmt.Fprint(w, chatCSS)
-	fmt.Fprint(w, imagePopupCSS)
+	fmt.Fprint(w, ImagePopupCSS)
 	fmt.Fprint(w, codePopupCSS)
 	// data-conv + data-session let chat.js build the API URLs
 	// (/chat/c/<conv>/<sid>/{stream,send,upload}) without re-deriving
@@ -691,10 +691,11 @@ const codePopupCSS = `<style>
                   line-height:1.45; white-space:pre; color:#222; cursor:auto; }
 </style>`
 
-// imagePopupCSS styles the shared <dialog> opened by ChatImagePopup.show.
-// Emitted on every page that loads chat_image_popup.js — currently the
-// chat conversation page and the Images transcript.
-const imagePopupCSS = `<style>
+// ImagePopupCSS styles the shared <dialog> opened by ChatImagePopup.show.
+// Exported because any page that loads chat_image_popup.js needs it (chat,
+// Images transcript, and the /learn demo). When chat_image_popup.js
+// eventually inlines its own styles, this constant goes away.
+const ImagePopupCSS = `<style>
 .chat-img-dialog { border:1px solid #000080; border-radius:10px; padding:10px;
                    display:flex; flex-direction:column; gap:8px; }
 .chat-img-dialog::backdrop { background:rgba(0,0,0,0.55); }
@@ -866,7 +867,7 @@ html, body { height:100%; }
    reflow upward and yank "scroll-to-bottom" off-target. */
 .chat-body img { max-width:100%; max-height:320px; width:auto; height:auto;
                  display:block; margin:6px 0; border-radius:6px; cursor:zoom-in; }
-/* Image popup rules live in imagePopupCSS — emitted on both the chat
+/* Image popup rules live in ImagePopupCSS — emitted on both the chat
    conversation page and the Images transcript page since both surfaces
    open the same dialog via ChatImagePopup.show. */
 /* Code popup rules live in codePopupCSS — emitted on every page that
