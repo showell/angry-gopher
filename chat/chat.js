@@ -7,17 +7,21 @@
 
   /* ===== message store — parallel to MessageView's bubble list =====
      PRODUCT_DECISION: chat.js holds the SSE records as plain data
-     (`records`), and the corresponding Message instances (`messages`)
-     in the same order. Records are what ChatSearch + quote/refer/edit
-     read; Message instances are what handles clicks + owns the bubble
-     DOM. byId indexes both by message id for O(1) lookup (supersession
-     + same-session navigateRef). msg.getIndex() is server-assigned
-     0-based; view index is 1-based; the two are kept consistent
-     because we always append in order. */
+     (`records`), and the corresponding Message widgets (`messages`) in
+     the same order. Records are what every domain action reads — quote,
+     refer, edit, search, navigateRef, onSelect, finishBacklog — because
+     the data lives there. Message widgets only own the bubble DOM +
+     click routing + in-place supersession; their public API is just
+     {render, markEdited, getElement}. byId indexes both arrays by
+     message id for O(1) lookup. Server-assigned index is 0-based; the
+     view index is 1-based; the two stay consistent because we always
+     append in order. */
   var records = [];
   var messages = [];
   var byId = new Map(); // id -> position in records / messages
-  function findMsg(id){ var i=byId.get(id); return i==null ? null : messages[i]; } // lint:null-undefined-check map-get
+  function recordById(id){ var i=byId.get(id); return i==null ? null : records[i]; }   // lint:null-undefined-check map-get
+  // lint:called-once supersession-only — named to match recordById sibling
+  function widgetById(id){ var i=byId.get(id); return i==null ? null : messages[i]; }  // lint:null-undefined-check map-get
 
   /* ===== domain actions (called from Message clicks AND ChatHelp keys) =====
      PRODUCT_DECISION: doQuote/doRefer/doEdit/navigateRef call pane.focusBubble,
@@ -26,30 +30,30 @@
      callback), so the forward reference is safe. */
   var pane;
 
-  function doQuote(msg){
+  function doQuote(rec){
     if(ChatCompose.isPending()) return;
-    pane.focusBubble(msg.getIndex() + 1);
+    pane.focusBubble(rec.index + 1);
     ChatRightSidebar.openCompose();
     ChatCompose.insertAtCursor(
-      'In MSG_'+msg.getId()+' '+(msg.isMine()?'I said':'you said')+
-      ':\n~~~ quote\n'+msg.getMarkdown()+'\n~~~\n\n'
+      'In MSG_'+rec.id+' '+(rec.mine?'I said':'you said')+
+      ':\n~~~ quote\n'+rec.markdown+'\n~~~\n\n'
     );
   }
-  function doRefer(msg){
+  function doRefer(rec){
     if(ChatCompose.isPending()) return;
-    pane.focusBubble(msg.getIndex() + 1);
+    pane.focusBubble(rec.index + 1);
     ChatRightSidebar.openCompose();
-    ChatCompose.insertAtCursor('See MSG_'+msg.getId()+' ');
+    ChatCompose.insertAtCursor('See MSG_'+rec.id+' ');
   }
   /* PRODUCT_DECISION: Edit composes a NEW message with an "Edit of MSG_<hash>"
-     backlink and the caret at the start of the original body. Append-only +
+     backlink and the caret at the start of the original markdown. Append-only +
      transparent — no copy/paste, the backlink wires the relation. */
-  function doEdit(msg){
+  function doEdit(rec){
     if(ChatCompose.isPending()) return;
-    pane.focusBubble(msg.getIndex() + 1);
-    var prefix='Edit of MSG_'+msg.getId()+'\n\n';
+    pane.focusBubble(rec.index + 1);
+    var prefix='Edit of MSG_'+rec.id+'\n\n';
     ChatRightSidebar.openCompose();
-    ChatCompose.setMarkdown(prefix+msg.getMarkdown(), prefix.length);
+    ChatCompose.setMarkdown(prefix+rec.markdown, prefix.length);
   }
 
   /* ===== cross-session vs same-session MSG_ ref navigation =====
@@ -63,8 +67,8 @@
     if(cut<=0) return;
     var targetSession=id.substring(0,cut);
     if(targetSession===SESSION){
-      var msg=findMsg(id);
-      if(msg) pane.focusBubble(msg.getIndex() + 1);
+      var rec=recordById(id);
+      if(rec) pane.focusBubble(rec.index + 1);
       return;
     }
     window.open('/chat/c/'+encodeURIComponent(CONV)+'/'+encodeURIComponent(targetSession)+'#msg-'+id, '_blank');
@@ -86,11 +90,11 @@
       return msg.render();
     },
     onSelect: function(idx){
-      var msg=messages[idx-1];
-      if(!msg) return;
+      var rec=records[idx-1];
+      if(!rec) return;
       /* BROWSER_WORKAROUND: window.history — chat.js shadows the global `history`
          with the #chat-history DOM element near the top of this IIFE. */
-      window.history.replaceState({}, '', '#msg-'+msg.getId());
+      window.history.replaceState({}, '', '#msg-'+rec.id);
     },
   });
 
@@ -114,7 +118,7 @@
     var empty=document.getElementById('chat-empty'); if(empty) empty.remove();
     pane.append(m);
     var em=(m.markdown||'').match(EDIT_RE);
-    if(em){ var orig=findMsg(em[1]); if(orig) orig.markEdited(m.id); }
+    if(em){ var orig=widgetById(em[1]); if(orig) orig.markEdited(m.id); }
   }
 
   /* ===== entry-point fragment (#msg-<id>) ===== */
@@ -139,9 +143,9 @@
     inBacklog=false;
     var opts={};
     if(wantFocusID){
-      var msg=findMsg(wantFocusID);
+      var rec=recordById(wantFocusID);
       wantFocusID=null;
-      if(msg) opts.focusIdx=msg.getIndex()+1;
+      if(rec) opts.focusIdx=rec.index+1;
     } else if(wasCaughtUpAtBacklogStart){
       opts.anchor='bottom';
     }
@@ -191,8 +195,8 @@
     focusFeed: pane.focus,
     records:   records, /* live ref — same array chat.js pushes onto */
     jumpToId: function(id){
-      var msg=findMsg(id);
-      if(msg) pane.focusBubble(msg.getIndex()+1);
+      var rec=recordById(id);
+      if(rec) pane.focusBubble(rec.index+1);
     },
   });
   ChatLeftSidebar.init({ conv: CONV });
@@ -214,7 +218,7 @@
     forward:     pane.forward,
     getSelectedMessage: function(){
       var idx=pane.getSelected();
-      return idx>0 ? messages[idx-1] : null;
+      return idx>0 ? records[idx-1] : null;
     },
     quoteReply:  doQuote,
     referReply:  doRefer,

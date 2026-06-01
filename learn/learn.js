@@ -248,9 +248,9 @@
       logBody.scrollTop = logBody.scrollHeight;
     }
     var callbacks = {
-      onQuote:  function(m){    log('onQuote(MSG_'  + m.getId() + ')'); },
-      onRefer:  function(m){    log('onRefer(MSG_'  + m.getId() + ')'); },
-      onEdit:   function(m){    log('onEdit(MSG_'   + m.getId() + ')'); },
+      onQuote:  function(r){    log('onQuote(MSG_'  + r.id + ')'); },
+      onRefer:  function(r){    log('onRefer(MSG_'  + r.id + ')'); },
+      onEdit:   function(r){    log('onEdit(MSG_'   + r.id + ')'); },
       onMsgRef: function(link){ log('onMsgRef('     + link.getAttribute('href') + ')'); },
     };
 
@@ -531,14 +531,14 @@
     var mount = document.createElement('div');
     wrapper.appendChild(mount);
 
-    /* Same id→Message lookup chat.js builds for cross-message
+    /* Same id→record lookup chat.js maintains for cross-message
        navigation. msg-ref clicks find their target through this. */
-    var messagesById = Object.create(null);
+    var recordsById = Object.create(null);
     var pane;
     function navigateRef(linkEl){
       var id = (linkEl.getAttribute('href') || '').replace(/^#msg-/, '');
-      var msg = messagesById[id];
-      if(msg) pane.focusBubble(msg.getIndex() + 1);
+      var rec = recordsById[id];
+      if(rec) pane.focusBubble(rec.index + 1);
     }
 
     pane = ChatMiddlePane.init({
@@ -547,13 +547,15 @@
       renderBubble: function(idx, data){
         var msg = Message.create(data, {
           /* The real chat.js routes these into the compose box; the
-             demo just announces the verb so the buttons aren't dead. */
-          onQuote:  function(m){ alert('quote-reply to MSG_' + m.getId()); },
-          onRefer:  function(m){ alert('insert "See MSG_' + m.getId() + '" into compose'); },
-          onEdit:   function(m){ alert('compose "Edit of MSG_' + m.getId() + '"'); },
+             demo just announces the verb so the buttons aren't dead.
+             onQuote/onRefer/onEdit receive the SSE record — data, not
+             a widget. */
+          onQuote:  function(r){ alert('quote-reply to MSG_' + r.id); },
+          onRefer:  function(r){ alert('insert "See MSG_' + r.id + '" into compose'); },
+          onEdit:   function(r){ alert('compose "Edit of MSG_' + r.id + '"'); },
           onMsgRef: navigateRef,
         });
-        messagesById[msg.getId()] = msg;
+        recordsById[data.id] = data;
         return msg.render();
       },
     });

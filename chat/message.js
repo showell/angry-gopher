@@ -16,30 +16,32 @@
 
    Click routing summary:
      image / pre inside body  → ChatImagePopup.show / ChatCodePopup.show
-     msg-ref link inside body → deps.onMsgRef(linkEl)   (domain navigation)
-     quote-reply button       → deps.onQuote(msg)        (affects compose)
-     refer button             → deps.onRefer(msg)        (affects compose)
-     edit button              → deps.onEdit(msg)         (affects compose)
+     msg-ref link inside body → deps.onMsgRef(linkEl)    (domain navigation)
+     quote-reply button       → deps.onQuote(record)     (affects compose)
+     refer button             → deps.onRefer(record)     (affects compose)
+     edit button              → deps.onEdit(record)      (affects compose)
      external <a> / plain     → no-op (browser default + bubble up)
+
+   The record passed to onQuote/onRefer/onEdit is the same SSE payload
+   handed to create() — bubble actions are data, not DOM. The widget
+   doesn't expose getters; if the caller needs id / markdown / mine,
+   it reads them off the record directly.
 
    Clicks never stopPropagation, so an outer container listener
    (MessageView) still sees the click and can update selection.
 
    Usage sketch:
 
-     var msg = Message.create(m, {
-       onQuote:  function(msg){ if(!ChatCompose.isPending()) doQuote(msg); },
-       onRefer:  function(msg){ if(!ChatCompose.isPending()) doRefer(msg); },
-       onEdit:   function(msg){ if(!ChatCompose.isPending()) doEdit(msg); },
+     var msg = Message.create(rec, {
+       onQuote:  function(r){ if(!ChatCompose.isPending()) doQuote(r); },
+       onRefer:  function(r){ if(!ChatCompose.isPending()) doRefer(r); },
+       onEdit:   function(r){ if(!ChatCompose.isPending()) doEdit(r); },
        onMsgRef: function(link){ navigateRef(link); },
      });
      container.appendChild(msg.render());
 
      // Later, when a new "Edit of MSG_<id>" message arrives:
-     original.markEdited(newMsg.getId());
-
-     // From elsewhere (e.g. search results):
-     Message.showImagePopup(someImgSrc);
+     originalMsg.markEdited(newRec.id);
 */
 
 window.Message = (function(){
@@ -167,12 +169,13 @@ window.Message = (function(){
     /* PRODUCT_DECISION: one listener per bubble. The walk-up classification
        happens inside the handler; never stops propagation, so a container
        listener (e.g. MessageView) still sees the click for its own purposes
-       (selection update). */
+       (selection update). Quote/refer/edit hand the record (data) up — the
+       caller reads id / markdown / mine off it. */
     function handleClick(e){
       var t = e.target;
-      if(t.closest && t.closest('.msg-quote')){ onQuote(api); return; }
-      if(t.closest && t.closest('.msg-refer')){ onRefer(api); return; }
-      if(t.closest && t.closest('.msg-edit')){  onEdit(api);  return; }
+      if(t.closest && t.closest('.msg-quote')){ onQuote(data); return; }
+      if(t.closest && t.closest('.msg-refer')){ onRefer(data); return; }
+      if(t.closest && t.closest('.msg-edit')){  onEdit(data);  return; }
       if(!t.closest || !t.closest('.chat-body')) return;
       var hit = classifyBodyClick(t);
       if(hit.kind === 'image'){ ChatImagePopup.show(hit.src); return; }
@@ -215,16 +218,11 @@ window.Message = (function(){
       bodyEl.appendChild(note); bodyEl.appendChild(spoiler);
     }
 
-    var api = {
-      render:      render,
-      markEdited:  markEdited,
-      getElement:  function(){ return bubble; },
-      getId:       function(){ return data.id; },
-      getIndex:    function(){ return data.index; },
-      getMarkdown: function(){ return data.markdown; },
-      isMine:      function(){ return data.mine; },
+    return {
+      render:     render,
+      markEdited: markEdited,
+      getElement: function(){ return bubble; },
     };
-    return api;
   }
 
   return {
