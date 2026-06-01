@@ -4,10 +4,6 @@
   var SESSION=root.dataset.session;
   /* PRODUCT_DECISION: API URL space mirrors disk layout under {ChatDataRoot}/<conv>/sessions/<sid>. */
   var SESSION_BASE='/chat/c/'+encodeURIComponent(CONV)+'/'+encodeURIComponent(SESSION);
-  var history=document.getElementById('chat-history');
-  var bubbles=document.getElementById('chat-bubbles');
-  var backBtn=document.getElementById('chat-back');
-  var fwdBtn=document.getElementById('chat-fwd');
 
   /* ===== Message tracking — parallel to MessageView's bubble list =====
      PRODUCT_DECISION: chat.js holds Message instances so it can look them up
@@ -73,12 +69,9 @@
     window.open('/chat/c/'+encodeURIComponent(CONV)+'/'+encodeURIComponent(targetSession)+'#msg-'+id, '_blank');
   }
 
-  /* ===== middle pane — bubble feed + nav-stack history + back/fwd buttons ===== */
+  /* ===== middle pane — owns wrapper + navbar + back/fwd + history + bubbles ===== */
   pane = ChatMiddlePane.init({
-    history:  history,
-    bubbles:  bubbles,
-    backBtn:  backBtn,
-    fwdBtn:   fwdBtn,
+    mount: document.getElementById('chat-feed'),
     renderBubble: function(idx, m){
       var msg = Message.create(m, {
         onQuote:  doQuote,
@@ -102,6 +95,17 @@
      EDIT_RE: a body starting with "Edit of MSG_<hash>" causes the original
      Message to redraw in-place; append-only on disk, only the rendered view
      changes. */
+  /* PRODUCT_DECISION: empty-state placeholder is a chat-page convention
+     (the colored-bubbles demo doesn't want one), so chat.js seeds it
+     into pane.bubbles itself and removes it on first append. */
+  (function(){
+    var empty = document.createElement('p');
+    empty.id = 'chat-empty';
+    empty.className = 'muted';
+    empty.textContent = 'No messages yet. Say hello 👋';
+    pane.bubbles.appendChild(empty);
+  })();
+
   var EDIT_RE=/^Edit of MSG_([A-Za-z0-9-]+_[0-9]+)\b/;
   function appendMessage(m){
     var empty=document.getElementById('chat-empty'); if(empty) empty.remove();
@@ -180,7 +184,9 @@
 
   /* ===== sibling module wiring ===== */
   ChatSearch.init({
-    bubbles: bubbles, history: history,
+    bubbles:   pane.bubbles,
+    navbar:    pane.navbar,
+    focusFeed: pane.focus,
     jumpToEl: function(el){
       /* PRODUCT_DECISION: search holds the original feed bubble; translate
          data-id back to its Message + view-idx and focus. */
@@ -198,14 +204,14 @@
      for the "c" keybind; compose closes itself on Esc-empty. */
   ChatRightSidebar.init({
     onOpen:  function(){ ChatCompose.focus(); },
-    onClose: function(){ history.focus({preventScroll:true}); },
+    onClose: pane.focus,
   });
   /* PRODUCT_DECISION: keys map 1:1 to the chat-keyhelp panel on the closed-compose side.
      Arrow / Home / End / PgUp / PgDn are NOT here — MessageView owns those internally. */
   ChatHelp.init({
     openCompose: ChatRightSidebar.openCompose,
-    backBtn:     backBtn,
-    fwdBtn:      fwdBtn,
+    back:        pane.back,
+    forward:     pane.forward,
     getSelectedMessage: function(){
       var idx=pane.getSelected();
       return idx>0 ? messages[idx-1] : null;

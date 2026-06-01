@@ -502,8 +502,11 @@ func renderChatPicker(w http.ResponseWriter, user users.User) {
 }
 
 func renderChatConversation(w http.ResponseWriter, user users.User, partnerID, conv, sessionID string) {
-	msgs, err := ReadChatSession(user.ID, partnerID, sessionID)
-	if err != nil {
+	// Fail-fast on a corrupt session file before we ship the page shell —
+	// the SSE backlog reads the same file but errors there are harder to
+	// surface. The slice itself is discarded; the client builds the feed
+	// from the SSE replay.
+	if _, err := ReadChatSession(user.ID, partnerID, sessionID); err != nil {
 		http.Error(w, "read conversation: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -520,18 +523,11 @@ func renderChatConversation(w http.ResponseWriter, user users.User, partnerID, c
 
 	fmt.Fprint(w, `<div class="chat-layout">`)
 	renderChatSidebar(w, user, partnerID, conv, sessionID)
-	fmt.Fprint(w, `<div class="chat-main" id="chat-feed">`+
-		`<div class="chat-navbar"><button type="button" id="chat-back" class="chat-back" title="Back to the previous selection (b)" disabled>&larr;</button>`+
-		`<button type="button" id="chat-fwd" class="chat-back" title="Forward — redo a Back (f)" disabled>&rarr;</button>`+
-		`<button type="button" id="chat-search-btn" class="chat-back" title="Search messages (/)">🔍</button></div>`+
-		`<div class="chat-history" id="chat-history" tabindex="-1"><div class="chat-bubbles" id="chat-bubbles">`)
-	if len(msgs) == 0 {
-		fmt.Fprint(w, `<p class="muted" id="chat-empty">No messages yet. Say hello 👋</p>`)
-	}
-	// The bubbles are built client-side from the SSE replay; the server
-	// ships only this skeleton.
-	fmt.Fprint(w, `</div></div></div>
-<div class="chat-compose" id="chat-right-sidebar">
+	// The middle column (wrapper + navbar with Back/Forward/🔍, history
+	// surface, bubble list, all their styling) is built client-side by
+	// chat/middle_pane.js — this is just the mount slot.
+	fmt.Fprint(w, `<div id="chat-feed"></div>`)
+	fmt.Fprint(w, `<div class="chat-compose" id="chat-right-sidebar">
   <div class="chat-closed-panel" id="chat-closed-panel">
     <button type="button" id="chat-open-compose" class="chat-open-compose">Open compose box</button>
   </div>
@@ -708,10 +704,6 @@ html, body { height:100%; }
    when the feed is empty). */
 #chat-root { flex:1; min-height:0; display:flex; flex-direction:column; }
 .chat-layout { display:flex; gap:20px; flex:1; min-height:0; }
-/* chat-main is the message column itself; cap it at ~the pre-sidebar
-   width so long lines stay readable. Excess horizontal space sits to
-   the right (after compose), not as symmetric gutters. */
-.chat-main { min-width:0; flex:1; max-width:600px; display:flex; flex-direction:column; min-height:0; }
 .chat-sidebar { width:180px; flex-shrink:0; overflow-y:auto; border-right:1px solid #ddd;
                 padding-right:14px; font-size:13px; }
 .chat-sidebar-section { margin-bottom:18px; }
@@ -738,7 +730,6 @@ html, body { height:100%; }
                         border:1px solid #ccc; border-radius:3px; font-family:inherit; }
 .chat-add-topic button { padding:3px 8px; font-size:12px; flex:none; }
 .chat-add-topic-err { flex-basis:100%; color:#b00020; font-size:11px; }
-.chat-navbar { margin-bottom:8px; }
 .chat-open-compose { font-size:13px; padding:4px 12px; background:#e7e7ff; color:#23235a;
                      border:1px solid #b9b9e0; border-radius:6px; cursor:pointer; }
 .chat-open-compose:hover { background:#dcdcff; }
@@ -756,11 +747,8 @@ html, body { height:100%; }
                     margin-right:7px; cursor:pointer; }
 .chat-keyhelp-key:hover { background:#f3f3ff; border-color:#9b9be0; }
 .chat-keyhelp-key:active { background:#e7e7ff; border-bottom-width:1px; transform:translateY(1px); }
-.chat-back { font-size:14px; line-height:1; padding:3px 11px; background:#eee; color:#333;
-             border:1px solid #ccc; border-radius:4px; cursor:pointer; }
-#chat-fwd { margin-left:4px; }
-.chat-back:hover:enabled { background:#e3e3e3; }
-.chat-back:disabled { opacity:0.4; cursor:default; }
+/* Middle column (wrapper, navbar with Back/Forward/🔍, history surface,
+   bubble list, button styling) is owned by chat/middle_pane.js. */
 /* Search modal: a two-phase palette — token autocomplete, then message
    results (the term highlighted in each message rendered like the feed).
    Pinned to a fixed top offset and grows downward as results fill in —
@@ -788,11 +776,6 @@ html, body { height:100%; }
    modal), so drop the link affordance. */
 .chat-sr-rbody a.msg-ref { cursor:default; }
 .chat-search-modal mark { background:#ffe680; color:inherit; border-radius:2px; padding:0; }
-.chat-history { min-width:0; flex:1; min-height:0; overflow-y:auto;
-                border:1px solid #ddd; border-radius:8px; padding:12px; background:#fcfcf8; }
-/* The feed is click-focusable so keyboard nav works; the selected-message
-   ring is the visible cursor, so no focus outline on the container itself. */
-.chat-history:focus { outline:none; }
 .chat-compose form { margin:0; }
 .chat-compose textarea { width:100%; min-height:200px; resize:vertical; box-sizing:border-box;
                          font-family:inherit; font-size:14px; padding:8px; }
@@ -817,7 +800,6 @@ html, body { height:100%; }
    pinned and visible. */
 @media (orientation: landscape) {
   .chat-layout { flex-direction:row; align-items:stretch; }
-  .chat-main { flex:1; }
   .chat-compose { width:320px; flex:none; display:flex; flex-direction:column; min-height:0; }
   .chat-compose-body { display:flex; flex-direction:column; flex:1; min-height:0; }
   .chat-compose form { display:flex; flex-direction:column; flex:1; min-height:0; }

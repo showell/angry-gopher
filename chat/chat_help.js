@@ -9,10 +9,10 @@ window.ChatHelp = (function(){
   // lint:called-once keymap-source-of-truth
   function shortcuts(deps){
     return [
-      { key: 'b', label: 'back',                                requiresSelection: false, action: function(){ deps.backBtn.click(); } },
+      { key: 'b', label: 'back',                                requiresSelection: false, action: function(){ deps.back(); } },
       { key: 'c', label: 'compose',                             requiresSelection: false, action: function(){ deps.openCompose(); } },
       { key: 'e', label: 'edit selected message',               requiresSelection: true,  action: function(s){ deps.editMessage(s); } },
-      { key: 'f', label: 'forward',                             requiresSelection: false, action: function(){ deps.fwdBtn.click(); } },
+      { key: 'f', label: 'forward',                             requiresSelection: false, action: function(){ deps.forward(); } },
       { key: 'q', label: 'quote-reply to selected message',     requiresSelection: true,  action: function(s){ deps.quoteReply(s); } },
       { key: 'r', label: 'refer (drop a "See MSG_…" link)',     requiresSelection: true,  action: function(s){ deps.referReply(s); } },
       { key: '/', label: 'search messages',                     requiresSelection: false, action: function(){ ChatSearch.open(); } },

@@ -8,9 +8,11 @@ window.ChatSearch = (function(){
 
   /* PRODUCT_DECISION: host-supplied refs/helpers populated by init().
      jumpToEl(el) is the one feed-side callback — given a feed bubble DOM,
-     scroll it into focus + select it + record on nav stack. Body-click
-     classification + popups come from Message.* statics (no callbacks). */
-  var bubbles, history;
+     scroll it into focus + select it + record on nav stack. focusFeed
+     restores keyboard focus to the bubble feed after the modal closes.
+     Body-click classification + popups come from Message.* statics
+     (no callbacks). */
+  var bubbles, focusFeed;
   var jumpToEl;
 
   var SEARCH_MIN=2, SUGGEST_CAP=10, SNIPPET_PAD=90;
@@ -105,7 +107,7 @@ window.ChatSearch = (function(){
       else closeSearchModal();
     });
     dlg.addEventListener('click', onSearchClick);
-    dlg.addEventListener('close', function(){ dlg.remove(); SR=null; history.focus({preventScroll:true}); });
+    dlg.addEventListener('close', function(){ dlg.remove(); SR=null; focusFeed(); });
     dlg.showModal(); input.focus(); renderSuggest();
   }
   function closeSearchModal(){ if(SR) SR.dlg.close(); }
@@ -195,10 +197,20 @@ window.ChatSearch = (function(){
   }
 
   function init(deps){
-    bubbles=deps.bubbles; history=deps.history;
-    jumpToEl=deps.jumpToEl;
-    var searchBtn=document.getElementById('chat-search-btn');
-    if(searchBtn) searchBtn.addEventListener('click', openSearchModal);
+    bubbles   = deps.bubbles;
+    focusFeed = deps.focusFeed;
+    jumpToEl  = deps.jumpToEl;
+    /* PRODUCT_DECISION: ChatSearch owns its own trigger end-to-end —
+       creates the 🔍 button, styles it to match the navbar via
+       ChatMiddlePane's helper, drops it next to back/fwd. The navbar
+       doesn't know about search; it just lent us a slot. */
+    var searchBtn = ChatMiddlePane.makeNavButton({
+      label: '🔍',
+      title: 'Search messages (/)',
+    });
+    searchBtn.style.marginLeft = '4px';
+    searchBtn.addEventListener('click', openSearchModal);
+    deps.navbar.appendChild(searchBtn);
   }
   function isOpen(){ return !!SR; }
   function refreshIfOpen(){ if(SR) refreshOpenSearch(); }
