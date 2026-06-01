@@ -7,7 +7,6 @@
 package learn
 
 import (
-	"angry-gopher/server/chat"
 	"angry-gopher/server/web"
 	"fmt"
 	"html"
@@ -27,10 +26,8 @@ func HandleLearn(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	fmt.Fprintf(w, `<!DOCTYPE html>
 <html><head><meta charset="utf-8"><title>%s</title>`, html.EscapeString("Learn — Lyn Rummy"))
-	// PRODUCT_DECISION: chat_image_popup.js still depends on an external
-	// stylesheet, so we borrow it from chat. chat_code_popup.js owns its
-	// own styles now — no CSS needed for Lesson 2.
-	fmt.Fprint(w, chat.ImagePopupCSS)
+	// PRODUCT_DECISION: both popups own their own styles inline now —
+	// /learn loads no external CSS for them.
 	fmt.Fprint(w, `</head><body><div id="learn-root"></div>`)
 	fmt.Fprintf(w,
 		`<script src="/chat/chat_image_popup.js?v=%s"></script>`+

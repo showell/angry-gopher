@@ -489,7 +489,6 @@ func renderChatConversation(w http.ResponseWriter, user users.User, partnerID, c
 
 	chatPageHeader(w, "Chat w/"+partnerName+": "+sessionID, user, "")
 	fmt.Fprint(w, chatCSS)
-	fmt.Fprint(w, ImagePopupCSS)
 	// data-conv + data-session let chat.js build the API URLs
 	// (/chat/c/<conv>/<sid>/{stream,send,upload}) without re-deriving
 	// the pair key. data-partner stays for display labels (mine vs theirs).
@@ -673,22 +672,6 @@ func chatSendDone(w http.ResponseWriter, r *http.Request, conv, sessionID string
 	http.Redirect(w, r, "/chat/c/"+conv+"/"+url.PathEscape(sessionID), http.StatusSeeOther)
 }
 
-// ImagePopupCSS styles the shared <dialog> opened by ChatImagePopup.show.
-// Exported because any page that loads chat_image_popup.js needs it (chat,
-// Images transcript, and the /learn demo). When chat_image_popup.js
-// eventually inlines its own styles, this constant goes away.
-const ImagePopupCSS = `<style>
-.chat-img-dialog { border:1px solid #000080; border-radius:10px; padding:10px;
-                   display:flex; flex-direction:column; gap:8px; }
-.chat-img-dialog::backdrop { background:rgba(0,0,0,0.55); }
-.chat-img-controls { display:flex; align-items:center; gap:10px; }
-.chat-img-controls input[type=range] { flex:1; }
-/* PRODUCT_DECISION: fixed viewport so the slider stays put. The image is
-   scaled in px inside it and overflows into scrollbars when zoomed in. */
-.chat-img-scroll { width:70vw; height:70vh; overflow:auto; background:#faf9f5; border-radius:6px; }
-.chat-img-scroll img { display:block; }
-</style>`
-
 const chatCSS = `<style>
 /* The conversation page fills the viewport; only the message history
    scrolls. The title lives in the top bar, so there's no in-body heading.
@@ -849,10 +832,8 @@ html, body { height:100%; }
    reflow upward and yank "scroll-to-bottom" off-target. */
 .chat-body img { max-width:100%; max-height:320px; width:auto; height:auto;
                  display:block; margin:6px 0; border-radius:6px; cursor:zoom-in; }
-/* Image popup rules live in ImagePopupCSS — emitted on both the chat
-   conversation page and the Images transcript page since both surfaces
-   open the same dialog via ChatImagePopup.show. The code popup owns its
-   own styles inside chat_code_popup.js — no CSS coordination needed. */
+/* The image + code popups own their own styles inside chat_image_popup.js
+   and chat_code_popup.js respectively — no CSS coordination needed. */
 /* Plain message-box modal (e.g. the "host may be down" notice). */
 .chat-alert-dialog { max-width:90vw; border:1px solid #bbb; border-radius:8px; padding:18px 20px; }
 .chat-alert-dialog::backdrop { background:rgba(0,0,0,0.4); }
