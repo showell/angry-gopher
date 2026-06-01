@@ -778,44 +778,12 @@ html, body { height:100%; }
 .chat-compose textarea { width:100%; min-height:200px; resize:vertical; box-sizing:border-box;
                          font-family:inherit; font-size:14px; padding:8px; }
 .chat-compose button { margin-top:8px; }
-.chat-msg { margin:0 0 12px; padding:8px 10px; border-radius:8px; max-width:88%; }
-.chat-msg.mine { background:#e7e7ff; margin-left:auto; }
-.chat-msg.theirs { background:#f0f0e6; margin-right:auto; }
-/* Break long unbreakable runs (e.g. URLs) so they wrap inside the bubble
-   instead of overflowing it — alignment-independent. */
-.chat-body { overflow-wrap:anywhere; }
-.chat-meta { font-size:11px; color:#888; margin-bottom:3px; }
-.chat-meta .msg-quote,
-.chat-meta .msg-refer,
-.chat-meta .msg-edit { font-size:10px; color:#888; background:none; border:none;
-                       padding:0 2px; cursor:pointer; text-decoration:underline; }
-.chat-meta .msg-quote:hover,
-.chat-meta .msg-refer:hover,
-.chat-meta .msg-edit:hover { color:#000080; }
-.chat-body a.msg-ref { font-family:ui-monospace,Menlo,Consolas,monospace; font-size:0.9em;
-                       background:#eaeaff; color:#000080; padding:0 4px; border-radius:3px;
-                       text-decoration:none; }
-.chat-body a.msg-ref:hover { background:#d8d8ff; }
-/* A superseded (edited) message: forward link to the edit + its original
-   markdown demoted to a small, quiet quote, tucked behind a spoiler. */
-.chat-edited-note { font-size:12px; color:#888; margin-bottom:4px; }
-.chat-edited-spoiler > summary { font-size:11px; color:#888; cursor:pointer; list-style:none; }
-.chat-edited-spoiler > summary::-webkit-details-marker { display:none; }
-.chat-edited-spoiler > summary::before { content:"\25b8 "; } /* ▸ collapsed */
-.chat-edited-spoiler[open] > summary::before { content:"\25be "; } /* ▾ expanded */
-.chat-edited-orig { font-size:11px; color:#999; white-space:pre-wrap; overflow-wrap:anywhere;
-                    border-left:3px solid #ddd; padding:2px 0 2px 8px; margin-top:4px; }
-/* The selected message keeps a steady highlight ring. */
-.chat-msg.selected { box-shadow:0 0 0 2px #ffcf3a; }
-.chat-body p:first-child { margin-top:0; }
-.chat-body p:last-child { margin-bottom:0; }
-.chat-body pre { background:#f4f4ec; padding:8px; border-radius:4px; overflow-x:auto; cursor:pointer; }
-/* A ~~~ quote fence (quote-reply) renders verbatim but reads as a quote, not
-   code: proportional font, left rule, soft tint, wrapping preserved. */
-.chat-body pre.chat-quote { font-family:inherit; white-space:pre-wrap; overflow-wrap:anywhere;
-                            background:#f6f6fb; border-left:3px solid #b9b9e0;
-                            border-radius:0 4px 4px 0; margin:6px 0; padding:6px 10px;
-                            color:#444; overflow-x:visible; }
+/* Message DOM (.chat-msg / .chat-meta / .chat-body / .chat-edited-*) and
+   the body-content classes goldmark + chat_msgref emit (.msg-ref,
+   pre.chat-quote, etc.) are styled by chat/message.js itself. The widget
+   owns every rule that targets the bubble, AND the rules that target
+   what the server puts inside .chat-body. Nothing for this page to
+   emit. */
 .chat-transcript { display:none; margin:0; white-space:pre-wrap; overflow-wrap:anywhere;
                    font-family:ui-monospace,Menlo,Consolas,monospace; font-size:13px; color:#333; }
 .chat-history.view-transcript #chat-bubbles { display:none; }
@@ -825,13 +793,6 @@ html, body { height:100%; }
 .chat-views a.active { font-weight:bold; color:#000; cursor:default; }
 .chat-compose-actions { display:flex; gap:8px; margin-top:8px; }
 .chat-compose-actions button { margin-top:0; }
-/* width/height:auto so the HTML width/height attrs (set by the upload
-   handler) only seed the aspect-ratio hint — CSS max-* still controls
-   actual size. The point of the HTML attrs is to reserve correctly-
-   proportioned space before the image decodes, so the feed doesn't
-   reflow upward and yank "scroll-to-bottom" off-target. */
-.chat-body img { max-width:100%; max-height:320px; width:auto; height:auto;
-                 display:block; margin:6px 0; border-radius:6px; cursor:zoom-in; }
 /* The image + code popups own their own styles inside chat_image_popup.js
    and chat_code_popup.js respectively — no CSS coordination needed. */
 /* Plain message-box modal (e.g. the "host may be down" notice). */

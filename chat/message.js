@@ -1,10 +1,18 @@
-/* Message — exploratory abstraction (NOT wired into chat.js).
+/* Message — chat-bubble widget.
 
    A Message instance owns one chat bubble: its DOM, its click routing,
    and the in-place mutations a later "Edit of MSG_<id>" causes. The
    image-zoom and code-monospace popups live at the module level
    because they have no per-instance state — exposed on the public
    surface so other rendering surfaces (search results) can reuse them.
+
+   Styling: Message owns ALL styling for the bubble AND for the HTML
+   inside the body. data.html is sanitized server-side and uses a small
+   stable vocabulary of classes (chat-body, a.msg-ref, pre.chat-quote,
+   etc.); the widget supplies the stylesheet for those classes via a
+   one-shot <style> tag injected lazily on first create(). The chat
+   conversation page emits no CSS for message DOM — the widget is the
+   source of truth.
 
    Click routing summary:
      image / pre inside body  → ChatImagePopup.show / ChatCodePopup.show
@@ -37,6 +45,75 @@
 window.Message = (function(){
   'use strict';
 
+  /* ===== styling: one stylesheet, injected once =====
+     PRODUCT_DECISION: Message owns every CSS rule that targets the bubble
+     it builds AND the server-baked HTML inside .chat-body. Two reasons
+     this lives in JS instead of CSS on the page:
+       1. :hover and ::-webkit-details-marker / ::before pseudo-elements
+          can't go on element.style; an injected <style> tag is the only
+          way to keep all the rules in one file.
+       2. Dropping this script onto any page makes its messages look
+          right, no CSS coordination. The chat page, the search modal
+          (it clones .chat-body), and the /learn demo all benefit.
+     The IIFE injects on first create() so a page that never instantiates
+     a Message pays nothing. */
+  var stylesInjected = false;
+  // lint:called-once init-once-guard
+  function ensureStyles(){
+    if(stylesInjected) return;
+    var s = document.createElement('style');
+    s.textContent = ''
+      /* Bubble container, sender/receiver variants, selection ring. */
+      + '.chat-msg { margin:0 0 12px; padding:8px 10px; border-radius:8px; max-width:88%; }'
+      + '.chat-msg.mine { background:#e7e7ff; margin-left:auto; }'
+      + '.chat-msg.theirs { background:#f0f0e6; margin-right:auto; }'
+      + '.chat-msg.selected { box-shadow:0 0 0 2px #ffcf3a; }'
+      /* Meta line + action buttons. */
+      + '.chat-meta { font-size:11px; color:#888; margin-bottom:3px; }'
+      + '.chat-meta .msg-quote, .chat-meta .msg-refer, .chat-meta .msg-edit {'
+      +   ' font-size:10px; color:#888; background:none; border:none;'
+      +   ' padding:0 2px; cursor:pointer; text-decoration:underline; }'
+      + '.chat-meta .msg-quote:hover, .chat-meta .msg-refer:hover, .chat-meta .msg-edit:hover {'
+      +   ' color:#000080; }'
+      /* Bubble body wrap + classes goldmark + chat post-processing emit. */
+      + '.chat-body { overflow-wrap:anywhere; }'
+      + '.chat-body p:first-child { margin-top:0; }'
+      + '.chat-body p:last-child { margin-bottom:0; }'
+      + '.chat-body a.msg-ref {'
+      +   ' font-family:ui-monospace,Menlo,Consolas,monospace; font-size:0.9em;'
+      +   ' background:#eaeaff; color:#000080; padding:0 4px; border-radius:3px;'
+      +   ' text-decoration:none; }'
+      + '.chat-body a.msg-ref:hover { background:#d8d8ff; }'
+      + '.chat-body pre {'
+      +   ' background:#f4f4ec; padding:8px; border-radius:4px;'
+      +   ' overflow-x:auto; cursor:pointer; }'
+      + '.chat-body pre.chat-quote {'
+      +   ' font-family:inherit; white-space:pre-wrap; overflow-wrap:anywhere;'
+      +   ' background:#f6f6fb; border-left:3px solid #b9b9e0;'
+      +   ' border-radius:0 4px 4px 0; margin:6px 0; padding:6px 10px;'
+      +   ' color:#444; overflow-x:visible; }'
+      /* PRODUCT_DECISION: width/height:auto so the HTML width/height attrs
+         (set by the upload handler) only seed the aspect-ratio hint — the
+         max-* still controls actual size. The HTML attrs are there to reserve
+         correctly-proportioned space before the image decodes, so the feed
+         doesn't reflow upward and yank "scroll-to-bottom" off-target. */
+      + '.chat-body img {'
+      +   ' max-width:100%; max-height:320px; width:auto; height:auto;'
+      +   ' display:block; margin:6px 0; border-radius:6px; cursor:zoom-in; }'
+      /* Supersession spoiler (Edit of MSG_<id>). */
+      + '.chat-edited-note { font-size:12px; color:#888; margin-bottom:4px; }'
+      + '.chat-edited-spoiler > summary {'
+      +   ' font-size:11px; color:#888; cursor:pointer; list-style:none; }'
+      + '.chat-edited-spoiler > summary::-webkit-details-marker { display:none; }'
+      + '.chat-edited-spoiler > summary::before { content:"▸ "; }'
+      + '.chat-edited-spoiler[open] > summary::before { content:"▾ "; }'
+      + '.chat-edited-orig {'
+      +   ' font-size:11px; color:#999; white-space:pre-wrap; overflow-wrap:anywhere;'
+      +   ' border-left:3px solid #ddd; padding:2px 0 2px 8px; margin-top:4px; }';
+    document.head.appendChild(s);
+    stylesInjected = true;
+  }
+
   /* ===== module-level body-click classifier =====
      PRODUCT_DECISION: shared classifier so every surface that renders a
      chat body (the feed via Message, the search-results modal) has ONE
@@ -59,6 +136,7 @@ window.Message = (function(){
   /* ===== instance factory ===== */
 
   function create(data, deps){
+    ensureStyles();
     deps = deps || {};
     var onQuote  = deps.onQuote  || function(){};
     var onRefer  = deps.onRefer  || function(){};

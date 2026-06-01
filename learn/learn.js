@@ -251,11 +251,11 @@
       onMsgRef: function(link){ log('onMsgRef('     + link.getAttribute('href') + ')'); },
     };
 
-    /* The bubble container: a plain dashed box so the reader sees the
-       widget's bubbles WITHOUT any chat styling around them. */
+    /* A plain container — the bubbles bring their own visual chrome
+       (Message injects its stylesheet on first create()), so the wrapper
+       just provides a neutral white surface. */
     var bubbles = setStyles(document.createElement('div'), {
-      border: '1px dashed ' + COLORS.border, borderRadius: '4px',
-      padding: '8px', background: '#fff',
+      background: '#fff', padding: '4px 8px',
     });
     messages.forEach(function(d){
       bubbles.appendChild(Message.create(d, callbacks).render());
@@ -264,8 +264,9 @@
     var hint = setStyles(document.createElement('p'), {
       margin: '0 0 10px', color: COLORS.muted, fontSize: '13px',
     });
-    hint.textContent = 'Demo: three bubbles, no chat CSS loaded. Click the buttons (quote-reply / refer / edit), '
-      + 'the image, the code block, or the MSG_ link. Watch the log below — that’s the page acting on what the widget reports.';
+    hint.textContent = 'Demo: three bubbles, no chat CSS loaded on this page — Message brought its own. '
+      + 'Click the buttons (quote-reply / refer / edit), the image, the code block, or the MSG_ link. '
+      + 'Watch the log below: that’s the page acting on what the widget reports.';
     var logCaption = setStyles(document.createElement('div'), {
       marginTop: '12px', marginBottom: '4px', fontSize: '13px', color: COLORS.muted,
     });
@@ -378,11 +379,14 @@
     + 'the rest of the system — the compose box, the nav stack, the popups.'));
   lesson3Body.appendChild(buildParagraph(
     'Notice two things in the source below. First, data.html is HTML the server already produced '
-    + '(markdown rendered + sanitized by goldmark). The widget innerHTMLs it as-is — it doesn’t '
-    + 'parse markdown and doesn’t re-sanitize. The separation lets the chat surface and the search '
-    + 'modal use the same widget on the same bytes. Second, Message ships no CSS of its own. The '
-    + 'classes it adds (chat-msg, chat-meta, chat-body, msg-quote, msg-refer, msg-edit) are hooks '
-    + 'for a containing page to style; the widget works without them.'));
+    + '(markdown rendered + sanitized by goldmark, plus a regex pass that wraps MSG_<id> tokens in '
+    + '<a class="msg-ref"> links). The widget innerHTMLs it as-is — it doesn’t parse markdown, '
+    + 'doesn’t re-sanitize. The separation lets the chat surface and the search modal use the same '
+    + 'widget on the same bytes. Second, Message owns ALL the styling — both the bubble chrome it '
+    + 'builds (chat-msg, chat-meta, etc.) and the small vocabulary of classes the server emits inside '
+    + 'data.html (.chat-body, a.msg-ref, pre.chat-quote, img). The widget injects one <style> tag '
+    + 'lazily on first create(); the chat conversation page no longer ships any CSS for these. The '
+    + 'demo below proves it: /learn loads no chat stylesheet at all, and the bubbles still look right.'));
   lesson3Body.appendChild(buildSpoiler({
     label:     'Show message.js source',
     openLabel: 'Hide source',
