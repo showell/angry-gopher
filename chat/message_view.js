@@ -101,17 +101,23 @@ window.MessageView = (function(){
       selected = idx;
       if(selected > 0) els[selected - 1].classList.add('selected');
     }
+    /* PRODUCT_DECISION: selection visual ALWAYS applies immediately; only the
+       caller's setSelectedBubble callback (URL hash + nav-stack push) honors
+       the debounce. Holding ArrowUp must walk the cursor one bubble per
+       keypress — debouncing the visible selection makes a burst land on the
+       FINAL keypress's target as a single step instead of stepping through.
+       The 700ms rest is the "I've found something important, record it"
+       signal for the nav stack, not a brake on the cursor itself. */
     function settle(idx, immediate){
       if(inBacklog) return; /* PRODUCT_DECISION: batch mode skips all settles — endBacklog does the final one. */
       if(settleTimer){ clearTimeout(settleTimer); settleTimer = null; }
+      applySelection(idx);
       pendingIdx = idx;
       if(immediate){
-        applySelection(idx);
         setSelectedBubble(idx);
       } else {
         settleTimer = setTimeout(function(){
           settleTimer = null;
-          applySelection(pendingIdx);
           setSelectedBubble(pendingIdx);
         }, settleDelay);
       }
