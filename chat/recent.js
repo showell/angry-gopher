@@ -46,7 +46,18 @@
       var a=document.createElement('a');
       a.href='/chat/c/'+encodeURIComponent(evt.conv)+'/'+encodeURIComponent(evt.sid);
       a.textContent=evt.sid;
-      what.appendChild(document.createTextNode('New message in '));
+      /* PRODUCT_DECISION: lead with the author when known — apoorva's ask.
+         Pre-companion sessions (live append starts populating .lastauthor on
+         first new message) fall back to the older "New message" phrasing. */
+      if(evt.last_author){
+        what.appendChild(document.createTextNode('Message from '));
+        var author=document.createElement('strong');
+        author.textContent=evt.last_author;
+        what.appendChild(author);
+        what.appendChild(document.createTextNode(' in '));
+      } else {
+        what.appendChild(document.createTextNode('New message in '));
+      }
       what.appendChild(a);
       var partner=document.createElement('span'); partner.className='muted';
       partner.textContent=' (with '+(evt.partner||'')+')';

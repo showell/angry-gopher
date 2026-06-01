@@ -53,9 +53,10 @@ type recentItem struct {
 	kind recentKind
 	at   time.Time
 	// chat-only
-	partner string
-	conv    string
-	sid     string
+	partner    string
+	conv       string
+	sid        string
+	lastAuthor string // display name of the most recent sender, or ""
 	// doc-only
 	slug  string
 	title string
@@ -114,11 +115,12 @@ func gatherRecentItems(user users.User) []recentItem {
 				continue
 			}
 			items = append(items, recentItem{
-				kind:    recentChat,
-				at:      info.ModTime(),
-				partner: partner.Name,
-				conv:    conv,
-				sid:     sid,
+				kind:       recentChat,
+				at:         info.ModTime(),
+				partner:    partner.Name,
+				conv:       conv,
+				sid:        sid,
+				lastAuthor: users.GetUserName(ReadChatLastAuthor(user.ID, partner.ID, sid)),
 			})
 		}
 	}
@@ -176,11 +178,24 @@ func writeRecentRow(w http.ResponseWriter, it recentItem) {
 	case recentChat:
 		href := "/chat/c/" + it.conv + "/" + url.PathEscape(it.sid)
 		key := "chat:" + it.conv + "/" + it.sid
+		// PRODUCT_DECISION: lead with the author when known — that's what
+		// apoorva asked for. Fall back to the older "New message" phrasing
+		// when the companion file is missing (pre-companion sessions before
+		// the migration backfill).
+		var what string
+		if it.lastAuthor != "" {
+			what = fmt.Sprintf(
+				`Message from <strong>%s</strong> in <a href="%s">%s</a> <span class="muted">(with %s)</span>`,
+				html.EscapeString(it.lastAuthor), href,
+				html.EscapeString(it.sid), html.EscapeString(it.partner))
+		} else {
+			what = fmt.Sprintf(
+				`New message in <a href="%s">%s</a> <span class="muted">(with %s)</span>`,
+				href, html.EscapeString(it.sid), html.EscapeString(it.partner))
+		}
 		fmt.Fprintf(w,
-			`<tr data-key="%s" data-ts="%s"><td class="recent-when">%s</td>`+
-				`<td>New message in <a href="%s">%s</a> <span class="muted">(with %s)</span></td></tr>`,
-			html.EscapeString(key), ts, html.EscapeString(age), href,
-			html.EscapeString(it.sid), html.EscapeString(it.partner))
+			`<tr data-key="%s" data-ts="%s"><td class="recent-when">%s</td><td>%s</td></tr>`,
+			html.EscapeString(key), ts, html.EscapeString(age), what)
 	case recentDoc:
 		href := "/chat/docs/" + url.PathEscape(it.slug)
 		key := "doc:" + it.slug
@@ -197,15 +212,17 @@ func writeRecentRow(w http.ResponseWriter, it recentItem) {
 // Kind selects which identity fields are populated:
 //
 //	chat: Conv ("a_b") + SID (topic) + Partner (name of the OTHER side)
+//	      + LastAuthor (name of the message's sender)
 //	doc:  Slug + Title
 type recentEvent struct {
-	Kind    string    `json:"kind"`
-	At      time.Time `json:"at"`
-	Conv    string    `json:"conv,omitempty"`
-	SID     string    `json:"sid,omitempty"`
-	Partner string    `json:"partner,omitempty"`
-	Slug    string    `json:"slug,omitempty"`
-	Title   string    `json:"title,omitempty"`
+	Kind       string    `json:"kind"`
+	At         time.Time `json:"at"`
+	Conv       string    `json:"conv,omitempty"`
+	SID        string    `json:"sid,omitempty"`
+	Partner    string    `json:"partner,omitempty"`
+	LastAuthor string    `json:"last_author,omitempty"`
+	Slug       string    `json:"slug,omitempty"`
+	Title      string    `json:"title,omitempty"`
 }
 
 var (
@@ -258,19 +275,22 @@ func openRecent(userID string) (<-chan recentEvent, func()) {
 }
 
 // PublishChatRecent fans one chat-message activity out to BOTH conv
-// participants' recent feeds, pre-resolving each side's partner name so
-// the client doesn't need a uid→name table. Called from AppendChatMessage
-// (the single chat-write chokepoint).
-func PublishChatRecent(conv, sid string, at time.Time) {
+// participants' recent feeds, pre-resolving each side's partner name +
+// the message author's name so the client doesn't need a uid→name table.
+// Called from AppendChatMessage (the single chat-write chokepoint).
+func PublishChatRecent(conv, sid string, at time.Time, authorUID string) {
 	a, b, ok := strings.Cut(conv, "_")
 	if !ok || a == "" || b == "" {
 		return
 	}
+	authorName := users.GetUserName(authorUID)
 	publishRecent(a, recentEvent{
-		Kind: "chat", At: at, Conv: conv, SID: sid, Partner: users.GetUserName(b),
+		Kind: "chat", At: at, Conv: conv, SID: sid,
+		Partner: users.GetUserName(b), LastAuthor: authorName,
 	})
 	publishRecent(b, recentEvent{
-		Kind: "chat", At: at, Conv: conv, SID: sid, Partner: users.GetUserName(a),
+		Kind: "chat", At: at, Conv: conv, SID: sid,
+		Partner: users.GetUserName(a), LastAuthor: authorName,
 	})
 }
 
