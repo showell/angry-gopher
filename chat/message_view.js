@@ -206,23 +206,21 @@ window.MessageView = (function(){
     });
 
     /* ---- click ---- */
-    /* PRODUCT_DECISION: container listener updates selection on bubble click.
-       Per-bubble action routing (popups, quote/refer/edit) is the Message's
-       responsibility — it attaches its own listener that doesn't stop
-       propagation, so this one still sees the click. */
-    /* PRODUCT_DECISION: defaultPrevented === "the click already navigated
-       somewhere (e.g. an msg-ref jump)" — Message calls preventDefault
-       on those, and focusBubble has already painted the TARGET bubble.
-       Selecting the source here would overwrite that paint, so bail. */
+    /* PRODUCT_DECISION: container listener runs in CAPTURE phase so the
+       clicked-on bubble lands on the nav stack BEFORE the bubble's own
+       handler routes the click (popup, msg-ref jump, external link,
+       quote/refer/edit). A subsequent msg-ref jump then pushes the
+       target on top — back walks target → source naturally.
+       NavStack.push dedupes consecutive same-entry pushes, so a
+       second click on the same bubble is a no-op on the stack. */
     container.addEventListener('click', function(e){
       if(inBacklog) return;
-      if(e.defaultPrevented) return;
       var t = e.target, hitIdx = 0;
       for(var i = 0; i < els.length; i++){
         if(els[i] === t || els[i].contains(t)){ hitIdx = i + 1; break; }
       }
       if(hitIdx > 0) settle(hitIdx, true);
-    });
+    }, {capture:true});
 
     /* ---- public navigation API (also called from the built-in keymap) ---- */
 
