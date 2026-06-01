@@ -215,11 +215,9 @@ window.MessageView = (function(){
        second click on the same bubble is a no-op on the stack. */
     container.addEventListener('click', function(e){
       if(inBacklog) return;
-      var t = e.target, hitIdx = 0;
-      for(var i = 0; i < els.length; i++){
-        if(els[i] === t || els[i].contains(t)){ hitIdx = i + 1; break; }
-      }
-      if(hitIdx > 0) settle(hitIdx, true);
+      var bubble = e.target.closest && e.target.closest('[data-mv-idx]');
+      if(!bubble) return;
+      settle(parseInt(bubble.getAttribute('data-mv-idx'), 10), true);
     }, {capture:true});
 
     /* ---- public navigation API (also called from the built-in keymap) ---- */
@@ -302,6 +300,11 @@ window.MessageView = (function(){
     function append(data){
       var idx = els.length + 1;
       var el = renderBubble(idx, data);
+      /* PRODUCT_DECISION: tag the bubble with its 1-based view index so
+         click hit-testing is a single closest() walk up from e.target —
+         no per-click scan of els[]. Append-only + no reordering means
+         the index never goes stale. */
+      el.setAttribute('data-mv-idx', idx);
       els.push(el);
       list.appendChild(el);
       return idx;
