@@ -20,6 +20,7 @@ import "embed"
 //go:embed chat/chat_help.js
 //go:embed chat/message.js
 //go:embed chat/message_view.js
+//go:embed chat/nav_stack.js
 //go:embed chat/chat_left_sidebar.js
 //go:embed chat/chat_right_sidebar.js
 //go:embed chat/chat_search.js

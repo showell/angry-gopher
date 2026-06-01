@@ -46,6 +46,7 @@ func RegisterPages(mux *http.ServeMux) {
 	mux.HandleFunc("/chat/chat_help.js", chat.HandleChatHelpJS)
 	mux.HandleFunc("/chat/message.js", chat.HandleMessageJS)
 	mux.HandleFunc("/chat/message_view.js", chat.HandleMessageViewJS)
+	mux.HandleFunc("/chat/nav_stack.js", chat.HandleNavStackJS)
 	mux.HandleFunc("/chat/chat_image_popup.js", chat.HandleChatImagePopupJS)
 	mux.HandleFunc("/chat/chat_code_popup.js", chat.HandleChatCodePopupJS)
 	mux.HandleFunc("/chat/notify.js", chat.HandleNotifyJS)

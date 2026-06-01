@@ -69,26 +69,13 @@
     window.open('/chat/c/'+encodeURIComponent(CONV)+'/'+encodeURIComponent(targetSession)+'#msg-'+id, '_blank');
   }
 
-  /* ===== nav stack — chat.js domain feature, not view's =====
-     entries[] holds view-indices (1-based) of committed selections.
-     Click/link jumps commit immediately; settling debounces 700ms before
-     pushing — handled by the view via setSelectedBubble callback. */
-  var entries=[], pos=-1;
-  function curEntry(){ return pos>=0 ? entries[pos] : 0; }
-  function drifted(){
-    var sel=view.getSelected();
-    /* PRODUCT_DECISION: sel===0 means no selection, never drifted. lint:null-undefined-check legit-absence-sentinel */
-    return sel>0 && sel!==curEntry();
-  }
-  function updateNav(){
-    backBtn.disabled=!(pos>0||drifted()); /* PRODUCT_DECISION: drift enables ← as "recover to where I was". */
-    fwdBtn.disabled=!(pos<entries.length-1);
-  }
-  function goToEntry(){
-    if(pos<0) return;
-    view.focusBubble(entries[pos], {silent:true}); /* PRODUCT_DECISION: silent — walk doesn't push back onto the stack. */
-    updateNav();
-  }
+  /* ===== nav stack — instantiated AFTER `view` is created (below) =====
+     The state-machine itself lives in chat/nav_stack.js. chat.js wires
+     the three bindings: walk (consume = view.focusBubble), onChange
+     (UI = back/fwd button enable), currentSelection (drift = the live
+     view selection). Click/link jumps commit immediately; settling
+     debounces 700ms before pushing (MessageView's setSelectedBubble). */
+  var nav;
 
   /* ===== "is the feed scrolled to the bottom" =====
      PRODUCT_DECISION: works across both rendered + transcript views (queries
@@ -155,23 +142,19 @@
       /* BROWSER_WORKAROUND: window.history — chat.js shadows the global `history`
          with the #chat-history DOM element near the top of this IIFE. */
       window.history.replaceState({}, '', '#msg-'+msg.getId());
-      /* PRODUCT_DECISION: nav-stack push — drop the forward tail, append, update btns. */
-      if(idx===curEntry()) return;
-      entries.length=pos+1;
-      entries.push(idx); pos=entries.length-1;
-      updateNav();
+      nav.push(idx);
     },
   });
 
-  /* ===== back / forward buttons ===== */
-  backBtn.addEventListener('click',function(){
-    if(drifted()){ goToEntry(); return; } /* PRODUCT_DECISION: drift recovery — first back returns to entries[pos]. */
-    if(pos>0){ pos--; goToEntry(); }
+  /* ===== nav stack instantiation + back / forward bindings ===== */
+  nav = NavStack.create({
+    walk:             view.focusBubble,
+    onChange:         function(canBack, canFwd){ backBtn.disabled=!canBack; fwdBtn.disabled=!canFwd; },
+    currentSelection: view.getSelected,
   });
-  fwdBtn.addEventListener('click',function(){
-    if(pos<entries.length-1){ pos++; goToEntry(); }
-  });
-  updateNav();
+  backBtn.addEventListener('click', nav.back);
+  fwdBtn.addEventListener('click', nav.forward);
+  nav.update();
 
   /* ===== one append wraps view + transcript + supersession + empty-removal =====
      PRODUCT_DECISION: transcript span — literal on-disk block, sibling DOM tree

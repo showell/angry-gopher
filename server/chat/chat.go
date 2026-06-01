@@ -433,6 +433,17 @@ func HandleMessageViewJS(w http.ResponseWriter, r *http.Request) {
 	web.ServeJS(w, MessageViewJSPath, "message_view.js missing from the binary")
 }
 
+// NavStackJSPath is the back/forward state machine — chat.js wires
+// MessageView's setSelectedBubble (push), the back/forward buttons
+// (back/forward), the b/f hotkeys (via the button.click), and the
+// view.focusBubble walk into it.
+var NavStackJSPath = "chat/nav_stack.js"
+
+// HandleNavStackJS serves the NavStack module from the embedded assets.
+func HandleNavStackJS(w http.ResponseWriter, r *http.Request) {
+	web.ServeJS(w, NavStackJSPath, "nav_stack.js missing from the binary")
+}
+
 // ChatImagePopupJSPath is the shared image-zoom dialog — reused by chat
 // bubbles (via Message), search results, and the Images transcript view.
 var ChatImagePopupJSPath = "chat/chat_image_popup.js"
@@ -530,6 +541,7 @@ func renderChatConversation(w http.ResponseWriter, user users.User, partnerID, c
 		`<script src="/chat/chat_code_popup.js?v=%s"></script>`+
 		`<script src="/chat/message.js?v=%s"></script>`+
 		`<script src="/chat/message_view.js?v=%s"></script>`+
+		`<script src="/chat/nav_stack.js?v=%s"></script>`+
 		`<script src="/chat/chat_search.js?v=%s"></script>`+
 		`<script src="/chat/chat_left_sidebar.js?v=%s"></script>`+
 		`<script src="/chat/chat_right_sidebar.js?v=%s"></script>`+
@@ -537,7 +549,7 @@ func renderChatConversation(w http.ResponseWriter, user users.User, partnerID, c
 		`<script src="/chat/chat_help.js?v=%s"></script>`+
 		`<script src="/chat/chat.js?v=%s"></script>`+
 		`<script src="/chat/notify.js?v=%s"></script>`,
-		v, v, v, v, v, v, v, v, v, v, v)
+		v, v, v, v, v, v, v, v, v, v, v, v)
 
 	web.PageFooter(w)
 }
