@@ -69,7 +69,23 @@
 window.MessageView = (function(){
   'use strict';
 
+  /* ===== styling: one stylesheet, injected once =====
+     PRODUCT_DECISION: MessageView owns its selection ring's CSS — the only
+     bubble styling it's responsible for. Class is mv-selected (not the
+     generic 'mv-selected') so the rule can't collide with caller styles.
+     Same lazy-injection pattern as the popups + Message. */
+  var stylesInjected = false;
+  // lint:called-once init-once-guard
+  function ensureStyles(){
+    if(stylesInjected) return;
+    var s = document.createElement('style');
+    s.textContent = '.mv-selected { box-shadow:0 0 0 2px #ffcf3a; }';
+    document.head.appendChild(s);
+    stylesInjected = true;
+  }
+
   function create(opts){
+    ensureStyles();
     var container       = opts.container;
     /* PRODUCT_DECISION: `list` is the appendChild target; container is the
        scroll surface. They're the same in simple cases; chat.js needs them
@@ -79,6 +95,12 @@ window.MessageView = (function(){
     var renderBubble    = opts.renderBubble;
     var setSelectedBubble = opts.setSelectedBubble || function(){};
     var settleDelay     = opts.settleDelay     || 700;
+    /* PRODUCT_DECISION: keyboard listener defaults to document-wide (the
+       chat conversation page wants arrow keys without forcing a click
+       first). When a page hosts more than one MessageView, or wants
+       arrows to scroll the page normally, set scopeKeysToContainer:true —
+       keys then only act when document.activeElement is in the container. */
+    var scopeKeysToContainer = !!opts.scopeKeysToContainer;
     var scrollQuietMs   = opts.scrollQuietMs   || 150;
     var revealPadTop    = opts.revealPadTop    || 6;
     var revealPadBottom = opts.revealPadBottom || 48;
@@ -97,9 +119,9 @@ window.MessageView = (function(){
     /* ---- selection ---- */
 
     function applySelection(idx){
-      if(selected > 0 && els[selected - 1]) els[selected - 1].classList.remove('selected');
+      if(selected > 0 && els[selected - 1]) els[selected - 1].classList.remove('mv-selected');
       selected = idx;
-      if(selected > 0) els[selected - 1].classList.add('selected');
+      if(selected > 0) els[selected - 1].classList.add('mv-selected');
     }
     /* PRODUCT_DECISION: selection visual ALWAYS applies immediately; only the
        caller's setSelectedBubble callback (URL hash + nav-stack push) honors
@@ -238,6 +260,7 @@ window.MessageView = (function(){
       var ae = document.activeElement;
       if(ae && (ae.tagName === 'TEXTAREA' || ae.tagName === 'INPUT' || ae.isContentEditable)) return;
       if(e.ctrlKey || e.metaKey || e.altKey) return;
+      if(scopeKeysToContainer && ae !== container && !container.contains(ae)) return;
       /* PRODUCT_DECISION: switch covers the only keys the view claims —
          everything else passes through to the caller's dispatcher. */
       switch(e.key){

@@ -266,16 +266,127 @@
     });
     hint.textContent = 'Demo: three bubbles, no chat CSS loaded on this page — Message brought its own. '
       + 'Click the buttons (quote-reply / refer / edit), the image, the code block, or the MSG_ link. '
-      + 'Watch the log below: that’s the page acting on what the widget reports.';
+      + 'Watch the log on the right: that’s the page acting on what the widget reports.';
     var logCaption = setStyles(document.createElement('div'), {
-      marginTop: '12px', marginBottom: '4px', fontSize: '13px', color: COLORS.muted,
+      marginBottom: '4px', fontSize: '13px', color: COLORS.muted,
     });
     logCaption.textContent = 'Callback log:';
 
+    /* Side-by-side: bubbles on the left flex to fill; log column fixed-width
+       on the right so its monospace lines stay readable at any page width. */
+    var twoCol = setStyles(document.createElement('div'), {
+      display: 'flex', gap: '14px', alignItems: 'flex-start',
+    });
+    var leftCol = setStyles(document.createElement('div'), { flex: '1', minWidth: '0' });
+    leftCol.appendChild(bubbles);
+    var rightCol = setStyles(document.createElement('div'), { width: '260px', flexShrink: '0' });
+    rightCol.appendChild(logCaption);
+    rightCol.appendChild(logBody);
+    twoCol.appendChild(leftCol); twoCol.appendChild(rightCol);
+
     box.appendChild(hint);
-    box.appendChild(bubbles);
-    box.appendChild(logCaption);
-    box.appendChild(logBody);
+    box.appendChild(twoCol);
+    return box;
+  }
+
+  /* ---- message-view demo: a scrolling list of opaque colored divs that
+     stand in for bubbles. Plays the same role as Lesson 3's chat-bubble
+     demo, but with no Message instance — the renderBubble strategy here
+     just returns a colored <div>. The point is MessageView's
+     setSelectedBubble callback (the nav-stack hook): every time the
+     selection settles after a click, scroll, or arrow press, the demo
+     logs the call. ---- */
+  // lint:called-once page-factory
+  function buildMessageViewDemo(){
+    var box = setStyles(document.createElement('div'), {
+      border: '1px solid ' + COLORS.border, borderRadius: '6px',
+      background: COLORS.surface, padding: '14px 16px', marginTop: '10px',
+    });
+
+    /* Twelve opaque bubbles in three colors, various widths + heights —
+       enough to overflow a short scroll container so the reader sees
+       scroll-driven selection in action. */
+    var palette = ['#e74c3c', '#27ae60', '#3498db']; // red, green, blue
+    var dims = [
+      [120, 36], [180, 52], [ 90, 30], [220, 64], [150, 44], [110, 38],
+      [200, 56], [ 80, 32], [170, 60], [140, 42], [190, 48], [100, 34],
+    ];
+
+    /* Scroll surface — tabindex so it can hold keyboard focus when the
+       reader clicks, since MessageView's keydown listener is scoped to
+       the container on this page (no hijacking page-wide arrows). */
+    var scroller = setStyles(document.createElement('div'), {
+      maxHeight: '220px', overflow: 'auto',
+      border: '1px solid #ccc', borderRadius: '4px',
+      background: '#fff', padding: '8px',
+    });
+    scroller.tabIndex = 0;
+
+    var logBody = setStyles(document.createElement('div'), {
+      fontFamily: 'ui-monospace, Menlo, Consolas, monospace', fontSize: '12px',
+      background: '#fff', border: '1px solid ' + COLORS.border, borderRadius: '4px',
+      padding: '8px', minHeight: '120px',
+    });
+    function log(line){
+      var entry = document.createElement('div');
+      entry.textContent = '→ ' + line;
+      logBody.appendChild(entry);
+      logBody.scrollTop = logBody.scrollHeight;
+    }
+
+    var view = MessageView.create({
+      container: scroller,
+      scopeKeysToContainer: true, /* Don't hijack /learn's page-level arrows. */
+      renderBubble: function(idx, data){
+        var div = document.createElement('div');
+        Object.assign(div.style, {
+          background: data.color, width: data.w + 'px', height: data.h + 'px',
+          margin: '6px 0', borderRadius: '4px',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          color: 'white', fontFamily: 'sans-serif', fontSize: '13px', fontWeight: 'bold',
+        });
+        div.textContent = '#' + idx;
+        return div;
+      },
+      setSelectedBubble: function(idx){
+        log('setSelectedBubble(' + idx + ') → caller pushes onto nav stack');
+      },
+    });
+
+    /* Fill via the same backlog protocol the chat page uses on initial
+       load: startBacklog → many append → endBacklog. anchor:'bottom'
+       scrolls to the bottom and selects the last bubble. */
+    view.startBacklog(dims.length);
+    dims.forEach(function(d, i){
+      view.append({ color: palette[i % palette.length], w: d[0], h: d[1] });
+    });
+    view.endBacklog({ anchor: 'bottom' });
+
+    var hint = setStyles(document.createElement('p'), {
+      margin: '0 0 10px', color: COLORS.muted, fontSize: '13px',
+    });
+    hint.textContent = 'Demo: twelve opaque rectangles instead of chat bubbles. '
+      + 'Click one, scroll the container, or click into it and use the arrow keys. '
+      + 'Each time selection settles, MessageView fires setSelectedBubble — the '
+      + 'log on the right shows the call. That callback is where chat.js pushes the new '
+      + 'selection onto its back/forward stack and rewrites the URL hash.';
+    var logCaption = setStyles(document.createElement('div'), {
+      marginBottom: '4px', fontSize: '13px', color: COLORS.muted,
+    });
+    logCaption.textContent = 'Callback log:';
+
+    var twoCol = setStyles(document.createElement('div'), {
+      display: 'flex', gap: '14px', alignItems: 'flex-start',
+    });
+    var leftCol = setStyles(document.createElement('div'), { flex: '1', minWidth: '0' });
+    leftCol.appendChild(scroller);
+    var rightCol = setStyles(document.createElement('div'), { width: '260px', flexShrink: '0' });
+    rightCol.appendChild(logCaption);
+    rightCol.appendChild(logBody);
+    twoCol.appendChild(leftCol); twoCol.appendChild(rightCol);
+
+    box.appendChild(hint);
+    box.appendChild(twoCol);
     return box;
   }
 
@@ -406,6 +517,46 @@
          + 'Build a chat bubble, route the click, hand off to the caller — never reach across '
          + 'to compose, to the nav stack, or to ChatSearch.',
     body:  lesson3Body,
+  }));
+
+  /* Lesson 4 — chat/message_view.js. A scrolling list of opaque rectangles;
+     the widget manages selection + keyboard nav + scroll-driven re-selection
+     and reports back via setSelectedBubble — that's the seam where the nav
+     stack lives. */
+  var lesson4Body = document.createElement('div');
+  lesson4Body.appendChild(buildParagraph(
+    'MessageView is the rectangle-list widget under Lesson 3’s bubbles. '
+    + 'It knows nothing about chat, markdown, or popups — its DOM is opaque rectangles in a scroll '
+    + 'container. The caller passes a renderBubble strategy ("here’s how to make bubble #i") '
+    + 'and a setSelectedBubble callback ("here’s what to do when the selection settles"). '
+    + 'In the chat conversation page, that callback is the seam where chat.js pushes the new '
+    + 'selection onto a back/forward nav stack and rewrites the URL hash. The widget itself owns '
+    + 'no policy about what selection MEANS.'));
+  lesson4Body.appendChild(buildParagraph(
+    'The demo below uses three colors and a dozen rectangles of varying sizes so scrolling is '
+    + 'forced. Click, scroll, or focus the container and press arrows — every settle fires '
+    + 'setSelectedBubble, and the page logs it. The selection ring (yellow box-shadow) is '
+    + 'MessageView’s own visual: it injects the .mv-selected stylesheet on first create() the '
+    + 'same way Message brought its own.'));
+  lesson4Body.appendChild(buildSpoiler({
+    label:     'Show message_view.js source',
+    openLabel: 'Hide source',
+    render: function(box){ box.appendChild(buildSourcePanel('/learn/source/message_view.js')); },
+  }));
+  lesson4Body.appendChild(buildMessageViewDemo());
+  var demo4Caption = setStyles(document.createElement('p'), {
+    margin: '14px 0 6px', color: COLORS.muted, fontSize: '13px',
+  });
+  demo4Caption.textContent = 'Demo source (the function that built the box above):';
+  lesson4Body.appendChild(demo4Caption);
+  lesson4Body.appendChild(buildCodeBlock(buildMessageViewDemo.toString()));
+
+  wrap.appendChild(buildSection({
+    title: 'Lesson 4: message_view.js',
+    lede:  'A scrollable list of opaque rectangles with selection state, keyboard navigation, '
+         + 'scroll-driven re-selection, and one outbound callback. The widget under chat’s '
+         + 'bubbles — separable enough that a demo with colored rectangles wires up the same way.',
+    body:  lesson4Body,
   }));
 
   root.appendChild(wrap);

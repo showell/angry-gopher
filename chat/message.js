@@ -63,11 +63,13 @@ window.Message = (function(){
     if(stylesInjected) return;
     var s = document.createElement('style');
     s.textContent = ''
-      /* Bubble container, sender/receiver variants, selection ring. */
+      /* Bubble container + sender/receiver variants. The selection ring
+         (toggled by MessageView's mv-selected class) lives in
+         chat/message_view.js — it's MessageView's visual concern, not the
+         bubble's. */
       + '.chat-msg { margin:0 0 12px; padding:8px 10px; border-radius:8px; max-width:88%; }'
       + '.chat-msg.mine { background:#e7e7ff; margin-left:auto; }'
       + '.chat-msg.theirs { background:#f0f0e6; margin-right:auto; }'
-      + '.chat-msg.selected { box-shadow:0 0 0 2px #ffcf3a; }'
       /* Meta line + action buttons. */
       + '.chat-meta { font-size:11px; color:#888; margin-bottom:3px; }'
       + '.chat-meta .msg-quote, .chat-meta .msg-refer, .chat-meta .msg-edit {'

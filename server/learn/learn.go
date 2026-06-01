@@ -34,8 +34,9 @@ func HandleLearn(w http.ResponseWriter, r *http.Request) {
 		`<script src="/chat/chat_image_popup.js?v=%s"></script>`+
 			`<script src="/chat/chat_code_popup.js?v=%s"></script>`+
 			`<script src="/chat/message.js?v=%s"></script>`+
+			`<script src="/chat/message_view.js?v=%s"></script>`+
 			`<script src="/learn/learn.js?v=%s"></script>`,
-		v, v, v, v)
+		v, v, v, v, v)
 	fmt.Fprint(w, `</body></html>`)
 }
 
@@ -52,6 +53,7 @@ var learnSourceAllowlist = map[string]string{
 	"chat_image_popup.js": "chat/chat_image_popup.js",
 	"chat_code_popup.js":  "chat/chat_code_popup.js",
 	"message.js":          "chat/message.js",
+	"message_view.js":     "chat/message_view.js",
 }
 
 // HandleLearnSource serves the raw text of an allowlisted JS module so the
