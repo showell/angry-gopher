@@ -297,24 +297,21 @@
     return box;
   }
 
-  /* ---- message-view demo: a scrolling list of opaque colored divs that
-     stand in for bubbles. Plays the same role as Lesson 3's chat-bubble
-     demo, but with no Message instance — the renderBubble strategy here
-     just returns a colored <div>. The point is MessageView's
-     setSelectedBubble callback (the nav-stack hook): every time the
-     selection settles after a click, scroll, or arrow press, the demo
-     logs the call. ---- */
-  // lint:called-once page-factory
-  function buildMessageViewDemo(){
-    var box = setStyles(document.createElement('div'), {
-      border: '1px solid ' + COLORS.border, borderRadius: '6px',
-      background: COLORS.surface, padding: '14px 16px', marginTop: '10px',
-    });
+  /* ---- shared infrastructure for Lessons 4 + 5 ----
+     Three small helpers build the common scaffolding both lessons need:
+     a 36-bubble MessageView, a fixed-height auto-scrolling log panel,
+     and the two-column layout. Lesson 4's demo wires setSelectedBubble
+     to the log only; Lesson 5's demo additionally instantiates a
+     NavStack and wires Back/Forward buttons. ---- */
 
+  var SURFACE_HEIGHT = '220px';
+
+  // lint:called-once widget — shared by Lessons 4 + 5
+  function buildColoredScroller(onSelected){
     /* Three colors, twelve-entry size cycle repeated to 36 bubbles —
-       enough to overflow a short scroll container so the reader sees
-       scroll-driven selection in action, and to feel the burst-of-
-       keypresses → 700ms debounce in the log. */
+       enough to overflow the scroll container so the reader sees
+       scroll-driven selection in action, and to feel the
+       burst-of-keypresses → 700ms debounce in the log. */
     var palette = ['#e74c3c', '#27ae60', '#3498db']; // red, green, blue
     var sizeCycle = [
       [120, 36], [180, 52], [ 90, 30], [220, 64], [150, 44], [110, 38],
@@ -323,10 +320,9 @@
     var dims = [];
     for(var i = 0; i < 36; i++) dims.push(sizeCycle[i % sizeCycle.length]);
 
-    /* Scroll surface — tabindex so it can hold keyboard focus when the
-       reader clicks, since MessageView's keydown listener is scoped to
-       the container on this page (no hijacking page-wide arrows). */
-    var SURFACE_HEIGHT = '220px';
+    /* tabindex so the container can hold keyboard focus when the reader
+       clicks — MessageView's keydown listener is scoped to the container
+       here (no hijacking page-wide arrows). */
     var scroller = setStyles(document.createElement('div'), {
       height: SURFACE_HEIGHT, overflow: 'auto',
       border: '1px solid #ccc', borderRadius: '4px',
@@ -334,23 +330,9 @@
     });
     scroller.tabIndex = 0;
 
-    /* Log surface matches the message list's height + auto-scrolls so it
-       feels like a paired stream, not a stack that grows forever. */
-    var logBody = setStyles(document.createElement('div'), {
-      fontFamily: 'ui-monospace, Menlo, Consolas, monospace', fontSize: '12px',
-      background: '#fff', border: '1px solid ' + COLORS.border, borderRadius: '4px',
-      padding: '8px', height: SURFACE_HEIGHT, overflowY: 'auto', boxSizing: 'border-box',
-    });
-    function log(line){
-      var entry = document.createElement('div');
-      entry.textContent = '→ ' + line;
-      logBody.appendChild(entry);
-      logBody.scrollTop = logBody.scrollHeight;
-    }
-
     var view = MessageView.create({
       container: scroller,
-      scopeKeysToContainer: true, /* Don't hijack /learn's page-level arrows. */
+      scopeKeysToContainer: true,
       renderBubble: function(idx, data){
         var div = document.createElement('div');
         Object.assign(div.style, {
@@ -362,9 +344,7 @@
         div.textContent = '#' + idx;
         return div;
       },
-      setSelectedBubble: function(idx){
-        log('setSelectedBubble(' + idx + ') → caller pushes onto nav stack');
-      },
+      setSelectedBubble: onSelected,
     });
 
     /* Fill via the same backlog protocol the chat page uses on initial
@@ -376,6 +356,55 @@
     });
     view.endBacklog({ anchor: 'bottom' });
 
+    return { scroller: scroller, view: view };
+  }
+
+  // lint:called-once widget — shared by Lessons 4 + 5
+  function buildLogPanel(){
+    var logCaption = setStyles(document.createElement('div'), {
+      marginBottom: '4px', fontSize: '13px', color: COLORS.muted,
+    });
+    logCaption.textContent = 'Callback log:';
+    /* Fixed height matches the scroller's; auto-scrolls so the latest
+       entry stays in view and the panel doesn't grow without bound. */
+    var logBody = setStyles(document.createElement('div'), {
+      fontFamily: 'ui-monospace, Menlo, Consolas, monospace', fontSize: '12px',
+      background: '#fff', border: '1px solid ' + COLORS.border, borderRadius: '4px',
+      padding: '8px', height: SURFACE_HEIGHT, overflowY: 'auto', boxSizing: 'border-box',
+    });
+    function log(line){
+      var entry = document.createElement('div');
+      entry.textContent = '→ ' + line;
+      logBody.appendChild(entry);
+      logBody.scrollTop = logBody.scrollHeight;
+    }
+    return { logCaption: logCaption, logBody: logBody, log: log };
+  }
+
+  // lint:called-once widget — shared by Lessons 4 + 5
+  function buildScrollerLogLayout(scroller, logCaption, logBody){
+    var twoCol = setStyles(document.createElement('div'), {
+      display: 'flex', gap: '14px',
+    });
+    var leftCol = setStyles(document.createElement('div'), { flex: '1', minWidth: '0' });
+    leftCol.appendChild(scroller);
+    var rightCol = setStyles(document.createElement('div'), {
+      width: '260px', flexShrink: '0',
+      display: 'flex', flexDirection: 'column',
+    });
+    rightCol.appendChild(logCaption);
+    rightCol.appendChild(logBody);
+    twoCol.appendChild(leftCol); twoCol.appendChild(rightCol);
+    return twoCol;
+  }
+
+  /* ---- Lesson 4 demo: MessageView in isolation, callback just logs. ---- */
+  // lint:called-once page-factory
+  function buildMessageViewDemo(){
+    var box = setStyles(document.createElement('div'), {
+      border: '1px solid ' + COLORS.border, borderRadius: '6px',
+      background: COLORS.surface, padding: '14px 16px', marginTop: '10px',
+    });
     var hint = setStyles(document.createElement('p'), {
       margin: '0 0 10px', color: COLORS.muted, fontSize: '13px',
     });
@@ -383,25 +412,74 @@
       + 'Click one, scroll the container, or click into it and hold an arrow key. '
       + 'The yellow ring follows every press instantly — but setSelectedBubble waits '
       + 'for a 700ms rest before reporting, so a burst of presses only logs the place '
-      + 'you SETTLED, not every intermediate step. That callback is where chat.js pushes '
-      + 'the new selection onto its back/forward stack and rewrites the URL hash.';
-    var logCaption = setStyles(document.createElement('div'), {
-      marginBottom: '4px', fontSize: '13px', color: COLORS.muted,
+      + 'you SETTLED, not every intermediate step. The callback fires into the void here; '
+      + 'Lesson 5 wires it up to the nav stack.';
+    var panel = buildLogPanel();
+    var scr = buildColoredScroller(function(idx){
+      panel.log('setSelectedBubble(' + idx + ')');
     });
-    logCaption.textContent = 'Callback log:';
+    box.appendChild(hint);
+    box.appendChild(buildScrollerLogLayout(scr.scroller, panel.logCaption, panel.logBody));
+    return box;
+  }
 
-    var twoCol = setStyles(document.createElement('div'), {
-      display: 'flex', gap: '14px', alignItems: 'flex-start',
+  /* ---- Lesson 5 demo: same scroller, plus a NavStack instance and two
+     native <button>s for Back/Forward. Additive on top of Lesson 4 —
+     the helpers do the same job; the new wiring lives here. ---- */
+  // lint:called-once page-factory
+  function buildNavStackDemo(){
+    var box = setStyles(document.createElement('div'), {
+      border: '1px solid ' + COLORS.border, borderRadius: '6px',
+      background: COLORS.surface, padding: '14px 16px', marginTop: '10px',
     });
-    var leftCol = setStyles(document.createElement('div'), { flex: '1', minWidth: '0' });
-    leftCol.appendChild(scroller);
-    var rightCol = setStyles(document.createElement('div'), { width: '260px', flexShrink: '0' });
-    rightCol.appendChild(logCaption);
-    rightCol.appendChild(logBody);
-    twoCol.appendChild(leftCol); twoCol.appendChild(rightCol);
+    var hint = setStyles(document.createElement('p'), {
+      margin: '0 0 10px', color: COLORS.muted, fontSize: '13px',
+    });
+    hint.textContent = 'Demo: same 36 rectangles, plus a NavStack instance and two unstyled '
+      + 'browser-default buttons. Click bubbles, scroll, or use arrows to settle on places — each '
+      + 'settle pushes onto the stack. Click Back to retrace; click Forward to undo a Back. Scroll '
+      + 'after a click to drift off the cursor, then click Back — it recovers, doesn’t pop.';
+
+    /* Plain <button>s: no Object.assign(button.style, ...). Want the
+       reader to see them as raw bindings, not styled UI. */
+    var backBtn = document.createElement('button'); backBtn.textContent = 'Back';
+    var fwdBtn  = document.createElement('button'); fwdBtn.textContent  = 'Forward';
+    var buttonRow = document.createElement('div');
+    buttonRow.style.margin = '0 0 10px';
+    buttonRow.appendChild(backBtn);
+    buttonRow.appendChild(document.createTextNode(' '));
+    buttonRow.appendChild(fwdBtn);
+
+    var panel = buildLogPanel();
+
+    /* Forward-reference: setSelectedBubble fires nav.push, but nav
+       doesn't exist yet at construction time of the scroller. The
+       callback closes over `nav` (declared, assigned below) — JS
+       hoisting handles it as long as no user click reaches nav.push
+       before nav is assigned. */
+    var nav;
+    var scr = buildColoredScroller(function(idx){
+      panel.log('setSelectedBubble(' + idx + ')');
+      nav.push(idx);
+    });
+
+    nav = NavStack.create({
+      walk: function(entry, opts){
+        panel.log('walk(' + entry + ', silent=' + !!opts.silent + ')');
+        scr.view.focusBubble(entry, opts);
+      },
+      onChange: function(canBack, canFwd){
+        backBtn.disabled = !canBack;
+        fwdBtn.disabled  = !canFwd;
+      },
+      currentSelection: scr.view.getSelected,
+    });
+    backBtn.addEventListener('click', nav.back);
+    fwdBtn.addEventListener('click', nav.forward);
 
     box.appendChild(hint);
-    box.appendChild(twoCol);
+    box.appendChild(buttonRow);
+    box.appendChild(buildScrollerLogLayout(scr.scroller, panel.logCaption, panel.logBody));
     return box;
   }
 
@@ -544,9 +622,14 @@
     + 'It knows nothing about chat, markdown, or popups — its DOM is opaque rectangles in a scroll '
     + 'container. The caller passes a renderBubble strategy ("here’s how to make bubble #i") '
     + 'and a setSelectedBubble callback ("here’s what to do when the selection settles"). '
-    + 'In the chat conversation page, that callback is the seam where chat.js pushes the new '
-    + 'selection onto a back/forward nav stack and rewrites the URL hash. The widget itself owns '
-    + 'no policy about what selection MEANS.'));
+    + 'The widget itself owns no policy about what selection MEANS.'));
+  lesson4Body.appendChild(buildParagraph(
+    'Why have that callback at all? Because something needs to remember where you’ve been so '
+    + 'you can press Back and return. That something is a nav stack — Lesson 5’s subject. In this '
+    + 'lesson the callback just logs; in Lesson 5 the same callback also pushes onto a NavStack '
+    + 'instance, and two Back/Forward buttons pop it. Keeping the wiring out of MessageView is the '
+    + 'point: a different page could wire setSelectedBubble to a URL router, a save-as-bookmark '
+    + 'button, anything.'));
   lesson4Body.appendChild(buildParagraph(
     'The demo below uses three colors and 36 rectangles of varying sizes so scrolling is '
     + 'forced. Click, scroll, or focus the container and press arrows — every settle fires '
@@ -556,9 +639,9 @@
   lesson4Body.appendChild(buildParagraph(
     'There’s a 700ms debounce between the visible cursor and the setSelectedBubble call. '
     + 'The cursor (yellow ring) moves on every keystroke so a burst of arrow presses feels '
-    + 'responsive — but the callback only fires after a brief rest, so the nav stack and URL '
-    + 'hash record where you LANDED, not every intermediate stop. The same debounce gates '
-    + 'scroll-driven re-selection: scrolling fast doesn’t fire the callback per frame.'));
+    + 'responsive — but the callback only fires after a brief rest, so whatever you wire it to '
+    + '(eventually the nav stack) records where you LANDED, not every intermediate stop. The same '
+    + 'debounce gates scroll-driven re-selection: scrolling fast doesn’t fire the callback per frame.'));
   lesson4Body.appendChild(buildSpoiler({
     label:     'Show message_view.js source',
     openLabel: 'Hide source',
@@ -578,6 +661,51 @@
          + 'scroll-driven re-selection, and one outbound callback. The widget under chat’s '
          + 'bubbles — separable enough that a demo with colored rectangles wires up the same way.',
     body:  lesson4Body,
+  }));
+
+  /* Lesson 5 — chat/nav_stack.js. The back/forward state machine. Built
+     on top of Lesson 4: same scroller, plus a NavStack instance and two
+     unstyled <button>s. ---- */
+  var lesson5Body = document.createElement('div');
+  lesson5Body.appendChild(buildParagraph(
+    'NavStack is the cursor-into-history that Back and Forward orbit around. It’s pure state '
+    + 'machine — three callbacks in (walk, onChange, currentSelection), three verbs out (push, '
+    + 'back, forward). Nothing about it knows what an entry IS; the chat conversation uses '
+    + 'bubble indices, but the demo here uses the same indices for the same reason and the '
+    + 'NavStack doesn’t care either way.'));
+  lesson5Body.appendChild(buildParagraph(
+    'The three callbacks are how the module stays decoupled: walk(entry, opts) is "go to this '
+    + 'entry" — for the chat (and this demo) that’s view.focusBubble; onChange(canBack, canFwd) '
+    + 'is the button-enable hook; currentSelection() returns whatever the live selection is right '
+    + 'now, used for drift detection. The opts.silent flag on walk tells the consumer "don’t '
+    + 're-push on arrival" — without it back/forward would each push the destination as they '
+    + 'land, and the stack would never shrink.'));
+  lesson5Body.appendChild(buildParagraph(
+    'Drift: after a push, the live selection can wander off (the user scrolls, or arrows to a '
+    + 'new bubble without resting long enough for a push). currentSelection() != entries[pos] '
+    + '— that’s drift. The first Back in that state recovers to the marked entry instead of '
+    + 'popping, so Back means "get me back to where I was" first and "pop the stack" second. '
+    + 'Try it in the demo: click bubble #20, then scroll up or down, then click Back.'));
+  lesson5Body.appendChild(buildSpoiler({
+    label:     'Show nav_stack.js source',
+    openLabel: 'Hide source',
+    render: function(box){ box.appendChild(buildSourcePanel('/learn/source/nav_stack.js')); },
+  }));
+  lesson5Body.appendChild(buildNavStackDemo());
+  var demo5Caption = setStyles(document.createElement('p'), {
+    margin: '14px 0 6px', color: COLORS.muted, fontSize: '13px',
+  });
+  demo5Caption.textContent = 'Demo source (additive on Lesson 4 — same helpers, plus the new wiring):';
+  lesson5Body.appendChild(demo5Caption);
+  lesson5Body.appendChild(buildCodeBlock(buildNavStackDemo.toString()));
+
+  wrap.appendChild(buildSection({
+    title: 'Lesson 5: nav_stack.js',
+    lede:  'The state machine Back/Forward orbit around. Lessons 3 and 4 segue here: Message '
+         + 'reports clicks via callbacks (Lesson 3), MessageView reports settled selections via '
+         + 'setSelectedBubble (Lesson 4), and this lesson wires that callback into a real NavStack '
+         + 'so Back and Forward come alive.',
+    body:  lesson5Body,
   }));
 
   root.appendChild(wrap);
