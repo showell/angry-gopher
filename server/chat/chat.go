@@ -433,15 +433,26 @@ func HandleMessageViewJS(w http.ResponseWriter, r *http.Request) {
 	web.ServeJS(w, MessageViewJSPath, "message_view.js missing from the binary")
 }
 
-// NavStackJSPath is the back/forward state machine — chat.js wires
-// MessageView's setSelectedBubble (push), the back/forward buttons
-// (back/forward), the b/f hotkeys (via the button.click), and the
-// view.focusBubble walk into it.
+// NavStackJSPath is the back/forward state machine — middle_pane.js
+// wires MessageView's setSelectedBubble (push), the back/forward
+// buttons (back/forward), and the view.focusBubble walk into it.
 var NavStackJSPath = "chat/nav_stack.js"
 
 // HandleNavStackJS serves the NavStack module from the embedded assets.
 func HandleNavStackJS(w http.ResponseWriter, r *http.Request) {
 	web.ServeJS(w, NavStackJSPath, "nav_stack.js missing from the binary")
+}
+
+// MiddlePaneJSPath wraps MessageView + NavStack + the back/fwd buttons
+// behind a small API (append, focusBubble, getSelected, caughtUp, etc.)
+// that chat.js drives. It's the bubble-feed widget — chat.js stays the
+// workhorse for domain actions, message tracking, SSE, supersession,
+// and sibling-module wiring.
+var MiddlePaneJSPath = "chat/middle_pane.js"
+
+// HandleMiddlePaneJS serves the middle-pane module from the embedded assets.
+func HandleMiddlePaneJS(w http.ResponseWriter, r *http.Request) {
+	web.ServeJS(w, MiddlePaneJSPath, "middle_pane.js missing from the binary")
 }
 
 // ChatImagePopupJSPath is the shared image-zoom dialog — reused by chat
@@ -537,6 +548,7 @@ func renderChatConversation(w http.ResponseWriter, user users.User, partnerID, c
 		`<script src="/chat/message.js?v=%s"></script>`+
 		`<script src="/chat/message_view.js?v=%s"></script>`+
 		`<script src="/chat/nav_stack.js?v=%s"></script>`+
+		`<script src="/chat/middle_pane.js?v=%s"></script>`+
 		`<script src="/chat/chat_search.js?v=%s"></script>`+
 		`<script src="/chat/chat_left_sidebar.js?v=%s"></script>`+
 		`<script src="/chat/chat_right_sidebar.js?v=%s"></script>`+
@@ -544,7 +556,7 @@ func renderChatConversation(w http.ResponseWriter, user users.User, partnerID, c
 		`<script src="/chat/chat_help.js?v=%s"></script>`+
 		`<script src="/chat/chat.js?v=%s"></script>`+
 		`<script src="/chat/notify.js?v=%s"></script>`,
-		v, v, v, v, v, v, v, v, v, v, v, v)
+		v, v, v, v, v, v, v, v, v, v, v, v, v)
 
 	web.PageFooter(w)
 }

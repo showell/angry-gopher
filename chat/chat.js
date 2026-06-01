@@ -22,10 +22,16 @@
     return null;
   }
 
-  /* ===== domain actions (called from Message clicks AND ChatHelp keys) ===== */
+  /* ===== domain actions (called from Message clicks AND ChatHelp keys) =====
+     PRODUCT_DECISION: doQuote/doRefer/doEdit/navigateRef call pane.focusBubble,
+     which is captured by closure from the var pane below. The actions are
+     CALLED later (from Message instances built inside the pane's renderBubble
+     callback), so the forward reference is safe. */
+  var pane;
+
   function doQuote(msg){
     if(ChatCompose.isPending()) return;
-    view.focusBubble(msg.getIndex() + 1);
+    pane.focusBubble(msg.getIndex() + 1);
     ChatRightSidebar.openCompose();
     ChatCompose.insertAtCursor(
       'In MSG_'+msg.getId()+' '+(msg.isMine()?'I said':'you said')+
@@ -34,7 +40,7 @@
   }
   function doRefer(msg){
     if(ChatCompose.isPending()) return;
-    view.focusBubble(msg.getIndex() + 1);
+    pane.focusBubble(msg.getIndex() + 1);
     ChatRightSidebar.openCompose();
     ChatCompose.insertAtCursor('See MSG_'+msg.getId()+' ');
   }
@@ -43,7 +49,7 @@
      transparent — no copy/paste, the backlink wires the relation. */
   function doEdit(msg){
     if(ChatCompose.isPending()) return;
-    view.focusBubble(msg.getIndex() + 1);
+    pane.focusBubble(msg.getIndex() + 1);
     var prefix='Edit of MSG_'+msg.getId()+'\n\n';
     ChatRightSidebar.openCompose();
     ChatCompose.setBody(prefix+msg.getBody(), prefix.length);
@@ -52,7 +58,7 @@
   /* ===== cross-session vs same-session MSG_ ref navigation =====
      PRODUCT_DECISION: cross-session refs open in a new tab — the source tab
      stays parked, no nav-stack to engineer. Same-session refs scroll +
-     select via view.focusBubble. */
+     select via pane.focusBubble. */
   function navigateRef(refEl){
     var hashTarget=refEl.getAttribute('href').replace(/^#/, '');
     var id=hashTarget.replace(/^msg-/, '');
@@ -61,32 +67,18 @@
     var targetSession=id.substring(0,cut);
     if(targetSession===SESSION){
       var msg=findById(id);
-      if(msg) view.focusBubble(msg.getIndex() + 1);
+      if(msg) pane.focusBubble(msg.getIndex() + 1);
       return;
     }
     window.open('/chat/c/'+encodeURIComponent(CONV)+'/'+encodeURIComponent(targetSession)+'#msg-'+id, '_blank');
   }
 
-  /* ===== nav stack — instantiated AFTER `view` is created (below) =====
-     The state-machine itself lives in chat/nav_stack.js. chat.js wires
-     the three bindings: walk (consume = view.focusBubble), onChange
-     (UI = back/fwd button enable), currentSelection (drift = the live
-     view selection). Click/link jumps commit immediately; settling
-     debounces 700ms before pushing (MessageView's setSelectedBubble). */
-  var nav;
-
-  /* ===== "is the feed scrolled to the bottom" =====
-     True when empty so first messages stick. */
-  function caughtUp(){
-    var els=bubbles.querySelectorAll('[data-i]');
-    if(els.length===0) return true;
-    return els[els.length-1].getBoundingClientRect().bottom<=history.getBoundingClientRect().bottom+1;
-  }
-
-  /* ===== MessageView setup ===== */
-  var view = MessageView.create({
-    container: history,
-    list:      bubbles,
+  /* ===== middle pane — bubble feed + nav-stack history + back/fwd buttons ===== */
+  pane = ChatMiddlePane.init({
+    history:  history,
+    bubbles:  bubbles,
+    backBtn:  backBtn,
+    fwdBtn:   fwdBtn,
     renderBubble: function(idx, m){
       var msg = Message.create(m, {
         onQuote:  doQuote,
@@ -97,25 +89,14 @@
       messages.push(msg);
       return msg.render();
     },
-    setSelectedBubble: function(idx){
-      if(idx<=0) return;
+    onSelect: function(idx){
       var msg=messages[idx-1];
       if(!msg) return;
       /* BROWSER_WORKAROUND: window.history — chat.js shadows the global `history`
          with the #chat-history DOM element near the top of this IIFE. */
       window.history.replaceState({}, '', '#msg-'+msg.getId());
-      nav.push(idx);
     },
   });
-
-  /* ===== nav stack instantiation + back / forward bindings ===== */
-  nav = NavStack.create({
-    gotoMessage:      function(idx){ view.focusBubble(idx, {silent:true}); },
-    onChange:         function(canBack, canFwd){ backBtn.disabled=!canBack; fwdBtn.disabled=!canFwd; },
-    currentSelection: view.getSelected,
-  });
-  backBtn.addEventListener('click', nav.back);
-  fwdBtn.addEventListener('click', nav.forward);
 
   /* ===== one append wraps view + supersession + empty-removal =====
      EDIT_RE: a body starting with "Edit of MSG_<hash>" causes the original
@@ -124,7 +105,7 @@
   var EDIT_RE=/^Edit of MSG_([A-Za-z0-9-]+_[0-9]+)\b/;
   function appendMessage(m){
     var empty=document.getElementById('chat-empty'); if(empty) empty.remove();
-    view.append(m);
+    pane.append(m);
     var em=(m.body||'').match(EDIT_RE);
     if(em){ var orig=findById(em[1]); if(orig) orig.markEdited(m.id); }
   }
@@ -157,15 +138,15 @@
     } else if(wasCaughtUpAtBacklogStart){
       opts.anchor='bottom';
     }
-    view.endBacklog(opts);
+    pane.endBacklog(opts);
   }
 
   es.addEventListener('backlog-size', function(e){
     /* PRODUCT_DECISION: per-connection reset — fires on initial load AND every reconnect. */
-    wasCaughtUpAtBacklogStart=caughtUp();
+    wasCaughtUpAtBacklogStart=pane.caughtUp();
     inBacklog=true; backlogSeen=0;
     backlogSize=parseInt(e.data,10) || 0;
-    view.startBacklog(backlogSize);
+    pane.startBacklog(backlogSize);
     if(backlogSize===0) finishBacklog();
   });
 
@@ -179,12 +160,12 @@
     }
     /* PRODUCT_DECISION: capture caughtUp BEFORE the append — the just-arrived
        bubble is off-screen until we scroll, so a post-append check always reads false. */
-    var stick=caughtUp();
+    var stick=pane.caughtUp();
     appendMessage(m);
     if(stick){
       /* PRODUCT_DECISION: scroll to bottom + select the LAST message (debounced).
          cursorToExtreme(true) with stick→false would record-too-fast on a burst. */
-      view.cursorToExtreme(true);
+      pane.cursorToExtreme(true);
     }
     if(m.cid) ChatCompose.ackIfPending(m.cid); /* PRODUCT_DECISION: our message round-tripped (saved + echoed). */
     if(ChatSearch.isOpen()) ChatSearch.refreshIfOpen();
@@ -198,7 +179,7 @@
          data-id back to its Message + view-idx and focus. */
       var id=el && el.getAttribute && el.getAttribute('data-id');
       var msg=id ? findById(id) : null;
-      if(msg) view.focusBubble(msg.getIndex()+1);
+      if(msg) pane.focusBubble(msg.getIndex()+1);
     },
   });
   ChatLeftSidebar.init({ conv: CONV });
@@ -219,7 +200,7 @@
     backBtn:     backBtn,
     fwdBtn:      fwdBtn,
     getSelectedMessage: function(){
-      var idx=view.getSelected();
+      var idx=pane.getSelected();
       return idx>0 ? messages[idx-1] : null;
     },
     quoteReply:  doQuote,

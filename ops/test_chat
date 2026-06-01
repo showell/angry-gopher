@@ -71,6 +71,9 @@ phase "code-js" node --check chat/code.js
 echo "==> nav_stack.js syntax"
 phase "nav-stack-js" node --check chat/nav_stack.js
 
+echo "==> middle_pane.js syntax"
+phase "middle-pane-js" node --check chat/middle_pane.js
+
 echo "==> learn.js syntax"
 phase "learn-js" node --check learn/learn.js
 
