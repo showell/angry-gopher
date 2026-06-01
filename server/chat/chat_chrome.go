@@ -30,7 +30,7 @@ func chatChromeTop(w http.ResponseWriter, user users.User, title, active string)
 			`<a class="chat-top-home" href="/">Home</a>`+
 			`<span class="chat-top-title">%s</span>`+
 			`<span class="chat-top-links">%s · %s · %s · %s · %s · %s</span></div>`+
-			`<div class="app-top-user"><strong>%s</strong>%s · <a href="/logout">Log out</a></div></header>`,
+			`<div class="app-top-user"><strong>%s</strong>%s · <a href="/learn">Learn</a> · <a href="/logout">Log out</a></div></header>`,
 		html.EscapeString(title),
 		navLink("/chat", "Chat", "chat"),
 		navLink("/chat/docs", "Docs", "docs"),

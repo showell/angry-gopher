@@ -44,10 +44,15 @@
       color: COLORS.ink, textDecoration: 'none', fontWeight: 'bold',
     });
     lrLink.href = '/'; lrLink.textContent = 'Lyn Rummy';
-    var sep = document.createElement('span');
-    sep.textContent = ' · Learn';
-    setStyles(sep, { color: COLORS.body, fontSize: '14px', marginLeft: '6px' });
-    left.appendChild(lrLink); left.appendChild(sep);
+    var chatLink = setStyles(document.createElement('a'), {
+      color: COLORS.ink, textDecoration: 'none', fontSize: '14px', marginLeft: '6px',
+    });
+    chatLink.href = '/chat'; chatLink.textContent = ' · Chat';
+    var here = setStyles(document.createElement('span'), {
+      color: COLORS.body, fontSize: '14px', marginLeft: '6px',
+    });
+    here.textContent = ' · Learn';
+    left.appendChild(lrLink); left.appendChild(chatLink); left.appendChild(here);
     bar.appendChild(left);
     return bar;
   }
@@ -91,9 +96,11 @@
     return wrap;
   }
 
-  /* ---- source-code panel: <pre><code> with monospace + scroll ---- */
+  /* ---- code block: monospace <pre><code> with the page's visual language.
+     One styled wrapper, two filling strategies — inline text (buildCodeBlock)
+     and async fetch (buildSourcePanel). ---- */
   // lint:called-once widget — reused per lesson
-  function buildSourcePanel(url){
+  function buildCodeBlock(text){
     var pre = setStyles(document.createElement('pre'), {
       margin: '0', padding: '12px 14px', background: COLORS.codeBg,
       color: COLORS.code, fontFamily: 'ui-monospace, Menlo, Consolas, monospace',
@@ -101,8 +108,15 @@
       overflowX: 'auto', whiteSpace: 'pre',
     });
     var code = document.createElement('code');
-    code.textContent = 'Loading…';
+    code.textContent = text;
     pre.appendChild(code);
+    return pre;
+  }
+
+  // lint:called-once widget — reused per lesson
+  function buildSourcePanel(url){
+    var pre = buildCodeBlock('Loading…');
+    var code = pre.firstChild;
     fetch(url).then(function(r){
       if(!r.ok) throw new Error('fetch failed: ' + r.status);
       return r.text();
@@ -190,6 +204,15 @@
     render: function(box){ box.appendChild(buildSourcePanel('/learn/source/chat_image_popup.js')); },
   }));
   lesson1Body.appendChild(buildPopupDemo());
+  /* PRODUCT_DECISION: the inline demo source is buildPopupDemo.toString() —
+     not a copy. The reader sees exactly the function that built the box
+     above, and there is nowhere for the two to drift apart. */
+  var demoCaption = setStyles(document.createElement('p'), {
+    margin: '14px 0 6px', color: COLORS.muted, fontSize: '13px',
+  });
+  demoCaption.textContent = 'Demo source (the function that built the box above):';
+  lesson1Body.appendChild(demoCaption);
+  lesson1Body.appendChild(buildCodeBlock(buildPopupDemo.toString()));
 
   wrap.appendChild(buildSection({
     title: 'Lesson 1: chat_image_popup.js',
