@@ -5,18 +5,19 @@
   /* PRODUCT_DECISION: API URL space mirrors disk layout under {ChatDataRoot}/<conv>/sessions/<sid>. */
   var SESSION_BASE='/chat/c/'+encodeURIComponent(CONV)+'/'+encodeURIComponent(SESSION);
 
-  /* ===== Message tracking — parallel to MessageView's bubble list =====
-     PRODUCT_DECISION: chat.js holds Message instances so it can look them up
-     by id (for "Edit of MSG_<id>" supersession + same-session navigateRef
-     targets). msg.getIndex() is server-assigned 0-based; view index is
-     1-based; the two are kept consistent because we always append in order. */
+  /* ===== message store — parallel to MessageView's bubble list =====
+     PRODUCT_DECISION: chat.js holds the SSE records as plain data
+     (`records`), and the corresponding Message instances (`messages`)
+     in the same order. Records are what ChatSearch + quote/refer/edit
+     read; Message instances are what handles clicks + owns the bubble
+     DOM. byId indexes both by message id for O(1) lookup (supersession
+     + same-session navigateRef). msg.getIndex() is server-assigned
+     0-based; view index is 1-based; the two are kept consistent
+     because we always append in order. */
+  var records = [];
   var messages = [];
-  function findById(id){
-    for(var i = 0; i < messages.length; i++){
-      if(messages[i].getId() === id) return messages[i];
-    }
-    return null;
-  }
+  var byId = new Map(); // id -> position in records / messages
+  function findMsg(id){ var i=byId.get(id); return i==null ? null : messages[i]; } // lint:null-undefined-check map-get
 
   /* ===== domain actions (called from Message clicks AND ChatHelp keys) =====
      PRODUCT_DECISION: doQuote/doRefer/doEdit/navigateRef call pane.focusBubble,
@@ -62,7 +63,7 @@
     if(cut<=0) return;
     var targetSession=id.substring(0,cut);
     if(targetSession===SESSION){
-      var msg=findById(id);
+      var msg=findMsg(id);
       if(msg) pane.focusBubble(msg.getIndex() + 1);
       return;
     }
@@ -79,6 +80,8 @@
         onEdit:   doEdit,
         onMsgRef: navigateRef,
       });
+      byId.set(m.id, records.length);
+      records.push(m);
       messages.push(msg);
       return msg.render();
     },
@@ -111,7 +114,7 @@
     var empty=document.getElementById('chat-empty'); if(empty) empty.remove();
     pane.append(m);
     var em=(m.markdown||'').match(EDIT_RE);
-    if(em){ var orig=findById(em[1]); if(orig) orig.markEdited(m.id); }
+    if(em){ var orig=findMsg(em[1]); if(orig) orig.markEdited(m.id); }
   }
 
   /* ===== entry-point fragment (#msg-<id>) ===== */
@@ -136,7 +139,7 @@
     inBacklog=false;
     var opts={};
     if(wantFocusID){
-      var msg=findById(wantFocusID);
+      var msg=findMsg(wantFocusID);
       wantFocusID=null;
       if(msg) opts.focusIdx=msg.getIndex()+1;
     } else if(wasCaughtUpAtBacklogStart){
@@ -184,14 +187,11 @@
 
   /* ===== sibling module wiring ===== */
   ChatSearch.init({
-    bubbles:   pane.bubbles,
     navbar:    pane.navbar,
     focusFeed: pane.focus,
-    jumpToEl: function(el){
-      /* PRODUCT_DECISION: search holds the original feed bubble; translate
-         data-id back to its Message + view-idx and focus. */
-      var id=el && el.getAttribute && el.getAttribute('data-id');
-      var msg=id ? findById(id) : null;
+    records:   records, /* live ref — same array chat.js pushes onto */
+    jumpToId: function(id){
+      var msg=findMsg(id);
       if(msg) pane.focusBubble(msg.getIndex()+1);
     },
   });
