@@ -27,15 +27,17 @@ func HandleLearn(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	fmt.Fprintf(w, `<!DOCTYPE html>
 <html><head><meta charset="utf-8"><title>%s</title>`, html.EscapeString("Learn — Lyn Rummy"))
-	// PRODUCT_DECISION: the popup demo needs ImagePopupCSS to render right.
-	// This is the one CSS dependency the page borrows; eliminating it is
-	// the next step (migrate chat_image_popup.js to inline-styles itself).
+	// PRODUCT_DECISION: each popup demo needs its popup's CSS to render
+	// right. These are the CSS dependencies the page borrows; eliminating
+	// them is the next step (migrate the popups to inline-styles).
 	fmt.Fprint(w, chat.ImagePopupCSS)
+	fmt.Fprint(w, chat.CodePopupCSS)
 	fmt.Fprint(w, `</head><body><div id="learn-root"></div>`)
 	fmt.Fprintf(w,
 		`<script src="/chat/chat_image_popup.js?v=%s"></script>`+
+			`<script src="/chat/chat_code_popup.js?v=%s"></script>`+
 			`<script src="/learn/learn.js?v=%s"></script>`,
-		url.QueryEscape(web.AssetVersion), url.QueryEscape(web.AssetVersion))
+		url.QueryEscape(web.AssetVersion), url.QueryEscape(web.AssetVersion), url.QueryEscape(web.AssetVersion))
 	fmt.Fprint(w, `</body></html>`)
 }
 
@@ -50,6 +52,7 @@ func HandleLearnJS(w http.ResponseWriter, r *http.Request) {
 // accidentally exposing anything we didn't curate.
 var learnSourceAllowlist = map[string]string{
 	"chat_image_popup.js": "chat/chat_image_popup.js",
+	"chat_code_popup.js":  "chat/chat_code_popup.js",
 }
 
 // HandleLearnSource serves the raw text of an allowlisted JS module so the

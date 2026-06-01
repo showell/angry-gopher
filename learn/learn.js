@@ -128,6 +128,39 @@
     return pre;
   }
 
+  /* ---- meta code-popup demo: fetches a JS source file, renders it as a
+     clickable code block, and on click hands that exact text to
+     ChatCodePopup.show. The popup ends up displaying its own source — the
+     reader sees the code, clicks it, and the code goes into the popup the
+     code itself implements. ---- */
+  // lint:called-once page-factory
+  function buildCodePopupDemo(url){
+    var box = setStyles(document.createElement('div'), {
+      border: '1px solid ' + COLORS.border, borderRadius: '6px',
+      background: COLORS.surface, padding: '14px 16px', marginTop: '10px',
+    });
+    var caption = setStyles(document.createElement('div'), {
+      fontSize: '13px', color: COLORS.muted, marginBottom: '10px',
+    });
+    caption.textContent = 'Demo: click the code below to open it in the popup it implements.';
+    var pre = buildCodeBlock('Loading…');
+    var code = pre.firstChild;
+    setStyles(pre, { cursor: 'pointer' });
+    fetch(url).then(function(r){
+      if(!r.ok) throw new Error('fetch failed: ' + r.status);
+      return r.text();
+    }).then(function(text){
+      code.textContent = text;
+      pre.addEventListener('click', function(){
+        if(window.ChatCodePopup) ChatCodePopup.show(text);
+      });
+    }).catch(function(err){
+      code.textContent = 'failed to load ' + url + ': ' + err.message;
+    });
+    box.appendChild(caption); box.appendChild(pre);
+    return box;
+  }
+
   /* ---- popup demo: a small caption + a button that calls
      ChatImagePopup.show(<test image>). The exact integration images.js
      uses, isolated to one click. ---- */
@@ -220,6 +253,26 @@
          + 'The chat feed, the search panel, and the Images transcript all delegate to it via ChatImagePopup.show(src). '
          + 'Click the cat below to see exactly what those callers see — same module, no chat around it.',
     body:  lesson1Body,
+  }));
+
+  /* Lesson 2 — chat_code_popup.js (27 LOC). Meta demo: the code IS the
+     clickable target; the popup it opens shows the code that built the
+     popup. Small enough that no spoiler is needed. */
+  var lesson2Body = document.createElement('div');
+  lesson2Body.appendChild(buildCodePopupDemo('/learn/source/chat_code_popup.js'));
+  var demo2Caption = setStyles(document.createElement('p'), {
+    margin: '14px 0 6px', color: COLORS.muted, fontSize: '13px',
+  });
+  demo2Caption.textContent = 'Demo source (the function that built the box above):';
+  lesson2Body.appendChild(demo2Caption);
+  lesson2Body.appendChild(buildCodeBlock(buildCodePopupDemo.toString()));
+
+  wrap.appendChild(buildSection({
+    title: 'Lesson 2: chat_code_popup.js',
+    lede:  'A sibling of Lesson 1, but for code: opens any string of source in a monospace <dialog>. '
+         + 'Used by the chat feed (click a code block) and the Code transcript. '
+         + 'Small enough — 27 lines — to read end-to-end without a spoiler.',
+    body:  lesson2Body,
   }));
 
   root.appendChild(wrap);

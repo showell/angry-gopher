@@ -490,7 +490,7 @@ func renderChatConversation(w http.ResponseWriter, user users.User, partnerID, c
 	chatPageHeader(w, "Chat w/"+partnerName+": "+sessionID, user, "")
 	fmt.Fprint(w, chatCSS)
 	fmt.Fprint(w, ImagePopupCSS)
-	fmt.Fprint(w, codePopupCSS)
+	fmt.Fprint(w, CodePopupCSS)
 	// data-conv + data-session let chat.js build the API URLs
 	// (/chat/c/<conv>/<sid>/{stream,send,upload}) without re-deriving
 	// the pair key. data-partner stays for display labels (mine vs theirs).
@@ -674,10 +674,11 @@ func chatSendDone(w http.ResponseWriter, r *http.Request, conv, sessionID string
 	http.Redirect(w, r, "/chat/c/"+conv+"/"+url.PathEscape(sessionID), http.StatusSeeOther)
 }
 
-// codePopupCSS styles the shared <dialog> opened by ChatCodePopup.show.
-// Emitted on every page that loads chat_code_popup.js — currently the
-// chat conversation page and the Code transcript.
-const codePopupCSS = `<style>
+// CodePopupCSS styles the shared <dialog> opened by ChatCodePopup.show.
+// Exported because any page that loads chat_code_popup.js needs it (chat,
+// Code transcript, and the /learn demo). When chat_code_popup.js
+// eventually inlines its own styles, this constant goes away.
+const CodePopupCSS = `<style>
 /* PRODUCT_DECISION: fit-content (its UA default) capped at 80vw/80vh, so it
    hugs small snippets and stops at 80% for big ones; the <pre> scrolls in
    whichever direction overflows. */
@@ -870,7 +871,7 @@ html, body { height:100%; }
 /* Image popup rules live in ImagePopupCSS — emitted on both the chat
    conversation page and the Images transcript page since both surfaces
    open the same dialog via ChatImagePopup.show. */
-/* Code popup rules live in codePopupCSS — emitted on every page that
+/* Code popup rules live in CodePopupCSS — emitted on every page that
    loads chat_code_popup.js (chat conversation + Code transcript). */
 /* Plain message-box modal (e.g. the "host may be down" notice). */
 .chat-alert-dialog { max-width:90vw; border:1px solid #bbb; border-radius:8px; padding:18px 20px; }
