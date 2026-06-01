@@ -194,6 +194,90 @@
     return box;
   }
 
+  /* ---- explanatory paragraph: when a lesson has more to say than the
+     section's one-line lede. ---- */
+  // lint:called-once widget — reused per lesson
+  function buildParagraph(text){
+    return setStyles(
+      Object.assign(document.createElement('p'), { textContent: text }),
+      { margin: '0 0 12px', color: COLORS.body }
+    );
+  }
+
+  /* ---- message demo: the meat of Lesson 3. Builds three server-shaped
+     messages, wires their callbacks to a visible log panel, and renders
+     the bubbles with NO chat CSS loaded — the widget owns DOM + behavior,
+     not styling. Clicking around shows callback flow + body-click
+     delegation to ChatImagePopup / ChatCodePopup. ---- */
+  // lint:called-once page-factory
+  function buildMessageDemo(){
+    var box = setStyles(document.createElement('div'), {
+      border: '1px solid ' + COLORS.border, borderRadius: '6px',
+      background: COLORS.surface, padding: '14px 16px', marginTop: '10px',
+    });
+
+    /* Three server-shaped message objects. `html` would be sanitized by
+       goldmark on the real server; here we author it directly. */
+    var messages = [
+      { id: 'demo_001', index: 0, from: 'Alice', mine: false, time: '09:30',
+        body: 'Hey 👋',
+        html: 'Hey there 👋' },
+      { id: 'demo_002', index: 1, from: 'You', mine: true, time: '09:31',
+        body: 'Try clicking the image or the code block',
+        html: 'Try clicking either of these:<br>'
+            + '<img src="/images/cat_professor.webp" style="max-width:140px;cursor:zoom-in"><br>'
+            + '<pre>console.log("hi from the demo");</pre>' },
+      { id: 'demo_003', index: 2, from: 'Alice', mine: false, time: '09:32',
+        body: 'See MSG_demo_002',
+        html: 'See <a class="msg-ref" href="#msg-demo_002">MSG_demo_002</a> 👆' },
+    ];
+
+    /* The callback log — visible proof that the widget hands off without
+       deciding what should happen. */
+    var logBody = setStyles(document.createElement('div'), {
+      fontFamily: 'ui-monospace, Menlo, Consolas, monospace', fontSize: '12px',
+      background: '#fff', border: '1px solid ' + COLORS.border, borderRadius: '4px',
+      padding: '8px', minHeight: '48px', marginTop: '4px',
+    });
+    function log(line){
+      var entry = document.createElement('div');
+      entry.textContent = '→ ' + line;
+      logBody.appendChild(entry);
+    }
+    var callbacks = {
+      onQuote:  function(m){    log('onQuote(MSG_'  + m.getId() + ')'); },
+      onRefer:  function(m){    log('onRefer(MSG_'  + m.getId() + ')'); },
+      onEdit:   function(m){    log('onEdit(MSG_'   + m.getId() + ')'); },
+      onMsgRef: function(link){ log('onMsgRef('     + link.getAttribute('href') + ')'); },
+    };
+
+    /* The bubble container: a plain dashed box so the reader sees the
+       widget's bubbles WITHOUT any chat styling around them. */
+    var bubbles = setStyles(document.createElement('div'), {
+      border: '1px dashed ' + COLORS.border, borderRadius: '4px',
+      padding: '8px', background: '#fff',
+    });
+    messages.forEach(function(d){
+      bubbles.appendChild(Message.create(d, callbacks).render());
+    });
+
+    var hint = setStyles(document.createElement('p'), {
+      margin: '0 0 10px', color: COLORS.muted, fontSize: '13px',
+    });
+    hint.textContent = 'Demo: three bubbles, no chat CSS loaded. Click the buttons (quote-reply / refer / edit), '
+      + 'the image, the code block, or the MSG_ link. Watch the log below — that’s the page acting on what the widget reports.';
+    var logCaption = setStyles(document.createElement('div'), {
+      marginTop: '12px', marginBottom: '4px', fontSize: '13px', color: COLORS.muted,
+    });
+    logCaption.textContent = 'Callback log:';
+
+    box.appendChild(hint);
+    box.appendChild(bubbles);
+    box.appendChild(logCaption);
+    box.appendChild(logBody);
+    return box;
+  }
+
   /* ---- section frame: heading + prose + custom body ---- */
   // lint:called-once widget — reused per lesson
   function buildSection(opts){
@@ -280,6 +364,44 @@
          + 'Used by the chat feed (click a code block) and the Code transcript. '
          + 'Self-contained — owns its own styles inline, no external CSS — so it’s short enough to read end-to-end without a spoiler.',
     body:  lesson2Body,
+  }));
+
+  /* Lesson 3 — chat/message.js. A widget that builds a chat bubble out of
+     server-baked HTML and routes clicks via caller-supplied callbacks. */
+  var lesson3Body = document.createElement('div');
+  lesson3Body.appendChild(buildParagraph(
+    'Each message your browser shows comes through Message.create(data, callbacks).render(). '
+    + 'The widget owns the bubble’s DOM and one delegated click listener. What should happen '
+    + 'when you click the quote-reply button? When you click an image? When you click a MSG_ '
+    + 'reference link? Message doesn’t know. It classifies the click and invokes the matching '
+    + 'callback the caller provided. The callbacks are how the page connects this widget to '
+    + 'the rest of the system — the compose box, the nav stack, the popups.'));
+  lesson3Body.appendChild(buildParagraph(
+    'Notice two things in the source below. First, data.html is HTML the server already produced '
+    + '(markdown rendered + sanitized by goldmark). The widget innerHTMLs it as-is — it doesn’t '
+    + 'parse markdown and doesn’t re-sanitize. The separation lets the chat surface and the search '
+    + 'modal use the same widget on the same bytes. Second, Message ships no CSS of its own. The '
+    + 'classes it adds (chat-msg, chat-meta, chat-body, msg-quote, msg-refer, msg-edit) are hooks '
+    + 'for a containing page to style; the widget works without them.'));
+  lesson3Body.appendChild(buildSpoiler({
+    label:     'Show message.js source',
+    openLabel: 'Hide source',
+    render: function(box){ box.appendChild(buildSourcePanel('/learn/source/message.js')); },
+  }));
+  lesson3Body.appendChild(buildMessageDemo());
+  var demo3Caption = setStyles(document.createElement('p'), {
+    margin: '14px 0 6px', color: COLORS.muted, fontSize: '13px',
+  });
+  demo3Caption.textContent = 'Demo source (the function that built the box above):';
+  lesson3Body.appendChild(demo3Caption);
+  lesson3Body.appendChild(buildCodeBlock(buildMessageDemo.toString()));
+
+  wrap.appendChild(buildSection({
+    title: 'Lesson 3: message.js',
+    lede:  'The first widget that exposes callbacks instead of doing the work itself. '
+         + 'Build a chat bubble, route the click, hand off to the caller — never reach across '
+         + 'to compose, to the nav stack, or to ChatSearch.',
+    body:  lesson3Body,
   }));
 
   root.appendChild(wrap);

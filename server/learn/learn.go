@@ -29,11 +29,13 @@ func HandleLearn(w http.ResponseWriter, r *http.Request) {
 	// PRODUCT_DECISION: both popups own their own styles inline now —
 	// /learn loads no external CSS for them.
 	fmt.Fprint(w, `</head><body><div id="learn-root"></div>`)
+	v := url.QueryEscape(web.AssetVersion)
 	fmt.Fprintf(w,
 		`<script src="/chat/chat_image_popup.js?v=%s"></script>`+
 			`<script src="/chat/chat_code_popup.js?v=%s"></script>`+
+			`<script src="/chat/message.js?v=%s"></script>`+
 			`<script src="/learn/learn.js?v=%s"></script>`,
-		url.QueryEscape(web.AssetVersion), url.QueryEscape(web.AssetVersion), url.QueryEscape(web.AssetVersion))
+		v, v, v, v)
 	fmt.Fprint(w, `</body></html>`)
 }
 
@@ -49,6 +51,7 @@ func HandleLearnJS(w http.ResponseWriter, r *http.Request) {
 var learnSourceAllowlist = map[string]string{
 	"chat_image_popup.js": "chat/chat_image_popup.js",
 	"chat_code_popup.js":  "chat/chat_code_popup.js",
+	"message.js":          "chat/message.js",
 }
 
 // HandleLearnSource serves the raw text of an allowlisted JS module so the
