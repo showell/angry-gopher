@@ -484,51 +484,87 @@
     return box;
   }
 
-  /* ---- Lesson 6 demo: ChatMiddlePane.init in a small wrapper. The
-     same colored rectangles as Lessons 4 + 5, now mounted via the
-     real middle_pane integration layer — back/forward buttons are
-     built by the widget, not by the demo. ---- */
+  /* ---- Lesson 6 demo: ChatMiddlePane.init wired with the real
+     Message factory and a small batch of simulated server responses
+     (same wire shape as the chat conversation page's SSE — index,
+     from, time, html, body, id, mine). The html field is what the
+     Go server would have produced from goldmark; everything else is
+     JS the reader has already seen. ---- */
 
   // lint:called-once widget
   function buildMiddlePaneDemo(){
-    var palette = ['#e74c3c', '#27ae60', '#3498db'];
-    var sizeCycle = [
-      [120, 36], [180, 52], [ 90, 30], [220, 64], [150, 44], [110, 38],
-      [200, 56], [ 80, 32], [170, 60], [140, 42], [190, 48], [100, 34],
+    /* Six simulated SSE payloads in the same shape the real stream
+       emits. The `html` field is what the server would have rendered
+       from the `body` markdown — written by hand here so the demo
+       doesn't need a Go round-trip. */
+    var fakeMessages = [
+      { from: 'apoorva', time: 'today · 9:00 AM', mine: false, id: 'demo_1',
+        body: 'Hi! I just finished lesson 5 about **nav_stack**. Are these demos using real chat data?',
+        html: '<p>Hi! I just finished lesson 5 about <strong>nav_stack</strong>. Are these demos using real chat data?</p>' },
+      { from: 'Claude',  time: 'today · 9:01 AM', mine: true,  id: 'demo_2',
+        body: 'No — the earlier lessons used colored rectangles to keep the focus on the widget itself...',
+        html: '<p>No — the earlier lessons used colored rectangles to keep the focus on the widget itself. Lesson 6 finally introduces real messages.</p>'
+            + '<p>The data shape is what the SSE stream sends: <code>{from, time, html, body, id, mine}</code>. Hand it to <code>Message.create</code> and you get a bubble.</p>' },
+      { from: 'apoorva', time: 'today · 9:02 AM', mine: false, id: 'demo_3',
+        body: 'So the html field is already rendered? What does the JS side do then?',
+        html: '<p>So the <code>html</code> field is already rendered? What does the JS side do then?</p>' },
+      { from: 'Claude',  time: 'today · 9:03 AM', mine: true,  id: 'demo_4',
+        body: 'Right — Go runs the body through goldmark, sanitizes it, and post-processes MSG_ tokens...',
+        html: '<p>Right — Go runs the body through goldmark, sanitizes it, and post-processes MSG_ tokens into msg-ref links (see <a href="#msg-demo_1" class="msg-ref">MSG_demo_1</a>). The JS just <code>innerHTML</code>s it.</p>'
+            + '<p>Code blocks land in <code>&lt;pre&gt;</code> tags — clickable too:</p>'
+            + '<pre class="chat-quote">function hi(){ return \'world\'; }</pre>' },
+      { from: 'apoorva', time: 'today · 9:04 AM', mine: false, id: 'demo_5',
+        body: 'And images?',
+        html: '<p>And images?</p>'
+            + '<p><img src="/images/cat_professor.webp" alt="cat professor"></p>' },
+      { from: 'Claude',  time: 'today · 9:05 AM', mine: true,  id: 'demo_6',
+        body: 'Same path — body has ![alt](src), goldmark renders it as <img>, Message wires the click to the popup.',
+        html: '<p>Same path — body has <code>![alt](src)</code>, goldmark renders it as <code>&lt;img&gt;</code>, Message wires the click to the popup. Try clicking the cat above.</p>'
+            + '<p>Click <a href="#msg-demo_1" class="msg-ref">MSG_demo_1</a> and the pane scrolls back + selects that bubble — your current position goes on the nav stack, so Back returns you here.</p>' },
     ];
 
-    /* Wrapper gives the mount a flex parent + a defined height so
-       middle_pane's flex:1 + max-width:600px inside the mount fills
-       the column correctly. */
     var wrapper = setStyles(document.createElement('div'), {
-      height: '320px', display: 'flex',
+      height: '440px', display: 'flex',
       border: '1px solid #ccc', borderRadius: '4px',
       padding: '8px', background: '#fafafa', boxSizing: 'border-box',
     });
     var mount = document.createElement('div');
     wrapper.appendChild(mount);
 
-    var pane = ChatMiddlePane.init({
+    /* Same id→Message lookup chat.js builds for cross-message
+       navigation. msg-ref clicks find their target through this. */
+    var messagesById = Object.create(null);
+    var pane;
+    function navigateRef(linkEl){
+      var id = (linkEl.getAttribute('href') || '').replace(/^#msg-/, '');
+      var msg = messagesById[id];
+      if(msg) pane.focusBubble(msg.getIndex() + 1);
+    }
+
+    pane = ChatMiddlePane.init({
       mount: mount,
       scopeKeysToContainer: true,
       renderBubble: function(idx, data){
-        var div = document.createElement('div');
-        Object.assign(div.style, {
-          background: data.color, width: data.w + 'px', height: data.h + 'px',
-          margin: '6px 0', borderRadius: '4px',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          color: 'white', fontFamily: 'sans-serif', fontSize: '13px', fontWeight: 'bold',
+        var msg = Message.create(data, {
+          /* The real chat.js routes these into the compose box; the
+             demo just announces the verb so the buttons aren't dead. */
+          onQuote:  function(m){ alert('quote-reply to MSG_' + m.getId()); },
+          onRefer:  function(m){ alert('insert "See MSG_' + m.getId() + '" into compose'); },
+          onEdit:   function(m){ alert('compose "Edit of MSG_' + m.getId() + '"'); },
+          onMsgRef: navigateRef,
         });
-        div.textContent = '#' + idx;
-        return div;
+        messagesById[msg.getId()] = msg;
+        return msg.render();
       },
     });
 
-    pane.startBacklog(36);
-    for(var i = 0; i < 36; i++){
-      var d = sizeCycle[i % sizeCycle.length];
-      pane.append({ color: palette[i % palette.length], w: d[0], h: d[1] });
-    }
+    pane.startBacklog(fakeMessages.length);
+    fakeMessages.forEach(function(m, i){
+      pane.append({
+        index: i, from: m.from, time: m.time,
+        html: m.html, body: m.body, id: m.id, mine: m.mine,
+      });
+    });
     pane.endBacklog({ anchor: 'bottom' });
 
     return wrapper;
@@ -755,19 +791,25 @@
   /* Lesson 6 — chat/middle_pane.js. The integration layer for everything
      Lessons 3-5 built. One init() call builds the column + wires up
      MessageView + NavStack + the back/forward buttons. The demo is a
-     few lines because middle_pane does the wiring. */
+     full chat-shaped column wired with the real Message factory. */
   var lesson6Body = document.createElement('div');
   lesson6Body.appendChild(buildParagraph(
     'ChatMiddlePane.init({mount, renderBubble}) builds the whole bubble-feed column — wrapper, '
     + 'navbar with Back/Forward, scrollable history surface — and instantiates MessageView and '
-    + 'NavStack inside. The demo below is, structurally, the chat conversation page; only the '
-    + 'bubbles are colored rectangles instead of rendered markdown.'));
+    + 'NavStack inside. Hand it a renderBubble that returns Message.create(data, callbacks).render() '
+    + 'and the column comes alive.'));
   lesson6Body.appendChild(buildParagraph(
     'What does the server actually send? Rendered HTML for the body of each message — markdown '
-    + 'converted by goldmark, then a regex pass that turns MSG_<id> tokens into link refs. That '
-    + 'HTML lands in Message.create as data.html and gets innerHTMLed as-is. Everything else — '
-    + 'the column, the navbar, the buttons, the scrollbar styling, the bubble chrome, hover and '
-    + 'disabled states — is built and styled by JS. Go ships data; JS owns presentation.'));
+    + 'converted by goldmark, then a regex pass that turns MSG_<id> tokens into msg-ref links. '
+    + 'That HTML lands in Message.create as data.html and gets innerHTMLed as-is. Everything '
+    + 'else — column, navbar, buttons, scrollbar, bubble chrome, hover and disabled states — is '
+    + 'built and styled by JS. Go ships data; JS owns presentation.'));
+  lesson6Body.appendChild(buildParagraph(
+    'The demo below uses six simulated SSE payloads in the same wire shape the real stream emits '
+    + '— the html field is written by hand so /learn doesn’t need a chat session backing it. '
+    + 'Click MSG_demo_1 to jump back through the nav stack; click the cat for the image popup; '
+    + 'click the code block for the code popup; click q/r/e on a message to see what the real '
+    + 'compose-side callbacks would have fired.'));
   lesson6Body.appendChild(buildSpoiler({
     label:     'Show middle_pane.js source',
     openLabel: 'Hide source',
