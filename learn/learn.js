@@ -484,6 +484,56 @@
     return box;
   }
 
+  /* ---- Lesson 6 demo: ChatMiddlePane.init in a small wrapper. The
+     same colored rectangles as Lessons 4 + 5, now mounted via the
+     real middle_pane integration layer — back/forward buttons are
+     built by the widget, not by the demo. ---- */
+
+  // lint:called-once widget
+  function buildMiddlePaneDemo(){
+    var palette = ['#e74c3c', '#27ae60', '#3498db'];
+    var sizeCycle = [
+      [120, 36], [180, 52], [ 90, 30], [220, 64], [150, 44], [110, 38],
+      [200, 56], [ 80, 32], [170, 60], [140, 42], [190, 48], [100, 34],
+    ];
+
+    /* Wrapper gives the mount a flex parent + a defined height so
+       middle_pane's flex:1 + max-width:600px inside the mount fills
+       the column correctly. */
+    var wrapper = setStyles(document.createElement('div'), {
+      height: '320px', display: 'flex',
+      border: '1px solid #ccc', borderRadius: '4px',
+      padding: '8px', background: '#fafafa', boxSizing: 'border-box',
+    });
+    var mount = document.createElement('div');
+    wrapper.appendChild(mount);
+
+    var pane = ChatMiddlePane.init({
+      mount: mount,
+      scopeKeysToContainer: true,
+      renderBubble: function(idx, data){
+        var div = document.createElement('div');
+        Object.assign(div.style, {
+          background: data.color, width: data.w + 'px', height: data.h + 'px',
+          margin: '6px 0', borderRadius: '4px',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          color: 'white', fontFamily: 'sans-serif', fontSize: '13px', fontWeight: 'bold',
+        });
+        div.textContent = '#' + idx;
+        return div;
+      },
+    });
+
+    pane.startBacklog(36);
+    for(var i = 0; i < 36; i++){
+      var d = sizeCycle[i % sizeCycle.length];
+      pane.append({ color: palette[i % palette.length], w: d[0], h: d[1] });
+    }
+    pane.endBacklog({ anchor: 'bottom' });
+
+    return wrapper;
+  }
+
   /* ---- section frame: heading + prose + custom body ---- */
   // lint:called-once widget — reused per lesson
   function buildSection(opts){
@@ -700,6 +750,42 @@
          + 'setSelectedBubble (Lesson 4), and this lesson wires that callback into a real NavStack '
          + 'so Back and Forward come alive.',
     body:  lesson5Body,
+  }));
+
+  /* Lesson 6 — chat/middle_pane.js. The integration layer for everything
+     Lessons 3-5 built. One init() call builds the column + wires up
+     MessageView + NavStack + the back/forward buttons. The demo is a
+     few lines because middle_pane does the wiring. */
+  var lesson6Body = document.createElement('div');
+  lesson6Body.appendChild(buildParagraph(
+    'ChatMiddlePane.init({mount, renderBubble}) builds the whole bubble-feed column — wrapper, '
+    + 'navbar with Back/Forward, scrollable history surface — and instantiates MessageView and '
+    + 'NavStack inside. The demo below is, structurally, the chat conversation page; only the '
+    + 'bubbles are colored rectangles instead of rendered markdown.'));
+  lesson6Body.appendChild(buildParagraph(
+    'What does the server actually send? Rendered HTML for the body of each message — markdown '
+    + 'converted by goldmark, then a regex pass that turns MSG_<id> tokens into link refs. That '
+    + 'HTML lands in Message.create as data.html and gets innerHTMLed as-is. Everything else — '
+    + 'the column, the navbar, the buttons, the scrollbar styling, the bubble chrome, hover and '
+    + 'disabled states — is built and styled by JS. Go ships data; JS owns presentation.'));
+  lesson6Body.appendChild(buildSpoiler({
+    label:     'Show middle_pane.js source',
+    openLabel: 'Hide source',
+    render: function(box){ box.appendChild(buildSourcePanel('/learn/source/middle_pane.js')); },
+  }));
+  lesson6Body.appendChild(buildMiddlePaneDemo());
+  var demo6Caption = setStyles(document.createElement('p'), {
+    margin: '14px 0 6px', color: COLORS.muted, fontSize: '13px',
+  });
+  demo6Caption.textContent = 'Demo source (the function that built the box above):';
+  lesson6Body.appendChild(demo6Caption);
+  lesson6Body.appendChild(buildCodeBlock(buildMiddlePaneDemo.toString()));
+
+  wrap.appendChild(buildSection({
+    title: 'Lesson 6: middle_pane.js',
+    lede:  'The integration layer that ties Lessons 3-5 together. One init() call, the whole '
+         + 'column comes alive.',
+    body:  lesson6Body,
   }));
 
   root.appendChild(wrap);

@@ -93,6 +93,11 @@ window.ChatMiddlePane = (function(){
       container:    history,
       list:         bubbles,
       renderBubble: renderBubble,
+      /* PRODUCT_DECISION: forwarded for hosts that share the page with
+         other arrow-key consumers (e.g. /learn's multiple demos).
+         Defaults to false on the chat conversation page so arrows
+         work without first focusing the feed. */
+      scopeKeysToContainer: !!opts.scopeKeysToContainer,
       setSelectedBubble: function(idx){
         if(idx<=0) return;
         onSelect(idx);
