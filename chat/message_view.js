@@ -87,10 +87,10 @@ window.MessageView = (function(){
   function create(opts){
     ensureStyles();
     var container       = opts.container;
-    /* PRODUCT_DECISION: `list` is the appendChild target; container is the
-       scroll surface. They're the same in simple cases; chat.js needs them
-       separate because the scroll surface (#chat-history) wraps both
-       #chat-bubbles AND the transcript view. */
+    /* `list` is the appendChild target; container is the scroll surface.
+       They're the same in simple cases; chat.js keeps them separate so
+       #chat-history can own the scroll/border/padding and #chat-bubbles
+       can be a plain inner flex column. */
     var list            = opts.list || container;
     var renderBubble    = opts.renderBubble;
     var setSelectedBubble = opts.setSelectedBubble || function(){};
@@ -158,12 +158,8 @@ window.MessageView = (function(){
     /* ---- visibility + reveal ---- */
 
     function visibleIdxs(){
-      /* BROWSER_WORKAROUND: offsetParent===null skips bubbles in a hidden
-         sibling view (e.g. the transcript view when rendered is active). */
       var out = [];
-      for(var i = 0; i < els.length; i++){
-        if(els[i].offsetParent !== null) out.push(i + 1);
-      }
+      for(var i = 0; i < els.length; i++) out.push(i + 1);
       return out;
     }
     function revealEl(el){

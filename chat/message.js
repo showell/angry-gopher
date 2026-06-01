@@ -197,8 +197,8 @@ window.Message = (function(){
 
     /* PRODUCT_DECISION: in-place supersession when a later "Edit of MSG_<id>"
        arrives — render an "Edited in MSG_<editID>" link, demote the original
-       body into a spoiler. Append-only: the on-disk record + transcript view
-       still show both byte-for-byte. */
+       body into a spoiler. Append-only: the on-disk markdown record still
+       shows both byte-for-byte. */
     function markEdited(editID){
       if(!bubble) return;
       var bodyEl=bubble.querySelector('.chat-body'); if(!bodyEl) return;

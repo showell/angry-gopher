@@ -6,8 +6,6 @@
   var SESSION_BASE='/chat/c/'+encodeURIComponent(CONV)+'/'+encodeURIComponent(SESSION);
   var history=document.getElementById('chat-history');
   var bubbles=document.getElementById('chat-bubbles');
-  var transcript=document.getElementById('chat-transcript');
-  var views=document.getElementById('chat-views');
   var backBtn=document.getElementById('chat-back');
   var fwdBtn=document.getElementById('chat-fwd');
 
@@ -78,48 +76,12 @@
   var nav;
 
   /* ===== "is the feed scrolled to the bottom" =====
-     PRODUCT_DECISION: works across both rendered + transcript views (queries
-     [data-i] on #chat-history). True when empty so first messages stick. */
+     True when empty so first messages stick. */
   function caughtUp(){
-    var els=history.querySelectorAll('[data-i]');
-    for(var i=els.length-1;i>=0;i--){
-      if(els[i].offsetParent===null) continue; /* BROWSER_WORKAROUND: offsetParent===null skips the hidden view. */
-      return els[i].getBoundingClientRect().bottom<=history.getBoundingClientRect().bottom+1;
-    }
-    return true;
+    var els=bubbles.querySelectorAll('[data-i]');
+    if(els.length===0) return true;
+    return els[els.length-1].getBoundingClientRect().bottom<=history.getBoundingClientRect().bottom+1;
   }
-
-  /* ===== view switching (rendered / transcript) =====
-     PRODUCT_DECISION: anchor scrolling on the same MESSAGE across view
-     switches. We capture the topmost data-i BEFORE the view change
-     (matching across both bubble + transcript spans, since both have
-     data-i), then scroll the NEW view's element with that data-i to
-     the top. */
-  function setView(v){
-    var htop=history.getBoundingClientRect().top;
-    var anchorIdx=null;
-    var probes=history.querySelectorAll('[data-i]');
-    for(var i=0;i<probes.length;i++){
-      if(probes[i].offsetParent===null) continue;
-      if(probes[i].getBoundingClientRect().bottom>htop+1){ anchorIdx=probes[i].getAttribute('data-i'); break; }
-    }
-    history.className='chat-history view-'+v;
-    var links=views.querySelectorAll('a');
-    for(var i=0;i<links.length;i++){ links[i].className=(links[i].getAttribute('data-view')===v)?'active':''; }
-    if(anchorIdx!==null){ // lint:null-undefined-check anchorIdx-null-when-feed-empty
-      var targets=history.querySelectorAll('[data-i="'+anchorIdx+'"]');
-      for(var j=0;j<targets.length;j++){
-        if(targets[j].offsetParent===null) continue;
-        history.scrollTop+=targets[j].getBoundingClientRect().top-history.getBoundingClientRect().top;
-        break;
-      }
-    }
-  }
-  function toggleView(){ setView(history.className.indexOf('view-transcript')>=0?'rendered':'transcript'); }
-  views.addEventListener('click',function(e){
-    var a=e.target.closest('a[data-view]'); if(!a) return;
-    e.preventDefault(); setView(a.getAttribute('data-view'));
-  });
 
   /* ===== MessageView setup ===== */
   var view = MessageView.create({
@@ -155,19 +117,14 @@
   backBtn.addEventListener('click', nav.back);
   fwdBtn.addEventListener('click', nav.forward);
 
-  /* ===== one append wraps view + transcript + supersession + empty-removal =====
-     PRODUCT_DECISION: transcript span — literal on-disk block, sibling DOM tree
-     to #chat-bubbles inside #chat-history; managed directly here because
-     MessageView is rectangle-list-only. EDIT_RE supersession: a body starting
-     with "Edit of MSG_<hash>" causes the original Message to redraw in-place;
-     append-only on disk, only the rendered view changes. */
+  /* ===== one append wraps view + supersession + empty-removal =====
+     EDIT_RE: a body starting with "Edit of MSG_<hash>" causes the original
+     Message to redraw in-place; append-only on disk, only the rendered view
+     changes. */
   var EDIT_RE=/^Edit of MSG_([A-Za-z0-9-]+_[0-9]+)\b/;
   function appendMessage(m){
     var empty=document.getElementById('chat-empty'); if(empty) empty.remove();
     view.append(m);
-    var span=document.createElement('span');
-    span.setAttribute('data-i', m.index); span.textContent=m.enc;
-    transcript.appendChild(span);
     var em=(m.body||'').match(EDIT_RE);
     if(em){ var orig=findById(em[1]); if(orig) orig.markEdited(m.id); }
   }
@@ -261,7 +218,6 @@
     openCompose: ChatRightSidebar.openCompose,
     backBtn:     backBtn,
     fwdBtn:      fwdBtn,
-    toggleView:  toggleView,
     getSelectedMessage: function(){
       var idx=view.getSelected();
       return idx>0 ? messages[idx-1] : null;

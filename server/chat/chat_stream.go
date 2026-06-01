@@ -122,7 +122,6 @@ type chatWireMsg struct {
 	From  string `json:"from"`
 	Time  string `json:"time"`
 	HTML  string `json:"html"`
-	Enc   string `json:"enc"`
 	Body  string `json:"body"` // raw markdown source, for client-side quote-reply
 	ID    string `json:"id"`
 	Mine  bool   `json:"mine"`
@@ -135,7 +134,6 @@ func writeChatEvent(w io.Writer, rc *http.ResponseController, evt chatEvent, me 
 		From:  evt.Msg.From,
 		Time:  formatChatTime(evt.Msg.At),
 		HTML:  string(RenderChatMarkdown(evt.Msg.Body)),
-		Enc:   chatStoredForm(evt.Index, evt.Msg),
 		Body:  evt.Msg.Body,
 		ID:    evt.Msg.ID,
 		Mine:  evt.Msg.From == me,

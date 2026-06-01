@@ -505,12 +505,7 @@ func renderChatConversation(w http.ResponseWriter, user users.User, partnerID, c
 	// the pair key. data-partner stays for display labels (mine vs theirs).
 	fmt.Fprintf(w, `<div id="chat-root" data-conv="%s" data-session="%s" data-partner="%s">`,
 		html.EscapeString(conv), html.EscapeString(sessionID), html.EscapeString(partnerID))
-	fmt.Fprint(w, `<div class="chat-views" id="chat-views">`+
-		`<span class="chat-view-tabs" title="Toggle with t">`+
-		`<a href="#" data-view="rendered" class="active">Rendered</a> · `+
-		`<a href="#" data-view="transcript">Transcript</a></span>`+
-		`<span class="chat-notify" id="chat-notify"></span>`+
-		`</div>`)
+	fmt.Fprint(w, `<div class="chat-notify" id="chat-notify"></div>`)
 
 	fmt.Fprint(w, `<div class="chat-layout">`)
 	renderChatSidebar(w, user, partnerID, conv, sessionID)
@@ -518,13 +513,13 @@ func renderChatConversation(w http.ResponseWriter, user users.User, partnerID, c
 		`<div class="chat-navbar"><button type="button" id="chat-back" class="chat-back" title="Back to the previous selection (b)" disabled>&larr;</button>`+
 		`<button type="button" id="chat-fwd" class="chat-back" title="Forward — redo a Back (f)" disabled>&rarr;</button>`+
 		`<button type="button" id="chat-search-btn" class="chat-back" title="Search messages (/)">🔍</button></div>`+
-		`<div class="chat-history view-rendered" id="chat-history" tabindex="-1"><div class="chat-bubbles" id="chat-bubbles">`)
+		`<div class="chat-history" id="chat-history" tabindex="-1"><div class="chat-bubbles" id="chat-bubbles">`)
 	if len(msgs) == 0 {
 		fmt.Fprint(w, `<p class="muted" id="chat-empty">No messages yet. Say hello 👋</p>`)
 	}
-	// The feed (bubbles + transcript) is built client-side from the SSE
-	// replay; the server ships only this skeleton.
-	fmt.Fprint(w, `</div><pre class="chat-transcript" id="chat-transcript"></pre></div></div>
+	// The bubbles are built client-side from the SSE replay; the server
+	// ships only this skeleton.
+	fmt.Fprint(w, `</div></div></div>
 <div class="chat-compose" id="chat-right-sidebar">
   <div class="chat-closed-panel" id="chat-closed-panel">
     <button type="button" id="chat-open-compose" class="chat-open-compose">Open compose box</button>
@@ -755,9 +750,9 @@ html, body { height:100%; }
 .chat-back:hover:enabled { background:#e3e3e3; }
 .chat-back:disabled { opacity:0.4; cursor:default; }
 /* Search modal: a two-phase palette — token autocomplete, then message
-   results (the term highlighted in each message rendered like the feed). */
-/* Pinned to a fixed top offset (≈ the Rendered/Transcript tabs row) and grows
-   downward as results fill in — never vertically re-centering. */
+   results (the term highlighted in each message rendered like the feed).
+   Pinned to a fixed top offset and grows downward as results fill in —
+   never vertically re-centering. */
 .chat-search-modal { position:fixed; top:56px; bottom:auto; left:0; right:0; margin:0 auto;
                      width:600px; max-width:92vw; max-height:calc(100vh - 80px); padding:0;
                      border:1px solid #b9b9e0; border-radius:10px; background:#fff;
@@ -790,19 +785,10 @@ html, body { height:100%; }
 .chat-compose textarea { width:100%; min-height:200px; resize:vertical; box-sizing:border-box;
                          font-family:inherit; font-size:14px; padding:8px; }
 .chat-compose button { margin-top:8px; }
-/* Message DOM (.chat-msg / .chat-meta / .chat-body / .chat-edited-*) and
-   the body-content classes goldmark + chat_msgref emit (.msg-ref,
-   pre.chat-quote, etc.) are styled by chat/message.js itself. The widget
-   owns every rule that targets the bubble, AND the rules that target
-   what the server puts inside .chat-body. Nothing for this page to
-   emit. */
-.chat-transcript { display:none; margin:0; white-space:pre-wrap; overflow-wrap:anywhere;
-                   font-family:ui-monospace,Menlo,Consolas,monospace; font-size:13px; color:#333; }
-.chat-history.view-transcript #chat-bubbles { display:none; }
-.chat-history.view-transcript .chat-transcript { display:block; }
-.chat-views { margin:0 0 8px; font-size:13px; display:flex; align-items:center; gap:12px; }
-.chat-views a { text-decoration:none; }
-.chat-views a.active { font-weight:bold; color:#000; cursor:default; }
+/* Bubble DOM + body-content classes (chat-msg, chat-meta, chat-body,
+   chat-edited-* family, plus msg-ref / pre.chat-quote that goldmark +
+   chat_msgref emit) are styled by chat/message.js itself. Nothing for
+   this page to emit. */
 .chat-compose-actions { display:flex; gap:8px; margin-top:8px; }
 .chat-compose-actions button { margin-top:0; }
 /* The image + code popups own their own styles inside chat_image_popup.js

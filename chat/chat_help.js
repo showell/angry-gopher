@@ -15,7 +15,6 @@ window.ChatHelp = (function(){
       { key: 'f', label: 'forward',                             requiresSelection: false, action: function(){ deps.fwdBtn.click(); } },
       { key: 'q', label: 'quote-reply to selected message',     requiresSelection: true,  action: function(s){ deps.quoteReply(s); } },
       { key: 'r', label: 'refer (drop a "See MSG_…" link)',     requiresSelection: true,  action: function(s){ deps.referReply(s); } },
-      { key: 't', label: 'toggle rendered / transcript',        requiresSelection: false, action: function(){ deps.toggleView(); } },
       { key: '/', label: 'search messages',                     requiresSelection: false, action: function(){ ChatSearch.open(); } },
     ];
   }

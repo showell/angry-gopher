@@ -273,8 +273,8 @@ func encodeChatBlock(msg ChatMessage) string {
 
 // chatStoredForm is exactly what message `index` contributes to the file:
 // its block, preceded by the separator for every message after the
-// first. Concatenated over a session these reproduce the file, so
-// the Transcript view (built from these) mirrors storage byte-for-byte.
+// first. Concatenated over a session these reproduce the file
+// byte-for-byte.
 func chatStoredForm(index int, msg ChatMessage) string {
 	if index == 0 {
 		return encodeChatBlock(msg)
