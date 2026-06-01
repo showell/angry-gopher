@@ -295,7 +295,6 @@ func HandleCode(w http.ResponseWriter, r *http.Request) {
 	chatPageHeader(w, "Code", user, "code")
 	fmt.Fprint(w, `<div class="chat-notify" id="chat-notify"></div>`)
 	fmt.Fprint(w, codeCSS)
-	fmt.Fprint(w, CodePopupCSS)
 	renderCodeList(w, entries)
 	fmt.Fprintf(w,
 		`<script src="/chat/chat_code_popup.js?v=%s"></script>`+

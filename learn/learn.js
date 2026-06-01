@@ -271,7 +271,7 @@
     title: 'Lesson 2: chat_code_popup.js',
     lede:  'A sibling of Lesson 1, but for code: opens any string of source in a monospace <dialog>. '
          + 'Used by the chat feed (click a code block) and the Code transcript. '
-         + 'Small enough — 27 lines — to read end-to-end without a spoiler.',
+         + 'Self-contained — owns its own styles inline, no external CSS — so it’s short enough to read end-to-end without a spoiler.',
     body:  lesson2Body,
   }));
 

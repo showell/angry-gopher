@@ -490,7 +490,6 @@ func renderChatConversation(w http.ResponseWriter, user users.User, partnerID, c
 	chatPageHeader(w, "Chat w/"+partnerName+": "+sessionID, user, "")
 	fmt.Fprint(w, chatCSS)
 	fmt.Fprint(w, ImagePopupCSS)
-	fmt.Fprint(w, CodePopupCSS)
 	// data-conv + data-session let chat.js build the API URLs
 	// (/chat/c/<conv>/<sid>/{stream,send,upload}) without re-deriving
 	// the pair key. data-partner stays for display labels (mine vs theirs).
@@ -674,24 +673,6 @@ func chatSendDone(w http.ResponseWriter, r *http.Request, conv, sessionID string
 	http.Redirect(w, r, "/chat/c/"+conv+"/"+url.PathEscape(sessionID), http.StatusSeeOther)
 }
 
-// CodePopupCSS styles the shared <dialog> opened by ChatCodePopup.show.
-// Exported because any page that loads chat_code_popup.js needs it (chat,
-// Code transcript, and the /learn demo). When chat_code_popup.js
-// eventually inlines its own styles, this constant goes away.
-const CodePopupCSS = `<style>
-/* PRODUCT_DECISION: fit-content (its UA default) capped at 80vw/80vh, so it
-   hugs small snippets and stops at 80% for big ones; the <pre> scrolls in
-   whichever direction overflows. */
-.chat-code-dialog { max-width:80vw; max-height:80vh; padding:0; border:1px solid #bbb;
-                    border-radius:8px; background:#fff; display:flex; flex-direction:column; }
-.chat-code-dialog::backdrop { background:rgba(0,0,0,0.45); }
-.chat-code-controls { flex:none; display:flex; justify-content:flex-end; padding:6px 8px;
-                      border-bottom:1px solid #eee; background:#faf9f5; }
-.chat-code-view { flex:1; min-height:0; min-width:0; overflow:auto; margin:0; padding:14px 16px;
-                  font-family:ui-monospace,Menlo,Consolas,monospace; font-size:14px;
-                  line-height:1.45; white-space:pre; color:#222; cursor:auto; }
-</style>`
-
 // ImagePopupCSS styles the shared <dialog> opened by ChatImagePopup.show.
 // Exported because any page that loads chat_image_popup.js needs it (chat,
 // Images transcript, and the /learn demo). When chat_image_popup.js
@@ -870,9 +851,8 @@ html, body { height:100%; }
                  display:block; margin:6px 0; border-radius:6px; cursor:zoom-in; }
 /* Image popup rules live in ImagePopupCSS — emitted on both the chat
    conversation page and the Images transcript page since both surfaces
-   open the same dialog via ChatImagePopup.show. */
-/* Code popup rules live in CodePopupCSS — emitted on every page that
-   loads chat_code_popup.js (chat conversation + Code transcript). */
+   open the same dialog via ChatImagePopup.show. The code popup owns its
+   own styles inside chat_code_popup.js — no CSS coordination needed. */
 /* Plain message-box modal (e.g. the "host may be down" notice). */
 .chat-alert-dialog { max-width:90vw; border:1px solid #bbb; border-radius:8px; padding:18px 20px; }
 .chat-alert-dialog::backdrop { background:rgba(0,0,0,0.4); }

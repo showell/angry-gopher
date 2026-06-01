@@ -27,11 +27,10 @@ func HandleLearn(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	fmt.Fprintf(w, `<!DOCTYPE html>
 <html><head><meta charset="utf-8"><title>%s</title>`, html.EscapeString("Learn — Lyn Rummy"))
-	// PRODUCT_DECISION: each popup demo needs its popup's CSS to render
-	// right. These are the CSS dependencies the page borrows; eliminating
-	// them is the next step (migrate the popups to inline-styles).
+	// PRODUCT_DECISION: chat_image_popup.js still depends on an external
+	// stylesheet, so we borrow it from chat. chat_code_popup.js owns its
+	// own styles now — no CSS needed for Lesson 2.
 	fmt.Fprint(w, chat.ImagePopupCSS)
-	fmt.Fprint(w, chat.CodePopupCSS)
 	fmt.Fprint(w, `</head><body><div id="learn-root"></div>`)
 	fmt.Fprintf(w,
 		`<script src="/chat/chat_image_popup.js?v=%s"></script>`+
