@@ -31,13 +31,20 @@
     codeBg:  '#f4f4ee',
   };
 
-  /* ---- chrome: top bar, page wrap, footer ---- */
+  /* ---- chrome: top bar, page wrap, footer ----
+     PRODUCT_DECISION: top bars in this binary are STICKY — same rule on
+     every page (see server/web/chrome.go's AppChromeCSS for the shared
+     CSS exemplar). When you build a custom JS-styled top bar like this
+     one, include position:sticky/top:0/zIndex + an opaque background so
+     scrolled content can't bleed through. Future-Claude: keep new pages
+     consistent with this. */
   // lint:called-once page-factory
   function buildTopBar(){
     var bar = setStyles(document.createElement('header'), {
       background: '#f0ede4', borderBottom: '1px solid ' + COLORS.border,
       padding: '8px 24px', fontFamily: 'sans-serif',
       display: 'flex', justifyContent: 'space-between', alignItems: 'baseline',
+      position: 'sticky', top: '0', zIndex: '10',
     });
     var left = document.createElement('div');
     var lrLink = setStyles(document.createElement('a'), {

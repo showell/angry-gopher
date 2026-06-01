@@ -17,10 +17,15 @@ import (
 
 // AppChromeCSS is the shared stylesheet for the app top bar.
 const AppChromeCSS = `
-/* PRODUCT_DECISION: sticky top so the nav stays visible while page content
-   scrolls (Recent, Images, Docs). Background is opaque, so sticky doesn't
-   leak content underneath. On the chat conversation page the document
-   doesn't scroll (the feed scrolls internally), so sticky is a no-op there. */
+/* PRODUCT_DECISION: top bars in this binary are STICKY — universal rule.
+   position:sticky + top:0 + z-index:10 + opaque background so scrolled
+   content can't bleed through. Applies to Recent / Images / Docs / Code
+   / Settings / Learn / etc. On the chat conversation page the document
+   doesn't scroll (the feed scrolls internally), so sticky is a no-op
+   there. When a page builds its own top bar in JS rather than reusing
+   this stylesheet (e.g. learn/learn.js's buildTopBar), it MUST replicate
+   the sticky + opaque-background contract. Cross-ref in buildTopBar
+   names this file as the canonical exemplar. */
 .app-top { background: #f0ede4; border-bottom: 1px solid #c9bfa7; padding: 8px 24px;
            font-family: sans-serif; display: flex; justify-content: space-between;
            align-items: baseline;
