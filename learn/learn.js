@@ -233,16 +233,19 @@
     ];
 
     /* The callback log — visible proof that the widget hands off without
-       deciding what should happen. */
+       deciding what should happen. flex:1 + overflowY:auto so it matches
+       the bubble column's height (stretched by the flex row) and scrolls
+       instead of growing. */
     var logBody = setStyles(document.createElement('div'), {
       fontFamily: 'ui-monospace, Menlo, Consolas, monospace', fontSize: '12px',
       background: '#fff', border: '1px solid ' + COLORS.border, borderRadius: '4px',
-      padding: '8px', minHeight: '48px', marginTop: '4px',
+      padding: '8px', flex: '1', minHeight: '0', overflowY: 'auto', boxSizing: 'border-box',
     });
     function log(line){
       var entry = document.createElement('div');
       entry.textContent = '→ ' + line;
       logBody.appendChild(entry);
+      logBody.scrollTop = logBody.scrollHeight;
     }
     var callbacks = {
       onQuote:  function(m){    log('onQuote(MSG_'  + m.getId() + ')'); },
@@ -272,14 +275,19 @@
     });
     logCaption.textContent = 'Callback log:';
 
-    /* Side-by-side: bubbles on the left flex to fill; log column fixed-width
-       on the right so its monospace lines stay readable at any page width. */
+    /* Side-by-side: bubbles on the left flex to fill; log column fixed-
+       width on the right. Default alignItems (stretch) makes the log
+       column match the bubble column's natural height, so logBody's
+       flex:1 fills the matched height and scrolls when full. */
     var twoCol = setStyles(document.createElement('div'), {
-      display: 'flex', gap: '14px', alignItems: 'flex-start',
+      display: 'flex', gap: '14px',
     });
     var leftCol = setStyles(document.createElement('div'), { flex: '1', minWidth: '0' });
     leftCol.appendChild(bubbles);
-    var rightCol = setStyles(document.createElement('div'), { width: '260px', flexShrink: '0' });
+    var rightCol = setStyles(document.createElement('div'), {
+      width: '260px', flexShrink: '0',
+      display: 'flex', flexDirection: 'column',
+    });
     rightCol.appendChild(logCaption);
     rightCol.appendChild(logBody);
     twoCol.appendChild(leftCol); twoCol.appendChild(rightCol);
