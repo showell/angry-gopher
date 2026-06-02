@@ -204,7 +204,16 @@ window.ChatLeftSidebar = (function(){
     mount.appendChild(conv.box);
     mount.appendChild(pin.box);
     mount.appendChild(ses.box);
-    mount.appendChild(ChatAddTopic.create({ conv: CONV }));
+    /* PRODUCT_DECISION: on the conversation page, "topic added" means
+       "navigate the user into the new session." The widget reports
+       the event; the sidebar decides this is a hard navigation. */
+    mount.appendChild(ChatAddTopic.create({
+      conv: CONV,
+      onCreated: function(j){
+        location.href = '/chat/c/' + encodeURIComponent(j.conv) +
+                                   '/' + encodeURIComponent(j.sid);
+      },
+    }));
 
     wireSidebarStream();
   }

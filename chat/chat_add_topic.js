@@ -1,13 +1,12 @@
 /* ChatAddTopic — the "Add Topic" form at the bottom of the left rail.
 
-   One factory: ChatAddTopic.create({conv}) returns a <form> ready to
-   drop into a parent. Owns its DOM, its CSS, its validation regex
-   (TOPIC_RE — letters/digits/hyphens, no leading or trailing hyphen),
-   the POST to /chat/c/<conv>/new, and the redirect on success.
-
-   The form decides nothing about layout — the caller chooses where to
-   put it. On success it navigates the whole page to the new session;
-   on failure the error line displays under the input. */
+   ChatAddTopic.create({conv, onCreated}) returns a <form> ready to
+   drop into a parent. Owns its DOM, its CSS, its TOPIC_RE validation,
+   the POST to /chat/c/<conv>/new, and the inline error display on
+   failure. Does NOT decide what happens on success — the caller
+   passes onCreated({conv, sid}) and decides whether to navigate, log,
+   pop a toast, etc. The widget is a presentational form with a
+   domain event; the next action is policy. */
 window.ChatAddTopic = (function(){
   'use strict';
 
@@ -37,7 +36,8 @@ window.ChatAddTopic = (function(){
 
   function create(deps){
     ensureStyles();
-    var conv = deps.conv;
+    var conv      = deps.conv;
+    var onCreated = deps.onCreated || function(){};
 
     var form = document.createElement('form');
     form.className = 'chat-add-topic';
@@ -64,7 +64,10 @@ window.ChatAddTopic = (function(){
         if(r.ok) return r.json();
         return r.text().then(function(t){ throw (t&&t.trim())||('error '+r.status); });
       }).then(function(j){
-        location.href='/chat/c/'+encodeURIComponent(j.conv)+'/'+encodeURIComponent(j.sid);
+        /* PRODUCT_DECISION: success → fire the caller's onCreated. The
+           widget doesn't know whether to navigate, log, or pop a toast;
+           that's policy for the surface mounting the form. */
+        onCreated(j);
       }).catch(function(msg){
         err.textContent = (typeof msg==='string' ? msg : 'Could not add topic.');
         btn.disabled=false;
