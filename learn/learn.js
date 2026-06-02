@@ -614,23 +614,58 @@
     });
     wrapper.appendChild(controls);
 
-    /* Hint line + mount slot. The mount slot's id matches what the
-       real /chat page emits, so ChatRightSidebar finds it the same
-       way it does in production. */
+    /* Hint line above the side-by-side rail+log. */
     var hint = setStyles(document.createElement('p'), {
       margin: '0', fontSize: '12px', color: '#888',
     });
     hint.textContent = 'Click "Open compose box", type a message, hit Send. '
-      + 'Watch the textarea + buttons disable while "Sending…" sits in the status line.';
+      + 'Watch the textarea + buttons disable while "Sending…" sits in the status line, '
+      + 'and watch the callback log on the right narrate the round-trip.';
     wrapper.appendChild(hint);
 
+    /* The callback log — visible proof of the send state machine. We
+       hook the two observable round-trip points: the fake-server POST
+       handler (entry: "POST received"), and our setTimeout that fires
+       ChatCompose.ackIfPending (exit: "echo arrived → ack fired"). For
+       the silent path we just log the entry and note that hostDown will
+       trip from inside ChatCompose without our help. */
+    var logBody = setStyles(document.createElement('div'), {
+      fontFamily: 'ui-monospace, Menlo, Consolas, monospace', fontSize: '12px',
+      background: '#fff', border: '1px solid ' + COLORS.border, borderRadius: '4px',
+      padding: '8px', flex: '1', minHeight: '0', overflowY: 'auto', boxSizing: 'border-box',
+    });
+    function log(line){
+      var entry = document.createElement('div');
+      entry.textContent = '→ ' + line;
+      logBody.appendChild(entry);
+      logBody.scrollTop = logBody.scrollHeight;
+    }
+    var logCaption = setStyles(document.createElement('div'), {
+      marginBottom: '4px', fontSize: '13px', color: COLORS.muted,
+    });
+    logCaption.textContent = 'Callback log:';
+
+    /* Left: the rail mount. Right: the callback log column. */
     var mountWrapper = setStyles(document.createElement('div'), {
       background: '#fff', border: '1px solid #ddd', borderRadius: '4px',
       padding: '12px', boxSizing: 'border-box', minHeight: '320px',
     });
     var mountSlot = document.createElement('div');
     mountWrapper.appendChild(mountSlot);
-    wrapper.appendChild(mountWrapper);
+
+    var twoCol = setStyles(document.createElement('div'), {
+      display: 'flex', gap: '14px',
+    });
+    var leftCol = setStyles(document.createElement('div'), { flex: '1', minWidth: '0' });
+    leftCol.appendChild(mountWrapper);
+    var rightCol = setStyles(document.createElement('div'), {
+      width: '260px', flexShrink: '0',
+      display: 'flex', flexDirection: 'column',
+    });
+    rightCol.appendChild(logCaption);
+    rightCol.appendChild(logBody);
+    twoCol.appendChild(leftCol); twoCol.appendChild(rightCol);
+    wrapper.appendChild(twoCol);
 
     /* PRODUCT_DECISION: intercept fetch only for our fake SESSION_BASE so
        the rest of the page (asset loads, source spoilers, future demos)
@@ -644,11 +679,18 @@
         var body = (opts && opts.body) || '';
         var cidMatch = body.match(/cid=([^&]+)/);
         var cid = cidMatch ? decodeURIComponent(cidMatch[1]) : null;
+        var shortCid = cid ? cid.slice(0, 8) + '…' : '?';
+        log('POST /send received (cid=' + shortCid + ', mode=' + nextMode + ')');
         if(nextMode === 'echo' && cid){
-          setTimeout(function(){ ChatCompose.ackIfPending(cid); }, 800);
+          log('  → scheduling fake SSE echo in 800ms');
+          setTimeout(function(){
+            log('SSE echo arriving — calling ChatCompose.ackIfPending(' + shortCid + ')');
+            ChatCompose.ackIfPending(cid);
+            log('  → textarea cleared, form re-enabled');
+          }, 800);
+        } else {
+          log('  → no echo will be sent; ChatCompose\'s 3s hostDown will trip');
         }
-        /* silent mode: POST resolves OK but no echo ever arrives, so
-           ChatCompose's 3s hostDown timer trips and the alert fires. */
         return Promise.resolve({ ok: true });
       }
       return origFetch.apply(this, arguments);
