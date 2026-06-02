@@ -1141,19 +1141,15 @@
   lesson0PartB.textContent = 'Part 2: LearnFakeHost';
   lesson0Body.appendChild(lesson0PartB);
   lesson0Body.appendChild(buildParagraph(
-    'When a lesson teaches a widget that POSTs to the server (Lessons 7, 8, 9), the demo has '
-    + 'to fake the host\'s response. The first three lessons that needed this each did their '
-    + 'own monkey-patch — capture the existing window.fetch, install a wrapper that checks the '
-    + 'URL prefix, fall through to the captured fetch on miss. It worked, but only by accident: '
-    + 'each lesson\'s captured "original" was actually the previous lesson\'s wrapper. One '
-    + 'script reorder and the chain would silently misroute.'));
+    'When a lesson teaches a widget that POSTs to the server (Lessons 7, 8, 9), the demo needs '
+    + 'to fake the host\'s response. LearnFakeHost is the shared facility for that: one global '
+    + 'wrap of window.fetch, a registry of routes, fall-through to the browser\'s real fetch '
+    + 'for anything no route claims.'));
   lesson0Body.appendChild(buildParagraph(
-    'LearnFakeHost replaces that pattern with one global wrap and a route registry. '
-    + 'LearnFakeHost.register({match, respond}) adds one route — match is a string (prefix), '
-    + 'a RegExp (with captured groups), or a function predicate; respond is given a {url, '
-    + 'opts, match} context and returns a Promise of a Response-shaped object. The host tries '
-    + 'routes in registration order; the first match wins; anything no route claims falls '
-    + 'through to the browser\'s real fetch.'));
+    'LearnFakeHost.register({match, respond}) adds one route. match is a string (literal or '
+    + 'prefix), a RegExp (with captured groups), or a function predicate. respond receives a '
+    + '{url, opts, match} context and returns a Promise of a Response-shaped object. The host '
+    + 'tries routes in registration order; the first match wins.'));
   lesson0Body.appendChild(buildSpoiler({
     label:     'Show fake_host.js source',
     openLabel: 'Hide source',
