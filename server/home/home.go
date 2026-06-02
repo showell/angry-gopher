@@ -25,7 +25,6 @@ func HandleHome(w http.ResponseWriter, r *http.Request) {
 	web.PageSubtitle(w, "Jump straight into a game or browse your recent sessions.")
 
 	renderGamesHero(w)
-	renderChatLink(w)
 	renderRecentSessions(w, user.ID)
 
 	web.PageFooter(w)
@@ -71,13 +70,6 @@ func renderGamesHero(w http.ResponseWriter) {
     </div>
   </div>
 </div>`)
-}
-
-// renderChatLink is the small entry point to the chat surface.
-func renderChatLink(w http.ResponseWriter) {
-	fmt.Fprint(w, `<p style="margin:0 0 24px;font-size:15px">`+
-		`💬 <a href="/chat" style="font-weight:bold">Messages</a> `+
-		`<span class="muted" style="font-size:13px">— private notes to other players</span></p>`)
 }
 
 // renderRecentSessions lists the 10 most recent full-game sessions
