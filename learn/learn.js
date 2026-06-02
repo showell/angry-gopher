@@ -740,6 +740,139 @@
     return wrapper;
   }
 
+  /* ---- Lesson 8 demo: the Add Topic form.
+     ChatAddTopic.create returns a presentational form that owns
+     validation (TOPIC_RE: letters/digits/hyphens, no leading/trailing
+     hyphen), the POST to /chat/c/<conv>/new, and the inline error
+     display. It does NOT navigate; the caller's onCreated callback
+     decides what to do with the new {conv, sid}. The demo
+     monkey-patches fetch for the demo's fake conv URL (same shape as
+     Lesson 7), and passes a logging onCreated so success doesn't
+     navigate away from /learn. ---- */
+
+  // lint:called-once widget
+  function buildAddTopicDemo(){
+    var wrapper = setStyles(document.createElement('div'), {
+      display: 'flex', flexDirection: 'column', gap: '10px',
+      border: '1px solid #ccc', borderRadius: '4px',
+      padding: '10px', background: '#fafafa', boxSizing: 'border-box',
+    });
+
+    /* "Next submit" toggle — picks how the fake server responds.
+       Default is succeed. */
+    var nextMode = 'succeed';
+    var controls = setStyles(document.createElement('div'), {
+      fontSize: '13px', color: '#555', display: 'flex', gap: '14px',
+      alignItems: 'center', flexWrap: 'wrap',
+    });
+    var modeLabel = document.createElement('span');
+    modeLabel.textContent = 'Next submit:';
+    controls.appendChild(modeLabel);
+    var modes = [
+      { value: 'succeed', label: 'host accepts' },
+      { value: 'reject',  label: 'host rejects ("topic already exists")' },
+    ];
+    modes.forEach(function(m){
+      var lbl = document.createElement('label');
+      lbl.style.cursor = 'pointer';
+      var r = document.createElement('input');
+      r.type = 'radio'; r.name = 'lesson8-mode'; r.value = m.value;
+      if(m.value === nextMode) r.checked = true;
+      r.addEventListener('change', function(){ if(r.checked) nextMode = m.value; });
+      lbl.appendChild(r); lbl.appendChild(document.createTextNode(' ' + m.label));
+      controls.appendChild(lbl);
+    });
+    wrapper.appendChild(controls);
+
+    /* Hint paragraph above the side-by-side form+log. */
+    var hint = setStyles(document.createElement('p'), {
+      margin: '0', fontSize: '12px', color: '#888',
+    });
+    hint.textContent = 'Type a topic name and hit Add Topic. Watch the callback log on '
+      + 'the right narrate validation → POST → response → onCreated. Try invalid input '
+      + '("foo--bar", "-foo", "foo!") to see the client-side TOPIC_RE rejection — no '
+      + 'fetch fires, the error displays under the input.';
+    wrapper.appendChild(hint);
+
+    /* Callback log. */
+    var logBody = setStyles(document.createElement('div'), {
+      fontFamily: 'ui-monospace, Menlo, Consolas, monospace', fontSize: '12px',
+      background: '#fff', border: '1px solid ' + COLORS.border, borderRadius: '4px',
+      padding: '8px', flex: '1', minHeight: '0', overflowY: 'auto', boxSizing: 'border-box',
+    });
+    function log(line){
+      var entry = document.createElement('div');
+      entry.textContent = '→ ' + line;
+      logBody.appendChild(entry);
+      logBody.scrollTop = logBody.scrollHeight;
+    }
+    var logCaption = setStyles(document.createElement('div'), {
+      marginBottom: '4px', fontSize: '13px', color: COLORS.muted,
+    });
+    logCaption.textContent = 'Callback log:';
+
+    /* PRODUCT_DECISION: monkey-patch fetch only for our fake conv's /new
+       URL so other page traffic (assets, source spoilers) is untouched.
+       Same shape as Lesson 7 — the lesson-fake pattern is the standard
+       way we simulate host responses in demos. */
+    var FAKE_CONV = 'lesson8-fake';
+    var origFetch = window.fetch;
+    window.fetch = function(url, opts){
+      var prefix = '/chat/c/' + FAKE_CONV + '/new';
+      if(typeof url === 'string' && url.indexOf(prefix) === 0){
+        var body = (opts && opts.body) || '';
+        var topicMatch = body.match(/topic=([^&]+)/);
+        var topic = topicMatch ? decodeURIComponent(topicMatch[1]) : '?';
+        log('POST ' + prefix + ' (topic=' + topic + ', mode=' + nextMode + ')');
+        if(nextMode === 'succeed'){
+          var resp = { conv: FAKE_CONV, sid: topic };
+          log('  → host returns {ok:true, conv=' + resp.conv + ', sid=' + resp.sid + '}');
+          return Promise.resolve({
+            ok: true,
+            json: function(){ return Promise.resolve(resp); },
+          });
+        }
+        var errMsg = 'topic already exists';
+        log('  → host returns {ok:false} with body: "' + errMsg + '"');
+        return Promise.resolve({
+          ok: false,
+          text: function(){ return Promise.resolve(errMsg); },
+        });
+      }
+      return origFetch.apply(this, arguments);
+    };
+
+    /* Build the form with a logging onCreated — no navigation. */
+    var formMount = setStyles(document.createElement('div'), {
+      background: '#fff', border: '1px solid #ddd', borderRadius: '4px',
+      padding: '12px', boxSizing: 'border-box',
+    });
+    formMount.appendChild(ChatAddTopic.create({
+      conv: FAKE_CONV,
+      onCreated: function(j){
+        log('onCreated({conv: ' + j.conv + ', sid: ' + j.sid + '}) — caller would navigate to '
+          + '/chat/c/' + j.conv + '/' + j.sid);
+      },
+    }));
+
+    /* Side-by-side: form on the left, log on the right. */
+    var twoCol = setStyles(document.createElement('div'), {
+      display: 'flex', gap: '14px',
+    });
+    var leftCol = setStyles(document.createElement('div'), { flex: '1', minWidth: '0' });
+    leftCol.appendChild(formMount);
+    var rightCol = setStyles(document.createElement('div'), {
+      width: '260px', flexShrink: '0',
+      display: 'flex', flexDirection: 'column', minHeight: '180px',
+    });
+    rightCol.appendChild(logCaption);
+    rightCol.appendChild(logBody);
+    twoCol.appendChild(leftCol); twoCol.appendChild(rightCol);
+    wrapper.appendChild(twoCol);
+
+    return wrapper;
+  }
+
   /* ---- section frame: heading + prose + custom body ---- */
   // lint:called-once widget — reused per lesson
   function buildSection(opts){
@@ -1048,6 +1181,49 @@
          + 'state than usual — it has to wait for the server to confirm delivery before it '
          + 'clears.',
     body:  lesson7Body,
+  }));
+
+  /* Lesson 8 — chat_add_topic.js. The Add Topic form at the bottom of
+     the left rail. Smallest "stateful form + host interaction" lesson —
+     contrast with Lesson 7's compose, which juggles a real state
+     machine. This one is just: validate, POST, fire a callback or
+     show an error. */
+  var lesson8Body = document.createElement('div');
+  lesson8Body.appendChild(buildParagraph(
+    'ChatAddTopic.create({conv, onCreated}) returns a <form> ready to drop in. It owns input '
+    + 'validation (TOPIC_RE: letters/digits/hyphens, no leading or trailing hyphen), the POST to '
+    + '/chat/c/<conv>/new, and inline error display. It does NOT decide what happens on success '
+    + '— onCreated({conv, sid}) is the caller\'s policy. On the real chat page that\'s a hard '
+    + 'navigation into the new session; in this demo it just logs.'));
+  lesson8Body.appendChild(buildParagraph(
+    'The boundary lesson here is small but real: the widget reports a domain event ("a topic '
+    + 'was added"), and the caller decides what to do with it. Hardcoding location.href inside '
+    + 'the widget would have presumed deployment context (a page that wants to navigate); '
+    + 'hoisting it makes the widget reusable AND makes the lesson demo possible without '
+    + 'fighting a page navigation away from /learn.'));
+  lesson8Body.appendChild(buildParagraph(
+    'The demo monkey-patches fetch for the fake conv\'s /new URL — the same shape Lesson 7 '
+    + 'used for the send/upload endpoints. Pick "host accepts" or "host rejects" before each '
+    + 'submit and watch the callback log narrate. The TOPIC_RE rejection path is purely '
+    + 'client-side: invalid input shows the error without firing fetch at all.'));
+  lesson8Body.appendChild(buildSpoiler({
+    label:     'Show chat_add_topic.js source',
+    openLabel: 'Hide source',
+    render: function(box){ box.appendChild(buildSourcePanel('/learn/source/chat_add_topic.js')); },
+  }));
+  lesson8Body.appendChild(buildAddTopicDemo());
+  var demo8Caption = setStyles(document.createElement('p'), {
+    margin: '14px 0 6px', color: COLORS.muted, fontSize: '13px',
+  });
+  demo8Caption.textContent = 'Demo source (the function that built the box above):';
+  lesson8Body.appendChild(demo8Caption);
+  lesson8Body.appendChild(buildCodeBlock(buildAddTopicDemo.toString()));
+
+  wrap.appendChild(buildSection({
+    title: 'Lesson 8: chat_add_topic.js',
+    lede:  'A small form widget that knows about input validation and HTTP — but not about '
+         + 'navigation. The caller decides what "topic added" means in their surface.',
+    body:  lesson8Body,
   }));
 
   root.appendChild(wrap);
