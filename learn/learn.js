@@ -620,7 +620,9 @@
     });
     hint.textContent = 'Click "Open compose box", type a message, hit Send. '
       + 'Watch the textarea + buttons disable while "Sending…" sits in the status line, '
-      + 'and watch the callback log on the right narrate the round-trip.';
+      + 'and watch the callback log on the right narrate the round-trip. '
+      + 'The Image button works too — pick a file, the fake server returns a JSON pointer, '
+      + 'and ChatCompose inserts an <img> tag at the cursor.';
     wrapper.appendChild(hint);
 
     /* The callback log — visible proof of the send state machine. We
@@ -692,6 +694,29 @@
           log('  → no echo will be sent; ChatCompose\'s 3s hostDown will trip');
         }
         return Promise.resolve({ ok: true });
+      }
+      if(typeof url === 'string' && url.indexOf(FAKE_BASE + '/upload') === 0){
+        /* FormData with field `file`; uploadImage in ChatCompose builds it. */
+        var fd = opts && opts.body;
+        var file = (fd && fd.get) ? fd.get('file') : null;
+        var name = file ? file.name : '?';
+        var kb = file ? (file.size/1024).toFixed(1) + ' KB' : '?';
+        log('POST /upload received (file=' + name + ', ' + kb + ')');
+        /* Fake server: pretend we stored it and return the same JSON
+           shape the real /chat/c/<conv>/<sid>/upload handler does —
+           {name, url, width, height}. The url points at a real asset
+           the page already serves so the <img> tag would render if it
+           were posted; the demo just inserts the tag text into the
+           textarea, no rendering required. */
+        var fakeResp = { name: name, url: '/images/cat_professor.webp',
+                         width: 320, height: 240 };
+        log('  → returning JSON {url=' + fakeResp.url + ', '
+          + fakeResp.width + 'x' + fakeResp.height + '}');
+        log('  → ChatCompose inserts <img> tag at cursor');
+        return Promise.resolve({
+          ok: true,
+          json: function(){ return Promise.resolve(fakeResp); },
+        });
       }
       return origFetch.apply(this, arguments);
     };
