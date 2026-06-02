@@ -32,6 +32,12 @@ phase "chat-search-js" node --check chat/chat_search.js
 echo "==> chat_left_sidebar.js syntax"
 phase "chat-left-sidebar-js" node --check chat/chat_left_sidebar.js
 
+echo "==> chat_add_topic.js syntax"
+phase "chat-add-topic-js" node --check chat/chat_add_topic.js
+
+echo "==> chat_drag_to_pin.js syntax"
+phase "chat-drag-to-pin-js" node --check chat/chat_drag_to_pin.js
+
 echo "==> chat_right_sidebar.js syntax"
 phase "chat-right-sidebar-js" node --check chat/chat_right_sidebar.js
 

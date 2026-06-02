@@ -367,14 +367,35 @@ func HandleChatSearchJS(w http.ResponseWriter, r *http.Request) {
 	web.ServeJS(w, ChatSearchJSPath, "chat_search.js missing from the binary")
 }
 
-// ChatLeftSidebarJSPath is the embedded left-sidebar client (committed,
-// hand-written). Drives add-topic + drag-to-pin behavior on the
-// server-rendered sidebar markup.
+// ChatLeftSidebarJSPath is the embedded left-sidebar client — builds
+// the conversation/sessions rail from inline JSON, mounts the Add
+// Topic form, and subscribes to /chat/sidebar/stream for upserts.
 var ChatLeftSidebarJSPath = "chat/chat_left_sidebar.js"
 
 // HandleChatLeftSidebarJS serves the left-sidebar script from the embedded assets.
 func HandleChatLeftSidebarJS(w http.ResponseWriter, r *http.Request) {
 	web.ServeJS(w, ChatLeftSidebarJSPath, "chat_left_sidebar.js missing from the binary")
+}
+
+// ChatAddTopicJSPath is the embedded Add-Topic form widget — the
+// little form at the bottom of the left rail (input + button + error
+// line + submit + redirect on success).
+var ChatAddTopicJSPath = "chat/chat_add_topic.js"
+
+// HandleChatAddTopicJS serves the add-topic widget from the embedded assets.
+func HandleChatAddTopicJS(w http.ResponseWriter, r *http.Request) {
+	web.ServeJS(w, ChatAddTopicJSPath, "chat_add_topic.js missing from the binary")
+}
+
+// ChatDragToPinJSPath is the embedded drag-to-pin gesture widget —
+// pointer state machine for moving a session row between the Pinned
+// and Sessions lists, including the optimistic-update + revert dance
+// around the pin/unpin POST.
+var ChatDragToPinJSPath = "chat/chat_drag_to_pin.js"
+
+// HandleChatDragToPinJS serves the drag-to-pin widget from the embedded assets.
+func HandleChatDragToPinJS(w http.ResponseWriter, r *http.Request) {
+	web.ServeJS(w, ChatDragToPinJSPath, "chat_drag_to_pin.js missing from the binary")
 }
 
 // ChatRightSidebarJSPath is the embedded right-sidebar client — slim
@@ -547,13 +568,15 @@ func renderChatConversation(w http.ResponseWriter, user users.User, partnerID, c
 		`<script src="/chat/nav_stack.js?v=%s"></script>`+
 		`<script src="/chat/middle_pane.js?v=%s"></script>`+
 		`<script src="/chat/chat_search.js?v=%s"></script>`+
+		`<script src="/chat/chat_drag_to_pin.js?v=%s"></script>`+
+		`<script src="/chat/chat_add_topic.js?v=%s"></script>`+
 		`<script src="/chat/chat_left_sidebar.js?v=%s"></script>`+
 		`<script src="/chat/chat_right_sidebar.js?v=%s"></script>`+
 		`<script src="/chat/chat_compose.js?v=%s"></script>`+
 		`<script src="/chat/chat_help.js?v=%s"></script>`+
 		`<script src="/chat/chat.js?v=%s"></script>`+
 		`<script src="/chat/notify.js?v=%s"></script>`,
-		v, v, v, v, v, v, v, v, v, v, v, v, v)
+		v, v, v, v, v, v, v, v, v, v, v, v, v, v, v)
 
 	web.PageFooter(w)
 }

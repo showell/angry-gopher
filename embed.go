@@ -23,6 +23,8 @@ import "embed"
 //go:embed chat/nav_stack.js
 //go:embed chat/middle_pane.js
 //go:embed chat/chat_left_sidebar.js
+//go:embed chat/chat_add_topic.js
+//go:embed chat/chat_drag_to_pin.js
 //go:embed chat/chat_right_sidebar.js
 //go:embed chat/chat_search.js
 //go:embed chat/docs.js
