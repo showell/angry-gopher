@@ -572,6 +572,107 @@
     return wrapper;
   }
 
+  /* ---- Lesson 7 demo: the right rail.
+     ChatRightSidebar builds the wrapper + closed-panel + Open-compose
+     button; ChatCompose builds the open-state form and runs the send
+     state machine (POST → wait for SSE echo → clear textarea). We
+     monkey-patch fetch on the demo's fake SESSION_BASE so the reader
+     can choose what happens next: a fake echo arrives in 800ms, or
+     the host stays silent and the 3s timer trips hostDown. ---- */
+
+  // lint:called-once widget
+  function buildRightRailDemo(){
+    var wrapper = setStyles(document.createElement('div'), {
+      display: 'flex', flexDirection: 'column', gap: '10px',
+      border: '1px solid #ccc', borderRadius: '4px',
+      padding: '10px', background: '#fafafa', boxSizing: 'border-box',
+    });
+
+    /* "Next send" mode toggle — picks how the fake server responds
+       to the next POST /send. Default is echo (the happy path). */
+    var nextMode = 'echo';
+    var controls = setStyles(document.createElement('div'), {
+      fontSize: '13px', color: '#555', display: 'flex', gap: '14px',
+      alignItems: 'center', flexWrap: 'wrap',
+    });
+    var modeLabel = document.createElement('span');
+    modeLabel.textContent = 'Next send:';
+    controls.appendChild(modeLabel);
+    var modes = [
+      { value: 'echo',   label: 'echo arrives in 800ms (success)' },
+      { value: 'silent', label: 'host silent → 3s timeout' },
+    ];
+    modes.forEach(function(m){
+      var lbl = document.createElement('label');
+      lbl.style.cursor = 'pointer';
+      var r = document.createElement('input');
+      r.type = 'radio'; r.name = 'lesson7-mode'; r.value = m.value;
+      if(m.value === nextMode) r.checked = true;
+      r.addEventListener('change', function(){ if(r.checked) nextMode = m.value; });
+      lbl.appendChild(r); lbl.appendChild(document.createTextNode(' ' + m.label));
+      controls.appendChild(lbl);
+    });
+    wrapper.appendChild(controls);
+
+    /* Hint line + mount slot. The mount slot's id matches what the
+       real /chat page emits, so ChatRightSidebar finds it the same
+       way it does in production. */
+    var hint = setStyles(document.createElement('p'), {
+      margin: '0', fontSize: '12px', color: '#888',
+    });
+    hint.textContent = 'Click "Open compose box", type a message, hit Send. '
+      + 'Watch the textarea + buttons disable while "Sending…" sits in the status line.';
+    wrapper.appendChild(hint);
+
+    var mountWrapper = setStyles(document.createElement('div'), {
+      background: '#fff', border: '1px solid #ddd', borderRadius: '4px',
+      padding: '12px', boxSizing: 'border-box', minHeight: '320px',
+    });
+    var mountSlot = document.createElement('div');
+    mountSlot.id = 'chat-right-sidebar';
+    mountWrapper.appendChild(mountSlot);
+    wrapper.appendChild(mountWrapper);
+
+    /* PRODUCT_DECISION: intercept fetch only for our fake SESSION_BASE so
+       the rest of the page (asset loads, source spoilers, future demos)
+       keeps using the real fetch. Parse the cid out of the form body so
+       we can fire the matching ackIfPending — the same cid round-trip
+       the production server does via SSE. */
+    var FAKE_BASE = '/learn/lesson7-fake';
+    var origFetch = window.fetch;
+    window.fetch = function(url, opts){
+      if(typeof url === 'string' && url.indexOf(FAKE_BASE + '/send') === 0){
+        var body = (opts && opts.body) || '';
+        var cidMatch = body.match(/cid=([^&]+)/);
+        var cid = cidMatch ? decodeURIComponent(cidMatch[1]) : null;
+        if(nextMode === 'echo' && cid){
+          setTimeout(function(){ ChatCompose.ackIfPending(cid); }, 800);
+        }
+        /* silent mode: POST resolves OK but no echo ever arrives, so
+           ChatCompose's 3s hostDown timer trips and the alert fires. */
+        return Promise.resolve({ ok: true });
+      }
+      return origFetch.apply(this, arguments);
+    };
+
+    /* Init in the same order chat.js does: right sidebar first
+       (builds the wrapper class + closed-panel + Open button), then
+       compose (inserts its body before the closed-panel and registers
+       it for the open/closed toggle). No ChatHelp here — the keyhelp
+       panel is Lesson 4's territory; the closed state in the demo
+       shows just the Open-compose button. */
+    ChatRightSidebar.init({
+      onOpen:  function(){ ChatCompose.focus(); },
+      onClose: function(){},
+    });
+    ChatCompose.init({
+      sessionBase: FAKE_BASE,
+      closeCompose: ChatRightSidebar.closeCompose,
+    });
+
+    return wrapper;
+  }
+
   /* ---- section frame: heading + prose + custom body ---- */
   // lint:called-once widget — reused per lesson
   function buildSection(opts){
@@ -831,6 +932,55 @@
     lede:  'The integration layer that ties Lessons 3-5 together. One init() call, the whole '
          + 'column comes alive.',
     body:  lesson6Body,
+  }));
+
+  /* Lesson 7 — chat_right_sidebar.js + chat_compose.js (the right rail). */
+  var lesson7Body = document.createElement('div');
+  lesson7Body.appendChild(buildParagraph(
+    'The right rail has two states: closed (showing the "Open compose box" button — and, in '
+    + 'the real app, the keyhelp panel from Lesson 4) and open (showing the compose form). '
+    + 'ChatRightSidebar.init builds the wrapper + closed-panel + Open button and exposes '
+    + 'openCompose / closeCompose. ChatCompose.init builds the form, textarea, Send and Image '
+    + 'buttons, the status line, and the markdown hint — then inserts that body before the '
+    + 'closed-panel and hands a reference back via registerComposeBody so the toggle can flip '
+    + 'their visibility.'));
+  lesson7Body.appendChild(buildParagraph(
+    'The send state machine is the essential complexity. Hitting Send doesn\'t clear the '
+    + 'textarea. ChatCompose generates a client correlation id (cid), disables the form, paints '
+    + '"Sending…", starts a 3-second hostDown timer, and POSTs. The textarea only clears when '
+    + 'the SSE echo arrives with the matching cid (chat.js routes that into '
+    + 'ChatCompose.ackIfPending). If the timer trips first, hostDown re-enables the form WITHOUT '
+    + 'clearing the text — no draft lost — and shows a "host may be down" alert. The cid '
+    + 'round-trip exists because POST success isn\'t real delivery confirmation; the SSE echo is.'));
+  lesson7Body.appendChild(buildParagraph(
+    'The demo wires both widgets into a mount slot. Fetch is monkey-patched on a fake '
+    + 'SESSION_BASE: pick "echo" and your send fires a fake ackIfPending after 800ms; pick '
+    + '"silent" and the POST resolves but no echo ever arrives, so the 3s timer trips and you '
+    + 'see the alert. Real ChatCompose code, real state machine, fake server.'));
+  lesson7Body.appendChild(buildSpoiler({
+    label:     'Show chat_right_sidebar.js source',
+    openLabel: 'Hide source',
+    render: function(box){ box.appendChild(buildSourcePanel('/learn/source/chat_right_sidebar.js')); },
+  }));
+  lesson7Body.appendChild(buildSpoiler({
+    label:     'Show chat_compose.js source',
+    openLabel: 'Hide source',
+    render: function(box){ box.appendChild(buildSourcePanel('/learn/source/chat_compose.js')); },
+  }));
+  lesson7Body.appendChild(buildRightRailDemo());
+  var demo7Caption = setStyles(document.createElement('p'), {
+    margin: '14px 0 6px', color: COLORS.muted, fontSize: '13px',
+  });
+  demo7Caption.textContent = 'Demo source (the function that built the box above):';
+  lesson7Body.appendChild(demo7Caption);
+  lesson7Body.appendChild(buildCodeBlock(buildRightRailDemo.toString()));
+
+  wrap.appendChild(buildSection({
+    title: 'Lesson 7: chat_right_sidebar.js + chat_compose.js',
+    lede:  'The right rail: a tiny shell widget around a stateful form. The form has more '
+         + 'state than usual — it has to wait for the server to confirm delivery before it '
+         + 'clears.',
+    body:  lesson7Body,
   }));
 
   root.appendChild(wrap);

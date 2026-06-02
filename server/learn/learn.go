@@ -37,8 +37,10 @@ func HandleLearn(w http.ResponseWriter, r *http.Request) {
 			`<script src="/chat/message_view.js?v=%s"></script>`+
 			`<script src="/chat/nav_stack.js?v=%s"></script>`+
 			`<script src="/chat/middle_pane.js?v=%s"></script>`+
+			`<script src="/chat/chat_right_sidebar.js?v=%s"></script>`+
+			`<script src="/chat/chat_compose.js?v=%s"></script>`+
 			`<script src="/learn/learn.js?v=%s"></script>`,
-		v, v, v, v, v, v, v)
+		v, v, v, v, v, v, v, v, v)
 	fmt.Fprint(w, `</body></html>`)
 }
 
@@ -52,12 +54,14 @@ func HandleLearnJS(w http.ResponseWriter, r *http.Request) {
 // into learn.js — the explicit allowlist keeps the source endpoint from
 // accidentally exposing anything we didn't curate.
 var learnSourceAllowlist = map[string]string{
-	"chat_image_popup.js": "chat/chat_image_popup.js",
-	"chat_code_popup.js":  "chat/chat_code_popup.js",
-	"message.js":          "chat/message.js",
-	"message_view.js":     "chat/message_view.js",
-	"nav_stack.js":        "chat/nav_stack.js",
-	"middle_pane.js":      "chat/middle_pane.js",
+	"chat_image_popup.js":  "chat/chat_image_popup.js",
+	"chat_code_popup.js":   "chat/chat_code_popup.js",
+	"message.js":           "chat/message.js",
+	"message_view.js":      "chat/message_view.js",
+	"nav_stack.js":         "chat/nav_stack.js",
+	"middle_pane.js":       "chat/middle_pane.js",
+	"chat_right_sidebar.js": "chat/chat_right_sidebar.js",
+	"chat_compose.js":      "chat/chat_compose.js",
 }
 
 // HandleLearnSource serves the raw text of an allowlisted JS module so the
