@@ -211,15 +211,17 @@
     },
   });
   ChatLeftSidebar.init({ conv: CONV });
-  ChatCompose.init({
-    sessionBase: SESSION_BASE,
-    closeCompose: ChatRightSidebar.closeCompose,
-  });
-  /* PRODUCT_DECISION: chat.js opens compose for quote/refer/edit; chat_help opens
-     for the "c" keybind; compose closes itself on Esc-empty. */
+  /* PRODUCT_DECISION: ChatRightSidebar builds the wrapper + closed-panel +
+     "Open compose box" button — ChatCompose then inserts its body into the
+     wrapper (before the closed-panel) and registers it for the toggle. So
+     ChatRightSidebar.init MUST run first. */
   ChatRightSidebar.init({
     onOpen:  function(){ ChatCompose.focus(); },
     onClose: pane.focus,
+  });
+  ChatCompose.init({
+    sessionBase: SESSION_BASE,
+    closeCompose: ChatRightSidebar.closeCompose,
   });
   /* PRODUCT_DECISION: keys map 1:1 to the chat-keyhelp panel on the closed-compose side.
      Arrow / Home / End / PgUp / PgDn are NOT here — MessageView owns those internally. */

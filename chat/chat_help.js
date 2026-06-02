@@ -2,9 +2,35 @@
    keyhelp panel — one source of truth, no drift. Letter shortcuts are sorted
    alphabetically (no functional grouping); '/' lives at the end as the only
    non-letter. Each shortcut's "button" in the panel is a real <button> that
-   triggers the same action as the key — they look pressable AND they are. */
+   triggers the same action as the key — they look pressable AND they are.
+   ChatHelp owns the keyhelp CSS — the panel itself, the kbd-look key
+   buttons, and their hover/active feedback. */
 window.ChatHelp = (function(){
   'use strict';
+
+  /* PRODUCT_DECISION: widget owns its CSS. Movement keys (arrows, Home/End,
+     paging, Esc) aren't styled here — they aren't in the panel either,
+     they're discoverable. */
+  var stylesInjected = false;
+  // lint:called-once init-once-guard
+  function ensureStyles(){
+    if(stylesInjected) return;
+    var s = document.createElement('style');
+    s.textContent = ''
+      + '.chat-keyhelp { margin-top:18px; font-size:13px; color:#555; }'
+      + '.chat-keyhelp-title { font-weight:bold; color:#333; margin-bottom:7px; }'
+      + '.chat-key { margin:5px 0; }'
+      + '.chat-keyhelp-key { display:inline-block; min-width:1.1em; text-align:center;'
+      +                   ' padding:1px 6px; font-family:ui-monospace,Menlo,Consolas,monospace;'
+      +                   ' font-size:12px; color:#333; background:#fff; border:1px solid #ccc;'
+      +                   ' border-bottom-width:2px; border-radius:4px; margin-right:7px;'
+      +                   ' cursor:pointer; }'
+      + '.chat-keyhelp-key:hover { background:#f3f3ff; border-color:#9b9be0; }'
+      + '.chat-keyhelp-key:active { background:#e7e7ff; border-bottom-width:1px;'
+      +                          ' transform:translateY(1px); }';
+    document.head.appendChild(s);
+    stylesInjected = true;
+  }
 
   // lint:called-once keymap-source-of-truth
   function shortcuts(deps){
@@ -55,6 +81,7 @@ window.ChatHelp = (function(){
   }
 
   function init(deps){
+    ensureStyles();
     var entries = shortcuts(deps);
     var byKey = Object.create(null);
     entries.forEach(function(entry){ byKey[entry.key] = entry; });

@@ -1,6 +1,9 @@
 /* PRODUCT_DECISION: compose owns the send state machine — cid round-trip,
    optimistic disable, ack on SSE echo, hostDown timeout. Image upload (button
-   + clipboard paste) lives here too. */
+   + clipboard paste) lives here too. Also owns its entire DOM (form,
+   textarea, Send/Image buttons, status line, markdown hint) and its CSS
+   (form/textarea sizing, action-row layout, status/hint colors, and the
+   host-down alert dialog). */
 window.ChatCompose = (function(){
   'use strict';
 
@@ -9,6 +12,35 @@ window.ChatCompose = (function(){
   var pendingCid=null, pendingTimer=null;
   /* PRODUCT_DECISION: must match Gopher's maxChatUploadBytes and stay under Caddy's body cap. */
   var MAX_IMAGE_BYTES=10*1024*1024;
+
+  /* PRODUCT_DECISION: widget owns its own CSS. Selectors are scoped to
+     .chat-compose (the right-rail wrapper class set by ChatRightSidebar)
+     so the page-level orientation @media queries in chat.go that reach
+     in for landscape sizing keep matching the same elements. */
+  var stylesInjected = false;
+  // lint:called-once init-once-guard
+  function ensureStyles(){
+    if(stylesInjected) return;
+    var s = document.createElement('style');
+    s.textContent = ''
+      + '.chat-compose form { margin:0; }'
+      + '.chat-compose textarea { width:100%; min-height:200px; resize:vertical;'
+      +                        ' box-sizing:border-box; font-family:inherit;'
+      +                        ' font-size:14px; padding:8px; }'
+      + '.chat-compose button { margin-top:8px; }'
+      + '.chat-compose-actions { display:flex; gap:8px; margin-top:8px; }'
+      + '.chat-compose-actions button { margin-top:0; }'
+      + '.chat-status { font-size:12px; color:#b00020; min-height:16px; margin-top:6px; }'
+      + '.chat-hint { font-size:12px; color:#999; margin-top:8px; }'
+      /* Plain "host may be down" alert — only ChatCompose builds these. */
+      + '.chat-alert-dialog { max-width:90vw; border:1px solid #bbb;'
+      +                    ' border-radius:8px; padding:18px 20px; }'
+      + '.chat-alert-dialog::backdrop { background:rgba(0,0,0,0.4); }'
+      + '.chat-alert-dialog p { margin:0 0 14px; }'
+      + '.chat-alert-dialog button { padding:5px 16px; }';
+    document.head.appendChild(s);
+    stylesInjected = true;
+  }
 
   function setComposeEnabled(on){
     textarea.disabled=!on;
@@ -132,16 +164,19 @@ window.ChatCompose = (function(){
   }
 
   function init(deps){
+    ensureStyles();
     var built = buildComposeBody();
     textarea = built.textarea; form = built.form; status = built.status;
     imageBtn = built.imageBtn; fileInput = built.fileInput;
     SESSION_BASE = deps.sessionBase; closeCompose = deps.closeCompose;
 
     /* PRODUCT_DECISION: insert before the closed-panel so the open state
-       shows above the keyhelp side. Right-sidebar wrapper is server-rendered. */
+       shows above the keyhelp side. ChatRightSidebar built both the
+       wrapper and the closed-panel; we ride on top with our compose body. */
     var rightSidebar = document.getElementById('chat-right-sidebar');
     var closedPanel = document.getElementById('chat-closed-panel');
     rightSidebar.insertBefore(built.body, closedPanel);
+    ChatRightSidebar.registerComposeBody(built.body);
 
     form.addEventListener('submit', function(e){ e.preventDefault(); send(); });
     textarea.addEventListener('keydown', function(e){
