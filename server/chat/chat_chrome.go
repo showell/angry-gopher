@@ -51,6 +51,15 @@ func chatPageHeader(w http.ResponseWriter, title string, user users.User, active
 	fmt.Fprint(w, `<div class="app-body-wrap">`)
 }
 
+// StylesJSPath is the embedded shared transcript-styles client.
+var StylesJSPath = "chat/styles.js"
+
+// HandleStylesJS serves chat/styles.js (ChatStyles namespace shared by
+// /chat/code and /chat/images).
+func HandleStylesJS(w http.ResponseWriter, r *http.Request) {
+	web.ServeJS(w, StylesJSPath, "styles.js missing from the binary")
+}
+
 // chatTabTitle picks the browser-tab text from which chat-subsystem page
 // you're on. Mirrors the nav: "Docs"/"Recent"/"Settings" for those,
 // "Chat" for the conversation page (active="") and the people list

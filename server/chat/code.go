@@ -35,9 +35,9 @@ package chat
 import (
 	"angry-gopher/server/users"
 	"angry-gopher/server/web"
+	"bytes"
 	"encoding/json"
 	"fmt"
-	"html"
 	"net/http"
 	"net/url"
 	"os"
@@ -294,14 +294,40 @@ func HandleCode(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	chatPageHeader(w, "Code", user, "code")
 	fmt.Fprint(w, `<div class="chat-notify" id="chat-notify"></div>`)
-	fmt.Fprint(w, codeCSS)
-	renderCodeList(w, entries)
+	fmt.Fprint(w, `<div id="code-mount"></div>`)
+	emitCodeData(w, entries)
 	fmt.Fprintf(w,
-		`<script src="/chat/chat_code_popup.js?v=%s"></script>`+
+		`<script src="/chat/styles.js?v=%s"></script>`+
+			`<script src="/chat/chat_code_popup.js?v=%s"></script>`+
 			`<script src="/chat/code.js?v=%s"></script>`+
 			`<script src="/chat/notify.js?v=%s"></script>`,
-		url.QueryEscape(web.AssetVersion), url.QueryEscape(web.AssetVersion), url.QueryEscape(web.AssetVersion))
+		url.QueryEscape(web.AssetVersion), url.QueryEscape(web.AssetVersion),
+		url.QueryEscape(web.AssetVersion), url.QueryEscape(web.AssetVersion))
 	web.PageFooter(w)
+}
+
+// emitCodeData ships the initial transcript as inline JSON next to the
+// mount slot. The shape matches codeSSEEvent, so the client uses ONE
+// builder for both the first-paint entries and the live SSE upserts.
+func emitCodeData(w http.ResponseWriter, entries []codeEntry) {
+	payload := make([]codeSSEEvent, len(entries))
+	for i, e := range entries {
+		payload[i] = codeSSEEvent{
+			SourceID: e.SourceID,
+			From:     e.From,
+			Conv:     e.Conv,
+			At:       e.At,
+			Blocks:   blocksToWire(e.Blocks),
+		}
+	}
+	blob, err := json.Marshal(payload)
+	if err != nil {
+		return
+	}
+	// PRODUCT_DECISION: escape `</` so the JSON can't accidentally close
+	// the surrounding <script> tag.
+	blob = bytes.ReplaceAll(blob, []byte("</"), []byte(`<\/`))
+	fmt.Fprintf(w, `<script id="code-data" type="application/json">%s</script>`, blob)
 }
 
 func readCodeForUser(uid string) ([]codeEntry, error) {
@@ -317,71 +343,6 @@ func readCodeForUser(uid string) ([]codeEntry, error) {
 		return nil, err
 	}
 	return parseCodeFile(string(data)), nil
-}
-
-const codeCSS = `<style>
-/* PRODUCT_DECISION: 600px cap matches chat-main + Images, so code reads at
-   the same width the user remembers from the feed. */
-.code-list { list-style: none; padding: 0; margin: 0 auto; max-width: 600px; }
-.code-entry { margin: 0 0 28px 0; padding: 14px 16px; border: 1px solid #e0e0e0; border-radius: 6px; background: #fafafa; }
-.code-entry-meta { font-size: 15px; color: #333; margin-bottom: 10px; line-height: 1.5; }
-.code-entry-meta-line { margin: 1px 0; }
-.code-entry-meta a { color: #333; text-decoration: none; }
-.code-entry-meta a:hover { text-decoration: underline; }
-.code-entry-meta-from { font-weight: 600; }
-.code-block { margin: 8px 0; border: 1px solid #ddd; border-radius: 6px; overflow: hidden; background: #fff; }
-.code-block-lang { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em;
-                   color: #888; padding: 4px 12px; background: #faf9f5; border-bottom: 1px solid #eee; }
-.code-block pre { margin: 0; padding: 10px 14px; max-height: 360px; overflow: auto;
-                  font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 13px;
-                  line-height: 1.45; color: #222; cursor: zoom-in; }
-</style>`
-
-func renderCodeList(w http.ResponseWriter, entries []codeEntry) {
-	fmt.Fprint(w, `<ul class="code-list" id="code-list"`)
-	if len(entries) == 0 {
-		fmt.Fprint(w, ` hidden`)
-	}
-	fmt.Fprint(w, `>`)
-	for _, e := range entries {
-		writeCodeEntry(w, e)
-	}
-	fmt.Fprint(w, `</ul>`)
-	if len(entries) == 0 {
-		fmt.Fprint(w, `<p class="muted" id="code-empty">No code blocks yet.</p>`)
-	}
-}
-
-func writeCodeEntry(w http.ResponseWriter, e codeEntry) {
-	sid, _, ok := splitMsgID(e.SourceID)
-	href := "/chat/c/" + e.Conv
-	if ok {
-		href += "/" + url.PathEscape(sid) + "#msg-" + e.SourceID
-	}
-	when := e.At.UTC().Format("January 2, 2006 15:04")
-	fmt.Fprintf(w,
-		`<li class="code-entry" data-source-id="%s"`+
-			`><div class="code-entry-meta">`+
-			`<div class="code-entry-meta-line"><span class="code-entry-meta-from">Sent by %s</span></div>`+
-			`<div class="code-entry-meta-line">%s</div>`+
-			`<div class="code-entry-meta-line">From <a href="%s">MSG_%s</a></div>`+
-			`</div>`,
-		html.EscapeString(e.SourceID),
-		html.EscapeString(e.From),
-		html.EscapeString(when),
-		href, html.EscapeString(e.SourceID))
-	for _, blk := range e.Blocks {
-		writeCodeBlock(w, blk)
-	}
-	fmt.Fprint(w, `</li>`)
-}
-
-func writeCodeBlock(w http.ResponseWriter, blk codeBlock) {
-	fmt.Fprint(w, `<div class="code-block">`)
-	if blk.Lang != "" {
-		fmt.Fprintf(w, `<div class="code-block-lang">%s</div>`, html.EscapeString(blk.Lang))
-	}
-	fmt.Fprintf(w, `<pre>%s</pre></div>`, html.EscapeString(blk.Body))
 }
 
 type codeSSEEvent struct {

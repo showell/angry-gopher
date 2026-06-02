@@ -1,75 +1,72 @@
 /* /chat/code client — thin renderer for the per-user code transcript.
-   Server emits the list forward-chronologically at page load; this script
-   holds an EventSource on /chat/code/stream and appends one <li> per
-   pushed event at the BOTTOM. Click any rendered <pre> → ChatCodePopup.show(text).
-   Read-only feed (no selection, nav stack, or keyboard shortcuts). */
+
+   Server ships the initial entries as inline JSON (#code-data) next to
+   the mount slot (#code-mount). This script builds the list via
+   ChatStyles helpers, holds an EventSource on /chat/code/stream and
+   appends one <li> per pushed event at the BOTTOM. Click any rendered
+   <pre> → ChatCodePopup.show(text). Read-only feed (no selection, nav
+   stack, or keyboard shortcuts). */
 (function(){
   'use strict';
 
-  var listEl  = document.getElementById('code-list');
-  var emptyEl = document.getElementById('code-empty');
-  if(!listEl) return;
+  var mount  = document.getElementById('code-mount');
+  var dataEl = document.getElementById('code-data');
+  if(!mount || !dataEl) return;
 
-  var MONTHS = ['January','February','March','April','May','June',
-                'July','August','September','October','November','December'];
-  // lint:called-once date-formatter
-  function formatWhen(iso){
-    /* PRODUCT_DECISION: matches the server-side renderer ("January 2, 2006 15:04",
-       UTC) so initial render + SSE upserts format consistently. */
-    var d = new Date(iso);
-    var hh = d.getUTCHours(), mm = d.getUTCMinutes();
-    return MONTHS[d.getUTCMonth()] + ' ' + d.getUTCDate() + ', ' + d.getUTCFullYear() + ' ' +
-           (hh < 10 ? '0' : '') + hh + ':' + (mm < 10 ? '0' : '') + mm;
-  }
+  var entries;
+  try { entries = JSON.parse(dataEl.textContent); }
+  catch(err){ console.error('code: malformed JSON payload', err); return; }
+  if(!Array.isArray(entries)) entries = [];
 
+  var listEl = ChatStyles.createTranscriptList();
+  mount.appendChild(listEl);
+
+  var emptyEl = document.createElement('p');
+  Object.assign(emptyEl.style, { color:'#888', textAlign:'center', margin:'24px 0' });
+  emptyEl.textContent = 'No code blocks yet.';
+
+  /* PRODUCT_DECISION: the code-block styling lives inline in buildEntry —
+     this page is the only consumer, and inlining keeps the per-block
+     visual contract (wrapper / lang strap / <pre>) in one read. */
   function buildEntry(evt){
-    var li = document.createElement('li');
-    li.className = 'code-entry';
-    li.setAttribute('data-source-id', evt.source_id);
-
-    var meta = document.createElement('div');
-    meta.className = 'code-entry-meta';
-
-    var line1 = document.createElement('div'); line1.className = 'code-entry-meta-line';
-    var from = document.createElement('span'); from.className = 'code-entry-meta-from';
-    from.textContent = 'Sent by ' + evt.from;
-    line1.appendChild(from);
-    meta.appendChild(line1);
-
-    var line2 = document.createElement('div'); line2.className = 'code-entry-meta-line';
-    line2.textContent = formatWhen(evt.at);
-    meta.appendChild(line2);
-
-    var line3 = document.createElement('div'); line3.className = 'code-entry-meta-line';
-    line3.appendChild(document.createTextNode('From '));
-    var a = document.createElement('a');
-    /* PRODUCT_DECISION: split source_id into <sid>_<n> on the LAST underscore
-       (sids may contain hyphens but no underscores by construction). */
-    var cut = evt.source_id.lastIndexOf('_');
-    var sid = cut > 0 ? evt.source_id.substring(0, cut) : '';
-    a.href = '/chat/c/' + encodeURIComponent(evt.conv) +
-             (sid ? '/' + encodeURIComponent(sid) + '#msg-' + evt.source_id : '');
-    a.textContent = 'MSG_' + evt.source_id;
-    line3.appendChild(a);
-    meta.appendChild(line3);
-
-    li.appendChild(meta);
-
+    var li = ChatStyles.createTranscriptEntry({
+      sourceID: evt.source_id,
+      from: evt.from,
+      when: ChatStyles.formatTranscriptTime(evt.at),
+      conv: evt.conv,
+    });
     for(var i = 0; i < evt.blocks.length; i++){
       var blk = evt.blocks[i];
-      var wrap = document.createElement('div'); wrap.className = 'code-block';
+      var wrap = document.createElement('div');
+      Object.assign(wrap.style, {
+        margin:'8px 0', border:'1px solid #ddd', borderRadius:'6px',
+        overflow:'hidden', background:'#fff',
+      });
       if(blk.lang){
-        var lang = document.createElement('div'); lang.className = 'code-block-lang';
+        var lang = document.createElement('div');
+        Object.assign(lang.style, {
+          fontSize:'11px', textTransform:'uppercase', letterSpacing:'0.05em',
+          color:'#888', padding:'4px 12px', background:'#faf9f5',
+          borderBottom:'1px solid #eee',
+        });
         lang.textContent = blk.lang;
         wrap.appendChild(lang);
       }
       var pre = document.createElement('pre');
+      Object.assign(pre.style, {
+        margin:'0', padding:'10px 14px', maxHeight:'360px', overflow:'auto',
+        fontFamily:'ui-monospace, Menlo, Consolas, monospace',
+        fontSize:'13px', lineHeight:'1.45', color:'#222', cursor:'zoom-in',
+      });
       pre.textContent = blk.body;
       wrap.appendChild(pre);
       li.appendChild(wrap);
     }
     return li;
   }
+
+  for(var i = 0; i < entries.length; i++) listEl.appendChild(buildEntry(entries[i]));
+  if(entries.length === 0) mount.appendChild(emptyEl);
 
   /* PRODUCT_DECISION: clicking any rendered <pre> opens the shared popup.
      Single delegated listener; the <pre> is the only thing in the entry
@@ -89,6 +86,6 @@
     var existing = listEl.querySelector('li[data-source-id="' + evt.source_id + '"]');
     if(existing){ existing.replaceWith(buildEntry(evt)); return; }
     listEl.appendChild(buildEntry(evt));
-    if(emptyEl){ emptyEl.remove(); emptyEl = null; listEl.hidden = false; }
+    if(emptyEl && emptyEl.parentNode){ emptyEl.remove(); }
   };
 })();

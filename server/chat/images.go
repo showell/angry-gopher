@@ -30,9 +30,9 @@ package chat
 import (
 	"angry-gopher/server/users"
 	"angry-gopher/server/web"
+	"bytes"
 	"encoding/json"
 	"fmt"
-	"html"
 	"net/http"
 	"net/url"
 	"os"
@@ -197,14 +197,40 @@ func HandleImages(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	chatPageHeader(w, "Images", user, "images")
 	fmt.Fprint(w, `<div class="chat-notify" id="chat-notify"></div>`)
-	fmt.Fprint(w, imagesCSS)
-	renderImagesList(w, entries)
+	fmt.Fprint(w, `<div id="images-mount"></div>`)
+	emitImagesData(w, entries)
 	fmt.Fprintf(w,
-		`<script src="/chat/chat_image_popup.js?v=%s"></script>`+
+		`<script src="/chat/styles.js?v=%s"></script>`+
+			`<script src="/chat/chat_image_popup.js?v=%s"></script>`+
 			`<script src="/chat/images.js?v=%s"></script>`+
 			`<script src="/chat/notify.js?v=%s"></script>`,
-		url.QueryEscape(web.AssetVersion), url.QueryEscape(web.AssetVersion), url.QueryEscape(web.AssetVersion))
+		url.QueryEscape(web.AssetVersion), url.QueryEscape(web.AssetVersion),
+		url.QueryEscape(web.AssetVersion), url.QueryEscape(web.AssetVersion))
 	web.PageFooter(w)
+}
+
+// emitImagesData ships the initial transcript as inline JSON next to the
+// mount slot. The shape matches imagesSSEEvent, so the client uses ONE
+// builder for both first-paint entries and the live SSE upserts.
+func emitImagesData(w http.ResponseWriter, entries []imagesEntry) {
+	payload := make([]imagesSSEEvent, len(entries))
+	for i, e := range entries {
+		payload[i] = imagesSSEEvent{
+			SourceID: e.SourceID,
+			From:     e.From,
+			Conv:     e.Conv,
+			At:       e.At,
+			Images:   e.Images,
+		}
+	}
+	blob, err := json.Marshal(payload)
+	if err != nil {
+		return
+	}
+	// PRODUCT_DECISION: escape `</` so the JSON can't accidentally close
+	// the surrounding <script> tag.
+	blob = bytes.ReplaceAll(blob, []byte("</"), []byte(`<\/`))
+	fmt.Fprintf(w, `<script id="images-data" type="application/json">%s</script>`, blob)
 }
 
 func readImagesForUser(uid string) ([]imagesEntry, error) {
@@ -220,65 +246,6 @@ func readImagesForUser(uid string) ([]imagesEntry, error) {
 		return nil, err
 	}
 	return parseImagesFile(string(data)), nil
-}
-
-const imagesCSS = `<style>
-/* PRODUCT_DECISION: 600px cap matches chat-main, so images render at the
-   same widths the user remembers from the feed (natural aspect ratio,
-   height-capped at 320px). */
-.images-list { list-style: none; padding: 0; margin: 0 auto; max-width: 600px; }
-.images-entry { margin: 0 0 28px 0; padding: 14px 16px; border: 1px solid #e0e0e0; border-radius: 6px; background: #fafafa; }
-.images-entry-meta { font-size: 15px; color: #333; margin-bottom: 10px; line-height: 1.5; }
-.images-entry-meta-line { margin: 1px 0; }
-.images-entry-meta a { color: #333; text-decoration: none; }
-.images-entry-meta a:hover { text-decoration: underline; }
-.images-entry-meta-from { font-weight: 600; }
-.images-entry-imgs img { max-width: 100%; max-height: 320px; width: auto; height: auto;
-                         display: block; margin: 6px 0; border-radius: 6px; cursor: zoom-in; }
-</style>`
-
-// renderImagesList emits the page body in forward-chronological order
-// (oldest first, matching the on-disk order). Each <li> carries a
-// data-source-id so SSE upserts can append at the bottom without
-// rebuilding the whole list.
-func renderImagesList(w http.ResponseWriter, entries []imagesEntry) {
-	fmt.Fprint(w, `<ul class="images-list" id="images-list"`)
-	if len(entries) == 0 {
-		fmt.Fprint(w, ` hidden`)
-	}
-	fmt.Fprint(w, `>`)
-	for _, e := range entries {
-		writeImagesEntry(w, e)
-	}
-	fmt.Fprint(w, `</ul>`)
-	if len(entries) == 0 {
-		fmt.Fprint(w, `<p class="muted" id="images-empty">No images yet.</p>`)
-	}
-}
-
-func writeImagesEntry(w http.ResponseWriter, e imagesEntry) {
-	// Split "<sid>_<n>" → session + index for the deep-link.
-	sid, _, ok := splitMsgID(e.SourceID)
-	href := "/chat/c/" + e.Conv
-	if ok {
-		href += "/" + url.PathEscape(sid) + "#msg-" + e.SourceID
-	}
-	when := e.At.UTC().Format("January 2, 2006 15:04")
-	fmt.Fprintf(w,
-		`<li class="images-entry" data-source-id="%s"`+
-			`><div class="images-entry-meta">`+
-			`<div class="images-entry-meta-line"><span class="images-entry-meta-from">Sent by %s</span></div>`+
-			`<div class="images-entry-meta-line">%s</div>`+
-			`<div class="images-entry-meta-line">From <a href="%s">MSG_%s</a></div>`+
-			`</div><div class="images-entry-imgs">`,
-		html.EscapeString(e.SourceID),
-		html.EscapeString(e.From),
-		html.EscapeString(when),
-		href, html.EscapeString(e.SourceID))
-	for _, tag := range e.Images {
-		fmt.Fprint(w, tag)
-	}
-	fmt.Fprint(w, `</div></li>`)
 }
 
 func splitMsgID(msgID string) (sid string, n string, ok bool) {

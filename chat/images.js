@@ -1,69 +1,59 @@
 /* /chat/images client — thin renderer for the per-user image transcript.
-   Server emits the list in forward-chronological order at page load; this
-   script holds an EventSource on /chat/images/stream and appends one <li>
-   per pushed event at the BOTTOM (matches transcript order, like the chat
-   feed). Click any rendered <img> → ChatImagePopup.show(src). No selection,
-   no nav-stack, no keyboard — this is a read-only feed. */
+
+   Server ships the initial entries as inline JSON (#images-data) next to
+   the mount slot (#images-mount). This script builds the list via
+   ChatStyles helpers, holds an EventSource on /chat/images/stream and
+   appends one <li> per pushed event at the BOTTOM. Click any rendered
+   <img> → ChatImagePopup.show(src). Read-only feed (no selection, nav
+   stack, or keyboard shortcuts). */
 (function(){
   'use strict';
 
-  var listEl  = document.getElementById('images-list');
-  var emptyEl = document.getElementById('images-empty');
-  if(!listEl) return;
+  var mount  = document.getElementById('images-mount');
+  var dataEl = document.getElementById('images-data');
+  if(!mount || !dataEl) return;
 
-  var MONTHS = ['January','February','March','April','May','June',
-                'July','August','September','October','November','December'];
-  // lint:called-once date-formatter
-  function formatWhen(iso){
-    /* PRODUCT_DECISION: matches the server-side renderer ("January 2, 2006 15:04",
-       UTC) — initial render + SSE upserts share one format so the page reads
-       consistently when both old + new entries are visible. */
-    var d = new Date(iso);
-    var hh = d.getUTCHours(), mm = d.getUTCMinutes();
-    return MONTHS[d.getUTCMonth()] + ' ' + d.getUTCDate() + ', ' + d.getUTCFullYear() + ' ' +
-           (hh < 10 ? '0' : '') + hh + ':' + (mm < 10 ? '0' : '') + mm;
-  }
+  var entries;
+  try { entries = JSON.parse(dataEl.textContent); }
+  catch(err){ console.error('images: malformed JSON payload', err); return; }
+  if(!Array.isArray(entries)) entries = [];
+
+  var listEl = ChatStyles.createTranscriptList();
+  mount.appendChild(listEl);
+
+  var emptyEl = document.createElement('p');
+  Object.assign(emptyEl.style, { color:'#888', textAlign:'center', margin:'24px 0' });
+  emptyEl.textContent = 'No images yet.';
+
+  /* PRODUCT_DECISION: per-page image style — natural aspect ratio, capped
+     at the entry width and at 320px tall, with a zoom-in cursor matching
+     the popup affordance. Set on each <img> as we inject; the server-
+     supplied tags carry sanitized src/alt only. */
+  var IMG_STYLE = {
+    maxWidth:'100%', maxHeight:'320px', width:'auto', height:'auto',
+    display:'block', margin:'6px 0', borderRadius:'6px', cursor:'zoom-in',
+  };
 
   function buildEntry(evt){
-    var li = document.createElement('li');
-    li.className = 'images-entry';
-    li.setAttribute('data-source-id', evt.source_id);
-
-    var meta = document.createElement('div');
-    meta.className = 'images-entry-meta';
-
-    var line1 = document.createElement('div'); line1.className = 'images-entry-meta-line';
-    var from = document.createElement('span'); from.className = 'images-entry-meta-from';
-    from.textContent = 'Sent by ' + evt.from;
-    line1.appendChild(from);
-    meta.appendChild(line1);
-
-    var line2 = document.createElement('div'); line2.className = 'images-entry-meta-line';
-    line2.textContent = formatWhen(evt.at);
-    meta.appendChild(line2);
-
-    var line3 = document.createElement('div'); line3.className = 'images-entry-meta-line';
-    line3.appendChild(document.createTextNode('From '));
-    var a = document.createElement('a');
-    /* PRODUCT_DECISION: split source_id into <sid>_<n> on the LAST underscore
-       (sids may contain hyphens but no underscores by construction). */
-    var cut = evt.source_id.lastIndexOf('_');
-    var sid = cut > 0 ? evt.source_id.substring(0, cut) : '';
-    a.href = '/chat/c/' + encodeURIComponent(evt.conv) +
-             (sid ? '/' + encodeURIComponent(sid) + '#msg-' + evt.source_id : '');
-    a.textContent = 'MSG_' + evt.source_id;
-    line3.appendChild(a);
-    meta.appendChild(line3);
-
-    li.appendChild(meta);
+    var li = ChatStyles.createTranscriptEntry({
+      sourceID: evt.source_id,
+      from: evt.from,
+      when: ChatStyles.formatTranscriptTime(evt.at),
+      conv: evt.conv,
+    });
     var imgs = document.createElement('div');
-    imgs.className = 'images-entry-imgs';
     /* PRODUCT_DECISION: server-supplied <img> tags include sanitized src/alt
-       attributes; trust + inject as innerHTML. */
+       attributes; trust + inject as innerHTML. Per-image styling is then
+       applied in JS so this page emits zero CSS. */
     imgs.innerHTML = evt.images.join('');
+    var nodes = imgs.querySelectorAll('img');
+    for(var i = 0; i < nodes.length; i++) Object.assign(nodes[i].style, IMG_STYLE);
     li.appendChild(imgs);
     return li;
   }
+
+  for(var i = 0; i < entries.length; i++) listEl.appendChild(buildEntry(entries[i]));
+  if(entries.length === 0) mount.appendChild(emptyEl);
 
   /* PRODUCT_DECISION: clicking any rendered <img> opens the shared popup.
      Single delegated listener; no per-image binding (cheaper as the list grows). */
@@ -82,6 +72,6 @@
     var existing = listEl.querySelector('li[data-source-id="' + evt.source_id + '"]');
     if(existing){ existing.replaceWith(buildEntry(evt)); return; }
     listEl.appendChild(buildEntry(evt));
-    if(emptyEl){ emptyEl.remove(); emptyEl = null; listEl.hidden = false; }
+    if(emptyEl && emptyEl.parentNode){ emptyEl.remove(); }
   };
 })();
