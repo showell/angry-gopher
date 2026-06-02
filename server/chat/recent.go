@@ -30,9 +30,9 @@ package chat
 import (
 	"angry-gopher/server/users"
 	"angry-gopher/server/web"
+	"bytes"
 	"encoding/json"
 	"fmt"
-	"html"
 	"net/http"
 	"net/url"
 	"os"
@@ -81,24 +81,44 @@ func HandleRecent(w http.ResponseWriter, r *http.Request) {
 	// pings (notify.js no-ops when this div is absent). Recent users tend
 	// to camp here waiting for activity, so the tab needs to alert too.
 	fmt.Fprint(w, `<div class="chat-notify" id="chat-notify"></div>`)
-	fmt.Fprint(w, recentCSS)
-	renderRecentList(w, items)
+	fmt.Fprint(w, `<div id="recent-mount"></div>`)
+	emitRecentData(w, items)
 	fmt.Fprintf(w, `<script src="/chat/recent.js?v=%s"></script>`+
 		`<script src="/chat/notify.js?v=%s"></script>`,
 		url.QueryEscape(web.AssetVersion), url.QueryEscape(web.AssetVersion))
 	web.PageFooter(w)
 }
 
-// recentCSS scopes the When column's right-align + tabular-nums to the
-// recent page. The shared chrome already styles the table (border, hover,
-// header color); this only adds what's specific to recent's first column.
-const recentCSS = `<style>
-.recent-table th.recent-when, .recent-table td.recent-when {
-  text-align: right; font-variant-numeric: tabular-nums;
-  white-space: nowrap; width: 1%;
+// emitRecentData ships the initial activity feed as inline JSON next to
+// the mount slot. The shape matches recentEvent, so the client uses ONE
+// builder for both the first-paint rows and the live SSE upserts.
+func emitRecentData(w http.ResponseWriter, items []recentItem) {
+	payload := make([]recentEvent, 0, len(items))
+	for _, it := range items {
+		evt := recentEvent{At: it.at}
+		switch it.kind {
+		case recentChat:
+			evt.Kind = "chat"
+			evt.Conv = it.conv
+			evt.SID = it.sid
+			evt.Partner = it.partner
+			evt.LastAuthor = it.lastAuthor
+		case recentDoc:
+			evt.Kind = "doc"
+			evt.Slug = it.slug
+			evt.Title = it.title
+		}
+		payload = append(payload, evt)
+	}
+	blob, err := json.Marshal(payload)
+	if err != nil {
+		return
+	}
+	// PRODUCT_DECISION: escape `</` so the JSON can't accidentally close
+	// the surrounding <script> tag.
+	blob = bytes.ReplaceAll(blob, []byte("</"), []byte(`<\/`))
+	fmt.Fprintf(w, `<script id="recent-data" type="application/json">%s</script>`, blob)
 }
-.recent-table td.recent-when { color: #888; }
-</style>`
 
 // gatherRecentItems walks every conv that includes the viewer plus their
 // docs dir, statting each file for its mtime. Returned newest-first.
@@ -143,68 +163,6 @@ func gatherRecentItems(user users.User) []recentItem {
 	}
 	sort.Slice(items, func(i, j int) bool { return items[i].at.After(items[j].at) })
 	return items
-}
-
-// renderRecentList emits the activity table. Every <tr> carries a
-// data-key (kind:identity, so SSE upserts replace the right row) and a
-// data-ts (RFC3339, so the 20s client tick can re-humanize the When cell
-// without a server round-trip). The empty-state <p> uses id="recent-empty"
-// so SSE can swap it out for the table on first event.
-//
-// <thead> + <tbody> are emitted EXPLICITLY: browsers auto-wrap loose <tr>s
-// in a tbody anyway, and the JS targets that tbody when inserting new
-// rows. Pretending the tbody doesn't exist in the source means JS that
-// queries `table > tr` is structurally wrong but coincidentally works
-// for queries-as-descendants — and crashes on insertBefore.
-func renderRecentList(w http.ResponseWriter, items []recentItem) {
-	fmt.Fprint(w, `<table class="recent-table" id="recent-table"`)
-	if len(items) == 0 {
-		fmt.Fprint(w, ` hidden`)
-	}
-	fmt.Fprint(w, `><thead><tr><th class="recent-when">When</th><th>What</th></tr></thead><tbody>`)
-	for _, it := range items {
-		writeRecentRow(w, it)
-	}
-	fmt.Fprint(w, `</tbody></table>`)
-	if len(items) == 0 {
-		fmt.Fprint(w, `<p class="muted" id="recent-empty">Nothing yet.</p>`)
-	}
-}
-
-func writeRecentRow(w http.ResponseWriter, it recentItem) {
-	age := web.HumanizeSince(it.at)
-	ts := it.at.UTC().Format(time.RFC3339)
-	switch it.kind {
-	case recentChat:
-		href := "/chat/c/" + it.conv + "/" + url.PathEscape(it.sid)
-		key := "chat:" + it.conv + "/" + it.sid
-		// PRODUCT_DECISION: lead with the author when known — that's what
-		// apoorva asked for. Fall back to the older "New message" phrasing
-		// when the companion file is missing (pre-companion sessions before
-		// the migration backfill).
-		var what string
-		if it.lastAuthor != "" {
-			what = fmt.Sprintf(
-				`Message from <strong>%s</strong> in <a href="%s">%s</a> <span class="muted">(with %s)</span>`,
-				html.EscapeString(it.lastAuthor), href,
-				html.EscapeString(it.sid), html.EscapeString(it.partner))
-		} else {
-			what = fmt.Sprintf(
-				`New message in <a href="%s">%s</a> <span class="muted">(with %s)</span>`,
-				href, html.EscapeString(it.sid), html.EscapeString(it.partner))
-		}
-		fmt.Fprintf(w,
-			`<tr data-key="%s" data-ts="%s"><td class="recent-when">%s</td><td>%s</td></tr>`,
-			html.EscapeString(key), ts, html.EscapeString(age), what)
-	case recentDoc:
-		href := "/chat/docs/" + url.PathEscape(it.slug)
-		key := "doc:" + it.slug
-		fmt.Fprintf(w,
-			`<tr data-key="%s" data-ts="%s"><td class="recent-when">%s</td>`+
-				`<td>You edited <a href="%s">%s</a></td></tr>`,
-			html.EscapeString(key), ts, html.EscapeString(age), href,
-			html.EscapeString(it.title))
-	}
 }
 
 // recentEvent is one activity ping pushed to a single viewer. Encoded as

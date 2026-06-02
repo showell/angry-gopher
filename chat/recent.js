@@ -1,18 +1,54 @@
-/* PRODUCT_DECISION: two jobs on /chat/recent — 20s tick re-humanizes When
-   cells from data-ts, and an EventSource on /chat/recent/stream upserts one
-   row per pushed event (replace-in-place by data-key, insert sorted by
-   data-ts desc). DOM is the model; no client-side cache. */
+/* /chat/recent client — flat reverse-chronological feed of activity.
+
+   Server ships the initial rows as inline JSON (#recent-data) next to the
+   mount slot (#recent-mount). This script builds the table, holds an
+   EventSource on /chat/recent/stream for upserts, and re-humanizes the
+   When column on a 20s tick (from each row's data-ts).
+
+   The page-specific styling — When column right-align/tabular-nums and
+   the "(with X)" muted span — lives inline here so the server emits zero
+   CSS for this page. The base table look (borders, header colors,
+   tr:hover) still comes from the shared chrome stylesheet. */
 (function(){
   'use strict';
 
-  var emptyEl=document.getElementById('recent-empty');
-  var tableEl=document.getElementById('recent-table');
-  if(!tableEl) return;
-  /* BROWSER_WORKAROUND: rows live under <tbody>, not directly under <table>.
-     tableEl.insertBefore(tr, otherTr) throws because otherTr's parent is the
-     tbody, not the table. Server emits the <tbody> explicitly. */
-  var tbodyEl=tableEl.querySelector('tbody');
-  if(!tbodyEl) return;
+  var mount  = document.getElementById('recent-mount');
+  var dataEl = document.getElementById('recent-data');
+  if(!mount || !dataEl) return;
+
+  var initial;
+  try { initial = JSON.parse(dataEl.textContent); }
+  catch(err){ console.error('recent: malformed JSON payload', err); return; }
+  if(!Array.isArray(initial)) initial = [];
+
+  /* PRODUCT_DECISION: When column inline-styles match what the dropped
+     server-side .recent-when block did (right-align, tabular nums, tight
+     nowrap column, muted color on td). Applied per cell so the page
+     emits no CSS of its own. */
+  var WHEN_STYLE_TH = {
+    textAlign:'right', fontVariantNumeric:'tabular-nums',
+    whiteSpace:'nowrap', width:'1%',
+  };
+  var WHEN_STYLE_TD = {
+    textAlign:'right', fontVariantNumeric:'tabular-nums',
+    whiteSpace:'nowrap', width:'1%', color:'#888',
+  };
+
+  var tableEl = document.createElement('table');
+  var thead   = document.createElement('thead');
+  var headRow = document.createElement('tr');
+  var thWhen  = document.createElement('th'); thWhen.textContent = 'When';
+  Object.assign(thWhen.style, WHEN_STYLE_TH);
+  var thWhat  = document.createElement('th'); thWhat.textContent = 'What';
+  headRow.appendChild(thWhen); headRow.appendChild(thWhat);
+  thead.appendChild(headRow); tableEl.appendChild(thead);
+  var tbodyEl = document.createElement('tbody');
+  tableEl.appendChild(tbodyEl);
+  mount.appendChild(tableEl);
+
+  var emptyEl = document.createElement('p');
+  Object.assign(emptyEl.style, { color:'#888' });
+  emptyEl.textContent = 'Nothing yet.';
 
   function humanize(iso){
     var d=Date.now()-new Date(iso).getTime();
@@ -37,7 +73,11 @@
   // lint:called-once row-factory
   function buildRow(evt){
     var tr=document.createElement('tr');
-    var when=document.createElement('td'); when.className='recent-when';
+    var when=document.createElement('td');
+    /* The class is kept ONLY as a query handle for rePaintAges; styling
+       is inline. */
+    when.className='recent-when';
+    Object.assign(when.style, WHEN_STYLE_TD);
     when.textContent=humanize(evt.at);
     var what=document.createElement('td');
     tr.dataset.ts=evt.at;
@@ -59,7 +99,8 @@
         what.appendChild(document.createTextNode('New message in '));
       }
       what.appendChild(a);
-      var partner=document.createElement('span'); partner.className='muted';
+      var partner=document.createElement('span');
+      partner.style.color='#888';
       partner.textContent=' (with '+(evt.partner||'')+')';
       what.appendChild(partner);
     }else if(evt.kind==='doc'){
@@ -98,8 +139,16 @@
     if(existing) existing.remove();
     var tr=buildRow(evt); if(!tr) return;
     insertSorted(tr);
-    if(emptyEl){ emptyEl.remove(); emptyEl=null; tableEl.hidden=false; }
+    if(emptyEl && emptyEl.parentNode){ emptyEl.remove(); }
   }
+
+  /* Initial paint: server-provided rows are already newest-first, so a
+     plain append per row preserves order. Empty state shows when the
+     payload is empty. */
+  for(var i=0;i<initial.length;i++){
+    var tr=buildRow(initial[i]); if(tr) tbodyEl.appendChild(tr);
+  }
+  if(initial.length===0) mount.appendChild(emptyEl);
 
   var es=new EventSource('/chat/recent/stream');
   es.onmessage=function(e){
