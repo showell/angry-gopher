@@ -182,9 +182,20 @@
       /* PRODUCT_DECISION: our message round-tripped (saved + echoed). The
          status-bar ping doubles as a self-test for #chat-notify — every
          send exercises the same DOM target the other-conv ping uses, so
-         a regression there shows up the next time you talk to anyone. */
+         a regression there shows up the next time you talk to anyone.
+         The link parallels the cross-conv ping shape; click focuses the
+         bubble in the current feed (same-session always, since we just
+         sent it). */
       ChatCompose.ackIfPending(m.cid);
-      ChatNotify.show('✓ '+m.id+' sent');
+      var link=document.createElement('a');
+      link.href='#msg-'+m.id;
+      link.textContent='✓ '+m.id+' sent';
+      link.addEventListener('click', function(e){
+        e.preventDefault();
+        var rec=recordById(m.id);
+        if(rec) pane.focusBubble(rec.index+1);
+      });
+      ChatNotify.show(link);
     }
     if(ChatSearch.isOpen()) ChatSearch.refreshIfOpen();
   };
