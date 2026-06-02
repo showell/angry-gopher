@@ -704,11 +704,11 @@
         log('POST /upload received (file=' + name + ', ' + kb + ')');
         /* Fake server: pretend we stored it and return the same JSON
            shape the real /chat/c/<conv>/<sid>/upload handler does —
-           {name, url, width, height}. The url points at a real asset
-           the page already serves so the <img> tag would render if it
-           were posted; the demo just inserts the tag text into the
-           textarea, no rendering required. */
-        var fakeResp = { name: name, url: '/images/cat_professor.webp',
+           {name, url, width, height}. The url is a placeholder string,
+           not a real asset — the demo just inserts the tag text into
+           the textarea, so we don't pretend to know what the reader
+           uploaded. */
+        var fakeResp = { name: name, url: '/simulated-link-from-mock-server',
                          width: 320, height: 240 };
         log('  → returning JSON {url=' + fakeResp.url + ', '
           + fakeResp.width + 'x' + fakeResp.height + '}');
