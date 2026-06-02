@@ -204,10 +204,67 @@
     );
   }
 
-  /* ---- Lesson 0 demo: the LearnCallbackLog widget itself. Three
-     "event" buttons each call clog.log(...) so the reader sees the
-     widget receiving events the same way real-system widgets feed
-     their callers. ---- */
+  /* ---- Lesson 0 second demo: LearnFakeHost. Register a /ping route,
+     wire a button to fetch it, log both sides of the round-trip. ---- */
+  // lint:called-once page-factory
+  function buildFakeHostDemo(){
+    var box = setStyles(document.createElement('div'), {
+      border: '1px solid ' + COLORS.border, borderRadius: '6px',
+      background: COLORS.surface, padding: '14px 16px', marginTop: '10px',
+    });
+    var hint = setStyles(document.createElement('p'), {
+      margin: '0 0 10px', color: COLORS.muted, fontSize: '13px',
+    });
+    hint.textContent = 'Click "fetch /learn/lesson0-fake/ping" — the call goes through real fetch, '
+      + 'LearnFakeHost matches the URL against this demo\'s registered route, and the route\'s '
+      + 'respond() returns a fake Response. Lessons 7, 8, and 9 use the same registration to '
+      + 'simulate their hosts.';
+
+    var clog = LearnCallbackLog.create({ height: '180px' });
+
+    /* Register a tiny ping route — string-match against the literal URL. */
+    LearnFakeHost.register({
+      match: '/learn/lesson0-fake/ping',
+      respond: function(ctx){
+        clog.log('LearnFakeHost matched ' + ctx.url + ' → calling respond()');
+        return Promise.resolve({
+          ok: true,
+          text: function(){ return Promise.resolve('pong'); },
+        });
+      },
+    });
+
+    var btnRow = setStyles(document.createElement('div'), {
+      display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '8px',
+    });
+    var pingBtn = document.createElement('button');
+    pingBtn.type = 'button';
+    pingBtn.textContent = 'fetch("/learn/lesson0-fake/ping")';
+    pingBtn.addEventListener('click', function(){
+      clog.log('caller: fetch("/learn/lesson0-fake/ping")');
+      fetch('/learn/lesson0-fake/ping').then(function(r){
+        return r.text();
+      }).then(function(t){
+        clog.log('caller: received "' + t + '"');
+      });
+    });
+    btnRow.appendChild(pingBtn);
+
+    var twoCol = setStyles(document.createElement('div'), {
+      display: 'flex', gap: '14px',
+    });
+    var leftCol = setStyles(document.createElement('div'), { flex: '1', minWidth: '0' });
+    leftCol.appendChild(hint);
+    leftCol.appendChild(btnRow);
+    twoCol.appendChild(leftCol); twoCol.appendChild(clog.element);
+    box.appendChild(twoCol);
+    return box;
+  }
+
+  /* ---- Lesson 0 first demo: the LearnCallbackLog widget itself.
+     Three "event" buttons each call clog.log(...) so the reader sees
+     the widget receiving events the same way real-system widgets
+     feed their callers. ---- */
   // lint:called-once page-factory
   function buildCallbackLogDemo(){
     var box = setStyles(document.createElement('div'), {
@@ -649,16 +706,15 @@
     twoCol.appendChild(leftCol); twoCol.appendChild(clog.element);
     wrapper.appendChild(twoCol);
 
-    /* PRODUCT_DECISION: intercept fetch only for our fake SESSION_BASE so
-       the rest of the page (asset loads, source spoilers, future demos)
-       keeps using the real fetch. Parse the cid out of the form body so
-       we can fire the matching ackIfPending — the same cid round-trip
-       the production server does via SSE. */
+    /* PRODUCT_DECISION: register the two routes with LearnFakeHost
+       (Lesson 0). The host owns the fetch wrap; we just declare
+       URL → response mappings. Each route's respond reads nextMode
+       from this demo's closure for the echo/silent toggle. */
     var FAKE_BASE = '/learn/lesson7-fake';
-    var origFetch = window.fetch;
-    window.fetch = function(url, opts){
-      if(typeof url === 'string' && url.indexOf(FAKE_BASE + '/send') === 0){
-        var body = (opts && opts.body) || '';
+    LearnFakeHost.register({
+      match: FAKE_BASE + '/send',
+      respond: function(ctx){
+        var body = (ctx.opts && ctx.opts.body) || '';
         var cidMatch = body.match(/cid=([^&]+)/);
         var cid = cidMatch ? decodeURIComponent(cidMatch[1]) : null;
         var shortCid = cid ? cid.slice(0, 8) + '…' : '?';
@@ -674,20 +730,16 @@
           log('  → no echo will be sent; ChatCompose\'s 3s hostDown will trip');
         }
         return Promise.resolve({ ok: true });
-      }
-      if(typeof url === 'string' && url.indexOf(FAKE_BASE + '/upload') === 0){
-        /* FormData with field `file`; uploadImage in ChatCompose builds it. */
-        var fd = opts && opts.body;
+      },
+    });
+    LearnFakeHost.register({
+      match: FAKE_BASE + '/upload',
+      respond: function(ctx){
+        var fd = ctx.opts && ctx.opts.body;
         var file = (fd && fd.get) ? fd.get('file') : null;
         var name = file ? file.name : '?';
         var kb = file ? (file.size/1024).toFixed(1) + ' KB' : '?';
         log('POST /upload received (file=' + name + ', ' + kb + ')');
-        /* Fake server: pretend we stored it and return the same JSON
-           shape the real /chat/c/<conv>/<sid>/upload handler does —
-           {name, url, width, height}. The url is a placeholder string,
-           not a real asset — the demo just inserts the tag text into
-           the textarea, so we don't pretend to know what the reader
-           uploaded. */
         var fakeResp = { name: name, url: '/simulated-link-from-mock-server',
                          width: 320, height: 240 };
         log('  → returning JSON {url=' + fakeResp.url + ', '
@@ -697,9 +749,8 @@
           ok: true,
           json: function(){ return Promise.resolve(fakeResp); },
         });
-      }
-      return origFetch.apply(this, arguments);
-    };
+      },
+    });
 
     /* Init in the same order chat.js does: right sidebar first
        (builds the wrapper class + closed-panel + Open button), then
@@ -778,19 +829,17 @@
     var clog = LearnCallbackLog.create();
     function log(line){ clog.log(line); }
 
-    /* PRODUCT_DECISION: monkey-patch fetch only for our fake conv's /new
-       URL so other page traffic (assets, source spoilers) is untouched.
-       Same shape as Lesson 7 — the lesson-fake pattern is the standard
-       way we simulate host responses in demos. */
+    /* PRODUCT_DECISION: register the route with LearnFakeHost
+       (Lesson 0) — the host owns the fetch wrap. */
     var FAKE_CONV = 'lesson8-fake';
-    var origFetch = window.fetch;
-    window.fetch = function(url, opts){
-      var prefix = '/chat/c/' + FAKE_CONV + '/new';
-      if(typeof url === 'string' && url.indexOf(prefix) === 0){
-        var body = (opts && opts.body) || '';
+    var NEW_URL = '/chat/c/' + FAKE_CONV + '/new';
+    LearnFakeHost.register({
+      match: NEW_URL,
+      respond: function(ctx){
+        var body = (ctx.opts && ctx.opts.body) || '';
         var topicMatch = body.match(/topic=([^&]+)/);
         var topic = topicMatch ? decodeURIComponent(topicMatch[1]) : '?';
-        log('POST ' + prefix + ' (topic=' + topic + ', mode=' + nextMode + ')');
+        log('POST ' + NEW_URL + ' (topic=' + topic + ', mode=' + nextMode + ')');
         if(nextMode === 'succeed'){
           var resp = { conv: FAKE_CONV, sid: topic };
           log('  → host returns {ok:true, conv=' + resp.conv + ', sid=' + resp.sid + '}');
@@ -805,9 +854,8 @@
           ok: false,
           text: function(){ return Promise.resolve(errMsg); },
         });
-      }
-      return origFetch.apply(this, arguments);
-    };
+      },
+    });
 
     /* Build the form with a logging onCreated — no navigation. */
     var formMount = setStyles(document.createElement('div'), {
@@ -949,17 +997,15 @@
       ul.appendChild(li);
     }
 
-    /* PRODUCT_DECISION: intercept fetch only for our fake conv's
-       /pin and /unpin URLs. Delay the response so the optimistic
-       state is visible before revert in failure mode. */
+    /* PRODUCT_DECISION: register the route with LearnFakeHost
+       (Lesson 0). Regexp match captures the sid + action; the 700ms
+       delay keeps the optimistic state visible before revert. */
     var FAKE_CONV = 'lesson9-fake';
-    var origFetch = window.fetch;
-    window.fetch = function(url, opts){
-      var match = typeof url === 'string'
-        && url.match(/^\/chat\/c\/lesson9-fake\/([^/]+)\/(pin|unpin)$/);
-      if(match){
-        var sid = decodeURIComponent(match[1]);
-        var action = match[2];
+    LearnFakeHost.register({
+      match: /^\/chat\/c\/lesson9-fake\/([^/]+)\/(pin|unpin)$/,
+      respond: function(ctx){
+        var sid = decodeURIComponent(ctx.match[1]);
+        var action = ctx.match[2];
         clog.log('POST /chat/c/' + FAKE_CONV + '/' + sid + '/' + action
                + ' (mode=' + nextMode + ')');
         return new Promise(function(resolve){
@@ -973,9 +1019,8 @@
             }
           }, 700);
         });
-      }
-      return origFetch.apply(this, arguments);
-    };
+      },
+    });
 
     /* Init the gesture widget. onDrop fires TWICE in failure mode:
        once for the optimistic move, once for the revert. We log + place
@@ -1044,47 +1089,89 @@
   var wrap = buildWrap();
   wrap.appendChild(buildIntro());
 
-  /* Lesson 0 — LearnCallbackLog: the shared demo widget every other
-     lesson drops in. Frames the modular pattern explicitly: each
-     widget is a one-factory drop-in, the lessons assemble widgets
-     like Legos, and demo code is built the same way as the real
-     system code. */
+  /* Lesson 0 — the demo infrastructure. Two small widgets the rest
+     of the lessons assemble together: LearnCallbackLog (narrates
+     what a callback received) and LearnFakeHost (registers fake
+     server responses without manually patching fetch). Together they
+     give every later lesson the same Legos. */
   var lesson0Body = document.createElement('div');
   lesson0Body.appendChild(buildParagraph(
-    'Most lessons that follow show a chat widget receiving events from the user — a click, a '
-    + 'keystroke, a server response — and reporting them back through callbacks. To watch what '
-    + 'the widget reports, every demo drops in a small column that prints each event as a line. '
-    + 'That column is LearnCallbackLog, and this lesson is about it.'));
+    'Most lessons that follow show a chat widget receiving events — clicks, keystrokes, server '
+    + 'responses — and reporting them back through callbacks. The lessons share two tiny demo '
+    + 'widgets to make that visible: LearnCallbackLog, which prints each event as a line, and '
+    + 'LearnFakeHost, which lets a demo register fake server responses without manually '
+    + 'monkey-patching window.fetch.'));
   lesson0Body.appendChild(buildParagraph(
-    'It is NOT part of the chat system. It is demo code — only the /learn page loads it, and '
-    + 'no production widget knows it exists. But it is built exactly the way the real widgets '
-    + 'are: a single create() factory, an owned DOM column, its own inline styles, a small '
-    + 'public API (log, clear). The shape lets the lessons compose pieces like Legos — drop in '
-    + 'a Message here, a ChatRightSidebar there, a LearnCallbackLog beside it.'));
+    'Neither is part of the chat system. They are demo code — only /learn loads them, no '
+    + 'production widget knows they exist. But they are built exactly the way the real widgets '
+    + 'are: one factory or registration API, owned DOM, owned styling, a small public surface. '
+    + 'The shape is what lets the lessons assemble code like Legos — drop in a Message here, a '
+    + 'ChatRightSidebar there, a LearnCallbackLog beside it, a LearnFakeHost route below it.'));
+
+  /* ---- Part 1: LearnCallbackLog ---- */
+  var lesson0PartA = setStyles(document.createElement('h3'), {
+    margin: '14px 0 8px', fontSize: '17px', color: COLORS.ink,
+  });
+  lesson0PartA.textContent = 'Part 1: LearnCallbackLog';
+  lesson0Body.appendChild(lesson0PartA);
   lesson0Body.appendChild(buildParagraph(
-    'A boring but load-bearing detail: the log body has a FIXED height (220px by default) so '
-    + 'overflowing entries scroll INSIDE the body. A flex:1 minHeight:0 log relies on the '
-    + 'parent to constrain its height, and short-form demos (like Lesson 8) don\'t give it '
-    + 'one — so the auto-scroll-to-bottom ends up moving the page, not the log. Fixed height + '
-    + 'overflowY:auto guarantees the log is its own scroll region.'));
+    'LearnCallbackLog.create({caption, height, width}) returns {element, log, clear}. Drop the '
+    + 'element wherever the layout needs it; call log(line) on every event you want to narrate; '
+    + 'optionally call clear() to wipe. The log body has a FIXED height (220px by default) so '
+    + 'overflowing entries scroll INSIDE the body — flex:1 minHeight:0 was tried first, but in '
+    + 'short-form demos (like the Add Topic form) it left the auto-scroll moving the page '
+    + 'instead of the log.'));
   lesson0Body.appendChild(buildSpoiler({
     label:     'Show callback_log.js source',
     openLabel: 'Hide source',
     render: function(box){ box.appendChild(buildSourcePanel('/learn/source/callback_log.js')); },
   }));
   lesson0Body.appendChild(buildCallbackLogDemo());
-  var demo0Caption = setStyles(document.createElement('p'), {
+  var demo0aCaption = setStyles(document.createElement('p'), {
     margin: '14px 0 6px', color: COLORS.muted, fontSize: '13px',
   });
-  demo0Caption.textContent = 'Demo source (the function that built the box above):';
-  lesson0Body.appendChild(demo0Caption);
+  demo0aCaption.textContent = 'Demo source (the function that built the box above):';
+  lesson0Body.appendChild(demo0aCaption);
   lesson0Body.appendChild(buildCodeBlock(buildCallbackLogDemo.toString()));
 
+  /* ---- Part 2: LearnFakeHost ---- */
+  var lesson0PartB = setStyles(document.createElement('h3'), {
+    margin: '24px 0 8px', fontSize: '17px', color: COLORS.ink,
+  });
+  lesson0PartB.textContent = 'Part 2: LearnFakeHost';
+  lesson0Body.appendChild(lesson0PartB);
+  lesson0Body.appendChild(buildParagraph(
+    'When a lesson teaches a widget that POSTs to the server (Lessons 7, 8, 9), the demo has '
+    + 'to fake the host\'s response. The first three lessons that needed this each did their '
+    + 'own monkey-patch — capture the existing window.fetch, install a wrapper that checks the '
+    + 'URL prefix, fall through to the captured fetch on miss. It worked, but only by accident: '
+    + 'each lesson\'s captured "original" was actually the previous lesson\'s wrapper. One '
+    + 'script reorder and the chain would silently misroute.'));
+  lesson0Body.appendChild(buildParagraph(
+    'LearnFakeHost replaces that pattern with one global wrap and a route registry. '
+    + 'LearnFakeHost.register({match, respond}) adds one route — match is a string (prefix), '
+    + 'a RegExp (with captured groups), or a function predicate; respond is given a {url, '
+    + 'opts, match} context and returns a Promise of a Response-shaped object. The host tries '
+    + 'routes in registration order; the first match wins; anything no route claims falls '
+    + 'through to the browser\'s real fetch.'));
+  lesson0Body.appendChild(buildSpoiler({
+    label:     'Show fake_host.js source',
+    openLabel: 'Hide source',
+    render: function(box){ box.appendChild(buildSourcePanel('/learn/source/fake_host.js')); },
+  }));
+  lesson0Body.appendChild(buildFakeHostDemo());
+  var demo0bCaption = setStyles(document.createElement('p'), {
+    margin: '14px 0 6px', color: COLORS.muted, fontSize: '13px',
+  });
+  demo0bCaption.textContent = 'Demo source (the function that built the box above):';
+  lesson0Body.appendChild(demo0bCaption);
+  lesson0Body.appendChild(buildCodeBlock(buildFakeHostDemo.toString()));
+
   wrap.appendChild(buildSection({
-    title: 'Lesson 0: LearnCallbackLog (the widget the demos share)',
-    lede:  'A tiny drop-in widget for narrating what a callback received. Demo code, but built '
-         + 'the same shape as the real chat widgets — every later lesson assembles one of these '
-         + 'next to whatever it\'s teaching.',
+    title: 'Lesson 0: demo infrastructure (LearnCallbackLog + LearnFakeHost)',
+    lede:  'Two small widgets the rest of the lessons reuse: one narrates what a callback '
+         + 'received, the other simulates the host. Demo code, but built the same shape as the '
+         + 'real chat widgets — every later lesson assembles one of each.',
     body:  lesson0Body,
   }));
 

@@ -42,8 +42,9 @@ func HandleLearn(w http.ResponseWriter, r *http.Request) {
 			`<script src="/chat/chat_add_topic.js?v=%s"></script>`+
 			`<script src="/chat/chat_drag_to_pin.js?v=%s"></script>`+
 			`<script src="/learn/callback_log.js?v=%s"></script>`+
+			`<script src="/learn/fake_host.js?v=%s"></script>`+
 			`<script src="/learn/learn.js?v=%s"></script>`,
-		v, v, v, v, v, v, v, v, v, v, v, v)
+		v, v, v, v, v, v, v, v, v, v, v, v, v)
 	fmt.Fprint(w, `</body></html>`)
 }
 
@@ -57,6 +58,14 @@ func HandleLearnJS(w http.ResponseWriter, r *http.Request) {
 // but built the same way (one factory, owned DOM + styles).
 func HandleCallbackLogJS(w http.ResponseWriter, r *http.Request) {
 	web.ServeJS(w, "learn/callback_log.js", "callback_log.js missing from the binary")
+}
+
+// HandleFakeHostJS serves the shared fetch-mocking facility every
+// host-interacting demo registers routes with. One global wrap,
+// routes register their match + respond, fall through to real fetch
+// for any URL no route claims.
+func HandleFakeHostJS(w http.ResponseWriter, r *http.Request) {
+	web.ServeJS(w, "learn/fake_host.js", "fake_host.js missing from the binary")
 }
 
 // learnSourceAllowlist names every module the Learn page is allowed to
@@ -75,6 +84,7 @@ var learnSourceAllowlist = map[string]string{
 	"chat_add_topic.js":     "chat/chat_add_topic.js",
 	"chat_drag_to_pin.js":   "chat/chat_drag_to_pin.js",
 	"callback_log.js":       "learn/callback_log.js",
+	"fake_host.js":          "learn/fake_host.js",
 }
 
 // HandleLearnSource serves the raw text of an allowlisted JS module so the

@@ -77,6 +77,7 @@ func RegisterPages(mux *http.ServeMux) {
 	mux.HandleFunc("/learn", learn.HandleLearn)
 	mux.HandleFunc("/learn/learn.js", learn.HandleLearnJS)
 	mux.HandleFunc("/learn/callback_log.js", learn.HandleCallbackLogJS)
+	mux.HandleFunc("/learn/fake_host.js", learn.HandleFakeHostJS)
 	mux.HandleFunc("/learn/source/{file}", learn.HandleLearnSource)
 	// /images/<file> — shared brand assets (avatars etc). Explicit
 	// allowlist lives in server/web/images.go.
