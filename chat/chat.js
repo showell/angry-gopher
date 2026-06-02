@@ -30,13 +30,24 @@
      callback), so the forward reference is safe. */
   var pane;
 
+  /* CommonMark: a tilde fence is closed by a line of tildes of equal-or-greater
+     length. To safely wrap markdown that itself contains ~~~ fences (because it
+     was a quote-of-a-quote, or had a tilde-fenced code block), the outer fence
+     must be longer than the longest inner one. */
+  function pickQuoteFence(md){  // lint:called-once named for the why-comment above
+    var runs = md.match(/^~{3,}/gm);
+    var max = 2;
+    if(runs) for(var i=0;i<runs.length;i++) if(runs[i].length > max) max = runs[i].length;
+    return '~'.repeat(max + 1);
+  }
   function doQuote(rec){
     if(ChatCompose.isPending()) return;
     pane.focusBubble(rec.index + 1);
     ChatRightSidebar.openCompose();
+    var fence = pickQuoteFence(rec.markdown);
     ChatCompose.insertAtCursor(
       'In MSG_'+rec.id+' '+(rec.mine?'I said':'you said')+
-      ':\n~~~ quote\n'+rec.markdown+'\n~~~\n\n'
+      ':\n'+fence+' quote\n'+rec.markdown+'\n'+fence+'\n\n'
     );
   }
   function doRefer(rec){
