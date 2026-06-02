@@ -713,87 +713,22 @@ func chatSendDone(w http.ResponseWriter, r *http.Request, conv, sessionID string
 	http.Redirect(w, r, "/chat/c/"+conv+"/"+url.PathEscape(sessionID), http.StatusSeeOther)
 }
 
+// PRODUCT_DECISION: only the page-shell layout lives here — the rules
+// that span the whole flex chain from <html> down to .chat-layout. Every
+// per-widget rule (left rail, middle column, right rail wrapper, compose
+// form/textarea, help keyhelp, search modal, bubble DOM, popups) lives
+// in the widget's own JS file. lynrummy.com is desktop-only; there are
+// no orientation @media queries — the page assumes a landscape viewport.
 const chatCSS = `<style>
 /* The conversation page fills the viewport; only the message history
-   scrolls. The title lives in the top bar, so there's no in-body heading.
-   overflow stays visible — a flex mishap degrades to a page scrollbar,
-   never clipped content. */
+   scrolls. overflow stays visible — a flex mishap degrades to a page
+   scrollbar, never clipped content. */
 html, body { height:100%; }
 /* Chat overrides the platform's narrow text-page wrap — with the
-   sidebar + main + compose, 890px squeezes the message feed. Let it
-   fill the viewport; chat-msg's own max-width keeps bubbles from
-   becoming ridiculously wide on ultrawide screens. */
+   sidebar + main + compose, 890px squeezes the message feed. */
 .app-body-wrap { margin:10px auto; padding:0 24px 10px; min-height:0;
                  max-width:none; display:flex; flex-direction:column; }
-/* #chat-root wraps the views row + layout; it must carry the fill down the
-   flex chain (without this it sizes to content, collapsing the compose box
-   when the feed is empty). */
 #chat-root { flex:1; min-height:0; display:flex; flex-direction:column; }
-.chat-layout { display:flex; gap:20px; flex:1; min-height:0; }
-/* Left rail (.chat-sidebar and its three sections, the session-item
-   drag affordances + drop targets, the drag ghost, and the
-   add-topic form) lives in chat/chat_left_sidebar.js. The page-level
-   @media query below still reaches in to hide the rail in portrait. */
-/* Right rail (wrapper, "Open compose box" button, closed-panel) lives
-   in chat/chat_right_sidebar.js; the open-state compose form (textarea,
-   Send/Image, status, hint, host-down alert) in chat/chat_compose.js;
-   the keyhelp panel inside the closed-panel in chat/chat_help.js. Each
-   widget owns its own CSS. The orientation @media rules below are the
-   one cross-cutting exception — they reach into .chat-compose to size
-   the right rail in landscape. */
-/* Middle column (wrapper, navbar with Back/Forward/🔍, history surface,
-   bubble list, button styling) is owned by chat/middle_pane.js. */
-/* Search modal: a two-phase palette — token autocomplete, then message
-   results (the term highlighted in each message rendered like the feed).
-   Pinned to a fixed top offset and grows downward as results fill in —
-   never vertically re-centering. */
-.chat-search-modal { position:fixed; top:56px; bottom:auto; left:0; right:0; margin:0 auto;
-                     width:600px; max-width:92vw; max-height:calc(100vh - 80px); padding:0;
-                     border:1px solid #b9b9e0; border-radius:10px; background:#fff;
-                     display:flex; flex-direction:column; }
-.chat-search-modal::backdrop { background:rgba(0,0,0,0.4); }
-.chat-sr-input { margin:0; border:none; border-bottom:1px solid #e3e3ef; border-radius:10px 10px 0 0;
-                 font-size:16px; padding:12px 16px; font-family:inherit; outline:none; }
-.chat-sr-status { font-size:12px; color:#888; padding:6px 16px; border-bottom:1px solid #f0f0f4; flex:none; }
-.chat-sr-list { overflow-y:auto; padding:4px 0; flex:1 1 auto; min-height:0; }
-.chat-sr-row { padding:7px 16px; cursor:pointer; border-left:3px solid transparent; }
-.chat-sr-row.sel { background:#eef0ff; border-left-color:#000080; }
-.chat-sr-row:hover { background:#f6f6fb; }
-.chat-sr-tok { font-weight:bold; color:#23235a; display:flex; align-items:baseline; gap:8px; }
-.chat-sr-cnt { font-weight:normal; font-size:11px; color:#999; }
-.chat-sr-rhead { font-size:11px; color:#888; margin-bottom:2px; }
-.chat-sr-ctx { font-family:ui-monospace,Menlo,Consolas,monospace; font-size:12px; color:#555;
-               white-space:pre-wrap; overflow-wrap:anywhere; margin-top:3px;
-               max-height:4.6em; overflow:hidden; } /* phase 1: limited RAW context while typing */
-.chat-sr-rbody { margin-top:3px; color:#333; font-size:13px; overflow-wrap:anywhere; } /* phase 2: full RENDERED message */
-/* MSG_ refs are inert inside results (they'd jump the hidden feed, not the
-   modal), so drop the link affordance. */
-.chat-sr-rbody a.msg-ref { cursor:default; }
-.chat-search-modal mark { background:#ffe680; color:inherit; border-radius:2px; padding:0; }
-/* Bubble DOM + body-content classes (chat-msg, chat-meta, chat-body,
-   chat-edited-* family, plus msg-ref / pre.chat-quote that goldmark +
-   chat_msgref emit) are styled by chat/message.js itself. Nothing for
-   this page to emit. */
-/* The image + code popups own their own styles inside chat_image_popup.js
-   and chat_code_popup.js respectively — no CSS coordination needed. */
-/* Wide (landscape): side by side — conversation left, compose on the RIGHT.
-   The compose column is full height; its textarea flexes so Send/Image stay
-   pinned and visible. */
-@media (orientation: landscape) {
-  .chat-layout { flex-direction:row; align-items:stretch; }
-  .chat-compose { width:320px; flex:none; display:flex; flex-direction:column; min-height:0; }
-  .chat-compose-body { display:flex; flex-direction:column; flex:1; min-height:0; }
-  .chat-compose form { display:flex; flex-direction:column; flex:1; min-height:0; }
-  .chat-compose textarea { flex:1; min-height:0; }
-}
-/* Tall (portrait): single column — history fills, compose sits at the
-   BOTTOM at a fixed height (both stay on screen). The sidebar would
-   eat too much vertical space stacked on top; hide it (use the picker
-   or back-out to /chat to switch convs on portrait). */
-@media (orientation: portrait) {
-  .chat-layout { flex-direction:column; align-items:stretch; }
-  .chat-sidebar { display:none; }
-  .chat-compose { width:auto; flex:none; }
-  .chat-compose textarea { min-height:120px; }
-}
+.chat-layout { display:flex; flex-direction:row; align-items:stretch;
+               gap:20px; flex:1; min-height:0; }
 </style>`

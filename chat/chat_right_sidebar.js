@@ -23,16 +23,18 @@ window.ChatRightSidebar = (function(){
   var wrapper, composeBody, closedPanel;
   var onOpen, onClose;
 
-  /* PRODUCT_DECISION: widget owns its own CSS — the "Open compose box"
-     button and the wrapper's structural rules. Page-level orientation
-     @media queries still live in chat.go because they reach across
-     .chat-layout / .chat-sidebar / .chat-compose. */
+  /* PRODUCT_DECISION: widget owns its own CSS — the wrapper sizing/flex
+     and the "Open compose box" button. The wrapper rules used to live as
+     a landscape @media in chat.go; with mobile/portrait support dropped
+     they're always-on and belong here next to the element they style. */
   var stylesInjected = false;
   // lint:called-once init-once-guard
   function ensureStyles(){
     if(stylesInjected) return;
     var s = document.createElement('style');
     s.textContent = ''
+      + '.chat-compose { width:320px; flex:none; display:flex;'
+      +               ' flex-direction:column; min-height:0; }'
       + '.chat-open-compose { font-size:13px; padding:4px 12px; background:#e7e7ff; color:#23235a;'
       +                    ' border:1px solid #b9b9e0; border-radius:6px; cursor:pointer; }'
       + '.chat-open-compose:hover { background:#dcdcff; }';
@@ -58,8 +60,8 @@ window.ChatRightSidebar = (function(){
     onOpen=deps.onOpen; onClose=deps.onClose;
 
     /* Caller hands us a mount element; we decorate it with the
-       chat-compose class so the page-level @media queries (which size
-       the right rail in landscape) match. */
+       chat-compose class so the wrapper rule in ensureStyles above
+       picks it up. */
     wrapper = deps.mount;
     wrapper.className = 'chat-compose';
 

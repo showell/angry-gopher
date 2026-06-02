@@ -14,17 +14,20 @@ window.ChatCompose = (function(){
   var MAX_IMAGE_BYTES=10*1024*1024;
 
   /* PRODUCT_DECISION: widget owns its own CSS. Selectors are scoped to
-     .chat-compose (the right-rail wrapper class set by ChatRightSidebar)
-     so the page-level orientation @media queries in chat.go that reach
-     in for landscape sizing keep matching the same elements. */
+     .chat-compose (the right-rail wrapper class set by ChatRightSidebar).
+     The compose-body + form + textarea flex rules used to live in
+     chat.go's landscape @media; with mobile/portrait support dropped they
+     are always-on and belong here next to the elements they style. */
   var stylesInjected = false;
   // lint:called-once init-once-guard
   function ensureStyles(){
     if(stylesInjected) return;
     var s = document.createElement('style');
     s.textContent = ''
-      + '.chat-compose form { margin:0; }'
-      + '.chat-compose textarea { width:100%; min-height:200px; resize:vertical;'
+      + '.chat-compose-body { display:flex; flex-direction:column; flex:1; min-height:0; }'
+      + '.chat-compose form { margin:0; display:flex; flex-direction:column;'
+      +                    ' flex:1; min-height:0; }'
+      + '.chat-compose textarea { width:100%; flex:1; min-height:0; resize:vertical;'
       +                        ' box-sizing:border-box; font-family:inherit;'
       +                        ' font-size:14px; padding:8px; }'
       + '.chat-compose button { margin-top:8px; }'

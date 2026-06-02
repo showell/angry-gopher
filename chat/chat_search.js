@@ -8,6 +8,56 @@
 window.ChatSearch = (function(){
   'use strict';
 
+  /* PRODUCT_DECISION: widget owns its own CSS. The modal's rules are
+     heavily state/pseudo-driven (.sel, :hover, ::backdrop, mark, and a
+     few descendant selectors) so a single lazy <style> block is cleaner
+     than per-element inline. Class-scoped to .chat-search-modal /
+     .chat-sr-* so nothing leaks. */
+  var stylesInjected = false;
+  // lint:called-once init-once-guard
+  function ensureStyles(){
+    if(stylesInjected) return;
+    var s = document.createElement('style');
+    s.textContent = ''
+      /* PRODUCT_DECISION: pinned to a fixed top offset and grows downward as
+         results fill in — never vertically re-centering. */
+      + '.chat-search-modal { position:fixed; top:56px; bottom:auto; left:0; right:0;'
+      +                    ' margin:0 auto; width:600px; max-width:92vw;'
+      +                    ' max-height:calc(100vh - 80px); padding:0;'
+      +                    ' border:1px solid #b9b9e0; border-radius:10px;'
+      +                    ' background:#fff; display:flex; flex-direction:column; }'
+      + '.chat-search-modal::backdrop { background:rgba(0,0,0,0.4); }'
+      + '.chat-sr-input { margin:0; border:none; border-bottom:1px solid #e3e3ef;'
+      +                ' border-radius:10px 10px 0 0; font-size:16px;'
+      +                ' padding:12px 16px; font-family:inherit; outline:none; }'
+      + '.chat-sr-status { font-size:12px; color:#888; padding:6px 16px;'
+      +                 ' border-bottom:1px solid #f0f0f4; flex:none; }'
+      + '.chat-sr-list { overflow-y:auto; padding:4px 0; flex:1 1 auto; min-height:0; }'
+      + '.chat-sr-row { padding:7px 16px; cursor:pointer;'
+      +              ' border-left:3px solid transparent; }'
+      + '.chat-sr-row.sel { background:#eef0ff; border-left-color:#000080; }'
+      + '.chat-sr-row:hover { background:#f6f6fb; }'
+      + '.chat-sr-tok { font-weight:bold; color:#23235a; display:flex;'
+      +              ' align-items:baseline; gap:8px; }'
+      + '.chat-sr-cnt { font-weight:normal; font-size:11px; color:#999; }'
+      + '.chat-sr-rhead { font-size:11px; color:#888; margin-bottom:2px; }'
+      /* phase 1: limited RAW context while typing */
+      + '.chat-sr-ctx { font-family:ui-monospace,Menlo,Consolas,monospace;'
+      +              ' font-size:12px; color:#555; white-space:pre-wrap;'
+      +              ' overflow-wrap:anywhere; margin-top:3px;'
+      +              ' max-height:4.6em; overflow:hidden; }'
+      /* phase 2: full RENDERED message */
+      + '.chat-sr-rbody { margin-top:3px; color:#333; font-size:13px;'
+      +                ' overflow-wrap:anywhere; }'
+      /* MSG_ refs are inert inside results (they'd jump the hidden feed, not
+         the modal), so drop the link affordance. */
+      + '.chat-sr-rbody a.msg-ref { cursor:default; }'
+      + '.chat-search-modal mark { background:#ffe680; color:inherit;'
+      +                          ' border-radius:2px; padding:0; }';
+    document.head.appendChild(s);
+    stylesInjected = true;
+  }
+
   /* PRODUCT_DECISION: host-supplied refs/helpers populated by init().
      `records` is the live array of SSE message records chat.js pushes
      onto (each has id, index, from, time, mine, markdown, html); search
@@ -92,6 +142,7 @@ window.ChatSearch = (function(){
   var SR=null;
   function openSearchModal(){
     if(SR){ SR.input.focus(); return; }
+    ensureStyles();
     var dlg=document.createElement('dialog'); dlg.className='chat-search-modal';
     var input=document.createElement('input'); input.type='text'; input.className='chat-sr-input';
     input.placeholder='Search messages…'; input.autocomplete='off';
