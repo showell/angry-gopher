@@ -172,9 +172,12 @@ window.ChatCompose = (function(){
 
     /* PRODUCT_DECISION: insert before the closed-panel so the open state
        shows above the keyhelp side. ChatRightSidebar built both the
-       wrapper and the closed-panel; we ride on top with our compose body. */
-    var rightSidebar = document.getElementById('chat-right-sidebar');
-    var closedPanel = document.getElementById('chat-closed-panel');
+       wrapper and the closed-panel; we ride on top with our compose body.
+       We pull the refs from ChatRightSidebar (no global DOM queries) so
+       this widget works whether or not the rail is attached to the page
+       at init time. */
+    var rightSidebar = ChatRightSidebar.getWrapper();
+    var closedPanel = ChatRightSidebar.getClosedPanel();
     rightSidebar.insertBefore(built.body, closedPanel);
     ChatRightSidebar.registerComposeBody(built.body);
 

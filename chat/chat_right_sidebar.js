@@ -1,24 +1,26 @@
 /* ChatRightSidebar — the right rail's wrapper + open/closed toggle.
 
-   Builds its own DOM into a Go-provided mount slot
-   (<div id="chat-right-sidebar"></div>):
+   Builds its own DOM into a caller-supplied mount element:
 
-     <div class="chat-compose" id="chat-right-sidebar">  (the mount, class added)
+     <mount class="chat-compose">
        <div class="chat-closed-panel" id="chat-closed-panel">
          <button id="chat-open-compose" class="chat-open-compose">Open compose box</button>
          <!-- ChatHelp.init() appends its keyhelp panel here -->
        </div>
        <!-- ChatCompose.init() inserts its compose-body BEFORE the closed-panel -->
-     </div>
+     </mount>
 
    Two children, two states, flipped by openCompose / closeCompose.
+   getWrapper() / getClosedPanel() expose those refs to ChatCompose so
+   it doesn't need to re-query the DOM (and works in demos where the
+   widget isn't attached to document.body at init time).
 
    Parallels chat_left_sidebar.js so future-Claude finds each rail in a
    predictable file. */
 window.ChatRightSidebar = (function(){
   'use strict';
 
-  var composeBody, closedPanel;
+  var wrapper, composeBody, closedPanel;
   var onOpen, onClose;
 
   /* PRODUCT_DECISION: widget owns its own CSS — the "Open compose box"
@@ -55,10 +57,10 @@ window.ChatRightSidebar = (function(){
     ensureStyles();
     onOpen=deps.onOpen; onClose=deps.onClose;
 
-    /* The mount slot keeps its id; we just decorate it with the
+    /* Caller hands us a mount element; we decorate it with the
        chat-compose class so the page-level @media queries (which size
        the right rail in landscape) match. */
-    var wrapper = document.getElementById('chat-right-sidebar');
+    wrapper = deps.mount;
     wrapper.className = 'chat-compose';
 
     /* Closed panel + Open-compose button, built in DOM order. The
@@ -83,7 +85,10 @@ window.ChatRightSidebar = (function(){
      we have a stable reference for the open/closed toggle, without
      re-querying the DOM each time. */
   function registerComposeBody(el){ composeBody = el; }
+  function getWrapper(){ return wrapper; }
+  function getClosedPanel(){ return closedPanel; }
 
   return { init:init, openCompose:openCompose, closeCompose:closeCompose,
-           registerComposeBody:registerComposeBody };
+           registerComposeBody:registerComposeBody,
+           getWrapper:getWrapper, getClosedPanel:getClosedPanel };
 })();

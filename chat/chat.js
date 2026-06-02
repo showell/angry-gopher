@@ -216,6 +216,7 @@
      wrapper (before the closed-panel) and registers it for the toggle. So
      ChatRightSidebar.init MUST run first. */
   ChatRightSidebar.init({
+    mount:   document.getElementById('chat-right-sidebar'),
     onOpen:  function(){ ChatCompose.focus(); },
     onClose: pane.focus,
   });

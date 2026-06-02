@@ -629,7 +629,6 @@
       padding: '12px', boxSizing: 'border-box', minHeight: '320px',
     });
     var mountSlot = document.createElement('div');
-    mountSlot.id = 'chat-right-sidebar';
     mountWrapper.appendChild(mountSlot);
     wrapper.appendChild(mountWrapper);
 
@@ -662,6 +661,7 @@
        panel is Lesson 4's territory; the closed state in the demo
        shows just the Open-compose button. */
     ChatRightSidebar.init({
+      mount:   mountSlot,
       onOpen:  function(){ ChatCompose.focus(); },
       onClose: function(){},
     });
