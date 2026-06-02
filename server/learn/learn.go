@@ -40,9 +40,10 @@ func HandleLearn(w http.ResponseWriter, r *http.Request) {
 			`<script src="/chat/chat_right_sidebar.js?v=%s"></script>`+
 			`<script src="/chat/chat_compose.js?v=%s"></script>`+
 			`<script src="/chat/chat_add_topic.js?v=%s"></script>`+
+			`<script src="/chat/chat_drag_to_pin.js?v=%s"></script>`+
 			`<script src="/learn/callback_log.js?v=%s"></script>`+
 			`<script src="/learn/learn.js?v=%s"></script>`,
-		v, v, v, v, v, v, v, v, v, v, v)
+		v, v, v, v, v, v, v, v, v, v, v, v)
 	fmt.Fprint(w, `</body></html>`)
 }
 
@@ -72,6 +73,7 @@ var learnSourceAllowlist = map[string]string{
 	"chat_right_sidebar.js": "chat/chat_right_sidebar.js",
 	"chat_compose.js":       "chat/chat_compose.js",
 	"chat_add_topic.js":     "chat/chat_add_topic.js",
+	"chat_drag_to_pin.js":   "chat/chat_drag_to_pin.js",
 	"callback_log.js":       "learn/callback_log.js",
 }
 

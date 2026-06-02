@@ -834,6 +834,174 @@
     return wrapper;
   }
 
+  /* ---- Lesson 9 demo: ChatDragToPin.
+     Two stacked lists (Pinned + Sessions) playing the role of the
+     real left sidebar's drop targets. Each item is an <li> with
+     data-sid; each list has data-section so the widget can tell
+     "pinned" from "everything else." Mock fetch handles the pin/unpin
+     POST and delays its response so the optimistic move is visible
+     for ~700ms before the revert (in failure mode). ---- */
+
+  // lint:called-once widget
+  function buildDragToPinDemo(){
+    var wrapper = setStyles(document.createElement('div'), {
+      display: 'flex', flexDirection: 'column', gap: '10px',
+      border: '1px solid #ccc', borderRadius: '4px',
+      padding: '10px', background: '#fafafa', boxSizing: 'border-box',
+    });
+
+    /* "Next pin/unpin" toggle — pick whether the host accepts the
+       optimistic move or rejects it (triggering the revert). */
+    var nextMode = 'accept';
+    var controls = setStyles(document.createElement('div'), {
+      fontSize: '13px', color: '#555', display: 'flex', gap: '14px',
+      alignItems: 'center', flexWrap: 'wrap',
+    });
+    var modeLabel = document.createElement('span');
+    modeLabel.textContent = 'Next pin/unpin:';
+    controls.appendChild(modeLabel);
+    var modes = [
+      { value: 'accept', label: 'host accepts' },
+      { value: 'reject', label: 'host rejects → optimistic move reverts' },
+    ];
+    modes.forEach(function(m){
+      var lbl = document.createElement('label');
+      lbl.style.cursor = 'pointer';
+      var r = document.createElement('input');
+      r.type = 'radio'; r.name = 'lesson9-mode'; r.value = m.value;
+      if(m.value === nextMode) r.checked = true;
+      r.addEventListener('change', function(){ if(r.checked) nextMode = m.value; });
+      lbl.appendChild(r); lbl.appendChild(document.createTextNode(' ' + m.label));
+      controls.appendChild(lbl);
+    });
+    wrapper.appendChild(controls);
+
+    var hint = setStyles(document.createElement('p'), {
+      margin: '0', fontSize: '12px', color: '#888',
+    });
+    hint.textContent = 'Drag a row between the two lists. Watch the callback log narrate the '
+      + 'gesture: onDrop fires immediately (the optimistic move), then we POST to the host. '
+      + 'In "reject" mode the response takes ~700ms, and you\'ll see onDrop fire a second time '
+      + 'with reversed source/target to revert.';
+    wrapper.appendChild(hint);
+
+    /* The callback log — drop-in shared widget (see Lesson 0). */
+    var clog = LearnCallbackLog.create({ height: '280px' });
+
+    /* PRODUCT_DECISION: inline list styling — chat_left_sidebar.js
+       owns the .chat-sidebar-list CSS family on the real chat page,
+       but /learn doesn't load that script. Borrow just enough to make
+       the lists feel like the sidebar's: a thin column, a section
+       title, a slim row. The drag widget supplies its own affordance
+       CSS (cursor:grab, the dragging opacity, the drop-target outline,
+       the floating ghost), so we don't restyle those here. */
+    // lint:called-once row-builder — invoked per <li> inside makeList
+    function makeItem(sid){
+      var li = setStyles(document.createElement('li'), {
+        padding: '4px 8px', borderRadius: '3px',
+        color: '#000080', background: '#f0f0ff',
+        margin: '2px 0', fontSize: '13px', listStyle: 'none',
+      });
+      li.setAttribute('data-sid', sid);
+      li.textContent = sid;
+      ChatDragToPin.attach(li);
+      return li;
+    }
+    function makeList(title, section, sids){
+      var box = setStyles(document.createElement('div'), {
+        marginBottom: '14px',
+      });
+      var t = setStyles(document.createElement('div'), {
+        fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em',
+        color: '#888', marginBottom: '4px', fontWeight: 'bold',
+      });
+      t.textContent = title;
+      var ul = setStyles(document.createElement('ul'), {
+        listStyle: 'none', padding: '4px', margin: '0',
+        minHeight: '32px', borderRadius: '4px',
+      });
+      ul.className = 'chat-session-drop';   /* widget styles the drop-active outline */
+      ul.setAttribute('data-section', section);
+      sids.forEach(function(sid){ ul.appendChild(makeItem(sid)); });
+      box.appendChild(t); box.appendChild(ul);
+      return { box: box, ul: ul };
+    }
+    var pinned   = makeList('Pinned',   'pinned',   ['general']);
+    var sessions = makeList('Sessions', 'sessions', ['ideas', 'notes', 'todos', '2026-06-02']);
+
+    var listsCol = setStyles(document.createElement('div'), {
+      width: '200px', flexShrink: '0',
+      background: '#fff', border: '1px solid #ddd', borderRadius: '4px',
+      padding: '8px 10px', boxSizing: 'border-box',
+    });
+    listsCol.appendChild(pinned.box);
+    listsCol.appendChild(sessions.box);
+
+    /* Mini insertSorted (the real sidebar's version) so dropped rows
+       sit alphabetically by data-sid in their new home. */
+    // lint:called-once drop-callback-hook — invoked from onDrop on every move
+    function insertSorted(ul, li){
+      var sid = li.getAttribute('data-sid');
+      var items = ul.querySelectorAll('li[data-sid]');
+      for(var i = 0; i < items.length; i++){
+        if(items[i].getAttribute('data-sid') > sid){ ul.insertBefore(li, items[i]); return; }
+      }
+      ul.appendChild(li);
+    }
+
+    /* PRODUCT_DECISION: intercept fetch only for our fake conv's
+       /pin and /unpin URLs. Delay the response so the optimistic
+       state is visible before revert in failure mode. */
+    var FAKE_CONV = 'lesson9-fake';
+    var origFetch = window.fetch;
+    window.fetch = function(url, opts){
+      var match = typeof url === 'string'
+        && url.match(/^\/chat\/c\/lesson9-fake\/([^/]+)\/(pin|unpin)$/);
+      if(match){
+        var sid = decodeURIComponent(match[1]);
+        var action = match[2];
+        clog.log('POST /chat/c/' + FAKE_CONV + '/' + sid + '/' + action
+               + ' (mode=' + nextMode + ')');
+        return new Promise(function(resolve){
+          setTimeout(function(){
+            if(nextMode === 'accept'){
+              clog.log('  → host returns ok');
+              resolve({ ok: true });
+            } else {
+              clog.log('  → host returns failure → ChatDragToPin will revert');
+              resolve({ ok: false });
+            }
+          }, 700);
+        });
+      }
+      return origFetch.apply(this, arguments);
+    };
+
+    /* Init the gesture widget. onDrop fires TWICE in failure mode:
+       once for the optimistic move, once for the revert. We log + place
+       in both cases (same callback, no branching). */
+    ChatDragToPin.init({
+      conv: FAKE_CONV,
+      onDrop: function(evt){
+        var section = evt.toUl.getAttribute('data-section');
+        clog.log('onDrop({item: ' + evt.item.getAttribute('data-sid')
+               + ', toUl: <ul data-section="' + section + '">})');
+        insertSorted(evt.toUl, evt.item);
+      },
+    });
+
+    /* Side-by-side: lists on the left, log on the right. */
+    var twoCol = setStyles(document.createElement('div'), {
+      display: 'flex', gap: '14px',
+    });
+    var leftCol = setStyles(document.createElement('div'), { flex: '1', minWidth: '0' });
+    leftCol.appendChild(listsCol);
+    twoCol.appendChild(leftCol); twoCol.appendChild(clog.element);
+    wrapper.appendChild(twoCol);
+
+    return wrapper;
+  }
+
   /* ---- section frame: heading + prose + custom body ---- */
   // lint:called-once widget — reused per lesson
   function buildSection(opts){
@@ -1229,6 +1397,52 @@
     lede:  'A small form widget that knows about input validation and HTTP — but not about '
          + 'navigation. The caller decides what "topic added" means in their surface.',
     body:  lesson8Body,
+  }));
+
+  /* Lesson 9 — chat_drag_to_pin.js. A pointer-driven gesture widget
+     that owns the state machine and the host POST, and reports drops
+     via callback so the caller stays in charge of DOM placement. The
+     headline behavior is the optimistic-update + revert dance. */
+  var lesson9Body = document.createElement('div');
+  lesson9Body.appendChild(buildParagraph(
+    'ChatDragToPin.init({conv, onDrop}) wires the module; ChatDragToPin.attach(item) makes one '
+    + '<li> draggable. The widget owns the pointer state machine (a 5px move threshold so '
+    + 'a plain tap still navigates the link, pointer-capture at drag-start so the gesture '
+    + 'tracks even when the cursor leaves the row, a floating drag ghost), the pin/unpin POST '
+    + 'to the host, and — importantly — the optimistic-update + revert orchestration around '
+    + 'that POST.'));
+  lesson9Body.appendChild(buildParagraph(
+    'The onDrop contract is the teaching point. The widget reports drops via a single '
+    + 'callback ({item, toUl}). On a successful move it fires once. On host rejection it '
+    + 'fires TWICE — once with the optimistic target, then again with source and target '
+    + 'reversed. The caller does the DOM placement in BOTH cases (no separate revert API); '
+    + 'one branch-less callback handles both directions. That keeps the gesture widget '
+    + 'agnostic about the caller\'s placement rule (the real sidebar inserts alphabetically '
+    + 'via insertSorted, this demo uses the same).'));
+  lesson9Body.appendChild(buildParagraph(
+    'The demo intercepts fetch for the fake conv\'s /pin and /unpin URLs and delays the '
+    + 'response ~700ms so the optimistic state is visible before the revert. Try "host '
+    + 'accepts" first to see the happy path, then flip to "host rejects" and watch the row '
+    + 'snap back as onDrop fires a second time.'));
+  lesson9Body.appendChild(buildSpoiler({
+    label:     'Show chat_drag_to_pin.js source',
+    openLabel: 'Hide source',
+    render: function(box){ box.appendChild(buildSourcePanel('/learn/source/chat_drag_to_pin.js')); },
+  }));
+  lesson9Body.appendChild(buildDragToPinDemo());
+  var demo9Caption = setStyles(document.createElement('p'), {
+    margin: '14px 0 6px', color: COLORS.muted, fontSize: '13px',
+  });
+  demo9Caption.textContent = 'Demo source (the function that built the box above):';
+  lesson9Body.appendChild(demo9Caption);
+  lesson9Body.appendChild(buildCodeBlock(buildDragToPinDemo.toString()));
+
+  wrap.appendChild(buildSection({
+    title: 'Lesson 9: chat_drag_to_pin.js',
+    lede:  'A pointer-driven gesture widget. The shape that matters: optimistic move plus '
+         + 'symmetric revert, both reported through the SAME onDrop callback so the caller '
+         + 'doesn\'t branch on direction.',
+    body:  lesson9Body,
   }));
 
   root.appendChild(wrap);
