@@ -55,7 +55,15 @@ window.ChatAddTopic = (function(){
       e.preventDefault();
       var name = input.value.trim();
       if(!TOPIC_RE.test(name)){ err.textContent='Letters, digits, and hyphens only.'; return; }
-      err.textContent=''; btn.disabled=true;
+      err.textContent='';
+      /* BROWSER_WORKAROUND: move focus off the button BEFORE we disable
+         it. If the button is the active element when it gets
+         `disabled=true`, the browser relocates focus to the next
+         focusable element (Firefox is especially eager about this),
+         which can scrollIntoView and jump the page. Parking focus on
+         the input keeps the active element stable through the round-trip. */
+      input.focus();
+      btn.disabled=true;
       fetch('/chat/c/'+encodeURIComponent(conv)+'/new',{
         method:'POST',
         headers:{'Content-Type':'application/x-www-form-urlencoded'},
@@ -64,9 +72,13 @@ window.ChatAddTopic = (function(){
         if(r.ok) return r.json();
         return r.text().then(function(t){ throw (t&&t.trim())||('error '+r.status); });
       }).then(function(j){
-        /* PRODUCT_DECISION: success → fire the caller's onCreated. The
-           widget doesn't know whether to navigate, log, or pop a toast;
-           that's policy for the surface mounting the form. */
+        /* PRODUCT_DECISION: clear the input + re-enable BEFORE firing
+           onCreated. In prod, onCreated navigates the whole page away
+           so the cleanup is invisible; in non-navigating callers (the
+           /learn demo, future surfaces) the form is left ready for
+           another topic. */
+        input.value = '';
+        btn.disabled = false;
         onCreated(j);
       }).catch(function(msg){
         err.textContent = (typeof msg==='string' ? msg : 'Could not add topic.');
