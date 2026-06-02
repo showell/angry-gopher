@@ -65,9 +65,9 @@ func AppChromeTop(w http.ResponseWriter, name string, isAdmin bool) {
 		adminLink = ` · <a href="/admin">Admin</a>`
 	}
 	fmt.Fprintf(w,
-		`<header class="app-top"><div class="app-top-home"><a href="/">Lyn Rummy</a></div>`+
-			`<div class="app-top-user">Playing as <strong>%s</strong>%s · `+
-			`<a href="/chat">Chat</a> · <a href="/logout">Log out</a></div></header>`,
+		`<header class="app-top"><div class="app-top-home">`+
+			`<a href="/">Lyn Rummy</a> · <a href="/chat">Chat</a></div>`+
+			`<div class="app-top-user">Playing as <strong>%s</strong>%s · <a href="/logout">Log out</a></div></header>`,
 		html.EscapeString(name), adminLink)
 }
 
