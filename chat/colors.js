@@ -117,7 +117,7 @@ window.ChatColors = (function(){
     if(document.getElementById(STYLE_ID)) return;
     var saved = (function(){
       try { return localStorage.getItem(STORAGE); } catch(e){ return null; }  // lint:silent-catch localStorage-may-throw-in-private-mode
-    })() || 'light';
+    })() || 'dark';
     document.documentElement.setAttribute('data-theme', saved);
     var s = document.createElement('style');
     s.id = STYLE_ID;
