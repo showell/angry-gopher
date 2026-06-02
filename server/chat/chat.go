@@ -12,6 +12,7 @@ package chat
 import (
 	"angry-gopher/server/users"
 	"angry-gopher/server/web"
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -522,7 +523,7 @@ func renderChatConversation(w http.ResponseWriter, user users.User, partnerID, c
 	fmt.Fprint(w, `<div class="chat-notify" id="chat-notify"></div>`)
 
 	fmt.Fprint(w, `<div class="chat-layout">`)
-	renderChatSidebar(w, user, partnerID, conv, sessionID)
+	emitChatSidebarMount(w, user, partnerID, conv, sessionID)
 	// The middle column (wrapper + navbar with Back/Forward/🔍, history
 	// surface, bubble list, all their styling) is built client-side by
 	// chat/middle_pane.js — this is just the mount slot.
@@ -557,78 +558,80 @@ func renderChatConversation(w http.ResponseWriter, user users.User, partnerID, c
 	web.PageFooter(w)
 }
 
-// renderChatSidebar emits the left-rail nav: the user's conversations
-// (one row per other authorized principal) above the sessions of the
-// current conv. Active conv + session are bolded. Server-rendered, no
-// JS — picking a conv goes to /chat/c/<conv> which itself redirects to
-// the user's default session for that pair.
-func renderChatSidebar(w http.ResponseWriter, user users.User, partnerID, conv, sessionID string) {
-	fmt.Fprint(w, `<aside class="chat-sidebar" id="chat-left-sidebar">`)
+// sidebarItem is one labelled link in the left rail — used for partner
+// conversations AND for sessions. `id` is the data-* attribute key the
+// client uses for SSE dedupe (partners) and drag-to-pin (sessions).
+type sidebarItem struct {
+	ID     string `json:"id"`
+	Label  string `json:"label"`
+	URL    string `json:"url"`
+	Active bool   `json:"active"`
+}
 
-	// Conversations: every other authorized principal as a row.
-	fmt.Fprint(w, `<div class="chat-sidebar-section"><div class="chat-sidebar-title">Conversations</div><ul class="chat-sidebar-list" data-section="conversations">`)
+// sidebarPayload is what the server emits and the client renders the
+// left rail from. Data shape mirrors the UI: three sections, no flags
+// (pinned-ness is "which array you're in", not a bool on the item).
+// Empty-state strings ("Drag a session here…", "No sessions yet") are
+// the client's concern.
+type sidebarPayload struct {
+	Conversations  []sidebarItem `json:"conversations"`
+	PinnedSessions []sidebarItem `json:"pinned_sessions"`
+	Sessions       []sidebarItem `json:"sessions"`
+}
+
+// buildSidebarPayload computes the left-rail data for one conversation
+// page render. Partners come from ListAuthorized; sessions come from
+// ListChatSessions (sorted) split by PinnedSessions.
+func buildSidebarPayload(user users.User, partnerID, conv, sessionID string) sidebarPayload {
+	var p sidebarPayload
 	for _, m := range users.ListAuthorized() {
 		if m.ID == user.ID {
 			continue
 		}
 		theirConv := chatPairKey(user.ID, m.ID)
-		cls := ""
-		if theirConv == conv {
-			cls = ` class="active"`
-		}
-		fmt.Fprintf(w, `<li data-uid="%s"><a href="/chat/c/%s"%s>%s</a></li>`,
-			html.EscapeString(m.ID), theirConv, cls, html.EscapeString(m.Name))
+		p.Conversations = append(p.Conversations, sidebarItem{
+			ID:     m.ID,
+			Label:  m.Name,
+			URL:    "/chat/c/" + theirConv,
+			Active: theirConv == conv,
+		})
 	}
-	fmt.Fprint(w, `</ul></div>`)
-
-	// Sessions of THIS conv, split into the user's Pinned group (above) and
-	// the rest. Both alphabetical (ListChatSessions is sorted); pins are
-	// per-user, and the two <ul>s are pointer drag/drop targets (chat.js).
-	a, b := user.ID, partnerID
-	sessions := ListChatSessions(a, b)
+	sessions := ListChatSessions(user.ID, partnerID)
 	pinned := PinnedSessions(user.ID, conv)
-	item := func(sid string) {
-		acls := ""
-		if sid == sessionID {
-			acls = ` class="active"`
-		}
-		fmt.Fprintf(w, `<li class="chat-session-item" data-sid="%s"><a href="/chat/c/%s/%s"%s draggable="false">%s</a></li>`,
-			html.EscapeString(sid), conv, url.PathEscape(sid), acls, html.EscapeString(sid))
-	}
-
-	fmt.Fprint(w, `<div class="chat-sidebar-section"><div class="chat-sidebar-title">Pinned Sessions</div>`+
-		`<ul class="chat-sidebar-list chat-session-drop" data-section="pinned">`)
-	nPinned := 0
 	for _, sid := range sessions {
+		item := sidebarItem{
+			ID:     sid,
+			Label:  sid,
+			URL:    "/chat/c/" + conv + "/" + url.PathEscape(sid),
+			Active: sid == sessionID,
+		}
 		if pinned[sid] {
-			item(sid)
-			nPinned++
+			p.PinnedSessions = append(p.PinnedSessions, item)
+		} else {
+			p.Sessions = append(p.Sessions, item)
 		}
 	}
-	if nPinned == 0 {
-		fmt.Fprint(w, `<li class="muted chat-pin-hint">Drag a session here to pin it</li>`)
-	}
-	fmt.Fprint(w, `</ul></div>`)
+	return p
+}
 
-	fmt.Fprint(w, `<div class="chat-sidebar-section"><div class="chat-sidebar-title">Sessions</div>`+
-		`<ul class="chat-sidebar-list chat-session-drop" data-section="sessions">`)
-	nUnpinned := 0
-	for _, sid := range sessions {
-		if !pinned[sid] {
-			item(sid)
-			nUnpinned++
-		}
+// emitChatSidebarMount writes a mount slot for chat_left_sidebar.js plus
+// the initial payload as inline JSON. The JSON is shipped in a
+// <script type="application/json"> sibling so first paint doesn't need
+// a round-trip and the wire shape is what the SSE upserts would extend.
+func emitChatSidebarMount(w http.ResponseWriter, user users.User, partnerID, conv, sessionID string) {
+	payload, err := json.Marshal(buildSidebarPayload(user, partnerID, conv, sessionID))
+	if err != nil {
+		// PRODUCT_DECISION: empty payload is a recoverable rendering result —
+		// client builds empty sections, SSE backfills.
+		payload = []byte(`{}`)
 	}
-	if nUnpinned == 0 {
-		fmt.Fprint(w, `<li class="muted">No sessions yet</li>`)
-	}
-	fmt.Fprint(w, `</ul>`)
-	// Add a topic = create a new session with a custom name in THIS conv.
-	fmt.Fprint(w, `<form id="chat-add-topic" class="chat-add-topic">`+
-		`<input type="text" id="chat-topic-name" placeholder="new-topic" autocomplete="off" maxlength="80" spellcheck="false">`+
-		`<button type="submit">Add Topic</button>`+
-		`<div class="chat-add-topic-err" id="chat-topic-err"></div></form>`)
-	fmt.Fprint(w, `</div></aside>`)
+	// PRODUCT_DECISION: escape `</` as `<\/` so a username (or future field
+	// value) can't accidentally close the <script> tag. JSON spec allows
+	// `\/` as an alternate encoding of `/`, so the client parser still sees
+	// the same string.
+	safe := bytes.ReplaceAll(payload, []byte("</"), []byte(`<\/`))
+	fmt.Fprint(w, `<div id="chat-left-sidebar"></div>`)
+	fmt.Fprintf(w, `<script type="application/json" id="chat-sidebar-data">%s</script>`, safe)
 }
 
 // HandleChatSend appends a posted message to the session named in the
@@ -704,32 +707,10 @@ html, body { height:100%; }
    when the feed is empty). */
 #chat-root { flex:1; min-height:0; display:flex; flex-direction:column; }
 .chat-layout { display:flex; gap:20px; flex:1; min-height:0; }
-.chat-sidebar { width:180px; flex-shrink:0; overflow-y:auto; border-right:1px solid #ddd;
-                padding-right:14px; font-size:13px; }
-.chat-sidebar-section { margin-bottom:18px; }
-.chat-sidebar-title { font-size:11px; text-transform:uppercase; letter-spacing:0.05em;
-                       color:#888; margin-bottom:6px; font-weight:bold; }
-.chat-sidebar-list { list-style:none; padding:0; margin:0; }
-.chat-sidebar-list li { margin:0; }
-.chat-sidebar-list li a { display:block; padding:4px 8px; border-radius:3px;
-                           color:#000080; text-decoration:none; }
-.chat-sidebar-list li a:hover { background:#f0f0ff; }
-.chat-sidebar-list li a.active { background:#000080; color:white; font-weight:bold; }
-.chat-sidebar-list li.muted { color:#888; padding:4px 8px; font-style:italic; }
-.chat-session-item { touch-action:none; cursor:grab; user-select:none; -webkit-user-select:none; }
-.chat-session-item.dragging { opacity:0.5; cursor:grabbing; }
-.chat-session-drop { min-height:14px; border-radius:4px; }
-.chat-session-drop.drop-active { outline:2px dashed #1a5fb4; outline-offset:-2px; background:#eef3fb; }
-.chat-pin-hint { font-size:11px; }
-.chat-drag-ghost { position:fixed; z-index:1000; pointer-events:none; background:#000080;
-                   color:#fff; font-size:12px; padding:3px 9px; border-radius:4px;
-                   box-shadow:0 2px 8px rgba(0,0,0,0.35); opacity:0.92; white-space:nowrap;
-                   max-width:170px; overflow:hidden; text-overflow:ellipsis; }
-.chat-add-topic { display:flex; flex-wrap:wrap; gap:4px; margin-top:8px; }
-.chat-add-topic input { flex:1; min-width:0; padding:3px 6px; font-size:12px;
-                        border:1px solid #ccc; border-radius:3px; font-family:inherit; }
-.chat-add-topic button { padding:3px 8px; font-size:12px; flex:none; }
-.chat-add-topic-err { flex-basis:100%; color:#b00020; font-size:11px; }
+/* Left rail (.chat-sidebar and its three sections, the session-item
+   drag affordances + drop targets, the drag ghost, and the
+   add-topic form) lives in chat/chat_left_sidebar.js. The page-level
+   @media query below still reaches in to hide the rail in portrait. */
 /* Right rail (wrapper, "Open compose box" button, closed-panel) lives
    in chat/chat_right_sidebar.js; the open-state compose form (textarea,
    Send/Image, status, hint, host-down alert) in chat/chat_compose.js;

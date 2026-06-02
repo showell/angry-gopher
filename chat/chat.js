@@ -210,7 +210,15 @@
       if(rec) pane.focusBubble(rec.index+1);
     },
   });
-  ChatLeftSidebar.init({ conv: CONV });
+  /* PRODUCT_DECISION: left rail data ships inline as a sibling <script>
+     tag next to the mount slot; we parse it once and pass to the widget. */
+  var sidebarDataEl = document.getElementById('chat-sidebar-data');
+  var sidebarData = sidebarDataEl ? JSON.parse(sidebarDataEl.textContent) : {};
+  ChatLeftSidebar.init({
+    mount: document.getElementById('chat-left-sidebar'),
+    conv: CONV,
+    data: sidebarData,
+  });
   /* PRODUCT_DECISION: ChatRightSidebar builds the wrapper + closed-panel +
      "Open compose box" button — ChatCompose then inserts its body into the
      wrapper (before the closed-panel) and registers it for the toggle. So
