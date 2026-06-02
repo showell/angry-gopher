@@ -83,6 +83,9 @@ phase "middle-pane-js" node --check chat/middle_pane.js
 echo "==> learn.js syntax"
 phase "learn-js" node --check learn/learn.js
 
+echo "==> callback_log.js syntax"
+phase "callback-log-js" node --check learn/callback_log.js
+
 echo "==> chat_client.py syntax"
 phase "chat-py" python3 -m py_compile chat/chat_client.py
 

@@ -204,6 +204,56 @@
     );
   }
 
+  /* ---- Lesson 0 demo: the LearnCallbackLog widget itself. Three
+     "event" buttons each call clog.log(...) so the reader sees the
+     widget receiving events the same way real-system widgets feed
+     their callers. ---- */
+  // lint:called-once page-factory
+  function buildCallbackLogDemo(){
+    var box = setStyles(document.createElement('div'), {
+      border: '1px solid ' + COLORS.border, borderRadius: '6px',
+      background: COLORS.surface, padding: '14px 16px', marginTop: '10px',
+    });
+    var hint = setStyles(document.createElement('p'), {
+      margin: '0 0 10px', color: COLORS.muted, fontSize: '13px',
+    });
+    hint.textContent = 'Click the buttons to send events into the log. The widget owns the column, '
+      + 'the caption, and the fixed-height scrolling body — auto-scrolling to keep the latest entry '
+      + 'in view. Every other lesson drops the same widget into its demo.';
+
+    var clog = LearnCallbackLog.create();
+
+    var btnRow = setStyles(document.createElement('div'), {
+      display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '8px',
+    });
+    var counter = 0;
+    function mkBtn(label, msg){
+      var b = document.createElement('button');
+      b.type = 'button'; b.textContent = label;
+      b.addEventListener('click', function(){ clog.log(msg + ' (#' + (++counter) + ')'); });
+      return b;
+    }
+    btnRow.appendChild(mkBtn('Fire onSelect',   'onSelect(42)'));
+    btnRow.appendChild(mkBtn('Fire onChange',   'onChange("draft")'));
+    btnRow.appendChild(mkBtn('Fire onComplete', 'onComplete({ok:true})'));
+    var clearBtn = document.createElement('button');
+    clearBtn.type = 'button'; clearBtn.textContent = 'Clear';
+    clearBtn.addEventListener('click', function(){ clog.clear(); counter = 0; });
+    btnRow.appendChild(clearBtn);
+
+    /* Side-by-side: buttons + hint on the left, the log on the right —
+       same shape every later lesson uses. */
+    var twoCol = setStyles(document.createElement('div'), {
+      display: 'flex', gap: '14px',
+    });
+    var leftCol = setStyles(document.createElement('div'), { flex: '1', minWidth: '0' });
+    leftCol.appendChild(hint);
+    leftCol.appendChild(btnRow);
+    twoCol.appendChild(leftCol); twoCol.appendChild(clog.element);
+    box.appendChild(twoCol);
+    return box;
+  }
+
   /* ---- message demo: the meat of Lesson 3. Builds three server-shaped
      messages, wires their callbacks to a visible log panel, and renders
      the bubbles with NO chat CSS loaded — the widget owns DOM + behavior,
@@ -233,25 +283,13 @@
     ];
 
     /* The callback log — visible proof that the widget hands off without
-       deciding what should happen. flex:1 + overflowY:auto so it matches
-       the bubble column's height (stretched by the flex row) and scrolls
-       instead of growing. */
-    var logBody = setStyles(document.createElement('div'), {
-      fontFamily: 'ui-monospace, Menlo, Consolas, monospace', fontSize: '12px',
-      background: '#fff', border: '1px solid ' + COLORS.border, borderRadius: '4px',
-      padding: '8px', flex: '1', minHeight: '0', overflowY: 'auto', boxSizing: 'border-box',
-    });
-    function log(line){
-      var entry = document.createElement('div');
-      entry.textContent = '→ ' + line;
-      logBody.appendChild(entry);
-      logBody.scrollTop = logBody.scrollHeight;
-    }
+       deciding what should happen. Drop-in shared widget (see Lesson 0). */
+    var clog = LearnCallbackLog.create();
     var callbacks = {
-      onQuote:  function(r){    log('onQuote(MSG_'  + r.id + ')'); },
-      onRefer:  function(r){    log('onRefer(MSG_'  + r.id + ')'); },
-      onEdit:   function(r){    log('onEdit(MSG_'   + r.id + ')'); },
-      onMsgRef: function(link){ log('onMsgRef('     + link.getAttribute('href') + ')'); },
+      onQuote:  function(r){    clog.log('onQuote(MSG_'  + r.id + ')'); },
+      onRefer:  function(r){    clog.log('onRefer(MSG_'  + r.id + ')'); },
+      onEdit:   function(r){    clog.log('onEdit(MSG_'   + r.id + ')'); },
+      onMsgRef: function(link){ clog.log('onMsgRef('     + link.getAttribute('href') + ')'); },
     };
 
     /* A plain container — the bubbles bring their own visual chrome
@@ -270,27 +308,15 @@
     hint.textContent = 'Demo: three bubbles, no chat CSS loaded on this page — Message brought its own. '
       + 'Click the buttons (quote-reply / refer / edit), the image, the code block, or the MSG_ link. '
       + 'Watch the log on the right: that’s the page acting on what the widget reports.';
-    var logCaption = setStyles(document.createElement('div'), {
-      marginBottom: '4px', fontSize: '13px', color: COLORS.muted,
-    });
-    logCaption.textContent = 'Callback log:';
 
-    /* Side-by-side: bubbles on the left flex to fill; log column fixed-
-       width on the right. Default alignItems (stretch) makes the log
-       column match the bubble column's natural height, so logBody's
-       flex:1 fills the matched height and scrolls when full. */
+    /* Side-by-side: bubbles on the left flex to fill; the log column
+       brings its own fixed width (LearnCallbackLog defaults to 260px). */
     var twoCol = setStyles(document.createElement('div'), {
       display: 'flex', gap: '14px',
     });
     var leftCol = setStyles(document.createElement('div'), { flex: '1', minWidth: '0' });
     leftCol.appendChild(bubbles);
-    var rightCol = setStyles(document.createElement('div'), {
-      width: '260px', flexShrink: '0',
-      display: 'flex', flexDirection: 'column',
-    });
-    rightCol.appendChild(logCaption);
-    rightCol.appendChild(logBody);
-    twoCol.appendChild(leftCol); twoCol.appendChild(rightCol);
+    twoCol.appendChild(leftCol); twoCol.appendChild(clog.element);
 
     box.appendChild(hint);
     box.appendChild(twoCol);
@@ -360,41 +386,13 @@
   }
 
   // lint:called-once widget — shared by Lessons 4 + 5
-  function buildLogPanel(){
-    var logCaption = setStyles(document.createElement('div'), {
-      marginBottom: '4px', fontSize: '13px', color: COLORS.muted,
-    });
-    logCaption.textContent = 'Callback log:';
-    /* Fixed height matches the scroller's; auto-scrolls so the latest
-       entry stays in view and the panel doesn't grow without bound. */
-    var logBody = setStyles(document.createElement('div'), {
-      fontFamily: 'ui-monospace, Menlo, Consolas, monospace', fontSize: '12px',
-      background: '#fff', border: '1px solid ' + COLORS.border, borderRadius: '4px',
-      padding: '8px', height: SURFACE_HEIGHT, overflowY: 'auto', boxSizing: 'border-box',
-    });
-    function log(line){
-      var entry = document.createElement('div');
-      entry.textContent = '→ ' + line;
-      logBody.appendChild(entry);
-      logBody.scrollTop = logBody.scrollHeight;
-    }
-    return { logCaption: logCaption, logBody: logBody, log: log };
-  }
-
-  // lint:called-once widget — shared by Lessons 4 + 5
-  function buildScrollerLogLayout(scroller, logCaption, logBody){
+  function buildScrollerLogLayout(scroller, logColumn){
     var twoCol = setStyles(document.createElement('div'), {
       display: 'flex', gap: '14px',
     });
     var leftCol = setStyles(document.createElement('div'), { flex: '1', minWidth: '0' });
     leftCol.appendChild(scroller);
-    var rightCol = setStyles(document.createElement('div'), {
-      width: '260px', flexShrink: '0',
-      display: 'flex', flexDirection: 'column',
-    });
-    rightCol.appendChild(logCaption);
-    rightCol.appendChild(logBody);
-    twoCol.appendChild(leftCol); twoCol.appendChild(rightCol);
+    twoCol.appendChild(leftCol); twoCol.appendChild(logColumn);
     return twoCol;
   }
 
@@ -414,12 +412,12 @@
       + 'for a 700ms rest before reporting, so a burst of presses only logs the place '
       + 'you SETTLED, not every intermediate step. The callback fires into the void here; '
       + 'Lesson 5 wires it up to the nav stack.';
-    var panel = buildLogPanel();
+    var clog = LearnCallbackLog.create();
     var scr = buildColoredScroller(function(idx){
-      panel.log('setSelectedBubble(' + idx + ')');
+      clog.log('setSelectedBubble(' + idx + ')');
     });
     box.appendChild(hint);
-    box.appendChild(buildScrollerLogLayout(scr.scroller, panel.logCaption, panel.logBody));
+    box.appendChild(buildScrollerLogLayout(scr.scroller, clog.element));
     return box;
   }
 
@@ -450,7 +448,7 @@
     buttonRow.appendChild(document.createTextNode(' '));
     buttonRow.appendChild(fwdBtn);
 
-    var panel = buildLogPanel();
+    var clog = LearnCallbackLog.create();
 
     /* Forward-reference: the callback closes over `nav` (declared
        here, assigned below). buildColoredScroller runs endBacklog
@@ -460,13 +458,13 @@
        on the floor matches the chat page's behavior. */
     var nav;
     var scr = buildColoredScroller(function(idx){
-      panel.log('setSelectedBubble(' + idx + ')');
+      clog.log('setSelectedBubble(' + idx + ')');
       if(nav) nav.push(idx);
     });
 
     nav = NavStack.create({
       gotoMessage: function(entry){
-        panel.log('gotoMessage(' + entry + ')');
+        clog.log('gotoMessage(' + entry + ')');
         scr.view.focusBubble(entry, {silent:true});
       },
       onChange: function(canBack, canFwd){
@@ -480,7 +478,7 @@
 
     box.appendChild(hint);
     box.appendChild(buttonRow);
-    box.appendChild(buildScrollerLogLayout(scr.scroller, panel.logCaption, panel.logBody));
+    box.appendChild(buildScrollerLogLayout(scr.scroller, clog.element));
     return box;
   }
 
@@ -630,22 +628,10 @@
        handler (entry: "POST received"), and our setTimeout that fires
        ChatCompose.ackIfPending (exit: "echo arrived → ack fired"). For
        the silent path we just log the entry and note that hostDown will
-       trip from inside ChatCompose without our help. */
-    var logBody = setStyles(document.createElement('div'), {
-      fontFamily: 'ui-monospace, Menlo, Consolas, monospace', fontSize: '12px',
-      background: '#fff', border: '1px solid ' + COLORS.border, borderRadius: '4px',
-      padding: '8px', flex: '1', minHeight: '0', overflowY: 'auto', boxSizing: 'border-box',
-    });
-    function log(line){
-      var entry = document.createElement('div');
-      entry.textContent = '→ ' + line;
-      logBody.appendChild(entry);
-      logBody.scrollTop = logBody.scrollHeight;
-    }
-    var logCaption = setStyles(document.createElement('div'), {
-      marginBottom: '4px', fontSize: '13px', color: COLORS.muted,
-    });
-    logCaption.textContent = 'Callback log:';
+       trip from inside ChatCompose without our help. Drop-in shared
+       widget (see Lesson 0). */
+    var clog = LearnCallbackLog.create({height: '300px'});
+    function log(line){ clog.log(line); }
 
     /* Left: the rail mount. Right: the callback log column. */
     var mountWrapper = setStyles(document.createElement('div'), {
@@ -660,13 +646,7 @@
     });
     var leftCol = setStyles(document.createElement('div'), { flex: '1', minWidth: '0' });
     leftCol.appendChild(mountWrapper);
-    var rightCol = setStyles(document.createElement('div'), {
-      width: '260px', flexShrink: '0',
-      display: 'flex', flexDirection: 'column',
-    });
-    rightCol.appendChild(logCaption);
-    rightCol.appendChild(logBody);
-    twoCol.appendChild(leftCol); twoCol.appendChild(rightCol);
+    twoCol.appendChild(leftCol); twoCol.appendChild(clog.element);
     wrapper.appendChild(twoCol);
 
     /* PRODUCT_DECISION: intercept fetch only for our fake SESSION_BASE so
@@ -794,22 +774,9 @@
       + 'fetch fires, the error displays under the input.';
     wrapper.appendChild(hint);
 
-    /* Callback log. */
-    var logBody = setStyles(document.createElement('div'), {
-      fontFamily: 'ui-monospace, Menlo, Consolas, monospace', fontSize: '12px',
-      background: '#fff', border: '1px solid ' + COLORS.border, borderRadius: '4px',
-      padding: '8px', flex: '1', minHeight: '0', overflowY: 'auto', boxSizing: 'border-box',
-    });
-    function log(line){
-      var entry = document.createElement('div');
-      entry.textContent = '→ ' + line;
-      logBody.appendChild(entry);
-      logBody.scrollTop = logBody.scrollHeight;
-    }
-    var logCaption = setStyles(document.createElement('div'), {
-      marginBottom: '4px', fontSize: '13px', color: COLORS.muted,
-    });
-    logCaption.textContent = 'Callback log:';
+    /* Callback log — drop-in shared widget (see Lesson 0). */
+    var clog = LearnCallbackLog.create();
+    function log(line){ clog.log(line); }
 
     /* PRODUCT_DECISION: monkey-patch fetch only for our fake conv's /new
        URL so other page traffic (assets, source spoilers) is untouched.
@@ -861,13 +828,7 @@
     });
     var leftCol = setStyles(document.createElement('div'), { flex: '1', minWidth: '0' });
     leftCol.appendChild(formMount);
-    var rightCol = setStyles(document.createElement('div'), {
-      width: '260px', flexShrink: '0',
-      display: 'flex', flexDirection: 'column', minHeight: '180px',
-    });
-    rightCol.appendChild(logCaption);
-    rightCol.appendChild(logBody);
-    twoCol.appendChild(leftCol); twoCol.appendChild(rightCol);
+    twoCol.appendChild(leftCol); twoCol.appendChild(clog.element);
     wrapper.appendChild(twoCol);
 
     return wrapper;
@@ -914,6 +875,50 @@
   document.body.insertBefore(buildTopBar(), document.body.firstChild);
   var wrap = buildWrap();
   wrap.appendChild(buildIntro());
+
+  /* Lesson 0 — LearnCallbackLog: the shared demo widget every other
+     lesson drops in. Frames the modular pattern explicitly: each
+     widget is a one-factory drop-in, the lessons assemble widgets
+     like Legos, and demo code is built the same way as the real
+     system code. */
+  var lesson0Body = document.createElement('div');
+  lesson0Body.appendChild(buildParagraph(
+    'Most lessons that follow show a chat widget receiving events from the user — a click, a '
+    + 'keystroke, a server response — and reporting them back through callbacks. To watch what '
+    + 'the widget reports, every demo drops in a small column that prints each event as a line. '
+    + 'That column is LearnCallbackLog, and this lesson is about it.'));
+  lesson0Body.appendChild(buildParagraph(
+    'It is NOT part of the chat system. It is demo code — only the /learn page loads it, and '
+    + 'no production widget knows it exists. But it is built exactly the way the real widgets '
+    + 'are: a single create() factory, an owned DOM column, its own inline styles, a small '
+    + 'public API (log, clear). The shape lets the lessons compose pieces like Legos — drop in '
+    + 'a Message here, a ChatRightSidebar there, a LearnCallbackLog beside it.'));
+  lesson0Body.appendChild(buildParagraph(
+    'A boring but load-bearing detail: the log body has a FIXED height (220px by default) so '
+    + 'overflowing entries scroll INSIDE the body. A flex:1 minHeight:0 log relies on the '
+    + 'parent to constrain its height, and short-form demos (like Lesson 8) don\'t give it '
+    + 'one — so the auto-scroll-to-bottom ends up moving the page, not the log. Fixed height + '
+    + 'overflowY:auto guarantees the log is its own scroll region.'));
+  lesson0Body.appendChild(buildSpoiler({
+    label:     'Show callback_log.js source',
+    openLabel: 'Hide source',
+    render: function(box){ box.appendChild(buildSourcePanel('/learn/source/callback_log.js')); },
+  }));
+  lesson0Body.appendChild(buildCallbackLogDemo());
+  var demo0Caption = setStyles(document.createElement('p'), {
+    margin: '14px 0 6px', color: COLORS.muted, fontSize: '13px',
+  });
+  demo0Caption.textContent = 'Demo source (the function that built the box above):';
+  lesson0Body.appendChild(demo0Caption);
+  lesson0Body.appendChild(buildCodeBlock(buildCallbackLogDemo.toString()));
+
+  wrap.appendChild(buildSection({
+    title: 'Lesson 0: LearnCallbackLog (the widget the demos share)',
+    lede:  'A tiny drop-in widget for narrating what a callback received. Demo code, but built '
+         + 'the same shape as the real chat widgets — every later lesson assembles one of these '
+         + 'next to whatever it\'s teaching.',
+    body:  lesson0Body,
+  }));
 
   /* Lesson 1 — chat_image_popup.js (48 LOC). */
   var lesson1Body = document.createElement('div');

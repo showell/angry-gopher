@@ -40,14 +40,22 @@ func HandleLearn(w http.ResponseWriter, r *http.Request) {
 			`<script src="/chat/chat_right_sidebar.js?v=%s"></script>`+
 			`<script src="/chat/chat_compose.js?v=%s"></script>`+
 			`<script src="/chat/chat_add_topic.js?v=%s"></script>`+
+			`<script src="/learn/callback_log.js?v=%s"></script>`+
 			`<script src="/learn/learn.js?v=%s"></script>`,
-		v, v, v, v, v, v, v, v, v, v)
+		v, v, v, v, v, v, v, v, v, v, v)
 	fmt.Fprint(w, `</body></html>`)
 }
 
 // HandleLearnJS serves the Learn-page client.
 func HandleLearnJS(w http.ResponseWriter, r *http.Request) {
 	web.ServeJS(w, "learn/learn.js", "learn.js missing from the binary")
+}
+
+// HandleCallbackLogJS serves the shared callback-log widget used by
+// most lesson demos. Demo code, not part of the real chat system —
+// but built the same way (one factory, owned DOM + styles).
+func HandleCallbackLogJS(w http.ResponseWriter, r *http.Request) {
+	web.ServeJS(w, "learn/callback_log.js", "callback_log.js missing from the binary")
 }
 
 // learnSourceAllowlist names every module the Learn page is allowed to
@@ -64,6 +72,7 @@ var learnSourceAllowlist = map[string]string{
 	"chat_right_sidebar.js": "chat/chat_right_sidebar.js",
 	"chat_compose.js":       "chat/chat_compose.js",
 	"chat_add_topic.js":     "chat/chat_add_topic.js",
+	"callback_log.js":       "learn/callback_log.js",
 }
 
 // HandleLearnSource serves the raw text of an allowlisted JS module so the

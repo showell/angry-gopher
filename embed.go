@@ -33,6 +33,7 @@ import "embed"
 //go:embed chat/images.js
 //go:embed chat/code.js
 //go:embed learn/learn.js
+//go:embed learn/callback_log.js
 //go:embed images/cat_professor.webp
 //go:embed games/lynrummy/conformance/curated_1line_puzzles.dsl
 //go:embed games/lynrummy/conformance/curated_2line_puzzles.dsl
