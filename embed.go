@@ -15,6 +15,8 @@ import "embed"
 //go:embed games/lynrummy/elm/engine_glue.js
 //go:embed chat/chat.js
 //go:embed chat/styles.js
+//go:embed chat/colors.js
+//go:embed chat/chat_theme.js
 //go:embed chat/chat_compose.js
 //go:embed chat/chat_image_popup.js
 //go:embed chat/chat_code_popup.js

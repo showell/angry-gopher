@@ -29,6 +29,12 @@ phase "chat-js" node --check chat/chat.js
 echo "==> styles.js syntax"
 phase "styles-js" node --check chat/styles.js
 
+echo "==> colors.js syntax"
+phase "colors-js" node --check chat/colors.js
+
+echo "==> chat_theme.js syntax"
+phase "chat-theme-js" node --check chat/chat_theme.js
+
 echo "==> chat_search.js syntax"
 phase "chat-search-js" node --check chat/chat_search.js
 

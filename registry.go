@@ -40,6 +40,8 @@ func RegisterPages(mux *http.ServeMux) {
 	mux.HandleFunc("/chat/notifications", chat.HandleChatNotifications)
 	mux.HandleFunc("/chat/chat.js", chat.HandleChatJS)
 	mux.HandleFunc("/chat/styles.js", chat.HandleStylesJS)
+	mux.HandleFunc("/chat/colors.js", chat.HandleColorsJS)
+	mux.HandleFunc("/chat/chat_theme.js", chat.HandleChatThemeJS)
 	mux.HandleFunc("/chat/chat_search.js", chat.HandleChatSearchJS)
 	mux.HandleFunc("/chat/chat_left_sidebar.js", chat.HandleChatLeftSidebarJS)
 	mux.HandleFunc("/chat/chat_add_topic.js", chat.HandleChatAddTopicJS)
