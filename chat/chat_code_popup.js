@@ -23,7 +23,7 @@ window.ChatCodePopup = (function(){
   function ensureBackdropStyle(){
     if(backdropStyleInjected) return;
     var s = document.createElement('style');
-    s.textContent = 'dialog.chat-code-dialog::backdrop { background:rgba(0,0,0,0.45); }';
+    s.textContent = 'dialog.chat-code-dialog::backdrop { background:var(--cc-backdrop); }';
     document.head.appendChild(s);
     backdropStyleInjected = true;
   }
@@ -36,14 +36,14 @@ window.ChatCodePopup = (function(){
     dlg.className = 'chat-code-dialog';
     Object.assign(dlg.style, {
       maxWidth: '80vw', maxHeight: '80vh', padding: '0',
-      border: '1px solid #bbb', borderRadius: '8px', background: '#fff',
+      border: '1px solid '+ChatColors.dialogBorder, borderRadius: '8px', background: ChatColors.bg,
       display: 'flex', flexDirection: 'column',
     });
 
     var controls = document.createElement('div');
     Object.assign(controls.style, {
       flex: 'none', display: 'flex', justifyContent: 'flex-end',
-      padding: '6px 8px', borderBottom: '1px solid #eee', background: '#faf9f5',
+      padding: '6px 8px', borderBottom: '1px solid '+ChatColors.softBorder, background: ChatColors.codeStrapBg,
     });
     var close = document.createElement('button');
     close.type = 'button'; close.textContent = 'Close';
@@ -57,7 +57,7 @@ window.ChatCodePopup = (function(){
       margin: '0', padding: '14px 16px',
       fontFamily: 'ui-monospace, Menlo, Consolas, monospace',
       fontSize: '14px', lineHeight: '1.45', whiteSpace: 'pre',
-      color: '#222', cursor: 'auto',
+      color: ChatColors.codeFg, cursor: 'auto',
     });
 
     dlg.appendChild(controls); dlg.appendChild(pre);

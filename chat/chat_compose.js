@@ -33,12 +33,13 @@ window.ChatCompose = (function(){
       + '.chat-compose button { margin-top:8px; }'
       + '.chat-compose-actions { display:flex; gap:8px; margin-top:8px; }'
       + '.chat-compose-actions button { margin-top:0; }'
-      + '.chat-status { font-size:12px; color:#b00020; min-height:16px; margin-top:6px; }'
-      + '.chat-hint { font-size:12px; color:#999; margin-top:8px; }'
+      + '.chat-status { font-size:12px; color:var(--cc-error); min-height:16px; margin-top:6px; }'
+      + '.chat-hint { font-size:12px; color:var(--cc-soft-muted-fg); margin-top:8px; }'
       /* Plain "host may be down" alert — only ChatCompose builds these. */
-      + '.chat-alert-dialog { max-width:90vw; border:1px solid #bbb;'
+      + '.chat-alert-dialog { max-width:90vw; border:1px solid var(--cc-dialog-border);'
+      +                    ' background:var(--cc-bg); color:var(--cc-fg);'
       +                    ' border-radius:8px; padding:18px 20px; }'
-      + '.chat-alert-dialog::backdrop { background:rgba(0,0,0,0.4); }'
+      + '.chat-alert-dialog::backdrop { background:var(--cc-backdrop); }'
       + '.chat-alert-dialog p { margin:0 0 14px; }'
       + '.chat-alert-dialog button { padding:5px 16px; }';
     document.head.appendChild(s);
@@ -74,7 +75,7 @@ window.ChatCompose = (function(){
     var cid=(window.crypto&&crypto.randomUUID)?crypto.randomUUID():Date.now()+'-'+Math.random().toString(16).slice(2);
     pendingCid=cid;
     setComposeEnabled(false); /* PRODUCT_DECISION: keep the text disabled until the host acks. */
-    status.style.color='#888'; status.textContent='Sending…';
+    status.style.color=ChatColors.mutedFg; status.textContent='Sending…';
     pendingTimer=setTimeout(hostDown, 3000);
     fetch(SESSION_BASE+'/send',{ method:'POST',
       headers:{'Content-Type':'application/x-www-form-urlencoded','X-Chat-Async':'1'},
@@ -100,7 +101,7 @@ window.ChatCompose = (function(){
       status.textContent='That image is '+(file.size/1048576).toFixed(1)+' MB — too big to send (limit 10 MB). Try compressing or resizing it.';
       return;
     }
-    status.style.color='#888'; status.textContent='Uploading image…';
+    status.style.color=ChatColors.mutedFg; status.textContent='Uploading image…';
     var fd=new FormData(); fd.append('file',file);
     fetch(SESSION_BASE+'/upload',{method:'POST',body:fd})
       .then(function(r){

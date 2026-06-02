@@ -57,12 +57,13 @@ window.ChatStyles = (function(){
     li.setAttribute('data-source-id', opts.sourceID);
     Object.assign(li.style, {
       margin: '0 0 28px 0', padding: '14px 16px',
-      border: '1px solid #e0e0e0', borderRadius: '6px', background: '#fafafa',
+      border: '1px solid '+ChatColors.softBorder, borderRadius: '6px',
+      background: ChatColors.cardBg,
     });
 
     var meta = document.createElement('div');
     Object.assign(meta.style, {
-      fontSize: '15px', color: '#333', marginBottom: '10px', lineHeight: '1.5',
+      fontSize: '15px', color: ChatColors.metaFg, marginBottom: '10px', lineHeight: '1.5',
     });
 
     var line1 = document.createElement('div');
@@ -83,7 +84,7 @@ window.ChatStyles = (function(){
     line3.appendChild(document.createTextNode('From '));
     var a = document.createElement('a');
     a.className = 'chat-transcript-meta-link';
-    Object.assign(a.style, { color: '#333', textDecoration: 'none' });
+    Object.assign(a.style, { color: ChatColors.metaFg, textDecoration: 'none' });
     /* PRODUCT_DECISION: split source_id into <sid>_<n> on the LAST underscore
        (sids may contain hyphens but no underscores by construction). */
     var cut = opts.sourceID.lastIndexOf('_');

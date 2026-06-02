@@ -17,16 +17,17 @@ window.ChatHelp = (function(){
     if(stylesInjected) return;
     var s = document.createElement('style');
     s.textContent = ''
-      + '.chat-keyhelp { margin-top:18px; font-size:13px; color:#555; }'
-      + '.chat-keyhelp-title { font-weight:bold; color:#333; margin-bottom:7px; }'
+      + '.chat-keyhelp { margin-top:18px; font-size:13px; color:var(--cc-body-muted-fg); }'
+      + '.chat-keyhelp-title { font-weight:bold; color:var(--cc-meta-fg); margin-bottom:7px; }'
       + '.chat-key { margin:5px 0; }'
       + '.chat-keyhelp-key { display:inline-block; min-width:1.1em; text-align:center;'
       +                   ' padding:1px 6px; font-family:ui-monospace,Menlo,Consolas,monospace;'
-      +                   ' font-size:12px; color:#333; background:#fff; border:1px solid #ccc;'
+      +                   ' font-size:12px; color:var(--cc-meta-fg); background:var(--cc-bg);'
+      +                   ' border:1px solid var(--cc-border);'
       +                   ' border-bottom-width:2px; border-radius:4px; margin-right:7px;'
       +                   ' cursor:pointer; }'
-      + '.chat-keyhelp-key:hover { background:#f3f3ff; border-color:#9b9be0; }'
-      + '.chat-keyhelp-key:active { background:#e7e7ff; border-bottom-width:1px;'
+      + '.chat-keyhelp-key:hover { background:var(--cc-quote-bg); border-color:var(--cc-quote-border); }'
+      + '.chat-keyhelp-key:active { background:var(--cc-mine-bg); border-bottom-width:1px;'
       +                          ' transform:translateY(1px); }';
     document.head.appendChild(s);
     stylesInjected = true;

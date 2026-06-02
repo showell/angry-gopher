@@ -22,7 +22,7 @@
   mount.appendChild(listEl);
 
   var emptyEl = document.createElement('p');
-  Object.assign(emptyEl.style, { color:'#888', textAlign:'center', margin:'24px 0' });
+  Object.assign(emptyEl.style, { color: ChatColors.mutedFg, textAlign:'center', margin:'24px 0' });
   emptyEl.textContent = 'No images yet.';
 
   /* PRODUCT_DECISION: per-page image style — natural aspect ratio, capped

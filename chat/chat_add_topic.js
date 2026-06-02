@@ -21,10 +21,11 @@ window.ChatAddTopic = (function(){
     s.textContent = ''
       + '.chat-add-topic { display:flex; flex-wrap:wrap; gap:4px; margin-top:8px; }'
       + '.chat-add-topic input { flex:1; min-width:0; padding:3px 6px;'
-      +                       ' font-size:12px; border:1px solid #ccc;'
+      +                       ' font-size:12px; border:1px solid var(--cc-border);'
+      +                       ' background:var(--cc-bg); color:var(--cc-fg);'
       +                       ' border-radius:3px; font-family:inherit; }'
       + '.chat-add-topic button { padding:3px 8px; font-size:12px; flex:none; }'
-      + '.chat-add-topic-err { flex-basis:100%; color:#b00020; font-size:11px; }';
+      + '.chat-add-topic-err { flex-basis:100%; color:var(--cc-error); font-size:11px; }';
     document.head.appendChild(s);
     stylesInjected = true;
   }

@@ -35,9 +35,10 @@ window.ChatRightSidebar = (function(){
     s.textContent = ''
       + '.chat-compose { width:320px; flex:none; display:flex;'
       +               ' flex-direction:column; min-height:0; }'
-      + '.chat-open-compose { font-size:13px; padding:4px 12px; background:#e7e7ff; color:#23235a;'
-      +                    ' border:1px solid #b9b9e0; border-radius:6px; cursor:pointer; }'
-      + '.chat-open-compose:hover { background:#dcdcff; }';
+      + '.chat-open-compose { font-size:13px; padding:4px 12px;'
+      +                    ' background:var(--cc-mine-bg); color:var(--cc-search-tok-fg);'
+      +                    ' border:1px solid var(--cc-quote-border); border-radius:6px; cursor:pointer; }'
+      + '.chat-open-compose:hover { background:var(--cc-accent-soft-hov); }';
     document.head.appendChild(s);
     stylesInjected = true;
   }

@@ -31,7 +31,7 @@
   };
   var WHEN_STYLE_TD = {
     textAlign:'right', fontVariantNumeric:'tabular-nums',
-    whiteSpace:'nowrap', width:'1%', color:'#888',
+    whiteSpace:'nowrap', width:'1%', color: ChatColors.mutedFg,
   };
 
   var tableEl = document.createElement('table');
@@ -47,7 +47,7 @@
   mount.appendChild(tableEl);
 
   var emptyEl = document.createElement('p');
-  Object.assign(emptyEl.style, { color:'#888' });
+  Object.assign(emptyEl.style, { color: ChatColors.mutedFg });
   emptyEl.textContent = 'Nothing yet.';
 
   function humanize(iso){
@@ -100,7 +100,7 @@
       }
       what.appendChild(a);
       var partner=document.createElement('span');
-      partner.style.color='#888';
+      partner.style.color=ChatColors.mutedFg;
       partner.textContent=' (with '+(evt.partner||'')+')';
       what.appendChild(partner);
     }else if(evt.kind==='doc'){

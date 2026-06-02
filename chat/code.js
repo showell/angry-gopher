@@ -22,7 +22,7 @@
   mount.appendChild(listEl);
 
   var emptyEl = document.createElement('p');
-  Object.assign(emptyEl.style, { color:'#888', textAlign:'center', margin:'24px 0' });
+  Object.assign(emptyEl.style, { color: ChatColors.mutedFg, textAlign:'center', margin:'24px 0' });
   emptyEl.textContent = 'No code blocks yet.';
 
   /* PRODUCT_DECISION: the code-block styling lives inline in buildEntry —
@@ -39,15 +39,15 @@
       var blk = evt.blocks[i];
       var wrap = document.createElement('div');
       Object.assign(wrap.style, {
-        margin:'8px 0', border:'1px solid #ddd', borderRadius:'6px',
-        overflow:'hidden', background:'#fff',
+        margin:'8px 0', border:'1px solid '+ChatColors.border, borderRadius:'6px',
+        overflow:'hidden', background: ChatColors.bg,
       });
       if(blk.lang){
         var lang = document.createElement('div');
         Object.assign(lang.style, {
           fontSize:'11px', textTransform:'uppercase', letterSpacing:'0.05em',
-          color:'#888', padding:'4px 12px', background:'#faf9f5',
-          borderBottom:'1px solid #eee',
+          color: ChatColors.mutedFg, padding:'4px 12px', background: ChatColors.codeStrapBg,
+          borderBottom:'1px solid '+ChatColors.softBorder,
         });
         lang.textContent = blk.lang;
         wrap.appendChild(lang);
@@ -56,7 +56,7 @@
       Object.assign(pre.style, {
         margin:'0', padding:'10px 14px', maxHeight:'360px', overflow:'auto',
         fontFamily:'ui-monospace, Menlo, Consolas, monospace',
-        fontSize:'13px', lineHeight:'1.45', color:'#222', cursor:'zoom-in',
+        fontSize:'13px', lineHeight:'1.45', color: ChatColors.codeFg, cursor:'zoom-in',
       });
       pre.textContent = blk.body;
       wrap.appendChild(pre);

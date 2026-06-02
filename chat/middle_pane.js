@@ -21,7 +21,7 @@ window.ChatMiddlePane = (function(){
     /* :hover / :disabled / media-query — the rules that can't go through
        el.style. The rest of the column's styling is inline. */
     s.textContent =
-        '.chat-mp-btn:hover:enabled { background:#e3e3e3; }'
+        '.chat-mp-btn:hover:enabled { background:var(--cc-soft-border); }'
       + '.chat-mp-btn:disabled { opacity:0.4; cursor:default; }'
       + '.chat-mp-history:focus { outline:none; }'
       + '@media (orientation: landscape) { .chat-mp-main { flex:1; } }';
@@ -37,8 +37,8 @@ window.ChatMiddlePane = (function(){
     else b.textContent = opts.label || '';
     Object.assign(b.style, {
       fontSize:'14px', lineHeight:1, padding:'3px 11px',
-      background:'#eee', color:'#333',
-      border:'1px solid #ccc', borderRadius:'4px', cursor:'pointer',
+      background: ChatColors.softBorder, color: ChatColors.metaFg,
+      border:'1px solid '+ChatColors.border, borderRadius:'4px', cursor:'pointer',
     });
     return b;
   }
@@ -77,8 +77,8 @@ window.ChatMiddlePane = (function(){
     history.tabIndex = -1;
     Object.assign(history.style, {
       minWidth:0, flex:1, minHeight:0, overflowY:'auto',
-      border:'1px solid #ddd', borderRadius:'8px',
-      padding:'12px', background:'#fcfcf8',
+      border:'1px solid '+ChatColors.border, borderRadius:'8px',
+      padding:'12px', background: ChatColors.cardBg,
     });
 
     var bubbles = document.createElement('div');

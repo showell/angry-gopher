@@ -26,23 +26,30 @@ const AppChromeCSS = `
    this stylesheet (e.g. learn/learn.js's buildTopBar), it MUST replicate
    the sticky + opaque-background contract. Cross-ref in buildTopBar
    names this file as the canonical exemplar. */
-.app-top { background: #f0ede4; border-bottom: 1px solid #c9bfa7; padding: 8px 24px;
+/* PRODUCT_DECISION: every color is var(--cc-..., #hex). The fallback is
+   the original light-mode hex, so pages that don't load chat/colors.js
+   (home, settings, lynrummy, learn) keep the legacy palette untouched.
+   Pages that DO load colors.js (chat-subsystem) get the dark palette
+   when the user toggles. */
+.app-top { background: var(--cc-top-bar-bg, #f0ede4);
+           border-bottom: 1px solid var(--cc-top-bar-border, #c9bfa7);
+           padding: 8px 24px;
            font-family: sans-serif; display: flex; justify-content: space-between;
            align-items: baseline;
            position: sticky; top: 0; z-index: 10; }
-.app-top-home a { color: #000080; text-decoration: none; font-weight: bold; }
+.app-top-home a { color: var(--cc-accent, #000080); text-decoration: none; font-weight: bold; }
 .app-top-home a:hover { text-decoration: underline; }
-.app-top-user { font-size: 13px; color: #444; }
-.app-top-user a { color: #000080; }
+.app-top-user { font-size: 13px; color: var(--cc-body-muted-fg, #444); }
+.app-top-user a { color: var(--cc-accent, #000080); }
 .chat-top .chat-top-left { display: flex; align-items: baseline; gap: 14px;
                            flex-wrap: wrap; min-width: 0; }
-.chat-top-home { color: #000080; text-decoration: none; font-size: 13px; }
+.chat-top-home { color: var(--cc-accent, #000080); text-decoration: none; font-size: 13px; }
 .chat-top-home:hover { text-decoration: underline; }
-.chat-top-title { font-weight: bold; color: #000080; }
+.chat-top-title { font-weight: bold; color: var(--cc-accent, #000080); }
 .chat-top-links { font-size: 13px; }
-.chat-top-links a { color: #000080; text-decoration: none; }
+.chat-top-links a { color: var(--cc-accent, #000080); text-decoration: none; }
 .chat-top-links a:hover { text-decoration: underline; }
-.chat-notify { font-size:13px; color:#1a5fb4; overflow:hidden; text-overflow:ellipsis;
+.chat-notify { font-size:13px; color:var(--cc-notify-fg, #1a5fb4); overflow:hidden; text-overflow:ellipsis;
                white-space:nowrap; min-width:0; }
 .chat-notify a { color:inherit; }
 .chat-notify a:hover { text-decoration:underline; }
@@ -79,16 +86,16 @@ body { font-family: sans-serif; margin: 0; padding: 0;
                  width: 100%; box-sizing: border-box; }`)
 	fmt.Fprint(w, AppChromeCSS)
 	fmt.Fprint(w, `
-h1 { color: #000080; }
-h2 { color: #000080; margin-top: 24px; }
-a { color: #000080; }
+h1 { color: var(--cc-accent, #000080); }
+h2 { color: var(--cc-accent, #000080); margin-top: 24px; }
+a { color: var(--cc-accent, #000080); }
 nav { margin-bottom: 16px; font-size: 13px; }
 nav a { margin-right: 12px; }
 table { border-collapse: collapse; margin-top: 8px; width: 100%%; }
-th { background: #000080; color: white; padding: 6px 12px; text-align: left; }
-td { border-bottom: 1px solid #ccc; padding: 6px 12px; }
-tr:hover td { background: #f0f0ff; }
-.muted { color: #888; }
+th { background: var(--cc-accent, #000080); color: white; padding: 6px 12px; text-align: left; }
+td { border-bottom: 1px solid var(--cc-border, #ccc); padding: 6px 12px; }
+tr:hover td { background: var(--cc-accent-soft-bg, #f0f0ff); }
+.muted { color: var(--cc-muted-fg, #888); }
 textarea { width: 100%%; height: 60px; padding: 6px; box-sizing: border-box; margin: 8px 0; }
 button { background: #000080; color: white; border: none; padding: 8px 16px;
          font-size: 14px; cursor: pointer; border-radius: 4px; }

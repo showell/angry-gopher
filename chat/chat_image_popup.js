@@ -23,7 +23,7 @@ window.ChatImagePopup = (function(){
   function ensureBackdropStyle(){
     if(backdropStyleInjected) return;
     var s = document.createElement('style');
-    s.textContent = 'dialog.chat-img-dialog::backdrop { background:rgba(0,0,0,0.55); }';
+    s.textContent = 'dialog.chat-img-dialog::backdrop { background:var(--cc-backdrop); }';
     document.head.appendChild(s);
     backdropStyleInjected = true;
   }
@@ -35,7 +35,8 @@ window.ChatImagePopup = (function(){
        something to attach to; nothing else selects on it. */
     dlg.className = 'chat-img-dialog';
     Object.assign(dlg.style, {
-      border: '1px solid #000080', borderRadius: '10px', padding: '10px',
+      border: '1px solid '+ChatColors.accent, borderRadius: '10px', padding: '10px',
+      background: ChatColors.bg, color: ChatColors.fg,
       display: 'flex', flexDirection: 'column', gap: '8px',
     });
 
@@ -56,7 +57,7 @@ window.ChatImagePopup = (function(){
     var scroll = document.createElement('div');
     Object.assign(scroll.style, {
       width: '70vw', height: '70vh', overflow: 'auto',
-      background: '#faf9f5', borderRadius: '6px',
+      background: ChatColors.codeStrapBg, borderRadius: '6px',
     });
     var img = document.createElement('img'); img.alt = '';
     img.style.display = 'block';

@@ -41,13 +41,13 @@ window.ChatDragToPin = (function(){
       +                     ' user-select:none; -webkit-user-select:none; }'
       + '.chat-session-item.dragging { opacity:0.5; cursor:grabbing; }'
       + '.chat-session-drop { min-height:14px; border-radius:4px; }'
-      + '.chat-session-drop.drop-active { outline:2px dashed #1a5fb4;'
+      + '.chat-session-drop.drop-active { outline:2px dashed var(--cc-notify-fg);'
       +                                 ' outline-offset:-2px;'
-      +                                 ' background:#eef3fb; }'
+      +                                 ' background:var(--cc-accent-soft-bg); }'
       /* Drag ghost is appended to document.body (not a sidebar) so a
          narrow sidebar doesn't clip it; position:fixed makes that fine. */
       + '.chat-drag-ghost { position:fixed; z-index:1000; pointer-events:none;'
-      +                   ' background:#000080; color:#fff; font-size:12px;'
+      +                   ' background:var(--cc-accent); color:var(--cc-bg); font-size:12px;'
       +                   ' padding:3px 9px; border-radius:4px;'
       +                   ' box-shadow:0 2px 8px rgba(0,0,0,0.35);'
       +                   ' opacity:0.92; white-space:nowrap; max-width:170px;'

@@ -70,32 +70,32 @@ window.Message = (function(){
          chat/message_view.js — it's MessageView's visual concern, not the
          bubble's. */
       + '.chat-msg { margin:0 0 12px; padding:8px 10px; border-radius:8px; max-width:88%; }'
-      + '.chat-msg.mine { background:#e7e7ff; margin-left:auto; }'
-      + '.chat-msg.theirs { background:#f0f0e6; margin-right:auto; }'
+      + '.chat-msg.mine { background:var(--cc-mine-bg); margin-left:auto; }'
+      + '.chat-msg.theirs { background:var(--cc-theirs-bg); margin-right:auto; }'
       /* Meta line + action buttons. */
-      + '.chat-meta { font-size:11px; color:#888; margin-bottom:3px; }'
+      + '.chat-meta { font-size:11px; color:var(--cc-muted-fg); margin-bottom:3px; }'
       + '.chat-meta .msg-quote, .chat-meta .msg-refer, .chat-meta .msg-edit {'
-      +   ' font-size:10px; color:#888; background:none; border:none;'
+      +   ' font-size:10px; color:var(--cc-muted-fg); background:none; border:none;'
       +   ' padding:0 2px; cursor:pointer; text-decoration:underline; }'
       + '.chat-meta .msg-quote:hover, .chat-meta .msg-refer:hover, .chat-meta .msg-edit:hover {'
-      +   ' color:#000080; }'
+      +   ' color:var(--cc-accent); }'
       /* Bubble body wrap + classes goldmark + chat post-processing emit. */
       + '.chat-body { overflow-wrap:anywhere; }'
       + '.chat-body p:first-child { margin-top:0; }'
       + '.chat-body p:last-child { margin-bottom:0; }'
       + '.chat-body a.msg-ref {'
       +   ' font-family:ui-monospace,Menlo,Consolas,monospace; font-size:0.9em;'
-      +   ' background:#eaeaff; color:#000080; padding:0 4px; border-radius:3px;'
+      +   ' background:var(--cc-accent-soft-bg); color:var(--cc-accent); padding:0 4px; border-radius:3px;'
       +   ' text-decoration:none; }'
-      + '.chat-body a.msg-ref:hover { background:#d8d8ff; }'
+      + '.chat-body a.msg-ref:hover { background:var(--cc-accent-soft-hov); }'
       + '.chat-body pre {'
-      +   ' background:#f4f4ec; padding:8px; border-radius:4px;'
+      +   ' background:var(--cc-code-bg); padding:8px; border-radius:4px;'
       +   ' overflow-x:auto; cursor:pointer; }'
       + '.chat-body pre.chat-quote {'
       +   ' font-family:inherit; white-space:pre-wrap; overflow-wrap:anywhere;'
-      +   ' background:#f6f6fb; border-left:3px solid #b9b9e0;'
+      +   ' background:var(--cc-quote-bg); border-left:3px solid var(--cc-quote-border);'
       +   ' border-radius:0 4px 4px 0; margin:6px 0; padding:6px 10px;'
-      +   ' color:#444; overflow-x:visible; }'
+      +   ' color:var(--cc-body-muted-fg); overflow-x:visible; }'
       /* PRODUCT_DECISION: width/height:auto so the HTML width/height attrs
          (set by the upload handler) only seed the aspect-ratio hint — the
          max-* still controls actual size. The HTML attrs are there to reserve
@@ -105,15 +105,15 @@ window.Message = (function(){
       +   ' max-width:100%; max-height:320px; width:auto; height:auto;'
       +   ' display:block; margin:6px 0; border-radius:6px; cursor:zoom-in; }'
       /* Supersession spoiler (Edit of MSG_<id>). */
-      + '.chat-edited-note { font-size:12px; color:#888; margin-bottom:4px; }'
+      + '.chat-edited-note { font-size:12px; color:var(--cc-muted-fg); margin-bottom:4px; }'
       + '.chat-edited-spoiler > summary {'
-      +   ' font-size:11px; color:#888; cursor:pointer; list-style:none; }'
+      +   ' font-size:11px; color:var(--cc-muted-fg); cursor:pointer; list-style:none; }'
       + '.chat-edited-spoiler > summary::-webkit-details-marker { display:none; }'
       + '.chat-edited-spoiler > summary::before { content:"▸ "; }'
       + '.chat-edited-spoiler[open] > summary::before { content:"▾ "; }'
       + '.chat-edited-orig {'
-      +   ' font-size:11px; color:#999; white-space:pre-wrap; overflow-wrap:anywhere;'
-      +   ' border-left:3px solid #ddd; padding:2px 0 2px 8px; margin-top:4px; }';
+      +   ' font-size:11px; color:var(--cc-soft-muted-fg); white-space:pre-wrap; overflow-wrap:anywhere;'
+      +   ' border-left:3px solid var(--cc-border); padding:2px 0 2px 8px; margin-top:4px; }';
     document.head.appendChild(s);
     stylesInjected = true;
   }
