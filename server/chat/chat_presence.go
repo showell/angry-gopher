@@ -93,7 +93,13 @@ func markActiveAndBroadcast(user users.User) {
 			UserID:   user.ID,
 			UserName: user.Name,
 		})
-		publishNotify(other.ID, notifyEvent{Text: text})
+		// LinkURL is the recipient's default conversation with the user who
+		// came online — same target as clicking their sidebar row. Pair-key
+		// is per-recipient because conv ids sort numerically.
+		publishNotify(other.ID, notifyEvent{
+			Text:    text,
+			LinkURL: "/chat/c/" + chatPairKey(other.ID, user.ID),
+		})
 	}
 }
 

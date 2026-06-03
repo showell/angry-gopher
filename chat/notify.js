@@ -57,11 +57,19 @@ window.ChatNotify = (function(){
     if(!n) return;
     /* PRODUCT_DECISION: two event shapes on the same stream — free-form
        text status (presence "X has come online" today) and message ping
-       (from/conv/session). Text takes precedence; if it's set we render
-       a plain status string with no link. The favicon flashes either way:
-       the strip is the user-attention layer, not a per-thread channel. */
+       (from/conv/session). Text takes precedence; link_url (when set)
+       turns the text into a clickable link. The favicon flashes either
+       way: the strip is the user-attention layer, not a per-thread
+       channel. */
     if(n.text){
-      show(n.text);
+      if(n.link_url){
+        var la=document.createElement('a'); /* textContent only — text is untrusted. */
+        la.href=n.link_url; la.textContent=n.text;
+        la.addEventListener('click', clearTab);
+        show(la);
+      } else {
+        show(n.text);
+      }
       alertTab();
       return;
     }

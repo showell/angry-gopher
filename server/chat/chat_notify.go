@@ -32,8 +32,10 @@ import (
 //   - Message ping: From / Conv / Session populated; the client renders
 //     "<From> sent you a message on <Session>" linking to the thread.
 //   - Free-form status (presence "X has come online" today): Text
-//     populated and the others empty. The client renders Text verbatim
-//     and skips the link.
+//     populated and the others empty. The client renders Text verbatim;
+//     if LinkURL is also set, Text becomes the link label and clicking
+//     navigates there (presence uses this to jump straight to your
+//     default conversation with the user who came online).
 //
 // Text takes precedence on the client. The notify strip is the chat
 // subsystem's "user attention" surface — every chat-chrome page wires
@@ -44,6 +46,7 @@ type notifyEvent struct {
 	Conv    string `json:"conv,omitempty"`
 	Session string `json:"session,omitempty"`
 	Text    string `json:"text,omitempty"`
+	LinkURL string `json:"link_url,omitempty"`
 }
 
 var (
