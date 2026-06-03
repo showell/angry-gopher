@@ -665,7 +665,18 @@ func HandleChatSend(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	partner, _ := OtherInConv(user.ID, conv)
+	if !serveSendMessage(w, r, user, DMConv(user.ID, partner), sessionID) {
+		return
+	}
+	SetUserLastSession(user.ID, user.ID, partner, sessionID)
+}
 
+// parseComposeForm parses the markdown + cid fields from a POST body
+// shared by every "send a message" handler (DM, channel, anything we
+// add later). Writes the error response and returns ok=false on
+// over-size or malformed bodies. Centralizing this is what would have
+// caught the body/markdown field-name drift the first time.
+func parseComposeForm(w http.ResponseWriter, r *http.Request) (markdown, cid string, ok bool) {
 	r.Body = http.MaxBytesReader(w, r.Body, maxChatMessageBytes)
 	if err := r.ParseForm(); err != nil {
 		var maxErr *http.MaxBytesError
@@ -676,35 +687,44 @@ func HandleChatSend(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return
 	}
-	markdown := strings.TrimSpace(r.FormValue("markdown"))
-	cid := strings.TrimSpace(r.FormValue("cid")) // client-correlation id, echoed on the SSE broadcast
-	async := r.Header.Get("X-Chat-Async") == "1"
-
-	if markdown == "" {
-		chatSendDone(w, r, conv, sessionID, async)
-		return
-	}
-	if strings.HasPrefix(markdown, "DROP_ON_FLOOR") {
-		// Test back door: accept the POST but neither save nor broadcast, so no
-		// SSE echo returns and the sender's client exercises its timeout path.
-		chatSendDone(w, r, conv, sessionID, async)
-		return
-	}
-	if _, err := AppendChatMessage(user, partner, sessionID, markdown, cid); err != nil {
-		http.Error(w, "save message: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-	SetUserLastSession(user.ID, user.ID, partner, sessionID)
-	users.TouchUser(user.ID) // sending a message counts as activity
-	chatSendDone(w, r, conv, sessionID, async)
+	markdown = strings.TrimSpace(r.FormValue("markdown"))
+	cid = strings.TrimSpace(r.FormValue("cid"))
+	ok = true
+	return
 }
 
-func chatSendDone(w http.ResponseWriter, r *http.Request, conv, sessionID string, async bool) {
+// serveSendMessage is the shared body of HandleChatSend +
+// HandleChannelSend: parse the compose form, append (unless empty or
+// the test back-door), report. Returns ok=true on a saved message so
+// the caller can do conv-kind-specific bookkeeping after.
+func serveSendMessage(w http.ResponseWriter, r *http.Request, user users.User, c Conv, sid string) bool {
+	markdown, cid, ok := parseComposeForm(w, r)
+	if !ok {
+		return false
+	}
+	async := r.Header.Get("X-Chat-Async") == "1"
+	if markdown == "" || strings.HasPrefix(markdown, "DROP_ON_FLOOR") {
+		// Empty bodies and the DROP_ON_FLOOR test back-door both report
+		// success without appending — the client's timeout/echo handling
+		// gets to exercise its no-echo path.
+		sendMessageDone(w, r, c, sid, async)
+		return false
+	}
+	if _, err := c.AppendMessage(user, sid, markdown, cid); err != nil {
+		http.Error(w, "save message: "+err.Error(), http.StatusInternalServerError)
+		return false
+	}
+	users.TouchUser(user.ID)
+	sendMessageDone(w, r, c, sid, async)
+	return true
+}
+
+func sendMessageDone(w http.ResponseWriter, r *http.Request, c Conv, sid string, async bool) {
 	if async {
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
-	http.Redirect(w, r, "/chat/c/"+conv+"/"+url.PathEscape(sessionID), http.StatusSeeOther)
+	http.Redirect(w, r, c.topicURL(sid), http.StatusSeeOther)
 }
 
 // PRODUCT_DECISION: only the page-shell layout lives here — the rules

@@ -7,7 +7,6 @@ package chat
 import (
 	"angry-gopher/server/users"
 	"encoding/json"
-	"errors"
 	"net/http"
 	"net/url"
 	"strings"
@@ -83,7 +82,7 @@ func HandleChannelStream(w http.ResponseWriter, r *http.Request) {
 	serveChatStream(w, r, c, sid, since)
 }
 
-// HandleChannelSend posts a message to a topic.
+// HandleChannelSend posts a message to a channel topic.
 func HandleChannelSend(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -93,32 +92,7 @@ func HandleChannelSend(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	r.Body = http.MaxBytesReader(w, r.Body, maxChatMessageBytes)
-	if err := r.ParseForm(); err != nil {
-		var maxErr *http.MaxBytesError
-		if errors.As(err, &maxErr) {
-			http.Error(w, "message too large", http.StatusRequestEntityTooLarge)
-			return
-		}
-		http.Error(w, "bad request", http.StatusBadRequest)
-		return
-	}
-	markdown := strings.TrimSpace(r.FormValue("markdown"))
-	cid := strings.TrimSpace(r.FormValue("cid"))
-	if markdown == "" {
-		http.Error(w, "empty message", http.StatusBadRequest)
-		return
-	}
-	if _, err := c.AppendMessage(user, sid, markdown, cid); err != nil {
-		http.Error(w, "append: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-	users.TouchUser(user.ID)
-	if r.Header.Get("X-Chat-Async") != "" {
-		w.WriteHeader(http.StatusNoContent)
-		return
-	}
-	http.Redirect(w, r, c.topicURL(sid), http.StatusSeeOther)
+	serveSendMessage(w, r, user, c, sid)
 }
 
 // HandleChannelPin toggles the caller's per-user pin for a topic.
