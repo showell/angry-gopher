@@ -19,19 +19,6 @@
 window.ChatStyles = (function(){
   'use strict';
 
-  /* PRODUCT_DECISION: the meta link's :hover underline can't go on
-     element.style (it's a pseudo-class). Injected once per page load,
-     class-scoped so the rule only matches our meta links. */
-  var hoverStyleInjected = false;
-  // lint:called-once init-once-guard
-  function ensureHoverStyle(){
-    if(hoverStyleInjected) return;
-    var s = document.createElement('style');
-    s.textContent = 'a.chat-transcript-meta-link:hover { text-decoration: underline; }';
-    document.head.appendChild(s);
-    hoverStyleInjected = true;
-  }
-
   var MONTHS = ['January','February','March','April','May','June',
                 'July','August','September','October','November','December'];
 
@@ -84,8 +71,6 @@ window.ChatStyles = (function(){
     line3.style.margin = '1px 0';
     line3.appendChild(document.createTextNode('From '));
     var a = document.createElement('a');
-    a.className = 'chat-transcript-meta-link';
-    Object.assign(a.style, { color: ChatColors.metaFg, textDecoration: 'none' });
     a.href = opts.sourceURL;
     a.textContent = 'MSG_' + opts.sourceID;
     ensureHoverStyle();
@@ -95,6 +80,7 @@ window.ChatStyles = (function(){
     li.appendChild(meta);
     return li;
   }
+
 
   return {
     createTranscriptList: createTranscriptList,
