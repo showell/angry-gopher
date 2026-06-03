@@ -72,27 +72,64 @@
     seg.sprites.push({ side: side, kind: kind });
   }
 
-  function buildTrack() {
-    addStraight(30);
-    addCurve(60, 2);
-    addStraight(20);
-    addHill(40, 1500);
-    addCurve(60, -4);
-    addStraight(30);
-    addLowRoller(40, 2, -800);
-    addCurve(50, 5);
-    addStraight(30);
-    addHill(40, -1200);
-    addCurve(80, -6);
-    addStraight(40);
-    addHill(60, 2200);
-    addCurve(60, 4);
-    addStraight(30);
-    addCurve(80, -3);
-    addLowRoller(40, -2, 900);
-    addStraight(50);
+  // -------- course DSL --------
+  //
+  // A .course file is one directive per line; '#' is a comment.
+  //
+  //   name <free text>             — display name (sets document.title)
+  //   straight <N>                 — N*3 segments of flat road
+  //   curve <N> <amount>           — N*3 segments curving (+ right, - left)
+  //   hill <N> <delta>             — N*3 segments climbing (+ up, - down)
+  //   roller <N> <curve> <delta>   — curve + elevation combined
+  //   sprite <kind> <back> <side>  — place a sprite <back> segments behind
+  //                                  the current build cursor;
+  //                                  kind: tree | sign | cone; side: left|right
+  //   trees                        — auto-sprinkle trees + signs + cones
+  //   finish                       — explicit finish marker (auto otherwise)
+  //
+  // straight/curve/hill/roller advance the build cursor; sprite/trees/finish
+  // do not. Place sprites near the road shape they decorate by interleaving
+  // them with road directives.
+  function parseCourse(text) {
+    var meta = { name: 'Untitled' };
+    var lines = text.split('\n');
+    var sprinkleAll = false;
 
-    // mark start & finish
+    for (var i = 0; i < lines.length; i++) {
+      var raw = lines[i];
+      var line = raw.replace(/#.*$/, '').trim();
+      if (!line) continue;
+      var parts = line.split(/\s+/);
+      var cmd = parts[0].toLowerCase();
+
+      if (cmd === 'name') {
+        meta.name = raw.replace(/#.*$/, '').replace(/^\s*name\s+/i, '').trim();
+      } else if (cmd === 'straight') {
+        addStraight(+parts[1]);
+      } else if (cmd === 'curve') {
+        addCurve(+parts[1], +parts[2]);
+      } else if (cmd === 'hill') {
+        addHill(+parts[1], +parts[2]);
+      } else if (cmd === 'roller') {
+        addLowRoller(+parts[1], +parts[2], +parts[3]);
+      } else if (cmd === 'sprite') {
+        var back = +parts[2];
+        var side = (parts[3] === 'left') ? -1 : 1;
+        addSprite(segments.length - 1 - back, side, parts[1]);
+      } else if (cmd === 'trees') {
+        sprinkleAll = true;
+      } else if (cmd === 'finish') {
+        // explicit; we mark the trailing segments below regardless
+      } else {
+        console.warn('course: unknown directive', cmd, 'at line', i + 1);
+      }
+    }
+
+    if (segments.length < 6) {
+      console.error('course: too few segments built');
+      return meta;
+    }
+
     segments[0].color = COLORS.START;
     segments[1].color = COLORS.START;
     segments[2].color = COLORS.START;
@@ -100,25 +137,46 @@
     segments[segments.length - 2].color = COLORS.FINISH;
     segments[segments.length - 3].color = COLORS.FINISH;
 
-    // sprinkle trees + signs
+    if (sprinkleAll) sprinkleDecor();
+
+    trackLength = segments.length * segmentLength;
+    return meta;
+  }
+
+  function sprinkleDecor() {
     var i;
     for (i = 20; i < segments.length; i += 3 + Math.floor(Math.random() * 5)) {
       var side = Math.random() < 0.5 ? -1 : 1;
       var kind = Math.random() < 0.85 ? 'tree' : 'sign';
       addSprite(i, side, kind);
     }
-    // dense roadside tree wall in the distance
     for (i = 5; i < segments.length; i += 2) {
-      if (Math.random() < 0.4) addSprite(i, Math.random() < 0.5 ? -1 : 1, 'tree');
+      if (Math.random() < 0.35) addSprite(i, Math.random() < 0.5 ? -1 : 1, 'tree');
     }
-    // a few cones in the curves
     for (i = 0; i < segments.length; i++) {
-      if (Math.abs(segments[i].curve) > 3 && Math.random() < 0.18) {
+      if (Math.abs(segments[i].curve) > 3 && Math.random() < 0.15) {
         addSprite(i, segments[i].curve > 0 ? -1 : 1, 'cone');
       }
     }
+  }
 
-    trackLength = segments.length * segmentLength;
+  function chosenCourse() {
+    var q = new URLSearchParams(location.search);
+    return q.get('course') || 'practice';
+  }
+
+  function loadCourse() {
+    var name = chosenCourse();
+    return fetch('courses/' + encodeURIComponent(name) + '.course')
+      .then(function (r) {
+        if (!r.ok) throw new Error('HTTP ' + r.status + ' loading ' + name + '.course');
+        return r.text();
+      })
+      .then(function (text) {
+        var meta = parseCourse(text);
+        document.title = meta.name + ' — driving';
+        return meta;
+      });
   }
 
   function findSegment(z) {
@@ -557,9 +615,23 @@
     requestAnimationFrame(loop);
   }
 
-  buildTrack();
-  requestAnimationFrame(function (t) {
-    last = t;
-    requestAnimationFrame(loop);
-  });
+  loadCourse()
+    .then(function () {
+      requestAnimationFrame(function (t) {
+        last = t;
+        requestAnimationFrame(loop);
+      });
+    })
+    .catch(function (err) {
+      console.error('course load failed:', err);
+      var msg = document.createElement('pre');
+      msg.style.cssText = 'color:#eee;background:#1a1a22;padding:24px;font:13px/1.5 ui-monospace,monospace;margin:24px;border:1px solid #333;border-radius:6px;white-space:pre-wrap;';
+      msg.textContent =
+        'Failed to load course: ' + (err.message || err) + '\n\n' +
+        'Courses are loaded over HTTP. Run:\n\n' +
+        '    cd games/driving\n' +
+        '    python3 -m http.server 5000\n\n' +
+        'then open http://localhost:5000/';
+      canvas.parentNode.insertBefore(msg, canvas);
+    });
 })();
