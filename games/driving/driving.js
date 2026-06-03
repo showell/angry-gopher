@@ -146,10 +146,9 @@
   var accel      = maxSpeed / 4;
   var brakeDecel = -maxSpeed;
   var handDecel  = -maxSpeed * 1.4;
-  var coastDecel = -maxSpeed / 6;
-  var offRoadDecel = -maxSpeed / 1.5;
+  var offRoadDecel = -maxSpeed / 3;
   var offRoadLimit = maxSpeed / 4;
-  var centrifugal = 0.35;
+  var centrifugal = 0.18;
 
   var keys = {};
   window.addEventListener('keydown', function (e) {
@@ -179,7 +178,7 @@
     if (keys.Space)            player.speed = clamp(player.speed + handDecel * dt, 0, maxSpeed);
     else if (keys.ArrowDown)   player.speed = clamp(player.speed + brakeDecel * dt, 0, maxSpeed);
     else if (keys.ArrowUp)     player.speed = clamp(player.speed + accel * dt, 0, maxSpeed);
-    else                       player.speed = clamp(player.speed + coastDecel * dt, 0, maxSpeed);
+    // no coast decel — you only slow if you brake (or go off-road)
 
     // off-road slowdown + bumpiness handled by render
     if ((player.x < -1 || player.x > 1) && player.speed > offRoadLimit) {
