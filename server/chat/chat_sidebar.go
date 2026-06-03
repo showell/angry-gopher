@@ -8,7 +8,6 @@ package chat
 import (
 	"angry-gopher/server/users"
 	"net/http"
-	"strings"
 )
 
 // init wires chat's sidebar publish into users' new-member hook so login
@@ -55,17 +54,14 @@ func PublishUserArrived(newUID, newName string) {
 	}
 }
 
-// PublishTopicAdded broadcasts a new-session event to BOTH conv
-// participants. Called by AppendChatMessage exactly when the message
-// being appended is the first in its session.
-func PublishTopicAdded(conv, sid string) {
-	a, b, ok := strings.Cut(conv, "_")
-	if !ok || a == "" || b == "" {
-		return
+// publishTopicAddedForConv broadcasts a new-session event to every
+// conv member. Called by Conv.AppendMessage when the message being
+// appended is the first in its session.
+func publishTopicAddedForConv(c Conv, sid string) {
+	evt := sidebarEvent{Kind: "topic-added", Conv: c.Key, SID: sid}
+	for _, uid := range c.Members {
+		sidebarBus.publish(uid, evt)
 	}
-	evt := sidebarEvent{Kind: "topic-added", Conv: conv, SID: sid}
-	sidebarBus.publish(a, evt)
-	sidebarBus.publish(b, evt)
 }
 
 // HandleSidebarStream serves GET /chat/sidebar/stream.

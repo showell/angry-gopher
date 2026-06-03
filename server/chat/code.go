@@ -224,27 +224,23 @@ func appendCodeEntryLocked(uid string, e codeEntry) error {
 	return nil
 }
 
-// PublishChatCode fans a code-bearing chat message out to BOTH conv
-// participants' code.md files + their live SSE streams. Called from
-// AppendChatMessage when the markdown contains ``` fenced blocks. Lock
-// order: chatMu (held) → codeFileMu (per-user, leaf).
-func PublishChatCode(conv, sid string, msg ChatMessage) {
+// publishCodeForConv fans a code-bearing chat message out to every
+// conv member's code.md + live SSE stream. Called from
+// Conv.AppendMessage when the markdown contains ``` fenced blocks.
+// Lock order: chatMu (held) → codeFileMu (per-user, leaf).
+func publishCodeForConv(c Conv, sid string, msg ChatMessage) {
 	blocks := extractCodeBlocks(msg.Markdown)
 	if len(blocks) == 0 {
-		return
-	}
-	a, b, ok := strings.Cut(conv, "_")
-	if !ok || a == "" || b == "" {
 		return
 	}
 	e := codeEntry{
 		SourceID: msg.ID,
 		From:     msg.From,
-		Conv:     conv,
+		Conv:     c.Key,
 		At:       msg.At,
 		Blocks:   blocks,
 	}
-	for _, uid := range []string{a, b} {
+	for _, uid := range c.Members {
 		mu := codeMuFor(uid)
 		mu.Lock()
 		if err := appendCodeEntryLocked(uid, e); err != nil {

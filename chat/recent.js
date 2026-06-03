@@ -82,10 +82,9 @@
     var what=document.createElement('td');
     tr.dataset.ts=evt.at;
     if(evt.kind==='chat'){
-      tr.dataset.key='chat:'+evt.conv+'/'+evt.sid;
+      tr.dataset.key='chat:'+evt.url;
       var a=document.createElement('a');
-      a.href='/chat/c/'+encodeURIComponent(evt.conv)+'/'+encodeURIComponent(evt.sid);
-      a.textContent=evt.sid;
+      a.href=evt.url; a.textContent=evt.topic;
       /* PRODUCT_DECISION: lead with the author when known — apoorva's ask.
          Pre-companion sessions (live append starts populating .lastauthor on
          first new message) fall back to the older "New message" phrasing. */
@@ -99,10 +98,12 @@
         what.appendChild(document.createTextNode('New message in '));
       }
       what.appendChild(a);
-      var partner=document.createElement('span');
-      partner.style.color=ChatColors.mutedFg;
-      partner.textContent=' (with '+(evt.partner||'')+')';
-      what.appendChild(partner);
+      if(evt.where){
+        var ctx=document.createElement('span');
+        ctx.style.color=ChatColors.mutedFg;
+        ctx.textContent=' ('+evt.where+')';
+        what.appendChild(ctx);
+      }
     }else if(evt.kind==='doc'){
       tr.dataset.key='doc:'+evt.slug;
       var da=document.createElement('a');
@@ -134,7 +135,7 @@
 
   // lint:called-once sse-handler
   function upsert(evt){
-    var key=evt.kind==='chat' ? 'chat:'+evt.conv+'/'+evt.sid : 'doc:'+evt.slug;
+    var key=evt.kind==='chat' ? 'chat:'+evt.url : 'doc:'+evt.slug;
     var existing=tbodyEl.querySelector('tr[data-key="'+key+'"]');
     if(existing) existing.remove();
     var tr=buildRow(evt); if(!tr) return;

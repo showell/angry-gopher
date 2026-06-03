@@ -139,27 +139,23 @@ func appendImagesEntryLocked(uid string, e imagesEntry) error {
 	return nil
 }
 
-// PublishChatImage fans an image-bearing chat message out to BOTH conv
-// participants' images.md files + their live SSE streams. Called from
-// AppendChatMessage when the markdown contains <img ...> tags. Lock order:
-// chatMu (held) → imagesMu (per-user, leaf).
-func PublishChatImage(conv, sid string, msg ChatMessage) {
+// publishImagesForConv fans an image-bearing chat message out to every
+// conv member's images.md + live SSE stream. Called from
+// Conv.AppendMessage when the markdown contains <img ...> tags. Lock
+// order: chatMu (held) → imagesMu (per-user, leaf).
+func publishImagesForConv(c Conv, sid string, msg ChatMessage) {
 	tags := imageTagRe.FindAllString(msg.Markdown, -1)
 	if len(tags) == 0 {
-		return
-	}
-	a, b, ok := strings.Cut(conv, "_")
-	if !ok || a == "" || b == "" {
 		return
 	}
 	e := imagesEntry{
 		SourceID: msg.ID,
 		From:     msg.From,
-		Conv:     conv,
+		Conv:     c.Key,
 		At:       msg.At,
 		Images:   tags,
 	}
-	for _, uid := range []string{a, b} {
+	for _, uid := range c.Members {
 		mu := imagesMuFor(uid)
 		mu.Lock()
 		if err := appendImagesEntryLocked(uid, e); err != nil {

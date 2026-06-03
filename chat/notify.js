@@ -54,26 +54,15 @@ window.ChatNotify = (function(){
   var nes=new EventSource('/chat/notifications');
   nes.onmessage=function(e){
     var n; try{ n=JSON.parse(e.data); }catch(err){ console.error('notify: malformed JSON from /chat/notifications', e.data, err); return; }
-    if(!n) return;
-    /* PRODUCT_DECISION: two event shapes on the same stream — free-form
-       text status (presence "X has come online" today) and message ping
-       (from/conv/session). Status events ALWAYS carry text+link_url as a
-       pair (server-side invariant in chat_notify.go); we render text as
-       the link label, no conditional. The favicon flashes either way:
-       the strip is the user-attention layer, not a per-thread channel. */
-    if(n.text){
-      var la=document.createElement('a'); /* textContent only — text is untrusted. */
-      la.href=n.link_url; la.textContent=n.text;
-      la.addEventListener('click', clearTab);
-      show(la);
-      alertTab();
-      return;
-    }
-    if(!n.session) return;
-    if(n.conv===CONV && n.session===SESSION) return; /* PRODUCT_DECISION: already in the open feed. */
-    var a=document.createElement('a'); /* PRODUCT_DECISION: textContent only — from/session are untrusted. */
-    a.href='/chat/c/'+encodeURIComponent(n.conv)+'/'+encodeURIComponent(n.session);
-    a.textContent=n.from+' sent you a message on '+n.session;
+    if(!n||!n.text||!n.link_url) return;
+    /* INVARIANT: every notify event ships pre-rendered text + link_url
+       (server-side invariant in chat_notify.go). One render path: wrap
+       text in <a href=link_url>. The strip suppresses the update iff
+       conv+session match the open feed (no point saying "new message"
+       about the thread you're reading). */
+    if(n.conv && n.conv===CONV && n.session===SESSION) return;
+    var a=document.createElement('a'); /* PRODUCT_DECISION: textContent only — text is untrusted. */
+    a.href=n.link_url; a.textContent=n.text;
     a.addEventListener('click', clearTab);
     show(a);
     alertTab();

@@ -348,116 +348,19 @@ func readChatFileLocked(path string) ([]ChatMessage, error) {
 // ReadChatSession returns every message in one session of a
 // conversation.
 func ReadChatSession(a, b, sessionID string) ([]ChatMessage, error) {
-	chatMu.Lock()
-	defer chatMu.Unlock()
-	return readChatFileLocked(chatSessionPath(a, b, sessionID))
+	return DMConv(a, b).ReadSession(sessionID)
 }
 
-// AppendChatMessage stores a message from `from` to the partner id,
-// writing it to the named session, and publishes it to any live
-// subscribers of that (conv, session). Returns the stored message
-// (with its normalized timestamp + id).
+// AppendChatMessage is the DM-shaped wrapper that 10 other files still
+// call. New code should construct a Conv and call AppendMessage
+// directly.
 func AppendChatMessage(from users.User, partnerID, sessionID, markdown, cid string) (ChatMessage, error) {
-	convKey := chatPairKey(from.ID, partnerID)
-	subKey := convKey + "/" + sessionID
-	path := chatSessionPath(from.ID, partnerID, sessionID)
-	msg := ChatMessage{From: from.Name, At: time.Now().UTC(), Markdown: markdown}
-
-	chatMu.Lock()
-	defer chatMu.Unlock()
-
-	existing, err := readChatFileLocked(path)
-	if err != nil {
-		return msg, err
-	}
-	index := len(existing)
-	msg.ID = chatMsgID(sessionID, index)
-
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return msg, err
-	}
-	f, err := os.OpenFile(path, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0o644)
-	if err != nil {
-		return msg, err
-	}
-	if _, err := f.WriteString(chatStoredForm(index, msg)); err != nil {
-		f.Close()
-		return msg, err
-	}
-	if err := f.Close(); err != nil {
-		return msg, err
-	}
-
-	// Update the last-author companion. Best-effort — Recent degrades to
-	// "no author shown" if this fails, but the message itself is durable.
-	_ = os.WriteFile(chatLastAuthorPath(from.ID, partnerID, sessionID), []byte(from.ID), 0o644)
-
-	evt := chatEvent{Index: index, Msg: msg, Cid: cid}
-	for ch := range chatSubs[subKey] {
-		select {
-		case ch <- evt:
-		default: // slow subscriber; it will replay on reconnect
-		}
-	}
-	// Ping the RECIPIENT's cross-session notification feed (any page they have
-	// open), so they learn "<from> sent you a message on <session>" even when
-	// they're not viewing this session. Lock order: chatMu (held) -> notifyMu.
-	notifyBus.publish(partnerID, notifyEvent{From: from.Name, Conv: convKey, Session: sessionID})
-	// Ping BOTH participants' /chat/recent feeds so an open Recent page
-	// upserts this (conv, session) row to the top. Same lock order as
-	// notify — recentMu is a leaf.
-	PublishChatRecent(convKey, sessionID, msg.At, from.ID)
-	// Append to BOTH participants' image transcripts if the body contains
-	// <img ...> tags + ping their /chat/images streams. Lock order:
-	// chatMu (held) → imagesFileMu (leaf, per-user).
-	PublishChatImage(convKey, sessionID, msg)
-	// Same shape for code: append to BOTH participants' code transcripts if
-	// the body contains triple-backtick fenced code blocks + ping their
-	// /chat/code streams. Lock order: chatMu (held) → codeFileMu (leaf).
-	PublishChatCode(convKey, sessionID, msg)
-	// First message in this session → the session is brand new (covers both
-	// HandleChatNewTopic's seeded "hi" and date sessions auto-created on
-	// first send). Ping BOTH participants' /chat/sidebar streams so an open
-	// conversation page upserts a Sessions row without a reload.
-	if index == 0 {
-		PublishTopicAdded(convKey, sessionID)
-	}
-	return msg, nil
+	return DMConv(from.ID, partnerID).AppendMessage(from, sessionID, markdown, cid)
 }
 
-// OpenChatStream atomically snapshots one session's backlog from
-// `since` onward and registers a subscriber for future messages in
-// that session. The returned cancel must be called to unsubscribe
-// (and close the channel).
+// OpenChatStream is the DM-shaped wrapper. New code should use
+// DMConv(a, b).OpenStream(sid, since) or the equivalent channel
+// constructor's OpenStream.
 func OpenChatStream(a, b, sessionID string, since int) (backlog []chatEvent, ch <-chan chatEvent, cancel func()) {
-	convKey := chatPairKey(a, b)
-	subKey := convKey + "/" + sessionID
-	out := make(chan chatEvent, 32)
-
-	chatMu.Lock()
-	defer chatMu.Unlock()
-
-	all, _ := readChatFileLocked(chatSessionPath(a, b, sessionID))
-	for i := since; i >= 0 && i < len(all); i++ {
-		backlog = append(backlog, chatEvent{Index: i, Msg: all[i]})
-	}
-	if chatSubs[subKey] == nil {
-		chatSubs[subKey] = map[chan chatEvent]struct{}{}
-	}
-	chatSubs[subKey][out] = struct{}{}
-
-	cancel = func() {
-		chatMu.Lock()
-		defer chatMu.Unlock()
-		if subs := chatSubs[subKey]; subs != nil {
-			if _, ok := subs[out]; ok {
-				delete(subs, out)
-				close(out)
-			}
-			if len(subs) == 0 {
-				delete(chatSubs, subKey)
-			}
-		}
-	}
-	return backlog, out, cancel
+	return DMConv(a, b).OpenStream(sessionID, since)
 }

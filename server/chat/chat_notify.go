@@ -8,31 +8,24 @@ import (
 	"net/http"
 )
 
-// notifyEvent is one activity ping on the user-attention layer. Two
-// shapes flow through the same stream:
+// notifyEvent is one ping on the user-attention layer. INVARIANT: Text
+// and LinkURL are ALWAYS set — every status message is actionable and
+// renders as <a href=LinkURL>Text</a> on the client, no conditional.
 //
-//   - Message ping: From / Conv / Session populated; the client renders
-//     "<From> sent you a message on <Session>" linking to the thread.
-//   - Free-form status (presence "X has come online" today): Text +
-//     LinkURL populated and the others empty. The client renders Text
-//     as the LinkURL's label.
+// Conv + Session, when set, name the (conv, session) the event is
+// about; the client suppresses the strip update if that pair matches
+// the open feed (you don't need a "you have a new message" notice for
+// the thread you're actively reading). Cross-thread events (presence,
+// channel posts viewed from a different page) leave them empty.
 //
-// PRODUCT_DECISION: every status message is actionable. When Text is
-// set, LinkURL MUST also be set — the client unconditionally wraps Text
-// in an <a href=LinkURL>. There is no plain-text "status only"
-// rendering path; if you can't motivate a destination for a notice, it
-// doesn't belong on the user-attention layer.
-//
-// Text takes precedence on the client. The notify strip is the chat
-// subsystem's "user attention" surface — every chat-chrome page wires
-// #chat-notify — so anything that should flash the favicon + tab strip
-// for the user (not for a specific thread) belongs here.
+// The notify strip is the chat subsystem's "user attention" surface —
+// every chat-chrome page wires #chat-notify — so anything that should
+// flash the favicon + tab strip for the user belongs here.
 type notifyEvent struct {
-	From    string `json:"from,omitempty"`
 	Conv    string `json:"conv,omitempty"`
 	Session string `json:"session,omitempty"`
-	Text    string `json:"text,omitempty"`
-	LinkURL string `json:"link_url,omitempty"`
+	Text    string `json:"text"`
+	LinkURL string `json:"link_url"`
 }
 
 // notifyBus is keyed by recipient user id (a user may have several

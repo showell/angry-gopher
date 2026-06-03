@@ -16,7 +16,6 @@ import (
 	"net/url"
 	"os"
 	"sort"
-	"strings"
 	"time"
 )
 
@@ -73,9 +72,9 @@ func emitRecentData(w http.ResponseWriter, items []recentItem) {
 		switch it.kind {
 		case recentChat:
 			evt.Kind = "chat"
-			evt.Conv = it.conv
-			evt.SID = it.sid
-			evt.Partner = it.partner
+			evt.URL = "/chat/c/" + it.conv + "/" + it.sid
+			evt.Topic = it.sid
+			evt.Where = "with " + it.partner
 			evt.LastAuthor = it.lastAuthor
 		case recentDoc:
 			evt.Kind = "doc"
@@ -139,19 +138,23 @@ func gatherRecentItems(user users.User) []recentItem {
 	return items
 }
 
-// recentEvent is one activity ping pushed to a single viewer. Encoded as
-// JSON in the SSE data field; the client renders the row from these fields.
-// Kind selects which identity fields are populated:
+// recentEvent is one activity ping pushed to a single viewer. Kind
+// selects which fields are populated:
 //
-//	chat: Conv ("a_b") + SID (topic) + Partner (name of the OTHER side)
-//	      + LastAuthor (name of the message's sender)
+//	chat: URL (where to navigate) + Topic (display label for the topic)
+//	      + Where (pre-rendered context, "with apoorva" for DMs or
+//	      "in General" for channels) + LastAuthor (sender's name)
 //	doc:  Slug + Title
+//
+// Pre-rendering URL + Where on the server means the client doesn't
+// branch on conv shape: every chat row is "Message from <LastAuthor>
+// in <Topic> (<Where>)" linking to URL, no conditional.
 type recentEvent struct {
 	Kind       string    `json:"kind"`
 	At         time.Time `json:"at"`
-	Conv       string    `json:"conv,omitempty"`
-	SID        string    `json:"sid,omitempty"`
-	Partner    string    `json:"partner,omitempty"`
+	URL        string    `json:"url,omitempty"`
+	Topic      string    `json:"topic,omitempty"`
+	Where      string    `json:"where,omitempty"`
 	LastAuthor string    `json:"last_author,omitempty"`
 	Slug       string    `json:"slug,omitempty"`
 	Title      string    `json:"title,omitempty"`
@@ -160,24 +163,33 @@ type recentEvent struct {
 // recentBus is keyed by viewer user id.
 var recentBus = newSubBus[recentEvent]()
 
-// PublishChatRecent fans one chat-message activity out to BOTH conv
-// participants' recent feeds, pre-resolving each side's partner name +
-// the message author's name so the client doesn't need a uid→name table.
-// Called from AppendChatMessage (the single chat-write chokepoint).
-func PublishChatRecent(conv, sid string, at time.Time, authorUID string) {
-	a, b, ok := strings.Cut(conv, "_")
-	if !ok || a == "" || b == "" {
-		return
-	}
+// publishRecentForConv fans one chat-message activity out to every
+// conv member's recent feed, pre-resolving the per-recipient "Where"
+// label so the client doesn't need a uid→name table. DM: each side
+// reads "with <other>"; channel: every member reads "in <channel>".
+func publishRecentForConv(c Conv, sid string, at time.Time, authorUID string) {
 	authorName := users.GetUserName(authorUID)
-	recentBus.publish(a, recentEvent{
-		Kind: "chat", At: at, Conv: conv, SID: sid,
-		Partner: users.GetUserName(b), LastAuthor: authorName,
-	})
-	recentBus.publish(b, recentEvent{
-		Kind: "chat", At: at, Conv: conv, SID: sid,
-		Partner: users.GetUserName(a), LastAuthor: authorName,
-	})
+	url := c.topicURL(sid)
+	for _, uid := range c.Members {
+		recentBus.publish(uid, recentEvent{
+			Kind:       "chat",
+			At:         at,
+			URL:        url,
+			Topic:      sid,
+			Where:      c.recentWhereFor(uid),
+			LastAuthor: authorName,
+		})
+	}
+}
+
+// recentWhereFor is the per-recipient muted-span text. DMs name the
+// other party ("with apoorva"); channels name the channel ("in General").
+func (c Conv) recentWhereFor(viewerUID string) string {
+	if c.Kind == KindChannel {
+		return "in " + c.Key
+	}
+	other := c.PartnerOf(viewerUID)
+	return "with " + users.GetUserName(other)
 }
 
 // PublishDocRecent pings the author's own recent feed when one of their
