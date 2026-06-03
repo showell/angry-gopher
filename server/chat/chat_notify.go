@@ -31,11 +31,15 @@ import (
 //
 //   - Message ping: From / Conv / Session populated; the client renders
 //     "<From> sent you a message on <Session>" linking to the thread.
-//   - Free-form status (presence "X has come online" today): Text
-//     populated and the others empty. The client renders Text verbatim;
-//     if LinkURL is also set, Text becomes the link label and clicking
-//     navigates there (presence uses this to jump straight to your
-//     default conversation with the user who came online).
+//   - Free-form status (presence "X has come online" today): Text +
+//     LinkURL populated and the others empty. The client renders Text
+//     as the LinkURL's label.
+//
+// PRODUCT_DECISION: every status message is actionable. When Text is
+// set, LinkURL MUST also be set — the client unconditionally wraps Text
+// in an <a href=LinkURL>. There is no plain-text "status only"
+// rendering path; if you can't motivate a destination for a notice, it
+// doesn't belong on the user-attention layer.
 //
 // Text takes precedence on the client. The notify strip is the chat
 // subsystem's "user attention" surface — every chat-chrome page wires
