@@ -54,7 +54,18 @@ window.ChatNotify = (function(){
   var nes=new EventSource('/chat/notifications');
   nes.onmessage=function(e){
     var n; try{ n=JSON.parse(e.data); }catch(err){ console.error('notify: malformed JSON from /chat/notifications', e.data, err); return; }
-    if(!n||!n.session) return;
+    if(!n) return;
+    /* PRODUCT_DECISION: two event shapes on the same stream — free-form
+       text status (presence "X has come online" today) and message ping
+       (from/conv/session). Text takes precedence; if it's set we render
+       a plain status string with no link. The favicon flashes either way:
+       the strip is the user-attention layer, not a per-thread channel. */
+    if(n.text){
+      show(n.text);
+      alertTab();
+      return;
+    }
+    if(!n.session) return;
     if(n.conv===CONV && n.session===SESSION) return; /* PRODUCT_DECISION: already in the open feed. */
     var a=document.createElement('a'); /* PRODUCT_DECISION: textContent only — from/session are untrusted. */
     a.href='/chat/c/'+encodeURIComponent(n.conv)+'/'+encodeURIComponent(n.session);

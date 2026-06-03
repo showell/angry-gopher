@@ -48,7 +48,16 @@ window.ChatLeftSidebar = (function(){
       +                                 ' font-weight:bold; }'
       + '.chat-sidebar-list li.muted { color:var(--cc-muted-fg); padding:4px 8px;'
       +                              ' font-style:italic; }'
-      + '.chat-pin-hint { font-size:11px; }';
+      + '.chat-pin-hint { font-size:11px; }'
+      /* Presence dot: tiny round badge to the left of partner labels. The
+         "online" class flips it to the accent color; default state stays
+         neutral muted so it's still readable as "user, gray = inactive". */
+      + '.chat-presence-dot { display:inline-block; width:8px; height:8px;'
+      +                     ' border-radius:50%; margin-right:6px;'
+      +                     ' background:var(--cc-soft-muted-fg);'
+      +                     ' vertical-align:middle; }'
+      + '.chat-sidebar-list li.online .chat-presence-dot {'
+      +                     ' background:var(--cc-accent); }';
     document.head.appendChild(s);
     stylesInjected = true;
   }
@@ -60,8 +69,14 @@ window.ChatLeftSidebar = (function(){
   function makeConvItem(rec){
     var li=document.createElement('li');
     li.setAttribute('data-uid', rec.id);
+    if(rec.online) li.className='online';
     var a=document.createElement('a');
-    a.href=rec.url; a.textContent=rec.label;
+    a.href=rec.url;
+    /* Dot lives INSIDE the row link so it picks up the same hover/active
+       background. The label is plain text; dot styling is purely CSS. */
+    var dot=document.createElement('span'); dot.className='chat-presence-dot';
+    a.appendChild(dot);
+    a.appendChild(document.createTextNode(rec.label));
     if(rec.active) a.className='active';
     li.appendChild(a);
     return li;
@@ -155,6 +170,16 @@ window.ChatLeftSidebar = (function(){
       active: false,
     }));
   }
+  /* Presence: server fires user-online ONLY on the came-online edge
+     (>=5min of prior inactivity). We just flip the row class; the dot
+     repaints via CSS. No live offline-fade in v1 — rows stay green
+     until the next page reload re-derives state from the server. */
+  // lint:called-once sse-event-handler
+  function markPartnerOnline(evt){
+    if(!evt.user_id) return;
+    var li=convList.querySelector('li[data-uid="'+evt.user_id+'"]');
+    if(li) li.classList.add('online');
+  }
   // lint:called-once init-section
   function wireSidebarStream(){
     var es=new EventSource('/chat/sidebar/stream');
@@ -165,6 +190,7 @@ window.ChatLeftSidebar = (function(){
       if(!evt||!evt.kind) return;
       if(evt.kind==='user-arrived') upsertPartner(evt);
       else if(evt.kind==='topic-added') upsertSession(evt);
+      else if(evt.kind==='user-online') markPartnerOnline(evt);
     };
   }
 

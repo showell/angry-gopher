@@ -26,13 +26,24 @@ import (
 	"time"
 )
 
-// notifyEvent is one activity ping: "<From> sent you a message on <Session>"
-// in conversation <Conv>. No body — just who/where, so the client shows a
-// status line and a link, not the message itself.
+// notifyEvent is one activity ping on the user-attention layer. Two
+// shapes flow through the same stream:
+//
+//   - Message ping: From / Conv / Session populated; the client renders
+//     "<From> sent you a message on <Session>" linking to the thread.
+//   - Free-form status (presence "X has come online" today): Text
+//     populated and the others empty. The client renders Text verbatim
+//     and skips the link.
+//
+// Text takes precedence on the client. The notify strip is the chat
+// subsystem's "user attention" surface — every chat-chrome page wires
+// #chat-notify — so anything that should flash the favicon + tab strip
+// for the user (not for a specific thread) belongs here.
 type notifyEvent struct {
-	From    string `json:"from"`
-	Conv    string `json:"conv"`
-	Session string `json:"session"`
+	From    string `json:"from,omitempty"`
+	Conv    string `json:"conv,omitempty"`
+	Session string `json:"session,omitempty"`
+	Text    string `json:"text,omitempty"`
 }
 
 var (

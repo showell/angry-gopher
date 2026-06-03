@@ -584,11 +584,14 @@ func renderChatConversation(w http.ResponseWriter, user users.User, partnerID, c
 // sidebarItem is one labelled link in the left rail — used for partner
 // conversations AND for sessions. `id` is the data-* attribute key the
 // client uses for SSE dedupe (partners) and drag-to-pin (sessions).
+// Online is the presence flag — meaningful for partner rows (does the
+// partner have recent server activity?); always false for session rows.
 type sidebarItem struct {
 	ID     string `json:"id"`
 	Label  string `json:"label"`
 	URL    string `json:"url"`
 	Active bool   `json:"active"`
+	Online bool   `json:"online,omitempty"`
 }
 
 // sidebarPayload is what the server emits and the client renders the
@@ -617,6 +620,7 @@ func buildSidebarPayload(user users.User, partnerID, conv, sessionID string) sid
 			Label:  m.Name,
 			URL:    "/chat/c/" + theirConv,
 			Active: theirConv == conv,
+			Online: IsOnline(m.ID),
 		})
 	}
 	sessions := ListChatSessions(user.ID, partnerID)

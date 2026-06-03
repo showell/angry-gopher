@@ -50,9 +50,11 @@ func init() {
 // sidebarEvent is one structural ping. Kind discriminates: user-arrived
 // is a fresh chat partner (Conv pre-resolved to the partner-key from the
 // RECIPIENT'S perspective so the client doesn't need to know its own uid);
-// topic-added is a new session in a conversation you're (probably) in.
+// topic-added is a new session in a conversation you're (probably) in;
+// user-online flips the partner-row presence dot on (no Conv field —
+// presence is per-user, not per-conversation).
 type sidebarEvent struct {
-	Kind     string `json:"kind"` // "user-arrived" | "topic-added"
+	Kind     string `json:"kind"` // "user-arrived" | "topic-added" | "user-online"
 	UserID   string `json:"user_id,omitempty"`
 	UserName string `json:"user_name,omitempty"`
 	Conv     string `json:"conv,omitempty"`
