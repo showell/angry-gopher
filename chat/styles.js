@@ -6,9 +6,10 @@
 
    Public surface (window.ChatStyles):
      createTranscriptList() → <ul>, styled, ready to append entries to.
-     createTranscriptEntry({sourceID, from, when, conv}) → <li> with
-       data-source-id + the meta header pre-built. Caller appends the
-       page-specific body.
+     createTranscriptEntry({sourceID, from, when, sourceURL}) → <li>
+       with data-source-id + the meta header pre-built. sourceURL is
+       server-supplied so DM and channel rows render the same shape
+       without a conv-kind branch on the client.
      formatTranscriptTime(iso) → UTC "January 2, 2006 15:04" string.
 
    Self-contained: this module owns ALL transcript-shell styling. Element
@@ -85,12 +86,7 @@ window.ChatStyles = (function(){
     var a = document.createElement('a');
     a.className = 'chat-transcript-meta-link';
     Object.assign(a.style, { color: ChatColors.metaFg, textDecoration: 'none' });
-    /* PRODUCT_DECISION: split source_id into <sid>_<n> on the LAST underscore
-       (sids may contain hyphens but no underscores by construction). */
-    var cut = opts.sourceID.lastIndexOf('_');
-    var sid = cut > 0 ? opts.sourceID.substring(0, cut) : '';
-    a.href = '/chat/c/' + encodeURIComponent(opts.conv) +
-             (sid ? '/' + encodeURIComponent(sid) + '#msg-' + opts.sourceID : '');
+    a.href = opts.sourceURL;
     a.textContent = 'MSG_' + opts.sourceID;
     ensureHoverStyle();
     line3.appendChild(a);

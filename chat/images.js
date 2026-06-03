@@ -39,7 +39,7 @@
       sourceID: evt.source_id,
       from: evt.from,
       when: ChatStyles.formatTranscriptTime(evt.at),
-      conv: evt.conv,
+      sourceURL: evt.source_url,
     });
     var imgs = document.createElement('div');
     /* PRODUCT_DECISION: server-supplied <img> tags include sanitized src/alt

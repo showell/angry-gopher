@@ -33,7 +33,7 @@
       sourceID: evt.source_id,
       from: evt.from,
       when: ChatStyles.formatTranscriptTime(evt.at),
-      conv: evt.conv,
+      sourceURL: evt.source_url,
     });
     for(var i = 0; i < evt.blocks.length; i++){
       var blk = evt.blocks[i];

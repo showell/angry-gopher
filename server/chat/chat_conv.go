@@ -56,6 +56,18 @@ func (c Conv) baseURL() string {
 	return "/chat/c/" + c.Key
 }
 
+// convKeyBaseURL returns the URL root for a conv addressed by its
+// storage key alone. DM keys are "<digits>_<digits>" by construction
+// (the only conv keys that contain an underscore — channel names
+// exclude "_" per validChannelName), so the shape is a sufficient
+// discriminator without rebuilding the full Conv.
+func convKeyBaseURL(convKey string) string {
+	if strings.Contains(convKey, "_") {
+		return "/chat/c/" + convKey
+	}
+	return "/channel/" + convKey
+}
+
 // topicURL is c.baseURL() + "/" + sid — the URL to one topic page.
 func (c Conv) topicURL(sid string) string { return c.baseURL() + "/" + sid }
 

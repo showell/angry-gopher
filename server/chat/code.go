@@ -249,11 +249,12 @@ func publishCodeForConv(c Conv, sid string, msg ChatMessage) {
 		}
 		mu.Unlock()
 		codeBus.publish(uid, codeSSEEvent{
-			SourceID: e.SourceID,
-			From:     e.From,
-			Conv:     e.Conv,
-			At:       e.At,
-			Blocks:   blocksToWire(e.Blocks),
+			SourceID:  e.SourceID,
+			From:      e.From,
+			Conv:      e.Conv,
+			At:        e.At,
+			Blocks:    blocksToWire(e.Blocks),
+			SourceURL: imagesSourceURL(e.Conv, e.SourceID),
 		})
 	}
 }
@@ -305,11 +306,12 @@ func emitCodeData(w http.ResponseWriter, entries []codeEntry) {
 	payload := make([]codeSSEEvent, len(entries))
 	for i, e := range entries {
 		payload[i] = codeSSEEvent{
-			SourceID: e.SourceID,
-			From:     e.From,
-			Conv:     e.Conv,
-			At:       e.At,
-			Blocks:   blocksToWire(e.Blocks),
+			SourceID:  e.SourceID,
+			From:      e.From,
+			Conv:      e.Conv,
+			At:        e.At,
+			Blocks:    blocksToWire(e.Blocks),
+			SourceURL: imagesSourceURL(e.Conv, e.SourceID),
 		}
 	}
 	blob, err := json.Marshal(payload)
@@ -338,11 +340,12 @@ func readCodeForUser(uid string) ([]codeEntry, error) {
 }
 
 type codeSSEEvent struct {
-	SourceID string          `json:"source_id"`
-	From     string          `json:"from"`
-	Conv     string          `json:"conv"`
-	At       time.Time       `json:"at"`
-	Blocks   []codeBlockWire `json:"blocks"`
+	SourceID  string          `json:"source_id"`
+	From      string          `json:"from"`
+	Conv      string          `json:"conv"`
+	At        time.Time       `json:"at"`
+	Blocks    []codeBlockWire `json:"blocks"`
+	SourceURL string          `json:"source_url"`
 }
 
 // codeBus is keyed by viewer user id.

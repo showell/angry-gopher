@@ -164,11 +164,12 @@ func publishImagesForConv(c Conv, sid string, msg ChatMessage) {
 		}
 		mu.Unlock()
 		imagesBus.publish(uid, imagesSSEEvent{
-			SourceID: e.SourceID,
-			From:     e.From,
-			Conv:     e.Conv,
-			At:       e.At,
-			Images:   e.Images,
+			SourceID:  e.SourceID,
+			From:      e.From,
+			Conv:      e.Conv,
+			At:        e.At,
+			Images:    e.Images,
+			SourceURL: imagesSourceURL(e.Conv, e.SourceID),
 		})
 	}
 }
@@ -208,11 +209,12 @@ func emitImagesData(w http.ResponseWriter, entries []imagesEntry) {
 	payload := make([]imagesSSEEvent, len(entries))
 	for i, e := range entries {
 		payload[i] = imagesSSEEvent{
-			SourceID: e.SourceID,
-			From:     e.From,
-			Conv:     e.Conv,
-			At:       e.At,
-			Images:   e.Images,
+			SourceID:  e.SourceID,
+			From:      e.From,
+			Conv:      e.Conv,
+			At:        e.At,
+			Images:    e.Images,
+			SourceURL: imagesSourceURL(e.Conv, e.SourceID),
 		}
 	}
 	blob, err := json.Marshal(payload)
@@ -248,14 +250,31 @@ func splitMsgID(msgID string) (sid string, n string, ok bool) {
 	return msgID[:cut], msgID[cut+1:], true
 }
 
+// imagesSourceURL is the deep link to the source-message thread, used
+// as the meta-row link in styles.js. Both Images and Code rows use
+// the same shape; named here because Images is the first caller, with
+// codeSourceURL aliasing in code.go.
+func imagesSourceURL(convKey, sourceID string) string {
+	sid, _, ok := splitMsgID(sourceID)
+	if !ok {
+		return convKeyBaseURL(convKey)
+	}
+	return convKeyBaseURL(convKey) + "/" + sid + "#msg-" + sourceID
+}
+
 // imagesSSEEvent is one image-bearing message ping pushed to a single
 // viewer. Encoded as JSON; the client renders the row from these fields.
+// SourceURL is the pre-built link to the source message thread —
+// /chat/c/<pair>/<sid>#msg-<id> for DM origin, /channel/<name>/<sid>
+// for channels — so the client doesn't reconstruct the URL from Conv
+// (which would force a kind-discriminating branch).
 type imagesSSEEvent struct {
-	SourceID string    `json:"source_id"`
-	From     string    `json:"from"`
-	Conv     string    `json:"conv"`
-	At       time.Time `json:"at"`
-	Images   []string  `json:"images"`
+	SourceID  string    `json:"source_id"`
+	From      string    `json:"from"`
+	Conv      string    `json:"conv"`
+	At        time.Time `json:"at"`
+	Images    []string  `json:"images"`
+	SourceURL string    `json:"source_url"`
 }
 
 // imagesBus is keyed by viewer user id.
