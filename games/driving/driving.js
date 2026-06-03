@@ -42,76 +42,94 @@
   document.title = 'driving — ' + mode.name;
 
   // ---- world / map (encoded in JS) ----
-  // Parking lot with two facing rows; player starts mid-row facing the lane.
-  // Exit driveway at the WEST end. Street runs east-west; correct route is
-  // RIGHT (east) onto the street. Going LEFT (west) shows a fire ~quarter
-  // mile away — that's the wrong-way cue.
-  function car(x, z, color) {
-    return { kind: 'car', x: x, z: z, w: 1.8, h: 1.45, d: 4.5, color: color };
+  // One prescribed route. At each turning decision a fire sits dead ahead
+  // (the wrong, keep-going-straight direction), close enough to force the
+  // turn but with just enough room to turn around:
+  //   start: parked facing EAST, cars + apartments across the lot ahead.
+  //   1. pull out, turn LEFT  -> face NORTH up the parking-lot lane.
+  //   2. at the exit, turn RIGHT -> face EAST on a small road.
+  //   3. at its end, turn LEFT  -> face NORTH on a larger 2-lane road.
+  //
+  // Map is 2D: every object has a ground (x, z) footprint; obstacles also
+  // carry a height, so they render as 3D boxes. Cars are axis-aligned, so
+  // they come in two orientations — east/west (length along x) and
+  // north/south (length along z).
+  function carEW(x, z, color) {  // points east/west
+    return { kind: 'car', x: x, z: z, w: 4.5, h: 1.45, d: 1.8, color: color, axis: 'ew' };
+  }
+  function carNS(x, z, color) {  // points north/south
+    return { kind: 'car', x: x, z: z, w: 1.8, h: 1.45, d: 4.5, color: color, axis: 'ns' };
+  }
+  function fire(x, z, w, d, h) {
+    return { kind: 'fire', x: x, z: z, w: w, d: d, h: h };
   }
 
   var world = {
     ground: [
-      { x1: -700, z1: -80, x2: 400, z2: 120, color: '#2f7a30' },  // grass everywhere
-      { x1:  -25, z1: -12, x2:  16, z2:   8, color: '#3a3a40' },  // parking lot
-      { x1:  -20, z1:   8, x2: -10, z2:  12, color: '#3a3a40' },  // exit driveway
-      { x1: -700, z1:  12, x2: 400, z2:  22, color: '#2c2c30' },  // street
-      { x1: -700, z1:  22, x2: 400, z2:  24, color: '#a0a0a8' },  // far sidewalk
-      { x1: -700, z1:   9, x2: -25, z2:  12, color: '#9c9c9c' },  // near sidewalk west of lot
-      { x1:   16, z1:   9, x2: 400, z2:  12, color: '#9c9c9c' },  // near sidewalk east of lot
+      { x1: -120, z1: -60, x2: 180, z2: 420, color: '#2f7a30' },  // grass everywhere
+      { x1:   -4, z1: -16, x2:  17, z2:  42, color: '#3a3a40' },  // parking lot
+      { x1:    1, z1:  41, x2:  90, z2:  51, color: '#2c2c30' },  // small road (E-W)
+      { x1:   74, z1:  40, x2:  90, z2: 380, color: '#2c2c30' },  // larger road (N-S)
     ],
     lines: [],  // populated below
     obstacles: [
-      // player's row (player at x=0, z=-5.5)
-      car(-10,   -5.5, '#9b2c2c'),
-      car( -7.5, -5.5, '#2e4d8a'),
-      car( -5,   -5.5, '#7a6730'),
-      car( -2.5, -5.5, '#2d5060'),
-      car(  2.5, -5.5, '#88307a'),
-      car(  5,   -5.5, '#327832'),
-      car(  7.5, -5.5, '#5c3c3c'),
-      car( 10,   -5.5, '#787880'),
-      car( 13,   -5.5, '#3a1ea0'),
-      // opposite row
-      car(-10,    5.5, '#a08020'),
-      car( -7.5,  5.5, '#107050'),
-      car( -5,    5.5, '#503070'),
-      car( -2.5,  5.5, '#403028'),
-      car(  0,    5.5, '#9c4060'),
-      car(  2.5,  5.5, '#208058'),
-      car(  5,    5.5, '#7a5430'),
-      car(  7.5,  5.5, '#205080'),
-      car( 10,    5.5, '#a04040'),
-      car( 13,    5.5, '#808040'),
-      // 2-story apartments across the street
-      { kind: 'building', x: -25, z: 30, w: 18, h: 6.5, d: 9, color: '#c8a878', roof: '#5a3a2a' },
-      { kind: 'building', x:   0, z: 30, w: 18, h: 6.5, d: 9, color: '#aa9468', roof: '#4a3328' },
-      { kind: 'building', x:  25, z: 30, w: 18, h: 6.5, d: 9, color: '#b89876', roof: '#5a3a2a' },
-      // burnt warehouse — the wrong-way cue, far to the west
-      { kind: 'burnt', x: -450, z: 30, w: 30, h: 6, d: 12, color: '#1a1a1a', roof: '#0a0808' },
+      // player's row, facing east (player at x=0, z=0; z=0 spot is empty)
+      carEW(0, -6.6, '#9b2c2c'),
+      carEW(0, -4.4, '#2e4d8a'),
+      carEW(0, -2.2, '#7a6730'),
+      carEW(0,  2.2, '#88307a'),
+      carEW(0,  4.4, '#327832'),
+      carEW(0,  6.6, '#5c3c3c'),
+      // opposite row, facing west; gap at z=0 frames the fire across the lot
+      carEW(13.5, -6.6, '#a08020'),
+      carEW(13.5, -4.4, '#107050'),
+      carEW(13.5, -2.2, '#503070'),
+      carEW(13.5,  2.2, '#208058'),
+      carEW(13.5,  4.4, '#7a5430'),
+      carEW(13.5,  6.6, '#205080'),
+      // 2-story apartments across the lot (face west toward the player)
+      { kind: 'building', x: 26, z: -9, w: 8, h: 6.5, d: 12, color: '#c8a878', roof: '#5a3a2a' },
+      { kind: 'building', x: 26, z:  3, w: 8, h: 6.5, d: 12, color: '#aa9468', roof: '#4a3328' },
+      { kind: 'building', x: 26, z: 15, w: 8, h: 6.5, d: 12, color: '#b89876', roof: '#5a3a2a' },
+      // a little life along the two roads
+      carEW(30, 49, '#3a1ea0'),
+      carEW(56, 49, '#a04040'),
+      carNS(78, 130, '#403028'),
+      carNS(78, 210, '#205080'),
+      // decision-point fires (dead ahead at each turn)
+      fire(18,   0, 8,  6, 6.5),   // DP1: straight EAST across the lot -> turn LEFT (north)
+      fire(6.75, 55, 10, 6, 7),    // DP2: straight NORTH past the exit  -> turn RIGHT (east)
+      fire(96,   46, 8, 8, 6.5),   // DP3: straight EAST past the road   -> turn LEFT (north)
     ],
   };
 
-  // generate parking-spot stripes + street markings
+  // parking-spot stripes + road markings
   (function () {
-    var x;
-    for (x = -11.25; x <= 14.3; x += 2.5) {
-      world.lines.push({ x1: x - 0.06, z1: -8.5, x2: x + 0.06, z2: -2.5, color: '#dadada' });
-      world.lines.push({ x1: x - 0.06, z1:  2.5, x2: x + 0.06, z2:  8.5, color: '#dadada' });
+    var x, z, i;
+    var zb = [-7.7, -5.5, -3.3, -1.1, 1.1, 3.3, 5.5, 7.7];
+    for (i = 0; i < zb.length; i++) {
+      world.lines.push({ x1: -2.25, z1: zb[i] - 0.06, x2:  2.25, z2: zb[i] + 0.06, color: '#cfcfcf' });
+      world.lines.push({ x1: 11.25, z1: zb[i] - 0.06, x2: 15.75, z2: zb[i] + 0.06, color: '#cfcfcf' });
     }
-    // dashed yellow centerline; extend across the whole drivable street
-    for (x = -700; x < 400; x += 6) {
-      world.lines.push({ x1: x, z1: 16.85, x2: x + 3, z2: 17.15, color: '#e8c840' });
+    // small road: dashed center (E-W) + white edge lines
+    for (x = 2; x < 88; x += 6) {
+      world.lines.push({ x1: x, z1: 45.85, x2: x + 3, z2: 46.15, color: '#e8c840' });
     }
-    // white edge lines
-    world.lines.push({ x1: -700, z1: 12.15, x2: 400, z2: 12.30, color: '#dadada' });
-    world.lines.push({ x1: -700, z1: 21.70, x2: 400, z2: 21.85, color: '#dadada' });
+    world.lines.push({ x1: 1, z1: 41.2, x2: 90, z2: 41.4, color: '#cccccc' });
+    world.lines.push({ x1: 1, z1: 50.6, x2: 90, z2: 50.8, color: '#cccccc' });
+    // larger road: dashed center (N-S) + lane lines each side
+    for (z = 42; z < 378; z += 6) {
+      world.lines.push({ x1: 81.85, z1: z, x2: 82.15, z2: z + 3, color: '#e8c840' });
+    }
+    world.lines.push({ x1: 77.9, z1: 42, x2: 78.1, z2: 380, color: '#cccccc' });
+    world.lines.push({ x1: 85.9, z1: 42, x2: 86.1, z2: 380, color: '#cccccc' });
   })();
 
   // ---- player ----
-  var startX = 0, startZ = -5.5;
-  var player = { x: startX, z: startZ, heading: 0, speed: 0 };
-  var maxTravelDist = 250;  // m from start; beyond this, the game ends
+  // Parked facing EAST (heading = +90deg) looking across the lot.
+  var startX = 0, startZ = 0;
+  var player = { x: startX, z: startZ, heading: Math.PI / 2, speed: 0 };
+  var endZ = 360;  // drive this far north on the larger road -> end of map
   var gameOver = false;
   var gameOverReason = '';
 
@@ -153,11 +171,10 @@
     }
     // else: pinned this frame — position unchanged, speed unchanged.
 
-    // boundary check — drive too far in any direction and the run ends
-    var ddx = player.x - startX, ddz = player.z - startZ;
-    if (ddx * ddx + ddz * ddz > maxTravelDist * maxTravelDist) {
+    // boundary check — reaching the far north end of the larger road ends it
+    if (player.z > endZ) {
       gameOver = true;
-      gameOverReason = (player.x < startX - 10) ? 'wrong way' : 'end of map';
+      gameOverReason = 'end of map';
       player.speed = 0;
     }
   }
@@ -246,9 +263,12 @@
   // side faces (tinted glass) and a body-toned roof. Identical per-car
   // apart from body color, per Steve's spec.
   function carParts(c) {
+    // Cabin is shorter along the car's length and slightly narrower across.
+    var lw = (c.axis === 'ew') ? 0.55 : 0.85;  // x scale
+    var ld = (c.axis === 'ew') ? 0.85 : 0.55;  // z scale
     return [
-      { x: c.x, y: 0,    z: c.z, w: c.w,        h: 0.95, d: c.d,        color: c.color },
-      { x: c.x, y: 0.95, z: c.z, w: c.w * 0.85, h: 0.55, d: c.d * 0.55,
+      { x: c.x, y: 0,    z: c.z, w: c.w,      h: 0.95, d: c.d,      color: c.color },
+      { x: c.x, y: 0.95, z: c.z, w: c.w * lw, h: 0.55, d: c.d * ld,
         color: '#2c2c34', roof: dim(c.color, 0.85) },
     ];
   }
@@ -292,6 +312,7 @@
       var o = world.obstacles[i];
       var dx0 = o.x - player.x, dz0 = o.z - player.z;
       if (dx0 * dx0 + dz0 * dz0 > 800 * 800) continue;
+      if (o.kind === 'fire') continue;  // flames are billboarded in drawFire
       if (o.kind === 'car') {
         var parts = carParts(o);
         for (var p = 0; p < parts.length; p++) collectBoxFaces(parts[p], list);
@@ -313,53 +334,65 @@
     for (var i = 0; i < world.obstacles.length; i++) {
       var a = world.obstacles[i];
       if (a.kind !== 'building') continue;
-      var z = a.z - a.d / 2 - 0.04;  // just south of south face
+      var x = a.x - a.w / 2 - 0.04;  // just west of the west face (faces player)
       for (var row = 0; row < 2; row++) {
         var y = 1.6 + row * 2.4;
         for (var col = 0; col < 4; col++) {
-          var cx = a.x - a.w / 2 + 1.8 + col * (a.w - 3.6) / 3;
+          var cz = a.z - a.d / 2 + 1.8 + col * (a.d - 3.6) / 3;
           drawWorldPolygon([
-            [cx - 0.7, y,        z],
-            [cx + 0.7, y,        z],
-            [cx + 0.7, y + 1.1,  z],
-            [cx - 0.7, y + 1.1,  z],
+            [x, y,        cz - 0.7],
+            [x, y,        cz + 0.7],
+            [x, y + 1.1,  cz + 0.7],
+            [x, y + 1.1,  cz - 0.7],
           ], '#e8d890');
         }
       }
     }
   }
 
+  // Flames are camera-facing billboards: each column is a vertical quad whose
+  // horizontal axis is perpendicular to the player->fire direction, so the
+  // fire reads as a wall of flame from whatever angle you approach it.
   function drawFire(t) {
-    var fx = -450, fz = 30 - 6 - 0.4;  // just south of the burnt warehouse front
-    // flame columns
-    for (var i = 0; i < 11; i++) {
-      var bx = fx + (i - 5) * 2.6;
-      var topY = 7 + Math.sin(t * 5 + i * 0.7) * 1.4 + Math.cos(t * 3 + i * 1.3) * 0.7;
-      drawWorldPolygon([
-        [bx - 1.6, 4.5, fz],
-        [bx + 1.6, 4.5, fz],
-        [bx + 0.5, topY, fz],
-        [bx - 0.5, topY, fz],
-      ], '#f47820');
-      var innerTop = topY - 1;
-      drawWorldPolygon([
-        [bx - 0.8, 5.2, fz - 0.05],
-        [bx + 0.8, 5.2, fz - 0.05],
-        [bx + 0.2, innerTop, fz - 0.05],
-        [bx - 0.2, innerTop, fz - 0.05],
-      ], '#fad440');
-    }
-    // smoke columns
-    for (var s = 0; s < 5; s++) {
-      var sx = fx + (s - 2) * 5 + Math.sin(t * 0.5 + s * 1.3) * 1.8;
-      var bottomY = 9 + s * 2.5;
-      var topY = bottomY + 5;
-      drawWorldPolygon([
-        [sx - 4.5, bottomY, fz + 0.1],
-        [sx + 4.5, bottomY, fz + 0.1],
-        [sx + 3.2, topY,    fz + 0.1],
-        [sx - 3.2, topY,    fz + 0.1],
-      ], '#3a3a40');
+    for (var fi = 0; fi < world.obstacles.length; fi++) {
+      var f = world.obstacles[fi];
+      if (f.kind !== 'fire') continue;
+      var dx = f.x - player.x, dz = f.z - player.z;
+      var len = Math.sqrt(dx * dx + dz * dz) || 1;
+      var rx = dz / len, rz = -dx / len;   // ground-plane right (perp to view)
+      var cols = Math.max(5, Math.round(f.w / 0.9));
+      var sp = f.w / cols;
+      for (var i = 0; i < cols; i++) {
+        var off = (i - (cols - 1) / 2) * sp;
+        var bx = f.x + rx * off, bz = f.z + rz * off;
+        var topY = f.h + Math.sin(t * 5 + i * 0.7) * 1.3 + Math.cos(t * 3 + i * 1.3) * 0.7;
+        var hw = sp * 0.7, tw = sp * 0.25;
+        drawWorldPolygon([
+          [bx - rx * hw, 0.2,  bz - rz * hw],
+          [bx + rx * hw, 0.2,  bz + rz * hw],
+          [bx + rx * tw, topY, bz + rz * tw],
+          [bx - rx * tw, topY, bz - rz * tw],
+        ], '#f47820');
+        var innerTop = topY - 1.2;
+        drawWorldPolygon([
+          [bx - rx * hw * 0.5, 1.0,      bz - rz * hw * 0.5],
+          [bx + rx * hw * 0.5, 1.0,      bz + rz * hw * 0.5],
+          [bx + rx * tw * 0.5, innerTop, bz + rz * tw * 0.5],
+          [bx - rx * tw * 0.5, innerTop, bz - rz * tw * 0.5],
+        ], '#fad440');
+      }
+      // smoke billowing above
+      for (var s = 0; s < 4; s++) {
+        var soff = (s - 1.5) * f.w / 4 + Math.sin(t * 0.5 + s * 1.3) * 1.5;
+        var sx = f.x + rx * soff, sz = f.z + rz * soff;
+        var by = f.h + 1 + s * 2.2, ty = by + 4.5, sw = f.w * 0.28;
+        drawWorldPolygon([
+          [sx - rx * sw,       by, sz - rz * sw],
+          [sx + rx * sw,       by, sz + rz * sw],
+          [sx + rx * sw * 0.7, ty, sz + rz * sw * 0.7],
+          [sx - rx * sw * 0.7, ty, sz - rz * sw * 0.7],
+        ], '#3a3a40');
+      }
     }
   }
 
@@ -445,15 +478,10 @@
     ctx.textAlign = 'center';
     ctx.fillStyle = '#fff';
     ctx.font = 'bold 42px ui-monospace, monospace';
-    ctx.fillText(gameOverReason === 'wrong way' ? 'WRONG WAY' : 'END OF MAP', W / 2, H / 2 - 20);
+    ctx.fillText('END OF MAP', W / 2, H / 2 - 20);
     ctx.font = '16px ui-monospace, monospace';
     ctx.fillStyle = '#bbb';
-    ctx.fillText(
-      gameOverReason === 'wrong way'
-        ? 'The fire is half a mile west — you went the wrong way.'
-        : 'You drove past the prescribed route.',
-      W / 2, H / 2 + 12
-    );
+    ctx.fillText('You made it out onto the main road.', W / 2, H / 2 + 12);
     ctx.fillText('Reload (Ctrl+R) to start over.', W / 2, H / 2 + 36);
     ctx.textAlign = 'left';
   }
