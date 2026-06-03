@@ -42,13 +42,13 @@
   document.title = 'driving — ' + mode.name;
 
   // ---- world / map (encoded in JS) ----
-  // One prescribed route. At each turning decision a fire sits dead ahead
-  // (the wrong, keep-going-straight direction), close enough to force the
-  // turn but with just enough room to turn around:
+  // One prescribed route. Each turn is a T-junction: the desired path is one
+  // branch, a fire blocks the other. You never see a fire on the right path —
+  // only when you take the wrong turn. Going straight is blocked by scenery.
   //   start: parked facing EAST, cars + apartments across the lot ahead.
-  //   1. pull out, turn LEFT  -> face NORTH up the parking-lot lane.
-  //   2. at the exit, turn RIGHT -> face EAST on a small road.
-  //   3. at its end, turn LEFT  -> face NORTH on a larger 2-lane road.
+  //   1. pull forward EAST, turn LEFT  -> NORTH up the lane    (right = fire)
+  //   2. at the exit,       turn RIGHT -> EAST on a small road (left  = fire)
+  //   3. at its end,        turn LEFT  -> NORTH on a big road  (right = fire)
   //
   // Map is 2D: every object has a ground (x, z) footprint; obstacles also
   // carry a height, so they render as 3D boxes. Cars are axis-aligned, so
@@ -68,8 +68,8 @@
     ground: [
       { x1: -120, z1: -60, x2: 180, z2: 420, color: '#2f7a30' },  // grass everywhere
       { x1:   -4, z1: -16, x2:  17, z2:  42, color: '#3a3a40' },  // parking lot
-      { x1:    1, z1:  41, x2:  90, z2:  51, color: '#2c2c30' },  // small road (E-W)
-      { x1:   74, z1:  40, x2:  90, z2: 380, color: '#2c2c30' },  // larger road (N-S)
+      { x1:  -24, z1:  41, x2:  90, z2:  51, color: '#2c2c30' },  // small road (E-W)
+      { x1:   74, z1:  20, x2:  90, z2: 380, color: '#2c2c30' },  // larger road (N-S)
     ],
     lines: [],  // populated below
     obstacles: [
@@ -96,10 +96,13 @@
       carEW(56, 49, '#a04040'),
       carNS(78, 130, '#403028'),
       carNS(78, 210, '#205080'),
-      // decision-point fires (dead ahead at each turn)
-      fire(18,   0, 8,  6, 6.5),   // DP1: straight EAST across the lot -> turn LEFT (north)
-      fire(6.75, 55, 10, 6, 7),    // DP2: straight NORTH past the exit  -> turn RIGHT (east)
-      fire(96,   46, 8, 8, 6.5),   // DP3: straight EAST past the road   -> turn LEFT (north)
+      // far sides of the two road T-junctions (can't go straight; you turn)
+      { kind: 'building', x: 6.75, z: 57, w: 14, h: 6,   d: 8,  color: '#9a8c70', roof: '#4a3a2a' },
+      { kind: 'building', x: 98,   z: 46, w: 8,  h: 6.5, d: 14, color: '#b0986e', roof: '#52382a' },
+      // fires mark the WRONG turn at each T (never on the desired path)
+      fire(6.75, -11, 8,  5, 6.5),  // T1: turning RIGHT (south) instead of left
+      fire(-14,  46,  9,  6, 7),    // T2: turning LEFT  (west)  instead of right
+      fire(82,   34, 12,  5, 6.5),  // T3: turning RIGHT (south) instead of left
     ],
   };
 
@@ -358,6 +361,7 @@
       var f = world.obstacles[fi];
       if (f.kind !== 'fire') continue;
       var dx = f.x - player.x, dz = f.z - player.z;
+      if (dx * dx + dz * dz > 50 * 50) continue;  // only near its own junction
       var len = Math.sqrt(dx * dx + dz * dz) || 1;
       var rx = dz / len, rz = -dx / len;   // ground-plane right (perp to view)
       var cols = Math.max(5, Math.round(f.w / 0.9));
