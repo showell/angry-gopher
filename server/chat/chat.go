@@ -19,6 +19,7 @@ import (
 	"html"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -310,6 +311,64 @@ func HandleChatConversations(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(out)
+}
+
+// HandleChatMsgLookup resolves a global MSG_<id> to the conv it lives
+// in and redirects to that thread's topic URL + #msg-<id>. Used by
+// chat.js for cross-session ref navigation: in v1 the MSG_ id only
+// carries the session id, not the conv kind, so the client can't
+// build the right URL from "/chat/c/..." vs "/channel/...". The
+// server walks the viewer's accessible convs (DM partners + channels)
+// and picks the first one whose session list contains the sid.
+//
+// Multiple convs can in principle share a session id (e.g. both a DM
+// and a channel having a "ChitChat" topic); we pick the first hit and
+// accept the ambiguity for v1. The MSG_ id could grow a conv prefix
+// later if the collision becomes annoying.
+func HandleChatMsgLookup(w http.ResponseWriter, r *http.Request) {
+	user := users.CurrentUser(r)
+	id := r.PathValue("id")
+	if !msgRefIDRe.MatchString(id) {
+		http.NotFound(w, r)
+		return
+	}
+	c, sid, ok := findMsgConvForUser(user.ID, id)
+	if !ok {
+		http.NotFound(w, r)
+		return
+	}
+	http.Redirect(w, r, c.topicURL(sid)+"#msg-"+id, http.StatusFound)
+}
+
+// msgRefIDRe is the path-safe shape of a MSG_ id (the part after MSG_).
+// Mirrors msgRefRe's id capture (chat_msgref.go): an alphanumeric+hyphen
+// session slug, underscore, decimal index.
+var msgRefIDRe = regexp.MustCompile(`^[A-Za-z0-9-]+_[0-9]+$`)
+
+// findMsgConvForUser walks the viewer's accessible convs (DM partners
+// + channels they're subscribed to) and returns the first one whose
+// session list contains the sid embedded in msgID.
+func findMsgConvForUser(uid, msgID string) (Conv, string, bool) {
+	cut := strings.LastIndex(msgID, "_")
+	if cut <= 0 {
+		return Conv{}, "", false
+	}
+	sid := msgID[:cut]
+	for _, partner := range users.ListAuthorized() {
+		if partner.ID == uid {
+			continue
+		}
+		c := DMConv(uid, partner.ID)
+		if c.SessionExists(sid) {
+			return c, sid, true
+		}
+	}
+	for _, name := range ListUserChannels(uid) {
+		if c, ok := ChannelConv(name, uid); ok && c.SessionExists(sid) {
+			return c, sid, true
+		}
+	}
+	return Conv{}, "", false
 }
 
 // onlyOtherPartner returns the partner id when there is exactly one

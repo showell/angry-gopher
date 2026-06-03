@@ -72,9 +72,11 @@
   }
 
   /* ===== cross-session vs same-session MSG_ ref navigation =====
-     PRODUCT_DECISION: cross-session refs open in a new tab — the source tab
-     stays parked, no nav-stack to engineer. Same-session refs scroll +
-     select via pane.focusBubble. */
+     PRODUCT_DECISION: cross-session refs open in a new tab via the
+     /chat/msg/<id> lookup endpoint — the server resolves which conv
+     (DM or channel) owns the target session and 302s into it. The
+     client doesn't know the URL space ahead of time. Same-session
+     refs stay client-side (scroll + select via pane.focusBubble). */
   function navigateRef(refEl){
     var hashTarget=refEl.getAttribute('href').replace(/^#/, '');
     var id=hashTarget.replace(/^msg-/, '');
@@ -86,7 +88,7 @@
       if(rec) pane.focusBubble(rec.index + 1);
       return;
     }
-    window.open(CONV_BASE+'/'+encodeURIComponent(targetSession)+'#msg-'+id, '_blank');
+    window.open('/chat/msg/'+encodeURIComponent(id), '_blank');
   }
 
   /* ===== middle pane — owns wrapper + navbar + back/fwd + history + bubbles ===== */

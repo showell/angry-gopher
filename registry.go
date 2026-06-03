@@ -56,6 +56,9 @@ func RegisterPages(mux *http.ServeMux) {
 	Route(mux, "/chat/code/stream", NEED_PASSWORD, chat.HandleCodeStream)
 	Route(mux, "/chat/conversations", NEED_PASSWORD, chat.WithPresence(chat.HandleChatConversations))
 	Route(mux, "/chat/notifications", NEED_PASSWORD, chat.HandleChatNotifications)
+	// /chat/msg/<id> resolves a MSG_ ref to its conv + topic — the
+	// cross-(DM|channel) ref click target. See HandleChatMsgLookup.
+	Route(mux, "/chat/msg/{id}", NEED_PASSWORD, chat.HandleChatMsgLookup)
 	Route(mux, "/chat/c/{conv}", NEED_PASSWORD, chat.WithPresence(chat.HandleChatConv))
 	Route(mux, "/chat/c/{conv}/new", NEED_PASSWORD, chat.WithPresence(chat.HandleChatNewTopic)) // literal beats {sid}; "new" reserved
 	Route(mux, "/chat/c/{conv}/{sid}", NEED_PASSWORD, chat.WithPresence(chat.HandleChatPage))
