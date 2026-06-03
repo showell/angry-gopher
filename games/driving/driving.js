@@ -45,10 +45,10 @@
   // One prescribed route. Each turn is a T-junction: the desired path is one
   // branch, a fire blocks the other. You never see a fire on the right path —
   // only when you take the wrong turn. Going straight is blocked by scenery.
-  //   start: parked facing EAST, cars + apartments across the lot ahead.
-  //   1. pull forward EAST, turn LEFT  -> NORTH up the lane    (right = fire)
-  //   2. at the exit,       turn RIGHT -> EAST on a small road (left  = fire)
-  //   3. at its end,        turn LEFT  -> NORTH on a big road  (right = fire)
+  //   start: parked in the Parking Lot facing EAST, cars + apartments ahead.
+  //   1. pull forward EAST, turn LEFT  -> NORTH out of the lot     (right = fire)
+  //   2. at the exit,       turn RIGHT -> EAST on Autumn Pines Rd  (left  = fire)
+  //   3. at its end,        turn LEFT  -> NORTH on Murrell Rd      (right = fire)
   //
   // Map is 2D: every object has a ground (x, z) footprint; obstacles also
   // carry a height, so they render as 3D boxes. Cars are axis-aligned, so
@@ -70,9 +70,9 @@
   var world = {
     ground: [
       { x1: -120, z1: -60, x2: 180, z2: 420, color: '#2f7a30' },  // grass everywhere
-      { x1:   -4, z1: -16, x2:  17, z2:  42, color: '#3a3a40' },  // parking lot
-      { x1:  -46, z1:  41, x2:  90, z2:  51, color: '#2c2c30' },  // small road (E-W)
-      { x1:   74, z1: -10, x2:  90, z2: 380, color: '#2c2c30' },  // larger road (N-S)
+      { x1:   -4, z1: -16, x2:  17, z2:  42, color: '#3a3a40' },  // Parking Lot
+      { x1:  -46, z1:  41, x2:  90, z2:  51, color: '#2c2c30' },  // Autumn Pines Rd (E-W)
+      { x1:   74, z1: -10, x2:  90, z2: 380, color: '#2c2c30' },  // Murrell Rd (N-S)
     ],
     lines: [],  // populated below
     obstacles: [
@@ -130,11 +130,12 @@
     world.lines.push({ x1: 85.9, z1: 42, x2: 86.1, z2: 380, color: '#cccccc' });
   })();
 
-  // tree line flanking the whole north side of the small road. It's what you
-  // face heading north out of the lot, and your left wall driving east. Spaced
-  // so the collision footprints touch — a continuous wall you can't slip past.
+  // tree line flanking the north side of Autumn Pines Rd. It's what you face
+  // heading north out of the lot, and your left wall driving east. Spaced so
+  // the collision footprints touch — a wall you can't slip past. Stops before
+  // Murrell Rd (west edge x=74) so the left turn north onto Murrell is clear.
   (function () {
-    for (var x = -44; x <= 88; x += 3.5) world.obstacles.push(tree(x, 53));
+    for (var x = -44; x <= 70; x += 3.5) world.obstacles.push(tree(x, 53));
   })();
 
   // ---- player ----
