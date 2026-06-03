@@ -863,7 +863,7 @@
       padding: '12px', boxSizing: 'border-box',
     });
     formMount.appendChild(ChatAddTopic.create({
-      conv: FAKE_CONV,
+      convBase: '/chat/c/' + FAKE_CONV,
       onCreated: function(j){
         log('onCreated({conv: ' + j.conv + ', sid: ' + j.sid + '}) — caller would navigate to '
           + '/chat/c/' + j.conv + '/' + j.sid);
@@ -1026,7 +1026,7 @@
        once for the optimistic move, once for the revert. We log + place
        in both cases (same callback, no branching). */
     ChatDragToPin.init({
-      conv: FAKE_CONV,
+      convBase: '/chat/c/' + FAKE_CONV,
       onDrop: function(evt){
         var section = evt.toUl.getAttribute('data-section');
         clog.log('onDrop({item: ' + evt.item.getAttribute('data-sid')
@@ -1446,11 +1446,12 @@
      show an error. */
   var lesson8Body = document.createElement('div');
   lesson8Body.appendChild(buildParagraph(
-    'ChatAddTopic.create({conv, onCreated}) returns a <form> ready to drop in. It owns input '
+    'ChatAddTopic.create({convBase, onCreated}) returns a <form> ready to drop in. It owns input '
     + 'validation (TOPIC_RE: letters/digits/hyphens, no leading or trailing hyphen), the POST to '
-    + '/chat/c/<conv>/new, and inline error display. It does NOT decide what happens on success '
-    + '— onCreated({conv, sid}) is the caller\'s policy. On the real chat page that\'s a hard '
-    + 'navigation into the new session; in this demo it just logs.'));
+    + 'convBase+"/new", and inline error display. It does NOT decide what happens on success '
+    + '— onCreated({conv, sid}) is the caller\'s policy. The convBase shape carries the URL '
+    + 'space (DM "/chat/c/<pair>" or channel "/channel/<name>"); the widget itself never '
+    + 'branches on kind.'));
   lesson8Body.appendChild(buildParagraph(
     'The boundary lesson here is small but real: the widget reports a domain event ("a topic '
     + 'was added"), and the caller decides what to do with it. Hardcoding location.href inside '
@@ -1488,7 +1489,7 @@
      headline behavior is the optimistic-update + revert dance. */
   var lesson9Body = document.createElement('div');
   lesson9Body.appendChild(buildParagraph(
-    'ChatDragToPin.init({conv, onDrop}) wires the module; ChatDragToPin.attach(item) makes one '
+    'ChatDragToPin.init({convBase, onDrop}) wires the module; ChatDragToPin.attach(item) makes one '
     + '<li> draggable. The widget owns the pointer state machine (a 5px move threshold so '
     + 'a plain tap still navigates the link, pointer-capture at drag-start so the gesture '
     + 'tracks even when the cursor leaves the row, a floating drag ghost), the pin/unpin POST '
