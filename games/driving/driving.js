@@ -120,8 +120,7 @@
   window.addEventListener('keydown', function (e) {
     keys[e.code] = true;
     if (e.code === 'ArrowUp' || e.code === 'ArrowDown' ||
-        e.code === 'ArrowLeft' || e.code === 'ArrowRight' ||
-        e.code === 'Space') e.preventDefault();
+        e.code === 'ArrowLeft' || e.code === 'ArrowRight') e.preventDefault();
   });
   window.addEventListener('keyup', function (e) { keys[e.code] = false; });
 
@@ -131,16 +130,16 @@
   function update(dt) {
     if (gameOver) return;
 
+    // Super-simple physics: input is the *only* thing that changes
+    // speed/heading. Collision blocks position only — it never touches
+    // speed. If you're pinned against a wall, steer to a clear angle and
+    // you drive away at whatever speed you held.
     if (keys.ArrowUp)   player.speed += mode.accel * dt;
     if (keys.ArrowDown) player.speed -= mode.brake * dt;
-    if (keys.Space)     player.speed -= mode.handBrake * dt;
-    player.speed = clamp(player.speed, 0, mode.maxSpeed);  // no reverse
+    player.speed = clamp(player.speed, 0, mode.maxSpeed);
 
-    // Constant steer rate — pivots at standstill (so a corner-brush doesn't
-    // strand you with no way out) and doesn't fight you at higher speed.
-    var steerRate = 1.4;
     var steerInput = (keys.ArrowLeft ? -1 : 0) + (keys.ArrowRight ? 1 : 0);
-    player.heading += steerInput * steerRate * dt;
+    player.heading += steerInput * 1.4 * dt;
 
     var dx = Math.sin(player.heading) * player.speed * dt;
     var dz = Math.cos(player.heading) * player.speed * dt;
@@ -149,13 +148,10 @@
       player.z += dz;
     } else if (!collides(player.x + dx, player.z)) {
       player.x += dx;
-      player.speed *= 0.5;
     } else if (!collides(player.x, player.z + dz)) {
       player.z += dz;
-      player.speed *= 0.5;
-    } else {
-      player.speed = 0;  // pinned against a wall — pivot to escape
     }
+    // else: pinned this frame — position unchanged, speed unchanged.
 
     // boundary check — drive too far in any direction and the run ends
     var ddx = player.x - startX, ddz = player.z - startZ;
