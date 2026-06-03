@@ -6,7 +6,6 @@ package chat
 import (
 	"angry-gopher/server/users"
 	"net/http"
-	"sync"
 )
 
 // notifyEvent is one activity ping on the user-attention layer. Two
@@ -36,51 +35,9 @@ type notifyEvent struct {
 	LinkURL string `json:"link_url,omitempty"`
 }
 
-var (
-	notifyMu sync.Mutex
-	// notifySubs is keyed by recipient user id; a user may have several open
-	// pages/tabs, so each id maps to a set of channels.
-	notifySubs = map[string]map[chan notifyEvent]struct{}{}
-)
-
-// publishNotify delivers a ping to every live connection of one user.
-// Best-effort: a full channel is skipped (notifications are live-only, so a
-// dropped ping is just one the user doesn't see). Acquires notifyMu only;
-// callers may hold chatMu (lock order chatMu -> notifyMu; notifyMu is a leaf).
-func publishNotify(userID string, evt notifyEvent) {
-	notifyMu.Lock()
-	defer notifyMu.Unlock()
-	for ch := range notifySubs[userID] {
-		select {
-		case ch <- evt:
-		default:
-		}
-	}
-}
-
-func openNotify(userID string) (<-chan notifyEvent, func()) {
-	ch := make(chan notifyEvent, 16)
-	notifyMu.Lock()
-	if notifySubs[userID] == nil {
-		notifySubs[userID] = map[chan notifyEvent]struct{}{}
-	}
-	notifySubs[userID][ch] = struct{}{}
-	notifyMu.Unlock()
-
-	return ch, func() {
-		notifyMu.Lock()
-		defer notifyMu.Unlock()
-		if subs := notifySubs[userID]; subs != nil {
-			if _, ok := subs[ch]; ok {
-				delete(subs, ch)
-				close(ch)
-			}
-			if len(subs) == 0 {
-				delete(notifySubs, userID)
-			}
-		}
-	}
-}
+// notifyBus is keyed by recipient user id (a user may have several
+// open tabs, so each id maps to a set of channels).
+var notifyBus = newSubBus[notifyEvent]()
 
 // HandleChatNotifications serves GET /chat/notifications.
 func HandleChatNotifications(w http.ResponseWriter, r *http.Request) {
@@ -90,6 +47,6 @@ func HandleChatNotifications(w http.ResponseWriter, r *http.Request) {
 	}
 	user := users.CurrentUser(r)
 	serveSSE(w, r, func() (<-chan notifyEvent, func()) {
-		return openNotify(user.ID)
+		return notifyBus.open(user.ID)
 	})
 }

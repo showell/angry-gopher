@@ -4,8 +4,59 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"sync"
 	"time"
 )
+
+// subBus is a keyed pub/sub fan-out for SSE streams: each key maps to a
+// set of buffered channels (one per open tab). publish is best-effort —
+// a full channel is skipped, since every stream using this is live-only
+// (a dropped event is one the user doesn't see; they re-derive on
+// reload). Leaf lock — safe to call publish while holding outer locks
+// (lock order: caller's mu → subBus.mu). Grep for `Bus.publish` /
+// `Bus.open` to find every callsite.
+type subBus[T any] struct {
+	mu   sync.Mutex
+	subs map[string]map[chan T]struct{}
+}
+
+func newSubBus[T any]() *subBus[T] {
+	return &subBus[T]{subs: map[string]map[chan T]struct{}{}}
+}
+
+func (b *subBus[T]) publish(key string, evt T) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	for ch := range b.subs[key] {
+		select {
+		case ch <- evt:
+		default:
+		}
+	}
+}
+
+func (b *subBus[T]) open(key string) (<-chan T, func()) {
+	ch := make(chan T, 16)
+	b.mu.Lock()
+	if b.subs[key] == nil {
+		b.subs[key] = map[chan T]struct{}{}
+	}
+	b.subs[key][ch] = struct{}{}
+	b.mu.Unlock()
+	return ch, func() {
+		b.mu.Lock()
+		defer b.mu.Unlock()
+		if set := b.subs[key]; set != nil {
+			if _, ok := set[ch]; ok {
+				delete(set, ch)
+				close(ch)
+			}
+			if len(set) == 0 {
+				delete(b.subs, key)
+			}
+		}
+	}
+}
 
 // serveSSE drives the standard chat SSE wire shape: per-user channel,
 // ": ok" preamble, 25s ": ping" keepalive, JSON-encoded events. The

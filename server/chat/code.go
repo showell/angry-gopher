@@ -252,7 +252,7 @@ func PublishChatCode(conv, sid string, msg ChatMessage) {
 			continue
 		}
 		mu.Unlock()
-		publishCode(uid, codeSSEEvent{
+		codeBus.publish(uid, codeSSEEvent{
 			SourceID: e.SourceID,
 			From:     e.From,
 			Conv:     e.Conv,
@@ -353,10 +353,11 @@ type codeSSEEvent struct {
 	Blocks   []codeBlockWire `json:"blocks"`
 }
 
+// codeBus is keyed by viewer user id.
+var codeBus = newSubBus[codeSSEEvent]()
+
+// Per-user file mutex so concurrent appends serialize.
 var (
-	codeSubsMu sync.Mutex
-	codeSubs   = map[string]map[chan codeSSEEvent]struct{}{}
-	// Per-user file mutex so concurrent appends serialize.
 	codeFileMu      sync.Mutex
 	codeFileMutexes = map[string]*sync.Mutex{}
 )
@@ -372,40 +373,6 @@ func codeMuFor(uid string) *sync.Mutex {
 	return mu
 }
 
-func publishCode(uid string, evt codeSSEEvent) {
-	codeSubsMu.Lock()
-	defer codeSubsMu.Unlock()
-	for ch := range codeSubs[uid] {
-		select {
-		case ch <- evt:
-		default:
-		}
-	}
-}
-
-func openCode(uid string) (<-chan codeSSEEvent, func()) {
-	ch := make(chan codeSSEEvent, 16)
-	codeSubsMu.Lock()
-	if codeSubs[uid] == nil {
-		codeSubs[uid] = map[chan codeSSEEvent]struct{}{}
-	}
-	codeSubs[uid][ch] = struct{}{}
-	codeSubsMu.Unlock()
-	return ch, func() {
-		codeSubsMu.Lock()
-		defer codeSubsMu.Unlock()
-		if subs := codeSubs[uid]; subs != nil {
-			if _, ok := subs[ch]; ok {
-				delete(subs, ch)
-				close(ch)
-			}
-			if len(subs) == 0 {
-				delete(codeSubs, uid)
-			}
-		}
-	}
-}
-
 // HandleCodeStream serves GET /chat/code/stream.
 func HandleCodeStream(w http.ResponseWriter, r *http.Request) {
 	if !users.IsAuthorized(r) {
@@ -414,7 +381,7 @@ func HandleCodeStream(w http.ResponseWriter, r *http.Request) {
 	}
 	user := users.CurrentUser(r)
 	serveSSE(w, r, func() (<-chan codeSSEEvent, func()) {
-		return openCode(user.ID)
+		return codeBus.open(user.ID)
 	})
 }
 

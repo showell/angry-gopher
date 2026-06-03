@@ -10,13 +10,13 @@
 //     MarkActive. MarkActive bumps the user's lastSeen timestamp.
 //   - If the previous lastSeen was zero (never seen) or >= 5 minutes ago,
 //     MarkActive reports cameOnline=true and we fan out to every other
-//     authorized user via the existing user-attention layer (publishNotify
-//     for the status strip + publishSidebar for the partner-row dot).
+//     authorized user via the user-attention layer (notifyBus for the
+//     status strip + sidebarBus for the partner-row dot).
 //   - No background sweeper, no offline broadcast. Clients infer "gone
 //     offline" lazily — on the next page render the IsOnline check
 //     returns false and the dot paints gray.
 //
-// Same posture as notifySubs / sidebarSubs: in-memory map, lost on
+// Same posture as the subBus instances: in-memory only, lost on
 // restart, 5-minute fuzz is well below the precision the feature needs.
 package chat
 
@@ -69,16 +69,10 @@ func IsOnline(userID string) bool {
 
 // markActiveAndBroadcast wraps MarkActive — on the came-online edge it
 // fans the event out to every OTHER authorized user across both
-// user-attention streams:
-//
-//   - publishSidebar(other, {kind:"user-online", ...}) drives the
-//     partner-row dot on conversation pages.
-//   - publishNotify(other, {text:"<name> has come online."}) drives the
-//     status strip + favicon flash on every chat-chrome page.
-//
-// Pattern mirrors AppendChatMessage's fanout: leaf publishes happen
-// while holding no other lock, and self is excluded (you don't see your
-// own arrival, same as the notify suppress-self pattern).
+// user-attention streams: sidebarBus drives the partner-row dot;
+// notifyBus drives the status strip + favicon flash. Self is excluded
+// (you don't see your own arrival; same shape as the notify
+// suppress-self pattern).
 func markActiveAndBroadcast(user users.User) {
 	if !MarkActive(user.ID) {
 		return
@@ -88,7 +82,7 @@ func markActiveAndBroadcast(user users.User) {
 		if other.ID == user.ID {
 			continue
 		}
-		publishSidebar(other.ID, sidebarEvent{
+		sidebarBus.publish(other.ID, sidebarEvent{
 			Kind:     "user-online",
 			UserID:   user.ID,
 			UserName: user.Name,
@@ -96,7 +90,7 @@ func markActiveAndBroadcast(user users.User) {
 		// LinkURL is the recipient's default conversation with the user who
 		// came online — same target as clicking their sidebar row. Pair-key
 		// is per-recipient because conv ids sort numerically.
-		publishNotify(other.ID, notifyEvent{
+		notifyBus.publish(other.ID, notifyEvent{
 			Text:    text,
 			LinkURL: "/chat/c/" + chatPairKey(other.ID, user.ID),
 		})

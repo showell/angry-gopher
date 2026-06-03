@@ -167,7 +167,7 @@ func PublishChatImage(conv, sid string, msg ChatMessage) {
 			continue
 		}
 		mu.Unlock()
-		publishImages(uid, imagesSSEEvent{
+		imagesBus.publish(uid, imagesSSEEvent{
 			SourceID: e.SourceID,
 			From:     e.From,
 			Conv:     e.Conv,
@@ -266,10 +266,11 @@ type imagesSSEEvent struct {
 	Images   []string  `json:"images"`
 }
 
+// imagesBus is keyed by viewer user id.
+var imagesBus = newSubBus[imagesSSEEvent]()
+
+// Per-user file mutex so the migration walk and live appends serialize.
 var (
-	imagesSubsMu sync.Mutex
-	imagesSubs   = map[string]map[chan imagesSSEEvent]struct{}{}
-	// Per-user file mutex so the migration walk and live appends serialize.
 	imagesFileMu      sync.Mutex
 	imagesFileMutexes = map[string]*sync.Mutex{}
 )
@@ -285,40 +286,6 @@ func imagesMuFor(uid string) *sync.Mutex {
 	return mu
 }
 
-func publishImages(uid string, evt imagesSSEEvent) {
-	imagesSubsMu.Lock()
-	defer imagesSubsMu.Unlock()
-	for ch := range imagesSubs[uid] {
-		select {
-		case ch <- evt:
-		default:
-		}
-	}
-}
-
-func openImages(uid string) (<-chan imagesSSEEvent, func()) {
-	ch := make(chan imagesSSEEvent, 16)
-	imagesSubsMu.Lock()
-	if imagesSubs[uid] == nil {
-		imagesSubs[uid] = map[chan imagesSSEEvent]struct{}{}
-	}
-	imagesSubs[uid][ch] = struct{}{}
-	imagesSubsMu.Unlock()
-	return ch, func() {
-		imagesSubsMu.Lock()
-		defer imagesSubsMu.Unlock()
-		if subs := imagesSubs[uid]; subs != nil {
-			if _, ok := subs[ch]; ok {
-				delete(subs, ch)
-				close(ch)
-			}
-			if len(subs) == 0 {
-				delete(imagesSubs, uid)
-			}
-		}
-	}
-}
-
 // HandleImagesStream serves GET /chat/images/stream.
 func HandleImagesStream(w http.ResponseWriter, r *http.Request) {
 	if !users.IsAuthorized(r) {
@@ -327,7 +294,7 @@ func HandleImagesStream(w http.ResponseWriter, r *http.Request) {
 	}
 	user := users.CurrentUser(r)
 	serveSSE(w, r, func() (<-chan imagesSSEEvent, func()) {
-		return openImages(user.ID)
+		return imagesBus.open(user.ID)
 	})
 }
 

@@ -17,7 +17,6 @@ import (
 	"os"
 	"sort"
 	"strings"
-	"sync"
 	"time"
 )
 
@@ -162,52 +161,8 @@ type recentEvent struct {
 	Title      string    `json:"title,omitempty"`
 }
 
-var (
-	recentMu sync.Mutex
-	// recentSubs is keyed by viewer user id; a user may have multiple tabs
-	// open, so each id maps to a set of channels.
-	recentSubs = map[string]map[chan recentEvent]struct{}{}
-)
-
-// publishRecent delivers an event to every live recent-stream subscriber
-// of one user. Best-effort: a full channel is skipped (live-only feed; a
-// dropped event just means the user doesn't see that row update until
-// next reload or next event). Leaf lock — safe to call while holding
-// chatMu (lock order: chatMu -> recentMu).
-func publishRecent(userID string, evt recentEvent) {
-	recentMu.Lock()
-	defer recentMu.Unlock()
-	for ch := range recentSubs[userID] {
-		select {
-		case ch <- evt:
-		default:
-		}
-	}
-}
-
-func openRecent(userID string) (<-chan recentEvent, func()) {
-	ch := make(chan recentEvent, 16)
-	recentMu.Lock()
-	if recentSubs[userID] == nil {
-		recentSubs[userID] = map[chan recentEvent]struct{}{}
-	}
-	recentSubs[userID][ch] = struct{}{}
-	recentMu.Unlock()
-
-	return ch, func() {
-		recentMu.Lock()
-		defer recentMu.Unlock()
-		if subs := recentSubs[userID]; subs != nil {
-			if _, ok := subs[ch]; ok {
-				delete(subs, ch)
-				close(ch)
-			}
-			if len(subs) == 0 {
-				delete(recentSubs, userID)
-			}
-		}
-	}
-}
+// recentBus is keyed by viewer user id.
+var recentBus = newSubBus[recentEvent]()
 
 // PublishChatRecent fans one chat-message activity out to BOTH conv
 // participants' recent feeds, pre-resolving each side's partner name +
@@ -219,11 +174,11 @@ func PublishChatRecent(conv, sid string, at time.Time, authorUID string) {
 		return
 	}
 	authorName := users.GetUserName(authorUID)
-	publishRecent(a, recentEvent{
+	recentBus.publish(a, recentEvent{
 		Kind: "chat", At: at, Conv: conv, SID: sid,
 		Partner: users.GetUserName(b), LastAuthor: authorName,
 	})
-	publishRecent(b, recentEvent{
+	recentBus.publish(b, recentEvent{
 		Kind: "chat", At: at, Conv: conv, SID: sid,
 		Partner: users.GetUserName(a), LastAuthor: authorName,
 	})
@@ -233,7 +188,7 @@ func PublishChatRecent(conv, sid string, at time.Time, authorUID string) {
 // docs is created or saved. Docs are per-user, so only the author sees
 // them; no fan-out.
 func PublishDocRecent(uid, slug string, at time.Time) {
-	publishRecent(uid, recentEvent{
+	recentBus.publish(uid, recentEvent{
 		Kind: "doc", At: at, Slug: slug, Title: titleFromSlug(slug),
 	})
 }
@@ -247,7 +202,7 @@ func HandleRecentStream(w http.ResponseWriter, r *http.Request) {
 	}
 	user := users.CurrentUser(r)
 	serveSSE(w, r, func() (<-chan recentEvent, func()) {
-		return openRecent(user.ID)
+		return recentBus.open(user.ID)
 	})
 }
 

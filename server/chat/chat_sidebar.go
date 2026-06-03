@@ -9,7 +9,6 @@ import (
 	"angry-gopher/server/users"
 	"net/http"
 	"strings"
-	"sync"
 )
 
 // init wires chat's sidebar publish into users' new-member hook so login
@@ -35,26 +34,8 @@ type sidebarEvent struct {
 	SID      string `json:"sid,omitempty"`
 }
 
-var (
-	sidebarMu sync.Mutex
-	// sidebarSubs is keyed by viewer user id; a user may have multiple tabs
-	// open, so each id maps to a set of channels.
-	sidebarSubs = map[string]map[chan sidebarEvent]struct{}{}
-)
-
-// publishSidebar delivers one event to every live sidebar subscriber of
-// the named user. Best-effort: a full channel is skipped. Leaf lock,
-// safe to call while holding chatMu (lock order: chatMu -> sidebarMu).
-func publishSidebar(userID string, evt sidebarEvent) {
-	sidebarMu.Lock()
-	defer sidebarMu.Unlock()
-	for ch := range sidebarSubs[userID] {
-		select {
-		case ch <- evt:
-		default:
-		}
-	}
-}
+// sidebarBus is keyed by viewer user id.
+var sidebarBus = newSubBus[sidebarEvent]()
 
 // PublishUserArrived broadcasts a new-partner event to every authorized
 // principal EXCEPT the new user. Per-recipient, Conv is pre-resolved
@@ -65,7 +46,7 @@ func PublishUserArrived(newUID, newName string) {
 		if u.ID == newUID {
 			continue
 		}
-		publishSidebar(u.ID, sidebarEvent{
+		sidebarBus.publish(u.ID, sidebarEvent{
 			Kind:     "user-arrived",
 			UserID:   newUID,
 			UserName: newName,
@@ -83,32 +64,8 @@ func PublishTopicAdded(conv, sid string) {
 		return
 	}
 	evt := sidebarEvent{Kind: "topic-added", Conv: conv, SID: sid}
-	publishSidebar(a, evt)
-	publishSidebar(b, evt)
-}
-
-func openSidebar(userID string) (<-chan sidebarEvent, func()) {
-	ch := make(chan sidebarEvent, 16)
-	sidebarMu.Lock()
-	if sidebarSubs[userID] == nil {
-		sidebarSubs[userID] = map[chan sidebarEvent]struct{}{}
-	}
-	sidebarSubs[userID][ch] = struct{}{}
-	sidebarMu.Unlock()
-
-	return ch, func() {
-		sidebarMu.Lock()
-		defer sidebarMu.Unlock()
-		if subs := sidebarSubs[userID]; subs != nil {
-			if _, ok := subs[ch]; ok {
-				delete(subs, ch)
-				close(ch)
-			}
-			if len(subs) == 0 {
-				delete(sidebarSubs, userID)
-			}
-		}
-	}
+	sidebarBus.publish(a, evt)
+	sidebarBus.publish(b, evt)
 }
 
 // HandleSidebarStream serves GET /chat/sidebar/stream.
@@ -119,6 +76,6 @@ func HandleSidebarStream(w http.ResponseWriter, r *http.Request) {
 	}
 	user := users.CurrentUser(r)
 	serveSSE(w, r, func() (<-chan sidebarEvent, func()) {
-		return openSidebar(user.ID)
+		return sidebarBus.open(user.ID)
 	})
 }

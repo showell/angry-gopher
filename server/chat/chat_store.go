@@ -402,7 +402,7 @@ func AppendChatMessage(from users.User, partnerID, sessionID, markdown, cid stri
 	// Ping the RECIPIENT's cross-session notification feed (any page they have
 	// open), so they learn "<from> sent you a message on <session>" even when
 	// they're not viewing this session. Lock order: chatMu (held) -> notifyMu.
-	publishNotify(partnerID, notifyEvent{From: from.Name, Conv: convKey, Session: sessionID})
+	notifyBus.publish(partnerID, notifyEvent{From: from.Name, Conv: convKey, Session: sessionID})
 	// Ping BOTH participants' /chat/recent feeds so an open Recent page
 	// upserts this (conv, session) row to the top. Same lock order as
 	// notify — recentMu is a leaf.
