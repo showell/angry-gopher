@@ -103,13 +103,13 @@ func HandleChannelSend(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return
 	}
-	body := strings.TrimSpace(r.FormValue("body"))
-	if body == "" {
+	markdown := strings.TrimSpace(r.FormValue("markdown"))
+	cid := strings.TrimSpace(r.FormValue("cid"))
+	if markdown == "" {
 		http.Error(w, "empty message", http.StatusBadRequest)
 		return
 	}
-	cid := r.FormValue("cid")
-	if _, err := c.AppendMessage(user, sid, body, cid); err != nil {
+	if _, err := c.AppendMessage(user, sid, markdown, cid); err != nil {
 		http.Error(w, "append: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
