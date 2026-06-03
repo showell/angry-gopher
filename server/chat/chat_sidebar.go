@@ -1,41 +1,15 @@
 // Sidebar SSE — the per-user stream that pushes structural changes the
 // conversation page's left sidebar needs to upsert without a reload:
-// a new authorized principal joined (new Conversations row) or a new
-// topic appeared (new Sessions row, only if you're viewing that conv).
-//
-// SSE landscape (four streams, one file each):
-//   - chat-message  chat_stream.go:  /chat/c/{conv}/{sid}/stream
-//                                    (full rendered messages for ONE open session)
-//   - notify        chat_notify.go:  /chat/notifications
-//                                    (per-user pings + favicon-violet)
-//   - recent        recent.go:       /chat/recent/stream
-//                                    (per-user row upserts for the Recent page)
-//   - sidebar       (HERE):          /chat/sidebar/stream
-//                                    (per-user structural updates for the
-//                                    conversation page's left sidebar)
-//
-// Publish chokepoints:
-//   - chat_store.go::AppendChatMessage publishes topic-added to BOTH
-//     conv participants when the message being appended is the FIRST
-//     in its session (existing length == 0). Covers both code paths
-//     that create a session (HandleChatNewTopic seeding "hi" and
-//     daily/date sessions auto-created on first send).
-//   - login.go::HandleLoginFull → users.FireNewMember → the init() hook
-//     below → PublishUserArrived to every other authorized principal.
-//
-// Live-only: no backlog, no replay. The initial server-rendered sidebar
-// IS the backlog; a reload re-derives state from disk.
-
+// new chat partner, new topic, partner came-online. Live-only: no
+// backlog. The initial server-rendered sidebar IS the backlog; a reload
+// re-derives state from disk.
 package chat
 
 import (
 	"angry-gopher/server/users"
-	"encoding/json"
-	"fmt"
 	"net/http"
 	"strings"
 	"sync"
-	"time"
 )
 
 // init wires chat's sidebar publish into users' new-member hook so login
@@ -113,8 +87,6 @@ func PublishTopicAdded(conv, sid string) {
 	publishSidebar(b, evt)
 }
 
-// openSidebar registers a subscriber for one viewer; the returned cancel
-// unregisters and closes its channel.
 func openSidebar(userID string) (<-chan sidebarEvent, func()) {
 	ch := make(chan sidebarEvent, 16)
 	sidebarMu.Lock()
@@ -139,63 +111,14 @@ func openSidebar(userID string) (<-chan sidebarEvent, func()) {
 	}
 }
 
-// HandleSidebarStream is the per-user SSE stream of sidebar structural
-// events (GET /chat/sidebar/stream). Mirrors HandleRecentStream:
-// cleared write deadline, ": ok" preamble flush, 25s ": ping"
-// keepalives, ctx-cancel on disconnect.
+// HandleSidebarStream serves GET /chat/sidebar/stream.
 func HandleSidebarStream(w http.ResponseWriter, r *http.Request) {
 	if !users.IsAuthorized(r) {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
 	user := users.CurrentUser(r)
-
-	w.Header().Set("Content-Type", "text/event-stream")
-	w.Header().Set("Cache-Control", "no-cache")
-	w.Header().Set("Connection", "keep-alive")
-	w.Header().Set("X-Accel-Buffering", "no")
-
-	rc := http.NewResponseController(w)
-	_ = rc.SetWriteDeadline(time.Time{})
-
-	ch, cancel := openSidebar(user.ID)
-	defer cancel()
-
-	if _, err := fmt.Fprint(w, ": ok\n\n"); err != nil {
-		return
-	}
-	if rc.Flush() != nil {
-		return
-	}
-
-	ticker := time.NewTicker(25 * time.Second)
-	defer ticker.Stop()
-	ctx := r.Context()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case evt, ok := <-ch:
-			if !ok {
-				return
-			}
-			blob, err := json.Marshal(evt)
-			if err != nil {
-				continue
-			}
-			if _, err := fmt.Fprintf(w, "data: %s\n\n", blob); err != nil {
-				return
-			}
-			if rc.Flush() != nil {
-				return
-			}
-		case <-ticker.C:
-			if _, err := fmt.Fprint(w, ": ping\n\n"); err != nil {
-				return
-			}
-			if rc.Flush() != nil {
-				return
-			}
-		}
-	}
+	serveSSE(w, r, func() (<-chan sidebarEvent, func()) {
+		return openSidebar(user.ID)
+	})
 }

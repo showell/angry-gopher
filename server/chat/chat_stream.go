@@ -1,26 +1,11 @@
 // Chat-message SSE — the per-(conv, session) live stream that delivers
-// rendered messages to one open conversation page.
-//
-// SSE landscape (three streams, one file each):
-//   - chat-message (HERE):       /chat/c/{conv}/{sid}/stream
-//   - notify        chat_notify.go: /chat/notifications  (per-user "you have
-//                                   activity over there" pings + favicon-violet)
-//   - recent        recent.go:      /chat/recent/stream  (per-user activity feed)
-//
-// Publish chokepoints (every SSE event the server emits is fired from one
-// of these — the publish-at-source pattern is uniform):
-//   - chat_store.go::AppendChatMessage publishes chat-message + notify + recent.
-//   - docs_store.go::WriteUserDoc / CreateUserDoc publish recent.
-//
-// Why this file isn't fused with chat_store.go: the subscriber registry
-// (chatSubs) and the publish loop live in chat_store.go because they're
-// co-located with the file append under chatMu — that lock guarantees a
-// new subscriber atomically observes "current backlog vs. future stream"
-// without losing a message in the gap (see chat_store.go's header).
-// chat_stream.go is just the HTTP face of that machinery: handler + wire
-// encoding. Subscribe/publish stay near the storage they're synchronized
-// with.
-
+// rendered messages to one open conversation page. Unlike the per-user
+// streams (notify / sidebar / recent / images / code, all on serveSSE),
+// this one replays a backlog and emits a custom "backlog-size" preamble
+// + per-event id, so it owns its own loop here. Subscribe/publish live
+// in chat_store.go, co-located with the file append under chatMu so a
+// new subscriber atomically observes "backlog vs. future stream"
+// without losing a message in the gap.
 package chat
 
 import (

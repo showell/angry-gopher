@@ -319,64 +319,16 @@ func openImages(uid string) (<-chan imagesSSEEvent, func()) {
 	}
 }
 
-// HandleImagesStream is the per-user SSE stream for live image entries
-// (GET /chat/images/stream). Mirrors HandleRecentStream — live-only, no
-// backlog, 25s ping keepalive.
+// HandleImagesStream serves GET /chat/images/stream.
 func HandleImagesStream(w http.ResponseWriter, r *http.Request) {
 	if !users.IsAuthorized(r) {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
 	user := users.CurrentUser(r)
-
-	w.Header().Set("Content-Type", "text/event-stream")
-	w.Header().Set("Cache-Control", "no-cache")
-	w.Header().Set("Connection", "keep-alive")
-	w.Header().Set("X-Accel-Buffering", "no")
-
-	rc := http.NewResponseController(w)
-	_ = rc.SetWriteDeadline(time.Time{})
-
-	ch, cancel := openImages(user.ID)
-	defer cancel()
-
-	if _, err := fmt.Fprint(w, ": ok\n\n"); err != nil {
-		return
-	}
-	if rc.Flush() != nil {
-		return
-	}
-
-	ticker := time.NewTicker(25 * time.Second)
-	defer ticker.Stop()
-	ctx := r.Context()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case evt, ok := <-ch:
-			if !ok {
-				return
-			}
-			blob, err := json.Marshal(evt)
-			if err != nil {
-				continue
-			}
-			if _, err := fmt.Fprintf(w, "data: %s\n\n", blob); err != nil {
-				return
-			}
-			if rc.Flush() != nil {
-				return
-			}
-		case <-ticker.C:
-			if _, err := fmt.Fprint(w, ": ping\n\n"); err != nil {
-				return
-			}
-			if rc.Flush() != nil {
-				return
-			}
-		}
-	}
+	serveSSE(w, r, func() (<-chan imagesSSEEvent, func()) {
+		return openImages(user.ID)
+	})
 }
 
 // ImagesJSPath is the embedded Images-page client.

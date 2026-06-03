@@ -1,30 +1,9 @@
 // /chat/recent: a flat reverse-chronological feed of activity across the
-// signed-in user's chat sessions and personal docs.
-//
-// Initial-load source is file mtime (the server walks the convs the user
-// participates in plus their docs dir on every GET). After load, the page
-// stays live two ways:
-//   - a per-user SSE stream at /chat/recent/stream, with one event per
-//     write — AppendChatMessage / WriteUserDoc / CreateUserDoc call into
-//     PublishChatRecent / PublishDocRecent at the source.
-//   - a 20-second client-side timer that re-humanizes the When column
-//     from each row's data-ts (so "5m ago" rolls to "6m ago" without a
-//     server round-trip).
-//
-// SSE landscape (three streams, one file each):
-//   - chat-message  chat_stream.go:  /chat/c/{conv}/{sid}/stream
-//                                    (full rendered messages for ONE open session)
-//   - notify        chat_notify.go:  /chat/notifications
-//                                    (per-user pings + favicon-violet)
-//   - recent        (HERE):          /chat/recent/stream
-//                                    (per-user row upserts for the Recent page)
-//
-// Publish chokepoints: chat_store.go::AppendChatMessage publishes for
-// chat events (to BOTH participants); docs_store.go::WriteUserDoc and
-// CreateUserDoc publish for doc events (author only). Per-user
-// subscriber map mirrors chat_notify.go — same shape, same flush + ping
-// rhythm, just a richer event payload (kind + identity fields).
-
+// signed-in user's chat sessions and personal docs. Initial-load source
+// is file mtime (the server walks the convs the user participates in
+// plus their docs dir on every GET). After load, a per-user SSE stream
+// (/chat/recent/stream) delivers one event per write, and a 20-second
+// client-side timer re-humanizes the When column without a round-trip.
 package chat
 
 import (
@@ -206,8 +185,6 @@ func publishRecent(userID string, evt recentEvent) {
 	}
 }
 
-// openRecent registers a subscriber for one viewer; the returned cancel
-// unregisters and closes its channel.
 func openRecent(userID string) (<-chan recentEvent, func()) {
 	ch := make(chan recentEvent, 16)
 	recentMu.Lock()
@@ -261,65 +238,17 @@ func PublishDocRecent(uid, slug string, at time.Time) {
 	})
 }
 
-// HandleRecentStream is the per-user SSE stream of activity events for
-// the recent feed (GET /chat/recent/stream). Mirrors HandleChatNotifications:
-// live-only, no backlog, no replay — the initial server-rendered table
-// IS the backlog. Cleared write-deadline + 25s ping keepalives.
+// HandleRecentStream serves GET /chat/recent/stream. Live-only — the
+// initial server-rendered table IS the backlog.
 func HandleRecentStream(w http.ResponseWriter, r *http.Request) {
 	if !users.IsAuthorized(r) {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
 	user := users.CurrentUser(r)
-
-	w.Header().Set("Content-Type", "text/event-stream")
-	w.Header().Set("Cache-Control", "no-cache")
-	w.Header().Set("Connection", "keep-alive")
-	w.Header().Set("X-Accel-Buffering", "no")
-
-	rc := http.NewResponseController(w)
-	_ = rc.SetWriteDeadline(time.Time{})
-
-	ch, cancel := openRecent(user.ID)
-	defer cancel()
-
-	if _, err := fmt.Fprint(w, ": ok\n\n"); err != nil {
-		return
-	}
-	if rc.Flush() != nil {
-		return
-	}
-
-	ticker := time.NewTicker(25 * time.Second)
-	defer ticker.Stop()
-	ctx := r.Context()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case evt, ok := <-ch:
-			if !ok {
-				return
-			}
-			blob, err := json.Marshal(evt)
-			if err != nil {
-				continue
-			}
-			if _, err := fmt.Fprintf(w, "data: %s\n\n", blob); err != nil {
-				return
-			}
-			if rc.Flush() != nil {
-				return
-			}
-		case <-ticker.C:
-			if _, err := fmt.Fprint(w, ": ping\n\n"); err != nil {
-				return
-			}
-			if rc.Flush() != nil {
-				return
-			}
-		}
-	}
+	serveSSE(w, r, func() (<-chan recentEvent, func()) {
+		return openRecent(user.ID)
+	})
 }
 
 // RecentJSPath is the embedded recent-feed client (committed, hand-written).
