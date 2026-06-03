@@ -49,15 +49,18 @@ window.ChatLeftSidebar = (function(){
       + '.chat-sidebar-list li.muted { color:var(--cc-muted-fg); padding:4px 8px;'
       +                              ' font-style:italic; }'
       + '.chat-pin-hint { font-size:11px; }'
-      /* Presence dot: tiny round badge to the left of partner labels. The
-         "online" class flips it to the accent color; default state stays
-         neutral muted so it's still readable as "user, gray = inactive". */
-      + '.chat-presence-dot { display:inline-block; width:8px; height:8px;'
+      /* Presence dot: tiny round badge to the left of partner labels.
+         Idle = hollow circle outlined in blue; online = solid green fill.
+         Dedicated tokens (presenceIdle / presenceOnline) so the
+         indicator vocabulary stays separate from accent/error. */
+      + '.chat-presence-dot { display:inline-block; width:9px; height:9px;'
       +                     ' border-radius:50%; margin-right:6px;'
-      +                     ' background:var(--cc-soft-muted-fg);'
-      +                     ' vertical-align:middle; }'
+      +                     ' background:transparent;'
+      +                     ' border:1.5px solid var(--cc-presence-idle);'
+      +                     ' box-sizing:border-box; vertical-align:middle; }'
       + '.chat-sidebar-list li.online .chat-presence-dot {'
-      +                     ' background:var(--cc-accent); }';
+      +                     ' background:var(--cc-presence-online);'
+      +                     ' border-color:var(--cc-presence-online); }';
     document.head.appendChild(s);
     stylesInjected = true;
   }

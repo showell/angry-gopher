@@ -58,6 +58,11 @@ window.ChatColors = (function(){
     notifyFg:      '#1a5fb4',
     topBarBg:      '#f0ede4',
     topBarBorder:  '#c9bfa7',
+    /* Presence dots — dedicated tokens so the indicator vocabulary
+       doesn't ride on accent/error. Idle = hollow circle outlined in
+       blue; online = solid green fill. */
+    presenceIdle:   '#3b82f6',
+    presenceOnline: '#22c55e',
   };
 
   /* GitHub-ish dark with bubble colors picked to keep mine-vs-theirs
@@ -94,6 +99,8 @@ window.ChatColors = (function(){
     notifyFg:      '#79b8ff',
     topBarBg:      '#161b22',
     topBarBorder:  '#30363d',
+    presenceIdle:   '#58a6ff',
+    presenceOnline: '#3fb950',
   };
 
   /* token name → CSS-var name. Built once from the LIGHT key list
