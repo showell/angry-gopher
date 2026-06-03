@@ -63,6 +63,9 @@
   function fire(x, z, w, d, h) {
     return { kind: 'fire', x: x, z: z, w: w, d: d, h: h };
   }
+  function tree(x, z) {  // collision footprint ~foliage so a row reads as a wall
+    return { kind: 'tree', x: x, z: z, w: 2.6, h: 5.2, d: 2.6 };
+  }
 
   var world = {
     ground: [
@@ -91,14 +94,9 @@
       { kind: 'building', x: 26, z: -9, w: 8, h: 6.5, d: 12, color: '#c8a878', roof: '#5a3a2a' },
       { kind: 'building', x: 26, z:  3, w: 8, h: 6.5, d: 12, color: '#aa9468', roof: '#4a3328' },
       { kind: 'building', x: 26, z: 15, w: 8, h: 6.5, d: 12, color: '#b89876', roof: '#5a3a2a' },
-      // a little life along the two roads
-      carEW(30, 49, '#3a1ea0'),
-      carEW(56, 49, '#a04040'),
-      carNS(78, 130, '#403028'),
-      carNS(78, 210, '#205080'),
-      // far sides of the two road T-junctions (can't go straight; you turn)
-      { kind: 'building', x: 6.75, z: 57, w: 14, h: 6,   d: 8,  color: '#9a8c70', roof: '#4a3a2a' },
-      { kind: 'building', x: 98,   z: 46, w: 8,  h: 6.5, d: 14, color: '#b0986e', roof: '#52382a' },
+      // far side of the big-road T (can't go straight east; you turn)
+      { kind: 'building', x: 98, z: 46, w: 8, h: 6.5, d: 14, color: '#b0986e', roof: '#52382a' },
+      // the small road's north side is a tree line — generated below
       // blocks that hide each wrong-branch fire until you turn onto it.
       // west of the lane (left as you head north); SW corner of the big road.
       { kind: 'building', x: -10, z: 24, w: 14, h: 6.5, d: 32, color: '#8c9078', roof: '#3a4030' },
@@ -130,6 +128,13 @@
     }
     world.lines.push({ x1: 77.9, z1: 42, x2: 78.1, z2: 380, color: '#cccccc' });
     world.lines.push({ x1: 85.9, z1: 42, x2: 86.1, z2: 380, color: '#cccccc' });
+  })();
+
+  // tree line flanking the whole north side of the small road. It's what you
+  // face heading north out of the lot, and your left wall driving east. Spaced
+  // so the collision footprints touch — a continuous wall you can't slip past.
+  (function () {
+    for (var x = -44; x <= 88; x += 3.5) world.obstacles.push(tree(x, 53));
   })();
 
   // ---- player ----
@@ -280,6 +285,14 @@
     ];
   }
 
+  // ---- tree composition (trunk + foliage) ----
+  function treeParts(t) {
+    return [
+      { x: t.x, y: 0,   z: t.z, w: 0.5, h: 2.2, d: 0.5, color: '#6b4a2a' },
+      { x: t.x, y: 2.0, z: t.z, w: 2.6, h: 3.2, d: 2.6, color: '#2f6b2e', roof: '#3f8a3a' },
+    ];
+  }
+
   // ---- box face collection ----
   function collectBoxFaces(o, faceList) {
     var hw = o.w / 2, hd = o.d / 2;
@@ -323,6 +336,9 @@
       if (o.kind === 'car') {
         var parts = carParts(o);
         for (var p = 0; p < parts.length; p++) collectBoxFaces(parts[p], list);
+      } else if (o.kind === 'tree') {
+        var tparts = treeParts(o);
+        for (var tp = 0; tp < tparts.length; tp++) collectBoxFaces(tparts[tp], list);
       } else {
         collectBoxFaces(o, list);
       }
