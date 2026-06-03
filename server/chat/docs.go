@@ -11,7 +11,7 @@ package chat
 
 import (
 	"angry-gopher/server/users"
-	"angry-gopher/server/web"
+	"angry-gopher/server/platform"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -282,7 +282,7 @@ var DocsJSPath = "chat/docs.js"
 
 // HandleDocsJS serves the docs client script from the embedded assets.
 func HandleDocsJS(w http.ResponseWriter, r *http.Request) {
-	web.ServeJS(w, DocsJSPath, "docs.js missing from the binary")
+	platform.ServeJS(w, DocsJSPath, "docs.js missing from the binary")
 }
 
 func renderDocsPage(w http.ResponseWriter, user users.User, docs []DocSummary, slug, body string) {
@@ -352,13 +352,13 @@ func renderDocsPage(w http.ResponseWriter, user users.User, docs []DocSummary, s
 			`<button type="button" id="docs-posted-ok">OK</button>`+
 			`</dialog>`)
 		fmt.Fprintf(w, `<script src="/chat/docs.js?v=%s"></script>`,
-			url.QueryEscape(web.AssetVersion))
+			url.QueryEscape(platform.AssetVersion))
 	}
 	// notify.js loads even when no doc is open — the favicon-violet alert
 	// and the #chat-notify status strip should work on the docs landing too.
 	fmt.Fprintf(w, `<script src="/chat/notify.js?v=%s"></script>`,
-		url.QueryEscape(web.AssetVersion))
-	web.PageFooter(w)
+		url.QueryEscape(platform.AssetVersion))
+	platform.PageFooter(w)
 }
 
 // docsCSS — the three-pane grid + small editor chrome. Reuses chat fonts/

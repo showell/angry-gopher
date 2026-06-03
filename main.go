@@ -14,7 +14,7 @@ import (
 	"angry-gopher/server/chat"
 	"angry-gopher/server/lynrummy"
 	"angry-gopher/server/users"
-	"angry-gopher/server/web"
+	"angry-gopher/server/platform"
 )
 
 func buildMux() http.Handler {
@@ -58,8 +58,8 @@ Usage:
 	users.SetUsersRoot(config.UsersDataRoot())
 	users.SetAuthRoot(config.AuthDataRoot())
 	users.SetSessionSecretDir(config.ChatDataRoot())
-	web.SetAssets(assets)
-	web.SetVersion(gitCommit)
+	platform.SetAssets(assets)
+	platform.SetVersion(gitCommit)
 
 	handler := buildMux()
 

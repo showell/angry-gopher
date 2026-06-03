@@ -1,4 +1,4 @@
-package web
+package platform
 
 import "net/http"
 

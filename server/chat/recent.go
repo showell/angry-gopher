@@ -8,7 +8,7 @@ package chat
 
 import (
 	"angry-gopher/server/users"
-	"angry-gopher/server/web"
+	"angry-gopher/server/platform"
 	"bytes"
 	"encoding/json"
 	"fmt"
@@ -59,8 +59,8 @@ func HandleRecent(w http.ResponseWriter, r *http.Request) {
 	emitRecentData(w, items)
 	fmt.Fprintf(w, `<script src="/chat/recent.js?v=%s"></script>`+
 		`<script src="/chat/notify.js?v=%s"></script>`,
-		url.QueryEscape(web.AssetVersion), url.QueryEscape(web.AssetVersion))
-	web.PageFooter(w)
+		url.QueryEscape(platform.AssetVersion), url.QueryEscape(platform.AssetVersion))
+	platform.PageFooter(w)
 }
 
 // emitRecentData ships the initial activity feed as inline JSON next to
@@ -204,5 +204,5 @@ var RecentJSPath = "chat/recent.js"
 
 // HandleRecentJS serves the recent-feed client script from the embedded assets.
 func HandleRecentJS(w http.ResponseWriter, r *http.Request) {
-	web.ServeJS(w, RecentJSPath, "recent.js missing from the binary")
+	platform.ServeJS(w, RecentJSPath, "recent.js missing from the binary")
 }

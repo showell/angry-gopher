@@ -10,7 +10,7 @@ import (
 	"angry-gopher/server/learn"
 	"angry-gopher/server/login"
 	"angry-gopher/server/lynrummy"
-	"angry-gopher/server/web"
+	"angry-gopher/server/platform"
 	"net/http"
 )
 
@@ -113,5 +113,5 @@ func RegisterPages(mux *http.ServeMux) {
 	Route(mux, "/admin/", ADMIN_ONLY, admin.HandleAdmin)
 
 	// /images/<file> — shared brand assets (avatars etc).
-	Route(mux, "/images/{file}", TOTALLY_PUBLIC, web.HandleImage)
+	Route(mux, "/images/{file}", TOTALLY_PUBLIC, platform.HandleImage)
 }

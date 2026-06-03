@@ -9,7 +9,7 @@ package chat
 
 import (
 	"angry-gopher/server/users"
-	"angry-gopher/server/web"
+	"angry-gopher/server/platform"
 	"fmt"
 	"html"
 	"net/http"
@@ -65,7 +65,7 @@ environment variable, not in a prompt; revoke it here anytime.</p>`)
 	if !users.UserHasAPIKey(user.ID) {
 		fmt.Fprint(w, `<p>You don't have an API key yet.</p>
 <form method="post" action="/settings/apikey" style="display:inline"><button type="submit">Generate key</button></form>`)
-		web.PageFooter(w)
+		platform.PageFooter(w)
 		return
 	}
 
@@ -87,5 +87,5 @@ environment variable, not in a prompt; revoke it here anytime.</p>`)
 <form method="post" action="/settings/apikey" style="display:inline"><button type="submit">Regenerate key</button></form>
 <form method="post" action="/settings/apikey" style="display:inline"><input type="hidden" name="revoke" value="1"><button type="submit" style="background:#b00020">Revoke key</button></form>
 </p>`)
-	web.PageFooter(w)
+	platform.PageFooter(w)
 }

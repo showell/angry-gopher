@@ -7,7 +7,7 @@
 package learn
 
 import (
-	"angry-gopher/server/web"
+	"angry-gopher/server/platform"
 	"fmt"
 	"html"
 	"net/http"
@@ -16,7 +16,7 @@ import (
 
 // HandleLearn serves /learn. Minimal head + an empty <div id="learn-root">;
 // learn.js builds the chrome, sections, spoilers, and demo. We deliberately
-// skip web.PageHeadAndStyle so the page doesn't inherit the shared
+// skip platform.PageHeadAndStyle so the page doesn't inherit the shared
 // stylesheet — the experiment is to grow the page in JS-styles only.
 func HandleLearn(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/learn" {
@@ -29,7 +29,7 @@ func HandleLearn(w http.ResponseWriter, r *http.Request) {
 	// PRODUCT_DECISION: both popups own their own styles inline now —
 	// /learn loads no external CSS for them.
 	fmt.Fprint(w, `</head><body><div id="learn-root"></div>`)
-	v := url.QueryEscape(web.AssetVersion)
+	v := url.QueryEscape(platform.AssetVersion)
 	// colors.js + install() FIRST: chat modules reference ChatColors
 	// tokens at construction time (e.g. middle_pane.js's makeNavButton
 	// reads ChatColors.softBorder), so the namespace must exist before
@@ -57,14 +57,14 @@ func HandleLearn(w http.ResponseWriter, r *http.Request) {
 
 // HandleLearnJS serves the Learn-page client.
 func HandleLearnJS(w http.ResponseWriter, r *http.Request) {
-	web.ServeJS(w, "learn/learn.js", "learn.js missing from the binary")
+	platform.ServeJS(w, "learn/learn.js", "learn.js missing from the binary")
 }
 
 // HandleCallbackLogJS serves the shared callback-log widget used by
 // most lesson demos. Demo code, not part of the real chat system —
 // but built the same way (one factory, owned DOM + styles).
 func HandleCallbackLogJS(w http.ResponseWriter, r *http.Request) {
-	web.ServeJS(w, "learn/callback_log.js", "callback_log.js missing from the binary")
+	platform.ServeJS(w, "learn/callback_log.js", "callback_log.js missing from the binary")
 }
 
 // HandleFakeHostJS serves the shared fetch-mocking facility every
@@ -72,7 +72,7 @@ func HandleCallbackLogJS(w http.ResponseWriter, r *http.Request) {
 // routes register their match + respond, fall through to real fetch
 // for any URL no route claims.
 func HandleFakeHostJS(w http.ResponseWriter, r *http.Request) {
-	web.ServeJS(w, "learn/fake_host.js", "fake_host.js missing from the binary")
+	platform.ServeJS(w, "learn/fake_host.js", "fake_host.js missing from the binary")
 }
 
 // learnSourceAllowlist names every module the Learn page is allowed to
@@ -104,7 +104,7 @@ func HandleLearnSource(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	data, err := web.ReadAsset(path)
+	data, err := platform.ReadAsset(path)
 	if err != nil {
 		http.Error(w, "asset missing: "+file, http.StatusNotFound)
 		return

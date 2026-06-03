@@ -1,7 +1,8 @@
-// Package web is the server platform layer: embedded-asset serving, the
-// shared page chrome, and the id counter. It imports none of our other
-// packages — the Lyn Rummy, Chat, and users packages all build on it.
-package web
+// Package platform is the no-deps base layer every feature package
+// builds on: embedded-asset serving, the shared page chrome, the file-
+// backed id counter, and the time humanizer. Imports nothing from
+// angry-gopher/server.
+package platform
 
 // chrome.go holds the shared page chrome — the HTML shell every page
 // renders into: <head> + styles, the top nav, the page header/subtitle,

@@ -14,7 +14,7 @@ package lynrummy
 
 import (
 	"angry-gopher/server/users"
-	"angry-gopher/server/web"
+	"angry-gopher/server/platform"
 	"encoding/json"
 	"fmt"
 	"html"
@@ -52,9 +52,9 @@ func HandleGame(w http.ResponseWriter, r *http.Request) {
 	case sub == "elm.js":
 		lynrummyElmJS(w)
 	case sub == "engine.js":
-		web.ServeJS(w, EngineJSPath, "engine.js not found — run `ops/build_engine_js`")
+		platform.ServeJS(w, EngineJSPath, "engine.js not found — run `ops/build_engine_js`")
 	case sub == "engine_glue.js":
-		web.ServeJS(w, EngineGlueJSPath, "engine_glue.js not found — check the file exists at "+EngineGlueJSPath)
+		platform.ServeJS(w, EngineGlueJSPath, "engine_glue.js not found — check the file exists at "+EngineGlueJSPath)
 	case sub == "new-session":
 		lynrummyElmNewSession(w, r, userID)
 	case sub == "sessions":
@@ -431,7 +431,7 @@ func lynrummyElmPlayWithSession(w http.ResponseWriter, userID string, sessionID 
 }
 
 func lynrummyElmJS(w http.ResponseWriter) {
-	data, err := web.ReadAsset(ElmJSPath)
+	data, err := platform.ReadAsset(ElmJSPath)
 	if err != nil {
 		http.Error(w, "elm.js missing from the binary — run `ops/build_elm` before `go build`", http.StatusNotFound)
 		return

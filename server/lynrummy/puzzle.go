@@ -10,7 +10,7 @@ package lynrummy
 
 import (
 	"angry-gopher/server/users"
-	"angry-gopher/server/web"
+	"angry-gopher/server/platform"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -53,7 +53,7 @@ func HandlePuzzles(w http.ResponseWriter, r *http.Request) {
 	case sub == "" || sub == "/":
 		puzzlePage(w, userID)
 	case sub == "puzzle.js":
-		web.ServeJS(w, PuzzleJSPath, "puzzle.js not found — run `ops/build_elm`")
+		platform.ServeJS(w, PuzzleJSPath, "puzzle.js not found — run `ops/build_elm`")
 	case strings.HasPrefix(sub, "sessions/"):
 		handlePuzzleSessionRoute(w, r, userID, strings.TrimPrefix(sub, "sessions/"))
 	default:
@@ -125,7 +125,7 @@ func indentLines(src string) string {
 func loadCatalog() (string, error) {
 	var kept []string
 	for _, p := range puzzleCatalogPaths {
-		data, err := web.ReadAsset(p)
+		data, err := platform.ReadAsset(p)
 		if err != nil {
 			return "", fmt.Errorf("read %s: %w", p, err)
 		}

@@ -7,7 +7,7 @@ package admin
 import (
 	"angry-gopher/server/lynrummy"
 	"angry-gopher/server/users"
-	"angry-gopher/server/web"
+	"angry-gopher/server/platform"
 	"fmt"
 	"html"
 	"io/fs"
@@ -163,7 +163,7 @@ func renderMembersTable(w http.ResponseWriter) {
 		}
 		since := "never"
 		if row.ever {
-			since = web.HumanizeSince(row.active)
+			since = platform.HumanizeSince(row.active)
 		}
 		images := fmt.Sprintf("%s / %s",
 			humanBytes(users.UserUploadBytes(row.user.ID)), humanBytes(users.MaxUploadLifetimeBytes))

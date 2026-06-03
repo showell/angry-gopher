@@ -2,7 +2,7 @@ package home
 
 import (
 	"angry-gopher/server/users"
-	"angry-gopher/server/web"
+	"angry-gopher/server/platform"
 	"fmt"
 	"net/http"
 )
@@ -18,10 +18,10 @@ func HandleHome(w http.ResponseWriter, r *http.Request) {
 	}
 	user := users.CurrentUser(r)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	web.PageHeader(w, "Lyn Rummy", user.Name, user.Admin)
-	web.PageSubtitle(w, "Jump straight into a game or browse the puzzles.")
+	platform.PageHeader(w, "Lyn Rummy", user.Name, user.Admin)
+	platform.PageSubtitle(w, "Jump straight into a game or browse the puzzles.")
 	renderGamesHero(w)
-	web.PageFooter(w)
+	platform.PageFooter(w)
 }
 
 // renderGamesHero: tiles for the full game and the puzzles surface.

@@ -12,7 +12,7 @@
 package lynrummy
 
 import (
-	"angry-gopher/server/web"
+	"angry-gopher/server/platform"
 	"bufio"
 	"bytes"
 	"encoding/json"
@@ -76,13 +76,13 @@ func nextPuzzleIDPath(userID string) string {
 // AllocateSessionID returns the next sequential full-game session
 // id for a player, 1-based, persisted via their next-session-id.txt.
 func AllocateSessionID(userID string) (int64, error) {
-	return web.AllocateID(nextSessionIDPath(userID))
+	return platform.AllocateID(nextSessionIDPath(userID))
 }
 
 // AllocatePuzzleSessionID returns the next sequential puzzle session
 // id for a player, 1-based, persisted via their next-puzzle-id.txt.
 func AllocatePuzzleSessionID(userID string) (int64, error) {
-	return web.AllocateID(nextPuzzleIDPath(userID))
+	return platform.AllocateID(nextPuzzleIDPath(userID))
 }
 
 // PuzzleSessionDir returns the on-disk directory for a puzzle

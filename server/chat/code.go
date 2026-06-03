@@ -34,7 +34,7 @@ package chat
 
 import (
 	"angry-gopher/server/users"
-	"angry-gopher/server/web"
+	"angry-gopher/server/platform"
 	"bytes"
 	"encoding/json"
 	"fmt"
@@ -297,9 +297,9 @@ func HandleCode(w http.ResponseWriter, r *http.Request) {
 			`<script src="/chat/chat_code_popup.js?v=%s"></script>`+
 			`<script src="/chat/code.js?v=%s"></script>`+
 			`<script src="/chat/notify.js?v=%s"></script>`,
-		url.QueryEscape(web.AssetVersion), url.QueryEscape(web.AssetVersion),
-		url.QueryEscape(web.AssetVersion), url.QueryEscape(web.AssetVersion))
-	web.PageFooter(w)
+		url.QueryEscape(platform.AssetVersion), url.QueryEscape(platform.AssetVersion),
+		url.QueryEscape(platform.AssetVersion), url.QueryEscape(platform.AssetVersion))
+	platform.PageFooter(w)
 }
 
 // emitCodeData ships the initial transcript as inline JSON next to the
@@ -382,5 +382,5 @@ var CodeJSPath = "chat/code.js"
 
 // HandleCodeJS serves the Code-page client.
 func HandleCodeJS(w http.ResponseWriter, r *http.Request) {
-	web.ServeJS(w, CodeJSPath, "code.js missing from the binary")
+	platform.ServeJS(w, CodeJSPath, "code.js missing from the binary")
 }

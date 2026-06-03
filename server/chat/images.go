@@ -29,7 +29,7 @@ package chat
 
 import (
 	"angry-gopher/server/users"
-	"angry-gopher/server/web"
+	"angry-gopher/server/platform"
 	"bytes"
 	"encoding/json"
 	"fmt"
@@ -200,9 +200,9 @@ func HandleImages(w http.ResponseWriter, r *http.Request) {
 			`<script src="/chat/chat_image_popup.js?v=%s"></script>`+
 			`<script src="/chat/images.js?v=%s"></script>`+
 			`<script src="/chat/notify.js?v=%s"></script>`,
-		url.QueryEscape(web.AssetVersion), url.QueryEscape(web.AssetVersion),
-		url.QueryEscape(web.AssetVersion), url.QueryEscape(web.AssetVersion))
-	web.PageFooter(w)
+		url.QueryEscape(platform.AssetVersion), url.QueryEscape(platform.AssetVersion),
+		url.QueryEscape(platform.AssetVersion), url.QueryEscape(platform.AssetVersion))
+	platform.PageFooter(w)
 }
 
 // emitImagesData ships the initial transcript as inline JSON next to the
@@ -295,5 +295,5 @@ var ImagesJSPath = "chat/images.js"
 
 // HandleImagesJS serves the Images-page client.
 func HandleImagesJS(w http.ResponseWriter, r *http.Request) {
-	web.ServeJS(w, ImagesJSPath, "images.js missing from the binary")
+	platform.ServeJS(w, ImagesJSPath, "images.js missing from the binary")
 }

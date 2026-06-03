@@ -38,7 +38,7 @@ import (
 	"sync"
 	"time"
 
-	"angry-gopher/server/web"
+	"angry-gopher/server/platform"
 
 	"golang.org/x/crypto/bcrypt"
 )
@@ -84,7 +84,7 @@ func authFile(id, f string) string { return filepath.Join(AuthRoot, id, f) }
 
 // AllocateUser creates a new user with the given name and returns its id.
 func AllocateUser(name string) (string, error) {
-	n, err := web.AllocateID(filepath.Join(AuthRoot, "next-id.txt"))
+	n, err := platform.AllocateID(filepath.Join(AuthRoot, "next-id.txt"))
 	if err != nil {
 		return "", err
 	}

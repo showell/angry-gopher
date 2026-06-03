@@ -11,7 +11,7 @@ package chat
 
 import (
 	"angry-gopher/server/users"
-	"angry-gopher/server/web"
+	"angry-gopher/server/platform"
 	"bytes"
 	"encoding/json"
 	"errors"
@@ -339,7 +339,7 @@ var ChatJSPath = "chat/chat.js"
 
 // HandleChatJS serves the chat client script from the embedded assets.
 func HandleChatJS(w http.ResponseWriter, r *http.Request) {
-	web.ServeJS(w, ChatJSPath, "chat.js missing from the binary")
+	platform.ServeJS(w, ChatJSPath, "chat.js missing from the binary")
 }
 
 // ChatSearchJSPath is the embedded search-modal client (committed,
@@ -348,7 +348,7 @@ var ChatSearchJSPath = "chat/chat_search.js"
 
 // HandleChatSearchJS serves the search-modal script from the embedded assets.
 func HandleChatSearchJS(w http.ResponseWriter, r *http.Request) {
-	web.ServeJS(w, ChatSearchJSPath, "chat_search.js missing from the binary")
+	platform.ServeJS(w, ChatSearchJSPath, "chat_search.js missing from the binary")
 }
 
 // ChatLeftSidebarJSPath is the embedded left-sidebar client — builds
@@ -358,7 +358,7 @@ var ChatLeftSidebarJSPath = "chat/chat_left_sidebar.js"
 
 // HandleChatLeftSidebarJS serves the left-sidebar script from the embedded assets.
 func HandleChatLeftSidebarJS(w http.ResponseWriter, r *http.Request) {
-	web.ServeJS(w, ChatLeftSidebarJSPath, "chat_left_sidebar.js missing from the binary")
+	platform.ServeJS(w, ChatLeftSidebarJSPath, "chat_left_sidebar.js missing from the binary")
 }
 
 // ChatAddTopicJSPath is the embedded Add-Topic form widget — the
@@ -368,7 +368,7 @@ var ChatAddTopicJSPath = "chat/chat_add_topic.js"
 
 // HandleChatAddTopicJS serves the add-topic widget from the embedded assets.
 func HandleChatAddTopicJS(w http.ResponseWriter, r *http.Request) {
-	web.ServeJS(w, ChatAddTopicJSPath, "chat_add_topic.js missing from the binary")
+	platform.ServeJS(w, ChatAddTopicJSPath, "chat_add_topic.js missing from the binary")
 }
 
 // ChatDragToPinJSPath is the embedded drag-to-pin gesture widget —
@@ -379,7 +379,7 @@ var ChatDragToPinJSPath = "chat/chat_drag_to_pin.js"
 
 // HandleChatDragToPinJS serves the drag-to-pin widget from the embedded assets.
 func HandleChatDragToPinJS(w http.ResponseWriter, r *http.Request) {
-	web.ServeJS(w, ChatDragToPinJSPath, "chat_drag_to_pin.js missing from the binary")
+	platform.ServeJS(w, ChatDragToPinJSPath, "chat_drag_to_pin.js missing from the binary")
 }
 
 // ChatRightSidebarJSPath is the embedded right-sidebar client — slim
@@ -388,7 +388,7 @@ var ChatRightSidebarJSPath = "chat/chat_right_sidebar.js"
 
 // HandleChatRightSidebarJS serves the right-sidebar script from the embedded assets.
 func HandleChatRightSidebarJS(w http.ResponseWriter, r *http.Request) {
-	web.ServeJS(w, ChatRightSidebarJSPath, "chat_right_sidebar.js missing from the binary")
+	platform.ServeJS(w, ChatRightSidebarJSPath, "chat_right_sidebar.js missing from the binary")
 }
 
 // ChatComposeJSPath is the embedded compose client — form submit,
@@ -397,7 +397,7 @@ var ChatComposeJSPath = "chat/chat_compose.js"
 
 // HandleChatComposeJS serves the compose script from the embedded assets.
 func HandleChatComposeJS(w http.ResponseWriter, r *http.Request) {
-	web.ServeJS(w, ChatComposeJSPath, "chat_compose.js missing from the binary")
+	platform.ServeJS(w, ChatComposeJSPath, "chat_compose.js missing from the binary")
 }
 
 // ChatHelpJSPath is the embedded global keyboard-dispatcher — the keys
@@ -406,7 +406,7 @@ var ChatHelpJSPath = "chat/chat_help.js"
 
 // HandleChatHelpJS serves the keyboard-dispatcher script from the embedded assets.
 func HandleChatHelpJS(w http.ResponseWriter, r *http.Request) {
-	web.ServeJS(w, ChatHelpJSPath, "chat_help.js missing from the binary")
+	platform.ServeJS(w, ChatHelpJSPath, "chat_help.js missing from the binary")
 }
 
 // NotifyJSPath is the shared cross-page notify + tab-alert module, loaded
@@ -415,7 +415,7 @@ var NotifyJSPath = "chat/notify.js"
 
 // HandleNotifyJS serves the shared notify module from the embedded assets.
 func HandleNotifyJS(w http.ResponseWriter, r *http.Request) {
-	web.ServeJS(w, NotifyJSPath, "notify.js missing from the binary")
+	platform.ServeJS(w, NotifyJSPath, "notify.js missing from the binary")
 }
 
 // MessageJSPath is the per-bubble Message class — owns the bubble DOM,
@@ -426,7 +426,7 @@ var MessageJSPath = "chat/message.js"
 
 // HandleMessageJS serves the Message module from the embedded assets.
 func HandleMessageJS(w http.ResponseWriter, r *http.Request) {
-	web.ServeJS(w, MessageJSPath, "message.js missing from the binary")
+	platform.ServeJS(w, MessageJSPath, "message.js missing from the binary")
 }
 
 // MessageViewJSPath is the list-of-bubbles widget — owns selection state,
@@ -436,7 +436,7 @@ var MessageViewJSPath = "chat/message_view.js"
 
 // HandleMessageViewJS serves the MessageView module from the embedded assets.
 func HandleMessageViewJS(w http.ResponseWriter, r *http.Request) {
-	web.ServeJS(w, MessageViewJSPath, "message_view.js missing from the binary")
+	platform.ServeJS(w, MessageViewJSPath, "message_view.js missing from the binary")
 }
 
 // NavStackJSPath is the back/forward state machine — middle_pane.js
@@ -446,7 +446,7 @@ var NavStackJSPath = "chat/nav_stack.js"
 
 // HandleNavStackJS serves the NavStack module from the embedded assets.
 func HandleNavStackJS(w http.ResponseWriter, r *http.Request) {
-	web.ServeJS(w, NavStackJSPath, "nav_stack.js missing from the binary")
+	platform.ServeJS(w, NavStackJSPath, "nav_stack.js missing from the binary")
 }
 
 // MiddlePaneJSPath wraps MessageView + NavStack + the back/fwd buttons
@@ -458,7 +458,7 @@ var MiddlePaneJSPath = "chat/middle_pane.js"
 
 // HandleMiddlePaneJS serves the middle-pane module from the embedded assets.
 func HandleMiddlePaneJS(w http.ResponseWriter, r *http.Request) {
-	web.ServeJS(w, MiddlePaneJSPath, "middle_pane.js missing from the binary")
+	platform.ServeJS(w, MiddlePaneJSPath, "middle_pane.js missing from the binary")
 }
 
 // ChatImagePopupJSPath is the shared image-zoom dialog — reused by chat
@@ -467,7 +467,7 @@ var ChatImagePopupJSPath = "chat/chat_image_popup.js"
 
 // HandleChatImagePopupJS serves the shared image-popup module.
 func HandleChatImagePopupJS(w http.ResponseWriter, r *http.Request) {
-	web.ServeJS(w, ChatImagePopupJSPath, "chat_image_popup.js missing from the binary")
+	platform.ServeJS(w, ChatImagePopupJSPath, "chat_image_popup.js missing from the binary")
 }
 
 // ChatCodePopupJSPath is the shared code-monospace dialog — reused by chat
@@ -476,7 +476,7 @@ var ChatCodePopupJSPath = "chat/chat_code_popup.js"
 
 // HandleChatCodePopupJS serves the shared code-popup module.
 func HandleChatCodePopupJS(w http.ResponseWriter, r *http.Request) {
-	web.ServeJS(w, ChatCodePopupJSPath, "chat_code_popup.js missing from the binary")
+	platform.ServeJS(w, ChatCodePopupJSPath, "chat_code_popup.js missing from the binary")
 }
 
 // validChatPartner reports whether partner id is a usable conversation
@@ -504,7 +504,7 @@ func renderChatPicker(w http.ResponseWriter, user users.User) {
 		fmt.Fprint(w, `<li class="muted">No other members yet.</li>`)
 	}
 	fmt.Fprint(w, `</ul>`)
-	web.PageFooter(w)
+	platform.PageFooter(w)
 }
 
 func renderChatConversation(w http.ResponseWriter, user users.User, partnerID, conv, sessionID string) {
@@ -544,7 +544,7 @@ func renderChatConversation(w http.ResponseWriter, user users.User, partnerID, c
 	// document order for these non-module siblings. message.js and
 	// message_view.js are foundational (used by chat.js's IIFE itself, not
 	// just via init). notify.js loads after chat.js (no init dep).
-	v := url.QueryEscape(web.AssetVersion)
+	v := url.QueryEscape(platform.AssetVersion)
 	fmt.Fprintf(w, `</div><script src="/chat/chat_image_popup.js?v=%s"></script>`+
 		`<script src="/chat/chat_code_popup.js?v=%s"></script>`+
 		`<script src="/chat/message.js?v=%s"></script>`+
@@ -562,7 +562,7 @@ func renderChatConversation(w http.ResponseWriter, user users.User, partnerID, c
 		`<script src="/chat/notify.js?v=%s"></script>`,
 		v, v, v, v, v, v, v, v, v, v, v, v, v, v, v)
 
-	web.PageFooter(w)
+	platform.PageFooter(w)
 }
 
 // sidebarItem is one labelled link in the left rail — used for partner

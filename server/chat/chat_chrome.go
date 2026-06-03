@@ -2,7 +2,7 @@ package chat
 
 import (
 	"angry-gopher/server/users"
-	"angry-gopher/server/web"
+	"angry-gopher/server/platform"
 	"fmt"
 	"html"
 	"net/http"
@@ -54,14 +54,14 @@ func chatChromeTop(w http.ResponseWriter, user users.User, title, active string)
 // <h1> — the title lives in the bar. active is "chat" | "docs" |
 // "settings" | "".
 func chatPageHeader(w http.ResponseWriter, title string, user users.User, active string) {
-	web.PageHeadAndStyle(w, chatTabTitle(active))
+	platform.PageHeadAndStyle(w, chatTabTitle(active))
 	// PRODUCT_DECISION: colors.js loads synchronously BEFORE the chrome
 	// HTML — install() reads localStorage, sets data-theme on <html>,
 	// and injects the palette <style> block. Chrome HTML then renders
 	// with the right colors first-paint (no flash). chat_theme.js wires
 	// the toggle button (emitted by chatChromeTop) and can defer until
 	// later since the button is just a visual decoration until clicked.
-	v := url.QueryEscape(web.AssetVersion)
+	v := url.QueryEscape(platform.AssetVersion)
 	fmt.Fprintf(w,
 		`<script src="/chat/colors.js?v=%s"></script>`+
 			`<script>ChatColors.install();</script>`+
@@ -77,7 +77,7 @@ var StylesJSPath = "chat/styles.js"
 // HandleStylesJS serves chat/styles.js (ChatStyles namespace shared by
 // /chat/code and /chat/images).
 func HandleStylesJS(w http.ResponseWriter, r *http.Request) {
-	web.ServeJS(w, StylesJSPath, "styles.js missing from the binary")
+	platform.ServeJS(w, StylesJSPath, "styles.js missing from the binary")
 }
 
 // ColorsJSPath / ChatThemeJSPath are the palette + theme-toggle clients.
@@ -87,12 +87,12 @@ var ChatThemeJSPath = "chat/chat_theme.js"
 // HandleColorsJS serves chat/colors.js (ChatColors namespace: palette
 // + install + toggle, every chat-subsystem page loads it early).
 func HandleColorsJS(w http.ResponseWriter, r *http.Request) {
-	web.ServeJS(w, ColorsJSPath, "colors.js missing from the binary")
+	platform.ServeJS(w, ColorsJSPath, "colors.js missing from the binary")
 }
 
 // HandleChatThemeJS serves chat/chat_theme.js (wires the toggle button).
 func HandleChatThemeJS(w http.ResponseWriter, r *http.Request) {
-	web.ServeJS(w, ChatThemeJSPath, "chat_theme.js missing from the binary")
+	platform.ServeJS(w, ChatThemeJSPath, "chat_theme.js missing from the binary")
 }
 
 // chatTabTitle picks the browser-tab text from which chat-subsystem page
