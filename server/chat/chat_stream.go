@@ -9,6 +9,7 @@
 package chat
 
 import (
+	"angry-gopher/server/users"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -18,26 +19,38 @@ import (
 	"time"
 )
 
+// parseSince extracts the SSE replay cursor from Last-Event-ID
+// (reconnect path) or ?since=N (initial load).
+func parseSince(r *http.Request) int {
+	if lei := strings.TrimSpace(r.Header.Get("Last-Event-ID")); lei != "" {
+		if n, err := strconv.Atoi(lei); err == nil {
+			return n + 1
+		}
+	}
+	if q := r.URL.Query().Get("since"); q != "" {
+		if n, err := strconv.Atoi(q); err == nil && n >= 0 {
+			return n
+		}
+	}
+	return 0
+}
+
 // HandleChatStream is the SSE endpoint for /chat/c/<conv>/<sid>/stream.
-// It replays from `since` (or the Last-Event-ID on reconnect) and then
-// streams live messages until the client disconnects.
 func HandleChatStream(w http.ResponseWriter, r *http.Request) {
 	user, conv, sessionID, ok := chatPathSession(w, r)
 	if !ok {
 		return
 	}
 	partner, _ := OtherInConv(user.ID, conv)
+	serveChatStream(w, r, DMConv(user.ID, partner), sessionID, parseSince(r))
+}
 
-	since := 0
-	if lei := strings.TrimSpace(r.Header.Get("Last-Event-ID")); lei != "" {
-		if n, err := strconv.Atoi(lei); err == nil {
-			since = n + 1
-		}
-	} else if q := r.URL.Query().Get("since"); q != "" {
-		if n, err := strconv.Atoi(q); err == nil && n >= 0 {
-			since = n
-		}
-	}
+// serveChatStream replays the session's backlog (with a "backlog-size"
+// preamble so the client can suppress per-message scroll work until
+// initial load lands) and streams live messages until disconnect. Used
+// by both DM and channel topic streams.
+func serveChatStream(w http.ResponseWriter, r *http.Request, c Conv, sid string, since int) {
+	user := users.CurrentUser(r)
 
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
@@ -45,19 +58,11 @@ func HandleChatStream(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("X-Accel-Buffering", "no")
 
 	rc := http.NewResponseController(w)
-	// This connection is long-lived; clear the server's 30s WriteTimeout
-	// so it isn't torn down mid-stream.
 	_ = rc.SetWriteDeadline(time.Time{})
 
-	backlog, ch, cancel := OpenChatStream(user.ID, partner, sessionID, since)
+	backlog, ch, cancel := c.OpenStream(sid, since)
 	defer cancel()
 
-	// Preamble: tell the client how many backlog events to expect so it can
-	// suppress per-message scroll work until the whole backlog has landed.
-	// Without this, a 1000-message conversation scrolls visibly on each
-	// message during initial load. Named SSE event ("backlog-size") routes
-	// to a separate addEventListener on the client; the unnamed message
-	// events for actual chat messages keep going to onmessage.
 	if _, err := fmt.Fprintf(w, "event: backlog-size\ndata: %d\n\n", len(backlog)); err != nil {
 		return
 	}

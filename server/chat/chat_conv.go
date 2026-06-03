@@ -46,14 +46,26 @@ type Conv struct {
 	Members []string
 }
 
-// topicURL is the path the URL-visible address maps to. The two kinds
-// live in different URL namespaces (the only place that matters
-// outside Conv).
-func (c Conv) topicURL(sid string) string {
+// baseURL is the conversation's URL root (no topic). chat.js reads it
+// from data-conv-base to build /send, /stream, /upload, and cross-
+// session refs without branching on Kind.
+func (c Conv) baseURL() string {
 	if c.Kind == KindChannel {
-		return "/channel/" + c.Key + "/" + sid
+		return "/channel/" + c.Key
 	}
-	return "/chat/c/" + c.Key + "/" + sid
+	return "/chat/c/" + c.Key
+}
+
+// topicURL is c.baseURL() + "/" + sid — the URL to one topic page.
+func (c Conv) topicURL(sid string) string { return c.baseURL() + "/" + sid }
+
+// tabTitleFor is the browser-tab text shown on the conversation page,
+// per viewer (DMs need the OTHER party's name).
+func (c Conv) tabTitleFor(viewerUID, sid string) string {
+	if c.Kind == KindChannel {
+		return "#" + c.Key + ": " + sid
+	}
+	return "Chat w/" + users.GetUserName(c.PartnerOf(viewerUID)) + ": " + sid
 }
 
 // notifyText is the human-readable notify-strip line for one new

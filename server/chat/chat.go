@@ -229,7 +229,7 @@ func HandleChatPage(w http.ResponseWriter, r *http.Request) {
 	partner, _ := OtherInConv(user.ID, conv)
 	SetUserLastSession(user.ID, user.ID, partner, sid)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	renderChatConversation(w, user, partner, conv, sid)
+	renderConversation(w, user, DMConv(user.ID, partner), sid)
 }
 
 // resolveSessionForUser picks the session a user lands on when only
@@ -507,28 +507,25 @@ func renderChatPicker(w http.ResponseWriter, user users.User) {
 	platform.PageFooter(w)
 }
 
-func renderChatConversation(w http.ResponseWriter, user users.User, partnerID, conv, sessionID string) {
-	// Fail-fast on a corrupt session file before we ship the page shell —
-	// the SSE backlog reads the same file but errors there are harder to
-	// surface. The slice itself is discarded; the client builds the feed
-	// from the SSE replay.
-	if _, err := ReadChatSession(user.ID, partnerID, sessionID); err != nil {
+// renderConversation renders one topic feed page — same shell for DMs
+// and channels. The Conv supplies the URL space (conv-base attr lets
+// chat.js build /send, /stream, /upload, and cross-session refs
+// without branching on kind) and the storage shape (ReadSession + the
+// sidebar payload).
+func renderConversation(w http.ResponseWriter, user users.User, c Conv, sid string) {
+	// Fail-fast on a corrupt session file before we ship the page shell.
+	if _, err := c.ReadSession(sid); err != nil {
 		http.Error(w, "read conversation: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
-	partnerName := users.GetUserName(partnerID)
-
-	chatPageHeader(w, "Chat w/"+partnerName+": "+sessionID, user, "")
+	chatPageHeader(w, c.tabTitleFor(user.ID, sid), user, "")
 	fmt.Fprint(w, chatCSS)
-	// data-conv + data-session let chat.js build the API URLs
-	// (/chat/c/<conv>/<sid>/{stream,send,upload}) without re-deriving
-	// the pair key. data-partner stays for display labels (mine vs theirs).
-	fmt.Fprintf(w, `<div id="chat-root" data-conv="%s" data-session="%s" data-partner="%s">`,
-		html.EscapeString(conv), html.EscapeString(sessionID), html.EscapeString(partnerID))
+	fmt.Fprintf(w, `<div id="chat-root" data-conv="%s" data-conv-base="%s" data-session="%s">`,
+		html.EscapeString(c.Key), html.EscapeString(c.baseURL()), html.EscapeString(sid))
 	fmt.Fprint(w, `<div class="chat-notify" id="chat-notify"></div>`)
 
 	fmt.Fprint(w, `<div class="chat-layout">`)
-	emitChatSidebarMount(w, user, partnerID, conv, sessionID)
+	emitChatSidebarMount(w, user, c, sid)
 	// The middle column (wrapper + navbar with Back/Forward/🔍, history
 	// surface, bubble list, all their styling) is built client-side by
 	// chat/middle_pane.js — this is just the mount slot.
@@ -590,9 +587,11 @@ type sidebarPayload struct {
 }
 
 // buildSidebarPayload computes the left-rail data for one conversation
-// page render. Partners come from ListAuthorized; sessions come from
-// ListChatSessions (sorted) split by PinnedSessions.
-func buildSidebarPayload(user users.User, partnerID, conv, sessionID string) sidebarPayload {
+// page render. Conversations row = every DM partner + every channel
+// the viewer subscribes to (Zulip-shape: General sits beside Apoorva).
+// Sessions / PinnedSessions are the current conv's topics, split by
+// pinned state.
+func buildSidebarPayload(user users.User, current Conv, sessionID string) sidebarPayload {
 	var p sidebarPayload
 	for _, m := range users.ListAuthorized() {
 		if m.ID == user.ID {
@@ -600,20 +599,27 @@ func buildSidebarPayload(user users.User, partnerID, conv, sessionID string) sid
 		}
 		theirConv := chatPairKey(user.ID, m.ID)
 		p.Conversations = append(p.Conversations, sidebarItem{
-			ID:     m.ID,
+			ID:     "uid:" + m.ID,
 			Label:  m.Name,
 			URL:    "/chat/c/" + theirConv,
-			Active: theirConv == conv,
+			Active: current.Kind == KindDM && theirConv == current.Key,
 			Online: IsOnline(m.ID),
 		})
 	}
-	sessions := ListChatSessions(user.ID, partnerID)
-	pinned := PinnedSessions(user.ID, conv)
-	for _, sid := range sessions {
+	for _, name := range ListUserChannels(user.ID) {
+		p.Conversations = append(p.Conversations, sidebarItem{
+			ID:     "ch:" + name,
+			Label:  "# " + name,
+			URL:    "/channel/" + name,
+			Active: current.Kind == KindChannel && name == current.Key,
+		})
+	}
+	pinned := PinnedSessions(user.ID, current.Key)
+	for _, sid := range current.ListSessions() {
 		item := sidebarItem{
 			ID:     sid,
 			Label:  sid,
-			URL:    "/chat/c/" + conv + "/" + url.PathEscape(sid),
+			URL:    current.topicURL(sid),
 			Active: sid == sessionID,
 		}
 		if pinned[sid] {
@@ -629,8 +635,8 @@ func buildSidebarPayload(user users.User, partnerID, conv, sessionID string) sid
 // the initial payload as inline JSON. The JSON is shipped in a
 // <script type="application/json"> sibling so first paint doesn't need
 // a round-trip and the wire shape is what the SSE upserts would extend.
-func emitChatSidebarMount(w http.ResponseWriter, user users.User, partnerID, conv, sessionID string) {
-	payload, err := json.Marshal(buildSidebarPayload(user, partnerID, conv, sessionID))
+func emitChatSidebarMount(w http.ResponseWriter, user users.User, current Conv, sessionID string) {
+	payload, err := json.Marshal(buildSidebarPayload(user, current, sessionID))
 	if err != nil {
 		// PRODUCT_DECISION: empty payload is a recoverable rendering result —
 		// client builds empty sections, SSE backfills.

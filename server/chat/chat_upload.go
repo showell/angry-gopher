@@ -21,7 +21,6 @@ import (
 	_ "image/png"  // register the png decoder
 	"io"
 	"net/http"
-	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -73,8 +72,7 @@ func randUploadToken() (string, error) {
 	return hex.EncodeToString(b[:]), nil
 }
 
-// HandleChatUpload accepts one image for the conversation with ?with=,
-// stores it, and returns {"url":...,"name":...} as JSON.
+// HandleChatUpload accepts one image for /chat/c/<conv>/<sid>.
 func HandleChatUpload(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -85,9 +83,26 @@ func HandleChatUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	partner, _ := OtherInConv(user.ID, conv)
+	serveUpload(w, r, user, DMConv(user.ID, partner), sessionID)
+}
 
-	// Cap the body (with a little slack for multipart framing); enforce
-	// the real image-size limit on the decoded bytes below.
+// HandleChannelUpload accepts one image for /channel/<name>/<topic>.
+func HandleChannelUpload(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	user, c, sid, ok := channelPathTopic(w, r)
+	if !ok {
+		return
+	}
+	serveUpload(w, r, user, c, sid)
+}
+
+// serveUpload is the shared image-upload path used by DM and channel
+// uploads. Validates type + size, reserves the user's lifetime quota,
+// writes to the conv's UploadsDir, returns the URL + dimensions.
+func serveUpload(w http.ResponseWriter, r *http.Request, user users.User, c Conv, sid string) {
 	r.Body = http.MaxBytesReader(w, r.Body, maxChatUploadBytes+1<<20)
 	file, header, err := r.FormFile("file")
 	if err != nil {
@@ -115,8 +130,6 @@ func HandleChatUpload(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "unsupported image type (png, jpeg, gif, webp only)", http.StatusUnsupportedMediaType)
 		return
 	}
-
-	// Lifetime per-user upload backstop (reserve before storing).
 	if !users.ReserveUploadBytes(user.ID, int64(len(data)), users.MaxUploadLifetimeBytes) {
 		http.Error(w, fmt.Sprintf("Upload limit reached — you've used your %d GB image allowance.",
 			users.MaxUploadLifetimeBytes>>30), http.StatusForbidden)
@@ -129,7 +142,7 @@ func HandleChatUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	name := token + "." + ext
-	dir := chatSessionUploadsDir(user.ID, partner, sessionID)
+	dir := c.UploadsDir(sid)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		http.Error(w, "mkdir: "+err.Error(), http.StatusInternalServerError)
 		return
@@ -140,12 +153,9 @@ func HandleChatUpload(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Decode pixel dimensions from the header bytes (no full-image alloc).
-	// Width+height ride along in the JSON so the client can write a width/
-	// height-bearing <img> tag — modern browsers use those attrs as an
-	// aspect-ratio hint while the image decodes, reserving the right space
-	// in the layout. That kills the "scroll lands too high because images
-	// haven't loaded yet" jank on initial chat load. webp isn't stdlib;
-	// if decode fails we just omit dims and degrade to the old behavior.
+	// Width+height let the client write an <img width=H height=W> tag whose
+	// aspect-ratio reserves layout space while the image decodes, killing
+	// the "scroll lands too high" jank on initial chat load.
 	width, height := 0, 0
 	if cfg, _, derr := image.DecodeConfig(bytes.NewReader(data)); derr == nil {
 		width, height = cfg.Width, cfg.Height
@@ -153,21 +163,36 @@ func HandleChatUpload(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{
-		"url":    "/chat/c/" + conv + "/" + url.PathEscape(sessionID) + "/uploads/" + name,
+		"url":    c.topicURL(sid) + "/uploads/" + name,
 		"name":   header.Filename,
 		"width":  width,
 		"height": height,
 	})
 }
 
-// HandleChatFile serves an uploaded image, gated to participants of the
-// conversation named in the URL. URL shape:
+// HandleChatFile serves an uploaded image at
 // /chat/c/<conv>/<sid>/uploads/<filename>.
 func HandleChatFile(w http.ResponseWriter, r *http.Request) {
 	_, conv, sessionID, ok := chatPathSession(w, r)
 	if !ok {
 		return
 	}
+	user := users.CurrentUser(r)
+	partner, _ := OtherInConv(user.ID, conv)
+	serveUploadedFile(w, r, DMConv(user.ID, partner), sessionID)
+}
+
+// HandleChannelFile serves an uploaded image at
+// /channel/<name>/<topic>/uploads/<file>.
+func HandleChannelFile(w http.ResponseWriter, r *http.Request) {
+	_, c, sid, ok := channelPathTopic(w, r)
+	if !ok {
+		return
+	}
+	serveUploadedFile(w, r, c, sid)
+}
+
+func serveUploadedFile(w http.ResponseWriter, r *http.Request, c Conv, sid string) {
 	name := r.PathValue("file")
 	if !chatUploadName.MatchString(name) {
 		http.NotFound(w, r)
@@ -177,5 +202,5 @@ func HandleChatFile(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", chatImageContentType[ext])
 	w.Header().Set("Cache-Control", "private, max-age=31536000, immutable")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
-	http.ServeFile(w, r, filepath.Join(ChatSessionUploadsDirForKey(conv, sessionID), name))
+	http.ServeFile(w, r, filepath.Join(c.UploadsDir(sid), name))
 }

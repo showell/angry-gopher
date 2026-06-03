@@ -2,8 +2,12 @@
   var root=document.getElementById('chat-root');
   var CONV=root.dataset.conv;
   var SESSION=root.dataset.session;
-  /* PRODUCT_DECISION: API URL space mirrors disk layout under {ChatDataRoot}/<conv>/sessions/<sid>. */
-  var SESSION_BASE='/chat/c/'+encodeURIComponent(CONV)+'/'+encodeURIComponent(SESSION);
+  /* CONV_BASE is the conversation's URL root, supplied by the server so
+     chat.js doesn't branch on DM vs channel ("/chat/c/<pair>" vs
+     "/channel/<name>"). SESSION_BASE = CONV_BASE + /<sid>; cross-session
+     refs reuse CONV_BASE + /<other-sid>. Same code path for both kinds. */
+  var CONV_BASE=root.dataset.convBase;
+  var SESSION_BASE=CONV_BASE+'/'+encodeURIComponent(SESSION);
 
   /* ===== message store — parallel to MessageView's bubble list =====
      PRODUCT_DECISION: chat.js holds the SSE records as plain data
@@ -82,7 +86,7 @@
       if(rec) pane.focusBubble(rec.index + 1);
       return;
     }
-    window.open('/chat/c/'+encodeURIComponent(CONV)+'/'+encodeURIComponent(targetSession)+'#msg-'+id, '_blank');
+    window.open(CONV_BASE+'/'+encodeURIComponent(targetSession)+'#msg-'+id, '_blank');
   }
 
   /* ===== middle pane — owns wrapper + navbar + back/fwd + history + bubbles ===== */
@@ -228,6 +232,7 @@
   ChatLeftSidebar.init({
     mount: document.getElementById('chat-left-sidebar'),
     conv: CONV,
+    convBase: CONV_BASE,
     data: sidebarData,
   });
   /* PRODUCT_DECISION: ChatRightSidebar builds the wrapper + closed-panel +

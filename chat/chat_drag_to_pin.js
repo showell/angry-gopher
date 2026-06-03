@@ -26,7 +26,7 @@
 window.ChatDragToPin = (function(){
   'use strict';
 
-  var CONV, onDropCb;
+  var CONV_BASE, onDropCb;
 
   /* PRODUCT_DECISION: widget owns its CSS — the draggable affordance
      on items, the dragging-state opacity, the drop-target outlines,
@@ -111,7 +111,7 @@ window.ChatDragToPin = (function(){
     /* PRODUCT_DECISION: optimistic — caller places the item NOW; we'll
        fire onDrop again with reversed source/target if the POST fails. */
     if(onDropCb) onDropCb({item:d.item, toUl:target});
-    fetch('/chat/c/'+encodeURIComponent(CONV)+'/'+encodeURIComponent(d.sid)+'/'+(pin?'pin':'unpin'),
+    fetch(CONV_BASE+'/'+encodeURIComponent(d.sid)+'/'+(pin?'pin':'unpin'),
           {method:'POST'})
       .then(function(r){ if(!r.ok) throw 0; })
       .catch(function(){
@@ -128,7 +128,7 @@ window.ChatDragToPin = (function(){
 
   function init(deps){
     ensureStyles();
-    CONV = deps.conv;
+    CONV_BASE = deps.convBase;
     onDropCb = deps.onDrop;
   }
   // lint:called-once event-handler-bundle — invoked per session item

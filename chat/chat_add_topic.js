@@ -1,12 +1,12 @@
 /* ChatAddTopic — the "Add Topic" form at the bottom of the left rail.
 
-   ChatAddTopic.create({conv, onCreated}) returns a <form> ready to
-   drop into a parent. Owns its DOM, its CSS, its TOPIC_RE validation,
-   the POST to /chat/c/<conv>/new, and the inline error display on
-   failure. Does NOT decide what happens on success — the caller
-   passes onCreated({conv, sid}) and decides whether to navigate, log,
-   pop a toast, etc. The widget is a presentational form with a
-   domain event; the next action is policy. */
+   ChatAddTopic.create({convBase, onCreated}) returns a <form> ready to
+   drop into a parent. POSTs to convBase + "/new"; the convBase shape
+   ("/chat/c/<pair>" for DMs, "/channel/<name>" for channels) is the
+   single point that knows DM-vs-channel — the widget itself doesn't.
+   Owns its DOM, CSS, TOPIC_RE validation, and the inline error display.
+   Does NOT decide what happens on success — the caller passes
+   onCreated({conv, sid}). */
 window.ChatAddTopic = (function(){
   'use strict';
 
@@ -37,7 +37,7 @@ window.ChatAddTopic = (function(){
 
   function create(deps){
     ensureStyles();
-    var conv      = deps.conv;
+    var convBase  = deps.convBase;
     var onCreated = deps.onCreated || function(){};
 
     var form = document.createElement('form');
@@ -65,7 +65,7 @@ window.ChatAddTopic = (function(){
          the input keeps the active element stable through the round-trip. */
       input.focus();
       btn.disabled=true;
-      fetch('/chat/c/'+encodeURIComponent(conv)+'/new',{
+      fetch(convBase+'/new',{
         method:'POST',
         headers:{'Content-Type':'application/x-www-form-urlencoded'},
         body:'topic='+encodeURIComponent(name),

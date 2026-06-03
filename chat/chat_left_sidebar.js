@@ -75,10 +75,14 @@ window.ChatLeftSidebar = (function(){
     if(rec.online) li.className='online';
     var a=document.createElement('a');
     a.href=rec.url;
-    /* Dot lives INSIDE the row link so it picks up the same hover/active
-       background. The label is plain text; dot styling is purely CSS. */
-    var dot=document.createElement('span'); dot.className='chat-presence-dot';
-    a.appendChild(dot);
+    /* Presence dot is per-user. Channel rows ("ch:" prefix) skip it —
+       a channel has N members; "the channel is online" isn't a
+       sensible aggregation. The label-prefix "# " from the server
+       carries the channel-ness visually. */
+    if(rec.id.indexOf('uid:')===0){
+      var dot=document.createElement('span'); dot.className='chat-presence-dot';
+      a.appendChild(dot);
+    }
     a.appendChild(document.createTextNode(rec.label));
     if(rec.active) a.className='active';
     li.appendChild(a);
@@ -145,31 +149,31 @@ window.ChatLeftSidebar = (function(){
   }
 
   /* ===== SSE stream — user-arrived, topic-added =====
-     PRODUCT_DECISION: server pre-resolves evt.conv to the canonical
-     pair-key from THIS recipient's perspective, so we just build the
-     link. Idempotent on data-uid / data-sid. */
+     PRODUCT_DECISION: server pre-builds evt.url per-recipient so the
+     client doesn't branch on conv kind (DM vs channel). Idempotent on
+     data-uid / data-sid. */
 
   // lint:called-once sse-event-handler
   function upsertPartner(evt){
-    if(!evt.user_id || !evt.conv) return;
-    if(convList.querySelector('li[data-uid="'+evt.user_id+'"]')) return;
+    if(!evt.user_id || !evt.url) return;
+    if(convList.querySelector('li[data-uid="uid:'+evt.user_id+'"]')) return;
     convList.appendChild(makeConvItem({
-      id: evt.user_id,
+      id: 'uid:' + evt.user_id,
       label: evt.user_name || evt.user_id,
-      url: '/chat/c/' + encodeURIComponent(evt.conv),
+      url: evt.url,
       active: false,
     }));
   }
   // lint:called-once sse-event-handler
   function upsertSession(evt){
-    if(!evt.conv || !evt.sid || evt.conv!==CONV) return;
+    if(!evt.conv || !evt.sid || !evt.url || evt.conv!==CONV) return;
     if(sessionList.querySelector('li[data-sid="'+evt.sid+'"]')) return;
     var placeholder=sessionList.querySelector('li.muted:not(.chat-pin-hint)');
     if(placeholder) placeholder.remove();
     insertSorted(sessionList, makeSessionItem({
       id: evt.sid,
       label: evt.sid,
-      url: '/chat/c/' + encodeURIComponent(CONV) + '/' + encodeURIComponent(evt.sid),
+      url: evt.url,
       active: false,
     }));
   }
@@ -180,7 +184,7 @@ window.ChatLeftSidebar = (function(){
   // lint:called-once sse-event-handler
   function markPartnerOnline(evt){
     if(!evt.user_id) return;
-    var li=convList.querySelector('li[data-uid="'+evt.user_id+'"]');
+    var li=convList.querySelector('li[data-uid="uid:'+evt.user_id+'"]');
     if(li) li.classList.add('online');
   }
   // lint:called-once init-section
@@ -200,6 +204,7 @@ window.ChatLeftSidebar = (function(){
   function init(deps){
     ensureStyles();
     CONV = deps.conv;
+    var convBase = deps.convBase;
     mount = deps.mount;
     mount.className = 'chat-sidebar';
 
@@ -207,7 +212,7 @@ window.ChatLeftSidebar = (function(){
        move AND on the revert if the POST fails. Sidebar owns DOM
        placement (insertSorted) and the empty-pinned hint. */
     ChatDragToPin.init({
-      conv: CONV,
+      convBase: convBase,
       onDrop: function(evt){
         insertSorted(evt.toUl, evt.item);
         syncPinHint();
@@ -237,10 +242,9 @@ window.ChatLeftSidebar = (function(){
        "navigate the user into the new session." The widget reports
        the event; the sidebar decides this is a hard navigation. */
     mount.appendChild(ChatAddTopic.create({
-      conv: CONV,
+      convBase: convBase,
       onCreated: function(j){
-        location.href = '/chat/c/' + encodeURIComponent(j.conv) +
-                                   '/' + encodeURIComponent(j.sid);
+        location.href = convBase + '/' + encodeURIComponent(j.sid);
       },
     }));
 

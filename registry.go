@@ -76,6 +76,19 @@ func RegisterPages(mux *http.ServeMux) {
 	// literal verbs above, which Go 1.22's ServeMux prefers over this wildcard.
 	Route(mux, "/chat/docs/{slug}", NEED_PASSWORD, chat.WithPresence(chat.HandleDocsItem))
 
+	// Channels — Zulip-shaped group conversations. /channel/<name>/<topic>
+	// parallels /chat/c/<conv>/<sid>; the chat-machinery layer (storage,
+	// SSE, fanout, notify) is shared via the Conv abstraction.
+	Route(mux, "/channel/{channel}", NEED_PASSWORD, chat.WithPresence(chat.HandleChannelConv))
+	Route(mux, "/channel/{channel}/new", NEED_PASSWORD, chat.WithPresence(chat.HandleChannelNewTopic))
+	Route(mux, "/channel/{channel}/{topic}", NEED_PASSWORD, chat.WithPresence(chat.HandleChannelPage))
+	Route(mux, "/channel/{channel}/{topic}/stream", NEED_PASSWORD, chat.HandleChannelStream)
+	Route(mux, "/channel/{channel}/{topic}/send", NEED_PASSWORD, chat.WithPresence(chat.HandleChannelSend))
+	Route(mux, "/channel/{channel}/{topic}/pin", NEED_PASSWORD, chat.WithPresence(chat.HandleChannelPin))
+	Route(mux, "/channel/{channel}/{topic}/unpin", NEED_PASSWORD, chat.WithPresence(chat.HandleChannelPin))
+	Route(mux, "/channel/{channel}/{topic}/upload", NEED_PASSWORD, chat.WithPresence(chat.HandleChannelUpload))
+	Route(mux, "/channel/{channel}/{topic}/uploads/{file}", NEED_PASSWORD, chat.HandleChannelFile)
+
 	// Chat JS bundles — static cacheable assets. Loaded by /learn too
 	// (which itself is TOTALLY_PUBLIC), so these must be public.
 	Route(mux, "/chat/recent.js", TOTALLY_PUBLIC, chat.HandleRecentJS)
