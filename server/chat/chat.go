@@ -235,13 +235,15 @@ func HandleChatPage(w http.ResponseWriter, r *http.Request) {
 
 // resolveSessionForUser picks the session a user lands on when only
 // the conv is named (no explicit sid in the URL). Order: user's
-// last-viewed -> conv's newest -> today's date (so a brand-new conv
-// auto-creates today's session on first post).
+// last-viewed → ChitChat (if it exists) → conv's first-alphabetical →
+// today's date (so a brand-new conv auto-creates today's session on
+// first post).
 func resolveSessionForUser(uid, partner string) string {
-	if last := LastUserSession(uid, uid, partner); last != "" && ChatSessionExists(uid, partner, last) {
+	c := DMConv(uid, partner)
+	if last := LastUserSession(uid, uid, partner); last != "" && c.SessionExists(last) {
 		return last
 	}
-	if def := DefaultChatSession(uid, partner); def != "" {
+	if def := c.PreferredDefaultSession(); def != "" {
 		return def
 	}
 	return time.Now().UTC().Format("2006-01-02")

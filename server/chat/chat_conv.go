@@ -175,6 +175,18 @@ func (c Conv) DefaultSession() string {
 	return ""
 }
 
+// PreferredDefaultSession is the topic to land on when the viewer
+// hasn't picked one yet. It prefers ChitChat (the convention for
+// ongoing free-form chat in both DMs and channels) when that topic
+// exists, otherwise falls back to DefaultSession. Returns "" only
+// when the conv has no topics at all on disk.
+func (c Conv) PreferredDefaultSession() string {
+	if c.SessionExists("ChitChat") {
+		return "ChitChat"
+	}
+	return c.DefaultSession()
+}
+
 // SessionExists reports whether sid has a transcript file on disk.
 func (c Conv) SessionExists(sid string) bool {
 	_, err := os.Stat(c.SessionPath(sid))

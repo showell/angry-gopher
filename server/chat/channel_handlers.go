@@ -55,7 +55,7 @@ func HandleChannelConv(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	sid := c.DefaultSession()
+	sid := c.PreferredDefaultSession()
 	if sid == "" {
 		sid = todayDateSlug()
 	}
