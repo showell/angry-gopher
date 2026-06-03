@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>driving</title>
+<style>
+  html, body { margin: 0; padding: 0; background: #0b0b0d; height: 100%; }
+  body {
+    display: flex; align-items: center; justify-content: center;
+    font-family: ui-monospace, Menlo, monospace; color: #cfd2d6;
+  }
+  #wrap { position: relative; }
+  canvas {
+    display: block;
+    background: #000;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.6);
+  }
+  #hint {
+    position: absolute; left: 10px; top: 10px;
+    font-size: 12px; opacity: 0.85;
+    text-shadow: 1px 1px 2px #000;
+    pointer-events: none;
+  }
+  #fps {
+    position: absolute; right: 10px; bottom: 10px;
+    font-size: 11px; opacity: 0.55;
+    text-shadow: 1px 1px 2px #000;
+    pointer-events: none;
+  }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <canvas id="c" width="960" height="600"></canvas>
+  <div id="hint">&larr; &rarr; steer &middot; &uarr; accelerate &middot; &darr; brake &middot; space handbrake</div>
+  <div id="fps">--</div>
+</div>
+<script src="driving.js"></script>
+</body>
+</html>
