@@ -30,8 +30,15 @@ func HandleLearn(w http.ResponseWriter, r *http.Request) {
 	// /learn loads no external CSS for them.
 	fmt.Fprint(w, `</head><body><div id="learn-root"></div>`)
 	v := url.QueryEscape(web.AssetVersion)
+	// colors.js + install() FIRST: chat modules reference ChatColors
+	// tokens at construction time (e.g. middle_pane.js's makeNavButton
+	// reads ChatColors.softBorder), so the namespace must exist before
+	// any chat-module load runs. The toggle button isn't wired here —
+	// /learn picks up whatever theme localStorage already has.
 	fmt.Fprintf(w,
-		`<script src="/chat/chat_image_popup.js?v=%s"></script>`+
+		`<script src="/chat/colors.js?v=%s"></script>`+
+			`<script>ChatColors.install();</script>`+
+			`<script src="/chat/chat_image_popup.js?v=%s"></script>`+
 			`<script src="/chat/chat_code_popup.js?v=%s"></script>`+
 			`<script src="/chat/message.js?v=%s"></script>`+
 			`<script src="/chat/message_view.js?v=%s"></script>`+
@@ -44,7 +51,7 @@ func HandleLearn(w http.ResponseWriter, r *http.Request) {
 			`<script src="/learn/callback_log.js?v=%s"></script>`+
 			`<script src="/learn/fake_host.js?v=%s"></script>`+
 			`<script src="/learn/learn.js?v=%s"></script>`,
-		v, v, v, v, v, v, v, v, v, v, v, v, v)
+		v, v, v, v, v, v, v, v, v, v, v, v, v, v)
 	fmt.Fprint(w, `</body></html>`)
 }
 
