@@ -24,19 +24,18 @@
   var MODES = {
     parkingLot: {
       name: 'parking lot',
-      maxSpeed: 8,        // ~18 mph
+      maxSpeed: 12,       // ~27 mph
       accel: 4,
       brake: 10,
       handBrake: 18,
-      reverseLimit: -3,
     },
     neighborhood: {       // placeholder, not yet entered
       name: 'neighborhood',
-      maxSpeed: 14, accel: 7, brake: 14, handBrake: 22, reverseLimit: -4,
+      maxSpeed: 16, accel: 7, brake: 14, handBrake: 22,
     },
     highway: {            // placeholder, not yet entered
       name: 'highway',
-      maxSpeed: 32, accel: 10, brake: 18, handBrake: 28, reverseLimit: -2,
+      maxSpeed: 32, accel: 10, brake: 18, handBrake: 28,
     },
   };
   var mode = MODES.parkingLot;
@@ -134,16 +133,13 @@
 
     if (keys.ArrowUp)   player.speed += mode.accel * dt;
     if (keys.ArrowDown) player.speed -= mode.brake * dt;
-    if (keys.Space) {
-      if (player.speed > 0) player.speed = Math.max(0, player.speed - mode.handBrake * dt);
-      else                  player.speed = Math.min(0, player.speed + mode.handBrake * dt);
-    }
-    player.speed = clamp(player.speed, mode.reverseLimit, mode.maxSpeed);
+    if (keys.Space)     player.speed -= mode.handBrake * dt;
+    player.speed = clamp(player.speed, 0, mode.maxSpeed);  // no reverse
 
-    var absSpeed = Math.abs(player.speed);
-    var steerRate = 1.7 * Math.min(1, absSpeed / 3);
+    // Constant steer rate — pivots at standstill (so a corner-brush doesn't
+    // strand you with no way out) and doesn't fight you at higher speed.
+    var steerRate = 1.4;
     var steerInput = (keys.ArrowLeft ? -1 : 0) + (keys.ArrowRight ? 1 : 0);
-    if (player.speed < 0) steerInput = -steerInput;
     player.heading += steerInput * steerRate * dt;
 
     var dx = Math.sin(player.heading) * player.speed * dt;
@@ -153,12 +149,12 @@
       player.z += dz;
     } else if (!collides(player.x + dx, player.z)) {
       player.x += dx;
-      player.speed *= 0.4;
+      player.speed *= 0.5;
     } else if (!collides(player.x, player.z + dz)) {
       player.z += dz;
-      player.speed *= 0.4;
+      player.speed *= 0.5;
     } else {
-      player.speed *= 0.05;
+      player.speed = 0;  // pinned against a wall — pivot to escape
     }
 
     // boundary check — drive too far in any direction and the run ends
@@ -427,13 +423,12 @@
     ctx.strokeRect(W - 200, 12, 188, 60);
     ctx.fillStyle = '#fff';
     ctx.font = 'bold 22px ui-monospace, monospace';
-    var mph = Math.floor(Math.abs(player.speed) * 2.237);
-    var label = player.speed < -0.1 ? 'REV ' : 'MPH ';
-    ctx.fillText(label + mph, W - 188, 40);
+    var mph = Math.floor(player.speed * 2.237);
+    ctx.fillText('MPH ' + mph, W - 188, 40);
     ctx.fillStyle = '#2a2a30';
     ctx.fillRect(W - 188, 50, 168, 8);
-    ctx.fillStyle = player.speed < 0 ? '#7a90ff' : '#ff8030';
-    ctx.fillRect(W - 188, 50, 168 * Math.min(1, Math.abs(player.speed) / mode.maxSpeed), 8);
+    ctx.fillStyle = '#ff8030';
+    ctx.fillRect(W - 188, 50, 168 * (player.speed / mode.maxSpeed), 8);
 
     // mode badge (top-left)
     ctx.fillStyle = 'rgba(0,0,0,0.55)';
