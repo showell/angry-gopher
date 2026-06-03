@@ -55,20 +55,25 @@ const AppChromeCSS = `
 .chat-notify a:hover { text-decoration:underline; }
 `
 
-// AppChromeTop emits the top bar: a home link, who you're playing as, an
-// Admin link for admins, and logout. It takes the two identity fields it
-// renders (name, admin) rather than a whole User — this platform layer
-// renders chrome, it doesn't model users.
+// AppChromeTop emits the top bar: home + Chat on the left, identity
+// area on the right. With a name, the identity area shows "Playing as
+// X · Admin? · Log out"; with no name (anon visitors to TOTALLY_PUBLIC
+// pages like Home and Learn), it shows just a "Log in" link.
 func AppChromeTop(w http.ResponseWriter, name string, isAdmin bool) {
-	adminLink := ""
-	if isAdmin {
-		adminLink = ` · <a href="/admin">Admin</a>`
+	right := `<a href="/login">Log in</a>`
+	if name != "" {
+		adminLink := ""
+		if isAdmin {
+			adminLink = ` · <a href="/admin">Admin</a>`
+		}
+		right = fmt.Sprintf(`Playing as <strong>%s</strong>%s · <a href="/logout">Log out</a>`,
+			html.EscapeString(name), adminLink)
 	}
 	fmt.Fprintf(w,
 		`<header class="app-top"><div class="app-top-home">`+
 			`<a href="/">Lyn Rummy</a> · <a href="/chat">Chat</a></div>`+
-			`<div class="app-top-user">Playing as <strong>%s</strong>%s · <a href="/logout">Log out</a></div></header>`,
-		html.EscapeString(name), adminLink)
+			`<div class="app-top-user">%s</div></header>`,
+		right)
 }
 
 // PageHeadAndStyle emits the doctype, head, shared stylesheet, and opens

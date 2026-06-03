@@ -1,19 +1,16 @@
 package home
 
 import (
-	"angry-gopher/server/lynrummy"
 	"angry-gopher/server/users"
 	"angry-gopher/server/web"
 	"fmt"
-	"html"
 	"net/http"
-	"sort"
-	"time"
 )
 
-// HandleHome serves the site root "/": the Lyn Rummy launch-pad
-// (play a game, solve puzzles, resume recent sessions). The Elm
-// client owns its own sessions on disk.
+// HandleHome serves the site root "/": the Lyn Rummy launch pad
+// (play a game, solve puzzles). TOTALLY_PUBLIC — anon visitors get the
+// same marketing surface; the Game/Puzzles tiles route through the
+// login flow on click.
 func HandleHome(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/" {
 		http.NotFound(w, r)
@@ -22,11 +19,8 @@ func HandleHome(w http.ResponseWriter, r *http.Request) {
 	user := users.CurrentUser(r)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	web.PageHeader(w, "Lyn Rummy", user.Name, user.Admin)
-	web.PageSubtitle(w, "Jump straight into a game or browse your recent sessions.")
-
+	web.PageSubtitle(w, "Jump straight into a game or browse the puzzles.")
 	renderGamesHero(w)
-	renderRecentSessions(w, user.ID)
-
 	web.PageFooter(w)
 }
 
@@ -43,16 +37,6 @@ func renderGamesHero(w http.ResponseWriter) {
 .play-btn { display:inline-block; background:#000080; color:white; padding:12px 28px;
             border-radius:6px; text-decoration:none; font-weight:bold; font-size:16px; }
 .play-btn:hover { background:#0000a0; }
-.sessions-section { margin-top:28px; }
-.sessions-section h3 { color:#000080; margin:0 0 10px; font-size:18px; }
-.sessions-table { width:100%; border-collapse:collapse; font-size:14px; }
-.sessions-table th, .sessions-table td { text-align:left; padding:8px 10px; border-bottom:1px solid #eee; }
-.sessions-table th { background:#f4f4ec; font-weight:bold; }
-.sessions-table tr:hover { background:#fafaf6; }
-.sessions-table a { color:#000080; text-decoration:none; font-weight:bold; }
-.sessions-table a:hover { text-decoration:underline; }
-.sessions-table .n { text-align:right; font-variant-numeric:tabular-nums; }
-.sessions-table .muted { color:#888; }
 </style>
 <div class="games-hero">
   <div class="games-tile">
@@ -70,72 +54,4 @@ func renderGamesHero(w http.ResponseWriter) {
     </div>
   </div>
 </div>`)
-}
-
-// renderRecentSessions lists the 10 most recent full-game sessions
-// across ALL players (any player may see others' games), newest
-// first, with a Player column. The Resume link shows only on the
-// viewer's own rows — the per-user routing can't open someone else's
-// session.
-func renderRecentSessions(w http.ResponseWriter, viewer string) {
-	type sessionRow struct {
-		player  string
-		id      int64
-		created int64
-		label   string
-		actions int
-	}
-	var rows []sessionRow
-	for _, p := range users.ListUserIDs() {
-		ids, err := lynrummy.ListSessionIDs(p)
-		if err != nil {
-			continue
-		}
-		for _, id := range ids {
-			meta, _ := lynrummy.ReadSessionMeta(p, id)
-			count, _ := lynrummy.CountSessionActions(p, id)
-			rows = append(rows, sessionRow{
-				player:  p,
-				id:      id,
-				created: lynrummy.SessionCreatedAt(meta),
-				label:   lynrummy.SessionLabel(meta),
-				actions: count,
-			})
-		}
-	}
-	sort.Slice(rows, func(i, j int) bool { return rows[i].created > rows[j].created })
-	if len(rows) > 10 {
-		rows = rows[:10]
-	}
-
-	eastern, _ := time.LoadLocation("America/New_York")
-
-	fmt.Fprint(w, `<div class="sessions-section">
-<h3>Recent sessions</h3>
-<table class="sessions-table">
-<tr><th>Player</th><th>#</th><th>Created</th><th>Label</th><th class="n">Actions</th><th></th></tr>`)
-	if len(rows) == 0 {
-		fmt.Fprint(w, `<tr><td colspan="6" class="muted">No sessions yet — click Play a game above to start one.</td></tr>`)
-	}
-	for _, row := range rows {
-		ts := ""
-		if row.created > 0 {
-			ts = time.Unix(row.created, 0).In(eastern).Format("Jan 2, 2006 · 3:04 PM MST")
-		}
-		labelCell := row.label
-		if labelCell == "" {
-			labelCell = `<span class="muted">—</span>`
-		} else {
-			labelCell = html.EscapeString(labelCell)
-		}
-		resumeCell := `<span class="muted">—</span>`
-		if row.player == viewer {
-			resumeCell = fmt.Sprintf(`<a href="/game/%d">Resume →</a>`, row.id)
-		}
-		fmt.Fprintf(w,
-			`<tr><td>%s</td><td>%d</td><td>%s</td><td>%s</td><td class="n">%d</td><td>%s</td></tr>`,
-			html.EscapeString(users.GetUserName(row.player)), row.id, html.EscapeString(ts), labelCell, row.actions, resumeCell,
-		)
-	}
-	fmt.Fprint(w, `</table></div>`)
 }

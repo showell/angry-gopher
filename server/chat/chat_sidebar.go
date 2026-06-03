@@ -70,10 +70,6 @@ func PublishTopicAdded(conv, sid string) {
 
 // HandleSidebarStream serves GET /chat/sidebar/stream.
 func HandleSidebarStream(w http.ResponseWriter, r *http.Request) {
-	if !users.IsAuthorized(r) {
-		http.Error(w, "unauthorized", http.StatusUnauthorized)
-		return
-	}
 	user := users.CurrentUser(r)
 	serveSSE(w, r, func() (<-chan sidebarEvent, func()) {
 		return sidebarBus.open(user.ID)

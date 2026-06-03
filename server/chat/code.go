@@ -281,10 +281,6 @@ func HandleCode(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	if !users.IsAuthorized(r) {
-		http.Redirect(w, r, "/login/full?next="+url.QueryEscape("/chat/code"), http.StatusSeeOther)
-		return
-	}
 	user := users.CurrentUser(r)
 	entries, err := readCodeForUser(user.ID)
 	if err != nil {
@@ -375,10 +371,6 @@ func codeMuFor(uid string) *sync.Mutex {
 
 // HandleCodeStream serves GET /chat/code/stream.
 func HandleCodeStream(w http.ResponseWriter, r *http.Request) {
-	if !users.IsAuthorized(r) {
-		http.Error(w, "unauthorized", http.StatusUnauthorized)
-		return
-	}
 	user := users.CurrentUser(r)
 	serveSSE(w, r, func() (<-chan codeSSEEvent, func()) {
 		return codeBus.open(user.ID)

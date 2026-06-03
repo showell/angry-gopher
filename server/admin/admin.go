@@ -30,13 +30,9 @@ type UserStats struct {
 	DiskBytes      int64
 }
 
-// HandleAdmin dispatches the admin surface. Admin powers are tied to the
-// user (the admin flag); non-admins get a 404 (don't reveal it exists).
+// HandleAdmin dispatches the admin surface. The ADMIN_ONLY route gate
+// already enforced the admin flag.
 func HandleAdmin(w http.ResponseWriter, r *http.Request) {
-	if !users.CurrentUser(r).Admin {
-		http.NotFound(w, r)
-		return
-	}
 	if r.URL.Path == "/admin/delete" {
 		handleAdminDelete(w, r)
 		return

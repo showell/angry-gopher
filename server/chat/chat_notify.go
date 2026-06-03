@@ -41,10 +41,6 @@ var notifyBus = newSubBus[notifyEvent]()
 
 // HandleChatNotifications serves GET /chat/notifications.
 func HandleChatNotifications(w http.ResponseWriter, r *http.Request) {
-	if !users.IsAuthorized(r) {
-		http.Error(w, "unauthorized", http.StatusUnauthorized)
-		return
-	}
 	user := users.CurrentUser(r)
 	serveSSE(w, r, func() (<-chan notifyEvent, func()) {
 		return notifyBus.open(user.ID)

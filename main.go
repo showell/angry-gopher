@@ -11,9 +11,7 @@ import (
 	"os"
 	"time"
 
-	"angry-gopher/server/admin"
 	"angry-gopher/server/chat"
-	"angry-gopher/server/login"
 	"angry-gopher/server/lynrummy"
 	"angry-gopher/server/users"
 	"angry-gopher/server/web"
@@ -21,55 +19,8 @@ import (
 
 func buildMux() http.Handler {
 	mux := http.NewServeMux()
-
-	mux.HandleFunc("/version", handleVersion)
-
-	// HTML pages, incl. the home/lobby at "/". Single source of truth.
 	RegisterPages(mux)
-
-	// Name login/logout (login sets the gopher_uid cookie; logout
-	// clears it). /login/full sets a member password session.
-	mux.HandleFunc("/login", login.HandleLogin)
-	mux.HandleFunc("/login/full", login.HandleLoginFull)
-	mux.HandleFunc("/logout", login.HandleLogout)
-
-	// Admin overview (session stats from the filesystem). Goes through
-	// the login gate, then requires the user's admin flag (see HandleAdmin).
-	mux.HandleFunc("/admin", admin.HandleAdmin)
-	mux.HandleFunc("/admin/", admin.HandleAdmin)
-
-	return withLoginGate(mux)
-}
-
-// withLoginGate makes login mandatory: any request without a resolvable
-// identity is redirected to /login, except for the exempt paths (login/
-// logout, the version check).
-func withLoginGate(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if loginExempt(r.URL.Path) {
-			next.ServeHTTP(w, r)
-			return
-		}
-		// users.CurrentUser resolves the identity (member session is
-		// authoritative; a guest uid is honored only if it's a real
-		// non-member user; a member uid without a session is a forge
-		// attempt and resolves to none). No identity → log in.
-		if users.CurrentUser(r).ID == "" {
-			http.Redirect(w, r, "/login", http.StatusSeeOther)
-			return
-		}
-		next.ServeHTTP(w, r)
-	})
-}
-
-func loginExempt(path string) bool {
-	switch path {
-	case "/login", "/login/full", "/logout", "/version":
-		return true
-	}
-	// /admin is intentionally not exempt: it goes through the gate and
-	// then requires the admin flag (see admin.HandleAdmin).
-	return false
+	return mux
 }
 
 func main() {

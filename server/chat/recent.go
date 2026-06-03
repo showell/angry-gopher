@@ -47,10 +47,6 @@ func HandleRecent(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	if !users.IsAuthorized(r) {
-		http.Redirect(w, r, "/login/full?next="+url.QueryEscape("/chat/recent"), http.StatusSeeOther)
-		return
-	}
 	user := users.CurrentUser(r)
 	items := gatherRecentItems(user)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -196,10 +192,6 @@ func PublishDocRecent(uid, slug string, at time.Time) {
 // HandleRecentStream serves GET /chat/recent/stream. Live-only — the
 // initial server-rendered table IS the backlog.
 func HandleRecentStream(w http.ResponseWriter, r *http.Request) {
-	if !users.IsAuthorized(r) {
-		http.Error(w, "unauthorized", http.StatusUnauthorized)
-		return
-	}
 	user := users.CurrentUser(r)
 	serveSSE(w, r, func() (<-chan recentEvent, func()) {
 		return recentBus.open(user.ID)

@@ -72,10 +72,6 @@ func HandleChat(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	if !users.IsAuthorized(r) {
-		http.Redirect(w, r, "/login/full?next="+url.QueryEscape("/chat"), http.StatusSeeOther)
-		return
-	}
 	user := users.CurrentUser(r)
 	// One-partner shortcut: skip the picker, drop into that conv (which
 	// itself redirects to the default session).
@@ -87,15 +83,11 @@ func HandleChat(w http.ResponseWriter, r *http.Request) {
 	renderChatPicker(w, user)
 }
 
-// chatPathParticipant resolves and authorizes the {conv} path
-// parameter against the current request. ok=false means an HTTP
-// response has already been written (login redirect, 404, etc); the
-// caller should just return.
+// chatPathParticipant resolves the {conv} path parameter and confirms
+// the caller participates in it. ok=false means an HTTP response has
+// already been written (404 for non-participants); the caller returns.
+// Caller's NEED_PASSWORD route gate already established the principal.
 func chatPathParticipant(w http.ResponseWriter, r *http.Request) (user users.User, conv string, ok bool) {
-	if !users.IsAuthorized(r) {
-		http.Redirect(w, r, "/login/full?next="+url.QueryEscape(r.URL.Path), http.StatusSeeOther)
-		return
-	}
 	user = users.CurrentUser(r)
 	conv = r.PathValue("conv")
 	if !ChatKeyParticipant(conv, user.ID) {
@@ -258,10 +250,6 @@ func resolveSessionForUser(uid, partner string) string {
 // (conv, session). Falls back to /chat (the picker / one-partner
 // shortcut) if the user has never been to any conv.
 func HandleChatDefault(w http.ResponseWriter, r *http.Request) {
-	if !users.IsAuthorized(r) {
-		http.Redirect(w, r, "/login/full?next="+url.QueryEscape("/chat/default"), http.StatusSeeOther)
-		return
-	}
 	user := users.CurrentUser(r)
 	conv := LastUserConv(user.ID)
 	if conv == "" || !ChatKeyParticipant(conv, user.ID) {
@@ -285,10 +273,6 @@ func HandleChatDefault(w http.ResponseWriter, r *http.Request) {
 func HandleChatConversations(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-	if !users.IsAuthorized(r) {
-		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
 	me := users.CurrentUser(r)

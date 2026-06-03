@@ -52,14 +52,9 @@ func HandleDocsItem(w http.ResponseWriter, r *http.Request) {
 	renderDocsEditor(w, r, slug)
 }
 
-// serveRawDoc returns a doc's raw markdown body. API-shaped auth (401, not
-// an HTML login redirect) since this is the raw/bot path; acts on
-// CurrentUser only, so you only ever read your own docs.
+// serveRawDoc returns a doc's raw markdown body. Acts on CurrentUser
+// only, so you only ever read your own docs.
 func serveRawDoc(w http.ResponseWriter, r *http.Request, slug string) {
-	if !users.IsAuthorized(r) {
-		http.Error(w, "unauthorized", http.StatusUnauthorized)
-		return
-	}
 	user := users.CurrentUser(r)
 	path, err := docPath(user.ID, slug) // re-validates the slug
 	if err != nil || !fileExists(path) {
@@ -79,10 +74,7 @@ func serveRawDoc(w http.ResponseWriter, r *http.Request, slug string) {
 // no doc selected). Browser-facing, so unauthorized redirects to login and
 // an unknown/invalid slug drops back to the bare editor.
 func renderDocsEditor(w http.ResponseWriter, r *http.Request, slug string) {
-	user := requireMember(w, r, r.URL.Path)
-	if user.ID == "" {
-		return
-	}
+	user := users.CurrentUser(r)
 	docs, err := ListUserDocs(user.ID)
 	if err != nil {
 		http.Error(w, "list docs: "+err.Error(), http.StatusInternalServerError)
@@ -110,10 +102,6 @@ func renderDocsEditor(w http.ResponseWriter, r *http.Request, slug string) {
 func HandleDocsList(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-	if !users.IsAuthorized(r) {
-		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
 	user := users.CurrentUser(r)
@@ -153,10 +141,7 @@ func HandleDocsNew(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/chat/docs", http.StatusSeeOther)
 		return
 	}
-	user := requireMember(w, r, "/chat/docs")
-	if user.ID == "" {
-		return
-	}
+	user := users.CurrentUser(r)
 	title := strings.TrimSpace(r.FormValue("title"))
 	if title == "" {
 		http.Redirect(w, r, "/chat/docs", http.StatusSeeOther)
@@ -179,10 +164,7 @@ func HandleDocsSave(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	user := requireMember(w, r, "/chat/docs")
-	if user.ID == "" {
-		return
-	}
+	user := users.CurrentUser(r)
 	r.Body = http.MaxBytesReader(w, r.Body, maxDocBytes)
 	if err := r.ParseForm(); err != nil {
 		var maxErr *http.MaxBytesError
@@ -216,10 +198,7 @@ func HandleDocsPost(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	user := requireMember(w, r, "/chat/docs")
-	if user.ID == "" {
-		return
-	}
+	user := users.CurrentUser(r)
 	r.Body = http.MaxBytesReader(w, r.Body, maxDocBytes)
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, "bad request", http.StatusBadRequest)
@@ -280,10 +259,6 @@ func defaultChatPartner(uid string) string {
 func HandleDocsRender(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-	if !users.IsAuthorized(r) {
-		http.Error(w, "members only", http.StatusForbidden)
 		return
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, maxDocBytes)

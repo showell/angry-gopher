@@ -184,10 +184,6 @@ func HandleImages(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	if !users.IsAuthorized(r) {
-		http.Redirect(w, r, "/login/full?next="+url.QueryEscape("/chat/images"), http.StatusSeeOther)
-		return
-	}
 	user := users.CurrentUser(r)
 	entries, err := readImagesForUser(user.ID)
 	if err != nil {
@@ -288,10 +284,6 @@ func imagesMuFor(uid string) *sync.Mutex {
 
 // HandleImagesStream serves GET /chat/images/stream.
 func HandleImagesStream(w http.ResponseWriter, r *http.Request) {
-	if !users.IsAuthorized(r) {
-		http.Error(w, "unauthorized", http.StatusUnauthorized)
-		return
-	}
 	user := users.CurrentUser(r)
 	serveSSE(w, r, func() (<-chan imagesSSEEvent, func()) {
 		return imagesBus.open(user.ID)

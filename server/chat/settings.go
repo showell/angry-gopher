@@ -13,18 +13,7 @@ import (
 	"fmt"
 	"html"
 	"net/http"
-	"net/url"
 )
-
-// requireMember returns the authenticated member, or the zero User after
-// redirecting a non-member to the full login (carrying `next`).
-func requireMember(w http.ResponseWriter, r *http.Request, next string) users.User {
-	if !users.IsAuthorized(r) {
-		http.Redirect(w, r, "/login/full?next="+url.QueryEscape(next), http.StatusSeeOther)
-		return users.User{}
-	}
-	return users.CurrentUser(r)
-}
 
 // HandleSettings serves the member settings page.
 func HandleSettings(w http.ResponseWriter, r *http.Request) {
@@ -32,21 +21,14 @@ func HandleSettings(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	user := requireMember(w, r, "/settings")
-	if user.ID == "" {
-		return
-	}
-	renderSettings(w, r, user)
+	renderSettings(w, r, users.CurrentUser(r))
 }
 
 // HandleSettingsAPIKey generates or revokes the CURRENT member's API key.
 // It always acts on the session identity (never a request-supplied user
 // id), so a member can only manage their own key.
 func HandleSettingsAPIKey(w http.ResponseWriter, r *http.Request) {
-	user := requireMember(w, r, "/settings")
-	if user.ID == "" {
-		return
-	}
+	user := users.CurrentUser(r)
 	if r.Method != http.MethodPost {
 		http.Redirect(w, r, "/settings", http.StatusSeeOther)
 		return
