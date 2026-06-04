@@ -27,11 +27,12 @@ function heading(s: CarState, h: Record<string, number>): number {
   return h[s.segment] + s.angle;
 }
 
-// car position expressed in segment-1's frame (a chosen reference, not global):
-// compose only the local B->A transforms (rotate by THETA about the corner).
-function inRefFrame(s: CarState, world: World): { a: number; x: number } {
-  let i = world.order.indexOf(s.segment);
-  let a = s.along, x = s.across;
+// a point in segment[idx]'s frame, expressed in segment-1's frame (a chosen
+// reference, not global): compose only local B->A transforms (rotate THETA
+// about the corner).
+interface P { a: number; x: number }
+function localToRef(idx: number, a: number, x: number, world: World): P {
+  let i = idx;
   while (i > 0) {
     const A = world.segments[world.order[i - 1]];   // B was entered from A
     const sgn = A.exitSign, L = A.length, theta = A.exitAngle;
@@ -41,6 +42,38 @@ function inRefFrame(s: CarState, world: World): { a: number; x: number } {
     a = aA; x = xA; i--;
   }
   return { a, x };
+}
+function inRefFrame(s: CarState, world: World): P {
+  return localToRef(world.order.indexOf(s.segment), s.along, s.across, world);
+}
+
+// --- "roads don't loop back": no two non-adjacent centrelines come within a
+// lane width of each other (so the road rectangles never overlap/cross). ---
+function cross(o: P, p: P, q: P): number {
+  return (p.a - o.a) * (q.x - o.x) - (p.x - o.x) * (q.a - o.a);
+}
+function ptSeg(p: P, a: P, b: P): number {
+  const dx = b.a - a.a, dy = b.x - a.x, len2 = dx * dx + dy * dy || 1;
+  const t = Math.max(0, Math.min(1, ((p.a - a.a) * dx + (p.x - a.x) * dy) / len2));
+  return Math.hypot(p.a - (a.a + t * dx), p.x - (a.x + t * dy));
+}
+function segDist(p1: P, p2: P, p3: P, p4: P): number {
+  const cr = (s: P, e: P) => (cross(p3, p4, s) > 0) !== (cross(p3, p4, e) > 0);
+  if (cr(p1, p2) && ((cross(p1, p2, p3) > 0) !== (cross(p1, p2, p4) > 0))) return 0;  // proper crossing
+  return Math.min(ptSeg(p1, p3, p4), ptSeg(p2, p3, p4), ptSeg(p3, p1, p2), ptSeg(p4, p1, p2));
+}
+function minRoadGap(world: World): number {
+  const n = world.order.length;
+  const ln: Array<[P, P]> = [];
+  for (let i = 0; i < n; i++) {
+    const L = world.segments[world.order[i]].length;
+    ln.push([localToRef(i, 0, 0, world), localToRef(i, L, 0, world)]);
+  }
+  let min = Infinity;
+  for (let i = 0; i < n; i++) {
+    for (let j = i + 2; j < n; j++) min = Math.min(min, segDist(ln[i][0], ln[i][1], ln[j][0], ln[j][1]));
+  }
+  return min;
 }
 
 function main(): void {
@@ -65,13 +98,17 @@ function main(): void {
   // 1) invariants on every state
   for (const st of states) assertInvariants(st, world);
 
-  // 2) heading continuity: no jump bigger than one turn step
+  // 2) heading continuity: no jump bigger than the LARGEST single turn step
+  // (omega scales with the turn angle, so a 120deg turn steps faster than DPHI).
+  let maxAngle = 0;
+  for (const id of world.order) maxAngle = Math.max(maxAngle, world.segments[id].exitAngle);
+  const maxOmega = DPHI * maxAngle / (Math.PI / 2);
   let maxHeadingJump = 0;
   for (let i = 1; i < states.length; i++) {
     const dh = Math.abs(wrap(heading(states[i], headings) - heading(states[i - 1], headings)));
     maxHeadingJump = Math.max(maxHeadingJump, dh);
   }
-  if (maxHeadingJump > DPHI + 1e-6) throw new Error(`heading jump ${maxHeadingJump} > DPHI`);
+  if (maxHeadingJump > maxOmega + 1e-6) throw new Error(`heading jump ${maxHeadingJump} > maxOmega ${maxOmega}`);
 
   // 3) position continuity (in seg-1 frame): no jump bigger than one cruise step
   let maxPosJump = 0;
@@ -86,12 +123,19 @@ function main(): void {
   const endGap = world.segments[last].length - s.along;
   if (Math.abs(endGap) > STEP) throw new Error(`not at the end of ${last} (gap ${endGap})`);
 
+  // 5) roads don't loop back on each other
+  const gap = minRoadGap(world);
+  const lane = world.segments[world.order[0]].width;
+  if (gap < lane) throw new Error(`roads loop/overlap: nearest non-adjacent gap ${gap.toFixed(2)}m < lane ${lane}m`);
+
   console.log('PASS');
+  console.log(`  segments          : ${world.order.length}`);
   console.log(`  presses to finish : ${states.length - 1}`);
   console.log(`  handoffs          : ${handoffs}`);
-  console.log(`  max heading jump  : ${maxHeadingJump.toFixed(4)} rad (turn step = ${DPHI})`);
+  console.log(`  max heading jump  : ${maxHeadingJump.toFixed(4)} rad (largest turn step = ${maxOmega.toFixed(4)})`);
   console.log(`  max position jump : ${maxPosJump.toFixed(4)} m (cruise step = ${STEP})`);
   console.log(`  max lateral offset: ${maxAcross.toFixed(3)} m (through the turns)`);
+  console.log(`  nearest road gap  : ${gap.toFixed(2)} m (>= lane ${lane}m -> no loops)`);
 }
 
 main();

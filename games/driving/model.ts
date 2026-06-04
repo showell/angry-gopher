@@ -44,6 +44,7 @@ export interface RoadSegment {
   id: SegId;
   length: number;
   width: number;
+  foliage: string;      // tree-top colour; every tree on the segment shares it
   trees: TreeLocal[];
   exit: { dir: TurnDir; to: SegId; radius: number; angle: number } | null;
   // derived relational scalars (filled by buildWorld)
@@ -84,11 +85,13 @@ export function buildWorld(): World {
   const LANE = 4;   // one-lane road ~ two car widths
   const R = 2;      // turn radius
   const DEG = Math.PI / 180;
+  const GREEN = '#2f7a30', RED = '#b23a2a', GOLD = '#cf9a18';
 
-  const seg = (id: SegId, length: number, exit: RoadSegment['exit']): RoadSegment => {
+  const seg = (id: SegId, length: number, foliage: string,
+               exit: RoadSegment['exit']): RoadSegment => {
     const tan = exit ? exit.radius * Math.tan(exit.angle / 2) : 0;
     return {
-      id, length, width: LANE, trees: treeRow(length), exit,
+      id, length, width: LANE, foliage, trees: treeRow(length), exit,
       exitR: exit ? exit.radius : 0,
       exitSign: exit ? signOf(exit.dir) : 0,
       exitAngle: exit ? exit.angle : 0,
@@ -97,15 +100,25 @@ export function buildWorld(): World {
       arcStart: length - tan,
     };
   };
+  const turn = (to: SegId, dir: TurnDir, deg: number): RoadSegment['exit'] =>
+    ({ dir, to, radius: R, angle: deg * DEG });
 
+  // route is checked non-self-intersecting by test/test_model.ts (no loops).
   const segments: Record<SegId, RoadSegment> = {
-    seg1: seg('seg1', 40, { dir: 'right', to: 'seg2', radius: R, angle: 90 * DEG }),
-    seg2: seg('seg2', 40, { dir: 'left',  to: 'seg3', radius: R, angle: 60 * DEG }),
-    seg3: seg('seg3', 80, { dir: 'left',  to: 'seg4', radius: R, angle: 60 * DEG }),
-    seg4: seg('seg4', 40, { dir: 'right', to: 'seg5', radius: R, angle: 30 * DEG }),
-    seg5: seg('seg5', 40, null),
+    seg1:  seg('seg1',  50, GREEN, turn('seg2',  'right',  90)),
+    seg2:  seg('seg2',  55, GOLD,  turn('seg3',  'left',  120)),
+    seg3:  seg('seg3',  80, RED,   turn('seg4',  'right',  60)),
+    seg4:  seg('seg4',  50, GREEN, turn('seg5',  'right',  30)),
+    seg5:  seg('seg5',  55, GOLD,  turn('seg6',  'left',  120)),
+    seg6:  seg('seg6',  60, RED,   turn('seg7',  'left',   60)),
+    seg7:  seg('seg7',  50, GREEN, turn('seg8',  'right',  90)),
+    seg8:  seg('seg8',  55, GOLD,  turn('seg9',  'right',  60)),
+    seg9:  seg('seg9',  50, RED,   turn('seg10', 'left',  120)),
+    seg10: seg('seg10', 50, GREEN, null),
   };
-  const order: SegId[] = ['seg1', 'seg2', 'seg3', 'seg4', 'seg5'];
+  const order: SegId[] = [
+    'seg1', 'seg2', 'seg3', 'seg4', 'seg5', 'seg6', 'seg7', 'seg8', 'seg9', 'seg10',
+  ];
   for (const id of order) {
     const s = segments[id];
     if (s.exit) {

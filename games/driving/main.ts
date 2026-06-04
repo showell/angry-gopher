@@ -8,7 +8,7 @@
 import { buildWorld, initialState, advanceCar } from './model.ts';
 import type { CarState } from './model.ts';
 import { buildScene, TREE_H } from './view.ts';
-import type { CarPt, Quad } from './view.ts';
+import type { CarPt, Quad, TreeView } from './view.ts';
 
 const canvas = document.getElementById('c') as HTMLCanvasElement;
 const ctx = canvas.getContext('2d') as CanvasRenderingContext2D;
@@ -74,16 +74,17 @@ function drawQuad(q: Quad): void {
   ctx.fill();
 }
 
-// radially symmetric: drawn only from distance + angle (a trunk + a green disc)
-function drawTree(t: CarPt): void {
-  if (t.forward <= NEAR) return;
-  const base = project({ right: t.right, forward: t.forward, height: 0 });
-  const top = project({ right: t.right, forward: t.forward, height: TREE_H });
+// radially symmetric: drawn only from distance + angle (a trunk + a coloured disc)
+function drawTree(t: TreeView): void {
+  const at = t.at;
+  if (at.forward <= NEAR) return;
+  const base = project({ right: at.right, forward: at.forward, height: 0 });
+  const top = project({ right: at.right, forward: at.forward, height: TREE_H });
   const ht = base.y - top.y;
   const trunkW = Math.max(1, ht * 0.10);
   ctx.fillStyle = '#5a3e22';
   ctx.fillRect(base.x - trunkW / 2, base.y - ht * 0.42, trunkW, ht * 0.42);
-  ctx.fillStyle = '#2f7a30';
+  ctx.fillStyle = t.color;
   ctx.beginPath();
   ctx.arc(base.x, base.y - ht * 0.62, ht * 0.30, 0, Math.PI * 2);
   ctx.fill();
@@ -111,7 +112,7 @@ function render(): void {
 
   for (const q of scene.quads) drawQuad(q);
 
-  const vis = scene.trees.filter((t) => t.forward > NEAR).sort((a, b) => b.forward - a.forward);
+  const vis = scene.trees.filter((t) => t.at.forward > NEAR).sort((a, b) => b.at.forward - a.at.forward);
   for (const t of vis) drawTree(t);
 
   drawHud(s);

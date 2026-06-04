@@ -14,7 +14,8 @@ export const TREE_H = 5;
 
 export interface CarPt { right: number; forward: number }   // car frame, ground plane
 export interface Quad { pts: CarPt[]; color: string }
-export interface Scene { quads: Quad[]; trees: CarPt[] }
+export interface TreeView { at: CarPt; color: string }       // color = the segment's foliage
+export interface Scene { quads: Quad[]; trees: TreeView[] }
 
 // the car's pose in its own segment's frame
 interface Pose { along: number; across: number; angle: number }
@@ -53,7 +54,7 @@ export function buildScene(state: CarState, world: World): Scene {
   const c: Pose = { along: state.along, across: state.across, angle: state.angle };
   const hw = cur.width / 2;
   const quads: Quad[] = [];
-  const trees: CarPt[] = [];
+  const trees: TreeView[] = [];
 
   // current segment: road strip + (any) intersection squares
   quads.push(strip(0, cur.length, hw, c));
@@ -69,11 +70,15 @@ export function buildScene(state: CarState, world: World): Scene {
       return toCar(p.a, p.x, c);
     };
     quads.push({ pts: [m(0, -nhw), m(0, nhw), m(nxt.length, nhw), m(nxt.length, -nhw)], color: ROAD });
-    for (const t of nxt.trees) trees.push(m(t.along, treeAcross(t.side, nhw, t.offset)));
+    for (const t of nxt.trees) {
+      trees.push({ at: m(t.along, treeAcross(t.side, nhw, t.offset)), color: nxt.foliage });
+    }
   }
 
   // current segment trees
-  for (const t of cur.trees) trees.push(toCar(t.along, treeAcross(t.side, hw, t.offset), c));
+  for (const t of cur.trees) {
+    trees.push({ at: toCar(t.along, treeAcross(t.side, hw, t.offset), c), color: cur.foliage });
+  }
 
   return { quads, trees };
 }
