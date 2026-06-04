@@ -201,7 +201,7 @@
   function buildRoute() {
     var ground = [{ x1: -600, z1: -120, x2: 320, z2: 1700, color: '#2f7a30' }];
     var lines = [], obs = [];
-    var ax = 0, az = 0, start = null, end = null, colorN = 0, corridors = [];
+    var ax = 0, az = 0, start = null, end = null, colorN = 0, corridors = [], segMeta = [];
     for (var i = 0; i < ROUTE.length; i++) {
       var s = ROUTE[i], d = DIR[s.dir];
       var W = s.width * CARW, hw = W / 2, alongX = (d[0] !== 0);
@@ -240,6 +240,7 @@
         b.cap = true; obs.push(b);
       }
 
+      segMeta.push({ name: s.name, ax: ax, az: az, bx: bx, bz: bz });
       if (i === 0) start = { x: ax, z: az, heading: DIR_HEADING[s.dir] };
       if (i === ROUTE.length - 1) end = { x: bx, z: bz, dir: d };
       // A stall (the parking space) opens onto the NEXT lane's side: shift the
@@ -272,11 +273,27 @@
       return !(start.x > o.x - hw && start.x < o.x + hw &&
                start.z > o.z - hd && start.z < o.z + hd);
     });
-    return { ground: ground, lines: lines, obstacles: obs, start: start, end: end };
+    return { ground: ground, lines: lines, obstacles: obs, start: start, end: end, segments: segMeta };
   }
 
   var built = buildRoute();
   var world = { ground: built.ground, lines: built.lines, obstacles: built.obstacles };
+  var segments = built.segments;
+
+  // ---- 2D map view ----
+  var mapView = true;  // start in the top-down map (M toggles to the drive view)
+  var mapBounds = (function () {
+    var b = { minx: Infinity, minz: Infinity, maxx: -Infinity, maxz: -Infinity };
+    for (var i = 0; i < world.ground.length; i++) {
+      var g = world.ground[i];
+      if (g.color === '#2f7a30') continue;  // skip the grass backdrop
+      if (g.x1 < b.minx) b.minx = g.x1;
+      if (g.z1 < b.minz) b.minz = g.z1;
+      if (g.x2 > b.maxx) b.maxx = g.x2;
+      if (g.z2 > b.maxz) b.maxz = g.z2;
+    }
+    return b;
+  })();
 
   // ---- player ----
   var startX = built.start.x, startZ = built.start.z;
@@ -290,6 +307,7 @@
   var keys = {};
   window.addEventListener('keydown', function (e) {
     if (e.code === 'Space') { paused = !paused; e.preventDefault(); return; }
+    if (e.code === 'KeyM') { mapView = !mapView; e.preventDefault(); return; }
     keys[e.code] = true;
     if (e.code === 'ArrowUp' || e.code === 'ArrowDown' ||
         e.code === 'ArrowLeft' || e.code === 'ArrowRight') e.preventDefault();
@@ -698,6 +716,60 @@
     ctx.textAlign = 'left';
   }
 
+  // ---- top-down map: drawn straight from the world data structure ----
+  function renderMap() {
+    ctx.fillStyle = '#243018';
+    ctx.fillRect(0, 0, W, H);
+    var pad = 36;
+    var bw = mapBounds.maxx - mapBounds.minx, bh = mapBounds.maxz - mapBounds.minz;
+    var scale = Math.min((W - 2 * pad) / bw, (H - 2 * pad) / bh);
+    var ox = (W - bw * scale) / 2, oy = (H - bh * scale) / 2;
+    function SX(wx) { return ox + (wx - mapBounds.minx) * scale; }
+    function SY(wz) { return oy + (mapBounds.maxz - wz) * scale; }  // north = up
+
+    for (var i = 0; i < world.ground.length; i++) {
+      var g = world.ground[i];
+      if (g.color === '#2f7a30') continue;
+      ctx.fillStyle = g.color;
+      ctx.fillRect(SX(g.x1), SY(g.z2), (g.x2 - g.x1) * scale, (g.z2 - g.z1) * scale);
+    }
+    for (var j = 0; j < world.obstacles.length; j++) {
+      var o = world.obstacles[j];
+      ctx.fillStyle = o.kind === 'fire' ? '#ff7a20' : o.kind === 'tree' ? '#46a046'
+                    : o.kind === 'car' ? '#5aa0e0' : o.kind === 'house' ? '#d8c090' : '#b8986a';
+      var ow = Math.max(1.5, o.w * scale), oh = Math.max(1.5, o.d * scale);
+      ctx.fillRect(SX(o.x) - ow / 2, SY(o.z) - oh / 2, ow, oh);
+    }
+    // segment name labels at each rectangle's midpoint
+    ctx.font = '11px ui-monospace, monospace';
+    ctx.textAlign = 'left';
+    for (var k = 0; k < segments.length; k++) {
+      var sm = segments[k];
+      var mx = SX((sm.ax + sm.bx) / 2), my = SY((sm.az + sm.bz) / 2);
+      var tw = ctx.measureText(sm.name).width;
+      ctx.fillStyle = 'rgba(0,0,0,0.55)';
+      ctx.fillRect(mx + 5, my - 9, tw + 6, 14);
+      ctx.fillStyle = '#ffe';
+      ctx.fillText(sm.name, mx + 8, my + 1);
+    }
+    // player: red triangle pointing along heading (0 = north = up)
+    ctx.save();
+    ctx.translate(SX(player.x), SY(player.z));
+    ctx.rotate(player.heading);
+    ctx.fillStyle = '#ff2828';
+    ctx.beginPath();
+    ctx.moveTo(0, -9); ctx.lineTo(6, 7); ctx.lineTo(-6, 7); ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+    // scale bar + header
+    var barM = 500, barPx = barM * scale;
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(20, H - 20); ctx.lineTo(20 + barPx, H - 20); ctx.stroke();
+    ctx.fillStyle = '#fff';
+    ctx.fillText(barM + ' m', 20, H - 26);
+    ctx.fillText('MAP  ' + Math.round(bw) + ' x ' + Math.round(bh) + ' m   (M: drive view)', 20, 22);
+  }
+
   function render(time) {
     drawSky();
     for (var i = 0; i < world.ground.length; i++) drawGroundQuad(world.ground[i]);
@@ -717,7 +789,7 @@
     var dt = Math.min(0.05, (t - last) / 1000);
     last = t;
     update(dt);
-    render(t / 1000);
+    if (mapView) renderMap(); else render(t / 1000);
     frameCount++;
     fpsTime += dt;
     if (fpsTime >= 0.5) {
