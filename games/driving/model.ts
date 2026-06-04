@@ -196,21 +196,25 @@ function treeColor(scheme: Scheme, k: number): string {
 // A cow herd EARLY in the segment (left) and pigs near the END (right), set
 // further back than the trees — spread apart so you actually pass them on the
 // long, fast roads instead of blowing by a mid-road cluster.
-const BULL_ALONG = 16;   // just after the 2nd tree — the first thing you meet leaving the corner
+const BULL_ALONG = 24;   // by the 4th tree (trees at entryTan+6, every 6m) — the first cow you meet
 const PIG_BACK = 60;     // pigs ~10 trees before the next intersection
 
 function critterRow(length: number, hw: number): CritterLocal[] {
-  const edge = hw + 10;   // further out than the trees (offset 1.5)
-  return [...cowHerd(edge), ...pigRow(length, edge)];
+  return [...cowHerd(hw), ...pigRow(length, hw + 10)];
 }
 
 // 15 cows early in the segment: a BULL at the front (lowest along — seen first
 // as you leave the corner), bigger than the rest and facing the opposite way,
 // then 10 full-size cows + 4 half-size calves just behind it in a loose cluster
 // (a staggered grid with deterministic jitter — no randomness).
-function cowHerd(edge: number): CritterLocal[] {
+function cowHerd(hw: number): CritterLocal[] {
   const out: CritterLocal[] = [];
-  out.push({ along: BULL_ALONG, across: -(edge + 3), emoji: '🐂', height: 2.5, faceRight: false });
+  const edge = hw + 10;       // the cows graze well off the road
+  const treeX = hw + 1.5;     // the roadside tree line (left side = -treeX)
+  const bullH = 2.5;
+  // The bull waits by the 4th tree, facing away from the road, its rear (its
+  // road-side edge, since it faces left) right up against that tree.
+  out.push({ along: BULL_ALONG, across: -(treeX + bullH / 2 + 0.25), emoji: '🐂', height: bullH, faceRight: false });
   for (let i = 0; i < 14; i++) {
     const col = Math.floor(i / 3), row = i % 3;
     const along = BULL_ALONG + 6 + col * 6 + (row - 1) * 2 + 1.5 * Math.sin(i * 2.7);
