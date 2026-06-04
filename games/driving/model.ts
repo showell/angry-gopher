@@ -6,10 +6,15 @@
 // HOW THE CAR MOVES, FRAME BY FRAME
 //
 // Position is relative to the CURRENT segment: along (progress), across
-// (lateral offset, + = right), angle (heading relative to the segment).
+// (lateral offset, + = right), angle (heading relative to the segment), and v
+// (speed along the path, m/press).
 //
-// Cruising:  across = 0, angle = 0; each press advances `along`, decelerating
-//            into the turn.
+// Cruising:  across = 0, angle = 0; each press advances `along` by v, and v
+//            changes by accel() — a pure function of (along, v, can-the-driver-
+//            see-the-intersection-yet). Out of sight: constant acceleration.
+//            In sight: the exact constant deceleration that brings the car to
+//            turn speed right at the corner (recomputed each press, so it self-
+//            corrects discretisation drift). See accel() / cruise().
 //
 // Turning (no precomputed arc): each press rotates the heading by `omega` and
 // inches forward `ds = R * omega` — forward and rotation IN SYNC, tracing a
@@ -26,9 +31,11 @@
 // by THETA about the shared corner. Continuous; the car never jumps.
 // =============================================================================
 
-export const STEP = 1.2;          // metres advanced per press while cruising
 export const DPHI = 0.05;         // heading turned per press in a 90deg turn (rad)
-export const BRAKE_ZONE = 8;      // metres before a turn over which we decelerate
+export const V_BASE = 1.2;        // cruise speed just after a corner (m/press)
+export const A_ACCEL = 0.03;      // constant acceleration while the intersection is out of sight (m/press^2)
+export const SIGHT = 180;         // how far ahead the adult elephant (= the intersection) becomes visible (m)
+const ELEPHANT_AHEAD = 20;        // the adult elephant sits this far past a segment's end (matches elephantRow)
 
 const QUARTER = Math.PI / 2;
 const omegaFor = (theta: number): number => DPHI * theta / QUARTER;  // turn rate scales with angle
@@ -79,11 +86,12 @@ export interface CarState {
   along: number;
   across: number;
   angle: number;
+  v: number;          // speed along the path (m/press)
   turn: Turning | null;
 }
 
 export function initialState(world: World): CarState {
-  return { segment: world.start, along: 0, across: 0, angle: 0, turn: null };
+  return { segment: world.start, along: 0, across: 0, angle: 0, v: V_BASE, turn: null };
 }
 
 const signOf = (d: TurnDir): number => (d === 'right' ? 1 : -1);
@@ -117,7 +125,7 @@ export function buildWorld(): World {
   const segments: Record<SegId, RoadSegment> = {
     seg1:  seg('seg1', 100, 'ALL_GREEN',    turn('seg2',  'right',  90)),
     seg2:  seg('seg2', 110, 'YELLOW_GREEN', turn('seg3',  'left',  120)),
-    seg3:  seg('seg3', 160, 'RED_GREEN',    turn('seg4',  'right',  60)),
+    seg3:  seg('seg3', 208, 'RED_GREEN',    turn('seg4',  'right',  60)),   // long: a good accelerate-then-brake test
     seg4:  seg('seg4', 100, 'ALL_GREEN',    turn('seg5',  'right',  30)),
     seg5:  seg('seg5', 110, 'YELLOW_GREEN', turn('seg6',  'left',  120)),
     seg6:  seg('seg6', 120, 'RED_GREEN',    turn('seg7',  'left',   60)),
@@ -186,7 +194,7 @@ function critterRow(length: number, hw: number): CritterLocal[] {
 // turn. Both ~twice as far out as the cows/pigs.
 function elephantRow(length: number, exit: RoadSegment['exit']): CritterLocal[] {
   if (!exit) return [];
-  const corner = length + 20;
+  const corner = length + ELEPHANT_AHEAD;
   return [
     { along: corner,     across: 0,                         emoji: '🐘', height: 2.8, faceRight: false },
     { along: corner + 6, across: -signOf(exit.dir) * 14,    emoji: '🐘', height: 1.4, faceRight: false },
@@ -203,23 +211,52 @@ export function advanceCar(state: CarState, world: World): CarState {
   return next;
 }
 
+// Can the driver see the upcoming intersection yet? Yes once the adult elephant
+// beyond it is within SIGHT. The route's final segment has no intersection — its
+// end is always "in view" (the car simply coasts to a stop there).
+function sees(state: CarState, seg: RoadSegment): boolean {
+  if (!seg.exit) return true;
+  return seg.length + ELEPHANT_AHEAD - state.along <= SIGHT;
+}
+
+// the speed at which a turn is taken (its fixed per-press creep) — the speed the
+// approach must decelerate to so motion is continuous into the turn.
+const turnSpeed = (seg: RoadSegment): number => seg.exitR * omegaFor(seg.exitAngle);
+
+// Acceleration (m/press^2) PURELY from position, velocity, and visibility:
+//   intersection out of sight -> keep accelerating at a constant rate.
+//   intersection in view       -> the EXACT constant deceleration that lands the
+//     car at turn speed (0 at the route end) right at the turn point, from
+//     v^2 = vEnd^2 + 2*a*d. Recomputed every press: constant-decel kinematics are
+//     self-consistent, so this reproduces the same a each press while correcting
+//     integration drift.
+function accel(state: CarState, seg: RoadSegment): number {
+  if (!sees(state, seg)) return A_ACCEL;
+  const turnPoint = seg.exit ? seg.arcStart : seg.length;
+  const vEnd = seg.exit ? turnSpeed(seg) : 0;
+  const d = turnPoint - state.along;
+  if (d <= 1e-6) return 0;
+  return (vEnd * vEnd - state.v * state.v) / (2 * d);
+}
+
 function cruise(state: CarState, seg: RoadSegment, world: World): CarState {
-  const target = seg.exit ? seg.arcStart : seg.length;
-  const remaining = target - state.along;
-  if (remaining > 1e-6) {
-    return { ...state, along: Math.min(state.along + cruiseStep(remaining, seg), target) };
+  let v = Math.max(0, state.v + accel(state, seg));
+
+  if (!seg.exit) {   // route end: coast to a stop at the far end
+    const along = state.along + v;
+    if (along >= seg.length || v < 1e-2) return { ...state, along: seg.length, v: 0 };
+    return { ...state, along, v };
   }
-  if (!seg.exit) return state;   // parked at the end of the route
+
+  const vEnd = turnSpeed(seg);
+  v = Math.max(v, vEnd);                       // approaching a turn, never crawl below turn speed
+  const along = state.along + v;
+  if (along < seg.arcStart) return { ...state, along, v };
+
   const turn: Turning = {
     sgn: seg.exitSign, r: seg.exitR, angle: seg.exitAngle, phase: 'exiting', toSeg: seg.exit.to,
   };
-  return turnStep({ segment: seg.id, along: seg.arcStart, across: 0, angle: 0, turn }, seg, world);
-}
-
-function cruiseStep(remaining: number, seg: RoadSegment): number {
-  const creep = seg.exitR > 0 ? seg.exitR * omegaFor(seg.exitAngle) : STEP;
-  if (remaining >= BRAKE_ZONE) return STEP;
-  return creep + (STEP - creep) * (remaining / BRAKE_ZONE);
+  return turnStep({ segment: seg.id, along: seg.arcStart, across: 0, angle: 0, v: vEnd, turn }, seg, world);
 }
 
 function turnStep(state: CarState, seg: RoadSegment, world: World): CarState {
@@ -233,12 +270,12 @@ function turnStep(state: CarState, seg: RoadSegment, world: World): CarState {
   const angle = state.angle + dHeading;
 
   if (t.phase === 'exiting') {
-    if (angle * t.sgn < t.angle / 2) return { segment: seg.id, along, across, angle, turn: t };
+    if (angle * t.sgn < t.angle / 2) return { segment: seg.id, along, across, angle, v: ds, turn: t };
     return handoff(along, across, angle, seg, world, t);   // arc midpoint -> advance the segment
   }
   // entering: turn until aligned with the new segment, then resume cruising
-  if (angle * t.sgn < 0) return { segment: seg.id, along, across, angle, turn: t };
-  return { segment: seg.id, along: seg.entryTan, across: 0, angle: 0, turn: null };
+  if (angle * t.sgn < 0) return { segment: seg.id, along, across, angle, v: ds, turn: t };
+  return { segment: seg.id, along: seg.entryTan, across: 0, angle: 0, v: V_BASE, turn: null };
 }
 
 // Re-express the car in the next segment's frame: a rotation by THETA about the
@@ -254,6 +291,7 @@ function handoff(along: number, across: number, angle: number,
     along: dA * cosB + dX * sinB,
     across: -dA * sinB + dX * cosB,
     angle: angle - sgn * theta,
+    v: next.entryR * omegaFor(theta),
     turn: { sgn, r: next.entryR, angle: theta, phase: 'entering', toSeg: next.id },
   };
 }
@@ -269,6 +307,7 @@ export function assertInvariants(s: CarState, world: World): void {
   const seg = world.segments[s.segment];
   assert(Number.isFinite(s.along) && Number.isFinite(s.across) && Number.isFinite(s.angle),
          `finite (${s.along},${s.across},${s.angle})`);
+  assert(Number.isFinite(s.v) && s.v >= -1e-9 && s.v <= 6, `v sane (${s.v})`);
   assert(Math.abs(s.angle) <= QUARTER + 1e-6, `|angle| <= 90deg (${s.angle})`);
   assert(s.along >= -seg.entryR - 1e-6, `along not far before start (${s.along})`);
   assert(s.along <= seg.length + seg.exitR + 1e-6, `along not far past end (${s.along})`);

@@ -4,7 +4,7 @@
 // transforms (lengths + turn signs) — the same relational facts advanceCar uses.
 //
 // Run: node test/test_model.ts
-import { buildWorld, initialState, advanceCar, assertInvariants, STEP, DPHI } from '../model.ts';
+import { buildWorld, initialState, advanceCar, assertInvariants, DPHI } from '../model.ts';
 import type { CarState, World } from '../model.ts';
 
 function wrap(a: number): number {
@@ -69,12 +69,13 @@ function main(): void {
 
   let s = initialState(world);
   const states: CarState[] = [s];
-  let handoffs = 0, maxAcross = 0;
+  let handoffs = 0, maxAcross = 0, maxV = 0;
 
-  for (let i = 0; i < 5000; i++) {
+  for (let i = 0; i < 8000; i++) {
     const n = advanceCar(s, world);
     if (n.segment !== s.segment) handoffs++;
     maxAcross = Math.max(maxAcross, Math.abs(n.across));
+    maxV = Math.max(maxV, n.v);
     // stuck at the route end?
     if (n.segment === s.segment && n.along === s.along && n.turn === null) break;
     states.push(n);
@@ -96,18 +97,19 @@ function main(): void {
   }
   if (maxHeadingJump > maxOmega + 1e-6) throw new Error(`heading jump ${maxHeadingJump} > maxOmega ${maxOmega}`);
 
-  // 3) position continuity (in seg-1 frame): no jump bigger than one cruise step
+  // 3) position continuity (in seg-1 frame): no single-press jump bigger than
+  // the fastest press (each press advances by the car's speed v).
   let maxPosJump = 0;
   for (let i = 1; i < states.length; i++) {
     const p0 = inRefFrame(states[i - 1], world), p1 = inRefFrame(states[i], world);
     maxPosJump = Math.max(maxPosJump, Math.hypot(p1.a - p0.a, p1.x - p0.x));
   }
-  if (maxPosJump > STEP + 1e-6) throw new Error(`position jump ${maxPosJump.toFixed(4)} > STEP`);
+  if (maxPosJump > maxV + 1e-6) throw new Error(`position jump ${maxPosJump.toFixed(4)} > maxV ${maxV.toFixed(4)}`);
 
-  // 4) the route actually completes at the end of the last segment
+  // 4) the route actually completes, coasting to a stop at the end of the last segment
   if (s.segment !== last) throw new Error(`did not reach ${last}, stuck on ${s.segment}`);
   const endGap = world.segments[last].length - s.along;
-  if (Math.abs(endGap) > STEP) throw new Error(`not at the end of ${last} (gap ${endGap})`);
+  if (Math.abs(endGap) > 1e-6) throw new Error(`not at the end of ${last} (gap ${endGap})`);
 
   // 5) roads don't loop back: each key point is north of the one two before it
   const north = northings(world);
@@ -117,13 +119,24 @@ function main(): void {
     }
   }
 
+  // 6) the long test segment accelerates past ~7 trees before the driver sees
+  // the intersection and starts braking.
+  const seg3 = world.segments['seg3'];
+  let decelAlong = seg3.length;
+  for (let i = 1; i < states.length; i++) {
+    if (states[i].segment === 'seg3' && states[i - 1].segment === 'seg3'
+        && states[i].v < states[i - 1].v - 1e-9) { decelAlong = states[i - 1].along; break; }
+  }
+  const treesBeforeDecel = seg3.trees.filter((t) => t.side === 'left' && t.along <= decelAlong).length;
+
   console.log('PASS');
   console.log(`  segments          : ${world.order.length}`);
   console.log(`  presses to finish : ${states.length - 1}`);
   console.log(`  handoffs          : ${handoffs}`);
   console.log(`  max heading jump  : ${maxHeadingJump.toFixed(4)} rad (largest turn step = ${maxOmega.toFixed(4)})`);
-  console.log(`  max position jump : ${maxPosJump.toFixed(4)} m (cruise step = ${STEP})`);
+  console.log(`  max position jump : ${maxPosJump.toFixed(4)} m (peak speed = ${maxV.toFixed(4)} m/press)`);
   console.log(`  max lateral offset: ${maxAcross.toFixed(3)} m (through the turns)`);
+  console.log(`  seg3 accel zone   : ${treesBeforeDecel} trees/side before braking (decel onset @ ${decelAlong.toFixed(1)}m)`);
   console.log(`  northings (N>N-2) : ${north.map((v) => v.toFixed(0)).join(' ')}`);
 }
 
