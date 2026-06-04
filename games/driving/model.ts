@@ -193,16 +193,37 @@ function treeColor(scheme: Scheme, k: number): string {
   return k % 2 === 0 ? GREEN : accent;
 }
 
-// Four cows near the START of the segment (left) and four pigs near the END
-// (right), set further back than the trees — spread apart so you actually pass
-// them on the long, fast roads instead of blowing by a mid-road cluster.
+// A cow herd near the START of the segment (left) and pigs near the END (right),
+// set further back than the trees — spread apart so you actually pass them on
+// the long, fast roads instead of blowing by a mid-road cluster.
 const CRITTER_IN = 60;   // ~10 trees (6m apart) from the near end of the segment
+
 function critterRow(length: number, hw: number): CritterLocal[] {
-  const out: CritterLocal[] = [];
   const edge = hw + 10;   // further out than the trees (offset 1.5)
+  return [...cowHerd(edge), ...pigRow(length, edge)];
+}
+
+// 15 cows in a loose cluster: 10 full-size + 4 half-size calves, plus a bull at
+// the FRONT (closest to the intersection) facing the opposite way. The scatter
+// is a staggered grid with deterministic jitter — no randomness.
+function cowHerd(edge: number): CritterLocal[] {
+  const out: CritterLocal[] = [];
+  for (let i = 0; i < 14; i++) {
+    const col = Math.floor(i / 3), row = i % 3;
+    const along = CRITTER_IN + (col - 2) * 6 + (row - 1) * 2 + 1.5 * Math.sin(i * 2.7);
+    const across = -(edge + row * 5 + 1.2 * Math.cos(i * 1.9));
+    const calf = i % 4 === 1;   // i = 1,5,9,13 -> 4 calves at half size
+    out.push({ along, across, emoji: '🐄', height: calf ? 0.7 : 1.4, faceRight: true });
+  }
+  out.push({ along: CRITTER_IN + 20, across: -(edge + 3), emoji: '🐂', height: 1.4, faceRight: false });
+  return out;
+}
+
+// Four pigs near the end of the segment, on the right.
+function pigRow(length: number, edge: number): CritterLocal[] {
+  const out: CritterLocal[] = [];
   for (const d of [-6, -2, 2, 6]) {
-    out.push({ along: CRITTER_IN + d,          across: -edge, emoji: '🐄', height: 1.4, faceRight: true });
-    out.push({ along: length - CRITTER_IN + d, across:  edge, emoji: '🐖', height: 1.1, faceRight: false });
+    out.push({ along: length - CRITTER_IN + d, across: edge, emoji: '🐖', height: 1.1, faceRight: false });
   }
   return out;
 }
