@@ -271,3 +271,26 @@ interface Camera3D {
   focalPx: number;
 }
 type Frame3D = (worldPoint: Vec3, cam: Camera3D) => ScreenPt;
+
+
+// ----------------------------------------------------------------------------
+// Exports — the vocabulary, so other modules can import it. Type-only.
+// ----------------------------------------------------------------------------
+export type {
+  // units
+  Meters, Miles, Seconds, Hours, MetersPerSecond, MilesPerHour, MetersPerSecond2, Radians,
+  // geometry
+  Cardinal, Side, Turn, Vec2, Vec3, Rect,
+  // placement & render model
+  SegmentPos, Placement, Footprint, Box3, Model3D, Color,
+  // obstructions
+  Tree, Building, House, ParkedCar, Obstruction, PhysicalId, CornerTwin, CornerObstruction,
+  // danger
+  DangerZone,
+  // segments & graph
+  SegmentId, Surface, RoadSegment, JunctionId, Junction, Intersection, Exit, DeadEnd,
+  // the car & its local slice of the world
+  CarLocation, UserCar, LocalWorld,
+  // views
+  ScreenPt, Frame2D, Camera3D, Frame3D,
+};

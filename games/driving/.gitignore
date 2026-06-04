@@ -1,0 +1,4 @@
+node_modules/
+*.tsbuildinfo
+# esbuild output (built by ./build, served locally)
+/app.js

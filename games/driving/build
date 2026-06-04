@@ -1,0 +1,21 @@
+#!/bin/bash
+# Bundle the driving game's TS into a single browser-loadable app.js.
+# Entry: main.ts. esbuild via `npx --yes`, so no local install is needed
+# (first run downloads esbuild into npm's cache; later runs are local).
+# Pattern borrowed from ops/build_engine_js.
+set -e
+cd "$(dirname "$0")"
+
+if ! command -v npx >/dev/null 2>&1; then
+    echo "Error: npx not found — install Node.js"
+    exit 1
+fi
+
+npx --yes esbuild main.ts \
+    --bundle \
+    --format=iife \
+    --platform=browser \
+    --target=es2022 \
+    --outfile=app.js
+
+echo "built games/driving/app.js"
