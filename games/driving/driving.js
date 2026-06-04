@@ -41,23 +41,41 @@
   var mode = MODES.parkingLot;
   document.title = 'driving — ' + mode.name;
 
-  // ---- world / map (encoded in JS) ----
-  // One prescribed route. Each turn is a T-junction: the desired path is one
-  // branch, a fire blocks the other. You never see a fire on the right path —
-  // only when you take the wrong turn. Going straight is blocked by scenery.
-  //   start: parked in the Parking Lot facing EAST, cars + apartments ahead.
-  //   1. pull forward EAST, turn LEFT  -> NORTH out of the lot     (right = fire)
-  //   2. at the exit,       turn RIGHT -> EAST on Autumn Pines Rd  (left  = fire)
-  //   3. at its end,        turn LEFT  -> NORTH on Murrell Rd      (right = fire)
-  //
-  // Map is 2D: every object has a ground (x, z) footprint; obstacles also
-  // carry a height, so they render as 3D boxes. Cars are axis-aligned, so
-  // they come in two orientations — east/west (length along x) and
-  // north/south (length along z).
-  function carEW(x, z, color) {  // points east/west
+  // ---- world / map: built from a route DSL ----
+  // The drive is a chain of perpendicular corridors. Each segment is directed,
+  // so the direction change between consecutive segments *is* the turn
+  // (E->N = left, N->E = right, N->W = left). Per segment:
+  //   width  : corridor width, in car-widths
+  //   dir    : travel / facing direction (E N W S)
+  //   right  : scenery on your right  \ cars | buildings | trees | houses | sky
+  //   left   : scenery on your left   / ('a/b' alternates the two kinds)
+  //   behind : caps the back end — the wrong-way deterrent: fire | building
+  //   miles  : length (or m: meters, for the short lot segments)
+  //   lines  : painted lane lines
+  // A fire sits at a segment's back, so on the correct path it is always behind
+  // you (off-screen); you only meet it by turning the wrong way into the back.
+  var ROUTE = [
+    { name: 'parking space',   width: 1, dir: 'E', right: 'cars',           left: 'cars',           behind: 'building', m: 6 },
+    { name: 'parking lot',     width: 3, dir: 'N', right: 'cars/buildings', left: 'cars/buildings', behind: 'fire',     m: 48 },
+    { name: 'Autumn Pines Rd', width: 2, dir: 'E', right: 'buildings',      left: 'trees',          behind: 'fire',     miles: 0.25 },
+    { name: 'Murrell Rd',      width: 4, dir: 'N', right: 'sky',            left: 'sky',            behind: 'fire',     miles: 3, lines: true },
+    { name: 'Levitt Pkwy',     width: 2, dir: 'W', right: 'houses',         left: 'trees',          behind: 'building', miles: 1 },
+  ];
+
+  var CARW = 2.6;   // meters of corridor per "car width"
+  var MILE = 300;   // compressed meters per mile (tunable; keeps the drive sane)
+  var DIR = { E: [1, 0], N: [0, 1], W: [-1, 0], S: [0, -1] };
+  var DIR_HEADING = { E: Math.PI / 2, N: 0, W: -Math.PI / 2, S: Math.PI };
+  var CAR_COLORS = ['#9b2c2c', '#2e4d8a', '#7a6730', '#88307a', '#327832',
+                    '#5c3c3c', '#a08020', '#107050', '#503070', '#205080'];
+  var BUILD_COLORS = ['#c8a878', '#aa9468', '#b89876', '#9c8470', '#b0986e'];
+  var HOUSE_COLORS = ['#cdb89a', '#b9a888', '#d2c0a0', '#c2ad8a'];
+  var ROOFS = ['#5a3a2a', '#4a3328', '#46342a', '#52382a'];
+
+  function carEW(x, z, color) {  // points east/west (length along x)
     return { kind: 'car', x: x, z: z, w: 4.5, h: 1.45, d: 1.8, color: color, axis: 'ew' };
   }
-  function carNS(x, z, color) {  // points north/south
+  function carNS(x, z, color) {  // points north/south (length along z)
     return { kind: 'car', x: x, z: z, w: 1.8, h: 1.45, d: 4.5, color: color, axis: 'ns' };
   }
   function fire(x, z, w, d, h) {
@@ -66,83 +84,116 @@
   function tree(x, z) {  // collision footprint ~foliage so a row reads as a wall
     return { kind: 'tree', x: x, z: z, w: 2.6, h: 5.2, d: 2.6 };
   }
+  function box(kind, x, z, w, h, d, color, roof) {
+    return { kind: kind, x: x, z: z, w: w, h: h, d: d, color: color, roof: roof };
+  }
 
-  var world = {
-    ground: [
-      { x1: -120, z1: -60, x2: 180, z2: 420, color: '#2f7a30' },  // grass everywhere
-      { x1:   -4, z1: -16, x2:  17, z2:  42, color: '#3a3a40' },  // Parking Lot
-      { x1:  -46, z1:  41, x2:  90, z2:  51, color: '#2c2c30' },  // Autumn Pines Rd (E-W)
-      { x1:   74, z1: -10, x2:  90, z2: 380, color: '#2c2c30' },  // Murrell Rd (N-S)
-    ],
-    lines: [],  // populated below
-    obstacles: [
-      // player's row, facing east (player at x=0, z=0; z=0 spot is empty)
-      carEW(0, -6.6, '#9b2c2c'),
-      carEW(0, -4.4, '#2e4d8a'),
-      carEW(0, -2.2, '#7a6730'),
-      carEW(0,  2.2, '#88307a'),
-      carEW(0,  4.4, '#327832'),
-      carEW(0,  6.6, '#5c3c3c'),
-      // opposite row, facing west; gap at z=0 frames the fire across the lot
-      carEW(13.5, -6.6, '#a08020'),
-      carEW(13.5, -4.4, '#107050'),
-      carEW(13.5, -2.2, '#503070'),
-      carEW(13.5,  2.2, '#208058'),
-      carEW(13.5,  4.4, '#7a5430'),
-      carEW(13.5,  6.6, '#205080'),
-      // 2-story apartments across the lot (face west toward the player)
-      { kind: 'building', x: 26, z: -9, w: 8, h: 6.5, d: 12, color: '#c8a878', roof: '#5a3a2a' },
-      { kind: 'building', x: 26, z:  3, w: 8, h: 6.5, d: 12, color: '#aa9468', roof: '#4a3328' },
-      { kind: 'building', x: 26, z: 15, w: 8, h: 6.5, d: 12, color: '#b89876', roof: '#5a3a2a' },
-      // far side of the big-road T (can't go straight east; you turn)
-      { kind: 'building', x: 98, z: 46, w: 8, h: 6.5, d: 14, color: '#b0986e', roof: '#52382a' },
-      // the small road's north side is a tree line — generated below
-      // blocks that hide each wrong-branch fire until you turn onto it.
-      // west of the lane (left as you head north); SW corner of the big road.
-      { kind: 'building', x: -10, z: 24, w: 14, h: 6.5, d: 32, color: '#8c9078', roof: '#3a4030' },
-      { kind: 'building', x:  66, z: 24, w: 14, h: 6.5, d: 30, color: '#9c8470', roof: '#46342a' },
-      // fires mark the WRONG turn at each T (never seen on the desired path)
-      fire(6.75, -11, 8, 5, 6.5),   // T1: turning RIGHT (south) instead of left
-      fire(-30,  46, 9, 6, 7),      // T2: turning LEFT  (west)  instead of right
-      fire(82,    6, 12, 5, 6.5),   // T3: turning RIGHT (south) instead of left
-    ],
-  };
+  // axis-aligned ground rect for a corridor, extended at each junction by the
+  // neighbour's half-width so perpendicular corridors meet in a paved corner.
+  function corridorRect(ax, az, bx, bz, d, W, extStart, extEnd, color) {
+    var sx = ax - d[0] * extStart, sz = az - d[1] * extStart;
+    var ex = bx + d[0] * extEnd,   ez = bz + d[1] * extEnd;
+    var px = -d[1], pz = d[0];
+    var xs = [sx + px * W / 2, sx - px * W / 2, ex + px * W / 2, ex - px * W / 2];
+    var zs = [sz + pz * W / 2, sz - pz * W / 2, ez + pz * W / 2, ez - pz * W / 2];
+    return { x1: Math.min.apply(null, xs), z1: Math.min.apply(null, zs),
+             x2: Math.max.apply(null, xs), z2: Math.max.apply(null, zs), color: color };
+  }
 
-  // parking-spot stripes + road markings
-  (function () {
-    var x, z, i;
-    var zb = [-7.7, -5.5, -3.3, -1.1, 1.1, 3.3, 5.5, 7.7];
-    for (i = 0; i < zb.length; i++) {
-      world.lines.push({ x1: -2.25, z1: zb[i] - 0.06, x2:  2.25, z2: zb[i] + 0.06, color: '#cfcfcf' });
-      world.lines.push({ x1: 11.25, z1: zb[i] - 0.06, x2: 15.75, z2: zb[i] + 0.06, color: '#cfcfcf' });
-    }
-    // small road: dashed center (E-W) + white edge lines
-    for (x = 2; x < 88; x += 6) {
-      world.lines.push({ x1: x, z1: 45.85, x2: x + 3, z2: 46.15, color: '#e8c840' });
-    }
-    world.lines.push({ x1: 1, z1: 41.2, x2: 90, z2: 41.4, color: '#cccccc' });
-    world.lines.push({ x1: 1, z1: 50.6, x2: 90, z2: 50.8, color: '#cccccc' });
-    // larger road: dashed center (N-S) + lane lines each side
-    for (z = 42; z < 378; z += 6) {
-      world.lines.push({ x1: 81.85, z1: z, x2: 82.15, z2: z + 3, color: '#e8c840' });
-    }
-    world.lines.push({ x1: 77.9, z1: 42, x2: 78.1, z2: 380, color: '#cccccc' });
-    world.lines.push({ x1: 85.9, z1: 42, x2: 86.1, z2: 380, color: '#cccccc' });
-  })();
+  var SCENERY_STEP = { cars: 5, trees: 3.5, buildings: 14, houses: 13 };
+  var SCENERY_GAP  = { cars: 1.6, trees: 1.2, buildings: 5.5, houses: 4.5 };
 
-  // tree line flanking the north side of Autumn Pines Rd. It's what you face
-  // heading north out of the lot, and your left wall driving east. Spaced so
-  // the collision footprints touch — a wall you can't slip past. Stops before
-  // Murrell Rd (west edge x=74) so the left turn north onto Murrell is clear.
-  (function () {
-    for (var x = -44; x <= 70; x += 3.5) world.obstacles.push(tree(x, 53));
-  })();
+  function pushScenery(kind, cx, cz, alongX, k, obs) {
+    if (kind === 'cars') {
+      var c = CAR_COLORS[(k * 3) % CAR_COLORS.length];
+      obs.push(alongX ? carEW(cx, cz, c) : carNS(cx, cz, c));
+    } else if (kind === 'trees') {
+      obs.push(tree(cx, cz));
+    } else if (kind === 'buildings') {
+      obs.push(box('building', cx, cz, alongX ? 12 : 9, 6.5, alongX ? 9 : 12,
+                   BUILD_COLORS[k % BUILD_COLORS.length], ROOFS[k % ROOFS.length]));
+    } else if (kind === 'houses') {
+      obs.push(box('house', cx, cz, alongX ? 8 : 7, 4.5, alongX ? 7 : 8,
+                   HOUSE_COLORS[k % HOUSE_COLORS.length], ROOFS[k % ROOFS.length]));
+    }
+  }
+
+  // line a corridor side (right/left of travel) with a row of scenery
+  function placeSide(type, side, ax, az, d, W, lenM, obs) {
+    if (!type || type === 'sky') return;
+    var perp = (side === 'right') ? [d[1], -d[0]] : [-d[1], d[0]];
+    var alongX = (d[0] !== 0);
+    var kinds = type.split('/');
+    var step = SCENERY_STEP[kinds[0]] || 6;
+    var k = 0;
+    for (var t = step * 0.5; t < lenM; t += step, k++) {
+      var kind = kinds[k % kinds.length];
+      var edge = W / 2 + (SCENERY_GAP[kind] || 2);
+      pushScenery(kind, ax + d[0] * t + perp[0] * edge,
+                        az + d[1] * t + perp[1] * edge, alongX, k, obs);
+    }
+  }
+
+  function addLaneLines(ax, az, d, hw, lenM, lines) {
+    var alongX = (d[0] !== 0), t;
+    for (t = 0; t < lenM; t += 6) {  // dashed yellow centerline
+      if (alongX) lines.push({ x1: ax + d[0] * t, z1: az - 0.15,
+                               x2: ax + d[0] * (t + 3), z2: az + 0.15, color: '#e8c840' });
+      else        lines.push({ x1: ax - 0.15, z1: az + d[1] * t,
+                               x2: ax + 0.15, z2: az + d[1] * (t + 3), color: '#e8c840' });
+    }
+    if (alongX) {  // white edges (assumes a positive-axis corridor)
+      lines.push({ x1: ax, z1: az - hw + 0.2, x2: ax + d[0] * lenM, z2: az - hw + 0.4, color: '#cccccc' });
+      lines.push({ x1: ax, z1: az + hw - 0.4, x2: ax + d[0] * lenM, z2: az + hw - 0.2, color: '#cccccc' });
+    } else {
+      lines.push({ x1: ax - hw + 0.2, z1: az, x2: ax - hw + 0.4, z2: az + d[1] * lenM, color: '#cccccc' });
+      lines.push({ x1: ax + hw - 0.4, z1: az, x2: ax + hw - 0.2, z2: az + d[1] * lenM, color: '#cccccc' });
+    }
+  }
+
+  function buildRoute() {
+    var ground = [{ x1: -600, z1: -120, x2: 320, z2: 1700, color: '#2f7a30' }];
+    var lines = [], obs = [];
+    var ax = 0, az = 0, start = null, end = null, colorN = 0;
+    for (var i = 0; i < ROUTE.length; i++) {
+      var s = ROUTE[i], d = DIR[s.dir];
+      var W = s.width * CARW, hw = W / 2;
+      var lenM = (s.m != null) ? s.m : s.miles * MILE;
+      var bx = ax + d[0] * lenM, bz = az + d[1] * lenM;
+      var prevHW = (i > 0) ? ROUTE[i - 1].width * CARW / 2 : 0;
+      var nextHW = (i < ROUTE.length - 1) ? ROUTE[i + 1].width * CARW / 2 : 0;
+
+      ground.push(corridorRect(ax, az, bx, bz, d, W, prevHW, nextHW,
+                               (s.miles == null) ? '#3a3a40' : '#2c2c30'));
+      if (s.lines) addLaneLines(ax, az, d, hw, lenM, lines);
+      placeSide(s.right, 'right', ax, az, d, W, lenM, obs);
+      placeSide(s.left,  'left',  ax, az, d, W, lenM, obs);
+
+      // back-end cap: placed so its near face clears the corridor start
+      if (s.behind === 'fire') {
+        var off = prevHW + 14;  // down the block, not right at the corner
+        obs.push(fire(ax - d[0] * off, az - d[1] * off, Math.max(W, 6), 5, 6.5));
+      } else if (s.behind === 'building') {
+        var bo = prevHW + 5.5, alongX = (d[0] !== 0);
+        obs.push(box('building', ax - d[0] * bo, az - d[1] * bo,
+                     alongX ? 8 : W + 4, 6.5, alongX ? W + 4 : 8,
+                     BUILD_COLORS[colorN++ % BUILD_COLORS.length], ROOFS[i % ROOFS.length]));
+      }
+
+      if (i === 0) start = { x: ax, z: az, heading: DIR_HEADING[s.dir] };
+      if (i === ROUTE.length - 1) end = { x: bx, z: bz, dir: d };
+      ax = bx; az = bz;
+    }
+    return { ground: ground, lines: lines, obstacles: obs, start: start, end: end };
+  }
+
+  var built = buildRoute();
+  var world = { ground: built.ground, lines: built.lines, obstacles: built.obstacles };
 
   // ---- player ----
-  // Parked facing EAST (heading = +90deg) looking across the lot.
-  var startX = 0, startZ = 0;
-  var player = { x: startX, z: startZ, heading: Math.PI / 2, speed: 0 };
-  var endZ = 360;  // drive this far north on the larger road -> end of map
+  var startX = built.start.x, startZ = built.start.z;
+  var player = { x: startX, z: startZ, heading: built.start.heading, speed: 0 };
+  var routeEnd = built.end;  // { x, z, dir } — drive past it -> end of map
   var gameOver = false;
   var gameOverReason = '';
   var paused = false;
@@ -186,8 +237,9 @@
     }
     // else: pinned this frame — position unchanged, speed unchanged.
 
-    // boundary check — reaching the far north end of the larger road ends it
-    if (player.z > endZ) {
+    // boundary check — drive past the end of the last segment and the run ends
+    if ((player.x - routeEnd.x) * routeEnd.dir[0] +
+        (player.z - routeEnd.z) * routeEnd.dir[1] > 0) {
       gameOver = true;
       gameOverReason = 'end of map';
       player.speed = 0;
