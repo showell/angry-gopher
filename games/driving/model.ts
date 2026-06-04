@@ -81,9 +81,9 @@ export function initialState(world: World): CarState {
 const signOf = (d: TurnDir): number => (d === 'right' ? 1 : -1);
 
 export function buildWorld(): World {
-  const LANE = 4;            // one-lane road ~ two car widths
-  const R = 2;              // turn radius
-  const THETA = Math.PI / 3; // 60deg turns -> roads meet at 120deg
+  const LANE = 4;   // one-lane road ~ two car widths
+  const R = 2;      // turn radius
+  const DEG = Math.PI / 180;
 
   const seg = (id: SegId, length: number, exit: RoadSegment['exit']): RoadSegment => {
     const tan = exit ? exit.radius * Math.tan(exit.angle / 2) : 0;
@@ -99,11 +99,13 @@ export function buildWorld(): World {
   };
 
   const segments: Record<SegId, RoadSegment> = {
-    seg1: seg('seg1', 40, { dir: 'right', to: 'seg2', radius: R, angle: THETA }),
-    seg2: seg('seg2', 40, { dir: 'left',  to: 'seg3', radius: R, angle: THETA }),
-    seg3: seg('seg3', 40, null),
+    seg1: seg('seg1', 40, { dir: 'right', to: 'seg2', radius: R, angle: 90 * DEG }),
+    seg2: seg('seg2', 40, { dir: 'left',  to: 'seg3', radius: R, angle: 60 * DEG }),
+    seg3: seg('seg3', 80, { dir: 'left',  to: 'seg4', radius: R, angle: 60 * DEG }),
+    seg4: seg('seg4', 40, { dir: 'right', to: 'seg5', radius: R, angle: 30 * DEG }),
+    seg5: seg('seg5', 40, null),
   };
-  const order: SegId[] = ['seg1', 'seg2', 'seg3'];
+  const order: SegId[] = ['seg1', 'seg2', 'seg3', 'seg4', 'seg5'];
   for (const id of order) {
     const s = segments[id];
     if (s.exit) {
