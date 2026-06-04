@@ -71,13 +71,13 @@ export function buildScene(state: CarState, world: World): Scene {
     };
     quads.push({ pts: [m(0, -nhw), m(0, nhw), m(nxt.length, nhw), m(nxt.length, -nhw)], color: ROAD });
     for (const t of nxt.trees) {
-      trees.push({ at: m(t.along, treeAcross(t.side, nhw, t.offset)), color: nxt.foliage });
+      trees.push({ at: m(t.along, treeAcross(t.side, nhw, t.offset)), color: t.color });
     }
   }
 
   // current segment trees
   for (const t of cur.trees) {
-    trees.push({ at: toCar(t.along, treeAcross(t.side, hw, t.offset), c), color: cur.foliage });
+    trees.push({ at: toCar(t.along, treeAcross(t.side, hw, t.offset), c), color: t.color });
   }
 
   return { quads, trees };

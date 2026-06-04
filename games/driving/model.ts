@@ -38,13 +38,15 @@ const omegaFor = (theta: number): number => DPHI * theta / QUARTER;  // turn rat
 // ----------------------------------------------------------------------------
 export type SegId = string;
 export type TurnDir = 'left' | 'right';
-export interface TreeLocal { side: 'left' | 'right'; along: number; offset: number }
+export type Scheme = 'ALL_GREEN' | 'YELLOW_GREEN' | 'RED_GREEN';
+export interface TreeLocal { side: 'left' | 'right'; along: number; offset: number; color: string }
+
+const GREEN = '#2f7a30', YELLOW = '#cf9a18', RED = '#b23a2a';
 
 export interface RoadSegment {
   id: SegId;
   length: number;
   width: number;
-  foliage: string;      // tree-top colour; every tree on the segment shares it
   trees: TreeLocal[];
   exit: { dir: TurnDir; to: SegId; radius: number; angle: number } | null;
   // derived relational scalars (filled by buildWorld)
@@ -85,13 +87,12 @@ export function buildWorld(): World {
   const LANE = 4;   // one-lane road ~ two car widths
   const R = 2;      // turn radius
   const DEG = Math.PI / 180;
-  const GREEN = '#2f7a30', RED = '#b23a2a', GOLD = '#cf9a18';
 
-  const seg = (id: SegId, length: number, foliage: string,
+  const seg = (id: SegId, length: number, scheme: Scheme,
                exit: RoadSegment['exit']): RoadSegment => {
     const tan = exit ? exit.radius * Math.tan(exit.angle / 2) : 0;
     return {
-      id, length, width: LANE, foliage, trees: treeRow(length), exit,
+      id, length, width: LANE, trees: treeRow(length, scheme), exit,
       exitR: exit ? exit.radius : 0,
       exitSign: exit ? signOf(exit.dir) : 0,
       exitAngle: exit ? exit.angle : 0,
@@ -105,16 +106,16 @@ export function buildWorld(): World {
 
   // route is checked non-self-intersecting by test/test_model.ts (no loops).
   const segments: Record<SegId, RoadSegment> = {
-    seg1:  seg('seg1',  50, GREEN, turn('seg2',  'right',  90)),
-    seg2:  seg('seg2',  55, GOLD,  turn('seg3',  'left',  120)),
-    seg3:  seg('seg3',  80, RED,   turn('seg4',  'right',  60)),
-    seg4:  seg('seg4',  50, GREEN, turn('seg5',  'right',  30)),
-    seg5:  seg('seg5',  55, GOLD,  turn('seg6',  'left',  120)),
-    seg6:  seg('seg6',  60, RED,   turn('seg7',  'left',   60)),
-    seg7:  seg('seg7',  50, GREEN, turn('seg8',  'right',  90)),
-    seg8:  seg('seg8',  55, GOLD,  turn('seg9',  'right',  60)),
-    seg9:  seg('seg9',  50, RED,   turn('seg10', 'left',  120)),
-    seg10: seg('seg10', 50, GREEN, null),
+    seg1:  seg('seg1',  50, 'ALL_GREEN',    turn('seg2',  'right',  90)),
+    seg2:  seg('seg2',  55, 'YELLOW_GREEN', turn('seg3',  'left',  120)),
+    seg3:  seg('seg3',  80, 'RED_GREEN',    turn('seg4',  'right',  60)),
+    seg4:  seg('seg4',  50, 'ALL_GREEN',    turn('seg5',  'right',  30)),
+    seg5:  seg('seg5',  55, 'YELLOW_GREEN', turn('seg6',  'left',  120)),
+    seg6:  seg('seg6',  60, 'RED_GREEN',    turn('seg7',  'left',   60)),
+    seg7:  seg('seg7',  50, 'ALL_GREEN',    turn('seg8',  'right',  90)),
+    seg8:  seg('seg8',  55, 'YELLOW_GREEN', turn('seg9',  'right',  60)),
+    seg9:  seg('seg9',  50, 'RED_GREEN',    turn('seg10', 'left',  120)),
+    seg10: seg('seg10', 50, 'ALL_GREEN',    null),
   };
   const order: SegId[] = [
     'seg1', 'seg2', 'seg3', 'seg4', 'seg5', 'seg6', 'seg7', 'seg8', 'seg9', 'seg10',
@@ -130,13 +131,20 @@ export function buildWorld(): World {
   return { segments, start: 'seg1', order };
 }
 
-function treeRow(length: number): TreeLocal[] {
+function treeRow(length: number, scheme: Scheme): TreeLocal[] {
   const trees: TreeLocal[] = [];
-  for (let along = 4; along <= length - 4; along += 6) {
-    trees.push({ side: 'left', along, offset: 1.5 });
-    trees.push({ side: 'right', along, offset: 1.5 });
+  let k = 0;
+  for (let along = 4; along <= length - 4; along += 6, k++) {
+    const color = treeColor(scheme, k);   // alternates along the segment
+    trees.push({ side: 'left', along, offset: 1.5, color });
+    trees.push({ side: 'right', along, offset: 1.5, color });
   }
   return trees;
+}
+function treeColor(scheme: Scheme, k: number): string {
+  if (scheme === 'ALL_GREEN') return GREEN;
+  const accent = scheme === 'YELLOW_GREEN' ? YELLOW : RED;
+  return k % 2 === 0 ? GREEN : accent;
 }
 
 // ----------------------------------------------------------------------------
