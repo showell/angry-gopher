@@ -149,8 +149,8 @@ export function buildWorld(): World {
 
   // route is checked non-self-intersecting by test/test_model.ts (no loops).
   const segments: Record<SegId, RoadSegment> = {
-    seg1:  seg('seg1', 200, 'ALL_GREEN',    turn('seg2',  'right',  90)),
-    seg2:  seg('seg2', 220, 'YELLOW_GREEN', turn('seg3',  'left',  120)),
+    seg1:  seg('seg1', 300, 'ALL_GREEN',    turn('seg2',  'right',  50)),
+    seg2:  seg('seg2', 320, 'YELLOW_GREEN', turn('seg3',  'left',  80)),
     seg3:  seg('seg3', 416, 'RED_GREEN',    turn('seg4',  'right',  60)),   // the longest straight: most aggressive
     seg4:  seg('seg4', 200, 'ALL_GREEN',    turn('seg5',  'right',  30)),
     seg5:  seg('seg5', 220, 'YELLOW_GREEN', turn('seg6',  'left',  120)),
