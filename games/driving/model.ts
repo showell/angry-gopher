@@ -32,7 +32,7 @@
 // =============================================================================
 
 export const DPHI = 0.05;         // heading turned per press in a 90deg turn (rad)
-export const V_BASE = 1.2;        // cruise speed just after a corner (m/press)
+export const V_BASE = 1.2;        // the car's speed at the very start of the drive (m/press)
 export const A_ACCEL = 0.03;      // constant acceleration while the intersection is out of sight (m/press^2)
 export const SIGHT = 180;         // how far ahead the adult elephant (= the intersection) becomes visible (m)
 const ELEPHANT_AHEAD = 20;        // the adult elephant sits this far past a segment's end (matches elephantRow)
@@ -123,16 +123,16 @@ export function buildWorld(): World {
 
   // route is checked non-self-intersecting by test/test_model.ts (no loops).
   const segments: Record<SegId, RoadSegment> = {
-    seg1:  seg('seg1', 100, 'ALL_GREEN',    turn('seg2',  'right',  90)),
-    seg2:  seg('seg2', 110, 'YELLOW_GREEN', turn('seg3',  'left',  120)),
-    seg3:  seg('seg3', 208, 'RED_GREEN',    turn('seg4',  'right',  60)),   // long: a good accelerate-then-brake test
-    seg4:  seg('seg4', 100, 'ALL_GREEN',    turn('seg5',  'right',  30)),
-    seg5:  seg('seg5', 110, 'YELLOW_GREEN', turn('seg6',  'left',  120)),
-    seg6:  seg('seg6', 120, 'RED_GREEN',    turn('seg7',  'left',   60)),
-    seg7:  seg('seg7', 100, 'ALL_GREEN',    turn('seg8',  'right',  90)),
-    seg8:  seg('seg8', 110, 'YELLOW_GREEN', turn('seg9',  'right',  60)),
-    seg9:  seg('seg9', 100, 'RED_GREEN',    turn('seg10', 'left',  120)),
-    seg10: seg('seg10', 100, 'ALL_GREEN',   null),
+    seg1:  seg('seg1', 200, 'ALL_GREEN',    turn('seg2',  'right',  90)),
+    seg2:  seg('seg2', 220, 'YELLOW_GREEN', turn('seg3',  'left',  120)),
+    seg3:  seg('seg3', 416, 'RED_GREEN',    turn('seg4',  'right',  60)),   // the longest straight: most aggressive
+    seg4:  seg('seg4', 200, 'ALL_GREEN',    turn('seg5',  'right',  30)),
+    seg5:  seg('seg5', 220, 'YELLOW_GREEN', turn('seg6',  'left',  120)),
+    seg6:  seg('seg6', 240, 'RED_GREEN',    turn('seg7',  'left',   60)),
+    seg7:  seg('seg7', 200, 'ALL_GREEN',    turn('seg8',  'right',  90)),
+    seg8:  seg('seg8', 220, 'YELLOW_GREEN', turn('seg9',  'right',  60)),
+    seg9:  seg('seg9', 200, 'RED_GREEN',    turn('seg10', 'left',  120)),
+    seg10: seg('seg10', 200, 'ALL_GREEN',   null),
   };
   const order: SegId[] = [
     'seg1', 'seg2', 'seg3', 'seg4', 'seg5', 'seg6', 'seg7', 'seg8', 'seg9', 'seg10',
@@ -249,7 +249,7 @@ function cruise(state: CarState, seg: RoadSegment, world: World): CarState {
   }
 
   const vEnd = turnSpeed(seg);
-  v = Math.max(v, vEnd);                       // approaching a turn, never crawl below turn speed
+  if (sees(state, seg)) v = Math.max(v, vEnd);   // while braking for the turn, never crawl below turn speed
   const along = state.along + v;
   if (along < seg.arcStart) return { ...state, along, v };
 
@@ -275,7 +275,8 @@ function turnStep(state: CarState, seg: RoadSegment, world: World): CarState {
   }
   // entering: turn until aligned with the new segment, then resume cruising
   if (angle * t.sgn < 0) return { segment: seg.id, along, across, angle, v: ds, turn: t };
-  return { segment: seg.id, along: seg.entryTan, across: 0, angle: 0, v: V_BASE, turn: null };
+  // leave the turn at the turn's OWN speed and accelerate from there (no jump to V_BASE)
+  return { segment: seg.id, along: seg.entryTan, across: 0, angle: 0, v: ds, turn: null };
 }
 
 // Re-express the car in the next segment's frame: a rotation by THETA about the
