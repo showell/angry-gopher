@@ -24,9 +24,9 @@
   var MODES = {
     parkingLot: {
       name: 'parking lot',
-      maxSpeed: 12,       // ~27 mph
+      maxSpeed: 12,       // ~27 mph (HUD bar reference only; speed is uncapped)
       accel: 4,
-      brake: 10,
+      brake: 16,          // strong enough to scrub speed before a turn
       handBrake: 18,
     },
     neighborhood: {       // placeholder, not yet entered
@@ -306,9 +306,12 @@
     // speed/heading. Collision blocks position only — it never touches
     // speed. If you're pinned against a wall, steer to a clear angle and
     // you drive away at whatever speed you held.
-    if (keys.ArrowUp)   player.speed += mode.accel * dt;
+    // Progressive acceleration: gentle from a standstill (precise in the lot),
+    // but it pulls harder the faster you're already going, so an open road
+    // builds to highway speed quickly. No upper cap — brake for the turns.
+    if (keys.ArrowUp)   player.speed += (mode.accel + player.speed * 0.15) * dt;
     if (keys.ArrowDown) player.speed -= mode.brake * dt;
-    player.speed = Math.max(0, player.speed);  // no speed cap; only the brake slows you
+    player.speed = Math.max(0, player.speed);
 
     var steerInput = (keys.ArrowLeft ? -1 : 0) + (keys.ArrowRight ? 1 : 0);
     player.heading += steerInput * 0.8 * dt;  // rad/s; gentler = finer control
