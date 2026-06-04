@@ -55,7 +55,7 @@
   // A fire sits at a segment's back, so on the correct path it is always behind
   // you (off-screen); you only meet it by turning the wrong way into the back.
   var ROUTE = [
-    { name: 'parking space',   type: 'lot',  width: 1, dir: 'E', right: 'cars',           left: 'cars',           behind: 'building', m: 6 },
+    { name: 'parking space',   type: 'lot',  width: 1, dir: 'E', right: 'cars',           left: 'cars',           behind: 'building', m: 4.5 },
     { name: 'parking lot',     type: 'lot',  width: 3, dir: 'N', right: 'cars/buildings', left: 'cars/buildings', behind: 'fire',     m: 48 },
     { name: 'Autumn Pines Rd', type: 'road', width: 2, dir: 'E', right: 'buildings',      left: 'trees',          behind: 'fire',     miles: 0.25 },
     { name: 'Murrell Rd',      type: 'road', width: 4, dir: 'N', right: 'sky',            left: 'sky',            behind: 'fire',     miles: 3, lines: true },
@@ -152,14 +152,19 @@
     var layers = spec.split('/');
     for (var li = 0; li < layers.length; li++) {
       var layer = layers[li];
-      if (layer === 'cars') {
+      if (layer === 'cars' && lenM < CARW * 2) {
+        // a single stall (the parking space): one neighbour car each side,
+        // side-by-side and same heading as you, one car-width away.
+        obs.push(carEW(ax + d[0] * (lenM / 2) + perp[0] * CARW,
+                       az + d[1] * (lenM / 2) + perp[1] * CARW,
+                       CAR_COLORS[side === 'right' ? 1 : 4]));
+        off = CARW + 1;
+      } else if (layer === 'cars') {
         var carOff = off + 2.4;  // nose-in: car center 2.4m past the lane edge
         for (var t = 1.4, k = 0; t < lenM - 1; t += 2.5, k++) {
           var c = CAR_COLORS[(k * 3) % CAR_COLORS.length];
-          // perpendicular to a N/S lane (carEW); for the E/W pull-out space
-          // this is the parallel neighbour row — also carEW.
           obs.push(carEW(ax + d[0] * t + perp[0] * carOff,
-                         az + d[1] * t + perp[1] * carOff, c));
+                         az + d[1] * t + perp[1] * carOff, c));  // perpendicular nose-in
           lines.push(alongPerpRect(ax, az, d, perp, t - 1.25, t - 1.25 + 0.08, off, off + 4.6, '#cfcfcf'));
         }
         off = carOff + 2.5;
@@ -204,8 +209,11 @@
       var bx = ax + d[0] * lenM, bz = az + d[1] * lenM;
       var prevHW = (i > 0) ? ROUTE[i - 1].width * CARW / 2 : 0;
       var nextHW = (i < ROUTE.length - 1) ? ROUTE[i + 1].width * CARW / 2 : 0;
+      // the lot lane reaches back past the pull-out, so pavement flanks you on
+      // both sides as you nose out of your space.
+      var apron = (s.type === 'lot' && s.width > 1) ? 12 : 0;
 
-      ground.push(corridorRect(ax, az, bx, bz, d, W, prevHW, nextHW,
+      ground.push(corridorRect(ax, az, bx, bz, d, W, prevHW + apron, nextHW,
                                (s.type === 'lot') ? '#3a3a40' : '#2c2c30'));
       if (s.lines) addLaneLines(ax, az, d, hw, lenM, lines);
       if (s.type === 'lot') {
@@ -218,7 +226,7 @@
 
       // back-end cap: placed so its near face clears the corridor start
       if (s.behind === 'fire') {
-        var off = prevHW + 14;  // down the block, not right at the corner
+        var off = (apron ? apron + prevHW + 3 : prevHW + 14);  // just past the apron, or down the block
         obs.push(fire(ax - d[0] * off, az - d[1] * off, Math.max(W, 6), 5, 6.5));
       } else if (s.behind === 'building') {
         var bo = prevHW + 5.5, alongX = (d[0] !== 0);
@@ -233,7 +241,7 @@
     }
     // spawn guard: never let scenery (a car/tree) sit on the player's start —
     // it would pin the car. Clear the player's own stall + a little ahead.
-    var clr = 2.0;
+    var clr = 1.0;  // just over the collision pad — removes pins, keeps neighbours
     obs = obs.filter(function (o) {
       if (o.kind === 'building' || o.kind === 'fire') return true;
       var hw = o.w / 2 + clr, hd = o.d / 2 + clr;
