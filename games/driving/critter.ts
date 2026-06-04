@@ -43,6 +43,7 @@ const HERD_ROW_DEPTH = 5;                // across-spacing (depth) of the herd s
 const HERD_JITTER_ALONG = 1.5;           // deterministic wobble of the scatter, along
 const HERD_JITTER_ACROSS = 1.2;          // deterministic wobble of the scatter, across
 const PIG_DIST_BEFORE_END = 60;          // pigs gather this far before the next intersection
+const ELEPHANT_PAST_INTERSECTION = 20;   // the elephants stand this far beyond the intersection
 const BABY_ELEPHANT_AHEAD = 6;           // the baby elephant sits this far ahead of the adult
 const BABY_ELEPHANT_SIDE_OFFSET = 14;    // ...and this far to the side (opposite the turn)
 
@@ -58,13 +59,14 @@ export function segmentCritters(length: number, laneHalfWidth: number, treeLineO
   return [...cowHerd(laneHalfWidth, treeLineOffset), ...pigRow(length, laneHalfWidth + HERD_ROAD_OFFSET)];
 }
 
-// The critters AT a segment's exit intersection: the elephants, just past it,
-// to the side OPPOSITE the turn. `corner` is the along-position of the marker;
-// `turnSign` is +1 right / -1 left; elephants go giant late in the route (segNum).
-// The adult faces "left" (rear on its right), so we put its REAR — not its middle
-// — on the centreline by shifting it half its width, else the wide giant body
-// straddles the road.
-export function intersectionCritters(corner: number, turnSign: number, segNum: number): Critter[] {
+// The critters AT a segment's exit intersection: the elephants, just past it, to
+// the side OPPOSITE the turn. `intersectionAlong` is where the intersection is
+// (the segment's far end); `turnSign` is +1 right / -1 left; elephants go giant
+// late in the route (segNum). The adult faces "left" (rear on its right), so we
+// put its REAR — not its middle — on the centreline by shifting it half its
+// width, else the wide giant body straddles the road.
+export function intersectionCritters(intersectionAlong: number, turnSign: number, segNum: number): Critter[] {
+  const corner = intersectionAlong + ELEPHANT_PAST_INTERSECTION;
   const scale = segNum > GIANT_ELEPHANT_FROM_SEG ? GIANT_ELEPHANT_SCALE : 1;
   const adultH = ELEPHANT_HEIGHT * scale, babyH = BABY_ELEPHANT_HEIGHT * scale;
   return [

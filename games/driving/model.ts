@@ -10,11 +10,11 @@
 // (speed along the path, m/press).
 //
 // Cruising:  across = 0, angle = 0; each press advances `along` by v, and v
-//            changes by accel() — a pure function of (along, v, can-the-driver-
-//            see-the-intersection-yet). Out of sight: constant acceleration.
-//            In sight: the exact constant deceleration that brings the Rider to
-//            turn speed right at the corner (recomputed each press, so it self-
-//            corrects discretisation drift). See accel() / cruise().
+//            changes by accel() — a pure function of (along, v, how-far-to-the-
+//            next-intersection). Far off: constant acceleration. Within
+//            APPROACH_INTERSECTION_DIST: the exact constant deceleration that
+//            brings the Rider to turn speed right at the corner (recomputed each
+//            press, so it self-corrects discretisation drift). See accel()/cruise().
 //
 // Turning (no precomputed arc): each press rotates the heading by `omega` and
 // inches forward `ds = R * omega` — forward and rotation IN SYNC, tracing a
@@ -50,14 +50,13 @@ const DIST_BETWEEN_TREES = 6;            // tree spacing along a segment
 const TREE_ROAD_OFFSET = 1.5;            // a tree stands this far beyond the lane edge
 const TREE_INTERSECTION_CLEARANCE = 6;   // no trees within this of an intersection
 
-// seeing the next intersection
-const SIGHT_DIST = 180;                  // the Rider first sees the next intersection from this far back
-const APPROACH_INTERSECTION_DIST = 20;   // the adult elephant marks the intersection, this far past a segment's end
+// the Rider starts slowing once the next intersection is within this distance
+const APPROACH_INTERSECTION_DIST = 160;
 
 // ---- motion (per-press, not metres) ----
 export const DPHI = 0.10;     // heading turned per press in a 90deg turn (rad); sets turn speed AND spin rate
 export const V_BASE = 1.2;    // the Rider's speed at the very start of the drive (m/press)
-export const A_ACCEL = 0.03;  // constant acceleration while the intersection is out of sight (m/press^2)
+export const A_ACCEL = 0.03;  // constant acceleration while the intersection is still far off (m/press^2)
 
 const QUARTER = Math.PI / 2;
 const omegaFor = (theta: number): number => DPHI * theta / QUARTER;  // turn rate scales with angle
@@ -142,7 +141,7 @@ export function buildWorld(): World {
       id, length, width: LANE_WIDTH, scheme,
       trees: [],   // filled below, once entry/exit tangents are known
       critters: segmentCritters(length, LANE_WIDTH / 2, TREE_ROAD_OFFSET),
-      exitCritters: exit ? intersectionCritters(length + APPROACH_INTERSECTION_DIST, signOf(exit.dir), segNumber(id)) : [],
+      exitCritters: exit ? intersectionCritters(length, signOf(exit.dir), segNumber(id)) : [],
       exit,
       exitR: exit ? exit.radius : 0,
       exitSign: exit ? signOf(exit.dir) : 0,
@@ -228,29 +227,29 @@ export function getNextRiderState(state: RiderState, world: World): RiderState {
   return next;
 }
 
-// Can the driver see the upcoming intersection yet? Yes once the adult elephant
-// beyond it is within SIGHT_DIST. (Only meaningful for a segment that HAS a turn;
-// the final segment never brakes and is handled directly in accel/cruise.)
-function sees(state: RiderState, seg: RoadSegment): boolean {
+// Is the Rider close enough to the upcoming intersection to start slowing for it?
+// (Only meaningful for a segment that HAS a turn; the final segment never brakes
+// and is handled directly in accel/cruise.)
+function nearIntersection(state: RiderState, seg: RoadSegment): boolean {
   if (!seg.exit) return true;
-  return seg.length + APPROACH_INTERSECTION_DIST - state.along <= SIGHT_DIST;
+  return seg.length - state.along <= APPROACH_INTERSECTION_DIST;
 }
 
 // the speed at which a turn is taken (its fixed per-press creep) — the speed the
 // approach must decelerate to so motion is continuous into the turn.
 const turnSpeed = (seg: RoadSegment): number => seg.exitR * omegaFor(seg.exitAngle);
 
-// Acceleration (m/press^2) PURELY from position, velocity, and visibility:
-//   intersection out of sight -> keep accelerating at a constant rate.
-//   intersection in view       -> the EXACT constant deceleration that lands the
+// Acceleration (m/press^2) PURELY from position, velocity, and distance-to-turn:
+//   intersection still far -> keep accelerating at a constant rate.
+//   intersection near       -> the EXACT constant deceleration that lands the
 //     Rider at turn speed (0 at the route end) right at the turn point, from
 //     v^2 = vEnd^2 + 2*a*d. Recomputed every press: constant-decel kinematics are
 //     self-consistent, so this reproduces the same a each press while correcting
 //     integration drift.
 function accel(state: RiderState, seg: RoadSegment): number {
   // The final segment (no turn) accelerates the whole way; so does any segment
-  // whose turn is still out of sight. Otherwise brake to turn speed.
-  if (!seg.exit || !sees(state, seg)) return A_ACCEL;
+  // whose turn is still far off. Otherwise brake to turn speed.
+  if (!seg.exit || !nearIntersection(state, seg)) return A_ACCEL;
   const d = seg.arcStart - state.along;
   if (d <= 1e-6) return 0;
   const vEnd = turnSpeed(seg);
@@ -267,7 +266,7 @@ function cruise(state: RiderState, seg: RoadSegment, world: World): RiderState {
   }
 
   const vEnd = turnSpeed(seg);
-  if (sees(state, seg)) v = Math.max(v, vEnd);   // while braking for the turn, never crawl below turn speed
+  if (nearIntersection(state, seg)) v = Math.max(v, vEnd);   // while braking for the turn, never crawl below turn speed
   const along = state.along + v;
   if (along < seg.arcStart) return { ...state, along, v };
 
