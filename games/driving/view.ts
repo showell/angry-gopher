@@ -27,9 +27,11 @@ function toCar(a: number, x: number, c: Pose): CarPt {
 }
 
 // map a point in the NEXT segment's frame into the CURRENT segment's frame.
-// B starts at A's corner (along = L) and is perpendicular; sgn = A's turn sign.
-function nextToCur(aB: number, xB: number, L: number, sgn: number): { a: number; x: number } {
-  return { a: L - sgn * xB, x: sgn * aB };
+// B starts at A's corner (along = L), rotated by sgn*THETA. Reduces to the
+// simple swap at 90deg.
+function nextToCur(aB: number, xB: number, L: number, sgn: number, theta: number): { a: number; x: number } {
+  const cos = Math.cos(theta), sin = Math.sin(theta);
+  return { a: L + aB * cos - xB * sgn * sin, x: aB * sgn * sin + xB * cos };
 }
 
 function strip(a0: number, a1: number, hw: number, c: Pose): Quad {
@@ -61,9 +63,9 @@ export function buildScene(state: CarState, world: World): Scene {
   // next segment through the intersection
   if (cur.exit) {
     const nxt: RoadSegment = world.segments[cur.exit.to];
-    const L = cur.length, sgn = cur.exitSign, nhw = nxt.width / 2;
+    const L = cur.length, sgn = cur.exitSign, nhw = nxt.width / 2, theta = cur.exitAngle;
     const m = (aB: number, xB: number): CarPt => {
-      const p = nextToCur(aB, xB, L, sgn);
+      const p = nextToCur(aB, xB, L, sgn, theta);
       return toCar(p.a, p.x, c);
     };
     quads.push({ pts: [m(0, -nhw), m(0, nhw), m(nxt.length, nhw), m(nxt.length, -nhw)], color: ROAD });
