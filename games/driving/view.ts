@@ -9,12 +9,12 @@
 // =============================================================================
 import type { World, RiderState, RoadSegment } from './model.ts';
 import type { CritterView } from './critter.ts';
+import type { TreeView } from './tree.ts';
 
 const ROAD = '#34353c';
 
 export interface RiderPt { right: number; forward: number }   // Rider frame, ground plane
 export interface Quad { pts: RiderPt[]; color: string }
-export interface TreeView { at: RiderPt; color: string; height: number; pine: boolean }
 export interface Scene { quads: Quad[]; trees: TreeView[]; critters: CritterView[] }
 
 // the Rider's pose in its own segment's frame
@@ -49,9 +49,6 @@ function squareAt(at: (a: number, x: number) => RiderPt, center: number, hw: num
     pts: [at(center - hw, -hw), at(center + hw, -hw), at(center + hw, hw), at(center - hw, hw)],
     color: ROAD,
   };
-}
-function treeAcross(side: 'left' | 'right', hw: number, offset: number): number {
-  return (side === 'right' ? 1 : -1) * (hw + offset);
 }
 
 // how many segments to look ahead (current + this many beyond the next corner)
@@ -91,7 +88,7 @@ export function buildScene(state: RiderState, world: World): Scene {
     if (d === 0 && seg.entryR > 0) quads.push(squareAt(at, 0, hw));        // the corner we came through
     if (seg.exit) quads.push(squareAt(at, seg.length, hw));                // each corner ahead
     for (const t of seg.trees) {
-      trees.push({ at: at(t.along, treeAcross(t.side, hw, t.offset)), color: t.color, height: t.height, pine: t.pine });
+      trees.push({ at: at(t.along, t.across), color: t.color, height: t.height, pine: t.pine });
     }
     for (const cr of seg.critters) {
       critters.push({ at: at(cr.along, cr.across), emoji: cr.emoji, height: cr.height, faceRight: cr.faceRight });

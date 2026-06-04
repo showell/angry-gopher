@@ -10,10 +10,11 @@
 import { buildWorld, initialRiderState, getNextRiderState, riderHeading } from './model.ts';
 import type { RiderState } from './model.ts';
 import { buildScene } from './view.ts';
-import type { RiderPt, Quad, TreeView } from './view.ts';
+import type { RiderPt, Quad } from './view.ts';
 import { drawHorizon } from './horizon.ts';
 import { drawCritter } from './critter.ts';
 import type { Project } from './critter.ts';
+import { drawTree } from './tree.ts';
 
 const canvas = document.getElementById('c') as HTMLCanvasElement;
 const ctx = canvas.getContext('2d') as CanvasRenderingContext2D;
@@ -90,42 +91,6 @@ function drawQuad(q: Quad): void {
   ctx.fill();
 }
 
-// radially symmetric: drawn only from distance + angle. Round trees (autumn
-// colours) are a trunk + a coloured disc; pines are a trunk + a thin, jagged
-// conifer in darker green.
-const PINE = '#1c5a22';   // darker than the round green
-function drawTree(t: TreeView): void {
-  const at = t.at;
-  if (at.forward <= NEAR) return;
-  const base = project({ right: at.right, forward: at.forward, height: 0 });
-  const top = project({ right: at.right, forward: at.forward, height: t.height });
-  const ht = base.y - top.y;
-  const trunkW = Math.max(1, ht * 0.10);
-  ctx.fillStyle = '#5a3e22';
-  ctx.fillRect(base.x - trunkW / 2, base.y - ht * 0.42, trunkW, ht * 0.42);
-
-  if (t.pine) {
-    // three stacked tiers, narrow and widest at the bottom — a jagged conifer
-    const apexY = base.y - ht, foliage = ht * 0.90, w = ht * 0.20;
-    const tops = [0.0, 0.28, 0.56], bots = [0.46, 0.74, 1.0], wide = [0.5, 0.78, 1.0];
-    ctx.fillStyle = PINE;
-    for (let k = 0; k < 3; k++) {
-      ctx.beginPath();
-      ctx.moveTo(base.x, apexY + foliage * tops[k]);
-      ctx.lineTo(base.x + w * wide[k], apexY + foliage * bots[k]);
-      ctx.lineTo(base.x - w * wide[k], apexY + foliage * bots[k]);
-      ctx.closePath();
-      ctx.fill();
-    }
-    return;
-  }
-
-  ctx.fillStyle = t.color;
-  ctx.beginPath();
-  ctx.arc(base.x, base.y - ht * 0.62, ht * 0.30, 0, Math.PI * 2);
-  ctx.fill();
-}
-
 // frame-rate / render-time, smoothed — lets us tell "Rider going slow" (low speed
 // but fps pinned at 60) from "code going slow" (fps drops / render ms climbs).
 let fps = 0, renderMs = 0;
@@ -159,7 +124,7 @@ function render(rider: RiderState): void {
   // trees + critters are billboards; draw them back-to-front together so a
   // nearer one correctly occludes a farther one.
   const bills: Array<{ forward: number; draw: () => void }> = [];
-  for (const t of scene.trees) bills.push({ forward: t.at.forward, draw: () => drawTree(t) });
+  for (const t of scene.trees) bills.push({ forward: t.at.forward, draw: () => drawTree(ctx, t, screenOf) });
   for (const cr of scene.critters) bills.push({ forward: cr.at.forward, draw: () => drawCritter(ctx, cr, screenOf) });
   bills.filter((b) => b.forward > NEAR).sort((a, b) => b.forward - a.forward).forEach((b) => b.draw());
 

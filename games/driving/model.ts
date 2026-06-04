@@ -33,22 +33,18 @@
 
 import { segmentCritters, intersectionCritters } from './critter.ts';
 import type { Critter } from './critter.ts';
+import { segmentTrees, TREE_ROAD_OFFSET } from './tree.ts';
+import type { Scheme, Tree } from './tree.ts';
 
 // ============================================================================
-// DIMENSIONS — distances & sizes for the road and trees, in METRES, gathered so
-// they can be read and tuned in one place. (Animal sizes/placement live in
-// critter.ts; motion constants — speed, accel, spin — are per-press, below.)
+// DIMENSIONS — distances for the road & the Rider's approach to a turn, in
+// METRES. (Tree sizes/placement live in tree.ts, animals in critter.ts; motion
+// constants — speed, accel, spin — are per-press, below.)
 // ============================================================================
 
 // road
 const LANE_WIDTH = 4;                    // a single lane
 const TURN_RADIUS = 2;                   // radius of every corner
-
-// trees
-const TREE_HEIGHT = 5;                   // round (autumn) trees; pines render at half height
-const DIST_BETWEEN_TREES = 6;            // tree spacing along a segment
-const TREE_ROAD_OFFSET = 1.5;            // a tree stands this far beyond the lane edge
-const TREE_INTERSECTION_CLEARANCE = 6;   // no trees within this of an intersection
 
 // the Rider starts slowing once the next intersection is within this distance
 const APPROACH_INTERSECTION_DIST = 160;
@@ -66,17 +62,13 @@ const omegaFor = (theta: number): number => DPHI * theta / QUARTER;  // turn rat
 // ----------------------------------------------------------------------------
 export type SegId = string;
 export type TurnDir = 'left' | 'right';
-export type Scheme = 'ALL_GREEN' | 'YELLOW_GREEN' | 'RED_GREEN';
-export interface TreeLocal { side: 'left' | 'right'; along: number; offset: number; color: string; height: number; pine: boolean }
-
-const GREEN = '#2f7a30', YELLOW = '#cf9a18', RED = '#b23a2a';
 
 export interface RoadSegment {
   id: SegId;
   length: number;
   width: number;
   scheme: Scheme;                // visual theme; drives the tree colours
-  trees: TreeLocal[];
+  trees: Tree[];
   critters: Critter[];      // roadside, along the segment (cows/pigs)
   exitCritters: Critter[];  // at the exit intersection (elephants); shared with the next segment
   exit: { dir: TurnDir; to: SegId; radius: number; angle: number } | null;
@@ -185,34 +177,13 @@ export function buildWorld(): World {
       next.northHeading = s.northHeading + s.exitSign * s.exitAngle;   // accumulate orientation along the route
     }
   }
-  // Trees, now that each end's tangent is known. A turn intrudes `tan` into the
-  // straight; we keep that clear PLUS a clearance so a tree never lands on the
-  // adjoining road (and none sit right at a segment's start/end).
+  // Trees, now that each end's tangent is known (tree.ts keeps a clear zone
+  // around each intersection so none land on the adjoining road).
   for (const id of order) {
     const s = segments[id];
-    const startAlong = s.entryTan + TREE_INTERSECTION_CLEARANCE;
-    const endAlong = s.length - s.exitTan - TREE_INTERSECTION_CLEARANCE;
-    s.trees = treeRow(startAlong, endAlong, s.scheme);
+    s.trees = segmentTrees(s.length, s.entryTan, s.exitTan, s.scheme, LANE_WIDTH / 2);
   }
   return { segments, start: 'seg1', order };
-}
-
-function treeRow(startAlong: number, endAlong: number, scheme: Scheme): TreeLocal[] {
-  const trees: TreeLocal[] = [];
-  let k = 0;
-  for (let along = startAlong; along <= endAlong; along += DIST_BETWEEN_TREES, k++) {
-    const color = treeColor(scheme, k);   // alternates along the segment
-    const pine = color === GREEN;         // green trees are conifers; accent trees are round
-    const height = pine ? TREE_HEIGHT / 2 : TREE_HEIGHT;
-    trees.push({ side: 'left', along, offset: TREE_ROAD_OFFSET, color, height, pine });
-    trees.push({ side: 'right', along, offset: TREE_ROAD_OFFSET, color, height, pine });
-  }
-  return trees;
-}
-function treeColor(scheme: Scheme, k: number): string {
-  if (scheme === 'ALL_GREEN') return GREEN;
-  const accent = scheme === 'YELLOW_GREEN' ? YELLOW : RED;
-  return k % 2 === 0 ? GREEN : accent;
 }
 
 // ----------------------------------------------------------------------------

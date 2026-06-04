@@ -134,7 +134,7 @@ function main(): void {
     if (states[i].segment === 'seg3' && states[i - 1].segment === 'seg3'
         && states[i].v < states[i - 1].v - 1e-9) { decelAlong = states[i - 1].along; break; }
   }
-  const treesBeforeDecel = seg3.trees.filter((t) => t.side === 'left' && t.along <= decelAlong).length;
+  const treesBeforeDecel = seg3.trees.filter((t) => t.across < 0 && t.along <= decelAlong).length;
 
   console.log('PASS');
   console.log(`  segments          : ${world.order.length}`);
