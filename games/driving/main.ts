@@ -7,7 +7,7 @@
 // =============================================================================
 import { buildWorld, initialState, advanceCar } from './model.ts';
 import type { CarState } from './model.ts';
-import { buildScene, TREE_H } from './view.ts';
+import { buildScene } from './view.ts';
 import type { CarPt, Quad, TreeView } from './view.ts';
 
 const canvas = document.getElementById('c') as HTMLCanvasElement;
@@ -79,7 +79,7 @@ function drawTree(t: TreeView): void {
   const at = t.at;
   if (at.forward <= NEAR) return;
   const base = project({ right: at.right, forward: at.forward, height: 0 });
-  const top = project({ right: at.right, forward: at.forward, height: TREE_H });
+  const top = project({ right: at.right, forward: at.forward, height: t.height });
   const ht = base.y - top.y;
   const trunkW = Math.max(1, ht * 0.10);
   ctx.fillStyle = '#5a3e22';

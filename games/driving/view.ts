@@ -10,11 +10,10 @@
 import type { World, CarState, RoadSegment } from './model.ts';
 
 const ROAD = '#34353c';
-export const TREE_H = 5;
 
 export interface CarPt { right: number; forward: number }   // car frame, ground plane
 export interface Quad { pts: CarPt[]; color: string }
-export interface TreeView { at: CarPt; color: string }       // color = the segment's foliage
+export interface TreeView { at: CarPt; color: string; height: number }
 export interface Scene { quads: Quad[]; trees: TreeView[] }
 
 // the car's pose in its own segment's frame
@@ -47,7 +46,7 @@ function treeAcross(side: 'left' | 'right', hw: number, offset: number): number 
 }
 
 // how many segments to look ahead (current + this many beyond the next corner)
-const LOOK_AHEAD = 3;
+const LOOK_AHEAD = 4;
 
 export function buildScene(state: CarState, world: World): Scene {
   const c: Pose = { along: state.along, across: state.across, angle: state.angle };
@@ -82,7 +81,7 @@ export function buildScene(state: CarState, world: World): Scene {
     if (d === 0 && seg.entryR > 0) quads.push(squareAt(at, 0, hw));        // the corner we came through
     if (seg.exit) quads.push(squareAt(at, seg.length, hw));                // each corner ahead
     for (const t of seg.trees) {
-      trees.push({ at: at(t.along, treeAcross(t.side, hw, t.offset)), color: t.color });
+      trees.push({ at: at(t.along, treeAcross(t.side, hw, t.offset)), color: t.color, height: t.height });
     }
   }
 

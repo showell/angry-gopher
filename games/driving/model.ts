@@ -39,9 +39,10 @@ const omegaFor = (theta: number): number => DPHI * theta / QUARTER;  // turn rat
 export type SegId = string;
 export type TurnDir = 'left' | 'right';
 export type Scheme = 'ALL_GREEN' | 'YELLOW_GREEN' | 'RED_GREEN';
-export interface TreeLocal { side: 'left' | 'right'; along: number; offset: number; color: string }
+export interface TreeLocal { side: 'left' | 'right'; along: number; offset: number; color: string; height: number }
 
 const GREEN = '#2f7a30', YELLOW = '#cf9a18', RED = '#b23a2a';
+const TREE_H = 5;   // base tree height (metres); green trees are half this
 
 export interface RoadSegment {
   id: SegId;
@@ -136,8 +137,9 @@ function treeRow(length: number, scheme: Scheme): TreeLocal[] {
   let k = 0;
   for (let along = 4; along <= length - 4; along += 6, k++) {
     const color = treeColor(scheme, k);   // alternates along the segment
-    trees.push({ side: 'left', along, offset: 1.5, color });
-    trees.push({ side: 'right', along, offset: 1.5, color });
+    const height = color === GREEN ? TREE_H / 2 : TREE_H;
+    trees.push({ side: 'left', along, offset: 1.5, color, height });
+    trees.push({ side: 'right', along, offset: 1.5, color, height });
   }
   return trees;
 }
