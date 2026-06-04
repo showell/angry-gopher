@@ -8,7 +8,7 @@
 import { buildWorld, initialState, advanceCar, carHeading } from './model.ts';
 import type { CarState } from './model.ts';
 import { buildScene } from './view.ts';
-import { horizonHeight } from './horizon.ts';
+import { groundBase, northRange, wnwRange, SUN_BEARING, SNOWLINE } from './horizon.ts';
 import type { CarPt, Quad, TreeView, CritterView } from './view.ts';
 
 const canvas = document.getElementById('c') as HTMLCanvasElement;
@@ -124,21 +124,56 @@ function drawCritter(cr: CritterView): void {
   ctx.restore();
 }
 
-// The mountain range to the north, at infinity: each screen column is a viewing
-// ray at some absolute bearing (car heading + its angle off-centre); we sample
-// the horizon silhouette there and fill it up from the horizon line.
-const MTN = '#5b6a8f';   // hazy distant blue
-function drawHorizon(heading: number): void {
-  ctx.fillStyle = MTN;
+// ---- the horizon, at infinity (orientation only) ----
+// Each screen column is a viewing ray at some absolute bearing (car heading +
+// its angle off-centre). A "silhouette" fills the band between a height f(bearing)
+// above the horizon and some bottom line.
+const ROCK = '#5b6a8f';        // northern range
+const ROCK_WNW = '#39435f';    // WNW range, darker — backlit by the sunset
+const SNOW = '#eef3f8';
+const LAND = '#4a8f43';        // foreground rolling land (matches the grass)
+
+function wrapAngle(a: number): number {
+  while (a > Math.PI) a -= 2 * Math.PI;
+  while (a < -Math.PI) a += 2 * Math.PI;
+  return a;
+}
+function bearingAt(x: number, heading: number): number {
+  return heading + Math.atan((x - W / 2) / FOCAL);
+}
+function silhouette(heading: number, f: (b: number) => number, bottomY: number): void {
   ctx.beginPath();
-  ctx.moveTo(0, H / 2);
-  for (let x = 0; x <= W; x += 2) {
-    const bearing = heading + Math.atan((x - W / 2) / FOCAL);
-    ctx.lineTo(x, H / 2 - horizonHeight(bearing));
-  }
-  ctx.lineTo(W, H / 2);
+  ctx.moveTo(0, bottomY);
+  for (let x = 0; x <= W; x += 2) ctx.lineTo(x, H / 2 - f(bearingAt(x, heading)));
+  ctx.lineTo(W, bottomY);
   ctx.closePath();
   ctx.fill();
+}
+
+function drawHorizon(heading: number): void {
+  // the setting sun + its glow, clipped to the sky, behind the ranges
+  const rel = wrapAngle(SUN_BEARING - heading);
+  if (Math.abs(rel) < 1.4) {
+    const sx = W / 2 + Math.tan(rel) * FOCAL, sy = H / 2 - 6;
+    ctx.save();
+    ctx.beginPath(); ctx.rect(0, 0, W, H / 2); ctx.clip();   // sky only — the ground occludes the rest
+    const glow = ctx.createRadialGradient(sx, sy, 8, sx, sy, 340);
+    glow.addColorStop(0, 'rgba(255,201,128,0.85)');
+    glow.addColorStop(0.4, 'rgba(255,150,92,0.32)');
+    glow.addColorStop(1, 'rgba(255,150,92,0)');
+    ctx.fillStyle = glow; ctx.fillRect(0, 0, W, H / 2);
+    const sun = ctx.createRadialGradient(sx, sy, 4, sx, sy, 46);
+    sun.addColorStop(0, '#ffe6a3'); sun.addColorStop(1, '#ff9d5c');
+    ctx.fillStyle = sun;
+    ctx.beginPath(); ctx.arc(sx, sy, 46, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  }
+
+  ctx.fillStyle = ROCK_WNW; silhouette(heading, wnwRange, H / 2);                    // WNW range, over the sun
+  ctx.fillStyle = ROCK; silhouette(heading, northRange, H / 2);                      // northern range
+  ctx.fillStyle = SNOW;                                                              // snowcaps above the snowline
+  silhouette(heading, (b) => Math.max(northRange(b), SNOWLINE), H / 2 - SNOWLINE);
+  ctx.fillStyle = LAND; silhouette(heading, groundBase, H / 2);                      // rolling land, in front
 }
 
 function drawHud(s: CarState): void {
