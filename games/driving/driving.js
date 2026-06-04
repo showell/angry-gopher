@@ -58,7 +58,7 @@
     { name: 'parking space',   type: 'lot',  width: 1, dir: 'E', right: 'cars',           left: 'cars',           behind: 'building', m: 4.5, stall: true },
     { name: 'parking lot',     type: 'lot',  width: 3, dir: 'N', right: 'cars/buildings', left: 'cars/buildings', behind: 'fire',     m: 45 },
     { name: 'Autumn Pines Rd', type: 'road', width: 2, dir: 'E', right: 'buildings',      left: 'trees',          behind: 'fire',     miles: 0.25 },
-    { name: 'Murrell Rd',      type: 'road', width: 4, dir: 'N', right: 'sky',            left: 'sky',            behind: 'fire',     miles: 3, lines: true },
+    { name: 'Murrell Rd',      type: 'road', width: 4, dir: 'N', right: 'sky',            left: 'sky',            behind: 'fire',     m: 800, lines: true },
     { name: 'Levitt Pkwy',     type: 'road', width: 2, dir: 'W', right: 'houses',         left: 'trees',          behind: 'building', miles: 1 },
   ];
 
