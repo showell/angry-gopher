@@ -82,6 +82,13 @@ function main(): void {
     s = n;
   }
 
+  // 0) the model's per-segment northHeading matches an independent accumulation
+  for (const id of world.order) {
+    if (Math.abs(world.segments[id].northHeading - headings[id]) > 1e-9) {
+      throw new Error(`northHeading mismatch on ${id}: ${world.segments[id].northHeading} vs ${headings[id]}`);
+    }
+  }
+
   // 1) invariants on every state
   for (const st of states) assertInvariants(st, world);
 

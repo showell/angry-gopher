@@ -69,6 +69,7 @@ export interface RoadSegment {
   entryR: number;       // radius of the turn that feeds this segment
   entryTan: number;     // where this segment's straight begins (past its start)
   arcStart: number;     // length - exitTan
+  northHeading: number; // heading relative to north (seg1 = 0), radians — the one absolute orientation we keep
 }
 
 export interface World {
@@ -94,6 +95,14 @@ export function initialState(world: World): CarState {
   return { segment: world.start, along: 0, across: 0, angle: 0, v: V_BASE, turn: null };
 }
 
+// The car's heading relative to north (north = seg1's forward direction). This
+// is the one ABSOLUTE orientation we expose: far scenery (the horizon) is drawn
+// purely from it, because a mountain at infinity depends on which way the car
+// faces, not where it is. Continuous across handoffs (segment base + angle).
+export function carHeading(state: CarState, world: World): number {
+  return world.segments[state.segment].northHeading + state.angle;
+}
+
 const signOf = (d: TurnDir): number => (d === 'right' ? 1 : -1);
 
 export function buildWorld(): World {
@@ -116,6 +125,7 @@ export function buildWorld(): World {
       exitTan: tan,
       entryR: 0, entryTan: 0,
       arcStart: length - tan,
+      northHeading: 0,
     };
   };
   const turn = (to: SegId, dir: TurnDir, deg: number): RoadSegment['exit'] =>
@@ -143,6 +153,7 @@ export function buildWorld(): World {
       const next = segments[s.exit.to];
       next.entryR = s.exit.radius;
       next.entryTan = s.exitTan;
+      next.northHeading = s.northHeading + s.exitSign * s.exitAngle;   // accumulate orientation along the route
     }
   }
   // Trees, now that each end's tangent is known. A turn intrudes `tan` into the

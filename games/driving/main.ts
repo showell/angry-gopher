@@ -5,9 +5,10 @@
 //   ArrowUp   : advanceCar -> push a new CarState, redraw
 //   ArrowDown : pop a CarState, redraw
 // =============================================================================
-import { buildWorld, initialState, advanceCar } from './model.ts';
+import { buildWorld, initialState, advanceCar, carHeading } from './model.ts';
 import type { CarState } from './model.ts';
 import { buildScene } from './view.ts';
+import { horizonHeight } from './horizon.ts';
 import type { CarPt, Quad, TreeView, CritterView } from './view.ts';
 
 const canvas = document.getElementById('c') as HTMLCanvasElement;
@@ -123,6 +124,23 @@ function drawCritter(cr: CritterView): void {
   ctx.restore();
 }
 
+// The mountain range to the north, at infinity: each screen column is a viewing
+// ray at some absolute bearing (car heading + its angle off-centre); we sample
+// the horizon silhouette there and fill it up from the horizon line.
+const MTN = '#5b6a8f';   // hazy distant blue
+function drawHorizon(heading: number): void {
+  ctx.fillStyle = MTN;
+  ctx.beginPath();
+  ctx.moveTo(0, H / 2);
+  for (let x = 0; x <= W; x += 2) {
+    const bearing = heading + Math.atan((x - W / 2) / FOCAL);
+    ctx.lineTo(x, H / 2 - horizonHeight(bearing));
+  }
+  ctx.lineTo(W, H / 2);
+  ctx.closePath();
+  ctx.fill();
+}
+
 function drawHud(s: CarState): void {
   ctx.fillStyle = 'rgba(0,0,0,0.5)';
   ctx.fillRect(12, 12, 300, 30);
@@ -142,6 +160,8 @@ function render(): void {
   ctx.fillRect(0, 0, W, H / 2);
   ctx.fillStyle = '#4a8f43';
   ctx.fillRect(0, H / 2, W, H / 2);
+
+  drawHorizon(carHeading(s, world));   // mountains on the northern horizon, by orientation only
 
   for (const q of scene.quads) drawQuad(q);
 
