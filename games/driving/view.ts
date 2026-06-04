@@ -86,11 +86,7 @@ export function buildScene(state: CarState, world: World): Scene {
       trees.push({ at: at(t.along, treeAcross(t.side, hw, t.offset)), color: t.color, height: t.height });
     }
     for (const cr of seg.critters) {
-      // left-side critters face right (toward the road); right-side face left.
-      critters.push({
-        at: at(cr.along, treeAcross(cr.side, hw, cr.offset)),
-        emoji: cr.emoji, height: cr.height, faceRight: cr.side === 'left',
-      });
+      critters.push({ at: at(cr.along, cr.across), emoji: cr.emoji, height: cr.height, faceRight: cr.faceRight });
     }
   }
 
