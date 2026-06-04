@@ -193,28 +193,32 @@ function treeColor(scheme: Scheme, k: number): string {
   return k % 2 === 0 ? GREEN : accent;
 }
 
-// Four cows on the left, four pigs on the right, clustered halfway down the
-// segment and set further back than the trees. (Full-body emoji.)
+// Four cows near the START of the segment (left) and four pigs near the END
+// (right), set further back than the trees — spread apart so you actually pass
+// them on the long, fast roads instead of blowing by a mid-road cluster.
+const CRITTER_IN = 60;   // ~10 trees (6m apart) from the near end of the segment
 function critterRow(length: number, hw: number): CritterLocal[] {
   const out: CritterLocal[] = [];
-  const mid = length / 2;
   const edge = hw + 10;   // further out than the trees (offset 1.5)
   for (const d of [-6, -2, 2, 6]) {
-    out.push({ along: mid + d, across: -edge, emoji: '🐄', height: 1.4, faceRight: true });
-    out.push({ along: mid + d, across:  edge, emoji: '🐖', height: 1.1, faceRight: false });
+    out.push({ along: CRITTER_IN + d,          across: -edge, emoji: '🐄', height: 1.4, faceRight: true });
+    out.push({ along: length - CRITTER_IN + d, across:  edge, emoji: '🐖', height: 1.1, faceRight: false });
   }
   return out;
 }
 
-// Beyond the upcoming intersection: an adult elephant straight ahead, and its
-// BABY (cow-sized) just past it and a bit to the side OPPOSITE the upcoming
-// turn. Both ~twice as far out as the cows/pigs.
+// Beyond the upcoming intersection: an adult elephant and its BABY (cow-sized),
+// both to the side OPPOSITE the upcoming turn. The adult faces "left" (rear on
+// its right), so we put its REAR — not its middle — on the centreline by
+// shifting it half its width; otherwise the wide late-route (3x) body straddles
+// the road and overlaps the roadside trees.
 function elephantRow(length: number, exit: RoadSegment['exit'], scale: number): CritterLocal[] {
   if (!exit) return [];
   const corner = length + ELEPHANT_AHEAD;
+  const adultH = 2.8 * scale, babyH = 1.4 * scale, sign = signOf(exit.dir);
   return [
-    { along: corner,     across: 0,                         emoji: '🐘', height: 2.8 * scale, faceRight: false },
-    { along: corner + 6, across: -signOf(exit.dir) * 14,    emoji: '🐘', height: 1.4 * scale, faceRight: false },
+    { along: corner,     across: -sign * adultH / 2,  emoji: '🐘', height: adultH, faceRight: false },
+    { along: corner + 6, across: -sign * 14,          emoji: '🐘', height: babyH, faceRight: false },
   ];
 }
 
