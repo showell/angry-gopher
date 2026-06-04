@@ -104,6 +104,7 @@ export function carHeading(state: CarState, world: World): number {
 }
 
 const signOf = (d: TurnDir): number => (d === 'right' ? 1 : -1);
+const segNumber = (id: SegId): number => Number(id.slice(3));   // "seg12" -> 12
 
 export function buildWorld(): World {
   const LANE = 4;   // one-lane road ~ two car widths
@@ -117,7 +118,7 @@ export function buildWorld(): World {
       id, length, width: LANE, scheme,
       trees: [],   // filled below, once entry/exit tangents are known
       critters: critterRow(length, LANE / 2),
-      exitCritters: elephantRow(length, exit),
+      exitCritters: elephantRow(length, exit, segNumber(id) > 8 ? 3 : 1),   // late-route elephants are giant
       exit,
       exitR: exit ? exit.radius : 0,
       exitSign: exit ? signOf(exit.dir) : 0,
@@ -142,10 +143,15 @@ export function buildWorld(): World {
     seg7:  seg('seg7', 200, 'ALL_GREEN',    turn('seg8',  'right',  90)),
     seg8:  seg('seg8', 220, 'YELLOW_GREEN', turn('seg9',  'right',  60)),
     seg9:  seg('seg9', 200, 'RED_GREEN',    turn('seg10', 'left',  120)),
-    seg10: seg('seg10', 200, 'ALL_GREEN',   null),
+    seg10: seg('seg10', 200, 'ALL_GREEN',   turn('seg11', 'right',  15)),
+    seg11: seg('seg11', 200, 'YELLOW_GREEN', turn('seg12', 'right', 15)),
+    seg12: seg('seg12', 200, 'RED_GREEN',    turn('seg13', 'right', 15)),
+    seg13: seg('seg13', 200, 'ALL_GREEN',    turn('seg14', 'right', 15)),
+    seg14: seg('seg14', 400, 'YELLOW_GREEN', null),   // the long final straight: accelerate, never brake, then end
   };
   const order: SegId[] = [
     'seg1', 'seg2', 'seg3', 'seg4', 'seg5', 'seg6', 'seg7', 'seg8', 'seg9', 'seg10',
+    'seg11', 'seg12', 'seg13', 'seg14',
   ];
   for (const id of order) {
     const s = segments[id];
@@ -203,12 +209,12 @@ function critterRow(length: number, hw: number): CritterLocal[] {
 // Beyond the upcoming intersection: an adult elephant straight ahead, and its
 // BABY (cow-sized) just past it and a bit to the side OPPOSITE the upcoming
 // turn. Both ~twice as far out as the cows/pigs.
-function elephantRow(length: number, exit: RoadSegment['exit']): CritterLocal[] {
+function elephantRow(length: number, exit: RoadSegment['exit'], scale: number): CritterLocal[] {
   if (!exit) return [];
   const corner = length + ELEPHANT_AHEAD;
   return [
-    { along: corner,     across: 0,                         emoji: '🐘', height: 2.8, faceRight: false },
-    { along: corner + 6, across: -signOf(exit.dir) * 14,    emoji: '🐘', height: 1.4, faceRight: false },
+    { along: corner,     across: 0,                         emoji: '🐘', height: 2.8 * scale, faceRight: false },
+    { along: corner + 6, across: -signOf(exit.dir) * 14,    emoji: '🐘', height: 1.4 * scale, faceRight: false },
   ];
 }
 
@@ -223,8 +229,8 @@ export function advanceCar(state: CarState, world: World): CarState {
 }
 
 // Can the driver see the upcoming intersection yet? Yes once the adult elephant
-// beyond it is within SIGHT. The route's final segment has no intersection — its
-// end is always "in view" (the car simply coasts to a stop there).
+// beyond it is within SIGHT. (Only meaningful for a segment that HAS a turn; the
+// final segment never brakes and is handled directly in accel/cruise.)
 function sees(state: CarState, seg: RoadSegment): boolean {
   if (!seg.exit) return true;
   return seg.length + ELEPHANT_AHEAD - state.along <= SIGHT;
@@ -242,20 +248,21 @@ const turnSpeed = (seg: RoadSegment): number => seg.exitR * omegaFor(seg.exitAng
 //     self-consistent, so this reproduces the same a each press while correcting
 //     integration drift.
 function accel(state: CarState, seg: RoadSegment): number {
-  if (!sees(state, seg)) return A_ACCEL;
-  const turnPoint = seg.exit ? seg.arcStart : seg.length;
-  const vEnd = seg.exit ? turnSpeed(seg) : 0;
-  const d = turnPoint - state.along;
+  // The final segment (no turn) accelerates the whole way; so does any segment
+  // whose turn is still out of sight. Otherwise brake to turn speed.
+  if (!seg.exit || !sees(state, seg)) return A_ACCEL;
+  const d = seg.arcStart - state.along;
   if (d <= 1e-6) return 0;
+  const vEnd = turnSpeed(seg);
   return (vEnd * vEnd - state.v * state.v) / (2 * d);
 }
 
 function cruise(state: CarState, seg: RoadSegment, world: World): CarState {
   let v = Math.max(0, state.v + accel(state, seg));
 
-  if (!seg.exit) {   // route end: coast to a stop at the far end
+  if (!seg.exit) {   // the final segment: accelerate to the end, then the game is over
     const along = state.along + v;
-    if (along >= seg.length || v < 1e-2) return { ...state, along: seg.length, v: 0 };
+    if (along >= seg.length) return { ...state, along: seg.length, v: 0 };   // reached the end -> stop
     return { ...state, along, v };
   }
 
@@ -319,7 +326,7 @@ export function assertInvariants(s: CarState, world: World): void {
   const seg = world.segments[s.segment];
   assert(Number.isFinite(s.along) && Number.isFinite(s.across) && Number.isFinite(s.angle),
          `finite (${s.along},${s.across},${s.angle})`);
-  assert(Number.isFinite(s.v) && s.v >= -1e-9 && s.v <= 6, `v sane (${s.v})`);
+  assert(Number.isFinite(s.v) && s.v >= -1e-9 && s.v <= 8, `v sane (${s.v})`);
   assert(Math.abs(s.angle) <= QUARTER + 1e-6, `|angle| <= 90deg (${s.angle})`);
   assert(s.along >= -seg.entryR - 1e-6, `along not far before start (${s.along})`);
   assert(s.along <= seg.length + seg.exitR + 1e-6, `along not far past end (${s.along})`);

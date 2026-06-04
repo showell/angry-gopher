@@ -27,6 +27,12 @@ const world = buildWorld();
 const stack: CarState[] = [initialState(world)];
 const current = (): CarState => stack[stack.length - 1];
 
+// the game is over once we've driven to the end of the final (exit-less) segment
+const lastId = world.order[world.order.length - 1];
+function gameEnded(s: CarState): boolean {
+  return s.segment === lastId && !s.turn && s.along >= world.segments[lastId].length - 1e-6;
+}
+
 window.addEventListener('keydown', (e) => {
   if (e.code === 'ArrowUp') {
     const next = advanceCar(current(), world);
@@ -214,6 +220,16 @@ function render(): void {
   bills.filter((b) => b.forward > NEAR).sort((a, b) => b.forward - a.forward).forEach((b) => b.draw());
 
   drawHud(s);
+
+  if (gameEnded(s)) {
+    ctx.fillStyle = 'rgba(0,0,0,0.55)';
+    ctx.fillRect(0, H / 2 - 48, W, 96);
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 46px ui-monospace, monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('Game ended', W / 2, H / 2 + 16);
+    ctx.textAlign = 'left';
+  }
 }
 
 let lastFrame = 0;
