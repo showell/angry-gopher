@@ -55,15 +55,15 @@
   // A fire sits at a segment's back, so on the correct path it is always behind
   // you (off-screen); you only meet it by turning the wrong way into the back.
   var ROUTE = [
-    { name: 'parking space',   width: 1, dir: 'E', right: 'cars',           left: 'cars',           behind: 'building', m: 6 },
-    { name: 'parking lot',     width: 3, dir: 'N', right: 'cars/buildings', left: 'cars/buildings', behind: 'fire',     m: 48 },
-    { name: 'Autumn Pines Rd', width: 2, dir: 'E', right: 'buildings',      left: 'trees',          behind: 'fire',     miles: 0.25 },
-    { name: 'Murrell Rd',      width: 4, dir: 'N', right: 'sky',            left: 'sky',            behind: 'fire',     miles: 3, lines: true },
-    { name: 'Levitt Pkwy',     width: 2, dir: 'W', right: 'houses',         left: 'trees',          behind: 'building', miles: 1 },
+    { name: 'parking space',   type: 'lot',  width: 1, dir: 'E', right: 'cars',           left: 'cars',           behind: 'building', m: 6 },
+    { name: 'parking lot',     type: 'lot',  width: 3, dir: 'N', right: 'cars/buildings', left: 'cars/buildings', behind: 'fire',     m: 48 },
+    { name: 'Autumn Pines Rd', type: 'road', width: 2, dir: 'E', right: 'buildings',      left: 'trees',          behind: 'fire',     miles: 0.25 },
+    { name: 'Murrell Rd',      type: 'road', width: 4, dir: 'N', right: 'sky',            left: 'sky',            behind: 'fire',     miles: 3, lines: true },
+    { name: 'Levitt Pkwy',     type: 'road', width: 2, dir: 'W', right: 'houses',         left: 'trees',          behind: 'building', miles: 1 },
   ];
 
   var CARW = 2.6;   // meters of corridor per "car width"
-  var MILE = 300;   // compressed meters per mile (tunable; keeps the drive sane)
+  var MILE = 1600;  // meters per mile (real scale)
   var DIR = { E: [1, 0], N: [0, 1], W: [-1, 0], S: [0, -1] };
   var DIR_HEADING = { E: Math.PI / 2, N: 0, W: -Math.PI / 2, S: Math.PI };
   var CAR_COLORS = ['#9b2c2c', '#2e4d8a', '#7a6730', '#88307a', '#327832',
@@ -118,19 +118,61 @@
     }
   }
 
-  // line a corridor side (right/left of travel) with a row of scenery
-  function placeSide(type, side, ax, az, d, W, lenM, obs) {
-    if (!type || type === 'sky') return;
+  // ROAD side: a single row of one scenery kind along the edge.
+  function placeRoadSide(spec, side, ax, az, d, W, lenM, obs) {
+    if (!spec || spec === 'sky') return;
     var perp = (side === 'right') ? [d[1], -d[0]] : [-d[1], d[0]];
     var alongX = (d[0] !== 0);
-    var kinds = type.split('/');
-    var step = SCENERY_STEP[kinds[0]] || 6;
-    var k = 0;
-    for (var t = step * 0.5; t < lenM; t += step, k++) {
-      var kind = kinds[k % kinds.length];
-      var edge = W / 2 + (SCENERY_GAP[kind] || 2);
-      pushScenery(kind, ax + d[0] * t + perp[0] * edge,
+    var step = SCENERY_STEP[spec] || 6;
+    var edge = W / 2 + (SCENERY_GAP[spec] || 2);
+    for (var t = step * 0.5, k = 0; t < lenM; t += step, k++) {
+      pushScenery(spec, ax + d[0] * t + perp[0] * edge,
                         az + d[1] * t + perp[1] * edge, alongX, k, obs);
+    }
+  }
+
+  // a thin axis-aligned line/ground rect described in (along, perp) coords
+  function alongPerpRect(ax, az, d, perp, a0, a1, p0, p1, color) {
+    var xs = [ax + d[0] * a0 + perp[0] * p0, ax + d[0] * a0 + perp[0] * p1,
+              ax + d[0] * a1 + perp[0] * p0, ax + d[0] * a1 + perp[0] * p1];
+    var zs = [az + d[1] * a0 + perp[1] * p0, az + d[1] * a0 + perp[1] * p1,
+              az + d[1] * a1 + perp[1] * p0, az + d[1] * a1 + perp[1] * p1];
+    return { x1: Math.min.apply(null, xs), z1: Math.min.apply(null, zs),
+             x2: Math.max.apply(null, xs), z2: Math.max.apply(null, zs), color: color };
+  }
+
+  // LOT side: layers stacked outward from the lane edge. 'cars' is a packed row
+  // of perpendicular (nose-in) cars over painted stalls; then a sidewalk; then
+  // any further layer (buildings) set back. 'cars/buildings' = both.
+  function placeLotSide(spec, side, ax, az, d, W, lenM, obs, ground, lines) {
+    if (!spec || spec === 'sky') return;
+    var perp = (side === 'right') ? [d[1], -d[0]] : [-d[1], d[0]];
+    var alongX = (d[0] !== 0);
+    var off = W / 2;
+    var layers = spec.split('/');
+    for (var li = 0; li < layers.length; li++) {
+      var layer = layers[li];
+      if (layer === 'cars') {
+        var carOff = off + 2.4;  // nose-in: car center 2.4m past the lane edge
+        for (var t = 1.4, k = 0; t < lenM - 1; t += 2.5, k++) {
+          var c = CAR_COLORS[(k * 3) % CAR_COLORS.length];
+          // perpendicular to a N/S lane (carEW); for the E/W pull-out space
+          // this is the parallel neighbour row — also carEW.
+          obs.push(carEW(ax + d[0] * t + perp[0] * carOff,
+                         az + d[1] * t + perp[1] * carOff, c));
+          lines.push(alongPerpRect(ax, az, d, perp, t - 1.25, t - 1.25 + 0.08, off, off + 4.6, '#cfcfcf'));
+        }
+        off = carOff + 2.5;
+        ground.push(alongPerpRect(ax, az, d, perp, 0, lenM, off, off + 1.8, '#9c9c9c'));  // sidewalk
+        off += 1.8;
+      } else {  // buildings (set back behind the sidewalk)
+        var step = SCENERY_STEP[layer] || 14, edge = off + (SCENERY_GAP[layer] || 5.5);
+        for (var t2 = step * 0.5, k2 = 0; t2 < lenM; t2 += step, k2++) {
+          pushScenery(layer, ax + d[0] * t2 + perp[0] * edge,
+                             az + d[1] * t2 + perp[1] * edge, alongX, k2, obs);
+        }
+        off = edge + 6;
+      }
     }
   }
 
@@ -164,10 +206,15 @@
       var nextHW = (i < ROUTE.length - 1) ? ROUTE[i + 1].width * CARW / 2 : 0;
 
       ground.push(corridorRect(ax, az, bx, bz, d, W, prevHW, nextHW,
-                               (s.miles == null) ? '#3a3a40' : '#2c2c30'));
+                               (s.type === 'lot') ? '#3a3a40' : '#2c2c30'));
       if (s.lines) addLaneLines(ax, az, d, hw, lenM, lines);
-      placeSide(s.right, 'right', ax, az, d, W, lenM, obs);
-      placeSide(s.left,  'left',  ax, az, d, W, lenM, obs);
+      if (s.type === 'lot') {
+        placeLotSide(s.right, 'right', ax, az, d, W, lenM, obs, ground, lines);
+        placeLotSide(s.left,  'left',  ax, az, d, W, lenM, obs, ground, lines);
+      } else {
+        placeRoadSide(s.right, 'right', ax, az, d, W, lenM, obs);
+        placeRoadSide(s.left,  'left',  ax, az, d, W, lenM, obs);
+      }
 
       // back-end cap: placed so its near face clears the corridor start
       if (s.behind === 'fire') {
@@ -184,6 +231,15 @@
       if (i === ROUTE.length - 1) end = { x: bx, z: bz, dir: d };
       ax = bx; az = bz;
     }
+    // spawn guard: never let scenery (a car/tree) sit on the player's start —
+    // it would pin the car. Clear the player's own stall + a little ahead.
+    var clr = 2.0;
+    obs = obs.filter(function (o) {
+      if (o.kind === 'building' || o.kind === 'fire') return true;
+      var hw = o.w / 2 + clr, hd = o.d / 2 + clr;
+      return !(start.x > o.x - hw && start.x < o.x + hw &&
+               start.z > o.z - hd && start.z < o.z + hd);
+    });
     return { ground: ground, lines: lines, obstacles: obs, start: start, end: end };
   }
 
@@ -220,7 +276,7 @@
     // you drive away at whatever speed you held.
     if (keys.ArrowUp)   player.speed += mode.accel * dt;
     if (keys.ArrowDown) player.speed -= mode.brake * dt;
-    player.speed = clamp(player.speed, 0, mode.maxSpeed);
+    player.speed = Math.max(0, player.speed);  // no speed cap; only the brake slows you
 
     var steerInput = (keys.ArrowLeft ? -1 : 0) + (keys.ArrowRight ? 1 : 0);
     player.heading += steerInput * 0.8 * dt;  // rad/s; gentler = finer control
@@ -565,7 +621,7 @@
     ctx.fillStyle = '#2a2a30';
     ctx.fillRect(W - 188, 50, 168, 8);
     ctx.fillStyle = '#ff8030';
-    ctx.fillRect(W - 188, 50, 168 * (player.speed / mode.maxSpeed), 8);
+    ctx.fillRect(W - 188, 50, 168 * Math.min(1, player.speed / mode.maxSpeed), 8);
 
     // mode badge (top-left)
     ctx.fillStyle = 'rgba(0,0,0,0.55)';
