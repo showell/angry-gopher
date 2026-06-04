@@ -55,8 +55,8 @@
   // A fire sits at a segment's back, so on the correct path it is always behind
   // you (off-screen); you only meet it by turning the wrong way into the back.
   var ROUTE = [
-    { name: 'parking space',   type: 'lot',  width: 1, dir: 'E', right: 'cars',           left: 'cars',           behind: 'building', m: 4.5 },
-    { name: 'parking lot',     type: 'lot',  width: 3, dir: 'N', right: 'cars/buildings', left: 'cars/buildings', behind: 'fire',     m: 48 },
+    { name: 'parking space',   type: 'lot',  width: 1, dir: 'E', right: 'cars',           left: 'cars',           behind: 'building', m: 4.5, stall: true },
+    { name: 'parking lot',     type: 'lot',  width: 3, dir: 'N', right: 'cars/buildings', left: 'cars/buildings', behind: 'fire',     m: 90 },
     { name: 'Autumn Pines Rd', type: 'road', width: 2, dir: 'E', right: 'buildings',      left: 'trees',          behind: 'fire',     miles: 0.25 },
     { name: 'Murrell Rd',      type: 'road', width: 4, dir: 'N', right: 'sky',            left: 'sky',            behind: 'fire',     miles: 3, lines: true },
     { name: 'Levitt Pkwy',     type: 'road', width: 2, dir: 'W', right: 'houses',         left: 'trees',          behind: 'building', miles: 1 },
@@ -204,16 +204,17 @@
     var ax = 0, az = 0, start = null, end = null, colorN = 0, corridors = [];
     for (var i = 0; i < ROUTE.length; i++) {
       var s = ROUTE[i], d = DIR[s.dir];
-      var W = s.width * CARW, hw = W / 2;
+      var W = s.width * CARW, hw = W / 2, alongX = (d[0] !== 0);
       var lenM = (s.m != null) ? s.m : s.miles * MILE;
-      var bx = ax + d[0] * lenM, bz = az + d[1] * lenM;
+      var bx = ax + d[0] * lenM, bz = az + d[1] * lenM;  // forward (correct) end
       var prevHW = (i > 0) ? ROUTE[i - 1].width * CARW / 2 : 0;
       var nextHW = (i < ROUTE.length - 1) ? ROUTE[i + 1].width * CARW / 2 : 0;
-      // the lot lane reaches back past the pull-out, so pavement flanks you on
-      // both sides as you nose out of your space.
-      var apron = (s.type === 'lot' && s.width > 1) ? 12 : 0;
+      // The wrong-way branch is REAL pavement: every road rectangle reaches back
+      // past its junction by a stub. A fire dead-ends that stub (just enough road
+      // to turn around); a 'building' is a wall right behind you.
+      var stub = (s.behind === 'fire') ? 20 : Math.max(prevHW + 2, 3);
 
-      var corr = corridorRect(ax, az, bx, bz, d, W, prevHW + apron, nextHW,
+      var corr = corridorRect(ax, az, bx, bz, d, W, stub, nextHW,
                               (s.type === 'lot') ? '#3a3a40' : '#2c2c30');
       ground.push(corr);
       corridors.push(corr);
@@ -226,20 +227,26 @@
         placeRoadSide(s.left,  'left',  ax, az, d, W, lenM, obs);
       }
 
-      // back-end cap: placed so its near face clears the corridor start
+      // back-end cap sits ON the stub pavement (fire) or just past it (wall)
       if (s.behind === 'fire') {
-        var off = (apron ? apron + prevHW + 3 : prevHW + 14);  // just past the apron, or down the block
-        obs.push(fire(ax - d[0] * off, az - d[1] * off, Math.max(W, 6), 5, 6.5));
+        var fo = stub - 4;
+        var f = fire(ax - d[0] * fo, az - d[1] * fo, W, 5, 6.5);
+        f.cap = true; obs.push(f);
       } else if (s.behind === 'building') {
-        var bo = prevHW + 5.5, alongX = (d[0] !== 0);
-        obs.push(box('building', ax - d[0] * bo, az - d[1] * bo,
-                     alongX ? 8 : W + 4, 6.5, alongX ? W + 4 : 8,
-                     BUILD_COLORS[colorN++ % BUILD_COLORS.length], ROOFS[i % ROOFS.length]));
+        var bo = stub + 1.5;
+        var b = box('building', ax - d[0] * bo, az - d[1] * bo,
+                    alongX ? 5 : W + 2, 6.5, alongX ? W + 2 : 5,
+                    BUILD_COLORS[colorN++ % BUILD_COLORS.length], ROOFS[i % ROOFS.length]);
+        b.cap = true; obs.push(b);
       }
 
       if (i === 0) start = { x: ax, z: az, heading: DIR_HEADING[s.dir] };
       if (i === ROUTE.length - 1) end = { x: bx, z: bz, dir: d };
-      ax = bx; az = bz;
+      // A stall (the parking space) opens onto the NEXT lane's side: shift the
+      // lane's centreline out by its half-width so the stall meets its edge,
+      // not its middle. Normal roads chain centreline-to-centreline.
+      if (s.stall) { ax = bx + d[0] * nextHW; az = bz + d[1] * nextHW; }
+      else { ax = bx; az = bz; }
     }
     // pavement is sacrosanct: drop any scenery that penetrates a drivable
     // corridor (or its paved corner) by more than a hair. This kills the
@@ -247,6 +254,7 @@
     // lot lane at the intersection — while leaving edge-hugging trees/cars.
     var bite = 0.6;
     obs = obs.filter(function (o) {
+      if (o.kind === 'fire' || o.cap) return true;  // fires/caps belong at a road's end
       var ohw = o.w / 2, ohd = o.d / 2;
       for (var c = 0; c < corridors.length; c++) {
         var r = corridors[c];
