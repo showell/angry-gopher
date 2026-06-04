@@ -157,8 +157,8 @@ function critterRow(length: number): CritterLocal[] {
   const out: CritterLocal[] = [];
   const mid = length / 2;
   for (const d of [-6, -2, 2, 6]) {
-    out.push({ side: 'left',  along: mid + d, offset: 5, emoji: '🐄', height: 2.8 });
-    out.push({ side: 'right', along: mid + d, offset: 5, emoji: '🐖', height: 2.2 });
+    out.push({ side: 'left',  along: mid + d, offset: 10, emoji: '🐄', height: 1.4 });
+    out.push({ side: 'right', along: mid + d, offset: 10, emoji: '🐖', height: 1.1 });
   }
   return out;
 }
