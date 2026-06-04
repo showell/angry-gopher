@@ -165,15 +165,15 @@ function critterRow(length: number, hw: number): CritterLocal[] {
   return out;
 }
 
-// Two elephants just beyond the upcoming intersection — ~twice as far out as
-// the cows/pigs and twice the cow's size. One straight ahead (across 0), one
-// offset to the side OPPOSITE the upcoming turn.
+// Beyond the upcoming intersection: an adult elephant straight ahead, and its
+// BABY (cow-sized) just past it and a bit to the side OPPOSITE the upcoming
+// turn. Both ~twice as far out as the cows/pigs.
 function elephantRow(length: number, exit: RoadSegment['exit']): CritterLocal[] {
   if (!exit) return [];
-  const beyond = length + 20;
+  const corner = length + 20;
   return [
-    { along: beyond, across: 0, emoji: '🐘', height: 2.8, faceRight: false },
-    { along: beyond, across: -signOf(exit.dir) * 20, emoji: '🐘', height: 2.8, faceRight: false },
+    { along: corner,     across: 0,                         emoji: '🐘', height: 2.8, faceRight: false },
+    { along: corner + 6, across: -signOf(exit.dir) * 14,    emoji: '🐘', height: 1.4, faceRight: false },
   ];
 }
 
