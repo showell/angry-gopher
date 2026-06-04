@@ -35,13 +35,10 @@ function nextToCur(aB: number, xB: number, L: number, sgn: number, theta: number
   return { a: L + aB * cos - xB * sgn * sin, x: aB * sgn * sin + xB * cos };
 }
 
-function strip(a0: number, a1: number, hw: number, c: Pose): Quad {
-  return { pts: [toCar(a0, -hw, c), toCar(a0, hw, c), toCar(a1, hw, c), toCar(a1, -hw, c)], color: ROAD };
-}
-function square(aCenter: number, hw: number, c: Pose): Quad {
+// a square intersection quad, drawn with a per-segment local->car mapper
+function squareAt(at: (a: number, x: number) => CarPt, center: number, hw: number): Quad {
   return {
-    pts: [toCar(aCenter - hw, -hw, c), toCar(aCenter + hw, -hw, c),
-          toCar(aCenter + hw, hw, c), toCar(aCenter - hw, hw, c)],
+    pts: [at(center - hw, -hw), at(center + hw, -hw), at(center + hw, hw), at(center - hw, hw)],
     color: ROAD,
   };
 }
@@ -49,35 +46,44 @@ function treeAcross(side: 'left' | 'right', hw: number, offset: number): number 
   return (side === 'right' ? 1 : -1) * (hw + offset);
 }
 
+// how many segments to look ahead (current + this many beyond the next corner)
+const LOOK_AHEAD = 3;
+
 export function buildScene(state: CarState, world: World): Scene {
-  const cur = world.segments[state.segment];
   const c: Pose = { along: state.along, across: state.across, angle: state.angle };
-  const hw = cur.width / 2;
   const quads: Quad[] = [];
   const trees: TreeView[] = [];
 
-  // current segment: road strip + (any) intersection squares
-  quads.push(strip(0, cur.length, hw, c));
-  if (cur.entryR > 0) quads.push(square(0, hw, c));            // the corner we came through
-  if (cur.exit) quads.push(square(cur.length, hw, c));          // the corner ahead
-
-  // next segment through the intersection
-  if (cur.exit) {
-    const nxt: RoadSegment = world.segments[cur.exit.to];
-    const L = cur.length, sgn = cur.exitSign, nhw = nxt.width / 2, theta = cur.exitAngle;
-    const m = (aB: number, xB: number): CarPt => {
-      const p = nextToCur(aB, xB, L, sgn, theta);
-      return toCar(p.a, p.x, c);
-    };
-    quads.push({ pts: [m(0, -nhw), m(0, nhw), m(nxt.length, nhw), m(nxt.length, -nhw)], color: ROAD });
-    for (const t of nxt.trees) {
-      trees.push({ at: m(t.along, treeAcross(t.side, nhw, t.offset)), color: t.color });
-    }
+  // the car's current segment and up to (LOOK_AHEAD-1) segments beyond it
+  const chain: RoadSegment[] = [];
+  for (let s: RoadSegment | undefined = world.segments[state.segment];
+       s && chain.length < LOOK_AHEAD;
+       s = s.exit ? world.segments[s.exit.to] : undefined) {
+    chain.push(s);
   }
 
-  // current segment trees
-  for (const t of cur.trees) {
-    trees.push({ at: toCar(t.along, treeAcross(t.side, hw, t.offset), c), color: t.color });
+  for (let d = 0; d < chain.length; d++) {
+    const seg = chain[d];
+    const hw = seg.width / 2;
+    // map a point in seg's frame to the car's frame, composing the exit turns
+    // of every segment between it and the car (innermost first). For d = 0 this
+    // is just toCar; for each step deeper it adds one more nextToCur.
+    const at = (a: number, x: number): CarPt => {
+      let pa = a, px = x;
+      for (let k = d - 1; k >= 0; k--) {
+        const prev = chain[k];   // prev -> chain[k+1] is prev's exit turn
+        const p = nextToCur(pa, px, prev.length, prev.exitSign, prev.exitAngle);
+        pa = p.a; px = p.x;
+      }
+      return toCar(pa, px, c);
+    };
+
+    quads.push({ pts: [at(0, -hw), at(0, hw), at(seg.length, hw), at(seg.length, -hw)], color: ROAD });
+    if (d === 0 && seg.entryR > 0) quads.push(squareAt(at, 0, hw));        // the corner we came through
+    if (seg.exit) quads.push(squareAt(at, seg.length, hw));                // each corner ahead
+    for (const t of seg.trees) {
+      trees.push({ at: at(t.along, treeAcross(t.side, hw, t.offset)), color: t.color });
+    }
   }
 
   return { quads, trees };
