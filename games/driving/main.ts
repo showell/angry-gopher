@@ -8,7 +8,7 @@
 import { buildWorld, initialState, advanceCar, carHeading } from './model.ts';
 import type { CarState } from './model.ts';
 import { buildScene } from './view.ts';
-import { groundBase, northRange, wnwRange, SUN_BEARING, SNOWLINE } from './horizon.ts';
+import { groundBase, northRange, westRange, SUN_BEARING, SNOWLINE } from './horizon.ts';
 import type { CarPt, Quad, TreeView, CritterView } from './view.ts';
 
 const canvas = document.getElementById('c') as HTMLCanvasElement;
@@ -129,7 +129,7 @@ function drawCritter(cr: CritterView): void {
 // its angle off-centre). A "silhouette" fills the band between a height f(bearing)
 // above the horizon and some bottom line.
 const ROCK = '#5b6a8f';        // northern range
-const ROCK_WNW = '#39435f';    // WNW range, darker — backlit by the sunset
+const ROCK_WEST = '#39435f';   // westward range, darker — backlit by the sunset
 const SNOW = '#eef3f8';
 const LAND = '#4a8f43';        // foreground rolling land (matches the grass)
 
@@ -154,7 +154,7 @@ function drawHorizon(heading: number): void {
   // the setting sun + its glow, clipped to the sky, behind the ranges
   const rel = wrapAngle(SUN_BEARING - heading);
   if (Math.abs(rel) < 1.4) {
-    const sx = W / 2 + Math.tan(rel) * FOCAL, sy = H / 2 - 6;
+    const sx = W / 2 + Math.tan(rel) * FOCAL, sy = H / 2 - 50;   // up over the range crest, setting behind it
     ctx.save();
     ctx.beginPath(); ctx.rect(0, 0, W, H / 2); ctx.clip();   // sky only — the ground occludes the rest
     const glow = ctx.createRadialGradient(sx, sy, 8, sx, sy, 340);
@@ -169,7 +169,7 @@ function drawHorizon(heading: number): void {
     ctx.restore();
   }
 
-  ctx.fillStyle = ROCK_WNW; silhouette(heading, wnwRange, H / 2);                    // WNW range, over the sun
+  ctx.fillStyle = ROCK_WEST; silhouette(heading, westRange, H / 2);                  // westward range, over the sun
   ctx.fillStyle = ROCK; silhouette(heading, northRange, H / 2);                      // northern range
   ctx.fillStyle = SNOW;                                                              // snowcaps above the snowline
   silhouette(heading, (b) => Math.max(northRange(b), SNOWLINE), H / 2 - SNOWLINE);

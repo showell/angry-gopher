@@ -6,7 +6,7 @@
 //
 //   groundBase  — a gentle roll present at EVERY bearing (the sloped horizon)
 //   northRange  — a tall range centred on north (drawn snowcapped)
-//   wnwRange    — a second range to the WNW, with the sun setting behind it
+//   westRange   — a second range to the west, with the sun setting over it
 // =============================================================================
 
 function wrap(a: number): number {
@@ -15,8 +15,12 @@ function wrap(a: number): number {
   return a;
 }
 
-export const SUN_BEARING = -1.18;   // WNW (~ -68deg): west-north-west, to the left of north
-export const SNOWLINE = 95;         // px above the horizon; the north range is snowcapped above this
+// seg7 faces ~ -120deg (WSW), so centring the westward range there puts it
+// straight ahead on seg7. The sun sits a little further south & left (more
+// negative bearing), setting over the range's crest.
+export const WEST_RANGE_BEARING = -2.094;   // -120deg = seg7's heading
+export const SUN_BEARING = -2.27;           // ~ -130deg: a touch south & left of straight-ahead
+export const SNOWLINE = 95;                 // px above the horizon; the north range is snowcapped above this
 
 // One mountain range: a smooth envelope (tallest at its centre, tapering to open
 // sky at its edges) times a fixed rugged ridge line.
@@ -36,4 +40,4 @@ export function groundBase(bearing: number): number {
 }
 
 export const northRange = (bearing: number): number => range(bearing, 0, 0.95, 150, 8, 21);
-export const wnwRange = (bearing: number): number => range(bearing, SUN_BEARING, 0.72, 120, 11, 27);
+export const westRange = (bearing: number): number => range(bearing, WEST_RANGE_BEARING, 0.72, 120, 11, 27);
