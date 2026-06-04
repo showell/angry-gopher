@@ -201,7 +201,7 @@
   function buildRoute() {
     var ground = [{ x1: -600, z1: -120, x2: 320, z2: 1700, color: '#2f7a30' }];
     var lines = [], obs = [];
-    var ax = 0, az = 0, start = null, end = null, colorN = 0;
+    var ax = 0, az = 0, start = null, end = null, colorN = 0, corridors = [];
     for (var i = 0; i < ROUTE.length; i++) {
       var s = ROUTE[i], d = DIR[s.dir];
       var W = s.width * CARW, hw = W / 2;
@@ -213,8 +213,10 @@
       // both sides as you nose out of your space.
       var apron = (s.type === 'lot' && s.width > 1) ? 12 : 0;
 
-      ground.push(corridorRect(ax, az, bx, bz, d, W, prevHW + apron, nextHW,
-                               (s.type === 'lot') ? '#3a3a40' : '#2c2c30'));
+      var corr = corridorRect(ax, az, bx, bz, d, W, prevHW + apron, nextHW,
+                              (s.type === 'lot') ? '#3a3a40' : '#2c2c30');
+      ground.push(corr);
+      corridors.push(corr);
       if (s.lines) addLaneLines(ax, az, d, hw, lenM, lines);
       if (s.type === 'lot') {
         placeLotSide(s.right, 'right', ax, az, d, W, lenM, obs, ground, lines);
@@ -239,6 +241,20 @@
       if (i === ROUTE.length - 1) end = { x: bx, z: bz, dir: d };
       ax = bx; az = bz;
     }
+    // pavement is sacrosanct: drop any scenery that penetrates a drivable
+    // corridor (or its paved corner) by more than a hair. This kills the
+    // cross-corridor case — e.g. a wide Autumn Pines building poking into the
+    // lot lane at the intersection — while leaving edge-hugging trees/cars.
+    var bite = 0.6;
+    obs = obs.filter(function (o) {
+      var ohw = o.w / 2, ohd = o.d / 2;
+      for (var c = 0; c < corridors.length; c++) {
+        var r = corridors[c];
+        if (o.x + ohw > r.x1 + bite && o.x - ohw < r.x2 - bite &&
+            o.z + ohd > r.z1 + bite && o.z - ohd < r.z2 - bite) return false;
+      }
+      return true;
+    });
     // spawn guard: never let scenery (a car/tree) sit on the player's start —
     // it would pin the car. Clear the player's own stall + a little ahead.
     var clr = 1.0;  // just over the collision pad — removes pins, keeps neighbours
