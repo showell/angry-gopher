@@ -35,6 +35,14 @@ function nextToCur(aB: number, xB: number, L: number, sgn: number, theta: number
   return { a: L + aB * cos - xB * sgn * sin, x: aB * sgn * sin + xB * cos };
 }
 
+// the inverse: a point in the CURRENT segment's frame -> the NEXT segment's
+// frame (the A->B handoff). Used to render an intersection's decorations from
+// the downstream side.
+function curToNext(a: number, x: number, L: number, sgn: number, theta: number): { a: number; x: number } {
+  const dA = a - L, cosB = Math.cos(theta), sinB = sgn * Math.sin(theta);
+  return { a: dA * cosB + x * sinB, x: -dA * sinB + x * cosB };
+}
+
 // a square intersection quad, drawn with a per-segment local->car mapper
 function squareAt(at: (a: number, x: number) => CarPt, center: number, hw: number): Quad {
   return {
@@ -87,6 +95,23 @@ export function buildScene(state: CarState, world: World): Scene {
     }
     for (const cr of seg.critters) {
       critters.push({ at: at(cr.along, cr.across), emoji: cr.emoji, height: cr.height, faceRight: cr.faceRight });
+    }
+    // exit intersection decorations, rendered from the APPROACHING side
+    for (const cr of seg.exitCritters) {
+      critters.push({ at: at(cr.along, cr.across), emoji: cr.emoji, height: cr.height, faceRight: cr.faceRight });
+    }
+  }
+
+  // The intersection just behind us belongs to BOTH segments. Render the
+  // current segment's ENTRY decorations — the previous segment's exit props,
+  // mapped through the handoff into the current frame — so a corner prop stays
+  // continuous across the A->B handoff instead of popping out of the chain.
+  const idx = world.order.indexOf(state.segment);
+  if (idx > 0) {
+    const prev = world.segments[world.order[idx - 1]];
+    for (const cr of prev.exitCritters) {
+      const p = curToNext(cr.along, cr.across, prev.length, prev.exitSign, prev.exitAngle);
+      critters.push({ at: toCar(p.a, p.x, c), emoji: cr.emoji, height: cr.height, faceRight: cr.faceRight });
     }
   }
 

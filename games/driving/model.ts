@@ -50,7 +50,8 @@ export interface RoadSegment {
   length: number;
   width: number;
   trees: TreeLocal[];
-  critters: CritterLocal[];
+  critters: CritterLocal[];      // roadside, along the segment (cows/pigs)
+  exitCritters: CritterLocal[];  // at the exit intersection (elephants); shared with the next segment
   exit: { dir: TurnDir; to: SegId; radius: number; angle: number } | null;
   // derived relational scalars (filled by buildWorld)
   exitR: number;        // exit turn radius (0 if none)
@@ -96,7 +97,9 @@ export function buildWorld(): World {
     const tan = exit ? exit.radius * Math.tan(exit.angle / 2) : 0;
     return {
       id, length, width: LANE, trees: treeRow(length, scheme),
-      critters: [...critterRow(length, LANE / 2), ...elephantRow(length, exit)], exit,
+      critters: critterRow(length, LANE / 2),
+      exitCritters: elephantRow(length, exit),
+      exit,
       exitR: exit ? exit.radius : 0,
       exitSign: exit ? signOf(exit.dir) : 0,
       exitAngle: exit ? exit.angle : 0,
