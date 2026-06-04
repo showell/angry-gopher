@@ -14,7 +14,8 @@ const ROAD = '#34353c';
 export interface CarPt { right: number; forward: number }   // car frame, ground plane
 export interface Quad { pts: CarPt[]; color: string }
 export interface TreeView { at: CarPt; color: string; height: number }
-export interface Scene { quads: Quad[]; trees: TreeView[] }
+export interface CritterView { at: CarPt; emoji: string; height: number; faceRight: boolean }
+export interface Scene { quads: Quad[]; trees: TreeView[]; critters: CritterView[] }
 
 // the car's pose in its own segment's frame
 interface Pose { along: number; across: number; angle: number }
@@ -52,6 +53,7 @@ export function buildScene(state: CarState, world: World): Scene {
   const c: Pose = { along: state.along, across: state.across, angle: state.angle };
   const quads: Quad[] = [];
   const trees: TreeView[] = [];
+  const critters: CritterView[] = [];
 
   // the car's current segment and up to (LOOK_AHEAD-1) segments beyond it
   const chain: RoadSegment[] = [];
@@ -83,7 +85,14 @@ export function buildScene(state: CarState, world: World): Scene {
     for (const t of seg.trees) {
       trees.push({ at: at(t.along, treeAcross(t.side, hw, t.offset)), color: t.color, height: t.height });
     }
+    for (const cr of seg.critters) {
+      // left-side critters face right (toward the road); right-side face left.
+      critters.push({
+        at: at(cr.along, treeAcross(cr.side, hw, cr.offset)),
+        emoji: cr.emoji, height: cr.height, faceRight: cr.side === 'left',
+      });
+    }
   }
 
-  return { quads, trees };
+  return { quads, trees, critters };
 }

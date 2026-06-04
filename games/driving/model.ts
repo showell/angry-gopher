@@ -40,6 +40,7 @@ export type SegId = string;
 export type TurnDir = 'left' | 'right';
 export type Scheme = 'ALL_GREEN' | 'YELLOW_GREEN' | 'RED_GREEN';
 export interface TreeLocal { side: 'left' | 'right'; along: number; offset: number; color: string; height: number }
+export interface CritterLocal { side: 'left' | 'right'; along: number; offset: number; emoji: string; height: number }
 
 const GREEN = '#2f7a30', YELLOW = '#cf9a18', RED = '#b23a2a';
 const TREE_H = 5;   // base tree height (metres); green trees are half this
@@ -49,6 +50,7 @@ export interface RoadSegment {
   length: number;
   width: number;
   trees: TreeLocal[];
+  critters: CritterLocal[];
   exit: { dir: TurnDir; to: SegId; radius: number; angle: number } | null;
   // derived relational scalars (filled by buildWorld)
   exitR: number;        // exit turn radius (0 if none)
@@ -93,7 +95,7 @@ export function buildWorld(): World {
                exit: RoadSegment['exit']): RoadSegment => {
     const tan = exit ? exit.radius * Math.tan(exit.angle / 2) : 0;
     return {
-      id, length, width: LANE, trees: treeRow(length, scheme), exit,
+      id, length, width: LANE, trees: treeRow(length, scheme), critters: critterRow(length), exit,
       exitR: exit ? exit.radius : 0,
       exitSign: exit ? signOf(exit.dir) : 0,
       exitAngle: exit ? exit.angle : 0,
@@ -147,6 +149,18 @@ function treeColor(scheme: Scheme, k: number): string {
   if (scheme === 'ALL_GREEN') return GREEN;
   const accent = scheme === 'YELLOW_GREEN' ? YELLOW : RED;
   return k % 2 === 0 ? GREEN : accent;
+}
+
+// Four cows on the left, four pigs on the right, clustered halfway down the
+// segment and set further back than the trees. (Full-body emoji.)
+function critterRow(length: number): CritterLocal[] {
+  const out: CritterLocal[] = [];
+  const mid = length / 2;
+  for (const d of [-6, -2, 2, 6]) {
+    out.push({ side: 'left',  along: mid + d, offset: 5, emoji: '🐄', height: 2.8 });
+    out.push({ side: 'right', along: mid + d, offset: 5, emoji: '🐖', height: 2.2 });
+  }
+  return out;
 }
 
 // ----------------------------------------------------------------------------

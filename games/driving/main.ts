@@ -8,7 +8,7 @@
 import { buildWorld, initialState, advanceCar } from './model.ts';
 import type { CarState } from './model.ts';
 import { buildScene } from './view.ts';
-import type { CarPt, Quad, TreeView } from './view.ts';
+import type { CarPt, Quad, TreeView, CritterView } from './view.ts';
 
 const canvas = document.getElementById('c') as HTMLCanvasElement;
 const ctx = canvas.getContext('2d') as CanvasRenderingContext2D;
@@ -90,6 +90,24 @@ function drawTree(t: TreeView): void {
   ctx.fill();
 }
 
+// a full-body emoji billboard, sized by distance, flipped to face the road
+function drawCritter(cr: CritterView): void {
+  const at = cr.at;
+  if (at.forward <= NEAR) return;
+  const base = project({ right: at.right, forward: at.forward, height: 0 });
+  const top = project({ right: at.right, forward: at.forward, height: cr.height });
+  const px = base.y - top.y;
+  if (px < 5) return;
+  ctx.save();
+  ctx.translate(base.x, base.y);
+  if (cr.faceRight) ctx.scale(-1, 1);   // most animal emoji face left by default
+  ctx.font = `${px}px serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'bottom';
+  ctx.fillText(cr.emoji, 0, 0);
+  ctx.restore();
+}
+
 function drawHud(s: CarState): void {
   ctx.fillStyle = 'rgba(0,0,0,0.5)';
   ctx.fillRect(12, 12, 300, 30);
@@ -112,8 +130,12 @@ function render(): void {
 
   for (const q of scene.quads) drawQuad(q);
 
-  const vis = scene.trees.filter((t) => t.at.forward > NEAR).sort((a, b) => b.at.forward - a.at.forward);
-  for (const t of vis) drawTree(t);
+  // trees + critters are billboards; draw them back-to-front together so a
+  // nearer one correctly occludes a farther one.
+  const bills: Array<{ forward: number; draw: () => void }> = [];
+  for (const t of scene.trees) bills.push({ forward: t.at.forward, draw: () => drawTree(t) });
+  for (const cr of scene.critters) bills.push({ forward: cr.at.forward, draw: () => drawCritter(cr) });
+  bills.filter((b) => b.forward > NEAR).sort((a, b) => b.forward - a.forward).forEach((b) => b.draw());
 
   drawHud(s);
 }
