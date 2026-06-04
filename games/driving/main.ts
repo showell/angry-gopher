@@ -176,14 +176,20 @@ function drawHorizon(heading: number): void {
   ctx.fillStyle = LAND; silhouette(heading, groundBase, H / 2);                      // rolling land, in front
 }
 
+// frame-rate / render-time, smoothed — lets us tell "car going slow" (low speed
+// but fps pinned at 60) from "code going slow" (fps drops / render ms climbs).
+let fps = 0, renderMs = 0;
+
 function drawHud(s: CarState): void {
   ctx.fillStyle = 'rgba(0,0,0,0.5)';
-  ctx.fillRect(12, 12, 300, 30);
-  ctx.fillStyle = '#fff';
+  ctx.fillRect(12, 12, 360, 50);
   ctx.font = 'bold 13px ui-monospace, monospace';
   ctx.textAlign = 'left';
   const where = s.turn ? `${s.segment} (turning ${s.turn.phase})` : `${s.segment} @ ${s.along.toFixed(1)}m`;
-  ctx.fillText(`${where}   ·   step ${stack.length - 1}`, 22, 32);
+  ctx.fillStyle = '#fff';
+  ctx.fillText(`${where}   ·   step ${stack.length - 1}`, 22, 31);
+  ctx.fillStyle = '#9fe6a0';
+  ctx.fillText(`speed ${s.v.toFixed(2)} m/press   ·   ${fps.toFixed(0)} fps   ·   ${renderMs.toFixed(1)} ms`, 22, 50);
 }
 
 function render(): void {
@@ -210,8 +216,13 @@ function render(): void {
   drawHud(s);
 }
 
-function loop(): void {
+let lastFrame = 0;
+function loop(t: number): void {
+  if (lastFrame) fps += ((1000 / Math.max(1, t - lastFrame)) - fps) * 0.1;   // smoothed fps from frame dt
+  lastFrame = t;
+  const t0 = performance.now();
   render();
+  renderMs += ((performance.now() - t0) - renderMs) * 0.1;                    // smoothed render cost
   requestAnimationFrame(loop);
 }
 requestAnimationFrame(loop);
