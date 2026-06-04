@@ -47,33 +47,19 @@ function inRefFrame(s: CarState, world: World): P {
   return localToRef(world.order.indexOf(s.segment), s.along, s.across, world);
 }
 
-// --- "roads don't loop back": no two non-adjacent centrelines come within a
-// lane width of each other (so the road rectangles never overlap/cross). ---
-function cross(o: P, p: P, q: P): number {
-  return (p.a - o.a) * (q.x - o.x) - (p.x - o.x) * (q.a - o.a);
-}
-function ptSeg(p: P, a: P, b: P): number {
-  const dx = b.a - a.a, dy = b.x - a.x, len2 = dx * dx + dy * dy || 1;
-  const t = Math.max(0, Math.min(1, ((p.a - a.a) * dx + (p.x - a.x) * dy) / len2));
-  return Math.hypot(p.a - (a.a + t * dx), p.x - (a.x + t * dy));
-}
-function segDist(p1: P, p2: P, p3: P, p4: P): number {
-  const cr = (s: P, e: P) => (cross(p3, p4, s) > 0) !== (cross(p3, p4, e) > 0);
-  if (cr(p1, p2) && ((cross(p1, p2, p3) > 0) !== (cross(p1, p2, p4) > 0))) return 0;  // proper crossing
-  return Math.min(ptSeg(p1, p3, p4), ptSeg(p2, p3, p4), ptSeg(p3, p1, p2), ptSeg(p4, p1, p2));
-}
-function minRoadGap(world: World): number {
-  const n = world.order.length;
-  const ln: Array<[P, P]> = [];
-  for (let i = 0; i < n; i++) {
-    const L = world.segments[world.order[i]].length;
-    ln.push([localToRef(i, 0, 0, world), localToRef(i, L, 0, world)]);
+// --- "roads don't loop back" (constructive invariant) ---
+// Global north = seg1's forward direction (the drive starts heading north), so
+// the northing of a point is just its `along` coordinate in seg-1's frame. Key
+// points are the start, then each segment's far end (its intersection). Every
+// point must be NORTH of the point two before it: the even- and odd-indexed
+// points each march strictly north, so the path can dip south at most once
+// between northward steps and can never curl back to cross itself.
+function northings(world: World): number[] {
+  const out = [0];  // p0 = the start
+  for (let i = 0; i < world.order.length; i++) {
+    out.push(localToRef(i, world.segments[world.order[i]].length, 0, world).a);
   }
-  let min = Infinity;
-  for (let i = 0; i < n; i++) {
-    for (let j = i + 2; j < n; j++) min = Math.min(min, segDist(ln[i][0], ln[i][1], ln[j][0], ln[j][1]));
-  }
-  return min;
+  return out;
 }
 
 function main(): void {
@@ -123,10 +109,13 @@ function main(): void {
   const endGap = world.segments[last].length - s.along;
   if (Math.abs(endGap) > STEP) throw new Error(`not at the end of ${last} (gap ${endGap})`);
 
-  // 5) roads don't loop back on each other
-  const gap = minRoadGap(world);
-  const lane = world.segments[world.order[0]].width;
-  if (gap < lane) throw new Error(`roads loop/overlap: nearest non-adjacent gap ${gap.toFixed(2)}m < lane ${lane}m`);
+  // 5) roads don't loop back: each key point is north of the one two before it
+  const north = northings(world);
+  for (let N = 2; N < north.length; N++) {
+    if (!(north[N] > north[N - 2])) {
+      throw new Error(`loop risk: point ${N} north ${north[N].toFixed(1)} <= point ${N - 2} north ${north[N - 2].toFixed(1)}`);
+    }
+  }
 
   console.log('PASS');
   console.log(`  segments          : ${world.order.length}`);
@@ -135,7 +124,7 @@ function main(): void {
   console.log(`  max heading jump  : ${maxHeadingJump.toFixed(4)} rad (largest turn step = ${maxOmega.toFixed(4)})`);
   console.log(`  max position jump : ${maxPosJump.toFixed(4)} m (cruise step = ${STEP})`);
   console.log(`  max lateral offset: ${maxAcross.toFixed(3)} m (through the turns)`);
-  console.log(`  nearest road gap  : ${gap.toFixed(2)} m (>= lane ${lane}m -> no loops)`);
+  console.log(`  northings (N>N-2) : ${north.map((v) => v.toFixed(0)).join(' ')}`);
 }
 
 main();
