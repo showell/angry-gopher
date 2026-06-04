@@ -172,7 +172,7 @@
     player.speed = clamp(player.speed, 0, mode.maxSpeed);
 
     var steerInput = (keys.ArrowLeft ? -1 : 0) + (keys.ArrowRight ? 1 : 0);
-    player.heading += steerInput * 1.4 * dt;
+    player.heading += steerInput * 0.8 * dt;  // rad/s; gentler = finer control
 
     var dx = Math.sin(player.heading) * player.speed * dt;
     var dz = Math.cos(player.heading) * player.speed * dt;
