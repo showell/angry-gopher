@@ -10,8 +10,10 @@
 import { buildWorld, initialRiderState, getNextRiderState, riderHeading } from './model.ts';
 import type { RiderState } from './model.ts';
 import { buildScene } from './view.ts';
-import { groundBase, northRange, westRange, SUN_BEARING, SNOWLINE } from './horizon.ts';
-import type { RiderPt, Quad, TreeView, CritterView } from './view.ts';
+import type { RiderPt, Quad, TreeView } from './view.ts';
+import { drawHorizon } from './horizon.ts';
+import { drawCritter } from './critter.ts';
+import type { Project } from './critter.ts';
 
 const canvas = document.getElementById('c') as HTMLCanvasElement;
 const ctx = canvas.getContext('2d') as CanvasRenderingContext2D;
@@ -55,6 +57,8 @@ interface V3 { right: number; forward: number; height: number }
 function project(p: V3): { x: number; y: number } {
   return { x: W / 2 + (p.right / p.forward) * FOCAL, y: H / 2 - ((p.height - EYE_H) / p.forward) * FOCAL };
 }
+// project a ground-plane point at a height — the form critter.ts wants
+const screenOf: Project = (right, forward, height) => project({ right, forward, height });
 function clipNear(verts: V3[]): V3[] {
   const out: V3[] = [];
   for (let i = 0; i < verts.length; i++) {
@@ -122,91 +126,6 @@ function drawTree(t: TreeView): void {
   ctx.fill();
 }
 
-// Emoji are expensive to rasterize every frame, so render each one ONCE to an
-// offscreen sprite and reuse it. drawImage is far cheaper than fillText.
-const spriteCache = new Map<string, HTMLCanvasElement>();
-function emojiSprite(emoji: string): HTMLCanvasElement {
-  const cached = spriteCache.get(emoji);
-  if (cached) return cached;
-  const S = 96;
-  const c = document.createElement('canvas');
-  c.width = S; c.height = S;
-  const g = c.getContext('2d') as CanvasRenderingContext2D;
-  g.font = `${Math.round(S * 0.8)}px serif`;
-  g.textAlign = 'center';
-  g.textBaseline = 'middle';
-  g.fillText(emoji, S / 2, S / 2 + S * 0.06);
-  spriteCache.set(emoji, c);
-  return c;
-}
-
-// a full-body emoji billboard, sized by distance, flipped to face the road
-function drawCritter(cr: CritterView): void {
-  const at = cr.at;
-  if (at.forward <= NEAR) return;
-  const base = project({ right: at.right, forward: at.forward, height: 0 });
-  const top = project({ right: at.right, forward: at.forward, height: cr.height });
-  const h = base.y - top.y;
-  if (h < 5) return;
-  ctx.save();
-  ctx.translate(base.x, base.y);
-  if (cr.faceRight) ctx.scale(-1, 1);   // most animal emoji face left by default
-  ctx.drawImage(emojiSprite(cr.emoji), -h / 2, -h, h, h);   // square, bottom on the ground
-  ctx.restore();
-}
-
-// ---- the horizon, at infinity (orientation only) ----
-// Each screen column is a viewing ray at some absolute bearing (Rider heading +
-// its angle off-centre). A "silhouette" fills the band between a height f(bearing)
-// above the horizon and some bottom line.
-const ROCK = '#5b6a8f';        // northern range
-const ROCK_WEST = '#39435f';   // westward range, darker — backlit by the sunset
-const SNOW = '#eef3f8';
-const LAND = '#4a8f43';        // foreground rolling land (matches the grass)
-
-function wrapAngle(a: number): number {
-  while (a > Math.PI) a -= 2 * Math.PI;
-  while (a < -Math.PI) a += 2 * Math.PI;
-  return a;
-}
-function bearingAt(x: number, heading: number): number {
-  return heading + Math.atan((x - W / 2) / FOCAL);
-}
-function silhouette(heading: number, f: (b: number) => number, bottomY: number): void {
-  ctx.beginPath();
-  ctx.moveTo(0, bottomY);
-  for (let x = 0; x <= W; x += 2) ctx.lineTo(x, H / 2 - f(bearingAt(x, heading)));
-  ctx.lineTo(W, bottomY);
-  ctx.closePath();
-  ctx.fill();
-}
-
-function drawHorizon(heading: number): void {
-  // the setting sun + its glow, clipped to the sky, behind the ranges
-  const rel = wrapAngle(SUN_BEARING - heading);
-  if (Math.abs(rel) < 1.4) {
-    const sx = W / 2 + Math.tan(rel) * FOCAL, sy = H / 2 - 50;   // up over the range crest, setting behind it
-    ctx.save();
-    ctx.beginPath(); ctx.rect(0, 0, W, H / 2); ctx.clip();   // sky only — the ground occludes the rest
-    const glow = ctx.createRadialGradient(sx, sy, 8, sx, sy, 340);
-    glow.addColorStop(0, 'rgba(255,201,128,0.85)');
-    glow.addColorStop(0.4, 'rgba(255,150,92,0.32)');
-    glow.addColorStop(1, 'rgba(255,150,92,0)');
-    ctx.fillStyle = glow; ctx.fillRect(0, 0, W, H / 2);
-    const sun = ctx.createRadialGradient(sx, sy, 4, sx, sy, 46);
-    sun.addColorStop(0, '#ffe6a3'); sun.addColorStop(1, '#ff9d5c');
-    ctx.fillStyle = sun;
-    ctx.beginPath(); ctx.arc(sx, sy, 46, 0, Math.PI * 2); ctx.fill();
-    ctx.restore();
-  }
-
-  ctx.fillStyle = ROCK_WEST; silhouette(heading, westRange, H / 2);                  // westward range, over the sun
-  ctx.fillStyle = ROCK; silhouette(heading, northRange, H / 2);                      // northern range
-  ctx.fillStyle = SNOW;                                                              // snowcaps above the snowline
-  silhouette(heading, (b) => Math.max(northRange(b), SNOWLINE), H / 2 - SNOWLINE);
-  ctx.fillStyle = LAND; silhouette(heading, groundBase, H / 2);                      // rolling land, in front
-}
-
 // frame-rate / render-time, smoothed — lets us tell "Rider going slow" (low speed
 // but fps pinned at 60) from "code going slow" (fps drops / render ms climbs).
 let fps = 0, renderMs = 0;
@@ -233,7 +152,7 @@ function render(rider: RiderState): void {
   ctx.fillStyle = '#4a8f43';
   ctx.fillRect(0, H / 2, W, H / 2);
 
-  drawHorizon(riderHeading(rider, world));   // mountains on the northern horizon, by orientation only
+  drawHorizon(ctx, riderHeading(rider, world), W, H, FOCAL);   // mountains + sun, by orientation only
 
   for (const q of scene.quads) drawQuad(q);
 
@@ -241,7 +160,7 @@ function render(rider: RiderState): void {
   // nearer one correctly occludes a farther one.
   const bills: Array<{ forward: number; draw: () => void }> = [];
   for (const t of scene.trees) bills.push({ forward: t.at.forward, draw: () => drawTree(t) });
-  for (const cr of scene.critters) bills.push({ forward: cr.at.forward, draw: () => drawCritter(cr) });
+  for (const cr of scene.critters) bills.push({ forward: cr.at.forward, draw: () => drawCritter(ctx, cr, screenOf) });
   bills.filter((b) => b.forward > NEAR).sort((a, b) => b.forward - a.forward).forEach((b) => b.draw());
 
   drawHud(rider);

@@ -31,10 +31,13 @@
 // by THETA about the shared corner. Continuous; the Rider never jumps.
 // =============================================================================
 
+import { segmentCritters, intersectionCritters } from './critter.ts';
+import type { Critter } from './critter.ts';
+
 // ============================================================================
-// DIMENSIONS — every value here is in METRES (a size or a distance), gathered so
-// the whole world can be read and tuned in one place. (Motion constants — speed,
-// acceleration, spin — are per-press, not metres, and follow further down.)
+// DIMENSIONS — distances & sizes for the road and trees, in METRES, gathered so
+// they can be read and tuned in one place. (Animal sizes/placement live in
+// critter.ts; motion constants — speed, accel, spin — are per-press, below.)
 // ============================================================================
 
 // road
@@ -51,32 +54,6 @@ const TREE_INTERSECTION_CLEARANCE = 6;   // no trees within this of an intersect
 const SIGHT_DIST = 180;                  // the Rider first sees the next intersection from this far back
 const APPROACH_INTERSECTION_DIST = 20;   // the adult elephant marks the intersection, this far past a segment's end
 
-// animal heights
-const COW_HEIGHT = 1.4;
-const CALF_HEIGHT = COW_HEIGHT / 2;
-const BULL_HEIGHT = COW_HEIGHT * 1.15;          // a touch bigger than a cow
-const PIG_HEIGHT = 1.1;
-const ELEPHANT_HEIGHT = 2.8;                    // adult; x GIANT_ELEPHANT_SCALE late in the route
-const BABY_ELEPHANT_HEIGHT = ELEPHANT_HEIGHT / 2;
-
-// where the animals stand
-const HERD_ROAD_OFFSET = 10;             // cows graze this far beyond the lane edge
-const BULL_DIST = 24;                    // the bull stands here (~the 4th tree); the herd is just behind
-const BULL_TREE_GAP = 0.5;               // the bull's rear sits this far back from the tree line
-const HERD_GAP_BEHIND_BULL = 6;          // the rest of the herd starts this far behind the bull
-const HERD_COL_SPACING = 6;              // along-spacing of the herd scatter
-const HERD_ROW_STAGGER = 2;              // along-stagger between herd rows
-const HERD_ROW_DEPTH = 5;                // across-spacing (depth) of the herd scatter
-const HERD_JITTER_ALONG = 1.5;           // deterministic wobble of the scatter, along
-const HERD_JITTER_ACROSS = 1.2;          // deterministic wobble of the scatter, across
-const PIG_DIST_BEFORE_END = 60;          // pigs gather this far before the next intersection
-const BABY_ELEPHANT_AHEAD = 6;           // the baby elephant sits this far ahead of the adult
-const BABY_ELEPHANT_SIDE_OFFSET = 14;    // ...and this far to the side (opposite the turn)
-
-// late-route giants
-const GIANT_ELEPHANT_SCALE = 3;          // elephants this many times bigger...
-const GIANT_ELEPHANT_FROM_SEG = 8;       // ...on segments numbered above this
-
 // ---- motion (per-press, not metres) ----
 export const DPHI = 0.10;     // heading turned per press in a 90deg turn (rad); sets turn speed AND spin rate
 export const V_BASE = 1.2;    // the Rider's speed at the very start of the drive (m/press)
@@ -92,7 +69,6 @@ export type SegId = string;
 export type TurnDir = 'left' | 'right';
 export type Scheme = 'ALL_GREEN' | 'YELLOW_GREEN' | 'RED_GREEN';
 export interface TreeLocal { side: 'left' | 'right'; along: number; offset: number; color: string; height: number; pine: boolean }
-export interface CritterLocal { along: number; across: number; emoji: string; height: number; faceRight: boolean }
 
 const GREEN = '#2f7a30', YELLOW = '#cf9a18', RED = '#b23a2a';
 
@@ -102,8 +78,8 @@ export interface RoadSegment {
   width: number;
   scheme: Scheme;                // visual theme; drives the tree colours
   trees: TreeLocal[];
-  critters: CritterLocal[];      // roadside, along the segment (cows/pigs)
-  exitCritters: CritterLocal[];  // at the exit intersection (elephants); shared with the next segment
+  critters: Critter[];      // roadside, along the segment (cows/pigs)
+  exitCritters: Critter[];  // at the exit intersection (elephants); shared with the next segment
   exit: { dir: TurnDir; to: SegId; radius: number; angle: number } | null;
   // derived relational scalars (filled by buildWorld)
   exitR: number;        // exit turn radius (0 if none)
@@ -165,8 +141,8 @@ export function buildWorld(): World {
     return {
       id, length, width: LANE_WIDTH, scheme,
       trees: [],   // filled below, once entry/exit tangents are known
-      critters: critterRow(length, LANE_WIDTH / 2),
-      exitCritters: elephantRow(length, exit, segNumber(id) > GIANT_ELEPHANT_FROM_SEG ? GIANT_ELEPHANT_SCALE : 1),
+      critters: segmentCritters(length, LANE_WIDTH / 2, TREE_ROAD_OFFSET),
+      exitCritters: exit ? intersectionCritters(length + APPROACH_INTERSECTION_DIST, signOf(exit.dir), segNumber(id)) : [],
       exit,
       exitR: exit ? exit.radius : 0,
       exitSign: exit ? signOf(exit.dir) : 0,
@@ -238,58 +214,6 @@ function treeColor(scheme: Scheme, k: number): string {
   if (scheme === 'ALL_GREEN') return GREEN;
   const accent = scheme === 'YELLOW_GREEN' ? YELLOW : RED;
   return k % 2 === 0 ? GREEN : accent;
-}
-
-// A cow herd EARLY in the segment (left) and pigs near the END (right), set
-// further back than the trees — spread apart so you actually pass them on the
-// long, fast roads instead of blowing by a mid-road cluster.
-function critterRow(length: number, hw: number): CritterLocal[] {
-  return [...cowHerd(hw), ...pigRow(length, hw + 10)];
-}
-
-// 15 cows early in the segment: a BULL at the front (lowest along — seen first
-// as you leave the corner), bigger than the rest and facing the opposite way,
-// then 10 full-size cows + 4 half-size calves just behind it in a loose cluster
-// (a staggered grid with deterministic jitter — no randomness).
-function cowHerd(hw: number): CritterLocal[] {
-  const out: CritterLocal[] = [];
-  const edge = hw + HERD_ROAD_OFFSET;     // the cows graze well off the road
-  const treeX = hw + TREE_ROAD_OFFSET;    // the roadside tree line (left side = -treeX)
-  // The bull waits by the 4th tree, facing away from the road, its rear (its
-  // road-side edge, since it faces left) set back a bit from the tree line.
-  out.push({ along: BULL_DIST, across: -(treeX + BULL_HEIGHT / 2 + BULL_TREE_GAP), emoji: '🐂', height: BULL_HEIGHT, faceRight: false });
-  for (let i = 0; i < 14; i++) {
-    const col = Math.floor(i / 3), row = i % 3;
-    const along = BULL_DIST + HERD_GAP_BEHIND_BULL + col * HERD_COL_SPACING + (row - 1) * HERD_ROW_STAGGER + HERD_JITTER_ALONG * Math.sin(i * 2.7);
-    const across = -(edge + row * HERD_ROW_DEPTH + HERD_JITTER_ACROSS * Math.cos(i * 1.9));
-    const calf = i % 4 === 1;   // i = 1,5,9,13 -> 4 calves at half size
-    out.push({ along, across, emoji: '🐄', height: calf ? CALF_HEIGHT : COW_HEIGHT, faceRight: true });
-  }
-  return out;
-}
-
-// Four pigs near the end of the segment, on the right.
-function pigRow(length: number, edge: number): CritterLocal[] {
-  const out: CritterLocal[] = [];
-  for (const d of [-6, -2, 2, 6]) {
-    out.push({ along: length - PIG_DIST_BEFORE_END + d, across: edge, emoji: '🐖', height: PIG_HEIGHT, faceRight: false });
-  }
-  return out;
-}
-
-// Beyond the upcoming intersection: an adult elephant and its BABY (cow-sized),
-// both to the side OPPOSITE the upcoming turn. The adult faces "left" (rear on
-// its right), so we put its REAR — not its middle — on the centreline by
-// shifting it half its width; otherwise the wide late-route (3x) body straddles
-// the road and overlaps the roadside trees.
-function elephantRow(length: number, exit: RoadSegment['exit'], scale: number): CritterLocal[] {
-  if (!exit) return [];
-  const corner = length + APPROACH_INTERSECTION_DIST;
-  const adultH = ELEPHANT_HEIGHT * scale, babyH = BABY_ELEPHANT_HEIGHT * scale, sign = signOf(exit.dir);
-  return [
-    { along: corner,                       across: -sign * adultH / 2,                emoji: '🐘', height: adultH, faceRight: false },
-    { along: corner + BABY_ELEPHANT_AHEAD, across: -sign * BABY_ELEPHANT_SIDE_OFFSET, emoji: '🐘', height: babyH, faceRight: false },
-  ];
 }
 
 // ----------------------------------------------------------------------------

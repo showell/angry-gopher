@@ -8,13 +8,13 @@
 // intersection. Nothing behind us.
 // =============================================================================
 import type { World, RiderState, RoadSegment } from './model.ts';
+import type { CritterView } from './critter.ts';
 
 const ROAD = '#34353c';
 
 export interface RiderPt { right: number; forward: number }   // Rider frame, ground plane
 export interface Quad { pts: RiderPt[]; color: string }
 export interface TreeView { at: RiderPt; color: string; height: number; pine: boolean }
-export interface CritterView { at: RiderPt; emoji: string; height: number; faceRight: boolean }
 export interface Scene { quads: Quad[]; trees: TreeView[]; critters: CritterView[] }
 
 // the Rider's pose in its own segment's frame
