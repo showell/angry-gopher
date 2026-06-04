@@ -145,10 +145,12 @@
   var endZ = 360;  // drive this far north on the larger road -> end of map
   var gameOver = false;
   var gameOverReason = '';
+  var paused = false;
 
   // ---- input ----
   var keys = {};
   window.addEventListener('keydown', function (e) {
+    if (e.code === 'Space') { paused = !paused; e.preventDefault(); return; }
     keys[e.code] = true;
     if (e.code === 'ArrowUp' || e.code === 'ArrowDown' ||
         e.code === 'ArrowLeft' || e.code === 'ArrowRight') e.preventDefault();
@@ -159,7 +161,7 @@
 
   // ---- update ----
   function update(dt) {
-    if (gameOver) return;
+    if (gameOver || paused) return;
 
     // Super-simple physics: input is the *only* thing that changes
     // speed/heading. Collision blocks position only — it never touches
@@ -540,6 +542,19 @@
     ctx.textAlign = 'left';
   }
 
+  function drawPaused() {
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
+    ctx.fillRect(0, 0, W, H);
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 42px ui-monospace, monospace';
+    ctx.fillText('PAUSED', W / 2, H / 2 - 8);
+    ctx.font = '16px ui-monospace, monospace';
+    ctx.fillStyle = '#bbb';
+    ctx.fillText('Press space to resume.', W / 2, H / 2 + 24);
+    ctx.textAlign = 'left';
+  }
+
   function render(time) {
     drawSky();
     for (var i = 0; i < world.ground.length; i++) drawGroundQuad(world.ground[i]);
@@ -550,6 +565,7 @@
     drawDashboard();
     drawHud();
     if (gameOver) drawGameOver();
+    else if (paused) drawPaused();
   }
 
   // ---- main loop ----
