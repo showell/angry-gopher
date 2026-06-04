@@ -1,15 +1,17 @@
 // =============================================================================
-// main — canvas. Projects the car-relative scene (from view.ts) to the screen
-// and draws it; drives the forward/back stack of CarStates.
+// main — canvas. The frame loop is: take the current RiderState, build the
+// Rider-relative scene (view.ts), and draw it. The Rider is advanced EXPLICITLY
+// by getNextRiderState (model.ts) before drawing — that next RiderState is what
+// gets passed into the rendering code.
 //
-//   ArrowUp   : advanceCar -> push a new CarState, redraw
-//   ArrowDown : pop a CarState, redraw
+//   ArrowUp   : getNextRiderState -> push the next RiderState onto the history
+//   ArrowDown : pop back to the previous RiderState
 // =============================================================================
-import { buildWorld, initialState, advanceCar, carHeading } from './model.ts';
-import type { CarState } from './model.ts';
+import { buildWorld, initialRiderState, getNextRiderState, riderHeading } from './model.ts';
+import type { RiderState } from './model.ts';
 import { buildScene } from './view.ts';
 import { groundBase, northRange, westRange, SUN_BEARING, SNOWLINE } from './horizon.ts';
-import type { CarPt, Quad, TreeView, CritterView } from './view.ts';
+import type { RiderPt, Quad, TreeView, CritterView } from './view.ts';
 
 const canvas = document.getElementById('c') as HTMLCanvasElement;
 const ctx = canvas.getContext('2d') as CanvasRenderingContext2D;
@@ -22,30 +24,33 @@ const FOCAL = (W / 2) / Math.tan((FOV / 2) * Math.PI / 180);
 const NEAR = 0.4;
 const EYE_H = 1.2;
 
-// ---- the world + the state stack ----
+// ---- the world + the Rider's history (a forward/back stack of RiderStates) ----
 const world = buildWorld();
-const stack: CarState[] = [initialState(world)];
-const current = (): CarState => stack[stack.length - 1];
+const riderHistory: RiderState[] = [initialRiderState(world)];
+const currentRider = (): RiderState => riderHistory[riderHistory.length - 1];
 
-// the game is over once we've driven to the end of the final (exit-less) segment
+// the game is over once the Rider has reached the end of the final (exit-less) segment
 const lastId = world.order[world.order.length - 1];
-function gameEnded(s: CarState): boolean {
-  return s.segment === lastId && !s.turn && s.along >= world.segments[lastId].length - 1e-6;
+function gameEnded(rider: RiderState): boolean {
+  return rider.segment === lastId && !rider.turn && rider.along >= world.segments[lastId].length - 1e-6;
 }
 
 window.addEventListener('keydown', (e) => {
   if (e.code === 'ArrowUp') {
-    const next = advanceCar(current(), world);
-    const c = current();
-    if (next.segment !== c.segment || next.along !== c.along || next.across !== c.across) stack.push(next);
+    // advance the Rider one frame, explicitly, and remember it
+    const rider = currentRider();
+    const next = getNextRiderState(rider, world);
+    if (next.segment !== rider.segment || next.along !== rider.along || next.across !== rider.across) {
+      riderHistory.push(next);
+    }
     e.preventDefault();
   } else if (e.code === 'ArrowDown') {
-    if (stack.length > 1) stack.pop();
+    if (riderHistory.length > 1) riderHistory.pop();
     e.preventDefault();
   }
 });
 
-// ---- projection (car frame -> screen) ----
+// ---- projection (Rider frame -> screen) ----
 interface V3 { right: number; forward: number; height: number }
 function project(p: V3): { x: number; y: number } {
   return { x: W / 2 + (p.right / p.forward) * FOCAL, y: H / 2 - ((p.height - EYE_H) / p.forward) * FOCAL };
@@ -69,7 +74,7 @@ function clipNear(verts: V3[]): V3[] {
 }
 
 function drawQuad(q: Quad): void {
-  const verts: V3[] = q.pts.map((p: CarPt) => ({ right: p.right, forward: p.forward, height: 0 }));
+  const verts: V3[] = q.pts.map((p: RiderPt) => ({ right: p.right, forward: p.forward, height: 0 }));
   const clipped = clipNear(verts);
   if (clipped.length < 3) return;
   const pts = clipped.map(project);
@@ -151,7 +156,7 @@ function drawCritter(cr: CritterView): void {
 }
 
 // ---- the horizon, at infinity (orientation only) ----
-// Each screen column is a viewing ray at some absolute bearing (car heading +
+// Each screen column is a viewing ray at some absolute bearing (Rider heading +
 // its angle off-centre). A "silhouette" fills the band between a height f(bearing)
 // above the horizon and some bottom line.
 const ROCK = '#5b6a8f';        // northern range
@@ -202,25 +207,25 @@ function drawHorizon(heading: number): void {
   ctx.fillStyle = LAND; silhouette(heading, groundBase, H / 2);                      // rolling land, in front
 }
 
-// frame-rate / render-time, smoothed — lets us tell "car going slow" (low speed
+// frame-rate / render-time, smoothed — lets us tell "Rider going slow" (low speed
 // but fps pinned at 60) from "code going slow" (fps drops / render ms climbs).
 let fps = 0, renderMs = 0;
 
-function drawHud(s: CarState): void {
+function drawHud(rider: RiderState): void {
   ctx.fillStyle = 'rgba(0,0,0,0.5)';
   ctx.fillRect(12, 12, 360, 50);
   ctx.font = 'bold 13px ui-monospace, monospace';
   ctx.textAlign = 'left';
-  const where = s.turn ? `${s.segment} (turning ${s.turn.phase})` : `${s.segment} @ ${s.along.toFixed(1)}m`;
+  const where = rider.turn ? `${rider.segment} (turning ${rider.turn.phase})` : `${rider.segment} @ ${rider.along.toFixed(1)}m`;
   ctx.fillStyle = '#fff';
-  ctx.fillText(`${where}   ·   step ${stack.length - 1}`, 22, 31);
+  ctx.fillText(`${where}   ·   step ${riderHistory.length - 1}`, 22, 31);
   ctx.fillStyle = '#9fe6a0';
-  ctx.fillText(`speed ${s.v.toFixed(2)} m/press   ·   ${fps.toFixed(0)} fps   ·   ${renderMs.toFixed(1)} ms`, 22, 50);
+  ctx.fillText(`speed ${rider.v.toFixed(2)} m/press   ·   ${fps.toFixed(0)} fps   ·   ${renderMs.toFixed(1)} ms`, 22, 50);
 }
 
-function render(): void {
-  const s = current();
-  const scene = buildScene(s, world);
+// draw one frame for the given RiderState (handed in by the loop)
+function render(rider: RiderState): void {
+  const scene = buildScene(rider, world);
 
   // level camera => horizon at H/2: sky above, grass below
   ctx.fillStyle = '#8ecae6';
@@ -228,7 +233,7 @@ function render(): void {
   ctx.fillStyle = '#4a8f43';
   ctx.fillRect(0, H / 2, W, H / 2);
 
-  drawHorizon(carHeading(s, world));   // mountains on the northern horizon, by orientation only
+  drawHorizon(riderHeading(rider, world));   // mountains on the northern horizon, by orientation only
 
   for (const q of scene.quads) drawQuad(q);
 
@@ -239,9 +244,9 @@ function render(): void {
   for (const cr of scene.critters) bills.push({ forward: cr.at.forward, draw: () => drawCritter(cr) });
   bills.filter((b) => b.forward > NEAR).sort((a, b) => b.forward - a.forward).forEach((b) => b.draw());
 
-  drawHud(s);
+  drawHud(rider);
 
-  if (gameEnded(s)) {
+  if (gameEnded(rider)) {
     ctx.fillStyle = 'rgba(0,0,0,0.55)';
     ctx.fillRect(0, H / 2 - 48, W, 96);
     ctx.fillStyle = '#fff';
@@ -257,7 +262,7 @@ function loop(t: number): void {
   if (lastFrame) fps += ((1000 / Math.max(1, t - lastFrame)) - fps) * 0.1;   // smoothed fps from frame dt
   lastFrame = t;
   const t0 = performance.now();
-  render();
+  render(currentRider());
   renderMs += ((performance.now() - t0) - renderMs) * 0.1;                    // smoothed render cost
   requestAnimationFrame(loop);
 }

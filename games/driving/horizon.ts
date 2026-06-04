@@ -1,8 +1,8 @@
 // =============================================================================
 // horizon — far scenery as layered silhouettes. Everything here is at infinity:
-// apparent position depends only on which way the car FACES, not where it is.
+// apparent position depends only on which way the Rider FACES, not where it is.
 // So each layer is a pure function from absolute bearing (radians, 0 = north,
-// + = clockwise / to the car's right) to a height in pixels above the horizon.
+// + = clockwise / to the Rider's right) to a height in pixels above the horizon.
 //
 //   groundBase  — a gentle roll present at EVERY bearing (the sloped horizon)
 //   northRange  — a tall range centred on north (drawn snowcapped)

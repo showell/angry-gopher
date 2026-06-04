@@ -3,7 +3,7 @@
 // and (now) no absolute directions: a segment relates to its neighbour only by
 // a turn ANGLE. Node-testable (test/test_model.ts).
 //
-// HOW THE CAR MOVES, FRAME BY FRAME
+// HOW THE RIDER (on a motorcycle = a point) MOVES, FRAME BY FRAME
 //
 // Position is relative to the CURRENT segment: along (progress), across
 // (lateral offset, + = right), angle (heading relative to the segment), and v
@@ -12,7 +12,7 @@
 // Cruising:  across = 0, angle = 0; each press advances `along` by v, and v
 //            changes by accel() — a pure function of (along, v, can-the-driver-
 //            see-the-intersection-yet). Out of sight: constant acceleration.
-//            In sight: the exact constant deceleration that brings the car to
+//            In sight: the exact constant deceleration that brings the Rider to
 //            turn speed right at the corner (recomputed each press, so it self-
 //            corrects discretisation drift). See accel() / cruise().
 //
@@ -28,11 +28,11 @@
 //
 // Handoff: at the arc midpoint (THETA/2) we advance the current segment A->B,
 // re-expressing the very same (along, across, angle) in B's frame — a rotation
-// by THETA about the shared corner. Continuous; the car never jumps.
+// by THETA about the shared corner. Continuous; the Rider never jumps.
 // =============================================================================
 
 export const DPHI = 0.10;         // heading turned per press in a 90deg turn (rad); sets turn speed AND spin rate
-export const V_BASE = 1.2;        // the car's speed at the very start of the drive (m/press)
+export const V_BASE = 1.2;        // the Rider's speed at the very start of the drive (m/press)
 export const A_ACCEL = 0.03;      // constant acceleration while the intersection is out of sight (m/press^2)
 export const SIGHT = 180;         // how far ahead the adult elephant (= the intersection) becomes visible (m)
 const ELEPHANT_AHEAD = 20;        // the adult elephant sits this far past a segment's end (matches elephantRow)
@@ -79,10 +79,16 @@ export interface World {
 }
 
 // ----------------------------------------------------------------------------
-// Car state. `turn` is null while cruising; a small descriptor while turning.
+// RiderState — the whole game is seen through the RIDER. The Rider is on a
+// motorcycle, which is treated as a single POINT (no rectangle), which keeps the
+// physics simple. A RiderState is everything we know about the Rider this frame:
+//   POSITION : segment + along (progress) + across (lateral offset) + angle
+//              (heading, relative to the current segment)
+//   VELOCITY : v (speed along the path, m/press)
+// `turn` is null while cruising; a small descriptor while turning.
 // ----------------------------------------------------------------------------
 export interface Turning { sgn: number; r: number; angle: number; phase: 'exiting' | 'entering'; toSeg: SegId }
-export interface CarState {
+export interface RiderState {
   segment: SegId;
   along: number;
   across: number;
@@ -91,15 +97,15 @@ export interface CarState {
   turn: Turning | null;
 }
 
-export function initialState(world: World): CarState {
+export function initialRiderState(world: World): RiderState {
   return { segment: world.start, along: 0, across: 0, angle: 0, v: V_BASE, turn: null };
 }
 
-// The car's heading relative to north (north = seg1's forward direction). This
+// The Rider's heading relative to north (north = seg1's forward direction). This
 // is the one ABSOLUTE orientation we expose: far scenery (the horizon) is drawn
-// purely from it, because a mountain at infinity depends on which way the car
+// purely from it, because a mountain at infinity depends on which way the Rider
 // faces, not where it is. Continuous across handoffs (segment base + angle).
-export function carHeading(state: CarState, world: World): number {
+export function riderHeading(state: RiderState, world: World): number {
   return world.segments[state.segment].northHeading + state.angle;
 }
 
@@ -107,7 +113,7 @@ const signOf = (d: TurnDir): number => (d === 'right' ? 1 : -1);
 const segNumber = (id: SegId): number => Number(id.slice(3));   // "seg12" -> 12
 
 export function buildWorld(): World {
-  const LANE = 4;   // one-lane road ~ two car widths
+  const LANE = 4;   // one lane, ~4m wide
   const R = 2;      // turn radius
   const DEG = Math.PI / 180;
 
@@ -251,9 +257,11 @@ function elephantRow(length: number, exit: RoadSegment['exit'], scale: number): 
 }
 
 // ----------------------------------------------------------------------------
-// advanceCar — one forward press.
+// getNextRiderState — advance the Rider one frame. Pure: (RiderState, World) ->
+// the next RiderState. Called explicitly before each draw; the returned state is
+// what the renderer is handed.
 // ----------------------------------------------------------------------------
-export function advanceCar(state: CarState, world: World): CarState {
+export function getNextRiderState(state: RiderState, world: World): RiderState {
   const seg = world.segments[state.segment];
   const next = state.turn === null ? cruise(state, seg, world) : turnStep(state, seg, world);
   assertInvariants(next, world);
@@ -263,7 +271,7 @@ export function advanceCar(state: CarState, world: World): CarState {
 // Can the driver see the upcoming intersection yet? Yes once the adult elephant
 // beyond it is within SIGHT. (Only meaningful for a segment that HAS a turn; the
 // final segment never brakes and is handled directly in accel/cruise.)
-function sees(state: CarState, seg: RoadSegment): boolean {
+function sees(state: RiderState, seg: RoadSegment): boolean {
   if (!seg.exit) return true;
   return seg.length + ELEPHANT_AHEAD - state.along <= SIGHT;
 }
@@ -275,11 +283,11 @@ const turnSpeed = (seg: RoadSegment): number => seg.exitR * omegaFor(seg.exitAng
 // Acceleration (m/press^2) PURELY from position, velocity, and visibility:
 //   intersection out of sight -> keep accelerating at a constant rate.
 //   intersection in view       -> the EXACT constant deceleration that lands the
-//     car at turn speed (0 at the route end) right at the turn point, from
+//     Rider at turn speed (0 at the route end) right at the turn point, from
 //     v^2 = vEnd^2 + 2*a*d. Recomputed every press: constant-decel kinematics are
 //     self-consistent, so this reproduces the same a each press while correcting
 //     integration drift.
-function accel(state: CarState, seg: RoadSegment): number {
+function accel(state: RiderState, seg: RoadSegment): number {
   // The final segment (no turn) accelerates the whole way; so does any segment
   // whose turn is still out of sight. Otherwise brake to turn speed.
   if (!seg.exit || !sees(state, seg)) return A_ACCEL;
@@ -289,7 +297,7 @@ function accel(state: CarState, seg: RoadSegment): number {
   return (vEnd * vEnd - state.v * state.v) / (2 * d);
 }
 
-function cruise(state: CarState, seg: RoadSegment, world: World): CarState {
+function cruise(state: RiderState, seg: RoadSegment, world: World): RiderState {
   let v = Math.max(0, state.v + accel(state, seg));
 
   if (!seg.exit) {   // the final segment: accelerate to the end, then the game is over
@@ -309,7 +317,7 @@ function cruise(state: CarState, seg: RoadSegment, world: World): CarState {
   return turnStep({ segment: seg.id, along: seg.arcStart, across: 0, angle: 0, v: vEnd, turn }, seg, world);
 }
 
-function turnStep(state: CarState, seg: RoadSegment, world: World): CarState {
+function turnStep(state: RiderState, seg: RoadSegment, world: World): RiderState {
   const t = state.turn as Turning;
   const omega = omegaFor(t.angle);
   const dHeading = t.sgn * omega;
@@ -329,10 +337,10 @@ function turnStep(state: CarState, seg: RoadSegment, world: World): CarState {
   return { segment: seg.id, along: seg.entryTan, across: 0, angle: 0, v: ds, turn: null };
 }
 
-// Re-express the car in the next segment's frame: a rotation by THETA about the
+// Re-express the Rider in the next segment's frame: a rotation by THETA about the
 // shared corner (A's far end = B's start). Reduces to the simple swap at 90deg.
 function handoff(along: number, across: number, angle: number,
-                 from: RoadSegment, world: World, t: Turning): CarState {
+                 from: RoadSegment, world: World, t: Turning): RiderState {
   const L = from.length, theta = t.angle, sgn = t.sgn;
   const dA = along - L, dX = across;
   const cosB = Math.cos(theta), sinB = sgn * Math.sin(theta);   // rotate by sgn*THETA
@@ -348,13 +356,13 @@ function handoff(along: number, across: number, angle: number,
 }
 
 // ----------------------------------------------------------------------------
-// Invariants. We ALLOW the car past a segment's end (nosing into the turn) and
+// Invariants. We ALLOW the Rider past a segment's end (nosing into the turn) and
 // before its start (entering); these pin down "how far is reasonable".
 // ----------------------------------------------------------------------------
 function assert(cond: boolean, msg: string): void {
   if (!cond) throw new Error('invariant violated: ' + msg);
 }
-export function assertInvariants(s: CarState, world: World): void {
+export function assertInvariants(s: RiderState, world: World): void {
   const seg = world.segments[s.segment];
   assert(Number.isFinite(s.along) && Number.isFinite(s.across) && Number.isFinite(s.angle),
          `finite (${s.along},${s.across},${s.angle})`);

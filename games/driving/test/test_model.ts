@@ -1,11 +1,11 @@
 // Drive the whole route and verify the model is sound WITHOUT ever building a
 // global-world coordinate system. Continuity is checked by expressing each
-// car position in segment 1's frame, composing only local segment-to-segment
-// transforms (lengths + turn signs) — the same relational facts advanceCar uses.
+// Rider position in segment 1's frame, composing only local segment-to-segment
+// transforms (lengths + turn signs) — the same relational facts getNextRiderState uses.
 //
 // Run: node test/test_model.ts
-import { buildWorld, initialState, advanceCar, assertInvariants, DPHI } from '../model.ts';
-import type { CarState, World } from '../model.ts';
+import { buildWorld, initialRiderState, getNextRiderState, assertInvariants, DPHI } from '../model.ts';
+import type { RiderState, World } from '../model.ts';
 
 function wrap(a: number): number {
   while (a > Math.PI) a -= 2 * Math.PI;
@@ -23,7 +23,7 @@ function segHeadings(world: World): Record<string, number> {
   }
   return h;
 }
-function heading(s: CarState, h: Record<string, number>): number {
+function heading(s: RiderState, h: Record<string, number>): number {
   return h[s.segment] + s.angle;
 }
 
@@ -43,7 +43,7 @@ function localToRef(idx: number, a: number, x: number, world: World): P {
   }
   return { a, x };
 }
-function inRefFrame(s: CarState, world: World): P {
+function inRefFrame(s: RiderState, world: World): P {
   return localToRef(world.order.indexOf(s.segment), s.along, s.across, world);
 }
 
@@ -67,12 +67,12 @@ function main(): void {
   const last = world.order[world.order.length - 1];
   const headings = segHeadings(world);
 
-  let s = initialState(world);
-  const states: CarState[] = [s];
+  let s = initialRiderState(world);
+  const states: RiderState[] = [s];
   let handoffs = 0, maxAcross = 0, maxV = 0;
 
   for (let i = 0; i < 8000; i++) {
-    const n = advanceCar(s, world);
+    const n = getNextRiderState(s, world);
     if (n.segment !== s.segment) handoffs++;
     maxAcross = Math.max(maxAcross, Math.abs(n.across));
     maxV = Math.max(maxV, n.v);
@@ -105,7 +105,7 @@ function main(): void {
   if (maxHeadingJump > maxOmega + 1e-6) throw new Error(`heading jump ${maxHeadingJump} > maxOmega ${maxOmega}`);
 
   // 3) position continuity (in seg-1 frame): no single-press jump bigger than
-  // the fastest press (each press advances by the car's speed v).
+  // the fastest press (each press advances by the Rider's speed v).
   let maxPosJump = 0;
   for (let i = 1; i < states.length; i++) {
     const p0 = inRefFrame(states[i - 1], world), p1 = inRefFrame(states[i], world);

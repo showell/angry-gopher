@@ -1,27 +1,27 @@
 // =============================================================================
-// view — pure CAR-RELATIVE geometry. Given the car's state, produce the visible
-// scene as primitives measured FROM THE CAR (forward distance + sideways
-// offset). No canvas, no global coordinates: the car is the origin.
+// view — pure RIDER-RELATIVE geometry. Given the Rider's state, produce the visible
+// scene as primitives measured FROM THE RIDER (forward distance + sideways
+// offset). No canvas, no global coordinates: the Rider is the origin.
 //
-// We render only what's around the car: the current segment (its road strip,
+// We render only what's around the Rider: the current segment (its road strip,
 // its intersection squares, its trees) and the NEXT segment seen through the
 // intersection. Nothing behind us.
 // =============================================================================
-import type { World, CarState, RoadSegment } from './model.ts';
+import type { World, RiderState, RoadSegment } from './model.ts';
 
 const ROAD = '#34353c';
 
-export interface CarPt { right: number; forward: number }   // car frame, ground plane
-export interface Quad { pts: CarPt[]; color: string }
-export interface TreeView { at: CarPt; color: string; height: number; pine: boolean }
-export interface CritterView { at: CarPt; emoji: string; height: number; faceRight: boolean }
+export interface RiderPt { right: number; forward: number }   // Rider frame, ground plane
+export interface Quad { pts: RiderPt[]; color: string }
+export interface TreeView { at: RiderPt; color: string; height: number; pine: boolean }
+export interface CritterView { at: RiderPt; emoji: string; height: number; faceRight: boolean }
 export interface Scene { quads: Quad[]; trees: TreeView[]; critters: CritterView[] }
 
-// the car's pose in its own segment's frame
+// the Rider's pose in its own segment's frame
 interface Pose { along: number; across: number; angle: number }
 
-// a segment-local point (along a, across x) expressed FROM THE CAR
-function toCar(a: number, x: number, c: Pose): CarPt {
+// a segment-local point (along a, across x) expressed FROM THE RIDER
+function toRider(a: number, x: number, c: Pose): RiderPt {
   const dA = a - c.along, dX = x - c.across;
   const cos = Math.cos(c.angle), sin = Math.sin(c.angle);
   return { forward: dA * cos + dX * sin, right: -dA * sin + dX * cos };
@@ -43,8 +43,8 @@ function curToNext(a: number, x: number, L: number, sgn: number, theta: number):
   return { a: dA * cosB + x * sinB, x: -dA * sinB + x * cosB };
 }
 
-// a square intersection quad, drawn with a per-segment local->car mapper
-function squareAt(at: (a: number, x: number) => CarPt, center: number, hw: number): Quad {
+// a square intersection quad, drawn with a per-segment local->Rider mapper
+function squareAt(at: (a: number, x: number) => RiderPt, center: number, hw: number): Quad {
   return {
     pts: [at(center - hw, -hw), at(center + hw, -hw), at(center + hw, hw), at(center - hw, hw)],
     color: ROAD,
@@ -57,13 +57,13 @@ function treeAcross(side: 'left' | 'right', hw: number, offset: number): number 
 // how many segments to look ahead (current + this many beyond the next corner)
 const LOOK_AHEAD = 4;
 
-export function buildScene(state: CarState, world: World): Scene {
+export function buildScene(state: RiderState, world: World): Scene {
   const c: Pose = { along: state.along, across: state.across, angle: state.angle };
   const quads: Quad[] = [];
   const trees: TreeView[] = [];
   const critters: CritterView[] = [];
 
-  // the car's current segment and up to (LOOK_AHEAD-1) segments beyond it
+  // the Rider's current segment and up to (LOOK_AHEAD-1) segments beyond it
   const chain: RoadSegment[] = [];
   for (let s: RoadSegment | undefined = world.segments[state.segment];
        s && chain.length < LOOK_AHEAD;
@@ -74,17 +74,17 @@ export function buildScene(state: CarState, world: World): Scene {
   for (let d = 0; d < chain.length; d++) {
     const seg = chain[d];
     const hw = seg.width / 2;
-    // map a point in seg's frame to the car's frame, composing the exit turns
-    // of every segment between it and the car (innermost first). For d = 0 this
-    // is just toCar; for each step deeper it adds one more nextToCur.
-    const at = (a: number, x: number): CarPt => {
+    // map a point in seg's frame to the Rider's frame, composing the exit turns
+    // of every segment between it and the Rider (innermost first). For d = 0 this
+    // is just toRider; for each step deeper it adds one more nextToCur.
+    const at = (a: number, x: number): RiderPt => {
       let pa = a, px = x;
       for (let k = d - 1; k >= 0; k--) {
         const prev = chain[k];   // prev -> chain[k+1] is prev's exit turn
         const p = nextToCur(pa, px, prev.length, prev.exitSign, prev.exitAngle);
         pa = p.a; px = p.x;
       }
-      return toCar(pa, px, c);
+      return toRider(pa, px, c);
     };
 
     quads.push({ pts: [at(0, -hw), at(0, hw), at(seg.length, hw), at(seg.length, -hw)], color: ROAD });
@@ -111,7 +111,7 @@ export function buildScene(state: CarState, world: World): Scene {
     const prev = world.segments[world.order[idx - 1]];
     for (const cr of prev.exitCritters) {
       const p = curToNext(cr.along, cr.across, prev.length, prev.exitSign, prev.exitAngle);
-      critters.push({ at: toCar(p.a, p.x, c), emoji: cr.emoji, height: cr.height, faceRight: cr.faceRight });
+      critters.push({ at: toRider(p.a, p.x, c), emoji: cr.emoji, height: cr.height, faceRight: cr.faceRight });
     }
   }
 
