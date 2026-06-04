@@ -90,21 +90,36 @@ function drawTree(t: TreeView): void {
   ctx.fill();
 }
 
+// Emoji are expensive to rasterize every frame, so render each one ONCE to an
+// offscreen sprite and reuse it. drawImage is far cheaper than fillText.
+const spriteCache = new Map<string, HTMLCanvasElement>();
+function emojiSprite(emoji: string): HTMLCanvasElement {
+  const cached = spriteCache.get(emoji);
+  if (cached) return cached;
+  const S = 96;
+  const c = document.createElement('canvas');
+  c.width = S; c.height = S;
+  const g = c.getContext('2d') as CanvasRenderingContext2D;
+  g.font = `${Math.round(S * 0.8)}px serif`;
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  g.fillText(emoji, S / 2, S / 2 + S * 0.06);
+  spriteCache.set(emoji, c);
+  return c;
+}
+
 // a full-body emoji billboard, sized by distance, flipped to face the road
 function drawCritter(cr: CritterView): void {
   const at = cr.at;
   if (at.forward <= NEAR) return;
   const base = project({ right: at.right, forward: at.forward, height: 0 });
   const top = project({ right: at.right, forward: at.forward, height: cr.height });
-  const px = base.y - top.y;
-  if (px < 5) return;
+  const h = base.y - top.y;
+  if (h < 5) return;
   ctx.save();
   ctx.translate(base.x, base.y);
   if (cr.faceRight) ctx.scale(-1, 1);   // most animal emoji face left by default
-  ctx.font = `${px}px serif`;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'bottom';
-  ctx.fillText(cr.emoji, 0, 0);
+  ctx.drawImage(emojiSprite(cr.emoji), -h / 2, -h, h, h);   // square, bottom on the ground
   ctx.restore();
 }
 
