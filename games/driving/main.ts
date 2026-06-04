@@ -81,7 +81,10 @@ function drawQuad(q: Quad): void {
   ctx.fill();
 }
 
-// radially symmetric: drawn only from distance + angle (a trunk + a coloured disc)
+// radially symmetric: drawn only from distance + angle. Round trees (autumn
+// colours) are a trunk + a coloured disc; pines are a trunk + a thin, jagged
+// conifer in darker green.
+const PINE = '#1c5a22';   // darker than the round green
 function drawTree(t: TreeView): void {
   const at = t.at;
   if (at.forward <= NEAR) return;
@@ -91,6 +94,23 @@ function drawTree(t: TreeView): void {
   const trunkW = Math.max(1, ht * 0.10);
   ctx.fillStyle = '#5a3e22';
   ctx.fillRect(base.x - trunkW / 2, base.y - ht * 0.42, trunkW, ht * 0.42);
+
+  if (t.pine) {
+    // three stacked tiers, narrow and widest at the bottom — a jagged conifer
+    const apexY = base.y - ht, foliage = ht * 0.90, w = ht * 0.20;
+    const tops = [0.0, 0.28, 0.56], bots = [0.46, 0.74, 1.0], wide = [0.5, 0.78, 1.0];
+    ctx.fillStyle = PINE;
+    for (let k = 0; k < 3; k++) {
+      ctx.beginPath();
+      ctx.moveTo(base.x, apexY + foliage * tops[k]);
+      ctx.lineTo(base.x + w * wide[k], apexY + foliage * bots[k]);
+      ctx.lineTo(base.x - w * wide[k], apexY + foliage * bots[k]);
+      ctx.closePath();
+      ctx.fill();
+    }
+    return;
+  }
+
   ctx.fillStyle = t.color;
   ctx.beginPath();
   ctx.arc(base.x, base.y - ht * 0.62, ht * 0.30, 0, Math.PI * 2);

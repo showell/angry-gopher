@@ -46,7 +46,7 @@ const omegaFor = (theta: number): number => DPHI * theta / QUARTER;  // turn rat
 export type SegId = string;
 export type TurnDir = 'left' | 'right';
 export type Scheme = 'ALL_GREEN' | 'YELLOW_GREEN' | 'RED_GREEN';
-export interface TreeLocal { side: 'left' | 'right'; along: number; offset: number; color: string; height: number }
+export interface TreeLocal { side: 'left' | 'right'; along: number; offset: number; color: string; height: number; pine: boolean }
 export interface CritterLocal { along: number; across: number; emoji: string; height: number; faceRight: boolean }
 
 const GREEN = '#2f7a30', YELLOW = '#cf9a18', RED = '#b23a2a';
@@ -181,9 +181,10 @@ function treeRow(startAlong: number, endAlong: number, scheme: Scheme): TreeLoca
   let k = 0;
   for (let along = startAlong; along <= endAlong; along += 6, k++) {
     const color = treeColor(scheme, k);   // alternates along the segment
-    const height = color === GREEN ? TREE_H / 2 : TREE_H;
-    trees.push({ side: 'left', along, offset: 1.5, color, height });
-    trees.push({ side: 'right', along, offset: 1.5, color, height });
+    const pine = color === GREEN;         // green trees are conifers; accent trees are round
+    const height = pine ? TREE_H / 2 : TREE_H;
+    trees.push({ side: 'left', along, offset: 1.5, color, height, pine });
+    trees.push({ side: 'right', along, offset: 1.5, color, height, pine });
   }
   return trees;
 }
@@ -211,10 +212,10 @@ function cowHerd(hw: number): CritterLocal[] {
   const out: CritterLocal[] = [];
   const edge = hw + 10;       // the cows graze well off the road
   const treeX = hw + 1.5;     // the roadside tree line (left side = -treeX)
-  const bullH = 2.5;
+  const bullH = 1.4 * 1.15;   // just 15% bigger than an adult cow
   // The bull waits by the 4th tree, facing away from the road, its rear (its
-  // road-side edge, since it faces left) right up against that tree.
-  out.push({ along: BULL_ALONG, across: -(treeX + bullH / 2 + 0.25), emoji: '🐂', height: bullH, faceRight: false });
+  // road-side edge, since it faces left) set back a bit from the tree line.
+  out.push({ along: BULL_ALONG, across: -(treeX + bullH / 2 + 0.5), emoji: '🐂', height: bullH, faceRight: false });
   for (let i = 0; i < 14; i++) {
     const col = Math.floor(i / 3), row = i % 3;
     const along = BULL_ALONG + 6 + col * 6 + (row - 1) * 2 + 1.5 * Math.sin(i * 2.7);

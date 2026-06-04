@@ -13,7 +13,7 @@ const ROAD = '#34353c';
 
 export interface CarPt { right: number; forward: number }   // car frame, ground plane
 export interface Quad { pts: CarPt[]; color: string }
-export interface TreeView { at: CarPt; color: string; height: number }
+export interface TreeView { at: CarPt; color: string; height: number; pine: boolean }
 export interface CritterView { at: CarPt; emoji: string; height: number; faceRight: boolean }
 export interface Scene { quads: Quad[]; trees: TreeView[]; critters: CritterView[] }
 
@@ -91,7 +91,7 @@ export function buildScene(state: CarState, world: World): Scene {
     if (d === 0 && seg.entryR > 0) quads.push(squareAt(at, 0, hw));        // the corner we came through
     if (seg.exit) quads.push(squareAt(at, seg.length, hw));                // each corner ahead
     for (const t of seg.trees) {
-      trees.push({ at: at(t.along, treeAcross(t.side, hw, t.offset)), color: t.color, height: t.height });
+      trees.push({ at: at(t.along, treeAcross(t.side, hw, t.offset)), color: t.color, height: t.height, pine: t.pine });
     }
     for (const cr of seg.critters) {
       critters.push({ at: at(cr.along, cr.across), emoji: cr.emoji, height: cr.height, faceRight: cr.faceRight });
