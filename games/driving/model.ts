@@ -49,6 +49,7 @@ export interface RoadSegment {
   id: SegId;
   length: number;
   width: number;
+  scheme: Scheme;                // visual theme; drives the tree colours
   trees: TreeLocal[];
   critters: CritterLocal[];      // roadside, along the segment (cows/pigs)
   exitCritters: CritterLocal[];  // at the exit intersection (elephants); shared with the next segment
@@ -96,7 +97,8 @@ export function buildWorld(): World {
                exit: RoadSegment['exit']): RoadSegment => {
     const tan = exit ? exit.radius * Math.tan(exit.angle / 2) : 0;
     return {
-      id, length, width: LANE, trees: treeRow(length, scheme),
+      id, length, width: LANE, scheme,
+      trees: [],   // filled below, once entry/exit tangents are known
       critters: critterRow(length, LANE / 2),
       exitCritters: elephantRow(length, exit),
       exit,
@@ -113,16 +115,16 @@ export function buildWorld(): World {
 
   // route is checked non-self-intersecting by test/test_model.ts (no loops).
   const segments: Record<SegId, RoadSegment> = {
-    seg1:  seg('seg1',  50, 'ALL_GREEN',    turn('seg2',  'right',  90)),
-    seg2:  seg('seg2',  55, 'YELLOW_GREEN', turn('seg3',  'left',  120)),
-    seg3:  seg('seg3',  80, 'RED_GREEN',    turn('seg4',  'right',  60)),
-    seg4:  seg('seg4',  50, 'ALL_GREEN',    turn('seg5',  'right',  30)),
-    seg5:  seg('seg5',  55, 'YELLOW_GREEN', turn('seg6',  'left',  120)),
-    seg6:  seg('seg6',  60, 'RED_GREEN',    turn('seg7',  'left',   60)),
-    seg7:  seg('seg7',  50, 'ALL_GREEN',    turn('seg8',  'right',  90)),
-    seg8:  seg('seg8',  55, 'YELLOW_GREEN', turn('seg9',  'right',  60)),
-    seg9:  seg('seg9',  50, 'RED_GREEN',    turn('seg10', 'left',  120)),
-    seg10: seg('seg10', 50, 'ALL_GREEN',    null),
+    seg1:  seg('seg1', 100, 'ALL_GREEN',    turn('seg2',  'right',  90)),
+    seg2:  seg('seg2', 110, 'YELLOW_GREEN', turn('seg3',  'left',  120)),
+    seg3:  seg('seg3', 160, 'RED_GREEN',    turn('seg4',  'right',  60)),
+    seg4:  seg('seg4', 100, 'ALL_GREEN',    turn('seg5',  'right',  30)),
+    seg5:  seg('seg5', 110, 'YELLOW_GREEN', turn('seg6',  'left',  120)),
+    seg6:  seg('seg6', 120, 'RED_GREEN',    turn('seg7',  'left',   60)),
+    seg7:  seg('seg7', 100, 'ALL_GREEN',    turn('seg8',  'right',  90)),
+    seg8:  seg('seg8', 110, 'YELLOW_GREEN', turn('seg9',  'right',  60)),
+    seg9:  seg('seg9', 100, 'RED_GREEN',    turn('seg10', 'left',  120)),
+    seg10: seg('seg10', 100, 'ALL_GREEN',   null),
   };
   const order: SegId[] = [
     'seg1', 'seg2', 'seg3', 'seg4', 'seg5', 'seg6', 'seg7', 'seg8', 'seg9', 'seg10',
@@ -135,13 +137,24 @@ export function buildWorld(): World {
       next.entryTan = s.exitTan;
     }
   }
+  // Trees, now that each end's tangent is known. A turn intrudes `tan` into the
+  // straight; we keep that clear PLUS a clearance so a tree never lands on the
+  // adjoining road (and none sit right at a segment's start/end).
+  for (const id of order) {
+    const s = segments[id];
+    const startAlong = s.entryTan + TREE_CLEARANCE;
+    const endAlong = s.length - s.exitTan - TREE_CLEARANCE;
+    s.trees = treeRow(startAlong, endAlong, s.scheme);
+  }
   return { segments, start: 'seg1', order };
 }
 
-function treeRow(length: number, scheme: Scheme): TreeLocal[] {
+const TREE_CLEARANCE = 6;   // metres of clear ground near an intersection (beyond the turn's reach)
+
+function treeRow(startAlong: number, endAlong: number, scheme: Scheme): TreeLocal[] {
   const trees: TreeLocal[] = [];
   let k = 0;
-  for (let along = 4; along <= length - 4; along += 6, k++) {
+  for (let along = startAlong; along <= endAlong; along += 6, k++) {
     const color = treeColor(scheme, k);   // alternates along the segment
     const height = color === GREEN ? TREE_H / 2 : TREE_H;
     trees.push({ side: 'left', along, offset: 1.5, color, height });
