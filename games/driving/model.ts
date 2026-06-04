@@ -31,11 +31,56 @@
 // by THETA about the shared corner. Continuous; the Rider never jumps.
 // =============================================================================
 
-export const DPHI = 0.10;         // heading turned per press in a 90deg turn (rad); sets turn speed AND spin rate
-export const V_BASE = 1.2;        // the Rider's speed at the very start of the drive (m/press)
-export const A_ACCEL = 0.03;      // constant acceleration while the intersection is out of sight (m/press^2)
-export const SIGHT = 180;         // how far ahead the adult elephant (= the intersection) becomes visible (m)
-const ELEPHANT_AHEAD = 20;        // the adult elephant sits this far past a segment's end (matches elephantRow)
+// ============================================================================
+// DIMENSIONS — every value here is in METRES (a size or a distance), gathered so
+// the whole world can be read and tuned in one place. (Motion constants — speed,
+// acceleration, spin — are per-press, not metres, and follow further down.)
+// ============================================================================
+
+// road
+const LANE_WIDTH = 4;                    // a single lane
+const TURN_RADIUS = 2;                   // radius of every corner
+
+// trees
+const TREE_HEIGHT = 5;                   // round (autumn) trees; pines render at half height
+const DIST_BETWEEN_TREES = 6;            // tree spacing along a segment
+const TREE_ROAD_OFFSET = 1.5;            // a tree stands this far beyond the lane edge
+const TREE_INTERSECTION_CLEARANCE = 6;   // no trees within this of an intersection
+
+// seeing the next intersection
+const SIGHT_DIST = 180;                  // the Rider first sees the next intersection from this far back
+const APPROACH_INTERSECTION_DIST = 20;   // the adult elephant marks the intersection, this far past a segment's end
+
+// animal heights
+const COW_HEIGHT = 1.4;
+const CALF_HEIGHT = COW_HEIGHT / 2;
+const BULL_HEIGHT = COW_HEIGHT * 1.15;          // a touch bigger than a cow
+const PIG_HEIGHT = 1.1;
+const ELEPHANT_HEIGHT = 2.8;                    // adult; x GIANT_ELEPHANT_SCALE late in the route
+const BABY_ELEPHANT_HEIGHT = ELEPHANT_HEIGHT / 2;
+
+// where the animals stand
+const HERD_ROAD_OFFSET = 10;             // cows graze this far beyond the lane edge
+const BULL_DIST = 24;                    // the bull stands here (~the 4th tree); the herd is just behind
+const BULL_TREE_GAP = 0.5;               // the bull's rear sits this far back from the tree line
+const HERD_GAP_BEHIND_BULL = 6;          // the rest of the herd starts this far behind the bull
+const HERD_COL_SPACING = 6;              // along-spacing of the herd scatter
+const HERD_ROW_STAGGER = 2;              // along-stagger between herd rows
+const HERD_ROW_DEPTH = 5;                // across-spacing (depth) of the herd scatter
+const HERD_JITTER_ALONG = 1.5;           // deterministic wobble of the scatter, along
+const HERD_JITTER_ACROSS = 1.2;          // deterministic wobble of the scatter, across
+const PIG_DIST_BEFORE_END = 60;          // pigs gather this far before the next intersection
+const BABY_ELEPHANT_AHEAD = 6;           // the baby elephant sits this far ahead of the adult
+const BABY_ELEPHANT_SIDE_OFFSET = 14;    // ...and this far to the side (opposite the turn)
+
+// late-route giants
+const GIANT_ELEPHANT_SCALE = 3;          // elephants this many times bigger...
+const GIANT_ELEPHANT_FROM_SEG = 8;       // ...on segments numbered above this
+
+// ---- motion (per-press, not metres) ----
+export const DPHI = 0.10;     // heading turned per press in a 90deg turn (rad); sets turn speed AND spin rate
+export const V_BASE = 1.2;    // the Rider's speed at the very start of the drive (m/press)
+export const A_ACCEL = 0.03;  // constant acceleration while the intersection is out of sight (m/press^2)
 
 const QUARTER = Math.PI / 2;
 const omegaFor = (theta: number): number => DPHI * theta / QUARTER;  // turn rate scales with angle
@@ -50,7 +95,6 @@ export interface TreeLocal { side: 'left' | 'right'; along: number; offset: numb
 export interface CritterLocal { along: number; across: number; emoji: string; height: number; faceRight: boolean }
 
 const GREEN = '#2f7a30', YELLOW = '#cf9a18', RED = '#b23a2a';
-const TREE_H = 5;   // base tree height (metres); green trees are half this
 
 export interface RoadSegment {
   id: SegId;
@@ -113,18 +157,16 @@ const signOf = (d: TurnDir): number => (d === 'right' ? 1 : -1);
 const segNumber = (id: SegId): number => Number(id.slice(3));   // "seg12" -> 12
 
 export function buildWorld(): World {
-  const LANE = 4;   // one lane, ~4m wide
-  const R = 2;      // turn radius
   const DEG = Math.PI / 180;
 
   const seg = (id: SegId, length: number, scheme: Scheme,
                exit: RoadSegment['exit']): RoadSegment => {
     const tan = exit ? exit.radius * Math.tan(exit.angle / 2) : 0;
     return {
-      id, length, width: LANE, scheme,
+      id, length, width: LANE_WIDTH, scheme,
       trees: [],   // filled below, once entry/exit tangents are known
-      critters: critterRow(length, LANE / 2),
-      exitCritters: elephantRow(length, exit, segNumber(id) > 8 ? 3 : 1),   // late-route elephants are giant
+      critters: critterRow(length, LANE_WIDTH / 2),
+      exitCritters: elephantRow(length, exit, segNumber(id) > GIANT_ELEPHANT_FROM_SEG ? GIANT_ELEPHANT_SCALE : 1),
       exit,
       exitR: exit ? exit.radius : 0,
       exitSign: exit ? signOf(exit.dir) : 0,
@@ -136,7 +178,7 @@ export function buildWorld(): World {
     };
   };
   const turn = (to: SegId, dir: TurnDir, deg: number): RoadSegment['exit'] =>
-    ({ dir, to, radius: R, angle: deg * DEG });
+    ({ dir, to, radius: TURN_RADIUS, angle: deg * DEG });
 
   // route is checked non-self-intersecting by test/test_model.ts (no loops).
   const segments: Record<SegId, RoadSegment> = {
@@ -173,24 +215,22 @@ export function buildWorld(): World {
   // adjoining road (and none sit right at a segment's start/end).
   for (const id of order) {
     const s = segments[id];
-    const startAlong = s.entryTan + TREE_CLEARANCE;
-    const endAlong = s.length - s.exitTan - TREE_CLEARANCE;
+    const startAlong = s.entryTan + TREE_INTERSECTION_CLEARANCE;
+    const endAlong = s.length - s.exitTan - TREE_INTERSECTION_CLEARANCE;
     s.trees = treeRow(startAlong, endAlong, s.scheme);
   }
   return { segments, start: 'seg1', order };
 }
 
-const TREE_CLEARANCE = 6;   // metres of clear ground near an intersection (beyond the turn's reach)
-
 function treeRow(startAlong: number, endAlong: number, scheme: Scheme): TreeLocal[] {
   const trees: TreeLocal[] = [];
   let k = 0;
-  for (let along = startAlong; along <= endAlong; along += 6, k++) {
+  for (let along = startAlong; along <= endAlong; along += DIST_BETWEEN_TREES, k++) {
     const color = treeColor(scheme, k);   // alternates along the segment
     const pine = color === GREEN;         // green trees are conifers; accent trees are round
-    const height = pine ? TREE_H / 2 : TREE_H;
-    trees.push({ side: 'left', along, offset: 1.5, color, height, pine });
-    trees.push({ side: 'right', along, offset: 1.5, color, height, pine });
+    const height = pine ? TREE_HEIGHT / 2 : TREE_HEIGHT;
+    trees.push({ side: 'left', along, offset: TREE_ROAD_OFFSET, color, height, pine });
+    trees.push({ side: 'right', along, offset: TREE_ROAD_OFFSET, color, height, pine });
   }
   return trees;
 }
@@ -203,9 +243,6 @@ function treeColor(scheme: Scheme, k: number): string {
 // A cow herd EARLY in the segment (left) and pigs near the END (right), set
 // further back than the trees — spread apart so you actually pass them on the
 // long, fast roads instead of blowing by a mid-road cluster.
-const BULL_ALONG = 24;   // by the 4th tree (trees at entryTan+6, every 6m) — the first cow you meet
-const PIG_BACK = 60;     // pigs ~10 trees before the next intersection
-
 function critterRow(length: number, hw: number): CritterLocal[] {
   return [...cowHerd(hw), ...pigRow(length, hw + 10)];
 }
@@ -216,18 +253,17 @@ function critterRow(length: number, hw: number): CritterLocal[] {
 // (a staggered grid with deterministic jitter — no randomness).
 function cowHerd(hw: number): CritterLocal[] {
   const out: CritterLocal[] = [];
-  const edge = hw + 10;       // the cows graze well off the road
-  const treeX = hw + 1.5;     // the roadside tree line (left side = -treeX)
-  const bullH = 1.4 * 1.15;   // just 15% bigger than an adult cow
+  const edge = hw + HERD_ROAD_OFFSET;     // the cows graze well off the road
+  const treeX = hw + TREE_ROAD_OFFSET;    // the roadside tree line (left side = -treeX)
   // The bull waits by the 4th tree, facing away from the road, its rear (its
   // road-side edge, since it faces left) set back a bit from the tree line.
-  out.push({ along: BULL_ALONG, across: -(treeX + bullH / 2 + 0.5), emoji: '🐂', height: bullH, faceRight: false });
+  out.push({ along: BULL_DIST, across: -(treeX + BULL_HEIGHT / 2 + BULL_TREE_GAP), emoji: '🐂', height: BULL_HEIGHT, faceRight: false });
   for (let i = 0; i < 14; i++) {
     const col = Math.floor(i / 3), row = i % 3;
-    const along = BULL_ALONG + 6 + col * 6 + (row - 1) * 2 + 1.5 * Math.sin(i * 2.7);
-    const across = -(edge + row * 5 + 1.2 * Math.cos(i * 1.9));
+    const along = BULL_DIST + HERD_GAP_BEHIND_BULL + col * HERD_COL_SPACING + (row - 1) * HERD_ROW_STAGGER + HERD_JITTER_ALONG * Math.sin(i * 2.7);
+    const across = -(edge + row * HERD_ROW_DEPTH + HERD_JITTER_ACROSS * Math.cos(i * 1.9));
     const calf = i % 4 === 1;   // i = 1,5,9,13 -> 4 calves at half size
-    out.push({ along, across, emoji: '🐄', height: calf ? 0.7 : 1.4, faceRight: true });
+    out.push({ along, across, emoji: '🐄', height: calf ? CALF_HEIGHT : COW_HEIGHT, faceRight: true });
   }
   return out;
 }
@@ -236,7 +272,7 @@ function cowHerd(hw: number): CritterLocal[] {
 function pigRow(length: number, edge: number): CritterLocal[] {
   const out: CritterLocal[] = [];
   for (const d of [-6, -2, 2, 6]) {
-    out.push({ along: length - PIG_BACK + d, across: edge, emoji: '🐖', height: 1.1, faceRight: false });
+    out.push({ along: length - PIG_DIST_BEFORE_END + d, across: edge, emoji: '🐖', height: PIG_HEIGHT, faceRight: false });
   }
   return out;
 }
@@ -248,11 +284,11 @@ function pigRow(length: number, edge: number): CritterLocal[] {
 // the road and overlaps the roadside trees.
 function elephantRow(length: number, exit: RoadSegment['exit'], scale: number): CritterLocal[] {
   if (!exit) return [];
-  const corner = length + ELEPHANT_AHEAD;
-  const adultH = 2.8 * scale, babyH = 1.4 * scale, sign = signOf(exit.dir);
+  const corner = length + APPROACH_INTERSECTION_DIST;
+  const adultH = ELEPHANT_HEIGHT * scale, babyH = BABY_ELEPHANT_HEIGHT * scale, sign = signOf(exit.dir);
   return [
-    { along: corner,     across: -sign * adultH / 2,  emoji: '🐘', height: adultH, faceRight: false },
-    { along: corner + 6, across: -sign * 14,          emoji: '🐘', height: babyH, faceRight: false },
+    { along: corner,                       across: -sign * adultH / 2,                emoji: '🐘', height: adultH, faceRight: false },
+    { along: corner + BABY_ELEPHANT_AHEAD, across: -sign * BABY_ELEPHANT_SIDE_OFFSET, emoji: '🐘', height: babyH, faceRight: false },
   ];
 }
 
@@ -269,11 +305,11 @@ export function getNextRiderState(state: RiderState, world: World): RiderState {
 }
 
 // Can the driver see the upcoming intersection yet? Yes once the adult elephant
-// beyond it is within SIGHT. (Only meaningful for a segment that HAS a turn; the
-// final segment never brakes and is handled directly in accel/cruise.)
+// beyond it is within SIGHT_DIST. (Only meaningful for a segment that HAS a turn;
+// the final segment never brakes and is handled directly in accel/cruise.)
 function sees(state: RiderState, seg: RoadSegment): boolean {
   if (!seg.exit) return true;
-  return seg.length + ELEPHANT_AHEAD - state.along <= SIGHT;
+  return seg.length + APPROACH_INTERSECTION_DIST - state.along <= SIGHT_DIST;
 }
 
 // the speed at which a turn is taken (its fixed per-press creep) — the speed the
