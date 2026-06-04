@@ -31,7 +31,7 @@
 // by THETA about the shared corner. Continuous; the car never jumps.
 // =============================================================================
 
-export const DPHI = 0.05;         // heading turned per press in a 90deg turn (rad)
+export const DPHI = 0.10;         // heading turned per press in a 90deg turn (rad); sets turn speed AND spin rate
 export const V_BASE = 1.2;        // the car's speed at the very start of the drive (m/press)
 export const A_ACCEL = 0.03;      // constant acceleration while the intersection is out of sight (m/press^2)
 export const SIGHT = 180;         // how far ahead the adult elephant (= the intersection) becomes visible (m)
