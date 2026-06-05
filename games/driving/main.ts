@@ -50,6 +50,22 @@ function gameEnded(rider: RiderState): boolean {
 // the render entirely (and the HUD/stats hold still — there are no new frames to
 // report). `dirty` marks a pending redraw; it's set wherever the Rider's state changes.
 let dirty = true;
+let auto = false;
+
+// Raw per-frame instrumentation for the CURRENT auto run, with NO smoothing: one entry
+// per rendered frame — { step, dt (wall-clock frame interval, ms), render (our own draw
+// cost, ms) }. Reset when auto starts; dumped as a JSON string to the console on stop.
+let trace: Array<{ step: number; dt: number; render: number }> = [];
+
+// Start/stop automatic mode and the trace side effects: a fresh buffer on start, a JSON
+// dump on stop. No-op when already in the requested state.
+function setAuto(on: boolean): void {
+  if (on === auto) return;
+  if (on) trace = [];
+  else if (trace.length) console.log(JSON.stringify(trace));
+  auto = on;
+  dirty = true;
+}
 
 // advance the Rider one frame and remember it (a no-op once it stops moving — game over)
 function advance(): void {
@@ -62,19 +78,18 @@ function advance(): void {
 }
 
 // SPACE toggles automatic mode (advance every frame, so you needn't hold the up arrow);
-// the arrows always take manual control, pausing auto so you can walk frame by frame
+// the arrows always take manual control, stopping auto so you can walk frame by frame
 // (UP = step forward, DOWN = step back). Holding an arrow repeats; holding space doesn't.
-let auto = false;
 window.addEventListener('keydown', (e) => {
   if (e.code === 'Space') {
-    if (!e.repeat) { auto = !auto; dirty = true; }   // redraw once to flip the AUTO/PAUSED badge
+    if (!e.repeat) setAuto(!auto);
     e.preventDefault();
   } else if (e.code === 'ArrowUp') {
-    auto = false;
+    setAuto(false);
     advance();
     e.preventDefault();
   } else if (e.code === 'ArrowDown') {
-    auto = false;
+    setAuto(false);
     if (riderHistory.length > 1) { riderHistory.pop(); dirty = true; }
     e.preventDefault();
   }
@@ -205,11 +220,11 @@ function loop(t: number): void {
   // ONLY redraw when the picture changed. Paused & idle => nothing to draw, so the HUD
   // and its stats freeze (no phantom frames re-reporting the same scene).
   if (dirty) {
+    const dt = lastFrame ? t - lastFrame : 0;
     // fps / cadence / drops are a CONTINUOUS-rate notion — only meaningful while auto-
     // running. Compare each frame to the RECENT cadence (frameMs), not a fixed 16.67, so
     // a steady rate (whatever it is) never false-alarms; only a genuine stall does.
     if (auto && lastFrame) {
-      const dt = t - lastFrame;
       fps += (1000 / Math.max(1, dt) - fps) * 0.1;
       if (dt > frameMs * 1.8) { droppedFrames += Math.round(dt / frameMs) - 1; dropFlash = 30; }
       frameMs += (dt - frameMs) * 0.1;
@@ -218,7 +233,13 @@ function loop(t: number): void {
 
     const t0 = performance.now();
     render(currentRider());
-    renderMs += (performance.now() - t0 - renderMs) * 0.1;   // smoothed render cost
+    const r = performance.now() - t0;
+    renderMs += (r - renderMs) * 0.1;   // smoothed render cost (for the HUD)
+
+    // raw, unsmoothed sample into the trace buffer (auto frames with a valid prior time)
+    if (auto && lastFrame) {
+      trace.push({ step: riderHistory.length - 1, dt: Math.round(dt * 100) / 100, render: Math.round(r * 100) / 100 });
+    }
     dirty = false;
   }
   lastFrame = auto ? t : 0;   // paused => drop the baseline so auto restarts cadence cleanly
