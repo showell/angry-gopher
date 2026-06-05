@@ -50,7 +50,7 @@ const TURN_RADIUS = 2;                   // radius of every corner
 const APPROACH_INTERSECTION_DIST = 160;
 
 // ---- motion (per-press, not metres) ----
-export const DPHI = 0.10;     // heading turned per press in a 90deg turn (rad); sets turn speed AND spin rate
+export const DPHI = 0.08;     // heading turned per press in a 90deg turn (rad); sets turn speed AND spin rate
 export const V_BASE = 1.2;    // the Rider's speed at the very start of the drive (m/press)
 export const A_ACCEL = 0.03;  // constant acceleration while the intersection is still far off (m/press^2)
 const V_MAX = 6;              // top speed (m/press) — the bike never accelerates past this
@@ -64,9 +64,9 @@ const omegaFor = (theta: number): number => DPHI * theta / QUARTER;  // turn rat
 // It rotates at the SAME per-frame rate as the equivalent arc would, omegaFor(theta),
 // so the rider's rotational tolerance is identical for easy and sharp turns.
 export const EASY_TURN_MAX = 90 * Math.PI / 180;   // turns up to this gentle get straighten-out, not an arc
-const STRAIGHTEN_MARGIN = 0.3;              // hard safety: keep the drift bulge at least this far inside the edge (m)
-const RECENTER_MAX_ANGLE = 0.12;            // gentlest heading used to ease back to centre once aligned (rad)
-const RECENTER_GAIN = 0.08;                 // recenter aim angle = -RECENTER_GAIN * across (per m)
+const STRAIGHTEN_MARGIN = 0.1;              // hard safety: keep the drift bulge at least this far inside the edge (m)
+const RECENTER_MAX_ANGLE = 0.08;            // gentlest heading used to ease back to centre once aligned (rad)
+const RECENTER_GAIN = 0.3;                 // recenter aim angle = -RECENTER_GAIN * across (per m)
 const ALIGN_EPS = 0.02;                     // "aligned" once |angle| is below this (rad)
 const CENTER_EPS = 0.05;                    // "centred" once |across| is below this (m)
 
