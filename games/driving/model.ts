@@ -233,6 +233,19 @@ function nearIntersection(state: RiderState, seg: RoadSegment): boolean {
 const turnSpeed = (seg: RoadSegment): number => seg.exitR * omegaFor(seg.exitAngle);
 const isEasy = (seg: RoadSegment): boolean => seg.exit !== null && seg.exitAngle <= EASY_TURN_MAX;
 
+// The speed an EASY turn is taken at. Unlike a sharp turn's tight creep, an easy
+// turn is a GENTLE wide arc: the Rider enters ON the inner edge still pointed the
+// old way, then lets the angle-kill drift him the full lane-width to the FAR edge.
+// Pick the speed so that killing the whole turn angle (rotating at omegaFor) sweeps
+// exactly (width - margin) of lateral drift: a constant-speed constant-omega arc has
+// radius R = v/omega and lateral drift R*(1 - cos THETA), so
+//   v = omega * (width - margin) / (1 - cos THETA).
+// Faster than the creep => a wider, gentler arc that USES the whole lane instead of
+// hugging the near edge. (margin keeps the far end a hair inside the road.)
+function easyTurnSpeed(seg: RoadSegment): number {
+  return omegaFor(seg.exitAngle) * (seg.width - STRAIGHTEN_MARGIN) / (1 - Math.cos(seg.exitAngle));
+}
+
 // Acceleration (m/press^2) PURELY from position, velocity, and distance-to-turn:
 //   intersection still far -> keep accelerating at a constant rate.
 //   intersection near       -> the EXACT constant deceleration that lands the
@@ -250,7 +263,7 @@ function accel(state: RiderState, seg: RoadSegment): number {
   const target = isEasy(seg) ? seg.straightenStart : seg.arcStart;   // easy turns start at the inner-edge crossing
   const d = target - state.along;
   if (d <= 1e-6) return 0;
-  const vEnd = turnSpeed(seg);
+  const vEnd = isEasy(seg) ? easyTurnSpeed(seg) : turnSpeed(seg);   // easy: brake only to the lane-filling speed
   return (vEnd * vEnd - state.v * state.v) / (2 * d);
 }
 
@@ -263,8 +276,8 @@ function cruise(state: RiderState, seg: RoadSegment, world: World): RiderState {
     return { ...state, along, v };
   }
 
-  if (isEasy(seg)) {   // braked to the same creep speed as a sharp turn; snap in and straighten out
-    if (nearIntersection(state, seg)) v = Math.max(v, turnSpeed(seg));   // never crawl below turn speed
+  if (isEasy(seg)) {   // braked to the lane-filling speed; cross in and arc across to the far edge
+    if (nearIntersection(state, seg)) v = Math.max(v, easyTurnSpeed(seg));   // never crawl below the lane-filling speed
     const along = state.along + v;
     if (along < seg.straightenStart) return { ...state, along, v };     // cross the inner edge -> commit to the next segment
     return enterStraighten(seg, world, v);
@@ -356,16 +369,18 @@ function straightenStep(state: RiderState, seg: RoadSegment): RiderState {
   const dHeading = clamp(aim - state.angle, -omega, omega);
   const angle = state.angle + dHeading;
 
-  // hold speed through the angle-kill (no accelerating mid-corner — we braked to a
-  // comfortable entry speed already); re-accelerate once aligned. v_safe below is
-  // the hard road-edge cap either way: nulling the CURRENT heading drifts
-  // ~ v*a^2/(2*omega) toward the edge it points at, so cap v to keep that on the
-  // road. Use the pre-steer angle — it drives this frame's drift — so it's honest.
+  // hold speed through the angle-kill (no accelerating mid-corner — we braked to the
+  // lane-filling entry speed already); re-accelerate once aligned. v_safe is the hard
+  // road-edge cap: nulling the CURRENT heading a at radius R = v/omega drifts
+  // R*(1 - cos a) = v*(1 - cos a)/omega toward the edge it points at, so cap v to keep
+  // that inside `room`. At entry this EXACTLY equals easyTurnSpeed (room = width-margin,
+  // a = THETA), so it just holds the calibrated arc; it only bites if `across` drifts
+  // unexpectedly. Use the pre-steer angle — it drives this frame's drift — so it's honest.
   let v = aligned ? state.v + A_ACCEL : state.v;
   const a = state.angle;
   if (Math.abs(a) > 1e-3) {
     const room = Math.max(0, hw - STRAIGHTEN_MARGIN - state.across * Math.sign(a));
-    v = Math.min(v, 2 * omega * room / (a * a));
+    v = Math.min(v, omega * room / (1 - Math.cos(a)));
   }
   v = clamp(v, 0, V_MAX);
 
