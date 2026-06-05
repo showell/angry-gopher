@@ -141,14 +141,21 @@ export function buildScene(state: RiderState, world: World): Scene {
   if (idx > 0) {
     const prev = world.segments[world.order[idx - 1]];
     const dir = prev.exitSign > 0 ? 'right' : 'left';
+    const Wp = prev.width;
+    // a point in PREV's BL frame, mapped into the Rider's frame through the join.
+    const fromPrev = (a: number, x: number): RiderPt => {
+      const p = curToNext(a, x, prev.length, prev.exitAngle, dir, Wp);
+      return toRider(p.a, p.x, c, riderHw);
+    };
+    // the WHOLE prior road strip (clipNear trims the part behind us) — so the segment we
+    // just left doesn't vanish mid-crossing — plus its outer-corner sector and exit props.
+    quads.push({ pts: [fromPrev(0, 0), fromPrev(0, Wp), fromPrev(prev.length, Wp), fromPrev(prev.length, 0)], color: ROAD });
     const cur = chain[0];
     const innerX = prev.exitSign > 0 ? cur.width : 0, outerX = cur.width - innerX;
-    const outerXp = prev.exitSign > 0 ? 0 : prev.width;
-    const e1 = curToNext(prev.length, outerXp, prev.length, prev.exitAngle, dir, prev.width);   // prev's outer end corner
-    quads.push(sectorQuad(at(0, 0, innerX), toRider(e1.a, e1.x, c, riderHw), at(0, 0, outerX)));
+    const outerXp = prev.exitSign > 0 ? 0 : Wp;
+    quads.push(sectorQuad(at(0, 0, innerX), fromPrev(prev.length, outerXp), at(0, 0, outerX)));
     for (const cr of prev.exitCritters) {
-      const p = curToNext(cr.along, cr.across + prev.width / 2, prev.length, prev.exitAngle, dir, prev.width);
-      critters.push({ at: toRider(p.a, p.x, c, riderHw), emoji: cr.emoji, height: cr.height, faceRight: cr.faceRight });
+      critters.push({ at: fromPrev(cr.along, cr.across + Wp / 2), emoji: cr.emoji, height: cr.height, faceRight: cr.faceRight });
     }
   }
 
