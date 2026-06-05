@@ -4,7 +4,7 @@
 // transforms (lengths + turn signs) — the same relational facts getNextRiderState uses.
 //
 // Run: node test/test_model.ts
-import { buildWorld, initialRiderState, getNextRiderState, assertInvariants, DPHI } from '../model.ts';
+import { buildWorld, initialRiderState, getNextRiderState, assertInvariants, DPHI, EASY_TURN_MAX } from '../model.ts';
 import type { RiderState, World } from '../model.ts';
 
 function wrap(a: number): number {
@@ -35,10 +35,16 @@ function localToRef(idx: number, a: number, x: number, world: World): P {
   let i = idx;
   while (i > 0) {
     const A = world.segments[world.order[i - 1]];   // B was entered from A
-    const sgn = A.exitSign, L = A.length, theta = A.exitAngle;
+    const sgn = A.exitSign, L = A.length, theta = A.exitAngle, hw = A.width / 2;
     const cos = Math.cos(theta), sin = Math.sin(theta);
-    const aA = L + a * cos - x * sgn * sin;
-    const xA = a * sgn * sin + x * cos;
+    let aA: number, xA: number;
+    if (theta <= EASY_TURN_MAX) {       // easy turn: inner-edge join (Rider straightened in)
+      aA = L + hw * sin + a * cos - x * sgn * sin;
+      xA = sgn * hw * (1 - cos) + a * sgn * sin + x * cos;
+    } else {                            // sharp turn: centre-line join (Rider arced in)
+      aA = L + a * cos - x * sgn * sin;
+      xA = a * sgn * sin + x * cos;
+    }
     a = aA; x = xA; i--;
   }
   return { a, x };

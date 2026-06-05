@@ -63,7 +63,7 @@ const omegaFor = (theta: number): number => DPHI * theta / QUARTER;  // turn rat
 // straightens out, instead of tracing an arc — see enterStraighten/straightenStep.
 // It rotates at the SAME per-frame rate as the equivalent arc would, omegaFor(theta),
 // so the rider's rotational tolerance is identical for easy and sharp turns.
-const EASY_TURN_MAX = 60 * Math.PI / 180;   // turns up to this gentle get straighten-out, not an arc
+export const EASY_TURN_MAX = 60 * Math.PI / 180;   // turns up to this gentle get straighten-out, not an arc
 const STRAIGHTEN_MARGIN = 0.3;              // hard safety: keep the drift bulge at least this far inside the edge (m)
 const RECENTER_MAX_ANGLE = 0.12;            // gentlest heading used to ease back to centre once aligned (rad)
 const RECENTER_GAIN = 0.08;                 // recenter aim angle = -RECENTER_GAIN * across (per m)
@@ -92,8 +92,10 @@ export interface RoadSegment {
   exitTan: number;      // R * tan(THETA/2): how far before the corner the turn starts
   entryR: number;       // radius of the turn that feeds this segment
   entryTan: number;     // where this segment's straight begins (past its start)
-  arcStart: number;     // length - exitTan
-  northHeading: number; // heading relative to north (seg1 = 0), radians — the one absolute orientation we keep
+  arcStart: number;          // length - exitTan (where a sharp-turn arc begins)
+  straightenStart: number;   // length - hw/tan(THETA): where an EASY turn crosses the next segment's inner edge
+  entryAngle: number;        // the turn angle that FEEDS this segment (0 if none) — its entry runs negative-along
+  northHeading: number;      // heading relative to north (seg1 = 0), radians — the one absolute orientation we keep
 }
 
 export interface World {
@@ -155,6 +157,8 @@ export function buildWorld(): World {
       exitTan: tan,
       entryR: 0, entryTan: 0,
       arcStart: length - tan,
+      straightenStart: exit ? length - (LANE_WIDTH / 2) / Math.tan(exit.angle) : length,
+      entryAngle: 0,
       northHeading: 0,
     };
   };
@@ -188,6 +192,7 @@ export function buildWorld(): World {
       const next = segments[s.exit.to];
       next.entryR = s.exit.radius;
       next.entryTan = s.exitTan;
+      next.entryAngle = s.exitAngle;
       next.northHeading = s.northHeading + s.exitSign * s.exitAngle;   // accumulate orientation along the route
     }
   }
@@ -242,7 +247,8 @@ function accel(state: RiderState, seg: RoadSegment): number {
   // SAME entry speed for easy and sharp turns; only what happens AT the turn
   // differs (straighten-out vs arc).
   if (!seg.exit || !nearIntersection(state, seg)) return A_ACCEL;
-  const d = seg.arcStart - state.along;
+  const target = isEasy(seg) ? seg.straightenStart : seg.arcStart;   // easy turns start at the inner-edge crossing
+  const d = target - state.along;
   if (d <= 1e-6) return 0;
   const vEnd = turnSpeed(seg);
   return (vEnd * vEnd - state.v * state.v) / (2 * d);
@@ -260,7 +266,7 @@ function cruise(state: RiderState, seg: RoadSegment, world: World): RiderState {
   if (isEasy(seg)) {   // braked to the same creep speed as a sharp turn; snap in and straighten out
     if (nearIntersection(state, seg)) v = Math.max(v, turnSpeed(seg));   // never crawl below turn speed
     const along = state.along + v;
-    if (along < seg.arcStart) return { ...state, along, v };
+    if (along < seg.straightenStart) return { ...state, along, v };     // cross the inner edge -> commit to the next segment
     return enterStraighten(seg, world, v);
   }
 
@@ -313,21 +319,23 @@ function handoff(along: number, across: number, angle: number,
   };
 }
 
-// EASY TURN: instead of arcing, snap into the next segment's frame at the tangent
-// point and straighten out. The entry (derived from that point): on the new road
-// but still pointed the OLD way (angle = -sgn*theta), offset to the inside
-// (across = sgn*R*(1-cos theta)), a touch before the segment's start. It's the
-// same physical point, so position is continuous (no jump).
+// EASY TURN: instead of arcing, the moment the Rider crosses the extension of the
+// next segment's INNER edge (at straightenStart on this segment) we re-express it
+// in the next segment's frame and straighten out. Crossing that edge, the Rider
+// lands ON the inner edge (across = sgn*hw — the right edge for a right turn),
+// still pointed the OLD way (angle = -sgn*theta), and a touch BEFORE the new
+// segment's begin line (along = -hw/sin(theta), negative — expected). Same physical
+// point, so position is continuous (no jump).
 function enterStraighten(seg: RoadSegment, world: World, v: number): RiderState {
   const next = world.segments[(seg.exit as { to: SegId }).to];
-  const sgn = seg.exitSign, theta = seg.exitAngle, R = seg.exitR;
+  const sgn = seg.exitSign, theta = seg.exitAngle, hw = seg.width / 2;
   return {
     segment: next.id,
-    along: -R * Math.tan(theta / 2) * Math.cos(theta),
-    across: sgn * R * (1 - Math.cos(theta)),
+    along: -hw / Math.sin(theta),
+    across: sgn * hw,
     angle: -sgn * theta,
     v,
-    turn: { sgn, r: R, angle: theta, phase: 'straightening', toSeg: next.id },
+    turn: { sgn, r: seg.exitR, angle: theta, phase: 'straightening', toSeg: next.id },
   };
 }
 
@@ -384,7 +392,9 @@ export function assertInvariants(s: RiderState, world: World): void {
          `finite (${s.along},${s.across},${s.angle})`);
   assert(Number.isFinite(s.v) && s.v >= -1e-9 && s.v <= 8, `v sane (${s.v})`);
   assert(Math.abs(s.angle) <= QUARTER + 1e-6, `|angle| <= 90deg (${s.angle})`);
-  assert(s.along >= -seg.entryR - 1e-6, `along not far before start (${s.along})`);
+  // an easy turn enters at along = -hw/sin(entryAngle), before the begin line — that's expected
+  const entryFloor = seg.entryAngle > 0 ? -(seg.width / 2) / Math.sin(seg.entryAngle) : 0;
+  assert(s.along >= entryFloor - 1e-6, `along not far before start (${s.along})`);
   assert(s.along <= seg.length + seg.exitR + 1e-6, `along not far past end (${s.along})`);
   const lateralRoom = seg.width / 2 + Math.max(seg.entryR, seg.exitR) + 1;
   assert(Math.abs(s.across) <= lateralRoom, `across bounded (${s.across})`);
