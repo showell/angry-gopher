@@ -153,13 +153,18 @@ function render(rider: RiderState): void {
   ctx.translate(-W / 2, -H / 2);
 
   // sky above / grass below, drawn oversized so the rolled frame's corners stay filled
+  // (two fillRects — cheap at any size).
   const BIG = W + H;
   ctx.fillStyle = '#8ecae6';
   ctx.fillRect(W / 2 - BIG, H / 2 - BIG, 2 * BIG, BIG);
   ctx.fillStyle = '#4a8f43';
   ctx.fillRect(W / 2 - BIG, H / 2, 2 * BIG, BIG);
 
-  drawHorizon(ctx, riderHeading(rider, world), W, H, FOCAL, BIG);   // mountains + sun, by orientation only
+  // the horizon silhouettes ARE expensive (a per-column trig loop), so overscan them
+  // by only what THIS lean exposes at the frame's corners — ~0 going straight (no
+  // wasted columns), a little when banked. (Was a flat W+H, redrawn every frame.)
+  const overscan = Math.abs(Math.sin(lean)) * H / 2 + 16;
+  drawHorizon(ctx, riderHeading(rider, world), W, H, FOCAL, overscan);   // mountains + sun, by orientation only
 
   for (const q of scene.quads) drawQuad(q);
 
