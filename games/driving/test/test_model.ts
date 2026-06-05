@@ -4,7 +4,7 @@
 // transforms (lengths + turn signs) — the same relational facts getNextRiderState uses.
 //
 // Run: node test/test_model.ts
-import { buildWorld, initialRiderState, getNextRiderState, assertInvariants, DPHI, STRAIGHTEN_OMEGA } from '../model.ts';
+import { buildWorld, initialRiderState, getNextRiderState, assertInvariants, DPHI } from '../model.ts';
 import type { RiderState, World } from '../model.ts';
 
 function wrap(a: number): number {
@@ -92,18 +92,18 @@ function main(): void {
   // 1) invariants on every state
   for (const st of states) assertInvariants(st, world);
 
-  // 2) heading continuity: no single-press jump bigger than the largest allowed
-  // per-press rotation — the sharpest arc step (omega scales with the turn angle)
-  // or the straighten-out flick rate, whichever is larger.
+  // 2) heading continuity: no single-press jump bigger than the sharpest per-press
+  // rotation (omega scales with the turn angle). Straighten-out uses the same
+  // omegaFor(theta) as the arc, so this one bound covers both turn kinds.
   let maxAngle = 0;
   for (const id of world.order) maxAngle = Math.max(maxAngle, world.segments[id].exitAngle);
-  const maxStep = Math.max(DPHI * maxAngle / (Math.PI / 2), STRAIGHTEN_OMEGA);
+  const maxOmega = DPHI * maxAngle / (Math.PI / 2);
   let maxHeadingJump = 0;
   for (let i = 1; i < states.length; i++) {
     const dh = Math.abs(wrap(heading(states[i], headings) - heading(states[i - 1], headings)));
     maxHeadingJump = Math.max(maxHeadingJump, dh);
   }
-  if (maxHeadingJump > maxStep + 1e-6) throw new Error(`heading jump ${maxHeadingJump} > maxStep ${maxStep}`);
+  if (maxHeadingJump > maxOmega + 1e-6) throw new Error(`heading jump ${maxHeadingJump} > maxOmega ${maxOmega}`);
 
   // 2b) the Rider never leaves the road — the core safety property of straighten-out
   const roadHW = world.segments[world.order[0]].width / 2;
@@ -137,7 +137,7 @@ function main(): void {
   console.log(`  segments          : ${world.order.length}`);
   console.log(`  presses to finish : ${states.length - 1}`);
   console.log(`  handoffs          : ${handoffs}`);
-  console.log(`  max heading jump  : ${maxHeadingJump.toFixed(4)} rad (largest allowed step = ${maxStep.toFixed(4)})`);
+  console.log(`  max heading jump  : ${maxHeadingJump.toFixed(4)} rad (largest turn step = ${maxOmega.toFixed(4)})`);
   console.log(`  max position jump : ${maxPosJump.toFixed(4)} m (peak speed = ${maxV.toFixed(4)} m/press)`);
   console.log(`  max off-centre    : ${maxAcross.toFixed(3)} m (bulge; road half-width = ${(world.segments[world.order[0]].width / 2).toFixed(1)})`);
   console.log(`  northings (N>N-2) : ${north.map((v) => v.toFixed(0)).join(' ')}`);

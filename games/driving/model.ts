@@ -61,8 +61,9 @@ const omegaFor = (theta: number): number => DPHI * theta / QUARTER;  // turn rat
 // ---- straighten-out: easy turns (theta <= EASY_TURN_MAX) skip the rigid arc ----
 // The bike (a point) crosses into the new segment at the tangent point and then
 // straightens out, instead of tracing an arc — see enterStraighten/straightenStep.
+// It rotates at the SAME per-frame rate as the equivalent arc would, omegaFor(theta),
+// so the rider's rotational tolerance is identical for easy and sharp turns.
 const EASY_TURN_MAX = 60 * Math.PI / 180;   // turns up to this gentle get straighten-out, not an arc
-export const STRAIGHTEN_OMEGA = 0.25;       // max heading change per press while straightening (rad): the "flick" rate
 const STRAIGHTEN_MARGIN = 0.3;              // hard safety: keep the drift bulge at least this far inside the edge (m)
 const RECENTER_MAX_ANGLE = 0.12;            // gentlest heading used to ease back to centre once aligned (rad)
 const RECENTER_GAIN = 0.08;                 // recenter aim angle = -RECENTER_GAIN * across (per m)
@@ -339,11 +340,12 @@ function enterStraighten(seg: RoadSegment, world: World, v: number): RiderState 
 //       edge is the ONLY hard limit. Resume cruising once aligned AND centred.
 function straightenStep(state: RiderState, seg: RoadSegment): RiderState {
   const hw = seg.width / 2;
+  const omega = omegaFor((state.turn as Turning).angle);   // SAME per-frame rotation as this turn's arc — one rider tolerance
   const aligned = Math.abs(state.angle) < ALIGN_EPS;
 
   // steer straight while the angle is still wrong; then a gentle recentre lean.
   const aim = aligned ? clamp(-RECENTER_GAIN * state.across, -RECENTER_MAX_ANGLE, RECENTER_MAX_ANGLE) : 0;
-  const dHeading = clamp(aim - state.angle, -STRAIGHTEN_OMEGA, STRAIGHTEN_OMEGA);
+  const dHeading = clamp(aim - state.angle, -omega, omega);
   const angle = state.angle + dHeading;
 
   // hold speed through the angle-kill (no accelerating mid-corner — we braked to a
@@ -355,7 +357,7 @@ function straightenStep(state: RiderState, seg: RoadSegment): RiderState {
   const a = state.angle;
   if (Math.abs(a) > 1e-3) {
     const room = Math.max(0, hw - STRAIGHTEN_MARGIN - state.across * Math.sign(a));
-    v = Math.min(v, 2 * STRAIGHTEN_OMEGA * room / (a * a));
+    v = Math.min(v, 2 * omega * room / (a * a));
   }
   v = clamp(v, 0, V_MAX);
 
