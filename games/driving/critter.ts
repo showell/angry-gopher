@@ -43,10 +43,6 @@ const HERD_ROW_DEPTH = 5;                // across-spacing (depth) of the herd s
 const HERD_JITTER_ALONG = 1.5;           // deterministic wobble of the scatter, along
 const HERD_JITTER_ACROSS = 1.2;          // deterministic wobble of the scatter, across
 const PIG_DIST_BEFORE_END = 60;          // pigs gather this far before the next intersection
-const ELEPHANT_PAST_INTERSECTION = 20;   // the elephants stand this far beyond the intersection
-const BABY_ELEPHANT_AHEAD = 6;           // the baby elephant sits this far ahead of the adult
-const BABY_ELEPHANT_SIDE_OFFSET = 14;    // ...and this far to the side (opposite the turn)
-
 const GIANT_ELEPHANT_SCALE = 3;          // elephants this many times bigger...
 const GIANT_ELEPHANT_FROM_SEG = 8;       // ...on segments numbered above this
 
@@ -59,19 +55,20 @@ export function segmentCritters(length: number, laneHalfWidth: number, treeLineO
   return [...cowHerd(laneHalfWidth, treeLineOffset), ...pigRow(length, laneHalfWidth + HERD_ROAD_OFFSET)];
 }
 
-// The critters AT a segment's exit intersection: the elephants, just past it, to
-// the side OPPOSITE the turn. `intersectionAlong` is where the intersection is
-// (the segment's far end); `turnSign` is +1 right / -1 left; elephants go giant
-// late in the route (segNum). The adult faces "left" (rear on its right), so we
-// put its REAR — not its middle — on the centreline by shifting it half its
-// width, else the wide giant body straddles the road.
-export function intersectionCritters(intersectionAlong: number, turnSign: number, segNum: number): Critter[] {
-  const corner = intersectionAlong + ELEPHANT_PAST_INTERSECTION;
+// Elephants AT a segment's exit intersection — they read as having just CROSSED it.
+// The adult stands at the FAR corner of the segment: for a RIGHT turn its bottom-
+// RIGHT corner sits on EL (end-left), facing left; for a LEFT turn (mirror, NOT a
+// flip) its bottom-LEFT corner sits on ER (end-right), facing RIGHT. So its centre
+// is half its width beyond that edge — and that offset scales with the giant late-
+// route elephants. The baby is tucked beside it, toward the road centre. `turnSign`
+// is +1 right / -1 left; `hw` is the road half-width; the corners are EL/ER at along=L.
+export function intersectionCritters(intersectionAlong: number, turnSign: number, segNum: number, hw: number): Critter[] {
   const scale = segNum > GIANT_ELEPHANT_FROM_SEG ? GIANT_ELEPHANT_SCALE : 1;
   const adultH = ELEPHANT_HEIGHT * scale, babyH = BABY_ELEPHANT_HEIGHT * scale;
+  const faceRight = turnSign < 0;   // right turn -> faces left; left turn -> faces right (new)
   return [
-    { along: corner,                       across: -turnSign * adultH / 2,                emoji: '🐘', height: adultH, faceRight: false },
-    { along: corner + BABY_ELEPHANT_AHEAD, across: -turnSign * BABY_ELEPHANT_SIDE_OFFSET, emoji: '🐘', height: babyH, faceRight: false },
+    { along: intersectionAlong, across: -turnSign * (hw + adultH / 2), emoji: '🐘', height: adultH, faceRight },
+    { along: intersectionAlong, across: -turnSign * (hw - babyH / 2), emoji: '🐘', height: babyH, faceRight },
   ];
 }
 

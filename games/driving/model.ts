@@ -147,7 +147,7 @@ export function buildWorld(): World {
       id, length, width: LANE_WIDTH, scheme,
       trees: [],   // filled below, once entry/exit tangents are known
       critters: segmentCritters(length, LANE_WIDTH / 2, TREE_ROAD_OFFSET),
-      exitCritters: exit ? intersectionCritters(length, signOf(exit.dir), segNumber(id)) : [],
+      exitCritters: exit ? intersectionCritters(length, signOf(exit.dir), segNumber(id), LANE_WIDTH / 2) : [],
       exit,
       exitR: exit ? exit.radius : 0,
       exitSign: exit ? signOf(exit.dir) : 0,
