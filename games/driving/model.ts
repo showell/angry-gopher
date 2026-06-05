@@ -321,10 +321,15 @@ function straightenStep(state: RiderState, seg: RoadSegment): RiderState {
   // as he nears the centre the lean fades on its own, so he arrives upright with no residual
   // to snap out (the lean and the offset reach 0 together).
   const aim = killing ? 0 : -state.across / RECENTER_DISTANCE;
-  // JERK-LIMIT the rotation: tilt = LEAN_PER_OMEGA * the per-press rotation, so capping how
-  // much the rotation may change per press (TURN_RATE_STEP) caps the tilt change to MAX_TILT_STEP
-  // — the bank ramps in and out smoothly instead of snapping on at the corner.
-  const desired = clamp(aim - state.angle, -omega, omega);
+  // Approach the aim on a BRAKING profile: cap the rotation rate to what can still decelerate
+  // (at TURN_RATE_STEP/press) to 0 by the time the heading reaches the aim — sqrt(2*step*gap).
+  // So the heading SETTLES onto the aim instead of coasting past it and wobbling (the rate
+  // can't change instantly, so without braking it always overshoots a moving target).
+  const gap = aim - state.angle;
+  const lim = Math.min(omega, Math.sqrt(2 * TURN_RATE_STEP * Math.abs(gap)));
+  const desired = clamp(gap, -lim, lim);
+  // JERK-LIMIT: tilt = LEAN_PER_OMEGA * the per-press rotation, so capping how much the rotation
+  // may change per press (TURN_RATE_STEP) caps the tilt change to MAX_TILT_STEP — no sharp banking.
   const dHeading = clamp(desired, t.turnRate - TURN_RATE_STEP, t.turnRate + TURN_RATE_STEP);
   const angle = state.angle + dHeading;
 
