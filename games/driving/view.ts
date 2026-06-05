@@ -105,7 +105,7 @@ export function buildScene(state: RiderState, world: World): Scene {
 
   // The intersection just behind us belongs to BOTH segments: render the previous
   // segment's exit props, mapped through its join into the current frame, so a
-  // corner prop stays continuous across the handoff.
+  // corner prop stays continuous across the crossing.
   const idx = world.order.indexOf(state.segment);
   if (idx > 0) {
     const prev = world.segments[world.order[idx - 1]];

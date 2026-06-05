@@ -16,19 +16,12 @@
 //            brings the Rider to turn speed right at the corner (recomputed each
 //            press, so it self-corrects discretisation drift). See accel()/cruise().
 //
-// Turning (no precomputed arc): each press rotates the heading by `omega` and
-// inches forward `ds = R * omega` — forward and rotation IN SYNC, tracing a
-// circle of radius R. We integrate in the segment frame:
-//   along  += ds * cos(angle);  across += ds * sin(angle);  angle += omega.
-// For a turn of total angle THETA we rotate omega = DPHI * THETA / (pi/2) per
-// press — i.e. a 60deg turn rotates 2/3 as fast as a 90deg turn, so every turn
-// takes the same number of presses. The straight ends a tangent length
-// t = R * tan(THETA/2) before the corner; the next segment's straight begins
-// the same t past its start.
-//
-// Handoff: at the arc midpoint (THETA/2) we advance the current segment A->B,
-// re-expressing the very same (along, across, angle) in B's frame — a rotation
-// by THETA about the shared corner. Continuous; the Rider never jumps.
+// Turning (straighten-out — the ONLY turn mechanism; every turn is <= 90deg): the
+// moment the Rider crosses the extension of the next segment's INNER edge he is
+// re-expressed in that segment's frame, landing ON the inner edge still pointed the
+// old way, then ROTATES his heading to 0 (omega = DPHI * THETA / (pi/2) per press, so
+// every turn takes the same number of presses) while drifting across the lane to the
+// FAR edge, and finally eases back to centre. See enterStraighten/straightenStep.
 // =============================================================================
 
 import { segmentCritters, intersectionCritters } from './critter.ts';
@@ -44,7 +37,7 @@ import type { Scheme, Tree } from './tree.ts';
 
 // road
 const LANE_WIDTH = 4;                    // a single lane
-const TURN_RADIUS = 2;                   // radius of every corner
+const TURN_RADIUS = 2;                   // sets the tree clear-zone tangent at each corner (R*tan(THETA/2))
 
 // the Rider starts slowing once the next intersection is within this distance
 const APPROACH_INTERSECTION_DIST = 160;
@@ -63,12 +56,11 @@ export const LEAN_CAP = 45 * Math.PI / 180;  // hard runtime cap on the lean
 const QUARTER = Math.PI / 2;
 const omegaFor = (theta: number): number => DPHI * theta / QUARTER;  // turn rate scales with angle
 
-// ---- straighten-out: easy turns (theta <= EASY_TURN_MAX) skip the rigid arc ----
-// The bike (a point) crosses into the new segment at the tangent point and then
-// straightens out, instead of tracing an arc — see enterStraighten/straightenStep.
-// It rotates at the SAME per-frame rate as the equivalent arc would, omegaFor(theta),
-// so the rider's rotational tolerance is identical for easy and sharp turns.
-export const EASY_TURN_MAX = 90 * Math.PI / 180;   // turns up to this gentle get straighten-out, not an arc
+// ---- straighten-out tuning ----
+// Every turn is a straighten-out (no rigid arcs). The geometry requires the turn angle
+// to be at most 90deg — beyond that the Rider would enter the next segment pointed
+// backwards. test/test_model.ts enforces it on the configured route.
+export const MAX_TURN_ANGLE = 90 * Math.PI / 180;   // the largest turn the model allows
 const STRAIGHTEN_MARGIN = 0.1;              // hard safety: keep the drift bulge at least this far inside the edge (m)
 const RECENTER_DISTANCE = 160;              // after the turn, ease back to centre over about this far (m); ~ APPROACH_INTERSECTION_DIST
 const ALIGN_EPS = 0.02;                     // "aligned" once |angle| is below this (rad)
@@ -90,14 +82,11 @@ export interface RoadSegment {
   exitCritters: Critter[];  // at the exit intersection (elephants); shared with the next segment
   exit: { dir: TurnDir; to: SegId; radius: number; angle: number } | null;
   // derived relational scalars (filled by buildWorld)
-  exitR: number;        // exit turn radius (0 if none)
   exitSign: number;     // +1 right, -1 left, 0 none
   exitAngle: number;    // turn angle THETA (0 if none)
-  exitTan: number;      // R * tan(THETA/2): how far before the corner the turn starts
-  entryR: number;       // radius of the turn that feeds this segment
-  entryTan: number;     // where this segment's straight begins (past its start)
-  arcStart: number;          // length - exitTan (where a sharp-turn arc begins)
-  straightenStart: number;   // length - hw/tan(THETA): where an EASY turn crosses the next segment's inner edge
+  exitTan: number;      // R * tan(THETA/2): the clear zone trees keep near the exit corner
+  entryTan: number;     // the clear zone trees keep near the entry corner
+  straightenStart: number;   // length - hw/tan(THETA): where the Rider crosses the next segment's inner edge
   entryAngle: number;        // the turn angle that FEEDS this segment (0 if none) — its entry runs negative-along
   northHeading: number;      // heading relative to north (seg1 = 0), radians — the one absolute orientation we keep
 }
@@ -117,7 +106,7 @@ export interface World {
 //   VELOCITY : v (speed along the path, m/press)
 // `turn` is null while cruising; a small descriptor while turning.
 // ----------------------------------------------------------------------------
-export interface Turning { sgn: number; r: number; angle: number; phase: 'exiting' | 'entering' | 'straightening' | 'recentering'; toSeg: SegId; recenterEnd: number }
+export interface Turning { angle: number; phase: 'straightening' | 'recentering'; recenterEnd: number }
 export interface RiderState {
   segment: SegId;
   along: number;
@@ -134,7 +123,7 @@ export function initialRiderState(world: World): RiderState {
 // The Rider's heading relative to north (north = seg1's forward direction). This
 // is the one ABSOLUTE orientation we expose: far scenery (the horizon) is drawn
 // purely from it, because a mountain at infinity depends on which way the Rider
-// faces, not where it is. Continuous across handoffs (segment base + angle).
+// faces, not where it is. Continuous across segment crossings (segment base + angle).
 export function riderHeading(state: RiderState, world: World): number {
   return world.segments[state.segment].northHeading + state.angle;
 }
@@ -161,12 +150,10 @@ export function buildWorld(): World {
       critters: segmentCritters(length, LANE_WIDTH / 2, TREE_ROAD_OFFSET),
       exitCritters: exit ? intersectionCritters(length, signOf(exit.dir), segNumber(id), LANE_WIDTH / 2) : [],
       exit,
-      exitR: exit ? exit.radius : 0,
       exitSign: exit ? signOf(exit.dir) : 0,
       exitAngle: exit ? exit.angle : 0,
       exitTan: tan,
-      entryR: 0, entryTan: 0,
-      arcStart: length - tan,
+      entryTan: 0,
       straightenStart: exit ? length - (LANE_WIDTH / 2) / Math.tan(exit.angle) : length,
       entryAngle: 0,
       northHeading: 0,
@@ -175,21 +162,21 @@ export function buildWorld(): World {
   const turn = (to: SegId, dir: TurnDir, deg: number): RoadSegment['exit'] =>
     ({ dir, to, radius: TURN_RADIUS, angle: deg * DEG });
 
-  // route is checked non-self-intersecting by test/test_model.ts (no loops).
-  // Hand-authored route, opening with a soft S of gentle warm-up turns. Only the 120deg
-  // turns take a sharp arc; the last segment has no exit (the final straight).
+  // route is checked non-self-intersecting (no loops) and all-turns-<=-90deg by
+  // test/test_model.ts. Hand-authored, opening with a soft S of gentle warm-up turns;
+  // every turn is a straighten-out; the last segment has no exit (the final straight).
   const segments: Record<SegId, RoadSegment> = {
     seg1:  seg('seg1', 300, 'ALL_GREEN',     turn('seg2',  'left',   30)),
     seg2:  seg('seg2', 240, 'YELLOW_GREEN',  turn('seg3',  'right',  30)),
-    seg3:  seg('seg3', 260, 'RED_GREEN',     turn('seg4',  'right',  60)),
-    seg4:  seg('seg4', 320, 'ALL_GREEN',     turn('seg5',  'left',   90)),
-    seg5:  seg('seg5', 416, 'YELLOW_GREEN',  turn('seg6',  'right',  60)),
+    seg3:  seg('seg3', 260, 'RED_GREEN',     turn('seg4',  'right',  50)),
+    seg4:  seg('seg4', 320, 'ALL_GREEN',     turn('seg5',  'left',   80)),
+    seg5:  seg('seg5', 416, 'YELLOW_GREEN',  turn('seg6',  'right',  30)),
     seg6:  seg('seg6', 200, 'RED_GREEN',     turn('seg7',  'right',  30)),
-    seg7:  seg('seg7', 220, 'ALL_GREEN',     turn('seg8',  'left',  120)),
-    seg8:  seg('seg8', 240, 'YELLOW_GREEN',  turn('seg9',  'left',   60)),
-    seg9:  seg('seg9', 200, 'RED_GREEN',     turn('seg10', 'right',  90)),
-    seg10: seg('seg10', 220, 'ALL_GREEN',    turn('seg11', 'right',  60)),
-    seg11: seg('seg11', 200, 'YELLOW_GREEN', turn('seg12', 'left',  120)),
+    seg7:  seg('seg7', 220, 'ALL_GREEN',     turn('seg8',  'left',   80)),
+    seg8:  seg('seg8', 240, 'YELLOW_GREEN',  turn('seg9',  'left',   70)),
+    seg9:  seg('seg9', 200, 'RED_GREEN',     turn('seg10', 'right',  80)),
+    seg10: seg('seg10', 220, 'ALL_GREEN',    turn('seg11', 'right',  20)),
+    seg11: seg('seg11', 200, 'YELLOW_GREEN', turn('seg12', 'left',   70)),
     seg12: seg('seg12', 200, 'RED_GREEN',    turn('seg13', 'right',  15)),
     seg13: seg('seg13', 200, 'ALL_GREEN',    turn('seg14', 'right',  15)),
     seg14: seg('seg14', 200, 'YELLOW_GREEN', turn('seg15', 'right',  15)),
@@ -204,7 +191,6 @@ export function buildWorld(): World {
     const s = segments[id];
     if (s.exit) {
       const next = segments[s.exit.to];
-      next.entryR = s.exit.radius;
       next.entryTan = s.exitTan;
       next.entryAngle = s.exitAngle;
       next.northHeading = s.northHeading + s.exitSign * s.exitAngle;   // accumulate orientation along the route
@@ -226,10 +212,7 @@ export function buildWorld(): World {
 // ----------------------------------------------------------------------------
 export function getNextRiderState(state: RiderState, world: World): RiderState {
   const seg = world.segments[state.segment];
-  const t = state.turn;
-  const next = t === null ? cruise(state, seg, world)
-             : (t.phase === 'straightening' || t.phase === 'recentering') ? straightenStep(state, seg)
-             : turnStep(state, seg, world);
+  const next = state.turn === null ? cruise(state, seg, world) : straightenStep(state, seg);
   assertInvariants(next, world);
   return next;
 }
@@ -242,21 +225,15 @@ function nearIntersection(state: RiderState, seg: RoadSegment): boolean {
   return seg.length - state.along <= APPROACH_INTERSECTION_DIST;
 }
 
-// the speed at which a turn is taken (its fixed per-press creep) — the speed the
-// approach must decelerate to so motion is continuous into the turn.
-const turnSpeed = (seg: RoadSegment): number => seg.exitR * omegaFor(seg.exitAngle);
-const isEasy = (seg: RoadSegment): boolean => seg.exit !== null && seg.exitAngle <= EASY_TURN_MAX;
-
-// The speed an EASY turn is taken at. Unlike a sharp turn's tight creep, an easy
-// turn is a GENTLE wide arc: the Rider enters ON the inner edge still pointed the
-// old way, then lets the angle-kill drift him the full lane-width to the FAR edge.
-// Pick the speed so that killing the whole turn angle (rotating at omegaFor) sweeps
-// exactly (width - margin) of lateral drift: a constant-speed constant-omega arc has
-// radius R = v/omega and lateral drift R*(1 - cos THETA), so
+// The speed a turn is taken at: a GENTLE wide arc. The Rider enters ON the inner edge
+// still pointed the old way, then lets the angle-kill drift him the full lane-width to
+// the FAR edge. Pick the speed so that killing the whole turn angle (rotating at
+// omegaFor) sweeps exactly (width - margin) of lateral drift: a constant-speed
+// constant-omega arc has radius R = v/omega and lateral drift R*(1 - cos THETA), so
 //   v = omega * (width - margin) / (1 - cos THETA).
-// Faster than the creep => a wider, gentler arc that USES the whole lane instead of
-// hugging the near edge. (margin keeps the far end a hair inside the road.)
-function easyTurnSpeed(seg: RoadSegment): number {
+// A wide, gentle arc that USES the whole lane instead of hugging the near edge.
+// (margin keeps the far end a hair inside the road.)
+function turnSpeed(seg: RoadSegment): number {
   return omegaFor(seg.exitAngle) * (seg.width - STRAIGHTEN_MARGIN) / (1 - Math.cos(seg.exitAngle));
 }
 
@@ -269,15 +246,12 @@ function easyTurnSpeed(seg: RoadSegment): number {
 //     integration drift.
 function accel(state: RiderState, seg: RoadSegment): number {
   // Far from a turn (or on the exit-less final segment): accelerate at A_ACCEL.
-  // Approaching one: brake to reach the turn's creep speed AT THE TANGENT POINT
-  // (arcStart, just before the intersection — so the brake is a touch harder).
-  // SAME entry speed for easy and sharp turns; only what happens AT the turn
-  // differs (straighten-out vs arc).
+  // Approaching one: brake to reach the lane-filling turn speed right at the inner-edge
+  // crossing (straightenStart), where the Rider commits to the next segment.
   if (!seg.exit || !nearIntersection(state, seg)) return A_ACCEL;
-  const target = isEasy(seg) ? seg.straightenStart : seg.arcStart;   // easy turns start at the inner-edge crossing
-  const d = target - state.along;
+  const d = seg.straightenStart - state.along;
   if (d <= 1e-6) return 0;
-  const vEnd = isEasy(seg) ? easyTurnSpeed(seg) : turnSpeed(seg);   // easy: brake only to the lane-filling speed
+  const vEnd = turnSpeed(seg);
   return (vEnd * vEnd - state.v * state.v) / (2 * d);
 }
 
@@ -290,69 +264,19 @@ function cruise(state: RiderState, seg: RoadSegment, world: World): RiderState {
     return { ...state, along, v };
   }
 
-  if (isEasy(seg)) {   // braked to the lane-filling speed; cross in and arc across to the far edge
-    if (nearIntersection(state, seg)) v = Math.max(v, easyTurnSpeed(seg));   // never crawl below the lane-filling speed
-    const along = state.along + v;
-    if (along < seg.straightenStart) return { ...state, along, v };     // cross the inner edge -> commit to the next segment
-    return enterStraighten(seg, world, v);
-  }
-
-  const vEnd = turnSpeed(seg);
-  if (nearIntersection(state, seg)) v = Math.max(v, vEnd);   // while braking for the turn, never crawl below turn speed
+  // braked to the lane-filling speed; cross the inner edge and straighten into the next
+  if (nearIntersection(state, seg)) v = Math.max(v, turnSpeed(seg));   // never crawl below the lane-filling speed
   const along = state.along + v;
-  if (along < seg.arcStart) return { ...state, along, v };
-
-  const turn: Turning = {
-    sgn: seg.exitSign, r: seg.exitR, angle: seg.exitAngle, phase: 'exiting', toSeg: seg.exit.to, recenterEnd: 0,
-  };
-  return turnStep({ segment: seg.id, along: seg.arcStart, across: 0, angle: 0, v: vEnd, turn }, seg, world);
+  if (along < seg.straightenStart) return { ...state, along, v };     // cross the inner edge -> commit to the next segment
+  return enterStraighten(seg, world, v);
 }
 
-function turnStep(state: RiderState, seg: RoadSegment, world: World): RiderState {
-  const t = state.turn as Turning;
-  const omega = omegaFor(t.angle);
-  const dHeading = t.sgn * omega;
-  const ds = t.r * omega;                  // forward IN SYNC with rotation
-  const mid = state.angle + dHeading / 2;
-  const along = state.along + ds * Math.cos(mid);
-  const across = state.across + ds * Math.sin(mid);
-  const angle = state.angle + dHeading;
-
-  if (t.phase === 'exiting') {
-    if (angle * t.sgn < t.angle / 2) return { segment: seg.id, along, across, angle, v: ds, turn: t };
-    return handoff(along, across, angle, seg, world, t);   // arc midpoint -> advance the segment
-  }
-  // entering: turn until aligned with the new segment, then resume cruising
-  if (angle * t.sgn < 0) return { segment: seg.id, along, across, angle, v: ds, turn: t };
-  // leave the turn at the turn's OWN speed and accelerate from there (no jump to V_BASE)
-  return { segment: seg.id, along: seg.entryTan, across: 0, angle: 0, v: ds, turn: null };
-}
-
-// Re-express the Rider in the next segment's frame: a rotation by THETA about the
-// shared corner (A's far end = B's start). Reduces to the simple swap at 90deg.
-function handoff(along: number, across: number, angle: number,
-                 from: RoadSegment, world: World, t: Turning): RiderState {
-  const L = from.length, theta = t.angle, sgn = t.sgn;
-  const dA = along - L, dX = across;
-  const cosB = Math.cos(theta), sinB = sgn * Math.sin(theta);   // rotate by sgn*THETA
-  const next = world.segments[t.toSeg];
-  return {
-    segment: next.id,
-    along: dA * cosB + dX * sinB,
-    across: -dA * sinB + dX * cosB,
-    angle: angle - sgn * theta,
-    v: next.entryR * omegaFor(theta),
-    turn: { sgn, r: next.entryR, angle: theta, phase: 'entering', toSeg: next.id, recenterEnd: 0 },
-  };
-}
-
-// EASY TURN: instead of arcing, the moment the Rider crosses the extension of the
-// next segment's INNER edge (at straightenStart on this segment) we re-express it
-// in the next segment's frame and straighten out. Crossing that edge, the Rider
-// lands ON the inner edge (across = sgn*hw — the right edge for a right turn),
-// still pointed the OLD way (angle = -sgn*theta), and a touch BEFORE the new
-// segment's begin line (along = -hw/sin(theta), negative — expected). Same physical
-// point, so position is continuous (no jump).
+// Crossing into a turn: the moment the Rider crosses the extension of the next
+// segment's INNER edge (at straightenStart on this segment) we re-express him in the
+// next segment's frame and straighten out. Crossing that edge, the Rider lands ON the
+// inner edge (across = sgn*hw — the right edge for a right turn), still pointed the OLD
+// way (angle = -sgn*theta), and a touch BEFORE the new segment's begin line (along =
+// -hw/sin(theta), negative — expected). Same physical point, so position is continuous.
 function enterStraighten(seg: RoadSegment, world: World, v: number): RiderState {
   const next = world.segments[(seg.exit as { to: SegId }).to];
   const sgn = seg.exitSign, theta = seg.exitAngle, hw = seg.width / 2;
@@ -362,7 +286,7 @@ function enterStraighten(seg: RoadSegment, world: World, v: number): RiderState 
     across: sgn * hw,
     angle: -sgn * theta,
     v,
-    turn: { sgn, r: seg.exitR, angle: theta, phase: 'straightening', toSeg: next.id, recenterEnd: 0 },
+    turn: { angle: theta, phase: 'straightening', recenterEnd: 0 },
   };
 }
 
@@ -381,7 +305,7 @@ function enterStraighten(seg: RoadSegment, world: World, v: number): RiderState 
 function straightenStep(state: RiderState, seg: RoadSegment): RiderState {
   const hw = seg.width / 2;
   const t = state.turn as Turning;
-  const omega = omegaFor(t.angle);          // SAME per-frame rotation as this turn's arc — one rider tolerance
+  const omega = omegaFor(t.angle);          // per-press rotation for this turn
   const killing = t.phase === 'straightening';
 
   // angle-kill steers straight to 0; recenter aims at the centre line RECENTER_DISTANCE
@@ -394,8 +318,8 @@ function straightenStep(state: RiderState, seg: RoadSegment): RiderState {
   // re-accelerate while recentring. v_safe is the hard road-edge cap: nulling the
   // CURRENT heading a at radius R = v/omega drifts R*(1 - cos a) = v*(1 - cos a)/omega
   // toward the edge it points at, so cap v to keep that inside `room`. At angle-kill
-  // entry this EXACTLY equals easyTurnSpeed, so it just holds the calibrated arc; it
-  // only bites if `across` drifts unexpectedly (the recenter lean is too small to bind).
+  // entry this EXACTLY equals turnSpeed, so it just holds the calibrated arc; it only
+  // bites if `across` drifts unexpectedly (the recenter lean is too small to bind).
   let v = killing ? state.v : state.v + A_ACCEL;
   const a = state.angle;
   if (Math.abs(a) > 1e-3) {
@@ -420,8 +344,9 @@ function straightenStep(state: RiderState, seg: RoadSegment): RiderState {
 }
 
 // ----------------------------------------------------------------------------
-// Invariants. We ALLOW the Rider past a segment's end (nosing into the turn) and
-// before its start (entering); these pin down "how far is reasonable".
+// Invariants. The Rider may sit BEFORE a segment's start (negative along — he crosses
+// into a turn at the inner edge, just shy of the begin line); this pins down "how far
+// before is reasonable", plus the usual finite and bounded checks.
 // ----------------------------------------------------------------------------
 function assert(cond: boolean, msg: string): void {
   if (!cond) throw new Error('invariant violated: ' + msg);
@@ -432,12 +357,11 @@ export function assertInvariants(s: RiderState, world: World): void {
          `finite (${s.along},${s.across},${s.angle})`);
   assert(Number.isFinite(s.v) && s.v >= -1e-9 && s.v <= 8, `v sane (${s.v})`);
   assert(Math.abs(s.angle) <= QUARTER + 1e-6, `|angle| <= 90deg (${s.angle})`);
-  // an easy turn enters at along = -hw/sin(entryAngle), before the begin line — that's expected
+  // a turn enters at along = -hw/sin(entryAngle), before the begin line — that's expected
   const entryFloor = seg.entryAngle > 0 ? -(seg.width / 2) / Math.sin(seg.entryAngle) : 0;
   assert(s.along >= entryFloor - 1e-6, `along not far before start (${s.along})`);
-  assert(s.along <= seg.length + seg.exitR + 1e-6, `along not far past end (${s.along})`);
-  const lateralRoom = seg.width / 2 + Math.max(seg.entryR, seg.exitR) + 1;
-  assert(Math.abs(s.across) <= lateralRoom, `across bounded (${s.across})`);
+  assert(s.along <= seg.length + 1e-6, `along not past end (${s.along})`);
+  assert(Math.abs(s.across) <= seg.width / 2 + 1, `across bounded (${s.across})`);
   if (s.turn === null) {
     assert(Math.abs(s.across) < 1e-6 && Math.abs(s.angle) < 1e-6, 'cruising => centred and aligned');
   }

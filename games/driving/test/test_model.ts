@@ -4,7 +4,7 @@
 // transforms (lengths + turn signs) — the same relational facts getNextRiderState uses.
 //
 // Run: node test/test_model.ts
-import { buildWorld, initialRiderState, getNextRiderState, assertInvariants, DPHI, EASY_TURN_MAX, leanFor } from '../model.ts';
+import { buildWorld, initialRiderState, getNextRiderState, assertInvariants, DPHI, MAX_TURN_ANGLE, leanFor } from '../model.ts';
 import type { RiderState, World } from '../model.ts';
 
 function wrap(a: number): number {
@@ -28,8 +28,8 @@ function heading(s: RiderState, h: Record<string, number>): number {
 }
 
 // a point in segment[idx]'s frame, expressed in segment-1's frame (a chosen
-// reference, not global): compose only local B->A transforms (rotate THETA
-// about the corner).
+// reference, not global): compose only local B->A transforms. Every turn is a
+// straighten-out, so the join is always at the INNER edge of the corner.
 interface P { a: number; x: number }
 function localToRef(idx: number, a: number, x: number, world: World): P {
   let i = idx;
@@ -37,14 +37,8 @@ function localToRef(idx: number, a: number, x: number, world: World): P {
     const A = world.segments[world.order[i - 1]];   // B was entered from A
     const sgn = A.exitSign, L = A.length, theta = A.exitAngle, hw = A.width / 2;
     const cos = Math.cos(theta), sin = Math.sin(theta);
-    let aA: number, xA: number;
-    if (theta <= EASY_TURN_MAX) {       // easy turn: inner-edge join (Rider straightened in)
-      aA = L + hw * sin + a * cos - x * sgn * sin;
-      xA = sgn * hw * (1 - cos) + a * sgn * sin + x * cos;
-    } else {                            // sharp turn: centre-line join (Rider arced in)
-      aA = L + a * cos - x * sgn * sin;
-      xA = a * sgn * sin + x * cos;
-    }
+    const aA = L + hw * sin + a * cos - x * sgn * sin;
+    const xA = sgn * hw * (1 - cos) + a * sgn * sin + x * cos;
     a = aA; x = xA; i--;
   }
   return { a, x };
@@ -73,13 +67,22 @@ function main(): void {
   const last = world.order[world.order.length - 1];
   const headings = segHeadings(world);
 
+  // CONFIG: every turn must be <= 90deg — the straighten-out geometry (the only turn
+  // mechanism) breaks beyond it (the Rider would enter the next segment pointed back).
+  for (const id of world.order) {
+    const deg = world.segments[id].exitAngle * 180 / Math.PI;
+    if (world.segments[id].exitAngle > MAX_TURN_ANGLE + 1e-9) {
+      throw new Error(`turn on ${id} is ${deg.toFixed(0)}deg, over the ${(MAX_TURN_ANGLE * 180 / Math.PI).toFixed(0)}deg max`);
+    }
+  }
+
   let s = initialRiderState(world);
   const states: RiderState[] = [s];
-  let handoffs = 0, maxAcross = 0, maxV = 0;
+  let crossings = 0, maxAcross = 0, maxV = 0;
 
   for (let i = 0; i < 8000; i++) {
     const n = getNextRiderState(s, world);
-    if (n.segment !== s.segment) handoffs++;
+    if (n.segment !== s.segment) crossings++;
     maxAcross = Math.max(maxAcross, Math.abs(n.across));
     maxV = Math.max(maxV, n.v);
     // stuck at the route end?
@@ -148,7 +151,7 @@ function main(): void {
   console.log('PASS');
   console.log(`  segments          : ${world.order.length}`);
   console.log(`  presses to finish : ${states.length - 1}`);
-  console.log(`  handoffs          : ${handoffs}`);
+  console.log(`  segment crossings : ${crossings}`);
   console.log(`  max heading jump  : ${maxHeadingJump.toFixed(4)} rad (largest turn step = ${maxOmega.toFixed(4)})`);
   console.log(`  max position jump : ${maxPosJump.toFixed(4)} m (peak speed = ${maxV.toFixed(4)} m/press)`);
   console.log(`  max off-centre    : ${maxAcross.toFixed(3)} m (bulge; road half-width = ${(world.segments[world.order[0]].width / 2).toFixed(1)})`);
