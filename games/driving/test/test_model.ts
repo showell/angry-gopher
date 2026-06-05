@@ -107,11 +107,14 @@ function main(): void {
   let maxAngle = 0;
   for (const id of world.order) maxAngle = Math.max(maxAngle, world.segments[id].exitAngle);
   const maxOmega = DPHI * maxAngle / (Math.PI / 2);
-  let maxHeadingJump = 0, maxLean = 0;
+  let maxHeadingJump = 0, maxLean = 0, maxTiltStep = 0, prevTilt = 0;
   for (let i = 1; i < states.length; i++) {
     const dh = wrap(heading(states[i], headings) - heading(states[i - 1], headings));
     maxHeadingJump = Math.max(maxHeadingJump, Math.abs(dh));
-    maxLean = Math.max(maxLean, Math.abs(leanFor(dh)));   // camera roll banks into the turn, ~ the per-press rotation
+    const tilt = leanFor(dh);   // camera roll, ~ the per-press rotation
+    maxLean = Math.max(maxLean, Math.abs(tilt));
+    maxTiltStep = Math.max(maxTiltStep, Math.abs(tilt - prevTilt));   // how sharply the bank changes frame-to-frame
+    prevTilt = tilt;
   }
   if (maxHeadingJump > maxOmega + 1e-6) throw new Error(`heading jump ${maxHeadingJump} > maxOmega ${maxOmega}`);
 
@@ -119,6 +122,9 @@ function main(): void {
   // must clear 10deg on the sharp turns yet never reach 35deg.
   if (maxLean > 35 * Math.PI / 180) throw new Error(`max lean ${(maxLean * 180 / Math.PI).toFixed(1)}deg reached 35deg`);
   if (maxLean < 10 * Math.PI / 180) throw new Error(`max lean ${(maxLean * 180 / Math.PI).toFixed(1)}deg never cleared 10deg`);
+
+  // 2d) no SHARP banking: the tilt may change at most 1deg per press.
+  if (maxTiltStep > 1 * Math.PI / 180 + 1e-9) throw new Error(`tilt step ${(maxTiltStep * 180 / Math.PI).toFixed(2)}deg > 1deg`);
 
   // 2b) the Rider never leaves the road — the core safety property of straighten-out
   const roadHW = world.segments[world.order[0]].width / 2;
@@ -156,6 +162,7 @@ function main(): void {
   console.log(`  max position jump : ${maxPosJump.toFixed(4)} m (peak speed = ${maxV.toFixed(4)} m/press)`);
   console.log(`  max off-centre    : ${maxAcross.toFixed(3)} m (bulge; road half-width = ${(world.segments[world.order[0]].width / 2).toFixed(1)})`);
   console.log(`  max lean          : ${(maxLean * 180 / Math.PI).toFixed(1)} deg (runtime cap 45; test window 10..35)`);
+  console.log(`  max tilt step     : ${(maxTiltStep * 180 / Math.PI).toFixed(2)} deg/press (limit 1.0)`);
   console.log(`  northings (N>N-2) : ${north.map((v) => v.toFixed(0)).join(' ')}`);
 }
 

@@ -52,6 +52,10 @@ const V_MAX = 4;              // top speed (m/press) — the bike never accelera
 // rotating the bike (the per-press heading change), with NO easing. See leanFor().
 export const LEAN_PER_OMEGA = 10;             // lean (rad) per rad of per-press heading change (~10deg on an 80deg turn)
 export const LEAN_CAP = 45 * Math.PI / 180;  // hard runtime cap on the lean
+// the tilt may change at most this much per press — no sharp banking. Since tilt =
+// LEAN_PER_OMEGA * the per-press rotation, this caps how fast the rotation rate may change.
+const MAX_TILT_STEP = 1 * Math.PI / 180;
+const TURN_RATE_STEP = MAX_TILT_STEP / LEAN_PER_OMEGA;
 
 const QUARTER = Math.PI / 2;
 const omegaFor = (theta: number): number => DPHI * theta / QUARTER;  // turn rate scales with angle
@@ -107,7 +111,7 @@ export interface World {
 //   VELOCITY : v (speed along the path, m/press)
 // `turn` is null while cruising; a small descriptor while turning.
 // ----------------------------------------------------------------------------
-export interface Turning { angle: number; phase: 'straightening' | 'recentering' }
+export interface Turning { angle: number; phase: 'straightening' | 'recentering'; turnRate: number }
 export interface RiderState {
   segment: SegId;
   along: number;
@@ -287,7 +291,7 @@ function enterStraighten(seg: RoadSegment, world: World, v: number): RiderState 
     across: sgn * hw,
     angle: -sgn * theta,
     v,
-    turn: { angle: theta, phase: 'straightening' },
+    turn: { angle: theta, phase: 'straightening', turnRate: 0 },
   };
 }
 
@@ -317,7 +321,11 @@ function straightenStep(state: RiderState, seg: RoadSegment): RiderState {
   // as he nears the centre the lean fades on its own, so he arrives upright with no residual
   // to snap out (the lean and the offset reach 0 together).
   const aim = killing ? 0 : -state.across / RECENTER_DISTANCE;
-  const dHeading = clamp(aim - state.angle, -omega, omega);
+  // JERK-LIMIT the rotation: tilt = LEAN_PER_OMEGA * the per-press rotation, so capping how
+  // much the rotation may change per press (TURN_RATE_STEP) caps the tilt change to MAX_TILT_STEP
+  // — the bank ramps in and out smoothly instead of snapping on at the corner.
+  const desired = clamp(aim - state.angle, -omega, omega);
+  const dHeading = clamp(desired, t.turnRate - TURN_RATE_STEP, t.turnRate + TURN_RATE_STEP);
   const angle = state.angle + dHeading;
 
   // hold the turn speed through the angle-kill (no accelerating mid-corner); re-accelerate
@@ -338,9 +346,11 @@ function straightenStep(state: RiderState, seg: RoadSegment): RiderState {
   const across = state.across + v * Math.sin(mid);
 
   const aligned = Math.abs(angle) < ALIGN_EPS, centred = Math.abs(across) < CENTER_EPS;
-  if (aligned && centred) return { segment: seg.id, along, across: 0, angle: 0, v, turn: null };          // upright at centre -> cruise
-  if (killing && aligned) return { segment: seg.id, along, across, angle, v, turn: { ...t, phase: 'recentering' } };
-  return { segment: seg.id, along, across, angle, v, turn: t };
+  // hand off to cruise only when the incoming heading is already within one tilt-step of 0,
+  // so zeroing it (this frame's delta is -state.angle) is itself a <= MAX_TILT_STEP change.
+  if (centred && Math.abs(state.angle) < TURN_RATE_STEP) return { segment: seg.id, along, across: 0, angle: 0, v, turn: null };
+  const phase = killing && aligned ? 'recentering' : t.phase;
+  return { segment: seg.id, along, across, angle, v, turn: { angle: t.angle, phase, turnRate: dHeading } };
 }
 
 // ----------------------------------------------------------------------------
