@@ -18,11 +18,10 @@ function wrap(a: number): number {
   return a;
 }
 
-// seg9 faces ~ -120deg (WSW), so centring the westward range there puts it
-// straight ahead on seg9. The sun sits a little further south & left (more
-// negative bearing), setting over the range's crest.
-const WEST_RANGE_BEARING = -2.094;   // -120deg = seg9's heading (absolute; unchanged by the renumber)
-const SUN_BEARING = -2.27;           // ~ -130deg: a touch south & left of straight-ahead
+// We have a western range of mountains that the sun sets behind.
+const WEST_RANGE_BEARING = -2.094;
+const SUN_BEARING = -2.27;
+
 const SNOWLINE = 95;                 // px above the horizon; the north range is snowcapped above this
 
 // One mountain range: a smooth envelope (tallest at its centre, tapering to open
