@@ -49,14 +49,6 @@ function curToNext(a: number, x: number, L: number, sgn: number, theta: number, 
   return { a: dA * cos + dX * sgn * sin, x: -dA * sgn * sin + dX * cos };
 }
 
-// a square intersection quad, drawn with a per-segment local->Rider mapper
-function squareAt(at: (a: number, x: number) => RiderPt, center: number, hw: number): Quad {
-  return {
-    pts: [at(center - hw, -hw), at(center + hw, -hw), at(center + hw, hw), at(center - hw, hw)],
-    color: ROAD,
-  };
-}
-
 // how many segments to look ahead (current + this many beyond the next corner)
 const LOOK_AHEAD = 4;
 
@@ -91,8 +83,8 @@ export function buildScene(state: RiderState, world: World): Scene {
     };
 
     quads.push({ pts: [at(0, -hw), at(0, hw), at(seg.length, hw), at(seg.length, -hw)], color: ROAD });
-    if (d === 0 && seg.entryR > 0) quads.push(squareAt(at, 0, hw));        // the corner we came through
-    if (seg.exit) quads.push(squareAt(at, seg.length, hw));                // each corner ahead
+    // (intersection pavement — the fan-shaped overlap region — is drawn separately; TODO thing a.
+    //  The old centre-line corner squares are gone: they paved over the inner-edge join.)
     for (const t of seg.trees) {
       trees.push({ at: at(t.along, t.across), color: t.color, height: t.height, pine: t.pine });
     }
