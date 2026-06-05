@@ -63,7 +63,7 @@ const omegaFor = (theta: number): number => DPHI * theta / QUARTER;  // turn rat
 // straightens out, instead of tracing an arc — see enterStraighten/straightenStep.
 const EASY_TURN_MAX = 60 * Math.PI / 180;   // turns up to this gentle get straighten-out, not an arc
 export const STRAIGHTEN_OMEGA = 0.25;       // max heading change per press while straightening (rad): the "flick" rate
-const STRAIGHTEN_MARGIN = 0.3;              // keep the drift bulge at least this far inside the road edge (m)
+const STRAIGHTEN_MARGIN = 0.3;              // hard safety: keep the drift bulge at least this far inside the edge (m)
 const RECENTER_MAX_ANGLE = 0.12;            // gentlest heading used to ease back to centre once aligned (rad)
 const RECENTER_GAIN = 0.08;                 // recenter aim angle = -RECENTER_GAIN * across (per m)
 const ALIGN_EPS = 0.02;                     // "aligned" once |angle| is below this (rad)
@@ -235,10 +235,12 @@ const isEasy = (seg: RoadSegment): boolean => seg.exit !== null && seg.exitAngle
 //     self-consistent, so this reproduces the same a each press while correcting
 //     integration drift.
 function accel(state: RiderState, seg: RoadSegment): number {
-  // Accelerate at the constant rate when: there's no turn (final segment), the
-  // turn is EASY (straighten-out does its own braking, so we carry speed in), or
-  // the turn is still far off. Otherwise brake to the (sharp) turn's creep speed.
-  if (!seg.exit || isEasy(seg) || !nearIntersection(state, seg)) return A_ACCEL;
+  // Far from a turn (or on the exit-less final segment): accelerate at A_ACCEL.
+  // Approaching one: brake to reach the turn's creep speed AT THE TANGENT POINT
+  // (arcStart, just before the intersection — so the brake is a touch harder).
+  // SAME entry speed for easy and sharp turns; only what happens AT the turn
+  // differs (straighten-out vs arc).
+  if (!seg.exit || !nearIntersection(state, seg)) return A_ACCEL;
   const d = seg.arcStart - state.along;
   if (d <= 1e-6) return 0;
   const vEnd = turnSpeed(seg);
@@ -254,7 +256,8 @@ function cruise(state: RiderState, seg: RoadSegment, world: World): RiderState {
     return { ...state, along, v };
   }
 
-  if (isEasy(seg)) {   // carry speed to the tangent point, then snap in and straighten out
+  if (isEasy(seg)) {   // braked to the same creep speed as a sharp turn; snap in and straighten out
+    if (nearIntersection(state, seg)) v = Math.max(v, turnSpeed(seg));   // never crawl below turn speed
     const along = state.along + v;
     if (along < seg.arcStart) return { ...state, along, v };
     return enterStraighten(seg, world, v);
@@ -343,10 +346,12 @@ function straightenStep(state: RiderState, seg: RoadSegment): RiderState {
   const dHeading = clamp(aim - state.angle, -STRAIGHTEN_OMEGA, STRAIGHTEN_OMEGA);
   const angle = state.angle + dHeading;
 
-  // nulling the CURRENT heading will drift ~ v*a^2/(2*omega) toward the edge it
-  // points at; cap v so that drift (from here) stays inside the road. Use the
-  // pre-steer angle — it's what drives this frame's drift — so the cap is honest.
-  let v = state.v + A_ACCEL;
+  // hold speed through the angle-kill (no accelerating mid-corner — we braked to a
+  // comfortable entry speed already); re-accelerate once aligned. v_safe below is
+  // the hard road-edge cap either way: nulling the CURRENT heading drifts
+  // ~ v*a^2/(2*omega) toward the edge it points at, so cap v to keep that on the
+  // road. Use the pre-steer angle — it drives this frame's drift — so it's honest.
+  let v = aligned ? state.v + A_ACCEL : state.v;
   const a = state.angle;
   if (Math.abs(a) > 1e-3) {
     const room = Math.max(0, hw - STRAIGHTEN_MARGIN - state.across * Math.sign(a));
