@@ -341,7 +341,10 @@ function straightenStep(state: RiderState, seg: RoadSegment): RiderState {
   let v = killing ? state.v : state.v + A_ACCEL;
   const a = state.angle;
   if (Math.abs(a) > 1e-3) {
-    const room = Math.max(0, hw - STRAIGHTEN_MARGIN - state.across * Math.sign(a));
+    // floor `room` at the margin so v_safe never reaches 0 (which would FREEZE the Rider):
+    // at the far edge with a near-zero heading — the recenter about to lean back the other
+    // way — room would be ~0. The heading is tiny there, so relaxing the cap is harmless.
+    const room = Math.max(STRAIGHTEN_MARGIN, hw - STRAIGHTEN_MARGIN - state.across * Math.sign(a));
     v = Math.min(v, omega * room / (1 - Math.cos(a)));
   }
   v = clamp(v, 0, V_MAX);
