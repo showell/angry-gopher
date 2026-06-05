@@ -93,7 +93,7 @@ export function buildScene(state: RiderState, world: World): Scene {
     // (intersection pavement is drawn separately — TODO thing a.)
     // scenery is still authored centre-relative; +hw shifts it to from-the-left.
     for (const t of seg.trees) {
-      trees.push({ at: at(t.along, t.across + hw), color: t.color, height: t.height, kind: t.kind });
+      trees.push({ at: at(t.along, t.across + hw), color: t.color, height: t.height });
     }
     for (const cr of seg.critters) {
       critters.push({ at: at(cr.along, cr.across + hw), emoji: cr.emoji, height: cr.height, faceRight: cr.faceRight });
