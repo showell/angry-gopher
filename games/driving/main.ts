@@ -207,15 +207,12 @@ function loop(t: number): void {
   if (dirty) {
     // fps / cadence / drops are a CONTINUOUS-rate notion — only meaningful while auto-
     // running. Compare each frame to the RECENT cadence (frameMs), not a fixed 16.67, so
-    // a steady rate (whatever it is) never false-alarms; only a genuine stall does. Skip
-    // gaps over 200ms (a backgrounded tab paused rAF — not jank).
+    // a steady rate (whatever it is) never false-alarms; only a genuine stall does.
     if (auto && lastFrame) {
       const dt = t - lastFrame;
-      if (dt <= 200) {
-        fps += (1000 / Math.max(1, dt) - fps) * 0.1;
-        if (dt > frameMs * 1.8) { droppedFrames += Math.round(dt / frameMs) - 1; dropFlash = 30; }
-        frameMs += (dt - frameMs) * 0.1;
-      }
+      fps += (1000 / Math.max(1, dt) - fps) * 0.1;
+      if (dt > frameMs * 1.8) { droppedFrames += Math.round(dt / frameMs) - 1; dropFlash = 30; }
+      frameMs += (dt - frameMs) * 0.1;
     }
     if (auto && dropFlash > 0) dropFlash--;
 
