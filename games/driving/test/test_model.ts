@@ -4,7 +4,7 @@
 // transforms (lengths + turn signs) — the same relational facts getNextRiderState uses.
 //
 // Run: node test/test_model.ts
-import { buildWorld, initialRiderState, getNextRiderState, assertInvariants, DPHI, EASY_TURN_MAX } from '../model.ts';
+import { buildWorld, initialRiderState, getNextRiderState, assertInvariants, DPHI, EASY_TURN_MAX, leanFor } from '../model.ts';
 import type { RiderState, World } from '../model.ts';
 
 function wrap(a: number): number {
@@ -104,12 +104,18 @@ function main(): void {
   let maxAngle = 0;
   for (const id of world.order) maxAngle = Math.max(maxAngle, world.segments[id].exitAngle);
   const maxOmega = DPHI * maxAngle / (Math.PI / 2);
-  let maxHeadingJump = 0;
+  let maxHeadingJump = 0, maxLean = 0;
   for (let i = 1; i < states.length; i++) {
-    const dh = Math.abs(wrap(heading(states[i], headings) - heading(states[i - 1], headings)));
-    maxHeadingJump = Math.max(maxHeadingJump, dh);
+    const dh = wrap(heading(states[i], headings) - heading(states[i - 1], headings));
+    maxHeadingJump = Math.max(maxHeadingJump, Math.abs(dh));
+    maxLean = Math.max(maxLean, Math.abs(leanFor(dh)));   // camera roll banks into the turn, ~ the per-press rotation
   }
   if (maxHeadingJump > maxOmega + 1e-6) throw new Error(`heading jump ${maxHeadingJump} > maxOmega ${maxOmega}`);
+
+  // 2c) lean (camera roll): stricter than the 45deg runtime cap — the realised lean
+  // must clear 10deg on the sharp turns yet never reach 35deg.
+  if (maxLean > 35 * Math.PI / 180) throw new Error(`max lean ${(maxLean * 180 / Math.PI).toFixed(1)}deg reached 35deg`);
+  if (maxLean < 10 * Math.PI / 180) throw new Error(`max lean ${(maxLean * 180 / Math.PI).toFixed(1)}deg never cleared 10deg`);
 
   // 2b) the Rider never leaves the road — the core safety property of straighten-out
   const roadHW = world.segments[world.order[0]].width / 2;
@@ -146,6 +152,7 @@ function main(): void {
   console.log(`  max heading jump  : ${maxHeadingJump.toFixed(4)} rad (largest turn step = ${maxOmega.toFixed(4)})`);
   console.log(`  max position jump : ${maxPosJump.toFixed(4)} m (peak speed = ${maxV.toFixed(4)} m/press)`);
   console.log(`  max off-centre    : ${maxAcross.toFixed(3)} m (bulge; road half-width = ${(world.segments[world.order[0]].width / 2).toFixed(1)})`);
+  console.log(`  max lean          : ${(maxLean * 180 / Math.PI).toFixed(1)} deg (runtime cap 45; test window 10..35)`);
   console.log(`  northings (N>N-2) : ${north.map((v) => v.toFixed(0)).join(' ')}`);
 }
 

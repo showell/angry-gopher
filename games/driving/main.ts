@@ -7,7 +7,7 @@
 //   ArrowUp   : getNextRiderState -> push the next RiderState onto the history
 //   ArrowDown : pop back to the previous RiderState
 // =============================================================================
-import { buildWorld, initialRiderState, getNextRiderState, riderHeading } from './model.ts';
+import { buildWorld, initialRiderState, getNextRiderState, riderHeading, leanFor } from './model.ts';
 import type { RiderState } from './model.ts';
 import { buildScene } from './view.ts';
 import type { RiderPt, Quad } from './view.ts';
@@ -31,6 +31,13 @@ const EYE_H = 1.2;
 const world = buildWorld();
 const riderHistory: RiderState[] = [initialRiderState(world)];
 const currentRider = (): RiderState => riderHistory[riderHistory.length - 1];
+
+// the rider's current lean (camera roll), from the heading change of his latest step
+const currentLean = (): number => {
+  const n = riderHistory.length;
+  if (n < 2) return 0;
+  return leanFor(riderHeading(riderHistory[n - 1], world) - riderHeading(riderHistory[n - 2], world));
+};
 
 // the game is over once the Rider has reached the end of the final (exit-less) segment
 const lastId = world.order[world.order.length - 1];
@@ -111,13 +118,22 @@ function drawHud(rider: RiderState): void {
 function render(rider: RiderState): void {
   const scene = buildScene(rider, world);
 
-  // level camera => horizon at H/2: sky above, grass below
-  ctx.fillStyle = '#8ecae6';
-  ctx.fillRect(0, 0, W, H / 2);
-  ctx.fillStyle = '#4a8f43';
-  ctx.fillRect(0, H / 2, W, H / 2);
+  // CAMERA ROLL: the rider banks into the turn, so the whole world — horizon included
+  // — rotates about the screen centre by his lean. The HUD/overlay (below) stay level.
+  const lean = currentLean();
+  ctx.save();
+  ctx.translate(W / 2, H / 2);
+  ctx.rotate(-lean);
+  ctx.translate(-W / 2, -H / 2);
 
-  drawHorizon(ctx, riderHeading(rider, world), W, H, FOCAL);   // mountains + sun, by orientation only
+  // sky above / grass below, drawn oversized so the rolled frame's corners stay filled
+  const BIG = W + H;
+  ctx.fillStyle = '#8ecae6';
+  ctx.fillRect(W / 2 - BIG, H / 2 - BIG, 2 * BIG, BIG);
+  ctx.fillStyle = '#4a8f43';
+  ctx.fillRect(W / 2 - BIG, H / 2, 2 * BIG, BIG);
+
+  drawHorizon(ctx, riderHeading(rider, world), W, H, FOCAL, BIG);   // mountains + sun, by orientation only
 
   for (const q of scene.quads) drawQuad(q);
 
@@ -127,6 +143,8 @@ function render(rider: RiderState): void {
   for (const t of scene.trees) bills.push({ forward: t.at.forward, draw: () => drawTree(ctx, t, screenOf) });
   for (const cr of scene.critters) bills.push({ forward: cr.at.forward, draw: () => drawCritter(ctx, cr, screenOf) });
   bills.filter((b) => b.forward > NEAR).sort((a, b) => b.forward - a.forward).forEach((b) => b.draw());
+
+  ctx.restore();
 
   drawHud(rider);
 

@@ -55,6 +55,11 @@ export const V_BASE = 1.2;    // the Rider's speed at the very start of the driv
 export const A_ACCEL = 0.03;  // constant acceleration while the intersection is still far off (m/press^2)
 const V_MAX = 6;              // top speed (m/press) — the bike never accelerates past this
 
+// camera roll: the rider banks INTO the turn, directly proportional to how fast he's
+// rotating the bike (the per-press heading change), with NO easing. See leanFor().
+export const LEAN_PER_OMEGA = 4.5;            // lean (rad) per rad of per-press heading change
+export const LEAN_CAP = 45 * Math.PI / 180;  // hard runtime cap on the lean
+
 const QUARTER = Math.PI / 2;
 const omegaFor = (theta: number): number => DPHI * theta / QUARTER;  // turn rate scales with angle
 
@@ -137,6 +142,12 @@ export function riderHeading(state: RiderState, world: World): number {
 const signOf = (d: TurnDir): number => (d === 'right' ? 1 : -1);
 const segNumber = (id: SegId): number => Number(id.slice(3));   // "seg12" -> 12
 const clamp = (x: number, lo: number, hi: number): number => Math.max(lo, Math.min(hi, x));
+
+// The rider's lean / camera roll for a per-press heading change `dHeading`. He banks
+// INTO the turn — sign and size track the rotation directly (no easing), then capped.
+export function leanFor(dHeading: number): number {
+  return clamp(LEAN_PER_OMEGA * dHeading, -LEAN_CAP, LEAN_CAP);
+}
 
 export function buildWorld(): World {
   const DEG = Math.PI / 180;

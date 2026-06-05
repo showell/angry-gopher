@@ -55,15 +55,17 @@ const LAND = '#4a8f43';        // foreground rolling land (matches the grass)
 // the westward and (snowcapped) northern ranges, and the rolling foreground land.
 // Needs the canvas ctx and the camera (W, H, FOCAL) to turn bearings into columns.
 export function drawHorizon(ctx: CanvasRenderingContext2D, heading: number,
-                            W: number, H: number, FOCAL: number): void {
+                            W: number, H: number, FOCAL: number, overscan = 0): void {
   // each screen column is a viewing ray at this absolute bearing
   const bearingAt = (x: number): number => heading + Math.atan((x - W / 2) / FOCAL);
-  // fill the band between height f(bearing) above the horizon and a bottom line
+  // fill the band between height f(bearing) above the horizon and a bottom line.
+  // `overscan` widens the band past the screen edges so a rolled (leaning) camera
+  // still finds land all the way out to the rotated corners.
   const silhouette = (f: (b: number) => number, bottomY: number): void => {
     ctx.beginPath();
-    ctx.moveTo(0, bottomY);
-    for (let x = 0; x <= W; x += 2) ctx.lineTo(x, H / 2 - f(bearingAt(x)));
-    ctx.lineTo(W, bottomY);
+    ctx.moveTo(-overscan, bottomY);
+    for (let x = -overscan; x <= W + overscan; x += 2) ctx.lineTo(x, H / 2 - f(bearingAt(x)));
+    ctx.lineTo(W + overscan, bottomY);
     ctx.closePath();
     ctx.fill();
   };
