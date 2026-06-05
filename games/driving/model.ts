@@ -44,13 +44,13 @@ const APPROACH_INTERSECTION_DIST = 60;
 
 // ---- motion (per-press, not metres) ----
 export const DPHI = 0.06;     // heading turned per press in a 90deg turn (rad); sets turn speed AND spin rate
-export const V_BASE = 1.0;    // the Rider's speed at the very start of the drive (m/press)
-export const A_ACCEL = 0.02;  // constant acceleration while the intersection is still far off (m/press^2)
+export const V_BASE = 0.5;    // the Rider's speed at the very start of the drive (m/press)
+export const A_ACCEL = 0.15;  // constant acceleration while the intersection is still far off (m/press^2)
 const V_MAX = 5;              // top speed (m/press) — the bike never accelerates past this
 
 // camera roll: the rider banks INTO the turn, directly proportional to how fast he's
 // rotating the bike (the per-press heading change), with NO easing. See leanFor().
-export const LEAN_PER_OMEGA = 4.5;            // lean (rad) per rad of per-press heading change
+export const LEAN_PER_OMEGA = 6.5;            // lean (rad) per rad of per-press heading change
 export const LEAN_CAP = 45 * Math.PI / 180;  // hard runtime cap on the lean
 
 const QUARTER = Math.PI / 2;
@@ -62,7 +62,7 @@ const omegaFor = (theta: number): number => DPHI * theta / QUARTER;  // turn rat
 // backwards. test/test_model.ts enforces it on the configured route.
 export const MAX_TURN_ANGLE = 90 * Math.PI / 180;   // the largest turn the model allows
 const STRAIGHTEN_MARGIN = 0.1;              // hard safety: keep the drift bulge at least this far inside the edge (m)
-const RECENTER_DISTANCE = 160;              // after the turn, ease back to centre over about this far (m); ~ APPROACH_INTERSECTION_DIST
+const RECENTER_DISTANCE = 160;
 const ALIGN_EPS = 0.02;                     // "aligned" once |angle| is below this (rad)
 const CENTER_EPS = 0.05;                    // "centred" once |across| is below this (m)
 
