@@ -63,7 +63,7 @@ const omegaFor = (theta: number): number => DPHI * theta / QUARTER;  // turn rat
 // straightens out, instead of tracing an arc — see enterStraighten/straightenStep.
 // It rotates at the SAME per-frame rate as the equivalent arc would, omegaFor(theta),
 // so the rider's rotational tolerance is identical for easy and sharp turns.
-export const EASY_TURN_MAX = 60 * Math.PI / 180;   // turns up to this gentle get straighten-out, not an arc
+export const EASY_TURN_MAX = 90 * Math.PI / 180;   // turns up to this gentle get straighten-out, not an arc
 const STRAIGHTEN_MARGIN = 0.3;              // hard safety: keep the drift bulge at least this far inside the edge (m)
 const RECENTER_MAX_ANGLE = 0.12;            // gentlest heading used to ease back to centre once aligned (rad)
 const RECENTER_GAIN = 0.08;                 // recenter aim angle = -RECENTER_GAIN * across (per m)
@@ -167,13 +167,12 @@ export function buildWorld(): World {
 
   // route is checked non-self-intersecting by test/test_model.ts (no loops).
   // A soft S opens the route (seg1->seg2->seg3): gentle left 30, back right 30,
-  // then right 50 — a net +50 into seg4, so seg4 and everything after keep the exact
-  // orientation they had when seg1 turned right 50 straight into them.
+  // then right 60 — a net +60 into seg4.
   const segments: Record<SegId, RoadSegment> = {
     seg1:  seg('seg1', 300, 'ALL_GREEN',    turn('seg2',  'left',   30)),   // soft S, part 1: gentle left
     seg2:  seg('seg2', 240, 'YELLOW_GREEN', turn('seg3',  'right',  30)),   // soft S, part 2: gentle right back
-    seg3:  seg('seg3', 260, 'RED_GREEN',    turn('seg4',  'right',  50)),   // soft S, part 3: right 50 into seg4
-    seg4:  seg('seg4', 320, 'ALL_GREEN',    turn('seg5',  'left',   80)),
+    seg3:  seg('seg3', 260, 'RED_GREEN',    turn('seg4',  'right',  60)),   // soft S, part 3: right 60 into seg4
+    seg4:  seg('seg4', 320, 'ALL_GREEN',    turn('seg5',  'left',   90)),
     seg5:  seg('seg5', 416, 'YELLOW_GREEN', turn('seg6',  'right',  60)),   // the longest straight: most aggressive
     seg6:  seg('seg6', 200, 'RED_GREEN',    turn('seg7',  'right',  30)),
     seg7:  seg('seg7', 220, 'ALL_GREEN',    turn('seg8',  'left',  120)),
