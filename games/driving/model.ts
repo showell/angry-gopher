@@ -40,13 +40,13 @@ const LANE_WIDTH = 4;                    // a single lane
 const TURN_RADIUS = 2;                   // sets the tree clear-zone tangent at each corner (R*tan(THETA/2))
 
 // the Rider starts slowing once the next intersection is within this distance
-const APPROACH_INTERSECTION_DIST = 160;
+const APPROACH_INTERSECTION_DIST = 60;
 
 // ---- motion (per-press, not metres) ----
-export const DPHI = 0.08;     // heading turned per press in a 90deg turn (rad); sets turn speed AND spin rate
-export const V_BASE = 1.2;    // the Rider's speed at the very start of the drive (m/press)
-export const A_ACCEL = 0.03;  // constant acceleration while the intersection is still far off (m/press^2)
-const V_MAX = 6;              // top speed (m/press) — the bike never accelerates past this
+export const DPHI = 0.06;     // heading turned per press in a 90deg turn (rad); sets turn speed AND spin rate
+export const V_BASE = 1.0;    // the Rider's speed at the very start of the drive (m/press)
+export const A_ACCEL = 0.02;  // constant acceleration while the intersection is still far off (m/press^2)
+const V_MAX = 5;              // top speed (m/press) — the bike never accelerates past this
 
 // camera roll: the rider banks INTO the turn, directly proportional to how fast he's
 // rotating the bike (the per-press heading change), with NO easing. See leanFor().
