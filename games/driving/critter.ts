@@ -32,6 +32,7 @@ const BULL_HEIGHT = COW_HEIGHT * 1.15;          // a touch bigger than a cow
 const PIG_HEIGHT = 1.1;
 const ELEPHANT_HEIGHT = 2.8;                    // adult; x GIANT_ELEPHANT_SCALE late in the route
 const BABY_ELEPHANT_HEIGHT = ELEPHANT_HEIGHT / 2;
+const BABY_ELEPHANT_SETBACK = 20;              // baby trails the adult this far back (its bottom), out of the intersection
 
 const HERD_ROAD_OFFSET = 10;             // cows graze this far beyond the lane edge
 const BULL_DIST = 24;                    // the bull stands here (~the 4th tree); the herd is just behind
@@ -65,10 +66,12 @@ export function segmentCritters(length: number, laneHalfWidth: number, treeLineO
 export function intersectionCritters(intersectionAlong: number, turnSign: number, segNum: number, hw: number): Critter[] {
   const scale = segNum > GIANT_ELEPHANT_FROM_SEG ? GIANT_ELEPHANT_SCALE : 1;
   const adultH = ELEPHANT_HEIGHT * scale, babyH = BABY_ELEPHANT_HEIGHT * scale;
-  const faceRight = turnSign < 0;   // right turn -> faces left; left turn -> faces right (new)
+  const faceRight = turnSign < 0;                      // right turn -> faces left; left turn -> faces right (new)
+  const across = -turnSign * (hw + adultH / 2);        // adult centre; the baby follows it horizontally
   return [
-    { along: intersectionAlong, across: -turnSign * (hw + adultH / 2), emoji: '🐘', height: adultH, faceRight },
-    { along: intersectionAlong, across: -turnSign * (hw - babyH / 2), emoji: '🐘', height: babyH, faceRight },
+    { along: intersectionAlong, across, emoji: '🐘', height: adultH, faceRight },
+    // baby directly behind the adult, set back so it's not standing in the intersection
+    { along: intersectionAlong - BABY_ELEPHANT_SETBACK, across, emoji: '🐘', height: babyH, faceRight },
   ];
 }
 
