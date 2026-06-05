@@ -63,7 +63,7 @@ const omegaFor = (theta: number): number => DPHI * theta / QUARTER;  // turn rat
 export const MAX_TURN_ANGLE = 90 * Math.PI / 180;   // the largest turn the model allows
 const STRAIGHTEN_MARGIN = 0.1;              // hard safety: keep the drift bulge at least this far inside the edge (m)
 const TURN_AGGRESSION = 0.5;                // <1 takes turns slower than the lane-filling speed (drifts less across the lane)
-const RECENTER_DISTANCE = 30;
+const RECENTER_DISTANCE = 30;               // recenter lean = -across/this; bigger = gentler lean, slower return to centre
 const ALIGN_EPS = 0.02;                     // "aligned" once |angle| is below this (rad)
 const CENTER_EPS = 0.05;                    // "centred" once |across| is below this (m)
 
@@ -107,7 +107,7 @@ export interface World {
 //   VELOCITY : v (speed along the path, m/press)
 // `turn` is null while cruising; a small descriptor while turning.
 // ----------------------------------------------------------------------------
-export interface Turning { angle: number; phase: 'straightening' | 'recentering' | 'settling'; recenterEnd: number }
+export interface Turning { angle: number; phase: 'straightening' | 'recentering' }
 export interface RiderState {
   segment: SegId;
   along: number;
@@ -287,7 +287,7 @@ function enterStraighten(seg: RoadSegment, world: World, v: number): RiderState 
     across: sgn * hw,
     angle: -sgn * theta,
     v,
-    turn: { angle: theta, phase: 'straightening', recenterEnd: 0 },
+    turn: { angle: theta, phase: 'straightening' },
   };
 }
 
@@ -311,19 +311,20 @@ function straightenStep(state: RiderState, seg: RoadSegment): RiderState {
   // — just slower and with a softer bank. (radius = turnSpeed/omega cancels the factor.)
   const omega = TURN_AGGRESSION * omegaFor(t.angle);
   const killing = t.phase === 'straightening';     // angle-kill
-  const settling = t.phase === 'settling';         // leftover heading being rotated out
 
-  // angle-kill & settle drive the heading to 0; the recentre drift aims at the centre line
-  // RECENTER_DISTANCE ahead (heading = -across/remaining, so the offset closes linearly).
-  const aim = (killing || settling) ? 0 : -state.across / (t.recenterEnd - state.along);
+  // angle-kill drives the heading to 0. The recentre leans PROPORTIONALLY to how far off
+  // the Rider still is (aim = -across/RECENTER_DISTANCE): far off -> leaned -> drifting in;
+  // as he nears the centre the lean fades on its own, so he arrives upright with no residual
+  // to snap out (the lean and the offset reach 0 together).
+  const aim = killing ? 0 : -state.across / RECENTER_DISTANCE;
   const dHeading = clamp(aim - state.angle, -omega, omega);
   const angle = state.angle + dHeading;
 
   // hold the turn speed through the angle-kill (no accelerating mid-corner); re-accelerate
-  // while recentring/settling. v_safe is the hard road-edge cap: nulling the CURRENT heading
-  // a at radius R = v/omega drifts R*(1 - cos a) = v*(1 - cos a)/omega toward the edge it
-  // points at, so cap v to keep that inside `room`. v_safe-at-entry exactly equals turnSpeed
-  // (both scale by TURN_AGGRESSION), so the rider holds it and fills the lane to the far edge.
+  // while recentring. v_safe is the hard road-edge cap: nulling the CURRENT heading a at
+  // radius R = v/omega drifts R*(1 - cos a) = v*(1 - cos a)/omega toward the edge it points
+  // at, so cap v to keep that inside `room`. v_safe-at-entry exactly equals turnSpeed (both
+  // scale by TURN_AGGRESSION), so the rider holds it and fills the lane to the far edge.
   let v = killing ? state.v : state.v + A_ACCEL;
   const a = state.angle;
   if (Math.abs(a) > 1e-3) {
@@ -337,19 +338,8 @@ function straightenStep(state: RiderState, seg: RoadSegment): RiderState {
   const across = state.across + v * Math.sin(mid);
 
   const aligned = Math.abs(angle) < ALIGN_EPS, centred = Math.abs(across) < CENTER_EPS;
-  if (killing) {
-    if (aligned && centred) return { segment: seg.id, along, across: 0, angle: 0, v, turn: null };        // straightened in one go
-    if (aligned) return { segment: seg.id, along, across, angle, v, turn: { ...t, phase: 'recentering', recenterEnd: along + RECENTER_DISTANCE } };
-    return { segment: seg.id, along, across, angle, v, turn: t };
-  }
-  if (settling) {
-    // leftover drift-lean fully rotated out (the clamp zeroed it) -> cruise. `across` is
-    // centred bar a few cm of drift, which we zero — a harmless sub-CENTER_EPS nudge.
-    if (Math.abs(angle) < 1e-9) return { segment: seg.id, along, across: 0, angle: 0, v, turn: null };
-    return { segment: seg.id, along, across, angle, v, turn: t };
-  }
-  // recentring: reached the centre -> settle the leftover heading out (no snap)
-  if (centred) return { segment: seg.id, along, across, angle, v, turn: { ...t, phase: 'settling' } };
+  if (aligned && centred) return { segment: seg.id, along, across: 0, angle: 0, v, turn: null };          // upright at centre -> cruise
+  if (killing && aligned) return { segment: seg.id, along, across, angle, v, turn: { ...t, phase: 'recentering' } };
   return { segment: seg.id, along, across, angle, v, turn: t };
 }
 
