@@ -141,25 +141,29 @@ let fps = 60, renderMs = 0, frameMs = TARGET_MS, droppedFrames = 0, dropFlash = 
 
 function drawHud(rider: RiderState): void {
   ctx.fillStyle = 'rgba(0,0,0,0.5)';
-  ctx.fillRect(12, 12, 452, 74);
+  ctx.fillRect(12, 12, 510, 74);
   ctx.font = 'bold 13px ui-monospace, monospace';
   ctx.textAlign = 'left';
 
-  // line 1: where + step, then the mode badge (green AUTO / amber PAUSED)
-  const where = rider.turn ? `${rider.segment} (turning ${rider.turn.phase})` : `${rider.segment} @ ${rider.along.toFixed(1)}m`;
-  const l1 = `${where}   ·   step ${riderHistory.length - 1}   ·   `;
+  const phase = rider.turn ? rider.turn.phase : 'cruise';
+  const headingDeg = rider.angle * 180 / Math.PI;
+  const tiltDeg = currentLean() * 180 / Math.PI;
+
+  // line 1: segment + phase + step, then the mode badge (green AUTO / amber PAUSED)
+  const l1 = `${rider.segment}  ·  ${phase}  ·  step ${riderHistory.length - 1}  ·  `;
   ctx.fillStyle = '#fff';
   ctx.fillText(l1, 22, 31);
   ctx.fillStyle = auto ? '#7cfc7c' : '#e6c64f';
   ctx.fillText(auto ? 'AUTO' : 'PAUSED', 22 + ctx.measureText(l1).width, 31);
 
-  // line 2: the Rider's own pace
+  // line 2: ALWAYS-on rider state — position (x = across, y = along), heading relative to
+  // the segment's direction, camera tilt, and speed. (These used to vanish during turns.)
   ctx.fillStyle = '#9fe6a0';
-  ctx.fillText(`speed ${rider.v.toFixed(2)} m/press`, 22, 50);
+  ctx.fillText(`x ${rider.across.toFixed(2)}  y ${rider.along.toFixed(1)}  heading ${headingDeg.toFixed(1)}deg  tilt ${tiltDeg.toFixed(1)}deg  v ${rider.v.toFixed(2)}`, 22, 50);
 
   // line 3: frame HEALTH — wall-clock cadence vs the 60Hz budget; turns red while dropping
   ctx.fillStyle = dropFlash > 0 ? '#ff6b6b' : '#9fe6a0';
-  ctx.fillText(`${fps.toFixed(0)} fps   ·   frame ${frameMs.toFixed(1)}/${TARGET_MS.toFixed(1)}ms   ·   render ${renderMs.toFixed(1)}ms   ·   dropped ${droppedFrames}`, 22, 69);
+  ctx.fillText(`${fps.toFixed(0)} fps  ·  frame ${frameMs.toFixed(1)}/${TARGET_MS.toFixed(1)}ms  ·  render ${renderMs.toFixed(1)}ms  ·  dropped ${droppedFrames}`, 22, 69);
 }
 
 // draw one frame for the given RiderState (handed in by the loop)
