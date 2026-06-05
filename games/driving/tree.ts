@@ -19,7 +19,7 @@ export interface TreeView { at: { right: number; forward: number }; color: strin
 // ---- dimensions (metres) ----
 const SMALL_HEIGHT = 2.5;                 // odd-parity conifers (the established small size)
 const BIG_SCALE = 1.3;                    // even-parity conifers stand this much taller
-const DIST_BETWEEN_TREES = 6;             // tree spacing along a segment
+const DIST_BETWEEN_TREES = 30;            // tree spacing along a segment
 export const TREE_ROAD_OFFSET = 1.5;      // a tree stands this far beyond the lane edge (the bull lines up with it)
 const TREE_INTERSECTION_CLEARANCE = 6;    // no trees within this of an intersection
 
