@@ -114,8 +114,8 @@ function drawQuad(q: Quad): void {
 // frame timing, smoothed. fps/frameMs are the WALL-CLOCK cadence (how fast the browser
 // actually calls us); renderMs is how long our own draw takes. At 60Hz a healthy frame
 // is one vsync — TARGET_MS (16.67ms). A gap of ~2x means a vsync was missed (dropped).
-const TARGET_MS = 1000 / 60;   // 60Hz vsync budget
-let fps = 0, renderMs = 0, frameMs = 0, droppedFrames = 0, dropFlash = 0;
+const TARGET_MS = 1000 / 60;   // 60Hz vsync budget (the ideal we display against)
+let fps = 60, renderMs = 0, frameMs = TARGET_MS, droppedFrames = 0, dropFlash = 0;
 
 function drawHud(rider: RiderState): void {
   ctx.fillStyle = 'rgba(0,0,0,0.5)';
@@ -189,13 +189,20 @@ let lastFrame = 0;
 function loop(t: number): void {
   if (lastFrame) {
     const dt = t - lastFrame;
-    fps += (1000 / Math.max(1, dt) - fps) * 0.1;        // smoothed wall-clock cadence
-    frameMs += (dt - frameMs) * 0.1;
-    // vsyncs skipped this frame. Ignore huge gaps (>200ms = the tab was backgrounded,
-    // not a render hiccup) so the counter reflects real jank only.
-    const missed = dt > 200 ? 0 : Math.max(0, Math.round(dt / TARGET_MS) - 1);
-    droppedFrames += missed;
-    dropFlash = missed > 0 ? 45 : Math.max(0, dropFlash - 1);   // keep the warning lit ~0.75s after a drop
+    if (dt <= 200) {   // ignore background-tab gaps (rAF pauses when hidden) — not jank
+      fps += (1000 / Math.max(1, dt) - fps) * 0.1;
+      // A DROPPED frame is one that overruns the RECENT cadence (frameMs) by ~a full
+      // vsync, and only counts while AUTO-running — paused/idle frames just redraw a
+      // static scene, so "dropping" is meaningless there. Comparing to the actual
+      // cadence (not a fixed 16.67) means a steady rate, whatever it is, never false-
+      // alarms; only a genuine stall does.
+      if (auto && dt > frameMs * 1.8) {
+        droppedFrames += Math.round(dt / frameMs) - 1;
+        dropFlash = 30;
+      }
+      frameMs += (dt - frameMs) * 0.1;   // smoothed cadence — the honest "how fast frames arrive"
+    }
+    if (dropFlash > 0) dropFlash--;
   }
   lastFrame = t;
 
