@@ -65,8 +65,7 @@ const omegaFor = (theta: number): number => DPHI * theta / QUARTER;  // turn rat
 // so the rider's rotational tolerance is identical for easy and sharp turns.
 export const EASY_TURN_MAX = 90 * Math.PI / 180;   // turns up to this gentle get straighten-out, not an arc
 const STRAIGHTEN_MARGIN = 0.1;              // hard safety: keep the drift bulge at least this far inside the edge (m)
-const RECENTER_MAX_ANGLE = 0.08;            // gentlest heading used to ease back to centre once aligned (rad)
-const RECENTER_GAIN = 0.3;                 // recenter aim angle = -RECENTER_GAIN * across (per m)
+const RECENTER_DISTANCE = 160;              // after the turn, ease back to centre over about this far (m); ~ APPROACH_INTERSECTION_DIST
 const ALIGN_EPS = 0.02;                     // "aligned" once |angle| is below this (rad)
 const CENTER_EPS = 0.05;                    // "centred" once |across| is below this (m)
 
@@ -113,7 +112,7 @@ export interface World {
 //   VELOCITY : v (speed along the path, m/press)
 // `turn` is null while cruising; a small descriptor while turning.
 // ----------------------------------------------------------------------------
-export interface Turning { sgn: number; r: number; angle: number; phase: 'exiting' | 'entering' | 'straightening' | 'recentering'; toSeg: SegId }
+export interface Turning { sgn: number; r: number; angle: number; phase: 'exiting' | 'entering' | 'straightening' | 'recentering'; toSeg: SegId; recenterEnd: number }
 export interface RiderState {
   segment: SegId;
   along: number;
@@ -293,7 +292,7 @@ function cruise(state: RiderState, seg: RoadSegment, world: World): RiderState {
   if (along < seg.arcStart) return { ...state, along, v };
 
   const turn: Turning = {
-    sgn: seg.exitSign, r: seg.exitR, angle: seg.exitAngle, phase: 'exiting', toSeg: seg.exit.to,
+    sgn: seg.exitSign, r: seg.exitR, angle: seg.exitAngle, phase: 'exiting', toSeg: seg.exit.to, recenterEnd: 0,
   };
   return turnStep({ segment: seg.id, along: seg.arcStart, across: 0, angle: 0, v: vEnd, turn }, seg, world);
 }
@@ -332,7 +331,7 @@ function handoff(along: number, across: number, angle: number,
     across: -dA * sinB + dX * cosB,
     angle: angle - sgn * theta,
     v: next.entryR * omegaFor(theta),
-    turn: { sgn, r: next.entryR, angle: theta, phase: 'entering', toSeg: next.id },
+    turn: { sgn, r: next.entryR, angle: theta, phase: 'entering', toSeg: next.id, recenterEnd: 0 },
   };
 }
 
@@ -352,7 +351,7 @@ function enterStraighten(seg: RoadSegment, world: World, v: number): RiderState 
     across: sgn * hw,
     angle: -sgn * theta,
     v,
-    turn: { sgn, r: seg.exitR, angle: theta, phase: 'straightening', toSeg: next.id },
+    turn: { sgn, r: seg.exitR, angle: theta, phase: 'straightening', toSeg: next.id, recenterEnd: 0 },
   };
 }
 
@@ -365,17 +364,18 @@ function enterStraighten(seg: RoadSegment, world: World, v: number): RiderState 
 //       holding the lane-filling speed; the bike arcs across to the far edge. v_safe
 //       is the hard road-edge cap. Heading reaches 0 -> finish (if already centred) or
 //       hand off to recenter.
-//   (2) 'recentering' — at leisure: a gentle proportional lean back toward the centre
-//       line (aim = -gain*across, capped), re-accelerating. Overshooting centre is
-//       fine; resume cruising once aligned AND centred.
+//   (2) 'recentering' — at leisure: aim at the centre line RECENTER_DISTANCE ahead, so
+//       the offset closes LINEARLY and the Rider is back at centre that far down the
+//       road. Re-accelerating; resume cruising once centred (the residual lean is tiny).
 function straightenStep(state: RiderState, seg: RoadSegment): RiderState {
   const hw = seg.width / 2;
   const t = state.turn as Turning;
   const omega = omegaFor(t.angle);          // SAME per-frame rotation as this turn's arc — one rider tolerance
   const killing = t.phase === 'straightening';
 
-  // angle-kill steers straight to 0; recenter leans gently toward the centre line.
-  const aim = killing ? 0 : clamp(-RECENTER_GAIN * state.across, -RECENTER_MAX_ANGLE, RECENTER_MAX_ANGLE);
+  // angle-kill steers straight to 0; recenter aims at the centre line RECENTER_DISTANCE
+  // ahead — heading = -across/(remaining distance), so the offset closes linearly.
+  const aim = killing ? 0 : -state.across / (t.recenterEnd - state.along);
   const dHeading = clamp(aim - state.angle, -omega, omega);
   const angle = state.angle + dHeading;
 
@@ -398,8 +398,13 @@ function straightenStep(state: RiderState, seg: RoadSegment): RiderState {
   const across = state.across + v * Math.sin(mid);
 
   const aligned = Math.abs(angle) < ALIGN_EPS, centred = Math.abs(across) < CENTER_EPS;
-  if (aligned && centred) return { segment: seg.id, along, across: 0, angle: 0, v, turn: null };          // straightened — cruise
-  if (killing && aligned) return { segment: seg.id, along, across, angle, v, turn: { ...t, phase: 'recentering' } };  // angle dead, still off-centre
+  if (killing) {
+    if (aligned && centred) return { segment: seg.id, along, across: 0, angle: 0, v, turn: null };        // straightened in one go
+    if (aligned) return { segment: seg.id, along, across, angle, v, turn: { ...t, phase: 'recentering', recenterEnd: along + RECENTER_DISTANCE } };
+    return { segment: seg.id, along, across, angle, v, turn: t };
+  }
+  // recentring: done once back at the centre line (the residual lean is tiny)
+  if (centred) return { segment: seg.id, along, across: 0, angle: 0, v, turn: null };
   return { segment: seg.id, along, across, angle, v, turn: t };
 }
 
