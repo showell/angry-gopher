@@ -45,12 +45,19 @@ function gameEnded(rider: RiderState): boolean {
   return rider.segment === lastId && !rider.turn && rider.along >= world.segments[lastId].length - 1e-6;
 }
 
+// The scene only needs redrawing when something CHANGES — the Rider advancing or
+// stepping. While paused and idle the picture is identical frame to frame, so we skip
+// the render entirely (and the HUD/stats hold still — there are no new frames to
+// report). `dirty` marks a pending redraw; it's set wherever the Rider's state changes.
+let dirty = true;
+
 // advance the Rider one frame and remember it (a no-op once it stops moving — game over)
 function advance(): void {
   const rider = currentRider();
   const next = getNextRiderState(rider, world);
   if (next.segment !== rider.segment || next.along !== rider.along || next.across !== rider.across) {
     riderHistory.push(next);
+    dirty = true;
   }
 }
 
@@ -60,7 +67,7 @@ function advance(): void {
 let auto = false;
 window.addEventListener('keydown', (e) => {
   if (e.code === 'Space') {
-    if (!e.repeat) auto = !auto;
+    if (!e.repeat) { auto = !auto; dirty = true; }   // redraw once to flip the AUTO/PAUSED badge
     e.preventDefault();
   } else if (e.code === 'ArrowUp') {
     auto = false;
@@ -68,7 +75,7 @@ window.addEventListener('keydown', (e) => {
     e.preventDefault();
   } else if (e.code === 'ArrowDown') {
     auto = false;
-    if (riderHistory.length > 1) riderHistory.pop();
+    if (riderHistory.length > 1) { riderHistory.pop(); dirty = true; }
     e.preventDefault();
   }
 });
@@ -192,31 +199,32 @@ function render(rider: RiderState): void {
 
 let lastFrame = 0;
 function loop(t: number): void {
-  if (lastFrame) {
-    const dt = t - lastFrame;
-    if (dt <= 200) {   // ignore background-tab gaps (rAF pauses when hidden) — not jank
-      fps += (1000 / Math.max(1, dt) - fps) * 0.1;
-      // A DROPPED frame is one that overruns the RECENT cadence (frameMs) by ~a full
-      // vsync, and only counts while AUTO-running — paused/idle frames just redraw a
-      // static scene, so "dropping" is meaningless there. Comparing to the actual
-      // cadence (not a fixed 16.67) means a steady rate, whatever it is, never false-
-      // alarms; only a genuine stall does.
-      if (auto && dt > frameMs * 1.8) {
-        droppedFrames += Math.round(dt / frameMs) - 1;
-        dropFlash = 30;
-      }
-      frameMs += (dt - frameMs) * 0.1;   // smoothed cadence — the honest "how fast frames arrive"
-    }
-    if (dropFlash > 0) dropFlash--;
-  }
-  lastFrame = t;
-
-  // automatic mode: one Rider step per frame, until paused or finished
+  // automatic mode: one Rider step per frame, until paused or finished (sets `dirty`)
   if (auto && !gameEnded(currentRider())) advance();
 
-  const t0 = performance.now();
-  render(currentRider());
-  renderMs += (performance.now() - t0 - renderMs) * 0.1;        // smoothed render cost
+  // ONLY redraw when the picture changed. Paused & idle => nothing to draw, so the HUD
+  // and its stats freeze (no phantom frames re-reporting the same scene).
+  if (dirty) {
+    // fps / cadence / drops are a CONTINUOUS-rate notion — only meaningful while auto-
+    // running. Compare each frame to the RECENT cadence (frameMs), not a fixed 16.67, so
+    // a steady rate (whatever it is) never false-alarms; only a genuine stall does. Skip
+    // gaps over 200ms (a backgrounded tab paused rAF — not jank).
+    if (auto && lastFrame) {
+      const dt = t - lastFrame;
+      if (dt <= 200) {
+        fps += (1000 / Math.max(1, dt) - fps) * 0.1;
+        if (dt > frameMs * 1.8) { droppedFrames += Math.round(dt / frameMs) - 1; dropFlash = 30; }
+        frameMs += (dt - frameMs) * 0.1;
+      }
+    }
+    if (auto && dropFlash > 0) dropFlash--;
+
+    const t0 = performance.now();
+    render(currentRider());
+    renderMs += (performance.now() - t0 - renderMs) * 0.1;   // smoothed render cost
+    dirty = false;
+  }
+  lastFrame = auto ? t : 0;   // paused => drop the baseline so auto restarts cadence cleanly
   requestAnimationFrame(loop);
 }
 requestAnimationFrame(loop);
