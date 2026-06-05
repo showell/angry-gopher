@@ -46,7 +46,7 @@ const HERD_JITTER_ACROSS = 1.2;          // deterministic wobble of the scatter,
 const PIG_DIST_BEFORE_END = 60;          // pigs gather this far before the next intersection
 const PIG_BACK_ROW_OFFSET = 6;           // the extra back row of pigs sits this much further from the road
 const GIANT_ELEPHANT_SCALE = 1.7;          // elephants this many times bigger...
-const GIANT_ELEPHANT_FROM_SEG = 8;       // ...on segments numbered above this
+const GIANT_ELEPHANT_FROM_SEG = 10;      // ...on segments numbered above this (the old seg9+, shifted +2 by the front insert)
 
 // ---- where the critters are, per segment ----
 

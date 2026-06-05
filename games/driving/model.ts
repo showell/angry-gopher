@@ -166,25 +166,30 @@ export function buildWorld(): World {
     ({ dir, to, radius: TURN_RADIUS, angle: deg * DEG });
 
   // route is checked non-self-intersecting by test/test_model.ts (no loops).
+  // A soft S opens the route (seg1->seg2->seg3): gentle left 30, back right 30,
+  // then right 50 — a net +50 into seg4, so seg4 and everything after keep the exact
+  // orientation they had when seg1 turned right 50 straight into them.
   const segments: Record<SegId, RoadSegment> = {
-    seg1:  seg('seg1', 300, 'ALL_GREEN',    turn('seg2',  'right',  50)),
-    seg2:  seg('seg2', 320, 'YELLOW_GREEN', turn('seg3',  'left',  80)),
-    seg3:  seg('seg3', 416, 'RED_GREEN',    turn('seg4',  'right',  60)),   // the longest straight: most aggressive
-    seg4:  seg('seg4', 200, 'ALL_GREEN',    turn('seg5',  'right',  30)),
-    seg5:  seg('seg5', 220, 'YELLOW_GREEN', turn('seg6',  'left',  120)),
-    seg6:  seg('seg6', 240, 'RED_GREEN',    turn('seg7',  'left',   60)),
-    seg7:  seg('seg7', 200, 'ALL_GREEN',    turn('seg8',  'right',  90)),
-    seg8:  seg('seg8', 220, 'YELLOW_GREEN', turn('seg9',  'right',  60)),
-    seg9:  seg('seg9', 200, 'RED_GREEN',    turn('seg10', 'left',  120)),
-    seg10: seg('seg10', 200, 'ALL_GREEN',   turn('seg11', 'right',  15)),
-    seg11: seg('seg11', 200, 'YELLOW_GREEN', turn('seg12', 'right', 15)),
+    seg1:  seg('seg1', 300, 'ALL_GREEN',    turn('seg2',  'left',   30)),   // soft S, part 1: gentle left
+    seg2:  seg('seg2', 240, 'YELLOW_GREEN', turn('seg3',  'right',  30)),   // soft S, part 2: gentle right back
+    seg3:  seg('seg3', 260, 'RED_GREEN',    turn('seg4',  'right',  50)),   // soft S, part 3: right 50 into seg4
+    seg4:  seg('seg4', 320, 'ALL_GREEN',    turn('seg5',  'left',   80)),
+    seg5:  seg('seg5', 416, 'YELLOW_GREEN', turn('seg6',  'right',  60)),   // the longest straight: most aggressive
+    seg6:  seg('seg6', 200, 'RED_GREEN',    turn('seg7',  'right',  30)),
+    seg7:  seg('seg7', 220, 'ALL_GREEN',    turn('seg8',  'left',  120)),
+    seg8:  seg('seg8', 240, 'YELLOW_GREEN', turn('seg9',  'left',   60)),
+    seg9:  seg('seg9', 200, 'RED_GREEN',    turn('seg10', 'right',  90)),
+    seg10: seg('seg10', 220, 'ALL_GREEN',   turn('seg11', 'right',  60)),
+    seg11: seg('seg11', 200, 'YELLOW_GREEN', turn('seg12', 'left', 120)),
     seg12: seg('seg12', 200, 'RED_GREEN',    turn('seg13', 'right', 15)),
     seg13: seg('seg13', 200, 'ALL_GREEN',    turn('seg14', 'right', 15)),
-    seg14: seg('seg14', 400, 'YELLOW_GREEN', null),   // the long final straight: accelerate, never brake, then end
+    seg14: seg('seg14', 200, 'YELLOW_GREEN', turn('seg15', 'right', 15)),
+    seg15: seg('seg15', 200, 'RED_GREEN',    turn('seg16', 'right', 15)),
+    seg16: seg('seg16', 400, 'ALL_GREEN',    null),   // the long final straight: accelerate, never brake, then end
   };
   const order: SegId[] = [
     'seg1', 'seg2', 'seg3', 'seg4', 'seg5', 'seg6', 'seg7', 'seg8', 'seg9', 'seg10',
-    'seg11', 'seg12', 'seg13', 'seg14',
+    'seg11', 'seg12', 'seg13', 'seg14', 'seg15', 'seg16',
   ];
   for (const id of order) {
     const s = segments[id];
