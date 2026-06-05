@@ -44,9 +44,9 @@ const APPROACH_INTERSECTION_DIST = 60;
 
 // ---- motion (per-press, not metres) ----
 export const DPHI = 0.04;     // heading turned per press in a 90deg turn (rad); sets turn speed AND spin rate
-export const V_BASE = 0.5;    // the Rider's speed at the very start of the drive (m/press)
+export const V_BASE = 0.3;    // the Rider's speed at the very start of the drive (m/press)
 export const A_ACCEL = 0.015; // constant acceleration while the intersection is still far off (m/press^2)
-const V_MAX = 5;              // top speed (m/press) — the bike never accelerates past this
+const V_MAX = 4;              // top speed (m/press) — the bike never accelerates past this
 
 // camera roll: the rider banks INTO the turn, directly proportional to how fast he's
 // rotating the bike (the per-press heading change), with NO easing. See leanFor().
@@ -62,7 +62,8 @@ const omegaFor = (theta: number): number => DPHI * theta / QUARTER;  // turn rat
 // backwards. test/test_model.ts enforces it on the configured route.
 export const MAX_TURN_ANGLE = 90 * Math.PI / 180;   // the largest turn the model allows
 const STRAIGHTEN_MARGIN = 0.1;              // hard safety: keep the drift bulge at least this far inside the edge (m)
-const RECENTER_DISTANCE = 160;
+const TURN_AGGRESSION = 0.5;                // <1 takes turns slower than the lane-filling speed (drifts less across the lane)
+const RECENTER_DISTANCE = 30;
 const ALIGN_EPS = 0.02;                     // "aligned" once |angle| is below this (rad)
 const CENTER_EPS = 0.05;                    // "centred" once |across| is below this (m)
 
@@ -168,11 +169,11 @@ export function buildWorld(): World {
   const segments: Record<SegId, RoadSegment> = {
     seg1:  seg('seg1', 300, 'ALL_GREEN',     turn('seg2',  'left',   30)),
     seg2:  seg('seg2', 240, 'YELLOW_GREEN',  turn('seg3',  'right',  30)),
-    seg3:  seg('seg3', 260, 'RED_GREEN',     turn('seg4',  'right',  50)),
-    seg4:  seg('seg4', 320, 'ALL_GREEN',     turn('seg5',  'left',   80)),
-    seg5:  seg('seg5', 416, 'YELLOW_GREEN',  turn('seg6',  'right',  30)),
-    seg6:  seg('seg6', 200, 'RED_GREEN',     turn('seg7',  'right',  30)),
-    seg7:  seg('seg7', 220, 'ALL_GREEN',     turn('seg8',  'left',   80)),
+    seg3:  seg('seg3', 800, 'RED_GREEN',     turn('seg4',  'right',  50)),
+    seg4:  seg('seg4', 320, 'ALL_GREEN',     turn('seg5',  'left',   70)),
+    seg5:  seg('seg5', 400, 'YELLOW_GREEN',  turn('seg6',  'right',  20)),
+    seg6:  seg('seg6', 200, 'RED_GREEN',     turn('seg7',  'right',  20)),
+    seg7:  seg('seg7', 220, 'ALL_GREEN',     turn('seg8',  'left',   70)),
     seg8:  seg('seg8', 240, 'YELLOW_GREEN',  turn('seg9',  'left',   70)),
     seg9:  seg('seg9', 200, 'RED_GREEN',     turn('seg10', 'right',  80)),
     seg10: seg('seg10', 220, 'ALL_GREEN',    turn('seg11', 'right',  20)),
@@ -225,16 +226,16 @@ function nearIntersection(state: RiderState, seg: RoadSegment): boolean {
   return seg.length - state.along <= APPROACH_INTERSECTION_DIST;
 }
 
-// The speed a turn is taken at: a GENTLE wide arc. The Rider enters ON the inner edge
-// still pointed the old way, then lets the angle-kill drift him the full lane-width to
-// the FAR edge. Pick the speed so that killing the whole turn angle (rotating at
-// omegaFor) sweeps exactly (width - margin) of lateral drift: a constant-speed
-// constant-omega arc has radius R = v/omega and lateral drift R*(1 - cos THETA), so
-//   v = omega * (width - margin) / (1 - cos THETA).
-// A wide, gentle arc that USES the whole lane instead of hugging the near edge.
-// (margin keeps the far end a hair inside the road.)
+// The speed a turn is taken at. The Rider enters ON the inner edge still pointed the old
+// way; the angle-kill (rotating at omegaFor) then drifts him across the lane. At full
+// aggression the speed is picked so killing the whole turn angle sweeps exactly
+// (width - margin) of lateral drift — a constant-speed/omega arc of radius R = v/omega
+// drifts R*(1 - cos THETA), so v = omega*(width - margin)/(1 - cos THETA), reaching the
+// FAR edge. TURN_AGGRESSION (<1) scales that down: slower through the turn, drifting only
+// that fraction of the lane (so a half-aggression turn sweeps to ~the centre, not the
+// far edge). (margin keeps the far end a hair inside the road.)
 function turnSpeed(seg: RoadSegment): number {
-  return omegaFor(seg.exitAngle) * (seg.width - STRAIGHTEN_MARGIN) / (1 - Math.cos(seg.exitAngle));
+  return TURN_AGGRESSION * omegaFor(seg.exitAngle) * (seg.width - STRAIGHTEN_MARGIN) / (1 - Math.cos(seg.exitAngle));
 }
 
 // Acceleration (m/press^2) PURELY from position, velocity, and distance-to-turn:
@@ -314,12 +315,12 @@ function straightenStep(state: RiderState, seg: RoadSegment): RiderState {
   const dHeading = clamp(aim - state.angle, -omega, omega);
   const angle = state.angle + dHeading;
 
-  // hold the lane-filling speed through the angle-kill (no accelerating mid-corner);
-  // re-accelerate while recentring. v_safe is the hard road-edge cap: nulling the
-  // CURRENT heading a at radius R = v/omega drifts R*(1 - cos a) = v*(1 - cos a)/omega
-  // toward the edge it points at, so cap v to keep that inside `room`. At angle-kill
-  // entry this EXACTLY equals turnSpeed, so it just holds the calibrated arc; it only
-  // bites if `across` drifts unexpectedly (the recenter lean is too small to bind).
+  // hold the turn speed through the angle-kill (no accelerating mid-corner); re-accelerate
+  // while recentring. v_safe is the hard road-edge cap: nulling the CURRENT heading a at
+  // radius R = v/omega drifts R*(1 - cos a) = v*(1 - cos a)/omega toward the edge it points
+  // at, so cap v to keep that inside `room`. At full aggression v_safe-at-entry equals
+  // turnSpeed (the calibrated full-lane arc); below that the entry speed is under v_safe,
+  // so it never bites — drift just stays well inside the road.
   let v = killing ? state.v : state.v + A_ACCEL;
   const a = state.angle;
   if (Math.abs(a) > 1e-3) {
