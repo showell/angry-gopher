@@ -27,20 +27,26 @@ function toRider(a: number, x: number, c: Pose): RiderPt {
   return { forward: dA * cos + dX * sin, right: -dA * sin + dX * cos };
 }
 
-// map a point in the NEXT segment's frame into the CURRENT segment's frame.
-// B starts at A's corner (along = L), rotated by sgn*THETA. Reduces to the
-// simple swap at 90deg.
-function nextToCur(aB: number, xB: number, L: number, sgn: number, theta: number): { a: number; x: number } {
+// Map a point in the NEXT segment's frame into the CURRENT segment's frame.
+// The segments share an INNER-edge corner: B's begin-inner-corner (BR for a right
+// turn, BL for a left) coincides with A's end-inner-corner (ER/EL), at
+// (along=L, across=sgn*hw). The transform rotates by sgn*THETA about THAT shared
+// corner (not the centre-line point), so the road has width — see random453/454.
+function nextToCur(aB: number, xB: number, L: number, sgn: number, theta: number, hw: number): { a: number; x: number } {
   const cos = Math.cos(theta), sin = Math.sin(theta);
-  return { a: L + aB * cos - xB * sgn * sin, x: aB * sgn * sin + xB * cos };
+  return {
+    a: L + hw * sin + aB * cos - xB * sgn * sin,
+    x: sgn * hw * (1 - cos) + aB * sgn * sin + xB * cos,
+  };
 }
 
-// the inverse: a point in the CURRENT segment's frame -> the NEXT segment's
-// frame (the A->B handoff). Used to render an intersection's decorations from
+// the inverse: a point in the CURRENT segment's frame -> the NEXT segment's frame
+// (same shared inner corner). Used to render an intersection's decorations from
 // the downstream side.
-function curToNext(a: number, x: number, L: number, sgn: number, theta: number): { a: number; x: number } {
-  const dA = a - L, cosB = Math.cos(theta), sinB = sgn * Math.sin(theta);
-  return { a: dA * cosB + x * sinB, x: -dA * sinB + x * cosB };
+function curToNext(a: number, x: number, L: number, sgn: number, theta: number, hw: number): { a: number; x: number } {
+  const cos = Math.cos(theta), sin = Math.sin(theta);
+  const dA = a - L - hw * sin, dX = x - sgn * hw * (1 - cos);
+  return { a: dA * cos + dX * sgn * sin, x: -dA * sgn * sin + dX * cos };
 }
 
 // a square intersection quad, drawn with a per-segment local->Rider mapper
@@ -78,7 +84,7 @@ export function buildScene(state: RiderState, world: World): Scene {
       let pa = a, px = x;
       for (let k = d - 1; k >= 0; k--) {
         const prev = chain[k];   // prev -> chain[k+1] is prev's exit turn
-        const p = nextToCur(pa, px, prev.length, prev.exitSign, prev.exitAngle);
+        const p = nextToCur(pa, px, prev.length, prev.exitSign, prev.exitAngle, prev.width / 2);
         pa = p.a; px = p.x;
       }
       return toRider(pa, px, c);
@@ -107,7 +113,7 @@ export function buildScene(state: RiderState, world: World): Scene {
   if (idx > 0) {
     const prev = world.segments[world.order[idx - 1]];
     for (const cr of prev.exitCritters) {
-      const p = curToNext(cr.along, cr.across, prev.length, prev.exitSign, prev.exitAngle);
+      const p = curToNext(cr.along, cr.across, prev.length, prev.exitSign, prev.exitAngle, prev.width / 2);
       critters.push({ at: toRider(p.a, p.x, c), emoji: cr.emoji, height: cr.height, faceRight: cr.faceRight });
     }
   }
