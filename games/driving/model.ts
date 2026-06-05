@@ -113,7 +113,7 @@ export interface World {
 //   VELOCITY : v (speed along the path, m/press)
 // `turn` is null while cruising; a small descriptor while turning.
 // ----------------------------------------------------------------------------
-export interface Turning { sgn: number; r: number; angle: number; phase: 'exiting' | 'entering' | 'straightening'; toSeg: SegId }
+export interface Turning { sgn: number; r: number; angle: number; phase: 'exiting' | 'entering' | 'straightening' | 'recentering'; toSeg: SegId }
 export interface RiderState {
   segment: SegId;
   along: number;
@@ -214,7 +214,7 @@ export function getNextRiderState(state: RiderState, world: World): RiderState {
   const seg = world.segments[state.segment];
   const t = state.turn;
   const next = t === null ? cruise(state, seg, world)
-             : t.phase === 'straightening' ? straightenStep(state, seg)
+             : (t.phase === 'straightening' || t.phase === 'recentering') ? straightenStep(state, seg)
              : turnStep(state, seg, world);
   assertInvariants(next, world);
   return next;
@@ -352,31 +352,36 @@ function enterStraighten(seg: RoadSegment, world: World, v: number): RiderState 
   };
 }
 
-// One press of straighten-out, on the segment we've just entered. Two priorities:
-//   (1) ANGLE first (urgent): rotate toward 0 at the flick rate, letting the bike
-//       drift across the centre line. Brake — instantly, the bike's only road-
-//       safety lever — just enough that the drift bulge stays on the road.
-//   (2) once aligned, RECENTER at leisure: a gentle opposite lean back toward the
-//       centre line, giving up no speed. Overshooting centre is fine; the road
-//       edge is the ONLY hard limit. Resume cruising once aligned AND centred.
+// One press of straighten-out, run in two EXPLICIT, SEQUENTIAL phases carried in
+// turn.phase. (Deriving the phase from |angle| each press instead caused a wiggle:
+// the recenter lean raised |angle| past the threshold, which flipped the bike back
+// into "still misaligned, kill the angle", which rotated it straight again — a bang-
+// bang oscillation. The phase, once advanced, never reverts.)
+//   (1) 'straightening' — ANGLE-KILL (urgent): rotate the heading to 0 at omegaFor,
+//       holding the lane-filling speed; the bike arcs across to the far edge. v_safe
+//       is the hard road-edge cap. Heading reaches 0 -> finish (if already centred) or
+//       hand off to recenter.
+//   (2) 'recentering' — at leisure: a gentle proportional lean back toward the centre
+//       line (aim = -gain*across, capped), re-accelerating. Overshooting centre is
+//       fine; resume cruising once aligned AND centred.
 function straightenStep(state: RiderState, seg: RoadSegment): RiderState {
   const hw = seg.width / 2;
-  const omega = omegaFor((state.turn as Turning).angle);   // SAME per-frame rotation as this turn's arc — one rider tolerance
-  const aligned = Math.abs(state.angle) < ALIGN_EPS;
+  const t = state.turn as Turning;
+  const omega = omegaFor(t.angle);          // SAME per-frame rotation as this turn's arc — one rider tolerance
+  const killing = t.phase === 'straightening';
 
-  // steer straight while the angle is still wrong; then a gentle recentre lean.
-  const aim = aligned ? clamp(-RECENTER_GAIN * state.across, -RECENTER_MAX_ANGLE, RECENTER_MAX_ANGLE) : 0;
+  // angle-kill steers straight to 0; recenter leans gently toward the centre line.
+  const aim = killing ? 0 : clamp(-RECENTER_GAIN * state.across, -RECENTER_MAX_ANGLE, RECENTER_MAX_ANGLE);
   const dHeading = clamp(aim - state.angle, -omega, omega);
   const angle = state.angle + dHeading;
 
-  // hold speed through the angle-kill (no accelerating mid-corner — we braked to the
-  // lane-filling entry speed already); re-accelerate once aligned. v_safe is the hard
-  // road-edge cap: nulling the CURRENT heading a at radius R = v/omega drifts
-  // R*(1 - cos a) = v*(1 - cos a)/omega toward the edge it points at, so cap v to keep
-  // that inside `room`. At entry this EXACTLY equals easyTurnSpeed (room = width-margin,
-  // a = THETA), so it just holds the calibrated arc; it only bites if `across` drifts
-  // unexpectedly. Use the pre-steer angle — it drives this frame's drift — so it's honest.
-  let v = aligned ? state.v + A_ACCEL : state.v;
+  // hold the lane-filling speed through the angle-kill (no accelerating mid-corner);
+  // re-accelerate while recentring. v_safe is the hard road-edge cap: nulling the
+  // CURRENT heading a at radius R = v/omega drifts R*(1 - cos a) = v*(1 - cos a)/omega
+  // toward the edge it points at, so cap v to keep that inside `room`. At angle-kill
+  // entry this EXACTLY equals easyTurnSpeed, so it just holds the calibrated arc; it
+  // only bites if `across` drifts unexpectedly (the recenter lean is too small to bind).
+  let v = killing ? state.v : state.v + A_ACCEL;
   const a = state.angle;
   if (Math.abs(a) > 1e-3) {
     const room = Math.max(0, hw - STRAIGHTEN_MARGIN - state.across * Math.sign(a));
@@ -388,10 +393,10 @@ function straightenStep(state: RiderState, seg: RoadSegment): RiderState {
   const along = state.along + v * Math.cos(mid);
   const across = state.across + v * Math.sin(mid);
 
-  if (Math.abs(angle) < ALIGN_EPS && Math.abs(across) < CENTER_EPS) {
-    return { segment: seg.id, along, across: 0, angle: 0, v, turn: null };   // straightened — resume cruise
-  }
-  return { segment: seg.id, along, across, angle, v, turn: state.turn };
+  const aligned = Math.abs(angle) < ALIGN_EPS, centred = Math.abs(across) < CENTER_EPS;
+  if (aligned && centred) return { segment: seg.id, along, across: 0, angle: 0, v, turn: null };          // straightened — cruise
+  if (killing && aligned) return { segment: seg.id, along, across, angle, v, turn: { ...t, phase: 'recentering' } };  // angle dead, still off-centre
+  return { segment: seg.id, along, across, angle, v, turn: t };
 }
 
 // ----------------------------------------------------------------------------
