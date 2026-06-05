@@ -45,16 +45,29 @@ function gameEnded(rider: RiderState): boolean {
   return rider.segment === lastId && !rider.turn && rider.along >= world.segments[lastId].length - 1e-6;
 }
 
+// advance the Rider one frame and remember it (a no-op once it stops moving — game over)
+function advance(): void {
+  const rider = currentRider();
+  const next = getNextRiderState(rider, world);
+  if (next.segment !== rider.segment || next.along !== rider.along || next.across !== rider.across) {
+    riderHistory.push(next);
+  }
+}
+
+// SPACE toggles automatic mode (advance every frame, so you needn't hold the up arrow);
+// the arrows always take manual control, pausing auto so you can walk frame by frame
+// (UP = step forward, DOWN = step back). Holding an arrow repeats; holding space doesn't.
+let auto = false;
 window.addEventListener('keydown', (e) => {
-  if (e.code === 'ArrowUp') {
-    // advance the Rider one frame, explicitly, and remember it
-    const rider = currentRider();
-    const next = getNextRiderState(rider, world);
-    if (next.segment !== rider.segment || next.along !== rider.along || next.across !== rider.across) {
-      riderHistory.push(next);
-    }
+  if (e.code === 'Space') {
+    if (!e.repeat) auto = !auto;
+    e.preventDefault();
+  } else if (e.code === 'ArrowUp') {
+    auto = false;
+    advance();
     e.preventDefault();
   } else if (e.code === 'ArrowDown') {
+    auto = false;
     if (riderHistory.length > 1) riderHistory.pop();
     e.preventDefault();
   }
@@ -98,20 +111,33 @@ function drawQuad(q: Quad): void {
   ctx.fill();
 }
 
-// frame-rate / render-time, smoothed — lets us tell "Rider going slow" (low speed
-// but fps pinned at 60) from "code going slow" (fps drops / render ms climbs).
-let fps = 0, renderMs = 0;
+// frame timing, smoothed. fps/frameMs are the WALL-CLOCK cadence (how fast the browser
+// actually calls us); renderMs is how long our own draw takes. At 60Hz a healthy frame
+// is one vsync — TARGET_MS (16.67ms). A gap of ~2x means a vsync was missed (dropped).
+const TARGET_MS = 1000 / 60;   // 60Hz vsync budget
+let fps = 0, renderMs = 0, frameMs = 0, droppedFrames = 0, dropFlash = 0;
 
 function drawHud(rider: RiderState): void {
   ctx.fillStyle = 'rgba(0,0,0,0.5)';
-  ctx.fillRect(12, 12, 360, 50);
+  ctx.fillRect(12, 12, 452, 74);
   ctx.font = 'bold 13px ui-monospace, monospace';
   ctx.textAlign = 'left';
+
+  // line 1: where + step, then the mode badge (green AUTO / amber PAUSED)
   const where = rider.turn ? `${rider.segment} (turning ${rider.turn.phase})` : `${rider.segment} @ ${rider.along.toFixed(1)}m`;
+  const l1 = `${where}   ·   step ${riderHistory.length - 1}   ·   `;
   ctx.fillStyle = '#fff';
-  ctx.fillText(`${where}   ·   step ${riderHistory.length - 1}`, 22, 31);
+  ctx.fillText(l1, 22, 31);
+  ctx.fillStyle = auto ? '#7cfc7c' : '#e6c64f';
+  ctx.fillText(auto ? 'AUTO' : 'PAUSED', 22 + ctx.measureText(l1).width, 31);
+
+  // line 2: the Rider's own pace
   ctx.fillStyle = '#9fe6a0';
-  ctx.fillText(`speed ${rider.v.toFixed(2)} m/press   ·   ${fps.toFixed(0)} fps   ·   ${renderMs.toFixed(1)} ms`, 22, 50);
+  ctx.fillText(`speed ${rider.v.toFixed(2)} m/press`, 22, 50);
+
+  // line 3: frame HEALTH — wall-clock cadence vs the 60Hz budget; turns red while dropping
+  ctx.fillStyle = dropFlash > 0 ? '#ff6b6b' : '#9fe6a0';
+  ctx.fillText(`${fps.toFixed(0)} fps   ·   frame ${frameMs.toFixed(1)}/${TARGET_MS.toFixed(1)}ms   ·   render ${renderMs.toFixed(1)}ms   ·   dropped ${droppedFrames}`, 22, 69);
 }
 
 // draw one frame for the given RiderState (handed in by the loop)
@@ -161,11 +187,24 @@ function render(rider: RiderState): void {
 
 let lastFrame = 0;
 function loop(t: number): void {
-  if (lastFrame) fps += ((1000 / Math.max(1, t - lastFrame)) - fps) * 0.1;   // smoothed fps from frame dt
+  if (lastFrame) {
+    const dt = t - lastFrame;
+    fps += (1000 / Math.max(1, dt) - fps) * 0.1;        // smoothed wall-clock cadence
+    frameMs += (dt - frameMs) * 0.1;
+    // vsyncs skipped this frame. Ignore huge gaps (>200ms = the tab was backgrounded,
+    // not a render hiccup) so the counter reflects real jank only.
+    const missed = dt > 200 ? 0 : Math.max(0, Math.round(dt / TARGET_MS) - 1);
+    droppedFrames += missed;
+    dropFlash = missed > 0 ? 45 : Math.max(0, dropFlash - 1);   // keep the warning lit ~0.75s after a drop
+  }
   lastFrame = t;
+
+  // automatic mode: one Rider step per frame, until paused or finished
+  if (auto && !gameEnded(currentRider())) advance();
+
   const t0 = performance.now();
   render(currentRider());
-  renderMs += ((performance.now() - t0) - renderMs) * 0.1;                    // smoothed render cost
+  renderMs += (performance.now() - t0 - renderMs) * 0.1;        // smoothed render cost
   requestAnimationFrame(loop);
 }
 requestAnimationFrame(loop);
