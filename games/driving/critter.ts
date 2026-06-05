@@ -44,6 +44,7 @@ const HERD_ROW_DEPTH = 5;                // across-spacing (depth) of the herd s
 const HERD_JITTER_ALONG = 1.5;           // deterministic wobble of the scatter, along
 const HERD_JITTER_ACROSS = 1.2;          // deterministic wobble of the scatter, across
 const PIG_DIST_BEFORE_END = 60;          // pigs gather this far before the next intersection
+const PIG_BACK_ROW_OFFSET = 6;           // the extra back row of pigs sits this much further from the road
 const GIANT_ELEPHANT_SCALE = 1.7;          // elephants this many times bigger...
 const GIANT_ELEPHANT_FROM_SEG = 8;       // ...on segments numbered above this
 
@@ -94,11 +95,16 @@ function cowHerd(hw: number, treeLineOffset: number): Critter[] {
   return out;
 }
 
+// 10 pigs near the end of the segment, on the right: a front row of 4 at the
+// road's edge, and a back row of 6 sitting further off the road (same spot).
 function pigRow(length: number, edge: number): Critter[] {
   const out: Critter[] = [];
-  for (const d of [-6, -2, 2, 6]) {
-    out.push({ along: length - PIG_DIST_BEFORE_END + d, across: edge, emoji: '🐖', height: PIG_HEIGHT, faceRight: false });
-  }
+  const base = length - PIG_DIST_BEFORE_END;
+  const pig = (d: number, across: number): void => {
+    out.push({ along: base + d, across, emoji: '🐖', height: PIG_HEIGHT, faceRight: false });
+  };
+  for (const d of [-6, -2, 2, 6]) pig(d, edge);                            // front row of 4
+  for (const d of [-10, -6, -2, 2, 6, 10]) pig(d, edge + PIG_BACK_ROW_OFFSET);  // back row of 6, further out
   return out;
 }
 
