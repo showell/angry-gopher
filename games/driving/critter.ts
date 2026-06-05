@@ -44,7 +44,7 @@ const HERD_ROW_DEPTH = 5;                // across-spacing (depth) of the herd s
 const HERD_JITTER_ALONG = 1.5;           // deterministic wobble of the scatter, along
 const HERD_JITTER_ACROSS = 1.2;          // deterministic wobble of the scatter, across
 const PIG_DIST_BEFORE_END = 60;          // pigs gather this far before the next intersection
-const GIANT_ELEPHANT_SCALE = 3;          // elephants this many times bigger...
+const GIANT_ELEPHANT_SCALE = 1.7;          // elephants this many times bigger...
 const GIANT_ELEPHANT_FROM_SEG = 8;       // ...on segments numbered above this
 
 // ---- where the critters are, per segment ----
