@@ -12,9 +12,8 @@ import type { RiderState } from './model.ts';
 import { buildScene } from './view.ts';
 import type { RiderPt, Quad } from './view.ts';
 import { drawHorizon } from './horizon.ts';
-import { drawCritter } from './critter.ts';
-import type { Project } from './critter.ts';
-import { drawTree } from './tree.ts';
+import { DETAIL_DIST } from './scenery.ts';
+import type { Project } from './scenery.ts';
 
 // The page is a near-empty shell (the Go /driving route or the standalone
 // index.html), so we build our own DOM here — the host ships no markup or CSS.
@@ -218,12 +217,13 @@ function render(rider: RiderState): void {
 
   for (const q of scene.quads) drawQuad(q);
 
-  // trees + critters are billboards; draw them back-to-front together so a
-  // nearer one correctly occludes a farther one.
-  const bills: Array<{ forward: number; draw: () => void }> = [];
-  for (const t of scene.trees) bills.push({ forward: t.at.forward, draw: () => drawTree(ctx, t, screenOf) });
-  for (const cr of scene.critters) bills.push({ forward: cr.at.forward, draw: () => drawCritter(ctx, cr, screenOf) });
-  bills.filter((b) => b.forward > NEAR).sort((a, b) => b.forward - a.forward).forEach((b) => b.draw());
+  // scenery (trees + critters) drawn back-to-front so a nearer one occludes a farther
+  // one. The renderer owns the near/far POLICY; each object owns how it draws at each
+  // detail level (drawAsNear within DETAIL_DIST, drawAsFar beyond).
+  scene.scenery
+    .filter((s) => s.forward > NEAR)
+    .sort((a, b) => b.forward - a.forward)
+    .forEach((s) => (s.forward < DETAIL_DIST ? s.drawAsNear : s.drawAsFar)(ctx, screenOf));
 
   ctx.restore();
 

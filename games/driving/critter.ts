@@ -6,6 +6,8 @@
 // the canvas — no need to know a cow from an elephant.
 // =============================================================================
 
+import type { Project, Ctx, Scenery } from './scenery.ts';
+
 // A critter in its SEGMENT's frame: `along` the segment, `across` from the
 // centreline (+ = right). A point billboard — height in metres, facing a way.
 export interface Critter {
@@ -110,8 +112,13 @@ function pigRow(length: number, edge: number): Critter[] {
 
 // ---- drawing: emoji billboards, with cached sprites ----
 
-// project a ground-plane point (right, forward) at a height to the screen
-export type Project = (right: number, forward: number, height: number) => { x: number; y: number };
+// Wrap a placed critter as Scenery. Critters have no up-close detail yet, so
+// drawAsNear and drawAsFar are the same billboard draw (the "same underlying code"
+// case) — a hook for per-distance detail later without touching the renderer.
+export function critterScenery(view: CritterView): Scenery {
+  const draw = (ctx: Ctx, project: Project): void => drawCritter(ctx, view, project);
+  return { forward: view.at.forward, drawAsNear: draw, drawAsFar: draw };
+}
 
 // Emoji are expensive to rasterize every frame, so render each one ONCE to an
 // offscreen sprite and reuse it. drawImage is far cheaper than fillText.

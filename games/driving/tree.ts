@@ -4,7 +4,7 @@
 // how they're drawn (a tiered conifer). The rest of the app just asks a segment
 // for its trees and throws the drawn shapes on the canvas.
 // =============================================================================
-import type { Project } from './critter.ts';
+import type { Project, Ctx, Scenery } from './scenery.ts';
 
 // A segment's tree theme. ALL_GREEN: all green. YELLOW_GREEN / RED_GREEN: green
 // alternating with a golden / red accent. Every tree is a conifer either way.
@@ -15,6 +15,13 @@ export interface Tree { along: number; across: number; color: string; height: nu
 
 // A tree placed in the scene, measured FROM THE RIDER and ready to draw.
 export interface TreeView { at: { right: number; forward: number }; color: string; height: number }
+
+// Wrap a placed tree as Scenery. drawAsFar is the standard conifer; drawAsNear will
+// grow up-close detail (needles / shading) — for now it's the same draw.
+export function treeScenery(view: TreeView): Scenery {
+  const draw = (ctx: Ctx, project: Project): void => drawTree(ctx, view, project);
+  return { forward: view.at.forward, drawAsNear: draw, drawAsFar: draw };
+}
 
 // ---- dimensions (metres) ----
 const SMALL_HEIGHT = 4.5;                 // odd-parity conifers (the established small size)

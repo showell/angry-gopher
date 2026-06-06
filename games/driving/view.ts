@@ -8,14 +8,17 @@
 // through the intersections ahead — plus the intersection just behind us.
 // =============================================================================
 import type { World, RiderState, RoadSegment } from './model.ts';
-import type { CritterView } from './critter.ts';
-import type { TreeView } from './tree.ts';
+import { critterScenery } from './critter.ts';
+import { treeScenery } from './tree.ts';
+import type { Scenery } from './scenery.ts';
 
 const ROAD = '#34353c';
 
 export interface RiderPt { right: number; forward: number }   // Rider frame, ground plane
 export interface Quad { pts: RiderPt[]; color: string }
-export interface Scene { quads: Quad[]; trees: TreeView[]; critters: CritterView[] }
+// Road quads are the ground plane (drawn first, no LOD); scenery is the depth-sorted,
+// near/far-aware drawables (trees + critters, merged so they occlude each other right).
+export interface Scene { quads: Quad[]; scenery: Scenery[] }
 
 // the Rider's pose in its own segment's frame
 interface Pose { along: number; across: number; angle: number }
@@ -79,8 +82,7 @@ const LOOK_AHEAD = 4;
 export function buildScene(state: RiderState, world: World): Scene {
   const c: Pose = { along: state.along, across: state.across, angle: state.angle };
   const quads: Quad[] = [];
-  const trees: TreeView[] = [];
-  const critters: CritterView[] = [];
+  const scenery: Scenery[] = [];
 
   // the Rider's current segment and up to (LOOK_AHEAD-1) segments beyond it
   const chain: RoadSegment[] = [];
@@ -124,13 +126,13 @@ export function buildScene(state: RiderState, world: World): Scene {
 
     // scenery is still authored centre-relative; +hw shifts it to from-the-left.
     for (const t of seg.trees) {
-      trees.push({ at: at(d, t.along, t.across + hw), color: t.color, height: t.height });
+      scenery.push(treeScenery({ at: at(d, t.along, t.across + hw), color: t.color, height: t.height }));
     }
     for (const cr of seg.critters) {
-      critters.push({ at: at(d, cr.along, cr.across + hw), emoji: cr.emoji, height: cr.height, faceRight: cr.faceRight });
+      scenery.push(critterScenery({ at: at(d, cr.along, cr.across + hw), emoji: cr.emoji, height: cr.height, faceRight: cr.faceRight }));
     }
     for (const cr of seg.exitCritters) {   // exit decorations, approaching side
-      critters.push({ at: at(d, cr.along, cr.across + hw), emoji: cr.emoji, height: cr.height, faceRight: cr.faceRight });
+      scenery.push(critterScenery({ at: at(d, cr.along, cr.across + hw), emoji: cr.emoji, height: cr.height, faceRight: cr.faceRight }));
     }
   }
 
@@ -155,9 +157,9 @@ export function buildScene(state: RiderState, world: World): Scene {
     const outerXp = prev.exitSign > 0 ? 0 : Wp;
     quads.push(sectorQuad(at(0, 0, innerX), fromPrev(prev.length, outerXp), at(0, 0, outerX)));
     for (const cr of prev.exitCritters) {
-      critters.push({ at: fromPrev(cr.along, cr.across + Wp / 2), emoji: cr.emoji, height: cr.height, faceRight: cr.faceRight });
+      scenery.push(critterScenery({ at: fromPrev(cr.along, cr.across + Wp / 2), emoji: cr.emoji, height: cr.height, faceRight: cr.faceRight }));
     }
   }
 
-  return { quads, trees, critters };
+  return { quads, scenery };
 }
