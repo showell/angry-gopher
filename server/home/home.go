@@ -19,7 +19,7 @@ func HandleHome(w http.ResponseWriter, r *http.Request) {
 	user := users.CurrentUser(r)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	platform.PageHeader(w, "Lyn Rummy", user.Name, user.Admin)
-	platform.PageSubtitle(w, "Jump straight into a game or browse the puzzles.")
+	platform.PageSubtitle(w, "Jump into a game, browse the puzzles, or take a drive.")
 	renderGamesHero(w)
 	platform.PageFooter(w)
 }
@@ -27,8 +27,9 @@ func HandleHome(w http.ResponseWriter, r *http.Request) {
 // renderGamesHero: tiles for the full game and the puzzles surface.
 func renderGamesHero(w http.ResponseWriter) {
 	fmt.Fprint(w, `<style>
-.games-hero { margin:20px 0 28px; display:grid; grid-template-columns:1fr 1fr; gap:20px; }
-@media (max-width: 640px) { .games-hero { grid-template-columns:1fr; } }
+.games-hero { margin:20px 0 28px; display:grid; grid-template-columns:repeat(3, 1fr); gap:20px; }
+@media (max-width: 900px) { .games-hero { grid-template-columns:1fr 1fr; } }
+@media (max-width: 600px) { .games-hero { grid-template-columns:1fr; } }
 .games-tile { border:1px solid #ccc; border-radius:8px; padding:22px; background:#fcfcf8;
               display:flex; flex-direction:column; }
 .games-tile h2 { margin:0 0 6px; font-size:22px; color:#000080; }
@@ -51,6 +52,13 @@ func renderGamesHero(w http.ResponseWriter) {
     <p>A single board, mid-game. Drag stacks to merge or split your way to a clean meld layout. Solo, no opponent — undo is free, and Replay walks back through your moves.</p>
     <div class="cta">
       <a class="play-btn" href="/puzzles">Solve puzzles →</a>
+    </div>
+  </div>
+  <div class="games-tile">
+    <h2>Driving</h2>
+    <p>A first-person motorcycle ride down a winding road. Steer through the turns with the arrow keys, or hit SPACE and let it drive itself. No goal, no clock — just the road.</p>
+    <div class="cta">
+      <a class="play-btn" href="/driving">Take a drive →</a>
     </div>
   </div>
 </div>`)
