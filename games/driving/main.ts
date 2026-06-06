@@ -11,10 +11,10 @@ import { initialRiderState, getNextRiderState, riderHeading, leanFor } from './m
 import type { RiderState } from './model.ts';
 import { buildWorld } from './road_segment.ts';
 import { buildScene } from './view.ts';
-import type { RiderPt, Quad } from './view.ts';
+import type { Quad } from './view.ts';
 import { drawHorizon } from './horizon.ts';
 import { DETAIL_DIST } from './scenery.ts';
-import type { Project } from './scenery.ts';
+import type { Project, RiderPt } from './scenery.ts';
 
 // The page is a near-empty shell (the Go /driving route or the standalone
 // index.html), so we build our own DOM here — the host ships no markup or CSS.

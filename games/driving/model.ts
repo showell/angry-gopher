@@ -25,7 +25,7 @@
 // =============================================================================
 
 import type { World, RoadSegment, SegId } from './road_segment.ts';
-import { turnSpeed } from './road_segment.ts';
+import { turnSpeed } from './intersection.ts';
 
 // ============================================================================
 // DIMENSIONS — distances for the Rider's approach to a turn, in METRES. (The

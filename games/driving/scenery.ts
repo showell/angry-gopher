@@ -11,6 +11,11 @@
 // drawAsFar. The interface is expected to grow (more LOD tiers, etc.) as needed.
 // =============================================================================
 
+// A ground-plane point in the RIDER's frame: how far to the right and forward of
+// the Rider it sits. The fundamental coordinate of the whole rider-relative scene;
+// shared by view.ts (which produces them) and intersection.ts (its pavement).
+export interface RiderPt { right: number; forward: number }
+
 // A ground-plane point (right, forward) at a height, projected to the screen.
 export type Project = (right: number, forward: number, height: number) => { x: number; y: number };
 export type Ctx = CanvasRenderingContext2D;

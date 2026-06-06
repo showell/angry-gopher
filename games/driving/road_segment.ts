@@ -119,20 +119,3 @@ export function buildWorld(): World {
   }
   return { segments, start: 'seg1', order };
 }
-
-// The max speed (m/press) at which each turn angle is taken: the Rider holds this through
-// the angle-kill, drifting to the far edge and recentring without leaving the road. These
-// are NOT a closed form — they were found by offline simulation of THIS straighten-out
-// (jerk-limited rotation up to TURN_OMEGA, braking-profile recentre), binary-searching the
-// fastest entry whose far-edge drift stays STRAIGHTEN_MARGIN inside the edge. "An expert
-// Rider knows safe turn speeds." Only the route's six angles are tabulated; an unlisted
-// angle is a config error — re-run the sim and add it (linear interp OVER-estimates, unsafe).
-const SAFE_TURN_SPEED: Record<number, number> = {
-  15: 1.297, 20: 0.840, 30: 0.461, 50: 0.222, 70: 0.139, 80: 0.117,
-};
-export function turnSpeed(seg: RoadSegment): number {
-  const deg = Math.round(seg.exitAngle * 180 / Math.PI);
-  const v = SAFE_TURN_SPEED[deg];
-  if (v === undefined) throw new Error(`no safe turn speed tabulated for a ${deg}deg turn (${seg.id})`);
-  return v;
-}

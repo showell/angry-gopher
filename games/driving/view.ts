@@ -11,11 +11,11 @@ import type { RiderState } from './model.ts';
 import type { World, RoadSegment } from './road_segment.ts';
 import { critterScenery } from './critter.ts';
 import { treeScenery } from './tree.ts';
-import type { Scenery } from './scenery.ts';
+import type { Scenery, RiderPt } from './scenery.ts';
+import { nextToCur, curToNext, pavementSector } from './intersection.ts';
 
 const ROAD = '#34353c';
 
-export interface RiderPt { right: number; forward: number }   // Rider frame, ground plane
 export interface Quad { pts: RiderPt[]; color: string }
 // Road quads are the ground plane (drawn first, no LOD); scenery is the depth-sorted,
 // near/far-aware drawables (trees + critters, merged so they occlude each other right).
@@ -31,50 +31,6 @@ function toRider(a: number, x: number, c: Pose, hw: number): RiderPt {
   const dA = a - c.along, dX = x - (c.across + hw);
   const cos = Math.cos(c.angle), sin = Math.sin(c.angle);
   return { forward: dA * cos + dX * sin, right: -dA * sin + dX * cos };
-}
-
-// Map a point from the NEXT segment's BL-origin frame into the CURRENT segment's.
-// The segments fuse along the INNER edge of the turn, and LEFT/RIGHT are NOT mirror
-// images (random455): a LEFT turn is free — the fused left edges contain the origin,
-// so just rotate (CCW) and add the length; a RIGHT turn fuses at the right edge, so
-// it pays a road-width shift on x (reference the right edge, rotate CW, shift back).
-function nextToCur(aB: number, xB: number, L: number, theta: number, dir: 'left' | 'right', W: number): { a: number; x: number } {
-  const cos = Math.cos(theta), sin = Math.sin(theta);
-  if (dir === 'left') {
-    return { a: aB * cos + xB * sin + L, x: xB * cos - aB * sin };
-  }
-  return { a: aB * cos - xB * sin + W * sin + L, x: xB * cos + aB * sin + W * (1 - cos) };
-}
-
-// the inverse (CURRENT segment's frame -> NEXT segment's frame), same fusion.
-function curToNext(a: number, x: number, L: number, theta: number, dir: 'left' | 'right', W: number): { a: number; x: number } {
-  const cos = Math.cos(theta), sin = Math.sin(theta);
-  if (dir === 'left') {
-    const a0 = a - L;
-    return { a: a0 * cos - x * sin, x: a0 * sin + x * cos };
-  }
-  const a0 = a - L - W * sin, x0 = x - W * (1 - cos);
-  return { a: a0 * cos + x0 * sin, x: -a0 * sin + x0 * cos };
-}
-
-// A wedge of road pavement filling a turn's OUTER corner: a circular sector centred at
-// the inner corner P (where the two inner edges fuse), with straight legs P->e1 and
-// P->e2 along the two segments' end/start edges out to their outer corners, and an arc
-// of radius |P->e1| between them. (P, e1, e2 are already in the Rider's frame; the
-// transforms are rigid, so the arc is a true arc here too.)
-function sectorQuad(P: RiderPt, e1: RiderPt, e2: RiderPt): Quad {
-  const R = Math.hypot(e1.right - P.right, e1.forward - P.forward);
-  const a1 = Math.atan2(e1.forward - P.forward, e1.right - P.right);
-  let delta = Math.atan2(e2.forward - P.forward, e2.right - P.right) - a1;
-  while (delta > Math.PI) delta -= 2 * Math.PI;
-  while (delta < -Math.PI) delta += 2 * Math.PI;   // sweep the SHORT way (= the turn angle)
-  const pts: RiderPt[] = [P];
-  const N = 8;
-  for (let i = 0; i <= N; i++) {
-    const ang = a1 + delta * (i / N);
-    pts.push({ right: P.right + R * Math.cos(ang), forward: P.forward + R * Math.sin(ang) });
-  }
-  return { pts, color: ROAD };
 }
 
 // how many segments to look ahead (current + this many beyond the next corner)
@@ -122,7 +78,7 @@ export function buildScene(state: RiderState, world: World): Scene {
     if (seg.exit && next) {
       const innerX = seg.exitSign > 0 ? W : 0, outerX = W - innerX;
       const outerX2 = seg.exitSign > 0 ? 0 : next.width;
-      quads.push(sectorQuad(at(d, seg.length, innerX), at(d, seg.length, outerX), at(d + 1, 0, outerX2)));
+      quads.push({ pts: pavementSector(at(d, seg.length, innerX), at(d, seg.length, outerX), at(d + 1, 0, outerX2)), color: ROAD });
     }
 
     // scenery is still authored centre-relative; +hw shifts it to from-the-left.
@@ -156,7 +112,7 @@ export function buildScene(state: RiderState, world: World): Scene {
     const cur = chain[0];
     const innerX = prev.exitSign > 0 ? cur.width : 0, outerX = cur.width - innerX;
     const outerXp = prev.exitSign > 0 ? 0 : Wp;
-    quads.push(sectorQuad(at(0, 0, innerX), fromPrev(prev.length, outerXp), at(0, 0, outerX)));
+    quads.push({ pts: pavementSector(at(0, 0, innerX), fromPrev(prev.length, outerXp), at(0, 0, outerX)), color: ROAD });
     for (const cr of prev.exitCritters) {
       scenery.push(critterScenery({ at: fromPrev(cr.along, cr.across + Wp / 2), emoji: cr.emoji, height: cr.height, faceRight: cr.faceRight }));
     }
