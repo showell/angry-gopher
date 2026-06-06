@@ -20,7 +20,7 @@ function wrap(a: number): number {
 function segHeadings(world: World): Record<string, number> {
   const h: Record<string, number> = { [world.order[0]]: 0 };
   for (let i = 0; i < world.order.length - 1; i++) {
-    const ix = world.intersections[world.segments[world.order[i]].exitIxn as string];
+    const ix = world.intersections[world.segments[world.order[i]].exitIxn];
     h[world.order[i + 1]] = h[world.order[i]] + ix.sign * ix.angle;
   }
   return h;
@@ -37,7 +37,7 @@ function localToRef(idx: number, a: number, x: number, world: World): P {
   let i = idx;
   while (i > 0) {
     const A = world.segments[world.order[i - 1]];   // B was entered from A
-    const ix = world.intersections[A.exitIxn as string];
+    const ix = world.intersections[A.exitIxn];
     const sgn = ix.sign, L = A.length, theta = ix.angle, hw = A.width / 2;
     const cos = Math.cos(theta), sin = Math.sin(theta);
     const aA = L + hw * sin + a * cos - x * sgn * sin;
@@ -73,8 +73,7 @@ function main(): void {
   // CONFIG: every turn must be <= 90deg — the straighten-out geometry (the only turn
   // mechanism) breaks beyond it (the Rider would enter the next segment pointed back).
   for (const id of world.order) {
-    const ix = world.segments[id].exitIxn;
-    const angle = ix ? world.intersections[ix].angle : 0;
+    const angle = world.intersections[world.segments[id].exitIxn].angle;   // terminus -> 0, no throw
     if (angle > MAX_TURN_ANGLE + 1e-9) {
       throw new Error(`turn on ${id} is ${(angle * 180 / Math.PI).toFixed(0)}deg, over the ${(MAX_TURN_ANGLE * 180 / Math.PI).toFixed(0)}deg max`);
     }

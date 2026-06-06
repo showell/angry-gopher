@@ -122,25 +122,22 @@ export function getNextRiderState(state: RiderState, world: World): RiderState {
 }
 
 // Is the Rider close enough to the upcoming intersection to start slowing for it?
-// (Only meaningful for a segment that HAS an exit turn; the final segment never brakes
-// and is handled directly in accel/cruise.)
+// Every segment exits through an intersection (a turn, or the terminus), so this is
+// always just "within braking distance of the end".
 function nearIntersection(state: RiderState, seg: RoadSegment): boolean {
-  if (seg.exitIxn === null) return true;
   return seg.length - state.along <= APPROACH_INTERSECTION_DIST;
 }
 
 // Acceleration (m/press^2) PURELY from position, velocity, and distance-to-turn:
 //   intersection still far -> keep accelerating at a constant rate.
 //   intersection near       -> the EXACT constant deceleration that lands the
-//     Rider at turn speed (0 at the route end) right at the turn point, from
-//     v^2 = vEnd^2 + 2*a*d. Recomputed every press: constant-decel kinematics are
-//     self-consistent, so this reproduces the same a each press while correcting
-//     integration drift.
+//     Rider at the exit's turn speed (0 at the terminus, so he coasts to a stop) right
+//     at the commit point, from v^2 = vEnd^2 + 2*a*d. Recomputed every press: constant-
+//     decel kinematics are self-consistent, so this reproduces the same a each press
+//     while correcting integration drift. (The terminus is just an intersection with
+//     turn speed 0 — no exit-less special case.)
 function accel(state: RiderState, seg: RoadSegment, world: World): number {
-  // Far from a turn (or on the exit-less final segment): accelerate at A_ACCEL.
-  // Approaching one: brake to reach the lane-filling turn speed right where the Rider
-  // commits to the turn (alongWhereRiderCommitsToTurn — the inner-edge crossing).
-  if (seg.exitIxn === null || !nearIntersection(state, seg)) return A_ACCEL;
+  if (!nearIntersection(state, seg)) return A_ACCEL;
   const d = seg.alongWhereRiderCommitsToTurn - state.along;
   if (d <= 1e-6) return 0;
   const vEnd = turnSpeed(world.intersections[seg.exitIxn]);
@@ -149,15 +146,16 @@ function accel(state: RiderState, seg: RoadSegment, world: World): number {
 
 function cruise(state: RiderState, seg: RoadSegment, world: World): RiderState {
   let v = clamp(state.v + accel(state, seg, world), 0, V_MAX);
+  const exitIxn = world.intersections[seg.exitIxn];
 
-  if (seg.exitIxn === null) {   // the final segment: accelerate to the end, then the game is over
+  if (exitIxn.to === null) {   // the terminus: coast to the end (braked by accel), then the game is over
     const along = state.along + v;
     if (along >= seg.length) return { ...state, along: seg.length, v: 0 };   // reached the end -> stop
     return { ...state, along, v };
   }
 
   // braked to the lane-filling speed; cross the inner edge and straighten into the next
-  if (nearIntersection(state, seg)) v = Math.max(v, turnSpeed(world.intersections[seg.exitIxn]));   // never crawl below the lane-filling speed
+  if (nearIntersection(state, seg)) v = Math.max(v, turnSpeed(exitIxn));   // never crawl below the lane-filling speed
   const along = state.along + v;
   if (along < seg.alongWhereRiderCommitsToTurn) return { ...state, along, v };   // cross the inner edge -> commit to the next segment
   return enterStraighten(seg, world, v);
@@ -170,8 +168,8 @@ function cruise(state: RiderState, seg: RoadSegment, world: World): RiderState {
 // way (angle = -sgn*theta), and a touch BEFORE the new segment's begin line (along =
 // -hw/sin(theta), negative — expected). Same physical point, so position is continuous.
 function enterStraighten(seg: RoadSegment, world: World, v: number): RiderState {
-  const ixn = world.intersections[seg.exitIxn as string];   // non-null: cruise only calls this past the commit point
-  const next = world.segments[ixn.to];
+  const ixn = world.intersections[seg.exitIxn];
+  const next = world.segments[ixn.to as string];   // a turn (not a terminus): cruise only reaches here for ixn.to != null
   const sgn = ixn.sign, theta = ixn.angle, hw = seg.width / 2;
   return {
     segment: next.id,

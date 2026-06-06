@@ -36,12 +36,14 @@ export interface RoadSegment {
   trees: Tree[];
   critters: Critter[];      // roadside, along the segment (cows/pigs)
   exitCritters: Critter[];  // at the exit intersection (elephants); shared with the next segment
-  // graph refs: the intersections bracketing this edge (null where the route opens/closes).
+  // graph refs: the intersections bracketing this edge. Every segment EXITS through an
+  // intersection (a turn, or the terminus that closes the route), so exitIxn is never null;
+  // entryIxn is null only at the route START, where the Rider just spawns (no node there).
   entryIxn: IxnId | null;   // the intersection the Rider ARRIVES FROM (null at the route start)
-  exitIxn: IxnId | null;    // the intersection the Rider DEPARTS THROUGH (null at the route end)
+  exitIxn: IxnId;           // the intersection the Rider DEPARTS THROUGH (a turn, or the terminus)
   // The `along` position at which the Rider leaves this segment for its exit turn: he
   // crosses the extension of the next segment's inner edge here, hw/tan(THETA) BEFORE the
-  // segment's geometric end, and commits to the turn. With no exit it's just the segment
+  // segment's geometric end, and commits to the turn. At the terminus it's just the segment
   // end. (Lives on the segment because it's an along-coordinate; the TURN lives on the
   // intersection.)
   alongWhereRiderCommitsToTurn: number;
@@ -87,43 +89,52 @@ export function buildWorld(): World {
   ];
   const order: SegId[] = route.map((r) => r.id);
 
-  // ---- bare segments (graph refs + turn-derived scalars filled in the passes below) ----
+  // ---- intersections: a turn NODE per exit, plus the TERMINUS node that closes the route.
+  // Every segment exits through exactly one of these, so we record each segment's exit (and,
+  // for turns, the entry it feeds) up front. ----
+  const intersections: Record<IxnId, Intersection> = {};
+  const exitIxnOf: Record<SegId, IxnId> = {};
+  const entryIxnOf: Record<SegId, IxnId> = {};
+  for (const r of route) {
+    if (r.exit) {
+      const theta = r.exit.angle, sign = signOf(r.exit.dir);
+      const id: IxnId = `${r.id}_${r.exit.to}`;
+      intersections[id] = {
+        id, from: r.id, to: r.exit.to, angle: theta,
+        radius: TURN_RADIUS, sign, tan: TURN_RADIUS * Math.tan(theta / 2),
+      };
+      exitIxnOf[r.id] = id;
+      entryIxnOf[r.exit.to] = id;
+    } else {
+      const id: IxnId = `${r.id}_end`;   // the terminus: the Rider arrives and stops (no fork)
+      intersections[id] = { id, from: r.id, to: null, angle: 0, radius: 0, sign: 0, tan: 0 };
+      exitIxnOf[r.id] = id;
+    }
+  }
+
+  // ---- segments ----
   const segments: Record<SegId, RoadSegment> = {};
   for (const r of route) {
+    const exit = intersections[exitIxnOf[r.id]];
+    const isTurn = exit.to !== null;
     segments[r.id] = {
       id: r.id, length: r.length, width: LANE_WIDTH, scheme: r.scheme,
       trees: [],                // filled once each corner's clear-zone tangent is known
       critters: segmentCritters(r.length, LANE_WIDTH / 2, TREE_ROAD_OFFSET),
-      exitCritters: [],         // filled below, once the exit turn's sign is known
-      entryIxn: null, exitIxn: null,
-      alongWhereRiderCommitsToTurn: r.length,   // no exit -> the Rider runs to the very end
+      exitCritters: isTurn ? intersectionCritters(r.length, exit.sign, segNumber(r.id), LANE_WIDTH / 2) : [],
+      entryIxn: entryIxnOf[r.id] ?? null,
+      exitIxn: exitIxnOf[r.id],
+      // the inner-edge crossing, hw/tan(THETA) before the end (a terminus has no turn -> the end)
+      alongWhereRiderCommitsToTurn: isTurn ? r.length - (LANE_WIDTH / 2) / Math.tan(exit.angle) : r.length,
       northHeading: 0,
     };
   }
 
-  // ---- intersections: one NODE per exit turn, wiring the two adjoining segments ----
-  const intersections: Record<IxnId, Intersection> = {};
-  for (const r of route) {
-    if (!r.exit) continue;
-    const from = segments[r.id];
-    const theta = r.exit.angle, sign = signOf(r.exit.dir);
-    const id: IxnId = `${r.id}_${r.exit.to}`;
-    intersections[id] = {
-      id, from: r.id, to: r.exit.to, dir: r.exit.dir, angle: theta,
-      radius: TURN_RADIUS, sign, tan: TURN_RADIUS * Math.tan(theta / 2),
-    };
-    from.exitIxn = id;
-    segments[r.exit.to].entryIxn = id;
-    from.alongWhereRiderCommitsToTurn = from.length - (LANE_WIDTH / 2) / Math.tan(theta);
-    from.exitCritters = intersectionCritters(from.length, sign, segNumber(r.id), LANE_WIDTH / 2);
-  }
-
   // ---- orientation relative to north, accumulated along the route ----
   for (const id of order) {
-    const s = segments[id];
-    if (!s.exitIxn) continue;
-    const ixn = intersections[s.exitIxn];
-    segments[ixn.to].northHeading = s.northHeading + ixn.sign * ixn.angle;
+    const ixn = intersections[segments[id].exitIxn];
+    if (ixn.to === null) continue;   // terminus: nothing downstream
+    segments[ixn.to].northHeading = segments[id].northHeading + ixn.sign * ixn.angle;
   }
 
   // ---- trees, now that each corner's clear-zone tangent is known (tree.ts keeps a
@@ -131,7 +142,7 @@ export function buildWorld(): World {
   for (const id of order) {
     const s = segments[id];
     const entryTan = s.entryIxn ? intersections[s.entryIxn].tan : 0;
-    const exitTan = s.exitIxn ? intersections[s.exitIxn].tan : 0;
+    const exitTan = intersections[s.exitIxn].tan;   // a terminus contributes 0 (no corner)
     s.trees = segmentTrees(s.length, entryTan, exitTan, s.scheme, LANE_WIDTH / 2);
   }
 

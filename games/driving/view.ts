@@ -41,12 +41,14 @@ export function buildScene(state: RiderState, world: World): Scene {
   const quads: Quad[] = [];
   const scenery: Scenery[] = [];
 
-  // the Rider's current segment and up to (LOOK_AHEAD-1) segments beyond it
+  // the Rider's current segment and up to (LOOK_AHEAD-1) segments beyond it, following each
+  // segment's exit turn — stopping at the terminus (exit.to === null), which has no successor.
   const chain: RoadSegment[] = [];
-  for (let s: RoadSegment | undefined = world.segments[state.segment];
-       s && chain.length < LOOK_AHEAD;
-       s = s.exitIxn ? world.segments[world.intersections[s.exitIxn].to] : undefined) {
+  let s: RoadSegment | undefined = world.segments[state.segment];
+  while (s && chain.length < LOOK_AHEAD) {
     chain.push(s);
+    const to: string | null = world.intersections[s.exitIxn].to;
+    s = to ? world.segments[to] : undefined;
   }
 
   const riderHw = chain[0].width / 2;   // the Rider's-frame half-width (its pose is centre-relative)
@@ -57,7 +59,7 @@ export function buildScene(state: RiderState, world: World): Scene {
     let pa = a, px = x;
     for (let k = d - 1; k >= 0; k--) {
       const prev = chain[k];   // prev -> chain[k+1] is prev's exit turn
-      const ixn = world.intersections[prev.exitIxn as string];
+      const ixn = world.intersections[prev.exitIxn];
       const dir = ixn.sign > 0 ? 'right' : 'left';
       const p = nextToCur(pa, px, prev.length, ixn.angle, dir, prev.width);
       pa = p.a; px = p.x;
@@ -75,9 +77,9 @@ export function buildScene(state: RiderState, world: World): Scene {
     // pavement for this exit's intersection, whenever the next segment is in view: a
     // sector filling the turn's OUTER corner. innerX is the fused (inner) edge, outerX
     // the far edge — picked by turn direction (right: inner = right edge = W).
-    const next = chain[d + 1];
-    const exitIxn = seg.exitIxn ? world.intersections[seg.exitIxn] : null;
-    if (exitIxn && next) {
+    const next = chain[d + 1];   // present only when seg's exit is a turn (the terminus has no successor)
+    const exitIxn = world.intersections[seg.exitIxn];
+    if (next) {
       const innerX = exitIxn.sign > 0 ? W : 0, outerX = W - innerX;
       const outerX2 = exitIxn.sign > 0 ? 0 : next.width;
       quads.push({ pts: pavementSector(at(d, seg.length, innerX), at(d, seg.length, outerX), at(d + 1, 0, outerX2)), color: ROAD });
@@ -101,7 +103,7 @@ export function buildScene(state: RiderState, world: World): Scene {
   const idx = world.order.indexOf(state.segment);
   if (idx > 0) {
     const prev = world.segments[world.order[idx - 1]];
-    const pIxn = world.intersections[prev.exitIxn as string];   // the joint we just crossed
+    const pIxn = world.intersections[prev.exitIxn];   // the joint we just crossed
     const dir = pIxn.sign > 0 ? 'right' : 'left';
     const Wp = prev.width;
     // a point in PREV's BL frame, mapped into the Rider's frame through the join.

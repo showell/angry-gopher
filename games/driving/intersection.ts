@@ -12,24 +12,28 @@
 // =============================================================================
 
 import type { RiderPt } from './scenery.ts';
-import type { SegId, TurnDir } from './road_segment.ts';
+import type { SegId } from './road_segment.ts';
 
 export type IxnId = string;
 
 // An intersection: the turn that joins one segment to the next. For now it carries the
-// turn DIRECTLY (dir/angle/radius) rather than wrapping a separate Turn object — fine
+// turn DIRECTLY (angle/radius/sign) rather than wrapping a separate Turn object — fine
 // while there's exactly one outgoing edge. `to` is that single outgoing segment; it
 // becomes the CHOSEN fork once the rider gets to pick. (`from`/`to` make this a real
 // graph edge; segments carry the reverse refs.)
+//
+// A TERMINUS — where the route opens or closes — is a degenerate intersection with
+// `to: null` (no outgoing fork), angle 0 and sign 0. The Rider arrives and stops; there
+// is no turn. (Only the END terminus is modelled as a node: every segment exits through
+// an intersection. The START isn't — the Rider just spawns on seg1 — so it earns no node.)
 export interface Intersection {
   id: IxnId;
   from: SegId;        // the segment arriving at this intersection
-  to: SegId;          // the segment leaving it (the chosen fork; singular for now)
-  dir: TurnDir;       // which way the turn bends
-  angle: number;      // turn angle THETA (rad)
+  to: SegId | null;   // the segment leaving it (chosen fork; singular for now). null = TERMINUS.
+  angle: number;      // turn angle THETA (rad); 0 at a terminus
   radius: number;     // corner radius
-  sign: number;       // +1 right, -1 left
-  tan: number;        // radius * tan(THETA/2): the clear zone trees keep near this corner
+  sign: number;       // +1 right, -1 left; 0 = no turn (terminus)
+  tan: number;        // radius * tan(THETA/2): the clear zone trees keep near this corner; 0 at a terminus
 }
 
 // The max speed (m/press) at which each turn angle is taken: the Rider holds this through
@@ -43,6 +47,7 @@ const SAFE_TURN_SPEED: Record<number, number> = {
   15: 1.297, 20: 0.840, 30: 0.461, 50: 0.222, 70: 0.139, 80: 0.117,
 };
 export function turnSpeed(ixn: Intersection): number {
+  if (ixn.to === null) return 0;   // a terminus: the route ends here, so the approach coasts to a stop
   const deg = Math.round(ixn.angle * 180 / Math.PI);
   const v = SAFE_TURN_SPEED[deg];
   if (v === undefined) throw new Error(`no safe turn speed tabulated for a ${deg}deg turn (${ixn.id})`);
