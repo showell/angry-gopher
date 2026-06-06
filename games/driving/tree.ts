@@ -16,8 +16,9 @@ export interface Tree { along: number; across: number; color: string; height: nu
 // A tree placed in the scene, measured FROM THE RIDER and ready to draw.
 export interface TreeView { at: { right: number; forward: number }; color: string; height: number }
 
-// Wrap a placed tree as Scenery. drawAsFar is the standard conifer; drawAsNear will
-// grow up-close detail (needles / shading) — for now it's the same draw.
+// Wrap a placed tree as Scenery. No up-close detail for now (the needle experiment was
+// backed out — it broke the billboard's radial symmetry), so both LOD methods are the
+// same draw; the hook stays for when near-detail returns.
 export function treeScenery(view: TreeView): Scenery {
   const draw = (ctx: Ctx, project: Project): void => drawTree(ctx, view, project);
   return { forward: view.at.forward, drawAsNear: draw, drawAsFar: draw };
@@ -66,24 +67,41 @@ function accentColor(scheme: Scheme): string {
 
 // ---- drawing ----
 
-// A tree: a trunk, then a tiered conifer crown (three stacked tiers, narrow at the
-// apex and widest at the bottom — jagged). The caller pre-filters by depth.
+// the eight stacked tiers, as fractions of the CROWN span: each tier's apex (TOP) and
+// base (BOT) heights, and its base half-width (WIDE). Narrow at the apex, widest at the
+// bottom — the conifer silhouette.
+const TIER_TOP = [0.0, 0.10, 0.20, 0.30, 0.40, 0.50, 0.60, 0.70];
+const TIER_BOT = [0.30, 0.40, 0.50, 0.60, 0.70, 0.80, 0.90, 1.0];
+const TIER_WIDE = [0.35, 0.44, 0.53, 0.63, 0.72, 0.81, 0.91, 1.0];
+
+const VISIBLE_TRUNK = 0.44;   // visible bare trunk, as a fraction of tree height
+const CROWN_H = 0.648;        // crown height, as a fraction of tree height
+const CROWN_W = 0.288;        // crown base half-width, as a fraction of tree height
+
+// A tree: a tall, thin trunk rising most of the way up, with an eight-tier conifer crown
+// perched ON TOP of it (lowest tier resting on the trunk, apex near the very top). The
+// crown doesn't drape to the ground, so the trunk reads tall — the setup for driving
+// under a tall tree and looking up into the crown. Trunk length and crown size are
+// decoupled so they tune independently. Radially symmetric on purpose: the billboard
+// reads the same from any angle. The caller pre-filters by depth.
 export function drawTree(ctx: CanvasRenderingContext2D, t: TreeView, project: Project): void {
   const base = project(t.at.right, t.at.forward, 0);
   const top = project(t.at.right, t.at.forward, t.height);
   const ht = base.y - top.y;
-  const trunkW = Math.max(1, ht * 0.10);
-  ctx.fillStyle = TRUNK;
-  ctx.fillRect(base.x - trunkW / 2, base.y - ht * 0.42, trunkW, ht * 0.42);
 
-  const apexY = base.y - ht, foliage = ht * 0.90, w = ht * 0.20;
-  const tops = [0.0, 0.28, 0.56], bots = [0.46, 0.74, 1.0], wide = [0.5, 0.78, 1.0];
+  const trunkW = Math.max(1, ht * 0.08);                  // thin; only the length changes
+  const trunkH = ht * VISIBLE_TRUNK + ht * 0.05;          // up into the crown a touch, no gap
+  ctx.fillStyle = TRUNK;
+  ctx.fillRect(base.x - trunkW / 2, base.y - trunkH, trunkW, trunkH);
+
+  const crownBottomY = base.y - ht * VISIBLE_TRUNK;       // crown rests here and grows UP
+  const foliage = ht * CROWN_H, apexY = crownBottomY - foliage, w = ht * CROWN_W;
   ctx.fillStyle = t.color;
-  for (let k = 0; k < 3; k++) {
+  for (let k = 0; k < 8; k++) {
     ctx.beginPath();
-    ctx.moveTo(base.x, apexY + foliage * tops[k]);
-    ctx.lineTo(base.x + w * wide[k], apexY + foliage * bots[k]);
-    ctx.lineTo(base.x - w * wide[k], apexY + foliage * bots[k]);
+    ctx.moveTo(base.x, apexY + foliage * TIER_TOP[k]);
+    ctx.lineTo(base.x + w * TIER_WIDE[k], apexY + foliage * TIER_BOT[k]);
+    ctx.lineTo(base.x - w * TIER_WIDE[k], apexY + foliage * TIER_BOT[k]);
     ctx.closePath();
     ctx.fill();
   }
