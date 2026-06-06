@@ -21,7 +21,11 @@ cd "$GOPHER_DIR"
 "$(dirname "$0")/build_driving"
 
 COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
-go build -ldflags "-X main.gitCommit=$COMMIT" -o gopher-server .
+# Dev cache-bust: append a per-build nonce so the ?v= asset version changes
+# on every restart even when edits are uncommitted (the commit alone would
+# not). Prod (ops/deploy) keeps the bare commit for stable browser caching.
+BUILD_ID="$COMMIT-$(date +%s)"
+go build -ldflags "-X main.gitCommit=$BUILD_ID" -o gopher-server .
 
 # Puzzles catalog is frozen — served from the committed
 # games/lynrummy/puzzles/puzzles.json. To refresh, write a TS
