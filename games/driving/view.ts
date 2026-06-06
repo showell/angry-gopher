@@ -77,7 +77,7 @@ function sectorQuad(P: RiderPt, e1: RiderPt, e2: RiderPt): Quad {
 }
 
 // how many segments to look ahead (current + this many beyond the next corner)
-const LOOK_AHEAD = 4;
+const LOOK_AHEAD = 6;
 
 export function buildScene(state: RiderState, world: World): Scene {
   const c: Pose = { along: state.along, across: state.across, angle: state.angle };

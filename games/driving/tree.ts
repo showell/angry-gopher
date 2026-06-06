@@ -21,6 +21,7 @@ export interface TreeView { at: { right: number; forward: number }; color: strin
 export function treeScenery(view: TreeView): Scenery {
   return {
     forward: view.at.forward,
+    height: view.height,
     drawAsNear: (ctx: Ctx, project: Project): void => drawTreeNear(ctx, view, project),
     drawAsFar: (ctx: Ctx, project: Project): void => drawTree(ctx, view, project),
   };
@@ -54,7 +55,8 @@ export function segmentTrees(length: number, entryTan: number, exitTan: number,
   for (let along = startAlong; along <= endAlong; along += DIST_BETWEEN_TREES, k++) {
     const even = k % 2 === 0;
     const color = even ? CONIFER_GREEN : accentColor(scheme);
-    const height = even ? SMALL_HEIGHT * BIG_SCALE : SMALL_HEIGHT;
+    let height = even ? SMALL_HEIGHT * BIG_SCALE : SMALL_HEIGHT;
+    if (color === CONIFER_RED) height *= 2;   // red trees stand twice as big in every dimension
     trees.push({ along, across: -x, color, height });
     trees.push({ along, across: x, color, height });
   }

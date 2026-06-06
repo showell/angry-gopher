@@ -17,6 +17,7 @@ export type Ctx = CanvasRenderingContext2D;
 
 export interface Scenery {
   forward: number;                               // depth from the Rider: sort key AND near/far choice
+  height: number;                                // world height (m) — lets the renderer size-cull far, short objects
   drawAsNear(ctx: Ctx, project: Project): void;
   drawAsFar(ctx: Ctx, project: Project): void;
 }

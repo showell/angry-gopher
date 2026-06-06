@@ -117,7 +117,7 @@ function pigRow(length: number, edge: number): Critter[] {
 // case) — a hook for per-distance detail later without touching the renderer.
 export function critterScenery(view: CritterView): Scenery {
   const draw = (ctx: Ctx, project: Project): void => drawCritter(ctx, view, project);
-  return { forward: view.at.forward, drawAsNear: draw, drawAsFar: draw };
+  return { forward: view.at.forward, height: view.height, drawAsNear: draw, drawAsFar: draw };
 }
 
 // Emoji are expensive to rasterize every frame, so render each one ONCE to an

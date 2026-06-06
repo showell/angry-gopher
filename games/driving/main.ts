@@ -49,6 +49,7 @@ const FOV = 70;
 const FOCAL = (W / 2) / Math.tan((FOV / 2) * Math.PI / 180);
 const NEAR = 0.4;
 const EYE_H = 1.2;
+const MIN_SCENERY_PX = 4;   // skip scenery that would project shorter than this (far AND short)
 
 // ---- the world + the Rider's history (a forward/back stack of RiderStates) ----
 const world = buildWorld();
@@ -219,9 +220,11 @@ function render(rider: RiderState): void {
 
   // scenery (trees + critters) drawn back-to-front so a nearer one occludes a farther
   // one. The renderer owns the near/far POLICY; each object owns how it draws at each
-  // detail level (drawAsNear within DETAIL_DIST, drawAsFar beyond).
+  // detail level (drawAsNear within DETAIL_DIST, drawAsFar beyond). Cull anything that
+  // would project shorter than MIN_SCENERY_PX — a single test that drops the far AND short
+  // (a tall tree stays in until it's very distant; a short critter drops out sooner).
   scene.scenery
-    .filter((s) => s.forward > NEAR)
+    .filter((s) => s.forward > NEAR && (s.height / s.forward) * FOCAL >= MIN_SCENERY_PX)
     .sort((a, b) => b.forward - a.forward)
     .forEach((s) => (s.forward < DETAIL_DIST ? s.drawAsNear : s.drawAsFar)(ctx, screenOf));
 
