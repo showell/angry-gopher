@@ -28,9 +28,10 @@ git push
 
 COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo unknown)
 
-# Build the Elm/TS bundles FIRST — go build embeds them (see embed.go).
+# Build the front-end bundles FIRST — go build embeds them (see embed.go).
 echo "Building Elm/TS bundles..."
 "$GOPHER_DIR/ops/build_elm"
+"$GOPHER_DIR/ops/build_driving"
 
 echo "Building gopher-server ($COMMIT)..."
 go build -ldflags "-X main.gitCommit=$COMMIT" -o gopher-server .

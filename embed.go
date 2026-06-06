@@ -5,9 +5,9 @@ import "embed"
 // Front-end assets baked into the binary so the server is fully
 // self-contained — no working-dir or relative-path dependency at
 // runtime, and the "missing elm.js" failure mode is gone. The three
-// .js bundles are produced by ops/build_elm and MUST exist before
-// `go build`; engine_glue.js, chat.js, docs.js, and the puzzle catalogs
-// are committed.
+// LR .js bundles are produced by ops/build_elm and the driving bundle
+// by ops/build_driving; all MUST exist before `go build`. engine_glue.js,
+// chat.js, docs.js, and the puzzle catalogs are committed.
 //
 //go:embed games/lynrummy/elm/elm.js
 //go:embed games/lynrummy/elm/puzzle.js
@@ -35,6 +35,7 @@ import "embed"
 //go:embed chat/recent.js
 //go:embed chat/images.js
 //go:embed chat/code.js
+//go:embed games/driving/app.js
 //go:embed learn/learn.js
 //go:embed learn/callback_log.js
 //go:embed learn/fake_host.js

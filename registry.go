@@ -6,6 +6,7 @@ package main
 import (
 	"angry-gopher/server/admin"
 	"angry-gopher/server/chat"
+	"angry-gopher/server/driving"
 	"angry-gopher/server/home"
 	"angry-gopher/server/learn"
 	"angry-gopher/server/login"
@@ -28,6 +29,11 @@ func RegisterPages(mux *http.ServeMux) {
 	Route(mux, "/game/", JUST_NEEDS_NAME, lynrummy.HandleGame)
 	Route(mux, "/puzzles", JUST_NEEDS_NAME, lynrummy.HandlePuzzles)
 	Route(mux, "/puzzles/", JUST_NEEDS_NAME, lynrummy.HandlePuzzles)
+
+	// Driving — a standalone canvas toy. Public like /learn (no user
+	// state); the subtree handler serves the page + its one JS bundle.
+	Route(mux, "/driving", TOTALLY_PUBLIC, driving.HandleDriving)
+	Route(mux, "/driving/", TOTALLY_PUBLIC, driving.HandleDriving)
 
 	// Login surface itself is anyone — that's the whole point.
 	Route(mux, "/login", TOTALLY_PUBLIC, login.HandleLogin)

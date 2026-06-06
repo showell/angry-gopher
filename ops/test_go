@@ -19,6 +19,7 @@ cd "$REPO_DIR"
 for f in games/lynrummy/elm/elm.js games/lynrummy/elm/puzzle.js games/lynrummy/elm/engine.js; do
     [ -f "$f" ] || { echo "Error: $f missing — run ops/build_elm first (its bundles are embedded by go build)."; exit 1; }
 done
+[ -f games/driving/app.js ] || { echo "Error: games/driving/app.js missing — run ops/build_driving first (embedded by go build)."; exit 1; }
 
 phase() {
     local label="$1"

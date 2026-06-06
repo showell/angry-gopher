@@ -15,9 +15,10 @@ sleep 0.5
 
 cd "$GOPHER_DIR"
 
-# Build the Elm/TS bundles FIRST: `go build` embeds them into the
+# Build the front-end bundles FIRST: `go build` embeds them into the
 # binary (see embed.go), so they must exist and be current.
 "$(dirname "$0")/build_elm"
+"$(dirname "$0")/build_driving"
 
 COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 go build -ldflags "-X main.gitCommit=$COMMIT" -o gopher-server .

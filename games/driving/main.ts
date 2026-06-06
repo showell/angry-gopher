@@ -16,7 +16,31 @@ import { drawCritter } from './critter.ts';
 import type { Project } from './critter.ts';
 import { drawTree } from './tree.ts';
 
-const canvas = document.getElementById('c') as HTMLCanvasElement;
+// The page is a near-empty shell (the Go /driving route or the standalone
+// index.html), so we build our own DOM here — the host ships no markup or CSS.
+// A fixed 960x600 canvas centred on a dark page, with a one-line controls hint.
+document.body.style.cssText =
+  'margin:0;background:#0b0b0d;height:100vh;display:flex;align-items:center;' +
+  'justify-content:center;font-family:ui-monospace,Menlo,monospace;color:#cfd2d6';
+
+const wrap = document.createElement('div');
+wrap.style.position = 'relative';
+document.body.appendChild(wrap);
+
+const canvas = document.createElement('canvas');
+canvas.width = 960;
+canvas.height = 600;
+canvas.style.cssText = 'display:block;background:#000;box-shadow:0 10px 40px rgba(0,0,0,0.6)';
+wrap.appendChild(canvas);
+
+const hint = document.createElement('div');
+hint.textContent = '↑ drive forward · ↓ back up · SPACE auto';
+hint.style.cssText =
+  'position:absolute;left:50%;top:10px;transform:translateX(-50%);padding:6px 14px;' +
+  'background:rgba(0,0,0,0.45);border:1px solid rgba(255,255,255,0.15);border-radius:4px;' +
+  'font-size:12px;color:#e6e8eb;letter-spacing:0.4px;pointer-events:none;white-space:nowrap';
+wrap.appendChild(hint);
+
 const ctx = canvas.getContext('2d') as CanvasRenderingContext2D;
 const W = canvas.width;
 const H = canvas.height;
