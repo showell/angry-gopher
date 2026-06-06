@@ -7,8 +7,9 @@
 //   ArrowUp   : getNextRiderState -> push the next RiderState onto the history
 //   ArrowDown : pop back to the previous RiderState
 // =============================================================================
-import { buildWorld, initialRiderState, getNextRiderState, riderHeading, leanFor } from './model.ts';
+import { initialRiderState, getNextRiderState, riderHeading, leanFor } from './model.ts';
 import type { RiderState } from './model.ts';
+import { buildWorld } from './road_segment.ts';
 import { buildScene } from './view.ts';
 import type { RiderPt, Quad } from './view.ts';
 import { drawHorizon } from './horizon.ts';

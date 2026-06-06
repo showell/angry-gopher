@@ -4,8 +4,10 @@
 // transforms (lengths + turn signs) — the same relational facts getNextRiderState uses.
 //
 // Run: node test/test_model.ts
-import { buildWorld, initialRiderState, getNextRiderState, assertInvariants, MAX_LEAN, TURN_OMEGA, MAX_TURN_ANGLE, leanFor } from '../model.ts';
-import type { RiderState, World } from '../model.ts';
+import { initialRiderState, getNextRiderState, assertInvariants, MAX_LEAN, TURN_OMEGA, MAX_TURN_ANGLE, leanFor } from '../model.ts';
+import type { RiderState } from '../model.ts';
+import { buildWorld } from '../road_segment.ts';
+import type { World } from '../road_segment.ts';
 
 function wrap(a: number): number {
   while (a > Math.PI) a -= 2 * Math.PI;

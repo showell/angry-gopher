@@ -7,7 +7,8 @@
 // the circular-sector pavement filling each turn's outer corner, and the segments seen
 // through the intersections ahead — plus the intersection just behind us.
 // =============================================================================
-import type { World, RiderState, RoadSegment } from './model.ts';
+import type { RiderState } from './model.ts';
+import type { World, RoadSegment } from './road_segment.ts';
 import { critterScenery } from './critter.ts';
 import { treeScenery } from './tree.ts';
 import type { Scenery } from './scenery.ts';
