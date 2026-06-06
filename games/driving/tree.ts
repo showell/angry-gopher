@@ -50,13 +50,18 @@ export function segmentTrees(length: number, entryTan: number, exitTan: number,
   const trees: Tree[] = [];
   const startAlong = entryTan + TREE_INTERSECTION_CLEARANCE;
   const endAlong = length - exitTan - TREE_INTERSECTION_CLEARANCE;
-  const x = laneHalfWidth + TREE_ROAD_OFFSET;   // the tree line, each side of the road
+  const treeLine = laneHalfWidth + TREE_ROAD_OFFSET;   // the default tree line, each side of the road
   let k = 0;
   for (let along = startAlong; along <= endAlong; along += DIST_BETWEEN_TREES, k++) {
     const even = k % 2 === 0;
     const color = even ? CONIFER_GREEN : accentColor(scheme);
     let height = even ? SMALL_HEIGHT * BIG_SCALE : SMALL_HEIGHT;
-    if (color === CONIFER_RED) height *= 2;   // red trees stand twice as big in every dimension
+    let x = treeLine;
+    if (color === CONIFER_RED) height *= 2;   // red trees: twice as big in every dimension
+    if (color === CONIFER_GOLD) {             // yellow trees: 3x as big, set ~4x further off the road
+      height *= 3;
+      x = laneHalfWidth + 4 * TREE_ROAD_OFFSET;
+    }
     trees.push({ along, across: -x, color, height });
     trees.push({ along, across: x, color, height });
   }
