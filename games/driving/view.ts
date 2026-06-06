@@ -45,7 +45,7 @@ export function buildScene(state: RiderState, world: World): Scene {
   const chain: RoadSegment[] = [];
   for (let s: RoadSegment | undefined = world.segments[state.segment];
        s && chain.length < LOOK_AHEAD;
-       s = s.exit ? world.segments[s.exit.to] : undefined) {
+       s = s.exitIxn ? world.segments[world.intersections[s.exitIxn].to] : undefined) {
     chain.push(s);
   }
 
@@ -57,8 +57,9 @@ export function buildScene(state: RiderState, world: World): Scene {
     let pa = a, px = x;
     for (let k = d - 1; k >= 0; k--) {
       const prev = chain[k];   // prev -> chain[k+1] is prev's exit turn
-      const dir = prev.exitSign > 0 ? 'right' : 'left';
-      const p = nextToCur(pa, px, prev.length, prev.exitAngle, dir, prev.width);
+      const ixn = world.intersections[prev.exitIxn as string];
+      const dir = ixn.sign > 0 ? 'right' : 'left';
+      const p = nextToCur(pa, px, prev.length, ixn.angle, dir, prev.width);
       pa = p.a; px = p.x;
     }
     return toRider(pa, px, c, riderHw);
@@ -75,9 +76,10 @@ export function buildScene(state: RiderState, world: World): Scene {
     // sector filling the turn's OUTER corner. innerX is the fused (inner) edge, outerX
     // the far edge — picked by turn direction (right: inner = right edge = W).
     const next = chain[d + 1];
-    if (seg.exit && next) {
-      const innerX = seg.exitSign > 0 ? W : 0, outerX = W - innerX;
-      const outerX2 = seg.exitSign > 0 ? 0 : next.width;
+    const exitIxn = seg.exitIxn ? world.intersections[seg.exitIxn] : null;
+    if (exitIxn && next) {
+      const innerX = exitIxn.sign > 0 ? W : 0, outerX = W - innerX;
+      const outerX2 = exitIxn.sign > 0 ? 0 : next.width;
       quads.push({ pts: pavementSector(at(d, seg.length, innerX), at(d, seg.length, outerX), at(d + 1, 0, outerX2)), color: ROAD });
     }
 
@@ -99,19 +101,20 @@ export function buildScene(state: RiderState, world: World): Scene {
   const idx = world.order.indexOf(state.segment);
   if (idx > 0) {
     const prev = world.segments[world.order[idx - 1]];
-    const dir = prev.exitSign > 0 ? 'right' : 'left';
+    const pIxn = world.intersections[prev.exitIxn as string];   // the joint we just crossed
+    const dir = pIxn.sign > 0 ? 'right' : 'left';
     const Wp = prev.width;
     // a point in PREV's BL frame, mapped into the Rider's frame through the join.
     const fromPrev = (a: number, x: number): RiderPt => {
-      const p = curToNext(a, x, prev.length, prev.exitAngle, dir, Wp);
+      const p = curToNext(a, x, prev.length, pIxn.angle, dir, Wp);
       return toRider(p.a, p.x, c, riderHw);
     };
     // the WHOLE prior road strip (clipNear trims the part behind us) — so the segment we
     // just left doesn't vanish mid-crossing — plus its outer-corner sector and exit props.
     quads.push({ pts: [fromPrev(0, 0), fromPrev(0, Wp), fromPrev(prev.length, Wp), fromPrev(prev.length, 0)], color: ROAD });
     const cur = chain[0];
-    const innerX = prev.exitSign > 0 ? cur.width : 0, outerX = cur.width - innerX;
-    const outerXp = prev.exitSign > 0 ? 0 : Wp;
+    const innerX = pIxn.sign > 0 ? cur.width : 0, outerX = cur.width - innerX;
+    const outerXp = pIxn.sign > 0 ? 0 : Wp;
     quads.push({ pts: pavementSector(at(0, 0, innerX), fromPrev(prev.length, outerXp), at(0, 0, outerX)), color: ROAD });
     for (const cr of prev.exitCritters) {
       scenery.push(critterScenery({ at: fromPrev(cr.along, cr.across + Wp / 2), emoji: cr.emoji, height: cr.height, faceRight: cr.faceRight }));

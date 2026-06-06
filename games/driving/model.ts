@@ -122,10 +122,10 @@ export function getNextRiderState(state: RiderState, world: World): RiderState {
 }
 
 // Is the Rider close enough to the upcoming intersection to start slowing for it?
-// (Only meaningful for a segment that HAS a turn; the final segment never brakes
+// (Only meaningful for a segment that HAS an exit turn; the final segment never brakes
 // and is handled directly in accel/cruise.)
 function nearIntersection(state: RiderState, seg: RoadSegment): boolean {
-  if (!seg.exit) return true;
+  if (seg.exitIxn === null) return true;
   return seg.length - state.along <= APPROACH_INTERSECTION_DIST;
 }
 
@@ -136,42 +136,43 @@ function nearIntersection(state: RiderState, seg: RoadSegment): boolean {
 //     v^2 = vEnd^2 + 2*a*d. Recomputed every press: constant-decel kinematics are
 //     self-consistent, so this reproduces the same a each press while correcting
 //     integration drift.
-function accel(state: RiderState, seg: RoadSegment): number {
+function accel(state: RiderState, seg: RoadSegment, world: World): number {
   // Far from a turn (or on the exit-less final segment): accelerate at A_ACCEL.
-  // Approaching one: brake to reach the lane-filling turn speed right at the inner-edge
-  // crossing (straightenStart), where the Rider commits to the next segment.
-  if (!seg.exit || !nearIntersection(state, seg)) return A_ACCEL;
-  const d = seg.straightenStart - state.along;
+  // Approaching one: brake to reach the lane-filling turn speed right where the Rider
+  // commits to the turn (alongWhereRiderCommitsToTurn — the inner-edge crossing).
+  if (seg.exitIxn === null || !nearIntersection(state, seg)) return A_ACCEL;
+  const d = seg.alongWhereRiderCommitsToTurn - state.along;
   if (d <= 1e-6) return 0;
-  const vEnd = turnSpeed(seg);
+  const vEnd = turnSpeed(world.intersections[seg.exitIxn]);
   return (vEnd * vEnd - state.v * state.v) / (2 * d);
 }
 
 function cruise(state: RiderState, seg: RoadSegment, world: World): RiderState {
-  let v = clamp(state.v + accel(state, seg), 0, V_MAX);
+  let v = clamp(state.v + accel(state, seg, world), 0, V_MAX);
 
-  if (!seg.exit) {   // the final segment: accelerate to the end, then the game is over
+  if (seg.exitIxn === null) {   // the final segment: accelerate to the end, then the game is over
     const along = state.along + v;
     if (along >= seg.length) return { ...state, along: seg.length, v: 0 };   // reached the end -> stop
     return { ...state, along, v };
   }
 
   // braked to the lane-filling speed; cross the inner edge and straighten into the next
-  if (nearIntersection(state, seg)) v = Math.max(v, turnSpeed(seg));   // never crawl below the lane-filling speed
+  if (nearIntersection(state, seg)) v = Math.max(v, turnSpeed(world.intersections[seg.exitIxn]));   // never crawl below the lane-filling speed
   const along = state.along + v;
-  if (along < seg.straightenStart) return { ...state, along, v };     // cross the inner edge -> commit to the next segment
+  if (along < seg.alongWhereRiderCommitsToTurn) return { ...state, along, v };   // cross the inner edge -> commit to the next segment
   return enterStraighten(seg, world, v);
 }
 
-// Crossing into a turn: the moment the Rider crosses the extension of the next
-// segment's INNER edge (at straightenStart on this segment) we re-express him in the
+// Crossing into a turn: the moment the Rider crosses the extension of the next segment's
+// INNER edge (at alongWhereRiderCommitsToTurn on this segment) we re-express him in the
 // next segment's frame and straighten out. Crossing that edge, the Rider lands ON the
 // inner edge (across = sgn*hw — the right edge for a right turn), still pointed the OLD
 // way (angle = -sgn*theta), and a touch BEFORE the new segment's begin line (along =
 // -hw/sin(theta), negative — expected). Same physical point, so position is continuous.
 function enterStraighten(seg: RoadSegment, world: World, v: number): RiderState {
-  const next = world.segments[(seg.exit as { to: SegId }).to];
-  const sgn = seg.exitSign, theta = seg.exitAngle, hw = seg.width / 2;
+  const ixn = world.intersections[seg.exitIxn as string];   // non-null: cruise only calls this past the commit point
+  const next = world.segments[ixn.to];
+  const sgn = ixn.sign, theta = ixn.angle, hw = seg.width / 2;
   return {
     segment: next.id,
     along: -hw / Math.sin(theta),
@@ -263,7 +264,8 @@ export function assertInvariants(s: RiderState, world: World): void {
   assert(Number.isFinite(s.v) && s.v >= -1e-9 && s.v <= 8, `v sane (${s.v})`);
   assert(Math.abs(s.angle) <= QUARTER + 1e-6, `|angle| <= 90deg (${s.angle})`);
   // a turn enters at along = -hw/sin(entryAngle), before the begin line — that's expected
-  const entryFloor = seg.entryAngle > 0 ? -(seg.width / 2) / Math.sin(seg.entryAngle) : 0;
+  const entryAngle = seg.entryIxn ? world.intersections[seg.entryIxn].angle : 0;
+  const entryFloor = entryAngle > 0 ? -(seg.width / 2) / Math.sin(entryAngle) : 0;
   assert(s.along >= entryFloor - 1e-6, `along not far before start (${s.along})`);
   assert(s.along <= seg.length + 1e-6, `along not past end (${s.along})`);
   assert(Math.abs(s.across) <= seg.width / 2 + 1, `across bounded (${s.across})`);

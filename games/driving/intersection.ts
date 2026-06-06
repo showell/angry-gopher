@@ -4,15 +4,33 @@
 // fuse, and the corner's pavement is drawn. A segment is just the straight part
 // between two of these.
 //
-// For now an intersection has no instance of its own — its data still lives as the
-// exit/entry fields on the adjoining RoadSegments (road_segment.ts). This module
-// owns the BEHAVIOUR keyed off that data: the safe turn speed, the frame-fusion
-// transforms, and the pavement wedge. Giving the intersection a real type (and
-// moving the turn data onto it) is the next step.
+// The Intersection is now a first-class NODE: the road is a graph of these joined
+// by RoadSegment edges (road_segment.ts). The turn lives ON the intersection
+// (dir/angle/radius), not smeared across the two adjoining segments. This module
+// owns both the type and its behaviour: the safe turn speed, the frame-fusion
+// transforms, and the pavement wedge.
 // =============================================================================
 
 import type { RiderPt } from './scenery.ts';
-import type { RoadSegment } from './road_segment.ts';
+import type { SegId, TurnDir } from './road_segment.ts';
+
+export type IxnId = string;
+
+// An intersection: the turn that joins one segment to the next. For now it carries the
+// turn DIRECTLY (dir/angle/radius) rather than wrapping a separate Turn object — fine
+// while there's exactly one outgoing edge. `to` is that single outgoing segment; it
+// becomes the CHOSEN fork once the rider gets to pick. (`from`/`to` make this a real
+// graph edge; segments carry the reverse refs.)
+export interface Intersection {
+  id: IxnId;
+  from: SegId;        // the segment arriving at this intersection
+  to: SegId;          // the segment leaving it (the chosen fork; singular for now)
+  dir: TurnDir;       // which way the turn bends
+  angle: number;      // turn angle THETA (rad)
+  radius: number;     // corner radius
+  sign: number;       // +1 right, -1 left
+  tan: number;        // radius * tan(THETA/2): the clear zone trees keep near this corner
+}
 
 // The max speed (m/press) at which each turn angle is taken: the Rider holds this through
 // the angle-kill, drifting to the far edge and recentring without leaving the road. These
@@ -24,10 +42,10 @@ import type { RoadSegment } from './road_segment.ts';
 const SAFE_TURN_SPEED: Record<number, number> = {
   15: 1.297, 20: 0.840, 30: 0.461, 50: 0.222, 70: 0.139, 80: 0.117,
 };
-export function turnSpeed(seg: RoadSegment): number {
-  const deg = Math.round(seg.exitAngle * 180 / Math.PI);
+export function turnSpeed(ixn: Intersection): number {
+  const deg = Math.round(ixn.angle * 180 / Math.PI);
   const v = SAFE_TURN_SPEED[deg];
-  if (v === undefined) throw new Error(`no safe turn speed tabulated for a ${deg}deg turn (${seg.id})`);
+  if (v === undefined) throw new Error(`no safe turn speed tabulated for a ${deg}deg turn (${ixn.id})`);
   return v;
 }
 
