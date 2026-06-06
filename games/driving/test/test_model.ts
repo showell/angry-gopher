@@ -4,7 +4,7 @@
 // transforms (lengths + turn signs) — the same relational facts getNextRiderState uses.
 //
 // Run: node test/test_model.ts
-import { buildWorld, initialRiderState, getNextRiderState, assertInvariants, DPHI, MAX_TURN_ANGLE, leanFor } from '../model.ts';
+import { buildWorld, initialRiderState, getNextRiderState, assertInvariants, MAX_LEAN, TURN_OMEGA, MAX_TURN_ANGLE, leanFor } from '../model.ts';
 import type { RiderState, World } from '../model.ts';
 
 function wrap(a: number): number {
@@ -101,12 +101,10 @@ function main(): void {
   // 1) invariants on every state
   for (const st of states) assertInvariants(st, world);
 
-  // 2) heading continuity: no single-press jump bigger than the sharpest per-press
-  // rotation (omega scales with the turn angle). Straighten-out uses the same
-  // omegaFor(theta) as the arc, so this one bound covers both turn kinds.
-  let maxAngle = 0;
-  for (const id of world.order) maxAngle = Math.max(maxAngle, world.segments[id].exitAngle);
-  const maxOmega = DPHI * maxAngle / (Math.PI / 2);
+  // 2) heading continuity: no single-press jump bigger than the rotation ceiling. The
+  // straighten-out rotates at a fixed TURN_OMEGA (jerk-limited up to it), the same for
+  // every turn angle, so that one constant bounds every per-press heading change.
+  const maxOmega = TURN_OMEGA;
   let maxHeadingJump = 0, maxLean = 0, maxTiltStep = 0, prevTilt = 0;
   for (let i = 1; i < states.length; i++) {
     const dh = wrap(heading(states[i], headings) - heading(states[i - 1], headings));
@@ -118,10 +116,10 @@ function main(): void {
   }
   if (maxHeadingJump > maxOmega + 1e-6) throw new Error(`heading jump ${maxHeadingJump} > maxOmega ${maxOmega}`);
 
-  // 2c) lean (camera roll): stricter than the 45deg runtime cap — the realised lean
-  // must clear 10deg on the sharp turns yet never reach 35deg.
-  if (maxLean > 35 * Math.PI / 180) throw new Error(`max lean ${(maxLean * 180 / Math.PI).toFixed(1)}deg reached 35deg`);
-  if (maxLean < 10 * Math.PI / 180) throw new Error(`max lean ${(maxLean * 180 / Math.PI).toFixed(1)}deg never cleared 10deg`);
+  // 2c) lean (camera roll): the per-press rotation is capped at TURN_OMEGA, so the lean it
+  // produces never exceeds MAX_LEAN; the sharp turns should actually reach close to it.
+  if (maxLean > MAX_LEAN + 1e-6) throw new Error(`max lean ${(maxLean * 180 / Math.PI).toFixed(1)}deg exceeded MAX_LEAN ${(MAX_LEAN * 180 / Math.PI).toFixed(0)}deg`);
+  if (maxLean < MAX_LEAN - 3 * Math.PI / 180) throw new Error(`max lean ${(maxLean * 180 / Math.PI).toFixed(1)}deg never approached MAX_LEAN ${(MAX_LEAN * 180 / Math.PI).toFixed(0)}deg`);
 
   // 2d) no SHARP banking: the tilt may change at most 1deg per press.
   if (maxTiltStep > 1 * Math.PI / 180 + 1e-9) throw new Error(`tilt step ${(maxTiltStep * 180 / Math.PI).toFixed(2)}deg > 1deg`);
@@ -161,7 +159,7 @@ function main(): void {
   console.log(`  max heading jump  : ${maxHeadingJump.toFixed(4)} rad (largest turn step = ${maxOmega.toFixed(4)})`);
   console.log(`  max position jump : ${maxPosJump.toFixed(4)} m (peak speed = ${maxV.toFixed(4)} m/press)`);
   console.log(`  max off-centre    : ${maxAcross.toFixed(3)} m (bulge; road half-width = ${(world.segments[world.order[0]].width / 2).toFixed(1)})`);
-  console.log(`  max lean          : ${(maxLean * 180 / Math.PI).toFixed(1)} deg (runtime cap 45; test window 10..35)`);
+  console.log(`  max lean          : ${(maxLean * 180 / Math.PI).toFixed(1)} deg (runtime cap 45; ceiling = MAX_LEAN ${(MAX_LEAN * 180 / Math.PI).toFixed(0)})`);
   console.log(`  max tilt step     : ${(maxTiltStep * 180 / Math.PI).toFixed(2)} deg/press (limit 1.0)`);
   console.log(`  northings (N>N-2) : ${north.map((v) => v.toFixed(0)).join(' ')}`);
 }

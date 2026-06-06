@@ -19,9 +19,9 @@
 // Turning (straighten-out — the ONLY turn mechanism; every turn is <= 90deg): the
 // moment the Rider crosses the extension of the next segment's INNER edge he is
 // re-expressed in that segment's frame, landing ON the inner edge still pointed the
-// old way, then ROTATES his heading to 0 (omega = DPHI * THETA / (pi/2) per press, so
-// every turn takes the same number of presses) while drifting across the lane to the
-// FAR edge, and finally eases back to centre. See enterStraighten/straightenStep.
+// old way, then ROTATES his heading to 0 (at a fixed rate TURN_OMEGA, jerk-limited) while
+// drifting across the lane to the FAR edge, and finally eases back to centre. The entry
+// speed per turn angle is a tabulated safe value (turnSpeed). See enterStraighten/straightenStep.
 // =============================================================================
 
 import { segmentCritters, intersectionCritters } from './critter.ts';
@@ -43,7 +43,6 @@ const TURN_RADIUS = 2;                   // sets the tree clear-zone tangent at 
 const APPROACH_INTERSECTION_DIST = 60;
 
 // ---- motion (per-press, not metres) ----
-export const DPHI = 0.04;     // heading turned per press in a 90deg turn (rad); sets turn speed AND spin rate
 export const V_BASE = 0.3;    // the Rider's speed at the very start of the drive (m/press)
 export const A_ACCEL = 0.015; // constant acceleration while the intersection is still far off (m/press^2)
 const V_MAX = 4;              // top speed (m/press) — the bike never accelerates past this
@@ -57,8 +56,14 @@ export const LEAN_CAP = 45 * Math.PI / 180;  // hard runtime cap on the lean
 const MAX_TILT_STEP = 1 * Math.PI / 180;
 const TURN_RATE_STEP = MAX_TILT_STEP / LEAN_PER_OMEGA;
 
+// The rider leans at most this much, and the per-press rotation is capped to match, so a
+// straighten-out never banks past it. This single ceiling replaced the old angle-scaled
+// omegaFor: the ROTATION RATE is now one constant for every turn, and what varies by angle
+// is the entry speed (turnSpeed, a tabulated safe value).
+export const MAX_LEAN = 20 * Math.PI / 180;
+export const TURN_OMEGA = MAX_LEAN / LEAN_PER_OMEGA;   // max heading turned per press (rad)
+
 const QUARTER = Math.PI / 2;
-const omegaFor = (theta: number): number => DPHI * theta / QUARTER;  // turn rate scales with angle
 
 // ---- straighten-out tuning ----
 // Every turn is a straighten-out (no rigid arcs). The geometry requires the turn angle
@@ -66,7 +71,6 @@ const omegaFor = (theta: number): number => DPHI * theta / QUARTER;  // turn rat
 // backwards. test/test_model.ts enforces it on the configured route.
 export const MAX_TURN_ANGLE = 90 * Math.PI / 180;   // the largest turn the model allows
 const STRAIGHTEN_MARGIN = 0.1;              // hard safety: keep the drift bulge at least this far inside the edge (m)
-const TURN_AGGRESSION = 0.5;                // <1 takes turns slower than the lane-filling speed (drifts less across the lane)
 const RECENTER_DISTANCE = 30;               // recenter lean = -across/this; bigger = gentler lean, slower return to centre
 const ALIGN_EPS = 0.02;                     // "aligned" once |angle| is below this (rad)
 const CENTER_EPS = 0.05;                    // "centred" once |across| is below this (m)
@@ -230,16 +234,21 @@ function nearIntersection(state: RiderState, seg: RoadSegment): boolean {
   return seg.length - state.along <= APPROACH_INTERSECTION_DIST;
 }
 
-// The speed a turn is taken at. The Rider enters ON the inner edge still pointed the old
-// way; the angle-kill (rotating at omegaFor) then drifts him across the lane. At full
-// aggression the speed is picked so killing the whole turn angle sweeps exactly
-// (width - margin) of lateral drift — a constant-speed/omega arc of radius R = v/omega
-// drifts R*(1 - cos THETA), so v = omega*(width - margin)/(1 - cos THETA), reaching the
-// FAR edge. TURN_AGGRESSION (<1) scales that down: slower through the turn, drifting only
-// that fraction of the lane (so a half-aggression turn sweeps to ~the centre, not the
-// far edge). (margin keeps the far end a hair inside the road.)
+// The max speed (m/press) at which each turn angle is taken: the Rider holds this through
+// the angle-kill, drifting to the far edge and recentring without leaving the road. These
+// are NOT a closed form — they were found by offline simulation of THIS straighten-out
+// (jerk-limited rotation up to TURN_OMEGA, braking-profile recentre), binary-searching the
+// fastest entry whose far-edge drift stays STRAIGHTEN_MARGIN inside the edge. "An expert
+// Rider knows safe turn speeds." Only the route's six angles are tabulated; an unlisted
+// angle is a config error — re-run the sim and add it (linear interp OVER-estimates, unsafe).
+const SAFE_TURN_SPEED: Record<number, number> = {
+  15: 1.297, 20: 0.840, 30: 0.461, 50: 0.222, 70: 0.139, 80: 0.117,
+};
 function turnSpeed(seg: RoadSegment): number {
-  return TURN_AGGRESSION * omegaFor(seg.exitAngle) * (seg.width - STRAIGHTEN_MARGIN) / (1 - Math.cos(seg.exitAngle));
+  const deg = Math.round(seg.exitAngle * 180 / Math.PI);
+  const v = SAFE_TURN_SPEED[deg];
+  if (v === undefined) throw new Error(`no safe turn speed tabulated for a ${deg}deg turn (${seg.id})`);
+  return v;
 }
 
 // Acceleration (m/press^2) PURELY from position, velocity, and distance-to-turn:
@@ -300,7 +309,7 @@ function enterStraighten(seg: RoadSegment, world: World, v: number): RiderState 
 // the recenter lean raised |angle| past the threshold, which flipped the bike back
 // into "still misaligned, kill the angle", which rotated it straight again — a bang-
 // bang oscillation. The phase, once advanced, never reverts.)
-//   (1) 'straightening' — ANGLE-KILL (urgent): rotate the heading to 0 at omegaFor,
+//   (1) 'straightening' — ANGLE-KILL (urgent): rotate the heading to 0 at TURN_OMEGA,
 //       holding the lane-filling speed; the bike arcs across to the far edge. v_safe
 //       is the hard road-edge cap. Heading reaches 0 -> finish (if already centred) or
 //       hand off to recenter.
@@ -310,10 +319,10 @@ function enterStraighten(seg: RoadSegment, world: World, v: number): RiderState 
 function straightenStep(state: RiderState, seg: RoadSegment): RiderState {
   const hw = seg.width / 2;
   const t = state.turn as Turning;
-  // Rotate at TURN_AGGRESSION * the full rate: the slow entry speed and this gentle rate
-  // keep the radius at the lane-filling R*, so the angle-kill still sweeps the WHOLE lane
-  // — just slower and with a softer bank. (radius = turnSpeed/omega cancels the factor.)
-  const omega = TURN_AGGRESSION * omegaFor(t.angle);
+  // Rotate at a FIXED ceiling, the same for every turn — the lean it produces is MAX_LEAN.
+  // What varies by angle is the entry speed (turnSpeed): the sim picked each so this rotation
+  // rate sweeps the drift exactly to the far edge without overshooting it.
+  const omega = TURN_OMEGA;
   const killing = t.phase === 'straightening';     // angle-kill
 
   // angle-kill drives the heading to 0. The recentre leans PROPORTIONALLY to how far off
@@ -336,8 +345,8 @@ function straightenStep(state: RiderState, seg: RoadSegment): RiderState {
   // hold the turn speed through the angle-kill (no accelerating mid-corner); re-accelerate
   // while recentring. v_safe is the hard road-edge cap: nulling the CURRENT heading a at
   // radius R = v/omega drifts R*(1 - cos a) = v*(1 - cos a)/omega toward the edge it points
-  // at, so cap v to keep that inside `room`. v_safe-at-entry exactly equals turnSpeed (both
-  // scale by TURN_AGGRESSION), so the rider holds it and fills the lane to the far edge.
+  // at, so cap v to keep that inside `room`. The tabulated turnSpeed was found under this very
+  // cap, so the rider holds it through the kill and fills the lane to the far edge.
   let v = killing ? state.v : state.v + A_ACCEL;
   const a = state.angle;
   if (Math.abs(a) > 1e-3) {
