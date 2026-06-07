@@ -17,15 +17,16 @@ import type { Project, Ctx, Scenery, RiderPt } from './scenery.ts';
 // ---- dimensions (metres) ----
 const TOWER_HEIGHT = 100;              // apex height
 const TOWER_HALF = 5;                  // half the 10m square base edge
-const TOWER_BEYOND = 100;              // how far past the corner it stands, along the approach direction
+const TOWER_BEYOND = 160;             // how far past the corner it stands, along the approach direction
+const TOWER_RIGHT = 20;              // offset to the right of the lane, so you don't bear down on it dead-on
 const STAGE_HEIGHT = 20;              // a cross-beam ring every this many metres (5 stages => rings at 20/40/60/80)
 const ROD_HALF = 0.5;                 // half the 1m rod thickness
 const TOWER_YAW = 30 * Math.PI / 180; // turn the square off head-on so the Rider sees two faces, not one
 
 // The renderer's DETAIL_DIST (40m) is tuned for roadside critters; a 100m tower is never that
-// close, so the tower picks its OWN level of detail: the full lattice only within this range
-// (in practice just the nearest tower), bare legs beyond.
-const TOWER_NEAR_DIST = 250;
+// close, so the tower picks its OWN level of detail: the full braced lattice within this range,
+// bare legs beyond. Set well out so the cross-beams don't visibly pop in as you approach.
+const TOWER_NEAR_DIST = 300;
 
 const LEG_METAL = '#9aa0a8';   // the four sloping legs (a touch darker)
 const BEAM_METAL = '#c2c7cf';  // the horizontal cross-beams (brighter)
@@ -41,8 +42,8 @@ const CORNERS = [[-1, -1], [1, -1], [1, 1], [-1, 1]];
 // long. `map(a, x)` takes a point in that segment's BL frame (a along, x across-from-left) to
 // the Rider's frame — the same mapper the intersection uses for its other scenery.
 export function towerScenery(map: (a: number, x: number) => RiderPt, fromLength: number, hw: number): Scenery {
-  const a0 = fromLength + TOWER_BEYOND;   // dead ahead of the corner, in the approach direction
-  const x0 = hw;                          // centred on the lane (BL across = the road half-width)
+  const a0 = fromLength + TOWER_BEYOND;   // out ahead of the corner, in the approach direction
+  const x0 = hw + TOWER_RIGHT;            // and off to the right (BL across = half-width is the centreline)
   const cy = Math.cos(TOWER_YAW), sy = Math.sin(TOWER_YAW);
 
   // corner k of the cross-section at height h, in the Rider's frame. The square shrinks
@@ -55,16 +56,16 @@ export function towerScenery(map: (a: number, x: number) => RiderPt, fromLength:
     return { right: p.right, forward: p.forward, height: h };
   };
 
-  // a rod as a flat 1m-wide ribbon between two points. Near-vertical legs take their width
-  // horizontally (offset in `right`); horizontal beams take it vertically (offset in height) —
-  // whichever direction reads as thickness from the road.
-  const legRod = (a: Pt3, b: Pt3): Rod => ({ color: LEG_METAL, pts: [
+  // a rod as a flat 1m-wide ribbon between two points. Sloping rods (legs, diagonal braces) take
+  // their width horizontally (offset in `right`); horizontal beams take it vertically (offset in
+  // height) — whichever direction reads as thickness from the road.
+  const barH = (a: Pt3, b: Pt3, color: string): Rod => ({ color, pts: [
     { right: a.right - ROD_HALF, forward: a.forward, height: a.height },
     { right: b.right - ROD_HALF, forward: b.forward, height: b.height },
     { right: b.right + ROD_HALF, forward: b.forward, height: b.height },
     { right: a.right + ROD_HALF, forward: a.forward, height: a.height },
   ] });
-  const beamRod = (a: Pt3, b: Pt3): Rod => ({ color: BEAM_METAL, pts: [
+  const barV = (a: Pt3, b: Pt3, color: string): Rod => ({ color, pts: [
     { right: a.right, forward: a.forward, height: a.height - ROD_HALF },
     { right: b.right, forward: b.forward, height: b.height - ROD_HALF },
     { right: b.right, forward: b.forward, height: b.height + ROD_HALF },
@@ -73,16 +74,29 @@ export function towerScenery(map: (a: number, x: number) => RiderPt, fromLength:
 
   const apex = at(0, TOWER_HEIGHT);   // s = 0, so every corner converges here
   const legs: Rod[] = [];
-  for (let k = 0; k < 4; k++) legs.push(legRod(at(k, 0), apex));
+  for (let k = 0; k < 4; k++) legs.push(barH(at(k, 0), apex, LEG_METAL));
+
   const beams: Rod[] = [];
   for (let h = STAGE_HEIGHT; h < TOWER_HEIGHT; h += STAGE_HEIGHT) {
-    for (let k = 0; k < 4; k++) beams.push(beamRod(at(k, h), at((k + 1) % 4, h)));
+    for (let k = 0; k < 4; k++) beams.push(barV(at(k, h), at((k + 1) % 4, h), BEAM_METAL));
+  }
+
+  // X-bracing: each trapezoidal stage face (the top stage is a triangle to the apex, so it's
+  // skipped) gets both diagonals, crossing into an X.
+  const braces: Rod[] = [];
+  for (let h = 0; h < TOWER_HEIGHT - STAGE_HEIGHT; h += STAGE_HEIGHT) {
+    const hi = h + STAGE_HEIGHT;
+    for (let k = 0; k < 4; k++) {
+      const j = (k + 1) % 4;
+      braces.push(barH(at(k, h), at(j, hi), BEAM_METAL));
+      braces.push(barH(at(j, h), at(k, hi), BEAM_METAL));
+    }
   }
 
   // draw the lattice back-to-front so the near face's rods overpaint the far face's.
   const avgF = (r: Rod): number => (r.pts[0].forward + r.pts[1].forward + r.pts[2].forward + r.pts[3].forward) / 4;
   const sortBack = (rods: Rod[]): Rod[] => [...rods].sort((p, q) => avgF(q) - avgF(p));
-  const near = sortBack([...legs, ...beams]);
+  const near = sortBack([...legs, ...beams, ...braces]);
   const far = sortBack(legs);
 
   const fill = (ctx: Ctx, project: Project, rods: Rod[]): void => {
