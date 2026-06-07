@@ -54,8 +54,10 @@ const LAND = '#4a8f43';        // foreground rolling land (matches the grass)
 // the westward and (snowcapped) northern ranges, and the rolling foreground land.
 // Needs the canvas ctx and the camera (W, H, FOCAL) to turn bearings into columns.
 export function drawHorizon(ctx: CanvasRenderingContext2D, heading: number,
-                            W: number, H: number, FOCAL: number, overscan = 0): void {
-  // each screen column is a viewing ray at this absolute bearing
+                            W: number, H: number, FOCAL: number, overscan = 0, vScale = 1): void {
+  // each screen column is a viewing ray at this absolute bearing. FOCAL is the LIVE focal, so a
+  // pulled-in (leaning) camera spreads bearings horizontally; vScale = focal/baseFocal applies the
+  // SAME squeeze vertically, since the silhouette heights are authored in pixels at the base focal.
   const bearingAt = (x: number): number => heading + Math.atan((x - W / 2) / FOCAL);
   // fill the band between height f(bearing) above the horizon and a bottom line.
   // `overscan` widens the band past the screen edges so a rolled (leaning) camera
@@ -63,32 +65,33 @@ export function drawHorizon(ctx: CanvasRenderingContext2D, heading: number,
   const silhouette = (f: (b: number) => number, bottomY: number): void => {
     ctx.beginPath();
     ctx.moveTo(-overscan, bottomY);
-    for (let x = -overscan; x <= W + overscan; x += 2) ctx.lineTo(x, H / 2 - f(bearingAt(x)));
+    for (let x = -overscan; x <= W + overscan; x += 2) ctx.lineTo(x, H / 2 - f(bearingAt(x)) * vScale);
     ctx.lineTo(W + overscan, bottomY);
     ctx.closePath();
     ctx.fill();
   };
 
-  // the setting sun + its glow, clipped to the sky, behind the ranges
+  // the setting sun + its glow, clipped to the sky, behind the ranges (its vertical offset and
+  // radii scale with vScale too, so it squeezes with the ranges on a lean).
   const rel = wrap(SUN_BEARING - heading);
   if (Math.abs(rel) < 1.4) {
-    const sx = W / 2 + Math.tan(rel) * FOCAL, sy = H / 2 - 50;   // up over the range crest, setting behind it
+    const sx = W / 2 + Math.tan(rel) * FOCAL, sy = H / 2 - 50 * vScale;   // up over the range crest, setting behind it
     ctx.save();
     ctx.beginPath(); ctx.rect(0, 0, W, H / 2); ctx.clip();   // sky only — the ground occludes the rest
-    const glow = ctx.createRadialGradient(sx, sy, 8, sx, sy, 340);
+    const glow = ctx.createRadialGradient(sx, sy, 8 * vScale, sx, sy, 340 * vScale);
     glow.addColorStop(0, 'rgba(255,201,128,0.85)');
     glow.addColorStop(0.4, 'rgba(255,150,92,0.32)');
     glow.addColorStop(1, 'rgba(255,150,92,0)');
     ctx.fillStyle = glow; ctx.fillRect(0, 0, W, H / 2);
-    const sun = ctx.createRadialGradient(sx, sy, 4, sx, sy, 46);
+    const sun = ctx.createRadialGradient(sx, sy, 4 * vScale, sx, sy, 46 * vScale);
     sun.addColorStop(0, '#ffe6a3'); sun.addColorStop(1, '#ff9d5c');
     ctx.fillStyle = sun;
-    ctx.beginPath(); ctx.arc(sx, sy, 46, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(sx, sy, 46 * vScale, 0, Math.PI * 2); ctx.fill();
     ctx.restore();
   }
 
   ctx.fillStyle = ROCK_WEST; silhouette(westRange, H / 2);                          // westward range, over the sun
   ctx.fillStyle = ROCK; silhouette(northRange, H / 2);                              // northern range
-  ctx.fillStyle = SNOW; silhouette((b) => Math.max(northRange(b), SNOWLINE), H / 2 - SNOWLINE);   // snowcaps
+  ctx.fillStyle = SNOW; silhouette((b) => Math.max(northRange(b), SNOWLINE), H / 2 - SNOWLINE * vScale);   // snowcaps
   ctx.fillStyle = LAND; silhouette(groundBase, H / 2);                              // rolling land, in front
 }

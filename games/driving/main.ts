@@ -249,8 +249,10 @@ function render(rider: RiderState): void {
   // by only what THIS lean exposes at the frame's corners — ~0 going straight (no
   // wasted columns), a little when banked. (Was a flat W+H, redrawn every frame.)
   const overscan = Math.abs(Math.sin(lean)) * H / 2 + 16;
-  // the gaze yaws the view, so the far scenery shifts with it too (he's looking off-axis).
-  drawHorizon(ctx, riderHeading(rider, world) + gazeAngle(rider), W, H, camFocal, overscan);
+  // the gaze yaws the view, so the far scenery shifts with it too (he's looking off-axis). The
+  // lean pulls camFocal in, which squeezes the horizon horizontally; pass camFocal/FOCAL as the
+  // vertical scale so it squeezes vertically by the same factor (it's a real focal change).
+  drawHorizon(ctx, riderHeading(rider, world) + gazeAngle(rider), W, H, camFocal, overscan, camFocal / FOCAL);
 
   for (const q of scene.quads) drawQuad(q);
   for (const p of scene.polys) drawPoly3(p);   // guard rails, raised above the pavement
