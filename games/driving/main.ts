@@ -46,10 +46,20 @@ const H = canvas.height;
 
 // ---- camera ----
 const FOV = 70;
-const FOCAL = (W / 2) / Math.tan((FOV / 2) * Math.PI / 180);
+const FOCAL = (W / 2) / Math.tan((FOV / 2) * Math.PI / 180);   // base focal, looking straight ahead
 const NEAR = 0.4;
 const EYE_H = 1.2;
 const MIN_SCENERY_PX = 4;   // skip scenery that would project shorter than this (far AND short)
+
+// The Rider's focal point pulls IN as he leans into a turn — he's watching the corner he's
+// executing, not the far mountains. At lean θ he sits (90−θ)° off the ground; we scale the
+// focal by that ratio SQUARED to exaggerate the effect. `camFocal` is the live camera focal,
+// recomputed from the roll each frame (0 lean → full FOCAL); the whole projection reads it.
+let camFocal = FOCAL;
+const focalForLean = (lean: number): number => {
+  const off = 1 - Math.abs(lean) / (Math.PI / 2);   // (90 − leanDeg) / 90
+  return FOCAL * off * off;
+};
 
 // ---- the world + the Rider's history (a forward/back stack of RiderStates) ----
 const world = buildWorld();
@@ -122,7 +132,7 @@ window.addEventListener('keydown', (e) => {
 // ---- projection (Rider frame -> screen) ----
 interface V3 { right: number; forward: number; height: number }
 function project(p: V3): { x: number; y: number } {
-  return { x: W / 2 + (p.right / p.forward) * FOCAL, y: H / 2 - ((p.height - EYE_H) / p.forward) * FOCAL };
+  return { x: W / 2 + (p.right / p.forward) * camFocal, y: H / 2 - ((p.height - EYE_H) / p.forward) * camFocal };
 }
 // project a ground-plane point at a height — the form critter.ts wants
 const screenOf: Project = (right, forward, height) => project({ right, forward, height });
@@ -196,7 +206,10 @@ function render(rider: RiderState): void {
 
   // CAMERA ROLL: the rider banks into the turn, so the whole world — horizon included
   // — rotates about the screen centre by his lean. The HUD/overlay (below) stay level.
+  // The same lean also pulls the focal point in (see focalForLean); set it before any
+  // projection this frame so the road, scenery, and horizon all share one camera.
   const lean = currentLean();
+  camFocal = focalForLean(lean);
   ctx.save();
   ctx.translate(W / 2, H / 2);
   ctx.rotate(-lean);
@@ -214,7 +227,7 @@ function render(rider: RiderState): void {
   // by only what THIS lean exposes at the frame's corners — ~0 going straight (no
   // wasted columns), a little when banked. (Was a flat W+H, redrawn every frame.)
   const overscan = Math.abs(Math.sin(lean)) * H / 2 + 16;
-  drawHorizon(ctx, riderHeading(rider, world), W, H, FOCAL, overscan);   // mountains + sun, by orientation only
+  drawHorizon(ctx, riderHeading(rider, world), W, H, camFocal, overscan);   // mountains + sun, by orientation only
 
   for (const q of scene.quads) drawQuad(q);
 
@@ -224,7 +237,7 @@ function render(rider: RiderState): void {
   // would project shorter than MIN_SCENERY_PX — a single test that drops the far AND short
   // (a tall tree stays in until it's very distant; a short critter drops out sooner).
   scene.scenery
-    .filter((s) => s.forward > NEAR && (s.height / s.forward) * FOCAL >= MIN_SCENERY_PX)
+    .filter((s) => s.forward > NEAR && (s.height / s.forward) * camFocal >= MIN_SCENERY_PX)
     .sort((a, b) => b.forward - a.forward)
     .forEach((s) => (s.forward < DETAIL_DIST ? s.drawAsNear : s.drawAsFar)(ctx, screenOf));
 
