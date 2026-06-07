@@ -220,7 +220,9 @@ function drawHud(rider: RiderState): void {
 
 // draw one frame for the given RiderState (handed in by the loop)
 function render(rider: RiderState): void {
-  const scene = buildScene(rider, world);
+  // the step IS the clock for view-only animation (beacon blink): a pure function of it, so it
+  // freezes on pause and runs backwards on reverse. It's the same step the HUD shows.
+  const scene = buildScene(rider, world, riderHistory.length - 1);
 
   // CAMERA ROLL: the rider banks into the turn, so the whole world — horizon included
   // — rotates about the screen centre by his lean. The HUD/overlay (below) stay level.

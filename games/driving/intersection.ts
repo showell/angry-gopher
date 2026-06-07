@@ -13,7 +13,7 @@
 
 import { critterScenery, cornerCritters } from './critter.ts';
 import type { Critter, CornerCreature } from './critter.ts';
-import { towerScenery } from './tower.ts';
+import { towerScenery, beaconOffsetFor } from './tower.ts';
 import { ROAD } from './scenery.ts';
 import type { RiderPt, Quad, Poly3, Scenery } from './scenery.ts';
 import type { SegId, TurnDir, RoadSegment } from './road_segment.ts';
@@ -54,6 +54,7 @@ export interface Intersection {
   sign: number;       // +1 right, -1 left; 0 = no turn (terminus)
   tan: number;        // radius * tan(THETA/2): the corner's half-tangent (how far the turn intrudes into a straight); 0 at a terminus
   creatures: Critter[];   // the corner creatures parked here (elephants/giraffes/…; none at a terminus); the joint OWNS them
+  beaconOffset: number;   // authored blink-phase offset for this tower's apex beacon, so towers don't pulse in unison
 }
 
 // The AUTHORED spec for a turn, before it's wired into built segments: which segment it
@@ -78,6 +79,7 @@ export function buildIntersection(from: RoadSegment, to: RoadSegment, dir: TurnD
     from: from.id, to: to.id, angle,
     radius: TURN_RADIUS, sign, tan: TURN_RADIUS * Math.tan(angle / 2),
     creatures: cornerCritters(creature, from.length, sign, segNum, from.width / 2),
+    beaconOffset: beaconOffsetFor(segNum),
   };
 }
 
@@ -85,7 +87,8 @@ export function buildIntersection(from: RoadSegment, to: RoadSegment, dir: TurnD
 // with no outgoing fork (the Rider arrives and stops). No turn, so angle/sign/tan are 0
 // and there are no creatures.
 export function buildTerminus(from: RoadSegment): Intersection {
-  return { id: `${from.id}_end`, from: from.id, to: null, angle: 0, radius: 0, sign: 0, tan: 0, creatures: [] };
+  return { id: `${from.id}_end`, from: from.id, to: null, angle: 0, radius: 0, sign: 0, tan: 0, creatures: [],
+           beaconOffset: beaconOffsetFor(Number(from.id.slice(3))) };
 }
 
 // ---- the intersection as a SCENE CONTRIBUTOR ----
@@ -104,7 +107,7 @@ export type FrameMap = (a: number, x: number) => RiderPt;
 // the end-LEFT edge (the origin itself is the inner corner), a RIGHT turn fuses on the
 // end-RIGHT edge (the inner corner is the far one).
 export function intersectionScene(ixn: Intersection, from: RoadSegment, to: RoadSegment | null,
-                                  fromMap: FrameMap, toMap: FrameMap | null): { quads: Quad[]; polys: Poly3[]; scenery: Scenery[] } {
+                                  fromMap: FrameMap, toMap: FrameMap | null, step: number): { quads: Quad[]; polys: Poly3[]; scenery: Scenery[] } {
   const W = from.width, hw = W / 2;
   const corner = (cu: number, cv: number): RiderPt => fromMap(from.length + cv, cu);
 
@@ -114,7 +117,7 @@ export function intersectionScene(ixn: Intersection, from: RoadSegment, to: Road
 
   // the radio tower: 100m past the corner, dead ahead of the approaching Rider. The
   // intersection owns it — terminus included (a landmark straight ahead as the road ends).
-  scenery.push(towerScenery(fromMap, from.length, hw));
+  scenery.push(towerScenery(fromMap, from.length, hw, step, ixn.beaconOffset));
 
   if (ixn.to === null) return { quads, polys, scenery };   // terminus: just the tower, no turn geometry
 

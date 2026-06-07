@@ -34,6 +34,22 @@ const TOWER_NEAR_DIST = 400;
 
 const TOWER_METAL = '#9aa0a8';   // every rod — legs, rings, and braces — one darker gray
 
+// ---- the beacon at the apex ----
+const BEACON_PERIOD = 120;       // frames for a full invisible -> bright -> invisible cycle
+const BEACON_RADIUS = 0.5;       // 1m-diameter sphere, drawn as a flat disc
+const BEACON_COLOR = '#ff7a18';  // bright orange at full brightness
+
+// The blink is a pure function of the step (used as a clock), so it's identical on pause and
+// runs backwards on reverse — no wall-clock state. Each tower gets an authored phase offset so
+// they don't blink in unison. brightness: 0 (invisible) at the cycle ends, 1 (full) at the middle.
+export function beaconOffsetFor(segNum: number): number {
+  return (segNum * 37) % BEACON_PERIOD;   // 37 is coprime to 120 — spreads the offsets, all distinct
+}
+function beaconBrightness(step: number): number {
+  const phase = ((step % BEACON_PERIOD) + BEACON_PERIOD) % BEACON_PERIOD;
+  return (1 - Math.cos(2 * Math.PI * phase / BEACON_PERIOD)) / 2;
+}
+
 // a rider-frame point carrying a height off the ground
 interface Pt3 { right: number; forward: number; height: number }
 interface Rod { pts: Pt3[]; color: string }
@@ -64,8 +80,9 @@ const CORNERS = [[-1, -1], [1, -1], [1, 1], [-1, 1]];
 
 // Build the tower standing beyond the intersection whose incoming segment is `fromLength`
 // long. `map(a, x)` takes a point in that segment's BL frame (a along, x across-from-left) to
-// the Rider's frame — the same mapper the intersection uses for its other scenery.
-export function towerScenery(map: (a: number, x: number) => RiderPt, fromLength: number, hw: number): Scenery {
+// the Rider's frame — the same mapper the intersection uses for its other scenery. `step` is the
+// frame clock and `beaconOffset` this tower's authored blink phase (see beaconBrightness).
+export function towerScenery(map: (a: number, x: number) => RiderPt, fromLength: number, hw: number, step: number, beaconOffset: number): Scenery {
   const a0 = fromLength + TOWER_BEYOND;   // out ahead of the corner, in the approach direction
   const x0 = hw + TOWER_RIGHT;            // and off to the right (BL across = half-width is the centreline)
   const cy = Math.cos(TOWER_YAW), sy = Math.sin(TOWER_YAW);
@@ -172,8 +189,26 @@ export function towerScenery(map: (a: number, x: number) => RiderPt, fromLength:
     }
   };
 
-  const draw = (ctx: Ctx, project: Project): void =>
+  // ---- the apex beacon: a flat orange disc whose SIZE scales with distance but whose
+  // BRIGHTNESS (alpha) does not — a depthless glow that blinks on the step clock. ----
+  const beacon = beaconBrightness(step + beaconOffset);
+  const drawBeacon = (ctx: Ctx, project: Project): void => {
+    if (beacon < 0.02) return;   // skip the invisible part of the cycle
+    if (apex.forward < NEAR) return;
+    const s = project(apex.right, apex.forward, apex.height);
+    const r = BEACON_RADIUS * (project(1, apex.forward, 0).x - project(0, apex.forward, 0).x);
+    ctx.globalAlpha = beacon;
+    ctx.fillStyle = BEACON_COLOR;
+    ctx.beginPath();
+    ctx.arc(s.x, s.y, r, 0, 2 * Math.PI);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  };
+
+  const draw = (ctx: Ctx, project: Project): void => {
     (center.forward < TOWER_NEAR_DIST ? drawNear : drawFlat)(ctx, project);
+    drawBeacon(ctx, project);
+  };
 
   return { forward: center.forward, height: TOWER_HEIGHT, drawAsNear: draw, drawAsFar: draw };
 }

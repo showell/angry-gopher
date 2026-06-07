@@ -36,7 +36,7 @@ function toRider(a: number, x: number, c: Pose, hw: number): RiderPt {
 // how many segments to look ahead (current + this many beyond the next corner)
 const LOOK_AHEAD = 6;
 
-export function buildScene(state: RiderState, world: World): Scene {
+export function buildScene(state: RiderState, world: World, step: number): Scene {
   // the camera looks along the Rider's path PLUS his gaze offset (the distracted glance) — a
   // view-only yaw, so the whole rider-relative scene rotates with where he's looking.
   const c: Pose = { along: state.along, across: state.across, angle: state.angle + gazeAngle(state) };
@@ -90,7 +90,7 @@ export function buildScene(state: RiderState, world: World): Scene {
     const exitIxn = world.intersections[seg.exitIxn];
     const next = chain[d + 1];
     const js = intersectionScene(exitIxn, seg, next ?? null,
-                                 (a, x) => at(d, a, x), next ? (a, x) => at(d + 1, a, x) : null);
+                                 (a, x) => at(d, a, x), next ? (a, x) => at(d + 1, a, x) : null, step);
     for (const q of js.quads) quads.push(q);
     for (const p of js.polys) polys.push(p);
     for (const sc of js.scenery) scenery.push(sc);
@@ -110,7 +110,7 @@ export function buildScene(state: RiderState, world: World): Scene {
       const p = curToNext(a, x, prev.length, pIxn.angle, dir, Wp);
       return toRider(p.a, p.x, c, riderHw);
     };
-    const js = intersectionScene(pIxn, prev, chain[0], fromPrev, (a, x) => at(0, a, x));
+    const js = intersectionScene(pIxn, prev, chain[0], fromPrev, (a, x) => at(0, a, x), step);
     for (const q of js.quads) quads.push(q);
     for (const p of js.polys) polys.push(p);
     for (const sc of js.scenery) scenery.push(sc);
