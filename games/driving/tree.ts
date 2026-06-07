@@ -32,7 +32,8 @@ const SMALL_HEIGHT = 4.5;                 // odd-parity conifers (the establishe
 const BIG_SCALE = 1.3;                    // even-parity conifers stand this much taller
 const DIST_BETWEEN_TREES = 20;            // tree spacing along a segment
 export const TREE_ROAD_OFFSET = 1.5;      // a tree stands this far beyond the lane edge (the bull lines up with it)
-const TREE_INTERSECTION_CLEARANCE = 6;    // no trees within this of an intersection
+const TREE_START_CLEARANCE = 6;           // first tree sits this far past the entry join
+const TREE_CLEARING_DIST_AT_END = 85;     // no trees within this of the upcoming intersection (tweakable)
 
 const CONIFER_GREEN = '#1c5a22';   // green conifer (every even tree)
 const CONIFER_GOLD = '#cf9a18';    // golden (autumn) accent conifer
@@ -41,15 +42,16 @@ const TRUNK = '#5a3e22';
 
 // ---- where the trees are ----
 
-// Both rows of trees along a segment. `entryTan`/`exitTan` are how far the turns
-// at each end intrude into the straight; we keep that PLUS a clearance clear, so
-// no tree lands on the adjoining road or right at a segment's start/end. Trees
+// Both rows of trees along a segment. Trees stop TREE_CLEARING_DIST_AT_END short of
+// the segment's end so the upcoming intersection (corner pavement + its critters)
+// stays clear, with a small fixed back-off keeping the first tree off the entry join.
+// A function of the segment's LENGTH alone now — turn angles no longer matter (every
+// turn is <=80deg, so the corner's intrusion into the straight is negligible). Trees
 // alternate by parity: even = green and 1.3x tall, odd = the accent colour and small.
-export function segmentTrees(length: number, entryTan: number, exitTan: number,
-                             scheme: Scheme, laneHalfWidth: number): Tree[] {
+export function segmentTrees(length: number, scheme: Scheme, laneHalfWidth: number): Tree[] {
   const trees: Tree[] = [];
-  const startAlong = entryTan + TREE_INTERSECTION_CLEARANCE;
-  const endAlong = length - exitTan - TREE_INTERSECTION_CLEARANCE;
+  const startAlong = TREE_START_CLEARANCE;
+  const endAlong = length - TREE_CLEARING_DIST_AT_END;
   const treeLine = laneHalfWidth + TREE_ROAD_OFFSET;   // the default tree line, each side of the road
   let k = 0;
   for (let along = startAlong; along <= endAlong; along += DIST_BETWEEN_TREES, k++) {

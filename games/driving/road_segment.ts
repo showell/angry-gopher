@@ -137,13 +137,11 @@ export function buildWorld(): World {
     segments[ixn.to].northHeading = segments[id].northHeading + ixn.sign * ixn.angle;
   }
 
-  // ---- trees, now that each corner's clear-zone tangent is known (tree.ts keeps a
-  // clear zone around each intersection so none land on the adjoining road) ----
+  // ---- trees: a function of each segment's length alone (a fixed clearing before the
+  // upcoming intersection keeps them off the corner; turn angle no longer matters) ----
   for (const id of order) {
     const s = segments[id];
-    const entryTan = s.entryIxn ? intersections[s.entryIxn].tan : 0;
-    const exitTan = intersections[s.exitIxn].tan;   // a terminus contributes 0 (no corner)
-    s.trees = segmentTrees(s.length, entryTan, exitTan, s.scheme, LANE_WIDTH / 2);
+    s.trees = segmentTrees(s.length, s.scheme, LANE_WIDTH / 2);
   }
 
   return { segments, intersections, start: 'seg1', order };
