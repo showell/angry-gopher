@@ -58,7 +58,7 @@ export function segmentCritters(length: number, laneHalfWidth: number, treeLineO
 // The PLACEMENT is one shared rule (below); only these per-species dimensions differ, so a
 // new creature (zebras, …) is just another entry. critter.ts owns the dimensions; the
 // intersection only picks the species.
-export const CornerCreature = { ELEPHANT: 'ELEPHANT', GIRAFFE: 'GIRAFFE' } as const;
+export const CornerCreature = { ELEPHANT: 'ELEPHANT', GIRAFFE: 'GIRAFFE', ZEBRA: 'ZEBRA' } as const;
 export type CornerCreature = typeof CornerCreature[keyof typeof CornerCreature];
 
 interface CornerSpecies {
@@ -70,8 +70,9 @@ interface CornerSpecies {
   giantFromSeg: number;  // ...applied on segments numbered above this (the old seg9+, +2 from the front insert)
 }
 const SPECIES: Record<CornerCreature, CornerSpecies> = {
-  ELEPHANT: { emoji: '🐘', adultHeight: 2.8, babyRatio: 0.5, babyBeyond: 20, giantScale: 1.7, giantFromSeg: 10 },
-  GIRAFFE:  { emoji: '🦒', adultHeight: 4.5, babyRatio: 0.5, babyBeyond: 20, giantScale: 1.7, giantFromSeg: 10 },
+  ELEPHANT: { emoji: '🐘', adultHeight: 2.8, babyRatio: 0.5, babyBeyond: 14, giantScale: 1.7, giantFromSeg: 10 },
+  GIRAFFE:  { emoji: '🦒', adultHeight: 4.5, babyRatio: 0.5, babyBeyond: 14, giantScale: 1.7, giantFromSeg: 10 },
+  ZEBRA:    { emoji: '🦓', adultHeight: 1.6, babyRatio: 0.5, babyBeyond: 14, giantScale: 1.7, giantFromSeg: 10 },
 };
 
 // The two creatures AT a segment's exit intersection — they read as having just CROSSED it.

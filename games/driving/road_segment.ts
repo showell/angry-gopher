@@ -96,23 +96,31 @@ export function buildWorld(): World {
   const turn = (to: SegId, dir: TurnDir, deg: number, creature: CornerCreature = CornerCreature.ELEPHANT): IntersectionConfig =>
     ({ to, dir, angle: deg * DEG, creature });
   type Row = RoadSegmentConfig & { exit: IntersectionConfig | null };
+  // Corner creatures are authored explicitly per turn: zebras open the route, elephants take
+  // over, then giraffes, then all three intermingle. No runtime scattering — it's all here.
+  const Z = CornerCreature.ZEBRA, E = CornerCreature.ELEPHANT, G = CornerCreature.GIRAFFE;
   const route: Row[] = [
-    { id: 'seg1',  length: 300, scheme: 'ALL_GREEN',    exit: turn('seg2',  'left',  30, CornerCreature.GIRAFFE) },
-    { id: 'seg2',  length: 240, scheme: 'YELLOW_GREEN', exit: turn('seg3',  'right', 30) },
-    { id: 'seg3',  length: 800, scheme: 'RED_GREEN',    exit: turn('seg4',  'right', 50) },
-    { id: 'seg4',  length: 320, scheme: 'ALL_GREEN',    exit: turn('seg5',  'left',  70) },
-    { id: 'seg5',  length: 400, scheme: 'YELLOW_GREEN', exit: turn('seg6',  'right', 20) },
-    { id: 'seg6',  length: 200, scheme: 'RED_GREEN',    exit: turn('seg7',  'right', 20) },
-    { id: 'seg7',  length: 220, scheme: 'ALL_GREEN',    exit: turn('seg8',  'left',  70) },
-    { id: 'seg8',  length: 240, scheme: 'YELLOW_GREEN', exit: turn('seg9',  'left',  70) },
-    { id: 'seg9',  length: 200, scheme: 'RED_GREEN',    exit: turn('seg10', 'right', 80) },
-    { id: 'seg10', length: 220, scheme: 'ALL_GREEN',    exit: turn('seg11', 'right', 20) },
-    { id: 'seg11', length: 200, scheme: 'YELLOW_GREEN', exit: turn('seg12', 'left',  70) },
-    { id: 'seg12', length: 200, scheme: 'RED_GREEN',    exit: turn('seg13', 'right', 15) },
-    { id: 'seg13', length: 200, scheme: 'ALL_GREEN',    exit: turn('seg14', 'right', 15) },
-    { id: 'seg14', length: 200, scheme: 'YELLOW_GREEN', exit: turn('seg15', 'right', 15) },
-    { id: 'seg15', length: 200, scheme: 'RED_GREEN',    exit: turn('seg16', 'right', 15) },
-    { id: 'seg16', length: 400, scheme: 'ALL_GREEN',    exit: null },
+    { id: 'seg1',  length: 300, scheme: 'ALL_GREEN',    exit: turn('seg2',  'left',  30, Z) },
+    { id: 'seg2',  length: 240, scheme: 'YELLOW_GREEN', exit: turn('seg3',  'right', 30, Z) },
+    { id: 'seg3',  length: 800, scheme: 'RED_GREEN',    exit: turn('seg4',  'right', 50, E) },
+    { id: 'seg4',  length: 320, scheme: 'ALL_GREEN',    exit: turn('seg5',  'left',  70, E) },
+    { id: 'seg5',  length: 400, scheme: 'YELLOW_GREEN', exit: turn('seg6',  'right', 20, G) },
+    { id: 'seg6',  length: 200, scheme: 'RED_GREEN',    exit: turn('seg7',  'right', 20, G) },
+    { id: 'seg7',  length: 220, scheme: 'ALL_GREEN',    exit: turn('seg8',  'left',  70, Z) },
+    { id: 'seg8',  length: 240, scheme: 'YELLOW_GREEN', exit: turn('seg9',  'left',  70, G) },
+    { id: 'seg9',  length: 200, scheme: 'RED_GREEN',    exit: turn('seg10', 'right', 80, E) },
+    { id: 'seg10', length: 220, scheme: 'ALL_GREEN',    exit: turn('seg11', 'right', 20, Z) },
+    { id: 'seg11', length: 200, scheme: 'YELLOW_GREEN', exit: turn('seg12', 'left',  70, G) },
+    { id: 'seg12', length: 200, scheme: 'RED_GREEN',    exit: turn('seg13', 'right', 15, E) },
+    { id: 'seg13', length: 200, scheme: 'ALL_GREEN',    exit: turn('seg14', 'right', 15, Z) },
+    { id: 'seg14', length: 200, scheme: 'YELLOW_GREEN', exit: turn('seg15', 'right', 15, G) },
+    { id: 'seg15', length: 200, scheme: 'RED_GREEN',    exit: turn('seg16', 'right', 15, E) },
+    { id: 'seg16', length: 400, scheme: 'ALL_GREEN',    exit: turn('seg17', 'left',  50, Z) },
+    { id: 'seg17', length: 300, scheme: 'YELLOW_GREEN', exit: turn('seg18', 'right', 50, G) },
+    { id: 'seg18', length: 300, scheme: 'RED_GREEN',    exit: turn('seg19', 'left',  50, E) },
+    { id: 'seg19', length: 300, scheme: 'ALL_GREEN',    exit: turn('seg20', 'right', 50, Z) },
+    { id: 'seg20', length: 300, scheme: 'YELLOW_GREEN', exit: turn('seg21', 'left',  50, G) },
+    { id: 'seg21', length: 300, scheme: 'RED_GREEN',    exit: null },
   ];
   const order: SegId[] = route.map((r) => r.id);
 
