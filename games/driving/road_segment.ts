@@ -17,9 +17,14 @@ import { segmentTrees, TREE_ROAD_OFFSET } from './tree.ts';
 import type { Scheme, Tree } from './tree.ts';
 import { buildIntersection, buildTerminus } from './intersection.ts';
 import type { Intersection, IxnId, IntersectionConfig } from './intersection.ts';
+import { beaconOffsetFor } from './tower.ts';
 
 // ---- road dimensions (metres) ----
 const LANE_WIDTH = 4;       // a single lane
+
+// A long, straight stretch is dull, so a road segment longer than this stands its OWN tower
+// halfway down (owned by the segment, not an intersection — see view.ts for the placement).
+const MID_TOWER_MIN_LENGTH = 1000;
 
 // ----------------------------------------------------------------------------
 // World — a graph: segments (edges) joined by intersections (nodes). Scalars and
@@ -47,6 +52,7 @@ export interface RoadSegment {
   // intersection.)
   alongWhereRiderCommitsToTurn: number;
   northHeading: number;     // heading relative to north (seg1 = 0), radians — the one absolute orientation we keep
+  midTower: { beaconOffset: number } | null;   // a tower the segment OWNS, halfway down (long segments only); null otherwise
 }
 
 export interface World {
@@ -82,6 +88,9 @@ export function buildRoadSegment(c: RoadSegmentConfig): RoadSegment {
     exitIxn: '',   // a placeholder: set to the real id when this segment's exit intersection is built
     alongWhereRiderCommitsToTurn: c.length,
     northHeading: 0,
+    // long segments earn a mid-road tower; its blink phase is seeded off a shifted segment number
+    // so it doesn't pulse in unison with the segment's exit-intersection tower.
+    midTower: c.length > MID_TOWER_MIN_LENGTH ? { beaconOffset: beaconOffsetFor(Number(c.id.slice(3)) + 60) } : null,
   };
 }
 
@@ -108,7 +117,7 @@ export function buildWorld(): World {
     { id: 'seg6',  length: 300, scheme: 'RED_GREEN',    exit: turn('seg7',  'right', 20, G) },
     { id: 'seg7',  length: 300, scheme: 'ALL_GREEN',    exit: turn('seg8',  'left',  70, Z) },
     { id: 'seg8',  length: 300, scheme: 'YELLOW_GREEN', exit: turn('seg9',  'left',  70, G) },
-    { id: 'seg9',  length: 300, scheme: 'RED_GREEN',    exit: turn('seg10', 'right', 80, E) },
+    { id: 'seg9',  length: 1200, scheme: 'RED_GREEN',   exit: turn('seg10', 'right', 80, E) },
     { id: 'seg10', length: 300, scheme: 'ALL_GREEN',    exit: turn('seg11', 'right', 20, Z) },
     { id: 'seg11', length: 300, scheme: 'YELLOW_GREEN', exit: turn('seg12', 'left',  70, G) },
     { id: 'seg12', length: 300, scheme: 'RED_GREEN',    exit: turn('seg13', 'right', 15, E) },

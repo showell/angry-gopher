@@ -21,12 +21,9 @@ import type { Project, Ctx, Scenery, RiderPt } from './scenery.ts';
 // ---- dimensions (metres) ----
 const TOWER_HEIGHT = 80;               // apex height
 const TOWER_HALF = 6;                  // half the 12m square base edge
-const TOWER_BEYOND = 160;             // how far past the corner it stands, along the approach direction
-const TOWER_RIGHT = 20;              // offset to the right of the lane, so you don't bear down on it dead-on
 const STAGE_HEIGHT = 20;              // a cross-beam ring every this many metres (rings at 20/40/60)
 const BRACE_STAGES = 2;              // X-braces only on the bottom this-many stages (cheaper, and where they matter structurally)
 const ROD_HALF = 0.12;               // half the rod thickness
-const TOWER_YAW = 30 * Math.PI / 180; // turn the square off head-on so the Rider sees two faces, not one
 
 // Beyond this range a tower switches from the perspective lattice to the flat billboard. Both
 // draw all four faces, so nothing pops — the only thing lost is parallax, imperceptible this far off.
@@ -114,14 +111,15 @@ function clipAbove(pts: Pt3[], minH: number): Pt3[] {
 // the square's four base corners, in half-base units, before the yaw
 const CORNERS = [[-1, -1], [1, -1], [1, 1], [-1, 1]];
 
-// Build the tower standing beyond the intersection whose incoming segment is `fromLength`
-// long. `map(a, x)` takes a point in that segment's BL frame (a along, x across-from-left) to
-// the Rider's frame — the same mapper the intersection uses for its other scenery. `step` is the
-// frame clock and `beaconOffset` this tower's authored blink phase (see beaconBrightness).
-export function towerScenery(map: (a: number, x: number) => RiderPt, fromLength: number, hw: number, step: number, beaconOffset: number): Scenery {
-  const a0 = fromLength + TOWER_BEYOND;   // out ahead of the corner, in the approach direction
-  const x0 = hw + TOWER_RIGHT;            // and off to the right (BL across = half-width is the centreline)
-  const cy = Math.cos(TOWER_YAW), sy = Math.sin(TOWER_YAW);
+// Build a tower at a given spot in some segment's BL frame. The OWNER (an intersection, a long
+// road segment) decides the placement and hands it in; this module only renders. `map(a, x)`
+// takes a point in that frame (a along, x across-from-left) to the Rider's frame; `baseAlong` /
+// `baseAcross` are the tower base centre in that frame; `yaw` turns the square off head-on; `step`
+// is the frame clock and `beaconOffset` the blink phase (see beaconBrightness).
+export function towerScenery(map: (a: number, x: number) => RiderPt, baseAlong: number, baseAcross: number, yaw: number, step: number, beaconOffset: number): Scenery {
+  const a0 = baseAlong;
+  const x0 = baseAcross;
+  const cy = Math.cos(yaw), sy = Math.sin(yaw);
 
   // corner k of the cross-section at height h, in the Rider's frame. The square shrinks
   // linearly to a point at the apex, and is yawed about the vertical axis.

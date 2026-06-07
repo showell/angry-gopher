@@ -50,19 +50,37 @@ function inRefFrame(s: RiderState, world: World): P {
   return localToRef(world.order.indexOf(s.segment), s.along, s.across, world);
 }
 
-// --- "roads don't loop back" (constructive invariant) ---
-// Global north = seg1's forward direction (the drive starts heading north), so
-// the northing of a point is just its `along` coordinate in seg-1's frame. Key
-// points are the start, then each segment's far end (its intersection). Every
-// point must be NORTH of the point two before it: the even- and odd-indexed
-// points each march strictly north, so the path can dip south at most once
-// between northward steps and can never curl back to cross itself.
-function northings(world: World): number[] {
-  const out = [0];  // p0 = the start
-  for (let i = 0; i < world.order.length; i++) {
-    out.push(localToRef(i, world.segments[world.order[i]].length, 0, world).a);
+// --- "roads don't cross themselves" (the exact invariant) ---
+// Express every segment's centreline endpoints in seg-1's frame (composing only local
+// segment-to-segment transforms, never a global coordinate system), then check that no two
+// NON-ADJACENT segments intersect. Adjacent segments legitimately share an endpoint at their
+// joint, so they're skipped. This is EXACT — it replaces an older conservative "each point marches
+// north" proxy that rejected perfectly valid routes which merely doubled back for a stretch (e.g. a
+// long segment heading south-west does not, in fact, cross anything).
+interface RefPt { a: number; x: number }
+function crossesItself(world: World): string | null {
+  const segs = world.order.map((id, i) => ({
+    id, s: localToRef(i, 0, 0, world), e: localToRef(i, world.segments[id].length, 0, world),
+  }));
+  const turnDir = (o: RefPt, p: RefPt, q: RefPt): number => (p.a - o.a) * (q.x - o.x) - (p.x - o.x) * (q.a - o.a);
+  const within = (o: RefPt, p: RefPt, q: RefPt): boolean =>
+    Math.min(o.a, p.a) - 1e-9 <= q.a && q.a <= Math.max(o.a, p.a) + 1e-9 &&
+    Math.min(o.x, p.x) - 1e-9 <= q.x && q.x <= Math.max(o.x, p.x) + 1e-9;
+  const hit = (a: RefPt, b: RefPt, c: RefPt, d: RefPt): boolean => {
+    const d1 = turnDir(c, d, a), d2 = turnDir(c, d, b), d3 = turnDir(a, b, c), d4 = turnDir(a, b, d);
+    if (((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0)) && ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0))) return true;
+    if (Math.abs(d1) < 1e-9 && within(c, d, a)) return true;
+    if (Math.abs(d2) < 1e-9 && within(c, d, b)) return true;
+    if (Math.abs(d3) < 1e-9 && within(a, b, c)) return true;
+    if (Math.abs(d4) < 1e-9 && within(a, b, d)) return true;
+    return false;
+  };
+  for (let i = 0; i < segs.length; i++) {
+    for (let j = i + 2; j < segs.length; j++) {   // skip self + adjacent (they share a joint endpoint)
+      if (hit(segs[i].s, segs[i].e, segs[j].s, segs[j].e)) return `${segs[i].id} crosses ${segs[j].id}`;
+    }
   }
-  return out;
+  return null;
 }
 
 function main(): void {
@@ -174,13 +192,9 @@ function main(): void {
   const endGap = world.segments[last].length - s.along;
   if (Math.abs(endGap) > 1e-6) throw new Error(`not at the end of ${last} (gap ${endGap})`);
 
-  // 5) roads don't loop back: each key point is north of the one two before it
-  const north = northings(world);
-  for (let N = 2; N < north.length; N++) {
-    if (!(north[N] > north[N - 2])) {
-      throw new Error(`loop risk: point ${N} north ${north[N].toFixed(1)} <= point ${N - 2} north ${north[N - 2].toFixed(1)}`);
-    }
-  }
+  // 5) roads don't cross themselves — the exact invariant (no two non-adjacent segments intersect)
+  const crossing = crossesItself(world);
+  if (crossing) throw new Error(`route self-intersects: ${crossing}`);
 
   console.log('PASS');
   console.log(`  segments          : ${world.order.length}`);
@@ -191,7 +205,7 @@ function main(): void {
   console.log(`  max off-centre    : ${maxAcross.toFixed(3)} m (bulge; road half-width = ${(world.segments[world.order[0]].width / 2).toFixed(1)})`);
   console.log(`  max lean          : ${(maxLean * 180 / Math.PI).toFixed(1)} deg (runtime cap 45; ceiling = MAX_LEAN ${(MAX_LEAN * 180 / Math.PI).toFixed(0)})`);
   console.log(`  max tilt step     : ${(maxTiltStep * 180 / Math.PI).toFixed(2)} deg/press (limit 1.0)`);
-  console.log(`  northings (N>N-2) : ${north.map((v) => v.toFixed(0)).join(' ')}`);
+  console.log(`  self-intersect    : none (${world.order.length} segments checked pairwise)`);
 }
 
 main();

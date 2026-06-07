@@ -20,6 +20,12 @@ import type { SegId, TurnDir, RoadSegment } from './road_segment.ts';
 
 export type IxnId = string;
 
+// where this intersection stands its tower: out past the corner, off to the right, yawed off
+// head-on (so two faces show). The intersection OWNS this placement; tower.ts only renders.
+const TOWER_BEYOND = 160;             // metres past the corner, along the approach direction
+const TOWER_RIGHT = 20;               // metres right of the lane centreline
+const TOWER_YAW = 30 * Math.PI / 180; // turned off head-on
+
 const TURN_RADIUS = 2;        // corner radius; sets the pavement wedge and the `tan` clear-zone half.
 const ENTRY_ROAD_DIST = 40;   // metres of approach road the joint paints behind its edge (the rest of
                               // the segment draws its own strip; this only needs to cover the joint when
@@ -117,7 +123,7 @@ export function intersectionScene(ixn: Intersection, from: RoadSegment, to: Road
 
   // the radio tower: 100m past the corner, dead ahead of the approaching Rider. The
   // intersection owns it — terminus included (a landmark straight ahead as the road ends).
-  scenery.push(towerScenery(fromMap, from.length, hw, step, ixn.beaconOffset));
+  scenery.push(towerScenery(fromMap, from.length + TOWER_BEYOND, hw + TOWER_RIGHT, TOWER_YAW, step, ixn.beaconOffset));
 
   if (ixn.to === null) return { quads, polys, scenery };   // terminus: just the tower, no turn geometry
 

@@ -15,6 +15,7 @@ import { treeScenery } from './tree.ts';
 import { ROAD } from './scenery.ts';
 import type { Scenery, RiderPt, Quad, Poly3 } from './scenery.ts';
 import { nextToCur, curToNext, intersectionScene } from './intersection.ts';
+import { towerScenery } from './tower.ts';
 
 // Road quads are the ground plane (drawn first, no LOD); polys are raised road structures
 // (guard rails) drawn over them; scenery is the depth-sorted, near/far-aware drawables (trees
@@ -38,6 +39,9 @@ const LOOK_AHEAD = 6;
 
 // road strips are sliced into chunks this long (metres) so the ground curvature bends smoothly
 const ROAD_CHUNK = 25;
+
+// a segment-owned mid-road tower stands this far to the LEFT of the lane centreline, square-on
+const SEG_TOWER_LEFT = 100;
 
 export function buildScene(state: RiderState, world: World, step: number): Scene {
   // the camera looks along the Rider's path PLUS his gaze offset (the distracted glance) — a
@@ -91,6 +95,11 @@ export function buildScene(state: RiderState, world: World, step: number): Scene
     }
     for (const cr of seg.critters) {
       scenery.push(critterScenery({ at: at(d, cr.along, cr.across + hw), emoji: cr.emoji, height: cr.height, faceRight: cr.faceRight }));
+    }
+
+    // a long segment owns a tower halfway down, 100m to the left of the lane, square-on (yaw 0).
+    if (seg.midTower) {
+      scenery.push(towerScenery((a, x) => at(d, a, x), seg.length / 2, hw - SEG_TOWER_LEFT, 0, step, seg.midTower.beaconOffset));
     }
 
     // this segment's exit JOINT draws itself: approach road + corner sector + elephants.
