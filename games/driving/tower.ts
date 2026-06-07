@@ -8,10 +8,11 @@
 //
 // Cheap by construction: a see-through wire lattice of flat rod-quads (no solid faces).
 // It picks its OWN level of detail, since a tower is never within the renderer's critter-tuned
-// DETAIL_DIST: the full four-faced lattice within TOWER_NEAR_DIST, and beyond that just the two
-// faces nearest the Rider — at distance there's no perceptible depth to a 12m-deep tower, so the
-// back leg and back-face beams are pure cost. (The earlier far-LOD dropped the beams entirely,
-// but their absence read clearly even at range; the front two faces keep them.)
+// DETAIL_DIST: a full perspective lattice within TOWER_NEAR_DIST, and beyond that the SAME four
+// faces drawn as a flat billboard (project the base corners + apex, interpolate the rest in 2D).
+// A far tower has no perceptible depth, so the flat version reads identically — and because it
+// keeps all four faces, the back leg doesn't pop into view as a tower crosses the threshold. The
+// flat path also skips the per-vertex frame-mapping and near-clip the 3D one needs.
 // =============================================================================
 
 import { NEAR } from './scenery.ts';
@@ -27,9 +28,8 @@ const BRACE_STAGES = 2;              // X-braces only on the bottom this-many st
 const ROD_HALF = 0.12;               // half the rod thickness
 const TOWER_YAW = 30 * Math.PI / 180; // turn the square off head-on so the Rider sees two faces, not one
 
-// Beyond this range a tower drops from the full four-faced lattice to just its two nearest faces
-// (no perceptible depth at distance). Both keep their cross-beams, so the threshold is barely
-// visible — it only swaps the unseen back of the tower in and out.
+// Beyond this range a tower switches from the perspective lattice to the flat billboard. Both
+// draw all four faces, so nothing pops — the only thing lost is parallax, imperceptible this far off.
 const TOWER_NEAR_DIST = 400;
 
 const TOWER_METAL = '#9aa0a8';   // every rod — legs, rings, and braces — one darker gray
@@ -37,6 +37,7 @@ const TOWER_METAL = '#9aa0a8';   // every rod — legs, rings, and braces — on
 // a rider-frame point carrying a height off the ground
 interface Pt3 { right: number; forward: number; height: number }
 interface Rod { pts: Pt3[]; color: string }
+interface Pt2 { x: number; y: number }   // a projected screen point (the flat path works in 2D)
 
 // Clip a rod polygon against the near plane (forward >= NEAR) in 3D, before projecting —
 // the same Sutherland-Hodgman the renderer runs on road quads, here on height-carrying points.
@@ -96,21 +97,20 @@ export function towerScenery(map: (a: number, x: number) => RiderPt, fromLength:
   ] });
 
   const apex = at(0, TOWER_HEIGHT);   // s = 0, so every corner converges here
+  const center = map(a0, x0);
 
-  // A face `k` spans corners k and k+1. Build the lattice over a chosen set of legs (corner
-  // indices) and faces (face indices) — the whole tower for the near LOD, the two front faces
-  // for the far one.
-  const lattice = (legCorners: number[], faceKs: number[]): Rod[] => {
+  // ---- NEAR: the full perspective lattice (built lazily — a far tower never pays for it) ----
+  // Four sloping legs, horizontal cross-beam rings (the top stage tapers to the apex, so no ring
+  // there), and X-braces on the bottom BRACE_STAGES stage faces, both diagonals crossing into an X.
+  const lattice = (): Rod[] => {
     const rods: Rod[] = [];
-    for (const k of legCorners) rods.push(barH(at(k, 0), apex, TOWER_METAL));   // sloping legs
-    // horizontal cross-beam rings (the top stage tapers to the apex, so no ring there)
+    for (let k = 0; k < 4; k++) rods.push(barH(at(k, 0), apex, TOWER_METAL));
     for (let h = STAGE_HEIGHT; h < TOWER_HEIGHT; h += STAGE_HEIGHT) {
-      for (const k of faceKs) rods.push(barV(at(k, h), at((k + 1) % 4, h), TOWER_METAL));
+      for (let k = 0; k < 4; k++) rods.push(barV(at(k, h), at((k + 1) % 4, h), TOWER_METAL));
     }
-    // X-bracing on the bottom BRACE_STAGES stage faces: both diagonals of each, crossing into an X.
     for (let h = 0; h < BRACE_STAGES * STAGE_HEIGHT; h += STAGE_HEIGHT) {
       const hi = h + STAGE_HEIGHT;
-      for (const k of faceKs) {
+      for (let k = 0; k < 4; k++) {
         const j = (k + 1) % 4;
         rods.push(barH(at(k, h), at(j, hi), TOWER_METAL));
         rods.push(barH(at(j, h), at(k, hi), TOWER_METAL));
@@ -118,20 +118,12 @@ export function towerScenery(map: (a: number, x: number) => RiderPt, fromLength:
     }
     return rods;
   };
-
-  // draw the lattice back-to-front so the near face's rods overpaint the far face's.
+  // back-to-front so the near face's rods overpaint the far face's.
   const avgF = (r: Rod): number => (r.pts[0].forward + r.pts[1].forward + r.pts[2].forward + r.pts[3].forward) / 4;
   const sortBack = (rods: Rod[]): Rod[] => [...rods].sort((p, q) => avgF(q) - avgF(p));
 
-  // near: the whole tower. far: only the two faces flanking the corner closest to the Rider —
-  // those are its three legs and two faces; the back corner and its faces aren't seen at range.
-  const near = sortBack(lattice([0, 1, 2, 3], [0, 1, 2, 3]));
-  let fc = 0;   // the front (nearest) corner
-  for (let k = 1; k < 4; k++) if (at(k, 0).forward < at(fc, 0).forward) fc = k;
-  const far = sortBack(lattice([(fc + 3) % 4, fc, (fc + 1) % 4], [(fc + 3) % 4, fc]));
-
-  const fill = (ctx: Ctx, project: Project, rods: Rod[]): void => {
-    for (const rod of rods) {
+  const drawNear = (ctx: Ctx, project: Project): void => {
+    for (const rod of sortBack(lattice())) {
       // near-clip first: a rod that straddles the near plane (one corner beside/behind the
       // Rider on a sharp turn) would otherwise project to a sliver streaking across the view.
       const pts = clipNear(rod.pts);
@@ -149,10 +141,39 @@ export function towerScenery(map: (a: number, x: number) => RiderPt, fromLength:
     }
   };
 
-  const center = map(a0, x0);
-  // full four-faced lattice for a near tower; the two front faces for the rest (see TOWER_NEAR_DIST).
+  // ---- FAR: the same four faces, flat. Project the base corners + apex once, then derive every
+  // ring corner by 2D interpolation up the legs (the cross-section shrinks linearly to the apex).
+  // No parallax, but all four faces, so the back leg is present at the threshold just like near. ----
+  const ROD_W = ROD_HALF * 2;
+  const drawFlat = (ctx: Ctx, project: Project): void => {
+    const ps = (p: Pt3): Pt2 => project(p.right, p.forward, p.height);
+    const baseS = [ps(at(0, 0)), ps(at(1, 0)), ps(at(2, 0)), ps(at(3, 0))];
+    const apexS = ps(apex);
+    const wpx = ROD_W * (project(1, center.forward, 0).x - project(0, center.forward, 0).x);   // rod width in px at this depth
+    const lerp = (a: Pt2, b: Pt2, t: number): Pt2 => ({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t });
+    const ring = (k: number, h: number): Pt2 => lerp(baseS[k], apexS, h / TOWER_HEIGHT);
+    const bar = (A: Pt2, B: Pt2): void => {   // a thick screen-space line as a filled quad
+      const dx = B.x - A.x, dy = B.y - A.y, len = Math.hypot(dx, dy) || 1;
+      const ox = -dy / len * wpx / 2, oy = dx / len * wpx / 2;
+      ctx.beginPath();
+      ctx.moveTo(A.x + ox, A.y + oy); ctx.lineTo(B.x + ox, B.y + oy);
+      ctx.lineTo(B.x - ox, B.y - oy); ctx.lineTo(A.x - ox, A.y - oy);
+      ctx.closePath();
+      ctx.fill();
+    };
+    ctx.fillStyle = TOWER_METAL;
+    for (let k = 0; k < 4; k++) bar(baseS[k], apexS);                                  // legs
+    for (let h = STAGE_HEIGHT; h < TOWER_HEIGHT; h += STAGE_HEIGHT) {
+      for (let k = 0; k < 4; k++) bar(ring(k, h), ring((k + 1) % 4, h));               // rings
+    }
+    for (let h = 0; h < BRACE_STAGES * STAGE_HEIGHT; h += STAGE_HEIGHT) {
+      const hi = h + STAGE_HEIGHT;
+      for (let k = 0; k < 4; k++) { const j = (k + 1) % 4; bar(ring(k, h), ring(j, hi)); bar(ring(j, h), ring(k, hi)); }
+    }
+  };
+
   const draw = (ctx: Ctx, project: Project): void =>
-    fill(ctx, project, center.forward < TOWER_NEAR_DIST ? near : far);
+    (center.forward < TOWER_NEAR_DIST ? drawNear : drawFlat)(ctx, project);
 
   return { forward: center.forward, height: TOWER_HEIGHT, drawAsNear: draw, drawAsFar: draw };
 }
