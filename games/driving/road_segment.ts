@@ -11,7 +11,7 @@
 // (alongWhereRiderCommitsToTurn) — the segment owns its own length.
 // =============================================================================
 
-import { segmentCritters } from './critter.ts';
+import { segmentCritters, CornerCreature } from './critter.ts';
 import type { Critter } from './critter.ts';
 import { segmentTrees, TREE_ROAD_OFFSET } from './tree.ts';
 import type { Scheme, Tree } from './tree.ts';
@@ -93,10 +93,11 @@ export function buildWorld(): World {
   // (to / dir / degrees) or null at the end. Checked non-self-intersecting (no loops) and
   // all-turns-<=-90deg by test/test_model.ts. Hand-authored, opening with a soft S of gentle
   // warm-up turns.
-  const turn = (to: SegId, dir: TurnDir, deg: number): IntersectionConfig => ({ to, dir, angle: deg * DEG });
+  const turn = (to: SegId, dir: TurnDir, deg: number, creature: CornerCreature = CornerCreature.ELEPHANT): IntersectionConfig =>
+    ({ to, dir, angle: deg * DEG, creature });
   type Row = RoadSegmentConfig & { exit: IntersectionConfig | null };
   const route: Row[] = [
-    { id: 'seg1',  length: 300, scheme: 'ALL_GREEN',    exit: turn('seg2',  'left',  30) },
+    { id: 'seg1',  length: 300, scheme: 'ALL_GREEN',    exit: turn('seg2',  'left',  30, CornerCreature.GIRAFFE) },
     { id: 'seg2',  length: 240, scheme: 'YELLOW_GREEN', exit: turn('seg3',  'right', 30) },
     { id: 'seg3',  length: 800, scheme: 'RED_GREEN',    exit: turn('seg4',  'right', 50) },
     { id: 'seg4',  length: 320, scheme: 'ALL_GREEN',    exit: turn('seg5',  'left',  70) },
@@ -127,7 +128,7 @@ export function buildWorld(): World {
     const from = segments[r.id];
     if (r.exit) {
       const to = segments[r.exit.to];
-      const ixn = buildIntersection(from, to, r.exit.dir, r.exit.angle);
+      const ixn = buildIntersection(from, to, r.exit.dir, r.exit.angle, r.exit.creature);
       intersections[ixn.id] = ixn;
       from.exitIxn = ixn.id;
       to.entryIxn = ixn.id;

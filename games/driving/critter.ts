@@ -32,9 +32,6 @@ const COW_HEIGHT = 1.4;
 const CALF_HEIGHT = COW_HEIGHT / 2;
 const BULL_HEIGHT = COW_HEIGHT * 1.15;          // a touch bigger than a cow
 const PIG_HEIGHT = 1.1;
-const ELEPHANT_HEIGHT = 2.8;                    // adult; x GIANT_ELEPHANT_SCALE late in the route
-const BABY_ELEPHANT_HEIGHT = ELEPHANT_HEIGHT / 2;
-const BABY_ELEPHANT_BEYOND = 20;               // baby stands this far BEYOND the turn (its bottom), in the Rider's path
 
 const HERD_ROAD_OFFSET = 10;             // cows graze this far beyond the lane edge
 const BULL_DIST = 24;                    // the bull stands here (~the 4th tree); the herd is just behind
@@ -47,8 +44,6 @@ const HERD_JITTER_ALONG = 1.5;           // deterministic wobble of the scatter,
 const HERD_JITTER_ACROSS = 1.2;          // deterministic wobble of the scatter, across
 const PIG_DIST_BEFORE_END = 60;          // pigs gather this far before the next intersection
 const PIG_BACK_ROW_OFFSET = 6;           // the extra back row of pigs sits this much further from the road
-const GIANT_ELEPHANT_SCALE = 1.7;          // elephants this many times bigger...
-const GIANT_ELEPHANT_FROM_SEG = 10;      // ...on segments numbered above this (the old seg9+, shifted +2 by the front insert)
 
 // ---- where the critters are, per segment ----
 
@@ -59,22 +54,41 @@ export function segmentCritters(length: number, laneHalfWidth: number, treeLineO
   return [...cowHerd(laneHalfWidth, treeLineOffset), ...pigRow(length, laneHalfWidth + HERD_ROAD_OFFSET)];
 }
 
-// Elephants AT a segment's exit intersection — they read as having just CROSSED it.
-// The adult stands at the FAR corner of the segment: for a RIGHT turn its bottom-
-// RIGHT corner sits on EL (end-left), facing left; for a LEFT turn (mirror, NOT a
-// flip) its bottom-LEFT corner sits on ER (end-right), facing RIGHT. So its centre
-// is half its width beyond that edge — and that offset scales with the giant late-
-// route elephants. The baby is tucked beside it, toward the road centre. `turnSign`
-// is +1 right / -1 left; `hw` is the road half-width; the corners are EL/ER at along=L.
-export function intersectionCritters(intersectionAlong: number, turnSign: number, segNum: number, hw: number): Critter[] {
-  const scale = segNum > GIANT_ELEPHANT_FROM_SEG ? GIANT_ELEPHANT_SCALE : 1;
-  const adultH = ELEPHANT_HEIGHT * scale, babyH = BABY_ELEPHANT_HEIGHT * scale;
-  const faceRight = turnSign < 0;                      // right turn -> faces left; left turn -> faces right (new)
+// ---- corner creatures: the animals parked AT an intersection (elephants, giraffes, …) ----
+// The PLACEMENT is one shared rule (below); only these per-species dimensions differ, so a
+// new creature (zebras, …) is just another entry. critter.ts owns the dimensions; the
+// intersection only picks the species.
+export const CornerCreature = { ELEPHANT: 'ELEPHANT', GIRAFFE: 'GIRAFFE' } as const;
+export type CornerCreature = typeof CornerCreature[keyof typeof CornerCreature];
+
+interface CornerSpecies {
+  emoji: string;
+  adultHeight: number;   // metres — giraffes stand taller than elephants
+  babyRatio: number;     // baby height as a fraction of the adult
+  babyBeyond: number;    // how far past the turn the baby stands, in the Rider's path
+  giantScale: number;    // cartoonish late-route upsizing...
+  giantFromSeg: number;  // ...applied on segments numbered above this (the old seg9+, +2 from the front insert)
+}
+const SPECIES: Record<CornerCreature, CornerSpecies> = {
+  ELEPHANT: { emoji: '🐘', adultHeight: 2.8, babyRatio: 0.5, babyBeyond: 20, giantScale: 1.7, giantFromSeg: 10 },
+  GIRAFFE:  { emoji: '🦒', adultHeight: 4.5, babyRatio: 0.5, babyBeyond: 20, giantScale: 1.7, giantFromSeg: 10 },
+};
+
+// The two creatures AT a segment's exit intersection — they read as having just CROSSED it.
+// The adult stands at the FAR corner: for a RIGHT turn its bottom-RIGHT corner sits on EL
+// (end-left), facing left; for a LEFT turn (mirror, NOT a flip) its bottom-LEFT corner sits
+// on ER (end-right), facing RIGHT. So its centre is half its width beyond that edge — an
+// offset that scales with the giant late-route size. The baby stands ahead in the Rider's
+// path, BEYOND the turn. `turnSign` is +1 right / -1 left; `hw` is the road half-width; the
+// corners are EL/ER at along=intersectionAlong.
+export function cornerCritters(creature: CornerCreature, intersectionAlong: number, turnSign: number, segNum: number, hw: number): Critter[] {
+  const spec = SPECIES[creature];
+  const scale = segNum > spec.giantFromSeg ? spec.giantScale : 1;
+  const adultH = spec.adultHeight * scale, babyH = adultH * spec.babyRatio;
+  const faceRight = turnSign < 0;                      // right turn -> faces left; left turn -> faces right
   return [
-    // adult parked at the far corner — its inner corner on EL (right turn) / ER (left)
-    { along: intersectionAlong, across: -turnSign * (hw + adultH / 2), emoji: '🐘', height: adultH, faceRight },
-    // baby straight ahead in the Rider's path (centred, between EL and ER), BEYOND the turn
-    { along: intersectionAlong + BABY_ELEPHANT_BEYOND, across: 0, emoji: '🐘', height: babyH, faceRight },
+    { along: intersectionAlong, across: -turnSign * (hw + adultH / 2), emoji: spec.emoji, height: adultH, faceRight },
+    { along: intersectionAlong + spec.babyBeyond, across: 0, emoji: spec.emoji, height: babyH, faceRight },
   ];
 }
 

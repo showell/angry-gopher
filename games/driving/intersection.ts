@@ -11,8 +11,8 @@
 // transforms, and the pavement wedge.
 // =============================================================================
 
-import { critterScenery, intersectionCritters } from './critter.ts';
-import type { Critter } from './critter.ts';
+import { critterScenery, cornerCritters } from './critter.ts';
+import type { Critter, CornerCreature } from './critter.ts';
 import { ROAD } from './scenery.ts';
 import type { RiderPt, Quad, Scenery } from './scenery.ts';
 import type { SegId, TurnDir, RoadSegment } from './road_segment.ts';
@@ -43,37 +43,39 @@ export interface Intersection {
   radius: number;     // corner radius
   sign: number;       // +1 right, -1 left; 0 = no turn (terminus)
   tan: number;        // radius * tan(THETA/2): the corner's half-tangent (how far the turn intrudes into a straight); 0 at a terminus
-  elephants: Critter[];   // the elephants parked at this corner (none at a terminus); the joint OWNS them
+  creatures: Critter[];   // the corner creatures parked here (elephants/giraffes/…; none at a terminus); the joint OWNS them
 }
 
 // The AUTHORED spec for a turn, before it's wired into built segments: which segment it
-// leads to, its direction, and its angle. buildIntersection resolves it against the two
-// segment objects into an Intersection (mirrors RoadSegmentConfig -> buildRoadSegment).
+// leads to, its direction, its angle, and which creatures stand at the corner.
+// buildIntersection resolves it against the two segment objects into an Intersection
+// (mirrors RoadSegmentConfig -> buildRoadSegment).
 export interface IntersectionConfig {
   to: SegId;
   dir: TurnDir;
-  angle: number;   // turn angle THETA (radians)
+  angle: number;            // turn angle THETA (radians)
+  creature: CornerCreature; // which animal stands at this corner
 }
 
 // Build the turn NODE joining `from` to `to`. Pure: it reads the two segments' ids and
-// returns the Intersection (including the elephants parked at the corner); the caller wires
+// returns the Intersection (including the creatures parked at the corner); the caller wires
 // the reverse graph refs onto the segments.
-export function buildIntersection(from: RoadSegment, to: RoadSegment, dir: TurnDir, angle: number): Intersection {
+export function buildIntersection(from: RoadSegment, to: RoadSegment, dir: TurnDir, angle: number, creature: CornerCreature): Intersection {
   const sign = signOf(dir);
-  const segNum = Number(from.id.slice(3));   // "seg12" -> 12; late-route corners get giant elephants
+  const segNum = Number(from.id.slice(3));   // "seg12" -> 12; late-route corners get giant creatures
   return {
     id: `${from.id}_${to.id}`,
     from: from.id, to: to.id, angle,
     radius: TURN_RADIUS, sign, tan: TURN_RADIUS * Math.tan(angle / 2),
-    elephants: intersectionCritters(from.length, sign, segNum, from.width / 2),
+    creatures: cornerCritters(creature, from.length, sign, segNum, from.width / 2),
   };
 }
 
 // Build the TERMINUS node that closes the route off `from`: a degenerate intersection
 // with no outgoing fork (the Rider arrives and stops). No turn, so angle/sign/tan are 0
-// and there are no elephants.
+// and there are no creatures.
 export function buildTerminus(from: RoadSegment): Intersection {
-  return { id: `${from.id}_end`, from: from.id, to: null, angle: 0, radius: 0, sign: 0, tan: 0, elephants: [] };
+  return { id: `${from.id}_end`, from: from.id, to: null, angle: 0, radius: 0, sign: 0, tan: 0, creatures: [] };
 }
 
 // ---- the intersection as a SCENE CONTRIBUTOR ----
@@ -119,8 +121,8 @@ export function intersectionScene(ixn: Intersection, from: RoadSegment, to: Road
     quads.push({ pts: pavementSector(inner, outerFrom, outerTo), color: ROAD });
   }
 
-  // the elephants parked at the corner (authored centre-relative; +hw shifts to from-the-left).
-  const scenery: Scenery[] = ixn.elephants.map((cr) =>
+  // the creatures parked at the corner (authored centre-relative; +hw shifts to from-the-left).
+  const scenery: Scenery[] = ixn.creatures.map((cr) =>
     critterScenery({ at: fromMap(cr.along, cr.across + hw), emoji: cr.emoji, height: cr.height, faceRight: cr.faceRight }));
 
   return { quads, scenery };
