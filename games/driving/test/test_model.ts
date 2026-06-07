@@ -113,7 +113,7 @@ function main(): void {
   for (const st of states) assertInvariants(st, world);
 
   // 1b) the distracted-rider GAZE: it must be back to straight (0) before the braking zone, and
-  // it must run the exact configured 9-frame sequence.
+  // it must run the exact configured sequence.
   for (const st of states) {
     const distToEnd = world.segments[st.segment].length - st.along;
     if (distToEnd <= APPROACH_INTERSECTION_DIST && Math.abs(gazeAngle(st)) > 1e-9) {

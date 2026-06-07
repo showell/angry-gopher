@@ -112,20 +112,21 @@ export function leanFor(dHeading: number): number {
 
 // ---- the "distracted rider": GAZE decoupled from the path ----
 // Cruising up to a turn the Rider GLANCES right at the roadside pigs, then wisely puts his eyes
-// back on the road. It's a fixed 9-frame head-turn (degrees, to the RIGHT — where the pigs are)
-// that fires once per segment when he comes within GAZE_TRIGGER_DIST of the end and is back to 0
-// well before the braking zone (APPROACH_INTERSECTION_DIST) — both enforced by test_model. Gaze
-// is a VIEW offset ONLY: it never touches the path/physics, just where the camera looks (the
-// renderer adds it as a yaw — see main.ts/view.ts). `gazeStep` carries the progress on RiderState.
-export const GAZE_SEQUENCE = [4, 8, 12, 16, 20, 16, 12, 8, 4];   // the glance, degrees to the right
+// back on the road. It's a fixed head-turn (one frame per entry, degrees, to the RIGHT — where
+// the pigs are) that fires once per segment when he comes within GAZE_TRIGGER_DIST of the end and
+// is back to 0 well before the braking zone (APPROACH_INTERSECTION_DIST) — both enforced by
+// test_model. Gaze is a VIEW offset ONLY: it never touches the path/physics, just where the
+// camera looks (the renderer adds it as a yaw — see main.ts/view.ts). `gazeStep` carries the
+// progress on RiderState.
+export const GAZE_SEQUENCE = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1];   // the glance, degrees right
 export const GAZE_TRIGGER_DIST = 150;                            // begin the glance this far (game units) before the end
 export function gazeAngle(state: RiderState): number {
   const i = state.gazeStep;
   return i >= 0 && i < GAZE_SEQUENCE.length ? GAZE_SEQUENCE[i] * (Math.PI / 180) : 0;
 }
 // advance the glance one cruise-frame: once armed (>=0) step toward done (capped), else arm at
-// the trigger. Frame-based (9 frames), not distance-based — but the 300m-min segments + the
-// 150→60 window guarantee it finishes before the braking zone (enforced by test_model).
+// the trigger. Frame-based (one frame per sequence entry), not distance-based — but the 300m-min
+// segments + the 150→60 window guarantee it finishes before the braking zone (enforced by test).
 function nextGazeStep(gazeStep: number, distToEnd: number): number {
   if (gazeStep >= 0) return Math.min(gazeStep + 1, GAZE_SEQUENCE.length);
   return distToEnd <= GAZE_TRIGGER_DIST ? 0 : -1;
