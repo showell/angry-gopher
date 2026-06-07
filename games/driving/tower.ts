@@ -57,13 +57,13 @@ interface Pt2 { x: number; y: number }   // a projected screen point (the flat p
 
 // ---- local ground curvature (proof of concept: towers only) ----
 // We sit on a sphere of radius EARTH_RADIUS; its surface drops d^2/(2R) below the Rider's tangent
-// plane at horizontal distance d, so a distant object's whole height shifts down by that much.
-// We touch only the height (depth and screen-x are unchanged), and only towers for now. The
-// horizon mountains stay infinitely far and never curve. A small R is deliberately exaggerated.
-const EARTH_RADIUS = 2000;
-function curved(project: Project): Project {
-  return (right, forward, height) =>
-    project(right, forward, height - (right * right + forward * forward) / (2 * EARTH_RADIUS));
+// plane at horizontal distance d. We render that as the bulge HIDING the bottom of a distant
+// tower — we draw only the part above the drop height, WITHOUT moving the tower down on screen
+// (its top stays put; its base sinks into the horizon). The horizon mountains stay infinitely far
+// and never curve. Small R = exaggerated.
+const EARTH_RADIUS = 5000;
+function groundDrop(p: RiderPt): number {
+  return (p.right * p.right + p.forward * p.forward) / (2 * EARTH_RADIUS);
 }
 
 // Clip a rod polygon against the near plane (forward >= NEAR) in 3D, before projecting —
@@ -80,6 +80,25 @@ function clipNear(pts: Pt3[]): Pt3[] {
         right: a.right + f * (b.right - a.right),
         forward: NEAR,
         height: a.height + f * (b.height - a.height),
+      });
+    }
+  }
+  return out;
+}
+
+// Clip a rod polygon to the part at or above `minH` — the bottom hidden by the ground bulge.
+function clipAbove(pts: Pt3[], minH: number): Pt3[] {
+  const out: Pt3[] = [];
+  for (let i = 0; i < pts.length; i++) {
+    const a = pts[i], b = pts[(i + 1) % pts.length];
+    const aIn = a.height >= minH, bIn = b.height >= minH;
+    if (aIn) out.push(a);
+    if (aIn !== bIn) {
+      const f = (minH - a.height) / (b.height - a.height);
+      out.push({
+        right: a.right + f * (b.right - a.right),
+        forward: a.forward + f * (b.forward - a.forward),
+        height: minH,
       });
     }
   }
@@ -150,11 +169,11 @@ export function towerScenery(map: (a: number, x: number) => RiderPt, fromLength:
   const avgF = (r: Rod): number => (r.pts[0].forward + r.pts[1].forward + r.pts[2].forward + r.pts[3].forward) / 4;
   const sortBack = (rods: Rod[]): Rod[] => [...rods].sort((p, q) => avgF(q) - avgF(p));
 
-  const drawNear = (ctx: Ctx, project: Project): void => {
+  const drawNear = (ctx: Ctx, project: Project, clipH: number): void => {
     for (const rod of sortBack(lattice())) {
-      // near-clip first: a rod that straddles the near plane (one corner beside/behind the
-      // Rider on a sharp turn) would otherwise project to a sliver streaking across the view.
-      const pts = clipNear(rod.pts);
+      // near-clip (a rod straddling the near plane would streak across the view), then clip off
+      // the bottom hidden by the ground bulge.
+      const pts = clipAbove(clipNear(rod.pts), clipH);
       if (pts.length < 3) continue;
       ctx.fillStyle = rod.color;
       ctx.beginPath();
@@ -173,13 +192,13 @@ export function towerScenery(map: (a: number, x: number) => RiderPt, fromLength:
   // ring corner by 2D interpolation up the legs (the cross-section shrinks linearly to the apex).
   // No parallax, but all four faces, so the back leg is present at the threshold just like near. ----
   const ROD_W = ROD_HALF * 2;
-  const drawFlat = (ctx: Ctx, project: Project): void => {
+  const drawFlat = (ctx: Ctx, project: Project, clipH: number): void => {
     const ps = (p: Pt3): Pt2 => project(p.right, p.forward, p.height);
     const baseS = [ps(at(0, 0)), ps(at(1, 0)), ps(at(2, 0)), ps(at(3, 0))];
     const apexS = ps(apex);
     const wpx = ROD_W * (project(1, center.forward, 0).x - project(0, center.forward, 0).x);   // rod width in px at this depth
     const lerp = (a: Pt2, b: Pt2, t: number): Pt2 => ({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t });
-    const ring = (k: number, h: number): Pt2 => lerp(baseS[k], apexS, h / TOWER_HEIGHT);
+    const ring = (k: number, h: number): Pt2 => lerp(baseS[k], apexS, h / TOWER_HEIGHT);   // screen point of corner k at world height h
     const bar = (A: Pt2, B: Pt2): void => {   // a thick screen-space line as a filled quad
       const dx = B.x - A.x, dy = B.y - A.y, len = Math.hypot(dx, dy) || 1;
       const ox = -dy / len * wpx / 2, oy = dx / len * wpx / 2;
@@ -190,13 +209,20 @@ export function towerScenery(map: (a: number, x: number) => RiderPt, fromLength:
       ctx.fill();
     };
     ctx.fillStyle = TOWER_METAL;
-    for (let k = 0; k < 4; k++) bar(baseS[k], apexS);                                  // legs
+    for (let k = 0; k < 4; k++) bar(ring(k, clipH), apexS);                            // legs (from the drop height up)
     for (let h = STAGE_HEIGHT; h < TOWER_HEIGHT; h += STAGE_HEIGHT) {
+      if (h <= clipH) continue;                                                        // ring hidden by the bulge
       for (let k = 0; k < 4; k++) bar(ring(k, h), ring((k + 1) % 4, h));               // rings
     }
     for (let h = 0; h < BRACE_STAGES * STAGE_HEIGHT; h += STAGE_HEIGHT) {
       const hi = h + STAGE_HEIGHT;
-      for (let k = 0; k < 4; k++) { const j = (k + 1) % 4; bar(ring(k, h), ring(j, hi)); bar(ring(j, h), ring(k, hi)); }
+      if (hi <= clipH) continue;                                                       // whole stage hidden
+      const f = (Math.max(h, clipH) - h) / STAGE_HEIGHT;                               // where each diagonal meets the drop height
+      for (let k = 0; k < 4; k++) {
+        const j = (k + 1) % 4;
+        bar(lerp(ring(k, h), ring(j, hi), f), ring(j, hi));                            // diagonal k.bottom -> j.top, clipped
+        bar(lerp(ring(j, h), ring(k, hi), f), ring(k, hi));                            // diagonal j.bottom -> k.top, clipped
+      }
     }
   };
 
@@ -217,9 +243,10 @@ export function towerScenery(map: (a: number, x: number) => RiderPt, fromLength:
   };
 
   const draw = (ctx: Ctx, project: Project): void => {
-    const cp = curved(project);   // lattice, billboard, and beacon all curve with the ground
-    (center.forward < TOWER_NEAR_DIST ? drawNear : drawFlat)(ctx, cp);
-    drawBeacon(ctx, cp);
+    const clipH = groundDrop(center);   // metres of the tower's base hidden by the ground bulge
+    if (clipH >= TOWER_HEIGHT) return;  // the whole tower has sunk below the horizon
+    (center.forward < TOWER_NEAR_DIST ? drawNear : drawFlat)(ctx, project, clipH);
+    drawBeacon(ctx, project);   // the apex is always above the drop, so the beacon stays put
   };
 
   return { forward: center.forward, height: TOWER_HEIGHT, drawAsNear: draw, drawAsFar: draw };
