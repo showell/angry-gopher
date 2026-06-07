@@ -62,7 +62,7 @@ interface Pt2 { x: number; y: number }   // a projected screen point (the flat p
 // effects: its whole height is lowered by that drop (it stands on lower ground), AND the part now
 // below the horizon is clipped (hidden behind the bulge). Net: the visible tower rises from the
 // horizon line with its apex pulled down. Small R = exaggerated.
-const EARTH_RADIUS = 15000;
+const EARTH_RADIUS = 20000;
 function groundDrop(p: RiderPt): number {
   return (p.right * p.right + p.forward * p.forward) / (2 * EARTH_RADIUS);
 }
