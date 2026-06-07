@@ -120,12 +120,16 @@ function main(): void {
       throw new Error(`gaze ${(gazeAngle(st) * 180 / Math.PI).toFixed(0)}deg still off-straight within the ${APPROACH_INTERSECTION_DIST}m approach on ${st.segment}`);
     }
   }
-  const gazeDeg = states.map((st) => Math.round(gazeAngle(st) * 180 / Math.PI));
-  const first = gazeDeg.findIndex((g) => g !== 0);
+  const DEG = Math.PI / 180;
+  const gazeVals = states.map((st) => gazeAngle(st));
+  const first = gazeVals.findIndex((g) => Math.abs(g) > 1e-9);
   if (first < 0) throw new Error('the distracted-rider glance never fired');
-  const run = gazeDeg.slice(first, first + GAZE_SEQUENCE.length).join(',');
-  if (run !== GAZE_SEQUENCE.join(',')) throw new Error(`glance sequence [${run}] != [${GAZE_SEQUENCE.join(',')}]`);
-  if (gazeDeg[first + GAZE_SEQUENCE.length] !== 0) throw new Error('glance did not return to straight after the sequence');
+  for (let k = 0; k < GAZE_SEQUENCE.length; k++) {
+    if (Math.abs(gazeVals[first + k] - GAZE_SEQUENCE[k] * DEG) > 1e-9) {
+      throw new Error(`glance frame ${k}: ${(gazeVals[first + k] / DEG).toFixed(2)}deg != ${GAZE_SEQUENCE[k]}deg`);
+    }
+  }
+  if (Math.abs(gazeVals[first + GAZE_SEQUENCE.length]) > 1e-9) throw new Error('glance did not return to straight after the sequence');
 
   // 2) heading continuity: no single-press jump bigger than the rotation ceiling. The
   // straighten-out rotates at a fixed TURN_OMEGA (jerk-limited up to it), the same for

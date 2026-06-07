@@ -40,7 +40,7 @@ export const APPROACH_INTERSECTION_DIST = 60;
 // ---- motion (per-press, not metres) ----
 export const V_BASE = 0.3;    // the Rider's speed at the very start of the drive (m/press)
 export const A_ACCEL = 0.015; // constant acceleration while the intersection is still far off (m/press^2)
-const V_MAX = 4;              // top speed (m/press) — the bike never accelerates past this
+const V_MAX = 2.5;            // top speed (m/press) — the bike never accelerates past this
 
 // camera roll: the rider banks INTO the turn, directly proportional to how fast he's
 // rotating the bike (the per-press heading change), with NO easing. See leanFor().
@@ -118,8 +118,14 @@ export function leanFor(dHeading: number): number {
 // test_model. Gaze is a VIEW offset ONLY: it never touches the path/physics, just where the
 // camera looks (the renderer adds it as a yaw — see main.ts/view.ts). `gazeStep` carries the
 // progress on RiderState.
-export const GAZE_SEQUENCE = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1];   // the glance, degrees right
-export const GAZE_TRIGGER_DIST = 150;                            // begin the glance this far (game units) before the end
+// a slow, SUBTLE glance: 0.3deg of head-turn per frame, ramping to a small peak and back
+// (~40 frames). Built rather than spelled out, to avoid a wall of float literals.
+const GAZE_STEP_DEG = 0.3;     // degrees added per frame
+const GAZE_PEAK_STEPS = 20;    // frames up to the peak (= GAZE_PEAK_STEPS * GAZE_STEP_DEG = 6deg), then back down
+export const GAZE_SEQUENCE: number[] = [];
+for (let i = 1; i <= GAZE_PEAK_STEPS; i++) GAZE_SEQUENCE.push(i * GAZE_STEP_DEG);        // 0.3 .. 6.0
+for (let i = GAZE_PEAK_STEPS - 1; i >= 1; i--) GAZE_SEQUENCE.push(i * GAZE_STEP_DEG);    // 5.7 .. 0.3
+export const GAZE_TRIGGER_DIST = 220;                            // begin the glance this far (game units) before the end
 export function gazeAngle(state: RiderState): number {
   const i = state.gazeStep;
   return i >= 0 && i < GAZE_SEQUENCE.length ? GAZE_SEQUENCE[i] * (Math.PI / 180) : 0;
