@@ -12,9 +12,12 @@
 // =============================================================================
 
 import type { RiderPt } from './scenery.ts';
-import type { SegId } from './road_segment.ts';
+import type { SegId, TurnDir, RoadSegment } from './road_segment.ts';
 
 export type IxnId = string;
+
+const TURN_RADIUS = 2;   // corner radius; sets the pavement wedge and the `tan` clear-zone half.
+const signOf = (d: TurnDir): number => (d === 'right' ? 1 : -1);
 
 // An intersection: the turn that joins one segment to the next. For now it carries the
 // turn DIRECTLY (angle/radius/sign) rather than wrapping a separate Turn object — fine
@@ -33,7 +36,33 @@ export interface Intersection {
   angle: number;      // turn angle THETA (rad); 0 at a terminus
   radius: number;     // corner radius
   sign: number;       // +1 right, -1 left; 0 = no turn (terminus)
-  tan: number;        // radius * tan(THETA/2): the clear zone trees keep near this corner; 0 at a terminus
+  tan: number;        // radius * tan(THETA/2): the corner's half-tangent (how far the turn intrudes into a straight); 0 at a terminus
+}
+
+// The AUTHORED spec for a turn, before it's wired into built segments: which segment it
+// leads to, its direction, and its angle. buildIntersection resolves it against the two
+// segment objects into an Intersection (mirrors RoadSegmentConfig -> buildRoadSegment).
+export interface IntersectionConfig {
+  to: SegId;
+  dir: TurnDir;
+  angle: number;   // turn angle THETA (radians)
+}
+
+// Build the turn NODE joining `from` to `to`. Pure: it reads the two segments' ids and
+// returns the Intersection; the caller wires the reverse graph refs onto the segments.
+export function buildIntersection(from: RoadSegment, to: RoadSegment, dir: TurnDir, angle: number): Intersection {
+  const sign = signOf(dir);
+  return {
+    id: `${from.id}_${to.id}`,
+    from: from.id, to: to.id, angle,
+    radius: TURN_RADIUS, sign, tan: TURN_RADIUS * Math.tan(angle / 2),
+  };
+}
+
+// Build the TERMINUS node that closes the route off `from`: a degenerate intersection
+// with no outgoing fork (the Rider arrives and stops). No turn, so angle/sign/tan are 0.
+export function buildTerminus(from: RoadSegment): Intersection {
+  return { id: `${from.id}_end`, from: from.id, to: null, angle: 0, radius: 0, sign: 0, tan: 0 };
 }
 
 // The max speed (m/press) at which each turn angle is taken: the Rider holds this through

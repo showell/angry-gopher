@@ -15,11 +15,11 @@ import { segmentCritters, intersectionCritters } from './critter.ts';
 import type { Critter } from './critter.ts';
 import { segmentTrees, TREE_ROAD_OFFSET } from './tree.ts';
 import type { Scheme, Tree } from './tree.ts';
-import type { Intersection, IxnId } from './intersection.ts';
+import { buildIntersection, buildTerminus } from './intersection.ts';
+import type { Intersection, IxnId, IntersectionConfig } from './intersection.ts';
 
 // ---- road dimensions (metres) ----
 const LANE_WIDTH = 4;       // a single lane
-const TURN_RADIUS = 2;      // sets the tree clear-zone tangent at each corner (R*tan(THETA/2))
 
 // ----------------------------------------------------------------------------
 // World — a graph: segments (edges) joined by intersections (nodes). Scalars and
@@ -57,18 +57,56 @@ export interface World {
   order: SegId[];
 }
 
-const signOf = (d: TurnDir): number => (d === 'right' ? 1 : -1);
 const segNumber = (id: SegId): number => Number(id.slice(3));   // "seg12" -> 12
+
+// The AUTHORED spec for a segment: its id, length, and tree scheme. Everything else a
+// RoadSegment carries is either intrinsic (built here) or depends on the bracketing
+// intersections (wired once those exist).
+export interface RoadSegmentConfig {
+  id: SegId;
+  length: number;
+  scheme: Scheme;
+}
+
+// Build a segment's INTRINSIC state from its config: dimensions, roadside trees, and the
+// along-the-road critters — all a function of length/scheme alone. The intersection-derived
+// bits start empty/neutral: exitCritters (the elephants, added by addElephants once the exit
+// turn is known), the graph refs, the turn-commit point (defaults to the segment end, a
+// terminus), and the north heading (accumulated along the route). buildWorld fills those.
+export function buildRoadSegment(c: RoadSegmentConfig): RoadSegment {
+  return {
+    id: c.id,
+    length: c.length,
+    width: LANE_WIDTH,
+    scheme: c.scheme,
+    trees: segmentTrees(c.length, c.scheme, LANE_WIDTH / 2),
+    critters: segmentCritters(c.length, LANE_WIDTH / 2, TREE_ROAD_OFFSET),
+    exitCritters: [],
+    entryIxn: null,
+    exitIxn: '',   // a placeholder: set to the real id when this segment's exit intersection is built
+    alongWhereRiderCommitsToTurn: c.length,
+    northHeading: 0,
+  };
+}
+
+// Park the exit-intersection elephants on a segment, now that its exit turn is known. A
+// terminus has no turn, so it gets none. (The elephants live ON the segment for now; the
+// intersection will OWN them in a later step — that's why this is its own pass.)
+export function addElephants(seg: RoadSegment, exit: Intersection): void {
+  if (exit.to === null) return;
+  seg.exitCritters = intersectionCritters(seg.length, exit.sign, segNumber(seg.id), seg.width / 2);
+}
 
 export function buildWorld(): World {
   const DEG = Math.PI / 180;
 
   // ---- author the route ----
-  // Each row: a segment's length + scheme, and the exit turn it takes (to / dir / degrees)
-  // or null at the end. Checked non-self-intersecting (no loops) and all-turns-<=-90deg by
-  // test/test_model.ts. Hand-authored, opening with a soft S of gentle warm-up turns.
-  const turn = (to: SegId, dir: TurnDir, deg: number) => ({ to, dir, angle: deg * DEG });
-  type Row = { id: SegId; length: number; scheme: Scheme; exit: { to: SegId; dir: TurnDir; angle: number } | null };
+  // Each row: a segment's config (id / length / scheme) and the exit turn it takes
+  // (to / dir / degrees) or null at the end. Checked non-self-intersecting (no loops) and
+  // all-turns-<=-90deg by test/test_model.ts. Hand-authored, opening with a soft S of gentle
+  // warm-up turns.
+  const turn = (to: SegId, dir: TurnDir, deg: number): IntersectionConfig => ({ to, dir, angle: deg * DEG });
+  type Row = RoadSegmentConfig & { exit: IntersectionConfig | null };
   const route: Row[] = [
     { id: 'seg1',  length: 300, scheme: 'ALL_GREEN',    exit: turn('seg2',  'left',  30) },
     { id: 'seg2',  length: 240, scheme: 'YELLOW_GREEN', exit: turn('seg3',  'right', 30) },
@@ -89,45 +127,28 @@ export function buildWorld(): World {
   ];
   const order: SegId[] = route.map((r) => r.id);
 
-  // ---- intersections: a turn NODE per exit, plus the TERMINUS node that closes the route.
-  // Every segment exits through exactly one of these, so we record each segment's exit (and,
-  // for turns, the entry it feeds) up front. ----
-  const intersections: Record<IxnId, Intersection> = {};
-  const exitIxnOf: Record<SegId, IxnId> = {};
-  const entryIxnOf: Record<SegId, IxnId> = {};
-  for (const r of route) {
-    if (r.exit) {
-      const theta = r.exit.angle, sign = signOf(r.exit.dir);
-      const id: IxnId = `${r.id}_${r.exit.to}`;
-      intersections[id] = {
-        id, from: r.id, to: r.exit.to, angle: theta,
-        radius: TURN_RADIUS, sign, tan: TURN_RADIUS * Math.tan(theta / 2),
-      };
-      exitIxnOf[r.id] = id;
-      entryIxnOf[r.exit.to] = id;
-    } else {
-      const id: IxnId = `${r.id}_end`;   // the terminus: the Rider arrives and stops (no fork)
-      intersections[id] = { id, from: r.id, to: null, angle: 0, radius: 0, sign: 0, tan: 0 };
-      exitIxnOf[r.id] = id;
-    }
-  }
-
-  // ---- segments ----
+  // ---- segments: each fully built EXCEPT the bits that need the intersections ----
   const segments: Record<SegId, RoadSegment> = {};
+  for (const r of route) segments[r.id] = buildRoadSegment({ id: r.id, length: r.length, scheme: r.scheme });
+
+  // ---- intersections: a turn NODE per exit + the TERMINUS that closes the route. Each is
+  // wired into the segments it joins: the graph refs both ways, and (at a turn) the arriving
+  // segment's turn-commit point — the inner-edge crossing hw/tan(THETA) before its end. ----
+  const intersections: Record<IxnId, Intersection> = {};
   for (const r of route) {
-    const exit = intersections[exitIxnOf[r.id]];
-    const isTurn = exit.to !== null;
-    segments[r.id] = {
-      id: r.id, length: r.length, width: LANE_WIDTH, scheme: r.scheme,
-      trees: [],                // filled once each corner's clear-zone tangent is known
-      critters: segmentCritters(r.length, LANE_WIDTH / 2, TREE_ROAD_OFFSET),
-      exitCritters: isTurn ? intersectionCritters(r.length, exit.sign, segNumber(r.id), LANE_WIDTH / 2) : [],
-      entryIxn: entryIxnOf[r.id] ?? null,
-      exitIxn: exitIxnOf[r.id],
-      // the inner-edge crossing, hw/tan(THETA) before the end (a terminus has no turn -> the end)
-      alongWhereRiderCommitsToTurn: isTurn ? r.length - (LANE_WIDTH / 2) / Math.tan(exit.angle) : r.length,
-      northHeading: 0,
-    };
+    const from = segments[r.id];
+    if (r.exit) {
+      const to = segments[r.exit.to];
+      const ixn = buildIntersection(from, to, r.exit.dir, r.exit.angle);
+      intersections[ixn.id] = ixn;
+      from.exitIxn = ixn.id;
+      to.entryIxn = ixn.id;
+      from.alongWhereRiderCommitsToTurn = r.length - (from.width / 2) / Math.tan(r.exit.angle);
+    } else {
+      const ixn = buildTerminus(from);   // the Rider arrives and stops; commit point stays at the end
+      intersections[ixn.id] = ixn;
+      from.exitIxn = ixn.id;
+    }
   }
 
   // ---- orientation relative to north, accumulated along the route ----
@@ -137,12 +158,8 @@ export function buildWorld(): World {
     segments[ixn.to].northHeading = segments[id].northHeading + ixn.sign * ixn.angle;
   }
 
-  // ---- trees: a function of each segment's length alone (a fixed clearing before the
-  // upcoming intersection keeps them off the corner; turn angle no longer matters) ----
-  for (const id of order) {
-    const s = segments[id];
-    s.trees = segmentTrees(s.length, s.scheme, LANE_WIDTH / 2);
-  }
+  // ---- elephants at each segment's exit turn (none at the terminus) ----
+  for (const id of order) addElephants(segments[id], intersections[segments[id].exitIxn]);
 
   return { segments, intersections, start: 'seg1', order };
 }
