@@ -36,6 +36,9 @@ function toRider(a: number, x: number, c: Pose, hw: number): RiderPt {
 // how many segments to look ahead (current + this many beyond the next corner)
 const LOOK_AHEAD = 6;
 
+// road strips are sliced into chunks this long (metres) so the ground curvature bends smoothly
+const ROAD_CHUNK = 25;
+
 export function buildScene(state: RiderState, world: World, step: number): Scene {
   // the camera looks along the Rider's path PLUS his gaze offset (the distracted glance) — a
   // view-only yaw, so the whole rider-relative scene rotates with where he's looking.
@@ -74,8 +77,13 @@ export function buildScene(state: RiderState, world: World, step: number): Scene
     const seg = chain[d];
     const hw = seg.width / 2, W = seg.width;
 
-    // road strip in BL coords: x runs 0 (left edge) .. W (right edge)
-    quads.push({ pts: [at(d, 0, 0), at(d, 0, W), at(d, seg.length, W), at(d, seg.length, 0)], color: ROAD });
+    // road strip in BL coords: x runs 0 (left edge) .. W (right edge). Sliced along its length so
+    // the ground curvature (applied per vertex by the renderer) reads as a smooth bend, not a tilt.
+    const chunks = Math.max(1, Math.ceil(seg.length / ROAD_CHUNK));
+    for (let i = 0; i < chunks; i++) {
+      const a0 = (seg.length * i) / chunks, a1 = (seg.length * (i + 1)) / chunks;
+      quads.push({ pts: [at(d, a0, 0), at(d, a0, W), at(d, a1, W), at(d, a1, 0)], color: ROAD });
+    }
 
     // scenery is still authored centre-relative; +hw shifts it to from-the-left.
     for (const t of seg.trees) {

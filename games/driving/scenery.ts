@@ -46,3 +46,13 @@ export const DETAIL_DIST = 40;
 // before projecting, or the divide-by-forward blows the point across the screen. Shared by
 // the renderer (road quads + guard rails) and any Scenery that does its own 3D clip (towers).
 export const NEAR = 0.4;
+
+// ---- ground curvature (experiment) ----
+// The local ground is a spherical plateau of radius GROUND_RADIUS: it drops d^2/(2R) below the
+// Rider's tangent plane at horizontal distance d. The renderer lowers each ground-quad vertex by
+// this, so the road bends down toward a finite horizon (at ~sqrt(2R*EYE_H), ~600m here) instead
+// of a vanishing point at infinity. Towers carry their own, stronger radius. Larger R = gentler.
+export const GROUND_RADIUS = 150000;
+export function groundDrop(right: number, forward: number): number {
+  return (right * right + forward * forward) / (2 * GROUND_RADIUS);
+}

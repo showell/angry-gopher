@@ -12,7 +12,7 @@ import type { RiderState } from './model.ts';
 import { buildWorld } from './road_segment.ts';
 import { buildScene } from './view.ts';
 import { drawHorizon } from './horizon.ts';
-import { DETAIL_DIST, NEAR } from './scenery.ts';
+import { DETAIL_DIST, NEAR, groundDrop } from './scenery.ts';
 import type { Project, RiderPt, Quad, Poly3 } from './scenery.ts';
 
 // The page is a near-empty shell (the Go /driving route or the standalone
@@ -158,7 +158,9 @@ function clipNear(verts: V3[]): V3[] {
 }
 
 function drawQuad(q: Quad): void {
-  const verts: V3[] = q.pts.map((p: RiderPt) => ({ right: p.right, forward: p.forward, height: 0 }));
+  // the ground is curved: lower each vertex by its distance's curvature drop (the road then bends
+  // toward a finite horizon). Tessellated road quads make the bend smooth rather than a tilt.
+  const verts: V3[] = q.pts.map((p: RiderPt) => ({ right: p.right, forward: p.forward, height: -groundDrop(p.right, p.forward) }));
   const clipped = clipNear(verts);
   if (clipped.length < 3) return;
   const pts = clipped.map(project);
