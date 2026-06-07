@@ -35,8 +35,8 @@ const TOWER_NEAR_DIST = 400;
 const TOWER_METAL = '#9aa0a8';   // every rod — legs, rings, and braces — one darker gray
 
 // ---- the beacon at the apex ----
-const BEACON_PERIOD = 120;       // frames for a full invisible -> bright -> invisible cycle
-const BEACON_RADIUS = 1.5;       // 3m-diameter sphere, drawn as a flat disc
+const BEACON_PERIOD = 240;       // frames for a full invisible -> bright -> invisible cycle
+const BEACON_RADIUS = 2.5;       // 5m-diameter sphere, drawn as a flat disc
 const BEACON_COLOR = '#ff2fe6';  // vivid pink
 
 // The blink is a pure function of the step (used as a clock), so it's identical on pause and
