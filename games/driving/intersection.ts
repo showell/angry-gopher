@@ -14,7 +14,7 @@
 import { critterScenery, cornerCritters } from './critter.ts';
 import type { Critter, CornerCreature } from './critter.ts';
 import { ROAD } from './scenery.ts';
-import type { RiderPt, Quad, Scenery } from './scenery.ts';
+import type { RiderPt, Quad, Poly3, Scenery } from './scenery.ts';
 import type { SegId, TurnDir, RoadSegment } from './road_segment.ts';
 
 export type IxnId = string;
@@ -24,6 +24,14 @@ const ENTRY_ROAD_DIST = 40;   // metres of approach road the joint paints behind
                               // the segment draws its own strip; this only needs to cover the joint when
                               // it's the one BEHIND the Rider). Safe to fix — segments are always long enough.
 const signOf = (d: TurnDir): number => (d === 'right' ? 1 : -1);
+
+// ---- guard rail along the corner arc (metres) ----
+const RAIL_HEIGHT = 0.5;          // the rail bar's centre, above the ground
+const RAIL_THICK = 0.1;           // the bar's vertical thickness
+const RAIL_LEG_SPACING = 5;       // a leg every this many degrees of arc (every turn angle is a multiple)
+const RAIL_LEG_THICK = 0.02;      // each leg post's width
+const RAIL_METAL = '#c2c7cf';     // the bar (bright metallic)
+const RAIL_LEG_METAL = '#9aa0a8'; // the posts (a touch darker)
 
 // An intersection: the turn that joins one segment to the next. For now it carries the
 // turn DIRECTLY (angle/radius/sign) rather than wrapping a separate Turn object — fine
@@ -94,19 +102,21 @@ export type FrameMap = (a: number, x: number) => RiderPt;
 // the end-LEFT edge (the origin itself is the inner corner), a RIGHT turn fuses on the
 // end-RIGHT edge (the inner corner is the far one).
 export function intersectionScene(ixn: Intersection, from: RoadSegment, to: RoadSegment | null,
-                                  fromMap: FrameMap, toMap: FrameMap | null): { quads: Quad[]; scenery: Scenery[] } {
-  if (ixn.to === null) return { quads: [], scenery: [] };   // terminus: nothing to draw
+                                  fromMap: FrameMap, toMap: FrameMap | null): { quads: Quad[]; polys: Poly3[]; scenery: Scenery[] } {
+  if (ixn.to === null) return { quads: [], polys: [], scenery: [] };   // terminus: nothing to draw
   const W = from.width, hw = W / 2;
   const corner = (cu: number, cv: number): RiderPt => fromMap(from.length + cv, cu);
 
   const quads: Quad[] = [];
+  const polys: Poly3[] = [];
 
   // the approach road: `from`'s tail leading into the joint (end edge back ENTRY_ROAD_DIST).
   quads.push({ pts: [corner(0, 0), corner(W, 0), corner(W, -ENTRY_ROAD_DIST), corner(0, -ENTRY_ROAD_DIST)], color: ROAD });
 
   // the corner pavement sector — a wedge from the inner fuse-corner out to the two outer
   // corners (one on each segment). Inner/outer flip with turn direction; pavementSector
-  // sweeps the short way either way, so it's the shared piece.
+  // sweeps the short way either way, so it's the shared piece. The guard rail rides the same
+  // outer arc.
   if (toMap && to) {
     let inner: RiderPt, outerFrom: RiderPt, outerTo: RiderPt;
     if (ixn.sign > 0) {                 // RIGHT turn: the segments fuse on `from`'s end-RIGHT edge
@@ -119,13 +129,14 @@ export function intersectionScene(ixn: Intersection, from: RoadSegment, to: Road
       outerTo   = toMap(0, to.width);   //   outer corner on `to`   = its start-right edge
     }
     quads.push({ pts: pavementSector(inner, outerFrom, outerTo), color: ROAD });
+    for (const p of guardRail(inner, outerFrom, outerTo)) polys.push(p);
   }
 
   // the creatures parked at the corner (authored centre-relative; +hw shifts to from-the-left).
   const scenery: Scenery[] = ixn.creatures.map((cr) =>
     critterScenery({ at: fromMap(cr.along, cr.across + hw), emoji: cr.emoji, height: cr.height, faceRight: cr.faceRight }));
 
-  return { quads, scenery };
+  return { quads, polys, scenery };
 }
 
 // The max speed (m/press) at which each turn angle is taken: the Rider holds this through
@@ -172,23 +183,67 @@ export function curToNext(a: number, x: number, L: number, theta: number, dir: '
   return { a: a0 * cos + x0 * sin, x: -a0 * sin + x0 * cos };
 }
 
-// ---- the pavement that fills the turn's outer corner ----
-// A circular SECTOR centred at the inner corner P (where the two inner edges fuse), with
-// straight legs P->e1 and P->e2 along the two segments' end/start edges out to their
-// outer corners, and an arc of radius |P->e1| between them. (P, e1, e2 are already in the
-// Rider's frame; the transforms are rigid, so the arc is a true arc here too.) Returns the
-// polygon outline; the caller paints it road-colour.
-export function pavementSector(P: RiderPt, e1: RiderPt, e2: RiderPt): RiderPt[] {
+// ---- the corner arc, shared by the pavement and the guard rail ----
+// The arc centred at the inner corner P (where the two inner edges fuse), radius |P->e1|,
+// swept the SHORT way from e1's bearing to e2's (= the turn angle). P, e1, e2 are already
+// in the Rider's frame; the transforms are rigid, so the arc is a true arc here too.
+interface CornerArc { P: RiderPt; R: number; a1: number; delta: number }
+function cornerArc(P: RiderPt, e1: RiderPt, e2: RiderPt): CornerArc {
   const R = Math.hypot(e1.right - P.right, e1.forward - P.forward);
   const a1 = Math.atan2(e1.forward - P.forward, e1.right - P.right);
   let delta = Math.atan2(e2.forward - P.forward, e2.right - P.right) - a1;
   while (delta > Math.PI) delta -= 2 * Math.PI;
-  while (delta < -Math.PI) delta += 2 * Math.PI;   // sweep the SHORT way (= the turn angle)
+  while (delta < -Math.PI) delta += 2 * Math.PI;
+  return { P, R, a1, delta };
+}
+const onArc = (c: CornerArc, ang: number): RiderPt =>
+  ({ right: c.P.right + c.R * Math.cos(ang), forward: c.P.forward + c.R * Math.sin(ang) });
+
+// ---- the pavement that fills the turn's outer corner ----
+// A circular SECTOR: straight legs P->e1 and P->e2 along the two segments' end/start edges
+// out to their outer corners, and the arc between them. Returns the polygon outline; the
+// caller paints it road-colour.
+export function pavementSector(P: RiderPt, e1: RiderPt, e2: RiderPt): RiderPt[] {
+  const c = cornerArc(P, e1, e2);
   const pts: RiderPt[] = [P];
   const N = 8;
-  for (let i = 0; i <= N; i++) {
-    const ang = a1 + delta * (i / N);
-    pts.push({ right: P.right + R * Math.cos(ang), forward: P.forward + R * Math.sin(ang) });
-  }
+  for (let i = 0; i <= N; i++) pts.push(onArc(c, c.a1 + c.delta * (i / N)));
   return pts;
+}
+
+// ---- the guard rail running along that outer arc ----
+// A thin metallic bar at RAIL_HEIGHT, RAIL_THICK tall, following the corner arc, held up by
+// posts at both ends and every RAIL_LEG_SPACING degrees. Returned as raised polygons (the bar
+// as one curved ribbon, each post as a thin upright); the caller draws them above the pavement.
+function guardRail(P: RiderPt, e1: RiderPt, e2: RiderPt): Poly3[] {
+  const c = cornerArc(P, e1, e2);
+  const top = RAIL_HEIGHT + RAIL_THICK / 2, bot = RAIL_HEIGHT - RAIL_THICK / 2;
+  const legs = Math.max(1, Math.round(Math.abs(c.delta) / (RAIL_LEG_SPACING * Math.PI / 180)));
+  const angAt = (i: number): number => c.a1 + c.delta * (i / legs);
+  const polys: Poly3[] = [];
+
+  // the bar: a ribbon between the top and bottom edges along the whole arc.
+  const upper: { right: number; forward: number; height: number }[] = [];
+  const lower: { right: number; forward: number; height: number }[] = [];
+  for (let i = 0; i <= legs; i++) {
+    const p = onArc(c, angAt(i));
+    upper.push({ right: p.right, forward: p.forward, height: top });
+    lower.push({ right: p.right, forward: p.forward, height: bot });
+  }
+  polys.push({ pts: [...upper, ...lower.reverse()], color: RAIL_METAL });
+
+  // the posts: a thin upright at each leg point, from the ground to the bar. Its RAIL_LEG_THICK
+  // width runs along the arc tangent (so it reads as a slim post from the road).
+  const halfW = RAIL_LEG_THICK / 2;
+  for (let i = 0; i <= legs; i++) {
+    const ang = angAt(i), p = onArc(c, ang);
+    const tx = -Math.sin(ang) * halfW, tf = Math.cos(ang) * halfW;   // along-arc tangent * half width
+    polys.push({ pts: [
+      { right: p.right - tx, forward: p.forward - tf, height: 0 },
+      { right: p.right + tx, forward: p.forward + tf, height: 0 },
+      { right: p.right + tx, forward: p.forward + tf, height: top },
+      { right: p.right - tx, forward: p.forward - tf, height: top },
+    ], color: RAIL_LEG_METAL });
+  }
+  return polys;
 }

@@ -13,7 +13,7 @@ import { buildWorld } from './road_segment.ts';
 import { buildScene } from './view.ts';
 import { drawHorizon } from './horizon.ts';
 import { DETAIL_DIST } from './scenery.ts';
-import type { Project, RiderPt, Quad } from './scenery.ts';
+import type { Project, RiderPt, Quad, Poly3 } from './scenery.ts';
 
 // The page is a near-empty shell (the Go /driving route or the standalone
 // index.html), so we build our own DOM here — the host ships no markup or CSS.
@@ -171,6 +171,20 @@ function drawQuad(q: Quad): void {
   ctx.fill();
 }
 
+// a raised polygon (guard rail) — same near-clip + project + fill as a road quad, but its
+// corners already carry their own heights (off the ground).
+function drawPoly3(p: Poly3): void {
+  const clipped = clipNear(p.pts);
+  if (clipped.length < 3) return;
+  const pts = clipped.map(project);
+  ctx.fillStyle = p.color;
+  ctx.beginPath();
+  ctx.moveTo(pts[0].x, pts[0].y);
+  for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+  ctx.closePath();
+  ctx.fill();
+}
+
 // frame timing, smoothed. fps/frameMs are the WALL-CLOCK cadence (how fast the browser
 // actually calls us); renderMs is how long our own draw takes. At 60Hz a healthy frame
 // is one vsync — TARGET_MS (16.67ms). A gap of ~2x means a vsync was missed (dropped).
@@ -234,6 +248,7 @@ function render(rider: RiderState): void {
   drawHorizon(ctx, riderHeading(rider, world), W, H, camFocal, overscan);   // mountains + sun, by orientation only
 
   for (const q of scene.quads) drawQuad(q);
+  for (const p of scene.polys) drawPoly3(p);   // guard rails, raised above the pavement
 
   // scenery (trees + critters) drawn back-to-front so a nearer one occludes a farther
   // one. The renderer owns the near/far POLICY; each object owns how it draws at each

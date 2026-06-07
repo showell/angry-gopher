@@ -20,6 +20,11 @@ export interface RiderPt { right: number; forward: number }
 // Produced by view.ts (segment strips) and intersection.ts (corner + approach pavement).
 export interface Quad { pts: RiderPt[]; color: string }
 
+// A RAISED flat-shaded polygon (e.g. a guard-rail band or post): rider-frame corners that
+// each carry a height off the ground. Near-plane clipped and projected like the road quads,
+// but drawn after them so it stands above the pavement.
+export interface Poly3 { pts: { right: number; forward: number; height: number }[]; color: string }
+
 // the road surface colour, shared by the segment strips and the intersection pavement.
 export const ROAD = '#34353c';
 

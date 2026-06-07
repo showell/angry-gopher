@@ -12,12 +12,13 @@ import type { World, RoadSegment } from './road_segment.ts';
 import { critterScenery } from './critter.ts';
 import { treeScenery } from './tree.ts';
 import { ROAD } from './scenery.ts';
-import type { Scenery, RiderPt, Quad } from './scenery.ts';
+import type { Scenery, RiderPt, Quad, Poly3 } from './scenery.ts';
 import { nextToCur, curToNext, intersectionScene } from './intersection.ts';
 
-// Road quads are the ground plane (drawn first, no LOD); scenery is the depth-sorted,
-// near/far-aware drawables (trees + critters, merged so they occlude each other right).
-export interface Scene { quads: Quad[]; scenery: Scenery[] }
+// Road quads are the ground plane (drawn first, no LOD); polys are raised road structures
+// (guard rails) drawn over them; scenery is the depth-sorted, near/far-aware drawables (trees
+// + critters, merged so they occlude each other right).
+export interface Scene { quads: Quad[]; polys: Poly3[]; scenery: Scenery[] }
 
 // the Rider's pose in its own segment's frame
 interface Pose { along: number; across: number; angle: number }
@@ -37,6 +38,7 @@ const LOOK_AHEAD = 6;
 export function buildScene(state: RiderState, world: World): Scene {
   const c: Pose = { along: state.along, across: state.across, angle: state.angle };
   const quads: Quad[] = [];
+  const polys: Poly3[] = [];
   const scenery: Scenery[] = [];
 
   // the Rider's current segment and up to (LOOK_AHEAD-1) segments beyond it, following each
@@ -87,6 +89,7 @@ export function buildScene(state: RiderState, world: World): Scene {
     const js = intersectionScene(exitIxn, seg, next ?? null,
                                  (a, x) => at(d, a, x), next ? (a, x) => at(d + 1, a, x) : null);
     for (const q of js.quads) quads.push(q);
+    for (const p of js.polys) polys.push(p);
     for (const sc of js.scenery) scenery.push(sc);
   }
 
@@ -106,8 +109,9 @@ export function buildScene(state: RiderState, world: World): Scene {
     };
     const js = intersectionScene(pIxn, prev, chain[0], fromPrev, (a, x) => at(0, a, x));
     for (const q of js.quads) quads.push(q);
+    for (const p of js.polys) polys.push(p);
     for (const sc of js.scenery) scenery.push(sc);
   }
 
-  return { quads, scenery };
+  return { quads, polys, scenery };
 }
