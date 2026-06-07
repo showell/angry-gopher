@@ -56,14 +56,20 @@ interface Rod { pts: Pt3[]; color: string }
 interface Pt2 { x: number; y: number }   // a projected screen point (the flat path works in 2D)
 
 // ---- local ground curvature (proof of concept: towers only) ----
-// We sit on a sphere of radius EARTH_RADIUS; its surface drops d^2/(2R) below the Rider's tangent
-// plane at horizontal distance d. We render that as the bulge HIDING the bottom of a distant
-// tower — we draw only the part above the drop height, WITHOUT moving the tower down on screen
-// (its top stays put; its base sinks into the horizon). The horizon mountains stay infinitely far
-// and never curve. Small R = exaggerated.
+// The greater world (mountains, sun, horizon) sits on a flat plane, so the true horizon is at eye
+// level and never moves. The LOCAL ground is a spherical plateau of radius EARTH_RADIUS: it drops
+// d^2/(2R) below the Rider's tangent plane at horizontal distance d. A tower that far out gets BOTH
+// effects: its whole height is lowered by that drop (it stands on lower ground), AND the part now
+// below the horizon is clipped (hidden behind the bulge). Net: the visible tower rises from the
+// horizon line with its apex pulled down. Small R = exaggerated.
 const EARTH_RADIUS = 5000;
 function groundDrop(p: RiderPt): number {
   return (p.right * p.right + p.forward * p.forward) / (2 * EARTH_RADIUS);
+}
+// project with the tower lowered by its ground drop, so the apex sinks and the clipped base lands
+// on the horizon line (render-height 0).
+function lowered(project: Project, drop: number): Project {
+  return (right, forward, height) => project(right, forward, height - drop);
 }
 
 // Clip a rod polygon against the near plane (forward >= NEAR) in 3D, before projecting —
@@ -243,10 +249,11 @@ export function towerScenery(map: (a: number, x: number) => RiderPt, fromLength:
   };
 
   const draw = (ctx: Ctx, project: Project): void => {
-    const clipH = groundDrop(center);   // metres of the tower's base hidden by the ground bulge
-    if (clipH >= TOWER_HEIGHT) return;  // the whole tower has sunk below the horizon
-    (center.forward < TOWER_NEAR_DIST ? drawNear : drawFlat)(ctx, project, clipH);
-    drawBeacon(ctx, project);   // the apex is always above the drop, so the beacon stays put
+    const drop = groundDrop(center);    // how far the local ground has fallen at this tower
+    if (drop >= TOWER_HEIGHT) return;   // the whole tower has sunk below the horizon
+    const lp = lowered(project, drop);  // lower the tower by the drop; clipping at `drop` then lands its base on the horizon
+    (center.forward < TOWER_NEAR_DIST ? drawNear : drawFlat)(ctx, lp, drop);
+    drawBeacon(ctx, lp);   // the apex (always above the drop) lowers with the tower
   };
 
   return { forward: center.forward, height: TOWER_HEIGHT, drawAsNear: draw, drawAsFar: draw };
