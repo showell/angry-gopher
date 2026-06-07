@@ -57,12 +57,15 @@ const MIN_SCENERY_PX = 4;   // skip scenery that would project shorter than this
 // snaps in hard at the deepest part of a turn. The floor keeps it well clear of a degenerate
 // zero. `camFocal` is the live camera focal, recomputed from the roll each frame; the whole
 // projection reads it.
-const MIN_FOCAL_FACTOR = 0.35;   // focal at full lean, as a fraction of FOCAL (never 0)
+const MIN_FOCAL_FACTOR = 0.175;   // focal at full lean, as a fraction of FOCAL (never 0)
 let camFocal = FOCAL;
 const focalForLean = (lean: number): number => {
   const frac = Math.min(Math.abs(lean) / MAX_LEAN, 1);   // 0 straight … 1 at MAX_LEAN
   return FOCAL * (1 - (1 - MIN_FOCAL_FACTOR) * frac * frac);
 };
+
+// the rider also turns his HEAD into the corner — a subtle view-only yaw, 20% of the lean angle.
+const HEAD_YAW_FRAC = 0.2;
 
 // ---- the world + the Rider's history (a forward/back stack of RiderStates) ----
 const world = buildWorld();
@@ -222,15 +225,18 @@ function drawHud(rider: RiderState): void {
 
 // draw one frame for the given RiderState (handed in by the loop)
 function render(rider: RiderState): void {
+  // the lean drives camera roll, the focal pull-in, AND a subtle head-yaw into the corner; compute
+  // it first so the scene is built already looking slightly into the turn.
+  const lean = currentLean();
+  const headYaw = HEAD_YAW_FRAC * lean;
   // the step IS the clock for view-only animation (beacon blink): a pure function of it, so it
   // freezes on pause and runs backwards on reverse. It's the same step the HUD shows.
-  const scene = buildScene(rider, world, riderHistory.length - 1);
+  const scene = buildScene(rider, world, riderHistory.length - 1, headYaw);
 
   // CAMERA ROLL: the rider banks into the turn, so the whole world — horizon included
   // — rotates about the screen centre by his lean. The HUD/overlay (below) stay level.
   // The same lean also pulls the focal point in (see focalForLean); set it before any
   // projection this frame so the road, scenery, and horizon all share one camera.
-  const lean = currentLean();
   camFocal = focalForLean(lean);
   ctx.save();
   ctx.translate(W / 2, H / 2);
@@ -252,7 +258,7 @@ function render(rider: RiderState): void {
   // the gaze yaws the view, so the far scenery shifts with it too (he's looking off-axis). The
   // lean pulls camFocal in, which squeezes the horizon horizontally; pass camFocal/FOCAL as the
   // vertical scale so it squeezes vertically by the same factor (it's a real focal change).
-  drawHorizon(ctx, riderHeading(rider, world) + gazeAngle(rider), W, H, camFocal, overscan, camFocal / FOCAL);
+  drawHorizon(ctx, riderHeading(rider, world) + gazeAngle(rider) + headYaw, W, H, camFocal, overscan, camFocal / FOCAL);
 
   for (const q of scene.quads) drawQuad(q);
   for (const p of scene.polys) drawPoly3(p);   // guard rails, raised above the pavement

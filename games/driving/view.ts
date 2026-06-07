@@ -43,10 +43,11 @@ const ROAD_CHUNK = 25;
 // a segment-owned mid-road tower stands this far to the LEFT of the lane centreline, square-on
 const SEG_TOWER_LEFT = 100;
 
-export function buildScene(state: RiderState, world: World, step: number): Scene {
-  // the camera looks along the Rider's path PLUS his gaze offset (the distracted glance) — a
-  // view-only yaw, so the whole rider-relative scene rotates with where he's looking.
-  const c: Pose = { along: state.along, across: state.across, angle: state.angle + gazeAngle(state) };
+export function buildScene(state: RiderState, world: World, step: number, headYaw: number): Scene {
+  // the camera looks along the Rider's path PLUS two view-only yaws: his gaze offset (the
+  // distracted glance) and a subtle head-turn into the corner (headYaw, from the lean). Both
+  // rotate the whole rider-relative scene with where he's looking.
+  const c: Pose = { along: state.along, across: state.across, angle: state.angle + gazeAngle(state) + headYaw };
   const quads: Quad[] = [];
   const polys: Poly3[] = [];
   const scenery: Scenery[] = [];
