@@ -2,14 +2,16 @@
 // tower — the radio tower that stands beyond each intersection: a tall square-base
 // lattice pyramid of metal rods. The first of the "truly 3D" landmarks an
 // intersection owns (an intersection is a PLACE, not just a junction). This module
-// owns the tower's dimensions and how it draws; the intersection only places it,
-// 100m past the corner and dead ahead of the approaching Rider (the same "beyond
-// the turn, in his facing direction" spot the corner creatures' baby uses).
+// owns the tower's dimensions and how it draws; the intersection only places it, out past the
+// corner and off to the right, in the direction the Rider faces as he approaches (the same
+// "beyond the turn, in his facing direction" idea the corner creatures' baby uses).
 //
-// Cheap by construction: a see-through wire lattice of flat rod-quads (no solid
-// faces, so no back-face culling — you simply see at most two faces), no near-clip
-// (it's always far off), and a self-chosen LOD that drops to just the four legs
-// beyond TOWER_NEAR_DIST so only the closest tower pays for its cross-beams.
+// Cheap by construction: a see-through wire lattice of flat rod-quads (no solid faces).
+// It picks its OWN level of detail, since a tower is never within the renderer's critter-tuned
+// DETAIL_DIST: the full four-faced lattice within TOWER_NEAR_DIST, and beyond that just the two
+// faces nearest the Rider — at distance there's no perceptible depth to a 12m-deep tower, so the
+// back leg and back-face beams are pure cost. (The earlier far-LOD dropped the beams entirely,
+// but their absence read clearly even at range; the front two faces keep them.)
 // =============================================================================
 
 import { NEAR } from './scenery.ts';
@@ -21,12 +23,13 @@ const TOWER_HALF = 6;                  // half the 12m square base edge
 const TOWER_BEYOND = 160;             // how far past the corner it stands, along the approach direction
 const TOWER_RIGHT = 20;              // offset to the right of the lane, so you don't bear down on it dead-on
 const STAGE_HEIGHT = 20;              // a cross-beam ring every this many metres (rings at 20/40/60)
-const ROD_HALF = 0.25;                // half the 0.5m rod thickness
+const BRACE_STAGES = 2;              // X-braces only on the bottom this-many stages (cheaper, and where they matter structurally)
+const ROD_HALF = 0.12;               // half the rod thickness
 const TOWER_YAW = 30 * Math.PI / 180; // turn the square off head-on so the Rider sees two faces, not one
 
-// The renderer's DETAIL_DIST (40m) is tuned for roadside critters; an 80m tower is never that
-// close, so the tower picks its OWN level of detail: the full braced lattice within this range,
-// bare legs beyond. Set well out so the cross-beams don't visibly pop in as you approach.
+// Beyond this range a tower drops from the full four-faced lattice to just its two nearest faces
+// (no perceptible depth at distance). Both keep their cross-beams, so the threshold is barely
+// visible — it only swaps the unseen back of the tower in and out.
 const TOWER_NEAR_DIST = 400;
 
 const TOWER_METAL = '#9aa0a8';   // every rod — legs, rings, and braces — one darker gray
@@ -76,7 +79,7 @@ export function towerScenery(map: (a: number, x: number) => RiderPt, fromLength:
     return { right: p.right, forward: p.forward, height: h };
   };
 
-  // a rod as a flat 1m-wide ribbon between two points. Sloping rods (legs, diagonal braces) take
+  // a rod as a flat thin ribbon between two points. Sloping rods (legs, diagonal braces) take
   // their width horizontally (offset in `right`); horizontal beams take it vertically (offset in
   // height) — whichever direction reads as thickness from the road.
   const barH = (a: Pt3, b: Pt3, color: string): Rod => ({ color, pts: [
@@ -93,31 +96,39 @@ export function towerScenery(map: (a: number, x: number) => RiderPt, fromLength:
   ] });
 
   const apex = at(0, TOWER_HEIGHT);   // s = 0, so every corner converges here
-  const legs: Rod[] = [];
-  for (let k = 0; k < 4; k++) legs.push(barH(at(k, 0), apex, TOWER_METAL));
 
-  const beams: Rod[] = [];
-  for (let h = STAGE_HEIGHT; h < TOWER_HEIGHT; h += STAGE_HEIGHT) {
-    for (let k = 0; k < 4; k++) beams.push(barV(at(k, h), at((k + 1) % 4, h), TOWER_METAL));
-  }
-
-  // X-bracing: each trapezoidal stage face (the top stage is a triangle to the apex, so it's
-  // skipped) gets both diagonals, crossing into an X.
-  const braces: Rod[] = [];
-  for (let h = 0; h < TOWER_HEIGHT - STAGE_HEIGHT; h += STAGE_HEIGHT) {
-    const hi = h + STAGE_HEIGHT;
-    for (let k = 0; k < 4; k++) {
-      const j = (k + 1) % 4;
-      braces.push(barH(at(k, h), at(j, hi), TOWER_METAL));
-      braces.push(barH(at(j, h), at(k, hi), TOWER_METAL));
+  // A face `k` spans corners k and k+1. Build the lattice over a chosen set of legs (corner
+  // indices) and faces (face indices) — the whole tower for the near LOD, the two front faces
+  // for the far one.
+  const lattice = (legCorners: number[], faceKs: number[]): Rod[] => {
+    const rods: Rod[] = [];
+    for (const k of legCorners) rods.push(barH(at(k, 0), apex, TOWER_METAL));   // sloping legs
+    // horizontal cross-beam rings (the top stage tapers to the apex, so no ring there)
+    for (let h = STAGE_HEIGHT; h < TOWER_HEIGHT; h += STAGE_HEIGHT) {
+      for (const k of faceKs) rods.push(barV(at(k, h), at((k + 1) % 4, h), TOWER_METAL));
     }
-  }
+    // X-bracing on the bottom BRACE_STAGES stage faces: both diagonals of each, crossing into an X.
+    for (let h = 0; h < BRACE_STAGES * STAGE_HEIGHT; h += STAGE_HEIGHT) {
+      const hi = h + STAGE_HEIGHT;
+      for (const k of faceKs) {
+        const j = (k + 1) % 4;
+        rods.push(barH(at(k, h), at(j, hi), TOWER_METAL));
+        rods.push(barH(at(j, h), at(k, hi), TOWER_METAL));
+      }
+    }
+    return rods;
+  };
 
   // draw the lattice back-to-front so the near face's rods overpaint the far face's.
   const avgF = (r: Rod): number => (r.pts[0].forward + r.pts[1].forward + r.pts[2].forward + r.pts[3].forward) / 4;
   const sortBack = (rods: Rod[]): Rod[] => [...rods].sort((p, q) => avgF(q) - avgF(p));
-  const near = sortBack([...legs, ...beams, ...braces]);
-  const far = sortBack(legs);
+
+  // near: the whole tower. far: only the two faces flanking the corner closest to the Rider —
+  // those are its three legs and two faces; the back corner and its faces aren't seen at range.
+  const near = sortBack(lattice([0, 1, 2, 3], [0, 1, 2, 3]));
+  let fc = 0;   // the front (nearest) corner
+  for (let k = 1; k < 4; k++) if (at(k, 0).forward < at(fc, 0).forward) fc = k;
+  const far = sortBack(lattice([(fc + 3) % 4, fc, (fc + 1) % 4], [(fc + 3) % 4, fc]));
 
   const fill = (ctx: Ctx, project: Project, rods: Rod[]): void => {
     for (const rod of rods) {
@@ -139,7 +150,7 @@ export function towerScenery(map: (a: number, x: number) => RiderPt, fromLength:
   };
 
   const center = map(a0, x0);
-  // full lattice only for the nearest tower; bare legs for the rest (see TOWER_NEAR_DIST).
+  // full four-faced lattice for a near tower; the two front faces for the rest (see TOWER_NEAR_DIST).
   const draw = (ctx: Ctx, project: Project): void =>
     fill(ctx, project, center.forward < TOWER_NEAR_DIST ? near : far);
 
