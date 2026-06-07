@@ -16,6 +16,13 @@
 // shared by view.ts (which produces them) and intersection.ts (its pavement).
 export interface RiderPt { right: number; forward: number }
 
+// A flat ground-plane polygon — the road surface. Drawn before scenery, no LOD.
+// Produced by view.ts (segment strips) and intersection.ts (corner + approach pavement).
+export interface Quad { pts: RiderPt[]; color: string }
+
+// the road surface colour, shared by the segment strips and the intersection pavement.
+export const ROAD = '#34353c';
+
 // A ground-plane point (right, forward) at a height, projected to the screen.
 export type Project = (right: number, forward: number, height: number) => { x: number; y: number };
 export type Ctx = CanvasRenderingContext2D;

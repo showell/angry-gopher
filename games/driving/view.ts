@@ -11,12 +11,10 @@ import type { RiderState } from './model.ts';
 import type { World, RoadSegment } from './road_segment.ts';
 import { critterScenery } from './critter.ts';
 import { treeScenery } from './tree.ts';
-import type { Scenery, RiderPt } from './scenery.ts';
-import { nextToCur, curToNext, pavementSector } from './intersection.ts';
+import { ROAD } from './scenery.ts';
+import type { Scenery, RiderPt, Quad } from './scenery.ts';
+import { nextToCur, curToNext, intersectionScene } from './intersection.ts';
 
-const ROAD = '#34353c';
-
-export interface Quad { pts: RiderPt[]; color: string }
 // Road quads are the ground plane (drawn first, no LOD); scenery is the depth-sorted,
 // near/far-aware drawables (trees + critters, merged so they occlude each other right).
 export interface Scene { quads: Quad[]; scenery: Scenery[] }
@@ -74,17 +72,6 @@ export function buildScene(state: RiderState, world: World): Scene {
     // road strip in BL coords: x runs 0 (left edge) .. W (right edge)
     quads.push({ pts: [at(d, 0, 0), at(d, 0, W), at(d, seg.length, W), at(d, seg.length, 0)], color: ROAD });
 
-    // pavement for this exit's intersection, whenever the next segment is in view: a
-    // sector filling the turn's OUTER corner. innerX is the fused (inner) edge, outerX
-    // the far edge — picked by turn direction (right: inner = right edge = W).
-    const next = chain[d + 1];   // present only when seg's exit is a turn (the terminus has no successor)
-    const exitIxn = world.intersections[seg.exitIxn];
-    if (next) {
-      const innerX = exitIxn.sign > 0 ? W : 0, outerX = W - innerX;
-      const outerX2 = exitIxn.sign > 0 ? 0 : next.width;
-      quads.push({ pts: pavementSector(at(d, seg.length, innerX), at(d, seg.length, outerX), at(d + 1, 0, outerX2)), color: ROAD });
-    }
-
     // scenery is still authored centre-relative; +hw shifts it to from-the-left.
     for (const t of seg.trees) {
       scenery.push(treeScenery({ at: at(d, t.along, t.across + hw), color: t.color, height: t.height }));
@@ -92,14 +79,20 @@ export function buildScene(state: RiderState, world: World): Scene {
     for (const cr of seg.critters) {
       scenery.push(critterScenery({ at: at(d, cr.along, cr.across + hw), emoji: cr.emoji, height: cr.height, faceRight: cr.faceRight }));
     }
-    for (const cr of seg.exitCritters) {   // exit decorations, approaching side
-      scenery.push(critterScenery({ at: at(d, cr.along, cr.across + hw), emoji: cr.emoji, height: cr.height, faceRight: cr.faceRight }));
-    }
+
+    // this segment's exit JOINT draws itself: approach road + corner sector + elephants.
+    // The sector needs the next segment too, so toMap is supplied only when it's in view.
+    const exitIxn = world.intersections[seg.exitIxn];
+    const next = chain[d + 1];
+    const js = intersectionScene(exitIxn, seg, next ?? null,
+                                 (a, x) => at(d, a, x), next ? (a, x) => at(d + 1, a, x) : null);
+    for (const q of js.quads) quads.push(q);
+    for (const sc of js.scenery) scenery.push(sc);
   }
 
-  // The intersection just BEHIND us: draw its pavement (defensively, so the corner we
-  // just crossed never flashes a gap) plus the previous segment's exit props, both
-  // mapped through the join into the current frame.
+  // The joint just BEHIND us draws itself too — its approach road keeps the segment we just
+  // left from vanishing mid-crossing, plus its corner sector and elephants — all mapped
+  // through the join into the current frame.
   const idx = world.order.indexOf(state.segment);
   if (idx > 0) {
     const prev = world.segments[world.order[idx - 1]];
@@ -111,16 +104,9 @@ export function buildScene(state: RiderState, world: World): Scene {
       const p = curToNext(a, x, prev.length, pIxn.angle, dir, Wp);
       return toRider(p.a, p.x, c, riderHw);
     };
-    // the WHOLE prior road strip (clipNear trims the part behind us) — so the segment we
-    // just left doesn't vanish mid-crossing — plus its outer-corner sector and exit props.
-    quads.push({ pts: [fromPrev(0, 0), fromPrev(0, Wp), fromPrev(prev.length, Wp), fromPrev(prev.length, 0)], color: ROAD });
-    const cur = chain[0];
-    const innerX = pIxn.sign > 0 ? cur.width : 0, outerX = cur.width - innerX;
-    const outerXp = pIxn.sign > 0 ? 0 : Wp;
-    quads.push({ pts: pavementSector(at(0, 0, innerX), fromPrev(prev.length, outerXp), at(0, 0, outerX)), color: ROAD });
-    for (const cr of prev.exitCritters) {
-      scenery.push(critterScenery({ at: fromPrev(cr.along, cr.across + Wp / 2), emoji: cr.emoji, height: cr.height, faceRight: cr.faceRight }));
-    }
+    const js = intersectionScene(pIxn, prev, chain[0], fromPrev, (a, x) => at(0, a, x));
+    for (const q of js.quads) quads.push(q);
+    for (const sc of js.scenery) scenery.push(sc);
   }
 
   return { quads, scenery };

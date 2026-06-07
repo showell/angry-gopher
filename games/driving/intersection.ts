@@ -11,12 +11,18 @@
 // transforms, and the pavement wedge.
 // =============================================================================
 
-import type { RiderPt } from './scenery.ts';
+import { critterScenery, intersectionCritters } from './critter.ts';
+import type { Critter } from './critter.ts';
+import { ROAD } from './scenery.ts';
+import type { RiderPt, Quad, Scenery } from './scenery.ts';
 import type { SegId, TurnDir, RoadSegment } from './road_segment.ts';
 
 export type IxnId = string;
 
-const TURN_RADIUS = 2;   // corner radius; sets the pavement wedge and the `tan` clear-zone half.
+const TURN_RADIUS = 2;        // corner radius; sets the pavement wedge and the `tan` clear-zone half.
+const ENTRY_ROAD_DIST = 40;   // metres of approach road the joint paints behind its edge (the rest of
+                              // the segment draws its own strip; this only needs to cover the joint when
+                              // it's the one BEHIND the Rider). Safe to fix — segments are always long enough.
 const signOf = (d: TurnDir): number => (d === 'right' ? 1 : -1);
 
 // An intersection: the turn that joins one segment to the next. For now it carries the
@@ -37,6 +43,7 @@ export interface Intersection {
   radius: number;     // corner radius
   sign: number;       // +1 right, -1 left; 0 = no turn (terminus)
   tan: number;        // radius * tan(THETA/2): the corner's half-tangent (how far the turn intrudes into a straight); 0 at a terminus
+  elephants: Critter[];   // the elephants parked at this corner (none at a terminus); the joint OWNS them
 }
 
 // The AUTHORED spec for a turn, before it's wired into built segments: which segment it
@@ -49,20 +56,74 @@ export interface IntersectionConfig {
 }
 
 // Build the turn NODE joining `from` to `to`. Pure: it reads the two segments' ids and
-// returns the Intersection; the caller wires the reverse graph refs onto the segments.
+// returns the Intersection (including the elephants parked at the corner); the caller wires
+// the reverse graph refs onto the segments.
 export function buildIntersection(from: RoadSegment, to: RoadSegment, dir: TurnDir, angle: number): Intersection {
   const sign = signOf(dir);
+  const segNum = Number(from.id.slice(3));   // "seg12" -> 12; late-route corners get giant elephants
   return {
     id: `${from.id}_${to.id}`,
     from: from.id, to: to.id, angle,
     radius: TURN_RADIUS, sign, tan: TURN_RADIUS * Math.tan(angle / 2),
+    elephants: intersectionCritters(from.length, sign, segNum, from.width / 2),
   };
 }
 
 // Build the TERMINUS node that closes the route off `from`: a degenerate intersection
-// with no outgoing fork (the Rider arrives and stops). No turn, so angle/sign/tan are 0.
+// with no outgoing fork (the Rider arrives and stops). No turn, so angle/sign/tan are 0
+// and there are no elephants.
 export function buildTerminus(from: RoadSegment): Intersection {
-  return { id: `${from.id}_end`, from: from.id, to: null, angle: 0, radius: 0, sign: 0, tan: 0 };
+  return { id: `${from.id}_end`, from: from.id, to: null, angle: 0, radius: 0, sign: 0, tan: 0, elephants: [] };
+}
+
+// ---- the intersection as a SCENE CONTRIBUTOR ----
+// A point in a segment's BL frame (a along, x across-from-left) mapped into the Rider's frame.
+export type FrameMap = (a: number, x: number) => RiderPt;
+
+// Everything this joint draws, in the Rider's frame: the approach road, the corner pavement
+// sector, and the elephants. The caller hands us a mapper for the INCOMING segment `from`
+// (fromMap) and, when the outgoing segment is in view, one for `to` (toMap) — the sector
+// needs a point from each side, so it's drawn only when toMap is present.
+//
+// We author everything relative to `from`'s END-LEFT corner: corner(cu, cv) puts the origin
+// there, with cu running ACROSS the terminating edge (toward end-right) and cv perpendicular
+// (negative = back down the approach road). Left and right exits are coded independently —
+// no sign-multiplier symmetry — because the geometry genuinely differs: a LEFT turn fuses on
+// the end-LEFT edge (the origin itself is the inner corner), a RIGHT turn fuses on the
+// end-RIGHT edge (the inner corner is the far one).
+export function intersectionScene(ixn: Intersection, from: RoadSegment, to: RoadSegment | null,
+                                  fromMap: FrameMap, toMap: FrameMap | null): { quads: Quad[]; scenery: Scenery[] } {
+  if (ixn.to === null) return { quads: [], scenery: [] };   // terminus: nothing to draw
+  const W = from.width, hw = W / 2;
+  const corner = (cu: number, cv: number): RiderPt => fromMap(from.length + cv, cu);
+
+  const quads: Quad[] = [];
+
+  // the approach road: `from`'s tail leading into the joint (end edge back ENTRY_ROAD_DIST).
+  quads.push({ pts: [corner(0, 0), corner(W, 0), corner(W, -ENTRY_ROAD_DIST), corner(0, -ENTRY_ROAD_DIST)], color: ROAD });
+
+  // the corner pavement sector — a wedge from the inner fuse-corner out to the two outer
+  // corners (one on each segment). Inner/outer flip with turn direction; pavementSector
+  // sweeps the short way either way, so it's the shared piece.
+  if (toMap && to) {
+    let inner: RiderPt, outerFrom: RiderPt, outerTo: RiderPt;
+    if (ixn.sign > 0) {                 // RIGHT turn: the segments fuse on `from`'s end-RIGHT edge
+      inner     = corner(W, 0);         //   inner corner = end-right (the far one)
+      outerFrom = corner(0, 0);         //   outer corner on `from` = end-left (the origin)
+      outerTo   = toMap(0, 0);          //   outer corner on `to`   = its start-left edge
+    } else {                            // LEFT turn: the segments fuse on `from`'s end-LEFT edge
+      inner     = corner(0, 0);         //   inner corner = end-left (the origin)
+      outerFrom = corner(W, 0);         //   outer corner on `from` = end-right
+      outerTo   = toMap(0, to.width);   //   outer corner on `to`   = its start-right edge
+    }
+    quads.push({ pts: pavementSector(inner, outerFrom, outerTo), color: ROAD });
+  }
+
+  // the elephants parked at the corner (authored centre-relative; +hw shifts to from-the-left).
+  const scenery: Scenery[] = ixn.elephants.map((cr) =>
+    critterScenery({ at: fromMap(cr.along, cr.across + hw), emoji: cr.emoji, height: cr.height, faceRight: cr.faceRight }));
+
+  return { quads, scenery };
 }
 
 // The max speed (m/press) at which each turn angle is taken: the Rider holds this through

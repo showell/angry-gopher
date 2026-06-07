@@ -11,7 +11,7 @@
 // (alongWhereRiderCommitsToTurn) — the segment owns its own length.
 // =============================================================================
 
-import { segmentCritters, intersectionCritters } from './critter.ts';
+import { segmentCritters } from './critter.ts';
 import type { Critter } from './critter.ts';
 import { segmentTrees, TREE_ROAD_OFFSET } from './tree.ts';
 import type { Scheme, Tree } from './tree.ts';
@@ -34,8 +34,7 @@ export interface RoadSegment {
   width: number;
   scheme: Scheme;                // visual theme; drives the tree colours
   trees: Tree[];
-  critters: Critter[];      // roadside, along the segment (cows/pigs)
-  exitCritters: Critter[];  // at the exit intersection (elephants); shared with the next segment
+  critters: Critter[];      // roadside, along the segment (cows/pigs); the elephants live on the exit Intersection
   // graph refs: the intersections bracketing this edge. Every segment EXITS through an
   // intersection (a turn, or the terminus that closes the route), so exitIxn is never null;
   // entryIxn is null only at the route START, where the Rider just spawns (no node there).
@@ -57,8 +56,6 @@ export interface World {
   order: SegId[];
 }
 
-const segNumber = (id: SegId): number => Number(id.slice(3));   // "seg12" -> 12
-
 // The AUTHORED spec for a segment: its id, length, and tree scheme. Everything else a
 // RoadSegment carries is either intrinsic (built here) or depends on the bracketing
 // intersections (wired once those exist).
@@ -70,9 +67,9 @@ export interface RoadSegmentConfig {
 
 // Build a segment's INTRINSIC state from its config: dimensions, roadside trees, and the
 // along-the-road critters — all a function of length/scheme alone. The intersection-derived
-// bits start empty/neutral: exitCritters (the elephants, added by addElephants once the exit
-// turn is known), the graph refs, the turn-commit point (defaults to the segment end, a
-// terminus), and the north heading (accumulated along the route). buildWorld fills those.
+// bits start empty/neutral: the graph refs, the turn-commit point (defaults to the segment
+// end, a terminus), and the north heading (accumulated along the route). buildWorld fills
+// those, and the elephants live on the exit Intersection, not here.
 export function buildRoadSegment(c: RoadSegmentConfig): RoadSegment {
   return {
     id: c.id,
@@ -81,20 +78,11 @@ export function buildRoadSegment(c: RoadSegmentConfig): RoadSegment {
     scheme: c.scheme,
     trees: segmentTrees(c.length, c.scheme, LANE_WIDTH / 2),
     critters: segmentCritters(c.length, LANE_WIDTH / 2, TREE_ROAD_OFFSET),
-    exitCritters: [],
     entryIxn: null,
     exitIxn: '',   // a placeholder: set to the real id when this segment's exit intersection is built
     alongWhereRiderCommitsToTurn: c.length,
     northHeading: 0,
   };
-}
-
-// Park the exit-intersection elephants on a segment, now that its exit turn is known. A
-// terminus has no turn, so it gets none. (The elephants live ON the segment for now; the
-// intersection will OWN them in a later step — that's why this is its own pass.)
-export function addElephants(seg: RoadSegment, exit: Intersection): void {
-  if (exit.to === null) return;
-  seg.exitCritters = intersectionCritters(seg.length, exit.sign, segNumber(seg.id), seg.width / 2);
 }
 
 export function buildWorld(): World {
@@ -157,9 +145,6 @@ export function buildWorld(): World {
     if (ixn.to === null) continue;   // terminus: nothing downstream
     segments[ixn.to].northHeading = segments[id].northHeading + ixn.sign * ixn.angle;
   }
-
-  // ---- elephants at each segment's exit turn (none at the terminus) ----
-  for (const id of order) addElephants(segments[id], intersections[segments[id].exitIxn]);
 
   return { segments, intersections, start: 'seg1', order };
 }
