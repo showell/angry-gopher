@@ -7,7 +7,7 @@
 //   ArrowUp   : getNextRiderState -> push the next RiderState onto the history
 //   ArrowDown : pop back to the previous RiderState
 // =============================================================================
-import { initialRiderState, getNextRiderState, riderHeading, leanFor } from './model.ts';
+import { initialRiderState, getNextRiderState, riderHeading, leanFor, MAX_LEAN } from './model.ts';
 import type { RiderState } from './model.ts';
 import { buildWorld } from './road_segment.ts';
 import { buildScene } from './view.ts';
@@ -52,13 +52,17 @@ const EYE_H = 1.2;
 const MIN_SCENERY_PX = 4;   // skip scenery that would project shorter than this (far AND short)
 
 // The Rider's focal point pulls IN as he leans into a turn — he's watching the corner he's
-// executing, not the far mountains. At lean θ he sits (90−θ)° off the ground; we scale the
-// focal by that ratio SQUARED to exaggerate the effect. `camFocal` is the live camera focal,
-// recomputed from the roll each frame (0 lean → full FOCAL); the whole projection reads it.
+// executing, not the far mountains. We measure the lean as a fraction of the enforced
+// MAX_LEAN (the route never banks past it; see model.ts + test_model), and pull the focal
+// from full FOCAL down toward MIN_FOCAL_FACTOR·FOCAL, accelerating (squared) so the focus
+// snaps in hard at the deepest part of a turn. The floor keeps it well clear of a degenerate
+// zero. `camFocal` is the live camera focal, recomputed from the roll each frame; the whole
+// projection reads it.
+const MIN_FOCAL_FACTOR = 0.35;   // focal at full lean, as a fraction of FOCAL (never 0)
 let camFocal = FOCAL;
 const focalForLean = (lean: number): number => {
-  const off = 1 - Math.abs(lean) / (Math.PI / 2);   // (90 − leanDeg) / 90
-  return FOCAL * off * off;
+  const frac = Math.min(Math.abs(lean) / MAX_LEAN, 1);   // 0 straight … 1 at MAX_LEAN
+  return FOCAL * (1 - (1 - MIN_FOCAL_FACTOR) * frac * frac);
 };
 
 // ---- the world + the Rider's history (a forward/back stack of RiderStates) ----
