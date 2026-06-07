@@ -7,7 +7,7 @@
 //   ArrowUp   : getNextRiderState -> push the next RiderState onto the history
 //   ArrowDown : pop back to the previous RiderState
 // =============================================================================
-import { initialRiderState, getNextRiderState, riderHeading, leanFor, MAX_LEAN } from './model.ts';
+import { initialRiderState, getNextRiderState, riderHeading, leanFor, MAX_LEAN, gazeAngle } from './model.ts';
 import type { RiderState } from './model.ts';
 import { buildWorld } from './road_segment.ts';
 import { buildScene } from './view.ts';
@@ -211,7 +211,8 @@ function drawHud(rider: RiderState): void {
   // line 2: ALWAYS-on rider state — position (x = across, y = along), heading relative to
   // the segment's direction, camera tilt, and speed. (These used to vanish during turns.)
   ctx.fillStyle = '#9fe6a0';
-  ctx.fillText(`x ${rider.across.toFixed(2)}  y ${rider.along.toFixed(1)}  heading ${headingDeg.toFixed(1)}deg  tilt ${tiltDeg.toFixed(1)}deg  v ${rider.v.toFixed(2)}`, 22, 50);
+  const gazeDeg = gazeAngle(rider) * 180 / Math.PI;
+  ctx.fillText(`x ${rider.across.toFixed(2)}  y ${rider.along.toFixed(1)}  heading ${headingDeg.toFixed(1)}deg  tilt ${tiltDeg.toFixed(1)}deg  gaze ${gazeDeg.toFixed(0)}deg  v ${rider.v.toFixed(2)}`, 22, 50);
 
   // line 3: frame HEALTH — wall-clock cadence vs the 60Hz budget; turns red while dropping
   ctx.fillStyle = dropFlash > 0 ? '#ff6b6b' : '#9fe6a0';
@@ -245,7 +246,8 @@ function render(rider: RiderState): void {
   // by only what THIS lean exposes at the frame's corners — ~0 going straight (no
   // wasted columns), a little when banked. (Was a flat W+H, redrawn every frame.)
   const overscan = Math.abs(Math.sin(lean)) * H / 2 + 16;
-  drawHorizon(ctx, riderHeading(rider, world), W, H, camFocal, overscan);   // mountains + sun, by orientation only
+  // the gaze yaws the view, so the far scenery shifts with it too (he's looking off-axis).
+  drawHorizon(ctx, riderHeading(rider, world) + gazeAngle(rider), W, H, camFocal, overscan);
 
   for (const q of scene.quads) drawQuad(q);
   for (const p of scene.polys) drawPoly3(p);   // guard rails, raised above the pavement

@@ -4,7 +4,7 @@
 // transforms (lengths + turn signs) — the same relational facts getNextRiderState uses.
 //
 // Run: node test/test_model.ts
-import { initialRiderState, getNextRiderState, assertInvariants, MAX_LEAN, TURN_OMEGA, MAX_TURN_ANGLE, leanFor } from '../model.ts';
+import { initialRiderState, getNextRiderState, assertInvariants, MAX_LEAN, TURN_OMEGA, MAX_TURN_ANGLE, leanFor, gazeAngle, GAZE_SEQUENCE, APPROACH_INTERSECTION_DIST } from '../model.ts';
 import type { RiderState } from '../model.ts';
 import { buildWorld } from '../road_segment.ts';
 import type { World } from '../road_segment.ts';
@@ -111,6 +111,21 @@ function main(): void {
 
   // 1) invariants on every state
   for (const st of states) assertInvariants(st, world);
+
+  // 1b) the distracted-rider GAZE: it must be back to straight (0) before the braking zone, and
+  // it must run the exact configured 9-frame sequence.
+  for (const st of states) {
+    const distToEnd = world.segments[st.segment].length - st.along;
+    if (distToEnd <= APPROACH_INTERSECTION_DIST && Math.abs(gazeAngle(st)) > 1e-9) {
+      throw new Error(`gaze ${(gazeAngle(st) * 180 / Math.PI).toFixed(0)}deg still off-straight within the ${APPROACH_INTERSECTION_DIST}m approach on ${st.segment}`);
+    }
+  }
+  const gazeDeg = states.map((st) => Math.round(gazeAngle(st) * 180 / Math.PI));
+  const first = gazeDeg.findIndex((g) => g !== 0);
+  if (first < 0) throw new Error('the distracted-rider glance never fired');
+  const run = gazeDeg.slice(first, first + GAZE_SEQUENCE.length).join(',');
+  if (run !== GAZE_SEQUENCE.join(',')) throw new Error(`glance sequence [${run}] != [${GAZE_SEQUENCE.join(',')}]`);
+  if (gazeDeg[first + GAZE_SEQUENCE.length] !== 0) throw new Error('glance did not return to straight after the sequence');
 
   // 2) heading continuity: no single-press jump bigger than the rotation ceiling. The
   // straighten-out rotates at a fixed TURN_OMEGA (jerk-limited up to it), the same for

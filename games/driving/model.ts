@@ -35,7 +35,7 @@ import { turnSpeed } from './intersection.ts';
 // ============================================================================
 
 // the Rider starts slowing once the next intersection is within this distance
-const APPROACH_INTERSECTION_DIST = 60;
+export const APPROACH_INTERSECTION_DIST = 60;
 
 // ---- motion (per-press, not metres) ----
 export const V_BASE = 0.3;    // the Rider's speed at the very start of the drive (m/press)
@@ -87,10 +87,11 @@ export interface RiderState {
   angle: number;
   v: number;          // speed along the path (m/press)
   turn: Turning | null;
+  gazeStep: number;   // the "distracted rider" glance: -1 = eyes ahead, 0..8 = mid-glance, >=9 = glance done
 }
 
 export function initialRiderState(world: World): RiderState {
-  return { segment: world.start, along: 0, across: 0, angle: 0, v: V_BASE, turn: null };
+  return { segment: world.start, along: 0, across: 0, angle: 0, v: V_BASE, turn: null, gazeStep: -1 };
 }
 
 // The Rider's heading relative to north (north = seg1's forward direction). This
@@ -107,6 +108,27 @@ const clamp = (x: number, lo: number, hi: number): number => Math.max(lo, Math.m
 // INTO the turn — sign and size track the rotation directly (no easing), then capped.
 export function leanFor(dHeading: number): number {
   return clamp(LEAN_PER_OMEGA * dHeading, -LEAN_CAP, LEAN_CAP);
+}
+
+// ---- the "distracted rider": GAZE decoupled from the path ----
+// Cruising up to a turn the Rider GLANCES right at the roadside pigs, then wisely puts his eyes
+// back on the road. It's a fixed 9-frame head-turn (degrees, to the RIGHT — where the pigs are)
+// that fires once per segment when he comes within GAZE_TRIGGER_DIST of the end and is back to 0
+// well before the braking zone (APPROACH_INTERSECTION_DIST) — both enforced by test_model. Gaze
+// is a VIEW offset ONLY: it never touches the path/physics, just where the camera looks (the
+// renderer adds it as a yaw — see main.ts/view.ts). `gazeStep` carries the progress on RiderState.
+export const GAZE_SEQUENCE = [4, 8, 12, 16, 20, 16, 12, 8, 4];   // the glance, degrees to the right
+export const GAZE_TRIGGER_DIST = 150;                            // begin the glance this far (game units) before the end
+export function gazeAngle(state: RiderState): number {
+  const i = state.gazeStep;
+  return i >= 0 && i < GAZE_SEQUENCE.length ? GAZE_SEQUENCE[i] * (Math.PI / 180) : 0;
+}
+// advance the glance one cruise-frame: once armed (>=0) step toward done (capped), else arm at
+// the trigger. Frame-based (9 frames), not distance-based — but the 300m-min segments + the
+// 150→60 window guarantee it finishes before the braking zone (enforced by test_model).
+function nextGazeStep(gazeStep: number, distToEnd: number): number {
+  if (gazeStep >= 0) return Math.min(gazeStep + 1, GAZE_SEQUENCE.length);
+  return distToEnd <= GAZE_TRIGGER_DIST ? 0 : -1;
 }
 
 // ----------------------------------------------------------------------------
@@ -150,14 +172,18 @@ function cruise(state: RiderState, seg: RoadSegment, world: World): RiderState {
 
   if (exitIxn.to === null) {   // the terminus: coast to the end (braked by accel), then the game is over
     const along = state.along + v;
-    if (along >= seg.length) return { ...state, along: seg.length, v: 0 };   // reached the end -> stop
-    return { ...state, along, v };
+    const gazeStep = nextGazeStep(state.gazeStep, seg.length - along);
+    if (along >= seg.length) return { ...state, along: seg.length, v: 0, gazeStep };   // reached the end -> stop
+    return { ...state, along, v, gazeStep };
   }
 
   // braked to the lane-filling speed; cross the inner edge and straighten into the next
   if (nearIntersection(state, seg)) v = Math.max(v, turnSpeed(exitIxn));   // never crawl below the lane-filling speed
   const along = state.along + v;
-  if (along < seg.alongWhereRiderCommitsToTurn) return { ...state, along, v };   // cross the inner edge -> commit to the next segment
+  if (along < seg.alongWhereRiderCommitsToTurn) {   // cross the inner edge -> commit to the next segment
+    const gazeStep = nextGazeStep(state.gazeStep, seg.length - along);
+    return { ...state, along, v, gazeStep };
+  }
   return enterStraighten(seg, world, v);
 }
 
@@ -178,6 +204,7 @@ function enterStraighten(seg: RoadSegment, world: World, v: number): RiderState 
     angle: -sgn * theta,
     v,
     turn: { angle: theta, phase: 'straightening', turnRate: 0 },
+    gazeStep: -1,   // eyes back on the road through the turn; re-arms on the new segment
   };
 }
 
@@ -242,9 +269,9 @@ function straightenStep(state: RiderState, seg: RoadSegment): RiderState {
   const aligned = Math.abs(angle) < ALIGN_EPS, centred = Math.abs(across) < CENTER_EPS;
   // hand off to cruise only when the incoming heading is already within one tilt-step of 0,
   // so zeroing it (this frame's delta is -state.angle) is itself a <= MAX_TILT_STEP change.
-  if (centred && Math.abs(state.angle) < TURN_RATE_STEP) return { segment: seg.id, along, across: 0, angle: 0, v, turn: null };
+  if (centred && Math.abs(state.angle) < TURN_RATE_STEP) return { segment: seg.id, along, across: 0, angle: 0, v, turn: null, gazeStep: state.gazeStep };
   const phase = killing && aligned ? 'recentering' : t.phase;
-  return { segment: seg.id, along, across, angle, v, turn: { angle: t.angle, phase, turnRate: dHeading } };
+  return { segment: seg.id, along, across, angle, v, turn: { angle: t.angle, phase, turnRate: dHeading }, gazeStep: state.gazeStep };
 }
 
 // ----------------------------------------------------------------------------
@@ -269,5 +296,7 @@ export function assertInvariants(s: RiderState, world: World): void {
   assert(Math.abs(s.across) <= seg.width / 2 + 1, `across bounded (${s.across})`);
   if (s.turn === null) {
     assert(Math.abs(s.across) < 1e-6 && Math.abs(s.angle) < 1e-6, 'cruising => centred and aligned');
+  } else {
+    assert(s.gazeStep < 0, 'no distracted glance mid-turn (eyes on the road)');
   }
 }

@@ -8,6 +8,7 @@
 // through the intersections ahead — plus the intersection just behind us.
 // =============================================================================
 import type { RiderState } from './model.ts';
+import { gazeAngle } from './model.ts';
 import type { World, RoadSegment } from './road_segment.ts';
 import { critterScenery } from './critter.ts';
 import { treeScenery } from './tree.ts';
@@ -36,7 +37,9 @@ function toRider(a: number, x: number, c: Pose, hw: number): RiderPt {
 const LOOK_AHEAD = 6;
 
 export function buildScene(state: RiderState, world: World): Scene {
-  const c: Pose = { along: state.along, across: state.across, angle: state.angle };
+  // the camera looks along the Rider's path PLUS his gaze offset (the distracted glance) — a
+  // view-only yaw, so the whole rider-relative scene rotates with where he's looking.
+  const c: Pose = { along: state.along, across: state.across, angle: state.angle + gazeAngle(state) };
   const quads: Quad[] = [];
   const polys: Poly3[] = [];
   const scenery: Scenery[] = [];
