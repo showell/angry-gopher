@@ -55,6 +55,17 @@ interface Pt3 { right: number; forward: number; height: number }
 interface Rod { pts: Pt3[]; color: string }
 interface Pt2 { x: number; y: number }   // a projected screen point (the flat path works in 2D)
 
+// ---- local ground curvature (proof of concept: towers only) ----
+// We sit on a sphere of radius EARTH_RADIUS; its surface drops d^2/(2R) below the Rider's tangent
+// plane at horizontal distance d, so a distant object's whole height shifts down by that much.
+// We touch only the height (depth and screen-x are unchanged), and only towers for now. The
+// horizon mountains stay infinitely far and never curve. A small R is deliberately exaggerated.
+const EARTH_RADIUS = 2000;
+function curved(project: Project): Project {
+  return (right, forward, height) =>
+    project(right, forward, height - (right * right + forward * forward) / (2 * EARTH_RADIUS));
+}
+
 // Clip a rod polygon against the near plane (forward >= NEAR) in 3D, before projecting —
 // the same Sutherland-Hodgman the renderer runs on road quads, here on height-carrying points.
 function clipNear(pts: Pt3[]): Pt3[] {
@@ -206,8 +217,9 @@ export function towerScenery(map: (a: number, x: number) => RiderPt, fromLength:
   };
 
   const draw = (ctx: Ctx, project: Project): void => {
-    (center.forward < TOWER_NEAR_DIST ? drawNear : drawFlat)(ctx, project);
-    drawBeacon(ctx, project);
+    const cp = curved(project);   // lattice, billboard, and beacon all curve with the ground
+    (center.forward < TOWER_NEAR_DIST ? drawNear : drawFlat)(ctx, cp);
+    drawBeacon(ctx, cp);
   };
 
   return { forward: center.forward, height: TOWER_HEIGHT, drawAsNear: draw, drawAsFar: draw };
