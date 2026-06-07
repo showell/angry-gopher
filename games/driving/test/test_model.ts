@@ -79,6 +79,14 @@ function main(): void {
     }
   }
 
+  // CONFIG: every segment is at least MIN_SEG_LENGTH long — the route relies on this breathing
+  // room (full tree/critter sets + room to accelerate and decelerate; no degenerate-short cases).
+  const MIN_SEG_LENGTH = 300;
+  for (const id of world.order) {
+    const len = world.segments[id].length;
+    if (len < MIN_SEG_LENGTH) throw new Error(`segment ${id} is ${len}m, under the ${MIN_SEG_LENGTH}m minimum`);
+  }
+
   let s = initialRiderState(world);
   const states: RiderState[] = [s];
   let crossings = 0, maxAcross = 0, maxV = 0;
