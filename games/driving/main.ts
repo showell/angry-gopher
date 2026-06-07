@@ -58,7 +58,7 @@ const MIN_SCENERY_PX = 4;   // skip scenery that would project shorter than this
 // snaps in hard at the deepest part of a turn. The floor keeps it well clear of a degenerate
 // zero. `camFocal` is the live camera focal, recomputed from the roll each frame; the whole
 // projection reads it.
-const MIN_FOCAL_FACTOR = 0.175;  // focal at full lean, as a fraction of FOCAL (never 0)
+const MIN_FOCAL_FACTOR = 0.35;   // focal at full lean, as a fraction of FOCAL (never 0)
 let camFocal = FOCAL;
 const focalForLean = (lean: number): number => {
   const frac = Math.min(Math.abs(lean) / MAX_LEAN, 1);   // 0 straight … 1 at MAX_LEAN
