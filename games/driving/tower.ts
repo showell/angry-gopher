@@ -12,6 +12,7 @@
 // beyond TOWER_NEAR_DIST so only the closest tower pays for its cross-beams.
 // =============================================================================
 
+import { NEAR } from './scenery.ts';
 import type { Project, Ctx, Scenery, RiderPt } from './scenery.ts';
 
 // ---- dimensions (metres) ----
@@ -33,6 +34,26 @@ const TOWER_METAL = '#9aa0a8';   // every rod — legs, rings, and braces — on
 // a rider-frame point carrying a height off the ground
 interface Pt3 { right: number; forward: number; height: number }
 interface Rod { pts: Pt3[]; color: string }
+
+// Clip a rod polygon against the near plane (forward >= NEAR) in 3D, before projecting —
+// the same Sutherland-Hodgman the renderer runs on road quads, here on height-carrying points.
+function clipNear(pts: Pt3[]): Pt3[] {
+  const out: Pt3[] = [];
+  for (let i = 0; i < pts.length; i++) {
+    const a = pts[i], b = pts[(i + 1) % pts.length];
+    const aIn = a.forward >= NEAR, bIn = b.forward >= NEAR;
+    if (aIn) out.push(a);
+    if (aIn !== bIn) {
+      const f = (NEAR - a.forward) / (b.forward - a.forward);
+      out.push({
+        right: a.right + f * (b.right - a.right),
+        forward: NEAR,
+        height: a.height + f * (b.height - a.height),
+      });
+    }
+  }
+  return out;
+}
 
 // the square's four base corners, in half-base units, before the yaw
 const CORNERS = [[-1, -1], [1, -1], [1, 1], [-1, 1]];
@@ -100,12 +121,16 @@ export function towerScenery(map: (a: number, x: number) => RiderPt, fromLength:
 
   const fill = (ctx: Ctx, project: Project, rods: Rod[]): void => {
     for (const rod of rods) {
+      // near-clip first: a rod that straddles the near plane (one corner beside/behind the
+      // Rider on a sharp turn) would otherwise project to a sliver streaking across the view.
+      const pts = clipNear(rod.pts);
+      if (pts.length < 3) continue;
       ctx.fillStyle = rod.color;
       ctx.beginPath();
-      const s0 = project(rod.pts[0].right, rod.pts[0].forward, rod.pts[0].height);
+      const s0 = project(pts[0].right, pts[0].forward, pts[0].height);
       ctx.moveTo(s0.x, s0.y);
-      for (let i = 1; i < rod.pts.length; i++) {
-        const s = project(rod.pts[i].right, rod.pts[i].forward, rod.pts[i].height);
+      for (let i = 1; i < pts.length; i++) {
+        const s = project(pts[i].right, pts[i].forward, pts[i].height);
         ctx.lineTo(s.x, s.y);
       }
       ctx.closePath();

@@ -12,7 +12,7 @@ import type { RiderState } from './model.ts';
 import { buildWorld } from './road_segment.ts';
 import { buildScene } from './view.ts';
 import { drawHorizon } from './horizon.ts';
-import { DETAIL_DIST } from './scenery.ts';
+import { DETAIL_DIST, NEAR } from './scenery.ts';
 import type { Project, RiderPt, Quad, Poly3 } from './scenery.ts';
 
 // The page is a near-empty shell (the Go /driving route or the standalone
@@ -47,7 +47,6 @@ const H = canvas.height;
 // ---- camera ----
 const FOV = 70;
 const FOCAL = (W / 2) / Math.tan((FOV / 2) * Math.PI / 180);   // base focal, looking straight ahead
-const NEAR = 0.4;
 const EYE_H = 1.2;
 const MIN_SCENERY_PX = 4;   // skip scenery that would project shorter than this (far AND short)
 

@@ -41,3 +41,8 @@ export interface Scenery {
 
 // Within this distance (metres) a Scenery is drawn with its near (detailed) variant.
 export const DETAIL_DIST = 40;
+
+// The camera's near plane (metres in front of the eye). Anything closer must be clipped
+// before projecting, or the divide-by-forward blows the point across the screen. Shared by
+// the renderer (road quads + guard rails) and any Scenery that does its own 3D clip (towers).
+export const NEAR = 0.4;
