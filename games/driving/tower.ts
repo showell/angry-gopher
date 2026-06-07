@@ -36,9 +36,8 @@ const TOWER_METAL = '#9aa0a8';   // every rod — legs, rings, and braces — on
 
 // ---- the beacon at the apex ----
 const BEACON_PERIOD = 120;       // frames for a full invisible -> bright -> invisible cycle
-const BEACON_RADIUS = 5;         // 10m-diameter sphere, drawn as a flat disc
-const BEACON_CORE = '#ffd6fb';   // hot near-white-pink core (a glowing bulb, brighter than a flat fill)
-const BEACON_COLOR = '#ff2fe6';  // vivid pink halo
+const BEACON_RADIUS = 1.5;       // 3m-diameter sphere, drawn as a flat disc
+const BEACON_COLOR = '#ff2fe6';  // vivid pink
 
 // The blink is a pure function of the step (used as a clock), so it's identical on pause and
 // runs backwards on reverse — no wall-clock state. Each tower gets an authored phase offset so
@@ -198,12 +197,8 @@ export function towerScenery(map: (a: number, x: number) => RiderPt, fromLength:
     if (apex.forward < NEAR) return;
     const s = project(apex.right, apex.forward, apex.height);
     const r = BEACON_RADIUS * (project(1, apex.forward, 0).x - project(0, apex.forward, 0).x);
-    const glow = ctx.createRadialGradient(s.x, s.y, 0, s.x, s.y, r);   // white-hot core -> pink halo
-    glow.addColorStop(0, BEACON_CORE);
-    glow.addColorStop(0.4, BEACON_COLOR);
-    glow.addColorStop(1, BEACON_COLOR);
     ctx.globalAlpha = beacon;
-    ctx.fillStyle = glow;
+    ctx.fillStyle = BEACON_COLOR;
     ctx.beginPath();
     ctx.arc(s.x, s.y, r, 0, 2 * Math.PI);
     ctx.fill();
