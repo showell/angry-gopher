@@ -15,21 +15,20 @@
 import type { Project, Ctx, Scenery, RiderPt } from './scenery.ts';
 
 // ---- dimensions (metres) ----
-const TOWER_HEIGHT = 100;              // apex height
-const TOWER_HALF = 5;                  // half the 10m square base edge
+const TOWER_HEIGHT = 80;               // apex height
+const TOWER_HALF = 6;                  // half the 12m square base edge
 const TOWER_BEYOND = 160;             // how far past the corner it stands, along the approach direction
 const TOWER_RIGHT = 20;              // offset to the right of the lane, so you don't bear down on it dead-on
-const STAGE_HEIGHT = 20;              // a cross-beam ring every this many metres (5 stages => rings at 20/40/60/80)
-const ROD_HALF = 0.5;                 // half the 1m rod thickness
+const STAGE_HEIGHT = 20;              // a cross-beam ring every this many metres (rings at 20/40/60)
+const ROD_HALF = 0.25;                // half the 0.5m rod thickness
 const TOWER_YAW = 30 * Math.PI / 180; // turn the square off head-on so the Rider sees two faces, not one
 
-// The renderer's DETAIL_DIST (40m) is tuned for roadside critters; a 100m tower is never that
+// The renderer's DETAIL_DIST (40m) is tuned for roadside critters; an 80m tower is never that
 // close, so the tower picks its OWN level of detail: the full braced lattice within this range,
 // bare legs beyond. Set well out so the cross-beams don't visibly pop in as you approach.
-const TOWER_NEAR_DIST = 300;
+const TOWER_NEAR_DIST = 400;
 
-const LEG_METAL = '#9aa0a8';   // the four sloping legs (a touch darker)
-const BEAM_METAL = '#c2c7cf';  // the horizontal cross-beams (brighter)
+const TOWER_METAL = '#9aa0a8';   // every rod — legs, rings, and braces — one darker gray
 
 // a rider-frame point carrying a height off the ground
 interface Pt3 { right: number; forward: number; height: number }
@@ -74,11 +73,11 @@ export function towerScenery(map: (a: number, x: number) => RiderPt, fromLength:
 
   const apex = at(0, TOWER_HEIGHT);   // s = 0, so every corner converges here
   const legs: Rod[] = [];
-  for (let k = 0; k < 4; k++) legs.push(barH(at(k, 0), apex, LEG_METAL));
+  for (let k = 0; k < 4; k++) legs.push(barH(at(k, 0), apex, TOWER_METAL));
 
   const beams: Rod[] = [];
   for (let h = STAGE_HEIGHT; h < TOWER_HEIGHT; h += STAGE_HEIGHT) {
-    for (let k = 0; k < 4; k++) beams.push(barV(at(k, h), at((k + 1) % 4, h), BEAM_METAL));
+    for (let k = 0; k < 4; k++) beams.push(barV(at(k, h), at((k + 1) % 4, h), TOWER_METAL));
   }
 
   // X-bracing: each trapezoidal stage face (the top stage is a triangle to the apex, so it's
@@ -88,8 +87,8 @@ export function towerScenery(map: (a: number, x: number) => RiderPt, fromLength:
     const hi = h + STAGE_HEIGHT;
     for (let k = 0; k < 4; k++) {
       const j = (k + 1) % 4;
-      braces.push(barH(at(k, h), at(j, hi), BEAM_METAL));
-      braces.push(barH(at(j, h), at(k, hi), BEAM_METAL));
+      braces.push(barH(at(k, h), at(j, hi), TOWER_METAL));
+      braces.push(barH(at(j, h), at(k, hi), TOWER_METAL));
     }
   }
 
