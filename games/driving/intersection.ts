@@ -17,6 +17,7 @@ import { towerScenery, beaconOffsetFor } from './tower.ts';
 import { ROAD } from './scenery.ts';
 import type { RiderPt, Quad, Poly3, Scenery } from './scenery.ts';
 import type { SegId, TurnDir, RoadSegment } from './road_segment.ts';
+import { buildGuardRail, RAIL_RUNOUT, RAIL_POST_SPACING_DEG } from './guard_rail.ts';
 
 export type IxnId = string;
 
@@ -31,15 +32,6 @@ const ENTRY_ROAD_DIST = 40;   // metres of approach road the joint paints behind
                               // the segment draws its own strip; this only needs to cover the joint when
                               // it's the one BEHIND the Rider). Safe to fix — segments are always long enough.
 const signOf = (d: TurnDir): number => (d === 'right' ? 1 : -1);
-
-// ---- guard rail along the corner arc (metres) ----
-const RAIL_HEIGHT = 0.5;          // the rail bar's centre, above the ground
-const RAIL_THICK = 0.1;           // the bar's vertical thickness
-const RAIL_LEG_SPACING = 5;       // a leg every this many degrees of arc (every turn angle is a multiple)
-const RAIL_EXTEND = 10;           // metres the rail runs past the arc along each segment's outer edge
-const RAIL_LEG_THICK = 0.02;      // each leg post's width (posts every 1m on the straight extensions)
-const RAIL_METAL = '#c2c7cf';     // the bar (bright metallic)
-const RAIL_LEG_METAL = '#9aa0a8'; // the posts (a touch darker)
 
 // An intersection: the turn that joins one segment to the next. For now it carries the
 // turn DIRECTLY (angle/radius/sign) rather than wrapping a separate Turn object — fine
@@ -139,19 +131,18 @@ export function intersectionScene(ixn: Intersection, from: RoadSegment, to: Road
     }
     quads.push({ pts: pavementSector(inner, outerFrom, outerTo), color: ROAD });
 
-    // the guard rail: one run along `from`'s outer edge (posts every 1m), around the corner
-    // arc (posts every RAIL_LEG_SPACING degrees), and out along `to`'s outer edge (every 1m).
-    // The outer edge is `from`'s LEFT (x=0) / `to`'s LEFT (x=0) on a right turn, the RIGHT
-    // edges on a left turn — same sides the sector's outer corners sit on.
+    // the guard rail's ground path: a run-up along `from`'s outer edge, around the corner arc,
+    // and a run-out along `to`'s outer edge. The outer edge is the LEFT (x=0) of each on a right
+    // turn, the RIGHT on a left turn — the same sides the sector's outer corners sit on.
     const fromOuterCu = ixn.sign > 0 ? 0 : W;          // `from`'s outer edge (corner-frame across)
     const toOuterX = ixn.sign > 0 ? 0 : to.width;      // `to`'s outer edge (its BL across)
     const arc = cornerArc(inner, outerFrom, outerTo);
-    const arcLegs = Math.max(1, Math.round(Math.abs(arc.delta) / (RAIL_LEG_SPACING * Math.PI / 180)));
-    const railPts: RiderPt[] = [];
-    for (let m = RAIL_EXTEND; m >= 1; m--) railPts.push(corner(fromOuterCu, -m));         // run-up into the arc
-    for (let i = 0; i <= arcLegs; i++) railPts.push(onArc(arc, arc.a1 + arc.delta * (i / arcLegs)));
-    for (let m = 1; m <= RAIL_EXTEND; m++) railPts.push(toMap(m, toOuterX));              // run-out past the arc
-    for (const p of railPoly(railPts)) polys.push(p);
+    const arcPosts = Math.max(1, Math.round(Math.abs(arc.delta) / (RAIL_POST_SPACING_DEG * Math.PI / 180)));
+    const railPath: RiderPt[] = [];
+    for (let m = RAIL_RUNOUT; m >= 1; m--) railPath.push(corner(fromOuterCu, -m));         // run-up into the arc
+    for (let i = 0; i <= arcPosts; i++) railPath.push(onArc(arc, arc.a1 + arc.delta * (i / arcPosts)));
+    for (let m = 1; m <= RAIL_RUNOUT; m++) railPath.push(toMap(m, toOuterX));              // run-out past the arc
+    for (const p of buildGuardRail(railPath)) polys.push(p);
   }
 
   // the creatures parked at the corner (authored centre-relative; +hw shifts to from-the-left).
@@ -232,37 +223,4 @@ export function pavementSector(P: RiderPt, e1: RiderPt, e2: RiderPt): RiderPt[] 
   const N = 8;
   for (let i = 0; i <= N; i++) pts.push(onArc(c, c.a1 + c.delta * (i / N)));
   return pts;
-}
-
-// ---- the guard rail as raised polygons, given the run it follows ----
-// `points` are the rail's ground path in the Rider's frame (a leg stands at each): the
-// straight run-up along one segment's outer edge, around the corner arc, and out along the
-// other segment's outer edge — all one continuous list. Builds the bar as a single ribbon at
-// RAIL_HEIGHT (RAIL_THICK tall) and a thin upright post at every point. Each post's width
-// runs along the local rail direction, so it reads as a slim post from the road.
-function railPoly(points: RiderPt[]): Poly3[] {
-  const top = RAIL_HEIGHT + RAIL_THICK / 2, bot = RAIL_HEIGHT - RAIL_THICK / 2;
-  const polys: Poly3[] = [];
-
-  // the bar: one ribbon between the top and bottom edges along the whole run.
-  const upper = points.map((p) => ({ right: p.right, forward: p.forward, height: top }));
-  const lower = points.map((p) => ({ right: p.right, forward: p.forward, height: bot }));
-  polys.push({ pts: [...upper, ...lower.reverse()], color: RAIL_METAL });
-
-  // a post at each point, its RAIL_LEG_THICK width laid along the local run direction (the
-  // central difference of its neighbours; one-sided at the ends).
-  const halfW = RAIL_LEG_THICK / 2;
-  for (let i = 0; i < points.length; i++) {
-    const a = points[Math.max(0, i - 1)], b = points[Math.min(points.length - 1, i + 1)];
-    const len = Math.hypot(b.right - a.right, b.forward - a.forward) || 1;
-    const ox = ((b.right - a.right) / len) * halfW, of = ((b.forward - a.forward) / len) * halfW;
-    const p = points[i];
-    polys.push({ pts: [
-      { right: p.right - ox, forward: p.forward - of, height: 0 },
-      { right: p.right + ox, forward: p.forward + of, height: 0 },
-      { right: p.right + ox, forward: p.forward + of, height: top },
-      { right: p.right - ox, forward: p.forward - of, height: top },
-    ], color: RAIL_LEG_METAL });
-  }
-  return polys;
 }
