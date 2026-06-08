@@ -58,8 +58,16 @@ const SUN_DROP_PX_PER_STEP = 0.24 * (2 * SUN_RADIUS_PX) / 625;     // 24% of the
 export function sunHeightPx(step: number): number {
   return SUN_START_PX - SUN_DROP_PX_PER_STEP * step;
 }
-export function sunSetFraction(step: number): number {              // 0 at the start, 1 once the sun reaches the horizon
-  return Math.max(0, Math.min(1, 1 - sunHeightPx(step) / SUN_START_PX));
+// How far "dusk" has progressed (0 = day, 1 = night), driving the sky colour. While ANY of the
+// disc — and the ambient light it bends over the mountains — is still up, dusk creeps in at HALF
+// speed; once the sun is TRULY below the horizon (whole disc under it) the remaining ambient fades
+// the rest of the way. The slow phase is the 2x-slower darkening the dusk wanted.
+export function sunSetFraction(step: number): number {
+  const h = sunHeightPx(step);
+  const trulyBelow = -SUN_RADIUS_PX;                                   // the whole disc is under the horizon here
+  const slowEnd = 0.5 * (SUN_START_PX - trulyBelow) / SUN_START_PX;    // dusk reached by the time it's truly below
+  if (h >= trulyBelow) return Math.max(0, (SUN_START_PX - h) / (SUN_START_PX - trulyBelow) * slowEnd);
+  return Math.min(1, slowEnd + (trulyBelow - h) / SUN_RADIUS_PX * (1 - slowEnd));
 }
 // the tallest horizon silhouette at a given bearing — the effective occluder of the sun there.
 export function horizonCrestPx(bearing: number): number {

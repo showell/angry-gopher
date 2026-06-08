@@ -172,6 +172,22 @@ function main(): void {
     throw new Error(`by seg9's end the sun centre (${sunCentreAtExit.toFixed(0)}px) has already dropped below the crest (${crest.toFixed(0)}px)`);
   }
 
+  // 1d) the SUNSET over seg12 (the SECOND sun-ward stretch, 800m): headed toward the sun but LESS
+  // directly than seg9, with at least PART of the sun still present (its top above the western
+  // range) as the Rider turns onto it. Locks the seg12 angle + the lower sun position there.
+  const seg12Len = world.segments['seg12'].length;
+  if (seg12Len !== 800) throw new Error(`seg12 is ${seg12Len}m, expected 800m`);
+  const onSeg12 = states.map((st, i) => (st.segment === 'seg12' ? i : -1)).filter((i) => i >= 0);
+  if (!onSeg12.length) throw new Error('the Rider never drove seg12');
+  const sun12offDeg = Math.abs(wrap(headings['seg12'] - SUN_BEARING)) * 180 / Math.PI;
+  if (!(sun12offDeg > sunwardDeg && sun12offDeg < 50)) {
+    throw new Error(`seg12 heads ${sun12offDeg.toFixed(0)}deg off the sun — expected between seg9's ${sunwardDeg.toFixed(0)}deg and 50deg (toward it, less directly than seg9)`);
+  }
+  const sun12TopOnEntry = sunHeightPx(onSeg12[0]) + SUN_RADIUS_PX;
+  if (!(sun12TopOnEntry > crest)) {
+    throw new Error(`onto seg12 no sun is present: its top (${sun12TopOnEntry.toFixed(0)}px) is below the crest (${crest.toFixed(0)}px)`);
+  }
+
   // 2) heading continuity: no single-press jump bigger than the rotation ceiling. The
   // straighten-out rotates at a fixed TURN_OMEGA (jerk-limited up to it), the same for
   // every turn angle, so that one constant bounds every per-press heading change.
