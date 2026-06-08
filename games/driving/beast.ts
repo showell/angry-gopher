@@ -48,10 +48,10 @@ const FOOT:  Bone = { length: 0.316, joint: -1.981, r0: 0.032, r1: 0.013 };
 
 // the fore-arm, bent at the elbow and hanging in front of the chest. Its lower segment (the fore-arm)
 // is nearly as long as the hind leg's shin, as in the cartoon — the forelimb isn't tiny.
-const ARM_SHOULDER: P = [-0.05, 0.49];
-const ARM_BASE_ANGLE = -2.035;
-const UPPER_ARM: Bone = { length: 0.090, joint: 0,     r0: 0.035, r1: 0.027 };
-const FORE_ARM:  Bone = { length: 0.165, joint: 0.219, r0: 0.027, r1: 0.016 };
+const ARM_SHOULDER: P = [-0.12, 0.56];                 // up at the base of the neck, near the head
+const ARM_BASE_ANGLE = -1.990;
+const UPPER_ARM: Bone = { length: 0.100, joint: 0,     r0: 0.035, r1: 0.027 };
+const FORE_ARM:  Bone = { length: 0.165, joint: 0.174, r0: 0.027, r1: 0.016 };
 
 // ---- the body as one smooth shape ----
 // The DORSAL line (top), from the top of the neck down the back to the tail tip: back-of-top-neck,
@@ -59,10 +59,10 @@ const FORE_ARM:  Bone = { length: 0.165, joint: 0.219, r0: 0.027, r1: 0.016 };
 // lists are joined into ONE closed Catmull-Rom loop (drawBody), so the whole silhouette is smooth —
 // no kink down the neck, across the back, or where the neck-top closes.
 const DORSAL: P[] = [
-  [0.00, 0.79],    // back of the top of the neck (the head sits forward of here)
-  [0.06, 0.61],    // back of the lower neck
-  [0.16, 0.565],   // withers
-  [0.32, 0.575],   // top of the back
+  [-0.11, 0.78],   // top of the neck, back (the head sits forward of and above here)
+  [-0.02, 0.66],   // nape — the back of the neck, leaning forward
+  [0.13, 0.575],   // withers — base of the neck, where it widens into the shoulders
+  [0.30, 0.58],    // top of the back
   [0.48, 0.50],    // rump
   [0.66, 0.31],    // top of the upper tail
   [0.84, 0.13],    // top of the middle tail
@@ -78,21 +78,21 @@ const VENTRAL: P[] = [
   [0.68, 0.21],    // upper tail underside (dropped a touch — thicker through the middle)
   [0.46, 0.37],    // under the rump
   [0.18, 0.31],    // belly
-  [-0.05, 0.36],   // lower chest
-  [-0.14, 0.56],   // throat
-  [-0.16, 0.72],   // up the front of the neck to its top
+  [-0.04, 0.40],   // lower chest
+  [-0.14, 0.57],   // throat — base of the neck, front
+  [-0.19, 0.74],   // up the front of the neck to its top (it narrows toward the head)
 ];
 
 // the head: a long ellipse lying parallel to the ground (snout to the left), thinner than the neck it
 // sits on. cx/cy centre it; rx is the long (horizontal) radius, ry the short (vertical) one.
 const HEAD = {
-  cx: -0.26, cy: 0.78, rx: 0.17, ry: 0.078,
-  eye: [-0.29, 0.81], nostril: [-0.42, 0.785],
+  cx: -0.30, cy: 0.80, rx: 0.16, ry: 0.075,
+  eye: [-0.33, 0.83], nostril: [-0.45, 0.805],
 } as const;
 
 // two upright ears rising from the top-back of the head, the front one a touch ahead of the back one.
-const EAR_BACK = { base: [-0.12, 0.83], tip: [-0.05, 1.01], r0: 0.033, r1: 0.010 } as const;
-const EAR_FRONT = { base: [-0.20, 0.85], tip: [-0.23, 1.03], r0: 0.036, r1: 0.012 } as const;
+const EAR_BACK = { base: [-0.18, 0.85], tip: [-0.11, 1.01], r0: 0.033, r1: 0.010 } as const;
+const EAR_FRONT = { base: [-0.26, 0.86], tip: [-0.29, 1.03], r0: 0.036, r1: 0.012 } as const;
 
 const LINE_WIDTH = 0.012;   // outline weight, in standing-height units (scales with distance)
 
@@ -257,10 +257,10 @@ function drawFarLeg(ctx: Ctx, shade: string, line: string): void {
 // boundary) — the two-tone that makes the form read as volume rather than a flat silhouette.
 function drawBelly(ctx: Ctx, fill: string): void {
   ctx.beginPath();
-  ctx.moveTo(-0.13, 0.40);
-  ctx.quadraticCurveTo(-0.02, 0.30, 0.18, 0.32);   // under the long belly to the groin
-  ctx.quadraticCurveTo(0.08, 0.24, -0.05, 0.24);   // down the front of the thigh to the knee
-  ctx.quadraticCurveTo(-0.13, 0.32, -0.13, 0.40);  // up the chest front
+  ctx.moveTo(-0.03, 0.41);
+  ctx.quadraticCurveTo(0.05, 0.31, 0.18, 0.33);    // along the belly underside to the groin
+  ctx.quadraticCurveTo(0.08, 0.25, -0.05, 0.25);   // down the front of the thigh to the knee
+  ctx.quadraticCurveTo(-0.06, 0.33, -0.03, 0.41);  // up the chest front
   ctx.closePath();
   ctx.fillStyle = fill; ctx.fill();
 }
@@ -275,7 +275,7 @@ function drawToes(ctx: Ctx, color: string): void {
 function drawPaw(ctx: Ctx, color: string): void {
   ctx.fillStyle = color;
   ctx.beginPath();
-  ctx.arc(-0.13, 0.25, 0.024, 0, Math.PI * 2);
+  ctx.arc(-0.20, 0.31, 0.024, 0, Math.PI * 2);
   ctx.fill();
 }
 
