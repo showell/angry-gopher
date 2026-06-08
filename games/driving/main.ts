@@ -48,7 +48,7 @@ const H = canvas.height;
 const FOV = 70;
 const FOCAL = (W / 2) / Math.tan((FOV / 2) * Math.PI / 180);   // base focal, looking straight ahead
 const EYE_H = 1.2;
-const MIN_SCENERY_PX = 4;   // skip scenery that would project shorter than this (far AND short)
+const MIN_SCENERY_PX = 2;   // skip scenery that would project shorter than this (kept tight so small objects fade in rather than pop)
 
 // The Rider's focal point pulls IN as he leans into a turn — he's watching the corner he's
 // executing, not the far mountains. We measure the lean as a fraction of the enforced

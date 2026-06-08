@@ -112,20 +112,23 @@ export type FrameMap = (a: number, x: number) => RiderPt;
 // no sign-multiplier symmetry — because the geometry genuinely differs: a LEFT turn fuses on
 // the end-LEFT edge (the origin itself is the inner corner), a RIGHT turn fuses on the
 // end-RIGHT edge (the inner corner is the far one).
+// The radio tower this intersection OWNS: out past the corner, off to the right, yawed off head-on
+// (terminus included — a landmark straight ahead as the road ends). Kept SEPARATE from
+// intersectionScene so towers, being tall landmarks, can be drawn much farther ahead than the
+// corner details (sector / rail / creatures), which only matter up close.
+export function intersectionTower(ixn: Intersection, from: RoadSegment, fromMap: FrameMap, step: number): Scenery {
+  return towerScenery(fromMap, from.length + TOWER_BEYOND, from.width / 2 + TOWER_RIGHT, TOWER_YAW, step, ixn.beaconOffset);
+}
+
 export function intersectionScene(ixn: Intersection, from: RoadSegment, to: RoadSegment | null,
-                                  fromMap: FrameMap, toMap: FrameMap | null, step: number): { quads: Quad[]; polys: Poly3[]; scenery: Scenery[] } {
+                                  fromMap: FrameMap, toMap: FrameMap | null): { quads: Quad[]; polys: Poly3[]; scenery: Scenery[] } {
+  if (ixn.to === null) return { quads: [], polys: [], scenery: [] };   // terminus: no corner geometry (its tower is drawn separately)
   const W = from.width, hw = W / 2;
   const corner = (cu: number, cv: number): RiderPt => fromMap(from.length + cv, cu);
 
   const quads: Quad[] = [];
   const polys: Poly3[] = [];
   const scenery: Scenery[] = [];
-
-  // the radio tower: 100m past the corner, dead ahead of the approaching Rider. The
-  // intersection owns it — terminus included (a landmark straight ahead as the road ends).
-  scenery.push(towerScenery(fromMap, from.length + TOWER_BEYOND, hw + TOWER_RIGHT, TOWER_YAW, step, ixn.beaconOffset));
-
-  if (ixn.to === null) return { quads, polys, scenery };   // terminus: just the tower, no turn geometry
 
   // the approach road: `from`'s tail leading into the joint (end edge back ENTRY_ROAD_DIST).
   quads.push({ pts: [corner(0, 0), corner(W, 0), corner(W, -ENTRY_ROAD_DIST), corner(0, -ENTRY_ROAD_DIST)], color: ROAD });

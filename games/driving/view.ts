@@ -14,7 +14,7 @@ import { critterScenery } from './critter.ts';
 import { treeScenery } from './tree.ts';
 import { ROAD } from './scenery.ts';
 import type { Scenery, RiderPt, Quad, Poly3 } from './scenery.ts';
-import { nextToCur, curToNext, intersectionScene } from './intersection.ts';
+import { nextToCur, curToNext, intersectionScene, intersectionTower } from './intersection.ts';
 import { towerScenery } from './tower.ts';
 
 // Road quads are the ground plane (drawn first, no LOD); polys are raised road structures
@@ -34,8 +34,11 @@ function toRider(a: number, x: number, c: Pose, hw: number): RiderPt {
   return { forward: dA * cos + dX * sin, right: -dA * sin + dX * cos };
 }
 
-// how many segments to look ahead (current + this many beyond the next corner)
-const LOOK_AHEAD = 6;
+// How many segments to look ahead. Towers are tall landmarks visible from far off, so they reach
+// much further than the road/trees/critters and the corner details (which are short and only read
+// up close). Rendering cost is tolerable, so both are generous.
+const SCENERY_LOOK_AHEAD = 7;   // road strips, trees, critters, corner sector/rail/creatures
+const TOWER_LOOK_AHEAD = 10;    // just the towers
 
 // road strips are sliced into chunks this long (metres) so the ground curvature bends smoothly
 const ROAD_CHUNK = 25;
@@ -52,11 +55,12 @@ export function buildScene(state: RiderState, world: World, step: number, headYa
   const polys: Poly3[] = [];
   const scenery: Scenery[] = [];
 
-  // the Rider's current segment and up to (LOOK_AHEAD-1) segments beyond it, following each
-  // segment's exit turn — stopping at the terminus (exit.to === null), which has no successor.
+  // the Rider's current segment and the segments beyond it (out to TOWER_LOOK_AHEAD, the farthest
+  // we draw anything), following each segment's exit turn — stopping at the terminus (exit.to ===
+  // null), which has no successor.
   const chain: RoadSegment[] = [];
   let s: RoadSegment | undefined = world.segments[state.segment];
-  while (s && chain.length < LOOK_AHEAD) {
+  while (s && chain.length < TOWER_LOOK_AHEAD) {
     chain.push(s);
     const to: string | null = world.intersections[s.exitIxn].to;
     s = to ? world.segments[to] : undefined;
@@ -81,6 +85,17 @@ export function buildScene(state: RiderState, world: World, step: number, headYa
   for (let d = 0; d < chain.length; d++) {
     const seg = chain[d];
     const hw = seg.width / 2, W = seg.width;
+    const exitIxn = world.intersections[seg.exitIxn];
+
+    // TOWERS reach the farthest: this segment's exit-intersection tower, plus a mid-road tower if a
+    // long segment owns one (halfway down, 100m left of the lane, square-on).
+    scenery.push(intersectionTower(exitIxn, seg, (a, x) => at(d, a, x), step));
+    if (seg.midTower) {
+      scenery.push(towerScenery((a, x) => at(d, a, x), seg.length / 2, hw - SEG_TOWER_LEFT, 0, step, seg.midTower.beaconOffset));
+    }
+
+    // everything else (short, only reads up close) stops at the nearer scenery lookahead.
+    if (d >= SCENERY_LOOK_AHEAD) continue;
 
     // road strip in BL coords: x runs 0 (left edge) .. W (right edge). Sliced along its length so
     // the ground curvature (applied per vertex by the renderer) reads as a smooth bend, not a tilt.
@@ -98,17 +113,11 @@ export function buildScene(state: RiderState, world: World, step: number, headYa
       scenery.push(critterScenery({ at: at(d, cr.along, cr.across + hw), emoji: cr.emoji, height: cr.height, faceRight: cr.faceRight }));
     }
 
-    // a long segment owns a tower halfway down, 100m to the left of the lane, square-on (yaw 0).
-    if (seg.midTower) {
-      scenery.push(towerScenery((a, x) => at(d, a, x), seg.length / 2, hw - SEG_TOWER_LEFT, 0, step, seg.midTower.beaconOffset));
-    }
-
-    // this segment's exit JOINT draws itself: approach road + corner sector + elephants.
+    // this segment's exit JOINT draws its corner details (approach road + sector + rail + creatures).
     // The sector needs the next segment too, so toMap is supplied only when it's in view.
-    const exitIxn = world.intersections[seg.exitIxn];
     const next = chain[d + 1];
     const js = intersectionScene(exitIxn, seg, next ?? null,
-                                 (a, x) => at(d, a, x), next ? (a, x) => at(d + 1, a, x) : null, step);
+                                 (a, x) => at(d, a, x), next ? (a, x) => at(d + 1, a, x) : null);
     for (const q of js.quads) quads.push(q);
     for (const p of js.polys) polys.push(p);
     for (const sc of js.scenery) scenery.push(sc);
@@ -128,7 +137,8 @@ export function buildScene(state: RiderState, world: World, step: number, headYa
       const p = curToNext(a, x, prev.length, pIxn.angle, dir, Wp);
       return toRider(p.a, p.x, c, riderHw);
     };
-    const js = intersectionScene(pIxn, prev, chain[0], fromPrev, (a, x) => at(0, a, x), step);
+    scenery.push(intersectionTower(pIxn, prev, fromPrev, step));   // the tower we just passed
+    const js = intersectionScene(pIxn, prev, chain[0], fromPrev, (a, x) => at(0, a, x));
     for (const q of js.quads) quads.push(q);
     for (const p of js.polys) polys.push(p);
     for (const sc of js.scenery) scenery.push(sc);

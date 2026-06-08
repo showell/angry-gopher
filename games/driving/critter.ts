@@ -159,7 +159,7 @@ export function drawCritter(ctx: CanvasRenderingContext2D, cr: CritterView, proj
   const base = project(cr.at.right, cr.at.forward, 0);
   const top = project(cr.at.right, cr.at.forward, cr.height);
   const h = base.y - top.y;
-  if (h < 5) return;
+  if (h < 1) return;   // just a sub-pixel guard; the renderer's MIN_SCENERY_PX cull is the real cutoff
   ctx.save();
   ctx.translate(base.x, base.y);
   if (cr.faceRight) ctx.scale(-1, 1);   // most animal emoji face left by default
