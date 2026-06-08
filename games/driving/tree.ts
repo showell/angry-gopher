@@ -30,10 +30,10 @@ export function treeScenery(view: TreeView): Scenery {
 // ---- dimensions (metres) ----
 const SMALL_HEIGHT = 4.5;                 // odd-parity conifers (the established small size)
 const BIG_SCALE = 1.3;                    // even-parity conifers stand this much taller
-const DIST_BETWEEN_TREES = 20;            // tree spacing along a segment
+const TREES_PER_SIDE = 11;                // exactly this many trees per side, every segment (spacing derived)
 export const TREE_ROAD_OFFSET = 1.5;      // a tree stands this far beyond the lane edge (the bull lines up with it)
-const TREE_START_CLEARANCE = 6;           // first tree sits this far past the entry join
-const TREE_CLEARING_DIST_AT_END = 85;     // no trees within this of the upcoming intersection (tweakable)
+const TREE_START_INSET = 6;               // the first tree is inset this far from the entry join
+const TREE_END_INSET = 85;                // the last tree is inset this far from the upcoming intersection (clear zone)
 
 const CONIFER_GREEN = '#1c5a22';   // green conifer (every even tree)
 const CONIFER_GOLD = '#cf9a18';    // golden (autumn) accent conifer
@@ -42,19 +42,19 @@ const TRUNK = '#5a3e22';
 
 // ---- where the trees are ----
 
-// Both rows of trees along a segment. Trees stop TREE_CLEARING_DIST_AT_END short of
-// the segment's end so the upcoming intersection (corner pavement + its critters)
-// stays clear, with a small fixed back-off keeping the first tree off the entry join.
-// A function of the segment's LENGTH alone now — turn angles no longer matter (every
-// turn is <=80deg, so the corner's intrusion into the straight is negligible). Trees
-// alternate by parity: even = green and 1.3x tall, odd = the accent colour and small.
+// Both rows of trees along a segment: exactly TREES_PER_SIDE per side, evenly spaced from
+// TREE_START_INSET past the entry join to TREE_END_INSET short of the upcoming intersection (so
+// the corner pavement + its critters stay clear). The COUNT is fixed, so the spacing stretches
+// with the segment's length — a long segment spreads its trees thinner. Trees alternate by
+// parity: even = green and 1.3x tall, odd = the accent colour and small.
 export function segmentTrees(length: number, scheme: Scheme, laneHalfWidth: number): Tree[] {
   const trees: Tree[] = [];
-  const startAlong = TREE_START_CLEARANCE;
-  const endAlong = length - TREE_CLEARING_DIST_AT_END;
+  const startAlong = TREE_START_INSET;
+  const endAlong = length - TREE_END_INSET;
+  const spacing = (endAlong - startAlong) / (TREES_PER_SIDE - 1);   // anchors the first/last tree on the insets
   const treeLine = laneHalfWidth + TREE_ROAD_OFFSET;   // the default tree line, each side of the road
-  let k = 0;
-  for (let along = startAlong; along <= endAlong; along += DIST_BETWEEN_TREES, k++) {
+  for (let k = 0; k < TREES_PER_SIDE; k++) {
+    const along = startAlong + k * spacing;
     const even = k % 2 === 0;
     const color = even ? CONIFER_GREEN : accentColor(scheme);
     let height = even ? SMALL_HEIGHT * BIG_SCALE : SMALL_HEIGHT;
