@@ -41,8 +41,8 @@ const CAT: BeastForm = {
 // the foot sits behind the knee, then a small forward paw. All four legs share this shape; they
 // differ only in where they attach. (joint angles are rest-pose, radians.)
 const LEG_BASE_ANGLE = -1.745;                                // upper leg: down, a touch forward
-const UPPER_LEG: Bone = { length: 0.22, joint: 0,      r0: 0.050, r1: 0.040 };
-const LOWER_LEG: Bone = { length: 0.20, joint: 0.523,  r0: 0.040, r1: 0.032 };
+const UPPER_LEG: Bone = { length: 0.24, joint: 0,      r0: 0.050, r1: 0.040 };
+const LOWER_LEG: Bone = { length: 0.21, joint: 0.620,  r0: 0.040, r1: 0.032 };
 const PAW:       Bone = { length: 0.05, joint: -1.571, r0: 0.034, r1: 0.030 };
 
 // where the legs attach to the torso (near pair, in front; far pair set back a touch and drawn in
@@ -55,15 +55,15 @@ const FAR_SETBACK = 0.06;   // the far leg of each pair sits this much further t
 // neck: over the back to the rump, around to under the belly, and up the chest and front of the neck.
 const BODY: P[] = [
   [-0.28, 0.70],   // top of the neck (the head sits forward of and above here)
-  [-0.10, 0.645],  // withers
-  [0.18, 0.635],   // back
-  [0.44, 0.635],   // back
-  [0.64, 0.615],   // rump
-  [0.73, 0.50],    // rump-back / tail base
-  [0.66, 0.44],    // under the rump
-  [0.40, 0.43],    // belly
-  [0.10, 0.43],    // belly
-  [-0.16, 0.45],   // brisket (lower chest)
+  [-0.10, 0.655],  // withers
+  [0.18, 0.645],   // back
+  [0.44, 0.645],   // back
+  [0.64, 0.625],   // rump
+  [0.74, 0.50],    // rump-back / tail base
+  [0.67, 0.41],    // under the rump
+  [0.40, 0.40],    // belly
+  [0.10, 0.40],    // belly
+  [-0.16, 0.42],   // brisket (lower chest)
   [-0.28, 0.57],   // throat (front of the neck)
 ];
 
@@ -100,7 +100,7 @@ export interface BeastView {
   form: BeastForm;
 }
 
-const CAT_HEIGHT = 0.7;          // metres — a (cartoon-sized) cat, ground to the top of the ears
+const CAT_HEIGHT = 2.8;          // metres — a big SAFARI-sized cat, ground to the top of the ears
 const CAT_ALONG = 65;            // just past the cow herd (which ends ~55)
 const CAT_ROAD_GAP = 1.5;        // it sits this far beyond the roadside tree line, facing the road
 
@@ -239,11 +239,11 @@ function drawBody(ctx: Ctx, fill: string, line: string): void {
 // makes the form read as volume rather than a flat silhouette.
 function drawBelly(ctx: Ctx, fill: string): void {
   ctx.beginPath();
-  ctx.moveTo(-0.15, 0.45);
-  ctx.quadraticCurveTo(0.10, 0.41, 0.40, 0.42);    // along the belly bottom
-  ctx.quadraticCurveTo(0.55, 0.44, 0.66, 0.45);    // to under the rump
-  ctx.quadraticCurveTo(0.40, 0.49, 0.05, 0.49);    // back, rising a touch into the body
-  ctx.quadraticCurveTo(-0.12, 0.49, -0.15, 0.45);  // up the chest
+  ctx.moveTo(-0.15, 0.43);
+  ctx.quadraticCurveTo(0.10, 0.39, 0.40, 0.40);    // along the belly bottom
+  ctx.quadraticCurveTo(0.55, 0.42, 0.67, 0.43);    // to under the rump
+  ctx.quadraticCurveTo(0.40, 0.47, 0.05, 0.47);    // back, rising a touch into the body
+  ctx.quadraticCurveTo(-0.12, 0.47, -0.15, 0.43);  // up the chest
   ctx.closePath();
   ctx.fillStyle = fill; ctx.fill();
 }
