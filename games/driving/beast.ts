@@ -63,18 +63,18 @@ const DORSAL: P[] = [
   [0.16, 0.565],   // withers
   [0.32, 0.575],   // top of the back
   [0.48, 0.50],    // rump
-  [0.64, 0.33],    // top of the upper tail
-  [0.81, 0.16],    // top of the middle tail
-  [0.96, 0.05],    // tail tip
+  [0.66, 0.31],    // top of the upper tail
+  [0.84, 0.13],    // top of the middle tail
+  [1.01, 0.01],    // tail tip (tail ~10% longer)
 ];
 // The VENTRAL line (bottom), from the tail tip back up to the top of the neck: tail underside, under
 // the rump, belly, chest, throat, and on up the FRONT of the neck. Shares the tip with the dorsal
 // line; the body closes across the top of the neck (a short edge, hidden by the head). Drawing the
 // neck-front as part of this smooth curve is what gives the kangaroo a real, kink-free neck.
 const VENTRAL: P[] = [
-  [0.96, 0.05],    // tail tip (shared)
-  [0.83, 0.10],    // middle tail underside
-  [0.66, 0.25],    // upper tail underside
+  [1.01, 0.01],    // tail tip (shared)
+  [0.87, 0.06],    // middle tail underside
+  [0.68, 0.21],    // upper tail underside (dropped a touch — thicker through the middle)
   [0.46, 0.37],    // under the rump
   [0.18, 0.31],    // belly
   [-0.05, 0.36],   // lower chest
