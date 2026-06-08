@@ -68,9 +68,10 @@ const FRONT_HIP: P = [-0.10, 0.46];
 const HIND_HIP: P = [0.58, 0.46];
 const FAR_SETBACK = 0.06;   // the far leg of each pair sits this much further toward the tail
 
-// two triangular ears on top of the head (front one forward of the back one).
-const EAR_FRONT = { a: [-0.58, 0.85], tip: [-0.60, 1.02], b: [-0.48, 0.87] } as const;
-const EAR_BACK = { a: [-0.46, 0.87], tip: [-0.40, 1.02], b: [-0.34, 0.84] } as const;
+// two triangular ears, seen in PROFILE: the near ear stands on top of the head; the far ear sits a
+// little behind it and lower, so (drawn behind the head, in shade) only its tip peeks out.
+const NEAR_EAR = { a: [-0.53, 0.84], tip: [-0.53, 1.04], b: [-0.43, 0.87] } as const;
+const FAR_EAR = { a: [-0.45, 0.86], tip: [-0.43, 1.00], b: [-0.35, 0.85] } as const;
 
 // the long tail off the rump, sweeping back and curling up at the tip — capsules between the nodes.
 const TAIL_NODES: P[] = [[0.72, 0.52], [0.94, 0.50], [1.08, 0.58], [1.14, 0.73]];
@@ -278,10 +279,11 @@ function drawBeast(ctx: Ctx, b: BeastView, project: Project): void {
 function drawCat(ctx: Ctx, pal: BeastForm['palette']): void {
   drawLeg(ctx, far(FRONT_HIP), pal.shadow, pal.line);   // far pair, behind the body, in shade
   drawLeg(ctx, far(HIND_HIP), pal.shadow, pal.line);
+  drawEar(ctx, FAR_EAR, pal.shadow, pal.line);          // far ear, behind the head (its base is hidden)
   fillSkin(ctx, pal.body, pal.line);                    // head + neck + torso + tail as one sleek skin
   drawLeg(ctx, FRONT_HIP, pal.body, pal.line);          // near pair, over the body
   drawLeg(ctx, HIND_HIP, pal.body, pal.line);
-  drawEars(ctx, pal.body, pal.line);
+  drawEar(ctx, NEAR_EAR, pal.body, pal.line);           // near ear, on top of the head
   drawFace(ctx, pal.eye, pal.nose);
 }
 
@@ -293,7 +295,7 @@ function drawDiagnostic(ctx: Ctx): void {
   for (let i = 0; i < TAIL_NODES.length - 1; i++) {
     capsulePath(ctx, TAIL_NODES[i], TAIL_NODES[i + 1], TAIL_RADII[i], TAIL_RADII[i + 1]); ctx.stroke();
   }
-  for (const e of [EAR_FRONT, EAR_BACK]) {
+  for (const e of [NEAR_EAR, FAR_EAR]) {
     ctx.beginPath(); ctx.moveTo(e.a[0], e.a[1]); ctx.lineTo(e.tip[0], e.tip[1]); ctx.lineTo(e.b[0], e.b[1]); ctx.closePath(); ctx.stroke();
   }
 
@@ -334,15 +336,13 @@ function drawLeg(ctx: Ctx, hip: P, fill: string, line: string): void {
   capsule(ctx, j[2], j[3], PAW.r0, PAW.r1, fill, line);
 }
 
-function drawEars(ctx: Ctx, fill: string, line: string): void {
-  for (const e of [EAR_FRONT, EAR_BACK]) {
-    ctx.beginPath();
-    ctx.moveTo(e.a[0], e.a[1]);
-    ctx.lineTo(e.tip[0], e.tip[1]);
-    ctx.lineTo(e.b[0], e.b[1]);
-    ctx.closePath();
-    fillStroke(ctx, fill, line);
-  }
+function drawEar(ctx: Ctx, e: { a: P; tip: P; b: P }, fill: string, line: string): void {
+  ctx.beginPath();
+  ctx.moveTo(e.a[0], e.a[1]);
+  ctx.lineTo(e.tip[0], e.tip[1]);
+  ctx.lineTo(e.b[0], e.b[1]);
+  ctx.closePath();
+  fillStroke(ctx, fill, line);
 }
 
 function drawFace(ctx: Ctx, eye: string, nose: string): void {
