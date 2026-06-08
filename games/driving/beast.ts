@@ -27,9 +27,9 @@ interface BeastForm {
 
 const KANGAROO: BeastForm = {
   palette: { body: '#b27a44', belly: '#e3c9a3', limb: '#9c6736', line: '#3b2a17', eye: '#15100a' },
-  heel: [0.15, 0.02], toe: [-0.17, 0.00], footTop: [-0.08, 0.06], ankle: [0.15, 0.08], knee: [0.25, 0.33], hip: [0.08, 0.50], thighBack: [0.31, 0.40],
+  heel: [0.10, 0.03], toe: [-0.21, 0.00], footTop: [-0.08, 0.06], ankle: [0.10, 0.05], knee: [-0.02, 0.34], hip: [0.12, 0.50], thighBack: [0.31, 0.40],
   rump: [0.33, 0.50], backPeak: [0.20, 0.64], shoulder: [-0.02, 0.58], chestFront: [-0.12, 0.44], bellyBottom: [0.05, 0.33],
-  tailTop: [0.27, 0.47], tailBottom: [0.17, 0.38], tailTip: [0.62, 0.05],
+  tailTop: [0.25, 0.50], tailBottom: [0.13, 0.36], tailTip: [0.66, 0.02],
   neckFront: [-0.08, 0.52], throat: [-0.14, 0.62], chin: [-0.19, 0.66], snout: [-0.31, 0.72], noseTop: [-0.27, 0.77], headTop: [-0.05, 0.81], crown: [-0.04, 0.82],
   earFrontTip: [-0.12, 1.00], earBackTip: [0.06, 0.97], eye: [-0.15, 0.78], nostril: [-0.28, 0.73],
   armTop: [-0.05, 0.53], armElbow: [0.01, 0.45], armPaw: [-0.11, 0.40],
@@ -54,16 +54,23 @@ export interface BeastView {
   form: BeastForm;
 }
 
-const KANGAROO_HEIGHT = 1.8;     // a big red kangaroo stands about this tall
-const KANGAROO_ALONG = 24;       // matches the bull's BULL_DIST so the two stand opposite each other
-const KANGAROO_ROAD_GAP = 1.5;   // it stands this far beyond the roadside tree line, facing the road
+const KANGAROO_ADULT_HEIGHT = 2.7;   // metres — a big cartoon kangaroo (adult size)
+const KANGAROO_ALONG = 65;           // just past the cow herd (which ends ~55), leaving road to hop across later
+const KANGAROO_ROAD_GAP = 1.5;       // it stands this far beyond the roadside tree line, facing the road
 
-// The beasts lining a segment: for now one kangaroo on the RIGHT, opposite the bull that leads the
-// herd on the left. `treeLineOffset` is how far the roadside trees sit beyond the lane edge — the
-// kangaroo stands just past them and faces the road.
+// Build a kangaroo at a given SIZE. A beast's size (height in metres) is decoupled from its FORM (the
+// unit-frame shape), so the same kangaroo can stand as a baby, an adult, or a giant — only the height
+// changes, and drawBeast scales the whole profile to it.
+function kangaroo(along: number, across: number, height: number, faceRight: boolean): Beast {
+  return { along, across, height, faceRight, form: KANGAROO };
+}
+
+// The beasts lining a segment: for now one adult kangaroo on the RIGHT (opposite the herd, which
+// leads on the left), parked just past the herd and facing the road. `treeLineOffset` is how far the
+// roadside trees sit beyond the lane edge; the kangaroo stands just past them.
 export function segmentBeasts(laneHalfWidth: number, treeLineOffset: number): Beast[] {
   const treeX = laneHalfWidth + treeLineOffset;
-  return [{ along: KANGAROO_ALONG, across: treeX + KANGAROO_ROAD_GAP, height: KANGAROO_HEIGHT, faceRight: false, form: KANGAROO }];
+  return [kangaroo(KANGAROO_ALONG, treeX + KANGAROO_ROAD_GAP, KANGAROO_ADULT_HEIGHT, false)];
 }
 
 // Wrap a placed beast as Scenery. Like critters, it carries no extra up-close detail yet, so near
@@ -122,11 +129,11 @@ function drawTail(ctx: Ctx, F: BeastForm): void {
 function drawHindLeg(ctx: Ctx, F: BeastForm): void {
   ctx.beginPath();
   ctx.moveTo(...F.hip);
-  ctx.quadraticCurveTo(...F.thighBack, ...F.knee);   // thigh bulging back to the knee
-  ctx.lineTo(...F.ankle);                            // shank down to the ankle
+  ctx.quadraticCurveTo(...F.thighBack, ...F.knee);   // haunch bulging back, then in to the forward knee
+  ctx.lineTo(...F.ankle);                            // long shin angling back down to the ankle (the Z)
   ctx.quadraticCurveTo(...F.heel, ...F.toe);         // heel around to the foot's toe
   ctx.lineTo(...F.footTop);                          // top of the foot near the toes
-  ctx.quadraticCurveTo(0.06, 0.20, ...F.hip);        // up the front of the shin back to the hip
+  ctx.quadraticCurveTo(-0.06, 0.22, ...F.hip);       // up the front of the leg, past the knee, to the hip
   ctx.closePath();
   fillStroke(ctx, F, F.palette.limb);
 }
