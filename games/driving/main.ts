@@ -11,7 +11,8 @@ import { initialRiderState, getNextRiderState, riderHeading, leanFor, MAX_LEAN, 
 import type { RiderState } from './model.ts';
 import { buildWorld } from './world.ts';
 import { buildScene } from './view.ts';
-import { drawHorizon, sunSetFraction, sunsetWarmth } from './horizon.ts';
+import { drawHorizon } from './horizon.ts';
+import { sunSetFraction, sunsetWarmth } from './sun.ts';
 import { DETAIL_DIST, NEAR, groundDrop } from './scenery.ts';
 import type { Project, RiderPt, Quad, Poly3 } from './scenery.ts';
 

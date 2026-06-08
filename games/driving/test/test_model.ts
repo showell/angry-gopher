@@ -8,7 +8,8 @@ import { initialRiderState, getNextRiderState, assertInvariants, MAX_LEAN, TURN_
 import type { RiderState } from '../model.ts';
 import { buildWorld } from '../world.ts';
 import type { World } from '../world.ts';
-import { SUN_BEARING, sunHeightPx, horizonCrestPx, SUN_RADIUS_PX } from '../horizon.ts';
+import { SUN_BEARING, sunHeightPx, SUN_RADIUS_PX } from '../sun.ts';
+import { horizonCrestPx } from '../mountain.ts';
 
 function wrap(a: number): number {
   while (a > Math.PI) a -= 2 * Math.PI;
@@ -164,6 +165,10 @@ function main(): void {
   const sunwardDeg = Math.abs(wrap(headings['seg7'] - SUN_BEARING)) * 180 / Math.PI;
   if (sunwardDeg > 20) throw new Error(`seg7 heads ${sunwardDeg.toFixed(0)}deg off the sun (> 20deg) — not a sun-ward approach`);
   const crest = horizonCrestPx(SUN_BEARING);                       // the western range at the sun's bearing
+  // the one coupling between sun.ts and mountain.ts: the sun must SET BEHIND the western range, so
+  // at the sun's bearing the crest is a real mountain, not open sky (which rolls to only ~30px).
+  const MOUNTAIN_CREST_MIN = 40;
+  if (crest < MOUNTAIN_CREST_MIN) throw new Error(`sun and west range decoupled: crest at the sun's bearing is only ${crest.toFixed(0)}px (open sky, not a mountain)`);
   const sunCentreOnEntry = sunHeightPx(s7start);
   const sunBottomAtExit = sunHeightPx(s7end) - SUN_RADIUS_PX;
   if (!(sunCentreOnEntry > crest)) {
