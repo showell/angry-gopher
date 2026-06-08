@@ -12,6 +12,7 @@ import { gazeAngle } from './model.ts';
 import type { World } from './world.ts';
 import type { RoadSegment } from './road_segment.ts';
 import { critterScenery } from './critter.ts';
+import { beastScenery } from './beast.ts';
 import { treeScenery } from './tree.ts';
 import { ROAD } from './scenery.ts';
 import type { Scenery, RiderPt, Quad, Poly3 } from './scenery.ts';
@@ -112,6 +113,9 @@ export function buildScene(state: RiderState, world: World, step: number, headYa
     }
     for (const cr of seg.critters) {
       scenery.push(critterScenery({ at: at(d, cr.along, cr.across + hw), emoji: cr.emoji, height: cr.height, faceRight: cr.faceRight }));
+    }
+    for (const b of seg.beasts) {
+      scenery.push(beastScenery({ at: at(d, b.along, b.across + hw), height: b.height, faceRight: b.faceRight, form: b.form }));
     }
 
     // this segment's exit JOINT draws its corner details (approach road + sector + rail + creatures).

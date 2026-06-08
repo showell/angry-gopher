@@ -12,6 +12,8 @@
 
 import { farmCritters } from './farm_critter.ts';
 import type { Critter } from './critter.ts';
+import { segmentBeasts } from './beast.ts';
+import type { Beast } from './beast.ts';
 import { segmentTrees, TREE_ROAD_OFFSET } from './tree.ts';
 import type { Scheme, Tree } from './tree.ts';
 import { beaconOffsetFor } from './tower.ts';
@@ -33,7 +35,8 @@ export interface RoadSegment {
   width: number;
   scheme: Scheme;                // visual theme; drives the tree colours
   trees: Tree[];
-  critters: Critter[];      // roadside, along the segment (cows/pigs); the elephants live on the exit Intersection
+  critters: Critter[];      // roadside emoji billboards along the segment (cows/pigs); elephants live on the exit Intersection
+  beasts: Beast[];          // roadside hand-drawn beasts along the segment (the kangaroo), opposite the bull
   // graph refs: the intersections bracketing this edge. Every segment EXITS through an
   // intersection (a turn, or the terminus that closes the route), so exitIxn is never null;
   // entryIxn is null only at the route START, where the Rider just spawns (no node there).
@@ -71,6 +74,7 @@ export function buildRoadSegment(c: RoadSegmentConfig): RoadSegment {
     scheme: c.scheme,
     trees: segmentTrees(c.length, c.scheme, LANE_WIDTH / 2),
     critters: farmCritters(c.length, LANE_WIDTH / 2, TREE_ROAD_OFFSET),
+    beasts: segmentBeasts(LANE_WIDTH / 2, TREE_ROAD_OFFSET),
     entryIxn: null,
     exitIxn: '',   // a placeholder: set to the real id when this segment's exit intersection is built
     alongWhereRiderCommitsToTurn: c.length,
