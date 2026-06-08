@@ -46,9 +46,10 @@ const TORSO_R = 0.13;
 
 // the NECK: a thick capsule connecting the torso (its base, on the front-upper torso) to the head
 // (its top, sunk into the back of the head). This is the "cylinder with real weight" between them.
-const NECK_A: P = [-0.16, 0.60];
-const NECK_B: P = [-0.40, 0.70];
-const NECK_R = 0.12;
+// (15% smaller than the first cut, shrunk about its own centre.)
+const NECK_A: P = [-0.178, 0.608];
+const NECK_B: P = [-0.382, 0.693];
+const NECK_R = 0.102;
 
 // the HEAD: a sphere (circle) carried forward at the end of the neck.
 const HEAD = { cx: -0.48, cy: 0.76, r: 0.16, eye: [-0.53, 0.80], nose: [-0.63, 0.74] } as const;
@@ -83,6 +84,7 @@ const BONE = '#1f4fd8';     // skeleton bones
 const JOINT = '#e03b3b';    // skeleton joints
 const NECK_FILL = '#ff5fa6';
 const NECK_EDGE = '#d23f80';
+const SKIN = '#1faa4f';     // the stretched-skin envelope (diagnostic)
 
 // A beast in its SEGMENT's frame, like a Critter: along/across placement, world height, facing.
 export interface Beast {
@@ -167,6 +169,54 @@ function capsule(ctx: Ctx, A: P, B: P, rA: number, rB: number, fill: string, lin
   fillStroke(ctx, fill, line);
 }
 
+// Extend the current path with a smooth OPEN curve through pts (Catmull-Rom -> cubic Béziers).
+function smoothOpen(ctx: Ctx, pts: P[]): void {
+  ctx.moveTo(pts[0][0], pts[0][1]);
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p0 = pts[i - 1] ?? pts[i];
+    const p1 = pts[i];
+    const p2 = pts[i + 1];
+    const p3 = pts[i + 2] ?? pts[i + 1];
+    const c1x = p1[0] + (p2[0] - p0[0]) / 6, c1y = p1[1] + (p2[1] - p0[1]) / 6;
+    const c2x = p2[0] - (p3[0] - p1[0]) / 6, c2y = p2[1] - (p3[1] - p1[1]) / 6;
+    ctx.bezierCurveTo(c1x, c1y, c2x, c2y, p2[0], p2[1]);
+  }
+}
+
+// The external tangent between circles (c1,r1) and (c2,r2): the two points where a SKIN stretched
+// taut over both touches them, on the upper or lower side. This is how the head/neck/body/tail solids
+// give sleeker silhouette lines than their own circles — the skin spans the gaps tangentially.
+function tangentPts(c1: P, r1: number, c2: P, r2: number, upper: boolean): [P, P] {
+  const dx = c2[0] - c1[0], dy = c2[1] - c1[1], D = Math.hypot(dx, dy) || 1e-6;
+  const base = Math.atan2(dy, dx);
+  const a = Math.acos(Math.max(-1, Math.min(1, (r1 - r2) / D)));
+  const t1 = base + a, t2 = base - a;
+  const theta = (Math.sin(t1) >= Math.sin(t2)) === upper ? t1 : t2;
+  const nx = Math.cos(theta), ny = Math.sin(theta);
+  return [[c1[0] + r1 * nx, c1[1] + r1 * ny], [c2[0] + r2 * nx, c2[1] + r2 * ny]];
+}
+
+// The skin envelope: a TOP line and a BOTTOM line, each a smooth curve that wraps the internal solids
+// (head sphere -> body cylinder -> tail) along their external tangents — sleeker than the solids.
+function buildSkin(): { top: P[]; bottom: P[] } {
+  const headC: P = [HEAD.cx, HEAD.cy];
+  const tailC = TAIL_NODES[1], tailR = TAIL_RADII[1];     // the tail base is sunk inside the body; span to the next node
+  const tip = TAIL_NODES[TAIL_NODES.length - 1];
+  const midX = (TORSO_A[0] + TORSO_B[0]) / 2;
+  const noseFront: P = [HEAD.cx - HEAD.r, HEAD.cy];
+  const crown: P = [HEAD.cx, HEAD.cy + HEAD.r];
+
+  const [hT, fT] = tangentPts(headC, HEAD.r, TORSO_A, TORSO_R, true);     // head -> body top
+  const [rT, tT] = tangentPts(TORSO_B, TORSO_R, tailC, tailR, true);      // body -> tail top
+  const [hB, fB] = tangentPts(headC, HEAD.r, TORSO_A, TORSO_R, false);    // head -> body bottom
+  const [rB, tB] = tangentPts(TORSO_B, TORSO_R, tailC, tailR, false);     // body -> tail bottom
+
+  return {
+    top: [noseFront, crown, hT, fT, [midX, TORSO_A[1] + TORSO_R], rT, tT, tip],
+    bottom: [noseFront, hB, fB, [midX, TORSO_A[1] - TORSO_R], rB, tB, tip],
+  };
+}
+
 // Draw the beast in its unit frame (standing height 1, y up, feet at the origin), sized by distance.
 function drawBeast(ctx: Ctx, b: BeastView, project: Project): void {
   const base = project(b.at.right, b.at.forward, 0);
@@ -195,7 +245,7 @@ function drawCat(ctx: Ctx, pal: BeastForm['palette']): void {
   drawTail(ctx, pal.body, pal.line);
   capsule(ctx, TORSO_A, TORSO_B, TORSO_R, TORSO_R, pal.body, pal.line);   // torso cylinder
   capsule(ctx, NECK_A, NECK_B, NECK_R, NECK_R, pal.body, pal.line);       // neck cylinder
-  drawHead(ctx, pal.body, pal.line);                                      // head sphere
+  drawHead(ctx, pal.body, pal.line);                                      // head sphere — AFTER the neck, so it sits closer to the rider (on top)
   drawEars(ctx, pal.body, pal.line);
   drawFace(ctx, pal.eye, pal.nose);
   drawLeg(ctx, FRONT_HIP, pal.body, pal.line);          // near pair, over the body
@@ -218,6 +268,11 @@ function drawDiagnostic(ctx: Ctx): void {
   legSkeleton(ctx, far(HIND_HIP));
   legSkeleton(ctx, FRONT_HIP);
   legSkeleton(ctx, HIND_HIP);
+
+  const skin = buildSkin();   // the stretched-skin envelope: head -> body top -> tail, and the belly
+  ctx.strokeStyle = SKIN;
+  ctx.beginPath(); smoothOpen(ctx, skin.top); ctx.stroke();
+  ctx.beginPath(); smoothOpen(ctx, skin.bottom); ctx.stroke();
 
   capsulePath(ctx, NECK_A, NECK_B, NECK_R, NECK_R);   // the NECK, solid pink — the thing to look at
   ctx.fillStyle = NECK_FILL; ctx.fill();
