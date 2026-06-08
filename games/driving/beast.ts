@@ -58,7 +58,7 @@ const FORE_ARM:  Bone = { length: 0.165, joint: 0.219, r0: 0.027, r1: 0.016 };
 // back-of-lower-neck, withers, back, rump, then the three tail sections. Drawn as one Catmull-Rom
 // spline, so the whole curve is smooth — the tail thins as the ventral line rises to meet it.
 const DORSAL: P[] = [
-  [-0.04, 0.78],   // back of the top of the neck (out of the back of the head)
+  [0.00, 0.79],    // back of the top of the neck (the head sits forward of here)
   [0.06, 0.61],    // back of the lower neck
   [0.16, 0.565],   // withers
   [0.32, 0.575],   // top of the back
@@ -67,30 +67,31 @@ const DORSAL: P[] = [
   [0.81, 0.16],    // top of the middle tail
   [0.96, 0.05],    // tail tip
 ];
-// The VENTRAL line (bottom), from the tail tip back to the throat: tail underside, under the rump,
-// belly, chest, throat. Shares the tip with the dorsal line; the body closes across the neck (hidden
-// by the head). Its rise toward the tail tip is what gives the tail its taper.
+// The VENTRAL line (bottom), from the tail tip back up to the top of the neck: tail underside, under
+// the rump, belly, chest, throat, and on up the FRONT of the neck. Shares the tip with the dorsal
+// line; the body closes across the top of the neck (a short edge, hidden by the head). Drawing the
+// neck-front as part of this smooth curve is what gives the kangaroo a real, kink-free neck.
 const VENTRAL: P[] = [
   [0.96, 0.05],    // tail tip (shared)
   [0.83, 0.10],    // middle tail underside
   [0.66, 0.25],    // upper tail underside
   [0.46, 0.37],    // under the rump
   [0.18, 0.31],    // belly
-  [-0.05, 0.34],   // lower chest
-  [-0.15, 0.55],   // throat (front of the neck)
+  [-0.05, 0.36],   // lower chest
+  [-0.14, 0.56],   // throat
+  [-0.16, 0.72],   // up the front of the neck to its top
 ];
 
-// the head's permanent outline (snout pointing left), with the eye and nostril. The occiput (back of
-// the head) rises out of the top of the neck, continuing the dorsal curve.
+// the head: a long ellipse lying parallel to the ground (snout to the left), thinner than the neck it
+// sits on. cx/cy centre it; rx is the long (horizontal) radius, ry the short (vertical) one.
 const HEAD = {
-  throat: [-0.15, 0.63], occiput: [-0.04, 0.80], crown: [-0.12, 0.86],
-  noseTop: [-0.33, 0.81], snout: [-0.38, 0.75], chin: [-0.27, 0.68],
-  eye: [-0.21, 0.79], nostril: [-0.35, 0.76],
+  cx: -0.26, cy: 0.78, rx: 0.17, ry: 0.078,
+  eye: [-0.29, 0.81], nostril: [-0.42, 0.785],
 } as const;
 
-// two upright ears rising from the crown, the front one a touch ahead of the back one.
-const EAR_BACK = { base: [-0.05, 0.82], tip: [0.03, 1.00], r0: 0.034, r1: 0.010 } as const;
-const EAR_FRONT = { base: [-0.12, 0.83], tip: [-0.18, 1.02], r0: 0.038, r1: 0.012 } as const;
+// two upright ears rising from the top-back of the head, the front one a touch ahead of the back one.
+const EAR_BACK = { base: [-0.12, 0.83], tip: [-0.05, 1.01], r0: 0.033, r1: 0.010 } as const;
+const EAR_FRONT = { base: [-0.20, 0.85], tip: [-0.23, 1.03], r0: 0.036, r1: 0.012 } as const;
 
 const LINE_WIDTH = 0.012;   // outline weight, in standing-height units (scales with distance)
 
@@ -282,15 +283,11 @@ function drawEars(ctx: Ctx, fill: string, line: string): void {
   capsule(ctx, EAR_FRONT.base, EAR_FRONT.tip, EAR_FRONT.r0, EAR_FRONT.r1, fill, line);
 }
 
+// the head: a long horizontal ellipse, sitting on the front of the neck and reaching forward to the
+// snout. Drawn over the neck so it reads as a distinct, smaller head on a thicker neck.
 function drawHead(ctx: Ctx, fill: string, line: string): void {
   ctx.beginPath();
-  ctx.moveTo(...HEAD.throat);
-  ctx.quadraticCurveTo(-0.03, 0.73, ...HEAD.occiput);     // up the back of the head, continuing the nape
-  ctx.quadraticCurveTo(...HEAD.crown, ...HEAD.noseTop);   // over the crown to the top of the snout
-  ctx.lineTo(...HEAD.snout);                              // out to the nose tip
-  ctx.lineTo(...HEAD.chin);                               // under the muzzle to the chin
-  ctx.quadraticCurveTo(-0.19, 0.66, ...HEAD.throat);      // back to the throat
-  ctx.closePath();
+  ctx.ellipse(HEAD.cx, HEAD.cy, HEAD.rx, HEAD.ry, 0, 0, Math.PI * 2);
   fillStroke(ctx, fill, line);
 }
 
