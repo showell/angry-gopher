@@ -53,8 +53,8 @@ const westRange = (bearing: number): number => range(bearing, WEST_RANGE_BEARING
 // one-time calibration: the sun is part-behind the western range as the Rider turns onto seg9 and
 // its centre is still above the range by seg9's end — enforced by test_model.
 export const SUN_RADIUS_PX = 46;                                    // the sun disc's radius (px at base focal)
-const SUN_START_PX = 119;                                          // sun height above the horizon at step 0
-const SUN_DROP_PX_PER_STEP = 0.16 * (2 * SUN_RADIUS_PX) / 625;     // 16% of the disc diameter over seg9's ~625 steps
+const SUN_START_PX = 146;                                          // sun height above the horizon at step 0 (higher, to keep seg9)
+const SUN_DROP_PX_PER_STEP = 0.24 * (2 * SUN_RADIUS_PX) / 625;     // 24% of the disc diameter over seg9's ~625 steps (50% faster)
 export function sunHeightPx(step: number): number {
   return SUN_START_PX - SUN_DROP_PX_PER_STEP * step;
 }
@@ -115,6 +115,12 @@ export function drawHorizon(ctx: CanvasRenderingContext2D, heading: number,
 
   ctx.fillStyle = ROCK_WEST; silhouette(westRange, H / 2);                          // westward range, over the sun
   ctx.fillStyle = ROCK; silhouette(northRange, H / 2);                              // northern range
-  ctx.fillStyle = SNOW; silhouette((b) => Math.max(northRange(b), SNOWLINE), H / 2 - SNOWLINE * vScale);   // snowcaps
+  // snowcaps: the north range ABOVE the snowline. Clip to that band and paint the whole range in
+  // SNOW, so the base is one clean line. (The old max()-with-flat-bottom trick left sub-pixel white
+  // slivers wherever the noisy ridge grazed the snowline — invisible against bright sky, not dusk.)
+  ctx.save();
+  ctx.beginPath(); ctx.rect(-overscan, 0, W + 2 * overscan, H / 2 - SNOWLINE * vScale); ctx.clip();
+  ctx.fillStyle = SNOW; silhouette(northRange, H / 2);
+  ctx.restore();
   ctx.fillStyle = LAND; silhouette(groundBase, H / 2);                              // rolling land, in front
 }
