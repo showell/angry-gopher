@@ -1,39 +1,75 @@
-// beast.ts — a hand-drawn cartoon BEAST in profile (no emoji). Every beast shares one anatomy: a
-// torso with an arched back, a long heavy tail, a big hind leg on a flat foot, a small arm, an
-// upright neck, and a head with a snout, two ears and an eye. A species is just a BeastForm — the
-// palette plus the profile ANCHOR POINTS, given in a frame where the beast stands 1 unit tall with
-// its feet on y = 0, facing LEFT, x running toward the tail. The kangaroo is the first study; future
-// beasts (same anatomy, different proportions) are new BeastForms drawn by the very same code.
+// beast.ts — a hand-drawn cartoon BEAST in profile (no emoji), modelled as an ARTICULATED SKELETON.
+//
+// A beast is built from rigid PARTS, each with a permanent shape — for the leg: an upper leg, a lower
+// leg, and a foot. The JOINTS between them (hip, knee, ankle) have no size of their own; they are
+// just pivots, and a POSE is the set of joint ANGLES. Forward kinematics walks the chain — each joint
+// adds its angle to the running direction, then a rigid bone of fixed length carries on to the next
+// joint — so the limb bends at real joints, and a hop is just a change of angles, nothing redraws.
+//
+// Rigid limb parts are drawn as tapered capsules (a permanent length + end radii); the torso, head
+// and ears keep their own permanent outlines; the neck and tail are curled chains. Everything lives
+// in a frame where the beast stands 1 unit tall, feet on y = 0, facing LEFT, x running toward the
+// tail. The kangaroo is the first study; future beasts reuse this anatomy with different numbers.
 
 import type { Project, Ctx, Scenery } from './scenery.ts';
 
 // a point in the beast's profile frame: x toward the tail (right), y up, feet at the origin.
 type P = readonly [number, number];
 
+// a rigid bone: its permanent length, the RELATIVE angle (radians) of the joint at its proximal end,
+// and the taper of its flesh (radius at the proximal end r0, at the distal end r1).
+interface Bone { length: number; joint: number; r0: number; r1: number }
+
+// For now a species is just its palette; the skeleton below is the kangaroo's. A second beast will
+// lift the skeleton numbers into this form (same anatomy, different proportions).
 interface BeastForm {
-  palette: { body: string; belly: string; limb: string; line: string; eye: string };
-  // hind leg + flat foot — the kangaroo's ground support
-  heel: P; toe: P; footTop: P; ankle: P; knee: P; hip: P; thighBack: P;
-  // torso — the arched back and the belly
-  rump: P; backPeak: P; shoulder: P; chestFront: P; bellyBottom: P;
-  // the long tail
-  tailTop: P; tailBottom: P; tailTip: P;
-  // neck + head
-  neckFront: P; throat: P; chin: P; snout: P; noseTop: P; headTop: P; crown: P;
-  // ears, eye, nostril, and the small fore-arm
-  earFrontTip: P; earBackTip: P; eye: P; nostril: P;
-  armTop: P; armElbow: P; armPaw: P;
+  palette: { body: string; limb: string; line: string; eye: string };
 }
 
 const KANGAROO: BeastForm = {
-  palette: { body: '#b27a44', belly: '#e3c9a3', limb: '#9c6736', line: '#3b2a17', eye: '#15100a' },
-  heel: [0.10, 0.03], toe: [-0.21, 0.00], footTop: [-0.08, 0.06], ankle: [0.10, 0.05], knee: [-0.02, 0.34], hip: [0.12, 0.50], thighBack: [0.31, 0.40],
-  rump: [0.33, 0.50], backPeak: [0.20, 0.64], shoulder: [-0.02, 0.58], chestFront: [-0.12, 0.44], bellyBottom: [0.05, 0.33],
-  tailTop: [0.25, 0.50], tailBottom: [0.13, 0.36], tailTip: [0.66, 0.02],
-  neckFront: [-0.08, 0.52], throat: [-0.14, 0.62], chin: [-0.19, 0.66], snout: [-0.31, 0.72], noseTop: [-0.27, 0.77], headTop: [-0.05, 0.81], crown: [-0.04, 0.82],
-  earFrontTip: [-0.12, 1.00], earBackTip: [0.06, 0.97], eye: [-0.15, 0.78], nostril: [-0.28, 0.73],
-  armTop: [-0.05, 0.53], armElbow: [0.01, 0.45], armPaw: [-0.11, 0.40],
+  palette: { body: '#b27a44', limb: '#9c6736', line: '#3b2a17', eye: '#15100a' },
 };
+
+// ---- the kangaroo skeleton (rigid bones + rest-pose joint angles, radians) ----
+
+// hind leg: the Z. The thigh points down-and-forward from the hip; the knee bends the long shin back
+// down to the ankle; the ankle lays the long foot out flat. (joint angles measured rest-pose.)
+const HIP: P = [0.16, 0.46];
+const LEG_BASE_ANGLE = -2.414;                                // absolute direction of the thigh
+const THIGH: Bone = { length: 0.241, joint: 0,      r0: 0.100, r1: 0.055 };
+const SHIN:  Bone = { length: 0.277, joint: 1.290,  r0: 0.052, r1: 0.032 };
+const FOOT:  Bone = { length: 0.321, joint: -1.924, r0: 0.034, r1: 0.014 };
+
+// the small fore-arm, bent at the elbow and held up against the chest.
+const ARM_SHOULDER: P = [-0.05, 0.47];
+const ARM_BASE_ANGLE = -1.166;
+const UPPER_ARM: Bone = { length: 0.076, joint: 0,      r0: 0.035, r1: 0.025 };
+const FORE_ARM:  Bone = { length: 0.112, joint: -1.512, r0: 0.025, r1: 0.014 };
+
+// the heavy tail, curled: a chain of nodes from the rump sweeping down to the ground and tipping back
+// up. Drawn as tapering capsules between successive nodes (radius per node).
+const TAIL_NODES: P[] = [[0.30, 0.48], [0.50, 0.24], [0.62, 0.08], [0.72, 0.13]];
+const TAIL_RADII = [0.100, 0.065, 0.035, 0.018];
+
+// the curled neck, rising from the withers and bending forward to the head.
+const NECK_NODES: P[] = [[-0.01, 0.55], [-0.05, 0.66], [-0.13, 0.74]];
+const NECK_RADII = [0.075, 0.058, 0.046];
+
+// the head's permanent outline (snout pointing left), with the eye and nostril.
+const HEAD = {
+  throat: [-0.13, 0.70], skullBack: [-0.03, 0.80], crown: [-0.11, 0.85],
+  noseTop: [-0.31, 0.80], snout: [-0.35, 0.745], chin: [-0.25, 0.69],
+  eye: [-0.20, 0.785], nostril: [-0.325, 0.755],
+} as const;
+
+// two upright ears rising from the crown, the front one a touch ahead of the back one.
+const EAR_BACK = { base: [-0.05, 0.81], tip: [0.03, 0.99], r0: 0.034, r1: 0.010 } as const;
+const EAR_FRONT = { base: [-0.12, 0.82], tip: [-0.18, 1.01], r0: 0.038, r1: 0.012 } as const;
+
+// the torso's permanent outline: the arched back over the belly.
+const TORSO = {
+  chestFront: [-0.13, 0.42], shoulderTop: [-0.03, 0.55], rump: [0.32, 0.52], rumpLow: [0.27, 0.36], belly: [0.00, 0.33],
+} as const;
 
 const LINE_WIDTH = 0.012;   // outline weight, in standing-height units (scales with distance)
 
@@ -58,9 +94,9 @@ const KANGAROO_ADULT_HEIGHT = 2.7;   // metres — a big cartoon kangaroo (adult
 const KANGAROO_ALONG = 65;           // just past the cow herd (which ends ~55), leaving road to hop across later
 const KANGAROO_ROAD_GAP = 1.5;       // it stands this far beyond the roadside tree line, facing the road
 
-// Build a kangaroo at a given SIZE. A beast's size (height in metres) is decoupled from its FORM (the
-// unit-frame shape), so the same kangaroo can stand as a baby, an adult, or a giant — only the height
-// changes, and drawBeast scales the whole profile to it.
+// Build a kangaroo at a given SIZE. A beast's size (height in metres) is decoupled from its form (the
+// unit-frame skeleton), so the same kangaroo can stand as a baby, an adult, or a giant — only the
+// height changes, and drawBeast scales the whole profile to it.
 function kangaroo(along: number, across: number, height: number, faceRight: boolean): Beast {
   return { along, across, height, faceRight, form: KANGAROO };
 }
@@ -80,22 +116,54 @@ export function beastScenery(view: BeastView): Scenery {
   return { forward: view.at.forward, height: view.height, drawAsNear: draw, drawAsFar: draw };
 }
 
-// Fill the current path with `fill`, then trace its outline in the form's line colour.
-function fillStroke(ctx: Ctx, F: BeastForm, fill: string): void {
-  ctx.fillStyle = fill; ctx.fill();
-  ctx.strokeStyle = F.palette.line; ctx.stroke();
+// Forward kinematics: starting at `root` with the first bone pointing at absolute `baseAngle`, each
+// joint adds its relative angle and a rigid bone carries on to the next joint. Returns every joint
+// position (root first), so a limb's outline can be drawn between them.
+function jointsOf(root: P, baseAngle: number, bones: Bone[]): P[] {
+  const pts: P[] = [root];
+  let angle = baseAngle, x = root[0], y = root[1];
+  for (const b of bones) {
+    angle += b.joint;
+    x += b.length * Math.cos(angle);
+    y += b.length * Math.sin(angle);
+    pts.push([x, y]);
+  }
+  return pts;
 }
 
-// Draw the beast's profile, sized by distance. We map into a local frame where the standing height
-// is 1, x runs right (toward the tail) and y runs UP, with the feet on the origin; every BeastForm
-// anchor is read in that frame. Parts are drawn back-to-front so they overlap correctly.
+function fillStroke(ctx: Ctx, fill: string, line: string): void {
+  ctx.fillStyle = fill; ctx.fill();
+  ctx.strokeStyle = line; ctx.stroke();
+}
+
+// Draw one rigid bone as a tapered capsule between joints A and B (half-widths rA, rB), with rounded
+// ends — the rounding at a shared joint is what reads as the joint (a knee, an ankle).
+function capsule(ctx: Ctx, A: P, B: P, rA: number, rB: number, fill: string, line: string): void {
+  const dx = B[0] - A[0], dy = B[1] - A[1];
+  const len = Math.hypot(dx, dy) || 1e-6;
+  const ux = dx / len, uy = dy / len;   // along the bone
+  const nx = -uy, ny = ux;              // its left normal
+  const CAP = 1.33;                     // how far the rounded end bulges past the joint
+  ctx.beginPath();
+  ctx.moveTo(A[0] + nx * rA, A[1] + ny * rA);
+  ctx.lineTo(B[0] + nx * rB, B[1] + ny * rB);
+  ctx.quadraticCurveTo(B[0] + ux * rB * CAP, B[1] + uy * rB * CAP, B[0] - nx * rB, B[1] - ny * rB);
+  ctx.lineTo(A[0] - nx * rA, A[1] - ny * rA);
+  ctx.quadraticCurveTo(A[0] - ux * rA * CAP, A[1] - uy * rA * CAP, A[0] + nx * rA, A[1] + ny * rA);
+  ctx.closePath();
+  fillStroke(ctx, fill, line);
+}
+
+// Draw the beast in its unit frame (standing height 1, y up, feet at the origin), sized by distance.
+// Parts are drawn back-to-front: tail behind the body, then the torso, the near limbs over it, and
+// finally the neck and head.
 function drawBeast(ctx: Ctx, b: BeastView, project: Project): void {
   const base = project(b.at.right, b.at.forward, 0);
   const top = project(b.at.right, b.at.forward, b.height);
   const h = base.y - top.y;
   if (h < 2) return;   // too small to detail; the renderer's size cull is the real cutoff
 
-  const F = b.form;
+  const pal = b.form.palette;
   ctx.save();
   ctx.translate(base.x, base.y);
   if (b.faceRight) ctx.scale(-1, 1);   // the form faces left; flip to face right
@@ -104,102 +172,66 @@ function drawBeast(ctx: Ctx, b: BeastView, project: Project): void {
   ctx.lineJoin = 'round';
   ctx.lineCap = 'round';
 
-  drawTail(ctx, F);
-  drawHindLeg(ctx, F);
-  drawTorso(ctx, F);
-  drawEars(ctx, F);
-  drawNeckHead(ctx, F);
-  drawArm(ctx, F);
-  drawFace(ctx, F);
+  const leg = jointsOf(HIP, LEG_BASE_ANGLE, [THIGH, SHIN, FOOT]);          // [hip, knee, ankle, toe]
+  const arm = jointsOf(ARM_SHOULDER, ARM_BASE_ANGLE, [UPPER_ARM, FORE_ARM]); // [shoulder, elbow, paw]
+
+  drawChain(ctx, TAIL_NODES, TAIL_RADII, pal.body, pal.line);   // tail, behind the body
+  drawTorso(ctx, pal.body, pal.line);
+  capsule(ctx, leg[0], leg[1], THIGH.r0, THIGH.r1, pal.limb, pal.line);   // upper leg
+  capsule(ctx, leg[1], leg[2], SHIN.r0, SHIN.r1, pal.limb, pal.line);     // lower leg
+  capsule(ctx, leg[2], leg[3], FOOT.r0, FOOT.r1, pal.limb, pal.line);     // foot
+  capsule(ctx, arm[0], arm[1], UPPER_ARM.r0, UPPER_ARM.r1, pal.limb, pal.line);
+  capsule(ctx, arm[1], arm[2], FORE_ARM.r0, FORE_ARM.r1, pal.limb, pal.line);
+  drawChain(ctx, NECK_NODES, NECK_RADII, pal.body, pal.line);   // curled neck
+  drawEars(ctx, pal.body, pal.line);
+  drawHead(ctx, pal.body, pal.line);
+  drawFace(ctx, pal.eye);
 
   ctx.restore();
 }
 
-// the heavy tail, thick at the rump and tapering back-and-down to the ground behind.
-function drawTail(ctx: Ctx, F: BeastForm): void {
-  ctx.beginPath();
-  ctx.moveTo(...F.tailTop);
-  ctx.quadraticCurveTo(0.50, 0.36, ...F.tailTip);      // top edge sweeping down to the tip
-  ctx.quadraticCurveTo(0.40, 0.16, ...F.tailBottom);   // back along the underside
-  ctx.closePath();
-  fillStroke(ctx, F, F.palette.body);
+// a curled chain (neck, tail): tapering capsules between successive nodes.
+function drawChain(ctx: Ctx, nodes: P[], radii: number[], fill: string, line: string): void {
+  for (let i = 0; i < nodes.length - 1; i++) {
+    capsule(ctx, nodes[i], nodes[i + 1], radii[i], radii[i + 1], fill, line);
+  }
 }
 
-// the big hind leg: a bulging thigh to the knee, a shank to the ankle, and a long flat foot.
-function drawHindLeg(ctx: Ctx, F: BeastForm): void {
+function drawTorso(ctx: Ctx, fill: string, line: string): void {
   ctx.beginPath();
-  ctx.moveTo(...F.hip);
-  ctx.quadraticCurveTo(...F.thighBack, ...F.knee);   // haunch bulging back, then in to the forward knee
-  ctx.lineTo(...F.ankle);                            // long shin angling back down to the ankle (the Z)
-  ctx.quadraticCurveTo(...F.heel, ...F.toe);         // heel around to the foot's toe
-  ctx.lineTo(...F.footTop);                          // top of the foot near the toes
-  ctx.quadraticCurveTo(-0.06, 0.22, ...F.hip);       // up the front of the leg, past the knee, to the hip
+  ctx.moveTo(...TORSO.chestFront);
+  ctx.quadraticCurveTo(-0.10, 0.52, ...TORSO.shoulderTop);   // up the chest to the withers
+  ctx.quadraticCurveTo(0.16, 0.63, ...TORSO.rump);           // over the arched back
+  ctx.quadraticCurveTo(0.36, 0.44, ...TORSO.rumpLow);        // down the rump
+  ctx.quadraticCurveTo(0.10, 0.30, ...TORSO.belly);          // under the belly
+  ctx.quadraticCurveTo(-0.13, 0.34, ...TORSO.chestFront);    // up to the chest front
   ctx.closePath();
-  fillStroke(ctx, F, F.palette.limb);
+  fillStroke(ctx, fill, line);
 }
 
-// the torso: up the chest, over the arched back to the rump, then under the belly.
-function drawTorso(ctx: Ctx, F: BeastForm): void {
-  ctx.beginPath();
-  ctx.moveTo(...F.chestFront);
-  ctx.quadraticCurveTo(-0.07, 0.60, ...F.shoulder);    // up the chest to the shoulder
-  ctx.quadraticCurveTo(...F.backPeak, ...F.rump);      // over the arched back to the rump
-  ctx.quadraticCurveTo(0.28, 0.38, ...F.bellyBottom);  // down the rump and under the belly
-  ctx.quadraticCurveTo(-0.05, 0.34, ...F.chestFront);  // belly forward to the chest
-  ctx.closePath();
-  fillStroke(ctx, F, F.palette.body);
+function drawEars(ctx: Ctx, fill: string, line: string): void {
+  capsule(ctx, EAR_BACK.base, EAR_BACK.tip, EAR_BACK.r0, EAR_BACK.r1, fill, line);
+  capsule(ctx, EAR_FRONT.base, EAR_FRONT.tip, EAR_FRONT.r0, EAR_FRONT.r1, fill, line);
 }
 
-// two upright ears rising from the crown; the back ear sits a touch behind the front one.
-function drawEars(ctx: Ctx, F: BeastForm): void {
+function drawHead(ctx: Ctx, fill: string, line: string): void {
   ctx.beginPath();
-  ctx.moveTo(-0.02, 0.80);
-  ctx.quadraticCurveTo(0.10, 0.92, ...F.earBackTip);
-  ctx.quadraticCurveTo(0.02, 0.86, 0.03, 0.80);
+  ctx.moveTo(...HEAD.throat);
+  ctx.quadraticCurveTo(-0.02, 0.74, ...HEAD.skullBack);   // up the back of the skull
+  ctx.quadraticCurveTo(...HEAD.crown, ...HEAD.noseTop);   // over the crown to the top of the snout
+  ctx.lineTo(...HEAD.snout);                              // out to the nose tip
+  ctx.lineTo(...HEAD.chin);                               // under the muzzle to the chin
+  ctx.quadraticCurveTo(-0.16, 0.67, ...HEAD.throat);      // back to the throat
   ctx.closePath();
-  fillStroke(ctx, F, F.palette.body);
-
-  ctx.beginPath();
-  ctx.moveTo(-0.09, 0.80);
-  ctx.quadraticCurveTo(-0.16, 0.92, ...F.earFrontTip);
-  ctx.quadraticCurveTo(-0.06, 0.88, -0.03, 0.80);
-  ctx.closePath();
-  fillStroke(ctx, F, F.palette.body);
+  fillStroke(ctx, fill, line);
 }
 
-// the upright neck and the head: up the back of the neck, over the skull, out to the snout, and
-// back under the muzzle and throat to the chest.
-function drawNeckHead(ctx: Ctx, F: BeastForm): void {
+function drawFace(ctx: Ctx, eye: string): void {
+  ctx.fillStyle = eye;
   ctx.beginPath();
-  ctx.moveTo(...F.shoulder);                          // back-of-neck base, at the shoulder
-  ctx.quadraticCurveTo(0.05, 0.70, ...F.crown);       // up the back of the neck to the crown
-  ctx.quadraticCurveTo(...F.headTop, ...F.noseTop);   // over the skull to the top of the snout
-  ctx.lineTo(...F.snout);                             // out to the nose tip
-  ctx.lineTo(...F.chin);                              // under the muzzle to the chin
-  ctx.quadraticCurveTo(...F.throat, ...F.neckFront);  // down the throat
-  ctx.lineTo(...F.shoulder);                          // close along the chest
-  ctx.closePath();
-  fillStroke(ctx, F, F.palette.body);
-}
-
-// the small fore-arm, bent and held up against the chest.
-function drawArm(ctx: Ctx, F: BeastForm): void {
-  ctx.beginPath();
-  ctx.moveTo(...F.armTop);
-  ctx.quadraticCurveTo(0.04, 0.47, ...F.armElbow);
-  ctx.lineTo(...F.armPaw);
-  ctx.quadraticCurveTo(-0.05, 0.43, -0.02, 0.50);
-  ctx.closePath();
-  fillStroke(ctx, F, F.palette.limb);
-}
-
-// the eye and the nostril — two filled dots in the line colour.
-function drawFace(ctx: Ctx, F: BeastForm): void {
-  ctx.fillStyle = F.palette.eye;
-  ctx.beginPath();
-  ctx.arc(F.eye[0], F.eye[1], 0.022, 0, Math.PI * 2);
+  ctx.arc(HEAD.eye[0], HEAD.eye[1], 0.022, 0, Math.PI * 2);
   ctx.fill();
   ctx.beginPath();
-  ctx.arc(F.nostril[0], F.nostril[1], 0.009, 0, Math.PI * 2);
+  ctx.arc(HEAD.nostril[0], HEAD.nostril[1], 0.009, 0, Math.PI * 2);
   ctx.fill();
 }
