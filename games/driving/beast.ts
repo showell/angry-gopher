@@ -23,12 +23,13 @@ interface Bone { length: number; joint: number; r0: number; r1: number }
 // For now a species is just its palette; the skeleton below is the kangaroo's. A second beast will
 // lift the skeleton numbers into this form (same anatomy, different proportions).
 interface BeastForm {
-  palette: { body: string; belly: string; limb: string; line: string; eye: string };
+  palette: { body: string; belly: string; limb: string; shadow: string; line: string; eye: string };
 }
 
 const KANGAROO: BeastForm = {
-  // two-tone, like the emoji: brown on the back/outer, cream belly on the underside and inner limbs.
-  palette: { body: '#b27a44', belly: '#e6cda6', limb: '#a06f3c', line: '#3b2a17', eye: '#15100a' },
+  // two-tone, like the emoji: brown on the back/outer, cream belly on the underside and inner limbs;
+  // shadow is the darker tone for the far-side leg (in shade behind the body).
+  palette: { body: '#b27a44', belly: '#e6cda6', limb: '#a06f3c', shadow: '#82592f', line: '#3b2a17', eye: '#15100a' },
 };
 
 // ---- the kangaroo skeleton (rigid bones + rest-pose joint angles, radians) ----
@@ -51,27 +52,30 @@ const FORE_ARM:  Bone = { length: 0.165, joint: 0.219, r0: 0.027, r1: 0.016 };
 
 // the heavy tail: thick as the haunch at the root, sweeping in one smooth curve down and back to a
 // low point that rests near the ground (no up-hook). Tapering capsules between successive nodes.
-const TAIL_NODES: P[] = [[0.40, 0.50], [0.62, 0.30], [0.80, 0.13], [0.94, 0.04]];
+const TAIL_NODES: P[] = [[0.44, 0.49], [0.64, 0.29], [0.81, 0.13], [0.94, 0.04]];
 const TAIL_RADII = [0.130, 0.085, 0.045, 0.012];
 
-// the curled neck, rising from the withers and bending forward to the head.
-const NECK_NODES: P[] = [[-0.01, 0.55], [-0.05, 0.66], [-0.13, 0.74]];
-const NECK_RADII = [0.075, 0.058, 0.046];
+// the neck, leaning forward from the withers to the head. Its back edge is the upper part of the
+// dorsal curve, so its lower node sits back, over the start of the back, to flow into it smoothly.
+const NECK_NODES: P[] = [[0.03, 0.55], [-0.02, 0.66], [-0.08, 0.76]];
+const NECK_RADII = [0.090, 0.065, 0.050];
 
-// the head's permanent outline (snout pointing left), with the eye and nostril.
+// the head's permanent outline (snout pointing left), with the eye and nostril. The occiput (back of
+// the head) continues straight up out of the nape, so the dorsal line runs unbroken into the neck.
 const HEAD = {
-  throat: [-0.13, 0.70], skullBack: [-0.03, 0.80], crown: [-0.11, 0.85],
-  noseTop: [-0.31, 0.80], snout: [-0.35, 0.745], chin: [-0.25, 0.69],
-  eye: [-0.20, 0.785], nostril: [-0.325, 0.755],
+  throat: [-0.14, 0.70], occiput: [-0.04, 0.82], crown: [-0.11, 0.86],
+  noseTop: [-0.32, 0.81], snout: [-0.37, 0.75], chin: [-0.26, 0.68],
+  eye: [-0.21, 0.79], nostril: [-0.345, 0.76],
 } as const;
 
 // two upright ears rising from the crown, the front one a touch ahead of the back one.
-const EAR_BACK = { base: [-0.05, 0.81], tip: [0.03, 0.99], r0: 0.034, r1: 0.010 } as const;
-const EAR_FRONT = { base: [-0.12, 0.82], tip: [-0.18, 1.01], r0: 0.038, r1: 0.012 } as const;
+const EAR_BACK = { base: [-0.05, 0.82], tip: [0.03, 1.00], r0: 0.034, r1: 0.010 } as const;
+const EAR_FRONT = { base: [-0.12, 0.83], tip: [-0.18, 1.02], r0: 0.038, r1: 0.012 } as const;
 
-// the torso's permanent outline: the arched back over the belly.
+// the torso's permanent outline: the long, gently arched back (the middle of the dorsal curve) over
+// the belly. The withers meet the neck's base, and the rump meets the tail's base.
 const TORSO = {
-  chestFront: [-0.15, 0.42], shoulderTop: [-0.04, 0.55], rump: [0.42, 0.50], rumpLow: [0.36, 0.36], belly: [0.02, 0.33],
+  chestFront: [-0.15, 0.42], shoulderTop: [0.03, 0.55], rump: [0.44, 0.50], rumpLow: [0.36, 0.36], belly: [0.02, 0.33],
 } as const;
 
 const LINE_WIDTH = 0.012;   // outline weight, in standing-height units (scales with distance)
@@ -178,6 +182,7 @@ function drawBeast(ctx: Ctx, b: BeastView, project: Project): void {
   const leg = jointsOf(HIP, LEG_BASE_ANGLE, [THIGH, SHIN, FOOT]);          // [hip, knee, ankle, toe]
   const arm = jointsOf(ARM_SHOULDER, ARM_BASE_ANGLE, [UPPER_ARM, FORE_ARM]); // [shoulder, elbow, paw]
 
+  drawFarLeg(ctx, pal.shadow, pal.line);                       // far hind leg, behind everything, set back
   drawChain(ctx, TAIL_NODES, TAIL_RADII, pal.body, pal.line);   // tail, behind the body
   drawTorso(ctx, pal.body, pal.line);
   capsule(ctx, leg[0], leg[1], THIGH.r0, THIGH.r1, pal.limb, pal.line);   // upper leg (the haunch)
@@ -206,13 +211,24 @@ function drawChain(ctx: Ctx, nodes: P[], radii: number[], fill: string, line: st
 function drawTorso(ctx: Ctx, fill: string, line: string): void {
   ctx.beginPath();
   ctx.moveTo(...TORSO.chestFront);
-  ctx.quadraticCurveTo(-0.11, 0.52, ...TORSO.shoulderTop);   // up the chest to the withers
-  ctx.quadraticCurveTo(0.18, 0.62, ...TORSO.rump);           // over the long arched back
-  ctx.quadraticCurveTo(0.46, 0.42, ...TORSO.rumpLow);        // down the rump
-  ctx.quadraticCurveTo(0.12, 0.30, ...TORSO.belly);          // under the belly
+  ctx.quadraticCurveTo(-0.10, 0.50, ...TORSO.shoulderTop);   // up the chest to the withers
+  ctx.quadraticCurveTo(0.24, 0.585, ...TORSO.rump);          // over the long, gently arched back
+  ctx.quadraticCurveTo(0.48, 0.42, ...TORSO.rumpLow);        // down the rump
+  ctx.quadraticCurveTo(0.14, 0.30, ...TORSO.belly);          // under the belly
   ctx.quadraticCurveTo(-0.15, 0.34, ...TORSO.chestFront);    // up to the chest front
   ctx.closePath();
   fillStroke(ctx, fill, line);
+}
+
+// the FAR hind leg, set back a touch from the near one and drawn in shade behind the body, so the
+// kangaroo reads as standing on two legs. Same bones, hip shifted toward the tail.
+const FAR_LEG_SETBACK = 0.05;
+function drawFarLeg(ctx: Ctx, shade: string, line: string): void {
+  const farHip: P = [HIP[0] + FAR_LEG_SETBACK, HIP[1]];
+  const leg = jointsOf(farHip, LEG_BASE_ANGLE, [THIGH, SHIN, FOOT]);
+  capsule(ctx, leg[0], leg[1], THIGH.r0, THIGH.r1, shade, line);
+  capsule(ctx, leg[1], leg[2], SHIN.r0, SHIN.r1, shade, line);
+  capsule(ctx, leg[2], leg[3], FOOT.r0, FOOT.r1, shade, line);
 }
 
 // the cream underside: belly + the front of the haunch, drawn over the brown body (no outline, soft
@@ -249,11 +265,11 @@ function drawEars(ctx: Ctx, fill: string, line: string): void {
 function drawHead(ctx: Ctx, fill: string, line: string): void {
   ctx.beginPath();
   ctx.moveTo(...HEAD.throat);
-  ctx.quadraticCurveTo(-0.02, 0.74, ...HEAD.skullBack);   // up the back of the skull
+  ctx.quadraticCurveTo(-0.03, 0.75, ...HEAD.occiput);     // up the back of the head, continuing the nape
   ctx.quadraticCurveTo(...HEAD.crown, ...HEAD.noseTop);   // over the crown to the top of the snout
   ctx.lineTo(...HEAD.snout);                              // out to the nose tip
   ctx.lineTo(...HEAD.chin);                               // under the muzzle to the chin
-  ctx.quadraticCurveTo(-0.16, 0.67, ...HEAD.throat);      // back to the throat
+  ctx.quadraticCurveTo(-0.18, 0.67, ...HEAD.throat);      // back to the throat
   ctx.closePath();
   fillStroke(ctx, fill, line);
 }
