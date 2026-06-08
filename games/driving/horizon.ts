@@ -51,20 +51,23 @@ const westRange = (bearing: number): number => range(bearing, WEST_RANGE_BEARING
 // one-time calibration: the sun is part-behind the western range as the Rider turns onto seg9 and
 // its centre is still above the range by seg9's end — enforced by test_model.
 export const SUN_RADIUS_PX = 46;                                    // the sun disc's radius (px at base focal)
-const SUN_START_PX = 240;                                          // sun height above the horizon at step 0 (high, with ramp-up room)
-const SUN_DROP_PX_PER_STEP = 0.48 * (2 * SUN_RADIUS_PX) / 625;     // 48% of the disc diameter over seg9's ~625 steps (fast)
+const SUN_START_PX = 217.8;                                        // tuned so the sun's seg9-ENTRY height (~92px) is unchanged when the rate changes
+const SUN_DROP_PX_PER_STEP = 0.408 * (2 * SUN_RADIUS_PX) / 625;    // ~41% of the disc diameter over seg9 (15% slower, more sun in seg12)
 export function sunHeightPx(step: number): number {
   return SUN_START_PX - SUN_DROP_PX_PER_STEP * step;
 }
-// How far "dusk" has progressed (0 = day, 1 = night), driving the sky colour. While ANY of the
-// disc — and the ambient light it bends over the mountains — is still up, dusk creeps in at HALF
-// speed; once the sun is TRULY below the horizon (whole disc under it) the remaining ambient fades
-// the rest of the way. The slow phase is the 2x-slower darkening the dusk wanted.
+// How far "dusk" has progressed (0 = day, 1 = night), driving the sky colour. While the sun is up
+// the darkening is a SQUARED ramp — it barely moves while the sun is high and accelerates as the
+// sun nears the horizon, so the sky stays bright until around sunset. Once the sun is TRULY below
+// the horizon (whole disc under it) the remaining ambient fades the rest of the way.
 export function sunSetFraction(step: number): number {
   const h = sunHeightPx(step);
   const trulyBelow = -SUN_RADIUS_PX;                                   // the whole disc is under the horizon here
   const slowEnd = 0.5 * (SUN_START_PX - trulyBelow) / SUN_START_PX;    // dusk reached by the time it's truly below
-  if (h >= trulyBelow) return Math.max(0, (SUN_START_PX - h) / (SUN_START_PX - trulyBelow) * slowEnd);
+  if (h >= trulyBelow) {
+    const p = (SUN_START_PX - h) / (SUN_START_PX - trulyBelow);        // 0 at the start, 1 as the sun reaches truly-below
+    return Math.max(0, slowEnd * p * p);                              // squared: slow while the sun is high, faster near sunset
+  }
   return Math.min(1, slowEnd + (trulyBelow - h) / SUN_RADIUS_PX * (1 - slowEnd));
 }
 // the tallest horizon silhouette at a given bearing — the effective occluder of the sun there.
@@ -91,19 +94,23 @@ function snowColor(step: number): string {
 // dead-flat horizontal line. A single broad ARCH centred on the range (a cos, not a low-freq sin
 // that just reads as a tilt): the base dips deepest under the tall central peak and rises toward the
 // edges. A pure function of bearing, so it holds still in the world as the Rider turns.
-// The snowcap sits ONLY on the range's single TALLEST hump (it looked odd straddling two). Locate
-// that hump once, then key a subtle cap there: a HIGH snowline, so the shorter humps (~95px vs the
-// peak's ~148px) stay bare, with a shallow dip under the summit for a gently curved cap base. Where
-// range > snowlineAt only on the one hump, that's the only place snow appears.
-const SNOW_PEAK_BEARING = (() => {
-  let bm = 0, vm = -1;
-  for (let b = -0.5; b <= 0.5; b += 0.01) { const v = northRange(b); if (v > vm) { vm = v; bm = b; } }
-  return bm;
+// The snowcap sits ONLY on the range's single TALLEST hump (it looked odd straddling two), and its
+// base FOLLOWS the ridge so it reads as curved, not a flat line. The snowline is high — only the
+// tallest hump (~148px vs the others' ~95px) clears SNOW_THRESHOLD — and dips under the summit in
+// proportion to how far the ridge rises above the threshold: deepest (by SNOW_DIP) at the peak,
+// tapering to nothing at the flanks. (A curve CENTRED on the peak reads flat right there; this
+// borrows the ridge's own curvature instead.)
+const SNOW_PEAK_HEIGHT = (() => {
+  let vm = -1;
+  for (let b = -0.5; b <= 0.5; b += 0.01) vm = Math.max(vm, northRange(b));
+  return vm;
 })();
-const SNOW_BASE = 122;           // snowline height at the cap flanks — only the tallest hump pokes above it
-const SNOW_CURVE_AMP = 7;        // the base dips this much under the summit (gently curved cap bottom)
-const SNOW_CURVE_FREQ = 5.0;
-const snowlineAt = (bearing: number): number => SNOW_BASE - SNOW_CURVE_AMP * Math.cos((bearing - SNOW_PEAK_BEARING) * SNOW_CURVE_FREQ);
+const SNOW_THRESHOLD = 124;      // only ridge above this gets snow — isolates the single tallest hump
+const SNOW_DIP = 10;             // how far the snowline dips under the summit — the cap base's curve depth
+const snowlineAt = (bearing: number): number => {
+  const above = Math.max(0, Math.min(1, (northRange(bearing) - SNOW_THRESHOLD) / (SNOW_PEAK_HEIGHT - SNOW_THRESHOLD)));
+  return SNOW_THRESHOLD - SNOW_DIP * above;
+};
 
 // Draw the whole horizon for the Rider's heading: the setting sun + glow (behind),
 // the westward and (snowcapped) northern ranges, and the rolling foreground land.
