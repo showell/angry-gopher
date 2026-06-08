@@ -68,15 +68,26 @@ const focalForLean = (lean: number): number => {
 const HEAD_YAW_FRAC = 0.15;
 
 // The sun SETS over the ride: its elevation drops a fixed amount per STEP — a pure function of the
-// step, like the beacon clock, so it scrubs cleanly on reverse and freezes on pause. Rate is a
-// one-time calibration: 8% of the sun's 7.678deg angular diameter (radius 46px at FOCAL 685.5)
-// over the 625-step traversal of seg9, the route's most direct approach toward it. The start
-// elevation places the sun straddling the western range through seg9 (still setting, not yet gone
-// behind) and mostly-behind it by the ride's end.
-const SUN_SET_DEG_PER_STEP = 0.08 * 7.678 / 625;   // = 0.000983 deg/step
-const SUN_ELEV_START_DEG = 6.65;
+// step, like the beacon clock, so it scrubs cleanly on reverse and freezes on pause. The HEADLINE
+// effect is the SKY dimming with it (skyColor, below); the disc itself is secondary. Rate doubles
+// the original calibration (16% of the sun's 7.678deg diameter over the 625-step seg9 traversal,
+// the route's most direct approach toward the sun); start elevation is ~2x as high to match.
+const SUN_SET_DEG_PER_STEP = 0.16 * 7.678 / 625;   // = 0.001966 deg/step (2x)
+const SUN_ELEV_START_DEG = 13.3;                   // ~2x as high (often off-screen on the early segments)
 const sunHeightPx = (step: number): number =>
   FOCAL * Math.tan((SUN_ELEV_START_DEG - SUN_SET_DEG_PER_STEP * step) * Math.PI / 180);
+
+// The sky DIMS as the sun sets — the main effect. Lerp the whole sky colour from day to a dusk
+// blue as the sun descends from its start elevation toward the horizon (t = the fraction it has
+// fallen). Darkening ALL channels (not just B) keeps it reading blue rather than fading to grey.
+const DAY_SKY = [142, 202, 230];    // #8ecae6 (the established daytime sky)
+const DUSK_SKY = [36, 58, 94];      // deep dusk blue
+const skyColor = (step: number): string => {
+  const elev = SUN_ELEV_START_DEG - SUN_SET_DEG_PER_STEP * step;
+  const t = Math.max(0, Math.min(1, 1 - elev / SUN_ELEV_START_DEG));   // 0 at the start, 1 once the sun reaches the horizon
+  const ch = (i: number): number => Math.round(DAY_SKY[i] + (DUSK_SKY[i] - DAY_SKY[i]) * t);
+  return `rgb(${ch(0)},${ch(1)},${ch(2)})`;
+};
 
 // ---- the world + the Rider's history (a forward/back stack of RiderStates) ----
 const world = buildWorld();
@@ -258,7 +269,7 @@ function render(rider: RiderState): void {
   // sky above / grass below, drawn oversized so the rolled frame's corners stay filled
   // (two fillRects — cheap at any size).
   const BIG = W + H;
-  ctx.fillStyle = '#8ecae6';
+  ctx.fillStyle = skyColor(step);
   ctx.fillRect(W / 2 - BIG, H / 2 - BIG, 2 * BIG, BIG);
   ctx.fillStyle = '#4a8f43';
   ctx.fillRect(W / 2 - BIG, H / 2, 2 * BIG, BIG);
