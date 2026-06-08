@@ -23,22 +23,24 @@ interface Bone { length: number; joint: number; r0: number; r1: number }
 // For now a species is just its palette; the skeleton below is the kangaroo's. A second beast will
 // lift the skeleton numbers into this form (same anatomy, different proportions).
 interface BeastForm {
-  palette: { body: string; limb: string; line: string; eye: string };
+  palette: { body: string; belly: string; limb: string; line: string; eye: string };
 }
 
 const KANGAROO: BeastForm = {
-  palette: { body: '#b27a44', limb: '#9c6736', line: '#3b2a17', eye: '#15100a' },
+  // two-tone, like the emoji: brown on the back/outer, cream belly on the underside and inner limbs.
+  palette: { body: '#b27a44', belly: '#e6cda6', limb: '#a06f3c', line: '#3b2a17', eye: '#15100a' },
 };
 
 // ---- the kangaroo skeleton (rigid bones + rest-pose joint angles, radians) ----
 
-// hind leg: the Z. The thigh points down-and-forward from the hip; the knee bends the long shin back
-// down to the ankle; the ankle lays the long foot out flat. (joint angles measured rest-pose.)
-const HIP: P = [0.16, 0.46];
-const LEG_BASE_ANGLE = -2.414;                                // absolute direction of the thigh
-const THIGH: Bone = { length: 0.241, joint: 0,      r0: 0.100, r1: 0.055 };
-const SHIN:  Bone = { length: 0.277, joint: 1.290,  r0: 0.052, r1: 0.032 };
-const FOOT:  Bone = { length: 0.321, joint: -1.924, r0: 0.034, r1: 0.014 };
+// hind leg: the Z. A big, long, thick THIGH (the haunch) points down-and-forward from the hip; a
+// short, slender SHIN bends back down to the ankle; the ankle lays the long FOOT out flat. Lengths
+// and thicknesses read from the emoji's shading (thigh > foot > shin). (joint angles are rest-pose.)
+const HIP: P = [0.17, 0.48];
+const LEG_BASE_ANGLE = -2.335;                                // absolute direction of the thigh
+const THIGH: Bone = { length: 0.332, joint: 0,      r0: 0.130, r1: 0.050 };
+const SHIN:  Bone = { length: 0.194, joint: 1.367,  r0: 0.048, r1: 0.030 };
+const FOOT:  Bone = { length: 0.316, joint: -1.982, r0: 0.032, r1: 0.013 };
 
 // the small fore-arm, bent at the elbow and held up against the chest.
 const ARM_SHOULDER: P = [-0.05, 0.47];
@@ -46,10 +48,10 @@ const ARM_BASE_ANGLE = -1.166;
 const UPPER_ARM: Bone = { length: 0.076, joint: 0,      r0: 0.035, r1: 0.025 };
 const FORE_ARM:  Bone = { length: 0.112, joint: -1.512, r0: 0.025, r1: 0.014 };
 
-// the heavy tail, curled: a chain of nodes from the rump sweeping down to the ground and tipping back
-// up. Drawn as tapering capsules between successive nodes (radius per node).
-const TAIL_NODES: P[] = [[0.30, 0.48], [0.50, 0.24], [0.62, 0.08], [0.72, 0.13]];
-const TAIL_RADII = [0.100, 0.065, 0.035, 0.018];
+// the heavy tail: thick as the haunch at the root, sweeping in one smooth curve down and back to a
+// low point that rests near the ground (no up-hook). Tapering capsules between successive nodes.
+const TAIL_NODES: P[] = [[0.30, 0.50], [0.54, 0.30], [0.74, 0.13], [0.90, 0.04]];
+const TAIL_RADII = [0.130, 0.085, 0.045, 0.012];
 
 // the curled neck, rising from the withers and bending forward to the head.
 const NECK_NODES: P[] = [[-0.01, 0.55], [-0.05, 0.66], [-0.13, 0.74]];
@@ -177,11 +179,14 @@ function drawBeast(ctx: Ctx, b: BeastView, project: Project): void {
 
   drawChain(ctx, TAIL_NODES, TAIL_RADII, pal.body, pal.line);   // tail, behind the body
   drawTorso(ctx, pal.body, pal.line);
-  capsule(ctx, leg[0], leg[1], THIGH.r0, THIGH.r1, pal.limb, pal.line);   // upper leg
-  capsule(ctx, leg[1], leg[2], SHIN.r0, SHIN.r1, pal.limb, pal.line);     // lower leg
-  capsule(ctx, leg[2], leg[3], FOOT.r0, FOOT.r1, pal.limb, pal.line);     // foot
+  capsule(ctx, leg[0], leg[1], THIGH.r0, THIGH.r1, pal.limb, pal.line);   // upper leg (the haunch)
+  drawBelly(ctx, pal.belly);                                              // cream belly + thigh-front, over the body
+  capsule(ctx, leg[1], leg[2], SHIN.r0, SHIN.r1, pal.belly, pal.line);    // lower leg (cream inner)
+  capsule(ctx, leg[2], leg[3], FOOT.r0, FOOT.r1, pal.belly, pal.line);    // foot (cream)
+  drawToes(ctx, pal.line);                                                // dark toe-claws at the foot tip
   capsule(ctx, arm[0], arm[1], UPPER_ARM.r0, UPPER_ARM.r1, pal.limb, pal.line);
   capsule(ctx, arm[1], arm[2], FORE_ARM.r0, FORE_ARM.r1, pal.limb, pal.line);
+  drawPaw(ctx, pal.line);                                                 // dark paw at the arm's end
   drawChain(ctx, NECK_NODES, NECK_RADII, pal.body, pal.line);   // curled neck
   drawEars(ctx, pal.body, pal.line);
   drawHead(ctx, pal.body, pal.line);
@@ -207,6 +212,32 @@ function drawTorso(ctx: Ctx, fill: string, line: string): void {
   ctx.quadraticCurveTo(-0.13, 0.34, ...TORSO.chestFront);    // up to the chest front
   ctx.closePath();
   fillStroke(ctx, fill, line);
+}
+
+// the cream underside: belly + the front of the haunch, drawn over the brown body (no outline, soft
+// boundary) — the two-tone that makes the form read as volume rather than a flat silhouette.
+function drawBelly(ctx: Ctx, fill: string): void {
+  ctx.beginPath();
+  ctx.moveTo(-0.11, 0.40);
+  ctx.quadraticCurveTo(-0.02, 0.30, 0.12, 0.31);   // under the belly back to the groin
+  ctx.quadraticCurveTo(0.06, 0.24, -0.05, 0.24);   // down the front of the thigh to the knee
+  ctx.quadraticCurveTo(-0.11, 0.32, -0.11, 0.40);  // up the chest front
+  ctx.closePath();
+  ctx.fillStyle = fill; ctx.fill();
+}
+
+// the dark toe-claws at the front of the foot.
+function drawToes(ctx: Ctx, color: string): void {
+  capsule(ctx, [-0.23, 0.04], [-0.30, 0.015], 0.020, 0.008, color, color);
+  capsule(ctx, [-0.20, 0.03], [-0.27, 0.008], 0.018, 0.007, color, color);
+}
+
+// the dark paw at the end of the fore-arm.
+function drawPaw(ctx: Ctx, color: string): void {
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.arc(-0.12, 0.35, 0.024, 0, Math.PI * 2);
+  ctx.fill();
 }
 
 function drawEars(ctx: Ctx, fill: string, line: string): void {
