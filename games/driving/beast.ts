@@ -1,21 +1,23 @@
-// beast.ts — a hand-drawn cartoon BEAST in profile (no emoji), modelled as an ARTICULATED SKELETON.
+// beast.ts — a hand-drawn cartoon BEAST in profile (no emoji), modelled from simple solids.
 //
-// The LIMBS are rigid PARTS with permanent shapes — for each leg: an upper leg, a lower leg, a paw —
-// joined by JOINTS (the knee, the ankle) that have no size of their own; they are just pivots, and a
-// POSE is the set of joint ANGLES. Forward kinematics walks the chain, so the leg bends at real
-// joints and a gait would be just a change of angles, nothing redraws. The joints are the ONLY hard
-// angles on the animal.
+// A cat standing in profile, built from the parts you'd name pointing at it:
+//   • TORSO — a long rounded cylinder (a horizontal capsule) parallel to the ground.
+//   • NECK  — a shorter, thick cylinder (a capsule) that connects the head to the torso.
+//   • HEAD  — a sphere (a circle), carried forward at the end of the neck.
+//   • LEGS  — four articulated chains (upper leg, lower leg, paw) joined by knee/ankle JOINTS that
+//             have no size; a POSE is the set of joint ANGLES, walked by forward kinematics.
+//   • TAIL  — a tapering chain of capsules off the rump.
+// Filled in one colour the capsules and sphere union into a single connected body. Everything lives
+// in a frame where the beast stands 1 unit tall (feet on y = 0, ear tips at 1), facing LEFT, x toward
+// the tail.
 //
-// The BODY (neck + back) is the opposite: one continuous shape whose outline is a single SMOOTH
-// closed curve (a Catmull-Rom loop through the silhouette points), so there are no kinks anywhere.
-// The head, ears, tail and legs are drawn over/under it.
-//
-// This beast is a CAT standing in profile: a torso roughly parallel to the ground, four near-vertical
-// legs (a slight bend at the knee puts each foot just behind its knee), a head carried forward on a
-// short neck, and a long tail off the rump. Everything lives in a frame where the beast stands 1 unit
-// tall (feet on y = 0, top of the ears at 1), facing LEFT, x running toward the tail.
+// DEBUG (below) swaps in a diagnostic view: the neck solid pink, the other solids as see-through
+// outlines, the legs as their raw skeleton — so the underlying construction is visible. Turn it off
+// for the finished cat.
 
 import type { Project, Ctx, Scenery } from './scenery.ts';
+
+const DEBUG = true;   // TEMPORARY: show the neck (pink) + skeleton over transparent solids
 
 // a point in the beast's profile frame: x toward the tail (right), y up, feet at the origin.
 type P = readonly [number, number];
@@ -37,6 +39,20 @@ const CAT: BeastForm = {
 
 // ---- the cat skeleton ----
 
+// the TORSO: a horizontal capsule (rounded cylinder) from the shoulder to the rump.
+const TORSO_A: P = [-0.14, 0.55];
+const TORSO_B: P = [0.66, 0.55];
+const TORSO_R = 0.13;
+
+// the NECK: a thick capsule connecting the torso (its base, on the front-upper torso) to the head
+// (its top, sunk into the back of the head). This is the "cylinder with real weight" between them.
+const NECK_A: P = [-0.16, 0.60];
+const NECK_B: P = [-0.40, 0.70];
+const NECK_R = 0.12;
+
+// the HEAD: a sphere (circle) carried forward at the end of the neck.
+const HEAD = { cx: -0.48, cy: 0.76, r: 0.16, eye: [-0.53, 0.80], nose: [-0.63, 0.74] } as const;
+
 // one leg: upper leg down (and slightly forward), then the knee bends the lower leg down-and-BACK so
 // the foot sits behind the knee, then a small forward paw. All four legs share this shape; they
 // differ only in where they attach. (joint angles are rest-pose, radians.)
@@ -47,41 +63,26 @@ const PAW:       Bone = { length: 0.05, joint: -1.571, r0: 0.034, r1: 0.030 };
 
 // where the legs attach to the torso (near pair, in front; far pair set back a touch and drawn in
 // shade behind the body, so all four legs read).
-const FRONT_HIP: P = [-0.16, 0.46];
-const HIND_HIP: P = [0.52, 0.46];
+const FRONT_HIP: P = [-0.10, 0.46];
+const HIND_HIP: P = [0.58, 0.46];
 const FAR_SETBACK = 0.06;   // the far leg of each pair sits this much further toward the tail
 
-// the body outline (neck + back + belly) as ONE closed smooth loop, clockwise from the top of the
-// neck: over the back to the rump, around to under the belly, and up the chest and front of the neck.
-const BODY: P[] = [
-  [-0.28, 0.70],   // top of the neck (the head sits forward of and above here)
-  [-0.10, 0.655],  // withers
-  [0.18, 0.645],   // back
-  [0.44, 0.645],   // back
-  [0.64, 0.625],   // rump
-  [0.74, 0.50],    // rump-back / tail base
-  [0.67, 0.41],    // under the rump
-  [0.40, 0.40],    // belly
-  [0.10, 0.40],    // belly
-  [-0.16, 0.42],   // brisket (lower chest)
-  [-0.28, 0.57],   // throat (front of the neck)
-];
-
-// the head: a roundish ellipse carried forward of the neck, with the eye and the nose at the front.
-const HEAD = {
-  cx: -0.45, cy: 0.74, rx: 0.15, ry: 0.135,
-  eye: [-0.50, 0.78], nose: [-0.59, 0.71],
-} as const;
-
 // two triangular ears on top of the head (front one forward of the back one).
-const EAR_FRONT = { a: [-0.55, 0.83], tip: [-0.57, 1.00], b: [-0.45, 0.85] } as const;
-const EAR_BACK = { a: [-0.43, 0.85], tip: [-0.37, 1.00], b: [-0.31, 0.82] } as const;
+const EAR_FRONT = { a: [-0.58, 0.85], tip: [-0.60, 1.02], b: [-0.48, 0.87] } as const;
+const EAR_BACK = { a: [-0.46, 0.87], tip: [-0.40, 1.02], b: [-0.34, 0.84] } as const;
 
 // the long tail off the rump, sweeping back and curling up at the tip — capsules between the nodes.
 const TAIL_NODES: P[] = [[0.72, 0.52], [0.94, 0.50], [1.08, 0.58], [1.14, 0.73]];
 const TAIL_RADII = [0.060, 0.050, 0.038, 0.022];
 
 const LINE_WIDTH = 0.012;   // outline weight, in standing-height units (scales with distance)
+
+// diagnostic colours
+const GHOST = '#7fa8c9';    // see-through outline for the non-neck solids
+const BONE = '#1f4fd8';     // skeleton bones
+const JOINT = '#e03b3b';    // skeleton joints
+const NECK_FILL = '#ff5fa6';
+const NECK_EDGE = '#d23f80';
 
 // A beast in its SEGMENT's frame, like a Critter: along/across placement, world height, facing.
 export interface Beast {
@@ -105,14 +106,12 @@ const CAT_ALONG = 65;            // just past the cow herd (which ends ~55)
 const CAT_ROAD_GAP = 1.5;        // it sits this far beyond the roadside tree line, facing the road
 
 // Build a cat at a given SIZE. A beast's size (height in metres) is decoupled from its form (the
-// unit-frame skeleton), so the same cat can be a kitten or full-grown — only the height changes, and
-// drawBeast scales the whole profile to it.
+// unit-frame skeleton), so the same cat can be a kitten or full-grown — only the height changes.
 function cat(along: number, across: number, height: number, faceRight: boolean): Beast {
   return { along, across, height, faceRight, form: CAT };
 }
 
 // The beasts lining a segment: for now one cat on the RIGHT, just past the herd, facing the road.
-// `treeLineOffset` is how far the roadside trees sit beyond the lane edge; the cat sits just past them.
 export function segmentBeasts(laneHalfWidth: number, treeLineOffset: number): Beast[] {
   const treeX = laneHalfWidth + treeLineOffset;
   return [cat(CAT_ALONG, treeX + CAT_ROAD_GAP, CAT_HEIGHT, false)];
@@ -127,7 +126,7 @@ export function beastScenery(view: BeastView): Scenery {
 
 // Forward kinematics: starting at `root` with the first bone pointing at absolute `baseAngle`, each
 // joint adds its relative angle and a rigid bone carries on to the next joint. Returns every joint
-// position (root first), so a limb's outline can be drawn between them.
+// position (root first).
 function jointsOf(root: P, baseAngle: number, bones: Bone[]): P[] {
   const pts: P[] = [root];
   let angle = baseAngle, x = root[0], y = root[1];
@@ -145,27 +144,9 @@ function fillStroke(ctx: Ctx, fill: string, line: string): void {
   ctx.strokeStyle = line; ctx.stroke();
 }
 
-// Trace a CLOSED smooth curve through pts (a Catmull-Rom spline rendered as cubic Béziers, wrapping
-// around). EVERY point is interior — its tangent comes from its neighbours on both sides — so the
-// whole loop is smooth, with no kink anywhere, including where the last point rejoins the first.
-function smoothLoop(ctx: Ctx, pts: P[]): void {
-  const n = pts.length;
-  ctx.moveTo(pts[0][0], pts[0][1]);
-  for (let i = 0; i < n; i++) {
-    const p0 = pts[(i - 1 + n) % n];
-    const p1 = pts[i];
-    const p2 = pts[(i + 1) % n];
-    const p3 = pts[(i + 2) % n];
-    const c1x = p1[0] + (p2[0] - p0[0]) / 6, c1y = p1[1] + (p2[1] - p0[1]) / 6;
-    const c2x = p2[0] - (p3[0] - p1[0]) / 6, c2y = p2[1] - (p3[1] - p1[1]) / 6;
-    ctx.bezierCurveTo(c1x, c1y, c2x, c2y, p2[0], p2[1]);
-  }
-  ctx.closePath();
-}
-
-// Draw one rigid bone as a tapered capsule between joints A and B (half-widths rA, rB), with rounded
-// ends — the rounding at a shared joint is what reads as the joint (a knee, an ankle).
-function capsule(ctx: Ctx, A: P, B: P, rA: number, rB: number, fill: string, line: string): void {
+// Lay down (but don't paint) the path of a tapered capsule between joints A and B (half-widths rA,
+// rB), with rounded ends.
+function capsulePath(ctx: Ctx, A: P, B: P, rA: number, rB: number): void {
   const dx = B[0] - A[0], dy = B[1] - A[1];
   const len = Math.hypot(dx, dy) || 1e-6;
   const ux = dx / len, uy = dy / len;   // along the bone
@@ -178,18 +159,21 @@ function capsule(ctx: Ctx, A: P, B: P, rA: number, rB: number, fill: string, lin
   ctx.lineTo(A[0] - nx * rA, A[1] - ny * rA);
   ctx.quadraticCurveTo(A[0] - ux * rA * CAP, A[1] - uy * rA * CAP, A[0] + nx * rA, A[1] + ny * rA);
   ctx.closePath();
+}
+
+// a filled + outlined capsule (a rigid limb part; the rounding at a shared joint reads as the joint).
+function capsule(ctx: Ctx, A: P, B: P, rA: number, rB: number, fill: string, line: string): void {
+  capsulePath(ctx, A, B, rA, rB);
   fillStroke(ctx, fill, line);
 }
 
 // Draw the beast in its unit frame (standing height 1, y up, feet at the origin), sized by distance.
-// Back-to-front: the far pair of legs, the tail, the body, the near pair of legs, then the head.
 function drawBeast(ctx: Ctx, b: BeastView, project: Project): void {
   const base = project(b.at.right, b.at.forward, 0);
   const top = project(b.at.right, b.at.forward, b.height);
   const h = base.y - top.y;
   if (h < 2) return;   // too small to detail; the renderer's size cull is the real cutoff
 
-  const pal = b.form.palette;
   ctx.save();
   ctx.translate(base.x, base.y);
   if (b.faceRight) ctx.scale(-1, 1);   // the form faces left; flip to face right
@@ -198,22 +182,61 @@ function drawBeast(ctx: Ctx, b: BeastView, project: Project): void {
   ctx.lineJoin = 'round';
   ctx.lineCap = 'round';
 
-  const farFront: P = [FRONT_HIP[0] + FAR_SETBACK, FRONT_HIP[1]];
-  const farHind: P = [HIND_HIP[0] + FAR_SETBACK, HIND_HIP[1]];
-
-  drawLeg(ctx, farFront, pal.shadow, pal.line);   // far pair, behind the body, in shade
-  drawLeg(ctx, farHind, pal.shadow, pal.line);
-  drawTail(ctx, pal.body, pal.line);              // tail, off the rump
-  drawBody(ctx, pal.body, pal.line);              // neck + back, one smooth shape
-  drawBelly(ctx, pal.belly);                      // lighter underside, over the body
-  drawLeg(ctx, FRONT_HIP, pal.body, pal.line);    // near pair, over the body
-  drawLeg(ctx, HIND_HIP, pal.body, pal.line);
-  drawHead(ctx, pal.body, pal.line);              // over the front of the neck
-  drawEars(ctx, pal.body, pal.line);
-  drawFace(ctx, pal.eye, pal.nose);
+  if (DEBUG) drawDiagnostic(ctx);
+  else drawCat(ctx, b.form.palette);
 
   ctx.restore();
 }
+
+// the finished cat: solids unioned in one colour, back-to-front.
+function drawCat(ctx: Ctx, pal: BeastForm['palette']): void {
+  drawLeg(ctx, far(FRONT_HIP), pal.shadow, pal.line);   // far pair, behind the body, in shade
+  drawLeg(ctx, far(HIND_HIP), pal.shadow, pal.line);
+  drawTail(ctx, pal.body, pal.line);
+  capsule(ctx, TORSO_A, TORSO_B, TORSO_R, TORSO_R, pal.body, pal.line);   // torso cylinder
+  capsule(ctx, NECK_A, NECK_B, NECK_R, NECK_R, pal.body, pal.line);       // neck cylinder
+  drawHead(ctx, pal.body, pal.line);                                      // head sphere
+  drawEars(ctx, pal.body, pal.line);
+  drawFace(ctx, pal.eye, pal.nose);
+  drawLeg(ctx, FRONT_HIP, pal.body, pal.line);          // near pair, over the body
+  drawLeg(ctx, HIND_HIP, pal.body, pal.line);
+}
+
+// the diagnostic view: solids as see-through outlines, legs as raw skeleton, the NECK in solid pink.
+function drawDiagnostic(ctx: Ctx): void {
+  ctx.strokeStyle = GHOST;
+  capsulePath(ctx, TORSO_A, TORSO_B, TORSO_R, TORSO_R); ctx.stroke();   // torso outline
+  ctx.beginPath(); ctx.ellipse(HEAD.cx, HEAD.cy, HEAD.r, HEAD.r, 0, 0, Math.PI * 2); ctx.stroke();   // head
+  for (let i = 0; i < TAIL_NODES.length - 1; i++) {
+    capsulePath(ctx, TAIL_NODES[i], TAIL_NODES[i + 1], TAIL_RADII[i], TAIL_RADII[i + 1]); ctx.stroke();
+  }
+  for (const e of [EAR_FRONT, EAR_BACK]) {
+    ctx.beginPath(); ctx.moveTo(e.a[0], e.a[1]); ctx.lineTo(e.tip[0], e.tip[1]); ctx.lineTo(e.b[0], e.b[1]); ctx.closePath(); ctx.stroke();
+  }
+
+  legSkeleton(ctx, far(FRONT_HIP));
+  legSkeleton(ctx, far(HIND_HIP));
+  legSkeleton(ctx, FRONT_HIP);
+  legSkeleton(ctx, HIND_HIP);
+
+  capsulePath(ctx, NECK_A, NECK_B, NECK_R, NECK_R);   // the NECK, solid pink — the thing to look at
+  ctx.fillStyle = NECK_FILL; ctx.fill();
+  ctx.strokeStyle = NECK_EDGE; ctx.stroke();
+}
+
+// the raw skeleton of one leg: bones as a polyline, joints as dots.
+function legSkeleton(ctx: Ctx, hip: P): void {
+  const j = jointsOf(hip, LEG_BASE_ANGLE, [UPPER_LEG, LOWER_LEG, PAW]);
+  ctx.strokeStyle = BONE;
+  ctx.beginPath();
+  ctx.moveTo(j[0][0], j[0][1]);
+  for (let i = 1; i < j.length; i++) ctx.lineTo(j[i][0], j[i][1]);
+  ctx.stroke();
+  ctx.fillStyle = JOINT;
+  for (const p of j) { ctx.beginPath(); ctx.arc(p[0], p[1], 0.018, 0, Math.PI * 2); ctx.fill(); }
+}
+
+const far = (hip: P): P => [hip[0] + FAR_SETBACK, hip[1]];
 
 // one leg: upper leg, lower leg, paw — three capsules along the FK chain from the hip.
 function drawLeg(ctx: Ctx, hip: P, fill: string, line: string): void {
@@ -229,28 +252,9 @@ function drawTail(ctx: Ctx, fill: string, line: string): void {
   }
 }
 
-function drawBody(ctx: Ctx, fill: string, line: string): void {
-  ctx.beginPath();
-  smoothLoop(ctx, BODY);
-  fillStroke(ctx, fill, line);
-}
-
-// the lighter underside, drawn over the brown body (no outline, soft boundary) — the two-tone that
-// makes the form read as volume rather than a flat silhouette.
-function drawBelly(ctx: Ctx, fill: string): void {
-  ctx.beginPath();
-  ctx.moveTo(-0.15, 0.43);
-  ctx.quadraticCurveTo(0.10, 0.39, 0.40, 0.40);    // along the belly bottom
-  ctx.quadraticCurveTo(0.55, 0.42, 0.67, 0.43);    // to under the rump
-  ctx.quadraticCurveTo(0.40, 0.47, 0.05, 0.47);    // back, rising a touch into the body
-  ctx.quadraticCurveTo(-0.12, 0.47, -0.15, 0.43);  // up the chest
-  ctx.closePath();
-  ctx.fillStyle = fill; ctx.fill();
-}
-
 function drawHead(ctx: Ctx, fill: string, line: string): void {
   ctx.beginPath();
-  ctx.ellipse(HEAD.cx, HEAD.cy, HEAD.rx, HEAD.ry, 0, 0, Math.PI * 2);
+  ctx.ellipse(HEAD.cx, HEAD.cy, HEAD.r, HEAD.r, 0, 0, Math.PI * 2);
   fillStroke(ctx, fill, line);
 }
 
