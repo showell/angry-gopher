@@ -22,8 +22,6 @@ function wrap(a: number): number {
 const WEST_RANGE_BEARING = -2.094;
 export const SUN_BEARING = -2.27;
 
-const SNOWLINE = 95;                 // px above the horizon; the north range is snowcapped above this
-
 // One mountain range: a smooth envelope (tallest at its centre, tapering to open
 // sky at its edges) times a fixed rugged ridge line.
 function range(bearing: number, center: number, half: number, peak: number,
@@ -93,9 +91,19 @@ function snowColor(step: number): string {
 // dead-flat horizontal line. A single broad ARCH centred on the range (a cos, not a low-freq sin
 // that just reads as a tilt): the base dips deepest under the tall central peak and rises toward the
 // edges. A pure function of bearing, so it holds still in the world as the Rider turns.
-const SNOW_CURVE_AMP = 30;       // how far the base dips at the range's centre
-const SNOW_CURVE_FREQ = 5.2;     // tight enough that the arch bends ACROSS the narrow cap, not just slopes
-const snowlineAt = (bearing: number): number => SNOWLINE - SNOW_CURVE_AMP * Math.cos(bearing * SNOW_CURVE_FREQ);
+// The snowcap sits ONLY on the range's single TALLEST hump (it looked odd straddling two). Locate
+// that hump once, then key a subtle cap there: a HIGH snowline, so the shorter humps (~95px vs the
+// peak's ~148px) stay bare, with a shallow dip under the summit for a gently curved cap base. Where
+// range > snowlineAt only on the one hump, that's the only place snow appears.
+const SNOW_PEAK_BEARING = (() => {
+  let bm = 0, vm = -1;
+  for (let b = -0.5; b <= 0.5; b += 0.01) { const v = northRange(b); if (v > vm) { vm = v; bm = b; } }
+  return bm;
+})();
+const SNOW_BASE = 122;           // snowline height at the cap flanks — only the tallest hump pokes above it
+const SNOW_CURVE_AMP = 7;        // the base dips this much under the summit (gently curved cap bottom)
+const SNOW_CURVE_FREQ = 5.0;
+const snowlineAt = (bearing: number): number => SNOW_BASE - SNOW_CURVE_AMP * Math.cos((bearing - SNOW_PEAK_BEARING) * SNOW_CURVE_FREQ);
 
 // Draw the whole horizon for the Rider's heading: the setting sun + glow (behind),
 // the westward and (snowcapped) northern ranges, and the rolling foreground land.
