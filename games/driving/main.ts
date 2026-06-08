@@ -11,7 +11,7 @@ import { initialRiderState, getNextRiderState, riderHeading, leanFor, MAX_LEAN, 
 import type { RiderState } from './model.ts';
 import { buildWorld } from './road_segment.ts';
 import { buildScene } from './view.ts';
-import { drawHorizon } from './horizon.ts';
+import { drawHorizon, sunSetFraction } from './horizon.ts';
 import { DETAIL_DIST, NEAR, groundDrop } from './scenery.ts';
 import type { Project, RiderPt, Quad, Poly3 } from './scenery.ts';
 
@@ -67,24 +67,13 @@ const focalForLean = (lean: number): number => {
 // the rider also turns his HEAD into the corner — a subtle view-only yaw, 15% of the lean angle.
 const HEAD_YAW_FRAC = 0.15;
 
-// The sun SETS over the ride: its elevation drops a fixed amount per STEP — a pure function of the
-// step, like the beacon clock, so it scrubs cleanly on reverse and freezes on pause. The HEADLINE
-// effect is the SKY dimming with it (skyColor, below); the disc itself is secondary. Rate doubles
-// the original calibration (16% of the sun's 7.678deg diameter over the 625-step seg9 traversal,
-// the route's most direct approach toward the sun); start elevation is ~2x as high to match.
-const SUN_SET_DEG_PER_STEP = 0.16 * 7.678 / 625;   // = 0.001966 deg/step (2x)
-const SUN_ELEV_START_DEG = 13.3;                   // ~2x as high (often off-screen on the early segments)
-const sunHeightPx = (step: number): number =>
-  FOCAL * Math.tan((SUN_ELEV_START_DEG - SUN_SET_DEG_PER_STEP * step) * Math.PI / 180);
-
-// The sky DIMS as the sun sets — the main effect. Lerp the whole sky colour from day to a dusk
-// blue as the sun descends from its start elevation toward the horizon (t = the fraction it has
-// fallen). Darkening ALL channels (not just B) keeps it reading blue rather than fading to grey.
+// The sky DIMS as the sun sets — the main effect. Lerp the whole sky colour from day to a dusk blue
+// across the sun's descent (sunSetFraction, from horizon.ts, where the sun clock lives). Darkening
+// ALL channels (not just B) keeps it reading blue rather than fading to grey.
 const DAY_SKY = [142, 202, 230];    // #8ecae6 (the established daytime sky)
 const DUSK_SKY = [36, 58, 94];      // deep dusk blue
 const skyColor = (step: number): string => {
-  const elev = SUN_ELEV_START_DEG - SUN_SET_DEG_PER_STEP * step;
-  const t = Math.max(0, Math.min(1, 1 - elev / SUN_ELEV_START_DEG));   // 0 at the start, 1 once the sun reaches the horizon
+  const t = sunSetFraction(step);
   const ch = (i: number): number => Math.round(DAY_SKY[i] + (DUSK_SKY[i] - DAY_SKY[i]) * t);
   return `rgb(${ch(0)},${ch(1)},${ch(2)})`;
 };
@@ -281,7 +270,7 @@ function render(rider: RiderState): void {
   // the gaze yaws the view, so the far scenery shifts with it too (he's looking off-axis). The
   // lean pulls camFocal in, which squeezes the horizon horizontally; pass camFocal/FOCAL as the
   // vertical scale so it squeezes vertically by the same factor (it's a real focal change).
-  drawHorizon(ctx, riderHeading(rider, world) + gazeAngle(rider) + headYaw, W, H, camFocal, overscan, camFocal / FOCAL, sunHeightPx(step));
+  drawHorizon(ctx, riderHeading(rider, world) + gazeAngle(rider) + headYaw, W, H, camFocal, overscan, camFocal / FOCAL, step);
 
   for (const q of scene.quads) drawQuad(q);
   for (const p of scene.polys) drawPoly3(p);   // guard rails, raised above the pavement

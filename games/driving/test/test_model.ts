@@ -8,6 +8,7 @@ import { initialRiderState, getNextRiderState, assertInvariants, MAX_LEAN, TURN_
 import type { RiderState } from '../model.ts';
 import { buildWorld } from '../road_segment.ts';
 import type { World } from '../road_segment.ts';
+import { SUN_BEARING, sunHeightPx, horizonCrestPx, SUN_RADIUS_PX } from '../horizon.ts';
 
 function wrap(a: number): number {
   while (a > Math.PI) a -= 2 * Math.PI;
@@ -148,6 +149,28 @@ function main(): void {
     }
   }
   if (Math.abs(gazeVals[first + GAZE_SEQUENCE.length]) > 1e-9) throw new Error('glance did not return to straight after the sequence');
+
+  // 1c) the SUNSET over seg9 (the special segment). seg9 must be the long, sun-ward stretch: at
+  // least 1000m (it hosts the mid-segment radio tower), headed roughly toward the sun, with PART of
+  // the sun already behind the western range as the Rider turns onto it, and the sun's CENTRE still
+  // above that range by the segment's end. The sun height is a pure function of the step (the same
+  // step the renderer uses), so this pins the calibration in horizon.ts to the route's timing.
+  const seg9Len = world.segments['seg9'].length;
+  if (seg9Len < 1000) throw new Error(`seg9 is ${seg9Len}m, under the 1000m it needs for its mid-segment tower`);
+  const onSeg9 = states.map((st, i) => (st.segment === 'seg9' ? i : -1)).filter((i) => i >= 0);
+  if (!onSeg9.length) throw new Error('the Rider never drove seg9');
+  const s9start = onSeg9[0], s9end = onSeg9[onSeg9.length - 1];
+  const sunwardDeg = Math.abs(wrap(headings['seg9'] - SUN_BEARING)) * 180 / Math.PI;
+  if (sunwardDeg > 20) throw new Error(`seg9 heads ${sunwardDeg.toFixed(0)}deg off the sun (> 20deg) — not a sun-ward approach`);
+  const crest = horizonCrestPx(SUN_BEARING);                       // the western range at the sun's bearing
+  const sunBottomOnEntry = sunHeightPx(s9start) - SUN_RADIUS_PX;
+  const sunCentreAtExit = sunHeightPx(s9end);
+  if (!(sunBottomOnEntry < crest)) {
+    throw new Error(`onto seg9 the sun bottom (${sunBottomOnEntry.toFixed(0)}px) is not yet behind the crest (${crest.toFixed(0)}px)`);
+  }
+  if (!(sunCentreAtExit > crest)) {
+    throw new Error(`by seg9's end the sun centre (${sunCentreAtExit.toFixed(0)}px) has already dropped below the crest (${crest.toFixed(0)}px)`);
+  }
 
   // 2) heading continuity: no single-press jump bigger than the rotation ceiling. The
   // straighten-out rotates at a fixed TURN_OMEGA (jerk-limited up to it), the same for
