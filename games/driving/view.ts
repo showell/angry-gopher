@@ -9,7 +9,8 @@
 // =============================================================================
 import type { RiderState } from './model.ts';
 import { gazeAngle } from './model.ts';
-import type { World, RoadSegment } from './road_segment.ts';
+import type { World } from './world.ts';
+import type { RoadSegment } from './road_segment.ts';
 import { critterScenery } from './critter.ts';
 import { treeScenery } from './tree.ts';
 import { ROAD } from './scenery.ts';

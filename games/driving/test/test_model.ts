@@ -6,8 +6,8 @@
 // Run: node test/test_model.ts
 import { initialRiderState, getNextRiderState, assertInvariants, MAX_LEAN, TURN_OMEGA, MAX_TURN_ANGLE, leanFor, gazeAngle, GAZE_SEQUENCE, APPROACH_INTERSECTION_DIST } from '../model.ts';
 import type { RiderState } from '../model.ts';
-import { buildWorld } from '../road_segment.ts';
-import type { World } from '../road_segment.ts';
+import { buildWorld } from '../world.ts';
+import type { World } from '../world.ts';
 import { SUN_BEARING, sunHeightPx, horizonCrestPx, SUN_RADIUS_PX } from '../horizon.ts';
 
 function wrap(a: number): number {

@@ -24,12 +24,13 @@
 // speed per turn angle is a tabulated safe value (turnSpeed). See enterStraighten/straightenStep.
 // =============================================================================
 
-import type { World, RoadSegment, SegId } from './road_segment.ts';
+import type { World } from './world.ts';
+import type { RoadSegment, SegId } from './road_segment.ts';
 import { turnSpeed } from './intersection.ts';
 
 // ============================================================================
 // DIMENSIONS — distances for the Rider's approach to a turn, in METRES. (The
-// road's own dimensions + the segment network live in road_segment.ts; tree
+// road's own dimensions live in road_segment.ts, the segment network in world.ts; tree
 // sizes in tree.ts, animals in critter.ts; motion constants — speed, accel,
 // spin — are per-press, below.)
 // ============================================================================

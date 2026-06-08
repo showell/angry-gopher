@@ -9,7 +9,7 @@
 // =============================================================================
 import { initialRiderState, getNextRiderState, riderHeading, leanFor, MAX_LEAN, gazeAngle } from './model.ts';
 import type { RiderState } from './model.ts';
-import { buildWorld } from './road_segment.ts';
+import { buildWorld } from './world.ts';
 import { buildScene } from './view.ts';
 import { drawHorizon, sunSetFraction, sunsetWarmth } from './horizon.ts';
 import { DETAIL_DIST, NEAR, groundDrop } from './scenery.ts';

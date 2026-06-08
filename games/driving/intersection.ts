@@ -63,17 +63,6 @@ export interface Intersection {
   beaconOffset: number;   // authored blink-phase offset for this tower's apex beacon, so towers don't pulse in unison
 }
 
-// The AUTHORED spec for a turn, before it's wired into built segments: which segment it
-// leads to, its direction, its angle, and which creatures stand at the corner.
-// buildIntersection resolves it against the two segment objects into an Intersection
-// (mirrors RoadSegmentConfig -> buildRoadSegment).
-export interface IntersectionConfig {
-  to: SegId;
-  dir: TurnDir;
-  angle: number;            // turn angle THETA (radians)
-  creature: CornerCreature; // which animal stands at this corner
-}
-
 // Build the turn NODE joining `from` to `to`. Pure: it reads the two segments' ids and
 // returns the Intersection (including the creatures parked at the corner); the caller wires
 // the reverse graph refs onto the segments.
