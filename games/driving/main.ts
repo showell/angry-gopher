@@ -11,7 +11,7 @@ import { initialRiderState, getNextRiderState, riderHeading, leanFor, MAX_LEAN, 
 import type { RiderState } from './model.ts';
 import { buildWorld } from './road_segment.ts';
 import { buildScene } from './view.ts';
-import { drawHorizon, sunSetFraction } from './horizon.ts';
+import { drawHorizon, sunSetFraction, sunsetWarmth } from './horizon.ts';
 import { DETAIL_DIST, NEAR, groundDrop } from './scenery.ts';
 import type { Project, RiderPt, Quad, Poly3 } from './scenery.ts';
 
@@ -67,16 +67,16 @@ const focalForLean = (lean: number): number => {
 // the rider also turns his HEAD into the corner — a subtle view-only yaw, 15% of the lean angle.
 const HEAD_YAW_FRAC = 0.15;
 
-// The sky DIMS as the sun sets — the main effect. Lerp the whole sky colour from day to a dusk blue
-// across the sun's descent (sunSetFraction, from horizon.ts, where the sun clock lives). Darkening
-// ALL channels (not just B) keeps it reading blue rather than fading to grey.
+// The sky DIMS to a dusk blue as the sun sets (sunSetFraction), and REDDENS toward a warm sunset
+// glow near the horizon as the sun crosses it (sunsetWarmth). Darkening all channels keeps the blue
+// from greying out; the red is mixed only into the lower sky (the gradient in render()).
 const DAY_SKY = [142, 202, 230];    // #8ecae6 (the established daytime sky)
 const DUSK_SKY = [36, 58, 94];      // deep dusk blue
-const skyColor = (step: number): string => {
-  const t = sunSetFraction(step);
-  const ch = (i: number): number => Math.round(DAY_SKY[i] + (DUSK_SKY[i] - DAY_SKY[i]) * t);
-  return `rgb(${ch(0)},${ch(1)},${ch(2)})`;
-};
+const SUNSET_RED = [222, 88, 52];   // warm sunset glow mixed into the horizon band
+const SUNSET_GLOW = 0.85;           // how strongly the red mixes in at peak warmth
+const lerp3 = (a: number[], b: number[], t: number): number[] => a.map((v, i) => Math.round(v + (b[i] - v) * t));
+const rgbStr = (c: number[]): string => `rgb(${c[0]},${c[1]},${c[2]})`;
+const skyRGB = (step: number): number[] => lerp3(DAY_SKY, DUSK_SKY, sunSetFraction(step));
 
 // ---- the world + the Rider's history (a forward/back stack of RiderStates) ----
 const world = buildWorld();
@@ -258,7 +258,15 @@ function render(rider: RiderState): void {
   // sky above / grass below, drawn oversized so the rolled frame's corners stay filled
   // (two fillRects — cheap at any size).
   const BIG = W + H;
-  ctx.fillStyle = skyColor(step);
+  // sky: dusk-blue up high, warming to a sunset RED near the horizon as the sun sets (the warm band
+  // sits in the lower sky, behind/above the mountains; its strength peaks at sunset via sunsetWarmth).
+  const sky = skyRGB(step);
+  const horizonSky = lerp3(sky, SUNSET_RED, sunsetWarmth(step) * SUNSET_GLOW);
+  const skyGrad = ctx.createLinearGradient(0, 0, 0, H / 2);
+  skyGrad.addColorStop(0, rgbStr(sky));
+  skyGrad.addColorStop(0.2, rgbStr(sky));
+  skyGrad.addColorStop(1, rgbStr(horizonSky));
+  ctx.fillStyle = skyGrad;
   ctx.fillRect(W / 2 - BIG, H / 2 - BIG, 2 * BIG, BIG);
   ctx.fillStyle = '#4a8f43';
   ctx.fillRect(W / 2 - BIG, H / 2, 2 * BIG, BIG);

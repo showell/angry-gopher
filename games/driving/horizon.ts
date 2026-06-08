@@ -75,6 +75,12 @@ export function horizonCrestPx(bearing: number): number {
   return Math.max(westRange(bearing), northRange(bearing), groundBase(bearing));
 }
 
+// How RED the sunset is (0..1): a bump that peaks as the sun crosses the horizon and fades when it
+// is high up or deep below — drives the warm afterglow band the sky adds near the horizon.
+export function sunsetWarmth(step: number): number {
+  return Math.max(0, 1 - Math.abs(sunHeightPx(step)) / 110);
+}
+
 // ---- drawing ----
 const ROCK = '#5b6a8f';        // northern range
 const ROCK_WEST = '#39435f';   // westward range, darker — backlit by the sunset
@@ -82,18 +88,25 @@ const SNOW_DAY = [238, 243, 248];   // bright daytime snowcaps (#eef3f8)
 const SNOW_NIGHT = [70, 84, 104];   // heavily dimmed at dusk — the glare goes as the light does
 const LAND = '#4a8f43';        // foreground rolling land (matches the grass)
 
-// The snowcaps lose their glare through the ride. (The rock fades on its own as the sky darkens
-// toward it — nice, free atmospheric perspective — but bright snow would stay jarring without this.)
+// The snowcaps lose their glare through the ride, dimming toward dusk.
 function snowColor(step: number): string {
   const t = sunSetFraction(step);
   const c = (i: number): number => Math.round(SNOW_DAY[i] + (SNOW_NIGHT[i] - SNOW_DAY[i]) * t);
   return `rgb(${c(0)},${c(1)},${c(2)})`;
 }
 
-// A gently curved snowline (px above the horizon) at a bearing — the cap's base, instead of a
-// dead-flat horizontal line. A single broad ARCH centred on the range (a cos, not a low-freq sin
-// that just reads as a tilt): the base dips deepest under the tall central peak and rises toward the
-// edges. A pure function of bearing, so it holds still in the world as the Rider turns.
+// The non-snowy ROCK dims too — a brightness multiplier toward dusk — so it ALWAYS stays darker
+// than the (also-dimming) snowcap. Otherwise the bright-day rock ends up lighter than the
+// dusk-dimmed snow, which looks wrong. (Day rock is already darker than day snow, so scaling both
+// down keeps the ordering.)
+const ROCK_NIGHT_DIM = 0.5;   // rock fades to this fraction of its daytime brightness by full night
+function dimmed(hex: string, step: number): string {
+  const f = 1 - ROCK_NIGHT_DIM * sunSetFraction(step);
+  const n = parseInt(hex.slice(1), 16);
+  const c = (sh: number): number => Math.round(((n >> sh) & 255) * f);
+  return `rgb(${c(16)},${c(8)},${c(0)})`;
+}
+
 // The snowcap sits ONLY on the range's single TALLEST hump (it looked odd straddling two), and its
 // base FOLLOWS the ridge so it reads as curved, not a flat line. The snowline is high — only the
 // tallest hump (~148px vs the others' ~95px) clears SNOW_THRESHOLD — and dips under the summit in
@@ -153,8 +166,8 @@ export function drawHorizon(ctx: CanvasRenderingContext2D, heading: number,
     ctx.restore();
   }
 
-  ctx.fillStyle = ROCK_WEST; silhouette(westRange, H / 2);                          // westward range, over the sun
-  ctx.fillStyle = ROCK; silhouette(northRange, H / 2);                              // northern range
+  ctx.fillStyle = dimmed(ROCK_WEST, step); silhouette(westRange, H / 2);            // westward range, over the sun
+  ctx.fillStyle = dimmed(ROCK, step); silhouette(northRange, H / 2);               // northern range
   // snowcaps: the north range ABOVE a gently CURVED snowline. Clip to the band above that curve and
   // paint the range in the (dusk-dimmed) snow colour. The curved clip base avoids the old
   // max()-with-flat-bottom trick, whose sub-pixel slivers showed against a dark sky.
