@@ -11,8 +11,10 @@
 // transforms, and the pavement wedge.
 // =============================================================================
 
-import { critterScenery, cornerCritters } from './critter.ts';
-import type { Critter, CornerCreature } from './critter.ts';
+import { critterScenery } from './critter.ts';
+import type { Critter } from './critter.ts';
+import { cornerCritters } from './safari_critter.ts';
+import type { CornerCreature } from './safari_critter.ts';
 import { towerScenery, beaconOffsetFor } from './tower.ts';
 import { ROAD } from './scenery.ts';
 import type { RiderPt, Quad, Poly3, Scenery } from './scenery.ts';

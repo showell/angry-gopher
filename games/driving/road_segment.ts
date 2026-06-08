@@ -10,7 +10,7 @@
 // it once the bracketing intersections exist.
 // =============================================================================
 
-import { segmentCritters } from './critter.ts';
+import { farmCritters } from './farm_critter.ts';
 import type { Critter } from './critter.ts';
 import { segmentTrees, TREE_ROAD_OFFSET } from './tree.ts';
 import type { Scheme, Tree } from './tree.ts';
@@ -70,7 +70,7 @@ export function buildRoadSegment(c: RoadSegmentConfig): RoadSegment {
     width: LANE_WIDTH,
     scheme: c.scheme,
     trees: segmentTrees(c.length, c.scheme, LANE_WIDTH / 2),
-    critters: segmentCritters(c.length, LANE_WIDTH / 2, TREE_ROAD_OFFSET),
+    critters: farmCritters(c.length, LANE_WIDTH / 2, TREE_ROAD_OFFSET),
     entryIxn: null,
     exitIxn: '',   // a placeholder: set to the real id when this segment's exit intersection is built
     alongWhereRiderCommitsToTurn: c.length,

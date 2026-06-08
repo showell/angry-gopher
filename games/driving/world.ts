@@ -11,7 +11,7 @@ import { buildRoadSegment } from './road_segment.ts';
 import type { RoadSegment, RoadSegmentConfig, SegId, TurnDir } from './road_segment.ts';
 import { buildIntersection, buildTerminus } from './intersection.ts';
 import type { Intersection, IxnId } from './intersection.ts';
-import { CornerCreature } from './critter.ts';
+import { CornerCreature } from './safari_critter.ts';
 
 export interface World {
   segments: Record<SegId, RoadSegment>;
