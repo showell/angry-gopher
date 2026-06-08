@@ -150,46 +150,46 @@ function main(): void {
   }
   if (Math.abs(gazeVals[first + GAZE_SEQUENCE.length]) > 1e-9) throw new Error('glance did not return to straight after the sequence');
 
-  // 1c) the SUNSET over seg9 (the special segment). seg9 must be the long, sun-ward stretch: at
+  // 1c) the SUNSET over seg7 (the special segment). seg7 must be the long, sun-ward stretch: at
   // least 1000m (it hosts the mid-segment radio tower), headed roughly toward the sun, with the sun
   // still UP as the Rider turns onto it and dropping PART-BEHIND the western range by the segment's
   // end — it SETS behind the range across the stretch. (With the fast descent the sun can't be
   // part-behind at both ends of the window, so we pin the setting, not a single instant.) The sun
   // height is a pure function of the step, pinning the horizon.ts calibration to the route's timing.
-  const seg9Len = world.segments['seg9'].length;
-  if (seg9Len < 1000) throw new Error(`seg9 is ${seg9Len}m, under the 1000m it needs for its mid-segment tower`);
-  const onSeg9 = states.map((st, i) => (st.segment === 'seg9' ? i : -1)).filter((i) => i >= 0);
-  if (!onSeg9.length) throw new Error('the Rider never drove seg9');
-  const s9start = onSeg9[0], s9end = onSeg9[onSeg9.length - 1];
-  const sunwardDeg = Math.abs(wrap(headings['seg9'] - SUN_BEARING)) * 180 / Math.PI;
-  if (sunwardDeg > 20) throw new Error(`seg9 heads ${sunwardDeg.toFixed(0)}deg off the sun (> 20deg) — not a sun-ward approach`);
+  const seg7Len = world.segments['seg7'].length;
+  if (seg7Len < 1000) throw new Error(`seg7 is ${seg7Len}m, under the 1000m it needs for its mid-segment tower`);
+  const onSeg7 = states.map((st, i) => (st.segment === 'seg7' ? i : -1)).filter((i) => i >= 0);
+  if (!onSeg7.length) throw new Error('the Rider never drove seg7');
+  const s7start = onSeg7[0], s7end = onSeg7[onSeg7.length - 1];
+  const sunwardDeg = Math.abs(wrap(headings['seg7'] - SUN_BEARING)) * 180 / Math.PI;
+  if (sunwardDeg > 20) throw new Error(`seg7 heads ${sunwardDeg.toFixed(0)}deg off the sun (> 20deg) — not a sun-ward approach`);
   const crest = horizonCrestPx(SUN_BEARING);                       // the western range at the sun's bearing
-  const sunCentreOnEntry = sunHeightPx(s9start);
-  const sunBottomAtExit = sunHeightPx(s9end) - SUN_RADIUS_PX;
+  const sunCentreOnEntry = sunHeightPx(s7start);
+  const sunBottomAtExit = sunHeightPx(s7end) - SUN_RADIUS_PX;
   if (!(sunCentreOnEntry > crest)) {
-    throw new Error(`onto seg9 the sun centre (${sunCentreOnEntry.toFixed(0)}px) is already below the crest (${crest.toFixed(0)}px) — not still up`);
+    throw new Error(`onto seg7 the sun centre (${sunCentreOnEntry.toFixed(0)}px) is already below the crest (${crest.toFixed(0)}px) — not still up`);
   }
   if (!(sunBottomAtExit < crest)) {
-    throw new Error(`by seg9's end the sun bottom (${sunBottomAtExit.toFixed(0)}px) is still above the crest (${crest.toFixed(0)}px) — it hasn't set behind`);
+    throw new Error(`by seg7's end the sun bottom (${sunBottomAtExit.toFixed(0)}px) is still above the crest (${crest.toFixed(0)}px) — it hasn't set behind`);
   }
 
-  // 1d) the SUNSET over seg12 (the SECOND sun-ward stretch, 800m): its sun-ward angle is LOCKED to
-  // its authored value (~35deg off the sun — more toward it than seg9's ~10deg, but still off-axis),
+  // 1d) the SUNSET over seg10 (the SECOND sun-ward stretch, 800m): its sun-ward angle is LOCKED to
+  // its authored value (~35deg off the sun — more toward it than seg7's ~10deg, but still off-axis),
   // with at least PART of the sun still present (its top above the western range) as the Rider turns
   // onto it. A change to the route shifts the angle by a turn-angle step (>=5deg), which the tight
   // tolerance catches.
-  const seg12Len = world.segments['seg12'].length;
-  if (seg12Len !== 800) throw new Error(`seg12 is ${seg12Len}m, expected 800m`);
-  const onSeg12 = states.map((st, i) => (st.segment === 'seg12' ? i : -1)).filter((i) => i >= 0);
-  if (!onSeg12.length) throw new Error('the Rider never drove seg12');
-  const SEG12_OFF_SUN_DEG = 35;   // the authored seg12 sun-ward angle
-  const sun12offDeg = Math.abs(wrap(headings['seg12'] - SUN_BEARING)) * 180 / Math.PI;
-  if (Math.abs(sun12offDeg - SEG12_OFF_SUN_DEG) > 2) {
-    throw new Error(`seg12 is ${sun12offDeg.toFixed(1)}deg off the sun, expected the locked ~${SEG12_OFF_SUN_DEG}deg (more toward it than seg9's ${sunwardDeg.toFixed(0)}deg)`);
+  const seg10Len = world.segments['seg10'].length;
+  if (seg10Len !== 800) throw new Error(`seg10 is ${seg10Len}m, expected 800m`);
+  const onSeg10 = states.map((st, i) => (st.segment === 'seg10' ? i : -1)).filter((i) => i >= 0);
+  if (!onSeg10.length) throw new Error('the Rider never drove seg10');
+  const SEG10_OFF_SUN_DEG = 35;   // the authored seg10 sun-ward angle
+  const sun10offDeg = Math.abs(wrap(headings['seg10'] - SUN_BEARING)) * 180 / Math.PI;
+  if (Math.abs(sun10offDeg - SEG10_OFF_SUN_DEG) > 2) {
+    throw new Error(`seg10 is ${sun10offDeg.toFixed(1)}deg off the sun, expected the locked ~${SEG10_OFF_SUN_DEG}deg (more toward it than seg7's ${sunwardDeg.toFixed(0)}deg)`);
   }
-  const sun12TopOnEntry = sunHeightPx(onSeg12[0]) + SUN_RADIUS_PX;
-  if (!(sun12TopOnEntry > crest)) {
-    throw new Error(`onto seg12 no sun is present: its top (${sun12TopOnEntry.toFixed(0)}px) is below the crest (${crest.toFixed(0)}px)`);
+  const sun10TopOnEntry = sunHeightPx(onSeg10[0]) + SUN_RADIUS_PX;
+  if (!(sun10TopOnEntry > crest)) {
+    throw new Error(`onto seg10 no sun is present: its top (${sun10TopOnEntry.toFixed(0)}px) is below the crest (${crest.toFixed(0)}px)`);
   }
 
   // 2) heading continuity: no single-press jump bigger than the rotation ceiling. The

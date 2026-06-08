@@ -67,12 +67,12 @@ interface CornerSpecies {
   babyRatio: number;     // baby height as a fraction of the adult
   babyBeyond: number;    // how far past the turn the baby stands, in the Rider's path
   giantScale: number;    // cartoonish late-route upsizing...
-  giantFromSeg: number;  // ...applied on segments numbered above this (the old seg9+, +2 from the front insert)
+  giantFromSeg: number;  // ...applied on segments numbered above this (the late-route corners)
 }
 const SPECIES: Record<CornerCreature, CornerSpecies> = {
-  ELEPHANT: { emoji: '🐘', adultHeight: 2.8, babyRatio: 0.5, babyBeyond: 14, giantScale: 1.7, giantFromSeg: 10 },
-  GIRAFFE:  { emoji: '🦒', adultHeight: 4.5, babyRatio: 0.5, babyBeyond: 14, giantScale: 1.7, giantFromSeg: 10 },
-  ZEBRA:    { emoji: '🦓', adultHeight: 1.6, babyRatio: 0.5, babyBeyond: 14, giantScale: 1.7, giantFromSeg: 10 },
+  ELEPHANT: { emoji: '🐘', adultHeight: 2.8, babyRatio: 0.5, babyBeyond: 14, giantScale: 1.7, giantFromSeg: 8 },
+  GIRAFFE:  { emoji: '🦒', adultHeight: 4.5, babyRatio: 0.5, babyBeyond: 14, giantScale: 1.7, giantFromSeg: 8 },
+  ZEBRA:    { emoji: '🦓', adultHeight: 1.6, babyRatio: 0.5, babyBeyond: 14, giantScale: 1.7, giantFromSeg: 8 },
 };
 
 // The two creatures AT a segment's exit intersection — they read as having just CROSSED it.

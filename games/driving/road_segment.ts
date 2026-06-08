@@ -100,8 +100,8 @@ export function buildWorld(): World {
   // ---- author the route ----
   // Each row: a segment's config (id / length / scheme) and the exit turn it takes
   // (to / dir / degrees) or null at the end. Checked non-self-intersecting (no loops) and
-  // all-turns-<=-90deg by test/test_model.ts. Hand-authored, opening with a soft S of gentle
-  // warm-up turns.
+  // all-turns-<=-90deg by test/test_model.ts. Hand-authored; opens straight onto the long
+  // seg1 so the sunset is already underway by the first stretch (SUN_START_PX is calibrated to it).
   const turn = (to: SegId, dir: TurnDir, deg: number, creature: CornerCreature = CornerCreature.ELEPHANT): IntersectionConfig =>
     ({ to, dir, angle: deg * DEG, creature });
   type Row = RoadSegmentConfig & { exit: IntersectionConfig | null };
@@ -109,27 +109,25 @@ export function buildWorld(): World {
   // over, then giraffes, then all three intermingle. No runtime scattering — it's all here.
   const Z = CornerCreature.ZEBRA, E = CornerCreature.ELEPHANT, G = CornerCreature.GIRAFFE;
   const route: Row[] = [
-    { id: 'seg1',  length: 300, scheme: 'ALL_GREEN',    exit: turn('seg2',  'left',  50, Z) },
-    { id: 'seg2',  length: 300, scheme: 'YELLOW_GREEN', exit: turn('seg3',  'right', 50, Z) },
-    { id: 'seg3',  length: 800, scheme: 'RED_GREEN',    exit: turn('seg4',  'right', 50, E) },
-    { id: 'seg4',  length: 320, scheme: 'ALL_GREEN',    exit: turn('seg5',  'left',  70, E) },
-    { id: 'seg5',  length: 400, scheme: 'YELLOW_GREEN', exit: turn('seg6',  'right', 20, G) },
-    { id: 'seg6',  length: 300, scheme: 'RED_GREEN',    exit: turn('seg7',  'right', 20, G) },
-    { id: 'seg7',  length: 300, scheme: 'ALL_GREEN',    exit: turn('seg8',  'left',  70, Z) },
-    { id: 'seg8',  length: 300, scheme: 'YELLOW_GREEN', exit: turn('seg9',  'left',  70, G) },
-    { id: 'seg9',  length: 1200, scheme: 'RED_GREEN',   exit: turn('seg10', 'right', 80, E) },
-    { id: 'seg10', length: 300, scheme: 'ALL_GREEN',    exit: turn('seg11', 'right', 15, Z) },
-    { id: 'seg11', length: 300, scheme: 'YELLOW_GREEN', exit: turn('seg12', 'left',  70, G) },
-    { id: 'seg12', length: 800, scheme: 'RED_GREEN',    exit: turn('seg13', 'right', 15, E) },
-    { id: 'seg13', length: 300, scheme: 'ALL_GREEN',    exit: turn('seg14', 'right', 15, Z) },
-    { id: 'seg14', length: 300, scheme: 'YELLOW_GREEN', exit: turn('seg15', 'right', 15, G) },
-    { id: 'seg15', length: 300, scheme: 'RED_GREEN',    exit: turn('seg16', 'right', 15, E) },
-    { id: 'seg16', length: 400, scheme: 'ALL_GREEN',    exit: turn('seg17', 'left',  50, Z) },
-    { id: 'seg17', length: 300, scheme: 'YELLOW_GREEN', exit: turn('seg18', 'right', 50, G) },
-    { id: 'seg18', length: 300, scheme: 'RED_GREEN',    exit: turn('seg19', 'left',  50, E) },
-    { id: 'seg19', length: 300, scheme: 'ALL_GREEN',    exit: turn('seg20', 'right', 50, Z) },
-    { id: 'seg20', length: 300, scheme: 'YELLOW_GREEN', exit: turn('seg21', 'left',  50, G) },
-    { id: 'seg21', length: 300, scheme: 'RED_GREEN',    exit: null },
+    { id: 'seg1',  length: 800, scheme: 'RED_GREEN',    exit: turn('seg2',  'right', 50, E) },
+    { id: 'seg2',  length: 320, scheme: 'ALL_GREEN',    exit: turn('seg3',  'left',  70, E) },
+    { id: 'seg3',  length: 400, scheme: 'YELLOW_GREEN', exit: turn('seg4',  'right', 20, G) },
+    { id: 'seg4',  length: 300, scheme: 'RED_GREEN',    exit: turn('seg5',  'right', 20, G) },
+    { id: 'seg5',  length: 300, scheme: 'ALL_GREEN',    exit: turn('seg6',  'left',  70, Z) },
+    { id: 'seg6',  length: 300, scheme: 'YELLOW_GREEN', exit: turn('seg7',  'left',  70, G) },
+    { id: 'seg7',  length: 1200, scheme: 'RED_GREEN',   exit: turn('seg8',  'right', 80, E) },
+    { id: 'seg8',  length: 300, scheme: 'ALL_GREEN',    exit: turn('seg9',  'right', 15, Z) },
+    { id: 'seg9',  length: 300, scheme: 'YELLOW_GREEN', exit: turn('seg10', 'left',  70, G) },
+    { id: 'seg10', length: 800, scheme: 'RED_GREEN',    exit: turn('seg11', 'right', 15, E) },
+    { id: 'seg11', length: 300, scheme: 'ALL_GREEN',    exit: turn('seg12', 'right', 15, Z) },
+    { id: 'seg12', length: 300, scheme: 'YELLOW_GREEN', exit: turn('seg13', 'right', 15, G) },
+    { id: 'seg13', length: 300, scheme: 'RED_GREEN',    exit: turn('seg14', 'right', 15, E) },
+    { id: 'seg14', length: 400, scheme: 'ALL_GREEN',    exit: turn('seg15', 'left',  50, Z) },
+    { id: 'seg15', length: 300, scheme: 'YELLOW_GREEN', exit: turn('seg16', 'right', 50, G) },
+    { id: 'seg16', length: 300, scheme: 'RED_GREEN',    exit: turn('seg17', 'left',  50, E) },
+    { id: 'seg17', length: 300, scheme: 'ALL_GREEN',    exit: turn('seg18', 'right', 50, Z) },
+    { id: 'seg18', length: 300, scheme: 'YELLOW_GREEN', exit: turn('seg19', 'left',  50, G) },
+    { id: 'seg19', length: 300, scheme: 'RED_GREEN',    exit: null },
   ];
   const order: SegId[] = route.map((r) => r.id);
 

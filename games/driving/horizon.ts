@@ -46,13 +46,13 @@ const westRange = (bearing: number): number => range(bearing, WEST_RANGE_BEARING
 // The sun's height above the horizon drops linearly with the STEP — a pure function of it (like the
 // beacon clock), so it scrubs on reverse and freezes on pause. We work in PIXELS at the base focal
 // (the frame the mountain silhouettes are authored in), so the sun and the ranges compare directly
-// and the seg9 sunset behaviour is checkable in the model test. Near the horizon px ~= focal*angle,
+// and the seg7 sunset behaviour is checkable in the model test. Near the horizon px ~= focal*angle,
 // so a constant px/step is essentially the constant DEG/step world-rotation. SUN_START_PX is a
-// one-time calibration: the sun is part-behind the western range as the Rider turns onto seg9 and
-// its centre is still above the range by seg9's end — enforced by test_model.
+// one-time calibration: the sun is still up but already descending as the ride opens, part-behind
+// the western range as the Rider turns onto seg7 and still setting by its end — enforced by test_model.
 export const SUN_RADIUS_PX = 46;                                    // the sun disc's radius (px at base focal)
-const SUN_START_PX = 222;                                          // sun height above the horizon at step 0
-const SUN_DROP_PX_PER_STEP = 0.408 * (2 * SUN_RADIUS_PX) / 625;    // ~41% of the disc diameter over seg9 (15% slower, more sun in seg12)
+const SUN_START_PX = 194.85;                                       // sun height above the horizon at step 0 (calibrated to seg1's start: the old seg3 entry height)
+const SUN_DROP_PX_PER_STEP = 0.408 * (2 * SUN_RADIUS_PX) / 625;    // ~41% of the disc diameter over seg7 (the long sun-ward stretch)
 export function sunHeightPx(step: number): number {
   return SUN_START_PX - SUN_DROP_PX_PER_STEP * step;
 }
