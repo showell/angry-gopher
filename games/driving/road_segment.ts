@@ -118,7 +118,7 @@ export function buildWorld(): World {
     { id: 'seg7',  length: 300, scheme: 'ALL_GREEN',    exit: turn('seg8',  'left',  70, Z) },
     { id: 'seg8',  length: 300, scheme: 'YELLOW_GREEN', exit: turn('seg9',  'left',  70, G) },
     { id: 'seg9',  length: 1200, scheme: 'RED_GREEN',   exit: turn('seg10', 'right', 80, E) },
-    { id: 'seg10', length: 300, scheme: 'ALL_GREEN',    exit: turn('seg11', 'right', 20, Z) },
+    { id: 'seg10', length: 300, scheme: 'ALL_GREEN',    exit: turn('seg11', 'right', 15, Z) },
     { id: 'seg11', length: 300, scheme: 'YELLOW_GREEN', exit: turn('seg12', 'left',  70, G) },
     { id: 'seg12', length: 800, scheme: 'RED_GREEN',    exit: turn('seg13', 'right', 15, E) },
     { id: 'seg13', length: 300, scheme: 'ALL_GREEN',    exit: turn('seg14', 'right', 15, Z) },

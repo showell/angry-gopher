@@ -51,7 +51,7 @@ const westRange = (bearing: number): number => range(bearing, WEST_RANGE_BEARING
 // one-time calibration: the sun is part-behind the western range as the Rider turns onto seg9 and
 // its centre is still above the range by seg9's end — enforced by test_model.
 export const SUN_RADIUS_PX = 46;                                    // the sun disc's radius (px at base focal)
-const SUN_START_PX = 217.8;                                        // tuned so the sun's seg9-ENTRY height (~92px) is unchanged when the rate changes
+const SUN_START_PX = 222;                                          // sun height above the horizon at step 0
 const SUN_DROP_PX_PER_STEP = 0.408 * (2 * SUN_RADIUS_PX) / 625;    // ~41% of the disc diameter over seg9 (15% slower, more sun in seg12)
 export function sunHeightPx(step: number): number {
   return SUN_START_PX - SUN_DROP_PX_PER_STEP * step;
