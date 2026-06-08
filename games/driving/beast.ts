@@ -196,25 +196,40 @@ function tangentPts(c1: P, r1: number, c2: P, r2: number, upper: boolean): [P, P
   return [[c1[0] + r1 * nx, c1[1] + r1 * ny], [c2[0] + r2 * nx, c2[1] + r2 * ny]];
 }
 
-// The skin envelope: a TOP line and a BOTTOM line, each a smooth curve that wraps the internal solids
-// (head sphere -> body cylinder -> tail) along their external tangents — sleeker than the solids.
+// The internal solids as a front-to-back CHAIN of circles: the head, the two ends of the NECK capsule,
+// the two ends of the TORSO capsule, then the tail nodes (the tail base sits inside the torso, so it's
+// dropped). The skin is the tight external-tangent envelope walked along CONSECUTIVE circles: between
+// each pair it takes the external tangent, so it hugs every circle and only spans the small gap to the
+// next. That keeps it close to the structure AND routes it over the neck (head -> neck -> torso),
+// never head straight to torso.
 function buildSkin(): { top: P[]; bottom: P[] } {
-  const headC: P = [HEAD.cx, HEAD.cy];
-  const tailC = TAIL_NODES[1], tailR = TAIL_RADII[1];     // the tail base is sunk inside the body; span to the next node
-  const tip = TAIL_NODES[TAIL_NODES.length - 1];
-  const midX = (TORSO_A[0] + TORSO_B[0]) / 2;
-  const noseFront: P = [HEAD.cx - HEAD.r, HEAD.cy];
-  const crown: P = [HEAD.cx, HEAD.cy + HEAD.r];
+  const chain: { c: P; r: number }[] = [
+    { c: [HEAD.cx, HEAD.cy], r: HEAD.r },
+    { c: NECK_B, r: NECK_R },          // neck, head end
+    { c: NECK_A, r: NECK_R },          // neck, torso end
+    { c: TORSO_A, r: TORSO_R },        // torso, front
+    { c: TORSO_B, r: TORSO_R },        // torso, rear
+    { c: TAIL_NODES[1], r: TAIL_RADII[1] },
+    { c: TAIL_NODES[2], r: TAIL_RADII[2] },
+    { c: TAIL_NODES[3], r: TAIL_RADII[3] },
+  ];
+  const nose: P = [HEAD.cx - HEAD.r, HEAD.cy];
+  const last = chain[chain.length - 1], prev = chain[chain.length - 2];
+  const td = Math.atan2(last.c[1] - prev.c[1], last.c[0] - prev.c[0]);   // tail-tip direction
+  const tip: P = [last.c[0] + last.r * Math.cos(td), last.c[1] + last.r * Math.sin(td)];
 
-  const [hT, fT] = tangentPts(headC, HEAD.r, TORSO_A, TORSO_R, true);     // head -> body top
-  const [rT, tT] = tangentPts(TORSO_B, TORSO_R, tailC, tailR, true);      // body -> tail top
-  const [hB, fB] = tangentPts(headC, HEAD.r, TORSO_A, TORSO_R, false);    // head -> body bottom
-  const [rB, tB] = tangentPts(TORSO_B, TORSO_R, tailC, tailR, false);     // body -> tail bottom
-
-  return {
-    top: [noseFront, crown, hT, fT, [midX, TORSO_A[1] + TORSO_R], rT, tT, tip],
-    bottom: [noseFront, hB, fB, [midX, TORSO_A[1] - TORSO_R], rB, tB, tip],
-  };
+  const top: P[] = [nose, [HEAD.cx, HEAD.cy + HEAD.r]];
+  const bottom: P[] = [nose, [HEAD.cx, HEAD.cy - HEAD.r]];
+  for (let i = 0; i < chain.length - 1; i++) {
+    const A = chain[i], B = chain[i + 1];
+    const [aT, bT] = tangentPts(A.c, A.r, B.c, B.r, true);
+    const [aB, bB] = tangentPts(A.c, A.r, B.c, B.r, false);
+    top.push(aT, bT);
+    bottom.push(aB, bB);
+  }
+  top.push(tip);
+  bottom.push(tip);
+  return { top, bottom };
 }
 
 // Draw the beast in its unit frame (standing height 1, y up, feet at the origin), sized by distance.
