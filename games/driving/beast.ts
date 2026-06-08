@@ -17,7 +17,7 @@
 
 import type { Project, Ctx, Scenery } from './scenery.ts';
 
-const DEBUG = true;   // TEMPORARY: show the neck (pink) + skeleton over transparent solids
+const DEBUG = false;   // set true for the diagnostic view (pink neck + skeleton over transparent solids)
 
 // a point in the beast's profile frame: x toward the tail (right), y up, feet at the origin.
 type P = readonly [number, number];
@@ -29,12 +29,12 @@ interface Bone { length: number; joint: number; r0: number; r1: number }
 // For now a species is just its palette; the skeleton below is the cat's. A second beast will lift
 // the skeleton numbers into this form (same anatomy, different proportions).
 interface BeastForm {
-  palette: { body: string; belly: string; shadow: string; line: string; eye: string; nose: string };
+  palette: { body: string; shadow: string; line: string; eye: string; nose: string };
 }
 
 const CAT: BeastForm = {
-  // a ginger cat: warm body, cream belly; shadow is the darker tone for the FAR pair of legs.
-  palette: { body: '#c8823c', belly: '#efe0c6', shadow: '#8a571f', line: '#3a2a17', eye: '#15100a', nose: '#b56b6b' },
+  // a ginger cat; shadow is the darker tone for the FAR pair of legs.
+  palette: { body: '#c8823c', shadow: '#8a571f', line: '#3a2a17', eye: '#15100a', nose: '#b56b6b' },
 };
 
 // ---- the cat skeleton ----
@@ -230,6 +230,29 @@ function buildSkin(): { top: P[]; bottom: P[] } {
   return { top, bottom };
 }
 
+// Trace a CLOSED smooth curve through pts (Catmull-Rom -> cubic Béziers, wrapping around).
+function smoothClosed(ctx: Ctx, pts: P[]): void {
+  const n = pts.length;
+  ctx.moveTo(pts[0][0], pts[0][1]);
+  for (let i = 0; i < n; i++) {
+    const p0 = pts[(i - 1 + n) % n], p1 = pts[i], p2 = pts[(i + 1) % n], p3 = pts[(i + 2) % n];
+    const c1x = p1[0] + (p2[0] - p0[0]) / 6, c1y = p1[1] + (p2[1] - p0[1]) / 6;
+    const c2x = p2[0] - (p3[0] - p1[0]) / 6, c2y = p2[1] - (p3[1] - p1[1]) / 6;
+    ctx.bezierCurveTo(c1x, c1y, c2x, c2y, p2[0], p2[1]);
+  }
+  ctx.closePath();
+}
+
+// Fill the cat's body as the SKIN silhouette: the top envelope, then the bottom envelope reversed,
+// closed into one smooth shape. Head, neck, torso and tail are all inside this single outline.
+function fillSkin(ctx: Ctx, fill: string, line: string): void {
+  const { top, bottom } = buildSkin();
+  const loop = [...top, ...bottom.slice(1, -1).reverse()];
+  ctx.beginPath();
+  smoothClosed(ctx, loop);
+  fillStroke(ctx, fill, line);
+}
+
 // Draw the beast in its unit frame (standing height 1, y up, feet at the origin), sized by distance.
 function drawBeast(ctx: Ctx, b: BeastView, project: Project): void {
   const base = project(b.at.right, b.at.forward, 0);
@@ -251,18 +274,15 @@ function drawBeast(ctx: Ctx, b: BeastView, project: Project): void {
   ctx.restore();
 }
 
-// the finished cat: solids unioned in one colour, back-to-front.
+// the finished cat: the body is the SKIN silhouette over the internal solids; legs, ears and face on top.
 function drawCat(ctx: Ctx, pal: BeastForm['palette']): void {
   drawLeg(ctx, far(FRONT_HIP), pal.shadow, pal.line);   // far pair, behind the body, in shade
   drawLeg(ctx, far(HIND_HIP), pal.shadow, pal.line);
-  drawTail(ctx, pal.body, pal.line);
-  capsule(ctx, TORSO_A, TORSO_B, TORSO_R, TORSO_R, pal.body, pal.line);   // torso cylinder
-  capsule(ctx, NECK_A, NECK_B, NECK_R, NECK_R, pal.body, pal.line);       // neck cylinder
-  drawHead(ctx, pal.body, pal.line);                                      // head sphere — AFTER the neck, so it sits closer to the rider (on top)
-  drawEars(ctx, pal.body, pal.line);
-  drawFace(ctx, pal.eye, pal.nose);
+  fillSkin(ctx, pal.body, pal.line);                    // head + neck + torso + tail as one sleek skin
   drawLeg(ctx, FRONT_HIP, pal.body, pal.line);          // near pair, over the body
   drawLeg(ctx, HIND_HIP, pal.body, pal.line);
+  drawEars(ctx, pal.body, pal.line);
+  drawFace(ctx, pal.eye, pal.nose);
 }
 
 // the diagnostic view: solids as see-through outlines, legs as raw skeleton, the NECK in solid pink.
@@ -312,18 +332,6 @@ function drawLeg(ctx: Ctx, hip: P, fill: string, line: string): void {
   capsule(ctx, j[0], j[1], UPPER_LEG.r0, UPPER_LEG.r1, fill, line);
   capsule(ctx, j[1], j[2], LOWER_LEG.r0, LOWER_LEG.r1, fill, line);
   capsule(ctx, j[2], j[3], PAW.r0, PAW.r1, fill, line);
-}
-
-function drawTail(ctx: Ctx, fill: string, line: string): void {
-  for (let i = 0; i < TAIL_NODES.length - 1; i++) {
-    capsule(ctx, TAIL_NODES[i], TAIL_NODES[i + 1], TAIL_RADII[i], TAIL_RADII[i + 1], fill, line);
-  }
-}
-
-function drawHead(ctx: Ctx, fill: string, line: string): void {
-  ctx.beginPath();
-  ctx.ellipse(HEAD.cx, HEAD.cy, HEAD.r, HEAD.r, 0, 0, Math.PI * 2);
-  fillStroke(ctx, fill, line);
 }
 
 function drawEars(ctx: Ctx, fill: string, line: string): void {
