@@ -36,21 +36,22 @@ const KANGAROO: BeastForm = {
 // hind leg: the Z. A big, long, thick THIGH (the haunch) points down-and-forward from the hip; a
 // short, slender SHIN bends back down to the ankle; the ankle lays the long FOOT out flat. Lengths
 // and thicknesses read from the emoji's shading (thigh > foot > shin). (joint angles are rest-pose.)
-const HIP: P = [0.17, 0.48];
-const LEG_BASE_ANGLE = -2.335;                                // absolute direction of the thigh
-const THIGH: Bone = { length: 0.332, joint: 0,      r0: 0.130, r1: 0.050 };
-const SHIN:  Bone = { length: 0.194, joint: 1.367,  r0: 0.048, r1: 0.030 };
-const FOOT:  Bone = { length: 0.316, joint: -1.982, r0: 0.032, r1: 0.013 };
+const HIP: P = [0.24, 0.48];                                  // set back, at the end of the long torso
+const LEG_BASE_ANGLE = -2.467;                                // absolute direction of the thigh
+const THIGH: Bone = { length: 0.384, joint: 0,      r0: 0.130, r1: 0.050 };
+const SHIN:  Bone = { length: 0.194, joint: 1.499,  r0: 0.048, r1: 0.030 };
+const FOOT:  Bone = { length: 0.316, joint: -1.981, r0: 0.032, r1: 0.013 };
 
-// the small fore-arm, bent at the elbow and held up against the chest.
-const ARM_SHOULDER: P = [-0.05, 0.47];
-const ARM_BASE_ANGLE = -1.166;
-const UPPER_ARM: Bone = { length: 0.076, joint: 0,      r0: 0.035, r1: 0.025 };
-const FORE_ARM:  Bone = { length: 0.112, joint: -1.512, r0: 0.025, r1: 0.014 };
+// the fore-arm, bent at the elbow and hanging in front of the chest. Its lower segment (the fore-arm)
+// is nearly as long as the hind leg's shin, as in the cartoon — the forelimb isn't tiny.
+const ARM_SHOULDER: P = [-0.05, 0.49];
+const ARM_BASE_ANGLE = -2.035;
+const UPPER_ARM: Bone = { length: 0.090, joint: 0,     r0: 0.035, r1: 0.027 };
+const FORE_ARM:  Bone = { length: 0.165, joint: 0.219, r0: 0.027, r1: 0.016 };
 
 // the heavy tail: thick as the haunch at the root, sweeping in one smooth curve down and back to a
 // low point that rests near the ground (no up-hook). Tapering capsules between successive nodes.
-const TAIL_NODES: P[] = [[0.30, 0.50], [0.54, 0.30], [0.74, 0.13], [0.90, 0.04]];
+const TAIL_NODES: P[] = [[0.40, 0.50], [0.62, 0.30], [0.80, 0.13], [0.94, 0.04]];
 const TAIL_RADII = [0.130, 0.085, 0.045, 0.012];
 
 // the curled neck, rising from the withers and bending forward to the head.
@@ -70,7 +71,7 @@ const EAR_FRONT = { base: [-0.12, 0.82], tip: [-0.18, 1.01], r0: 0.038, r1: 0.01
 
 // the torso's permanent outline: the arched back over the belly.
 const TORSO = {
-  chestFront: [-0.13, 0.42], shoulderTop: [-0.03, 0.55], rump: [0.32, 0.52], rumpLow: [0.27, 0.36], belly: [0.00, 0.33],
+  chestFront: [-0.15, 0.42], shoulderTop: [-0.04, 0.55], rump: [0.42, 0.50], rumpLow: [0.36, 0.36], belly: [0.02, 0.33],
 } as const;
 
 const LINE_WIDTH = 0.012;   // outline weight, in standing-height units (scales with distance)
@@ -205,11 +206,11 @@ function drawChain(ctx: Ctx, nodes: P[], radii: number[], fill: string, line: st
 function drawTorso(ctx: Ctx, fill: string, line: string): void {
   ctx.beginPath();
   ctx.moveTo(...TORSO.chestFront);
-  ctx.quadraticCurveTo(-0.10, 0.52, ...TORSO.shoulderTop);   // up the chest to the withers
-  ctx.quadraticCurveTo(0.16, 0.63, ...TORSO.rump);           // over the arched back
-  ctx.quadraticCurveTo(0.36, 0.44, ...TORSO.rumpLow);        // down the rump
-  ctx.quadraticCurveTo(0.10, 0.30, ...TORSO.belly);          // under the belly
-  ctx.quadraticCurveTo(-0.13, 0.34, ...TORSO.chestFront);    // up to the chest front
+  ctx.quadraticCurveTo(-0.11, 0.52, ...TORSO.shoulderTop);   // up the chest to the withers
+  ctx.quadraticCurveTo(0.18, 0.62, ...TORSO.rump);           // over the long arched back
+  ctx.quadraticCurveTo(0.46, 0.42, ...TORSO.rumpLow);        // down the rump
+  ctx.quadraticCurveTo(0.12, 0.30, ...TORSO.belly);          // under the belly
+  ctx.quadraticCurveTo(-0.15, 0.34, ...TORSO.chestFront);    // up to the chest front
   ctx.closePath();
   fillStroke(ctx, fill, line);
 }
@@ -218,10 +219,10 @@ function drawTorso(ctx: Ctx, fill: string, line: string): void {
 // boundary) — the two-tone that makes the form read as volume rather than a flat silhouette.
 function drawBelly(ctx: Ctx, fill: string): void {
   ctx.beginPath();
-  ctx.moveTo(-0.11, 0.40);
-  ctx.quadraticCurveTo(-0.02, 0.30, 0.12, 0.31);   // under the belly back to the groin
-  ctx.quadraticCurveTo(0.06, 0.24, -0.05, 0.24);   // down the front of the thigh to the knee
-  ctx.quadraticCurveTo(-0.11, 0.32, -0.11, 0.40);  // up the chest front
+  ctx.moveTo(-0.13, 0.40);
+  ctx.quadraticCurveTo(-0.02, 0.30, 0.16, 0.31);   // under the long belly to the groin
+  ctx.quadraticCurveTo(0.08, 0.24, -0.05, 0.24);   // down the front of the thigh to the knee
+  ctx.quadraticCurveTo(-0.13, 0.32, -0.13, 0.40);  // up the chest front
   ctx.closePath();
   ctx.fillStyle = fill; ctx.fill();
 }
@@ -236,7 +237,7 @@ function drawToes(ctx: Ctx, color: string): void {
 function drawPaw(ctx: Ctx, color: string): void {
   ctx.fillStyle = color;
   ctx.beginPath();
-  ctx.arc(-0.12, 0.35, 0.024, 0, Math.PI * 2);
+  ctx.arc(-0.13, 0.25, 0.024, 0, Math.PI * 2);
   ctx.fill();
 }
 
