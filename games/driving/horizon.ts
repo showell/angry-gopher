@@ -53,8 +53,8 @@ const westRange = (bearing: number): number => range(bearing, WEST_RANGE_BEARING
 // one-time calibration: the sun is part-behind the western range as the Rider turns onto seg9 and
 // its centre is still above the range by seg9's end — enforced by test_model.
 export const SUN_RADIUS_PX = 46;                                    // the sun disc's radius (px at base focal)
-const SUN_START_PX = 146;                                          // sun height above the horizon at step 0 (higher, to keep seg9)
-const SUN_DROP_PX_PER_STEP = 0.24 * (2 * SUN_RADIUS_PX) / 625;     // 24% of the disc diameter over seg9's ~625 steps (50% faster)
+const SUN_START_PX = 240;                                          // sun height above the horizon at step 0 (high, with ramp-up room)
+const SUN_DROP_PX_PER_STEP = 0.48 * (2 * SUN_RADIUS_PX) / 625;     // 48% of the disc diameter over seg9's ~625 steps (fast)
 export function sunHeightPx(step: number): number {
   return SUN_START_PX - SUN_DROP_PX_PER_STEP * step;
 }
@@ -90,11 +90,12 @@ function snowColor(step: number): string {
 }
 
 // A gently curved snowline (px above the horizon) at a bearing — the cap's base, instead of a
-// dead-flat horizontal line. A broad, low-amplitude undulation, a pure function of bearing so it
-// holds still in the world as the Rider turns.
-const SNOW_CURVE_AMP = 8;
-const SNOW_CURVE_FREQ = 1.5;
-const snowlineAt = (bearing: number): number => SNOWLINE + SNOW_CURVE_AMP * Math.sin(bearing * SNOW_CURVE_FREQ);
+// dead-flat horizontal line. A single broad ARCH centred on the range (a cos, not a low-freq sin
+// that just reads as a tilt): the base dips deepest under the tall central peak and rises toward the
+// edges. A pure function of bearing, so it holds still in the world as the Rider turns.
+const SNOW_CURVE_AMP = 30;       // how far the base dips at the range's centre
+const SNOW_CURVE_FREQ = 5.2;     // tight enough that the arch bends ACROSS the narrow cap, not just slopes
+const snowlineAt = (bearing: number): number => SNOWLINE - SNOW_CURVE_AMP * Math.cos(bearing * SNOW_CURVE_FREQ);
 
 // Draw the whole horizon for the Rider's heading: the setting sun + glow (behind),
 // the westward and (snowcapped) northern ranges, and the rolling foreground land.

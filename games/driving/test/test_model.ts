@@ -151,10 +151,11 @@ function main(): void {
   if (Math.abs(gazeVals[first + GAZE_SEQUENCE.length]) > 1e-9) throw new Error('glance did not return to straight after the sequence');
 
   // 1c) the SUNSET over seg9 (the special segment). seg9 must be the long, sun-ward stretch: at
-  // least 1000m (it hosts the mid-segment radio tower), headed roughly toward the sun, with PART of
-  // the sun already behind the western range as the Rider turns onto it, and the sun's CENTRE still
-  // above that range by the segment's end. The sun height is a pure function of the step (the same
-  // step the renderer uses), so this pins the calibration in horizon.ts to the route's timing.
+  // least 1000m (it hosts the mid-segment radio tower), headed roughly toward the sun, with the sun
+  // still UP as the Rider turns onto it and dropping PART-BEHIND the western range by the segment's
+  // end — it SETS behind the range across the stretch. (With the fast descent the sun can't be
+  // part-behind at both ends of the window, so we pin the setting, not a single instant.) The sun
+  // height is a pure function of the step, pinning the horizon.ts calibration to the route's timing.
   const seg9Len = world.segments['seg9'].length;
   if (seg9Len < 1000) throw new Error(`seg9 is ${seg9Len}m, under the 1000m it needs for its mid-segment tower`);
   const onSeg9 = states.map((st, i) => (st.segment === 'seg9' ? i : -1)).filter((i) => i >= 0);
@@ -163,13 +164,13 @@ function main(): void {
   const sunwardDeg = Math.abs(wrap(headings['seg9'] - SUN_BEARING)) * 180 / Math.PI;
   if (sunwardDeg > 20) throw new Error(`seg9 heads ${sunwardDeg.toFixed(0)}deg off the sun (> 20deg) — not a sun-ward approach`);
   const crest = horizonCrestPx(SUN_BEARING);                       // the western range at the sun's bearing
-  const sunBottomOnEntry = sunHeightPx(s9start) - SUN_RADIUS_PX;
-  const sunCentreAtExit = sunHeightPx(s9end);
-  if (!(sunBottomOnEntry < crest)) {
-    throw new Error(`onto seg9 the sun bottom (${sunBottomOnEntry.toFixed(0)}px) is not yet behind the crest (${crest.toFixed(0)}px)`);
+  const sunCentreOnEntry = sunHeightPx(s9start);
+  const sunBottomAtExit = sunHeightPx(s9end) - SUN_RADIUS_PX;
+  if (!(sunCentreOnEntry > crest)) {
+    throw new Error(`onto seg9 the sun centre (${sunCentreOnEntry.toFixed(0)}px) is already below the crest (${crest.toFixed(0)}px) — not still up`);
   }
-  if (!(sunCentreAtExit > crest)) {
-    throw new Error(`by seg9's end the sun centre (${sunCentreAtExit.toFixed(0)}px) has already dropped below the crest (${crest.toFixed(0)}px)`);
+  if (!(sunBottomAtExit < crest)) {
+    throw new Error(`by seg9's end the sun bottom (${sunBottomAtExit.toFixed(0)}px) is still above the crest (${crest.toFixed(0)}px) — it hasn't set behind`);
   }
 
   // 1d) the SUNSET over seg12 (the SECOND sun-ward stretch, 800m): headed toward the sun but LESS
