@@ -183,52 +183,50 @@ function smoothOpen(ctx: Ctx, pts: P[]): void {
   }
 }
 
-// The external tangent between circles (c1,r1) and (c2,r2): the two points where a SKIN stretched
-// taut over both touches them, on the upper or lower side. This is how the head/neck/body/tail solids
-// give sleeker silhouette lines than their own circles — the skin spans the gaps tangentially.
-function tangentPts(c1: P, r1: number, c2: P, r2: number, upper: boolean): [P, P] {
-  const dx = c2[0] - c1[0], dy = c2[1] - c1[1], D = Math.hypot(dx, dy) || 1e-6;
-  const base = Math.atan2(dy, dx);
-  const a = Math.acos(Math.max(-1, Math.min(1, (r1 - r2) / D)));
-  const t1 = base + a, t2 = base - a;
-  const theta = (Math.sin(t1) >= Math.sin(t2)) === upper ? t1 : t2;
-  const nx = Math.cos(theta), ny = Math.sin(theta);
-  return [[c1[0] + r1 * nx, c1[1] + r1 * ny], [c2[0] + r2 * nx, c2[1] + r2 * ny]];
+type Circle = { c: P; r: number };
+
+// sample a capsule into overlapping circles along its length, so a chain of them fills the cylinder.
+function sampleCapsule(out: Circle[], A: P, B: P, rA: number, rB: number, n: number): void {
+  for (let k = 0; k <= n; k++) {
+    const t = k / n;
+    out.push({ c: [A[0] + (B[0] - A[0]) * t, A[1] + (B[1] - A[1]) * t], r: rA + (rB - rA) * t });
+  }
 }
 
-// The internal solids as a front-to-back CHAIN of circles: the head, the two ends of the NECK capsule,
-// the two ends of the TORSO capsule, then the tail nodes (the tail base sits inside the torso, so it's
-// dropped). The skin is the tight external-tangent envelope walked along CONSECUTIVE circles: between
-// each pair it takes the external tangent, so it hugs every circle and only spans the small gap to the
-// next. That keeps it close to the structure AND routes it over the neck (head -> neck -> torso),
-// never head straight to torso.
-function buildSkin(): { top: P[]; bottom: P[] } {
-  const chain: { c: P; r: number }[] = [
-    { c: [HEAD.cx, HEAD.cy], r: HEAD.r },
-    { c: NECK_B, r: NECK_R },          // neck, head end
-    { c: NECK_A, r: NECK_R },          // neck, torso end
-    { c: TORSO_A, r: TORSO_R },        // torso, front
-    { c: TORSO_B, r: TORSO_R },        // torso, rear
-    { c: TAIL_NODES[1], r: TAIL_RADII[1] },
-    { c: TAIL_NODES[2], r: TAIL_RADII[2] },
-    { c: TAIL_NODES[3], r: TAIL_RADII[3] },
-  ];
-  const nose: P = [HEAD.cx - HEAD.r, HEAD.cy];
-  const last = chain[chain.length - 1], prev = chain[chain.length - 2];
-  const td = Math.atan2(last.c[1] - prev.c[1], last.c[0] - prev.c[0]);   // tail-tip direction
-  const tip: P = [last.c[0] + last.r * Math.cos(td), last.c[1] + last.r * Math.sin(td)];
-
-  const top: P[] = [nose, [HEAD.cx, HEAD.cy + HEAD.r]];
-  const bottom: P[] = [nose, [HEAD.cx, HEAD.cy - HEAD.r]];
-  for (let i = 0; i < chain.length - 1; i++) {
-    const A = chain[i], B = chain[i + 1];
-    const [aT, bT] = tangentPts(A.c, A.r, B.c, B.r, true);
-    const [aB, bB] = tangentPts(A.c, A.r, B.c, B.r, false);
-    top.push(aT, bT);
-    bottom.push(aB, bB);
+// every internal solid as a cloud of circles (the capsules sampled along their length).
+function bodyCircles(): Circle[] {
+  const out: Circle[] = [{ c: [HEAD.cx, HEAD.cy], r: HEAD.r }];
+  sampleCapsule(out, NECK_A, NECK_B, NECK_R, NECK_R, 4);
+  sampleCapsule(out, TORSO_A, TORSO_B, TORSO_R, TORSO_R, 8);
+  for (let i = 0; i < TAIL_NODES.length - 1; i++) {
+    sampleCapsule(out, TAIL_NODES[i], TAIL_NODES[i + 1], TAIL_RADII[i], TAIL_RADII[i + 1], 4);
   }
-  top.push(tip);
-  bottom.push(tip);
+  return out;
+}
+
+// The SKIN is the outer silhouette of the UNION of those circles: scanning across x, the TOP line is
+// the highest circle-top covering that x and the BOTTOM line is the lowest circle-bottom. So the skin
+// lies exactly on whichever solid is outermost there — hugging each one — and the only place it leaves
+// a circle is the local hand-off where the next solid becomes the outer one (which the smooth curve
+// then rounds). No chords across circles, no spanning the gaps.
+function buildSkin(): { top: P[]; bottom: P[] } {
+  const circles = bodyCircles();
+  let minX = Infinity, maxX = -Infinity;
+  for (const c of circles) { minX = Math.min(minX, c.c[0] - c.r); maxX = Math.max(maxX, c.c[0] + c.r); }
+  const step = (maxX - minX) / 90;
+  const top: P[] = [], bottom: P[] = [];
+  for (let x = minX; x <= maxX + 1e-9; x += step) {
+    let yt = -Infinity, yb = Infinity;
+    for (const c of circles) {
+      const dx = x - c.c[0];
+      if (Math.abs(dx) <= c.r) {
+        const dy = Math.sqrt(c.r * c.r - dx * dx);
+        if (c.c[1] + dy > yt) yt = c.c[1] + dy;
+        if (c.c[1] - dy < yb) yb = c.c[1] - dy;
+      }
+    }
+    if (yt > -Infinity) { top.push([x, yt]); bottom.push([x, yb]); }
+  }
   return { top, bottom };
 }
 
