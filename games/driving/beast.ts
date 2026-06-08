@@ -54,9 +54,10 @@ const UPPER_ARM: Bone = { length: 0.090, joint: 0,     r0: 0.035, r1: 0.027 };
 const FORE_ARM:  Bone = { length: 0.165, joint: 0.219, r0: 0.027, r1: 0.016 };
 
 // ---- the body as one smooth shape ----
-// The DORSAL line (top), from the back of the head down the back to the tail tip: back-of-top-neck,
-// back-of-lower-neck, withers, back, rump, then the three tail sections. Drawn as one Catmull-Rom
-// spline, so the whole curve is smooth — the tail thins as the ventral line rises to meet it.
+// The DORSAL line (top), from the top of the neck down the back to the tail tip: back-of-top-neck,
+// back-of-lower-neck, withers, back, rump, then the three tail sections. The dorsal and ventral
+// lists are joined into ONE closed Catmull-Rom loop (drawBody), so the whole silhouette is smooth —
+// no kink down the neck, across the back, or where the neck-top closes.
 const DORSAL: P[] = [
   [0.00, 0.79],    // back of the top of the neck (the head sits forward of here)
   [0.06, 0.61],    // back of the lower neck
@@ -69,8 +70,8 @@ const DORSAL: P[] = [
 ];
 // The VENTRAL line (bottom), from the tail tip back up to the top of the neck: tail underside, under
 // the rump, belly, chest, throat, and on up the FRONT of the neck. Shares the tip with the dorsal
-// line; the body closes across the top of the neck (a short edge, hidden by the head). Drawing the
-// neck-front as part of this smooth curve is what gives the kangaroo a real, kink-free neck.
+// line; the loop closes smoothly across the top of the neck, and the head ellipse sits on the front
+// of it. Carrying the neck-front through the same smooth loop is what gives a real, kink-free neck.
 const VENTRAL: P[] = [
   [1.01, 0.01],    // tail tip (shared)
   [0.87, 0.06],    // middle tail underside
@@ -158,20 +159,22 @@ function fillStroke(ctx: Ctx, fill: string, line: string): void {
   ctx.strokeStyle = line; ctx.stroke();
 }
 
-// Extend the current path with a smooth curve through pts (a Catmull-Rom spline rendered as cubic
-// Béziers). The tangent at each interior point is set from its neighbours, so curvature stays
-// continuous THROUGH the points — no kink where one section meets the next. The caller is already at
-// pts[0] (moveTo or a prior segment ending there).
-function smoothThrough(ctx: Ctx, pts: P[]): void {
-  for (let i = 0; i < pts.length - 1; i++) {
-    const p0 = pts[i - 1] ?? pts[i];
+// Trace a CLOSED smooth curve through pts (a Catmull-Rom spline rendered as cubic Béziers, wrapping
+// around). EVERY point is interior — its tangent comes from its neighbours on both sides — so the
+// whole loop is smooth, with no kink anywhere, including where the last point rejoins the first.
+function smoothLoop(ctx: Ctx, pts: P[]): void {
+  const n = pts.length;
+  ctx.moveTo(pts[0][0], pts[0][1]);
+  for (let i = 0; i < n; i++) {
+    const p0 = pts[(i - 1 + n) % n];
     const p1 = pts[i];
-    const p2 = pts[i + 1];
-    const p3 = pts[i + 2] ?? pts[i + 1];
+    const p2 = pts[(i + 1) % n];
+    const p3 = pts[(i + 2) % n];
     const c1x = p1[0] + (p2[0] - p0[0]) / 6, c1y = p1[1] + (p2[1] - p0[1]) / 6;
     const c2x = p2[0] - (p3[0] - p1[0]) / 6, c2y = p2[1] - (p3[1] - p1[1]) / 6;
     ctx.bezierCurveTo(c1x, c1y, c2x, c2y, p2[0], p2[1]);
   }
+  ctx.closePath();
 }
 
 // Draw one rigid bone as a tapered capsule between joints A and B (half-widths rA, rB), with rounded
@@ -233,11 +236,9 @@ function drawBeast(ctx: Ctx, b: BeastView, project: Project): void {
 // the body: neck + back + tail as one shape — a smooth dorsal curve out to the tail tip, then a
 // smooth ventral curve back to the throat, closed across the neck (the head hides that edge).
 function drawBody(ctx: Ctx, fill: string, line: string): void {
+  const loop = [...DORSAL, ...VENTRAL.slice(1)];   // one silhouette, sharing the tail tip
   ctx.beginPath();
-  ctx.moveTo(...DORSAL[0]);
-  smoothThrough(ctx, DORSAL);    // back of the head -> tail tip
-  smoothThrough(ctx, VENTRAL);   // tail tip -> throat
-  ctx.closePath();
+  smoothLoop(ctx, loop);
   fillStroke(ctx, fill, line);
 }
 
