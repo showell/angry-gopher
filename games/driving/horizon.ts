@@ -77,8 +77,24 @@ export function horizonCrestPx(bearing: number): number {
 // ---- drawing ----
 const ROCK = '#5b6a8f';        // northern range
 const ROCK_WEST = '#39435f';   // westward range, darker — backlit by the sunset
-const SNOW = '#eef3f8';        // snowcaps
+const SNOW_DAY = [238, 243, 248];   // bright daytime snowcaps (#eef3f8)
+const SNOW_NIGHT = [70, 84, 104];   // heavily dimmed at dusk — the glare goes as the light does
 const LAND = '#4a8f43';        // foreground rolling land (matches the grass)
+
+// The snowcaps lose their glare through the ride. (The rock fades on its own as the sky darkens
+// toward it — nice, free atmospheric perspective — but bright snow would stay jarring without this.)
+function snowColor(step: number): string {
+  const t = sunSetFraction(step);
+  const c = (i: number): number => Math.round(SNOW_DAY[i] + (SNOW_NIGHT[i] - SNOW_DAY[i]) * t);
+  return `rgb(${c(0)},${c(1)},${c(2)})`;
+}
+
+// A gently curved snowline (px above the horizon) at a bearing — the cap's base, instead of a
+// dead-flat horizontal line. A broad, low-amplitude undulation, a pure function of bearing so it
+// holds still in the world as the Rider turns.
+const SNOW_CURVE_AMP = 8;
+const SNOW_CURVE_FREQ = 1.5;
+const snowlineAt = (bearing: number): number => SNOWLINE + SNOW_CURVE_AMP * Math.sin(bearing * SNOW_CURVE_FREQ);
 
 // Draw the whole horizon for the Rider's heading: the setting sun + glow (behind),
 // the westward and (snowcapped) northern ranges, and the rolling foreground land.
@@ -123,12 +139,17 @@ export function drawHorizon(ctx: CanvasRenderingContext2D, heading: number,
 
   ctx.fillStyle = ROCK_WEST; silhouette(westRange, H / 2);                          // westward range, over the sun
   ctx.fillStyle = ROCK; silhouette(northRange, H / 2);                              // northern range
-  // snowcaps: the north range ABOVE the snowline. Clip to that band and paint the whole range in
-  // SNOW, so the base is one clean line. (The old max()-with-flat-bottom trick left sub-pixel white
-  // slivers wherever the noisy ridge grazed the snowline — invisible against bright sky, not dusk.)
+  // snowcaps: the north range ABOVE a gently CURVED snowline. Clip to the band above that curve and
+  // paint the range in the (dusk-dimmed) snow colour. The curved clip base avoids the old
+  // max()-with-flat-bottom trick, whose sub-pixel slivers showed against a dark sky.
   ctx.save();
-  ctx.beginPath(); ctx.rect(-overscan, 0, W + 2 * overscan, H / 2 - SNOWLINE * vScale); ctx.clip();
-  ctx.fillStyle = SNOW; silhouette(northRange, H / 2);
+  ctx.beginPath();
+  ctx.moveTo(-overscan, 0);
+  ctx.lineTo(W + overscan, 0);
+  for (let x = W + overscan; x >= -overscan; x -= 2) ctx.lineTo(x, H / 2 - snowlineAt(bearingAt(x)) * vScale);
+  ctx.closePath();
+  ctx.clip();
+  ctx.fillStyle = snowColor(step); silhouette(northRange, H / 2);
   ctx.restore();
   ctx.fillStyle = LAND; silhouette(groundBase, H / 2);                              // rolling land, in front
 }
