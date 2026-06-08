@@ -19,8 +19,8 @@ function wrap(a: number): number {
 }
 
 // We have a western range of mountains that the sun sets behind.
-const WEST_RANGE_BEARING = -2.094;
-export const SUN_BEARING = -2.27;
+const WEST_RANGE_BEARING = -2.0416;
+export const SUN_BEARING = -2.2176;
 
 // One mountain range: a smooth envelope (tallest at its centre, tapering to open
 // sky at its edges) times a fixed rugged ridge line.

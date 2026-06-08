@@ -174,7 +174,7 @@ function main(): void {
   }
 
   // 1d) the SUNSET over seg10 (the SECOND sun-ward stretch, 800m): its sun-ward angle is LOCKED to
-  // its authored value (~35deg off the sun — more toward it than seg7's ~10deg, but still off-axis),
+  // its authored value (~32deg off the sun — more toward it than seg7's ~7deg, but still off-axis),
   // with at least PART of the sun still present (its top above the western range) as the Rider turns
   // onto it. A change to the route shifts the angle by a turn-angle step (>=5deg), which the tight
   // tolerance catches.
@@ -182,7 +182,7 @@ function main(): void {
   if (seg10Len !== 800) throw new Error(`seg10 is ${seg10Len}m, expected 800m`);
   const onSeg10 = states.map((st, i) => (st.segment === 'seg10' ? i : -1)).filter((i) => i >= 0);
   if (!onSeg10.length) throw new Error('the Rider never drove seg10');
-  const SEG10_OFF_SUN_DEG = 35;   // the authored seg10 sun-ward angle
+  const SEG10_OFF_SUN_DEG = 32;   // the authored seg10 sun-ward angle
   const sun10offDeg = Math.abs(wrap(headings['seg10'] - SUN_BEARING)) * 180 / Math.PI;
   if (Math.abs(sun10offDeg - SEG10_OFF_SUN_DEG) > 2) {
     throw new Error(`seg10 is ${sun10offDeg.toFixed(1)}deg off the sun, expected the locked ~${SEG10_OFF_SUN_DEG}deg (more toward it than seg7's ${sunwardDeg.toFixed(0)}deg)`);
