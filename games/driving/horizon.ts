@@ -54,7 +54,8 @@ const LAND = '#4a8f43';        // foreground rolling land (matches the grass)
 // the westward and (snowcapped) northern ranges, and the rolling foreground land.
 // Needs the canvas ctx and the camera (W, H, FOCAL) to turn bearings into columns.
 export function drawHorizon(ctx: CanvasRenderingContext2D, heading: number,
-                            W: number, H: number, FOCAL: number, overscan = 0, vScale = 1): void {
+                            W: number, H: number, FOCAL: number, overscan = 0, vScale = 1,
+                            sunHeightPx = 50): void {
   // each screen column is a viewing ray at this absolute bearing. FOCAL is the LIVE focal, so a
   // pulled-in (leaning) camera spreads bearings horizontally; vScale = focal/baseFocal applies the
   // SAME squeeze vertically, since the silhouette heights are authored in pixels at the base focal.
@@ -75,7 +76,7 @@ export function drawHorizon(ctx: CanvasRenderingContext2D, heading: number,
   // radii scale with vScale too, so it squeezes with the ranges on a lean).
   const rel = wrap(SUN_BEARING - heading);
   if (Math.abs(rel) < 1.4) {
-    const sx = W / 2 + Math.tan(rel) * FOCAL, sy = H / 2 - 50 * vScale;   // up over the range crest, setting behind it
+    const sx = W / 2 + Math.tan(rel) * FOCAL, sy = H / 2 - sunHeightPx * vScale;   // height set by the ride's sunset clock
     ctx.save();
     ctx.beginPath(); ctx.rect(0, 0, W, H / 2); ctx.clip();   // sky only — the ground occludes the rest
     const glow = ctx.createRadialGradient(sx, sy, 8 * vScale, sx, sy, 340 * vScale);

@@ -67,6 +67,17 @@ const focalForLean = (lean: number): number => {
 // the rider also turns his HEAD into the corner — a subtle view-only yaw, 15% of the lean angle.
 const HEAD_YAW_FRAC = 0.15;
 
+// The sun SETS over the ride: its elevation drops a fixed amount per STEP — a pure function of the
+// step, like the beacon clock, so it scrubs cleanly on reverse and freezes on pause. Rate is a
+// one-time calibration: 8% of the sun's 7.678deg angular diameter (radius 46px at FOCAL 685.5)
+// over the 625-step traversal of seg9, the route's most direct approach toward it. The start
+// elevation places the sun straddling the western range through seg9 (still setting, not yet gone
+// behind) and mostly-behind it by the ride's end.
+const SUN_SET_DEG_PER_STEP = 0.08 * 7.678 / 625;   // = 0.000983 deg/step
+const SUN_ELEV_START_DEG = 6.65;
+const sunHeightPx = (step: number): number =>
+  FOCAL * Math.tan((SUN_ELEV_START_DEG - SUN_SET_DEG_PER_STEP * step) * Math.PI / 180);
+
 // ---- the world + the Rider's history (a forward/back stack of RiderStates) ----
 const world = buildWorld();
 const riderHistory: RiderState[] = [initialRiderState(world)];
@@ -229,9 +240,10 @@ function render(rider: RiderState): void {
   // it first so the scene is built already looking slightly into the turn.
   const lean = currentLean();
   const headYaw = HEAD_YAW_FRAC * lean;
-  // the step IS the clock for view-only animation (beacon blink): a pure function of it, so it
-  // freezes on pause and runs backwards on reverse. It's the same step the HUD shows.
-  const scene = buildScene(rider, world, riderHistory.length - 1, headYaw);
+  // the step IS the clock for view-only animation (beacon blink, sunset): a pure function of it,
+  // so it freezes on pause and runs backwards on reverse. It's the same step the HUD shows.
+  const step = riderHistory.length - 1;
+  const scene = buildScene(rider, world, step, headYaw);
 
   // CAMERA ROLL: the rider banks into the turn, so the whole world — horizon included
   // — rotates about the screen centre by his lean. The HUD/overlay (below) stay level.
@@ -258,7 +270,7 @@ function render(rider: RiderState): void {
   // the gaze yaws the view, so the far scenery shifts with it too (he's looking off-axis). The
   // lean pulls camFocal in, which squeezes the horizon horizontally; pass camFocal/FOCAL as the
   // vertical scale so it squeezes vertically by the same factor (it's a real focal change).
-  drawHorizon(ctx, riderHeading(rider, world) + gazeAngle(rider) + headYaw, W, H, camFocal, overscan, camFocal / FOCAL);
+  drawHorizon(ctx, riderHeading(rider, world) + gazeAngle(rider) + headYaw, W, H, camFocal, overscan, camFocal / FOCAL, sunHeightPx(step));
 
   for (const q of scene.quads) drawQuad(q);
   for (const p of scene.polys) drawPoly3(p);   // guard rails, raised above the pavement
