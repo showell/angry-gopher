@@ -12,7 +12,8 @@ import { gazeAngle } from './model.ts';
 import type { World } from './world.ts';
 import type { RoadSegment } from './road_segment.ts';
 import { critterScenery } from './critter.ts';
-import { beastScenery, beastPose } from './beast.ts';
+import { catScenery } from './cat_anatomy.ts';
+import { catPose } from './cat_motion.ts';
 import { treeScenery } from './tree.ts';
 import { ROAD } from './scenery.ts';
 import type { Scenery, RiderPt, Quad, Poly3 } from './scenery.ts';
@@ -114,13 +115,13 @@ export function buildScene(state: RiderState, world: World, step: number, headYa
     for (const cr of seg.critters) {
       scenery.push(critterScenery({ at: at(d, cr.along, cr.across + hw), emoji: cr.emoji, height: cr.height, faceRight: cr.faceRight }));
     }
-    for (const b of seg.beasts) {
-      // The beast crosses the road as the rider nears it — but "nears" is measured in the rider's own
-      // along-coordinate, which we only have for his current segment (d === 0). Beasts further ahead
+    for (const cat of seg.cats) {
+      // The cat crosses the road as the rider nears it — but "nears" is measured in the rider's own
+      // along-coordinate, which we only have for his current segment (d === 0). Cats further ahead
       // sit at their waiting spot until the rider enters their segment.
-      const pose = d === 0 ? beastPose(b, state.along, state.v)
-                           : { across: b.startAcross, walk: 0, headFront: false };
-      scenery.push(beastScenery({ at: at(d, b.along, pose.across + hw), height: b.height, faceRight: b.faceRight, form: b.form, walk: pose.walk, headFront: pose.headFront }));
+      const pose = d === 0 ? catPose(cat, state.along, state.v)
+                           : { across: cat.startAcross, walk: 0, headFront: false };
+      scenery.push(catScenery({ at: at(d, cat.along, pose.across + hw), height: cat.height, faceRight: cat.faceRight, form: cat.form, walk: pose.walk, headFront: pose.headFront }));
     }
 
     // this segment's exit JOINT draws its corner details (approach road + sector + rail + creatures).

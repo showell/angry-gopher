@@ -27,7 +27,7 @@
 import type { World } from './world.ts';
 import type { RoadSegment, SegId } from './road_segment.ts';
 import { turnSpeed } from './intersection.ts';
-import { segmentBeastDanger } from './beast.ts';
+import { segmentCatDanger } from './cat_motion.ts';
 
 // ============================================================================
 // DIMENSIONS — distances for the Rider's approach to a turn, in METRES. (The
@@ -176,11 +176,11 @@ function accel(state: RiderState, seg: RoadSegment, world: World): number {
 }
 
 function cruise(state: RiderState, seg: RoadSegment, world: World): RiderState {
-  // A beast crossing the road just ahead: the rider sees it and HOLDS OFF the throttle (never
-  // accelerates toward it) — but braking for an intersection still applies. He doesn't slow for the
-  // beast, he just stops speeding up, so it clears in front of him by the frame he arrives.
+  // A cat crossing the road just ahead: the rider sees it and HOLDS OFF the throttle (never accelerates
+  // toward it) — but braking for an intersection still applies. He doesn't slow for the cat, he just
+  // stops speeding up, so it clears in front of him by the frame he arrives.
   let a = accel(state, seg, world);
-  if (segmentBeastDanger(seg.beasts, state.along, state.v)) a = Math.min(a, 0);
+  if (segmentCatDanger(seg.cats, state.along, state.v)) a = Math.min(a, 0);
   let v = clamp(state.v + a, 0, V_MAX);
   const exitIxn = world.intersections[seg.exitIxn];
 
