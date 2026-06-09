@@ -6,7 +6,7 @@
 import type { Critter } from './critter.ts';
 import type { Quad, Scenery } from './scenery.ts';
 import { crocodileScene } from './crocodile.ts';
-import type { CornerMap } from './crocodile.ts';
+import type { RoadMap } from './crocodile.ts';
 
 export const CornerCreature = { ELEPHANT: 'ELEPHANT', GIRAFFE: 'GIRAFFE', ZEBRA: 'ZEBRA', CROCODILE: 'CROCODILE' } as const;
 export type CornerCreature = typeof CornerCreature[keyof typeof CornerCreature];
@@ -51,9 +51,10 @@ export function cornerCritters(creature: CornerCreature, intersectionAlong: numb
 }
 
 // The corner's EXTRA scene beyond the emoji pair: a CROCODILE corner hands off to crocodile.ts for a
-// lagoon + four crocs; every other species adds nothing. `corner` maps corner-frame metres (cu across,
-// cv beyond) into the Rider's frame; `segNum` drives the same late-route upsizing as the emoji giants.
-export function cornerCreatureExtras(creature: CornerCreature | null, segNum: number, corner: CornerMap): { quads: Quad[]; scenery: Scenery[] } {
-  if (creature === CornerCreature.CROCODILE) return crocodileScene(corner, segNum);
+// lagoon + four crocs (placed along the OUTGOING road, so `road` is that segment's frame mapper); every
+// other species adds nothing. `segNum` drives the same late-route upsizing as the emoji giants. `road`
+// is null only when the outgoing segment is out of view (the corner is then off-screen anyway).
+export function cornerCreatureExtras(creature: CornerCreature | null, segNum: number, road: RoadMap | null): { quads: Quad[]; scenery: Scenery[] } {
+  if (creature === CornerCreature.CROCODILE && road) return crocodileScene(road, segNum);
   return { quads: [], scenery: [] };
 }

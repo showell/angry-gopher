@@ -155,8 +155,8 @@ export function intersectionScene(ixn: Intersection, from: RoadSegment, to: Road
   }
 
   // the corner's hand-drawn extras (the crocodile lagoon) — safari_critter hands off to the right
-  // module, in the same corner frame the sector uses.
-  const extras = cornerCreatureExtras(ixn.creature, Number(from.id.slice(3)), corner);
+  // module, placed along the OUTGOING road (toMap) so the lagoon stretches past the turn, not sideways.
+  const extras = cornerCreatureExtras(ixn.creature, Number(from.id.slice(3)), toMap);
   for (const q of extras.quads) quads.push(q);
   for (const s of extras.scenery) scenery.push(s);
 
