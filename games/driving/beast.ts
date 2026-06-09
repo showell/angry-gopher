@@ -214,7 +214,9 @@ function buildSkin(): { top: P[]; bottom: P[] } {
   const circles = bodyCircles();
   let minX = Infinity, maxX = -Infinity;
   for (const c of circles) { minX = Math.min(minX, c.c[0] - c.r); maxX = Math.max(maxX, c.c[0] + c.r); }
-  const step = (maxX - minX) / 90;
+  // The skin is sampled as scan-lines in x, so near-vertical stretches of the outline (the front of
+  // the face, the tip of the tail) need a fine step or they flatten — sample densely.
+  const step = (maxX - minX) / 240;
   const top: P[] = [], bottom: P[] = [];
   for (let x = minX; x <= maxX + 1e-9; x += step) {
     let yt = -Infinity, yb = Infinity;
