@@ -13,7 +13,9 @@
 //     cruises (holds speed);
 //   • approaching a turn it BRAKES down toward TRUCK_TURN_SPEED within TRUCK_BRAKE_DISTANCE, then
 //     accelerates back out the far side (it's behind schedule again after the corner).
-// Its acceleration is 0.9x the rider's (A_ACCEL), the one knob that makes the pacing work out.
+// It brakes at 0.9x the rider's acceleration (A_ACCEL) and, when behind schedule, claws back at 1.1x
+// (10% quicker than the rider). Bright-red brake lights light up on its rear ONLY while it's actually
+// slowing.
 //
 // It obeys the same ground-curvature + near-plane rules as the road it sits on.
 
@@ -30,25 +32,29 @@ const WIDTH = 2.4;     // narrower than the 4m lane, so it fits and rounds the c
 const HEIGHT = 3;
 
 // ---- the chase ----
-const START_AHEAD = 800;            // metres in front of the rider at the start (the initial lead)
+const START_AHEAD = 640;            // metres in front of the rider at the start (20% less head start)
 const FINISH_LEAD = 100;            // the lead the schedule lerps DOWN to by the course end — not 0,
                                     // because braking for the final corner would dip a near-0 lead
                                     // negative and we'd catch it at the line; 100m keeps a photo finish
-const TRUCK_TURN_SPEED = 0.3;       // m/press it slows to for a corner
-const TRUCK_BRAKE_DISTANCE = 100;   // metres before a turn it starts braking
-const TRUCK_ACCEL = 0.9 * A_ACCEL;  // 0.9x the rider's acceleration — accelerating AND braking rate
+const TRUCK_TURN_SPEED = 0.3;          // m/press it slows to for a corner
+const TRUCK_BRAKE_DISTANCE = 100;      // metres before a turn it starts braking
+const TRUCK_BRAKE_DECEL = 0.9 * A_ACCEL;   // braking rate into a corner — 0.9x the rider's acceleration
+const TRUCK_CHASE_ACCEL = 1.1 * A_ACCEL;   // behind-schedule acceleration — 10% FASTER than the rider, to claw the lead back
 
-// ---- colour: bright red, with a lighter roof / darker sides so the prism reads as a solid ----
-const BODY = '#e0201a';
-const ROOF = '#ff5a4d';
-const SIDE = '#b3160f';
+// ---- colour: a dark-blue body (lighter roof / darker sides so the prism reads as a solid), plus
+// bright-red brake lights that only light while it slows. ----
+const BODY = '#1c2e66';
+const ROOF = '#3a52a8';
+const SIDE = '#152150';
+const BRAKE = '#ff2a18';
 
 // a rider-frame point carrying a height off the ground
 interface Pt3 { right: number; forward: number; height: number }
 interface Face { pts: Pt3[]; color: string }
 
-// The truck's own state: how far it has driven along the route, and its speed.
-export interface TruckState { pos: number; v: number }
+// The truck's own state: how far it has driven along the route, its speed, and whether it's slowing
+// this frame (brake lights show only then).
+export interface TruckState { pos: number; v: number; braking: boolean }
 
 // The total length of the course — the sum of the segment lengths (intersection arcs ignored as
 // negligible). The schedule lerps the truck's lead to ~0 over this distance.
@@ -58,9 +64,9 @@ export function courseLength(world: World): number {
   return L;
 }
 
-// The truck at the start: START_AHEAD down the road, idling at the base speed.
+// The truck at the start: START_AHEAD down the road, idling at the base speed, not braking.
 export function initialTruck(): TruckState {
-  return { pos: START_AHEAD, v: V_BASE };
+  return { pos: START_AHEAD, v: V_BASE, braking: false };
 }
 
 // Metres from `pos` to the next real TURN ahead (a terminus is not a turn — you don't brake to round
@@ -84,11 +90,11 @@ export function nextTruck(truck: TruckState, riderDist: number, world: World, L:
   const distToTurn = distToNextTurn(truck.pos, world);
   let v = truck.v;
   if (distToTurn <= TRUCK_BRAKE_DISTANCE) {
-    v = Math.max(TRUCK_TURN_SPEED, v - TRUCK_ACCEL);   // brake into the corner, hold ~TRUCK_TURN_SPEED through it
+    v = Math.max(TRUCK_TURN_SPEED, v - TRUCK_BRAKE_DECEL);   // brake into the corner, hold ~TRUCK_TURN_SPEED through it
   } else if (truck.pos < scheduled) {
-    v = v + TRUCK_ACCEL;                               // behind schedule: floor it (no speed cap)
-  }                                                    // else ahead of schedule on a straight: cruise (hold v)
-  return { pos: truck.pos + v, v };
+    v = v + TRUCK_CHASE_ACCEL;                              // behind schedule: floor it (no speed cap)
+  }                                                         // else ahead of schedule on a straight: cruise (hold v)
+  return { pos: truck.pos + v, v, braking: v < truck.v };   // brake lights on only when actually slowing
 }
 
 // lower a rider-frame point onto the curved ground (the same drop the road quads use), at height `h`
@@ -100,7 +106,7 @@ function lower(p: RiderPt, h: number): Pt3 {
 // Build the truck as one Scenery: a box centred on the lane centre at `centerAlong` in the segment
 // frame `map`. We map its four ground corners into the rider's frame, raise the roof, then paint the
 // (up to) five visible faces back-to-front so the box occludes itself correctly.
-function buildTruck(map: (a: number, x: number) => RiderPt, centerAlong: number, hw: number): Scenery {
+function buildTruck(map: (a: number, x: number) => RiderPt, centerAlong: number, hw: number, braking: boolean): Scenery {
   const a0 = centerAlong - LENGTH / 2, a1 = centerAlong + LENGTH / 2;   // rear (toward us), front (away)
   const xl = hw - WIDTH / 2, xr = hw + WIDTH / 2;
   const RL = map(a0, xl), RR = map(a0, xr), FL = map(a1, xl), FR = map(a1, xr);
@@ -116,20 +122,38 @@ function buildTruck(map: (a: number, x: number) => RiderPt, centerAlong: number,
   const avgF = (f: Face): number => f.pts.reduce((s, p) => s + p.forward, 0) / f.pts.length;
   const center = map(centerAlong, hw);
 
+  // a small panel on the REAR face (along a0), in [across, height] fractions of the body — the two
+  // brake lights live here. Built lazily, drawn only when slowing.
+  const rearPanel = (xA: number, xB: number, hLo: number, hHi: number): Pt3[] =>
+    [lower(map(a0, xA), hLo), lower(map(a0, xB), hLo), lower(map(a0, xB), hHi), lower(map(a0, xA), hHi)];
+  const BL = 0.30 * HEIGHT, BH = 0.55 * HEIGHT;   // brake-light height band
+  const brakeLights: Pt3[][] = [
+    rearPanel(xl + 0.12 * WIDTH, xl + 0.34 * WIDTH, BL, BH),   // left light
+    rearPanel(xr - 0.34 * WIDTH, xr - 0.12 * WIDTH, BL, BH),   // right light
+  ];
+
+  const fill = (ctx: Ctx, project: Project, poly: Pt3[]): void => {
+    const pts = clipNear(poly);
+    if (pts.length < 3) return;
+    ctx.beginPath();
+    const s0 = project(pts[0].right, pts[0].forward, pts[0].height);
+    ctx.moveTo(s0.x, s0.y);
+    for (let i = 1; i < pts.length; i++) {
+      const s = project(pts[i].right, pts[i].forward, pts[i].height);
+      ctx.lineTo(s.x, s.y);
+    }
+    ctx.closePath();
+    ctx.fill();
+  };
+
   const draw = (ctx: Ctx, project: Project): void => {
     for (const f of [...faces].sort((p, q) => avgF(q) - avgF(p))) {   // farthest faces first (painter's)
-      const pts = clipNear(f.pts);
-      if (pts.length < 3) continue;
       ctx.fillStyle = f.color;
-      ctx.beginPath();
-      const s0 = project(pts[0].right, pts[0].forward, pts[0].height);
-      ctx.moveTo(s0.x, s0.y);
-      for (let i = 1; i < pts.length; i++) {
-        const s = project(pts[i].right, pts[i].forward, pts[i].height);
-        ctx.lineTo(s.x, s.y);
-      }
-      ctx.closePath();
-      ctx.fill();
+      fill(ctx, project, f.pts);
+    }
+    if (braking) {   // the rear face is the nearest, drawn last above — so the lights land on top of it
+      ctx.fillStyle = BRAKE;
+      for (const light of brakeLights) fill(ctx, project, light);
     }
   };
   return { forward: center.forward, height: HEIGHT, drawAsNear: draw, drawAsFar: draw };
@@ -146,5 +170,5 @@ export function truckScenery(truck: TruckState, rider: RiderState, world: World,
   let remaining = rider.along + lead, d = 0;
   while (d < chain.length && remaining > chain[d].length) { remaining -= chain[d].length; d++; }
   if (d >= chain.length) return null;               // still beyond the look-ahead — too far to draw
-  return buildTruck((a, x) => at(d, a, x), remaining, chain[d].width / 2);
+  return buildTruck((a, x) => at(d, a, x), remaining, chain[d].width / 2, truck.braking);
 }
