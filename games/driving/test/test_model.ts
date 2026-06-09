@@ -255,19 +255,18 @@ function main(): void {
   const crossing = crossesItself(world);
   if (crossing) throw new Error(`route self-intersects: ${crossing}`);
 
-  // 6) the truck chase: the truck starts ahead of us and we reel it in before the route ends. Its gap
-  // is a pure function of how far we've driven (truck speed = 0.8x ours), so it closes monotonically.
+  // 6) the truck chase: the truck starts ahead of us and STAYS ahead the whole route — at 0.9x our
+  // speed from an 800m head start, the gap (a pure function of how far we've driven) narrows but never
+  // quite closes. The near-miss is the fun, so verify we never catch it (gap stays > 0 throughout).
   if (truckGap(routeDistance(states[0], world)) <= 0) throw new Error('the truck should start ahead, not already caught');
-  let caughtAt = -1;
-  for (let i = 0; i < states.length; i++) {
-    if (truckGap(routeDistance(states[i], world)) <= 0) { caughtAt = i; break; }
-  }
-  if (caughtAt < 0) throw new Error('never caught the truck over the whole route');
+  let minGap = Infinity;
+  for (const st of states) minGap = Math.min(minGap, truckGap(routeDistance(st, world)));
+  if (minGap <= 0) throw new Error(`caught the truck (min gap ${minGap.toFixed(1)}m) — it should stay ahead the whole route; raise the truck's speed`);
 
   console.log('PASS');
   console.log(`  segments          : ${world.order.length}`);
   console.log(`  presses to finish : ${states.length - 1}`);
-  console.log(`  truck caught at   : press ${caughtAt} (rider ${routeDistance(states[caughtAt], world).toFixed(0)}m along)`);
+  console.log(`  truck min gap     : ${minGap.toFixed(0)}m (stays ahead — never caught)`);
   console.log(`  segment crossings : ${crossings}`);
   console.log(`  max heading jump  : ${maxHeadingJump.toFixed(4)} rad (largest turn step = ${maxOmega.toFixed(4)})`);
   console.log(`  max position jump : ${maxPosJump.toFixed(4)} m (peak speed = ${maxV.toFixed(4)} m/press)`);

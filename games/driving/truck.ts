@@ -1,9 +1,9 @@
-// truck.ts — the vehicle we chase: a bright red rectangular prism that drives the route ahead of us
-// and which we slowly reel in. It rides the CENTRE LINE of whatever segment it's on (no lean, no lane
-// drift), so its box is built straight in that segment's frame and inherits the segment/arc heading.
-// Its speed is tied to ours — it covers SPEED_FRACTION of the distance we cover — so starting
-// START_AHEAD in front, the gap closes steadily until we catch it. v1: once caught it simply stops
-// being drawn (what happens on contact is a later problem). It obeys the same ground-curvature +
+// truck.ts — the vehicle we chase: a bright red rectangular prism that drives the route ahead of us.
+// It rides the CENTRE LINE of whatever segment it's on (no lean, no lane drift), so its box is built
+// straight in that segment's frame and inherits the segment/arc heading. Its speed is tied to ours —
+// it covers SPEED_FRACTION of the distance we cover — so from a START_AHEAD head start the gap NARROWS
+// as we push, but at 0.9x it never quite closes over the route: we chase but don't catch it (that
+// near-miss is the fun; the catch math is pinned by test_model). It obeys the same ground-curvature +
 // near-plane rules as the road it sits on.
 
 import { groundDrop, clipNear } from './scenery.ts';
@@ -19,8 +19,9 @@ const WIDTH = 2.4;     // narrower than the 4m lane, so it fits and rounds the c
 const HEIGHT = 3;
 
 // ---- the chase ----
-const START_AHEAD = 400;        // metres in front of the rider at the start
-const SPEED_FRACTION = 0.8;     // the truck covers this fraction of the distance the rider does
+const START_AHEAD = 800;        // metres in front of the rider at the start
+const SPEED_FRACTION = 0.9;     // the truck covers this fraction of the distance the rider does — fast
+                                // enough that an 800m head start lasts the whole route (we never catch it)
 
 // ---- colour: bright red, with a lighter roof / darker sides so the prism reads as a solid ----
 const BODY = '#e0201a';
@@ -32,8 +33,9 @@ interface Pt3 { right: number; forward: number; height: number }
 interface Face { pts: Pt3[]; color: string }
 
 // The gap (metres) still ahead of the rider after he has driven `riderDist` along the route. It starts
-// at START_AHEAD and closes because the truck only covers SPEED_FRACTION of his distance:
-// gap = START_AHEAD - (1 - SPEED_FRACTION) * riderDist. <= 0 means we've caught it.
+// at START_AHEAD and narrows because the truck only covers SPEED_FRACTION of his distance:
+// gap = START_AHEAD - (1 - SPEED_FRACTION) * riderDist. It stays positive across the whole route (we
+// chase but don't catch); <= 0 would mean caught.
 export function truckGap(riderDist: number): number {
   return START_AHEAD - (1 - SPEED_FRACTION) * riderDist;
 }
