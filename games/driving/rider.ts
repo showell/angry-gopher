@@ -130,6 +130,19 @@ export function riderFinished(rider: RiderState, world: World): boolean {
   return rider.segment === lastId && !rider.turn && rider.along >= world.segments[lastId].length - 1e-6;
 }
 
+// How far the rider has driven ALONG the route: the lengths of every segment behind his current one
+// plus his along on it. Treats each joint as zero-length (segments abut at the inner edge) — monotonic
+// and exact enough for chase dynamics (truck.ts reels itself in against this). Not a global position,
+// just arc-length along the 1D route.
+export function routeDistance(state: RiderState, world: World): number {
+  let d = 0;
+  for (const id of world.order) {
+    if (id === state.segment) return d + state.along;
+    d += world.segments[id].length;
+  }
+  return d;
+}
+
 // the current head-turn of the distracted glance (radians), indexed by gazeStep into GAZE_SEQUENCE.
 export function gazeAngle(state: RiderState): number {
   const i = state.gazeStep;

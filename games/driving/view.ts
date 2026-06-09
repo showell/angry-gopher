@@ -19,6 +19,7 @@ import { ROAD } from './scenery.ts';
 import type { Scenery, RiderPt, Quad, Poly3 } from './scenery.ts';
 import { nextToCur, curToNext, intersectionScene, intersectionTower } from './intersection.ts';
 import { towerScenery } from './tower.ts';
+import { truckScenery } from './truck.ts';
 
 // Road quads are the ground plane (drawn first, no LOD); polys are raised road structures
 // (guard rails) drawn over them; scenery is the depth-sorted, near/far-aware drawables (trees
@@ -154,6 +155,11 @@ export function buildScene(state: RiderState, world: World, step: number, headYa
     for (const p of js.polys) polys.push(p);
     for (const sc of js.scenery) scenery.push(sc);
   }
+
+  // the truck we're chasing: somewhere on the road ahead (or null once caught / still too far),
+  // mapped through the same chain frames as everything else.
+  const truck = truckScenery(state, world, chain, at);
+  if (truck) scenery.push(truck);
 
   return { quads, polys, scenery };
 }
