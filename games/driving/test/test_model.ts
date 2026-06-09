@@ -6,7 +6,8 @@
 // Run: node test/test_model.ts
 import { initialRiderState, getNextRiderState, assertInvariants, MAX_LEAN, TURN_OMEGA, MAX_TURN_ANGLE, leanFor, gazeAngle, GAZE_SEQUENCE, APPROACH_INTERSECTION_DIST, routeDistance } from '../rider.ts';
 import type { RiderState } from '../rider.ts';
-import { truckGap } from '../truck.ts';
+import { initialTruck, nextTruck, courseLength } from '../truck.ts';
+import type { TruckState } from '../truck.ts';
 import { buildWorld } from '../world.ts';
 import type { World } from '../world.ts';
 import { CornerCreature } from '../safari_critter.ts';
@@ -122,6 +123,11 @@ function main(): void {
   const states: RiderState[] = [s];
   let crossings = 0, maxAcross = 0, maxV = 0;
 
+  // the chased truck, simulated in lockstep with the rider (exactly as main.ts advances it)
+  const L = courseLength(world);
+  let truck: TruckState = initialTruck();
+  let minGap = Infinity, maxGap = truck.pos;   // the truck's lead over the rider, tracked across the drive
+
   for (let i = 0; i < 8000; i++) {
     const n = getNextRiderState(s, world);
     if (n.segment !== s.segment) crossings++;
@@ -131,6 +137,11 @@ function main(): void {
     if (n.segment === s.segment && n.along === s.along && n.turn === null) break;
     states.push(n);
     s = n;
+    const rd = routeDistance(n, world);
+    truck = nextTruck(truck, rd, world, L);
+    const gap = truck.pos - rd;
+    minGap = Math.min(minGap, gap);
+    maxGap = Math.max(maxGap, gap);
   }
 
   // 0) the model's per-segment northHeading matches an independent accumulation
@@ -255,18 +266,15 @@ function main(): void {
   const crossing = crossesItself(world);
   if (crossing) throw new Error(`route self-intersects: ${crossing}`);
 
-  // 6) the truck chase: the truck starts ahead of us and STAYS ahead the whole route — at 0.9x our
-  // speed from an 800m head start, the gap (a pure function of how far we've driven) narrows but never
-  // quite closes. The near-miss is the fun, so verify we never catch it (gap stays > 0 throughout).
-  if (truckGap(routeDistance(states[0], world)) <= 0) throw new Error('the truck should start ahead, not already caught');
-  let minGap = Infinity;
-  for (const st of states) minGap = Math.min(minGap, truckGap(routeDistance(st, world)));
-  if (minGap <= 0) throw new Error(`caught the truck (min gap ${minGap.toFixed(1)}m) — it should stay ahead the whole route; raise the truck's speed`);
+  // 6) the truck chase: the truck starts ahead of us and STAYS ahead the whole route. It runs its own
+  // schedule (lead lerping from the head start toward ~0), braking for corners and flooring it when it
+  // falls behind. The near-miss is the fun, so verify we never catch it (its lead stays > 0 throughout).
+  if (minGap <= 0) throw new Error(`caught the truck (min lead ${minGap.toFixed(1)}m) — it should stay ahead the whole route; raise the truck's speed`);
 
   console.log('PASS');
   console.log(`  segments          : ${world.order.length}`);
   console.log(`  presses to finish : ${states.length - 1}`);
-  console.log(`  truck min gap     : ${minGap.toFixed(0)}m (stays ahead — never caught)`);
+  console.log(`  truck lead range  : ${minGap.toFixed(0)}m .. ${maxGap.toFixed(0)}m (stays ahead — never caught)`);
   console.log(`  segment crossings : ${crossings}`);
   console.log(`  max heading jump  : ${maxHeadingJump.toFixed(4)} rad (largest turn step = ${maxOmega.toFixed(4)})`);
   console.log(`  max position jump : ${maxPosJump.toFixed(4)} m (peak speed = ${maxV.toFixed(4)} m/press)`);

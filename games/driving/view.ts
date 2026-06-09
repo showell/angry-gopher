@@ -20,6 +20,7 @@ import type { Scenery, RiderPt, Quad, Poly3 } from './scenery.ts';
 import { nextToCur, curToNext, intersectionScene, intersectionTower } from './intersection.ts';
 import { towerScenery } from './tower.ts';
 import { truckScenery } from './truck.ts';
+import type { TruckState } from './truck.ts';
 
 // Road quads are the ground plane (drawn first, no LOD); polys are raised road structures
 // (guard rails) drawn over them; scenery is the depth-sorted, near/far-aware drawables (trees
@@ -50,7 +51,7 @@ const ROAD_CHUNK = 25;
 // a segment-owned mid-road tower stands this far to the LEFT of the lane centreline, square-on
 const SEG_TOWER_LEFT = 100;
 
-export function buildScene(state: RiderState, world: World, step: number, headYaw: number): Scene {
+export function buildScene(state: RiderState, world: World, step: number, headYaw: number, truck: TruckState): Scene {
   // the camera looks along the Rider's path PLUS two view-only yaws: his gaze offset (the
   // distracted glance) and a subtle head-turn into the corner (headYaw, from the lean). Both
   // rotate the whole rider-relative scene with where he's looking.
@@ -158,8 +159,8 @@ export function buildScene(state: RiderState, world: World, step: number, headYa
 
   // the truck we're chasing: somewhere on the road ahead (or null once caught / still too far),
   // mapped through the same chain frames as everything else.
-  const truck = truckScenery(state, world, chain, at);
-  if (truck) scenery.push(truck);
+  const truckSc = truckScenery(truck, state, world, chain, at);
+  if (truckSc) scenery.push(truckSc);
 
   return { quads, polys, scenery };
 }

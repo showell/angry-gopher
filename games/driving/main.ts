@@ -7,8 +7,10 @@
 //   ArrowUp   : getNextRiderState -> push the next RiderState onto the history
 //   ArrowDown : pop back to the previous RiderState
 // =============================================================================
-import { initialRiderState, getNextRiderState, riderHeading, riderLean, riderFinished, MAX_LEAN, gazeAngle } from './rider.ts';
+import { initialRiderState, getNextRiderState, riderHeading, riderLean, riderFinished, MAX_LEAN, gazeAngle, routeDistance } from './rider.ts';
 import type { RiderState } from './rider.ts';
+import { initialTruck, nextTruck, courseLength } from './truck.ts';
+import type { TruckState } from './truck.ts';
 import { buildWorld } from './world.ts';
 import { buildScene } from './view.ts';
 import { drawHorizon } from './horizon.ts';
@@ -74,6 +76,12 @@ const world = buildWorld();
 const riderHistory: RiderState[] = [initialRiderState(world)];
 const currentRider = (): RiderState => riderHistory[riderHistory.length - 1];
 
+// the chased truck advances in lockstep with the rider and shares his forward/back stack, so
+// reverse rewinds it too. Its schedule is anchored to the precomputed course length.
+const COURSE_LENGTH = courseLength(world);
+const truckHistory: TruckState[] = [initialTruck()];
+const currentTruck = (): TruckState => truckHistory[truckHistory.length - 1];
+
 // the rider's current lean (camera roll), from the heading change of his latest step
 const currentLean = (): number => {
   const n = riderHistory.length;
@@ -102,12 +110,14 @@ function setAuto(on: boolean): void {
   dirty = true;
 }
 
-// advance the Rider one frame and remember it (a no-op once it stops moving — game over)
+// advance the Rider one frame and remember it (a no-op once it stops moving — game over). The truck
+// advances in the same step so the two stacks stay the same length (reverse pops both).
 function advance(): void {
   const rider = currentRider();
   const next = getNextRiderState(rider, world);
   if (next.segment !== rider.segment || next.along !== rider.along || next.across !== rider.across) {
     riderHistory.push(next);
+    truckHistory.push(nextTruck(currentTruck(), routeDistance(next, world), world, COURSE_LENGTH));
     dirty = true;
   }
 }
@@ -125,7 +135,7 @@ window.addEventListener('keydown', (e) => {
     e.preventDefault();
   } else if (e.code === 'ArrowDown') {
     setAuto(false);
-    if (riderHistory.length > 1) { riderHistory.pop(); dirty = true; }
+    if (riderHistory.length > 1) { riderHistory.pop(); truckHistory.pop(); dirty = true; }
     e.preventDefault();
   }
 });
@@ -196,7 +206,7 @@ function render(rider: RiderState): void {
   // the step IS the clock for view-only animation (beacon blink, sunset): a pure function of it,
   // so it freezes on pause and runs backwards on reverse. It's the same step the HUD shows.
   const step = riderHistory.length - 1;
-  const scene = buildScene(rider, world, step, headYaw);
+  const scene = buildScene(rider, world, step, headYaw, currentTruck());
 
   // CAMERA ROLL: the rider banks into the turn, so the whole world — horizon included
   // — rotates about the screen centre by his lean. The HUD/overlay (below) stay level.
