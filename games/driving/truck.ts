@@ -11,12 +11,13 @@
 //   • when it's BEHIND schedule it floors the throttle (accelerates, no speed cap) until it's back on
 //     pace, no matter how fast the rider is going; when it's AHEAD of schedule on a straight it just
 //     cruises (holds speed);
-//   • approaching a turn it BRAKES down toward TRUCK_TURN_SPEED within TRUCK_BRAKE_DISTANCE, then
-//     accelerates back out the far side (it's behind schedule again after the corner).
-// In the last TRUCK_BRAKE_DISTANCE before a corner it brakes at exactly the rate that brings it to
-// TRUCK_TURN_SPEED right at the turn (kinematic, the way the rider brakes); when behind schedule it
-// claws back at 1.1x the rider's acceleration (10% quicker). Bright-red brake lights light up on its
-// rear ONLY while it's actually slowing.
+//   • approaching a turn it BRAKES, then accelerates back out the far side (behind schedule again).
+// Its HABITS mirror the rider's so the chase doesn't oscillate wildly: it brakes over the same distance
+// (TRUCK_BRAKE_DISTANCE = the rider's APPROACH_INTERSECTION_DIST) and aims for the same angle-dependent
+// safe turn speed, just scaled down by TRUCK_TURN_CAUTION (a truck rounds corners more carefully). The
+// braking is kinematic (a = (vEnd^2 - v^2)/2d), the way the rider brakes. Its one ADVANTAGE is on the
+// straights: when behind schedule it claws back at 1.1x the rider's acceleration, so it can hold its
+// lead. Bright-red brake lights light up on its rear ONLY while it's actually slowing.
 //
 // It obeys the same ground-curvature + near-plane rules as the road it sits on.
 
@@ -25,7 +26,8 @@ import type { Project, Ctx, Scenery, RiderPt } from './scenery.ts';
 import type { World } from './world.ts';
 import type { RoadSegment } from './road_segment.ts';
 import type { RiderState } from './rider.ts';
-import { routeDistance, A_ACCEL, V_BASE } from './rider.ts';
+import { routeDistance, A_ACCEL, V_BASE, APPROACH_INTERSECTION_DIST } from './rider.ts';
+import { turnSpeed } from './intersection.ts';
 
 // ---- dimensions (metres) ----
 const LENGTH = 7;
@@ -37,8 +39,9 @@ const START_AHEAD = 640;            // metres in front of the rider at the start
 const FINISH_LEAD = 100;            // the lead the schedule lerps DOWN to by the course end — not 0,
                                     // because braking for the final corner would dip a near-0 lead
                                     // negative and we'd catch it at the line; 100m keeps a photo finish
-const TRUCK_TURN_SPEED = 0.3;          // m/press it slows to for a corner
-const TRUCK_BRAKE_DISTANCE = 50;       // metres before a turn it starts braking
+const TRUCK_TURN_CAUTION = 0.8;        // takes each corner at this fraction of the rider's safe turn speed —
+                                       // a truck is more conservative through turns than a nimble rider
+const TRUCK_BRAKE_DISTANCE = APPROACH_INTERSECTION_DIST;   // brake over the SAME distance the rider does — same stopping habit
 const TRUCK_CHASE_ACCEL = 1.1 * A_ACCEL;   // behind-schedule acceleration — 10% FASTER than the rider, to claw the lead back
 
 // ---- colour: a dark-blue body (lighter roof / darker sides so the prism reads as a solid), plus
@@ -69,32 +72,34 @@ export function initialTruck(): TruckState {
   return { pos: START_AHEAD, v: V_BASE, braking: false };
 }
 
-// Metres from `pos` to the next real TURN ahead (a terminus is not a turn — you don't brake to round
-// the finish line, so it returns Infinity there and on anything past the course end).
-function distToNextTurn(pos: number, world: World): number {
+// The next real TURN ahead of `pos`: how far to it, and the rider's safe speed for it. A terminus is
+// not a turn (you don't brake to round the finish line), so it returns {Infinity, 0} there and past the
+// course end.
+function nextTurn(pos: number, world: World): { dist: number; vTurn: number } {
   let cum = 0;
   for (const id of world.order) {
     cum += world.segments[id].length;
     if (pos < cum) {
       const ixn = world.intersections[world.segments[id].exitIxn];
-      return ixn.to === null ? Infinity : cum - pos;
+      return ixn.to === null ? { dist: Infinity, vTurn: 0 } : { dist: cum - pos, vTurn: turnSpeed(ixn) };
     }
   }
-  return Infinity;
+  return { dist: Infinity, vTurn: 0 };
 }
 
 // Advance the truck one rider-frame. `riderDist` is how far the rider has now driven (its schedule is
 // anchored to that). Pure: (TruckState, riderDist, world, L) -> the next TruckState.
 export function nextTruck(truck: TruckState, riderDist: number, world: World, L: number): TruckState {
   const scheduled = riderDist + FINISH_LEAD + (START_AHEAD - FINISH_LEAD) * (1 - riderDist / L);   // where the truck "should" be by now
-  const distToTurn = distToNextTurn(truck.pos, world);
+  const { dist: distToTurn, vTurn } = nextTurn(truck.pos, world);
+  const turnTarget = vTurn * TRUCK_TURN_CAUTION;             // the speed it aims to hit the corner at
   let v = truck.v;
   let braking = false;
   if (distToTurn <= TRUCK_BRAKE_DISTANCE) {
-    // brake at exactly the rate that arrives at the turn at TRUCK_TURN_SPEED (kinematic, the way the
-    // rider brakes: a = (vEnd^2 - v^2) / 2d), recomputed each frame as the gap closes.
-    const a = distToTurn > 1e-6 ? (TRUCK_TURN_SPEED * TRUCK_TURN_SPEED - v * v) / (2 * distToTurn) : 0;
-    v = Math.max(TRUCK_TURN_SPEED, v + a);
+    // brake at exactly the rate that arrives at the turn at turnTarget (kinematic, the way the rider
+    // brakes: a = (vEnd^2 - v^2) / 2d), recomputed each frame as the gap closes.
+    const a = distToTurn > 1e-6 ? (turnTarget * turnTarget - v * v) / (2 * distToTurn) : 0;
+    v = Math.max(turnTarget, v + a);
     braking = v < truck.v;                                   // lit only while actually slowing
   } else if (truck.pos < scheduled) {
     v = v + TRUCK_CHASE_ACCEL;                               // behind schedule: accelerate (never cruise)
