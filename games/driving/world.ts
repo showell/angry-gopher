@@ -40,7 +40,7 @@ const intersectionFrom = (from: SegId, to: SegId, deg: number, creature: CornerC
   ({ from, to, dir: deg < 0 ? 'left' : 'right', angle: Math.abs(deg) * DEG, creature });
 
 export function buildWorld(): World {
-  const Z = CornerCreature.ZEBRA, E = CornerCreature.ELEPHANT, G = CornerCreature.GIRAFFE;
+  const Z = CornerCreature.ZEBRA, E = CornerCreature.ELEPHANT, G = CornerCreature.GIRAFFE, C = CornerCreature.CROCODILE;
 
   // ---- the segments: the straight stretches (id / length / tree scheme). The route opens
   // straight onto the long seg1 so the sunset is already underway by the first stretch
@@ -69,11 +69,11 @@ export function buildWorld(): World {
   const order: SegId[] = segmentConfigs.map((c) => c.id);
 
   // ---- the intersections: the turn joining each segment to the next (signed degrees, + right /
-  // - left). The corner creatures are authored explicitly: elephants and giraffes lead, zebras
-  // join, then all three intermingle. seg19 has no entry here — it ends at the terminus, derived
-  // below as the one segment that never turns out. ----
+  // - left). The corner creatures are authored explicitly: a crocodile greets you at the first corner,
+  // elephants and giraffes lead, zebras join, then crocodiles reappear later. seg19 has no entry here —
+  // it ends at the terminus, derived below as the one segment that never turns out. ----
   const turns: IxnSpec[] = [
-    intersectionFrom('seg1',  'seg2',   50, E),
+    intersectionFrom('seg1',  'seg2',   50, C),
     intersectionFrom('seg2',  'seg3',  -70, E),
     intersectionFrom('seg3',  'seg4',   20, G),
     intersectionFrom('seg4',  'seg5',   20, G),
@@ -82,13 +82,13 @@ export function buildWorld(): World {
     intersectionFrom('seg7',  'seg8',   80, E),
     intersectionFrom('seg8',  'seg9',   15, Z),
     intersectionFrom('seg9',  'seg10', -70, G),
-    intersectionFrom('seg10', 'seg11',  15, E),
+    intersectionFrom('seg10', 'seg11',  15, C),
     intersectionFrom('seg11', 'seg12',  15, Z),
     intersectionFrom('seg12', 'seg13',  15, G),
     intersectionFrom('seg13', 'seg14',  15, E),
     intersectionFrom('seg14', 'seg15', -50, Z),
     intersectionFrom('seg15', 'seg16',  50, G),
-    intersectionFrom('seg16', 'seg17', -50, E),
+    intersectionFrom('seg16', 'seg17', -50, C),
     intersectionFrom('seg17', 'seg18',  50, Z),
     intersectionFrom('seg18', 'seg19', -50, G),
   ];

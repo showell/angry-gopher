@@ -4,7 +4,7 @@
 
 import type { Critter } from './critter.ts';
 
-export const CornerCreature = { ELEPHANT: 'ELEPHANT', GIRAFFE: 'GIRAFFE', ZEBRA: 'ZEBRA' } as const;
+export const CornerCreature = { ELEPHANT: 'ELEPHANT', GIRAFFE: 'GIRAFFE', ZEBRA: 'ZEBRA', CROCODILE: 'CROCODILE' } as const;
 export type CornerCreature = typeof CornerCreature[keyof typeof CornerCreature];
 
 interface CornerSpecies {
@@ -16,10 +16,15 @@ interface CornerSpecies {
   giantFromSeg: number;  // ...applied on segments numbered above this (the late-route corners)
 }
 const SPECIES: Record<CornerCreature, CornerSpecies> = {
-  ELEPHANT: { emoji: '🐘', adultHeight: 2.8, babyRatio: 0.5, babyBeyond: 14, giantScale: 1.7, giantFromSeg: 8 },
-  GIRAFFE:  { emoji: '🦒', adultHeight: 4.5, babyRatio: 0.5, babyBeyond: 14, giantScale: 1.7, giantFromSeg: 8 },
-  ZEBRA:    { emoji: '🦓', adultHeight: 1.6, babyRatio: 0.5, babyBeyond: 14, giantScale: 1.7, giantFromSeg: 8 },
+  ELEPHANT:  { emoji: '🐘', adultHeight: 2.8, babyRatio: 0.5, babyBeyond: 14, giantScale: 1.7, giantFromSeg: 8 },
+  GIRAFFE:   { emoji: '🦒', adultHeight: 4.5, babyRatio: 0.5, babyBeyond: 14, giantScale: 1.7, giantFromSeg: 8 },
+  ZEBRA:     { emoji: '🦓', adultHeight: 1.6, babyRatio: 0.5, babyBeyond: 14, giantScale: 1.7, giantFromSeg: 8 },
+  CROCODILE: { emoji: '🐊', adultHeight: 1.4, babyRatio: 0.5, babyBeyond: 14, giantScale: 1.7, giantFromSeg: 8 },
 };
+
+// the adult stands a guard-rail's-worth further off the corner than half its width, so the rail riding
+// the outer edge doesn't clip it.
+const ADULT_RAIL_BUFFER = 1.5;   // metres
 
 // The two creatures AT a segment's exit intersection — they read as having just CROSSED it. The
 // adult stands at the FAR corner: for a RIGHT turn its bottom-RIGHT corner sits on EL (end-left),
@@ -33,7 +38,7 @@ export function cornerCritters(creature: CornerCreature, intersectionAlong: numb
   const adultH = spec.adultHeight * scale, babyH = adultH * spec.babyRatio;
   const faceRight = turnSign < 0;                      // right turn -> faces left; left turn -> faces right
   return [
-    { along: intersectionAlong, across: -turnSign * (hw + adultH / 2), emoji: spec.emoji, height: adultH, faceRight },
+    { along: intersectionAlong, across: -turnSign * (hw + ADULT_RAIL_BUFFER + adultH / 2), emoji: spec.emoji, height: adultH, faceRight },
     { along: intersectionAlong + spec.babyBeyond, across: 0, emoji: spec.emoji, height: babyH, faceRight },
   ];
 }
