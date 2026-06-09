@@ -36,7 +36,7 @@ export function critterScenery(view: CritterView): Scenery {
 // Emoji are expensive to rasterise every frame, so render each ONCE to an offscreen sprite and
 // reuse it (drawImage is far cheaper than fillText).
 const spriteCache = new Map<string, HTMLCanvasElement>();
-function emojiSprite(emoji: string): HTMLCanvasElement {
+export function emojiSprite(emoji: string): HTMLCanvasElement {
   const cached = spriteCache.get(emoji);
   if (cached) return cached;
   const c = document.createElement('canvas');
