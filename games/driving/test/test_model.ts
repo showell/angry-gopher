@@ -4,8 +4,8 @@
 // transforms (lengths + turn signs) — the same relational facts getNextRiderState uses.
 //
 // Run: node test/test_model.ts
-import { initialRiderState, getNextRiderState, assertInvariants, MAX_LEAN, TURN_OMEGA, MAX_TURN_ANGLE, leanFor, gazeAngle, GAZE_SEQUENCE, APPROACH_INTERSECTION_DIST } from '../model.ts';
-import type { RiderState } from '../model.ts';
+import { initialRiderState, getNextRiderState, assertInvariants, MAX_LEAN, TURN_OMEGA, MAX_TURN_ANGLE, leanFor, gazeAngle, GAZE_SEQUENCE, APPROACH_INTERSECTION_DIST } from '../rider.ts';
+import type { RiderState } from '../rider.ts';
 import { buildWorld } from '../world.ts';
 import type { World } from '../world.ts';
 import { SUN_BEARING, sunHeightPx, SUN_RADIUS_PX } from '../sun.ts';

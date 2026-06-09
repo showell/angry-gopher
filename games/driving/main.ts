@@ -1,14 +1,14 @@
 // =============================================================================
 // main — canvas. The frame loop is: take the current RiderState, build the
 // Rider-relative scene (view.ts), and draw it. The Rider is advanced EXPLICITLY
-// by getNextRiderState (model.ts) before drawing — that next RiderState is what
+// by getNextRiderState (rider.ts) before drawing — that next RiderState is what
 // gets passed into the rendering code.
 //
 //   ArrowUp   : getNextRiderState -> push the next RiderState onto the history
 //   ArrowDown : pop back to the previous RiderState
 // =============================================================================
-import { initialRiderState, getNextRiderState, riderHeading, leanFor, MAX_LEAN, gazeAngle } from './model.ts';
-import type { RiderState } from './model.ts';
+import { initialRiderState, getNextRiderState, riderHeading, leanFor, MAX_LEAN, gazeAngle } from './rider.ts';
+import type { RiderState } from './rider.ts';
 import { buildWorld } from './world.ts';
 import { buildScene } from './view.ts';
 import { drawHorizon } from './horizon.ts';
