@@ -65,10 +65,10 @@ const PAW:       Bone = { length: 0.05, joint: -1.571, r0: 0.034, r1: 0.030 };
 
 // the WALK: each leg swings fore-aft about its hip (thigh) and bends the knee on the forward (lift)
 // half of the swing, so it reads as stepping rather than sliding. The four legs run on a diagonal
-// gait — near-front pairs with far-hind, near-hind with far-front (half a cycle apart). The gait
-// PHASE counts only the steps SPENT WALKING (the freeze doesn't advance it), so the legs hold at rest
-// through the freeze and pick the cycle back up on the way out. One full leg cycle per STRIDE_STEPS.
-const STRIDE_STEPS = 5;         // rider steps per full leg cycle
+// gait — near-front pairs with far-hind, near-hind with far-front (half a cycle apart). Each walking
+// phase does a WHOLE number of leg cycles over its own steps (≈ one cycle per STRIDE_STEPS, rounded),
+// so the legs land exactly at rest at the freeze and at the finish no matter the phase lengths.
+const STRIDE_STEPS = 5;         // target rider steps per full leg cycle (rounded per phase)
 const SWING_AMP = 0.40;         // rad — how far the thigh swings fore/aft
 const KNEE_AMP = 0.55;          // rad — extra knee bend at the top of the forward swing
 
@@ -121,15 +121,15 @@ export interface Beast {
 //   1. ENTERS  — walk in from the roadside until the centre of the head sphere is over the lane centre.
 //   2. FROZEN  — deer-in-the-headlights: stop dead, the head swivels 90° to face us, nothing moves.
 //   3. ESCAPES — bolt the rest of the way, clearing the road (tail tip and all) by the final frame.
-const CAT_ENTERS_ROAD_STEPS = 20;
-const CAT_FROZEN_STEPS = 10;
-const CAT_ESCAPES_STEPS = 10;
+const CAT_ENTERS_ROAD_STEPS = 10;
+const CAT_FROZEN_STEPS = 24;
+const CAT_ESCAPES_STEPS = 6;
 export const BEAST_CROSS_FRAMES = CAT_ENTERS_ROAD_STEPS + CAT_FROZEN_STEPS + CAT_ESCAPES_STEPS;
 
 // Close the crossing — and release the rider's throttle hold — this far short of the beast, so it's
 // never right up against the camera (which distorts things badly up close). The whole crossing clock
 // counts down to a point BEAST_ROAD_BUFFER before the beast, not to the beast itself.
-export const BEAST_ROAD_BUFFER = 8;   // metres
+export const BEAST_ROAD_BUFFER = 5;   // metres
 
 const clamp = (x: number, lo: number, hi: number): number => Math.max(lo, Math.min(hi, x));
 const lerp = (a: number, b: number, t: number): number => a + (b - a) * t;
@@ -148,11 +148,11 @@ function crossT(gap: number, v: number): number {
 // phase, and whether the head is swivelled to face us.
 export interface BeastPose { across: number; walk: number; headFront: boolean }
 
-// gait phase from the number of steps SPENT WALKING — STRIDE_STEPS per cycle. The phase boundaries
-// (ENTERS, FROZEN) are whole multiples of STRIDE_STEPS, so the legs land exactly at rest at the freeze
-// and at the finish.
-function gait(walkingSteps: number): number {
-  return (walkingSteps / STRIDE_STEPS) * 2 * Math.PI;
+// gait phase over a walking phase of `phaseLen` steps at local progress p (0..1): a whole number of
+// leg cycles (≈ phaseLen / STRIDE_STEPS, at least one), so the legs start and end the phase at rest.
+function gait(p: number, phaseLen: number): number {
+  const cycles = Math.max(1, Math.round(phaseLen / STRIDE_STEPS));
+  return p * cycles * 2 * Math.PI;
 }
 
 // Map the single crossing clock (crossT) onto a step counter 0..BEAST_CROSS_FRAMES, then split it into
@@ -166,13 +166,13 @@ export function beastPose(b: Beast, riderAlong: number, v: number): BeastPose {
 
   if (step <= freezeAt) {                                          // ENTERS: walk in to the lane centre
     const p = freezeAt > 0 ? step / freezeAt : 1;
-    return { across: lerp(b.startAcross, b.midAcross, p), walk: gait(step), headFront: false };
+    return { across: lerp(b.startAcross, b.midAcross, p), walk: gait(p, freezeAt), headFront: false };
   }
   if (step <= escapeAt) {                                          // FROZEN: stand dead still, facing us
-    return { across: b.midAcross, walk: gait(freezeAt), headFront: true };
+    return { across: b.midAcross, walk: 0, headFront: true };
   }
   const p = clamp((step - escapeAt) / CAT_ESCAPES_STEPS, 0, 1);    // ESCAPES: bolt clear of the road
-  return { across: lerp(b.midAcross, b.endAcross, p), walk: gait(freezeAt + (step - escapeAt)), headFront: false };
+  return { across: lerp(b.midAcross, b.endAcross, p), walk: gait(p, CAT_ESCAPES_STEPS), headFront: false };
 }
 
 // Is the beast still ahead (beyond the buffer) AND inside the BEAST_CROSS_FRAMES window — i.e. crossing
