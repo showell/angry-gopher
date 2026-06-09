@@ -2,7 +2,8 @@
 // thin upright posts. intersection.ts knows the corner's shape and builds the PATH the rail
 // follows on the ground; buildGuardRail raises that path into 3D polygons.
 
-import type { RiderPt, Poly3 } from './scenery.ts';
+import { clipNear } from './scenery.ts';
+import type { RiderPt, Poly3, Project, Ctx } from './scenery.ts';
 
 const RAIL_HEIGHT = 0.5;             // the bar's centre, above the ground (metres)
 const RAIL_THICKNESS = 0.1;          // the bar's vertical thickness
@@ -37,4 +38,22 @@ export function buildGuardRail(path: RiderPt[]): Poly3[] {
     ], color: RAIL_POST_METAL });
   }
   return polys;
+}
+
+// Draw one raised rail polygon (a band or a post): near-clip its corners, project them, fill. Same
+// pipeline as a road quad, but the corners already carry their own heights, so it stands above the
+// pavement (and is drawn after the road for that reason).
+export function drawGuardRail(ctx: Ctx, rail: Poly3, project: Project): void {
+  const clipped = clipNear(rail.pts);
+  if (clipped.length < 3) return;
+  ctx.fillStyle = rail.color;
+  ctx.beginPath();
+  const p0 = project(clipped[0].right, clipped[0].forward, clipped[0].height);
+  ctx.moveTo(p0.x, p0.y);
+  for (let i = 1; i < clipped.length; i++) {
+    const p = project(clipped[i].right, clipped[i].forward, clipped[i].height);
+    ctx.lineTo(p.x, p.y);
+  }
+  ctx.closePath();
+  ctx.fill();
 }

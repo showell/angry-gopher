@@ -18,6 +18,11 @@ const SUN_FULLY_SET_PX = -SUN_RADIUS_PX;                        // height at whi
 const WARMTH_FALLOFF_PX = 110;                                  // how far from the horizon the sunset-red fades to nothing
 const VISIBLE_BEARING_LIMIT = 1.4;                             // beyond this bearing off-heading the sun is off-screen
 
+// the warm sunset band the SKY paints near the horizon as the sun crosses it (sky.ts mixes this into
+// the lower sky by sunsetWarmth).
+export const SUNSET_RED = [222, 88, 52];   // #de5834 — warm sunset glow
+export const SUNSET_GLOW = 0.85;           // how strongly the red mixes in at peak warmth
+
 export function sunHeightPx(step: number): number {
   return SUN_START_PX - SUN_DROP_PX_PER_STEP * step;
 }

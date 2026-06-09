@@ -7,14 +7,15 @@
 //   ArrowUp   : getNextRiderState -> push the next RiderState onto the history
 //   ArrowDown : pop back to the previous RiderState
 // =============================================================================
-import { initialRiderState, getNextRiderState, riderHeading, leanFor, MAX_LEAN, gazeAngle } from './rider.ts';
+import { initialRiderState, getNextRiderState, riderHeading, riderLean, riderFinished, MAX_LEAN, gazeAngle } from './rider.ts';
 import type { RiderState } from './rider.ts';
 import { buildWorld } from './world.ts';
 import { buildScene } from './view.ts';
 import { drawHorizon } from './horizon.ts';
-import { sunSetFraction, sunsetWarmth } from './sun.ts';
-import { DETAIL_DIST, NEAR, groundDrop } from './scenery.ts';
-import type { Project, RiderPt, Quad, Poly3 } from './scenery.ts';
+import { skyColors } from './sky.ts';
+import { drawGuardRail } from './guard_rail.ts';
+import { DETAIL_DIST, NEAR, groundDrop, clipNear } from './scenery.ts';
+import type { Project, RiderPt, Quad } from './scenery.ts';
 
 // The page is a near-empty shell (the Go /driving route or the standalone
 // index.html), so we build our own DOM here — the host ships no markup or CSS.
@@ -53,7 +54,7 @@ const MIN_SCENERY_PX = 2;   // skip scenery that would project shorter than this
 
 // The Rider's focal point pulls IN as he leans into a turn — he's watching the corner he's
 // executing, not the far mountains. We measure the lean as a fraction of the enforced
-// MAX_LEAN (the route never banks past it; see model.ts + test_model), and pull the focal
+// MAX_LEAN (the route never banks past it; see rider.ts + test_model), and pull the focal
 // from full FOCAL down toward MIN_FOCAL_FACTOR·FOCAL, accelerating (squared) so the focus
 // snaps in hard at the deepest part of a turn. The floor keeps it well clear of a degenerate
 // zero. `camFocal` is the live camera focal, recomputed from the roll each frame; the whole
@@ -68,17 +69,6 @@ const focalForLean = (lean: number): number => {
 // the rider also turns his HEAD into the corner — a subtle view-only yaw, 15% of the lean angle.
 const HEAD_YAW_FRAC = 0.15;
 
-// The sky DIMS to a dusk blue as the sun sets (sunSetFraction), and REDDENS toward a warm sunset
-// glow near the horizon as the sun crosses it (sunsetWarmth). Darkening all channels keeps the blue
-// from greying out; the red is mixed only into the lower sky (the gradient in render()).
-const DAY_SKY = [142, 202, 230];    // #8ecae6 (the established daytime sky)
-const DUSK_SKY = [36, 58, 94];      // deep dusk blue
-const SUNSET_RED = [222, 88, 52];   // warm sunset glow mixed into the horizon band
-const SUNSET_GLOW = 0.85;           // how strongly the red mixes in at peak warmth
-const lerp3 = (a: number[], b: number[], t: number): number[] => a.map((v, i) => Math.round(v + (b[i] - v) * t));
-const rgbStr = (c: number[]): string => `rgb(${c[0]},${c[1]},${c[2]})`;
-const skyRGB = (step: number): number[] => lerp3(DAY_SKY, DUSK_SKY, sunSetFraction(step));
-
 // ---- the world + the Rider's history (a forward/back stack of RiderStates) ----
 const world = buildWorld();
 const riderHistory: RiderState[] = [initialRiderState(world)];
@@ -87,15 +77,8 @@ const currentRider = (): RiderState => riderHistory[riderHistory.length - 1];
 // the rider's current lean (camera roll), from the heading change of his latest step
 const currentLean = (): number => {
   const n = riderHistory.length;
-  if (n < 2) return 0;
-  return leanFor(riderHeading(riderHistory[n - 1], world) - riderHeading(riderHistory[n - 2], world));
+  return n < 2 ? 0 : riderLean(riderHistory[n - 2], riderHistory[n - 1], world);
 };
-
-// the game is over once the Rider has reached the end of the final (exit-less) segment
-const lastId = world.order[world.order.length - 1];
-function gameEnded(rider: RiderState): boolean {
-  return rider.segment === lastId && !rider.turn && rider.along >= world.segments[lastId].length - 1e-6;
-}
 
 // The scene only needs redrawing when something CHANGES — the Rider advancing or
 // stepping. While paused and idle the picture is identical frame to frame, so we skip
@@ -154,23 +137,6 @@ function project(p: V3): { x: number; y: number } {
 }
 // project a ground-plane point at a height — the form critter.ts wants
 const screenOf: Project = (right, forward, height) => project({ right, forward, height });
-function clipNear(verts: V3[]): V3[] {
-  const out: V3[] = [];
-  for (let i = 0; i < verts.length; i++) {
-    const a = verts[i], b = verts[(i + 1) % verts.length];
-    const aIn = a.forward >= NEAR, bIn = b.forward >= NEAR;
-    if (aIn) out.push(a);
-    if (aIn !== bIn) {
-      const f = (NEAR - a.forward) / (b.forward - a.forward);
-      out.push({
-        right: a.right + f * (b.right - a.right),
-        forward: NEAR,
-        height: a.height + f * (b.height - a.height),
-      });
-    }
-  }
-  return out;
-}
 
 function drawQuad(q: Quad): void {
   // the ground is curved: lower each vertex by its distance's curvature drop (the road then bends
@@ -180,20 +146,6 @@ function drawQuad(q: Quad): void {
   if (clipped.length < 3) return;
   const pts = clipped.map(project);
   ctx.fillStyle = q.color;
-  ctx.beginPath();
-  ctx.moveTo(pts[0].x, pts[0].y);
-  for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
-  ctx.closePath();
-  ctx.fill();
-}
-
-// a raised polygon (guard rail) — same near-clip + project + fill as a road quad, but its
-// corners already carry their own heights (off the ground).
-function drawPoly3(p: Poly3): void {
-  const clipped = clipNear(p.pts);
-  if (clipped.length < 3) return;
-  const pts = clipped.map(project);
-  ctx.fillStyle = p.color;
   ctx.beginPath();
   ctx.moveTo(pts[0].x, pts[0].y);
   for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
@@ -259,14 +211,13 @@ function render(rider: RiderState): void {
   // sky above / grass below, drawn oversized so the rolled frame's corners stay filled
   // (two fillRects — cheap at any size).
   const BIG = W + H;
-  // sky: dusk-blue up high, warming to a sunset RED near the horizon as the sun sets (the warm band
-  // sits in the lower sky, behind/above the mountains; its strength peaks at sunset via sunsetWarmth).
-  const sky = skyRGB(step);
-  const horizonSky = lerp3(sky, SUNSET_RED, sunsetWarmth(step) * SUNSET_GLOW);
+  // sky: a vertical gradient from the upper-sky colour down to a warmer horizon band (both from sky.ts,
+  // which dims to dusk and reddens at sunset). The warm band sits behind/above the mountains.
+  const { sky, horizon } = skyColors(step);
   const skyGrad = ctx.createLinearGradient(0, 0, 0, H / 2);
-  skyGrad.addColorStop(0, rgbStr(sky));
-  skyGrad.addColorStop(0.2, rgbStr(sky));
-  skyGrad.addColorStop(1, rgbStr(horizonSky));
+  skyGrad.addColorStop(0, sky);
+  skyGrad.addColorStop(0.2, sky);
+  skyGrad.addColorStop(1, horizon);
   ctx.fillStyle = skyGrad;
   ctx.fillRect(W / 2 - BIG, H / 2 - BIG, 2 * BIG, BIG);
   ctx.fillStyle = '#4a8f43';
@@ -282,7 +233,7 @@ function render(rider: RiderState): void {
   drawHorizon(ctx, riderHeading(rider, world) + gazeAngle(rider) + headYaw, W, H, camFocal, overscan, camFocal / FOCAL, step);
 
   for (const q of scene.quads) drawQuad(q);
-  for (const p of scene.polys) drawPoly3(p);   // guard rails, raised above the pavement
+  for (const p of scene.polys) drawGuardRail(ctx, p, screenOf);   // guard rails, raised above the pavement
 
   // scenery (trees + critters) drawn back-to-front so a nearer one occludes a farther
   // one. The renderer owns the near/far POLICY; each object owns how it draws at each
@@ -298,7 +249,7 @@ function render(rider: RiderState): void {
 
   drawHud(rider);
 
-  if (gameEnded(rider)) {
+  if (riderFinished(rider, world)) {
     ctx.fillStyle = 'rgba(0,0,0,0.55)';
     ctx.fillRect(0, H / 2 - 48, W, 96);
     ctx.fillStyle = '#fff';
@@ -312,7 +263,7 @@ function render(rider: RiderState): void {
 let lastFrame = 0;
 function loop(t: number): void {
   // automatic mode: one Rider step per frame, until paused or finished (sets `dirty`)
-  if (auto && !gameEnded(currentRider())) advance();
+  if (auto && !riderFinished(currentRider(), world)) advance();
 
   // ONLY redraw when the picture changed. Paused & idle => nothing to draw, so the HUD
   // and its stats freeze (no phantom frames re-reporting the same scene).

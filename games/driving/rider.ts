@@ -116,6 +116,18 @@ export function leanFor(dHeading: number): number {
   return clamp(LEAN_PER_OMEGA * dHeading, -LEAN_CAP, LEAN_CAP);
 }
 
+// The rider's lean across one frame (prev -> curr): the lean for the heading change between the two
+// states. The renderer reads it as the camera roll (and the focal pull-in / head-yaw into the corner).
+export function riderLean(prev: RiderState, curr: RiderState, world: World): number {
+  return leanFor(riderHeading(curr, world) - riderHeading(prev, world));
+}
+
+// Has the rider reached the end of the route — at rest at the end of the final (exit-less) segment?
+export function riderFinished(rider: RiderState, world: World): boolean {
+  const lastId = world.order[world.order.length - 1];
+  return rider.segment === lastId && !rider.turn && rider.along >= world.segments[lastId].length - 1e-6;
+}
+
 // the current head-turn of the distracted glance (radians), indexed by gazeStep into GAZE_SEQUENCE.
 export function gazeAngle(state: RiderState): number {
   const i = state.gazeStep;

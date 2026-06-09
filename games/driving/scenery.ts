@@ -47,6 +47,28 @@ export const DETAIL_DIST = 40;
 // the renderer (road quads + guard rails) and any Scenery that does its own 3D clip (towers).
 export const NEAR = 0.4;
 
+// Clip a rider-frame polygon (each vertex carrying a height off the ground) against the NEAR plane, so
+// no vertex sits behind the eye where the perspective divide would fling it across the screen. Returns
+// the clipped vertices (possibly fewer than 3 — the caller skips those). Shared by the road quads
+// (main.ts) and the guard rails (guard_rail.ts).
+export function clipNear(verts: { right: number; forward: number; height: number }[]): { right: number; forward: number; height: number }[] {
+  const out: { right: number; forward: number; height: number }[] = [];
+  for (let i = 0; i < verts.length; i++) {
+    const a = verts[i], b = verts[(i + 1) % verts.length];
+    const aIn = a.forward >= NEAR, bIn = b.forward >= NEAR;
+    if (aIn) out.push(a);
+    if (aIn !== bIn) {
+      const f = (NEAR - a.forward) / (b.forward - a.forward);
+      out.push({
+        right: a.right + f * (b.right - a.right),
+        forward: NEAR,
+        height: a.height + f * (b.height - a.height),
+      });
+    }
+  }
+  return out;
+}
+
 // ---- ground curvature (experiment) ----
 // The local ground is a spherical plateau of radius GROUND_RADIUS: it drops d^2/(2R) below the
 // Rider's tangent plane at horizontal distance d. The renderer lowers each ground-quad vertex by
