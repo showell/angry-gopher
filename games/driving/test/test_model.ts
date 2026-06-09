@@ -8,6 +8,7 @@ import { initialRiderState, getNextRiderState, assertInvariants, MAX_LEAN, TURN_
 import type { RiderState } from '../rider.ts';
 import { buildWorld } from '../world.ts';
 import type { World } from '../world.ts';
+import { CornerCreature } from '../safari_critter.ts';
 import { SUN_BEARING, sunHeightPx, SUN_RADIUS_PX } from '../sun.ts';
 import { horizonCrestPx } from '../mountain.ts';
 
@@ -96,6 +97,15 @@ function main(): void {
     const angle = world.intersections[world.segments[id].exitIxn].angle;   // terminus -> 0, no throw
     if (angle > MAX_TURN_ANGLE + 1e-9) {
       throw new Error(`turn on ${id} is ${(angle * 180 / Math.PI).toFixed(0)}deg, over the ${(MAX_TURN_ANGLE * 180 / Math.PI).toFixed(0)}deg max`);
+    }
+  }
+
+  // CONFIG: crocodiles only lurk at RIGHT-turn corners. Their lagoon is authored off the corner's
+  // LEFT, which is the OUTER side of a right turn (where the guard rail rides); a crocodile at a left
+  // turn would put the lagoon on the inner side, over the road. Any croc at a non-right turn is a bug.
+  for (const ixn of Object.values(world.intersections)) {
+    if (ixn.creature === CornerCreature.CROCODILE && ixn.sign <= 0) {
+      throw new Error(`crocodiles only belong at right turns, but ${ixn.id} (sign ${ixn.sign}) has one`);
     }
   }
 

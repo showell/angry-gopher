@@ -13,7 +13,7 @@
 
 import { critterScenery } from './critter.ts';
 import type { Critter } from './critter.ts';
-import { cornerCritters } from './safari_critter.ts';
+import { cornerCritters, cornerCreatureExtras } from './safari_critter.ts';
 import type { CornerCreature } from './safari_critter.ts';
 import { towerScenery, beaconOffsetFor } from './tower.ts';
 import { ROAD } from './scenery.ts';
@@ -53,7 +53,8 @@ export interface Intersection {
   radius: number;     // corner radius
   sign: number;       // +1 right, -1 left; 0 = no turn (terminus)
   tan: number;        // radius * tan(THETA/2): the corner's half-tangent (how far the turn intrudes into a straight); 0 at a terminus
-  creatures: Critter[];   // the corner creatures parked here (elephants/giraffes/…; none at a terminus); the joint OWNS them
+  creature: CornerCreature | null;   // the authored species at this corner (null at a terminus) — drives the emoji pair AND the crocodile lagoon
+  creatures: Critter[];   // the emoji creatures parked here (elephants/giraffes/zebras; empty for a crocodile or terminus); the joint OWNS them
   beaconOffset: number;   // authored blink-phase offset for this tower's apex beacon, so towers don't pulse in unison
 }
 
@@ -67,6 +68,7 @@ export function buildIntersection(from: RoadSegment, to: RoadSegment, dir: TurnD
     id: `${from.id}_${to.id}`,
     from: from.id, to: to.id, angle,
     radius: TURN_RADIUS, sign, tan: TURN_RADIUS * Math.tan(angle / 2),
+    creature,
     creatures: cornerCritters(creature, from.length, sign, segNum, from.width / 2),
     beaconOffset: beaconOffsetFor(segNum),
   };
@@ -76,7 +78,7 @@ export function buildIntersection(from: RoadSegment, to: RoadSegment, dir: TurnD
 // with no outgoing fork (the Rider arrives and stops). No turn, so angle/sign/tan are 0
 // and there are no creatures.
 export function buildTerminus(from: RoadSegment): Intersection {
-  return { id: `${from.id}_end`, from: from.id, to: null, angle: 0, radius: 0, sign: 0, tan: 0, creatures: [],
+  return { id: `${from.id}_end`, from: from.id, to: null, angle: 0, radius: 0, sign: 0, tan: 0, creature: null, creatures: [],
            beaconOffset: beaconOffsetFor(Number(from.id.slice(3))) };
 }
 
@@ -147,10 +149,16 @@ export function intersectionScene(ixn: Intersection, from: RoadSegment, to: Road
     for (const p of buildGuardRail(railPath)) polys.push(p);
   }
 
-  // the creatures parked at the corner (authored centre-relative; +hw shifts to from-the-left).
+  // the emoji creatures parked at the corner (authored centre-relative; +hw shifts to from-the-left).
   for (const cr of ixn.creatures) {
     scenery.push(critterScenery({ at: fromMap(cr.along, cr.across + hw), emoji: cr.emoji, height: cr.height, faceRight: cr.faceRight }));
   }
+
+  // the corner's hand-drawn extras (the crocodile lagoon) — safari_critter hands off to the right
+  // module, in the same corner frame the sector uses.
+  const extras = cornerCreatureExtras(ixn.creature, Number(from.id.slice(3)), corner);
+  for (const q of extras.quads) quads.push(q);
+  for (const s of extras.scenery) scenery.push(s);
 
   return { quads, polys, scenery };
 }

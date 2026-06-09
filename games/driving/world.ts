@@ -69,9 +69,11 @@ export function buildWorld(): World {
   const order: SegId[] = segmentConfigs.map((c) => c.id);
 
   // ---- the intersections: the turn joining each segment to the next (signed degrees, + right /
-  // - left). The corner creatures are authored explicitly: a crocodile greets you at the first corner,
-  // elephants and giraffes lead, zebras join, then crocodiles reappear later. seg19 has no entry here —
-  // it ends at the terminus, derived below as the one segment that never turns out. ----
+  // - left). The corner creatures are authored explicitly: a crocodile lagoon greets you at the first
+  // corner, elephants and giraffes lead, zebras join, then crocodiles reappear later. Crocodiles only
+  // sit at RIGHT turns (their lagoon is on the corner's left = a right turn's outer side; enforced by
+  // test_model). seg19 has no entry here — it ends at the terminus, derived below as the one segment
+  // that never turns out. ----
   const turns: IxnSpec[] = [
     intersectionFrom('seg1',  'seg2',   50, C),
     intersectionFrom('seg2',  'seg3',  -70, E),
@@ -87,8 +89,8 @@ export function buildWorld(): World {
     intersectionFrom('seg12', 'seg13',  15, G),
     intersectionFrom('seg13', 'seg14',  15, E),
     intersectionFrom('seg14', 'seg15', -50, Z),
-    intersectionFrom('seg15', 'seg16',  50, G),
-    intersectionFrom('seg16', 'seg17', -50, C),
+    intersectionFrom('seg15', 'seg16',  50, C),
+    intersectionFrom('seg16', 'seg17', -50, E),
     intersectionFrom('seg17', 'seg18',  50, Z),
     intersectionFrom('seg18', 'seg19', -50, G),
   ];
