@@ -26,7 +26,7 @@ import type { Project, Ctx, Scenery, RiderPt } from './scenery.ts';
 import type { World } from './world.ts';
 import type { RoadSegment } from './road_segment.ts';
 import type { RiderState } from './rider.ts';
-import { routeDistance, A_ACCEL, V_BASE, APPROACH_INTERSECTION_DIST } from './rider.ts';
+import { routeDistance, A_ACCEL, V_BASE, V_MAX, APPROACH_INTERSECTION_DIST } from './rider.ts';
 import { turnSpeed } from './intersection.ts';
 
 // ---- dimensions (metres) ----
@@ -43,6 +43,7 @@ const TRUCK_TURN_CAUTION = 0.8;        // takes each corner at this fraction of 
                                        // a truck is more conservative through turns than a nimble rider
 const TRUCK_BRAKE_DISTANCE = APPROACH_INTERSECTION_DIST;   // brake over the SAME distance the rider does — same stopping habit
 const TRUCK_CHASE_ACCEL = 1.1 * A_ACCEL;   // behind-schedule acceleration — 10% FASTER than the rider, to claw the lead back
+const TRUCK_MAX_V = 1.1 * V_MAX;           // top speed — 10% over the rider's, its straightaway edge, but bounded
 
 // ---- colour: a dark-blue body (lighter roof / darker sides so the prism reads as a solid), plus
 // bright-red brake lights that only light while it slows. ----
@@ -102,7 +103,7 @@ export function nextTruck(truck: TruckState, riderDist: number, world: World, L:
     v = Math.max(turnTarget, v + a);
     braking = v < truck.v;                                   // lit only while actually slowing
   } else if (truck.pos < scheduled) {
-    v = v + TRUCK_CHASE_ACCEL;                               // behind schedule: accelerate (never cruise)
+    v = Math.min(TRUCK_MAX_V, v + TRUCK_CHASE_ACCEL);        // behind schedule: accelerate, capped at its top speed
   }                                                          // ahead of schedule, not braking: cruise (hold v)
   // Three rules, nothing else: brake before a turn / accelerate when behind schedule / cruise when
   // ahead. The truck's speed is NEVER tied to the rider's — only to those rules. (`scheduled` reads the

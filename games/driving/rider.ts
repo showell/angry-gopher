@@ -51,8 +51,8 @@ export interface RiderState {
 // ----------------------------------------------------------------------------
 
 export const V_BASE = 0.3;    // speed at the very start of the drive (m/press)
-export const A_ACCEL = 0.015; // constant acceleration while the intersection is still far off (m/press^2)
-const V_MAX = 2.5;            // top speed — the bike never accelerates past this
+export const A_ACCEL = 0.010; // constant acceleration while the intersection is still far off (m/press^2)
+export const V_MAX = 2.5;     // top speed — the bike never accelerates past this (the truck caps off this too)
 
 // the Rider starts slowing once the next intersection is within this distance (metres)
 export const APPROACH_INTERSECTION_DIST = 60;
