@@ -63,6 +63,15 @@ const UPPER_LEG: Bone = { length: 0.24, joint: 0,      r0: 0.050, r1: 0.040 };
 const LOWER_LEG: Bone = { length: 0.21, joint: 0.620,  r0: 0.040, r1: 0.032 };
 const PAW:       Bone = { length: 0.05, joint: -1.571, r0: 0.034, r1: 0.030 };
 
+// the WALK: each leg swings fore-aft about its hip (thigh) and bends the knee on the forward (lift)
+// half of the swing, so it reads as stepping rather than sliding. The four legs run on a diagonal
+// gait — near-front pairs with far-hind, near-hind with far-front (half a cycle apart). The gait
+// PHASE is driven by the crossing progress (beastWalkPhase), so the legs cycle as the cat translates
+// and sit at rest (phase a whole number of cycles) the instant it stops.
+const STRIDE_CYCLES = 4;        // leg cycles over the whole crossing
+const SWING_AMP = 0.40;         // rad — how far the thigh swings fore/aft
+const KNEE_AMP = 0.55;          // rad — extra knee bend at the top of the forward swing
+
 // where the legs attach to the torso (near pair, in front; far pair set back a touch and drawn in
 // shade behind the body, so all four legs read).
 const FRONT_HIP: P = [-0.10, 0.46];
@@ -102,7 +111,7 @@ export interface Beast {
 // The crossing is clocked in RIDER FRAMES, not metres: the beast starts to move when the rider is
 // BEAST_CROSS_FRAMES presses from reaching it (at his current speed) and is completely across by the
 // frame he arrives. So a faster rider gives the beast a shorter real distance to cover — same frames.
-export const BEAST_CROSS_FRAMES = 20;
+export const BEAST_CROSS_FRAMES = 40;
 
 // Close the crossing — and release the rider's throttle hold — this far short of the beast, so it's
 // never right up against the camera (which distorts things badly up close). The whole crossing clock
@@ -127,6 +136,12 @@ export function beastAcross(b: Beast, riderAlong: number, v: number): number {
   return lerp(b.startAcross, b.endAcross, crossT(b.along - riderAlong, v));
 }
 
+// the beast's current gait PHASE (radians): STRIDE_CYCLES leg-cycles spread across the crossing, so it
+// steps in time with its translation and is back at rest (a whole number of cycles) once across.
+export function beastWalkPhase(b: Beast, riderAlong: number, v: number): number {
+  return STRIDE_CYCLES * 2 * Math.PI * crossT(b.along - riderAlong, v);
+}
+
 // Is the beast still ahead (beyond the buffer) AND inside the BEAST_CROSS_FRAMES window — i.e. crossing
 // in front of us right now? While this holds the rider must not accelerate (he sees it and holds off).
 function beastInDanger(b: Beast, riderAlong: number, v: number): boolean {
@@ -145,10 +160,11 @@ export interface BeastView {
   height: number;
   faceRight: boolean;
   form: BeastForm;
+  walk: number;        // gait phase (radians); 0 at rest
 }
 
-const CAT_HEIGHT = 1.4;          // metres — half the earlier safari size, ground to the top of the ears
-const CAT_ALONG = 95;            // desired spot down the road (was 65; +30 for more crossing time)
+const CAT_HEIGHT = 1.5;          // metres — ground to the top of the ears
+const CAT_ALONG = 105;           // desired spot down the road; rounded up to just past a tree
 const CAT_ROAD_GAP = 1.5;        // it sits this far beyond the roadside tree line, facing the road
 const PROFILE_REACH = 1.14;      // tail tip — how far the drawing reaches from its anchor (unit-frame x)
 const CAT_BEYOND_TREE = 2;       // sits this far PAST the rounding tree, so the tree reads in front of it
@@ -271,20 +287,23 @@ function drawBeast(ctx: Ctx, b: BeastView, project: Project): void {
   ctx.lineCap = 'round';
 
   if (DEBUG) drawDiagnostic(ctx);
-  else drawCat(ctx, b.form.palette);
+  else drawCat(ctx, b.form.palette, b.walk);
 
   ctx.restore();
 }
 
-// the finished cat: the body is the internal solids drawn directly; legs, ears and face on top.
-function drawCat(ctx: Ctx, pal: BeastForm['palette']): void {
-  drawLeg(ctx, far(FRONT_HIP), pal.shadow, pal.line);   // far pair, behind the body, in shade
-  drawLeg(ctx, far(HIND_HIP), pal.shadow, pal.line);
-  drawEar(ctx, FAR_EAR, pal.shadow, pal.line);          // far ear, behind the head (its base is hidden)
-  drawBody(ctx, pal.body, pal.line);                    // head + neck + torso + tail as overlapping solids
-  drawLeg(ctx, FRONT_HIP, pal.body, pal.line);          // near pair, over the body
-  drawLeg(ctx, HIND_HIP, pal.body, pal.line);
-  drawEar(ctx, NEAR_EAR, pal.body, pal.line);           // near ear, on top of the head
+// the finished cat: the body is the internal solids drawn directly; legs, ears and face on top. The
+// legs run on a DIAGONAL gait — near-front with far-hind (phase `walk`), near-hind with far-front
+// (half a cycle on).
+function drawCat(ctx: Ctx, pal: BeastForm['palette'], walk: number): void {
+  const opp = walk + Math.PI;
+  drawLeg(ctx, far(FRONT_HIP), pal.shadow, pal.line, opp);    // far pair, behind the body, in shade
+  drawLeg(ctx, far(HIND_HIP), pal.shadow, pal.line, walk);
+  drawEar(ctx, FAR_EAR, pal.shadow, pal.line);               // far ear, behind the head (its base is hidden)
+  drawBody(ctx, pal.body, pal.line);                         // head + neck + torso + tail as overlapping solids
+  drawLeg(ctx, FRONT_HIP, pal.body, pal.line, walk);         // near pair, over the body
+  drawLeg(ctx, HIND_HIP, pal.body, pal.line, opp);
+  drawEar(ctx, NEAR_EAR, pal.body, pal.line);                // near ear, on top of the head
   drawFace(ctx, pal.eye, pal.nose);
 }
 
@@ -324,11 +343,15 @@ function legSkeleton(ctx: Ctx, hip: P): void {
 
 const far = (hip: P): P => [hip[0] + FAR_SETBACK, hip[1]];
 
-// one leg: upper leg, lower leg, paw — three capsules along the FK chain from the hip.
-function drawLeg(ctx: Ctx, hip: P, fill: string, line: string): void {
-  const j = jointsOf(hip, LEG_BASE_ANGLE, [UPPER_LEG, LOWER_LEG, PAW]);
+// one leg: upper leg, lower leg, paw — three capsules along the FK chain from the hip. The gait
+// `phase` swings the thigh fore-aft and bends the knee on the forward (lift) half, so the leg steps.
+function drawLeg(ctx: Ctx, hip: P, fill: string, line: string, phase: number): void {
+  const s = Math.sin(phase);
+  const base = LEG_BASE_ANGLE + SWING_AMP * s;                       // thigh swings fore/aft
+  const lower = { ...LOWER_LEG, joint: LOWER_LEG.joint + KNEE_AMP * Math.max(0, s) };   // bend the knee as it lifts
+  const j = jointsOf(hip, base, [UPPER_LEG, lower, PAW]);
   capsule(ctx, j[0], j[1], UPPER_LEG.r0, UPPER_LEG.r1, fill, line);
-  capsule(ctx, j[1], j[2], LOWER_LEG.r0, LOWER_LEG.r1, fill, line);
+  capsule(ctx, j[1], j[2], lower.r0, lower.r1, fill, line);
   capsule(ctx, j[2], j[3], PAW.r0, PAW.r1, fill, line);
 }
 
