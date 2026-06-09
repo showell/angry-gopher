@@ -35,7 +35,7 @@ const WIDTH = 2.4;     // narrower than the 4m lane, so it fits and rounds the c
 const HEIGHT = 3;
 
 // ---- the chase ----
-const START_AHEAD = 640;            // metres in front of the rider at the start (20% less head start)
+const START_AHEAD = 500;            // metres in front of the rider at the start (the initial lead)
 const FINISH_LEAD = 100;            // the lead the schedule lerps DOWN to by the course end — not 0,
                                     // because braking for the final corner would dip a near-0 lead
                                     // negative and we'd catch it at the line; 100m keeps a photo finish
@@ -140,10 +140,10 @@ function buildTruck(map: (a: number, x: number) => RiderPt, centerAlong: number,
   // brake lights live here. Built lazily, drawn only when slowing.
   const rearPanel = (xA: number, xB: number, hLo: number, hHi: number): Pt3[] =>
     [lower(map(a0, xA), hLo), lower(map(a0, xB), hLo), lower(map(a0, xB), hHi), lower(map(a0, xA), hHi)];
-  const BL = 0.30 * HEIGHT, BH = 0.55 * HEIGHT;   // brake-light height band
+  const BL = 0.26 * HEIGHT, BH = 0.60 * HEIGHT;   // brake-light height band (taller than before — bigger lights)
   const brakeLights: Pt3[][] = [
-    rearPanel(xl + 0.12 * WIDTH, xl + 0.34 * WIDTH, BL, BH),   // left light
-    rearPanel(xr - 0.34 * WIDTH, xr - 0.12 * WIDTH, BL, BH),   // right light
+    rearPanel(xl + 0.10 * WIDTH, xl + 0.36 * WIDTH, BL, BH),   // left light (wider, too)
+    rearPanel(xr - 0.36 * WIDTH, xr - 0.10 * WIDTH, BL, BH),   // right light
   ];
 
   const fill = (ctx: Ctx, project: Project, poly: Pt3[]): void => {
@@ -160,14 +160,36 @@ function buildTruck(map: (a: number, x: number) => RiderPt, centerAlong: number,
     ctx.fill();
   };
 
+  // a soft red halo around a brake light: project its corners, find their screen centre + radius, and
+  // lay down a radial gradient a few times that size — so the light reads as GLOWING, not just a patch.
+  const glow = (ctx: Ctx, project: Project, poly: Pt3[]): void => {
+    const pts = clipNear(poly);
+    if (pts.length < 3) return;
+    const sp = pts.map((p) => project(p.right, p.forward, p.height));
+    let cx = 0, cy = 0;
+    for (const s of sp) { cx += s.x; cy += s.y; }
+    cx /= sp.length; cy /= sp.length;
+    let r = 0;
+    for (const s of sp) r = Math.max(r, Math.hypot(s.x - cx, s.y - cy));
+    const halo = ctx.createRadialGradient(cx, cy, 0, cx, cy, r * 3.2);
+    halo.addColorStop(0, 'rgba(255,80,60,0.9)');
+    halo.addColorStop(0.45, 'rgba(255,42,24,0.45)');
+    halo.addColorStop(1, 'rgba(255,42,24,0)');
+    ctx.fillStyle = halo;
+    ctx.beginPath();
+    ctx.arc(cx, cy, r * 3.2, 0, 2 * Math.PI);
+    ctx.fill();
+  };
+
   const draw = (ctx: Ctx, project: Project): void => {
     for (const f of [...faces].sort((p, q) => avgF(q) - avgF(p))) {   // farthest faces first (painter's)
       ctx.fillStyle = f.color;
       fill(ctx, project, f.pts);
     }
     if (braking) {   // the rear face is the nearest, drawn last above — so the lights land on top of it
+      for (const light of brakeLights) glow(ctx, project, light);   // soft halo first…
       ctx.fillStyle = BRAKE;
-      for (const light of brakeLights) fill(ctx, project, light);
+      for (const light of brakeLights) fill(ctx, project, light);   // …then the bright core on top
     }
   };
   return { forward: center.forward, height: HEIGHT, drawAsNear: draw, drawAsFar: draw };
