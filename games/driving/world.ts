@@ -42,57 +42,66 @@ const intersectionFrom = (from: SegId, to: SegId, deg: number, creature: CornerC
 export function buildWorld(): World {
   const Z = CornerCreature.ZEBRA, E = CornerCreature.ELEPHANT, G = CornerCreature.GIRAFFE, C = CornerCreature.CROCODILE;
 
-  // ---- the segments: the straight stretches (id / length / tree scheme). The route opens
-  // straight onto the long seg1 so the sunset is already underway by the first stretch
-  // (horizon.ts's SUN_START_PX is calibrated to it). ----
+  // ---- the segments: the straight stretches (id / length / tree scheme / whether pigs gather).
+  // The route opens straight onto the long seg1 so the sunset is already underway by the first
+  // stretch (horizon.ts's SUN_START_PX is calibrated to it).
+  //
+  // VARIETY GRAMMAR (random482): the baseline is deliberately boring — ALL_GREEN trees, a cow herd,
+  // an elephant corner — so the rare departures actually surprise. We FRONT-LOAD novelty so a new
+  // player learns the game isn't dull (seg2 cat, then a new element on seg3/4/5), keep the long
+  // sunset stretch (seg6-12) calm so the sun's arrival lands, then run a NEW / boring / boring rhythm
+  // from seg13 on. The per-segment departures from baseline: pigs (seg3), yellow trees (seg4),
+  // red trees (seg19). Corner-creature departures are in the turns table below. ----
   const segmentConfigs: RoadSegmentConfig[] = [
-    { id: 'seg1',  length: 800,  scheme: 'RED_GREEN' },
-    { id: 'seg2',  length: 320,  scheme: 'ALL_GREEN' },
-    { id: 'seg3',  length: 400,  scheme: 'YELLOW_GREEN' },
-    { id: 'seg4',  length: 300,  scheme: 'RED_GREEN' },
-    { id: 'seg5',  length: 300,  scheme: 'ALL_GREEN' },
-    { id: 'seg6',  length: 300,  scheme: 'YELLOW_GREEN' },
-    { id: 'seg7',  length: 1200, scheme: 'RED_GREEN' },
-    { id: 'seg8',  length: 300,  scheme: 'ALL_GREEN' },
-    { id: 'seg9',  length: 300,  scheme: 'YELLOW_GREEN' },
-    { id: 'seg10', length: 800,  scheme: 'RED_GREEN' },
-    { id: 'seg11', length: 300,  scheme: 'ALL_GREEN' },
-    { id: 'seg12', length: 300,  scheme: 'YELLOW_GREEN' },
-    { id: 'seg13', length: 300,  scheme: 'RED_GREEN' },
-    { id: 'seg14', length: 400,  scheme: 'ALL_GREEN' },
-    { id: 'seg15', length: 300,  scheme: 'YELLOW_GREEN' },
-    { id: 'seg16', length: 300,  scheme: 'RED_GREEN' },
-    { id: 'seg17', length: 300,  scheme: 'ALL_GREEN' },
-    { id: 'seg18', length: 300,  scheme: 'YELLOW_GREEN' },
-    { id: 'seg19', length: 300,  scheme: 'RED_GREEN' },
+    { id: 'seg1',  length: 800,  scheme: 'ALL_GREEN',    pigs: false },  // opener: plain road, sunset just beginning
+    { id: 'seg2',  length: 320,  scheme: 'ALL_GREEN',    pigs: false },  // the CAT crossing (cat_motion's CAT_SEGMENTS)
+    { id: 'seg3',  length: 400,  scheme: 'ALL_GREEN',    pigs: true  },  // NEW: pigs first appear
+    { id: 'seg4',  length: 300,  scheme: 'YELLOW_GREEN', pigs: false },  // NEW: first new tree colour (golden)
+    { id: 'seg5',  length: 300,  scheme: 'ALL_GREEN',    pigs: false },  // NEW: first giraffe (at its corner)
+    { id: 'seg6',  length: 300,  scheme: 'ALL_GREEN',    pigs: false },  // -- seg6-12: boring apart from the sunset --
+    { id: 'seg7',  length: 1200, scheme: 'ALL_GREEN',    pigs: false },  // the long sun-ward stretch (mid-tower + sunset)
+    { id: 'seg8',  length: 300,  scheme: 'ALL_GREEN',    pigs: false },
+    { id: 'seg9',  length: 300,  scheme: 'ALL_GREEN',    pigs: false },
+    { id: 'seg10', length: 800,  scheme: 'ALL_GREEN',    pigs: false },  // the second sun-ward stretch
+    { id: 'seg11', length: 300,  scheme: 'ALL_GREEN',    pigs: false },
+    { id: 'seg12', length: 300,  scheme: 'ALL_GREEN',    pigs: false },
+    { id: 'seg13', length: 300,  scheme: 'ALL_GREEN',    pigs: false },  // NEW: crocodile lagoon (at its corner)
+    { id: 'seg14', length: 400,  scheme: 'ALL_GREEN',    pigs: false },  // boring
+    { id: 'seg15', length: 300,  scheme: 'ALL_GREEN',    pigs: false },  // boring
+    { id: 'seg16', length: 300,  scheme: 'ALL_GREEN',    pigs: false },  // NEW: zebra (at its corner)
+    { id: 'seg17', length: 300,  scheme: 'ALL_GREEN',    pigs: false },  // boring
+    { id: 'seg18', length: 300,  scheme: 'ALL_GREEN',    pigs: false },  // boring
+    { id: 'seg19', length: 300,  scheme: 'RED_GREEN',    pigs: false },  // NEW: red trees, the finale before the terminus
   ];
   const order: SegId[] = segmentConfigs.map((c) => c.id);
 
   // ---- the intersections: the turn joining each segment to the next (signed degrees, + right /
-  // - left). The corner creatures are authored explicitly: a crocodile lagoon greets you at the first
-  // corner, elephants and giraffes lead, zebras join, then crocodiles reappear later. Crocodiles only
-  // sit at RIGHT turns (their lagoon is on the corner's left = a right turn's outer side; enforced by
-  // test_model). seg19 has no entry here — it ends at the terminus, derived below as the one segment
-  // that never turns out. ----
+  // - left). ELEPHANT is the default corner creature; the others are the rare departures that give a
+  // segment its character — a GIRAFFE debut (seg5), the CROCODILE lagoon (seg13), a ZEBRA (seg16).
+  // Crocodiles only sit at RIGHT turns (their lagoon is on the corner's left = a right turn's outer
+  // side; enforced by test_model) — seg13's +15 turn qualifies. The turn ANGLES are unchanged: the
+  // early ones are locked by the sunset calibration (seg7/seg10 headings, test_model), so variety
+  // rides on the creatures and trees, not the geometry. seg19 has no entry here — it ends at the
+  // terminus, derived below as the one segment that never turns out. ----
   const turns: IxnSpec[] = [
-    intersectionFrom('seg1',  'seg2',   50, C),
+    intersectionFrom('seg1',  'seg2',   50, E),
     intersectionFrom('seg2',  'seg3',  -70, E),
-    intersectionFrom('seg3',  'seg4',   20, G),
-    intersectionFrom('seg4',  'seg5',   20, G),
-    intersectionFrom('seg5',  'seg6',  -70, Z),
-    intersectionFrom('seg6',  'seg7',  -70, G),
+    intersectionFrom('seg3',  'seg4',   20, E),
+    intersectionFrom('seg4',  'seg5',   20, E),
+    intersectionFrom('seg5',  'seg6',  -70, G),   // NEW: first giraffe
+    intersectionFrom('seg6',  'seg7',  -70, E),
     intersectionFrom('seg7',  'seg8',   80, E),
-    intersectionFrom('seg8',  'seg9',   15, Z),
-    intersectionFrom('seg9',  'seg10', -70, G),
-    intersectionFrom('seg10', 'seg11',  15, C),
-    intersectionFrom('seg11', 'seg12',  15, Z),
-    intersectionFrom('seg12', 'seg13',  15, G),
-    intersectionFrom('seg13', 'seg14',  15, E),
-    intersectionFrom('seg14', 'seg15', -50, Z),
-    intersectionFrom('seg15', 'seg16',  50, C),
-    intersectionFrom('seg16', 'seg17', -50, E),
-    intersectionFrom('seg17', 'seg18',  50, Z),
-    intersectionFrom('seg18', 'seg19', -50, G),
+    intersectionFrom('seg8',  'seg9',   15, E),
+    intersectionFrom('seg9',  'seg10', -70, E),
+    intersectionFrom('seg10', 'seg11',  15, E),
+    intersectionFrom('seg11', 'seg12',  15, E),
+    intersectionFrom('seg12', 'seg13',  15, E),
+    intersectionFrom('seg13', 'seg14',  15, C),   // NEW: crocodile lagoon (right turn)
+    intersectionFrom('seg14', 'seg15', -50, E),
+    intersectionFrom('seg15', 'seg16',  50, E),
+    intersectionFrom('seg16', 'seg17', -50, Z),   // NEW: zebra
+    intersectionFrom('seg17', 'seg18',  50, E),
+    intersectionFrom('seg18', 'seg19', -50, E),
   ];
 
   // ---- build the segments (intrinsic state only), then wire the graph ----

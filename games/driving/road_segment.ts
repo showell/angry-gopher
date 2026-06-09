@@ -52,13 +52,15 @@ export interface RoadSegment {
   midTower: { beaconOffset: number } | null;   // a tower the segment OWNS, halfway down (long segments only); null otherwise
 }
 
-// The AUTHORED spec for a segment: its id, length, and tree scheme. Everything else a
-// RoadSegment carries is either intrinsic (built here) or depends on the bracketing
-// intersections (wired by world.ts once those exist).
+// The AUTHORED spec for a segment: its id, length, tree scheme, and whether the pig row gathers
+// near its end. Everything else a RoadSegment carries is either intrinsic (built here) or depends
+// on the bracketing intersections (wired by world.ts once those exist). Pigs are a per-segment
+// VARIETY element now (a rare roadside surprise), not a constant — the cow herd is the constant.
 export interface RoadSegmentConfig {
   id: SegId;
   length: number;
   scheme: Scheme;
+  pigs: boolean;
 }
 
 // Build a segment's INTRINSIC state from its config: dimensions, roadside trees, and the
@@ -75,7 +77,7 @@ export function buildRoadSegment(c: RoadSegmentConfig): RoadSegment {
     width: LANE_WIDTH,
     scheme: c.scheme,
     trees,
-    critters: farmCritters(c.length, LANE_WIDTH / 2, TREE_ROAD_OFFSET),
+    critters: farmCritters(c.length, LANE_WIDTH / 2, TREE_ROAD_OFFSET, c.pigs),
     cats: segmentCats(segNum, LANE_WIDTH / 2, TREE_ROAD_OFFSET, trees),   // only certain segments get a cat
     entryIxn: null,
     exitIxn: '',   // a placeholder: set to the real id when this segment's exit intersection is built

@@ -1,6 +1,7 @@
-// farm_critter — the roadside farm animals on each segment: a cow herd (a bull leading 10 cows and
-// 4 calves) early on the left, and a row of pigs near the end on the right. Placement is fully
-// deterministic — a staggered grid with sine/cosine jitter, no randomness.
+// farm_critter — the roadside farm animals on a segment: a cow herd (a bull leading 10 cows and
+// 4 calves) early on the left — the BORING CONSTANT, on every segment — and, only when the segment
+// asks for them, a row of pigs near the end on the right (a rare variety element, off by default).
+// Placement is fully deterministic — a staggered grid with sine/cosine jitter, no randomness.
 
 import type { Critter } from './critter.ts';
 
@@ -21,11 +22,12 @@ const HERD_JITTER_ACROSS = 1.2;    // deterministic wobble of the scatter, acros
 const PIG_DIST_BEFORE_END = 60;    // pigs gather this far before the next intersection
 const PIG_BACK_ROW_OFFSET = 6;     // the extra back row of pigs sits this much further from the road
 
-// The farm critters lining a segment: the cow herd near the start (left), the pigs near the end
-// (right). `treeLineOffset` is how far roadside trees sit beyond the lane edge — the bull lines its
-// rear up with that tree line.
-export function farmCritters(length: number, laneHalfWidth: number, treeLineOffset: number): Critter[] {
-  return [...cowHerd(laneHalfWidth, treeLineOffset), ...pigRow(length, laneHalfWidth + HERD_ROAD_OFFSET)];
+// The farm critters lining a segment: the cow herd near the start (left), always; and the pigs near
+// the end (right) only when `pigs` is set (a per-segment variety element). `treeLineOffset` is how
+// far roadside trees sit beyond the lane edge — the bull lines its rear up with that tree line.
+export function farmCritters(length: number, laneHalfWidth: number, treeLineOffset: number, pigs: boolean): Critter[] {
+  const herd = cowHerd(laneHalfWidth, treeLineOffset);
+  return pigs ? [...herd, ...pigRow(length, laneHalfWidth + HERD_ROAD_OFFSET)] : herd;
 }
 
 // 15 cows early in the segment: a BULL at the front (lowest along — seen first as you leave the

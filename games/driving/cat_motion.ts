@@ -39,8 +39,12 @@ const CROSS_FRAMES = ENTERS_ROAD_STEPS + FROZEN_STEPS + ESCAPES_STEPS;
 const ROAD_BUFFER = 5;          // metres of clear road kept between rider and cat (crossing finishes early)
 const STRIDE_STEPS = 5;         // target rider steps per leg cycle (rounded to a whole cycle per phase)
 
-// which segments get a crossing cat (by segment number), and where it spawns / how big it is.
-const CAT_SEGMENTS = new Set([2, 5, 8, 15]);
+// which segments get a crossing cat (by segment number), and where it spawns / how big it is. The
+// cat DEBUTS alone at seg2, then REAPPEARS irregularly on the late NEW segments (13, 19) — never
+// every segment (a hazard seen everywhere is only a tax), but more than once so a rider who missed
+// it the first time still meets it, and the reappearances stack with those segments' other features
+// as the route's complexity ramps up.
+const CAT_SEGMENTS = new Set([2, 13, 19]);
 const CAT_HEIGHT = 1.7;         // metres, ground to ear tips
 const CAT_ALONG = 105;          // desired spot down the road; rounded up to just past a tree
 const CAT_ROAD_GAP = 1.5;       // clearance beyond the roadside tree line, each side
