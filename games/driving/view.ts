@@ -12,7 +12,7 @@ import { gazeAngle } from './model.ts';
 import type { World } from './world.ts';
 import type { RoadSegment } from './road_segment.ts';
 import { critterScenery } from './critter.ts';
-import { beastScenery, beastAcross, beastWalkPhase } from './beast.ts';
+import { beastScenery, beastPose } from './beast.ts';
 import { treeScenery } from './tree.ts';
 import { ROAD } from './scenery.ts';
 import type { Scenery, RiderPt, Quad, Poly3 } from './scenery.ts';
@@ -118,9 +118,9 @@ export function buildScene(state: RiderState, world: World, step: number, headYa
       // The beast crosses the road as the rider nears it — but "nears" is measured in the rider's own
       // along-coordinate, which we only have for his current segment (d === 0). Beasts further ahead
       // sit at their waiting spot until the rider enters their segment.
-      const across = d === 0 ? beastAcross(b, state.along, state.v) : b.startAcross;
-      const walk = d === 0 ? beastWalkPhase(b, state.along, state.v) : 0;
-      scenery.push(beastScenery({ at: at(d, b.along, across + hw), height: b.height, faceRight: b.faceRight, form: b.form, walk }));
+      const pose = d === 0 ? beastPose(b, state.along, state.v)
+                           : { across: b.startAcross, walk: 0, headFront: false };
+      scenery.push(beastScenery({ at: at(d, b.along, pose.across + hw), height: b.height, faceRight: b.faceRight, form: b.form, walk: pose.walk, headFront: pose.headFront }));
     }
 
     // this segment's exit JOINT draws its corner details (approach road + sector + rail + creatures).

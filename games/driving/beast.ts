@@ -66,9 +66,9 @@ const PAW:       Bone = { length: 0.05, joint: -1.571, r0: 0.034, r1: 0.030 };
 // the WALK: each leg swings fore-aft about its hip (thigh) and bends the knee on the forward (lift)
 // half of the swing, so it reads as stepping rather than sliding. The four legs run on a diagonal
 // gait — near-front pairs with far-hind, near-hind with far-front (half a cycle apart). The gait
-// PHASE is driven by the crossing progress (beastWalkPhase), so the legs cycle as the cat translates
-// and sit at rest (phase a whole number of cycles) the instant it stops.
-const STRIDE_CYCLES = 4;        // leg cycles over the whole crossing
+// PHASE counts only the steps SPENT WALKING (the freeze doesn't advance it), so the legs hold at rest
+// through the freeze and pick the cycle back up on the way out. One full leg cycle per STRIDE_STEPS.
+const STRIDE_STEPS = 5;         // rider steps per full leg cycle
 const SWING_AMP = 0.40;         // rad — how far the thigh swings fore/aft
 const KNEE_AMP = 0.55;          // rad — extra knee bend at the top of the forward swing
 
@@ -82,6 +82,10 @@ const FAR_SETBACK = 0.06;   // the far leg of each pair sits this much further t
 // little behind it and lower, so (drawn behind the head, in shade) only its tip peeks out.
 const NEAR_EAR = { a: [-0.53, 0.84], tip: [-0.53, 1.04], b: [-0.43, 0.87] } as const;
 const FAR_EAR = { a: [-0.45, 0.86], tip: [-0.43, 1.00], b: [-0.35, 0.85] } as const;
+
+// the two ears seen FRONT-ON (during the freeze): symmetric triangles atop the head, about HEAD.cx.
+const FRONT_EAR_L = { a: [HEAD.cx - 0.15, 0.86], tip: [HEAD.cx - 0.10, 1.03], b: [HEAD.cx - 0.02, 0.88] } as const;
+const FRONT_EAR_R = { a: [HEAD.cx + 0.02, 0.88], tip: [HEAD.cx + 0.10, 1.03], b: [HEAD.cx + 0.15, 0.86] } as const;
 
 // the long tail off the rump, sweeping back and curling up at the tip — capsules between the nodes.
 const TAIL_NODES: P[] = [[0.72, 0.52], [0.94, 0.50], [1.08, 0.58], [1.14, 0.73]];
@@ -102,6 +106,7 @@ const NECK_EDGE = '#d23f80';
 export interface Beast {
   along: number;
   startAcross: number;   // waits here, beside the road (+ = right of centre)
+  midAcross: number;     // freezes here, head centre over the lane centreline
   endAcross: number;     // ends here, fully clear of the road (- = left of centre)
   height: number;        // standing height, metres
   faceRight: boolean;
@@ -111,7 +116,15 @@ export interface Beast {
 // The crossing is clocked in RIDER FRAMES, not metres: the beast starts to move when the rider is
 // BEAST_CROSS_FRAMES presses from reaching it (at his current speed) and is completely across by the
 // frame he arrives. So a faster rider gives the beast a shorter real distance to cover — same frames.
-export const BEAST_CROSS_FRAMES = 40;
+//
+// It runs in THREE phases, each a configurable number of those frames (steps):
+//   1. ENTERS  — walk in from the roadside until the centre of the head sphere is over the lane centre.
+//   2. FROZEN  — deer-in-the-headlights: stop dead, the head swivels 90° to face us, nothing moves.
+//   3. ESCAPES — bolt the rest of the way, clearing the road (tail tip and all) by the final frame.
+const CAT_ENTERS_ROAD_STEPS = 20;
+const CAT_FROZEN_STEPS = 10;
+const CAT_ESCAPES_STEPS = 10;
+export const BEAST_CROSS_FRAMES = CAT_ENTERS_ROAD_STEPS + CAT_FROZEN_STEPS + CAT_ESCAPES_STEPS;
 
 // Close the crossing — and release the rider's throttle hold — this far short of the beast, so it's
 // never right up against the camera (which distorts things badly up close). The whole crossing clock
@@ -131,15 +144,35 @@ function crossT(gap: number, v: number): number {
   return clamp(1 - e / (BEAST_CROSS_FRAMES * v), 0, 1);
 }
 
-// the beast's CURRENT across-offset, lerped from its waiting spot to fully-clear as the rider nears.
-export function beastAcross(b: Beast, riderAlong: number, v: number): number {
-  return lerp(b.startAcross, b.endAcross, crossT(b.along - riderAlong, v));
+// the beast's whole pose this frame, a pure function of how near the rider is: lateral offset, gait
+// phase, and whether the head is swivelled to face us.
+export interface BeastPose { across: number; walk: number; headFront: boolean }
+
+// gait phase from the number of steps SPENT WALKING — STRIDE_STEPS per cycle. The phase boundaries
+// (ENTERS, FROZEN) are whole multiples of STRIDE_STEPS, so the legs land exactly at rest at the freeze
+// and at the finish.
+function gait(walkingSteps: number): number {
+  return (walkingSteps / STRIDE_STEPS) * 2 * Math.PI;
 }
 
-// the beast's current gait PHASE (radians): STRIDE_CYCLES leg-cycles spread across the crossing, so it
-// steps in time with its translation and is back at rest (a whole number of cycles) once across.
-export function beastWalkPhase(b: Beast, riderAlong: number, v: number): number {
-  return STRIDE_CYCLES * 2 * Math.PI * crossT(b.along - riderAlong, v);
+// Map the single crossing clock (crossT) onto a step counter 0..BEAST_CROSS_FRAMES, then split it into
+// the three phases: walk in to the centre, freeze and face us, then bolt clear. The head swivels to
+// front ONLY in the freeze — two 90° swivels in all (profile -> front entering the freeze, front ->
+// profile leaving it).
+export function beastPose(b: Beast, riderAlong: number, v: number): BeastPose {
+  const step = crossT(b.along - riderAlong, v) * BEAST_CROSS_FRAMES;
+  const freezeAt = CAT_ENTERS_ROAD_STEPS;
+  const escapeAt = CAT_ENTERS_ROAD_STEPS + CAT_FROZEN_STEPS;
+
+  if (step <= freezeAt) {                                          // ENTERS: walk in to the lane centre
+    const p = freezeAt > 0 ? step / freezeAt : 1;
+    return { across: lerp(b.startAcross, b.midAcross, p), walk: gait(step), headFront: false };
+  }
+  if (step <= escapeAt) {                                          // FROZEN: stand dead still, facing us
+    return { across: b.midAcross, walk: gait(freezeAt), headFront: true };
+  }
+  const p = clamp((step - escapeAt) / CAT_ESCAPES_STEPS, 0, 1);    // ESCAPES: bolt clear of the road
+  return { across: lerp(b.midAcross, b.endAcross, p), walk: gait(freezeAt + (step - escapeAt)), headFront: false };
 }
 
 // Is the beast still ahead (beyond the buffer) AND inside the BEAST_CROSS_FRAMES window — i.e. crossing
@@ -161,6 +194,7 @@ export interface BeastView {
   faceRight: boolean;
   form: BeastForm;
   walk: number;        // gait phase (radians); 0 at rest
+  headFront: boolean;  // true while frozen — the head is swivelled to face us
 }
 
 const CAT_HEIGHT = 1.5;          // metres — ground to the top of the ears
@@ -171,8 +205,8 @@ const CAT_BEYOND_TREE = 2;       // sits this far PAST the rounding tree, so the
 
 // Build a cat at a given SIZE. A beast's size (height in metres) is decoupled from its form (the
 // unit-frame skeleton), so the same cat can be a kitten or full-grown — only the height changes.
-function cat(along: number, startAcross: number, endAcross: number, height: number, faceRight: boolean): Beast {
-  return { along, startAcross, endAcross, height, faceRight, form: CAT };
+function cat(along: number, startAcross: number, midAcross: number, endAcross: number, height: number, faceRight: boolean): Beast {
+  return { along, startAcross, midAcross, endAcross, height, faceRight, form: CAT };
 }
 
 // the smallest right-side tree `along` at or after `desired` — the cat is tucked just past it. Trees
@@ -189,13 +223,17 @@ function nextTreeAlong(desired: number, trees: Tree[]): number {
 export function segmentBeasts(laneHalfWidth: number, treeLineOffset: number, trees: Tree[]): Beast[] {
   const treeX = laneHalfWidth + treeLineOffset;
   const start = treeX + CAT_ROAD_GAP;   // waiting spot, beside the road on the right
+  // Freeze spot: the head sphere sits at local x HEAD.cx, which maps to an across offset of HEAD.cx *
+  // height from the feet anchor — so to put the head CENTRE on the lane centreline, the anchor sits at
+  // -HEAD.cx * height.
+  const mid = -HEAD.cx * CAT_HEIGHT;
   // The far side: the cat's sprite reaches PROFILE_REACH * height from its anchor (the tail tip), so to
   // be COMPLETELY clear of the road — tail and all — the anchor must sit a full reach (plus the same
   // road gap) past the left edge.
   const end = -(laneHalfWidth + CAT_ROAD_GAP + PROFILE_REACH * CAT_HEIGHT);
   // round the along UP to a tree and sit just beyond it, so a tree stands between the rider and the cat.
   const along = nextTreeAlong(CAT_ALONG, trees) + CAT_BEYOND_TREE;
-  return [cat(along, start, end, CAT_HEIGHT, false)];
+  return [cat(along, start, mid, end, CAT_HEIGHT, false)];
 }
 
 // Wrap a placed beast as Scenery. Like critters, it carries no extra up-close detail yet, so near
@@ -287,24 +325,31 @@ function drawBeast(ctx: Ctx, b: BeastView, project: Project): void {
   ctx.lineCap = 'round';
 
   if (DEBUG) drawDiagnostic(ctx);
-  else drawCat(ctx, b.form.palette, b.walk);
+  else drawCat(ctx, b.form.palette, b.walk, b.headFront);
 
   ctx.restore();
 }
 
 // the finished cat: the body is the internal solids drawn directly; legs, ears and face on top. The
 // legs run on a DIAGONAL gait — near-front with far-hind (phase `walk`), near-hind with far-front
-// (half a cycle on).
-function drawCat(ctx: Ctx, pal: BeastForm['palette'], walk: number): void {
+// (half a cycle on). `headFront` swivels the head to face us (the frozen, deer-in-the-headlights look):
+// the sphere is the same from any angle, so only the ears and face features change.
+function drawCat(ctx: Ctx, pal: BeastForm['palette'], walk: number, headFront: boolean): void {
   const opp = walk + Math.PI;
   drawLeg(ctx, far(FRONT_HIP), pal.shadow, pal.line, opp);    // far pair, behind the body, in shade
   drawLeg(ctx, far(HIND_HIP), pal.shadow, pal.line, walk);
-  drawEar(ctx, FAR_EAR, pal.shadow, pal.line);               // far ear, behind the head (its base is hidden)
+  if (!headFront) drawEar(ctx, FAR_EAR, pal.shadow, pal.line);   // profile: far ear peeks behind the head
   drawBody(ctx, pal.body, pal.line);                         // head + neck + torso + tail as overlapping solids
   drawLeg(ctx, FRONT_HIP, pal.body, pal.line, walk);         // near pair, over the body
   drawLeg(ctx, HIND_HIP, pal.body, pal.line, opp);
-  drawEar(ctx, NEAR_EAR, pal.body, pal.line);                // near ear, on top of the head
-  drawFace(ctx, pal.eye, pal.nose);
+  if (headFront) {                                           // FROZEN: two symmetric ears, a face-on muzzle
+    drawEar(ctx, FRONT_EAR_L, pal.body, pal.line);
+    drawEar(ctx, FRONT_EAR_R, pal.body, pal.line);
+    drawFaceFront(ctx, pal);
+  } else {                                                   // PROFILE: one ear on top, one-eye muzzle
+    drawEar(ctx, NEAR_EAR, pal.body, pal.line);
+    drawFace(ctx, pal.eye, pal.nose);
+  }
 }
 
 // the diagnostic view: solids as see-through outlines, legs as raw skeleton, the NECK in solid pink.
@@ -373,4 +418,44 @@ function drawFace(ctx: Ctx, eye: string, nose: string): void {
   ctx.beginPath();
   ctx.arc(HEAD.nose[0], HEAD.nose[1], 0.018, 0, Math.PI * 2);
   ctx.fill();
+}
+
+// the FRONT-ON muzzle, shown during the freeze: two eyes, a centred nose, a little mouth, and whiskers
+// — all laid out symmetrically about the head centre (cx, cy).
+function drawFaceFront(ctx: Ctx, pal: BeastForm['palette']): void {
+  const cx = HEAD.cx, cy = HEAD.cy;
+
+  ctx.fillStyle = pal.eye;                                   // two eyes, level, either side of centre
+  for (const ex of [cx - 0.07, cx + 0.07]) {
+    ctx.beginPath();
+    ctx.arc(ex, cy + 0.03, 0.028, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  ctx.fillStyle = pal.nose;                                  // nose — a small inverted triangle, centred
+  ctx.beginPath();
+  ctx.moveTo(cx - 0.025, cy - 0.03);
+  ctx.lineTo(cx + 0.025, cy - 0.03);
+  ctx.lineTo(cx, cy - 0.065);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.strokeStyle = pal.line;                                // mouth — down from the nose, then a curl each way
+  ctx.beginPath();
+  ctx.moveTo(cx, cy - 0.065);
+  ctx.lineTo(cx, cy - 0.10);
+  ctx.quadraticCurveTo(cx - 0.03, cy - 0.10, cx - 0.055, cy - 0.07);
+  ctx.moveTo(cx, cy - 0.10);
+  ctx.quadraticCurveTo(cx + 0.03, cy - 0.10, cx + 0.055, cy - 0.07);
+  ctx.stroke();
+
+  ctx.beginPath();                                           // whiskers — three a side, fanning from the muzzle
+  for (let i = 0; i < 3; i++) {
+    const dy = (i - 1) * 0.028;
+    ctx.moveTo(cx - 0.03, cy - 0.05 + dy * 0.3);
+    ctx.lineTo(cx - 0.24, cy - 0.05 + dy);
+    ctx.moveTo(cx + 0.03, cy - 0.05 + dy * 0.3);
+    ctx.lineTo(cx + 0.24, cy - 0.05 + dy);
+  }
+  ctx.stroke();
 }
