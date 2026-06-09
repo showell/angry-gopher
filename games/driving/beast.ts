@@ -7,9 +7,9 @@
 //   • LEGS  — four articulated chains (upper leg, lower leg, paw) joined by knee/ankle JOINTS that
 //             have no size; a POSE is the set of joint ANGLES, walked by forward kinematics.
 //   • TAIL  — a tapering chain of capsules off the rump.
-// Filled in one colour the capsules and sphere union into a single connected body. Everything lives
-// in a frame where the beast stands 1 unit tall (feet on y = 0, ear tips at 1), facing LEFT, x toward
-// the tail.
+// Filled in one colour the capsules and sphere overlap into a single connected body (no smoothed skin
+// over them — that was tried and dropped). Everything lives in a frame where the beast stands 1 unit
+// tall (feet on y = 0, ear tips at 1), facing LEFT, x toward the tail.
 //
 // DEBUG (below) swaps in a diagnostic view: the neck solid pink, the other solids as see-through
 // outlines, the legs as their raw skeleton — so the underlying construction is visible. Turn it off
@@ -85,7 +85,6 @@ const BONE = '#1f4fd8';     // skeleton bones
 const JOINT = '#e03b3b';    // skeleton joints
 const NECK_FILL = '#ff5fa6';
 const NECK_EDGE = '#d23f80';
-const SKIN = '#1faa4f';     // the stretched-skin envelope (diagnostic)
 
 // A beast in its SEGMENT's frame, like a Critter: along/across placement, world height, facing.
 export interface Beast {
@@ -170,90 +169,27 @@ function capsule(ctx: Ctx, A: P, B: P, rA: number, rB: number, fill: string, lin
   fillStroke(ctx, fill, line);
 }
 
-// Extend the current path with a smooth OPEN curve through pts (Catmull-Rom -> cubic Béziers).
-function smoothOpen(ctx: Ctx, pts: P[]): void {
-  ctx.moveTo(pts[0][0], pts[0][1]);
-  for (let i = 0; i < pts.length - 1; i++) {
-    const p0 = pts[i - 1] ?? pts[i];
-    const p1 = pts[i];
-    const p2 = pts[i + 1];
-    const p3 = pts[i + 2] ?? pts[i + 1];
-    const c1x = p1[0] + (p2[0] - p0[0]) / 6, c1y = p1[1] + (p2[1] - p0[1]) / 6;
-    const c2x = p2[0] - (p3[0] - p1[0]) / 6, c2y = p2[1] - (p3[1] - p1[1]) / 6;
-    ctx.bezierCurveTo(c1x, c1y, c2x, c2y, p2[0], p2[1]);
-  }
-}
-
-type Circle = { c: P; r: number };
-
-// sample a capsule into overlapping circles along its length, so a chain of them fills the cylinder.
-function sampleCapsule(out: Circle[], A: P, B: P, rA: number, rB: number, n: number): void {
-  for (let k = 0; k <= n; k++) {
-    const t = k / n;
-    out.push({ c: [A[0] + (B[0] - A[0]) * t, A[1] + (B[1] - A[1]) * t], r: rA + (rB - rA) * t });
-  }
-}
-
-// every internal solid as a cloud of circles (the capsules sampled along their length).
-function bodyCircles(): Circle[] {
-  const out: Circle[] = [{ c: [HEAD.cx, HEAD.cy], r: HEAD.r }];
-  sampleCapsule(out, NECK_A, NECK_B, NECK_R, NECK_R, 4);
-  sampleCapsule(out, TORSO_A, TORSO_B, TORSO_R, TORSO_R, 8);
+// The body is just the internal solids drawn directly in the body colour: torso, neck, head and tail
+// overlap, so the same fill unions them into one connected shape. We fill them ALL first (so no fill
+// paints over another's outline), then stroke them ALL — the only seams that show are where two solids
+// meet, which is fine for now. (A smoothed "skin" silhouette over these solids was tried and dropped;
+// it flattened the face and rippled the back. Revisit once motion lands.)
+function drawBody(ctx: Ctx, fill: string, line: string): void {
+  ctx.fillStyle = fill;
+  capsulePath(ctx, TORSO_A, TORSO_B, TORSO_R, TORSO_R); ctx.fill();
+  capsulePath(ctx, NECK_A, NECK_B, NECK_R, NECK_R); ctx.fill();
   for (let i = 0; i < TAIL_NODES.length - 1; i++) {
-    sampleCapsule(out, TAIL_NODES[i], TAIL_NODES[i + 1], TAIL_RADII[i], TAIL_RADII[i + 1], 4);
+    capsulePath(ctx, TAIL_NODES[i], TAIL_NODES[i + 1], TAIL_RADII[i], TAIL_RADII[i + 1]); ctx.fill();
   }
-  return out;
-}
+  ctx.beginPath(); ctx.arc(HEAD.cx, HEAD.cy, HEAD.r, 0, Math.PI * 2); ctx.fill();
 
-// The SKIN is the outer silhouette of the UNION of those circles: scanning across x, the TOP line is
-// the highest circle-top covering that x and the BOTTOM line is the lowest circle-bottom. So the skin
-// lies exactly on whichever solid is outermost there — hugging each one — and the only place it leaves
-// a circle is the local hand-off where the next solid becomes the outer one (which the smooth curve
-// then rounds). No chords across circles, no spanning the gaps.
-function buildSkin(): { top: P[]; bottom: P[] } {
-  const circles = bodyCircles();
-  let minX = Infinity, maxX = -Infinity;
-  for (const c of circles) { minX = Math.min(minX, c.c[0] - c.r); maxX = Math.max(maxX, c.c[0] + c.r); }
-  // The skin is sampled as scan-lines in x, so near-vertical stretches of the outline (the front of
-  // the face, the tip of the tail) need a fine step or they flatten — sample densely.
-  const step = (maxX - minX) / 240;
-  const top: P[] = [], bottom: P[] = [];
-  for (let x = minX; x <= maxX + 1e-9; x += step) {
-    let yt = -Infinity, yb = Infinity;
-    for (const c of circles) {
-      const dx = x - c.c[0];
-      if (Math.abs(dx) <= c.r) {
-        const dy = Math.sqrt(c.r * c.r - dx * dx);
-        if (c.c[1] + dy > yt) yt = c.c[1] + dy;
-        if (c.c[1] - dy < yb) yb = c.c[1] - dy;
-      }
-    }
-    if (yt > -Infinity) { top.push([x, yt]); bottom.push([x, yb]); }
+  ctx.strokeStyle = line;
+  capsulePath(ctx, TORSO_A, TORSO_B, TORSO_R, TORSO_R); ctx.stroke();
+  capsulePath(ctx, NECK_A, NECK_B, NECK_R, NECK_R); ctx.stroke();
+  for (let i = 0; i < TAIL_NODES.length - 1; i++) {
+    capsulePath(ctx, TAIL_NODES[i], TAIL_NODES[i + 1], TAIL_RADII[i], TAIL_RADII[i + 1]); ctx.stroke();
   }
-  return { top, bottom };
-}
-
-// Trace a CLOSED smooth curve through pts (Catmull-Rom -> cubic Béziers, wrapping around).
-function smoothClosed(ctx: Ctx, pts: P[]): void {
-  const n = pts.length;
-  ctx.moveTo(pts[0][0], pts[0][1]);
-  for (let i = 0; i < n; i++) {
-    const p0 = pts[(i - 1 + n) % n], p1 = pts[i], p2 = pts[(i + 1) % n], p3 = pts[(i + 2) % n];
-    const c1x = p1[0] + (p2[0] - p0[0]) / 6, c1y = p1[1] + (p2[1] - p0[1]) / 6;
-    const c2x = p2[0] - (p3[0] - p1[0]) / 6, c2y = p2[1] - (p3[1] - p1[1]) / 6;
-    ctx.bezierCurveTo(c1x, c1y, c2x, c2y, p2[0], p2[1]);
-  }
-  ctx.closePath();
-}
-
-// Fill the cat's body as the SKIN silhouette: the top envelope, then the bottom envelope reversed,
-// closed into one smooth shape. Head, neck, torso and tail are all inside this single outline.
-function fillSkin(ctx: Ctx, fill: string, line: string): void {
-  const { top, bottom } = buildSkin();
-  const loop = [...top, ...bottom.slice(1, -1).reverse()];
-  ctx.beginPath();
-  smoothClosed(ctx, loop);
-  fillStroke(ctx, fill, line);
+  ctx.beginPath(); ctx.arc(HEAD.cx, HEAD.cy, HEAD.r, 0, Math.PI * 2); ctx.stroke();
 }
 
 // Draw the beast in its unit frame (standing height 1, y up, feet at the origin), sized by distance.
@@ -277,12 +213,12 @@ function drawBeast(ctx: Ctx, b: BeastView, project: Project): void {
   ctx.restore();
 }
 
-// the finished cat: the body is the SKIN silhouette over the internal solids; legs, ears and face on top.
+// the finished cat: the body is the internal solids drawn directly; legs, ears and face on top.
 function drawCat(ctx: Ctx, pal: BeastForm['palette']): void {
   drawLeg(ctx, far(FRONT_HIP), pal.shadow, pal.line);   // far pair, behind the body, in shade
   drawLeg(ctx, far(HIND_HIP), pal.shadow, pal.line);
   drawEar(ctx, FAR_EAR, pal.shadow, pal.line);          // far ear, behind the head (its base is hidden)
-  fillSkin(ctx, pal.body, pal.line);                    // head + neck + torso + tail as one sleek skin
+  drawBody(ctx, pal.body, pal.line);                    // head + neck + torso + tail as overlapping solids
   drawLeg(ctx, FRONT_HIP, pal.body, pal.line);          // near pair, over the body
   drawLeg(ctx, HIND_HIP, pal.body, pal.line);
   drawEar(ctx, NEAR_EAR, pal.body, pal.line);           // near ear, on top of the head
@@ -305,11 +241,6 @@ function drawDiagnostic(ctx: Ctx): void {
   legSkeleton(ctx, far(HIND_HIP));
   legSkeleton(ctx, FRONT_HIP);
   legSkeleton(ctx, HIND_HIP);
-
-  const skin = buildSkin();   // the stretched-skin envelope: head -> body top -> tail, and the belly
-  ctx.strokeStyle = SKIN;
-  ctx.beginPath(); smoothOpen(ctx, skin.top); ctx.stroke();
-  ctx.beginPath(); smoothOpen(ctx, skin.bottom); ctx.stroke();
 
   capsulePath(ctx, NECK_A, NECK_B, NECK_R, NECK_R);   // the NECK, solid pink — the thing to look at
   ctx.fillStyle = NECK_FILL; ctx.fill();
