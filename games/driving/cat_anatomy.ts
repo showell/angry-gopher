@@ -37,16 +37,16 @@ export interface CatView {
 const DEBUG = false;
 
 export const CAT: CatForm = {
-  palette: { body: '#c8823c', shadow: '#8a571f', capsuleLine: '#6e4a24', line: '#3a2a17', eye: '#15100a', nose: '#b56b6b' },
+  palette: { body: '#c8823c', shadow: '#8a571f', capsuleLine: '#6e4a24', line: '#3a2a17', eye: '#2e74c4', nose: '#b56b6b' },
 };
 
 // body solids (unit frame): torso and neck are capsules (two endpoints + a radius); the head is a sphere.
 const TORSO_SHOULDER: P = [-0.14, 0.55];
 const TORSO_RUMP: P = [0.66, 0.55];
 const TORSO_RADIUS = 0.13;
-const NECK_BASE: P = [-0.178, 0.608];
-const NECK_TOP: P = [-0.382, 0.693];
-const NECK_RADIUS = 0.102;
+const NECK_BASE: P = [-0.1984, 0.6165];   // 20% shorter+thinner than the first cut (scaled 0.8 about its centre)
+const NECK_TOP: P = [-0.3616, 0.6845];
+const NECK_RADIUS = 0.0816;
 const HEAD = { cx: -0.48, cy: 0.76, r: 0.16, eye: [-0.53, 0.80], nose: [-0.63, 0.74] } as const;
 
 // silhouette facts cat_motion uses to place the cat: head-centre x (to centre the head on the lane)
@@ -261,8 +261,9 @@ function drawEar(ctx: Ctx, e: { a: P; tip: P; b: P }, fill: string, line: string
   fillStroke(ctx, fill, line);
 }
 
-// the PROFILE muzzle, seen side-on: one eye, the nose, and three whiskers fanning forward (the cat
-// faces -x, so the whiskers sweep past the nose toward the snout).
+// the PROFILE muzzle, seen side-on: one eye, the nose, and three SHORT whiskers low on the muzzle. In
+// profile the whiskers point mostly toward/away from us, so only a stub projects forward — about a third
+// of their head-on length.
 function drawFace(ctx: Ctx, pal: CatForm['palette']): void {
   ctx.fillStyle = pal.eye;
   ctx.beginPath();
@@ -276,9 +277,9 @@ function drawFace(ctx: Ctx, pal: CatForm['palette']): void {
   ctx.strokeStyle = pal.line;
   ctx.beginPath();
   for (let i = 0; i < 3; i++) {
-    const dy = (i - 1) * 0.03;
-    ctx.moveTo(HEAD.nose[0] + 0.02, HEAD.nose[1] + dy * 0.3);
-    ctx.lineTo(HEAD.nose[0] - 0.20, HEAD.nose[1] + dy);
+    const dy = (i - 1) * 0.022;
+    ctx.moveTo(HEAD.nose[0] + 0.01, 0.70 + dy * 0.3);
+    ctx.lineTo(HEAD.nose[0] - 0.06, 0.70 + dy);
   }
   ctx.stroke();
 }
