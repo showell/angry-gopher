@@ -16,6 +16,7 @@
 // for the finished cat.
 
 import type { Project, Ctx, Scenery } from './scenery.ts';
+import type { Tree } from './tree.ts';
 
 const DEBUG = false;   // set true for the diagnostic view (pink neck + skeleton over transparent solids)
 
@@ -101,17 +102,24 @@ export interface Beast {
 // The crossing is clocked in RIDER FRAMES, not metres: the beast starts to move when the rider is
 // BEAST_CROSS_FRAMES presses from reaching it (at his current speed) and is completely across by the
 // frame he arrives. So a faster rider gives the beast a shorter real distance to cover — same frames.
-export const BEAST_CROSS_FRAMES = 10;
+export const BEAST_CROSS_FRAMES = 20;
+
+// Close the crossing — and release the rider's throttle hold — this far short of the beast, so it's
+// never right up against the camera (which distorts things badly up close). The whole crossing clock
+// counts down to a point BEAST_ROAD_BUFFER before the beast, not to the beast itself.
+export const BEAST_ROAD_BUFFER = 8;   // metres
 
 const clamp = (x: number, lo: number, hi: number): number => Math.max(lo, Math.min(hi, x));
 const lerp = (a: number, b: number, t: number): number => a + (b - a) * t;
 
-// crossing progress 0..1 from the rider's along-gap to the beast (m) and his speed (m/press):
-// 0 until he is BEAST_CROSS_FRAMES frames away, then linear to 1 as he arrives (gap -> 0).
+// crossing progress 0..1 from the rider's along-gap to the beast (m) and his speed (m/press). The gap
+// is measured to a point BEAST_ROAD_BUFFER short of the beast: 0 until he is BEAST_CROSS_FRAMES frames
+// from THAT point, then linear to 1 as he reaches it — so the beast is clear with road still to spare.
 function crossT(gap: number, v: number): number {
-  if (gap <= 0) return 1;                                  // rider has reached/passed it — fully across
+  const e = gap - BEAST_ROAD_BUFFER;
+  if (e <= 0) return 1;                                    // within the buffer — fully across already
   if (v <= 1e-6) return 0;                                 // stopped: the frame-clock isn't ticking
-  return clamp(1 - gap / (BEAST_CROSS_FRAMES * v), 0, 1);
+  return clamp(1 - e / (BEAST_CROSS_FRAMES * v), 0, 1);
 }
 
 // the beast's CURRENT across-offset, lerped from its waiting spot to fully-clear as the rider nears.
@@ -119,11 +127,11 @@ export function beastAcross(b: Beast, riderAlong: number, v: number): number {
   return lerp(b.startAcross, b.endAcross, crossT(b.along - riderAlong, v));
 }
 
-// Is the beast still ahead AND inside the BEAST_CROSS_FRAMES window — i.e. crossing in front of us
-// right now? While this holds the rider must not accelerate (he sees the beast and holds off).
+// Is the beast still ahead (beyond the buffer) AND inside the BEAST_CROSS_FRAMES window — i.e. crossing
+// in front of us right now? While this holds the rider must not accelerate (he sees it and holds off).
 function beastInDanger(b: Beast, riderAlong: number, v: number): boolean {
-  const gap = b.along - riderAlong;
-  return gap > 0 && gap <= BEAST_CROSS_FRAMES * v;
+  const e = (b.along - riderAlong) - BEAST_ROAD_BUFFER;
+  return e > 0 && e <= BEAST_CROSS_FRAMES * v;
 }
 
 // Any beast on this segment crossing in front of the rider right now? (The model's accel gate.)
@@ -139,10 +147,11 @@ export interface BeastView {
   form: BeastForm;
 }
 
-const CAT_HEIGHT = 2.8;          // metres — a big SAFARI-sized cat, ground to the top of the ears
-const CAT_ALONG = 65;            // just past the cow herd (which ends ~55)
+const CAT_HEIGHT = 1.4;          // metres — half the earlier safari size, ground to the top of the ears
+const CAT_ALONG = 95;            // desired spot down the road (was 65; +30 for more crossing time)
 const CAT_ROAD_GAP = 1.5;        // it sits this far beyond the roadside tree line, facing the road
 const PROFILE_REACH = 1.14;      // tail tip — how far the drawing reaches from its anchor (unit-frame x)
+const CAT_BEYOND_TREE = 2;       // sits this far PAST the rounding tree, so the tree reads in front of it
 
 // Build a cat at a given SIZE. A beast's size (height in metres) is decoupled from its form (the
 // unit-frame skeleton), so the same cat can be a kitten or full-grown — only the height changes.
@@ -150,16 +159,27 @@ function cat(along: number, startAcross: number, endAcross: number, height: numb
   return { along, startAcross, endAcross, height, faceRight, form: CAT };
 }
 
+// the smallest right-side tree `along` at or after `desired` — the cat is tucked just past it. Trees
+// are NOT evenly spaced (size/scheme nudges some off the line and the count-per-segment stretches the
+// stride), so read the segment's actual trees instead of assuming a regular interval.
+function nextTreeAlong(desired: number, trees: Tree[]): number {
+  let best = Infinity;
+  for (const t of trees) if (t.across > 0 && t.along >= desired && t.along < best) best = t.along;
+  return Number.isFinite(best) ? best : desired;
+}
+
 // The beasts lining a segment: for now one cat that waits beside the road on the RIGHT, just past the
 // herd, then crosses to the LEFT as the rider nears.
-export function segmentBeasts(laneHalfWidth: number, treeLineOffset: number): Beast[] {
+export function segmentBeasts(laneHalfWidth: number, treeLineOffset: number, trees: Tree[]): Beast[] {
   const treeX = laneHalfWidth + treeLineOffset;
   const start = treeX + CAT_ROAD_GAP;   // waiting spot, beside the road on the right
   // The far side: the cat's sprite reaches PROFILE_REACH * height from its anchor (the tail tip), so to
   // be COMPLETELY clear of the road — tail and all — the anchor must sit a full reach (plus the same
   // road gap) past the left edge.
   const end = -(laneHalfWidth + CAT_ROAD_GAP + PROFILE_REACH * CAT_HEIGHT);
-  return [cat(CAT_ALONG, start, end, CAT_HEIGHT, false)];
+  // round the along UP to a tree and sit just beyond it, so a tree stands between the rider and the cat.
+  const along = nextTreeAlong(CAT_ALONG, trees) + CAT_BEYOND_TREE;
+  return [cat(along, start, end, CAT_HEIGHT, false)];
 }
 
 // Wrap a placed beast as Scenery. Like critters, it carries no extra up-close detail yet, so near

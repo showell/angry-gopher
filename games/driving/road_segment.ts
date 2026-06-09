@@ -67,14 +67,15 @@ export interface RoadSegmentConfig {
 // end, a terminus), and the north heading (accumulated along the route). world.ts fills
 // those, and the elephants live on the exit Intersection, not here.
 export function buildRoadSegment(c: RoadSegmentConfig): RoadSegment {
+  const trees = segmentTrees(c.length, c.scheme, LANE_WIDTH / 2);
   return {
     id: c.id,
     length: c.length,
     width: LANE_WIDTH,
     scheme: c.scheme,
-    trees: segmentTrees(c.length, c.scheme, LANE_WIDTH / 2),
+    trees,
     critters: farmCritters(c.length, LANE_WIDTH / 2, TREE_ROAD_OFFSET),
-    beasts: segmentBeasts(LANE_WIDTH / 2, TREE_ROAD_OFFSET),
+    beasts: segmentBeasts(LANE_WIDTH / 2, TREE_ROAD_OFFSET, trees),   // the cat rounds its along to a tree
     entryIxn: null,
     exitIxn: '',   // a placeholder: set to the real id when this segment's exit intersection is built
     alongWhereRiderCommitsToTurn: c.length,
