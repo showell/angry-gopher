@@ -16,9 +16,10 @@ type P = readonly [number, number];
 // the taper of its flesh (radius r0 proximal, r1 distal).
 interface Bone { length: number; joint: number; r0: number; r1: number }
 
-// a cat's look — just a palette for now.
+// a cat's look — just a palette for now. capsuleLine outlines the body/leg capsules (kept close to the
+// fill so the seams are soft); line is the crisper outline for ears and face features.
 export interface CatForm {
-  palette: { body: string; shadow: string; line: string; eye: string; nose: string };
+  palette: { body: string; shadow: string; capsuleLine: string; line: string; eye: string; nose: string };
 }
 
 // a placed cat measured FROM THE RIDER, ready to draw, with its current pose (gait + head facing).
@@ -36,7 +37,7 @@ export interface CatView {
 const DEBUG = false;
 
 export const CAT: CatForm = {
-  palette: { body: '#c8823c', shadow: '#8a571f', line: '#3a2a17', eye: '#15100a', nose: '#b56b6b' },
+  palette: { body: '#c8823c', shadow: '#8a571f', capsuleLine: '#6e4a24', line: '#3a2a17', eye: '#15100a', nose: '#b56b6b' },
 };
 
 // body solids (unit frame): torso and neck are capsules (two endpoints + a radius); the head is a sphere.
@@ -187,19 +188,19 @@ function drawCat(ctx: Ctx, c: CatView, project: Project): void {
 // ears and face change.
 function paintCat(ctx: Ctx, pal: CatForm['palette'], walk: number, headFront: boolean): void {
   const opp = walk + Math.PI;
-  drawLeg(ctx, far(FRONT_HIP), pal.shadow, pal.line, opp);    // far pair, behind the body, in shade
-  drawLeg(ctx, far(HIND_HIP), pal.shadow, pal.line, walk);
+  drawLeg(ctx, far(FRONT_HIP), pal.shadow, pal.capsuleLine, opp);    // far pair, behind the body, in shade
+  drawLeg(ctx, far(HIND_HIP), pal.shadow, pal.capsuleLine, walk);
   if (!headFront) drawEar(ctx, FAR_EAR, pal.shadow, pal.line);   // profile: far ear peeks behind the head
-  drawBody(ctx, pal.body, pal.line);
-  drawLeg(ctx, FRONT_HIP, pal.body, pal.line, walk);         // near pair, over the body
-  drawLeg(ctx, HIND_HIP, pal.body, pal.line, opp);
+  drawBody(ctx, pal.body, pal.capsuleLine);
+  drawLeg(ctx, FRONT_HIP, pal.body, pal.capsuleLine, walk);         // near pair, over the body
+  drawLeg(ctx, HIND_HIP, pal.body, pal.capsuleLine, opp);
   if (headFront) {                                           // FROZEN: two symmetric ears, a face-on muzzle
     drawEar(ctx, FRONT_EAR_L, pal.body, pal.line);
     drawEar(ctx, FRONT_EAR_R, pal.body, pal.line);
     drawFaceFront(ctx, pal);
-  } else {                                                   // PROFILE: one ear on top, one-eye muzzle
+  } else {                                                   // PROFILE: one ear on top, the side muzzle
     drawEar(ctx, NEAR_EAR, pal.body, pal.line);
-    drawFace(ctx, pal.eye, pal.nose);
+    drawFace(ctx, pal);
   }
 }
 
@@ -260,16 +261,26 @@ function drawEar(ctx: Ctx, e: { a: P; tip: P; b: P }, fill: string, line: string
   fillStroke(ctx, fill, line);
 }
 
-// the PROFILE muzzle: one eye and the nose, seen side-on.
-function drawFace(ctx: Ctx, eye: string, nose: string): void {
-  ctx.fillStyle = eye;
+// the PROFILE muzzle, seen side-on: one eye, the nose, and three whiskers fanning forward (the cat
+// faces -x, so the whiskers sweep past the nose toward the snout).
+function drawFace(ctx: Ctx, pal: CatForm['palette']): void {
+  ctx.fillStyle = pal.eye;
   ctx.beginPath();
   ctx.arc(HEAD.eye[0], HEAD.eye[1], 0.024, 0, Math.PI * 2);
   ctx.fill();
-  ctx.fillStyle = nose;
+  ctx.fillStyle = pal.nose;
   ctx.beginPath();
   ctx.arc(HEAD.nose[0], HEAD.nose[1], 0.018, 0, Math.PI * 2);
   ctx.fill();
+
+  ctx.strokeStyle = pal.line;
+  ctx.beginPath();
+  for (let i = 0; i < 3; i++) {
+    const dy = (i - 1) * 0.03;
+    ctx.moveTo(HEAD.nose[0] + 0.02, HEAD.nose[1] + dy * 0.3);
+    ctx.lineTo(HEAD.nose[0] - 0.20, HEAD.nose[1] + dy);
+  }
+  ctx.stroke();
 }
 
 // the HEAD-ON muzzle (shown frozen): two eyes, a centred nose, a little mouth, and whiskers — all laid

@@ -68,6 +68,7 @@ export interface RoadSegmentConfig {
 // those, and the elephants live on the exit Intersection, not here.
 export function buildRoadSegment(c: RoadSegmentConfig): RoadSegment {
   const trees = segmentTrees(c.length, c.scheme, LANE_WIDTH / 2);
+  const segNum = Number(c.id.slice(3));   // "seg7" -> 7
   return {
     id: c.id,
     length: c.length,
@@ -75,13 +76,13 @@ export function buildRoadSegment(c: RoadSegmentConfig): RoadSegment {
     scheme: c.scheme,
     trees,
     critters: farmCritters(c.length, LANE_WIDTH / 2, TREE_ROAD_OFFSET),
-    cats: segmentCats(LANE_WIDTH / 2, TREE_ROAD_OFFSET, trees),   // the cat rounds its along to a tree
+    cats: segmentCats(segNum, LANE_WIDTH / 2, TREE_ROAD_OFFSET, trees),   // only certain segments get a cat
     entryIxn: null,
     exitIxn: '',   // a placeholder: set to the real id when this segment's exit intersection is built
     alongWhereRiderCommitsToTurn: c.length,
     northHeading: 0,
     // long segments earn a mid-road tower; its blink phase is seeded off a shifted segment number
     // so it doesn't pulse in unison with the segment's exit-intersection tower.
-    midTower: c.length > MID_TOWER_MIN_LENGTH ? { beaconOffset: beaconOffsetFor(Number(c.id.slice(3)) + 60) } : null,
+    midTower: c.length > MID_TOWER_MIN_LENGTH ? { beaconOffset: beaconOffsetFor(segNum + 60) } : null,
   };
 }

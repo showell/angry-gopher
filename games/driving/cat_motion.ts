@@ -39,8 +39,9 @@ const CROSS_FRAMES = ENTERS_ROAD_STEPS + FROZEN_STEPS + ESCAPES_STEPS;
 const ROAD_BUFFER = 5;          // metres of clear road kept between rider and cat (crossing finishes early)
 const STRIDE_STEPS = 5;         // target rider steps per leg cycle (rounded to a whole cycle per phase)
 
-// where the cat spawns and how big it is.
-const CAT_HEIGHT = 1.5;         // metres, ground to ear tips
+// which segments get a crossing cat (by segment number), and where it spawns / how big it is.
+const CAT_SEGMENTS = new Set([2, 5, 8, 15]);
+const CAT_HEIGHT = 1.7;         // metres, ground to ear tips
 const CAT_ALONG = 105;          // desired spot down the road; rounded up to just past a tree
 const CAT_ROAD_GAP = 1.5;       // clearance beyond the roadside tree line, each side
 const CAT_BEYOND_TREE = 2;      // sits this far past the rounding tree, so the tree reads in front of it
@@ -112,9 +113,10 @@ function makeCat(along: number, startAcross: number, midAcross: number, endAcros
   return { along, startAcross, midAcross, endAcross, height, faceRight, form: CAT };
 }
 
-// The cats on a segment: for now one that waits beside the road on the RIGHT, just past the herd, then
-// crosses to the LEFT as the rider nears.
-export function segmentCats(laneHalfWidth: number, treeLineOffset: number, trees: Tree[]): Cat[] {
+// The cats on a segment: only CAT_SEGMENTS get one (else none) — a cat that waits beside the road on the
+// RIGHT, just past the herd, then crosses to the LEFT as the rider nears.
+export function segmentCats(segmentNumber: number, laneHalfWidth: number, treeLineOffset: number, trees: Tree[]): Cat[] {
+  if (!CAT_SEGMENTS.has(segmentNumber)) return [];
   const treeX = laneHalfWidth + treeLineOffset;
   const start = treeX + CAT_ROAD_GAP;   // waiting spot, beside the road on the right
   // Freeze spot: the head sphere sits at local x CAT_HEAD_X, which maps to an across offset of
