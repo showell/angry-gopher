@@ -36,6 +36,7 @@ export interface RoadSegment {
   scheme: Scheme;                // visual theme; drives the tree colours
   trees: Tree[];
   critters: Critter[];      // roadside emoji billboards along the segment (cows/pigs); elephants live on the exit Intersection
+  pigs: boolean;            // does the pig row gather near this segment's end? (the rider only glances on pig legs — rider.ts)
   cats: Cat[];              // hand-drawn cats that cross the road as the rider nears, opposite the bull
   // graph refs: the intersections bracketing this edge. Every segment EXITS through an
   // intersection (a turn, or the terminus that closes the route), so exitIxn is never null;
@@ -78,6 +79,7 @@ export function buildRoadSegment(c: RoadSegmentConfig): RoadSegment {
     scheme: c.scheme,
     trees,
     critters: farmCritters(c.length, LANE_WIDTH / 2, TREE_ROAD_OFFSET, c.pigs),
+    pigs: c.pigs,
     cats: segmentCats(segNum, LANE_WIDTH / 2, TREE_ROAD_OFFSET, trees),   // only certain segments get a cat
     entryIxn: null,
     exitIxn: '',   // a placeholder: set to the real id when this segment's exit intersection is built

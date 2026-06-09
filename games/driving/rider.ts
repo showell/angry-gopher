@@ -82,15 +82,17 @@ const ALIGN_EPS = 0.02;                     // "aligned" once |angle| is below t
 const CENTER_EPS = 0.05;                    // "centred" once |across| is below this (m)
 const QUARTER = Math.PI / 2;
 
-// the "distracted rider": a slow, SUBTLE glance toward the roadside pigs and back (~40 frames), built
-// rather than spelled out to avoid a wall of float literals. It fires once per segment when he comes
-// within GAZE_TRIGGER_DIST of the end and is back to 0 well before the braking zone — both enforced by
-// test_model. Gaze is a VIEW offset only: the renderer adds it as a camera yaw (see main.ts/view.ts).
-const GAZE_STEP_DEG = 0.3;     // degrees of head-turn added per frame
-const GAZE_PEAK_STEPS = 20;    // frames up to the peak (= 6deg), then back down
+// the "distracted rider": a slow glance toward the roadside pigs and back (~40 frames), built rather
+// than spelled out to avoid a wall of float literals. It fires once per segment — but ONLY on a leg
+// that actually HAS pigs to look at — when he comes within GAZE_TRIGGER_DIST of the end, and is back
+// to 0 well before the braking zone (both enforced by test_model). On a pig-less leg he keeps his
+// eyes ahead, so the conspicuously pig-free seg16 also loses the habitual glance. Gaze is a VIEW
+// offset only: the renderer adds it as a camera yaw (see main.ts/view.ts).
+const GAZE_STEP_DEG = 0.45;    // degrees of head-turn added per frame
+const GAZE_PEAK_STEPS = 20;    // frames up to the peak (= 9deg), then back down
 export const GAZE_SEQUENCE: number[] = [];
-for (let i = 1; i <= GAZE_PEAK_STEPS; i++) GAZE_SEQUENCE.push(i * GAZE_STEP_DEG);        // 0.3 .. 6.0
-for (let i = GAZE_PEAK_STEPS - 1; i >= 1; i--) GAZE_SEQUENCE.push(i * GAZE_STEP_DEG);    // 5.7 .. 0.3
+for (let i = 1; i <= GAZE_PEAK_STEPS; i++) GAZE_SEQUENCE.push(i * GAZE_STEP_DEG);        // 0.45 .. 9.0
+for (let i = GAZE_PEAK_STEPS - 1; i >= 1; i--) GAZE_SEQUENCE.push(i * GAZE_STEP_DEG);    // 8.55 .. 0.45
 export const GAZE_TRIGGER_DIST = 220;                                                    // begin the glance this far (game units) before the end
 
 const clamp = (x: number, lo: number, hi: number): number => Math.max(lo, Math.min(hi, x));
@@ -135,11 +137,12 @@ export function gazeAngle(state: RiderState): number {
 }
 
 // advance the glance one cruise-frame: once armed (>=0) step toward done (capped), else arm at the
-// trigger. Frame-based (one frame per sequence entry), not distance-based — but the 300m-min segments +
-// the 150->60 window guarantee it finishes before the braking zone (enforced by test).
-function nextGazeStep(gazeStep: number, distToEnd: number): number {
+// trigger — but only on a leg with pigs to glance at. Frame-based (one frame per sequence entry), not
+// distance-based — but the 300m-min segments + the trigger window guarantee it finishes before the
+// braking zone (enforced by test).
+function nextGazeStep(gazeStep: number, distToEnd: number, hasPigs: boolean): number {
   if (gazeStep >= 0) return Math.min(gazeStep + 1, GAZE_SEQUENCE.length);
-  return distToEnd <= GAZE_TRIGGER_DIST ? 0 : -1;
+  return hasPigs && distToEnd <= GAZE_TRIGGER_DIST ? 0 : -1;
 }
 
 // Advance the Rider one frame. Pure: (RiderState, World) -> the next RiderState. Called explicitly
@@ -183,7 +186,7 @@ function cruise(state: RiderState, seg: RoadSegment, world: World): RiderState {
 
   if (exitIxn.to === null) {   // the terminus: coast to the end (braked by accel), then the game is over
     const along = state.along + v;
-    const gazeStep = nextGazeStep(state.gazeStep, seg.length - along);
+    const gazeStep = nextGazeStep(state.gazeStep, seg.length - along, seg.pigs);
     if (along >= seg.length) return { ...state, along: seg.length, v: 0, gazeStep };   // reached the end -> stop
     return { ...state, along, v, gazeStep };
   }
@@ -192,7 +195,7 @@ function cruise(state: RiderState, seg: RoadSegment, world: World): RiderState {
   if (nearIntersection(state, seg)) v = Math.max(v, turnSpeed(exitIxn));   // never crawl below the lane-filling speed
   const along = state.along + v;
   if (along < seg.alongWhereRiderCommitsToTurn) {   // cross the inner edge -> commit to the next segment
-    const gazeStep = nextGazeStep(state.gazeStep, seg.length - along);
+    const gazeStep = nextGazeStep(state.gazeStep, seg.length - along, seg.pigs);
     return { ...state, along, v, gazeStep };
   }
   return enterStraighten(seg, world, v);

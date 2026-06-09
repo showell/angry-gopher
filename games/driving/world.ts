@@ -46,32 +46,38 @@ export function buildWorld(): World {
   // The route opens straight onto the long seg1 so the sunset is already underway by the first
   // stretch (horizon.ts's SUN_START_PX is calibrated to it).
   //
-  // VARIETY GRAMMAR (random482): the baseline is deliberately boring — ALL_GREEN trees, a cow herd,
-  // an elephant corner — so the rare departures actually surprise. We FRONT-LOAD novelty so a new
-  // player learns the game isn't dull (seg2 cat, then a new element on seg3/4/5), keep the long
-  // sunset stretch (seg6-12) calm so the sun's arrival lands, then run a NEW / boring / boring rhythm
-  // from seg13 on. The per-segment departures from baseline: pigs (seg3), yellow trees (seg4),
-  // red trees (seg19). Corner-creature departures are in the turns table below. ----
+  // VARIETY GRAMMAR (random482/483): the baseline is deliberately boring — ALL_GREEN trees, a cow
+  // herd, an elephant corner — so the rare departures actually surprise. We FRONT-LOAD novelty so a
+  // new player learns the game isn't dull (seg2 cat, then a new element on seg3/4/5), keep the long
+  // sunset stretch calm so the sun's arrival lands, then run a NEW / boring / boring rhythm from
+  // seg13 on. Features DEBUT once, then reappear irregularly as the route's complexity ramps up.
+  //
+  // Two motifs that recur enough to become comfortable (not surprises): PIGS — debut alone at seg3,
+  // then from seg8 on a near-constant roadside motif (the rider habitually glances at them, rider.ts),
+  // with one conspicuous ABSENCE at seg16 as a surprise; and RED TREES — a subtle "watch for new
+  // stuff" CLUE, lit on the segments that carry something notable (seg7 sunset, seg13 croc+cat,
+  // seg16 zebra+pig-absence, seg19 red+cat finale). YELLOW trees are the one-off first-colour reveal
+  // at seg4. Corner-creature departures are in the turns table below. ----
   const segmentConfigs: RoadSegmentConfig[] = [
-    { id: 'seg1',  length: 800,  scheme: 'ALL_GREEN',    pigs: false },  // opener: plain road, sunset just beginning
+    { id: 'seg1',  length: 500,  scheme: 'ALL_GREEN',    pigs: false },  // opener: plain road, kept short to reach the action sooner
     { id: 'seg2',  length: 320,  scheme: 'ALL_GREEN',    pigs: false },  // the CAT crossing (cat_motion's CAT_SEGMENTS)
-    { id: 'seg3',  length: 400,  scheme: 'ALL_GREEN',    pigs: true  },  // NEW: pigs first appear
-    { id: 'seg4',  length: 300,  scheme: 'YELLOW_GREEN', pigs: false },  // NEW: first new tree colour (golden)
+    { id: 'seg3',  length: 400,  scheme: 'ALL_GREEN',    pigs: true  },  // NEW: pigs first appear (alone)
+    { id: 'seg4',  length: 300,  scheme: 'YELLOW_GREEN', pigs: false },  // NEW: first new tree colour (golden, one-off)
     { id: 'seg5',  length: 300,  scheme: 'ALL_GREEN',    pigs: false },  // NEW: first giraffe (at its corner)
     { id: 'seg6',  length: 300,  scheme: 'ALL_GREEN',    pigs: false },  // -- seg6-12: boring apart from the sunset --
-    { id: 'seg7',  length: 1200, scheme: 'ALL_GREEN',    pigs: false },  // the long sun-ward stretch (mid-tower + sunset)
-    { id: 'seg8',  length: 300,  scheme: 'ALL_GREEN',    pigs: false },
-    { id: 'seg9',  length: 300,  scheme: 'ALL_GREEN',    pigs: false },
-    { id: 'seg10', length: 800,  scheme: 'ALL_GREEN',    pigs: false },  // the second sun-ward stretch
-    { id: 'seg11', length: 300,  scheme: 'ALL_GREEN',    pigs: false },
-    { id: 'seg12', length: 300,  scheme: 'ALL_GREEN',    pigs: false },
-    { id: 'seg13', length: 300,  scheme: 'ALL_GREEN',    pigs: false },  // NEW: crocodile lagoon (at its corner)
-    { id: 'seg14', length: 400,  scheme: 'ALL_GREEN',    pigs: false },  // boring
-    { id: 'seg15', length: 300,  scheme: 'ALL_GREEN',    pigs: false },  // boring
-    { id: 'seg16', length: 300,  scheme: 'ALL_GREEN',    pigs: false },  // NEW: zebra (at its corner)
-    { id: 'seg17', length: 300,  scheme: 'ALL_GREEN',    pigs: false },  // boring
-    { id: 'seg18', length: 300,  scheme: 'ALL_GREEN',    pigs: false },  // boring
-    { id: 'seg19', length: 300,  scheme: 'RED_GREEN',    pigs: false },  // NEW: red trees, the finale before the terminus
+    { id: 'seg7',  length: 1200, scheme: 'RED_GREEN',    pigs: false },  // the long sun-ward stretch (mid-tower + sunset); red-tree clue
+    { id: 'seg8',  length: 300,  scheme: 'ALL_GREEN',    pigs: true  },  // pigs return and settle into a constant motif
+    { id: 'seg9',  length: 300,  scheme: 'ALL_GREEN',    pigs: true  },
+    { id: 'seg10', length: 800,  scheme: 'ALL_GREEN',    pigs: true  },  // the second sun-ward stretch
+    { id: 'seg11', length: 300,  scheme: 'ALL_GREEN',    pigs: true  },
+    { id: 'seg12', length: 300,  scheme: 'ALL_GREEN',    pigs: true  },
+    { id: 'seg13', length: 300,  scheme: 'RED_GREEN',    pigs: true  },  // NEW: crocodile lagoon + cat; red-tree clue
+    { id: 'seg14', length: 400,  scheme: 'ALL_GREEN',    pigs: true  },  // boring
+    { id: 'seg15', length: 300,  scheme: 'ALL_GREEN',    pigs: true  },  // boring
+    { id: 'seg16', length: 300,  scheme: 'RED_GREEN',    pigs: false },  // NEW: zebra; red-tree clue; SURPRISE — the pigs are gone
+    { id: 'seg17', length: 300,  scheme: 'ALL_GREEN',    pigs: true  },  // boring (pigs back)
+    { id: 'seg18', length: 300,  scheme: 'ALL_GREEN',    pigs: true  },  // boring
+    { id: 'seg19', length: 300,  scheme: 'RED_GREEN',    pigs: true  },  // NEW: red trees + cat, the finale before the terminus
   ];
   const order: SegId[] = segmentConfigs.map((c) => c.id);
 
