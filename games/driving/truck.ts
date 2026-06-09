@@ -13,9 +13,10 @@
 //     cruises (holds speed);
 //   • approaching a turn it BRAKES down toward TRUCK_TURN_SPEED within TRUCK_BRAKE_DISTANCE, then
 //     accelerates back out the far side (it's behind schedule again after the corner).
-// It brakes at 0.9x the rider's acceleration (A_ACCEL) and, when behind schedule, claws back at 1.1x
-// (10% quicker than the rider). Bright-red brake lights light up on its rear ONLY while it's actually
-// slowing.
+// In the last TRUCK_BRAKE_DISTANCE before a corner it brakes at exactly the rate that brings it to
+// TRUCK_TURN_SPEED right at the turn (kinematic, the way the rider brakes); when behind schedule it
+// claws back at 1.1x the rider's acceleration (10% quicker). Bright-red brake lights light up on its
+// rear ONLY while it's actually slowing.
 //
 // It obeys the same ground-curvature + near-plane rules as the road it sits on.
 
@@ -37,8 +38,7 @@ const FINISH_LEAD = 100;            // the lead the schedule lerps DOWN to by th
                                     // because braking for the final corner would dip a near-0 lead
                                     // negative and we'd catch it at the line; 100m keeps a photo finish
 const TRUCK_TURN_SPEED = 0.3;          // m/press it slows to for a corner
-const TRUCK_BRAKE_DISTANCE = 100;      // metres before a turn it starts braking
-const TRUCK_BRAKE_DECEL = 0.9 * A_ACCEL;   // braking rate into a corner — 0.9x the rider's acceleration
+const TRUCK_BRAKE_DISTANCE = 50;       // metres before a turn it starts braking
 const TRUCK_CHASE_ACCEL = 1.1 * A_ACCEL;   // behind-schedule acceleration — 10% FASTER than the rider, to claw the lead back
 
 // ---- colour: a dark-blue body (lighter roof / darker sides so the prism reads as a solid), plus
@@ -89,12 +89,20 @@ export function nextTruck(truck: TruckState, riderDist: number, world: World, L:
   const scheduled = riderDist + FINISH_LEAD + (START_AHEAD - FINISH_LEAD) * (1 - riderDist / L);   // where the truck "should" be by now
   const distToTurn = distToNextTurn(truck.pos, world);
   let v = truck.v;
+  let braking = false;
   if (distToTurn <= TRUCK_BRAKE_DISTANCE) {
-    v = Math.max(TRUCK_TURN_SPEED, v - TRUCK_BRAKE_DECEL);   // brake into the corner, hold ~TRUCK_TURN_SPEED through it
+    // brake at exactly the rate that arrives at the turn at TRUCK_TURN_SPEED (kinematic, the way the
+    // rider brakes: a = (vEnd^2 - v^2) / 2d), recomputed each frame as the gap closes.
+    const a = distToTurn > 1e-6 ? (TRUCK_TURN_SPEED * TRUCK_TURN_SPEED - v * v) / (2 * distToTurn) : 0;
+    v = Math.max(TRUCK_TURN_SPEED, v + a);
+    braking = v < truck.v;                                   // lit only while actually slowing
   } else if (truck.pos < scheduled) {
-    v = v + TRUCK_CHASE_ACCEL;                              // behind schedule: floor it (no speed cap)
-  }                                                         // else ahead of schedule on a straight: cruise (hold v)
-  return { pos: truck.pos + v, v, braking: v < truck.v };   // brake lights on only when actually slowing
+    v = v + TRUCK_CHASE_ACCEL;                               // behind schedule: accelerate (never cruise)
+  }                                                          // ahead of schedule, not braking: cruise (hold v)
+  // Three rules, nothing else: brake before a turn / accelerate when behind schedule / cruise when
+  // ahead. The truck's speed is NEVER tied to the rider's — only to those rules. (`scheduled` reads the
+  // rider's DISTANCE to know where the truck should be, but never the rider's speed.)
+  return { pos: truck.pos + v, v, braking };
 }
 
 // lower a rider-frame point onto the curved ground (the same drop the road quads use), at height `h`
