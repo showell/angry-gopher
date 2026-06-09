@@ -27,9 +27,11 @@ const LAGOON: P[] = [
 ];
 const LAGOON_WATER = '#2f7e8c';
 
-// the four crocs on the NEAR bank — on land just in front of the near edge — spread across the width,
-// all facing the same way.
-const CROC_BANK: P[] = [[-5, 2], [-12, 2], [-19, 2], [-26, 2]];
+// the seven crocs on the FAR bank — on land just beyond the far edge (which arcs from cv ~28 up to ~32
+// and back), spread across the width, all facing the same way.
+const CROC_BANK: P[] = [
+  [-5, 30.5], [-9, 31.5], [-12, 32.5], [-15, 33.5], [-19, 32], [-22, 31], [-26, 29.5],
+];
 const CROC_EMOJI = '🐊';
 const CROC_FACE_RIGHT = true;       // all four face the same way
 
