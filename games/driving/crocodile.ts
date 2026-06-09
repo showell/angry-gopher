@@ -27,15 +27,23 @@ const LAGOON: P[] = [
 ];
 const LAGOON_WATER = '#2f7e8c';
 
-// the seven crocs on the FAR bank — on land just beyond the far edge (which arcs from cv ~28 up to ~32
-// and back), spread across the width, all facing the same way.
+// a 1m khaki mud bank along the water's FAR edge — the shore the crocs sit on. Its inner edge hugs the
+// water's far edge (the arc cv 29 -> 32 -> 28), its outer edge is 1m further onto the land.
+const MUD_BANK: P[] = [
+  [-5, 29], [-15, 32], [-26, 28],   // the water's far edge
+  [-26, 29], [-15, 33], [-5, 30],   // 1m back onto the land
+];
+const MUD_KHAKI = '#c2b280';
+
+// the seven crocs hauled out on the mud bank (the water's far edge + 0.5m), spread across the width, all
+// facing the same way.
 const CROC_BANK: P[] = [
-  [-5, 30.5], [-9, 31.5], [-12, 32.5], [-15, 33.5], [-19, 32], [-22, 31], [-26, 29.5],
+  [-5, 29.5], [-9, 30.7], [-12, 31.6], [-15, 32.5], [-19, 31.1], [-22, 30], [-26, 28.5],
 ];
 const CROC_EMOJI = '🐊';
-const CROC_FACE_RIGHT = true;       // all four face the same way
+const CROC_FACE_RIGHT = true;       // all seven face the same way
 
-const CROC_ADULT_HEIGHT = 1.4;      // metres
+const CROC_ADULT_HEIGHT = 2.8;      // metres
 const CROC_GIANT_SCALE = 1.7;       // late-route corners upsize, like the other safari critters...
 const CROC_GIANT_FROM_SEG = 8;      // ...on segments numbered above this
 
@@ -46,7 +54,8 @@ const CROC_GIANT_FROM_SEG = 8;      // ...on segments numbered above this
 export function crocodileScene(corner: CornerMap, segNum: number): { quads: Quad[]; scenery: Scenery[] } {
   const height = CROC_ADULT_HEIGHT * (segNum > CROC_GIANT_FROM_SEG ? CROC_GIANT_SCALE : 1);
   const lagoon: Quad = { pts: LAGOON.map(([cu, cv]) => corner(cu, cv)), color: LAGOON_WATER };
+  const mud: Quad = { pts: MUD_BANK.map(([cu, cv]) => corner(cu, cv)), color: MUD_KHAKI };
   const scenery = CROC_BANK.map(([cu, cv]) =>
     critterScenery({ at: corner(cu, cv), emoji: CROC_EMOJI, height, faceRight: CROC_FACE_RIGHT }));
-  return { quads: [lagoon], scenery };
+  return { quads: [lagoon, mud], scenery };
 }
