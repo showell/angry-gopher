@@ -86,7 +86,7 @@ const DANGER_STEPS = 15;                     // FORWARD brake: slow for the road
 const TURN_DANGER_STEPS = 60;               // STEERING look-ahead: project the rider's arc this many frames (~1s at 60fps) to pick which way to lean
 const TILT_STEP = 1 * Math.PI / 180;        // the most the rider leans further into the turn in one frame (prorated by danger nearness)
 const TILT_SNAP = 0.1 * Math.PI / 180;      // a lean within this of upright snaps to exactly 0 — kills the gentle straightaway swerve
-const YAW_SNAP = 1 * Math.PI / 180;         // a heading within this of straight-down-the-lane snaps to exactly 0 (with the lean) — locks straightaways
+const AIMING_DISTANCE = 100;                // when upright, the rider aims his heading at the lane centre this far ahead (m) — eases him back to the middle
 const YAW_PER_TILT = 1.2;                   // the lean's leverage on the bike: every degree of tilt yaws the heading 1.2deg
 
 const clamp = (x: number, lo: number, hi: number): number => Math.max(lo, Math.min(hi, x));
@@ -161,12 +161,12 @@ export function getNextRiderState(state: RiderState, world: World): RiderState {
   const headingChange = YAW_PER_TILT * prevTilt;
   let yaw = state.yaw + headingChange;
   const midHeading = state.yaw + headingChange / 2;                            // average heading over the frame -> arc
-  // snap-straight (the yaw): once nearly aligned with the lane, go FULLY straight — zero the heading AND the
-  // lean together. Zeroing only the yaw wouldn't hold (the carried tilt re-yaws him next frame, since the two
-  // are ~90deg out of phase in the swerve); killing both at once locks the straightaway and finishes turns crisply.
-  if (Math.abs(yaw) < YAW_SNAP) { yaw = 0; tilt = 0; }
   const along = state.along + v * Math.cos(midHeading);
   const across = state.across + v * Math.sin(midHeading);
+  // when UPRIGHT (the lean has settled to exactly 0), aim the heading at the lane CENTRE, AIMING_DISTANCE ahead,
+  // so he eases back to the middle instead of holding an off-centre line. Only when tilt is exactly 0 — never
+  // mid-lean — so a turn can't jitter; if he's still leaning we wait a frame for the lean to settle first.
+  if (tilt === 0) yaw = Math.atan2(-across, AIMING_DISTANCE);
 
   const riderState: RiderState = { segment: seg.id, along, across, yaw, v, tilt, gazeStep: state.gazeStep };
 
