@@ -84,7 +84,8 @@ export const MAX_TURN_ANGLE = 90 * Math.PI / 180;   // the largest turn the mode
 const STRAIGHTEN_MARGIN = 0.05;             // hard safety: keep the drift bulge at least this far inside the edge (m)
 const DANGER_STEPS = 15;                     // FORWARD brake: slow for the road edge once it's within this many frames at the current speed
 const TURN_DANGER_STEPS = 60;               // STEERING look-ahead: project the rider's arc this many frames (~1s at 60fps) to pick which way to lean
-const TILT_STEP = 1 * Math.PI / 180;        // the rider leans one more degree into the turn each frame (no damping yet)
+const TILT_STEP = 1 * Math.PI / 180;        // the most the rider leans further into the turn in one frame (prorated by danger nearness)
+const TILT_SNAP = 0.1 * Math.PI / 180;      // a lean within this of upright snaps to exactly 0 — kills the gentle straightaway swerve
 const YAW_PER_TILT = 1.2;                   // the lean's leverage on the bike: every degree of tilt yaws the heading 1.2deg
 
 const clamp = (x: number, lo: number, hi: number): number => Math.max(lo, Math.min(hi, x));
@@ -152,9 +153,10 @@ export function getNextRiderState(state: RiderState, world: World): RiderState {
   const prevTilt = state.tilt;
   const danger = getDangerInfo(state, seg);
   const tiltStep = TILT_STEP * (TURN_DANGER_STEPS - danger.steps) / TURN_DANGER_STEPS;   // closer danger -> bigger lean
-  const tilt = danger.side === DangerSide.LEFT ? prevTilt + tiltStep
-             : danger.side === DangerSide.RIGHT ? prevTilt - tiltStep
-             : prevTilt;
+  let tilt = danger.side === DangerSide.LEFT ? prevTilt + tiltStep
+           : danger.side === DangerSide.RIGHT ? prevTilt - tiltStep
+           : prevTilt;
+  if (Math.abs(tilt) < TILT_SNAP) tilt = 0;   // snap-straight: a near-upright lean becomes exactly upright
   const headingChange = YAW_PER_TILT * prevTilt;
   const yaw = state.yaw + headingChange;
   const midHeading = state.yaw + headingChange / 2;                            // average heading over the frame -> arc
