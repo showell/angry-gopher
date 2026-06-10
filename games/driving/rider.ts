@@ -85,7 +85,7 @@ const STRAIGHTEN_MARGIN = 0.05;             // hard safety: keep the drift bulge
 const DANGER_STEPS = 15;                     // FORWARD brake: slow for the road edge once it's within this many frames at the current speed
 const TURN_DANGER_STEPS = 60;               // STEERING look-ahead: project the rider's arc this many frames (~1s at 60fps) to pick which way to lean
 const TILT_STEP = 1 * Math.PI / 180;        // the rider leans one more degree into the turn each frame (no damping yet)
-const YAW_PER_TILT = 0.7;                   // the lean's leverage on the bike: every degree of tilt yaws the heading 0.7deg
+const YAW_PER_TILT = 1.2;                   // the lean's leverage on the bike: every degree of tilt yaws the heading 1.2deg
 
 const clamp = (x: number, lo: number, hi: number): number => Math.max(lo, Math.min(hi, x));
 
@@ -144,14 +144,16 @@ export function getNextRiderState(state: RiderState, world: World): RiderState {
 
   const v = state.v + getForwardAccelDecel(state, seg, world);                  // the forward decision IS the new speed
 
-  // The LEAN drives the turn. The rider projects his arc (getDangerInfo) and tips the bike one notch AWAY from
-  // whichever shoulder he'd run off first — LEFT danger -> lean right, RIGHT danger -> lean left, NONE -> hold.
-  // The lean carried IN from last frame yaws the bike: YAW_PER_TILT of heading per unit of tilt, so the tilt
-  // LEADS the yaw by a frame (he tips the bike, then it comes around). He holds his lean when the road's safe.
+  // The LEAN drives the turn. The rider projects his arc (getDangerInfo) and tips the bike AWAY from whichever
+  // shoulder he'd run off first — LEFT danger -> lean right, RIGHT danger -> lean left, NONE -> hold. The lean
+  // adjustment is PRORATED by how close the danger is: a full TILT_STEP when it's imminent, fading to ~0 at the
+  // horizon (we trust him not to overreact to far-off danger — that's the damping). The lean carried IN from
+  // last frame yaws the bike YAW_PER_TILT per unit, so the tilt LEADS the yaw by a frame.
   const prevTilt = state.tilt;
-  const dangerSide = getDangerInfo(state, seg).side;
-  const tilt = dangerSide === DangerSide.LEFT ? prevTilt + TILT_STEP
-             : dangerSide === DangerSide.RIGHT ? prevTilt - TILT_STEP
+  const danger = getDangerInfo(state, seg);
+  const tiltStep = TILT_STEP * (TURN_DANGER_STEPS - danger.steps) / TURN_DANGER_STEPS;   // closer danger -> bigger lean
+  const tilt = danger.side === DangerSide.LEFT ? prevTilt + tiltStep
+             : danger.side === DangerSide.RIGHT ? prevTilt - tiltStep
              : prevTilt;
   const headingChange = YAW_PER_TILT * prevTilt;
   const yaw = state.yaw + headingChange;
@@ -242,8 +244,8 @@ export function getDangerInfo(state: RiderState, seg: RoadSegment): DangerInfo {
   let yaw = state.yaw, across = state.across;
   for (let i = 0; i < TURN_DANGER_STEPS; i++) {
     across += state.v * Math.sin(yaw + headingStep / 2);                    // arc step (midpoint heading)
-    if (across <= -hw) return { side: DangerSide.LEFT, steps: i + 1 };
-    if (across >= hw) return { side: DangerSide.RIGHT, steps: i + 1 };
+    if (across <= -hw) return { side: DangerSide.LEFT, steps: i };          // i = safe steps before the crossing (0 = imminent)
+    if (across >= hw) return { side: DangerSide.RIGHT, steps: i };
     yaw += headingStep;
   }
   return { side: DangerSide.NONE, steps: TURN_DANGER_STEPS };
