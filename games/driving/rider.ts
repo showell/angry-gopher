@@ -37,6 +37,9 @@ export interface Turning { angle: number; phase: 'straightening' | 'recentering'
 export const DangerSide = { LEFT: 'LEFT', NONE: 'NONE', RIGHT: 'RIGHT' } as const;
 export type DangerSide = typeof DangerSide[keyof typeof DangerSide];
 
+// The danger projection's verdict: which side he'd run off, and in how many steps (the full horizon when NONE).
+export interface DangerInfo { side: DangerSide; steps: number }
+
 // The whole game is seen through the RIDER (on a motorcycle, treated as a single POINT, which keeps the
 // physics simple). A RiderState is everything we know about him this frame:
 //   POSITION : segment + along (progress) + across (lateral offset) + yaw (heading vs the segment)
@@ -152,9 +155,9 @@ export function getNextRiderState(state: RiderState, world: World): RiderState {
   // The lean carried IN from last frame yaws the bike: YAW_PER_TILT of heading per unit of tilt, so the tilt
   // LEADS the yaw by a frame (he tips the bike, then it comes around). Upright (tilt 0) when cruising.
   const prevTilt = state.turn ? state.turn.tilt : 0;
-  const danger = state.turn ? getDangerInfo(state, seg) : DangerSide.NONE;
-  const tilt = danger === DangerSide.LEFT ? prevTilt + TILT_STEP
-             : danger === DangerSide.RIGHT ? prevTilt - TILT_STEP
+  const dangerSide = state.turn ? getDangerInfo(state, seg).side : DangerSide.NONE;
+  const tilt = dangerSide === DangerSide.LEFT ? prevTilt + TILT_STEP
+             : dangerSide === DangerSide.RIGHT ? prevTilt - TILT_STEP
              : prevTilt;
   const headingChange = YAW_PER_TILT * prevTilt;
   const yaw = state.yaw + headingChange;
@@ -250,15 +253,15 @@ function isInDangerOfHittingShoulder(state: RiderState, seg: RoadSegment): boole
 // and speed held constant — and report which road edge it would run off FIRST, or NONE if he stays on the road
 // for the next TURN_DANGER_STEPS steps. A cheap loop, recomputed each frame; the rotational decision leans him
 // AWAY from whichever side it names.
-export function getDangerInfo(state: RiderState, seg: RoadSegment): DangerSide {
+export function getDangerInfo(state: RiderState, seg: RoadSegment): DangerInfo {
   const hw = seg.width / 2;
   const headingStep = YAW_PER_TILT * (state.turn ? state.turn.tilt : 0);   // constant per step (tilt held fixed)
   let yaw = state.yaw, across = state.across;
   for (let i = 0; i < TURN_DANGER_STEPS; i++) {
     across += state.v * Math.sin(yaw + headingStep / 2);                    // arc step (midpoint heading)
-    if (across <= -hw) return DangerSide.LEFT;
-    if (across >= hw) return DangerSide.RIGHT;
+    if (across <= -hw) return { side: DangerSide.LEFT, steps: i + 1 };
+    if (across >= hw) return { side: DangerSide.RIGHT, steps: i + 1 };
     yaw += headingStep;
   }
-  return DangerSide.NONE;
+  return { side: DangerSide.NONE, steps: TURN_DANGER_STEPS };
 }

@@ -187,7 +187,7 @@ function drawHud(rider: RiderState): void {
   ctx.fillStyle = '#9fe6a0';
   const gazeDeg = gazeAngle(rider) * 180 / Math.PI;
   const danger = getDangerInfo(rider, world.segments[rider.segment]);
-  ctx.fillText(`x ${rider.across.toFixed(2)}  y ${rider.along.toFixed(1)}  heading ${headingDeg.toFixed(1)}deg  tilt ${tiltDeg.toFixed(1)}deg  danger ${danger}  gaze ${gazeDeg.toFixed(0)}deg  v ${rider.v.toFixed(2)}`, 22, 50);
+  ctx.fillText(`x ${rider.across.toFixed(2)}  y ${rider.along.toFixed(1)}  heading ${headingDeg.toFixed(1)}deg  tilt ${tiltDeg.toFixed(1)}deg  danger ${danger.side} (${danger.steps})  gaze ${gazeDeg.toFixed(0)}deg  v ${rider.v.toFixed(2)}`, 22, 50);
 
   // line 3: frame HEALTH — wall-clock cadence vs the 60Hz budget; turns red while dropping
   ctx.fillStyle = dropFlash > 0 ? '#ff6b6b' : '#9fe6a0';
