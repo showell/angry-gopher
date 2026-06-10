@@ -144,27 +144,34 @@ export function getNextRiderState(state: RiderState, world: World): RiderState {
   const along = state.along + v * Math.cos(midHeading);
   const across = state.across + v * Math.sin(midHeading);
 
-  // Resolve the road graph. Most frames just STAY on this segment (below); the two exceptions are a
-  // CRUISING rider reaching the segment's exit — to turn into the next segment, or to stop at a terminus.
-  const exitIxn = world.intersections[seg.exitIxn];
-  if (state.turn === null && exitIxn.to !== null && along >= seg.alongWhereRiderCommitsToTurn) {
-    // crossed the inner edge -> re-express onto the NEXT segment's inner edge, still pointed the old way,
-    // a touch before its begin line (negative along) — the same physical point, so motion is continuous.
-    const next = world.segments[exitIxn.to], hw = seg.width / 2, theta = exitIxn.angle, sgn = exitIxn.sign;
-    return { segment: next.id, along: -hw / Math.sin(theta), across: sgn * hw, angle: -sgn * theta, v,
-             turn: { angle: theta, phase: 'straightening', turnRate: 0 }, gazeStep: -1 };
-  }
-  if (state.turn === null && exitIxn.to === null && along >= seg.length)
-    return { ...state, along: seg.length, v: 0 };   // stop dead at a terminus
-
-  // STAY on this segment. The turn descriptor captures all three cases: cruising stays straight (no turn);
-  // a turn whose heading is killed and is back at centre FINISHES (no turn); otherwise it carries on, its
-  // phase flipping to recentering once the heading reaches 0. Position is the clean centre when not
-  // turning, the integrated arc when turning.
+  // The DEFAULT next state: STAY on this segment. The turn descriptor unifies the three staying cases —
+  // cruising (no turn), a turn that's centred + aligned FINISHING (no turn), or a turn carrying on (its
+  // phase flips to recentering once the heading is killed). Position is the clean centre when not turning,
+  // the integrated arc when turning.
   const finishing = state.turn !== null && Math.abs(across) < CENTER_EPS && Math.abs(state.angle) < TURN_RATE_STEP;
   const turn: Turning | null = state.turn === null || finishing ? null
     : { angle: state.turn.angle, turnRate, phase: state.turn.phase === 'straightening' && Math.abs(angle) < ALIGN_EPS ? 'recentering' : state.turn.phase };
-  return { segment: seg.id, along, across: turn ? across : 0, angle: turn ? angle : 0, v, turn, gazeStep: state.gazeStep };
+  const riderState: RiderState = { segment: seg.id, along, across: turn ? across : 0, angle: turn ? angle : 0, v, turn, gazeStep: state.gazeStep };
+
+  // The two exceptions, both for a CRUISING rider reaching the segment's exit: turn into the next segment,
+  // or stop dead at a terminus.
+  const exitIxn = world.intersections[seg.exitIxn];
+  if (state.turn === null && exitIxn.to !== null && along >= seg.alongWhereRiderCommitsToTurn)
+    return riderStateForNextSegment(riderState, world);
+  if (state.turn === null && exitIxn.to === null && along >= seg.length)
+    return { ...riderState, along: seg.length, v: 0 };
+  return riderState;
+}
+
+// Re-express the rider onto the NEXT segment as he commits to the turn: he keeps his speed but lands on
+// the new segment's inner edge, still pointed the old way, a touch before its begin line (negative along)
+// — the same physical point, so motion stays continuous — and starts the straighten-out, eyes on the road.
+function riderStateForNextSegment(riderState: RiderState, world: World): RiderState {
+  const seg = world.segments[riderState.segment];
+  const exitIxn = world.intersections[seg.exitIxn];
+  const next = world.segments[exitIxn.to as string], hw = seg.width / 2, theta = exitIxn.angle, sgn = exitIxn.sign;
+  return { segment: next.id, along: -hw / Math.sin(theta), across: sgn * hw, angle: -sgn * theta,
+           v: riderState.v, turn: { angle: theta, phase: 'straightening', turnRate: 0 }, gazeStep: -1 };
 }
 
 // THE FORWARD DECISION — throttle/brake — returned as the change in speed this frame (state.v + this is
