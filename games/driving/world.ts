@@ -40,7 +40,7 @@ const intersectionFrom = (from: SegId, to: SegId, deg: number, creature: CornerC
   ({ from, to, dir: deg < 0 ? 'left' : 'right', angle: Math.abs(deg) * DEG, creature });
 
 export function buildWorld(): World {
-  const Z = CornerCreature.ZEBRA, E = CornerCreature.ELEPHANT, G = CornerCreature.GIRAFFE, C = CornerCreature.CROCODILE;
+  const Z = CornerCreature.ZEBRA, E = CornerCreature.ELEPHANT, G = CornerCreature.GIRAFFE, C = CornerCreature.CROCODILE, R = CornerCreature.RHINO;
 
   // ---- the segments: the straight stretches (id / length / tree scheme / whether pigs gather).
   // The route opens straight onto the long seg1 so the sunset is already underway by the first
@@ -96,7 +96,7 @@ export function buildWorld(): World {
     intersectionFrom('seg4',  'seg5',   20, E),
     intersectionFrom('seg5',  'seg6',  -70, G),   // NEW: first giraffe
     intersectionFrom('seg6',  'seg7',  -70, E),
-    intersectionFrom('seg7',  'seg8',   80, E),
+    intersectionFrom('seg7',  'seg8',   80, R),   // NEW: rhinos (zebra-sized) at the sunset-stretch corner
     intersectionFrom('seg8',  'seg9',   15, E),
     intersectionFrom('seg9',  'seg10', -70, E),
     intersectionFrom('seg10', 'seg11',  15, E),

@@ -8,7 +8,7 @@ import type { Quad, Scenery } from './scenery.ts';
 import { crocodileScene } from './crocodile.ts';
 import type { CornerMap } from './crocodile.ts';
 
-export const CornerCreature = { ELEPHANT: 'ELEPHANT', GIRAFFE: 'GIRAFFE', ZEBRA: 'ZEBRA', CROCODILE: 'CROCODILE' } as const;
+export const CornerCreature = { ELEPHANT: 'ELEPHANT', GIRAFFE: 'GIRAFFE', ZEBRA: 'ZEBRA', RHINO: 'RHINO', CROCODILE: 'CROCODILE' } as const;
 export type CornerCreature = typeof CornerCreature[keyof typeof CornerCreature];
 
 // the EMOJI species — the crocodile is hand-drawn (crocodile.ts), not a billboard, so it's excluded here.
@@ -26,6 +26,7 @@ const SPECIES: Record<EmojiCreature, CornerSpecies> = {
   ELEPHANT: { emoji: '🐘', adultHeight: 2.8, babyRatio: 0.5, babyBeyond: 14, giantScale: 1.7, giantFromSeg: 8 },
   GIRAFFE:  { emoji: '🦒', adultHeight: 4.5, babyRatio: 0.5, babyBeyond: 14, giantScale: 1.7, giantFromSeg: 8 },
   ZEBRA:    { emoji: '🦓', adultHeight: 1.6, babyRatio: 0.5, babyBeyond: 14, giantScale: 1.7, giantFromSeg: 8 },
+  RHINO:    { emoji: '🦏', adultHeight: 1.6, babyRatio: 0.5, babyBeyond: 14, giantScale: 1.7, giantFromSeg: 8 },
 };
 
 // the adult stands a guard-rail's-worth further off the corner than half its width, so the rail riding
