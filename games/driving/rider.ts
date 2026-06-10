@@ -78,7 +78,6 @@ export const TURN_OMEGA = MAX_LEAN / LEAN_PER_OMEGA;   // max heading turned per
 // test/test_model.ts enforces it on the configured route.
 export const MAX_TURN_ANGLE = 90 * Math.PI / 180;   // the largest turn the model allows
 const STRAIGHTEN_MARGIN = 0.05;             // hard safety: keep the drift bulge at least this far inside the edge (m)
-const RECENTER_DISTANCE = 30;               // recenter lean = -across/this; bigger = gentler lean, slower return to centre
 const ALIGN_EPS = 0.02;                     // "aligned" once |angle| is below this (rad)
 const CENTER_EPS = 0.05;                    // "centred" once |across| is below this (m)
 const DANGER_STEPS = 15;                     // brake for the road edge once it's within this many frames at the current speed
@@ -206,16 +205,12 @@ function getForwardAccelDecel(state: RiderState, seg: RoadSegment, world: World)
 }
 
 // THE ROTATIONAL DECISION — lean — returned as the change in the heading-turn rate this frame. Zero while
-// cruising (bike straight; he's already pointed right). Turning: aim the rate at the target heading (0 in
-// the angle-kill, the centre line RECENTER_DISTANCE ahead while recentring), settle onto it without
-// overshoot (a brake-to-zero profile), and jerk-limit the change so the bank never snaps (<= MAX_TILT_STEP).
+// cruising (bike straight; he's already pointed right). Turning: ONE rule — rotate at the full TURN_OMEGA to
+// bring the heading back to 0 (straight). No jerk-limit, no settle: the rate snaps to ±TURN_OMEGA.
 function getRotationalAccel(state: RiderState): number {
   if (state.turn === null) return 0;
-  const aim = state.turn.phase === 'straightening' ? 0 : -state.across / RECENTER_DISTANCE;
-  const settleRate = Math.min(TURN_OMEGA, Math.sqrt(2 * TURN_RATE_STEP * Math.abs(aim - state.angle)));
-  const desired = clamp(aim - state.angle, -settleRate, settleRate);
-  const dHeading = clamp(desired, state.turn.turnRate - TURN_RATE_STEP, state.turn.turnRate + TURN_RATE_STEP);
-  return dHeading - state.turn.turnRate;
+  const desiredRate = -Math.sign(state.angle) * TURN_OMEGA;   // the only rule: rotate the heading back to 0 (straight)
+  return desiredRate - state.turn.turnRate;
 }
 
 // Is the Rider close enough to the upcoming intersection to start slowing for it? Every segment exits
