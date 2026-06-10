@@ -13,12 +13,13 @@
 //     each frame — the logic lives in rider_gaze.ts (the caller runs bike-then-gaze; see getNextRiderState).
 //
 // HOW HE MOVES, FRAME BY FRAME: position is relative to the CURRENT segment — along (progress), across
-// (lateral offset, + = right), angle (heading vs the segment), v (speed, m/press). Cruising keeps
-// across/angle at 0 and advances along by v; accel() is a pure function of (along, v, distance-to-the-
-// next-intersection). Every turn is a straighten-out (no rigid arcs): the moment he crosses the next
-// segment's inner-edge extension he is re-expressed in that segment's frame, still pointed the old way,
-// then rotates his heading to 0 (at TURN_OMEGA, jerk-limited) while drifting to the far edge, and finally
-// eases back to centre. See accel()/cruise() and enterStraighten()/straightenStep().
+// (lateral offset, + = right), angle (heading vs the segment), v (speed, m/press). Each press,
+// getNextRiderState integrates two INDEPENDENT decisions — getForwardAccelDecel (throttle/brake) and
+// getRotationalAccel (lean) — into the new speed, heading, and position, then resolves the road graph.
+// Cruising keeps across/angle at 0 and advances along by v. Every turn is a straighten-out (no rigid
+// arcs): the moment he crosses the next segment's inner-edge extension he's re-expressed in that
+// segment's frame, still pointed the old way, then rotates his heading to 0 (at TURN_OMEGA, jerk-limited)
+// while drifting to the far edge, and finally eases back to centre.
 
 import type { World } from './world.ts';
 import type { RoadSegment, SegId } from './road_segment.ts';
@@ -148,8 +149,12 @@ export function getNextRiderState(state: RiderState, world: World): RiderState {
   if (state.turn === null) {
     const exitIxn = world.intersections[seg.exitIxn];
     if (exitIxn.to === null) return along >= seg.length ? { ...state, along: seg.length, v: 0 } : { ...state, along, v };
-    if (along >= seg.alongWhereRiderCommitsToTurn) return enterStraighten(seg, world, v);
-    return { ...state, along, v };
+    if (along < seg.alongWhereRiderCommitsToTurn) return { ...state, along, v };
+    // crossed the inner edge -> COMMIT to the turn: re-express on the NEXT segment's inner edge, still
+    // pointed the old way, a touch before its begin line (negative along) — the same physical point.
+    const next = world.segments[exitIxn.to], hw = seg.width / 2, theta = exitIxn.angle, sgn = exitIxn.sign;
+    return { segment: next.id, along: -hw / Math.sin(theta), across: sgn * hw, angle: -sgn * theta, v,
+             turn: { angle: theta, phase: 'straightening', turnRate: 0 }, gazeStep: -1 };
   }
   // TURNING: hand back to cruise once centred AND zeroing the heading is itself within one tilt-step,
   // else carry on (the two-phase straighten flips to recentering once the heading is killed).
@@ -167,10 +172,18 @@ export function getNextRiderState(state: RiderState, world: World): RiderState {
 function getForwardAccelDecel(state: RiderState, seg: RoadSegment, world: World): number {
   let v: number;
   if (state.turn === null) {
-    let a = accel(state, seg, world);
-    if (segmentCatDanger(seg.cats, state.along, state.v)) a = Math.min(a, 0);
+    const vEnd = turnSpeed(world.intersections[seg.exitIxn]);   // the corner's safe entry speed (0 at a terminus)
+    const near = nearIntersection(state, seg);
+    // far from the turn -> constant accel; near it -> the constant decel (v^2 = vEnd^2 + 2*a*d) that lands
+    // him at vEnd right at the commit point, recomputed each press so it self-corrects integration drift.
+    let a = A_ACCEL;
+    if (near) {
+      const d = seg.alongWhereRiderCommitsToTurn - state.along;
+      a = d <= 1e-6 ? 0 : (vEnd * vEnd - state.v * state.v) / (2 * d);
+    }
+    if (segmentCatDanger(seg.cats, state.along, state.v)) a = Math.min(a, 0);   // hold throttle for a crossing cat
     v = clamp(state.v + a, 0, V_MAX);
-    if (nearIntersection(state, seg)) v = Math.max(v, turnSpeed(world.intersections[seg.exitIxn]));
+    if (near) v = Math.max(v, vEnd);   // don't crawl below the corner's entry speed
   } else {
     v = clamp(state.turn.phase === 'straightening' ? state.v : state.v + A_ACCEL, 0, V_MAX);
     if (Math.abs(state.angle) > 1e-3) {   // road-edge cap: drift = v*(1-cos)/TURN_OMEGA must stay inside `room`
@@ -199,33 +212,3 @@ function getRotationalAccel(state: RiderState): number {
 function nearIntersection(state: RiderState, seg: RoadSegment): boolean {
   return seg.length - state.along <= APPROACH_INTERSECTION_DIST;
 }
-
-// Acceleration (m/press^2): constant A_ACCEL while the turn is far; once near, the exact constant decel
-// (v^2 = vEnd^2 + 2*a*d) that lands the Rider at the exit's turn speed right at the commit point — 0 at a
-// terminus, so he coasts to a stop. Recomputed each press, self-consistent, so it corrects drift.
-function accel(state: RiderState, seg: RoadSegment, world: World): number {
-  if (!nearIntersection(state, seg)) return A_ACCEL;
-  const d = seg.alongWhereRiderCommitsToTurn - state.along;
-  if (d <= 1e-6) return 0;
-  const vEnd = turnSpeed(world.intersections[seg.exitIxn]);
-  return (vEnd * vEnd - state.v * state.v) / (2 * d);
-}
-
-// Commit to the turn: re-express the Rider in the NEXT segment's frame at the inner-edge crossing. He
-// lands ON the inner edge (across = sgn*hw), still pointed the old way (angle = -sgn*theta), a touch
-// before its begin line (along = -hw/sin(theta), negative) — the same physical point, so continuous.
-function enterStraighten(seg: RoadSegment, world: World, v: number): RiderState {
-  const ixn = world.intersections[seg.exitIxn];
-  const next = world.segments[ixn.to as string];   // a turn (not a terminus): cruise only reaches here for ixn.to != null
-  const sgn = ixn.sign, theta = ixn.angle, hw = seg.width / 2;
-  return {
-    segment: next.id,
-    along: -hw / Math.sin(theta),
-    across: sgn * hw,
-    angle: -sgn * theta,
-    v,
-    turn: { angle: theta, phase: 'straightening', turnRate: 0 },
-    gazeStep: -1,   // a fresh turning state; rider_gaze.ts keeps the eyes on the road through the turn
-  };
-}
-
