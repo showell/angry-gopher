@@ -53,7 +53,6 @@ const FOV = 70;
 const FOCAL = (W / 2) / Math.tan((FOV / 2) * Math.PI / 180);   // base focal, looking straight ahead
 const EYE_H = 1.2;
 const MIN_SCENERY_PX = 2;   // skip scenery that would project shorter than this (kept tight so small objects fade in rather than pop)
-const RAIL_DEPTH_BIAS = 6;  // metres a guard rail is pulled forward in the depth sort, so it sits in front of same-depth corner billboards
 
 // The Rider's focal point pulls IN as he leans into a turn — he's watching the corner he's
 // executing, not the far mountains. We measure the lean as a fraction of the enforced
@@ -249,9 +248,8 @@ function render(rider: RiderState): void {
   // (Rails used to be a separate pass UNDER all scenery, so a billboard standing BEHIND a rail still
   // painted over it.) Each object owns how it draws at each detail level (drawAsNear within DETAIL_DIST,
   // drawAsFar beyond). Scenery shorter than MIN_SCENERY_PX is culled (drops the far AND short — a tall
-  // tree stays in until very distant; a short critter drops sooner). A guard rail is pulled forward by
-  // RAIL_DEPTH_BIAS in the sort so it sits in FRONT of same-depth corner billboards — it rides the road's
-  // edge BETWEEN you and the critters that "crossed" to the far corner, so it should occlude them.
+  // tree stays in until very distant; a short critter drops sooner). A rail poly sorts by its own mean
+  // depth — small enough (one post/band at a time) that the honest depth is accurate; no fudge factor.
   const drawables: { forward: number; draw: () => void }[] = [];
   for (const s of scene.scenery) {
     if (s.forward > NEAR && (s.height / s.forward) * camFocal >= MIN_SCENERY_PX)
@@ -259,7 +257,7 @@ function render(rider: RiderState): void {
   }
   for (const p of scene.polys) {
     const fwd = p.pts.reduce((a, q) => a + q.forward, 0) / p.pts.length;
-    drawables.push({ forward: fwd - RAIL_DEPTH_BIAS, draw: () => drawGuardRail(ctx, p, screenOf) });
+    drawables.push({ forward: fwd, draw: () => drawGuardRail(ctx, p, screenOf) });
   }
   drawables.sort((a, b) => b.forward - a.forward).forEach((d) => d.draw());
 
