@@ -1,6 +1,7 @@
-// truck.ts — the vehicle we chase: a bright red rectangular prism that drives the route ahead of us.
-// It rides the CENTRE LINE of whatever segment it's on (no lean, no lane drift), so its box is built
-// straight in that segment's frame and inherits the segment/arc heading.
+// truck.ts — the vehicle we chase: a dark-blue truck (a box TRAILER plus a CAB in front whose nose is a
+// sloped windshield) that drives the route ahead of us. It rides the CENTRE LINE of whatever segment
+// it's on (no lean, no lane drift), so its body is built straight in that segment's frame and inherits
+// the segment/arc heading.
 //
 // MOTION (a tiny simulation of its own, advanced one step per rider frame and kept in a history
 // alongside the rider's so it scrubs cleanly on pause/reverse):
@@ -30,9 +31,11 @@ import { routeDistance, A_ACCEL, V_BASE, V_MAX, APPROACH_INTERSECTION_DIST } fro
 import { turnSpeed } from './intersection.ts';
 
 // ---- dimensions (metres) ----
-const LENGTH = 7;
-const WIDTH = 2.4;     // narrower than the 4m lane, so it fits and rounds the corners
-const HEIGHT = 3;
+const LENGTH = 8.4;    // trailer length (20% longer than before, for visibility)
+const WIDTH = 2.4;     // narrower than the 4m lane, so it fits and rounds the corners (can't grow — road width)
+const HEIGHT = 3.6;    // trailer + cab height (20% taller than before)
+const CAB_LENGTH = 3.5;        // the cab sticks this far out in FRONT of the trailer
+const CAB_ROOF_FRAC = 0.3;     // the cab roof is this fraction of the cab; the windshield rakes down over the rest
 
 // ---- the chase ----
 const START_AHEAD = 500;            // metres in front of the rider at the start (the initial lead)
@@ -121,17 +124,28 @@ function lower(p: RiderPt, h: number): Pt3 {
 // frame `map`. We map its four ground corners into the rider's frame, raise the roof, then paint the
 // (up to) five visible faces back-to-front so the box occludes itself correctly.
 function buildTruck(map: (a: number, x: number) => RiderPt, centerAlong: number, hw: number, braking: boolean): Scenery {
-  const a0 = centerAlong - LENGTH / 2, a1 = centerAlong + LENGTH / 2;   // rear (toward us), front (away)
+  const a0 = centerAlong - LENGTH / 2, a1 = centerAlong + LENGTH / 2;   // trailer rear (toward us) / front (away)
   const xl = hw - WIDTH / 2, xr = hw + WIDTH / 2;
-  const RL = map(a0, xl), RR = map(a0, xr), FL = map(a1, xl), FR = map(a1, xr);
+  const RL = map(a0, xl), RR = map(a0, xr);
   const g = (p: RiderPt): Pt3 => lower(p, 0);          // ground corner
   const t = (p: RiderPt): Pt3 => lower(p, HEIGHT);     // roof corner
+
+  // the cab, in FRONT of the trailer (a1..a2): the roof runs flush from the trailer to aRoof, then a
+  // windshield rakes down from the roof (HEIGHT) to half height at the nose, then a vertical lower front.
+  // Trailer + cab share one flush top and one continuous side, so the trailer's front face is internal
+  // (not drawn) and the side silhouette runs straight over the roof to the windshield.
+  const a2 = a1 + CAB_LENGTH, aRoof = a1 + CAB_LENGTH * CAB_ROOF_FRAC;
+  const roofL = lower(map(aRoof, xl), HEIGHT), roofR = lower(map(aRoof, xr), HEIGHT);   // windshield top
+  const windL = lower(map(a2, xl), HEIGHT / 2), windR = lower(map(a2, xr), HEIGHT / 2); // windshield bottom / nose top
+  const noseL = lower(map(a2, xl), 0), noseR = lower(map(a2, xr), 0);                   // nose bottom
+
   const faces: Face[] = [
-    { color: BODY, pts: [g(RL), g(RR), t(RR), t(RL)] },   // rear (the face we chase)
-    { color: BODY, pts: [g(FL), g(FR), t(FR), t(FL)] },   // front
-    { color: SIDE, pts: [g(RL), g(FL), t(FL), t(RL)] },   // left
-    { color: SIDE, pts: [g(RR), g(FR), t(FR), t(RR)] },   // right
-    { color: ROOF, pts: [t(RL), t(RR), t(FR), t(FL)] },   // roof
+    { color: BODY, pts: [g(RL), g(RR), t(RR), t(RL)] },              // trailer rear (the face we chase)
+    { color: SIDE, pts: [g(RL), t(RL), roofL, windL, noseL] },       // LEFT side silhouette (trailer + cab)
+    { color: SIDE, pts: [g(RR), t(RR), roofR, windR, noseR] },       // RIGHT side silhouette
+    { color: ROOF, pts: [t(RL), t(RR), roofR, roofL] },              // roof (trailer top + cab roof, flush)
+    { color: BODY, pts: [roofL, roofR, windR, windL] },              // windshield (sloped; not glass yet)
+    { color: BODY, pts: [windL, windR, noseR, noseL] },              // cab nose (lower front)
   ];
   const avgF = (f: Face): number => f.pts.reduce((s, p) => s + p.forward, 0) / f.pts.length;
   const center = map(centerAlong, hw);
