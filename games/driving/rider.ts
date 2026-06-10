@@ -129,11 +129,59 @@ export function routeDistance(state: RiderState, world: World): number {
   return d;
 }
 
-// Advance the BIKE one frame. Pure: (RiderState, World) -> the next RiderState, with the gaze carried
-// through UNCHANGED — the caller runs the gaze as its own step right after (nextRiderGaze, rider_gaze.ts).
+// Advance the BIKE one frame. Pure; the gaze is carried through unchanged and advanced separately (the
+// caller runs nextRiderGaze right after — rider_gaze.ts).
 export function getNextRiderState(state: RiderState, world: World): RiderState {
   const seg = world.segments[state.segment];
-  return state.turn === null ? cruise(state, seg, world) : straightenStep(state, seg);
+
+  // CRUISING the straight: accelerate (or brake for the upcoming turn), then advance along.
+  if (state.turn === null) {
+    const exitIxn = world.intersections[seg.exitIxn];
+    let a = accel(state, seg, world);
+    if (segmentCatDanger(seg.cats, state.along, state.v)) a = Math.min(a, 0);   // hold throttle for a crossing cat (never brake for it)
+    let v = clamp(state.v + a, 0, V_MAX);
+    if (exitIxn.to === null) {   // terminus: coast to the end and stop
+      const along = state.along + v;
+      return along >= seg.length ? { ...state, along: seg.length, v: 0 } : { ...state, along, v };
+    }
+    if (nearIntersection(state, seg)) v = Math.max(v, turnSpeed(exitIxn));   // don't crawl below the corner's entry speed
+    const along = state.along + v;
+    if (along < seg.alongWhereRiderCommitsToTurn) return { ...state, along, v };
+    return enterStraighten(seg, world, v);   // crossed the inner edge -> commit to the turn
+  }
+
+  // TURNING: one press of straighten-out, in two phases carried in turn.phase. They're EXPLICIT and never
+  // revert: deriving them from |angle| bang-bangs the bike, since the recenter lean re-crosses the
+  // alignment threshold. (1) straightening: rotate the heading to 0 at the fixed ceiling, holding the
+  // corner's entry speed, arcing to the far edge. (2) recentering: ease back to centre, re-accelerating.
+  const turn = state.turn;
+  const hw = seg.width / 2;
+  const straightening = turn.phase === 'straightening';
+  const aim = straightening ? 0 : -state.across / RECENTER_DISTANCE;
+  // settle the rotation onto `aim` without overshoot (a brake-to-zero profile), then jerk-limit it.
+  const settleRate = Math.min(TURN_OMEGA, Math.sqrt(2 * TURN_RATE_STEP * Math.abs(aim - state.angle)));
+  const desired = clamp(aim - state.angle, -settleRate, settleRate);
+  const dHeading = clamp(desired, turn.turnRate - TURN_RATE_STEP, turn.turnRate + TURN_RATE_STEP);
+  const angle = state.angle + dHeading;
+
+  // hold the entry speed through the angle-kill, re-accelerate while recentring — but cap v so that nulling
+  // the CURRENT heading can't drift past the road edge (drift = v*(1-cos)/TURN_OMEGA, kept inside `room`).
+  let v = straightening ? state.v : state.v + A_ACCEL;
+  if (Math.abs(state.angle) > 1e-3) {
+    const room = Math.max(STRAIGHTEN_MARGIN, hw - STRAIGHTEN_MARGIN - state.across * Math.sign(state.angle));
+    v = Math.min(v, TURN_OMEGA * room / (1 - Math.cos(state.angle)));
+  }
+  v = clamp(v, 0, V_MAX);
+
+  const midHeading = state.angle + dHeading / 2;   // average heading over the frame -> integrate the arc
+  const along = state.along + v * Math.cos(midHeading);
+  const across = state.across + v * Math.sin(midHeading);
+
+  // hand back to cruise once centred AND zeroing the heading is itself within one tilt-step
+  if (Math.abs(across) < CENTER_EPS && Math.abs(state.angle) < TURN_RATE_STEP)
+    return { segment: seg.id, along, across: 0, angle: 0, v, turn: null, gazeStep: state.gazeStep };
+  const phase = straightening && Math.abs(angle) < ALIGN_EPS ? 'recentering' : turn.phase;
+  return { segment: seg.id, along, across, angle, v, turn: { angle: turn.angle, phase, turnRate: dHeading }, gazeStep: state.gazeStep };
 }
 
 // Is the Rider close enough to the upcoming intersection to start slowing for it? Every segment exits
@@ -142,13 +190,9 @@ function nearIntersection(state: RiderState, seg: RoadSegment): boolean {
   return seg.length - state.along <= APPROACH_INTERSECTION_DIST;
 }
 
-// Acceleration (m/press^2) PURELY from position, velocity, and distance-to-turn:
-//   intersection still far -> keep accelerating at a constant rate.
-//   intersection near       -> the EXACT constant deceleration that lands the Rider at the exit's turn
-//     speed (0 at the terminus, so he coasts to a stop) right at the commit point, from
-//     v^2 = vEnd^2 + 2*a*d. Recomputed every press: constant-decel kinematics are self-consistent, so
-//     this reproduces the same a each press while correcting integration drift. (The terminus is just an
-//     intersection with turn speed 0 — no exit-less special case.)
+// Acceleration (m/press^2): constant A_ACCEL while the turn is far; once near, the exact constant decel
+// (v^2 = vEnd^2 + 2*a*d) that lands the Rider at the exit's turn speed right at the commit point — 0 at a
+// terminus, so he coasts to a stop. Recomputed each press, self-consistent, so it corrects drift.
 function accel(state: RiderState, seg: RoadSegment, world: World): number {
   if (!nearIntersection(state, seg)) return A_ACCEL;
   const d = seg.alongWhereRiderCommitsToTurn - state.along;
@@ -157,33 +201,9 @@ function accel(state: RiderState, seg: RoadSegment, world: World): number {
   return (vEnd * vEnd - state.v * state.v) / (2 * d);
 }
 
-function cruise(state: RiderState, seg: RoadSegment, world: World): RiderState {
-  // A cat crossing the road just ahead: the rider sees it and HOLDS OFF the throttle (never accelerates
-  // toward it) — but braking for an intersection still applies. He doesn't slow for the cat, he just
-  // stops speeding up, so it clears in front of him by the frame he arrives.
-  let a = accel(state, seg, world);
-  if (segmentCatDanger(seg.cats, state.along, state.v)) a = Math.min(a, 0);
-  let v = clamp(state.v + a, 0, V_MAX);
-  const exitIxn = world.intersections[seg.exitIxn];
-
-  if (exitIxn.to === null) {   // the terminus: coast to the end (braked by accel), then the game is over
-    const along = state.along + v;
-    if (along >= seg.length) return { ...state, along: seg.length, v: 0 };   // reached the end -> stop
-    return { ...state, along, v };
-  }
-
-  // braked to the lane-filling speed; cross the inner edge and straighten into the next
-  if (nearIntersection(state, seg)) v = Math.max(v, turnSpeed(exitIxn));   // never crawl below the lane-filling speed
-  const along = state.along + v;
-  if (along < seg.alongWhereRiderCommitsToTurn) return { ...state, along, v };   // cross the inner edge -> commit
-  return enterStraighten(seg, world, v);
-}
-
-// Crossing into a turn: the moment the Rider crosses the extension of the next segment's INNER edge (at
-// alongWhereRiderCommitsToTurn on this segment) we re-express him in the next segment's frame and
-// straighten out. Crossing that edge, the Rider lands ON the inner edge (across = sgn*hw — the right
-// edge for a right turn), still pointed the OLD way (angle = -sgn*theta), and a touch BEFORE the new
-// segment's begin line (along = -hw/sin(theta), negative — expected). Same physical point, so continuous.
+// Commit to the turn: re-express the Rider in the NEXT segment's frame at the inner-edge crossing. He
+// lands ON the inner edge (across = sgn*hw), still pointed the old way (angle = -sgn*theta), a touch
+// before its begin line (along = -hw/sin(theta), negative) — the same physical point, so continuous.
 function enterStraighten(seg: RoadSegment, world: World, v: number): RiderState {
   const ixn = world.intersections[seg.exitIxn];
   const next = world.segments[ixn.to as string];   // a turn (not a terminus): cruise only reaches here for ixn.to != null
@@ -197,69 +217,5 @@ function enterStraighten(seg: RoadSegment, world: World, v: number): RiderState 
     turn: { angle: theta, phase: 'straightening', turnRate: 0 },
     gazeStep: -1,   // a fresh turning state; rider_gaze.ts keeps the eyes on the road through the turn
   };
-}
-
-// One press of straighten-out, run in two EXPLICIT, SEQUENTIAL phases carried in turn.phase. (Deriving
-// the phase from |angle| each press instead caused a wiggle: the recenter lean raised |angle| past the
-// threshold, which flipped the bike back into "still misaligned, kill the angle", which rotated it
-// straight again — a bang-bang oscillation. The phase, once advanced, never reverts.)
-//   (1) 'straightening' — ANGLE-KILL (urgent): rotate the heading to 0 at TURN_OMEGA, holding the lane-
-//       filling speed; the bike arcs across to the far edge. v_safe is the hard road-edge cap. Heading
-//       reaches 0 -> finish (if already centred) or hand off to recenter.
-//   (2) 'recentering' — at leisure: aim at the centre line RECENTER_DISTANCE ahead, so the offset closes
-//       LINEARLY and the Rider is back at centre that far down the road. Re-accelerating; resume
-//       cruising once centred (the residual lean is tiny).
-function straightenStep(state: RiderState, seg: RoadSegment): RiderState {
-  const hw = seg.width / 2;
-  const t = state.turn as Turning;
-  // Rotate at a FIXED ceiling, the same for every turn — the lean it produces is MAX_LEAN. What varies
-  // by angle is the entry speed (turnSpeed): the sim picked each so this rotation rate sweeps the drift
-  // exactly to the far edge without overshooting it.
-  const omega = TURN_OMEGA;
-  const killing = t.phase === 'straightening';     // angle-kill
-
-  // angle-kill drives the heading to 0. The recentre leans PROPORTIONALLY to how far off the Rider still
-  // is (aim = -across/RECENTER_DISTANCE): far off -> leaned -> drifting in; as he nears the centre the
-  // lean fades on its own, so he arrives upright with no residual to snap out (lean and offset reach 0
-  // together).
-  const aim = killing ? 0 : -state.across / RECENTER_DISTANCE;
-  // Approach the aim on a BRAKING profile: cap the rotation rate to what can still decelerate (at
-  // TURN_RATE_STEP/press) to 0 by the time the heading reaches the aim — sqrt(2*step*gap). So the heading
-  // SETTLES onto the aim instead of coasting past it and wobbling (the rate can't change instantly, so
-  // without braking it always overshoots a moving target).
-  const gap = aim - state.angle;
-  const lim = Math.min(omega, Math.sqrt(2 * TURN_RATE_STEP * Math.abs(gap)));
-  const desired = clamp(gap, -lim, lim);
-  // JERK-LIMIT: tilt = LEAN_PER_OMEGA * the per-press rotation, so capping how much the rotation may
-  // change per press (TURN_RATE_STEP) caps the tilt change to MAX_TILT_STEP — no sharp banking.
-  const dHeading = clamp(desired, t.turnRate - TURN_RATE_STEP, t.turnRate + TURN_RATE_STEP);
-  const angle = state.angle + dHeading;
-
-  // hold the turn speed through the angle-kill (no accelerating mid-corner); re-accelerate while
-  // recentring. v_safe is the hard road-edge cap: nulling the CURRENT heading a at radius R = v/omega
-  // drifts R*(1 - cos a) = v*(1 - cos a)/omega toward the edge it points at, so cap v to keep that inside
-  // `room`. The tabulated turnSpeed was found under this very cap, so the rider holds it through the kill
-  // and fills the lane to the far edge.
-  let v = killing ? state.v : state.v + A_ACCEL;
-  const a = state.angle;
-  if (Math.abs(a) > 1e-3) {
-    // floor `room` at the margin so v_safe never reaches 0 (which would FREEZE the Rider): at the far
-    // edge with a near-zero heading — the recenter about to lean back the other way — room would be ~0.
-    // The heading is tiny there, so relaxing the cap is harmless.
-    const room = Math.max(STRAIGHTEN_MARGIN, hw - STRAIGHTEN_MARGIN - state.across * Math.sign(a));
-    v = Math.min(v, omega * room / (1 - Math.cos(a)));
-  }
-  v = clamp(v, 0, V_MAX);
-
-  const mid = state.angle + dHeading / 2;
-  const along = state.along + v * Math.cos(mid);
-  const across = state.across + v * Math.sin(mid);
-
-  const aligned = Math.abs(angle) < ALIGN_EPS, centred = Math.abs(across) < CENTER_EPS;
-  // hand off to cruise only when the incoming heading is already within one tilt-step of 0, so zeroing
-  // it (this frame's delta is -state.angle) is itself a <= MAX_TILT_STEP change.
-  if (centred && Math.abs(state.angle) < TURN_RATE_STEP) return { segment: seg.id, along, across: 0, angle: 0, v, turn: null, gazeStep: state.gazeStep };
-  const phase = killing && aligned ? 'recentering' : t.phase;
-  return { segment: seg.id, along, across, angle, v, turn: { angle: t.angle, phase, turnRate: dHeading }, gazeStep: state.gazeStep };
 }
 
