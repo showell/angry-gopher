@@ -4,7 +4,7 @@
 // transforms (lengths + turn signs) — the same relational facts getNextRiderState uses.
 //
 // Run: node test/test_model.ts
-import { initialRiderState, getNextRiderState, assertInvariants, MAX_LEAN, TURN_OMEGA, MAX_TURN_ANGLE, leanFor, gazeAngle, GAZE_SEQUENCE, APPROACH_INTERSECTION_DIST, routeDistance } from '../rider.ts';
+import { initialRiderState, getNextRiderState, MAX_LEAN, TURN_OMEGA, MAX_TURN_ANGLE, leanFor, gazeAngle, GAZE_SEQUENCE, APPROACH_INTERSECTION_DIST, routeDistance } from '../rider.ts';
 import type { RiderState } from '../rider.ts';
 import { initialTruck, nextTruck, courseLength } from '../truck.ts';
 import type { TruckState } from '../truck.ts';
@@ -53,6 +53,33 @@ function localToRef(idx: number, a: number, x: number, world: World): P {
 }
 function inRefFrame(s: RiderState, world: World): P {
   return localToRef(world.order.indexOf(s.segment), s.along, s.across, world);
+}
+
+// Per-state invariants (moved out of getNextRiderState — these are a TEST concern, not a runtime cost in
+// the shipped game). The Rider may sit BEFORE a segment's start (negative along — he crosses into a turn
+// at the inner edge, just shy of the begin line); this pins down "how far before is reasonable", plus the
+// usual finite and bounded checks.
+const QUARTER = Math.PI / 2;
+function assert(cond: boolean, msg: string): void {
+  if (!cond) throw new Error('invariant violated: ' + msg);
+}
+function assertInvariants(s: RiderState, world: World): void {
+  const seg = world.segments[s.segment];
+  assert(Number.isFinite(s.along) && Number.isFinite(s.across) && Number.isFinite(s.angle),
+         `finite (${s.along},${s.across},${s.angle})`);
+  assert(Number.isFinite(s.v) && s.v >= -1e-9 && s.v <= 8, `v sane (${s.v})`);
+  assert(Math.abs(s.angle) <= QUARTER + 1e-6, `|angle| <= 90deg (${s.angle})`);
+  // a turn enters at along = -hw/sin(entryAngle), before the begin line — that's expected
+  const entryAngle = seg.entryIxn ? world.intersections[seg.entryIxn].angle : 0;
+  const entryFloor = entryAngle > 0 ? -(seg.width / 2) / Math.sin(entryAngle) : 0;
+  assert(s.along >= entryFloor - 1e-6, `along not far before start (${s.along})`);
+  assert(s.along <= seg.length + 1e-6, `along not past end (${s.along})`);
+  assert(Math.abs(s.across) <= seg.width / 2 + 1, `across bounded (${s.across})`);
+  if (s.turn === null) {
+    assert(Math.abs(s.across) < 1e-6 && Math.abs(s.angle) < 1e-6, 'cruising => centred and aligned');
+  } else {
+    assert(s.gazeStep < 0, 'no distracted glance mid-turn (eyes on the road)');
+  }
 }
 
 // --- "roads don't cross themselves" (the exact invariant) ---

@@ -80,7 +80,6 @@ const STRAIGHTEN_MARGIN = 0.1;              // hard safety: keep the drift bulge
 const RECENTER_DISTANCE = 30;               // recenter lean = -across/this; bigger = gentler lean, slower return to centre
 const ALIGN_EPS = 0.02;                     // "aligned" once |angle| is below this (rad)
 const CENTER_EPS = 0.05;                    // "centred" once |across| is below this (m)
-const QUARTER = Math.PI / 2;
 
 // the "distracted rider": a slow glance toward the roadside pigs and back (~40 frames), built rather
 // than spelled out to avoid a wall of float literals. It fires once per segment — but ONLY on a leg
@@ -162,9 +161,7 @@ function nextGazeStep(gazeStep: number, distToEnd: number, hasPigs: boolean): nu
 // before each draw; the returned state is what the renderer is handed.
 export function getNextRiderState(state: RiderState, world: World): RiderState {
   const seg = world.segments[state.segment];
-  const next = state.turn === null ? cruise(state, seg, world) : straightenStep(state, seg);
-  assertInvariants(next, world);
-  return next;
+  return state.turn === null ? cruise(state, seg, world) : straightenStep(state, seg);
 }
 
 // Is the Rider close enough to the upcoming intersection to start slowing for it? Every segment exits
@@ -298,28 +295,3 @@ function straightenStep(state: RiderState, seg: RoadSegment): RiderState {
   return { segment: seg.id, along, across, angle, v, turn: { angle: t.angle, phase, turnRate: dHeading }, gazeStep: state.gazeStep };
 }
 
-// Invariants. The Rider may sit BEFORE a segment's start (negative along — he crosses into a turn at the
-// inner edge, just shy of the begin line); this pins down "how far before is reasonable", plus the usual
-// finite and bounded checks.
-function assert(cond: boolean, msg: string): void {
-  if (!cond) throw new Error('invariant violated: ' + msg);
-}
-
-export function assertInvariants(s: RiderState, world: World): void {
-  const seg = world.segments[s.segment];
-  assert(Number.isFinite(s.along) && Number.isFinite(s.across) && Number.isFinite(s.angle),
-         `finite (${s.along},${s.across},${s.angle})`);
-  assert(Number.isFinite(s.v) && s.v >= -1e-9 && s.v <= 8, `v sane (${s.v})`);
-  assert(Math.abs(s.angle) <= QUARTER + 1e-6, `|angle| <= 90deg (${s.angle})`);
-  // a turn enters at along = -hw/sin(entryAngle), before the begin line — that's expected
-  const entryAngle = seg.entryIxn ? world.intersections[seg.entryIxn].angle : 0;
-  const entryFloor = entryAngle > 0 ? -(seg.width / 2) / Math.sin(entryAngle) : 0;
-  assert(s.along >= entryFloor - 1e-6, `along not far before start (${s.along})`);
-  assert(s.along <= seg.length + 1e-6, `along not past end (${s.along})`);
-  assert(Math.abs(s.across) <= seg.width / 2 + 1, `across bounded (${s.across})`);
-  if (s.turn === null) {
-    assert(Math.abs(s.across) < 1e-6 && Math.abs(s.angle) < 1e-6, 'cruising => centred and aligned');
-  } else {
-    assert(s.gazeStep < 0, 'no distracted glance mid-turn (eyes on the road)');
-  }
-}
