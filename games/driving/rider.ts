@@ -196,17 +196,10 @@ function getForwardAccelDecel(state: RiderState, seg: RoadSegment, world: World)
     v = clamp(state.v + a, 0, V_MAX);
     if (near) v = Math.max(v, vEnd);   // don't crawl below the corner's entry speed
   } else {
-    // The road edge is an obstacle, treated like any other. Assume the rider HOLDS his current heading (no
-    // credit for the rotation coming next frame) and measure how far along it until he'd run off the edge.
-    // If that's within DANGER_STEPS frames at the current speed, brake kinematically to arrive at the edge at
-    // v=0; otherwise accelerate. One rule for the whole turn — no phase check.
+    // The road edge is an obstacle, treated like any other: if he's in danger of hitting the shoulder, brake
+    // kinematically to arrive at it at v=0; otherwise accelerate. One rule for the whole turn — no phase check.
     let a = A_ACCEL;
-    const sin = Math.abs(Math.sin(state.angle));
-    if (sin > 1e-6) {
-      const room = Math.max(STRAIGHTEN_MARGIN, seg.width / 2 - STRAIGHTEN_MARGIN - state.across * Math.sign(state.angle));
-      const dEdge = room / sin;                                                   // distance to the edge holding this heading
-      if (dEdge < DANGER_STEPS * state.v) a = -state.v * state.v / (2 * dEdge);    // brake to hit the edge at v=0
-    }
+    if (isInDangerOfHittingShoulder(state, seg)) a = -state.v * state.v / (2 * shoulderDistance(state, seg));
     v = clamp(state.v + a, 0, V_MAX);
   }
   return v - state.v;
@@ -229,4 +222,22 @@ function getRotationalAccel(state: RiderState): number {
 // through an intersection (a turn, or the terminus), so this is just "within braking distance of the end".
 function nearIntersection(state: RiderState, seg: RoadSegment): boolean {
   return seg.length - state.along <= APPROACH_INTERSECTION_DIST;
+}
+
+// How far the rider would travel, holding his CURRENT heading, before running off the road shoulder on the
+// side he's drifting toward — Infinity when he's pointed (near) straight down the lane. `room` is the lateral
+// gap to that edge; the danger side is set by his HEADING, not which side of centre he's on (heading left, the
+// left shoulder is the danger side wherever he sits), and it's floored at the safety margin. Dividing by
+// sin(angle) turns the lateral gap into distance along his heading.
+function shoulderDistance(state: RiderState, seg: RoadSegment): number {
+  const sin = Math.abs(Math.sin(state.angle));
+  if (sin <= 1e-6) return Infinity;
+  const room = Math.max(STRAIGHTEN_MARGIN, seg.width / 2 - STRAIGHTEN_MARGIN - state.across * Math.sign(state.angle));
+  return room / sin;
+}
+
+// Is the rider close enough to the shoulder that, holding this heading, he'd reach it within DANGER_STEPS
+// frames at his current speed? The forward decision brakes for it; the rotational decision will lean on it too.
+function isInDangerOfHittingShoulder(state: RiderState, seg: RoadSegment): boolean {
+  return shoulderDistance(state, seg) < DANGER_STEPS * state.v;
 }
