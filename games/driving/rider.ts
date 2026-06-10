@@ -77,7 +77,7 @@ export const TURN_OMEGA = MAX_LEAN / LEAN_PER_OMEGA;   // max heading turned per
 // angle to be at most 90deg — beyond that the Rider would enter the next segment pointed backwards.
 // test/test_model.ts enforces it on the configured route.
 export const MAX_TURN_ANGLE = 90 * Math.PI / 180;   // the largest turn the model allows
-const STRAIGHTEN_MARGIN = 0.1;              // hard safety: keep the drift bulge at least this far inside the edge (m)
+const STRAIGHTEN_MARGIN = 0.05;             // hard safety: keep the drift bulge at least this far inside the edge (m)
 const RECENTER_DISTANCE = 30;               // recenter lean = -across/this; bigger = gentler lean, slower return to centre
 const ALIGN_EPS = 0.02;                     // "aligned" once |angle| is below this (rad)
 const CENTER_EPS = 0.05;                    // "centred" once |across| is below this (m)
