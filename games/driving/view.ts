@@ -55,7 +55,7 @@ export function buildScene(state: RiderState, world: World, step: number, headYa
   // the camera looks along the Rider's path PLUS two view-only yaws: his gaze offset (the
   // distracted glance) and a subtle head-turn into the corner (headYaw, from the lean). Both
   // rotate the whole rider-relative scene with where he's looking.
-  const c: Pose = { along: state.along, across: state.across, angle: state.angle + gazeAngle(state) + headYaw };
+  const c: Pose = { along: state.along, across: state.across, angle: state.yaw + gazeAngle(state) + headYaw };
   const quads: Quad[] = [];
   const polys: Poly3[] = [];
   const scenery: Scenery[] = [];

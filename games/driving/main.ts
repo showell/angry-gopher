@@ -7,7 +7,7 @@
 //   ArrowUp   : getNextRiderState -> push the next RiderState onto the history
 //   ArrowDown : pop back to the previous RiderState
 // =============================================================================
-import { initialRiderState, getNextRiderState, riderHeading, riderLean, riderFinished, MAX_LEAN, routeDistance } from './rider.ts';
+import { initialRiderState, getNextRiderState, riderHeading, riderTilt, riderFinished, getDangerInfo, MAX_LEAN, routeDistance } from './rider.ts';
 import { gazeAngle, nextRiderGaze } from './rider_gaze.ts';
 import type { RiderState } from './rider.ts';
 import { initialTruck, nextTruck, courseLength } from './truck.ts';
@@ -40,7 +40,7 @@ wrap.appendChild(canvas);
 const hint = document.createElement('div');
 hint.textContent = '↑ drive forward · ↓ back up · SPACE auto';
 hint.style.cssText =
-  'position:absolute;left:50%;top:10px;transform:translateX(-50%);padding:6px 14px;' +
+  'position:absolute;left:50%;bottom:10px;transform:translateX(-50%);padding:6px 14px;' +
   'background:rgba(0,0,0,0.45);border:1px solid rgba(255,255,255,0.15);border-radius:4px;' +
   'font-size:12px;color:#e6e8eb;letter-spacing:0.4px;pointer-events:none;white-space:nowrap';
 wrap.appendChild(hint);
@@ -82,12 +82,6 @@ const currentRider = (): RiderState => riderHistory[riderHistory.length - 1];
 const COURSE_LENGTH = courseLength(world);
 const truckHistory: TruckState[] = [initialTruck()];
 const currentTruck = (): TruckState => truckHistory[truckHistory.length - 1];
-
-// the rider's current lean (camera roll), from the heading change of his latest step
-const currentLean = (): number => {
-  const n = riderHistory.length;
-  return n < 2 ? 0 : riderLean(riderHistory[n - 2], riderHistory[n - 1], world);
-};
 
 // The scene only needs redrawing when something CHANGES — the Rider advancing or
 // stepping. While paused and idle the picture is identical frame to frame, so we skip
@@ -173,13 +167,13 @@ let fps = 60, renderMs = 0, frameMs = TARGET_MS, droppedFrames = 0, dropFlash = 
 
 function drawHud(rider: RiderState): void {
   ctx.fillStyle = 'rgba(0,0,0,0.5)';
-  ctx.fillRect(12, 12, 510, 74);
+  ctx.fillRect(12, 12, 650, 74);
   ctx.font = 'bold 13px ui-monospace, monospace';
   ctx.textAlign = 'left';
 
   const phase = rider.turn ? rider.turn.phase : 'cruise';
-  const headingDeg = rider.angle * 180 / Math.PI;
-  const tiltDeg = currentLean() * 180 / Math.PI;
+  const headingDeg = rider.yaw * 180 / Math.PI;
+  const tiltDeg = riderTilt(rider) * 180 / Math.PI;
 
   // line 1: segment + phase + step, then the mode badge (green AUTO / amber PAUSED)
   const l1 = `${rider.segment}  ·  ${phase}  ·  step ${riderHistory.length - 1}  ·  `;
@@ -192,7 +186,8 @@ function drawHud(rider: RiderState): void {
   // the segment's direction, camera tilt, and speed. (These used to vanish during turns.)
   ctx.fillStyle = '#9fe6a0';
   const gazeDeg = gazeAngle(rider) * 180 / Math.PI;
-  ctx.fillText(`x ${rider.across.toFixed(2)}  y ${rider.along.toFixed(1)}  heading ${headingDeg.toFixed(1)}deg  tilt ${tiltDeg.toFixed(1)}deg  gaze ${gazeDeg.toFixed(0)}deg  v ${rider.v.toFixed(2)}`, 22, 50);
+  const danger = getDangerInfo(rider, world.segments[rider.segment]);
+  ctx.fillText(`x ${rider.across.toFixed(2)}  y ${rider.along.toFixed(1)}  heading ${headingDeg.toFixed(1)}deg  tilt ${tiltDeg.toFixed(1)}deg  danger ${danger}  gaze ${gazeDeg.toFixed(0)}deg  v ${rider.v.toFixed(2)}`, 22, 50);
 
   // line 3: frame HEALTH — wall-clock cadence vs the 60Hz budget; turns red while dropping
   ctx.fillStyle = dropFlash > 0 ? '#ff6b6b' : '#9fe6a0';
@@ -201,10 +196,10 @@ function drawHud(rider: RiderState): void {
 
 // draw one frame for the given RiderState (handed in by the loop)
 function render(rider: RiderState): void {
-  // the lean drives camera roll, the focal pull-in, AND a subtle head-yaw into the corner; compute
+  // the rider's TILT drives camera roll, the focal pull-in, AND a subtle head-yaw into the corner; compute
   // it first so the scene is built already looking slightly into the turn.
-  const lean = currentLean();
-  const headYaw = HEAD_YAW_FRAC * lean;
+  const tilt = riderTilt(rider);
+  const headYaw = HEAD_YAW_FRAC * tilt;
   // the step IS the clock for view-only animation (beacon blink, sunset): a pure function of it,
   // so it freezes on pause and runs backwards on reverse. It's the same step the HUD shows.
   const step = riderHistory.length - 1;
@@ -214,10 +209,10 @@ function render(rider: RiderState): void {
   // — rotates about the screen centre by his lean. The HUD/overlay (below) stay level.
   // The same lean also pulls the focal point in (see focalForLean); set it before any
   // projection this frame so the road, scenery, and horizon all share one camera.
-  camFocal = focalForLean(lean);
+  camFocal = focalForLean(tilt);
   ctx.save();
   ctx.translate(W / 2, H / 2);
-  ctx.rotate(-lean);
+  ctx.rotate(-tilt);
   ctx.translate(-W / 2, -H / 2);
 
   // sky above / grass below, drawn oversized so the rolled frame's corners stay filled
@@ -238,7 +233,7 @@ function render(rider: RiderState): void {
   // the horizon silhouettes ARE expensive (a per-column trig loop), so overscan them
   // by only what THIS lean exposes at the frame's corners — ~0 going straight (no
   // wasted columns), a little when banked. (Was a flat W+H, redrawn every frame.)
-  const overscan = Math.abs(Math.sin(lean)) * H / 2 + 16;
+  const overscan = Math.abs(Math.sin(tilt)) * H / 2 + 16;
   // the gaze yaws the view, so the far scenery shifts with it too (he's looking off-axis). The
   // lean pulls camFocal in, which squeezes the horizon horizontally; pass camFocal/FOCAL as the
   // vertical scale so it squeezes vertically by the same factor (it's a real focal change).

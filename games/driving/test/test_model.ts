@@ -32,7 +32,7 @@ function segHeadings(world: World): Record<string, number> {
   return h;
 }
 function heading(s: RiderState, h: Record<string, number>): number {
-  return h[s.segment] + s.angle;
+  return h[s.segment] + s.yaw;
 }
 
 // a point in segment[idx]'s frame, expressed in segment-1's frame (a chosen
@@ -66,10 +66,10 @@ function assert(cond: boolean, msg: string): void {
 }
 function assertInvariants(s: RiderState, world: World): void {
   const seg = world.segments[s.segment];
-  assert(Number.isFinite(s.along) && Number.isFinite(s.across) && Number.isFinite(s.angle),
-         `finite (${s.along},${s.across},${s.angle})`);
+  assert(Number.isFinite(s.along) && Number.isFinite(s.across) && Number.isFinite(s.yaw),
+         `finite (${s.along},${s.across},${s.yaw})`);
   assert(Number.isFinite(s.v) && s.v >= -1e-9 && s.v <= 8, `v sane (${s.v})`);
-  assert(Math.abs(s.angle) <= QUARTER + 1e-6, `|angle| <= 90deg (${s.angle})`);
+  assert(Math.abs(s.yaw) <= QUARTER + 1e-6, `|yaw| <= 90deg (${s.yaw})`);
   // a turn enters at along = -hw/sin(entryAngle), before the begin line — that's expected
   const entryAngle = seg.entryIxn ? world.intersections[seg.entryIxn].angle : 0;
   const entryFloor = entryAngle > 0 ? -(seg.width / 2) / Math.sin(entryAngle) : 0;
@@ -77,7 +77,7 @@ function assertInvariants(s: RiderState, world: World): void {
   assert(s.along <= seg.length + 1e-6, `along not past end (${s.along})`);
   assert(Math.abs(s.across) <= seg.width / 2 + 1, `across bounded (${s.across})`);
   if (s.turn === null) {
-    assert(Math.abs(s.across) < 1e-6 && Math.abs(s.angle) < 1e-6, 'cruising => centred and aligned');
+    assert(Math.abs(s.across) < 1e-6 && Math.abs(s.yaw) < 1e-6, 'cruising => centred and aligned');
   } else {
     assert(s.gazeStep < 0, 'no distracted glance mid-turn (eyes on the road)');
   }
