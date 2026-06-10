@@ -81,6 +81,7 @@ const STRAIGHTEN_MARGIN = 0.1;              // hard safety: keep the drift bulge
 const RECENTER_DISTANCE = 30;               // recenter lean = -across/this; bigger = gentler lean, slower return to centre
 const ALIGN_EPS = 0.02;                     // "aligned" once |angle| is below this (rad)
 const CENTER_EPS = 0.05;                    // "centred" once |across| is below this (m)
+const DANGER_STEPS = 15;                     // brake for the road edge once it's within this many frames at the current speed
 
 const clamp = (x: number, lo: number, hi: number): number => Math.max(lo, Math.min(hi, x));
 
@@ -175,10 +176,10 @@ function riderStateForNextSegment(riderState: RiderState, world: World): RiderSt
 }
 
 // THE FORWARD DECISION — throttle/brake — returned as the change in speed this frame (state.v + this is
-// the new speed; V_MAX, the >=0 floor, and the road-edge cap are all baked in). Cruising: accelerate, or
+// the new speed; V_MAX, the >=0 floor, and the road-edge brake are all baked in). Cruising: accelerate, or
 // kinematic-brake into the turn, holding the throttle (<=0) while a cat crosses, and never crawling below
-// the corner's entry speed. Turning: hold the entry speed through the angle-kill, re-accelerate while
-// recentring, but cap the speed so the drift from nulling the heading can't cross the road edge.
+// the corner's entry speed. Turning: accelerate unless the road edge is close (within DANGER_STEPS frames at
+// the current heading), in which case brake kinematically to arrive at it at v=0 — one rule, no phase check.
 function getForwardAccelDecel(state: RiderState, seg: RoadSegment, world: World): number {
   let v: number;
   if (state.turn === null) {
@@ -195,11 +196,18 @@ function getForwardAccelDecel(state: RiderState, seg: RoadSegment, world: World)
     v = clamp(state.v + a, 0, V_MAX);
     if (near) v = Math.max(v, vEnd);   // don't crawl below the corner's entry speed
   } else {
-    v = clamp(state.turn.phase === 'straightening' ? state.v : state.v + A_ACCEL, 0, V_MAX);
-    if (Math.abs(state.angle) > 1e-3) {   // road-edge cap: drift = v*(1-cos)/TURN_OMEGA must stay inside `room`
+    // The road edge is an obstacle, treated like any other. Assume the rider HOLDS his current heading (no
+    // credit for the rotation coming next frame) and measure how far along it until he'd run off the edge.
+    // If that's within DANGER_STEPS frames at the current speed, brake kinematically to arrive at the edge at
+    // v=0; otherwise accelerate. One rule for the whole turn — no phase check.
+    let a = A_ACCEL;
+    const sin = Math.abs(Math.sin(state.angle));
+    if (sin > 1e-6) {
       const room = Math.max(STRAIGHTEN_MARGIN, seg.width / 2 - STRAIGHTEN_MARGIN - state.across * Math.sign(state.angle));
-      v = Math.min(v, TURN_OMEGA * room / (1 - Math.cos(state.angle)));
+      const dEdge = room / sin;                                                   // distance to the edge holding this heading
+      if (dEdge < DANGER_STEPS * state.v) a = -state.v * state.v / (2 * dEdge);    // brake to hit the edge at v=0
     }
+    v = clamp(state.v + a, 0, V_MAX);
   }
   return v - state.v;
 }
