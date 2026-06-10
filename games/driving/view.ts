@@ -8,7 +8,7 @@
 // through the intersections ahead — plus the intersection just behind us.
 // =============================================================================
 import type { RiderState } from './rider.ts';
-import { gazeAngle } from './rider.ts';
+import { gazeAngle } from './rider_gaze.ts';
 import type { World } from './world.ts';
 import type { RoadSegment } from './road_segment.ts';
 import { critterScenery } from './critter.ts';

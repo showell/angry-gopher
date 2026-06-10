@@ -4,7 +4,8 @@
 // transforms (lengths + turn signs) — the same relational facts getNextRiderState uses.
 //
 // Run: node test/test_model.ts
-import { initialRiderState, getNextRiderState, MAX_LEAN, TURN_OMEGA, MAX_TURN_ANGLE, leanFor, gazeAngle, GAZE_SEQUENCE, APPROACH_INTERSECTION_DIST, routeDistance } from '../rider.ts';
+import { initialRiderState, getNextRiderState, MAX_LEAN, TURN_OMEGA, MAX_TURN_ANGLE, leanFor, APPROACH_INTERSECTION_DIST, routeDistance } from '../rider.ts';
+import { gazeAngle, nextRiderGaze, GAZE_SEQUENCE } from '../rider_gaze.ts';
 import type { RiderState } from '../rider.ts';
 import { initialTruck, nextTruck, courseLength } from '../truck.ts';
 import type { TruckState } from '../truck.ts';
@@ -156,7 +157,7 @@ function main(): void {
   let minGap = Infinity, maxGap = truck.pos;   // the truck's lead over the rider, tracked across the drive
 
   for (let i = 0; i < 8000; i++) {
-    const n = getNextRiderState(s, world);
+    const n = nextRiderGaze(getNextRiderState(s, world), world);   // bike, then gaze (the same order as main.ts)
     if (n.segment !== s.segment) crossings++;
     maxAcross = Math.max(maxAcross, Math.abs(n.across));
     maxV = Math.max(maxV, n.v);

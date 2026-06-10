@@ -7,7 +7,8 @@
 //   ArrowUp   : getNextRiderState -> push the next RiderState onto the history
 //   ArrowDown : pop back to the previous RiderState
 // =============================================================================
-import { initialRiderState, getNextRiderState, riderHeading, riderLean, riderFinished, MAX_LEAN, gazeAngle, routeDistance } from './rider.ts';
+import { initialRiderState, getNextRiderState, riderHeading, riderLean, riderFinished, MAX_LEAN, routeDistance } from './rider.ts';
+import { gazeAngle, nextRiderGaze } from './rider_gaze.ts';
 import type { RiderState } from './rider.ts';
 import { initialTruck, nextTruck, courseLength } from './truck.ts';
 import type { TruckState } from './truck.ts';
@@ -114,7 +115,8 @@ function setAuto(on: boolean): void {
 // advances in the same step so the two stacks stay the same length (reverse pops both).
 function advance(): void {
   const rider = currentRider();
-  const next = getNextRiderState(rider, world);
+  // each frame the rider moves the BIKE, then — right after — shifts his GAZE toward the pigs.
+  const next = nextRiderGaze(getNextRiderState(rider, world), world);
   if (next.segment !== rider.segment || next.along !== rider.along || next.across !== rider.across) {
     riderHistory.push(next);
     truckHistory.push(nextTruck(currentTruck(), routeDistance(next, world), world, COURSE_LENGTH));
