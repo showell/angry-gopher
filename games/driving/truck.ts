@@ -36,6 +36,16 @@ const WIDTH = 2.4;     // narrower than the 4m lane, so it fits and rounds the c
 const HEIGHT = 3.6;    // trailer + cab height (20% taller than before)
 const CAB_LENGTH = 3.5;        // the cab sticks this far out in FRONT of the trailer
 const CAB_ROOF_FRAC = 0.3;     // the cab roof is this fraction of the cab; the windshield rakes down over the rest
+// tires (round, drawn flat — no depth, since we never get close enough to see it). The trailer FLOOR
+// hovers just over the tire tops; the cab drops lower, its floor at the tire centre line.
+const TIRE_RADIUS = 0.5;
+const TRAILER_BOTTOM = 2 * TIRE_RADIUS + 0.12;   // trailer floor — just above the tire tops (a faint hover gap)
+const CAB_BOTTOM = TIRE_RADIUS;                  // cab floor — at the tire's horizontal diameter (its centre)
+const TIRE_PAIR_GAP = 1.2;                       // centre-to-centre within a tandem pair
+const TRAILER_AXLE_INSET = 1.6;                  // each trailer tire-pair sits this far in from its end
+const CAB_AXLE_FRAC = 0.55;                      // the cab's lone tire, this fraction along the cab
+const TIRE_COLOR = '#15151a';                    // near-black
+const TIRE_SIDES = 16;                           // polygon approximation of the circle
 
 // ---- the chase ----
 const START_AHEAD = 500;            // metres in front of the rider at the start (the initial lead)
@@ -120,43 +130,56 @@ function lower(p: RiderPt, h: number): Pt3 {
   return { right: p.right, forward: p.forward, height: h - groundDrop(p.right, p.forward) };
 }
 
-// Build the truck as one Scenery: a box centred on the lane centre at `centerAlong` in the segment
-// frame `map`. We map its four ground corners into the rider's frame, raise the roof, then paint the
-// (up to) five visible faces back-to-front so the box occludes itself correctly.
+// Build the truck as one Scenery, in the segment frame `map`: a TRAILER box hovering over its tires
+// plus a lower CAB in front, and round tires at the sides. Faces are painted back-to-front so the body
+// occludes itself (and its far-side tires) correctly.
 function buildTruck(map: (a: number, x: number) => RiderPt, centerAlong: number, hw: number, braking: boolean): Scenery {
-  const a0 = centerAlong - LENGTH / 2, a1 = centerAlong + LENGTH / 2;   // trailer rear (toward us) / front (away)
+  const a0 = centerAlong - LENGTH / 2, a1 = centerAlong + LENGTH / 2;   // trailer rear (toward us) / front
+  const a2 = a1 + CAB_LENGTH, aRoof = a1 + CAB_LENGTH * CAB_ROOF_FRAC;  // cab nose / windshield top
   const xl = hw - WIDTH / 2, xr = hw + WIDTH / 2;
-  const RL = map(a0, xl), RR = map(a0, xr);
-  const g = (p: RiderPt): Pt3 => lower(p, 0);          // ground corner
-  const t = (p: RiderPt): Pt3 => lower(p, HEIGHT);     // roof corner
+  const p3 = (along: number, x: number, h: number): Pt3 => lower(map(along, x), h);   // a body point, on the curved ground
 
-  // the cab, in FRONT of the trailer (a1..a2): the roof runs flush from the trailer to aRoof, then a
-  // windshield rakes down from the roof (HEIGHT) to half height at the nose, then a vertical lower front.
-  // Trailer + cab share one flush top and one continuous side, so the trailer's front face is internal
-  // (not drawn) and the side silhouette runs straight over the roof to the windshield.
-  const a2 = a1 + CAB_LENGTH, aRoof = a1 + CAB_LENGTH * CAB_ROOF_FRAC;
-  const roofL = lower(map(aRoof, xl), HEIGHT), roofR = lower(map(aRoof, xr), HEIGHT);   // windshield top
-  const windL = lower(map(a2, xl), HEIGHT / 2), windR = lower(map(a2, xr), HEIGHT / 2); // windshield bottom / nose top
-  const noseL = lower(map(a2, xl), 0), noseR = lower(map(a2, xr), 0);                   // nose bottom
-
-  const faces: Face[] = [
-    { color: BODY, pts: [g(RL), g(RR), t(RR), t(RL)] },              // trailer rear (the face we chase)
-    { color: SIDE, pts: [g(RL), t(RL), roofL, windL, noseL] },       // LEFT side silhouette (trailer + cab)
-    { color: SIDE, pts: [g(RR), t(RR), roofR, windR, noseR] },       // RIGHT side silhouette
-    { color: ROOF, pts: [t(RL), t(RR), roofR, roofL] },              // roof (trailer top + cab roof, flush)
-    { color: BODY, pts: [roofL, roofR, windR, windL] },              // windshield (sloped; not glass yet)
-    { color: BODY, pts: [windL, windR, noseR, noseL] },              // cab nose (lower front)
+  // Each SIDE is one silhouette (trailer + cab are coplanar, so no internal faces): up the rear, along
+  // the flush roof, down the windshield then the nose, back along the lower cab floor, up the step to the
+  // higher trailer floor (the trailer hovers over its tires; the cab drops to the tire centre).
+  const side = (x: number): Pt3[] => [
+    p3(a0, x, TRAILER_BOTTOM), p3(a0, x, HEIGHT), p3(aRoof, x, HEIGHT),
+    p3(a2, x, HEIGHT / 2), p3(a2, x, CAB_BOTTOM), p3(a1, x, CAB_BOTTOM), p3(a1, x, TRAILER_BOTTOM),
   ];
+  const faces: Face[] = [
+    { color: BODY, pts: [p3(a0, xl, TRAILER_BOTTOM), p3(a0, xr, TRAILER_BOTTOM), p3(a0, xr, HEIGHT), p3(a0, xl, HEIGHT)] },  // trailer rear (chased)
+    { color: SIDE, pts: side(xl) },
+    { color: SIDE, pts: side(xr) },
+    { color: ROOF, pts: [p3(a0, xl, HEIGHT), p3(a0, xr, HEIGHT), p3(aRoof, xr, HEIGHT), p3(aRoof, xl, HEIGHT)] },            // flush roof
+    { color: BODY, pts: [p3(aRoof, xl, HEIGHT), p3(aRoof, xr, HEIGHT), p3(a2, xr, HEIGHT / 2), p3(a2, xl, HEIGHT / 2)] },    // windshield (not glass yet)
+    { color: BODY, pts: [p3(a2, xl, HEIGHT / 2), p3(a2, xr, HEIGHT / 2), p3(a2, xr, CAB_BOTTOM), p3(a2, xl, CAB_BOTTOM)] },  // cab nose
+  ];
+
+  // tires: a flat circle in each side plane (no depth). 4 per side on the trailer — a tandem pair inset
+  // from each end — plus one per side under the cab. They join the face sort, so the body occludes their
+  // tops and the lower arcs poke out below the floor.
+  const tire = (alongC: number, x: number): Face => {
+    const pts: Pt3[] = [];
+    for (let i = 0; i < TIRE_SIDES; i++) {
+      const th = (i / TIRE_SIDES) * 2 * Math.PI;
+      pts.push(p3(alongC + TIRE_RADIUS * Math.cos(th), x, TIRE_RADIUS + TIRE_RADIUS * Math.sin(th)));
+    }
+    return { color: TIRE_COLOR, pts };
+  };
+  const rearAxle = a0 + TRAILER_AXLE_INSET, frontAxle = a1 - TRAILER_AXLE_INSET, cabAxle = a1 + CAB_LENGTH * CAB_AXLE_FRAC;
+  const axles = [rearAxle - TIRE_PAIR_GAP / 2, rearAxle + TIRE_PAIR_GAP / 2,
+                 frontAxle - TIRE_PAIR_GAP / 2, frontAxle + TIRE_PAIR_GAP / 2, cabAxle];
+  for (const x of [xl, xr]) for (const a of axles) faces.push(tire(a, x));
+
   const avgF = (f: Face): number => f.pts.reduce((s, p) => s + p.forward, 0) / f.pts.length;
   const center = map(centerAlong, hw);
 
-  // a small panel on the REAR face (along a0), in [across, height] fractions of the body — the two
-  // brake lights live here. Built lazily, drawn only when slowing.
+  // the two brake lights, a panel low on the trailer rear (now that the rear face starts at TRAILER_BOTTOM).
   const rearPanel = (xA: number, xB: number, hLo: number, hHi: number): Pt3[] =>
     [lower(map(a0, xA), hLo), lower(map(a0, xB), hLo), lower(map(a0, xB), hHi), lower(map(a0, xA), hHi)];
-  const BL = 0.26 * HEIGHT, BH = 0.60 * HEIGHT;   // brake-light height band (taller than before — bigger lights)
+  const BL = TRAILER_BOTTOM + 0.20 * (HEIGHT - TRAILER_BOTTOM), BH = TRAILER_BOTTOM + 0.50 * (HEIGHT - TRAILER_BOTTOM);
   const brakeLights: Pt3[][] = [
-    rearPanel(xl + 0.10 * WIDTH, xl + 0.36 * WIDTH, BL, BH),   // left light (wider, too)
+    rearPanel(xl + 0.10 * WIDTH, xl + 0.36 * WIDTH, BL, BH),   // left light
     rearPanel(xr - 0.36 * WIDTH, xr - 0.10 * WIDTH, BL, BH),   // right light
   ];
 
