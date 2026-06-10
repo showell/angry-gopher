@@ -30,8 +30,6 @@ import { segmentCatDanger } from './cat_motion.ts';
 // types
 // ----------------------------------------------------------------------------
 
-export interface Turning { angle: number; phase: 'straightening' | 'recentering'; tilt: number }
-
 // Which road edge the rider's projected arc would run off FIRST (NONE = he stays on the road). The rider
 // leans AWAY from the danger: LEFT -> tilt right, RIGHT -> tilt left. See getDangerInfo.
 export const DangerSide = { LEFT: 'LEFT', NONE: 'NONE', RIGHT: 'RIGHT' } as const;
@@ -44,14 +42,16 @@ export interface DangerInfo { side: DangerSide; steps: number }
 // physics simple). A RiderState is everything we know about him this frame:
 //   POSITION : segment + along (progress) + across (lateral offset) + yaw (heading vs the segment)
 //   VELOCITY : v (speed along the path, m/press)
-// `turn` is null while cruising; a small descriptor while turning. `gazeStep` carries the glance.
+//   LEAN     : tilt (the bike's roll — 0 when upright; it's what turns the bike, see getNextRiderState)
+// There is no "turning" mode any more: the rider is always just driving, sometimes leaned. `gazeStep` carries
+// the glance.
 export interface RiderState {
   segment: SegId;
   along: number;
   across: number;
   yaw: number;        // the bike's heading offset from straight down the lane (rad; + = pointed right)
   v: number;          // speed along the path (m/press)
-  turn: Turning | null;
+  tilt: number;       // the bike's lean (rad; + = leaned right). Yaws the heading at YAW_PER_TILT per unit.
   gazeStep: number;   // the "distracted rider" glance: -1 = eyes ahead, 0..8 = mid-glance, >=9 = done
 }
 
@@ -70,10 +70,6 @@ export const APPROACH_INTERSECTION_DIST = 60;
 // (the per-press heading change), with NO easing. See leanFor().
 export const LEAN_PER_OMEGA = 10;             // lean (rad) per rad of per-press heading change (~10deg on an 80deg turn)
 export const LEAN_CAP = 45 * Math.PI / 180;  // hard runtime cap on the lean
-// the tilt may change at most this much per press — no sharp banking. Since tilt = LEAN_PER_OMEGA * the
-// per-press rotation, this caps how fast the rotation rate may change.
-const MAX_TILT_STEP = 1 * Math.PI / 180;
-const TURN_RATE_STEP = MAX_TILT_STEP / LEAN_PER_OMEGA;
 
 // The rider leans at most this much, and the per-press rotation is capped to match, so a straighten-out
 // never banks past it. This single ceiling replaced the old angle-scaled omegaFor: the ROTATION RATE is
@@ -86,8 +82,6 @@ export const TURN_OMEGA = MAX_LEAN / LEAN_PER_OMEGA;   // max heading turned per
 // test/test_model.ts enforces it on the configured route.
 export const MAX_TURN_ANGLE = 90 * Math.PI / 180;   // the largest turn the model allows
 const STRAIGHTEN_MARGIN = 0.05;             // hard safety: keep the drift bulge at least this far inside the edge (m)
-const ALIGN_EPS = 0.02;                     // "aligned" once |angle| is below this (rad)
-const CENTER_EPS = 0.05;                    // "centred" once |across| is below this (m)
 const DANGER_STEPS = 15;                     // FORWARD brake: slow for the road edge once it's within this many frames at the current speed
 const TURN_DANGER_STEPS = 60;               // STEERING look-ahead: project the rider's arc this many frames (~1s at 60fps) to pick which way to lean
 const TILT_STEP = 1 * Math.PI / 180;        // the rider leans one more degree into the turn each frame (no damping yet)
@@ -100,7 +94,7 @@ const clamp = (x: number, lo: number, hi: number): number => Math.max(lo, Math.m
 // ----------------------------------------------------------------------------
 
 export function initialRiderState(world: World): RiderState {
-  return { segment: world.start, along: 0, across: 0, yaw: 0, v: V_BASE, turn: null, gazeStep: -1 };
+  return { segment: world.start, along: 0, across: 0, yaw: 0, v: V_BASE, tilt: 0, gazeStep: -1 };
 }
 
 // The Rider's heading relative to north (north = seg1's forward direction). This is the one ABSOLUTE
@@ -116,16 +110,16 @@ export function leanFor(dHeading: number): number {
   return clamp(LEAN_PER_OMEGA * dHeading, -LEAN_CAP, LEAN_CAP);
 }
 
-// The rider's lean (camera roll): the bike's TILT this frame — 0 when upright (cruising). The renderer reads
-// it directly as the camera roll, the focal pull-in, and a subtle head-yaw into the corner.
+// The rider's lean (camera roll): the bike's TILT — 0 when upright. The renderer reads it directly as the
+// camera roll, the focal pull-in, and a subtle head-yaw into the corner.
 export function riderTilt(state: RiderState): number {
-  return state.turn ? state.turn.tilt : 0;
+  return state.tilt;
 }
 
 // Has the rider reached the end of the route — at rest at the end of the final (exit-less) segment?
 export function riderFinished(rider: RiderState, world: World): boolean {
   const lastId = world.order[world.order.length - 1];
-  return rider.segment === lastId && !rider.turn && rider.along >= world.segments[lastId].length - 1e-6;
+  return rider.segment === lastId && rider.along >= world.segments[lastId].length - 1e-6;
 }
 
 // How far the rider has driven ALONG the route: the lengths of every segment behind his current one
@@ -141,10 +135,10 @@ export function routeDistance(state: RiderState, world: World): number {
   return d;
 }
 
-// Advance the BIKE one frame. The rider makes two INDEPENDENT decisions — a forward one (throttle/brake)
-// and a rotational one (lean) — each fully owned by its helper; here we just integrate them into the new
-// velocity, heading, and position, then resolve where that lands him on the road graph. Pure; the gaze is
-// carried through unchanged and advanced separately (the caller runs nextRiderGaze right after).
+// Advance the BIKE one frame. The rider makes two decisions — a forward one (throttle/brake, getForwardAccelDecel)
+// and a rotational one (lean, steered by getDangerInfo) — which we integrate into the new velocity, heading, and
+// position, then resolve where that lands him on the road graph BY POSITION (there is no turning "mode"). Pure;
+// the gaze is carried through unchanged and advanced separately (the caller runs nextRiderGaze right after).
 export function getNextRiderState(state: RiderState, world: World): RiderState {
   const seg = world.segments[state.segment];
 
@@ -153,9 +147,9 @@ export function getNextRiderState(state: RiderState, world: World): RiderState {
   // The LEAN drives the turn. The rider projects his arc (getDangerInfo) and tips the bike one notch AWAY from
   // whichever shoulder he'd run off first — LEFT danger -> lean right, RIGHT danger -> lean left, NONE -> hold.
   // The lean carried IN from last frame yaws the bike: YAW_PER_TILT of heading per unit of tilt, so the tilt
-  // LEADS the yaw by a frame (he tips the bike, then it comes around). Upright (tilt 0) when cruising.
-  const prevTilt = state.turn ? state.turn.tilt : 0;
-  const dangerSide = state.turn ? getDangerInfo(state, seg).side : DangerSide.NONE;
+  // LEADS the yaw by a frame (he tips the bike, then it comes around). He holds his lean when the road's safe.
+  const prevTilt = state.tilt;
+  const dangerSide = getDangerInfo(state, seg).side;
   const tilt = dangerSide === DangerSide.LEFT ? prevTilt + TILT_STEP
              : dangerSide === DangerSide.RIGHT ? prevTilt - TILT_STEP
              : prevTilt;
@@ -165,63 +159,52 @@ export function getNextRiderState(state: RiderState, world: World): RiderState {
   const along = state.along + v * Math.cos(midHeading);
   const across = state.across + v * Math.sin(midHeading);
 
-  // The DEFAULT next state: STAY on this segment. The turn descriptor unifies the three staying cases —
-  // cruising (no turn), a turn that's centred + aligned FINISHING (no turn), or a turn carrying on (its
-  // phase flips to recentering once the heading is killed). Position is the clean centre when not turning,
-  // the integrated arc when turning.
-  const finishing = state.turn !== null && Math.abs(across) < CENTER_EPS && Math.abs(state.yaw) < TURN_RATE_STEP;
-  const turn: Turning | null = state.turn === null || finishing ? null
-    : { angle: state.turn.angle, tilt, phase: state.turn.phase === 'straightening' && Math.abs(yaw) < ALIGN_EPS ? 'recentering' : state.turn.phase };
-  const riderState: RiderState = { segment: seg.id, along, across: turn ? across : 0, yaw: turn ? yaw : 0, v, turn, gazeStep: state.gazeStep };
+  const riderState: RiderState = { segment: seg.id, along, across, yaw, v, tilt, gazeStep: state.gazeStep };
 
-  // The two exceptions, both for a CRUISING rider reaching the segment's exit: turn into the next segment,
-  // or stop dead at a terminus.
+  // Resolve the road graph by POSITION (not by any turn flag): on reaching the commit point, cross into the
+  // next segment; at a terminus, stop dead at the end.
   const exitIxn = world.intersections[seg.exitIxn];
-  if (state.turn === null && exitIxn.to !== null && along >= seg.alongWhereRiderCommitsToTurn)
+  if (exitIxn.to !== null && along >= seg.alongWhereRiderCommitsToTurn)
     return riderStateForNextSegment(riderState, world);
-  if (state.turn === null && exitIxn.to === null && along >= seg.length)
+  if (exitIxn.to === null && along >= seg.length)
     return { ...riderState, along: seg.length, v: 0 };
   return riderState;
 }
 
-// Re-express the rider onto the NEXT segment as he commits to the turn: he keeps his speed but lands on
-// the new segment's inner edge, still pointed the old way, a touch before its begin line (negative along)
-// — the same physical point, so motion stays continuous — and starts the straighten-out, eyes on the road.
+// Re-express the rider onto the NEXT segment as he commits to the turn: he keeps his speed AND his lean (the
+// bike's roll is physically continuous across the seam) but lands on the new segment's inner edge, now pointed
+// the old way relative to the new direction — a touch before its begin line (negative along), the same physical
+// point, so motion stays continuous — and straightens out from there, eyes on the road.
 function riderStateForNextSegment(riderState: RiderState, world: World): RiderState {
   const seg = world.segments[riderState.segment];
   const exitIxn = world.intersections[seg.exitIxn];
   const next = world.segments[exitIxn.to as string], hw = seg.width / 2, theta = exitIxn.angle, sgn = exitIxn.sign;
   return { segment: next.id, along: -hw / Math.sin(theta), across: sgn * hw, yaw: -sgn * theta,
-           v: riderState.v, turn: { angle: theta, phase: 'straightening', tilt: 0 }, gazeStep: -1 };
+           v: riderState.v, tilt: riderState.tilt, gazeStep: -1 };
 }
 
-// THE FORWARD DECISION — throttle/brake — returned as the change in speed this frame (state.v + this is
-// the new speed; V_MAX, the >=0 floor, and the road-edge brake are all baked in). Cruising: accelerate, or
-// kinematic-brake into the turn, holding the throttle (<=0) while a cat crosses, and never crawling below
-// the corner's entry speed. Turning: accelerate unless the road edge is close (within DANGER_STEPS frames at
-// the current heading), in which case brake kinematically to arrive at it at v=0 — one rule, no phase check.
+// THE FORWARD DECISION — throttle/brake — returned as the change in speed this frame (state.v + this is the
+// new speed; V_MAX and the >=0 floor are baked in). One obstacle-reactive rule, no cruising/turning phases: he
+// WANTS to accelerate, but takes the most restrictive (minimum) of three brakes — the upcoming corner (reach
+// its safe entry speed by the commit point), a crossing cat (hold the throttle), and the road edge/shoulder
+// (kinematic-brake to arrive at it at v=0). When approaching the corner he won't crawl below its entry speed.
 function getForwardAccelDecel(state: RiderState, seg: RoadSegment, world: World): number {
-  let v: number;
-  if (state.turn === null) {
-    const vEnd = turnSpeed(world.intersections[seg.exitIxn]);   // the corner's safe entry speed (0 at a terminus)
-    const near = nearIntersection(state, seg);
-    // far from the turn -> constant accel; near it -> the constant decel (v^2 = vEnd^2 + 2*a*d) that lands
-    // him at vEnd right at the commit point, recomputed each press so it self-corrects integration drift.
-    let a = A_ACCEL;
-    if (near) {
-      const d = seg.alongWhereRiderCommitsToTurn - state.along;
-      a = d <= 1e-6 ? 0 : (vEnd * vEnd - state.v * state.v) / (2 * d);
-    }
-    if (segmentCatDanger(seg.cats, state.along, state.v)) a = Math.min(a, 0);   // hold throttle for a crossing cat
-    v = clamp(state.v + a, 0, V_MAX);
-    if (near) v = Math.max(v, vEnd);   // don't crawl below the corner's entry speed
-  } else {
-    // The road edge is an obstacle, treated like any other: if he's in danger of hitting the shoulder, brake
-    // kinematically to arrive at it at v=0; otherwise accelerate. One rule for the whole turn — no phase check.
-    let a = A_ACCEL;
-    if (isInDangerOfHittingShoulder(state, seg)) a = -state.v * state.v / (2 * shoulderDistance(state, seg));
-    v = clamp(state.v + a, 0, V_MAX);
+  let a = A_ACCEL;
+
+  // brake for the upcoming corner: the constant decel (v^2 = vEnd^2 + 2*a*d) that lands him at the corner's
+  // safe entry speed right at the commit point, recomputed each press so it self-corrects integration drift.
+  const vEnd = turnSpeed(world.intersections[seg.exitIxn]);   // safe entry speed (0 at a terminus)
+  const near = nearIntersection(state, seg);
+  if (near) {
+    const d = seg.alongWhereRiderCommitsToTurn - state.along;
+    a = Math.min(a, d <= 1e-6 ? 0 : (vEnd * vEnd - state.v * state.v) / (2 * d));
   }
+  if (segmentCatDanger(seg.cats, state.along, state.v)) a = Math.min(a, 0);   // hold throttle for a crossing cat
+  if (isInDangerOfHittingShoulder(state, seg))                               // brake to stop before the shoulder
+    a = Math.min(a, -state.v * state.v / (2 * shoulderDistance(state, seg)));
+
+  let v = clamp(state.v + a, 0, V_MAX);
+  if (near) v = Math.max(v, vEnd);   // don't crawl below the corner's entry speed approaching it
   return v - state.v;
 }
 
@@ -255,7 +238,7 @@ function isInDangerOfHittingShoulder(state: RiderState, seg: RoadSegment): boole
 // AWAY from whichever side it names.
 export function getDangerInfo(state: RiderState, seg: RoadSegment): DangerInfo {
   const hw = seg.width / 2;
-  const headingStep = YAW_PER_TILT * (state.turn ? state.turn.tilt : 0);   // constant per step (tilt held fixed)
+  const headingStep = YAW_PER_TILT * state.tilt;                            // constant per step (tilt held fixed)
   let yaw = state.yaw, across = state.across;
   for (let i = 0; i < TURN_DANGER_STEPS; i++) {
     across += state.v * Math.sin(yaw + headingStep / 2);                    // arc step (midpoint heading)

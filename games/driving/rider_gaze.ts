@@ -37,8 +37,10 @@ function nextGazeStep(gazeStep: number, distToEnd: number, hasPigs: boolean): nu
 // Mid-turn the eyes are on the road (glance parked at -1); otherwise it arms/advances purely from how far
 // he NOW is from the segment's end and whether the segment has pigs. (It reads the post-move along, so the
 // glance is keyed off the bike's new progress — a frame's worth of imprecision the distraction shrugs off.)
+const EYES_ON_ROAD_YAW = 6 * Math.PI / 180;   // pointed more than this off the lane = mid-corner, no glancing
+
 export function nextRiderGaze(state: RiderState, world: World): RiderState {
-  if (state.turn !== null) return state.gazeStep === -1 ? state : { ...state, gazeStep: -1 };
+  if (Math.abs(state.yaw) > EYES_ON_ROAD_YAW) return state.gazeStep === -1 ? state : { ...state, gazeStep: -1 };
   const seg = world.segments[state.segment];
   const gazeStep = nextGazeStep(state.gazeStep, seg.length - state.along, seg.pigs);
   return gazeStep === state.gazeStep ? state : { ...state, gazeStep };

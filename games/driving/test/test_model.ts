@@ -76,11 +76,8 @@ function assertInvariants(s: RiderState, world: World): void {
   assert(s.along >= entryFloor - 1e-6, `along not far before start (${s.along})`);
   assert(s.along <= seg.length + 1e-6, `along not past end (${s.along})`);
   assert(Math.abs(s.across) <= seg.width / 2 + 1, `across bounded (${s.across})`);
-  if (s.turn === null) {
-    assert(Math.abs(s.across) < 1e-6 && Math.abs(s.yaw) < 1e-6, 'cruising => centred and aligned');
-  } else {
-    assert(s.gazeStep < 0, 'no distracted glance mid-turn (eyes on the road)');
-  }
+  // eyes on the road while pointed notably off the lane (mid straighten-out) — no distracted glance
+  if (Math.abs(s.yaw) > 6 * Math.PI / 180) assert(s.gazeStep < 0, 'no distracted glance mid-turn (eyes on the road)');
 }
 
 // --- "roads don't cross themselves" (the exact invariant) ---
@@ -162,7 +159,7 @@ function main(): void {
     maxAcross = Math.max(maxAcross, Math.abs(n.across));
     maxV = Math.max(maxV, n.v);
     // stuck at the route end?
-    if (n.segment === s.segment && n.along === s.along && n.turn === null) break;
+    if (n.segment === s.segment && n.along === s.along) break;   // stuck (terminus: stopped dead)
     states.push(n);
     s = n;
     const rd = routeDistance(n, world);

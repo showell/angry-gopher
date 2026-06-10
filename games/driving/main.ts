@@ -171,12 +171,11 @@ function drawHud(rider: RiderState): void {
   ctx.font = 'bold 13px ui-monospace, monospace';
   ctx.textAlign = 'left';
 
-  const phase = rider.turn ? rider.turn.phase : 'cruise';
   const headingDeg = rider.yaw * 180 / Math.PI;
   const tiltDeg = riderTilt(rider) * 180 / Math.PI;
 
-  // line 1: segment + phase + step, then the mode badge (green AUTO / amber PAUSED)
-  const l1 = `${rider.segment}  ·  ${phase}  ·  step ${riderHistory.length - 1}  ·  `;
+  // line 1: segment + step, then the mode badge (green AUTO / amber PAUSED)
+  const l1 = `${rider.segment}  ·  step ${riderHistory.length - 1}  ·  `;
   ctx.fillStyle = '#fff';
   ctx.fillText(l1, 22, 31);
   ctx.fillStyle = auto ? '#7cfc7c' : '#e6c64f';
