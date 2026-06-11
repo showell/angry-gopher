@@ -88,6 +88,7 @@ const TURN_DANGER_STEPS = 70;               // STEERING look-ahead: project the 
 const MIN_FORWARD_PROGRESS = 28;            // checkpoint distance (m): by the time the projected arc has gone this far forward he should be back across centre — if he is, he's safe; if he's STILL on his start side he's stuck hugging it. (28 ~ both the step-count AND danger-frame minimum from 20..200 sweeps at TURN_DANGER_STEPS=70.)
 const TILT_STEP = 1 * Math.PI / 180;        // the most the rider leans further into the turn in one frame (prorated by danger nearness)
 const TILT_SNAP = 0.5 * Math.PI / 180;      // part of the snap-to-centre window: the lean must be within this of upright
+const TILT_HOLD = 2 * Math.PI / 180;        // he only adds throttle while leaned LESS than this — accelerating mid-lean makes the constant-v danger projection lie and reads as jitter
 const YAW_EPSILON = 0.5 * Math.PI / 180;    // part of the snap-to-centre window: the heading must be within this of straight
 const AIMING_DISTANCE = 100;                // when upright, the rider aims his heading at the lane centre this far ahead (m) — eases him back to the middle
 const YAW_PER_TILT = 0.2;                   // the lean's leverage on the bike: every degree of tilt yaws the heading 0.2deg (so a turn demands a deep lean)
@@ -207,8 +208,11 @@ function riderStateForNextSegment(riderState: RiderState, world: World): RiderSt
 // WANTS to accelerate, but takes the most restrictive (minimum) of three brakes — the upcoming corner (reach
 // its safe entry speed by the commit point), a crossing cat (hold the throttle), and the road edge/shoulder
 // (kinematic-brake to arrive at it at v=0). When approaching the corner he won't crawl below its entry speed.
+// He only opens the throttle while near-upright (|tilt| < TILT_HOLD): accelerating mid-lean would make the
+// constant-v danger projection underestimate where he ends up, which shows up as steering jitter. Braking
+// always applies, leaned or not.
 function getForwardAccelDecel(state: RiderState, seg: RoadSegment, world: World): number {
-  let a = A_ACCEL;
+  let a = Math.abs(state.tilt) < TILT_HOLD ? A_ACCEL : 0;   // throttle only when near-upright; brakes below still fire
 
   // brake for the upcoming corner: the constant decel (v^2 = vEnd^2 + 2*a*d) that lands him at the corner's
   // safe entry speed right at the commit point, recomputed each press so it self-corrects integration drift.
