@@ -84,7 +84,7 @@ export const MAX_LEAN = 20 * Math.PI / 180;
 export const MAX_TURN_ANGLE = 90 * Math.PI / 180;   // the largest turn the model allows
 const STRAIGHTEN_MARGIN = 0.05;             // hard safety: keep the drift bulge at least this far inside the edge (m)
 const DANGER_STEPS = 15;                     // FORWARD brake: slow for the road edge once it's within this many frames at the current speed
-const TURN_DANGER_STEPS = 70;               // STEERING look-ahead: project the rider's arc this many frames to pick which way to lean (longer = more anticipation, less oversteer)
+const TURN_DANGER_STEPS = 300;              // STEERING look-ahead: project the rider's arc this many frames to pick which way to lean (longer = more anticipation, less oversteer)
 const MIN_FORWARD_PROGRESS = 28;            // checkpoint distance (m): by the time the projected arc has gone this far forward he should be back across centre — if he is, he's safe; if he's STILL on his start side he's stuck hugging it. (28 ~ both the step-count AND danger-frame minimum from 20..200 sweeps at TURN_DANGER_STEPS=70.)
 const TILT_STEP = 1 * Math.PI / 180;        // the most the rider leans further into the turn in one frame (prorated by danger nearness)
 const TILT_SNAP = 0.5 * Math.PI / 180;      // part of the snap-to-centre window: the lean must be within this of upright
