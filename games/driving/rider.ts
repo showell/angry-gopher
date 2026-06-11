@@ -84,7 +84,8 @@ export const MAX_LEAN = 20 * Math.PI / 180;
 export const MAX_TURN_ANGLE = 90 * Math.PI / 180;   // the largest turn the model allows
 const STRAIGHTEN_MARGIN = 0.05;             // hard safety: keep the drift bulge at least this far inside the edge (m)
 const DANGER_STEPS = 15;                     // FORWARD brake: slow for the road edge once it's within this many frames at the current speed
-const TURN_DANGER_STEPS = 120;              // STEERING look-ahead: project the rider's arc this many frames to pick which way to lean (longer = more anticipation, less oversteer)
+const TURN_DANGER_STEPS = 60;               // STEERING look-ahead: project the rider's arc this many frames to pick which way to lean (longer = more anticipation, less oversteer)
+const MIN_FORWARD_PROGRESS = 20;            // if the projected arc crosses the centre line only AFTER committing this far forward (m), he's safely re-centring on his own — no danger
 const TILT_STEP = 1 * Math.PI / 180;        // the most the rider leans further into the turn in one frame (prorated by danger nearness)
 const TILT_SNAP = 0.5 * Math.PI / 180;      // part of the snap-to-centre window: the lean must be within this of upright
 const YAW_EPSILON = 0.5 * Math.PI / 180;    // part of the snap-to-centre window: the heading must be within this of straight
@@ -266,11 +267,19 @@ function isInDangerOfHittingShoulder(state: RiderState, seg: RoadSegment): boole
 export function getDangerInfo(state: RiderState, seg: RoadSegment): DangerInfo {
   const hw = seg.width / 2 - STRAIGHTEN_MARGIN;                             // inset edge: react just inside the real shoulder
   const headingStep = YAW_PER_TILT * state.tilt;                            // constant per step (tilt held fixed)
-  let yaw = state.yaw, across = state.across;
+  let yaw = state.yaw, across = state.across, forward = 0;
+  const startSide = Math.sign(across);                                      // which side of centre he starts on
   const g0 = yaw - aimYawFor(across);                                       // signed initial gap from the aim; allowed to swing to its mirror -g0
   for (let i = 0; i < TURN_DANGER_STEPS; i++) {
-    across += state.v * Math.sin(yaw + headingStep / 2);                    // arc step (midpoint heading)
+    const mid = yaw + headingStep / 2;                                      // midpoint heading over the step
+    forward += state.v * Math.cos(mid);
+    across += state.v * Math.sin(mid);                                      // arc step
     yaw += headingStep;
+    // SHORT-CIRCUIT: if the arc crosses the centre line only AFTER he's committed >= MIN_FORWARD_PROGRESS
+    // forward, he's gently re-centring on his own — declare it safe so he doesn't twitch at far-off
+    // projected wobble down a straightaway.
+    if (forward >= MIN_FORWARD_PROGRESS && startSide !== 0 && Math.sign(across) !== startSide)
+      return { side: DangerSide.NONE, steps: TURN_DANGER_STEPS };
     if (across <= -hw) return { side: DangerSide.LEFT, steps: i };          // i = safe steps before the event (0 = imminent)
     if (across >= hw) return { side: DangerSide.RIGHT, steps: i };
     const rel = yaw - aimYawFor(across);                                    // signed gap from the (moving) aim
