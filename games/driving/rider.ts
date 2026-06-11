@@ -282,9 +282,12 @@ export function getDangerInfo(state: RiderState, seg: RoadSegment): DangerInfo {
       return { side: DangerSide.NONE, steps: TURN_DANGER_STEPS };
     if (across <= -hw) return { side: DangerSide.LEFT, steps: i };          // i = safe steps before the event (0 = imminent)
     if (across >= hw) return { side: DangerSide.RIGHT, steps: i };
+    // ...but only worry about the overshoot once he's actually crossed to the WRONG side of centre (the side
+    // opposite where he began): while he's still returning from his start side we don't fight his momentum.
     const rel = yaw - aimYawFor(across);                                    // signed gap from the (moving) aim
-    if (g0 < 0 && rel >= -g0) return { side: DangerSide.RIGHT, steps: i };  // swung as far right of aim as he began left -> overshooting right
-    if (g0 > 0 && rel <= -g0) return { side: DangerSide.LEFT, steps: i };   // swung as far left of aim as he began right -> overshooting left
+    const pastCentre = across * startSide < 0;                             // now on the opposite side from where he started
+    if (pastCentre && g0 < 0 && rel >= -g0) return { side: DangerSide.RIGHT, steps: i };  // started left, swung past aim to the right -> overshooting right
+    if (pastCentre && g0 > 0 && rel <= -g0) return { side: DangerSide.LEFT, steps: i };   // started right, swung past aim to the left -> overshooting left
   }
   return { side: DangerSide.NONE, steps: TURN_DANGER_STEPS };
 }
