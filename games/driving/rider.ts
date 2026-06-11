@@ -304,7 +304,7 @@ export function getDangerInfo(state: RiderState, seg: RoadSegment): DangerInfo {
 // the danger entirely — projection NONE — is the pick. If NONE of them clear it, take the one that POSTPONES
 // the danger furthest (the highest danger steps). NONE in -> hold the lean.
 const TILT_SEARCH_STEPS = 10;
-const MAX_TILT_CORRECTION = 10 * Math.PI / 180;   // the rider will swing his lean up to this much in a single frame to dodge danger
+const MAX_TILT_CORRECTION = 1 * Math.PI / 180;    // the most the rider can work his lean over in a single frame (he has to fight the bike's mass)
 function bestTiltCorrection(state: RiderState, seg: RoadSegment, side: DangerSide): number {
   if (side === DangerSide.NONE) return state.tilt;
   const dir = side === DangerSide.RIGHT ? -1 : 1;           // RIGHT danger -> lean left (tilt down); LEFT danger -> lean right
