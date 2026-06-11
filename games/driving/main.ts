@@ -7,7 +7,7 @@
 //   ArrowUp   : getNextRiderState -> push the next RiderState onto the history
 //   ArrowDown : pop back to the previous RiderState
 // =============================================================================
-import { initialRiderState, getNextRiderState, riderHeading, riderTilt, riderFinished, getDangerInfo, MAX_LEAN, routeDistance } from './rider.ts';
+import { initialRiderState, getNextRiderState, riderHeading, riderTilt, riderFinished, getDangerInfo, riderDebug, MAX_LEAN, routeDistance } from './rider.ts';
 import { gazeAngle, nextRiderGaze } from './rider_gaze.ts';
 import type { RiderState } from './rider.ts';
 import { initialTruck, nextTruck, courseLength } from './truck.ts';
@@ -167,7 +167,7 @@ let fps = 60, renderMs = 0, frameMs = TARGET_MS, droppedFrames = 0, dropFlash = 
 
 function drawHud(rider: RiderState): void {
   ctx.fillStyle = 'rgba(0,0,0,0.5)';
-  ctx.fillRect(12, 12, 650, 74);
+  ctx.fillRect(12, 12, 770, 93);
   ctx.font = 'bold 13px ui-monospace, monospace';
   ctx.textAlign = 'left';
 
@@ -186,11 +186,18 @@ function drawHud(rider: RiderState): void {
   ctx.fillStyle = '#9fe6a0';
   const gazeDeg = gazeAngle(rider) * 180 / Math.PI;
   const danger = getDangerInfo(rider, world.segments[rider.segment]);
-  ctx.fillText(`x ${rider.across.toFixed(2)}  y ${rider.along.toFixed(1)}  heading ${headingDeg.toFixed(1)}deg  tilt ${tiltDeg.toFixed(1)}deg  danger ${danger.side} (${danger.steps})  gaze ${gazeDeg.toFixed(0)}deg  v ${rider.v.toFixed(2)}`, 22, 50);
+  ctx.fillText(`x ${rider.across.toFixed(2)}  y ${rider.along.toFixed(1)}  heading ${headingDeg.toFixed(1)}deg  tilt ${tiltDeg.toFixed(2)}deg  danger ${danger.side} (${danger.steps})  gaze ${gazeDeg.toFixed(0)}deg  v ${rider.v.toFixed(2)}`, 22, 50);
 
-  // line 3: frame HEALTH — wall-clock cadence vs the 60Hz budget; turns red while dropping
+  // line 3: the rider's last DECISION — the per-frame lean change, the forward accel (+ throttle / − brake),
+  // and which snaps fired this frame (TILT = lean snapped upright, YAW = heading re-aimed at the lane centre).
+  const dbg = riderDebug();
+  const sgn = (x: number): string => (x >= 0 ? '+' : '');
+  ctx.fillStyle = '#8fd0e6';
+  ctx.fillText(`tilt_step ${sgn(dbg.tiltStep)}${(dbg.tiltStep * 180 / Math.PI).toFixed(2)}deg   accel ${sgn(dbg.accel)}${dbg.accel.toFixed(4)}   dHeading ${sgn(dbg.headingChange)}${(dbg.headingChange * 180 / Math.PI).toFixed(2)}deg   yawFromTarget ${sgn(dbg.yawFromTarget)}${(dbg.yawFromTarget * 180 / Math.PI).toFixed(2)}deg   snap ${dbg.tiltSnapped ? 'TILT' : '·'} ${dbg.yawAimed ? 'YAW' : '·'}`, 22, 69);
+
+  // line 4: frame HEALTH — wall-clock cadence vs the 60Hz budget; turns red while dropping
   ctx.fillStyle = dropFlash > 0 ? '#ff6b6b' : '#9fe6a0';
-  ctx.fillText(`${fps.toFixed(0)} fps  ·  frame ${frameMs.toFixed(1)}/${TARGET_MS.toFixed(1)}ms  ·  render ${renderMs.toFixed(1)}ms  ·  dropped ${droppedFrames}`, 22, 69);
+  ctx.fillText(`${fps.toFixed(0)} fps  ·  frame ${frameMs.toFixed(1)}/${TARGET_MS.toFixed(1)}ms  ·  render ${renderMs.toFixed(1)}ms  ·  dropped ${droppedFrames}`, 22, 88);
 }
 
 // draw one frame for the given RiderState (handed in by the loop)

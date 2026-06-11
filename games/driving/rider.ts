@@ -38,6 +38,13 @@ export type DangerSide = typeof DangerSide[keyof typeof DangerSide];
 // The danger projection's verdict: which side he'd run off, and in how many steps (the full horizon when NONE).
 export interface DangerInfo { side: DangerSide; steps: number }
 
+// A HUD-only readout of the last forward+lean decision getNextRiderState made — NOT part of the rider's
+// state, just the most recent frame's internal choices surfaced for the debug overlay. (Reflects the last
+// FORWARD step; on reverse it goes momentarily stale, which the diagnostic HUD tolerates.)
+export interface RiderDebug { accel: number; tiltStep: number; headingChange: number; yawFromTarget: number; tiltSnapped: boolean; yawAimed: boolean }
+let lastDebug: RiderDebug = { accel: 0, tiltStep: 0, headingChange: 0, yawFromTarget: 0, tiltSnapped: false, yawAimed: false };
+export function riderDebug(): RiderDebug { return lastDebug; }
+
 // The whole game is seen through the RIDER (on a motorcycle, treated as a single POINT, which keeps the
 // physics simple). A RiderState is everything we know about him this frame:
 //   POSITION : segment + along (progress) + across (lateral offset) + yaw (heading vs the segment)
@@ -77,9 +84,10 @@ export const MAX_LEAN = 20 * Math.PI / 180;
 export const MAX_TURN_ANGLE = 90 * Math.PI / 180;   // the largest turn the model allows
 const STRAIGHTEN_MARGIN = 0.05;             // hard safety: keep the drift bulge at least this far inside the edge (m)
 const DANGER_STEPS = 15;                     // FORWARD brake: slow for the road edge once it's within this many frames at the current speed
-const TURN_DANGER_STEPS = 60;               // STEERING look-ahead: project the rider's arc this many frames (~1s at 60fps) to pick which way to lean
+const TURN_DANGER_STEPS = 120;              // STEERING look-ahead: project the rider's arc this many frames to pick which way to lean (longer = more anticipation, less oversteer)
 const TILT_STEP = 1 * Math.PI / 180;        // the most the rider leans further into the turn in one frame (prorated by danger nearness)
-const TILT_SNAP = 0.1 * Math.PI / 180;      // a lean within this of upright snaps to exactly 0 — kills the gentle straightaway swerve
+const TILT_SNAP = 0.5 * Math.PI / 180;      // part of the snap-to-centre window: the lean must be within this of upright
+const YAW_EPSILON = 0.5 * Math.PI / 180;    // part of the snap-to-centre window: the heading must be within this of straight
 const AIMING_DISTANCE = 100;                // when upright, the rider aims his heading at the lane centre this far ahead (m) — eases him back to the middle
 const YAW_PER_TILT = 0.2;                   // the lean's leverage on the bike: every degree of tilt yaws the heading 0.2deg (so a turn demands a deep lean)
 
@@ -145,16 +153,22 @@ export function getNextRiderState(state: RiderState, world: World): RiderState {
   let tilt = danger.side === DangerSide.LEFT ? prevTilt + tiltStep
            : danger.side === DangerSide.RIGHT ? prevTilt - tiltStep
            : prevTilt;
-  if (Math.abs(tilt) < TILT_SNAP) tilt = 0;   // snap-straight: a near-upright lean becomes exactly upright
   const headingChange = YAW_PER_TILT * prevTilt;
   let yaw = state.yaw + headingChange;
   const midHeading = state.yaw + headingChange / 2;                            // average heading over the frame -> arc
   const along = state.along + v * Math.cos(midHeading);
   const across = state.across + v * Math.sin(midHeading);
-  // when UPRIGHT (the lean has settled to exactly 0), aim the heading at the lane CENTRE, AIMING_DISTANCE ahead,
-  // so he eases back to the middle instead of holding an off-centre line. Only when tilt is exactly 0 — never
-  // mid-lean — so a turn can't jitter; if he's still leaning we wait a frame for the lean to settle first.
-  if (tilt === 0) yaw = Math.atan2(-across, AIMING_DISTANCE);
+  // SNAP-TO-CENTRE — the heading we want is aimYaw: pointed at the lane CENTRE, AIMING_DISTANCE ahead (it's
+  // NOT 0 when he sits off-centre). Only when he's BOTH nearly upright (|tilt| < TILT_SNAP) AND already
+  // nearly on that aim (|yaw - aimYaw| < YAW_EPSILON) do we tidy him clean: lean to exactly 0 and heading
+  // onto aimYaw, so he eases back to the middle. Requiring BOTH means a turn (deep lean OR a heading far off
+  // the aim) can never trigger it mid-corner — the snap only kills the last wobble as he settles straight.
+  const aimYaw = Math.atan2(-across, AIMING_DISTANCE);
+  const yawFromTarget = yaw - aimYaw;                            // signed: how far the natural heading sits from the aim (abs gates the snap)
+  const snapped = Math.abs(tilt) < TILT_SNAP && Math.abs(yawFromTarget) < YAW_EPSILON;
+  if (snapped) { tilt = 0; yaw = aimYaw; }
+
+  lastDebug = { accel: v - state.v, tiltStep: tilt - prevTilt, headingChange, yawFromTarget, tiltSnapped: snapped, yawAimed: snapped };   // HUD readout of this frame's choices
 
   const riderState: RiderState = { segment: seg.id, along, across, yaw, v, tilt, gazeStep: state.gazeStep };
 
