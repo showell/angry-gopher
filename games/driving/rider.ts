@@ -274,7 +274,13 @@ function isInDangerOfHittingShoulder(state: RiderState, seg: RoadSegment): boole
 // He leans AWAY from whichever side this names. The effective road is inset by STRAIGHTEN_MARGIN so he reads the
 // shoulder a touch early and commits to the turn a bit sooner.
 export function getDangerInfo(state: RiderState, seg: RoadSegment): DangerInfo {
-  const hw = seg.width / 2 - STRAIGHTEN_MARGIN;                             // inset edge: react just inside the real shoulder
+  const insetHw = seg.width / 2 - STRAIGHTEN_MARGIN;                        // inset edge: react just inside the real shoulder
+  // The shoulder boundary on each side is the WORSE of the inset edge and where the rider ALREADY sits. If he
+  // starts past the inset edge (already within STRAIGHTEN_MARGIN of the real shoulder), a path counts as danger
+  // only if it pushes him EVEN closer to that shoulder than his starting offset — never for merely being where
+  // he is. Otherwise a straight, harmless path gets rejected at step 0 just because he began near the edge.
+  const rightBound = Math.max(insetHw, state.across);
+  const leftBound = Math.min(-insetHw, state.across);
   const headingStep = YAW_PER_TILT * state.tilt;                            // constant per step (tilt held fixed)
   let yaw = state.yaw, across = state.across, forward = 0, crossed = false;
   const startSide = Math.sign(across);                                      // which side of centre he starts on
@@ -285,8 +291,8 @@ export function getDangerInfo(state: RiderState, seg: RoadSegment): DangerInfo {
     across += state.v * Math.sin(mid);                                      // arc step
     yaw += headingStep;
     if (across * startSide < 0) crossed = true;                            // record that the arc has made it across centre at some point
-    if (across <= -hw) return { side: DangerSide.LEFT, steps: i };          // off the road — i = safe steps before it (0 = imminent)
-    if (across >= hw) return { side: DangerSide.RIGHT, steps: i };
+    if (across < leftBound) return { side: DangerSide.LEFT, steps: i };     // worse than where he started toward the left shoulder (i = steps before it)
+    if (across > rightBound) return { side: DangerSide.RIGHT, steps: i };   // worse than where he started toward the right shoulder
     // CHECKPOINT: once he's committed MIN_FORWARD_PROGRESS forward he should be back across centre. If he is
     // (and stayed on the road, above) he's re-centring fine — no danger. If he's STILL on his start side he's
     // stuck hugging it, so flag THAT side (he leans off it toward centre) rather than letting him stay pinned.
