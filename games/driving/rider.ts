@@ -41,9 +41,19 @@ export type DangerSide = typeof DangerSide[keyof typeof DangerSide];
 // terminated) — returned so the debug overlay renders precisely what was computed, never a drifting mimic.
 export interface DangerInfo { side: DangerSide; forward: number; crossed: boolean; endAcross: number; path: { along: number; across: number }[] }
 
+// Why the forward (throttle/brake) decision came out the way it did — whichever constraint was BINDING this
+// frame. CRUISE = accelerating freely; HOLD_LEAN = throttle shut because he's leaned past TILT_HOLD;
+// AVOID_SPEEDING = capped at V_MAX; PREPARE_FOR_INTERSECTION = braking to the corner's entry speed; AVOID_CAT
+// = holding for a crossing cat; AVOID_SHOULDER = braking so he doesn't run off the road edge.
+export const ForwardReason = {
+  CRUISE: 'CRUISE', HOLD_LEAN: 'HOLD_LEAN', AVOID_SPEEDING: 'AVOID_SPEEDING',
+  PREPARE_FOR_INTERSECTION: 'PREPARE_FOR_INTERSECTION', AVOID_CAT: 'AVOID_CAT', AVOID_SHOULDER: 'AVOID_SHOULDER',
+} as const;
+export type ForwardReason = typeof ForwardReason[keyof typeof ForwardReason];
+
 // A HUD-only readout of the forward+lean decision — NOT part of the rider's state, just the frame's internal
 // choices surfaced for the debug overlay.
-export interface RiderDebug { accel: number; tiltStep: number; headingChange: number; yawFromTarget: number; tiltSnapped: boolean; yawAimed: boolean }
+export interface RiderDebug { accel: number; forwardReason: ForwardReason; tiltStep: number; headingChange: number; yawFromTarget: number; tiltSnapped: boolean; yawAimed: boolean }
 // Recompute the decision the rider WOULD make FROM `state` this frame — pure, no side effects — so the HUD
 // shows the CURRENT frame's numbers, aligned with the danger it also reads fresh (no stale off-by-one).
 export function riderDebug(state: RiderState, world: World): RiderDebug {
@@ -97,7 +107,6 @@ const YAW_EPSILON = 1.5 * Math.PI / 180;    // part of the snap-to-centre window
 const AIMING_DISTANCE = 100;                // when upright, the rider aims his heading at the lane centre this far ahead (m) — eases him back to the middle
 const YAW_PER_TILT = 0.2;                   // the lean's leverage on the bike: every degree of tilt yaws the heading 0.2deg (so a turn demands a deep lean)
 
-const clamp = (x: number, lo: number, hi: number): number => Math.max(lo, Math.min(hi, x));
 
 // The heading that points the rider at the lane CENTRE, AIMING_DISTANCE ahead, from a lateral offset `across`
 // (0 when centred; tilts back toward the middle when off to a side). His straighten-out target — used both to
@@ -165,7 +174,8 @@ function decide(state: RiderState, seg: RoadSegment, world: World): Decision {
 
   // The FORWARD decision comes AFTER, and sees the bike's JUST-computed tilt + heading — so the shoulder/corner
   // braking reacts to this frame's rotation a step earlier. Subtle for now; it sets up making turns more aggressive.
-  const v = state.v + getForwardAccelDecel({ ...state, tilt, yaw }, seg, world);
+  const fwd = getForwardAccelDecel({ ...state, tilt, yaw }, seg, world);
+  const v = state.v + fwd.accel;
 
   const midHeading = state.yaw + headingChange / 2;                            // average heading over the frame -> arc
   const along = state.along + v * Math.cos(midHeading);
@@ -180,7 +190,7 @@ function decide(state: RiderState, seg: RoadSegment, world: World): Decision {
   const snapped = Math.abs(tilt) < TILT_SNAP && Math.abs(yawFromTarget) < YAW_EPSILON;
   if (snapped) { tilt = 0; yaw = aimYaw; }
 
-  const debug: RiderDebug = { accel: v - state.v, tiltStep: tilt - prevTilt, headingChange, yawFromTarget, tiltSnapped: snapped, yawAimed: snapped };
+  const debug: RiderDebug = { accel: fwd.accel, forwardReason: fwd.reason, tiltStep: tilt - prevTilt, headingChange, yawFromTarget, tiltSnapped: snapped, yawAimed: snapped };
   return { v, tilt, yaw, along, across, debug };
 }
 
@@ -212,16 +222,18 @@ function riderStateForNextSegment(riderState: RiderState, world: World): RiderSt
            v: riderState.v, tilt: riderState.tilt, gazeStep: -1 };
 }
 
-// THE FORWARD DECISION — throttle/brake — returned as the change in speed this frame (state.v + this is the
-// new speed; V_MAX and the >=0 floor are baked in). One obstacle-reactive rule, no cruising/turning phases: he
-// WANTS to accelerate, but takes the most restrictive (minimum) of three brakes — the upcoming corner (reach
-// its safe entry speed by the commit point), a crossing cat (hold the throttle), and the road edge/shoulder
-// (kinematic-brake to arrive at it at v=0). When approaching the corner he won't crawl below its entry speed.
-// He only opens the throttle while near-upright (|tilt| < TILT_HOLD): accelerating mid-lean would make the
-// constant-v danger projection underestimate where he ends up, which shows up as steering jitter. Braking
-// always applies, leaned or not.
-function getForwardAccelDecel(state: RiderState, seg: RoadSegment, world: World): number {
-  let a = Math.abs(state.tilt) < TILT_HOLD ? A_ACCEL : 0;   // throttle only when near-upright; brakes below still fire
+// THE FORWARD DECISION — throttle/brake — returns the change in speed this frame AND the binding reason (see
+// ForwardReason). One obstacle-reactive rule, no cruising/turning phases: he WANTS to accelerate, but takes the
+// most restrictive (minimum) of three brakes — the upcoming corner (reach its safe entry speed by the commit
+// point), a crossing cat (hold the throttle), and the road edge/shoulder (kinematic-brake to arrive at it at
+// v=0). When approaching the corner he won't crawl below its entry speed. He only opens the throttle while
+// near-upright (|tilt| < TILT_HOLD): accelerating mid-lean would make the constant-v danger projection
+// underestimate where he ends up. Braking always applies, leaned or not. The `reason` is whichever term ends up
+// binding — surfaced in the HUD and collected as a baseline metric (max shoulder decel per segment).
+function getForwardAccelDecel(state: RiderState, seg: RoadSegment, world: World): { accel: number; reason: ForwardReason } {
+  const leaned = Math.abs(state.tilt) >= TILT_HOLD;
+  let a = leaned ? 0 : A_ACCEL;                              // throttle only when near-upright; brakes below still fire
+  let reason: ForwardReason = leaned ? ForwardReason.HOLD_LEAN : ForwardReason.CRUISE;
 
   // brake for the upcoming corner: the constant decel (v^2 = vEnd^2 + 2*a*d) that lands him at the corner's
   // safe entry speed right at the commit point, recomputed each press so it self-corrects integration drift.
@@ -229,15 +241,20 @@ function getForwardAccelDecel(state: RiderState, seg: RoadSegment, world: World)
   const near = nearIntersection(state, seg);
   if (near) {
     const d = seg.alongWhereRiderCommitsToTurn - state.along;
-    a = Math.min(a, d <= 1e-6 ? 0 : (vEnd * vEnd - state.v * state.v) / (2 * d));
+    const cornerA = d <= 1e-6 ? 0 : (vEnd * vEnd - state.v * state.v) / (2 * d);
+    if (cornerA < a) { a = cornerA; reason = ForwardReason.PREPARE_FOR_INTERSECTION; }
   }
-  if (segmentCatDanger(seg.cats, state.along, state.v)) a = Math.min(a, 0);   // hold throttle for a crossing cat
-  if (isInDangerOfHittingShoulder(state, seg))                               // brake to stop before the shoulder
-    a = Math.min(a, -state.v * state.v / (2 * shoulderDistance(state, seg)));
+  if (segmentCatDanger(seg.cats, state.along, state.v) && a > 0) { a = 0; reason = ForwardReason.AVOID_CAT; }  // hold throttle for a crossing cat
+  if (isInDangerOfHittingShoulder(state, seg)) {                            // brake to stop before the shoulder
+    const shoulderA = -state.v * state.v / (2 * shoulderDistance(state, seg));
+    if (shoulderA < a) { a = shoulderA; reason = ForwardReason.AVOID_SHOULDER; }
+  }
 
-  let v = clamp(state.v + a, 0, V_MAX);
-  if (near) v = Math.max(v, vEnd);   // don't crawl below the corner's entry speed approaching it
-  return v - state.v;
+  let v = state.v + a;
+  if (v > V_MAX) { v = V_MAX; reason = ForwardReason.AVOID_SPEEDING; }      // capped at top speed
+  if (v < 0) v = 0;
+  if (near && v < vEnd) v = vEnd;   // don't crawl below the corner's entry speed approaching it
+  return { accel: v - state.v, reason };
 }
 
 // Is the Rider close enough to the upcoming intersection to start slowing for it? Every segment exits

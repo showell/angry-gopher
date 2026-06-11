@@ -4,7 +4,7 @@
 // transforms (lengths + turn signs) — the same relational facts getNextRiderState uses.
 //
 // Run: node test/test_model.ts
-import { initialRiderState, getNextRiderState, MAX_TURN_ANGLE, APPROACH_INTERSECTION_DIST, routeDistance } from '../rider.ts';
+import { initialRiderState, getNextRiderState, riderDebug, ForwardReason, MAX_TURN_ANGLE, APPROACH_INTERSECTION_DIST, routeDistance } from '../rider.ts';
 import { gazeAngle, nextRiderGaze, GAZE_SEQUENCE } from '../rider_gaze.ts';
 import type { RiderState } from '../rider.ts';
 import { initialTruck, nextTruck, courseLength } from '../truck.ts';
@@ -147,6 +147,7 @@ function main(): void {
   let s = initialRiderState(world);
   const states: RiderState[] = [s];
   let crossings = 0, maxAcross = 0, maxV = 0;
+  const shoulderDecel: Record<string, number> = {};   // BASELINE: most-negative accel while the shoulder brake is binding, per segment
 
   // the chased truck, simulated in lockstep with the rider (exactly as main.ts advances it)
   const L = courseLength(world);
@@ -154,6 +155,9 @@ function main(): void {
   let minGap = Infinity, maxGap = truck.pos;   // the truck's lead over the rider, tracked across the drive
 
   for (let i = 0; i < 8000; i++) {
+    const dbg = riderDebug(s, world);   // the forward decision FROM s (same one getNextRiderState makes); record shoulder braking
+    if (dbg.forwardReason === ForwardReason.AVOID_SHOULDER)
+      shoulderDecel[s.segment] = Math.min(shoulderDecel[s.segment] ?? 0, dbg.accel);
     const n = nextRiderGaze(getNextRiderState(s, world), world);   // bike, then gaze (the same order as main.ts)
     if (n.segment !== s.segment) crossings++;
     maxAcross = Math.max(maxAcross, Math.abs(n.across));
@@ -167,6 +171,16 @@ function main(): void {
     const gap = truck.pos - rd;
     minGap = Math.min(minGap, gap);
     maxGap = Math.max(maxGap, gap);
+  }
+
+  // BASELINE METRIC — max deceleration the SHOULDER brake imposes per segment (most-negative accel while
+  // AVOID_SHOULDER is binding). Printed here, before the assertions, so it surfaces regardless of any later
+  // failure (e.g. the gaze assertion while the distracted-rider glance is TEMP-disabled).
+  console.log(`  drive: ${states.length - 1} presses`);
+  console.log('  max shoulder deceleration per segment (m/press^2, blank = never braked for the shoulder):');
+  for (const id of world.order) {
+    const d = shoulderDecel[id];
+    console.log(`    ${id.padEnd(6)} ${d === undefined ? '—' : d.toFixed(4)}`);
   }
 
   // 0) the model's per-segment northHeading matches an independent accumulation

@@ -167,7 +167,7 @@ let fps = 60, renderMs = 0, frameMs = TARGET_MS, droppedFrames = 0, dropFlash = 
 
 function drawHud(rider: RiderState, dbg: RiderDebug): void {
   ctx.fillStyle = 'rgba(0,0,0,0.5)';
-  ctx.fillRect(12, 12, 770, 93);
+  ctx.fillRect(12, 12, 920, 93);
   ctx.font = 'bold 13px ui-monospace, monospace';
   ctx.textAlign = 'left';
 
@@ -192,7 +192,7 @@ function drawHud(rider: RiderState, dbg: RiderDebug): void {
   // brake), and which snaps fired (TILT = lean snapped upright, YAW = heading re-aimed at the lane centre).
   const sgn = (x: number): string => (x >= 0 ? '+' : '');
   ctx.fillStyle = '#8fd0e6';
-  ctx.fillText(`tilt_step ${sgn(dbg.tiltStep)}${(dbg.tiltStep * 180 / Math.PI).toFixed(2)}deg   accel ${sgn(dbg.accel)}${dbg.accel.toFixed(4)}   dHeading ${sgn(dbg.headingChange)}${(dbg.headingChange * 180 / Math.PI).toFixed(2)}deg   yawFromTarget ${sgn(dbg.yawFromTarget)}${(dbg.yawFromTarget * 180 / Math.PI).toFixed(2)}deg   snap ${dbg.tiltSnapped ? 'TILT' : '·'} ${dbg.yawAimed ? 'YAW' : '·'}`, 22, 69);
+  ctx.fillText(`tilt_step ${sgn(dbg.tiltStep)}${(dbg.tiltStep * 180 / Math.PI).toFixed(2)}deg   accel ${sgn(dbg.accel)}${dbg.accel.toFixed(4)} ${dbg.forwardReason}   dHeading ${sgn(dbg.headingChange)}${(dbg.headingChange * 180 / Math.PI).toFixed(2)}deg   yawFromTarget ${sgn(dbg.yawFromTarget)}${(dbg.yawFromTarget * 180 / Math.PI).toFixed(2)}deg   snap ${dbg.tiltSnapped ? 'TILT' : '·'} ${dbg.yawAimed ? 'YAW' : '·'}`, 22, 69);
 
   // line 4: frame HEALTH — wall-clock cadence vs the 60Hz budget; turns red while dropping
   ctx.fillStyle = dropFlash > 0 ? '#ff6b6b' : '#9fe6a0';
