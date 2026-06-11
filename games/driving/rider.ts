@@ -104,7 +104,7 @@ const TILT_SNAP = 1.5 * Math.PI / 180;      // part of the snap-to-centre window
 const TILT_HOLD = 2 * Math.PI / 180;        // he only adds throttle while leaned LESS than this — accelerating mid-lean makes the constant-v danger projection lie and reads as jitter
 const YAW_EPSILON = 1.5 * Math.PI / 180;    // part of the snap-to-centre window: the heading must be within this of straight
 const AIMING_DISTANCE = 100;                // when upright, the rider aims his heading at the lane centre this far ahead (m) — eases him back to the middle
-const YAW_PER_TILT = 0.2;                   // the lean's leverage on the bike: every degree of tilt yaws the heading 0.2deg (so a turn demands a deep lean)
+const YAW_PER_TILT = 0.1;                   // the lean's leverage on the bike: every degree of tilt yaws the heading 0.1deg (so a turn demands a DEEP, dramatic lean)
 
 
 // The heading that points the rider at the lane CENTRE, AIMING_DISTANCE ahead, from a lateral offset `across`
