@@ -84,12 +84,12 @@ export const MAX_LEAN = 20 * Math.PI / 180;
 export const MAX_TURN_ANGLE = 90 * Math.PI / 180;   // the largest turn the model allows
 const STRAIGHTEN_MARGIN = 0.05;             // hard safety: keep the drift bulge at least this far inside the edge (m)
 const DANGER_STEPS = 15;                     // FORWARD brake: slow for the road edge once it's within this many frames at the current speed
-const TURN_DANGER_STEPS = 300;              // STEERING look-ahead: project the rider's arc this many frames to pick which way to lean (longer = more anticipation, less oversteer)
+const TURN_DANGER_STEPS = 240;              // STEERING look-ahead: project the rider's arc this many frames to pick which way to lean (longer = more anticipation, less oversteer)
 const MIN_FORWARD_PROGRESS = 80;            // checkpoint distance (m): by the time the projected arc has gone this far forward he should be back across centre — if he is, he's safe; if he's STILL on his start side he's stuck hugging it
 const TILT_STEP = 1 * Math.PI / 180;        // the most the rider leans further into the turn in one frame (prorated by danger nearness)
-const TILT_SNAP = 0.5 * Math.PI / 180;      // part of the snap-to-centre window: the lean must be within this of upright
+const TILT_SNAP = 1.5 * Math.PI / 180;      // part of the snap-to-centre window: the lean must be within this of upright
 const TILT_HOLD = 2 * Math.PI / 180;        // he only adds throttle while leaned LESS than this — accelerating mid-lean makes the constant-v danger projection lie and reads as jitter
-const YAW_EPSILON = 0.5 * Math.PI / 180;    // part of the snap-to-centre window: the heading must be within this of straight
+const YAW_EPSILON = 1.5 * Math.PI / 180;    // part of the snap-to-centre window: the heading must be within this of straight
 const AIMING_DISTANCE = 100;                // when upright, the rider aims his heading at the lane centre this far ahead (m) — eases him back to the middle
 const YAW_PER_TILT = 0.2;                   // the lean's leverage on the bike: every degree of tilt yaws the heading 0.2deg (so a turn demands a deep lean)
 
