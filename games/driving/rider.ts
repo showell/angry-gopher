@@ -93,6 +93,13 @@ const YAW_PER_TILT = 0.2;                   // the lean's leverage on the bike: 
 
 const clamp = (x: number, lo: number, hi: number): number => Math.max(lo, Math.min(hi, x));
 
+// The heading that points the rider at the lane CENTRE, AIMING_DISTANCE ahead, from a lateral offset `across`
+// (0 when centred; tilts back toward the middle when off to a side). His straighten-out target — used both to
+// snap him clean (getNextRiderState) and to treat OVERSHOOTING it as a danger (getDangerInfo).
+function aimYawFor(across: number): number {
+  return Math.atan2(-across, AIMING_DISTANCE);
+}
+
 // ----------------------------------------------------------------------------
 // functions
 // ----------------------------------------------------------------------------
@@ -163,7 +170,7 @@ export function getNextRiderState(state: RiderState, world: World): RiderState {
   // nearly on that aim (|yaw - aimYaw| < YAW_EPSILON) do we tidy him clean: lean to exactly 0 and heading
   // onto aimYaw, so he eases back to the middle. Requiring BOTH means a turn (deep lean OR a heading far off
   // the aim) can never trigger it mid-corner — the snap only kills the last wobble as he settles straight.
-  const aimYaw = Math.atan2(-across, AIMING_DISTANCE);
+  const aimYaw = aimYawFor(across);
   const yawFromTarget = yaw - aimYaw;                            // signed: how far the natural heading sits from the aim (abs gates the snap)
   const snapped = Math.abs(tilt) < TILT_SNAP && Math.abs(yawFromTarget) < YAW_EPSILON;
   if (snapped) { tilt = 0; yaw = aimYaw; }
@@ -243,19 +250,29 @@ function isInDangerOfHittingShoulder(state: RiderState, seg: RoadSegment): boole
   return shoulderDistance(state, seg) < DANGER_STEPS * state.v;
 }
 
-// The rider's "brain": project his ARC forward — tilt held constant (so a constant heading-change per step)
-// and speed held constant — and report which road edge it would run off FIRST, or NONE if he stays on the road
-// for the next TURN_DANGER_STEPS steps. A cheap loop, recomputed each frame; the rotational decision leans him
-// AWAY from whichever side it names.
+// The rider's "brain": project his ARC forward (tilt held constant -> a constant heading-change per step,
+// speed held constant) and report the FIRST danger that would force a correction, or NONE over the next
+// TURN_DANGER_STEPS. There are TWO kinds of danger, and the SOONER one wins:
+//   • running off a road shoulder (across past +/-hw) — the hard limit, and
+//   • his heading OVERSHOOTING the aim (aimYawFor: the lane-centre target he straightens onto). Coming out
+//     of a turn the overshoot is usually sooner, and catching it is what stops the oversteer:
+//       - heading LEFT of the aim  -> off-road is the LEFT shoulder; the RIGHT danger is yaw crossing UP past
+//         the aim (about to sail past centre to the right).
+//       - heading RIGHT of the aim -> mirror: off-road is the RIGHT shoulder; the LEFT danger is crossing DOWN.
+// He leans AWAY from whichever side this names, so a looming overshoot eases his lean before he passes centre.
 export function getDangerInfo(state: RiderState, seg: RoadSegment): DangerInfo {
   const hw = seg.width / 2;
   const headingStep = YAW_PER_TILT * state.tilt;                            // constant per step (tilt held fixed)
   let yaw = state.yaw, across = state.across;
+  const aimSide = Math.sign(yaw - aimYawFor(across));                       // <0: heading left of the aim, >0: right of it
   for (let i = 0; i < TURN_DANGER_STEPS; i++) {
     across += state.v * Math.sin(yaw + headingStep / 2);                    // arc step (midpoint heading)
-    if (across <= -hw) return { side: DangerSide.LEFT, steps: i };          // i = safe steps before the crossing (0 = imminent)
-    if (across >= hw) return { side: DangerSide.RIGHT, steps: i };
     yaw += headingStep;
+    if (across <= -hw) return { side: DangerSide.LEFT, steps: i };          // i = safe steps before the event (0 = imminent)
+    if (across >= hw) return { side: DangerSide.RIGHT, steps: i };
+    const rel = yaw - aimYawFor(across);                                    // signed gap from the (moving) aim
+    if (aimSide < 0 && rel >= 0) return { side: DangerSide.RIGHT, steps: i };   // was left of aim, crossed past -> overshooting right
+    if (aimSide > 0 && rel <= 0) return { side: DangerSide.LEFT, steps: i };    // was right of aim, crossed past -> overshooting left
   }
   return { side: DangerSide.NONE, steps: TURN_DANGER_STEPS };
 }
