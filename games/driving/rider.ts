@@ -254,25 +254,28 @@ function isInDangerOfHittingShoulder(state: RiderState, seg: RoadSegment): boole
 // speed held constant) and report the FIRST danger that would force a correction, or NONE over the next
 // TURN_DANGER_STEPS. There are TWO kinds of danger, and the SOONER one wins:
 //   • running off a road shoulder (across past +/-hw) — the hard limit, and
-//   • his heading OVERSHOOTING the aim (aimYawFor: the lane-centre target he straightens onto). Coming out
-//     of a turn the overshoot is usually sooner, and catching it is what stops the oversteer:
-//       - heading LEFT of the aim  -> off-road is the LEFT shoulder; the RIGHT danger is yaw crossing UP past
-//         the aim (about to sail past centre to the right).
-//       - heading RIGHT of the aim -> mirror: off-road is the RIGHT shoulder; the LEFT danger is crossing DOWN.
-// He leans AWAY from whichever side this names, so a looming overshoot eases his lean before he passes centre.
+//   • his heading swinging PAST a symmetric band around the aim (aimYawFor: the lane-centre target). He starts
+//     g0 = yaw - aim off the aim; we let him swing the SAME amount to the OTHER side (to -g0) before the danger
+//     fires — that carries his angular momentum through the turn instead of braking it at the aim, and because
+//     g0 shrinks frame to frame the allowed overshoot shrinks with it, so it self-damps:
+//       - heading LEFT of the aim (g0 < 0)  -> off-road is the LEFT shoulder; the RIGHT danger is yaw reaching
+//         the mirror -g0 (swung as far right of the aim as he began left of it).
+//       - heading RIGHT of the aim (g0 > 0) -> mirror: off-road is the RIGHT shoulder; the LEFT danger is -g0.
+// He leans AWAY from whichever side this names. The effective road is inset by STRAIGHTEN_MARGIN so he reads the
+// shoulder a touch early and commits to the turn a bit sooner.
 export function getDangerInfo(state: RiderState, seg: RoadSegment): DangerInfo {
-  const hw = seg.width / 2;
+  const hw = seg.width / 2 - STRAIGHTEN_MARGIN;                             // inset edge: react just inside the real shoulder
   const headingStep = YAW_PER_TILT * state.tilt;                            // constant per step (tilt held fixed)
   let yaw = state.yaw, across = state.across;
-  const aimSide = Math.sign(yaw - aimYawFor(across));                       // <0: heading left of the aim, >0: right of it
+  const g0 = yaw - aimYawFor(across);                                       // signed initial gap from the aim; allowed to swing to its mirror -g0
   for (let i = 0; i < TURN_DANGER_STEPS; i++) {
     across += state.v * Math.sin(yaw + headingStep / 2);                    // arc step (midpoint heading)
     yaw += headingStep;
     if (across <= -hw) return { side: DangerSide.LEFT, steps: i };          // i = safe steps before the event (0 = imminent)
     if (across >= hw) return { side: DangerSide.RIGHT, steps: i };
     const rel = yaw - aimYawFor(across);                                    // signed gap from the (moving) aim
-    if (aimSide < 0 && rel >= 0) return { side: DangerSide.RIGHT, steps: i };   // was left of aim, crossed past -> overshooting right
-    if (aimSide > 0 && rel <= 0) return { side: DangerSide.LEFT, steps: i };    // was right of aim, crossed past -> overshooting left
+    if (g0 < 0 && rel >= -g0) return { side: DangerSide.RIGHT, steps: i };  // swung as far right of aim as he began left -> overshooting right
+    if (g0 > 0 && rel <= -g0) return { side: DangerSide.LEFT, steps: i };   // swung as far left of aim as he began right -> overshooting left
   }
   return { side: DangerSide.NONE, steps: TURN_DANGER_STEPS };
 }
