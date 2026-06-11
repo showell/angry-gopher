@@ -155,14 +155,18 @@ export function routeDistance(state: RiderState, world: World): number {
 interface Decision { v: number; tilt: number; yaw: number; along: number; across: number; debug: RiderDebug }
 function decide(state: RiderState, seg: RoadSegment, world: World): Decision {
   const prevTilt = state.tilt;
-  const v = state.v + getForwardAccelDecel(state, seg, world);                  // the forward decision IS the new speed
 
-  // The LEAN drives the turn. The rider evaluates all 21 leans (bestTiltCorrection) and takes the gentlest one
-  // whose projected path gets furthest down the road AND crosses back to centre. The lean carried IN from last
-  // frame yaws the bike YAW_PER_TILT per unit, so the tilt LEADS the yaw by a frame.
+  // The LEAN goes FIRST now. The rider evaluates all 21 leans (bestTiltCorrection) and takes the one whose
+  // projected path gets furthest down the road, crosses back to centre, and ends nearest the middle. The lean
+  // carried IN from last frame yaws the bike YAW_PER_TILT per unit, so the tilt LEADS the yaw by a frame.
   let tilt = bestTiltCorrection(state, seg);
   const headingChange = YAW_PER_TILT * prevTilt;
   let yaw = state.yaw + headingChange;
+
+  // The FORWARD decision comes AFTER, and sees the bike's JUST-computed tilt + heading — so the shoulder/corner
+  // braking reacts to this frame's rotation a step earlier. Subtle for now; it sets up making turns more aggressive.
+  const v = state.v + getForwardAccelDecel({ ...state, tilt, yaw }, seg, world);
+
   const midHeading = state.yaw + headingChange / 2;                            // average heading over the frame -> arc
   const along = state.along + v * Math.cos(midHeading);
   const across = state.across + v * Math.sin(midHeading);
