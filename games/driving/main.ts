@@ -7,7 +7,7 @@
 //   ArrowUp   : getNextRiderState -> push the next RiderState onto the history
 //   ArrowDown : pop back to the previous RiderState
 // =============================================================================
-import { initialRiderState, getNextRiderState, riderHeading, riderTilt, riderFinished, getDangerInfo, riderDebug, DangerSide, MAX_LEAN, routeDistance } from './rider.ts';
+import { initialRiderState, getNextRiderState, riderHeading, riderTilt, riderFinished, simulateRiderPath, riderDebug, DangerSide, MAX_LEAN, routeDistance } from './rider.ts';
 import { gazeAngle, nextRiderGaze } from './rider_gaze.ts';
 import type { RiderState, RiderDebug } from './rider.ts';
 import { initialTruck, nextTruck, courseLength } from './truck.ts';
@@ -185,8 +185,9 @@ function drawHud(rider: RiderState, dbg: RiderDebug): void {
   // the segment's direction, camera tilt, and speed. (These used to vanish during turns.)
   ctx.fillStyle = '#9fe6a0';
   const gazeDeg = gazeAngle(rider) * 180 / Math.PI;
-  const danger = getDangerInfo(rider, world.segments[rider.segment]);
-  ctx.fillText(`x ${rider.across.toFixed(2)}  y ${rider.along.toFixed(1)}  heading ${headingDeg.toFixed(1)}deg  tilt ${tiltDeg.toFixed(2)}deg  path ${danger.side} (fwd ${danger.forward.toFixed(0)}${danger.crossed ? ' X-ctr' : ''})  gaze ${gazeDeg.toFixed(0)}deg  v ${rider.v.toFixed(2)}`, 22, 50);
+  const danger = simulateRiderPath(rider, world.segments[rider.segment]);
+  const dangerN = Number.isFinite(danger.framesUntilDanger) ? `${danger.framesUntilDanger}f` : 'clear';
+  ctx.fillText(`x ${rider.across.toFixed(2)}  y ${rider.along.toFixed(1)}  heading ${headingDeg.toFixed(1)}deg  tilt ${tiltDeg.toFixed(2)}deg  path ${danger.side} (fwd ${danger.forward.toFixed(0)} danger ${dangerN}${danger.crossed ? ' X-ctr' : ''})  gaze ${gazeDeg.toFixed(0)}deg  v ${rider.v.toFixed(2)}`, 22, 50);
 
   // line 3: the rider's DECISION this frame — the per-frame lean change, the forward accel (+ throttle / −
   // brake), and which snaps fired (TILT = lean snapped upright, YAW = heading re-aimed at the lane centre).

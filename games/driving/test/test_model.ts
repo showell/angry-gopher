@@ -154,7 +154,7 @@ function main(): void {
   let truck: TruckState = initialTruck();
   let minGap = Infinity, maxGap = truck.pos;   // the truck's lead over the rider, tracked across the drive
 
-  for (let i = 0; i < 8000; i++) {
+  for (let i = 0; i < 12000; i++) {
     const dbg = riderDebug(s, world);   // the forward decision FROM s (same one getNextRiderState makes); record shoulder braking
     if (dbg.forwardReason === ForwardReason.AVOID_SHOULDER)
       shoulderDecel[s.segment] = Math.min(shoulderDecel[s.segment] ?? 0, dbg.accel);
