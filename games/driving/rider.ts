@@ -39,7 +39,7 @@ export type DangerSide = typeof DangerSide[keyof typeof DangerSide];
 // window), the FORWARD progress it made (capped at MIN_FORWARD_PROGRESS so all surviving paths tie exactly),
 // whether it crossed the centre line, and the ACTUAL arc walked (centre-relative along/across, ending where it
 // terminated) — returned so the debug overlay renders precisely what was computed, never a drifting mimic.
-export interface DangerInfo { side: DangerSide; forward: number; crossed: boolean; path: { along: number; across: number }[] }
+export interface DangerInfo { side: DangerSide; forward: number; crossed: boolean; endAcross: number; path: { along: number; across: number }[] }
 
 // A HUD-only readout of the forward+lean decision — NOT part of the rider's state, just the frame's internal
 // choices surfaced for the debug overlay.
@@ -285,12 +285,12 @@ export function getDangerInfo(state: RiderState, seg: RoadSegment): DangerInfo {
     yaw += headingStep;
     path.push({ along: state.along + forward, across });                    // record this projected point (last one IS the exit point)
     if (across * startSide < 0) crossed = true;                            // the arc has made it across centre
-    if (across < leftBound) return { side: DangerSide.LEFT, forward, crossed, path };       // ran off the left shoulder
-    if (across > rightBound) return { side: DangerSide.RIGHT, forward, crossed, path };     // ran off the right shoulder
-    if (forward < 0) return { side: DangerSide.NONE, forward, crossed, path };              // spun net-backward — disaster
-    if (forward >= MIN_FORWARD_PROGRESS) return { side: DangerSide.NONE, forward: MIN_FORWARD_PROGRESS, crossed, path };  // cleared (pinned exactly, for clean ties)
+    if (across < leftBound) return { side: DangerSide.LEFT, forward, crossed, endAcross: across, path };       // ran off the left shoulder
+    if (across > rightBound) return { side: DangerSide.RIGHT, forward, crossed, endAcross: across, path };     // ran off the right shoulder
+    if (forward < 0) return { side: DangerSide.NONE, forward, crossed, endAcross: across, path };              // spun net-backward — disaster
+    if (forward >= MIN_FORWARD_PROGRESS) return { side: DangerSide.NONE, forward: MIN_FORWARD_PROGRESS, crossed, endAcross: across, path };  // cleared (pinned exactly, for clean ties)
   }
-  return { side: DangerSide.NONE, forward, crossed, path };
+  return { side: DangerSide.NONE, forward, crossed, endAcross: across, path };
 }
 
 const TILT_SEARCH_STEPS = 10;                     // +/- this many 0.1deg steps -> 21 lean options spanning [-MAX, +MAX]
@@ -305,19 +305,18 @@ function leanAtOption(state: RiderState, j: number): number {
 // THE LEAN SEARCH (shared by the real decision and the debug overlay). Evaluate ALL 21 leans and rank by how
 // the projected path plays out (getDangerInfo): pick the path that makes the MOST forward progress (surviving
 // paths all tie at exactly MIN_FORWARD_PROGRESS); among that tie prefer the one that CROSSES the centre line,
-// then — among those — the LEAST lean. So he commits the gentlest lean that still gets him cleanly down the
-// road AND back across the middle. Returns the chosen option index.
-function leanBetter(a: DangerInfo, aAbs: number, b: DangerInfo, bAbs: number): boolean {
-  if (a.forward !== b.forward) return a.forward > b.forward;     // primary: furthest forward (capped, so survivors tie exactly)
-  if (a.crossed !== b.crossed) return a.crossed;                 // tiebreak: cross the centre line
-  return aAbs < bAbs;                                            // tiebreak: least lean
+// then — among those — the one that ENDS CLOSEST TO CENTRE. So he commits the lean that gets him cleanly down
+// the road, back across the middle, and settled nearest the lane centre. Returns the chosen option index.
+function leanBetter(a: DangerInfo, b: DangerInfo): boolean {
+  if (a.forward !== b.forward) return a.forward > b.forward;             // primary: furthest forward (capped, so survivors tie exactly)
+  if (a.crossed !== b.crossed) return a.crossed;                         // tiebreak: cross the centre line
+  return Math.abs(a.endAcross) < Math.abs(b.endAcross);                  // tiebreak: end closest to centre
 }
 function chosenLeanOption(state: RiderState, seg: RoadSegment): number {
-  let bestJ = 0, bestD = getDangerInfo({ ...state, tilt: leanAtOption(state, 0) }, seg), bestAbs = Math.abs(leanAtOption(state, 0) - state.tilt);
+  let bestJ = 0, bestD = getDangerInfo({ ...state, tilt: leanAtOption(state, 0) }, seg);
   for (let j = 1; j <= 2 * TILT_SEARCH_STEPS; j++) {
     const d = getDangerInfo({ ...state, tilt: leanAtOption(state, j) }, seg);
-    const abs = Math.abs(leanAtOption(state, j) - state.tilt);
-    if (leanBetter(d, abs, bestD, bestAbs)) { bestJ = j; bestD = d; bestAbs = abs; }
+    if (leanBetter(d, bestD)) { bestJ = j; bestD = d; }
   }
   return bestJ;
 }
