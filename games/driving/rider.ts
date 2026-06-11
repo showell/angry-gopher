@@ -35,10 +35,11 @@ import { segmentCatDanger } from './cat_motion.ts';
 export const DangerSide = { LEFT: 'LEFT', NONE: 'NONE', RIGHT: 'RIGHT' } as const;
 export type DangerSide = typeof DangerSide[keyof typeof DangerSide];
 
-// The danger projection's verdict: which side he'd run off, in how many steps (the full horizon when NONE), and
-// the ACTUAL arc it walked (centre-relative along/across), ending exactly where it early-exited — so the debug
-// overlay renders precisely what getDangerInfo computed rather than a separate mimic that could drift.
-export interface DangerInfo { side: DangerSide; steps: number; path: { along: number; across: number }[] }
+// A projected path's outcome: which shoulder it ran off (NONE if it stayed on the road through the scoring
+// window), the FORWARD progress it made (capped at MIN_FORWARD_PROGRESS so all surviving paths tie exactly),
+// whether it crossed the centre line, and the ACTUAL arc walked (centre-relative along/across, ending where it
+// terminated) — returned so the debug overlay renders precisely what was computed, never a drifting mimic.
+export interface DangerInfo { side: DangerSide; forward: number; crossed: boolean; path: { along: number; across: number }[] }
 
 // A HUD-only readout of the forward+lean decision — NOT part of the rider's state, just the frame's internal
 // choices surfaced for the debug overlay.
@@ -156,13 +157,10 @@ function decide(state: RiderState, seg: RoadSegment, world: World): Decision {
   const prevTilt = state.tilt;
   const v = state.v + getForwardAccelDecel(state, seg, world);                  // the forward decision IS the new speed
 
-  // The LEAN drives the turn. The rider projects his arc (getDangerInfo) and tips the bike AWAY from whichever
-  // shoulder he'd run off first — LEFT danger -> lean right, RIGHT danger -> lean left, NONE -> hold. He
-  // searches the AMOUNT (bestTiltCorrection): a lean change up to MAX_TILT_CORRECTION, preferring the gentlest
-  // that clears the danger entirely, else whichever postpones it longest. The lean carried IN from last frame
-  // yaws the bike YAW_PER_TILT per unit, so the tilt LEADS the yaw by a frame.
-  const danger = getDangerInfo(state, seg);
-  let tilt = bestTiltCorrection(state, seg, danger.side);
+  // The LEAN drives the turn. The rider evaluates all 21 leans (bestTiltCorrection) and takes the gentlest one
+  // whose projected path gets furthest down the road AND crosses back to centre. The lean carried IN from last
+  // frame yaws the bike YAW_PER_TILT per unit, so the tilt LEADS the yaw by a frame.
+  let tilt = bestTiltCorrection(state, seg);
   const headingChange = YAW_PER_TILT * prevTilt;
   let yaw = state.yaw + headingChange;
   const midHeading = state.yaw + headingChange / 2;                            // average heading over the frame -> arc
@@ -262,31 +260,23 @@ function isInDangerOfHittingShoulder(state: RiderState, seg: RoadSegment): boole
   return shoulderDistance(state, seg) < DANGER_STEPS * state.v;
 }
 
-// The rider's "brain": project his ARC forward (tilt held constant -> a constant heading-change per step,
-// speed held constant) and report the FIRST danger that would force a correction, or NONE over the next
-// TURN_DANGER_STEPS. There are TWO kinds of danger, and the SOONER one wins:
-//   • running off a road shoulder (across past +/-hw) — the hard limit, and
-//   • his heading swinging PAST a symmetric band around the aim (aimYawFor: the lane-centre target). He starts
-//     g0 = yaw - aim off the aim; we let him swing the SAME amount to the OTHER side (to -g0) before the danger
-//     fires — that carries his angular momentum through the turn instead of braking it at the aim, and because
-//     g0 shrinks frame to frame the allowed overshoot shrinks with it, so it self-damps:
-//       - heading LEFT of the aim (g0 < 0)  -> off-road is the LEFT shoulder; the RIGHT danger is yaw reaching
-//         the mirror -g0 (swung as far right of the aim as he began left of it).
-//       - heading RIGHT of the aim (g0 > 0) -> mirror: off-road is the RIGHT shoulder; the LEFT danger is -g0.
-// He leans AWAY from whichever side this names. The effective road is inset by STRAIGHTEN_MARGIN so he reads the
-// shoulder a touch early and commits to the turn a bit sooner.
+// Project his ARC forward (tilt held constant -> a constant heading-change per step, speed held constant) and
+// score how that lean PLAYS OUT. The projection runs until one of:
+//   • it runs off a shoulder           -> { side: LEFT|RIGHT, forward = progress at the hit }   (a bad lean)
+//   • it goes net-BACKWARD (forward<0) -> the disaster case; the negative forward sinks it in the ranking
+//   • it clears MIN_FORWARD_PROGRESS   -> { side: NONE, forward = MIN_FORWARD_PROGRESS exactly }  (a good lean)
+// `forward` is the score (more is better) and is pinned to EXACTLY MIN_FORWARD_PROGRESS for every surviving
+// path so they tie cleanly and the caller can tiebreak. `crossed` = did the arc cross the centre line. The
+// shoulder boundary on each side is the WORSE of the inset edge (STRAIGHTEN_MARGIN inside the real shoulder)
+// and where the rider ALREADY sits, so a path is only "off" if it pushes him FURTHER toward a shoulder than he
+// already is — not for merely starting near the edge.
 export function getDangerInfo(state: RiderState, seg: RoadSegment): DangerInfo {
-  const insetHw = seg.width / 2 - STRAIGHTEN_MARGIN;                        // inset edge: react just inside the real shoulder
-  // The shoulder boundary on each side is the WORSE of the inset edge and where the rider ALREADY sits. If he
-  // starts past the inset edge (already within STRAIGHTEN_MARGIN of the real shoulder), a path counts as danger
-  // only if it pushes him EVEN closer to that shoulder than his starting offset — never for merely being where
-  // he is. Otherwise a straight, harmless path gets rejected at step 0 just because he began near the edge.
+  const insetHw = seg.width / 2 - STRAIGHTEN_MARGIN;
   const rightBound = Math.max(insetHw, state.across);
   const leftBound = Math.min(-insetHw, state.across);
   const headingStep = YAW_PER_TILT * state.tilt;                            // constant per step (tilt held fixed)
   let yaw = state.yaw, across = state.across, forward = 0, crossed = false;
   const startSide = Math.sign(across);                                      // which side of centre he starts on
-  const g0 = yaw - aimYawFor(across);                                       // signed initial gap from the aim; allowed to swing to its mirror -g0
   const path: { along: number; across: number }[] = [];                    // the arc actually walked — returned so the overlay matches exactly
   for (let i = 0; i < TURN_DANGER_STEPS; i++) {
     const mid = yaw + headingStep / 2;                                      // midpoint heading over the step
@@ -294,77 +284,58 @@ export function getDangerInfo(state: RiderState, seg: RoadSegment): DangerInfo {
     across += state.v * Math.sin(mid);                                      // arc step
     yaw += headingStep;
     path.push({ along: state.along + forward, across });                    // record this projected point (last one IS the exit point)
-    if (across * startSide < 0) crossed = true;                            // record that the arc has made it across centre at some point
-    if (across < leftBound) return { side: DangerSide.LEFT, steps: i, path };     // worse than where he started toward the left shoulder (i = steps before it)
-    if (across > rightBound) return { side: DangerSide.RIGHT, steps: i, path };   // worse than where he started toward the right shoulder
-    // CHECKPOINT: once he's committed MIN_FORWARD_PROGRESS forward he should be back across centre. If he is
-    // (and stayed on the road, above) he's re-centring fine — no danger. If he's STILL on his start side he's
-    // stuck hugging it, so flag THAT side (he leans off it toward centre) rather than letting him stay pinned.
-    if (forward >= MIN_FORWARD_PROGRESS) {
-      if (startSide !== 0 && Math.sign(across) === startSide)
-        return { side: startSide > 0 ? DangerSide.RIGHT : DangerSide.LEFT, steps: i, path };
-      return { side: DangerSide.NONE, steps: TURN_DANGER_STEPS, path };
-    }
-    // ...but only worry about the overshoot once he's actually crossed to the WRONG side of centre (the side
-    // opposite where he began): while he's still returning from his start side we don't fight his momentum.
-    const rel = yaw - aimYawFor(across);                                    // signed gap from the (moving) aim
-    const pastCentre = across * startSide < 0;                             // now on the opposite side from where he started
-    if (pastCentre && g0 < 0 && rel >= -g0) return { side: DangerSide.RIGHT, steps: i, path };  // started left, swung past aim to the right -> overshooting right
-    if (pastCentre && g0 > 0 && rel <= -g0) return { side: DangerSide.LEFT, steps: i, path };   // started right, swung past aim to the left -> overshooting left
+    if (across * startSide < 0) crossed = true;                            // the arc has made it across centre
+    if (across < leftBound) return { side: DangerSide.LEFT, forward, crossed, path };       // ran off the left shoulder
+    if (across > rightBound) return { side: DangerSide.RIGHT, forward, crossed, path };     // ran off the right shoulder
+    if (forward < 0) return { side: DangerSide.NONE, forward, crossed, path };              // spun net-backward — disaster
+    if (forward >= MIN_FORWARD_PROGRESS) return { side: DangerSide.NONE, forward: MIN_FORWARD_PROGRESS, crossed, path };  // cleared (pinned exactly, for clean ties)
   }
-  // ran the whole projection without ever crossing centre -> he's stuck on his start side; flag it so he leans off.
-  if (startSide !== 0 && !crossed)
-    return { side: startSide > 0 ? DangerSide.RIGHT : DangerSide.LEFT, steps: TURN_DANGER_STEPS, path };
-  return { side: DangerSide.NONE, steps: TURN_DANGER_STEPS, path };
+  return { side: DangerSide.NONE, forward, crossed, path };
 }
 
-// How much to change the lean this frame, given the current danger. The rider leans AWAY from the danger and
-// searches the AMOUNT: ten lean changes from 0 up to MAX_TILT_CORRECTION. The FIRST (smallest) one that clears
-// the danger entirely — projection NONE — is the pick. If NONE of them clear it, take the one that POSTPONES
-// the danger furthest (the highest danger steps). NONE in -> hold the lean.
-const TILT_SEARCH_STEPS = 10;
+const TILT_SEARCH_STEPS = 10;                     // +/- this many 0.1deg steps -> 21 lean options spanning [-MAX, +MAX]
 const MAX_TILT_CORRECTION = 1 * Math.PI / 180;    // the most the rider can work his lean over in a single frame (he has to fight the bike's mass)
 
-// the lean the rider would hold at search step k (0..TILT_SEARCH_STEPS), in the correcting direction `dir`.
-function leanAtStep(state: RiderState, dir: number, k: number): number {
-  return state.tilt + dir * MAX_TILT_CORRECTION * k / TILT_SEARCH_STEPS;
+// the lean the rider would hold at search option j (0..2*TILT_SEARCH_STEPS): delta runs -MAX (lean hard left)
+// through 0 (hold) to +MAX (lean hard right).
+function leanAtOption(state: RiderState, j: number): number {
+  return state.tilt + MAX_TILT_CORRECTION * (j - TILT_SEARCH_STEPS) / TILT_SEARCH_STEPS;
 }
 
-// THE LEAN SEARCH (shared by the real decision and the debug overlay): try the TILT_SEARCH_STEPS+1 lean options
-// and return the chosen step index. The FIRST (gentlest) that clears the danger entirely (projection NONE) wins.
-// If NONE of them clear it, take the one that POSTPONES the danger longest (highest danger steps); on a TIE
-// prefer the LARGER lean (>=) — a sub-degree lean often can't move the integer step count yet, but he must
-// accumulate it across frames to come around.
-function chosenLeanStep(state: RiderState, seg: RoadSegment, dir: number): number {
-  let bestK = 0, bestSteps = -1;
-  for (let k = 0; k <= TILT_SEARCH_STEPS; k++) {
-    const d = getDangerInfo({ ...state, tilt: leanAtStep(state, dir, k) }, seg);
-    if (d.side === DangerSide.NONE) return k;
-    if (d.steps >= bestSteps) { bestSteps = d.steps; bestK = k; }
+// THE LEAN SEARCH (shared by the real decision and the debug overlay). Evaluate ALL 21 leans and rank by how
+// the projected path plays out (getDangerInfo): pick the path that makes the MOST forward progress (surviving
+// paths all tie at exactly MIN_FORWARD_PROGRESS); among that tie prefer the one that CROSSES the centre line,
+// then — among those — the LEAST lean. So he commits the gentlest lean that still gets him cleanly down the
+// road AND back across the middle. Returns the chosen option index.
+function leanBetter(a: DangerInfo, aAbs: number, b: DangerInfo, bAbs: number): boolean {
+  if (a.forward !== b.forward) return a.forward > b.forward;     // primary: furthest forward (capped, so survivors tie exactly)
+  if (a.crossed !== b.crossed) return a.crossed;                 // tiebreak: cross the centre line
+  return aAbs < bAbs;                                            // tiebreak: least lean
+}
+function chosenLeanOption(state: RiderState, seg: RoadSegment): number {
+  let bestJ = 0, bestD = getDangerInfo({ ...state, tilt: leanAtOption(state, 0) }, seg), bestAbs = Math.abs(leanAtOption(state, 0) - state.tilt);
+  for (let j = 1; j <= 2 * TILT_SEARCH_STEPS; j++) {
+    const d = getDangerInfo({ ...state, tilt: leanAtOption(state, j) }, seg);
+    const abs = Math.abs(leanAtOption(state, j) - state.tilt);
+    if (leanBetter(d, abs, bestD, bestAbs)) { bestJ = j; bestD = d; bestAbs = abs; }
   }
-  return bestK;
+  return bestJ;
 }
 
-function bestTiltCorrection(state: RiderState, seg: RoadSegment, side: DangerSide): number {
-  if (side === DangerSide.NONE) return state.tilt;
-  const dir = side === DangerSide.RIGHT ? -1 : 1;           // RIGHT danger -> lean left (tilt down); LEFT danger -> lean right
-  return leanAtStep(state, dir, chosenLeanStep(state, seg, dir));
+function bestTiltCorrection(state: RiderState, seg: RoadSegment): number {
+  return leanAtOption(state, chosenLeanOption(state, seg));
 }
 
-// The debug overlay's data: the ACTUAL arc getDangerInfo walked for EVERY lean option the search considered
-// (each ending where that option early-exits) WITH the danger side it ended on, and which index the rider
-// chose. With no danger there's no search — just his single held-tilt path (marked chosen). The chosen index
-// comes from chosenLeanStep, the SAME selection the real decision uses, so the yellow path can't disagree.
+// The debug overlay's data: the ACTUAL arc getDangerInfo walked for EVERY one of the 21 lean options WITH the
+// shoulder it ran off (NONE if it survived), and which index the rider chose. The chosen index comes from
+// chosenLeanOption, the SAME ranking the real decision uses, so the yellow path can't disagree with what he does.
 export interface LeanCandidate { path: { along: number; across: number }[]; side: DangerSide }
 export interface LeanCandidates { candidates: LeanCandidate[]; chosen: number }
 export function leanCandidates(state: RiderState, seg: RoadSegment): LeanCandidates {
-  const di = getDangerInfo(state, seg);
-  if (di.side === DangerSide.NONE) return { candidates: [{ path: di.path, side: di.side }], chosen: 0 };
-  const dir = di.side === DangerSide.RIGHT ? -1 : 1;
-  const chosen = chosenLeanStep(state, seg, dir);
+  const chosen = chosenLeanOption(state, seg);
   const candidates: LeanCandidate[] = [];
-  for (let k = 0; k <= TILT_SEARCH_STEPS; k++) {
-    const cd = getDangerInfo({ ...state, tilt: leanAtStep(state, dir, k) }, seg);
+  for (let j = 0; j <= 2 * TILT_SEARCH_STEPS; j++) {
+    const cd = getDangerInfo({ ...state, tilt: leanAtOption(state, j) }, seg);
     candidates.push({ path: cd.path, side: cd.side });
   }
   return { candidates, chosen };
