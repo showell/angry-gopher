@@ -264,6 +264,20 @@ function render(rider: RiderState): void {
   }
   drawables.sort((a, b) => b.forward - a.forward).forEach((d) => d.draw());
 
+  // the rider's PROJECTED PATH — a trail of yellow dots on the pavement marking where his current
+  // tilt + speed would carry him over the next TURN_DANGER_STEPS (the arc getDangerInfo reads). Drawn
+  // ON TOP (after scenery) as a debug overlay so it's never occluded; each dot sits on the ground
+  // plane (the road's curvature drop) and shrinks with distance.
+  ctx.fillStyle = '#ffe14d';
+  for (const p of scene.pathDots) {
+    if (p.forward <= NEAR) continue;
+    const s = project({ right: p.right, forward: p.forward, height: -groundDrop(p.right, p.forward) });
+    const r = Math.max(1.5, Math.min(4, camFocal * 0.05 / p.forward));
+    ctx.beginPath();
+    ctx.arc(s.x, s.y, r, 0, 2 * Math.PI);
+    ctx.fill();
+  }
+
   ctx.restore();
 
   drawHud(rider);

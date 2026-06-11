@@ -259,3 +259,22 @@ export function getDangerInfo(state: RiderState, seg: RoadSegment): DangerInfo {
   }
   return { side: DangerSide.NONE, steps: TURN_DANGER_STEPS };
 }
+
+// The same arc getDangerInfo walks, but recording every point (centre-relative along/across in the
+// CURRENT segment's frame) instead of just the first shoulder crossing — so the renderer can draw the
+// rider's projected path: where his current tilt + speed would carry him over the next TURN_DANGER_STEPS.
+// It's literally "what the rider sees" when he decides which way to lean. Mirrors getNextRiderState's
+// integration (midpoint heading, constant tilt -> constant headingStep, constant v).
+export function projectedPath(state: RiderState): { along: number; across: number }[] {
+  const headingStep = YAW_PER_TILT * state.tilt;
+  let yaw = state.yaw, along = state.along, across = state.across;
+  const path: { along: number; across: number }[] = [];
+  for (let i = 0; i < TURN_DANGER_STEPS; i++) {
+    const mid = yaw + headingStep / 2;                                      // average heading over the step -> arc
+    along += state.v * Math.cos(mid);
+    across += state.v * Math.sin(mid);
+    path.push({ along, across });
+    yaw += headingStep;
+  }
+  return path;
+}

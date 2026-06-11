@@ -8,6 +8,7 @@
 // through the intersections ahead — plus the intersection just behind us.
 // =============================================================================
 import type { RiderState } from './rider.ts';
+import { projectedPath } from './rider.ts';
 import { gazeAngle } from './rider_gaze.ts';
 import type { World } from './world.ts';
 import type { RoadSegment } from './road_segment.ts';
@@ -25,7 +26,7 @@ import type { TruckState } from './truck.ts';
 // Road quads are the ground plane (drawn first, no LOD); polys are raised road structures
 // (guard rails) drawn over them; scenery is the depth-sorted, near/far-aware drawables (trees
 // + critters, merged so they occlude each other right).
-export interface Scene { quads: Quad[]; polys: Poly3[]; scenery: Scenery[] }
+export interface Scene { quads: Quad[]; polys: Poly3[]; scenery: Scenery[]; pathDots: RiderPt[] }
 
 // the Rider's pose in its own segment's frame
 interface Pose { along: number; across: number; angle: number }
@@ -162,5 +163,10 @@ export function buildScene(state: RiderState, world: World, step: number, headYa
   const truckSc = truckScenery(truck, state, world, chain, at);
   if (truckSc) scenery.push(truckSc);
 
-  return { quads, polys, scenery };
+  // the rider's PROJECTED PATH — where his current tilt + speed would carry him over the next
+  // TURN_DANGER_STEPS (the very arc getDangerInfo reads). Centre-relative points in his current
+  // segment's frame; +riderHw shifts to from-the-left, then through the same camera pose as the road.
+  const pathDots: RiderPt[] = projectedPath(state).map((p) => at(0, p.along, p.across + riderHw));
+
+  return { quads, polys, scenery, pathDots };
 }
