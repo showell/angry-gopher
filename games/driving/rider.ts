@@ -38,12 +38,14 @@ export type DangerSide = typeof DangerSide[keyof typeof DangerSide];
 // The danger projection's verdict: which side he'd run off, and in how many steps (the full horizon when NONE).
 export interface DangerInfo { side: DangerSide; steps: number }
 
-// A HUD-only readout of the last forward+lean decision getNextRiderState made — NOT part of the rider's
-// state, just the most recent frame's internal choices surfaced for the debug overlay. (Reflects the last
-// FORWARD step; on reverse it goes momentarily stale, which the diagnostic HUD tolerates.)
+// A HUD-only readout of the forward+lean decision — NOT part of the rider's state, just the frame's internal
+// choices surfaced for the debug overlay.
 export interface RiderDebug { accel: number; tiltStep: number; headingChange: number; yawFromTarget: number; tiltSnapped: boolean; yawAimed: boolean }
-let lastDebug: RiderDebug = { accel: 0, tiltStep: 0, headingChange: 0, yawFromTarget: 0, tiltSnapped: false, yawAimed: false };
-export function riderDebug(): RiderDebug { return lastDebug; }
+// Recompute the decision the rider WOULD make FROM `state` this frame — pure, no side effects — so the HUD
+// shows the CURRENT frame's numbers, aligned with the danger it also reads fresh (no stale off-by-one).
+export function riderDebug(state: RiderState, world: World): RiderDebug {
+  return decide(state, world.segments[state.segment], world).debug;
+}
 
 // The whole game is seen through the RIDER (on a motorcycle, treated as a single POINT, which keeps the
 // physics simple). A RiderState is everything we know about him this frame:
@@ -145,9 +147,11 @@ export function routeDistance(state: RiderState, world: World): number {
 // and a rotational one (lean, steered by getDangerInfo) — which we integrate into the new velocity, heading, and
 // position, then resolve where that lands him on the road graph BY POSITION (there is no turning "mode"). Pure;
 // the gaze is carried through unchanged and advanced separately (the caller runs nextRiderGaze right after).
-export function getNextRiderState(state: RiderState, world: World): RiderState {
-  const seg = world.segments[state.segment];
-
+// The forward + lean + snap DECISION this frame, as raw post-snap values (no graph transition yet) plus the
+// debug readout. Shared by getNextRiderState (which then resolves the road graph) and riderDebug (the HUD).
+interface Decision { v: number; tilt: number; yaw: number; along: number; across: number; debug: RiderDebug }
+function decide(state: RiderState, seg: RoadSegment, world: World): Decision {
+  const prevTilt = state.tilt;
   const v = state.v + getForwardAccelDecel(state, seg, world);                  // the forward decision IS the new speed
 
   // The LEAN drives the turn. The rider projects his arc (getDangerInfo) and tips the bike AWAY from whichever
@@ -155,7 +159,6 @@ export function getNextRiderState(state: RiderState, world: World): RiderState {
   // searches the AMOUNT (bestTiltCorrection): a lean change up to MAX_TILT_CORRECTION, preferring the gentlest
   // that clears the danger entirely, else whichever postpones it longest. The lean carried IN from last frame
   // yaws the bike YAW_PER_TILT per unit, so the tilt LEADS the yaw by a frame.
-  const prevTilt = state.tilt;
   const danger = getDangerInfo(state, seg);
   let tilt = bestTiltCorrection(state, seg, danger.side);
   const headingChange = YAW_PER_TILT * prevTilt;
@@ -173,8 +176,14 @@ export function getNextRiderState(state: RiderState, world: World): RiderState {
   const snapped = Math.abs(tilt) < TILT_SNAP && Math.abs(yawFromTarget) < YAW_EPSILON;
   if (snapped) { tilt = 0; yaw = aimYaw; }
 
-  lastDebug = { accel: v - state.v, tiltStep: tilt - prevTilt, headingChange, yawFromTarget, tiltSnapped: snapped, yawAimed: snapped };   // HUD readout of this frame's choices
+  const debug: RiderDebug = { accel: v - state.v, tiltStep: tilt - prevTilt, headingChange, yawFromTarget, tiltSnapped: snapped, yawAimed: snapped };
+  return { v, tilt, yaw, along, across, debug };
+}
 
+// the gaze is carried through unchanged and advanced separately (the caller runs nextRiderGaze right after).
+export function getNextRiderState(state: RiderState, world: World): RiderState {
+  const seg = world.segments[state.segment];
+  const { v, tilt, yaw, along, across } = decide(state, seg, world);
   const riderState: RiderState = { segment: seg.id, along, across, yaw, v, tilt, gazeStep: state.gazeStep };
 
   // Resolve the road graph by POSITION (not by any turn flag): on reaching the commit point, cross into the
@@ -305,19 +314,44 @@ export function getDangerInfo(state: RiderState, seg: RoadSegment): DangerInfo {
 // the danger furthest (the highest danger steps). NONE in -> hold the lean.
 const TILT_SEARCH_STEPS = 10;
 const MAX_TILT_CORRECTION = 1 * Math.PI / 180;    // the most the rider can work his lean over in a single frame (he has to fight the bike's mass)
+
+// the lean the rider would hold at search step k (0..TILT_SEARCH_STEPS), in the correcting direction `dir`.
+function leanAtStep(state: RiderState, dir: number, k: number): number {
+  return state.tilt + dir * MAX_TILT_CORRECTION * k / TILT_SEARCH_STEPS;
+}
+
+// THE LEAN SEARCH (shared by the real decision and the debug overlay): try the TILT_SEARCH_STEPS+1 lean options
+// and return the chosen step index. The FIRST (gentlest) that clears the danger entirely (projection NONE) wins.
+// If NONE of them clear it, take the one that POSTPONES the danger longest (highest danger steps); on a TIE
+// prefer the LARGER lean (>=) — a sub-degree lean often can't move the integer step count yet, but he must
+// accumulate it across frames to come around.
+function chosenLeanStep(state: RiderState, seg: RoadSegment, dir: number): number {
+  let bestK = 0, bestSteps = -1;
+  for (let k = 0; k <= TILT_SEARCH_STEPS; k++) {
+    const d = getDangerInfo({ ...state, tilt: leanAtStep(state, dir, k) }, seg);
+    if (d.side === DangerSide.NONE) return k;
+    if (d.steps >= bestSteps) { bestSteps = d.steps; bestK = k; }
+  }
+  return bestK;
+}
+
 function bestTiltCorrection(state: RiderState, seg: RoadSegment, side: DangerSide): number {
   if (side === DangerSide.NONE) return state.tilt;
   const dir = side === DangerSide.RIGHT ? -1 : 1;           // RIGHT danger -> lean left (tilt down); LEFT danger -> lean right
-  let bestDelta = 0, bestSteps = -1;
-  for (let k = 0; k <= TILT_SEARCH_STEPS; k++) {
-    const delta = MAX_TILT_CORRECTION * k / TILT_SEARCH_STEPS;
-    const d = getDangerInfo({ ...state, tilt: state.tilt + dir * delta }, seg);
-    if (d.side === DangerSide.NONE) return state.tilt + dir * delta;        // fully clears the danger -> take the gentlest such lean
-    // else keep whichever postpones danger longest; on a TIE prefer the LARGER lean (>=) — a sub-degree lean
-    // often can't move the integer step count yet, but he must accumulate it across frames to come around.
-    if (d.steps >= bestSteps) { bestSteps = d.steps; bestDelta = delta; }
-  }
-  return state.tilt + dir * bestDelta;
+  return leanAtStep(state, dir, chosenLeanStep(state, seg, dir));
+}
+
+// The debug overlay's data: the projected arc for EVERY lean option the search considered, and which index the
+// rider chose. With no danger there's no search — just his single held-tilt path (marked chosen).
+export interface LeanCandidates { paths: { along: number; across: number }[][]; chosen: number }
+export function leanCandidates(state: RiderState, seg: RoadSegment): LeanCandidates {
+  const side = getDangerInfo(state, seg).side;
+  if (side === DangerSide.NONE) return { paths: [projectedPath(state)], chosen: 0 };
+  const dir = side === DangerSide.RIGHT ? -1 : 1;
+  const chosen = chosenLeanStep(state, seg, dir);
+  const paths: { along: number; across: number }[][] = [];
+  for (let k = 0; k <= TILT_SEARCH_STEPS; k++) paths.push(projectedPath({ ...state, tilt: leanAtStep(state, dir, k) }));
+  return { paths, chosen };
 }
 
 // The same arc getDangerInfo walks, but recording every point (centre-relative along/across in the

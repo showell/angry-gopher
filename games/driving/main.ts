@@ -190,7 +190,7 @@ function drawHud(rider: RiderState): void {
 
   // line 3: the rider's last DECISION — the per-frame lean change, the forward accel (+ throttle / − brake),
   // and which snaps fired this frame (TILT = lean snapped upright, YAW = heading re-aimed at the lane centre).
-  const dbg = riderDebug();
+  const dbg = riderDebug(rider, world);
   const sgn = (x: number): string => (x >= 0 ? '+' : '');
   ctx.fillStyle = '#8fd0e6';
   ctx.fillText(`tilt_step ${sgn(dbg.tiltStep)}${(dbg.tiltStep * 180 / Math.PI).toFixed(2)}deg   accel ${sgn(dbg.accel)}${dbg.accel.toFixed(4)}   dHeading ${sgn(dbg.headingChange)}${(dbg.headingChange * 180 / Math.PI).toFixed(2)}deg   yawFromTarget ${sgn(dbg.yawFromTarget)}${(dbg.yawFromTarget * 180 / Math.PI).toFixed(2)}deg   snap ${dbg.tiltSnapped ? 'TILT' : '·'} ${dbg.yawAimed ? 'YAW' : '·'}`, 22, 69);
@@ -264,18 +264,25 @@ function render(rider: RiderState): void {
   }
   drawables.sort((a, b) => b.forward - a.forward).forEach((d) => d.draw());
 
-  // the rider's PROJECTED PATH — a trail of yellow dots on the pavement marking where his current
-  // tilt + speed would carry him over the next TURN_DANGER_STEPS (the arc getDangerInfo reads). Drawn
-  // ON TOP (after scenery) as a debug overlay so it's never occluded; each dot sits on the ground
-  // plane (the road's curvature drop) and shrinks with distance.
-  ctx.fillStyle = '#ffe14d';
-  for (const p of scene.pathDots) {
-    if (p.forward <= NEAR) continue;
+  // the rider's PROJECTED PATHS — every lean option his search weighed, drawn as small BLUE dots on the
+  // pavement, with the CHOSEN lean's path in YELLOW on top. A debug overlay drawn after scenery so it's never
+  // occluded; each dot sits on the ground plane (the road's curvature drop). Blue is subsampled for clarity.
+  const groundDot = (p: { right: number; forward: number }, radius: number): void => {
+    if (p.forward <= NEAR) return;
     const s = project({ right: p.right, forward: p.forward, height: -groundDrop(p.right, p.forward) });
-    const r = Math.max(1.5, Math.min(4, camFocal * 0.05 / p.forward));
     ctx.beginPath();
-    ctx.arc(s.x, s.y, r, 0, 2 * Math.PI);
+    ctx.arc(s.x, s.y, radius, 0, 2 * Math.PI);
     ctx.fill();
+  };
+  ctx.fillStyle = '#5a9bd4';
+  for (const lp of scene.leanPaths) {
+    if (lp.chosen) continue;
+    for (let i = 0; i < lp.dots.length; i += 3) groundDot(lp.dots[i], 1.3);
+  }
+  const chosen = scene.leanPaths.find((lp) => lp.chosen);
+  if (chosen) {
+    ctx.fillStyle = '#ffe14d';
+    for (const p of chosen.dots) groundDot(p, Math.max(1.5, Math.min(4, camFocal * 0.05 / p.forward)));
   }
 
   ctx.restore();
