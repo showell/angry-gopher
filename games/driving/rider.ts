@@ -105,6 +105,7 @@ const TILT_HOLD = 2 * Math.PI / 180;        // he only adds throttle while leane
 const YAW_EPSILON = 1.5 * Math.PI / 180;    // part of the snap-to-centre window: the heading must be within this of straight
 const AIMING_DISTANCE = 100;                // when upright, the rider aims his heading at the lane centre this far ahead (m) — eases him back to the middle
 const YAW_PER_TILT = 0.1;                   // the lean's leverage on the bike: every degree of tilt yaws the heading 0.1deg (so a turn demands a DEEP, dramatic lean)
+const BRAKE_DECAY = 30;                      // shoulder brake fudge factor (frames): the kinematic decel decays exp(-N/this) as frames-until-danger N grows, so he under-brakes for far-off danger (trusting he'll steer out) and only fully brakes when it's imminent
 
 
 // The heading that points the rider at the lane CENTRE, AIMING_DISTANCE ahead, from a lateral offset `across`
@@ -254,7 +255,12 @@ function getForwardAccelDecel(state: RiderState, seg: RoadSegment, world: World)
   // there at v=0 (a = -v / 2N — stop within the distance he'd cover in N frames). If the path is clear, no brake.
   const sim = simulateRiderPath(state, seg);
   if (sim.side !== DangerSide.NONE) {
-    const shoulderA = -state.v / (2 * Math.max(sim.framesUntilDanger, 1));
+    // Kinematic stop-before-the-edge (a = -v/2N), then DECAYED: the rider fudges it — he doesn't fully brake for
+    // danger that's still many frames off (he trusts he'll steer out), so the decel decays exp(-N/BRAKE_DECAY)
+    // away from the full kinematic value as the frames-until-danger N grows. Imminent danger (N~0) still gets the
+    // full brake. (A simple decay, NOT a re-projection with changing tilt — the rider fudges, so we fudge.)
+    const N = sim.framesUntilDanger;
+    const shoulderA = -state.v / (2 * Math.max(N, 1)) * Math.exp(-N / BRAKE_DECAY);
     if (shoulderA < a) { a = shoulderA; reason = ForwardReason.AVOID_SHOULDER; }
   }
 
