@@ -152,16 +152,13 @@ export function getNextRiderState(state: RiderState, world: World): RiderState {
   const v = state.v + getForwardAccelDecel(state, seg, world);                  // the forward decision IS the new speed
 
   // The LEAN drives the turn. The rider projects his arc (getDangerInfo) and tips the bike AWAY from whichever
-  // shoulder he'd run off first — LEFT danger -> lean right, RIGHT danger -> lean left, NONE -> hold. The lean
-  // adjustment is PRORATED by how close the danger is: a full TILT_STEP when it's imminent, fading to ~0 at the
-  // horizon (we trust him not to overreact to far-off danger — that's the damping). The lean carried IN from
-  // last frame yaws the bike YAW_PER_TILT per unit, so the tilt LEADS the yaw by a frame.
+  // shoulder he'd run off first — LEFT danger -> lean right, RIGHT danger -> lean left, NONE -> hold. Rather
+  // than a fixed prorated step, he BINARY-SEARCHES the largest lean change (up to TILT_STEP) that corrects the
+  // danger without overcorrecting into the OPPOSITE shoulder's danger (see bestTiltCorrection). The lean
+  // carried IN from last frame yaws the bike YAW_PER_TILT per unit, so the tilt LEADS the yaw by a frame.
   const prevTilt = state.tilt;
   const danger = getDangerInfo(state, seg);
-  const tiltStep = TILT_STEP * (TURN_DANGER_STEPS - danger.steps) / TURN_DANGER_STEPS;   // closer danger -> bigger lean
-  let tilt = danger.side === DangerSide.LEFT ? prevTilt + tiltStep
-           : danger.side === DangerSide.RIGHT ? prevTilt - tiltStep
-           : prevTilt;
+  let tilt = bestTiltCorrection(state, seg, danger.side);
   const headingChange = YAW_PER_TILT * prevTilt;
   let yaw = state.yaw + headingChange;
   const midHeading = state.yaw + headingChange / 2;                            // average heading over the frame -> arc
@@ -301,6 +298,24 @@ export function getDangerInfo(state: RiderState, seg: RoadSegment): DangerInfo {
   if (startSide !== 0 && !crossed)
     return { side: startSide > 0 ? DangerSide.RIGHT : DangerSide.LEFT, steps: TURN_DANGER_STEPS };
   return { side: DangerSide.NONE, steps: TURN_DANGER_STEPS };
+}
+
+// How much to change the lean this frame, given the current danger. The rider leans AWAY from the danger,
+// but picks the AMOUNT by a linear search: try ten lean changes from TILT_STEP/10 up to TILT_STEP and take
+// the LARGEST whose projection doesn't overcorrect into the OPPOSITE shoulder's danger. (RIGHT danger ->
+// lean left as hard as he can without flipping to LEFT danger, and vice versa.) NONE -> hold the lean. This
+// replaces the old prorated step, which guessed the amount from the danger's distance and could under/overshoot.
+const TILT_SEARCH_STEPS = 10;
+function bestTiltCorrection(state: RiderState, seg: RoadSegment, side: DangerSide): number {
+  if (side === DangerSide.NONE) return state.tilt;
+  const dir = side === DangerSide.RIGHT ? -1 : 1;            // RIGHT danger -> reduce tilt (lean left); LEFT -> increase (lean right)
+  const opposite = side === DangerSide.RIGHT ? DangerSide.LEFT : DangerSide.RIGHT;
+  let best = 0;
+  for (let k = 1; k <= TILT_SEARCH_STEPS; k++) {
+    const delta = TILT_STEP * k / TILT_SEARCH_STEPS;
+    if (getDangerInfo({ ...state, tilt: state.tilt + dir * delta }, seg).side !== opposite) best = delta;  // still safe -> keep the largest
+  }
+  return state.tilt + dir * best;
 }
 
 // The same arc getDangerInfo walks, but recording every point (centre-relative along/across in the
