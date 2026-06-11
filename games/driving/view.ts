@@ -7,7 +7,7 @@
 // the circular-sector pavement filling each turn's outer corner, and the segments seen
 // through the intersections ahead — plus the intersection just behind us.
 // =============================================================================
-import type { RiderState } from './rider.ts';
+import type { RiderState, DangerSide } from './rider.ts';
 import { leanCandidates } from './rider.ts';
 import { gazeAngle } from './rider_gaze.ts';
 import type { World } from './world.ts';
@@ -26,7 +26,7 @@ import type { TruckState } from './truck.ts';
 // Road quads are the ground plane (drawn first, no LOD); polys are raised road structures
 // (guard rails) drawn over them; scenery is the depth-sorted, near/far-aware drawables (trees
 // + critters, merged so they occlude each other right).
-export interface Scene { quads: Quad[]; polys: Poly3[]; scenery: Scenery[]; leanPaths: { dots: RiderPt[]; chosen: boolean }[] }
+export interface Scene { quads: Quad[]; polys: Poly3[]; scenery: Scenery[]; leanPaths: { dots: RiderPt[]; side: DangerSide; chosen: boolean }[] }
 
 // the Rider's pose in its own segment's frame
 interface Pose { along: number; across: number; angle: number }
@@ -167,8 +167,9 @@ export function buildScene(state: RiderState, world: World, step: number, headYa
   // he chose. Centre-relative points in his current segment's frame; +riderHw shifts to from-the-left, then
   // through the same camera pose as the road.
   const lc = leanCandidates(state, chain[0]);
-  const leanPaths = lc.paths.map((path, idx) => ({
-    dots: path.map((p) => at(0, p.along, p.across + riderHw)),
+  const leanPaths = lc.candidates.map((c, idx) => ({
+    dots: c.path.map((p) => at(0, p.along, p.across + riderHw)),
+    side: c.side,
     chosen: idx === lc.chosen,
   }));
 

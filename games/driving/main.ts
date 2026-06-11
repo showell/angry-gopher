@@ -7,9 +7,9 @@
 //   ArrowUp   : getNextRiderState -> push the next RiderState onto the history
 //   ArrowDown : pop back to the previous RiderState
 // =============================================================================
-import { initialRiderState, getNextRiderState, riderHeading, riderTilt, riderFinished, getDangerInfo, riderDebug, MAX_LEAN, routeDistance } from './rider.ts';
+import { initialRiderState, getNextRiderState, riderHeading, riderTilt, riderFinished, getDangerInfo, riderDebug, DangerSide, MAX_LEAN, routeDistance } from './rider.ts';
 import { gazeAngle, nextRiderGaze } from './rider_gaze.ts';
-import type { RiderState } from './rider.ts';
+import type { RiderState, RiderDebug } from './rider.ts';
 import { initialTruck, nextTruck, courseLength } from './truck.ts';
 import type { TruckState } from './truck.ts';
 import { buildWorld } from './world.ts';
@@ -165,7 +165,7 @@ function drawQuad(q: Quad): void {
 const TARGET_MS = 1000 / 60;   // 60Hz vsync budget (the ideal we display against)
 let fps = 60, renderMs = 0, frameMs = TARGET_MS, droppedFrames = 0, dropFlash = 0;
 
-function drawHud(rider: RiderState): void {
+function drawHud(rider: RiderState, dbg: RiderDebug): void {
   ctx.fillStyle = 'rgba(0,0,0,0.5)';
   ctx.fillRect(12, 12, 770, 93);
   ctx.font = 'bold 13px ui-monospace, monospace';
@@ -188,9 +188,8 @@ function drawHud(rider: RiderState): void {
   const danger = getDangerInfo(rider, world.segments[rider.segment]);
   ctx.fillText(`x ${rider.across.toFixed(2)}  y ${rider.along.toFixed(1)}  heading ${headingDeg.toFixed(1)}deg  tilt ${tiltDeg.toFixed(2)}deg  danger ${danger.side} (${danger.steps})  gaze ${gazeDeg.toFixed(0)}deg  v ${rider.v.toFixed(2)}`, 22, 50);
 
-  // line 3: the rider's last DECISION — the per-frame lean change, the forward accel (+ throttle / − brake),
-  // and which snaps fired this frame (TILT = lean snapped upright, YAW = heading re-aimed at the lane centre).
-  const dbg = riderDebug(rider, world);
+  // line 3: the rider's DECISION this frame — the per-frame lean change, the forward accel (+ throttle / −
+  // brake), and which snaps fired (TILT = lean snapped upright, YAW = heading re-aimed at the lane centre).
   const sgn = (x: number): string => (x >= 0 ? '+' : '');
   ctx.fillStyle = '#8fd0e6';
   ctx.fillText(`tilt_step ${sgn(dbg.tiltStep)}${(dbg.tiltStep * 180 / Math.PI).toFixed(2)}deg   accel ${sgn(dbg.accel)}${dbg.accel.toFixed(4)}   dHeading ${sgn(dbg.headingChange)}${(dbg.headingChange * 180 / Math.PI).toFixed(2)}deg   yawFromTarget ${sgn(dbg.yawFromTarget)}${(dbg.yawFromTarget * 180 / Math.PI).toFixed(2)}deg   snap ${dbg.tiltSnapped ? 'TILT' : '·'} ${dbg.yawAimed ? 'YAW' : '·'}`, 22, 69);
@@ -206,6 +205,7 @@ function render(rider: RiderState): void {
   // it first so the scene is built already looking slightly into the turn.
   const tilt = riderTilt(rider);
   const headYaw = HEAD_YAW_FRAC * tilt;
+  const dbg = riderDebug(rider, world);   // this frame's decision — shared by the path overlay and the HUD
   // the step IS the clock for view-only animation (beacon blink, sunset): a pure function of it,
   // so it freezes on pause and runs backwards on reverse. It's the same step the HUD shows.
   const step = riderHistory.length - 1;
@@ -264,30 +264,33 @@ function render(rider: RiderState): void {
   }
   drawables.sort((a, b) => b.forward - a.forward).forEach((d) => d.draw());
 
-  // the rider's PROJECTED PATHS — every lean option his search weighed, drawn as small BLUE dots on the
-  // pavement, with the CHOSEN lean's path in YELLOW on top. A debug overlay drawn after scenery so it's never
-  // occluded; each dot sits on the ground plane (the road's curvature drop). Blue is subsampled for clarity.
-  const groundDot = (p: { right: number; forward: number }, radius: number): void => {
-    if (p.forward <= NEAR) return;
-    const s = project({ right: p.right, forward: p.forward, height: -groundDrop(p.right, p.forward) });
-    ctx.beginPath();
-    ctx.arc(s.x, s.y, radius, 0, 2 * Math.PI);
-    ctx.fill();
-  };
-  ctx.fillStyle = '#5a9bd4';
-  for (const lp of scene.leanPaths) {
-    if (lp.chosen) continue;
-    for (let i = 0; i < lp.dots.length; i += 3) groundDot(lp.dots[i], 1.3);
-  }
-  const chosen = scene.leanPaths.find((lp) => lp.chosen);
-  if (chosen) {
-    ctx.fillStyle = '#ffe14d';
-    for (const p of chosen.dots) groundDot(p, Math.max(1.5, Math.min(4, camFocal * 0.05 / p.forward)));
+  // the rider's PROJECTED PATHS — every lean option his danger search walked, coloured by where each ENDS:
+  // RED for left danger, GREEN for right danger, BLUE for clear (NONE); the CHOSEN lean's path is YELLOW on
+  // top. Drawn after scenery so it's never occluded; each dot sits on the ground plane. Suppressed entirely on
+  // a snap frame (he's settling — no decision fan to show). Non-chosen paths are subsampled for clarity.
+  if (!dbg.tiltSnapped) {
+    const groundDot = (p: { right: number; forward: number }, radius: number): void => {
+      if (p.forward <= NEAR) return;
+      const s = project({ right: p.right, forward: p.forward, height: -groundDrop(p.right, p.forward) });
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, radius, 0, 2 * Math.PI);
+      ctx.fill();
+    };
+    for (const lp of scene.leanPaths) {
+      if (lp.chosen) continue;
+      ctx.fillStyle = lp.side === DangerSide.LEFT ? '#ff5555' : lp.side === DangerSide.RIGHT ? '#55dd66' : '#5a9bd4';
+      for (let i = 0; i < lp.dots.length; i += 3) groundDot(lp.dots[i], 1.3);
+    }
+    const chosen = scene.leanPaths.find((lp) => lp.chosen);
+    if (chosen) {
+      ctx.fillStyle = '#ffe14d';
+      for (const p of chosen.dots) groundDot(p, Math.max(1.5, Math.min(4, camFocal * 0.05 / p.forward)));
+    }
   }
 
   ctx.restore();
 
-  drawHud(rider);
+  drawHud(rider, dbg);
 
   if (riderFinished(rider, world)) {
     ctx.fillStyle = 'rgba(0,0,0,0.55)';

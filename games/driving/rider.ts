@@ -352,16 +352,20 @@ function bestTiltCorrection(state: RiderState, seg: RoadSegment, side: DangerSid
 }
 
 // The debug overlay's data: the ACTUAL arc getDangerInfo walked for EVERY lean option the search considered
-// (each ending where that option early-exits), and which index the rider chose. With no danger there's no
-// search — just his single held-tilt path (marked chosen). The chosen index comes from chosenLeanStep, the
-// SAME selection the real decision uses, so the yellow path can't disagree with what he does.
-export interface LeanCandidates { paths: { along: number; across: number }[][]; chosen: number }
+// (each ending where that option early-exits) WITH the danger side it ended on, and which index the rider
+// chose. With no danger there's no search — just his single held-tilt path (marked chosen). The chosen index
+// comes from chosenLeanStep, the SAME selection the real decision uses, so the yellow path can't disagree.
+export interface LeanCandidate { path: { along: number; across: number }[]; side: DangerSide }
+export interface LeanCandidates { candidates: LeanCandidate[]; chosen: number }
 export function leanCandidates(state: RiderState, seg: RoadSegment): LeanCandidates {
   const di = getDangerInfo(state, seg);
-  if (di.side === DangerSide.NONE) return { paths: [di.path], chosen: 0 };
+  if (di.side === DangerSide.NONE) return { candidates: [{ path: di.path, side: di.side }], chosen: 0 };
   const dir = di.side === DangerSide.RIGHT ? -1 : 1;
   const chosen = chosenLeanStep(state, seg, dir);
-  const paths: { along: number; across: number }[][] = [];
-  for (let k = 0; k <= TILT_SEARCH_STEPS; k++) paths.push(getDangerInfo({ ...state, tilt: leanAtStep(state, dir, k) }, seg).path);
-  return { paths, chosen };
+  const candidates: LeanCandidate[] = [];
+  for (let k = 0; k <= TILT_SEARCH_STEPS; k++) {
+    const cd = getDangerInfo({ ...state, tilt: leanAtStep(state, dir, k) }, seg);
+    candidates.push({ path: cd.path, side: cd.side });
+  }
+  return { candidates, chosen };
 }
