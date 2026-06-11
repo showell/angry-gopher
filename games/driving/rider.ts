@@ -85,7 +85,7 @@ export const MAX_TURN_ANGLE = 90 * Math.PI / 180;   // the largest turn the mode
 const STRAIGHTEN_MARGIN = 0.05;             // hard safety: keep the drift bulge at least this far inside the edge (m)
 const DANGER_STEPS = 15;                     // FORWARD brake: slow for the road edge once it's within this many frames at the current speed
 const TURN_DANGER_STEPS = 60;               // STEERING look-ahead: project the rider's arc this many frames to pick which way to lean (longer = more anticipation, less oversteer)
-const MIN_FORWARD_PROGRESS = 20;            // if the projected arc crosses the centre line only AFTER committing this far forward (m), he's safely re-centring on his own — no danger
+const MIN_FORWARD_PROGRESS = 60;            // checkpoint distance (m): by the time the projected arc has gone this far forward he should be back across centre — if he is, he's safe; if he's STILL on his start side he's stuck hugging it
 const TILT_STEP = 1 * Math.PI / 180;        // the most the rider leans further into the turn in one frame (prorated by danger nearness)
 const TILT_SNAP = 0.5 * Math.PI / 180;      // part of the snap-to-centre window: the lean must be within this of upright
 const YAW_EPSILON = 0.5 * Math.PI / 180;    // part of the snap-to-centre window: the heading must be within this of straight
@@ -275,13 +275,16 @@ export function getDangerInfo(state: RiderState, seg: RoadSegment): DangerInfo {
     forward += state.v * Math.cos(mid);
     across += state.v * Math.sin(mid);                                      // arc step
     yaw += headingStep;
-    // SHORT-CIRCUIT: if the arc crosses the centre line only AFTER he's committed >= MIN_FORWARD_PROGRESS
-    // forward, he's gently re-centring on his own — declare it safe so he doesn't twitch at far-off
-    // projected wobble down a straightaway.
-    if (forward >= MIN_FORWARD_PROGRESS && startSide !== 0 && Math.sign(across) !== startSide)
-      return { side: DangerSide.NONE, steps: TURN_DANGER_STEPS };
-    if (across <= -hw) return { side: DangerSide.LEFT, steps: i };          // i = safe steps before the event (0 = imminent)
+    if (across <= -hw) return { side: DangerSide.LEFT, steps: i };          // off the road — i = safe steps before it (0 = imminent)
     if (across >= hw) return { side: DangerSide.RIGHT, steps: i };
+    // CHECKPOINT: once he's committed MIN_FORWARD_PROGRESS forward he should be back across centre. If he is
+    // (and stayed on the road, above) he's re-centring fine — no danger. If he's STILL on his start side he's
+    // stuck hugging it, so flag THAT side (he leans off it toward centre) rather than letting him stay pinned.
+    if (forward >= MIN_FORWARD_PROGRESS) {
+      if (startSide !== 0 && Math.sign(across) === startSide)
+        return { side: startSide > 0 ? DangerSide.RIGHT : DangerSide.LEFT, steps: i };
+      return { side: DangerSide.NONE, steps: TURN_DANGER_STEPS };
+    }
     // ...but only worry about the overshoot once he's actually crossed to the WRONG side of centre (the side
     // opposite where he began): while he's still returning from his start side we don't fight his momentum.
     const rel = yaw - aimYawFor(across);                                    // signed gap from the (moving) aim
