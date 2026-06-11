@@ -4,7 +4,7 @@
 // transforms (lengths + turn signs) — the same relational facts getNextRiderState uses.
 //
 // Run: node test/test_model.ts
-import { initialRiderState, getNextRiderState, MAX_LEAN, TURN_OMEGA, MAX_TURN_ANGLE, leanFor, APPROACH_INTERSECTION_DIST, routeDistance } from '../rider.ts';
+import { initialRiderState, getNextRiderState, MAX_TURN_ANGLE, APPROACH_INTERSECTION_DIST, routeDistance } from '../rider.ts';
 import { gazeAngle, nextRiderGaze, GAZE_SEQUENCE } from '../rider_gaze.ts';
 import type { RiderState } from '../rider.ts';
 import { initialTruck, nextTruck, courseLength } from '../truck.ts';
@@ -244,27 +244,21 @@ function main(): void {
     throw new Error(`onto seg10 no sun is present: its top (${sun10TopOnEntry.toFixed(0)}px) is below the crest (${crest.toFixed(0)}px)`);
   }
 
-  // 2) heading continuity: no single-press jump bigger than the rotation ceiling. The
-  // straighten-out rotates at a fixed TURN_OMEGA (jerk-limited up to it), the same for
-  // every turn angle, so that one constant bounds every per-press heading change.
-  const maxOmega = TURN_OMEGA;
-  let maxHeadingJump = 0, maxLean = 0, maxTiltStep = 0, prevTilt = 0;
+  // 2) heading + the LEAN that drives it. The bike turns BECAUSE it's leaned — tilt is free RiderState now —
+  // so we read the lean DIRECTLY from state.tilt rather than reconstructing it from the heading change. We
+  // watch how DEEP the rider leans to carve the route's sharp turns (maxTilt — a free outcome of YAW_PER_TILT,
+  // reported not pinned), and that the lean only ever EASES (maxTiltStep), plus per-press heading continuity.
+  let maxHeadingJump = 0, maxTilt = 0, maxTiltStep = 0;
   for (let i = 1; i < states.length; i++) {
     const dh = wrap(heading(states[i], headings) - heading(states[i - 1], headings));
     maxHeadingJump = Math.max(maxHeadingJump, Math.abs(dh));
-    const tilt = leanFor(dh);   // camera roll, ~ the per-press rotation
-    maxLean = Math.max(maxLean, Math.abs(tilt));
-    maxTiltStep = Math.max(maxTiltStep, Math.abs(tilt - prevTilt));   // how sharply the bank changes frame-to-frame
-    prevTilt = tilt;
+    maxTilt = Math.max(maxTilt, Math.abs(states[i].tilt));
+    maxTiltStep = Math.max(maxTiltStep, Math.abs(states[i].tilt - states[i - 1].tilt));   // frame-to-frame lean change
   }
-  if (maxHeadingJump > maxOmega + 1e-6) throw new Error(`heading jump ${maxHeadingJump} > maxOmega ${maxOmega}`);
 
-  // 2c) lean (camera roll): the per-press rotation is capped at TURN_OMEGA, so the lean it
-  // produces never exceeds MAX_LEAN; the sharp turns should actually reach close to it.
-  if (maxLean > MAX_LEAN + 1e-6) throw new Error(`max lean ${(maxLean * 180 / Math.PI).toFixed(1)}deg exceeded MAX_LEAN ${(MAX_LEAN * 180 / Math.PI).toFixed(0)}deg`);
-  if (maxLean < MAX_LEAN - 3 * Math.PI / 180) throw new Error(`max lean ${(maxLean * 180 / Math.PI).toFixed(1)}deg never approached MAX_LEAN ${(MAX_LEAN * 180 / Math.PI).toFixed(0)}deg`);
-
-  // 2d) no SHARP banking: the tilt may change at most 1deg per press.
+  // 2c) the lean only EASES: no single press changes the tilt by more than TILT_STEP (1deg). This is a genuine
+  // invariant of the prorated tilt update + snap-to-upright (it carries unchanged across the segment seam), and
+  // it replaces the old TURN_OMEGA/MAX_LEAN ceilings, which pinned a rotation rate the tilt model no longer has.
   if (maxTiltStep > 1 * Math.PI / 180 + 1e-9) throw new Error(`tilt step ${(maxTiltStep * 180 / Math.PI).toFixed(2)}deg > 1deg`);
 
   // 2b) the Rider never leaves the road — the core safety property of straighten-out
@@ -301,10 +295,10 @@ function main(): void {
   console.log(`  presses to finish : ${states.length - 1}`);
   console.log(`  truck lead range  : ${minGap.toFixed(0)}m .. ${maxGap.toFixed(0)}m (stays ahead — never caught)`);
   console.log(`  segment crossings : ${crossings}`);
-  console.log(`  max heading jump  : ${maxHeadingJump.toFixed(4)} rad (largest turn step = ${maxOmega.toFixed(4)})`);
+  console.log(`  max heading jump  : ${maxHeadingJump.toFixed(4)} rad/press`);
   console.log(`  max position jump : ${maxPosJump.toFixed(4)} m (peak speed = ${maxV.toFixed(4)} m/press)`);
   console.log(`  max off-centre    : ${maxAcross.toFixed(3)} m (bulge; road half-width = ${(world.segments[world.order[0]].width / 2).toFixed(1)})`);
-  console.log(`  max lean          : ${(maxLean * 180 / Math.PI).toFixed(1)} deg (runtime cap 45; ceiling = MAX_LEAN ${(MAX_LEAN * 180 / Math.PI).toFixed(0)})`);
+  console.log(`  max tilt          : ${(maxTilt * 180 / Math.PI).toFixed(1)} deg (the deepest lean to carve a turn; YAW_PER_TILT-driven, not pinned)`);
   console.log(`  max tilt step     : ${(maxTiltStep * 180 / Math.PI).toFixed(2)} deg/press (limit 1.0)`);
   console.log(`  self-intersect    : none (${world.order.length} segments checked pairwise)`);
 }

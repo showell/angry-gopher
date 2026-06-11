@@ -163,13 +163,14 @@ export function intersectionScene(ixn: Intersection, from: RoadSegment, to: Road
   return { quads, polys, scenery };
 }
 
-// The max speed (m/press) at which each turn angle is taken: the Rider holds this through
-// the angle-kill, drifting to the far edge and recentring without leaving the road. These
-// are NOT a closed form — they were found by offline simulation of THIS straighten-out
-// (jerk-limited rotation up to TURN_OMEGA, braking-profile recentre), binary-searching the
-// fastest entry whose far-edge drift stays STRAIGHTEN_MARGIN inside the edge. "An expert
-// Rider knows safe turn speeds." Only the route's six angles are tabulated; an unlisted
-// angle is a config error — re-run the sim and add it (linear interp OVER-estimates, unsafe).
+// The max speed (m/press) at which each turn angle is taken: the Rider brakes to this entry
+// speed by the commit point, then leans into the corner without leaving the road. These are
+// NOT a closed form — they were found by offline simulation, binary-searching the fastest
+// entry whose far-edge drift stays STRAIGHTEN_MARGIN inside the edge. "An expert Rider knows
+// safe turn speeds." Only the route's six angles are tabulated; an unlisted angle is a config
+// error — re-run the sim and add it (linear interp OVER-estimates, unsafe).
+// NOTE: these values predate the tilt-driven turning rework (they were derived under the old
+// jerk-limited straighten model); replacing this table with live self-computation is queued.
 const SAFE_TURN_SPEED: Record<number, number> = {
   15: 1.297, 20: 0.840, 30: 0.461, 50: 0.222, 70: 0.139, 80: 0.117,
 };

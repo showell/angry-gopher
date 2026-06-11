@@ -66,16 +66,10 @@ export const V_MAX = 2.5;     // top speed — the bike never accelerates past t
 // the Rider starts slowing once the next intersection is within this distance (metres)
 export const APPROACH_INTERSECTION_DIST = 60;
 
-// camera roll: the rider banks INTO the turn, directly proportional to how fast he's rotating the bike
-// (the per-press heading change), with NO easing. See leanFor().
-export const LEAN_PER_OMEGA = 10;             // lean (rad) per rad of per-press heading change (~10deg on an 80deg turn)
-export const LEAN_CAP = 45 * Math.PI / 180;  // hard runtime cap on the lean
-
-// The rider leans at most this much, and the per-press rotation is capped to match, so a straighten-out
-// never banks past it. This single ceiling replaced the old angle-scaled omegaFor: the ROTATION RATE is
-// now one constant for every turn, and what varies by angle is the entry speed (turnSpeed, tabulated).
+// A reference lean angle the renderer scales its focal pull-in against (camera effects saturate near it).
+// No longer a hard cap on the physics: the rider's tilt is now free state (getNextRiderState), and with a
+// low YAW_PER_TILT he may lean well past this to carve a sharp turn.
 export const MAX_LEAN = 20 * Math.PI / 180;
-export const TURN_OMEGA = MAX_LEAN / LEAN_PER_OMEGA;   // max heading turned per press (rad)
 
 // straighten-out tuning. Every turn is a straighten-out (no rigid arcs); the geometry requires the turn
 // angle to be at most 90deg — beyond that the Rider would enter the next segment pointed backwards.
@@ -87,7 +81,7 @@ const TURN_DANGER_STEPS = 60;               // STEERING look-ahead: project the 
 const TILT_STEP = 1 * Math.PI / 180;        // the most the rider leans further into the turn in one frame (prorated by danger nearness)
 const TILT_SNAP = 0.1 * Math.PI / 180;      // a lean within this of upright snaps to exactly 0 — kills the gentle straightaway swerve
 const AIMING_DISTANCE = 100;                // when upright, the rider aims his heading at the lane centre this far ahead (m) — eases him back to the middle
-const YAW_PER_TILT = 1.2;                   // the lean's leverage on the bike: every degree of tilt yaws the heading 1.2deg
+const YAW_PER_TILT = 0.2;                   // the lean's leverage on the bike: every degree of tilt yaws the heading 0.2deg (so a turn demands a deep lean)
 
 const clamp = (x: number, lo: number, hi: number): number => Math.max(lo, Math.min(hi, x));
 
@@ -104,12 +98,6 @@ export function initialRiderState(world: World): RiderState {
 // infinity depends on which way the Rider faces, not where it is. Continuous across segment crossings.
 export function riderHeading(state: RiderState, world: World): number {
   return world.segments[state.segment].northHeading + state.yaw;
-}
-
-// The rider's lean / camera roll for a per-press heading change `dHeading`. He banks INTO the turn —
-// sign and size track the rotation directly (no easing), then capped.
-export function leanFor(dHeading: number): number {
-  return clamp(LEAN_PER_OMEGA * dHeading, -LEAN_CAP, LEAN_CAP);
 }
 
 // The rider's lean (camera roll): the bike's TILT — 0 when upright. The renderer reads it directly as the
