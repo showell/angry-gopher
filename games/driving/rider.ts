@@ -313,7 +313,9 @@ function bestTiltCorrection(state: RiderState, seg: RoadSegment, side: DangerSid
     const delta = MAX_TILT_CORRECTION * k / TILT_SEARCH_STEPS;
     const d = getDangerInfo({ ...state, tilt: state.tilt + dir * delta }, seg);
     if (d.side === DangerSide.NONE) return state.tilt + dir * delta;        // fully clears the danger -> take the gentlest such lean
-    if (d.steps > bestSteps) { bestSteps = d.steps; bestDelta = delta; }    // else remember whichever postpones danger longest
+    // else keep whichever postpones danger longest; on a TIE prefer the LARGER lean (>=) — a sub-degree lean
+    // often can't move the integer step count yet, but he must accumulate it across frames to come around.
+    if (d.steps >= bestSteps) { bestSteps = d.steps; bestDelta = delta; }
   }
   return state.tilt + dir * bestDelta;
 }
