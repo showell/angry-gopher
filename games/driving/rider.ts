@@ -171,25 +171,26 @@ function decide(state: RiderState, seg: RoadSegment, world: World): Decision {
   const headingChange = YAW_PER_TILT * prevTilt;
   let yaw = state.yaw + headingChange;
 
-  // The FORWARD decision comes AFTER, seeing the bike's JUST-chosen lean — so its shoulder brake reasons about
-  // the SAME turning path the lean search committed to (simulateRiderPath at the chosen tilt, current heading),
-  // giving it faith the bike will turn. (We pass the new tilt but keep the current yaw, so the brake's path is
-  // exactly the chosen candidate's path, not one re-projected a frame ahead.)
-  const fwd = getForwardAccelDecel({ ...state, tilt }, seg, world);
+  // SNAP-TO-CENTRE — resolved BEFORE the forward decision, so a settled straightaway is fully upright + on-aim
+  // by the time the shoulder brake looks at the path. The heading we want is aimYaw: pointed at the lane CENTRE,
+  // AIMING_DISTANCE ahead (NOT 0 when off-centre). Only when he's BOTH nearly upright (|tilt| < TILT_SNAP) AND
+  // already nearly on that aim (|yaw - aimYaw| < YAW_EPSILON) do we tidy him clean: lean to exactly 0 and heading
+  // onto aimYaw. Requiring BOTH means a turn (deep lean OR a heading far off the aim) can never trigger it. (We
+  // measure the aim from the CURRENT across — this frame's lateral move is negligible for the snap test.)
+  const aimYaw = aimYawFor(state.across);
+  const yawFromTarget = yaw - aimYaw;                            // signed: how far the natural heading sits from the aim (abs gates the snap)
+  const snapped = Math.abs(tilt) < TILT_SNAP && Math.abs(yawFromTarget) < YAW_EPSILON;
+  if (snapped) { tilt = 0; yaw = aimYaw; }
+
+  // The FORWARD decision comes AFTER, seeing the FULLY-resolved tilt AND yaw (snap included) — so a snapped,
+  // upright, on-aim straightaway projects a clear path and he accelerates instead of braking for a phantom
+  // shoulder. Its shoulder brake simulates the rider at exactly this resolved lean + heading.
+  const fwd = getForwardAccelDecel({ ...state, tilt, yaw }, seg, world);
   const v = state.v + fwd.accel;
 
   const midHeading = state.yaw + headingChange / 2;                            // average heading over the frame -> arc
   const along = state.along + v * Math.cos(midHeading);
   const across = state.across + v * Math.sin(midHeading);
-  // SNAP-TO-CENTRE — the heading we want is aimYaw: pointed at the lane CENTRE, AIMING_DISTANCE ahead (it's
-  // NOT 0 when he sits off-centre). Only when he's BOTH nearly upright (|tilt| < TILT_SNAP) AND already
-  // nearly on that aim (|yaw - aimYaw| < YAW_EPSILON) do we tidy him clean: lean to exactly 0 and heading
-  // onto aimYaw, so he eases back to the middle. Requiring BOTH means a turn (deep lean OR a heading far off
-  // the aim) can never trigger it mid-corner — the snap only kills the last wobble as he settles straight.
-  const aimYaw = aimYawFor(across);
-  const yawFromTarget = yaw - aimYaw;                            // signed: how far the natural heading sits from the aim (abs gates the snap)
-  const snapped = Math.abs(tilt) < TILT_SNAP && Math.abs(yawFromTarget) < YAW_EPSILON;
-  if (snapped) { tilt = 0; yaw = aimYaw; }
 
   const debug: RiderDebug = { accel: fwd.accel, forwardReason: fwd.reason, tiltStep: tilt - prevTilt, headingChange, yawFromTarget, tiltSnapped: snapped, yawAimed: snapped };
   return { v, tilt, yaw, along, across, debug };
