@@ -198,6 +198,7 @@ function main(): void {
   // AVOID_SHOULDER is binding). Printed here, before the assertions, so it surfaces regardless of any later
   // failure (e.g. the gaze assertion while the distracted-rider glance is TEMP-disabled).
   console.log(`  drive: ${states.length - 1} presses`);
+  console.log(`  max off-centre reached: ${maxAcross.toFixed(3)}m (road half-width ${(world.segments[world.order[0]].width / 2).toFixed(1)}m — must stay under)`);
   console.log('  max shoulder deceleration per segment (m/press^2, blank = never braked for the shoulder):');
   for (const id of world.order) {
     const d = shoulderDecel[id];
