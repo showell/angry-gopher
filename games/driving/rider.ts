@@ -53,13 +53,14 @@ export const ForwardReason = {
 } as const;
 export type ForwardReason = typeof ForwardReason[keyof typeof ForwardReason];
 
-// A HUD-only readout of the forward+lean decision — NOT part of the rider's state, just the frame's internal
-// choices surfaced for the debug overlay.
-export interface RiderDebug { accel: number; forwardReason: ForwardReason; tiltStep: number; headingChange: number; yawFromTarget: number; tiltSnapped: boolean; yawAimed: boolean }
+// The ONLY things the rider decides each frame: a tilt-step (how much to work the lean) and an acceleration
+// (throttle/brake). forwardReason explains which constraint set the accel — carried along for the HUD, not a
+// separate decision. Everything else (heading, speed, position) is left to the physics in getNextRiderState.
+export interface RiderDecision { tiltStep: number; accel: number; forwardReason: ForwardReason }
 // Recompute the decision the rider WOULD make FROM `state` this frame — pure, no side effects — so the HUD
 // shows the CURRENT frame's numbers, aligned with the danger it also reads fresh (no stale off-by-one).
-export function riderDebug(state: RiderState, world: World): RiderDebug {
-  return decide(state, world.segments[state.segment], world).debug;
+export function riderDebug(state: RiderState, world: World): RiderDecision {
+  return decide(state, world.segments[state.segment], world);
 }
 
 // The whole game is seen through the RIDER (on a motorcycle, treated as a single POINT, which keeps the
@@ -94,19 +95,12 @@ export const MAX_TURN_ANGLE = 90 * Math.PI / 180;   // the largest turn the mode
 const STRAIGHTEN_MARGIN = 0.05;             // hard safety: keep the drift bulge at least this far inside the edge (m)
 const TURN_DANGER_STEPS = 2000;            // STEERING look-ahead (a hard cap; the loop almost always ends earlier on danger or crossing MIN_FORWARD_PROGRESS). Big enough that the projection reaches the road's end even when he's crawling.
 const MIN_FORWARD_PROGRESS = 25;            // scoring distance (m): a projected lean that survives this far without running off counts as "good enough" — its forward score is pinned here so survivors tie and the cross-centre / least-lean tiebreak decides. Shorter = more leans tie = more averse to hugging a side (but can oscillate)
-const TILT_SNAP = 1.5 * Math.PI / 180;      // part of the snap-to-centre window: the lean must be within this of upright
 const TILT_HOLD = 2 * Math.PI / 180;        // he only adds throttle while leaned LESS than this — accelerating mid-lean makes the constant-v danger projection lie and reads as jitter
-const YAW_EPSILON = 1.5 * Math.PI / 180;    // part of the snap-to-centre window: the heading must be within this of straight
-const AIMING_DISTANCE = 100;                // when upright, the rider aims his heading at the lane centre this far ahead (m) — eases him back to the middle
 const BRAKE_DECAY = 40;                      // shoulder brake fudge factor (frames): the kinematic decel decays exp(-N/this) as frames-until-danger N grows, so he under-brakes for far-off danger (trusting he'll steer out) and only fully brakes when it's imminent
 
-
-// The heading that points the rider at the lane CENTRE, AIMING_DISTANCE ahead, from a lateral offset `across`
-// (0 when centred; tilts back toward the middle when off to a side). His straighten-out target — used both to
-// snap him clean (getNextRiderState) and to treat OVERSHOOTING it as a danger (simulateRiderPath).
-function aimYawFor(across: number): number {
-  return Math.atan2(-across, AIMING_DISTANCE);
-}
+// (The snap-to-centre constants TILT_SNAP / YAW_EPSILON / AIMING_DISTANCE and aimYawFor were removed with the
+// snaps — TEMPORARILY disabled while we get a clean decision/physics break; we'll bring back a calibrated
+// near-target lean adjustment afterward.)
 
 // ----------------------------------------------------------------------------
 // functions
@@ -148,59 +142,34 @@ export function routeDistance(state: RiderState, world: World): number {
   return d;
 }
 
-// Advance the BIKE one frame. The rider makes two decisions — a forward one (throttle/brake, getForwardAccelDecel)
-// and a rotational one (lean, steered by simulateRiderPath) — which we integrate into the new velocity, heading, and
-// position, then resolve where that lands him on the road graph BY POSITION (there is no turning "mode"). Pure;
-// the gaze is carried through unchanged and advanced separately (the caller runs nextRiderGaze right after).
-// The forward + lean + snap DECISION this frame, as raw post-snap values (no graph transition yet) plus the
-// debug readout. Shared by getNextRiderState (which then resolves the road graph) and riderDebug (the HUD).
-interface Decision { v: number; tilt: number; yaw: number; along: number; across: number; debug: RiderDebug }
-function decide(state: RiderState, seg: RoadSegment, world: World): Decision {
-  const prevTilt = state.tilt;
-
-  // The LEAN goes FIRST now. The rider evaluates all 21 leans (bestTiltCorrection) and takes the one whose
-  // projected path gets furthest down the road, crosses back to centre, and ends nearest the middle. The lean
-  // carried IN from last frame yaws the bike YAW_PER_TILT per unit, so the tilt LEADS the yaw by a frame.
-  let tilt = bestTiltCorrection(state, seg);
-  let yaw = simulateRiderStep(state, 0).yaw;   // the heading this frame's carried-in lean rotates us to (acceleration doesn't affect heading, so a zero-accel physics step previews it)
-
-  // SNAP-TO-CENTRE — resolved BEFORE the forward decision, so a settled straightaway is fully upright + on-aim
-  // by the time the shoulder brake looks at the path. The heading we want is aimYaw: pointed at the lane CENTRE,
-  // AIMING_DISTANCE ahead (NOT 0 when off-centre). Only when he's BOTH nearly upright (|tilt| < TILT_SNAP) AND
-  // already nearly on that aim (|yaw - aimYaw| < YAW_EPSILON) do we tidy him clean: lean to exactly 0 and heading
-  // onto aimYaw. Requiring BOTH means a turn (deep lean OR a heading far off the aim) can never trigger it. (We
-  // measure the aim from the CURRENT across — this frame's lateral move is negligible for the snap test.)
-  const aimYaw = aimYawFor(state.across);
-  const yawFromTarget = yaw - aimYaw;                            // signed: how far the natural heading sits from the aim (abs gates the snap)
-  const snapped = Math.abs(tilt) < TILT_SNAP && Math.abs(yawFromTarget) < YAW_EPSILON;
-  if (snapped) { tilt = 0; yaw = aimYaw; }
-
-  // The FORWARD decision comes AFTER, seeing the FULLY-resolved tilt AND yaw (snap included) — so a snapped,
-  // upright, on-aim straightaway projects a clear path and he accelerates instead of braking for a phantom
-  // shoulder. Its shoulder brake simulates the rider at exactly this resolved lean + heading.
-  const fwd = getForwardAccelDecel({ ...state, tilt, yaw }, seg, world);
-
-  // PHYSICS — advance the bike one frame with the SAME dumb step the projections use (simulateRiderStep), then
-  // overlay the rider's decisions: physics owns v + position, the rider owns the lean and (snapped) heading.
-  const next = simulateRiderStep(state, fwd.accel);
-  const v = next.v, along = next.along, across = next.across;
-
-  const debug: RiderDebug = { accel: fwd.accel, forwardReason: fwd.reason, tiltStep: tilt - prevTilt, headingChange: next.yaw - state.yaw, yawFromTarget, tiltSnapped: snapped, yawAimed: snapped };
-  return { v, tilt, yaw, along, across, debug };
+// DECIDE — purely the rider's brain: it picks his two controls for the frame and NOTHING else (no physics, no
+// new position). The LEAN: he evaluates all 21 leans (bestTiltCorrection) and takes the one whose projected
+// path gets furthest down the road, crosses back to centre, and ends nearest the middle — the tilt-step is the
+// change from his current lean. The FORWARD: with that chosen lean, getForwardAccelDecel reads off his accel.
+// (Snaps are OFF for now — we tolerate the resulting oscillation until the decision/physics break is clean.)
+// getNextRiderState EXECUTES these controls through the physics; riderDebug reads them for the HUD.
+function decide(state: RiderState, seg: RoadSegment, world: World): RiderDecision {
+  const tiltStep = bestTiltCorrection(state, seg) - state.tilt;
+  const fwd = getForwardAccelDecel({ ...state, tilt: state.tilt + tiltStep }, seg, world);
+  return { tiltStep, accel: fwd.accel, forwardReason: fwd.reason };
 }
 
-// the gaze is carried through unchanged and advanced separately (the caller runs nextRiderGaze right after).
+// Advance the BIKE one frame: get the rider's CONTROLS (decide), EXECUTE them through the shared physics
+// (simulateRiderStep applies the tilt-step + accel and integrates heading/speed/position), then resolve where
+// that lands him on the road graph BY POSITION. Pure; the gaze is advanced separately (the caller runs
+// nextRiderGaze right after).
 export function getNextRiderState(state: RiderState, world: World): RiderState {
   const seg = world.segments[state.segment];
-  const { v, tilt, yaw, along, across } = decide(state, seg, world);
-  const riderState: RiderState = { segment: seg.id, along, across, yaw, v, tilt, gazeStep: state.gazeStep };
+  const { tiltStep, accel } = decide(state, seg, world);
+  const moved = simulateRiderStep(state, tiltStep, accel);
+  const riderState: RiderState = { ...moved, segment: seg.id, gazeStep: state.gazeStep };
 
   // Resolve the road graph by POSITION (not by any turn flag): on reaching the commit point, cross into the
   // next segment; at a terminus, stop dead at the end.
   const exitIxn = world.intersections[seg.exitIxn];
-  if (exitIxn.to !== null && along >= seg.alongWhereRiderCommitsToTurn)
+  if (exitIxn.to !== null && moved.along >= seg.alongWhereRiderCommitsToTurn)
     return riderStateForNextSegment(riderState, world);
-  if (exitIxn.to === null && along >= seg.length)
+  if (exitIxn.to === null && moved.along >= seg.length)
     return { ...riderState, along: seg.length, v: 0 };
   return riderState;
 }
@@ -288,7 +257,7 @@ export function simulateRiderPath(state: RiderState, seg: RoadSegment): PathSim 
   const path: { along: number; across: number }[] = [];                    // the arc actually walked — returned so the overlay matches exactly
   let phys: RiderPhysics = state, crossed = false;                          // step the SAME dumb physics forward, tilt + speed held constant
   for (let i = 0; i < TURN_DANGER_STEPS; i++) {
-    phys = simulateRiderStep(phys, 0);                                      // constant tilt, zero acceleration: a held-lean arc
+    phys = simulateRiderStep(phys, 0, 0);                                   // zero tilt-step + zero acceleration: a held-lean, constant-speed arc
     const across = phys.across, forward = phys.along - state.along;
     path.push({ along: phys.along, across });                               // record this projected point (last one IS the exit point)
     if (across * startSide < 0) crossed = true;                            // the arc has made it across centre

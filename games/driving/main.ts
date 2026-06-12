@@ -9,7 +9,7 @@
 // =============================================================================
 import { initialRiderState, getNextRiderState, riderHeading, riderTilt, riderFinished, simulateRiderPath, riderDebug, DangerSide, MAX_LEAN, routeDistance } from './rider.ts';
 import { gazeAngle, nextRiderGaze } from './rider_gaze.ts';
-import type { RiderState, RiderDebug } from './rider.ts';
+import type { RiderState, RiderDecision } from './rider.ts';
 import { initialTruck, nextTruck, courseLength } from './truck.ts';
 import type { TruckState } from './truck.ts';
 import { buildWorld } from './world.ts';
@@ -165,7 +165,7 @@ function drawQuad(q: Quad): void {
 const TARGET_MS = 1000 / 60;   // 60Hz vsync budget (the ideal we display against)
 let fps = 60, renderMs = 0, frameMs = TARGET_MS, droppedFrames = 0, dropFlash = 0;
 
-function drawHud(rider: RiderState, dbg: RiderDebug): void {
+function drawHud(rider: RiderState, dbg: RiderDecision): void {
   ctx.fillStyle = 'rgba(0,0,0,0.5)';
   ctx.fillRect(12, 12, 920, 93);
   ctx.font = 'bold 13px ui-monospace, monospace';
@@ -193,7 +193,7 @@ function drawHud(rider: RiderState, dbg: RiderDebug): void {
   // brake), and which snaps fired (TILT = lean snapped upright, YAW = heading re-aimed at the lane centre).
   const sgn = (x: number): string => (x >= 0 ? '+' : '');
   ctx.fillStyle = '#8fd0e6';
-  ctx.fillText(`tilt_step ${sgn(dbg.tiltStep)}${(dbg.tiltStep * 180 / Math.PI).toFixed(2)}deg   accel ${sgn(dbg.accel)}${dbg.accel.toFixed(4)} ${dbg.forwardReason}   dHeading ${sgn(dbg.headingChange)}${(dbg.headingChange * 180 / Math.PI).toFixed(2)}deg   yawFromTarget ${sgn(dbg.yawFromTarget)}${(dbg.yawFromTarget * 180 / Math.PI).toFixed(2)}deg   snap ${dbg.tiltSnapped ? 'TILT' : '·'} ${dbg.yawAimed ? 'YAW' : '·'}`, 22, 69);
+  ctx.fillText(`tilt_step ${sgn(dbg.tiltStep)}${(dbg.tiltStep * 180 / Math.PI).toFixed(2)}deg   accel ${sgn(dbg.accel)}${dbg.accel.toFixed(4)} ${dbg.forwardReason}`, 22, 69);
 
   // line 4: frame HEALTH — wall-clock cadence vs the 60Hz budget; turns red while dropping
   ctx.fillStyle = dropFlash > 0 ? '#ff6b6b' : '#9fe6a0';
@@ -267,26 +267,23 @@ function render(rider: RiderState): void {
 
   // the rider's PROJECTED PATHS — every lean option his danger search walked, coloured by where each ENDS:
   // RED for left danger, GREEN for right danger, BLUE for clear (NONE); the CHOSEN lean's path is YELLOW on
-  // top. Drawn after scenery so it's never occluded; each dot sits on the ground plane. Suppressed entirely on
-  // a snap frame (he's settling — no decision fan to show). Non-chosen paths are subsampled for clarity.
-  if (!dbg.tiltSnapped) {
-    const groundDot = (p: { right: number; forward: number }, radius: number): void => {
-      if (p.forward <= NEAR) return;
-      const s = project({ right: p.right, forward: p.forward, height: -groundDrop(p.right, p.forward) });
-      ctx.beginPath();
-      ctx.arc(s.x, s.y, radius, 0, 2 * Math.PI);
-      ctx.fill();
-    };
-    for (const lp of scene.leanPaths) {
-      if (lp.chosen) continue;
-      ctx.fillStyle = lp.side === DangerSide.LEFT ? '#ff5555' : lp.side === DangerSide.RIGHT ? '#55dd66' : '#5a9bd4';
-      for (let i = 0; i < lp.dots.length; i += 3) groundDot(lp.dots[i], 1.3);
-    }
-    const chosen = scene.leanPaths.find((lp) => lp.chosen);
-    if (chosen) {
-      ctx.fillStyle = '#ffe14d';
-      for (const p of chosen.dots) groundDot(p, Math.max(1.5, Math.min(4, camFocal * 0.05 / p.forward)));
-    }
+  // top. Drawn after scenery so it's never occluded; each dot sits on the ground plane. Non-chosen subsampled.
+  const groundDot = (p: { right: number; forward: number }, radius: number): void => {
+    if (p.forward <= NEAR) return;
+    const s = project({ right: p.right, forward: p.forward, height: -groundDrop(p.right, p.forward) });
+    ctx.beginPath();
+    ctx.arc(s.x, s.y, radius, 0, 2 * Math.PI);
+    ctx.fill();
+  };
+  for (const lp of scene.leanPaths) {
+    if (lp.chosen) continue;
+    ctx.fillStyle = lp.side === DangerSide.LEFT ? '#ff5555' : lp.side === DangerSide.RIGHT ? '#55dd66' : '#5a9bd4';
+    for (let i = 0; i < lp.dots.length; i += 3) groundDot(lp.dots[i], 1.3);
+  }
+  const chosen = scene.leanPaths.find((lp) => lp.chosen);
+  if (chosen) {
+    ctx.fillStyle = '#ffe14d';
+    for (const p of chosen.dots) groundDot(p, Math.max(1.5, Math.min(4, camFocal * 0.05 / p.forward)));
   }
 
   ctx.restore();

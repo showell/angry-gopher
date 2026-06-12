@@ -30,15 +30,19 @@ export const YAW_PER_TILT = 0.1;   // the lean's leverage: each unit of tilt yaw
 // code
 // ----------------------------------------------------------------------------
 
-// Advance the bike ONE frame under a given acceleration. The lean (carried in) rotates the heading; the
-// acceleration changes the speed; the new speed along the average heading moves the position. The lean itself
-// is carried through unchanged — it's a control the RIDER sets, not something physics evolves.
-export function simulateRiderStep(phys: RiderPhysics, accel: number): RiderPhysics {
+// Advance the bike ONE frame, applying the rider's two controls: a TILT-STEP (he works the lean over by a
+// notch) and an ACCELERATION (throttle/brake). The rider LEANS FIRST — the tilt-step lands at the START of the
+// frame — and then THAT lean induces this frame's heading change, so leaning and turning happen together (no
+// one-frame lead). The acceleration changes the speed; the new speed along the average heading moves the
+// position. Applying the tilt-step here is a slightly odd boundary, but it keeps the model clean: the RIDER
+// decides to change his lean, and the physics is what makes that change — and the turn it causes — happen.
+export function simulateRiderStep(phys: RiderPhysics, tiltStep: number, accel: number): RiderPhysics {
+  const tilt = phys.tilt + tiltStep;                 // the rider leans FIRST (instantaneous tilt-step at the frame's start)
   const v = phys.v + accel;                          // acceleration induces the velocity change
-  const headingChange = YAW_PER_TILT * phys.tilt;    // the lean (tilt) induces the heading change
+  const headingChange = YAW_PER_TILT * tilt;         // the (now-leaned) tilt induces this frame's heading change
   const midHeading = phys.yaw + headingChange / 2;   // average heading over the frame
   return {
-    tilt: phys.tilt,
+    tilt,
     yaw: phys.yaw + headingChange,
     v,
     along: phys.along + v * Math.cos(midHeading),     // velocity along the (mid) heading advances the position
