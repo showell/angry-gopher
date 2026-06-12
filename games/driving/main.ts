@@ -38,7 +38,7 @@ canvas.style.cssText = 'display:block;background:#000;box-shadow:0 10px 40px rgb
 wrap.appendChild(canvas);
 
 const hint = document.createElement('div');
-hint.textContent = '↑ drive forward · ↓ back up · SPACE auto';
+hint.textContent = '↑ drive forward · ↓ back up · SPACE auto · D debug';
 hint.style.cssText =
   'position:absolute;left:50%;bottom:10px;transform:translateX(-50%);padding:6px 14px;' +
   'background:rgba(0,0,0,0.45);border:1px solid rgba(255,255,255,0.15);border-radius:4px;' +
@@ -89,6 +89,7 @@ const currentTruck = (): TruckState => truckHistory[truckHistory.length - 1];
 // report). `dirty` marks a pending redraw; it's set wherever the Rider's state changes.
 let dirty = true;
 let auto = false;
+let debug = false;   // the lean-path OVERLAY + the HUD, toggled together by the D key (default OFF — a clean view; the one-line controls hint below the canvas always stays)
 
 // Raw per-frame instrumentation for the CURRENT auto run, with NO smoothing: one entry
 // per rendered frame — { step, dt (wall-clock frame interval, ms), render (our own draw
@@ -132,6 +133,9 @@ window.addEventListener('keydown', (e) => {
   } else if (e.code === 'ArrowDown') {
     setAuto(false);
     if (riderHistory.length > 1) { riderHistory.pop(); truckHistory.pop(); dirty = true; }
+    e.preventDefault();
+  } else if (e.code === 'KeyD') {
+    if (!e.repeat) { debug = !debug; dirty = true; }   // toggle the overlay + HUD together
     e.preventDefault();
   }
 });
@@ -268,27 +272,30 @@ function render(rider: RiderState): void {
   // the rider's PROJECTED PATHS — every lean option his danger search walked, coloured by where each ENDS:
   // RED for left danger, GREEN for right danger, BLUE for clear (NONE); the CHOSEN lean's path is YELLOW on
   // top. Drawn after scenery so it's never occluded; each dot sits on the ground plane. Non-chosen subsampled.
-  const groundDot = (p: { right: number; forward: number }, radius: number): void => {
-    if (p.forward <= NEAR) return;
-    const s = project({ right: p.right, forward: p.forward, height: -groundDrop(p.right, p.forward) });
-    ctx.beginPath();
-    ctx.arc(s.x, s.y, radius, 0, 2 * Math.PI);
-    ctx.fill();
-  };
-  for (const lp of scene.leanPaths) {
-    if (lp.chosen) continue;
-    ctx.fillStyle = lp.side === DangerSide.LEFT ? '#ff5555' : lp.side === DangerSide.RIGHT ? '#55dd66' : '#5a9bd4';
-    for (let i = 0; i < lp.dots.length; i += 3) groundDot(lp.dots[i], 1.3);
-  }
-  const chosen = scene.leanPaths.find((lp) => lp.chosen);
-  if (chosen) {
-    ctx.fillStyle = '#ffe14d';
-    for (const p of chosen.dots) groundDot(p, Math.max(1.5, Math.min(4, camFocal * 0.05 / p.forward)));
+  // Part of the DEBUG layer (toggled with the HUD): off by default for a clean view.
+  if (debug) {
+    const groundDot = (p: { right: number; forward: number }, radius: number): void => {
+      if (p.forward <= NEAR) return;
+      const s = project({ right: p.right, forward: p.forward, height: -groundDrop(p.right, p.forward) });
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, radius, 0, 2 * Math.PI);
+      ctx.fill();
+    };
+    for (const lp of scene.leanPaths) {
+      if (lp.chosen) continue;
+      ctx.fillStyle = lp.side === DangerSide.LEFT ? '#ff5555' : lp.side === DangerSide.RIGHT ? '#55dd66' : '#5a9bd4';
+      for (let i = 0; i < lp.dots.length; i += 3) groundDot(lp.dots[i], 1.3);
+    }
+    const chosen = scene.leanPaths.find((lp) => lp.chosen);
+    if (chosen) {
+      ctx.fillStyle = '#ffe14d';
+      for (const p of chosen.dots) groundDot(p, Math.max(1.5, Math.min(4, camFocal * 0.05 / p.forward)));
+    }
   }
 
   ctx.restore();
 
-  drawHud(rider, dbg);
+  if (debug) drawHud(rider, dbg);
 
   if (riderFinished(rider, world)) {
     ctx.fillStyle = 'rgba(0,0,0,0.55)';
