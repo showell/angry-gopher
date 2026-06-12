@@ -189,7 +189,7 @@ function drawHud(rider: RiderState, dbg: RiderDecision): void {
   // the segment's direction, camera tilt, and speed. (These used to vanish during turns.)
   ctx.fillStyle = '#9fe6a0';
   const gazeDeg = gazeAngle(rider) * 180 / Math.PI;
-  const danger = simulateRiderPath(rider, world.segments[rider.segment]);
+  const danger = simulateRiderPath(rider, world.segments[rider.segment], dbg.tiltStep);
   const dangerN = Number.isFinite(danger.framesUntilDanger) ? `${danger.framesUntilDanger}f` : 'clear';
   ctx.fillText(`x ${rider.across.toFixed(3)}  y ${rider.along.toFixed(1)}  heading ${headingDeg.toFixed(1)}deg  tilt ${tiltDeg.toFixed(3)}deg  path ${danger.side} (fwd ${danger.forward.toFixed(0)} danger ${dangerN}${danger.crossed ? ' X-ctr' : ''})  gaze ${gazeDeg.toFixed(0)}deg  v ${rider.v.toFixed(3)}`, 22, 50);
 

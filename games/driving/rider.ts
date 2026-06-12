@@ -100,9 +100,14 @@ const BRAKE_DECAY = 40;                    // shoulder brake fudge factor (frame
 const ASYMPTOTE_TUNING = 0.30;              // the lean search aims to END this fraction of his CURRENT offset from centre (0.30 = ~3x closer each lookahead) — an asymptotic glide to the middle instead of overshooting and oscillating
 const CENTER_LANE_EPSILON = 0.04;           // once he's THIS close to centre, stop chasing the exact middle — aim for the band EDGE (+/-this) on the side he's on, a stable target he can hold instead of twitching after a zero he can't physically keep (and off the start line, +this, so he pulls away at a slight angle)
 
-// (The snap-to-centre constants TILT_SNAP / YAW_EPSILON / AIMING_DISTANCE and aimYawFor were removed with the
-// snaps — TEMPORARILY disabled while we get a clean decision/physics break; we'll bring back a calibrated
-// near-target lean adjustment afterward.)
+// (The snap-to-centre constants TILT_SNAP / YAW_EPSILON were removed with the snaps. AIMING_DISTANCE / aimYawFor
+// are BACK — not as a snap, but as the heading the PATH PROJECTION straightens toward: the rider aims his heading
+// at the lane centre and flips his lean the moment he reaches that aim, so the projected arc self-arrests instead
+// of leaning ever harder.)
+const AIMING_DISTANCE = 100;   // the rider aims his heading at the lane centre this far ahead (m)
+function aimYawFor(across: number): number {
+  return Math.atan2(-across, AIMING_DISTANCE);   // heading that points at the lane centre from lateral offset `across` (0 when centred)
+}
 
 // ----------------------------------------------------------------------------
 // functions
@@ -151,8 +156,8 @@ export function routeDistance(state: RiderState, world: World): number {
 // (Snaps are OFF for now — we tolerate the resulting oscillation until the decision/physics break is clean.)
 // getNextRiderState EXECUTES these controls through the physics; riderDebug reads them for the HUD.
 function decide(state: RiderState, seg: RoadSegment, world: World): RiderDecision {
-  const tiltStep = bestTiltCorrection(state, seg) - state.tilt;
-  const fwd = getForwardAccelDecel({ ...state, tilt: state.tilt + tiltStep }, seg, world);
+  const tiltStep = searchLean(state, seg).step;
+  const fwd = getForwardAccelDecel(state, seg, world, tiltStep);
   return { tiltStep, accel: fwd.accel, forwardReason: fwd.reason };
 }
 
@@ -211,8 +216,8 @@ function riderStateForNextSegment(riderState: RiderState, world: World): RiderSt
 // near-upright (|tilt| < TILT_HOLD): accelerating mid-lean would make the constant-v danger projection
 // underestimate where he ends up. Braking always applies, leaned or not. The `reason` is whichever term ends up
 // binding — surfaced in the HUD and collected as a baseline metric (max shoulder decel per segment).
-function getForwardAccelDecel(state: RiderState, seg: RoadSegment, world: World): { accel: number; reason: ForwardReason } {
-  const leaned = Math.abs(state.tilt) >= TILT_HOLD;
+function getForwardAccelDecel(state: RiderState, seg: RoadSegment, world: World, tiltStep: number): { accel: number; reason: ForwardReason } {
+  const leaned = Math.abs(state.tilt + tiltStep) >= TILT_HOLD;   // gate on the lean he's COMMITTING to this frame
   let a = leaned ? 0 : A_ACCEL;                              // throttle only when near-upright; brakes below still fire
   let reason: ForwardReason = leaned ? ForwardReason.HOLD_LEAN : ForwardReason.CRUISE;
 
@@ -227,11 +232,12 @@ function getForwardAccelDecel(state: RiderState, seg: RoadSegment, world: World)
   }
   if (segmentCatDanger(seg.cats, state.along, state.v) && a > 0) { a = 0; reason = ForwardReason.AVOID_CAT; }  // hold throttle for a crossing cat
 
-  // Brake for the road edge using the rider's ACTUAL simulated path at his just-chosen lean (state.tilt/yaw
-  // already hold this frame's lean + heading) — so the brake has FAITH the bike will turn, instead of the old
+  // Brake for the road edge using the rider's ACTUAL simulated path: project from his current state RE-APPLYING
+  // the tilt-step he just chose, so the first projected frame IS his real next move and the rest assume he keeps
+  // working the lean the same way — the brake has FAITH the bike will turn (and keep turning), instead of the old
   // straight-line shoulderDistance. If the path runs off a shoulder in N frames, kinematically slow to arrive
   // there at v=0 (a = -v / 2N — stop within the distance he'd cover in N frames). If the path is clear, no brake.
-  const sim = simulateRiderPath(state, seg);
+  const sim = simulateRiderPath(state, seg, tiltStep);
   if (sim.side !== DangerSide.NONE) {
     // Kinematic stop-before-the-edge (a = -v/2N), then DECAYED: the rider fudges it — he doesn't fully brake for
     // danger that's still many frames off (he trusts he'll steer out), so the decel decays exp(-N/BRAKE_DECAY)
@@ -256,8 +262,9 @@ function nearIntersection(state: RiderState, seg: RoadSegment): boolean {
 }
 
 
-// Project his ARC forward (tilt held constant -> a constant heading-change per step, speed held constant) and
-// score how that lean PLAYS OUT. The projection runs until one of:
+// Project his ARC forward working the lean over by a constant-MAGNITUDE tiltStep each frame — its sign FLIPS ONCE,
+// the moment his heading crosses the lane-centre aim, so he leans IN then straightens OUT instead of leaning ever
+// harder (which oversteered and ran every probe off the road). Speed held constant. Score how it PLAYS OUT; runs until one of:
 //   • it runs off a shoulder           -> { side: LEFT|RIGHT, forward = progress at the hit }   (a bad lean)
 //   • it goes net-BACKWARD (forward<0) -> the disaster case; the negative forward sinks it in the ranking
 //   • it clears MIN_FORWARD_PROGRESS   -> { side: NONE, forward = MIN_FORWARD_PROGRESS exactly }  (a good lean)
@@ -266,15 +273,22 @@ function nearIntersection(state: RiderState, seg: RoadSegment): boolean {
 // shoulder boundary on each side is the WORSE of the inset edge (STRAIGHTEN_MARGIN inside the real shoulder)
 // and where the rider ALREADY sits, so a path is only "off" if it pushes him FURTHER toward a shoulder than he
 // already is — not for merely starting near the edge.
-export function simulateRiderPath(state: RiderState, seg: RoadSegment): PathSim {
+export function simulateRiderPath(state: RiderState, seg: RoadSegment, tiltStep: number): PathSim {
   const insetHw = seg.width / 2 - STRAIGHTEN_MARGIN;
   const rightBound = Math.max(insetHw, state.across);
   const leftBound = Math.min(-insetHw, state.across);
   const startSide = Math.sign(state.across);                                // which side of centre he starts on
   const path: { along: number; across: number }[] = [];                    // the arc actually walked — returned so the overlay matches exactly
-  let phys: RiderPhysics = state, crossed = false;                          // step the SAME dumb physics forward, tilt + speed held constant
+  let phys: RiderPhysics = state, crossed = false;                          // step the SAME dumb physics forward, speed held
+  let step = tiltStep;                                                      // constant MAGNITUDE; its sign flips ONCE, when he reaches the aim
+  let flipped = false, prevToAim = state.yaw - aimYawFor(state.across);     // signed gap from the centre-aim heading; a sign change = he crossed it
   for (let i = 0; i < TURN_DANGER_STEPS; i++) {
-    phys = simulateRiderStep(phys, 0, 0);                                   // zero tilt-step + zero acceleration: a held-lean, constant-speed arc
+    phys = simulateRiderStep(phys, step, 0);                               // work the lean over by step each frame; zero acceleration
+    if (!flipped) {                                                         // the frame his heading crosses the lane-centre aim, flip the lean to straighten out
+      const toAim = phys.yaw - aimYawFor(phys.across);
+      if (prevToAim !== 0 && Math.sign(toAim) !== Math.sign(prevToAim)) { step = -step; flipped = true; }
+      prevToAim = toAim;
+    }
     const across = phys.across, forward = phys.along - state.along;
     path.push({ along: phys.along, across });                               // record this projected point (last one IS the exit point)
     if (across * startSide < 0) crossed = true;                            // the arc has made it across centre
@@ -289,44 +303,41 @@ export function simulateRiderPath(state: RiderState, seg: RoadSegment): PathSim 
 const MAX_TILT_CORRECTION = 1 * Math.PI / 180;    // the most the rider can work his lean over in a single frame (he has to fight the bike's mass)
 const LEAN_SEARCH_ITERS = 12;                     // binary-search probes over [-MAX, +MAX]: each halves the interval, so 12 -> 2*MAX/2^12 ~= 0.0005deg precision in 12 path sims
 
-// Should the best lean be to the RIGHT of the one that produced this path? YES if the path runs off the LEFT (he
-// needs more right lean to get back on the road) or stays on-road but ends LEFT of the target (lean right to reach
-// it); NO if it runs off the RIGHT or ends right of the target. As the lean sweeps left->right the projected path
-// sweeps monotonically (off-LEFT -> a band that stays ON THE ROAD with its end sliding rightward -> off-RIGHT), so
-// this answer flips exactly ONCE across the range — which is all the bisection below needs.
+// Should the best tilt-STEP be MORE to the RIGHT than the one that produced this path? YES if the path runs off
+// the LEFT (he needs to lean righter to get back on the road) or stays on-road but ends LEFT of the target (lean
+// right to reach it); NO if it runs off the RIGHT or ends right of the target. As the step sweeps left->right the
+// projected (ramping-lean) path sweeps monotonically (off-LEFT -> a band that stays ON THE ROAD with its end
+// sliding rightward -> off-RIGHT), so this answer flips exactly ONCE across the range — all the bisection needs.
 function wantMoreRight(sim: PathSim, target: number): boolean {
   if (sim.side === DangerSide.LEFT) return true;
   if (sim.side === DangerSide.RIGHT) return false;
   return sim.endAcross < target;                  // on-road: lean further right only if it still ends short of the target
 }
 
-// THE LEAN SEARCH — a binary search for the held lean whose projected path stays on the road and ENDS CLOSEST to
-// the ASYMPTOTIC TARGET (`target` = a fraction of his current offset, so he glides toward centre instead of
-// overshooting). The single flip of wantMoreRight is the pivot: keep the half that still wants more right lean. We
-// record EVERY probe so the debug overlay can draw the exact paths the search evaluated — no parallel re-sampling.
-interface LeanSearch { tilt: number; probes: PathSim[] }
+// THE LEAN SEARCH — a binary search for the per-frame tilt-STEP whose projected path (that step re-applied every
+// frame, so the lean ramps) stays on the road and ENDS CLOSEST to the ASYMPTOTIC TARGET (`target` = a fraction of
+// his current offset, so he glides toward centre instead of overshooting). The single flip of wantMoreRight is the
+// pivot: keep the half that still wants more right lean. We record EVERY probe so the debug overlay can draw the
+// exact paths the search evaluated — no parallel re-sampling.
+interface LeanSearch { step: number; probes: PathSim[] }
 function searchLean(state: RiderState, seg: RoadSegment): LeanSearch {
   const target = Math.abs(state.across) < CENTER_LANE_EPSILON
     ? (state.across >= 0 ? CENTER_LANE_EPSILON : -CENTER_LANE_EPSILON)   // near centre: aim for the band edge on his side (a stable target), not the exact zero
     : state.across * ASYMPTOTE_TUNING;
-  let lo = state.tilt - MAX_TILT_CORRECTION;       // lean hard LEFT  (turns him left  -> off the left shoulder)
-  let hi = state.tilt + MAX_TILT_CORRECTION;       // lean hard RIGHT (turns him right -> off the right shoulder)
+  let lo = -MAX_TILT_CORRECTION;                   // ramp the lean LEFT  as hard as one frame allows (-> off the left shoulder)
+  let hi = MAX_TILT_CORRECTION;                    // ramp the lean RIGHT as hard as one frame allows (-> off the right shoulder)
   const probes: PathSim[] = [];
   for (let i = 0; i < LEAN_SEARCH_ITERS; i++) {
     const mid = (lo + hi) / 2;
-    const sim = simulateRiderPath({ ...state, tilt: mid }, seg);
+    const sim = simulateRiderPath(state, seg, mid);
     probes.push(sim);                              // the actual path this probe walked
     if (wantMoreRight(sim, target)) lo = mid; else hi = mid;
   }
-  return { tilt: (lo + hi) / 2, probes };
-}
-
-function bestTiltCorrection(state: RiderState, seg: RoadSegment): number {
-  return searchLean(state, seg).tilt;
+  return { step: (lo + hi) / 2, probes };
 }
 
 // The debug overlay's data: the ACTUAL arcs the binary search probed — each coloured by the shoulder it ran off
-// (RED left / GREEN right / BLUE on-road), narrowing in as the bisection converges — PLUS the held lean it finally
+// (RED left / GREEN right / BLUE on-road), narrowing in as the bisection converges — PLUS the tilt-step it finally
 // settled on as the last, highlighted candidate. Every path here is one simulateRiderPath the search really ran,
 // so the picture can't disagree with the algorithm.
 export interface LeanCandidate { path: { along: number; across: number }[]; side: DangerSide }
@@ -334,7 +345,7 @@ export interface LeanCandidates { candidates: LeanCandidate[]; chosen: number }
 export function leanCandidates(state: RiderState, seg: RoadSegment): LeanCandidates {
   const search = searchLean(state, seg);
   const candidates: LeanCandidate[] = search.probes.map((p) => ({ path: p.path, side: p.side }));
-  const chosen = simulateRiderPath({ ...state, tilt: search.tilt }, seg);   // the lean it settled on (the final midpoint)
+  const chosen = simulateRiderPath(state, seg, search.step);   // the tilt-step it settled on (the final midpoint)
   candidates.push({ path: chosen.path, side: chosen.side });
   return { candidates, chosen: candidates.length - 1 };
 }
