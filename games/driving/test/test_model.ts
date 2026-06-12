@@ -149,6 +149,16 @@ function main(): void {
   let crossings = 0, maxAcross = 0, maxV = 0;
   const shoulderDecel: Record<string, number> = {};   // BASELINE: most-negative accel while the shoulder brake is binding, per segment
 
+  // BASELINE for the intersection-entry rework: per segment, the slowest the rider ever gets and the
+  // hardest single-press deceleration he ever takes — each tagged with WHERE (segment-local along +
+  // distance-to-segment-end, across) and the seg-1 reference-frame map point (x,y), plus, for the
+  // brake, the ForwardReason that forced it. Slowest is charged to the segment the rider is ON; the
+  // brake is charged to the APPROACH segment (the one he's on while deciding to slow).
+  interface Slowest { v: number; along: number; across: number; x: number; y: number }
+  interface Hardest { accel: number; reason: ForwardReason; along: number; across: number; x: number; y: number }
+  const slowest: Record<string, Slowest> = {};
+  const hardest: Record<string, Hardest> = {};
+
   // the chased truck, simulated in lockstep with the rider (exactly as main.ts advances it)
   const L = courseLength(world);
   let truck: TruckState = initialTruck();
@@ -162,6 +172,17 @@ function main(): void {
     if (n.segment !== s.segment) crossings++;
     maxAcross = Math.max(maxAcross, Math.abs(n.across));
     maxV = Math.max(maxV, n.v);
+    // BASELINE captures: slowest point (state n, on its own segment) and hardest realized brake
+    // (v drop across this press, charged to the approach segment s with its forward reason).
+    const rfn = inRefFrame(n, world);
+    const sl = slowest[n.segment];
+    if (!sl || n.v < sl.v) slowest[n.segment] = { v: n.v, along: n.along, across: n.across, x: rfn.x, y: rfn.a };
+    const accel = n.v - s.v;
+    const hd = hardest[s.segment];
+    if (!hd || accel < hd.accel) {
+      const rfs = inRefFrame(s, world);
+      hardest[s.segment] = { accel, reason: dbg.forwardReason, along: s.along, across: s.across, x: rfs.x, y: rfs.a };
+    }
     // stuck at the route end?
     if (n.segment === s.segment && n.along === s.along) break;   // stuck (terminus: stopped dead)
     states.push(n);
@@ -181,6 +202,22 @@ function main(): void {
   for (const id of world.order) {
     const d = shoulderDecel[id];
     console.log(`    ${id.padEnd(6)} ${d === undefined ? '—' : d.toFixed(4)}`);
+  }
+
+  // BASELINE for the intersection-entry rework: slowest point + hardest brake per segment. (x,y) is the
+  // seg-1 reference-frame map point; d2end = metres from that point to the segment's end (the intersection).
+  console.log('  baseline per segment — SLOWEST point and HARDEST brake (for the intersection-entry rework):');
+  console.log('    seg     slowest_v  along  d2end  across      (x,y)   |  hardest_decel  reason                   along  d2end  across      (x,y)');
+  for (const id of world.order) {
+    const len = world.segments[id].length;
+    const sl = slowest[id], hd = hardest[id];
+    const slStr = sl
+      ? `${sl.v.toFixed(3).padStart(8)} ${sl.along.toFixed(0).padStart(6)} ${(len - sl.along).toFixed(0).padStart(6)} ${sl.across.toFixed(2).padStart(7)}  (${sl.x.toFixed(0)},${sl.y.toFixed(0)})`.padEnd(40)
+      : '—'.padEnd(40);
+    const hdStr = hd
+      ? `${hd.accel.toFixed(4).padStart(9)}  ${hd.reason.padEnd(22)} ${hd.along.toFixed(0).padStart(6)} ${(len - hd.along).toFixed(0).padStart(6)} ${hd.across.toFixed(2).padStart(7)}  (${hd.x.toFixed(0)},${hd.y.toFixed(0)})`
+      : '—';
+    console.log(`    ${id.padEnd(6)} ${slStr} | ${hdStr}`);
   }
 
   // 0) the model's per-segment northHeading matches an independent accumulation
