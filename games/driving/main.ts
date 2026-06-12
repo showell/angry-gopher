@@ -187,13 +187,13 @@ function drawHud(rider: RiderState, dbg: RiderDecision): void {
   const gazeDeg = gazeAngle(rider) * 180 / Math.PI;
   const danger = simulateRiderPath(rider, world.segments[rider.segment]);
   const dangerN = Number.isFinite(danger.framesUntilDanger) ? `${danger.framesUntilDanger}f` : 'clear';
-  ctx.fillText(`x ${rider.across.toFixed(2)}  y ${rider.along.toFixed(1)}  heading ${headingDeg.toFixed(1)}deg  tilt ${tiltDeg.toFixed(2)}deg  path ${danger.side} (fwd ${danger.forward.toFixed(0)} danger ${dangerN}${danger.crossed ? ' X-ctr' : ''})  gaze ${gazeDeg.toFixed(0)}deg  v ${rider.v.toFixed(2)}`, 22, 50);
+  ctx.fillText(`x ${rider.across.toFixed(3)}  y ${rider.along.toFixed(1)}  heading ${headingDeg.toFixed(1)}deg  tilt ${tiltDeg.toFixed(3)}deg  path ${danger.side} (fwd ${danger.forward.toFixed(0)} danger ${dangerN}${danger.crossed ? ' X-ctr' : ''})  gaze ${gazeDeg.toFixed(0)}deg  v ${rider.v.toFixed(3)}`, 22, 50);
 
   // line 3: the rider's DECISION this frame — the per-frame lean change, the forward accel (+ throttle / −
   // brake), and which snaps fired (TILT = lean snapped upright, YAW = heading re-aimed at the lane centre).
   const sgn = (x: number): string => (x >= 0 ? '+' : '');
   ctx.fillStyle = '#8fd0e6';
-  ctx.fillText(`tilt_step ${sgn(dbg.tiltStep)}${(dbg.tiltStep * 180 / Math.PI).toFixed(2)}deg   accel ${sgn(dbg.accel)}${dbg.accel.toFixed(4)} ${dbg.forwardReason}`, 22, 69);
+  ctx.fillText(`tilt_step ${sgn(dbg.tiltStep)}${(dbg.tiltStep * 180 / Math.PI).toFixed(3)}deg   accel ${sgn(dbg.accel)}${dbg.accel.toFixed(4)} ${dbg.forwardReason}`, 22, 69);
 
   // line 4: frame HEALTH — wall-clock cadence vs the 60Hz budget; turns red while dropping
   ctx.fillStyle = dropFlash > 0 ? '#ff6b6b' : '#9fe6a0';

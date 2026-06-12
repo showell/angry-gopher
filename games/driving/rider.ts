@@ -98,7 +98,7 @@ const MIN_FORWARD_PROGRESS = 25;            // scoring distance (m): a projected
 const TILT_HOLD = 2 * Math.PI / 180;        // he only adds throttle while leaned LESS than this — accelerating mid-lean makes the constant-v danger projection lie and reads as jitter
 const BRAKE_DECAY = 40;                      // shoulder brake fudge factor (frames): the kinematic decel decays exp(-N/this) as frames-until-danger N grows, so he under-brakes for far-off danger (trusting he'll steer out) and only fully brakes when it's imminent
 const ASYMPTOTE_TUNING = 0.30;              // the lean search aims to END this fraction of his CURRENT offset from centre (0.30 = ~3x closer each lookahead) — an asymptotic glide to the middle instead of overshooting and oscillating
-const CENTER_LANE_EPSILON = 0.001;          // once he's THIS close to centre, stop chasing the middle — aim to HOLD his current offset instead, so he doesn't twitch hunting for an exact zero he can't physically hold
+const CENTER_LANE_EPSILON = 0.04;           // once he's THIS close to centre, stop chasing the exact middle — aim for the band EDGE (+/-this) on the side he's on, a stable target he can hold instead of twitching after a zero he can't physically keep (and off the start line, +this, so he pulls away at a slight angle)
 
 // (The snap-to-centre constants TILT_SNAP / YAW_EPSILON / AIMING_DISTANCE and aimYawFor were removed with the
 // snaps — TEMPORARILY disabled while we get a clean decision/physics break; we'll bring back a calibrated
@@ -291,7 +291,9 @@ function wantMoreRight(sim: PathSim, target: number): boolean {
 // record EVERY probe so the debug overlay can draw the exact paths the search evaluated — no parallel re-sampling.
 interface LeanSearch { tilt: number; probes: PathSim[] }
 function searchLean(state: RiderState, seg: RoadSegment): LeanSearch {
-  const target = Math.abs(state.across) < CENTER_LANE_EPSILON ? state.across : state.across * ASYMPTOTE_TUNING;  // near centre: HOLD, don't chase
+  const target = Math.abs(state.across) < CENTER_LANE_EPSILON
+    ? (state.across >= 0 ? CENTER_LANE_EPSILON : -CENTER_LANE_EPSILON)   // near centre: aim for the band edge on his side (a stable target), not the exact zero
+    : state.across * ASYMPTOTE_TUNING;
   let lo = state.tilt - MAX_TILT_CORRECTION;       // lean hard LEFT  (turns him left  -> off the left shoulder)
   let hi = state.tilt + MAX_TILT_CORRECTION;       // lean hard RIGHT (turns him right -> off the right shoulder)
   const probes: PathSim[] = [];
