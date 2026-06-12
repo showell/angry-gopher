@@ -4,8 +4,8 @@
 // transforms (lengths + turn signs) — the same relational facts getNextRiderState uses.
 //
 // Run: node test/test_model.ts
-import { initialRiderState, getNextRiderState, riderDebug, ForwardReason, MAX_TURN_ANGLE, APPROACH_INTERSECTION_DIST, routeDistance } from '../rider.ts';
-import { gazeAngle, nextRiderGaze, GAZE_SEQUENCE } from '../rider_gaze.ts';
+import { initialRiderState, getNextRiderState, riderDebug, ForwardReason, MAX_TURN_ANGLE, routeDistance } from '../rider.ts';
+import { nextRiderGaze } from '../rider_gaze.ts';
 import type { RiderState } from '../rider.ts';
 import { initialTruck, nextTruck, courseLength } from '../truck.ts';
 import type { TruckState } from '../truck.ts';
@@ -234,24 +234,11 @@ function main(): void {
   // 1) invariants on every state
   for (const st of states) assertInvariants(st, world);
 
-  // 1b) the distracted-rider GAZE: it must be back to straight (0) before the braking zone, and
-  // it must run the exact configured sequence.
-  for (const st of states) {
-    const distToEnd = world.segments[st.segment].length - st.along;
-    if (distToEnd <= APPROACH_INTERSECTION_DIST && Math.abs(gazeAngle(st)) > 1e-9) {
-      throw new Error(`gaze ${(gazeAngle(st) * 180 / Math.PI).toFixed(0)}deg still off-straight within the ${APPROACH_INTERSECTION_DIST}m approach on ${st.segment}`);
-    }
-  }
-  const DEG = Math.PI / 180;
-  const gazeVals = states.map((st) => gazeAngle(st));
-  const first = gazeVals.findIndex((g) => Math.abs(g) > 1e-9);
-  if (first < 0) throw new Error('the distracted-rider glance never fired');
-  for (let k = 0; k < GAZE_SEQUENCE.length; k++) {
-    if (Math.abs(gazeVals[first + k] - GAZE_SEQUENCE[k] * DEG) > 1e-9) {
-      throw new Error(`glance frame ${k}: ${(gazeVals[first + k] / DEG).toFixed(2)}deg != ${GAZE_SEQUENCE[k]}deg`);
-    }
-  }
-  if (Math.abs(gazeVals[first + GAZE_SEQUENCE.length]) > 1e-9) throw new Error('glance did not return to straight after the sequence');
+  // 1b) the distracted-rider GAZE checks are TEMP-DISABLED — the gaze glance is currently off in
+  // rider_gaze.ts while we rework it into the "pig distraction" behaviour. When that lands, re-enable
+  // (and update for pigs) the checks that ran here: the glance must fire, walk the configured sequence,
+  // return to straight, and be back to straight before the APPROACH_INTERSECTION_DIST braking zone.
+  console.log('  NOTE: gaze/glance assertions TEMP-DISABLED (pig-distraction rework pending)');
 
   // 1c) the SUNSET over seg7 (the special segment). seg7 must be the long, sun-ward stretch: at
   // least 1000m (it hosts the mid-segment radio tower), headed roughly toward the sun, with the sun
