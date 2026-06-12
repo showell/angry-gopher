@@ -261,8 +261,8 @@ export function simulateRiderPath(state: RiderState, seg: RoadSegment): PathSim 
     const across = phys.across, forward = phys.along - state.along;
     path.push({ along: phys.along, across });                               // record this projected point (last one IS the exit point)
     if (across * startSide < 0) crossed = true;                            // the arc has made it across centre
-    if (across < leftBound) return { side: DangerSide.LEFT, forward, crossed, endAcross: across, framesUntilDanger: i, path };       // ran off the left shoulder in i frames
-    if (across > rightBound) return { side: DangerSide.RIGHT, forward, crossed, endAcross: across, framesUntilDanger: i, path };     // ran off the right shoulder in i frames
+    if (across < leftBound) return { side: DangerSide.LEFT, forward: Math.min(forward, MIN_FORWARD_PROGRESS), crossed, endAcross: across, framesUntilDanger: i, path };       // ran off the left shoulder in i frames (forward CAPPED — a path off the road must never out-score one that cleared)
+    if (across > rightBound) return { side: DangerSide.RIGHT, forward: Math.min(forward, MIN_FORWARD_PROGRESS), crossed, endAcross: across, framesUntilDanger: i, path };     // ran off the right shoulder in i frames (forward CAPPED)
     if (forward < 0) return { side: DangerSide.NONE, forward, crossed, endAcross: across, framesUntilDanger: Infinity, path };       // spun net-backward — disaster (no shoulder danger)
     if (forward >= MIN_FORWARD_PROGRESS) return { side: DangerSide.NONE, forward: MIN_FORWARD_PROGRESS, crossed, endAcross: across, framesUntilDanger: Infinity, path };  // cleared (no shoulder danger)
   }
@@ -287,13 +287,14 @@ function leanAtOption(state: RiderState, steps: number, j: number): number {
   return state.tilt + MAX_TILT_CORRECTION * (j - steps) / steps;
 }
 
-// THE LEAN SEARCH (shared by the real decision and the debug overlay). Evaluate ALL 21 leans and rank by how
-// the projected path plays out (simulateRiderPath): pick the path that makes the MOST forward progress (surviving
-// paths all tie at exactly MIN_FORWARD_PROGRESS); among that tie prefer the one that CROSSES the centre line,
-// then — among those — the one that ENDS CLOSEST TO CENTRE. So he commits the lean that gets him cleanly down
-// the road, back across the middle, and settled nearest the lane centre. Returns the chosen option index.
+// THE LEAN SEARCH (shared by the real decision and the debug overlay). Evaluate the leans and rank by how the
+// projected path plays out (simulateRiderPath): a path that stays ON THE ROAD (no shoulder danger) ALWAYS beats
+// one that runs off; then most forward progress (survivors tie at MIN_FORWARD_PROGRESS); then prefer the one
+// that CROSSES the centre line; then the one that ENDS CLOSEST TO CENTRE. So he commits the lean that gets him
+// cleanly down the road, back across the middle, and settled nearest centre. Returns the chosen option index.
 function leanBetter(a: PathSim, b: PathSim): boolean {
-  if (a.forward !== b.forward) return a.forward > b.forward;             // primary: furthest forward (capped, so survivors tie exactly)
+  if ((a.side === DangerSide.NONE) !== (b.side === DangerSide.NONE)) return a.side === DangerSide.NONE;  // no shoulder danger beats a path that runs off
+  if (a.forward !== b.forward) return a.forward > b.forward;             // furthest forward (all capped at MIN_FORWARD_PROGRESS)
   if (a.crossed !== b.crossed) return a.crossed;                         // tiebreak: cross the centre line
   return Math.abs(a.endAcross) < Math.abs(b.endAcross);                  // tiebreak: end closest to centre
 }
