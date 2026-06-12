@@ -285,8 +285,12 @@ export function simulateRiderPath(state: RiderState, seg: RoadSegment, tiltStep:
   let prevToAim = state.yaw - aimYawFor(state.across);                      // signed gap from the centre-aim heading; a sign change = he crossed it
   for (let i = 0; i < TURN_DANGER_STEPS; i++) {
     phys = simulateRiderStep(phys, step, 0);                               // work the lean over by step each frame; zero acceleration
-    const toAim = phys.yaw - aimYawFor(phys.across);                       // flip the lean EVERY time his heading crosses the lane-centre aim — the
-    if (prevToAim !== 0 && Math.sign(toAim) !== Math.sign(prevToAim)) step = -step;   // projected path then oscillates (never driven), but never oversteers off
+    // flip the lean EACH time his heading OVERSHOOTS the lane-centre aim in the step's OWN turn direction (sign of
+    // toAim at the crossing == sign of step). Gating on the step's direction is what stops a residual lean — one
+    // opposite to the commanded step — from driving the heading across the aim and triggering a premature flip
+    // (which turned every "lean left" probe into a "lean right" path). The path then oscillates (never driven).
+    const toAim = phys.yaw - aimYawFor(phys.across);
+    if (prevToAim !== 0 && Math.sign(toAim) !== Math.sign(prevToAim) && Math.sign(toAim) === Math.sign(step)) step = -step;
     prevToAim = toAim;
     const across = phys.across, forward = phys.along - state.along;
     path.push({ along: phys.along, across });                               // record this projected point (last one IS the exit point)
