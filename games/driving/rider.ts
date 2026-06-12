@@ -97,6 +97,7 @@ const TURN_DANGER_STEPS = 2000;            // STEERING look-ahead (a hard cap; t
 const MIN_FORWARD_PROGRESS = 25;            // scoring distance (m): a projected lean that survives this far without running off counts as "good enough" — its forward score is pinned here so survivors tie and the cross-centre / least-lean tiebreak decides. Shorter = more leans tie = more averse to hugging a side (but can oscillate)
 const TILT_HOLD = 2 * Math.PI / 180;        // he only adds throttle while leaned LESS than this — accelerating mid-lean makes the constant-v danger projection lie and reads as jitter
 const BRAKE_DECAY = 40;                      // shoulder brake fudge factor (frames): the kinematic decel decays exp(-N/this) as frames-until-danger N grows, so he under-brakes for far-off danger (trusting he'll steer out) and only fully brakes when it's imminent
+const ASYMPTOTE_TUNING = 0.20;              // the lean search aims to END this fraction of his CURRENT offset from centre (0.20 = 5x closer each lookahead) — an asymptotic glide to the middle instead of overshooting and oscillating
 
 // (The snap-to-centre constants TILT_SNAP / YAW_EPSILON / AIMING_DISTANCE and aimYawFor were removed with the
 // snaps — TEMPORARILY disabled while we get a clean decision/physics break; we'll bring back a calibrated
@@ -289,21 +290,21 @@ function leanAtOption(state: RiderState, steps: number, j: number): number {
 
 // THE LEAN SEARCH (shared by the real decision and the debug overlay). Evaluate the leans and rank by how the
 // projected path plays out (simulateRiderPath): a path that stays ON THE ROAD (no shoulder danger) ALWAYS beats
-// one that runs off; then most forward progress (survivors tie at MIN_FORWARD_PROGRESS); then prefer the one
-// that CROSSES the centre line; then the one that ENDS CLOSEST TO CENTRE. So he commits the lean that gets him
-// cleanly down the road, back across the middle, and settled nearest centre. Returns the chosen option index.
-function leanBetter(a: PathSim, b: PathSim): boolean {
+// one that runs off; then most forward progress (survivors tie at MIN_FORWARD_PROGRESS); then the one that ENDS
+// CLOSEST TO THE ASYMPTOTIC TARGET (`target` = a fraction of his current offset, so he glides toward centre
+// instead of overshooting it). Returns the chosen option index.
+function leanBetter(a: PathSim, b: PathSim, target: number): boolean {
   if ((a.side === DangerSide.NONE) !== (b.side === DangerSide.NONE)) return a.side === DangerSide.NONE;  // no shoulder danger beats a path that runs off
   if (a.forward !== b.forward) return a.forward > b.forward;             // furthest forward (all capped at MIN_FORWARD_PROGRESS)
-  if (a.crossed !== b.crossed) return a.crossed;                         // tiebreak: cross the centre line
-  return Math.abs(a.endAcross) < Math.abs(b.endAcross);                  // tiebreak: end closest to centre
+  return Math.abs(a.endAcross - target) < Math.abs(b.endAcross - target); // tiebreak: end closest to the asymptotic target
 }
 function chosenLeanOption(state: RiderState, seg: RoadSegment): number {
   const steps = leanSearchSteps(state);
+  const target = state.across * ASYMPTOTE_TUNING;   // aim to END here — a fraction of his current offset, for an asymptotic glide to centre
   let bestJ = 0, bestD = simulateRiderPath({ ...state, tilt: leanAtOption(state, steps, 0) }, seg);
   for (let j = 1; j <= 2 * steps; j++) {
     const d = simulateRiderPath({ ...state, tilt: leanAtOption(state, steps, j) }, seg);
-    if (leanBetter(d, bestD)) { bestJ = j; bestD = d; }
+    if (leanBetter(d, bestD, target)) { bestJ = j; bestD = d; }
   }
   return bestJ;
 }
