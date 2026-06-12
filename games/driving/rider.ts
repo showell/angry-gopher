@@ -271,8 +271,7 @@ export function simulateRiderPath(state: RiderState, seg: RoadSegment): PathSim 
 }
 
 const MAX_TILT_CORRECTION = 1 * Math.PI / 180;    // the most the rider can work his lean over in a single frame (he has to fight the bike's mass)
-const LEAN_SEARCH_ITERS = 10;                     // binary-search probes over [-MAX, +MAX]: each halves the interval, so 10 -> 2*MAX/2^10 ~= 0.002deg precision (finer than the old 0.02deg grid, ~10x fewer evals)
-const OVERLAY_LEANS = 20;                          // the debug overlay samples this many EVEN leans across the range to show the danger landscape (NOT what the search evaluates)
+const LEAN_SEARCH_ITERS = 12;                     // binary-search probes over [-MAX, +MAX]: each halves the interval, so 12 -> 2*MAX/2^12 ~= 0.0005deg precision in 12 path sims
 
 // Should the best lean be to the RIGHT of the one that produced this path? YES if the path runs off the LEFT (he
 // needs more right lean to get back on the road) or stays on-road but ends LEFT of the target (lean right to reach
@@ -287,31 +286,37 @@ function wantMoreRight(sim: PathSim, target: number): boolean {
 
 // THE LEAN SEARCH — a binary search for the held lean whose projected path stays on the road and ENDS CLOSEST to
 // the ASYMPTOTIC TARGET (`target` = a fraction of his current offset, so he glides toward centre instead of
-// overshooting). The single flip of wantMoreRight is the pivot: keep the half that still wants more right lean.
-function bestTiltCorrection(state: RiderState, seg: RoadSegment): number {
+// overshooting). The single flip of wantMoreRight is the pivot: keep the half that still wants more right lean. We
+// record EVERY probe so the debug overlay can draw the exact paths the search evaluated — no parallel re-sampling.
+interface LeanSearch { tilt: number; probes: PathSim[] }
+function searchLean(state: RiderState, seg: RoadSegment): LeanSearch {
   const target = state.across * ASYMPTOTE_TUNING;
   let lo = state.tilt - MAX_TILT_CORRECTION;       // lean hard LEFT  (turns him left  -> off the left shoulder)
   let hi = state.tilt + MAX_TILT_CORRECTION;       // lean hard RIGHT (turns him right -> off the right shoulder)
+  const probes: PathSim[] = [];
   for (let i = 0; i < LEAN_SEARCH_ITERS; i++) {
     const mid = (lo + hi) / 2;
-    if (wantMoreRight(simulateRiderPath({ ...state, tilt: mid }, seg), target)) lo = mid; else hi = mid;
+    const sim = simulateRiderPath({ ...state, tilt: mid }, seg);
+    probes.push(sim);                              // the actual path this probe walked
+    if (wantMoreRight(sim, target)) lo = mid; else hi = mid;
   }
-  return (lo + hi) / 2;
+  return { tilt: (lo + hi) / 2, probes };
 }
 
-// The debug overlay's data: an EVEN grid of projected arcs across the lean range (to show the danger landscape —
-// RED off-left / GREEN off-right / BLUE on-road), PLUS the rider's ACTUAL chosen arc (from the binary search) as
-// the last, highlighted candidate — so the yellow path is exactly the held lean he'll take, never a mimic of it.
+function bestTiltCorrection(state: RiderState, seg: RoadSegment): number {
+  return searchLean(state, seg).tilt;
+}
+
+// The debug overlay's data: the ACTUAL arcs the binary search probed — each coloured by the shoulder it ran off
+// (RED left / GREEN right / BLUE on-road), narrowing in as the bisection converges — PLUS the held lean it finally
+// settled on as the last, highlighted candidate. Every path here is one simulateRiderPath the search really ran,
+// so the picture can't disagree with the algorithm.
 export interface LeanCandidate { path: { along: number; across: number }[]; side: DangerSide }
 export interface LeanCandidates { candidates: LeanCandidate[]; chosen: number }
 export function leanCandidates(state: RiderState, seg: RoadSegment): LeanCandidates {
-  const candidates: LeanCandidate[] = [];
-  for (let j = 0; j <= OVERLAY_LEANS; j++) {
-    const tilt = state.tilt + MAX_TILT_CORRECTION * (2 * j / OVERLAY_LEANS - 1);   // even sweep -MAX..+MAX
-    const cd = simulateRiderPath({ ...state, tilt }, seg);
-    candidates.push({ path: cd.path, side: cd.side });
-  }
-  const chosen = simulateRiderPath({ ...state, tilt: bestTiltCorrection(state, seg) }, seg);   // the lean the search actually picked
+  const search = searchLean(state, seg);
+  const candidates: LeanCandidate[] = search.probes.map((p) => ({ path: p.path, side: p.side }));
+  const chosen = simulateRiderPath({ ...state, tilt: search.tilt }, seg);   // the lean it settled on (the final midpoint)
   candidates.push({ path: chosen.path, side: chosen.side });
   return { candidates, chosen: candidates.length - 1 };
 }
