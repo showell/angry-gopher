@@ -19,7 +19,7 @@ import { towerScenery, beaconOffsetFor } from './tower.ts';
 import { ROAD } from './scenery.ts';
 import type { RiderPt, Quad, Poly3, Scenery } from './scenery.ts';
 import type { SegId, TurnDir, RoadSegment } from './road_segment.ts';
-import { buildGuardRail, RAIL_RUNOUT, RAIL_POST_SPACING_DEG } from './guard_rail.ts';
+import { buildGuardRail, RAIL_RUNOUT } from './guard_rail.ts';
 
 export type IxnId = string;
 
@@ -87,8 +87,8 @@ export function buildTerminus(from: RoadSegment): Intersection {
 export type FrameMap = (a: number, x: number) => RiderPt;
 
 // Everything this joint draws, in the Rider's frame: the approach road, the corner pavement
-// sector, and the elephants. The caller hands us a mapper for the INCOMING segment `from`
-// (fromMap) and, when the outgoing segment is in view, one for `to` (toMap) — the sector
+// quad, and the elephants. The caller hands us a mapper for the INCOMING segment `from`
+// (fromMap) and, when the outgoing segment is in view, one for `to` (toMap) — the quad
 // needs a point from each side, so it's drawn only when toMap is present.
 //
 // We author everything relative to `from`'s END-LEFT corner: corner(cu, cv) puts the origin
@@ -118,34 +118,29 @@ export function intersectionScene(ixn: Intersection, from: RoadSegment, to: Road
   // the approach road: `from`'s tail leading into the joint (end edge back ENTRY_ROAD_DIST).
   quads.push({ pts: [corner(0, 0), corner(W, 0), corner(W, -ENTRY_ROAD_DIST), corner(0, -ENTRY_ROAD_DIST)], color: ROAD });
 
-  // the corner pavement sector — a wedge from the inner fuse-corner out to the two outer
-  // corners (one on each segment). Inner/outer flip with turn direction; pavementSector
-  // sweeps the short way either way, so it's the shared piece. The guard rail rides the same
-  // outer arc.
+  // The corner PAVEMENT is a QUADRILATERAL, not a circular sector. Its two SHORT ends are the segments'
+  // end/begin edges; its two LONG sides are the OUTER shoulder lines (the ones OPPOSITE the turn) extended
+  // into the joint until they cross at the outer APEX Q. This matches what the braking/turning model assumes —
+  // each segment extends straight into the joint, so any point inside is "in the lane" of one segment or the
+  // other. The guard rail rides those same outer shoulders, now meeting at the sharp apex Q (no arc).
   if (toMap && to) {
-    let inner: RiderPt, outerFrom: RiderPt, outerTo: RiderPt;
-    if (ixn.sign > 0) {                 // RIGHT turn: the segments fuse on `from`'s end-RIGHT edge
-      inner     = corner(W, 0);         //   inner corner = end-right (the far one)
-      outerFrom = corner(0, 0);         //   outer corner on `from` = end-left (the origin)
-      outerTo   = toMap(0, 0);          //   outer corner on `to`   = its start-left edge
-    } else {                            // LEFT turn: the segments fuse on `from`'s end-LEFT edge
-      inner     = corner(0, 0);         //   inner corner = end-left (the origin)
-      outerFrom = corner(W, 0);         //   outer corner on `from` = end-right
-      outerTo   = toMap(0, to.width);   //   outer corner on `to`   = its start-right edge
-    }
-    quads.push({ pts: pavementSector(inner, outerFrom, outerTo), color: ROAD });
+    const fromOuterCu = ixn.sign > 0 ? 0 : W;          // `from`'s OUTER edge (corner-frame across) — opposite the turn
+    const toOuterX = ixn.sign > 0 ? 0 : to.width;      // `to`'s OUTER edge (its BL across) — opposite the turn
+    const inner     = corner(ixn.sign > 0 ? W : 0, 0); // the inner fuse-corner where the two INNER edges meet
+    const outerFrom = corner(fromOuterCu, 0);          // `from`'s outer corner, at its end edge
+    const outerTo   = toMap(0, toOuterX);              // `to`'s outer corner, at its begin edge
+    // the outer APEX: the two outer-shoulder lines, extended into the joint, cross here.
+    const Q = lineMeet(outerFrom, corner(fromOuterCu, 1), outerTo, toMap(1, toOuterX));
 
-    // the guard rail's ground path: a run-up along `from`'s outer edge, around the corner arc,
-    // and a run-out along `to`'s outer edge. The outer edge is the LEFT (x=0) of each on a right
-    // turn, the RIGHT on a left turn — the same sides the sector's outer corners sit on.
-    const fromOuterCu = ixn.sign > 0 ? 0 : W;          // `from`'s outer edge (corner-frame across)
-    const toOuterX = ixn.sign > 0 ? 0 : to.width;      // `to`'s outer edge (its BL across)
-    const arc = cornerArc(inner, outerFrom, outerTo);
-    const arcPosts = Math.max(1, Math.round(Math.abs(arc.delta) / (RAIL_POST_SPACING_DEG * Math.PI / 180)));
+    quads.push({ pts: [inner, outerFrom, Q, outerTo], color: ROAD });
+
+    // the guard rail: a run-up along `from`'s outer edge, the two legs INTO and OUT OF the apex Q, then a
+    // run-out along `to`'s outer edge — ~1 post per metre throughout (buildGuardRail posts every path point).
     const railPath: RiderPt[] = [];
-    for (let m = RAIL_RUNOUT; m >= 1; m--) railPath.push(corner(fromOuterCu, -m));         // run-up into the arc
-    for (let i = 0; i <= arcPosts; i++) railPath.push(onArc(arc, arc.a1 + arc.delta * (i / arcPosts)));
-    for (let m = 1; m <= RAIL_RUNOUT; m++) railPath.push(toMap(m, toOuterX));              // run-out past the arc
+    for (let m = RAIL_RUNOUT; m >= 0; m--) railPath.push(corner(fromOuterCu, -m));   // run-up to the end edge (m=0 = outerFrom)
+    pushLeg(railPath, outerFrom, Q);                                                 // leg into the apex
+    pushLeg(railPath, Q, outerTo);                                                   // leg out of the apex
+    for (let m = 1; m <= RAIL_RUNOUT; m++) railPath.push(toMap(m, toOuterX));        // run-out from the begin edge
     for (const p of buildGuardRail(railPath)) polys.push(p);
   }
 
@@ -208,30 +203,22 @@ export function curToNext(a: number, x: number, L: number, theta: number, dir: '
   return { a: a0 * cos + x0 * sin, x: -a0 * sin + x0 * cos };
 }
 
-// ---- the corner arc, shared by the pavement and the guard rail ----
-// The arc centred at the inner corner P (where the two inner edges fuse), radius |P->e1|,
-// swept the SHORT way from e1's bearing to e2's (= the turn angle). P, e1, e2 are already
-// in the Rider's frame; the transforms are rigid, so the arc is a true arc here too.
-interface CornerArc { P: RiderPt; R: number; a1: number; delta: number }
-function cornerArc(P: RiderPt, e1: RiderPt, e2: RiderPt): CornerArc {
-  const R = Math.hypot(e1.right - P.right, e1.forward - P.forward);
-  const a1 = Math.atan2(e1.forward - P.forward, e1.right - P.right);
-  let delta = Math.atan2(e2.forward - P.forward, e2.right - P.right) - a1;
-  while (delta > Math.PI) delta -= 2 * Math.PI;
-  while (delta < -Math.PI) delta += 2 * Math.PI;
-  return { P, R, a1, delta };
-}
-const onArc = (c: CornerArc, ang: number): RiderPt =>
-  ({ right: c.P.right + c.R * Math.cos(ang), forward: c.P.forward + c.R * Math.sin(ang) });
+// ---- corner-quad geometry, shared by the pavement and the guard rail ----
 
-// ---- the pavement that fills the turn's outer corner ----
-// A circular SECTOR: straight legs P->e1 and P->e2 along the two segments' end/start edges
-// out to their outer corners, and the arc between them. Returns the polygon outline; the
-// caller paints it road-colour.
-export function pavementSector(P: RiderPt, e1: RiderPt, e2: RiderPt): RiderPt[] {
-  const c = cornerArc(P, e1, e2);
-  const pts: RiderPt[] = [P];
-  const N = 8;
-  for (let i = 0; i <= N; i++) pts.push(onArc(c, c.a1 + c.delta * (i / N)));
-  return pts;
+// Where two infinite lines cross, in the Rider's (right, forward) frame: line A through a0 toward a1, line B
+// through b0 toward b1. Used for the outer APEX where the two segments' outer shoulders, extended into the
+// joint, meet. A real intersection has a non-zero turn angle, so the lines are never parallel.
+function lineMeet(a0: RiderPt, a1: RiderPt, b0: RiderPt, b1: RiderPt): RiderPt {
+  const dax = a1.right - a0.right, daf = a1.forward - a0.forward;
+  const dbx = b1.right - b0.right, dbf = b1.forward - b0.forward;
+  const t = ((b0.right - a0.right) * dbf - (b0.forward - a0.forward) * dbx) / (dax * dbf - daf * dbx);
+  return { right: a0.right + t * dax, forward: a0.forward + t * daf };
+}
+
+// Append points stepping from `from` (EXCLUSIVE) to `to` (inclusive) at ~1m spacing — one guard-rail post per
+// metre along a straight leg of the corner.
+function pushLeg(path: RiderPt[], from: RiderPt, to: RiderPt): void {
+  const n = Math.max(1, Math.round(Math.hypot(to.right - from.right, to.forward - from.forward)));
+  for (let i = 1; i <= n; i++)
+    path.push({ right: from.right + (to.right - from.right) * (i / n), forward: from.forward + (to.forward - from.forward) * (i / n) });
 }
