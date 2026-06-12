@@ -262,9 +262,10 @@ function nearIntersection(state: RiderState, seg: RoadSegment): boolean {
 }
 
 
-// Project his ARC forward working the lean over by a constant-MAGNITUDE tiltStep each frame — its sign FLIPS ONCE,
-// the moment his heading crosses the lane-centre aim, so he leans IN then straightens OUT instead of leaning ever
-// harder (which oversteered and ran every probe off the road). Speed held constant. Score how it PLAYS OUT; runs until one of:
+// Project his ARC forward working the lean over by a constant-MAGNITUDE tiltStep each frame — its sign FLIPS EVERY
+// time his heading crosses the lane-centre aim, so instead of leaning ever harder (which oversteered and ran every
+// probe off the road) he leans IN, straightens, overshoots, leans back... the projected path can oscillate wildly,
+// but he NEVER actually drives it — only scores it. Speed held constant. Score how it PLAYS OUT; runs until one of:
 //   • it runs off a shoulder           -> { side: LEFT|RIGHT, forward = progress at the hit }   (a bad lean)
 //   • it goes net-BACKWARD (forward<0) -> the disaster case; the negative forward sinks it in the ranking
 //   • it clears MIN_FORWARD_PROGRESS   -> { side: NONE, forward = MIN_FORWARD_PROGRESS exactly }  (a good lean)
@@ -280,15 +281,13 @@ export function simulateRiderPath(state: RiderState, seg: RoadSegment, tiltStep:
   const startSide = Math.sign(state.across);                                // which side of centre he starts on
   const path: { along: number; across: number }[] = [];                    // the arc actually walked — returned so the overlay matches exactly
   let phys: RiderPhysics = state, crossed = false;                          // step the SAME dumb physics forward, speed held
-  let step = tiltStep;                                                      // constant MAGNITUDE; its sign flips ONCE, when he reaches the aim
-  let flipped = false, prevToAim = state.yaw - aimYawFor(state.across);     // signed gap from the centre-aim heading; a sign change = he crossed it
+  let step = tiltStep;                                                      // constant MAGNITUDE; its sign flips EACH time he crosses the aim
+  let prevToAim = state.yaw - aimYawFor(state.across);                      // signed gap from the centre-aim heading; a sign change = he crossed it
   for (let i = 0; i < TURN_DANGER_STEPS; i++) {
     phys = simulateRiderStep(phys, step, 0);                               // work the lean over by step each frame; zero acceleration
-    if (!flipped) {                                                         // the frame his heading crosses the lane-centre aim, flip the lean to straighten out
-      const toAim = phys.yaw - aimYawFor(phys.across);
-      if (prevToAim !== 0 && Math.sign(toAim) !== Math.sign(prevToAim)) { step = -step; flipped = true; }
-      prevToAim = toAim;
-    }
+    const toAim = phys.yaw - aimYawFor(phys.across);                       // flip the lean EVERY time his heading crosses the lane-centre aim — the
+    if (prevToAim !== 0 && Math.sign(toAim) !== Math.sign(prevToAim)) step = -step;   // projected path then oscillates (never driven), but never oversteers off
+    prevToAim = toAim;
     const across = phys.across, forward = phys.along - state.along;
     path.push({ along: phys.along, across });                               // record this projected point (last one IS the exit point)
     if (across * startSide < 0) crossed = true;                            // the arc has made it across centre
