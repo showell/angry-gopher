@@ -297,7 +297,7 @@ export function simulateRiderPath(state: RiderState, seg: RoadSegment, tiltStep:
     if (across * startSide < 0) crossed = true;                            // the arc has made it across centre
     if (across < leftBound) return { side: DangerSide.LEFT, forward: Math.min(forward, MIN_FORWARD_PROGRESS), crossed, endAcross: across, framesUntilDanger: i, path };       // ran off the left shoulder in i frames (forward CAPPED — a path off the road must never out-score one that cleared)
     if (across > rightBound) return { side: DangerSide.RIGHT, forward: Math.min(forward, MIN_FORWARD_PROGRESS), crossed, endAcross: across, framesUntilDanger: i, path };     // ran off the right shoulder in i frames (forward CAPPED)
-    if (forward < 0) return { side: DangerSide.NONE, forward, crossed, endAcross: across, framesUntilDanger: Infinity, path };       // spun net-backward — disaster (no shoulder danger)
+    if (forward < 0) return { side: phys.yaw < 0 ? DangerSide.LEFT : DangerSide.RIGHT, forward, crossed, endAcross: across, framesUntilDanger: i, path };       // looped net-BACKWARD — report it as danger on the side he curled toward (yaw<0 = left), so the search treats the loop as the hazard it is (forward<0 keeps it ranked a disaster)
     if (forward >= MIN_FORWARD_PROGRESS) return { side: DangerSide.NONE, forward: MIN_FORWARD_PROGRESS, crossed, endAcross: across, framesUntilDanger: Infinity, path };  // cleared (no shoulder danger)
   }
   return { side: DangerSide.NONE, forward: phys.along - state.along, crossed, endAcross: phys.across, framesUntilDanger: Infinity, path };
