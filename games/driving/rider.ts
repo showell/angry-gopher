@@ -166,25 +166,40 @@ export function getNextRiderState(state: RiderState, world: World): RiderState {
   const moved = simulateRiderStep(state, tiltStep, accel);
   const riderState: RiderState = { ...moved, segment: seg.id, gazeStep: state.gazeStep };
 
-  // Resolve the road graph by POSITION (not by any turn flag): on reaching the commit point, cross into the
-  // next segment; at a terminus, stop dead at the end.
+  // Resolve the road graph by POSITION (not by any turn flag): toward a turn, re-express him in the NEXT
+  // segment's frame EVERY frame and commit the moment his real position is actually within that road
+  // (|across| < half-width); at a terminus, stop dead at the end. No precomputed cutoff — that assumed he
+  // was centred, so it committed a hair early and let him clip past the inner edge. Doing it live also frees
+  // him to cut the corner later without the seam lying about where he is.
   const exitIxn = world.intersections[seg.exitIxn];
-  if (exitIxn.to !== null && moved.along >= seg.alongWhereRiderCommitsToTurn)
-    return riderStateForNextSegment(riderState, world);
-  if (exitIxn.to === null && moved.along >= seg.length)
+  if (exitIxn.to !== null) {
+    const onNext = riderStateForNextSegment(riderState, world);
+    if (Math.abs(onNext.across) < world.segments[exitIxn.to].width / 2) return onNext;
+  } else if (moved.along >= seg.length) {
     return { ...riderState, along: seg.length, v: 0 };
+  }
   return riderState;
 }
 
 // Re-express the rider onto the NEXT segment as he commits to the turn: he keeps his speed AND his lean (the
-// bike's roll is physically continuous across the seam) but lands on the new segment's inner edge, now pointed
-// the old way relative to the new direction — a touch before its begin line (negative along), the same physical
-// point, so motion stays continuous — and straightens out from there, eyes on the road.
+// bike's roll is physically continuous across the seam). His position is the SAME physical point, just read in
+// the next segment's frame — we translate his ACTUAL (along, across) through the joint geometry rather than
+// snapping him to an idealized inner-edge point. (The old code pinned him to (-hw/sin, sgn*hw, -sgn*theta),
+// which is what this transform yields ONLY in the ideal case across=0, yaw=0 at along = L - hw*cos/sin = the
+// commit point; it threw away how off-centre / overshot he really was, a small lie at the seam.) The map below
+// is the exact INVERSE of the seg-B -> seg-A transform the continuity check composes (test_model localToRef),
+// so the seam is now position-continuous by construction. The heading rotates by the turn: yaw_B = yaw_A -
+// sgn*theta. Eyes back on the road (gazeStep -1).
 function riderStateForNextSegment(riderState: RiderState, world: World): RiderState {
   const seg = world.segments[riderState.segment];
   const exitIxn = world.intersections[seg.exitIxn];
   const next = world.segments[exitIxn.to as string], hw = seg.width / 2, theta = exitIxn.angle, sgn = exitIxn.sign;
-  return { segment: next.id, along: -hw / Math.sin(theta), across: sgn * hw, yaw: -sgn * theta,
+  const cos = Math.cos(theta), sin = Math.sin(theta);
+  const da = riderState.along - (seg.length + hw * sin);   // his offset from the joint, in seg A's frame
+  const dx = riderState.across - sgn * hw * (1 - cos);
+  const along = cos * da + sgn * sin * dx;                  // rotate into seg B's frame (inverse of localToRef)
+  const across = -sgn * sin * da + cos * dx;
+  return { segment: next.id, along, across, yaw: riderState.yaw - sgn * theta,
            v: riderState.v, tilt: riderState.tilt, gazeStep: -1 };
 }
 

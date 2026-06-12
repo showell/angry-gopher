@@ -70,9 +70,12 @@ function assertInvariants(s: RiderState, world: World): void {
          `finite (${s.along},${s.across},${s.yaw})`);
   assert(Number.isFinite(s.v) && s.v >= -1e-9 && s.v <= 8, `v sane (${s.v})`);
   assert(Math.abs(s.yaw) <= QUARTER + 1e-6, `|yaw| <= 90deg (${s.yaw})`);
-  // a turn enters at along = -hw/sin(entryAngle), before the begin line — that's expected
+  // He crosses into a turn the frame his real position first lands within the new road (|across| < hw).
+  // That happens on the inner-edge line, where along = (sgn*across - hw)/sin(entryAngle); for across in
+  // [-hw, hw] the entry along spans [-2*hw/sin, 0], the floor being the worst case of crossing at the OUTER
+  // road edge. (The old -hw/sin floor assumed a perfectly centred rider at the seam.)
   const entryAngle = seg.entryIxn ? world.intersections[seg.entryIxn].angle : 0;
-  const entryFloor = entryAngle > 0 ? -(seg.width / 2) / Math.sin(entryAngle) : 0;
+  const entryFloor = entryAngle > 0 ? -seg.width / Math.sin(entryAngle) : 0;
   assert(s.along >= entryFloor - 1e-6, `along not far before start (${s.along})`);
   assert(s.along <= seg.length + 1e-6, `along not past end (${s.along})`);
   assert(Math.abs(s.across) <= seg.width / 2 + 1, `across bounded (${s.across})`);
