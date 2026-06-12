@@ -25,6 +25,8 @@ import type { World } from './world.ts';
 import type { RoadSegment, SegId } from './road_segment.ts';
 import { turnSpeed } from './intersection.ts';
 import { segmentCatDanger } from './cat_motion.ts';
+import { simulateRiderStep } from './bike_physics.ts';
+import type { RiderPhysics } from './bike_physics.ts';
 
 // ----------------------------------------------------------------------------
 // types
@@ -61,19 +63,11 @@ export function riderDebug(state: RiderState, world: World): RiderDebug {
 }
 
 // The whole game is seen through the RIDER (on a motorcycle, treated as a single POINT, which keeps the
-// physics simple). A RiderState is everything we know about him this frame:
-//   POSITION : segment + along (progress) + across (lateral offset) + yaw (heading vs the segment)
-//   VELOCITY : v (speed along the path, m/press)
-//   LEAN     : tilt (the bike's roll — 0 when upright; it's what turns the bike, see getNextRiderState)
-// There is no "turning" mode any more: the rider is always just driving, sometimes leaned. `gazeStep` carries
-// the glance.
-export interface RiderState {
-  segment: SegId;
-  along: number;
-  across: number;
-  yaw: number;        // the bike's heading offset from straight down the lane (rad; + = pointed right)
-  v: number;          // speed along the path (m/press)
-  tilt: number;       // the bike's lean (rad; + = leaned right). Yaws the heading at YAW_PER_TILT per unit.
+// physics simple). A RiderState is his PHYSICS (RiderPhysics: tilt/yaw/v/along/across — see bike_physics.ts)
+// plus the non-physical context the rider carries: which segment he's on and his gaze glance. There is no
+// "turning" mode — he's always just driving, sometimes leaned.
+export interface RiderState extends RiderPhysics {
+  segment: SegId;     // which road segment he's on (the RiderPhysics fields are relative to it)
   gazeStep: number;   // the "distracted rider" glance: -1 = eyes ahead, 0..8 = mid-glance, >=9 = done
 }
 
@@ -104,7 +98,6 @@ const TILT_SNAP = 1.5 * Math.PI / 180;      // part of the snap-to-centre window
 const TILT_HOLD = 2 * Math.PI / 180;        // he only adds throttle while leaned LESS than this — accelerating mid-lean makes the constant-v danger projection lie and reads as jitter
 const YAW_EPSILON = 1.5 * Math.PI / 180;    // part of the snap-to-centre window: the heading must be within this of straight
 const AIMING_DISTANCE = 100;                // when upright, the rider aims his heading at the lane centre this far ahead (m) — eases him back to the middle
-const YAW_PER_TILT = 0.1;                   // the lean's leverage on the bike: every degree of tilt yaws the heading 0.1deg (so a turn demands a DEEP, dramatic lean)
 const BRAKE_DECAY = 40;                      // shoulder brake fudge factor (frames): the kinematic decel decays exp(-N/this) as frames-until-danger N grows, so he under-brakes for far-off danger (trusting he'll steer out) and only fully brakes when it's imminent
 
 
@@ -169,8 +162,7 @@ function decide(state: RiderState, seg: RoadSegment, world: World): Decision {
   // projected path gets furthest down the road, crosses back to centre, and ends nearest the middle. The lean
   // carried IN from last frame yaws the bike YAW_PER_TILT per unit, so the tilt LEADS the yaw by a frame.
   let tilt = bestTiltCorrection(state, seg);
-  const headingChange = YAW_PER_TILT * prevTilt;
-  let yaw = state.yaw + headingChange;
+  let yaw = simulateRiderStep(state, 0).yaw;   // the heading this frame's carried-in lean rotates us to (acceleration doesn't affect heading, so a zero-accel physics step previews it)
 
   // SNAP-TO-CENTRE — resolved BEFORE the forward decision, so a settled straightaway is fully upright + on-aim
   // by the time the shoulder brake looks at the path. The heading we want is aimYaw: pointed at the lane CENTRE,
@@ -187,13 +179,13 @@ function decide(state: RiderState, seg: RoadSegment, world: World): Decision {
   // upright, on-aim straightaway projects a clear path and he accelerates instead of braking for a phantom
   // shoulder. Its shoulder brake simulates the rider at exactly this resolved lean + heading.
   const fwd = getForwardAccelDecel({ ...state, tilt, yaw }, seg, world);
-  const v = state.v + fwd.accel;
 
-  const midHeading = state.yaw + headingChange / 2;                            // average heading over the frame -> arc
-  const along = state.along + v * Math.cos(midHeading);
-  const across = state.across + v * Math.sin(midHeading);
+  // PHYSICS — advance the bike one frame with the SAME dumb step the projections use (simulateRiderStep), then
+  // overlay the rider's decisions: physics owns v + position, the rider owns the lean and (snapped) heading.
+  const next = simulateRiderStep(state, fwd.accel);
+  const v = next.v, along = next.along, across = next.across;
 
-  const debug: RiderDebug = { accel: fwd.accel, forwardReason: fwd.reason, tiltStep: tilt - prevTilt, headingChange, yawFromTarget, tiltSnapped: snapped, yawAimed: snapped };
+  const debug: RiderDebug = { accel: fwd.accel, forwardReason: fwd.reason, tiltStep: tilt - prevTilt, headingChange: next.yaw - state.yaw, yawFromTarget, tiltSnapped: snapped, yawAimed: snapped };
   return { v, tilt, yaw, along, across, debug };
 }
 
@@ -292,23 +284,20 @@ export function simulateRiderPath(state: RiderState, seg: RoadSegment): PathSim 
   const insetHw = seg.width / 2 - STRAIGHTEN_MARGIN;
   const rightBound = Math.max(insetHw, state.across);
   const leftBound = Math.min(-insetHw, state.across);
-  const headingStep = YAW_PER_TILT * state.tilt;                            // constant per step (tilt held fixed)
-  let yaw = state.yaw, across = state.across, forward = 0, crossed = false;
-  const startSide = Math.sign(across);                                      // which side of centre he starts on
+  const startSide = Math.sign(state.across);                                // which side of centre he starts on
   const path: { along: number; across: number }[] = [];                    // the arc actually walked — returned so the overlay matches exactly
+  let phys: RiderPhysics = state, crossed = false;                          // step the SAME dumb physics forward, tilt + speed held constant
   for (let i = 0; i < TURN_DANGER_STEPS; i++) {
-    const mid = yaw + headingStep / 2;                                      // midpoint heading over the step
-    forward += state.v * Math.cos(mid);
-    across += state.v * Math.sin(mid);                                      // arc step
-    yaw += headingStep;
-    path.push({ along: state.along + forward, across });                    // record this projected point (last one IS the exit point)
+    phys = simulateRiderStep(phys, 0);                                      // constant tilt, zero acceleration: a held-lean arc
+    const across = phys.across, forward = phys.along - state.along;
+    path.push({ along: phys.along, across });                               // record this projected point (last one IS the exit point)
     if (across * startSide < 0) crossed = true;                            // the arc has made it across centre
     if (across < leftBound) return { side: DangerSide.LEFT, forward, crossed, endAcross: across, framesUntilDanger: i, path };       // ran off the left shoulder in i frames
     if (across > rightBound) return { side: DangerSide.RIGHT, forward, crossed, endAcross: across, framesUntilDanger: i, path };     // ran off the right shoulder in i frames
     if (forward < 0) return { side: DangerSide.NONE, forward, crossed, endAcross: across, framesUntilDanger: Infinity, path };       // spun net-backward — disaster (no shoulder danger)
     if (forward >= MIN_FORWARD_PROGRESS) return { side: DangerSide.NONE, forward: MIN_FORWARD_PROGRESS, crossed, endAcross: across, framesUntilDanger: Infinity, path };  // cleared (no shoulder danger)
   }
-  return { side: DangerSide.NONE, forward, crossed, endAcross: across, framesUntilDanger: Infinity, path };
+  return { side: DangerSide.NONE, forward: phys.along - state.along, crossed, endAcross: phys.across, framesUntilDanger: Infinity, path };
 }
 
 const TILT_SEARCH_STEPS = 10;                     // +/- this many 0.1deg steps -> 21 lean options spanning [-MAX, +MAX]
