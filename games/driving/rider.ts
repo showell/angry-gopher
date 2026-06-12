@@ -269,13 +269,22 @@ export function simulateRiderPath(state: RiderState, seg: RoadSegment): PathSim 
   return { side: DangerSide.NONE, forward: phys.along - state.along, crossed, endAcross: phys.across, framesUntilDanger: Infinity, path };
 }
 
-const TILT_SEARCH_STEPS = 10;                     // +/- this many 0.1deg steps -> 21 lean options spanning [-MAX, +MAX]
+const TILT_SEARCH_STEPS = 10;                     // COARSE search: +/- this many steps -> 21 lean options over [-MAX, +MAX] at MAX/10 (0.1deg) resolution
+const FINE_SEARCH_STEPS = 50;                     // FINE search while settling near upright: 101 options over the SAME range at MAX/50 (0.02deg) — lets him hold a precise tiny lean (0 is a grid point) instead of overshooting and wobbling
+const FINE_SEARCH_YAW = 15 * Math.PI / 180;       // coarse gate on yaw vs the lane bearing: only fine-search when he's roughly down the lane (skip it when clearly mid-turn, to save the extra cost)
 const MAX_TILT_CORRECTION = 1 * Math.PI / 180;    // the most the rider can work his lean over in a single frame (he has to fight the bike's mass)
 
-// the lean the rider would hold at search option j (0..2*TILT_SEARCH_STEPS): delta runs -MAX (lean hard left)
-// through 0 (hold) to +MAX (lean hard right).
-function leanAtOption(state: RiderState, j: number): number {
-  return state.tilt + MAX_TILT_CORRECTION * (j - TILT_SEARCH_STEPS) / TILT_SEARCH_STEPS;
+// How finely to search the lean this frame: FINE when he's SETTLING — within a tilt-step of upright AND roughly
+// aligned with the lane — so he can land a precise small lean (0 included) and stop wobbling; COARSE otherwise.
+function leanSearchSteps(state: RiderState): number {
+  const settling = Math.abs(state.tilt) < MAX_TILT_CORRECTION && Math.abs(state.yaw) < FINE_SEARCH_YAW;
+  return settling ? FINE_SEARCH_STEPS : TILT_SEARCH_STEPS;
+}
+
+// the lean the rider would hold at search option j (0..2*steps): delta runs -MAX (lean hard left) through 0
+// (hold) to +MAX (lean hard right), at the resolution `steps` sets.
+function leanAtOption(state: RiderState, steps: number, j: number): number {
+  return state.tilt + MAX_TILT_CORRECTION * (j - steps) / steps;
 }
 
 // THE LEAN SEARCH (shared by the real decision and the debug overlay). Evaluate ALL 21 leans and rank by how
@@ -289,16 +298,17 @@ function leanBetter(a: PathSim, b: PathSim): boolean {
   return Math.abs(a.endAcross) < Math.abs(b.endAcross);                  // tiebreak: end closest to centre
 }
 function chosenLeanOption(state: RiderState, seg: RoadSegment): number {
-  let bestJ = 0, bestD = simulateRiderPath({ ...state, tilt: leanAtOption(state, 0) }, seg);
-  for (let j = 1; j <= 2 * TILT_SEARCH_STEPS; j++) {
-    const d = simulateRiderPath({ ...state, tilt: leanAtOption(state, j) }, seg);
+  const steps = leanSearchSteps(state);
+  let bestJ = 0, bestD = simulateRiderPath({ ...state, tilt: leanAtOption(state, steps, 0) }, seg);
+  for (let j = 1; j <= 2 * steps; j++) {
+    const d = simulateRiderPath({ ...state, tilt: leanAtOption(state, steps, j) }, seg);
     if (leanBetter(d, bestD)) { bestJ = j; bestD = d; }
   }
   return bestJ;
 }
 
 function bestTiltCorrection(state: RiderState, seg: RoadSegment): number {
-  return leanAtOption(state, chosenLeanOption(state, seg));
+  return leanAtOption(state, leanSearchSteps(state), chosenLeanOption(state, seg));
 }
 
 // The debug overlay's data: the ACTUAL arc simulateRiderPath walked for EVERY one of the 21 lean options WITH the
@@ -307,10 +317,11 @@ function bestTiltCorrection(state: RiderState, seg: RoadSegment): number {
 export interface LeanCandidate { path: { along: number; across: number }[]; side: DangerSide }
 export interface LeanCandidates { candidates: LeanCandidate[]; chosen: number }
 export function leanCandidates(state: RiderState, seg: RoadSegment): LeanCandidates {
+  const steps = leanSearchSteps(state);
   const chosen = chosenLeanOption(state, seg);
   const candidates: LeanCandidate[] = [];
-  for (let j = 0; j <= 2 * TILT_SEARCH_STEPS; j++) {
-    const cd = simulateRiderPath({ ...state, tilt: leanAtOption(state, j) }, seg);
+  for (let j = 0; j <= 2 * steps; j++) {
+    const cd = simulateRiderPath({ ...state, tilt: leanAtOption(state, steps, j) }, seg);
     candidates.push({ path: cd.path, side: cd.side });
   }
   return { candidates, chosen };
