@@ -163,8 +163,8 @@ export function buildScene(state: RiderState, world: World, step: number, headYa
   const truckSc = truckScenery(truck, state, world, chain, at);
   if (truckSc) scenery.push(truckSc);
 
-  // the rider's PROJECTED PATHS — one arc per lean option his search considered (debug overlay), plus which one
-  // he chose. Centre-relative points in his current segment's frame; +riderHw shifts to from-the-left, then
+  // the rider's PROJECTED PATHS — an even grid of lean arcs sampling the danger landscape (debug overlay), plus
+  // the arc the binary search actually chose. Centre-relative points in his current segment's frame; +riderHw shifts to from-the-left, then
   // through the same camera pose as the road.
   const lc = leanCandidates(state, chain[0]);
   const leanPaths = lc.candidates.map((c, idx) => ({
