@@ -12,8 +12,8 @@ function wrap(a: number): number {
 
 export const SUN_BEARING = -2.2176;
 export const SUN_RADIUS_PX = 46;
-const SUN_START_PX = 194.85;                                    // step-0 height; calibrated to the route's timing (locked by test_model)
-const SUN_DROP_PX_PER_STEP = 0.408 * (2 * SUN_RADIUS_PX) / 625; // ~41% of the disc diameter over the long sun-ward stretch
+const SUN_START_PX = 244.0;                                    // step-0 height; calibrated to the route's timing (locked by test_model) — raised to recentre the +2% faster descent in the seg7..seg10 sunset window
+const SUN_DROP_PX_PER_STEP = 0.41616 * (2 * SUN_RADIUS_PX) / 625; // ~42% of the disc diameter over the long sun-ward stretch (was 0.408; +2% faster descent)
 const SUN_FULLY_SET_PX = -SUN_RADIUS_PX;                        // height at which the whole disc has dropped below the horizon
 const WARMTH_FALLOFF_PX = 110;                                  // how far from the horizon the sunset-red fades to nothing
 const VISIBLE_BEARING_LIMIT = 1.4;                             // beyond this bearing off-heading the sun is off-screen

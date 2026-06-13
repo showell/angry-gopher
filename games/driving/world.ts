@@ -59,17 +59,17 @@ export function buildWorld(): World {
   // seg16 zebra+pig-absence, seg19 red+cat finale). YELLOW trees are the one-off first-colour reveal
   // at seg4. Corner-creature departures are in the turns table below. ----
   const segmentConfigs: RoadSegmentConfig[] = [
-    { id: 'seg1',  length: 500,  scheme: 'ALL_GREEN',    pigs: true  },  // opener: pigs here too so the distracted-rider glance shows up right away
+    { id: 'seg1',  length: 500,  scheme: 'ALL_GREEN',    pigs: false },  // opener: plain road, kept short to reach the action sooner
     { id: 'seg2',  length: 320,  scheme: 'ALL_GREEN',    pigs: false },  // the CAT crossing (cat_motion's CAT_SEGMENTS)
     { id: 'seg3',  length: 400,  scheme: 'ALL_GREEN',    pigs: true  },  // NEW: pigs first appear (alone)
     { id: 'seg4',  length: 300,  scheme: 'YELLOW_GREEN', pigs: false },  // NEW: first new tree colour (golden, one-off)
     { id: 'seg5',  length: 300,  scheme: 'ALL_GREEN',    pigs: false },  // NEW: first giraffe (at its corner)
     { id: 'seg6',  length: 300,  scheme: 'ALL_GREEN',    pigs: false },  // -- seg6-12: boring apart from the sunset --
     { id: 'seg7',  length: 1200, scheme: 'RED_GREEN',    pigs: false },  // the long sun-ward stretch (mid-tower + sunset); red-tree clue
-    { id: 'seg8',  length: 300,  scheme: 'ALL_GREEN',    pigs: true  },  // pigs return and settle into a constant motif
-    { id: 'seg9',  length: 300,  scheme: 'ALL_GREEN',    pigs: true  },
-    { id: 'seg10', length: 800,  scheme: 'ALL_GREEN',    pigs: true  },  // the second sun-ward stretch
-    { id: 'seg11', length: 300,  scheme: 'ALL_GREEN',    pigs: true  },
+    { id: 'seg8',  length: 300,  scheme: 'ALL_GREEN',    pigs: false },  // kept pig-free: the gawk slowdown would shift the sunset timing
+    { id: 'seg9',  length: 300,  scheme: 'ALL_GREEN',    pigs: false },
+    { id: 'seg10', length: 800,  scheme: 'ALL_GREEN',    pigs: false },  // the second sun-ward stretch (pig-free, so nothing slows the sunset run)
+    { id: 'seg11', length: 300,  scheme: 'ALL_GREEN',    pigs: true  },  // pigs return (2nd appearance — the last distraction) AFTER the sunset; then they stay for the rest
     { id: 'seg12', length: 300,  scheme: 'ALL_GREEN',    pigs: true  },
     { id: 'seg13', length: 300,  scheme: 'RED_GREEN',    pigs: true  },  // NEW: crocodile lagoon + cat; red-tree clue
     { id: 'seg14', length: 400,  scheme: 'ALL_GREEN',    pigs: true  },  // boring
