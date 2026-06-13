@@ -40,7 +40,6 @@ function nextGazeStep(gazeStep: number, distToEnd: number, hasPigs: boolean): nu
 const EYES_ON_ROAD_YAW = 6 * Math.PI / 180;   // pointed more than this off the lane = mid-corner, no glancing
 
 export function nextRiderGaze(state: RiderState, world: World): RiderState {
-  return state.gazeStep === -1 ? state : { ...state, gazeStep: -1 };   // TEMP: pig-distraction disabled — keep eyes ahead to isolate the turning feel
   if (Math.abs(state.yaw) > EYES_ON_ROAD_YAW) return state.gazeStep === -1 ? state : { ...state, gazeStep: -1 };
   const seg = world.segments[state.segment];
   const gazeStep = nextGazeStep(state.gazeStep, seg.length - state.along, seg.pigs);
