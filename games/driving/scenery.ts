@@ -39,8 +39,10 @@ export interface Scenery {
   drawAsFar(ctx: Ctx, project: Project): void;
 }
 
-// Within this distance (metres) a Scenery is drawn with its near (detailed) variant.
-export const DETAIL_DIST = 40;
+// Within this distance (metres) a Scenery is drawn with its near (detailed) variant. Pushed out from 40
+// because the up-front trees look so good that the first cheap one beyond the threshold read as an obvious
+// LOD seam; 70 keeps the near few tree rows detailed and only drops to the cheap variant well into the distance.
+export const DETAIL_DIST = 70;
 
 // The camera's near plane (metres in front of the eye). Anything closer must be clipped
 // before projecting, or the divide-by-forward blows the point across the screen. Shared by
