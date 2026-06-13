@@ -27,7 +27,7 @@ const GAZE_LOOK_DIST = 150;                       // he notices the pigs (and st
 const GAZE_RELEASE_ANGLE = 45 * Math.PI / 180;    // the gaze PEAKS here — once the pig has swung this far off his heading (~beside him, just down the road) he loses it and looks back (also the normaliser for the focus)
 const GAZE_SWIVEL_RATE = 4 * Math.PI / 180;       // most his head turns TOWARD the pig in one frame (rad) — the gentle "couple frames to turn" knob
 const GAZE_RETURN_RATE = 1.1 * Math.PI / 180;     // most his head turns BACK to the road in one frame — a slow, unhurried drift back to the road once he releases
-const FOCUS_DECAY = 0.004;                        // once his head is fully STRAIGHTENED, the focus bleeds off this much per frame (1 -> 0 over ~250 frames) — a slow, gentle re-widen
+const FOCUS_DECAY = 0.0015;                       // once his head is fully STRAIGHTENED, the focus bleeds off this much per frame (1 -> 0 over ~670 frames) — a very slow, gentle re-widen that carries past the corner into the next stretch
 const PIG_GAZE_SPEED = 0.20;                      // the slow speed he eases down to so he can savour the pigs (m/press) — then HOLDS it for the rest of the segment (never re-accelerates after the pigs)
 const PIG_GAZE_SETTLE_DIST = 25;                  // he finishes slowing to the gawk speed this far before the pig, then CREEPS the rest of the way at it (so he's at the gawk speed well before he looks away)
 const EYES_ON_ROAD_YAW = 6 * Math.PI / 180;       // pointed more than this off the lane = mid-corner, eyes snap back to the road

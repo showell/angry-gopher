@@ -73,7 +73,7 @@ const focalForLean = (lean: number): number => {
 // (less horizon, the background squeezed away). It's driven by the rider's `focus` (gazeFocus, 0..1), which
 // rises with the head-turn and then DECAYS slowly, so the narrow focus eases out well after his eyes are back
 // on the road rather than snapping open with the head — the shaping lives in rider_gaze, so this is linear.
-const MIN_GAZE_FOCAL_FACTOR = 0.35;  // focal at full focus, as a fraction of FOCAL — how hard the distraction narrows his view (as deep as a full lean)
+const MIN_GAZE_FOCAL_FACTOR = 0.61;  // focal at full focus, as a fraction of FOCAL — how hard the distraction narrows his view (gentler than a full lean's 0.35)
 const focalForGaze = (focus: number): number => FOCAL * (1 - (1 - MIN_GAZE_FOCAL_FACTOR) * focus);
 
 // the rider also turns his HEAD into the corner — a subtle view-only yaw, 15% of the lean angle.
