@@ -73,7 +73,7 @@ const focalForLean = (lean: number): number => {
 // pigs his focus narrows (less horizon, the background squeezed away), then relaxes as his gaze swings back to
 // the road. Driven by how far his head has turned (gazeAngle, peaking at GAZE_RELEASE_ANGLE), so it rises while
 // he's turning toward the pig and falls as he straightens out — no separate state to keep.
-const MIN_GAZE_FOCAL_FACTOR = 0.5;   // focal at the gaze's peak, as a fraction of FOCAL — how hard the distraction narrows his focus
+const MIN_GAZE_FOCAL_FACTOR = 0.35;  // focal at the gaze's peak, as a fraction of FOCAL — how hard the distraction narrows his focus (as deep as a full lean)
 const focalForGaze = (gaze: number): number => {
   const frac = Math.min(Math.abs(gaze) / GAZE_RELEASE_ANGLE, 1);   // 0 eyes-front … 1 at the gaze peak
   return FOCAL * (1 - (1 - MIN_GAZE_FOCAL_FACTOR) * frac * frac);

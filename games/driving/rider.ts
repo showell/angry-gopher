@@ -71,8 +71,9 @@ export function riderDebug(state: RiderState, world: World): RiderDecision {
 // plus the non-physical context the rider carries: which segment he's on and his gaze glance. There is no
 // "turning" mode — he's always just driving, sometimes leaned.
 export interface RiderState extends RiderPhysics {
-  segment: SegId;     // which road segment he's on (the RiderPhysics fields are relative to it)
-  gazeYaw: number;    // the "distracted rider" head-turn (radians, 0 = eyes ahead): a VIEW-ONLY camera yaw toward the pigs — see rider_gaze.ts
+  segment: SegId;      // which road segment he's on (the RiderPhysics fields are relative to it)
+  gazeYaw: number;     // the "distracted rider" head-turn (radians, 0 = eyes ahead): a VIEW-ONLY camera yaw toward the pigs — see rider_gaze.ts
+  gazeLinger: number;  // frames the gawk-speed hold lingers AFTER his eyes are back on the road, so he doesn't jump on the throttle the instant he looks away (rider_gaze.ts)
 }
 
 // ----------------------------------------------------------------------------
@@ -112,7 +113,7 @@ const CENTER_LANE_EPSILON = 0.04;           // once he's THIS close to centre, s
 // ----------------------------------------------------------------------------
 
 export function initialRiderState(world: World): RiderState {
-  return { segment: world.start, along: 0, across: 0, yaw: 0, v: V_BASE, tilt: 0, gazeYaw: 0 };
+  return { segment: world.start, along: 0, across: 0, yaw: 0, v: V_BASE, tilt: 0, gazeYaw: 0, gazeLinger: 0 };
 }
 
 // The Rider's heading relative to north (north = seg1's forward direction). This is the one ABSOLUTE
@@ -167,7 +168,7 @@ export function getNextRiderState(state: RiderState, world: World): RiderState {
   const seg = world.segments[state.segment];
   const { tiltStep, accel } = decide(state, seg, world);
   const moved = simulateRiderStep(state, tiltStep, accel);
-  const riderState: RiderState = { ...moved, segment: seg.id, gazeYaw: state.gazeYaw };
+  const riderState: RiderState = { ...moved, segment: seg.id, gazeYaw: state.gazeYaw, gazeLinger: state.gazeLinger };
 
   // Resolve the road graph by POSITION (not by any turn flag): toward a turn, re-express him in the NEXT
   // segment's frame EVERY frame and commit the moment his real position is actually within that road
@@ -203,7 +204,7 @@ function riderStateForNextSegment(riderState: RiderState, world: World): RiderSt
   const along = cos * da + sgn * sin * dx;                  // rotate into seg B's frame (inverse of localToRef)
   const across = -sgn * sin * da + cos * dx;
   return { segment: next.id, along, across, yaw: riderState.yaw - sgn * theta,
-           v: riderState.v, tilt: riderState.tilt, gazeYaw: 0 };
+           v: riderState.v, tilt: riderState.tilt, gazeYaw: 0, gazeLinger: 0 };
 }
 
 // THE FORWARD DECISION — throttle/brake — returns the change in speed this frame AND the binding reason (see
