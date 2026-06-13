@@ -27,8 +27,8 @@ const GAZE_LOOK_DIST = 150;                       // he notices the pigs (and st
 const GAZE_RELEASE_ANGLE = 45 * Math.PI / 180;    // the gaze PEAKS here — once the pig has swung this far off his heading (~beside him, just down the road) he loses it and looks back (also the normaliser for the focus)
 const GAZE_SWIVEL_RATE = 4 * Math.PI / 180;       // most his head turns TOWARD the pig in one frame (rad) — the gentle "couple frames to turn" knob
 const GAZE_RETURN_RATE = 1.1 * Math.PI / 180;     // most his head turns BACK to the road in one frame — a slow, unhurried drift back to the road once he releases
-const FOCUS_DECAY = 0.01;                         // once his head starts back, the camera focus bleeds off this much per frame (1 -> 0 over ~100 frames) — the focus lingers narrow well past the head-return (~60 frames after his eyes are home)
-const PIG_GAZE_SPEED = 0.15;                      // the slow speed he eases down to so he can savour the pigs (m/press) — then HOLDS it for the rest of the segment (never re-accelerates after the pigs)
+const FOCUS_DECAY = 0.004;                        // once his head is fully STRAIGHTENED, the focus bleeds off this much per frame (1 -> 0 over ~250 frames) — a slow, gentle re-widen
+const PIG_GAZE_SPEED = 0.20;                      // the slow speed he eases down to so he can savour the pigs (m/press) — then HOLDS it for the rest of the segment (never re-accelerates after the pigs)
 const PIG_GAZE_SETTLE_DIST = 25;                  // he finishes slowing to the gawk speed this far before the pig, then CREEPS the rest of the way at it (so he's at the gawk speed well before he looks away)
 const EYES_ON_ROAD_YAW = 6 * Math.PI / 180;       // pointed more than this off the lane = mid-corner, eyes snap back to the road
 
@@ -84,15 +84,17 @@ function desiredGaze(state: RiderState, seg: RoadSegment, world: World): number 
 // THE GAZE STEP — run AFTER the bike has moved this frame: swivel his head one frame toward where he wants to
 // look (desiredGaze), capped so it's a turn of the head, not a snap. The cap is ASYMMETRIC: gentle toward the
 // pig (GAZE_SWIVEL_RATE — a couple frames to turn), slower back to the road (GAZE_RETURN_RATE — an unhurried
-// drift once he releases, want = 0). Also drives FOCUS: it rises to track how far his head is turned, then
-// decays slowly (FOCUS_DECAY) once the head starts back, so the camera's narrow focus outlasts the head-return.
+// drift once he releases, want = 0). Also drives FOCUS: while his head is turned AT ALL (toward the pig or
+// swinging back), the focus rises with the turn and HOLDS its peak; it only begins easing out once he's fully
+// STRAIGHTENED (gazeYaw back to 0), and then slowly (FOCUS_DECAY) — so the re-widen happens late and gently.
 export function nextRiderGaze(state: RiderState, world: World): RiderState {
   const want = desiredGaze(state, world.segments[state.segment], world);
   const rate = want === 0 ? GAZE_RETURN_RATE : GAZE_SWIVEL_RATE;
   const delta = Math.max(-rate, Math.min(rate, want - state.gazeYaw));
   const gazeYaw = state.gazeYaw + delta;
-  const focusTarget = Math.min(Math.abs(gazeYaw) / GAZE_RELEASE_ANGLE, 1);
-  const focus = Math.max(focusTarget, state.focus - FOCUS_DECAY);   // snaps up to track the head, bleeds slowly back down
+  const focus = gazeYaw === 0
+    ? Math.max(0, state.focus - FOCUS_DECAY)                              // straightened out -> ease the focus back slowly
+    : Math.max(state.focus, Math.min(Math.abs(gazeYaw) / GAZE_RELEASE_ANGLE, 1));   // head turned -> rise with the turn, hold the peak
   return gazeYaw === state.gazeYaw && focus === state.focus ? state : { ...state, gazeYaw, focus };
 }
 

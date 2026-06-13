@@ -194,6 +194,8 @@ export function getNextRiderState(state: RiderState, world: World): RiderState {
 // is the exact INVERSE of the seg-B -> seg-A transform the continuity check composes (test_model localToRef),
 // so the seam is now position-continuous by construction. The heading rotates by the turn: yaw_B = yaw_A -
 // sgn*theta. Eyes back on the road (gazeYaw 0) — the next frame's gaze step re-derives it from the new segment.
+// The camera focus CARRIES across the seam (not reset) so its slow re-widen keeps easing out smoothly into the
+// next segment instead of snapping open at the corner.
 function riderStateForNextSegment(riderState: RiderState, world: World): RiderState {
   const seg = world.segments[riderState.segment];
   const exitIxn = world.intersections[seg.exitIxn];
@@ -204,7 +206,7 @@ function riderStateForNextSegment(riderState: RiderState, world: World): RiderSt
   const along = cos * da + sgn * sin * dx;                  // rotate into seg B's frame (inverse of localToRef)
   const across = -sgn * sin * da + cos * dx;
   return { segment: next.id, along, across, yaw: riderState.yaw - sgn * theta,
-           v: riderState.v, tilt: riderState.tilt, gazeYaw: 0, focus: 0 };
+           v: riderState.v, tilt: riderState.tilt, gazeYaw: 0, focus: riderState.focus };
 }
 
 // THE FORWARD DECISION — throttle/brake — returns the change in speed this frame AND the binding reason (see
