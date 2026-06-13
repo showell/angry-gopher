@@ -83,6 +83,7 @@ function assertInvariants(s: RiderState, world: World): void {
   // The precise pig-gaze behaviour (swivels toward the pig, slows, swings back before the corner) is asserted
   // in the deferred 1b block below, not here on every state.
   assert(Math.abs(s.gazeYaw) <= QUARTER + 1e-3, `gaze bounded (${s.gazeYaw})`);
+  assert(s.focus >= 0 && s.focus <= 1, `focus in [0,1] (${s.focus})`);
 }
 
 // --- "roads don't cross themselves" (the exact invariant) ---

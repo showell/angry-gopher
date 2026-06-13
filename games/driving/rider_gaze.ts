@@ -6,8 +6,12 @@
 //     it as an extra camera yaw (view.ts / main.ts). It SWIVELS gently toward the pig (a couple frames to
 //     turn his head, not a jerk), tracks it, then once the pig is beside him swings back to the road faster
 //     (he's done looking) — he has real interest, not a tic.
-//   • a brake (pigGazeBrake) — rider.ts folds this into its forward decision so he eases down to a slow
-//     gawking speed to actually see them. That's the one place the gaze reaches into the motion.
+//   • a brake (pigGazeBrake) + a never-re-accelerate hold (gawkEngaged) — rider.ts folds these into its
+//     forward decision so he eases down to a slow gawking speed and then STAYS there for the rest of the
+//     segment (he doesn't speed back up after the pigs; the next segment resets him). That's where the gaze
+//     reaches into the motion.
+//   • a FOCUS (gazeFocus, 0..1) — the camera narrows as he gawks (main.ts), rising with the head-turn and
+//     decaying slowly back so the view eases out of the narrow focus well after his eyes are home.
 // The gaze is its OWN step, run AFTER the bike has moved each frame (the caller runs bike-then-gaze; see
 // getNextRiderState). It aims at a REAL rendered pig — farm_critter.gazePig is the single source of where
 // that pig sits — so the head-turn and the billboard can never drift apart.
@@ -20,11 +24,11 @@ import { gazePig } from './farm_critter.ts';
 // --- the tunables (head-swivel rates, the gawk speed, when he notices / loses interest) ---
 const PIG_NOVELTY_COUNT = 2;                      // he's only distracted by the pigs the first N times they appear on the route — a novelty that wears off (afterward he's seen pigs, keeps his eyes on the road)
 const GAZE_LOOK_DIST = 150;                       // he notices the pigs (and starts slowing) when the pig is this far ahead (m) — bigger = he begins decelerating earlier (and starts his subtle far-off head-turn earlier)
-export const GAZE_RELEASE_ANGLE = 45 * Math.PI / 180;   // the gaze PEAKS here — once the pig has swung this far off his heading (~beside him, just down the road) he loses it and looks back. Exported as the normaliser for the camera's gaze-driven focus (main.ts)
+const GAZE_RELEASE_ANGLE = 45 * Math.PI / 180;    // the gaze PEAKS here — once the pig has swung this far off his heading (~beside him, just down the road) he loses it and looks back (also the normaliser for the focus)
 const GAZE_SWIVEL_RATE = 4 * Math.PI / 180;       // most his head turns TOWARD the pig in one frame (rad) — the gentle "couple frames to turn" knob
 const GAZE_RETURN_RATE = 1.1 * Math.PI / 180;     // most his head turns BACK to the road in one frame — a slow, unhurried drift back to the road once he releases
-const GAZE_LINGER_FRAMES = 10;                    // after his eyes are back on the road he holds the gawk speed this many more frames before re-accelerating (so he doesn't lurch the instant he looks away)
-const PIG_GAZE_SPEED = 0.15;                      // the slow speed he eases down to so he can savour the pigs (m/press) — he holds it until his eyes are back on the road
+const FOCUS_DECAY = 0.01;                         // once his head starts back, the camera focus bleeds off this much per frame (1 -> 0 over ~100 frames) — the focus lingers narrow well past the head-return (~60 frames after his eyes are home)
+const PIG_GAZE_SPEED = 0.15;                      // the slow speed he eases down to so he can savour the pigs (m/press) — then HOLDS it for the rest of the segment (never re-accelerates after the pigs)
 const PIG_GAZE_SETTLE_DIST = 25;                  // he finishes slowing to the gawk speed this far before the pig, then CREEPS the rest of the way at it (so he's at the gawk speed well before he looks away)
 const EYES_ON_ROAD_YAW = 6 * Math.PI / 180;       // pointed more than this off the lane = mid-corner, eyes snap back to the road
 
@@ -32,6 +36,12 @@ const EYES_ON_ROAD_YAW = 6 * Math.PI / 180;       // pointed more than this off 
 // as an extra camera yaw. Just the stored field now; the swivel that produces it lives in nextRiderGaze.
 export function gazeAngle(state: RiderState): number {
   return state.gazeYaw;
+}
+
+// the current narrowing of his focus (0 = normal, 1 = fully narrowed) — read by the camera (main.ts) to pull
+// the focal in. Stored field; nextRiderGaze rises it with the gaze and decays it slowly back.
+export function gazeFocus(state: RiderState): number {
+  return state.focus;
 }
 
 // Is THIS segment one of the first PIG_NOVELTY_COUNT pig-bearing segments on the route? Walk the route in
@@ -74,30 +84,36 @@ function desiredGaze(state: RiderState, seg: RoadSegment, world: World): number 
 // THE GAZE STEP — run AFTER the bike has moved this frame: swivel his head one frame toward where he wants to
 // look (desiredGaze), capped so it's a turn of the head, not a snap. The cap is ASYMMETRIC: gentle toward the
 // pig (GAZE_SWIVEL_RATE — a couple frames to turn), slower back to the road (GAZE_RETURN_RATE — an unhurried
-// drift once he releases, want = 0). Also ticks gazeLinger: held full while he's still looking/turning, then
-// counted down once his eyes are front — the gawk-speed hold (pigGazeBrake) reads it to wait before re-accelerating.
+// drift once he releases, want = 0). Also drives FOCUS: it rises to track how far his head is turned, then
+// decays slowly (FOCUS_DECAY) once the head starts back, so the camera's narrow focus outlasts the head-return.
 export function nextRiderGaze(state: RiderState, world: World): RiderState {
   const want = desiredGaze(state, world.segments[state.segment], world);
   const rate = want === 0 ? GAZE_RETURN_RATE : GAZE_SWIVEL_RATE;
   const delta = Math.max(-rate, Math.min(rate, want - state.gazeYaw));
   const gazeYaw = state.gazeYaw + delta;
-  const looking = want !== 0 || gazeYaw !== 0;
-  const gazeLinger = looking ? GAZE_LINGER_FRAMES : Math.max(0, state.gazeLinger - 1);
-  return gazeYaw === state.gazeYaw && gazeLinger === state.gazeLinger ? state : { ...state, gazeYaw, gazeLinger };
+  const focusTarget = Math.min(Math.abs(gazeYaw) / GAZE_RELEASE_ANGLE, 1);
+  const focus = Math.max(focusTarget, state.focus - FOCUS_DECAY);   // snaps up to track the head, bleeds slowly back down
+  return gazeYaw === state.gazeYaw && focus === state.focus ? state : { ...state, gazeYaw, focus };
 }
 
-// THE GAWK BRAKE — rider.ts asks this for the deceleration the pig-distraction wants this frame, and folds it
-// into its min-of-brakes forward decision. He's "distracted" while he's looking OR while his eyes are still
-// swinging back (gazeYaw not yet 0). Distracted and still too fast: ease down toward PIG_GAZE_SPEED (the same
-// kinematic v^2 = vEnd^2 + 2*a*d the corner brake uses), timed to SETTLE a little before the pig so he creeps
-// PAST it at the gawk speed rather than only touching it. Once at the gawk speed: hold (0) — and he keeps
-// holding through the eye-return, so he never re-accelerates until his eyes are back on the road. null = eyes
-// front, no constraint, drive normally.
+// Once he's NOTICED the pigs on a novel pig leg (the designated pig has come within GAZE_LOOK_DIST ahead), he's
+// committed to the slow gawk for the REST of the segment: he eases to the gawk speed and never re-accelerates
+// until he leaves the segment (the crossing resets him). Sticky and purely positional — he can't un-notice —
+// so no counter in his state. Distinct from pigAhead (the HEAD-turn), which also ends once the pig is beside
+// him; this is just the MOTION hold, so it ignores the eyes-on-road-in-a-corner gate and persists into the turn.
+export function gawkEngaged(state: RiderState, seg: RoadSegment, world: World): boolean {
+  if (!pigsAreNovel(world, seg.id)) return false;
+  return state.along >= gazePig(seg.length, seg.width / 2).along - GAZE_LOOK_DIST;
+}
+
+// THE GAWK BRAKE — rider.ts folds this into its min-of-brakes forward decision. null until he's noticed the
+// pigs; from then on he eases down toward PIG_GAZE_SPEED (the same kinematic v^2 = vEnd^2 + 2*a*d the corner
+// brake uses), timed to SETTLE a little before the pig so he creeps PAST it at the gawk speed rather than only
+// touching it, then holds (0) at the gawk speed for the rest of the segment. (rider.ts ALSO suppresses the
+// corner entry-speed floor while gawkEngaged, so the corner can't snap him back up — he never re-accelerates.)
 export function pigGazeBrake(state: RiderState, seg: RoadSegment, world: World): number | null {
-  const dist = pigAhead(state, seg, world);
-  // distracted = still looking, OR eyes not yet back, OR within the post-gaze linger (waiting to re-accelerate).
-  if (dist === null && state.gazeYaw === 0 && state.gazeLinger === 0) return null;   // eyes front, linger spent -> drive normally
-  if (state.v <= PIG_GAZE_SPEED) return 0;                     // at the gawk speed -> hold it (no re-accelerating)
-  const d = dist === null ? PIG_GAZE_SETTLE_DIST : dist - PIG_GAZE_SETTLE_DIST;   // distance over which to bleed down to the gawk speed
+  if (!gawkEngaged(state, seg, world)) return null;           // hasn't noticed the pigs yet -> drive normally
+  if (state.v <= PIG_GAZE_SPEED) return 0;                    // at the gawk speed -> hold it (never re-accelerates)
+  const d = gazePig(seg.length, seg.width / 2).along - state.along - PIG_GAZE_SETTLE_DIST;   // distance over which to bleed down
   return (PIG_GAZE_SPEED * PIG_GAZE_SPEED - state.v * state.v) / (2 * Math.max(d, 1));
 }

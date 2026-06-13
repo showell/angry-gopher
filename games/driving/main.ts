@@ -8,7 +8,7 @@
 //   ArrowDown : pop back to the previous RiderState
 // =============================================================================
 import { initialRiderState, getNextRiderState, riderHeading, riderTilt, riderFinished, simulateRiderPath, riderDebug, DangerSide, MAX_LEAN, routeDistance } from './rider.ts';
-import { gazeAngle, nextRiderGaze, GAZE_RELEASE_ANGLE } from './rider_gaze.ts';
+import { gazeAngle, gazeFocus, nextRiderGaze } from './rider_gaze.ts';
 import type { RiderState, RiderDecision } from './rider.ts';
 import { initialTruck, nextTruck, courseLength } from './truck.ts';
 import type { TruckState } from './truck.ts';
@@ -69,15 +69,12 @@ const focalForLean = (lean: number): number => {
   return FOCAL * (1 - (1 - MIN_FOCAL_FACTOR) * frac * frac);
 };
 
-// The distracted-rider GAZE pulls the focal IN the same way the lean does — as he turns his head toward the
-// pigs his focus narrows (less horizon, the background squeezed away), then relaxes as his gaze swings back to
-// the road. Driven by how far his head has turned (gazeAngle, peaking at GAZE_RELEASE_ANGLE), so it rises while
-// he's turning toward the pig and falls as he straightens out — no separate state to keep.
-const MIN_GAZE_FOCAL_FACTOR = 0.35;  // focal at the gaze's peak, as a fraction of FOCAL — how hard the distraction narrows his focus (as deep as a full lean)
-const focalForGaze = (gaze: number): number => {
-  const frac = Math.min(Math.abs(gaze) / GAZE_RELEASE_ANGLE, 1);   // 0 eyes-front … 1 at the gaze peak
-  return FOCAL * (1 - (1 - MIN_GAZE_FOCAL_FACTOR) * frac * frac);
-};
+// The distracted-rider GAZE pulls the focal IN the same way the lean does — as he gawks his focus narrows
+// (less horizon, the background squeezed away). It's driven by the rider's `focus` (gazeFocus, 0..1), which
+// rises with the head-turn and then DECAYS slowly, so the narrow focus eases out well after his eyes are back
+// on the road rather than snapping open with the head — the shaping lives in rider_gaze, so this is linear.
+const MIN_GAZE_FOCAL_FACTOR = 0.35;  // focal at full focus, as a fraction of FOCAL — how hard the distraction narrows his view (as deep as a full lean)
+const focalForGaze = (focus: number): number => FOCAL * (1 - (1 - MIN_GAZE_FOCAL_FACTOR) * focus);
 
 // the rider also turns his HEAD into the corner — a subtle view-only yaw, 15% of the lean angle.
 const HEAD_YAW_FRAC = 0.15;
@@ -232,7 +229,7 @@ function render(rider: RiderState): void {
   // (focalForGaze). Take whichever narrows more — they rarely overlap (eyes are on the road mid-corner, so
   // the gaze is 0 there; he's near-upright while gawking, so the lean is ~0 there). Set before any projection
   // this frame so the road, scenery, and horizon all share one camera.
-  camFocal = Math.min(focalForLean(tilt), focalForGaze(gazeAngle(rider)));
+  camFocal = Math.min(focalForLean(tilt), focalForGaze(gazeFocus(rider)));
   ctx.save();
   ctx.translate(W / 2, H / 2);
   ctx.rotate(-tilt);

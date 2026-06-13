@@ -27,7 +27,7 @@ import { turnSpeed } from './intersection.ts';
 import { segmentCatDanger } from './cat_motion.ts';
 import { simulateRiderStep } from './bike_physics.ts';
 import type { RiderPhysics } from './bike_physics.ts';
-import { pigGazeBrake } from './rider_gaze.ts';
+import { pigGazeBrake, gawkEngaged } from './rider_gaze.ts';
 
 // ----------------------------------------------------------------------------
 // types
@@ -73,7 +73,7 @@ export function riderDebug(state: RiderState, world: World): RiderDecision {
 export interface RiderState extends RiderPhysics {
   segment: SegId;      // which road segment he's on (the RiderPhysics fields are relative to it)
   gazeYaw: number;     // the "distracted rider" head-turn (radians, 0 = eyes ahead): a VIEW-ONLY camera yaw toward the pigs — see rider_gaze.ts
-  gazeLinger: number;  // frames the gawk-speed hold lingers AFTER his eyes are back on the road, so he doesn't jump on the throttle the instant he looks away (rider_gaze.ts)
+  focus: number;       // VIEW-ONLY camera focus narrowing (0 = normal … 1 = fully narrowed) as he gawks; rises with the gaze, decays slowly (rider_gaze.ts)
 }
 
 // ----------------------------------------------------------------------------
@@ -113,7 +113,7 @@ const CENTER_LANE_EPSILON = 0.04;           // once he's THIS close to centre, s
 // ----------------------------------------------------------------------------
 
 export function initialRiderState(world: World): RiderState {
-  return { segment: world.start, along: 0, across: 0, yaw: 0, v: V_BASE, tilt: 0, gazeYaw: 0, gazeLinger: 0 };
+  return { segment: world.start, along: 0, across: 0, yaw: 0, v: V_BASE, tilt: 0, gazeYaw: 0, focus: 0 };
 }
 
 // The Rider's heading relative to north (north = seg1's forward direction). This is the one ABSOLUTE
@@ -168,7 +168,7 @@ export function getNextRiderState(state: RiderState, world: World): RiderState {
   const seg = world.segments[state.segment];
   const { tiltStep, accel } = decide(state, seg, world);
   const moved = simulateRiderStep(state, tiltStep, accel);
-  const riderState: RiderState = { ...moved, segment: seg.id, gazeYaw: state.gazeYaw, gazeLinger: state.gazeLinger };
+  const riderState: RiderState = { ...moved, segment: seg.id, gazeYaw: state.gazeYaw, focus: state.focus };
 
   // Resolve the road graph by POSITION (not by any turn flag): toward a turn, re-express him in the NEXT
   // segment's frame EVERY frame and commit the moment his real position is actually within that road
@@ -204,7 +204,7 @@ function riderStateForNextSegment(riderState: RiderState, world: World): RiderSt
   const along = cos * da + sgn * sin * dx;                  // rotate into seg B's frame (inverse of localToRef)
   const across = -sgn * sin * da + cos * dx;
   return { segment: next.id, along, across, yaw: riderState.yaw - sgn * theta,
-           v: riderState.v, tilt: riderState.tilt, gazeYaw: 0, gazeLinger: 0 };
+           v: riderState.v, tilt: riderState.tilt, gazeYaw: 0, focus: 0 };
 }
 
 // THE FORWARD DECISION — throttle/brake — returns the change in speed this frame AND the binding reason (see
@@ -254,7 +254,10 @@ function getForwardAccelDecel(state: RiderState, seg: RoadSegment, world: World)
   let v = state.v + a;
   if (v > V_MAX) { v = V_MAX; reason = ForwardReason.AVOID_SPEEDING; }      // capped at top speed
   if (v < 0) v = 0;
-  if (near && v < vEnd) v = vEnd;   // don't crawl below the corner's entry speed approaching it
+  // don't crawl below the corner's entry speed approaching it — UNLESS he's gawking at the pigs, where staying
+  // at the slow gawk speed (and taking the corner slow) beats snapping back up to the corner speed (he never
+  // re-accelerates after the pigs). Lower-than-tabulated entry is always safe; it just makes the turn slower.
+  if (near && v < vEnd && !gawkEngaged(state, seg, world)) v = vEnd;
   return { accel: v - state.v, reason };
 }
 
