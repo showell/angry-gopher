@@ -79,8 +79,10 @@ function assertInvariants(s: RiderState, world: World): void {
   assert(s.along >= entryFloor - 1e-6, `along not far before start (${s.along})`);
   assert(s.along <= seg.length + 1e-6, `along not past end (${s.along})`);
   assert(Math.abs(s.across) <= seg.width / 2 + 1, `across bounded (${s.across})`);
-  // eyes on the road while pointed notably off the lane (mid straighten-out) — no distracted glance
-  if (Math.abs(s.yaw) > 6 * Math.PI / 180) assert(s.gazeStep < 0, 'no distracted glance mid-turn (eyes on the road)');
+  // the distracted gaze is a bounded VIEW angle (it tracks a pig off to the side, never beyond a right angle).
+  // The precise pig-gaze behaviour (swivels toward the pig, slows, swings back before the corner) is asserted
+  // in the deferred 1b block below, not here on every state.
+  assert(Math.abs(s.gazeYaw) <= QUARTER + 1e-3, `gaze bounded (${s.gazeYaw})`);
 }
 
 // --- "roads don't cross themselves" (the exact invariant) ---

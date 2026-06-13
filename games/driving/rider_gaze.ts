@@ -1,47 +1,79 @@
-// rider_gaze.ts — the "distracted rider": a slow, VIEW-ONLY glance toward the roadside pigs and back as
-// he cruises up to a turn, then eyes back on the road before braking. Decoupled from the bike motion
-// (rider.ts): the gaze is its OWN step, run AFTER the bike has moved each frame. It's a pure function of
-// where he now is on the segment (progress) and whether the segment has pigs — never of the path or the
-// physics. The renderer reads gazeAngle as a camera yaw (main.ts/view.ts).
+// rider_gaze.ts — the "distracted rider": as he approaches a segment that has pigs, his CURIOSITY gets
+// the better of him — he slows down to take them in and turns his GAZE toward one particular pig, tracking
+// it as he creeps past, then swings his eyes back to the road. Two coupled effects, both keyed off how far
+// the pig still is ahead of him:
+//   • a VIEW-ONLY head-turn (gazeYaw, radians) — never touches the path or the physics; the renderer reads
+//     it as an extra camera yaw (view.ts / main.ts). It SWIVELS gently toward the pig (a couple frames to
+//     turn his head, not a jerk), tracks it, then once the pig is beside him swings back to the road faster
+//     (he's done looking) — he has real interest, not a tic.
+//   • a brake (pigGazeBrake) — rider.ts folds this into its forward decision so he eases down to a slow
+//     gawking speed to actually see them. That's the one place the gaze reaches into the motion.
+// The gaze is its OWN step, run AFTER the bike has moved each frame (the caller runs bike-then-gaze; see
+// getNextRiderState). It aims at a REAL rendered pig — farm_critter.gazePig is the single source of where
+// that pig sits — so the head-turn and the billboard can never drift apart.
 
 import type { RiderState } from './rider.ts';
+import type { RoadSegment } from './road_segment.ts';
 import type { World } from './world.ts';
+import { gazePig } from './farm_critter.ts';
 
-// the glance: ramp the head-turn up to a peak over GAZE_PEAK_STEPS frames, then back down (a triangle),
-// built rather than spelled out to avoid a wall of float literals. It fires once per segment — but ONLY
-// on a leg that HAS pigs to look at — when he comes within GAZE_TRIGGER_DIST of the end, and is back to 0
-// well before the braking zone (both enforced by test_model). On a pig-less leg he keeps his eyes ahead,
-// so the conspicuously pig-free seg16 also loses the habitual glance.
-const GAZE_STEP_DEG = 0.45;    // degrees of head-turn added per frame
-const GAZE_PEAK_STEPS = 20;    // frames up to the peak (= 9deg), then back down
-export const GAZE_SEQUENCE: number[] = [];
-for (let i = 1; i <= GAZE_PEAK_STEPS; i++) GAZE_SEQUENCE.push(i * GAZE_STEP_DEG);        // 0.45 .. 9.0
-for (let i = GAZE_PEAK_STEPS - 1; i >= 1; i--) GAZE_SEQUENCE.push(i * GAZE_STEP_DEG);    // 8.55 .. 0.45
-export const GAZE_TRIGGER_DIST = 220;                                                    // begin the glance this far before the end
+// --- the tunables (head-swivel rates, the gawk speed, when he notices / loses interest) ---
+const GAZE_LOOK_DIST = 100;                       // he notices the pigs (and starts slowing) when the pig is this far ahead (m)
+const GAZE_RELEASE_ANGLE = 80 * Math.PI / 180;    // once the pig has swung this far off his heading (~beside him, just down the road) he loses it and looks back
+const GAZE_SWIVEL_RATE = 4 * Math.PI / 180;       // most his head turns TOWARD the pig in one frame (rad) — the gentle "couple frames to turn" knob
+const GAZE_RETURN_RATE = 10 * Math.PI / 180;      // most his head turns BACK to the road in one frame — faster, so eyes return fairly quickly once he releases
+const PIG_GAZE_SPEED = 0.4;                       // the slow speed he eases down to so he can savour the pigs (m/press)
+const EYES_ON_ROAD_YAW = 6 * Math.PI / 180;       // pointed more than this off the lane = mid-corner, eyes snap back to the road
 
-// the current head-turn of the distracted glance (radians), indexed by gazeStep into GAZE_SEQUENCE.
+// the current head-turn of the distracted gaze (radians, an offset from his heading) — read by the renderer
+// as an extra camera yaw. Just the stored field now; the swivel that produces it lives in nextRiderGaze.
 export function gazeAngle(state: RiderState): number {
-  const i = state.gazeStep;
-  return i >= 0 && i < GAZE_SEQUENCE.length ? GAZE_SEQUENCE[i] * (Math.PI / 180) : 0;
+  return state.gazeYaw;
 }
 
-// advance the glance one frame: once armed (>=0) step toward done (capped), else arm at the trigger — but
-// only on a leg with pigs to glance at. Frame-based (one frame per sequence entry), not distance-based;
-// the 300m-min segments + the trigger window guarantee it finishes before the braking zone (test).
-function nextGazeStep(gazeStep: number, distToEnd: number, hasPigs: boolean): number {
-  if (gazeStep >= 0) return Math.min(gazeStep + 1, GAZE_SEQUENCE.length);
-  return hasPigs && distToEnd <= GAZE_TRIGGER_DIST ? 0 : -1;
+// How far the designated pig is still AHEAD of the rider, but only while he's in the looking window: pigs on
+// this leg, eyes not already committed to a corner, the pig within GAZE_LOOK_DIST metres ahead, and not yet
+// swung past GAZE_RELEASE_ANGLE off his heading (once it's beside him he loses interest). null = no pig
+// interest right now (so both the gaze and the brake fall back to "drive normally"). The single gate both
+// effects share, so the head-turn and the slow-down begin and end together.
+function pigAhead(state: RiderState, seg: RoadSegment): number | null {
+  if (!seg.pigs) return null;
+  if (Math.abs(state.yaw) > EYES_ON_ROAD_YAW) return null;   // mid straighten-out: eyes on the road, no gawking
+  const pig = gazePig(seg.length, seg.width / 2);
+  const dist = pig.along - state.along;
+  if (dist > GAZE_LOOK_DIST) return null;                    // not noticed yet
+  const bearing = Math.atan2(pig.across - state.across, dist) - state.yaw;
+  return Math.abs(bearing) >= GAZE_RELEASE_ANGLE ? null : dist;   // swung beside him -> back to the road
 }
 
-// THE GAZE STEP — run AFTER the bike has moved this frame: returns the state with its glance advanced.
-// Mid-turn the eyes are on the road (glance parked at -1); otherwise it arms/advances purely from how far
-// he NOW is from the segment's end and whether the segment has pigs. (It reads the post-move along, so the
-// glance is keyed off the bike's new progress — a frame's worth of imprecision the distraction shrugs off.)
-const EYES_ON_ROAD_YAW = 6 * Math.PI / 180;   // pointed more than this off the lane = mid-corner, no glancing
+// Where he WANTS to be looking this frame: the bearing to the designated pig (relative to his heading, so the
+// renderer can add it straight onto state.yaw), or 0 (eyes front) when he has no pig interest. Bearing, not a
+// fixed angle, so as he creeps past the pig his gaze tracks it — swinging further to the side the closer he gets.
+function desiredGaze(state: RiderState, seg: RoadSegment): number {
+  if (pigAhead(state, seg) === null) return 0;
+  const pig = gazePig(seg.length, seg.width / 2);
+  return Math.atan2(pig.across - state.across, pig.along - state.along) - state.yaw;
+}
 
+// THE GAZE STEP — run AFTER the bike has moved this frame: swivel his head one frame toward where he wants to
+// look (desiredGaze), capped so it's a turn of the head, not a snap. The cap is ASYMMETRIC: gentle toward the
+// pig (GAZE_SWIVEL_RATE — a couple frames to turn), faster back to the road (GAZE_RETURN_RATE — eyes return
+// quickly once he releases, want = 0).
 export function nextRiderGaze(state: RiderState, world: World): RiderState {
-  if (Math.abs(state.yaw) > EYES_ON_ROAD_YAW) return state.gazeStep === -1 ? state : { ...state, gazeStep: -1 };
-  const seg = world.segments[state.segment];
-  const gazeStep = nextGazeStep(state.gazeStep, seg.length - state.along, seg.pigs);
-  return gazeStep === state.gazeStep ? state : { ...state, gazeStep };
+  const want = desiredGaze(state, world.segments[state.segment]);
+  const rate = want === 0 ? GAZE_RETURN_RATE : GAZE_SWIVEL_RATE;
+  const delta = Math.max(-rate, Math.min(rate, want - state.gazeYaw));
+  const gazeYaw = state.gazeYaw + delta;
+  return gazeYaw === state.gazeYaw ? state : { ...state, gazeYaw };
+}
+
+// THE GAWK BRAKE — rider.ts asks this for the deceleration the pig-distraction wants this frame, and folds it
+// into its min-of-brakes forward decision. null = no pig interest (don't constrain). Otherwise: ease down to
+// PIG_GAZE_SPEED by the time he reaches the pig (the same kinematic v^2 = vEnd^2 + 2*a*d the corner brake uses),
+// or — once already at the gawk speed — return 0 to hold the throttle there so he doesn't speed back up past them.
+export function pigGazeBrake(state: RiderState, seg: RoadSegment): number | null {
+  const dist = pigAhead(state, seg);
+  if (dist === null) return null;
+  if (state.v <= PIG_GAZE_SPEED) return 0;
+  return (PIG_GAZE_SPEED * PIG_GAZE_SPEED - state.v * state.v) / (2 * Math.max(dist, 1));
 }

@@ -21,6 +21,7 @@ const HERD_JITTER_ALONG = 1.5;     // deterministic wobble of the scatter, along
 const HERD_JITTER_ACROSS = 1.2;    // deterministic wobble of the scatter, across
 const PIG_DIST_BEFORE_END = 60;    // pigs gather this far before the next intersection
 const PIG_BACK_ROW_OFFSET = 6;     // the extra back row of pigs sits this much further from the road
+const GAZE_PIG_ALONG_OFFSET = 2;   // the one pig the distracted rider fixes on: a front-row pig just past the cluster centre
 
 // The farm critters lining a segment: the cow herd near the start (left), always; and the pigs near
 // the end (right) only when `pigs` is set (a per-segment variety element). `treeLineOffset` is how
@@ -46,6 +47,12 @@ function cowHerd(hw: number, treeLineOffset: number): Critter[] {
     out.push({ along, across, emoji: '🐄', height: calf ? CALF_HEIGHT : COW_HEIGHT, faceRight: true });
   }
   return out;
+}
+
+// The ONE pig the distracted rider fixes his gaze on (rider_gaze.ts) — a real front-row pig (the d=+2 one
+// below), so the head-turn always aims at something actually rendered. `laneHalfWidth` matches farmCritters.
+export function gazePig(length: number, laneHalfWidth: number): { along: number; across: number } {
+  return { along: length - PIG_DIST_BEFORE_END + GAZE_PIG_ALONG_OFFSET, across: laneHalfWidth + HERD_ROAD_OFFSET };
 }
 
 // 10 pigs near the end of the segment, on the right: a front row of 4 at the road's edge, and a

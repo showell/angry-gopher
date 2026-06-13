@@ -27,6 +27,7 @@ import { turnSpeed } from './intersection.ts';
 import { segmentCatDanger } from './cat_motion.ts';
 import { simulateRiderStep } from './bike_physics.ts';
 import type { RiderPhysics } from './bike_physics.ts';
+import { pigGazeBrake } from './rider_gaze.ts';
 
 // ----------------------------------------------------------------------------
 // types
@@ -46,10 +47,12 @@ export interface PathSim { side: DangerSide; forward: number; crossed: boolean; 
 // Why the forward (throttle/brake) decision came out the way it did — whichever constraint was BINDING this
 // frame. CRUISE = accelerating freely; HOLD_LEAN = throttle shut because he's leaned past TILT_HOLD;
 // AVOID_SPEEDING = capped at V_MAX; PREPARE_FOR_INTERSECTION = braking to the corner's entry speed; AVOID_CAT
-// = holding for a crossing cat; AVOID_SHOULDER = braking so he doesn't run off the road edge.
+// = holding for a crossing cat; AVOID_SHOULDER = braking so he doesn't run off the road edge; SLOW_FOR_PIGS =
+// easing down to gawk at the roadside pigs (the gaze distraction reaching into the motion — see rider_gaze.ts).
 export const ForwardReason = {
   CRUISE: 'CRUISE', HOLD_LEAN: 'HOLD_LEAN', AVOID_SPEEDING: 'AVOID_SPEEDING',
   PREPARE_FOR_INTERSECTION: 'PREPARE_FOR_INTERSECTION', AVOID_CAT: 'AVOID_CAT', AVOID_SHOULDER: 'AVOID_SHOULDER',
+  SLOW_FOR_PIGS: 'SLOW_FOR_PIGS',
 } as const;
 export type ForwardReason = typeof ForwardReason[keyof typeof ForwardReason];
 
@@ -69,7 +72,7 @@ export function riderDebug(state: RiderState, world: World): RiderDecision {
 // "turning" mode — he's always just driving, sometimes leaned.
 export interface RiderState extends RiderPhysics {
   segment: SegId;     // which road segment he's on (the RiderPhysics fields are relative to it)
-  gazeStep: number;   // the "distracted rider" glance: -1 = eyes ahead, 0..8 = mid-glance, >=9 = done
+  gazeYaw: number;    // the "distracted rider" head-turn (radians, 0 = eyes ahead): a VIEW-ONLY camera yaw toward the pigs — see rider_gaze.ts
 }
 
 // ----------------------------------------------------------------------------
@@ -109,7 +112,7 @@ const CENTER_LANE_EPSILON = 0.04;           // once he's THIS close to centre, s
 // ----------------------------------------------------------------------------
 
 export function initialRiderState(world: World): RiderState {
-  return { segment: world.start, along: 0, across: 0, yaw: 0, v: V_BASE, tilt: 0, gazeStep: -1 };
+  return { segment: world.start, along: 0, across: 0, yaw: 0, v: V_BASE, tilt: 0, gazeYaw: 0 };
 }
 
 // The Rider's heading relative to north (north = seg1's forward direction). This is the one ABSOLUTE
@@ -164,7 +167,7 @@ export function getNextRiderState(state: RiderState, world: World): RiderState {
   const seg = world.segments[state.segment];
   const { tiltStep, accel } = decide(state, seg, world);
   const moved = simulateRiderStep(state, tiltStep, accel);
-  const riderState: RiderState = { ...moved, segment: seg.id, gazeStep: state.gazeStep };
+  const riderState: RiderState = { ...moved, segment: seg.id, gazeYaw: state.gazeYaw };
 
   // Resolve the road graph by POSITION (not by any turn flag): toward a turn, re-express him in the NEXT
   // segment's frame EVERY frame and commit the moment his real position is actually within that road
@@ -189,7 +192,7 @@ export function getNextRiderState(state: RiderState, world: World): RiderState {
 // commit point; it threw away how off-centre / overshot he really was, a small lie at the seam.) The map below
 // is the exact INVERSE of the seg-B -> seg-A transform the continuity check composes (test_model localToRef),
 // so the seam is now position-continuous by construction. The heading rotates by the turn: yaw_B = yaw_A -
-// sgn*theta. Eyes back on the road (gazeStep -1).
+// sgn*theta. Eyes back on the road (gazeYaw 0) — the next frame's gaze step re-derives it from the new segment.
 function riderStateForNextSegment(riderState: RiderState, world: World): RiderState {
   const seg = world.segments[riderState.segment];
   const exitIxn = world.intersections[seg.exitIxn];
@@ -200,7 +203,7 @@ function riderStateForNextSegment(riderState: RiderState, world: World): RiderSt
   const along = cos * da + sgn * sin * dx;                  // rotate into seg B's frame (inverse of localToRef)
   const across = -sgn * sin * da + cos * dx;
   return { segment: next.id, along, across, yaw: riderState.yaw - sgn * theta,
-           v: riderState.v, tilt: riderState.tilt, gazeStep: -1 };
+           v: riderState.v, tilt: riderState.tilt, gazeYaw: 0 };
 }
 
 // THE FORWARD DECISION — throttle/brake — returns the change in speed this frame AND the binding reason (see
@@ -226,6 +229,11 @@ function getForwardAccelDecel(state: RiderState, seg: RoadSegment, world: World)
     if (cornerA < a) { a = cornerA; reason = ForwardReason.PREPARE_FOR_INTERSECTION; }
   }
   if (segmentCatDanger(seg.cats, state.along, state.v) && a > 0) { a = 0; reason = ForwardReason.AVOID_CAT; }  // hold throttle for a crossing cat
+
+  // ease down to a slow gawking speed for the roadside pigs (the gaze distraction's one reach into the motion).
+  // pigGazeBrake owns the trigger + the slow speed (rider_gaze.ts); here we just fold it into the min-of-brakes.
+  const pigA = pigGazeBrake(state, seg);
+  if (pigA !== null && pigA < a) { a = pigA; reason = ForwardReason.SLOW_FOR_PIGS; }
 
   // Brake for the road edge using the rider's ACTUAL simulated path at his just-chosen lean (state.tilt/yaw
   // already hold this frame's lean + heading) — so the brake has FAITH the bike will turn, instead of the old
