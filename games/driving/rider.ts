@@ -232,7 +232,7 @@ function getForwardAccelDecel(state: RiderState, seg: RoadSegment, world: World)
 
   // ease down to a slow gawking speed for the roadside pigs (the gaze distraction's one reach into the motion).
   // pigGazeBrake owns the trigger + the slow speed (rider_gaze.ts); here we just fold it into the min-of-brakes.
-  const pigA = pigGazeBrake(state, seg);
+  const pigA = pigGazeBrake(state, seg, world);
   if (pigA !== null && pigA < a) { a = pigA; reason = ForwardReason.SLOW_FOR_PIGS; }
 
   // Brake for the road edge using the rider's ACTUAL simulated path at his just-chosen lean (state.tilt/yaw

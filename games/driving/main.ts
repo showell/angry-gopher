@@ -8,7 +8,7 @@
 //   ArrowDown : pop back to the previous RiderState
 // =============================================================================
 import { initialRiderState, getNextRiderState, riderHeading, riderTilt, riderFinished, simulateRiderPath, riderDebug, DangerSide, MAX_LEAN, routeDistance } from './rider.ts';
-import { gazeAngle, nextRiderGaze } from './rider_gaze.ts';
+import { gazeAngle, nextRiderGaze, GAZE_RELEASE_ANGLE } from './rider_gaze.ts';
 import type { RiderState, RiderDecision } from './rider.ts';
 import { initialTruck, nextTruck, courseLength } from './truck.ts';
 import type { TruckState } from './truck.ts';
@@ -67,6 +67,16 @@ let camFocal = FOCAL;
 const focalForLean = (lean: number): number => {
   const frac = Math.min(Math.abs(lean) / MAX_LEAN, 1);   // 0 straight … 1 at MAX_LEAN
   return FOCAL * (1 - (1 - MIN_FOCAL_FACTOR) * frac * frac);
+};
+
+// The distracted-rider GAZE pulls the focal IN the same way the lean does — as he turns his head toward the
+// pigs his focus narrows (less horizon, the background squeezed away), then relaxes as his gaze swings back to
+// the road. Driven by how far his head has turned (gazeAngle, peaking at GAZE_RELEASE_ANGLE), so it rises while
+// he's turning toward the pig and falls as he straightens out — no separate state to keep.
+const MIN_GAZE_FOCAL_FACTOR = 0.5;   // focal at the gaze's peak, as a fraction of FOCAL — how hard the distraction narrows his focus
+const focalForGaze = (gaze: number): number => {
+  const frac = Math.min(Math.abs(gaze) / GAZE_RELEASE_ANGLE, 1);   // 0 eyes-front … 1 at the gaze peak
+  return FOCAL * (1 - (1 - MIN_GAZE_FOCAL_FACTOR) * frac * frac);
 };
 
 // the rider also turns his HEAD into the corner — a subtle view-only yaw, 15% of the lean angle.
@@ -218,9 +228,11 @@ function render(rider: RiderState): void {
 
   // CAMERA ROLL: the rider banks into the turn, so the whole world — horizon included
   // — rotates about the screen centre by his lean. The HUD/overlay (below) stay level.
-  // The same lean also pulls the focal point in (see focalForLean); set it before any
-  // projection this frame so the road, scenery, and horizon all share one camera.
-  camFocal = focalForLean(tilt);
+  // The same lean also pulls the focal point in (focalForLean); the pig distraction pulls it in too
+  // (focalForGaze). Take whichever narrows more — they rarely overlap (eyes are on the road mid-corner, so
+  // the gaze is 0 there; he's near-upright while gawking, so the lean is ~0 there). Set before any projection
+  // this frame so the road, scenery, and horizon all share one camera.
+  camFocal = Math.min(focalForLean(tilt), focalForGaze(gazeAngle(rider)));
   ctx.save();
   ctx.translate(W / 2, H / 2);
   ctx.rotate(-tilt);
