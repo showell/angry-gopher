@@ -5,7 +5,7 @@
 //
 // Run: node test/test_model.ts
 import { initialRiderState, getNextRiderState, riderDebug, ForwardReason, MAX_TURN_ANGLE, routeDistance } from '../rider.ts';
-import { nextRiderGaze } from '../rider_gaze.ts';
+import { nextRiderGaze, gazeFocus, PIG_GAZE_SPEED, GAZE_RELEASE_ANGLE, PIG_NOVELTY_COUNT } from '../rider_gaze.ts';
 import type { RiderState } from '../rider.ts';
 import { initialTruck, nextTruck, courseLength } from '../truck.ts';
 import type { TruckState } from '../truck.ts';
@@ -237,11 +237,56 @@ function main(): void {
   // 1) invariants on every state
   for (const st of states) assertInvariants(st, world);
 
-  // 1b) the distracted-rider GAZE checks are TEMP-DISABLED — the gaze glance is currently off in
-  // rider_gaze.ts while we rework it into the "pig distraction" behaviour. When that lands, re-enable
-  // (and update for pigs) the checks that ran here: the glance must fire, walk the configured sequence,
-  // return to straight, and be back to straight before the APPROACH_INTERSECTION_DIST braking zone.
-  console.log('  NOTE: gaze/glance assertions TEMP-DISABLED (pig-distraction rework pending)');
+  // 1b) the distracted-rider PIG GAZE (rider_gaze.ts). The rider GAWKS only on the first PIG_NOVELTY_COUNT
+  // pig legs (a novelty that wears off): on those legs he eases to the gawk speed, turns his head toward the
+  // designated pig up to GAZE_RELEASE_ANGLE, then drifts his eyes back to the road BEFORE the corner (no snap
+  // at the seam) and — having seen the pigs — never re-accelerates for the rest of the leg. Everywhere else he
+  // keeps his eyes ahead. We build the per-segment gaze/focus profile and pin the whole behaviour to it.
+  const segGazePeak: Record<string, number> = {};    // peak |gazeYaw| per segment (degrees)
+  const segFocusPeak: Record<string, number> = {};   // peak narrowing per segment (0..1)
+  for (const st of states) {
+    segGazePeak[st.segment] = Math.max(segGazePeak[st.segment] ?? 0, Math.abs(st.gazeYaw) * 180 / Math.PI);
+    segFocusPeak[st.segment] = Math.max(segFocusPeak[st.segment] ?? 0, gazeFocus(st));
+  }
+  // the gawk legs ARE the first PIG_NOVELTY_COUNT pig-bearing segments in route order.
+  const gawkLegs = world.order.filter((id) => world.segments[id].pigs).slice(0, PIG_NOVELTY_COUNT);
+  const RELEASE_DEG = GAZE_RELEASE_ANGLE * 180 / Math.PI;
+  // (i) the distraction fires on EXACTLY those legs and nowhere else (novelty wears off; pig-less legs never glance).
+  const GAZE_FIRES_DEG = 1;
+  for (const id of world.order) {
+    const fires = segGazePeak[id] > GAZE_FIRES_DEG, shouldFire = gawkLegs.includes(id);
+    if (fires !== shouldFire) {
+      throw new Error(`pig-gaze fires on ${id} (peak ${segGazePeak[id].toFixed(1)}deg) but it ${shouldFire ? 'should be a gawk leg' : 'should NOT (no pigs, or the novelty has worn off)'}`);
+    }
+  }
+  // (ii)-(v) the shape of the gawk on each of those legs.
+  for (const id of gawkLegs) {
+    const ss = states.filter((st) => st.segment === id);
+    // (ii) the head turns up to JUST UNDER the release angle (it lags the bearing, then releases at the angle).
+    const peak = segGazePeak[id];
+    if (peak > RELEASE_DEG || peak < RELEASE_DEG - 3) {
+      throw new Error(`${id} gaze peaks ${peak.toFixed(1)}deg, expected just under the ${RELEASE_DEG.toFixed(0)}deg release angle`);
+    }
+    // (iii) the camera focus fully narrows during the gawk.
+    if (segFocusPeak[id] < 0.99) throw new Error(`${id} focus only reached ${segFocusPeak[id].toFixed(2)}, expected ~1 at the gaze peak`);
+    // (iv) eyes drift back to straight BEFORE he commits to the corner, and are exactly straight at the seam
+    // (so the next segment's reset can't snap the head).
+    const commit = world.segments[id].alongWhereRiderCommitsToTurn;
+    let gazeBackAlong = -Infinity;   // the last along where his head was still off-straight
+    for (const st of ss) if (Math.abs(st.gazeYaw) * 180 / Math.PI > 0.01) gazeBackAlong = st.along;
+    if (!(gazeBackAlong < commit)) throw new Error(`${id} eyes not back before the turn: head still off-straight at along ${gazeBackAlong.toFixed(0)} >= commit ${commit.toFixed(0)}`);
+    if (Math.abs(ss[ss.length - 1].gazeYaw) > 1e-9) throw new Error(`${id} head ${(ss[ss.length - 1].gazeYaw * 180 / Math.PI).toFixed(1)}deg off-straight at the seam — it would snap to 0 at the crossing`);
+    // (v) he slows to the gawk speed (he's there by the gaze peak) and NEVER re-accelerates for the rest of the
+    // leg — from the peak on, the corner may take him slower, but speed never climbs back above the gawk speed.
+    // (The kinematic hold leaves a few-millionths residual above the exact speed, so allow a hair of tolerance.)
+    const GAWK_TOL = 1e-3;
+    const peakIdx = ss.reduce((best, st, i) => (Math.abs(st.gazeYaw) > Math.abs(ss[best].gazeYaw) ? i : best), 0);
+    if (ss[peakIdx].v > PIG_GAZE_SPEED + GAWK_TOL) throw new Error(`${id} still going ${ss[peakIdx].v.toFixed(3)} at the gaze peak — not slowed to the gawk speed ${PIG_GAZE_SPEED}`);
+    for (let k = peakIdx; k < ss.length; k++) {
+      if (ss[k].v > PIG_GAZE_SPEED + GAWK_TOL) throw new Error(`${id} re-accelerated to ${ss[k].v.toFixed(3)} after the pigs (above the gawk speed ${PIG_GAZE_SPEED})`);
+    }
+  }
+  console.log(`  pig-gaze: gawks on [${gawkLegs.join(', ')}] — peak ~${RELEASE_DEG.toFixed(0)}deg, focus full, slows to ${PIG_GAZE_SPEED} and holds, eyes back before each corner`);
 
   // 1c) the SUNSET over seg7 (the special segment). seg7 must be the long, sun-ward stretch: at
   // least 1000m (it hosts the mid-segment radio tower), headed roughly toward the sun, with the sun

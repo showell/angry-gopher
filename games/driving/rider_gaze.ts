@@ -22,15 +22,15 @@ import type { World } from './world.ts';
 import { gazePig } from './farm_critter.ts';
 
 // --- the tunables (head-swivel rates, the gawk speed, when he notices / loses interest) ---
-const PIG_NOVELTY_COUNT = 2;                      // he's only distracted by the pigs the first N times they appear on the route — a novelty that wears off (afterward he's seen pigs, keeps his eyes on the road)
+export const PIG_NOVELTY_COUNT = 2;               // he's only distracted by the pigs the first N times they appear on the route — a novelty that wears off (afterward he's seen pigs, keeps his eyes on the road)
 const GAZE_LOOK_DIST = 150;                       // he notices the pigs (and starts slowing) when the pig is this far ahead (m) — bigger = he begins decelerating earlier (and starts his subtle far-off head-turn earlier)
-const GAZE_RELEASE_ANGLE = 35 * Math.PI / 180;    // the gaze PEAKS here — once the pig has swung this far off his heading (~beside him, just down the road) he loses it and looks back (also the normaliser for the focus)
+export const GAZE_RELEASE_ANGLE = 35 * Math.PI / 180;   // the gaze PEAKS here — once the pig has swung this far off his heading (~beside him, just down the road) he loses it and looks back (also the normaliser for the focus)
 const GAZE_SWIVEL_RATE = 4 * Math.PI / 180;       // most his head turns TOWARD the pig in one frame (rad) — the gentle "couple frames to turn" knob
 const GAZE_RETURN_RATE = 0.2 * Math.PI / 180;     // the head's BACK-to-the-road drift rate for the bulk of the return — a very slow, unhurried linger once he releases
 const GAZE_RETURN_EASE = 0.05;                     // near straight the return step shrinks to this fraction of the remaining angle, so the head DECELERATES into straight (no sharp stop). Crossover ~ GAZE_RETURN_RATE/this (~4deg)
 const GAZE_RETURN_SNAP = 0.02 * Math.PI / 180;    // below this remaining angle, snap the last (sub-pixel) sliver to 0 — keeps the focus's "fully straightened" trigger exact
 const FOCUS_DECAY = 0.0012;                        // once his head is fully STRAIGHTENED, the focus PROGRESS bleeds off this much per frame (1 -> 0 over ~830 frames). The stored value is a linear progress; gazeFocus smoothsteps it so the actual re-widen eases gently out of the hold and settles softly (no velocity kink at either end)
-const PIG_GAZE_SPEED = 0.20;                      // the slow speed he eases down to so he can savour the pigs (m/press) — then HOLDS it for the rest of the segment (never re-accelerates after the pigs)
+export const PIG_GAZE_SPEED = 0.20;              // the slow speed he eases down to so he can savour the pigs (m/press) — then HOLDS it for the rest of the segment (never re-accelerates after the pigs)
 const PIG_GAZE_SETTLE_DIST = 25;                  // he finishes slowing to the gawk speed this far before the pig, then CREEPS the rest of the way at it (so he's at the gawk speed well before he looks away)
 const EYES_ON_ROAD_YAW = 6 * Math.PI / 180;       // pointed more than this off the lane = mid-corner, eyes snap back to the road
 
