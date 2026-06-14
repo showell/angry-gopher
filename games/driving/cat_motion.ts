@@ -118,6 +118,28 @@ export function segmentCatDanger(cats: Cat[], riderAlong: number, v: number): bo
   return cats.some((c) => catInDanger(c, riderAlong, v));
 }
 
+// THE RIDER'S FOCUS tightens as a cat crosses — the pig-distraction focal pull-in, but keyed to the cat's
+// own crossing clock. It ramps UP smoothly as the cat enters (over crossT 0..1), PEAKS at the LANDING frame
+// at FOCUS_PEAK (1.5 = an exaggerated 1.5x a normal full pull-in), then eases smoothly back to none over a
+// fixed FOCUS_RAMP_DOWN frames after the landing. View-only: main.ts folds the returned tightness (0 = none,
+// 1 = a normal full pull-in) into the camera focal. Returns the max across the segment's cats.
+const FOCUS_PEAK = 1.5;
+const FOCUS_RAMP_DOWN = 83;   // frames after the landing to ease focus back to full-wide (hard-coded; the exact frame isn't critical)
+const smoothstep = (t: number): number => t * t * (3 - 2 * t);
+
+export function catFocus(cats: Cat[], riderAlong: number, v: number): number {
+  let f = 0;
+  for (const c of cats) f = Math.max(f, catFocusOne(c, riderAlong, v));
+  return f;
+}
+
+function catFocusOne(c: Cat, riderAlong: number, v: number): number {
+  if (v <= 1e-6) return 0;
+  const e = (c.along - riderAlong) - ROAD_BUFFER;          // distance to the landing point: >0 approaching, <=0 after
+  if (e > 0) return smoothstep(crossT(c.along - riderAlong, v)) * FOCUS_PEAK;   // ramp UP, same clock as the crossing
+  return (1 - smoothstep(Math.min(-e / v / FOCUS_RAMP_DOWN, 1))) * FOCUS_PEAK;  // ramp DOWN over FOCUS_RAMP_DOWN frames past the landing
+}
+
 // the smallest right-side tree `along` at or after `desired` — the cat is tucked just past it. Trees are
 // NOT evenly spaced (size/scheme nudges some off the line and the count-per-segment stretches the
 // stride), so read the segment's actual trees instead of assuming a regular interval.

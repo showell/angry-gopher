@@ -11,6 +11,7 @@ import { initialRiderState, getNextRiderState, riderHeading, riderTilt, riderFin
 import { gazeAngle, gazeFocus, nextRiderGaze } from './rider_gaze.ts';
 import type { RiderState, RiderDecision } from './rider.ts';
 import { initialTruck, nextTruck, courseLength } from './truck.ts';
+import { catFocus } from './cat_motion.ts';
 import type { TruckState } from './truck.ts';
 import { buildWorld } from './world.ts';
 import { buildScene } from './view.ts';
@@ -271,7 +272,10 @@ function render(rider: RiderState): void {
   // (focalForGaze). Take whichever narrows more — they rarely overlap (eyes are on the road mid-corner, so
   // the gaze is 0 there; he's near-upright while gawking, so the lean is ~0 there). Set before any projection
   // this frame so the road, scenery, and horizon all share one camera.
-  camFocal = Math.min(focalForLean(tilt), focalForGaze(gazeFocus(rider)));
+  // the focal pulls IN for the deepest of: the lean, the pig gaze, and the rider's attention narrowing on a
+  // crossing cat (catFocus, view-only). focalForGaze is monotonic, so the tightest focus wins.
+  const attention = Math.max(gazeFocus(rider), catFocus(world.segments[rider.segment].cats, rider.along, rider.v));
+  camFocal = Math.min(focalForLean(tilt), focalForGaze(attention));
   ctx.save();
   ctx.translate(W / 2, H / 2);
   ctx.rotate(-tilt);
