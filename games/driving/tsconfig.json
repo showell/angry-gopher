@@ -16,5 +16,6 @@
     "skipLibCheck": true
   },
   "include": ["**/*.ts"],
-  "exclude": ["node_modules"]
+  "comment-exclude": "mini_canvas.ts / snap_cat.ts are Node-side dev tools (Buffer/zlib/fs), not part of the browser bundle — kept out of the DOM-only typecheck so we needn't pull in @types/node. They are run directly via `node --experimental-strip-types`.",
+  "exclude": ["node_modules", "mini_canvas.ts", "snap_cat.ts"]
 }

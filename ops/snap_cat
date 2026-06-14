@@ -1,0 +1,20 @@
+#!/bin/bash
+# CANONICAL DEV-LOOP SCRIPT — DO NOT REINVENT.
+# Before writing a new ops/* script or composing an ad-hoc
+# shell command for build / launch / test / regen, run
+# `ops/list` to see what already exists.
+#
+# Render the driving game's cat IN ISOLATION to a PNG contact
+# sheet (games/driving/snap/cat.png) using the dependency-free
+# MiniCanvas rasterizer — so the cat can be SEEN without a
+# browser while iterating on its anatomy. The PNG is gitignored.
+#
+# Runs the REAL cat drawing code (cat_anatomy via catScenery);
+# this is a viewer, not a re-implementation. Edit the POSES list
+# in games/driving/snap_cat.ts to change what's rendered.
+set -e
+
+source "$(dirname "$0")/_paths.sh"
+
+cd "$GOPHER_DIR/games/driving"
+node --experimental-strip-types snap_cat.ts
