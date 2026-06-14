@@ -39,7 +39,7 @@ canvas.style.cssText = 'display:block;background:#000;box-shadow:0 10px 40px rgb
 wrap.appendChild(canvas);
 
 const hint = document.createElement('div');
-hint.textContent = '↑ fwd · ↓ back · SPACE auto · D debug · S → sunset · H → seg16';
+hint.textContent = '↑ fwd · ↓ back · SPACE auto · D debug · S → sunset · H → seg16 · J → next ixn';
 hint.style.cssText =
   'position:absolute;left:50%;bottom:10px;transform:translateX(-50%);padding:6px 14px;' +
   'background:rgba(0,0,0,0.45);border:1px solid rgba(255,255,255,0.15);border-radius:4px;' +
@@ -177,6 +177,14 @@ window.addEventListener('keydown', (e) => {
     e.preventDefault();
   } else if (e.code === 'KeyH') {
     if (!e.repeat) forwardUntil('forwarding to seg16…', () => world.order.indexOf(currentRider().segment) >= seg16Idx);
+    e.preventDefault();
+  } else if (e.code === 'KeyJ') {
+    // jump one intersection: fast-forward the real drive until the rider crosses into the NEXT segment,
+    // landing him at its start. Repeated presses walk the route one segment at a time.
+    if (!e.repeat) {
+      const from = currentRider().segment;
+      forwardUntil('forwarding one intersection…', () => currentRider().segment !== from);
+    }
     e.preventDefault();
   }
 });
