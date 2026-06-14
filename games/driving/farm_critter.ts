@@ -29,8 +29,7 @@ const GAZE_PIG_ALONG_OFFSET = 2;   // the one pig the distracted rider fixes on:
 const BIG_HERD_COLS = 7;           // pigs along the road; the extra columns extend toward the intersection
 const BIG_HERD_ROWS = 7;           // rows of pigs; the extra rows extend the herd away from the road
 const PIG_COL_SPACING = 4;         // along-spacing within a row
-const PIG_ROW_DEPTH = 6;           // across-spacing between rows (deeper into the field)
-const PIG_ROW_STAGGER = 1.5;       // alternate rows nudged along, so columns don't line up rigidly
+const PIG_ROW_DEPTH = 6;           // across-spacing between rows (deeper into the field) AND the along-shear per row: each row steps PIG_ROW_DEPTH across and the same PIG_ROW_DEPTH toward the intersection, so the herd's slanted sides run at 45deg
 const PIG_JITTER_ALONG = 1.2;      // deterministic per-pig wobble, along
 const PIG_JITTER_ACROSS = 1.0;     // deterministic per-pig wobble, across
 const PIG_HERD_FIRST_COL = -6;     // along-offset of each row's near (cluster-front) pig; columns run from here toward the intersection
@@ -83,16 +82,18 @@ function pigRow(length: number, edge: number): Critter[] {
   return out;
 }
 
-// The big distraction herd: a BIG_HERD_COLS x BIG_HERD_ROWS block extending toward the intersection (cols)
-// and away from the road (rows), staggered + jittered so it mills like a real herd. The gaze still aims at
-// the fixed gazePig point near the front, which sits inside this block.
+// The big distraction herd: a BIG_HERD_COLS x BIG_HERD_ROWS block — columns run along the road, rows run away
+// from it. The front row sits at the road edge; each deeper row is SHEARED one PIG_ROW_DEPTH toward the
+// intersection (the same as its across step), so the herd's footprint is a parallelogram with 45deg slanted
+// sides. A deterministic jitter on top so it mills like a real herd. The gaze still aims at the fixed gazePig
+// point in the (unsheared) front row.
 function pigHerd(length: number, edge: number): Critter[] {
   const out: Critter[] = [];
   const base = length - PIG_DIST_BEFORE_END;
   for (let r = 0; r < BIG_HERD_ROWS; r++) {
     for (let c = 0; c < BIG_HERD_COLS; c++) {
       const i = r * BIG_HERD_COLS + c;
-      const along = base + PIG_HERD_FIRST_COL + c * PIG_COL_SPACING + (r % 2) * PIG_ROW_STAGGER + PIG_JITTER_ALONG * Math.sin(i * 2.3);
+      const along = base + PIG_HERD_FIRST_COL + c * PIG_COL_SPACING + r * PIG_ROW_DEPTH + PIG_JITTER_ALONG * Math.sin(i * 2.3);
       const across = edge + r * PIG_ROW_DEPTH + PIG_JITTER_ACROSS * Math.cos(i * 1.7);
       out.push({ along, across, emoji: '🐖', height: PIG_HEIGHT, faceRight: false });
     }
