@@ -64,9 +64,9 @@ export function buildWorld(): World {
   // seg16 zebra+pig-absence, seg19 red+cat finale). YELLOW trees are the one-off first-colour reveal
   // at seg4. Corner-creature departures are in the turns table below. ----
   const segmentConfigs: RoadSegmentConfig[] = [
-    { id: 'seg1',  length: 500,  scheme: 'ALL_GREEN',    pigs: true  },  // TEMP(pig-tuning): seg3's distraction herd moved here so it's visible immediately — revert to false
+    { id: 'seg1',  length: 500,  scheme: 'ALL_GREEN',    pigs: false },  // opener: plain road, kept short to reach the action sooner
     { id: 'seg2',  length: 320,  scheme: 'ALL_GREEN',    pigs: false },  // the CAT crossing (cat_motion's CAT_SEGMENTS)
-    { id: 'seg3',  length: 400,  scheme: 'ALL_GREEN',    pigs: false },  // TEMP(pig-tuning): pigs moved to seg1 for testing — revert to true (the real first appearance)
+    { id: 'seg3',  length: 400,  scheme: 'ALL_GREEN',    pigs: true  },  // NEW: pigs first appear (alone — the first distraction herd)
     { id: 'seg4',  length: 300,  scheme: 'YELLOW_GREEN', pigs: false },  // NEW: first new tree colour (golden, one-off)
     { id: 'seg5',  length: 300,  scheme: 'ALL_GREEN',    pigs: false },  // NEW: first giraffe (at its corner)
     { id: 'seg6',  length: 300,  scheme: 'ALL_GREEN',    pigs: false },  // -- seg6-12: boring apart from the sunset --
