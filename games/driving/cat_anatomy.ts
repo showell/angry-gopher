@@ -63,6 +63,9 @@ const HEAD = { cx: -0.48, cy: 0.76, r: 0.16, eye: [-0.53, 0.80], nose: [-0.63, 0
 // silhouette gains a snout (cats read by their muzzle, especially side-on). Unioned with the head.
 const MUZZLE = { cx: -0.60, cy: 0.705, r: 0.092 } as const;
 const NOSE_TIP: P = [MUZZLE.cx - MUZZLE.r * 0.7, MUZZLE.cy + 0.01];
+// FROZEN head: when the front wheels toward us, the head sits OVER the frontal chest (not way out
+// front on a profile neck) and reads a touch larger — it's the nearest thing to the rider.
+const FROZEN_HEAD = { cx: -0.25, cy: 0.80, r: 0.185 } as const;
 
 // silhouette facts cat_motion uses to place the cat: head-centre x (to centre the head on the lane)
 // and the tail-tip reach (to clear the road by a full tail length).
@@ -88,8 +91,8 @@ const KNEE_LIFT_AMP = 0.55;
 // ears — profile pair (near on top, far peeking behind) and the front-on pair (symmetric atop the head).
 const NEAR_EAR = { a: [-0.53, 0.84], tip: [-0.53, 1.04], b: [-0.43, 0.87] } as const;
 const FAR_EAR = { a: [-0.45, 0.86], tip: [-0.43, 1.00], b: [-0.35, 0.85] } as const;
-const FRONT_EAR_L = { a: [HEAD.cx - 0.15, 0.86], tip: [HEAD.cx - 0.10, 1.03], b: [HEAD.cx - 0.02, 0.88] } as const;
-const FRONT_EAR_R = { a: [HEAD.cx + 0.02, 0.88], tip: [HEAD.cx + 0.10, 1.03], b: [HEAD.cx + 0.15, 0.86] } as const;
+const FRONT_EAR_L = { a: [FROZEN_HEAD.cx - 0.17, 0.90], tip: [FROZEN_HEAD.cx - 0.11, 1.11], b: [FROZEN_HEAD.cx - 0.02, 0.93] } as const;
+const FRONT_EAR_R = { a: [FROZEN_HEAD.cx + 0.02, 0.93], tip: [FROZEN_HEAD.cx + 0.11, 1.11], b: [FROZEN_HEAD.cx + 0.17, 0.90] } as const;
 
 // tail — capsules between these nodes, tapering by these radii.
 const TAIL_NODES: P[] = [[0.72, 0.52], [0.94, 0.50], [1.08, 0.58], [1.14, 0.73]];
@@ -211,32 +214,33 @@ function catmullClosed(pts: P[], seg: number): P[] {
 // the smoothed torso silhouette path
 function bodyPath(ctx: Ctx): void { polyPath(ctx, catmullClosed(BODY_OUTLINE, 12)); }
 
-// Lay down the head silhouette path: a plain sphere head-on, the head+muzzle union in profile.
-function headPath(ctx: Ctx, headFront: boolean): void {
-  if (headFront) { ctx.beginPath(); ctx.arc(HEAD.cx, HEAD.cy, HEAD.r, 0, TAU); }
-  else polyPath(ctx, circleUnionOutline([HEAD.cx, HEAD.cy], HEAD.r, [MUZZLE.cx, MUZZLE.cy], MUZZLE.r));
+// Lay down the PROFILE head silhouette path: the head+muzzle union (the snout). The frozen head is a
+// plain sphere drawn by drawFrozenFront (it sits over the frontal chest, not way out front).
+function headPath(ctx: Ctx): void {
+  polyPath(ctx, circleUnionOutline([HEAD.cx, HEAD.cy], HEAD.r, [MUZZLE.cx, MUZZLE.cy], MUZZLE.r));
 }
 
 // The body is the internal solids drawn directly in the body colour: torso, neck, head and tail
 // overlap, so the same fill unions them into one connected shape. Fill them ALL first (so no fill
 // paints over another's outline), then stroke them ALL — the only seams that show are where two
-// solids meet, which is fine.
+// solids meet, which is fine. In the frozen pose the neck + head are PROFILE-suppressed (the front
+// wheels toward us, so drawFrozenFront owns the chest/neck/head instead).
 function drawBody(ctx: Ctx, fill: string, line: string, headFront: boolean): void {
   ctx.fillStyle = fill;
   bodyPath(ctx); ctx.fill();
-  capsulePath(ctx, NECK_BASE, NECK_TOP, NECK_RADIUS, NECK_RADIUS); ctx.fill();
+  if (!headFront) { capsulePath(ctx, NECK_BASE, NECK_TOP, NECK_RADIUS, NECK_RADIUS); ctx.fill(); }
   for (let i = 0; i < TAIL_NODES.length - 1; i++) {
     capsulePath(ctx, TAIL_NODES[i], TAIL_NODES[i + 1], TAIL_RADII[i], TAIL_RADII[i + 1]); ctx.fill();
   }
-  headPath(ctx, headFront); ctx.fill();
+  if (!headFront) { headPath(ctx); ctx.fill(); }
 
   ctx.strokeStyle = line;
   bodyPath(ctx); ctx.stroke();
-  capsulePath(ctx, NECK_BASE, NECK_TOP, NECK_RADIUS, NECK_RADIUS); ctx.stroke();
+  if (!headFront) { capsulePath(ctx, NECK_BASE, NECK_TOP, NECK_RADIUS, NECK_RADIUS); ctx.stroke(); }
   for (let i = 0; i < TAIL_NODES.length - 1; i++) {
     capsulePath(ctx, TAIL_NODES[i], TAIL_NODES[i + 1], TAIL_RADII[i], TAIL_RADII[i + 1]); ctx.stroke();
   }
-  headPath(ctx, headFront); ctx.stroke();
+  if (!headFront) { headPath(ctx); ctx.stroke(); }
 }
 
 // Draw the cat in its unit frame (standing height 1, y up, feet at the origin), sized by distance.
@@ -266,20 +270,45 @@ function drawCat(ctx: Ctx, c: CatView, project: Project): void {
 // ears and face change.
 function paintCat(ctx: Ctx, pal: CatForm['palette'], walk: number, headFront: boolean): void {
   const opp = walk + Math.PI;
-  drawLeg(ctx, far(FRONT_HIP), pal.shadow, pal.capsuleLine, opp);    // far pair, behind the body, in shade
-  drawLeg(ctx, far(HIND_HIP), pal.shadow, pal.capsuleLine, walk);
+  if (!headFront) drawLeg(ctx, far(FRONT_HIP), pal.shadow, pal.capsuleLine, opp);   // far foreleg (profile only)
+  drawLeg(ctx, far(HIND_HIP), pal.shadow, pal.capsuleLine, walk);                   // far hind, behind the body
   if (!headFront) drawEar(ctx, FAR_EAR, pal.shadow, pal.line);   // profile: far ear peeks behind the head
   drawBody(ctx, pal.body, pal.capsuleLine, headFront);
-  drawLeg(ctx, FRONT_HIP, pal.body, pal.capsuleLine, walk);         // near pair, over the body
-  drawLeg(ctx, HIND_HIP, pal.body, pal.capsuleLine, opp);
-  if (headFront) {                                           // FROZEN: two symmetric ears, a face-on muzzle
+  drawLeg(ctx, HIND_HIP, pal.body, pal.capsuleLine, opp);                           // near hind, over the body
+  if (headFront) {                                           // FROZEN: front wheels toward us, two ears, face-on muzzle
+    drawFrozenFront(ctx, pal);
     drawEar(ctx, FRONT_EAR_L, pal.body, pal.line);
     drawEar(ctx, FRONT_EAR_R, pal.body, pal.line);
     drawFaceFront(ctx, pal);
-  } else {                                                   // PROFILE: one ear on top, the side muzzle
+  } else {                                                   // PROFILE: near foreleg, one ear on top, the side muzzle
+    drawLeg(ctx, FRONT_HIP, pal.body, pal.capsuleLine, walk);
     drawEar(ctx, NEAR_EAR, pal.body, pal.line);
     drawFace(ctx, pal);
   }
+}
+
+// FROZEN twist toward the rider: the cat's front wheels to face us — a broad frontal chest with BOTH
+// forelegs splayed toward us — while the hindquarters stay in profile (the caught-mid-cross stare). The
+// chest is drawn OVER the forelegs' tops so they read as emerging from under it. Only in the head-on freeze.
+const FROZEN_FORELEGS: { hip: P; knee: P; paw: P }[] = [
+  { hip: [-0.285, 0.42], knee: [-0.335, 0.20], paw: [-0.375, 0.0] },   // our-left foreleg
+  { hip: [-0.135, 0.42], knee: [-0.085, 0.20], paw: [-0.045, 0.0] },   // our-right foreleg
+];
+const FROZEN_CHEST: P[] = [
+  [-0.325, 0.55], [-0.21, 0.605], [-0.095, 0.55],   // shoulders, broad and frontal
+  [-0.10, 0.36], [-0.21, 0.31], [-0.32, 0.36],      // narrowing down to between the legs
+];
+
+function drawFrozenFront(ctx: Ctx, pal: CatForm['palette']): void {
+  for (const L of FROZEN_FORELEGS) {
+    capsule(ctx, L.hip, L.knee, 0.052, 0.042, pal.body, pal.capsuleLine);
+    capsule(ctx, L.knee, L.paw, 0.042, 0.036, pal.body, pal.capsuleLine);
+  }
+  polyPath(ctx, catmullClosed(FROZEN_CHEST, 12));        // frontal chest over the forelegs' tops
+  fillStroke(ctx, pal.body, pal.capsuleLine);
+  ctx.beginPath();                                       // head sphere, sitting over the chest (short/foreshortened neck)
+  ctx.arc(FROZEN_HEAD.cx, FROZEN_HEAD.cy, FROZEN_HEAD.r, 0, TAU);
+  fillStroke(ctx, pal.body, pal.capsuleLine);
 }
 
 // the diagnostic view: solids as see-through outlines, legs as raw skeletons, the NECK in solid pink.
@@ -368,7 +397,7 @@ function drawFace(ctx: Ctx, pal: CatForm['palette']): void {
 // the HEAD-ON muzzle (shown frozen): two eyes, a centred nose, a little mouth, and whiskers — all laid
 // out symmetrically about the head centre (cx, cy).
 function drawFaceFront(ctx: Ctx, pal: CatForm['palette']): void {
-  const cx = HEAD.cx, cy = HEAD.cy;
+  const cx = FROZEN_HEAD.cx, cy = FROZEN_HEAD.cy;
 
   ctx.fillStyle = pal.eye;                                   // two eyes, level, either side of centre
   for (const ex of [cx - 0.07, cx + 0.07]) {

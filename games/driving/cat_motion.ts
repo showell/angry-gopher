@@ -36,7 +36,7 @@ const FROZEN_STEPS = 24;
 const ESCAPES_STEPS = 6;
 const CROSS_FRAMES = ENTERS_ROAD_STEPS + FROZEN_STEPS + ESCAPES_STEPS;
 
-const ROAD_BUFFER = 5;          // metres of clear road kept between rider and cat (crossing finishes early)
+const ROAD_BUFFER = 1;          // metres of clear road kept between rider and cat — small, so the cat clears only just in time and the encounter happens ~4m closer (it looms larger at the freeze)
 const STRIDE_STEPS = 5;         // target rider steps per leg cycle (rounded to a whole cycle per phase)
 
 // which segments get a crossing cat (by segment number), and where it spawns / how big it is. The
