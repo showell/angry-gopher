@@ -75,8 +75,8 @@ const CONE_NEAR_HALF = 0.25;      // half the wedge's VERTICAL thickness right a
 const CONE_FAR_CENTER = 0.7;      // centre height of the wedge's far edge — a gentle dip from the lamp, so the beam points mostly forward
 const CONE_FAR_HALF = 0.9;        // half the wedge's vertical thickness at its far edge — it fans open (down toward the road and up)
 const CONE_LENGTH = 20.4;         // how far ahead the beam reaches (m) — 15% shorter than before
-const CONE_ALPHA = 0.85;          // opacity at the wedge's bright core (the lamp)
-const CONE_EDGE_ALPHA = 0.30;     // ...fading to this at its edges — a soft glowing border, not a hard cut
+const CONE_ALPHA = 0.765;         // opacity at the wedge's bright core (the lamp)
+const CONE_EDGE_ALPHA = 0.27;     // ...fading to this at its edges — a soft glowing border, not a hard cut
 const BEAM_RGB = '255,248,214';   // warm white
 
 // a rider-frame point carrying a height off the ground

@@ -39,7 +39,7 @@ canvas.style.cssText = 'display:block;background:#000;box-shadow:0 10px 40px rgb
 wrap.appendChild(canvas);
 
 const hint = document.createElement('div');
-hint.textContent = '↑ fwd · ↓ back · SPACE auto · D debug · S → sunset · H → seg18';
+hint.textContent = '↑ fwd · ↓ back · SPACE auto · D debug · S → sunset · H → seg16';
 hint.style.cssText =
   'position:absolute;left:50%;bottom:10px;transform:translateX(-50%);padding:6px 14px;' +
   'background:rgba(0,0,0,0.45);border:1px solid rgba(255,255,255,0.15);border-radius:4px;' +
@@ -150,9 +150,9 @@ function forwardUntil(label: string, done: () => boolean): void {
   dirty = false;   // don't let the loop repaint over the notice before the compute runs
 }
 
-// the route index of seg18 — the H hotkey forwards to the start of it (where the truck's headlights first
-// read clearly). We stop on reaching seg18 OR any later segment, so a second press is a harmless no-op.
-const seg18Idx = world.order.indexOf('seg18');
+// the route index of seg16 — the H hotkey forwards to the start of it (where the truck's headlights first
+// read clearly). We stop on reaching seg16 OR any later segment, so a second press is a harmless no-op.
+const seg16Idx = world.order.indexOf('seg16');
 
 // SPACE toggles automatic mode (advance every frame, so you needn't hold the up arrow);
 // the arrows always take manual control, stopping auto so you can walk frame by frame
@@ -176,7 +176,7 @@ window.addEventListener('keydown', (e) => {
     if (!e.repeat) forwardUntil('forwarding to sunset…', () => sunBehindMountains(riderHistory.length - 1));
     e.preventDefault();
   } else if (e.code === 'KeyH') {
-    if (!e.repeat) forwardUntil('forwarding to seg18…', () => world.order.indexOf(currentRider().segment) >= seg18Idx);
+    if (!e.repeat) forwardUntil('forwarding to seg16…', () => world.order.indexOf(currentRider().segment) >= seg16Idx);
     e.preventDefault();
   }
 });
