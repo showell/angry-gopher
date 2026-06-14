@@ -323,7 +323,7 @@ function drawFrozenFront(ctx: Ctx, pal: CatForm['palette']): void {
 // POSE is just selected by which frame we're on. Real cats compress the spine to load a jump (the coil).
 type Leg = readonly [P, P, P];   // hip, knee, paw
 
-interface LeapPose { front: Leg; hind: Leg; tail: P[]; head: P; neck: P; sx: number; arch: number }
+interface LeapPose { front: Leg; hind: Leg; tail: P[]; head: P; neck: P; sx: number; arch: number; drop?: number }
 
 const COIL: LeapPose = {
   front: [[-0.02, 0.40], [0.16, 0.16], [0.33, 0.03]],   // front feet drawn back, knees bent, gathered in
@@ -346,24 +346,37 @@ const LAND: LeapPose = {
   head: [-0.52, 0.60], neck: [-0.34, 0.56],             // head up, looking ahead
   sx: 1.12, arch: -0.02,
 };
+// COLLAPSE: the frame after LAND — the cat folds to the ground. ONLY the legs change shape (both bend to a
+// sharp "<", knees barely above ground); the torso/head/tail/neck keep LAND's shape but sink by COLLAPSE_DROP
+// (applied in paintCatLeap). Feet stay where LAND planted them.
+const COLLAPSE_DROP = 0.20;
+const LAND2: LeapPose = {
+  ...LAND,
+  front: [[-0.16, 0.28], [-0.40, 0.05], [-0.26, 0.0]],  // "<": knee forward + barely above ground, paw tucked back under
+  hind: [[0.54, 0.28], [0.34, 0.05], [0.50, 0.0]],      // "<": knee forward + barely above ground
+  drop: COLLAPSE_DROP,
+};
 
 const HEAD_TO_MUZZLE: P = [MUZZLE.cx - HEAD.cx, MUZZLE.cy - HEAD.cy];
 const HEAD_TO_EYE: P = [HEAD.eye[0] - HEAD.cx, HEAD.eye[1] - HEAD.cy];
 
-// pick the pose for this escape frame (leapT 0..1): coil on the first step, flight while airborne, land at the end.
+// pick the pose for this escape frame (leapT 0..1 = k/ESCAPES_STEPS, ESCAPES_STEPS=4): coil on the first
+// step (k<1), flight while airborne (k 1..3), then the two ground frames — LAND (k≈3) then COLLAPSE (k≈4).
 function leapPoseFor(t: number): LeapPose {
-  if (t < 0.30) return COIL;
-  if (t < 0.92) return FLIGHT;
-  return LAND;
+  if (t < 0.20) return COIL;
+  if (t < 0.70) return FLIGHT;
+  if (t < 0.95) return LAND;
+  return LAND2;
 }
 
-// the torso outline deformed for a leap pose: scaled along its length and its BACK bowed up/flat.
-function leapBody(sx: number, arch: number): P[] {
+// the torso outline deformed for a leap pose: scaled along its length, its BACK bowed up/flat, and sunk by
+// `dy` (the collapse drop — the body folds toward the ground while keeping its shape).
+function leapBody(sx: number, arch: number, dy: number): P[] {
   const cx = 0.25;
   return BODY_OUTLINE.map(([x, y]) => {
     const hump = Math.max(0, 1 - Math.abs((x - 0.28) / 0.45));   // peaks mid-back, falls off toward the ends
     const top = y > 0.5 ? 1 : 0;                                 // only move the back (top) edge
-    return [cx + (x - cx) * sx, y + arch * top * hump];
+    return [cx + (x - cx) * sx, y + arch * top * hump - dy];
   });
 }
 
@@ -380,25 +393,29 @@ function drawTailNodes(ctx: Ctx, nodes: P[], fill: string, line: string): void {
 
 function paintCatLeap(ctx: Ctx, pal: CatForm['palette'], t: number): void {
   const k = leapPoseFor(t);
-  const muzzle: P = [k.head[0] + HEAD_TO_MUZZLE[0], k.head[1] + HEAD_TO_MUZZLE[1]];
+  const drop = k.drop ?? 0;                                       // COLLAPSE sinks the upper body (legs are authored low)
+  const head: P = [k.head[0], k.head[1] - drop];
+  const neck: P = [k.neck[0], k.neck[1] - drop];
+  const tail: P[] = drop ? k.tail.map(([x, y]): P => [x, y - drop]) : k.tail;
+  const muzzle: P = [head[0] + HEAD_TO_MUZZLE[0], head[1] + HEAD_TO_MUZZLE[1]];
 
   drawChain(ctx, offsetLeg(k.hind, FAR_LEG_SETBACK), pal.shadow, pal.capsuleLine);    // far pair, in shade
   drawChain(ctx, offsetLeg(k.front, FAR_LEG_SETBACK), pal.shadow, pal.capsuleLine);
-  drawTailNodes(ctx, k.tail, pal.body, pal.capsuleLine);                              // tail behind the body
-  polyPath(ctx, catmullClosed(leapBody(k.sx, k.arch), 12)); fillStroke(ctx, pal.body, pal.capsuleLine);
-  capsule(ctx, k.neck, k.head, NECK_RADIUS, NECK_RADIUS * 0.85, pal.body, pal.capsuleLine);
+  drawTailNodes(ctx, tail, pal.body, pal.capsuleLine);                                // tail behind the body
+  polyPath(ctx, catmullClosed(leapBody(k.sx, k.arch, drop), 12)); fillStroke(ctx, pal.body, pal.capsuleLine);
+  capsule(ctx, neck, head, NECK_RADIUS, NECK_RADIUS * 0.85, pal.body, pal.capsuleLine);
   drawChain(ctx, k.hind, pal.body, pal.capsuleLine);                                  // near pair, over the body
   drawChain(ctx, k.front, pal.body, pal.capsuleLine);
-  polyPath(ctx, circleUnionOutline(k.head, HEAD.r, muzzle, MUZZLE.r));                // head + snout (profile)
+  polyPath(ctx, circleUnionOutline(head, HEAD.r, muzzle, MUZZLE.r));                  // head + snout (profile)
   fillStroke(ctx, pal.body, pal.capsuleLine);
-  drawEar(ctx, shiftEar(NEAR_EAR, k.head), pal.body, pal.line);                       // one ear, on the head
+  drawEar(ctx, shiftEar(NEAR_EAR, head), pal.body, pal.line);                         // one ear, on the head
   ctx.fillStyle = pal.eye;                                                            // a single eye, alert
   ctx.beginPath();
-  ctx.arc(k.head[0] + HEAD_TO_EYE[0], k.head[1] + HEAD_TO_EYE[1], 0.024, 0, TAU);
+  ctx.arc(head[0] + HEAD_TO_EYE[0], head[1] + HEAD_TO_EYE[1], 0.024, 0, TAU);
   ctx.fill();
   // whiskers, SWEPT BACK by the self-induced wind (the cat leaps toward -x, so they trail toward +x) —
   // it really sells the forward rush. They stream off the muzzle pad over the cheek.
-  const pad: P = [k.head[0] + HEAD_TO_MUZZLE[0] - MUZZLE.r * 0.4, k.head[1] + HEAD_TO_MUZZLE[1] + 0.01];
+  const pad: P = [head[0] + HEAD_TO_MUZZLE[0] - MUZZLE.r * 0.4, head[1] + HEAD_TO_MUZZLE[1] + 0.01];
   ctx.strokeStyle = pal.line;
   ctx.beginPath();
   for (let i = 0; i < 3; i++) {

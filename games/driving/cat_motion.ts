@@ -33,10 +33,10 @@ export interface CatPose { across: number; lift: number; walk: number; headFront
 // ---- constants ----
 
 // crossing choreography, in rider frames (= steps); the three phases sum to the crossing window.
-// The escape is SHORT and violent: one coil frame, then airborne for just two frames, then land.
+// The escape is SHORT and violent: one coil frame, airborne for just two frames, then two landing frames.
 const ENTERS_ROAD_STEPS = 10;
 const FROZEN_STEPS = 24;
-const ESCAPES_STEPS = 3;        // coil (f0) → airborne (f1, f2) → land (f3) — the leap is one explosive bound
+const ESCAPES_STEPS = 4;        // coil (f0) → airborne (f1, f2) → land (f3) → collapse (f4) — the leap is one explosive bound, then it folds to the ground
 const CROSS_FRAMES = ENTERS_ROAD_STEPS + FROZEN_STEPS + ESCAPES_STEPS;
 
 // the leap (the escape), keyed by WHOLE escape-steps so each beat gets its own frame: step 0 is the COIL
@@ -92,18 +92,23 @@ export function catPose(c: Cat, riderAlong: number, v: number): CatPose {
     return { across: c.midAcross, lift: 0, walk: 0, headFront: true, leapT: -1 };
   }
   // ESCAPES: the LEAP, by whole escape-steps. k<1 is the COIL (in place, on the ground); the uncoil
-  // launches it, so k in [1,3) is AIRBORNE and already extended (two frames); k>=3 is the LAND.
-  const k = Math.min(step - escapeAt, ESCAPES_STEPS);             // escape-steps in, 0..3
+  // launches it, so k in [1,3) is AIRBORNE and already extended (two frames); k>=3 is on the ground at
+  // the far side (k=3 LAND, feet planted; k=4 COLLAPSE — the drawing folds the legs). leapT carries the
+  // exact phase to the drawing.
+  const k = Math.min(step - escapeAt, ESCAPES_STEPS);             // escape-steps in, 0..4
   const leapT = k / ESCAPES_STEPS;
   if (k < 1) return { across: c.midAcross, lift: 0, walk: 0, headFront: false, leapT };   // COIL, push-off feet planted
-  const b = (k - 1) / (ESCAPES_STEPS - 1);                        // 0 at launch … 1 at land, over the airborne + landing steps
-  return {
-    across: lerp(c.midAcross, c.endAcross, Math.pow(b, 0.7)),     // front-loaded: horizontal momentum right off the launch
-    lift: LEAP_HEIGHT * 4 * b * (1 - b),                          // low parabola: 0 -> peak -> 0 (lands)
-    walk: 0,
-    headFront: false,
-    leapT,
-  };
+  if (k < 3) {                                                    // AIRBORNE (two frames)
+    const b = (k - 1) / 2;                                        // 0 at launch … 1 at touchdown, over the two airborne steps
+    return {
+      across: lerp(c.midAcross, c.endAcross, Math.pow(b, 0.7)),   // front-loaded: horizontal momentum right off the launch
+      lift: LEAP_HEIGHT * 4 * b * (1 - b),                        // low parabola: 0 -> peak -> 0 (touches down at k=3)
+      walk: 0,
+      headFront: false,
+      leapT,
+    };
+  }
+  return { across: c.endAcross, lift: 0, walk: 0, headFront: false, leapT };   // LAND + COLLAPSE: on the ground, far side
 }
 
 // Is the cat still ahead (beyond the buffer) AND inside the crossing window — i.e. crossing in front of
@@ -123,7 +128,7 @@ export function segmentCatDanger(cats: Cat[], riderAlong: number, v: number): bo
 // at FOCUS_PEAK (1.5 = an exaggerated 1.5x a normal full pull-in), then eases smoothly back to none over a
 // fixed FOCUS_RAMP_DOWN frames after the landing. View-only: main.ts folds the returned tightness (0 = none,
 // 1 = a normal full pull-in) into the camera focal. Returns the max across the segment's cats.
-const FOCUS_PEAK = 1.5;
+const FOCUS_PEAK = 1.8;
 const FOCUS_RAMP_DOWN = 83;   // frames after the landing to ease focus back to full-wide (hard-coded; the exact frame isn't critical)
 const smoothstep = (t: number): number => t * t * (3 - 2 * t);
 

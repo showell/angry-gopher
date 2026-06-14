@@ -10,10 +10,10 @@ import { catScenery, CAT } from './cat_anatomy.ts';
 import type { CatView } from './cat_anatomy.ts';
 import type { Ctx, Project } from './scenery.ts';
 
-const COLS = 3, ROWS = 2;
-const CELL_W = 400, CELL_H = 440;
+const COLS = 4, ROWS = 2;
+const CELL_W = 340, CELL_H = 440;
 const W = COLS * CELL_W, H = ROWS * CELL_H;
-const UNIT_PX = 150;       // pixels per cat-unit (full standing height)
+const UNIT_PX = 140;       // pixels per cat-unit (full standing height)
 const FOOT_FROM_BOTTOM = 56;   // ground line above each cell's bottom edge
 const CAT_HEIGHT = 1.7;
 const SILH_CX = 0.30;      // x of the silhouette's centre in cat-frame units, so each panel roughly centres the cat
@@ -23,9 +23,10 @@ const POSES: { label: string; walk: number; headFront: boolean; leapT: number; l
   { label: 'profile · rest', walk: 0, headFront: false, leapT: -1, lift: 0 },
   { label: 'profile · mid-stride', walk: Math.PI / 2, headFront: false, leapT: -1, lift: 0 },
   { label: 'frozen · head-on', walk: 0, headFront: true, leapT: -1, lift: 0 },
-  { label: 'leap · coil', walk: 0, headFront: false, leapT: 0.15, lift: 0 },
-  { label: 'leap · airborne', walk: 0, headFront: false, leapT: 0.5, lift: 0.15 },
-  { label: 'leap · land', walk: 0, headFront: false, leapT: 1.0, lift: 0 },
+  { label: 'leap · coil', walk: 0, headFront: false, leapT: 0.1, lift: 0 },
+  { label: 'leap · airborne', walk: 0, headFront: false, leapT: 0.4, lift: 0.15 },
+  { label: 'leap · land', walk: 0, headFront: false, leapT: 0.8, lift: 0 },
+  { label: 'leap · collapse', walk: 0, headFront: false, leapT: 1.0, lift: 0 },
 ];
 
 const mc = new MiniCanvas(W, H, '#202329');
