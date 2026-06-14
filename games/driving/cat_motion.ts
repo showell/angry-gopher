@@ -40,10 +40,10 @@ const CROSS_FRAMES = ENTERS_ROAD_STEPS + FROZEN_STEPS + ESCAPES_STEPS;
 
 // the leap (the escape): the first frame is a COIL (spring compressed, still at mid); then it springs and
 // is AIRBORNE, covering the distance to the far side while rising in a parabola, then lands.
-const COIL_FRAC = 0.1;          // fraction of the escape spent coiled (≈ the first escape frame)
-const LEAP_HEIGHT = 0.5;        // peak hop, in cat-heights — mostly leaping away, only ~half its height up
+const COIL_FRAC = 0.12;         // fraction of the escape spent coiled (≈ the first escape frame)
+const LEAP_HEIGHT = 0.46;       // peak hop, in cat-heights — mostly leaping away, only ~half its height up
 
-const ROAD_BUFFER = 1;          // metres of clear road kept between rider and cat — small, so the cat clears only just in time and the encounter happens ~4m closer (it looms larger at the freeze)
+const ROAD_BUFFER = 3;          // metres of clear road kept between rider and cat — the cat clears with a little room to spare; tunes how close the encounter feels (was 5, then 1; 3 splits the difference)
 const STRIDE_STEPS = 5;         // target rider steps per leg cycle (rounded to a whole cycle per phase)
 
 // which segments get a crossing cat (by segment number), and where it spawns / how big it is. The
@@ -97,7 +97,7 @@ export function catPose(c: Cat, riderAlong: number, v: number): CatPose {
   const p = clamp((step - escapeAt) / ESCAPES_STEPS, 0, 1);
   if (p < COIL_FRAC) return { across: c.midAcross, lift: 0, walk: 0, headFront: false, leapT: p };
   const q = (p - COIL_FRAC) / (1 - COIL_FRAC);                     // 0..1 over the airborne + landing
-  const ease = q * q * (3 - 2 * q);                                // smoothstep the lateral travel
+  const ease = Math.pow(q, 0.7);                                   // front-loaded: most horizontal momentum right off the launch (low, flat trajectory)
   return {
     across: lerp(c.midAcross, c.endAcross, ease),
     lift: LEAP_HEIGHT * 4 * q * (1 - q),                           // parabola: 0 -> peak -> 0 (lands)

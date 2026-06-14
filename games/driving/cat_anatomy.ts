@@ -328,12 +328,13 @@ const lerpN = (a: number, b: number, t: number): number => a + (b - a) * t;
 const lerpP = (a: P, b: P, t: number): P => [lerpN(a[0], b[0], t), lerpN(a[1], b[1], t)];
 const lerpPts = (a: readonly P[], b: readonly P[], t: number): P[] => a.map((p, i) => lerpP(p, b[i], t));
 
-// COIL: spring loaded — low, gathered, front legs pulled back under, hind legs deeply folded.
+// COIL: spring loaded — low, gathered, butt drawn FORWARD under the body, front legs back, hind deeply
+// folded, head + neck tilted down toward the ground (sighting the leap).
 const COIL_FRONT: Leg = [[-0.05, 0.42], [-0.11, 0.16], [0.01, 0.0]];
-const COIL_HIND: Leg = [[0.50, 0.44], [0.41, 0.15], [0.28, 0.0]];
-const COIL_TAIL: P[] = [[0.62, 0.46], [0.78, 0.40], [0.90, 0.31], [0.97, 0.19]];
-const COIL_HEAD: P = [-0.40, 0.60];
-const COIL_NECK: P = [-0.17, 0.585];
+const COIL_HIND: Leg = [[0.45, 0.44], [0.36, 0.15], [0.24, 0.0]];
+const COIL_TAIL: P[] = [[0.57, 0.46], [0.73, 0.40], [0.85, 0.31], [0.92, 0.19]];
+const COIL_HEAD: P = [-0.41, 0.49];
+const COIL_NECK: P = [-0.15, 0.55];
 // FLIGHT: airborne, stretched along the leap axis — front legs reaching forward, hind trailing, tail straight out.
 const FLIGHT_FRONT: Leg = [[-0.17, 0.50], [-0.41, 0.45], [-0.66, 0.41]];
 const FLIGHT_HIND: Leg = [[0.62, 0.50], [0.89, 0.46], [1.17, 0.43]];
@@ -353,7 +354,7 @@ function leapStretch(t: number): number {
 // the torso outline deformed for the leap: scaled along its length (longer in flight) and its BACK bowed
 // up when coiled / flattened in flight (the spring compressing and releasing).
 function leapBody(s: number): P[] {
-  const sx = lerpN(0.80, 1.30, s);     // length: compressed coil → elongated flight
+  const sx = lerpN(0.72, 1.30, s);     // length: hard-compressed coil (butt forward) → elongated flight
   const arch = lerpN(0.085, -0.05, s); // back: bowed up hard (coil spring) → flat (flight)
   const cx = 0.25;
   return BODY_OUTLINE.map(([x, y]) => {
