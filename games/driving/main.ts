@@ -39,7 +39,7 @@ canvas.style.cssText = 'display:block;background:#000;box-shadow:0 10px 40px rgb
 wrap.appendChild(canvas);
 
 const hint = document.createElement('div');
-hint.textContent = '↑ drive forward · ↓ back up · SPACE auto · D debug · S → sunset';
+hint.textContent = '↑ fwd · ↓ back · SPACE auto · D debug · S → sunset · H → seg18';
 hint.style.cssText =
   'position:absolute;left:50%;bottom:10px;transform:translateX(-50%);padding:6px 14px;' +
   'background:rgba(0,0,0,0.45);border:1px solid rgba(255,255,255,0.15);border-radius:4px;' +
@@ -97,10 +97,11 @@ const currentTruck = (): TruckState => truckHistory[truckHistory.length - 1];
 // report). `dirty` marks a pending redraw; it's set wherever the Rider's state changes.
 let dirty = true;
 let auto = false;
-// S "forward to sunset": phase 0 = idle, 1 = notice painted (let the browser show it this frame), 2 = run the
-// heavy fast-forward compute next frame. The two-phase hop guarantees the notice is on screen BEFORE the
-// (blocking) compute runs.
+// Fast-forward ("forward to X"): phase 0 = idle, 1 = notice painted (let the browser show it this frame), 2 =
+// run the heavy fast-forward compute next frame. The two-phase hop guarantees the notice is on screen BEFORE
+// the (blocking) compute runs. `forwardDone` is the stop predicate for the active fast-forward.
 let forwardPhase: 0 | 1 | 2 = 0;
+let forwardDone: () => boolean = () => true;
 let debug = false;   // the lean-path OVERLAY + the HUD, toggled together by the D key (default OFF — a clean view; the one-line controls hint below the canvas always stays)
 
 // Raw per-frame instrumentation for the CURRENT auto run, with NO smoothing: one entry
@@ -131,11 +132,10 @@ function advance(): void {
   }
 }
 
-// S — fast-forward through the long sunset stretch: run the REAL drive (every getNextRiderState/nextTruck
-// step, no teleport — so speed/position arrive honestly) with NO rendering until the sun has dropped behind
-// the mountains (the truck's headlights switch on). Paint a notice NOW; the actual compute runs a frame later
-// (forwardPhase) so the browser shows the notice before the blocking loop.
-function forwardToSunset(): void {
+// Fast-forward to a point in the drive: run the REAL drive (every getNextRiderState/nextTruck step, no
+// teleport — so speed/position arrive honestly) with NO rendering until `done()` holds. Paint the notice NOW;
+// the actual compute runs a frame later (forwardPhase) so the browser shows the notice before the blocking loop.
+function forwardUntil(label: string, done: () => boolean): void {
   if (forwardPhase !== 0) return;
   setAuto(false);
   ctx.fillStyle = 'rgba(0,0,0,0.6)';
@@ -143,11 +143,16 @@ function forwardToSunset(): void {
   ctx.fillStyle = '#ffe6a3';
   ctx.font = 'bold 24px ui-monospace, monospace';
   ctx.textAlign = 'center';
-  ctx.fillText('forwarding to sunset…', W / 2, H / 2 + 8);
+  ctx.fillText(label, W / 2, H / 2 + 8);
   ctx.textAlign = 'left';
+  forwardDone = done;
   forwardPhase = 1;
   dirty = false;   // don't let the loop repaint over the notice before the compute runs
 }
+
+// the route index of seg18 — the H hotkey forwards to the start of it (where the truck's headlights first
+// read clearly). We stop on reaching seg18 OR any later segment, so a second press is a harmless no-op.
+const seg18Idx = world.order.indexOf('seg18');
 
 // SPACE toggles automatic mode (advance every frame, so you needn't hold the up arrow);
 // the arrows always take manual control, stopping auto so you can walk frame by frame
@@ -168,7 +173,10 @@ window.addEventListener('keydown', (e) => {
     if (!e.repeat) { debug = !debug; dirty = true; }   // toggle the overlay + HUD together
     e.preventDefault();
   } else if (e.code === 'KeyS') {
-    if (!e.repeat) forwardToSunset();
+    if (!e.repeat) forwardUntil('forwarding to sunset…', () => sunBehindMountains(riderHistory.length - 1));
+    e.preventDefault();
+  } else if (e.code === 'KeyH') {
+    if (!e.repeat) forwardUntil('forwarding to seg18…', () => world.order.indexOf(currentRider().segment) >= seg18Idx);
     e.preventDefault();
   }
 });
@@ -351,7 +359,7 @@ function loop(t: number): void {
   if (forwardPhase === 2) {
     forwardPhase = 0;
     let guard = 0;
-    while (guard++ < 20000 && !riderFinished(currentRider(), world) && !sunBehindMountains(riderHistory.length - 1)) advance();
+    while (guard++ < 20000 && !riderFinished(currentRider(), world) && !forwardDone()) advance();
     dirty = true;
     lastFrame = 0;
     requestAnimationFrame(loop);
