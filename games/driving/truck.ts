@@ -65,6 +65,16 @@ const ROOF = '#3a52a8';
 const SIDE = '#152150';
 const BRAKE = '#ff2a18';
 
+// ---- headlights: we never draw the lamps, only the CONE of light they throw forward from the cab nose,
+// a wedge fanning from headlight height down to the road ahead. It only shows once the sun is behind the
+// mountains, and only when the truck is in PROFILE (side-on) — the cone is foreshortened to nothing when it
+// points straight away from us, so its opacity scales with how broadside the beam is. ----
+const HEADLIGHT_H = 1.0;          // height of the lamps off the road (the cone's near, bright edge)
+const CONE_LENGTH = 16;           // how far ahead the beam reaches (m), fanning down to the road
+const CONE_HALF_WIDTH = 4;        // the beam's half-spread at its far end (m)
+const CONE_ALPHA = 0.55;          // peak opacity of the beam (when fully broadside); scaled down off-profile
+const BEAM_RGB = '255,248,214';   // warm white
+
 // a rider-frame point carrying a height off the ground
 interface Pt3 { right: number; forward: number; height: number }
 interface Face { pts: Pt3[]; color: string }
@@ -133,11 +143,26 @@ function lower(p: RiderPt, h: number): Pt3 {
 // Build the truck as one Scenery, in the segment frame `map`: a TRAILER box hovering over its tires
 // plus a lower CAB in front, and round tires at the sides. Faces are painted back-to-front so the body
 // occludes itself (and its far-side tires) correctly.
-function buildTruck(map: (a: number, x: number) => RiderPt, centerAlong: number, hw: number, braking: boolean): Scenery {
+function buildTruck(map: (a: number, x: number) => RiderPt, centerAlong: number, hw: number, braking: boolean, headlights: boolean): Scenery {
   const a0 = centerAlong - LENGTH / 2, a1 = centerAlong + LENGTH / 2;   // trailer rear (toward us) / front
   const a2 = a1 + CAB_LENGTH, aRoof = a1 + CAB_LENGTH * CAB_ROOF_FRAC;  // cab nose / windshield top
   const xl = hw - WIDTH / 2, xr = hw + WIDTH / 2;
   const p3 = (along: number, x: number, h: number): Pt3 => lower(map(along, x), h);   // a body point, on the curved ground
+
+  // how BROADSIDE the truck is to us (0 = pointing straight toward/away, 1 = full profile): the headlight beam
+  // runs along the truck's forward, so |sin| between our view ray to the cab and that forward = how much cone
+  // we'd see. Two mapped points a metre apart along the cab give the beam's direction in the rider frame.
+  const nose = map(a2, hw), beamEnd = map(a2 + 1, hw);
+  const bR = beamEnd.right - nose.right, bF = beamEnd.forward - nose.forward;
+  const viewLen = Math.hypot(nose.right, nose.forward), beamLen = Math.hypot(bR, bF);
+  const profile = viewLen > 1e-6 && beamLen > 1e-6 ? Math.abs(nose.right * bF - nose.forward * bR) / (viewLen * beamLen) : 0;
+  const coneAlpha = headlights ? CONE_ALPHA * profile : 0;
+  // the cone: a wedge from the lamps (cab nose, headlight height) fanning forward + down to the road ahead.
+  const cone: Pt3[] = [
+    p3(a2, hw, HEADLIGHT_H),
+    p3(a2 + CONE_LENGTH, hw - CONE_HALF_WIDTH, 0),
+    p3(a2 + CONE_LENGTH, hw + CONE_HALF_WIDTH, 0),
+  ];
 
   // Each SIDE is one silhouette (trailer + cab are coplanar, so no internal faces): up the rear, along
   // the flush roof, down the windshield then the nose, back along the lower cab floor, up the step to the
@@ -218,7 +243,30 @@ function buildTruck(map: (a: number, x: number) => RiderPt, centerAlong: number,
     ctx.fill();
   };
 
+  // the headlight cone: a wedge filled with a gradient bright at the lamps (poly[0]) fading to nothing at the
+  // far edge. Drawn UNDER the body so the cab sits on top of its source. Skipped entirely when off-profile/day.
+  const beam = (ctx: Ctx, project: Project, poly: Pt3[], alpha: number): void => {
+    const pts = clipNear(poly);
+    if (pts.length < 3) return;
+    const src = project(poly[0].right, poly[0].forward, poly[0].height);
+    const far = project((poly[1].right + poly[2].right) / 2, (poly[1].forward + poly[2].forward) / 2, (poly[1].height + poly[2].height) / 2);
+    const g = ctx.createLinearGradient(src.x, src.y, far.x, far.y);
+    g.addColorStop(0, `rgba(${BEAM_RGB},${alpha})`);
+    g.addColorStop(1, `rgba(${BEAM_RGB},0)`);
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    const s0 = project(pts[0].right, pts[0].forward, pts[0].height);
+    ctx.moveTo(s0.x, s0.y);
+    for (let i = 1; i < pts.length; i++) {
+      const s = project(pts[i].right, pts[i].forward, pts[i].height);
+      ctx.lineTo(s.x, s.y);
+    }
+    ctx.closePath();
+    ctx.fill();
+  };
+
   const draw = (ctx: Ctx, project: Project): void => {
+    if (coneAlpha > 0.01) beam(ctx, project, cone, coneAlpha);   // headlight cone under the body
     for (const f of [...faces].sort((p, q) => avgF(q) - avgF(p))) {   // farthest faces first (painter's)
       ctx.fillStyle = f.color;
       fill(ctx, project, f.pts);
@@ -237,11 +285,11 @@ function buildTruck(map: (a: number, x: number) => RiderPt, centerAlong: number,
 // chain[d]'s frame into the rider's frame (both from view.ts). We find which chain segment the truck's
 // centre lands on by walking its LEAD (pos minus how far the rider has driven) forward from the rider.
 export function truckScenery(truck: TruckState, rider: RiderState, world: World, chain: RoadSegment[],
-                             at: (d: number, a: number, x: number) => RiderPt): Scenery | null {
+                             at: (d: number, a: number, x: number) => RiderPt, headlights: boolean): Scenery | null {
   const lead = truck.pos - routeDistance(rider, world);
   if (lead <= 0) return null;                       // caught (shouldn't happen — the schedule keeps it ahead)
   let remaining = rider.along + lead, d = 0;
   while (d < chain.length && remaining > chain[d].length) { remaining -= chain[d].length; d++; }
   if (d >= chain.length) return null;               // still beyond the look-ahead — too far to draw
-  return buildTruck((a, x) => at(d, a, x), remaining, chain[d].width / 2, truck.braking);
+  return buildTruck((a, x) => at(d, a, x), remaining, chain[d].width / 2, truck.braking, headlights);
 }

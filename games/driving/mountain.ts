@@ -2,7 +2,7 @@
 // pure function from absolute bearing (radians, 0 = north, + = clockwise) to a height in pixels
 // above the horizon. The light dims them toward dusk, so we read the sunset clock from sun.ts.
 
-import { sunSetFraction } from './sun.ts';
+import { sunSetFraction, sunHeightPx, SUN_RADIUS_PX, SUN_BEARING } from './sun.ts';
 
 function wrap(a: number): number {
   while (a > Math.PI) a -= 2 * Math.PI;
@@ -45,6 +45,13 @@ const westRange = (bearing: number): number => range(bearing, WEST_RANGE_BEARING
 // the tallest silhouette at a bearing — the effective occluder of the sun there.
 export function horizonCrestPx(bearing: number): number {
   return Math.max(westRange(bearing), northRange(bearing), groundBase(bearing));
+}
+
+// Has the sun dropped fully BEHIND the western range? True once the whole disc (top = centre + radius) is below
+// the crest at the sun's bearing — i.e. dusk has arrived. Pure function of the step; the truck's headlights
+// switch on the moment this turns true (truck.ts / view.ts).
+export function sunBehindMountains(step: number): boolean {
+  return sunHeightPx(step) + SUN_RADIUS_PX < horizonCrestPx(SUN_BEARING);
 }
 
 // The snowcap sits ONLY on the north range's single tallest hump, and its base FOLLOWS the ridge

@@ -22,6 +22,7 @@ import { nextToCur, curToNext, intersectionScene, intersectionTower } from './in
 import { towerScenery } from './tower.ts';
 import { truckScenery } from './truck.ts';
 import type { TruckState } from './truck.ts';
+import { sunBehindMountains } from './mountain.ts';
 
 // Road quads are the ground plane (drawn first, no LOD); polys are raised road structures
 // (guard rails) drawn over them; scenery is the depth-sorted, near/far-aware drawables (trees
@@ -159,8 +160,9 @@ export function buildScene(state: RiderState, world: World, step: number, headYa
   }
 
   // the truck we're chasing: somewhere on the road ahead (or null once caught / still too far),
-  // mapped through the same chain frames as everything else.
-  const truckSc = truckScenery(truck, state, world, chain, at);
+  // mapped through the same chain frames as everything else. Its headlights (the cone) come on once the
+  // sun is behind the mountains.
+  const truckSc = truckScenery(truck, state, world, chain, at, sunBehindMountains(step));
   if (truckSc) scenery.push(truckSc);
 
   // the rider's PROJECTED PATHS — the actual arcs his binary search probed (debug overlay), narrowing in, plus

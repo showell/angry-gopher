@@ -16,6 +16,7 @@ import { buildWorld } from './world.ts';
 import { buildScene } from './view.ts';
 import { drawHorizon } from './horizon.ts';
 import { skyColors } from './sky.ts';
+import { sunBehindMountains } from './mountain.ts';
 import { drawGuardRail } from './guard_rail.ts';
 import { DETAIL_DIST, NEAR, groundDrop, clipNear } from './scenery.ts';
 import type { Project, RiderPt, Quad } from './scenery.ts';
@@ -38,7 +39,7 @@ canvas.style.cssText = 'display:block;background:#000;box-shadow:0 10px 40px rgb
 wrap.appendChild(canvas);
 
 const hint = document.createElement('div');
-hint.textContent = '↑ drive forward · ↓ back up · SPACE auto · D debug';
+hint.textContent = '↑ drive forward · ↓ back up · SPACE auto · D debug · S → sunset';
 hint.style.cssText =
   'position:absolute;left:50%;bottom:10px;transform:translateX(-50%);padding:6px 14px;' +
   'background:rgba(0,0,0,0.45);border:1px solid rgba(255,255,255,0.15);border-radius:4px;' +
@@ -96,6 +97,10 @@ const currentTruck = (): TruckState => truckHistory[truckHistory.length - 1];
 // report). `dirty` marks a pending redraw; it's set wherever the Rider's state changes.
 let dirty = true;
 let auto = false;
+// S "forward to sunset": phase 0 = idle, 1 = notice painted (let the browser show it this frame), 2 = run the
+// heavy fast-forward compute next frame. The two-phase hop guarantees the notice is on screen BEFORE the
+// (blocking) compute runs.
+let forwardPhase: 0 | 1 | 2 = 0;
 let debug = false;   // the lean-path OVERLAY + the HUD, toggled together by the D key (default OFF — a clean view; the one-line controls hint below the canvas always stays)
 
 // Raw per-frame instrumentation for the CURRENT auto run, with NO smoothing: one entry
@@ -126,6 +131,24 @@ function advance(): void {
   }
 }
 
+// S — fast-forward through the long sunset stretch: run the REAL drive (every getNextRiderState/nextTruck
+// step, no teleport — so speed/position arrive honestly) with NO rendering until the sun has dropped behind
+// the mountains (the truck's headlights switch on). Paint a notice NOW; the actual compute runs a frame later
+// (forwardPhase) so the browser shows the notice before the blocking loop.
+function forwardToSunset(): void {
+  if (forwardPhase !== 0) return;
+  setAuto(false);
+  ctx.fillStyle = 'rgba(0,0,0,0.6)';
+  ctx.fillRect(0, H / 2 - 32, W, 64);
+  ctx.fillStyle = '#ffe6a3';
+  ctx.font = 'bold 24px ui-monospace, monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText('forwarding to sunset…', W / 2, H / 2 + 8);
+  ctx.textAlign = 'left';
+  forwardPhase = 1;
+  dirty = false;   // don't let the loop repaint over the notice before the compute runs
+}
+
 // SPACE toggles automatic mode (advance every frame, so you needn't hold the up arrow);
 // the arrows always take manual control, stopping auto so you can walk frame by frame
 // (UP = step forward, DOWN = step back). Holding an arrow repeats; holding space doesn't.
@@ -143,6 +166,9 @@ window.addEventListener('keydown', (e) => {
     e.preventDefault();
   } else if (e.code === 'KeyD') {
     if (!e.repeat) { debug = !debug; dirty = true; }   // toggle the overlay + HUD together
+    e.preventDefault();
+  } else if (e.code === 'KeyS') {
+    if (!e.repeat) forwardToSunset();
     e.preventDefault();
   }
 });
@@ -319,6 +345,19 @@ function render(rider: RiderState): void {
 
 let lastFrame = 0;
 function loop(t: number): void {
+  // S forward-to-sunset: phase 1 just lets the notice paint this frame; phase 2 runs the (blocking) real drive
+  // forward — no rendering — until the sun is behind the mountains, then hands back to a normal redraw.
+  if (forwardPhase === 1) { forwardPhase = 2; requestAnimationFrame(loop); return; }
+  if (forwardPhase === 2) {
+    forwardPhase = 0;
+    let guard = 0;
+    while (guard++ < 20000 && !riderFinished(currentRider(), world) && !sunBehindMountains(riderHistory.length - 1)) advance();
+    dirty = true;
+    lastFrame = 0;
+    requestAnimationFrame(loop);
+    return;
+  }
+
   // automatic mode: one Rider step per frame, until paused or finished (sets `dirty`)
   if (auto && !riderFinished(currentRider(), world)) advance();
 
