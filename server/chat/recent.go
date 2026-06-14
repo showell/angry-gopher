@@ -29,10 +29,11 @@ const (
 type recentItem struct {
 	kind recentKind
 	at   time.Time
-	// chat-only
-	partner    string
-	conv       string
-	sid        string
+	// chat-only — pre-resolved via the Conv abstraction, exactly like the live
+	// path (publishRecentForConv), so DM and channel rows are shaped identically.
+	url        string // topic page URL (/chat/c/... for DMs, /channel/... for channels)
+	where      string // muted context ("with apoorva" / "in General")
+	topic      string // the session/topic id (display label)
 	lastAuthor string // display name of the most recent sender, or ""
 	// doc-only
 	slug  string
@@ -72,9 +73,9 @@ func emitRecentData(w http.ResponseWriter, items []recentItem) {
 		switch it.kind {
 		case recentChat:
 			evt.Kind = "chat"
-			evt.URL = "/chat/c/" + it.conv + "/" + it.sid
-			evt.Topic = it.sid
-			evt.Where = "with " + it.partner
+			evt.URL = it.url
+			evt.Topic = it.topic
+			evt.Where = it.where
 			evt.LastAuthor = it.lastAuthor
 		case recentDoc:
 			evt.Kind = "doc"
@@ -93,27 +94,38 @@ func emitRecentData(w http.ResponseWriter, items []recentItem) {
 	fmt.Fprintf(w, `<script id="recent-data" type="application/json">%s</script>`, blob)
 }
 
-// gatherRecentItems walks every conv that includes the viewer plus their
-// docs dir, statting each file for its mtime. Returned newest-first.
+// gatherRecentItems walks every conv that includes the viewer — DMs AND the
+// channels they're a member of — plus their docs dir, statting each session
+// file for its mtime. Returned newest-first. DMs and channels go through the
+// same Conv methods (topicURL / recentWhereFor / LastAuthor), so a channel
+// topic shows up here exactly like a DM topic, just with "in <channel>" context.
 func gatherRecentItems(user users.User) []recentItem {
 	var items []recentItem
+	var convs []Conv
 	for _, partner := range users.ListAuthorized() {
 		if partner.ID == user.ID {
 			continue
 		}
-		conv := chatPairKey(user.ID, partner.ID)
-		for _, sid := range ListChatSessions(user.ID, partner.ID) {
-			info, err := os.Stat(chatSessionPath(user.ID, partner.ID, sid))
+		convs = append(convs, DMConv(user.ID, partner.ID))
+	}
+	for _, name := range ListUserChannels(user.ID) {
+		if c, ok := ChannelConv(name, user.ID); ok {
+			convs = append(convs, c)
+		}
+	}
+	for _, c := range convs {
+		for _, sid := range c.ListSessions() {
+			info, err := os.Stat(c.SessionPath(sid))
 			if err != nil {
 				continue
 			}
 			items = append(items, recentItem{
 				kind:       recentChat,
 				at:         info.ModTime(),
-				partner:    partner.Name,
-				conv:       conv,
-				sid:        sid,
-				lastAuthor: users.GetUserName(ReadChatLastAuthor(user.ID, partner.ID, sid)),
+				url:        c.topicURL(sid),
+				where:      c.recentWhereFor(user.ID),
+				topic:      sid,
+				lastAuthor: users.GetUserName(c.LastAuthor(sid)),
 			})
 		}
 	}

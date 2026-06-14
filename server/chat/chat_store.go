@@ -137,25 +137,6 @@ func chatSessionUploadsDir(a, b, sessionID string) string {
 	return filepath.Join(chatSessionsDir(a, b), sessionID+".uploads")
 }
 
-// chatLastAuthorPath is a companion file alongside <sid>.md holding just
-// the uid of the most recent author. Read by Recent to label each row
-// without scanning the transcript backward; written on every successful
-// AppendChatMessage. Best-effort — if the write fails or the file is
-// missing, Recent shows the row without the author annotation.
-func chatLastAuthorPath(a, b, sessionID string) string {
-	return filepath.Join(chatSessionsDir(a, b), sessionID+".lastauthor")
-}
-
-// ReadChatLastAuthor returns the uid of the most recent author of a
-// session, or "" if the companion file is missing or unreadable.
-func ReadChatLastAuthor(a, b, sessionID string) string {
-	data, err := os.ReadFile(chatLastAuthorPath(a, b, sessionID))
-	if err != nil {
-		return ""
-	}
-	return strings.TrimSpace(string(data))
-}
-
 // ChatSessionUploadsDirForKey is the uploads dir addressed by a
 // conversation key (used by the serving path, which knows the key,
 // not the pair).
