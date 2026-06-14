@@ -69,12 +69,14 @@ const BRAKE = '#ff2a18';
 // front corner of the cab. Each is a flat, CONSTANT-brightness wedge — we don't fade it or scale its opacity;
 // its 3D ANGLE alone decides how it reads (a broad sheet when the truck is in profile, foreshortened to a
 // sliver when it points away). They only appear once the sun is behind the mountains. ----
-const HEADLIGHT_H = 1.0;          // height of the lamps off the road (the wedge's near edge)
+const HEADLIGHT_H = 1.0;          // height of the lamp off the road (centre of the wedge's near edge)
 const HEADLIGHT_INSET = 0.3;      // each lamp sits this far in from its cab-front corner
-const CONE_FAR_H = 0.6;           // height of the wedge's far edge — close to the lamp height, so the beam points mostly FORWARD (only a gentle dip toward the road)
-const CONE_LENGTH = 24;           // how far ahead the beam reaches (m)
-const CONE_HALF_WIDTH = 4;        // the beam's half-spread at its far end (m)
-const CONE_ALPHA = 0.85;          // each wedge's (constant) opacity — the two overlap to a brighter core
+const CONE_NEAR_HALF = 0.25;      // half the wedge's VERTICAL thickness right at the truck face — a slit, not a point
+const CONE_FAR_CENTER = 0.7;      // centre height of the wedge's far edge — a gentle dip from the lamp, so the beam points mostly forward
+const CONE_FAR_HALF = 0.9;        // half the wedge's vertical thickness at its far edge — it fans open (down toward the road and up)
+const CONE_LENGTH = 20.4;         // how far ahead the beam reaches (m) — 15% shorter than before
+const CONE_ALPHA = 0.85;          // opacity at the wedge's bright core (the lamp)
+const CONE_EDGE_ALPHA = 0.30;     // ...fading to this at its edges — a soft glowing border, not a hard cut
 const BEAM_RGB = '255,248,214';   // warm white
 
 // a rider-frame point carrying a height off the ground
@@ -151,13 +153,15 @@ function buildTruck(map: (a: number, x: number) => RiderPt, centerAlong: number,
   const xl = hw - WIDTH / 2, xr = hw + WIDTH / 2;
   const p3 = (along: number, x: number, h: number): Pt3 => lower(map(along, x), h);   // a body point, on the curved ground
 
-  // the two headlight wedges: one from each cab-front corner, fanning forward and dropping only gently to
-  // CONE_FAR_H so they point mostly forward. Constant brightness; their projected shape (the truck's angle) is
-  // what makes them read broad in profile and thin head-/tail-on.
+  // the two headlight wedges: one from each cab-front corner. Each is a VERTICAL side-silhouette — a thin slit
+  // at the truck face (HEADLIGHT_H ± CONE_NEAR_HALF) fanning open down the road to a taller far edge (centred on
+  // CONE_FAR_CENTER, half-height CONE_FAR_HALF). The vertical extent is the thickness we see in profile; its
+  // projected shape (the truck's angle) makes it broad in profile and a thin sliver head-/tail-on.
   const wedge = (srcX: number): Pt3[] => [
-    p3(a2, srcX, HEADLIGHT_H),
-    p3(a2 + CONE_LENGTH, srcX - CONE_HALF_WIDTH, CONE_FAR_H),
-    p3(a2 + CONE_LENGTH, srcX + CONE_HALF_WIDTH, CONE_FAR_H),
+    p3(a2, srcX, HEADLIGHT_H - CONE_NEAR_HALF),                    // near-bottom (the slit at the truck face)
+    p3(a2, srcX, HEADLIGHT_H + CONE_NEAR_HALF),                    // near-top
+    p3(a2 + CONE_LENGTH, srcX, CONE_FAR_CENTER + CONE_FAR_HALF),   // far-top (fanned open)
+    p3(a2 + CONE_LENGTH, srcX, CONE_FAR_CENTER - CONE_FAR_HALF),   // far-bottom
   ];
   const cones: Pt3[][] = [wedge(xl + HEADLIGHT_INSET), wedge(xr - HEADLIGHT_INSET)];
 
@@ -240,8 +244,28 @@ function buildTruck(map: (a: number, x: number) => RiderPt, centerAlong: number,
     ctx.fill();
   };
 
+  // fill a headlight wedge with a radial glow centred on the lamp (the near edge): brightest there, fading to
+  // a soft but still-visible edge — so the beam has no hard border and reads as light, not a painted shape.
+  const wedgeGlow = (ctx: Ctx, project: Project, poly: Pt3[]): void => {
+    const pts = clipNear(poly);
+    if (pts.length < 3) return;
+    const sp = pts.map((p) => project(p.right, p.forward, p.height));
+    const lamp = project((poly[0].right + poly[1].right) / 2, (poly[0].forward + poly[1].forward) / 2, (poly[0].height + poly[1].height) / 2);
+    let r = 0;
+    for (const s of sp) r = Math.max(r, Math.hypot(s.x - lamp.x, s.y - lamp.y));
+    const g = ctx.createRadialGradient(lamp.x, lamp.y, 0, lamp.x, lamp.y, Math.max(r, 1));
+    g.addColorStop(0, `rgba(${BEAM_RGB},${CONE_ALPHA})`);
+    g.addColorStop(1, `rgba(${BEAM_RGB},${CONE_EDGE_ALPHA})`);
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.moveTo(sp[0].x, sp[0].y);
+    for (let i = 1; i < sp.length; i++) ctx.lineTo(sp[i].x, sp[i].y);
+    ctx.closePath();
+    ctx.fill();
+  };
+
   const draw = (ctx: Ctx, project: Project): void => {
-    if (headlights) { ctx.fillStyle = `rgba(${BEAM_RGB},${CONE_ALPHA})`; for (const c of cones) fill(ctx, project, c); }   // headlight wedges under the body
+    if (headlights) for (const c of cones) wedgeGlow(ctx, project, c);   // headlight wedges under the body
     for (const f of [...faces].sort((p, q) => avgF(q) - avgF(p))) {   // farthest faces first (painter's)
       ctx.fillStyle = f.color;
       fill(ctx, project, f.pts);
