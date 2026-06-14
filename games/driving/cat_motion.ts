@@ -48,12 +48,8 @@ const LEAP_HEIGHT = 0.18;       // peak hop, in cat-heights — a low skim, most
 const ROAD_BUFFER = 3;          // metres of clear road kept between rider and cat — the cat clears with a little room to spare; tunes how close the encounter feels (was 5, then 1; 3 splits the difference)
 const STRIDE_STEPS = 5;         // target rider steps per leg cycle (rounded to a whole cycle per phase)
 
-// which segments get a crossing cat (by segment number), and where it spawns / how big it is. The
-// cat DEBUTS alone at seg2, then REAPPEARS irregularly on the late NEW segments (13, 19) — never
-// every segment (a hazard seen everywhere is only a tax), but more than once so a rider who missed
-// it the first time still meets it, and the reappearances stack with those segments' other features
-// as the route's complexity ramps up.
-const CAT_SEGMENTS = new Set([2, 13, 19]);
+// where the cat spawns / how big it is. WHICH segments get a cat is a ROUTE property, authored in
+// world.ts (the per-segment `cat` flag), not here — cat_motion owns only the cat's size and behaviour.
 const CAT_HEIGHT = 1.7;         // metres, ground to ear tips
 const CAT_ALONG = 105;          // desired spot down the road; rounded up to just past a tree
 const CAT_ROAD_GAP = 1.5;       // clearance beyond the roadside tree line, each side
@@ -137,10 +133,10 @@ function makeCat(along: number, startAcross: number, midAcross: number, endAcros
   return { along, startAcross, midAcross, endAcross, height, faceRight, form: CAT };
 }
 
-// The cats on a segment: only CAT_SEGMENTS get one (else none) — a cat that waits beside the road on the
-// RIGHT, just past the herd, then crosses to the LEFT as the rider nears.
-export function segmentCats(segmentNumber: number, laneHalfWidth: number, treeLineOffset: number, trees: Tree[]): Cat[] {
-  if (!CAT_SEGMENTS.has(segmentNumber)) return [];
+// The cats on a segment: one if the route placed a cat here (hasCat), else none — a cat that waits beside
+// the road on the RIGHT, just past the herd, then crosses to the LEFT as the rider nears.
+export function segmentCats(hasCat: boolean, laneHalfWidth: number, treeLineOffset: number, trees: Tree[]): Cat[] {
+  if (!hasCat) return [];
   const treeX = laneHalfWidth + treeLineOffset;
   const start = treeX + CAT_ROAD_GAP;   // waiting spot, beside the road on the right
   // Freeze spot: the head sphere sits at local x CAT_HEAD_X, which maps to an across offset of
