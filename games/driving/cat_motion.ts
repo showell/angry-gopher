@@ -39,12 +39,11 @@ const FROZEN_STEPS = 24;
 const ESCAPES_STEPS = 3;        // coil (f0) → airborne (f1, f2) → land (f3) — the leap is one explosive bound
 const CROSS_FRAMES = ENTERS_ROAD_STEPS + FROZEN_STEPS + ESCAPES_STEPS;
 
-// the leap (the escape): the first frame is a COIL (spring compressed, still at mid); the uncoil ITSELF
-// launches it — by the next frame it's already extended and airborne. A low, flat parabola carries it
-// just far enough to clear the road (hind feet landing barely on the grass), front-loaded so it has
-// horizontal momentum immediately.
-const COIL_FRAC = 0.12;         // fraction of the escape spent coiled (just the first escape frame)
-const LEAP_HEIGHT = 0.26;       // peak hop, in cat-heights — a low skim, mostly leaping AWAY, not up
+// the leap (the escape), keyed by WHOLE escape-steps so each beat gets its own frame: step 0 is the COIL
+// (spring compressed, still at mid); the uncoil ITSELF launches it, so steps 1 and 2 are AIRBORNE and
+// already extended; step 3 is the LAND. A low, flat parabola carries it just far enough to clear the road
+// (hind feet barely on the grass), front-loaded so it has horizontal momentum the instant it launches.
+const LEAP_HEIGHT = 0.18;       // peak hop, in cat-heights — a low skim, mostly leaping AWAY, not up
 
 const ROAD_BUFFER = 3;          // metres of clear road kept between rider and cat — the cat clears with a little room to spare; tunes how close the encounter feels (was 5, then 1; 3 splits the difference)
 const STRIDE_STEPS = 5;         // target rider steps per leg cycle (rounded to a whole cycle per phase)
@@ -96,17 +95,18 @@ export function catPose(c: Cat, riderAlong: number, v: number): CatPose {
   if (step <= escapeAt) {                                          // FROZEN: stand dead still, facing us
     return { across: c.midAcross, lift: 0, walk: 0, headFront: true, leapT: -1 };
   }
-  // ESCAPES: the LEAP. Coil in place one frame, then the uncoil launches it — airborne and already
-  // extended on the very next frame, skimming low across to land just clear of the road.
-  const p = clamp((step - escapeAt) / ESCAPES_STEPS, 0, 1);
-  if (p < COIL_FRAC) return { across: c.midAcross, lift: 0, walk: 0, headFront: false, leapT: p };
-  const a = (p - COIL_FRAC) / (1 - COIL_FRAC);                     // 0..1 over the airborne flight + landing
+  // ESCAPES: the LEAP, by whole escape-steps. k<1 is the COIL (in place, on the ground); the uncoil
+  // launches it, so k in [1,3) is AIRBORNE and already extended (two frames); k>=3 is the LAND.
+  const k = Math.min(step - escapeAt, ESCAPES_STEPS);             // escape-steps in, 0..3
+  const leapT = k / ESCAPES_STEPS;
+  if (k < 1) return { across: c.midAcross, lift: 0, walk: 0, headFront: false, leapT };   // COIL, push-off feet planted
+  const b = (k - 1) / (ESCAPES_STEPS - 1);                        // 0 at launch … 1 at land, over the airborne + landing steps
   return {
-    across: lerp(c.midAcross, c.endAcross, Math.pow(a, 0.7)),      // front-loaded: horizontal momentum right off the launch
-    lift: LEAP_HEIGHT * 4 * a * (1 - a),                           // low parabola: 0 -> peak -> 0 (lands)
+    across: lerp(c.midAcross, c.endAcross, Math.pow(b, 0.7)),     // front-loaded: horizontal momentum right off the launch
+    lift: LEAP_HEIGHT * 4 * b * (1 - b),                          // low parabola: 0 -> peak -> 0 (lands)
     walk: 0,
     headFront: false,
-    leapT: p,
+    leapT,
   };
 }
 
@@ -151,7 +151,7 @@ export function segmentCats(segmentNumber: number, laneHalfWidth: number, treeLi
   // settling barely onto the grass past the left edge. In the gathered landing pose the hind paw sits at
   // local x ~LAND_HIND_REACH from the anchor, so place the anchor so that paw lands GRASS_TOEHOLD past the
   // edge. (Tuned to the landing pose in cat_anatomy; verify the foot placement live.)
-  const LAND_HIND_REACH = 0.66 * CAT_HEIGHT;
+  const LAND_HIND_REACH = 0.70 * CAT_HEIGHT;
   const GRASS_TOEHOLD = 0.3;
   const end = -(laneHalfWidth + GRASS_TOEHOLD) - LAND_HIND_REACH;
   // round the along UP to a tree and sit just beyond it, so a tree stands between the rider and the cat.

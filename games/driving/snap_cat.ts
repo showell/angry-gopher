@@ -11,7 +11,7 @@ import type { CatView } from './cat_anatomy.ts';
 import type { Ctx, Project } from './scenery.ts';
 
 const COLS = 3, ROWS = 2;
-const CELL_W = 380, CELL_H = 440;
+const CELL_W = 400, CELL_H = 440;
 const W = COLS * CELL_W, H = ROWS * CELL_H;
 const UNIT_PX = 150;       // pixels per cat-unit (full standing height)
 const FOOT_FROM_BOTTOM = 56;   // ground line above each cell's bottom edge
@@ -23,9 +23,9 @@ const POSES: { label: string; walk: number; headFront: boolean; leapT: number; l
   { label: 'profile · rest', walk: 0, headFront: false, leapT: -1, lift: 0 },
   { label: 'profile · mid-stride', walk: Math.PI / 2, headFront: false, leapT: -1, lift: 0 },
   { label: 'frozen · head-on', walk: 0, headFront: true, leapT: -1, lift: 0 },
-  { label: 'leap · coil (f0)', walk: 0, headFront: false, leapT: 0.0, lift: 0 },
-  { label: 'leap · launch/air (f1)', walk: 0, headFront: false, leapT: 0.333, lift: 0.19 },
-  { label: 'leap · land (f3)', walk: 0, headFront: false, leapT: 1.0, lift: 0 },
+  { label: 'leap · coil', walk: 0, headFront: false, leapT: 0.15, lift: 0 },
+  { label: 'leap · airborne', walk: 0, headFront: false, leapT: 0.5, lift: 0.15 },
+  { label: 'leap · land', walk: 0, headFront: false, leapT: 1.0, lift: 0 },
 ];
 
 const mc = new MiniCanvas(W, H, '#202329');
