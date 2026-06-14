@@ -30,6 +30,8 @@ export interface CatView {
   form: CatForm;
   walk: number;        // gait phase (radians); 0 at rest
   headFront: boolean;  // true while frozen — head swivelled to face us
+  lift: number;        // vertical hop off the ground, in cat-heights (0 = grounded; >0 mid-leap)
+  leapT: number;       // -1 = not leaping; 0..1 = leap progress (coil -> airborne stretch -> land)
 }
 
 // ---- constants ----
@@ -254,11 +256,13 @@ function drawCat(ctx: Ctx, c: CatView, project: Project): void {
   ctx.translate(base.x, base.y);
   if (c.faceRight) ctx.scale(-1, 1);   // the form faces left; flip to face right
   ctx.scale(h, -h);                    // into the unit profile frame (y up, feet at the origin)
+  ctx.translate(0, c.lift);            // hop off the ground (a leap rises here; 0 otherwise)
   ctx.lineWidth = LINE_WIDTH;
   ctx.lineJoin = 'round';
   ctx.lineCap = 'round';
 
   if (DEBUG) drawDiagnostic(ctx);
+  else if (c.leapT >= 0) paintCatLeap(ctx, c.form.palette, c.leapT);
   else paintCat(ctx, c.form.palette, c.walk, c.headFront);
 
   ctx.restore();
@@ -309,6 +313,96 @@ function drawFrozenFront(ctx: Ctx, pal: CatForm['palette']): void {
   ctx.beginPath();                                       // head sphere, sitting over the chest (short/foreshortened neck)
   ctx.arc(FROZEN_HEAD.cx, FROZEN_HEAD.cy, FROZEN_HEAD.r, 0, TAU);
   fillStroke(ctx, pal.body, pal.capsuleLine);
+}
+
+// ===== THE LEAP (the escape) ==================================================================
+// After the freeze the cat turns back to face its escape direction (profile, left) and bolts in ONE
+// spring: it COILS (front legs drawn back, spine bowed up, gathered low) then SPRINGS into an
+// aerodynamic FLIGHT pose — body elongated and nearly flat, front legs reaching forward, hind legs
+// trailing back, tail fully extended. Two keyframes (coil → flight) are interpolated by a stretch
+// curve; the vertical hop is applied by drawCat (CatView.lift). Real cats compress their spine to load
+// the jump — that's the bowed-up back of the coil flattening as it stretches out.
+type Leg = readonly [P, P, P];   // hip, knee, paw
+
+const lerpN = (a: number, b: number, t: number): number => a + (b - a) * t;
+const lerpP = (a: P, b: P, t: number): P => [lerpN(a[0], b[0], t), lerpN(a[1], b[1], t)];
+const lerpPts = (a: readonly P[], b: readonly P[], t: number): P[] => a.map((p, i) => lerpP(p, b[i], t));
+
+// COIL: spring loaded — low, gathered, front legs pulled back under, hind legs deeply folded.
+const COIL_FRONT: Leg = [[-0.05, 0.42], [-0.11, 0.16], [0.01, 0.0]];
+const COIL_HIND: Leg = [[0.50, 0.44], [0.41, 0.15], [0.28, 0.0]];
+const COIL_TAIL: P[] = [[0.62, 0.46], [0.78, 0.40], [0.90, 0.31], [0.97, 0.19]];
+const COIL_HEAD: P = [-0.40, 0.60];
+const COIL_NECK: P = [-0.17, 0.585];
+// FLIGHT: airborne, stretched along the leap axis — front legs reaching forward, hind trailing, tail straight out.
+const FLIGHT_FRONT: Leg = [[-0.17, 0.50], [-0.41, 0.45], [-0.66, 0.41]];
+const FLIGHT_HIND: Leg = [[0.62, 0.50], [0.89, 0.46], [1.17, 0.43]];
+const FLIGHT_TAIL: P[] = [[0.70, 0.54], [0.97, 0.565], [1.22, 0.595], [1.45, 0.635]];
+const FLIGHT_HEAD: P = [-0.56, 0.55];
+const FLIGHT_NECK: P = [-0.35, 0.545];
+
+const HEAD_TO_MUZZLE: P = [MUZZLE.cx - HEAD.cx, MUZZLE.cy - HEAD.cy];
+const HEAD_TO_EYE: P = [HEAD.eye[0] - HEAD.cx, HEAD.eye[1] - HEAD.cy];
+
+// the stretch parameter (0 coil … 1 flight) over leap progress t: hold the coil an instant, then spring.
+function leapStretch(t: number): number {
+  const u = Math.max(0, Math.min(1, (t - 0.08) / 0.45));
+  return u * u * (3 - 2 * u);
+}
+
+// the torso outline deformed for the leap: scaled along its length (longer in flight) and its BACK bowed
+// up when coiled / flattened in flight (the spring compressing and releasing).
+function leapBody(s: number): P[] {
+  const sx = lerpN(0.80, 1.30, s);     // length: compressed coil → elongated flight
+  const arch = lerpN(0.085, -0.05, s); // back: bowed up hard (coil spring) → flat (flight)
+  const cx = 0.25;
+  return BODY_OUTLINE.map(([x, y]) => {
+    const hump = Math.max(0, 1 - Math.abs((x - 0.28) / 0.45));   // peaks mid-back, falls off toward the ends
+    const top = y > 0.5 ? 1 : 0;                                 // only move the back (top) edge
+    return [cx + (x - cx) * sx, y + arch * top * hump];
+  });
+}
+
+const offsetLeg = (leg: Leg, dx: number): Leg => [[leg[0][0] + dx, leg[0][1]], [leg[1][0] + dx, leg[1][1]], [leg[2][0] + dx, leg[2][1]]];
+
+function drawChain(ctx: Ctx, leg: Leg, fill: string, line: string): void {
+  capsule(ctx, leg[0], leg[1], 0.050, 0.040, fill, line);
+  capsule(ctx, leg[1], leg[2], 0.040, 0.032, fill, line);
+}
+
+function drawTailNodes(ctx: Ctx, nodes: P[], fill: string, line: string): void {
+  for (let i = 0; i < nodes.length - 1; i++) capsule(ctx, nodes[i], nodes[i + 1], TAIL_RADII[i], TAIL_RADII[i + 1], fill, line);
+}
+
+function paintCatLeap(ctx: Ctx, pal: CatForm['palette'], t: number): void {
+  const s = leapStretch(t);
+  const front = lerpPts(COIL_FRONT, FLIGHT_FRONT, s) as unknown as Leg;
+  const hind = lerpPts(COIL_HIND, FLIGHT_HIND, s) as unknown as Leg;
+  const tail = lerpPts(COIL_TAIL, FLIGHT_TAIL, s);
+  const head = lerpP(COIL_HEAD, FLIGHT_HEAD, s);
+  const neck = lerpP(COIL_NECK, FLIGHT_NECK, s);
+  const muzzle: P = [head[0] + HEAD_TO_MUZZLE[0], head[1] + HEAD_TO_MUZZLE[1]];
+
+  drawChain(ctx, offsetLeg(hind, FAR_LEG_SETBACK), pal.shadow, pal.capsuleLine);    // far pair, in shade
+  drawChain(ctx, offsetLeg(front, FAR_LEG_SETBACK), pal.shadow, pal.capsuleLine);
+  drawTailNodes(ctx, tail, pal.body, pal.capsuleLine);                              // tail behind the body
+  polyPath(ctx, catmullClosed(leapBody(s), 12)); fillStroke(ctx, pal.body, pal.capsuleLine);
+  capsule(ctx, neck, head, NECK_RADIUS, NECK_RADIUS * 0.85, pal.body, pal.capsuleLine);
+  drawChain(ctx, hind, pal.body, pal.capsuleLine);                                  // near pair, over the body
+  drawChain(ctx, front, pal.body, pal.capsuleLine);
+  polyPath(ctx, circleUnionOutline(head, HEAD.r, muzzle, MUZZLE.r));                // head + snout (profile)
+  fillStroke(ctx, pal.body, pal.capsuleLine);
+  drawEar(ctx, shiftEar(NEAR_EAR, head), pal.body, pal.line);                       // one ear, on the head
+  ctx.fillStyle = pal.eye;                                                          // a single eye, alert
+  ctx.beginPath();
+  ctx.arc(head[0] + HEAD_TO_EYE[0], head[1] + HEAD_TO_EYE[1], 0.024, 0, TAU);
+  ctx.fill();
+}
+
+// move an ear (defined relative to the resting HEAD centre) to a new head position
+function shiftEar(e: { a: P; tip: P; b: P }, head: P): { a: P; tip: P; b: P } {
+  const dx = head[0] - HEAD.cx, dy = head[1] - HEAD.cy;
+  return { a: [e.a[0] + dx, e.a[1] + dy], tip: [e.tip[0] + dx, e.tip[1] + dy], b: [e.b[0] + dx, e.b[1] + dy] };
 }
 
 // the diagnostic view: solids as see-through outlines, legs as raw skeletons, the NECK in solid pink.

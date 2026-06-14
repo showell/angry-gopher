@@ -25,8 +25,10 @@ export interface Cat {
   form: CatForm;
 }
 
-// the cat's whole pose this frame: lateral offset, gait phase (radians), and whether the head faces us.
-export interface CatPose { across: number; walk: number; headFront: boolean }
+// the cat's whole pose this frame: lateral offset, a vertical hop (lift, in cat-heights), the gait phase
+// (radians), whether the head faces us (freeze), and the LEAP progress (leapT: -1 = not leaping; 0..1 =
+// coil -> airborne stretch -> land).
+export interface CatPose { across: number; lift: number; walk: number; headFront: boolean; leapT: number }
 
 // ---- constants ----
 
@@ -35,6 +37,11 @@ const ENTERS_ROAD_STEPS = 10;
 const FROZEN_STEPS = 24;
 const ESCAPES_STEPS = 6;
 const CROSS_FRAMES = ENTERS_ROAD_STEPS + FROZEN_STEPS + ESCAPES_STEPS;
+
+// the leap (the escape): the first frame is a COIL (spring compressed, still at mid); then it springs and
+// is AIRBORNE, covering the distance to the far side while rising in a parabola, then lands.
+const COIL_FRAC = 0.1;          // fraction of the escape spent coiled (≈ the first escape frame)
+const LEAP_HEIGHT = 0.5;        // peak hop, in cat-heights — mostly leaping away, only ~half its height up
 
 const ROAD_BUFFER = 1;          // metres of clear road kept between rider and cat — small, so the cat clears only just in time and the encounter happens ~4m closer (it looms larger at the freeze)
 const STRIDE_STEPS = 5;         // target rider steps per leg cycle (rounded to a whole cycle per phase)
@@ -81,13 +88,23 @@ export function catPose(c: Cat, riderAlong: number, v: number): CatPose {
 
   if (step <= freezeAt) {                                          // ENTERS: walk in to the lane centre
     const p = freezeAt > 0 ? step / freezeAt : 1;
-    return { across: lerp(c.startAcross, c.midAcross, p), walk: gait(p, freezeAt), headFront: false };
+    return { across: lerp(c.startAcross, c.midAcross, p), lift: 0, walk: gait(p, freezeAt), headFront: false, leapT: -1 };
   }
   if (step <= escapeAt) {                                          // FROZEN: stand dead still, facing us
-    return { across: c.midAcross, walk: 0, headFront: true };
+    return { across: c.midAcross, lift: 0, walk: 0, headFront: true, leapT: -1 };
   }
-  const p = clamp((step - escapeAt) / ESCAPES_STEPS, 0, 1);        // ESCAPES: bolt clear of the road
-  return { across: lerp(c.midAcross, c.endAcross, p), walk: gait(p, ESCAPES_STEPS), headFront: false };
+  // ESCAPES: the LEAP. Coil in place, then spring airborne across the road in a parabola and land.
+  const p = clamp((step - escapeAt) / ESCAPES_STEPS, 0, 1);
+  if (p < COIL_FRAC) return { across: c.midAcross, lift: 0, walk: 0, headFront: false, leapT: p };
+  const q = (p - COIL_FRAC) / (1 - COIL_FRAC);                     // 0..1 over the airborne + landing
+  const ease = q * q * (3 - 2 * q);                                // smoothstep the lateral travel
+  return {
+    across: lerp(c.midAcross, c.endAcross, ease),
+    lift: LEAP_HEIGHT * 4 * q * (1 - q),                           // parabola: 0 -> peak -> 0 (lands)
+    walk: 0,
+    headFront: false,
+    leapT: p,
+  };
 }
 
 // Is the cat still ahead (beyond the buffer) AND inside the crossing window — i.e. crossing in front of

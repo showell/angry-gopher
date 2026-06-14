@@ -124,8 +124,8 @@ export function buildScene(state: RiderState, world: World, step: number, headYa
       // along-coordinate, which we only have for his current segment (d === 0). Cats further ahead
       // sit at their waiting spot until the rider enters their segment.
       const pose = d === 0 ? catPose(cat, state.along, state.v)
-                           : { across: cat.startAcross, walk: 0, headFront: false };
-      scenery.push(catScenery({ at: at(d, cat.along, pose.across + hw), height: cat.height, faceRight: cat.faceRight, form: cat.form, walk: pose.walk, headFront: pose.headFront }));
+                           : { across: cat.startAcross, lift: 0, walk: 0, headFront: false, leapT: -1 };
+      scenery.push(catScenery({ at: at(d, cat.along, pose.across + hw), height: cat.height, faceRight: cat.faceRight, form: cat.form, walk: pose.walk, headFront: pose.headFront, lift: pose.lift, leapT: pose.leapT }));
     }
 
     // this segment's exit JOINT draws its corner details (approach road + sector + rail + creatures).

@@ -10,38 +10,43 @@ import { catScenery, CAT } from './cat_anatomy.ts';
 import type { CatView } from './cat_anatomy.ts';
 import type { Ctx, Project } from './scenery.ts';
 
-const W = 1140, H = 440;
+const COLS = 3, ROWS = 2;
+const CELL_W = 380, CELL_H = 440;
+const W = COLS * CELL_W, H = ROWS * CELL_H;
+const UNIT_PX = 150;       // pixels per cat-unit (full standing height)
+const FOOT_FROM_BOTTOM = 56;   // ground line above each cell's bottom edge
 const CAT_HEIGHT = 1.7;
-// drawCat scales the unit frame (standing height = 1) by `h` = (base.y - top.y). We drive that
-// directly: UNIT_PX pixels per cat-unit, so the silhouette (head ~-0.64 … tail ~+1.14 = ~1.78 wide)
-// is UNIT_PX·1.78 px across. project() must return base/top that differ by UNIT_PX over one unit.
-const UNIT_PX = 170;
-const BASE_Y = 372;        // the ground line (feet) in css pixels
-const SILH_CX = 0.28;      // x of the silhouette's centre in cat-frame units, so each panel centres the cat
+const SILH_CX = 0.30;      // x of the silhouette's centre in cat-frame units, so each panel roughly centres the cat
 
-// the contact sheet: label + the two pose knobs the anatomy exposes (gait phase + head facing).
-const POSES: { label: string; walk: number; headFront: boolean }[] = [
-  { label: 'profile · rest', walk: 0, headFront: false },
-  { label: 'profile · mid-stride', walk: Math.PI / 2, headFront: false },
-  { label: 'frozen · head-on', walk: 0, headFront: true },
+// the contact sheet: label + the pose knobs (gait phase, head facing, leap progress, vertical hop).
+const POSES: { label: string; walk: number; headFront: boolean; leapT: number; lift: number }[] = [
+  { label: 'profile · rest', walk: 0, headFront: false, leapT: -1, lift: 0 },
+  { label: 'profile · mid-stride', walk: Math.PI / 2, headFront: false, leapT: -1, lift: 0 },
+  { label: 'frozen · head-on', walk: 0, headFront: true, leapT: -1, lift: 0 },
+  { label: 'leap · coil', walk: 0, headFront: false, leapT: 0.02, lift: 0 },
+  { label: 'leap · airborne', walk: 0, headFront: false, leapT: 0.45, lift: 0.42 },
+  { label: 'leap · landing', walk: 0, headFront: false, leapT: 0.9, lift: 0.06 },
 ];
 
 const mc = new MiniCanvas(W, H, '#202329');
 const ctx = mc as unknown as Ctx;
-const cols = POSES.length;
-const colW = W / cols;
 
-// a faint ground line + column separators (drawn at the base transform, css pixels)
+// faint cell grid + a ground line in each cell
 ctx.strokeStyle = '#3a3f48';
 ctx.lineWidth = 1.5;
-ctx.beginPath();
-ctx.moveTo(0, BASE_Y); ctx.lineTo(W, BASE_Y); ctx.stroke();
-for (let i = 1; i < cols; i++) { ctx.beginPath(); ctx.moveTo(i * colW, 0); ctx.lineTo(i * colW, H); ctx.stroke(); }
+for (let c = 1; c < COLS; c++) { ctx.beginPath(); ctx.moveTo(c * CELL_W, 0); ctx.lineTo(c * CELL_W, H); ctx.stroke(); }
+for (let r = 1; r < ROWS; r++) { ctx.beginPath(); ctx.moveTo(0, r * CELL_H); ctx.lineTo(W, r * CELL_H); ctx.stroke(); }
+for (let r = 0; r < ROWS; r++) {
+  const gy = r * CELL_H + CELL_H - FOOT_FROM_BOTTOM;
+  ctx.beginPath(); ctx.moveTo(r === 0 ? 0 : 0, gy); ctx.lineTo(W, gy); ctx.stroke();
+}
 
 POSES.forEach((pose, i) => {
-  const cx = colW * (i + 0.5);
-  const project: Project = (right, _forward, height) => ({ x: cx + (right - SILH_CX) * UNIT_PX, y: BASE_Y - (height / CAT_HEIGHT) * UNIT_PX });
-  const view: CatView = { at: { right: 0, forward: 10 }, height: CAT_HEIGHT, faceRight: false, form: CAT, walk: pose.walk, headFront: pose.headFront };
+  const col = i % COLS, row = Math.floor(i / COLS);
+  const cx = col * CELL_W + CELL_W / 2;
+  const baseY = row * CELL_H + CELL_H - FOOT_FROM_BOTTOM;
+  const project: Project = (right, _forward, height) => ({ x: cx + (right - SILH_CX) * UNIT_PX, y: baseY - (height / CAT_HEIGHT) * UNIT_PX });
+  const view: CatView = { at: { right: 0, forward: 10 }, height: CAT_HEIGHT, faceRight: false, form: CAT, walk: pose.walk, headFront: pose.headFront, lift: pose.lift, leapT: pose.leapT };
   catScenery(view).drawAsNear(ctx, project);
 });
 
