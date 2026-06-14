@@ -5,7 +5,7 @@
 //
 // Run: node test/test_model.ts
 import { initialRiderState, getNextRiderState, riderDebug, ForwardReason, MAX_TURN_ANGLE, routeDistance } from '../rider.ts';
-import { nextRiderGaze, gazeFocus, PIG_GAZE_SPEED, GAZE_RELEASE_ANGLE, PIG_NOVELTY_COUNT } from '../rider_gaze.ts';
+import { nextRiderGaze, gazeFocus, PIG_GAZE_SPEED, GAZE_RELEASE_ANGLE } from '../rider_gaze.ts';
 import type { RiderState } from '../rider.ts';
 import { initialTruck, nextTruck, courseLength } from '../truck.ts';
 import type { TruckState } from '../truck.ts';
@@ -248,8 +248,8 @@ function main(): void {
     segGazePeak[st.segment] = Math.max(segGazePeak[st.segment] ?? 0, Math.abs(st.gazeYaw) * 180 / Math.PI);
     segFocusPeak[st.segment] = Math.max(segFocusPeak[st.segment] ?? 0, gazeFocus(st));
   }
-  // the gawk legs ARE the first PIG_NOVELTY_COUNT pig-bearing segments in route order.
-  const gawkLegs = world.order.filter((id) => world.segments[id].pigs).slice(0, PIG_NOVELTY_COUNT);
+  // the gawk legs are the segments world.ts flagged as distraction legs (the first PIG_NOVELTY_COUNT pig legs).
+  const gawkLegs = world.order.filter((id) => world.segments[id].pigsDistract);
   const RELEASE_DEG = GAZE_RELEASE_ANGLE * 180 / Math.PI;
   // (i) the distraction fires on EXACTLY those legs and nowhere else (novelty wears off; pig-less legs never glance).
   const GAZE_FIRES_DEG = 1;

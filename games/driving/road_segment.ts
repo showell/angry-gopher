@@ -36,7 +36,8 @@ export interface RoadSegment {
   scheme: Scheme;                // visual theme; drives the tree colours
   trees: Tree[];
   critters: Critter[];      // roadside emoji billboards along the segment (cows/pigs); elephants live on the exit Intersection
-  pigs: boolean;            // does the pig row gather near this segment's end? (the rider only glances on pig legs — rider.ts)
+  pigs: boolean;            // does the pig row gather near this segment's end?
+  pigsDistract: boolean;    // is this one of the first PIG_NOVELTY_COUNT pig legs — the rider GAWKS here (big staggered herd + the slow-down + gaze), derived in world.ts. Read by rider_gaze.ts
   cats: Cat[];              // hand-drawn cats that cross the road as the rider nears, opposite the bull
   // graph refs: the intersections bracketing this edge. Every segment EXITS through an
   // intersection (a turn, or the terminus that closes the route), so exitIxn is never null;
@@ -64,12 +65,12 @@ export interface RoadSegmentConfig {
   pigs: boolean;
 }
 
-// Build a segment's INTRINSIC state from its config: dimensions, roadside trees, and the
-// along-the-road critters — all a function of length/scheme alone. The intersection-derived
-// bits start empty/neutral: the graph refs, the turn-commit point (defaults to the segment
-// end, a terminus), and the north heading (accumulated along the route). world.ts fills
-// those, and the elephants live on the exit Intersection, not here.
-export function buildRoadSegment(c: RoadSegmentConfig): RoadSegment {
+// Build a segment's INTRINSIC state from its config: dimensions, roadside trees, and the along-the-road
+// critters (a function of length/scheme — plus `pigsDistract`, the one route-derived input world.ts passes
+// in, which only picks the BIG vs small pig herd). The other intersection-derived bits start empty/neutral:
+// the graph refs, the turn-commit point (defaults to the segment end, a terminus), and the north heading
+// (accumulated along the route). world.ts fills those, and the elephants live on the exit Intersection.
+export function buildRoadSegment(c: RoadSegmentConfig, pigsDistract: boolean): RoadSegment {
   const trees = segmentTrees(c.length, c.scheme, LANE_WIDTH / 2);
   const segNum = Number(c.id.slice(3));   // "seg7" -> 7
   return {
@@ -78,8 +79,9 @@ export function buildRoadSegment(c: RoadSegmentConfig): RoadSegment {
     width: LANE_WIDTH,
     scheme: c.scheme,
     trees,
-    critters: farmCritters(c.length, LANE_WIDTH / 2, TREE_ROAD_OFFSET, c.pigs),
+    critters: farmCritters(c.length, LANE_WIDTH / 2, TREE_ROAD_OFFSET, c.pigs, pigsDistract),
     pigs: c.pigs,
+    pigsDistract,
     cats: segmentCats(segNum, LANE_WIDTH / 2, TREE_ROAD_OFFSET, trees),   // only certain segments get a cat
     entryIxn: null,
     exitIxn: '',   // a placeholder: set to the real id when this segment's exit intersection is built

@@ -23,12 +23,27 @@ const PIG_DIST_BEFORE_END = 60;    // pigs gather this far before the next inter
 const PIG_BACK_ROW_OFFSET = 6;     // the extra back row of pigs sits this much further from the road
 const GAZE_PIG_ALONG_OFFSET = 2;   // the one pig the distracted rider fixes on: a front-row pig just past the cluster centre
 
-// The farm critters lining a segment: the cow herd near the start (left), always; and the pigs near
-// the end (right) only when `pigs` is set (a per-segment variety element). `treeLineOffset` is how
-// far roadside trees sit beyond the lane edge — the bull lines its rear up with that tree line.
-export function farmCritters(length: number, laneHalfWidth: number, treeLineOffset: number, pigs: boolean): Critter[] {
+// The big DISTRACTION herd (the first couple of pig appearances — the legs flagged pigsDistract in world.ts):
+// a deep staggered block of pigs, BIG_HERD_COLS along the road x BIG_HERD_ROWS deep, each nudged by a
+// deterministic stagger + jitter so it reads as a milling herd rather than a rigid lattice.
+const BIG_HERD_COLS = 7;           // pigs along the road; the extra columns extend toward the intersection
+const BIG_HERD_ROWS = 7;           // rows of pigs; the extra rows extend the herd away from the road
+const PIG_COL_SPACING = 4;         // along-spacing within a row
+const PIG_ROW_DEPTH = 6;           // across-spacing between rows (deeper into the field)
+const PIG_ROW_STAGGER = 1.5;       // alternate rows nudged along, so columns don't line up rigidly
+const PIG_JITTER_ALONG = 1.2;      // deterministic per-pig wobble, along
+const PIG_JITTER_ACROSS = 1.0;     // deterministic per-pig wobble, across
+const PIG_HERD_FIRST_COL = -6;     // along-offset of each row's near (cluster-front) pig; columns run from here toward the intersection
+
+// The farm critters lining a segment: the cow herd near the start (left), always; and the pigs near the
+// end (right) only when `pigs` is set. On a DISTRACTION leg (`bigHerd`, the first couple of pig appearances)
+// the pigs are a big staggered block; on the other pig legs they're the small two-row cluster. `treeLineOffset`
+// is how far roadside trees sit beyond the lane edge — the bull lines its rear up with that tree line.
+export function farmCritters(length: number, laneHalfWidth: number, treeLineOffset: number, pigs: boolean, bigHerd: boolean): Critter[] {
   const herd = cowHerd(laneHalfWidth, treeLineOffset);
-  return pigs ? [...herd, ...pigRow(length, laneHalfWidth + HERD_ROAD_OFFSET)] : herd;
+  if (!pigs) return herd;
+  const edge = laneHalfWidth + HERD_ROAD_OFFSET;
+  return [...herd, ...(bigHerd ? pigHerd(length, edge) : pigRow(length, edge))];
 }
 
 // 15 cows early in the segment: a BULL at the front (lowest along — seen first as you leave the
@@ -56,7 +71,7 @@ export function gazePig(length: number, laneHalfWidth: number): { along: number;
 }
 
 // 10 pigs near the end of the segment, on the right: a front row of 4 at the road's edge, and a
-// back row of 6 sitting further off the road.
+// back row of 6 sitting further off the road. The small herd, for the non-distraction pig legs.
 function pigRow(length: number, edge: number): Critter[] {
   const out: Critter[] = [];
   const base = length - PIG_DIST_BEFORE_END;
@@ -65,5 +80,22 @@ function pigRow(length: number, edge: number): Critter[] {
   };
   for (const d of [-6, -2, 2, 6]) pig(d, edge);                                 // front row of 4
   for (const d of [-10, -6, -2, 2, 6, 10]) pig(d, edge + PIG_BACK_ROW_OFFSET);  // back row of 6, further out
+  return out;
+}
+
+// The big distraction herd: a BIG_HERD_COLS x BIG_HERD_ROWS block extending toward the intersection (cols)
+// and away from the road (rows), staggered + jittered so it mills like a real herd. The gaze still aims at
+// the fixed gazePig point near the front, which sits inside this block.
+function pigHerd(length: number, edge: number): Critter[] {
+  const out: Critter[] = [];
+  const base = length - PIG_DIST_BEFORE_END;
+  for (let r = 0; r < BIG_HERD_ROWS; r++) {
+    for (let c = 0; c < BIG_HERD_COLS; c++) {
+      const i = r * BIG_HERD_COLS + c;
+      const along = base + PIG_HERD_FIRST_COL + c * PIG_COL_SPACING + (r % 2) * PIG_ROW_STAGGER + PIG_JITTER_ALONG * Math.sin(i * 2.3);
+      const across = edge + r * PIG_ROW_DEPTH + PIG_JITTER_ACROSS * Math.cos(i * 1.7);
+      out.push({ along, across, emoji: '🐖', height: PIG_HEIGHT, faceRight: false });
+    }
+  }
   return out;
 }

@@ -235,7 +235,7 @@ function getForwardAccelDecel(state: RiderState, seg: RoadSegment, world: World)
 
   // ease down to a slow gawking speed for the roadside pigs (the gaze distraction's one reach into the motion).
   // pigGazeBrake owns the trigger + the slow speed (rider_gaze.ts); here we just fold it into the min-of-brakes.
-  const pigA = pigGazeBrake(state, seg, world);
+  const pigA = pigGazeBrake(state, seg);
   if (pigA !== null && pigA < a) { a = pigA; reason = ForwardReason.SLOW_FOR_PIGS; }
 
   // Brake for the road edge using the rider's ACTUAL simulated path at his just-chosen lean (state.tilt/yaw
@@ -259,7 +259,7 @@ function getForwardAccelDecel(state: RiderState, seg: RoadSegment, world: World)
   // don't crawl below the corner's entry speed approaching it — UNLESS he's gawking at the pigs, where staying
   // at the slow gawk speed (and taking the corner slow) beats snapping back up to the corner speed (he never
   // re-accelerates after the pigs). Lower-than-tabulated entry is always safe; it just makes the turn slower.
-  if (near && v < vEnd && !gawkEngaged(state, seg, world)) v = vEnd;
+  if (near && v < vEnd && !gawkEngaged(state, seg)) v = vEnd;
   return { accel: v - state.v, reason };
 }
 
