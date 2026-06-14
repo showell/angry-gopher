@@ -23,9 +23,9 @@ const POSES: { label: string; walk: number; headFront: boolean; leapT: number; l
   { label: 'profile · rest', walk: 0, headFront: false, leapT: -1, lift: 0 },
   { label: 'profile · mid-stride', walk: Math.PI / 2, headFront: false, leapT: -1, lift: 0 },
   { label: 'frozen · head-on', walk: 0, headFront: true, leapT: -1, lift: 0 },
-  { label: 'leap · coil', walk: 0, headFront: false, leapT: 0.02, lift: 0 },
-  { label: 'leap · launch (1st air)', walk: 0, headFront: false, leapT: 0.167, lift: 0.09 },
-  { label: 'leap · airborne (peak)', walk: 0, headFront: false, leapT: 0.45, lift: 0.43 },
+  { label: 'leap · coil (f0)', walk: 0, headFront: false, leapT: 0.0, lift: 0 },
+  { label: 'leap · launch/air (f1)', walk: 0, headFront: false, leapT: 0.333, lift: 0.19 },
+  { label: 'leap · land (f3)', walk: 0, headFront: false, leapT: 1.0, lift: 0 },
 ];
 
 const mc = new MiniCanvas(W, H, '#202329');

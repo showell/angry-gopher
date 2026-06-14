@@ -69,10 +69,8 @@ const NOSE_TIP: P = [MUZZLE.cx - MUZZLE.r * 0.7, MUZZLE.cy + 0.01];
 // front on a profile neck) and reads a touch larger — it's the nearest thing to the rider.
 const FROZEN_HEAD = { cx: -0.25, cy: 0.80, r: 0.185 } as const;
 
-// silhouette facts cat_motion uses to place the cat: head-centre x (to centre the head on the lane)
-// and the tail-tip reach (to clear the road by a full tail length).
+// silhouette fact cat_motion uses to place the cat: head-centre x (to centre the head on the lane).
 export const CAT_HEAD_X = HEAD.cx;
-export const CAT_TAIL_REACH = 1.14;
 
 // one leg, rest pose: thigh down-and-slightly-forward, then the knee bends the shank down-and-back so
 // the foot sits behind the knee, then a small forward paw. All four share this shape.
@@ -345,10 +343,13 @@ const FLIGHT_NECK: P = [-0.35, 0.545];
 const HEAD_TO_MUZZLE: P = [MUZZLE.cx - HEAD.cx, MUZZLE.cy - HEAD.cy];
 const HEAD_TO_EYE: P = [HEAD.eye[0] - HEAD.cx, HEAD.eye[1] - HEAD.cy];
 
-// the stretch parameter (0 coil … 1 flight) over leap progress t: hold the coil an instant, then spring.
+// the stretch parameter (0 coil … 1 flight) over leap progress t. The uncoil is VIOLENT — it's the
+// launch — so the cat is already fully extended on the first airborne frame, holds the flight line, then
+// gathers a little as it lands.
 function leapStretch(t: number): number {
-  const u = Math.max(0, Math.min(1, (t - 0.08) / 0.45));
-  return u * u * (3 - 2 * u);
+  if (t < 0.30) return Math.max(0, Math.min(1, (t - 0.08) / 0.20));   // coil → full extension, fast
+  if (t < 0.78) return 1;                                             // held flight line
+  return 1 - 0.55 * Math.min(1, (t - 0.78) / 0.22);                   // gather toward the landing
 }
 
 // the torso outline deformed for the leap: scaled along its length (longer in flight) and its BACK bowed
