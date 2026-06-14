@@ -65,14 +65,15 @@ const ROOF = '#3a52a8';
 const SIDE = '#152150';
 const BRAKE = '#ff2a18';
 
-// ---- headlights: we never draw the lamps, only the CONE of light they throw forward from the cab nose,
-// a wedge fanning from headlight height down to the road ahead. It only shows once the sun is behind the
-// mountains, and only when the truck is in PROFILE (side-on) — the cone is foreshortened to nothing when it
-// points straight away from us, so its opacity scales with how broadside the beam is. ----
-const HEADLIGHT_H = 1.0;          // height of the lamps off the road (the cone's near, bright edge)
-const CONE_LENGTH = 16;           // how far ahead the beam reaches (m), fanning down to the road
+// ---- headlights: we never draw the lamps, only the WEDGE of light they throw forward from the cab nose.
+// It's a flat, CONSTANT-brightness wedge — we don't fade it or scale its opacity; its 3D ANGLE alone decides
+// how it reads (a broad sheet when the truck is in profile, foreshortened to a sliver when it points away).
+// It only appears once the sun is behind the mountains. ----
+const HEADLIGHT_H = 1.0;          // height of the lamps off the road (the wedge's near edge)
+const CONE_FAR_H = 0.6;           // height of the wedge's far edge — close to the lamp height, so the beam points mostly FORWARD (only a gentle dip toward the road)
+const CONE_LENGTH = 48;           // how far ahead the beam reaches (m)
 const CONE_HALF_WIDTH = 4;        // the beam's half-spread at its far end (m)
-const CONE_ALPHA = 0.55;          // peak opacity of the beam (when fully broadside); scaled down off-profile
+const CONE_ALPHA = 0.66;          // the wedge's (constant) opacity
 const BEAM_RGB = '255,248,214';   // warm white
 
 // a rider-frame point carrying a height off the ground
@@ -149,19 +150,13 @@ function buildTruck(map: (a: number, x: number) => RiderPt, centerAlong: number,
   const xl = hw - WIDTH / 2, xr = hw + WIDTH / 2;
   const p3 = (along: number, x: number, h: number): Pt3 => lower(map(along, x), h);   // a body point, on the curved ground
 
-  // how BROADSIDE the truck is to us (0 = pointing straight toward/away, 1 = full profile): the headlight beam
-  // runs along the truck's forward, so |sin| between our view ray to the cab and that forward = how much cone
-  // we'd see. Two mapped points a metre apart along the cab give the beam's direction in the rider frame.
-  const nose = map(a2, hw), beamEnd = map(a2 + 1, hw);
-  const bR = beamEnd.right - nose.right, bF = beamEnd.forward - nose.forward;
-  const viewLen = Math.hypot(nose.right, nose.forward), beamLen = Math.hypot(bR, bF);
-  const profile = viewLen > 1e-6 && beamLen > 1e-6 ? Math.abs(nose.right * bF - nose.forward * bR) / (viewLen * beamLen) : 0;
-  const coneAlpha = headlights ? CONE_ALPHA * profile : 0;
-  // the cone: a wedge from the lamps (cab nose, headlight height) fanning forward + down to the road ahead.
+  // the headlight wedge: from the lamps (cab nose, headlight height) fanning forward, dropping only gently to
+  // CONE_FAR_H so it points mostly forward. Constant brightness; its projected shape (the truck's angle) is
+  // what makes it read broad in profile and thin head-/tail-on.
   const cone: Pt3[] = [
     p3(a2, hw, HEADLIGHT_H),
-    p3(a2 + CONE_LENGTH, hw - CONE_HALF_WIDTH, 0),
-    p3(a2 + CONE_LENGTH, hw + CONE_HALF_WIDTH, 0),
+    p3(a2 + CONE_LENGTH, hw - CONE_HALF_WIDTH, CONE_FAR_H),
+    p3(a2 + CONE_LENGTH, hw + CONE_HALF_WIDTH, CONE_FAR_H),
   ];
 
   // Each SIDE is one silhouette (trailer + cab are coplanar, so no internal faces): up the rear, along
@@ -243,30 +238,8 @@ function buildTruck(map: (a: number, x: number) => RiderPt, centerAlong: number,
     ctx.fill();
   };
 
-  // the headlight cone: a wedge filled with a gradient bright at the lamps (poly[0]) fading to nothing at the
-  // far edge. Drawn UNDER the body so the cab sits on top of its source. Skipped entirely when off-profile/day.
-  const beam = (ctx: Ctx, project: Project, poly: Pt3[], alpha: number): void => {
-    const pts = clipNear(poly);
-    if (pts.length < 3) return;
-    const src = project(poly[0].right, poly[0].forward, poly[0].height);
-    const far = project((poly[1].right + poly[2].right) / 2, (poly[1].forward + poly[2].forward) / 2, (poly[1].height + poly[2].height) / 2);
-    const g = ctx.createLinearGradient(src.x, src.y, far.x, far.y);
-    g.addColorStop(0, `rgba(${BEAM_RGB},${alpha})`);
-    g.addColorStop(1, `rgba(${BEAM_RGB},0)`);
-    ctx.fillStyle = g;
-    ctx.beginPath();
-    const s0 = project(pts[0].right, pts[0].forward, pts[0].height);
-    ctx.moveTo(s0.x, s0.y);
-    for (let i = 1; i < pts.length; i++) {
-      const s = project(pts[i].right, pts[i].forward, pts[i].height);
-      ctx.lineTo(s.x, s.y);
-    }
-    ctx.closePath();
-    ctx.fill();
-  };
-
   const draw = (ctx: Ctx, project: Project): void => {
-    if (coneAlpha > 0.01) beam(ctx, project, cone, coneAlpha);   // headlight cone under the body
+    if (headlights) { ctx.fillStyle = `rgba(${BEAM_RGB},${CONE_ALPHA})`; fill(ctx, project, cone); }   // headlight wedge under the body
     for (const f of [...faces].sort((p, q) => avgF(q) - avgF(p))) {   // farthest faces first (painter's)
       ctx.fillStyle = f.color;
       fill(ctx, project, f.pts);
