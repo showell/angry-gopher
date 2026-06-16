@@ -412,8 +412,12 @@ function loop(t: number): void {
     return;
   }
 
-  // automatic mode: one Rider step per frame, until paused or finished (sets `dirty`)
-  if (auto && !riderFinished(currentRider(), world)) advance();
+  // automatic mode: one Rider step per frame. At the finish line, auto-PAUSE — the rider can't advance
+  // any further, so we drop out of auto so the watching clock stops and the AUTO badge tells the truth.
+  if (auto) {
+    if (riderFinished(currentRider(), world)) setAuto(false);
+    else advance();
+  }
 
   // ONLY redraw when the picture changed. Paused & idle => nothing to draw, so the HUD
   // and its stats freeze (no phantom frames re-reporting the same scene).
