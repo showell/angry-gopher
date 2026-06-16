@@ -10,3 +10,11 @@
 
 GOPHER_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CAT_DIR="${CAT_DIR:-$(dirname "$GOPHER_DIR")/angry-cat}"
+
+# Sanity: GOPHER_DIR is derived from THIS file's location (not cwd), so an ops
+# script works from any directory — but if the layout is broken (file moved, no
+# repo root), fail loudly here rather than silently operating on the wrong tree.
+if [ ! -f "$GOPHER_DIR/go.mod" ]; then
+    echo "ops: cannot locate the angry-gopher repo root (no go.mod at '$GOPHER_DIR')" >&2
+    exit 1
+fi

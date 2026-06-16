@@ -35,14 +35,19 @@ go build -ldflags "-X main.gitCommit=$BUILD_ID" -o gopher-server .
 
 GOPHER_CONFIG=~/AngryGopher/gopher.conf nohup ./gopher-server > /tmp/angry-gopher.log 2>&1 &
 
-# Wait for the server to be ready.
+# Wait for the server to be ready — and prove it's serving the binary we JUST
+# built (its /version reports gitCommit == BUILD_ID). A plain 200 isn't enough:
+# a stale/old server still answers 200, which is exactly how a "rebuild" that
+# silently didn't happen masquerades as success. Insisting on BUILD_ID makes
+# this script's success mean "the fresh code is live," or it fails loudly.
 for i in $(seq 1 10); do
-    GOPHER=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:9000/version 2>/dev/null || true)
-    if [ "$GOPHER" = "200" ]; then
-        echo "Gopher: http://localhost:9000 (ready, prod)"
+    if curl -s http://localhost:9000/version 2>/dev/null | grep -qF "\"commit\":\"$BUILD_ID\""; then
+        echo "Gopher: http://localhost:9000 (ready, serving $BUILD_ID)"
         exit 0
     fi
     sleep 1
 done
 
-echo "Warning: server may not be fully ready yet"
+echo "ERROR: :9000 is not serving the build we just made ($BUILD_ID) — a stale or" >&2
+echo "       wrong server may be running, or the restart failed. Check /tmp/angry-gopher.log." >&2
+exit 1

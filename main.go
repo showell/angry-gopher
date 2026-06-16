@@ -83,9 +83,13 @@ Usage:
 
 func handleVersion(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
+	// `commit` is the build identity (the -ldflags BUILD_ID): it lets ops/start
+	// confirm the freshly-built binary is the one actually serving, so a stale or
+	// not-restarted server can't masquerade as a successful rebuild.
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"result":  "success",
 		"version": "0.1",
+		"commit":  gitCommit,
 	})
 }
 
