@@ -47,6 +47,17 @@ hint.style.cssText =
   'font-size:12px;color:#e6e8eb;letter-spacing:0.4px;pointer-events:none;white-space:nowrap';
 wrap.appendChild(hint);
 
+// "How long have I been watching?" — a quiet count-up clock in the lower-right corner. Muted + on a
+// faint plate so it reads over grass or road but is easy to tune out; tabular-nums keeps it from twitching
+// as digits change. Reflects WALL time accrued while in AUTO mode only (see setAuto + watchedMs).
+const timer = document.createElement('div');
+timer.textContent = '0:00';
+timer.style.cssText =
+  'position:absolute;right:12px;bottom:10px;padding:4px 11px;border-radius:4px;' +
+  'background:rgba(0,0,0,0.32);font-size:17px;color:#9aa0a6;letter-spacing:0.5px;' +
+  'font-variant-numeric:tabular-nums;pointer-events:none;';
+wrap.appendChild(timer);
+
 const ctx = canvas.getContext('2d') as CanvasRenderingContext2D;
 const W = canvas.width;
 const H = canvas.height;
@@ -98,6 +109,13 @@ const currentTruck = (): TruckState => truckHistory[truckHistory.length - 1];
 // report). `dirty` marks a pending redraw; it's set wherever the Rider's state changes.
 let dirty = true;
 let auto = false;
+// The watching clock: total WALL time spent in AUTO mode, accrued across every foray. Tracked at the ONE
+// place auto flips (setAuto) — start the stopwatch on entering auto, bank the elapsed on leaving — so it
+// holds while paused / stepping / fast-forwarding and resumes on the next auto run. performance.now() is
+// monotonic ms (real elapsed, immune to clock changes). watchedMs() adds the live in-progress foray.
+let autoAccumMs = 0;    // banked wall time from previous auto forays
+let autoStartMs = 0;    // performance.now() when the current auto foray began (meaningful only while auto)
+const watchedMs = (): number => autoAccumMs + (auto ? performance.now() - autoStartMs : 0);
 // Fast-forward ("forward to X"): phase 0 = idle, 1 = notice painted (let the browser show it this frame), 2 =
 // run the heavy fast-forward compute next frame. The two-phase hop guarantees the notice is on screen BEFORE
 // the (blocking) compute runs. `forwardDone` is the stop predicate for the active fast-forward.
@@ -114,8 +132,13 @@ let trace: Array<{ step: number; dt: number; render: number }> = [];
 // dump on stop. No-op when already in the requested state.
 function setAuto(on: boolean): void {
   if (on === auto) return;
-  if (on) trace = [];
-  else if (trace.length) console.log(JSON.stringify(trace));
+  if (on) {
+    trace = [];
+    autoStartMs = performance.now();                  // start (or resume) the watching clock
+  } else {
+    autoAccumMs += performance.now() - autoStartMs;   // bank this foray's wall time
+    if (trace.length) console.log(JSON.stringify(trace));
+  }
   auto = on;
   dirty = true;
 }
@@ -363,6 +386,17 @@ function render(rider: RiderState): void {
   }
 }
 
+// Repaint the corner clock at one-second resolution (only when the whole-second value changes, so the
+// DOM isn't touched 60x/s). Called every loop frame; the value only grows while auto runs (watchedMs).
+let lastShownSec = -1;
+function updateTimer(): void {
+  const secs = Math.floor(watchedMs() / 1000);
+  if (secs === lastShownSec) return;
+  lastShownSec = secs;
+  const m = Math.floor(secs / 60), s = secs % 60;
+  timer.textContent = m + ':' + (s < 10 ? '0' + s : s);
+}
+
 let lastFrame = 0;
 function loop(t: number): void {
   // S forward-to-sunset: phase 1 just lets the notice paint this frame; phase 2 runs the (blocking) real drive
@@ -406,6 +440,7 @@ function loop(t: number): void {
     }
     dirty = false;
   }
+  updateTimer();
   lastFrame = auto ? t : 0;   // paused => drop the baseline so auto restarts cadence cleanly
   requestAnimationFrame(loop);
 }
