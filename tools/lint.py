@@ -7,7 +7,7 @@ grep — without comment-text false positives — and add a couple of
 patterns grep can't easily express (like "every name in the AST that's
 declared but never used").
 
-Three rules today:
+Five rules today:
 
   silent-catch          try{...}catch(_){ return; } or catch(_){} —
                         a thrown exception is swallowed with no log,
@@ -37,6 +37,18 @@ Three rules today:
                         the single reference is via an IIFE export
                         object (`return { foo: foo }` = key + value =
                         2 references, so exports don't fire).
+
+  undefined-call        A call `foo(...)` whose callee is a bare
+                        identifier that is neither defined in the file
+                        (function / var / param / catch-binding) nor a
+                        known global (the JS_BUILTINS set + every
+                        window.X export across the whole linted
+                        fileset). Catches a call left dangling after its
+                        definition was deleted — node --check
+                        (syntax-only) and dead-code (declared-but-
+                        unused) both miss this exact shape. Member calls
+                        (`x.foo()`) are out of scope: a different
+                        namespace, not resolvable per-file.
 
 Escape hatches, in order of preference:
 
@@ -105,6 +117,36 @@ CALLED_ONCE_NAME_ALLOWLIST: set[str] = {
     # load-bearing for naming an abstraction (the name IS the
     # documentation), not just a convenience wrapper. Each addition
     # gets a comment.
+}
+
+# Globals legitimately callable as a bare identifier — browser/BOM/ES
+# builtins. Cross-file project globals are NOT listed here: they're
+# collected automatically from every `window.X = ...` export across the
+# linted fileset (see _window_exports), so adding a new widget needs no
+# edit here. This list is only the ambient platform surface. Constructors
+# used purely as namespaces (Object.assign, Math.max, JSON.parse) never
+# appear as a bare call, but listing them is harmless and future-proofs a
+# direct `Number(x)` / `Date.now` shape.
+JS_BUILTINS: set[str] = {
+    "Object", "Array", "String", "Number", "Boolean", "Date", "RegExp",
+    "Error", "Math", "JSON", "Promise", "Set", "Map", "Symbol",
+    "document", "window", "console", "navigator", "location", "history",
+    "screen", "localStorage", "sessionStorage", "getComputedStyle",
+    "setTimeout", "clearTimeout", "setInterval", "clearInterval",
+    "requestAnimationFrame", "cancelAnimationFrame",
+    "parseInt", "parseFloat", "isNaN", "isFinite",
+    "encodeURIComponent", "decodeURIComponent", "encodeURI", "decodeURI",
+    "fetch", "XMLHttpRequest", "EventSource", "WebSocket", "FormData",
+    "Blob", "File", "URL", "URLSearchParams", "Image", "Audio",
+    "alert", "confirm", "prompt",
+}
+
+UNDEFINED_CALL_ALLOWLIST: set[str] = {
+    # Add here only for a bare-call global that JS_BUILTINS doesn't cover
+    # and that genuinely exists at runtime (a newer platform API, or a
+    # name injected by the page shell outside the linted JS). Each
+    # addition gets a comment with the receipt. Prefer a window.X export
+    # (auto-detected) when the thing is one of our own modules.
 }
 
 
@@ -298,10 +340,77 @@ def check_called_once(prog, lines, path):
     return out
 
 
-def find_violations(path: pathlib.Path) -> list[dict]:
-    src = path.read_text()
+def _defined_names(prog) -> set[str]:
+    """Every name a bare call could legitimately resolve to WITHIN one
+    file: function + named-function-expr names, var declarators, function
+    parameters, and catch bindings. Per-file (like dead-code) — this
+    dialect rarely shadows, and hoisting means declaration order doesn't
+    matter, so a flat set is correct for `foo()` resolution."""
+    names: set[str] = set()
+    for n in jsparse.walk(prog):
+        kind = n["kind"]
+        if kind == "FunctionDecl":
+            names.add(n["name"])
+            names.update(n["params"])
+        elif kind == "FunctionExpr":
+            if n["name"]:
+                names.add(n["name"])  # named expr is in scope for recursion
+            names.update(n["params"])
+        elif kind == "VarDeclarator":
+            names.add(n["name"])
+        elif kind == "CatchClause":
+            names.add(n["param"])
+    return names
+
+
+def _window_exports(progs) -> set[str]:
+    """Collect every `window.X = ...` target across the whole fileset.
+    These are this codebase's cross-file globals (ChatColors, ChatStyles,
+    …), so a bare call to one in another file is legitimate. Computed once
+    over all files and shared, so a new widget needs no allowlist edit."""
+    out: set[str] = set()
+    for prog in progs:
+        for n in jsparse.walk(prog):
+            if n["kind"] != "Assign":
+                continue
+            t = n["target"]
+            if (t["kind"] == "Member" and not t["computed"]
+                    and t["object"]["kind"] == "Identifier"
+                    and t["object"]["name"] == "window"):
+                out.add(t["property"])
+    return out
+
+
+def check_undefined_call(prog, lines, path, known_globals):
+    """Flag a call `foo(...)` whose callee is a bare identifier resolving
+    to nothing — not defined in this file, not a known global. This is the
+    shape a deleted-but-still-called function leaves behind. Member calls
+    (callee is a Member node, `x.foo()`) are skipped: a different
+    namespace the per-file analysis can't resolve."""
+    defined = _defined_names(prog)
+    out = []
+    for n in jsparse.walk(prog):
+        if n["kind"] != "Call":
+            continue
+        callee = n["callee"]
+        if callee["kind"] != "Identifier":
+            continue
+        name = callee["name"]
+        if name in defined or name in known_globals or name in UNDEFINED_CALL_ALLOWLIST:
+            continue
+        line, col = callee["loc"]
+        if line_or_predecessor_annotation(lines, line, "undefined-call"):
+            continue
+        out.append({
+            "rule": "undefined-call", "file": path,
+            "line": line, "col": col,
+            "msg": f"call to '{name}' — neither defined in this file nor a known global  |  {lines[line - 1].strip()}",
+        })
+    return out
+
+
+def find_violations(path: pathlib.Path, src: str, prog, known_globals) -> list[dict]:
     lines = src.splitlines()
-    prog = jsparse.parse(src)
     out: list[dict] = []
     for node in jsparse.walk(prog):
         if node["kind"] == "Try":
@@ -312,14 +421,21 @@ def find_violations(path: pathlib.Path) -> list[dict]:
             if v: out.append(v)
     out.extend(check_dead_code(prog, lines, path))
     out.extend(check_called_once(prog, lines, path))
+    out.extend(check_undefined_call(prog, lines, path, known_globals))
     return out
 
 
 def main() -> int:
     files = sorted((REPO / "chat").glob("*.js")) + sorted((REPO / "learn").glob("*.js"))
+    # First pass: parse every file once and collect the cross-file
+    # window.X globals, so the undefined-call rule can resolve a bare call
+    # to a module defined in a sibling file.
+    sources = {path: path.read_text() for path in files}
+    progs = {path: jsparse.parse(sources[path]) for path in files}
+    known_globals = JS_BUILTINS | _window_exports(progs.values())
     all_violations: list[dict] = []
     for path in files:
-        all_violations.extend(find_violations(path))
+        all_violations.extend(find_violations(path, sources[path], progs[path], known_globals))
     all_violations.sort(key=lambda v: (str(v["file"]), v["line"], v["col"]))
     for v in all_violations:
         rel = v["file"].relative_to(REPO)
