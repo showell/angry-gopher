@@ -70,12 +70,20 @@ Usage:
 	// Timeouts bound how long a slow/idle client can tie up a
 	// connection (slowloris). Caddy fronts the server for TLS and
 	// outer body limits beyond our per-handler caps.
+	//
+	// No WriteTimeout on purpose: it's a hard deadline on the WHOLE
+	// response write, so it closes the socket mid-stream on anything
+	// large or long-lived — a big image to a slow client truncates
+	// ("corrupt or truncated"), and every SSE stream would die at 30s.
+	// (The SSE handlers already clear it per-request in sse.go.)
+	// ReadHeaderTimeout is the timeout that actually guards against
+	// slowloris; WriteTimeout was the wrong tool for a server that
+	// serves large files and infinite event streams.
 	srv := &http.Server{
 		Addr:              config.ListenAddr(),
 		Handler:           handler,
 		ReadHeaderTimeout: 10 * time.Second,
 		ReadTimeout:       30 * time.Second,
-		WriteTimeout:      30 * time.Second,
 		IdleTimeout:       120 * time.Second,
 	}
 	log.Fatal(srv.ListenAndServe())
