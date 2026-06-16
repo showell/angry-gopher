@@ -51,6 +51,13 @@ var imageTagRe = regexp.MustCompile(`(?is)<img\s[^>]*>`)
 
 const imagesSep = "\n\n-------------\n\n"
 
+// imagesPageLimit caps how many of the most-recent image entries the
+// Images page renders. The page is a "what got shared lately" feed, and
+// the full history is heavy to ship over a slow link (every entry is a
+// full-resolution image), so we show the tail rather than all of it. A
+// "show older" affordance can page further back later if wanted.
+const imagesPageLimit = 20
+
 type imagesEntry struct {
 	SourceID string   // e.g. "obsidianweb_42"
 	From     string
@@ -186,6 +193,11 @@ func HandleImages(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(w, "read failed: "+err.Error(), http.StatusInternalServerError)
 		return
+	}
+	// entries are oldest-first; keep only the most-recent imagesPageLimit
+	// (the tail) so the page stays a light, recent feed.
+	if len(entries) > imagesPageLimit {
+		entries = entries[len(entries)-imagesPageLimit:]
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	chatPageHeader(w, "Images", user, "images")
