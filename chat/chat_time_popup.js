@@ -38,27 +38,45 @@ window.ChatTimePopup = (function(){
     backdropStyleInjected = true;
   }
 
-  function fmt(date, tz){
-    return new Intl.DateTimeFormat(undefined, {
-      timeZone: tz, weekday: 'short', month: 'short', day: 'numeric',
-      hour: 'numeric', minute: '2-digit', timeZoneName: 'short'
-    }).format(date);
+  /* Split the instant into the three independently-aligned columns the
+     row renders: "Sun, May 24" / "10:17 AM" / "GMT+1". The zone abbrev
+     is pulled via formatToParts so it stands alone in its own column. */
+  // lint:called-once column-split-helper
+  function timeParts(date, tz){
+    var dateStr = new Intl.DateTimeFormat(undefined, {
+      timeZone: tz, weekday: 'short', month: 'short', day: 'numeric' }).format(date);
+    var timeStr = new Intl.DateTimeFormat(undefined, {
+      timeZone: tz, hour: 'numeric', minute: '2-digit' }).format(date);
+    var zoneStr = '';
+    var bits = new Intl.DateTimeFormat(undefined, {
+      timeZone: tz, timeZoneName: 'short' }).formatToParts(date);
+    for(var i = 0; i < bits.length; i++){
+      if(bits[i].type === 'timeZoneName'){ zoneStr = bits[i].value; break; }
+    }
+    return { date: dateStr, time: timeStr, zone: zoneStr };
   }
 
-  function buildRow(label, value, highlight){
+  /* One table-row of cells. display:table on the body container makes
+     the four columns (city · date · time · zone) line up across every
+     row regardless of text width. */
+  function buildRow(label, date, tz, highlight){
+    var p = timeParts(date, tz);
     var row = document.createElement('div');
-    Object.assign(row.style, {
-      display: 'flex', justifyContent: 'space-between', gap: '24px',
-      padding: '8px 16px', borderBottom: '1px solid '+ChatColors.softBorder
-    });
-    if(highlight) row.style.background = ChatColors.accentSoftBg;
-    var name = document.createElement('span');
-    name.textContent = label;
-    Object.assign(name.style, { color: ChatColors.mutedFg, whiteSpace: 'nowrap' });
-    var when = document.createElement('span');
-    when.textContent = value;
-    Object.assign(when.style, { color: ChatColors.metaFg, fontWeight: '600', whiteSpace: 'nowrap' });
-    row.appendChild(name); row.appendChild(when);
+    row.style.display = 'table-row';
+    function cell(text, extra){
+      var c = document.createElement('div');
+      c.textContent = text;
+      Object.assign(c.style, {
+        display: 'table-cell', padding: '7px 10px', whiteSpace: 'nowrap',
+        borderBottom: '1px solid '+ChatColors.softBorder,
+      }, extra);
+      if(highlight) c.style.background = ChatColors.accentSoftBg;
+      row.appendChild(c);
+    }
+    cell(label,  { color: ChatColors.mutedFg, paddingLeft: '16px' });
+    cell(p.date, { color: ChatColors.metaFg });
+    cell(p.time, { color: ChatColors.metaFg, fontWeight: '600', textAlign: 'right' });
+    cell(p.zone, { color: ChatColors.mutedFg, fontSize: '12px', paddingRight: '16px' });
     return row;
   }
 
@@ -92,16 +110,21 @@ window.ChatTimePopup = (function(){
     strap.appendChild(title); strap.appendChild(close);
     dlg.appendChild(strap);
 
+    /* display:table so the four columns align across every row. */
+    var body = document.createElement('div');
+    body.style.display = 'table';
+
     /* Viewer's own detected zone, pinned to the top and highlighted. */
     var localTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    dlg.appendChild(buildRow('Your time', fmt(date, localTz), true));
+    body.appendChild(buildRow('Your time', date, localTz, true));
 
     for(var i = 0; i < ZONES.length; i++){
       /* Skip a fixed zone that's identical to the viewer's — no point
          showing "India" twice for an India reader. */
       if(ZONES[i].tz === localTz) continue;
-      dlg.appendChild(buildRow(ZONES[i].label, fmt(date, ZONES[i].tz), false));
+      body.appendChild(buildRow(ZONES[i].label, date, ZONES[i].tz, false));
     }
+    dlg.appendChild(body);
 
     dlg.addEventListener('close', function(){ dlg.remove(); });
     dlg.addEventListener('click', function(e){ if(e.target === dlg) dlg.close(); });
