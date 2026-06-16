@@ -34,13 +34,24 @@
     whiteSpace:'nowrap', width:'1%', color: ChatColors.mutedFg,
   };
 
+  /* The Message column shows a plain-text preview the server already
+     trimmed; we clamp the visible height to three lines with the
+     -webkit-box line-clamp idiom (applied to an inner div so the td keeps
+     normal table-cell layout). */
+  var EXCERPT_STYLE = {
+    color: ChatColors.mutedFg, whiteSpace:'normal', maxWidth:'52ch',
+    display:'-webkit-box', WebkitBoxOrient:'vertical', WebkitLineClamp:'3',
+    overflow:'hidden',
+  };
+
   var tableEl = document.createElement('table');
   var thead   = document.createElement('thead');
   var headRow = document.createElement('tr');
   var thWhen  = document.createElement('th'); thWhen.textContent = 'When';
   Object.assign(thWhen.style, WHEN_STYLE_TH);
   var thWhat  = document.createElement('th'); thWhat.textContent = 'What';
-  headRow.appendChild(thWhen); headRow.appendChild(thWhat);
+  var thMsg   = document.createElement('th'); thMsg.textContent = 'Message';
+  headRow.appendChild(thWhen); headRow.appendChild(thWhat); headRow.appendChild(thMsg);
   thead.appendChild(headRow); tableEl.appendChild(thead);
   var tbodyEl = document.createElement('tbody');
   tableEl.appendChild(tbodyEl);
@@ -114,7 +125,14 @@
     }else{
       return null;
     }
-    tr.appendChild(when); tr.appendChild(what);
+    var preview=document.createElement('td');
+    if(evt.kind==='chat' && evt.excerpt){
+      var clamp=document.createElement('div');
+      Object.assign(clamp.style, EXCERPT_STYLE);
+      clamp.textContent=evt.excerpt;
+      preview.appendChild(clamp);
+    }
+    tr.appendChild(when); tr.appendChild(what); tr.appendChild(preview);
     return tr;
   }
 

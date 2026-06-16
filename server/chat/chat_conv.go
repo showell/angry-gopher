@@ -313,7 +313,7 @@ func (c Conv) fanoutMessage(from users.User, sid string, msg ChatMessage, index 
 	for _, uid := range c.Members {
 		notifyBus.publish(uid, notifyEvt)
 	}
-	publishRecentForConv(c, sid, msg.At, from.ID)
+	publishRecentForConv(c, sid, msg.At, from.ID, msg.Markdown)
 	publishImagesForConv(c, sid, msg)
 	publishCodeForConv(c, sid, msg)
 	if index == 0 {

@@ -15,7 +15,9 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"regexp"
 	"sort"
+	"strings"
 	"time"
 )
 
@@ -35,6 +37,7 @@ type recentItem struct {
 	where      string // muted context ("with apoorva" / "in General")
 	topic      string // the session/topic id (display label)
 	lastAuthor string // display name of the most recent sender, or ""
+	excerpt    string // plain-text preview of the latest message (client clamps to 3 lines)
 	// doc-only
 	slug  string
 	title string
@@ -77,6 +80,7 @@ func emitRecentData(w http.ResponseWriter, items []recentItem) {
 			evt.Topic = it.topic
 			evt.Where = it.where
 			evt.LastAuthor = it.lastAuthor
+			evt.Excerpt = it.excerpt
 		case recentDoc:
 			evt.Kind = "doc"
 			evt.Slug = it.slug
@@ -126,6 +130,7 @@ func gatherRecentItems(user users.User) []recentItem {
 				where:      c.recentWhereFor(user.ID),
 				topic:      sid,
 				lastAuthor: users.GetUserName(c.LastAuthor(sid)),
+				excerpt:    recentExcerpt(lastMessageMarkdown(c, sid)),
 			})
 		}
 	}
@@ -168,6 +173,7 @@ type recentEvent struct {
 	Topic      string    `json:"topic,omitempty"`
 	Where      string    `json:"where,omitempty"`
 	LastAuthor string    `json:"last_author,omitempty"`
+	Excerpt    string    `json:"excerpt,omitempty"`
 	Slug       string    `json:"slug,omitempty"`
 	Title      string    `json:"title,omitempty"`
 }
@@ -179,9 +185,10 @@ var recentBus = newSubBus[recentEvent]()
 // conv member's recent feed, pre-resolving the per-recipient "Where"
 // label so the client doesn't need a uid→name table. DM: each side
 // reads "with <other>"; channel: every member reads "in <channel>".
-func publishRecentForConv(c Conv, sid string, at time.Time, authorUID string) {
+func publishRecentForConv(c Conv, sid string, at time.Time, authorUID, markdown string) {
 	authorName := users.GetUserName(authorUID)
 	url := c.topicURL(sid)
+	excerpt := recentExcerpt(markdown)
 	for _, uid := range c.Members {
 		recentBus.publish(uid, recentEvent{
 			Kind:       "chat",
@@ -190,8 +197,46 @@ func publishRecentForConv(c Conv, sid string, at time.Time, authorUID string) {
 			Topic:      sid,
 			Where:      c.recentWhereFor(uid),
 			LastAuthor: authorName,
+			Excerpt:    excerpt,
 		})
 	}
+}
+
+// recentExcerptCap bounds the excerpt's byte size on the wire. The client
+// visually clamps the cell to 3 lines; this just keeps a long message from
+// bloating the feed JSON.
+const recentExcerptCap = 280
+
+var (
+	imgTagRe  = regexp.MustCompile(`(?is)<img\b[^>]*>`)
+	mdImageRe = regexp.MustCompile(`!\[[^\]]*\]\([^)]*\)`)
+	wsRunRe   = regexp.MustCompile(`\s+`)
+)
+
+// recentExcerpt renders a one-line plain-text preview of a message's raw
+// markdown for the Recent feed: image tags (HTML or markdown) collapse to
+// "[image]", all whitespace runs become a single space, and the result is
+// capped at recentExcerptCap runes. The client CSS-clamps the visible height
+// to three lines.
+func recentExcerpt(markdown string) string {
+	s := imgTagRe.ReplaceAllString(markdown, "[image]")
+	s = mdImageRe.ReplaceAllString(s, "[image]")
+	s = strings.TrimSpace(wsRunRe.ReplaceAllString(s, " "))
+	if r := []rune(s); len(r) > recentExcerptCap {
+		s = strings.TrimSpace(string(r[:recentExcerptCap])) + "…"
+	}
+	return s
+}
+
+// lastMessageMarkdown returns the raw markdown of the most recent message in
+// a session, or "" if it's empty or unreadable. Reads the whole transcript —
+// fine at our scale (the Recent page already stats every session file on GET).
+func lastMessageMarkdown(c Conv, sid string) string {
+	msgs, err := c.ReadSession(sid)
+	if err != nil || len(msgs) == 0 {
+		return ""
+	}
+	return msgs[len(msgs)-1].Markdown
 }
 
 // recentWhereFor is the per-recipient muted-span text. DMs name the
