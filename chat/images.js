@@ -34,6 +34,37 @@
     display:'block', margin:'6px 0', borderRadius:'6px', cursor:'zoom-in',
   };
 
+  /* Lazy image loading, hand-rolled via IntersectionObserver rather than
+     the <img loading="lazy"> attribute. "lazy" is viewport-based too, but
+     its preload margin is generous and not ours to control (the browser
+     fetches images several screens away). This page can hold many large
+     images, and we measured that concurrent fetches make aggregate
+     throughput WORSE on a slow link — so we want strict control over how
+     many load at once. Each <img> is kept src-less (its URL parked in
+     data-src) until it comes within LOAD_MARGIN of the viewport; only then
+     do we set src and let it fetch. Decode stays off the main thread. */
+  var LOAD_MARGIN = '400px 0px';
+
+  function loadNow(img){
+    var src = img.getAttribute('data-src');
+    if(src){ img.src = src; img.removeAttribute('data-src'); }
+  }
+
+  function onIntersect(items){
+    for(var i = 0; i < items.length; i++){
+      if(items[i].isIntersecting){
+        loadNow(items[i].target);
+        observer.unobserve(items[i].target);
+      }
+    }
+  }
+
+  /* Older browsers without IntersectionObserver fall back to eager load
+     (see buildEntry) so the page never shows blank images. */
+  var observer = (typeof IntersectionObserver === 'function')
+    ? new IntersectionObserver(onIntersect, { rootMargin: LOAD_MARGIN })
+    : null;
+
   function buildEntry(evt){
     var li = ChatStyles.createTranscriptEntry({
       sourceID: evt.source_id,
@@ -42,21 +73,25 @@
       sourceURL: evt.source_url,
     });
     var imgs = document.createElement('div');
-    /* PRODUCT_DECISION: server-supplied <img> tags include sanitized src/alt
-       attributes; trust + inject as innerHTML. Per-image styling is then
-       applied in JS so this page emits zero CSS. */
-    imgs.innerHTML = evt.images.join('');
-    var nodes = imgs.querySelectorAll('img');
-    for(var i = 0; i < nodes.length; i++){
-      Object.assign(nodes[i].style, IMG_STYLE);
-      /* This page is one long scroll of every image the viewer can see —
-         40MB+ across the whole history. Eager loading fires a request (and
-         a decode) for all of them on paint, which floods the network/host
-         even though each image is cached immutable for a year. lazy defers
-         the fetch until the image nears the viewport; async decode keeps
-         the work off the main thread. */
-      nodes[i].loading = 'lazy';
-      nodes[i].decoding = 'async';
+    /* Parse the server-supplied <img> tags inside an inert <template> so
+       they don't fetch on injection (an <img> begins loading the moment it
+       has a src, even detached). Rewrite each src -> data-src and style it
+       while inert, then move the still-src-less nodes into the live
+       container; the observer sets src when each nears the viewport. */
+    var tpl = document.createElement('template');
+    tpl.innerHTML = evt.images.join('');
+    var parsed = tpl.content.querySelectorAll('img');
+    for(var i = 0; i < parsed.length; i++){
+      Object.assign(parsed[i].style, IMG_STYLE);
+      parsed[i].decoding = 'async';
+      var src = parsed[i].getAttribute('src');
+      if(src){ parsed[i].setAttribute('data-src', src); parsed[i].removeAttribute('src'); }
+    }
+    imgs.appendChild(tpl.content);
+    var ready = imgs.querySelectorAll('img');
+    for(var j = 0; j < ready.length; j++){
+      if(observer){ observer.observe(ready[j]); }
+      else { loadNow(ready[j]); }
     }
     li.appendChild(imgs);
     return li;
