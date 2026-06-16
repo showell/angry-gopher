@@ -25,6 +25,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 )
 
 // maxChatUploadBytes caps a single uploaded image. Caddy's per-route body
@@ -202,5 +203,14 @@ func serveUploadedFile(w http.ResponseWriter, r *http.Request, c Conv, sid strin
 	w.Header().Set("Content-Type", chatImageContentType[ext])
 	w.Header().Set("Cache-Control", "private, max-age=31536000, immutable")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
+	// A large image to a slow client (or a connection back-pressured while
+	// the browser drains a whole gallery) can take longer than the server's
+	// global 30s WriteTimeout (main.go), which would close the socket
+	// mid-stream and surface as "image corrupt or truncated" in the browser.
+	// Extend the per-request write deadline generously for the download —
+	// the SSE handlers clear theirs entirely for the same reason (sse.go).
+	// A finite ceiling still bounds a stuck slow-reader: 5 min covers a
+	// 10 MB max-size upload down to ~33 KB/s.
+	_ = http.NewResponseController(w).SetWriteDeadline(time.Now().Add(5 * time.Minute))
 	http.ServeFile(w, r, filepath.Join(c.UploadsDir(sid), name))
 }
