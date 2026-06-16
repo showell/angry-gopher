@@ -73,14 +73,12 @@ window.ChatStyles = (function(){
     var a = document.createElement('a');
     a.href = opts.sourceURL;
     a.textContent = 'MSG_' + opts.sourceID;
-    ensureHoverStyle();
     line3.appendChild(a);
     meta.appendChild(line3);
 
     li.appendChild(meta);
     return li;
   }
-
 
   return {
     createTranscriptList: createTranscriptList,
