@@ -40,6 +40,7 @@ func HandleLearn(w http.ResponseWriter, r *http.Request) {
 			`<script>ChatColors.install();</script>`+
 			`<script src="/chat/chat_image_popup.js?v=%s"></script>`+
 			`<script src="/chat/chat_code_popup.js?v=%s"></script>`+
+			`<script src="/chat/chat_time_popup.js?v=%s"></script>`+
 			`<script src="/chat/message.js?v=%s"></script>`+
 			`<script src="/chat/message_view.js?v=%s"></script>`+
 			`<script src="/chat/nav_stack.js?v=%s"></script>`+
@@ -51,7 +52,7 @@ func HandleLearn(w http.ResponseWriter, r *http.Request) {
 			`<script src="/learn/callback_log.js?v=%s"></script>`+
 			`<script src="/learn/fake_host.js?v=%s"></script>`+
 			`<script src="/learn/learn.js?v=%s"></script>`,
-		v, v, v, v, v, v, v, v, v, v, v, v, v, v)
+		v, v, v, v, v, v, v, v, v, v, v, v, v, v, v)
 	fmt.Fprint(w, `</body></html>`)
 }
 
@@ -82,6 +83,7 @@ func HandleFakeHostJS(w http.ResponseWriter, r *http.Request) {
 var learnSourceAllowlist = map[string]string{
 	"chat_image_popup.js":   "chat/chat_image_popup.js",
 	"chat_code_popup.js":    "chat/chat_code_popup.js",
+	"chat_time_popup.js":    "chat/chat_time_popup.js",
 	"message.js":            "chat/message.js",
 	"message_view.js":       "chat/message_view.js",
 	"nav_stack.js":          "chat/nav_stack.js",

@@ -68,6 +68,9 @@ phase "chat-image-popup-js" node --check chat/chat_image_popup.js
 echo "==> chat_code_popup.js syntax"
 phase "chat-code-popup-js" node --check chat/chat_code_popup.js
 
+echo "==> chat_time_popup.js syntax"
+phase "chat-time-popup-js" node --check chat/chat_time_popup.js
+
 echo "==> docs.js syntax"
 phase "docs-js" node --check chat/docs.js
 

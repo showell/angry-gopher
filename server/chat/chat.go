@@ -29,20 +29,14 @@ import (
 // to encourage longer posts — but bounded.
 const maxChatMessageBytes = 64 * 1024
 
-// easternLoc formats message times in the same zone as the rest of the
-// site; falls back to UTC if the zoneinfo isn't available.
-var easternLoc = func() *time.Location {
-	if loc, err := time.LoadLocation("America/New_York"); err == nil {
-		return loc
-	}
-	return time.UTC
-}()
-
-func formatChatTime(t time.Time) string {
+// formatChatInstant emits the message's wall-clock instant as RFC3339
+// UTC. The client formats it into the viewer's own zone (and offers a
+// multi-zone popup), so the server no longer picks a display zone.
+func formatChatInstant(t time.Time) string {
 	if t.IsZero() {
 		return ""
 	}
-	return t.In(easternLoc).Format("Jan 2 · 3:04 PM")
+	return t.UTC().Format(time.RFC3339)
 }
 
 // URL space (mirrors the on-disk layout under {ChatDataRoot}/<conv>/sessions/):
@@ -540,6 +534,15 @@ func HandleChatCodePopupJS(w http.ResponseWriter, r *http.Request) {
 	platform.ServeJS(w, ChatCodePopupJSPath, "chat_code_popup.js missing from the binary")
 }
 
+// ChatTimePopupJSPath is the shared timestamp world-clock dialog —
+// opened by clicking a message's timestamp (via Message).
+var ChatTimePopupJSPath = "chat/chat_time_popup.js"
+
+// HandleChatTimePopupJS serves the shared time-popup module.
+func HandleChatTimePopupJS(w http.ResponseWriter, r *http.Request) {
+	platform.ServeJS(w, ChatTimePopupJSPath, "chat_time_popup.js missing from the binary")
+}
+
 // validChatPartner reports whether partner id is a usable conversation
 // partner for user id: another authorized principal (member or agent),
 // not yourself or empty.
@@ -605,6 +608,7 @@ func renderConversation(w http.ResponseWriter, user users.User, c Conv, sid stri
 	v := url.QueryEscape(platform.AssetVersion)
 	fmt.Fprintf(w, `</div><script src="/chat/chat_image_popup.js?v=%s"></script>`+
 		`<script src="/chat/chat_code_popup.js?v=%s"></script>`+
+		`<script src="/chat/chat_time_popup.js?v=%s"></script>`+
 		`<script src="/chat/message.js?v=%s"></script>`+
 		`<script src="/chat/message_view.js?v=%s"></script>`+
 		`<script src="/chat/nav_stack.js?v=%s"></script>`+
@@ -618,7 +622,7 @@ func renderConversation(w http.ResponseWriter, user users.User, c Conv, sid stri
 		`<script src="/chat/chat_help.js?v=%s"></script>`+
 		`<script src="/chat/chat.js?v=%s"></script>`+
 		`<script src="/chat/notify.js?v=%s"></script>`,
-		v, v, v, v, v, v, v, v, v, v, v, v, v, v, v)
+		v, v, v, v, v, v, v, v, v, v, v, v, v, v, v, v)
 
 	platform.PageFooter(w)
 }

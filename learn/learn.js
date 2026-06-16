@@ -326,15 +326,15 @@
     /* Three server-shaped message objects. `html` would be sanitized by
        goldmark on the real server; here we author it directly. */
     var messages = [
-      { id: 'demo_001', index: 0, from: 'Alice', mine: false, time: '09:30',
+      { id: 'demo_001', index: 0, from: 'Alice', mine: false, at: '2026-06-16T13:30:00Z',
         body: 'Hey 👋',
         html: 'Hey there 👋' },
-      { id: 'demo_002', index: 1, from: 'You', mine: true, time: '09:31',
+      { id: 'demo_002', index: 1, from: 'You', mine: true, at: '2026-06-16T13:31:00Z',
         body: 'Try clicking the image or the code block',
         html: 'Try clicking either of these:<br>'
             + '<img src="/images/cat_professor.webp" style="max-width:140px;cursor:zoom-in"><br>'
             + '<pre>console.log("hi from the demo");</pre>' },
-      { id: 'demo_003', index: 2, from: 'Alice', mine: false, time: '09:32',
+      { id: 'demo_003', index: 2, from: 'Alice', mine: false, at: '2026-06-16T13:32:00Z',
         body: 'See MSG_demo_002',
         html: 'See <a class="msg-ref" href="#msg-demo_002">MSG_demo_002</a> 👆' },
     ];
@@ -542,7 +542,7 @@
   /* ---- Lesson 6 demo: ChatMiddlePane.init wired with the real
      Message factory and a small batch of simulated server responses
      (same wire shape as the chat conversation page's SSE — index,
-     from, time, html, markdown, id, mine). The html field is what the
+     from, at, html, markdown, id, mine). The html field is what the
      Go server would have produced from goldmark; everything else is
      JS the reader has already seen. ---- */
 
@@ -553,26 +553,26 @@
        from the `markdown` source — written by hand here so the demo
        doesn't need a Go round-trip. */
     var fakeMessages = [
-      { from: 'apoorva', time: 'today · 9:00 AM', mine: false, id: 'demo_1',
+      { from: 'apoorva', at: '2026-06-16T13:00:00Z', mine: false, id: 'demo_1',
         markdown: 'Hi! I just finished lesson 5 about **nav_stack**. Are these demos using real chat data?',
         html: '<p>Hi! I just finished lesson 5 about <strong>nav_stack</strong>. Are these demos using real chat data?</p>' },
-      { from: 'Claude',  time: 'today · 9:01 AM', mine: true,  id: 'demo_2',
+      { from: 'Claude',  at: '2026-06-16T13:01:00Z', mine: true,  id: 'demo_2',
         markdown: 'No — the earlier lessons used colored rectangles to keep the focus on the widget itself...',
         html: '<p>No — the earlier lessons used colored rectangles to keep the focus on the widget itself. Lesson 6 finally introduces real messages.</p>'
-            + '<p>The data shape is what the SSE stream sends: <code>{from, time, html, markdown, id, mine}</code>. Hand it to <code>Message.create</code> and you get a bubble.</p>' },
-      { from: 'apoorva', time: 'today · 9:02 AM', mine: false, id: 'demo_3',
+            + '<p>The data shape is what the SSE stream sends: <code>{from, at, html, markdown, id, mine}</code> — <code>at</code> is the RFC3339 instant, rendered in your local zone (click it for the world clock). Hand it to <code>Message.create</code> and you get a bubble.</p>' },
+      { from: 'apoorva', at: '2026-06-16T13:02:00Z', mine: false, id: 'demo_3',
         markdown: 'So the html field is already rendered? What does the JS side do then?',
         html: '<p>So the <code>html</code> field is already rendered? What does the JS side do then?</p>' },
-      { from: 'Claude',  time: 'today · 9:03 AM', mine: true,  id: 'demo_4',
+      { from: 'Claude',  at: '2026-06-16T13:03:00Z', mine: true,  id: 'demo_4',
         markdown: 'Right — Go runs the markdown through goldmark, sanitizes it, and post-processes MSG_ tokens...',
         html: '<p>Right — Go runs the markdown through goldmark, sanitizes it, and post-processes MSG_ tokens into msg-ref links (see <a href="#msg-demo_1" class="msg-ref">MSG_demo_1</a>). The JS just <code>innerHTML</code>s it.</p>'
             + '<p>Code blocks land in <code>&lt;pre&gt;</code> tags — clickable too:</p>'
             + '<pre class="chat-quote">function hi(){ return \'world\'; }</pre>' },
-      { from: 'apoorva', time: 'today · 9:04 AM', mine: false, id: 'demo_5',
+      { from: 'apoorva', at: '2026-06-16T13:04:00Z', mine: false, id: 'demo_5',
         markdown: 'And images?',
         html: '<p>And images?</p>'
             + '<p><img src="/images/cat_professor.webp" alt="cat professor"></p>' },
-      { from: 'Claude',  time: 'today · 9:05 AM', mine: true,  id: 'demo_6',
+      { from: 'Claude',  at: '2026-06-16T13:05:00Z', mine: true,  id: 'demo_6',
         markdown: 'Same path — markdown has ![alt](src), goldmark renders it as <img>, Message wires the click to the popup.',
         html: '<p>Same path — the markdown has <code>![alt](src)</code>, goldmark renders it as <code>&lt;img&gt;</code>, Message wires the click to the popup. Try clicking the cat above.</p>'
             + '<p>Click <a href="#msg-demo_1" class="msg-ref">MSG_demo_1</a> and the pane scrolls back + selects that bubble — your current position goes on the nav stack, so Back returns you here.</p>' },

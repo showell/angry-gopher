@@ -120,6 +120,7 @@ func RegisterPages(mux *http.ServeMux) {
 	Route(mux, "/chat/middle_pane.js", TOTALLY_PUBLIC, chat.HandleMiddlePaneJS)
 	Route(mux, "/chat/chat_image_popup.js", TOTALLY_PUBLIC, chat.HandleChatImagePopupJS)
 	Route(mux, "/chat/chat_code_popup.js", TOTALLY_PUBLIC, chat.HandleChatCodePopupJS)
+	Route(mux, "/chat/chat_time_popup.js", TOTALLY_PUBLIC, chat.HandleChatTimePopupJS)
 	Route(mux, "/chat/notify.js", TOTALLY_PUBLIC, chat.HandleNotifyJS)
 	Route(mux, "/chat/docs.js", TOTALLY_PUBLIC, chat.HandleDocsJS)
 

@@ -207,7 +207,7 @@ window.ChatSearch = (function(){
       var rec=res[k];
       var row=document.createElement('div'); row.className='chat-sr-row'; row.setAttribute('data-i',k);
       var head=document.createElement('div'); head.className='chat-sr-rhead';
-      head.textContent='#'+(rec.index+1)+' '+rec.from+' · '+rec.time;
+      head.textContent='#'+(rec.index+1)+' '+rec.from+' · '+Message.formatLocalTime(rec.at);
       /* PRODUCT_DECISION: rebuild a .chat-body from rec.html (the same sanitized
          HTML the feed bubble was painted from) — search owns its own DOM,
          doesn't reach into the feed's. The bubble's style rules (link

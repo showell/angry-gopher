@@ -20,6 +20,7 @@ import "embed"
 //go:embed chat/chat_compose.js
 //go:embed chat/chat_image_popup.js
 //go:embed chat/chat_code_popup.js
+//go:embed chat/chat_time_popup.js
 //go:embed chat/chat_help.js
 //go:embed chat/message.js
 //go:embed chat/message_view.js

@@ -79,6 +79,9 @@ window.Message = (function(){
       +   ' padding:0 2px; cursor:pointer; text-decoration:underline; }'
       + '.chat-meta .msg-quote:hover, .chat-meta .msg-refer:hover, .chat-meta .msg-edit:hover {'
       +   ' color:var(--cc-accent); }'
+      /* Timestamp is clickable → multi-zone popup. */
+      + '.chat-meta .chat-time { cursor:pointer; text-decoration:underline dotted; }'
+      + '.chat-meta .chat-time:hover { color:var(--cc-accent); }'
       /* Bubble body wrap + classes goldmark + chat post-processing emit. */
       + '.chat-body { overflow-wrap:anywhere; }'
       + '.chat-body p:first-child { margin-top:0; }'
@@ -133,9 +136,25 @@ window.Message = (function(){
     return {kind:'plain'};
   }
 
+  /* ===== timestamp rendering =====
+     The wire ships `at` as an RFC3339 UTC instant; the bubble shows it in
+     the VIEWER's own zone (so an India reader sees IST, an NYC reader sees
+     ET) and clicking it opens ChatTimePopup with the full world clock.
+     Kept module-level so any surface rendering a meta line formats alike.
+     Look matches the old server string "Jan 2 · 3:04 PM", just re-zoned. */
+  function formatLocalTime(iso){
+    if(!iso) return '';
+    var d = new Date(iso);
+    if(isNaN(d.getTime())) return '';
+    var day  = new Intl.DateTimeFormat(undefined, {month:'short', day:'numeric'}).format(d);
+    var time = new Intl.DateTimeFormat(undefined, {hour:'numeric', minute:'2-digit'}).format(d);
+    return day + ' · ' + time;
+  }
+
   /* Image popup lives in chat_image_popup.js; code popup lives in
-     chat_code_popup.js. Both are shared with their respective transcript
-     views. Use ChatImagePopup.show(src) / ChatCodePopup.show(text) directly. */
+     chat_code_popup.js; time popup in chat_time_popup.js. All shared with
+     their respective transcript views. Use ChatImagePopup.show(src) /
+     ChatCodePopup.show(text) / ChatTimePopup.show(iso) directly. */
 
   /* ===== instance factory ===== */
 
@@ -152,7 +171,12 @@ window.Message = (function(){
     // lint:called-once dom-builder-abstraction
     function buildMeta(){
       var meta=document.createElement('div'); meta.className='chat-meta';
-      meta.appendChild(document.createTextNode('#'+(data.index+1)+' '+data.from+' · '+data.time+' '));
+      meta.appendChild(document.createTextNode('#'+(data.index+1)+' '+data.from+' · '));
+      var time=document.createElement('span'); time.className='chat-time';
+      time.title='Click to see this time in other zones';
+      time.textContent=formatLocalTime(data.at);
+      meta.appendChild(time);
+      meta.appendChild(document.createTextNode(' '));
       var quote=document.createElement('button'); quote.type='button'; quote.className='msg-quote';
       quote.title='Quote this message in a reply (q)'; quote.textContent='quote-reply';
       meta.appendChild(quote);
@@ -173,6 +197,7 @@ window.Message = (function(){
        caller reads id / markdown / mine off it. */
     function handleClick(e){
       var t = e.target;
+      if(t.closest && t.closest('.chat-time')){ ChatTimePopup.show(data.at); return; }
       if(t.closest && t.closest('.msg-quote')){ onQuote(data); return; }
       if(t.closest && t.closest('.msg-refer')){ onRefer(data); return; }
       if(t.closest && t.closest('.msg-edit')){  onEdit(data);  return; }
@@ -228,5 +253,6 @@ window.Message = (function(){
   return {
     create:             create,
     classifyBodyClick:  classifyBodyClick,
+    formatLocalTime:    formatLocalTime,
   };
 })();

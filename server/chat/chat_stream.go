@@ -111,7 +111,7 @@ func serveChatStream(w http.ResponseWriter, r *http.Request, c Conv, sid string,
 type chatWireMsg struct {
 	Index    int    `json:"index"`
 	From     string `json:"from"`
-	Time     string `json:"time"`
+	At       string `json:"at"` // RFC3339 UTC instant; client formats per-viewer zone
 	HTML     string `json:"html"`
 	Markdown string `json:"markdown"` // raw source, for client-side quote-reply / search
 	ID       string `json:"id"`
@@ -123,7 +123,7 @@ func writeChatEvent(w io.Writer, rc *http.ResponseController, evt chatEvent, me 
 	wire := chatWireMsg{
 		Index:    evt.Index,
 		From:     evt.Msg.From,
-		Time:     formatChatTime(evt.Msg.At),
+		At:       formatChatInstant(evt.Msg.At),
 		HTML:     string(RenderChatMarkdown(evt.Msg.Markdown)),
 		Markdown: evt.Msg.Markdown,
 		ID:       evt.Msg.ID,
