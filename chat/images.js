@@ -47,7 +47,17 @@
        applied in JS so this page emits zero CSS. */
     imgs.innerHTML = evt.images.join('');
     var nodes = imgs.querySelectorAll('img');
-    for(var i = 0; i < nodes.length; i++) Object.assign(nodes[i].style, IMG_STYLE);
+    for(var i = 0; i < nodes.length; i++){
+      Object.assign(nodes[i].style, IMG_STYLE);
+      /* This page is one long scroll of every image the viewer can see —
+         40MB+ across the whole history. Eager loading fires a request (and
+         a decode) for all of them on paint, which floods the network/host
+         even though each image is cached immutable for a year. lazy defers
+         the fetch until the image nears the viewport; async decode keeps
+         the work off the main thread. */
+      nodes[i].loading = 'lazy';
+      nodes[i].decoding = 'async';
+    }
     li.appendChild(imgs);
     return li;
   }
