@@ -39,8 +39,10 @@ window.ChatTimePopup = (function(){
   }
 
   /* Split the instant into the three independently-aligned columns the
-     row renders: "Sun, May 24" / "10:17 AM" / "GMT+1". The zone abbrev
-     is pulled via formatToParts so it stands alone in its own column. */
+     row renders: "Sun, May 24" / "10:17 AM" / "GMT+1". The zone column
+     uses 'shortOffset' so every row reads as a uniform GMT±N offset
+     (never a mix of abbreviations like EDT/PDT), pulled via
+     formatToParts so it stands alone in its own column. */
   // lint:called-once column-split-helper
   function timeParts(date, tz){
     var dateStr = new Intl.DateTimeFormat(undefined, {
@@ -49,7 +51,7 @@ window.ChatTimePopup = (function(){
       timeZone: tz, hour: 'numeric', minute: '2-digit' }).format(date);
     var zoneStr = '';
     var bits = new Intl.DateTimeFormat(undefined, {
-      timeZone: tz, timeZoneName: 'short' }).formatToParts(date);
+      timeZone: tz, timeZoneName: 'shortOffset' }).formatToParts(date);
     for(var i = 0; i < bits.length; i++){
       if(bits[i].type === 'timeZoneName'){ zoneStr = bits[i].value; break; }
     }
