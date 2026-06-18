@@ -1,0 +1,24 @@
+{"id":"emph/basic-both","md":"**bold** and *italic* together","html":"<p><strong>bold</strong> and <em>italic</em> together</p>\n"}
+{"id":"emph/strong-intraword","md":"a**b**c","html":"<p>a<strong>b</strong>c</p>\n"}
+{"id":"emph/em-intraword-star","md":"a*b*c","html":"<p>a<em>b</em>c</p>\n"}
+{"id":"emph/underscore-em","md":"_underscore emphasis_","html":"<p><em>underscore emphasis</em></p>\n"}
+{"id":"emph/underscore-intraword","md":"snake_case_word stays literal","html":"<p>snake_case_word stays literal</p>\n"}
+{"id":"emph/unclosed-strong","md":"**unclosed bold runs on","html":"<p>**unclosed bold runs on</p>\n"}
+{"id":"emph/triple","md":"***bold and italic***","html":"<p><em><strong>bold and italic</strong></em></p>\n"}
+{"id":"emph/nested","md":"**bold _and italic_ inside**","html":"<p><strong>bold <em>and italic</em> inside</strong></p>\n"}
+{"id":"emph/space-inside-star","md":"* not emphasis *","html":"<ul>\n<li>not emphasis *</li>\n</ul>\n"}
+{"id":"emph/abut-punct-paren","md":"(**bold**) and **bold**.","html":"<p>(<strong>bold</strong>) and <strong>bold</strong>.</p>\n"}
+{"id":"emph/overlap","md":"**a*b**c*","html":"<p><strong>a*b</strong>c*</p>\n"}
+{"id":"emph/star-in-code","md":"`a*b*c` and *real*","html":"<p><code>a*b*c</code> and <em>real</em></p>\n"}
+{"id":"list/tight-ul","md":"- a\n- b\n- c","html":"<ul>\n<li>a</li>\n<li>b</li>\n<li>c</li>\n</ul>\n"}
+{"id":"list/tight-ol","md":"1. one\n2. two","html":"<ol>\n<li>one</li>\n<li>two</li>\n</ol>\n"}
+{"id":"list/ol-start","md":"3. three\n4. four","html":"<ol start=\"3\">\n<li>three</li>\n<li>four</li>\n</ol>\n"}
+{"id":"list/loose-ul","md":"- a\n\n- b","html":"<ul>\n<li>\n<p>a</p>\n</li>\n<li>\n<p>b</p>\n</li>\n</ul>\n"}
+{"id":"list/interrupt-para-bullet","md":"some text\n- item","html":"<p>some text</p>\n<ul>\n<li>item</li>\n</ul>\n"}
+{"id":"list/interrupt-para-ordered","md":"some text\n1. item","html":"<p>some text</p>\n<ol>\n<li>item</li>\n</ol>\n"}
+{"id":"list/nested","md":"- outer\n  - inner\n- outer2","html":"<ul>\n<li>outer\n<ul>\n<li>inner</li>\n</ul>\n</li>\n<li>outer2</li>\n</ul>\n"}
+{"id":"list/emphasis-in-item","md":"- **bold** item\n- plain","html":"<ul>\n<li><strong>bold</strong> item</li>\n<li>plain</li>\n</ul>\n"}
+{"id":"bq/single","md":"> quoted","html":"<blockquote>\n<p>quoted</p>\n</blockquote>\n"}
+{"id":"bq/multiline","md":"> line one\n> line two","html":"<blockquote>\n<p>line one<br>\nline two</p>\n</blockquote>\n"}
+{"id":"bq/lazy","md":"> line one\nstill quoted","html":"<blockquote>\n<p>line one<br>\nstill quoted</p>\n</blockquote>\n"}
+{"id":"bq/emphasis","md":"> a **bold** quote","html":"<blockquote>\n<p>a <strong>bold</strong> quote</p>\n</blockquote>\n"}
