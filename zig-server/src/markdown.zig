@@ -17,7 +17,15 @@ pub fn render(a: std.mem.Allocator, md: []const u8) ![]const u8 {
 
 fn renderBlocks(a: std.mem.Allocator, md: []const u8) ![]const u8 {
     var out: std.ArrayList(u8) = .empty;
+    try renderBlocksInto(&out, a, md, false);
+    return out.toOwnedSlice(a);
+}
 
+/// renderBlocksInto is the block dispatcher. `tight` is set when rendering the
+/// contents of a tight list item: paragraphs emit their inline content with no
+/// <p> wrapper, and blocks are newline-separated rather than each carrying a
+/// trailing newline of its own.
+fn renderBlocksInto(out: *std.ArrayList(u8), a: std.mem.Allocator, md: []const u8, tight: bool) std.mem.Allocator.Error!void {
     var pos: usize = 0;
     while (pos < md.len) {
         const eol = lineEnd(md, pos);
@@ -31,17 +39,28 @@ fn renderBlocks(a: std.mem.Allocator, md: []const u8) ![]const u8 {
 
         // A fenced code block can interrupt a paragraph, so check it first.
         if (parseFenceOpen(md, pos)) |fo| {
-            pos = try renderFence(&out, a, md, fo);
+            try tightSep(out, a, tight);
+            pos = try renderFence(out, a, md, fo);
             continue;
         }
 
         // ATX heading (also interrupts a paragraph).
         if (atxHeading(line)) |h| {
+            try tightSep(out, a, tight);
             const d: u8 = '0' + @as(u8, @intCast(h.level));
             try out.appendSlice(a, &[_]u8{ '<', 'h', d, '>' });
-            try renderInline(&out, a, h.content);
+            try renderInline(out, a, h.content);
             try out.appendSlice(a, &[_]u8{ '<', '/', 'h', d, '>', '\n' });
             pos = next;
+            continue;
+        }
+
+        // A list (bullet or ordered). A list can interrupt a paragraph (bullet
+        // always; ordered only when it starts at 1) provided its first item is
+        // non-empty, so it's checked before the paragraph branch.
+        if (listMarkerAt(md, pos)) |lm| {
+            try tightSep(out, a, tight);
+            pos = try renderList(out, a, md, pos, lm);
             continue;
         }
 
@@ -50,21 +69,23 @@ fn renderBlocks(a: std.mem.Allocator, md: []const u8) ![]const u8 {
         // emit its raw source through the escape-but-<img> scan, with no <p>
         // wrapper and no added newline (goldmark passes the source through).
         if (isHtmlBlockStart(line)) {
+            try tightSep(out, a, tight);
             var p = next;
             while (p < md.len) {
                 const e2 = lineEnd(md, p);
                 if (isBlank(md[p..e2])) break;
                 p = if (e2 < md.len) e2 + 1 else md.len;
             }
-            try writeRawHtml(&out, a, md[pos..p]);
+            try writeRawHtml(out, a, md[pos..p]);
             pos = p;
             continue;
         }
 
         // Otherwise a paragraph: a maximal run of non-blank lines, each
         // hard-wrapped with <br>, inline raw HTML handled the same way. A
-        // fence opening on a later line interrupts the paragraph.
-        try out.appendSlice(a, "<p>");
+        // fence, heading, or interrupting list on a later line ends it.
+        try tightSep(out, a, tight);
+        if (!tight) try out.appendSlice(a, "<p>");
         var p = pos;
         var first = true;
         while (p < md.len) {
@@ -73,16 +94,23 @@ fn renderBlocks(a: std.mem.Allocator, md: []const u8) ![]const u8 {
             if (isBlank(l2)) break;
             if (parseFenceOpen(md, p) != null) break;
             if (atxHeading(l2) != null) break;
+            if (listInterruptsAt(md, p)) break;
             if (!first) try out.appendSlice(a, "<br>\n");
             first = false;
-            try renderInline(&out, a, trimLine(l2));
+            try renderInline(out, a, trimLine(l2));
             p = if (e2 < md.len) e2 + 1 else md.len;
         }
-        try out.appendSlice(a, "</p>\n");
+        if (!tight) try out.appendSlice(a, "</p>\n");
         pos = p;
     }
+}
 
-    return out.toOwnedSlice(a);
+/// tightSep inserts the inter-block separator newline used inside a tight list
+/// item: goldmark joins a bare paragraph to a following block with one '\n'.
+fn tightSep(out: *std.ArrayList(u8), a: std.mem.Allocator, tight: bool) !void {
+    if (tight and out.items.len > 0 and out.items[out.items.len - 1] != '\n') {
+        try out.append(a, '\n');
+    }
 }
 
 // --- fenced code blocks (incl. the `quote` extension) -----------------------
@@ -224,6 +252,187 @@ fn writeCodeLines(out: *std.ArrayList(u8), a: std.mem.Allocator, content: []cons
         try out.append(a, '\n');
         i = if (e < content.len) e + 1 else content.len;
     }
+}
+
+// --- lists (bullet + ordered, tight/loose, nesting) -------------------------
+
+const ListMarker = struct {
+    ordered: bool,
+    start: usize, // ordered start number
+    delim: u8, // ordered delimiter '.' or ')'
+    bullet: u8, // bullet char '-' '+' '*'
+    indent: usize, // leading spaces before the marker
+    content_col: usize, // column where the item content begins (dedent width)
+    content_start: usize, // index in md of the first content char on this line
+};
+
+/// listMarkerAt recognizes a list item marker at the line starting at md[pos]:
+/// up to 3 leading spaces, a bullet (`-`/`+`/`*`) or `<digits>.`/`<digits>)`,
+/// then a space/tab (or end of line for an empty item).
+fn listMarkerAt(md: []const u8, pos: usize) ?ListMarker {
+    const eol = lineEnd(md, pos);
+    const line = md[pos..eol];
+    var i: usize = 0;
+    var indent: usize = 0;
+    while (i < line.len and line[i] == ' ' and indent < 4) : (i += 1) indent += 1;
+    if (indent >= 4 or i >= line.len) return null;
+
+    var m = ListMarker{ .ordered = false, .start = 0, .delim = 0, .bullet = 0, .indent = indent, .content_col = 0, .content_start = 0 };
+    if (line[i] == '-' or line[i] == '+' or line[i] == '*') {
+        m.bullet = line[i];
+        i += 1;
+    } else if (isDigit(line[i])) {
+        const ds = i;
+        while (i < line.len and isDigit(line[i]) and (i - ds) < 9) : (i += 1) {}
+        if (i >= line.len or (line[i] != '.' and line[i] != ')')) return null;
+        m.ordered = true;
+        m.delim = line[i];
+        m.start = std.fmt.parseInt(usize, line[ds..i], 10) catch return null;
+        i += 1;
+    } else return null;
+
+    // The marker must be followed by whitespace (or end the line: empty item).
+    if (i < line.len and line[i] != ' ' and line[i] != '\t') return null;
+    const marker_end = i;
+    var sp: usize = 0;
+    while (i < line.len and line[i] == ' ') : (i += 1) sp += 1;
+
+    // 1-4 spaces become the content indent; >4 means only one is consumed (the
+    // rest is the content, possibly indented code); an empty item indents by 1.
+    const after_spaces = marker_end + sp;
+    if (marker_end >= line.len) {
+        m.content_col = marker_end + 1;
+        m.content_start = eol;
+    } else if (sp == 0 or sp > 4) {
+        m.content_col = marker_end + 1;
+        m.content_start = pos + marker_end + @as(usize, if (sp == 0) 0 else 1);
+    } else {
+        m.content_col = after_spaces;
+        m.content_start = pos + after_spaces;
+    }
+    return m;
+}
+
+fn sameListType(b: ListMarker, a: ListMarker) bool {
+    if (a.ordered != b.ordered) return false;
+    return if (a.ordered) a.delim == b.delim else a.bullet == b.bullet;
+}
+
+/// listInterruptsAt reports whether a list marker at md[pos] may interrupt an
+/// open paragraph: the item must be non-empty, and an ordered list must start
+/// at 1 (CommonMark's paragraph-interruption rules).
+fn listInterruptsAt(md: []const u8, pos: usize) bool {
+    const m = listMarkerAt(md, pos) orelse return false;
+    const eol = lineEnd(md, pos);
+    if (m.content_start >= eol) return false; // empty item can't interrupt
+    if (m.ordered and m.start != 1) return false;
+    return true;
+}
+
+fn leadingSpaces(line: []const u8) usize {
+    var n: usize = 0;
+    while (n < line.len and line[n] == ' ') : (n += 1) {}
+    return n;
+}
+
+/// renderList consumes a whole list beginning at md[pos] (with first marker m0)
+/// and returns the position just past it. Items are collected as dedented
+/// content blocks and rendered recursively; tight/loose controls <p> wrapping.
+fn renderList(out: *std.ArrayList(u8), a: std.mem.Allocator, md: []const u8, pos: usize, m0: ListMarker) std.mem.Allocator.Error!usize {
+    var items: std.ArrayList([]const u8) = .empty;
+    var loose = false;
+
+    var cur: std.ArrayList(u8) = .empty;
+    var have_item = false;
+    var cur_col = m0.content_col;
+    var blanks: usize = 0;
+    var p = pos;
+
+    while (p < md.len) {
+        const e = lineEnd(md, p);
+        const line = md[p..e];
+        const next = if (e < md.len) e + 1 else md.len;
+
+        if (isBlank(line)) {
+            blanks += 1;
+            p = next;
+            continue;
+        }
+
+        const indent = leadingSpaces(line);
+        const marker = listMarkerAt(md, p);
+        const is_new_item = marker != null and indent < cur_col;
+
+        if (is_new_item) {
+            if (!sameListType(marker.?, m0)) break; // a different marker ends the list
+            if (have_item) {
+                try items.append(a, try cur.toOwnedSlice(a));
+                if (blanks > 0) loose = true;
+            }
+            cur = .empty;
+            have_item = true;
+            cur_col = marker.?.content_col;
+            blanks = 0;
+            try cur.appendSlice(a, md[marker.?.content_start..e]);
+            try cur.append(a, '\n');
+        } else if (indent >= cur_col and have_item) {
+            // Indented continuation of the current item (its own nested blocks).
+            if (blanks > 0) loose = true;
+            blanks = 0;
+            try cur.appendSlice(a, line[cur_col..]);
+            try cur.append(a, '\n');
+        } else if (blanks == 0 and have_item and !lineStartsBlock(md, p)) {
+            // Lazy paragraph continuation: a non-indented line right after a
+            // paragraph line still belongs to the item.
+            try cur.appendSlice(a, line);
+            try cur.append(a, '\n');
+        } else break;
+
+        p = next;
+    }
+    if (have_item) try items.append(a, try cur.toOwnedSlice(a));
+
+    if (m0.ordered) {
+        if (m0.start == 1) {
+            try out.appendSlice(a, "<ol>\n");
+        } else {
+            try out.appendSlice(a, "<ol start=\"");
+            var nbuf: [20]u8 = undefined;
+            const ns = std.fmt.bufPrint(&nbuf, "{d}", .{m0.start}) catch unreachable;
+            try out.appendSlice(a, ns);
+            try out.appendSlice(a, "\">\n");
+        }
+    } else {
+        try out.appendSlice(a, "<ul>\n");
+    }
+    for (items.items) |item| {
+        // Render into a fresh buffer so the tight inter-block separator only
+        // sees the item's own content, not the enclosing <li>.
+        var inner: std.ArrayList(u8) = .empty;
+        if (loose) {
+            try inner.append(a, '\n');
+            try renderBlocksInto(&inner, a, item, false);
+        } else {
+            try renderBlocksInto(&inner, a, item, true);
+        }
+        try out.appendSlice(a, "<li>");
+        try out.appendSlice(a, inner.items);
+        try out.appendSlice(a, "</li>\n");
+    }
+    try out.appendSlice(a, if (m0.ordered) "</ol>\n" else "</ul>\n");
+    return p;
+}
+
+/// lineStartsBlock reports whether md[pos] begins a block that a lazy paragraph
+/// continuation may not absorb (a list item, fence, heading, or blank).
+fn lineStartsBlock(md: []const u8, pos: usize) bool {
+    const e = lineEnd(md, pos);
+    const line = md[pos..e];
+    if (isBlank(line)) return true;
+    if (listMarkerAt(md, pos) != null) return true;
+    if (parseFenceOpen(md, pos) != null) return true;
+    if (atxHeading(line) != null) return true;
+    return false;
 }
 
 fn lineEnd(md: []const u8, pos: usize) usize {
