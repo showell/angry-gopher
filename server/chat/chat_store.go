@@ -266,6 +266,11 @@ func chatStoredForm(index int, msg ChatMessage) string {
 }
 
 // decodeChatFile parses a whole session file into messages.
+// DecodeTranscript parses raw .md transcript bytes into messages using
+// the SAME decoder the server uses. Exposed for offline tooling (the
+// markdown census, gold-test generation); not on the serving path.
+func DecodeTranscript(data []byte) []ChatMessage { return decodeChatFile(data) }
+
 func decodeChatFile(data []byte) []ChatMessage {
 	text := string(data)
 	// Messages are joined by chatSep (no trailing separator), so splitting

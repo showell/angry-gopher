@@ -20,6 +20,7 @@ import (
 	"github.com/yuin/goldmark/extension"
 	"github.com/yuin/goldmark/renderer"
 	gmhtml "github.com/yuin/goldmark/renderer/html"
+	"github.com/yuin/goldmark/text"
 	"github.com/yuin/goldmark/util"
 )
 
@@ -98,6 +99,15 @@ var chatSanitizer = func() *bluemonday.Policy {
 	p.AllowAttrs("class").Matching(regexp.MustCompile(`^chat-quote$`)).OnElements("pre")
 	return p
 }()
+
+// ChatMarkdownAST parses src with the EXACT parser RenderChatMarkdown
+// uses and returns the document root. Exposed so offline tooling — the
+// markdown feature census and the zig-port gold tests — can walk the real
+// AST goldmark produces instead of re-implementing the config (a mimic).
+// Server code never calls this; rendering goes through RenderChatMarkdown.
+func ChatMarkdownAST(src string) ast.Node {
+	return chatMarkdown.Parser().Parse(text.NewReader([]byte(src)))
+}
 
 // RenderChatMarkdown converts a raw message body to safe rendered HTML.
 // On a parse error it falls back to escaped plain text rather than
