@@ -106,3 +106,57 @@ func TestRenderChatMarkdownXSS(t *testing.T) {
 		})
 	}
 }
+
+// TestExternalLinkNewTab pins that external (scheme://) links open in a new
+// tab with rel="noopener", while internal links (relative paths, #msg- refs)
+// open in place.
+func TestExternalLinkNewTab(t *testing.T) {
+	cases := []struct {
+		name   string
+		src    string
+		want   []string
+		reject []string
+	}{
+		{
+			name: "markdown link to external site",
+			src:  `[site](https://example.com/x)`,
+			want: []string{`target="_blank"`, `rel="noopener"`},
+		},
+		{
+			name: "bare-url autolink to external site",
+			src:  `see https://example.com for details`,
+			want: []string{`target="_blank"`, `rel="noopener"`},
+		},
+		{
+			name:   "relative link stays in place",
+			src:    `[here](/chat/c/1_2/x)`,
+			reject: []string{"target=", "noopener"},
+		},
+		{
+			name:   "msg ref link stays in place",
+			src:    "see MSG_general2_5 above",
+			want:   []string{`class="msg-ref"`},
+			reject: []string{"target=", "noopener"},
+		},
+		{
+			name:   "nofollow is not re-added",
+			src:    `[site](https://example.com)`,
+			reject: []string{"nofollow"},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			out := string(RenderChatMarkdown(tc.src))
+			for _, w := range tc.want {
+				if !strings.Contains(out, w) {
+					t.Errorf("missing %q\n  src:  %q\n  html: %q", w, tc.src, out)
+				}
+			}
+			for _, r := range tc.reject {
+				if strings.Contains(out, r) {
+					t.Errorf("should not contain %q\n  src:  %q\n  html: %q", r, tc.src, out)
+				}
+			}
+		})
+	}
+}
