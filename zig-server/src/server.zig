@@ -13,16 +13,24 @@
 const std = @import("std");
 const net = std.Io.net;
 const http = @import("http.zig");
+const config = @import("config.zig");
 const driving = @import("driving.zig");
 const puzzles = @import("puzzles.zig");
 
 const PORT: u16 = 9001;
 
-pub fn main() !void {
+pub fn main(init: std.process.Init.Minimal) !void {
     const alloc = std.heap.page_allocator;
-    var threaded = std.Io.Threaded.init(alloc, .{});
+    var threaded = std.Io.Threaded.init(alloc, .{ .environ = init.environ });
     defer threaded.deinit();
     const io = threaded.io();
+
+    // Point storage + identity at Go's live data tree (GOPHER_CONFIG). No-op
+    // when unset — repo-relative defaults keep /driving working standalone.
+    // (0.16 routes the OS environment through main's Init, not a global.)
+    var env = try std.process.Environ.createMap(init.environ, alloc);
+    defer env.deinit();
+    try config.load(io, alloc, env);
 
     const addr = try net.IpAddress.parse("0.0.0.0", PORT);
     var listener = try addr.listen(io, .{ .reuse_address = true });
