@@ -64,6 +64,13 @@ fn renderBlocksInto(out: *std.ArrayList(u8), a: std.mem.Allocator, md: []const u
             continue;
         }
 
+        // A blockquote (also interrupts a paragraph).
+        if (quoteMarkerLen(line) != null) {
+            try tightSep(out, a, tight);
+            pos = try renderQuote(out, a, md, pos);
+            continue;
+        }
+
         // An HTML block (CommonMark type 7) starts only at a block boundary —
         // it can't interrupt a paragraph — and runs until a blank line. We
         // emit its raw source through the escape-but-<img> scan, with no <p>
@@ -95,6 +102,7 @@ fn renderBlocksInto(out: *std.ArrayList(u8), a: std.mem.Allocator, md: []const u
             if (parseFenceOpen(md, p) != null) break;
             if (atxHeading(l2) != null) break;
             if (listInterruptsAt(md, p)) break;
+            if (quoteMarkerLen(l2) != null) break;
             if (!first) try out.appendSlice(a, "<br>\n");
             first = false;
             try renderInline(out, a, trimLine(l2));
@@ -424,15 +432,63 @@ fn renderList(out: *std.ArrayList(u8), a: std.mem.Allocator, md: []const u8, pos
 }
 
 /// lineStartsBlock reports whether md[pos] begins a block that a lazy paragraph
-/// continuation may not absorb (a list item, fence, heading, or blank).
+/// continuation may not absorb (a list item, blockquote, fence, heading, blank).
 fn lineStartsBlock(md: []const u8, pos: usize) bool {
     const e = lineEnd(md, pos);
     const line = md[pos..e];
     if (isBlank(line)) return true;
     if (listMarkerAt(md, pos) != null) return true;
+    if (quoteMarkerLen(line) != null) return true;
     if (parseFenceOpen(md, pos) != null) return true;
     if (atxHeading(line) != null) return true;
     return false;
+}
+
+// --- blockquotes ------------------------------------------------------------
+
+/// quoteMarkerLen returns the prefix length to strip for a blockquote line: up
+/// to 3 leading spaces, a '>', and one optional following space. null if the
+/// line isn't a blockquote line.
+fn quoteMarkerLen(line: []const u8) ?usize {
+    var i: usize = 0;
+    var indent: usize = 0;
+    while (i < line.len and line[i] == ' ' and indent < 4) : (i += 1) indent += 1;
+    if (indent >= 4 or i >= line.len or line[i] != '>') return null;
+    i += 1;
+    if (i < line.len and line[i] == ' ') i += 1;
+    return i;
+}
+
+/// renderQuote consumes a blockquote beginning at md[pos] and returns the
+/// position just past it. '>'-prefixed lines (and lazy paragraph-continuation
+/// lines, until a blank line) are stripped and rendered recursively.
+fn renderQuote(out: *std.ArrayList(u8), a: std.mem.Allocator, md: []const u8, pos: usize) std.mem.Allocator.Error!usize {
+    var inner: std.ArrayList(u8) = .empty;
+    var p = pos;
+    var last_was_text = false;
+    while (p < md.len) {
+        const e = lineEnd(md, p);
+        const line = md[p..e];
+        const next = if (e < md.len) e + 1 else md.len;
+
+        if (isBlank(line)) break; // a blank line ends the blockquote
+        if (quoteMarkerLen(line)) |ql| {
+            const stripped = line[ql..];
+            try inner.appendSlice(a, stripped);
+            try inner.append(a, '\n');
+            last_was_text = !isBlank(stripped) and !lineStartsBlock(md, p + ql);
+        } else if (last_was_text and !lineStartsBlock(md, p)) {
+            // Lazy continuation of a paragraph inside the quote.
+            try inner.appendSlice(a, line);
+            try inner.append(a, '\n');
+        } else break;
+        p = next;
+    }
+
+    try out.appendSlice(a, "<blockquote>\n");
+    try renderBlocksInto(out, a, inner.items, false);
+    try out.appendSlice(a, "</blockquote>\n");
+    return p;
 }
 
 fn lineEnd(md: []const u8, pos: usize) usize {
