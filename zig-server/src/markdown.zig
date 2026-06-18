@@ -928,8 +928,16 @@ fn autolinkAt(text: []const u8, i: usize) ?Autolink {
 fn urlEnd(text: []const u8, start: usize) ?usize {
     var end = start;
     while (end < text.len and !isSpace(text[end]) and text[end] != '<') : (end += 1) {}
-    // The domain must contain a '.'.
-    if (std.mem.indexOfScalar(u8, text[start..end], '.') == null) return null;
+    // The DOMAIN (host, after the scheme and before any port/path/query) must
+    // contain a '.', per GFM. A '.' in the path doesn't count — so
+    // http://localhost:9100/x.md is not an autolink, but http://a.com/x is.
+    var dstart = start;
+    if (std.mem.indexOf(u8, text[start..end], "://")) |p| dstart = start + p + 3;
+    var dend = dstart;
+    while (dend < end and text[dend] != '/' and text[dend] != '?' and
+        text[dend] != '#' and text[dend] != ':') : (dend += 1)
+    {}
+    if (std.mem.indexOfScalar(u8, text[dstart..dend], '.') == null) return null;
     while (end > start) {
         const c = text[end - 1];
         switch (c) {
