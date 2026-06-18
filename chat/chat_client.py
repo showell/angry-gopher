@@ -13,8 +13,10 @@ every call starts from discovery and then acts on a chosen (conv, sid):
       you're in, its sessions (newest-first), and the `default` session a
       bare /chat/c/<conv> would land on. Small, so one call returns it all.
 
-  read(conv, sid)          GET  /chat/c/<conv>/<sid>/stream?since=0
-      replay one session's transcript (the SSE backlog, then idle-exit).
+  raw(conv, sid)           GET  /chat/c/<conv>/<sid>/raw
+      the session's literal on-disk .md transcript, byte-for-byte — the
+      same endpoint the UI's "t" raw-view tab opens. Export and backup
+      share one server feature, so they can't drift.
 
   post(conv, sid, markdown)  POST /chat/c/<conv>/<sid>/send (form field `markdown`)
       append one message.
@@ -45,16 +47,13 @@ Stdlib only — no install step.
 """
 import json
 import os
-import socket
 import sys
 import urllib.error
 import urllib.parse
 import urllib.request
 
-# One-shot reads block this long waiting for more stream data; the backlog
-# arrives at once, then the idle gap trips this timeout and we exit.
-READ_TIMEOUT = 5
-# Plain request/response calls (discovery, posting) just need a sane bound.
+# Plain request/response calls (discovery, posting, raw transcript) just
+# need a sane bound.
 RPC_TIMEOUT = 10
 
 
@@ -89,22 +88,19 @@ class ChatClient:
                 return c["conv"], (sid or c["default"])
         sys.exit(f"no conversation with partner {partner}")
 
-    def read(self, conv, sid):
-        """Yield each message of one session (SSE backlog, since=0)."""
-        path = f"/chat/c/{conv}/{urllib.parse.quote(sid)}/stream?since=0"
+    def raw(self, conv, sid):
+        """Return one session's literal on-disk .md transcript, byte-for-byte.
+
+        The same /raw endpoint the UI's "t" raw-view tab opens, so an
+        automated backup and an interactive export are identical. The
+        transcript is the durable source of truth (MSG_/from:/date:
+        blocks) — not a re-rendered view of it."""
+        path = f"/chat/c/{conv}/{urllib.parse.quote(sid)}/raw"
         try:
-            resp = urllib.request.urlopen(self._request(path), timeout=READ_TIMEOUT)
+            with urllib.request.urlopen(self._request(path), timeout=RPC_TIMEOUT) as resp:
+                return resp.read().decode("utf-8")
         except urllib.error.HTTPError as e:
-            sys.exit(f"read failed: {e.code} {e.reason}")
-        if "text/event-stream" not in resp.headers.get("Content-Type", ""):
-            sys.exit("unexpected response — is the API key valid?")
-        try:
-            for raw in resp:
-                line = raw.decode("utf-8").rstrip("\n")
-                if line.startswith("data:"):
-                    yield json.loads(line[5:].lstrip())
-        except (socket.timeout, TimeoutError):
-            pass  # idle gap = end of the one-shot backlog
+            sys.exit(f"raw fetch failed: {e.code} {e.reason}")
 
     def post(self, conv, sid, markdown):
         """Append one message to a session (raises on a non-204 reply)."""
@@ -182,9 +178,7 @@ def main():
         explicit_sid = argv[3] if len(argv) > 3 else None
         conv, sid = client.resolve(partner, explicit_sid)
         if cmd == "fetch":
-            for msg in client.read(conv, sid):
-                print(json.dumps(msg, indent=2, ensure_ascii=False))
-                print("-" * 60)
+            sys.stdout.write(client.raw(conv, sid))
         else:
             client.post(conv, sid, sys.stdin.read())
             print(f"posted to {conv}/{sid}")

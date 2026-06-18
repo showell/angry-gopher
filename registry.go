@@ -69,6 +69,7 @@ func RegisterPages(mux *http.ServeMux) {
 	Route(mux, "/chat/c/{conv}/new", NEED_PASSWORD, chat.WithPresence(chat.HandleChatNewTopic)) // literal beats {sid}; "new" reserved
 	Route(mux, "/chat/c/{conv}/{sid}", NEED_PASSWORD, chat.WithPresence(chat.HandleChatPage))
 	Route(mux, "/chat/c/{conv}/{sid}/stream", NEED_PASSWORD, chat.HandleChatStream)
+	Route(mux, "/chat/c/{conv}/{sid}/raw", NEED_PASSWORD, chat.HandleChatRaw)
 	Route(mux, "/chat/c/{conv}/{sid}/send", NEED_PASSWORD, chat.WithPresence(chat.HandleChatSend))
 	Route(mux, "/chat/c/{conv}/{sid}/pin", NEED_PASSWORD, chat.WithPresence(chat.HandleChatPin))
 	Route(mux, "/chat/c/{conv}/{sid}/unpin", NEED_PASSWORD, chat.WithPresence(chat.HandleChatPin))
@@ -92,6 +93,7 @@ func RegisterPages(mux *http.ServeMux) {
 	Route(mux, "/channel/{channel}/new", NEED_PASSWORD, chat.WithPresence(chat.HandleChannelNewTopic))
 	Route(mux, "/channel/{channel}/{topic}", NEED_PASSWORD, chat.WithPresence(chat.HandleChannelPage))
 	Route(mux, "/channel/{channel}/{topic}/stream", NEED_PASSWORD, chat.HandleChannelStream)
+	Route(mux, "/channel/{channel}/{topic}/raw", NEED_PASSWORD, chat.HandleChannelRaw)
 	Route(mux, "/channel/{channel}/{topic}/send", NEED_PASSWORD, chat.WithPresence(chat.HandleChannelSend))
 	Route(mux, "/channel/{channel}/{topic}/pin", NEED_PASSWORD, chat.WithPresence(chat.HandleChannelPin))
 	Route(mux, "/channel/{channel}/{topic}/unpin", NEED_PASSWORD, chat.WithPresence(chat.HandleChannelPin))

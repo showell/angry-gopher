@@ -210,6 +210,18 @@ func (c Conv) ReadSession(sid string) ([]ChatMessage, error) {
 	return readChatFileLocked(c.SessionPath(sid))
 }
 
+// RawSession returns the literal on-disk transcript bytes for one
+// session — the append-only MSG_/from:/date: .md file, unparsed and
+// undecoded. This is the durable source of truth that BOTH the UI's "t"
+// raw-view tab and the fetch_prod_transcript backup client serve, so an
+// interactive export and an automated backup are byte-for-byte the same.
+// Read under chatMu so it never observes a half-written append.
+func (c Conv) RawSession(sid string) ([]byte, error) {
+	chatMu.Lock()
+	defer chatMu.Unlock()
+	return os.ReadFile(c.SessionPath(sid))
+}
+
 // AppendMessage stores a message in the named session, fans out to
 // every live subscriber, and pings the cross-page user-attention layer
 // (notify + recent + images + code, plus a sidebar topic-added on the

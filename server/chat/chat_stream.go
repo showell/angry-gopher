@@ -45,6 +45,33 @@ func HandleChatStream(w http.ResponseWriter, r *http.Request) {
 	serveChatStream(w, r, DMConv(user.ID, partner), sessionID, parseSince(r))
 }
 
+// HandleChatRaw serves /chat/c/<conv>/<sid>/raw — the literal transcript file.
+func HandleChatRaw(w http.ResponseWriter, r *http.Request) {
+	user, conv, sessionID, ok := chatPathSession(w, r)
+	if !ok {
+		return
+	}
+	partner, _ := OtherInConv(user.ID, conv)
+	serveRawTranscript(w, r, DMConv(user.ID, partner), sessionID)
+}
+
+// serveRawTranscript writes a session's literal on-disk .md transcript as
+// text/plain. Shared by the DM and channel raw routes; the very bytes it
+// emits are what the "t" raw-view tab opens AND what fetch_prod_transcript
+// backs up, so export and backup cannot drift. Served inline (no download
+// disposition) so it just opens readably in a browser tab; nosniff because
+// it's user-authored text we never want a browser to execute as HTML.
+func serveRawTranscript(w http.ResponseWriter, r *http.Request, c Conv, sid string) {
+	data, err := c.RawSession(sid)
+	if err != nil {
+		http.NotFound(w, r) // missing/unreadable session — don't distinguish
+		return
+	}
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	_, _ = w.Write(data)
+}
+
 // serveChatStream replays the session's backlog (with a "backlog-size"
 // preamble so the client can suppress per-message scroll work until
 // initial load lands) and streams live messages until disconnect. Used

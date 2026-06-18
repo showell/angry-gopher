@@ -263,6 +263,9 @@
     quoteReply:  doQuote,
     referReply:  doRefer,
     editMessage: doEdit,
+    /* Raw transcript = the literal on-disk .md file, opened in a new tab
+       via the same server endpoint fetch_prod_transcript backs up from. */
+    viewRaw:     function(){ window.open(SESSION_BASE + '/raw', '_blank'); },
   });
   ChatCompose.focus();
 })();

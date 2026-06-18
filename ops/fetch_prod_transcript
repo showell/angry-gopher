@@ -1,6 +1,9 @@
 #!/bin/bash
 # Fetch a PRODUCTION chat transcript (Steve <-> Apoorva) by delegating to
-# the dogfooded reference client, chat/chat_client.py.
+# the dogfooded reference client, chat/chat_client.py. Output is the literal
+# on-disk .md file (MSG_/from:/date: blocks) served by /chat/c/<conv>/<sid>/raw
+# — the SAME server endpoint the UI's "t" raw-view tab opens, so an automated
+# backup and an interactive export can never drift apart.
 #
 # Optional arg: a session id (e.g. 2026-05-23) to read a specific archived
 # session. With no arg you get the CURRENT session (the dominant case) —

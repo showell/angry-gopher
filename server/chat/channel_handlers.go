@@ -82,6 +82,15 @@ func HandleChannelStream(w http.ResponseWriter, r *http.Request) {
 	serveChatStream(w, r, c, sid, since)
 }
 
+// HandleChannelRaw serves /channel/<name>/<topic>/raw — the literal transcript file.
+func HandleChannelRaw(w http.ResponseWriter, r *http.Request) {
+	_, c, sid, ok := channelPathTopic(w, r)
+	if !ok {
+		return
+	}
+	serveRawTranscript(w, r, c, sid)
+}
+
 // HandleChannelSend posts a message to a channel topic.
 func HandleChannelSend(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
