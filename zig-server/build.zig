@@ -21,10 +21,23 @@ pub fn build(b: *std.Build) void {
     });
 
     // Embedded front-end assets (the embed.go analog). Referenced in code as
-    // @embedFile("driving_app_js").
-    root.addAnonymousImport("driving_app_js", .{
-        .root_source_file = b.path("../games/driving/app.js"),
-    });
+    // @embedFile("<name>"). All live outside this package dir, so they're wired
+    // here rather than by a relative @embedFile path.
+    const assets = [_]struct { name: []const u8, path: []const u8 }{
+        .{ .name = "driving_app_js", .path = "../games/driving/app.js" },
+        .{ .name = "puzzle_js", .path = "../games/lynrummy/elm/puzzle.js" },
+        // The puzzle catalogs, easiest-first (1-line … 6-line). Concatenated at
+        // runtime into the catalog shipped in the page flag (see puzzles.zig).
+        .{ .name = "puzzle_cat_1", .path = "../games/lynrummy/conformance/curated_1line_puzzles.dsl" },
+        .{ .name = "puzzle_cat_2", .path = "../games/lynrummy/conformance/curated_2line_puzzles.dsl" },
+        .{ .name = "puzzle_cat_3", .path = "../games/lynrummy/conformance/curated_3line_puzzles.dsl" },
+        .{ .name = "puzzle_cat_4", .path = "../games/lynrummy/conformance/curated_4line_puzzles.dsl" },
+        .{ .name = "puzzle_cat_5", .path = "../games/lynrummy/conformance/curated_5line_puzzles.dsl" },
+        .{ .name = "puzzle_cat_6", .path = "../games/lynrummy/conformance/curated_6line_puzzles.dsl" },
+    };
+    for (assets) |a| {
+        root.addAnonymousImport(a.name, .{ .root_source_file = b.path(a.path) });
+    }
 
     const exe = b.addExecutable(.{ .name = "zig-server", .root_module = root });
     b.installArtifact(exe);
