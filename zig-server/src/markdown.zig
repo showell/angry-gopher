@@ -64,7 +64,7 @@ fn renderBlocks(a: std.mem.Allocator, md: []const u8) ![]const u8 {
             if (parseFenceOpen(md, p) != null) break;
             if (!first) try out.appendSlice(a, "<br>\n");
             first = false;
-            try writeRawHtml(&out, a, trimLine(l2));
+            try renderInline(&out, a, trimLine(l2));
             p = if (e2 < md.len) e2 + 1 else md.len;
         }
         try out.appendSlice(a, "</p>\n");
@@ -381,6 +381,175 @@ fn escapeInto(out: *std.ArrayList(u8), a: std.mem.Allocator, text: []const u8) !
     }
 }
 
+// --- inline rendering (text + img + links + autolinks) ----------------------
+
+/// renderInline renders one line of paragraph text: escapes plain text, and
+/// recognizes inline <img>, markdown links [t](u), and GFM bare-URL/email
+/// autolinks. Emphasis/inline-code come later. target="_blank" on external
+/// links is added by the linkifyMsgRefs post-pass (mirroring Go).
+fn renderInline(out: *std.ArrayList(u8), a: std.mem.Allocator, text: []const u8) std.mem.Allocator.Error!void {
+    var last: usize = 0;
+    var i: usize = 0;
+    while (i < text.len) {
+        const c = text[i];
+        if (c == '<') {
+            if (safeImgAt(a, text, i)) |img| {
+                try escapeInto(out, a, text[last..i]);
+                try out.appendSlice(a, img.html);
+                i = img.end;
+                last = i;
+                continue;
+            }
+        } else if (c == '[') {
+            if (try mdLinkAt(a, text, i)) |lk| {
+                try escapeInto(out, a, text[last..i]);
+                try out.appendSlice(a, lk.html);
+                i = lk.end;
+                last = i;
+                continue;
+            }
+        } else if (autolinkBoundary(text, i) and autolinkAt(text, i) != null) {
+            const al = autolinkAt(text, i).?;
+            try escapeInto(out, a, text[last..i]);
+            try emitAutolink(out, a, text[i..al.end], al.kind);
+            i = al.end;
+            last = i;
+            continue;
+        }
+        i += 1;
+    }
+    try escapeInto(out, a, text[last..]);
+}
+
+/// autolinkBoundary: a GFM autolink may start only at the beginning of the
+/// run or after whitespace or one of * _ ~ (.
+fn autolinkBoundary(text: []const u8, i: usize) bool {
+    if (i == 0) return true;
+    const p = text[i - 1];
+    return isSpace(p) or p == '*' or p == '_' or p == '~' or p == '(';
+}
+
+const AutoKind = enum { url, www, email };
+const Autolink = struct { end: usize, kind: AutoKind };
+
+/// autolinkAt detects a GFM autolink starting at text[i] and returns the index
+/// just past it (after trailing-punctuation trimming), or null.
+fn autolinkAt(text: []const u8, i: usize) ?Autolink {
+    if (startsWithCI(text[i..], "http://") or startsWithCI(text[i..], "https://")) {
+        const end = urlEnd(text, i) orelse return null;
+        return .{ .end = end, .kind = .url };
+    }
+    if (startsWithCI(text[i..], "www.")) {
+        const end = urlEnd(text, i) orelse return null;
+        return .{ .end = end, .kind = .www };
+    }
+    if (emailEnd(text, i)) |end| return .{ .end = end, .kind = .email };
+    return null;
+}
+
+/// urlEnd consumes URL characters from start (up to whitespace or '<') then
+/// trims GFM trailing punctuation and unbalanced ')'.
+fn urlEnd(text: []const u8, start: usize) ?usize {
+    var end = start;
+    while (end < text.len and !isSpace(text[end]) and text[end] != '<') : (end += 1) {}
+    // The domain must contain a '.'.
+    if (std.mem.indexOfScalar(u8, text[start..end], '.') == null) return null;
+    while (end > start) {
+        const c = text[end - 1];
+        switch (c) {
+            '?', '!', '.', ',', ':', '*', '_', '~', '\'', '"' => end -= 1,
+            ')' => {
+                if (countByte(text[start..end], ')') > countByte(text[start..end], '(')) {
+                    end -= 1;
+                } else break;
+            },
+            else => break,
+        }
+    }
+    if (end <= start + 4) return null; // nothing meaningful left
+    return end;
+}
+
+/// emailEnd matches a GFM email autolink (local@domain.tld) at text[i].
+fn emailEnd(text: []const u8, i: usize) ?usize {
+    var j = i;
+    while (j < text.len and isEmailLocalChar(text[j])) : (j += 1) {}
+    if (j == i or j >= text.len or text[j] != '@') return null;
+    j += 1;
+    const domain_start = j;
+    while (j < text.len and (isAsciiAlnum(text[j]) or text[j] == '.' or text[j] == '-' or text[j] == '_')) : (j += 1) {}
+    const domain = text[domain_start..j];
+    if (domain.len == 0 or std.mem.indexOfScalar(u8, domain, '.') == null) return null;
+    // A trailing '.' or '-' or '_' is not part of the email.
+    while (j > domain_start and (text[j - 1] == '.' or text[j - 1] == '-' or text[j - 1] == '_')) : (j -= 1) {}
+    return j;
+}
+
+fn emitAutolink(out: *std.ArrayList(u8), a: std.mem.Allocator, link: []const u8, kind: AutoKind) !void {
+    try out.appendSlice(a, "<a href=\"");
+    switch (kind) {
+        .url => try escapeInto(out, a, link),
+        .www => {
+            try out.appendSlice(a, "http://");
+            try escapeInto(out, a, link);
+        },
+        .email => {
+            try out.appendSlice(a, "mailto:");
+            try escapeInto(out, a, link);
+        },
+    }
+    try out.appendSlice(a, "\">");
+    try escapeInto(out, a, link);
+    try out.appendSlice(a, "</a>");
+}
+
+const MdLink = struct { html: []const u8, end: usize };
+
+/// mdLinkAt parses a markdown link [text](url) at text[i] (text[i] == '['),
+/// or null if it's not a well-formed link.
+fn mdLinkAt(a: std.mem.Allocator, text: []const u8, i: usize) std.mem.Allocator.Error!?MdLink {
+    const close_br = std.mem.indexOfScalarPos(u8, text, i + 1, ']') orelse return null;
+    if (close_br + 1 >= text.len or text[close_br + 1] != '(') return null;
+    const open_p = close_br + 1;
+    const close_p = std.mem.indexOfScalarPos(u8, text, open_p + 1, ')') orelse return null;
+
+    const label = text[i + 1 .. close_br];
+    const url = text[open_p + 1 .. close_p];
+
+    var buf: std.ArrayList(u8) = .empty;
+    try buf.appendSlice(a, "<a href=\"");
+    if (!isDangerousUrl(url)) try escapeInto(&buf, a, url);
+    try buf.appendSlice(a, "\">");
+    try renderInline(&buf, a, label);
+    try buf.appendSlice(a, "</a>");
+    return .{ .html = buf.items, .end = close_p + 1 };
+}
+
+/// isDangerousUrl mirrors goldmark's IsDangerousURL: blocks javascript:,
+/// vbscript:, file:, and data: except for image data URIs.
+fn isDangerousUrl(url: []const u8) bool {
+    if (startsWithCI(url, "data:image/")) {
+        const v = url[11..];
+        if (startsWithCI(v, "png") or startsWithCI(v, "gif") or startsWithCI(v, "jpeg") or
+            startsWithCI(v, "webp") or startsWithCI(v, "svg")) return false;
+        return true;
+    }
+    return startsWithCI(url, "javascript:") or startsWithCI(url, "vbscript:") or
+        startsWithCI(url, "file:") or startsWithCI(url, "data:");
+}
+
+fn isEmailLocalChar(c: u8) bool {
+    return isAsciiAlnum(c) or c == '.' or c == '_' or c == '+' or c == '-';
+}
+
+fn countByte(s: []const u8, b: u8) usize {
+    var n: usize = 0;
+    for (s) |c| {
+        if (c == b) n += 1;
+    }
+    return n;
+}
+
 // --- MSG_ reference linkifier (post-pass over rendered HTML) -----------------
 
 /// linkifyMsgRefs rewrites MSG_<slug>_<n> tokens in HTML text into reference
@@ -396,7 +565,8 @@ fn linkifyMsgRefs(a: std.mem.Allocator, html: []const u8) ![]const u8 {
                 try out.appendSlice(a, html[i..]);
                 break;
             };
-            const tag = html[i .. end + 1];
+            var tag = html[i .. end + 1];
+            if (startsWithCI(tag, "<a ")) tag = try openExternalInNewTab(a, tag);
             try out.appendSlice(a, tag);
             if (tagOpensSkip(tag)) {
                 skip += 1;
@@ -416,6 +586,38 @@ fn linkifyMsgRefs(a: std.mem.Allocator, html: []const u8) ![]const u8 {
         i = next;
     }
     return out.toOwnedSlice(a);
+}
+
+/// openExternalInNewTab adds target="_blank" rel="noopener" to an <a> whose
+/// href is fully qualified (scheme://). Mirrors the Go post-pass.
+fn openExternalInNewTab(a: std.mem.Allocator, tag: []const u8) ![]const u8 {
+    const href = attrValue(tag, "href") orelse return tag;
+    if (!isExternalHref(href)) return tag;
+    var buf: std.ArrayList(u8) = .empty;
+    try buf.appendSlice(a, tag[0 .. tag.len - 1]); // drop trailing '>'
+    try buf.appendSlice(a, " target=\"_blank\" rel=\"noopener\">");
+    return buf.items;
+}
+
+fn attrValue(tag: []const u8, attr: []const u8) ?[]const u8 {
+    var pat: [16]u8 = undefined;
+    if (attr.len + 2 > pat.len) return null;
+    @memcpy(pat[0..attr.len], attr);
+    pat[attr.len] = '=';
+    pat[attr.len + 1] = '"';
+    const k = std.mem.indexOf(u8, tag, pat[0 .. attr.len + 2]) orelse return null;
+    const start = k + attr.len + 2;
+    const q = std.mem.indexOfScalarPos(u8, tag, start, '"') orelse return null;
+    return tag[start..q];
+}
+
+fn isExternalHref(href: []const u8) bool {
+    const p = std.mem.indexOf(u8, href, "://") orelse return false;
+    if (p == 0 or !isAsciiAlpha(href[0])) return false;
+    for (href[1..p]) |c| {
+        if (!isAsciiAlnum(c) and c != '+' and c != '.' and c != '-') return false;
+    }
+    return true;
 }
 
 fn tagOpensSkip(tag: []const u8) bool {
