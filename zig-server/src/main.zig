@@ -6,6 +6,9 @@ const markdown = @import("markdown.zig");
 // synthetic) — the corners the corpus never exercised. Both are checked.
 const GOLD_PATH = "/home/steve/showell_repos/gopher-gold/gold.jsonl";
 const ADVERSARIAL_PATH = "adversarial.jsonl";
+// Known, documented divergences from goldmark (per-line inline rendering vs
+// goldmark's paragraph-wide model). Reported but NOT counted in the gate.
+const DIVERGENCES_PATH = "divergences.jsonl";
 
 const Case = struct {
     id: []const u8,
@@ -72,4 +75,8 @@ pub fn main() !void {
     const pass = gold.pass + adv.pass;
     const total = pass + gold.fail + adv.fail;
     std.debug.print("==> {d}/{d} passing  ({d} failing)\n", .{ pass, total, gold.fail + adv.fail });
+
+    // Documented divergences: reported for visibility, excluded from the gate.
+    const div = try runFile(io, alloc, &arena, DIVERGENCES_PATH, "known divergences (not gating)", 24);
+    _ = div;
 }

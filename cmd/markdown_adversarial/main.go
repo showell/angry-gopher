@@ -64,12 +64,20 @@ var cases = [][2]string{
 	{"bq/emphasis", "> a **bold** quote"},
 }
 
-func main() {
-	out := "zig-server/adversarial.jsonl"
-	if len(os.Args) > 1 {
-		out = os.Args[1]
-	}
-	f, err := os.Create(out)
+// divergences: cases where the zig port is KNOWN to differ from goldmark. The
+// port renders each paragraph line independently (per-line renderInline);
+// goldmark resolves inline constructs over the whole paragraph, across soft
+// line breaks. The corpus contains zero such cases. These are documented (not
+// silently dropped) and reported by the harness separately, so they don't gate
+// the green run but also don't vanish.
+var divergences = [][2]string{
+	{"xline/emphasis", "**foo\nbar**"}, // goldmark: <strong>foo<br>\nbar</strong>
+	{"xline/code", "`foo\nbar`"},       // goldmark: <code>foo bar</code> (newline -> space)
+	{"xline/link", "[foo\nbar](/u)"},   // goldmark: <a href="/u">foo<br>\nbar</a>
+}
+
+func writeCases(path string, cs [][2]string) {
+	f, err := os.Create(path)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
@@ -80,12 +88,21 @@ func main() {
 
 	enc := json.NewEncoder(w)
 	enc.SetEscapeHTML(false)
-	for _, c := range cases {
+	for _, c := range cs {
 		gc := goldCase{ID: c[0], MD: c[1], HTML: string(chat.RenderChatMarkdown(c[1]))}
 		if err := enc.Encode(gc); err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
 		}
 	}
-	fmt.Fprintf(os.Stderr, "wrote %d adversarial cases to %s\n", len(cases), out)
+	fmt.Fprintf(os.Stderr, "wrote %d cases to %s\n", len(cs), path)
+}
+
+func main() {
+	dir := "zig-server"
+	if len(os.Args) > 1 {
+		dir = os.Args[1]
+	}
+	writeCases(dir+"/adversarial.jsonl", cases)
+	writeCases(dir+"/divergences.jsonl", divergences)
 }
