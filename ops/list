@@ -17,6 +17,9 @@ Available ops commands (run from repo root):
                          SKIPS the Lyn Rummy solver + Elm suites.
   ops/check_lynrummy     Lyn Rummy gate (~30s): common base + Elm + TS
                          solver. SKIPS the chat lint.
+  ops/check_bcrypt       zig-port bcrypt interop gate (~7s): proves the zig
+                         password layer cross-verifies with Go's bcrypt both
+                         directions, against committed synthetic fixtures.
 
   Leaves (composed by the gates above):
   ops/check_common       Shared base = test_go + test_docs + test_css (diamond floor).
