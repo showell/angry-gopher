@@ -422,52 +422,270 @@ fn escapeInto(out: *std.ArrayList(u8), a: std.mem.Allocator, text: []const u8) !
 
 // --- inline rendering (text + img + links + autolinks) ----------------------
 
-/// renderInline renders one line of paragraph text: escapes plain text, and
-/// recognizes inline <img>, markdown links [t](u), and GFM bare-URL/email
-/// autolinks. Emphasis/inline-code come later. target="_blank" on external
+// An inline node. The renderInline pipeline is: tokenize text into nodes
+// (literal text, pre-rendered html for code/img/link/autolink, and `*`/`_`
+// delimiter runs) → resolve emphasis by the CommonMark delimiter-stack
+// algorithm (inserting open/close marker nodes) → emit. Nodes live in one
+// arraylist; the inline order is a doubly-linked list over `prev`/`next`, and
+// the delimiter stack is a second linked list over `dprev`/`dnext`.
+const IKind = enum { text, html, delim, open, close };
+
+const Node = struct {
+    kind: IKind,
+    s: []const u8 = "", // text: raw (escape on emit); html: pre-rendered (emit as-is)
+    ch: u8 = 0, // delim char
+    count: usize = 0, // delim: remaining (unconsumed) delimiters
+    orig: usize = 0, // delim: original run length (for the rule of 3)
+    can_open: bool = false,
+    can_close: bool = false,
+    use: usize = 0, // open/close marker: 1 = <em>, 2 = <strong>
+    prev: ?u32 = null,
+    next: ?u32 = null,
+    dprev: ?u32 = null, // delimiter-stack links (delim nodes only)
+    dnext: ?u32 = null,
+};
+
+const Inline = struct {
+    nodes: std.ArrayList(Node) = .empty,
+    head: ?u32 = null,
+    tail: ?u32 = null,
+    dhead: ?u32 = null,
+    dtail: ?u32 = null,
+
+    fn append(self: *Inline, a: std.mem.Allocator, n: Node) !u32 {
+        const idx: u32 = @intCast(self.nodes.items.len);
+        var node = n;
+        node.prev = self.tail;
+        node.next = null;
+        try self.nodes.append(a, node);
+        if (self.tail) |t| self.nodes.items[t].next = idx;
+        self.tail = idx;
+        if (self.head == null) self.head = idx;
+        return idx;
+    }
+
+    fn appendDelim(self: *Inline, a: std.mem.Allocator, n: Node) !void {
+        const idx = try self.append(a, n);
+        self.nodes.items[idx].dprev = self.dtail;
+        if (self.dtail) |t| self.nodes.items[t].dnext = idx;
+        self.dtail = idx;
+        if (self.dhead == null) self.dhead = idx;
+    }
+
+    // insertAfter splices a fresh node into the inline list just after `at`.
+    fn insertAfter(self: *Inline, a: std.mem.Allocator, at: u32, n: Node) !void {
+        const idx: u32 = @intCast(self.nodes.items.len);
+        var node = n;
+        node.prev = at;
+        node.next = self.nodes.items[at].next;
+        try self.nodes.append(a, node);
+        if (self.nodes.items[idx].next) |nx| self.nodes.items[nx].prev = idx else self.tail = idx;
+        self.nodes.items[at].next = idx;
+    }
+
+    // insertBefore splices a fresh node into the inline list just before `at`.
+    fn insertBefore(self: *Inline, a: std.mem.Allocator, at: u32, n: Node) !void {
+        const idx: u32 = @intCast(self.nodes.items.len);
+        var node = n;
+        node.next = at;
+        node.prev = self.nodes.items[at].prev;
+        try self.nodes.append(a, node);
+        if (self.nodes.items[idx].prev) |pv| self.nodes.items[pv].next = idx else self.head = idx;
+        self.nodes.items[at].prev = idx;
+    }
+
+    // unlinkDelim removes a node from the delimiter stack (its inline-list place
+    // and text are untouched — leftover delimiter chars still emit).
+    fn unlinkDelim(self: *Inline, idx: u32) void {
+        const dp = self.nodes.items[idx].dprev;
+        const dn = self.nodes.items[idx].dnext;
+        if (dp) |p| self.nodes.items[p].dnext = dn else self.dhead = dn;
+        if (dn) |n| self.nodes.items[n].dprev = dp else self.dtail = dp;
+    }
+};
+
+/// renderInline renders one line of inline content: escapes plain text and
+/// recognizes inline <img>, code spans, markdown links [t](u), GFM bare-URL/
+/// email autolinks, and `*`/`_`/`**` emphasis. target="_blank" on external
 /// links is added by the linkifyMsgRefs post-pass (mirroring Go).
 fn renderInline(out: *std.ArrayList(u8), a: std.mem.Allocator, text: []const u8) std.mem.Allocator.Error!void {
-    var last: usize = 0;
+    var inl = Inline{};
+
+    var run_start: usize = 0;
     var i: usize = 0;
     while (i < text.len) {
         const c = text[i];
+        var consumed = false;
         if (c == '<') {
             if (safeImgAt(a, text, i)) |img| {
-                try escapeInto(out, a, text[last..i]);
-                try out.appendSlice(a, img.html);
+                try flushText(&inl, a, text[run_start..i]);
+                _ = try inl.append(a, .{ .kind = .html, .s = img.html });
                 i = img.end;
-                last = i;
-                continue;
+                consumed = true;
             }
         } else if (c == '`') {
             if (codeSpanAt(text, i)) |cs| {
-                try escapeInto(out, a, text[last..i]);
-                try out.appendSlice(a, "<code>");
-                try escapeInto(out, a, codeSpanContent(text[cs.content_start..cs.content_end]));
-                try out.appendSlice(a, "</code>");
+                try flushText(&inl, a, text[run_start..i]);
+                var buf: std.ArrayList(u8) = .empty;
+                try buf.appendSlice(a, "<code>");
+                try escapeInto(&buf, a, codeSpanContent(text[cs.content_start..cs.content_end]));
+                try buf.appendSlice(a, "</code>");
+                _ = try inl.append(a, .{ .kind = .html, .s = buf.items });
                 i = cs.end;
-                last = i;
-                continue;
+                consumed = true;
             }
         } else if (c == '[') {
             if (try mdLinkAt(a, text, i)) |lk| {
-                try escapeInto(out, a, text[last..i]);
-                try out.appendSlice(a, lk.html);
+                try flushText(&inl, a, text[run_start..i]);
+                _ = try inl.append(a, .{ .kind = .html, .s = lk.html });
                 i = lk.end;
-                last = i;
-                continue;
+                consumed = true;
             }
-        } else if (autolinkBoundary(text, i) and autolinkAt(text, i) != null) {
-            const al = autolinkAt(text, i).?;
-            try escapeInto(out, a, text[last..i]);
-            try emitAutolink(out, a, text[i..al.end], al.kind);
-            i = al.end;
-            last = i;
+        } else if (c == '*' or c == '_') {
+            try flushText(&inl, a, text[run_start..i]);
+            var n: usize = 0;
+            while (i + n < text.len and text[i + n] == c) : (n += 1) {}
+            const fl = flanking(text, i, i + n);
+            const can_open = if (c == '*') fl.left else fl.left and (!fl.right or fl.before_punct);
+            const can_close = if (c == '*') fl.right else fl.right and (!fl.left or fl.after_punct);
+            try inl.appendDelim(a, .{
+                .kind = .delim,
+                .s = text[i .. i + n],
+                .ch = c,
+                .count = n,
+                .orig = n,
+                .can_open = can_open,
+                .can_close = can_close,
+            });
+            i += n;
+            consumed = true;
+        } else if (autolinkBoundary(text, i)) {
+            if (autolinkAt(text, i)) |al| {
+                try flushText(&inl, a, text[run_start..i]);
+                var buf: std.ArrayList(u8) = .empty;
+                try emitAutolink(&buf, a, text[i..al.end], al.kind);
+                _ = try inl.append(a, .{ .kind = .html, .s = buf.items });
+                i = al.end;
+                consumed = true;
+            }
+        }
+        if (consumed) {
+            run_start = i;
+        } else {
+            i += 1;
+        }
+    }
+    try flushText(&inl, a, text[run_start..]);
+
+    processEmphasis(&inl, a);
+    try emitInline(out, a, &inl);
+}
+
+fn flushText(inl: *Inline, a: std.mem.Allocator, s: []const u8) !void {
+    if (s.len == 0) return;
+    _ = try inl.append(a, .{ .kind = .text, .s = s });
+}
+
+fn emitInline(out: *std.ArrayList(u8), a: std.mem.Allocator, inl: *Inline) !void {
+    var cur = inl.head;
+    while (cur) |idx| {
+        const n = inl.nodes.items[idx];
+        switch (n.kind) {
+            .text => try escapeInto(out, a, n.s),
+            .html => try out.appendSlice(a, n.s),
+            .delim => {
+                var k: usize = 0;
+                while (k < n.count) : (k += 1) try out.append(a, n.ch);
+            },
+            .open => try out.appendSlice(a, if (n.use == 2) "<strong>" else "<em>"),
+            .close => try out.appendSlice(a, if (n.use == 2) "</strong>" else "</em>"),
+        }
+        cur = n.next;
+    }
+}
+
+const Flank = struct { left: bool, right: bool, before_punct: bool, after_punct: bool };
+
+/// flanking computes the CommonMark left/right-flanking flags for the delimiter
+/// run text[s..e]. Run start/end of the line counts as whitespace.
+fn flanking(text: []const u8, s: usize, e: usize) Flank {
+    const before: u8 = if (s == 0) ' ' else text[s - 1];
+    const after: u8 = if (e >= text.len) ' ' else text[e];
+    const before_ws = isSpace(before);
+    const after_ws = isSpace(after);
+    const before_punct = isPunct(before);
+    const after_punct = isPunct(after);
+    const left = !after_ws and (!after_punct or before_ws or before_punct);
+    const right = !before_ws and (!before_punct or after_ws or after_punct);
+    return .{ .left = left, .right = right, .before_punct = before_punct, .after_punct = after_punct };
+}
+
+/// processEmphasis resolves `*`/`_` delimiter runs into <em>/<strong> by the
+/// CommonMark delimiter-stack algorithm (including the "rule of 3"), inserting
+/// open/close marker nodes around the matched spans. Mirrors goldmark, which
+/// implements the same spec.
+fn processEmphasis(inl: *Inline, a: std.mem.Allocator) void {
+    // openers_bottom[len % 3][char], char: '*' = 0, '_' = 1. null = stack bottom.
+    var openers_bottom = [_][2]?u32{.{ null, null }} ** 3;
+
+    var closer = inl.dhead;
+    while (closer) |ci| {
+        if (!inl.nodes.items[ci].can_close) {
+            closer = inl.nodes.items[ci].dnext;
             continue;
         }
-        i += 1;
+        const cch = inl.nodes.items[ci].ch;
+        const ob_index: usize = if (cch == '*') 0 else 1;
+        const bottom = openers_bottom[inl.nodes.items[ci].count % 3][ob_index];
+
+        // Look back for a matching opener.
+        var opener = inl.nodes.items[ci].dprev;
+        var opener_found = false;
+        while (opener) |oi| {
+            if (oi == bottom) break;
+            const on = inl.nodes.items[oi];
+            if (on.can_open and on.ch == cch) {
+                const cn = inl.nodes.items[ci];
+                const odd = (cn.can_open or on.can_close) and
+                    (cn.orig % 3 != 0) and ((on.orig + cn.orig) % 3 == 0);
+                if (!odd) {
+                    opener_found = true;
+                    break;
+                }
+            }
+            opener = on.dprev;
+        }
+
+        const old_closer = ci;
+        if (opener_found) {
+            const oi = opener.?;
+            const use: usize = if (inl.nodes.items[oi].count >= 2 and inl.nodes.items[ci].count >= 2) 2 else 1;
+
+            // Wrap the span: open marker after the opener, close marker before
+            // the closer. Insertion is append-based, so capture neighbors first.
+            inl.insertAfter(a, oi, .{ .kind = .open, .use = use }) catch return;
+            inl.insertBefore(a, ci, .{ .kind = .close, .use = use }) catch return;
+
+            inl.nodes.items[oi].count -= use;
+            inl.nodes.items[ci].count -= use;
+
+            // Drop every delimiter strictly between opener and closer.
+            inl.nodes.items[oi].dnext = ci;
+            inl.nodes.items[ci].dprev = oi;
+
+            if (inl.nodes.items[oi].count == 0) inl.unlinkDelim(oi);
+            if (inl.nodes.items[ci].count == 0) {
+                const nxt = inl.nodes.items[ci].dnext;
+                inl.unlinkDelim(ci);
+                closer = nxt;
+            }
+            // closer with leftover delimiters stays; the loop re-examines it.
+        } else {
+            closer = inl.nodes.items[ci].dnext;
+            openers_bottom[inl.nodes.items[old_closer].count % 3][ob_index] = inl.nodes.items[old_closer].dprev;
+            if (!inl.nodes.items[old_closer].can_open) inl.unlinkDelim(old_closer);
+        }
     }
-    try escapeInto(out, a, text[last..]);
 }
 
 /// autolinkBoundary: a GFM autolink may start only at the beginning of the
@@ -775,6 +993,13 @@ fn isAsciiAlnum(c: u8) bool {
 
 fn isSpace(c: u8) bool {
     return c == ' ' or c == '\t' or c == '\n' or c == '\r' or c == 0x0c;
+}
+
+/// isPunct reports whether c is an ASCII punctuation char (CommonMark's
+/// definition), used by the emphasis flanking rules.
+fn isPunct(c: u8) bool {
+    return (c >= '!' and c <= '/') or (c >= ':' and c <= '@') or
+        (c >= '[' and c <= '`') or (c >= '{' and c <= '~');
 }
 
 fn allDigits(s: []const u8) bool {
