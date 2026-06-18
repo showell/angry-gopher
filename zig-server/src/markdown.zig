@@ -29,6 +29,12 @@ fn renderBlocks(a: std.mem.Allocator, md: []const u8) ![]const u8 {
             continue;
         }
 
+        // A fenced code block can interrupt a paragraph, so check it first.
+        if (parseFenceOpen(md, pos)) |fo| {
+            pos = try renderFence(&out, a, md, fo);
+            continue;
+        }
+
         // An HTML block (CommonMark type 7) starts only at a block boundary —
         // it can't interrupt a paragraph — and runs until a blank line. We
         // emit its raw source through the escape-but-<img> scan, with no <p>
@@ -46,7 +52,8 @@ fn renderBlocks(a: std.mem.Allocator, md: []const u8) ![]const u8 {
         }
 
         // Otherwise a paragraph: a maximal run of non-blank lines, each
-        // hard-wrapped with <br>, inline raw HTML handled the same way.
+        // hard-wrapped with <br>, inline raw HTML handled the same way. A
+        // fence opening on a later line interrupts the paragraph.
         try out.appendSlice(a, "<p>");
         var p = pos;
         var first = true;
@@ -54,6 +61,7 @@ fn renderBlocks(a: std.mem.Allocator, md: []const u8) ![]const u8 {
             const e2 = lineEnd(md, p);
             const l2 = md[p..e2];
             if (isBlank(l2)) break;
+            if (parseFenceOpen(md, p) != null) break;
             if (!first) try out.appendSlice(a, "<br>\n");
             first = false;
             try writeRawHtml(&out, a, trimLine(l2));
@@ -64,6 +72,119 @@ fn renderBlocks(a: std.mem.Allocator, md: []const u8) ![]const u8 {
     }
 
     return out.toOwnedSlice(a);
+}
+
+// --- fenced code blocks (incl. the `quote` extension) -----------------------
+
+const FenceOpen = struct {
+    char: u8,
+    count: usize,
+    indent: usize,
+    lang: []const u8,
+    body_start: usize, // index of the first content line
+};
+
+/// parseFenceOpen recognizes a fence opening at md[pos] (line start): up to 3
+/// leading spaces, then >=3 of '`' or '~'. The info string is the rest of the
+/// line; the language is its first whitespace-delimited token.
+fn parseFenceOpen(md: []const u8, pos: usize) ?FenceOpen {
+    var i = pos;
+    var indent: usize = 0;
+    while (i < md.len and md[i] == ' ' and indent < 4) : (i += 1) {
+        indent += 1;
+    }
+    if (indent >= 4 or i >= md.len) return null;
+    const f = md[i];
+    if (f != '`' and f != '~') return null;
+    var count: usize = 0;
+    while (i < md.len and md[i] == f) : (i += 1) {
+        count += 1;
+    }
+    if (count < 3) return null;
+
+    const eol = lineEnd(md, i);
+    var info = md[i..eol];
+    // A backtick info string may not contain a backtick.
+    if (f == '`' and std.mem.indexOfScalar(u8, info, '`') != null) return null;
+    info = trimLine(info);
+    var lang = info;
+    if (std.mem.indexOfAny(u8, info, " \t")) |sp| lang = info[0..sp];
+
+    return .{
+        .char = f,
+        .count = count,
+        .indent = indent,
+        .lang = lang,
+        .body_start = if (eol < md.len) eol + 1 else md.len,
+    };
+}
+
+fn isClosingFence(line: []const u8, f: u8, n: usize) bool {
+    var i: usize = 0;
+    var indent: usize = 0;
+    while (i < line.len and line[i] == ' ' and indent < 4) : (i += 1) {
+        indent += 1;
+    }
+    if (indent >= 4) return false;
+    var count: usize = 0;
+    while (i < line.len and line[i] == f) : (i += 1) {
+        count += 1;
+    }
+    if (count < n) return false;
+    return trimLine(line[i..]).len == 0;
+}
+
+/// renderFence emits the code block and returns the position after the closing
+/// fence (or EOF when there is none — an unterminated fence runs to the end).
+fn renderFence(out: *std.ArrayList(u8), a: std.mem.Allocator, md: []const u8, fo: FenceOpen) !usize {
+    var content_end = md.len;
+    var after = md.len;
+    var p = fo.body_start;
+    while (p < md.len) {
+        const e = lineEnd(md, p);
+        if (isClosingFence(md[p..e], fo.char, fo.count)) {
+            content_end = p;
+            after = if (e < md.len) e + 1 else md.len;
+            break;
+        }
+        p = if (e < md.len) e + 1 else md.len;
+    }
+    const content = md[fo.body_start..content_end];
+
+    const is_quote = std.mem.eql(u8, fo.lang, "quote");
+    if (is_quote) {
+        try out.appendSlice(a, "<pre class=\"chat-quote\">");
+    } else {
+        try out.appendSlice(a, "<pre><code");
+        if (fo.lang.len > 0) {
+            try out.appendSlice(a, " class=\"language-");
+            try escapeInto(out, a, fo.lang);
+            try out.append(a, '"');
+        }
+        try out.append(a, '>');
+    }
+
+    try writeCodeLines(out, a, content, fo.indent);
+
+    try out.appendSlice(a, if (is_quote) "</pre>\n" else "</code></pre>\n");
+    return after;
+}
+
+/// writeCodeLines emits each content line escaped and newline-terminated
+/// (goldmark normalizes the final line to end with '\n'), stripping up to the
+/// fence's own indentation from each line.
+fn writeCodeLines(out: *std.ArrayList(u8), a: std.mem.Allocator, content: []const u8, indent: usize) !void {
+    var i: usize = 0;
+    while (i < content.len) {
+        const e = std.mem.indexOfScalarPos(u8, content, i, '\n') orelse content.len;
+        var line = content[i..e];
+        var s: usize = 0;
+        while (s < line.len and s < indent and line[s] == ' ') : (s += 1) {}
+        line = line[s..];
+        try escapeInto(out, a, line);
+        try out.append(a, '\n');
+        i = if (e < content.len) e + 1 else content.len;
+    }
 }
 
 fn lineEnd(md: []const u8, pos: usize) usize {
