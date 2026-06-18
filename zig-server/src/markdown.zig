@@ -35,6 +35,16 @@ fn renderBlocks(a: std.mem.Allocator, md: []const u8) ![]const u8 {
             continue;
         }
 
+        // ATX heading (also interrupts a paragraph).
+        if (atxHeading(line)) |h| {
+            const d: u8 = '0' + @as(u8, @intCast(h.level));
+            try out.appendSlice(a, &[_]u8{ '<', 'h', d, '>' });
+            try renderInline(&out, a, h.content);
+            try out.appendSlice(a, &[_]u8{ '<', '/', 'h', d, '>', '\n' });
+            pos = next;
+            continue;
+        }
+
         // An HTML block (CommonMark type 7) starts only at a block boundary —
         // it can't interrupt a paragraph — and runs until a blank line. We
         // emit its raw source through the escape-but-<img> scan, with no <p>
@@ -62,6 +72,7 @@ fn renderBlocks(a: std.mem.Allocator, md: []const u8) ![]const u8 {
             const l2 = md[p..e2];
             if (isBlank(l2)) break;
             if (parseFenceOpen(md, p) != null) break;
+            if (atxHeading(l2) != null) break;
             if (!first) try out.appendSlice(a, "<br>\n");
             first = false;
             try renderInline(&out, a, trimLine(l2));
@@ -117,6 +128,34 @@ fn parseFenceOpen(md: []const u8, pos: usize) ?FenceOpen {
         .lang = lang,
         .body_start = if (eol < md.len) eol + 1 else md.len,
     };
+}
+
+const Heading = struct { level: usize, content: []const u8 };
+
+/// atxHeading recognizes "# … " through "###### … ": 1-6 '#' after up to 3
+/// spaces, then a space (or end of line). An optional trailing run of '#'
+/// (the closing sequence) is stripped.
+fn atxHeading(line: []const u8) ?Heading {
+    var i: usize = 0;
+    var indent: usize = 0;
+    while (i < line.len and line[i] == ' ' and indent < 4) : (i += 1) {
+        indent += 1;
+    }
+    if (indent >= 4) return null;
+    var level: usize = 0;
+    while (i < line.len and line[i] == '#') : (i += 1) {
+        level += 1;
+    }
+    if (level == 0 or level > 6) return null;
+    if (i < line.len and line[i] != ' ' and line[i] != '\t') return null;
+
+    var content = std.mem.trim(u8, line[i..], " \t");
+    var h = content.len;
+    while (h > 0 and content[h - 1] == '#') : (h -= 1) {}
+    if (h < content.len and (h == 0 or content[h - 1] == ' ' or content[h - 1] == '\t')) {
+        content = std.mem.trim(u8, content[0..h], " \t");
+    }
+    return .{ .level = level, .content = content };
 }
 
 fn isClosingFence(line: []const u8, f: u8, n: usize) bool {
@@ -400,6 +439,16 @@ fn renderInline(out: *std.ArrayList(u8), a: std.mem.Allocator, text: []const u8)
                 last = i;
                 continue;
             }
+        } else if (c == '`') {
+            if (codeSpanAt(text, i)) |cs| {
+                try escapeInto(out, a, text[last..i]);
+                try out.appendSlice(a, "<code>");
+                try escapeInto(out, a, codeSpanContent(text[cs.content_start..cs.content_end]));
+                try out.appendSlice(a, "</code>");
+                i = cs.end;
+                last = i;
+                continue;
+            }
         } else if (c == '[') {
             if (try mdLinkAt(a, text, i)) |lk| {
                 try escapeInto(out, a, text[last..i]);
@@ -501,6 +550,40 @@ fn emitAutolink(out: *std.ArrayList(u8), a: std.mem.Allocator, link: []const u8,
     try out.appendSlice(a, "\">");
     try escapeInto(out, a, link);
     try out.appendSlice(a, "</a>");
+}
+
+const CodeSpan = struct { content_start: usize, content_end: usize, end: usize };
+
+/// codeSpanAt matches a backtick code span at text[i]: an opening run of N
+/// backticks closed by a run of exactly N backticks. Returns null (literal
+/// backticks) if there's no matching close.
+fn codeSpanAt(text: []const u8, i: usize) ?CodeSpan {
+    var n: usize = 0;
+    while (i + n < text.len and text[i + n] == '`') : (n += 1) {}
+    const content_start = i + n;
+    var k = content_start;
+    while (k < text.len) {
+        if (text[k] != '`') {
+            k += 1;
+            continue;
+        }
+        var m: usize = 0;
+        while (k + m < text.len and text[k + m] == '`') : (m += 1) {}
+        if (m == n) return .{ .content_start = content_start, .content_end = k, .end = k + m };
+        k += m; // a run of the wrong length is part of the content
+    }
+    return null;
+}
+
+/// codeSpanContent applies CommonMark's trimming: if the content both begins
+/// and ends with a space and isn't all spaces, one space is stripped each end.
+fn codeSpanContent(content: []const u8) []const u8 {
+    if (content.len >= 2 and content[0] == ' ' and content[content.len - 1] == ' ' and
+        std.mem.indexOfNone(u8, content, " ") != null)
+    {
+        return content[1 .. content.len - 1];
+    }
+    return content;
 }
 
 const MdLink = struct { html: []const u8, end: usize };
