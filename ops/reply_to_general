@@ -1,0 +1,36 @@
+#!/bin/bash
+# Post a message to the #General channel AS Claude (uid 3), reading the
+# markdown body from stdin. A thin wrapper for the Steve<->Claude chat that
+# runs over prod Gopher Chat (lynrummy.com) — the console agent crossposts
+# its replies here so the conversation lives in the channel too.
+#
+#   echo "hello" | ops/reply_to_general zig-port
+#   ops/reply_to_general zig-port <<'EOF'
+#   multi-line
+#   markdown
+#   EOF
+#
+# Topic defaults to zig-port. Claude's key is at ~/claude_gopher_api_key
+# (prefix 3-); see the claude-agent-key memory. Channel send mirrors the DM
+# send: POST /channel/<name>/<topic>/send, form field `markdown`, async.
+set -euo pipefail
+
+TOPIC="${1:-zig-port}"
+KEY_FILE="$HOME/claude_gopher_api_key"
+[ -f "$KEY_FILE" ] || { echo "missing $KEY_FILE — Claude's prod API key" >&2; exit 1; }
+
+BODY="$(cat)"
+[ -n "$BODY" ] || { echo "empty body on stdin — nothing to post" >&2; exit 1; }
+
+code=$(curl -s -o /dev/null -w '%{http_code}' \
+  -H "Authorization: Bearer $(cat "$KEY_FILE")" \
+  -H "X-Chat-Async: 1" \
+  --data-urlencode "markdown=${BODY}" \
+  "https://lynrummy.com/channel/General/${TOPIC}/send")
+
+if [ "$code" = "204" ]; then
+  echo "posted to #General > ${TOPIC}"
+else
+  echo "post failed: HTTP ${code}" >&2
+  exit 1
+fi
