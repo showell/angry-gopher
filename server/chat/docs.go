@@ -253,9 +253,9 @@ func defaultChatPartner(uid string) string {
 }
 
 // HandleDocsRender renders posted markdown to HTML for the live-preview
-// pane. Reuses RenderChatMarkdown (goldmark + bluemonday + linkifyMsgRefs)
-// so docs and chat messages render identically, including the same XSS
-// protections.
+// pane. Reuses RenderChatMarkdown (goldmark with escape-but-<img> +
+// linkifyMsgRefs) so docs and chat messages render identically, including
+// the same XSS protections.
 func HandleDocsRender(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
