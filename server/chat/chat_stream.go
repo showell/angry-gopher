@@ -55,6 +55,17 @@ func HandleChatRaw(w http.ResponseWriter, r *http.Request) {
 	serveRawTranscript(w, r, DMConv(user.ID, partner), sessionID)
 }
 
+// HandleChatDownload serves /chat/c/<conv>/<sid>/download — a .tar.gz of
+// the transcript plus its images.
+func HandleChatDownload(w http.ResponseWriter, r *http.Request) {
+	user, conv, sessionID, ok := chatPathSession(w, r)
+	if !ok {
+		return
+	}
+	partner, _ := OtherInConv(user.ID, conv)
+	serveTranscriptBundle(w, r, DMConv(user.ID, partner), sessionID)
+}
+
 // serveRawTranscript writes a session's literal on-disk .md transcript as
 // text/plain. Shared by the DM and channel raw routes; the very bytes it
 // emits are what the "t" raw-view tab opens AND what fetch_prod_transcript

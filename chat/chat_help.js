@@ -38,6 +38,7 @@ window.ChatHelp = (function(){
     return [
       { key: 'b', label: 'back',                                requiresSelection: false, action: function(){ deps.back(); } },
       { key: 'c', label: 'compose',                             requiresSelection: false, action: function(){ deps.openCompose(); } },
+      { key: 'd', label: 'download transcript + images (.tar.gz)', requiresSelection: false, action: function(){ deps.downloadBundle(); } },
       { key: 'e', label: 'edit selected message',               requiresSelection: true,  action: function(s){ deps.editMessage(s); } },
       { key: 'f', label: 'forward',                             requiresSelection: false, action: function(){ deps.forward(); } },
       { key: 'q', label: 'quote-reply to selected message',     requiresSelection: true,  action: function(s){ deps.quoteReply(s); } },

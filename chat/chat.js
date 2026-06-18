@@ -266,6 +266,16 @@
     /* Raw transcript = the literal on-disk .md file, opened in a new tab
        via the same server endpoint fetch_prod_transcript backs up from. */
     viewRaw:     function(){ window.open(SESSION_BASE + '/raw', '_blank'); },
+    /* Download = a .tar.gz of the transcript + its images. The server
+       sets Content-Disposition: attachment, so an anchor click saves it
+       without navigating away from the conversation. */
+    downloadBundle: function(){
+      var a = document.createElement('a');
+      a.href = SESSION_BASE + '/download';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    },
   });
   ChatCompose.focus();
 })();

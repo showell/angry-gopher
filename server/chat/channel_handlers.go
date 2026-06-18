@@ -91,6 +91,16 @@ func HandleChannelRaw(w http.ResponseWriter, r *http.Request) {
 	serveRawTranscript(w, r, c, sid)
 }
 
+// HandleChannelDownload serves /channel/<name>/<topic>/download — a .tar.gz
+// of the transcript plus its images.
+func HandleChannelDownload(w http.ResponseWriter, r *http.Request) {
+	_, c, sid, ok := channelPathTopic(w, r)
+	if !ok {
+		return
+	}
+	serveTranscriptBundle(w, r, c, sid)
+}
+
 // HandleChannelSend posts a message to a channel topic.
 func HandleChannelSend(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
