@@ -4,16 +4,23 @@
 //!   GET  /puzzles/puzzle.js                          the Elm bundle
 //!   POST /puzzles/sessions/<id>/puzzles/<idx>/actions  append one action line
 //!
-//! Phase 1 (this file so far): the page + bundle. The catalog (6 curated DSL
-//! files, easiest-first) is concatenated at request time and baked into the Elm
-//! flag, exactly as Go does, so there are zero round trips before play. Storage
-//! + the POST path land in phase 2; real identity in phase 3 (session_id is a
-//! stub until then).
+//! Phase 2 (now): the page allocates a real session id, writes meta, and the
+//! POST .../actions route appends to disk — storage.zig is the file layer.
+//! Identity is still a stub (phase 3): every request keys off stub_user_id.
 
 const std = @import("std");
 const http = @import("http.zig");
+const storage = @import("storage.zig");
 
 const puzzle_js = @embedFile("puzzle_js");
+
+// stub_user_id — the phase-2 placeholder for CurrentUser(r).ID. Replaced in
+// phase 3 by the real cookie/API-key resolver + the JUST_NEEDS_NAME gate. uid
+// "0" is not a real user, so its subtree can't collide with live player data.
+const stub_user_id = "0";
+
+// maxAppendBytes caps a single action line. Mirrors Go's maxAppendBytes (limits.go).
+const maxAppendBytes = 64 * 1024;
 
 // The curated catalogs, easiest-first (1-line … 6-line). Wired in build.zig.
 const catalogs = [_][]const u8{
@@ -28,23 +35,83 @@ const catalogs = [_][]const u8{
 const Alloc = std.mem.Allocator;
 
 /// handle dispatches /puzzles/* — the route table (a switch on the path tail).
-pub fn handle(req: *std.http.Server.Request, alloc: Alloc, sub: []const u8) !void {
+/// `sub` keeps its leading '/' (e.g. "/puzzle.js", "/sessions/3/...").
+pub fn handle(req: *std.http.Server.Request, io: std.Io, alloc: Alloc, sub: []const u8) !void {
     if (sub.len == 0 or std.mem.eql(u8, sub, "/")) {
-        try page(req, alloc);
+        try page(req, io, alloc);
     } else if (std.mem.eql(u8, sub, "/puzzle.js")) {
         try req.respond(puzzle_js, .{ .extra_headers = &.{http.js_ct} });
+    } else if (std.mem.startsWith(u8, sub, "/sessions/")) {
+        try sessionRoute(req, io, alloc, sub["/sessions/".len..]);
     } else {
         try http.notFound(req);
     }
 }
 
-/// page renders the HTML host with the full catalog + session id baked into the
-/// Elm flag. Mirrors Go's puzzlePage (minus storage, which is phase 2).
-fn page(req: *std.http.Server.Request, alloc: Alloc) !void {
+/// sessionRoute handles the one session route Go exposes:
+///   POST /sessions/<id>/puzzles/<idx>/actions  — append one action line.
+/// `rest` is the path after "/sessions/". Mirrors Go's handlePuzzleSessionRoute.
+fn sessionRoute(req: *std.http.Server.Request, io: std.Io, alloc: Alloc, rest: []const u8) !void {
+    var it = std.mem.splitScalar(u8, rest, '/');
+    const id_str = it.next() orelse return http.notFound(req);
+    const session_id = std.fmt.parseInt(i64, id_str, 10) catch return http.notFound(req);
+    if (session_id <= 0) return http.notFound(req);
+
+    // Expect exactly: puzzles / <idx> / actions, POST.
+    const seg_puzzles = it.next() orelse return http.notFound(req);
+    const idx_str = it.next() orelse return http.notFound(req);
+    const seg_actions = it.next() orelse return http.notFound(req);
+    if (it.next() != null) return http.notFound(req); // trailing junk
+    if (!std.mem.eql(u8, seg_puzzles, "puzzles") or !std.mem.eql(u8, seg_actions, "actions")) {
+        return http.notFound(req);
+    }
+    if (req.head.method != .POST) return http.notFound(req);
+
+    const puzzle_idx = std.fmt.parseInt(i32, idx_str, 10) catch return http.notFound(req);
+    if (puzzle_idx < 0) return http.notFound(req);
+
+    try appendAction(req, io, alloc, session_id, puzzle_idx);
+}
+
+/// appendAction appends the POST body verbatim as one line in
+/// puzzle_<idx>/actions.dsl. Mirrors Go's puzzleAppendAction: existence guard,
+/// 64 KB body cap, append, 204. The per-puzzle dir is created on first append.
+fn appendAction(req: *std.http.Server.Request, io: std.Io, alloc: Alloc, session_id: i64, puzzle_idx: i32) !void {
+    if (!try storage.puzzleSessionExists(io, alloc, stub_user_id, session_id)) {
+        return http.notFound(req);
+    }
+
+    var body_buf: [4 * 1024]u8 = undefined;
+    const reader = try req.readerExpectContinue(&body_buf);
+    // limit = cap + 1: allocRemaining errors when the limit is *reached*, but Go's
+    // MaxBytesReader allows exactly maxAppendBytes and rejects only maxBytes+1.
+    const body = reader.allocRemaining(alloc, .limited(maxAppendBytes + 1)) catch |e| switch (e) {
+        error.StreamTooLong => {
+            try req.respond("request body too large\n", .{ .status = .payload_too_large });
+            return;
+        },
+        else => return e,
+    };
+
+    const rel = try std.fmt.allocPrint(alloc, "puzzle_{d}/actions.dsl", .{puzzle_idx});
+    try storage.appendPuzzleSessionDslLine(io, alloc, stub_user_id, session_id, rel, body);
+    try req.respond("", .{ .status = .no_content });
+}
+
+/// page allocates a puzzle session, writes meta, and renders the HTML host with
+/// both session_id and the full catalog baked into the Elm flag. Zero post-load
+/// round trips before play. Mirrors Go's puzzlePage.
+fn page(req: *std.http.Server.Request, io: std.Io, alloc: Alloc) !void {
     const catalog = try loadCatalog(alloc);
     const indented = try indentLines(alloc, catalog);
 
-    const session_id: i64 = 0; // phase-1 stub; real allocation in phase 2
+    const session_id = try storage.allocatePuzzleSessionID(io, alloc, stub_user_id);
+
+    // meta DSL: server-owned created_at, then a snapshot of the catalog this
+    // session was bound to (so replay-by-index survives later catalog drift).
+    const created_at: i64 = @intCast(@divFloor(std.Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
+    const meta_dsl = try std.fmt.allocPrint(alloc, "created_at: {d}\n\ncatalog:\n{s}\n", .{ created_at, indented });
+    try storage.writePuzzleSessionFile(io, alloc, stub_user_id, session_id, "meta", meta_dsl);
 
     // Flag is one DSL string — `session_id:` scalar then a `catalog:` block.
     // Elm's Lib.PuzzleFlagDsl parses it whole.

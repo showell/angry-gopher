@@ -62,20 +62,20 @@ fn handleConn(io: std.Io, alloc: std.mem.Allocator, stream: net.Stream) !void {
             error.HttpConnectionClosing => return,
             else => return e,
         };
-        try route(&req, arena.allocator());
+        try route(&req, io, arena.allocator());
     }
 }
 
 /// route picks the handler by path prefix, passing the remainder (the path with
 /// the prefix stripped, e.g. "/app.js" or "/sessions/3/..."). Mirrors the Go
 /// mux's prefix dispatch; each handler owns its own sub-switch.
-fn route(req: *std.http.Server.Request, alloc: std.mem.Allocator) !void {
+fn route(req: *std.http.Server.Request, io: std.Io, alloc: std.mem.Allocator) !void {
     const path = stripQuery(req.head.target);
 
     if (matchPrefix(path, "/driving")) |sub| {
         try driving.handle(req, sub);
     } else if (matchPrefix(path, "/puzzles")) |sub| {
-        try puzzles.handle(req, alloc, sub);
+        try puzzles.handle(req, io, alloc, sub);
     } else {
         try http.notFound(req);
     }
