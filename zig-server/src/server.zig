@@ -3,23 +3,28 @@
 //! mirroring the Go server's package-per-surface layout (server/driving,
 //! server/lynrummy). build.zig is the embed.go analog (where assets are wired).
 //!
-//! Concurrency is the simplest thing that works: one connection at a time,
-//! blocking, and ONE request per connection (keep-alive off — see handleConn for
-//! why: a browser opens parallel connections for a multi-script page like /game,
-//! and a held-open keep-alive connection would starve them on this single thread).
-//! Fine for these static/append surfaces; the real concurrency + fan-out + keep-
-//! alive/streaming decision is deferred until Chat's SSE forces it.
+//! Concurrency: each accepted connection runs as its own task on the std.Io
+//! thread pool (a never-awaited Io.Group + group.concurrent — see main). The
+//! pool grows on demand and finished tasks self-reap, so it's effectively
+//! goroutine-per-connection. This is the model chat needs (long-lived SSE
+//! streams that mustn't starve other connections), proven first by the /spike
+//! surface (spike.zig + bus.zig) before any chat handler is ported. Each
+//! connection still serves ONE request then closes (keep-alive off) — that's
+//! independent of concurrency and can be revisited when chat lands.
 //!
 //! Run:  ops/build_driving && ops/build_elm   (from repo root, for the bundles)
 //!       cd zig-server && zig build run        (serves on http://localhost:9001)
 
 const std = @import("std");
+const Io = std.Io;
 const net = std.Io.net;
 const http = @import("http.zig");
 const config = @import("config.zig");
 const driving = @import("driving.zig");
 const puzzles = @import("puzzles.zig");
 const game = @import("game.zig");
+const spike = @import("spike.zig");
+const Bus = @import("bus.zig").Bus;
 
 const PORT: u16 = 9001;
 
@@ -36,21 +41,40 @@ pub fn main(init: std.process.Init.Minimal) !void {
     defer env.deinit();
     try config.load(io, alloc, env);
 
+    // The pub/sub fan-out shared across all connections (the Go subBus analog).
+    // Lives for the process lifetime; the /spike surface is its only tenant
+    // until chat lands.
+    var bus = Bus.init(io, alloc);
+
     const addr = try net.IpAddress.parse("0.0.0.0", PORT);
     var listener = try addr.listen(io, .{ .reuse_address = true });
     defer listener.deinit(io);
 
-    std.debug.print("zig-server: http://localhost:{d}  (/driving, /puzzles)\n", .{PORT});
+    std.debug.print("zig-server: http://localhost:{d}  (/driving, /puzzles, /game, /spike)\n", .{PORT});
 
+    // Each connection becomes a concurrent task in this group. We never await it
+    // — the server runs forever and completed tasks self-reap (see file header).
+    var conns: Io.Group = .init;
     while (true) {
         const stream = listener.accept(io) catch |e| {
             std.debug.print("accept failed: {s}\n", .{@errorName(e)});
             continue;
         };
-        handleConn(io, alloc, stream) catch |e| {
-            std.debug.print("connection error: {s}\n", .{@errorName(e)});
+        conns.concurrent(io, serveConn, .{ io, alloc, &bus, stream }) catch |e| {
+            // Pool exhausted / concurrency unavailable: fall back to serving
+            // this one inline rather than dropping it.
+            std.debug.print("spawn failed ({s}); serving inline\n", .{@errorName(e)});
+            serveConn(io, alloc, &bus, stream);
         };
     }
+}
+
+/// serveConn is the per-connection task body. It returns void (swallowing all
+/// errors) so it coerces to the Cancelable!void that Io.Group requires.
+fn serveConn(io: std.Io, alloc: std.mem.Allocator, bus: *Bus, stream: net.Stream) void {
+    handleConn(io, alloc, bus, stream) catch |e| {
+        std.debug.print("connection error: {s}\n", .{@errorName(e)});
+    };
 }
 
 /// handleConn serves exactly ONE request, then closes the connection
@@ -63,7 +87,7 @@ pub fn main(init: std.process.Init.Minimal) !void {
 /// connection keeps the simple blocking model working for every surface here.
 /// Real concurrency + keep-alive (and streaming) wait for chat's SSE to force
 /// the model decision — see the file header.
-fn handleConn(io: std.Io, alloc: std.mem.Allocator, stream: net.Stream) !void {
+fn handleConn(io: std.Io, alloc: std.mem.Allocator, bus: *Bus, stream: net.Stream) !void {
     defer stream.close(io);
 
     var read_buf: [16 * 1024]u8 = undefined; // must hold the full request header
@@ -80,13 +104,13 @@ fn handleConn(io: std.Io, alloc: std.mem.Allocator, stream: net.Stream) !void {
         else => return e,
     };
     req.head.keep_alive = false; // force `connection: close` without touching each handler
-    try route(&req, io, arena.allocator());
+    try route(&req, io, arena.allocator(), bus);
 }
 
 /// route picks the handler by path prefix, passing the remainder (the path with
 /// the prefix stripped, e.g. "/app.js" or "/sessions/3/..."). Mirrors the Go
 /// mux's prefix dispatch; each handler owns its own sub-switch.
-fn route(req: *std.http.Server.Request, io: std.Io, alloc: std.mem.Allocator) !void {
+fn route(req: *std.http.Server.Request, io: std.Io, alloc: std.mem.Allocator, bus: *Bus) !void {
     const path = stripQuery(req.head.target);
 
     if (matchPrefix(path, "/driving")) |sub| {
@@ -95,6 +119,8 @@ fn route(req: *std.http.Server.Request, io: std.Io, alloc: std.mem.Allocator) !v
         try puzzles.handle(req, io, alloc, sub);
     } else if (matchPrefix(path, "/game")) |sub| {
         try game.handle(req, io, alloc, sub);
+    } else if (matchPrefix(path, "/spike")) |sub| {
+        try spike.handle(req, io, alloc, bus, sub);
     } else {
         try http.notFound(req);
     }
