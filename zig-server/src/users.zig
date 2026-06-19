@@ -235,7 +235,7 @@ var upload_bytes_mu: Io.Mutex = .init;
 /// userUploadBytes returns the cumulative bytes a user has ever uploaded
 /// ({users_root}/{id}/upload-bytes), or 0 when absent/unparseable. Mirrors Go's
 /// UserUploadBytes.
-fn userUploadBytes(io: Io, alloc: Alloc, id: []const u8) i64 {
+pub fn userUploadBytes(io: Io, alloc: Alloc, id: []const u8) i64 {
     const path = std.fs.path.join(alloc, &.{ users_root, id, "upload-bytes" }) catch return 0;
     const b = Io.Dir.cwd().readFileAlloc(io, path, alloc, .unlimited) catch return 0;
     return std.fmt.parseInt(i64, std.mem.trim(u8, b, " \t\r\n"), 10) catch 0;
@@ -302,6 +302,49 @@ pub fn clearUserAPIKey(io: Io, alloc: Alloc, id: []const u8) void {
 /// for the settings page — agents, who have no password, are excluded).
 pub fn isMember(io: Io, alloc: Alloc, id: []const u8) bool {
     return userIsMember(io, alloc, id) catch false;
+}
+
+/// principalExists / principalAuthorized / principalIsAgent are the public
+/// admin-facing wrappers over the account-store predicates (Go's UserExists /
+/// UserIsAuthorized / IsAgent), swallowing errors to a plain bool.
+pub fn principalExists(io: Io, alloc: Alloc, id: []const u8) bool {
+    return userExists(io, alloc, id) catch false;
+}
+pub fn principalAuthorized(io: Io, alloc: Alloc, id: []const u8) bool {
+    return userIsAuthorized(io, alloc, id) catch false;
+}
+pub fn principalIsAgent(id: []const u8) bool {
+    return isAgent(id);
+}
+
+/// listUserIDs returns every account id (numeric dir under auth_root), sorted
+/// numerically. An id exists iff it has an account dir. Mirrors Go's ListUserIDs.
+pub fn listUserIDs(io: Io, alloc: Alloc) ![][]const u8 {
+    var dir = Io.Dir.cwd().openDir(io, auth_root, .{ .iterate = true }) catch return &.{};
+    defer dir.close(io);
+
+    var out: std.ArrayList([]const u8) = .empty;
+    var it = dir.iterate();
+    while (try it.next(io)) |entry| {
+        if (entry.kind != .directory) continue;
+        if (std.fmt.parseInt(i64, entry.name, 10)) |_| {} else |_| continue;
+        try out.append(alloc, try alloc.dupe(u8, entry.name));
+    }
+    const slice = try out.toOwnedSlice(alloc);
+    std.mem.sort([]const u8, slice, {}, lessThanNumericID);
+    return slice;
+}
+
+fn lessThanNumericID(_: void, a: []const u8, b: []const u8) bool {
+    return (std.fmt.parseInt(i64, a, 10) catch 0) < (std.fmt.parseInt(i64, b, 10) catch 0);
+}
+
+/// userLastSeen returns a user's last-activity time (Unix seconds), or null if
+/// never recorded. Mirrors Go's UserLastSeen ({users_root}/{id}/last-seen).
+pub fn userLastSeen(io: Io, alloc: Alloc, id: []const u8) ?i64 {
+    const path = std.fs.path.join(alloc, &.{ users_root, id, "last-seen" }) catch return null;
+    const b = Io.Dir.cwd().readFileAlloc(io, path, alloc, .unlimited) catch return null;
+    return std.fmt.parseInt(i64, std.mem.trim(u8, b, " \t\r\n"), 10) catch null;
 }
 
 fn authFileExists(io: Io, alloc: Alloc, id: []const u8, name: []const u8) !bool {

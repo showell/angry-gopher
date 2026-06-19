@@ -44,7 +44,7 @@ fn handleAPIKey(req: *Request, io: Io, alloc: Alloc, uid: []const u8) !void {
         return http.redirect(req, "/settings?keyrevoked=1");
     }
     const key = try users.setUserAPIKey(io, alloc, uid);
-    return renderKeyShown(req, io, alloc, uid, key);
+    return renderKeyShown(req, io, alloc, uid, key, "/settings", "Settings");
 }
 
 fn renderSettings(req: *Request, io: Io, alloc: Alloc, uid: []const u8) !void {
@@ -81,11 +81,14 @@ fn renderSettings(req: *Request, io: Io, alloc: Alloc, uid: []const u8) !void {
 }
 
 /// renderKeyShown displays a freshly generated key once (Go's RenderAPIKeyShown).
-/// A standalone page (not chat chrome); back link → /settings.
-fn renderKeyShown(req: *Request, io: Io, alloc: Alloc, uid: []const u8, key: []const u8) !void {
+/// A standalone page (not chat chrome); the back link points at whichever surface
+/// generated it (member /settings or the /admin panel). Shared with admin.zig.
+pub fn renderKeyShown(req: *Request, io: Io, alloc: Alloc, uid: []const u8, key: []const u8, back_url: []const u8, back_label: []const u8) !void {
     const name = try chat.htmlEscape(alloc, try users.getUserName(io, alloc, uid));
     const safe_key = try chat.htmlEscape(alloc, key);
-    const page = try std.fmt.allocPrint(alloc, key_shown_template, .{ name, safe_key });
+    const url = try chat.htmlEscape(alloc, back_url);
+    const label = try chat.htmlEscape(alloc, back_label);
+    const page = try std.fmt.allocPrint(alloc, key_shown_template, .{ url, label, name, safe_key });
     return req.respond(page, .{ .extra_headers = &.{http.html_ct} });
 }
 
@@ -130,8 +133,8 @@ const key_buttons_html =
     \\</p>
 ;
 
-// key_shown_template — Go's RenderAPIKeyShown. Two %s → user name (heading) + key.
-// {{ / }} escape the CSS braces for std.fmt; {s} are the two substitutions.
+// key_shown_template — Go's RenderAPIKeyShown. Four {s} → back URL, back label,
+// user name (heading), key. {{ / }} escape the CSS braces for std.fmt.
 const key_shown_template =
     \\<!DOCTYPE html>
     \\<html><head><meta charset="utf-8"><title>♦️ Lyn Rummy ♥️</title>
@@ -147,7 +150,7 @@ const key_shown_template =
     \\.muted {{ color: #888; font-size: 13px; }}
     \\</style>
     \\</head><body>
-    \\<nav><a href="/settings">← Settings</a></nav>
+    \\<nav><a href="{s}">← {s}</a></nav>
     \\<h1>API key for &ldquo;{s}&rdquo;</h1>
     \\<div class="box">
     \\<p class="warn"><strong>Copy this for the bot.</strong></p>

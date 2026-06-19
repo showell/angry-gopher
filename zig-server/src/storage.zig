@@ -39,6 +39,20 @@ fn userRoot(alloc: Alloc, user_id: []const u8) ![]u8 {
     return join(alloc, &.{ data_root, user_id });
 }
 
+/// userDataDir is the public form of userRoot — a player's whole game-data
+/// subtree ({data_root}/{userID}), which the admin overview walks for stats.
+pub fn userDataDir(alloc: Alloc, user_id: []const u8) ![]u8 {
+    return userRoot(alloc, user_id);
+}
+
+/// deleteUserData removes a player's entire game-data subtree (Go's
+/// lynrummy.DeleteUserData → os.RemoveAll). Refuses an empty id. Absent is OK.
+pub fn deleteUserData(io: Io, alloc: Alloc, user_id: []const u8) !void {
+    if (std.mem.trim(u8, user_id, " \t\r\n").len == 0) return error.EmptyUserID;
+    const root = try userRoot(alloc, user_id);
+    Io.Dir.cwd().deleteTree(io, root) catch {};
+}
+
 fn puzzleRoot(alloc: Alloc, user_id: []const u8) ![]u8 {
     return join(alloc, &.{ data_root, user_id, "puzzle" });
 }
