@@ -6,6 +6,7 @@
 //! Go (main.go + config.go) wires four roots from data_dir + auth_dir:
 //!   lynrummy   = {data_dir}/lynrummy   -> storage.data_root
 //!   chat       = {data_dir}/chat       -> users.session_secret_dir (the secret)
+//!                                       + chat_store.chat_root (conversations)
 //!   users      = {data_dir}/users      -> users.users_root
 //!   auth       = {auth_dir} or ~/Auth  -> users.auth_root  (shared account store)
 //!
@@ -15,6 +16,7 @@
 const std = @import("std");
 const storage = @import("storage.zig");
 const users = @import("users.zig");
+const chat_store = @import("chat_store.zig");
 
 /// load reads GOPHER_CONFIG (if set in `env`) and points storage + identity at
 /// the live tree. Strings are allocated from `alloc` (expected to be a
@@ -56,6 +58,7 @@ pub fn load(io: std.Io, alloc: std.mem.Allocator, env: std.process.Environ.Map) 
     storage.data_root = try std.fs.path.join(alloc, &.{ dd, "lynrummy" });
     users.users_root = try std.fs.path.join(alloc, &.{ dd, "users" });
     users.session_secret_dir = try std.fs.path.join(alloc, &.{ dd, "chat" });
+    chat_store.chat_root = try std.fs.path.join(alloc, &.{ dd, "chat" });
     users.auth_root = auth_dir orelse try expandHome(alloc, env, "~/Auth");
 
     std.debug.print("config: data_dir={s}  auth_root={s}\n", .{ dd, users.auth_root });

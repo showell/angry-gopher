@@ -24,6 +24,7 @@ const driving = @import("driving.zig");
 const puzzles = @import("puzzles.zig");
 const game = @import("game.zig");
 const spike = @import("spike.zig");
+const chat = @import("chat.zig");
 const Bus = @import("bus.zig").Bus;
 
 const PORT: u16 = 9001;
@@ -50,7 +51,7 @@ pub fn main(init: std.process.Init.Minimal) !void {
     var listener = try addr.listen(io, .{ .reuse_address = true });
     defer listener.deinit(io);
 
-    std.debug.print("zig-server: http://localhost:{d}  (/driving, /puzzles, /game, /spike)\n", .{PORT});
+    std.debug.print("zig-server: http://localhost:{d}  (/driving, /puzzles, /game, /spike, /chat, /channel)\n", .{PORT});
 
     // Each connection becomes a concurrent task in this group. We never await it
     // — the server runs forever and completed tasks self-reap (see file header).
@@ -121,6 +122,10 @@ fn route(req: *std.http.Server.Request, io: std.Io, alloc: std.mem.Allocator, bu
         try game.handle(req, io, alloc, sub);
     } else if (matchPrefix(path, "/spike")) |sub| {
         try spike.handle(req, io, alloc, bus, sub);
+    } else if (matchPrefix(path, "/chat")) |sub| {
+        try chat.handle(req, io, alloc, sub);
+    } else if (matchPrefix(path, "/channel")) |sub| {
+        try chat.handleChannel(req, io, alloc, sub);
     } else {
         try http.notFound(req);
     }
