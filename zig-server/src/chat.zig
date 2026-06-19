@@ -34,6 +34,7 @@ const users = @import("users.zig");
 const store = @import("chat_store.zig");
 const markdown = @import("markdown.zig");
 const docs = @import("docs.zig");
+const recent = @import("recent.zig");
 const Bus = @import("bus.zig").Bus;
 
 const Alloc = std.mem.Allocator;
@@ -73,6 +74,7 @@ const assets = [_]Asset{
     .{ .name = "chat.js", .body = @embedFile("chat_js_chat") },
     .{ .name = "notify.js", .body = @embedFile("chat_js_notify") },
     .{ .name = "docs.js", .body = @embedFile("chat_js_docs") },
+    .{ .name = "recent.js", .body = @embedFile("chat_js_recent") },
 };
 
 /// The sibling bundles the conversation page loads, in document order (after the
@@ -109,6 +111,14 @@ pub fn handle(req: *Request, io: Io, alloc: Alloc, bus: *Bus, sub: []const u8) !
     if (matchPrefix(sub, "/docs")) |rest| {
         if (rest.len == 0 or rest[0] == '/') {
             try docs.handle(req, io, alloc, bus, uid, rest);
+            return;
+        }
+    }
+    // /chat/recent[/stream] — the activity feed (recent.zig). Same boundary
+    // guard; recent.handle re-derives its own tail from the request target.
+    if (matchPrefix(sub, "/recent")) |rest| {
+        if (rest.len == 0 or rest[0] == '/') {
+            try recent.handle(req, io, alloc, uid);
             return;
         }
     }
@@ -454,7 +464,7 @@ fn sendDone(req: *Request, alloc: Alloc, is_async: bool, base: []const u8, sid: 
 /// keepaliveStream opens an SSE response that carries no events — just `: ok`
 /// then `: ping` every 25s. Used to satisfy the prod JS's secondary boot
 /// streams (notifications, sidebar) without a 404-reconnect loop.
-fn keepaliveStream(req: *Request, io: Io) !void {
+pub fn keepaliveStream(req: *Request, io: Io) !void {
     var hbuf: [1024]u8 = undefined;
     var body = req.respondStreaming(&hbuf, .{
         .respond_options = .{ .extra_headers = &http.sse_headers },
