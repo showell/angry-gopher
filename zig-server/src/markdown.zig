@@ -498,6 +498,9 @@ fn renderList(out: *std.ArrayList(u8), a: std.mem.Allocator, md: []const u8, pos
             try inner.append(a, '\n');
             try renderBlocksInto(&inner, a, item, false, depth + 1);
         } else {
+            // goldmark writes a newline after a tight <li> iff its first child
+            // is not a text paragraph (it's a nested list/quote/fence/heading).
+            if (firstItemChildIsBlock(item)) try inner.append(a, '\n');
             try renderBlocksInto(&inner, a, item, true, depth + 1);
         }
         try out.appendSlice(a, "<li>");
@@ -506,6 +509,26 @@ fn renderList(out: *std.ArrayList(u8), a: std.mem.Allocator, md: []const u8, pos
     }
     try out.appendSlice(a, if (m0.ordered) "</ol>\n" else "</ul>\n");
     return p;
+}
+
+/// firstItemChildIsBlock mirrors goldmark's list-item rule: a tight <li> gets a
+/// newline after it iff its first child is NOT a text paragraph — i.e. the item
+/// content opens with a nested list, blockquote, fence, or heading. (Loose items
+/// always get the newline; this is only consulted on the tight path.)
+fn firstItemChildIsBlock(item: []const u8) bool {
+    var pos: usize = 0;
+    while (pos < item.len) {
+        const e = lineEnd(item, pos);
+        const line = item[pos..e];
+        if (!isBlank(line)) {
+            return listMarkerAt(item, pos) != null or
+                quoteMarkerLen(line) != null or
+                parseFenceOpen(item, pos) != null or
+                atxHeading(line) != null;
+        }
+        pos = if (e < item.len) e + 1 else item.len;
+    }
+    return false;
 }
 
 /// lineStartsBlock reports whether md[pos] begins a block that a lazy paragraph
@@ -883,6 +906,18 @@ fn renderInline(out: *std.ArrayList(u8), a: std.mem.Allocator, text: []const u8)
                 _ = try inl.append(a, .{ .kind = .html, .s = buf.items });
                 i = cs.end;
                 consumed = true;
+            } else {
+                // No equal-length closing run: the whole opening run is
+                // literal. Skip past it so we don't re-enter at an interior
+                // backtick and let a shorter sub-run open a spurious span —
+                // CommonMark treats a backtick run as an atomic unit. The run
+                // stays pending as text (backticks aren't HTML-special). This
+                // is what keeps an inline ``` (e.g. discussing fences) from
+                // mangling the rest of the paragraph.
+                var n: usize = 0;
+                while (i + n < text.len and text[i + n] == '`') : (n += 1) {}
+                i += n;
+                continue;
             }
         } else if (c == '[') {
             if (try mdLinkAt(a, text, i, &rb, &rp)) |lk| {
