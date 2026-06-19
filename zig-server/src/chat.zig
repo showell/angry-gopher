@@ -13,16 +13,19 @@
 //!   POST /chat/c/<conv>/<sid>/send     post a message (fans out to live streams)
 //!   GET  /chat/c/<conv>/<sid>/raw      the literal on-disk .md bytes
 //!   {GET,POST} /channel/<name>/<topic>{,/stream,/send,/raw}   the channel equivalents
-//!   GET  /chat/notifications | /chat/sidebar/stream   keepalive-only stubs (the
-//!                                      prod JS opens these on boot; no events yet)
+//!   GET  /chat/notifications           SSE: per-uid notify strip (status pings +
+//!                                      came-online), a notifyBusKey subscriber
+//!   GET  /chat/sidebar/stream          SSE: per-uid sidebar upserts (topic-added +
+//!                                      user-online), a sidebarBusKey subscriber
 //!
 //! Live delivery within this binary: a /send append publishes a fan-out blob to
 //! bus.zig (the spike's bus, now graduated), and every open /stream on the same
 //! conv/sid drains it — so a message sent from the zig page appears live in
 //! every zig tab. The ONE gap (Steve's call): a message posted via the GO server
 //! lands on disk but NOT on this server's bus, so it shows on RELOAD, not live —
-//! cross-process append can't notify a different process's bus. (Notifications /
-//! sidebar presence are still keepalive-only stubs.)
+//! cross-process append can't notify a different process's bus. The same gap
+//! applies to the notify / sidebar / recent / images / code fanout (in-process
+//! only); presence likewise lives in this process's memory.
 //!
 //! Access mirrors Go: identity-or-/login; DM participant gate; channel
 //! membership gate; opaque 404 (no existence leak); sid path-traversal guard.
@@ -38,6 +41,7 @@ const recent = @import("recent.zig");
 const images = @import("images.zig");
 const code = @import("code.zig");
 const upload = @import("chat_upload.zig");
+const presence = @import("presence.zig");
 const Bus = @import("bus.zig").Bus;
 
 const Alloc = std.mem.Allocator;
@@ -107,6 +111,11 @@ pub fn handle(req: *Request, io: Io, alloc: Alloc, bus: *Bus, sub: []const u8) !
     const uid = try users.currentUserID(io, alloc, req);
     if (uid.len == 0) return http.redirect(req, "/login");
 
+    // Presence: any authorized page/action counts as activity — but NOT the SSE
+    // streams (a stream is the browser's job, and JS assets resolved above). On
+    // the offline→online edge this fans a came-online event to other users.
+    if (!isStreamPath(sub)) presence.markActiveAndBroadcast(io, alloc, bus, uid);
+
     if (sub.len == 0 or std.mem.eql(u8, sub, "/")) {
         try indexPage(req, io, alloc, uid);
         return;
@@ -145,14 +154,15 @@ pub fn handle(req: *Request, io: Io, alloc: Alloc, bus: *Bus, sub: []const u8) !
         try convRoute(req, io, alloc, bus, uid, rest);
         return;
     }
-    // Secondary boot streams the prod JS opens (notify.js, the left sidebar):
-    // stubbed as keepalive-only so the client connects cleanly without a
-    // 404-reconnect loop. They carry no events yet (presence / cross-conv
-    // notifications land with the write path), and the JS reacts only to real
-    // onmessage events, so an idle stream is the correct "nothing happening".
-    if (std.mem.eql(u8, sub, "/notifications") or std.mem.eql(u8, sub, "/sidebar/stream")) {
-        try keepaliveStream(req, io);
-        return;
+    // The two cross-page attention streams the prod JS opens on boot. Both are
+    // per-uid bus subscribers forwarding the published event JSON verbatim
+    // (notify: status-strip pings + came-online; sidebar: topic-added +
+    // user-online). Live-only — the server-rendered page is the backlog.
+    if (std.mem.eql(u8, sub, "/notifications")) {
+        return forwardUserStream(req, alloc, bus, try store.notifyBusKey(alloc, uid));
+    }
+    if (std.mem.eql(u8, sub, "/sidebar/stream")) {
+        return forwardUserStream(req, alloc, bus, try store.sidebarBusKey(alloc, uid));
     }
     try http.notFound(req);
 }
@@ -161,6 +171,7 @@ pub fn handle(req: *Request, io: Io, alloc: Alloc, bus: *Bus, sub: []const u8) !
 pub fn handleChannel(req: *Request, io: Io, alloc: Alloc, bus: *Bus, sub: []const u8) !void {
     const uid = try users.currentUserID(io, alloc, req);
     if (uid.len == 0) return http.redirect(req, "/login");
+    if (!isStreamPath(sub)) presence.markActiveAndBroadcast(io, alloc, bus, uid);
 
     var segs = segments(sub);
     const name_raw = segs.next() orelse return http.notFound(req);
@@ -343,9 +354,12 @@ fn buildSidebarJSON(io: Io, alloc: Alloc, uid: []const u8, kind: Kind, conv_key:
         first = false;
         const pk = try store.chatPairKey(alloc, uid, u.id);
         const active = kind == .dm and std.mem.eql(u8, pk, conv_key);
-        try b.print(alloc, "{{\"id\":\"uid:{s}\",\"label\":{f},\"url\":\"/chat/c/{s}\",\"active\":{}}}", .{
+        try b.print(alloc, "{{\"id\":\"uid:{s}\",\"label\":{f},\"url\":\"/chat/c/{s}\",\"active\":{}", .{
             u.id, std.json.fmt(u.name, .{}), pk, active,
         });
+        // online (omitempty, like Go) — drives the partner row's first-paint dot.
+        if (presence.isOnline(io, u.id)) try b.appendSlice(alloc, ",\"online\":true");
+        try b.append(alloc, '}');
     }
     for (try store.listUserChannels(io, alloc, uid)) |name| {
         if (!first) try b.append(alloc, ',');
@@ -502,21 +516,6 @@ fn sendDone(req: *Request, alloc: Alloc, is_async: bool, base: []const u8, sid: 
     return http.redirect(req, loc);
 }
 
-/// keepaliveStream opens an SSE response that carries no events — just `: ok`
-/// then `: ping` every 25s. Used to satisfy the prod JS's secondary boot
-/// streams (notifications, sidebar) without a 404-reconnect loop.
-pub fn keepaliveStream(req: *Request, io: Io) !void {
-    var hbuf: [1024]u8 = undefined;
-    var body = req.respondStreaming(&hbuf, .{
-        .respond_options = .{ .extra_headers = &http.sse_headers },
-    }) catch return;
-    http.pushFrame(&body, ": ok\n\n") catch return;
-    while (true) {
-        io.sleep(.fromSeconds(25), .awake) catch return;
-        http.pushFrame(&body, ": ping\n\n") catch return;
-    }
-}
-
 /// forwardUserStream subscribes to a per-uid cross-page bus key (recent/images)
 /// and forwards each published blob verbatim as one SSE `data:` frame. Live-only
 /// (the server-rendered page is the backlog); `: ping` keepalive when idle. The
@@ -659,6 +658,14 @@ fn segments(path: []const u8) SegIter {
 fn matchPrefix(s: []const u8, prefix: []const u8) ?[]const u8 {
     if (!std.mem.startsWith(u8, s, prefix)) return null;
     return s[prefix.len..];
+}
+
+/// isStreamPath reports whether `sub` is one of the chat subsystem's SSE streams
+/// — which presence deliberately doesn't count as activity (Go's WithPresence
+/// excludes streams). True for the per-conv/recent/images/code "…/stream" tails,
+/// the named "/notifications", and "/sidebar/stream" (caught by the suffix).
+fn isStreamPath(sub: []const u8) bool {
+    return std.mem.endsWith(u8, sub, "/stream") or std.mem.eql(u8, sub, "/notifications");
 }
 
 /// formField pulls one application/x-www-form-urlencoded field from `body`,

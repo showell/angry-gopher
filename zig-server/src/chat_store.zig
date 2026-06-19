@@ -179,10 +179,11 @@ pub fn appendMessage(io: Io, alloc: Alloc, bus: *Bus, meta: ConvMeta, conv_dir: 
     const blob = try busBlob(alloc, index, from_name, at, id, cid, markdown);
     bus.publish(key, blob);
 
-    // Cross-page fanout (Go's fanoutMessage): recent + images, per member, to
-    // their per-uid bus. Best-effort; runs under chat_mu so the lock order is
-    // chat_mu → imagesMu (leaf), matching Go. notify / topic-added stay stubs.
-    fanoutCrossPage(io, alloc, bus, meta, conv_key, sid, msg);
+    // Cross-page fanout (Go's fanoutMessage): notify + recent + images + code,
+    // per member, to their per-uid bus, plus a sidebar topic-added on the
+    // session's first message. Best-effort; runs under chat_mu so the lock order
+    // is chat_mu → imagesMu (leaf), matching Go.
+    fanoutCrossPage(io, alloc, bus, meta, conv_key, sid, msg, index);
 
     return msg;
 }
@@ -208,6 +209,15 @@ pub fn imagesBusKey(alloc: Alloc, uid: []const u8) ![]u8 {
 pub fn codeBusKey(alloc: Alloc, uid: []const u8) ![]u8 {
     return std.fmt.allocPrint(alloc, "code:{s}", .{uid});
 }
+/// notifyBusKey / sidebarBusKey are the per-uid keys for the two cross-page
+/// attention streams (Go's notifyBus / sidebarBus, keyed by recipient uid).
+/// Namespaced like the recent/images/code keys so nothing collides.
+pub fn notifyBusKey(alloc: Alloc, uid: []const u8) ![]u8 {
+    return std.fmt.allocPrint(alloc, "ntf:{s}", .{uid});
+}
+pub fn sidebarBusKey(alloc: Alloc, uid: []const u8) ![]u8 {
+    return std.fmt.allocPrint(alloc, "sb:{s}", .{uid});
+}
 
 /// convKeyBaseURL returns the URL root for a conv addressed by its storage key.
 /// DM keys contain '_' (channel names exclude it), a sufficient discriminator.
@@ -219,10 +229,12 @@ pub fn convKeyBaseURL(alloc: Alloc, conv_key: []const u8) ![]u8 {
     return std.fmt.allocPrint(alloc, "/channel/{s}", .{conv_key});
 }
 
-/// fanoutCrossPage publishes one new message to every member's recent + images
-/// feeds (Go's publishRecentForConv + publishImagesForConv). Best-effort: a
-/// failure for one member/surface is swallowed so it never blocks the write.
-fn fanoutCrossPage(io: Io, alloc: Alloc, bus: *Bus, meta: ConvMeta, conv_key: []const u8, sid: []const u8, msg: ChatMessage) void {
+/// fanoutCrossPage publishes one new message to every cross-page attention feed
+/// (Go's fanoutMessage): notify (status strip), recent (Recent page), images /
+/// code (per-user transcripts) per member, plus a sidebar topic-added on the
+/// session's FIRST message (index == 0). Best-effort: a failure for one
+/// member/surface is swallowed so it never blocks the write.
+fn fanoutCrossPage(io: Io, alloc: Alloc, bus: *Bus, meta: ConvMeta, conv_key: []const u8, sid: []const u8, msg: ChatMessage, index: usize) void {
     const base = convKeyBaseURL(alloc, conv_key) catch return;
     const rec_url = std.fmt.allocPrint(alloc, "{s}/{s}", .{ base, sid }) catch return;
     const excerpt = recent_feed.recentExcerpt(alloc, msg.markdown) catch "";
@@ -230,7 +242,38 @@ fn fanoutCrossPage(io: Io, alloc: Alloc, bus: *Bus, meta: ConvMeta, conv_key: []
     const blocks = code_store.extractCodeBlocks(alloc, msg.markdown) catch &.{};
     const src_url = images_store.imagesSourceURL(alloc, base, msg.id) catch base;
 
+    // notify text is viewer-invariant (rec_url is the per-conv topic URL, the
+    // notify-strip link). DMs read "X sent you a message on <sid>."; channels
+    // read "X posted to <key> > <sid>." Mirrors Conv.notifyText.
+    const notify_text = (if (meta.kind == .channel)
+        std.fmt.allocPrint(alloc, "{s} posted to {s} > {s}.", .{ msg.from, conv_key, sid })
+    else
+        std.fmt.allocPrint(alloc, "{s} sent you a message on {s}.", .{ msg.from, sid })) catch "";
+    // topic-added (sidebar) — only on the session's first message; viewer-invariant.
+    const topic_added = if (index == 0)
+        std.fmt.allocPrint(alloc, "{{\"kind\":\"topic-added\",\"conv\":{f},\"sid\":{f},\"url\":{f}}}", .{
+            std.json.fmt(conv_key, .{}), std.json.fmt(sid, .{}), std.json.fmt(rec_url, .{}),
+        }) catch ""
+    else
+        "";
+
     for (meta.members) |uid| {
+        // notify — every member is pinged; the open-feed suppression is in
+        // notify.js (conv+session match), so the wire carries both fields.
+        var nj: std.ArrayList(u8) = .empty;
+        nj.print(alloc, "{{\"conv\":{f},\"session\":{f},\"text\":{f},\"link_url\":{f}}}", .{
+            std.json.fmt(conv_key, .{}), std.json.fmt(sid, .{}),
+            std.json.fmt(notify_text, .{}), std.json.fmt(rec_url, .{}),
+        }) catch {};
+        if (nj.items.len > 0) {
+            if (notifyBusKey(alloc, uid)) |k| bus.publish(k, nj.items) else |_| {}
+        }
+
+        // sidebar — topic-added to every member on the first message only.
+        if (topic_added.len > 0) {
+            if (sidebarBusKey(alloc, uid)) |k| bus.publish(k, topic_added) else |_| {}
+        }
+
         // recent — every member sees the row (sender included, like Go).
         const where = recentWhere(io, alloc, meta, conv_key, uid) catch "";
         var rj: std.ArrayList(u8) = .empty;
