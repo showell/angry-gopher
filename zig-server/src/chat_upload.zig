@@ -7,13 +7,14 @@
 //! conv-base + sid + dir are supplied by the caller (chat.topicRoute), so this
 //! module is shape-agnostic.
 //!
-//! Parity gap (noted): Go also reserves a per-user lifetime upload quota
-//! (users.ReserveUploadBytes / MaxUploadLifetimeBytes). That user-layer subsystem
-//! isn't ported, so the zig server enforces only the 10 MiB per-image cap.
+//! Limits: a 10 MiB per-image cap AND the per-user lifetime quota (Go's
+//! users.ReserveUploadBytes / MaxUploadLifetimeBytes — 1 GiB cumulative,
+//! atomically reserved before the file is written).
 
 const std = @import("std");
 const Io = std.Io;
 const http = @import("http.zig");
+const users = @import("users.zig");
 
 const Alloc = std.mem.Allocator;
 const Request = std.http.Server.Request;
@@ -27,7 +28,7 @@ const max_upload_bytes = 10 << 20; // 10 MiB
 /// uploads sidecar under a random name (extension from sniffed magic bytes), and
 /// returns {url, name, width, height} JSON. width/height are 0 (we don't decode
 /// dimensions — the client omits the attrs then, per its BROWSER_WORKAROUND).
-pub fn handleUpload(req: *Request, io: Io, alloc: Alloc, conv_dir: []const u8, base: []const u8, sid: []const u8) !void {
+pub fn handleUpload(req: *Request, io: Io, alloc: Alloc, uid: []const u8, conv_dir: []const u8, base: []const u8, sid: []const u8) !void {
     if (req.head.method != .POST) return http.methodNotAllowed(req);
 
     // Read the Content-Type (for the multipart boundary) BEFORE the body — both
@@ -47,6 +48,12 @@ pub fn handleUpload(req: *Request, io: Io, alloc: Alloc, conv_dir: []const u8, b
     }
     const ext = detectImageExt(part.data) orelse
         return req.respond("unsupported image type (png, jpeg, gif, webp only)\n", .{ .status = .unsupported_media_type });
+
+    // Lifetime per-user quota (Go's users.ReserveUploadBytes) — atomic add-if-under-cap.
+    if (!users.reserveUploadBytes(io, alloc, uid, @intCast(part.data.len))) {
+        const msg = try std.fmt.allocPrint(alloc, "Upload limit reached — you've used your {d} GB image allowance.\n", .{users.max_upload_lifetime_bytes >> 30});
+        return req.respond(msg, .{ .status = .forbidden });
+    }
 
     const token = randHex16(io, alloc) catch return req.respond("token\n", .{ .status = .internal_server_error });
     const name = try std.fmt.allocPrint(alloc, "{s}.{s}", .{ token, ext });

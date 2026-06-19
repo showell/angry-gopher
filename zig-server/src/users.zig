@@ -224,6 +224,40 @@ fn touchUserImpl(io: Io, alloc: Alloc, id: []const u8) !void {
     try Io.Dir.cwd().writeFile(io, .{ .sub_path = path, .data = body });
 }
 
+/// max_upload_lifetime_bytes caps the cumulative bytes one user may ever upload —
+/// a runaway/abuse backstop, not a tight quota. Mirrors Go's MaxUploadLifetimeBytes.
+pub const max_upload_lifetime_bytes: i64 = 1 << 30; // 1 GiB per user, lifetime
+
+/// upload_bytes_mu serializes the read-add-write on the lifetime upload total so
+/// two concurrent uploads can't both slip past the cap. Mirrors Go's uploadBytesMu.
+var upload_bytes_mu: Io.Mutex = .init;
+
+/// userUploadBytes returns the cumulative bytes a user has ever uploaded
+/// ({users_root}/{id}/upload-bytes), or 0 when absent/unparseable. Mirrors Go's
+/// UserUploadBytes.
+fn userUploadBytes(io: Io, alloc: Alloc, id: []const u8) i64 {
+    const path = std.fs.path.join(alloc, &.{ users_root, id, "upload-bytes" }) catch return 0;
+    const b = Io.Dir.cwd().readFileAlloc(io, path, alloc, .unlimited) catch return 0;
+    return std.fmt.parseInt(i64, std.mem.trim(u8, b, " \t\r\n"), 10) catch 0;
+}
+
+/// reserveUploadBytes atomically adds `n` to the user's lifetime upload total if
+/// that stays within max_upload_lifetime_bytes, returning true; otherwise nothing
+/// changes and it returns false. Serialized via upload_bytes_mu. Mirrors Go's
+/// ReserveUploadBytes (the cap is the module const, as every Go caller passes).
+pub fn reserveUploadBytes(io: Io, alloc: Alloc, id: []const u8, n: i64) bool {
+    upload_bytes_mu.lockUncancelable(io);
+    defer upload_bytes_mu.unlock(io);
+    const total = userUploadBytes(io, alloc, id) + n;
+    if (total > max_upload_lifetime_bytes) return false;
+    const dir = std.fs.path.join(alloc, &.{ users_root, id }) catch return false;
+    Io.Dir.cwd().createDirPath(io, dir) catch return false;
+    const path = std.fs.path.join(alloc, &.{ dir, "upload-bytes" }) catch return false;
+    const body = std.fmt.allocPrint(alloc, "{d}", .{total}) catch return false;
+    Io.Dir.cwd().writeFile(io, .{ .sub_path = path, .data = body }) catch {};
+    return true;
+}
+
 fn authFileExists(io: Io, alloc: Alloc, id: []const u8, name: []const u8) !bool {
     const path = try std.fs.path.join(alloc, &.{ auth_root, id, name });
     _ = Io.Dir.cwd().statFile(io, path, .{}) catch return false;

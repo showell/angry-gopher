@@ -263,7 +263,7 @@ fn topicRoute(req: *Request, io: Io, alloc: Alloc, bus: *Bus, segs: *SegIter, ui
     } else if (std.mem.eql(u8, tail, "send")) {
         try sendMessage(req, io, alloc, bus, meta, dir, conv_key, base, sid, uid);
     } else if (std.mem.eql(u8, tail, "upload")) {
-        try upload.handleUpload(req, io, alloc, dir, base, sid);
+        try upload.handleUpload(req, io, alloc, uid, dir, base, sid);
     } else if (std.mem.eql(u8, tail, "pin")) {
         try pinSession(req, io, alloc, uid, conv_key, sid, true);
     } else if (std.mem.eql(u8, tail, "unpin")) {
