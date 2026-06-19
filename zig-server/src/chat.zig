@@ -36,6 +36,7 @@ const markdown = @import("markdown.zig");
 const docs = @import("docs.zig");
 const recent = @import("recent.zig");
 const images = @import("images.zig");
+const upload = @import("chat_upload.zig");
 const Bus = @import("bus.zig").Bus;
 
 const Alloc = std.mem.Allocator;
@@ -153,8 +154,10 @@ pub fn handleChannel(req: *Request, io: Io, alloc: Alloc, bus: *Bus, sub: []cons
     if (uid.len == 0) return http.redirect(req, "/login");
 
     var segs = segments(sub);
-    const name = segs.next() orelse return http.notFound(req);
-    if (!store.validChannelName(name)) return http.notFound(req);
+    const name_raw = segs.next() orelse return http.notFound(req);
+    if (!store.validChannelName(name_raw)) return http.notFound(req);
+    // Dupe out of req.head.target — a body read invalidates head strings (see convRoute).
+    const name = try alloc.dupe(u8, name_raw);
 
     const members = (try store.channelMembers(io, alloc, name)) orelse return http.notFound(req);
     if (!store.hasMember(members, uid)) return http.notFound(req);
@@ -162,12 +165,14 @@ pub fn handleChannel(req: *Request, io: Io, alloc: Alloc, bus: *Bus, sub: []cons
     const dir = try store.channelConvDir(alloc, name);
     const base = try std.fmt.allocPrint(alloc, "/channel/{s}", .{name});
 
-    const topic = segs.next() orelse {
+    const topic_raw = segs.next() orelse {
         const def = try store.defaultSession(io, alloc, dir);
         if (def.len == 0) return http.notFound(req);
         return http.redirect(req, try std.fmt.allocPrint(alloc, "{s}/{s}", .{ base, def }));
     };
-    if (!store.validSessionID(topic)) return http.notFound(req);
+    if (!store.validSessionID(topic_raw)) return http.notFound(req);
+    // Dupe out of req.head.target — a body read invalidates head strings (see convRoute).
+    const topic = try alloc.dupe(u8, topic_raw);
 
     const title = try std.fmt.allocPrint(alloc, "#{s}: {s}", .{ name, topic });
     const meta = store.ConvMeta{ .kind = .channel, .members = members };
@@ -177,18 +182,23 @@ pub fn handleChannel(req: *Request, io: Io, alloc: Alloc, bus: *Bus, sub: []cons
 /// convRoute handles /chat/c/<conv>[/<sid>[/raw|stream|send]]. `rest` is after "/c/".
 fn convRoute(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8, rest: []const u8) !void {
     var segs = segments(rest);
-    const conv = segs.next() orelse return http.notFound(req);
-    if (!try store.chatKeyParticipant(alloc, conv, uid)) return http.notFound(req);
+    const conv_raw = segs.next() orelse return http.notFound(req);
+    if (!try store.chatKeyParticipant(alloc, conv_raw, uid)) return http.notFound(req);
+    // Dupe path-derived strings out of req.head.target: a body read (send/upload)
+    // calls head.invalidateStrings(), which would otherwise clobber them — and
+    // they're used AFTER that read (response URLs, fanout keys, member uids).
+    const conv = try alloc.dupe(u8, conv_raw);
 
     const dir = try store.dmConvDir(alloc, conv);
     const base = try std.fmt.allocPrint(alloc, "/chat/c/{s}", .{conv});
 
-    const sid = segs.next() orelse {
+    const sid_raw = segs.next() orelse {
         const def = try store.defaultSession(io, alloc, dir);
         if (def.len == 0) return http.notFound(req);
         return http.redirect(req, try std.fmt.allocPrint(alloc, "{s}/{s}", .{ base, def }));
     };
-    if (!store.validSessionID(sid)) return http.notFound(req);
+    if (!store.validSessionID(sid_raw)) return http.notFound(req);
+    const sid = try alloc.dupe(u8, sid_raw);
 
     const partner = try partnerName(io, alloc, conv, uid);
     const title = try std.fmt.allocPrint(alloc, "Chat w/{s}: {s}", .{ partner, sid });
@@ -209,17 +219,19 @@ fn topicRoute(req: *Request, io: Io, alloc: Alloc, bus: *Bus, segs: *SegIter, ui
         try conversationPage(req, io, alloc, uid, kind, conv_key, base, dir, sid, title);
         return;
     };
-    // /uploads/<file> — serve an uploaded image (two trailing segments).
+    // /uploads/<file> — serve a stored image (two trailing segments).
     if (std.mem.eql(u8, tail, "uploads")) {
         const file = segs.next() orelse return http.notFound(req);
         if (segs.next() != null) return http.notFound(req);
-        return serveUpload(req, io, alloc, dir, sid, file);
+        return upload.serveUpload(req, io, alloc, dir, sid, file);
     }
     if (segs.next() != null) return http.notFound(req); // the rest take no further segment
     if (std.mem.eql(u8, tail, "stream")) {
         try streamTranscript(req, io, alloc, bus, dir, conv_key, sid, uid);
     } else if (std.mem.eql(u8, tail, "send")) {
         try sendMessage(req, io, alloc, bus, meta, dir, conv_key, base, sid, uid);
+    } else if (std.mem.eql(u8, tail, "upload")) {
+        try upload.handleUpload(req, io, alloc, dir, base, sid);
     } else if (std.mem.eql(u8, tail, "raw")) {
         try rawTranscript(req, io, alloc, dir, sid);
     } else {
@@ -558,39 +570,6 @@ fn rawTranscript(req: *Request, io: Io, alloc: Alloc, conv_dir: []const u8, sid:
         .{ .name = "content-type", .value = "text/plain; charset=utf-8" },
         .{ .name = "x-content-type-options", .value = "nosniff" },
     } });
-}
-
-/// serveUpload serves an uploaded image at <…>/<sid>/uploads/<file> so the
-/// Images page's `<img src>` resolves (Go's serveUploadedFile). The name must be
-/// 32 hex + .(png|jpg|gif|webp); content-type by extension; immutable private
-/// cache; nosniff. Path = conv_dir/sessions/<sid>.uploads/<file>.
-fn serveUpload(req: *Request, io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8, file: []const u8) !void {
-    const ct = uploadContentType(file) orelse return http.notFound(req);
-    const updir = try std.fmt.allocPrint(alloc, "{s}.uploads", .{sid});
-    const path = try std.fs.path.join(alloc, &.{ conv_dir, "sessions", updir, file });
-    const data = Io.Dir.cwd().readFileAlloc(io, path, alloc, .unlimited) catch return http.notFound(req);
-    try req.respond(data, .{ .extra_headers = &.{
-        .{ .name = "content-type", .value = ct },
-        .{ .name = "cache-control", .value = "private, max-age=31536000, immutable" },
-        .{ .name = "x-content-type-options", .value = "nosniff" },
-    } });
-}
-
-/// uploadContentType validates the upload filename (Go's chatUploadName:
-/// `^[a-f0-9]{32}\.(png|jpg|gif|webp)$`) and returns its MIME, or null if invalid
-/// — doubling as the path-traversal guard for the file segment.
-fn uploadContentType(name: []const u8) ?[]const u8 {
-    const dot = std.mem.lastIndexOfScalar(u8, name, '.') orelse return null;
-    if (dot != 32) return null;
-    for (name[0..32]) |c| {
-        if (!((c >= '0' and c <= '9') or (c >= 'a' and c <= 'f'))) return null;
-    }
-    const ext = name[dot + 1 ..];
-    if (std.mem.eql(u8, ext, "png")) return "image/png";
-    if (std.mem.eql(u8, ext, "jpg")) return "image/jpeg";
-    if (std.mem.eql(u8, ext, "gif")) return "image/gif";
-    if (std.mem.eql(u8, ext, "webp")) return "image/webp";
-    return null;
 }
 
 /// serveAsset serves an embedded client bundle by file name (no leading slash).
