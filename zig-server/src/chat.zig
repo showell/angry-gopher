@@ -36,6 +36,7 @@ const markdown = @import("markdown.zig");
 const docs = @import("docs.zig");
 const recent = @import("recent.zig");
 const images = @import("images.zig");
+const code = @import("code.zig");
 const upload = @import("chat_upload.zig");
 const Bus = @import("bus.zig").Bus;
 
@@ -79,6 +80,7 @@ const assets = [_]Asset{
     .{ .name = "recent.js", .body = @embedFile("chat_js_recent") },
     .{ .name = "styles.js", .body = @embedFile("chat_js_styles") },
     .{ .name = "images.js", .body = @embedFile("chat_js_images") },
+    .{ .name = "code.js", .body = @embedFile("chat_js_code") },
 };
 
 /// The sibling bundles the conversation page loads, in document order (after the
@@ -129,6 +131,13 @@ pub fn handle(req: *Request, io: Io, alloc: Alloc, bus: *Bus, sub: []const u8) !
     if (matchPrefix(sub, "/images")) |rest| {
         if (rest.len == 0 or rest[0] == '/') {
             try images.handle(req, io, alloc, bus, uid, rest);
+            return;
+        }
+    }
+    // /chat/code[/stream] — the per-user code transcript (code.zig).
+    if (matchPrefix(sub, "/code")) |rest| {
+        if (rest.len == 0 or rest[0] == '/') {
+            try code.handle(req, io, alloc, bus, uid, rest);
             return;
         }
     }

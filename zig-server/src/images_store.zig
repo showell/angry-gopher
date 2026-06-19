@@ -79,9 +79,12 @@ pub fn parseImagesFile(alloc: Alloc, text: []const u8) ![]ImagesEntry {
     return out.toOwnedSlice(alloc);
 }
 
-const Header = struct { from: []const u8, at: []const u8, source_id: []const u8, conv: []const u8 };
+/// Header is one transcript entry's parsed metadata line. Shared with code_store
+/// (the Images and Code feeds use the identical `Sent by … at … source MSG_… in …:`
+/// header), so parseHeader lives here as the single parser.
+pub const Header = struct { from: []const u8, at: []const u8, source_id: []const u8, conv: []const u8 };
 
-fn parseHeader(line: []const u8) ?Header {
+pub fn parseHeader(line: []const u8) ?Header {
     if (!std.mem.startsWith(u8, line, "Sent by ") or !std.mem.endsWith(u8, line, ":")) return null;
     const inner = line["Sent by ".len .. line.len - 1]; // strip prefix + trailing ':'
     const sep = ", source MSG_";

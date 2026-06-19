@@ -25,6 +25,7 @@ const Bus = bus_mod.Bus;
 const users = @import("users.zig");
 const recent_feed = @import("recent_feed.zig");
 const images_store = @import("images_store.zig");
+const code_store = @import("code_store.zig");
 
 /// chat_root mirrors Go's ChatDataRoot ({data_dir}/chat). config.zig overrides
 /// this at startup; the default is repo-relative-from-zig-server like the others.
@@ -204,6 +205,9 @@ pub fn recentBusKey(alloc: Alloc, uid: []const u8) ![]u8 {
 pub fn imagesBusKey(alloc: Alloc, uid: []const u8) ![]u8 {
     return std.fmt.allocPrint(alloc, "img:{s}", .{uid});
 }
+pub fn codeBusKey(alloc: Alloc, uid: []const u8) ![]u8 {
+    return std.fmt.allocPrint(alloc, "code:{s}", .{uid});
+}
 
 /// convKeyBaseURL returns the URL root for a conv addressed by its storage key.
 /// DM keys contain '_' (channel names exclude it), a sufficient discriminator.
@@ -223,6 +227,7 @@ fn fanoutCrossPage(io: Io, alloc: Alloc, bus: *Bus, meta: ConvMeta, conv_key: []
     const rec_url = std.fmt.allocPrint(alloc, "{s}/{s}", .{ base, sid }) catch return;
     const excerpt = recent_feed.recentExcerpt(alloc, msg.markdown) catch "";
     const tags = images_store.extractImageTags(alloc, msg.markdown) catch &.{};
+    const blocks = code_store.extractCodeBlocks(alloc, msg.markdown) catch &.{};
     const src_url = images_store.imagesSourceURL(alloc, base, msg.id) catch base;
 
     for (meta.members) |uid| {
@@ -245,6 +250,21 @@ fn fanoutCrossPage(io: Io, alloc: Alloc, bus: *Bus, meta: ConvMeta, conv_key: []
             var ij: std.ArrayList(u8) = .empty;
             images_store.encodeImagesEvent(&ij, alloc, e, src_url) catch continue;
             if (imagesBusKey(alloc, uid)) |k| bus.publish(k, ij.items) else |_| {}
+        }
+
+        // code — only when the message carried fenced code blocks.
+        if (blocks.len > 0) {
+            const e = code_store.CodeEntry{
+                .source_id = msg.id,
+                .from = msg.from,
+                .conv = conv_key,
+                .at = msg.date,
+                .blocks = blocks,
+            };
+            code_store.appendCodeEntry(io, alloc, uid, e) catch continue;
+            var cj: std.ArrayList(u8) = .empty;
+            code_store.encodeCodeEvent(&cj, alloc, e, src_url) catch continue;
+            if (codeBusKey(alloc, uid)) |k| bus.publish(k, cj.items) else |_| {}
         }
     }
 }
