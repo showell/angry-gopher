@@ -23,6 +23,7 @@ const http = @import("http.zig");
 const storage = @import("storage.zig");
 const users = @import("users.zig");
 const session_meta = @import("session_meta.zig");
+const timefmt = @import("timefmt.zig");
 
 const Alloc = std.mem.Allocator;
 const Request = std.http.Server.Request;
@@ -313,7 +314,7 @@ fn formatEastern(alloc: Alloc, unix_secs: i64) ![]u8 {
     const local = unix_secs + offset;
     const days = @divFloor(local, 86400);
     const tod = local - days * 86400; // [0, 86399]
-    const civil = civilFromDays(days);
+    const civil = timefmt.civilFromDays(days);
 
     const hour24: u32 = @intCast(@divFloor(tod, 3600));
     const minute: u32 = @intCast(@divFloor(@mod(tod, 3600), 60));
@@ -329,7 +330,7 @@ fn formatEastern(alloc: Alloc, unix_secs: i64) ![]u8 {
 /// inEasternDST reports whether a UTC instant falls in US Eastern Daylight Time
 /// under the post-2007 rule.
 fn inEasternDST(unix_secs: i64) bool {
-    const civil = civilFromDays(@divFloor(unix_secs, 86400));
+    const civil = timefmt.civilFromDays(@divFloor(unix_secs, 86400));
     const year = civil.year;
     // DST starts 2nd Sunday of March at 02:00 EST = 07:00 UTC.
     const dst_start = daysFromCivil(year, 3, nthSunday(year, 3, 2)) * 86400 + 7 * 3600;
@@ -350,23 +351,6 @@ fn nthSunday(year: i64, month: u32, n: u32) u32 {
 /// (Hinnant; valid for z >= 0, which covers every real timestamp here).
 fn weekday(z: i64) u32 {
     return @intCast(@mod(z + 4, 7));
-}
-
-const Civil = struct { year: i64, month: u32, day: u32 };
-
-/// civilFromDays converts days-since-1970-01-01 to a civil date (Howard
-/// Hinnant's algorithm).
-fn civilFromDays(days: i64) Civil {
-    const z = days + 719468;
-    const era = @divFloor(if (z >= 0) z else z - 146096, 146097);
-    const doe = z - era * 146097; // [0, 146096]
-    const yoe = @divFloor(doe - @divFloor(doe, 1460) + @divFloor(doe, 36524) - @divFloor(doe, 146096), 365); // [0,399]
-    const y = yoe + era * 400;
-    const doy = doe - (365 * yoe + @divFloor(yoe, 4) - @divFloor(yoe, 100)); // [0,365]
-    const mp = @divFloor(5 * doy + 2, 153); // [0,11]
-    const d = doy - @divFloor(153 * mp + 2, 5) + 1; // [1,31]
-    const m = if (mp < 10) mp + 3 else mp - 9; // [1,12]
-    return .{ .year = y + @as(i64, if (m <= 2) 1 else 0), .month = @intCast(m), .day = @intCast(d) };
 }
 
 /// daysFromCivil converts a civil date to days-since-1970-01-01 (Hinnant).

@@ -123,9 +123,9 @@ fn route(req: *std.http.Server.Request, io: std.Io, alloc: std.mem.Allocator, bu
     } else if (matchPrefix(path, "/spike")) |sub| {
         try spike.handle(req, io, alloc, bus, sub);
     } else if (matchPrefix(path, "/chat")) |sub| {
-        try chat.handle(req, io, alloc, sub);
+        try chat.handle(req, io, alloc, bus, sub);
     } else if (matchPrefix(path, "/channel")) |sub| {
-        try chat.handleChannel(req, io, alloc, sub);
+        try chat.handleChannel(req, io, alloc, bus, sub);
     } else {
         try http.notFound(req);
     }

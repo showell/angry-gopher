@@ -2,26 +2,27 @@
 //! client the Go server serves — the embedded chat/*.js bundles, byte-for-byte —
 //! on the SAME on-disk chat tree Go writes (chat_store.chat_root). The real
 //! client boots on the zig server, paints the transcript from the SSE backlog,
-//! and stays open on a keepalive stream.
+//! sends messages, and receives them live.
 //!
 //! Routes (mirror Go's URL space, server/chat/chat.go):
-//!   GET /chat                          index: the conversations this user can see
-//!   GET /chat/<file>.js                an embedded client bundle (colors.js, …)
-//!   GET /chat/c/<conv>                 303 → its default topic
-//!   GET /chat/c/<conv>/<sid>           the conversation page (boots the prod JS)
-//!   GET /chat/c/<conv>/<sid>/stream    SSE: backlog replay + keepalive
-//!   GET /chat/c/<conv>/<sid>/raw       the literal on-disk .md bytes
-//!   GET /channel/<name>/<topic>{,/stream,/raw}   the channel equivalents
-//!   GET /chat/notifications | /chat/sidebar/stream   keepalive-only stubs (the
+//!   GET  /chat                         index: the conversations this user can see
+//!   GET  /chat/<file>.js               an embedded client bundle (colors.js, …)
+//!   GET  /chat/c/<conv>                303 → its default topic
+//!   GET  /chat/c/<conv>/<sid>          the conversation page (boots the prod JS)
+//!   GET  /chat/c/<conv>/<sid>/stream   SSE: backlog replay + LIVE fan-out
+//!   POST /chat/c/<conv>/<sid>/send     post a message (fans out to live streams)
+//!   GET  /chat/c/<conv>/<sid>/raw      the literal on-disk .md bytes
+//!   {GET,POST} /channel/<name>/<topic>{,/stream,/send,/raw}   the channel equivalents
+//!   GET  /chat/notifications | /chat/sidebar/stream   keepalive-only stubs (the
 //!                                      prod JS opens these on boot; no events yet)
 //!
-//! What's NOT here yet (next increment): the WRITE path (/send) and live
-//! fan-out. The /stream replays the backlog Go wrote and then holds the
-//! connection open with `: ping` keepalives — it does NOT yet deliver live
-//! messages, because that needs zig to own the append (so it can publish to the
-//! bus); Go's cross-process append can't notify this server's bus. So today the
-//! transcript PAINTS (the visible milestone) and updates on reload; live + send
-//! land together next, graduating bus.zig into this stream.
+//! Live delivery within this binary: a /send append publishes a fan-out blob to
+//! bus.zig (the spike's bus, now graduated), and every open /stream on the same
+//! conv/sid drains it — so a message sent from the zig page appears live in
+//! every zig tab. The ONE gap (Steve's call): a message posted via the GO server
+//! lands on disk but NOT on this server's bus, so it shows on RELOAD, not live —
+//! cross-process append can't notify a different process's bus. (Notifications /
+//! sidebar presence are still keepalive-only stubs.)
 //!
 //! Access mirrors Go: identity-or-/login; DM participant gate; channel
 //! membership gate; opaque 404 (no existence leak); sid path-traversal guard.
@@ -32,9 +33,13 @@ const http = @import("http.zig");
 const users = @import("users.zig");
 const store = @import("chat_store.zig");
 const markdown = @import("markdown.zig");
+const Bus = @import("bus.zig").Bus;
 
 const Alloc = std.mem.Allocator;
 const Request = std.http.Server.Request;
+
+/// Max bytes for one posted message (Go's maxChatMessageBytes).
+const max_message_bytes = 64 * 1024;
 
 /// Asset version (cache-buster). The Go server uses the git sha / "dev"; the zig
 /// port has no build stamp, so a constant suffices — it only namespaces the
@@ -82,7 +87,7 @@ const page_scripts = [_][]const u8{
 // ── dispatch ───────────────────────────────────────────────────────────────
 
 /// handle dispatches /chat/* — `sub` keeps its leading '/' (empty for "/chat").
-pub fn handle(req: *Request, io: Io, alloc: Alloc, sub: []const u8) !void {
+pub fn handle(req: *Request, io: Io, alloc: Alloc, bus: *Bus, sub: []const u8) !void {
     // Embedded JS assets are public (the prod server serves them unauthenticated
     // too — they're static client code); resolve them before the identity gate.
     if (sub.len > 1 and std.mem.endsWith(u8, sub, ".js")) {
@@ -97,7 +102,7 @@ pub fn handle(req: *Request, io: Io, alloc: Alloc, sub: []const u8) !void {
         return;
     }
     if (matchPrefix(sub, "/c/")) |rest| {
-        try convRoute(req, io, alloc, uid, rest);
+        try convRoute(req, io, alloc, bus, uid, rest);
         return;
     }
     // Secondary boot streams the prod JS opens (notify.js, the left sidebar):
@@ -113,7 +118,7 @@ pub fn handle(req: *Request, io: Io, alloc: Alloc, sub: []const u8) !void {
 }
 
 /// handleChannel dispatches /channel/* — `sub` is the path after "/channel".
-pub fn handleChannel(req: *Request, io: Io, alloc: Alloc, sub: []const u8) !void {
+pub fn handleChannel(req: *Request, io: Io, alloc: Alloc, bus: *Bus, sub: []const u8) !void {
     const uid = try users.currentUserID(io, alloc, req);
     if (uid.len == 0) return http.redirect(req, "/login");
 
@@ -135,11 +140,11 @@ pub fn handleChannel(req: *Request, io: Io, alloc: Alloc, sub: []const u8) !void
     if (!store.validSessionID(topic)) return http.notFound(req);
 
     const title = try std.fmt.allocPrint(alloc, "#{s}: {s}", .{ name, topic });
-    try topicRoute(req, io, alloc, &segs, uid, .channel, name, base, dir, topic, title);
+    try topicRoute(req, io, alloc, bus, &segs, uid, .channel, name, base, dir, topic, title);
 }
 
-/// convRoute handles /chat/c/<conv>[/<sid>[/raw|stream]]. `rest` is after "/c/".
-fn convRoute(req: *Request, io: Io, alloc: Alloc, uid: []const u8, rest: []const u8) !void {
+/// convRoute handles /chat/c/<conv>[/<sid>[/raw|stream|send]]. `rest` is after "/c/".
+fn convRoute(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8, rest: []const u8) !void {
     var segs = segments(rest);
     const conv = segs.next() orelse return http.notFound(req);
     if (!try store.chatKeyParticipant(alloc, conv, uid)) return http.notFound(req);
@@ -156,13 +161,13 @@ fn convRoute(req: *Request, io: Io, alloc: Alloc, uid: []const u8, rest: []const
 
     const partner = try partnerName(io, alloc, conv, uid);
     const title = try std.fmt.allocPrint(alloc, "Chat w/{s}: {s}", .{ partner, sid });
-    try topicRoute(req, io, alloc, &segs, uid, .dm, conv, base, dir, sid, title);
+    try topicRoute(req, io, alloc, bus, &segs, uid, .dm, conv, base, dir, sid, title);
 }
 
 /// topicRoute fans out the per-topic tail shared by DMs and channels: the bare
-/// page, `/stream` (SSE), or `/raw` (literal bytes). `segs` is positioned just
-/// after the sid. `title` is the top-bar conversation title.
-fn topicRoute(req: *Request, io: Io, alloc: Alloc, segs: *SegIter, uid: []const u8, kind: Kind, conv_key: []const u8, base: []const u8, dir: []const u8, sid: []const u8, title: []const u8) !void {
+/// page, `/stream` (SSE), `/send` (POST a message), or `/raw` (literal bytes).
+/// `segs` is positioned just after the sid. `title` is the top-bar title.
+fn topicRoute(req: *Request, io: Io, alloc: Alloc, bus: *Bus, segs: *SegIter, uid: []const u8, kind: Kind, conv_key: []const u8, base: []const u8, dir: []const u8, sid: []const u8, title: []const u8) !void {
     const tail = segs.next();
     if (tail == null) {
         try conversationPage(req, io, alloc, uid, kind, conv_key, base, dir, sid, title);
@@ -171,7 +176,9 @@ fn topicRoute(req: *Request, io: Io, alloc: Alloc, segs: *SegIter, uid: []const 
     if (segs.next() != null) return http.notFound(req); // at most one trailing segment
     const t = tail.?;
     if (std.mem.eql(u8, t, "stream")) {
-        try streamTranscript(req, io, alloc, dir, sid, uid);
+        try streamTranscript(req, io, alloc, bus, dir, conv_key, sid, uid);
+    } else if (std.mem.eql(u8, t, "send")) {
+        try sendMessage(req, io, alloc, bus, dir, conv_key, base, sid, uid);
     } else if (std.mem.eql(u8, t, "raw")) {
         try rawTranscript(req, io, alloc, dir, sid);
     } else {
@@ -265,39 +272,131 @@ fn buildSidebarJSON(io: Io, alloc: Alloc, uid: []const u8, kind: Kind, conv_key:
 
 // ── SSE stream (backlog replay + keepalive) ──────────────────────────────────
 
-/// streamTranscript serves /<…>/<sid>/stream: the `backlog-size` preamble, then
-/// each message since the replay cursor as an `id:`+`data:` event, then holds
-/// the connection open with `: ping` keepalives. Mirrors Go's serveChatStream
-/// MINUS live fan-out (see the file header — that lands with the write path).
-fn streamTranscript(req: *Request, io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8, uid: []const u8) !void {
+/// streamTranscript serves /<…>/<sid>/stream — Go's serveChatStream: the
+/// `backlog-size` preamble, the backlog replay from the cursor, then LIVE
+/// messages off the bus (a message posted to this conv/sid via /send fans out
+/// here), with `: ping` keepalives when idle. openStream decodes the backlog and
+/// subscribes atomically, so each message lands in EITHER the backlog OR the
+/// live stream — never both, never neither.
+fn streamTranscript(req: *Request, io: Io, alloc: Alloc, bus: *Bus, conv_dir: []const u8, conv_key: []const u8, sid: []const u8, uid: []const u8) !void {
     const since = parseSince(req);
     const viewer = try users.getUserName(io, alloc, uid);
-    const raw = (try store.rawSession(io, alloc, conv_dir, sid)) orelse "";
-    const msgs = try store.decodeChatFile(alloc, raw);
+
+    const stream = try store.openStream(io, alloc, bus, conv_dir, conv_key, sid);
+    defer bus.close(stream.sub);
 
     var hbuf: [4096]u8 = undefined;
     var body = req.respondStreaming(&hbuf, .{
         .respond_options = .{ .extra_headers = &http.sse_headers },
     }) catch return;
 
-    const backlog_size = if (msgs.len > since) msgs.len - since else 0;
+    const backlog_size = if (stream.backlog.len > since) stream.backlog.len - since else 0;
     {
         const pre = try std.fmt.allocPrint(alloc, "event: backlog-size\ndata: {d}\n\n", .{backlog_size});
         http.pushFrame(&body, pre) catch return;
     }
 
     var i: usize = since;
-    while (i < msgs.len) : (i += 1) {
-        const frame = try wireFrame(alloc, i, msgs[i], viewer);
+    while (i < stream.backlog.len) : (i += 1) {
+        const m = stream.backlog[i];
+        const frame = try emitWire(alloc, i, m.from, m.date, m.markdown, m.id, std.mem.eql(u8, m.from, viewer), "");
         http.pushFrame(&body, frame) catch return;
     }
 
-    // Hold open with keepalives. No live messages yet (no zig writer) — the
-    // ping keeps the EventSource from reconnect-looping until the client leaves.
+    // Live: drain the subscriber. `.msg` is one fan-out blob (caller frees);
+    // `.idle` is the keepalive window — send a ping so a vanished client is
+    // noticed (the failed write ends the loop and the defer closes the sub).
     while (true) {
-        io.sleep(.fromSeconds(25), .awake) catch return;
-        http.pushFrame(&body, ": ping\n\n") catch return;
+        switch (stream.sub.next()) {
+            .msg => |raw| {
+                defer stream.sub.alloc.free(raw);
+                const frame = liveFrame(alloc, raw, viewer) catch continue;
+                http.pushFrame(&body, frame) catch return;
+            },
+            .idle => http.pushFrame(&body, ": ping\n\n") catch return,
+        }
     }
+}
+
+/// The fan-out blob shape appendMessage publishes (every wire field except the
+/// per-viewer `mine` and the per-stream-rendered `html`).
+const BusMsg = struct {
+    index: usize,
+    from: []const u8,
+    at: []const u8,
+    id: []const u8,
+    cid: []const u8,
+    markdown: []const u8,
+};
+
+/// liveFrame turns one bus blob into this viewer's SSE event: parse it, render
+/// html from the markdown, compute `mine` against the viewer's name, emit.
+fn liveFrame(alloc: Alloc, raw: []const u8, viewer: []const u8) ![]const u8 {
+    const parsed = try std.json.parseFromSlice(BusMsg, alloc, raw, .{});
+    defer parsed.deinit();
+    const m = parsed.value;
+    return emitWire(alloc, m.index, m.from, m.at, m.markdown, m.id, std.mem.eql(u8, m.from, viewer), m.cid);
+}
+
+/// emitWire builds one SSE message event (Go's writeChatEvent + chatWireMsg):
+/// `id: <index>` then a `data:` line of JSON. `html` is rendered from `markdown`
+/// via the markdown port; `mine` is viewer-relative; `cid` is included only when
+/// non-empty (Go's omitempty — set on live broadcasts, absent on backlog).
+fn emitWire(alloc: Alloc, index: usize, from: []const u8, at: []const u8, md: []const u8, id: []const u8, mine: bool, cid: []const u8) ![]const u8 {
+    const html = try markdown.render(alloc, md);
+    if (cid.len > 0) {
+        return std.fmt.allocPrint(alloc, "id: {d}\ndata: {{\"index\":{d},\"from\":{f},\"at\":{f},\"html\":{f},\"markdown\":{f},\"id\":{f},\"mine\":{},\"cid\":{f}}}\n\n", .{
+            index,                   index,
+            std.json.fmt(from, .{}), std.json.fmt(at, .{}),
+            std.json.fmt(html, .{}), std.json.fmt(md, .{}),
+            std.json.fmt(id, .{}),   mine,
+            std.json.fmt(cid, .{}),
+        });
+    }
+    return std.fmt.allocPrint(alloc, "id: {d}\ndata: {{\"index\":{d},\"from\":{f},\"at\":{f},\"html\":{f},\"markdown\":{f},\"id\":{f},\"mine\":{}}}\n\n", .{
+        index,                   index,
+        std.json.fmt(from, .{}), std.json.fmt(at, .{}),
+        std.json.fmt(html, .{}), std.json.fmt(md, .{}),
+        std.json.fmt(id, .{}),   mine,
+    });
+}
+
+// ── send (write path) ────────────────────────────────────────────────────────
+
+/// sendMessage handles POST /<…>/<sid>/send — Go's HandleChatSend/
+/// serveSendMessage: parse the markdown+cid form, append (which fans out live to
+/// every open stream on this conv/sid), and report. `X-Chat-Async: 1` → 204;
+/// a plain form post → 303 back to the topic. Empty / DROP_ON_FLOOR bodies report
+/// success without appending (the client's no-echo path).
+fn sendMessage(req: *Request, io: Io, alloc: Alloc, bus: *Bus, conv_dir: []const u8, conv_key: []const u8, base: []const u8, sid: []const u8, uid: []const u8) !void {
+    if (req.head.method != .POST) return http.methodNotAllowed(req);
+
+    // Read headers BEFORE the body: reading the request body advances the
+    // std.http.Server reader past `received_head`, after which iterateHeaders
+    // asserts. So capture X-Chat-Async first, then drain the body.
+    const is_async = if (header(req, "x-chat-async")) |v| std.mem.eql(u8, v, "1") else false;
+
+    const body = (try http.readLimitedBody(req, alloc, max_message_bytes)) orelse return;
+    const md_raw = (try formField(alloc, body, "markdown")) orelse "";
+    const cid = (try formField(alloc, body, "cid")) orelse "";
+    const md = std.mem.trim(u8, md_raw, " \t\r\n");
+
+    if (md.len == 0 or std.mem.startsWith(u8, md, "DROP_ON_FLOOR")) {
+        return sendDone(req, alloc, is_async, base, sid);
+    }
+
+    const from_name = try users.getUserName(io, alloc, uid);
+    _ = try store.appendMessage(io, alloc, bus, conv_dir, conv_key, sid, from_name, uid, md, cid);
+    users.touchUser(io, alloc, uid);
+    return sendDone(req, alloc, is_async, base, sid);
+}
+
+/// sendDone reports a (possibly no-op) send: 204 for async fetch callers, else a
+/// 303 back to the topic page (the no-JS form-post fallback).
+fn sendDone(req: *Request, alloc: Alloc, is_async: bool, base: []const u8, sid: []const u8) !void {
+    if (is_async) return req.respond("", .{ .status = .no_content });
+    const loc = try std.fmt.allocPrint(alloc, "{s}/{s}", .{ base, sid });
+    return http.redirect(req, loc);
 }
 
 /// keepaliveStream opens an SSE response that carries no events — just `: ok`
@@ -432,6 +531,47 @@ fn segments(path: []const u8) SegIter {
 fn matchPrefix(s: []const u8, prefix: []const u8) ?[]const u8 {
     if (!std.mem.startsWith(u8, s, prefix)) return null;
     return s[prefix.len..];
+}
+
+/// formField pulls one application/x-www-form-urlencoded field from `body`,
+/// percent/plus-decoded, or null when absent. Field names here ("markdown",
+/// "cid") are literal, so only the value is decoded.
+fn formField(alloc: Alloc, body: []const u8, name: []const u8) !?[]const u8 {
+    var it = std.mem.splitScalar(u8, body, '&');
+    while (it.next()) |pair| {
+        const eq = std.mem.indexOfScalar(u8, pair, '=') orelse continue;
+        if (std.mem.eql(u8, pair[0..eq], name)) return try urlDecode(alloc, pair[eq + 1 ..]);
+    }
+    return null;
+}
+
+/// urlDecode reverses form-urlencoding: '+' → space, '%XX' → byte, else verbatim.
+fn urlDecode(alloc: Alloc, s: []const u8) ![]u8 {
+    var out: std.ArrayList(u8) = .empty;
+    var i: usize = 0;
+    while (i < s.len) : (i += 1) {
+        const c = s[i];
+        if (c == '+') {
+            try out.append(alloc, ' ');
+        } else if (c == '%' and i + 2 < s.len) {
+            const hi = hexVal(s[i + 1]);
+            const lo = hexVal(s[i + 2]);
+            if (hi != null and lo != null) {
+                try out.append(alloc, hi.? * 16 + lo.?);
+                i += 2;
+            } else try out.append(alloc, c);
+        } else try out.append(alloc, c);
+    }
+    return out.toOwnedSlice(alloc);
+}
+
+fn hexVal(c: u8) ?u8 {
+    return switch (c) {
+        '0'...'9' => c - '0',
+        'a'...'f' => c - 'a' + 10,
+        'A'...'F' => c - 'A' + 10,
+        else => null,
+    };
 }
 
 /// queryValue pulls one (un-decoded) query parameter from a raw request target.

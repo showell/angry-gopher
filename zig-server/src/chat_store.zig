@@ -19,10 +19,20 @@
 const std = @import("std");
 const Io = std.Io;
 const Alloc = std.mem.Allocator;
+const timefmt = @import("timefmt.zig");
+const bus_mod = @import("bus.zig");
+const Bus = bus_mod.Bus;
 
 /// chat_root mirrors Go's ChatDataRoot ({data_dir}/chat). config.zig overrides
 /// this at startup; the default is repo-relative-from-zig-server like the others.
 pub var chat_root: []const u8 = "../games/lynrummy/chat-data";
+
+/// chat_mu serializes the read-count-then-append on the write path AND the
+/// read-backlog-then-subscribe on the stream path — mirroring Go's chatMu. It's
+/// what makes a message land in EITHER the backlog OR the live stream, never
+/// both and never neither (see appendMessage / openStream). Process-local, like
+/// Go's; the cross-process race with the Go server is the same one Go has.
+var chat_mu: Io.Mutex = .init;
 
 /// sep joins message blocks on disk: blank line, 13 hyphens, newline. A body
 /// line that would collide with it is backslash-escaped (see unescapeBodyLine).
@@ -103,6 +113,141 @@ fn unescapeBodyLine(line: []const u8) []const u8 {
     while (k < line.len and line[k] == '\\') k += 1;
     if (k >= 1 and std.mem.eql(u8, line[k..], dashes)) return line[1..];
     return line;
+}
+
+// ── write path + live fan-out (port of chat_conv.go AppendMessage) ───────────
+
+/// Stream is the result of openStream: the decoded backlog + a live Subscriber.
+/// The caller replays backlog[since..] then drains the subscriber, and MUST pair
+/// this with `bus.close(sub)` when the connection ends.
+pub const Stream = struct {
+    backlog: []ChatMessage,
+    sub: *bus_mod.Subscriber,
+};
+
+/// openStream is Go's Conv.OpenStream: under chat_mu, decode the session backlog
+/// AND register a live subscriber on `<conv_key>/<sid>` — atomically, so no
+/// message slips between "what's in the backlog" and "what the subscriber sees".
+/// A message appended concurrently is delivered exactly once (backlog xor live).
+pub fn openStream(io: Io, alloc: Alloc, bus: *Bus, conv_dir: []const u8, conv_key: []const u8, sid: []const u8) !Stream {
+    const path = try sessionMdPath(alloc, conv_dir, sid);
+    const key = try std.fmt.allocPrint(alloc, "{s}/{s}", .{ conv_key, sid });
+
+    chat_mu.lockUncancelable(io);
+    defer chat_mu.unlock(io);
+
+    const raw = Io.Dir.cwd().readFileAlloc(io, path, alloc, .unlimited) catch "";
+    const msgs = try decodeChatFile(alloc, raw);
+    const sub = try bus.open(key);
+    return .{ .backlog = msgs, .sub = sub };
+}
+
+/// appendMessage stores one message (Go's Conv.AppendMessage, write half): under
+/// chat_mu, read the current count → the message index, encode the on-disk block
+/// (with separator + body-line escaping), append it, write the .lastauthor
+/// companion, then publish a fan-out blob to the live subscribers — all under the
+/// one lock so a concurrent openStream can't double- or zero-count it. Returns
+/// the stored message (id + server-stamped date). NO render here: the blob
+/// carries raw markdown; each stream renders per-viewer (matching Go).
+pub fn appendMessage(io: Io, alloc: Alloc, bus: *Bus, conv_dir: []const u8, conv_key: []const u8, sid: []const u8, from_name: []const u8, from_id: []const u8, markdown: []const u8, cid: []const u8) !ChatMessage {
+    const path = try sessionMdPath(alloc, conv_dir, sid);
+
+    chat_mu.lockUncancelable(io);
+    defer chat_mu.unlock(io);
+
+    const raw = Io.Dir.cwd().readFileAlloc(io, path, alloc, .unlimited) catch "";
+    const existing = try decodeChatFile(alloc, raw);
+    const index = existing.len;
+
+    const id = try std.fmt.allocPrint(alloc, "{s}_{d}", .{ sid, index + 1 });
+    const at = try timefmt.formatRFC3339UTC(alloc, nowUnix(io));
+    const msg = ChatMessage{ .id = id, .from = from_name, .date = at, .markdown = markdown };
+
+    const stored = try chatStoredForm(alloc, index, msg);
+    try appendRawBytes(io, path, stored);
+
+    // Last-author companion (best-effort, like Go).
+    const la = try std.fs.path.join(alloc, &.{ conv_dir, "sessions", try std.fmt.allocPrint(alloc, "{s}.lastauthor", .{sid}) });
+    Io.Dir.cwd().writeFile(io, .{ .sub_path = la, .data = from_id }) catch {};
+
+    // Fan out to live subscribers on this conv/sid (best-effort).
+    const key = try std.fmt.allocPrint(alloc, "{s}/{s}", .{ conv_key, sid });
+    const blob = try busBlob(alloc, index, from_name, at, id, cid, markdown);
+    bus.publish(key, blob);
+
+    return msg;
+}
+
+/// busBlob is the internal fan-out payload — every field a stream needs to build
+/// its per-viewer wire event EXCEPT `mine` (viewer-relative) and `html` (rendered
+/// per-stream from `markdown`). JSON for robustness over arbitrary markdown bytes.
+fn busBlob(alloc: Alloc, index: usize, from: []const u8, at: []const u8, id: []const u8, cid: []const u8, markdown: []const u8) ![]u8 {
+    return std.fmt.allocPrint(alloc, "{{\"index\":{d},\"from\":{f},\"at\":{f},\"id\":{f},\"cid\":{f},\"markdown\":{f}}}", .{
+        index,
+        std.json.fmt(from, .{}),
+        std.json.fmt(at, .{}),
+        std.json.fmt(id, .{}),
+        std.json.fmt(cid, .{}),
+        std.json.fmt(markdown, .{}),
+    });
+}
+
+/// chatStoredForm is exactly what message `index` contributes to the file: its
+/// block, preceded by `sep` for every message after the first. Mirrors Go's.
+fn chatStoredForm(alloc: Alloc, index: usize, msg: ChatMessage) ![]u8 {
+    const block = try encodeChatBlock(alloc, msg);
+    if (index == 0) return block;
+    return std.fmt.allocPrint(alloc, "{s}{s}", .{ sep, block });
+}
+
+/// encodeChatBlock renders one message to its on-disk block: the MSG_ id line,
+/// the from/date header, a blank line, then the body with each line escaped
+/// against a separator collision. Mirrors Go's encodeChatBlock.
+fn encodeChatBlock(alloc: Alloc, msg: ChatMessage) ![]u8 {
+    var body: std.ArrayList(u8) = .empty;
+    var it = std.mem.splitScalar(u8, msg.markdown, '\n');
+    var first = true;
+    while (it.next()) |line| {
+        if (!first) try body.append(alloc, '\n');
+        first = false;
+        try body.appendSlice(alloc, try escapeBodyLine(alloc, line));
+    }
+    return std.fmt.allocPrint(alloc, "MSG_{s}\nfrom: {s}\ndate: {s}\n\n{s}", .{ msg.id, msg.from, msg.date, body.items });
+}
+
+/// escapeBodyLine protects a body line that would collide with `sep` by
+/// prepending a backslash — Go's escapeBodyLine, matching `^\\*-------------$`
+/// (ZERO or more backslashes then exactly 13 hyphens). Symmetric with
+/// unescapeBodyLine.
+fn escapeBodyLine(alloc: Alloc, line: []const u8) ![]const u8 {
+    var k: usize = 0;
+    while (k < line.len and line[k] == '\\') k += 1;
+    if (std.mem.eql(u8, line[k..], dashes)) return std.fmt.allocPrint(alloc, "\\{s}", .{line});
+    return line;
+}
+
+/// appendRawBytes appends `bytes` verbatim at the current end of `path` (creating
+/// parents). Unlike appendTextLine it adds no newline — chatStoredForm is already
+/// the exact bytes. Single positional write at EOF; see the top-of-file atomicity
+/// note (chat_mu serializes this process; the file is only ever appended).
+fn appendRawBytes(io: Io, path: []const u8, bytes: []const u8) !void {
+    try mkParentDirs(io, path);
+    var file = try Io.Dir.cwd().createFile(io, path, .{ .truncate = false });
+    defer file.close(io);
+    const st = try file.stat(io);
+    try file.writePositionalAll(io, bytes, st.size);
+}
+
+/// mkParentDirs creates the directory containing `path` (mkdir -p). No-op when
+/// `path` has no directory component.
+fn mkParentDirs(io: Io, path: []const u8) !void {
+    if (std.fs.path.dirname(path)) |d| {
+        try Io.Dir.cwd().createDirPath(io, d);
+    }
+}
+
+fn nowUnix(io: Io) i64 {
+    return @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
 }
 
 const Cut = struct { before: []const u8, after: []const u8 };
