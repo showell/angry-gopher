@@ -4,8 +4,11 @@
 //! server/lynrummy). build.zig is the embed.go analog (where assets are wired).
 //!
 //! Concurrency is the simplest thing that works: one connection at a time,
-//! blocking. Fine for these static/append surfaces; the real concurrency +
-//! fan-out decision is deferred until Chat's SSE forces it.
+//! blocking, and ONE request per connection (keep-alive off — see handleConn for
+//! why: a browser opens parallel connections for a multi-script page like /game,
+//! and a held-open keep-alive connection would starve them on this single thread).
+//! Fine for these static/append surfaces; the real concurrency + fan-out + keep-
+//! alive/streaming decision is deferred until Chat's SSE forces it.
 //!
 //! Run:  ops/build_driving && ops/build_elm   (from repo root, for the bundles)
 //!       cd zig-server && zig build run        (serves on http://localhost:9001)
@@ -50,9 +53,16 @@ pub fn main(init: std.process.Init.Minimal) !void {
     }
 }
 
-/// handleConn serves every request on one keep-alive connection until the client
-/// closes it (HttpConnectionClosing) or an error ends it. A per-connection arena
-/// (reset per request) backs the request-scoped allocations.
+/// handleConn serves exactly ONE request, then closes the connection
+/// (`connection: close`). Keep-alive is deliberately OFF: the accept loop is
+/// single-threaded, so a held-open idle keep-alive connection would block it
+/// while a browser's OTHER parallel connections starve in the accept backlog.
+/// That deadlocked /game — its page pulls three scripts at once (engine.js,
+/// elm.js, engine_glue.js), so the browser opens parallel connections; /driving
+/// and /puzzles load a single script each and never tripped it. One-request-per-
+/// connection keeps the simple blocking model working for every surface here.
+/// Real concurrency + keep-alive (and streaming) wait for chat's SSE to force
+/// the model decision — see the file header.
 fn handleConn(io: std.Io, alloc: std.mem.Allocator, stream: net.Stream) !void {
     defer stream.close(io);
 
@@ -65,14 +75,12 @@ fn handleConn(io: std.Io, alloc: std.mem.Allocator, stream: net.Stream) !void {
     var arena = std.heap.ArenaAllocator.init(alloc);
     defer arena.deinit();
 
-    while (true) {
-        _ = arena.reset(.retain_capacity);
-        var req = server.receiveHead() catch |e| switch (e) {
-            error.HttpConnectionClosing => return,
-            else => return e,
-        };
-        try route(&req, io, arena.allocator());
-    }
+    var req = server.receiveHead() catch |e| switch (e) {
+        error.HttpConnectionClosing => return,
+        else => return e,
+    };
+    req.head.keep_alive = false; // force `connection: close` without touching each handler
+    try route(&req, io, arena.allocator());
 }
 
 /// route picks the handler by path prefix, passing the remainder (the path with
