@@ -62,6 +62,8 @@ pub fn build(b: *std.Build) void {
         .{ .name = "chat_js_notify", .path = "../chat/notify.js" },
         .{ .name = "chat_js_docs", .path = "../chat/docs.js" },
         .{ .name = "chat_js_recent", .path = "../chat/recent.js" },
+        .{ .name = "chat_js_styles", .path = "../chat/styles.js" },
+        .{ .name = "chat_js_images", .path = "../chat/images.js" },
     };
     for (assets) |a| {
         root.addAnonymousImport(a.name, .{ .root_source_file = b.path(a.path) });

@@ -22,6 +22,9 @@ const Alloc = std.mem.Allocator;
 const timefmt = @import("timefmt.zig");
 const bus_mod = @import("bus.zig");
 const Bus = bus_mod.Bus;
+const users = @import("users.zig");
+const recent_feed = @import("recent_feed.zig");
+const images_store = @import("images_store.zig");
 
 /// chat_root mirrors Go's ChatDataRoot ({data_dir}/chat). config.zig overrides
 /// this at startup; the default is repo-relative-from-zig-server like the others.
@@ -149,7 +152,7 @@ pub fn openStream(io: Io, alloc: Alloc, bus: *Bus, conv_dir: []const u8, conv_ke
 /// one lock so a concurrent openStream can't double- or zero-count it. Returns
 /// the stored message (id + server-stamped date). NO render here: the blob
 /// carries raw markdown; each stream renders per-viewer (matching Go).
-pub fn appendMessage(io: Io, alloc: Alloc, bus: *Bus, conv_dir: []const u8, conv_key: []const u8, sid: []const u8, from_name: []const u8, from_id: []const u8, markdown: []const u8, cid: []const u8) !ChatMessage {
+pub fn appendMessage(io: Io, alloc: Alloc, bus: *Bus, meta: ConvMeta, conv_dir: []const u8, conv_key: []const u8, sid: []const u8, from_name: []const u8, from_id: []const u8, markdown: []const u8, cid: []const u8) !ChatMessage {
     const path = try sessionMdPath(alloc, conv_dir, sid);
 
     chat_mu.lockUncancelable(io);
@@ -175,7 +178,88 @@ pub fn appendMessage(io: Io, alloc: Alloc, bus: *Bus, conv_dir: []const u8, conv
     const blob = try busBlob(alloc, index, from_name, at, id, cid, markdown);
     bus.publish(key, blob);
 
+    // Cross-page fanout (Go's fanoutMessage): recent + images, per member, to
+    // their per-uid bus. Best-effort; runs under chat_mu so the lock order is
+    // chat_mu → imagesMu (leaf), matching Go. notify / topic-added stay stubs.
+    fanoutCrossPage(io, alloc, bus, meta, conv_key, sid, msg);
+
     return msg;
+}
+
+/// ConvKind discriminates the two conversation shapes for the fanout (DM "where"
+/// names the other party; channel "where" names the channel).
+pub const ConvKind = enum { dm, channel };
+
+/// ConvMeta carries what the cross-page fanout needs that the storage path
+/// doesn't otherwise know: the conv kind and its member uids (recipients).
+pub const ConvMeta = struct { kind: ConvKind, members: []const []const u8 };
+
+/// recentBusKey / imagesBusKey are the per-uid bus keys for the cross-page
+/// streams. Namespaced so they can't collide with the per-conv "<key>/<sid>"
+/// stream keys. Builder lives here (the publisher) so the stream handlers
+/// subscribe with the SAME function — no string drift.
+pub fn recentBusKey(alloc: Alloc, uid: []const u8) ![]u8 {
+    return std.fmt.allocPrint(alloc, "rec:{s}", .{uid});
+}
+pub fn imagesBusKey(alloc: Alloc, uid: []const u8) ![]u8 {
+    return std.fmt.allocPrint(alloc, "img:{s}", .{uid});
+}
+
+/// convKeyBaseURL returns the URL root for a conv addressed by its storage key.
+/// DM keys contain '_' (channel names exclude it), a sufficient discriminator.
+/// Mirrors Go's convKeyBaseURL.
+pub fn convKeyBaseURL(alloc: Alloc, conv_key: []const u8) ![]u8 {
+    if (std.mem.indexOfScalar(u8, conv_key, '_') != null) {
+        return std.fmt.allocPrint(alloc, "/chat/c/{s}", .{conv_key});
+    }
+    return std.fmt.allocPrint(alloc, "/channel/{s}", .{conv_key});
+}
+
+/// fanoutCrossPage publishes one new message to every member's recent + images
+/// feeds (Go's publishRecentForConv + publishImagesForConv). Best-effort: a
+/// failure for one member/surface is swallowed so it never blocks the write.
+fn fanoutCrossPage(io: Io, alloc: Alloc, bus: *Bus, meta: ConvMeta, conv_key: []const u8, sid: []const u8, msg: ChatMessage) void {
+    const base = convKeyBaseURL(alloc, conv_key) catch return;
+    const rec_url = std.fmt.allocPrint(alloc, "{s}/{s}", .{ base, sid }) catch return;
+    const excerpt = recent_feed.recentExcerpt(alloc, msg.markdown) catch "";
+    const tags = images_store.extractImageTags(alloc, msg.markdown) catch &.{};
+    const src_url = images_store.imagesSourceURL(alloc, base, msg.id) catch base;
+
+    for (meta.members) |uid| {
+        // recent — every member sees the row (sender included, like Go).
+        const where = recentWhere(io, alloc, meta, conv_key, uid) catch "";
+        var rj: std.ArrayList(u8) = .empty;
+        recent_feed.encodeChatEvent(&rj, alloc, msg.date, rec_url, sid, where, msg.from, excerpt) catch continue;
+        if (recentBusKey(alloc, uid)) |k| bus.publish(k, rj.items) else |_| {}
+
+        // images — only when the message carried <img> tags.
+        if (tags.len > 0) {
+            const e = images_store.ImagesEntry{
+                .source_id = msg.id,
+                .from = msg.from,
+                .conv = conv_key,
+                .at = msg.date,
+                .images = tags,
+            };
+            images_store.appendImagesEntry(io, alloc, uid, e) catch continue;
+            var ij: std.ArrayList(u8) = .empty;
+            images_store.encodeImagesEvent(&ij, alloc, e, src_url) catch continue;
+            if (imagesBusKey(alloc, uid)) |k| bus.publish(k, ij.items) else |_| {}
+        }
+    }
+}
+
+/// recentWhere is the per-recipient muted-context label: a channel names itself
+/// ("in <name>"); a DM names the OTHER party ("with <name>"). Mirrors Go's
+/// Conv.recentWhereFor.
+fn recentWhere(io: Io, alloc: Alloc, meta: ConvMeta, conv_key: []const u8, viewer: []const u8) ![]const u8 {
+    if (meta.kind == .channel) return std.fmt.allocPrint(alloc, "in {s}", .{conv_key});
+    var other: []const u8 = "";
+    for (meta.members) |m| {
+        if (!std.mem.eql(u8, m, viewer)) other = m;
+    }
+    const name = try users.getUserName(io, alloc, other);
+    return std.fmt.allocPrint(alloc, "with {s}", .{name});
 }
 
 /// busBlob is the internal fan-out payload — every field a stream needs to build

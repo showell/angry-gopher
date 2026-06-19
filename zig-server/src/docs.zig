@@ -29,6 +29,7 @@ const docs_store = @import("docs_store.zig");
 const markdown = @import("markdown.zig");
 const chat = @import("chat.zig");
 const timefmt = @import("timefmt.zig");
+const feed = @import("recent_feed.zig");
 const Bus = @import("bus.zig").Bus;
 
 const Alloc = std.mem.Allocator;
@@ -47,8 +48,8 @@ pub fn handle(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8, r
     }
     const seg = rest[1..]; // rest starts with '/'
     if (std.mem.eql(u8, seg, "list")) return docsList(req, io, alloc, uid);
-    if (std.mem.eql(u8, seg, "new")) return docsNew(req, io, alloc, uid);
-    if (std.mem.eql(u8, seg, "save")) return docsSave(req, io, alloc, uid);
+    if (std.mem.eql(u8, seg, "new")) return docsNew(req, io, alloc, bus, uid);
+    if (std.mem.eql(u8, seg, "save")) return docsSave(req, io, alloc, bus, uid);
     if (std.mem.eql(u8, seg, "render")) return docsRender(req, alloc);
     if (std.mem.eql(u8, seg, "post")) return docsPost(req, io, alloc, bus, uid);
 
@@ -189,20 +190,21 @@ fn docsList(req: *Request, io: Io, alloc: Alloc, uid: []const u8) !void {
 
 /// docsNew creates a new empty doc and 303s to it. Title is required (else back
 /// to /chat/docs). Mirrors Go's HandleDocsNew.
-fn docsNew(req: *Request, io: Io, alloc: Alloc, uid: []const u8) !void {
+fn docsNew(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8) !void {
     if (req.head.method != .POST) return http.redirect(req, "/chat/docs");
     const body = (try http.readLimitedBody(req, alloc, max_doc_bytes)) orelse return;
     const title_raw = (try chat.formField(alloc, body, "title")) orelse "";
     const title = std.mem.trim(u8, title_raw, " \t\r\n");
     if (title.len == 0) return http.redirect(req, "/chat/docs");
     const slug = try docs_store.createUserDoc(io, alloc, uid, title);
+    publishDocRecent(io, alloc, bus, uid, slug);
     return http.redirect(req, try std.fmt.allocPrint(alloc, "/chat/docs/{s}", .{slug}));
 }
 
 /// docsSave overwrites an existing doc's body (autosave target) → 204. A POST for
 /// an unknown slug is rejected (autosave must not spawn a doc from a stale URL).
 /// Mirrors Go's HandleDocsSave.
-fn docsSave(req: *Request, io: Io, alloc: Alloc, uid: []const u8) !void {
+fn docsSave(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8) !void {
     if (req.head.method != .POST) return http.methodNotAllowed(req);
     const body = (try http.readLimitedBody(req, alloc, max_doc_bytes)) orelse return;
     const slug_raw = (try chat.formField(alloc, body, "slug")) orelse "";
@@ -211,7 +213,20 @@ fn docsSave(req: *Request, io: Io, alloc: Alloc, uid: []const u8) !void {
     if (!docs_store.validDocSlug(slug)) return req.respond("bad slug\n", .{ .status = .bad_request });
     docs_store.writeUserDoc(io, alloc, uid, slug, doc_body) catch
         return req.respond("save failed\n", .{ .status = .internal_server_error });
+    publishDocRecent(io, alloc, bus, uid, slug);
     return req.respond("", .{ .status = .no_content });
+}
+
+/// publishDocRecent pings the author's own recent feed when they create or save a
+/// doc (Go's PublishDocRecent). Docs are per-user, so no fan-out — only the
+/// author sees it. Best-effort.
+fn publishDocRecent(io: Io, alloc: Alloc, bus: *Bus, uid: []const u8, slug: []const u8) void {
+    const at = timefmt.formatRFC3339UTC(alloc, nowUnix(io)) catch return;
+    const title = docs_store.titleFromSlug(alloc, slug) catch return;
+    var j: std.ArrayList(u8) = .empty;
+    feed.encodeDocEvent(&j, alloc, at, slug, title) catch return;
+    const key = store.recentBusKey(alloc, uid) catch return;
+    bus.publish(key, j.items);
 }
 
 /// docsRender renders posted markdown to HTML for the live-preview pane, reusing
@@ -248,7 +263,11 @@ fn docsPost(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8) !vo
 
     const conv_dir = try store.dmConvDir(alloc, conv);
     const from_name = try users.getUserName(io, alloc, uid);
-    const msg = try store.appendMessage(io, alloc, bus, conv_dir, conv, sid, from_name, uid, doc_body, "");
+    const members = try alloc.alloc([]const u8, 2);
+    members[0] = uid;
+    members[1] = partner;
+    const meta = store.ConvMeta{ .kind = .dm, .members = members };
+    const msg = try store.appendMessage(io, alloc, bus, meta, conv_dir, conv, sid, from_name, uid, doc_body, "");
     users.touchUser(io, alloc, uid);
 
     const out = try std.fmt.allocPrint(alloc, "{{\"conv\":{f},\"session\":{f},\"id\":{f}}}", .{

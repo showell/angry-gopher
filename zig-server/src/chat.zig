@@ -35,6 +35,7 @@ const store = @import("chat_store.zig");
 const markdown = @import("markdown.zig");
 const docs = @import("docs.zig");
 const recent = @import("recent.zig");
+const images = @import("images.zig");
 const Bus = @import("bus.zig").Bus;
 
 const Alloc = std.mem.Allocator;
@@ -75,6 +76,8 @@ const assets = [_]Asset{
     .{ .name = "notify.js", .body = @embedFile("chat_js_notify") },
     .{ .name = "docs.js", .body = @embedFile("chat_js_docs") },
     .{ .name = "recent.js", .body = @embedFile("chat_js_recent") },
+    .{ .name = "styles.js", .body = @embedFile("chat_js_styles") },
+    .{ .name = "images.js", .body = @embedFile("chat_js_images") },
 };
 
 /// The sibling bundles the conversation page loads, in document order (after the
@@ -114,11 +117,17 @@ pub fn handle(req: *Request, io: Io, alloc: Alloc, bus: *Bus, sub: []const u8) !
             return;
         }
     }
-    // /chat/recent[/stream] — the activity feed (recent.zig). Same boundary
-    // guard; recent.handle re-derives its own tail from the request target.
+    // /chat/recent[/stream] — the activity feed (recent.zig).
     if (matchPrefix(sub, "/recent")) |rest| {
         if (rest.len == 0 or rest[0] == '/') {
-            try recent.handle(req, io, alloc, uid);
+            try recent.handle(req, io, alloc, bus, uid, rest);
+            return;
+        }
+    }
+    // /chat/images[/stream] — the per-user image transcript (images.zig).
+    if (matchPrefix(sub, "/images")) |rest| {
+        if (rest.len == 0 or rest[0] == '/') {
+            try images.handle(req, io, alloc, bus, uid, rest);
             return;
         }
     }
@@ -161,7 +170,8 @@ pub fn handleChannel(req: *Request, io: Io, alloc: Alloc, bus: *Bus, sub: []cons
     if (!store.validSessionID(topic)) return http.notFound(req);
 
     const title = try std.fmt.allocPrint(alloc, "#{s}: {s}", .{ name, topic });
-    try topicRoute(req, io, alloc, bus, &segs, uid, .channel, name, base, dir, topic, title);
+    const meta = store.ConvMeta{ .kind = .channel, .members = members };
+    try topicRoute(req, io, alloc, bus, &segs, uid, meta, .channel, name, base, dir, topic, title);
 }
 
 /// convRoute handles /chat/c/<conv>[/<sid>[/raw|stream|send]]. `rest` is after "/c/".
@@ -182,25 +192,35 @@ fn convRoute(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8, re
 
     const partner = try partnerName(io, alloc, conv, uid);
     const title = try std.fmt.allocPrint(alloc, "Chat w/{s}: {s}", .{ partner, sid });
-    try topicRoute(req, io, alloc, bus, &segs, uid, .dm, conv, base, dir, sid, title);
+    // DM members are the two uids in the (already participant-checked) pair key.
+    const us = std.mem.indexOfScalar(u8, conv, '_').?;
+    const members = try alloc.alloc([]const u8, 2);
+    members[0] = conv[0..us];
+    members[1] = conv[us + 1 ..];
+    const meta = store.ConvMeta{ .kind = .dm, .members = members };
+    try topicRoute(req, io, alloc, bus, &segs, uid, meta, .dm, conv, base, dir, sid, title);
 }
 
 /// topicRoute fans out the per-topic tail shared by DMs and channels: the bare
 /// page, `/stream` (SSE), `/send` (POST a message), or `/raw` (literal bytes).
 /// `segs` is positioned just after the sid. `title` is the top-bar title.
-fn topicRoute(req: *Request, io: Io, alloc: Alloc, bus: *Bus, segs: *SegIter, uid: []const u8, kind: Kind, conv_key: []const u8, base: []const u8, dir: []const u8, sid: []const u8, title: []const u8) !void {
-    const tail = segs.next();
-    if (tail == null) {
+fn topicRoute(req: *Request, io: Io, alloc: Alloc, bus: *Bus, segs: *SegIter, uid: []const u8, meta: store.ConvMeta, kind: Kind, conv_key: []const u8, base: []const u8, dir: []const u8, sid: []const u8, title: []const u8) !void {
+    const tail = segs.next() orelse {
         try conversationPage(req, io, alloc, uid, kind, conv_key, base, dir, sid, title);
         return;
+    };
+    // /uploads/<file> — serve an uploaded image (two trailing segments).
+    if (std.mem.eql(u8, tail, "uploads")) {
+        const file = segs.next() orelse return http.notFound(req);
+        if (segs.next() != null) return http.notFound(req);
+        return serveUpload(req, io, alloc, dir, sid, file);
     }
-    if (segs.next() != null) return http.notFound(req); // at most one trailing segment
-    const t = tail.?;
-    if (std.mem.eql(u8, t, "stream")) {
+    if (segs.next() != null) return http.notFound(req); // the rest take no further segment
+    if (std.mem.eql(u8, tail, "stream")) {
         try streamTranscript(req, io, alloc, bus, dir, conv_key, sid, uid);
-    } else if (std.mem.eql(u8, t, "send")) {
-        try sendMessage(req, io, alloc, bus, dir, conv_key, base, sid, uid);
-    } else if (std.mem.eql(u8, t, "raw")) {
+    } else if (std.mem.eql(u8, tail, "send")) {
+        try sendMessage(req, io, alloc, bus, meta, dir, conv_key, base, sid, uid);
+    } else if (std.mem.eql(u8, tail, "raw")) {
         try rawTranscript(req, io, alloc, dir, sid);
     } else {
         try http.notFound(req);
@@ -430,7 +450,7 @@ fn emitWire(alloc: Alloc, index: usize, from: []const u8, at: []const u8, md: []
 /// every open stream on this conv/sid), and report. `X-Chat-Async: 1` → 204;
 /// a plain form post → 303 back to the topic. Empty / DROP_ON_FLOOR bodies report
 /// success without appending (the client's no-echo path).
-fn sendMessage(req: *Request, io: Io, alloc: Alloc, bus: *Bus, conv_dir: []const u8, conv_key: []const u8, base: []const u8, sid: []const u8, uid: []const u8) !void {
+fn sendMessage(req: *Request, io: Io, alloc: Alloc, bus: *Bus, meta: store.ConvMeta, conv_dir: []const u8, conv_key: []const u8, base: []const u8, sid: []const u8, uid: []const u8) !void {
     if (req.head.method != .POST) return http.methodNotAllowed(req);
 
     // Read headers BEFORE the body: reading the request body advances the
@@ -448,7 +468,7 @@ fn sendMessage(req: *Request, io: Io, alloc: Alloc, bus: *Bus, conv_dir: []const
     }
 
     const from_name = try users.getUserName(io, alloc, uid);
-    _ = try store.appendMessage(io, alloc, bus, conv_dir, conv_key, sid, from_name, uid, md, cid);
+    _ = try store.appendMessage(io, alloc, bus, meta, conv_dir, conv_key, sid, from_name, uid, md, cid);
     users.touchUser(io, alloc, uid);
     return sendDone(req, alloc, is_async, base, sid);
 }
@@ -473,6 +493,31 @@ pub fn keepaliveStream(req: *Request, io: Io) !void {
     while (true) {
         io.sleep(.fromSeconds(25), .awake) catch return;
         http.pushFrame(&body, ": ping\n\n") catch return;
+    }
+}
+
+/// forwardUserStream subscribes to a per-uid cross-page bus key (recent/images)
+/// and forwards each published blob verbatim as one SSE `data:` frame. Live-only
+/// (the server-rendered page is the backlog); `: ping` keepalive when idle. The
+/// published blob is already the exact event JSON the page's client parses.
+pub fn forwardUserStream(req: *Request, alloc: Alloc, bus: *Bus, key: []const u8) !void {
+    const sub = try bus.open(key);
+    defer bus.close(sub);
+
+    var hbuf: [4096]u8 = undefined;
+    var body = req.respondStreaming(&hbuf, .{
+        .respond_options = .{ .extra_headers = &http.sse_headers },
+    }) catch return;
+
+    while (true) {
+        switch (sub.next()) {
+            .msg => |blob| {
+                defer sub.alloc.free(blob);
+                const frame = std.fmt.allocPrint(alloc, "data: {s}\n\n", .{blob}) catch continue;
+                http.pushFrame(&body, frame) catch return;
+            },
+            .idle => http.pushFrame(&body, ": ping\n\n") catch return,
+        }
     }
 }
 
@@ -513,6 +558,39 @@ fn rawTranscript(req: *Request, io: Io, alloc: Alloc, conv_dir: []const u8, sid:
         .{ .name = "content-type", .value = "text/plain; charset=utf-8" },
         .{ .name = "x-content-type-options", .value = "nosniff" },
     } });
+}
+
+/// serveUpload serves an uploaded image at <…>/<sid>/uploads/<file> so the
+/// Images page's `<img src>` resolves (Go's serveUploadedFile). The name must be
+/// 32 hex + .(png|jpg|gif|webp); content-type by extension; immutable private
+/// cache; nosniff. Path = conv_dir/sessions/<sid>.uploads/<file>.
+fn serveUpload(req: *Request, io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8, file: []const u8) !void {
+    const ct = uploadContentType(file) orelse return http.notFound(req);
+    const updir = try std.fmt.allocPrint(alloc, "{s}.uploads", .{sid});
+    const path = try std.fs.path.join(alloc, &.{ conv_dir, "sessions", updir, file });
+    const data = Io.Dir.cwd().readFileAlloc(io, path, alloc, .unlimited) catch return http.notFound(req);
+    try req.respond(data, .{ .extra_headers = &.{
+        .{ .name = "content-type", .value = ct },
+        .{ .name = "cache-control", .value = "private, max-age=31536000, immutable" },
+        .{ .name = "x-content-type-options", .value = "nosniff" },
+    } });
+}
+
+/// uploadContentType validates the upload filename (Go's chatUploadName:
+/// `^[a-f0-9]{32}\.(png|jpg|gif|webp)$`) and returns its MIME, or null if invalid
+/// — doubling as the path-traversal guard for the file segment.
+fn uploadContentType(name: []const u8) ?[]const u8 {
+    const dot = std.mem.lastIndexOfScalar(u8, name, '.') orelse return null;
+    if (dot != 32) return null;
+    for (name[0..32]) |c| {
+        if (!((c >= '0' and c <= '9') or (c >= 'a' and c <= 'f'))) return null;
+    }
+    const ext = name[dot + 1 ..];
+    if (std.mem.eql(u8, ext, "png")) return "image/png";
+    if (std.mem.eql(u8, ext, "jpg")) return "image/jpeg";
+    if (std.mem.eql(u8, ext, "gif")) return "image/gif";
+    if (std.mem.eql(u8, ext, "webp")) return "image/webp";
+    return null;
 }
 
 /// serveAsset serves an embedded client bundle by file name (no leading slash).
