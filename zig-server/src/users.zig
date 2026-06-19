@@ -258,7 +258,7 @@ fn decodeB64(alloc: Alloc, s: []const u8) ![]u8 {
     return out;
 }
 
-fn encodeB64(alloc: Alloc, s: []const u8) ![]u8 {
+fn encodeB64(alloc: Alloc, s: []const u8) ![]const u8 {
     const out = try alloc.alloc(u8, b64.Encoder.calcSize(s.len));
     return b64.Encoder.encode(out, s);
 }

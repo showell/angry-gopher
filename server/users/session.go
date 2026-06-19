@@ -55,20 +55,33 @@ func sessionSecret() []byte {
 	return sessionSecretVal
 }
 
-func sessionMAC(id, issued string) string {
-	mac := hmac.New(sha256.New, sessionSecret())
+// sessionMaxAgeSecs is sessionMaxAge in whole seconds — the unit the
+// stateless cookie compares against (issued is a Unix-seconds string).
+const sessionMaxAgeSecs = int64(sessionMaxAge / time.Second)
+
+// macWith is the raw HMAC step, parameterized by secret so the same code
+// signs in production (with sessionSecret) and cross-validates against the
+// zig port (with a synthetic secret) — no re-implementation.
+func macWith(secret []byte, id, issued string) string {
+	mac := hmac.New(sha256.New, secret)
 	mac.Write([]byte(id + "\n" + issued))
 	return base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
 }
 
-func signSession(id string) string {
-	issued := strconv.FormatInt(time.Now().Unix(), 10)
-	return base64.RawURLEncoding.EncodeToString([]byte(id)) + "." + issued + "." + sessionMAC(id, issued)
+// SignSessionWith builds a cookie value for id issued at issuedUnix, signed
+// with secret. Exported as the cross-validation oracle (the zig port must
+// verify these); production calls signSession, which injects the live secret
+// and the current time.
+func SignSessionWith(secret []byte, id string, issuedUnix int64) string {
+	issued := strconv.FormatInt(issuedUnix, 10)
+	return base64.RawURLEncoding.EncodeToString([]byte(id)) + "." + issued + "." + macWith(secret, id, issued)
 }
 
-// verifySession returns the user id from a session cookie value if its
-// signature is valid and it hasn't expired.
-func verifySession(val string) (string, bool) {
+// VerifySessionWith returns the id from a cookie value if its signature
+// matches secret and it hasn't expired as of nowUnix. The pure core of
+// verifySession — exported so the cross-validation harness drives the REAL
+// verifier, not a copy.
+func VerifySessionWith(secret []byte, val string, nowUnix int64) (string, bool) {
 	parts := strings.Split(val, ".")
 	if len(parts) != 3 {
 		return "", false
@@ -78,13 +91,23 @@ func verifySession(val string) (string, bool) {
 		return "", false
 	}
 	id, issued := string(idBytes), parts[1]
-	if !hmac.Equal([]byte(sessionMAC(id, issued)), []byte(parts[2])) {
+	if !hmac.Equal([]byte(macWith(secret, id, issued)), []byte(parts[2])) {
 		return "", false
 	}
-	if n, err := strconv.ParseInt(issued, 10, 64); err != nil || time.Since(time.Unix(n, 0)) > sessionMaxAge {
+	if n, err := strconv.ParseInt(issued, 10, 64); err != nil || nowUnix-n > sessionMaxAgeSecs {
 		return "", false
 	}
 	return id, true
+}
+
+func signSession(id string) string {
+	return SignSessionWith(sessionSecret(), id, time.Now().Unix())
+}
+
+// verifySession returns the user id from a session cookie value if its
+// signature is valid and it hasn't expired.
+func verifySession(val string) (string, bool) {
+	return VerifySessionWith(sessionSecret(), val, time.Now().Unix())
 }
 
 // SessionUser returns the authenticated member's id, if the request
