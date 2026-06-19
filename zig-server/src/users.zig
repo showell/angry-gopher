@@ -258,6 +258,52 @@ pub fn reserveUploadBytes(io: Io, alloc: Alloc, id: []const u8, n: i64) bool {
     return true;
 }
 
+// ── API-key management (port of users/api_key.go's member-facing half) ───────
+
+/// userHasAPIKey reports whether the principal has an API-key file. Mirrors
+/// UserHasAPIKey.
+pub fn userHasAPIKey(io: Io, alloc: Alloc, id: []const u8) bool {
+    return authFileExists(io, alloc, id, "api-key") catch false;
+}
+
+/// getUserAPIKey returns the stored key for display, or null when absent OR a
+/// legacy bare-hash key (no '-', not recoverable — regenerate to view). Mirrors
+/// GetUserAPIKey.
+pub fn getUserAPIKey(io: Io, alloc: Alloc, id: []const u8) !?[]const u8 {
+    const b = (try readAuthFile(io, alloc, id, "api-key")) orelse return null;
+    const key = std.mem.trim(u8, b, " \t\r\n");
+    if (std.mem.indexOfScalar(u8, key, '-') == null) return null;
+    return key;
+}
+
+/// setUserAPIKey generates a fresh plaintext key ("<id>-<32 hex>", 16 CSPRNG
+/// bytes), stores it (mode 0o600 — treat it like a password), and returns it.
+/// Mirrors SetUserAPIKey.
+pub fn setUserAPIKey(io: Io, alloc: Alloc, id: []const u8) ![]const u8 {
+    var b: [16]u8 = undefined;
+    io.random(b[0..]);
+    const hex = std.fmt.bytesToHex(b, .lower); // [32]u8
+    const key = try std.fmt.allocPrint(alloc, "{s}-{s}", .{ id, &hex });
+    const dir = try std.fs.path.join(alloc, &.{ auth_root, id });
+    try Io.Dir.cwd().createDirPath(io, dir);
+    const path = try std.fs.path.join(alloc, &.{ dir, "api-key" });
+    try Io.Dir.cwd().writeFile(io, .{ .sub_path = path, .data = key, .flags = .{ .permissions = @enumFromInt(0o600) } });
+    return key;
+}
+
+/// clearUserAPIKey revokes the principal's key (deletes the file; absent is OK).
+/// Best-effort. Mirrors ClearUserAPIKey.
+pub fn clearUserAPIKey(io: Io, alloc: Alloc, id: []const u8) void {
+    const path = std.fs.path.join(alloc, &.{ auth_root, id, "api-key" }) catch return;
+    Io.Dir.cwd().deleteFile(io, path) catch {};
+}
+
+/// isMember reports whether `id` is a password member (Go's NEED_PASSWORD gate
+/// for the settings page — agents, who have no password, are excluded).
+pub fn isMember(io: Io, alloc: Alloc, id: []const u8) bool {
+    return userIsMember(io, alloc, id) catch false;
+}
+
 fn authFileExists(io: Io, alloc: Alloc, id: []const u8, name: []const u8) !bool {
     const path = try std.fs.path.join(alloc, &.{ auth_root, id, name });
     _ = Io.Dir.cwd().statFile(io, path, .{}) catch return false;
