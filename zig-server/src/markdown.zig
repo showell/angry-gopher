@@ -8,9 +8,66 @@ const std = @import("std");
 /// MSG_ reference linkifier.
 ///
 /// Caller owns the returned slice; pass an arena and reset it per message.
+///
+/// Before parsing, hostile/over-formatted input is rejected as malformed (see
+/// hostileReason) — a defence-in-depth belt over the linear-by-construction
+/// parser (the inline scanners use monotonic cursors so no input is super-
+/// linear; this cap just refuses absurd inputs outright). Callers that write
+/// (chat send, docs post) check hostileReason themselves first to fail the
+/// POST loudly; this guard covers every other render path (backlog, preview).
 pub fn render(a: std.mem.Allocator, md: []const u8) ![]const u8 {
+    if (hostileReason(md) != null) return a.dupe(u8, malformed_html);
     const body = try renderBlocks(a, md);
     return try linkifyMsgRefs(a, body);
+}
+
+/// malformed_html is what a rejected (hostile / over-formatted) message renders
+/// to instead of its content. A plain escaped paragraph — no styling shipped
+/// from the server (the client may style .md-malformed).
+pub const malformed_html = "<p class=\"md-malformed\">⚠️ malformed markdown — not rendered</p>\n";
+
+/// max_markup_tokens caps how many inline markup characters (`* _ [ ] ` ~ <`)
+/// a single message/doc may contain OUTSIDE fenced code. Ordinary prose uses a
+/// handful; a flood (hundreds–thousands) is an attack or a paste accident, and
+/// some of those constructs drive the inline scanners (links, emphasis, email
+/// autolinks). Real conversation never approaches this; past it we reject the
+/// whole input as malformed rather than render it. Fenced code is exempt —
+/// snake_case and indexing are ordinary text there, and code never reaches the
+/// inline scanners anyway. (Steve, 2026-06-19: reject over-formatted input
+/// rather than risk the server; "no more than ~256 non-ordinary-text tokens.")
+const max_markup_tokens = 256;
+
+/// hostileReason scans `md` once and returns a short reason if it's hostile or
+/// absurdly over-formatted (and should render as malformed_html / be refused at
+/// POST), or null if it's safe to render. Cheap and linear: a single line walk
+/// that skips fenced code blocks and counts inline markup characters elsewhere.
+pub fn hostileReason(md: []const u8) ?[]const u8 {
+    var tokens: usize = 0;
+    var fence_char: u8 = 0; // 0 = not inside a fenced code block
+    var fence_count: usize = 0;
+    var pos: usize = 0;
+    while (pos < md.len) {
+        const eol = lineEnd(md, pos);
+        const line = md[pos..eol];
+        const next = if (eol < md.len) eol + 1 else md.len;
+        if (fence_char != 0) {
+            // Inside a fenced code block: code is ordinary text, count nothing.
+            if (isClosingFence(line, fence_char, fence_count)) fence_char = 0;
+        } else if (parseFenceOpen(md, pos)) |fo| {
+            fence_char = fo.char;
+            fence_count = fo.count;
+        } else {
+            for (line) |c| switch (c) {
+                '*', '_', '[', ']', '`', '~', '<' => {
+                    tokens += 1;
+                    if (tokens > max_markup_tokens) return "too much markdown formatting";
+                },
+                else => {},
+            };
+        }
+        pos = next;
+    }
+    return null;
 }
 
 // --- block rendering --------------------------------------------------------
@@ -25,11 +82,12 @@ fn renderBlocks(a: std.mem.Allocator, md: []const u8) ![]const u8 {
 /// renderQuote/renderList → renderBlocksInto recursion that copies the inner
 /// source, so an unbounded nest (`> > > …` or deeply-indented lists) is both
 /// O(depth) stack (→ stack overflow) and O(depth²) memory — a single hostile
-/// message or doc could crash the server. The cap is far above anything real
-/// markdown nests (human content rarely passes ~6); past it we degrade to a flat
-/// escaped paragraph rather than recurse. Found by the adversarial stress harness
-/// (Steve, 2026-06-19).
-const max_block_depth = 256;
+/// message or doc could crash the server. Ordinary conversation never nests
+/// past ~10 (the corpus max is 1); past this we degrade to a flat escaped
+/// paragraph rather than recurse. Found by the adversarial stress harness, then
+/// tightened from 256 to ~10-levels-of-headroom (Steve, 2026-06-19: "nothing
+/// should ever be more than about 10 levels nested in ordinary conversation").
+const max_block_depth = 16;
 
 /// renderBlocksInto is the block dispatcher. `tight` is set when rendering the
 /// contents of a tight list item: paragraphs emit their inline content with no
@@ -797,6 +855,14 @@ fn renderInline(out: *std.ArrayList(u8), a: std.mem.Allocator, text: []const u8)
 
     var run_start: usize = 0;
     var i: usize = 0;
+    // Monotonic scan cursors: the first ']' / ')' at or after a position, and a
+    // floor below which no email autolink can start, all only ever move forward.
+    // They keep mdLinkAt / autolinkAt from re-scanning the same suffix from every
+    // '[' or post-`_` boundary — the difference between O(n²) and O(n) on hostile
+    // input like "[[[[…", "[]([]([](…", or "a_b_a_b…" (Steve, 2026-06-19).
+    var rb: usize = std.mem.indexOfScalarPos(u8, text, 0, ']') orelse text.len;
+    var rp: usize = std.mem.indexOfScalarPos(u8, text, 0, ')') orelse text.len;
+    var email_dead: usize = 0;
     while (i < text.len) {
         const c = text[i];
         var consumed = false;
@@ -819,7 +885,7 @@ fn renderInline(out: *std.ArrayList(u8), a: std.mem.Allocator, text: []const u8)
                 consumed = true;
             }
         } else if (c == '[') {
-            if (try mdLinkAt(a, text, i)) |lk| {
+            if (try mdLinkAt(a, text, i, &rb, &rp)) |lk| {
                 try flushText(&inl, a, text[run_start..i]);
                 _ = try inl.append(a, .{ .kind = .html, .s = lk.html });
                 i = lk.end;
@@ -844,7 +910,7 @@ fn renderInline(out: *std.ArrayList(u8), a: std.mem.Allocator, text: []const u8)
             i += n;
             consumed = true;
         } else if (autolinkBoundary(text, i)) {
-            if (autolinkAt(text, i)) |al| {
+            if (autolinkAt(text, i, &email_dead)) |al| {
                 try flushText(&inl, a, text[run_start..i]);
                 var buf: std.ArrayList(u8) = .empty;
                 try emitAutolink(&buf, a, text[i..al.end], al.kind);
@@ -985,7 +1051,13 @@ const Autolink = struct { end: usize, kind: AutoKind };
 
 /// autolinkAt detects a GFM autolink starting at text[i] and returns the index
 /// just past it (after trailing-punctuation trimming), or null.
-fn autolinkAt(text: []const u8, i: usize) ?Autolink {
+/// `email_dead` is renderInline's monotonic floor: no email autolink can start
+/// at any index below it. Without it, an email-local char that's also an
+/// autolink boundary ('_') makes emailEnd re-scan the whole email-local run from
+/// every '_' — O(n²) on "a_b_a_b…". When emailEnd fails, the entire local run is
+/// equally dead (every position in it scans to the same run end with the same
+/// outcome), so we advance the floor past it: O(n) total.
+fn autolinkAt(text: []const u8, i: usize, email_dead: *usize) ?Autolink {
     if (startsWithCI(text[i..], "http://") or startsWithCI(text[i..], "https://")) {
         const end = urlEnd(text, i) orelse return null;
         return .{ .end = end, .kind = .url };
@@ -994,7 +1066,12 @@ fn autolinkAt(text: []const u8, i: usize) ?Autolink {
         const end = urlEnd(text, i) orelse return null;
         return .{ .end = end, .kind = .www };
     }
-    if (emailEnd(text, i)) |end| return .{ .end = end, .kind = .email };
+    if (i >= email_dead.*) {
+        if (emailEnd(text, i)) |end| return .{ .end = end, .kind = .email };
+        var j = i;
+        while (j < text.len and isEmailLocalChar(text[j])) : (j += 1) {}
+        email_dead.* = if (j > i) j else i + 1;
+    }
     return null;
 }
 
@@ -1099,12 +1176,24 @@ fn codeSpanContent(content: []const u8) []const u8 {
 const MdLink = struct { html: []const u8, end: usize };
 
 /// mdLinkAt parses a markdown link [text](url) at text[i] (text[i] == '['),
-/// or null if it's not a well-formed link.
-fn mdLinkAt(a: std.mem.Allocator, text: []const u8, i: usize) std.mem.Allocator.Error!?MdLink {
-    const close_br = std.mem.indexOfScalarPos(u8, text, i + 1, ']') orelse return null;
+/// or null if it's not a well-formed link. `rb` / `rp` are renderInline's
+/// monotonic ']' / ')' cursors: each only ever advances, so the forward scans
+/// here cost O(n) total across all '[' rather than O(n²) on "[[[[…" / "[](…".
+/// `rb` lands on the first ']' at >= i+1 and `rp` on the first ')' at >= open_p+1
+/// — exactly what indexOfScalarPos found before, just never re-scanned.
+fn mdLinkAt(a: std.mem.Allocator, text: []const u8, i: usize, rb: *usize, rp: *usize) std.mem.Allocator.Error!?MdLink {
+    while (rb.* < text.len and rb.* < i + 1) {
+        rb.* = std.mem.indexOfScalarPos(u8, text, rb.* + 1, ']') orelse text.len;
+    }
+    if (rb.* >= text.len) return null;
+    const close_br = rb.*;
     if (close_br + 1 >= text.len or text[close_br + 1] != '(') return null;
     const open_p = close_br + 1;
-    const close_p = std.mem.indexOfScalarPos(u8, text, open_p + 1, ')') orelse return null;
+    while (rp.* < text.len and rp.* < open_p + 1) {
+        rp.* = std.mem.indexOfScalarPos(u8, text, rp.* + 1, ')') orelse text.len;
+    }
+    if (rp.* >= text.len) return null;
+    const close_p = rp.*;
 
     const label = text[i + 1 .. close_br];
     const url = text[open_p + 1 .. close_p];

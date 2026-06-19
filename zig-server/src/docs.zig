@@ -254,6 +254,10 @@ fn docsPost(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8) !vo
     if (std.mem.trim(u8, doc_body, " \t\r\n").len == 0) {
         return req.respond("doc is empty\n", .{ .status = .bad_request });
     }
+    // Don't broadcast hostile / over-formatted markdown to a chat partner.
+    if (markdown.hostileReason(doc_body)) |_| {
+        return req.respond("not posted: too much markdown formatting; break the doc up\n", .{ .status = .bad_request });
+    }
 
     const partner = defaultChatPartner(uid);
     if (!try validChatPartner(io, alloc, uid, partner)) {

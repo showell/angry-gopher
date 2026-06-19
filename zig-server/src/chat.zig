@@ -543,6 +543,13 @@ fn sendMessage(req: *Request, io: Io, alloc: Alloc, bus: *Bus, meta: store.ConvM
         return sendDone(req, alloc, is_async, base, sid);
     }
 
+    // Refuse hostile / absurdly over-formatted markdown at the door rather than
+    // store it: fail loud to the author (a 400) instead of fanning out content
+    // that every reader would render as the malformed placeholder anyway.
+    if (markdown.hostileReason(md)) |_| {
+        return req.respond("not sent: malformed markdown — too much formatting; break it into smaller messages\n", .{ .status = .bad_request });
+    }
+
     const from_name = try users.getUserName(io, alloc, uid);
     _ = try store.appendMessage(io, alloc, bus, meta, conv_dir, conv_key, sid, from_name, uid, md, cid);
     users.touchUser(io, alloc, uid);
