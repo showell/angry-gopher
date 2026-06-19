@@ -17,15 +17,34 @@ pub fn render(a: std.mem.Allocator, md: []const u8) ![]const u8 {
 
 fn renderBlocks(a: std.mem.Allocator, md: []const u8) ![]const u8 {
     var out: std.ArrayList(u8) = .empty;
-    try renderBlocksInto(&out, a, md, false);
+    try renderBlocksInto(&out, a, md, false, 0);
     return out.toOwnedSlice(a);
 }
+
+/// max_block_depth caps blockquote/list nesting. Each nesting level is a
+/// renderQuote/renderList → renderBlocksInto recursion that copies the inner
+/// source, so an unbounded nest (`> > > …` or deeply-indented lists) is both
+/// O(depth) stack (→ stack overflow) and O(depth²) memory — a single hostile
+/// message or doc could crash the server. The cap is far above anything real
+/// markdown nests (human content rarely passes ~6); past it we degrade to a flat
+/// escaped paragraph rather than recurse. Found by the adversarial stress harness
+/// (Steve, 2026-06-19).
+const max_block_depth = 256;
 
 /// renderBlocksInto is the block dispatcher. `tight` is set when rendering the
 /// contents of a tight list item: paragraphs emit their inline content with no
 /// <p> wrapper, and blocks are newline-separated rather than each carrying a
-/// trailing newline of its own.
-fn renderBlocksInto(out: *std.ArrayList(u8), a: std.mem.Allocator, md: []const u8, tight: bool) std.mem.Allocator.Error!void {
+/// trailing newline of its own. `depth` is the block-nesting level (see
+/// max_block_depth) — past the cap, the remaining source renders as one escaped
+/// paragraph with no further block recursion.
+fn renderBlocksInto(out: *std.ArrayList(u8), a: std.mem.Allocator, md: []const u8, tight: bool, depth: usize) std.mem.Allocator.Error!void {
+    if (depth > max_block_depth) {
+        if (out.items.len > 0 and out.items[out.items.len - 1] != '\n') try out.append(a, '\n');
+        try out.appendSlice(a, "<p>");
+        try renderInline(out, a, md);
+        try out.appendSlice(a, "</p>\n");
+        return;
+    }
     var pos: usize = 0;
     while (pos < md.len) {
         const eol = lineEnd(md, pos);
@@ -60,14 +79,14 @@ fn renderBlocksInto(out: *std.ArrayList(u8), a: std.mem.Allocator, md: []const u
         // non-empty, so it's checked before the paragraph branch.
         if (listMarkerAt(md, pos)) |lm| {
             try tightSep(out, a, tight);
-            pos = try renderList(out, a, md, pos, lm);
+            pos = try renderList(out, a, md, pos, lm, depth);
             continue;
         }
 
         // A blockquote (also interrupts a paragraph).
         if (quoteMarkerLen(line) != null) {
             try tightSep(out, a, tight);
-            pos = try renderQuote(out, a, md, pos);
+            pos = try renderQuote(out, a, md, pos, depth);
             continue;
         }
 
@@ -346,7 +365,7 @@ fn leadingSpaces(line: []const u8) usize {
 /// renderList consumes a whole list beginning at md[pos] (with first marker m0)
 /// and returns the position just past it. Items are collected as dedented
 /// content blocks and rendered recursively; tight/loose controls <p> wrapping.
-fn renderList(out: *std.ArrayList(u8), a: std.mem.Allocator, md: []const u8, pos: usize, m0: ListMarker) std.mem.Allocator.Error!usize {
+fn renderList(out: *std.ArrayList(u8), a: std.mem.Allocator, md: []const u8, pos: usize, m0: ListMarker, depth: usize) std.mem.Allocator.Error!usize {
     var items: std.ArrayList([]const u8) = .empty;
     var loose = false;
 
@@ -419,9 +438,9 @@ fn renderList(out: *std.ArrayList(u8), a: std.mem.Allocator, md: []const u8, pos
         var inner: std.ArrayList(u8) = .empty;
         if (loose) {
             try inner.append(a, '\n');
-            try renderBlocksInto(&inner, a, item, false);
+            try renderBlocksInto(&inner, a, item, false, depth + 1);
         } else {
-            try renderBlocksInto(&inner, a, item, true);
+            try renderBlocksInto(&inner, a, item, true, depth + 1);
         }
         try out.appendSlice(a, "<li>");
         try out.appendSlice(a, inner.items);
@@ -462,7 +481,7 @@ fn quoteMarkerLen(line: []const u8) ?usize {
 /// renderQuote consumes a blockquote beginning at md[pos] and returns the
 /// position just past it. '>'-prefixed lines (and lazy paragraph-continuation
 /// lines, until a blank line) are stripped and rendered recursively.
-fn renderQuote(out: *std.ArrayList(u8), a: std.mem.Allocator, md: []const u8, pos: usize) std.mem.Allocator.Error!usize {
+fn renderQuote(out: *std.ArrayList(u8), a: std.mem.Allocator, md: []const u8, pos: usize, depth: usize) std.mem.Allocator.Error!usize {
     var inner: std.ArrayList(u8) = .empty;
     var p = pos;
     var last_was_text = false;
@@ -486,7 +505,7 @@ fn renderQuote(out: *std.ArrayList(u8), a: std.mem.Allocator, md: []const u8, po
     }
 
     try out.appendSlice(a, "<blockquote>\n");
-    try renderBlocksInto(out, a, inner.items, false);
+    try renderBlocksInto(out, a, inner.items, false, depth + 1);
     try out.appendSlice(a, "</blockquote>\n");
     return p;
 }
