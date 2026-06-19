@@ -42,6 +42,8 @@ const images = @import("images.zig");
 const code = @import("code.zig");
 const upload = @import("chat_upload.zig");
 const presence = @import("presence.zig");
+const chat_state = @import("chat_state.zig");
+const download = @import("chat_download.zig");
 const Bus = @import("bus.zig").Bus;
 
 const Alloc = std.mem.Allocator;
@@ -252,8 +254,14 @@ fn topicRoute(req: *Request, io: Io, alloc: Alloc, bus: *Bus, segs: *SegIter, ui
         try sendMessage(req, io, alloc, bus, meta, dir, conv_key, base, sid, uid);
     } else if (std.mem.eql(u8, tail, "upload")) {
         try upload.handleUpload(req, io, alloc, dir, base, sid);
+    } else if (std.mem.eql(u8, tail, "pin")) {
+        try pinSession(req, io, alloc, uid, conv_key, sid, true);
+    } else if (std.mem.eql(u8, tail, "unpin")) {
+        try pinSession(req, io, alloc, uid, conv_key, sid, false);
     } else if (std.mem.eql(u8, tail, "raw")) {
         try rawTranscript(req, io, alloc, dir, sid);
+    } else if (std.mem.eql(u8, tail, "download")) {
+        try download.serveBundle(req, io, alloc, dir, sid);
     } else {
         try http.notFound(req);
     }
@@ -262,6 +270,9 @@ fn topicRoute(req: *Request, io: Io, alloc: Alloc, bus: *Bus, segs: *SegIter, ui
 // ── the conversation page (boots the prod JS) ────────────────────────────────
 
 fn conversationPage(req: *Request, io: Io, alloc: Alloc, uid: []const u8, kind: Kind, conv_key: []const u8, base: []const u8, dir: []const u8, sid: []const u8, title: []const u8) !void {
+    // Remember where this user is (DM only — last-conv/-session is the
+    // /chat/default resume pointer, keyed by pair; channels don't persist it).
+    if (kind == .dm) chat_state.setUserLastSession(io, alloc, uid, conv_key, sid);
     const viewer = try users.getUserName(io, alloc, uid);
     const sidebar_json = try buildSidebarJSON(io, alloc, uid, kind, conv_key, base, dir, sid);
 
@@ -371,20 +382,40 @@ fn buildSidebarJSON(io: Io, alloc: Alloc, uid: []const u8, kind: Kind, conv_key:
         });
     }
 
-    try b.appendSlice(alloc, "],\"pinned_sessions\":[],\"sessions\":[");
+    // Sessions split by pinned state (Go's buildSidebarPayload): the conv's
+    // pins (conv-key form) intersect the live session list — stale ids drop out.
+    const pins = try chat_state.pinnedSessions(io, alloc, uid, conv_key);
+    const sessions = try store.listSessions(io, alloc, dir);
+
+    try b.appendSlice(alloc, "],\"pinned_sessions\":[");
     first = true;
-    for (try store.listSessions(io, alloc, dir)) |s| {
+    for (sessions) |s| {
+        if (!chat_state.isPinned(pins, s)) continue;
         if (!first) try b.append(alloc, ',');
         first = false;
-        const active = std.mem.eql(u8, s, sid);
-        const u = try std.fmt.allocPrint(alloc, "{s}/{s}", .{ base, s });
-        try b.print(alloc, "{{\"id\":{f},\"label\":{f},\"url\":{f},\"active\":{}}}", .{
-            std.json.fmt(s, .{}), std.json.fmt(s, .{}), std.json.fmt(u, .{}), active,
-        });
+        try emitSessionItem(&b, alloc, base, s, sid);
+    }
+    try b.appendSlice(alloc, "],\"sessions\":[");
+    first = true;
+    for (sessions) |s| {
+        if (chat_state.isPinned(pins, s)) continue;
+        if (!first) try b.append(alloc, ',');
+        first = false;
+        try emitSessionItem(&b, alloc, base, s, sid);
     }
     try b.appendSlice(alloc, "]}");
 
     return replaceSeq(alloc, b.items, "</", "<\\/");
+}
+
+/// emitSessionItem appends one session row (`{id,label,url,active}`) to the
+/// sidebar JSON — shared by the pinned and unpinned passes.
+fn emitSessionItem(b: *std.ArrayList(u8), alloc: Alloc, base: []const u8, s: []const u8, sid: []const u8) !void {
+    const active = std.mem.eql(u8, s, sid);
+    const u = try std.fmt.allocPrint(alloc, "{s}/{s}", .{ base, s });
+    try b.print(alloc, "{{\"id\":{f},\"label\":{f},\"url\":{f},\"active\":{}}}", .{
+        std.json.fmt(s, .{}), std.json.fmt(s, .{}), std.json.fmt(u, .{}), active,
+    });
 }
 
 // ── SSE stream (backlog replay + keepalive) ──────────────────────────────────
@@ -505,7 +536,17 @@ fn sendMessage(req: *Request, io: Io, alloc: Alloc, bus: *Bus, meta: store.ConvM
     const from_name = try users.getUserName(io, alloc, uid);
     _ = try store.appendMessage(io, alloc, bus, meta, conv_dir, conv_key, sid, from_name, uid, md, cid);
     users.touchUser(io, alloc, uid);
+    if (meta.kind == .dm) chat_state.setUserLastSession(io, alloc, uid, conv_key, sid);
     return sendDone(req, alloc, is_async, base, sid);
+}
+
+/// pinSession handles POST /<…>/<sid>/{pin,unpin} — Go's HandleChatPin: toggle
+/// whether `sid` is in the caller's per-conv Pinned group, then 204. Per-user
+/// state; conv-level auth already passed (any participant pins their own view).
+fn pinSession(req: *Request, io: Io, alloc: Alloc, uid: []const u8, conv_key: []const u8, sid: []const u8, pinned: bool) !void {
+    if (req.head.method != .POST) return http.methodNotAllowed(req);
+    chat_state.setSessionPinned(io, alloc, uid, conv_key, sid, pinned);
+    return req.respond("", .{ .status = .no_content });
 }
 
 /// sendDone reports a (possibly no-op) send: 204 for async fetch callers, else a
