@@ -16,6 +16,7 @@ const http = @import("http.zig");
 const config = @import("config.zig");
 const driving = @import("driving.zig");
 const puzzles = @import("puzzles.zig");
+const game = @import("game.zig");
 
 const PORT: u16 = 9001;
 
@@ -84,6 +85,8 @@ fn route(req: *std.http.Server.Request, io: std.Io, alloc: std.mem.Allocator) !v
         try driving.handle(req, sub);
     } else if (matchPrefix(path, "/puzzles")) |sub| {
         try puzzles.handle(req, io, alloc, sub);
+    } else if (matchPrefix(path, "/game")) |sub| {
+        try game.handle(req, io, alloc, sub);
     } else {
         try http.notFound(req);
     }

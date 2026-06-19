@@ -43,8 +43,18 @@ fn puzzleRoot(alloc: Alloc, user_id: []const u8) ![]u8 {
     return join(alloc, &.{ data_root, user_id, "puzzle" });
 }
 
+/// lynrummyElmRoot is the full-game namespace for a player. Mirrors Go's
+/// lynrummyElmRoot.
+fn lynrummyElmRoot(alloc: Alloc, user_id: []const u8) ![]u8 {
+    return join(alloc, &.{ data_root, user_id, "lynrummy-elm" });
+}
+
 fn nextPuzzleIDPath(alloc: Alloc, user_id: []const u8) ![]u8 {
     return join(alloc, &.{ data_root, user_id, "next-puzzle-id.txt" });
+}
+
+fn nextSessionIDPath(alloc: Alloc, user_id: []const u8) ![]u8 {
+    return join(alloc, &.{ data_root, user_id, "next-session-id.txt" });
 }
 
 /// puzzleSessionDir is {puzzleRoot}/sessions/<id>.
@@ -125,6 +135,159 @@ fn appendTextLine(io: Io, alloc: Alloc, path: []const u8, body: []const u8) !voi
     defer file.close(io);
     const st = try file.stat(io);
     try file.writePositionalAll(io, line, st.size);
+}
+
+// ── full-game (lynrummy-elm) namespace ──────────────────────────────────────
+//
+// The full game adds READ-BACK to the puzzle's write-only surface: resume reads
+// meta+actions, the list pages read every session dir. Same dumb id-keyed store,
+// new namespace ({id}/lynrummy-elm/sessions/<id>/), and a few read helpers.
+
+/// allocateSessionID returns the next sequential full-game session id (1-based)
+/// for a player, persisted in their next-session-id.txt. Mirrors Go's
+/// AllocateSessionID → platform.AllocateID.
+pub fn allocateSessionID(io: Io, alloc: Alloc, user_id: []const u8) !i64 {
+    return allocateID(io, alloc, try nextSessionIDPath(alloc, user_id));
+}
+
+/// sessionDir is {lynrummyElmRoot}/sessions/<id>. Mirrors Go's SessionDir.
+pub fn sessionDir(alloc: Alloc, user_id: []const u8, session_id: i64) ![]u8 {
+    const root = try lynrummyElmRoot(alloc, user_id);
+    const id_str = try std.fmt.allocPrint(alloc, "{d}", .{session_id});
+    return join(alloc, &.{ root, "sessions", id_str });
+}
+
+/// writeSessionFile writes body to <session-dir>/<rel>, creating parent dirs.
+/// Last-write-wins (used for meta). Mirrors Go's WriteSessionFile.
+pub fn writeSessionFile(io: Io, alloc: Alloc, user_id: []const u8, session_id: i64, rel: []const u8, body: []const u8) !void {
+    const dir = try sessionDir(alloc, user_id, session_id);
+    const full = try join(alloc, &.{ dir, rel });
+    try mkParentDirs(io, full);
+    try Io.Dir.cwd().writeFile(io, .{ .sub_path = full, .data = body });
+}
+
+/// readSessionFile reads <session-dir>/<rel>, or null when the file (or session)
+/// is missing. Mirrors Go's ReadSessionFile (which returns os.ErrNotExist; the
+/// callers all treat not-exist as "absent", so null carries the same meaning).
+pub fn readSessionFile(io: Io, alloc: Alloc, user_id: []const u8, session_id: i64, rel: []const u8) !?[]u8 {
+    const dir = try sessionDir(alloc, user_id, session_id);
+    const full = try join(alloc, &.{ dir, rel });
+    return Io.Dir.cwd().readFileAlloc(io, full, alloc, .unlimited) catch return null;
+}
+
+/// sessionExists reports whether a full-game session directory is on disk.
+/// Mirrors Go's SessionExists (stat + IsDir).
+pub fn sessionExists(io: Io, alloc: Alloc, user_id: []const u8, session_id: i64) !bool {
+    const dir = try sessionDir(alloc, user_id, session_id);
+    const st = Io.Dir.cwd().statFile(io, dir, .{}) catch return false;
+    return st.kind == .directory;
+}
+
+/// appendSessionDslLine appends one DSL line to <session-dir>/<rel> (actions.dsl).
+/// Mirrors Go's AppendSessionDslLine → AppendTextLine.
+pub fn appendSessionDslLine(io: Io, alloc: Alloc, user_id: []const u8, session_id: i64, rel: []const u8, body: []const u8) !void {
+    const dir = try sessionDir(alloc, user_id, session_id);
+    const full = try join(alloc, &.{ dir, rel });
+    try appendTextLine(io, alloc, full, body);
+}
+
+/// appendSessionJSONLLine appends one JSON-compacted line to <session-dir>/<rel>
+/// (annotations.jsonl). Mirrors Go's AppendSessionLine → AppendJSONLLine: the
+/// body is JSON-compacted (insignificant whitespace stripped) then written as
+/// compact-body + '\n'.
+pub fn appendSessionJSONLLine(io: Io, alloc: Alloc, user_id: []const u8, session_id: i64, rel: []const u8, body: []const u8) !void {
+    const dir = try sessionDir(alloc, user_id, session_id);
+    const full = try join(alloc, &.{ dir, rel });
+    const compact = try compactJSON(alloc, body);
+    try appendRawLine(io, alloc, full, compact);
+}
+
+/// listSessionIDs returns every full-game session-id directory for a player,
+/// sorted ascending. Mirrors Go's ListSessionIDs (missing root → empty).
+pub fn listSessionIDs(io: Io, alloc: Alloc, user_id: []const u8) ![]i64 {
+    const root = try lynrummyElmRoot(alloc, user_id);
+    const sessions = try join(alloc, &.{ root, "sessions" });
+
+    var dir = Io.Dir.cwd().openDir(io, sessions, .{ .iterate = true }) catch return &.{};
+    defer dir.close(io);
+
+    var ids: std.ArrayList(i64) = .empty;
+    var it = dir.iterate();
+    while (try it.next(io)) |entry| {
+        if (entry.kind != .directory) continue;
+        const id = std.fmt.parseInt(i64, entry.name, 10) catch continue;
+        if (id <= 0) continue;
+        try ids.append(alloc, id);
+    }
+    const out = try ids.toOwnedSlice(alloc);
+    std.mem.sort(i64, out, {}, std.sort.asc(i64));
+    return out;
+}
+
+/// countTextLines returns the number of non-empty lines in `path`, or 0 if the
+/// file is missing. Mirrors Go's CountTextLines.
+pub fn countTextLines(io: Io, alloc: Alloc, path: []const u8) !usize {
+    const body = Io.Dir.cwd().readFileAlloc(io, path, alloc, .unlimited) catch return 0;
+    var n: usize = 0;
+    var it = std.mem.splitScalar(u8, body, '\n');
+    while (it.next()) |line| {
+        if (line.len > 0) n += 1;
+    }
+    return n;
+}
+
+/// countSessionActions counts the lines in <session>/actions.dsl. Mirrors Go's
+/// CountSessionActions.
+pub fn countSessionActions(io: Io, alloc: Alloc, user_id: []const u8, session_id: i64) !usize {
+    const dir = try sessionDir(alloc, user_id, session_id);
+    const full = try join(alloc, &.{ dir, "actions.dsl" });
+    return countTextLines(io, alloc, full);
+}
+
+/// appendRawLine appends `body` + one '\n' to `path` (no trailing-newline
+/// trimming — `body` is already exactly one line). Used by the JSONL path, whose
+/// compacted body never contains a newline. Mirrors the write half of Go's
+/// AppendJSONLLine.
+fn appendRawLine(io: Io, alloc: Alloc, path: []const u8, body: []const u8) !void {
+    try mkParentDirs(io, path);
+    const line = try std.fmt.allocPrint(alloc, "{s}\n", .{body});
+    var file = try Io.Dir.cwd().createFile(io, path, .{ .truncate = false });
+    defer file.close(io);
+    const st = try file.stat(io);
+    try file.writePositionalAll(io, line, st.size);
+}
+
+/// compactJSON strips insignificant whitespace (outside string literals) from
+/// `src`, mirroring Go's json.Compact at the token level: string contents and
+/// every non-whitespace byte are copied verbatim; spaces/tabs/CR/LF between
+/// tokens are dropped. Real input is always valid Elm-produced JSON, so this does
+/// no validation (Go's scanner would reject malformed input; that path is unused).
+fn compactJSON(alloc: Alloc, src: []const u8) ![]u8 {
+    var out: std.ArrayList(u8) = .empty;
+    var in_string = false;
+    var escaped = false;
+    for (src) |c| {
+        if (in_string) {
+            try out.append(alloc, c);
+            if (escaped) {
+                escaped = false;
+            } else if (c == '\\') {
+                escaped = true;
+            } else if (c == '"') {
+                in_string = false;
+            }
+            continue;
+        }
+        switch (c) {
+            ' ', '\t', '\r', '\n' => continue, // insignificant whitespace
+            '"' => {
+                in_string = true;
+                try out.append(alloc, c);
+            },
+            else => try out.append(alloc, c),
+        }
+    }
+    return out.toOwnedSlice(alloc);
 }
 
 /// mkParentDirs creates the directory containing `path` (mkdir -p). No-op when

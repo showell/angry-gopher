@@ -90,17 +90,7 @@ fn appendAction(req: *std.http.Server.Request, io: std.Io, alloc: Alloc, user_id
         return http.notFound(req);
     }
 
-    var body_buf: [4 * 1024]u8 = undefined;
-    const reader = try req.readerExpectContinue(&body_buf);
-    // limit = cap + 1: allocRemaining errors when the limit is *reached*, but Go's
-    // MaxBytesReader allows exactly maxAppendBytes and rejects only maxBytes+1.
-    const body = reader.allocRemaining(alloc, .limited(maxAppendBytes + 1)) catch |e| switch (e) {
-        error.StreamTooLong => {
-            try req.respond("request body too large\n", .{ .status = .payload_too_large });
-            return;
-        },
-        else => return e,
-    };
+    const body = (try http.readLimitedBody(req, alloc, maxAppendBytes)) orelse return;
 
     const rel = try std.fmt.allocPrint(alloc, "puzzle_{d}/actions.dsl", .{puzzle_idx});
     try storage.appendPuzzleSessionDslLine(io, alloc, user_id, session_id, rel, body);

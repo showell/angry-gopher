@@ -169,6 +169,30 @@ fn userIsAuthorized(io: Io, alloc: Alloc, id: []const u8) !bool {
     return (try userIsMember(io, alloc, id)) or isAgent(id);
 }
 
+/// getUserName returns a user's display name ({auth_root}/{id}/name, trailing
+/// CR/LF trimmed), or "" when absent. Mirrors users.GetUserName. Allocated from
+/// `alloc`.
+pub fn getUserName(io: Io, alloc: Alloc, id: []const u8) ![]const u8 {
+    const b = (try readAuthFile(io, alloc, id, "name")) orelse return "";
+    return std.mem.trimEnd(u8, b, "\r\n");
+}
+
+/// touchUser records "now" as the user's last-seen time
+/// ({users_root}/{id}/last-seen = unix seconds), best-effort like Go's TouchUser
+/// (a write failure isn't worth surfacing). Bumped on each Lyn Rummy move.
+pub fn touchUser(io: Io, alloc: Alloc, id: []const u8) void {
+    if (std.mem.trim(u8, id, " \t\r\n").len == 0) return;
+    touchUserImpl(io, alloc, id) catch {};
+}
+
+fn touchUserImpl(io: Io, alloc: Alloc, id: []const u8) !void {
+    const dir = try std.fs.path.join(alloc, &.{ users_root, id });
+    try Io.Dir.cwd().createDirPath(io, dir);
+    const path = try std.fs.path.join(alloc, &.{ dir, "last-seen" });
+    const body = try std.fmt.allocPrint(alloc, "{d}", .{nowUnix(io)});
+    try Io.Dir.cwd().writeFile(io, .{ .sub_path = path, .data = body });
+}
+
 fn authFileExists(io: Io, alloc: Alloc, id: []const u8, name: []const u8) !bool {
     const path = try std.fs.path.join(alloc, &.{ auth_root, id, name });
     _ = Io.Dir.cwd().statFile(io, path, .{}) catch return false;

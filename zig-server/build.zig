@@ -26,6 +26,11 @@ pub fn build(b: *std.Build) void {
     const assets = [_]struct { name: []const u8, path: []const u8 }{
         .{ .name = "driving_app_js", .path = "../games/driving/app.js" },
         .{ .name = "puzzle_js", .path = "../games/lynrummy/elm/puzzle.js" },
+        // Full-game bundles (the /game surface): the compiled Elm client, the
+        // esbuild-bundled TS engine, and the Elm↔engine glue shim.
+        .{ .name = "game_elm_js", .path = "../games/lynrummy/elm/elm.js" },
+        .{ .name = "game_engine_js", .path = "../games/lynrummy/elm/engine.js" },
+        .{ .name = "game_engine_glue_js", .path = "../games/lynrummy/elm/engine_glue.js" },
         // The puzzle catalogs, easiest-first (1-line … 6-line). Concatenated at
         // runtime into the catalog shipped in the page flag (see puzzles.zig).
         .{ .name = "puzzle_cat_1", .path = "../games/lynrummy/conformance/curated_1line_puzzles.dsl" },
