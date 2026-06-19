@@ -33,6 +33,7 @@ const http = @import("http.zig");
 const users = @import("users.zig");
 const store = @import("chat_store.zig");
 const markdown = @import("markdown.zig");
+const docs = @import("docs.zig");
 const Bus = @import("bus.zig").Bus;
 
 const Alloc = std.mem.Allocator;
@@ -44,7 +45,7 @@ const max_message_bytes = 64 * 1024;
 /// Asset version (cache-buster). The Go server uses the git sha / "dev"; the zig
 /// port has no build stamp, so a constant suffices — it only namespaces the
 /// browser cache, and :9001 is a separate origin from Go's :9000 anyway.
-const asset_v = "zig";
+pub const asset_v = "zig";
 
 const Kind = enum { dm, channel };
 
@@ -71,6 +72,7 @@ const assets = [_]Asset{
     .{ .name = "chat_help.js", .body = @embedFile("chat_js_help") },
     .{ .name = "chat.js", .body = @embedFile("chat_js_chat") },
     .{ .name = "notify.js", .body = @embedFile("chat_js_notify") },
+    .{ .name = "docs.js", .body = @embedFile("chat_js_docs") },
 };
 
 /// The sibling bundles the conversation page loads, in document order (after the
@@ -100,6 +102,15 @@ pub fn handle(req: *Request, io: Io, alloc: Alloc, bus: *Bus, sub: []const u8) !
     if (sub.len == 0 or std.mem.eql(u8, sub, "/")) {
         try indexPage(req, io, alloc, uid);
         return;
+    }
+    // /chat/docs[/...] — the three-pane authoring surface (docs.zig). Guard the
+    // boundary so only "/docs" or "/docs/..." matches (".js" is already served
+    // above; anything like "/docsX" falls through to 404).
+    if (matchPrefix(sub, "/docs")) |rest| {
+        if (rest.len == 0 or rest[0] == '/') {
+            try docs.handle(req, io, alloc, bus, uid, rest);
+            return;
+        }
     }
     if (matchPrefix(sub, "/c/")) |rest| {
         try convRoute(req, io, alloc, bus, uid, rest);
@@ -193,13 +204,9 @@ fn conversationPage(req: *Request, io: Io, alloc: Alloc, uid: []const u8, kind: 
     const sidebar_json = try buildSidebarJSON(io, alloc, uid, kind, conv_key, base, dir, sid);
 
     var b: std.ArrayList(u8) = .empty;
-    try b.appendSlice(alloc, page_head); // doctype + <head> + platform style + <body>
-
-    // chat-subsystem chrome: colors.js (sync, sets the palette pre-paint) +
-    // chat_theme.js (deferred) + the top bar + open .app-body-wrap.
-    try b.print(alloc, head_scripts, .{ asset_v, asset_v });
-    try b.print(alloc, chrome_top, .{ try htmlEscape(alloc, title), try htmlEscape(alloc, viewer) });
-    try b.appendSlice(alloc, "<div class=\"app-body-wrap\">");
+    // doctype + <head> + platform style + colors/theme scripts + top bar +
+    // open .app-body-wrap. active="" so no nav link is bolded inside a conv.
+    try writeChrome(&b, alloc, "Chat", title, viewer, "");
 
     try b.appendSlice(alloc, chat_css);
     try b.print(alloc, "<div id=\"chat-root\" data-conv=\"{s}\" data-conv-base=\"{s}\" data-session=\"{s}\">", .{
@@ -223,6 +230,51 @@ fn conversationPage(req: *Request, io: Io, alloc: Alloc, uid: []const u8, kind: 
     try b.appendSlice(alloc, "</div></body></html>");
 
     try req.respond(b.items, .{ .extra_headers = &.{http.html_ct} });
+}
+
+/// writeChrome emits the shared chat-subsystem page chrome into `b` (Go's
+/// chatPageHeader → PageHeadAndStyle + chatChromeTop): the doctype/head + the
+/// platform stylesheet (its <title> = `tab_title`), colors.js (sync, palette
+/// pre-paint) + chat_theme.js (deferred), the top bar (Home + `title` + the
+/// six-link sub-nav with `active` bolded + identity), and the open
+/// .app-body-wrap. Shared by the conversation page and the docs editor.
+pub fn writeChrome(b: *std.ArrayList(u8), alloc: Alloc, tab_title: []const u8, title: []const u8, viewer: []const u8, active: []const u8) !void {
+    try b.appendSlice(alloc, page_head_a);
+    try b.appendSlice(alloc, tab_title);
+    try b.appendSlice(alloc, page_head_b);
+    try b.print(alloc, head_scripts, .{ asset_v, asset_v });
+    try b.print(alloc, chrome_top_a, .{try htmlEscape(alloc, title)});
+    try navLinks(b, alloc, active);
+    try b.print(alloc, chrome_top_b, .{try htmlEscape(alloc, viewer)});
+    try b.appendSlice(alloc, "<div class=\"app-body-wrap\">");
+}
+
+const NavItem = struct { href: []const u8, label: []const u8, key: []const u8 };
+
+/// nav_items is the chat-subsystem sub-nav (Go's chatChromeTop navLink list).
+/// The admin link is omitted (no admin flag is ported), matching active="".
+const nav_items = [_]NavItem{
+    .{ .href = "/chat", .label = "Chat", .key = "chat" },
+    .{ .href = "/chat/docs", .label = "Docs", .key = "docs" },
+    .{ .href = "/chat/recent", .label = "Recent", .key = "recent" },
+    .{ .href = "/chat/images", .label = "Images", .key = "images" },
+    .{ .href = "/chat/code", .label = "Code", .key = "code" },
+    .{ .href = "/settings", .label = "Settings", .key = "settings" },
+};
+
+/// navLinks emits the sub-nav span body, " · "-joined, with the link whose key
+/// equals `active` rendered bold-without-href (Go's navLink).
+fn navLinks(b: *std.ArrayList(u8), alloc: Alloc, active: []const u8) !void {
+    var first = true;
+    for (nav_items) |it| {
+        if (!first) try b.appendSlice(alloc, " · ");
+        first = false;
+        if (std.mem.eql(u8, it.key, active)) {
+            try b.print(alloc, "<strong>{s}</strong>", .{it.label});
+        } else {
+            try b.print(alloc, "<a href=\"{s}\">{s}</a>", .{ it.href, it.label });
+        }
+    }
 }
 
 /// buildSidebarJSON is the inline left-rail payload (Go's buildSidebarPayload):
@@ -536,7 +588,7 @@ fn matchPrefix(s: []const u8, prefix: []const u8) ?[]const u8 {
 /// formField pulls one application/x-www-form-urlencoded field from `body`,
 /// percent/plus-decoded, or null when absent. Field names here ("markdown",
 /// "cid") are literal, so only the value is decoded.
-fn formField(alloc: Alloc, body: []const u8, name: []const u8) !?[]const u8 {
+pub fn formField(alloc: Alloc, body: []const u8, name: []const u8) !?[]const u8 {
     var it = std.mem.splitScalar(u8, body, '&');
     while (it.next()) |pair| {
         const eq = std.mem.indexOfScalar(u8, pair, '=') orelse continue;
@@ -602,7 +654,7 @@ fn replaceSeq(alloc: Alloc, input: []const u8, needle: []const u8, repl: []const
 }
 
 /// htmlEscape mirrors Go's html.EscapeString: & ' < > " → &amp; &#39; &lt; &gt; &#34;.
-fn htmlEscape(alloc: Alloc, s: []const u8) ![]const u8 {
+pub fn htmlEscape(alloc: Alloc, s: []const u8) ![]const u8 {
     if (std.mem.indexOfAny(u8, s, "&'<>\"") == null) return s;
     var out: std.ArrayList(u8) = .empty;
     for (s) |c| switch (c) {
@@ -618,12 +670,16 @@ fn htmlEscape(alloc: Alloc, s: []const u8) ![]const u8 {
 
 // ── templates (reproducing Go's platform chrome + chat shell) ─────────────────
 
-// page_head: PageHeadAndStyle with tabTitle "Chat" — doctype, <head>, the shared
-// platform stylesheet (AppChromeCSS + base rules), and <body> open. Static (no
-// format args), so the literal `%`/`{` in the CSS need no escaping.
-const page_head =
+// page_head_{a,b}: PageHeadAndStyle — doctype, <head>, the shared platform
+// stylesheet (AppChromeCSS + base rules), and <body> open. Split around the
+// <title> text so writeChrome can drop the per-page tab title in between
+// without a format string (the CSS's literal `%`/`{` would break one).
+const page_head_a =
     \\<!DOCTYPE html>
-    \\<html><head><meta charset="utf-8"><title>Chat</title>
+    \\<html><head><meta charset="utf-8"><title>
+;
+const page_head_b =
+    \\</title>
     \\<style>
     \\body { font-family: sans-serif; margin: 0; padding: 0;
     \\       display: flex; flex-direction: column; min-height: 100vh; }
@@ -665,10 +721,14 @@ const head_scripts =
     \\<script src="/chat/colors.js?v={s}"></script><script>ChatColors.install();</script><script defer src="/chat/chat_theme.js?v={s}"></script>
 ;
 
-// chrome_top: chatChromeTop with active="" (no nav link bolded, no admin link).
-// {s} = escaped conversation title, {s} = escaped viewer name.
-const chrome_top =
-    \\<header class="app-top chat-top"><div class="chat-top-left"><a class="chat-top-home" href="/">Home</a><span class="chat-top-title">{s}</span><span class="chat-top-links"><a href="/chat">Chat</a> · <a href="/chat/docs">Docs</a> · <a href="/chat/recent">Recent</a> · <a href="/chat/images">Images</a> · <a href="/chat/code">Code</a> · <a href="/settings">Settings</a></span></div><div class="app-top-user"><button id="chat-theme-toggle" type="button" title="Toggle theme" aria-label="Toggle theme" style="background:none;border:none;cursor:pointer;font-size:16px;padding:0 8px;vertical-align:middle">🌙</button> · <strong>{s}</strong> · <a href="/learn">Learn</a> · <a href="/logout">Log out</a></div></header>
+// chrome_top_{a,b}: chatChromeTop, split around the sub-nav span so navLinks can
+// emit the six links with `active` bolded. chrome_top_a takes the escaped title;
+// chrome_top_b takes the escaped viewer name. No admin link (none ported).
+const chrome_top_a =
+    \\<header class="app-top chat-top"><div class="chat-top-left"><a class="chat-top-home" href="/">Home</a><span class="chat-top-title">{s}</span><span class="chat-top-links">
+;
+const chrome_top_b =
+    \\</span></div><div class="app-top-user"><button id="chat-theme-toggle" type="button" title="Toggle theme" aria-label="Toggle theme" style="background:none;border:none;cursor:pointer;font-size:16px;padding:0 8px;vertical-align:middle">🌙</button> · <strong>{s}</strong> · <a href="/learn">Learn</a> · <a href="/logout">Log out</a></div></header>
 ;
 
 // chat_css: the page-shell layout (Go's chatCSS) — only the rules that span
