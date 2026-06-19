@@ -56,7 +56,7 @@ window.ChatNotify = (function(){
     var n; try{ n=JSON.parse(e.data); }catch(err){ console.error('notify: malformed JSON from /chat/notifications', e.data, err); return; }
     if(!n||!n.text||!n.link_url) return;
     /* INVARIANT: every notify event ships pre-rendered text + link_url
-       (server-side invariant in chat_notify.go). One render path: wrap
+       (a server-side invariant). One render path: wrap
        text in <a href=link_url>. The strip suppresses the update iff
        conv+session match the open feed (no point saying "new message"
        about the thread you're reading). */

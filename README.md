@@ -1,11 +1,17 @@
 # Angry Gopher
 
-A small, dependency-light Go server that hosts **Lyn Rummy** (a
+A small, dependency-light server that hosts **Lyn Rummy** (a
 single-human card game — Elm client + TypeScript agent) and a private
 **chat** surface, plus a small admin view. Storage is plain files on
 disk — **no database**. In prod it ships as one self-contained
-`go:embed` binary behind Caddy (TLS) under systemd; see
+embedded binary behind Caddy (TLS) under systemd; see
 [`deploy/README.md`](deploy/README.md).
+
+> **The server is being ported Go → zig.** The zig server in
+> [`zig-server/`](zig-server/) is the active implementation — see
+> [`SERVER.md`](SERVER.md). `server/*.go` is the historical original it
+> replaces; the routes, layout, and DSL below are shared by both. (The
+> `ops/start` / `ops/deploy` tooling still drives the Go build until cutover.)
 
 ## Quick start
 
@@ -37,7 +43,7 @@ the tree is freely rm-able without touching data, and vice versa.
 | `/admin` | Session + user overview (requires the admin flag) |
 | `/version` | Build version JSON |
 
-Every request goes through a login gate (`main.go`): no resolvable
+Every request goes through a login gate: no resolvable
 identity → redirect to `/login`. Login sets a `gopher_uid` cookie;
 members additionally get a signed session cookie. Bot **API keys are
 read-only** — a keyed request may only GET/HEAD.
@@ -46,6 +52,7 @@ read-only** — a keyed request may only GET/HEAD.
 
 | Where | Role |
 |---|---|
+| [`zig-server/`](zig-server/) | **the active server (zig)** — every surface, over the shared data tree; see [`SERVER.md`](SERVER.md). The Go entries below are the original it replaces |
 | `main.go`, `config.go`, `login.go`, `embed.go`, `home.go`, `registry.go` | server entry: config, mux + login gate, name login/logout, embedded assets, the home launch-pad, route registry |
 | `auth/` | username validation + the raw identity claim (the numeric user id) |
 | `server/web/` | shared base: identity (user registry), sessions, bot API keys, page chrome, embedded-asset serving. Imports neither subsystem. |
@@ -58,7 +65,7 @@ read-only** — a keyed request may only GET/HEAD.
 | `ops/` | the build / run / test scripts (`ops/list` enumerates them) |
 | `deploy/` | Caddyfile, systemd unit, deploy runbook |
 
-The Go server is dumb URL-keyed file storage; the strategic brain is the
+The server is dumb URL-keyed file storage; the strategic brain is the
 TS agent, and the Elm client owns the full game (dealer, referee, UI).
 
 ## The DSL is the lingua franca

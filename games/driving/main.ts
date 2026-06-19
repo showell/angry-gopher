@@ -22,7 +22,7 @@ import { drawGuardRail } from './guard_rail.ts';
 import { DETAIL_DIST, NEAR, groundDrop, clipNear } from './scenery.ts';
 import type { Project, RiderPt, Quad } from './scenery.ts';
 
-// The page is a near-empty shell (the Go /driving route or the standalone
+// The page is a near-empty shell (the server's /driving route or the standalone
 // index.html), so we build our own DOM here — the host ships no markup or CSS.
 // A fixed 960x600 canvas centred on a dark page, with a one-line controls hint.
 document.body.style.cssText =

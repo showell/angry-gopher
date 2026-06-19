@@ -33,8 +33,7 @@
 
   /* ---- chrome: top bar, page wrap, footer ----
      PRODUCT_DECISION: top bars in this binary are STICKY — same rule on
-     every page (see server/web/chrome.go's AppChromeCSS for the shared
-     CSS exemplar). When you build a custom JS-styled top bar like this
+     every page. When you build a custom JS-styled top bar like this
      one, include position:sticky/top:0/zIndex + an opaque background so
      scrolled content can't bleed through. Future-Claude: keep new pages
      consistent with this. */
@@ -323,8 +322,8 @@
       background: COLORS.surface, padding: '14px 16px', marginTop: '10px',
     });
 
-    /* Three server-shaped message objects. `html` would be sanitized by
-       goldmark on the real server; here we author it directly. */
+    /* Three server-shaped message objects. `html` would be produced by the
+       server's markdown renderer; here we author it directly. */
     var messages = [
       { id: 'demo_001', index: 0, from: 'Alice', mine: false, at: '2026-06-16T13:30:00Z',
         body: 'Hey 👋',
@@ -543,7 +542,7 @@
      Message factory and a small batch of simulated server responses
      (same wire shape as the chat conversation page's SSE — index,
      from, at, html, markdown, id, mine). The html field is what the
-     Go server would have produced from goldmark; everything else is
+     server's markdown renderer would have produced; everything else is
      JS the reader has already seen. ---- */
 
   // lint:called-once widget
@@ -564,8 +563,8 @@
         markdown: 'So the html field is already rendered? What does the JS side do then?',
         html: '<p>So the <code>html</code> field is already rendered? What does the JS side do then?</p>' },
       { from: 'Claude',  at: '2026-06-16T13:03:00Z', mine: true,  id: 'demo_4',
-        markdown: 'Right — Go runs the markdown through goldmark, sanitizes it, and post-processes MSG_ tokens...',
-        html: '<p>Right — Go runs the markdown through goldmark, sanitizes it, and post-processes MSG_ tokens into msg-ref links (see <a href="#msg-demo_1" class="msg-ref">MSG_demo_1</a>). The JS just <code>innerHTML</code>s it.</p>'
+        markdown: 'Right — the server runs the markdown through its renderer, sanitizes it, and post-processes MSG_ tokens...',
+        html: '<p>Right — the server runs the markdown through its renderer, sanitizes it, and post-processes MSG_ tokens into msg-ref links (see <a href="#msg-demo_1" class="msg-ref">MSG_demo_1</a>). The JS just <code>innerHTML</code>s it.</p>'
             + '<p>Code blocks land in <code>&lt;pre&gt;</code> tags — clickable too:</p>'
             + '<pre class="chat-quote">function hi(){ return \'world\'; }</pre>' },
       { from: 'apoorva', at: '2026-06-16T13:04:00Z', mine: false, id: 'demo_5',
@@ -573,8 +572,8 @@
         html: '<p>And images?</p>'
             + '<p><img src="/images/cat_professor.webp" alt="cat professor"></p>' },
       { from: 'Claude',  at: '2026-06-16T13:05:00Z', mine: true,  id: 'demo_6',
-        markdown: 'Same path — markdown has ![alt](src), goldmark renders it as <img>, Message wires the click to the popup.',
-        html: '<p>Same path — the markdown has <code>![alt](src)</code>, goldmark renders it as <code>&lt;img&gt;</code>, Message wires the click to the popup. Try clicking the cat above.</p>'
+        markdown: 'Same path — markdown has ![alt](src), the server renders it as <img>, Message wires the click to the popup.',
+        html: '<p>Same path — the markdown has <code>![alt](src)</code>, the server renders it as <code>&lt;img&gt;</code>, Message wires the click to the popup. Try clicking the cat above.</p>'
             + '<p>Click <a href="#msg-demo_1" class="msg-ref">MSG_demo_1</a> and the pane scrolls back + selects that bubble — your current position goes on the nav stack, so Back returns you here.</p>' },
     ];
 
@@ -1229,7 +1228,7 @@
     + 'the rest of the system — the compose box, the nav stack, the popups.'));
   lesson3Body.appendChild(buildParagraph(
     'Notice two things in the source below. First, data.html is HTML the server already produced '
-    + '(markdown rendered + sanitized by goldmark, plus a regex pass that wraps MSG_<id> tokens in '
+    + '(markdown rendered + sanitized by the server, plus a regex pass that wraps MSG_<id> tokens in '
     + '<a class="msg-ref"> links). The widget innerHTMLs it as-is — it doesn’t parse markdown, '
     + 'doesn’t re-sanitize. The separation lets the chat surface and the search modal use the same '
     + 'widget on the same bytes. Second, Message owns ALL the styling — both the bubble chrome it '
@@ -1359,7 +1358,7 @@
     + 'and the column comes alive.'));
   lesson6Body.appendChild(buildParagraph(
     'What does the server actually send? Two payloads per message: data.markdown (the raw source '
-    + 'the user typed) and data.html (the same source run through goldmark + a regex pass that '
+    + 'the user typed) and data.html (the same source rendered by the server + a regex pass that '
     + 'turns MSG_<id> tokens into msg-ref links). The html lands in Message.create and gets '
     + 'innerHTMLed as-is; the markdown is kept for quote-reply, edit, and ChatSearch. Everything '
     + 'else — column, navbar, buttons, scrollbar, bubble chrome, hover and disabled states — is '

@@ -1,6 +1,6 @@
 /* ChatTheme — wires the 🌙/☀️ toggle button in the chat-subsystem top bar.
 
-   PRODUCT_DECISION: chrome.go emits a placeholder <button id="chat-theme-toggle">
+   PRODUCT_DECISION: the server emits a placeholder <button id="chat-theme-toggle">
    with no icon; this module sets the right glyph on load and on click.
    Synchronous, no flash — ChatColors.install() runs first and sets
    data-theme; we just read it and pick the icon. */

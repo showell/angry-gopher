@@ -25,8 +25,8 @@ window.ChatRightSidebar = (function(){
 
   /* PRODUCT_DECISION: widget owns its own CSS — the wrapper sizing/flex
      and the "Open compose box" button. The wrapper rules used to live as
-     a landscape @media in chat.go; with mobile/portrait support dropped
-     they're always-on and belong here next to the element they style. */
+     a landscape @media in the server's CSS; with mobile/portrait support
+     dropped they're always-on and belong here next to the element they style. */
   var stylesInjected = false;
   // lint:called-once init-once-guard
   function ensureStyles(){

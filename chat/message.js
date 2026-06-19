@@ -82,7 +82,7 @@ window.Message = (function(){
       /* Timestamp is clickable → multi-zone popup. */
       + '.chat-meta .chat-time { cursor:pointer; text-decoration:underline dotted; }'
       + '.chat-meta .chat-time:hover { color:var(--cc-accent); }'
-      /* Bubble body wrap + classes goldmark + chat post-processing emit. */
+      /* Bubble body wrap + classes the server's markdown render + post-processing emit. */
       + '.chat-body { overflow-wrap:anywhere; }'
       + '.chat-body p:first-child { margin-top:0; }'
       + '.chat-body p:last-child { margin-bottom:0; }'

@@ -15,8 +15,8 @@ window.ChatCompose = (function(){
 
   /* PRODUCT_DECISION: widget owns its own CSS. Selectors are scoped to
      .chat-compose (the right-rail wrapper class set by ChatRightSidebar).
-     The compose-body + form + textarea flex rules used to live in
-     chat.go's landscape @media; with mobile/portrait support dropped they
+     The compose-body + form + textarea flex rules used to live in the
+     server's landscape @media; with mobile/portrait support dropped they
      are always-on and belong here next to the elements they style. */
   var stylesInjected = false;
   // lint:called-once init-once-guard

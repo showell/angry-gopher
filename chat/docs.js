@@ -19,8 +19,8 @@
   }
 
   /* BROWSER_WORKAROUND: x-www-form-urlencoded only. FormData sends multipart,
-     which Go's ParseForm doesn't touch — FormValue's ParseMultipartForm fails
-     silently under our MaxBytesReader wrap, so the server sees empty fields. */
+     which the server's form parsing doesn't read for these fields, so the
+     server sees them empty. */
   var FORM_HDR={'Content-Type':'application/x-www-form-urlencoded'};
   function encodeForm(pairs){
     var parts=[];
