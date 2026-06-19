@@ -26,6 +26,7 @@ const game = @import("game.zig");
 const spike = @import("spike.zig");
 const chat = @import("chat.zig");
 const settings = @import("settings.zig");
+const learn = @import("learn.zig");
 const Bus = @import("bus.zig").Bus;
 
 const PORT: u16 = 9001;
@@ -129,6 +130,8 @@ fn route(req: *std.http.Server.Request, io: std.Io, alloc: std.mem.Allocator, bu
         try chat.handleChannel(req, io, alloc, bus, sub);
     } else if (matchPrefix(path, "/settings")) |sub| {
         try settings.handle(req, io, alloc, bus, sub);
+    } else if (matchPrefix(path, "/learn")) |sub| {
+        try learn.handle(req, sub);
     } else {
         try http.notFound(req);
     }
