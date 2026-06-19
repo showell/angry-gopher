@@ -28,6 +28,7 @@ const store = @import("chat_store.zig");
 const docs_store = @import("docs_store.zig");
 const markdown = @import("markdown.zig");
 const chat = @import("chat.zig");
+const chat_state = @import("chat_state.zig");
 const timefmt = @import("timefmt.zig");
 const feed = @import("recent_feed.zig");
 const Bus = @import("bus.zig").Bus;
@@ -259,7 +260,7 @@ fn docsPost(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8) !vo
         return req.respond("no default chat partner available\n", .{ .status = .bad_request });
     }
     const conv = try store.chatPairKey(alloc, uid, partner);
-    const sid = try resolveSessionForUser(io, alloc, conv);
+    const sid = try chat_state.resolveSessionForUser(io, alloc, uid, conv);
 
     const conv_dir = try store.dmConvDir(alloc, conv);
     const from_name = try users.getUserName(io, alloc, uid);
@@ -292,17 +293,6 @@ fn validChatPartner(io: Io, alloc: Alloc, uid: []const u8, partner: []const u8) 
         if (std.mem.eql(u8, u.id, partner)) return true;
     }
     return false;
-}
-
-/// resolveSessionForUser picks the session a bare conv lands on. Go also prefers
-/// the user's last-viewed session, but per-user last-session tracking isn't
-/// ported, so this is: the conv's preferred default (ChitChat → first-alpha) →
-/// today's date (so a brand-new conv auto-creates today's session on first post).
-fn resolveSessionForUser(io: Io, alloc: Alloc, conv: []const u8) ![]const u8 {
-    const dir = try store.dmConvDir(alloc, conv);
-    const def = try store.defaultSession(io, alloc, dir);
-    if (def.len != 0) return def;
-    return timefmt.formatDateUTC(alloc, nowUnix(io));
 }
 
 fn nowUnix(io: Io) i64 {

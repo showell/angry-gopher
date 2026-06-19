@@ -16,6 +16,7 @@ const std = @import("std");
 const Io = std.Io;
 const Alloc = std.mem.Allocator;
 const store = @import("chat_store.zig");
+const timefmt = @import("timefmt.zig");
 
 /// userChatStateDir is a user's per-chat-state directory ({chat_root}/users/<uid>),
 /// sibling of users/<uid>/docs/.
@@ -140,4 +141,28 @@ fn readPinnedFile(io: Io, alloc: Alloc, uid: []const u8, conv_key: []const u8) !
 
 fn lessThanStr(_: void, a: []const u8, b: []const u8) bool {
     return std.mem.lessThan(u8, a, b);
+}
+
+// ── resume target (the bare-conv landing session) ─────────────────────────────
+
+/// resolveSessionForUser picks the session a bare /chat/c/<conv> (or docs
+/// post-to-chat) lands on for `uid`, in Go's order: the user's last-viewed (if it
+/// still exists) → ChitChat → first-alphabetical → today's date (so a brand-new
+/// conv auto-creates today's session on first post). Mirrors Go's
+/// resolveSessionForUser. Shared by /chat/default and the docs post flow.
+pub fn resolveSessionForUser(io: Io, alloc: Alloc, uid: []const u8, conv: []const u8) ![]const u8 {
+    const dir = try store.dmConvDir(alloc, conv);
+    const sessions = try store.listSessions(io, alloc, dir);
+
+    const last = try lastUserSession(io, alloc, uid, conv);
+    if (last.len != 0) {
+        for (sessions) |s| if (std.mem.eql(u8, s, last)) return last;
+    }
+    for (sessions) |s| if (std.mem.eql(u8, s, "ChitChat")) return s;
+    if (sessions.len > 0) return sessions[0];
+    return timefmt.formatDateUTC(alloc, nowUnix(io));
+}
+
+fn nowUnix(io: Io) i64 {
+    return @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
 }

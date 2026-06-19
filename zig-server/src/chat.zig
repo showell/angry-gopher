@@ -152,6 +152,12 @@ pub fn handle(req: *Request, io: Io, alloc: Alloc, bus: *Bus, sub: []const u8) !
             return;
         }
     }
+    // /chat/default — resume the last (conv, session); /chat/conversations —
+    // the (partner × session) matrix as JSON (the API-key discovery entry point);
+    // /chat/msg/<id> — resolve a global MSG_ ref to its thread and 302 there.
+    if (std.mem.eql(u8, sub, "/default")) return chatDefault(req, io, alloc, uid);
+    if (std.mem.eql(u8, sub, "/conversations")) return chatConversations(req, io, alloc, uid);
+    if (matchPrefix(sub, "/msg/")) |id| return chatMsgLookup(req, io, alloc, uid, id);
     if (matchPrefix(sub, "/c/")) |rest| {
         try convRoute(req, io, alloc, bus, uid, rest);
         return;
@@ -192,12 +198,14 @@ pub fn handleChannel(req: *Request, io: Io, alloc: Alloc, bus: *Bus, sub: []cons
         if (def.len == 0) return http.notFound(req);
         return http.redirect(req, try std.fmt.allocPrint(alloc, "{s}/{s}", .{ base, def }));
     };
+    const meta = store.ConvMeta{ .kind = .channel, .members = members };
+    // /channel/<name>/new — create a topic ("new" is reserved).
+    if (std.mem.eql(u8, topic_raw, "new")) return newTopic(req, io, alloc, bus, meta, .channel, name, base, dir, uid);
     if (!store.validSessionID(topic_raw)) return http.notFound(req);
     // Dupe out of req.head.target — a body read invalidates head strings (see convRoute).
     const topic = try alloc.dupe(u8, topic_raw);
 
     const title = try std.fmt.allocPrint(alloc, "#{s}: {s}", .{ name, topic });
-    const meta = store.ConvMeta{ .kind = .channel, .members = members };
     try topicRoute(req, io, alloc, bus, &segs, uid, meta, .channel, name, base, dir, topic, title);
 }
 
@@ -219,17 +227,19 @@ fn convRoute(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8, re
         if (def.len == 0) return http.notFound(req);
         return http.redirect(req, try std.fmt.allocPrint(alloc, "{s}/{s}", .{ base, def }));
     };
-    if (!store.validSessionID(sid_raw)) return http.notFound(req);
-    const sid = try alloc.dupe(u8, sid_raw);
-
-    const partner = try partnerName(io, alloc, conv, uid);
-    const title = try std.fmt.allocPrint(alloc, "Chat w/{s}: {s}", .{ partner, sid });
     // DM members are the two uids in the (already participant-checked) pair key.
     const us = std.mem.indexOfScalar(u8, conv, '_').?;
     const members = try alloc.alloc([]const u8, 2);
     members[0] = conv[0..us];
     members[1] = conv[us + 1 ..];
     const meta = store.ConvMeta{ .kind = .dm, .members = members };
+    // /chat/c/<conv>/new — create a topic ("new" beats {sid}; it's reserved).
+    if (std.mem.eql(u8, sid_raw, "new")) return newTopic(req, io, alloc, bus, meta, .dm, conv, base, dir, uid);
+    if (!store.validSessionID(sid_raw)) return http.notFound(req);
+    const sid = try alloc.dupe(u8, sid_raw);
+
+    const partner = try partnerName(io, alloc, conv, uid);
+    const title = try std.fmt.allocPrint(alloc, "Chat w/{s}: {s}", .{ partner, sid });
     try topicRoute(req, io, alloc, bus, &segs, uid, meta, .dm, conv, base, dir, sid, title);
 }
 
@@ -555,6 +565,170 @@ fn sendDone(req: *Request, alloc: Alloc, is_async: bool, base: []const u8, sid: 
     if (is_async) return req.respond("", .{ .status = .no_content });
     const loc = try std.fmt.allocPrint(alloc, "{s}/{s}", .{ base, sid });
     return http.redirect(req, loc);
+}
+
+// ── new topic ─────────────────────────────────────────────────────────────────
+
+/// newTopic handles POST <conv-base>/new — Go's HandleChat/ChannelNewTopic:
+/// validate the `topic` form field, refuse duplicates + the reserved "new", then
+/// seed the session with a first "hi" message (which fans out topic-added). For a
+/// DM it also remembers the new topic as last-viewed and announces it as a link
+/// in the highest generalN session, where the partner already watches. Returns
+/// `{conv, sid}` JSON. Shared by DMs and channels (kind gates the DM-only extras).
+fn newTopic(req: *Request, io: Io, alloc: Alloc, bus: *Bus, meta: store.ConvMeta, kind: Kind, conv_key: []const u8, base: []const u8, dir: []const u8, uid: []const u8) !void {
+    if (req.head.method != .POST) return http.methodNotAllowed(req);
+
+    const body = (try http.readLimitedBody(req, alloc, max_message_bytes)) orelse return;
+    const topic_raw = (try formField(alloc, body, "topic")) orelse "";
+    const topic = std.mem.trim(u8, topic_raw, " \t\r\n");
+    if (!store.validSessionID(topic)) {
+        return req.respond("Topic must be letters, digits, and hyphens only — no spaces, underscores, or punctuation.\n", .{ .status = .bad_request });
+    }
+    if (std.mem.eql(u8, topic, "new")) {
+        return req.respond("\"new\" is reserved — pick another topic name.\n", .{ .status = .bad_request });
+    }
+    for (try store.listSessions(io, alloc, dir)) |s| {
+        if (std.mem.eql(u8, s, topic)) return req.respond("That topic already exists.\n", .{ .status = .conflict });
+    }
+
+    const from_name = try users.getUserName(io, alloc, uid);
+    _ = try store.appendMessage(io, alloc, bus, meta, dir, conv_key, topic, from_name, uid, "hi", "");
+    users.touchUser(io, alloc, uid);
+
+    if (kind == .dm) {
+        chat_state.setUserLastSession(io, alloc, uid, conv_key, topic);
+        // Announce the new topic where the partner already watches (best-effort).
+        if (try highestGeneralSession(io, alloc, dir)) |gen| {
+            if (!std.mem.eql(u8, gen, topic)) {
+                const note = try std.fmt.allocPrint(alloc, "New topic: [{s}]({s}/{s})", .{ topic, base, topic });
+                _ = store.appendMessage(io, alloc, bus, meta, dir, conv_key, gen, from_name, uid, note, "") catch {};
+            }
+        }
+    }
+
+    const out = try std.fmt.allocPrint(alloc, "{{\"conv\":{f},\"sid\":{f}}}", .{ std.json.fmt(conv_key, .{}), std.json.fmt(topic, .{}) });
+    try req.respond(out, .{ .extra_headers = &.{http.json_ct} });
+}
+
+/// highestGeneralSession returns the "general<N>" session with the largest N in
+/// `dir`, or null when there is none. Mirrors Go's highestGeneralSession.
+fn highestGeneralSession(io: Io, alloc: Alloc, dir: []const u8) !?[]const u8 {
+    var best: ?[]const u8 = null;
+    var best_n: i64 = -1;
+    for (try store.listSessions(io, alloc, dir)) |s| {
+        if (!std.mem.startsWith(u8, s, "general")) continue;
+        const n = std.fmt.parseInt(i64, s["general".len..], 10) catch continue;
+        if (n > best_n) {
+            best_n = n;
+            best = s;
+        }
+    }
+    return best;
+}
+
+// ── default / conversations / msg-ref lookup ──────────────────────────────────
+
+/// chatDefault redirects to the user's most-recently-viewed (conv, session), or
+/// /chat when they've never been to a conv they still participate in. Mirrors
+/// Go's HandleChatDefault.
+fn chatDefault(req: *Request, io: Io, alloc: Alloc, uid: []const u8) !void {
+    const conv = try chat_state.lastUserConv(io, alloc, uid);
+    if (conv.len == 0 or !(try store.chatKeyParticipant(alloc, conv, uid))) {
+        return http.redirect(req, "/chat");
+    }
+    const sid = try chat_state.resolveSessionForUser(io, alloc, uid, conv);
+    return http.redirect(req, try std.fmt.allocPrint(alloc, "/chat/c/{s}/{s}", .{ conv, sid }));
+}
+
+/// chatConversations serves GET /chat/conversations: the (partner × session)
+/// matrix as JSON — every other authorized principal, each conv's default
+/// landing session and its session list (sorted). The discovery entry point for
+/// API-key clients. Mirrors Go's HandleChatConversations.
+fn chatConversations(req: *Request, io: Io, alloc: Alloc, uid: []const u8) !void {
+    if (req.head.method != .GET) return http.methodNotAllowed(req);
+
+    var b: std.ArrayList(u8) = .empty;
+    try b.print(alloc, "{{\"me\":{f},\"conversations\":[", .{std.json.fmt(uid, .{})});
+    var first = true;
+    for (try users.listAuthorized(io, alloc)) |partner| {
+        if (std.mem.eql(u8, partner.id, uid)) continue;
+        if (!first) try b.append(alloc, ',');
+        first = false;
+        const conv = try store.chatPairKey(alloc, uid, partner.id);
+        const def = try chat_state.resolveSessionForUser(io, alloc, uid, conv);
+        const dir = try store.dmConvDir(alloc, conv);
+        try b.print(alloc, "{{\"conv\":{f},\"partner\":{{\"id\":{f},\"name\":{f}}},\"default\":{f},\"sessions\":[", .{
+            std.json.fmt(conv, .{}), std.json.fmt(partner.id, .{}), std.json.fmt(partner.name, .{}), std.json.fmt(def, .{}),
+        });
+        var sfirst = true;
+        for (try store.listSessions(io, alloc, dir)) |s| {
+            if (!sfirst) try b.append(alloc, ',');
+            sfirst = false;
+            try b.print(alloc, "{f}", .{std.json.fmt(s, .{})});
+        }
+        try b.appendSlice(alloc, "]}");
+    }
+    try b.appendSlice(alloc, "]}");
+    try req.respond(b.items, .{ .extra_headers = &.{http.json_ct} });
+}
+
+/// chatMsgLookup resolves a global MSG_<id> to the thread it lives in and 302s to
+/// that topic URL + #msg-<id>. Walks the viewer's accessible convs (DM partners,
+/// then channels) and picks the first whose session list holds the sid embedded
+/// in the id. Mirrors Go's HandleChatMsgLookup / findMsgConvForUser.
+fn chatMsgLookup(req: *Request, io: Io, alloc: Alloc, uid: []const u8, id: []const u8) !void {
+    if (!validMsgRefID(id)) return http.notFound(req);
+    const cut = std.mem.lastIndexOfScalar(u8, id, '_').?; // validMsgRefID guarantees one
+    const sid = id[0..cut];
+
+    for (try users.listAuthorized(io, alloc)) |partner| {
+        if (std.mem.eql(u8, partner.id, uid)) continue;
+        const conv = try store.chatPairKey(alloc, uid, partner.id);
+        const dir = try store.dmConvDir(alloc, conv);
+        if (try convHasSession(io, alloc, dir, sid)) {
+            return redirectFound(req, try std.fmt.allocPrint(alloc, "/chat/c/{s}/{s}#msg-{s}", .{ conv, sid, id }));
+        }
+    }
+    for (try store.listUserChannels(io, alloc, uid)) |name| {
+        const dir = try store.channelConvDir(alloc, name);
+        if (try convHasSession(io, alloc, dir, sid)) {
+            return redirectFound(req, try std.fmt.allocPrint(alloc, "/channel/{s}/{s}#msg-{s}", .{ name, sid, id }));
+        }
+    }
+    return http.notFound(req);
+}
+
+/// validMsgRefID matches Go's msgRefIDRe: `^[A-Za-z0-9-]+_[0-9]+$` — a session
+/// slug, underscore, decimal index. Doubles as the path guard for the sid.
+fn validMsgRefID(id: []const u8) bool {
+    const cut = std.mem.lastIndexOfScalar(u8, id, '_') orelse return false;
+    const left = id[0..cut];
+    const right = id[cut + 1 ..];
+    if (left.len == 0 or right.len == 0) return false;
+    for (left) |c| {
+        if (!((c >= 'A' and c <= 'Z') or (c >= 'a' and c <= 'z') or (c >= '0' and c <= '9') or c == '-')) return false;
+    }
+    for (right) |c| {
+        if (c < '0' or c > '9') return false;
+    }
+    return true;
+}
+
+/// convHasSession reports whether `dir`'s session list contains `sid`.
+fn convHasSession(io: Io, alloc: Alloc, dir: []const u8, sid: []const u8) !bool {
+    for (try store.listSessions(io, alloc, dir)) |s| {
+        if (std.mem.eql(u8, s, sid)) return true;
+    }
+    return false;
+}
+
+/// redirectFound issues a 302 (Go's StatusFound) to `location` — the msg-ref
+/// lookup uses 302 (a transient lookup-then-go), not the 303 the others use.
+fn redirectFound(req: *Request, location: []const u8) !void {
+    return req.respond("", .{
+        .status = .found,
+        .extra_headers = &.{.{ .name = "location", .value = location }},
+    });
 }
 
 /// forwardUserStream subscribes to a per-uid cross-page bus key (recent/images)
