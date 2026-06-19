@@ -30,12 +30,10 @@ const Alloc = std.mem.Allocator;
 /// The single fan-out key the spike uses (chat will key by conv/user id).
 const broadcast_key = "all";
 
-const sse_headers = [_]std.http.Header{
-    .{ .name = "content-type", .value = "text/event-stream" },
-    .{ .name = "cache-control", .value = "no-cache" },
-    // Defeat any reverse-proxy buffering (Caddy/nginx) so frames arrive live.
-    .{ .name = "x-accel-buffering", .value = "no" },
-};
+/// SSE headers + pushFrame live in http.zig now (chat reuses them); aliased
+/// here so the spike body stays readable.
+const sse_headers = http.sse_headers;
+const pushFrame = http.pushFrame;
 
 pub fn handle(req: *std.http.Server.Request, io: Io, alloc: Alloc, bus: *Bus, sub: []const u8) !void {
     if (sub.len == 0 or std.mem.eql(u8, sub, "/")) {
@@ -49,17 +47,6 @@ pub fn handle(req: *std.http.Server.Request, io: Io, alloc: Alloc, bus: *Bus, su
     } else {
         try http.notFound(req);
     }
-}
-
-/// pushFrame sends one SSE frame live. Two flushes are required and the order
-/// matters: body.writer.flush() drains the chunked BodyWriter's own buffer into
-/// the protocol output (emitting the HTTP chunk), then body.flush() pushes that
-/// chunk out the socket. body.flush() alone is a no-op while bytes still sit in
-/// the writer buffer — the subtle bit that makes SSE actually stream.
-fn pushFrame(body: *std.http.BodyWriter, bytes: []const u8) !void {
-    try body.writer.writeAll(bytes);
-    try body.writer.flush();
-    try body.flush();
 }
 
 /// clockStream emits ": ok" then a `data:` tick every second, forever, until the

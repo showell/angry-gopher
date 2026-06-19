@@ -169,6 +169,37 @@ fn userIsAuthorized(io: Io, alloc: Alloc, id: []const u8) !bool {
     return (try userIsMember(io, alloc, id)) or isAgent(id);
 }
 
+/// AuthorizedUser is one entry of the account roster (id + display name).
+pub const AuthorizedUser = struct { id: []const u8, name: []const u8 };
+
+/// listAuthorized returns every authorized principal (member or agent) — one
+/// account dir under auth_root that has a password file OR is the agent — with
+/// its display name, sorted by numeric id. Mirrors the subset of
+/// users.ListAuthorized the chat sidebar needs. Missing auth_root → empty.
+pub fn listAuthorized(io: Io, alloc: Alloc) ![]AuthorizedUser {
+    var dir = Io.Dir.cwd().openDir(io, auth_root, .{ .iterate = true }) catch return &.{};
+    defer dir.close(io);
+
+    var out: std.ArrayList(AuthorizedUser) = .empty;
+    var it = dir.iterate();
+    while (try it.next(io)) |entry| {
+        if (entry.kind != .directory) continue;
+        // numeric id only (the account dirs); skips next-id.txt etc.
+        if (std.fmt.parseInt(i64, entry.name, 10)) |_| {} else |_| continue;
+        const id = try alloc.dupe(u8, entry.name);
+        if (!try userIsAuthorized(io, alloc, id)) continue;
+        const name = try getUserName(io, alloc, id);
+        try out.append(alloc, .{ .id = id, .name = name });
+    }
+    const slice = try out.toOwnedSlice(alloc);
+    std.mem.sort(AuthorizedUser, slice, {}, lessThanByNumericID);
+    return slice;
+}
+
+fn lessThanByNumericID(_: void, a: AuthorizedUser, b: AuthorizedUser) bool {
+    return (std.fmt.parseInt(i64, a.id, 10) catch 0) < (std.fmt.parseInt(i64, b.id, 10) catch 0);
+}
+
 /// getUserName returns a user's display name ({auth_root}/{id}/name, trailing
 /// CR/LF trimmed), or "" when absent. Mirrors users.GetUserName. Allocated from
 /// `alloc`.

@@ -39,6 +39,27 @@ pub fn build(b: *std.Build) void {
         .{ .name = "puzzle_cat_4", .path = "../games/lynrummy/conformance/curated_4line_puzzles.dsl" },
         .{ .name = "puzzle_cat_5", .path = "../games/lynrummy/conformance/curated_5line_puzzles.dsl" },
         .{ .name = "puzzle_cat_6", .path = "../games/lynrummy/conformance/curated_6line_puzzles.dsl" },
+        // The chat conversation page's client bundles — the IDENTICAL prod JS
+        // the Go server serves (chat/*.js, wired in Go's embed.go). The zig
+        // chat page serves these byte-for-byte so the real client boots on it.
+        .{ .name = "chat_js_colors", .path = "../chat/colors.js" },
+        .{ .name = "chat_js_theme", .path = "../chat/chat_theme.js" },
+        .{ .name = "chat_js_image_popup", .path = "../chat/chat_image_popup.js" },
+        .{ .name = "chat_js_code_popup", .path = "../chat/chat_code_popup.js" },
+        .{ .name = "chat_js_time_popup", .path = "../chat/chat_time_popup.js" },
+        .{ .name = "chat_js_message", .path = "../chat/message.js" },
+        .{ .name = "chat_js_message_view", .path = "../chat/message_view.js" },
+        .{ .name = "chat_js_nav_stack", .path = "../chat/nav_stack.js" },
+        .{ .name = "chat_js_middle_pane", .path = "../chat/middle_pane.js" },
+        .{ .name = "chat_js_search", .path = "../chat/chat_search.js" },
+        .{ .name = "chat_js_drag_to_pin", .path = "../chat/chat_drag_to_pin.js" },
+        .{ .name = "chat_js_add_topic", .path = "../chat/chat_add_topic.js" },
+        .{ .name = "chat_js_left_sidebar", .path = "../chat/chat_left_sidebar.js" },
+        .{ .name = "chat_js_right_sidebar", .path = "../chat/chat_right_sidebar.js" },
+        .{ .name = "chat_js_compose", .path = "../chat/chat_compose.js" },
+        .{ .name = "chat_js_help", .path = "../chat/chat_help.js" },
+        .{ .name = "chat_js_chat", .path = "../chat/chat.js" },
+        .{ .name = "chat_js_notify", .path = "../chat/notify.js" },
     };
     for (assets) |a| {
         root.addAnonymousImport(a.name, .{ .root_source_file = b.path(a.path) });

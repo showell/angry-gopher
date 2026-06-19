@@ -206,6 +206,28 @@ pub fn hasMember(members: [][]const u8, uid: []const u8) bool {
     return false;
 }
 
+/// listUserChannels returns the names of channels `uid` is a member of, sorted.
+/// Scans {chat_root}/channels/*.channel. Missing dir → empty. Mirrors Go's
+/// ListUserChannels (used by the sidebar's conversations rail).
+pub fn listUserChannels(io: Io, alloc: Alloc, uid: []const u8) ![][]const u8 {
+    const dir_path = try std.fs.path.join(alloc, &.{ chat_root, "channels" });
+    var dir = Io.Dir.cwd().openDir(io, dir_path, .{ .iterate = true }) catch return &.{};
+    defer dir.close(io);
+
+    var out: std.ArrayList([]const u8) = .empty;
+    var it = dir.iterate();
+    while (try it.next(io)) |entry| {
+        if (!std.mem.endsWith(u8, entry.name, ".channel")) continue;
+        const name = entry.name[0 .. entry.name.len - ".channel".len];
+        const members = (try channelMembers(io, alloc, name)) orelse continue;
+        if (!hasMember(members, uid)) continue;
+        try out.append(alloc, try alloc.dupe(u8, name));
+    }
+    const slice = try out.toOwnedSlice(alloc);
+    std.mem.sort([]const u8, slice, {}, lessThanStr);
+    return slice;
+}
+
 // ── validators / access (port of chat_store.go) ──────────────────────────────
 
 /// chatKeyParticipant reports whether `user` participates in DM key `key`
@@ -224,7 +246,7 @@ pub fn chatKeyParticipant(alloc: Alloc, key: []const u8, user: []const u8) !bool
 
 /// chatPairKey is the canonical DM key: the smaller numeric id first, joined by
 /// '_'. Mirrors chatPairKey (atoiOr0 on each side).
-fn chatPairKey(alloc: Alloc, a: []const u8, b: []const u8) ![]u8 {
+pub fn chatPairKey(alloc: Alloc, a: []const u8, b: []const u8) ![]u8 {
     return if (atoiOr0(a) <= atoiOr0(b))
         std.fmt.allocPrint(alloc, "{s}_{s}", .{ a, b })
     else
