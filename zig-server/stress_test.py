@@ -16,6 +16,14 @@ jobs:
      arena frees request memory on close, so RSS should settle near baseline; a
      monotone climb across phases is the leak signal.
 
+  3. COMPLEXITY / REJECT — a CPU-DoS is neither a crash nor a leak: a single
+     hostile message can be O(n²) in the markdown parser and peg a core for
+     tens of seconds (found 2026-06-19: "[[[[…", "[]([]([…", "a_b_a_b…"). This
+     job times render at growing input sizes and flags any super-linear blowup,
+     and checks that over-formatted input is rejected as malformed while normal
+     prose and fenced code still render. Defends both the linear-scanner fix and
+     the 256-markup-token reject cap from regressing.
+
 Markdown-content fuzzing routes through POST /chat/docs/render (renders, never
 writes), so we exercise the hot markdown/parse paths without polluting any
 transcript. Run with the server already up on :9001.
@@ -77,7 +85,8 @@ def alive():
 
 # ── crash battery ─────────────────────────────────────────────────────────────
 
-deaths = []  # (category, label) that left the server unresponsive
+deaths = []        # (category, label) that left the server unresponsive
+regressions = []   # (category, label) non-fatal failures (slow render, bad reject)
 
 def check(category, label):
     if not alive():
@@ -204,6 +213,70 @@ def upload_fuzz():
     ]
     return cases
 
+# ── complexity / reject phase ──────────────────────────────────────────────────
+
+def post_render(md: bytes, timeout=30.0):
+    """POST raw markdown to /chat/docs/render, full-read the response. Returns
+    (elapsed_s, status|None, body_bytes). The md goes in a urlencoded `body=`
+    field; our probe payloads use only form-safe bytes ([ ] _ ( ) a b ` # space)."""
+    payload = b"body=" + md
+    blob = (f"POST /chat/docs/render HTTP/1.1\r\nHost: {HOST}\r\n{AUTH}\r\n"
+            f"Content-Type: application/x-www-form-urlencoded\r\n"
+            f"Content-Length: {len(payload)}\r\nConnection: close\r\n\r\n").encode() + payload
+    t0 = time.time()
+    try:
+        s = socket.create_connection((HOST, PORT), timeout=timeout)
+        s.settimeout(timeout)
+        s.sendall(blob)
+        chunks = []
+        while True:
+            d = s.recv(65536)
+            if not d:
+                break
+            chunks.append(d)
+        s.close()
+    except Exception as e:
+        return time.time() - t0, None, str(e).encode()
+    resp = b"".join(chunks)
+    status = int(resp.split()[1]) if resp.startswith(b"HTTP/") else None
+    sep = resp.find(b"\r\n\r\n")
+    return time.time() - t0, status, (resp[sep + 4:] if sep >= 0 else b"")
+
+def complexity_and_reject():
+    """Time render at growing sizes (catch super-linear CPU blowup) and verify
+    over-formatted input is rejected while normal/code input renders."""
+    print("[complexity] render must stay sub-linear-ish; floods must be refused")
+    MALFORMED = b"malformed markdown"
+    # Vectors that were O(n²) before the monotonic-cursor fix. With the reject
+    # cap they're refused in O(n); if BOTH layers regress, n=80000 reverts to
+    # 5–35s and trips the threshold below.
+    vectors = {
+        "unclosed [":    lambda n: b"[" * n,
+        "[]( no )":      lambda n: b"[](" * (n // 3),
+        "a_b_ emphasis": lambda n: b"a_b_" * (n // 4),
+    }
+    sizes = [20000, 40000, 80000]
+    for name, mk in vectors.items():
+        ts = [post_render(mk(n))[0] for n in sizes]
+        flag = "SUPER-LINEAR!" if ts[-1] > 1.0 else "ok"
+        print(f"    {name:16} n={sizes[0]}→{sizes[-1]}: {ts[0]:.3f}s → {ts[-1]:.3f}s  [{flag}]")
+        if ts[-1] > 1.0:
+            regressions.append(("complexity", f"{name}: {ts[-1]:.1f}s at n={sizes[-1]} (super-linear)"))
+    # Reject correctness: floods → malformed; ordinary prose + fenced code → render.
+    checks = [
+        ("flood [ → malformed",   b"[" * 300,                              True),
+        ("flood _ → malformed",   b"a" + b"_b" * 300,                      True),
+        ("normal prose renders",  b"# Hi *there* [x](/y) `c` e@host.com",  False),
+        ("fenced code exempt",    b"```\n" + b"a_b_c_d_e_f " * 40 + b"\n```", False),
+    ]
+    for label, md, want_bad in checks:
+        _, st, body = post_render(md)
+        got_bad = MALFORMED in body
+        ok = st == 200 and got_bad == want_bad
+        print(f"    {label:22} status={st} malformed={got_bad}  [{'PASS' if ok else 'FAIL'}]")
+        if not ok:
+            regressions.append(("complexity", f"{label}: status={st} malformed={got_bad}, wanted {want_bad}"))
+
 # ── leak phase ────────────────────────────────────────────────────────────────
 
 def hammer_sequential(n):
@@ -257,6 +330,9 @@ def main():
     batch("markdown-fuzz",      markdown_fuzz())
     batch("upload-fuzz",        upload_fuzz())
 
+    print("\n══ COMPLEXITY / REJECT ══")
+    complexity_and_reject()
+
     print("\n══ LEAK HUNTING ══")
     base = settle_rss("baseline")
     print("  5000 sequential mixed GETs…");      hammer_sequential(5000); r1 = settle_rss("after sequential")
@@ -273,13 +349,19 @@ def main():
             print(f"       [{c}] {l}")
     else:
         print("  ✅ no crashes — server survived every adversarial case")
+    if regressions:
+        print(f"  ❌ {len(regressions)} REGRESSION(s):")
+        for c, l in regressions:
+            print(f"       [{c}] {l}")
+    else:
+        print("  ✅ no complexity/reject regressions")
     # Heuristic leak flag: sustained growth well past arena/page-cache slack.
     if r4 - base > 20000:
         print(f"  ⚠️  RSS grew {r4 - base} kB and didn't settle — investigate for a leak")
     else:
         print(f"  ✅ RSS settled (net +{r4 - base} kB ≈ allocator/page slack, not a leak)")
     print(f"  server still alive: {alive()}")
-    sys.exit(1 if deaths else 0)
+    sys.exit(1 if (deaths or regressions) else 0)
 
 if __name__ == "__main__":
     main()
