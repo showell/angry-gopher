@@ -34,7 +34,7 @@ const elm_js = @embedFile("game_elm_js");
 const engine_js = @embedFile("game_engine_js");
 const engine_glue_js = @embedFile("game_engine_glue_js");
 
-// Body-size caps. Mirror Go's limits.go.
+// Body-size caps.
 const max_new_session_bytes = 256 * 1024;
 const max_append_bytes = 64 * 1024;
 
@@ -122,7 +122,7 @@ fn newSession(req: *Request, io: std.Io, alloc: Alloc, user_id: []const u8) !voi
     const meta_bytes = try session_meta.formatSessionMeta(alloc, meta);
     try storage.writeSessionFile(io, alloc, user_id, id, "meta", meta_bytes);
 
-    // {"session_id":N}\n — matches Go's json.Encoder (no spaces, trailing newline).
+    // {"session_id":N}\n — no spaces, trailing newline.
     const body = try std.fmt.allocPrint(alloc, "{{\"session_id\":{d}}}\n", .{id});
     try req.respond(body, .{ .extra_headers = &.{http.json_ct} });
 }
@@ -202,7 +202,7 @@ fn sessionsJSON(req: *Request, io: std.Io, alloc: Alloc, user_id: []const u8) !v
         if (i > 0) try b.append(alloc, ',');
         const meta = try readMeta(io, alloc, user_id, id);
         const count = try storage.countSessionActions(io, alloc, user_id, id);
-        // Field order matches Go's entry struct: id, created_at, label, action_count.
+        // Field order: id, created_at, label, action_count.
         try b.print(alloc, "{{\"id\":{d},\"created_at\":{d},\"label\":{f},\"action_count\":{d}}}", .{
             id, meta.created_at, std.json.fmt(meta.label, .{}), count,
         });
@@ -248,9 +248,9 @@ fn playPage(req: *Request, io: std.Io, alloc: Alloc, user_id: []const u8, sessio
     const name = try users.getUserName(io, alloc, user_id);
     const name_json = try std.fmt.allocPrint(alloc, "{f}", .{std.json.fmt(name, .{})});
 
-    // The two spaces in the format are the literal spaces Go has after `=` and
-    // after `playerName:`; keeping them here avoids fragile trailing spaces in
-    // the play_a / play_b multiline literals.
+    // The two spaces in the format are the literal spaces after `=` and after
+    // `playerName:`; keeping them here avoids fragile trailing spaces in the
+    // play_a / play_b multiline literals.
     const body = try std.fmt.allocPrint(alloc, "{s} {s}{s} {s}{s}", .{ play_a, initial, play_b, name_json, play_c });
     try req.respond(body, .{ .extra_headers = &.{http.html_ct} });
 }
@@ -268,15 +268,14 @@ fn readMeta(io: std.Io, alloc: Alloc, user_id: []const u8, session_id: i64) !Ses
     return session_meta.parseSessionMeta(b);
 }
 
-/// labelSuffix mirrors Go's labelSuffix: "" for an empty label, else " · " +
-/// escaped label.
+/// labelSuffix is "" for an empty label, else " · " + escaped label.
 fn labelSuffix(alloc: Alloc, label: []const u8) ![]const u8 {
     if (label.len == 0) return "";
     return std.fmt.allocPrint(alloc, " · {s}", .{try htmlEscape(alloc, label)});
 }
 
-/// htmlEscape mirrors Go's html.EscapeString: & ' < > " → &amp; &#39; &lt; &gt;
-/// &#34;. Returns `s` unchanged (no allocation) when it has nothing to escape.
+/// htmlEscape maps & ' < > " → &amp; &#39; &lt; &gt; &#34;. Returns `s`
+/// unchanged (no allocation) when it has nothing to escape.
 fn htmlEscape(alloc: Alloc, s: []const u8) ![]const u8 {
     if (std.mem.indexOfAny(u8, s, "&'<>\"") == null) return s;
     var out: std.ArrayList(u8) = .empty;
@@ -293,14 +292,13 @@ fn htmlEscape(alloc: Alloc, s: []const u8) ![]const u8 {
 
 // ── Eastern-time formatting (the one tzdata gap) ─────────────────────────────
 //
-// Go formats list/detail timestamps as `time.Unix(t).In("America/New_York")`
-// with layout "Jan 2, 2006 · 3:04 PM MST". zig std has no timezone database, so
-// US Eastern DST rules are hardcoded here (EST = UTC-5, EDT = UTC-4; spring
-// forward 2nd Sunday of March 02:00, fall back 1st Sunday of November 02:00 —
-// the post-2007 US rule). Byte-exact with Go for every real session timestamp
-// (all 2026); the only divergence is pre-2007 historical dates, which never
-// appear in this data. Documented, non-gating — same spirit as the markdown
-// soft-break divergence.
+// List/detail timestamps render in US Eastern with layout
+// "Jan 2, 2006 · 3:04 PM MST". zig std has no timezone database, so US Eastern
+// DST rules are hardcoded here (EST = UTC-5, EDT = UTC-4; spring forward 2nd
+// Sunday of March 02:00, fall back 1st Sunday of November 02:00 — the post-2007
+// US rule). Correct for every real session timestamp (all 2026); the only
+// divergence is pre-2007 historical dates, which never appear in this data.
+// Documented, non-gating — same spirit as the markdown soft-break divergence.
 
 const month_abbr = [_][]const u8{ "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec" };
 
@@ -362,7 +360,7 @@ fn daysFromCivil(year: i64, month: u32, day: u32) i64 {
     return era * 146097 + doe - 719468;
 }
 
-// ── HTML templates (copied verbatim from Go's lynrummy_elm.go) ───────────────
+// ── HTML templates ───────────────────────────────────────────────────────────
 
 const sessions_list_head =
     \\<!DOCTYPE html>
@@ -412,8 +410,7 @@ const detail_head =
 ;
 
 // The play page, split around its two format slots: `var initialSessionId = `
-// <initial> `;` … `playerName: ` <name_json> `,`. Copied verbatim from Go's
-// lynrummyElmPlayWithSession (parity, not redesign).
+// <initial> `;` … `playerName: ` <name_json> `,`.
 const play_a =
     \\<!doctype html>
     \\<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"><title>♦️ Lyn Rummy ♥️</title>

@@ -6,7 +6,7 @@
 //!
 //! Phase 3 (now): the whole surface is gated JUST_NEEDS_NAME — every request
 //! resolves its identity (users.currentUserID), and with no identity we redirect
-//! to /login exactly like Go's Gated wrapper. The resolved id is the storage key
+//! to /login. The resolved id is the storage key
 //! (replacing the phase-2 stub). The page allocates a real session id + writes
 //! meta; POST .../actions appends to disk.
 
@@ -36,9 +36,8 @@ const Alloc = std.mem.Allocator;
 /// `sub` keeps its leading '/' (e.g. "/puzzle.js", "/sessions/3/...").
 ///
 /// The whole surface is gated JUST_NEEDS_NAME: resolve identity first and, with
-/// none, redirect to /login (mirroring Go's Gated wrapper — the strategy IS the
-/// contract, so the inner handlers never re-check). The resolved id is the
-/// storage key for every write below.
+/// none, redirect to /login. The gate IS the contract — the inner handlers never
+/// re-check. The resolved id is the storage key for every write below.
 pub fn handle(req: *std.http.Server.Request, io: std.Io, alloc: Alloc, sub: []const u8) !void {
     const user_id = try users.currentUserID(io, alloc, req);
     if (user_id.len == 0) {
@@ -57,7 +56,7 @@ pub fn handle(req: *std.http.Server.Request, io: std.Io, alloc: Alloc, sub: []co
     }
 }
 
-/// sessionRoute handles the one session route Go exposes:
+/// sessionRoute handles the one session route:
 ///   POST /sessions/<id>/puzzles/<idx>/actions  — append one action line.
 /// `rest` is the path after "/sessions/".
 fn sessionRoute(req: *std.http.Server.Request, io: std.Io, alloc: Alloc, user_id: []const u8, rest: []const u8) !void {
@@ -122,7 +121,7 @@ fn page(req: *std.http.Server.Request, io: std.Io, alloc: Alloc, user_id: []cons
 }
 
 /// loadCatalog concatenates the catalogs, stripping `#` comments and blank
-/// lines, surviving lines joined by '\n' (no trailing). Matches Go's loadCatalog.
+/// lines, surviving lines joined by '\n' (no trailing).
 fn loadCatalog(alloc: Alloc) ![]u8 {
     var out: std.ArrayList(u8) = .empty;
     var first = true;
@@ -142,7 +141,7 @@ fn loadCatalog(alloc: Alloc) ![]u8 {
 }
 
 /// indentLines prefixes every non-empty line with two spaces; empty lines pass
-/// through. Matches Go's indentLines.
+/// through.
 fn indentLines(alloc: Alloc, src: []const u8) ![]u8 {
     var out: std.ArrayList(u8) = .empty;
     var it = std.mem.splitScalar(u8, src, '\n');
@@ -156,11 +155,10 @@ fn indentLines(alloc: Alloc, src: []const u8) ![]u8 {
     return out.toOwnedSlice(alloc);
 }
 
-// The HTML host, copied verbatim from Go's puzzlePage (parity, not redesign:
-// Steve's "no CSS from Go" rule is about NEW features; this is an existing
-// surface being ported byte-for-byte). Split around the single `flags:` slot —
-// `page_pre` ends at `flags:`, the flag JSON goes in the format's space, and
-// `page_post` resumes at ` });`.
+// The HTML host. This page ships its own CSS: the "no CSS from the server" rule
+// is about NEW features, and this is an existing surface kept as-is. Split around
+// the single `flags:` slot — `page_pre` ends at `flags:`, the flag JSON goes in
+// the format's space, and `page_post` resumes at ` });`.
 const page_pre =
     \\<!doctype html>
     \\<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"><title>♦️ Lyn Rummy ♥️</title>

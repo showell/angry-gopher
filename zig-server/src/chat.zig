@@ -48,9 +48,8 @@ const Request = std.http.Server.Request;
 /// Max bytes for one posted message.
 const max_message_bytes = 64 * 1024;
 
-/// Asset version (cache-buster). The Go server uses the git sha / "dev"; the zig
-/// port has no build stamp, so a constant suffices — it only namespaces the
-/// browser cache, and :9001 is a separate origin from Go's :9000 anyway.
+/// Asset version (cache-buster). The server has no build stamp, so a constant
+/// suffices — it only namespaces the browser cache.
 pub const asset_v = "zig";
 
 const Kind = enum { dm, channel };
@@ -58,7 +57,7 @@ const Kind = enum { dm, channel };
 const Asset = struct { name: []const u8, body: []const u8 };
 
 /// The embedded prod client bundles (wired in build.zig). Served verbatim at
-/// /chat/<name> with a JS content type — the IDENTICAL bytes Go serves.
+/// /chat/<name> with a JS content type.
 const assets = [_]Asset{
     .{ .name = "colors.js", .body = @embedFile("chat_js_colors") },
     .{ .name = "chat_theme.js", .body = @embedFile("chat_js_theme") },
@@ -359,7 +358,7 @@ fn navLinks(b: *std.ArrayList(u8), alloc: Alloc, active: []const u8) !void {
 /// buildSidebarJSON is the inline left-rail payload:
 /// conversations = every other authorized user (DM) + every channel the viewer
 /// is in; pinned_sessions = [] (pins not ported yet); sessions = this conv's
-/// topics. The `</`→`<\/` pass mirrors Go's script-tag-safety replacement.
+/// topics. The `</`→`<\/` pass is script-tag safety for inline embedding.
 fn buildSidebarJSON(io: Io, alloc: Alloc, uid: []const u8, kind: Kind, conv_key: []const u8, base: []const u8, dir: []const u8, sid: []const u8) ![]const u8 {
     var b: std.ArrayList(u8) = .empty;
     try b.appendSlice(alloc, "{\"conversations\":[");
@@ -374,7 +373,7 @@ fn buildSidebarJSON(io: Io, alloc: Alloc, uid: []const u8, kind: Kind, conv_key:
         try b.print(alloc, "{{\"id\":\"uid:{s}\",\"label\":{f},\"url\":\"/chat/c/{s}\",\"active\":{}", .{
             u.id, std.json.fmt(u.name, .{}), pk, active,
         });
-        // online (omitempty, like Go) — drives the partner row's first-paint dot.
+        // online (omitted when false) — drives the partner row's first-paint dot.
         if (presence.isOnline(io, u.id)) try b.appendSlice(alloc, ",\"online\":true");
         try b.append(alloc, '}');
     }
@@ -426,7 +425,7 @@ fn emitSessionItem(b: *std.ArrayList(u8), alloc: Alloc, base: []const u8, s: []c
 
 // ── SSE stream (backlog replay + keepalive) ──────────────────────────────────
 
-/// streamTranscript serves /<…>/<sid>/stream — Go's serveChatStream: the
+/// streamTranscript serves /<…>/<sid>/stream: the
 /// `backlog-size` preamble, the backlog replay from the cursor, then LIVE
 /// messages off the bus (a message posted to this conv/sid via /send fans out
 /// here), with `: ping` keepalives when idle. openStream decodes the backlog and
@@ -517,8 +516,8 @@ fn emitWire(alloc: Alloc, index: usize, from: []const u8, at: []const u8, md: []
 
 // ── send (write path) ────────────────────────────────────────────────────────
 
-/// sendMessage handles POST /<…>/<sid>/send — Go's HandleChatSend/
-/// serveSendMessage: parse the markdown+cid form, append (which fans out live to
+/// sendMessage handles POST /<…>/<sid>/send: parse the markdown+cid form, then
+/// append (which fans out live to
 /// every open stream on this conv/sid), and report. `X-Chat-Async: 1` → 204;
 /// a plain form post → 303 back to the topic. Empty / DROP_ON_FLOOR bodies report
 /// success without appending (the client's no-echo path).
@@ -553,7 +552,7 @@ fn sendMessage(req: *Request, io: Io, alloc: Alloc, bus: *Bus, meta: store.ConvM
     return sendDone(req, alloc, is_async, base, sid);
 }
 
-/// pinSession handles POST /<…>/<sid>/{pin,unpin} — Go's HandleChatPin: toggle
+/// pinSession handles POST /<…>/<sid>/{pin,unpin}: toggle
 /// whether `sid` is in the caller's per-conv Pinned group, then 204. Per-user
 /// state; conv-level auth already passed (any participant pins their own view).
 fn pinSession(req: *Request, io: Io, alloc: Alloc, uid: []const u8, conv_key: []const u8, sid: []const u8, pinned: bool) !void {
@@ -572,7 +571,7 @@ fn sendDone(req: *Request, alloc: Alloc, is_async: bool, base: []const u8, sid: 
 
 // ── new topic ─────────────────────────────────────────────────────────────────
 
-/// newTopic handles POST <conv-base>/new — Go's HandleChat/ChannelNewTopic:
+/// newTopic handles POST <conv-base>/new:
 /// validate the `topic` form field, refuse duplicates + the reserved "new", then
 /// seed the session with a first "hi" message (which fans out topic-added). For a
 /// DM it also remembers the new topic as last-viewed and announces it as a link
@@ -759,7 +758,7 @@ pub fn forwardUserStream(req: *Request, alloc: Alloc, bus: *Bus, key: []const u8
 }
 
 /// wireFrame builds one SSE message event: `id: <index>` + a `data:` line whose
-/// JSON is Go's chatWireMsg. `cid` is omitted (omitempty) — backlog only, no
+/// JSON is the chat wire message. `cid` is omitted — backlog only, no
 /// live correlation id. `mine` = the sender's display name equals the viewer's.
 fn wireFrame(alloc: Alloc, index: usize, m: store.ChatMessage, viewer: []const u8) ![]const u8 {
     const html_body = try markdown.render(alloc, m.markdown);
@@ -787,8 +786,7 @@ fn parseSince(req: *Request) usize {
 
 // ── raw + index ──────────────────────────────────────────────────────────────
 
-/// rawTranscript serves the literal on-disk .md bytes (text/plain, nosniff) —
-/// byte-for-byte parity with Go's serveRawTranscript.
+/// rawTranscript serves the literal on-disk .md bytes (text/plain, nosniff).
 fn rawTranscript(req: *Request, io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8) !void {
     const data = (try store.rawSession(io, alloc, conv_dir, sid)) orelse return http.notFound(req);
     try req.respond(data, .{ .extra_headers = &.{
@@ -953,7 +951,7 @@ fn replaceSeq(alloc: Alloc, input: []const u8, needle: []const u8, repl: []const
     return out;
 }
 
-/// htmlEscape mirrors Go's html.EscapeString: & ' < > " → &amp; &#39; &lt; &gt; &#34;.
+/// htmlEscape maps & ' < > " → &amp; &#39; &lt; &gt; &#34;.
 pub fn htmlEscape(alloc: Alloc, s: []const u8) ![]const u8 {
     if (std.mem.indexOfAny(u8, s, "&'<>\"") == null) return s;
     var out: std.ArrayList(u8) = .empty;
@@ -968,7 +966,7 @@ pub fn htmlEscape(alloc: Alloc, s: []const u8) ![]const u8 {
     return out.toOwnedSlice(alloc);
 }
 
-// ── templates (reproducing Go's platform chrome + chat shell) ─────────────────
+// ── templates (the platform chrome + chat shell) ─────────────────────────────
 
 // page_head_{a,b}: PageHeadAndStyle — doctype, <head>, the shared platform
 // stylesheet (AppChromeCSS + base rules), and <body> open. Split around the

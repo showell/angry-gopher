@@ -9,24 +9,20 @@
 //!   meta                       — created_at + catalog snapshot (DSL)
 //!   puzzle_<idx>/actions.dsl   — one `<seq>) <action>` line per append
 //!
-//! Atomicity note: Go gets per-line append atomicity from O_APPEND (writes <
-//! PIPE_BUF). The std.Io file API exposes no O_APPEND, so appendTextLine does
-//! stat-size-then-positional-write. That is fully atomic for THIS design because
-//! session ids come from the shared counter, so a given actions.dsl is only ever
-//! written by the one server that allocated its session — there are never two
-//! concurrent appenders to the same file. (The counter file itself is the one
-//! cross-process race; see allocateID.)
+//! Atomicity note: appendTextLine does stat-size-then-positional-write (the
+//! std.Io file API exposes no O_APPEND). That is fully atomic for THIS design
+//! because session ids come from the shared counter, so a given actions.dsl is
+//! only ever appended by the one request that allocated its session — there are
+//! never two concurrent appenders to the same file.
 
 const std = @import("std");
 const Io = std.Io;
 const Alloc = std.mem.Allocator;
 
-/// data_root mirrors Go's GameDataRoot. Shared, live, repo-relative-from-zig-server.
+/// data_root is the live game-data dir (repo-relative from zig-server/, hence the `..`).
 pub var data_root: []const u8 = "../games/lynrummy/data";
 
-// idMu serializes counter increments within this process, mirroring Go's idMu.
-// (Cross-process serialization with the Go server is not provided — same as Go,
-// whose mutex is process-local; see the allocateID comment.)
+// idMu serializes counter increments within this process.
 var id_mu: Io.Mutex = .init;
 
 fn join(alloc: Alloc, parts: []const []const u8) ![]u8 {
@@ -83,10 +79,9 @@ pub fn allocatePuzzleSessionID(io: Io, alloc: Alloc, user_id: []const u8) !i64 {
 }
 
 /// allocateID is the shared counter-bump primitive: read the counter, return the
-/// current value, write value+1, auto-creating the file. Floors at 1.
-/// Public so the user
-/// registry (users.zig) can drive the account-id counter (AuthRoot/next-id.txt)
-/// through the same primitive Go shares via platform.AllocateID.
+/// current value, write value+1, auto-creating the file. Floors at 1. Public so
+/// the user registry (users.zig) can drive the account-id counter
+/// (auth_root/next-id.txt) through this same primitive.
 pub fn allocateID(io: Io, alloc: Alloc, path: []const u8) !i64 {
     id_mu.lockUncancelable(io);
     defer id_mu.unlock(io);
@@ -261,10 +256,9 @@ fn appendRawLine(io: Io, alloc: Alloc, path: []const u8, body: []const u8) !void
 }
 
 /// compactJSON strips insignificant whitespace (outside string literals) from
-/// `src`, mirroring Go's json.Compact at the token level: string contents and
-/// every non-whitespace byte are copied verbatim; spaces/tabs/CR/LF between
-/// tokens are dropped. Real input is always valid Elm-produced JSON, so this does
-/// no validation.
+/// `src`: string contents and every non-whitespace byte are copied verbatim;
+/// spaces/tabs/CR/LF between tokens are dropped. Real input is always valid
+/// Elm-produced JSON, so this does no validation.
 fn compactJSON(alloc: Alloc, src: []const u8) ![]u8 {
     var out: std.ArrayList(u8) = .empty;
     var in_string = false;

@@ -1,15 +1,15 @@
-//! users: identity resolution AND issuance — the port of Go's server/users/*.
-//! The resolution half (CurrentUser → WHO a request acts as) came first; the
+//! users: identity resolution AND issuance.
+//! The resolution half (currentUser → WHO a request acts as) came first; the
 //! issuance half (account creation, password set/verify, session signing, name
 //! validation) landed with the front-door login port (login.zig). Both read and
-//! write the SHARED account store under auth_root, the same tree Go uses.
+//! write the SHARED account store under auth_root.
 //!
 //! Issuance lives here (not login.zig) because it's account-store mechanics —
 //! the natural peer of the resolution reads. login.zig owns only the HTTP shell:
 //! the forms, the cookies, the redirects. The bcrypt primitives are in auth.zig
 //! (gold-cross-validated against Go); the session HMAC is below (signSession).
 //!
-//! Resolution order mirrors CurrentUser exactly:
+//! Resolution order:
 //!   1. a valid member SESSION cookie (gopher_auth, HMAC-SHA256 signed)   -> id
 //!   2. a valid API key (Authorization: Bearer <id>-<secret>)            -> id
 //!   3. the guest gopher_uid cookie, but ONLY if that id exists and is a
@@ -30,9 +30,8 @@ const storage = @import("storage.zig");
 const HmacSha256 = std.crypto.auth.hmac.sha2.HmacSha256;
 const b64 = std.base64.url_safe_no_pad;
 
-// Roots, mirroring Go's package vars (config.zig overrides these at startup from
-// GOPHER_CONFIG). Defaults match Go's repo-relative defaults, adjusted for the
-// zig-server cwd.
+// Roots (config.zig overrides these at startup from GOPHER_CONFIG). Defaults are
+// repo-relative, adjusted for the zig-server cwd.
 pub var auth_root: []const u8 = "../games/lynrummy/auth-data"; // shared account store (name/password/api-key)
 pub var users_root: []const u8 = "../games/lynrummy/users-data"; // gopher-private (admin/last-seen/...)
 pub var session_secret_dir: []const u8 = "../games/lynrummy/data/chat"; // holds _session_secret
@@ -113,8 +112,8 @@ pub fn verifySessionWithSecret(alloc: Alloc, secret: []const u8, val: []const u8
 }
 
 /// signSession produces a cookie value for `id` issued at `issued_unix`, signed
-/// with `secret`. Used by the gold harness (the
-/// production server never issues sessions — that stays in Go/Chat).
+/// with `secret`. The secret-parameterized form: signSessionNow wraps it with the
+/// live secret, and the gold harness drives it with a synthetic one.
 pub fn signSession(alloc: Alloc, secret: []const u8, id: []const u8, issued_unix: i64) ![]const u8 {
     const issued = try std.fmt.allocPrint(alloc, "{d}", .{issued_unix});
     var mac: [HmacSha256.mac_length]u8 = undefined;
@@ -213,8 +212,8 @@ pub fn getUserName(io: Io, alloc: Alloc, id: []const u8) ![]const u8 {
 }
 
 /// touchUser records "now" as the user's last-seen time
-/// ({users_root}/{id}/last-seen = unix seconds), best-effort like Go's TouchUser
-/// (a write failure isn't worth surfacing). Bumped on each Lyn Rummy move.
+/// ({users_root}/{id}/last-seen = unix seconds), best-effort (a write failure
+/// isn't worth surfacing). Bumped on each Lyn Rummy move.
 pub fn touchUser(io: Io, alloc: Alloc, id: []const u8) void {
     if (std.mem.trim(u8, id, " \t\r\n").len == 0) return;
     touchUserImpl(io, alloc, id) catch {};
@@ -358,7 +357,7 @@ fn readAuthFile(io: Io, alloc: Alloc, id: []const u8, name: []const u8) !?[]u8 {
 }
 
 /// loadSecret reads {session_secret_dir}/_session_secret (>= 32 bytes), or null.
-/// Read-only: unlike Go we never GENERATE a secret — we share the one Go wrote.
+/// Read-only: we never GENERATE a secret — we require the one already on disk.
 fn loadSecret(io: Io, alloc: Alloc) !?[]const u8 {
     const path = try std.fs.path.join(alloc, &.{ session_secret_dir, "_session_secret" });
     const b = Io.Dir.cwd().readFileAlloc(io, path, alloc, .unlimited) catch return null;
@@ -417,8 +416,8 @@ fn nowUnix(io: Io) i64 {
     return @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
 }
 
-/// ctEql is a constant-time slice compare (matches Go's subtle.ConstantTimeCompare:
-/// unequal lengths short-circuit to false, equal lengths compare in constant time).
+/// ctEql is a constant-time slice compare: unequal lengths short-circuit to
+/// false, equal lengths compare in constant time.
 fn ctEql(a: []const u8, b: []const u8) bool {
     if (a.len != b.len) return false;
     var acc: u8 = 0;
@@ -441,15 +440,14 @@ fn encodeB64(alloc: Alloc, s: []const u8) ![]const u8 {
 // ══ ISSUANCE (login.zig's account-store mechanics) ═══════════════════════════
 //
 // Everything below WRITES the account store (or signs a live session). The reads
-// above resolve identity; these create and credential it. Ports of the
-// server/users functions login.go calls: AllocateUser, SetUserName,
-// SetUserPassword, CheckUserPassword, FindMemberByName, IsNameReserved,
-// DeleteUserRecord, ValidateUserName, SanitizeUser, plus a live session signer.
+// above resolve identity; these create and credential it: account allocation,
+// name + password set, member lookup, deletion, name validation, plus a live
+// session signer.
 
-const max_user_len = 40; // mirrors name.go's maxUserLen
+const max_user_len = 40; // max display-name length
 
-/// ResolvedUser is the subset of Go's User that login.zig reads: id + name +
-/// member flag (Admin/Agent aren't needed by the login flows).
+/// ResolvedUser is the identity subset login.zig reads: id + name + member flag
+/// (admin/agent flags aren't needed by the login flows).
 pub const ResolvedUser = struct { id: []const u8, name: []const u8, member: bool };
 
 /// currentUser resolves the full identity a request acts as.
@@ -465,8 +463,7 @@ pub fn currentUser(io: Io, alloc: Alloc, req: *std.http.Server.Request) !Resolve
 }
 
 /// allocateUser creates a new account with `name` and returns its id, bumping
-/// the shared id counter (auth_root/next-id.txt) through storage.allocateID —
-/// the same primitive Go shares via platform.AllocateID.
+/// the shared id counter (auth_root/next-id.txt) through storage.allocateID.
 pub fn allocateUser(io: Io, alloc: Alloc, name: []const u8) ![]const u8 {
     const counter = try std.fs.path.join(alloc, &.{ auth_root, "next-id.txt" });
     const n = try storage.allocateID(io, alloc, counter);
@@ -485,9 +482,8 @@ pub fn setUserName(io: Io, alloc: Alloc, id: []const u8, name: []const u8) !void
 }
 
 /// setUserPassword bcrypt-hashes `password` and stores it (mode 0o600), making
-/// the user a member.
-/// The 60-byte hash has no trailing
-/// newline, matching Go, so checkUserPassword's verify sees exactly 60 bytes.
+/// the user a member. The 60-byte hash has no trailing newline, so
+/// checkUserPassword's verify sees exactly 60 bytes.
 pub fn setUserPassword(io: Io, alloc: Alloc, id: []const u8, password: []const u8) !void {
     var buf: [60]u8 = undefined;
     const hash = try auth.hashPassword(password, &buf, io);
@@ -505,8 +501,8 @@ pub fn checkUserPassword(io: Io, alloc: Alloc, id: []const u8, password: []const
 }
 
 /// findMemberByName returns the id of the member currently using `name`, or null.
-/// A small scan, like Go's FindMemberByName. Exact byte compare, so existing
-/// unicode-named members match regardless of validateUserName's policy.
+/// A small scan. Exact byte compare, so existing unicode-named members match
+/// regardless of validateUserName's policy.
 pub fn findMemberByName(io: Io, alloc: Alloc, name: []const u8) !?[]const u8 {
     for (try listUserIDs(io, alloc)) |id| {
         if ((userIsMember(io, alloc, id) catch false) and
@@ -535,7 +531,7 @@ pub fn deleteUserRecord(io: Io, alloc: Alloc, id: []const u8) void {
 }
 
 /// signSessionNow signs a live member session cookie value for `id` (loads the
-/// shared secret Go wrote, signs at the current time). null when the secret is
+/// shared on-disk secret, signs at the current time). null when the secret is
 /// missing. Wraps the pure signSession with the live secret + clock — the
 /// issuance counterpart to verifySessionWithSecret.
 pub fn signSessionNow(io: Io, alloc: Alloc, id: []const u8) !?[]const u8 {
@@ -545,14 +541,13 @@ pub fn signSessionNow(io: Io, alloc: Alloc, id: []const u8) !?[]const u8 {
 
 // ── name validation ────────────────────────────────────────
 //
-// UNICODE NOTE: Go uses unicode.IsLetter/IsNumber (full Unicode tables). zig std
-// doesn't expose those, so the policy here is: ASCII letters/digits are
+// UNICODE NOTE: classifying letters/digits by full Unicode tables would need data
+// zig std doesn't expose, so the policy here is: ASCII letters/digits are
 // letters/digits, the space and apostrophe are allowed, and ANY non-ASCII
-// codepoint (byte >= 0x80) is treated as a letter. This is strictly MORE
-// permissive than Go for exotic symbols (e.g. it'd accept an emoji byte where Go
-// rejects it), but it never locks out a Go-valid name — the safe direction, and
-// every real account name on the site is ASCII anyway. Length is byte-based,
-// matching Go's len()/Builder.Len().
+// codepoint (byte >= 0x80) is treated as a letter. This is deliberately
+// permissive — it accepts some exotic symbols a stricter check would reject — but
+// it never locks out a legitimate name, and every real account name on the site
+// is ASCII anyway. Length is byte-based.
 
 const NameResult = struct { name: []const u8, err: []const u8 };
 
