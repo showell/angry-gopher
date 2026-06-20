@@ -1,7 +1,13 @@
-//! users: read-only identity resolution — the port of Go's
-//! users.CurrentUser(r).ID (server/users/{current,session,api_key,name,users,
-//! agent}.go). Resolves WHO a request acts as, reading the SHARED account store
-//! Go writes; it never issues cookies or creates users (login stays in Go/Chat).
+//! users: identity resolution AND issuance — the port of Go's server/users/*.
+//! The resolution half (CurrentUser → WHO a request acts as) came first; the
+//! issuance half (account creation, password set/verify, session signing, name
+//! validation) landed with the front-door login port (login.zig). Both read and
+//! write the SHARED account store under auth_root, the same tree Go uses.
+//!
+//! Issuance lives here (not login.zig) because it's account-store mechanics —
+//! the natural peer of the resolution reads. login.zig owns only the HTTP shell:
+//! the forms, the cookies, the redirects. The bcrypt primitives are in auth.zig
+//! (gold-cross-validated against Go); the session HMAC is below (signSession).
 //!
 //! Resolution order mirrors CurrentUser exactly:
 //!   1. a valid member SESSION cookie (gopher_auth, HMAC-SHA256 signed)   -> id
@@ -18,6 +24,8 @@
 const std = @import("std");
 const Io = std.Io;
 const Alloc = std.mem.Allocator;
+const auth = @import("auth.zig");
+const storage = @import("storage.zig");
 
 const HmacSha256 = std.crypto.auth.hmac.sha2.HmacSha256;
 const b64 = std.base64.url_safe_no_pad;
@@ -439,4 +447,183 @@ fn decodeB64(alloc: Alloc, s: []const u8) ![]u8 {
 fn encodeB64(alloc: Alloc, s: []const u8) ![]const u8 {
     const out = try alloc.alloc(u8, b64.Encoder.calcSize(s.len));
     return b64.Encoder.encode(out, s);
+}
+
+// ══ ISSUANCE (login.zig's account-store mechanics) ═══════════════════════════
+//
+// Everything below WRITES the account store (or signs a live session). The reads
+// above resolve identity; these create and credential it. Ports of the
+// server/users functions login.go calls: AllocateUser, SetUserName,
+// SetUserPassword, CheckUserPassword, FindMemberByName, IsNameReserved,
+// DeleteUserRecord, ValidateUserName, SanitizeUser, plus a live session signer.
+
+const max_user_len = 40; // mirrors name.go's maxUserLen
+
+/// ResolvedUser is the subset of Go's User that login.zig reads: id + name +
+/// member flag (Admin/Agent aren't needed by the login flows).
+pub const ResolvedUser = struct { id: []const u8, name: []const u8, member: bool };
+
+/// currentUser resolves the full identity a request acts as (Go's CurrentUser,
+/// the fields login needs). Zero value (id == "") when there's no identity.
+pub fn currentUser(io: Io, alloc: Alloc, req: *std.http.Server.Request) !ResolvedUser {
+    const id = try currentUserID(io, alloc, req);
+    if (id.len == 0) return .{ .id = "", .name = "", .member = false };
+    return .{
+        .id = id,
+        .name = try getUserName(io, alloc, id),
+        .member = userIsMember(io, alloc, id) catch false,
+    };
+}
+
+/// allocateUser creates a new account with `name` and returns its id, bumping
+/// the shared id counter (auth_root/next-id.txt) through storage.allocateID —
+/// the same primitive Go shares via platform.AllocateID. Mirrors AllocateUser.
+pub fn allocateUser(io: Io, alloc: Alloc, name: []const u8) ![]const u8 {
+    const counter = try std.fs.path.join(alloc, &.{ auth_root, "next-id.txt" });
+    const n = try storage.allocateID(io, alloc, counter);
+    const id = try std.fmt.allocPrint(alloc, "{d}", .{n});
+    try setUserName(io, alloc, id, name);
+    return id;
+}
+
+/// setUserName writes a user's display name ({auth_root}/{id}/name), creating the
+/// account dir (whose existence IS the user). Mirrors SetUserName.
+pub fn setUserName(io: Io, alloc: Alloc, id: []const u8, name: []const u8) !void {
+    const dir = try std.fs.path.join(alloc, &.{ auth_root, id });
+    try Io.Dir.cwd().createDirPath(io, dir);
+    const path = try std.fs.path.join(alloc, &.{ dir, "name" });
+    try Io.Dir.cwd().writeFile(io, .{ .sub_path = path, .data = name });
+}
+
+/// setUserPassword bcrypt-hashes `password` and stores it (mode 0o600), making
+/// the user a member. Mirrors SetUserPassword (auth.zig writes `$2b$`; Go reads
+/// it natively — see auth.zig's interop note). The 60-byte hash has no trailing
+/// newline, matching Go, so checkUserPassword's verify sees exactly 60 bytes.
+pub fn setUserPassword(io: Io, alloc: Alloc, id: []const u8, password: []const u8) !void {
+    var buf: [60]u8 = undefined;
+    const hash = try auth.hashPassword(password, &buf, io);
+    const dir = try std.fs.path.join(alloc, &.{ auth_root, id });
+    try Io.Dir.cwd().createDirPath(io, dir);
+    const path = try std.fs.path.join(alloc, &.{ dir, "password" });
+    try Io.Dir.cwd().writeFile(io, .{ .sub_path = path, .data = hash, .flags = .{ .permissions = @enumFromInt(0o600) } });
+}
+
+/// checkUserPassword verifies `password` against a member's stored bcrypt hash.
+/// false when the member has no password file. Mirrors CheckUserPassword.
+pub fn checkUserPassword(io: Io, alloc: Alloc, id: []const u8, password: []const u8) bool {
+    const stored = (readAuthFile(io, alloc, id, "password") catch return false) orelse return false;
+    return auth.verifyPassword(std.mem.trimEnd(u8, stored, "\r\n"), password);
+}
+
+/// findMemberByName returns the id of the member currently using `name`, or null.
+/// A small scan, like Go's FindMemberByName. Exact byte compare, so existing
+/// unicode-named members match regardless of validateUserName's policy.
+pub fn findMemberByName(io: Io, alloc: Alloc, name: []const u8) !?[]const u8 {
+    for (try listUserIDs(io, alloc)) |id| {
+        if ((userIsMember(io, alloc, id) catch false) and
+            std.mem.eql(u8, try getUserName(io, alloc, id), name)) return id;
+    }
+    return null;
+}
+
+/// isNameReserved reports whether some member currently holds `name`. Mirrors
+/// IsNameReserved.
+pub fn isNameReserved(io: Io, alloc: Alloc, name: []const u8) bool {
+    return (findMemberByName(io, alloc, name) catch null) != null;
+}
+
+/// deleteUserRecord removes a user's account dir (auth_root: name/password/
+/// api-key) and gopher-private dir (users_root: admin/last-seen/upload-bytes).
+/// Game/chat data is deleted separately (storage.deleteUserData). Refuses an
+/// empty id so it can never target a root. Best-effort. Mirrors DeleteUserRecord.
+pub fn deleteUserRecord(io: Io, alloc: Alloc, id: []const u8) void {
+    if (std.mem.trim(u8, id, " \t\r\n").len == 0) return;
+    if (std.fs.path.join(alloc, &.{ auth_root, id })) |p| {
+        Io.Dir.cwd().deleteTree(io, p) catch {};
+    } else |_| {}
+    if (std.fs.path.join(alloc, &.{ users_root, id })) |p| {
+        Io.Dir.cwd().deleteTree(io, p) catch {};
+    } else |_| {}
+}
+
+/// signSessionNow signs a live member session cookie value for `id` (loads the
+/// shared secret Go wrote, signs at the current time). null when the secret is
+/// missing. Wraps the pure signSession with the live secret + clock — the
+/// issuance counterpart to verifySessionWithSecret. Mirrors signSession.
+pub fn signSessionNow(io: Io, alloc: Alloc, id: []const u8) !?[]const u8 {
+    const secret = (try loadSecret(io, alloc)) orelse return null;
+    return try signSession(alloc, secret, id, nowUnix(io));
+}
+
+// ── name validation (port of name.go) ────────────────────────────────────────
+//
+// UNICODE NOTE: Go uses unicode.IsLetter/IsNumber (full Unicode tables). zig std
+// doesn't expose those, so the policy here is: ASCII letters/digits are
+// letters/digits, the space and apostrophe are allowed, and ANY non-ASCII
+// codepoint (byte >= 0x80) is treated as a letter. This is strictly MORE
+// permissive than Go for exotic symbols (e.g. it'd accept an emoji byte where Go
+// rejects it), but it never locks out a Go-valid name — the safe direction, and
+// every real account name on the site is ASCII anyway. Length is byte-based,
+// matching Go's len()/Builder.Len().
+
+const NameResult = struct { name: []const u8, err: []const u8 };
+
+fn allowedNameByte(c: u8) bool {
+    return std.ascii.isAlphanumeric(c) or c == ' ' or c == '\'' or c >= 0x80;
+}
+
+fn isNameAlnumByte(c: u8) bool {
+    return std.ascii.isAlphanumeric(c) or c >= 0x80;
+}
+
+/// validateUserName cleans and checks a login-supplied name: trims, collapses
+/// internal whitespace runs to one space, requires at least one letter/digit,
+/// rejects any other punctuation. Returns {name, ""} on success or {"", message}
+/// describing the fix. Mirrors ValidateUserName.
+pub fn validateUserName(alloc: Alloc, raw: []const u8) !NameResult {
+    const trimmed = std.mem.trim(u8, raw, " \t\r\n");
+    if (trimmed.len == 0) return .{ .name = "", .err = "Please enter a name." };
+    if (trimmed.len > max_user_len) return .{ .name = "", .err = "That name is too long (40 characters max)." };
+
+    var b: std.ArrayList(u8) = .empty;
+    var last_space = false;
+    var has_alnum = false;
+    for (trimmed) |c| {
+        if (!allowedNameByte(c)) {
+            return .{ .name = "", .err = "Names can use only letters, numbers, spaces, and apostrophes." };
+        }
+        if (c == ' ') {
+            if (last_space) continue;
+            last_space = true;
+        } else {
+            last_space = false;
+            if (isNameAlnumByte(c)) has_alnum = true;
+        }
+        try b.append(alloc, c);
+    }
+    const out = std.mem.trimEnd(u8, b.items, " ");
+    if (!has_alnum) return .{ .name = "", .err = "Please enter a name with at least one letter or number." };
+    return .{ .name = out, .err = "" };
+}
+
+/// sanitizeUser scrubs a name into a clean attribute value: keeps allowed bytes,
+/// collapses whitespace runs, caps length, "" if nothing usable remains. Lenient
+/// (strips rather than rejects) — login re-checks with validateUserName. Mirrors
+/// SanitizeUser.
+pub fn sanitizeUser(alloc: Alloc, raw: []const u8) ![]const u8 {
+    var b: std.ArrayList(u8) = .empty;
+    var last_space = false;
+    for (std.mem.trim(u8, raw, " \t\r\n")) |c| {
+        if (c == ' ') {
+            if (!last_space and b.items.len > 0) {
+                try b.append(alloc, ' ');
+                last_space = true;
+            }
+        } else if (allowedNameByte(c)) {
+            try b.append(alloc, c);
+            last_space = false;
+        }
+        if (b.items.len >= max_user_len) break;
+    }
+    return std.mem.trimEnd(u8, b.items, " ");
 }

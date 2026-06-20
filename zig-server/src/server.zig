@@ -29,6 +29,7 @@ const settings = @import("settings.zig");
 const learn = @import("learn.zig");
 const admin = @import("admin.zig");
 const home = @import("home.zig");
+const login = @import("login.zig");
 const users = @import("users.zig");
 const Bus = @import("bus.zig").Bus;
 
@@ -137,6 +138,10 @@ fn route(req: *std.http.Server.Request, io: std.Io, alloc: std.mem.Allocator, bu
         try learn.handle(req, sub);
     } else if (matchPrefix(path, "/admin")) |sub| {
         try admin.handle(req, io, alloc, sub);
+    } else if (matchPrefix(path, "/login")) |sub| {
+        try login.handle(req, io, alloc, bus, sub);
+    } else if (std.mem.eql(u8, path, "/logout")) {
+        try login.handleLogout(req, io, alloc);
     } else if (std.mem.eql(u8, path, "/version")) {
         try home.handleVersion(req, alloc);
     } else if (std.mem.eql(u8, path, "/")) {

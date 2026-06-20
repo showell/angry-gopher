@@ -87,8 +87,10 @@ pub fn allocatePuzzleSessionID(io: Io, alloc: Alloc, user_id: []const u8) !i64 {
 
 /// allocateID is the shared counter-bump primitive: read the counter, return the
 /// current value, write value+1, auto-creating the file. Floors at 1. Mirrors
-/// platform.AllocateID exactly (including the n<1 → 1 clamp).
-fn allocateID(io: Io, alloc: Alloc, path: []const u8) !i64 {
+/// platform.AllocateID exactly (including the n<1 → 1 clamp). Public so the user
+/// registry (users.zig) can drive the account-id counter (AuthRoot/next-id.txt)
+/// through the same primitive Go shares via platform.AllocateID.
+pub fn allocateID(io: Io, alloc: Alloc, path: []const u8) !i64 {
     id_mu.lockUncancelable(io);
     defer id_mu.unlock(io);
 
