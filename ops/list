@@ -20,6 +20,10 @@ Available ops commands (run from repo root):
   ops/check_zig          zig-server gate (~1s): compiles the server + runs the
                          unit tests (auth's legacy-$2a$ read path, users' session
                          HMAC verify), each pinned by a frozen in-repo vector.
+  ops/check_markdown     Markdown dialect regression gate (~3s): renders every
+                         frozen corpus case with the zig renderer and asserts the
+                         output is unchanged. No Go, no goldmark oracle — our
+                         renderer IS the dialect. Re-freeze: ops/regen_markdown_gold.
 
   Leaves (composed by the gates above):
   ops/check_common       Shared base = test_go + test_docs + test_css (diamond floor).
@@ -56,6 +60,10 @@ Available ops commands (run from repo root):
 
   REGEN & TOOLS
   -------------
+  ops/regen_markdown_gold     Re-freeze the markdown dialect corpus from the
+                              zig renderer (gold + adversarial + dialect). The
+                              EXPLICIT re-baseline after an intentional dialect
+                              change; read each git diff before committing.
   ops/repin                   Re-pin every REPIN-aware primitive
                               fixture in one shot (verb_to_primitives,
                               physical_plan, elm_find_play). Use after

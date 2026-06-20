@@ -1,0 +1,3 @@
+{"id":"xline/emphasis","md":"**foo\nbar**","html":"<p>**foo<br>\nbar**</p>\n"}
+{"id":"xline/code","md":"`foo\nbar`","html":"<p>`foo<br>\nbar`</p>\n"}
+{"id":"xline/link","md":"[foo\nbar](/u)","html":"<p>[foo<br>\nbar](/u)</p>\n"}

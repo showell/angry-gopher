@@ -1,11 +1,12 @@
 const std = @import("std");
 
-/// render turns a raw chat message body into HTML, matching the Go
-/// RenderChatMarkdown oracle (goldmark GFM + hard-wraps, then escape-but-img
-/// and the MSG_ linkifier) byte-for-byte. Built up feature by feature against
-/// the gold corpus. Currently: paragraphs (hard wraps + escaping), raw HTML
-/// (escape everything but a same-origin <img>, block and inline), and the
-/// MSG_ reference linkifier.
+/// render turns a raw chat message body into HTML. It implements — and IS the
+/// definition of — lynrummy's markdown dialect: GFM-style paragraphs with hard
+/// wraps, then escape-but-img, then the MSG_ reference linkifier. (The dialect's
+/// ancestry is goldmark/CommonMark, but there is no external oracle: the gold
+/// corpus in main.zig freezes THIS function's output so it can't regress.)
+/// Currently: paragraphs (hard wraps + escaping), raw HTML (escape everything
+/// but a same-origin <img>, block and inline), and the MSG_ reference linkifier.
 ///
 /// Caller owns the returned slice; pass an arena and reset it per message.
 ///
@@ -151,7 +152,7 @@ fn renderBlocksInto(out: *std.ArrayList(u8), a: std.mem.Allocator, md: []const u
         // An HTML block (CommonMark type 7) starts only at a block boundary —
         // it can't interrupt a paragraph — and runs until a blank line. We
         // emit its raw source through the escape-but-<img> scan, with no <p>
-        // wrapper and no added newline (goldmark passes the source through).
+        // wrapper and no added newline (the source passes through unchanged).
         if (isHtmlBlockStart(line)) {
             try tightSep(out, a, tight);
             var p = next;
@@ -191,7 +192,7 @@ fn renderBlocksInto(out: *std.ArrayList(u8), a: std.mem.Allocator, md: []const u
 }
 
 /// tightSep inserts the inter-block separator newline used inside a tight list
-/// item: goldmark joins a bare paragraph to a following block with one '\n'.
+/// item: a bare paragraph joins a following block with one '\n'.
 fn tightSep(out: *std.ArrayList(u8), a: std.mem.Allocator, tight: bool) !void {
     if (tight and out.items.len > 0 and out.items[out.items.len - 1] != '\n') {
         try out.append(a, '\n');
@@ -323,7 +324,7 @@ fn renderFence(out: *std.ArrayList(u8), a: std.mem.Allocator, md: []const u8, fo
 }
 
 /// writeCodeLines emits each content line escaped and newline-terminated
-/// (goldmark normalizes the final line to end with '\n'), stripping up to the
+/// (the final line is normalized to end with '\n'), stripping up to the
 /// fence's own indentation from each line.
 fn writeCodeLines(out: *std.ArrayList(u8), a: std.mem.Allocator, content: []const u8, indent: usize) !void {
     var i: usize = 0;
@@ -498,8 +499,8 @@ fn renderList(out: *std.ArrayList(u8), a: std.mem.Allocator, md: []const u8, pos
             try inner.append(a, '\n');
             try renderBlocksInto(&inner, a, item, false, depth + 1);
         } else {
-            // goldmark writes a newline after a tight <li> iff its first child
-            // is not a text paragraph (it's a nested list/quote/fence/heading).
+            // we write a newline after a tight <li> iff its first child is not a
+            // text paragraph (it's a nested list/quote/fence/heading).
             if (firstItemChildIsBlock(item)) try inner.append(a, '\n');
             try renderBlocksInto(&inner, a, item, true, depth + 1);
         }
@@ -511,7 +512,7 @@ fn renderList(out: *std.ArrayList(u8), a: std.mem.Allocator, md: []const u8, pos
     return p;
 }
 
-/// firstItemChildIsBlock mirrors goldmark's list-item rule: a tight <li> gets a
+/// firstItemChildIsBlock encodes our list-item rule: a tight <li> gets a
 /// newline after it iff its first child is NOT a text paragraph — i.e. the item
 /// content opens with a nested list, blockquote, fence, or heading. (Loose items
 /// always get the newline; this is only consulted on the tight path.)
@@ -1240,8 +1241,8 @@ fn mdLinkAt(a: std.mem.Allocator, text: []const u8, i: usize, rb: *usize, rp: *u
     return .{ .html = buf.items, .end = close_p + 1 };
 }
 
-/// isDangerousUrl mirrors goldmark's IsDangerousURL: blocks javascript:,
-/// vbscript:, file:, and data: except for image data URIs.
+/// isDangerousUrl blocks the dangerous URL schemes javascript:, vbscript:,
+/// file:, and data: except for image data URIs.
 fn isDangerousUrl(url: []const u8) bool {
     if (startsWithCI(url, "data:image/")) {
         const v = url[11..];

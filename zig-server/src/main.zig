@@ -1,14 +1,33 @@
 const std = @import("std");
 const markdown = @import("markdown.zig");
 
-// gold.jsonl is the frozen real-corpus oracle (private, outside the repo).
-// adversarial.jsonl is the hand-written hostile-corner fixture (in-repo,
-// synthetic) — the corners the corpus never exercised. Both are checked.
+// The markdown DIALECT regression baseline. Our zig renderer (markdown.zig) IS
+// the definition of lynrummy's markdown dialect; these frozen (id, md, html)
+// corpora pin its output so an unintended change to the dialect can't slip in
+// unnoticed. There is NO external oracle — `html` is whatever OUR renderer
+// produces, frozen and human-reviewed. Re-baselining after an INTENTIONAL
+// dialect change is an explicit act: run with --rebaseline, then eyeball the
+// git diff of each corpus file before committing it.
+//
+//   gold.jsonl         the real corpus — every (id, md) captured from prod chat
+//                      + docs (private, outside the repo: it embeds real user
+//                      messages). The bulk of the coverage.
+//   adversarial.jsonl  hand-written hostile corners the real corpus never hit.
+//   dialect.jsonl      the cases where our dialect deliberately departs from
+//                      vanilla CommonMark: inline markup is PER-LINE, so `**`,
+//                      backticks, and `[...]` never pair across a hard wrap.
+//
+// Verify:       cd zig-server && zig run src/main.zig
+// Re-baseline:  cd zig-server && zig run src/main.zig -- --rebaseline
 const GOLD_PATH = "/home/steve/showell_repos/gopher-gold/gold.jsonl";
 const ADVERSARIAL_PATH = "adversarial.jsonl";
-// Known, documented divergences from goldmark (per-line inline rendering vs
-// goldmark's paragraph-wide model). Reported but NOT counted in the gate.
-const DIVERGENCES_PATH = "divergences.jsonl";
+const DIALECT_PATH = "dialect.jsonl";
+
+const CORPORA = [_]struct { path: []const u8, label: []const u8, detail: usize }{
+    .{ .path = GOLD_PATH, .label = "corpus", .detail = 4 },
+    .{ .path = ADVERSARIAL_PATH, .label = "adversarial", .detail = 24 },
+    .{ .path = DIALECT_PATH, .label = "dialect", .detail = 24 },
+};
 
 const Case = struct {
     id: []const u8,
@@ -18,10 +37,10 @@ const Case = struct {
 
 const Tally = struct { pass: usize = 0, fail: usize = 0 };
 
-/// runFile verifies every case in a JSONL gold file, printing a greppable
-/// FAILID per mismatch and full md/exp/got detail for the first `detail` of
-/// them. The arena is reset per case — the per-message lifetime.
-fn runFile(
+/// verifyFile renders every case's `md` and asserts it equals the frozen `html`,
+/// printing a greppable FAILID per mismatch and full md/exp/got detail for the
+/// first `detail` of them. The arena is reset per case — the per-message lifetime.
+fn verifyFile(
     io: std.Io,
     alloc: std.mem.Allocator,
     arena: *std.heap.ArenaAllocator,
@@ -60,7 +79,44 @@ fn runFile(
     return t;
 }
 
-pub fn main() !void {
+/// rebaselineFile rewrites `path` in place: each (id, md) is kept, and `html` is
+/// replaced with whatever OUR renderer now produces. This is how the zig renderer
+/// owns the baseline — after an intentional dialect change, re-freeze, then read
+/// the git diff to confirm only the intended cases moved.
+fn rebaselineFile(
+    io: std.Io,
+    alloc: std.mem.Allocator,
+    arena: *std.heap.ArenaAllocator,
+    path: []const u8,
+    label: []const u8,
+) !void {
+    const data = std.Io.Dir.cwd().readFileAlloc(io, path, alloc, .unlimited) catch |e| {
+        std.debug.print("({s}: cannot read {s}: {s})\n", .{ label, path, @errorName(e) });
+        return;
+    };
+    defer alloc.free(data);
+
+    var out: std.ArrayList(u8) = .empty;
+    defer out.deinit(alloc);
+    var n: usize = 0;
+    var lines = std.mem.splitScalar(u8, data, '\n');
+    while (lines.next()) |line| {
+        if (line.len == 0) continue;
+        _ = arena.reset(.retain_capacity);
+        const a = arena.allocator();
+
+        const c = try std.json.parseFromSliceLeaky(Case, a, line, .{});
+        const html = try markdown.render(a, c.md);
+        try out.print(alloc, "{{\"id\":{f},\"md\":{f},\"html\":{f}}}\n", .{
+            std.json.fmt(c.id, .{}), std.json.fmt(c.md, .{}), std.json.fmt(html, .{}),
+        });
+        n += 1;
+    }
+    try std.Io.Dir.cwd().writeFile(io, .{ .sub_path = path, .data = out.items });
+    std.debug.print("== {s}: re-baselined {d} cases -> {s}\n", .{ label, n, path });
+}
+
+pub fn main(init: std.process.Init.Minimal) !void {
     const alloc = std.heap.page_allocator;
     var threaded = std.Io.Threaded.init(alloc, .{});
     defer threaded.deinit();
@@ -69,14 +125,26 @@ pub fn main() !void {
     var arena = std.heap.ArenaAllocator.init(alloc);
     defer arena.deinit();
 
-    const gold = try runFile(io, alloc, &arena, GOLD_PATH, "corpus", 4);
-    const adv = try runFile(io, alloc, &arena, ADVERSARIAL_PATH, "adversarial", 24);
+    var args = std.process.Args.Iterator.init(init.args);
+    _ = args.skip(); // exe name
+    var rebaseline = false;
+    while (args.next()) |arg| {
+        if (std.mem.eql(u8, arg, "--rebaseline")) rebaseline = true;
+    }
 
-    const pass = gold.pass + adv.pass;
-    const total = pass + gold.fail + adv.fail;
-    std.debug.print("==> {d}/{d} passing  ({d} failing)\n", .{ pass, total, gold.fail + adv.fail });
+    if (rebaseline) {
+        for (CORPORA) |c| try rebaselineFile(io, alloc, &arena, c.path, c.label);
+        std.debug.print("\nRe-baselined. Review the git diff of each corpus before committing.\n", .{});
+        return;
+    }
 
-    // Documented divergences: reported for visibility, excluded from the gate.
-    const div = try runFile(io, alloc, &arena, DIVERGENCES_PATH, "known divergences (not gating)", 24);
-    _ = div;
+    var pass: usize = 0;
+    var fail: usize = 0;
+    for (CORPORA) |c| {
+        const t = try verifyFile(io, alloc, &arena, c.path, c.label, c.detail);
+        pass += t.pass;
+        fail += t.fail;
+    }
+    std.debug.print("==> {d}/{d} passing  ({d} failing)\n", .{ pass, pass + fail, fail });
+    if (fail != 0) std.process.exit(1);
 }

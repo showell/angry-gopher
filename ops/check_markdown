@@ -1,0 +1,19 @@
+#!/bin/bash
+# CANONICAL DEV-LOOP SCRIPT — DO NOT REINVENT.
+# Before composing an ad-hoc shell command for build / test / regen, run
+# `ops/list` to see what already exists.
+#
+# Markdown dialect regression gate (~3s). Renders every frozen corpus case with
+# the zig renderer (markdown.zig) and asserts it still equals the baseline —
+# gold.jsonl (the private real corpus), adversarial.jsonl, and dialect.jsonl.
+# Our renderer IS the source of truth for lynrummy's markdown dialect; this gate
+# just proves an edit didn't move any output unintentionally. There is no Go and
+# no goldmark oracle. Exits non-zero on any mismatch.
+#
+# After an INTENTIONAL dialect change, re-freeze with: ops/regen_markdown_gold
+# (then eyeball the git diff of each corpus before committing).
+
+set -e
+REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$REPO_DIR/zig-server"
+zig run src/main.zig

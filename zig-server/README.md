@@ -38,18 +38,27 @@ Port 9001 leaves 9000 free for the Go dev server (`ops/start`), so both run
 side by side. Concurrency is one-connection-at-a-time/blocking for now; the real
 concurrency + fan-out decision is deferred until Chat's SSE forces it.
 
-## Gold harness
+## Markdown dialect regression harness
 
-`src/main.zig` reads the private gold corpus
-(`~/showell_repos/gopher-gold/gold.jsonl` — 2378 real chat messages + docs,
-each `{id, md, html}` where `html` is the Go `RenderChatMarkdown` oracle
-output), renders every `md` with the zig renderer (arena reset per message),
-and diffs against the oracle. It prints `FAILID\t<id>` per mismatch plus a
-running `N/2378 passing` tally.
+The zig renderer (`src/markdown.zig`) **is** the definition of lynrummy's
+markdown dialect. `src/main.zig` is its regression harness: it renders every
+frozen `{id, md, html}` case (arena reset per message) and asserts the output
+still equals the baseline. There is **no external oracle** — `html` is whatever
+our renderer produces, frozen and human-reviewed. Three corpora:
+
+- `~/showell_repos/gopher-gold/gold.jsonl` — the real corpus (~2584 chat
+  messages + docs; private, it embeds real user messages).
+- `adversarial.jsonl` — hand-written hostile corners the real corpus never hit.
+- `dialect.jsonl` — where our dialect deliberately departs from vanilla
+  CommonMark: inline markup is **per-line**, so `**`, backticks, and `[...]`
+  never pair across a hard wrap.
 
 ```
-cd zig-server && zig run src/main.zig
+ops/check_markdown            # verify (renders all corpora, exits non-zero on drift)
+ops/regen_markdown_gold       # re-freeze from the renderer after an INTENTIONAL change
 ```
 
-The port proceeds by making more and more cases pass, easiest/most-common
-constructs first.
+Re-baselining is an explicit act (the benchmark pattern: verify never rewrites).
+After `ops/regen_markdown_gold`, read the git diff of each corpus and confirm
+only the cases you meant to change actually moved. The Go/goldmark toolchain
+that originally seeded the gold has been removed; the workflow is pure zig.

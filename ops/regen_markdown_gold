@@ -1,0 +1,20 @@
+#!/bin/bash
+# CANONICAL DEV-LOOP SCRIPT — DO NOT REINVENT.
+# Before composing an ad-hoc shell command for build / test / regen, run
+# `ops/list` to see what already exists.
+#
+# Re-baseline the markdown dialect corpus from the zig renderer (markdown.zig).
+# For every frozen (id, md) it rewrites `html` to whatever the renderer NOW
+# produces, across gold.jsonl (private real corpus), adversarial.jsonl, and
+# dialect.jsonl. This is the EXPLICIT re-freeze after an intentional dialect
+# change — the benchmark pattern: verify never rewrites; re-baselining is a
+# deliberate act. ALWAYS read the git diff of each corpus afterward and confirm
+# only the cases you meant to change actually moved.
+#
+# gold.jsonl lives in the PRIVATE gopher-gold repo (real user messages); its
+# diff is reviewed/committed there, separately from this repo.
+
+set -e
+REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$REPO_DIR/zig-server"
+zig run src/main.zig -- --rebaseline
