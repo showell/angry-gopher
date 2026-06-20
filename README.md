@@ -47,6 +47,55 @@ allocation. One uid is the same person across every surface. With the
 config above, `~/Auth/1` resolves to **Steve (uid 1)**, so a browser hits
 `/chat` as Steve rather than getting bounced to `/login`.
 
+### Bootstrapping a fresh environment
+
+Starting from an empty `data_dir` + `auth_dir` (no accounts yet), there
+are three steps. Account ids are allocated `1, 2, 3, …` in registration
+order (the counter floors at 1). **Convention: uid 1 and 2 are people;
+uid 3 is the agent (Claude).**
+
+**1. Seed the session secret.** Members get a *signed* session cookie,
+keyed by `{data_dir}/chat/_session_secret`. The server *reads* this file
+but never creates it — so registration 500s ("session unavailable")
+until it exists. Seed it once with ≥ 32 random bytes:
+
+```bash
+mkdir -p "$DATA_DIR/chat"
+head -c 48 /dev/urandom > "$DATA_DIR/chat/_session_secret"
+chmod 600 "$DATA_DIR/chat/_session_secret"
+```
+
+**2. Register the accounts in order.** Each registration POST *without a
+cookie* allocates the next id, so order is what assigns the uids. Do it
+in the browser at `/login/full` (enter a name + password twice), or by
+curl:
+
+```bash
+for who in Steve apoorva Claude; do      # → uid 1, 2, 3
+  curl -s -o /dev/null -X POST http://localhost:9001/login/full \
+    --data-urlencode "name=$who" \
+    --data-urlencode "password=CHANGEME-$who" \
+    --data-urlencode "confirm=CHANGEME-$who" \
+    --data-urlencode "next=/"
+done
+```
+
+This writes `{auth_dir}/<id>/{name,password}`.
+
+**3. Give the agent an API key.** The agent (uid 3) authenticates by key,
+not cookie — but it generates that key like any member: log in as Claude,
+then `POST /settings/apikey` (in the browser: `/settings` → *Generate
+key*). The key lands at `{auth_dir}/3/api-key` and is what the agent
+hands over as `Authorization: Bearer <key>`:
+
+```bash
+JAR=$(mktemp)
+curl -s -o /dev/null -c "$JAR" -X POST http://localhost:9001/login/full \
+  --data-urlencode "name=Claude" --data-urlencode "password=CHANGEME-Claude" --data-urlencode "next=/"
+curl -s -o /dev/null -b "$JAR" -X POST http://localhost:9001/settings/apikey
+cat "$AUTH_DIR/3/api-key"   # 3-<32 hex>
+```
+
 ### Reading chat as the agent (uid 3)
 
 Claude is **uid 3**, an API-key-only agent. To read what Steve sent on a
