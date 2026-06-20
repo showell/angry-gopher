@@ -1,9 +1,7 @@
-//! config: reads GOPHER_CONFIG (the same env-var + flat `key = value` file the
-//! Go server reads) and points the storage + identity layers at Go's LIVE data
-//! tree. This is how the zig port shares the live data dir (the fork-2 decision):
-//! both binaries resolve their roots from one config file.
+//! config: reads GOPHER_CONFIG (a flat `key = value` file, path from the env var)
+//! and points the storage + identity layers at the live data tree.
 //!
-//! Go (main.go + config.go) wires four roots from data_dir + auth_dir:
+//! Four roots are wired from data_dir + auth_dir:
 //!   lynrummy   = {data_dir}/lynrummy   -> storage.data_root
 //!   chat       = {data_dir}/chat       -> users.session_secret_dir (the secret)
 //!                                       + chat_store.chat_root (conversations)
@@ -47,7 +45,7 @@ pub fn load(io: std.Io, alloc: std.mem.Allocator, env: std.process.Environ.Map) 
         } else if (std.mem.eql(u8, key, "auth_dir")) {
             auth_dir = try expandHome(alloc, env, val);
         }
-        // port is Go's concern; the zig port owns PORT in server.zig.
+        // the config's port key is ignored; the server hardcodes PORT in server.zig.
     }
 
     const dd = data_dir orelse {
@@ -64,7 +62,7 @@ pub fn load(io: std.Io, alloc: std.mem.Allocator, env: std.process.Environ.Map) 
     std.debug.print("config: data_dir={s}  auth_root={s}\n", .{ dd, users.auth_root });
 }
 
-/// expandHome turns a leading `~/` into $HOME, mirroring Go's expandHome. Other
+/// expandHome turns a leading `~/` into $HOME. Other
 /// forms pass through unchanged.
 fn expandHome(alloc: std.mem.Allocator, env: std.process.Environ.Map, p: []const u8) ![]const u8 {
     if (std.mem.startsWith(u8, p, "~/")) {

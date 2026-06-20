@@ -1,20 +1,18 @@
-//! chat_store: the READ half of Go's chat storage layer (server/chat/
-//! chat_store.go + chat_conv.go + channels.go), enough to render a transcript
-//! off disk. The zig port shares Go's LIVE chat tree (chat_root = {data_dir}/
-//! chat, wired by config.zig) — Go writes messages, this reads the SAME bytes
-//! back. There is NO write path here: posting still goes through the Go server
-//! (the dogfood loop — route a message through Go, read it back through zig).
+//! chat_store: the on-disk chat storage layer — reading and appending transcripts
+//! (1:1 DMs and channels) under chat_root ({data_dir}/chat, wired by config.zig).
+//! decodeChatFile parses a transcript off disk; appendMessage adds a message and
+//! fans it out to live streams.
 //!
-//! On-disk shape (mirrors Go exactly):
+//! On-disk shape:
 //!   {chat_root}/<a>_<b>/sessions/<sid>.md              — a 1:1 DM transcript
 //!   {chat_root}/channels/<name>/sessions/<sid>.md      — a channel topic
 //!   {chat_root}/channels/<name>.channel                — channel member uids
 //!
 //! Transcript file format: messages concatenated, joined by `sep`. Each block is
 //!   MSG_<sid>_<n>\nfrom: <name>\ndate: <RFC3339>\n\n<markdown body>
-//! decodeChatFile is the byte-exact port of Go's decodeChatFile/decodeChatBlock,
-//! including the 13-hyphen separator-collision unescape. Round-trips with the
-//! raw bytes (the /raw view serves them verbatim, this decoder parses them).
+//! decodeChatFile parses that, including the 13-hyphen separator-collision
+//! unescape. Round-trips with the raw bytes (the /raw view serves them verbatim,
+//! this decoder parses them).
 
 const std = @import("std");
 const Io = std.Io;
@@ -27,15 +25,14 @@ const recent_feed = @import("recent_feed.zig");
 const images_store = @import("images_store.zig");
 const code_store = @import("code_store.zig");
 
-/// chat_root mirrors Go's ChatDataRoot ({data_dir}/chat). config.zig overrides
-/// this at startup; the default is repo-relative-from-zig-server like the others.
+/// chat_root is {data_dir}/chat. config.zig overrides this at startup; the
+/// default is repo-relative-from-zig-server like the others.
 pub var chat_root: []const u8 = "../games/lynrummy/chat-data";
 
 /// chat_mu serializes the read-count-then-append on the write path AND the
-/// read-backlog-then-subscribe on the stream path — mirroring Go's chatMu. It's
-/// what makes a message land in EITHER the backlog OR the live stream, never
-/// both and never neither (see appendMessage / openStream). Process-local, like
-/// Go's; the cross-process race with the Go server is the same one Go has.
+/// read-backlog-then-subscribe on the stream path. It's what makes a message land
+/// in EITHER the backlog OR the live stream, never both and never neither (see
+/// appendMessage / openStream).
 var chat_mu: Io.Mutex = .init;
 
 /// sep joins message blocks on disk: blank line, 13 hyphens, newline. A body
@@ -45,8 +42,7 @@ const dashes = "-------------"; // exactly 13; the collision shape
 
 /// ChatMessage is one decoded block. id/from/date are slices into the source
 /// buffer; markdown is freshly built (line-unescaped + rejoined). The `date` is
-/// the raw RFC3339 header string (Go reparses it to a time.Time and reformats on
-/// the wire; for a read-only view the stored string is what we display).
+/// the raw RFC3339 header string, displayed as stored.
 pub const ChatMessage = struct {
     id: []const u8,
     from: []const u8,
@@ -54,7 +50,7 @@ pub const ChatMessage = struct {
     markdown: []const u8,
 };
 
-// ── decode (byte-exact port of Go's decodeChatFile/decodeChatBlock) ──────────
+// ── decode ──────────────────────────────────────────────────────────────────
 
 /// decodeChatFile parses a whole session file into messages. Splits on `sep`
 /// (no trailing separator on disk, so one piece per message), skipping any
@@ -107,7 +103,7 @@ fn decodeChatBlock(alloc: Alloc, piece: []const u8) !ChatMessage {
     return msg;
 }
 
-/// unescapeBodyLine reverses Go's escapeBodyLine: a line that is one-or-more
+/// unescapeBodyLine reverses the body-line escaping: a line that is one-or-more
 /// backslashes followed by exactly 13 hyphens (the `^\\+-------------$` shape)
 /// loses one leading backslash. Everything else passes through.
 fn unescapeBodyLine(line: []const u8) []const u8 {
@@ -127,7 +123,7 @@ pub const Stream = struct {
     sub: *bus_mod.Subscriber,
 };
 
-/// openStream is Go's Conv.OpenStream: under chat_mu, decode the session backlog
+/// openStream: under chat_mu, decode the session backlog
 /// AND register a live subscriber on `<conv_key>/<sid>` — atomically, so no
 /// message slips between "what's in the backlog" and "what the subscriber sees".
 /// A message appended concurrently is delivered exactly once (backlog xor live).
@@ -150,7 +146,7 @@ pub fn openStream(io: Io, alloc: Alloc, bus: *Bus, conv_dir: []const u8, conv_ke
 /// companion, then publish a fan-out blob to the live subscribers — all under the
 /// one lock so a concurrent openStream can't double- or zero-count it. Returns
 /// the stored message (id + server-stamped date). NO render here: the blob
-/// carries raw markdown; each stream renders per-viewer (matching Go).
+/// carries raw markdown; each stream renders per-viewer.
 pub fn appendMessage(io: Io, alloc: Alloc, bus: *Bus, meta: ConvMeta, conv_dir: []const u8, conv_key: []const u8, sid: []const u8, from_name: []const u8, from_id: []const u8, markdown: []const u8, cid: []const u8) !ChatMessage {
     const path = try sessionMdPath(alloc, conv_dir, sid);
 
@@ -168,7 +164,7 @@ pub fn appendMessage(io: Io, alloc: Alloc, bus: *Bus, meta: ConvMeta, conv_dir: 
     const stored = try chatStoredForm(alloc, index, msg);
     try appendRawBytes(io, path, stored);
 
-    // Last-author companion (best-effort, like Go).
+    // Last-author companion (best-effort).
     const la = try std.fs.path.join(alloc, &.{ conv_dir, "sessions", try std.fmt.allocPrint(alloc, "{s}.lastauthor", .{sid}) });
     Io.Dir.cwd().writeFile(io, .{ .sub_path = la, .data = from_id }) catch {};
 
@@ -180,7 +176,7 @@ pub fn appendMessage(io: Io, alloc: Alloc, bus: *Bus, meta: ConvMeta, conv_dir: 
     // Cross-page fanout: notify + recent + images + code,
     // per member, to their per-uid bus, plus a sidebar topic-added on the
     // session's first message. Best-effort; runs under chat_mu so the lock order
-    // is chat_mu → imagesMu (leaf), matching Go.
+    // is chat_mu → imagesMu (leaf).
     fanoutCrossPage(io, alloc, bus, meta, conv_key, sid, msg, index);
 
     return msg;
@@ -271,7 +267,7 @@ fn fanoutCrossPage(io: Io, alloc: Alloc, bus: *Bus, meta: ConvMeta, conv_key: []
             if (sidebarBusKey(alloc, uid)) |k| bus.publish(k, topic_added) else |_| {}
         }
 
-        // recent — every member sees the row (sender included, like Go).
+        // recent — every member sees the row (sender included).
         const where = recentWhere(io, alloc, meta, conv_key, uid) catch "";
         var rj: std.ArrayList(u8) = .empty;
         recent_feed.encodeChatEvent(&rj, alloc, msg.date, rec_url, sid, where, msg.from, excerpt) catch continue;
@@ -359,9 +355,8 @@ fn encodeChatBlock(alloc: Alloc, msg: ChatMessage) ![]u8 {
 }
 
 /// escapeBodyLine protects a body line that would collide with `sep` by
-/// prepending a backslash — Go's escapeBodyLine, matching `^\\*-------------$`
-/// (ZERO or more backslashes then exactly 13 hyphens). Symmetric with
-/// unescapeBodyLine.
+/// prepending a backslash — it matches `^\\*-------------$` (ZERO or more
+/// backslashes then exactly 13 hyphens). Symmetric with unescapeBodyLine.
 fn escapeBodyLine(alloc: Alloc, line: []const u8) ![]const u8 {
     var k: usize = 0;
     while (k < line.len and line[k] == '\\') k += 1;
@@ -543,7 +538,7 @@ fn atoiOr0(s: []const u8) i64 {
     return std.fmt.parseInt(i64, s, 10) catch 0;
 }
 
-/// validSessionID matches Go's chatSessionIDRe: `^[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*$`
+/// validSessionID matches `^[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*$`
 /// in 1..80 chars — alphanumerics joined by single hyphens, no leading/trailing/
 /// double hyphen, no underscore/dot/slash. Doubles as the path-traversal guard
 /// for any sid that flows into a sessions/<sid> filesystem path.
@@ -564,7 +559,7 @@ pub fn validSessionID(sid: []const u8) bool {
     return true;
 }
 
-/// validChannelName matches Go's channel-name rule: `^[A-Za-z][A-Za-z0-9-]{0,39}$`
+/// validChannelName matches `^[A-Za-z][A-Za-z0-9-]{0,39}$`
 /// — a letter, then up to 39 of letter/digit/hyphen (1..40 chars total).
 pub fn validChannelName(name: []const u8) bool {
     if (name.len == 0 or name.len > 40) return false;

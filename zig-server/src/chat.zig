@@ -1,10 +1,9 @@
-//! chat: the chat conversation surface of the zig port. It serves the SAME prod
-//! client the Go server serves — the embedded chat/*.js bundles, byte-for-byte —
-//! on the SAME on-disk chat tree Go writes (chat_store.chat_root). The real
-//! client boots on the zig server, paints the transcript from the SSE backlog,
-//! sends messages, and receives them live.
+//! chat: the chat conversation surface. It serves the prod client — the embedded
+//! chat/*.js bundles — over the on-disk chat tree (chat_store.chat_root). The
+//! client boots, paints the transcript from the SSE backlog, sends messages, and
+//! receives them live.
 //!
-//! Routes (mirror Go's URL space, server/chat/chat.go):
+//! Routes:
 //!   GET  /chat                         index: the conversations this user can see
 //!   GET  /chat/<file>.js               an embedded client bundle (colors.js, …)
 //!   GET  /chat/c/<conv>                303 → its default topic
@@ -18,17 +17,13 @@
 //!   GET  /chat/sidebar/stream          SSE: per-uid sidebar upserts (topic-added +
 //!                                      user-online), a sidebarBusKey subscriber
 //!
-//! Live delivery within this binary: a /send append publishes a fan-out blob to
-//! bus.zig (the spike's bus, now graduated), and every open /stream on the same
-//! conv/sid drains it — so a message sent from the zig page appears live in
-//! every zig tab. The ONE gap (Steve's call): a message posted via the GO server
-//! lands on disk but NOT on this server's bus, so it shows on RELOAD, not live —
-//! cross-process append can't notify a different process's bus. The same gap
-//! applies to the notify / sidebar / recent / images / code fanout (in-process
-//! only); presence likewise lives in this process's memory.
+//! Live delivery: a /send append publishes a fan-out blob to bus.zig, and every
+//! open /stream on the same conv/sid drains it — so a sent message appears live
+//! in every open tab. The notify / sidebar / recent / images / code fan-out and
+//! presence are likewise in-process (in-memory, lost on restart).
 //!
-//! Access mirrors Go: identity-or-/login; DM participant gate; channel
-//! membership gate; opaque 404 (no existence leak); sid path-traversal guard.
+//! Access: identity-or-/login; DM participant gate; channel membership gate;
+//! opaque 404 (no existence leak); sid path-traversal guard.
 
 const std = @import("std");
 const Io = std.Io;
@@ -705,7 +700,7 @@ fn chatMsgLookup(req: *Request, io: Io, alloc: Alloc, uid: []const u8, id: []con
     return http.notFound(req);
 }
 
-/// validMsgRefID matches Go's msgRefIDRe: `^[A-Za-z0-9-]+_[0-9]+$` — a session
+/// validMsgRefID matches `^[A-Za-z0-9-]+_[0-9]+$` — a session
 /// slug, underscore, decimal index. Doubles as the path guard for the sid.
 fn validMsgRefID(id: []const u8) bool {
     const cut = std.mem.lastIndexOfScalar(u8, id, '_') orelse return false;

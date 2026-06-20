@@ -34,7 +34,7 @@ pub fn docPath(alloc: Alloc, uid: []const u8, slug: []const u8) ![]u8 {
     return std.fs.path.join(alloc, &.{ try userDocsDir(alloc, uid), file });
 }
 
-/// validDocSlug matches Go's docSlugRe: `^[a-z0-9]+(?:-[a-z0-9]+)*$` in 1..80
+/// validDocSlug matches `^[a-z0-9]+(?:-[a-z0-9]+)*$` in 1..80
 /// chars — lowercase alphanumerics joined by single hyphens, no leading/trailing/
 /// double hyphen. Anything else can't come from slugifyTitle or a URL.
 pub fn validDocSlug(slug: []const u8) bool {
