@@ -75,6 +75,32 @@ the SSH key was added at droplet creation).
    ssh steve@<IP> 'sudo mv /tmp/Caddyfile /etc/caddy/Caddyfile && sudo systemctl reload caddy'
    ```
 
+## Watchdog
+
+`deploy/watchdog.py` is a dead-simple, stdlib-only health monitor that runs
+ON the host as `steve` (not on the dev box). Every minute it checks: the
+local server answers `GET /version`, exactly one `zig-server` process is up
+and not hogging memory, the box has free RAM and disk, and nothing
+unexpected is running as `steve`. It overwrites a plain-text snapshot you
+read over ssh:
+
+```
+ssh steve@<IP> cat watchdog-status.txt      # latest snapshot
+ssh steve@<IP> cat watchdog.log             # appended history of WARN/FAIL cycles
+```
+
+It takes no arguments (thresholds are constants at the top of the file) and
+opens no network except to curl the local server. Ship + run it:
+
+```
+scp deploy/watchdog.py steve@<IP>:~/watchdog.py
+ssh steve@<IP> 'nohup python3 ~/watchdog.py >/dev/null 2>&1 &'
+```
+
+(A systemd unit — auto-restart, start-on-boot — is the eventual home; nohup
+is the first cut. The watchdog already survives a thrown check; it does not
+yet survive a reboot.)
+
 ## Hardening (applied 2026-05-21)
 
 - **TLS:** live on `https://lynrummy.com` (Let's Encrypt via Caddy,
