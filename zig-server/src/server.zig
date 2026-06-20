@@ -28,6 +28,8 @@ const chat = @import("chat.zig");
 const settings = @import("settings.zig");
 const learn = @import("learn.zig");
 const admin = @import("admin.zig");
+const home = @import("home.zig");
+const users = @import("users.zig");
 const Bus = @import("bus.zig").Bus;
 
 const PORT: u16 = 9001;
@@ -135,6 +137,15 @@ fn route(req: *std.http.Server.Request, io: std.Io, alloc: std.mem.Allocator, bu
         try learn.handle(req, sub);
     } else if (matchPrefix(path, "/admin")) |sub| {
         try admin.handle(req, io, alloc, sub);
+    } else if (std.mem.eql(u8, path, "/version")) {
+        try home.handleVersion(req, alloc);
+    } else if (std.mem.eql(u8, path, "/")) {
+        // The site root: the launch pad. TOTALLY_PUBLIC, so resolve the viewer
+        // for the top bar but never gate. (Go routes "/" as the mux catch-all
+        // whose handler 404s any non-"/" path; here the explicit-"/" check plus
+        // the notFound fallthrough below give the identical result.)
+        const uid = try users.currentUserID(io, alloc, req);
+        try home.handleHome(req, io, alloc, uid, path);
     } else {
         try http.notFound(req);
     }
