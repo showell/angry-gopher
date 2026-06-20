@@ -36,6 +36,7 @@ const http = @import("http.zig");
 const users = @import("users.zig");
 const store = @import("chat_store.zig");
 const markdown = @import("markdown.zig");
+const edge = @import("edge.zig");
 const docs = @import("docs.zig");
 const recent = @import("recent.zig");
 const images = @import("images.zig");
@@ -547,7 +548,7 @@ fn sendMessage(req: *Request, io: Io, alloc: Alloc, bus: *Bus, meta: store.ConvM
     // store it: fail loud to the author (a 400) instead of fanning out content
     // that every reader would render as the malformed placeholder anyway.
     if (markdown.hostileReason(md)) |_| {
-        return req.respond("not sent: malformed markdown — too much formatting; break it into smaller messages\n", .{ .status = .bad_request });
+        return edge.reject(req, .malformed_markdown, "not sent: malformed markdown — too much formatting; break it into smaller messages\n");
     }
 
     const from_name = try users.getUserName(io, alloc, uid);

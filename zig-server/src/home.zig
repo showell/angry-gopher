@@ -16,6 +16,7 @@
 const std = @import("std");
 const Io = std.Io;
 const http = @import("http.zig");
+const edge = @import("edge.zig");
 const users = @import("users.zig");
 const chat = @import("chat.zig");
 
@@ -49,9 +50,13 @@ pub fn handleHome(req: *Request, io: Io, alloc: Alloc, uid: []const u8, path: []
 /// `commit` field is "dev" — the zig build doesn't inject a build id yet; the
 /// `version` const is the observable knob for now.
 pub fn handleVersion(req: *Request, alloc: Alloc) !void {
+    // `rejects` is the edge-policy observable: a counter per reject kind (see
+    // edge.zig). The watchdog polls /version, so a climbing counter surfaces in
+    // watchdog-status.txt without any extra plumbing.
+    const rejects = try edge.countsJSON(alloc);
     const body = try std.fmt.allocPrint(alloc,
-        \\{{"result":"success","version":"{s}","commit":"dev"}}
-    , .{version});
+        \\{{"result":"success","version":"{s}","commit":"dev","rejects":{s}}}
+    , .{ version, rejects });
     try req.respond(body, .{ .extra_headers = &.{http.json_ct} });
 }
 

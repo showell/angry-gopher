@@ -24,6 +24,13 @@ jobs:
      prose and fenced code still render. Defends both the linear-scanner fix and
      the 256-markup-token reject cap from regressing.
 
+  4. EDGE-INPUT POLICY — every oversized/malformed probe at an edge (header,
+     body, markdown, multipart) must be rejected gracefully AND bump its
+     /version reject counter (edge.zig). The counter is the policy's guaranteed
+     observable; this job asserts each probe moves exactly its own counter and a
+     benign control moves none. Defends the bound-every-edge policy from
+     regressing silently.
+
 Markdown-content fuzzing routes through POST /chat/docs/render (renders, never
 writes), so we exercise the hot markdown/parse paths without polluting any
 transcript. Run with the server already up on :9001.
@@ -31,7 +38,7 @@ transcript. Run with the server already up on :9001.
     python3 zig-server/stress_test.py
 """
 
-import os, socket, ssl, sys, time, threading, subprocess
+import os, socket, ssl, sys, time, threading, subprocess, json
 
 HOST, PORT = "127.0.0.1", 9001
 KEY = open(os.path.expanduser("~/Auth/1/api-key")).read().strip()
@@ -277,6 +284,78 @@ def complexity_and_reject():
         if not ok:
             regressions.append(("complexity", f"{label}: status={st} malformed={got_bad}, wanted {want_bad}"))
 
+# ── edge-input policy ───────────────────────────────────────────────────────
+
+def get_rejects():
+    """GET /version and return its `rejects` counter object (full-read, since the
+    body outgrows a single recv once counters are multi-digit)."""
+    blob = (f"GET /version HTTP/1.1\r\nHost: {HOST}\r\nConnection: close\r\n\r\n").encode()
+    try:
+        s = socket.create_connection((HOST, PORT), timeout=4)
+        chunks = []
+        s.sendall(blob)
+        while True:
+            d = s.recv(65536)
+            if not d:
+                break
+            chunks.append(d)
+        s.close()
+    except Exception:
+        return {}
+    resp = b"".join(chunks)
+    sep = resp.find(b"\r\n\r\n")
+    try:
+        return json.loads(resp[sep + 4:]).get("rejects", {})
+    except Exception:
+        return {}
+
+def edge_policy():
+    """The buffer-overflow / edge-input policy (edge.zig). Every oversized or
+    malformed probe must (a) be rejected — never crash, never truncate — and
+    (b) increment its /version counter, the policy's GUARANTEED observable. The
+    counter is the assertion; the HTTP status is checked where it's guaranteed
+    (the oversize-header 431 is best-effort, since the connection may already be
+    torn down, so None is accepted there alongside 431)."""
+    print("[edge] every overflow/malformed probe must bump its /version counter")
+
+    def probe(kind, ok_statuses, fire):
+        before = get_rejects().get(kind, 0)
+        st = fire()
+        after = get_rejects().get(kind, 0)
+        moved = after == before + 1
+        ok = moved and (st in ok_statuses)
+        print(f"    {kind:20} status={st} count {before}→{after}  [{'PASS' if ok else 'FAIL'}]")
+        if not ok:
+            regressions.append(("edge", f"{kind}: status={st} (want {ok_statuses}), count {before}->{after}"))
+
+    # header_too_large: a head past the 16 KB read buffer. 431 best-effort (the
+    # conn may be torn down mid-send), but the counter is guaranteed.
+    probe("header_too_large", {431, None},
+          lambda: raw(b"GET /version HTTP/1.1\r\nHost: x\r\nX-Big: " + b"A" * 20000 +
+                      b"\r\nConnection: close\r\n\r\n")[0])
+    # body_too_large: a POST body over /login's 64 KB cap -> 413.
+    probe("body_too_large", {413},
+          lambda: req("POST", "/login", body=b"x" * 70000)[0])
+    # malformed_markdown: hostile over-formatted input to the preview endpoint.
+    # Returns 200 with the visible placeholder (harmless), counter fires.
+    probe("malformed_markdown", {200},
+          lambda: post_render(b"[" * 300)[1])
+    # malformed_multipart: an upload POST whose body isn't parseable multipart.
+    probe("malformed_multipart", {400},
+          lambda: req("POST", "/chat/c/1_2/general/upload",
+                      [AUTH, "Content-Type: text/plain"], body=b"notmultipart")[0])
+
+    # Negative control: benign traffic must move NO counter (no false positives).
+    before = get_rejects()
+    req("GET", "/", [AUTH])
+    post_render(b"hello **world** with a [link](/y) and `code`")
+    after = get_rejects()
+    if before == after:
+        print("    benign control       no counter moved      [PASS]")
+    else:
+        print(f"    benign control       {before} → {after}  [FAIL]")
+        regressions.append(("edge", f"benign traffic moved a counter: {before} -> {after}"))
+
 # ── leak phase ────────────────────────────────────────────────────────────────
 
 def hammer_sequential(n):
@@ -332,6 +411,9 @@ def main():
 
     print("\n══ COMPLEXITY / REJECT ══")
     complexity_and_reject()
+
+    print("\n══ EDGE-INPUT POLICY ══")
+    edge_policy()
 
     print("\n══ LEAK HUNTING ══")
     base = settle_rss("baseline")

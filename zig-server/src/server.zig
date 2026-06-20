@@ -31,6 +31,7 @@ const admin = @import("admin.zig");
 const home = @import("home.zig");
 const login = @import("login.zig");
 const brand = @import("brand.zig");
+const edge = @import("edge.zig");
 const users = @import("users.zig");
 const Bus = @import("bus.zig").Bus;
 
@@ -109,6 +110,18 @@ fn handleConn(io: std.Io, alloc: std.mem.Allocator, bus: *Bus, stream: net.Strea
 
     var req = server.receiveHead() catch |e| switch (e) {
         error.HttpConnectionClosing => return,
+        // A request head larger than read_buf (16 KB). Count it (the guaranteed
+        // observable, surfaced in /version) and best-effort a 431 before closing.
+        // The reader/writer may be mid-stream after an oversize head, so the raw
+        // write is swallowed on failure — the count is the part we rely on.
+        error.HttpHeadersOversize => {
+            edge.count(.header_too_large);
+            sw.interface.writeAll(
+                "HTTP/1.1 431 Request Header Fields Too Large\r\n" ++
+                    "connection: close\r\ncontent-length: 0\r\n\r\n") catch {};
+            sw.interface.flush() catch {};
+            return;
+        },
         else => return e,
     };
     req.head.keep_alive = false; // force `connection: close` without touching each handler

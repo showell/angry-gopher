@@ -27,6 +27,7 @@ const users = @import("users.zig");
 const store = @import("chat_store.zig");
 const docs_store = @import("docs_store.zig");
 const markdown = @import("markdown.zig");
+const edge = @import("edge.zig");
 const chat = @import("chat.zig");
 const chat_state = @import("chat_state.zig");
 const timefmt = @import("timefmt.zig");
@@ -236,6 +237,10 @@ fn docsRender(req: *Request, alloc: Alloc) !void {
     if (req.head.method != .POST) return http.methodNotAllowed(req);
     const body = (try http.readLimitedBody(req, alloc, max_doc_bytes)) orelse return;
     const md = (try chat.formField(alloc, body, "body")) orelse "";
+    // The live-preview fuzz path. markdown.render returns the visible
+    // malformed_html placeholder for hostile input (the existing observable);
+    // count it too so /version reflects preview probing, not just POST rejects.
+    if (markdown.hostileReason(md) != null) edge.count(.malformed_markdown);
     const html = try markdown.render(alloc, md);
     try req.respond(html, .{ .extra_headers = &.{http.html_ct} });
 }
@@ -256,7 +261,7 @@ fn docsPost(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8) !vo
     }
     // Don't broadcast hostile / over-formatted markdown to a chat partner.
     if (markdown.hostileReason(doc_body)) |_| {
-        return req.respond("not posted: too much markdown formatting; break the doc up\n", .{ .status = .bad_request });
+        return edge.reject(req, .malformed_markdown, "not posted: too much markdown formatting; break the doc up\n");
     }
 
     const partner = defaultChatPartner(uid);

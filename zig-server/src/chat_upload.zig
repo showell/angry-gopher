@@ -14,6 +14,7 @@
 const std = @import("std");
 const Io = std.Io;
 const http = @import("http.zig");
+const edge = @import("edge.zig");
 const users = @import("users.zig");
 
 const Alloc = std.mem.Allocator;
@@ -36,15 +37,15 @@ pub fn handleUpload(req: *Request, io: Io, alloc: Alloc, uid: []const u8, conv_d
     // which iterateHeaders asserts, the /send gotcha) AND because the body read
     // calls head.invalidateStrings(), which clobbers the header string memory.
     // So the boundary MUST be copied out before readLimitedBody runs.
-    const ct = reqHeader(req, "content-type") orelse return req.respond("no file\n", .{ .status = .bad_request });
-    const boundary_raw = multipartBoundary(ct) orelse return req.respond("no file\n", .{ .status = .bad_request });
+    const ct = reqHeader(req, "content-type") orelse return edge.reject(req, .malformed_multipart, "no file\n");
+    const boundary_raw = multipartBoundary(ct) orelse return edge.reject(req, .malformed_multipart, "no file\n");
     const boundary = try alloc.dupe(u8, boundary_raw);
 
     const body = (try http.readLimitedBody(req, alloc, max_upload_bytes + (1 << 20))) orelse return;
     const part = parseMultipartFile(alloc, body, boundary) orelse
-        return req.respond("no file\n", .{ .status = .bad_request });
+        return edge.reject(req, .malformed_multipart, "no file\n");
     if (part.data.len > max_upload_bytes) {
-        return req.respond("Image too large — the limit is 10 MB.\n", .{ .status = .payload_too_large });
+        return edge.reject(req, .body_too_large, "Image too large — the limit is 10 MB.\n");
     }
     const ext = detectImageExt(part.data) orelse
         return req.respond("unsupported image type (png, jpeg, gif, webp only)\n", .{ .status = .unsupported_media_type });
