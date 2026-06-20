@@ -11,6 +11,36 @@ set -e
 
 source "$(dirname "$0")/_paths.sh"
 
+# The server needs a config file naming the data + auth trees. Default to
+# ~/AngryGopher/gopher.conf; honor an existing GOPHER_CONFIG override. Fail
+# loudly with the exact format if it's missing — a fresh checkout has no
+# config, and without this guard the server just dies on launch and we'd only
+# see the generic ":9001 is not serving" below.
+GOPHER_CONFIG="${GOPHER_CONFIG:-$HOME/AngryGopher/gopher.conf}"
+if [ ! -f "$GOPHER_CONFIG" ]; then
+    cat >&2 <<EOF
+ops/start: no config file at $GOPHER_CONFIG
+
+The server reads a flat 'key = value' config naming two on-disk trees:
+data_dir (all writable state) and auth_dir (the account store). Create it:
+
+    mkdir -p "$(dirname "$GOPHER_CONFIG")"
+    cat > "$GOPHER_CONFIG" <<'CONF'
+    data_dir = ~/AngryGopher/prod
+    auth_dir = ~/Auth
+    CONF
+
+Notes:
+  - Only data_dir and auth_dir are honored; the port is hardcoded to :9001.
+  - auth_dir defaults to ~/Auth if omitted. data_dir is required.
+  - Paths may start with ~/ (expanded to \$HOME) or be absolute. A bare
+    \$HOME is NOT expanded — use ~/ or a real absolute path.
+  - To point at a different config: GOPHER_CONFIG=/path/to/conf ops/start
+EOF
+    exit 1
+fi
+export GOPHER_CONFIG
+
 # Kill any server on :9001 and WAIT until the port is actually free. This is
 # what makes "it answered" downstream mean "the binary we just built answered":
 # we prove the old one is gone, build fresh, launch, then prove the new one is
@@ -34,9 +64,10 @@ cd "$GOPHER_DIR"
 ( cd "$GOPHER_DIR/zig-server" && zig build )
 BIN="$GOPHER_DIR/zig-server/zig-out/bin/zig-server"
 
-# GOPHER_CONFIG points storage + auth at the live tree; without it the server
-# falls back to repo-relative defaults (and a stranger gets a 303 to /login).
-GOPHER_CONFIG=~/AngryGopher/gopher.conf nohup "$BIN" > /tmp/angry-gopher.log 2>&1 &
+# GOPHER_CONFIG (resolved + verified to exist above) points storage + auth at
+# the live tree; without it the server falls back to repo-relative defaults
+# (and a stranger gets a 303 to /login).
+nohup "$BIN" > /tmp/angry-gopher.log 2>&1 &
 
 # Wait for the freshly-built server to answer on :9001.
 for i in $(seq 1 10); do
