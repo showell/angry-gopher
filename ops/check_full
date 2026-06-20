@@ -4,9 +4,10 @@
 # command for build / launch / test / regen, run `ops/list` to see
 # what already exists.
 #
-# Full gate (~50s warm). Runs `ops/check` plus the >20s test tier
-# (currently just test_full_game.ts — agent self-play across 6
-# seeds, ~30s warm).
+# Full gate (~50s warm). Runs `ops/check` plus the heavy tier the fast gate
+# skips: the BFS engine + curated-puzzle conformance suites (~11s, moved out of
+# test_ts since Lyn Rummy is stable) and agent self-play (test_full_game.ts,
+# ~30s), then the benchmarks.
 #
 # Run before pushing changes that touch the BFS engine, the agent
 # loop, or the bucket pipeline. The fast gate is enough for most
@@ -22,7 +23,7 @@ t0_total=$SECONDS
 ./ops/check
 
 echo
-echo "===== Slow tier: agent self-play ====="
+echo "===== Heavy tier: full conformance + agent self-play ====="
 phase() {
     local label="$1"
     shift
@@ -30,6 +31,9 @@ phase() {
     "$@"
     echo "    [phase] ${label}: $((SECONDS - t0))s"
 }
+# The heavy conformance suites the fast gate skips (see test_ts), then self-play.
+phase "engine"    bash -c "cd games/lynrummy/ts && node test/test_engine_conformance.ts"
+phase "puzzles"   bash -c "cd games/lynrummy/ts && node test/test_curated_puzzles.ts"
 phase "full-game" bash -c "cd games/lynrummy/ts && node test/test_full_game.ts"
 
 echo

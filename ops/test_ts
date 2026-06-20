@@ -4,13 +4,14 @@
 # command for build / launch / test / regen, run `ops/list` to see
 # what already exists.
 #
-# Fast TS gate (~15s warm). Runs the TypeScript typechecker, every
-# fast TS test, and the dead-export report. Called by `ops/check`
+# Fast TS gate (~4s warm). Runs the TypeScript typechecker, the light TS
+# conformance/unit suites, and the dead-export report. Called by `ops/check`
 # and run individually during TS-side iteration.
 #
-# Anything that takes >20s warm lives in `ops/check_full` instead
-# (currently just test_full_game.ts — agent self-play across 6
-# seeds).
+# The HEAVY conformance suites (engine BFS + curated puzzles, ~11s combined)
+# live in `ops/check_full` instead — Lyn Rummy is stable, so paying that on
+# every commit isn't worth it; run the full gate before BFS/agent/bucket work.
+# Same for the >20s tier (test_full_game.ts agent self-play).
 
 set -e
 
@@ -34,13 +35,11 @@ phase "typecheck" bash -c "cd games/lynrummy/ts && ./node_modules/.bin/tsc -p ."
 echo "==> TS fast tests"
 cd games/lynrummy/ts
 phase "leaf"       node test/test_conformance_leaf.ts
-phase "engine"     node test/test_engine_conformance.ts
 phase "verbs"      node test/test_verb_to_primitives.ts
 phase "plan"       node test/test_physical_plan.ts
 phase "split-phys" node test/test_split_physics.ts
 phase "replay"     node test/test_replay_walkthroughs.ts
 phase "find-play"  node test/test_elm_find_play.ts
-phase "puzzles"    node test/test_curated_puzzles.ts
 cd "$REPO_DIR"
 
 echo "==> Dead-export scan"
