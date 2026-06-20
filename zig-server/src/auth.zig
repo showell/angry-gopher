@@ -8,8 +8,9 @@
 //! `$2b$`. And zig's std `strVerify` recomputes the full crypt string (always with
 //! its own `$2b$` tag) and compares the ENTIRE string, prefix included — so it
 //! rejects a `$2a$` hash on the version byte alone, even though the ciphertext
-//! matches. (See check_bcrypt.zig; this was caught by the gold harness, not by
-//! eye — bcrypt has no eyeball backstop.)
+//! matches. The frozen `$2a$` vector in the test below guards this — bcrypt has
+//! no eyeball backstop, so a regression in the normalization is invisible
+//! without it.
 //!
 //! Every stored password on the live site is a `$2a$` hash. So verifyPassword
 //! normalizes the version byte to `b` before handing the string to std. That one
@@ -54,4 +55,15 @@ pub fn hashPassword(password: []const u8, out: []u8, io: std.Io) ![]const u8 {
         .params = .{ .rounds_log = cost, .silently_truncate_password = false },
         .encoding = .crypt,
     }, out, io);
+}
+
+test "verifyPassword reads legacy $2a$ hashes" {
+    // A real bcrypt `$2a$` hash (cost 10) of "correct horse battery staple" — the
+    // tag every password on the live site is stored under. This frozen vector
+    // guards the `$2a$`→`$2b$` normalization above: if it regressed, no existing
+    // member could log in. No Go, no oracle — just the durable read-the-legacy-
+    // data property.
+    const hash = "$2a$10$TC9LJ0KU0TIrFl9Hk8FCAeU1bThg2GoSYXAqsjQLdIBSHIxGVfDza";
+    try std.testing.expect(verifyPassword(hash, "correct horse battery staple"));
+    try std.testing.expect(!verifyPassword(hash, "correct horse battery stapleX"));
 }

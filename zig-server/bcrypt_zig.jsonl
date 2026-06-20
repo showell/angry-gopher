@@ -1,6 +1,0 @@
-{"id":"plain","password":"correct horse battery staple","hash":"$2b$10$bowl8bqMHhnX215jG30Uqetz66DCsxjAR2wsLYI7ejQ9TDzScWUwy"}
-{"id":"symbols","password":"p@ssw0rd! #2026","hash":"$2b$10$wFX8c1XOl2ccGeqwbmevA.1ht3g9D8VCwulkNMPLIJgGhlPsjYHYG"}
-{"id":"single","password":"a","hash":"$2b$10$XG4hbaQzzqcEuVDhZp6yU.oYeZevxpIMkaA4yFHr2Pj3a.5aBXu66"}
-{"id":"empty","password":"","hash":"$2b$10$707QihqlixzeWWHqh9qEDuqtRj2bMSrhJuDSCLeUzSos.CiV40cm2"}
-{"id":"spaces","password":"  leading and trailing  ","hash":"$2b$10$mtjdbPKhGq8Sx.H4wXxH/.wOoecGN8QdeJTlBzBcPnJqPPEcZrm96"}
-{"id":"unicode","password":"café ☕ 日本語 π","hash":"$2b$10$OdDvcpnrwKu7ZSZ7fIZe6Ol3x4Rwz5tEuwVWoADTPVzqQoMbT7GKi"}

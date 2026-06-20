@@ -1,9 +1,9 @@
 const std = @import("std");
 
-// build.zig is the zig port's answer to Go's embed.go: the one place where
-// front-end assets that live ELSEWHERE in the repo get baked into the binary.
-// @embedFile alone can't reach outside the package dir, so each external asset
-// is wired in here as a named import and pulled in with @embedFile("<name>").
+// build.zig is the one place where front-end assets that live ELSEWHERE in the
+// repo get baked into the binary. @embedFile alone can't reach outside the
+// package dir, so each external asset is wired in here as a named import and
+// pulled in with @embedFile("<name>").
 //
 //   zig build run     -> build + run the server (serves /driving on :9001)
 //   zig build         -> just build (binary in zig-build/)
@@ -39,9 +39,8 @@ pub fn build(b: *std.Build) void {
         .{ .name = "puzzle_cat_4", .path = "../games/lynrummy/conformance/curated_4line_puzzles.dsl" },
         .{ .name = "puzzle_cat_5", .path = "../games/lynrummy/conformance/curated_5line_puzzles.dsl" },
         .{ .name = "puzzle_cat_6", .path = "../games/lynrummy/conformance/curated_6line_puzzles.dsl" },
-        // The chat conversation page's client bundles — the IDENTICAL prod JS
-        // the Go server serves (chat/*.js, wired in Go's embed.go). The zig
-        // chat page serves these byte-for-byte so the real client boots on it.
+        // The chat conversation page's client bundles (chat/*.js) — served
+        // byte-for-byte so the real prod client boots on the zig chat page.
         .{ .name = "chat_js_colors", .path = "../chat/colors.js" },
         .{ .name = "chat_js_theme", .path = "../chat/chat_theme.js" },
         .{ .name = "chat_js_image_popup", .path = "../chat/chat_image_popup.js" },
@@ -87,4 +86,19 @@ pub fn build(b: *std.Build) void {
 
     const run_step = b.step("run", "Build and run the zig server");
     run_step.dependOn(&run_cmd.step);
+
+    // Unit tests (`zig build test`). Pure-logic modules tested in isolation, so
+    // no embedded assets are needed: auth's legacy-$2a$ read path and users'
+    // session-cookie HMAC verify, each guarded by a frozen vector. These replaced
+    // the old Go cross-validation gates once zig↔Go bcrypt/session compatibility
+    // was settled.
+    const test_step = b.step("test", "Run unit tests");
+    for ([_][]const u8{ "src/auth.zig", "src/users.zig" }) |path| {
+        const unit = b.addTest(.{ .root_module = b.createModule(.{
+            .root_source_file = b.path(path),
+            .target = target,
+            .optimize = optimize,
+        }) });
+        test_step.dependOn(&b.addRunArtifact(unit).step);
+    }
 }

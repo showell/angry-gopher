@@ -1,0 +1,25 @@
+#!/bin/bash
+# CANONICAL DEV-LOOP SCRIPT — DO NOT REINVENT.
+# Before composing an ad-hoc shell command for build / test / regen, run
+# `ops/list` to see what already exists.
+#
+# zig-server unit-test gate (~1s). Compiles the server and runs the pure-logic
+# unit tests (`zig build test`): auth's legacy-$2a$ hash read path and users'
+# session-cookie HMAC verify, each pinned by a frozen in-repo vector. No Go, no
+# external oracle.
+#
+# These replaced the old bcrypt/session cross-validation gates: once zig's
+# bcrypt and our session HMAC were proven compatible with the live Go-written
+# data (the one real difference — the $2a$/$2b$ version tag — is handled in
+# auth.verifyPassword), the only durable property left to guard is "we can still
+# read the existing hashes + cookies", which needs no second language.
+
+set -e
+
+REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$REPO_DIR/zig-server"
+
+t0=$SECONDS
+zig build           # compile the server
+zig build test      # run the unit tests
+echo "zig-server build + unit tests passed in $((SECONDS - t0))s."

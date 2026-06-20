@@ -6,8 +6,8 @@
 //!
 //! Issuance lives here (not login.zig) because it's account-store mechanics —
 //! the natural peer of the resolution reads. login.zig owns only the HTTP shell:
-//! the forms, the cookies, the redirects. The bcrypt primitives are in auth.zig
-//! (gold-cross-validated against Go); the session HMAC is below (signSession).
+//! the forms, the cookies, the redirects. The bcrypt primitives are in auth.zig;
+//! the session HMAC is below (signSession).
 //!
 //! Resolution order:
 //!   1. a valid member SESSION cookie (gopher_auth, HMAC-SHA256 signed)   -> id
@@ -17,9 +17,9 @@
 //!      without a session, or an agent without a key, is ignored)        -> id
 //!   else "" (no identity).
 //!
-//! The session HMAC + API-key compare are the crypto worth cross-validating
-//! against Go (see the gold harness); they live as secret-parameterized pure
-//! functions so the harness can drive them with a synthetic secret.
+//! The session HMAC + API-key compare are the security-critical crypto here;
+//! they're written as secret-parameterized pure functions, so verifySessionWithSecret
+//! has a frozen-vector regression test at the bottom of this file.
 
 const std = @import("std");
 const Io = std.Io;
@@ -73,7 +73,7 @@ fn apiKeyUserID(io: Io, alloc: Alloc, req: *std.http.Server.Request) !?[]const u
     return checkAPIKey(io, alloc, key);
 }
 
-// ── session cookie crypto (cross-validated against Go) ───────────────────────
+// ── session cookie crypto ────────────────────────────────────────────────────
 
 /// sessionMAC writes HMAC-SHA256(secret, id + "\n" + issued) into out.
 fn sessionMAC(secret: []const u8, id: []const u8, issued: []const u8, out: *[HmacSha256.mac_length]u8) void {
@@ -608,4 +608,21 @@ pub fn sanitizeUser(alloc: Alloc, raw: []const u8) ![]const u8 {
         if (b.items.len >= max_user_len) break;
     }
     return std.mem.trimEnd(u8, b.items, " ");
+}
+
+test "verifySessionWithSecret round-trips a signed cookie" {
+    // A frozen `base64url(id).issued.HMAC` cookie signed with a SYNTHETIC secret
+    // (never the live _session_secret). Guards that the HMAC verify construction
+    // stays stable — the property that lets zig read members' existing
+    // browser cookies. No Go, no oracle.
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    const secret = "zig-port synthetic secret AAAAAA";
+    const val = "MQ.1700000000.h2oFDiRQJ1DLR1i-otOulFYPp0GGW21Gna1nryAO59s";
+
+    // Valid at issue time → resolves to id "1".
+    try std.testing.expectEqualStrings("1", verifySessionWithSecret(a, secret, val, 1700000000).?);
+    // Same cookie past the max-age window → rejected.
+    try std.testing.expect(verifySessionWithSecret(a, secret, val, 1731536001) == null);
 }

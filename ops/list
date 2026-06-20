@@ -17,12 +17,9 @@ Available ops commands (run from repo root):
                          SKIPS the Lyn Rummy solver + Elm suites.
   ops/check_lynrummy     Lyn Rummy gate (~30s): common base + Elm + TS
                          solver. SKIPS the chat lint.
-  ops/check_bcrypt       zig-port bcrypt interop gate (~7s): proves the zig
-                         password layer cross-verifies with Go's bcrypt both
-                         directions, against committed synthetic fixtures.
-  ops/check_session      zig-port session-cookie gate (~1s): proves the zig
-                         read-only identity layer cross-verifies gopher_auth
-                         HMAC cookies with Go both directions (synthetic secret).
+  ops/check_zig          zig-server gate (~1s): compiles the server + runs the
+                         unit tests (auth's legacy-$2a$ read path, users' session
+                         HMAC verify), each pinned by a frozen in-repo vector.
 
   Leaves (composed by the gates above):
   ops/check_common       Shared base = test_go + test_docs + test_css (diamond floor).
