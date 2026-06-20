@@ -6,8 +6,8 @@
 #
 # Chat subsystem leaf gate (~1s). The chat SERVER (zig) is compiled by
 # ops/check_zig; this leaf lints the chat CLIENT artifacts that nothing else
-# checks — the embedded chat.js and the example bot client. We iterate fast and
-# dogfooding catches the shallow bugs.
+# checks — the embedded chat/*.js (+ learn/*.js) and the example bot client. We
+# iterate fast and dogfooding catches the shallow bugs.
 
 set -e
 
@@ -22,83 +22,11 @@ phase() {
     echo "    [phase] ${label}: $((SECONDS - t0))s"
 }
 
-echo "==> chat.js syntax"
-phase "chat-js" node --check chat/chat.js
-
-echo "==> styles.js syntax"
-phase "styles-js" node --check chat/styles.js
-
-echo "==> colors.js syntax"
-phase "colors-js" node --check chat/colors.js
-
-echo "==> chat_theme.js syntax"
-phase "chat-theme-js" node --check chat/chat_theme.js
-
-echo "==> chat_search.js syntax"
-phase "chat-search-js" node --check chat/chat_search.js
-
-echo "==> chat_left_sidebar.js syntax"
-phase "chat-left-sidebar-js" node --check chat/chat_left_sidebar.js
-
-echo "==> chat_add_topic.js syntax"
-phase "chat-add-topic-js" node --check chat/chat_add_topic.js
-
-echo "==> chat_drag_to_pin.js syntax"
-phase "chat-drag-to-pin-js" node --check chat/chat_drag_to_pin.js
-
-echo "==> chat_right_sidebar.js syntax"
-phase "chat-right-sidebar-js" node --check chat/chat_right_sidebar.js
-
-echo "==> chat_compose.js syntax"
-phase "chat-compose-js" node --check chat/chat_compose.js
-
-echo "==> chat_help.js syntax"
-phase "chat-help-js" node --check chat/chat_help.js
-
-echo "==> message.js syntax"
-phase "message-js" node --check chat/message.js
-
-echo "==> message_view.js syntax"
-phase "message-view-js" node --check chat/message_view.js
-
-echo "==> chat_image_popup.js syntax"
-phase "chat-image-popup-js" node --check chat/chat_image_popup.js
-
-echo "==> chat_code_popup.js syntax"
-phase "chat-code-popup-js" node --check chat/chat_code_popup.js
-
-echo "==> chat_time_popup.js syntax"
-phase "chat-time-popup-js" node --check chat/chat_time_popup.js
-
-echo "==> docs.js syntax"
-phase "docs-js" node --check chat/docs.js
-
-echo "==> notify.js syntax"
-phase "notify-js" node --check chat/notify.js
-
-echo "==> recent.js syntax"
-phase "recent-js" node --check chat/recent.js
-
-echo "==> images.js syntax"
-phase "images-js" node --check chat/images.js
-
-echo "==> code.js syntax"
-phase "code-js" node --check chat/code.js
-
-echo "==> nav_stack.js syntax"
-phase "nav-stack-js" node --check chat/nav_stack.js
-
-echo "==> middle_pane.js syntax"
-phase "middle-pane-js" node --check chat/middle_pane.js
-
-echo "==> learn.js syntax"
-phase "learn-js" node --check learn/learn.js
-
-echo "==> callback_log.js syntax"
-phase "callback-log-js" node --check learn/callback_log.js
-
-echo "==> fake_host.js syntax"
-phase "fake-host-js" node --check learn/fake_host.js
+# Syntax-check every client script in ONE node process (vm parses without
+# running). Globbed, not hand-listed, so a new chat/*.js can't slip the gate —
+# and it skips the ~40ms-per-file node-startup tax of a `node --check` loop.
+echo "==> JS syntax (chat/*.js + learn/*.js, batched)"
+phase "js-syntax" node tools/check_js_syntax.mjs chat/*.js learn/*.js
 
 echo "==> chat_client.py syntax"
 phase "chat-py" python3 -m py_compile chat/chat_client.py

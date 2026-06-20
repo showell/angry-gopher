@@ -25,8 +25,11 @@ phase() {
     echo "    [phase] ${label}: $((SECONDS - t0))s"
 }
 
+# Direct tsc (skip the npm-run wrapper's ~0.4s spawn tax). Incremental caching
+# (tsconfig: tsBuildInfoFile=.tsbuildinfo, gitignored) makes a warm typecheck
+# ~1.9s vs ~3.7s cold — the common iterate-and-recheck case.
 echo "==> TS typecheck"
-phase "typecheck" bash -c "cd games/lynrummy/ts && npm run -s typecheck"
+phase "typecheck" bash -c "cd games/lynrummy/ts && ./node_modules/.bin/tsc -p ."
 
 echo "==> TS fast tests"
 cd games/lynrummy/ts
