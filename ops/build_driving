@@ -6,7 +6,7 @@
 #
 # Bundle the driving game's TypeScript into a single browser-
 # loadable JS file at games/driving/app.js, served by the
-# /driving/app.js route and embedded into the binary (see embed.go).
+# /driving/app.js route and embedded into the binary (build.zig @embedFile).
 #
 # Entry point: games/driving/main.ts. Esbuild resolves the whole
 # closure (model + view + tree + critter + horizon) into one IIFE.

@@ -40,10 +40,22 @@ We pin these versions:
 | **TypeScript** | 6.0.3 | the agent + game engine | `npm install` in `games/lynrummy/ts/` (pinned in its `package.json`) |
 | **Node** | 24 | runs the TS directly + hosts the npm-installed `elm`/`tsc` | system install — `node --version` |
 
-The TypeScript is never transpiled to run — Node executes the `.ts`
-files directly via type-stripping (so a Node new enough for that is
-required; dev uses v24). `tsc` is used only as the typechecker
-(`npm run typecheck`). Elm and `tsc` are project-local (run from each
+TypeScript runs two ways, and only one of them is transpiled:
+
+- **Node-side** — the agent solver and its tests run the `.ts` files
+  *directly* via Node's type-stripping, never transpiled (so a Node new
+  enough for that is required; dev uses v24).
+- **Browser-side** — the driving game (`games/driving/main.ts`) and the
+  Lyn Rummy engine (`games/lynrummy/ts/elm_api/engine_entry.ts`) **are**
+  transpiled: `esbuild` bundles each into one IIFE JS file
+  (`games/driving/app.js`, `games/lynrummy/elm/engine.js`), and those
+  bundles — alongside the Elm output — are `@embedFile`d into the zig
+  binary at compile time. `ops/build_driving` / `ops/build_engine_js` run
+  this; `esbuild` is fetched on demand via `npx --yes` (unpinned, not a
+  project install).
+
+`tsc` itself only ever typechecks (`npm run typecheck`) — it never emits
+the JS that ships. Elm and `tsc` are project-local (run from each
 package's `node_modules/.bin`), so a fresh checkout needs `npm install`
 in both `games/lynrummy/elm/` and `games/lynrummy/ts/`.
 
