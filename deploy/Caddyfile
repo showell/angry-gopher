@@ -4,13 +4,12 @@
 # Let's Encrypt cert and redirects HTTP->HTTPS. (.com is not HSTS-
 # preloaded, unlike .app, so we set the HSTS header ourselves below.)
 #
-# /admin is gated by the Go app (the admin flag on the user); no proxy
-# basic-auth. To test on the bare droplet IP (no TLS), set the site
-# address to `:80`.
+# /admin is gated by the app itself, not the proxy. To test on the bare
+# droplet IP (no TLS), set the site address to `:80`.
 lynrummy.com {
 	encode gzip
 
-	# Coarse outer caps. The Go handlers enforce tighter per-route limits
+	# Coarse outer caps. The server's handlers enforce tighter per-route limits
 	# (256 KB new-session, 64 KB append/puzzle). Chat image uploads need
 	# headroom: Gopher caps the decoded image at 10 MiB, so give the upload
 	# route 12 MB and keep everything else tight. The route is path-style —
@@ -32,7 +31,6 @@ lynrummy.com {
 		X-Frame-Options "SAMEORIGIN"
 	}
 
-	# The zig server listens on :9001 (the Go server used :9000). zig replaces
-	# Go; they never run together, so this points at exactly one backend.
+	# The zig server listens on :9001.
 	reverse_proxy localhost:9001
 }

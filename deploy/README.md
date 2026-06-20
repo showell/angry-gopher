@@ -14,10 +14,6 @@ embedded at compile time, `ops/build_elm` + `ops/build_driving` run
 *before* `zig build` (the deploy script handles this ordering). See
 `ops/deploy`.
 
-> The host was originally the Go server on `:9000`; the Go→zig cutover
-> repointed Caddy to `:9001` and the systemd `ExecStart` to the zig
-> binary. The old Go binary is left on disk as an instant rollback.
-
 ## Repeat deploys
 
 ```
@@ -131,5 +127,5 @@ To update the watchdog later: `scp` the new `watchdog.py` over, then
 
 ### Deferred to the guests phase
 
-`go:embed` self-contained binary; a dedicated least-privilege service
-user; Caddy rate-limiting (`xcaddy` + `caddy-ratelimit`).
+A dedicated least-privilege service user; Caddy rate-limiting (`xcaddy`
++ `caddy-ratelimit`).

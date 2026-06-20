@@ -9,9 +9,8 @@
 # file dependencies and no working-dir assumptions.
 #
 # Build ordering: the Elm/TS/driving bundles must exist BEFORE `zig build`,
-# because build.zig bakes them in at compile time — the same ordering the
-# old Go build needed for go:embed. The build scripts handle their own
-# prerequisites.
+# because build.zig bakes them in at compile time. The build scripts handle
+# their own prerequisites.
 #
 # Refuses to run with a dirty working tree and pushes HEAD to GitHub
 # first, so we never deploy code that isn't committed AND pushed.
