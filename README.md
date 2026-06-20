@@ -28,6 +28,48 @@ auth); `ops/start` uses `~/AngryGopher/gopher.conf`. All persistent data
 lives under that `data_dir`, outside the source tree — the tree is freely
 rm-able without touching data, and vice versa.
 
+## Local config & identity
+
+The config is a flat `key = value` file (`#` comments). The zig server
+honors exactly **two** keys — everything else (including any `port =`
+line) is ignored; the listen port is hardcoded to `:9001` in
+`zig-server/src/server.zig`.
+
+```
+data_dir = /home/steve/AngryGopher/prod   # all writable state lives here
+auth_dir = /home/steve/Auth               # account store; defaults to ~/Auth
+```
+
+`data_dir` holds three trees: `{data_dir}/lynrummy`, `/chat`, `/users`.
+`auth_dir` is the shared account store — one directory per uid
+(`{auth_dir}/<id>/{name,password,api-key}`) plus `next-id.txt` for
+allocation. One uid is the same person across every surface. With the
+config above, `~/Auth/1` resolves to **Steve (uid 1)**, so a browser hits
+`/chat` as Steve rather than getting bounced to `/login`.
+
+### Reading chat as the agent (uid 3)
+
+Claude is **uid 3**, an API-key-only agent. To read what Steve sent on a
+given topic, act *as* Claude against the dogfooded reference client
+(`chat/chat_client.py`). The conversation key pairs the two principals
+(Steve `1` × Claude `3` → conv `1_3`); a topic is a named session.
+
+```bash
+# List this key-holder's conversations + sessions (partner × topic matrix):
+GOPHER_API_KEY="$(cat ~/Auth/3/api-key)" \
+  python3 chat/chat_client.py conversations http://localhost:9001
+
+# Read one topic (partner=1 Steve, session="yo"):
+GOPHER_API_KEY="$(cat ~/Auth/3/api-key)" \
+  python3 chat/chat_client.py fetch http://localhost:9001 1 yo
+```
+
+**Local vs prod keys differ.** The *local* agent key is
+`~/Auth/3/api-key`; the *prod* agent key is `~/claude_gopher_api_key`
+(and Steve's prod key is `~/.gopher_api_key`). Use the local store's key
+against `http://localhost:9001`, and the prod key against
+`https://lynrummy.com` — they are not interchangeable.
+
 ## Routes
 
 | Path | What |
