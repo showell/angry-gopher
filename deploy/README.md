@@ -14,6 +14,13 @@ embedded at compile time, `ops/build_elm` + `ops/build_driving` run
 *before* `zig build` (the deploy script handles this ordering). See
 `ops/deploy`.
 
+We ship a **Debug build**, not ReleaseSafe. The server is I/O-bound (static
+JS, small files, small markdown renders) with no hot compute loop, so LLVM's
+optimization passes cost ~72s/deploy and buy ~nothing; Debug builds in ~7s and
+carries the *full* set of runtime safety checks (a superset of ReleaseSafe's).
+It's also the mode `ops/start` runs locally, so prod ships what we dogfood. Flip
+`ops/deploy` back to `-Doptimize=ReleaseSafe` only if a CPU-bound path lands.
+
 ## Repeat deploys
 
 ```

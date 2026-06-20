@@ -41,11 +41,16 @@ echo "Building Elm/TS + driving bundles..."
 "$GOPHER_DIR/ops/build_elm"
 "$GOPHER_DIR/ops/build_driving"
 
-# ReleaseSafe: optimized, but keeps the runtime safety checks (bounds,
-# overflow, etc.) — the right trade for a small server where not crashing
-# into UB matters more than the last few percent of speed.
-echo "Building zig-server ($COMMIT, ReleaseSafe)..."
-( cd "$GOPHER_DIR/zig-server" && zig build -Doptimize=ReleaseSafe )
+# Debug build (default optimize mode). The zig server is I/O-bound — it serves
+# embedded static JS, small files, and small markdown renders, with no hot
+# compute loop — so LLVM's optimization passes (~72s for ReleaseSafe vs ~7s for
+# Debug) buy ~nothing here. Debug also carries the FULL set of runtime safety
+# checks (a superset of ReleaseSafe's), and it's the exact mode `ops/start` runs
+# locally, so prod ships the build we dogfood every day. If a genuinely
+# CPU-bound path ever lands in the zig server, flip back to
+# `-Doptimize=ReleaseSafe` (or optimize just that path).
+echo "Building zig-server ($COMMIT, Debug)..."
+( cd "$GOPHER_DIR/zig-server" && zig build )
 BIN="$GOPHER_DIR/zig-server/zig-out/bin/zig-server"
 
 # The binary is self-contained + statically linked, so we ship exactly one file.
