@@ -63,7 +63,13 @@ echo "Restarting $DEPLOY_SERVICE ..."
 # — a logged-out visitor couldn't log in. /version proves the binary is the
 # fresh build; /login proves the front door a stranger actually lands on works.
 # (-f makes curl fail on a 4xx/5xx, so a 404 front door fails the deploy.)
-ssh "$DEPLOY_HOST" "sudo systemctl restart $DEPLOY_SERVICE && sleep 1 && \
+#
+# Poll /version (up to ~5s) instead of a fixed `sleep 1`: the server binds the
+# port in well under a second, so this returns as soon as it's actually up. If
+# it never comes up the loop just exhausts and the real checks below fail the
+# deploy.
+ssh "$DEPLOY_HOST" "sudo systemctl restart $DEPLOY_SERVICE && \
+    for _ in \$(seq 1 50); do curl -fsS http://localhost:9001/version >/dev/null 2>&1 && break; sleep 0.1; done && \
     systemctl is-active $DEPLOY_SERVICE && \
     curl -fsS http://localhost:9001/version >/dev/null && \
     curl -fsS http://localhost:9001/login >/dev/null && \
