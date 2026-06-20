@@ -22,17 +22,15 @@ pub fn civilFromDays(days: i64) Civil {
     return .{ .year = y + @as(i64, if (m <= 2) 1 else 0), .month = @intCast(m), .day = @intCast(d) };
 }
 
-/// formatDateUTC renders Unix seconds as `2026-06-19` (UTC) — Go's
-/// time.Now().UTC().Format("2006-01-02"), the docs/post session-id fallback
-/// when a conversation has no existing session yet.
+/// formatDateUTC renders Unix seconds as `2026-06-19` (UTC) — the docs/post
+/// session-id fallback when a conversation has no existing session yet.
 pub fn formatDateUTC(alloc: std.mem.Allocator, unix_secs: i64) ![]u8 {
     const c = civilFromDays(@divFloor(unix_secs, 86400));
     return std.fmt.allocPrint(alloc, "{d}-{d:0>2}-{d:0>2}", .{ c.year, c.month, c.day });
 }
 
-/// formatRFC3339UTC renders Unix seconds as `2026-06-19T14:34:07Z` — Go's
-/// time.Unix(t).UTC().Format(time.RFC3339), which chat stores as the `date:`
-/// header and emits as the wire `at`.
+/// formatRFC3339UTC renders Unix seconds as `2026-06-19T14:34:07Z` — chat stores
+/// it as the `date:` header and emits it as the wire `at`.
 pub fn formatRFC3339UTC(alloc: std.mem.Allocator, unix_secs: i64) ![]u8 {
     const days = @divFloor(unix_secs, 86400);
     const tod = unix_secs - days * 86400; // [0, 86399]

@@ -1,5 +1,5 @@
-//! images: /chat/images — the per-user image transcript. Go's images.go handler
-//! half. Reads the viewer's images.md (populated by the appendMessage cross-page
+//! images: /chat/images — the per-user image transcript, handler half.
+//! Reads the viewer's images.md (populated by the appendMessage cross-page
 //! fanout in chat_store), keeps the most-recent 20 entries, and ships them as
 //! inline JSON (#images-data) next to #images-mount — the same imagesSSEEvent
 //! shape images.js uses for both first-paint and the live /chat/images/stream

@@ -4,7 +4,7 @@
 //! detection — the server's view of "is this user touching things?" IS the
 //! definition.
 //!
-//! Lifecycle (mirrors Go): every counted page/action route runs through
+//! Lifecycle: every counted page/action route runs through
 //! markActiveAndBroadcast, which bumps the user's lastSeen. On the offline→online
 //! edge (first sighting OR >= PresenceWindow of inactivity) it fans a came-online
 //! event to every OTHER authorized user across both attention streams — the
@@ -12,7 +12,7 @@
 //! strip). No background sweeper, no offline broadcast: a row goes gray lazily on
 //! the next page render when isOnline returns false.
 //!
-//! In-memory only, lost on restart, 5-minute fuzz — same posture as Go's. The
+//! In-memory only, lost on restart, 5-minute fuzz. The
 //! lastSeen map outlives any one request, so its keys are duped from the
 //! process-lifetime page allocator, NOT the per-request arena.
 
@@ -23,7 +23,7 @@ const users = @import("users.zig");
 const store = @import("chat_store.zig");
 const Bus = @import("bus.zig").Bus;
 
-/// PresenceWindow: a markActive within this window means online. Go uses 5 min.
+/// PresenceWindow: a markActive within this window (5 min) means online.
 const window_ns: i128 = 5 * std.time.ns_per_min;
 
 /// The lastSeen map (uid → most-recent markActive, in real-clock ns) and its

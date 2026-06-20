@@ -8,7 +8,7 @@
 //! The .lastauthor companion is deliberately omitted (internal bookkeeping, not
 //! the human transcript). A topic is small, so the whole bundle is built in
 //! memory then gzipped — no streaming-response machinery. The tar headers are
-//! hand-rolled ustar (Go leans on archive/tar; zig std has no tar writer).
+//! hand-rolled ustar (zig std has no tar writer).
 
 const std = @import("std");
 const Io = std.Io;
@@ -58,7 +58,7 @@ pub fn serveBundle(req: *Request, io: Io, alloc: Alloc, conv_dir: []const u8, si
 }
 
 /// fileMtime returns a file's mtime in whole Unix seconds, or 0 on any error
-/// (cosmetic in the archive — Go falls back to now; 0 is just as harmless).
+/// (the mtime is cosmetic in the archive, so 0 is harmless).
 fn fileMtime(io: Io, path: []const u8) u64 {
     var f = Io.Dir.cwd().openFile(io, path, .{}) catch return 0;
     defer f.close(io);

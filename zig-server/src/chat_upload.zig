@@ -1,4 +1,4 @@
-//! chat_upload: chat image uploads — Go's server/chat/chat_upload.go.
+//! chat_upload: chat image uploads.
 //!   POST <conv-base>/<sid>/upload          store one image, return its URL
 //!   GET  <conv-base>/<sid>/uploads/<file>  serve a stored image
 //! Uploads land in the session's sidecar dir (sessions/<sid>.uploads/) under a

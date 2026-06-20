@@ -1,4 +1,4 @@
-//! code: /chat/code — the per-user code transcript. Go's code.go handler half.
+//! code: /chat/code — the per-user code transcript, handler half.
 //! Reads the viewer's code.md (populated by the appendMessage cross-page fanout),
 //! and ships ALL entries (oldest-first; no page cap, unlike Images) as inline
 //! JSON (#code-data) next to #code-mount — the same codeSSEEvent shape code.js

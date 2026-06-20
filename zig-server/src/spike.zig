@@ -4,7 +4,7 @@
 //! once and fan a message out across them? — using a toy clock + a toy broadcast
 //! instead of real chat streams. The two unknowns the games couldn't rehearse,
 //! isolated: connection concurrency (server.zig runs each connection on the std
-//! .Io thread pool) and pub/sub fan-out (bus.zig, the Go subBus analog).
+//! .Io thread pool) and pub/sub fan-out (bus.zig).
 //!
 //! Three endpoints under /spike:
 //!   GET  /spike            an index page that opens both SSE streams + a

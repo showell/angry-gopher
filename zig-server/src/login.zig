@@ -151,8 +151,7 @@ fn registerMember(cur: users.ResolvedUser, io: Io, alloc: Alloc, name: []const u
 fn loginAsMember(req: *Request, io: Io, alloc: Alloc, id: []const u8, next: []const u8) !void {
     const signed = (try users.signSessionNow(io, alloc, id)) orelse {
         // The shared session secret is missing — unrecoverable here (prod always
-        // has it; Go panics on a read failure too). Fail loudly rather than issue
-        // an unsigned/forgeable cookie.
+        // has it). Fail loudly rather than issue an unsigned/forgeable cookie.
         return req.respond("session unavailable\n", .{ .status = .internal_server_error });
     };
     const uid_ck = try uidCookie(alloc, id);
@@ -383,8 +382,7 @@ fn renderLogoutPage(req: *Request, alloc: Alloc, user: []const u8) !void {
 }
 
 /// renderLogoutComplete clears the localStorage name prefill and sends the player
-/// to /login. The clear-cookie headers ride on THIS response (Go sets them before
-/// rendering).
+/// to /login. The clear-cookie headers ride on THIS response.
 fn renderLogoutComplete(req: *Request, alloc: Alloc) !void {
     const body =
         \\<!doctype html><meta charset="utf-8">
@@ -396,8 +394,7 @@ fn renderLogoutComplete(req: *Request, alloc: Alloc) !void {
     try sendHTML(req, alloc, body, &.{ clear_uid_cookie, clear_auth_cookie });
 }
 
-// login_full_css: the shared stylesheet for the chat password screens (Go's
-// loginFullCSS — a plain const, so single `%`).
+// login_full_css: the shared stylesheet for the chat password screens.
 const login_full_css =
     \\<style>
     \\body { font-family: sans-serif; margin: 80px auto; max-width: 420px; padding: 0 24px; }
@@ -414,7 +411,7 @@ const login_full_css =
 ;
 
 // login_page_head / login_page_tail bracket the guest-login page's two optional
-// lines (currentLine + errLine). The `%%`-escaped width in Go resolves to `100%`.
+// lines (currentLine + errLine).
 const login_page_head =
     \\<!DOCTYPE html>
     \\<html><head><meta charset="utf-8"><title>♦️ Lyn Rummy ♥️</title>

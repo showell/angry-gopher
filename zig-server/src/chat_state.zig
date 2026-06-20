@@ -3,14 +3,14 @@
 //! in each conversation. Backs /chat/default (resume where you were), the
 //! conversation page's session memory, and the sidebar's Pinned group.
 //!
-//! Per-user state files (under the shared chat tree Go also writes):
+//! Per-user state files (under the shared chat tree):
 //!   {chat_root}/users/<uid>/last-conv                  — conv-key text file
 //!   {chat_root}/users/<uid>/last-sessions/<conv-key>   — session-id text file
 //!   {chat_root}/users/<uid>/pinned-sessions/<conv-key> — pinned sids, one/line
 //!
 //! Written on every conv page view + send, so the pointer tracks real focus.
 //! Best-effort throughout: a failed write just loses the bookmark for that visit
-//! (matching Go — errors are never surfaced to the request).
+//! (errors are never surfaced to the request).
 
 const std = @import("std");
 const Io = std.Io;
@@ -144,8 +144,8 @@ fn lessThanStr(_: void, a: []const u8, b: []const u8) bool {
 // ── resume target (the bare-conv landing session) ─────────────────────────────
 
 /// resolveSessionForUser picks the session a bare /chat/c/<conv> (or docs
-/// post-to-chat) lands on for `uid`, in Go's order: the user's last-viewed (if it
-/// still exists) → ChitChat → first-alphabetical → today's date (so a brand-new
+/// post-to-chat) lands on for `uid`, in priority order: the user's last-viewed (if
+/// it still exists) → ChitChat → first-alphabetical → today's date (so a brand-new
 /// conv auto-creates today's session on first post).
 /// Shared by /chat/default and the docs post flow.
 pub fn resolveSessionForUser(io: Io, alloc: Alloc, uid: []const u8, conv: []const u8) ![]const u8 {

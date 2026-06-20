@@ -72,7 +72,7 @@ fn sourceBytes(file: []const u8) ?[]const u8 {
 
 const v = chat.asset_v;
 
-/// scripts: the exact load order Go emits. colors.js + install() FIRST (chat
+/// scripts: the required load order. colors.js + install() FIRST (chat
 /// modules read ChatColors tokens at construction), then the reused chat widgets,
 /// then the three learn bundles. All comptime (the asset version is a constant).
 const scripts =

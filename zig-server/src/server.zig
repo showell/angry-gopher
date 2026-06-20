@@ -1,7 +1,6 @@
 //! server: the HTTP entry point of the zig port. Listens, accepts, and routes
-//! by path prefix to the per-feature handlers (driving.zig, puzzles.zig) —
-//! mirroring the Go server's package-per-surface layout (server/driving,
-//! server/lynrummy). build.zig is the embed.go analog (where assets are wired).
+//! by path prefix to the per-feature handlers (driving.zig, puzzles.zig). One
+//! module per surface; build.zig wires the embedded assets.
 //!
 //! Concurrency: each accepted connection runs as its own task on the std.Io
 //! thread pool (a never-awaited Io.Group + group.concurrent — see main). The
@@ -43,16 +42,15 @@ pub fn main(init: std.process.Init.Minimal) !void {
     defer threaded.deinit();
     const io = threaded.io();
 
-    // Point storage + identity at Go's live data tree (GOPHER_CONFIG). No-op
+    // Point storage + identity at the live data tree (GOPHER_CONFIG). No-op
     // when unset — repo-relative defaults keep /driving working standalone.
     // (0.16 routes the OS environment through main's Init, not a global.)
     var env = try std.process.Environ.createMap(init.environ, alloc);
     defer env.deinit();
     try config.load(io, alloc, env);
 
-    // The pub/sub fan-out shared across all connections (the Go subBus analog).
-    // Lives for the process lifetime; the /spike surface is its only tenant
-    // until chat lands.
+    // The pub/sub fan-out shared across all connections. Lives for the process
+    // lifetime; shared by chat's SSE streams and the /spike surface.
     var bus = Bus.init(io, alloc);
 
     const addr = try net.IpAddress.parse("0.0.0.0", PORT);
@@ -161,9 +159,8 @@ fn route(req: *std.http.Server.Request, io: std.Io, alloc: std.mem.Allocator, bu
         try home.handleVersion(req, alloc);
     } else if (std.mem.eql(u8, path, "/")) {
         // The site root: the launch pad. TOTALLY_PUBLIC, so resolve the viewer
-        // for the top bar but never gate. (Go routes "/" as the mux catch-all
-        // whose handler 404s any non-"/" path; here the explicit-"/" check plus
-        // the notFound fallthrough below give the identical result.)
+        // for the top bar but never gate. The explicit-"/" check plus the
+        // notFound fallthrough below means any non-"/" path 404s.
         const uid = try users.currentUserID(io, alloc, req);
         try home.handleHome(req, io, alloc, uid, path);
     } else {

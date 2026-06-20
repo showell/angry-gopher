@@ -1,5 +1,5 @@
-//! driving: serves /driving — the standalone first-person driving toy. The
-//! minimal surface (no auth, no state), mirroring Go's server/driving.
+//! driving: serves /driving — the standalone first-person driving toy. A
+//! minimal surface: no auth, no state.
 
 const std = @import("std");
 const http = @import("http.zig");
