@@ -1,29 +1,32 @@
 # zig-server
 
-A work-in-progress port of the Gopher Chat server from Go to zig, growing up
-inside the repo it's meant to eventually replace. Started with the **markdown
-rendering layer** (`src/markdown.zig`), then the **bcrypt password layer**
-(`src/auth.zig`), and now the first real **HTTP surface** (`src/server.zig`).
+The Angry Gopher server, in zig — every surface (home, login, chat, docs, the
+Lyn Rummy `/game` + `/puzzles`, `/driving`, `/admin`, `/settings`) served from
+one statically-linked binary over a shared on-disk data tree. It was ported from
+a Go original (now removed); the repo-root `SERVER.md` has the history.
 
 ## Toolchain
 
 zig **0.16.0** (`zig version`).
 
-## HTTP server (`src/server.zig`)
+## Server (`src/server.zig`)
 
-The first served surface: **`/driving`**, the standalone driving toy. Chosen as
-the first HTTP target because it's the minimal surface — no auth, no SSE, no
-POSTs, no runtime markdown, no persistence — so it isolates the HTTP runtime
-itself. It mirrors Go's `server/driving/driving.go`.
+`server.zig` is the entry point: it listens on **:9001**, runs each accepted
+connection as its own task on the `std.Io` thread pool (so long-lived SSE
+streams don't starve other connections), and routes by path prefix to the
+per-surface handlers (`chat.zig`, `puzzles.zig`, `game.zig`, `driving.zig`, …).
+The port is hardcoded; `data_dir` + auth come from `GOPHER_CONFIG`.
 
-The Go→zig analogs it stands up:
+Front-end assets that live elsewhere in the repo (the Elm/TS/driving bundles,
+the chat client, the puzzle catalogs) are baked in at compile time via
+`build.zig` `@embedFile`, so the binary is self-contained — no runtime file
+dependencies.
 
-| concern            | Go                          | zig                                  |
-|--------------------|-----------------------------|--------------------------------------|
-| embed assets       | `//go:embed`                | `@embedFile` (wired in `build.zig`)  |
-| listen + accept    | `http.ListenAndServe`       | `std.Io.net` listen/accept           |
-| request/response   | `net/http`                  | `std.http.Server`                    |
-| routing            | a mux                       | a `switch` on the path (no std router) |
+```
+ops/start                        # build bundles + zig + run on :9001
+# or, for just /driving:
+ops/build_driving && cd zig-server && zig build run
+```
 
 Assets that live elsewhere in the repo (the driving bundle) are baked in via
 `build.zig` — the **embed.go analog**: `@embedFile` can't reach outside its own

@@ -3,23 +3,31 @@
 # Before composing an ad-hoc shell command for build / test / regen, run
 # `ops/list` to see what already exists.
 #
-# zig-server unit-test gate (~1s). Compiles the server and runs the pure-logic
-# unit tests (`zig build test`): auth's legacy-$2a$ hash read path and users'
-# session-cookie HMAC verify, each pinned by a frozen in-repo vector. No Go, no
-# external oracle.
+# zig-server gate: compile the whole server + run the unit tests. This is the
+# "the binary compiles" floor (the role the old `go build ./...` played), now in
+# zig — composed by ops/check_common, so it runs in every subsystem gate and the
+# full pre-commit gate.
 #
-# These replaced the old bcrypt/session cross-validation gates: once zig's
-# bcrypt and our session HMAC were proven compatible with the live Go-written
-# data (the one real difference — the $2a$/$2b$ version tag — is handled in
-# auth.verifyPassword), the only durable property left to guard is "we can still
-# read the existing hashes + cookies", which needs no second language.
+# `zig build` compiles the server, which @embedFiles the built front-end bundles
+# (so they must exist first — same prerequisite the old go build had). `zig build
+# test` runs the pure-logic unit tests: auth's legacy-$2a$ hash read path and
+# users' session-cookie HMAC verify, each pinned by a frozen in-repo vector.
 
 set -e
 
 REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-cd "$REPO_DIR/zig-server"
+cd "$REPO_DIR"
 
+# Guard the built bundles `zig build` embeds — fail with guidance rather than a
+# cryptic @embedFile error. (The committed assets — chat/*.js, learn/*.js,
+# catalogs, images — are always present; only these four are build outputs.)
+for f in games/lynrummy/elm/elm.js games/lynrummy/elm/puzzle.js \
+         games/lynrummy/elm/engine.js games/driving/app.js; do
+    [ -f "$f" ] || { echo "Error: $f missing — run ops/build_elm + ops/build_driving first (embedded by zig build)." >&2; exit 1; }
+done
+
+cd "$REPO_DIR/zig-server"
 t0=$SECONDS
-zig build           # compile the server
+zig build           # compile the whole server
 zig build test      # run the unit tests
 echo "zig-server build + unit tests passed in $((SECONDS - t0))s."

@@ -5,49 +5,47 @@
 # `ops/list` to see what already exists. Drifted ops scripts
 # are how an hour disappears resurrecting things.
 #
-# Start prod Gopher server (port 9000).
+# Start the local zig server (port 9001). Rebuilds first — front-end
+# bundles, then `zig build` — so a plain `ops/start` picks up source edits.
 set -e
 
 source "$(dirname "$0")/_paths.sh"
 
-lsof -ti:9000 | xargs kill -9 2>/dev/null || true
-sleep 0.5
+# Kill any server on :9001 and WAIT until the port is actually free. This is
+# what makes "it answered" downstream mean "the binary we just built answered":
+# we prove the old one is gone, build fresh, launch, then prove the new one is
+# up. (zig has no -ldflags build-stamp, so freshness rides on this kill→build→
+# launch ordering instead of a /version nonce.)
+pkill -x zig-server 2>/dev/null || true
+lsof -ti:9001 | xargs kill -9 2>/dev/null || true
+for i in $(seq 1 10); do
+    curl -s http://localhost:9001/version >/dev/null 2>&1 || break
+    sleep 0.3
+done
 
 cd "$GOPHER_DIR"
 
-# Build the front-end bundles FIRST: `go build` embeds them into the
-# binary (see embed.go), so they must exist and be current.
+# Build the front-end bundles FIRST: build.zig @embedFiles them into the
+# binary, so they must exist and be current before `zig build`.
 "$(dirname "$0")/build_elm"
 "$(dirname "$0")/build_driving"
 
-COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
-# Dev cache-bust: append a per-build nonce so the ?v= asset version changes
-# on every restart even when edits are uncommitted (the commit alone would
-# not). Prod (ops/deploy) keeps the bare commit for stable browser caching.
-BUILD_ID="$COMMIT-$(date +%s)"
-go build -ldflags "-X main.gitCommit=$BUILD_ID" -o gopher-server .
+# Build the server. set -e stops here if the build fails, so nothing relaunches.
+( cd "$GOPHER_DIR/zig-server" && zig build )
+BIN="$GOPHER_DIR/zig-server/zig-out/bin/zig-server"
 
-# Puzzles catalog is frozen — served from the committed
-# games/lynrummy/puzzles/puzzles.json. To refresh, write a TS
-# generator from scratch (the legacy Python puzzle_catalog.py
-# was retired with the rest of the python/ subtree on
-# 2026-05-04).
+# GOPHER_CONFIG points storage + auth at the live tree; without it the server
+# falls back to repo-relative defaults (and a stranger gets a 303 to /login).
+GOPHER_CONFIG=~/AngryGopher/gopher.conf nohup "$BIN" > /tmp/angry-gopher.log 2>&1 &
 
-GOPHER_CONFIG=~/AngryGopher/gopher.conf nohup ./gopher-server > /tmp/angry-gopher.log 2>&1 &
-
-# Wait for the server to be ready — and prove it's serving the binary we JUST
-# built (its /version reports gitCommit == BUILD_ID). A plain 200 isn't enough:
-# a stale/old server still answers 200, which is exactly how a "rebuild" that
-# silently didn't happen masquerades as success. Insisting on BUILD_ID makes
-# this script's success mean "the fresh code is live," or it fails loudly.
+# Wait for the freshly-built server to answer on :9001.
 for i in $(seq 1 10); do
-    if curl -s http://localhost:9000/version 2>/dev/null | grep -qF "\"commit\":\"$BUILD_ID\""; then
-        echo "Gopher: http://localhost:9000 (ready, serving $BUILD_ID)"
+    if curl -s http://localhost:9001/version 2>/dev/null | grep -qF '"version"'; then
+        echo "Gopher (zig): http://localhost:9001 (ready)"
         exit 0
     fi
     sleep 1
 done
 
-echo "ERROR: :9000 is not serving the build we just made ($BUILD_ID) — a stale or" >&2
-echo "       wrong server may be running, or the restart failed. Check /tmp/angry-gopher.log." >&2
+echo "ERROR: :9001 is not serving — the build or relaunch failed. Check /tmp/angry-gopher.log." >&2
 exit 1

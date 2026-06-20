@@ -7,28 +7,26 @@ disk — **no database**. In prod it ships as one self-contained
 embedded binary behind Caddy (TLS) under systemd; see
 [`deploy/README.md`](deploy/README.md).
 
-> **The server is being ported Go → zig.** The zig server in
-> [`zig-server/`](zig-server/) is the active implementation — see
-> [`SERVER.md`](SERVER.md). `server/*.go` is the historical original it
-> replaces; the routes, layout, and DSL below are shared by both. (The
-> `ops/start` / `ops/deploy` tooling still drives the Go build until cutover.)
+> **The server is the zig implementation in [`zig-server/`](zig-server/)** —
+> see [`SERVER.md`](SERVER.md). (It was ported from a Go original, now removed;
+> the routes, layout, and DSL below describe the live zig server.)
 
 ## Quick start
 
 ```bash
-bash ops/start        # Gopher on :9000
+bash ops/start        # zig server on :9001
 ```
 
-`ops/start` is the canonical dev loop: it kills anything on :9000,
-rebuilds the Elm/TS bundles (`ops/build_elm`) and the Go binary —
-which embeds those bundles (see `embed.go`) — then relaunches and waits
-for the port to respond. Always use it; don't hand-roll `go run` /
-`nohup ./gopher-server`.
+`ops/start` is the canonical dev loop: it kills anything on :9001,
+rebuilds the Elm/TS bundles (`ops/build_elm`) and the zig binary —
+which embeds those bundles (see `zig-server/build.zig`) — then relaunches
+and waits for the port to respond. Always use it; don't hand-roll
+`zig build run`.
 
-The server needs `GOPHER_CONFIG` pointing at a config file (port +
-`data_dir`); `ops/start` uses `~/AngryGopher/gopher.conf`. All
-persistent data lives under that `data_dir`, outside the source tree —
-the tree is freely rm-able without touching data, and vice versa.
+The server needs `GOPHER_CONFIG` pointing at a config file (`data_dir` +
+auth); `ops/start` uses `~/AngryGopher/gopher.conf`. All persistent data
+lives under that `data_dir`, outside the source tree — the tree is freely
+rm-able without touching data, and vice versa.
 
 ## Routes
 
@@ -52,13 +50,7 @@ read-only** — a keyed request may only GET/HEAD.
 
 | Where | Role |
 |---|---|
-| [`zig-server/`](zig-server/) | **the active server (zig)** — every surface, over the shared data tree; see [`SERVER.md`](SERVER.md). The Go entries below are the original it replaces |
-| `main.go`, `config.go`, `login.go`, `embed.go`, `home.go`, `registry.go` | server entry: config, mux + login gate, name login/logout, embedded assets, the home launch-pad, route registry |
-| `auth/` | username validation + the raw identity claim (the numeric user id) |
-| `server/web/` | shared base: identity (user registry), sessions, bot API keys, page chrome, embedded-asset serving. Imports neither subsystem. |
-| `server/lynrummy/` | Lyn Rummy server: `/game` + `/puzzles` handlers + session file storage. Builds on `web`. |
-| `server/chat/` | chat server: handlers, SSE hub + storage, markdown, image uploads, `/settings`. Builds on `web`. |
-| `server/admin/` | the cross-cutting `/admin` overview (imports `web` + both subsystems) |
+| [`zig-server/`](zig-server/) | **the server (zig)** — every surface (home, login, chat, docs, Lyn Rummy `/game` + `/puzzles`, driving, `/admin`, `/settings`) as per-module handlers in `src/*.zig` over the shared data tree; front-end assets embedded via `build.zig`. See [`SERVER.md`](SERVER.md). |
 | `chat/` | the embedded chat **client** (`chat.js`) + the reference API client / example bot (`chat_client.py`: discover, read, post) |
 | `games/lynrummy/elm/` | the autonomous Elm client (dealer + referee + UI) |
 | `games/lynrummy/ts/` | the TypeScript agent — the strategic brain (solver + self-play) |
@@ -92,18 +84,19 @@ conformance is gated by `ops/check`.
 ## Ops & testing
 
 ```
-ops/start              Start Gopher on :9000 (rebuild + relaunch)
+ops/start              Start the zig server on :9001 (rebuild + relaunch)
 ops/list               List ops commands
-ops/check              Pre-commit gate (~20s warm): test_ts + test_elm + test_go + test_docs
-ops/check_full         Milestone gate (~50s warm): ops/check + agent self-play
+ops/check              Pre-commit gate (~35s warm): check_zig + test_ts + test_elm + test_docs + test_css
+ops/check_full         Milestone gate: ops/check + agent self-play
+ops/check_zig          zig server compiles + unit tests (~6s)
+ops/check_markdown     Markdown dialect regression (~3s)
 ops/test_ts            Fast TS gate (~15s)
 ops/test_elm           Fast Elm gate (~4s)
-ops/test_go            Fast Go gate (~5s)
 ops/test_docs          Fast docs gate (~1s): doc_xref --all (dead links/paths)
 ops/deploy             Build + ship to the prod droplet (see deploy/README.md)
 ```
 
-Don't hand-compose `go test ./...` / `elm make` / `tsc` — the ops
+Don't hand-compose `zig build` / `elm make` / `tsc` — the ops
 scripts encode sequencing, prerequisites, and the cross-language
 consistency checks that bare commands silently skip.
 

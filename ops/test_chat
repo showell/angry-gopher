@@ -4,11 +4,10 @@
 # command for build / launch / test / regen, run `ops/list` to see
 # what already exists.
 #
-# Chat subsystem leaf gate (~1s). The chat SERVER (server/chat) is Go,
-# so it's covered by `go build` in ops/test_go; this leaf lints the chat
-# CLIENT artifacts that nothing else checks — the embedded chat.js and
-# the example bot client. No Go unit tests for chat yet: we're iterating
-# fast and dogfooding catches the shallow bugs.
+# Chat subsystem leaf gate (~1s). The chat SERVER (zig) is compiled by
+# ops/check_zig; this leaf lints the chat CLIENT artifacts that nothing else
+# checks — the embedded chat.js and the example bot client. We iterate fast and
+# dogfooding catches the shallow bugs.
 
 set -e
 

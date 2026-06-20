@@ -2,8 +2,8 @@
 """
 CSS class-hygiene audit.
 
-Walks every <style>...</style> block in server/**/*.go, extracts each
-.classname token, and checks whether the rest of the repo (Go outside its
+Walks every <style>...</style> block in zig-server/src/*.zig, extracts each
+.classname token, and checks whether the rest of the repo (zig outside its
 own <style> blocks, plus JS / Elm / Markdown / HTML) references it. Any
 class with zero references is dead CSS — exits non-zero with a list.
 
@@ -37,24 +37,24 @@ KNOWN_DYNAMIC: set[str] = {
 STYLE_BLOCK = re.compile(r"<style>(.*?)</style>", re.DOTALL)
 CLASS_TOKEN = re.compile(r"\.([A-Za-z_][\w-]*)")
 SKIP_DIRS = {".git", "node_modules", "elm-stuff"}
-CONSUMER_GLOBS = ("*.go", "*.js", "*.elm", "*.md", "*.html")
+CONSUMER_GLOBS = ("*.zig", "*.js", "*.elm", "*.md", "*.html")
 
 
 def collect_css_classes() -> dict[str, set[str]]:
     """class-name -> set of defining files (relative paths)."""
     defs: dict[str, set[str]] = {}
-    for go in (REPO / "server").rglob("*.go"):
-        text = go.read_text()
+    for zf in (REPO / "zig-server" / "src").rglob("*.zig"):
+        text = zf.read_text()
         for m in STYLE_BLOCK.finditer(text):
             for cm in CLASS_TOKEN.finditer(m.group(1)):
                 defs.setdefault(cm.group(1), set()).add(
-                    str(go.relative_to(REPO))
+                    str(zf.relative_to(REPO))
                 )
     return defs
 
 
 def collect_consumer_text() -> str:
-    """Concatenate every consumer file; .go has its <style> blocks stripped
+    """Concatenate every consumer file; .zig has its <style> blocks stripped
     so a class only counts as 'referenced' if something OUTSIDE the CSS
     source mentions it."""
     chunks: list[str] = []
@@ -63,7 +63,7 @@ def collect_consumer_text() -> str:
             if any(part in SKIP_DIRS for part in path.parts):
                 continue
             text = path.read_text(errors="replace")
-            if path.suffix == ".go":
+            if path.suffix == ".zig":
                 text = STYLE_BLOCK.sub("", text)
             chunks.append(text)
     return "\n".join(chunks)

@@ -6,9 +6,9 @@ so you don't have to remember flags.
 
 ## Dev-loop entry points
 
-- **`ops/start`** — launches the dev server (Go on `:9000`).
+- **`ops/start`** — launches the dev server (zig on `:9001`).
   Rebuilds first — it calls `ops/build_elm` (Elm + TS bundles)
-  and `go build`, then relaunches — so a plain `ops/start`
+  and `zig build`, then relaunches — so a plain `ops/start`
   picks up source edits.
 - **`ops/build_elm`** — rebuilds **everything the browser
   needs**, in order:
@@ -22,8 +22,8 @@ browser.
 
 ## Build artifacts
 
-All three live at `games/lynrummy/elm/` and are served by
-`server/lynrummy/lynrummy_elm.go` and `server/lynrummy/puzzle.go`:
+All three live at `games/lynrummy/elm/` and are served by the zig
+server (`zig-server/src/game.zig` and `zig-server/src/puzzles.zig`):
 
 | File | Source | Served at |
 |------|--------|-----------|
@@ -58,9 +58,9 @@ JS glue file (`engine_glue.js`) that converts the wire-shape
   slower while npm caches esbuild.
 - `ops/build_elm` — the umbrella. Calls `ops/build_engine_js`
   first, then compiles both Elm entry points.
-- `ops/check` — pre-commit gate. Composes `ops/test_ts` +
-  `ops/test_elm` + `ops/test_go` + `ops/test_docs` (~20s warm).
-  `ops/check_full` adds the agent self-play suite (~50s warm total).
+- `ops/check` — pre-commit gate. Composes `ops/check_zig` +
+  `ops/test_ts` + `ops/test_elm` + `ops/test_docs` + `ops/test_css`
+  (~35s warm). `ops/check_full` adds the agent self-play suite.
 
 ## Other regenerators
 
@@ -68,8 +68,8 @@ These don't run on every build — invoke as needed:
 
 - **Puzzle catalogs.** The single-puzzle UI host
   (`/puzzles`) reads its featured board from
-  `conformance/mined_seeds.dsl`; the hard-coded
-  `featuredPuzzleName` lives in `server/lynrummy/puzzle.go`.
+  `conformance/mined_seeds.dsl`; the catalog handling lives in
+  `zig-server/src/puzzles.zig`.
 - **Bench gold.** `npm run bench:81-single-cards` and
   `npm run bench:6-card-hands` (in `ts/`) each run a perf
   bench that compares against and rewrites its own gold file
@@ -81,6 +81,6 @@ These don't run on every build — invoke as needed:
 
 - **Node.js** with npm + `npx` on PATH (used by both Elm
   install and esbuild).
-- **Go** (for `ops/start`).
+- **zig** (for `ops/start` + `ops/deploy`).
 - The Elm compiler comes from `games/lynrummy/elm/node_modules/`
   — run `npm install` there once on a fresh checkout.

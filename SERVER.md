@@ -8,14 +8,13 @@ tree.
 - Entry: `zig-server/src/server.zig` (routing is a `switch` on the path).
 - Build + run: `cd zig-server && zig build && GOPHER_CONFIG=~/AngryGopher/gopher.conf ./zig-out/bin/zig-server` (listens on `:9001`).
 - `GOPHER_CONFIG` points `data_dir` (the content tree) and `auth_root` (the shared `~/Auth` account store); unset = repo-relative defaults.
-- Markdown conformance: `cd zig-server && zig run src/main.zig` (diffs the renderer against the frozen gold corpus).
+- Markdown dialect regression: `ops/check_markdown` (renders every frozen corpus case with the renderer and asserts no drift; the renderer is the source of truth, the gold is a frozen baseline — no external oracle).
 
-## The historical Go server
+## History
 
-`server/*.go` is the **original** server — the one being replaced. It and the
-zig server never run together; the zig port is a drop-in replacement that
-reproduces its behavior surface by surface. Treat the Go tree as historical:
-read it for intent if useful, but **new work goes in `zig-server/`**.
+The server was ported from a Go original (`main.go` + `server/*.go`). That tree
+has been **removed** — it lives in git history if you ever need to read the old
+implementation for intent. All work is in `zig-server/`.
 
 ## Orientation, not reference
 

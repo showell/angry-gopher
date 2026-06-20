@@ -17,20 +17,20 @@ Available ops commands (run from repo root):
                          SKIPS the Lyn Rummy solver + Elm suites.
   ops/check_lynrummy     Lyn Rummy gate (~30s): common base + Elm + TS
                          solver. SKIPS the chat lint.
-  ops/check_zig          zig-server gate (~1s): compiles the server + runs the
-                         unit tests (auth's legacy-$2a$ read path, users' session
-                         HMAC verify), each pinned by a frozen in-repo vector.
+  ops/check_zig          zig-server gate (~6s): compiles the WHOLE server (the
+                         "binary compiles" floor, the role go build had) + runs
+                         the unit tests (auth's legacy-$2a$ read path, users'
+                         session HMAC verify). Composed by ops/check_common.
   ops/check_markdown     Markdown dialect regression gate (~3s): renders every
                          frozen corpus case with the zig renderer and asserts the
                          output is unchanged. No Go, no goldmark oracle — our
                          renderer IS the dialect. Re-freeze: ops/regen_markdown_gold.
 
   Leaves (composed by the gates above):
-  ops/check_common       Shared base = test_go + test_docs + test_css (diamond floor).
+  ops/check_common       Shared base = check_zig + test_docs + test_css (diamond floor).
   ops/test_ts            TS solver/engine suite (~20s) — Lyn Rummy.
   ops/test_elm           Elm client suite (~5s) — Lyn Rummy.
   ops/test_chat          Chat client lint (~1s): chat.js + docs.js + chat_client.py.
-  ops/test_go            go build ./... (~5s) — common (whole binary).
   ops/test_docs          doc_xref --all (~1s) — common.
   ops/test_css           check_css (~1s) — common. Flag CSS classes defined
                          in any server/**/*.go <style> block that no Go/JS/
@@ -41,11 +41,11 @@ Available ops commands (run from repo root):
 
   BUILD & RUN
   -----------
-  ops/start              Start Gopher server (port 9000). Kills any
-                         stale process, rebuilds the Go binary,
-                         recompiles Elm bundles, waits until ready.
-                         Do not replace with ad-hoc 'go run' — you
-                         will skip those steps.
+  ops/start              Start the zig server (port 9001). Kills any
+                         stale process, recompiles Elm/driving bundles,
+                         rebuilds the zig binary, waits until ready.
+                         Do not replace with ad-hoc 'zig build run' —
+                         you will skip those steps.
 
   ops/build_elm          Compile Game.elm + Puzzle.elm into elm.js and
                          puzzle.js. Calls ops/build_engine_js first.
@@ -55,7 +55,7 @@ Available ops commands (run from repo root):
                          edit before testing the live Elm UI.
   ops/build_driving      Bundle the driving game's TS into
                          games/driving/app.js via esbuild (served at
-                         /driving, embedded by go build). Called by
+                         /driving, embedded by zig build). Called by
                          ops/start. Run after any games/driving/ edit.
 
   REGEN & TOOLS

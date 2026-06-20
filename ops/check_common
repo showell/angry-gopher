@@ -4,20 +4,18 @@
 # command for build / launch / test / regen, run `ops/list` to see
 # what already exists.
 #
-# Shared base gate both subsystems need: the whole binary compiles
-# (go build, which covers server/web + lynrummy + chat + admin), the
-# docs have no dead links, and every CSS class in any <style> block is
-# still referenced. This is the "diamond floor" — composed by
-# ops/check_chat, ops/check_lynrummy, and ops/check. Mirrors the
-# server/web base that server/lynrummy and server/chat both build on.
+# Shared base gate both subsystems need: the zig server compiles + its unit
+# tests pass (ops/check_zig), the docs have no dead links, and every CSS class
+# in any <style> block is still referenced. This is the "diamond floor" —
+# composed by ops/check_chat, ops/check_lynrummy, and ops/check.
 
 set -e
 
 REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$REPO_DIR"
 
-echo "===== ops/test_go ====="
-./ops/test_go
+echo "===== ops/check_zig ====="
+./ops/check_zig
 
 echo
 echo "===== ops/test_docs ====="
