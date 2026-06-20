@@ -5,7 +5,7 @@
 //! The distinctive piece is extractCodeBlocks: a line-anchored fence state
 //! machine (NOT a regex). It keeps ```lang and ~~~lang blocks but EXCLUDES
 //! `~~~ quote` (the quote-reply marker), with a nesting-aware close so a
-//! quote-of-a-quote doesn't end the outer block early. Byte-faithful to Go.
+//! quote-of-a-quote doesn't end the outer block early.
 //!
 //! Leaf module: reuses images_store's shared transcript-header parser +
 //! source-URL helper, so the store doesn't depend on the UI layer.
@@ -16,10 +16,10 @@ const Alloc = std.mem.Allocator;
 const store = @import("chat_store.zig");
 const images_store = @import("images_store.zig");
 
-/// code_sep joins entries on disk (same shape as the Images feed; Go's codeSep).
+/// code_sep joins entries on disk (same shape as the Images feed).
 const code_sep = "\n\n-------------\n\n";
 
-/// codeMu serializes all code.md reads/appends (coarser than Go's per-uid map).
+/// codeMu serializes all code.md reads/appends (one global lock; code writes are rare).
 var codeMu: Io.Mutex = .init;
 
 pub const CodeBlock = struct { lang: []const u8, body: []const u8 };
@@ -42,7 +42,7 @@ fn userCodePath(alloc: Alloc, uid: []const u8) ![]u8 {
 /// line starting ```/~~~ (lang = trimmed remainder); closes on a line that is
 /// ONLY marker chars (≥3, trailing ws stripped — info text is NOT a close, per
 /// CommonMark). `~~~ quote` blocks are SKIPPED entirely with a nesting-aware
-/// close. Unclosed fences run to end-of-body (matching goldmark). Byte-faithful.
+/// close. Unclosed fences run to end-of-body (CommonMark).
 pub fn extractCodeBlocks(alloc: Alloc, body: []const u8) ![]const CodeBlock {
     var out: std.ArrayList(CodeBlock) = .empty;
     var lines: std.ArrayList([]const u8) = .empty;
@@ -172,7 +172,7 @@ pub fn readCodeForUser(io: Io, alloc: Alloc, uid: []const u8) ![]CodeEntry {
     return parseCodeFile(alloc, data);
 }
 
-/// encodeCodeEvent writes one codeSSEEvent JSON object into `j` (Go field order:
+/// encodeCodeEvent writes one codeSSEEvent JSON object into `j` (field order:
 /// source_id, from, conv, at, blocks:[{lang,body}], source_url). Shared by the
 /// page backlog and the live fanout.
 pub fn encodeCodeEvent(j: *std.ArrayList(u8), alloc: Alloc, e: CodeEntry, source_url: []const u8) !void {
