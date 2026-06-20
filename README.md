@@ -28,6 +28,25 @@ auth); `ops/start` uses `~/AngryGopher/gopher.conf`. All persistent data
 lives under that `data_dir`, outside the source tree — the tree is freely
 rm-able without touching data, and vice versa.
 
+## Toolchain
+
+Dependencies are few, but three compilers must be present to build fresh.
+We pin these versions:
+
+| Tool | Version | Builds | Install |
+|---|---|---|---|
+| **Zig** | 0.16.0 | the server (`zig-server/`) | system install — `zig version` |
+| **Elm** | 0.19.1 | the Lyn Rummy client | `npm install` in `games/lynrummy/elm/` (pinned in its `package.json`) |
+| **TypeScript** | 6.0.3 | the agent + game engine | `npm install` in `games/lynrummy/ts/` (pinned in its `package.json`) |
+| **Node** | 24 | runs the TS directly + hosts the npm-installed `elm`/`tsc` | system install — `node --version` |
+
+The TypeScript is never transpiled to run — Node executes the `.ts`
+files directly via type-stripping (so a Node new enough for that is
+required; dev uses v24). `tsc` is used only as the typechecker
+(`npm run typecheck`). Elm and `tsc` are project-local (run from each
+package's `node_modules/.bin`), so a fresh checkout needs `npm install`
+in both `games/lynrummy/elm/` and `games/lynrummy/ts/`.
+
 ## Local config & identity
 
 The config is a flat `key = value` file (`#` comments). The zig server
