@@ -91,7 +91,7 @@ const assets = [_]Asset{
 };
 
 /// The sibling bundles the conversation page loads, in document order (after the
-/// head's colors.js + chat_theme.js). Mirrors renderConversation's script list.
+/// head's colors.js + chat_theme.js).
 const page_scripts = [_][]const u8{
     "chat_image_popup.js", "chat_code_popup.js",   "chat_time_popup.js",
     "message.js",          "message_view.js",      "nav_stack.js",
@@ -316,8 +316,8 @@ fn conversationPage(req: *Request, io: Io, alloc: Alloc, uid: []const u8, kind: 
     try req.respond(b.items, .{ .extra_headers = &.{http.html_ct} });
 }
 
-/// writeChrome emits the shared chat-subsystem page chrome into `b` (Go's
-/// chatPageHeader → PageHeadAndStyle + chatChromeTop): the doctype/head + the
+/// writeChrome emits the shared chat-subsystem page chrome into `b`:
+/// the doctype/head + the
 /// platform stylesheet (its <title> = `tab_title`), colors.js (sync, palette
 /// pre-paint) + chat_theme.js (deferred), the top bar (Home + `title` + the
 /// six-link sub-nav with `active` bolded + identity), and the open
@@ -637,8 +637,7 @@ fn highestGeneralSession(io: Io, alloc: Alloc, dir: []const u8) !?[]const u8 {
 // ── default / conversations / msg-ref lookup ──────────────────────────────────
 
 /// chatDefault redirects to the user's most-recently-viewed (conv, session), or
-/// /chat when they've never been to a conv they still participate in. Mirrors
-/// Go's HandleChatDefault.
+/// /chat when they've never been to a conv they still participate in.
 fn chatDefault(req: *Request, io: Io, alloc: Alloc, uid: []const u8) !void {
     const conv = try chat_state.lastUserConv(io, alloc, uid);
     if (conv.len == 0 or !(try store.chatKeyParticipant(alloc, conv, uid))) {
@@ -884,8 +883,8 @@ fn matchPrefix(s: []const u8, prefix: []const u8) ?[]const u8 {
 }
 
 /// isStreamPath reports whether `sub` is one of the chat subsystem's SSE streams
-/// — which presence deliberately doesn't count as activity (Go's WithPresence
-/// excludes streams). True for the per-conv/recent/images/code "…/stream" tails,
+/// — which presence deliberately doesn't count as activity.
+/// True for the per-conv/recent/images/code "…/stream" tails,
 /// the named "/notifications", and "/sidebar/stream" (caught by the suffix).
 fn isStreamPath(sub: []const u8) bool {
     return std.mem.endsWith(u8, sub, "/stream") or std.mem.eql(u8, sub, "/notifications");

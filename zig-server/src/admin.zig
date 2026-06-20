@@ -26,9 +26,7 @@ const Request = std.http.Server.Request;
 /// hardcodes Steve's uid 1 (per his call) until that flag is ported.
 const admin_uid = "1";
 
-/// handle dispatches /admin* — `sub` is the path after "/admin" (Go's mux sends
-/// /admin and /admin/<anything> here; the literal /delete + /apikey are actions,
-/// everything else is the overview).
+/// handle dispatches /admin* — `sub` is the path after "/admin".
 pub fn handle(req: *Request, io: Io, alloc: Alloc, sub: []const u8) !void {
     const uid = try users.currentUserID(io, alloc, req);
     if (uid.len == 0) return http.redirect(req, "/login");
@@ -42,7 +40,7 @@ pub fn handle(req: *Request, io: Io, alloc: Alloc, sub: []const u8) !void {
 // ── actions ───────────────────────────────────────────────────────────────────
 
 /// handleDelete confirms (GET) and performs (POST) deletion of one player's
-/// on-disk game data, by user id. Mirrors handleAdminDelete.
+/// on-disk game data, by user id.
 fn handleDelete(req: *Request, io: Io, alloc: Alloc) !void {
     if (req.head.method == .POST) {
         const body = (try http.readLimitedBody(req, alloc, 64 * 1024)) orelse return;
@@ -57,7 +55,7 @@ fn handleDelete(req: *Request, io: Io, alloc: Alloc) !void {
 }
 
 /// handleAPIKey generates (POST) or revokes (POST revoke=1) a member's API key —
-/// the admin acting on any member. Mirrors handleAdminAPIKey.
+/// the admin acting on any member.
 fn handleAPIKey(req: *Request, io: Io, alloc: Alloc) !void {
     if (req.head.method != .POST) return http.redirect(req, "/admin");
     const body = (try http.readLimitedBody(req, alloc, 64 * 1024)) orelse return;
@@ -135,7 +133,7 @@ const MemberRow = struct { id: []const u8, name: []const u8, is_admin: bool, is_
 
 /// renderMembersTable lists the official principals (members + agents) with time
 /// since last active (most-recent first; never-active last), lifetime image total
-/// vs the cap, and per-member API-key controls. Mirrors renderMembersTable.
+/// vs the cap, and per-member API-key controls.
 fn renderMembersTable(b: *std.ArrayList(u8), io: Io, alloc: Alloc) !void {
     var rows: std.ArrayList(MemberRow) = .empty;
     for (try users.listAuthorized(io, alloc)) |m| {
@@ -181,8 +179,7 @@ fn memberLessThan(_: void, a: MemberRow, b: MemberRow) bool {
 }
 
 /// appendApiKeyCell writes the API-key controls for one member: Generate (becomes
-/// Regenerate + Revoke once a key exists), all POSTing to /admin/apikey. Mirrors
-/// Go's apiKeyCell.
+/// Regenerate + Revoke once a key exists), all POSTing to /admin/apikey.
 fn appendApiKeyCell(b: *std.ArrayList(u8), io: Io, alloc: Alloc, id: []const u8) !void {
     const has = users.userHasAPIKey(io, alloc, id);
     const gen = if (has) "Regenerate" else "Generate";
@@ -208,7 +205,7 @@ fn writeStatsRow(b: *std.ArrayList(u8), alloc: Alloc, st: UserStats, cls: []cons
 }
 
 /// renderDeleteConfirm is the "are you sure" page — it spells out exactly what
-/// will be removed before the POST that does it. Mirrors renderDeleteConfirm.
+/// will be removed before the POST that does it.
 fn renderDeleteConfirm(req: *Request, io: Io, alloc: Alloc, id: []const u8) !void {
     const st = gatherUserStats(io, alloc, id);
     const name = try chat.htmlEscape(alloc, try users.getUserName(io, alloc, id));
@@ -285,8 +282,7 @@ fn dirBytes(io: Io, alloc: Alloc, path: []const u8) i64 {
     return total;
 }
 
-/// countTextLines counts nonempty lines in `path` (0 if missing). Mirrors Go's
-/// CountTextLines (the action-log line counter).
+/// countTextLines counts nonempty lines in `path` (0 if missing).
 fn countTextLines(io: Io, alloc: Alloc, path: []const u8) i64 {
     const data = Io.Dir.cwd().readFileAlloc(io, path, alloc, .unlimited) catch return 0;
     var n: i64 = 0;
@@ -300,7 +296,7 @@ fn countTextLines(io: Io, alloc: Alloc, path: []const u8) i64 {
 // ── format helpers ─────────────────────────────────────────────────────────────
 
 /// humanizeSince renders elapsed seconds as a coarse relative string ("just now",
-/// "Nm ago", "Nh ago", "Nd ago"). Mirrors platform.HumanizeSince.
+/// "Nm ago", "Nh ago", "Nd ago").
 fn humanizeSince(alloc: Alloc, elapsed_s: i64) ![]const u8 {
     const d = if (elapsed_s < 0) 0 else elapsed_s;
     if (d < 60) return "just now";

@@ -54,8 +54,8 @@ pub fn formatImagesEntry(alloc: Alloc, e: ImagesEntry) ![]u8 {
 }
 
 /// parseImagesFile splits an images.md into entries in on-disk (chronological)
-/// order, parsing the header line by hand (Go's headerRe
-/// `^Sent by (.+) at (\S+), source MSG_(\S+) in (\S+):$`). Malformed blocks skip.
+/// order, parsing the header line by hand
+/// at (\S+), source MSG_(\S+) in (\S+):$`). Malformed blocks skip.
 pub fn parseImagesFile(alloc: Alloc, text: []const u8) ![]ImagesEntry {
     var out: std.ArrayList(ImagesEntry) = .empty;
     if (std.mem.trim(u8, text, " \t\r\n").len == 0) return out.toOwnedSlice(alloc);
@@ -102,7 +102,7 @@ pub fn parseHeader(line: []const u8) ?Header {
 }
 
 /// appendImagesEntry writes one entry to a user's images.md, prefixed by the
-/// separator when the file is non-empty. Mirrors appendImagesEntryLocked.
+/// separator when the file is non-empty.
 pub fn appendImagesEntry(io: Io, alloc: Alloc, uid: []const u8, e: ImagesEntry) !void {
     const path = try userImagesPath(alloc, uid);
     const entry = try formatImagesEntry(alloc, e);
@@ -124,7 +124,7 @@ pub fn appendImagesEntry(io: Io, alloc: Alloc, uid: []const u8, e: ImagesEntry) 
 }
 
 /// readImagesForUser returns a user's image entries in chronological order. A
-/// missing file → empty. Mirrors readImagesForUser.
+/// missing file → empty.
 pub fn readImagesForUser(io: Io, alloc: Alloc, uid: []const u8) ![]ImagesEntry {
     const path = try userImagesPath(alloc, uid);
     imagesMu.lockUncancelable(io);
@@ -134,7 +134,7 @@ pub fn readImagesForUser(io: Io, alloc: Alloc, uid: []const u8) ![]ImagesEntry {
 }
 
 /// extractImageTags returns every `<img\s[^>]*>` span (case-insensitive, spans
-/// newlines) in `s`. Mirrors Go's imageTagRe. Note: the `\s` (whitespace REQUIRED
+/// newlines) in `s`. Note: the `\s` (whitespace REQUIRED
 /// after "img") differs from recent's `\b` variant — kept faithful to each.
 pub fn extractImageTags(alloc: Alloc, s: []const u8) ![]const []const u8 {
     var out: std.ArrayList([]const u8) = .empty;

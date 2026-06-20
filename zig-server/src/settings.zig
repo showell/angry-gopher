@@ -33,8 +33,7 @@ pub fn handle(req: *Request, io: Io, alloc: Alloc, bus: *Bus, sub: []const u8) !
 }
 
 /// handleAPIKey generates or revokes the caller's key (POST), acting only on the
-/// resolved identity. GET falls back to the settings page. Mirrors Go's
-/// HandleSettingsAPIKey.
+/// resolved identity. GET falls back to the settings page.
 fn handleAPIKey(req: *Request, io: Io, alloc: Alloc, uid: []const u8) !void {
     if (req.head.method != .POST) return http.redirect(req, "/settings");
     const body = (try http.readLimitedBody(req, alloc, 64 * 1024)) orelse return;

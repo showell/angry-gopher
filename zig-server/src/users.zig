@@ -43,7 +43,7 @@ const session_max_age_secs: i64 = 365 * 24 * 60 * 60;
 // ── the resolver ────────────────────────────────────────────────────────────
 
 /// currentUserID resolves the id a request acts as, or "" when there's no valid
-/// identity. Mirrors users.CurrentUser(r).ID.
+/// identity.
 pub fn currentUserID(io: Io, alloc: Alloc, req: *std.http.Server.Request) ![]const u8 {
     // 1. member session cookie (authoritative).
     if (try sessionUserID(io, alloc, req)) |id| return id;
@@ -69,7 +69,6 @@ fn sessionUserID(io: Io, alloc: Alloc, req: *std.http.Server.Request) !?[]const 
 }
 
 /// apiKeyUserID resolves the principal id from an Authorization: Bearer key.
-/// Mirrors apiKeyUser -> CheckAPIKey.
 fn apiKeyUserID(io: Io, alloc: Alloc, req: *std.http.Server.Request) !?[]const u8 {
     const key = bearerToken(req) orelse return null;
     return checkAPIKey(io, alloc, key);
@@ -77,8 +76,7 @@ fn apiKeyUserID(io: Io, alloc: Alloc, req: *std.http.Server.Request) !?[]const u
 
 // ── session cookie crypto (cross-validated against Go) ───────────────────────
 
-/// sessionMAC writes HMAC-SHA256(secret, id + "\n" + issued) into out. Mirrors
-/// Go's sessionMAC (before its base64 step).
+/// sessionMAC writes HMAC-SHA256(secret, id + "\n" + issued) into out.
 fn sessionMAC(secret: []const u8, id: []const u8, issued: []const u8, out: *[HmacSha256.mac_length]u8) void {
     var ctx = HmacSha256.init(secret);
     ctx.update(id);
@@ -115,7 +113,7 @@ pub fn verifySessionWithSecret(alloc: Alloc, secret: []const u8, val: []const u8
 }
 
 /// signSession produces a cookie value for `id` issued at `issued_unix`, signed
-/// with `secret`. Mirrors Go's signSession. Used by the gold harness (the
+/// with `secret`. Used by the gold harness (the
 /// production server never issues sessions — that stays in Go/Chat).
 pub fn signSession(alloc: Alloc, secret: []const u8, id: []const u8, issued_unix: i64) ![]const u8 {
     const issued = try std.fmt.allocPrint(alloc, "{d}", .{issued_unix});
@@ -152,8 +150,7 @@ fn checkAPIKey(io: Io, alloc: Alloc, presented: []const u8) !?[]const u8 {
 
 // ── registry reads (account store) ───────────────────────────────────────────
 
-/// userExists reports whether id has an account dir under auth_root. Mirrors
-/// UserExists (existence of the account dir IS the user).
+/// userExists reports whether id has an account dir under auth_root.
 fn userExists(io: Io, alloc: Alloc, id: []const u8) !bool {
     if (std.mem.trim(u8, id, " \t\r\n").len == 0) return false;
     const dir = try std.fs.path.join(alloc, &.{ auth_root, id });
@@ -181,8 +178,8 @@ pub const AuthorizedUser = struct { id: []const u8, name: []const u8 };
 
 /// listAuthorized returns every authorized principal (member or agent) — one
 /// account dir under auth_root that has a password file OR is the agent — with
-/// its display name, sorted by numeric id. Mirrors the subset of
-/// users.ListAuthorized the chat sidebar needs. Missing auth_root → empty.
+/// its display name, sorted by numeric id.
+/// Missing auth_root → empty.
 pub fn listAuthorized(io: Io, alloc: Alloc) ![]AuthorizedUser {
     var dir = Io.Dir.cwd().openDir(io, auth_root, .{ .iterate = true }) catch return &.{};
     defer dir.close(io);
@@ -208,7 +205,7 @@ fn lessThanByNumericID(_: void, a: AuthorizedUser, b: AuthorizedUser) bool {
 }
 
 /// getUserName returns a user's display name ({auth_root}/{id}/name, trailing
-/// CR/LF trimmed), or "" when absent. Mirrors users.GetUserName. Allocated from
+/// CR/LF trimmed), or "" when absent. Allocated from
 /// `alloc`.
 pub fn getUserName(io: Io, alloc: Alloc, id: []const u8) ![]const u8 {
     const b = (try readAuthFile(io, alloc, id, "name")) orelse return "";
@@ -240,8 +237,7 @@ pub const max_upload_lifetime_bytes: i64 = 1 << 30; // 1 GiB per user, lifetime
 var upload_bytes_mu: Io.Mutex = .init;
 
 /// userUploadBytes returns the cumulative bytes a user has ever uploaded
-/// ({users_root}/{id}/upload-bytes), or 0 when absent/unparseable. Mirrors Go's
-/// UserUploadBytes.
+/// ({users_root}/{id}/upload-bytes), or 0 when absent/unparseable.
 pub fn userUploadBytes(io: Io, alloc: Alloc, id: []const u8) i64 {
     const path = std.fs.path.join(alloc, &.{ users_root, id, "upload-bytes" }) catch return 0;
     const b = Io.Dir.cwd().readFileAlloc(io, path, alloc, .unlimited) catch return 0;
@@ -250,8 +246,7 @@ pub fn userUploadBytes(io: Io, alloc: Alloc, id: []const u8) i64 {
 
 /// reserveUploadBytes atomically adds `n` to the user's lifetime upload total if
 /// that stays within max_upload_lifetime_bytes, returning true; otherwise nothing
-/// changes and it returns false. Serialized via upload_bytes_mu. Mirrors Go's
-/// ReserveUploadBytes (the cap is the module const, as every Go caller passes).
+/// changes and it returns false. Serialized via upload_bytes_mu.
 pub fn reserveUploadBytes(io: Io, alloc: Alloc, id: []const u8, n: i64) bool {
     upload_bytes_mu.lockUncancelable(io);
     defer upload_bytes_mu.unlock(io);
@@ -267,15 +262,13 @@ pub fn reserveUploadBytes(io: Io, alloc: Alloc, id: []const u8, n: i64) bool {
 
 // ── API-key management ───────
 
-/// userHasAPIKey reports whether the principal has an API-key file. Mirrors
-/// UserHasAPIKey.
+/// userHasAPIKey reports whether the principal has an API-key file.
 pub fn userHasAPIKey(io: Io, alloc: Alloc, id: []const u8) bool {
     return authFileExists(io, alloc, id, "api-key") catch false;
 }
 
 /// getUserAPIKey returns the stored key for display, or null when absent OR a
-/// legacy bare-hash key (no '-', not recoverable — regenerate to view). Mirrors
-/// GetUserAPIKey.
+/// legacy bare-hash key (no '-', not recoverable — regenerate to view).
 pub fn getUserAPIKey(io: Io, alloc: Alloc, id: []const u8) !?[]const u8 {
     const b = (try readAuthFile(io, alloc, id, "api-key")) orelse return null;
     const key = std.mem.trim(u8, b, " \t\r\n");
@@ -304,15 +297,14 @@ pub fn clearUserAPIKey(io: Io, alloc: Alloc, id: []const u8) void {
     Io.Dir.cwd().deleteFile(io, path) catch {};
 }
 
-/// isMember reports whether `id` is a password member (Go's NEED_PASSWORD gate
-/// for the settings page — agents, who have no password, are excluded).
+/// isMember reports whether `id` is a password member.
 pub fn isMember(io: Io, alloc: Alloc, id: []const u8) bool {
     return userIsMember(io, alloc, id) catch false;
 }
 
 /// principalExists / principalAuthorized / principalIsAgent are the public
-/// admin-facing wrappers over the account-store predicates (Go's UserExists /
-/// UserIsAuthorized / IsAgent), swallowing errors to a plain bool.
+/// admin-facing wrappers over the account-store predicates,
+/// swallowing errors to a plain bool.
 pub fn principalExists(io: Io, alloc: Alloc, id: []const u8) bool {
     return userExists(io, alloc, id) catch false;
 }
@@ -460,8 +452,8 @@ const max_user_len = 40; // mirrors name.go's maxUserLen
 /// member flag (Admin/Agent aren't needed by the login flows).
 pub const ResolvedUser = struct { id: []const u8, name: []const u8, member: bool };
 
-/// currentUser resolves the full identity a request acts as (Go's CurrentUser,
-/// the fields login needs). Zero value (id == "") when there's no identity.
+/// currentUser resolves the full identity a request acts as.
+/// Zero value (id == "") when there's no identity.
 pub fn currentUser(io: Io, alloc: Alloc, req: *std.http.Server.Request) !ResolvedUser {
     const id = try currentUserID(io, alloc, req);
     if (id.len == 0) return .{ .id = "", .name = "", .member = false };
@@ -493,8 +485,8 @@ pub fn setUserName(io: Io, alloc: Alloc, id: []const u8, name: []const u8) !void
 }
 
 /// setUserPassword bcrypt-hashes `password` and stores it (mode 0o600), making
-/// the user a member. Mirrors SetUserPassword (auth.zig writes `$2b$`; Go reads
-/// it natively — see auth.zig's interop note). The 60-byte hash has no trailing
+/// the user a member.
+/// The 60-byte hash has no trailing
 /// newline, matching Go, so checkUserPassword's verify sees exactly 60 bytes.
 pub fn setUserPassword(io: Io, alloc: Alloc, id: []const u8, password: []const u8) !void {
     var buf: [60]u8 = undefined;
@@ -523,8 +515,7 @@ pub fn findMemberByName(io: Io, alloc: Alloc, name: []const u8) !?[]const u8 {
     return null;
 }
 
-/// isNameReserved reports whether some member currently holds `name`. Mirrors
-/// IsNameReserved.
+/// isNameReserved reports whether some member currently holds `name`.
 pub fn isNameReserved(io: Io, alloc: Alloc, name: []const u8) bool {
     return (findMemberByName(io, alloc, name) catch null) != null;
 }
@@ -546,7 +537,7 @@ pub fn deleteUserRecord(io: Io, alloc: Alloc, id: []const u8) void {
 /// signSessionNow signs a live member session cookie value for `id` (loads the
 /// shared secret Go wrote, signs at the current time). null when the secret is
 /// missing. Wraps the pure signSession with the live secret + clock — the
-/// issuance counterpart to verifySessionWithSecret. Mirrors signSession.
+/// issuance counterpart to verifySessionWithSecret.
 pub fn signSessionNow(io: Io, alloc: Alloc, id: []const u8) !?[]const u8 {
     const secret = (try loadSecret(io, alloc)) orelse return null;
     return try signSession(alloc, secret, id, nowUnix(io));
@@ -605,8 +596,7 @@ pub fn validateUserName(alloc: Alloc, raw: []const u8) !NameResult {
 
 /// sanitizeUser scrubs a name into a clean attribute value: keeps allowed bytes,
 /// collapses whitespace runs, caps length, "" if nothing usable remains. Lenient
-/// (strips rather than rejects) — login re-checks with validateUserName. Mirrors
-/// SanitizeUser.
+/// (strips rather than rejects) — login re-checks with validateUserName.
 pub fn sanitizeUser(alloc: Alloc, raw: []const u8) ![]const u8 {
     var b: std.ArrayList(u8) = .empty;
     var last_space = false;

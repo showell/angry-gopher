@@ -92,8 +92,7 @@ pub fn slugifyTitle(alloc: Alloc, title: []const u8) ![]u8 {
 }
 
 /// uniqueDocSlug returns a slug not colliding with an existing file (and not a
-/// reserved name), appending "-2", "-3", … as needed. Mirrors Go's uniqueDocSlug
-/// (still races with a concurrent create; a collision there just overwrites).
+/// reserved name), appending "-2", "-3", … as needed.
 fn uniqueDocSlug(io: Io, alloc: Alloc, uid: []const u8, base: []const u8) ![]const u8 {
     if (!isReservedSlug(base) and !try docFileExists(io, alloc, uid, base)) return base;
     var n: usize = 2;
@@ -168,7 +167,7 @@ pub fn docExists(io: Io, alloc: Alloc, uid: []const u8, slug: []const u8) !bool 
 
 /// writeUserDoc overwrites a doc's body. Refuses to CREATE a doc that doesn't
 /// already exist (autosave must never spawn a file from a stale slug — use
-/// createUserDoc). Mirrors Go's WriteUserDoc. (PublishDocRecent: see file note.)
+/// createUserDoc). (PublishDocRecent: see file note.)
 pub fn writeUserDoc(io: Io, alloc: Alloc, uid: []const u8, slug: []const u8, body: []const u8) !void {
     const path = try docPath(alloc, uid, slug);
     if (!fileExists(io, path)) return error.DocDoesNotExist;

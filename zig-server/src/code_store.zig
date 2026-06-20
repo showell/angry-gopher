@@ -1,8 +1,6 @@
-//! code_store: the per-user Code transcript — Go's server/chat/code.go storage
-//! half. Mirrors images_store in shape: every message-with-code-blocks a viewer
-//! can see, collected oldest-first into {chat_root}/users/<uid>/code.md. Captured
-//! blocks are stored verbatim as triple-backtick fences (the on-disk form
-//! normalizes ~~~ openers to ``` too).
+//! code_store: the per-user Code transcript, storage half. Captured code blocks
+//! are stored verbatim as triple-backtick fences (the on-disk form normalizes
+//! ~~~ openers to ``` too).
 //!
 //! The distinctive piece is extractCodeBlocks: a line-anchored fence state
 //! machine (NOT a regex). It keeps ```lang and ~~~lang blocks but EXCLUDES
@@ -143,7 +141,7 @@ pub fn parseCodeFile(alloc: Alloc, text: []const u8) ![]CodeEntry {
 }
 
 /// appendCodeEntry writes one entry to a user's code.md, prefixed by the
-/// separator when the file is non-empty. Mirrors appendCodeEntryLocked.
+/// separator when the file is non-empty.
 pub fn appendCodeEntry(io: Io, alloc: Alloc, uid: []const u8, e: CodeEntry) !void {
     const path = try userCodePath(alloc, uid);
     const entry = try formatCodeEntry(alloc, e);
@@ -165,7 +163,7 @@ pub fn appendCodeEntry(io: Io, alloc: Alloc, uid: []const u8, e: CodeEntry) !voi
 }
 
 /// readCodeForUser returns a user's code entries in chronological order. Missing
-/// file → empty. Mirrors readCodeForUser.
+/// file → empty.
 pub fn readCodeForUser(io: Io, alloc: Alloc, uid: []const u8) ![]CodeEntry {
     const path = try userCodePath(alloc, uid);
     codeMu.lockUncancelable(io);

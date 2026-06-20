@@ -19,8 +19,7 @@ const flate = std.compress.flate;
 const Request = std.http.Server.Request;
 
 /// serveBundle responds with the topic's .tar.gz, or 404 when the transcript is
-/// missing/unreadable (don't distinguish — same as /raw). Mirrors Go's
-/// serveTranscriptBundle.
+/// missing/unreadable (don't distinguish — same as /raw).
 pub fn serveBundle(req: *Request, io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8) !void {
     const md_name = try std.fmt.allocPrint(alloc, "{s}.md", .{sid});
     const md_path = try std.fs.path.join(alloc, &.{ conv_dir, "sessions", md_name });

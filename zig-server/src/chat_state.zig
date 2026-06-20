@@ -36,8 +36,7 @@ pub fn lastUserConv(io: Io, alloc: Alloc, uid: []const u8) ![]const u8 {
 }
 
 /// lastUserSession returns the session id this user last viewed for `conv_key`,
-/// or "" if never. Mirrors LastUserSession (the caller passes the conv-key, where
-/// Go takes (a,b) then keys by chatPairKey).
+/// or "" if never.
 pub fn lastUserSession(io: Io, alloc: Alloc, uid: []const u8, conv_key: []const u8) ![]const u8 {
     const dir = try userChatStateDir(alloc, uid);
     const path = try std.fs.path.join(alloc, &.{ dir, "last-sessions", conv_key });
@@ -147,8 +146,8 @@ fn lessThanStr(_: void, a: []const u8, b: []const u8) bool {
 /// resolveSessionForUser picks the session a bare /chat/c/<conv> (or docs
 /// post-to-chat) lands on for `uid`, in Go's order: the user's last-viewed (if it
 /// still exists) → ChitChat → first-alphabetical → today's date (so a brand-new
-/// conv auto-creates today's session on first post). Mirrors Go's
-/// resolveSessionForUser. Shared by /chat/default and the docs post flow.
+/// conv auto-creates today's session on first post).
+/// Shared by /chat/default and the docs post flow.
 pub fn resolveSessionForUser(io: Io, alloc: Alloc, uid: []const u8, conv: []const u8) ![]const u8 {
     const dir = try store.dmConvDir(alloc, conv);
     const sessions = try store.listSessions(io, alloc, dir);

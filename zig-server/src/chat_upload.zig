@@ -7,9 +7,7 @@
 //! conv-base + sid + dir are supplied by the caller (chat.topicRoute), so this
 //! module is shape-agnostic.
 //!
-//! Limits: a 10 MiB per-image cap AND the per-user lifetime quota (Go's
-//! users.ReserveUploadBytes / MaxUploadLifetimeBytes — 1 GiB cumulative,
-//! atomically reserved before the file is written).
+//! Limits: a 10 MiB per-image cap AND the per-user lifetime quota.
 
 const std = @import("std");
 const Io = std.Io;
@@ -88,8 +86,8 @@ pub fn serveUpload(req: *Request, io: Io, alloc: Alloc, conv_dir: []const u8, si
     } });
 }
 
-/// uploadContentType validates the served/on-disk filename (Go's chatUploadName:
-/// `^[a-f0-9]{32}\.(png|jpg|gif|webp)$`) and returns its MIME, or null — doubling
+/// uploadContentType validates the served/on-disk filename
+/// $`) and returns its MIME, or null — doubling
 /// as the path-traversal guard for the file segment.
 fn uploadContentType(name: []const u8) ?[]const u8 {
     const dot = std.mem.lastIndexOfScalar(u8, name, '.') orelse return null;
@@ -121,8 +119,8 @@ fn extMime(ext: []const u8) ?[]const u8 {
     return null;
 }
 
-/// randHex16 returns 16 CSPRNG bytes as 32 lowercase hex chars (Go's
-/// randUploadToken). io.random is the OS-seeded secure RNG.
+/// randHex16 returns 16 CSPRNG bytes as 32 lowercase hex chars.
+/// io.random is the OS-seeded secure RNG.
 fn randHex16(io: Io, alloc: Alloc) ![]u8 {
     var buf: [16]u8 = undefined;
     io.random(buf[0..]);
@@ -176,7 +174,7 @@ fn parseMultipartFile(alloc: Alloc, body: []const u8, boundary: []const u8) ?Par
 
 /// attrVal pulls a quoted `<attr>="value"` out of a header block. Requires the
 /// char before `attr` to be a non-letter so the `name` attr doesn't match inside
-/// `filename`. Mirrors what mime/multipart resolves for our two attrs.
+/// `filename`.
 fn attrVal(headers: []const u8, attr: []const u8) ?[]const u8 {
     var i: usize = 0;
     while (std.mem.indexOfPos(u8, headers, i, attr)) |p| {

@@ -70,9 +70,7 @@ pub fn decodeChatFile(alloc: Alloc, data: []const u8) ![]ChatMessage {
 }
 
 /// decodeChatBlock parses one block: a `MSG_` id line, `key: value` header lines
-/// until a blank line, then the verbatim (line-unescaped) markdown body. Mirrors
-/// Go's decodeChatBlock — including that a header line without ": " is ignored
-/// and a missing blank line yields an empty body.
+/// until a blank line, then the verbatim (line-unescaped) markdown body.
 fn decodeChatBlock(alloc: Alloc, piece: []const u8) !ChatMessage {
     var lines: std.ArrayList([]const u8) = .empty;
     var lit = std.mem.splitScalar(u8, piece, '\n');
@@ -312,8 +310,7 @@ fn fanoutCrossPage(io: Io, alloc: Alloc, bus: *Bus, meta: ConvMeta, conv_key: []
 }
 
 /// recentWhere is the per-recipient muted-context label: a channel names itself
-/// ("in <name>"); a DM names the OTHER party ("with <name>"). Mirrors Go's
-/// Conv.recentWhereFor.
+/// ("in <name>"); a DM names the OTHER party ("with <name>").
 fn recentWhere(io: Io, alloc: Alloc, meta: ConvMeta, conv_key: []const u8, viewer: []const u8) ![]const u8 {
     if (meta.kind == .channel) return std.fmt.allocPrint(alloc, "in {s}", .{conv_key});
     var other: []const u8 = "";
@@ -399,7 +396,7 @@ fn nowUnix(io: Io) i64 {
 const Cut = struct { before: []const u8, after: []const u8 };
 
 /// cutSeq splits `s` at the first `needle`, returning the parts, or null when
-/// absent. Mirrors the `found` arm of Go's strings.Cut.
+/// absent.
 fn cutSeq(s: []const u8, needle: []const u8) ?Cut {
     const idx = std.mem.indexOf(u8, s, needle) orelse return null;
     return .{ .before = s[0..idx], .after = s[idx + needle.len ..] };
@@ -425,8 +422,8 @@ pub fn sessionMdPath(alloc: Alloc, conv_dir: []const u8, sid: []const u8) ![]u8 
 }
 
 /// rawSession reads a session's literal on-disk transcript bytes, or null when
-/// the file is missing/unreadable. Mirrors Conv.RawSession (callers 404 on
-/// null without distinguishing absent from unreadable). The /raw view serves
+/// the file is missing/unreadable.
+/// The /raw view serves
 /// these bytes verbatim.
 pub fn rawSession(io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8) !?[]u8 {
     const path = try sessionMdPath(alloc, conv_dir, sid);
@@ -434,8 +431,7 @@ pub fn rawSession(io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8) !
 }
 
 /// listSessions returns the session ids (the `.md` basenames) under
-/// {conv_dir}/sessions, sorted ascending. Missing dir → empty. Mirrors
-/// Conv.ListSessions (dirs like `<sid>.uploads` are skipped).
+/// {conv_dir}/sessions, sorted ascending. Missing dir → empty.
 pub fn listSessions(io: Io, alloc: Alloc, conv_dir: []const u8) ![][]const u8 {
     const dir_path = try std.fs.path.join(alloc, &.{ conv_dir, "sessions" });
     var dir = Io.Dir.cwd().openDir(io, dir_path, .{ .iterate = true }) catch return &.{};
@@ -473,7 +469,7 @@ fn lessThanStr(_: void, a: []const u8, b: []const u8) bool {
 
 /// channelMembers reads {chat_root}/channels/<name>.channel: one uid per line,
 /// blank/`#`-comment lines skipped. Missing file → null (the channel does not
-/// exist). Mirrors readChannelMembers; existence of the file IS the channel.
+/// exist).
 pub fn channelMembers(io: Io, alloc: Alloc, name: []const u8) !?[][]const u8 {
     const file = try std.fmt.allocPrint(alloc, "{s}.channel", .{name});
     const path = try std.fs.path.join(alloc, &.{ chat_root, "channels", file });
@@ -498,8 +494,7 @@ pub fn hasMember(members: [][]const u8, uid: []const u8) bool {
 }
 
 /// listUserChannels returns the names of channels `uid` is a member of, sorted.
-/// Scans {chat_root}/channels/*.channel. Missing dir → empty. Mirrors Go's
-/// ListUserChannels (used by the sidebar's conversations rail).
+/// Scans {chat_root}/channels/*.channel. Missing dir → empty.
 pub fn listUserChannels(io: Io, alloc: Alloc, uid: []const u8) ![][]const u8 {
     const dir_path = try std.fs.path.join(alloc, &.{ chat_root, "channels" });
     var dir = Io.Dir.cwd().openDir(io, dir_path, .{ .iterate = true }) catch return &.{};
@@ -536,7 +531,7 @@ pub fn chatKeyParticipant(alloc: Alloc, key: []const u8, user: []const u8) !bool
 }
 
 /// chatPairKey is the canonical DM key: the smaller numeric id first, joined by
-/// '_'. Mirrors chatPairKey (atoiOr0 on each side).
+/// '_'.
 pub fn chatPairKey(alloc: Alloc, a: []const u8, b: []const u8) ![]u8 {
     return if (atoiOr0(a) <= atoiOr0(b))
         std.fmt.allocPrint(alloc, "{s}_{s}", .{ a, b })

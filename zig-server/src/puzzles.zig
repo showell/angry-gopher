@@ -1,5 +1,5 @@
-//! puzzles: serves /puzzles — the Lyn Rummy puzzle surface. Mirrors Go's
-//! server/lynrummy/puzzle.go. Three routes:
+//! puzzles: serves /puzzles — the Lyn Rummy puzzle surface.
+//! Three routes:
 //!   GET  /puzzles                                   the page (catalog baked in)
 //!   GET  /puzzles/puzzle.js                          the Elm bundle
 //!   POST /puzzles/sessions/<id>/puzzles/<idx>/actions  append one action line
@@ -83,8 +83,8 @@ fn sessionRoute(req: *std.http.Server.Request, io: std.Io, alloc: Alloc, user_id
 }
 
 /// appendAction appends the POST body verbatim as one line in
-/// puzzle_<idx>/actions.dsl. Mirrors Go's puzzleAppendAction: existence guard,
-/// 64 KB body cap, append, 204. The per-puzzle dir is created on first append.
+/// puzzle_<idx>/actions.dsl.
+/// The per-puzzle dir is created on first append.
 fn appendAction(req: *std.http.Server.Request, io: std.Io, alloc: Alloc, user_id: []const u8, session_id: i64, puzzle_idx: i32) !void {
     if (!try storage.puzzleSessionExists(io, alloc, user_id, session_id)) {
         return http.notFound(req);

@@ -1,7 +1,6 @@
 //! session_meta: the full-game `meta` DSL — the typed scalars (created_at,
 //! label) the server owns at the top of the file, with the Elm-authored
-//! game-state DSL preserved verbatim below a blank-line separator. Mirrors Go's
-//! server/lynrummy/session_meta_dsl.go (SessionMeta + Format/ParseSessionMeta).
+//! game-state DSL preserved verbatim below a blank-line separator.
 //!
 //! The server never edits or parses the game-state DSL beyond pass-through; on
 //! resume it ships meta + "---" + actions back and Elm reconstructs state.
@@ -18,8 +17,7 @@ pub const SessionMeta = struct {
 };
 
 /// formatSessionMeta renders the on-disk shape: server-owned scalars, a blank
-/// line, then the game-state DSL (with a trailing newline ensured). Mirrors Go's
-/// FormatSessionMeta.
+/// line, then the game-state DSL (with a trailing newline ensured).
 pub fn formatSessionMeta(alloc: Alloc, m: SessionMeta) ![]u8 {
     var b: std.ArrayList(u8) = .empty;
     try b.print(alloc, "created_at: {d}\n", .{m.created_at});

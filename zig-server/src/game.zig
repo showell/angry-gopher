@@ -133,8 +133,7 @@ const LineKind = enum { actions, annotations };
 
 /// appendSessionLine is the universal write handler: POST body → one appended
 /// line in <session>/<rel>. Actions are wire-DSL text (actions.dsl); annotations
-/// are JSONL (compacted). A Lyn Rummy move bumps last-seen. Mirrors Go's
-/// lynrummyElmAppendSessionLine.
+/// are JSONL (compacted). A Lyn Rummy move bumps last-seen.
 fn appendSessionLine(req: *Request, io: std.Io, alloc: Alloc, user_id: []const u8, session_id: i64, kind: LineKind) !void {
     if (req.head.method != .POST) return http.methodNotAllowed(req);
     if (!try storage.sessionExists(io, alloc, user_id, session_id)) return http.notFound(req);
@@ -192,8 +191,7 @@ fn sessionsList(req: *Request, io: std.Io, alloc: Alloc, user_id: []const u8) !v
     try req.respond(b.items, .{ .extra_headers = &.{http.html_ct} });
 }
 
-/// sessionsJSON is the api/sessions equivalent of sessionsList. Mirrors Go's
-/// lynrummyElmSessionsJSON.
+/// sessionsJSON is the api/sessions equivalent of sessionsList.
 fn sessionsJSON(req: *Request, io: std.Io, alloc: Alloc, user_id: []const u8) !void {
     const ids = try storage.listSessionIDs(io, alloc, user_id);
     std.mem.sort(i64, ids, {}, std.sort.desc(i64));

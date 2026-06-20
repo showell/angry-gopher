@@ -1,5 +1,5 @@
-//! presence: who's actively touching the chat subsystem RIGHT NOW (port of
-//! server/chat/chat_presence.go). A user is "online" if any counted chat route
+//! presence: who's actively touching the chat subsystem RIGHT NOW.
+//! A user is "online" if any counted chat route
 //! marked them active within the last 5 minutes. No client polling, no idle
 //! detection — the server's view of "is this user touching things?" IS the
 //! definition.

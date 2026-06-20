@@ -607,8 +607,7 @@ fn trimLine(line: []const u8) []const u8 {
 
 /// writeRawHtml emits a chunk of raw HTML: each recognized same-origin <img>
 /// is rebuilt from an attribute allowlist; everything else is HTML-escaped to
-/// literal text. Mirrors the Go writeRawHTML — scanning (not all-or-nothing)
-/// so an <img> followed by text on the next line keeps both.
+/// literal text.
 fn writeRawHtml(out: *std.ArrayList(u8), a: std.mem.Allocator, raw: []const u8) !void {
     var last: usize = 0;
     var i: usize = 0;
@@ -1007,8 +1006,7 @@ fn flanking(text: []const u8, s: usize, e: usize) Flank {
 
 /// processEmphasis resolves `*`/`_` delimiter runs into <em>/<strong> by the
 /// CommonMark delimiter-stack algorithm (including the "rule of 3"), inserting
-/// open/close marker nodes around the matched spans. Mirrors goldmark, which
-/// implements the same spec.
+/// open/close marker nodes around the matched spans.
 fn processEmphasis(inl: *Inline, a: std.mem.Allocator) void {
     // openers_bottom[len % 3][char], char: '*' = 0, '_' = 1. null = stack bottom.
     var openers_bottom = [_][2]?u32{.{ null, null }} ** 3;
@@ -1306,7 +1304,7 @@ fn linkifyMsgRefs(a: std.mem.Allocator, html: []const u8) ![]const u8 {
 }
 
 /// openExternalInNewTab adds target="_blank" rel="noopener" to an <a> whose
-/// href is fully qualified (scheme://). Mirrors the Go post-pass.
+/// href is fully qualified (scheme://).
 fn openExternalInNewTab(a: std.mem.Allocator, tag: []const u8) ![]const u8 {
     const href = attrValue(tag, "href") orelse return tag;
     if (!isExternalHref(href)) return tag;
@@ -1364,7 +1362,7 @@ fn linkifyText(out: *std.ArrayList(u8), a: std.mem.Allocator, text: []const u8) 
 }
 
 /// msgRefEnd matches \bMSG_([A-Za-z0-9-]+_[0-9]+)\b at text[i], returning the
-/// index just past the match, or null. Mirrors msgRefRe.
+/// index just past the match, or null.
 fn msgRefEnd(text: []const u8, i: usize) ?usize {
     if (i + 4 > text.len or !std.mem.eql(u8, text[i .. i + 4], "MSG_")) return null;
     if (i > 0 and isWordChar(text[i - 1])) return null; // \b before

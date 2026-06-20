@@ -135,7 +135,7 @@ fn handleLoginFull(req: *Request, io: Io, alloc: Alloc, bus: *Bus) !void {
 /// registerMember turns `name` into a password member and returns its id. If the
 /// current guest IS this name (not yet a member), it upgrades that guest's id in
 /// place so their identity and data carry over; otherwise it allocates a fresh
-/// id. Mirrors registerMember.
+/// id.
 fn registerMember(cur: users.ResolvedUser, io: Io, alloc: Alloc, name: []const u8, password: []const u8) ![]const u8 {
     if (cur.id.len != 0 and !cur.member and std.mem.eql(u8, cur.name, name)) {
         try users.setUserPassword(io, alloc, cur.id, password);
@@ -147,7 +147,7 @@ fn registerMember(cur: users.ResolvedUser, io: Io, alloc: Alloc, name: []const u
 }
 
 /// loginAsMember sets the identity cookie + signed member session for `id` and
-/// returns to `next`. Mirrors loginAsMember.
+/// returns to `next`.
 fn loginAsMember(req: *Request, io: Io, alloc: Alloc, id: []const u8, next: []const u8) !void {
     const signed = (try users.signSessionNow(io, alloc, id)) orelse {
         // The shared session secret is missing — unrecoverable here (prod always
@@ -205,7 +205,7 @@ fn publishUserArrived(io: Io, alloc: Alloc, bus: *Bus, new_uid: []const u8, new_
 
 // ── cookies + response helpers ────────────────────────────────────────────────
 
-/// uidCookie is the long-lived identity cookie (the user id). Mirrors setUIDCookie.
+/// uidCookie is the long-lived identity cookie (the user id).
 fn uidCookie(alloc: Alloc, id: []const u8) ![]const u8 {
     return std.fmt.allocPrint(alloc, "gopher_uid={s}; Path=/; Max-Age={d}; HttpOnly; SameSite=Lax", .{ id, uid_max_age });
 }
@@ -245,7 +245,6 @@ fn formValue(alloc: Alloc, target: []const u8, body: []const u8, name: []const u
 }
 
 /// sanitizeNext keeps only internal redirect targets, to avoid open redirects.
-/// Mirrors sanitizeNext.
 fn sanitizeNext(next: []const u8) []const u8 {
     if (std.mem.startsWith(u8, next, "/") and !std.mem.startsWith(u8, next, "//")) return next;
     return "/";
@@ -269,7 +268,7 @@ fn renderLoginPage(req: *Request, alloc: Alloc, current: []const u8, err_msg: []
 }
 
 /// renderReservedNotice tells a guest a name belongs to a member, offering the
-/// password login or a different name. Mirrors renderReservedNotice.
+/// password login or a different name.
 fn renderReservedNotice(req: *Request, alloc: Alloc, name: []const u8) !void {
     const esc = try chat.htmlEscape(alloc, name);
     var b: std.ArrayList(u8) = .empty;
@@ -295,7 +294,6 @@ fn renderReservedNotice(req: *Request, alloc: Alloc, name: []const u8) !void {
 }
 
 /// renderFullLoginPage: the returning-member screen (fixed name, one password).
-/// Mirrors renderFullLoginPage.
 fn renderFullLoginPage(req: *Request, alloc: Alloc, name: []const u8, next: []const u8, err_msg: []const u8) !void {
     const en = try chat.htmlEscape(alloc, name);
     const enx = try chat.htmlEscape(alloc, next);
@@ -323,7 +321,6 @@ fn renderFullLoginPage(req: *Request, alloc: Alloc, name: []const u8, next: []co
 }
 
 /// renderRegisterPage: the guest→member screen (fixed name, password twice).
-/// Mirrors renderRegisterPage.
 fn renderRegisterPage(req: *Request, alloc: Alloc, name: []const u8, next: []const u8, err_msg: []const u8) !void {
     const en = try chat.htmlEscape(alloc, name);
     const enx = try chat.htmlEscape(alloc, next);
@@ -353,7 +350,6 @@ fn renderRegisterPage(req: *Request, alloc: Alloc, name: []const u8, next: []con
 }
 
 /// renderLogoutPage shows the logout confirmation with the release checkbox.
-/// Mirrors renderLogoutPage.
 fn renderLogoutPage(req: *Request, alloc: Alloc, user: []const u8) !void {
     const esc = try chat.htmlEscape(alloc, user);
     var b: std.ArrayList(u8) = .empty;
@@ -388,7 +384,7 @@ fn renderLogoutPage(req: *Request, alloc: Alloc, user: []const u8) !void {
 
 /// renderLogoutComplete clears the localStorage name prefill and sends the player
 /// to /login. The clear-cookie headers ride on THIS response (Go sets them before
-/// rendering). Mirrors renderLogoutComplete.
+/// rendering).
 fn renderLogoutComplete(req: *Request, alloc: Alloc) !void {
     const body =
         \\<!doctype html><meta charset="utf-8">

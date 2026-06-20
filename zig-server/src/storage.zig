@@ -1,8 +1,7 @@
-//! storage: filesystem-backed puzzle-session storage. Mirrors the puzzle
-//! subset of Go's server/lynrummy/game_data.go + platform.AllocateID. Dumb
-//! id-keyed file store; meta is last-write-wins, actions.dsl is append-only.
+//! storage: filesystem-backed puzzle-session storage. A dumb id-keyed file
+//! store; meta is last-write-wins, actions.dsl is append-only.
 //!
-//! data_root is the SHARED live dir Go uses (GameDataRoot). The zig server runs
+//! data_root is the live game-data dir. The zig server runs
 //! from zig-server/, so the repo-relative path carries the `..`. Per the port
 //! decision, both binaries read/write the same tree.
 //!
@@ -45,8 +44,8 @@ pub fn userDataDir(alloc: Alloc, user_id: []const u8) ![]u8 {
     return userRoot(alloc, user_id);
 }
 
-/// deleteUserData removes a player's entire game-data subtree (Go's
-/// lynrummy.DeleteUserData → os.RemoveAll). Refuses an empty id. Absent is OK.
+/// deleteUserData removes a player's entire game-data subtree.
+/// Refuses an empty id. Absent is OK.
 pub fn deleteUserData(io: Io, alloc: Alloc, user_id: []const u8) !void {
     if (std.mem.trim(u8, user_id, " \t\r\n").len == 0) return error.EmptyUserID;
     const root = try userRoot(alloc, user_id);
@@ -57,8 +56,7 @@ fn puzzleRoot(alloc: Alloc, user_id: []const u8) ![]u8 {
     return join(alloc, &.{ data_root, user_id, "puzzle" });
 }
 
-/// lynrummyElmRoot is the full-game namespace for a player. Mirrors Go's
-/// lynrummyElmRoot.
+/// lynrummyElmRoot is the full-game namespace for a player.
 fn lynrummyElmRoot(alloc: Alloc, user_id: []const u8) ![]u8 {
     return join(alloc, &.{ data_root, user_id, "lynrummy-elm" });
 }
@@ -79,15 +77,14 @@ pub fn puzzleSessionDir(alloc: Alloc, user_id: []const u8, session_id: i64) ![]u
 }
 
 /// allocatePuzzleSessionID returns the next sequential puzzle session id (1-based)
-/// for a player, persisted in their next-puzzle-id.txt. Mirrors Go's
-/// AllocatePuzzleSessionID → platform.AllocateID.
+/// for a player, persisted in their next-puzzle-id.txt.
 pub fn allocatePuzzleSessionID(io: Io, alloc: Alloc, user_id: []const u8) !i64 {
     return allocateID(io, alloc, try nextPuzzleIDPath(alloc, user_id));
 }
 
 /// allocateID is the shared counter-bump primitive: read the counter, return the
-/// current value, write value+1, auto-creating the file. Floors at 1. Mirrors
-/// platform.AllocateID exactly (including the n<1 → 1 clamp). Public so the user
+/// current value, write value+1, auto-creating the file. Floors at 1.
+/// Public so the user
 /// registry (users.zig) can drive the account-id counter (AuthRoot/next-id.txt)
 /// through the same primitive Go shares via platform.AllocateID.
 pub fn allocateID(io: Io, alloc: Alloc, path: []const u8) !i64 {
@@ -120,8 +117,7 @@ pub fn writePuzzleSessionFile(io: Io, alloc: Alloc, user_id: []const u8, session
     try Io.Dir.cwd().writeFile(io, .{ .sub_path = full, .data = body });
 }
 
-/// puzzleSessionExists reports whether a session directory is on disk. Mirrors
-/// Go's PuzzleSessionExists (stat + IsDir).
+/// puzzleSessionExists reports whether a session directory is on disk.
 pub fn puzzleSessionExists(io: Io, alloc: Alloc, user_id: []const u8, session_id: i64) !bool {
     const dir = try puzzleSessionDir(alloc, user_id, session_id);
     const st = Io.Dir.cwd().statFile(io, dir, .{}) catch return false;
@@ -137,7 +133,7 @@ pub fn appendPuzzleSessionDslLine(io: Io, alloc: Alloc, user_id: []const u8, ses
 
 /// appendTextLine appends `body` (trailing newlines stripped) + one '\n' to
 /// `path`, creating parent dirs. The line is written in a single positional
-/// write at the current end. Mirrors Go's AppendTextLine. See the atomicity note
+/// write at the current end. See the atomicity note
 /// at the top of this file.
 fn appendTextLine(io: Io, alloc: Alloc, path: []const u8, body: []const u8) !void {
     try mkParentDirs(io, path);
@@ -159,8 +155,7 @@ fn appendTextLine(io: Io, alloc: Alloc, path: []const u8, body: []const u8) !voi
 // new namespace ({id}/lynrummy-elm/sessions/<id>/), and a few read helpers.
 
 /// allocateSessionID returns the next sequential full-game session id (1-based)
-/// for a player, persisted in their next-session-id.txt. Mirrors Go's
-/// AllocateSessionID → platform.AllocateID.
+/// for a player, persisted in their next-session-id.txt.
 pub fn allocateSessionID(io: Io, alloc: Alloc, user_id: []const u8) !i64 {
     return allocateID(io, alloc, try nextSessionIDPath(alloc, user_id));
 }
@@ -182,8 +177,7 @@ pub fn writeSessionFile(io: Io, alloc: Alloc, user_id: []const u8, session_id: i
 }
 
 /// readSessionFile reads <session-dir>/<rel>, or null when the file (or session)
-/// is missing. Mirrors Go's ReadSessionFile (which returns os.ErrNotExist; the
-/// callers all treat not-exist as "absent", so null carries the same meaning).
+/// is missing.
 pub fn readSessionFile(io: Io, alloc: Alloc, user_id: []const u8, session_id: i64, rel: []const u8) !?[]u8 {
     const dir = try sessionDir(alloc, user_id, session_id);
     const full = try join(alloc, &.{ dir, rel });
@@ -205,9 +199,7 @@ pub fn appendSessionDslLine(io: Io, alloc: Alloc, user_id: []const u8, session_i
 }
 
 /// appendSessionJSONLLine appends one JSON-compacted line to <session-dir>/<rel>
-/// (annotations.jsonl). Mirrors Go's AppendSessionLine → AppendJSONLLine: the
-/// body is JSON-compacted (insignificant whitespace stripped) then written as
-/// compact-body + '\n'.
+/// (annotations.jsonl).
 pub fn appendSessionJSONLLine(io: Io, alloc: Alloc, user_id: []const u8, session_id: i64, rel: []const u8, body: []const u8) !void {
     const dir = try sessionDir(alloc, user_id, session_id);
     const full = try join(alloc, &.{ dir, rel });
@@ -249,8 +241,7 @@ pub fn countTextLines(io: Io, alloc: Alloc, path: []const u8) !usize {
     return n;
 }
 
-/// countSessionActions counts the lines in <session>/actions.dsl. Mirrors Go's
-/// CountSessionActions.
+/// countSessionActions counts the lines in <session>/actions.dsl.
 pub fn countSessionActions(io: Io, alloc: Alloc, user_id: []const u8, session_id: i64) !usize {
     const dir = try sessionDir(alloc, user_id, session_id);
     const full = try join(alloc, &.{ dir, "actions.dsl" });
@@ -259,8 +250,7 @@ pub fn countSessionActions(io: Io, alloc: Alloc, user_id: []const u8, session_id
 
 /// appendRawLine appends `body` + one '\n' to `path` (no trailing-newline
 /// trimming — `body` is already exactly one line). Used by the JSONL path, whose
-/// compacted body never contains a newline. Mirrors the write half of Go's
-/// AppendJSONLLine.
+/// compacted body never contains a newline.
 fn appendRawLine(io: Io, alloc: Alloc, path: []const u8, body: []const u8) !void {
     try mkParentDirs(io, path);
     const line = try std.fmt.allocPrint(alloc, "{s}\n", .{body});
