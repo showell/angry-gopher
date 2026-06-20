@@ -1,16 +1,25 @@
 #!/bin/bash
 # CANONICAL DEPLOY SCRIPT — DO NOT REINVENT.
 #
-# Build the Lyn Rummy server + front-end bundles locally, rsync the
-# minimal runtime tree to the production droplet, then restart the
-# systemd service. The host has no Go/Node/Elm — it only runs the
-# binary + serves the shipped static files.
+# Build the zig server + front-end bundles locally, rsync the single
+# self-contained binary to the production droplet, then restart the
+# systemd service. The host runs no zig/Go/Node/Elm toolchain — it only
+# runs the binary. The zig binary is STATICALLY LINKED and embeds every
+# asset at compile time (build.zig @embedFile), so there are no runtime
+# file dependencies and no working-dir assumptions.
+#
+# Build ordering: the Elm/TS/driving bundles must exist BEFORE `zig build`,
+# because build.zig bakes them in at compile time — the same ordering the
+# old Go build needed for go:embed. The build scripts handle their own
+# prerequisites.
 #
 # Refuses to run with a dirty working tree and pushes HEAD to GitHub
 # first, so we never deploy code that isn't committed AND pushed.
 #
 # Host coordinates live in deploy/deploy.conf. One-time host setup
-# (Caddy, systemd unit, gopher.conf) is documented in deploy/README.md.
+# (Caddy -> localhost:9001, the systemd unit, gopher.conf) is documented
+# in deploy/README.md. zig listens on :9001 (hardcoded in server.zig) and
+# reads data_dir/auth from $GOPHER_CONFIG.
 set -e
 
 source "$(dirname "$0")/_paths.sh"
@@ -28,20 +37,25 @@ git push
 
 COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo unknown)
 
-# Build the front-end bundles FIRST — go build embeds them (see embed.go).
-echo "Building Elm/TS bundles..."
+# Build the front-end bundles FIRST — build.zig embeds them (see build.zig).
+echo "Building Elm/TS + driving bundles..."
 "$GOPHER_DIR/ops/build_elm"
 "$GOPHER_DIR/ops/build_driving"
 
-echo "Building gopher-server ($COMMIT)..."
-go build -ldflags "-X main.gitCommit=$COMMIT" -o gopher-server .
+# ReleaseSafe: optimized, but keeps the runtime safety checks (bounds,
+# overflow, etc.) — the right trade for a small server where not crashing
+# into UB matters more than the last few percent of speed.
+echo "Building zig-server ($COMMIT, ReleaseSafe)..."
+( cd "$GOPHER_DIR/zig-server" && zig build -Doptimize=ReleaseSafe )
+BIN="$GOPHER_DIR/zig-server/zig-out/bin/zig-server"
 
-# The binary is self-contained (assets embedded via go:embed), so we
-# ship exactly one file.
+# The binary is self-contained + statically linked, so we ship exactly one file.
 echo "Syncing to $DEPLOY_HOST:$DEPLOY_DIR ..."
-rsync -avz gopher-server "$DEPLOY_HOST:$DEPLOY_DIR/"
+rsync -avz "$BIN" "$DEPLOY_HOST:$DEPLOY_DIR/zig-server"
 
 echo "Restarting $DEPLOY_SERVICE ..."
-ssh "$DEPLOY_HOST" "sudo systemctl restart $DEPLOY_SERVICE && sleep 1 && systemctl is-active $DEPLOY_SERVICE"
+ssh "$DEPLOY_HOST" "sudo systemctl restart $DEPLOY_SERVICE && sleep 1 && \
+    systemctl is-active $DEPLOY_SERVICE && \
+    curl -fsS http://localhost:9001/driving >/dev/null && echo 'zig serving on :9001'"
 
-echo "Deploy complete: http://162.243.1.123/version"
+echo "Deploy complete: https://lynrummy.com/driving"

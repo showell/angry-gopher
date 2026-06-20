@@ -1,5 +1,5 @@
 [Unit]
-Description=Angry Gopher (Lyn Rummy) game server
+Description=Angry Gopher (Lyn Rummy) game server — zig
 After=network.target
 
 [Service]
@@ -7,7 +7,10 @@ User=steve
 Group=steve
 WorkingDirectory=/home/steve/angry-gopher
 Environment=GOPHER_CONFIG=/home/steve/AngryGopher/gopher.conf
-ExecStart=/home/steve/angry-gopher/gopher-server
+# The zig server (statically linked, assets embedded). Listens on :9001;
+# reads data_dir/auth from GOPHER_CONFIG. The old Go binary stays on disk
+# as an instant rollback (point ExecStart back at it + restart).
+ExecStart=/home/steve/angry-gopher/zig-server
 Restart=on-failure
 RestartSec=2
 

@@ -32,5 +32,7 @@ lynrummy.com {
 		X-Frame-Options "SAMEORIGIN"
 	}
 
-	reverse_proxy localhost:9000
+	# The zig server listens on :9001 (the Go server used :9000). zig replaces
+	# Go; they never run together, so this points at exactly one backend.
+	reverse_proxy localhost:9001
 }

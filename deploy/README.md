@@ -1,17 +1,22 @@
 # Deploying Angry Gopher (Lyn Rummy)
 
 The production host is a DigitalOcean droplet (NYC3, Ubuntu 24.04,
-x86_64). Caddy fronts the Go server for TLS and a body cap; the Go
-server listens on `localhost:9000`. (`/admin` is gated by the app's
-per-user admin flag, not the proxy.)
+x86_64). Caddy fronts the **zig server** (see `SERVER.md`) for TLS and a
+body cap; the server listens on `localhost:9001`. (`/admin` is gated by
+the app's per-user admin flag, not the proxy.)
 
-The host runs **no Go/Node/Elm** — we build locally and ship a
-**single self-contained binary**: the Elm/TS bundles + puzzle
-catalogs are baked in via `go:embed` (see `embed.go`), so there are
-no runtime file dependencies and no working-dir assumptions. Because
-the bundles are embedded at compile time, `ops/build_elm` must run
-*before* `go build` (the build scripts handle this ordering). See
+The host runs **no zig/Go/Node/Elm toolchain** — we build locally and
+ship a **single self-contained binary**: the Elm/TS/driving bundles +
+puzzle catalogs are baked in at compile time (`build.zig` `@embedFile`),
+and the binary is statically linked, so there are no runtime file
+dependencies and no working-dir assumptions. Because the bundles are
+embedded at compile time, `ops/build_elm` + `ops/build_driving` run
+*before* `zig build` (the deploy script handles this ordering). See
 `ops/deploy`.
+
+> The host was originally the Go server on `:9000`; the Go→zig cutover
+> repointed Caddy to `:9001` and the systemd `ExecStart` to the zig
+> binary. The old Go binary is left on disk as an instant rollback.
 
 ## Repeat deploys
 
