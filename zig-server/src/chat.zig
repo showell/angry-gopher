@@ -107,7 +107,13 @@ pub fn handle(req: *Request, io: Io, alloc: Alloc, bus: *Bus, sub: []const u8) !
     }
 
     const uid = try users.currentUserID(io, alloc, req);
-    if (uid.len == 0) return http.redirect(req, "/login");
+    // NEED_PASSWORD: the whole chat subsystem (DMs, docs, recent, images, code,
+    // the conversations API) is members + agents only. A guest (name-only, no
+    // password) or a stranger is sent to set a password and returned here —
+    // guests may play the game, but chat requires membership.
+    if (!users.principalAuthorized(io, alloc, uid)) {
+        return http.redirect(req, try std.fmt.allocPrint(alloc, "/login/full?next=/chat{s}", .{sub}));
+    }
 
     // Presence: any authorized page/action counts as activity — but NOT the SSE
     // streams (a stream is the browser's job, and JS assets resolved above). On
@@ -174,7 +180,10 @@ pub fn handle(req: *Request, io: Io, alloc: Alloc, bus: *Bus, sub: []const u8) !
 /// handleChannel dispatches /channel/* — `sub` is the path after "/channel".
 pub fn handleChannel(req: *Request, io: Io, alloc: Alloc, bus: *Bus, sub: []const u8) !void {
     const uid = try users.currentUserID(io, alloc, req);
-    if (uid.len == 0) return http.redirect(req, "/login");
+    // NEED_PASSWORD: channels are members + agents only (same gate as /chat).
+    if (!users.principalAuthorized(io, alloc, uid)) {
+        return http.redirect(req, try std.fmt.allocPrint(alloc, "/login/full?next=/channel{s}", .{sub}));
+    }
     if (!isStreamPath(sub)) presence.markActiveAndBroadcast(io, alloc, bus, uid);
 
     var segs = segments(sub);
