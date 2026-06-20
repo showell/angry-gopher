@@ -54,8 +54,15 @@ echo "Syncing to $DEPLOY_HOST:$DEPLOY_DIR ..."
 rsync -avz "$BIN" "$DEPLOY_HOST:$DEPLOY_DIR/zig-server"
 
 echo "Restarting $DEPLOY_SERVICE ..."
+# Health check hits the REAL FRONT DOOR, not /driving. The first cutover went
+# green on a /driving check while /login 404'd (identity issuance wasn't ported)
+# — a logged-out visitor couldn't log in. /version proves the binary is the
+# fresh build; /login proves the front door a stranger actually lands on works.
+# (-f makes curl fail on a 4xx/5xx, so a 404 front door fails the deploy.)
 ssh "$DEPLOY_HOST" "sudo systemctl restart $DEPLOY_SERVICE && sleep 1 && \
     systemctl is-active $DEPLOY_SERVICE && \
-    curl -fsS http://localhost:9001/driving >/dev/null && echo 'zig serving on :9001'"
+    curl -fsS http://localhost:9001/version >/dev/null && \
+    curl -fsS http://localhost:9001/login >/dev/null && \
+    echo 'zig front door serving on :9001 (/version + /login OK)'"
 
-echo "Deploy complete: https://lynrummy.com/driving"
+echo "Deploy complete: https://lynrummy.com/  (verify the real front door, not just /driving)"
