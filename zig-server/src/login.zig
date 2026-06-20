@@ -226,7 +226,7 @@ pub fn handleLogout(req: *Request, io: Io, alloc: Alloc) !void {
         }
         return renderLogoutComplete(req, alloc);
     }
-    if (user.id.len == 0) return sendRedirect(req, alloc, "/login", &.{});
+    if (user.id.len == 0) return sendRedirect(req, alloc, "/", &.{});
     return renderLogoutPage(req, alloc, user.name);
 }
 
@@ -453,11 +453,13 @@ fn renderLogoutPage(req: *Request, alloc: Alloc, user: []const u8) !void {
 /// renderLogoutComplete clears the localStorage name prefill and sends the player
 /// to /login. The clear-cookie headers ride on THIS response.
 fn renderLogoutComplete(req: *Request, alloc: Alloc) !void {
+    // Home: a logged-out visitor picks where to go next (Driving is public, plus
+    // Lyn Rummy and chat).
     const body =
         \\<!doctype html><meta charset="utf-8">
         \\<script>
         \\  localStorage.removeItem('gopher_user');
-        \\  location.replace('/login');
+        \\  location.replace('/');
         \\</script>
     ;
     try sendHTML(req, alloc, body, &.{ clear_uid_cookie, clear_auth_cookie });
