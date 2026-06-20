@@ -13,22 +13,24 @@
 # The page itself is a near-empty shell (server/driving + the
 # standalone index.html); main.ts builds its own canvas/DOM.
 #
-# esbuild is invoked via `npx --yes` so no project-level install
-# is required. First run downloads esbuild into npm's cache; later
-# runs are local.
+# esbuild is a pinned devDependency of games/driving (alongside tsc), so we call
+# its local binary directly. `npx --yes` used to re-resolve esbuild on every call
+# (~1s of pure overhead); the local binary skips that. Fresh checkout: it arrives
+# with the `npm install` that dir already needs for tsc.
 set -e
 
 source "$(dirname "$0")/_paths.sh"
 
 ENTRY="$GOPHER_DIR/games/driving/main.ts"
 OUT="$GOPHER_DIR/games/driving/app.js"
+ESBUILD="$GOPHER_DIR/games/driving/node_modules/.bin/esbuild"
 
-if ! command -v npx >/dev/null 2>&1; then
-    echo "Error: npx not found — install Node.js (npm comes with it)"
+if [ ! -x "$ESBUILD" ]; then
+    echo "Error: esbuild not found at $ESBUILD — run \`npm install\` in games/driving/" >&2
     exit 1
 fi
 
-npx --yes esbuild "$ENTRY" \
+"$ESBUILD" "$ENTRY" \
     --bundle \
     --format=iife \
     --platform=browser \

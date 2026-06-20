@@ -51,13 +51,14 @@ TypeScript runs two ways, and only one of them is transpiled:
   (`games/driving/app.js`, `games/lynrummy/elm/engine.js`), and those
   bundles — alongside the Elm output — are `@embedFile`d into the zig
   binary at compile time. `ops/build_driving` / `ops/build_engine_js` run
-  this; `esbuild` is fetched on demand via `npx --yes` (unpinned, not a
-  project install).
+  this; `esbuild` is a pinned local devDependency (calling its binary
+  directly skips `npx`'s ~1s-per-call resolution tax).
 
 `tsc` itself only ever typechecks (`npm run typecheck`) — it never emits
-the JS that ships. Elm and `tsc` are project-local (run from each
-package's `node_modules/.bin`), so a fresh checkout needs `npm install`
-in both `games/lynrummy/elm/` and `games/lynrummy/ts/`.
+the JS that ships. Elm, `tsc`, and `esbuild` are all project-local (run
+from each package's `node_modules/.bin`), so a fresh checkout needs
+`npm install` in `games/lynrummy/elm/`, `games/lynrummy/ts/`, and
+`games/driving/`.
 
 ## Local config & identity
 
