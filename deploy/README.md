@@ -90,16 +90,19 @@ ssh steve@<IP> cat watchdog.log             # appended history of WARN/FAIL cycl
 ```
 
 It takes no arguments (thresholds are constants at the top of the file) and
-opens no network except to curl the local server. Ship + run it:
+opens no network except to curl the local server. Ship + install as a
+systemd service (auto-start on boot, auto-restart on crash — survives a
+droplet reboot, same as `gopher-server`):
 
 ```
 scp deploy/watchdog.py steve@<IP>:~/watchdog.py
-ssh steve@<IP> 'nohup python3 ~/watchdog.py >/dev/null 2>&1 &'
+scp deploy/watchdog.service steve@<IP>:/tmp/
+ssh steve@<IP> 'sudo mv /tmp/watchdog.service /etc/systemd/system/ && \
+  sudo systemctl daemon-reload && sudo systemctl enable --now watchdog'
 ```
 
-(A systemd unit — auto-restart, start-on-boot — is the eventual home; nohup
-is the first cut. The watchdog already survives a thrown check; it does not
-yet survive a reboot.)
+To update the watchdog later: `scp` the new `watchdog.py` over, then
+`ssh steve@<IP> 'sudo systemctl restart watchdog'`.
 
 ## Hardening (applied 2026-05-21)
 

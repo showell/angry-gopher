@@ -1,0 +1,17 @@
+[Unit]
+Description=zig-server health watchdog
+# Start after the server it watches, but it's independent — if gopher-server is
+# down, that's exactly what the watchdog should report (not a reason to not run).
+After=network.target gopher-server.service
+
+[Service]
+User=steve
+Group=steve
+# The watchdog is plain stdlib Python; it writes ~/watchdog-status.txt (snapshot,
+# read over ssh) and ~/watchdog.log (WARN/FAIL history). No args, no ports.
+ExecStart=/usr/bin/python3 /home/steve/watchdog.py
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
