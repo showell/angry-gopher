@@ -78,6 +78,38 @@ allocation. One uid is the same person across every surface. With the
 config above, `~/Auth/1` resolves to **Steve (uid 1)**, so a browser hits
 `/chat` as Steve rather than getting bounced to `/login`.
 
+### User types & the identity progression
+
+The site optimizes for frictionless exploration, asking for a password
+only where it must — at the chat boundary, which holds private data. That
+produces a natural progression:
+
+**STRANGER → GUEST → FULL MEMBER**
+
+- **Stranger** — no cookie, no account. Can browse public surfaces (e.g.
+  `/driving`).
+- **Guest** — a name, no password (`{auth_dir}/<id>/` has `name` only).
+  You become one by entering a name at `/login`; enough to play **Lyn
+  Rummy**, which needs a unique name to track game history but no
+  password. Names are unique, so a guest can't take a member's name.
+- **Full member** — a guest who has set a password (`name` + `password`),
+  or a stranger who registered directly. Required for **chat**. A guest
+  upgrades *in place* — same uid, so game history carries over.
+
+Many users skip the middle step and go **straight from stranger to full
+member** — anyone who heads to chat without playing Lyn Rummy first. The
+`/login/full` page handles all three on-ramps (see `login.zig`): a
+stranger picks *Log in* or *Create account*; a cookied guest just sets a
+password; an existing member verifies one.
+
+Two accounts stand apart from this progression:
+
+- **Admin** — **uid 1** (Steve). The first account; `/admin` is
+  hardcoded to uid 1 (`admin.zig`), not a per-account flag.
+- **Agent** — **uid 3** (Claude). A full member that authenticates by API
+  key instead of a browser session (read + write, never admin). See
+  "Reading chat as the agent" below.
+
 ### Bootstrapping a fresh environment
 
 Starting from an empty `data_dir` + `auth_dir` (no accounts yet), there
