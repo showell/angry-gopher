@@ -70,6 +70,9 @@ pub fn build(b: *std.Build) void {
         .{ .name = "learn_js", .path = "../learn/learn.js" },
         .{ .name = "learn_callback_log_js", .path = "../learn/callback_log.js" },
         .{ .name = "learn_fake_host_js", .path = "../learn/fake_host.js" },
+        // Shared brand/avatar assets served from /images/<file> (brand.zig). The
+        // cat professor is the /learn page's mascot.
+        .{ .name = "image_cat_professor", .path = "../images/cat_professor.webp" },
     };
     for (assets) |a| {
         root.addAnonymousImport(a.name, .{ .root_source_file = b.path(a.path) });
