@@ -78,6 +78,14 @@ allocation. One uid is the same person across every surface. With the
 config above, `~/Auth/1` resolves to **Steve (uid 1)**, so a browser hits
 `/chat` as Steve rather than getting bounced to `/login`.
 
+**Policy: keep server data OUTSIDE the repository.** Point `data_dir` and
+`auth_dir` at paths outside the source tree (e.g. `~/AngryGopher/…` and
+`~/Auth`, as above) — never inside the checkout. The tree stays freely
+rm-able without touching data, accounts/credentials never risk being
+committed, and there's nothing to `.gitignore`. The config file itself
+also lives outside the repo (`ops/start` defaults to
+`~/AngryGopher/gopher.conf`).
+
 ### User types & the identity progression
 
 The site optimizes for frictionless exploration, asking for a password
