@@ -1,12 +1,12 @@
-//! docs: the three-pane authoring surface inside the chat subsystem — Go's
-//! server/chat/docs.go. Left = the per-user doc list, middle = a textarea
+//! docs: the three-pane authoring surface inside the chat subsystem.
+//! Left = the per-user doc list, middle = a textarea
 //! (debounced autosave → /chat/docs/save), right = a live render (debounced
 //! POST → /chat/docs/render, reusing the SAME markdown port chat messages use,
 //! so docs and messages render identically). All endpoints act on the
 //! authenticated principal only — never a uid from the request — so each member
 //! reads/writes/creates only their own docs.
 //!
-//! Routes (mirror Go's mux, registry.go):
+//! Routes:
 //!   GET  /chat/docs               editor, no doc selected (list + nudge)
 //!   GET  /chat/docs/<slug>        editor focused on one doc
 //!   GET  /chat/docs/<slug>.md     the raw markdown (the literal file; API clients)
@@ -18,7 +18,7 @@
 //!   GET  /chat/docs.js            the client bundle (served by chat.serveAsset, public)
 //!
 //! The page chrome (head + top bar + .app-body-wrap) is chat.writeChrome with
-//! active="docs"; the rest of the layout/CSS is reproduced from Go's renderDocsPage.
+//! active="docs"; the rest of the layout/CSS is rendered below.
 
 const std = @import("std");
 const Io = std.Io;
@@ -65,8 +65,7 @@ pub fn handle(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8, r
 // ── editor page (browser) ─────────────────────────────────────────────────────
 
 /// renderDocsEditor renders the three-pane editor for `slug` ("" = no doc
-/// selected). An unknown/invalid slug drops back to the bare editor (303),
-/// mirroring Go's renderDocsEditor.
+/// selected). An unknown/invalid slug drops back to the bare editor (303).
 fn renderDocsEditor(req: *Request, io: Io, alloc: Alloc, uid: []const u8, slug_raw: []const u8) !void {
     const list = try docs_store.listUserDocs(io, alloc, uid);
     const slug = std.mem.trim(u8, slug_raw, " \t\r\n");
@@ -288,7 +287,7 @@ fn docsPost(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8) !vo
 // ── post-to-chat helpers ───────
 
 /// defaultChatPartner picks the partner id for "post to chat": Steve (id 1) talks
-/// to Apoorva (id 2); everyone else talks to Steve. Hard-wired, like Go's.
+/// to Apoorva (id 2); everyone else talks to Steve. Hard-wired.
 fn defaultChatPartner(uid: []const u8) []const u8 {
     if (std.mem.eql(u8, uid, "1")) return "2";
     return "1";

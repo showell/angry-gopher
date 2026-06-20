@@ -2,10 +2,9 @@
 //! leaf module so BOTH consumers share one encoder with no import cycle:
 //!   - recent.zig  — renders the initial backlog (one event per gathered item)
 //!   - chat_store.zig (appendMessage fanout) — publishes ONE live event per write
-//! Matches Go's recentEvent JSON (server/chat/recent.go): field order kind, at,
-//! url, topic, where, last_author, excerpt, slug, title — empties omitted
-//! (`omitempty`), so recent.js's `if(evt.last_author)` / `if(evt.where)` /
-//! `if(evt.excerpt)` branches stay correct.
+//! The recentEvent JSON field order is kind, at, url, topic, where, last_author,
+//! excerpt, slug, title — empties omitted, so recent.js's `if(evt.last_author)` /
+//! `if(evt.where)` / `if(evt.excerpt)` branches stay correct.
 
 const std = @import("std");
 const Alloc = std.mem.Allocator;

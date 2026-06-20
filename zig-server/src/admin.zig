@@ -1,7 +1,6 @@
 //! admin: /admin — a filesystem view of per-player on-disk data plus member
-//! management. Go gates this ADMIN_ONLY via the
-//! user's Admin flag; per Steve the port hardcodes admin = uid 1 (him, on prod
-//! and locally) until an admin flag is ported. No DB — it walks {data_root}/
+//! management. Admin-only; for now admin = uid 1 (Steve, on prod and locally)
+//! until an admin flag is added. No DB — it walks {data_root}/
 //! <user>/ directly (also the on-disk partition layout). Read-only stats plus two
 //! guarded actions: delete a player's game data, and generate/revoke a member's
 //! API key.
@@ -22,8 +21,8 @@ const settings = @import("settings.zig");
 
 const Request = std.http.Server.Request;
 
-/// admin_uid is the sole admin. Go reads the principal's Admin flag; the port
-/// hardcodes Steve's uid 1 (per his call) until that flag is ported.
+/// admin_uid is the sole admin. Hardcoded to Steve's uid 1 (per his call) until
+/// an admin flag is added.
 const admin_uid = "1";
 
 /// handle dispatches /admin* — `sub` is the path after "/admin".
@@ -146,7 +145,7 @@ fn renderMembersTable(b: *std.ArrayList(u8), io: Io, alloc: Alloc) !void {
         });
     }
     // Active-ever sorts above never-active; among active, most-recent first.
-    // Insertion sort = stable (Go uses SliceStable), and the roster is tiny.
+    // Insertion sort = stable, and the roster is tiny.
     std.sort.insertion(MemberRow, rows.items, {}, memberLessThan);
 
     try b.appendSlice(alloc, member_table_head);
@@ -334,7 +333,7 @@ fn nowUnix(io: Io) i64 {
     return @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
 }
 
-// ── verbatim Go markup (admin.go) ─────────────────────────────────────────────
+// ── page markup ───────────────────────────────────────────────────────────────
 
 const overview_head =
     \\<!DOCTYPE html>
@@ -375,8 +374,8 @@ const member_table_head =
     \\<tr><th>Name</th><th>Last active</th><th class="n">Images</th><th>API key</th></tr>
 ;
 
-// delete_confirm_template — Go's renderDeleteConfirm. Args: name, games, puzzles,
-// actions, disk, id. {{ }} escape the CSS braces for std.fmt.
+// delete_confirm_template. Args: name, games, puzzles, actions, disk, id.
+// {{ }} escape the CSS braces for std.fmt.
 const delete_confirm_template =
     \\<!DOCTYPE html>
     \\<html><head><meta charset="utf-8"><title>♦️ Lyn Rummy ♥️</title>

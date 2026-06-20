@@ -1,20 +1,17 @@
 //! recent: /chat/recent — a flat reverse-chronological feed of activity across
-//! the signed-in user's chat sessions (DMs + channels) and personal docs. Go's
-//! server/chat/recent.go. The initial-load source is file mtime: on every GET
-//! the server walks the convs the viewer participates in plus their docs dir,
-//! stats each session/doc file, and ships the rows newest-first as inline JSON
-//! (the same recentEvent shape the live stream would push, so recent.js uses one
-//! row builder for both paint and upsert).
+//! the signed-in user's chat sessions (DMs + channels) and personal docs. The
+//! initial-load source is file mtime: on every GET the server walks the convs the
+//! viewer participates in plus their docs dir, stats each session/doc file, and
+//! ships the rows newest-first as inline JSON (the same recentEvent shape the
+//! live stream pushes, so recent.js uses one row builder for both paint and
+//! upsert).
 //!
-//! Live stream parity gap (honest, documented): Go's /chat/recent/stream pushes
-//! one event per write via a per-uid recentBus that Conv.AppendMessage →
-//! fanoutMessage feeds (alongside notify/images/code). That cross-page fanout
-//! isn't wired into the zig appendMessage yet — it's the shared extension the
-//! Images/Code surfaces also need, to be built with them. So here the stream is
-//! a keepalive-only stub: the page paints correctly and re-humanizes the "When"
-//! column on its own 20s timer, but a new message/doc shows up on RELOAD, not
-//! live. recent.js reacts only to real onmessage events, so an idle stream is
-//! the correct "nothing happening" (same pattern as the notify/sidebar stubs).
+//! Live stream: /chat/recent/stream is a per-uid subscriber on the recent bus,
+//! live-only (the server-rendered page already IS the backlog, so no replay).
+//! chat_store.appendMessage fans one event onto the recent bus per write
+//! (alongside notify/images/code) and docs save/create do the same, so a new
+//! message or doc shows up live. recent.js re-humanizes the "When" column on a
+//! 20s timer and upserts rows from onmessage events.
 
 const std = @import("std");
 const Io = std.Io;
@@ -34,8 +31,7 @@ const Kind = enum { chat, doc };
 
 /// RecentItem is one row before JSON encoding. `at_ns` (file mtime) is the sort
 /// key; `at` is its RFC3339 rendering for the wire. Chat-only fields are
-/// pre-resolved per viewer exactly like Go's publishRecentForConv, so DM and
-/// channel rows are shaped identically.
+/// pre-resolved per viewer, so DM and channel rows are shaped identically.
 const RecentItem = struct {
     kind: Kind,
     at_ns: i96,
@@ -51,11 +47,8 @@ const RecentItem = struct {
     title: []const u8 = "",
 };
 
-/// handle dispatches /chat/recent* — `rest` is the path after "/recent" (keeps
-/// its leading '/', empty for "/chat/recent"). Go: the page is the exact path,
-/// plus /chat/recent/stream; anything else 404s.
 /// handle dispatches /chat/recent* — `rest` is the path after "/recent" ("" or
-/// "/stream").
+/// "/stream"); anything else 404s.
 pub fn handle(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8, rest: []const u8) !void {
     if (rest.len == 0) return renderRecentPage(req, io, alloc, uid);
     // Live: a per-uid subscriber on the recent bus. The server-rendered page IS

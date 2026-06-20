@@ -1,4 +1,4 @@
-//! docs_store: the per-user docs collection — Go's server/chat/docs_store.go.
+//! docs_store: the per-user docs collection.
 //! One markdown file per doc at `{chat_root}/users/<uid>/docs/<slug>.md`; the
 //! on-disk shape IS the whole model (filename = slugified title, body = file,
 //! no index/metadata/rename — `ls` the dir and you have the doc list). Each
@@ -7,10 +7,9 @@
 //! chat_root), namespaced under `users/` so it can't collide with the `<a>_<b>`
 //! DM pair-key dirs.
 //!
-//! Parity note: Go's WriteUserDoc/CreateUserDoc also call PublishDocRecent (the
-//! /chat/recent live stream). Recent isn't ported yet, so the publish is a
-//! no-op here — the files are written identically; only the live "Recent" ping
-//! is absent until that surface lands.
+//! This is pure storage. The live /chat/recent ping on save/create lives in
+//! docs.zig's handlers (publishDocRecent), not here, so the store stays
+//! UI-agnostic and has no dependency on the bus.
 
 const std = @import("std");
 const Io = std.Io;
@@ -27,7 +26,7 @@ pub fn userDocsDir(alloc: Alloc, uid: []const u8) ![]u8 {
 
 /// docPath resolves a (user, slug) pair to its on-disk file, re-validating the
 /// slug — so this is also the path-traversal chokepoint. Returns error on a bad
-/// slug (Go returns an error string; we use a typed error).
+/// slug.
 pub fn docPath(alloc: Alloc, uid: []const u8, slug: []const u8) ![]u8 {
     if (!validDocSlug(slug)) return error.InvalidDocSlug;
     const file = try std.fmt.allocPrint(alloc, "{s}.md", .{slug});
@@ -167,7 +166,7 @@ pub fn docExists(io: Io, alloc: Alloc, uid: []const u8, slug: []const u8) !bool 
 
 /// writeUserDoc overwrites a doc's body. Refuses to CREATE a doc that doesn't
 /// already exist (autosave must never spawn a file from a stale slug — use
-/// createUserDoc). (PublishDocRecent: see file note.)
+/// createUserDoc).
 pub fn writeUserDoc(io: Io, alloc: Alloc, uid: []const u8, slug: []const u8, body: []const u8) !void {
     const path = try docPath(alloc, uid, slug);
     if (!fileExists(io, path)) return error.DocDoesNotExist;

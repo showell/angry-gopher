@@ -1,8 +1,7 @@
 //! settings: the member settings page. Today
 //! one section — the bot API key. Self-service is safe because every action uses
 //! the resolved identity (never a request-supplied id), so a member can only
-//! manage their OWN key. Go gates these routes NEED_PASSWORD (members only); the
-//! port mirrors that — an agent (no password) gets a 404.
+//! manage their OWN key. Members only — an agent (no password) gets a 404.
 //!
 //!   GET  /settings          the settings page (?show=1 reveals the key,
 //!                           ?keyrevoked=1 flashes the revoke confirmation)
@@ -20,7 +19,7 @@ const Bus = @import("bus.zig").Bus;
 const Request = std.http.Server.Request;
 
 /// handle dispatches /settings* — `sub` is the path after "/settings" ("" or
-/// "/apikey"). Members only; presence is marked like Go's WithPresence.
+/// "/apikey"). Members only; presence is marked on entry.
 pub fn handle(req: *Request, io: Io, alloc: Alloc, bus: *Bus, sub: []const u8) !void {
     const uid = try users.currentUserID(io, alloc, req);
     if (uid.len == 0) return http.redirect(req, "/login");
@@ -110,7 +109,7 @@ fn queryValue(target: []const u8, name: []const u8) ?[]const u8 {
     return null;
 }
 
-// ── verbatim Go markup (settings.go / apikey_view.go) ─────────────────────────
+// ── page markup ───────────────────────────────────────────────────────────────
 
 const intro_html =
     \\<h2>API key</h2>
@@ -132,8 +131,8 @@ const key_buttons_html =
     \\</p>
 ;
 
-// key_shown_template — Go's RenderAPIKeyShown. Four {s} → back URL, back label,
-// user name (heading), key. {{ / }} escape the CSS braces for std.fmt.
+// key_shown_template. Four {s} → back URL, back label, user name (heading), key.
+// {{ / }} escape the CSS braces for std.fmt.
 const key_shown_template =
     \\<!DOCTYPE html>
     \\<html><head><meta charset="utf-8"><title>♦️ Lyn Rummy ♥️</title>

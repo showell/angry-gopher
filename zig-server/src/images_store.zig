@@ -1,5 +1,5 @@
-//! images_store: the per-user Images transcript — Go's server/chat/images.go
-//! storage half. Every message-with-images a viewer can see (across all their
+//! images_store: the per-user Images transcript, storage half.
+//! Every message-with-images a viewer can see (across all their
 //! convs/sessions) collected into ONE forward-chronological file (oldest first,
 //! new entries append at the bottom):
 //!
@@ -23,12 +23,12 @@ const store = @import("chat_store.zig");
 /// images_sep joins entries on disk (blank line, 13 hyphens, blank line).
 pub const images_sep = "\n\n-------------\n\n";
 
-/// imagesMu serializes all images.md reads/appends. Coarser than Go's per-uid
-/// mutex map (one global lock), but correct — image writes are rare.
+/// imagesMu serializes all images.md reads/appends. One global lock (coarse, but
+/// correct — image writes are rare).
 var imagesMu: Io.Mutex = .init;
 
 /// ImagesEntry is one decoded/encoded block. `at` is the RFC3339 string as
-/// stored (Go reparses to time.Time; for our read+wire path the string suffices).
+/// stored — the read+wire path needs no parsed timestamp, so the string suffices.
 pub const ImagesEntry = struct {
     source_id: []const u8,
     from: []const u8,
@@ -172,9 +172,9 @@ pub fn imagesSourceURL(alloc: Alloc, base_url: []const u8, source_id: []const u8
     return std.fmt.allocPrint(alloc, "{s}/{s}#msg-{s}", .{ base_url, sid, source_id });
 }
 
-/// encodeImagesEvent writes one imagesSSEEvent JSON object into `j` (Go field
-/// order: source_id, from, conv, at, images, source_url; no omitempty). Shared
-/// by the page backlog and the live fanout so both emit one shape.
+/// encodeImagesEvent writes one imagesSSEEvent JSON object into `j` (field order:
+/// source_id, from, conv, at, images, source_url; no fields omitted). Shared by
+/// the page backlog and the live fanout so both emit one shape.
 pub fn encodeImagesEvent(j: *std.ArrayList(u8), alloc: Alloc, e: ImagesEntry, source_url: []const u8) !void {
     try j.print(alloc, "{{\"source_id\":{f},\"from\":{f},\"conv\":{f},\"at\":{f},\"images\":[", .{
         std.json.fmt(e.source_id, .{}), std.json.fmt(e.from, .{}),
