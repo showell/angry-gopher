@@ -58,7 +58,7 @@ pub fn currentUserID(io: Io, alloc: Alloc, req: *std.http.Server.Request) ![]con
 }
 
 /// sessionUserID returns the member id from a valid gopher_auth cookie whose id
-/// is still a member. Mirrors SessionUser.
+/// is still a member.
 fn sessionUserID(io: Io, alloc: Alloc, req: *std.http.Server.Request) !?[]const u8 {
     const val = cookie(req, "gopher_auth") orelse return null;
     const secret = (try loadSecret(io, alloc)) orelse return null;
@@ -89,7 +89,7 @@ fn sessionMAC(secret: []const u8, id: []const u8, issued: []const u8, out: *[Hma
 
 /// verifySessionWithSecret validates a `base64url(id).issued.base64url(mac)`
 /// cookie against `secret` at time `now_unix` (Unix seconds), returning the id
-/// or null. Mirrors Go's verifySession. Fails closed on any malformation.
+/// or null.
 pub fn verifySessionWithSecret(alloc: Alloc, secret: []const u8, val: []const u8, now_unix: i64) ?[]const u8 {
     var it = std.mem.splitScalar(u8, val, '.');
     const p0 = it.next() orelse return null;
@@ -129,7 +129,6 @@ pub fn signSession(alloc: Alloc, secret: []const u8, id: []const u8, issued_unix
 // ── API key (cross-validated compare) ────────────────────────────────────────
 
 /// checkAPIKey resolves the principal id a presented key belongs to, or null.
-/// Mirrors Go's CheckAPIKey: id is the prefix before '-'; the principal must be
 /// authorized; the stored key compares constant-time (plaintext) or via sha256
 /// (legacy bare-hash keys).
 fn checkAPIKey(io: Io, alloc: Alloc, presented: []const u8) !?[]const u8 {
@@ -162,17 +161,17 @@ fn userExists(io: Io, alloc: Alloc, id: []const u8) !bool {
     return st.kind == .directory;
 }
 
-/// userIsMember reports whether id has a password file. Mirrors UserIsMember.
+/// userIsMember reports whether id has a password file.
 fn userIsMember(io: Io, alloc: Alloc, id: []const u8) !bool {
     return authFileExists(io, alloc, id, "password");
 }
 
-/// isAgent — today exactly one agent (Claude, uid 3). Mirrors IsAgent.
+/// isAgent — today exactly one agent (Claude, uid 3).
 fn isAgent(id: []const u8) bool {
     return std.mem.eql(u8, id, claude_agent_id);
 }
 
-/// userIsAuthorized = member OR agent. Mirrors UserIsAuthorized.
+/// userIsAuthorized = member OR agent.
 fn userIsAuthorized(io: Io, alloc: Alloc, id: []const u8) !bool {
     return (try userIsMember(io, alloc, id)) or isAgent(id);
 }
@@ -233,11 +232,11 @@ fn touchUserImpl(io: Io, alloc: Alloc, id: []const u8) !void {
 }
 
 /// max_upload_lifetime_bytes caps the cumulative bytes one user may ever upload —
-/// a runaway/abuse backstop, not a tight quota. Mirrors Go's MaxUploadLifetimeBytes.
+/// a runaway/abuse backstop, not a tight quota.
 pub const max_upload_lifetime_bytes: i64 = 1 << 30; // 1 GiB per user, lifetime
 
 /// upload_bytes_mu serializes the read-add-write on the lifetime upload total so
-/// two concurrent uploads can't both slip past the cap. Mirrors Go's uploadBytesMu.
+/// two concurrent uploads can't both slip past the cap.
 var upload_bytes_mu: Io.Mutex = .init;
 
 /// userUploadBytes returns the cumulative bytes a user has ever uploaded
@@ -266,7 +265,7 @@ pub fn reserveUploadBytes(io: Io, alloc: Alloc, id: []const u8, n: i64) bool {
     return true;
 }
 
-// ── API-key management (port of users/api_key.go's member-facing half) ───────
+// ── API-key management ───────
 
 /// userHasAPIKey reports whether the principal has an API-key file. Mirrors
 /// UserHasAPIKey.
@@ -286,7 +285,6 @@ pub fn getUserAPIKey(io: Io, alloc: Alloc, id: []const u8) !?[]const u8 {
 
 /// setUserAPIKey generates a fresh plaintext key ("<id>-<32 hex>", 16 CSPRNG
 /// bytes), stores it (mode 0o600 — treat it like a password), and returns it.
-/// Mirrors SetUserAPIKey.
 pub fn setUserAPIKey(io: Io, alloc: Alloc, id: []const u8) ![]const u8 {
     var b: [16]u8 = undefined;
     io.random(b[0..]);
@@ -300,7 +298,7 @@ pub fn setUserAPIKey(io: Io, alloc: Alloc, id: []const u8) ![]const u8 {
 }
 
 /// clearUserAPIKey revokes the principal's key (deletes the file; absent is OK).
-/// Best-effort. Mirrors ClearUserAPIKey.
+/// Best-effort.
 pub fn clearUserAPIKey(io: Io, alloc: Alloc, id: []const u8) void {
     const path = std.fs.path.join(alloc, &.{ auth_root, id, "api-key" }) catch return;
     Io.Dir.cwd().deleteFile(io, path) catch {};
@@ -326,7 +324,7 @@ pub fn principalIsAgent(id: []const u8) bool {
 }
 
 /// listUserIDs returns every account id (numeric dir under auth_root), sorted
-/// numerically. An id exists iff it has an account dir. Mirrors Go's ListUserIDs.
+/// numerically. An id exists iff it has an account dir.
 pub fn listUserIDs(io: Io, alloc: Alloc) ![][]const u8 {
     var dir = Io.Dir.cwd().openDir(io, auth_root, .{ .iterate = true }) catch return &.{};
     defer dir.close(io);
@@ -348,7 +346,7 @@ fn lessThanNumericID(_: void, a: []const u8, b: []const u8) bool {
 }
 
 /// userLastSeen returns a user's last-activity time (Unix seconds), or null if
-/// never recorded. Mirrors Go's UserLastSeen ({users_root}/{id}/last-seen).
+/// never recorded.
 pub fn userLastSeen(io: Io, alloc: Alloc, id: []const u8) ?i64 {
     const path = std.fs.path.join(alloc, &.{ users_root, id, "last-seen" }) catch return null;
     const b = Io.Dir.cwd().readFileAlloc(io, path, alloc, .unlimited) catch return null;
@@ -379,7 +377,6 @@ fn loadSecret(io: Io, alloc: Alloc) !?[]const u8 {
 // ── request parsing ──────────────────────────────────────────────────────────
 
 /// currentUID returns the gopher_uid cookie value if it's all digits, else "".
-/// Mirrors CurrentUID (the raw identity claim).
 fn currentUID(req: *std.http.Server.Request) []const u8 {
     const v = cookie(req, "gopher_uid") orelse return "";
     if (v.len == 0) return "";
@@ -477,7 +474,7 @@ pub fn currentUser(io: Io, alloc: Alloc, req: *std.http.Server.Request) !Resolve
 
 /// allocateUser creates a new account with `name` and returns its id, bumping
 /// the shared id counter (auth_root/next-id.txt) through storage.allocateID —
-/// the same primitive Go shares via platform.AllocateID. Mirrors AllocateUser.
+/// the same primitive Go shares via platform.AllocateID.
 pub fn allocateUser(io: Io, alloc: Alloc, name: []const u8) ![]const u8 {
     const counter = try std.fs.path.join(alloc, &.{ auth_root, "next-id.txt" });
     const n = try storage.allocateID(io, alloc, counter);
@@ -487,7 +484,7 @@ pub fn allocateUser(io: Io, alloc: Alloc, name: []const u8) ![]const u8 {
 }
 
 /// setUserName writes a user's display name ({auth_root}/{id}/name), creating the
-/// account dir (whose existence IS the user). Mirrors SetUserName.
+/// account dir (whose existence IS the user).
 pub fn setUserName(io: Io, alloc: Alloc, id: []const u8, name: []const u8) !void {
     const dir = try std.fs.path.join(alloc, &.{ auth_root, id });
     try Io.Dir.cwd().createDirPath(io, dir);
@@ -509,7 +506,7 @@ pub fn setUserPassword(io: Io, alloc: Alloc, id: []const u8, password: []const u
 }
 
 /// checkUserPassword verifies `password` against a member's stored bcrypt hash.
-/// false when the member has no password file. Mirrors CheckUserPassword.
+/// false when the member has no password file.
 pub fn checkUserPassword(io: Io, alloc: Alloc, id: []const u8, password: []const u8) bool {
     const stored = (readAuthFile(io, alloc, id, "password") catch return false) orelse return false;
     return auth.verifyPassword(std.mem.trimEnd(u8, stored, "\r\n"), password);
@@ -535,7 +532,7 @@ pub fn isNameReserved(io: Io, alloc: Alloc, name: []const u8) bool {
 /// deleteUserRecord removes a user's account dir (auth_root: name/password/
 /// api-key) and gopher-private dir (users_root: admin/last-seen/upload-bytes).
 /// Game/chat data is deleted separately (storage.deleteUserData). Refuses an
-/// empty id so it can never target a root. Best-effort. Mirrors DeleteUserRecord.
+/// empty id so it can never target a root. Best-effort.
 pub fn deleteUserRecord(io: Io, alloc: Alloc, id: []const u8) void {
     if (std.mem.trim(u8, id, " \t\r\n").len == 0) return;
     if (std.fs.path.join(alloc, &.{ auth_root, id })) |p| {
@@ -555,7 +552,7 @@ pub fn signSessionNow(io: Io, alloc: Alloc, id: []const u8) !?[]const u8 {
     return try signSession(alloc, secret, id, nowUnix(io));
 }
 
-// ── name validation (port of name.go) ────────────────────────────────────────
+// ── name validation ────────────────────────────────────────
 //
 // UNICODE NOTE: Go uses unicode.IsLetter/IsNumber (full Unicode tables). zig std
 // doesn't expose those, so the policy here is: ASCII letters/digits are
@@ -579,7 +576,7 @@ fn isNameAlnumByte(c: u8) bool {
 /// validateUserName cleans and checks a login-supplied name: trims, collapses
 /// internal whitespace runs to one space, requires at least one letter/digit,
 /// rejects any other punctuation. Returns {name, ""} on success or {"", message}
-/// describing the fix. Mirrors ValidateUserName.
+/// describing the fix.
 pub fn validateUserName(alloc: Alloc, raw: []const u8) !NameResult {
     const trimmed = std.mem.trim(u8, raw, " \t\r\n");
     if (trimmed.len == 0) return .{ .name = "", .err = "Please enter a name." };

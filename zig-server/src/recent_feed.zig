@@ -37,7 +37,7 @@ fn appendField(j: *std.ArrayList(u8), alloc: Alloc, name: []const u8, val: []con
     try j.print(alloc, ",\"{s}\":{f}", .{ name, std.json.fmt(val, .{}) });
 }
 
-// ── recentExcerpt (Go's recentExcerpt; regex ports done by hand) ──────────────
+// ── recentExcerpt ──────────────
 
 /// recentExcerpt renders a one-line plain-text preview of a message's raw
 /// markdown: image tags (HTML `<img …>` or markdown `![…](…)`) collapse to

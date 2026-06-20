@@ -37,7 +37,7 @@ const Bus = @import("bus.zig").Bus;
 const Alloc = std.mem.Allocator;
 const Request = std.http.Server.Request;
 
-/// maxDocBytes caps a single doc body (Go's maxDocBytes) — generous (1 MiB) but
+/// maxDocBytes caps a single doc body — generous (1 MiB) but
 /// bounded so a runaway client can't fill the disk.
 const max_doc_bytes = 1 << 20;
 
@@ -158,7 +158,7 @@ fn renderDocsPage(req: *Request, io: Io, alloc: Alloc, uid: []const u8, list: []
 // ── raw + list (API clients) ──────────────────────────────────────────────────
 
 /// serveRawDoc returns a doc's raw markdown body (text/markdown). Acts on the
-/// authenticated principal only. Mirrors Go's serveRawDoc.
+/// authenticated principal only.
 fn serveRawDoc(req: *Request, io: Io, alloc: Alloc, uid: []const u8, slug: []const u8) !void {
     const exists = docs_store.docExists(io, alloc, uid, slug) catch return http.notFound(req);
     if (!exists) return http.notFound(req);
@@ -169,7 +169,7 @@ fn serveRawDoc(req: *Request, io: Io, alloc: Alloc, uid: []const u8, slug: []con
 }
 
 /// docsList serves GET /chat/docs/list: a JSON listing of the principal's docs
-/// (slug + display title) for API-key clients. Mirrors Go's HandleDocsList.
+/// (slug + display title) for API-key clients.
 fn docsList(req: *Request, io: Io, alloc: Alloc, uid: []const u8) !void {
     if (req.head.method != .GET) return http.methodNotAllowed(req);
     const list = try docs_store.listUserDocs(io, alloc, uid);
@@ -191,7 +191,7 @@ fn docsList(req: *Request, io: Io, alloc: Alloc, uid: []const u8) !void {
 // ── write verbs (POST) ────────────────────────────────────────────────────────
 
 /// docsNew creates a new empty doc and 303s to it. Title is required (else back
-/// to /chat/docs). Mirrors Go's HandleDocsNew.
+/// to /chat/docs).
 fn docsNew(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8) !void {
     if (req.head.method != .POST) return http.redirect(req, "/chat/docs");
     const body = (try http.readLimitedBody(req, alloc, max_doc_bytes)) orelse return;
@@ -205,7 +205,6 @@ fn docsNew(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8) !voi
 
 /// docsSave overwrites an existing doc's body (autosave target) → 204. A POST for
 /// an unknown slug is rejected (autosave must not spawn a doc from a stale URL).
-/// Mirrors Go's HandleDocsSave.
 fn docsSave(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8) !void {
     if (req.head.method != .POST) return http.methodNotAllowed(req);
     const body = (try http.readLimitedBody(req, alloc, max_doc_bytes)) orelse return;
@@ -220,7 +219,7 @@ fn docsSave(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8) !vo
 }
 
 /// publishDocRecent pings the author's own recent feed when they create or save a
-/// doc (Go's PublishDocRecent). Docs are per-user, so no fan-out — only the
+/// doc. Docs are per-user, so no fan-out — only the
 /// author sees it. Best-effort.
 fn publishDocRecent(io: Io, alloc: Alloc, bus: *Bus, uid: []const u8, slug: []const u8) void {
     const at = timefmt.formatRFC3339UTC(alloc, nowUnix(io)) catch return;
@@ -232,7 +231,7 @@ fn publishDocRecent(io: Io, alloc: Alloc, bus: *Bus, uid: []const u8, slug: []co
 }
 
 /// docsRender renders posted markdown to HTML for the live-preview pane, reusing
-/// the chat markdown port. Mirrors Go's HandleDocsRender.
+/// the chat markdown port.
 fn docsRender(req: *Request, alloc: Alloc) !void {
     if (req.head.method != .POST) return http.methodNotAllowed(req);
     const body = (try http.readLimitedBody(req, alloc, max_doc_bytes)) orelse return;
@@ -247,7 +246,7 @@ fn docsRender(req: *Request, alloc: Alloc) !void {
 
 /// docsPost appends the doc's current body as a chat message to the caller's
 /// default partner and returns {conv, session, id} so the client can navigate to
-/// the posted message. Mirrors Go's HandleDocsPost.
+/// the posted message.
 fn docsPost(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8) !void {
     if (req.head.method != .POST) return http.methodNotAllowed(req);
     const body = (try http.readLimitedBody(req, alloc, max_doc_bytes)) orelse return;
@@ -286,7 +285,7 @@ fn docsPost(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8) !vo
     try req.respond(out, .{ .extra_headers = &.{http.json_ct} });
 }
 
-// ── post-to-chat helpers (port of chat.go bits HandleDocsPost relies on) ───────
+// ── post-to-chat helpers ───────
 
 /// defaultChatPartner picks the partner id for "post to chat": Steve (id 1) talks
 /// to Apoorva (id 2); everyone else talks to Steve. Hard-wired, like Go's.
@@ -308,7 +307,7 @@ fn nowUnix(io: Io) i64 {
     return @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
 }
 
-// ── docsCSS (Go's docsCSS: the three-pane grid + editor chrome) ────────────────
+// ── docsCSS ────────────────
 
 const docs_css =
     \\<style>

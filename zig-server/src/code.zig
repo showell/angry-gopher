@@ -19,7 +19,7 @@ const Alloc = std.mem.Allocator;
 const Request = std.http.Server.Request;
 
 /// handle dispatches /chat/code* — `rest` is the path after "/code" ("" or
-/// "/stream"). Mirrors Go: the page is the exact path plus /chat/code/stream.
+/// "/stream").
 pub fn handle(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8, rest: []const u8) !void {
     if (rest.len == 0) return renderCodePage(req, io, alloc, uid);
     if (std.mem.eql(u8, rest, "/stream")) {

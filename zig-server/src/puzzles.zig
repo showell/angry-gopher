@@ -17,7 +17,7 @@ const users = @import("users.zig");
 
 const puzzle_js = @embedFile("puzzle_js");
 
-// maxAppendBytes caps a single action line. Mirrors Go's maxAppendBytes (limits.go).
+// maxAppendBytes caps a single action line.
 const maxAppendBytes = 64 * 1024;
 
 // The curated catalogs, easiest-first (1-line … 6-line). Wired in build.zig.
@@ -59,7 +59,7 @@ pub fn handle(req: *std.http.Server.Request, io: std.Io, alloc: Alloc, sub: []co
 
 /// sessionRoute handles the one session route Go exposes:
 ///   POST /sessions/<id>/puzzles/<idx>/actions  — append one action line.
-/// `rest` is the path after "/sessions/". Mirrors Go's handlePuzzleSessionRoute.
+/// `rest` is the path after "/sessions/".
 fn sessionRoute(req: *std.http.Server.Request, io: std.Io, alloc: Alloc, user_id: []const u8, rest: []const u8) !void {
     var it = std.mem.splitScalar(u8, rest, '/');
     const id_str = it.next() orelse return http.notFound(req);
@@ -99,7 +99,7 @@ fn appendAction(req: *std.http.Server.Request, io: std.Io, alloc: Alloc, user_id
 
 /// page allocates a puzzle session, writes meta, and renders the HTML host with
 /// both session_id and the full catalog baked into the Elm flag. Zero post-load
-/// round trips before play. Mirrors Go's puzzlePage.
+/// round trips before play.
 fn page(req: *std.http.Server.Request, io: std.Io, alloc: Alloc, user_id: []const u8) !void {
     const catalog = try loadCatalog(alloc);
     const indented = try indentLines(alloc, catalog);

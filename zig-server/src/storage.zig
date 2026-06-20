@@ -112,7 +112,7 @@ pub fn allocateID(io: Io, alloc: Alloc, path: []const u8) !i64 {
 }
 
 /// writePuzzleSessionFile writes body to <session-dir>/<rel>, creating parent
-/// dirs. Last-write-wins (used for meta). Mirrors Go's WritePuzzleSessionFile.
+/// dirs. Last-write-wins (used for meta).
 pub fn writePuzzleSessionFile(io: Io, alloc: Alloc, user_id: []const u8, session_id: i64, rel: []const u8, body: []const u8) !void {
     const dir = try puzzleSessionDir(alloc, user_id, session_id);
     const full = try join(alloc, &.{ dir, rel });
@@ -129,7 +129,6 @@ pub fn puzzleSessionExists(io: Io, alloc: Alloc, user_id: []const u8, session_id
 }
 
 /// appendPuzzleSessionDslLine appends one DSL line to <session-dir>/<rel>.
-/// Mirrors Go's AppendPuzzleSessionDslLine → AppendTextLine.
 pub fn appendPuzzleSessionDslLine(io: Io, alloc: Alloc, user_id: []const u8, session_id: i64, rel: []const u8, body: []const u8) !void {
     const dir = try puzzleSessionDir(alloc, user_id, session_id);
     const full = try join(alloc, &.{ dir, rel });
@@ -166,7 +165,7 @@ pub fn allocateSessionID(io: Io, alloc: Alloc, user_id: []const u8) !i64 {
     return allocateID(io, alloc, try nextSessionIDPath(alloc, user_id));
 }
 
-/// sessionDir is {lynrummyElmRoot}/sessions/<id>. Mirrors Go's SessionDir.
+/// sessionDir is {lynrummyElmRoot}/sessions/<id>.
 pub fn sessionDir(alloc: Alloc, user_id: []const u8, session_id: i64) ![]u8 {
     const root = try lynrummyElmRoot(alloc, user_id);
     const id_str = try std.fmt.allocPrint(alloc, "{d}", .{session_id});
@@ -174,7 +173,7 @@ pub fn sessionDir(alloc: Alloc, user_id: []const u8, session_id: i64) ![]u8 {
 }
 
 /// writeSessionFile writes body to <session-dir>/<rel>, creating parent dirs.
-/// Last-write-wins (used for meta). Mirrors Go's WriteSessionFile.
+/// Last-write-wins (used for meta).
 pub fn writeSessionFile(io: Io, alloc: Alloc, user_id: []const u8, session_id: i64, rel: []const u8, body: []const u8) !void {
     const dir = try sessionDir(alloc, user_id, session_id);
     const full = try join(alloc, &.{ dir, rel });
@@ -192,7 +191,6 @@ pub fn readSessionFile(io: Io, alloc: Alloc, user_id: []const u8, session_id: i6
 }
 
 /// sessionExists reports whether a full-game session directory is on disk.
-/// Mirrors Go's SessionExists (stat + IsDir).
 pub fn sessionExists(io: Io, alloc: Alloc, user_id: []const u8, session_id: i64) !bool {
     const dir = try sessionDir(alloc, user_id, session_id);
     const st = Io.Dir.cwd().statFile(io, dir, .{}) catch return false;
@@ -200,7 +198,6 @@ pub fn sessionExists(io: Io, alloc: Alloc, user_id: []const u8, session_id: i64)
 }
 
 /// appendSessionDslLine appends one DSL line to <session-dir>/<rel> (actions.dsl).
-/// Mirrors Go's AppendSessionDslLine → AppendTextLine.
 pub fn appendSessionDslLine(io: Io, alloc: Alloc, user_id: []const u8, session_id: i64, rel: []const u8, body: []const u8) !void {
     const dir = try sessionDir(alloc, user_id, session_id);
     const full = try join(alloc, &.{ dir, rel });
@@ -219,7 +216,7 @@ pub fn appendSessionJSONLLine(io: Io, alloc: Alloc, user_id: []const u8, session
 }
 
 /// listSessionIDs returns every full-game session-id directory for a player,
-/// sorted ascending. Mirrors Go's ListSessionIDs (missing root → empty).
+/// sorted ascending.
 pub fn listSessionIDs(io: Io, alloc: Alloc, user_id: []const u8) ![]i64 {
     const root = try lynrummyElmRoot(alloc, user_id);
     const sessions = try join(alloc, &.{ root, "sessions" });
@@ -241,7 +238,7 @@ pub fn listSessionIDs(io: Io, alloc: Alloc, user_id: []const u8) ![]i64 {
 }
 
 /// countTextLines returns the number of non-empty lines in `path`, or 0 if the
-/// file is missing. Mirrors Go's CountTextLines.
+/// file is missing.
 pub fn countTextLines(io: Io, alloc: Alloc, path: []const u8) !usize {
     const body = Io.Dir.cwd().readFileAlloc(io, path, alloc, .unlimited) catch return 0;
     var n: usize = 0;
@@ -277,7 +274,7 @@ fn appendRawLine(io: Io, alloc: Alloc, path: []const u8, body: []const u8) !void
 /// `src`, mirroring Go's json.Compact at the token level: string contents and
 /// every non-whitespace byte are copied verbatim; spaces/tabs/CR/LF between
 /// tokens are dropped. Real input is always valid Elm-produced JSON, so this does
-/// no validation (Go's scanner would reject malformed input; that path is unused).
+/// no validation.
 fn compactJSON(alloc: Alloc, src: []const u8) ![]u8 {
     var out: std.ArrayList(u8) = .empty;
     var in_string = false;

@@ -1,5 +1,5 @@
 //! learn: /learn — the aspiring-developer tutorial that walks through how chat
-//! was built (port of server/learn/learn.go). Top-level + unauthed (public). The
+//! was built. Top-level + unauthed (public). The
 //! page is a near-empty shell that learn.js fills in via createElement; it
 //! deliberately loads NO shared stylesheet (the "grow the page in JS-styles only"
 //! experiment) — only colors.js + the chat widget modules its demos reuse, plus
@@ -37,7 +37,7 @@ fn serveJS(req: *Request, body: []const u8) !void {
 
 /// serveSource serves the raw text of an allowlisted module so the spoiler widget
 /// shows real, deployed source (never drifts). 404 for anything off the list —
-/// the allowlist IS the path guard. Mirrors HandleLearnSource.
+/// the allowlist IS the path guard.
 fn serveSource(req: *Request, file: []const u8) !void {
     const body = sourceBytes(file) orelse return http.notFound(req);
     try req.respond(body, .{ .extra_headers = &.{.{ .name = "content-type", .value = "text/plain; charset=utf-8" }} });
@@ -45,7 +45,6 @@ fn serveSource(req: *Request, file: []const u8) !void {
 
 /// sourceBytes maps an allowlisted served filename to its embedded bytes (the
 /// SAME bundles the binary serves elsewhere, so source and runtime can't drift).
-/// Mirrors Go's learnSourceAllowlist. The chat modules reuse build.zig's
 /// chat_js_* embeds; the two demo modules use the learn embeds.
 fn sourceBytes(file: []const u8) ?[]const u8 {
     const table = .{

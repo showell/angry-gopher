@@ -20,7 +20,7 @@ const users = @import("users.zig");
 const Alloc = std.mem.Allocator;
 const Request = std.http.Server.Request;
 
-/// maxChatUploadBytes caps a single uploaded image (Go's maxChatUploadBytes).
+/// maxChatUploadBytes caps a single uploaded image.
 const max_upload_bytes = 10 << 20; // 10 MiB
 
 // ── write path (POST <base>/<sid>/upload) ─────────────────────────────────────
@@ -50,7 +50,7 @@ pub fn handleUpload(req: *Request, io: Io, alloc: Alloc, uid: []const u8, conv_d
     const ext = detectImageExt(part.data) orelse
         return req.respond("unsupported image type (png, jpeg, gif, webp only)\n", .{ .status = .unsupported_media_type });
 
-    // Lifetime per-user quota (Go's users.ReserveUploadBytes) — atomic add-if-under-cap.
+    // Lifetime per-user quota — atomic add-if-under-cap.
     if (!users.reserveUploadBytes(io, alloc, uid, @intCast(part.data.len))) {
         const msg = try std.fmt.allocPrint(alloc, "Upload limit reached — you've used your {d} GB image allowance.\n", .{users.max_upload_lifetime_bytes >> 30});
         return req.respond(msg, .{ .status = .forbidden });
@@ -73,7 +73,7 @@ pub fn handleUpload(req: *Request, io: Io, alloc: Alloc, uid: []const u8, conv_d
 // ── serve path (GET <base>/<sid>/uploads/<file>) ──────────────────────────────
 
 /// serveUpload serves a stored image so the Images page's `<img src>` resolves
-/// (Go's serveUploadedFile). The name must be 32 hex + .(png|jpg|gif|webp);
+///. The name must be 32 hex + .(png|jpg|gif|webp);
 /// content-type by extension; immutable private cache; nosniff. Path =
 /// conv_dir/sessions/<sid>.uploads/<file>.
 pub fn serveUpload(req: *Request, io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8, file: []const u8) !void {
@@ -103,7 +103,7 @@ fn uploadContentType(name: []const u8) ?[]const u8 {
 // ── helpers ───────────────────────────────────────────────────────────────────
 
 /// detectImageExt sniffs the magic bytes of the four allowed image types and
-/// returns our canonical extension (Go's detectImageExt). We sniff rather than
+/// returns our canonical extension. We sniff rather than
 /// trust the client's filename / Content-Type.
 fn detectImageExt(data: []const u8) ?[]const u8 {
     if (data.len >= 8 and std.mem.startsWith(u8, data, "\x89PNG\r\n\x1a\n")) return "png";

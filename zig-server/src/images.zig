@@ -20,11 +20,11 @@ const Request = std.http.Server.Request;
 
 /// imagesPageLimit caps how many of the most-recent entries the page renders —
 /// it's a "what got shared lately" feed and every entry is a full image, so the
-/// tail keeps it light over a slow link. Mirrors Go's imagesPageLimit.
+/// tail keeps it light over a slow link.
 const images_page_limit = 20;
 
 /// handle dispatches /chat/images* — `rest` is the path after "/images" ("" or
-/// "/stream"). Mirrors Go: the page is the exact path plus /chat/images/stream.
+/// "/stream").
 pub fn handle(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8, rest: []const u8) !void {
     if (rest.len == 0) return renderImagesPage(req, io, alloc, uid);
     if (std.mem.eql(u8, rest, "/stream")) {
@@ -55,7 +55,7 @@ fn renderImagesPage(req: *Request, io: Io, alloc: Alloc, uid: []const u8) !void 
 
 /// emitImagesData ships the initial transcript as inline JSON. The `</`→`<\/`
 /// pass prevents the JSON from closing the surrounding <script>. Per-entry
-/// source_url is rebuilt from the entry's conv (Go's imagesSourceURL).
+/// source_url is rebuilt from the entry's conv.
 fn emitImagesData(b: *std.ArrayList(u8), alloc: Alloc, entries: []images_store.ImagesEntry) !void {
     var j: std.ArrayList(u8) = .empty;
     try j.append(alloc, '[');

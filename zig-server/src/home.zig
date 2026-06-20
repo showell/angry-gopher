@@ -1,17 +1,15 @@
 //! home: the site root "/" — the Lyn Rummy launch pad (Game / Puzzles / Driving
-//! tiles). Port of server/home/home.go. TOTALLY_PUBLIC: anon visitors get the
-//! same marketing surface; the tiles route through the login flow on click.
+//! tiles). Public: anon visitors get the same marketing surface; the tiles route
+//! through the login flow on click.
 //!
-//! This is the FIRST surface to render the GENERIC app chrome (the chat
-//! subsystem renders its own chat-flavored chrome in chat.zig). The chrome here
-//! mirrors server/platform/chrome.go's PageHeader → PageHeadAndStyle +
-//! AppChromeTop byte-for-byte (the shared stylesheet, the "Lyn Rummy · Chat" top
-//! bar, the "Playing as X / Log in" identity area). Kept as literals, the same
-//! way chat.zig keeps its chrome, so the served bytes match Go.
+//! This is the only surface on the GENERIC app chrome (the shared stylesheet +
+//! the "Lyn Rummy · Chat" top bar + the "Playing as X / Log in" identity area);
+//! the chat subsystem renders its own chat-flavored chrome in chat.zig. Kept as
+//! string literals, like chat's chrome.
 //!
-//! `/version` lives here too (Go's main.handleVersion): a tiny JSON build-identity
-//! probe. It's the smallest observable surface, so it doubles as the redeploy
-//! smoke signal — bump `version` to confirm a fresh binary is actually serving.
+//! `/version` lives here too: a tiny JSON build-identity probe, the smallest
+//! observable surface, so it doubles as the redeploy smoke signal — bump
+//! `version` to confirm a fresh binary is actually serving.
 
 const std = @import("std");
 const Io = std.Io;
@@ -27,16 +25,14 @@ const Request = std.http.Server.Request;
 /// redeploy observable (the "minor observable change" smoke test).
 pub const version = "0.1-zig";
 
-/// handleHome serves "/" exactly; any other path that falls through to it 404s
-/// (Go: HandleHome guards `r.URL.Path != "/"`). `uid` is the resolved viewer
-/// ("" for anon).
+/// handleHome serves "/" exactly; any other path that falls through here 404s.
+/// `uid` is the resolved viewer ("" for anon).
 pub fn handleHome(req: *Request, io: Io, alloc: Alloc, uid: []const u8, path: []const u8) !void {
     if (!std.mem.eql(u8, path, "/")) return http.notFound(req);
 
     const name = if (uid.len == 0) "" else try users.getUserName(io, alloc, uid);
-    // Admin link shows exactly when /admin is reachable. The port gates /admin
-    // on uid "1" (see admin.zig: admin flag not yet ported), so mirror that here
-    // rather than Go's per-user admin file — keeps the link and the gate honest.
+    // Show the Admin link exactly when /admin is reachable: that gate keys on
+    // uid "1" (see admin.zig), so this does too — link and gate stay honest.
     const is_admin = std.mem.eql(u8, uid, "1");
 
     var b: std.ArrayList(u8) = .empty;
@@ -46,9 +42,9 @@ pub fn handleHome(req: *Request, io: Io, alloc: Alloc, uid: []const u8, path: []
     try req.respond(b.items, .{ .extra_headers = &.{http.html_ct} });
 }
 
-/// handleVersion serves the JSON build-identity probe (Go's handleVersion). The
-/// `commit` field is "dev" — the zig build doesn't inject a build id yet; the
-/// `version` const is the observable knob for now.
+/// handleVersion serves the JSON build-identity probe. The `commit` field is
+/// "dev" — the build doesn't inject a build id yet; `version` is the observable
+/// knob for now.
 pub fn handleVersion(req: *Request, alloc: Alloc) !void {
     // `rejects` is the edge-policy observable: a counter per reject kind (see
     // edge.zig). The watchdog polls /version, so a climbing counter surfaces in
@@ -60,9 +56,8 @@ pub fn handleVersion(req: *Request, alloc: Alloc) !void {
     try req.respond(body, .{ .extra_headers = &.{http.json_ct} });
 }
 
-/// writeTopBar emits the generic app top bar (platform.AppChromeTop). Anon
-/// visitors get a "Log in" link; named visitors get "Playing as X [· Admin] ·
-/// Log out". The name is html-escaped (Go: html.EscapeString).
+/// writeTopBar emits the generic app top bar. Anon visitors get a "Log in" link;
+/// named visitors get "Playing as X [· Admin] · Log out" (name html-escaped).
 fn writeTopBar(b: *std.ArrayList(u8), alloc: Alloc, name: []const u8, is_admin: bool) !void {
     try b.appendSlice(alloc,
         "<header class=\"app-top\"><div class=\"app-top-home\">" ++
@@ -78,10 +73,8 @@ fn writeTopBar(b: *std.ArrayList(u8), alloc: Alloc, name: []const u8, is_admin: 
     try b.appendSlice(alloc, "</div></header>");
 }
 
-// head_style: PageHeadAndStyle — doctype, <head>, the shared platform
-// stylesheet (AppChromeCSS folded in), opening <body>. Byte-for-byte the
-// concatenation Go emits for the generic (non-chat) pages. (Go's fmt `%%`
-// escapes resolve to literal `%` here.)
+// head_style: the doctype, <head>, shared app stylesheet, and opening <body> —
+// the chrome for the generic (non-chat) pages.
 const head_style =
     \\<!DOCTYPE html>
     \\<html><head><meta charset="utf-8"><title>♦️ Lyn Rummy ♥️</title>
@@ -163,9 +156,8 @@ const head_style =
     \\
 ;
 
-// body_html: the title <h1>, subtitle, and the games hero tiles (Go's
-// PageHeader h1 + PageSubtitle + renderGamesHero), then PageFooter. Wholly
-// static — no per-viewer variation below the top bar.
+// body_html: the title <h1>, subtitle, and the games hero tiles. Wholly static —
+// no per-viewer variation below the top bar.
 const body_html =
     \\<div class="app-body-wrap"><h1>Lyn Rummy</h1>
     \\<p style="color:#666;font-size:13px;margin-top:-8px;margin-bottom:12px">Jump into a game, browse the puzzles, or take a drive.</p>

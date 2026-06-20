@@ -1,4 +1,4 @@
-//! chat_download: the transcript download bundle (port of chat_download.go) —
+//! chat_download: the transcript download bundle —
 //! the "d" hotkey's server side. GET <conv-base>/<sid>/download streams a
 //! gzipped tar of one topic:
 //!

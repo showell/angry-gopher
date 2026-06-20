@@ -1,5 +1,5 @@
 //! game: serves /game — the full Lyn Rummy Elm client + its deliberately-dumb
-//! session HTTP surface. Mirrors Go's server/lynrummy/lynrummy_elm.go.
+//! session HTTP surface.
 //!
 //! Routes (the switch in handle() is the route table):
 //!   GET  /game                         the play page (new game)
@@ -39,7 +39,7 @@ const max_new_session_bytes = 256 * 1024;
 const max_append_bytes = 64 * 1024;
 
 /// handle dispatches /game/* — `sub` keeps its leading '/' (e.g. "/elm.js",
-/// "/sessions/3/actions"), empty for exactly "/game". Mirrors Go's HandleGame.
+/// "/sessions/3/actions"), empty for exactly "/game".
 pub fn handle(req: *Request, io: std.Io, alloc: Alloc, sub: []const u8) !void {
     const user_id = try users.currentUserID(io, alloc, req);
     if (user_id.len == 0) {
@@ -73,7 +73,7 @@ pub fn handle(req: *Request, io: std.Io, alloc: Alloc, sub: []const u8) !void {
 }
 
 /// sessionRoute fans out the per-session URL space (`rest` is the path after
-/// "/sessions/"). Mirrors Go's handleSessionRoute.
+/// "/sessions/").
 fn sessionRoute(req: *Request, io: std.Io, alloc: Alloc, user_id: []const u8, rest: []const u8) !void {
     var it = std.mem.splitScalar(u8, rest, '/');
     const id_str = it.next() orelse return http.notFound(req);
@@ -106,7 +106,7 @@ fn sessionRoute(req: *Request, io: std.Io, alloc: Alloc, user_id: []const u8, re
 /// newSession creates a fresh full-game session: the POST body is Elm's
 /// DSL-encoded GameState; the server prepends a server-owned created_at, writes
 /// the merged DSL to <session>/meta, and returns the id as JSON. The game-state
-/// DSL is stored verbatim. Mirrors Go's lynrummyElmNewSession.
+/// DSL is stored verbatim.
 fn newSession(req: *Request, io: std.Io, alloc: Alloc, user_id: []const u8) !void {
     if (req.head.method != .POST) return http.methodNotAllowed(req);
 
@@ -157,7 +157,7 @@ fn appendSessionLine(req: *Request, io: std.Io, alloc: Alloc, user_id: []const u
 
 /// sessionBootstrap returns the resume bundle as one text/plain document: the
 /// meta DSL, a `---` separator line, then the action log DSL. Elm splits on the
-/// separator. Mirrors Go's lynrummyElmSessionBootstrap.
+/// separator.
 fn sessionBootstrap(req: *Request, io: std.Io, alloc: Alloc, user_id: []const u8, session_id: i64) !void {
     if (!try storage.sessionExists(io, alloc, user_id, session_id)) return http.notFound(req);
 
@@ -170,7 +170,7 @@ fn sessionBootstrap(req: *Request, io: std.Io, alloc: Alloc, user_id: []const u8
 }
 
 /// sessionsList renders the HTML browser of a player's full-game sessions,
-/// newest first. Mirrors Go's lynrummyElmSessionsList.
+/// newest first.
 fn sessionsList(req: *Request, io: std.Io, alloc: Alloc, user_id: []const u8) !void {
     const ids = try storage.listSessionIDs(io, alloc, user_id);
     std.mem.sort(i64, ids, {}, std.sort.desc(i64)); // newest first
@@ -214,7 +214,7 @@ fn sessionsJSON(req: *Request, io: std.Io, alloc: Alloc, user_id: []const u8) !v
 }
 
 /// sessionDetail renders a debug view for a session dir — no replay, just what's
-/// on disk. Mirrors Go's lynrummyElmSessionDetail.
+/// on disk.
 fn sessionDetail(req: *Request, io: std.Io, alloc: Alloc, user_id: []const u8, session_id: i64) !void {
     if (!try storage.sessionExists(io, alloc, user_id, session_id)) return http.notFound(req);
 
@@ -241,7 +241,7 @@ fn sessionDetail(req: *Request, io: std.Io, alloc: Alloc, user_id: []const u8, s
 // ── play page ────────────────────────────────────────────────────────────────
 
 /// playPage renders the Elm host. `session_id` 0 = new game (initialSessionId
-/// null); >0 resumes. Mirrors Go's lynrummyElmPlayWithSession.
+/// null); >0 resumes.
 fn playPage(req: *Request, io: std.Io, alloc: Alloc, user_id: []const u8, session_id: i64) !void {
     const initial = if (session_id > 0)
         try std.fmt.allocPrint(alloc, "{d}", .{session_id})
@@ -264,7 +264,7 @@ fn nowUnix(io: std.Io) i64 {
 }
 
 /// readMeta loads + parses <session>/meta, or a zero SessionMeta when absent
-/// (Go's `meta, _ := ReadSessionMeta` swallows the not-exist error).
+///.
 fn readMeta(io: std.Io, alloc: Alloc, user_id: []const u8, session_id: i64) !SessionMeta {
     const b = (try storage.readSessionFile(io, alloc, user_id, session_id, "meta")) orelse return .{};
     return session_meta.parseSessionMeta(b);

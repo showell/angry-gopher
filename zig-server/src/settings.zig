@@ -1,4 +1,4 @@
-//! settings: the member settings page (port of server/chat/settings.go). Today
+//! settings: the member settings page. Today
 //! one section — the bot API key. Self-service is safe because every action uses
 //! the resolved identity (never a request-supplied id), so a member can only
 //! manage their OWN key. Go gates these routes NEED_PASSWORD (members only); the
@@ -80,7 +80,7 @@ fn renderSettings(req: *Request, io: Io, alloc: Alloc, uid: []const u8) !void {
     return req.respond(b.items, .{ .extra_headers = &.{http.html_ct} });
 }
 
-/// renderKeyShown displays a freshly generated key once (Go's RenderAPIKeyShown).
+/// renderKeyShown displays a freshly generated key once.
 /// A standalone page (not chat chrome); the back link points at whichever surface
 /// generated it (member /settings or the /admin panel). Shared with admin.zig.
 pub fn renderKeyShown(req: *Request, io: Io, alloc: Alloc, uid: []const u8, key: []const u8, back_url: []const u8, back_label: []const u8) !void {

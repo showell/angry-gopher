@@ -55,7 +55,7 @@ const RecentItem = struct {
 /// its leading '/', empty for "/chat/recent"). Go: the page is the exact path,
 /// plus /chat/recent/stream; anything else 404s.
 /// handle dispatches /chat/recent* — `rest` is the path after "/recent" ("" or
-/// "/stream"). Mirrors Go: the page is the exact path plus /chat/recent/stream.
+/// "/stream").
 pub fn handle(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8, rest: []const u8) !void {
     if (rest.len == 0) return renderRecentPage(req, io, alloc, uid);
     // Live: a per-uid subscriber on the recent bus. The server-rendered page IS
@@ -88,7 +88,6 @@ fn renderRecentPage(req: *Request, io: Io, alloc: Alloc, uid: []const u8) !void 
 
 /// emitRecentData ships the initial feed as inline JSON next to the mount slot.
 /// The `</`→`<\/` pass prevents the JSON from closing the surrounding <script>.
-/// Mirrors Go's emitRecentData (one shape for first-paint + live upserts).
 fn emitRecentData(b: *std.ArrayList(u8), alloc: Alloc, items: []RecentItem) !void {
     var j: std.ArrayList(u8) = .empty;
     try j.append(alloc, '[');
@@ -112,7 +111,7 @@ fn encodeEvent(j: *std.ArrayList(u8), alloc: Alloc, it: RecentItem) !void {
     }
 }
 
-// ── gather (Go's gatherRecentItems) ───────────────────────────────────────────
+// ── gather ───────────────────────────────────────────
 
 /// gatherRecentItems walks every conv that includes the viewer — DMs (every
 /// other authorized principal) AND the channels they're a member of — plus their
@@ -199,7 +198,7 @@ fn lastAuthorName(io: Io, alloc: Alloc, dir: []const u8, sid: []const u8) ![]con
 
 /// lastMessageMarkdown returns the raw markdown of a session's most recent
 /// message, or "" if empty/unreadable. Reads the whole transcript — fine at our
-/// scale (the page already stats every session file). Mirrors Go.
+/// scale (the page already stats every session file).
 fn lastMessageMarkdown(io: Io, alloc: Alloc, dir: []const u8, sid: []const u8) ![]const u8 {
     const raw = (try store.rawSession(io, alloc, dir, sid)) orelse return "";
     const msgs = try store.decodeChatFile(alloc, raw);

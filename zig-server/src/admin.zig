@@ -1,5 +1,5 @@
 //! admin: /admin — a filesystem view of per-player on-disk data plus member
-//! management (port of server/admin/admin.go). Go gates this ADMIN_ONLY via the
+//! management. Go gates this ADMIN_ONLY via the
 //! user's Admin flag; per Steve the port hardcodes admin = uid 1 (him, on prod
 //! and locally) until an admin flag is ported. No DB — it walks {data_root}/
 //! <user>/ directly (also the on-disk partition layout). Read-only stats plus two
@@ -222,7 +222,7 @@ fn renderDeleteConfirm(req: *Request, io: Io, alloc: Alloc, id: []const u8) !voi
 // ── stats (walk {data_root}/<user>/ directly) ────────────────────────────────
 
 /// gatherUserStats walks one player's subtree for game/puzzle session counts,
-/// total action lines, and disk bytes. Mirrors Go's gatherUserStats.
+/// total action lines, and disk bytes.
 fn gatherUserStats(io: Io, alloc: Alloc, id: []const u8) UserStats {
     const uroot = storage.userDataDir(alloc, id) catch return zeroStats(id);
     const games_dir = std.fs.path.join(alloc, &.{ uroot, "lynrummy-elm", "sessions" }) catch return zeroStats(id);
@@ -267,7 +267,7 @@ fn countSubdirs(io: Io, dir_path: []const u8) i64 {
 }
 
 /// dirBytes sums the sizes of every regular file under `path` (recursive; missing
-/// dir → 0). Mirrors Go's dirBytes (filepath.WalkDir, errors ignored).
+/// dir → 0).
 fn dirBytes(io: Io, alloc: Alloc, path: []const u8) i64 {
     var total: i64 = 0;
     var dir = Io.Dir.cwd().openDir(io, path, .{ .iterate = true }) catch return 0;
@@ -310,7 +310,6 @@ fn humanizeSince(alloc: Alloc, elapsed_s: i64) ![]const u8 {
 }
 
 /// humanBytes renders a byte count as "N B" / "N.N {K,M,G,…}B" (1024-based).
-/// Mirrors Go's humanBytes.
 fn humanBytes(alloc: Alloc, n: i64) ![]const u8 {
     const unit: i64 = 1024;
     if (n < unit) return std.fmt.allocPrint(alloc, "{d} B", .{n});

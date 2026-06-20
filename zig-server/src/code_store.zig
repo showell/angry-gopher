@@ -38,7 +38,7 @@ fn userCodePath(alloc: Alloc, uid: []const u8) ![]u8 {
     return std.fs.path.join(alloc, &.{ store.chat_root, "users", uid, "code.md" });
 }
 
-// ── the fence extractor (Go's extractCodeBlocks, line-anchored state machine) ──
+// ── the fence extractor ──
 
 /// extractCodeBlocks walks `body` line by line tracking fence state. Opens on a
 /// line starting ```/~~~ (lang = trimmed remainder); closes on a line that is

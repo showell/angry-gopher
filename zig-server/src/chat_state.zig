@@ -1,4 +1,4 @@
-//! chat_state: per-user chat state (port of server/chat/chat_state.go) — which
+//! chat_state: per-user chat state — which
 //! (conv, session) a user was last looking at, and which sessions they've pinned
 //! in each conversation. Backs /chat/default (resume where you were), the
 //! conversation page's session memory, and the sidebar's Pinned group.
@@ -27,7 +27,7 @@ fn userChatStateDir(alloc: Alloc, uid: []const u8) ![]u8 {
 // ── last conv / session (the /chat/default resume pointer) ────────────────────
 
 /// lastUserConv returns the conv-key this user was most recently looking at, or
-/// "" if they've never had one. Mirrors LastUserConv.
+/// "" if they've never had one.
 pub fn lastUserConv(io: Io, alloc: Alloc, uid: []const u8) ![]const u8 {
     const dir = try userChatStateDir(alloc, uid);
     const path = try std.fs.path.join(alloc, &.{ dir, "last-conv" });
@@ -47,7 +47,7 @@ pub fn lastUserSession(io: Io, alloc: Alloc, uid: []const u8, conv_key: []const 
 
 /// setUserLastSession persists which session this user last viewed for `conv_key`
 /// AND bumps the last-conv pointer so /chat/default resumes the right pair.
-/// Best-effort. Mirrors SetUserLastSession.
+/// Best-effort.
 pub fn setUserLastSession(io: Io, alloc: Alloc, uid: []const u8, conv_key: []const u8, sid: []const u8) void {
     if (uid.len == 0 or sid.len == 0) return;
     const dir = userChatStateDir(alloc, uid) catch return;
@@ -66,7 +66,6 @@ pub fn setUserLastSession(io: Io, alloc: Alloc, uid: []const u8, conv_key: []con
 /// pinnedSessions returns the set of session ids this user has pinned in the
 /// conversation `conv_key`, sorted (the file's content order). A missing file →
 /// empty. Stale ids are harmless — callers intersect with the live session list.
-/// Mirrors PinnedSessions (Go returns a set; we return a sorted slice + isPinned).
 pub fn pinnedSessions(io: Io, alloc: Alloc, uid: []const u8, conv_key: []const u8) ![][]const u8 {
     const b = readPinnedFile(io, alloc, uid, conv_key) catch return &.{};
     return parsePinned(alloc, b);
@@ -95,7 +94,7 @@ pub fn isPinned(set: [][]const u8, sid: []const u8) bool {
 
 /// setSessionPinned adds or removes one session from the user's pinned set for
 /// `conv_key`, persisting it sorted. Removing the last pin deletes the file.
-/// Best-effort. Mirrors SetSessionPinned.
+/// Best-effort.
 pub fn setSessionPinned(io: Io, alloc: Alloc, uid: []const u8, conv_key: []const u8, sid: []const u8, pinned: bool) void {
     if (uid.len == 0 or sid.len == 0) return;
     const existing = readPinnedFile(io, alloc, uid, conv_key) catch "";

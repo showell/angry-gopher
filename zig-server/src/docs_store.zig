@@ -60,7 +60,7 @@ fn isLowerAlnum(c: u8) bool {
 
 /// reservedDocSlugs would collide with the literal /chat/docs/<verb> routes
 /// (list, new, save, render, post). Creation steps over these; they're still
-/// valid URL input (no such file exists, so a read just 404s). Mirrors Go.
+/// valid URL input (no such file exists, so a read just 404s).
 fn isReservedSlug(slug: []const u8) bool {
     const reserved = [_][]const u8{ "list", "new", "save", "render", "post" };
     for (reserved) |r| {
@@ -71,7 +71,7 @@ fn isReservedSlug(slug: []const u8) bool {
 
 /// slugifyTitle reduces a free-form title to a filename slug: lowercase,
 /// non-alphanumerics collapsed to single hyphens, trimmed. "untitled" if the
-/// title is empty or all-symbol; truncated to 80 (re-trimmed). Mirrors Go.
+/// title is empty or all-symbol; truncated to 80 (re-trimmed).
 pub fn slugifyTitle(alloc: Alloc, title: []const u8) ![]u8 {
     var b: std.ArrayList(u8) = .empty;
     var prev_hyphen = false;
@@ -116,7 +116,7 @@ fn fileExists(io: Io, path: []const u8) bool {
 }
 
 /// listUserDocs enumerates a user's docs, alphabetically by slug. A missing dir
-/// means "no docs yet," not an error. Mirrors Go's ListUserDocs.
+/// means "no docs yet," not an error.
 pub fn listUserDocs(io: Io, alloc: Alloc, uid: []const u8) ![]DocSummary {
     const dir_path = try userDocsDir(alloc, uid);
     var dir = Io.Dir.cwd().openDir(io, dir_path, .{ .iterate = true }) catch return &.{};
@@ -144,7 +144,7 @@ fn lessThanSlug(_: void, a: DocSummary, b: DocSummary) bool {
 
 /// titleFromSlug renders a slug back to a display title: hyphens to spaces,
 /// first letter upper-cased. Presentational reverse of slugifyTitle (lossy —
-/// the filename is the source of truth). Mirrors Go's titleFromSlug.
+/// the filename is the source of truth).
 pub fn titleFromSlug(alloc: Alloc, slug: []const u8) ![]u8 {
     const t = try std.mem.replaceOwned(u8, alloc, slug, "-", " ");
     if (t.len == 0) return t;
@@ -153,7 +153,7 @@ pub fn titleFromSlug(alloc: Alloc, slug: []const u8) ![]u8 {
 }
 
 /// readUserDoc returns a doc's raw markdown body. A missing file gives
-/// (empty, ok) — the route distinguishes "not found". Mirrors Go's ReadUserDoc.
+/// (empty, ok) — the route distinguishes "not found".
 pub fn readUserDoc(io: Io, alloc: Alloc, uid: []const u8, slug: []const u8) ![]const u8 {
     const path = try docPath(alloc, uid, slug);
     return Io.Dir.cwd().readFileAlloc(io, path, alloc, .unlimited) catch "";
@@ -176,7 +176,7 @@ pub fn writeUserDoc(io: Io, alloc: Alloc, uid: []const u8, slug: []const u8, bod
 }
 
 /// createUserDoc creates a new empty doc with a title-derived, collision-suffixed
-/// slug, and returns the chosen slug. Mirrors Go's CreateUserDoc.
+/// slug, and returns the chosen slug.
 pub fn createUserDoc(io: Io, alloc: Alloc, uid: []const u8, title: []const u8) ![]const u8 {
     const dir = try userDocsDir(alloc, uid);
     try Io.Dir.cwd().createDirPath(io, dir);

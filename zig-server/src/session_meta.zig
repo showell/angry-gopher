@@ -43,7 +43,7 @@ pub fn parseSessionMeta(src: []const u8) SessionMeta {
 
     var lines = LineScanner{ .src = src };
     while (lines.next()) |line| {
-        scanned += line.len + 1; // +1 for the consumed newline (Go's accounting)
+        scanned += line.len + 1; // +1 for the consumed newline
         const trimmed = std.mem.trim(u8, line, " \t\r\n");
         if (trimmed.len == 0) {
             body_start = scanned;
@@ -65,12 +65,12 @@ pub fn parseSessionMeta(src: []const u8) SessionMeta {
     return m;
 }
 
-/// createdAt returns the meta's created_at (0 if absent). Mirrors SessionCreatedAt.
+/// createdAt returns the meta's created_at (0 if absent).
 pub fn createdAt(m: SessionMeta) i64 {
     return m.created_at;
 }
 
-/// label returns meta.label. Mirrors SessionLabel.
+/// label returns meta.label.
 pub fn label(m: SessionMeta) []const u8 {
     return m.label;
 }
@@ -122,7 +122,7 @@ fn splitColon(line: []const u8) ?KV {
 }
 
 /// applyMetaScalar sets a recognized scalar; unknown keys are accepted-and-
-/// ignored (forward-compat). Mirrors Go's applyMetaScalar.
+/// ignored (forward-compat).
 fn applyMetaScalar(m: *SessionMeta, key: []const u8, val: []const u8) void {
     if (std.mem.eql(u8, key, "created_at")) {
         if (std.fmt.parseInt(i64, val, 10)) |n| {

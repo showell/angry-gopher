@@ -50,7 +50,7 @@ const Bus = @import("bus.zig").Bus;
 const Alloc = std.mem.Allocator;
 const Request = std.http.Server.Request;
 
-/// Max bytes for one posted message (Go's maxChatMessageBytes).
+/// Max bytes for one posted message.
 const max_message_bytes = 64 * 1024;
 
 /// Asset version (cache-buster). The Go server uses the git sha / "dev"; the zig
@@ -335,7 +335,7 @@ pub fn writeChrome(b: *std.ArrayList(u8), alloc: Alloc, tab_title: []const u8, t
 
 const NavItem = struct { href: []const u8, label: []const u8, key: []const u8 };
 
-/// nav_items is the chat-subsystem sub-nav (Go's chatChromeTop navLink list).
+/// nav_items is the chat-subsystem sub-nav.
 /// The admin link is omitted (no admin flag is ported), matching active="".
 const nav_items = [_]NavItem{
     .{ .href = "/chat", .label = "Chat", .key = "chat" },
@@ -347,7 +347,7 @@ const nav_items = [_]NavItem{
 };
 
 /// navLinks emits the sub-nav span body, " · "-joined, with the link whose key
-/// equals `active` rendered bold-without-href (Go's navLink).
+/// equals `active` rendered bold-without-href.
 fn navLinks(b: *std.ArrayList(u8), alloc: Alloc, active: []const u8) !void {
     var first = true;
     for (nav_items) |it| {
@@ -361,7 +361,7 @@ fn navLinks(b: *std.ArrayList(u8), alloc: Alloc, active: []const u8) !void {
     }
 }
 
-/// buildSidebarJSON is the inline left-rail payload (Go's buildSidebarPayload):
+/// buildSidebarJSON is the inline left-rail payload:
 /// conversations = every other authorized user (DM) + every channel the viewer
 /// is in; pinned_sessions = [] (pins not ported yet); sessions = this conv's
 /// topics. The `</`→`<\/` pass mirrors Go's script-tag-safety replacement.
@@ -393,7 +393,7 @@ fn buildSidebarJSON(io: Io, alloc: Alloc, uid: []const u8, kind: Kind, conv_key:
         });
     }
 
-    // Sessions split by pinned state (Go's buildSidebarPayload): the conv's
+    // Sessions split by pinned state: the conv's
     // pins (conv-key form) intersect the live session list — stale ids drop out.
     const pins = try chat_state.pinnedSessions(io, alloc, uid, conv_key);
     const sessions = try store.listSessions(io, alloc, dir);
@@ -497,10 +497,10 @@ fn liveFrame(alloc: Alloc, raw: []const u8, viewer: []const u8) ![]const u8 {
     return emitWire(alloc, m.index, m.from, m.at, m.markdown, m.id, std.mem.eql(u8, m.from, viewer), m.cid);
 }
 
-/// emitWire builds one SSE message event (Go's writeChatEvent + chatWireMsg):
+/// emitWire builds one SSE message event:
 /// `id: <index>` then a `data:` line of JSON. `html` is rendered from `markdown`
 /// via the markdown port; `mine` is viewer-relative; `cid` is included only when
-/// non-empty (Go's omitempty — set on live broadcasts, absent on backlog).
+/// non-empty.
 fn emitWire(alloc: Alloc, index: usize, from: []const u8, at: []const u8, md: []const u8, id: []const u8, mine: bool, cid: []const u8) ![]const u8 {
     const html = try markdown.render(alloc, md);
     if (cid.len > 0) {
@@ -619,7 +619,7 @@ fn newTopic(req: *Request, io: Io, alloc: Alloc, bus: *Bus, meta: store.ConvMeta
 }
 
 /// highestGeneralSession returns the "general<N>" session with the largest N in
-/// `dir`, or null when there is none. Mirrors Go's highestGeneralSession.
+/// `dir`, or null when there is none.
 fn highestGeneralSession(io: Io, alloc: Alloc, dir: []const u8) !?[]const u8 {
     var best: ?[]const u8 = null;
     var best_n: i64 = -1;
@@ -651,7 +651,7 @@ fn chatDefault(req: *Request, io: Io, alloc: Alloc, uid: []const u8) !void {
 /// chatConversations serves GET /chat/conversations: the (partner × session)
 /// matrix as JSON — every other authorized principal, each conv's default
 /// landing session and its session list (sorted). The discovery entry point for
-/// API-key clients. Mirrors Go's HandleChatConversations.
+/// API-key clients.
 fn chatConversations(req: *Request, io: Io, alloc: Alloc, uid: []const u8) !void {
     if (req.head.method != .GET) return http.methodNotAllowed(req);
 
@@ -683,7 +683,7 @@ fn chatConversations(req: *Request, io: Io, alloc: Alloc, uid: []const u8) !void
 /// chatMsgLookup resolves a global MSG_<id> to the thread it lives in and 302s to
 /// that topic URL + #msg-<id>. Walks the viewer's accessible convs (DM partners,
 /// then channels) and picks the first whose session list holds the sid embedded
-/// in the id. Mirrors Go's HandleChatMsgLookup / findMsgConvForUser.
+/// in the id.
 fn chatMsgLookup(req: *Request, io: Io, alloc: Alloc, uid: []const u8, id: []const u8) !void {
     if (!validMsgRefID(id)) return http.notFound(req);
     const cut = std.mem.lastIndexOfScalar(u8, id, '_').?; // validMsgRefID guarantees one
@@ -730,7 +730,7 @@ fn convHasSession(io: Io, alloc: Alloc, dir: []const u8, sid: []const u8) !bool 
     return false;
 }
 
-/// redirectFound issues a 302 (Go's StatusFound) to `location` — the msg-ref
+/// redirectFound issues a 302 to `location` — the msg-ref
 /// lookup uses 302 (a transient lookup-then-go), not the 303 the others use.
 fn redirectFound(req: *Request, location: []const u8) !void {
     return req.respond("", .{
@@ -779,7 +779,7 @@ fn wireFrame(alloc: Alloc, index: usize, m: store.ChatMessage, viewer: []const u
 }
 
 /// parseSince extracts the replay cursor: Last-Event-ID (reconnect) → n+1, else
-/// ?since=N (initial load) → n, else 0. Mirrors Go's parseSince.
+/// ?since=N (initial load) → n, else 0.
 fn parseSince(req: *Request) usize {
     if (header(req, "last-event-id")) |lei| {
         const t = std.mem.trim(u8, lei, " \t");
@@ -1037,7 +1037,7 @@ const chrome_top_b =
     \\</span></div><div class="app-top-user"><button id="chat-theme-toggle" type="button" title="Toggle theme" aria-label="Toggle theme" style="background:none;border:none;cursor:pointer;font-size:16px;padding:0 8px;vertical-align:middle">🌙</button> · <strong>{s}</strong> · <a href="/learn">Learn</a> · <a href="/logout">Log out</a></div></header>
 ;
 
-// chat_css: the page-shell layout (Go's chatCSS) — only the rules that span
+// chat_css: the page-shell layout — only the rules that span
 // <html> down to .chat-layout; per-widget CSS is injected by the JS modules.
 const chat_css =
     \\<style>

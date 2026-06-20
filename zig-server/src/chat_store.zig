@@ -58,7 +58,7 @@ pub const ChatMessage = struct {
 
 /// decodeChatFile parses a whole session file into messages. Splits on `sep`
 /// (no trailing separator on disk, so one piece per message), skipping any
-/// all-whitespace piece. Mirrors Go's decodeChatFile.
+/// all-whitespace piece.
 pub fn decodeChatFile(alloc: Alloc, data: []const u8) ![]ChatMessage {
     var out: std.ArrayList(ChatMessage) = .empty;
     var it = std.mem.splitSequence(u8, data, sep);
@@ -111,7 +111,7 @@ fn decodeChatBlock(alloc: Alloc, piece: []const u8) !ChatMessage {
 
 /// unescapeBodyLine reverses Go's escapeBodyLine: a line that is one-or-more
 /// backslashes followed by exactly 13 hyphens (the `^\\+-------------$` shape)
-/// loses one leading backslash. Everything else passes through. Mirrors Go.
+/// loses one leading backslash. Everything else passes through.
 fn unescapeBodyLine(line: []const u8) []const u8 {
     var k: usize = 0;
     while (k < line.len and line[k] == '\\') k += 1;
@@ -119,7 +119,7 @@ fn unescapeBodyLine(line: []const u8) []const u8 {
     return line;
 }
 
-// ── write path + live fan-out (port of chat_conv.go AppendMessage) ───────────
+// ── write path + live fan-out ───────────
 
 /// Stream is the result of openStream: the decoded backlog + a live Subscriber.
 /// The caller replays backlog[since..] then drains the subscriber, and MUST pair
@@ -146,7 +146,7 @@ pub fn openStream(io: Io, alloc: Alloc, bus: *Bus, conv_dir: []const u8, conv_ke
     return .{ .backlog = msgs, .sub = sub };
 }
 
-/// appendMessage stores one message (Go's Conv.AppendMessage, write half): under
+/// appendMessage stores one message: under
 /// chat_mu, read the current count → the message index, encode the on-disk block
 /// (with separator + body-line escaping), append it, write the .lastauthor
 /// companion, then publish a fan-out blob to the live subscribers — all under the
@@ -179,7 +179,7 @@ pub fn appendMessage(io: Io, alloc: Alloc, bus: *Bus, meta: ConvMeta, conv_dir: 
     const blob = try busBlob(alloc, index, from_name, at, id, cid, markdown);
     bus.publish(key, blob);
 
-    // Cross-page fanout (Go's fanoutMessage): notify + recent + images + code,
+    // Cross-page fanout: notify + recent + images + code,
     // per member, to their per-uid bus, plus a sidebar topic-added on the
     // session's first message. Best-effort; runs under chat_mu so the lock order
     // is chat_mu → imagesMu (leaf), matching Go.
@@ -210,7 +210,7 @@ pub fn codeBusKey(alloc: Alloc, uid: []const u8) ![]u8 {
     return std.fmt.allocPrint(alloc, "code:{s}", .{uid});
 }
 /// notifyBusKey / sidebarBusKey are the per-uid keys for the two cross-page
-/// attention streams (Go's notifyBus / sidebarBus, keyed by recipient uid).
+/// attention streams.
 /// Namespaced like the recent/images/code keys so nothing collides.
 pub fn notifyBusKey(alloc: Alloc, uid: []const u8) ![]u8 {
     return std.fmt.allocPrint(alloc, "ntf:{s}", .{uid});
@@ -221,7 +221,6 @@ pub fn sidebarBusKey(alloc: Alloc, uid: []const u8) ![]u8 {
 
 /// convKeyBaseURL returns the URL root for a conv addressed by its storage key.
 /// DM keys contain '_' (channel names exclude it), a sufficient discriminator.
-/// Mirrors Go's convKeyBaseURL.
 pub fn convKeyBaseURL(alloc: Alloc, conv_key: []const u8) ![]u8 {
     if (std.mem.indexOfScalar(u8, conv_key, '_') != null) {
         return std.fmt.allocPrint(alloc, "/chat/c/{s}", .{conv_key});
@@ -230,7 +229,7 @@ pub fn convKeyBaseURL(alloc: Alloc, conv_key: []const u8) ![]u8 {
 }
 
 /// fanoutCrossPage publishes one new message to every cross-page attention feed
-/// (Go's fanoutMessage): notify (status strip), recent (Recent page), images /
+///: notify (status strip), recent (Recent page), images /
 /// code (per-user transcripts) per member, plus a sidebar topic-added on the
 /// session's FIRST message (index == 0). Best-effort: a failure for one
 /// member/surface is swallowed so it never blocks the write.
@@ -244,7 +243,7 @@ fn fanoutCrossPage(io: Io, alloc: Alloc, bus: *Bus, meta: ConvMeta, conv_key: []
 
     // notify text is viewer-invariant (rec_url is the per-conv topic URL, the
     // notify-strip link). DMs read "X sent you a message on <sid>."; channels
-    // read "X posted to <key> > <sid>." Mirrors Conv.notifyText.
+    // read "X posted to <key> > <sid>."
     const notify_text = (if (meta.kind == .channel)
         std.fmt.allocPrint(alloc, "{s} posted to {s} > {s}.", .{ msg.from, conv_key, sid })
     else
@@ -340,7 +339,7 @@ fn busBlob(alloc: Alloc, index: usize, from: []const u8, at: []const u8, id: []c
 }
 
 /// chatStoredForm is exactly what message `index` contributes to the file: its
-/// block, preceded by `sep` for every message after the first. Mirrors Go's.
+/// block, preceded by `sep` for every message after the first.
 fn chatStoredForm(alloc: Alloc, index: usize, msg: ChatMessage) ![]u8 {
     const block = try encodeChatBlock(alloc, msg);
     if (index == 0) return block;
@@ -349,7 +348,7 @@ fn chatStoredForm(alloc: Alloc, index: usize, msg: ChatMessage) ![]u8 {
 
 /// encodeChatBlock renders one message to its on-disk block: the MSG_ id line,
 /// the from/date header, a blank line, then the body with each line escaped
-/// against a separator collision. Mirrors Go's encodeChatBlock.
+/// against a separator collision.
 fn encodeChatBlock(alloc: Alloc, msg: ChatMessage) ![]u8 {
     var body: std.ArrayList(u8) = .empty;
     var it = std.mem.splitScalar(u8, msg.markdown, '\n');
@@ -406,7 +405,7 @@ fn cutSeq(s: []const u8, needle: []const u8) ?Cut {
     return .{ .before = s[0..idx], .after = s[idx + needle.len ..] };
 }
 
-// ── conversation paths + access (port of chat_conv.go / channels.go) ─────────
+// ── conversation paths + access ─────────
 
 /// dmConvDir is {chat_root}/<conv>. `conv` is the already-canonical pair key
 /// (e.g. "1_2"); callers gate it through chatKeyParticipant first.
@@ -419,7 +418,7 @@ pub fn channelConvDir(alloc: Alloc, name: []const u8) ![]u8 {
     return std.fs.path.join(alloc, &.{ chat_root, "channels", name });
 }
 
-/// sessionMdPath is {conv_dir}/sessions/<sid>.md. Mirrors Conv.SessionPath.
+/// sessionMdPath is {conv_dir}/sessions/<sid>.md.
 pub fn sessionMdPath(alloc: Alloc, conv_dir: []const u8, sid: []const u8) ![]u8 {
     const file = try std.fmt.allocPrint(alloc, "{s}.md", .{sid});
     return std.fs.path.join(alloc, &.{ conv_dir, "sessions", file });
@@ -456,7 +455,7 @@ pub fn listSessions(io: Io, alloc: Alloc, conv_dir: []const u8) ![][]const u8 {
 }
 
 /// defaultSession prefers "ChitChat" when present, else the alphabetically-first
-/// session, else "" (empty conv). Mirrors Conv.PreferredDefaultSession.
+/// session, else "" (empty conv).
 pub fn defaultSession(io: Io, alloc: Alloc, conv_dir: []const u8) ![]const u8 {
     const sessions = try listSessions(io, alloc, conv_dir);
     for (sessions) |s| {
@@ -470,7 +469,7 @@ fn lessThanStr(_: void, a: []const u8, b: []const u8) bool {
     return std.mem.lessThan(u8, a, b);
 }
 
-// ── channels (port of channels.go) ───────────────────────────────────────────
+// ── channels ───────────────────────────────────────────
 
 /// channelMembers reads {chat_root}/channels/<name>.channel: one uid per line,
 /// blank/`#`-comment lines skipped. Missing file → null (the channel does not
@@ -520,11 +519,11 @@ pub fn listUserChannels(io: Io, alloc: Alloc, uid: []const u8) ![][]const u8 {
     return slice;
 }
 
-// ── validators / access (port of chat_store.go) ──────────────────────────────
+// ── validators / access ──────────────────────────────
 
 /// chatKeyParticipant reports whether `user` participates in DM key `key`
 /// ("<a>_<b>"). The key must be canonical (smaller numeric id first) — a
-/// non-canonical or malformed key is rejected. Mirrors ChatKeyParticipant.
+/// non-canonical or malformed key is rejected.
 pub fn chatKeyParticipant(alloc: Alloc, key: []const u8, user: []const u8) !bool {
     const cut = cutSeq(key, "_") orelse return false;
     const x = cut.before;

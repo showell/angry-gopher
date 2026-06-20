@@ -1,4 +1,4 @@
-//! login: the identity-ISSUANCE front door — the port of server/login/login.go.
+//! login: the identity-ISSUANCE front door.
 //! Two tiers, both keyed by a numeric user id (the cookie carries the id, not the
 //! name):
 //!   /login       — guests: pick a non-reserved name; a fresh login allocates a
@@ -13,7 +13,7 @@
 //! mechanics (allocate, password, name validation, session signing) live in
 //! users.zig next to their resolution peers; this file owns only the HTTP shell —
 //! the forms, the cookies, the redirects — plus the new-member sidebar fan-out
-//! (Go wires that through a hook; here it's a direct call, the one listener).
+//! (a direct call here — there's only the one listener).
 
 const std = @import("std");
 const Io = std.Io;
@@ -27,16 +27,15 @@ const Bus = @import("bus.zig").Bus;
 const Alloc = std.mem.Allocator;
 const Request = std.http.Server.Request;
 
-/// uid_max_age is the long-lived identity cookie's lifetime (Go: 60*60*24*365).
+/// uid_max_age is the long-lived identity cookie's lifetime (one year).
 const uid_max_age = 60 * 60 * 24 * 365;
 
-// Cleared cookies use Max-Age=0 (Go's net/http renders a negative MaxAge as
-// "Max-Age=0", which tells the browser to delete the cookie now).
+// Cleared cookies use Max-Age=0, which tells the browser to delete the cookie now.
 const clear_uid_cookie = "gopher_uid=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax";
 const clear_auth_cookie = "gopher_auth=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax";
 
 /// handle dispatches /login* — `sub` is the path after "/login" ("" for the guest
-/// page, "/full" for the password gate). Mirrors Go's two routes.
+/// page, "/full" for the password gate).
 pub fn handle(req: *Request, io: Io, alloc: Alloc, bus: *Bus, sub: []const u8) !void {
     if (sub.len == 0) return handleLogin(req, io, alloc);
     if (std.mem.eql(u8, sub, "/full")) return handleLoginFull(req, io, alloc, bus);
@@ -47,7 +46,6 @@ pub fn handle(req: *Request, io: Io, alloc: Alloc, bus: *Bus, sub: []const u8) !
 
 /// handleLogin: GET renders the name-entry page; POST validates the name and
 /// either flags a reserved name, or allocates a fresh guest id and logs in.
-/// Mirrors HandleLogin.
 fn handleLogin(req: *Request, io: Io, alloc: Alloc) !void {
     if (req.head.method == .POST) {
         // Resolve identity (reads cookie headers) BEFORE the body: iterateHeaders
@@ -81,7 +79,6 @@ fn handleLogin(req: *Request, io: Io, alloc: Alloc) !void {
 /// already have (a guest name, or an explicit ?name= from the reserved-name
 /// notice). A returning member verifies a password; a guest registers by entering
 /// one twice. On success it issues a member session and returns to `next`.
-/// Mirrors HandleLoginFull.
 fn handleLoginFull(req: *Request, io: Io, alloc: Alloc, bus: *Bus) !void {
     // Resolve header-derived state BEFORE touching the body: iterateHeaders
     // asserts on received_head, and the body read invalidates header/target
@@ -168,7 +165,7 @@ fn loginAsMember(req: *Request, io: Io, alloc: Alloc, id: []const u8, next: []co
 
 /// handleLogout shows the logout page (GET) and performs logout (POST). A
 /// "release" deletes the account + all its data, freeing the name; the default
-/// (unchecked) just clears the cookies and keeps the data. Mirrors HandleLogout.
+/// (unchecked) just clears the cookies and keeps the data.
 pub fn handleLogout(req: *Request, io: Io, alloc: Alloc) !void {
     const user = try users.currentUser(io, alloc, req);
     if (req.head.method == .POST) {
@@ -186,12 +183,12 @@ pub fn handleLogout(req: *Request, io: Io, alloc: Alloc) !void {
     return renderLogoutPage(req, alloc, user.name);
 }
 
-// ── new-member fan-out (port of chat_sidebar.PublishUserArrived) ──────────────
+// ── new-member fan-out ──────────────
 
 /// publishUserArrived broadcasts a "user-arrived" sidebar event to every
 /// authorized principal except the new user, so their open conversation sidebars
 /// upsert a row. URL is pre-resolved per-recipient (the client builds /chat/c/<conv>
-/// without knowing its own uid). Best-effort. Mirrors PublishUserArrived.
+/// without knowing its own uid). Best-effort.
 fn publishUserArrived(io: Io, alloc: Alloc, bus: *Bus, new_uid: []const u8, new_name: []const u8) void {
     const authorized = users.listAuthorized(io, alloc) catch return;
     for (authorized) |u| {
@@ -213,13 +210,13 @@ fn uidCookie(alloc: Alloc, id: []const u8) ![]const u8 {
     return std.fmt.allocPrint(alloc, "gopher_uid={s}; Path=/; Max-Age={d}; HttpOnly; SameSite=Lax", .{ id, uid_max_age });
 }
 
-/// authCookie is the signed member session cookie. Mirrors SetAuthCookie.
+/// authCookie is the signed member session cookie.
 fn authCookie(alloc: Alloc, signed: []const u8) ![]const u8 {
     return std.fmt.allocPrint(alloc, "gopher_auth={s}; Path=/; Max-Age={d}; HttpOnly; SameSite=Lax", .{ signed, uid_max_age });
 }
 
 /// sendRedirect issues a 303 See Other to `location` carrying any Set-Cookie
-/// headers (Go's http.Redirect after SetCookie). Each cookie is its own header.
+/// headers. Each cookie is its own header.
 fn sendRedirect(req: *Request, alloc: Alloc, location: []const u8, cookies: []const []const u8) !void {
     var hs: std.ArrayList(std.http.Header) = .empty;
     try hs.append(alloc, .{ .name = "location", .value = location });
@@ -236,7 +233,7 @@ fn sendHTML(req: *Request, alloc: Alloc, body: []const u8, cookies: []const []co
 }
 
 /// formValue reads a form field from the POST body first, then the query string
-/// (Go's FormValue precedence). `body` is "" for non-POST; `target` is the duped
+///. `body` is "" for non-POST; `target` is the duped
 /// request target (the body read invalidates the live one). The query after '?'
 /// has the same a=b&c=d shape chat.formField parses.
 fn formValue(alloc: Alloc, target: []const u8, body: []const u8, name: []const u8) !?[]const u8 {

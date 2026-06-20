@@ -39,7 +39,7 @@ fn nowNs(io: Io) i128 {
 /// markActive bumps `uid`'s lastSeen and reports whether THIS bump was the
 /// transition edge from offline to online (true on first-ever sighting OR after
 /// >= PresenceWindow of inactivity). Pure state mutation — callers that need to
-/// broadcast use markActiveAndBroadcast. Mirrors Go's MarkActive.
+/// broadcast use markActiveAndBroadcast.
 pub fn markActive(io: Io, uid: []const u8) bool {
     if (uid.len == 0) return false;
     const now = nowNs(io);
@@ -63,7 +63,7 @@ pub fn markActive(io: Io, uid: []const u8) bool {
 
 /// isOnline reports whether `uid` was markActive'd within PresenceWindow.
 /// Read-only; called by the sidebar payload to compute each partner row's
-/// first-paint Online flag. Mirrors Go's IsOnline.
+/// first-paint Online flag.
 pub fn isOnline(io: Io, uid: []const u8) bool {
     if (uid.len == 0) return false;
     mu.lockUncancelable(io);
@@ -76,7 +76,7 @@ pub fn isOnline(io: Io, uid: []const u8) bool {
 /// event out to every OTHER authorized user across both attention streams:
 /// sidebar (the partner-row dot) + notify (the status strip + favicon flash).
 /// Self is excluded. Best-effort — a failure for one recipient/surface is
-/// swallowed. Mirrors Go's markActiveAndBroadcast.
+/// swallowed.
 pub fn markActiveAndBroadcast(io: Io, alloc: Alloc, bus: *Bus, uid: []const u8) void {
     if (!markActive(io, uid)) return;
     const name = users.getUserName(io, alloc, uid) catch return;

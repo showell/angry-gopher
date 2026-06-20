@@ -42,7 +42,7 @@ fn userImagesPath(alloc: Alloc, uid: []const u8) ![]u8 {
 }
 
 /// formatImagesEntry serializes an entry to its on-disk text form (no leading or
-/// trailing separator — the caller joins with images_sep). Mirrors Go.
+/// trailing separator — the caller joins with images_sep).
 pub fn formatImagesEntry(alloc: Alloc, e: ImagesEntry) ![]u8 {
     var b: std.ArrayList(u8) = .empty;
     try b.print(alloc, "Sent by {s} at {s}, source MSG_{s} in {s}:", .{ e.from, e.at, e.source_id, e.conv });
@@ -157,7 +157,7 @@ fn isSpace(c: u8) bool {
 }
 
 /// splitMsgID splits "<sid>_<n>" at the LAST underscore. Returns the sid (or null
-/// when there's no underscore past index 0). Mirrors Go's splitMsgID.
+/// when there's no underscore past index 0).
 pub fn splitMsgID(msg_id: []const u8) ?[]const u8 {
     const cut = std.mem.lastIndexOfScalar(u8, msg_id, '_') orelse return null;
     if (cut == 0) return null;
