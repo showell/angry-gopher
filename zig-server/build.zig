@@ -53,6 +53,7 @@ pub fn build(b: *std.Build) void {
         .{ .name = "chat_js_search", .path = "../chat/chat_search.js" },
         .{ .name = "chat_js_drag_to_pin", .path = "../chat/chat_drag_to_pin.js" },
         .{ .name = "chat_js_add_topic", .path = "../chat/chat_add_topic.js" },
+        .{ .name = "chat_js_first_topic", .path = "../chat/chat_first_topic.js" },
         .{ .name = "chat_js_left_sidebar", .path = "../chat/chat_left_sidebar.js" },
         .{ .name = "chat_js_right_sidebar", .path = "../chat/chat_right_sidebar.js" },
         .{ .name = "chat_js_compose", .path = "../chat/chat_compose.js" },

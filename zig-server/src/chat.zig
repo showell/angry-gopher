@@ -71,6 +71,7 @@ const assets = [_]Asset{
     .{ .name = "chat_search.js", .body = @embedFile("chat_js_search") },
     .{ .name = "chat_drag_to_pin.js", .body = @embedFile("chat_js_drag_to_pin") },
     .{ .name = "chat_add_topic.js", .body = @embedFile("chat_js_add_topic") },
+    .{ .name = "chat_first_topic.js", .body = @embedFile("chat_js_first_topic") },
     .{ .name = "chat_left_sidebar.js", .body = @embedFile("chat_js_left_sidebar") },
     .{ .name = "chat_right_sidebar.js", .body = @embedFile("chat_js_right_sidebar") },
     .{ .name = "chat_compose.js", .body = @embedFile("chat_js_compose") },
@@ -190,7 +191,11 @@ pub fn handleChannel(req: *Request, io: Io, alloc: Alloc, bus: *Bus, sub: []cons
 
     const topic_raw = segs.next() orelse {
         const def = try store.defaultSession(io, alloc, dir);
-        if (def.len == 0) return http.notFound(req);
+        if (def.len == 0) {
+            // Member of a channel with no topics yet — offer to start the first.
+            const title = try std.fmt.allocPrint(alloc, "#{s}", .{name});
+            return firstTopicPage(req, io, alloc, uid, base, title);
+        }
         return http.redirect(req, try std.fmt.allocPrint(alloc, "{s}/{s}", .{ base, def }));
     };
     const meta = store.ConvMeta{ .kind = .channel, .members = members };
@@ -219,7 +224,13 @@ fn convRoute(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8, re
 
     const sid_raw = segs.next() orelse {
         const def = try store.defaultSession(io, alloc, dir);
-        if (def.len == 0) return http.notFound(req);
+        if (def.len == 0) {
+            // Addressable pair, no topics yet — offer to start the first one
+            // (rather than 404 a real, reachable conversation).
+            const partner = try partnerName(io, alloc, conv, uid);
+            const title = try std.fmt.allocPrint(alloc, "Chat w/{s}", .{partner});
+            return firstTopicPage(req, io, alloc, uid, base, title);
+        }
         return http.redirect(req, try std.fmt.allocPrint(alloc, "{s}/{s}", .{ base, def }));
     };
     // DM members are the two uids in the (already participant-checked) pair key.
@@ -270,6 +281,26 @@ fn topicRoute(req: *Request, io: Io, alloc: Alloc, bus: *Bus, segs: *SegIter, ui
     } else {
         try http.notFound(req);
     }
+}
+
+// ── the first-topic bootstrap page (addressable conv, no sessions yet) ────────
+
+/// firstTopicPage renders the "no topics yet" bootstrap shell for a conversation
+/// that is addressable (a DM pair, or a channel the viewer is in) but has no
+/// sessions on disk. The shell is deliberately thin: chrome + an empty mount
+/// carrying the conv base; the ChatFirstTopic client module owns the intro, the
+/// styling, and the ChatAddTopic widget (pre-filled "general") that POSTs
+/// <base>/new and navigates to the created topic. `base` is "/chat/c/<pair>" or
+/// "/channel/<name>"; the widget is base-shape-agnostic.
+fn firstTopicPage(req: *Request, io: Io, alloc: Alloc, uid: []const u8, base: []const u8, title: []const u8) !void {
+    const viewer = try users.getUserName(io, alloc, uid);
+    var b: std.ArrayList(u8) = .empty;
+    try writeChrome(&b, alloc, "Chat", title, viewer, "chat");
+    try b.print(alloc, "<div id=\"chat-first-topic\" data-conv-base=\"{s}\"></div>", .{try htmlEscape(alloc, base)});
+    try b.print(alloc, "<script src=\"/chat/chat_add_topic.js?v={s}\"></script>", .{asset_v});
+    try b.print(alloc, "<script src=\"/chat/chat_first_topic.js?v={s}\"></script>", .{asset_v});
+    try b.appendSlice(alloc, "</div></body></html>");
+    try req.respond(b.items, .{ .extra_headers = &.{http.html_ct} });
 }
 
 // ── the conversation page (boots the prod JS) ────────────────────────────────
@@ -811,23 +842,21 @@ fn indexPage(req: *Request, io: Io, alloc: Alloc, uid: []const u8) !void {
     var b: std.ArrayList(u8) = .empty;
     try b.appendSlice(alloc, index_head);
 
+    // List every OTHER authorized principal as a startable DM — not just convs
+    // that already exist on disk. A DM directory is created lazily (first topic),
+    // so a fresh member would otherwise see "none" with no way in; clicking a
+    // partner with no topics yet lands on the first-topic bootstrap page. "none"
+    // now means exactly what it says: you're the only principal.
     try b.appendSlice(alloc, "<h2>Direct messages</h2><ul>");
     var any_dm = false;
-    if (Io.Dir.cwd().openDir(io, store.chat_root, .{ .iterate = true })) |*dir_const| {
-        var dir = dir_const.*;
-        defer dir.close(io);
-        var it = dir.iterate();
-        while (try it.next(io)) |entry| {
-            if (entry.kind != .directory) continue;
-            if (!try store.chatKeyParticipant(alloc, entry.name, uid)) continue;
-            const conv = try alloc.dupe(u8, entry.name);
-            const partner = try partnerName(io, alloc, conv, uid);
-            try b.print(alloc, "<li><a href=\"/chat/c/{s}\">{s}</a> <span class=\"muted\">({s})</span></li>", .{
-                conv, try htmlEscape(alloc, partner), conv,
-            });
-            any_dm = true;
-        }
-    } else |_| {}
+    for (try users.listAuthorized(io, alloc)) |partner| {
+        if (std.mem.eql(u8, partner.id, uid)) continue;
+        const conv = try store.chatPairKey(alloc, uid, partner.id);
+        try b.print(alloc, "<li><a href=\"/chat/c/{s}\">{s}</a></li>", .{
+            conv, try htmlEscape(alloc, partner.name),
+        });
+        any_dm = true;
+    }
     if (!any_dm) try b.appendSlice(alloc, "<li class=\"muted\">none</li>");
     try b.appendSlice(alloc, "</ul>");
 

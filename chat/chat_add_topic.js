@@ -6,7 +6,9 @@
    single point that knows DM-vs-channel — the widget itself doesn't.
    Owns its DOM, CSS, TOPIC_RE validation, and the inline error display.
    Does NOT decide what happens on success — the caller passes
-   onCreated({conv, sid}). */
+   onCreated({conv, sid}). An optional initialValue pre-fills the input
+   (the first-topic bootstrap seeds "general"); omitted, the field is empty
+   with a "new-topic" placeholder. */
 window.ChatAddTopic = (function(){
   'use strict';
 
@@ -46,6 +48,7 @@ window.ChatAddTopic = (function(){
     input.type = 'text'; input.placeholder = 'new-topic';
     input.autocomplete = 'off'; input.maxLength = 80;
     input.spellcheck = false;
+    if(deps.initialValue) input.value = deps.initialValue;
     var btn = document.createElement('button');
     btn.type = 'submit'; btn.textContent = 'Add Topic';
     var err = document.createElement('div');
