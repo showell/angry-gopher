@@ -75,6 +75,7 @@ const assets = [_]Asset{
     .{ .name = "chat_right_sidebar.js", .body = @embedFile("chat_js_right_sidebar") },
     .{ .name = "chat_compose.js", .body = @embedFile("chat_js_compose") },
     .{ .name = "chat_help.js", .body = @embedFile("chat_js_help") },
+    .{ .name = "chat_responsive.js", .body = @embedFile("chat_js_responsive") },
     .{ .name = "chat.js", .body = @embedFile("chat_js_chat") },
     .{ .name = "notify.js", .body = @embedFile("chat_js_notify") },
     .{ .name = "docs.js", .body = @embedFile("chat_js_docs") },
@@ -91,7 +92,8 @@ const page_scripts = [_][]const u8{
     "message.js",          "message_view.js",      "nav_stack.js",
     "middle_pane.js",      "chat_search.js",       "chat_drag_to_pin.js",
     "chat_add_topic.js",   "chat_left_sidebar.js", "chat_right_sidebar.js",
-    "chat_compose.js",     "chat_help.js",         "chat.js",
+    "chat_compose.js",     "chat_help.js",         "chat_responsive.js",
+    "chat.js",
     "notify.js",
 };
 
@@ -974,7 +976,7 @@ pub fn htmlEscape(alloc: Alloc, s: []const u8) ![]const u8 {
 // without a format string (the CSS's literal `%`/`{` would break one).
 const page_head_a =
     \\<!DOCTYPE html>
-    \\<html><head><meta charset="utf-8"><title>
+    \\<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>
 ;
 const page_head_b =
     \\</title>
