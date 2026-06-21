@@ -60,7 +60,7 @@ window.ChatResponsive = (function(){
       + '.chat-mp-history { padding-bottom:56px !important; }'
 
       /* right sidebar → fixed bottom bar */
-      + '.chat-compose { width:100% !important; flex:none !important;'
+      + '.chat-compose { width:auto !important; flex:none !important;'
       +   ' position:fixed; bottom:0; left:0; right:0; z-index:50;'
       +   ' background:var(--cc-bg); border-top:1px solid var(--cc-border);'
       +   ' max-height:45vh; }'
@@ -68,7 +68,7 @@ window.ChatResponsive = (function(){
       + '.chat-compose .chat-keyhelp { display:none; }'
       + '.chat-compose-body { padding:8px 12px; }'
       + '.chat-compose textarea { min-height:80px; max-height:25vh;'
-      +   ' flex:none; resize:none; }'
+      +   ' flex:none; resize:none; font-size:16px; }'
 
       /* hamburger button */
       + '.chat-hamburger { display:inline-block; background:none; border:none;'
