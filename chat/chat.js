@@ -206,7 +206,7 @@
       ChatCompose.ackIfPending(m.cid);
       var link=document.createElement('a');
       link.href='#msg-'+m.id;
-      link.textContent='✓ '+m.id+' sent';
+      link.textContent='✓ your message was sent to '+m.id;
       link.addEventListener('click', function(e){
         e.preventDefault();
         var rec=recordById(m.id);

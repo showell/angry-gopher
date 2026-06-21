@@ -251,15 +251,22 @@ fn fanoutCrossPage(io: Io, alloc: Alloc, bus: *Bus, meta: ConvMeta, conv_key: []
         "";
 
     for (meta.members) |uid| {
-        // notify — every member is pinged; the open-feed suppression is in
-        // notify.js (conv+session match), so the wire carries both fields.
-        var nj: std.ArrayList(u8) = .empty;
-        nj.print(alloc, "{{\"conv\":{f},\"session\":{f},\"text\":{f},\"link_url\":{f}}}", .{
-            std.json.fmt(conv_key, .{}), std.json.fmt(sid, .{}),
-            std.json.fmt(notify_text, .{}), std.json.fmt(rec_url, .{}),
-        }) catch {};
-        if (nj.items.len > 0) {
-            if (notifyBusKey(alloc, uid)) |k| bus.publish(k, nj.items) else |_| {}
+        // notify — every member EXCEPT the author is pinged. The favicon dot
+        // means "a partner did something"; you don't notify yourself about your
+        // own message (the author already sees the self-confirm via the main
+        // feed echo). Skipping the author here is the real invariant — the
+        // open-feed conv+session suppression in notify.js only covers the
+        // currently-viewed thread, so author-skip is what keeps the dot quiet
+        // when you send to a thread you're not actively staring at.
+        if (!std.mem.eql(u8, uid, from_id)) {
+            var nj: std.ArrayList(u8) = .empty;
+            nj.print(alloc, "{{\"conv\":{f},\"session\":{f},\"text\":{f},\"link_url\":{f}}}", .{
+                std.json.fmt(conv_key, .{}), std.json.fmt(sid, .{}),
+                std.json.fmt(notify_text, .{}), std.json.fmt(rec_url, .{}),
+            }) catch {};
+            if (nj.items.len > 0) {
+                if (notifyBusKey(alloc, uid)) |k| bus.publish(k, nj.items) else |_| {}
+            }
         }
 
         // sidebar — topic-added to every member on the first message only.
