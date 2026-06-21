@@ -10,16 +10,18 @@ lynrummy.com {
 	encode gzip
 
 	# Coarse outer caps. The server's handlers enforce tighter per-route limits
-	# (256 KB new-session, 64 KB append/puzzle). Chat image uploads need
-	# headroom: Gopher caps the decoded image at 10 MiB, so give the upload
-	# route 12 MB and keep everything else tight. The route is path-style —
-	# POST /chat/c/<conv>/<sid>/upload — so match it with a regexp; the two
-	# matchers are exact complements, so precisely one cap applies per request.
-	@upload path_regexp up ^/chat/c/[^/]+/[^/]+/upload$
+	# (256 KB new-session, 64 KB append/puzzle). Uploads need real headroom:
+	# Gopher caps a screencast at 100 MiB (image 10 MiB) and reads up to ~101
+	# MiB of multipart body, so give the upload route 110 MB and keep everything
+	# else tight. The route is path-style and exists for BOTH DMs and channels —
+	# POST /chat/c/<conv>/<sid>/upload AND /channel/<name>/<topic>/upload — so
+	# match both with one regexp; the two matchers are exact complements, so
+	# precisely one cap applies per request.
+	@upload path_regexp up ^(/chat/c/[^/]+/[^/]+|/channel/[^/]+/[^/]+)/upload$
 	request_body @upload {
-		max_size 12MB
+		max_size 110MB
 	}
-	@notupload not path_regexp nup ^/chat/c/[^/]+/[^/]+/upload$
+	@notupload not path_regexp nup ^(/chat/c/[^/]+/[^/]+|/channel/[^/]+/[^/]+)/upload$
 	request_body @notupload {
 		max_size 1MB
 	}
