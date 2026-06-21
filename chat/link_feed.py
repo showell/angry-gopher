@@ -57,7 +57,7 @@ def extract_urls(text):
     """External URLs in `text`, in order, trailing sentence punctuation trimmed."""
     out = []
     for m in URL_RE.finditer(text):
-        url = m.group(0).rstrip(".,;:!?")
+        url = m.group(0).rstrip(".,;:!?“”‘’«»")
         if is_external(url):
             out.append(url)
     return out
@@ -136,15 +136,27 @@ def collect(chat_dir, uid):
     return msgs
 
 
-def build_feed(msgs):
-    """Render the deduped feed; a message appears at the FIRST sight of each URL."""
-    seen, blocks, n_links = set(), [], 0
+def deduped_messages(msgs):
+    """Messages in feed (chronological) order, each annotated with only the URLs
+    it INTRODUCES — i.e. the first sight of each unique external URL. Shared by
+    the feed renderer and the grouper (link_groups.py) so dedup lives once."""
+    seen, out = set(), []
     for msg in sorted(msgs, key=lambda m: (m["date"], m["conv"], m["id"])):
         new = [u for u in dict.fromkeys(msg["urls"]) if u not in seen]
         if not new:
             continue
         seen.update(new)
-        n_links += len(new)
+        rec = dict(msg)
+        rec["new_urls"] = new
+        out.append(rec)
+    return out
+
+
+def build_feed(msgs):
+    """Render the deduped feed; a message appears at the FIRST sight of each URL."""
+    blocks, n_links = [], 0
+    for msg in deduped_messages(msgs):
+        n_links += len(msg["new_urls"])
         header = [
             msg["id"],
             f"from: {msg['from']}",
@@ -152,9 +164,9 @@ def build_feed(msgs):
             f"conv: {msg['conv']}",
             f"topic: {msg['topic']}",
         ]
-        header += [f"link: {u}" for u in new]
+        header += [f"link: {u}" for u in msg["new_urls"]]
         blocks.append("\n".join(header) + "\n\n" + msg["body"])
-    return blocks, len(seen), n_links
+    return blocks, n_links, n_links
 
 
 def main():
