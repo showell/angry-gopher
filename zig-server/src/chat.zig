@@ -36,6 +36,7 @@ const docs = @import("docs.zig");
 const recent = @import("recent.zig");
 const images = @import("images.zig");
 const code = @import("code.zig");
+const links = @import("links.zig");
 const upload = @import("chat_upload.zig");
 const presence = @import("presence.zig");
 const chat_state = @import("chat_state.zig");
@@ -153,6 +154,13 @@ pub fn handle(req: *Request, io: Io, alloc: Alloc, bus: *Bus, sub: []const u8) !
     if (matchPrefix(sub, "/code")) |rest| {
         if (rest.len == 0 or rest[0] == '/') {
             try code.handle(req, io, alloc, bus, uid, rest);
+            return;
+        }
+    }
+    // /chat/links — a per-user curated links page (links.zig). Static: no stream.
+    if (matchPrefix(sub, "/links")) |rest| {
+        if (rest.len == 0 or rest[0] == '/') {
+            try links.handle(req, io, alloc, uid, rest);
             return;
         }
     }
@@ -379,6 +387,7 @@ const nav_items = [_]NavItem{
     .{ .href = "/chat/recent", .label = "Recent", .key = "recent" },
     .{ .href = "/chat/images", .label = "Images", .key = "images" },
     .{ .href = "/chat/code", .label = "Code", .key = "code" },
+    .{ .href = "/chat/links", .label = "Links", .key = "links" },
     .{ .href = "/settings", .label = "Settings", .key = "settings" },
 };
 

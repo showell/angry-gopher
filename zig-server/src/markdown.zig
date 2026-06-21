@@ -23,6 +23,17 @@ pub fn render(a: std.mem.Allocator, md: []const u8) ![]const u8 {
     return try linkifyMsgRefs(a, body);
 }
 
+/// renderTrusted is render() for SERVER-OWNED content (not user-submitted): the
+/// same block/inline pipeline, but WITHOUT the hostile-input token cap. A curated
+/// file like the per-user Links page legitimately carries far more than 256 link
+/// tokens, which render() would reject wholesale. The structural crash guards
+/// (block-nesting depth) and HTML escaping still apply. NEVER call this on input
+/// that came from a request body.
+pub fn renderTrusted(a: std.mem.Allocator, md: []const u8) ![]const u8 {
+    const body = try renderBlocks(a, md);
+    return try linkifyMsgRefs(a, body);
+}
+
 /// malformed_html is what a rejected (hostile / over-formatted) message renders
 /// to instead of its content. A plain escaped paragraph — no styling shipped
 /// from the server (the client may style .md-malformed).
