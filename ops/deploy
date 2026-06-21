@@ -77,4 +77,17 @@ ssh "$DEPLOY_HOST" "sudo systemctl restart $DEPLOY_SERVICE && \
     curl -fsS http://localhost:9001/login >/dev/null && \
     echo 'zig front door serving on :9001 (/version + /login OK)'"
 
+# Refresh the watchdog too: ship the current deploy/watchdog.py (so the host copy
+# never drifts from the repo) and bounce it, so watchdog-status.txt picks up the
+# new commit hash + resets uptime right away instead of within a cycle. The
+# watchdog is monitoring aux, not the service — best-effort, so a hiccup here
+# WARNs but never fails an otherwise-green server deploy.
+echo "Refreshing watchdog ..."
+if scp "$GOPHER_DIR/deploy/watchdog.py" "$DEPLOY_HOST:~/watchdog.py" && \
+   ssh "$DEPLOY_HOST" "sudo systemctl restart watchdog && systemctl is-active watchdog"; then
+    echo "watchdog refreshed (latest watchdog.py, restarted)"
+else
+    echo "WARNING: watchdog refresh failed (server deploy is fine; fix the watchdog by hand)" >&2
+fi
+
 echo "Deploy complete: https://lynrummy.com/  (verify the real front door, not just /driving)"

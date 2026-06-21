@@ -92,8 +92,13 @@ ssh steve@<IP> cat watchdog-status.txt      # latest snapshot
 ssh steve@<IP> cat watchdog.log             # appended history of WARN/FAIL cycles
 ```
 
+The snapshot header carries both UTC and New York wall-clock; the `server`
+line includes the build's git commit hash (baked in via `ops/deploy`'s
+`-Dcommit`), and a `zig-uptime` line shows how long the running binary has
+been up.
+
 It takes no arguments (thresholds are constants at the top of the file) and
-opens no network except to curl the local server. Ship + install as a
+opens no network except to curl the local server. ONE-TIME install as a
 systemd service (auto-start on boot, auto-restart on crash — survives a
 droplet reboot, same as `gopher-server`):
 
@@ -104,7 +109,9 @@ ssh steve@<IP> 'sudo mv /tmp/watchdog.service /etc/systemd/system/ && \
   sudo systemctl daemon-reload && sudo systemctl enable --now watchdog'
 ```
 
-To update the watchdog later: `scp` the new `watchdog.py` over, then
+After that, `ops/deploy` ships the current `watchdog.py` and restarts the
+service on every deploy (best-effort), so the host copy never drifts from the
+repo — no manual update step. To bounce it by hand anyway:
 `ssh steve@<IP> 'sudo systemctl restart watchdog'`.
 
 ## Hardening (applied 2026-05-21)
