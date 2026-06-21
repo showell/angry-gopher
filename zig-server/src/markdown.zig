@@ -1,4 +1,5 @@
 const std = @import("std");
+const fence = @import("fence.zig");
 
 /// render turns a raw chat message body into HTML. It implements — and IS the
 /// definition of — lynrummy's markdown dialect: GFM-style paragraphs with hard
@@ -53,7 +54,7 @@ pub fn hostileReason(md: []const u8) ?[]const u8 {
         const next = if (eol < md.len) eol + 1 else md.len;
         if (fence_char != 0) {
             // Inside a fenced code block: code is ordinary text, count nothing.
-            if (isClosingFence(line, fence_char, fence_count)) fence_char = 0;
+            if (fence.isClose(line, fence_char, fence_count)) fence_char = 0;
         } else if (parseFenceOpen(md, pos)) |fo| {
             fence_char = fo.char;
             fence_count = fo.count;
@@ -201,6 +202,9 @@ fn tightSep(out: *std.ArrayList(u8), a: std.mem.Allocator, tight: bool) !void {
 
 // --- fenced code blocks (incl. the `quote` extension) -----------------------
 
+/// FenceOpen is fence.Open plus the document offset of the first content line,
+/// which the offset-based renderer needs and the line-based fence grammar can't
+/// supply on its own.
 const FenceOpen = struct {
     char: u8,
     count: usize,
@@ -209,37 +213,17 @@ const FenceOpen = struct {
     body_start: usize, // index of the first content line
 };
 
-/// parseFenceOpen recognizes a fence opening at md[pos] (line start): up to 3
-/// leading spaces, then >=3 of '`' or '~'. The info string is the rest of the
-/// line; the language is its first whitespace-delimited token.
+/// parseFenceOpen recognizes a fence opening at md[pos] (line start), delegating
+/// the grammar to fence.parseOpen (the shared, length-aware, depth-capped
+/// definition) and adding the document offset of the body.
 fn parseFenceOpen(md: []const u8, pos: usize) ?FenceOpen {
-    var i = pos;
-    var indent: usize = 0;
-    while (i < md.len and md[i] == ' ' and indent < 4) : (i += 1) {
-        indent += 1;
-    }
-    if (indent >= 4 or i >= md.len) return null;
-    const f = md[i];
-    if (f != '`' and f != '~') return null;
-    var count: usize = 0;
-    while (i < md.len and md[i] == f) : (i += 1) {
-        count += 1;
-    }
-    if (count < 3) return null;
-
-    const eol = lineEnd(md, i);
-    var info = md[i..eol];
-    // A backtick info string may not contain a backtick.
-    if (f == '`' and std.mem.indexOfScalar(u8, info, '`') != null) return null;
-    info = trimLine(info);
-    var lang = info;
-    if (std.mem.indexOfAny(u8, info, " \t")) |sp| lang = info[0..sp];
-
+    const eol = lineEnd(md, pos);
+    const o = fence.parseOpen(md[pos..eol]) orelse return null;
     return .{
-        .char = f,
-        .count = count,
-        .indent = indent,
-        .lang = lang,
+        .char = o.char,
+        .count = o.count,
+        .indent = o.indent,
+        .lang = o.lang,
         .body_start = if (eol < md.len) eol + 1 else md.len,
     };
 }
@@ -272,21 +256,6 @@ fn atxHeading(line: []const u8) ?Heading {
     return .{ .level = level, .content = content };
 }
 
-fn isClosingFence(line: []const u8, f: u8, n: usize) bool {
-    var i: usize = 0;
-    var indent: usize = 0;
-    while (i < line.len and line[i] == ' ' and indent < 4) : (i += 1) {
-        indent += 1;
-    }
-    if (indent >= 4) return false;
-    var count: usize = 0;
-    while (i < line.len and line[i] == f) : (i += 1) {
-        count += 1;
-    }
-    if (count < n) return false;
-    return trimLine(line[i..]).len == 0;
-}
-
 /// renderFence emits the code block and returns the position after the closing
 /// fence (or EOF when there is none — an unterminated fence runs to the end).
 fn renderFence(out: *std.ArrayList(u8), a: std.mem.Allocator, md: []const u8, fo: FenceOpen) !usize {
@@ -295,7 +264,7 @@ fn renderFence(out: *std.ArrayList(u8), a: std.mem.Allocator, md: []const u8, fo
     var p = fo.body_start;
     while (p < md.len) {
         const e = lineEnd(md, p);
-        if (isClosingFence(md[p..e], fo.char, fo.count)) {
+        if (fence.isClose(md[p..e], fo.char, fo.count)) {
             content_end = p;
             after = if (e < md.len) e + 1 else md.len;
             break;
