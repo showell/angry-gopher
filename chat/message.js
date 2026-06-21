@@ -107,6 +107,10 @@ window.Message = (function(){
       + '.chat-body img {'
       +   ' max-width:100%; max-height:320px; width:auto; height:auto;'
       +   ' display:block; margin:6px 0; border-radius:6px; cursor:zoom-in; }'
+      /* Screencasts: bounded to the bubble width with native controls (no
+         zoom-click — that's IMG-only). max-height keeps a tall clip in check. */
+      + '.chat-body video {'
+      +   ' max-width:100%; max-height:480px; display:block; margin:6px 0; border-radius:6px; }'
       /* Supersession spoiler (Edit of MSG_<id>). */
       + '.chat-edited-note { font-size:12px; color:var(--cc-muted-fg); margin-bottom:4px; }'
       + '.chat-edited-spoiler > summary {'

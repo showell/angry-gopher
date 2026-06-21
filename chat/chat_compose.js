@@ -7,11 +7,14 @@
 window.ChatCompose = (function(){
   'use strict';
 
-  var textarea, form, status, imageBtn, fileInput;
+  var textarea, form, status, uploadBtn, fileInput;
   var SESSION_BASE, closeCompose;
   var pendingCid=null, pendingTimer=null;
-  /* PRODUCT_DECISION: must match Gopher's maxChatUploadBytes and stay under Caddy's body cap. */
+  /* PRODUCT_DECISION: must match the server's per-kind caps (UploadKind.cap) and
+     stay under Caddy's body cap. Images are small; screencasts get more room. */
   var MAX_IMAGE_BYTES=10*1024*1024;
+  var MAX_VIDEO_BYTES=100*1024*1024;
+  var UPLOAD_ACCEPT='image/png,image/jpeg,image/gif,image/webp,video/mp4,video/webm,video/quicktime';
 
   /* PRODUCT_DECISION: widget owns its own CSS. Selectors are scoped to
      .chat-compose (the right-rail wrapper class set by ChatRightSidebar).
@@ -94,38 +97,47 @@ window.ChatCompose = (function(){
     textarea.value=text;
     if(typeof caretAt==='number') textarea.setSelectionRange(caretAt, caretAt);
   }
-  /* PRODUCT_DECISION: reject oversized images up front (per-image limit);
-     otherwise surface the server's own message (e.g. lifetime upload cap). */
-  function uploadImage(file){
+  /* PRODUCT_DECISION: one upload path for images AND screencasts. The per-kind
+     size limit is checked up front; the server's "kind" in the response decides
+     whether we insert an <img> or a <video>. Other failures (e.g. the shared
+     lifetime cap) surface the server's own message. */
+  function uploadFile(file){
     if(!file) return;
-    if(file.size > MAX_IMAGE_BYTES){
+    var isVideo=file.type.indexOf('video/')===0;
+    var noun=isVideo?'screencast':'image';
+    var cap=isVideo?MAX_VIDEO_BYTES:MAX_IMAGE_BYTES;
+    if(file.size > cap){
       status.style.color='';
-      status.textContent='That image is '+(file.size/1048576).toFixed(1)+' MB — too big to send (limit 10 MB). Try compressing or resizing it.';
+      status.textContent='That '+noun+' is '+(file.size/1048576).toFixed(1)+' MB — too big to send (limit '+(cap/1048576)+' MB).'+(isVideo?'':' Try compressing or resizing it.');
       return;
     }
-    status.style.color=ChatColors.mutedFg; status.textContent='Uploading image…';
+    status.style.color=ChatColors.mutedFg; status.textContent='Uploading '+noun+'…';
     var fd=new FormData(); fd.append('file',file);
     fetch(SESSION_BASE+'/upload',{method:'POST',body:fd})
       .then(function(r){
         if(r.ok) return r.json();
         return r.text().then(function(t){
           t=(t||'').trim();
-          throw (t && t.charAt(0)!=='<' && t.length<200) ? t : 'Image upload failed.';
+          throw (t && t.charAt(0)!=='<' && t.length<200) ? t : 'Upload failed.';
         });
       })
       .then(function(d){
-        /* BROWSER_WORKAROUND: HTML <img> with width/height so browsers reserve
-           layout space before decode — keeps "scroll to bottom" stable when
-           the image lands. Server may return 0 for unknown dims (e.g. webp
-           without stdlib decoder); we omit the attrs in that case. */
-        var alt=(d.name||'image').replace(/["<>\r\n]/g,'');
-        var dims=(d.width>0 && d.height>0) ? ' width="'+d.width+'" height="'+d.height+'"' : '';
-        insertAtCursor('<img src="'+d.url+'" alt="'+alt+'"'+dims+'>');
+        if(d.kind==='video'){
+          insertAtCursor('<video src="'+d.url+'"></video>');
+        } else {
+          /* BROWSER_WORKAROUND: HTML <img> with width/height so browsers reserve
+             layout space before decode — keeps "scroll to bottom" stable when
+             the image lands. Server may return 0 for unknown dims (e.g. webp
+             without stdlib decoder); we omit the attrs in that case. */
+          var alt=(d.name||'image').replace(/["<>\r\n]/g,'');
+          var dims=(d.width>0 && d.height>0) ? ' width="'+d.width+'" height="'+d.height+'"' : '';
+          insertAtCursor('<img src="'+d.url+'" alt="'+alt+'"'+dims+'>');
+        }
         status.textContent=''; status.style.color='';
       })
       .catch(function(msg){
         status.style.color='';
-        status.textContent = (typeof msg==='string' && msg) ? msg : 'Image upload failed.';
+        status.textContent = (typeof msg==='string' && msg) ? msg : 'Upload failed.';
       });
   }
 
@@ -148,14 +160,14 @@ window.ChatCompose = (function(){
 
     var actions = document.createElement('div'); actions.className = 'chat-compose-actions';
     var sendBtn = document.createElement('button'); sendBtn.type = 'submit'; sendBtn.textContent = 'Send';
-    var imgBtn = document.createElement('button'); imgBtn.type = 'button'; imgBtn.id = 'chat-image-btn'; imgBtn.textContent = 'Image';
-    actions.appendChild(sendBtn); actions.appendChild(imgBtn);
+    var upBtn = document.createElement('button'); upBtn.type = 'button'; upBtn.id = 'chat-upload-btn'; upBtn.textContent = 'Upload';
+    actions.appendChild(sendBtn); actions.appendChild(upBtn);
     form.appendChild(actions);
     body.appendChild(form);
 
     var file = document.createElement('input');
     file.type = 'file'; file.id = 'chat-file';
-    file.accept = 'image/png,image/jpeg,image/gif,image/webp';
+    file.accept = UPLOAD_ACCEPT;
     file.style.display = 'none';
     body.appendChild(file);
 
@@ -163,17 +175,17 @@ window.ChatCompose = (function(){
     body.appendChild(statusEl);
 
     var hint = document.createElement('div'); hint.className = 'chat-hint';
-    hint.textContent = 'Markdown supported · paste or attach an image · Ctrl/⌘-Enter to send';
+    hint.textContent = 'Markdown supported · attach an image or screencast · Ctrl/⌘-Enter to send';
     body.appendChild(hint);
 
-    return { body:body, form:form, textarea:ta, imageBtn:imgBtn, fileInput:file, status:statusEl };
+    return { body:body, form:form, textarea:ta, uploadBtn:upBtn, fileInput:file, status:statusEl };
   }
 
   function init(deps){
     ensureStyles();
     var built = buildComposeBody();
     textarea = built.textarea; form = built.form; status = built.status;
-    imageBtn = built.imageBtn; fileInput = built.fileInput;
+    uploadBtn = built.uploadBtn; fileInput = built.fileInput;
     SESSION_BASE = deps.sessionBase; closeCompose = deps.closeCompose;
 
     /* PRODUCT_DECISION: insert before the closed-panel so the open state
@@ -192,12 +204,13 @@ window.ChatCompose = (function(){
       if((e.ctrlKey||e.metaKey)&&e.key==='Enter'){ e.preventDefault(); send(); return; }
       if(e.key==='Escape'&&textarea.value.trim()===''){ e.preventDefault(); closeCompose(); } /* PRODUCT_DECISION: Esc closes only when empty — never lose a draft. */
     });
-    imageBtn.addEventListener('click', function(){ fileInput.click(); });
-    fileInput.addEventListener('change', function(){ uploadImage(fileInput.files[0]); fileInput.value=''; });
+    uploadBtn.addEventListener('click', function(){ fileInput.click(); });
+    fileInput.addEventListener('change', function(){ uploadFile(fileInput.files[0]); fileInput.value=''; });
     textarea.addEventListener('paste', function(e){
       var files=e.clipboardData&&e.clipboardData.files;
       if(files) for(var i=0;i<files.length;i++){
-        if(files[i].type.indexOf('image/')===0){ e.preventDefault(); uploadImage(files[i]); return; }
+        var t=files[i].type;
+        if(t.indexOf('image/')===0 || t.indexOf('video/')===0){ e.preventDefault(); uploadFile(files[i]); return; }
       }
     });
   }
