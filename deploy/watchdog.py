@@ -9,7 +9,9 @@ status file you can read from the dev box over ssh:
 
 What it checks (all thresholds are constants below — no CLI args, by design):
   - server    : the local server answers GET /version with a success JSON
+                (that body carries the build's version + git commit hash)
   - process   : exactly one zig-server process is running
+  - zig-uptime: how long the running binary has been up (sampled each cycle)
   - zig-memory: that process's RSS is not enormous
   - sys-memory: the box still has available RAM
   - disk      : the root filesystem still has free space
@@ -36,6 +38,15 @@ import shutil
 import time
 import traceback
 import urllib.request
+
+# NYC wall-clock alongside UTC in the status header. The host (Ubuntu) ships
+# tzdata, so zoneinfo handles EST/EDT correctly; guarded so a missing tz db can
+# never take the watchdog down — we just fall back to UTC-only.
+try:
+    from zoneinfo import ZoneInfo
+    NYC_TZ = ZoneInfo("America/New_York")
+except Exception:
+    NYC_TZ = None
 
 # ── configuration (edit here; the program takes no arguments) ─────────────────
 
@@ -111,6 +122,44 @@ def mb(kb):
     return kb / 1024.0
 
 
+def proc_uptime_secs(pid):
+    """Seconds the given pid has been running, derived from /proc against the
+    same boot reference as /proc/uptime (so no wall-clock drift). Returns None if
+    it can't be read. Sampled once per cycle, so up to INTERVAL_SECS stale — fine
+    for an at-a-glance "how long has this build been up" line."""
+    try:
+        with open("/proc/uptime") as f:
+            sys_up = float(f.read().split()[0])
+        with open(f"/proc/{pid}/stat") as f:
+            stat = f.read()
+        # comm (field 2) is parenthesized and may contain spaces/parens, so the
+        # numeric fields are taken AFTER the last ')'. starttime is field 22;
+        # counting from the field right after ')' (field 3) that's index 19.
+        after = stat[stat.rfind(")") + 1:].split()
+        starttime_ticks = int(after[19])
+        clk = os.sysconf("SC_CLK_TCK") or 100
+        return sys_up - starttime_ticks / clk
+    except Exception:
+        return None
+
+
+def human_duration(secs):
+    secs = int(secs)
+    d, rem = divmod(secs, 86400)
+    h, rem = divmod(rem, 3600)
+    m, s = divmod(rem, 60)
+    parts = []
+    if d:
+        parts.append(f"{d}d")
+    if h:
+        parts.append(f"{h}h")
+    if m:
+        parts.append(f"{m}m")
+    if not d:  # show seconds only while the uptime is still short
+        parts.append(f"{s}s")
+    return " ".join(parts)
+
+
 # ── the checks ────────────────────────────────────────────────────────────────
 
 def check_server():
@@ -133,6 +182,15 @@ def check_zig_process(zigs):
         return Check("process", OK, f"zig-server up (pid {zigs[0]['pid']})")
     pids = ", ".join(str(p["pid"]) for p in zigs)
     return Check("process", WARN, f"{len(zigs)} zig-server processes (pids {pids}); expected exactly 1")
+
+
+def check_zig_uptime(zigs):
+    if not zigs:
+        return Check("zig-uptime", WARN, "no zig-server process to measure")
+    ups = [u for u in (proc_uptime_secs(p["pid"]) for p in zigs) if u is not None]
+    if not ups:
+        return Check("zig-uptime", WARN, "could not read process start time")
+    return Check("zig-uptime", OK, f"up {human_duration(max(ups))}")
 
 
 def check_zig_memory(zigs):
@@ -198,7 +256,11 @@ def heavy_processes(procs):
 # ── output ────────────────────────────────────────────────────────────────────
 
 def now_str():
-    return datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+    utc = datetime.datetime.now(datetime.timezone.utc)
+    s = utc.strftime("%Y-%m-%d %H:%M:%S UTC")
+    if NYC_TZ is not None:
+        s += utc.astimezone(NYC_TZ).strftime("  /  %Y-%m-%d %H:%M:%S %Z (New York)")
+    return s
 
 
 def render(checks, heavy, overall, stamp):
@@ -242,6 +304,7 @@ def run_once():
     checks = [
         check_server(),
         check_zig_process(zigs),
+        check_zig_uptime(zigs),
         check_zig_memory(zigs),
         check_sys_memory(),
         check_disk(),

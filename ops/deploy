@@ -50,7 +50,9 @@ echo "Building Elm/TS + driving bundles..."
 # CPU-bound path ever lands in the zig server, flip back to
 # `-Doptimize=ReleaseSafe` (or optimize just that path).
 echo "Building zig-server ($COMMIT, Debug)..."
-( cd "$GOPHER_DIR/zig-server" && zig build )
+# -Dcommit bakes the short-hash into the binary so /version reports the exact
+# deployed commit (build.zig -> home.zig handleVersion -> watchdog-status.txt).
+( cd "$GOPHER_DIR/zig-server" && zig build "-Dcommit=$COMMIT" )
 BIN="$GOPHER_DIR/zig-server/zig-out/bin/zig-server"
 
 # The binary is self-contained + statically linked, so we ship exactly one file.

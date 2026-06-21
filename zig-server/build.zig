@@ -20,6 +20,13 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
+    // Bake the deploy's git short-hash into the binary so /version (and thus the
+    // watchdog) reports exactly which commit is serving. ops/deploy passes
+    // -Dcommit=$(git rev-parse --short HEAD); local/dev builds fall back to "dev".
+    const build_opts = b.addOptions();
+    build_opts.addOption([]const u8, "commit", b.option([]const u8, "commit", "git short hash baked into /version") orelse "dev");
+    root.addImport("build_options", build_opts.createModule());
+
     // Embedded front-end assets (the embed.go analog). Referenced in code as
     // @embedFile("<name>"). All live outside this package dir, so they're wired
     // here rather than by a relative @embedFile path.

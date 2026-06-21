@@ -12,6 +12,7 @@
 //! `version` to confirm a fresh binary is actually serving.
 
 const std = @import("std");
+const build_options = @import("build_options");
 const Io = std.Io;
 const http = @import("http.zig");
 const edge = @import("edge.zig");
@@ -42,17 +43,18 @@ pub fn handleHome(req: *Request, io: Io, alloc: Alloc, uid: []const u8, path: []
     try req.respond(b.items, .{ .extra_headers = &.{http.html_ct} });
 }
 
-/// handleVersion serves the JSON build-identity probe. The `commit` field is
-/// "dev" — the build doesn't inject a build id yet; `version` is the observable
-/// knob for now.
+/// handleVersion serves the JSON build-identity probe. `commit` is the git
+/// short-hash baked in at build time (ops/deploy passes -Dcommit=...); it reads
+/// "dev" for local builds. Together with `version` it pins exactly which build
+/// is serving — the watchdog surfaces both in watchdog-status.txt.
 pub fn handleVersion(req: *Request, alloc: Alloc) !void {
     // `rejects` is the edge-policy observable: a counter per reject kind (see
     // edge.zig). The watchdog polls /version, so a climbing counter surfaces in
     // watchdog-status.txt without any extra plumbing.
     const rejects = try edge.countsJSON(alloc);
     const body = try std.fmt.allocPrint(alloc,
-        \\{{"result":"success","version":"{s}","commit":"dev","rejects":{s}}}
-    , .{ version, rejects });
+        \\{{"result":"success","version":"{s}","commit":"{s}","rejects":{s}}}
+    , .{ version, build_options.commit, rejects });
     try req.respond(body, .{ .extra_headers = &.{http.json_ct} });
 }
 
