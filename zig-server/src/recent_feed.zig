@@ -2,9 +2,10 @@
 //! leaf module so BOTH consumers share one encoder with no import cycle:
 //!   - recent.zig  — renders the initial backlog (one event per gathered item)
 //!   - chat_store.zig (appendMessage fanout) — publishes ONE live event per write
-//! The recentEvent JSON field order is kind, at, url, topic, where, last_author,
-//! excerpt, slug, title — empties omitted, so recent.js's `if(evt.last_author)` /
-//! `if(evt.where)` / `if(evt.excerpt)` branches stay correct.
+//! The recentEvent JSON field order is kind, at, url, who, where, topic,
+//! excerpt, slug, title — empties omitted, so recent.js's `if(evt.where)` /
+//! `if(evt.excerpt)` branches stay correct. `who` is the author's display name,
+//! already rendered "You" for the recipient (the feed is per-viewer).
 
 const std = @import("std");
 const Alloc = std.mem.Allocator;
@@ -13,19 +14,21 @@ const Alloc = std.mem.Allocator;
 pub const recent_excerpt_cap = 280;
 
 /// encodeChatEvent writes one chat recentEvent object into `j`.
-pub fn encodeChatEvent(j: *std.ArrayList(u8), alloc: Alloc, at: []const u8, url: []const u8, topic: []const u8, where: []const u8, last_author: []const u8, excerpt: []const u8) !void {
+pub fn encodeChatEvent(j: *std.ArrayList(u8), alloc: Alloc, at: []const u8, url: []const u8, who: []const u8, where: []const u8, topic: []const u8, excerpt: []const u8) !void {
     try j.print(alloc, "{{\"kind\":\"chat\",\"at\":{f}", .{std.json.fmt(at, .{})});
     try appendField(j, alloc, "url", url);
-    try appendField(j, alloc, "topic", topic);
+    try appendField(j, alloc, "who", who);
     try appendField(j, alloc, "where", where);
-    try appendField(j, alloc, "last_author", last_author);
+    try appendField(j, alloc, "topic", topic);
     try appendField(j, alloc, "excerpt", excerpt);
     try j.append(alloc, '}');
 }
 
-/// encodeDocEvent writes one doc recentEvent object into `j`.
-pub fn encodeDocEvent(j: *std.ArrayList(u8), alloc: Alloc, at: []const u8, slug: []const u8, title: []const u8) !void {
+/// encodeDocEvent writes one doc recentEvent object into `j`. `who` is the
+/// editor, already "You" for the viewer (docs are the viewer's own).
+pub fn encodeDocEvent(j: *std.ArrayList(u8), alloc: Alloc, at: []const u8, who: []const u8, slug: []const u8, title: []const u8) !void {
     try j.print(alloc, "{{\"kind\":\"doc\",\"at\":{f}", .{std.json.fmt(at, .{})});
+    try appendField(j, alloc, "who", who);
     try appendField(j, alloc, "slug", slug);
     try appendField(j, alloc, "title", title);
     try j.append(alloc, '}');

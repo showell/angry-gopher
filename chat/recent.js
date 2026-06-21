@@ -5,10 +5,10 @@
    EventSource on /chat/recent/stream for upserts, and re-humanizes the
    When column on a 20s tick (from each row's data-ts).
 
-   The page-specific styling — When column right-align/tabular-nums and
-   the "(with X)" muted span — lives inline here so the server emits zero
-   CSS for this page. The base table look (borders, header colors,
-   tr:hover) still comes from the shared chrome stylesheet. */
+   ALL styling for this page is client-side — the server emits zero CSS for
+   /chat/recent. A small injected <style> (below) sets the table spacing and
+   widens the page container; per-cell inline styles handle the When column
+   (right-align/tabular-nums) and the muted excerpt/context spans. */
 (function(){
   'use strict';
 
@@ -21,6 +21,17 @@
   catch(err){ console.error('recent: malformed JSON payload', err); return; }
   if(!Array.isArray(initial)) initial = [];
 
+  /* Page-owned layout. border-spacing (not border-collapse) names the
+     inter-column and inter-row gaps directly: 4px/3px is +2px between columns
+     and +1px between rows over the UA default 2px/2px. The container is
+     widened past the 820px chrome cap so the feed uses the horizontal space
+     it has when the window is wide. */
+  var layoutStyle = document.createElement('style');
+  layoutStyle.textContent =
+      '.app-body-wrap { max-width: 800px; }'
+    + '#recent-mount table { width: 100%; border-collapse: separate; border-spacing: 4px 3px; }';
+  document.head.appendChild(layoutStyle);
+
   /* PRODUCT_DECISION: When column inline-styles match what the dropped
      server-side .recent-when block did (right-align, tabular nums, tight
      nowrap column, muted color on td). Applied per cell so the page
@@ -29,17 +40,23 @@
     textAlign:'right', fontVariantNumeric:'tabular-nums',
     whiteSpace:'nowrap', width:'1%',
   };
+  /* metaFg (not mutedFg) for When + Message: the muted gray washed out
+     against both light and dark backgrounds, so these use the higher-contrast
+     meta token. */
   var WHEN_STYLE_TD = {
     textAlign:'right', fontVariantNumeric:'tabular-nums',
-    whiteSpace:'nowrap', width:'1%', color: ChatColors.mutedFg,
+    whiteSpace:'nowrap', width:'1%', color: ChatColors.metaFg,
   };
+
+  /* Who column shrinks to its content (names are short). */
+  var WHO_STYLE = { whiteSpace:'nowrap', width:'1%' };
 
   /* The Message column shows a plain-text preview the server already
      trimmed; we clamp the visible height to three lines with the
      -webkit-box line-clamp idiom (applied to an inner div so the td keeps
      normal table-cell layout). */
   var EXCERPT_STYLE = {
-    color: ChatColors.mutedFg, whiteSpace:'normal', maxWidth:'52ch',
+    color: ChatColors.metaFg, whiteSpace:'normal', maxWidth:'44ch',
     display:'-webkit-box', WebkitBoxOrient:'vertical', WebkitLineClamp:'3',
     overflow:'hidden',
   };
@@ -49,9 +66,12 @@
   var headRow = document.createElement('tr');
   var thWhen  = document.createElement('th'); thWhen.textContent = 'When';
   Object.assign(thWhen.style, WHEN_STYLE_TH);
+  var thWho   = document.createElement('th'); thWho.textContent = 'Who';
+  Object.assign(thWho.style, WHO_STYLE);
   var thWhat  = document.createElement('th'); thWhat.textContent = 'What';
   var thMsg   = document.createElement('th'); thMsg.textContent = 'Message';
-  headRow.appendChild(thWhen); headRow.appendChild(thWhat); headRow.appendChild(thMsg);
+  headRow.appendChild(thWhen); headRow.appendChild(thWho);
+  headRow.appendChild(thWhat); headRow.appendChild(thMsg);
   thead.appendChild(headRow); tableEl.appendChild(thead);
   var tbodyEl = document.createElement('tbody');
   tableEl.appendChild(tbodyEl);
@@ -90,37 +110,28 @@
     when.className='recent-when';
     Object.assign(when.style, WHEN_STYLE_TD);
     when.textContent=humanize(evt.at);
+    /* Who: the author, already rendered "You" server-side for the viewer.
+       Empty for legacy sessions with no recorded author. */
+    var who=document.createElement('td');
+    Object.assign(who.style, WHO_STYLE);
+    who.textContent=evt.who||'';
     var what=document.createElement('td');
     tr.dataset.ts=evt.at;
     if(evt.kind==='chat'){
       tr.dataset.key='chat:'+evt.url;
+      /* "message <where> (<topic>)" — where is "to <partner>" (DM) or
+         "in <channel>" (channel); the topic links to the transcript. */
+      what.appendChild(document.createTextNode(evt.where ? 'message '+evt.where+' (' : 'message ('));
       var a=document.createElement('a');
       a.href=evt.url; a.textContent=evt.topic;
-      /* PRODUCT_DECISION: lead with the author when known — apoorva's ask.
-         Pre-companion sessions (live append starts populating .lastauthor on
-         first new message) fall back to the older "New message" phrasing. */
-      if(evt.last_author){
-        what.appendChild(document.createTextNode('Message from '));
-        var author=document.createElement('strong');
-        author.textContent=evt.last_author;
-        what.appendChild(author);
-        what.appendChild(document.createTextNode(' in '));
-      } else {
-        what.appendChild(document.createTextNode('New message in '));
-      }
       what.appendChild(a);
-      if(evt.where){
-        var ctx=document.createElement('span');
-        ctx.style.color=ChatColors.mutedFg;
-        ctx.textContent=' ('+evt.where+')';
-        what.appendChild(ctx);
-      }
+      what.appendChild(document.createTextNode(')'));
     }else if(evt.kind==='doc'){
       tr.dataset.key='doc:'+evt.slug;
       var da=document.createElement('a');
       da.href='/chat/docs/'+encodeURIComponent(evt.slug);
       da.textContent=evt.title||evt.slug;
-      what.appendChild(document.createTextNode('You edited '));
+      what.appendChild(document.createTextNode('edited '));
       what.appendChild(da);
     }else{
       return null;
@@ -132,7 +143,8 @@
       clamp.textContent=evt.excerpt;
       preview.appendChild(clamp);
     }
-    tr.appendChild(when); tr.appendChild(what); tr.appendChild(preview);
+    tr.appendChild(when); tr.appendChild(who);
+    tr.appendChild(what); tr.appendChild(preview);
     return tr;
   }
 

@@ -224,7 +224,8 @@ fn publishDocRecent(io: Io, alloc: Alloc, bus: *Bus, uid: []const u8, slug: []co
     const at = timefmt.formatRFC3339UTC(alloc, nowUnix(io)) catch return;
     const title = docs_store.titleFromSlug(alloc, slug) catch return;
     var j: std.ArrayList(u8) = .empty;
-    feed.encodeDocEvent(&j, alloc, at, slug, title) catch return;
+    // who is always "You": docs are per-user, only the author sees this row.
+    feed.encodeDocEvent(&j, alloc, at, "You", slug, title) catch return;
     const key = store.recentBusKey(alloc, uid) catch return;
     bus.publish(key, j.items);
 }

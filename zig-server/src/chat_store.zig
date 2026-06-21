@@ -177,7 +177,7 @@ pub fn appendMessage(io: Io, alloc: Alloc, bus: *Bus, meta: ConvMeta, conv_dir: 
     // per member, to their per-uid bus, plus a sidebar topic-added on the
     // session's first message. Best-effort; runs under chat_mu so the lock order
     // is chat_mu → imagesMu (leaf).
-    fanoutCrossPage(io, alloc, bus, meta, conv_key, sid, msg, index);
+    fanoutCrossPage(io, alloc, bus, meta, conv_key, sid, msg, from_id, index);
 
     return msg;
 }
@@ -227,7 +227,7 @@ pub fn convKeyBaseURL(alloc: Alloc, conv_key: []const u8) ![]u8 {
 /// code (per-user transcripts) per member, plus a sidebar topic-added on the
 /// session's FIRST message (index == 0). Best-effort: a failure for one
 /// member/surface is swallowed so it never blocks the write.
-fn fanoutCrossPage(io: Io, alloc: Alloc, bus: *Bus, meta: ConvMeta, conv_key: []const u8, sid: []const u8, msg: ChatMessage, index: usize) void {
+fn fanoutCrossPage(io: Io, alloc: Alloc, bus: *Bus, meta: ConvMeta, conv_key: []const u8, sid: []const u8, msg: ChatMessage, from_id: []const u8, index: usize) void {
     const base = convKeyBaseURL(alloc, conv_key) catch return;
     const rec_url = std.fmt.allocPrint(alloc, "{s}/{s}", .{ base, sid }) catch return;
     const excerpt = recent_feed.recentExcerpt(alloc, msg.markdown) catch "";
@@ -267,10 +267,12 @@ fn fanoutCrossPage(io: Io, alloc: Alloc, bus: *Bus, meta: ConvMeta, conv_key: []
             if (sidebarBusKey(alloc, uid)) |k| bus.publish(k, topic_added) else |_| {}
         }
 
-        // recent — every member sees the row (sender included).
+        // recent — every member sees the row (sender included). `who` renders
+        // "You" for the recipient who authored it; everyone else sees the name.
         const where = recentWhere(io, alloc, meta, conv_key, uid) catch "";
+        const who = if (std.mem.eql(u8, uid, from_id)) "You" else msg.from;
         var rj: std.ArrayList(u8) = .empty;
-        recent_feed.encodeChatEvent(&rj, alloc, msg.date, rec_url, sid, where, msg.from, excerpt) catch continue;
+        recent_feed.encodeChatEvent(&rj, alloc, msg.date, rec_url, who, where, sid, excerpt) catch continue;
         if (recentBusKey(alloc, uid)) |k| bus.publish(k, rj.items) else |_| {}
 
         // images — only when the message carried <img> tags.
@@ -305,8 +307,9 @@ fn fanoutCrossPage(io: Io, alloc: Alloc, bus: *Bus, meta: ConvMeta, conv_key: []
     }
 }
 
-/// recentWhere is the per-recipient muted-context label: a channel names itself
-/// ("in <name>"); a DM names the OTHER party ("with <name>").
+/// recentWhere is the per-recipient context label the What column reads as
+/// "message <where> (<topic>)": a channel names itself ("in <name>"); a DM names
+/// the OTHER party ("to <name>").
 fn recentWhere(io: Io, alloc: Alloc, meta: ConvMeta, conv_key: []const u8, viewer: []const u8) ![]const u8 {
     if (meta.kind == .channel) return std.fmt.allocPrint(alloc, "in {s}", .{conv_key});
     var other: []const u8 = "";
@@ -314,7 +317,7 @@ fn recentWhere(io: Io, alloc: Alloc, meta: ConvMeta, conv_key: []const u8, viewe
         if (!std.mem.eql(u8, m, viewer)) other = m;
     }
     const name = try users.getUserName(io, alloc, other);
-    return std.fmt.allocPrint(alloc, "with {s}", .{name});
+    return std.fmt.allocPrint(alloc, "to {s}", .{name});
 }
 
 /// busBlob is the internal fan-out payload — every field a stream needs to build
