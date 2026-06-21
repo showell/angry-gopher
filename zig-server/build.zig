@@ -95,7 +95,7 @@ pub fn build(b: *std.Build) void {
     // the old Go cross-validation gates once zig↔Go bcrypt/session compatibility
     // was settled.
     const test_step = b.step("test", "Run unit tests");
-    for ([_][]const u8{ "src/auth.zig", "src/users.zig" }) |path| {
+    for ([_][]const u8{ "src/auth.zig", "src/users.zig", "src/fence.zig", "src/recent_feed.zig", "src/code_store.zig" }) |path| {
         const unit = b.addTest(.{ .root_module = b.createModule(.{
             .root_source_file = b.path(path),
             .target = target,

@@ -4,8 +4,9 @@
 //!
 //! The distinctive piece is extractCodeBlocks: a line-anchored fence state
 //! machine (NOT a regex). It keeps ```lang and ~~~lang blocks but EXCLUDES
-//! `~~~ quote` (the quote-reply marker), with a nesting-aware close so a
-//! quote-of-a-quote doesn't end the outer block early.
+//! `quote` blocks (the quote-reply marker). Fence matching is length-aware (via
+//! fence.zig), so a longer outer fence — what the JS picks for a
+//! quote-of-a-quote — contains shorter inner fences instead of closing early.
 //!
 //! Leaf module: reuses images_store's shared transcript-header parser +
 //! source-URL helper, so the store doesn't depend on the UI layer.
@@ -15,6 +16,7 @@ const Io = std.Io;
 const Alloc = std.mem.Allocator;
 const store = @import("chat_store.zig");
 const images_store = @import("images_store.zig");
+const fence = @import("fence.zig");
 
 /// code_sep joins entries on disk (same shape as the Images feed).
 const code_sep = "\n\n-------------\n\n";
@@ -39,10 +41,11 @@ fn userCodePath(alloc: Alloc, uid: []const u8) ![]u8 {
 // ── the fence extractor ──
 
 /// extractCodeBlocks walks `body` line by line tracking fence state. Opens on a
-/// line starting ```/~~~ (lang = trimmed remainder); closes on a line that is
-/// ONLY marker chars (≥3, trailing ws stripped — info text is NOT a close, per
-/// CommonMark). `~~~ quote` blocks are SKIPPED entirely with a nesting-aware
-/// close. Unclosed fences run to end-of-body (CommonMark).
+/// fence line (fence.parseOpen); closes on a fence of the SAME char and >= the
+/// opener's length (fence.isClose), so a longer outer fence contains shorter
+/// inner ones. `quote` blocks (the quote-reply marker) are SKIPPED — their
+/// length-aware span is consumed but not captured. Unclosed fences run to
+/// end-of-body (CommonMark).
 pub fn extractCodeBlocks(alloc: Alloc, body: []const u8) ![]const CodeBlock {
     var out: std.ArrayList(CodeBlock) = .empty;
     var lines: std.ArrayList([]const u8) = .empty;
@@ -52,53 +55,20 @@ pub fn extractCodeBlocks(alloc: Alloc, body: []const u8) ![]const CodeBlock {
 
     var i: usize = 0;
     while (i < ls.len) {
-        const line = ls[i];
-        var marker: u8 = 0;
-        var lang: []const u8 = "";
-        if (std.mem.startsWith(u8, line, "```")) {
-            marker = '`';
-            lang = std.mem.trim(u8, line[3..], " \t\r\n");
-        } else if (std.mem.startsWith(u8, line, "~~~")) {
-            marker = '~';
-            lang = std.mem.trim(u8, line[3..], " \t\r\n");
-        } else {
+        const fo = fence.parseOpen(ls[i]) orelse {
             i += 1;
             continue;
-        }
-        const is_quote = marker == '~' and std.mem.eql(u8, lang, "quote");
+        };
         const start = i + 1;
         var j = start;
-        if (is_quote) {
-            var depth: usize = 1;
-            while (j < ls.len) : (j += 1) {
-                if (isCloseFence(ls[j], marker)) {
-                    depth -= 1;
-                    if (depth == 0) break;
-                } else if (std.mem.startsWith(u8, ls[j], "~~~")) {
-                    depth += 1;
-                }
-            }
-        } else {
-            while (j < ls.len and !isCloseFence(ls[j], marker)) : (j += 1) {}
-        }
-        if (!is_quote) {
+        while (j < ls.len and !fence.isClose(ls[j], fo.char, fo.count)) : (j += 1) {}
+        if (!std.mem.eql(u8, fo.lang, "quote")) {
             const content = try std.mem.join(alloc, "\n", ls[start..j]);
-            try out.append(alloc, .{ .lang = lang, .body = content });
+            try out.append(alloc, .{ .lang = fo.lang, .body = content });
         }
         i = j + 1;
     }
     return out.toOwnedSlice(alloc);
-}
-
-/// isCloseFence reports whether `line` is a valid closing fence: ≥3 chars, all
-/// equal to `marker` after trailing-whitespace strip (no info text allowed).
-fn isCloseFence(line: []const u8, marker: u8) bool {
-    const stripped = std.mem.trimEnd(u8, line, " \t");
-    if (stripped.len < 3) return false;
-    for (stripped) |c| {
-        if (c != marker) return false;
-    }
-    return true;
 }
 
 // ── format / parse / append / read (mirrors images_store) ─────────────────────
@@ -170,6 +140,43 @@ pub fn readCodeForUser(io: Io, alloc: Alloc, uid: []const u8) ![]CodeEntry {
     defer codeMu.unlock(io);
     const data = Io.Dir.cwd().readFileAlloc(io, path, alloc, .unlimited) catch return &.{};
     return parseCodeFile(alloc, data);
+}
+
+test "extractCodeBlocks: a quote-of-a-quote captures no code" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const body =
+        \\In MSG_test_2 I said:
+        \\~~~~ quote
+        \\In MSG_test_1 I said:
+        \\~~~ quote
+        \\hi
+        \\~~~
+        \\
+        \\hello
+        \\~~~~
+        \\
+        \\yo
+    ;
+    const blocks = try extractCodeBlocks(arena.allocator(), body);
+    try std.testing.expectEqual(@as(usize, 0), blocks.len);
+}
+
+test "extractCodeBlocks: a real code block survives; a longer fence holds an inner one" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const body =
+        \\here:
+        \\````zig
+        \\const x = 1;
+        \\```
+        \\still code
+        \\````
+    ;
+    const blocks = try extractCodeBlocks(arena.allocator(), body);
+    try std.testing.expectEqual(@as(usize, 1), blocks.len);
+    try std.testing.expectEqualStrings("zig", blocks[0].lang);
+    try std.testing.expectEqualStrings("const x = 1;\n```\nstill code", blocks[0].body);
 }
 
 /// encodeCodeEvent writes one codeSSEEvent JSON object into `j` (field order:

@@ -9,9 +9,10 @@
 
 const std = @import("std");
 const Alloc = std.mem.Allocator;
+const fence = @import("fence.zig");
 
 /// recentExcerptCap bounds an excerpt's length on the wire (in codepoints).
-pub const recent_excerpt_cap = 280;
+pub const recent_excerpt_cap = 350;
 
 /// encodeChatEvent writes one chat recentEvent object into `j`.
 pub fn encodeChatEvent(j: *std.ArrayList(u8), alloc: Alloc, at: []const u8, url: []const u8, who: []const u8, where: []const u8, topic: []const u8, excerpt: []const u8) !void {
@@ -42,14 +43,57 @@ fn appendField(j: *std.ArrayList(u8), alloc: Alloc, name: []const u8, val: []con
 // ── recentExcerpt ──────────────
 
 /// recentExcerpt renders a one-line plain-text preview of a message's raw
-/// markdown: image tags (HTML `<img …>` or markdown `![…](…)`) collapse to
-/// "[image]", whitespace runs become a single space, trimmed, capped at
-/// recent_excerpt_cap codepoints (+ "…"). The client CSS-clamps to three lines.
+/// markdown: each `quote` fence (a quote-reply) collapses to "[quoted text]" so
+/// the message's NEW content survives the cap, image tags (HTML `<img …>` or
+/// markdown `![…](…)`) collapse to "[image]", whitespace runs become a single
+/// space, trimmed, capped at recent_excerpt_cap codepoints (+ "…"). The client
+/// CSS-clamps to three lines.
 pub fn recentExcerpt(alloc: Alloc, markdown: []const u8) ![]const u8 {
-    const no_html = try replaceImgHtml(alloc, markdown);
+    const no_quote = try collapseQuotes(alloc, markdown);
+    const no_html = try replaceImgHtml(alloc, no_quote);
     const no_md = try replaceImgMarkdown(alloc, no_html);
     const collapsed = try collapseWhitespace(alloc, no_md);
     return capCodepoints(alloc, collapsed, recent_excerpt_cap);
+}
+
+/// collapseQuotes replaces each top-level `quote` fence (the quote-reply marker)
+/// with the literal "[quoted text]", so a reply's new content isn't crowded out
+/// of the excerpt by the quoted body. Fence spans are length-aware (fence.zig),
+/// so a quote-of-a-quote — wrapped by the JS in a LONGER outer fence — collapses
+/// as one unit (the inner quote is inside it). Runs before whitespace collapse,
+/// while line structure is still intact. The "In MSG_… said:" preamble line is
+/// left as-is (it carries the relative attribution).
+fn collapseQuotes(alloc: Alloc, markdown: []const u8) ![]const u8 {
+    var out: std.ArrayList(u8) = .empty;
+    var lines: std.ArrayList([]const u8) = .empty;
+    var lit = std.mem.splitScalar(u8, markdown, '\n');
+    while (lit.next()) |ln| try lines.append(alloc, ln);
+    const ls = lines.items;
+
+    var i: usize = 0;
+    while (i < ls.len) {
+        if (fence.parseOpen(ls[i])) |fo| {
+            // Consume the whole fence span (length-aware close, or EOF).
+            var j = i + 1;
+            while (j < ls.len and !fence.isClose(ls[j], fo.char, fo.count)) : (j += 1) {}
+            if (std.mem.eql(u8, fo.lang, "quote")) {
+                try out.appendSlice(alloc, "[quoted text]\n");
+            } else {
+                // A real code block — keep it verbatim so its interior lines
+                // aren't re-read as quote openers.
+                for (ls[i .. @min(j + 1, ls.len)]) |code_line| {
+                    try out.appendSlice(alloc, code_line);
+                    try out.append(alloc, '\n');
+                }
+            }
+            i = j + 1;
+            continue;
+        }
+        try out.appendSlice(alloc, ls[i]);
+        try out.append(alloc, '\n');
+        i += 1;
+    }
+    return out.toOwnedSlice(alloc);
 }
 
 /// replaceImgHtml collapses each `<img\b[^>]*>` span to "[image]" (case-
@@ -142,4 +186,31 @@ fn isSpace(c: u8) bool {
 
 fn isWordByte(c: u8) bool {
     return (c >= 'A' and c <= 'Z') or (c >= 'a' and c <= 'z') or (c >= '0' and c <= '9') or c == '_';
+}
+
+test "recentExcerpt collapses a nested quote and keeps the new content" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const body =
+        \\In MSG_test_2 I said:
+        \\~~~~ quote
+        \\In MSG_test_1 I said:
+        \\~~~ quote
+        \\hi
+        \\~~~
+        \\
+        \\hello
+        \\~~~~
+        \\
+        \\yo
+    ;
+    const ex = try recentExcerpt(arena.allocator(), body);
+    try std.testing.expectEqualStrings("In MSG_test_2 I said: [quoted text] yo", ex);
+}
+
+test "recentExcerpt leaves a real code block intact" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const ex = try recentExcerpt(arena.allocator(), "look:\n```\ncode here\n```\ndone");
+    try std.testing.expectEqualStrings("look: ``` code here ``` done", ex);
 }
