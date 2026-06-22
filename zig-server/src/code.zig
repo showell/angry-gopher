@@ -14,6 +14,7 @@ const code_store = @import("code_store.zig");
 const images_store = @import("images_store.zig");
 const chat = @import("chat.zig");
 const chrome = @import("chrome.zig");
+const html = @import("html.zig");
 const Bus = @import("bus.zig").Bus;
 
 const Alloc = std.mem.Allocator;
@@ -60,16 +61,9 @@ fn emitCodeData(b: *std.ArrayList(u8), alloc: Alloc, entries: []code_store.CodeE
         try code_store.encodeCodeEvent(&j, alloc, e, src);
     }
     try j.append(alloc, ']');
-    const safe = try replaceSeq(alloc, j.items, "</", "<\\/");
+    const safe = try html.scriptSafe(alloc, j.items);
     try b.appendSlice(alloc, "<script id=\"code-data\" type=\"application/json\">");
     try b.appendSlice(alloc, safe);
     try b.appendSlice(alloc, "</script>");
 }
 
-/// replaceSeq returns `input` with every `needle` replaced by `repl` (alloc-owned).
-fn replaceSeq(alloc: Alloc, input: []const u8, needle: []const u8, repl: []const u8) ![]u8 {
-    const n = std.mem.replacementSize(u8, input, needle, repl);
-    const out = try alloc.alloc(u8, n);
-    _ = std.mem.replace(u8, input, needle, repl, out);
-    return out;
-}

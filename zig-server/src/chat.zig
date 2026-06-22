@@ -427,7 +427,7 @@ fn buildSidebarJSON(io: Io, alloc: Alloc, uid: []const u8, topic: Topic) ![]cons
     }
     try b.appendSlice(alloc, "]}");
 
-    return replaceSeq(alloc, b.items, "</", "<\\/");
+    return html.scriptSafe(alloc, b.items);
 }
 
 /// emitSessionItem appends one session row (`{id,label,url,active}`) to the
@@ -957,14 +957,6 @@ fn header(req: *Request, name: []const u8) ?[]const u8 {
         if (std.ascii.eqlIgnoreCase(h.name, name)) return h.value;
     }
     return null;
-}
-
-/// replaceSeq returns `input` with every `needle` replaced by `repl` (alloc-owned).
-fn replaceSeq(alloc: Alloc, input: []const u8, needle: []const u8, repl: []const u8) ![]u8 {
-    const n = std.mem.replacementSize(u8, input, needle, repl);
-    const out = try alloc.alloc(u8, n);
-    _ = std.mem.replace(u8, input, needle, repl, out);
-    return out;
 }
 
 // ── templates (the chat conversation/index shell) ────────────────────────────
