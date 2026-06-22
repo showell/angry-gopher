@@ -54,7 +54,7 @@ window.ChatSavePopup = (function(){
 
     var input = document.createElement('input');
     input.type = 'text';
-    input.value = (opts.note != null ? opts.note : 'read later');
+    input.value = opts.note || 'read later';
     Object.assign(input.style, {
       width: '100%', boxSizing: 'border-box', padding: '7px 9px',
       fontSize: '14px', color: ChatColors.fg, background: ChatColors.bg,

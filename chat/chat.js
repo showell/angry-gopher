@@ -71,6 +71,56 @@
     ChatCompose.setMarkdown(prefix+rec.markdown, prefix.length);
   }
 
+  /* PRODUCT_DECISION: save = snapshot this message into your reading-list doc.
+     The popup pre-fills "read later" (Enter accepts); on confirm we POST the
+     snapshot-as-seen (markdown body, author, viewer-zone date) plus the
+     conv/sid/id that locate the source. The server composes the durable block
+     and appends — open /chat/docs/reading-list to read/edit/delete saved items.
+     Feedback is a transient toast (consistent for click + the 's' hotkey); a
+     persistent per-message "saved" marker waits for read-back-state. */
+  function doSave(rec){
+    ChatSavePopup.show({ note: 'read later', onConfirm: function(note){ postSave(rec, note); } });
+  }
+  function postSave(rec, note){  // lint:called-once save POST helper
+    var params = new URLSearchParams();
+    params.set('conv', CONV);
+    params.set('sid',  SESSION);
+    params.set('id',   rec.id);
+    params.set('from', rec.from);
+    params.set('at',   Message.formatLocalTime(rec.at));
+    params.set('body', rec.markdown);
+    params.set('note', note);
+    fetch('/chat/docs/save_to_reading_list', {
+      method: 'POST',
+      headers: {'Content-Type':'application/x-www-form-urlencoded'},
+      body: params.toString(),
+    }).then(function(r){
+      showToast(r.ok ? 'Saved to reading list' : 'Save failed', !r.ok);
+    }).catch(function(){ showToast('Save failed', true); });
+  }
+
+  /* A minimal transient toast — no dependency, self-removing. One element
+     reused across calls; fades after a beat. Green for success (savedFg),
+     red for failure (error). */
+  var toastEl = null, toastTimer = null;
+  function showToast(text, isError){
+    if(!toastEl){
+      toastEl = document.createElement('div');
+      Object.assign(toastEl.style, {
+        position:'fixed', left:'50%', bottom:'24px', transform:'translateX(-50%)',
+        padding:'8px 14px', borderRadius:'6px', fontSize:'13px', zIndex:'9999',
+        color:'#fff', boxShadow:'0 2px 8px rgba(0,0,0,0.3)', pointerEvents:'none',
+        opacity:'0', transition:'opacity 0.15s',
+      });
+      document.body.appendChild(toastEl);
+    }
+    toastEl.textContent = text;
+    toastEl.style.background = isError ? ChatColors.error : ChatColors.savedFg;
+    toastEl.style.opacity = '1';
+    if(toastTimer) clearTimeout(toastTimer);
+    toastTimer = setTimeout(function(){ toastEl.style.opacity = '0'; }, 1800);
+  }
+
   /* ===== cross-session vs same-session MSG_ ref navigation =====
      PRODUCT_DECISION: cross-session refs open in a new tab via the
      /chat/msg/<id> lookup endpoint — the server resolves which conv
@@ -99,6 +149,7 @@
         onQuote:  doQuote,
         onRefer:  doRefer,
         onEdit:   doEdit,
+        onSave:   doSave,
         onMsgRef: navigateRef,
       });
       byId.set(m.id, records.length);
@@ -263,6 +314,7 @@
     quoteReply:  doQuote,
     referReply:  doRefer,
     editMessage: doEdit,
+    save:        doSave,
     /* Raw transcript = the literal on-disk .md file, opened in a new tab
        via the same server endpoint fetch_prod_transcript backs up from. */
     viewRaw:     function(){ window.open(SESSION_BASE + '/raw', '_blank'); },

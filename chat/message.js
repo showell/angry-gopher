@@ -20,6 +20,7 @@
      quote-reply button       → deps.onQuote(record)     (affects compose)
      refer button             → deps.onRefer(record)     (affects compose)
      edit button              → deps.onEdit(record)      (affects compose)
+     save button              → deps.onSave(record)      (save to reading list)
      external <a> / plain     → no-op (browser default + bubble up)
 
    The record passed to onQuote/onRefer/onEdit is the same SSE payload
@@ -74,10 +75,10 @@ window.Message = (function(){
       + '.chat-msg.theirs { background:var(--cc-theirs-bg); margin-right:auto; }'
       /* Meta line + action buttons. */
       + '.chat-meta { font-size:11px; color:var(--cc-muted-fg); margin-bottom:3px; }'
-      + '.chat-meta .msg-quote, .chat-meta .msg-refer, .chat-meta .msg-edit {'
+      + '.chat-meta .msg-quote, .chat-meta .msg-refer, .chat-meta .msg-edit, .chat-meta .msg-save {'
       +   ' font-size:10px; color:var(--cc-muted-fg); background:none; border:none;'
       +   ' padding:0 2px; cursor:pointer; text-decoration:underline; }'
-      + '.chat-meta .msg-quote:hover, .chat-meta .msg-refer:hover, .chat-meta .msg-edit:hover {'
+      + '.chat-meta .msg-quote:hover, .chat-meta .msg-refer:hover, .chat-meta .msg-edit:hover, .chat-meta .msg-save:hover {'
       +   ' color:var(--cc-accent); }'
       /* Timestamp is clickable → multi-zone popup. */
       + '.chat-meta .chat-time { cursor:pointer; text-decoration:underline dotted; }'
@@ -168,6 +169,7 @@ window.Message = (function(){
     var onQuote  = deps.onQuote  || function(){};
     var onRefer  = deps.onRefer  || function(){};
     var onEdit   = deps.onEdit   || function(){};
+    var onSave   = deps.onSave   || function(){};
     var onMsgRef = deps.onMsgRef || function(){};
 
     var bubble = null;
@@ -192,6 +194,10 @@ window.Message = (function(){
       var edit=document.createElement('button'); edit.type='button'; edit.className='msg-edit';
       edit.title='Load this message back into compose with an "Edit of MSG_…" backlink (e)'; edit.textContent='edit';
       meta.appendChild(edit);
+      meta.appendChild(document.createTextNode(' '));
+      var save=document.createElement('button'); save.type='button'; save.className='msg-save';
+      save.title='Save this message to your reading list (s)'; save.textContent='save';
+      meta.appendChild(save);
       return meta;
     }
     /* PRODUCT_DECISION: one listener per bubble. The walk-up classification
@@ -205,6 +211,7 @@ window.Message = (function(){
       if(t.closest && t.closest('.msg-quote')){ onQuote(data); return; }
       if(t.closest && t.closest('.msg-refer')){ onRefer(data); return; }
       if(t.closest && t.closest('.msg-edit')){  onEdit(data);  return; }
+      if(t.closest && t.closest('.msg-save')){  onSave(data);  return; }
       if(!t.closest || !t.closest('.chat-body')) return;
       var hit = classifyBodyClick(t);
       if(hit.kind === 'image'){ ChatImagePopup.show(hit.src); return; }
