@@ -223,6 +223,15 @@ read-only** — a keyed request may only GET/HEAD.
 The server is dumb URL-keyed file storage; the strategic brain is the
 TS agent, and the Elm client owns the full game (dealer, referee, UI).
 
+**Responsive / mobile** (the chat surfaces — our mobile user is Apoorva;
+Steve is desktop-only). Small-screen layout is decided client-side. One JS
+authority, `Viewport` (`chat/viewport.js`), owns the single breakpoint and
+exposes it two ways — an `html.vp-narrow` class for CSS and `onChange` for
+JS — so the number lives in exactly one place. The shared nav drawer
+(`chrome_drawer.js`) and the chat page's mobile layout (`chat_responsive.js`)
+both key off it; the server (`chrome.zig`) just ships the desktop top bar and
+loads the widgets. Start at `Viewport` and follow the breadcrumbs.
+
 ## The DSL is the lingua franca
 
 One short, canonical DSL carries the same grammar across all three
