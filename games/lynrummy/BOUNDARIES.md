@@ -478,10 +478,12 @@ comment, a `_ -> X` fallback — stop. The discomfort is
 telling you something the comment can't reach.
 
 **This is particularly true in Lyn Rummy specifically.** We
-own every layer (Elm, TS agent, the zig server, wire format,
-on-disk session files, conformance fixtures) AND we are not yet
-in production. We have the LUXURY of reshaping across
-network and language boundaries when reality calls for it.
+own every layer end to end (Elm, TS agent, the zig server,
+wire format, on-disk session files, conformance fixtures) and
+no external client pins any of those boundaries. So even though
+it's in production, we keep the LUXURY of reshaping across
+network and language boundaries when reality calls for it — a
+boundary change is a same-repo edit, not a contract break.
 That luxury is rare; don't squander it by reaching for a
 translation layer when the shape is wrong on both sides.
 
