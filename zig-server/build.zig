@@ -98,13 +98,12 @@ pub fn build(b: *std.Build) void {
     const run_step = b.step("run", "Build and run the zig server");
     run_step.dependOn(&run_cmd.step);
 
-    // Unit tests (`zig build test`). Pure-logic modules tested in isolation, so
-    // no embedded assets are needed: auth's legacy-$2a$ read path and users'
-    // session-cookie HMAC verify, each guarded by a frozen vector. These replaced
-    // the old Go cross-validation gates once zig↔Go bcrypt/session compatibility
-    // was settled.
+    // Unit tests (`zig build test`). Each listed module is a test root; a module
+    // must be in this list for its `test {}` blocks to actually run under the
+    // gate (imports alone don't enroll a file's tests). Pure-logic modules tested
+    // in isolation, so no embedded assets are needed.
     const test_step = b.step("test", "Run unit tests");
-    for ([_][]const u8{ "src/auth.zig", "src/users.zig", "src/fence.zig", "src/recent_feed.zig", "src/code_store.zig", "src/chat_upload.zig", "src/markdown.zig" }) |path| {
+    for ([_][]const u8{ "src/auth.zig", "src/users.zig", "src/markdown_fence.zig", "src/recent_feed.zig", "src/code_store.zig", "src/chat_upload.zig", "src/markdown.zig", "src/bus.zig", "src/chat_sse.zig" }) |path| {
         const unit = b.addTest(.{ .root_module = b.createModule(.{
             .root_source_file = b.path(path),
             .target = target,

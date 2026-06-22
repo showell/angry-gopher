@@ -1,4 +1,4 @@
-//! fence.zig: the chat dialect's fenced-code grammar as line-based predicates.
+//! markdown_fence.zig: the chat dialect's fenced-code grammar as line-based predicates.
 //!
 //! markdown.zig (the renderer, the dialect's source of truth) parses fences
 //! offset-into-the-document via parseFenceOpen/isClosingFence. This module is

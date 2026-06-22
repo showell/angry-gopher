@@ -16,7 +16,7 @@ const Io = std.Io;
 const Alloc = std.mem.Allocator;
 const store = @import("chat_store.zig");
 const images_store = @import("images_store.zig");
-const fence = @import("fence.zig");
+const fence = @import("markdown_fence.zig");
 
 /// code_sep joins entries on disk (same shape as the Images feed).
 const code_sep = "\n\n-------------\n\n";

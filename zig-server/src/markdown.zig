@@ -1,5 +1,5 @@
 const std = @import("std");
-const fence = @import("fence.zig");
+const fence = @import("markdown_fence.zig");
 
 /// render turns a raw chat message body into HTML. It implements — and IS the
 /// definition of — lynrummy's markdown dialect: GFM-style paragraphs with hard

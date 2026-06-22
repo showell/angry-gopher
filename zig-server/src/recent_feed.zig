@@ -9,7 +9,7 @@
 
 const std = @import("std");
 const Alloc = std.mem.Allocator;
-const fence = @import("fence.zig");
+const fence = @import("markdown_fence.zig");
 
 /// recentExcerptCap bounds an excerpt's length on the wire (in codepoints).
 pub const recent_excerpt_cap = 350;
