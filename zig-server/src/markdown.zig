@@ -1,3 +1,18 @@
+//! markdown: the block workhorse + public entry points of the chat dialect.
+//! render()/renderTrusted()/hostileReason() live here, along with the recursive
+//! block layer (paragraphs, ATX headings, fenced code, lists, blockquotes, the
+//! raw-HTML block) — one mutually-recursive descent kept whole on purpose.
+//!
+//! The leaf pieces it drives, each its own file (one-way DAG, no cycles):
+//!   markdown_text   — escaping + char-class predicates (pure leaf; everyone uses it)
+//!   markdown_fence  — the fenced-code grammar (line-based predicates)
+//!   markdown_media  — the locked same-origin <img>/<video> rebuilder (safety + dims)
+//!   markdown_inline — the inline pass (emphasis, code spans, links, autolinks)
+//!   markdown_links  — the MSG_-reference + external-link post-pass over the HTML
+//!
+//! markdown.zig (this file) IS the dialect's source of truth; the gold corpus in
+//! main.zig freezes render()'s output so nothing here can silently regress.
+
 const std = @import("std");
 const fence = @import("markdown_fence.zig");
 const mtext = @import("markdown_text.zig");
@@ -5,21 +20,11 @@ const mmedia = @import("markdown_media.zig");
 const minline = @import("markdown_inline.zig");
 const mlinks = @import("markdown_links.zig");
 
-// Shared text primitives (escaping + char-class predicates) live in the
-// markdown_text leaf; alias them so the renderer bodies read unqualified.
+// Shared text primitives live in the markdown_text leaf; alias the few the block
+// layer still uses so the renderer bodies read unqualified.
 const escapeInto = mtext.escapeInto;
-const isWordChar = mtext.isWordChar;
-const isSlugChar = mtext.isSlugChar;
-const isAttrNameChar = mtext.isAttrNameChar;
 const isDigit = mtext.isDigit;
 const isAsciiAlpha = mtext.isAsciiAlpha;
-const isAsciiAlnum = mtext.isAsciiAlnum;
-const isSpace = mtext.isSpace;
-const isPunct = mtext.isPunct;
-const allDigits = mtext.allDigits;
-const eqlCI = mtext.eqlCI;
-const startsWithCI = mtext.startsWithCI;
-const lower = mtext.lower;
 
 /// render turns a raw chat message body into HTML. It implements — and IS the
 /// definition of — lynrummy's markdown dialect: GFM-style paragraphs with hard
