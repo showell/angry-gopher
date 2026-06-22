@@ -20,6 +20,7 @@ const users = @import("users.zig");
 const store = @import("chat_store.zig");
 const docs_store = @import("docs_store.zig");
 const chat = @import("chat.zig");
+const chrome = @import("chrome.zig");
 const timefmt = @import("timefmt.zig");
 const feed = @import("recent_feed.zig");
 const Bus = @import("bus.zig").Bus;
@@ -66,7 +67,7 @@ fn renderRecentPage(req: *Request, io: Io, alloc: Alloc, uid: []const u8) !void 
     const items = try gatherRecentItems(io, alloc, uid);
 
     var b: std.ArrayList(u8) = .empty;
-    try chat.writeChrome(&b, alloc, "Recent", "Recent", viewer, "recent");
+    try chrome.begin(&b, alloc, "Recent", "Recent", viewer, "recent");
     // Cross-page attention strip + favicon alert on incoming pings (notify.js
     // no-ops when #chat-notify is absent). Recent users camp here, so the tab
     // needs to alert too.
@@ -74,8 +75,8 @@ fn renderRecentPage(req: *Request, io: Io, alloc: Alloc, uid: []const u8) !void 
     try b.appendSlice(alloc, "<div id=\"recent-mount\"></div>");
     try emitRecentData(&b, alloc, items);
     try b.print(alloc, "<script src=\"/chat/recent.js?v={s}\"></script>" ++
-        "<script src=\"/chat/notify.js?v={s}\"></script>", .{ chat.asset_v, chat.asset_v });
-    try b.appendSlice(alloc, "</div></body></html>"); // close .app-body-wrap (PageFooter)
+        "<script src=\"/chat/notify.js?v={s}\"></script>", .{ chrome.asset_v, chrome.asset_v });
+    try chrome.end(&b, alloc);
 
     try req.respond(b.items, .{ .extra_headers = &.{http.html_ct} });
 }

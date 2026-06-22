@@ -17,7 +17,7 @@
 //!   POST /chat/docs/post          append the doc to the default chat partner → JSON
 //!   GET  /chat/docs.js            the client bundle (served by chat.serveAsset, public)
 //!
-//! The page chrome (head + top bar + .app-body-wrap) is chat.writeChrome with
+//! The page chrome (head + top bar + .app-body-wrap) is chrome.begin with
 //! active="docs"; the rest of the layout/CSS is rendered below.
 
 const std = @import("std");
@@ -29,6 +29,7 @@ const docs_store = @import("docs_store.zig");
 const markdown = @import("markdown.zig");
 const edge = @import("edge.zig");
 const chat = @import("chat.zig");
+const chrome = @import("chrome.zig");
 const html = @import("html.zig");
 const chat_state = @import("chat_state.zig");
 const timefmt = @import("timefmt.zig");
@@ -87,7 +88,7 @@ fn renderDocsPage(req: *Request, io: Io, alloc: Alloc, uid: []const u8, list: []
     const viewer = try users.getUserName(io, alloc, uid);
 
     var b: std.ArrayList(u8) = .empty;
-    try chat.writeChrome(&b, alloc, "Docs", "Docs", viewer, "docs");
+    try chrome.begin(&b, alloc, "Docs", "Docs", viewer, "docs");
     try b.appendSlice(alloc, docs_css);
 
     // Cross-session new-message strip + favicon alert, shared with chat via
@@ -145,12 +146,12 @@ fn renderDocsPage(req: *Request, io: Io, alloc: Alloc, uid: []const u8, list: []
     if (slug.len != 0) {
         try b.appendSlice(alloc, "<dialog id=\"docs-posted-dialog\" class=\"docs-alert-dialog\">" ++
             "<p>Doc sent to chat.</p><button type=\"button\" id=\"docs-posted-ok\">OK</button></dialog>");
-        try b.print(alloc, "<script src=\"/chat/docs.js?v={s}\"></script>", .{chat.asset_v});
+        try b.print(alloc, "<script src=\"/chat/docs.js?v={s}\"></script>", .{chrome.asset_v});
     }
     // notify.js loads even on the docs landing (the favicon alert + #chat-notify
     // strip should work here too).
-    try b.print(alloc, "<script src=\"/chat/notify.js?v={s}\"></script>", .{chat.asset_v});
-    try b.appendSlice(alloc, "</div></body></html>"); // close .app-body-wrap (PageFooter)
+    try b.print(alloc, "<script src=\"/chat/notify.js?v={s}\"></script>", .{chrome.asset_v});
+    try chrome.end(&b, alloc);
 
     try req.respond(b.items, .{ .extra_headers = &.{http.html_ct} });
 }

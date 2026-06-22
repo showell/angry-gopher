@@ -13,6 +13,7 @@
 const std = @import("std");
 const http = @import("http.zig");
 const chat = @import("chat.zig");
+const chrome = @import("chrome.zig");
 
 const Request = std.http.Server.Request;
 
@@ -70,7 +71,7 @@ fn sourceBytes(file: []const u8) ?[]const u8 {
 
 // ── the page (a static shell; learn.js builds everything else) ────────────────
 
-const v = chat.asset_v;
+const v = chrome.asset_v;
 
 /// scripts: the required load order. colors.js + install() FIRST (chat
 /// modules read ChatColors tokens at construction), then the reused chat widgets,

@@ -11,6 +11,7 @@ const http = @import("http.zig");
 const users = @import("users.zig");
 const store = @import("chat_store.zig");
 const chat = @import("chat.zig");
+const chrome = @import("chrome.zig");
 const markdown = @import("markdown.zig");
 
 const Alloc = std.mem.Allocator;
@@ -24,7 +25,7 @@ pub fn handle(req: *Request, io: Io, alloc: Alloc, uid: []const u8, rest: []cons
     const md: ?[]u8 = Io.Dir.cwd().readFileAlloc(io, path, alloc, .unlimited) catch null;
 
     var b: std.ArrayList(u8) = .empty;
-    try chat.writeChrome(&b, alloc, "Links", "Links", viewer, "links");
+    try chrome.begin(&b, alloc, "Links", "Links", viewer, "links");
     try b.appendSlice(alloc, links_css ++ "<div class=\"links-page\">");
     if (md) |src| {
         // renderTrusted: links.md is server-curated (Steve scp's it), not request
@@ -34,7 +35,8 @@ pub fn handle(req: *Request, io: Io, alloc: Alloc, uid: []const u8, rest: []cons
     } else {
         try b.appendSlice(alloc, "<p>No links yet — ask Steve to curate links.</p>");
     }
-    try b.appendSlice(alloc, "</div></div></body></html>"); // close .links-page + .app-body-wrap
+    try b.appendSlice(alloc, "</div>"); // close .links-page
+    try chrome.end(&b, alloc);
     try req.respond(b.items, .{ .extra_headers = &.{http.html_ct} });
 }
 

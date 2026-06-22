@@ -13,6 +13,7 @@ const Alloc = std.mem.Allocator;
 const http = @import("http.zig");
 const users = @import("users.zig");
 const chat = @import("chat.zig");
+const chrome = @import("chrome.zig");
 const html = @import("html.zig");
 const presence = @import("presence.zig");
 const Bus = @import("bus.zig").Bus;
@@ -49,7 +50,7 @@ fn handleAPIKey(req: *Request, io: Io, alloc: Alloc, uid: []const u8) !void {
 fn renderSettings(req: *Request, io: Io, alloc: Alloc, uid: []const u8) !void {
     const viewer = try users.getUserName(io, alloc, uid);
     var b: std.ArrayList(u8) = .empty;
-    try chat.writeChrome(&b, alloc, "Settings", "Settings", viewer, "settings");
+    try chrome.begin(&b, alloc, "Settings", "Settings", viewer, "settings");
 
     if (queryFlag(req, "keyrevoked")) {
         try b.appendSlice(alloc, "<p class=\"flash\">Your API key was revoked.</p>");
@@ -60,7 +61,7 @@ fn renderSettings(req: *Request, io: Io, alloc: Alloc, uid: []const u8) !void {
     if (!users.userHasAPIKey(io, alloc, uid)) {
         try b.appendSlice(alloc, "<p>You don't have an API key yet.</p>\n" ++
             "<form method=\"post\" action=\"/settings/apikey\" style=\"display:inline\"><button type=\"submit\">Generate key</button></form>");
-        try b.appendSlice(alloc, "</div></body></html>");
+        try chrome.end(&b, alloc);
         return req.respond(b.items, .{ .extra_headers = &.{http.html_ct} });
     }
 
@@ -75,7 +76,7 @@ fn renderSettings(req: *Request, io: Io, alloc: Alloc, uid: []const u8) !void {
         try b.appendSlice(alloc, "<p>You have an API key.</p>");
     }
     try b.appendSlice(alloc, key_buttons_html);
-    try b.appendSlice(alloc, "</div></body></html>");
+    try chrome.end(&b, alloc);
     return req.respond(b.items, .{ .extra_headers = &.{http.html_ct} });
 }
 

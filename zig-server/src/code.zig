@@ -13,6 +13,7 @@ const store = @import("chat_store.zig");
 const code_store = @import("code_store.zig");
 const images_store = @import("images_store.zig");
 const chat = @import("chat.zig");
+const chrome = @import("chrome.zig");
 const Bus = @import("bus.zig").Bus;
 
 const Alloc = std.mem.Allocator;
@@ -33,15 +34,15 @@ fn renderCodePage(req: *Request, io: Io, alloc: Alloc, uid: []const u8) !void {
     const entries = try code_store.readCodeForUser(io, alloc, uid);
 
     var b: std.ArrayList(u8) = .empty;
-    try chat.writeChrome(&b, alloc, "Code", "Code", viewer, "code");
+    try chrome.begin(&b, alloc, "Code", "Code", viewer, "code");
     try b.appendSlice(alloc, "<div class=\"chat-notify\" id=\"chat-notify\"></div>");
     try b.appendSlice(alloc, "<div id=\"code-mount\"></div>");
     try emitCodeData(&b, alloc, entries);
     try b.print(alloc, "<script src=\"/chat/styles.js?v={s}\"></script>" ++
         "<script src=\"/chat/chat_code_popup.js?v={s}\"></script>" ++
         "<script src=\"/chat/code.js?v={s}\"></script>" ++
-        "<script src=\"/chat/notify.js?v={s}\"></script>", .{ chat.asset_v, chat.asset_v, chat.asset_v, chat.asset_v });
-    try b.appendSlice(alloc, "</div></body></html>"); // close .app-body-wrap (PageFooter)
+        "<script src=\"/chat/notify.js?v={s}\"></script>", .{ chrome.asset_v, chrome.asset_v, chrome.asset_v, chrome.asset_v });
+    try chrome.end(&b, alloc);
 
     try req.respond(b.items, .{ .extra_headers = &.{http.html_ct} });
 }
