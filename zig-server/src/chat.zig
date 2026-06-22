@@ -66,6 +66,7 @@ const Asset = struct { name: []const u8, body: []const u8 };
 /// /chat/<name> with a JS content type.
 const assets = [_]Asset{
     .{ .name = "colors.js", .body = @embedFile("chat_js_colors") },
+    .{ .name = "viewport.js", .body = @embedFile("chat_js_viewport") },
     .{ .name = "chat_theme.js", .body = @embedFile("chat_js_theme") },
     .{ .name = "chrome_drawer.js", .body = @embedFile("chat_js_chrome_drawer") },
     .{ .name = "chat_image_popup.js", .body = @embedFile("chat_js_image_popup") },

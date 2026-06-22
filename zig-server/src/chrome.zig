@@ -27,7 +27,7 @@ pub fn begin(b: *std.ArrayList(u8), alloc: Alloc, tab_title: []const u8, title: 
     try b.appendSlice(alloc, page_head_a);
     try b.appendSlice(alloc, tab_title);
     try b.appendSlice(alloc, page_head_b);
-    try b.print(alloc, head_scripts, .{ asset_v, asset_v, asset_v });
+    try b.print(alloc, head_scripts, .{ asset_v, asset_v, asset_v, asset_v });
     try b.print(alloc, chrome_top_a, .{try html.htmlEscape(alloc, title)});
     try navLinks(b, alloc, active);
     try b.print(alloc, chrome_top_b, .{try html.htmlEscape(alloc, viewer)});
@@ -119,13 +119,14 @@ const page_head_b =
     \\
 ;
 
-// head_scripts: colors.js (sync, sets palette pre-paint) + chat_theme.js
-// (deferred toggle wiring) + chrome_drawer.js (deferred; on small screens it
-// reads the top-bar nav we render below and re-presents it as a drawer — the
-// server ships the links, the client owns where they show). Three {s} = asset
-// version.
+// head_scripts: colors.js (sync, palette pre-paint) + viewport.js (sync, sets
+// the vp-narrow class pre-paint so responsive CSS keys off it without its own
+// @media; the single breakpoint authority) + chat_theme.js (deferred toggle
+// wiring) + chrome_drawer.js (deferred; reads the top-bar nav we render below
+// and, when Viewport says narrow, re-presents it as a drawer — server ships the
+// links, client owns where they show). Four {s} = asset version.
 const head_scripts =
-    \\<script src="/chat/colors.js?v={s}"></script><script>ChatColors.install();</script><script defer src="/chat/chat_theme.js?v={s}"></script><script defer src="/chat/chrome_drawer.js?v={s}"></script>
+    \\<script src="/chat/colors.js?v={s}"></script><script>ChatColors.install();</script><script src="/chat/viewport.js?v={s}"></script><script defer src="/chat/chat_theme.js?v={s}"></script><script defer src="/chat/chrome_drawer.js?v={s}"></script>
 ;
 
 // chrome_top_{a,b}: chatChromeTop, split around the sub-nav span so navLinks can

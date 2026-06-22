@@ -55,20 +55,20 @@ window.ChromeDrawer = (function(){
       + '.chrome-drawer-nav a:hover, .chrome-drawer-foot a:hover { background:var(--cc-accent-soft-bg,#e8e4d8); }'
       + '.chrome-drawer-nav strong { background:var(--cc-accent,#000080); color:var(--cc-bg,#fff); }'
       + '.chrome-drawer-foot { margin-top:auto; padding-top:6px; border-top:1px solid var(--cc-border,#c9bfa7); }'
-      + '@media (max-width:768px) {'
-      +   ' .app-top { padding:8px 12px; }'
-      +   ' .chat-top-links { display:none; }'
-      +   ' .app-top-user-extra { display:none; }'
-      +   ' .chrome-burger { display:inline-block; }'
-      +   ' .chrome-drawer { display:flex; flex-direction:column; gap:2px;'
-      +     ' position:fixed; top:0; left:0; bottom:0; width:260px; z-index:100;'
-      +     ' box-sizing:border-box; padding:14px; overflow-y:auto;'
-      +     ' background:var(--cc-bg,#fff); border-right:1px solid var(--cc-border,#c9bfa7);'
-      +     ' transform:translateX(-100%); transition:transform 0.25s ease; }'
-      +   ' .chrome-drawer.open { transform:translateX(0); }'
-      +   ' .chrome-backdrop { position:fixed; inset:0; z-index:99; background:rgba(0,0,0,0.4); }'
-      +   ' .chrome-backdrop.open { display:block; }'
-      + '}';
+      /* Narrow-screen rules hang off the vp-narrow class on <html> (set by
+         Viewport) — no @media here, so the breakpoint lives only in Viewport. */
+      + 'html.vp-narrow .app-top { padding:8px 12px; }'
+      + 'html.vp-narrow .chat-top-links { display:none; }'
+      + 'html.vp-narrow .app-top-user-extra { display:none; }'
+      + 'html.vp-narrow .chrome-burger { display:inline-block; }'
+      + 'html.vp-narrow .chrome-drawer { display:flex; flex-direction:column; gap:2px;'
+      +   ' position:fixed; top:0; left:0; bottom:0; width:260px; z-index:100;'
+      +   ' box-sizing:border-box; padding:14px; overflow-y:auto;'
+      +   ' background:var(--cc-bg,#fff); border-right:1px solid var(--cc-border,#c9bfa7);'
+      +   ' transform:translateX(-100%); transition:transform 0.25s ease; }'
+      + 'html.vp-narrow .chrome-drawer.open { transform:translateX(0); }'
+      + 'html.vp-narrow .chrome-backdrop { position:fixed; inset:0; z-index:99; background:rgba(0,0,0,0.4); }'
+      + 'html.vp-narrow .chrome-backdrop.open { display:block; }';
     document.head.appendChild(s);
   }
 
@@ -134,8 +134,7 @@ window.ChromeDrawer = (function(){
   });
   /* Crossing back to desktop width (rotate) must not leave the drawer
      stuck open under the restored top-bar nav. */
-  var mql = window.matchMedia('(max-width:768px)');
-  mql.addEventListener('change', function(){ if(!mql.matches) close(); });
+  Viewport.onChange(function(narrow){ if(!narrow) close(); });
 
   return { close: close };
 })();

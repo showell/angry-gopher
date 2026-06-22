@@ -17,26 +17,25 @@
        hides behind it. CSS still does the positioning; JS owns the one
        fact (the bar's current height) that CSS can't know.
 
-   Runs from chat.js. The first sidebar placement waits for
-   DOMContentLoaded, because ChromeDrawer (deferred) builds the
+   Runs from chat.js. Reads the breakpoint from Viewport (the single
+   authority) — never its own matchMedia. The first sidebar placement waits
+   for DOMContentLoaded, because ChromeDrawer (deferred) builds the
    #chrome-drawer-extra slot only after chat.js has run. */
 window.ChatResponsive = (function(){
   'use strict';
 
-  var mql;
-
   // lint:called-once init-once-guard
   function ensureStyles(){
     var s = document.createElement('style');
+    /* Narrow-screen rules hang off html.vp-narrow (set by Viewport) — no
+       @media, so the breakpoint lives only in Viewport. The compose-collapse
+       button defaults to hidden and is revealed only when narrow. */
     s.textContent = ''
 
-      /* ===== mobile (<=768px) ===== */
-      + '@media (max-width:768px) {'
-
       /* single-column, full-bleed feed */
-      + '.app-body-wrap { margin:0; padding:0; }'
-      + '.chat-layout { flex-direction:column; gap:0; }'
-      + '.chat-mp-main { max-width:none !important; flex:1 !important; }'
+      + 'html.vp-narrow .app-body-wrap { margin:0; padding:0; }'
+      + 'html.vp-narrow .chat-layout { flex-direction:column; gap:0; }'
+      + 'html.vp-narrow .chat-mp-main { max-width:none !important; flex:1 !important; }'
 
       /* NB: the feed's bottom inset (room for the fixed compose bar) is set
          live by syncComposeInset() below — the bar's height varies (closed
@@ -45,34 +44,28 @@ window.ChatResponsive = (function(){
       /* the conversations rail, once relocated into the chrome drawer:
          drop the desktop column chrome (fixed width + right border) and
          set it off from the section nav sitting above it */
-      + '.chrome-drawer .chat-sidebar { width:auto; border-right:none;'
+      + 'html.vp-narrow .chrome-drawer .chat-sidebar { width:auto; border-right:none;'
       +   ' padding-right:0; overflow-y:visible; margin-top:8px; padding-top:8px;'
       +   ' border-top:1px solid var(--cc-border); }'
 
       /* right sidebar → fixed bottom compose bar */
-      + '.chat-compose { width:auto !important; flex:none !important;'
+      + 'html.vp-narrow .chat-compose { width:auto !important; flex:none !important;'
       +   ' position:fixed; bottom:0; left:0; right:0; z-index:50;'
       +   ' background:var(--cc-bg); border-top:1px solid var(--cc-border);'
       +   ' max-height:45vh; }'
-      + '.chat-compose .chat-closed-panel { padding:8px 12px; }'
-      + '.chat-compose .chat-keyhelp { display:none; }'
-      + '.chat-compose-body { padding:8px 12px; }'
-      + '.chat-compose textarea { min-height:80px; max-height:25vh;'
+      + 'html.vp-narrow .chat-compose .chat-closed-panel { padding:8px 12px; }'
+      + 'html.vp-narrow .chat-compose .chat-keyhelp { display:none; }'
+      + 'html.vp-narrow .chat-compose-body { padding:8px 12px; }'
+      + 'html.vp-narrow .chat-compose textarea { min-height:80px; max-height:25vh;'
       +   ' flex:none; resize:none; font-size:16px; }'
 
-      /* compose collapse bar */
-      + '.chat-compose-collapse { display:flex; justify-content:flex-end;'
+      /* compose collapse bar: hidden by default, shown when narrow */
+      + '.chat-compose-collapse { display:none; }'
+      + 'html.vp-narrow .chat-compose-collapse { display:flex; justify-content:flex-end;'
       +   ' margin-bottom:4px; }'
       + '.chat-compose-collapse-btn { background:none; border:none;'
       +   ' color:var(--cc-muted-fg); font-size:18px; cursor:pointer;'
-      +   ' padding:2px 4px; line-height:1; }'
-
-      + '}' /* end @media */
-
-      /* ===== desktop: hide mobile-only compose affordance ===== */
-      + '@media (min-width:769px) {'
-      + '.chat-compose-collapse { display:none; }'
-      + '}';
+      +   ' padding:2px 4px; line-height:1; }';
 
     document.head.appendChild(s);
   }
@@ -85,7 +78,7 @@ window.ChatResponsive = (function(){
     var history = document.querySelector('.chat-mp-history');
     var compose = document.querySelector('.chat-compose');
     if(!history || !compose) return;
-    if(!mql.matches){ history.style.paddingBottom = ''; return; }
+    if(!Viewport.isNarrow()){ history.style.paddingBottom = ''; return; }
     var atBottom = history.scrollTop + history.clientHeight >= history.scrollHeight - 2;
     history.style.paddingBottom = (compose.offsetHeight + 8) + 'px';
     if(atBottom) history.scrollTop = history.scrollHeight;
@@ -97,7 +90,7 @@ window.ChatResponsive = (function(){
   function placeSidebar(){
     var sb = document.getElementById('chat-left-sidebar');
     if(!sb) return;
-    if(mql.matches){
+    if(Viewport.isNarrow()){
       var slot = document.getElementById('chrome-drawer-extra');
       if(slot) slot.appendChild(sb);
     } else {
@@ -112,7 +105,7 @@ window.ChatResponsive = (function(){
 
     /* Compose collapse bar — a ▾ button prepended to the compose body so
        mobile users can dismiss the compose panel without Esc. Hidden on
-       desktop via the @media rule above. */
+       desktop (shown only under html.vp-narrow) by the rule above. */
     var composeBody = document.getElementById('chat-compose-body');
     if(composeBody){
       var bar = document.createElement('div');
@@ -127,10 +120,13 @@ window.ChatResponsive = (function(){
       composeBody.insertBefore(bar, composeBody.firstChild);
     }
 
-    mql = window.matchMedia('(max-width:768px)');
+    /* Viewport owns the breakpoint. onChange fires immediately and on every
+       crossing; placeSidebar ALSO runs on DOMContentLoaded because ChromeDrawer
+       (deferred) builds the #chrome-drawer-extra slot only after this code runs,
+       so the immediate onChange is too early for the first relocation. */
+    Viewport.onChange(placeSidebar);
+    Viewport.onChange(syncComposeInset);
     document.addEventListener('DOMContentLoaded', placeSidebar);
-    mql.addEventListener('change', placeSidebar);
-    mql.addEventListener('change', syncComposeInset);
 
     /* Track the compose bar's height live. ResizeObserver fires an initial
        callback on observe(), so the first inset is set without a separate

@@ -49,6 +49,7 @@ pub fn build(b: *std.Build) void {
         // The chat conversation page's client bundles (chat/*.js) — served
         // byte-for-byte so the real prod client boots on the zig chat page.
         .{ .name = "chat_js_colors", .path = "../chat/colors.js" },
+        .{ .name = "chat_js_viewport", .path = "../chat/viewport.js" },
         .{ .name = "chat_js_theme", .path = "../chat/chat_theme.js" },
         .{ .name = "chat_js_chrome_drawer", .path = "../chat/chrome_drawer.js" },
         .{ .name = "chat_js_image_popup", .path = "../chat/chat_image_popup.js" },
