@@ -10,7 +10,12 @@
        the layout column on desktop) — so the drawer reads as one panel:
        section nav (from ChromeDrawer) + conversations.
      - The right sidebar becomes a fixed bottom compose bar with a ▾
-       collapse button.
+       collapse button. Because that bar is position:fixed (out of flow)
+       and its height changes (closed pill vs open textarea), JS keeps the
+       feed's bottom padding equal to the bar's live height — a
+       ResizeObserver, not a static CSS guess — so the last message never
+       hides behind it. CSS still does the positioning; JS owns the one
+       fact (the bar's current height) that CSS can't know.
 
    Runs from chat.js. The first sidebar placement waits for
    DOMContentLoaded, because ChromeDrawer (deferred) builds the
@@ -33,8 +38,9 @@ window.ChatResponsive = (function(){
       + '.chat-layout { flex-direction:column; gap:0; }'
       + '.chat-mp-main { max-width:none !important; flex:1 !important; }'
 
-      /* bottom padding so the last messages clear the fixed compose bar */
-      + '.chat-mp-history { padding-bottom:56px !important; }'
+      /* NB: the feed's bottom inset (room for the fixed compose bar) is set
+         live by syncComposeInset() below — the bar's height varies (closed
+         pill vs open textarea), so a static reserve would clip messages. */
 
       /* the conversations rail, once relocated into the chrome drawer:
          drop the desktop column chrome (fixed width + right border) and
@@ -69,6 +75,20 @@ window.ChatResponsive = (function(){
       + '}';
 
     document.head.appendChild(s);
+  }
+
+  /* Keep the feed clear of the fixed compose bar: pad the scroll surface by
+     the bar's live height (+ a small gap) on mobile, nothing on desktop
+     (where the compose is the in-flow right column). If the reader was at
+     the bottom, stay pinned there as the bar grows/shrinks. */
+  function syncComposeInset(){
+    var history = document.querySelector('.chat-mp-history');
+    var compose = document.querySelector('.chat-compose');
+    if(!history || !compose) return;
+    if(!mql.matches){ history.style.paddingBottom = ''; return; }
+    var atBottom = history.scrollTop + history.clientHeight >= history.scrollHeight - 2;
+    history.style.paddingBottom = (compose.offsetHeight + 8) + 'px';
+    if(atBottom) history.scrollTop = history.scrollHeight;
   }
 
   /* Relocate the conversations rail between the desktop layout column and
@@ -110,6 +130,18 @@ window.ChatResponsive = (function(){
     mql = window.matchMedia('(max-width:768px)');
     document.addEventListener('DOMContentLoaded', placeSidebar);
     mql.addEventListener('change', placeSidebar);
+    mql.addEventListener('change', syncComposeInset);
+
+    /* Track the compose bar's height live. ResizeObserver fires an initial
+       callback on observe(), so the first inset is set without a separate
+       call; older browsers without it fall back to a one-time measure. */
+    var compose = document.querySelector('.chat-compose');
+    if(compose && typeof ResizeObserver === 'function'){
+      var ro = new ResizeObserver(syncComposeInset);
+      ro.observe(compose);
+    } else {
+      syncComposeInset();
+    }
   }
 
   return { init:init };
