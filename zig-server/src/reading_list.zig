@@ -129,6 +129,68 @@ fn isIdChar(c: u8) bool {
         (c >= '0' and c <= '9') or c == '-' or c == '_';
 }
 
+// ── per-user saved-ref cache (the read-back lookup) ──────────────────────────
+//
+// Keyed by uid; each entry owns a page_allocator-backed arena holding the parsed
+// refs (and the doc bytes they alias). We re-parse only when the reading-list
+// doc's mtime advances past the cached one — a real edit moves mtime by seconds,
+// so we err naturally toward a cache miss rather than a stale hit. Module-level
+// and lazy (no startup init); cache_mu serialises access. Entries persist for the
+// server's lifetime (a handful of users); the page_allocator arena is freed
+// wholesale on each refresh.
+
+const Entry = struct {
+    mtime_ns: i96,
+    arena: std.heap.ArenaAllocator,
+    refs: []Ref,
+};
+
+const cache_alloc = std.heap.page_allocator; // server-lifetime; see server.zig
+var cache: std.StringHashMapUnmanaged(Entry) = .empty;
+var cache_mu: Io.Mutex = .init;
+
+/// savedIdsFor returns the message ids the user has saved within (conv, sid) —
+/// the read-back set a chat page marks its bubbles against. Consults the cache,
+/// re-parsing the reading-list doc only when its mtime has advanced. The returned
+/// ids are copied into `req_alloc`, so nothing cache-owned escapes the lock.
+pub fn savedIdsFor(io: Io, req_alloc: Alloc, uid: []const u8, conv: []const u8, sid: []const u8) ![]const []const u8 {
+    cache_mu.lockUncancelable(io);
+    defer cache_mu.unlock(io);
+
+    const path = docs_store.docPath(req_alloc, uid, reading_list_slug) catch return &.{};
+    const st = Io.Dir.cwd().statFile(io, path, .{}) catch return &.{}; // no doc → nothing saved
+    const file_mtime: i96 = st.mtime.nanoseconds;
+
+    const gop = try cache.getOrPut(cache_alloc, uid);
+    if (!gop.found_existing or gop.value_ptr.mtime_ns < file_mtime) {
+        const fresh = try buildEntry(io, path, file_mtime); // build before mutating: old stays intact on error
+        if (gop.found_existing) {
+            gop.value_ptr.arena.deinit();
+        } else {
+            gop.key_ptr.* = try cache_alloc.dupe(u8, uid); // own the key past the request arena
+        }
+        gop.value_ptr.* = fresh;
+    }
+
+    var ids: std.ArrayList([]const u8) = .empty;
+    for (gop.value_ptr.refs) |r| {
+        if (std.mem.eql(u8, r.conv, conv) and std.mem.eql(u8, r.sid, sid)) {
+            try ids.append(req_alloc, try req_alloc.dupe(u8, r.id));
+        }
+    }
+    return ids.toOwnedSlice(req_alloc);
+}
+
+/// buildEntry reads + parses the reading-list doc into a fresh per-entry arena.
+fn buildEntry(io: Io, path: []const u8, mtime_ns: i96) !Entry {
+    var arena = std.heap.ArenaAllocator.init(cache_alloc);
+    errdefer arena.deinit();
+    const aa = arena.allocator();
+    const doc = Io.Dir.cwd().readFileAlloc(io, path, aa, .unlimited) catch "";
+    const refs = try parseRefs(aa, doc); // refs alias `doc`, both arena-owned
+    return .{ .mtime_ns = mtime_ns, .arena = arena, .refs = refs };
+}
+
 /// oneLine returns a copy of s with newlines/CRs flattened to spaces — for the
 /// single-line fields (note, from, when) that sit in a heading or meta line.
 fn oneLine(alloc: Alloc, s: []const u8) ![]u8 {
@@ -247,4 +309,52 @@ test "parseRefs: lenient — skips malformed/partial URLs, empty doc → none" {
     const refs = try parseRefs(a, doc);
     try testing.expectEqual(@as(usize, 1), refs.len);
     try testing.expectEqualStrings("yo_9", refs[0].id);
+}
+
+// Pins the doc's mtime so cache hit/miss is deterministic, not a wall-clock race.
+fn writeReadingList(io: Io, a: Alloc, uid: []const u8, body: []const u8, mtime_ns: i96) !void {
+    try Io.Dir.cwd().createDirPath(io, try docs_store.userDocsDir(a, uid));
+    const path = try docs_store.docPath(a, uid, reading_list_slug);
+    try Io.Dir.cwd().writeFile(io, .{ .sub_path = path, .data = body });
+    var f = try Io.Dir.cwd().openFile(io, path, .{ .mode = .read_write });
+    defer f.close(io);
+    try f.setTimestamps(io, .{ .modify_timestamp = .{ .new = .{ .nanoseconds = mtime_ns } } });
+}
+
+test "savedIdsFor: filters by conv+sid, re-parses only when mtime advances" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var tmp = testing.tmpDir(.{});
+    defer tmp.cleanup();
+    const saved_root = store.chat_root;
+    defer store.chat_root = saved_root;
+    store.chat_root = try std.fs.path.join(a, &.{ ".zig-cache", "tmp", &tmp.sub_path });
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+
+    const uid = "777"; // distinct uid so the process-global cache can't collide
+    const v1 =
+        \\[a](/chat/c/1_2/2026-05-28#msg-2026-05-28_5)
+        \\[b](/channel/General/general1#msg-general1_3)
+    ;
+    try writeReadingList(io, a, uid, v1, 1_000_000_000);
+
+    // filter by (conv, sid): each topic sees only its own saved ids
+    const dm = try savedIdsFor(io, a, uid, "1_2", "2026-05-28");
+    try testing.expectEqual(@as(usize, 1), dm.len);
+    try testing.expectEqualStrings("2026-05-28_5", dm[0]);
+    const ch = try savedIdsFor(io, a, uid, "General", "general1");
+    try testing.expectEqual(@as(usize, 1), ch.len);
+    try testing.expectEqualStrings("general1_3", ch[0]);
+    try testing.expectEqual(@as(usize, 0), (try savedIdsFor(io, a, uid, "1_2", "other")).len);
+
+    // content removed but mtime UNCHANGED → cache hit, still sees v1
+    try writeReadingList(io, a, uid, "(emptied)", 1_000_000_000);
+    try testing.expectEqual(@as(usize, 1), (try savedIdsFor(io, a, uid, "1_2", "2026-05-28")).len);
+
+    // mtime advanced → re-parse, now reflects the emptied doc
+    try writeReadingList(io, a, uid, "(emptied)", 2_000_000_000);
+    try testing.expectEqual(@as(usize, 0), (try savedIdsFor(io, a, uid, "1_2", "2026-05-28")).len);
 }
