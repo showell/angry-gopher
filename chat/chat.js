@@ -277,13 +277,11 @@
       a.remove();
     },
   });
-  /* PRODUCT_DECISION: ChatResponsive makes the 3-column layout work on narrow
-     viewports (<=768px). Must run AFTER ChatLeftSidebar, ChatRightSidebar,
-     ChatCompose, and ChatHelp — it wraps their mount elements with mobile
-     overrides (off-screen drawer, sticky bottom compose bar, hamburger). */
-  ChatResponsive.init({
-    topBar:  document.querySelector('.app-top.chat-top'),
-    sidebar: document.getElementById('chat-left-sidebar'),
-  });
+  /* PRODUCT_DECISION: ChatResponsive owns the chat page's small-screen layout
+     (full-width feed, fixed bottom compose bar, and relocating the conversations
+     rail into the shared ChromeDrawer). Must run AFTER ChatLeftSidebar,
+     ChatRightSidebar, and ChatCompose so their mount elements exist. The shared
+     hamburger + nav drawer are ChromeDrawer's job (chrome_drawer.js, every page). */
+  ChatResponsive.init();
   ChatCompose.focus();
 })();

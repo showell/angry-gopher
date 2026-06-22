@@ -67,6 +67,7 @@ const Asset = struct { name: []const u8, body: []const u8 };
 const assets = [_]Asset{
     .{ .name = "colors.js", .body = @embedFile("chat_js_colors") },
     .{ .name = "chat_theme.js", .body = @embedFile("chat_js_theme") },
+    .{ .name = "chrome_drawer.js", .body = @embedFile("chat_js_chrome_drawer") },
     .{ .name = "chat_image_popup.js", .body = @embedFile("chat_js_image_popup") },
     .{ .name = "chat_code_popup.js", .body = @embedFile("chat_js_code_popup") },
     .{ .name = "chat_time_popup.js", .body = @embedFile("chat_js_time_popup") },

@@ -50,6 +50,7 @@ pub fn build(b: *std.Build) void {
         // byte-for-byte so the real prod client boots on the zig chat page.
         .{ .name = "chat_js_colors", .path = "../chat/colors.js" },
         .{ .name = "chat_js_theme", .path = "../chat/chat_theme.js" },
+        .{ .name = "chat_js_chrome_drawer", .path = "../chat/chrome_drawer.js" },
         .{ .name = "chat_js_image_popup", .path = "../chat/chat_image_popup.js" },
         .{ .name = "chat_js_code_popup", .path = "../chat/chat_code_popup.js" },
         .{ .name = "chat_js_time_popup", .path = "../chat/chat_time_popup.js" },
