@@ -29,6 +29,7 @@ const docs_store = @import("docs_store.zig");
 const markdown = @import("markdown.zig");
 const edge = @import("edge.zig");
 const chat = @import("chat.zig");
+const html = @import("html.zig");
 const chat_state = @import("chat_state.zig");
 const timefmt = @import("timefmt.zig");
 const feed = @import("recent_feed.zig");
@@ -106,7 +107,7 @@ fn renderDocsPage(req: *Request, io: Io, alloc: Alloc, uid: []const u8, list: []
         for (list) |d| {
             const active = if (std.mem.eql(u8, d.slug, slug)) " active" else "";
             try b.print(alloc, "<li class=\"docs-item{s}\"><a href=\"/chat/docs/{s}\">{s}</a></li>", .{
-                active, d.slug, try chat.htmlEscape(alloc, d.title),
+                active, d.slug, try html.htmlEscape(alloc, d.title),
             });
         }
         try b.appendSlice(alloc, "</ul>");
@@ -125,9 +126,9 @@ fn renderDocsPage(req: *Request, io: Io, alloc: Alloc, uid: []const u8, list: []
         const title = try docs_store.titleFromSlug(alloc, slug);
         try b.print(alloc, "<div class=\"docs-title-row\"><span class=\"docs-title\">{s}</span>" ++
             "<button type=\"button\" id=\"docs-post-btn\" class=\"docs-post-btn\">Post to chat</button>" ++
-            "<span class=\"docs-status\" id=\"docs-status\"></span></div>", .{try chat.htmlEscape(alloc, title)});
+            "<span class=\"docs-status\" id=\"docs-status\"></span></div>", .{try html.htmlEscape(alloc, title)});
         try b.print(alloc, "<textarea id=\"docs-body\" data-slug=\"{s}\" spellcheck=\"true\">{s}</textarea>", .{
-            try chat.htmlEscape(alloc, slug), try chat.htmlEscape(alloc, body),
+            try html.htmlEscape(alloc, slug), try html.htmlEscape(alloc, body),
         });
     }
     try b.appendSlice(alloc, "</section>");
@@ -240,8 +241,8 @@ fn docsRender(req: *Request, alloc: Alloc) !void {
     // malformed_html placeholder for hostile input (the existing observable);
     // count it too so /version reflects preview probing, not just POST rejects.
     if (markdown.hostileReason(md) != null) edge.count(.malformed_markdown);
-    const html = try markdown.render(alloc, md);
-    try req.respond(html, .{ .extra_headers = &.{http.html_ct} });
+    const rendered = try markdown.render(alloc, md);
+    try req.respond(rendered, .{ .extra_headers = &.{http.html_ct} });
 }
 
 /// docsPost appends the doc's current body as a chat message to the caller's

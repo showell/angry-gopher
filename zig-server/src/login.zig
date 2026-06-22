@@ -23,6 +23,7 @@ const http = @import("http.zig");
 const users = @import("users.zig");
 const storage = @import("storage.zig");
 const chat = @import("chat.zig");
+const html = @import("html.zig");
 const store = @import("chat_store.zig");
 const Bus = @import("bus.zig").Bus;
 
@@ -305,10 +306,10 @@ fn renderLoginPage(req: *Request, alloc: Alloc, current: []const u8, err_msg: []
     var b: std.ArrayList(u8) = .empty;
     try b.appendSlice(alloc, login_page_head);
     if (current.len != 0) {
-        try b.print(alloc, "<p class=\"muted\">Currently playing as <strong>{s}</strong>.</p>", .{try chat.htmlEscape(alloc, current)});
+        try b.print(alloc, "<p class=\"muted\">Currently playing as <strong>{s}</strong>.</p>", .{try html.htmlEscape(alloc, current)});
     }
     if (err_msg.len != 0) {
-        try b.print(alloc, "<p class=\"err\">{s}</p>", .{try chat.htmlEscape(alloc, err_msg)});
+        try b.print(alloc, "<p class=\"err\">{s}</p>", .{try html.htmlEscape(alloc, err_msg)});
     }
     try b.appendSlice(alloc, login_page_tail);
     try sendHTML(req, alloc, b.items, &.{});
@@ -317,7 +318,7 @@ fn renderLoginPage(req: *Request, alloc: Alloc, current: []const u8, err_msg: []
 /// renderReservedNotice tells a guest a name belongs to a member, offering the
 /// password login or a different name.
 fn renderReservedNotice(req: *Request, alloc: Alloc, name: []const u8) !void {
-    const esc = try chat.htmlEscape(alloc, name);
+    const esc = try html.htmlEscape(alloc, name);
     var b: std.ArrayList(u8) = .empty;
     try b.print(alloc,
         \\<!DOCTYPE html>
@@ -346,8 +347,8 @@ fn renderReservedNotice(req: *Request, alloc: Alloc, name: []const u8) !void {
 /// eyeball (typo guard, no confirm field). `next` rides through as a hidden
 /// field so we return where the user was headed.
 fn renderPwPage(req: *Request, alloc: Alloc, mode: PwMode, name: []const u8, next: []const u8, err_msg: []const u8) !void {
-    const en = try chat.htmlEscape(alloc, name);
-    const enx = try chat.htmlEscape(alloc, next);
+    const en = try html.htmlEscape(alloc, name);
+    const enx = try html.htmlEscape(alloc, next);
     var b: std.ArrayList(u8) = .empty;
 
     try b.print(alloc,
@@ -373,7 +374,7 @@ fn renderPwPage(req: *Request, alloc: Alloc, mode: PwMode, name: []const u8, nex
     }
 
     if (err_msg.len != 0) {
-        try b.print(alloc, "<p class=\"err\">{s}</p>", .{try chat.htmlEscape(alloc, err_msg)});
+        try b.print(alloc, "<p class=\"err\">{s}</p>", .{try html.htmlEscape(alloc, err_msg)});
     }
 
     try b.print(alloc, "<form method=\"post\" action=\"/login/full\"><input type=\"hidden\" name=\"next\" value=\"{s}\">", .{enx});
@@ -419,7 +420,7 @@ fn renderPwPage(req: *Request, alloc: Alloc, mode: PwMode, name: []const u8, nex
 
 /// renderLogoutPage shows the logout confirmation with the release checkbox.
 fn renderLogoutPage(req: *Request, alloc: Alloc, user: []const u8) !void {
-    const esc = try chat.htmlEscape(alloc, user);
+    const esc = try html.htmlEscape(alloc, user);
     var b: std.ArrayList(u8) = .empty;
     try b.print(alloc,
         \\<!DOCTYPE html>

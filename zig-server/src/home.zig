@@ -18,6 +18,7 @@ const http = @import("http.zig");
 const edge = @import("edge.zig");
 const users = @import("users.zig");
 const chat = @import("chat.zig");
+const html = @import("html.zig");
 
 const Alloc = std.mem.Allocator;
 const Request = std.http.Server.Request;
@@ -68,7 +69,7 @@ fn writeTopBar(b: *std.ArrayList(u8), alloc: Alloc, name: []const u8, is_admin: 
     if (name.len == 0) {
         try b.appendSlice(alloc, "<a href=\"/login\">Log in</a>");
     } else {
-        const esc = try chat.htmlEscape(alloc, name);
+        const esc = try html.htmlEscape(alloc, name);
         const admin_link = if (is_admin) " · <a href=\"/admin\">Admin</a>" else "";
         try b.print(alloc, "Playing as <strong>{s}</strong>{s} · <a href=\"/logout\">Log out</a>", .{ esc, admin_link });
     }

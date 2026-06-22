@@ -31,6 +31,8 @@ const http = @import("http.zig");
 const users = @import("users.zig");
 const store = @import("chat_store.zig");
 const markdown = @import("markdown.zig");
+const html = @import("html.zig");
+const htmlEscape = html.htmlEscape; // internal alias; the impl lives in html.zig
 const edge = @import("edge.zig");
 const docs = @import("docs.zig");
 const recent = @import("recent.zig");
@@ -577,21 +579,21 @@ fn liveFrame(alloc: Alloc, raw: []const u8, viewer: []const u8) ![]const u8 {
 /// via the markdown port; `mine` is viewer-relative; `cid` is included only when
 /// non-empty.
 fn emitWire(alloc: Alloc, index: usize, from: []const u8, at: []const u8, md: []const u8, id: []const u8, mine: bool, cid: []const u8) ![]const u8 {
-    const html = try markdown.render(alloc, md);
+    const rendered = try markdown.render(alloc, md);
     if (cid.len > 0) {
         return std.fmt.allocPrint(alloc, "id: {d}\ndata: {{\"index\":{d},\"from\":{f},\"at\":{f},\"html\":{f},\"markdown\":{f},\"id\":{f},\"mine\":{},\"cid\":{f}}}\n\n", .{
-            index,                   index,
-            std.json.fmt(from, .{}), std.json.fmt(at, .{}),
-            std.json.fmt(html, .{}), std.json.fmt(md, .{}),
-            std.json.fmt(id, .{}),   mine,
+            index,                       index,
+            std.json.fmt(from, .{}),     std.json.fmt(at, .{}),
+            std.json.fmt(rendered, .{}), std.json.fmt(md, .{}),
+            std.json.fmt(id, .{}),       mine,
             std.json.fmt(cid, .{}),
         });
     }
     return std.fmt.allocPrint(alloc, "id: {d}\ndata: {{\"index\":{d},\"from\":{f},\"at\":{f},\"html\":{f},\"markdown\":{f},\"id\":{f},\"mine\":{}}}\n\n", .{
-        index,                   index,
-        std.json.fmt(from, .{}), std.json.fmt(at, .{}),
-        std.json.fmt(html, .{}), std.json.fmt(md, .{}),
-        std.json.fmt(id, .{}),   mine,
+        index,                       index,
+        std.json.fmt(from, .{}),     std.json.fmt(at, .{}),
+        std.json.fmt(rendered, .{}), std.json.fmt(md, .{}),
+        std.json.fmt(id, .{}),       mine,
     });
 }
 
@@ -1032,20 +1034,6 @@ fn replaceSeq(alloc: Alloc, input: []const u8, needle: []const u8, repl: []const
 }
 
 /// htmlEscape maps & ' < > " → &amp; &#39; &lt; &gt; &#34;.
-pub fn htmlEscape(alloc: Alloc, s: []const u8) ![]const u8 {
-    if (std.mem.indexOfAny(u8, s, "&'<>\"") == null) return s;
-    var out: std.ArrayList(u8) = .empty;
-    for (s) |c| switch (c) {
-        '&' => try out.appendSlice(alloc, "&amp;"),
-        '\'' => try out.appendSlice(alloc, "&#39;"),
-        '<' => try out.appendSlice(alloc, "&lt;"),
-        '>' => try out.appendSlice(alloc, "&gt;"),
-        '"' => try out.appendSlice(alloc, "&#34;"),
-        else => try out.append(alloc, c),
-    };
-    return out.toOwnedSlice(alloc);
-}
-
 // ── templates (the platform chrome + chat shell) ─────────────────────────────
 
 // page_head_{a,b}: PageHeadAndStyle — doctype, <head>, the shared platform

@@ -13,6 +13,7 @@ const Alloc = std.mem.Allocator;
 const http = @import("http.zig");
 const users = @import("users.zig");
 const chat = @import("chat.zig");
+const html = @import("html.zig");
 const presence = @import("presence.zig");
 const Bus = @import("bus.zig").Bus;
 
@@ -66,7 +67,7 @@ fn renderSettings(req: *Request, io: Io, alloc: Alloc, uid: []const u8) !void {
     // Has a key. Reveal it on ?show=1; otherwise just the buttons.
     if (queryFlag(req, "show")) {
         if (try users.getUserAPIKey(io, alloc, uid)) |key| {
-            try b.print(alloc, "<p>Your API key (copy it somewhere safe):</p>\n<code style=\"" ++ key_code_style ++ "\">{s}</code>", .{try chat.htmlEscape(alloc, key)});
+            try b.print(alloc, "<p>Your API key (copy it somewhere safe):</p>\n<code style=\"" ++ key_code_style ++ "\">{s}</code>", .{try html.htmlEscape(alloc, key)});
         } else {
             try b.appendSlice(alloc, "<p class=\"muted\">This key predates the show feature — regenerate it to see the value.</p>");
         }
@@ -82,10 +83,10 @@ fn renderSettings(req: *Request, io: Io, alloc: Alloc, uid: []const u8) !void {
 /// A standalone page (not chat chrome); the back link points at whichever surface
 /// generated it (member /settings or the /admin panel). Shared with admin.zig.
 pub fn renderKeyShown(req: *Request, io: Io, alloc: Alloc, uid: []const u8, key: []const u8, back_url: []const u8, back_label: []const u8) !void {
-    const name = try chat.htmlEscape(alloc, try users.getUserName(io, alloc, uid));
-    const safe_key = try chat.htmlEscape(alloc, key);
-    const url = try chat.htmlEscape(alloc, back_url);
-    const label = try chat.htmlEscape(alloc, back_label);
+    const name = try html.htmlEscape(alloc, try users.getUserName(io, alloc, uid));
+    const safe_key = try html.htmlEscape(alloc, key);
+    const url = try html.htmlEscape(alloc, back_url);
+    const label = try html.htmlEscape(alloc, back_label);
     const page = try std.fmt.allocPrint(alloc, key_shown_template, .{ url, label, name, safe_key });
     return req.respond(page, .{ .extra_headers = &.{http.html_ct} });
 }

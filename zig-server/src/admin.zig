@@ -17,6 +17,7 @@ const http = @import("http.zig");
 const users = @import("users.zig");
 const storage = @import("storage.zig");
 const chat = @import("chat.zig");
+const html = @import("html.zig");
 const settings = @import("settings.zig");
 
 const Request = std.http.Server.Request;
@@ -101,10 +102,10 @@ fn renderOverview(req: *Request, io: Io, alloc: Alloc) !void {
 
     // Flash (delete / key-revoke confirmations), keyed by uid in the query.
     if (queryValue(req.head.target, "deleted")) |d| {
-        const name = try chat.htmlEscape(alloc, try users.getUserName(io, alloc, d));
+        const name = try html.htmlEscape(alloc, try users.getUserName(io, alloc, d));
         try b.print(alloc, "<p class=\"flash\">Deleted game data for <strong>{s}</strong>.</p>", .{name});
     } else if (queryValue(req.head.target, "keyrevoked")) |k| {
-        const name = try chat.htmlEscape(alloc, try users.getUserName(io, alloc, k));
+        const name = try html.htmlEscape(alloc, try users.getUserName(io, alloc, k));
         try b.print(alloc, "<p class=\"flash\">Revoked the API key for <strong>{s}</strong>.</p>", .{name});
     }
 
@@ -112,7 +113,7 @@ fn renderOverview(req: *Request, io: Io, alloc: Alloc) !void {
 
     try b.print(alloc, "<h2>Sessions per player</h2>\n<p class=\"muted\">Read straight from {s}.</p>\n<table>\n" ++
         "<tr><th>Player</th><th class=\"n\">Games</th><th class=\"n\">Puzzles</th><th class=\"n\">Actions</th><th class=\"n\">Disk</th><th></th></tr>", .{
-        try chat.htmlEscape(alloc, storage.data_root),
+        try html.htmlEscape(alloc, storage.data_root),
     });
 
     if (rows.items.len == 0) {
@@ -154,7 +155,7 @@ fn renderMembersTable(b: *std.ArrayList(u8), io: Io, alloc: Alloc) !void {
     }
     const now = nowUnix(io);
     for (rows.items) |row| {
-        var name = try chat.htmlEscape(alloc, row.name);
+        var name = try html.htmlEscape(alloc, row.name);
         if (row.is_admin) name = try std.fmt.allocPrint(alloc, "{s} <span class=\"muted\">(admin)</span>", .{name});
         if (row.is_agent) name = try std.fmt.allocPrint(alloc, "{s} <span class=\"muted\">(agent)</span>", .{name});
         const since = if (row.last_seen) |t| try humanizeSince(alloc, now - t) else "never";
@@ -182,7 +183,7 @@ fn memberLessThan(_: void, a: MemberRow, b: MemberRow) bool {
 fn appendApiKeyCell(b: *std.ArrayList(u8), io: Io, alloc: Alloc, id: []const u8) !void {
     const has = users.userHasAPIKey(io, alloc, id);
     const gen = if (has) "Regenerate" else "Generate";
-    const esc = try chat.htmlEscape(alloc, id);
+    const esc = try html.htmlEscape(alloc, id);
     try b.print(alloc, "<form class=\"inline\" method=\"post\" action=\"/admin/apikey\">" ++
         "<input type=\"hidden\" name=\"user\" value=\"{s}\">" ++
         "<button class=\"key\" type=\"submit\">{s}</button></form>", .{ esc, gen });
@@ -196,7 +197,7 @@ fn appendApiKeyCell(b: *std.ArrayList(u8), io: Io, alloc: Alloc, id: []const u8)
 fn writeStatsRow(b: *std.ArrayList(u8), alloc: Alloc, st: UserStats, cls: []const u8, actions_cell: []const u8) !void {
     const row_class = if (cls.len != 0) try std.fmt.allocPrint(alloc, " class=\"{s}\"", .{cls}) else "";
     try b.print(alloc, "<tr{s}><td>{s}</td><td class=\"n\">{d}</td><td class=\"n\">{d}</td><td class=\"n\">{d}</td><td class=\"n\">{s}</td><td>{s}</td></tr>", .{
-        row_class,            try chat.htmlEscape(alloc, st.name),
+        row_class,            try html.htmlEscape(alloc, st.name),
         st.game_sessions,     st.puzzle_sessions,
         st.total_actions,     try humanBytes(alloc, st.disk_bytes),
         actions_cell,
@@ -207,10 +208,10 @@ fn writeStatsRow(b: *std.ArrayList(u8), alloc: Alloc, st: UserStats, cls: []cons
 /// will be removed before the POST that does it.
 fn renderDeleteConfirm(req: *Request, io: Io, alloc: Alloc, id: []const u8) !void {
     const st = gatherUserStats(io, alloc, id);
-    const name = try chat.htmlEscape(alloc, try users.getUserName(io, alloc, id));
+    const name = try html.htmlEscape(alloc, try users.getUserName(io, alloc, id));
     const disk = try humanBytes(alloc, st.disk_bytes);
     const page = try std.fmt.allocPrint(alloc, delete_confirm_template, .{
-        name, st.game_sessions, st.puzzle_sessions, st.total_actions, disk, try chat.htmlEscape(alloc, id),
+        name, st.game_sessions, st.puzzle_sessions, st.total_actions, disk, try html.htmlEscape(alloc, id),
     });
     try req.respond(page, .{ .extra_headers = &.{http.html_ct} });
 }

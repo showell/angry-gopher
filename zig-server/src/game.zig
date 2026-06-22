@@ -24,6 +24,7 @@ const storage = @import("storage.zig");
 const users = @import("users.zig");
 const session_meta = @import("session_meta.zig");
 const timefmt = @import("timefmt.zig");
+const html = @import("html.zig");
 
 const Alloc = std.mem.Allocator;
 const Request = std.http.Server.Request;
@@ -184,7 +185,7 @@ fn sessionsList(req: *Request, io: std.Io, alloc: Alloc, user_id: []const u8) !v
         const count = try storage.countSessionActions(io, alloc, user_id, id);
         const ts = if (meta.created_at > 0) try formatEastern(alloc, meta.created_at) else "";
         try b.print(alloc, "<tr><td><a href=\"/game/sessions/{d}\">#{d}</a></td><td>{s}</td><td class=\"n\">{d}</td><td>{s}</td></tr>", .{
-            id, id, try htmlEscape(alloc, ts), count, try htmlEscape(alloc, meta.label),
+            id, id, try html.htmlEscape(alloc, ts), count, try html.htmlEscape(alloc, meta.label),
         });
     }
     try b.appendSlice(alloc, "</table></body></html>");
@@ -224,9 +225,9 @@ fn sessionDetail(req: *Request, io: std.Io, alloc: Alloc, user_id: []const u8, s
     const ts = if (meta.created_at > 0) try formatEastern(alloc, meta.created_at) else "";
 
     var b: std.ArrayList(u8) = .empty;
-    try b.print(alloc, detail_head, .{ session_id, try htmlEscape(alloc, ts), try labelSuffix(alloc, meta.label) });
+    try b.print(alloc, detail_head, .{ session_id, try html.htmlEscape(alloc, ts), try labelSuffix(alloc, meta.label) });
     if (try storage.readSessionFile(io, alloc, user_id, session_id, "meta")) |raw_meta| {
-        try b.print(alloc, "<pre>{s}</pre>", .{try htmlEscape(alloc, raw_meta)});
+        try b.print(alloc, "<pre>{s}</pre>", .{try html.htmlEscape(alloc, raw_meta)});
     } else {
         try b.appendSlice(alloc, "<p class=\"muted\">no meta file</p>");
     }
@@ -271,23 +272,7 @@ fn readMeta(io: std.Io, alloc: Alloc, user_id: []const u8, session_id: i64) !Ses
 /// labelSuffix is "" for an empty label, else " · " + escaped label.
 fn labelSuffix(alloc: Alloc, label: []const u8) ![]const u8 {
     if (label.len == 0) return "";
-    return std.fmt.allocPrint(alloc, " · {s}", .{try htmlEscape(alloc, label)});
-}
-
-/// htmlEscape maps & ' < > " → &amp; &#39; &lt; &gt; &#34;. Returns `s`
-/// unchanged (no allocation) when it has nothing to escape.
-fn htmlEscape(alloc: Alloc, s: []const u8) ![]const u8 {
-    if (std.mem.indexOfAny(u8, s, "&'<>\"") == null) return s;
-    var out: std.ArrayList(u8) = .empty;
-    for (s) |c| switch (c) {
-        '&' => try out.appendSlice(alloc, "&amp;"),
-        '\'' => try out.appendSlice(alloc, "&#39;"),
-        '<' => try out.appendSlice(alloc, "&lt;"),
-        '>' => try out.appendSlice(alloc, "&gt;"),
-        '"' => try out.appendSlice(alloc, "&#34;"),
-        else => try out.append(alloc, c),
-    };
-    return out.toOwnedSlice(alloc);
+    return std.fmt.allocPrint(alloc, " · {s}", .{try html.htmlEscape(alloc, label)});
 }
 
 // ── Eastern-time formatting (the one tzdata gap) ─────────────────────────────
