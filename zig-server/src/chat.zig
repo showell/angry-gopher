@@ -53,7 +53,28 @@ const max_message_bytes = 64 * 1024;
 /// suffices — it only namespaces the browser cache.
 pub const asset_v = "zig";
 
-const Kind = enum { dm, channel };
+/// Conv is a resolved, access-checked conversation: the kind+members the fanout
+/// needs (`meta`), plus the URL/storage coordinates every per-conv handler shares.
+/// convRoute (DM) and handleChannel (channel) each build one once the viewer's
+/// access is confirmed — that's where the dm/channel knowledge is concrete, so it
+/// gets earned exactly once and travels as data from there on.
+const Conv = struct {
+    meta: store.ConvMeta, // kind + member uids — the single source of `kind`
+    key: []const u8, // pair key "a_b" (DM) or channel name
+    base: []const u8, // URL base: /chat/c/<key> or /channel/<key>
+    dir: []const u8, // on-disk conv dir
+
+    /// Whether this conv remembers the viewer's spot (the /chat/default resume
+    /// pointer). DMs do; channels don't. Call sites ask this question by name
+    /// instead of re-testing the kind — the predicate is what they actually mean.
+    fn persistsCursor(self: Conv) bool {
+        return self.meta.kind == .dm;
+    }
+};
+
+/// Topic is a Conv plus a validated session id and its page title — the unit the
+/// per-topic tail (topicRoute and below) operates on.
+const Topic = struct { conv: Conv, sid: []const u8, title: []const u8 };
 
 const Asset = struct { name: []const u8, body: []const u8 };
 
@@ -205,98 +226,105 @@ pub fn handleChannel(req: *Request, io: Io, alloc: Alloc, bus: *Bus, sub: []cons
     const members = (try store.channelMembers(io, alloc, name)) orelse return http.notFound(req);
     if (!store.hasMember(members, uid)) return http.notFound(req);
 
-    const dir = try store.channelConvDir(alloc, name);
-    const base = try std.fmt.allocPrint(alloc, "/channel/{s}", .{name});
+    const conv = Conv{
+        .meta = .{ .kind = .channel, .members = members },
+        .key = name,
+        .base = try std.fmt.allocPrint(alloc, "/channel/{s}", .{name}),
+        .dir = try store.channelConvDir(alloc, name),
+    };
 
     const topic_raw = segs.next() orelse {
-        const def = try store.defaultSession(io, alloc, dir);
+        const def = try store.defaultSession(io, alloc, conv.dir);
         if (def.len == 0) {
             // Member of a channel with no topics yet — offer to start the first.
             const title = try std.fmt.allocPrint(alloc, "#{s}", .{name});
-            return firstTopicPage(req, io, alloc, uid, base, title);
+            return firstTopicPage(req, io, alloc, uid, conv.base, title);
         }
-        return http.redirect(req, try std.fmt.allocPrint(alloc, "{s}/{s}", .{ base, def }));
+        return http.redirect(req, try std.fmt.allocPrint(alloc, "{s}/{s}", .{ conv.base, def }));
     };
-    const meta = store.ConvMeta{ .kind = .channel, .members = members };
     // /channel/<name>/new — create a topic ("new" is reserved).
-    if (std.mem.eql(u8, topic_raw, "new")) return newTopic(req, io, alloc, bus, meta, .channel, name, base, dir, uid);
+    if (std.mem.eql(u8, topic_raw, "new")) return newTopic(req, io, alloc, bus, conv, uid);
     if (!store.validSessionID(topic_raw)) return http.notFound(req);
     // Dupe out of req.head.target — a body read invalidates head strings (see convRoute).
     const topic = try alloc.dupe(u8, topic_raw);
 
     const title = try std.fmt.allocPrint(alloc, "#{s}: {s}", .{ name, topic });
-    try topicRoute(req, io, alloc, bus, &segs, uid, meta, .channel, name, base, dir, topic, title);
+    try topicRoute(req, io, alloc, bus, &segs, uid, Topic{ .conv = conv, .sid = topic, .title = title });
 }
 
 /// convRoute handles /chat/c/<conv>[/<sid>[/raw|stream|send]]. `rest` is after "/c/".
 fn convRoute(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8, rest: []const u8) !void {
     var segs = segments(rest);
-    const conv_raw = segs.next() orelse return http.notFound(req);
-    if (!try store.chatKeyParticipant(alloc, conv_raw, uid)) return http.notFound(req);
+    const pair_raw = segs.next() orelse return http.notFound(req);
+    if (!try store.chatKeyParticipant(alloc, pair_raw, uid)) return http.notFound(req);
     // Dupe path-derived strings out of req.head.target: a body read (send/upload)
     // calls head.invalidateStrings(), which would otherwise clobber them — and
     // they're used AFTER that read (response URLs, fanout keys, member uids).
-    const conv = try alloc.dupe(u8, conv_raw);
+    const pair = try alloc.dupe(u8, pair_raw);
 
-    const dir = try store.dmConvDir(alloc, conv);
-    const base = try std.fmt.allocPrint(alloc, "/chat/c/{s}", .{conv});
+    // DM members are the two uids in the (already participant-checked) pair key.
+    const us = std.mem.indexOfScalar(u8, pair, '_').?;
+    const members = try alloc.alloc([]const u8, 2);
+    members[0] = pair[0..us];
+    members[1] = pair[us + 1 ..];
+    const conv = Conv{
+        .meta = .{ .kind = .dm, .members = members },
+        .key = pair,
+        .base = try std.fmt.allocPrint(alloc, "/chat/c/{s}", .{pair}),
+        .dir = try store.dmConvDir(alloc, pair),
+    };
 
     const sid_raw = segs.next() orelse {
-        const def = try store.defaultSession(io, alloc, dir);
+        const def = try store.defaultSession(io, alloc, conv.dir);
         if (def.len == 0) {
             // Addressable pair, no topics yet — offer to start the first one
             // (rather than 404 a real, reachable conversation).
-            const partner = try partnerName(io, alloc, conv, uid);
+            const partner = try partnerName(io, alloc, conv.key, uid);
             const title = try std.fmt.allocPrint(alloc, "Chat w/{s}", .{partner});
-            return firstTopicPage(req, io, alloc, uid, base, title);
+            return firstTopicPage(req, io, alloc, uid, conv.base, title);
         }
-        return http.redirect(req, try std.fmt.allocPrint(alloc, "{s}/{s}", .{ base, def }));
+        return http.redirect(req, try std.fmt.allocPrint(alloc, "{s}/{s}", .{ conv.base, def }));
     };
-    // DM members are the two uids in the (already participant-checked) pair key.
-    const us = std.mem.indexOfScalar(u8, conv, '_').?;
-    const members = try alloc.alloc([]const u8, 2);
-    members[0] = conv[0..us];
-    members[1] = conv[us + 1 ..];
-    const meta = store.ConvMeta{ .kind = .dm, .members = members };
     // /chat/c/<conv>/new — create a topic ("new" beats {sid}; it's reserved).
-    if (std.mem.eql(u8, sid_raw, "new")) return newTopic(req, io, alloc, bus, meta, .dm, conv, base, dir, uid);
+    if (std.mem.eql(u8, sid_raw, "new")) return newTopic(req, io, alloc, bus, conv, uid);
     if (!store.validSessionID(sid_raw)) return http.notFound(req);
     const sid = try alloc.dupe(u8, sid_raw);
 
-    const partner = try partnerName(io, alloc, conv, uid);
+    const partner = try partnerName(io, alloc, conv.key, uid);
     const title = try std.fmt.allocPrint(alloc, "Chat w/{s}: {s}", .{ partner, sid });
-    try topicRoute(req, io, alloc, bus, &segs, uid, meta, .dm, conv, base, dir, sid, title);
+    try topicRoute(req, io, alloc, bus, &segs, uid, Topic{ .conv = conv, .sid = sid, .title = title });
 }
 
 /// topicRoute fans out the per-topic tail shared by DMs and channels: the bare
 /// page, `/stream` (SSE), `/send` (POST a message), or `/raw` (literal bytes).
 /// `segs` is positioned just after the sid. `title` is the top-bar title.
-fn topicRoute(req: *Request, io: Io, alloc: Alloc, bus: *Bus, segs: *SegIter, uid: []const u8, meta: store.ConvMeta, kind: Kind, conv_key: []const u8, base: []const u8, dir: []const u8, sid: []const u8, title: []const u8) !void {
+fn topicRoute(req: *Request, io: Io, alloc: Alloc, bus: *Bus, segs: *SegIter, uid: []const u8, topic: Topic) !void {
+    const conv = topic.conv;
     const tail = segs.next() orelse {
-        try conversationPage(req, io, alloc, uid, kind, conv_key, base, dir, sid, title);
+        try conversationPage(req, io, alloc, uid, topic);
         return;
     };
     // /uploads/<file> — serve a stored image (two trailing segments).
     if (std.mem.eql(u8, tail, "uploads")) {
         const file = segs.next() orelse return http.notFound(req);
         if (segs.next() != null) return http.notFound(req);
-        return upload.serveUpload(req, io, alloc, dir, sid, file);
+        return upload.serveUpload(req, io, alloc, conv.dir, topic.sid, file);
     }
     if (segs.next() != null) return http.notFound(req); // the rest take no further segment
     if (std.mem.eql(u8, tail, "stream")) {
-        try streamTranscript(req, io, alloc, bus, dir, conv_key, sid, uid);
+        try streamTranscript(req, io, alloc, bus, conv.dir, conv.key, topic.sid, uid);
     } else if (std.mem.eql(u8, tail, "send")) {
-        try sendMessage(req, io, alloc, bus, meta, dir, conv_key, base, sid, uid);
+        try sendMessage(req, io, alloc, bus, topic, uid);
     } else if (std.mem.eql(u8, tail, "upload")) {
-        try upload.handleUpload(req, io, alloc, uid, dir, base, sid);
+        try upload.handleUpload(req, io, alloc, uid, conv.dir, conv.base, topic.sid);
     } else if (std.mem.eql(u8, tail, "pin")) {
-        try pinSession(req, io, alloc, uid, conv_key, sid, true);
+        try pinSession(req, io, alloc, uid, conv.key, topic.sid, true);
     } else if (std.mem.eql(u8, tail, "unpin")) {
-        try pinSession(req, io, alloc, uid, conv_key, sid, false);
+        try pinSession(req, io, alloc, uid, conv.key, topic.sid, false);
     } else if (std.mem.eql(u8, tail, "raw")) {
-        try rawTranscript(req, io, alloc, dir, sid);
+        try rawTranscript(req, io, alloc, conv.dir, topic.sid);
     } else if (std.mem.eql(u8, tail, "download")) {
-        try download.serveBundle(req, io, alloc, dir, sid);
+        try download.serveBundle(req, io, alloc, conv.dir, topic.sid);
     } else {
         try http.notFound(req);
     }
@@ -324,21 +352,22 @@ fn firstTopicPage(req: *Request, io: Io, alloc: Alloc, uid: []const u8, base: []
 
 // ── the conversation page (boots the prod JS) ────────────────────────────────
 
-fn conversationPage(req: *Request, io: Io, alloc: Alloc, uid: []const u8, kind: Kind, conv_key: []const u8, base: []const u8, dir: []const u8, sid: []const u8, title: []const u8) !void {
-    // Remember where this user is (DM only — last-conv/-session is the
-    // /chat/default resume pointer, keyed by pair; channels don't persist it).
-    if (kind == .dm) chat_state.setUserLastSession(io, alloc, uid, conv_key, sid);
+fn conversationPage(req: *Request, io: Io, alloc: Alloc, uid: []const u8, topic: Topic) !void {
+    const conv = topic.conv;
+    // Remember where this user is — the /chat/default resume pointer, keyed by
+    // pair. Only convs that persist a cursor (DMs) do this; channels don't.
+    if (conv.persistsCursor()) chat_state.setUserLastSession(io, alloc, uid, conv.key, topic.sid);
     const viewer = try users.getUserName(io, alloc, uid);
-    const sidebar_json = try buildSidebarJSON(io, alloc, uid, kind, conv_key, base, dir, sid);
+    const sidebar_json = try buildSidebarJSON(io, alloc, uid, topic);
 
     var b: std.ArrayList(u8) = .empty;
     // doctype + <head> + platform style + colors/theme scripts + top bar +
     // open .app-body-wrap. active="" so no nav link is bolded inside a conv.
-    try writeChrome(&b, alloc, "Chat", title, viewer, "");
+    try writeChrome(&b, alloc, "Chat", topic.title, viewer, "");
 
     try b.appendSlice(alloc, chat_css);
     try b.print(alloc, "<div id=\"chat-root\" data-conv=\"{s}\" data-conv-base=\"{s}\" data-session=\"{s}\">", .{
-        try htmlEscape(alloc, conv_key), try htmlEscape(alloc, base), try htmlEscape(alloc, sid),
+        try htmlEscape(alloc, conv.key), try htmlEscape(alloc, conv.base), try htmlEscape(alloc, topic.sid),
     });
     try b.appendSlice(alloc, "<div class=\"chat-notify\" id=\"chat-notify\"></div>");
     try b.appendSlice(alloc, "<div class=\"chat-layout\">");
@@ -410,7 +439,8 @@ fn navLinks(b: *std.ArrayList(u8), alloc: Alloc, active: []const u8) !void {
 /// conversations = every other authorized user (DM) + every channel the viewer
 /// is in; pinned_sessions = [] (pins not ported yet); sessions = this conv's
 /// topics. The `</`→`<\/` pass is script-tag safety for inline embedding.
-fn buildSidebarJSON(io: Io, alloc: Alloc, uid: []const u8, kind: Kind, conv_key: []const u8, base: []const u8, dir: []const u8, sid: []const u8) ![]const u8 {
+fn buildSidebarJSON(io: Io, alloc: Alloc, uid: []const u8, topic: Topic) ![]const u8 {
+    const conv = topic.conv;
     var b: std.ArrayList(u8) = .empty;
     try b.appendSlice(alloc, "{\"conversations\":[");
 
@@ -420,7 +450,7 @@ fn buildSidebarJSON(io: Io, alloc: Alloc, uid: []const u8, kind: Kind, conv_key:
         if (!first) try b.append(alloc, ',');
         first = false;
         const pk = try store.chatPairKey(alloc, uid, u.id);
-        const active = kind == .dm and std.mem.eql(u8, pk, conv_key);
+        const active = conv.meta.kind == .dm and std.mem.eql(u8, pk, conv.key);
         try b.print(alloc, "{{\"id\":\"uid:{s}\",\"label\":{f},\"url\":\"/chat/c/{s}\",\"active\":{}", .{
             u.id, std.json.fmt(u.name, .{}), pk, active,
         });
@@ -431,7 +461,7 @@ fn buildSidebarJSON(io: Io, alloc: Alloc, uid: []const u8, kind: Kind, conv_key:
     for (try store.listUserChannels(io, alloc, uid)) |name| {
         if (!first) try b.append(alloc, ',');
         first = false;
-        const active = kind == .channel and std.mem.eql(u8, name, conv_key);
+        const active = conv.meta.kind == .channel and std.mem.eql(u8, name, conv.key);
         const label = try std.fmt.allocPrint(alloc, "# {s}", .{name});
         try b.print(alloc, "{{\"id\":\"ch:{s}\",\"label\":{f},\"url\":\"/channel/{s}\",\"active\":{}}}", .{
             name, std.json.fmt(label, .{}), name, active,
@@ -440,8 +470,8 @@ fn buildSidebarJSON(io: Io, alloc: Alloc, uid: []const u8, kind: Kind, conv_key:
 
     // Sessions split by pinned state: the conv's
     // pins (conv-key form) intersect the live session list — stale ids drop out.
-    const pins = try chat_state.pinnedSessions(io, alloc, uid, conv_key);
-    const sessions = try store.listSessions(io, alloc, dir);
+    const pins = try chat_state.pinnedSessions(io, alloc, uid, conv.key);
+    const sessions = try store.listSessions(io, alloc, conv.dir);
 
     try b.appendSlice(alloc, "],\"pinned_sessions\":[");
     first = true;
@@ -449,7 +479,7 @@ fn buildSidebarJSON(io: Io, alloc: Alloc, uid: []const u8, kind: Kind, conv_key:
         if (!chat_state.isPinned(pins, s)) continue;
         if (!first) try b.append(alloc, ',');
         first = false;
-        try emitSessionItem(&b, alloc, base, s, sid);
+        try emitSessionItem(&b, alloc, conv.base, s, topic.sid);
     }
     try b.appendSlice(alloc, "],\"sessions\":[");
     first = true;
@@ -457,7 +487,7 @@ fn buildSidebarJSON(io: Io, alloc: Alloc, uid: []const u8, kind: Kind, conv_key:
         if (chat_state.isPinned(pins, s)) continue;
         if (!first) try b.append(alloc, ',');
         first = false;
-        try emitSessionItem(&b, alloc, base, s, sid);
+        try emitSessionItem(&b, alloc, conv.base, s, topic.sid);
     }
     try b.appendSlice(alloc, "]}");
 
@@ -572,7 +602,8 @@ fn emitWire(alloc: Alloc, index: usize, from: []const u8, at: []const u8, md: []
 /// every open stream on this conv/sid), and report. `X-Chat-Async: 1` → 204;
 /// a plain form post → 303 back to the topic. Empty / DROP_ON_FLOOR bodies report
 /// success without appending (the client's no-echo path).
-fn sendMessage(req: *Request, io: Io, alloc: Alloc, bus: *Bus, meta: store.ConvMeta, conv_dir: []const u8, conv_key: []const u8, base: []const u8, sid: []const u8, uid: []const u8) !void {
+fn sendMessage(req: *Request, io: Io, alloc: Alloc, bus: *Bus, topic: Topic, uid: []const u8) !void {
+    const conv = topic.conv;
     if (req.head.method != .POST) return http.methodNotAllowed(req);
 
     // Read headers BEFORE the body: reading the request body advances the
@@ -586,7 +617,7 @@ fn sendMessage(req: *Request, io: Io, alloc: Alloc, bus: *Bus, meta: store.ConvM
     const md = std.mem.trim(u8, md_raw, " \t\r\n");
 
     if (md.len == 0 or std.mem.startsWith(u8, md, "DROP_ON_FLOOR")) {
-        return sendDone(req, alloc, is_async, base, sid);
+        return sendDone(req, alloc, is_async, conv.base, topic.sid);
     }
 
     // Refuse hostile / absurdly over-formatted markdown at the door rather than
@@ -597,10 +628,10 @@ fn sendMessage(req: *Request, io: Io, alloc: Alloc, bus: *Bus, meta: store.ConvM
     }
 
     const from_name = try users.getUserName(io, alloc, uid);
-    _ = try store.appendMessage(io, alloc, bus, meta, conv_dir, conv_key, sid, from_name, uid, md, cid);
+    _ = try store.appendMessage(io, alloc, bus, conv.meta, conv.dir, conv.key, topic.sid, from_name, uid, md, cid);
     users.touchUser(io, alloc, uid);
-    if (meta.kind == .dm) chat_state.setUserLastSession(io, alloc, uid, conv_key, sid);
-    return sendDone(req, alloc, is_async, base, sid);
+    if (conv.persistsCursor()) chat_state.setUserLastSession(io, alloc, uid, conv.key, topic.sid);
+    return sendDone(req, alloc, is_async, conv.base, topic.sid);
 }
 
 /// pinSession handles POST /<…>/<sid>/{pin,unpin}: toggle
@@ -628,7 +659,7 @@ fn sendDone(req: *Request, alloc: Alloc, is_async: bool, base: []const u8, sid: 
 /// DM it also remembers the new topic as last-viewed and announces it as a link
 /// in the highest generalN session, where the partner already watches. Returns
 /// `{conv, sid}` JSON. Shared by DMs and channels (kind gates the DM-only extras).
-fn newTopic(req: *Request, io: Io, alloc: Alloc, bus: *Bus, meta: store.ConvMeta, kind: Kind, conv_key: []const u8, base: []const u8, dir: []const u8, uid: []const u8) !void {
+fn newTopic(req: *Request, io: Io, alloc: Alloc, bus: *Bus, conv: Conv, uid: []const u8) !void {
     if (req.head.method != .POST) return http.methodNotAllowed(req);
 
     const body = (try http.readLimitedBody(req, alloc, max_message_bytes)) orelse return;
@@ -640,26 +671,26 @@ fn newTopic(req: *Request, io: Io, alloc: Alloc, bus: *Bus, meta: store.ConvMeta
     if (std.mem.eql(u8, topic, "new")) {
         return req.respond("\"new\" is reserved — pick another topic name.\n", .{ .status = .bad_request });
     }
-    for (try store.listSessions(io, alloc, dir)) |s| {
+    for (try store.listSessions(io, alloc, conv.dir)) |s| {
         if (std.mem.eql(u8, s, topic)) return req.respond("That topic already exists.\n", .{ .status = .conflict });
     }
 
     const from_name = try users.getUserName(io, alloc, uid);
-    _ = try store.appendMessage(io, alloc, bus, meta, dir, conv_key, topic, from_name, uid, "hi", "");
+    _ = try store.appendMessage(io, alloc, bus, conv.meta, conv.dir, conv.key, topic, from_name, uid, "hi", "");
     users.touchUser(io, alloc, uid);
 
-    if (kind == .dm) {
-        chat_state.setUserLastSession(io, alloc, uid, conv_key, topic);
+    if (conv.persistsCursor()) {
+        chat_state.setUserLastSession(io, alloc, uid, conv.key, topic);
         // Announce the new topic where the partner already watches (best-effort).
-        if (try highestGeneralSession(io, alloc, dir)) |gen| {
+        if (try highestGeneralSession(io, alloc, conv.dir)) |gen| {
             if (!std.mem.eql(u8, gen, topic)) {
-                const note = try std.fmt.allocPrint(alloc, "New topic: [{s}]({s}/{s})", .{ topic, base, topic });
-                _ = store.appendMessage(io, alloc, bus, meta, dir, conv_key, gen, from_name, uid, note, "") catch {};
+                const note = try std.fmt.allocPrint(alloc, "New topic: [{s}]({s}/{s})", .{ topic, conv.base, topic });
+                _ = store.appendMessage(io, alloc, bus, conv.meta, conv.dir, conv.key, gen, from_name, uid, note, "") catch {};
             }
         }
     }
 
-    const out = try std.fmt.allocPrint(alloc, "{{\"conv\":{f},\"sid\":{f}}}", .{ std.json.fmt(conv_key, .{}), std.json.fmt(topic, .{}) });
+    const out = try std.fmt.allocPrint(alloc, "{{\"conv\":{f},\"sid\":{f}}}", .{ std.json.fmt(conv.key, .{}), std.json.fmt(topic, .{}) });
     try req.respond(out, .{ .extra_headers = &.{http.json_ct} });
 }
 
