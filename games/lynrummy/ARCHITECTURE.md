@@ -20,7 +20,7 @@ tools), see [`ENTRY_POINTS.md`](ENTRY_POINTS.md).
   entry points: `Game.elm` (full game) and `Puzzle.elm`
   (single-board puzzle). See
   [`elm/README.md`](./elm/README.md).
-- **Go server is dumb storage.** Holds session files
+- **The server is dumb storage.** Holds session files
   (`meta`, `actions.dsl`) under `games/lynrummy/data/`.
   Doesn't referee, doesn't reason. Sequential session-id
   allocation is the one smart exception.
@@ -41,8 +41,8 @@ TS agent's spatial-planning rules both trace back to it.
 
 One canonical text grammar carries every long-lived
 artifact: conformance fixtures, on-disk session files, the
-resume wire, agent self-play transcripts. Three runtimes
-(Elm, TypeScript, Go) speak it. Most tests parse `.dsl`
+resume wire, agent self-play transcripts. Two runtimes
+(Elm, TypeScript) speak it. Most tests parse `.dsl`
 files at run time.
 
 The examples are the spec — there's no separate syntax
@@ -76,7 +76,7 @@ others.
 
 Consequences:
 
-- The Go server stores what Elm posts but never parses
+- The server stores what Elm posts but never parses
   primitives. Storage, not coordination.
 - After bootstrap, Elm's only outbound traffic is
   fire-and-forget action POSTs (`sendAction`). No inbound
@@ -168,5 +168,5 @@ frame coords. Replay branches on path presence.
 
 All build, launch, and test ops go through `ops/` scripts
 (repo root). `ops/list` for the index. Don't hand-compose
-`go run .`, `elm make`, or `go test ./...` — those silently
+`zig build`, `elm make`, or `tsc` — those silently
 drop sequencing the scripts encode.

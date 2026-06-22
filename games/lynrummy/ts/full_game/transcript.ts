@@ -1,9 +1,8 @@
 // transcript.ts — write an Elm-replayable session directory from a
 // TS agent self-play game. Pure DSL on disk; no JSON envelopes.
 //
-// Output shape (matches what `views/lynrummy_elm.go` writes when a
-// human plays in the browser, which is what Elm's
-// `Wire.fetchActionLog` reads back on replay):
+// Output shape (matches what a human-played browser session writes,
+// which is what Elm's `Wire.fetchActionLog` reads back on replay):
 //
 //   <sessions_dir>/<id>/meta            multi-line DSL: server-owned
 //                                       scalars (created_at, label),
@@ -14,7 +13,7 @@
 //                                       writes during a human game)
 //
 // Per Steve, 2026-05-03: agents use the file system directly (no
-// HTTP). This module writes files; it doesn't talk to the Go server.
+// HTTP). This module writes files; it doesn't talk to the server.
 
 import * as fs from "node:fs";
 import * as path from "node:path";
@@ -88,7 +87,7 @@ function assertSessionsDirExists(): void {
 }
 
 /** Read + increment + write the session-id counter. Mirrors what
- *  `views/lynrummy_elm.go` does, but TS-side (the Go server is
+ *  a human-played browser session does, but TS-side (the server is
  *  out of the loop for agent-written transcripts). */
 function allocateSessionId(): number {
   let n = 1;

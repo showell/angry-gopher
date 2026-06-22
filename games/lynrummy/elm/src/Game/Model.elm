@@ -150,7 +150,7 @@ bootstrapFromBundle initialState actions model =
 
 
 {-| The UI serializes core game actions transparently back and
-forth with the Go server (and file system). We replay them
+forth with the server (and file system). We replay them
 back here so that players can resume where the prior session
 left off.
 -}

@@ -179,7 +179,7 @@ function main(): void {
     console.log(`# (s<seed>t<turn>p<player>) so duplicates within a verb-shape are distinguishable.`);
     console.log(`#`);
     console.log(`# Format matches mined_seeds.dsl — \`puzzle <name>\` header + indented`);
-    console.log(`# \`at (left,top): cards\` body. UI: views/puzzle.go consumes directly.`);
+    console.log(`# \`at (left,top): cards\` body. UI: the server (puzzles.zig) consumes directly.`);
     console.log(`# Conformance: test/test_curated_puzzles.ts asserts plan_length === 4.`);
     console.log();
     for (const hit of allHits) dumpPuzzleDsl(hit);

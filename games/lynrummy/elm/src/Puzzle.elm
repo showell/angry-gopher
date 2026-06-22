@@ -39,7 +39,7 @@ import Task
 import Time
 
 
-{-| Server-baked flags. The Go handler allocates a session and
+{-| Server-baked flags. The server's handler allocates a session and
 emits `{session_id, puzzles}` in the page's `Elm.Puzzle.init`
 call — `puzzles` is the entire curated catalog. We decode it
 once at boot; navigation never refetches.

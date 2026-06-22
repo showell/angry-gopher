@@ -11,7 +11,7 @@ who taught the family to play.
 ## Status
 
 **Live in production** at https://lynrummy.com — a DigitalOcean
-droplet running the Go server behind Caddy (Let's Encrypt TLS,
+droplet running the zig server behind Caddy (Let's Encrypt TLS,
 name-login). Real players (family + friends) can log in and play.
 Keep that in mind when changing what ships — but calibrate the
 stakes: it's a small card game, not critical infrastructure, so stay
@@ -55,7 +55,8 @@ The TS agent at `ts/` owns three end-to-end jobs:
 - **Conformance + perf gates.** `ops/check` runs the TS gate
   (typecheck + leaf primitives + engine cross-check + verb
   fixtures + physical-plan + replay walkthroughs + elmFindPlay
-  + dead-export scan), the Elm gate, and `go build`. Add
+  + dead-export scan), the Elm gate, and the zig build
+  (`ops/check_zig`). Add
   `ops/check_full` for agent self-play across 6 seeds. Bench
   gold files at `ts/bench/*_gold.txt` lock baseline wall-time
   per scenario.
@@ -67,7 +68,7 @@ Lyn Rummy + Chat — over a shared base). Each leaf runs <20s warm;
 composite gates pick the right leaves.
 
 **`ops/check_lynrummy` (~30s warm).** The Lyn Rummy subsystem gate:
-the shared base (`go build` + a doc-link check) plus the Elm client
+the shared base (zig build + a doc-link check) plus the Elm client
 and TS solver/engine suites. Use this while working on Lyn Rummy; it
 skips the chat lint.
 

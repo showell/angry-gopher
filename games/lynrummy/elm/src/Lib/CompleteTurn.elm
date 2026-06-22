@@ -10,9 +10,8 @@ module Lib.CompleteTurn exposing
 (`applyCompleteTurn`), the outcome type, the popup/status
 content builders that narrate the outcome, and the host-facing
 wrapper (`attemptCompleteTurn`) that bundles the transition
-with the status / popup / wire payload the UI needs. Mirrors
-the Go-side `games/lynrummy/replay.go` `applyCompleteTurn`
-step-for-step.
+with the status / popup / wire payload the UI needs. This is
+the canonical `applyCompleteTurn` — the referee lives here.
 
 `Lib.Popup` and `Lib.Status` are pure view-chrome (`viewPopup`
 / `viewStatusBar` + the `PopupContent` / `StatusMessage`
@@ -169,7 +168,7 @@ popupFromOutcome { result, cardsDrawn } =
 {-| The full CompleteTurn transition, deterministic from the
 pre-turn state alone. Produces the post-turn state.
 
-Steps (mirrors Go's applyCompleteTurn exactly):
+Steps:
 
 1.  Classify the turn result using a PlayerTurn accumulator.
 2.  Compute and bank the outgoing player's turn score.

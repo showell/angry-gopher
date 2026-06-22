@@ -31,11 +31,11 @@ games/lynrummy/conformance/scenarios/*.dsl
 TS: games/lynrummy/ts/test/conformance_dsl.ts + per-test consumers
 Elm: tests/Lib/ConformanceDsl.elm  →  tests/Lib/ConformanceTests.elm
         ↓  (ops/check runs everything <20s; ops/check_full adds the slow tier)
-elm-test + TS conformance suite + elm-review + go build
+elm-test + TS conformance suite + elm-review + zig build
 ```
 
 The canonical command is `ops/check` (pre-commit gate, ~20s). Always run it before
-reporting done. It runs `ops/test_ts` + `ops/test_elm` + `ops/test_go`.
+reporting done. It runs `ops/test_ts` + `ops/test_elm` + `ops/check_zig`.
 
 Each `op:` in a `.dsl` scenario dispatches at test time to a hand-written
 verifier — in Elm via the `verify` case-match in

@@ -11,7 +11,7 @@ import type { Card, Rank, Suit, Deck } from "./core/card.ts";
 import { parseCardLabel } from "./core/card.ts";
 import type { BoardStack } from "./geometry/geometry.ts";
 
-// Locations match dealer.go's initial-board layout
+// Locations match `Lib.Dealer`'s (Elm) initial-board layout
 // (`top = 20 + row*60; col = (row*3 + 1) % 5; left = 40 + col*30`) so
 // the transcript writer's positioned output matches what Elm renders
 // on a fresh-replay bootstrap.

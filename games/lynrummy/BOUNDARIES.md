@@ -20,7 +20,7 @@
 
 ## How to use this document
 
-Read it once, end to end, before substantive Elm / Go
+Read it once, end to end, before substantive Elm / TS
 refactor work. Then keep it open as a reference. The
 sections aren't disjoint — most real boundary problems
 trigger two or three of the diagnostics at once. The
@@ -478,8 +478,8 @@ comment, a `_ -> X` fallback — stop. The discomfort is
 telling you something the comment can't reach.
 
 **This is particularly true in Lyn Rummy specifically.** We
-own every layer (Elm, Go, TS agent, wire format, on-disk
-session files, conformance fixtures) AND we are not yet
+own every layer (Elm, TS agent, the zig server, wire format,
+on-disk session files, conformance fixtures) AND we are not yet
 in production. We have the LUXURY of reshaping across
 network and language boundaries when reality calls for it.
 That luxury is rare; don't squander it by reaching for a
@@ -500,8 +500,8 @@ translation layer when the shape is wrong on both sides.
 
 ### The license
 
-I own the whole system. Elm, Go, TS, wire format, DB
-schema, on-disk session files — all mine to reshape. When
+I own the whole system. Elm, TS, the zig server, wire format,
+on-disk session files — all mine to reshape. When
 two sides disagree, the constraints are mine to redraw.
 Don't treat the contract as immutable when I'm the one
 drawing the contract.

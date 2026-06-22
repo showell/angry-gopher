@@ -19,22 +19,21 @@ Two Elm `Browser.element` boots, both compiled from
 | `src/Game.elm` | `elm.js` | `/game` | Full Lyn Rummy game client |
 | `src/Puzzle.elm` | `puzzle.js` | `/puzzles` | Single-board puzzle |
 
-## Server-side handlers (Go)
+## Server-side handlers (zig)
 
-The Go server is dumb URL-keyed file storage for LynRummy
+The server is dumb URL-keyed file storage for LynRummy
 session data. No referee, no replay, no dealer — Elm owns
 all of that now.
 
-The Lyn Rummy server lives in its own package, `server/lynrummy/`:
+The Lyn Rummy handlers live in the single zig server
+(`zig-server/src/`):
 
-- `lynrummy_elm.go` — the `/game` surface
-- `puzzle.go` — the `/puzzles` surface
-- `game_data.go` — session/puzzle file storage
+- `game.zig` — the `/game` surface
+- `puzzles.zig` — the `/puzzles` surface
+- `storage.zig` / `session_meta.zig` — session/puzzle file storage
 
-It builds on the shared `server/web/` base (identity, sessions,
-chrome, assets). Chat is a separate sibling package
-(`server/chat/`); the two share no symbols. See the repo
-`README.md` for the package map.
+Chat, Docs, and the other subsystems are sibling handlers in the
+same binary. See the repo `README.md` for the layout.
 
 ## CLI / agent tooling
 
@@ -61,11 +60,11 @@ See its README.md for more details.
 The single canonical run point is **`ops/check`** (~20s warm)
 from the repo root. It composes:
 
+- `ops/check_zig` — the zig server compiles + its unit tests pass.
 - `ops/test_ts` — TS typecheck + leaf + engine cross-check + verbs
   + physical_plan + walkthroughs + elmFindPlay + dead-export scan.
 - `ops/test_elm` — embed DSLs + standalone Elm typecheck +
   elm make + elm-test + elm-review.
-- `ops/test_go` — `go build ./...`.
 - `ops/test_docs` — `doc_xref --all`: flags Markdown links/paths
   pointing at files that no longer exist.
 
@@ -73,8 +72,8 @@ from the repo root. It composes:
 across 6 seeds, ~28s) — the only >20s test in the repo.
 
 Run individual gates (`ops/test_ts` / `ops/test_elm` /
-`ops/test_go`) during language-focused iteration. The bare
-elm-test / elm-review / tsc / go build commands work too but
+`ops/check_zig`) during language-focused iteration. The bare
+elm-test / elm-review / tsc / zig build commands work too but
 skip the cross-language sequencing the scripts encode.
 
 See also: [`elm/README.md`](./elm/README.md) — links here

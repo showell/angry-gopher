@@ -5,7 +5,7 @@ module Lib.PuzzleFlagDsl exposing
     )
 
 {-| Parse the puzzle page's boot flag — a single DSL string the
-Go server bakes into the `Elm.Puzzle.init` call. Shape:
+server bakes into the `Elm.Puzzle.init` call. Shape:
 
     session_id: 17
 

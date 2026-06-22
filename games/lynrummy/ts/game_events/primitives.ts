@@ -230,7 +230,7 @@ function applyMergeStack(
   let loc: Loc;
   if (side === "left") {
     newCards = [...s.cards, ...t.cards];
-    // Go's LeftMerge: merged stack's left edge shifts left by the
+    // Left merge: merged stack's left edge shifts left by the
     // width of the incoming cards.
     loc = { left: t.loc.left - CARD_PITCH * s.cards.length, top: t.loc.top };
   } else {

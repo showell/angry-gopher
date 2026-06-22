@@ -83,9 +83,9 @@ rowLoc row =
 
 
 {-| Build a complete, playable initial game state from a seed.
-Ported from `games/lynrummy/dealer.go:DealFullGame`.
+This is the canonical full deal.
 
-Steps (matches the Go counterpart's shape):
+Steps:
 
 1.  Shuffle a 104-card double deck via `Card.buildFullDoubleDeck`
     (Mulberry32 under the seed).

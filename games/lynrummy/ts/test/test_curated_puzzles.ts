@@ -12,8 +12,8 @@
 //
 // Format note: the puzzle DSL is the UI-consumable shape from
 // mined_seeds.dsl — `puzzle X` headers + indented `at (left,
-// top): cards` bodies. The same blocks views/puzzle.go reads to
-// serve the puzzle UI; running them through BFS here is the
+// top): cards` bodies. The same blocks the server (`puzzles.zig`)
+// reads to serve the puzzle UI; running them through BFS here is the
 // solvability + plan-length guarantee that backs the UI.
 
 import * as fs from "node:fs";

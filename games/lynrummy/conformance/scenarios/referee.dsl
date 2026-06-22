@@ -1,5 +1,5 @@
 # Referee conformance scenarios (validate_turn_complete only).
-# Compiled to native Go + Elm tests.
+# Compiled to native TS + Elm tests.
 
 scenario turn_complete_clean_board
   desc: Every stack on the board is a valid group (run + set, well-spaced).

@@ -29,17 +29,18 @@ ops/build_driving && cd zig-server && zig build run
 ```
 
 Assets that live elsewhere in the repo (the driving bundle) are baked in via
-`build.zig` — the **embed.go analog**: `@embedFile` can't reach outside its own
-package dir, so each external asset is declared there as a named import.
+`build.zig` — where cross-package embedding is wired up: `@embedFile` can't
+reach outside its own package dir, so each external asset is declared there as a
+named import.
 
 ```
 ops/build_driving            # from repo root: builds games/driving/app.js (esbuild)
 cd zig-server && zig build run   # serves /driving on http://localhost:9001
 ```
 
-Port 9001 leaves 9000 free for the Go dev server (`ops/start`), so both run
-side by side. Concurrency is one-connection-at-a-time/blocking for now; the real
-concurrency + fan-out decision is deferred until Chat's SSE forces it.
+Port 9001 is where `ops/start` serves locally — it runs this same zig binary
+(the Go original is gone). Each accepted connection runs as its own task on a
+std.Io thread pool, so requests are served concurrently.
 
 ## Markdown dialect regression harness
 

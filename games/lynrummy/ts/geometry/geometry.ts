@@ -3,9 +3,9 @@
 // clear of the crowding/overlap thresholds the referee enforces (and
 // stricter human-feel thresholds the agent enforces on its own).
 //
-// Constants must agree with `Lib.Physics.BoardGeometry` (Elm) and
-// the Go server's BoardBounds. Drift between layers is silent and
-// load-bearing — when changing one, update all three.
+// Constants must agree with `Lib.Physics.BoardGeometry` (Elm). Drift
+// between the two layers is silent and load-bearing — change one,
+// change the other.
 
 import type { Card } from "../core/card.ts";
 
@@ -31,7 +31,7 @@ interface Rect {
   readonly bottom: number;
 }
 
-// --- Layout constants — match Elm + Go ---------------------------------
+// --- Layout constants — match Elm ---------------------------------
 
 const CARD_WIDTH = 27;
 export const CARD_PITCH = CARD_WIDTH + 6;  // 33

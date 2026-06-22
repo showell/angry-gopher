@@ -967,7 +967,7 @@ const Inline = struct {
 /// renderInline renders one line of inline content: escapes plain text and
 /// recognizes inline <img>, code spans, markdown links [t](u), GFM bare-URL/
 /// email autolinks, and `*`/`_`/`**` emphasis. target="_blank" on external
-/// links is added by the linkifyMsgRefs post-pass (mirroring Go).
+/// links is added by the linkifyMsgRefs post-pass.
 fn renderInline(out: *std.ArrayList(u8), a: std.mem.Allocator, text: []const u8) std.mem.Allocator.Error!void {
     var inl = Inline{};
 
@@ -1364,8 +1364,8 @@ fn countByte(s: []const u8, b: u8) usize {
 // --- MSG_ reference linkifier (post-pass over rendered HTML) -----------------
 
 /// linkifyMsgRefs rewrites MSG_<slug>_<n> tokens in HTML text into reference
-/// links, skipping the contents of <code>, <pre>, and <a> elements — the same
-/// single tokenizing walk (tags vs. text) as the Go linkifyMsgRefs.
+/// links, skipping the contents of <code>, <pre>, and <a> elements — a
+/// single tokenizing walk (tags vs. text).
 fn linkifyMsgRefs(a: std.mem.Allocator, html: []const u8) ![]const u8 {
     var out: std.ArrayList(u8) = .empty;
     var skip: usize = 0;
