@@ -569,6 +569,24 @@ pub fn validSessionID(sid: []const u8) bool {
     return true;
 }
 
+/// validMsgRefID matches `^[A-Za-z0-9-]+_[0-9]+$` — a session slug, an
+/// underscore, a decimal message index. The canonical message-ref id check,
+/// shared by the /chat/msg/<id> lookup and reading_list's saved-ref parse (and a
+/// path guard for the embedded sid). One home so the two can't drift.
+pub fn validMsgRefID(id: []const u8) bool {
+    const cut = std.mem.lastIndexOfScalar(u8, id, '_') orelse return false;
+    const left = id[0..cut];
+    const right = id[cut + 1 ..];
+    if (left.len == 0 or right.len == 0) return false;
+    for (left) |c| {
+        if (!isAlnum(c) and c != '-') return false;
+    }
+    for (right) |c| {
+        if (c < '0' or c > '9') return false;
+    }
+    return true;
+}
+
 /// validChannelName matches `^[A-Za-z][A-Za-z0-9-]{0,39}$`
 /// — a letter, then up to 39 of letter/digit/hyphen (1..40 chars total).
 pub fn validChannelName(name: []const u8) bool {
@@ -586,4 +604,20 @@ fn isAlpha(c: u8) bool {
 
 fn isAlnum(c: u8) bool {
     return isAlpha(c) or (c >= '0' and c <= '9');
+}
+
+const testing = std.testing;
+
+test "validMsgRefID: accepts slug_index, rejects everything off-shape" {
+    // canonical shapes (DM date-sid, channel word-sid, hyphenated sid)
+    try testing.expect(validMsgRefID("2026-05-28_5"));
+    try testing.expect(validMsgRefID("general1_3"));
+    try testing.expect(validMsgRefID("smoke-dm-topic_12"));
+    // off-shape: no underscore, empty halves, non-digit index, trailing junk
+    try testing.expect(!validMsgRefID("nodigits"));
+    try testing.expect(!validMsgRefID("yo_"));
+    try testing.expect(!validMsgRefID("_5"));
+    try testing.expect(!validMsgRefID("yo_5x"));
+    try testing.expect(!validMsgRefID("yo_5_"));
+    try testing.expect(!validMsgRefID(""));
 }

@@ -470,7 +470,7 @@ fn chatConversations(req: *Request, io: Io, alloc: Alloc, uid: []const u8) !void
 /// then channels) and picks the first whose session list holds the sid embedded
 /// in the id.
 fn chatMsgLookup(req: *Request, io: Io, alloc: Alloc, uid: []const u8, id: []const u8) !void {
-    if (!validMsgRefID(id)) return http.notFound(req);
+    if (!store.validMsgRefID(id)) return http.notFound(req);
     const cut = std.mem.lastIndexOfScalar(u8, id, '_').?; // validMsgRefID guarantees one
     const sid = id[0..cut];
 
@@ -489,22 +489,6 @@ fn chatMsgLookup(req: *Request, io: Io, alloc: Alloc, uid: []const u8, id: []con
         }
     }
     return http.notFound(req);
-}
-
-/// validMsgRefID matches `^[A-Za-z0-9-]+_[0-9]+$` — a session
-/// slug, underscore, decimal index. Doubles as the path guard for the sid.
-fn validMsgRefID(id: []const u8) bool {
-    const cut = std.mem.lastIndexOfScalar(u8, id, '_') orelse return false;
-    const left = id[0..cut];
-    const right = id[cut + 1 ..];
-    if (left.len == 0 or right.len == 0) return false;
-    for (left) |c| {
-        if (!((c >= 'A' and c <= 'Z') or (c >= 'a' and c <= 'z') or (c >= '0' and c <= '9') or c == '-')) return false;
-    }
-    for (right) |c| {
-        if (c < '0' or c > '9') return false;
-    }
-    return true;
 }
 
 /// convHasSession reports whether `dir`'s session list contains `sid`.
