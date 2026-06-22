@@ -39,6 +39,7 @@ const sse = @import("chat_sse.zig");
 const asset_v = chrome.asset_v; // internal alias; the canonical const lives in chrome.zig
 const edge = @import("edge.zig");
 const docs = @import("docs.zig");
+const reading_list = @import("reading_list.zig");
 const recent = @import("recent.zig");
 const images = @import("images.zig");
 const code = @import("code.zig");
@@ -300,9 +301,26 @@ fn topicRoute(req: *Request, io: Io, alloc: Alloc, bus: *Bus, segs: *SegIter, ui
         try rawTranscript(req, io, alloc, conv.dir, topic.sid);
     } else if (std.mem.eql(u8, tail, "download")) {
         try download.serveBundle(req, io, alloc, conv.dir, topic.sid);
+    } else if (std.mem.eql(u8, tail, "saved")) {
+        try savedIds(req, io, alloc, uid, conv.key, topic.sid);
     } else {
         try http.notFound(req);
     }
+}
+
+/// savedIds answers GET /<conv>/<sid>/saved → JSON array of the message ids the
+/// caller has saved to their reading list within this topic, for the page to
+/// mark its bubbles. Served from reading_list's mtime-cached parse.
+fn savedIds(req: *Request, io: Io, alloc: Alloc, uid: []const u8, conv_key: []const u8, sid: []const u8) !void {
+    const ids = try reading_list.savedIdsFor(io, alloc, uid, conv_key, sid);
+    var out: std.ArrayList(u8) = .empty;
+    try out.append(alloc, '[');
+    for (ids, 0..) |id, i| {
+        if (i != 0) try out.append(alloc, ',');
+        try out.appendSlice(alloc, try std.fmt.allocPrint(alloc, "{f}", .{std.json.fmt(id, .{})}));
+    }
+    try out.append(alloc, ']');
+    try req.respond(out.items, .{ .extra_headers = &.{http.json_ct} });
 }
 
 // ── send (write path) ────────────────────────────────────────────────────────
