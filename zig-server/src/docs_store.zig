@@ -140,6 +140,33 @@ fn lessThanSlug(_: void, a: DocSummary, b: DocSummary) bool {
     return std.mem.lessThan(u8, a.slug, b.slug);
 }
 
+/// mostRecentDocSlug returns the slug of the user's most-recently-modified doc,
+/// or null if they have none. Lets a bare /chat/docs land straight in the doc you
+/// last touched — and since a save bumps reading-list's mtime, right after saving
+/// a message you land in your reading list.
+pub fn mostRecentDocSlug(io: Io, alloc: Alloc, uid: []const u8) !?[]const u8 {
+    const dir_path = try userDocsDir(alloc, uid);
+    var dir = Io.Dir.cwd().openDir(io, dir_path, .{ .iterate = true }) catch return null;
+    defer dir.close(io);
+
+    var best_slug: ?[]const u8 = null;
+    var best_mtime: i96 = 0;
+    var it = dir.iterate();
+    while (try it.next(io)) |entry| {
+        if (entry.kind == .directory) continue;
+        if (!std.mem.endsWith(u8, entry.name, ".md")) continue;
+        const slug = entry.name[0 .. entry.name.len - ".md".len];
+        if (!validDocSlug(slug)) continue;
+        const path = try std.fs.path.join(alloc, &.{ dir_path, entry.name });
+        const st = Io.Dir.cwd().statFile(io, path, .{}) catch continue;
+        if (best_slug == null or st.mtime.nanoseconds > best_mtime) {
+            best_mtime = st.mtime.nanoseconds;
+            best_slug = try alloc.dupe(u8, slug);
+        }
+    }
+    return best_slug;
+}
+
 /// titleFromSlug renders a slug back to a display title: hyphens to spaces,
 /// first letter upper-cased. Presentational reverse of slugifyTitle (lossy —
 /// the filename is the source of truth).

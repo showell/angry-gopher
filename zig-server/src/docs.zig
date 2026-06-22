@@ -49,6 +49,12 @@ const max_doc_bytes = 1 << 20;
 /// after /docs/), so a nested slash is a 404.
 pub fn handle(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8, rest: []const u8) !void {
     if (rest.len == 0 or std.mem.eql(u8, rest, "/")) {
+        // Land straight in the doc you last touched (incl. the reading list right
+        // after a save) rather than an empty nudge. Only the bare landing falls
+        // back to the picker, and only when you have no docs at all.
+        if (try docs_store.mostRecentDocSlug(io, alloc, uid)) |slug| {
+            return http.redirect(req, try std.fmt.allocPrint(alloc, "/chat/docs/{s}", .{slug}));
+        }
         return renderDocsEditor(req, io, alloc, uid, "");
     }
     const seg = rest[1..]; // rest starts with '/'
