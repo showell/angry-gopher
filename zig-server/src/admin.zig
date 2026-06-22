@@ -49,7 +49,7 @@ fn handleDelete(req: *Request, io: Io, alloc: Alloc) !void {
         storage.deleteUserData(io, alloc, id) catch return req.respond("delete failed\n", .{ .status = .internal_server_error });
         return http.redirect(req, try std.fmt.allocPrint(alloc, "/admin?deleted={s}", .{id}));
     }
-    const id = std.mem.trim(u8, queryValue(req.head.target, "user") orelse "", " \t\r\n");
+    const id = std.mem.trim(u8, http.queryValue(req.head.target, "user") orelse "", " \t\r\n");
     if (id.len == 0 or !users.principalExists(io, alloc, id)) return http.redirect(req, "/admin");
     return renderDeleteConfirm(req, io, alloc, id);
 }
@@ -101,10 +101,10 @@ fn renderOverview(req: *Request, io: Io, alloc: Alloc) !void {
     try b.appendSlice(alloc, overview_head);
 
     // Flash (delete / key-revoke confirmations), keyed by uid in the query.
-    if (queryValue(req.head.target, "deleted")) |d| {
+    if (http.queryValue(req.head.target, "deleted")) |d| {
         const name = try html.htmlEscape(alloc, try users.getUserName(io, alloc, d));
         try b.print(alloc, "<p class=\"flash\">Deleted game data for <strong>{s}</strong>.</p>", .{name});
-    } else if (queryValue(req.head.target, "keyrevoked")) |k| {
+    } else if (http.queryValue(req.head.target, "keyrevoked")) |k| {
         const name = try html.htmlEscape(alloc, try users.getUserName(io, alloc, k));
         try b.print(alloc, "<p class=\"flash\">Revoked the API key for <strong>{s}</strong>.</p>", .{name});
     }
@@ -318,16 +318,6 @@ fn humanBytes(alloc: Alloc, n: i64) ![]const u8 {
     }
     const val = @as(f64, @floatFromInt(n)) / @as(f64, @floatFromInt(div));
     return std.fmt.allocPrint(alloc, "{d:.1} {c}B", .{ val, "KMGTPE"[exp] });
-}
-
-fn queryValue(target: []const u8, name: []const u8) ?[]const u8 {
-    const q = std.mem.indexOfScalar(u8, target, '?') orelse return null;
-    var it = std.mem.splitScalar(u8, target[q + 1 ..], '&');
-    while (it.next()) |pair| {
-        const eq = std.mem.indexOfScalar(u8, pair, '=') orelse continue;
-        if (std.mem.eql(u8, pair[0..eq], name)) return pair[eq + 1 ..];
-    }
-    return null;
 }
 
 fn nowUnix(io: Io) i64 {

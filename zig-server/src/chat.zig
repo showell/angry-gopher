@@ -316,7 +316,7 @@ fn sendMessage(req: *Request, io: Io, alloc: Alloc, bus: *Bus, topic: Topic, uid
     // Read headers BEFORE the body: reading the request body advances the
     // std.http.Server reader past `received_head`, after which iterateHeaders
     // asserts. So capture X-Chat-Async first, then drain the body.
-    const is_async = if (header(req, "x-chat-async")) |v| std.mem.eql(u8, v, "1") else false;
+    const is_async = if (http.header(req, "x-chat-async")) |v| std.mem.eql(u8, v, "1") else false;
 
     const body = (try http.readLimitedBody(req, alloc, max_message_bytes)) orelse return;
     const md_raw = (try formField(alloc, body, "markdown")) orelse "";
@@ -621,12 +621,4 @@ fn hexVal(c: u8) ?u8 {
         'A'...'F' => c - 'A' + 10,
         else => null,
     };
-}
-
-fn header(req: *Request, name: []const u8) ?[]const u8 {
-    var it = req.iterateHeaders();
-    while (it.next()) |h| {
-        if (std.ascii.eqlIgnoreCase(h.name, name)) return h.value;
-    }
-    return null;
 }

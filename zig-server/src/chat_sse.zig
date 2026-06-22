@@ -147,31 +147,12 @@ pub fn forwardUserStream(req: *Request, alloc: Alloc, bus: *Bus, key: []const u8
 /// parseSince extracts the replay cursor: Last-Event-ID (reconnect) → n+1, else
 /// ?since=N (initial load) → n, else 0.
 fn parseSince(req: *Request) usize {
-    if (header(req, "last-event-id")) |lei| {
+    if (http.header(req, "last-event-id")) |lei| {
         const t = std.mem.trim(u8, lei, " \t");
         if (std.fmt.parseInt(usize, t, 10)) |n| return n + 1 else |_| {}
     }
-    if (queryValue(req.head.target, "since")) |q| {
+    if (http.queryValue(req.head.target, "since")) |q| {
         if (std.fmt.parseInt(usize, q, 10)) |n| return n else |_| {}
     }
     return 0;
-}
-
-fn header(req: *Request, name: []const u8) ?[]const u8 {
-    var it = req.iterateHeaders();
-    while (it.next()) |h| {
-        if (std.ascii.eqlIgnoreCase(h.name, name)) return h.value;
-    }
-    return null;
-}
-
-/// queryValue pulls one (un-decoded) query parameter from a raw request target.
-fn queryValue(target: []const u8, name: []const u8) ?[]const u8 {
-    const q = std.mem.indexOfScalar(u8, target, '?') orelse return null;
-    var it = std.mem.splitScalar(u8, target[q + 1 ..], '&');
-    while (it.next()) |pair| {
-        const eq = std.mem.indexOfScalar(u8, pair, '=') orelse continue;
-        if (std.mem.eql(u8, pair[0..eq], name)) return pair[eq + 1 ..];
-    }
-    return null;
 }

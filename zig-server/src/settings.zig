@@ -96,19 +96,8 @@ pub fn renderKeyShown(req: *Request, io: Io, alloc: Alloc, uid: []const u8, key:
 
 /// queryFlag reports whether the `?name=1` flag is present in the request target.
 fn queryFlag(req: *Request, name: []const u8) bool {
-    const v = queryValue(req.head.target, name) orelse return false;
+    const v = http.queryValue(req.head.target, name) orelse return false;
     return std.mem.eql(u8, v, "1");
-}
-
-/// queryValue pulls one (un-decoded) query parameter from a raw request target.
-fn queryValue(target: []const u8, name: []const u8) ?[]const u8 {
-    const q = std.mem.indexOfScalar(u8, target, '?') orelse return null;
-    var it = std.mem.splitScalar(u8, target[q + 1 ..], '&');
-    while (it.next()) |pair| {
-        const eq = std.mem.indexOfScalar(u8, pair, '=') orelse continue;
-        if (std.mem.eql(u8, pair[0..eq], name)) return pair[eq + 1 ..];
-    }
-    return null;
 }
 
 // ── page markup ───────────────────────────────────────────────────────────────

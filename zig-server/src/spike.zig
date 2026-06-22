@@ -104,7 +104,7 @@ fn eventStream(req: *std.http.Server.Request, bus: *Bus) !void {
 /// works). Replies with the number of streams that received it.
 fn broadcast(req: *std.http.Server.Request, alloc: Alloc, bus: *Bus) !void {
     var msg: []const u8 = "";
-    if (queryValue(req.head.target, "msg")) |q| {
+    if (http.queryValue(req.head.target, "msg")) |q| {
         msg = q;
     } else {
         const body = (try http.readLimitedBody(req, alloc, 64 * 1024)) orelse return;
@@ -118,19 +118,6 @@ fn broadcast(req: *std.http.Server.Request, alloc: Alloc, bus: *Bus) !void {
     const n = bus.subscriberCount(broadcast_key);
     const reply = try std.fmt.allocPrint(alloc, "delivered to {d} stream(s)\n", .{n});
     try req.respond(reply, .{ .extra_headers = &.{http.plain_ct} });
-}
-
-/// queryValue pulls a single (un-decoded) query parameter out of a raw request
-/// target like "/spike/broadcast?msg=hello". Spike-grade: no %-decoding, first
-/// match wins, returns null if absent. (chat will reuse the real parser.)
-fn queryValue(target: []const u8, name: []const u8) ?[]const u8 {
-    const q = std.mem.indexOfScalar(u8, target, '?') orelse return null;
-    var it = std.mem.splitScalar(u8, target[q + 1 ..], '&');
-    while (it.next()) |pair| {
-        const eq = std.mem.indexOfScalar(u8, pair, '=') orelse continue;
-        if (std.mem.eql(u8, pair[0..eq], name)) return pair[eq + 1 ..];
-    }
-    return null;
 }
 
 const index_page =

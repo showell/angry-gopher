@@ -26,6 +26,7 @@ const Io = std.Io;
 const Alloc = std.mem.Allocator;
 const auth = @import("auth.zig");
 const storage = @import("storage.zig");
+const http = @import("http.zig");
 
 const HmacSha256 = std.crypto.auth.hmac.sha2.HmacSha256;
 const b64 = std.base64.url_safe_no_pad;
@@ -379,7 +380,7 @@ fn currentUID(req: *std.http.Server.Request) []const u8 {
 
 /// bearerToken extracts the token from an Authorization: Bearer <token> header.
 fn bearerToken(req: *std.http.Server.Request) ?[]const u8 {
-    const h = header(req, "authorization") orelse return null;
+    const h = http.header(req, "authorization") orelse return null;
     const prefix = "Bearer ";
     if (!std.mem.startsWith(u8, h, prefix)) return null;
     const tok = std.mem.trim(u8, h[prefix.len..], " \t");
@@ -401,14 +402,6 @@ fn cookie(req: *std.http.Server.Request, name: []const u8) ?[]const u8 {
     return null;
 }
 
-/// header returns the first header whose name case-insensitively matches.
-fn header(req: *std.http.Server.Request, name: []const u8) ?[]const u8 {
-    var hit = req.iterateHeaders();
-    while (hit.next()) |hdr| {
-        if (std.ascii.eqlIgnoreCase(hdr.name, name)) return hdr.value;
-    }
-    return null;
-}
 
 // ── small helpers ────────────────────────────────────────────────────────────
 
