@@ -9,13 +9,13 @@
        shared drawer's #chrome-drawer-extra slot on mobile (and back to
        the layout column on desktop) — so the drawer reads as one panel:
        section nav (from ChromeDrawer) + conversations.
-     - The right sidebar becomes a fixed bottom compose bar with a ▾
-       collapse button. Because that bar is position:fixed (out of flow)
-       and its height changes (closed pill vs open textarea), JS keeps the
-       feed's bottom padding equal to the bar's live height — a
-       ResizeObserver, not a static CSS guess — so the last message never
-       hides behind it. CSS still does the positioning; JS owns the one
-       fact (the bar's current height) that CSS can't know.
+     - The right sidebar becomes a bottom compose bar with a ▾ collapse
+       button. It stays IN FLOW: the column tiles as feed (flex:1) above
+       compose (flex:none), so the bar sits at the bottom and the feed
+       scrolls in the space that's left — no overlap, whatever the bar's
+       height. JS owns the mode (column vs row, via the vp-narrow class);
+       flexbox owns the geometry. No fixed-positioning, no height
+       measurement.
 
    Runs from chat.js. Reads the breakpoint from Viewport (the single
    authority) — never its own matchMedia. The first sidebar placement waits
@@ -37,10 +37,6 @@ window.ChatResponsive = (function(){
       + 'html.vp-narrow .chat-layout { flex-direction:column; gap:0; }'
       + 'html.vp-narrow .chat-mp-main { max-width:none !important; flex:1 !important; }'
 
-      /* NB: the feed's bottom inset (room for the fixed compose bar) is set
-         live by syncComposeInset() below — the bar's height varies (closed
-         pill vs open textarea), so a static reserve would clip messages. */
-
       /* the conversations rail, once relocated into the chrome drawer:
          drop the desktop column chrome (fixed width + right border) and
          set it off from the section nav sitting above it */
@@ -48,9 +44,10 @@ window.ChatResponsive = (function(){
       +   ' padding-right:0; overflow-y:visible; margin-top:8px; padding-top:8px;'
       +   ' border-top:1px solid var(--cc-border); }'
 
-      /* right sidebar → fixed bottom compose bar */
-      + 'html.vp-narrow .chat-compose { width:auto !important; flex:none !important;'
-      +   ' position:fixed; bottom:0; left:0; right:0; z-index:50;'
+      /* right sidebar → in-flow bottom compose bar. flex:none + the feed's
+         flex:1 tile the column; no fixed positioning, so no overlap to
+         compensate for. max-height caps a long open textarea. */
+      + 'html.vp-narrow .chat-compose { width:auto; flex:none;'
       +   ' background:var(--cc-bg); border-top:1px solid var(--cc-border);'
       +   ' max-height:45vh; }'
       + 'html.vp-narrow .chat-compose .chat-closed-panel { padding:8px 12px; }'
@@ -68,20 +65,6 @@ window.ChatResponsive = (function(){
       +   ' padding:2px 4px; line-height:1; }';
 
     document.head.appendChild(s);
-  }
-
-  /* Keep the feed clear of the fixed compose bar: pad the scroll surface by
-     the bar's live height (+ a small gap) on mobile, nothing on desktop
-     (where the compose is the in-flow right column). If the reader was at
-     the bottom, stay pinned there as the bar grows/shrinks. */
-  function syncComposeInset(){
-    var history = document.querySelector('.chat-mp-history');
-    var compose = document.querySelector('.chat-compose');
-    if(!history || !compose) return;
-    if(!Viewport.isNarrow()){ history.style.paddingBottom = ''; return; }
-    var atBottom = history.scrollTop + history.clientHeight >= history.scrollHeight - 2;
-    history.style.paddingBottom = (compose.offsetHeight + 8) + 'px';
-    if(atBottom) history.scrollTop = history.scrollHeight;
   }
 
   /* Relocate the conversations rail between the desktop layout column and
@@ -120,24 +103,13 @@ window.ChatResponsive = (function(){
       composeBody.insertBefore(bar, composeBody.firstChild);
     }
 
-    /* Viewport owns the breakpoint. onChange fires immediately and on every
-       crossing; placeSidebar ALSO runs on DOMContentLoaded because ChromeDrawer
-       (deferred) builds the #chrome-drawer-extra slot only after this code runs,
-       so the immediate onChange is too early for the first relocation. */
+    /* Viewport owns the breakpoint. placeSidebar runs on each crossing and on
+       DOMContentLoaded — the latter because ChromeDrawer (deferred) builds the
+       #chrome-drawer-extra slot only after this code runs, so the immediate
+       onChange is too early for the first relocation. The compose/feed layout
+       itself is pure flex now (see ensureStyles) — no JS to drive it. */
     Viewport.onChange(placeSidebar);
-    Viewport.onChange(syncComposeInset);
     document.addEventListener('DOMContentLoaded', placeSidebar);
-
-    /* Track the compose bar's height live. ResizeObserver fires an initial
-       callback on observe(), so the first inset is set without a separate
-       call; older browsers without it fall back to a one-time measure. */
-    var compose = document.querySelector('.chat-compose');
-    if(compose && typeof ResizeObserver === 'function'){
-      var ro = new ResizeObserver(syncComposeInset);
-      ro.observe(compose);
-    } else {
-      syncComposeInset();
-    }
   }
 
   return { init:init };
