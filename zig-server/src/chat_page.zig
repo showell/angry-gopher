@@ -25,6 +25,7 @@ const asset_v = chrome.asset_v; // internal alias; canonical const in chrome.zig
 /// head's colors.js + chat_theme.js).
 const page_scripts = [_][]const u8{
     "chat_image_popup.js", "chat_code_popup.js",   "chat_time_popup.js",
+    "chat_save_popup.js",
     "message.js",          "message_view.js",      "nav_stack.js",
     "middle_pane.js",      "chat_search.js",       "chat_drag_to_pin.js",
     "chat_add_topic.js",   "chat_left_sidebar.js", "chat_right_sidebar.js",

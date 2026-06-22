@@ -55,6 +55,7 @@ pub fn build(b: *std.Build) void {
         .{ .name = "chat_js_image_popup", .path = "../chat/chat_image_popup.js" },
         .{ .name = "chat_js_code_popup", .path = "../chat/chat_code_popup.js" },
         .{ .name = "chat_js_time_popup", .path = "../chat/chat_time_popup.js" },
+        .{ .name = "chat_js_save_popup", .path = "../chat/chat_save_popup.js" },
         .{ .name = "chat_js_message", .path = "../chat/message.js" },
         .{ .name = "chat_js_message_view", .path = "../chat/message_view.js" },
         .{ .name = "chat_js_nav_stack", .path = "../chat/nav_stack.js" },

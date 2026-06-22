@@ -72,6 +72,7 @@ const assets = [_]Asset{
     .{ .name = "chat_image_popup.js", .body = @embedFile("chat_js_image_popup") },
     .{ .name = "chat_code_popup.js", .body = @embedFile("chat_js_code_popup") },
     .{ .name = "chat_time_popup.js", .body = @embedFile("chat_js_time_popup") },
+    .{ .name = "chat_save_popup.js", .body = @embedFile("chat_js_save_popup") },
     .{ .name = "message.js", .body = @embedFile("chat_js_message") },
     .{ .name = "message_view.js", .body = @embedFile("chat_js_message_view") },
     .{ .name = "nav_stack.js", .body = @embedFile("chat_js_nav_stack") },
