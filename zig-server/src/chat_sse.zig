@@ -144,15 +144,113 @@ pub fn forwardUserStream(req: *Request, alloc: Alloc, bus: *Bus, key: []const u8
 
 // ── replay cursor ──────────────────────────────────────────────────────────────
 
-/// parseSince extracts the replay cursor: Last-Event-ID (reconnect) → n+1, else
-/// ?since=N (initial load) → n, else 0.
+/// parseSince extracts the replay cursor from the request: Last-Event-ID
+/// (reconnect) → n+1, else ?since=N (initial load) → n, else 0. The decision is
+/// sinceFrom; this is just the Io-free read of the two header/query sources.
 fn parseSince(req: *Request) usize {
-    if (http.header(req, "last-event-id")) |lei| {
+    return sinceFrom(http.header(req, "last-event-id"), http.queryValue(req.head.target, "since"));
+}
+
+/// sinceFrom is the pure replay-cursor decision: a parseable Last-Event-ID wins
+/// (reconnect resumes AFTER the last delivered id → n+1); else a parseable
+/// ?since=N (initial load resumes AT n); else 0. A malformed source falls through
+/// to the next, so a junk Last-Event-ID doesn't strand a valid ?since.
+fn sinceFrom(last_event_id: ?[]const u8, since_q: ?[]const u8) usize {
+    if (last_event_id) |lei| {
         const t = std.mem.trim(u8, lei, " \t");
         if (std.fmt.parseInt(usize, t, 10)) |n| return n + 1 else |_| {}
     }
-    if (http.queryValue(req.head.target, "since")) |q| {
+    if (since_q) |q| {
         if (std.fmt.parseInt(usize, q, 10)) |n| return n else |_| {}
     }
     return 0;
+}
+
+// ── tests ────────────────────────────────────────────────────────────────────
+
+const testing = std.testing;
+
+test "sinceFrom: Last-Event-ID resumes after n; ?since resumes at n; junk falls through" {
+    // Last-Event-ID (reconnect) → n+1
+    try testing.expectEqual(@as(usize, 6), sinceFrom("5", null));
+    try testing.expectEqual(@as(usize, 6), sinceFrom("  5 ", null)); // trimmed
+    // ?since (initial load) → n
+    try testing.expectEqual(@as(usize, 5), sinceFrom(null, "5"));
+    // neither present → 0
+    try testing.expectEqual(@as(usize, 0), sinceFrom(null, null));
+    // Last-Event-ID wins over ?since when both are present and valid
+    try testing.expectEqual(@as(usize, 6), sinceFrom("5", "99"));
+    // a junk Last-Event-ID must NOT strand a valid ?since — it falls through
+    try testing.expectEqual(@as(usize, 5), sinceFrom("garbage", "5"));
+    // both unparseable → 0
+    try testing.expectEqual(@as(usize, 0), sinceFrom("x", "y"));
+}
+
+/// wireField pulls one field out of an emitted SSE message frame for assertions:
+/// it strips the `id: N\n` line, then JSON-parses the `data:` payload into `T`.
+/// (emitWire's html is markdown.render output — markdown has its own gold tests,
+/// so here we check chat_sse's framing/escaping/mine/cid contract, not the HTML.)
+fn parseWire(comptime T: type, a: Alloc, frame: []const u8) !std.json.Parsed(T) {
+    const pfx = "data: ";
+    const start = (std.mem.indexOf(u8, frame, pfx) orelse return error.NoData) + pfx.len;
+    const end = (std.mem.indexOf(u8, frame[start..], "\n\n") orelse return error.NoEnd) + start;
+    return std.json.parseFromSlice(T, a, frame[start..end], .{});
+}
+
+const WireView = struct {
+    index: usize,
+    from: []const u8,
+    at: []const u8,
+    html: []const u8,
+    markdown: []const u8,
+    id: []const u8,
+    mine: bool,
+    cid: ?[]const u8 = null, // omitted from the wire when empty
+};
+
+test "emitWire frames id/index/mine, round-trips JSON-escaped fields, and omits empty cid" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+
+    // a name with a double-quote exercises JSON escaping on the wire
+    const frame = try emitWire(a, 7, "A\"B", "2pm", "hi", "MSG_1", true, "");
+    try testing.expect(std.mem.startsWith(u8, frame, "id: 7\n")); // SSE id = index
+    try testing.expect(std.mem.endsWith(u8, frame, "\n\n"));
+
+    const p = try parseWire(WireView, a, frame);
+    defer p.deinit();
+    try testing.expectEqual(@as(usize, 7), p.value.index);
+    try testing.expectEqualStrings("A\"B", p.value.from); // escaping round-trips
+    try testing.expectEqualStrings("hi", p.value.markdown); // raw markdown preserved
+    try testing.expectEqualStrings("MSG_1", p.value.id);
+    try testing.expect(p.value.mine);
+    try testing.expect(p.value.cid == null); // empty cid omitted
+
+    // a non-empty cid is included
+    const frame2 = try emitWire(a, 8, "Steve", "3pm", "yo", "MSG_2", false, "c-9");
+    const p2 = try parseWire(WireView, a, frame2);
+    defer p2.deinit();
+    try testing.expect(!p2.value.mine);
+    try testing.expectEqualStrings("c-9", p2.value.cid.?);
+}
+
+test "liveFrame computes mine against the viewer from a bus blob" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+
+    const raw = "{\"index\":3,\"from\":\"Steve\",\"at\":\"2pm\",\"id\":\"MSG_2\",\"cid\":\"c-1\",\"markdown\":\"yo\"}";
+
+    // same name as the author → mine:true, and cid passes through
+    const mine = try parseWire(WireView, a, try liveFrame(a, raw, "Steve"));
+    defer mine.deinit();
+    try testing.expect(mine.value.mine);
+    try testing.expectEqualStrings("c-1", mine.value.cid.?);
+    try testing.expectEqual(@as(usize, 3), mine.value.index);
+
+    // a different viewer → mine:false (the one viewer-relative field)
+    const theirs = try parseWire(WireView, a, try liveFrame(a, raw, "apoorva"));
+    defer theirs.deinit();
+    try testing.expect(!theirs.value.mine);
 }

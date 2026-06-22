@@ -6,9 +6,9 @@
 //! thread pool (a never-awaited Io.Group + group.concurrent — see main). The
 //! pool grows on demand and finished tasks self-reap, so it's effectively
 //! goroutine-per-connection. This is the model chat needs (long-lived SSE
-//! streams that mustn't starve other connections), proven first by the /spike
-//! surface (spike.zig + bus.zig) before any chat handler is ported. Each
-//! connection still serves ONE request then closes (keep-alive off) — that's
+//! streams that mustn't starve other connections); bus.zig is the keyed
+//! fan-out runtime those streams run on. Each connection still serves ONE
+//! request then closes (keep-alive off) — that's
 //! independent of concurrency and can be revisited when chat lands.
 //!
 //! Run:  ops/build_driving && ops/build_elm   (from repo root, for the bundles)
@@ -22,7 +22,6 @@ const config = @import("config.zig");
 const driving = @import("driving.zig");
 const puzzles = @import("puzzles.zig");
 const game = @import("game.zig");
-const spike = @import("spike.zig");
 const chat = @import("chat.zig");
 const settings = @import("settings.zig");
 const learn = @import("learn.zig");
@@ -50,14 +49,14 @@ pub fn main(init: std.process.Init.Minimal) !void {
     try config.load(io, alloc, env);
 
     // The pub/sub fan-out shared across all connections. Lives for the process
-    // lifetime; shared by chat's SSE streams and the /spike surface.
+    // lifetime; drives chat's SSE streams.
     var bus = Bus.init(io, alloc);
 
     const addr = try net.IpAddress.parse("0.0.0.0", PORT);
     var listener = try addr.listen(io, .{ .reuse_address = true });
     defer listener.deinit(io);
 
-    std.debug.print("zig-server: http://localhost:{d}  (/driving, /puzzles, /game, /spike, /chat, /channel)\n", .{PORT});
+    std.debug.print("zig-server: http://localhost:{d}  (/driving, /puzzles, /game, /chat, /channel)\n", .{PORT});
 
     // Each connection becomes a concurrent task in this group. We never await it
     // — the server runs forever and completed tasks self-reap (see file header).
@@ -137,8 +136,6 @@ fn route(req: *std.http.Server.Request, io: std.Io, alloc: std.mem.Allocator, bu
         try puzzles.handle(req, io, alloc, sub);
     } else if (matchPrefix(path, "/game")) |sub| {
         try game.handle(req, io, alloc, sub);
-    } else if (matchPrefix(path, "/spike")) |sub| {
-        try spike.handle(req, io, alloc, bus, sub);
     } else if (matchPrefix(path, "/chat")) |sub| {
         try chat.handle(req, io, alloc, bus, sub);
     } else if (matchPrefix(path, "/channel")) |sub| {
