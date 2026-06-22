@@ -835,3 +835,100 @@ test "fs: api key issue, read back, clear; legacy bare-hash is held but not disp
     try testing.expect(userHasAPIKey(io, a, id));
     try testing.expect((try getUserAPIKey(io, a, id)) == null);
 }
+
+// ── issuance (account allocation, deletion, live session signing) ─────────────
+
+test "fs: allocateUser hands out distinct increasing ids and persists the name" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var tmp = testing.tmpDir(.{});
+    defer tmp.cleanup();
+    try tmpRoots(&tmp, a);
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+
+    const id1 = try allocateUser(io, a, "First");
+    const id2 = try allocateUser(io, a, "Second");
+
+    // distinct, numeric, strictly increasing (the shared counter bumps)
+    const n1 = try std.fmt.parseInt(i64, id1, 10);
+    const n2 = try std.fmt.parseInt(i64, id2, 10);
+    try testing.expect(n2 > n1);
+    // each name was written and reads back against its own id
+    try testing.expectEqualStrings("First", try getUserName(io, a, id1));
+    try testing.expectEqualStrings("Second", try getUserName(io, a, id2));
+    // a freshly allocated account exists but is not yet a member (no password)
+    try testing.expect(principalExists(io, a, id1));
+    try testing.expect(!isMember(io, a, id1));
+}
+
+test "fs: deleteUserRecord refuses an empty id, removes one principal, spares others" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var tmp = testing.tmpDir(.{});
+    defer tmp.cleanup();
+    try tmpRoots(&tmp, a);
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+
+    const keep = try allocateUser(io, a, "Keeper");
+    try setUserPassword(io, a, keep, "pw");
+    const gone = try allocateUser(io, a, "Goner");
+    try setUserPassword(io, a, gone, "pw");
+    try testing.expect(reserveUploadBytes(io, a, gone, 100)); // give it users_root state too
+
+    // The safety guard: an empty/blank id must be a no-op — joined onto a root it
+    // would otherwise deleteTree the whole account store. Both principals survive.
+    deleteUserRecord(io, a, "");
+    deleteUserRecord(io, a, "   ");
+    try testing.expect(principalExists(io, a, keep));
+    try testing.expect(principalExists(io, a, gone));
+
+    // Deleting the goner removes BOTH its account dir (auth_root) and its private
+    // dir (users_root); the upload total is gone with it.
+    deleteUserRecord(io, a, gone);
+    try testing.expect(!principalExists(io, a, gone));
+    try testing.expectEqual(@as(i64, 0), userUploadBytes(io, a, gone));
+    // …and the unrelated principal is untouched.
+    try testing.expect(principalExists(io, a, keep));
+    try testing.expect(isMember(io, a, keep));
+}
+
+test "fs: signSessionNow needs a valid secret, and the cookie it signs verifies" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var tmp = testing.tmpDir(.{});
+    defer tmp.cleanup();
+    try tmpRoots(&tmp, a);
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+
+    const id = try allocateUser(io, a, "Member");
+    try setUserPassword(io, a, id, "pw");
+    try Io.Dir.cwd().createDirPath(io, session_secret_dir);
+    const spath = try std.fs.path.join(a, &.{ session_secret_dir, "_session_secret" });
+
+    // no secret file → can't sign
+    try testing.expect((try signSessionNow(io, a, id)) == null);
+    // a too-short secret (< 32 bytes) is treated as absent, not half-honored
+    try Io.Dir.cwd().writeFile(io, .{ .sub_path = spath, .data = "tooshort" });
+    try testing.expect((try signSessionNow(io, a, id)) == null);
+
+    // a proper 32-byte secret → signs, and the resolver accepts what we signed
+    const secret = "0123456789abcdef0123456789abcdef";
+    try Io.Dir.cwd().writeFile(io, .{ .sub_path = spath, .data = secret });
+    const cookie_val = (try signSessionNow(io, a, id)).?;
+
+    // verify at the cookie's own issue instant (valid) and one past max age (not).
+    var it = std.mem.splitScalar(u8, cookie_val, '.');
+    _ = it.next();
+    const issued = try std.fmt.parseInt(i64, it.next().?, 10);
+    try testing.expectEqualStrings(id, verifySessionWithSecret(a, secret, cookie_val, issued).?);
+    try testing.expect(verifySessionWithSecret(a, secret, cookie_val, issued + session_max_age_secs + 1) == null);
+}
