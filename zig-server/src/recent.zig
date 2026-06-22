@@ -19,7 +19,7 @@ const http = @import("http.zig");
 const users = @import("users.zig");
 const store = @import("chat_store.zig");
 const docs_store = @import("docs_store.zig");
-const chat = @import("chat.zig");
+const chat_sse = @import("chat_sse.zig");
 const chrome = @import("chrome.zig");
 const html = @import("html.zig");
 const timefmt = @import("timefmt.zig");
@@ -58,7 +58,7 @@ pub fn handle(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8, r
     // the backlog, so the stream is live-only (no replay). Fed by the
     // appendMessage cross-page fanout + docs save/create.
     if (std.mem.eql(u8, rest, "/stream")) {
-        return chat.forwardUserStream(req, alloc, bus, try store.recentBusKey(alloc, uid));
+        return chat_sse.forwardUserStream(req, alloc, bus, try store.recentBusKey(alloc, uid));
     }
     return http.notFound(req);
 }

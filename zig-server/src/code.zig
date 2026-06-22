@@ -12,7 +12,7 @@ const users = @import("users.zig");
 const store = @import("chat_store.zig");
 const code_store = @import("code_store.zig");
 const images_store = @import("images_store.zig");
-const chat = @import("chat.zig");
+const chat_sse = @import("chat_sse.zig");
 const chrome = @import("chrome.zig");
 const html = @import("html.zig");
 const Bus = @import("bus.zig").Bus;
@@ -25,7 +25,7 @@ const Request = std.http.Server.Request;
 pub fn handle(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8, rest: []const u8) !void {
     if (rest.len == 0) return renderCodePage(req, io, alloc, uid);
     if (std.mem.eql(u8, rest, "/stream")) {
-        return chat.forwardUserStream(req, alloc, bus, try store.codeBusKey(alloc, uid));
+        return chat_sse.forwardUserStream(req, alloc, bus, try store.codeBusKey(alloc, uid));
     }
     return http.notFound(req);
 }
