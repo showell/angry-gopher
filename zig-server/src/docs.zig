@@ -34,6 +34,7 @@ const html = @import("html.zig");
 const chat_state = @import("chat_state.zig");
 const timefmt = @import("timefmt.zig");
 const feed = @import("recent_feed.zig");
+const reading_list = @import("reading_list.zig");
 const Bus = @import("bus.zig").Bus;
 
 const Alloc = std.mem.Allocator;
@@ -56,6 +57,7 @@ pub fn handle(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8, r
     if (std.mem.eql(u8, seg, "save")) return docsSave(req, io, alloc, bus, uid);
     if (std.mem.eql(u8, seg, "render")) return docsRender(req, alloc);
     if (std.mem.eql(u8, seg, "post")) return docsPost(req, io, alloc, bus, uid);
+    if (std.mem.eql(u8, seg, "save_to_reading_list")) return docsSaveToReadingList(req, io, alloc, bus, uid);
 
     if (std.mem.indexOfScalar(u8, seg, '/') != null) return http.notFound(req);
     if (std.mem.endsWith(u8, seg, ".md")) {
@@ -285,6 +287,32 @@ fn docsPost(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8) !vo
         std.json.fmt(conv, .{}), std.json.fmt(sid, .{}), std.json.fmt(msg.id, .{}),
     });
     try req.respond(out, .{ .extra_headers = &.{http.json_ct} });
+}
+
+/// docsSaveToReadingList appends one saved chat message to the caller's
+/// reading-list doc (creating it on first save) → 204. The client sends the
+/// snapshot as-seen (body markdown, author, display date) plus the conv/sid/id
+/// locating the source message, plus the annotation. Acts only on the
+/// authenticated principal's own doc — uid is the session principal, never the
+/// request. reading_list.save caps the doc size (DocTooLarge → 500 here; a
+/// hammering client hits the bound, not unbounded growth).
+fn docsSaveToReadingList(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8) !void {
+    if (req.head.method != .POST) return http.methodNotAllowed(req);
+    const body = (try http.readLimitedBody(req, alloc, max_doc_bytes)) orelse return;
+    const conv = std.mem.trim(u8, (try chat.formField(alloc, body, "conv")) orelse "", " \t\r\n");
+    const sid = std.mem.trim(u8, (try chat.formField(alloc, body, "sid")) orelse "", " \t\r\n");
+    const id = std.mem.trim(u8, (try chat.formField(alloc, body, "id")) orelse "", " \t\r\n");
+    const from = (try chat.formField(alloc, body, "from")) orelse "";
+    const at = (try chat.formField(alloc, body, "at")) orelse "";
+    const msg_body = (try chat.formField(alloc, body, "body")) orelse "";
+    const note = (try chat.formField(alloc, body, "note")) orelse "";
+    if (conv.len == 0 or sid.len == 0 or id.len == 0 or msg_body.len == 0) {
+        return req.respond("missing field\n", .{ .status = .bad_request });
+    }
+    reading_list.save(io, alloc, uid, conv, sid, id, from, at, msg_body, note) catch
+        return req.respond("save failed\n", .{ .status = .internal_server_error });
+    publishDocRecent(io, alloc, bus, uid, reading_list.reading_list_slug);
+    return req.respond("", .{ .status = .no_content });
 }
 
 // ── post-to-chat helpers ───────
