@@ -53,28 +53,10 @@ const Request = std.http.Server.Request;
 /// Max bytes for one posted message.
 const max_message_bytes = 64 * 1024;
 
-/// Conv is a resolved, access-checked conversation: the kind+members the fanout
-/// needs (`meta`), plus the URL/storage coordinates every per-conv handler shares.
-/// convRoute (DM) and handleChannel (channel) each build one once the viewer's
-/// access is confirmed — that's where the dm/channel knowledge is concrete, so it
-/// gets earned exactly once and travels as data from there on.
-const Conv = struct {
-    meta: store.ConvMeta, // kind + member uids — the single source of `kind`
-    key: []const u8, // pair key "a_b" (DM) or channel name
-    base: []const u8, // URL base: /chat/c/<key> or /channel/<key>
-    dir: []const u8, // on-disk conv dir
-
-    /// Whether this conv remembers the viewer's spot (the /chat/default resume
-    /// pointer). DMs do; channels don't. Call sites ask this question by name
-    /// instead of re-testing the kind — the predicate is what they actually mean.
-    fn persistsCursor(self: Conv) bool {
-        return self.meta.kind == .dm;
-    }
-};
-
-/// Topic is a Conv plus a validated session id and its page title — the unit the
-/// per-topic tail (topicRoute and below) operates on.
-const Topic = struct { conv: Conv, sid: []const u8, title: []const u8 };
+// Resolved-conversation domain types (Conv, Topic) live in conv.zig — shared
+// with the page renderer (chat_page.zig) so neither side re-discriminates kind.
+const Conv = @import("conv.zig").Conv;
+const Topic = @import("conv.zig").Topic;
 
 const Asset = struct { name: []const u8, body: []const u8 };
 
