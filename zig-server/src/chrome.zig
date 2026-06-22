@@ -44,7 +44,9 @@ pub fn end(b: *std.ArrayList(u8), alloc: Alloc) !void {
 
 const NavItem = struct { href: []const u8, label: []const u8, key: []const u8 };
 
-/// nav_items is the chat-subsystem sub-nav.
+/// nav_items is the chat-subsystem sub-nav — the content surfaces. Settings is
+/// deliberately NOT here: it's a rarely-touched utility, so it sits with Learn /
+/// Log out in the identity group (chrome_top_b), which the drawer also mirrors.
 /// The admin link is omitted (no admin flag is ported), matching active="".
 const nav_items = [_]NavItem{
     .{ .href = "/chat", .label = "Chat", .key = "chat" },
@@ -53,7 +55,6 @@ const nav_items = [_]NavItem{
     .{ .href = "/chat/images", .label = "Images", .key = "images" },
     .{ .href = "/chat/code", .label = "Code", .key = "code" },
     .{ .href = "/chat/links", .label = "Links", .key = "links" },
-    .{ .href = "/settings", .label = "Settings", .key = "settings" },
 };
 
 /// navLinks emits the sub-nav span body, " · "-joined, with the link whose key
@@ -136,5 +137,5 @@ const chrome_top_a =
     \\<header class="app-top chat-top"><div class="chat-top-left"><a class="chat-top-home" href="/">Home</a><span class="chat-top-title">{s}</span><span class="chat-top-links">
 ;
 const chrome_top_b =
-    \\</span></div><div class="app-top-user"><button id="chat-theme-toggle" type="button" title="Toggle theme" aria-label="Toggle theme" style="background:none;border:none;cursor:pointer;font-size:16px;padding:0 8px;vertical-align:middle">🌙</button> · <strong>{s}</strong> · <a href="/learn">Learn</a> · <a href="/logout">Log out</a></div></header>
+    \\</span></div><div class="app-top-user"><button id="chat-theme-toggle" type="button" title="Toggle theme" aria-label="Toggle theme" style="background:none;border:none;cursor:pointer;font-size:16px;padding:0 8px;vertical-align:middle">🌙</button> · <strong>{s}</strong> · <a href="/settings">Settings</a> · <a href="/learn">Learn</a> · <a href="/logout">Log out</a></div></header>
 ;

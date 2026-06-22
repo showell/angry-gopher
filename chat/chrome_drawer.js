@@ -50,8 +50,14 @@ window.ChromeDrawer = (function(){
       + '.chrome-drawer-user { font-weight:bold; color:var(--cc-accent,#000080);'
       +   ' padding-bottom:8px; margin-bottom:6px; border-bottom:1px solid var(--cc-border,#c9bfa7); }'
       + '.chrome-drawer-nav a, .chrome-drawer-nav strong, .chrome-drawer-foot a {'
-      +   ' display:block; padding:8px 6px; border-radius:4px; text-decoration:none;'
+      +   ' display:block; border-radius:4px; text-decoration:none;'
       +   ' color:var(--cc-accent,#000080); }'
+      /* Section nav is compact (it's the long list, and on the chat page the
+         conversations sit right below it — keep them reachable without a
+         scroll). The footer (Settings/Learn/Log out) keeps a comfortable
+         tap target. */
+      + '.chrome-drawer-nav a, .chrome-drawer-nav strong { padding:4px 6px; font-size:13px; }'
+      + '.chrome-drawer-foot a { padding:8px 6px; }'
       + '.chrome-drawer-nav a:hover, .chrome-drawer-foot a:hover { background:var(--cc-accent-soft-bg,#e8e4d8); }'
       + '.chrome-drawer-nav strong { background:var(--cc-accent,#000080); color:var(--cc-bg,#fff); }'
       + '.chrome-drawer-foot { margin-top:auto; padding-top:6px; border-top:1px solid var(--cc-border,#c9bfa7); }'
