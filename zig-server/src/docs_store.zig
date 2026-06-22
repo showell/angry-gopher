@@ -183,3 +183,56 @@ pub fn createUserDoc(io: Io, alloc: Alloc, uid: []const u8, title: []const u8) !
     try Io.Dir.cwd().writeFile(io, .{ .sub_path = path, .data = "" });
     return slug;
 }
+
+/// append_mu guards the read-modify-write in appendToUserDoc. An overwrite
+/// (writeUserDoc / autosave) is last-writer-wins and needs no lock, but an APPEND
+/// reads-then-writes, so two concurrent appends (the same user saving from two
+/// tabs) could otherwise drop one writer's bytes.
+var append_mu: Io.Mutex = .init;
+
+/// appendToUserDoc appends `addition` to a doc, CREATING it at the exact slug
+/// (never collision-suffixed, unlike createUserDoc) when it doesn't exist yet —
+/// so the first save to a fixed-slug doc like "reading-list" just works. Refuses
+/// to grow the doc past `max_bytes` (0 = unlimited) with error.DocTooLarge: a
+/// cheap bound on a client that hammers an append endpoint. The bytes are the
+/// user's own private doc, but they're still ours to host.
+pub fn appendToUserDoc(io: Io, alloc: Alloc, uid: []const u8, slug: []const u8, addition: []const u8, max_bytes: usize) !void {
+    const path = try docPath(alloc, uid, slug); // re-validates the slug (traversal chokepoint)
+
+    append_mu.lockUncancelable(io);
+    defer append_mu.unlock(io);
+
+    try Io.Dir.cwd().createDirPath(io, try userDocsDir(alloc, uid));
+    const existing = Io.Dir.cwd().readFileAlloc(io, path, alloc, .unlimited) catch "";
+    if (max_bytes != 0 and existing.len + addition.len > max_bytes) return error.DocTooLarge;
+    const combined = try std.mem.concat(alloc, u8, &.{ existing, addition });
+    try Io.Dir.cwd().writeFile(io, .{ .sub_path = path, .data = combined });
+}
+
+const testing = std.testing;
+
+test "appendToUserDoc creates on first call, appends after, and caps at max_bytes" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var tmp = testing.tmpDir(.{});
+    defer tmp.cleanup();
+    const saved_root = store.chat_root;
+    defer store.chat_root = saved_root;
+    store.chat_root = try std.fs.path.join(a, &.{ ".zig-cache", "tmp", &tmp.sub_path });
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+
+    // first call creates the doc — no createUserDoc needed
+    try appendToUserDoc(io, a, "1", "reading-list", "AAA\n", 0);
+    try testing.expectEqualStrings("AAA\n", try readUserDoc(io, a, "1", "reading-list"));
+
+    // second call appends, preserving prior content
+    try appendToUserDoc(io, a, "1", "reading-list", "BBB\n", 0);
+    try testing.expectEqualStrings("AAA\nBBB\n", try readUserDoc(io, a, "1", "reading-list"));
+
+    // over-cap append refuses WITHOUT mutating (existing 8 + "CCCC\n" 5 = 13 > 12)
+    try testing.expectError(error.DocTooLarge, appendToUserDoc(io, a, "1", "reading-list", "CCCC\n", 12));
+    try testing.expectEqualStrings("AAA\nBBB\n", try readUserDoc(io, a, "1", "reading-list"));
+}
