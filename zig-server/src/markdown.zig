@@ -1,5 +1,22 @@
 const std = @import("std");
 const fence = @import("markdown_fence.zig");
+const mtext = @import("markdown_text.zig");
+
+// Shared text primitives (escaping + char-class predicates) live in the
+// markdown_text leaf; alias them so the renderer bodies read unqualified.
+const escapeInto = mtext.escapeInto;
+const isWordChar = mtext.isWordChar;
+const isSlugChar = mtext.isSlugChar;
+const isAttrNameChar = mtext.isAttrNameChar;
+const isDigit = mtext.isDigit;
+const isAsciiAlpha = mtext.isAsciiAlpha;
+const isAsciiAlnum = mtext.isAsciiAlnum;
+const isSpace = mtext.isSpace;
+const isPunct = mtext.isPunct;
+const allDigits = mtext.allDigits;
+const eqlCI = mtext.eqlCI;
+const startsWithCI = mtext.startsWithCI;
+const lower = mtext.lower;
 
 /// render turns a raw chat message body into HTML. It implements — and IS the
 /// definition of — lynrummy's markdown dialect: GFM-style paragraphs with hard
@@ -868,18 +885,6 @@ fn htmlTagEnd(t: []const u8) ?usize {
     return null;
 }
 
-fn escapeInto(out: *std.ArrayList(u8), a: std.mem.Allocator, text: []const u8) !void {
-    for (text) |ch| {
-        switch (ch) {
-            '&' => try out.appendSlice(a, "&amp;"),
-            '<' => try out.appendSlice(a, "&lt;"),
-            '>' => try out.appendSlice(a, "&gt;"),
-            '"' => try out.appendSlice(a, "&quot;"),
-            else => try out.append(a, ch),
-        }
-    }
-}
-
 // --- inline rendering (text + img + links + autolinks) ----------------------
 
 // An inline node. The renderInline pipeline is: tokenize text into nodes
@@ -1476,69 +1481,6 @@ fn msgRefEnd(text: []const u8, i: usize) ?usize {
 }
 
 // --- small char/string helpers ----------------------------------------------
-
-fn isWordChar(c: u8) bool {
-    return isAsciiAlnum(c) or c == '_';
-}
-
-fn isSlugChar(c: u8) bool {
-    return isAsciiAlnum(c) or c == '-';
-}
-
-fn isAttrNameChar(c: u8) bool {
-    return isAsciiAlnum(c) or c == '-' or c == '_' or c == ':';
-}
-
-fn isDigit(c: u8) bool {
-    return c >= '0' and c <= '9';
-}
-
-fn isAsciiAlpha(c: u8) bool {
-    return (c >= 'A' and c <= 'Z') or (c >= 'a' and c <= 'z');
-}
-
-fn isAsciiAlnum(c: u8) bool {
-    return isAsciiAlpha(c) or isDigit(c);
-}
-
-fn isSpace(c: u8) bool {
-    return c == ' ' or c == '\t' or c == '\n' or c == '\r' or c == 0x0c;
-}
-
-/// isPunct reports whether c is an ASCII punctuation char (CommonMark's
-/// definition), used by the emphasis flanking rules.
-fn isPunct(c: u8) bool {
-    return (c >= '!' and c <= '/') or (c >= ':' and c <= '@') or
-        (c >= '[' and c <= '`') or (c >= '{' and c <= '~');
-}
-
-fn allDigits(s: []const u8) bool {
-    if (s.len == 0) return false;
-    for (s) |c| {
-        if (!isDigit(c)) return false;
-    }
-    return true;
-}
-
-fn eqlCI(s: []const u8, lower_lit: []const u8) bool {
-    if (s.len != lower_lit.len) return false;
-    for (s, lower_lit) |c, l| {
-        if (lower(c) != l) return false;
-    }
-    return true;
-}
-
-fn startsWithCI(haystack: []const u8, prefix: []const u8) bool {
-    if (haystack.len < prefix.len) return false;
-    for (prefix, 0..) |p, n| {
-        if (lower(haystack[n]) != lower(p)) return false;
-    }
-    return true;
-}
-
-fn lower(c: u8) u8 {
-    return if (c >= 'A' and c <= 'Z') c + 32 else c;
-}
 
 const testing = std.testing;
 
