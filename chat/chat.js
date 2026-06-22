@@ -75,9 +75,9 @@
      The popup pre-fills "read later" (Enter accepts); on confirm we POST the
      snapshot-as-seen (markdown body, author, viewer-zone date) plus the
      conv/sid/id that locate the source. The server composes the durable block
-     and appends — open /chat/docs/reading-list to read/edit/delete saved items.
-     Feedback is a transient toast (consistent for click + the 's' hotkey); a
-     persistent per-message "saved" marker waits for read-back-state. */
+     and appends. Feedback lands in the existing #chat-notify status strip as a
+     link straight to the reading list (Docs) — consistent for click + the 's'
+     hotkey; a persistent per-message "saved" marker waits for read-back-state. */
   function doSave(rec){
     ChatSavePopup.show({ note: 'read later', onConfirm: function(note){ postSave(rec, note); } });
   }
@@ -95,30 +95,21 @@
       headers: {'Content-Type':'application/x-www-form-urlencoded'},
       body: params.toString(),
     }).then(function(r){
-      showToast(r.ok ? 'Saved to reading list' : 'Save failed', !r.ok);
-    }).catch(function(){ showToast('Save failed', true); });
+      if(r.ok) ChatNotify.show(savedStatus(rec.id));
+      else ChatNotify.show('Save failed');
+    }).catch(function(){ ChatNotify.show('Save failed'); });
   }
-
-  /* A minimal transient toast — no dependency, self-removing. One element
-     reused across calls; fades after a beat. Green for success (savedFg),
-     red for failure (error). */
-  var toastEl = null, toastTimer = null;
-  function showToast(text, isError){
-    if(!toastEl){
-      toastEl = document.createElement('div');
-      Object.assign(toastEl.style, {
-        position:'fixed', left:'50%', bottom:'24px', transform:'translateX(-50%)',
-        padding:'8px 14px', borderRadius:'6px', fontSize:'13px', zIndex:'9999',
-        color:'#fff', boxShadow:'0 2px 8px rgba(0,0,0,0.3)', pointerEvents:'none',
-        opacity:'0', transition:'opacity 0.15s',
-      });
-      document.body.appendChild(toastEl);
-    }
-    toastEl.textContent = text;
-    toastEl.style.background = isError ? ChatColors.error : ChatColors.savedFg;
-    toastEl.style.opacity = '1';
-    if(toastTimer) clearTimeout(toastTimer);
-    toastTimer = setTimeout(function(){ toastEl.style.opacity = '0'; }, 1800);
+  /* "MSG_<id> saved to reading list (Docs)" with the destination linked —
+     /chat/docs/reading-list drops you straight into the doc (the server lands
+     a bare /chat/docs on your most-recent doc, which a save just became). */
+  function savedStatus(id){  // lint:called-once status-strip builder
+    var span = document.createElement('span');
+    span.appendChild(document.createTextNode('MSG_' + id + ' saved to '));
+    var a = document.createElement('a');
+    a.href = '/chat/docs/reading-list';
+    a.textContent = 'reading list (Docs)';
+    span.appendChild(a);
+    return span;
   }
 
   /* ===== cross-session vs same-session MSG_ ref navigation =====
