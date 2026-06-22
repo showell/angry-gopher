@@ -1,8 +1,16 @@
-//! users: identity resolution AND issuance.
+//! users: identity resolution, issuance, and per-user gopher-private state.
 //! The resolution half (currentUser → WHO a request acts as) came first; the
 //! issuance half (account creation, password set/verify, session signing, name
-//! validation) landed with the front-door login port (login.zig). Both read and
-//! write the SHARED account store under auth_root.
+//! validation) landed with the front-door login port (login.zig).
+//!
+//! Three roots, three concerns (config.zig sets all three at startup; nothing
+//! else reaches past this module's API to touch their files):
+//!   • auth_root          — the SHARED account store: name, password, api-key,
+//!                          next-id. Identity + credentials + issuance.
+//!   • users_root         — gopher-private per-user STATE: last-seen,
+//!                          upload-bytes (the upload quota). Same file shape —
+//!                          one small scalar per fact under {users_root}/{id}/.
+//!   • session_secret_dir — _session_secret, the HMAC key for session cookies.
 //!
 //! Issuance lives here (not login.zig) because it's account-store mechanics —
 //! the natural peer of the resolution reads. login.zig owns only the HTTP shell:
@@ -126,9 +134,23 @@ pub fn signSession(alloc: Alloc, secret: []const u8, id: []const u8, issued_unix
 
 // ── API key (cross-validated compare) ────────────────────────────────────────
 
-/// checkAPIKey resolves the principal id a presented key belongs to, or null.
-/// authorized; the stored key compares constant-time (plaintext) or via sha256
-/// (legacy bare-hash keys).
+/// apiKeyMatches reports whether `presented` is the credential `stored` stands
+/// for. Two stored forms: a modern plaintext key ("<id>-<hex>", contains '-')
+/// compares constant-time as-is; a legacy bare hash (no '-') matches the
+/// sha256-hex of the presented key. Constant-time in both arms. PURE — the Io-free
+/// security decision, lifted out of checkAPIKey's file read so it carries its own
+/// frozen-vector tests (the api-key peer of verifySessionWithSecret).
+fn apiKeyMatches(stored: []const u8, presented: []const u8) bool {
+    if (std.mem.indexOfScalar(u8, stored, '-') != null) return ctEql(stored, presented);
+    var sum: [std.crypto.hash.sha2.Sha256.digest_length]u8 = undefined;
+    std.crypto.hash.sha2.Sha256.hash(presented, &sum, .{});
+    const hex = std.fmt.bytesToHex(sum, .lower);
+    return ctEql(stored, &hex);
+}
+
+/// checkAPIKey resolves the principal id a presented key belongs to, or null. The
+/// id is the key's "<id>-" prefix; it must be authorized and its stored api-key
+/// must match (apiKeyMatches).
 fn checkAPIKey(io: Io, alloc: Alloc, presented: []const u8) !?[]const u8 {
     const dash = std.mem.indexOfScalar(u8, presented, '-') orelse return null;
     const id = presented[0..dash];
@@ -136,16 +158,7 @@ fn checkAPIKey(io: Io, alloc: Alloc, presented: []const u8) !?[]const u8 {
 
     const stored_opt = readAuthFile(io, alloc, id, "api-key") catch return null;
     const stored = std.mem.trim(u8, stored_opt orelse return null, " \t\r\n");
-
-    const ok = if (std.mem.indexOfScalar(u8, stored, '-') != null)
-        ctEql(stored, presented)
-    else blk: {
-        var sum: [std.crypto.hash.sha2.Sha256.digest_length]u8 = undefined;
-        std.crypto.hash.sha2.Sha256.hash(presented, &sum, .{});
-        const hex = std.fmt.bytesToHex(sum, .lower);
-        break :blk ctEql(stored, &hex);
-    };
-    return if (ok) id else null;
+    return if (apiKeyMatches(stored, presented)) id else null;
 }
 
 // ── registry reads (account store) ───────────────────────────────────────────
@@ -603,19 +616,222 @@ pub fn sanitizeUser(alloc: Alloc, raw: []const u8) ![]const u8 {
     return std.mem.trimEnd(u8, b.items, " ");
 }
 
-test "verifySessionWithSecret round-trips a signed cookie" {
+// ══ TESTS ════════════════════════════════════════════════════════════════════
+//
+// Two halves, matching the module: the security DECISIONS are pure (no Io), and
+// get frozen-vector / negative-case unit tests; the account store + quotas are
+// genuinely a FILESYSTEM contract (a reservation must PERSIST, an over-cap one
+// must NOT mutate), so those run against a real temp tree with a real Io — the
+// disk effect IS the thing under test, not an obstacle to mock away.
+
+const testing = std.testing;
+
+test "verifySessionWithSecret accepts a genuine cookie and rejects every forgery" {
     // A frozen `base64url(id).issued.HMAC` cookie signed with a SYNTHETIC secret
     // (never the live _session_secret). Guards that the HMAC verify construction
-    // stays stable — the property that lets zig read members' existing
-    // browser cookies. No Go, no oracle.
-    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    // stays stable — the property that lets zig read members' existing browser
+    // cookies — and that no tampered/expired/malformed variant slips through.
+    // No Go, no oracle.
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();
     const a = arena.allocator();
     const secret = "zig-port synthetic secret AAAAAA";
+    const issued = 1700000000;
     const val = "MQ.1700000000.h2oFDiRQJ1DLR1i-otOulFYPp0GGW21Gna1nryAO59s";
 
-    // Valid at issue time → resolves to id "1".
-    try std.testing.expectEqualStrings("1", verifySessionWithSecret(a, secret, val, 1700000000).?);
-    // Same cookie past the max-age window → rejected.
-    try std.testing.expect(verifySessionWithSecret(a, secret, val, 1731536001) == null);
+    // Genuine cookie at issue time → resolves to id "1".
+    try testing.expectEqualStrings("1", verifySessionWithSecret(a, secret, val, issued).?);
+
+    // ── forgery / corruption: every one must reject ──
+    // wrong secret (a different server key can't validate our cookie)
+    try testing.expect(verifySessionWithSecret(a, "a totally different secret AAAA", val, issued) == null);
+    // a single flipped MAC byte
+    const tampered = try a.dupe(u8, val);
+    tampered[tampered.len - 1] = if (tampered[tampered.len - 1] == 's') 't' else 's';
+    try testing.expect(verifySessionWithSecret(a, secret, tampered, issued) == null);
+    // wrong number of parts (2 and 4 — must be exactly 3)
+    try testing.expect(verifySessionWithSecret(a, secret, "MQ.1700000000", issued) == null);
+    try testing.expect(verifySessionWithSecret(a, secret, try std.fmt.allocPrint(a, "{s}.x", .{val}), issued) == null);
+    // non-base64 in the MAC slot
+    try testing.expect(verifySessionWithSecret(a, secret, "MQ.1700000000.!!!not-base64!!!", issued) == null);
+    // expired: one second past the max-age window
+    try testing.expect(verifySessionWithSecret(a, secret, val, issued + session_max_age_secs + 1) == null);
+
+    // ── round-trip a freshly signed cookie + the exact expiry boundary ──
+    const signed = try signSession(a, secret, "42", issued);
+    try testing.expectEqualStrings("42", verifySessionWithSecret(a, secret, signed, issued).?);
+    // exactly AT max age is still valid (the check is strictly-greater)…
+    try testing.expectEqualStrings("42", verifySessionWithSecret(a, secret, signed, issued + session_max_age_secs).?);
+    // …one second later is not.
+    try testing.expect(verifySessionWithSecret(a, secret, signed, issued + session_max_age_secs + 1) == null);
+}
+
+test "apiKeyMatches: plaintext constant-time arm and legacy sha256-hex arm" {
+    // Modern plaintext key (has '-'): exact constant-time match only.
+    try testing.expect(apiKeyMatches("3-deadbeefcafe", "3-deadbeefcafe"));
+    try testing.expect(!apiKeyMatches("3-deadbeefcafe", "3-deadbeefcaff")); // one char off
+    try testing.expect(!apiKeyMatches("3-deadbeefcafe", "3-deadbeefcaf")); // length off
+    // Legacy bare hash (no '-'): matches the sha256-hex of the PRESENTED key.
+    // sha256("3-rawkey") computed out-of-band (no oracle in the test).
+    const legacy = "65df45737ecf94ac50d1b31b078ba3bbb9a7b7d1d4dbc538456feea5a8fc2c6c";
+    try testing.expect(apiKeyMatches(legacy, "3-rawkey"));
+    try testing.expect(!apiKeyMatches(legacy, "3-wrongkey"));
+}
+
+test "validateUserName collapses whitespace, requires alnum, rejects punctuation/overlength" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+
+    // happy: trims, collapses internal whitespace runs to one space
+    try testing.expectEqualStrings("Steve Howell", (try validateUserName(a, "  Steve   Howell  ")).name);
+    // apostrophe + space allowed; non-ASCII bytes treated as letters (permissive)
+    try testing.expectEqualStrings("O'Brien", (try validateUserName(a, "O'Brien")).name);
+    try testing.expectEqualStrings("José", (try validateUserName(a, "José")).name);
+
+    // ── rejections: name is empty, err is set ──
+    const cases = [_][]const u8{
+        "   ", //                whitespace only
+        "a<b", //                angle bracket (HTML-injection shaped)
+        "x;y", //                semicolon
+        "path/name", //          slash
+        "'' ''", //              punctuation but no letter/digit
+        "a" ** 41, //            41 bytes, over the 40 cap
+    };
+    for (cases) |raw| {
+        const r = try validateUserName(a, raw);
+        try testing.expectEqualStrings("", r.name);
+        try testing.expect(r.err.len != 0);
+    }
+}
+
+test "sanitizeUser strips disallowed bytes, collapses whitespace, caps length" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+
+    // lenient: strips rather than rejects, and collapses the gap left behind
+    try testing.expectEqualStrings("ab", try sanitizeUser(a, "a<b>"));
+    try testing.expectEqualStrings("a b", try sanitizeUser(a, "  a < b  "));
+    // nothing usable → empty
+    try testing.expectEqualStrings("", try sanitizeUser(a, "<<>>"));
+    // capped to max_user_len bytes
+    try testing.expectEqual(@as(usize, max_user_len), (try sanitizeUser(a, "a" ** 80)).len);
+}
+
+/// tmpRoots points the three module roots at a fresh temp tree so the fs-backed
+/// tests write real files without touching the live data dir.
+fn tmpRoots(tmp: *testing.TmpDir, a: Alloc) !void {
+    // tmpDir() makes .zig-cache/tmp/<sub_path> via Io.Dir.cwd(); users.zig's file
+    // ops use that same cwd, so a relative base reaches the same tree.
+    const base = try std.fs.path.join(a, &.{ ".zig-cache", "tmp", &tmp.sub_path });
+    auth_root = try std.fs.path.join(a, &.{ base, "auth" });
+    users_root = try std.fs.path.join(a, &.{ base, "users" });
+    session_secret_dir = try std.fs.path.join(a, &.{ base, "secret" });
+}
+
+test "fs: password set then verify; wrong and missing both reject" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var tmp = testing.tmpDir(.{});
+    defer tmp.cleanup();
+    try tmpRoots(&tmp, a);
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+
+    try setUserName(io, a, "100", "Tester");
+    try testing.expect(!isMember(io, a, "100")); // a name, but no password yet
+    try setUserPassword(io, a, "100", "hunter2");
+    try testing.expect(isMember(io, a, "100"));
+    try testing.expect(checkUserPassword(io, a, "100", "hunter2"));
+    try testing.expect(!checkUserPassword(io, a, "100", "wrong")); // wrong password
+    try testing.expect(!checkUserPassword(io, a, "999", "anything")); // no such member
+}
+
+test "fs: upload quota reserves under the cap, refuses over it without mutating" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var tmp = testing.tmpDir(.{});
+    defer tmp.cleanup();
+    try tmpRoots(&tmp, a);
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+
+    const id = "200";
+    const cap = max_upload_lifetime_bytes;
+    try testing.expectEqual(@as(i64, 0), userUploadBytes(io, a, id));
+
+    // reserve almost the whole allowance
+    try testing.expect(reserveUploadBytes(io, a, id, cap - 10));
+    try testing.expectEqual(cap - 10, userUploadBytes(io, a, id));
+
+    // a reservation that would exceed the cap is refused AND leaves the total put
+    try testing.expect(!reserveUploadBytes(io, a, id, 20));
+    try testing.expectEqual(cap - 10, userUploadBytes(io, a, id));
+
+    // exactly to the cap is allowed; one byte beyond is not
+    try testing.expect(reserveUploadBytes(io, a, id, 10));
+    try testing.expectEqual(cap, userUploadBytes(io, a, id));
+    try testing.expect(!reserveUploadBytes(io, a, id, 1));
+    try testing.expectEqual(cap, userUploadBytes(io, a, id));
+}
+
+test "fs: only members reserve a name; findMemberByName resolves it" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var tmp = testing.tmpDir(.{});
+    defer tmp.cleanup();
+    try tmpRoots(&tmp, a);
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+
+    // a freshly allocated account (name only, no password) is NOT yet a member,
+    // so its name is NOT reserved — a half-registered guest can't squat a name.
+    const id = try allocateUser(io, a, "Alice");
+    try testing.expect(!isNameReserved(io, a, "Alice"));
+    try testing.expect((try findMemberByName(io, a, "Alice")) == null);
+
+    // becoming a member (password set) reserves the name and makes it resolvable
+    try setUserPassword(io, a, id, "pw");
+    try testing.expect(isNameReserved(io, a, "Alice"));
+    try testing.expectEqualStrings(id, (try findMemberByName(io, a, "Alice")).?);
+    try testing.expect(!isNameReserved(io, a, "Bob")); // an unrelated name is free
+}
+
+test "fs: api key issue, read back, clear; legacy bare-hash is held but not displayable" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var tmp = testing.tmpDir(.{});
+    defer tmp.cleanup();
+    try tmpRoots(&tmp, a);
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+
+    const id = "300";
+    try setUserName(io, a, id, "Agent"); // create the account dir
+    try testing.expect(!userHasAPIKey(io, a, id));
+
+    const key = try setUserAPIKey(io, a, id);
+    try testing.expect(std.mem.startsWith(u8, key, "300-"));
+    try testing.expect(userHasAPIKey(io, a, id));
+    try testing.expectEqualStrings(key, (try getUserAPIKey(io, a, id)).?); // round-trips for display
+    try testing.expect(apiKeyMatches(key, key)); // and authenticates against itself
+
+    clearUserAPIKey(io, a, id);
+    try testing.expect(!userHasAPIKey(io, a, id));
+    try testing.expect((try getUserAPIKey(io, a, id)) == null);
+
+    // a legacy bare-hash key (no '-') is honored for auth but never echoed back
+    const path = try std.fs.path.join(a, &.{ auth_root, id, "api-key" });
+    try Io.Dir.cwd().writeFile(io, .{ .sub_path = path, .data = "abc123def" });
+    try testing.expect(userHasAPIKey(io, a, id));
+    try testing.expect((try getUserAPIKey(io, a, id)) == null);
 }
