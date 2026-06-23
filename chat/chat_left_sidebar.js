@@ -37,7 +37,15 @@ window.ChatLeftSidebar = (function(){
       + '.chat-sidebar-section { margin-bottom:18px; }'
       + '.chat-sidebar-title { font-size:11px; text-transform:uppercase;'
       +                      ' letter-spacing:0.05em; color:var(--cc-muted-fg);'
-      +                      ' margin-bottom:6px; font-weight:bold; }'
+      +                      ' margin-bottom:6px; font-weight:bold;'
+      +                      ' display:flex; align-items:center; gap:5px;'
+      +                      ' cursor:pointer; user-select:none; }'
+      /* Caret is the disclosure affordance — points down when open, rotates
+         to point right when the section is collapsed. */
+      + '.chat-sidebar-caret { display:inline-block; font-size:9px;'
+      +                      ' transition:transform 0.15s ease; }'
+      + '.chat-sidebar-section.collapsed .chat-sidebar-caret { transform:rotate(-90deg); }'
+      + '.chat-sidebar-section.collapsed .chat-sidebar-list { display:none; }'
       + '.chat-sidebar-list { list-style:none; padding:0; margin:0; }'
       + '.chat-sidebar-list li { margin:0; }'
       + '.chat-sidebar-list li a { display:block; padding:4px 8px;'
@@ -63,6 +71,22 @@ window.ChatLeftSidebar = (function(){
       +                     ' border-color:var(--cc-presence-online); }';
     document.head.appendChild(s);
     stylesInjected = true;
+  }
+
+  /* ===== collapse state =====
+     PRODUCT_DECISION: collapse is sticky per-section across reloads — a
+     rail you tucked away stays tucked. Persisted to localStorage keyed by
+     the section's data-section name; default (no key) is expanded. Same
+     widget instance drives the desktop rail and the mobile drawer, so the
+     two stay in sync for free. */
+  function collapseKey(section){ return 'chat-sidebar-collapsed:' + section; }
+  // lint:called-once collapse-state — runs per section at build time
+  function isCollapsed(section){
+    try { return localStorage.getItem(collapseKey(section)) === '1'; } catch(e){ return false; }  // lint:silent-catch localStorage-may-throw-in-private-mode
+  }
+  // lint:called-once collapse-state — runs per section on toggle
+  function storeCollapsed(section, collapsed){
+    try { if(collapsed) localStorage.setItem(collapseKey(section), '1'); else localStorage.removeItem(collapseKey(section)); } catch(e){ /* private mode — collapse just won't persist */ }  // lint:silent-catch localStorage-may-throw-in-private-mode
   }
 
   /* ===== row builders =====
@@ -102,8 +126,22 @@ window.ChatLeftSidebar = (function(){
   // lint:called-once section-builder
   function buildSection(title, listClass, dataSection, items, emptyHint, itemFn){
     var box=document.createElement('div'); box.className='chat-sidebar-section';
+    if(isCollapsed(dataSection)) box.classList.add('collapsed');
     var t=document.createElement('div'); t.className='chat-sidebar-title';
-    t.textContent=title; box.appendChild(t);
+    var caret=document.createElement('span'); caret.className='chat-sidebar-caret';
+    caret.textContent='▾';
+    t.appendChild(caret);
+    t.appendChild(document.createTextNode(title));
+    t.setAttribute('role','button'); t.setAttribute('tabindex','0');
+    function toggle(){
+      var nowCollapsed=box.classList.toggle('collapsed');
+      storeCollapsed(dataSection, nowCollapsed);
+    }
+    t.addEventListener('click', toggle);
+    t.addEventListener('keydown', function(e){
+      if(e.key==='Enter' || e.key===' '){ e.preventDefault(); toggle(); }
+    });
+    box.appendChild(t);
     var ul=document.createElement('ul');
     ul.className='chat-sidebar-list'+(listClass?' '+listClass:'');
     ul.setAttribute('data-section', dataSection);
