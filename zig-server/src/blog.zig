@@ -269,6 +269,8 @@ const head_b =
     \\.comment-form button { background: #000080; color: white; border: none; padding: 9px 18px;
     \\                       font-size: 14px; border-radius: 4px; cursor: pointer; }
     \\.comment-form button:hover { background: #0000a0; }
+    \\.comment-form button:disabled { opacity: 0.6; cursor: default; }
+    \\.comment-err { color: #b00020; font-size: 14px; margin: 0 0 6px; }
     \\</style>
     \\</head><body>
     \\

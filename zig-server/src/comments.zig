@@ -59,13 +59,15 @@ pub fn renderThread(b: *std.ArrayList(u8), io: Io, alloc: Alloc, slug: []const u
     const raw = (try store.rawSession(io, alloc, conv.dir, sid)) orelse "";
     const msgs = try store.decodeChatFile(alloc, raw);
 
-    try b.appendSlice(alloc, "<section class=\"comments\"><h2>");
+    try b.appendSlice(alloc, "<section id=\"comments\" class=\"comments\"><h2>");
     if (msgs.len == 0) {
         try b.appendSlice(alloc, "Comments</h2><p class=\"muted\">No comments yet. Be the first.</p>");
     } else {
         try b.print(alloc, "{d} comment{s}</h2>", .{ msgs.len, if (msgs.len == 1) "" else "s" });
         for (msgs) |m| {
-            try b.appendSlice(alloc, "<div class=\"comment\"><div class=\"comment-head\"><strong>");
+            // id="c-<msg id>" so the plain-form post-redirect can land on the new
+            // comment (#c-comments_N) instead of scrolling back to the article top.
+            try b.print(alloc, "<div id=\"c-{s}\" class=\"comment\"><div class=\"comment-head\"><strong>", .{m.id});
             try b.appendSlice(alloc, try html.htmlEscape(alloc, m.from));
             try b.appendSlice(alloc, "</strong><span class=\"comment-date\">");
             try b.appendSlice(alloc, try html.htmlEscape(alloc, m.date));
@@ -83,28 +85,86 @@ pub fn renderThread(b: *std.ArrayList(u8), io: Io, alloc: Alloc, slug: []const u
         try b.print(alloc, "<p class=\"muted\">Commenting as <strong>{s}</strong>.</p>", .{try html.htmlEscape(alloc, viewer_name)});
     }
     try b.appendSlice(alloc, "<textarea class=\"comment-text\" name=\"comment\" rows=\"4\" placeholder=\"Add a comment\u{2026}\"></textarea>");
-    try b.appendSlice(alloc, "<button type=\"submit\">Post comment</button></form></section>");
+    try b.appendSlice(alloc, "<button type=\"submit\">Post comment</button></form>");
+    // Rung B progressive enhancement (inert without JS — the form above still
+    // posts and the server 303s to the new comment's anchor).
+    try b.appendSlice(alloc, enhance_script);
+    try b.appendSlice(alloc, "</section>");
 }
+
+/// enhance_script upgrades the plain form to post-without-reload: it intercepts
+/// the submit, POSTs async (X-Comment-Async ⇒ the server answers 204 instead of a
+/// 303), then re-fetches the page and swaps just the rendered `.comments` section
+/// in place. The client ships NO markup — the server stays the single source of
+/// the comment HTML (and the count + the name→"commenting as" flip come along for
+/// free). Inline, like login.zig's standalone-page scripts; a network error falls
+/// back to a real form submit. Snap scroll (no smooth), per house style.
+const enhance_script =
+    \\<script>
+    \\(function(){
+    \\  var form = document.querySelector('.comment-form');
+    \\  if (!form || !window.fetch || !window.DOMParser) return;
+    \\  function showErr(f, msg){
+    \\    var e = f.querySelector('.comment-err');
+    \\    if (!e){ e = document.createElement('p'); e.className = 'comment-err'; f.insertBefore(e, f.firstChild); }
+    \\    e.textContent = msg;
+    \\  }
+    \\  function refresh(){
+    \\    fetch(location.pathname).then(function(r){ return r.text(); }).then(function(html){
+    \\      var doc = new DOMParser().parseFromString(html, 'text/html');
+    \\      var fresh = doc.querySelector('.comments'), cur = document.querySelector('.comments');
+    \\      if (!fresh || !cur){ location.reload(); return; }
+    \\      cur.replaceWith(fresh);
+    \\      bind(fresh.querySelector('.comment-form'));
+    \\      var last = fresh.querySelector('.comment:last-of-type');
+    \\      if (last) last.scrollIntoView({block:'center'});
+    \\    }).catch(function(){ location.reload(); });
+    \\  }
+    \\  function bind(f){
+    \\    if (!f) return;
+    \\    f.addEventListener('submit', function(e){
+    \\      e.preventDefault();
+    \\      var btn = f.querySelector('button');
+    \\      btn.disabled = true;
+    \\      fetch(f.action, {
+    \\        method: 'POST',
+    \\        headers: {'Content-Type':'application/x-www-form-urlencoded','X-Comment-Async':'1'},
+    \\        body: new URLSearchParams(new FormData(f)).toString()
+    \\      }).then(function(r){
+    \\        if (r.status === 204){ refresh(); return; }
+    \\        return r.text().then(function(t){ showErr(f, t || 'Could not post your comment.'); btn.disabled = false; });
+    \\      }).catch(function(){ f.submit(); });
+    \\    });
+    \\  }
+    \\  bind(form);
+    \\})();
+    \\</script>
+;
 
 /// handlePost handles POST /blog/<slug>/comment. `slug` has already been validated
 /// by blog.zig to name a real, enumerated post.
 pub fn handlePost(req: *Request, io: Io, alloc: Alloc, bus: *Bus, slug: []const u8) !void {
     if (req.head.method != .POST) return http.methodNotAllowed(req);
 
-    // Resolve identity from the cookie headers BEFORE reading the body
-    // (iterateHeaders asserts on received_head, and the body read invalidates the
-    // header strings). currentUserID already keeps the gopher_uid value owned.
+    // Read header-derived state BEFORE the body (iterateHeaders asserts on
+    // received_head, and the body read invalidates header strings).
+    // X-Comment-Async marks the Rung-B fetch caller (⇒ 204, not a 303);
+    // currentUser reads the identity cookies (it keeps gopher_uid owned).
+    const is_async = if (try http.header(req, alloc, "x-comment-async")) |v| std.mem.eql(u8, v, "1") else false;
     const cur = try users.currentUser(io, alloc, req);
 
     const body = (try http.readLimitedBody(req, alloc, max_comment_bytes)) orelse return;
     const md_raw = (try chat.formField(alloc, body, "comment")) orelse "";
     const md = std.mem.trim(u8, md_raw, " \t\r\n");
 
-    // Empty body is a no-op (and must NOT mint a guest for nothing): just go back.
-    if (md.len == 0) return redirectBack(req, alloc, slug, null);
+    // Empty body is a no-op (and must NOT mint a guest for nothing).
+    if (md.len == 0) {
+        if (is_async) return req.respond("", .{ .status = .no_content });
+        return redirectToThread(req, alloc, slug, "#comments", null);
+    }
     // Refuse hostile / over-formatted markdown at the door, like chat /send.
     if (markdown.hostileReason(md)) |_| {
-        return badComment(req, alloc, "Not posted: too much formatting — break it into smaller pieces.");
+        return badComment(req, alloc, is_async, "Not posted: too much formatting — break it into smaller pieces.");
     }
 
     // Resolve the poster. An existing identity comments as itself; a fresh visitor
@@ -116,9 +176,9 @@ pub fn handlePost(req: *Request, io: Io, alloc: Alloc, bus: *Bus, slug: []const 
     if (cur.id.len == 0) {
         const raw_name = (try chat.formField(alloc, body, "name")) orelse "";
         const vr = try users.validateUserName(alloc, raw_name);
-        if (vr.err.len != 0) return badComment(req, alloc, vr.err);
+        if (vr.err.len != 0) return badComment(req, alloc, is_async, vr.err);
         if (users.isNameReserved(io, alloc, vr.name)) {
-            return badComment(req, alloc, "That name belongs to a registered member — pick another, or log in.");
+            return badComment(req, alloc, is_async, "That name belongs to a registered member — pick another, or log in.");
         }
         from_id = try users.allocateUser(io, alloc, vr.name);
         from_name = vr.name;
@@ -126,24 +186,43 @@ pub fn handlePost(req: *Request, io: Io, alloc: Alloc, bus: *Bus, slug: []const 
     }
 
     const conv = try convFor(alloc, slug);
-    _ = try store.appendMessage(io, alloc, bus, conv.meta, conv.dir, conv.key, sid, from_name, from_id, md, "");
+    const msg = try store.appendMessage(io, alloc, bus, conv.meta, conv.dir, conv.key, sid, from_name, from_id, md, "");
     users.touchUser(io, alloc, from_id);
-    return redirectBack(req, alloc, slug, set_cookie);
+
+    // Async (Rung B): the client re-fetches + swaps the thread, so 204 is enough —
+    // it just has to carry any just-minted guest cookie so the next post is "as X".
+    if (is_async) {
+        if (set_cookie) |c| {
+            return req.respond("", .{ .status = .no_content, .extra_headers = &.{.{ .name = "set-cookie", .value = c }} });
+        }
+        return req.respond("", .{ .status = .no_content });
+    }
+    // Plain form: 303 to the NEW comment's anchor so the page lands there instead
+    // of scrolling back to the article top.
+    const anchor = try std.fmt.allocPrint(alloc, "#c-{s}", .{msg.id});
+    return redirectToThread(req, alloc, slug, anchor, set_cookie);
 }
 
-/// redirectBack 303s to the post page, carrying a Set-Cookie when a guest identity
-/// was just minted so the visitor is recognized on their next comment.
-fn redirectBack(req: *Request, alloc: Alloc, slug: []const u8, cookie: ?[]const u8) !void {
-    const loc = try std.fmt.allocPrint(alloc, "/blog/{s}", .{slug});
+/// redirectToThread 303s to the post page at `anchor` (e.g. "#c-comments_3"),
+/// carrying a Set-Cookie when a guest identity was just minted so the visitor is
+/// recognized on their next comment.
+fn redirectToThread(req: *Request, alloc: Alloc, slug: []const u8, anchor: []const u8, cookie: ?[]const u8) !void {
+    const loc = try std.fmt.allocPrint(alloc, "/blog/{s}{s}", .{ slug, anchor });
     var hs: std.ArrayList(std.http.Header) = .empty;
     try hs.append(alloc, .{ .name = "location", .value = loc });
     if (cookie) |c| try hs.append(alloc, .{ .name = "set-cookie", .value = c });
     try req.respond("", .{ .status = .see_other, .extra_headers = hs.items });
 }
 
-/// badComment fails loud with a 400 and a back link — history.back() preserves the
-/// visitor's typed comment so a name fix isn't a retype.
-fn badComment(req: *Request, alloc: Alloc, msg: []const u8) !void {
+/// badComment fails loud with a 400. For the async caller it's a plain-text body
+/// the script shows inline by the form; for a plain post it's a small page with a
+/// back link — history.back() preserves the visitor's typed comment.
+fn badComment(req: *Request, alloc: Alloc, is_async: bool, msg: []const u8) !void {
+    if (is_async) {
+        return req.respond(msg, .{ .status = .bad_request, .extra_headers = &.{
+            .{ .name = "content-type", .value = "text/plain; charset=utf-8" },
+        } });
+    }
     const body = try std.fmt.allocPrint(alloc,
         \\<!doctype html><meta charset="utf-8">
         \\<body style="font-family:sans-serif;max-width:46rem;margin:48px auto;padding:0 24px;line-height:1.6">
