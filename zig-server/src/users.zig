@@ -58,9 +58,12 @@ pub fn currentUserID(io: Io, alloc: Alloc, req: *std.http.Server.Request) ![]con
     // 2. API key.
     if (try apiKeyUserID(io, alloc, req)) |id| return id;
     // 3. guest gopher_uid — only a non-authorized principal that exists.
+    // Dupe out of the Cookie header for the same reason as the api-key path: a
+    // body read would invalidate this slice. (Matters once guests can post —
+    // e.g. name-only blog commenters.)
     const uid = currentUID(req);
     if (uid.len != 0 and try userExists(io, alloc, uid) and !try userIsAuthorized(io, alloc, uid)) {
-        return uid;
+        return try alloc.dupe(u8, uid);
     }
     return "";
 }
@@ -158,7 +161,13 @@ fn checkAPIKey(io: Io, alloc: Alloc, presented: []const u8) !?[]const u8 {
 
     const stored_opt = readAuthFile(io, alloc, id, "api-key") catch return null;
     const stored = std.mem.trim(u8, stored_opt orelse return null, " \t\r\n");
-    return if (apiKeyMatches(stored, presented)) id else null;
+    if (!apiKeyMatches(stored, presented)) return null;
+    // DUPE OUT OF THE HEADER: `id` is a slice into the Authorization request
+    // header (via bearerToken). A later body read invalidates the head strings
+    // (the zig-0.16 received_head gotcha), which would clobber this uid and make
+    // getUserName resolve the wrong/empty principal. Own it so it survives —
+    // symmetric with the cookie path, which already allocates (verifySessionWithSecret).
+    return try alloc.dupe(u8, id);
 }
 
 // ── registry reads (account store) ───────────────────────────────────────────
