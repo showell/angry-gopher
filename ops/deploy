@@ -64,7 +64,7 @@ BIN="$GOPHER_DIR/zig-server/zig-out/bin/zig-server"
 # route depends on is present when the fresh binary starts.
 echo "Syncing to $DEPLOY_HOST:$DEPLOY_DIR ..."
 rsync -avz "$BIN" "$DEPLOY_HOST:$DEPLOY_DIR/zig-server"
-rsync -avz --delete "$GOPHER_DIR/blog/posts/" "$DEPLOY_HOST:$DEPLOY_DIR/blog/posts/"
+rsync -avz --mkpath --delete "$GOPHER_DIR/blog/posts/" "$DEPLOY_HOST:$DEPLOY_DIR/blog/posts/"
 
 echo "Restarting $DEPLOY_SERVICE ..."
 # Health check hits the REAL FRONT DOOR, not /driving. The first cutover went
