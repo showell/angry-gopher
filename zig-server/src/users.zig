@@ -58,12 +58,12 @@ pub fn currentUserID(io: Io, alloc: Alloc, req: *std.http.Server.Request) ![]con
     // 2. API key.
     if (try apiKeyUserID(io, alloc, req)) |id| return id;
     // 3. guest gopher_uid — only a non-authorized principal that exists.
-    // Dupe out of the Cookie header for the same reason as the api-key path: a
-    // body read would invalidate this slice. (Matters once guests can post —
-    // e.g. name-only blog commenters.)
-    const uid = currentUID(req);
-    if (uid.len != 0 and try userExists(io, alloc, uid) and !try userIsAuthorized(io, alloc, uid)) {
-        return try alloc.dupe(u8, uid);
+    // http.cookie owns the value, so it survives a later body read (matters once
+    // guests can post — e.g. name-only blog commenters).
+    if (try http.cookie(req, alloc, "gopher_uid")) |uid| {
+        if (allDigits(uid) and try userExists(io, alloc, uid) and !try userIsAuthorized(io, alloc, uid)) {
+            return uid;
+        }
     }
     return "";
 }
@@ -71,7 +71,7 @@ pub fn currentUserID(io: Io, alloc: Alloc, req: *std.http.Server.Request) ![]con
 /// sessionUserID returns the member id from a valid gopher_auth cookie whose id
 /// is still a member.
 fn sessionUserID(io: Io, alloc: Alloc, req: *std.http.Server.Request) !?[]const u8 {
-    const val = cookie(req, "gopher_auth") orelse return null;
+    const val = (try http.cookie(req, alloc, "gopher_auth")) orelse return null;
     const secret = (try loadSecret(io, alloc)) orelse return null;
     const now = nowUnix(io);
     const id = verifySessionWithSecret(alloc, secret, val, now) orelse return null;
@@ -81,7 +81,7 @@ fn sessionUserID(io: Io, alloc: Alloc, req: *std.http.Server.Request) !?[]const 
 
 /// apiKeyUserID resolves the principal id from an Authorization: Bearer key.
 fn apiKeyUserID(io: Io, alloc: Alloc, req: *std.http.Server.Request) !?[]const u8 {
-    const key = bearerToken(req) orelse return null;
+    const key = (try bearerToken(req, alloc)) orelse return null;
     return checkAPIKey(io, alloc, key);
 }
 
@@ -161,13 +161,9 @@ fn checkAPIKey(io: Io, alloc: Alloc, presented: []const u8) !?[]const u8 {
 
     const stored_opt = readAuthFile(io, alloc, id, "api-key") catch return null;
     const stored = std.mem.trim(u8, stored_opt orelse return null, " \t\r\n");
-    if (!apiKeyMatches(stored, presented)) return null;
-    // DUPE OUT OF THE HEADER: `id` is a slice into the Authorization request
-    // header (via bearerToken). A later body read invalidates the head strings
-    // (the zig-0.16 received_head gotcha), which would clobber this uid and make
-    // getUserName resolve the wrong/empty principal. Own it so it survives —
-    // symmetric with the cookie path, which already allocates (verifySessionWithSecret).
-    return try alloc.dupe(u8, id);
+    // `id` is a slice into `presented`, which bearerToken already owns (via
+    // http.header), so it survives a later body read — no dupe needed here.
+    return if (apiKeyMatches(stored, presented)) id else null;
 }
 
 // ── registry reads (account store) ───────────────────────────────────────────
@@ -390,38 +386,24 @@ fn loadSecret(io: Io, alloc: Alloc) !?[]const u8 {
 
 // ── request parsing ──────────────────────────────────────────────────────────
 
-/// currentUID returns the gopher_uid cookie value if it's all digits, else "".
-fn currentUID(req: *std.http.Server.Request) []const u8 {
-    const v = cookie(req, "gopher_uid") orelse return "";
-    if (v.len == 0) return "";
-    for (v) |ch| {
-        if (ch < '0' or ch > '9') return "";
+/// allDigits reports whether `s` is non-empty and all ASCII digits (a well-formed uid).
+fn allDigits(s: []const u8) bool {
+    if (s.len == 0) return false;
+    for (s) |ch| {
+        if (ch < '0' or ch > '9') return false;
     }
-    return v;
+    return true;
 }
 
-/// bearerToken extracts the token from an Authorization: Bearer <token> header.
-fn bearerToken(req: *std.http.Server.Request) ?[]const u8 {
-    const h = http.header(req, "authorization") orelse return null;
+/// bearerToken extracts the (owned) token from an Authorization: Bearer <token>
+/// header. The token is duped by http.header, so slices of it (the "<id>-" prefix
+/// in checkAPIKey) survive a later body read.
+fn bearerToken(req: *std.http.Server.Request, alloc: Alloc) !?[]const u8 {
+    const h = (try http.header(req, alloc, "authorization")) orelse return null;
     const prefix = "Bearer ";
     if (!std.mem.startsWith(u8, h, prefix)) return null;
     const tok = std.mem.trim(u8, h[prefix.len..], " \t");
     return if (tok.len == 0) null else tok;
-}
-
-/// cookie returns the value of cookie `name` from any Cookie header, or null.
-fn cookie(req: *std.http.Server.Request, name: []const u8) ?[]const u8 {
-    var hit = req.iterateHeaders();
-    while (hit.next()) |hdr| {
-        if (!std.ascii.eqlIgnoreCase(hdr.name, "cookie")) continue;
-        var pairs = std.mem.splitScalar(u8, hdr.value, ';');
-        while (pairs.next()) |raw| {
-            const pair = std.mem.trim(u8, raw, " \t");
-            const eq = std.mem.indexOfScalar(u8, pair, '=') orelse continue;
-            if (std.mem.eql(u8, pair[0..eq], name)) return pair[eq + 1 ..];
-        }
-    }
-    return null;
 }
 
 

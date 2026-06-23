@@ -128,7 +128,7 @@ fn handleConn(io: std.Io, alloc: std.mem.Allocator, bus: *Bus, stream: net.Strea
 /// route picks the handler by path prefix, passing the remainder (the path with
 /// the prefix stripped, e.g. "/app.js" or "/sessions/3/...").
 fn route(req: *std.http.Server.Request, io: std.Io, alloc: std.mem.Allocator, bus: *Bus) !void {
-    const path = stripQuery(req.head.target);
+    const path = stripQuery(try http.target(req, alloc));
 
     if (matchPrefix(path, "/driving")) |sub| {
         try driving.handle(req, sub);

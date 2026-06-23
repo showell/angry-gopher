@@ -26,6 +26,12 @@ for f in games/lynrummy/elm/elm.js games/lynrummy/elm/puzzle.js \
     [ -f "$f" ] || { echo "Error: $f missing — run ops/build_elm + ops/build_driving first (embedded by zig build)." >&2; exit 1; }
 done
 
+# Poka-yoke lint: raw request-head access (req.head.target / iterateHeaders) is
+# confined to http.zig, whose accessors return OWNED copies — so a head value can
+# never dangle past the body read that invalidates it (the empty/wrong-author bug).
+echo "==> head-access lint"
+python3 "$REPO_DIR/tools/lint_head_access.py"
+
 cd "$REPO_DIR/zig-server"
 t0=$SECONDS
 zig build           # compile the whole server

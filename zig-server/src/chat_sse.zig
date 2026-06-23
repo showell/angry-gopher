@@ -33,7 +33,7 @@ const Request = std.http.Server.Request;
 /// message lands in EITHER the backlog OR the live stream — never both, never
 /// neither.
 pub fn streamTranscript(req: *Request, io: Io, alloc: Alloc, bus: *Bus, conv_dir: []const u8, conv_key: []const u8, sid: []const u8, uid: []const u8) !void {
-    const since = parseSince(req);
+    const since = try parseSince(req, alloc);
     const viewer = try users.getUserName(io, alloc, uid);
 
     const stream = try store.openStream(io, alloc, bus, conv_dir, conv_key, sid);
@@ -147,8 +147,8 @@ pub fn forwardUserStream(req: *Request, alloc: Alloc, bus: *Bus, key: []const u8
 /// parseSince extracts the replay cursor from the request: Last-Event-ID
 /// (reconnect) → n+1, else ?since=N (initial load) → n, else 0. The decision is
 /// sinceFrom; this is just the Io-free read of the two header/query sources.
-fn parseSince(req: *Request) usize {
-    return sinceFrom(http.header(req, "last-event-id"), http.queryValue(req.head.target, "since"));
+fn parseSince(req: *Request, alloc: Alloc) !usize {
+    return sinceFrom(try http.header(req, alloc, "last-event-id"), http.queryValue(try http.target(req, alloc), "since"));
 }
 
 /// sinceFrom is the pure replay-cursor decision: a parseable Last-Event-ID wins

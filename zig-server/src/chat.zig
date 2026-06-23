@@ -196,8 +196,9 @@ pub fn handleChannel(req: *Request, io: Io, alloc: Alloc, bus: *Bus, sub: []cons
     var segs = segments(sub);
     const name_raw = segs.next() orelse return http.notFound(req);
     if (!store.validChannelName(name_raw)) return http.notFound(req);
-    // Dupe out of req.head.target — a body read invalidates head strings (see convRoute).
-    const name = try alloc.dupe(u8, name_raw);
+    // No dupe: the router resolved the path via http.target, which owns it, so
+    // path-derived slices already survive the body read.
+    const name = name_raw;
 
     const members = (try store.channelMembers(io, alloc, name)) orelse return http.notFound(req);
     if (!store.hasMember(members, uid)) return http.notFound(req);
@@ -221,8 +222,7 @@ pub fn handleChannel(req: *Request, io: Io, alloc: Alloc, bus: *Bus, sub: []cons
     // /channel/<name>/new — create a topic ("new" is reserved).
     if (std.mem.eql(u8, topic_raw, "new")) return newTopic(req, io, alloc, bus, conv, uid);
     if (!store.validSessionID(topic_raw)) return http.notFound(req);
-    // Dupe out of req.head.target — a body read invalidates head strings (see convRoute).
-    const topic = try alloc.dupe(u8, topic_raw);
+    const topic = topic_raw; // owned via the router's http.target (see `name` above)
 
     const title = try std.fmt.allocPrint(alloc, "#{s}: {s}", .{ name, topic });
     try topicRoute(req, io, alloc, bus, &segs, uid, Topic{ .conv = conv, .sid = topic, .title = title });
@@ -233,10 +233,10 @@ fn convRoute(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8, re
     var segs = segments(rest);
     const pair_raw = segs.next() orelse return http.notFound(req);
     if (!try store.chatKeyParticipant(alloc, pair_raw, uid)) return http.notFound(req);
-    // Dupe path-derived strings out of req.head.target: a body read (send/upload)
-    // calls head.invalidateStrings(), which would otherwise clobber them — and
-    // they're used AFTER that read (response URLs, fanout keys, member uids).
-    const pair = try alloc.dupe(u8, pair_raw);
+    // No dupe: the router resolved the path via http.target, which owns it, so
+    // these path-derived strings (used after the body read for response URLs,
+    // fanout keys, member uids) already survive head invalidation.
+    const pair = pair_raw;
 
     // DM members are the two uids in the (already participant-checked) pair key.
     const us = std.mem.indexOfScalar(u8, pair, '_').?;
@@ -264,7 +264,7 @@ fn convRoute(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8, re
     // /chat/c/<conv>/new — create a topic ("new" beats {sid}; it's reserved).
     if (std.mem.eql(u8, sid_raw, "new")) return newTopic(req, io, alloc, bus, conv, uid);
     if (!store.validSessionID(sid_raw)) return http.notFound(req);
-    const sid = try alloc.dupe(u8, sid_raw);
+    const sid = sid_raw; // owned via the router's http.target (see `pair` above)
 
     const partner = try partnerName(io, alloc, conv.key, uid);
     const title = try std.fmt.allocPrint(alloc, "Chat w/{s}: {s}", .{ partner, sid });
@@ -337,7 +337,7 @@ fn sendMessage(req: *Request, io: Io, alloc: Alloc, bus: *Bus, topic: Topic, uid
     // Read headers BEFORE the body: reading the request body advances the
     // std.http.Server reader past `received_head`, after which iterateHeaders
     // asserts. So capture X-Chat-Async first, then drain the body.
-    const is_async = if (http.header(req, "x-chat-async")) |v| std.mem.eql(u8, v, "1") else false;
+    const is_async = if (try http.header(req, alloc, "x-chat-async")) |v| std.mem.eql(u8, v, "1") else false;
 
     const body = (try http.readLimitedBody(req, alloc, max_message_bytes)) orelse return;
     const md_raw = (try formField(alloc, body, "markdown")) orelse "";

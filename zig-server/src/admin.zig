@@ -49,7 +49,7 @@ fn handleDelete(req: *Request, io: Io, alloc: Alloc) !void {
         storage.deleteUserData(io, alloc, id) catch return req.respond("delete failed\n", .{ .status = .internal_server_error });
         return http.redirect(req, try std.fmt.allocPrint(alloc, "/admin?deleted={s}", .{id}));
     }
-    const id = std.mem.trim(u8, http.queryValue(req.head.target, "user") orelse "", " \t\r\n");
+    const id = std.mem.trim(u8, http.queryValue(try http.target(req, alloc), "user") orelse "", " \t\r\n");
     if (id.len == 0 or !users.principalExists(io, alloc, id)) return http.redirect(req, "/admin");
     return renderDeleteConfirm(req, io, alloc, id);
 }
@@ -101,10 +101,11 @@ fn renderOverview(req: *Request, io: Io, alloc: Alloc) !void {
     try b.appendSlice(alloc, overview_head);
 
     // Flash (delete / key-revoke confirmations), keyed by uid in the query.
-    if (http.queryValue(req.head.target, "deleted")) |d| {
+    const tgt = try http.target(req, alloc);
+    if (http.queryValue(tgt, "deleted")) |d| {
         const name = try html.htmlEscape(alloc, try users.getUserName(io, alloc, d));
         try b.print(alloc, "<p class=\"flash\">Deleted game data for <strong>{s}</strong>.</p>", .{name});
-    } else if (http.queryValue(req.head.target, "keyrevoked")) |k| {
+    } else if (http.queryValue(tgt, "keyrevoked")) |k| {
         const name = try html.htmlEscape(alloc, try users.getUserName(io, alloc, k));
         try b.print(alloc, "<p class=\"flash\">Revoked the API key for <strong>{s}</strong>.</p>", .{name});
     }

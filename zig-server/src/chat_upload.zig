@@ -41,14 +41,12 @@ const range_window = 8 << 20; // 8 MiB
 pub fn handleUpload(req: *Request, io: Io, alloc: Alloc, uid: []const u8, conv_dir: []const u8, base: []const u8, sid: []const u8) !void {
     if (req.head.method != .POST) return http.methodNotAllowed(req);
 
-    // Read the Content-Type (for the multipart boundary) BEFORE the body — both
-    // because reading the body advances the reader past received_head (after
-    // which iterateHeaders asserts, the /send gotcha) AND because the body read
-    // calls head.invalidateStrings(), which clobbers the header string memory.
-    // So the boundary MUST be copied out before readLimitedBody runs.
-    const ct = reqHeader(req, "content-type") orelse return edge.reject(req, .malformed_multipart, "no file\n");
-    const boundary_raw = multipartBoundary(ct) orelse return edge.reject(req, .malformed_multipart, "no file\n");
-    const boundary = try alloc.dupe(u8, boundary_raw);
+    // Read the Content-Type (for the multipart boundary) BEFORE the body: reading
+    // the body advances the reader past received_head (after which iterateHeaders
+    // asserts, the /send gotcha) and invalidates the head strings. http.header
+    // owns its result, so `ct` (and the boundary sliced from it) survive the body read.
+    const ct = (try http.header(req, alloc, "content-type")) orelse return edge.reject(req, .malformed_multipart, "no file\n");
+    const boundary = multipartBoundary(ct) orelse return edge.reject(req, .malformed_multipart, "no file\n");
 
     const body = (try http.readLimitedBody(req, alloc, max_any_upload)) orelse return;
     const part = parseMultipartFile(alloc, body, boundary) orelse
@@ -102,7 +100,7 @@ pub fn serveUpload(req: *Request, io: Io, alloc: Alloc, conv_dir: []const u8, si
     defer f.close(io);
     const size = (f.stat(io) catch return http.notFound(req)).size;
 
-    if (reqHeader(req, "range")) |range_hdr| {
+    if (try http.header(req, alloc, "range")) |range_hdr| {
         const r = parseRange(range_hdr, size) orelse {
             const cr = try std.fmt.allocPrint(alloc, "bytes */{d}", .{size});
             return req.respond("", .{ .status = .range_not_satisfiable, .extra_headers = &.{
@@ -314,15 +312,6 @@ fn attrVal(headers: []const u8, attr: []const u8) ?[]const u8 {
 
 fn isAlpha(c: u8) bool {
     return (c >= 'A' and c <= 'Z') or (c >= 'a' and c <= 'z');
-}
-
-/// reqHeader returns a request header value (case-insensitive), or null.
-fn reqHeader(req: *Request, name: []const u8) ?[]const u8 {
-    var it = req.iterateHeaders();
-    while (it.next()) |h| {
-        if (std.ascii.eqlIgnoreCase(h.name, name)) return h.value;
-    }
-    return null;
 }
 
 const testing = std.testing;

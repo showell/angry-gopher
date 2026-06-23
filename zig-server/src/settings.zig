@@ -52,7 +52,7 @@ fn renderSettings(req: *Request, io: Io, alloc: Alloc, uid: []const u8) !void {
     var b: std.ArrayList(u8) = .empty;
     try chrome.begin(&b, alloc, "Settings", "Settings", viewer, "settings");
 
-    if (queryFlag(req, "keyrevoked")) {
+    if (try queryFlag(req, alloc, "keyrevoked")) {
         try b.appendSlice(alloc, "<p class=\"flash\">Your API key was revoked.</p>");
     }
 
@@ -66,7 +66,7 @@ fn renderSettings(req: *Request, io: Io, alloc: Alloc, uid: []const u8) !void {
     }
 
     // Has a key. Reveal it on ?show=1; otherwise just the buttons.
-    if (queryFlag(req, "show")) {
+    if (try queryFlag(req, alloc, "show")) {
         if (try users.getUserAPIKey(io, alloc, uid)) |key| {
             try b.print(alloc, "<p>Your API key (copy it somewhere safe):</p>\n<code style=\"" ++ key_code_style ++ "\">{s}</code>", .{try html.htmlEscape(alloc, key)});
         } else {
@@ -95,8 +95,8 @@ pub fn renderKeyShown(req: *Request, io: Io, alloc: Alloc, uid: []const u8, key:
 // ── helpers ───────────────────────────────────────────────────────────────────
 
 /// queryFlag reports whether the `?name=1` flag is present in the request target.
-fn queryFlag(req: *Request, name: []const u8) bool {
-    const v = http.queryValue(req.head.target, name) orelse return false;
+fn queryFlag(req: *Request, alloc: Alloc, name: []const u8) !bool {
+    const v = http.queryValue(try http.target(req, alloc), name) orelse return false;
     return std.mem.eql(u8, v, "1");
 }
 

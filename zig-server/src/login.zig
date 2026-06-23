@@ -98,7 +98,7 @@ fn handleLoginFull(req: *Request, io: Io, alloc: Alloc, bus: *Bus) !void {
     // asserts on received_head, and the body read invalidates header/target
     // strings — so resolve identity and dup the query target up front.
     const cur = try users.currentUser(io, alloc, req);
-    const target = try alloc.dupe(u8, req.head.target);
+    const target = try http.target(req, alloc);
     var body: []const u8 = "";
     if (req.head.method == .POST) {
         body = (try http.readLimitedBody(req, alloc, 64 * 1024)) orelse return;
