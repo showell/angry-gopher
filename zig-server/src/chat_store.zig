@@ -633,3 +633,31 @@ test "validMsgRefID: accepts slug_index, rejects everything off-shape" {
     try testing.expect(!validMsgRefID("yo_5_"));
     try testing.expect(!validMsgRefID(""));
 }
+
+test "fs: a posted message round-trips through the store (real Io over a temp dir)" {
+    // The shape lib/std uses to test its own file I/O (cf. the std.Io writer
+    // tests): hand the real code a real Io over a throwaway directory and assert
+    // on the bytes that come back. Ours mints its own Io.Threaded instead of
+    // borrowing std.testing.io — a reminder the io is just a value you can make.
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+
+    var tmp = testing.tmpDir(.{});
+    defer tmp.cleanup();
+    chat_root = try std.fs.path.join(a, &.{ ".zig-cache", "tmp", &tmp.sub_path });
+
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var bus = Bus.init(io, a);
+
+    const dir = try dmConvDir(a, "1_2");
+    const meta = ConvMeta{ .kind = .dm, .members = &[_][]const u8{} };
+    _ = try appendMessage(io, a, &bus, meta, dir, "1_2", "topic", "Tester", "1", "hello world", "");
+
+    const msgs = try decodeChatFile(a, (try rawSession(io, a, dir, "topic")).?);
+    try testing.expectEqual(@as(usize, 1), msgs.len);
+    try testing.expectEqualStrings("Tester", msgs[0].from);
+    try testing.expectEqualStrings("hello world", msgs[0].markdown);
+}
