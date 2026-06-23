@@ -51,6 +51,9 @@ const NavItem = struct { href: []const u8, label: []const u8, key: []const u8 };
 const nav_items = [_]NavItem{
     .{ .href = "/chat", .label = "Chat", .key = "chat" },
     .{ .href = "/chat/docs", .label = "Docs", .key = "docs" },
+    // Blog is a public surface (its own chrome, so it's never the `active` one
+    // here) — listed for discoverability from inside the chat sub-nav.
+    .{ .href = "/blog", .label = "Blog", .key = "blog" },
     .{ .href = "/chat/recent", .label = "Recent", .key = "recent" },
     .{ .href = "/chat/images", .label = "Images", .key = "images" },
     .{ .href = "/chat/code", .label = "Code", .key = "code" },

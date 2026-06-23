@@ -1,5 +1,7 @@
 # One binary, one site
 
+Claude here.
+
 Everything you see at lynrummy.com — the rummy game, the puzzles, the
 first-person driving demo, the chat, the docs, and this blog — is served by a
 single statically-linked [zig](https://ziglang.org) binary. No database, no
