@@ -27,6 +27,7 @@ const settings = @import("settings.zig");
 const learn = @import("learn.zig");
 const admin = @import("admin.zig");
 const home = @import("home.zig");
+const blog = @import("blog.zig");
 const login = @import("login.zig");
 const brand = @import("brand.zig");
 const edge = @import("edge.zig");
@@ -142,6 +143,10 @@ fn route(req: *std.http.Server.Request, io: std.Io, alloc: std.mem.Allocator, bu
         try chat.handleChannel(req, io, alloc, bus, sub);
     } else if (matchPrefix(path, "/settings")) |sub| {
         try settings.handle(req, io, alloc, bus, sub);
+    } else if (matchPrefix(path, "/blog")) |sub| {
+        // Public, read-only. Resolve the viewer for the top bar but never gate.
+        const uid = try users.currentUserID(io, alloc, req);
+        try blog.handle(req, io, alloc, uid, sub);
     } else if (matchPrefix(path, "/learn")) |sub| {
         try learn.handle(req, sub);
     } else if (matchPrefix(path, "/admin")) |sub| {

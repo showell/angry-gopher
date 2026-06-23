@@ -64,7 +64,7 @@ pub fn handleVersion(req: *Request, alloc: Alloc) !void {
 fn writeTopBar(b: *std.ArrayList(u8), alloc: Alloc, name: []const u8, is_admin: bool) !void {
     try b.appendSlice(alloc,
         "<header class=\"app-top\"><div class=\"app-top-home\">" ++
-        "<a href=\"/\">Lyn Rummy</a> · <a href=\"/chat\">Chat</a></div>" ++
+        "<a href=\"/\">Lyn Rummy</a> · <a href=\"/chat\">Chat</a> · <a href=\"/blog\">Blog</a></div>" ++
         "<div class=\"app-top-user\">");
     if (name.len == 0) {
         try b.appendSlice(alloc, "<a href=\"/login\">Log in</a>");
@@ -199,5 +199,11 @@ const body_html =
     \\      <a class="play-btn" href="/driving">Take a drive →</a>
     \\    </div>
     \\  </div>
-    \\</div></div></body></html>
+    \\</div>
+    \\<div class="card" style="margin-top:8px">
+    \\  <h2><a href="/blog">Blog</a></h2>
+    \\  <p>Notes from building this site — a single zig binary, written with Claude. Read along.</p>
+    \\  <ul><li><a href="/blog">Read the blog →</a></li></ul>
+    \\</div>
+    \\</div></body></html>
 ;

@@ -15,6 +15,7 @@ const std = @import("std");
 const storage = @import("storage.zig");
 const users = @import("users.zig");
 const chat_store = @import("chat_store.zig");
+const blog = @import("blog.zig");
 
 /// load reads GOPHER_CONFIG (if set in `env`) and points storage + identity at
 /// the live tree. Strings are allocated from `alloc` (expected to be a
@@ -44,6 +45,11 @@ pub fn load(io: std.Io, alloc: std.mem.Allocator, env: std.process.Environ.Map) 
             data_dir = try expandHome(alloc, env, val);
         } else if (std.mem.eql(u8, key, "auth_dir")) {
             auth_dir = try expandHome(alloc, env, val);
+        } else if (std.mem.eql(u8, key, "blog_dir")) {
+            // Optional: where the blog posts live. The default (blog/posts,
+            // relative to cwd) already resolves both locally and on the droplet,
+            // so this is only for an unusual layout.
+            blog.blog_root = try expandHome(alloc, env, val);
         }
         // the config's port key is ignored; the server hardcodes PORT in server.zig.
     }
