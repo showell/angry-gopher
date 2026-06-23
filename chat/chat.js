@@ -16,7 +16,7 @@
      refer, edit, search, navigateRef, onSelect, finishBacklog — because
      the data lives there. Message widgets only own the bubble DOM +
      click routing + in-place supersession; their public API is just
-     {render, markEdited, getElement}. byId indexes both arrays by
+     {render, markEdited, setSaved, getElement}. byId indexes both arrays by
      message id for O(1) lookup. Server-assigned index is 0-based; the
      view index is 1-based; the two stay consistent because we always
      append in order. */
@@ -26,6 +26,21 @@
   function recordById(id){ var i=byId.get(id); return i==null ? null : records[i]; }   // lint:null-undefined-check map-get
   // lint:called-once supersession-only — named to match recordById sibling
   function widgetById(id){ var i=byId.get(id); return i==null ? null : messages[i]; }  // lint:null-undefined-check map-get
+
+  /* ===== reading-list "already saved" set =====
+     The ids saved within THIS topic (per the server's mtime-cached parse). A
+     bubble shows '✓ saved' when its id is in here. Populated once on load and
+     extended on each confirmed save; new bubbles read it at render time, already-
+     rendered ones get flipped by markSaved. Cross-tab edits to the reading list
+     aren't reflected until reload (deliberate — keeping saves sticky is fine). */
+  var savedIds = new Set();
+  function markSaved(id){ savedIds.add(id); var w=widgetById(id); if(w) w.setSaved(true); }
+  function loadSavedSet(){  // lint:called-once load-once-on-init
+    fetch(SESSION_BASE+'/saved').then(function(r){ return r.ok ? r.json() : []; })
+      .then(function(ids){ for(var i=0;i<ids.length;i++) markSaved(ids[i]); })
+      .catch(function(){});
+  }
+  loadSavedSet();
 
   /* ===== domain actions (called from Message clicks AND ChatHelp keys) =====
      PRODUCT_DECISION: doQuote/doRefer/doEdit/navigateRef call pane.focusBubble,
@@ -95,7 +110,8 @@
       headers: {'Content-Type':'application/x-www-form-urlencoded'},
       body: params.toString(),
     }).then(function(r){
-      if(r.ok) ChatNotify.show(savedStatus(rec.id));
+      /* Flip the bubble only on a CONFIRMED save — never optimistically. */
+      if(r.ok){ markSaved(rec.id); ChatNotify.show(savedStatus(rec.id)); }
       else ChatNotify.show('Save failed');
     }).catch(function(){ ChatNotify.show('Save failed'); });
   }
@@ -136,6 +152,7 @@
   pane = ChatMiddlePane.init({
     mount: document.getElementById('chat-feed'),
     renderBubble: function(idx, m){
+      m.saved = savedIds.has(m.id); /* initial indicator state, kept in sync via setSaved */
       var msg = Message.create(m, {
         onQuote:  doQuote,
         onRefer:  doRefer,

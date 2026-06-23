@@ -80,6 +80,8 @@ window.Message = (function(){
       +   ' padding:0 2px; cursor:pointer; text-decoration:underline; }'
       + '.chat-meta .msg-quote:hover, .chat-meta .msg-refer:hover, .chat-meta .msg-edit:hover, .chat-meta .msg-save:hover {'
       +   ' color:var(--cc-accent); }'
+      /* Already-in-your-reading-list: a green status (still clickable to re-save). */
+      + '.chat-meta .msg-save.saved { color:var(--cc-saved-fg); text-decoration:none; }'
       /* Timestamp is clickable → multi-zone popup. */
       + '.chat-meta .chat-time { cursor:pointer; text-decoration:underline dotted; }'
       + '.chat-meta .chat-time:hover { color:var(--cc-accent); }'
@@ -173,6 +175,17 @@ window.Message = (function(){
     var onMsgRef = deps.onMsgRef || function(){};
 
     var bubble = null;
+    var saveBtn = null;
+
+    /* The save button doubles as the "already in your reading list" indicator:
+       'save' normally, '✓ saved' (green) when this message is in the set. Stays
+       clickable either way — re-save is allowed (no dedup). chat.js flips it via
+       setSaved() once the per-topic saved-set arrives, or after a confirmed save. */
+    function applySaved(isSaved){
+      if(!saveBtn) return;
+      saveBtn.textContent = isSaved ? '✓ saved' : 'save';
+      saveBtn.classList.toggle('saved', !!isSaved);
+    }
 
     // lint:called-once dom-builder-abstraction
     function buildMeta(){
@@ -195,9 +208,10 @@ window.Message = (function(){
       edit.title='Load this message back into compose with an "Edit of MSG_…" backlink (e)'; edit.textContent='edit';
       meta.appendChild(edit);
       meta.appendChild(document.createTextNode(' '));
-      var save=document.createElement('button'); save.type='button'; save.className='msg-save';
-      save.title='Save this message to your reading list (s)'; save.textContent='save';
-      meta.appendChild(save);
+      saveBtn=document.createElement('button'); saveBtn.type='button'; saveBtn.className='msg-save';
+      saveBtn.title='Save this message to your reading list (s)';
+      meta.appendChild(saveBtn);
+      applySaved(!!data.saved); /* initial state from the record */
       return meta;
     }
     /* PRODUCT_DECISION: one listener per bubble. The walk-up classification
@@ -257,6 +271,7 @@ window.Message = (function(){
     return {
       render:     render,
       markEdited: markEdited,
+      setSaved:   applySaved,
       getElement: function(){ return bubble; },
     };
   }
