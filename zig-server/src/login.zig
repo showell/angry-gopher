@@ -253,8 +253,10 @@ fn publishUserArrived(io: Io, alloc: Alloc, bus: *Bus, new_uid: []const u8, new_
 
 // ── cookies + response helpers ────────────────────────────────────────────────
 
-/// uidCookie is the long-lived identity cookie (the user id).
-fn uidCookie(alloc: Alloc, id: []const u8) ![]const u8 {
+/// uidCookie is the long-lived identity cookie (the user id). Public so the blog
+/// comment path can mint a name-only guest inline (the same guest issuance this
+/// file does at /login) and set its identity cookie on the redirect back.
+pub fn uidCookie(alloc: Alloc, id: []const u8) ![]const u8 {
     return std.fmt.allocPrint(alloc, "gopher_uid={s}; Path=/; Max-Age={d}; HttpOnly; SameSite=Lax", .{ id, uid_max_age });
 }
 

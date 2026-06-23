@@ -182,9 +182,14 @@ pub fn appendMessage(io: Io, alloc: Alloc, bus: *Bus, meta: ConvMeta, conv_dir: 
     return msg;
 }
 
-/// ConvKind discriminates the two conversation shapes for the fanout (DM "where"
-/// names the other party; channel "where" names the channel).
-pub const ConvKind = enum { dm, channel };
+/// ConvKind discriminates the conversation shapes for the fanout (DM "where"
+/// names the other party; channel "where" names the channel). `blog_comment` is a
+/// public, MEMBERLESS thread: because the cross-page fanout is keyed
+/// `for (members)`, an empty member list means a comment never reaches anyone's
+/// private notify/Recent/Images/Code feeds — the kind isn't tested on that path,
+/// it just rides the empty loop. It exists so a comment Conv tells the truth
+/// rather than masquerading as a `.dm`.
+pub const ConvKind = enum { dm, channel, blog_comment };
 
 /// ConvMeta carries what the cross-page fanout needs that the storage path
 /// doesn't otherwise know: the conv kind and its member uids (recipients).
@@ -418,6 +423,13 @@ pub fn dmConvDir(alloc: Alloc, conv: []const u8) ![]u8 {
 /// channelConvDir is {chat_root}/channels/<name>.
 pub fn channelConvDir(alloc: Alloc, name: []const u8) ![]u8 {
     return std.fs.path.join(alloc, &.{ chat_root, "channels", name });
+}
+
+/// blogCommentDir is {chat_root}/blog-comments/<slug> — the comment thread for a
+/// blog post. `slug` is always a blog.zig-enumerated post slug ([a-z0-9-]), so it
+/// carries no traversal and never names a thread for a post that doesn't exist.
+pub fn blogCommentDir(alloc: Alloc, slug: []const u8) ![]u8 {
+    return std.fs.path.join(alloc, &.{ chat_root, "blog-comments", slug });
 }
 
 /// sessionMdPath is {conv_dir}/sessions/<sid>.md.

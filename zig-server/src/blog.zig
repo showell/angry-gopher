@@ -21,6 +21,8 @@ const http = @import("http.zig");
 const users = @import("users.zig");
 const markdown = @import("markdown.zig");
 const html = @import("html.zig");
+const comments = @import("comments.zig");
+const Bus = @import("bus.zig").Bus;
 
 const Alloc = std.mem.Allocator;
 const Request = std.http.Server.Request;
@@ -41,18 +43,32 @@ const PostMeta = struct {
     title: []const u8, // first "# " line, or the prettified slug as a fallback
 };
 
-/// handle serves /blog (index) and /blog/<slug> (one post). `uid` is the resolved
-/// viewer ("" for anon) — used only for the top bar; reading never gates.
-pub fn handle(req: *Request, io: Io, alloc: Alloc, uid: []const u8, rest: []const u8) !void {
+/// handle serves /blog (index), /blog/<slug> (one post + its comments), and
+/// POST /blog/<slug>/comment (add a comment). `uid` is the resolved viewer ("" for
+/// anon) — used for the top bar and the comment form; reading never gates.
+pub fn handle(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8, rest: []const u8) !void {
     const name = if (uid.len == 0) "" else try users.getUserName(io, alloc, uid);
 
     if (rest.len == 0 or std.mem.eql(u8, rest, "/")) {
         return renderIndex(req, io, alloc, name);
     }
-    // /blog/<slug> — strip the leading '/'. A trailing slash or sub-path 404s.
-    const slug = rest[1..];
-    if (slug.len == 0 or std.mem.indexOfScalar(u8, slug, '/') != null) return http.notFound(req);
-    return renderPost(req, io, alloc, name, slug);
+    // /blog/<slug>[/<tail>] — split the first path segment as the slug.
+    const after = rest[1..];
+    const slash = std.mem.indexOfScalar(u8, after, '/');
+    const slug = if (slash) |s| after[0..s] else after;
+    const tail = if (slash) |s| after[s..] else "";
+    if (slug.len == 0 or !isSlug(slug)) return http.notFound(req);
+
+    // The slug must name a real (enumerated) post — no traversal, and no comment
+    // thread for a post that doesn't exist.
+    const metas = try listPosts(io, alloc);
+    const meta = for (metas) |m| {
+        if (std.mem.eql(u8, m.slug, slug)) break m;
+    } else return http.notFound(req);
+
+    if (tail.len == 0) return renderPost(req, io, alloc, name, meta);
+    if (std.mem.eql(u8, tail, "/comment")) return comments.handlePost(req, io, alloc, bus, meta.slug);
+    return http.notFound(req);
 }
 
 /// renderIndex lists every post, newest first (filename desc), as title + date.
@@ -78,14 +94,10 @@ fn renderIndex(req: *Request, io: Io, alloc: Alloc, name: []const u8) !void {
     try req.respond(b.items, .{ .extra_headers = &.{http.html_ct} });
 }
 
-/// renderPost serves one post by slug. The body renders whole (its own H1 is the
-/// on-page title); a date line sits above it. Unknown slug → 404.
-fn renderPost(req: *Request, io: Io, alloc: Alloc, name: []const u8, slug: []const u8) !void {
-    const metas = try listPosts(io, alloc);
-    const meta = for (metas) |m| {
-        if (std.mem.eql(u8, m.slug, slug)) break m;
-    } else return http.notFound(req);
-
+/// renderPost serves one post (its meta already resolved by handle). The body
+/// renders whole (its own H1 is the on-page title); a date line sits above it, and
+/// the comments thread + form below.
+fn renderPost(req: *Request, io: Io, alloc: Alloc, name: []const u8, meta: PostMeta) !void {
     const path = try std.fs.path.join(alloc, &.{ blog_root, meta.file });
     const src = Io.Dir.cwd().readFileAlloc(io, path, alloc, .unlimited) catch return http.notFound(req);
 
@@ -93,7 +105,9 @@ fn renderPost(req: *Request, io: Io, alloc: Alloc, name: []const u8, slug: []con
     try begin(&b, alloc, meta.title, name);
     try b.appendSlice(alloc, "<p class=\"back\"><a href=\"/blog\">← Blog</a></p>");
     try b.print(alloc, "<p class=\"post-date\">{s}</p>", .{meta.date});
+    // Server-owned post body: the trusted (uncapped) render.
     try b.appendSlice(alloc, try markdown.renderTrusted(alloc, src));
+    try comments.renderThread(&b, io, alloc, meta.slug, name);
     try end(&b, alloc);
     try req.respond(b.items, .{ .extra_headers = &.{http.html_ct} });
 }
@@ -239,6 +253,22 @@ const head_b =
     \\ul.post-list a { color: #000080; text-decoration: none; font-weight: bold; font-size: 17px; }
     \\ul.post-list a:hover { text-decoration: underline; }
     \\ul.post-list .post-date { margin: 0; white-space: nowrap; }
+    \\.comments { margin-top: 3rem; border-top: 1px solid #ddd; padding-top: 1.4rem; }
+    \\.comments h2 { color: #000080; font-size: 18px; margin: 0 0 1rem; }
+    \\.comment { padding: 12px 0; border-bottom: 1px solid #eee; }
+    \\.comment-head { font-size: 14px; }
+    \\.comment-date { color: #888; font-size: 12px; margin-left: 8px; }
+    \\.comment-body { margin-top: 4px; }
+    \\.comment-body p { margin: 0.4rem 0; }
+    \\.comment-form { margin-top: 1.6rem; display: flex; flex-direction: column; gap: 8px;
+    \\               align-items: flex-start; }
+    \\.comment-form .comment-name { font-size: 15px; padding: 7px; width: 100%; max-width: 280px;
+    \\                              box-sizing: border-box; }
+    \\.comment-form .comment-text { font-size: 15px; padding: 8px; width: 100%; box-sizing: border-box;
+    \\                              font-family: inherit; }
+    \\.comment-form button { background: #000080; color: white; border: none; padding: 9px 18px;
+    \\                       font-size: 14px; border-radius: 4px; cursor: pointer; }
+    \\.comment-form button:hover { background: #0000a0; }
     \\</style>
     \\</head><body>
     \\

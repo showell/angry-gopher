@@ -144,9 +144,10 @@ fn route(req: *std.http.Server.Request, io: std.Io, alloc: std.mem.Allocator, bu
     } else if (matchPrefix(path, "/settings")) |sub| {
         try settings.handle(req, io, alloc, bus, sub);
     } else if (matchPrefix(path, "/blog")) |sub| {
-        // Public, read-only. Resolve the viewer for the top bar but never gate.
+        // Public. Reading never gates; posting a comment mints a guest if needed.
+        // Resolve the viewer (for the top bar + comment attribution) but never gate.
         const uid = try users.currentUserID(io, alloc, req);
-        try blog.handle(req, io, alloc, uid, sub);
+        try blog.handle(req, io, alloc, bus, uid, sub);
     } else if (matchPrefix(path, "/learn")) |sub| {
         try learn.handle(req, sub);
     } else if (matchPrefix(path, "/admin")) |sub| {
