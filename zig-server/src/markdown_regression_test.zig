@@ -17,8 +17,8 @@ const markdown = @import("markdown.zig");
 //                      vanilla CommonMark: inline markup is PER-LINE, so `**`,
 //                      backticks, and `[...]` never pair across a hard wrap.
 //
-// Verify:       cd zig-server && zig run src/main.zig
-// Re-baseline:  cd zig-server && zig run src/main.zig -- --rebaseline
+// Verify:       cd zig-server && zig run src/markdown_regression_test.zig
+// Re-baseline:  cd zig-server && zig run src/markdown_regression_test.zig -- --rebaseline
 const GOLD_PATH = "/home/steve/showell_repos/gopher-gold/gold.jsonl";
 const ADVERSARIAL_PATH = "adversarial.jsonl";
 const DIALECT_PATH = "dialect.jsonl";

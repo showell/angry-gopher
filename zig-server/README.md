@@ -45,7 +45,7 @@ std.Io thread pool, so requests are served concurrently.
 ## Markdown dialect regression harness
 
 The zig renderer (`src/markdown.zig`) **is** the definition of lynrummy's
-markdown dialect. `src/main.zig` is its regression harness: it renders every
+markdown dialect. `src/markdown_regression_test.zig` is its regression harness: it renders every
 frozen `{id, md, html}` case (arena reset per message) and asserts the output
 still equals the baseline. There is **no external oracle** — `html` is whatever
 our renderer produces, frozen and human-reviewed. Three corpora:

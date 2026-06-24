@@ -11,7 +11,8 @@
 //!   markdown_links  — the MSG_-reference + external-link post-pass over the HTML
 //!
 //! markdown.zig (this file) IS the dialect's source of truth; the gold corpus in
-//! main.zig freezes render()'s output so nothing here can silently regress.
+//! markdown_regression_test.zig freezes render()'s output so nothing here can
+//! silently regress.
 
 const std = @import("std");
 const fence = @import("markdown_fence.zig");
@@ -30,7 +31,8 @@ const isAsciiAlpha = mtext.isAsciiAlpha;
 /// definition of — lynrummy's markdown dialect: GFM-style paragraphs with hard
 /// wraps, then escape-but-img, then the MSG_ reference linkifier. (The dialect's
 /// ancestry is goldmark/CommonMark, but there is no external oracle: the gold
-/// corpus in main.zig freezes THIS function's output so it can't regress.)
+/// corpus in markdown_regression_test.zig freezes THIS function's output so it
+/// can't regress.)
 /// Currently: paragraphs (hard wraps + escaping), raw HTML (escape everything
 /// but a same-origin <img>, block and inline), and the MSG_ reference linkifier.
 ///

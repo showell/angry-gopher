@@ -16,4 +16,4 @@
 set -e
 REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$REPO_DIR/zig-server"
-zig run src/main.zig
+zig run src/markdown_regression_test.zig
