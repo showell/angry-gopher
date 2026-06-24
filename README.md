@@ -68,7 +68,7 @@ line) is ignored; the listen port is hardcoded to `:9001` in
 `zig-server/src/server.zig`.
 
 ```
-data_dir = /home/steve/AngryGopher/prod   # all writable state lives here
+data_dir = /home/steve/AngryGopher/local  # all writable state lives here
 auth_dir = /home/steve/Auth               # account store; defaults to ~/Auth
 ```
 

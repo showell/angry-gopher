@@ -26,7 +26,7 @@ data_dir (all writable state) and auth_dir (the account store). Create it:
 
     mkdir -p "$(dirname "$GOPHER_CONFIG")"
     cat > "$GOPHER_CONFIG" <<'CONF'
-    data_dir = ~/AngryGopher/prod
+    data_dir = ~/AngryGopher/local
     auth_dir = ~/Auth
     CONF
 
