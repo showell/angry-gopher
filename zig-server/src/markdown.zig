@@ -44,7 +44,7 @@ const isAsciiAlpha = mtext.isAsciiAlpha;
 /// POST loudly; this guard covers every other render path (backlog, preview).
 pub fn render(a: std.mem.Allocator, md: []const u8) ![]const u8 {
     if (hostileReason(md) != null) return a.dupe(u8, malformed_html);
-    const body = try renderBlocks(a, md);
+    const body = try renderBlocks(a, md, false);
     return try mlinks.linkifyMsgRefs(a, body);
 }
 
@@ -55,7 +55,19 @@ pub fn render(a: std.mem.Allocator, md: []const u8) ![]const u8 {
 /// (block-nesting depth) and HTML escaping still apply. NEVER call this on input
 /// that came from a request body.
 pub fn renderTrusted(a: std.mem.Allocator, md: []const u8) ![]const u8 {
-    const body = try renderBlocks(a, md);
+    const body = try renderBlocks(a, md, false);
+    return try mlinks.linkifyMsgRefs(a, body);
+}
+
+/// renderTrustedReflow is renderTrusted for PROSE (blog articles): paragraphs
+/// reflow to the reader's viewport. A source line wrap joins with a single space
+/// rather than a hard `<br>`, so an inline span (emphasis, code, link) can cross
+/// an author's line wrap, and the text rewraps to the reader's width. The
+/// hard-wrap dialect — every newline a `<br>` — stays the default for chat/docs,
+/// where a line break is content; reflow is only for server-owned long-form
+/// writing. Same trusted (uncapped) pipeline as renderTrusted otherwise.
+pub fn renderTrustedReflow(a: std.mem.Allocator, md: []const u8) ![]const u8 {
+    const body = try renderBlocks(a, md, true);
     return try mlinks.linkifyMsgRefs(a, body);
 }
 
@@ -110,9 +122,9 @@ pub fn hostileReason(md: []const u8) ?[]const u8 {
 
 // --- block rendering --------------------------------------------------------
 
-fn renderBlocks(a: std.mem.Allocator, md: []const u8) ![]const u8 {
+fn renderBlocks(a: std.mem.Allocator, md: []const u8, soft_wrap: bool) ![]const u8 {
     var out: std.ArrayList(u8) = .empty;
-    try renderBlocksInto(&out, a, md, false, 0);
+    try renderBlocksInto(&out, a, md, false, 0, soft_wrap);
     return out.toOwnedSlice(a);
 }
 
@@ -133,7 +145,7 @@ const max_block_depth = 16;
 /// trailing newline of its own. `depth` is the block-nesting level (see
 /// max_block_depth) — past the cap, the remaining source renders as one escaped
 /// paragraph with no further block recursion.
-fn renderBlocksInto(out: *std.ArrayList(u8), a: std.mem.Allocator, md: []const u8, tight: bool, depth: usize) std.mem.Allocator.Error!void {
+fn renderBlocksInto(out: *std.ArrayList(u8), a: std.mem.Allocator, md: []const u8, tight: bool, depth: usize, soft_wrap: bool) std.mem.Allocator.Error!void {
     if (depth > max_block_depth) {
         if (out.items.len > 0 and out.items[out.items.len - 1] != '\n') try out.append(a, '\n');
         try out.appendSlice(a, "<p>");
@@ -175,14 +187,14 @@ fn renderBlocksInto(out: *std.ArrayList(u8), a: std.mem.Allocator, md: []const u
         // non-empty, so it's checked before the paragraph branch.
         if (listMarkerAt(md, pos)) |lm| {
             try tightSep(out, a, tight);
-            pos = try renderList(out, a, md, pos, lm, depth);
+            pos = try renderList(out, a, md, pos, lm, depth, soft_wrap);
             continue;
         }
 
         // A blockquote (also interrupts a paragraph).
         if (quoteMarkerLen(line) != null) {
             try tightSep(out, a, tight);
-            pos = try renderQuote(out, a, md, pos, depth);
+            pos = try renderQuote(out, a, md, pos, depth, soft_wrap);
             continue;
         }
 
@@ -210,6 +222,7 @@ fn renderBlocksInto(out: *std.ArrayList(u8), a: std.mem.Allocator, md: []const u
         if (!tight) try out.appendSlice(a, "<p>");
         var p = pos;
         var first = true;
+        var reflow: std.ArrayList(u8) = .empty; // accumulates the joined paragraph (soft_wrap only)
         while (p < md.len) {
             const e2 = lineEnd(md, p);
             const l2 = md[p..e2];
@@ -218,11 +231,23 @@ fn renderBlocksInto(out: *std.ArrayList(u8), a: std.mem.Allocator, md: []const u
             if (atxHeading(l2) != null) break;
             if (listInterruptsAt(md, p)) break;
             if (quoteMarkerLen(l2) != null) break;
-            if (!first) try out.appendSlice(a, "<br>\n");
+            if (soft_wrap) {
+                // Reflow: wrapped source lines join with one space and the whole
+                // paragraph goes to the inline pass once (below), so an inline
+                // span can cross an author's line wrap and the text rewraps to
+                // the reader's width.
+                if (!first) try reflow.append(a, ' ');
+                try reflow.appendSlice(a, trimLine(l2));
+            } else {
+                // Hard-wrap dialect: each source line is its own line, joined by
+                // a <br>, and rendered inline on its own.
+                if (!first) try out.appendSlice(a, "<br>\n");
+                try minline.renderInline(out, a, trimLine(l2));
+            }
             first = false;
-            try minline.renderInline(out, a, trimLine(l2));
             p = if (e2 < md.len) e2 + 1 else md.len;
         }
+        if (soft_wrap) try minline.renderInline(out, a, reflow.items);
         if (!tight) try out.appendSlice(a, "</p>\n");
         pos = p;
     }
@@ -429,7 +454,7 @@ fn leadingSpaces(line: []const u8) usize {
 /// renderList consumes a whole list beginning at md[pos] (with first marker m0)
 /// and returns the position just past it. Items are collected as dedented
 /// content blocks and rendered recursively; tight/loose controls <p> wrapping.
-fn renderList(out: *std.ArrayList(u8), a: std.mem.Allocator, md: []const u8, pos: usize, m0: ListMarker, depth: usize) std.mem.Allocator.Error!usize {
+fn renderList(out: *std.ArrayList(u8), a: std.mem.Allocator, md: []const u8, pos: usize, m0: ListMarker, depth: usize, soft_wrap: bool) std.mem.Allocator.Error!usize {
     var items: std.ArrayList([]const u8) = .empty;
     var loose = false;
 
@@ -502,12 +527,12 @@ fn renderList(out: *std.ArrayList(u8), a: std.mem.Allocator, md: []const u8, pos
         var inner: std.ArrayList(u8) = .empty;
         if (loose) {
             try inner.append(a, '\n');
-            try renderBlocksInto(&inner, a, item, false, depth + 1);
+            try renderBlocksInto(&inner, a, item, false, depth + 1, soft_wrap);
         } else {
             // we write a newline after a tight <li> iff its first child is not a
             // text paragraph (it's a nested list/quote/fence/heading).
             if (firstItemChildIsBlock(item)) try inner.append(a, '\n');
-            try renderBlocksInto(&inner, a, item, true, depth + 1);
+            try renderBlocksInto(&inner, a, item, true, depth + 1, soft_wrap);
         }
         try out.appendSlice(a, "<li>");
         try out.appendSlice(a, inner.items);
@@ -568,7 +593,7 @@ fn quoteMarkerLen(line: []const u8) ?usize {
 /// renderQuote consumes a blockquote beginning at md[pos] and returns the
 /// position just past it. '>'-prefixed lines (and lazy paragraph-continuation
 /// lines, until a blank line) are stripped and rendered recursively.
-fn renderQuote(out: *std.ArrayList(u8), a: std.mem.Allocator, md: []const u8, pos: usize, depth: usize) std.mem.Allocator.Error!usize {
+fn renderQuote(out: *std.ArrayList(u8), a: std.mem.Allocator, md: []const u8, pos: usize, depth: usize, soft_wrap: bool) std.mem.Allocator.Error!usize {
     var inner: std.ArrayList(u8) = .empty;
     var p = pos;
     var last_was_text = false;
@@ -592,7 +617,7 @@ fn renderQuote(out: *std.ArrayList(u8), a: std.mem.Allocator, md: []const u8, po
     }
 
     try out.appendSlice(a, "<blockquote>\n");
-    try renderBlocksInto(out, a, inner.items, false, depth + 1);
+    try renderBlocksInto(out, a, inner.items, false, depth + 1, soft_wrap);
     try out.appendSlice(a, "</blockquote>\n");
     return p;
 }
@@ -692,4 +717,23 @@ test "render: a cross-origin or unclosed <video> is escaped, not embedded" {
     try testing.expect(std.mem.indexOf(u8, off, "&lt;video") != null);
     const unclosed = try render(arena.allocator(), "<video src=\"/u/x.mp4\">"); // no </video>
     try testing.expect(std.mem.indexOf(u8, unclosed, "<video") == null);
+}
+
+test "renderTrustedReflow: an inline span crosses a source wrap; prose reflows (no <br>)" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const html = try renderTrustedReflow(arena.allocator(), "A **bold phrase that\nspans two lines** here.");
+    // The wrap joins with a space, so the emphasis run closes and the text reflows.
+    try testing.expect(std.mem.indexOf(u8, html, "<strong>bold phrase that spans two lines</strong>") != null);
+    try testing.expect(std.mem.indexOf(u8, html, "<br>") == null);
+    try testing.expect(std.mem.indexOf(u8, html, "**") == null);
+}
+
+test "renderTrusted (hard-wrap dialect): a source wrap stays a <br>, inline is line-scoped" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const html = try renderTrusted(arena.allocator(), "A **bold phrase that\nspans two lines** here.");
+    // Chat/docs contract: every newline is a hard break and a span can't cross it.
+    try testing.expect(std.mem.indexOf(u8, html, "<br>") != null);
+    try testing.expect(std.mem.indexOf(u8, html, "<strong>") == null);
 }

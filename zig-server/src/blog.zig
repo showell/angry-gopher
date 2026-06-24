@@ -106,7 +106,7 @@ fn renderPost(req: *Request, io: Io, alloc: Alloc, name: []const u8, meta: PostM
     try b.appendSlice(alloc, "<p class=\"back\"><a href=\"/blog\">← Blog</a></p>");
     try b.print(alloc, "<p class=\"post-date\">{s}</p>", .{meta.date});
     // Server-owned post body: the trusted (uncapped) render.
-    try b.appendSlice(alloc, try markdown.renderTrusted(alloc, src));
+    try b.appendSlice(alloc, try markdown.renderTrustedReflow(alloc, src));
     try comments.renderThread(&b, io, alloc, meta.slug, name);
     try end(&b, alloc);
     try req.respond(b.items, .{ .extra_headers = &.{http.html_ct} });
@@ -244,6 +244,10 @@ const head_b =
     \\.blog-wrap h1 { color: #000080; }
     \\.blog-wrap h2 { color: #000080; margin-top: 1.8rem; }
     \\.blog-wrap a { color: #000080; }
+    \\.blog-wrap pre { background: #f6f4ee; border: 1px solid #c9bfa7; border-radius: 6px;
+    \\                 padding: 12px 14px; overflow-x: auto; line-height: 1.45; font-size: 0.88em; }
+    \\.blog-wrap pre code { background: none; padding: 0; font-size: inherit; }
+    \\.blog-wrap code { background: #f0ede4; padding: 1px 5px; border-radius: 3px; font-size: 0.92em; }
     \\.muted { color: #888; }
     \\.back a { font-size: 13px; text-decoration: none; }
     \\.post-date { color: #888; font-size: 13px; margin: 0 0 1.4rem; }
