@@ -11,13 +11,23 @@ const Io = std.Io;
 // slowest individual messages — the starting point for hunting renderer
 // weaknesses.
 //
-// Run: cd zig-server && zig run src/markdown_bench.zig
+// Locally:   cd zig-server && zig run src/markdown_bench.zig
+// On a host without a toolchain (the droplet): compile a static binary down
+// here and ship it, exactly like the main server —
+//   cd zig-server && zig build-exe src/markdown_bench.zig -femit-bin=markdown_bench
+//   rsync markdown_bench steve@<droplet>:/tmp/ && ssh steve@<droplet> /tmp/markdown_bench
 //
-// CHAT_DIR points at an EXPANDED prod backup (the transcripts embed real user
-// messages, so they live outside the repo, like gold.jsonl). Re-point after
-// expanding a fresh tarball:
-//   mkdir -p /tmp/prod-backup && tar -xzf <backup>.tar.gz -C /tmp/prod-backup
-const CHAT_DIR = "/tmp/prod-backup/prod/chat";
+// The corpus root differs by machine, so instead of a runtime flag (a knob a
+// benchmark shouldn't have) we bake a fixed search list and use the FIRST that
+// exists — the chosen root is printed, so the run is self-describing. The
+// transcripts embed real user messages (like gold.jsonl), so every candidate
+// lives outside the repo. To bench a fresh backup locally, expand it under the
+// last entry: mkdir -p /tmp/prod-backup && tar -xzf <backup>.tar.gz -C /tmp/prod-backup
+const CHAT_DIR_CANDIDATES = [_][]const u8{
+    "/home/steve/AngryGopher/prod/chat", // droplet prod data_dir/chat
+    "/home/steve/AngryGopher/local/chat", // local dev data_dir/chat
+    "/tmp/prod-backup/prod/chat", // a locally-expanded prod backup tarball
+};
 
 // Each message is timed in BATCHES batches of BATCH_RENDERS renders. One
 // monotonic-clock pair brackets a whole batch (so the clock-read overhead is
@@ -60,6 +70,17 @@ fn slowestFirst(_: void, a: Record, b: Record) bool {
     return a.ns > b.ns;
 }
 
+/// resolveChatDir returns the first candidate root that exists as a directory,
+/// or null when none do (so the caller can crash loud rather than bench nothing).
+fn resolveChatDir(io: Io) ?[]const u8 {
+    for (CHAT_DIR_CANDIDATES) |cand| {
+        var dir = Io.Dir.cwd().openDir(io, cand, .{ .iterate = true }) catch continue;
+        dir.close(io);
+        return cand;
+    }
+    return null;
+}
+
 pub fn main(init: std.process.Init.Minimal) !void {
     _ = init;
     const alloc = std.heap.page_allocator;
@@ -71,10 +92,17 @@ pub fn main(init: std.process.Init.Minimal) !void {
     var render_arena = std.heap.ArenaAllocator.init(alloc);
     defer render_arena.deinit();
 
+    const chat_dir = resolveChatDir(io) orelse {
+        std.debug.print("no corpus root found — tried:\n", .{});
+        for (CHAT_DIR_CANDIDATES) |c| std.debug.print("  {s}\n", .{c});
+        std.process.exit(1);
+    };
+    std.debug.print("corpus root: {s}\n", .{chat_dir});
+
     var files: std.ArrayList([]const u8) = .empty;
-    try collectMd(io, alloc, CHAT_DIR, &files);
+    try collectMd(io, alloc, chat_dir, &files);
     if (files.items.len == 0) {
-        std.debug.print("no transcripts under {s} — expand a backup there first\n", .{CHAT_DIR});
+        std.debug.print("no transcripts under {s} — expand a backup there first\n", .{chat_dir});
         std.process.exit(1);
     }
 
