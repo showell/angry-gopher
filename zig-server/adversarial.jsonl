@@ -22,3 +22,8 @@
 {"id":"bq/multiline","md":"> line one\n> line two","html":"<blockquote>\n<p>line one<br>\nline two</p>\n</blockquote>\n"}
 {"id":"bq/lazy","md":"> line one\nstill quoted","html":"<blockquote>\n<p>line one<br>\nstill quoted</p>\n</blockquote>\n"}
 {"id":"bq/emphasis","md":"> a **bold** quote","html":"<blockquote>\n<p>a <strong>bold</strong> quote</p>\n</blockquote>\n"}
+{"id":"msgref/in-link-label","md":"[MSG_x_1](url)","html":"<p><a href=\"url\">MSG_x_1</a></p>\n"}
+{"id":"msgref/in-code-span","md":"`MSG_x_1`","html":"<p><code>MSG_x_1</code></p>\n"}
+{"id":"msgref/in-emphasis","md":"**MSG_x_1**","html":"<p><strong><a href=\"#msg-x_1\" class=\"msg-ref\">MSG_x_1</a></strong></p>\n"}
+{"id":"msgref/intraword-no-link","md":"seeMSG_x_1 here","html":"<p>seeMSG_x_1 here</p>\n"}
+{"id":"msgref/external-link-newtab","md":"[site](https://example.com)","html":"<p><a href=\"https://example.com\" target=\"_blank\" rel=\"noopener\">site</a></p>\n"}

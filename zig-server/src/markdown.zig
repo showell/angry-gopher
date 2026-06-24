@@ -7,8 +7,10 @@
 //!   markdown_text   — escaping + char-class predicates (pure leaf; everyone uses it)
 //!   markdown_fence  — the fenced-code grammar (line-based predicates)
 //!   markdown_media  — the locked same-origin <img>/<video> rebuilder (safety + dims)
-//!   markdown_inline — the inline pass (emphasis, code spans, links, autolinks)
-//!   markdown_links  — the MSG_-reference + external-link post-pass over the HTML
+//!   markdown_inline — the inline pass (emphasis, code spans, links, autolinks),
+//!                     which also emits MSG_ refs + external-link attrs inline
+//!   markdown_links  — the MSG_-reference + external-link RULES (helpers the
+//!                     inline pass calls at emit time; no longer a post-pass)
 //!
 //! markdown.zig (this file) IS the dialect's source of truth; the gold corpus in
 //! markdown_regression_test.zig freezes render()'s output so nothing here can
@@ -19,7 +21,6 @@ const fence = @import("markdown_fence.zig");
 const mtext = @import("markdown_text.zig");
 const mmedia = @import("markdown_media.zig");
 const minline = @import("markdown_inline.zig");
-const mlinks = @import("markdown_links.zig");
 
 // Shared text primitives live in the markdown_text leaf; alias the few the block
 // layer still uses so the renderer bodies read unqualified.
@@ -29,12 +30,13 @@ const isAsciiAlpha = mtext.isAsciiAlpha;
 
 /// render turns a raw chat message body into HTML. It implements — and IS the
 /// definition of — lynrummy's markdown dialect: GFM-style paragraphs with hard
-/// wraps, then escape-but-img, then the MSG_ reference linkifier. (The dialect's
+/// wraps, escape-but-img, and MSG_ reference links emitted inline. (The dialect's
 /// ancestry is goldmark/CommonMark, but there is no external oracle: the gold
 /// corpus in markdown_regression_test.zig freezes THIS function's output so it
 /// can't regress.)
 /// Currently: paragraphs (hard wraps + escaping), raw HTML (escape everything
-/// but a same-origin <img>, block and inline), and the MSG_ reference linkifier.
+/// but a same-origin <img>, block and inline), and MSG_ reference links + the
+/// external-link new-tab rule, both produced by the inline pass at emit time.
 ///
 /// Caller owns the returned slice; pass an arena and reset it per message.
 ///
@@ -46,8 +48,7 @@ const isAsciiAlpha = mtext.isAsciiAlpha;
 /// POST loudly; this guard covers every other render path (backlog, preview).
 pub fn render(a: std.mem.Allocator, md: []const u8) ![]const u8 {
     if (hostileReason(md) != null) return a.dupe(u8, malformed_html);
-    const body = try renderBlocks(a, md, false);
-    return try mlinks.linkifyMsgRefs(a, body);
+    return try renderBlocks(a, md, false);
 }
 
 /// renderTrusted is render() for SERVER-OWNED content (not user-submitted): the
@@ -57,8 +58,7 @@ pub fn render(a: std.mem.Allocator, md: []const u8) ![]const u8 {
 /// (block-nesting depth) and HTML escaping still apply. NEVER call this on input
 /// that came from a request body.
 pub fn renderTrusted(a: std.mem.Allocator, md: []const u8) ![]const u8 {
-    const body = try renderBlocks(a, md, false);
-    return try mlinks.linkifyMsgRefs(a, body);
+    return try renderBlocks(a, md, false);
 }
 
 /// renderTrustedReflow is renderTrusted for PROSE (blog articles): paragraphs
@@ -69,8 +69,7 @@ pub fn renderTrusted(a: std.mem.Allocator, md: []const u8) ![]const u8 {
 /// where a line break is content; reflow is only for server-owned long-form
 /// writing. Same trusted (uncapped) pipeline as renderTrusted otherwise.
 pub fn renderTrustedReflow(a: std.mem.Allocator, md: []const u8) ![]const u8 {
-    const body = try renderBlocks(a, md, true);
-    return try mlinks.linkifyMsgRefs(a, body);
+    return try renderBlocks(a, md, true);
 }
 
 /// malformed_html is what a rejected (hostile / over-formatted) message renders
@@ -151,7 +150,7 @@ fn renderBlocksInto(out: *std.ArrayList(u8), a: std.mem.Allocator, md: []const u
     if (depth > max_block_depth) {
         if (out.items.len > 0 and out.items[out.items.len - 1] != '\n') try out.append(a, '\n');
         try out.appendSlice(a, "<p>");
-        try minline.renderInline(out, a, md);
+        try minline.renderInline(out, a, md, true);
         try out.appendSlice(a, "</p>\n");
         return;
     }
@@ -178,7 +177,7 @@ fn renderBlocksInto(out: *std.ArrayList(u8), a: std.mem.Allocator, md: []const u
             try tightSep(out, a, tight);
             const d: u8 = '0' + @as(u8, @intCast(h.level));
             try out.appendSlice(a, &[_]u8{ '<', 'h', d, '>' });
-            try minline.renderInline(out, a, h.content);
+            try minline.renderInline(out, a, h.content, true);
             try out.appendSlice(a, &[_]u8{ '<', '/', 'h', d, '>', '\n' });
             pos = next;
             continue;
@@ -244,12 +243,12 @@ fn renderBlocksInto(out: *std.ArrayList(u8), a: std.mem.Allocator, md: []const u
                 // Hard-wrap dialect: each source line is its own line, joined by
                 // a <br>, and rendered inline on its own.
                 if (!first) try out.appendSlice(a, "<br>\n");
-                try minline.renderInline(out, a, trimLine(l2));
+                try minline.renderInline(out, a, trimLine(l2), true);
             }
             first = false;
             p = if (e2 < md.len) e2 + 1 else md.len;
         }
-        if (soft_wrap) try minline.renderInline(out, a, reflow.items);
+        if (soft_wrap) try minline.renderInline(out, a, reflow.items, true);
         if (!tight) try out.appendSlice(a, "</p>\n");
         pos = p;
     }

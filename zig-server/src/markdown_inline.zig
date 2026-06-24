@@ -10,12 +10,14 @@
 //!
 //! A leaf: the block renderer calls renderInline, and renderInline calls the
 //! media rebuilder for an inline <img>/<video>; it never calls back into block
-//! rendering. external-link target="_blank" is added later by the
-//! markdown.linkifyMsgRefs post-pass.
+//! rendering. MSG_ reference links and external-link target="_blank" are emitted
+//! HERE, at the point each text run / link is produced (markdown_links holds the
+//! rules) — no separate post-pass re-scans the finished HTML.
 
 const std = @import("std");
 const mtext = @import("markdown_text.zig");
 const mmedia = @import("markdown_media.zig");
+const mlinks = @import("markdown_links.zig");
 
 // Leaf text helpers (see markdown_text); aliased so the bodies read unqualified.
 const escapeInto = mtext.escapeInto;
@@ -110,9 +112,16 @@ const Inline = struct {
 
 /// renderInline renders one line of inline content: escapes plain text and
 /// recognizes inline <img>, code spans, markdown links [t](u), GFM bare-URL/
-/// email autolinks, and `*`/`_`/`**` emphasis. target="_blank" on external
-/// links is added by the linkifyMsgRefs post-pass.
-pub fn renderInline(out: *std.ArrayList(u8), a: std.mem.Allocator, text: []const u8) std.mem.Allocator.Error!void {
+/// email autolinks, and `*`/`_`/`**` emphasis. MSG_ reference links and external
+/// `target="_blank"` are emitted inline as text runs / links are produced.
+///
+/// `linkify` gates MSG_ expansion of plain-text runs. It's true for ordinary
+/// content and false when rendering a markdown-link LABEL — a label is already
+/// inside an <a>, so expanding a MSG_ ref there would nest anchors. (The old
+/// post-pass got this for free by skipping <a> interiors; here it's an explicit
+/// argument, which is the honest version of that skip.) Emphasis and autolinks
+/// still run in labels, exactly as before.
+pub fn renderInline(out: *std.ArrayList(u8), a: std.mem.Allocator, text: []const u8, linkify: bool) std.mem.Allocator.Error!void {
     var inl = Inline{};
 
     var run_start: usize = 0;
@@ -128,7 +137,18 @@ pub fn renderInline(out: *std.ArrayList(u8), a: std.mem.Allocator, text: []const
     while (i < text.len) {
         const c = text[i];
         var consumed = false;
-        if (c == '<') {
+        // A MSG_ ref is recognized FIRST (when linkify), as one atomic token —
+        // its `_` characters would otherwise be tokenized as emphasis delimiters
+        // and split the ref apart. Disabled inside a link label (see `linkify`).
+        const msg_end: ?usize = if (linkify and c == 'M') mlinks.msgRefEnd(text, i) else null;
+        if (msg_end) |end| {
+            try flushText(&inl, a, text[run_start..i]);
+            var buf: std.ArrayList(u8) = .empty;
+            try mlinks.appendMsgRef(&buf, a, text[i + 4 .. end]); // group: <slug>_<n>
+            _ = try inl.append(a, .{ .kind = .html, .s = buf.items });
+            i = end;
+            consumed = true;
+        } else if (c == '<') {
             if (mmedia.safeImgAt(a, text, i) orelse mmedia.safeVideoAt(a, text, i)) |tag| {
                 try flushText(&inl, a, text[run_start..i]);
                 _ = try inl.append(a, .{ .kind = .html, .s = tag.html });
@@ -407,7 +427,10 @@ fn emitAutolink(out: *std.ArrayList(u8), a: std.mem.Allocator, link: []const u8,
             try escapeInto(out, a, link);
         },
     }
-    try out.appendSlice(a, "\">");
+    try out.appendSlice(a, "\"");
+    // url/www are scheme://… (external → new tab); mailto: is not.
+    if (kind != .email) try out.appendSlice(a, mlinks.external_attrs);
+    try out.appendSlice(a, ">");
     try escapeInto(out, a, link);
     try out.appendSlice(a, "</a>");
 }
@@ -474,8 +497,10 @@ fn mdLinkAt(a: std.mem.Allocator, text: []const u8, i: usize, rb: *usize, rp: *u
     var buf: std.ArrayList(u8) = .empty;
     try buf.appendSlice(a, "<a href=\"");
     if (!isDangerousUrl(url)) try escapeInto(&buf, a, url);
-    try buf.appendSlice(a, "\">");
-    try renderInline(&buf, a, label);
+    try buf.appendSlice(a, "\"");
+    if (mlinks.isExternalHref(url)) try buf.appendSlice(a, mlinks.external_attrs);
+    try buf.appendSlice(a, ">");
+    try renderInline(&buf, a, label, false); // a label is inside this <a> — don't nest MSG_ links
     try buf.appendSlice(a, "</a>");
     return .{ .html = buf.items, .end = close_p + 1 };
 }
