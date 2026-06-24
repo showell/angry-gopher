@@ -284,7 +284,7 @@ fn fanoutCrossPage(io: Io, alloc: Alloc, bus: *Bus, meta: ConvMeta, conv_key: []
         const where = recentWhere(io, alloc, meta, conv_key, uid) catch "";
         const who = if (std.mem.eql(u8, uid, from_id)) "You" else msg.from;
         var rj: std.ArrayList(u8) = .empty;
-        recent_feed.encodeChatEvent(&rj, alloc, msg.date, rec_url, who, where, sid, excerpt) catch continue;
+        recent_feed.encodeChatEvent(&rj, alloc, msg.date, rec_url, who, where, sid, excerpt, meta.kind == .dm) catch continue;
         if (recentBusKey(alloc, uid)) |k| bus.publish(k, rj.items) else |_| {}
 
         // images — only when the message carried <img> tags.

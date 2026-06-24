@@ -14,14 +14,17 @@ const fence = @import("markdown_fence.zig");
 /// recentExcerptCap bounds an excerpt's length on the wire (in codepoints).
 pub const recent_excerpt_cap = 350;
 
-/// encodeChatEvent writes one chat recentEvent object into `j`.
-pub fn encodeChatEvent(j: *std.ArrayList(u8), alloc: Alloc, at: []const u8, url: []const u8, who: []const u8, where: []const u8, topic: []const u8, excerpt: []const u8) !void {
+/// encodeChatEvent writes one chat recentEvent object into `j`. `dm` flags a
+/// 1:1 conversation (vs a channel) so the client can label an incoming DM as
+/// "(DM)" rather than the misleading "message to <me>"; emitted only when true.
+pub fn encodeChatEvent(j: *std.ArrayList(u8), alloc: Alloc, at: []const u8, url: []const u8, who: []const u8, where: []const u8, topic: []const u8, excerpt: []const u8, dm: bool) !void {
     try j.print(alloc, "{{\"kind\":\"chat\",\"at\":{f}", .{std.json.fmt(at, .{})});
     try appendField(j, alloc, "url", url);
     try appendField(j, alloc, "who", who);
     try appendField(j, alloc, "where", where);
     try appendField(j, alloc, "topic", topic);
     try appendField(j, alloc, "excerpt", excerpt);
+    if (dm) try j.appendSlice(alloc, ",\"dm\":true");
     try j.append(alloc, '}');
 }
 
@@ -213,4 +216,18 @@ test "recentExcerpt leaves a real code block intact" {
     defer arena.deinit();
     const ex = try recentExcerpt(arena.allocator(), "look:\n```\ncode here\n```\ndone");
     try std.testing.expectEqualStrings("look: ``` code here ``` done", ex);
+}
+
+test "encodeChatEvent: dm:true is emitted for a 1:1 conv, omitted for a channel" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    const a = arena.allocator();
+    defer arena.deinit();
+
+    var dm: std.ArrayList(u8) = .empty;
+    try encodeChatEvent(&dm, a, "2026-06-24T00:00:00Z", "/chat/c/1_3/yo", "Claude", "to Claude", "yo", "", true);
+    try std.testing.expect(std.mem.indexOf(u8, dm.items, "\"dm\":true") != null);
+
+    var ch: std.ArrayList(u8) = .empty;
+    try encodeChatEvent(&ch, a, "2026-06-24T00:00:00Z", "/channel/general/yo", "Claude", "in general", "yo", "", false);
+    try std.testing.expect(std.mem.indexOf(u8, ch.items, "\"dm\"") == null);
 }

@@ -583,6 +583,12 @@ pub fn validateUserName(alloc: Alloc, raw: []const u8) !NameResult {
     }
     const out = std.mem.trimEnd(u8, b.items, " ");
     if (!has_alnum) return .{ .name = "", .err = "Please enter a name with at least one letter or number." };
+    // "You"/"Me" are sentinels the UI uses for the viewer (e.g. Recent renders the
+    // viewer's own author as "You"), so a real account can't hold them — case-
+    // insensitively, since "YOU" reads as the sentinel too.
+    if (std.ascii.eqlIgnoreCase(out, "you") or std.ascii.eqlIgnoreCase(out, "me")) {
+        return .{ .name = "", .err = "“You” and “Me” are reserved — please pick another name." };
+    }
     return .{ .name = out, .err = "" };
 }
 
@@ -694,6 +700,17 @@ test "validateUserName collapses whitespace, requires alnum, rejects punctuation
         try testing.expectEqualStrings("", r.name);
         try testing.expect(r.err.len != 0);
     }
+
+    // "You"/"Me" are UI sentinels — reserved case-insensitively (incl. after trim).
+    const reserved = [_][]const u8{ "You", "you", "Me", "me", "YOU", "  Me  " };
+    for (reserved) |raw| {
+        const r = try validateUserName(a, raw);
+        try testing.expectEqualStrings("", r.name);
+        try testing.expect(r.err.len != 0);
+    }
+    // but names that merely CONTAIN them are fine
+    try testing.expectEqualStrings("Mel", (try validateUserName(a, "Mel")).name);
+    try testing.expectEqualStrings("You Two", (try validateUserName(a, "You Two")).name);
 }
 
 test "sanitizeUser strips disallowed bytes, collapses whitespace, caps length" {

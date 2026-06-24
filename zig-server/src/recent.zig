@@ -45,6 +45,8 @@ const RecentItem = struct {
     where: []const u8 = "",
     topic: []const u8 = "",
     excerpt: []const u8 = "",
+    dm: bool = false, // 1:1 conv (vs channel) — drives the "(DM)" label
+
     // doc-only
     slug: []const u8 = "",
     title: []const u8 = "",
@@ -102,7 +104,7 @@ fn emitRecentData(b: *std.ArrayList(u8), alloc: Alloc, items: []RecentItem) !voi
 /// recent_feed encoder so the backlog and the live fanout emit one shape.
 fn encodeEvent(j: *std.ArrayList(u8), alloc: Alloc, it: RecentItem) !void {
     switch (it.kind) {
-        .chat => try feed.encodeChatEvent(j, alloc, it.at, it.url, it.who, it.where, it.topic, it.excerpt),
+        .chat => try feed.encodeChatEvent(j, alloc, it.at, it.url, it.who, it.where, it.topic, it.excerpt, it.dm),
         .doc => try feed.encodeDocEvent(j, alloc, it.at, it.who, it.slug, it.title),
     }
 }
@@ -122,7 +124,7 @@ fn gatherRecentItems(io: Io, alloc: Alloc, uid: []const u8) ![]RecentItem {
         const dir = try store.dmConvDir(alloc, conv);
         const base = try std.fmt.allocPrint(alloc, "/chat/c/{s}", .{conv});
         const where = try std.fmt.allocPrint(alloc, "to {s}", .{u.name});
-        try gatherConvSessions(io, alloc, &items, dir, base, where, uid);
+        try gatherConvSessions(io, alloc, &items, dir, base, where, uid, true);
     }
 
     // Channels the viewer is a member of.
@@ -130,7 +132,7 @@ fn gatherRecentItems(io: Io, alloc: Alloc, uid: []const u8) ![]RecentItem {
         const dir = try store.channelConvDir(alloc, name);
         const base = try std.fmt.allocPrint(alloc, "/channel/{s}", .{name});
         const where = try std.fmt.allocPrint(alloc, "in {s}", .{name});
-        try gatherConvSessions(io, alloc, &items, dir, base, where, uid);
+        try gatherConvSessions(io, alloc, &items, dir, base, where, uid, false);
     }
 
     // The viewer's own docs.
@@ -155,8 +157,9 @@ fn gatherRecentItems(io: Io, alloc: Alloc, uid: []const u8) ![]RecentItem {
 /// gatherConvSessions appends a chat row for each session in one conv: stat its
 /// mtime, resolve the last author ("You" for the viewer) from the .lastauthor
 /// companion, and build a one-line excerpt of the latest message. `base`/`where`
-/// are the conv's pre-resolved URL base and per-viewer context label.
-fn gatherConvSessions(io: Io, alloc: Alloc, items: *std.ArrayList(RecentItem), dir: []const u8, base: []const u8, where: []const u8, viewer: []const u8) !void {
+/// are the conv's pre-resolved URL base and per-viewer context label; `dm` flags
+/// a 1:1 conv (vs a channel) for the wire.
+fn gatherConvSessions(io: Io, alloc: Alloc, items: *std.ArrayList(RecentItem), dir: []const u8, base: []const u8, where: []const u8, viewer: []const u8, dm: bool) !void {
     for (try store.listSessions(io, alloc, dir)) |sid| {
         const path = try store.sessionMdPath(alloc, dir, sid);
         const st = Io.Dir.cwd().statFile(io, path, .{}) catch continue;
@@ -169,6 +172,7 @@ fn gatherConvSessions(io: Io, alloc: Alloc, items: *std.ArrayList(RecentItem), d
             .where = where,
             .topic = sid,
             .excerpt = try feed.recentExcerpt(alloc, try lastMessageMarkdown(io, alloc, dir, sid)),
+            .dm = dm,
         });
     }
 }

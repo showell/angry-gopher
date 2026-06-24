@@ -122,11 +122,17 @@
       tr.dataset.key='chat:'+evt.url;
       /* Lead with the topic (the scannable thing) and link it to the
          transcript; the partner/channel context trails in parens. where is
-         "to <partner>" (DM) or "in <channel>" (channel). */
+         "to <partner>" (DM) or "in <channel>" (channel). An INCOMING DM (a 1:1
+         conv whose latest message isn't ours) is labeled just "(DM)" — "message
+         to <me>" would be backwards, and the Who cell already names the partner.
+         Our own DMs keep "message to <partner>"; channels keep "message in …". */
       var a=document.createElement('a');
       a.href=evt.url; a.textContent=evt.topic;
       what.appendChild(a);
-      what.appendChild(document.createTextNode(evt.where ? ' (message '+evt.where+')' : ' (message)'));
+      var context = (evt.dm && evt.who !== 'You') ? ' (DM)'
+                  : evt.where ? ' (message '+evt.where+')'
+                  : ' (message)';
+      what.appendChild(document.createTextNode(context));
     }else if(evt.kind==='doc'){
       tr.dataset.key='doc:'+evt.slug;
       var da=document.createElement('a');
