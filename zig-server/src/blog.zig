@@ -1,12 +1,14 @@
 //! blog: /blog — a public, read-only blog. Posts are markdown files that live in
-//! the repo at blog/posts/<YYYY-MM-DD>-<slug>.md and are rsync'd to the droplet
+//! the repo at blog/posts/<YYYY-MM-DD>-<HHMM>-<slug>.md and are rsync'd to the droplet
 //! by ops/deploy (NOT @embedFile'd — they're free-standing content, not built
 //! artifacts, so editing a post is a content change, not a recompile). The server
 //! reads them from `blog_root` at request time.
 //!
 //! Metadata has a single source of truth and no parser:
-//!   - the FILENAME gives the date (`2026-06-23`) and the URL slug
-//!     (`single-zig-binary`); the index sorts by filename desc = newest first.
+//!   - the FILENAME gives the date + time (`2026-06-23-1341`) and the URL slug
+//!     (`single-zig-binary`); the index sorts by filename asc = chronological,
+//!     oldest first. The HHMM time exists so posts on the same day keep their
+//!     real publish order — a date alone can't express intra-day sequence.
 //!   - the first `# H1` line in the file gives the display title (and renders
 //!     naturally at the top of the post — no duplicated front-matter).
 //!
@@ -37,9 +39,10 @@ pub var blog_root: []const u8 = "blog/posts";
 /// name (kept so the post route can re-open exactly the enumerated file rather
 /// than rebuild a path from request input — no traversal surface).
 const PostMeta = struct {
-    file: []const u8, // e.g. "2026-06-23-single-zig-binary.md"
+    file: []const u8, // e.g. "2026-06-23-1341-single-zig-binary.md"
     slug: []const u8, // e.g. "single-zig-binary" (the URL tail)
     date: []const u8, // e.g. "2026-06-23"
+    time: []const u8, // e.g. "1341" (HHMM, 24h, local) — for ordering + display
     title: []const u8, // first "# " line, or the prettified slug as a fallback
 };
 
@@ -71,7 +74,7 @@ pub fn handle(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8, r
     return http.notFound(req);
 }
 
-/// renderIndex lists every post, newest first (filename desc), as title + date.
+/// renderIndex lists every post, oldest first (filename asc), as title + stamp.
 fn renderIndex(req: *Request, io: Io, alloc: Alloc, name: []const u8) !void {
     const metas = try listPosts(io, alloc);
 
@@ -85,7 +88,7 @@ fn renderIndex(req: *Request, io: Io, alloc: Alloc, name: []const u8) !void {
         for (metas) |m| {
             try b.print(alloc,
                 "<li><a href=\"/blog/{s}\">{s}</a><span class=\"post-date\">{s}</span></li>",
-                .{ m.slug, try html.htmlEscape(alloc, m.title), m.date },
+                .{ m.slug, try html.htmlEscape(alloc, m.title), try formatStamp(alloc, m.date, m.time) },
             );
         }
         try b.appendSlice(alloc, "</ul>");
@@ -104,7 +107,7 @@ fn renderPost(req: *Request, io: Io, alloc: Alloc, name: []const u8, meta: PostM
     var b: std.ArrayList(u8) = .empty;
     try begin(&b, alloc, meta.title, name);
     try b.appendSlice(alloc, "<p class=\"back\"><a href=\"/blog\">← Blog</a></p>");
-    try b.print(alloc, "<p class=\"post-date\">{s}</p>", .{meta.date});
+    try b.print(alloc, "<p class=\"post-date\">{s}</p>", .{try formatStamp(alloc, meta.date, meta.time)});
     // Server-owned post body: the trusted (uncapped) render.
     try b.appendSlice(alloc, try markdown.renderTrustedReflow(alloc, src));
     try comments.renderThread(&b, io, alloc, meta.slug, name);
@@ -128,31 +131,53 @@ fn listPosts(io: Io, alloc: Alloc) ![]PostMeta {
         const file = try alloc.dupe(u8, entry.name);
         const parsed = parseFileName(file) orelse continue;
         const title = try readTitle(io, alloc, file, parsed.slug);
-        try out.append(alloc, .{ .file = file, .slug = parsed.slug, .date = parsed.date, .title = title });
+        try out.append(alloc, .{ .file = file, .slug = parsed.slug, .date = parsed.date, .time = parsed.time, .title = title });
     }
     const slice = try out.toOwnedSlice(alloc);
-    std.mem.sort(PostMeta, slice, {}, newestFirst);
+    std.mem.sort(PostMeta, slice, {}, oldestFirst);
     return slice;
 }
 
-fn newestFirst(_: void, a: PostMeta, b: PostMeta) bool {
-    return std.mem.lessThan(u8, b.file, a.file); // filename desc = date desc
+fn oldestFirst(_: void, a: PostMeta, b: PostMeta) bool {
+    return std.mem.lessThan(u8, a.file, b.file); // filename asc = date+time asc
 }
 
-/// parseFileName splits "YYYY-MM-DD-slug.md" into its date and slug, validating
-/// the date prefix and slug charset. Returns null for any non-conforming name —
-/// the slug is the URL tail, so its charset is the public route's safety bound.
-fn parseFileName(file: []const u8) ?struct { date: []const u8, slug: []const u8 } {
+/// parseFileName splits "YYYY-MM-DD-HHMM-slug.md" into its date, time, and slug,
+/// validating the date prefix, the 4-digit time, and the slug charset. Returns
+/// null for any non-conforming name — the slug is the URL tail, so its charset is
+/// the public route's safety bound.
+fn parseFileName(file: []const u8) ?struct { date: []const u8, time: []const u8, slug: []const u8 } {
     if (!std.mem.endsWith(u8, file, ".md")) return null;
     const stem = file[0 .. file.len - ".md".len];
-    // Need "YYYY-MM-DD-" (11 chars) then a non-empty slug.
-    if (stem.len < 12) return null;
+    // Need "YYYY-MM-DD-HHMM-" (16 chars) then a non-empty slug.
+    if (stem.len < 17) return null;
     const date = stem[0..10];
     if (!isIsoDate(date)) return null;
     if (stem[10] != '-') return null;
-    const slug = stem[11..];
+    const time = stem[11..15];
+    if (!isHhmm(time)) return null;
+    if (stem[15] != '-') return null;
+    const slug = stem[16..];
     if (slug.len == 0 or !isSlug(slug)) return null;
-    return .{ .date = date, .slug = slug };
+    return .{ .date = date, .time = time, .slug = slug };
+}
+
+/// isHhmm validates a 4-digit "HHMM" clock time (00–23 hours, 00–59 minutes).
+fn isHhmm(s: []const u8) bool {
+    if (s.len != 4) return false;
+    for (s) |c| if (!std.ascii.isDigit(c)) return false;
+    const hh = (s[0] - '0') * 10 + (s[1] - '0');
+    const mm = (s[2] - '0') * 10 + (s[3] - '0');
+    return hh < 24 and mm < 60;
+}
+
+/// formatStamp renders a date + HHMM as "2026-06-23 · 1:41 PM" (12-hour clock).
+fn formatStamp(alloc: Alloc, date: []const u8, time: []const u8) ![]const u8 {
+    const hh = (time[0] - '0') * 10 + (time[1] - '0');
+    const mm = time[2..4];
+    const period = if (hh < 12) "AM" else "PM";
+    const hour12: u8 = if (hh == 0) 12 else if (hh > 12) hh - 12 else hh;
+    return std.fmt.allocPrint(alloc, "{s} · {d}:{s} {s}", .{ date, hour12, mm, period });
 }
 
 fn isIsoDate(s: []const u8) bool {
