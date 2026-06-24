@@ -18,6 +18,8 @@ const std = @import("std");
 const mtext = @import("markdown_text.zig");
 const mmedia = @import("markdown_media.zig");
 const mlinks = @import("markdown_links.zig");
+const Budget = mtext.Budget;
+const RenderError = mtext.RenderError;
 
 // Leaf text helpers (see markdown_text); aliased so the bodies read unqualified.
 const escapeInto = mtext.escapeInto;
@@ -121,7 +123,12 @@ const Inline = struct {
 /// post-pass got this for free by skipping <a> interiors; here it's an explicit
 /// argument, which is the honest version of that skip.) Emphasis and autolinks
 /// still run in labels, exactly as before.
-pub fn renderInline(out: *std.ArrayList(u8), a: std.mem.Allocator, text: []const u8, linkify: bool) std.mem.Allocator.Error!void {
+///
+/// `budget` is charged one unit per outer-loop step plus the length of every
+/// inner scan (code spans, link/url/email seeks, emphasis lookback); the loop
+/// aborts with error.Hostile the moment it's blown. Because the scanners are
+/// linear, legit text stays far under; a re-parse regression trips it.
+pub fn renderInline(out: *std.ArrayList(u8), a: std.mem.Allocator, text: []const u8, linkify: bool, budget: *Budget) RenderError!void {
     var inl = Inline{};
 
     var run_start: usize = 0;
@@ -135,6 +142,8 @@ pub fn renderInline(out: *std.ArrayList(u8), a: std.mem.Allocator, text: []const
     var rp: usize = std.mem.indexOfScalarPos(u8, text, 0, ')') orelse text.len;
     var email_dead: usize = 0;
     while (i < text.len) {
+        budget.charge(1);
+        if (budget.blown()) return error.Hostile;
         const c = text[i];
         var consumed = false;
         // A MSG_ ref is recognized FIRST (when linkify), as one atomic token —
@@ -156,7 +165,7 @@ pub fn renderInline(out: *std.ArrayList(u8), a: std.mem.Allocator, text: []const
                 consumed = true;
             }
         } else if (c == '`') {
-            if (codeSpanAt(text, i)) |cs| {
+            if (codeSpanAt(text, i, budget)) |cs| {
                 try flushText(&inl, a, text[run_start..i]);
                 var buf: std.ArrayList(u8) = .empty;
                 try buf.appendSlice(a, "<code>");
@@ -174,12 +183,12 @@ pub fn renderInline(out: *std.ArrayList(u8), a: std.mem.Allocator, text: []const
                 // is what keeps an inline ``` (e.g. discussing fences) from
                 // mangling the rest of the paragraph.
                 var n: usize = 0;
-                while (i + n < text.len and text[i + n] == '`') : (n += 1) {}
+                while (i + n < text.len and text[i + n] == '`') : (n += 1) budget.charge(1);
                 i += n;
                 continue;
             }
         } else if (c == '[') {
-            if (try mdLinkAt(a, text, i, &rb, &rp)) |lk| {
+            if (try mdLinkAt(a, text, i, &rb, &rp, budget)) |lk| {
                 try flushText(&inl, a, text[run_start..i]);
                 _ = try inl.append(a, .{ .kind = .html, .s = lk.html });
                 i = lk.end;
@@ -188,7 +197,7 @@ pub fn renderInline(out: *std.ArrayList(u8), a: std.mem.Allocator, text: []const
         } else if (c == '*' or c == '_') {
             try flushText(&inl, a, text[run_start..i]);
             var n: usize = 0;
-            while (i + n < text.len and text[i + n] == c) : (n += 1) {}
+            while (i + n < text.len and text[i + n] == c) : (n += 1) budget.charge(1);
             const fl = flanking(text, i, i + n);
             const can_open = if (c == '*') fl.left else fl.left and (!fl.right or fl.before_punct);
             const can_close = if (c == '*') fl.right else fl.right and (!fl.left or fl.after_punct);
@@ -204,7 +213,7 @@ pub fn renderInline(out: *std.ArrayList(u8), a: std.mem.Allocator, text: []const
             i += n;
             consumed = true;
         } else if (autolinkBoundary(text, i)) {
-            if (autolinkAt(text, i, &email_dead)) |al| {
+            if (autolinkAt(text, i, &email_dead, budget)) |al| {
                 try flushText(&inl, a, text[run_start..i]);
                 var buf: std.ArrayList(u8) = .empty;
                 try emitAutolink(&buf, a, text[i..al.end], al.kind);
@@ -221,7 +230,8 @@ pub fn renderInline(out: *std.ArrayList(u8), a: std.mem.Allocator, text: []const
     }
     try flushText(&inl, a, text[run_start..]);
 
-    processEmphasis(&inl, a);
+    processEmphasis(&inl, a, budget);
+    if (budget.blown()) return error.Hostile;
     try emitInline(out, a, &inl);
 }
 
@@ -267,12 +277,14 @@ fn flanking(text: []const u8, s: usize, e: usize) Flank {
 /// processEmphasis resolves `*`/`_` delimiter runs into <em>/<strong> by the
 /// CommonMark delimiter-stack algorithm (including the "rule of 3"), inserting
 /// open/close marker nodes around the matched spans.
-fn processEmphasis(inl: *Inline, a: std.mem.Allocator) void {
+fn processEmphasis(inl: *Inline, a: std.mem.Allocator, budget: *Budget) void {
     // openers_bottom[len % 3][char], char: '*' = 0, '_' = 1. null = stack bottom.
     var openers_bottom = [_][2]?u32{.{ null, null }} ** 3;
 
     var closer = inl.dhead;
     while (closer) |ci| {
+        budget.charge(1);
+        if (budget.blown()) return; // bail; renderInline aborts to malformed after
         if (!inl.nodes.items[ci].can_close) {
             closer = inl.nodes.items[ci].dnext;
             continue;
@@ -285,6 +297,7 @@ fn processEmphasis(inl: *Inline, a: std.mem.Allocator) void {
         var opener = inl.nodes.items[ci].dprev;
         var opener_found = false;
         while (opener) |oi| {
+            budget.charge(1); // the opener lookback — the emphasis O(n^2) risk
             if (oi == bottom) break;
             const on = inl.nodes.items[oi];
             if (on.can_open and on.ch == cch) {
@@ -350,19 +363,19 @@ const Autolink = struct { end: usize, kind: AutoKind };
 /// every '_' — O(n²) on "a_b_a_b…". When emailEnd fails, the entire local run is
 /// equally dead (every position in it scans to the same run end with the same
 /// outcome), so we advance the floor past it: O(n) total.
-fn autolinkAt(text: []const u8, i: usize, email_dead: *usize) ?Autolink {
+fn autolinkAt(text: []const u8, i: usize, email_dead: *usize, budget: *Budget) ?Autolink {
     if (startsWithCI(text[i..], "http://") or startsWithCI(text[i..], "https://")) {
-        const end = urlEnd(text, i) orelse return null;
+        const end = urlEnd(text, i, budget) orelse return null;
         return .{ .end = end, .kind = .url };
     }
     if (startsWithCI(text[i..], "www.")) {
-        const end = urlEnd(text, i) orelse return null;
+        const end = urlEnd(text, i, budget) orelse return null;
         return .{ .end = end, .kind = .www };
     }
     if (i >= email_dead.*) {
-        if (emailEnd(text, i)) |end| return .{ .end = end, .kind = .email };
+        if (emailEnd(text, i, budget)) |end| return .{ .end = end, .kind = .email };
         var j = i;
-        while (j < text.len and isEmailLocalChar(text[j])) : (j += 1) {}
+        while (j < text.len and isEmailLocalChar(text[j])) : (j += 1) budget.charge(1);
         email_dead.* = if (j > i) j else i + 1;
     }
     return null;
@@ -370,9 +383,9 @@ fn autolinkAt(text: []const u8, i: usize, email_dead: *usize) ?Autolink {
 
 /// urlEnd consumes URL characters from start (up to whitespace or '<') then
 /// trims GFM trailing punctuation and unbalanced ')'.
-fn urlEnd(text: []const u8, start: usize) ?usize {
+fn urlEnd(text: []const u8, start: usize, budget: *Budget) ?usize {
     var end = start;
-    while (end < text.len and !isSpace(text[end]) and text[end] != '<') : (end += 1) {}
+    while (end < text.len and !isSpace(text[end]) and text[end] != '<') : (end += 1) budget.charge(1);
     // The DOMAIN (host, after the scheme and before any port/path/query) must
     // contain a '.', per GFM. A '.' in the path doesn't count — so
     // http://localhost:9100/x.md is not an autolink, but http://a.com/x is.
@@ -400,13 +413,13 @@ fn urlEnd(text: []const u8, start: usize) ?usize {
 }
 
 /// emailEnd matches a GFM email autolink (local@domain.tld) at text[i].
-fn emailEnd(text: []const u8, i: usize) ?usize {
+fn emailEnd(text: []const u8, i: usize, budget: *Budget) ?usize {
     var j = i;
-    while (j < text.len and isEmailLocalChar(text[j])) : (j += 1) {}
+    while (j < text.len and isEmailLocalChar(text[j])) : (j += 1) budget.charge(1);
     if (j == i or j >= text.len or text[j] != '@') return null;
     j += 1;
     const domain_start = j;
-    while (j < text.len and (isAsciiAlnum(text[j]) or text[j] == '.' or text[j] == '-' or text[j] == '_')) : (j += 1) {}
+    while (j < text.len and (isAsciiAlnum(text[j]) or text[j] == '.' or text[j] == '-' or text[j] == '_')) : (j += 1) budget.charge(1);
     const domain = text[domain_start..j];
     if (domain.len == 0 or std.mem.indexOfScalar(u8, domain, '.') == null) return null;
     // A trailing '.' or '-' or '_' is not part of the email.
@@ -440,18 +453,19 @@ const CodeSpan = struct { content_start: usize, content_end: usize, end: usize }
 /// codeSpanAt matches a backtick code span at text[i]: an opening run of N
 /// backticks closed by a run of exactly N backticks. Returns null (literal
 /// backticks) if there's no matching close.
-fn codeSpanAt(text: []const u8, i: usize) ?CodeSpan {
+fn codeSpanAt(text: []const u8, i: usize, budget: *Budget) ?CodeSpan {
     var n: usize = 0;
-    while (i + n < text.len and text[i + n] == '`') : (n += 1) {}
+    while (i + n < text.len and text[i + n] == '`') : (n += 1) budget.charge(1);
     const content_start = i + n;
     var k = content_start;
     while (k < text.len) {
+        budget.charge(1);
         if (text[k] != '`') {
             k += 1;
             continue;
         }
         var m: usize = 0;
-        while (k + m < text.len and text[k + m] == '`') : (m += 1) {}
+        while (k + m < text.len and text[k + m] == '`') : (m += 1) budget.charge(1);
         if (m == n) return .{ .content_start = content_start, .content_end = k, .end = k + m };
         k += m; // a run of the wrong length is part of the content
     }
@@ -477,16 +491,20 @@ const MdLink = struct { html: []const u8, end: usize };
 /// here cost O(n) total across all '[' rather than O(n²) on "[[[[…" / "[](…".
 /// `rb` lands on the first ']' at >= i+1 and `rp` on the first ')' at >= open_p+1
 /// — exactly what indexOfScalarPos found before, just never re-scanned.
-fn mdLinkAt(a: std.mem.Allocator, text: []const u8, i: usize, rb: *usize, rp: *usize) std.mem.Allocator.Error!?MdLink {
+fn mdLinkAt(a: std.mem.Allocator, text: []const u8, i: usize, rb: *usize, rp: *usize, budget: *Budget) RenderError!?MdLink {
     while (rb.* < text.len and rb.* < i + 1) {
+        const from = rb.*;
         rb.* = std.mem.indexOfScalarPos(u8, text, rb.* + 1, ']') orelse text.len;
+        budget.charge(rb.* - from); // bytes the cursor advanced — O(n) total by construction
     }
     if (rb.* >= text.len) return null;
     const close_br = rb.*;
     if (close_br + 1 >= text.len or text[close_br + 1] != '(') return null;
     const open_p = close_br + 1;
     while (rp.* < text.len and rp.* < open_p + 1) {
+        const from = rp.*;
         rp.* = std.mem.indexOfScalarPos(u8, text, rp.* + 1, ')') orelse text.len;
+        budget.charge(rp.* - from);
     }
     if (rp.* >= text.len) return null;
     const close_p = rp.*;
@@ -500,7 +518,7 @@ fn mdLinkAt(a: std.mem.Allocator, text: []const u8, i: usize, rb: *usize, rp: *u
     try buf.appendSlice(a, "\"");
     if (mlinks.isExternalHref(url)) try buf.appendSlice(a, mlinks.external_attrs);
     try buf.appendSlice(a, ">");
-    try renderInline(&buf, a, label, false); // a label is inside this <a> — don't nest MSG_ links
+    try renderInline(&buf, a, label, false, budget); // a label is inside this <a> — don't nest MSG_ links
     try buf.appendSlice(a, "</a>");
     return .{ .html = buf.items, .end = close_p + 1 };
 }

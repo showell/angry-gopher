@@ -163,7 +163,7 @@ pub fn handlePost(req: *Request, io: Io, alloc: Alloc, bus: *Bus, slug: []const 
         return redirectToThread(req, alloc, slug, "#comments", null);
     }
     // Refuse hostile / over-formatted markdown at the door, like chat /send.
-    if (markdown.hostileReason(md)) |_| {
+    if (markdown.hostileReason(alloc, md)) |_| {
         return badComment(req, alloc, is_async, "Not posted: too much formatting — break it into smaller pieces.");
     }
 

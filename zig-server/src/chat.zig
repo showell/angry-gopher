@@ -351,7 +351,7 @@ fn sendMessage(req: *Request, io: Io, alloc: Alloc, bus: *Bus, topic: Topic, uid
     // Refuse hostile / absurdly over-formatted markdown at the door rather than
     // store it: fail loud to the author (a 400) instead of fanning out content
     // that every reader would render as the malformed placeholder anyway.
-    if (markdown.hostileReason(md)) |_| {
+    if (markdown.hostileReason(alloc, md)) |_| {
         return edge.reject(req, .malformed_markdown, "not sent: malformed markdown — too much formatting; break it into smaller messages\n");
     }
 

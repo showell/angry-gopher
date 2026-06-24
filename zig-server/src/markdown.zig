@@ -27,6 +27,8 @@ const minline = @import("markdown_inline.zig");
 const escapeInto = mtext.escapeInto;
 const isDigit = mtext.isDigit;
 const isAsciiAlpha = mtext.isAsciiAlpha;
+const Budget = mtext.Budget;
+const RenderError = mtext.RenderError;
 
 /// render turns a raw chat message body into HTML. It implements — and IS the
 /// definition of — lynrummy's markdown dialect: GFM-style paragraphs with hard
@@ -47,18 +49,25 @@ const isAsciiAlpha = mtext.isAsciiAlpha;
 /// (chat send, docs post) check hostileReason themselves first to fail the
 /// POST loudly; this guard covers every other render path (backlog, preview).
 pub fn render(a: std.mem.Allocator, md: []const u8) ![]const u8 {
-    if (hostileReason(md) != null) return a.dupe(u8, malformed_html);
-    return try renderBlocks(a, md, false);
+    var budget = Budget.forInput(md);
+    return renderBlocks(a, md, false, &budget) catch |e| switch (e) {
+        error.Hostile => a.dupe(u8, malformed_html),
+        else => |x| x,
+    };
 }
 
 /// renderTrusted is render() for SERVER-OWNED content (not user-submitted): the
-/// same block/inline pipeline, but WITHOUT the hostile-input token cap. A curated
-/// file like the per-user Links page legitimately carries far more than 256 link
-/// tokens, which render() would reject wholesale. The structural crash guards
-/// (block-nesting depth) and HTML escaping still apply. NEVER call this on input
-/// that came from a request body.
+/// same block/inline pipeline, but with an UNLIMITED work budget. A curated file
+/// like the per-user Links page is dense but linear, so it never approaches the
+/// budget anyway; unlimited just states the contract (we authored it, it is not
+/// an attack vector). The structural crash guards (block-nesting depth) and HTML
+/// escaping still apply. NEVER call this on input that came from a request body.
 pub fn renderTrusted(a: std.mem.Allocator, md: []const u8) ![]const u8 {
-    return try renderBlocks(a, md, false);
+    var budget = Budget.unlimited();
+    return renderBlocks(a, md, false, &budget) catch |e| switch (e) {
+        error.Hostile => a.dupe(u8, malformed_html),
+        else => |x| x,
+    };
 }
 
 /// renderTrustedReflow is renderTrusted for PROSE (blog articles): paragraphs
@@ -69,7 +78,24 @@ pub fn renderTrusted(a: std.mem.Allocator, md: []const u8) ![]const u8 {
 /// where a line break is content; reflow is only for server-owned long-form
 /// writing. Same trusted (uncapped) pipeline as renderTrusted otherwise.
 pub fn renderTrustedReflow(a: std.mem.Allocator, md: []const u8) ![]const u8 {
-    return try renderBlocks(a, md, true);
+    var budget = Budget.unlimited();
+    return renderBlocks(a, md, true, &budget) catch |e| switch (e) {
+        error.Hostile => a.dupe(u8, malformed_html),
+        else => |x| x,
+    };
+}
+
+/// workUnits renders `md` with an unlimited budget and reports the work it cost
+/// (scan-steps charged) — the deterministic measure the Budget caps on. For
+/// tuning Budget.per_byte from the real corpus (see markdown_hostile_probe), and
+/// for spot-checking that the parser stays linear. Renders into a throwaway
+/// arena, so it costs a full render and returns nothing but the count.
+pub fn workUnits(a: std.mem.Allocator, md: []const u8) !usize {
+    var arena = std.heap.ArenaAllocator.init(a);
+    defer arena.deinit();
+    var budget = Budget.unlimited();
+    _ = try renderBlocks(arena.allocator(), md, false, &budget);
+    return budget.spent;
 }
 
 /// malformed_html is what a rejected (hostile / over-formatted) message renders
@@ -77,67 +103,30 @@ pub fn renderTrustedReflow(a: std.mem.Allocator, md: []const u8) ![]const u8 {
 /// from the server (the client may style .md-malformed).
 pub const malformed_html = "<p class=\"md-malformed\">⚠️ malformed markdown — not rendered</p>\n";
 
-/// max_markup_tokens caps how many inline markup characters (`* _ [ ] ` ~ <`)
-/// a single message/doc may contain OUTSIDE fenced code. Ordinary prose uses a
-/// handful; a flood (hundreds–thousands) is an attack or a paste accident, and
-/// some of those constructs drive the inline scanners (links, emphasis, email
-/// autolinks). Real conversation never approaches this; past it we reject the
-/// whole input as malformed rather than render it. Fenced code is exempt —
-/// snake_case and indexing are ordinary text there, and code never reaches the
-/// inline scanners anyway. (Steve, 2026-06-19: reject over-formatted input
-/// rather than risk the server; "no more than ~256 non-ordinary-text tokens.")
-const max_markup_tokens = 256;
-
-/// hostileReason returns a short reason if `md` is over-formatted (and should
-/// render as malformed_html / be refused at POST), or null if it's safe.
-pub fn hostileReason(md: []const u8) ?[]const u8 {
-    if (countMarkupTokens(md, max_markup_tokens) > max_markup_tokens)
-        return "too much markdown formatting";
+/// hostileReason returns a short reason if `md` would blow the render work
+/// budget (and so should be refused at POST / rendered as malformed_html), or
+/// null if it's safe. It renders in good faith with the real budget into a
+/// throwaway arena — there is no separate "is it hostile?" model that could
+/// drift from the parser; the parser IS the judge. Costs one render of `md`
+/// (cheap for legit input, and bounded for hostile input — that's the trade:
+/// we start the parse in good faith rather than pre-screening). OOM is not
+/// "hostile" — we report null and let the real render path surface it.
+pub fn hostileReason(a: std.mem.Allocator, md: []const u8) ?[]const u8 {
+    var arena = std.heap.ArenaAllocator.init(a);
+    defer arena.deinit();
+    var budget = Budget.forInput(md);
+    _ = renderBlocks(arena.allocator(), md, false, &budget) catch |e| switch (e) {
+        error.Hostile => return "too much markdown formatting",
+        error.OutOfMemory => return null,
+    };
     return null;
-}
-
-/// countMarkupTokens counts inline-markup characters (`* _ [ ] ` ~ <`) OUTSIDE
-/// fenced code — a single linear line walk that skips fenced blocks. It stops
-/// counting once the total exceeds `cap` (hostileReason passes the real cap for
-/// an early exit; pass a huge cap to count them all, e.g. for measurement).
-///
-/// NOTE: this is a proxy for SUPERFICIAL formatting density, not the real parse
-/// work — the inline scanners are linear (monotonic cursors), so density no
-/// longer predicts cost the way it did before that "earned knowledge" landed.
-pub fn countMarkupTokens(md: []const u8, cap: usize) usize {
-    var tokens: usize = 0;
-    var fence_char: u8 = 0; // 0 = not inside a fenced code block
-    var fence_count: usize = 0;
-    var pos: usize = 0;
-    while (pos < md.len) {
-        const eol = lineEnd(md, pos);
-        const line = md[pos..eol];
-        const next = if (eol < md.len) eol + 1 else md.len;
-        if (fence_char != 0) {
-            // Inside a fenced code block: code is ordinary text, count nothing.
-            if (fence.isClose(line, fence_char, fence_count)) fence_char = 0;
-        } else if (parseFenceOpen(md, pos)) |fo| {
-            fence_char = fo.char;
-            fence_count = fo.count;
-        } else {
-            for (line) |c| switch (c) {
-                '*', '_', '[', ']', '`', '~', '<' => {
-                    tokens += 1;
-                    if (tokens > cap) return tokens;
-                },
-                else => {},
-            };
-        }
-        pos = next;
-    }
-    return tokens;
 }
 
 // --- block rendering --------------------------------------------------------
 
-fn renderBlocks(a: std.mem.Allocator, md: []const u8, soft_wrap: bool) ![]const u8 {
+fn renderBlocks(a: std.mem.Allocator, md: []const u8, soft_wrap: bool, budget: *Budget) RenderError![]const u8 {
     var out: std.ArrayList(u8) = .empty;
-    try renderBlocksInto(&out, a, md, false, 0, soft_wrap);
+    try renderBlocksInto(&out, a, md, false, 0, soft_wrap, budget);
     return out.toOwnedSlice(a);
 }
 
@@ -158,16 +147,20 @@ const max_block_depth = 16;
 /// trailing newline of its own. `depth` is the block-nesting level (see
 /// max_block_depth) — past the cap, the remaining source renders as one escaped
 /// paragraph with no further block recursion.
-fn renderBlocksInto(out: *std.ArrayList(u8), a: std.mem.Allocator, md: []const u8, tight: bool, depth: usize, soft_wrap: bool) std.mem.Allocator.Error!void {
+fn renderBlocksInto(out: *std.ArrayList(u8), a: std.mem.Allocator, md: []const u8, tight: bool, depth: usize, soft_wrap: bool, budget: *Budget) RenderError!void {
     if (depth > max_block_depth) {
         if (out.items.len > 0 and out.items[out.items.len - 1] != '\n') try out.append(a, '\n');
         try out.appendSlice(a, "<p>");
-        try minline.renderInline(out, a, md, true);
+        try minline.renderInline(out, a, md, true, budget);
         try out.appendSlice(a, "</p>\n");
         return;
     }
     var pos: usize = 0;
     while (pos < md.len) {
+        // Charge one unit per block line and bail if the budget is blown — this
+        // is also where inline charges from the previous line get noticed.
+        budget.charge(1);
+        if (budget.blown()) return error.Hostile;
         const eol = lineEnd(md, pos);
         const line = md[pos..eol];
         const next = if (eol < md.len) eol + 1 else md.len;
@@ -180,7 +173,7 @@ fn renderBlocksInto(out: *std.ArrayList(u8), a: std.mem.Allocator, md: []const u
         // A fenced code block can interrupt a paragraph, so check it first.
         if (parseFenceOpen(md, pos)) |fo| {
             try tightSep(out, a, tight);
-            pos = try renderFence(out, a, md, fo);
+            pos = try renderFence(out, a, md, fo, budget);
             continue;
         }
 
@@ -189,7 +182,7 @@ fn renderBlocksInto(out: *std.ArrayList(u8), a: std.mem.Allocator, md: []const u
             try tightSep(out, a, tight);
             const d: u8 = '0' + @as(u8, @intCast(h.level));
             try out.appendSlice(a, &[_]u8{ '<', 'h', d, '>' });
-            try minline.renderInline(out, a, h.content, true);
+            try minline.renderInline(out, a, h.content, true, budget);
             try out.appendSlice(a, &[_]u8{ '<', '/', 'h', d, '>', '\n' });
             pos = next;
             continue;
@@ -200,14 +193,14 @@ fn renderBlocksInto(out: *std.ArrayList(u8), a: std.mem.Allocator, md: []const u
         // non-empty, so it's checked before the paragraph branch.
         if (listMarkerAt(md, pos)) |lm| {
             try tightSep(out, a, tight);
-            pos = try renderList(out, a, md, pos, lm, depth, soft_wrap);
+            pos = try renderList(out, a, md, pos, lm, depth, soft_wrap, budget);
             continue;
         }
 
         // A blockquote (also interrupts a paragraph).
         if (quoteMarkerLen(line) != null) {
             try tightSep(out, a, tight);
-            pos = try renderQuote(out, a, md, pos, depth, soft_wrap);
+            pos = try renderQuote(out, a, md, pos, depth, soft_wrap, budget);
             continue;
         }
 
@@ -223,7 +216,7 @@ fn renderBlocksInto(out: *std.ArrayList(u8), a: std.mem.Allocator, md: []const u
                 if (isBlank(md[p..e2])) break;
                 p = if (e2 < md.len) e2 + 1 else md.len;
             }
-            try writeRawHtml(out, a, md[pos..p]);
+            try writeRawHtml(out, a, md[pos..p], budget);
             pos = p;
             continue;
         }
@@ -255,12 +248,12 @@ fn renderBlocksInto(out: *std.ArrayList(u8), a: std.mem.Allocator, md: []const u
                 // Hard-wrap dialect: each source line is its own line, joined by
                 // a <br>, and rendered inline on its own.
                 if (!first) try out.appendSlice(a, "<br>\n");
-                try minline.renderInline(out, a, trimLine(l2), true);
+                try minline.renderInline(out, a, trimLine(l2), true, budget);
             }
             first = false;
             p = if (e2 < md.len) e2 + 1 else md.len;
         }
-        if (soft_wrap) try minline.renderInline(out, a, reflow.items, true);
+        if (soft_wrap) try minline.renderInline(out, a, reflow.items, true, budget);
         if (!tight) try out.appendSlice(a, "</p>\n");
         pos = p;
     }
@@ -332,7 +325,7 @@ fn atxHeading(line: []const u8) ?Heading {
 
 /// renderFence emits the code block and returns the position after the closing
 /// fence (or EOF when there is none — an unterminated fence runs to the end).
-fn renderFence(out: *std.ArrayList(u8), a: std.mem.Allocator, md: []const u8, fo: FenceOpen) !usize {
+fn renderFence(out: *std.ArrayList(u8), a: std.mem.Allocator, md: []const u8, fo: FenceOpen, budget: *Budget) !usize {
     var content_end = md.len;
     var after = md.len;
     var p = fo.body_start;
@@ -346,6 +339,7 @@ fn renderFence(out: *std.ArrayList(u8), a: std.mem.Allocator, md: []const u8, fo
         p = if (e < md.len) e + 1 else md.len;
     }
     const content = md[fo.body_start..content_end];
+    budget.charge(content.len); // the close-scan + per-byte escape is linear in the code body
 
     const is_quote = std.mem.eql(u8, fo.lang, "quote");
     if (is_quote) {
@@ -467,7 +461,7 @@ fn leadingSpaces(line: []const u8) usize {
 /// renderList consumes a whole list beginning at md[pos] (with first marker m0)
 /// and returns the position just past it. Items are collected as dedented
 /// content blocks and rendered recursively; tight/loose controls <p> wrapping.
-fn renderList(out: *std.ArrayList(u8), a: std.mem.Allocator, md: []const u8, pos: usize, m0: ListMarker, depth: usize, soft_wrap: bool) std.mem.Allocator.Error!usize {
+fn renderList(out: *std.ArrayList(u8), a: std.mem.Allocator, md: []const u8, pos: usize, m0: ListMarker, depth: usize, soft_wrap: bool, budget: *Budget) RenderError!usize {
     var items: std.ArrayList([]const u8) = .empty;
     var loose = false;
 
@@ -540,12 +534,12 @@ fn renderList(out: *std.ArrayList(u8), a: std.mem.Allocator, md: []const u8, pos
         var inner: std.ArrayList(u8) = .empty;
         if (loose) {
             try inner.append(a, '\n');
-            try renderBlocksInto(&inner, a, item, false, depth + 1, soft_wrap);
+            try renderBlocksInto(&inner, a, item, false, depth + 1, soft_wrap, budget);
         } else {
             // we write a newline after a tight <li> iff its first child is not a
             // text paragraph (it's a nested list/quote/fence/heading).
             if (firstItemChildIsBlock(item)) try inner.append(a, '\n');
-            try renderBlocksInto(&inner, a, item, true, depth + 1, soft_wrap);
+            try renderBlocksInto(&inner, a, item, true, depth + 1, soft_wrap, budget);
         }
         try out.appendSlice(a, "<li>");
         try out.appendSlice(a, inner.items);
@@ -606,7 +600,7 @@ fn quoteMarkerLen(line: []const u8) ?usize {
 /// renderQuote consumes a blockquote beginning at md[pos] and returns the
 /// position just past it. '>'-prefixed lines (and lazy paragraph-continuation
 /// lines, until a blank line) are stripped and rendered recursively.
-fn renderQuote(out: *std.ArrayList(u8), a: std.mem.Allocator, md: []const u8, pos: usize, depth: usize, soft_wrap: bool) std.mem.Allocator.Error!usize {
+fn renderQuote(out: *std.ArrayList(u8), a: std.mem.Allocator, md: []const u8, pos: usize, depth: usize, soft_wrap: bool, budget: *Budget) RenderError!usize {
     var inner: std.ArrayList(u8) = .empty;
     var p = pos;
     var last_was_text = false;
@@ -630,7 +624,7 @@ fn renderQuote(out: *std.ArrayList(u8), a: std.mem.Allocator, md: []const u8, po
     }
 
     try out.appendSlice(a, "<blockquote>\n");
-    try renderBlocksInto(out, a, inner.items, false, depth + 1, soft_wrap);
+    try renderBlocksInto(out, a, inner.items, false, depth + 1, soft_wrap, budget);
     try out.appendSlice(a, "</blockquote>\n");
     return p;
 }
@@ -652,7 +646,8 @@ fn trimLine(line: []const u8) []const u8 {
 /// writeRawHtml emits a chunk of raw HTML: each recognized same-origin <img> or
 /// <video> is rebuilt from an attribute allowlist; everything else is
 /// HTML-escaped to literal text.
-fn writeRawHtml(out: *std.ArrayList(u8), a: std.mem.Allocator, raw: []const u8) !void {
+fn writeRawHtml(out: *std.ArrayList(u8), a: std.mem.Allocator, raw: []const u8, budget: *Budget) !void {
+    budget.charge(raw.len); // one linear scan of the raw block
     var last: usize = 0;
     var i: usize = 0;
     while (i < raw.len) {
@@ -749,4 +744,30 @@ test "renderTrusted (hard-wrap dialect): a source wrap stays a <br>, inline is l
     // Chat/docs contract: every newline is a hard break and a span can't cross it.
     try testing.expect(std.mem.indexOf(u8, html, "<br>") != null);
     try testing.expect(std.mem.indexOf(u8, html, "<strong>") == null);
+}
+
+test "budget: a blown ceiling aborts the parse with error.Hostile" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    // A ceiling far below the work this text needs forces the abort path —
+    // the mechanism a super-linear regression would trip (proven against a
+    // fault-injected O(n^2) cursor; here we exercise the abort directly).
+    var budget = Budget{ .ceiling = 3 };
+    try testing.expectError(error.Hostile, renderBlocks(arena.allocator(), "hello world, this is several words", false, &budget));
+}
+
+test "budget: linear content never trips, regardless of size" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    // The ceiling is per_byte*len+base, and a linear parser spends ~k*len with
+    // k well under per_byte — so a big but ordinary message renders, never the
+    // malformed placeholder. (This is the whole point: density/size don't trip
+    // it, only super-linear work does.)
+    var buf: std.ArrayList(u8) = .empty;
+    var i: usize = 0;
+    while (i < 4000) : (i += 1) try buf.appendSlice(a, "word **bold** [t](http://x.com) ");
+    const html = try render(a, buf.items);
+    try testing.expect(!std.mem.eql(u8, html, malformed_html));
+    try testing.expect(hostileReason(a, buf.items) == null);
 }
