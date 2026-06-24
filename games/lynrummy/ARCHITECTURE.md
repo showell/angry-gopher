@@ -1,172 +1,145 @@
 # Lyn Rummy architecture
 
-This is what future-Claude reads to orient before making a
-change in the Lyn Rummy tree. **The code is the reference;
-this doc is for principles and pointers.** When prose here
-disagrees with code, trust the code.
+Orientation for a human reader: the big-picture shape of the system and the few
+ideas worth understanding before reading code. **The code is the reference**; when
+prose here disagrees with code, trust the code. (The subsystem is parked — see
+[`README.md`](./README.md) — so this is a record of how it was built and why, not
+a roadmap.)
 
-For concrete entry points (Elm boots, server handlers, CLI
-tools), see [`ENTRY_POINTS.md`](ENTRY_POINTS.md).
+## The one design axiom: a single shared board
+
+Both players contribute to the **same** play surface. Everything flows from this —
+it's not two private tableaus that occasionally interact. There are two hands but
+only one is face-up at a time (the active player's; the other shows as a card
+count). And it's **solo + an optional agent opponent** — two-human, pass-the-mouse
+multiplayer is deliberately out of scope. Features designed against any of those
+assumptions invert the foundational shape.
 
 ## The three actors
 
-- **TypeScript is the agent.** Computes plays. Lives in
-  `games/lynrummy/ts/`. Generates full self-played games as
-  DSL transcripts (`npm run generate-game`) and serves the
-  Elm UI's Hint button and the in-game agent over ports.
-  See [`ts/README.md`](./ts/README.md).
-- **Elm is the autonomous client.** Renders the game, runs
-  its own referee, replays its own action log. Two browser
-  entry points: `Game.elm` (full game) and `Puzzle.elm`
-  (single-board puzzle). See
-  [`elm/README.md`](./elm/README.md).
-- **The server is dumb storage.** Holds session files
-  (`meta`, `actions.dsl`) under `games/lynrummy/data/`.
-  Doesn't referee, doesn't reason. Sequential session-id
-  allocation is the one smart exception.
+- **TypeScript is the agent.** It computes plays (`games/lynrummy/ts/`): the BFS
+  solver, the verb→gesture pipeline, full self-played games written as DSL
+  transcripts, and the Hint button / in-game opponent served to the UI over ports.
+- **Elm is the autonomous client.** It renders the game, runs its own referee, and
+  replays its own action log. Two browser entry points — `Game.elm` (full game)
+  and `Puzzle.elm` (single board) — sharing `Lib.*` for rendering, the DSL
+  parsers, animation, the dealer, and the referee.
+- **The server is dumb storage.** It holds session files (`meta`, `actions.dsl`)
+  and never referees or reasons. Sequential session-id allocation is its one smart
+  exception.
 
 ## The mission
 
-A human plays Lyn Rummy through the Elm UI, against a TS
-agent, and watches the agent's moves unfold through the
-same UI **in a way that reads as another player playing —
-not as a machine logging primitives to a server**.
+A human plays through the Elm UI, against the TS agent, and watches the agent's
+moves unfold **in a way that reads as another player playing — not a machine
+logging primitives to a server.** That third constraint does the most work: the UI
+must re-tell the agent's story visually, at human speed, with motion that looks
+like a drag. Replay fidelity and the agent's spatial-planning rules both trace
+back to it.
 
-The third constraint does the most work: the UI has to be
-able to re-tell the agent's story visually, at human speed,
-with motion that looks like a drag. Replay fidelity and the
-TS agent's spatial-planning rules both trace back to it.
+A corollary worth stating: **the agent plans as well as the constraints allow.**
+"Human-like" is *not* a dumbness axis — humans are genuinely good at spatial
+planning at the kitchen table. The human-likeness lives in **pacing** (human
+tempo, natural pauses) and **tolerance for imperfection** (the clumsiness a real
+person also shows fighting a drag-and-drop UI), never in degrading plan quality.
 
-## DSL is the lingua franca
+## DSL is the lingua franca (the idea worth stealing)
 
-One canonical text grammar carries every long-lived
-artifact: conformance fixtures, on-disk session files, the
-resume wire, agent self-play transcripts. Two runtimes
-(Elm, TypeScript) speak it. Most tests parse `.dsl`
-files at run time.
+One canonical text grammar carries **every** long-lived artifact: the conformance
+fixtures, the on-disk session files, the resume wire, the TS↔Elm move wire, and
+the agent's self-play transcripts. Two runtimes (Elm, TypeScript) speak it, and
+most tests parse `.dsl` files at run time. Cards are Unicode glyphs, coordinates
+are `(left, top)` — dramatically more compact and readable than the equivalent
+JSON of card objects and points.
 
-The examples are the spec — there's no separate syntax
-reference. Read
-`conformance/scenarios/undo_walkthrough.dsl` for the most
-compact tour, and any other `.dsl` under
-`conformance/scenarios/` for the rest. For the conformance
-pipeline (entry points: `ops/check` pre-commit, `ops/check_full`
-milestone), see [`BUILDING.md`](BUILDING.md).
+Why this mattered so much in practice:
+
+- **One shape, no translators.** Because the same grammar is the wire *and* the
+  test corpus *and* the saved game, the fixtures are a literal contract for the
+  live system — there's no second representation to drift out of sync. (Sibling
+  parsers exist only where the *envelope* differs, e.g. a `N)` sequence prefix on
+  log lines; the per-primitive grammar lives in exactly one place.)
+- **"Is this a bug or by design?" becomes a lookup.** A disagreement gets settled
+  against a DSL scenario instead of a conversation.
+- **Steve and Claude could read the wire together.** A game, a hint, a stuck
+  state — all of it is human-readable text you can paste into a discussion and
+  reason about jointly. This was the single biggest force-multiplier for
+  troubleshooting the game, and the favorite part of the architecture.
+
+The examples *are* the spec — there's no separate syntax reference. Read
+`conformance/scenarios/undo_walkthrough.dsl` for the most compact tour, and the
+rest of `conformance/scenarios/*.dsl` for the full grammar. (The approach is
+niche: it pays off precisely because everything here is cards-and-coordinates.
+Projects without that shape — like the Driving Game, or Chat — are happier with no
+wire format or with plain JSON.)
 
 ## Events are the system
 
-A Lyn Rummy game, autonomous or human-played, is a sequence
-of events: split, merge_stack, merge_hand, place_hand,
-move_stack, complete_turn, undo. The wire format carries
-events. The referee decides legality. The action log
-persists them. Replay re-manifests them. **All of these
-exist to serve the events.**
-
-When deciding whether logic belongs in component A or B,
-ask: what event is being handled, and which component
-handles it without distorting its representation. That
-question is upstream of language choice, file layout, and
-performance.
+A game, autonomous or human-played, is a sequence of events: `split`,
+`merge_stack`, `merge_hand`, `place_hand`, `move_stack`, `complete_turn`, `undo`.
+The wire carries events; the referee decides legality; the action log persists
+them; replay re-manifests them. When deciding whether logic belongs in component A
+or B, ask which one handles the event without distorting its representation —
+that's upstream of language, file layout, and performance.
 
 ## Each actor owns its own view
 
-Each actor has its own log, its own referee, its own
-acceptance policy. No actor is authoritative above the
-others.
-
-Consequences:
-
-- The server stores what Elm posts but never parses
-  primitives. Storage, not coordination.
-- After bootstrap, Elm's only outbound traffic is
-  fire-and-forget action POSTs (`sendAction`). No inbound
-  HTTP gates user input. The only "pending" state is for
-  TS engine responses ("Thinking…").
-- The TS agent's full-game loop writes straight to the file
-  system. No HTTP.
-
-## Two entry points, shared `Lib`
-
-`Game.elm` and `Puzzle.elm` are independent port modules,
-each with its own update/view/subscriptions. They share
-`Lib.*` modules for the rendering primitives, the DSL
-parsers, the animation engine, the dealer, the referee.
-The full game additionally pulls in `Game.*` for its
-Model/Msg/View slicing.
-
-Choose by domain. If a new surface wants full-game
-semantics (turns, hand, agent), extend `Game.elm`. If it's
-narrower (board only, no turn cycle), follow `Puzzle.elm`'s
-pattern.
+Each actor has its own log, referee, and acceptance policy; none is authoritative
+above the others. Consequences: the server stores what Elm posts but never parses
+primitives; after bootstrap Elm's only outbound traffic is fire-and-forget action
+POSTs; the TS full-game loop writes straight to the filesystem.
 
 ## Frames of reference
 
-Two coordinate frames; nobody should confuse them.
-
-- **Board frame.** Origin `(0, 0)` at the board's top-left.
-  Stack `loc` and any board-level reasoning live here. The
-  TS agent uses board frame natively.
-- **Viewport frame.** Origin at the browser window's
-  top-left. Pointer coords and the live drag floater live
-  here.
-
-Elm translates board → viewport at render time using the
-board's measured DOM rect. Hand-to-board drags require
-viewport frame for the path (the drag starts in the hand
-area, no board-frame coord) but ALWAYS land in board frame.
-
-If you're writing code that speaks coordinates on the wire
-and you're not sure which frame you're in, stop.
+Two coordinate frames, never to be confused. **Board frame** — origin at the
+board's top-left; stack positions and all board reasoning live here, and the agent
+works here natively. **Viewport frame** — origin at the browser window; pointer
+coords and the live drag floater live here. Elm translates board → viewport at
+render time from the board's measured DOM rect. If you're writing code that speaks
+coordinates on the wire and aren't sure which frame you're in, stop.
 
 ## Durable facts vs. rich facts
 
-A move-as-recorded has two layers:
-
-- **Durable.** The logical move + the board-frame landing
-  coord. Survives any future environment.
-- **Rich.** Raw pointer path in viewport pixels, timestamped
-  per sample. Faithful at capture; geometric validity
-  depends on environment.
-
-At replay: faithful playback when the environment matches,
-synthesize from durable when it doesn't. The TS agent emits
-durable only — Elm synthesizes drags on replay from board-
-frame coords. Replay branches on path presence.
+A recorded move has two layers. **Durable** — the logical move plus the
+board-frame landing coordinate; survives any environment. **Rich** — the raw,
+timestamped pointer path in viewport pixels; faithful at capture, but its
+geometric validity depends on the environment. At replay: play the rich path back
+faithfully when the environment matches, and synthesize from the durable facts
+when it doesn't. The agent emits durable-only; Elm synthesizes the drag on replay.
+*Faithful when possible, durable always.*
 
 ## Design principles
 
-- **Redundancy as asset.** Two independent representations
-  + an automated agreement check > a single canonical one.
-- **Each actor owns its own view.** No coordinator above
-  the actors.
-- **Record facts, decide later.** The wire carries what
-  happened, not instructions for how to interpret it.
-- **Own the whole system.** The wire is a contract we
-  control. If a component needs a fact to behave well, put
-  the fact on the wire.
-- **Constraints must be real, not artificial.** Verify
-  before designing around.
-- **Faithful when possible, durable always.**
-- **Plan, then execute.** Agents simulate the full move
-  mentally before emitting primitives. See
-  [`ts/PHYSICAL_PLAN.md`](./ts/PHYSICAL_PLAN.md).
-- **Compute answers you own.** Don't round-trip through an
-  opaque system to learn what you already know.
-- **One representation per concept.** Don't let two models
-  for the same thing co-exist.
+- **Redundancy as an asset** — two independent representations plus an automated
+  agreement check beats a single canonical one.
+- **Record facts, decide later** — the wire carries what happened, not how to
+  interpret it.
+- **Own the whole system** — the wire is a contract we control; if a component
+  needs a fact to behave well, put the fact on the wire.
+- **Constraints must be real, not artificial** — verify before designing around one.
+- **Plan, then execute** — agents simulate the full move before emitting
+  primitives (see [`ts/PHYSICAL_PLAN.md`](./ts/PHYSICAL_PLAN.md)).
+- **One representation per concept** — don't let two models of the same thing
+  coexist.
+
+## A retrospective on Elm
+
+Elm was the UI bet, and as a language it's a pleasure — the referee, the dealer,
+and the replay engine are clean because of it. But the honest verdict is that
+Steve wouldn't choose it again for an app like this. The ~10% of places where Elm
+has to shell out to JS/TS — for **performance** (the BFS solver moved to TS) and
+for **browser reality** (reading DOM geometry for drags) — were more painful than
+the purity bought back. The takeaway kept here is about the *ideas* (typed
+messages, no runtime exceptions, each actor owning its view), not a recommendation
+to reach for Elm next time.
 
 ## Where to find more
 
-- [`./README.md`](./README.md) — repo-level overview.
-- [`./ts/README.md`](./ts/README.md) — TS agent subsystem.
-- [`./elm/README.md`](./elm/README.md) — Elm client.
-- [`ENTRY_POINTS.md`](ENTRY_POINTS.md) — boot points + URLs.
-- [`BUILDING.md`](BUILDING.md) — build pipeline.
-- `conformance/scenarios/*.dsl` — DSL examples = spec.
-- `~/.claude/projects/-home-steve-showell-repos-angry-gopher/memory/MEMORY.md`
-  — durable doctrines + working-style feedback.
+- [`README.md`](./README.md) — overview, status, build & gates.
+- [`RULES.md`](./RULES.md) — the game itself.
+- [`ts/ENGINE_V2.md`](./ts/ENGINE_V2.md) · [`ts/PHYSICAL_PLAN.md`](./ts/PHYSICAL_PLAN.md)
+  — solver design and the gesture layer, for reading the engine.
+- `conformance/scenarios/*.dsl` — the DSL examples that are the spec.
 
-All build, launch, and test ops go through `ops/` scripts
-(repo root). `ops/list` for the index. Don't hand-compose
-`zig build`, `elm make`, or `tsc` — those silently
-drop sequencing the scripts encode.
+All build, launch, and test work goes through `ops/` scripts (`ops/list` for the
+index) — don't hand-compose `zig build`, `elm make`, or the TS runners.

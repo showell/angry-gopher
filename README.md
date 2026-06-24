@@ -279,7 +279,6 @@ consistency checks that bare commands silently skip.
 | Lyn Rummy docs (top of tree) | [`games/lynrummy/README.md`](games/lynrummy/README.md) |
 | Rules of the game | [`games/lynrummy/RULES.md`](games/lynrummy/RULES.md) |
 | Load-bearing design decisions | [`games/lynrummy/ARCHITECTURE.md`](games/lynrummy/ARCHITECTURE.md) |
-| Build pipeline | [`games/lynrummy/BUILDING.md`](games/lynrummy/BUILDING.md) |
 | Deploy / host setup | [`deploy/README.md`](deploy/README.md) |
 | Agent-collaboration conventions | `~/showell_repos/claude-collab/agent_collab/` |
 

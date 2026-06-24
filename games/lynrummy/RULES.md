@@ -74,4 +74,6 @@ refill.
 
 The first player to clear their hand is the **victor**.
 Play continues after that — clearing your hand is the
-victory event, not the end of the game.
+victory event, not the end of the game (and it can happen
+more than once). The **game** ends only when the deck runs
+low.
