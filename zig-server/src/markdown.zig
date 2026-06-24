@@ -88,11 +88,23 @@ pub const malformed_html = "<p class=\"md-malformed\">⚠️ malformed markdown 
 /// rather than risk the server; "no more than ~256 non-ordinary-text tokens.")
 const max_markup_tokens = 256;
 
-/// hostileReason scans `md` once and returns a short reason if it's hostile or
-/// absurdly over-formatted (and should render as malformed_html / be refused at
-/// POST), or null if it's safe to render. Cheap and linear: a single line walk
-/// that skips fenced code blocks and counts inline markup characters elsewhere.
+/// hostileReason returns a short reason if `md` is over-formatted (and should
+/// render as malformed_html / be refused at POST), or null if it's safe.
 pub fn hostileReason(md: []const u8) ?[]const u8 {
+    if (countMarkupTokens(md, max_markup_tokens) > max_markup_tokens)
+        return "too much markdown formatting";
+    return null;
+}
+
+/// countMarkupTokens counts inline-markup characters (`* _ [ ] ` ~ <`) OUTSIDE
+/// fenced code — a single linear line walk that skips fenced blocks. It stops
+/// counting once the total exceeds `cap` (hostileReason passes the real cap for
+/// an early exit; pass a huge cap to count them all, e.g. for measurement).
+///
+/// NOTE: this is a proxy for SUPERFICIAL formatting density, not the real parse
+/// work — the inline scanners are linear (monotonic cursors), so density no
+/// longer predicts cost the way it did before that "earned knowledge" landed.
+pub fn countMarkupTokens(md: []const u8, cap: usize) usize {
     var tokens: usize = 0;
     var fence_char: u8 = 0; // 0 = not inside a fenced code block
     var fence_count: usize = 0;
@@ -111,14 +123,14 @@ pub fn hostileReason(md: []const u8) ?[]const u8 {
             for (line) |c| switch (c) {
                 '*', '_', '[', ']', '`', '~', '<' => {
                     tokens += 1;
-                    if (tokens > max_markup_tokens) return "too much markdown formatting";
+                    if (tokens > cap) return tokens;
                 },
                 else => {},
             };
         }
         pos = next;
     }
-    return null;
+    return tokens;
 }
 
 // --- block rendering --------------------------------------------------------
