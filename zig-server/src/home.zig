@@ -218,5 +218,6 @@ const body_html =
     \\  <p>Notes from building this site — a single zig binary, written with Claude. Read along.</p>
     \\  <ul><li><a href="/blog">Read the blog →</a></li></ul>
     \\</div>
+    \\<p style="margin-top:28px;font-size:13px;color:#888"><a href="/steve-resume">Resume for Steve Howell</a></p>
     \\</div></body></html>
 ;

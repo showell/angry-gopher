@@ -65,6 +65,10 @@ BIN="$GOPHER_DIR/zig-server/zig-out/bin/zig-server"
 echo "Syncing to $DEPLOY_HOST:$DEPLOY_DIR ..."
 rsync -avz "$BIN" "$DEPLOY_HOST:$DEPLOY_DIR/zig-server"
 rsync -avz --mkpath --delete "$GOPHER_DIR/blog/posts/" "$DEPLOY_HOST:$DEPLOY_DIR/blog/posts/"
+# Same deal for the pages/ tree (currently just steve-resume.md) — free-standing
+# markdown read at request time; --delete scoped to pages/ keeps the repo the
+# single source of truth for what's live.
+rsync -avz --mkpath --delete "$GOPHER_DIR/pages/" "$DEPLOY_HOST:$DEPLOY_DIR/pages/"
 
 echo "Restarting $DEPLOY_SERVICE ..."
 # Health check hits the REAL FRONT DOOR, not /driving. The first cutover went

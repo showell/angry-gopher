@@ -28,6 +28,7 @@ const learn = @import("learn.zig");
 const admin = @import("admin.zig");
 const home = @import("home.zig");
 const blog = @import("blog.zig");
+const resume_page = @import("resume_page.zig");
 const login = @import("login.zig");
 const brand = @import("brand.zig");
 const edge = @import("edge.zig");
@@ -173,6 +174,10 @@ fn route(req: *std.http.Server.Request, io: std.Io, alloc: std.mem.Allocator, bu
         try login.handleLogout(req, io, alloc);
     } else if (matchPrefix(path, "/images")) |sub| {
         try brand.handle(req, sub);
+    } else if (std.mem.eql(u8, path, "/steve-resume")) {
+        // Public, read-only. A single server-owned markdown page (pages/steve-resume.md)
+        // rendered through the trusted markdown pipeline — no viewer resolution, no gate.
+        try resume_page.handle(req, io, alloc);
     } else if (std.mem.eql(u8, path, "/version")) {
         try home.handleVersion(req, alloc);
     } else if (std.mem.eql(u8, path, "/debug/mem")) {
