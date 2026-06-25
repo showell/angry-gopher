@@ -118,9 +118,15 @@ fn unescapeBodyLine(line: []const u8) []const u8 {
 /// Stream is the result of openStream: the decoded backlog + a live Subscriber.
 /// The caller replays backlog[since..] then drains the subscriber, and MUST pair
 /// this with `bus.close(sub)` when the connection ends.
+///
+/// Two lifetimes deliberately bundled here — keep them straight:
+///   backlog: REQUEST-scoped. Decoded into openStream's arena `alloc`; valid only
+///            for this request and never stored past it (it's replayed, then dropped).
+///   sub:     SERVER-scoped. Owned by the bus on its base allocator; outlives the
+///            request until `bus.close(sub)` removes + frees it.
 pub const Stream = struct {
-    backlog: []ChatMessage,
-    sub: *bus_mod.Subscriber,
+    backlog: []ChatMessage, // request-arena: consume in-request, never retain
+    sub: *bus_mod.Subscriber, // bus-owned (base alloc): close it, don't free piecemeal
 };
 
 /// openStream: under chat_mu, decode the session backlog

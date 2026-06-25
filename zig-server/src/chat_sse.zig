@@ -63,7 +63,7 @@ pub fn streamTranscript(req: *Request, io: Io, alloc: Alloc, bus: *Bus, conv_dir
     while (true) {
         switch (stream.sub.next()) {
             .msg => |raw| {
-                defer stream.sub.alloc.free(raw);
+                defer stream.sub.gpa.free(raw);
                 const frame = liveFrame(alloc, raw, viewer) catch continue;
                 http.pushFrame(&body, frame) catch return;
             },
@@ -133,7 +133,7 @@ pub fn forwardUserStream(req: *Request, alloc: Alloc, bus: *Bus, key: []const u8
     while (true) {
         switch (sub.next()) {
             .msg => |blob| {
-                defer sub.alloc.free(blob);
+                defer sub.gpa.free(blob);
                 const frame = std.fmt.allocPrint(alloc, "data: {s}\n\n", .{blob}) catch continue;
                 http.pushFrame(&body, frame) catch return;
             },
