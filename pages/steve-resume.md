@@ -25,7 +25,7 @@ Phi Beta Kappa. BS with a double major (Computer Science / Electrical Engineerin
 
 ### Zulip / Kandra Labs — 2016–2025
 
-*Open-source office chat application*
+*Remote · open-source office chat application*
 
 I contributed to Zulip for about a decade as it grew into one of the premier open-source office chat applications, and I was one of the project's most prolific contributors. Zulip is a large chat system with a wide surface area — messaging, search, notifications, presence, permissions, and administration — built on Python, Django, and PostgreSQL on the backend; jQuery/JavaScript (and eventually TypeScript) on the frontend; and a real-time event system connecting the two. I made over 5,700 atomic commits across the codebase during my tenure. My role, broadly, was to improve the code along four axes: readability, reliability, usability, and performance.
 
@@ -49,7 +49,7 @@ I was one of the original ten developers at the Cambridge-based Zulip startup. T
 
 ### Software Engineer — DomainTools LLC
 
-*Feb 2012 – Apr 2013*
+*Feb 2012 – Apr 2013 · Seattle, WA*
 
 When I worked at domaintools.com, the company was still mostly focused on services centered on its extensive in-house database of domain records. I helped maintain their PHP website tools and Python backend systems, and I also wrote significant amounts of C. Some of the daily map/reduce jobs that analyzed vast datasets of domain data were still written in Python; I ported them to C to make the programs 30x faster. That work included a lightweight home-grown JSON parser and an arena-based allocation system to prevent memory leaks.
 
@@ -65,13 +65,13 @@ During my tenure we optimized processes enough to achieve marginal profits again
 
 ### Software Developer — Merchant Link
 
-*Apr 2004 – Sep 2007*
+*Apr 2004 – Sep 2007 · Silver Spring, MD*
 
 I developed credit-card gateway applications in Python, along with supporting tools such as accounting and performance monitoring (some web-based). I also performed production-support activities such as troubleshooting and deploying major software releases.
 
 ### Software Developer — NXT
 
-*1997 – Jul 1999*
+*1997 – Jul 1999 · Bethesda, MD*
 
 This company later became Merchant Link / Chase Paymentech through acquisitions (where I worked again in 2004–2007). During my original tenure at NXT, I primarily wrote asynchronous credit-card gateway software in straight C on Sun/Solaris. Our small team of five wrote to multiple credit-card formats and protocols, processing nearly a million transactions per day in the 1990s, mostly through two large Unix boxes.
 
@@ -79,17 +79,19 @@ I was also the primary architect of some of our monitoring and error-tracking sy
 
 ### Software Consultant — Watson Wyatt Worldwide
 
-*Jun 1992 – Nov 1996*
+*Jun 1992 – Nov 1996 · Washington, DC*
 
 Developed applications for cafeteria-style corporate benefits. C/C++, SQL Server.
 
 ### Software Developer — Oracle
 
-*Sep 1989 – Jun 1991*
+*Sep 1989 – Jun 1991 · Redwood City, CA*
 
 Helped automate QA for Oracle mainframe products with Rexx. Installed new database releases and reviewed documentation.
 
 ### Internships
+
+*Maryland*
 
 - **Summer 1989** — Computer Sciences Corporation
 - **Summer 1988** — Noise Cancellation Technologies
