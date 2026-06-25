@@ -23,7 +23,12 @@ var base_url: []const u8 = "http://localhost:9001";
 
 const burst_requests = 500; // requests fired per burst
 const bursts = 4; // burst 0 is warmup (caches fill); the slope is measured over bursts 1..N-1
+const burst_workers = 8; // concurrent firers per burst — cuts wall-clock and stresses the concurrency paths
 const leak_threshold_bpr = 1; // sustained bytes/request of growth at/above which we call it a leak
+
+// Per-request failures during a burst, surfaced at the end — a hammer that's
+// silently erroring isn't exercising anything, so we never hide it.
+var hit_errors: std.atomic.Value(usize) = .init(0);
 
 /// A Scenario is one endpoint exercise: method + path (+ optional body for POSTs).
 /// `auth` scenarios carry the session cookie minted by registering at startup.
@@ -98,7 +103,20 @@ pub fn main(init: std.process.Init) !void {
 
     var leaks: usize = 0;
     for (scenarios) |s| {
-        const v = hammer(&client, gpa, s) catch |e| {
+        // Sanity: the endpoint must actually answer 200 before we trust a CLEAN
+        // verdict — a silent 303-to-login (auth broken) or 500 would otherwise
+        // "pass" while exercising nothing.
+        const st = hitStatus(&client, s) catch |e| {
+            try out.print("ERROR  {s}: {s}\n", .{ s.label, @errorName(e) });
+            try out.flush();
+            std.process.exit(2);
+        };
+        if (st != .ok) {
+            try out.print("ERROR  {s}: expected 200, got {d}\n", .{ s.label, @intFromEnum(st) });
+            try out.flush();
+            std.process.exit(2);
+        }
+        const v = hammer(io, &client, gpa, s) catch |e| {
             try out.print("ERROR  {s}: {s}\n", .{ s.label, @errorName(e) });
             try out.flush();
             std.process.exit(2);
@@ -110,6 +128,12 @@ pub fn main(init: std.process.Init) !void {
         );
         try out.flush();
         if (v.leaked) leaks += 1;
+    }
+
+    const errs = hit_errors.load(.monotonic);
+    if (errs > 0) {
+        try out.print("WARNING: {d} request(s) errored mid-burst — verdicts are suspect\n", .{errs});
+        try out.flush();
     }
 
     if (leaks == 0) {
@@ -134,13 +158,12 @@ const Verdict = struct {
 /// hammer drives one scenario: warmup + measured bursts, reading the meter between
 /// bursts, and judges the slope. Caches fill during burst 1, so the baseline is
 /// the meter AFTER burst 1; sustained growth past that is the leak signal.
-fn hammer(client: *std.http.Client, gpa: std.mem.Allocator, s: Scenario) !Verdict {
+fn hammer(io: Io, client: *std.http.Client, gpa: std.mem.Allocator, s: Scenario) !Verdict {
     var warm_bytes: u64 = 0;
     var final_bytes: u64 = 0;
     var b: usize = 0;
     while (b < bursts) : (b += 1) {
-        var i: usize = 0;
-        while (i < burst_requests) : (i += 1) try hit(client, s);
+        try fireBurst(io, client, s);
         const live = try readLiveBytes(client, gpa);
         if (b == 0) warm_bytes = live; // baseline: after warmup
         if (b == bursts - 1) final_bytes = live; // endpoint: after the last burst
@@ -157,6 +180,54 @@ fn hammer(client: *std.http.Client, gpa: std.mem.Allocator, s: Scenario) !Verdic
         .bytes_per_req = bpr,
         .leaked = bpr >= leak_threshold_bpr,
     };
+}
+
+/// fireBurst fires burst_requests at the scenario, spread across burst_workers
+/// concurrent firers, and waits for all of them (the barrier before the meter
+/// read). Concurrency cuts wall-clock and exercises the server's per-connection
+/// concurrency paths under real parallel load.
+fn fireBurst(io: Io, client: *std.http.Client, s: Scenario) !void {
+    var group: Io.Group = .init;
+    var w: usize = 0;
+    while (w < burst_workers) : (w += 1) {
+        const count = burst_requests / burst_workers + @as(usize, if (w < burst_requests % burst_workers) 1 else 0);
+        group.async(io, fireChunk, .{ client, s, count });
+    }
+    try group.await(io);
+}
+
+/// fireChunk fires `count` sequential requests on one worker. A per-request error
+/// is counted (surfaced at the end) rather than aborting the burst — a dropped
+/// connection mid-hammer shouldn't kill the run, but it must not vanish either.
+fn fireChunk(client: *std.http.Client, s: Scenario, count: usize) void {
+    var i: usize = 0;
+    while (i < count) : (i += 1) {
+        hit(client, s) catch {
+            _ = hit_errors.fetchAdd(1, .monotonic);
+        };
+    }
+}
+
+/// hitStatus fires one request and returns the response status — the per-scenario
+/// sanity probe (must be 200 before we trust a CLEAN verdict).
+fn hitStatus(client: *std.http.Client, s: Scenario) !std.http.Status {
+    var scratch: [4096]u8 = undefined;
+    var sink: Io.Writer.Discarding = .init(&scratch);
+    var url_buf: [256]u8 = undefined;
+    const url = try std.fmt.bufPrint(&url_buf, "{s}{s}", .{ base_url, s.path });
+    const extra: []const std.http.Header = if (s.auth and session_cookie != null)
+        &.{.{ .name = "cookie", .value = session_cookie.? }}
+    else
+        &.{};
+    const res = try client.fetch(.{
+        .location = .{ .url = url },
+        .method = s.method,
+        .payload = s.body,
+        .response_writer = &sink.writer,
+        .extra_headers = extra,
+        .keep_alive = false,
+    });
+    return res.status;
 }
 
 /// hit fires one request at the scenario's path and discards the body — we're
