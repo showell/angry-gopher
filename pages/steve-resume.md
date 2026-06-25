@@ -27,55 +27,55 @@ Phi Beta Kappa. BS with a double major (Computer Science / Electrical Engineerin
 
 *Remote · open-source office chat application*
 
-I contributed to Zulip for about a decade as it grew into one of the premier open-source office chat applications, and I was one of the project's most prolific contributors. Zulip is a large chat system with a wide surface area — messaging, search, notifications, presence, permissions, and administration — built on Python, Django, and PostgreSQL on the backend; jQuery/JavaScript (and eventually TypeScript) on the frontend; and a real-time event system connecting the two. I made over 5,700 atomic commits across the codebase during my tenure. My role, broadly, was to improve the code along four axes: readability, reliability, usability, and performance.
+I was one of the most prolific contributors to Zulip as it grew into a premier open-source office chat application. Zulip is a large chat system with a wide surface area — messaging, search, notifications, presence, permissions, and administration — built on Python, Django, and PostgreSQL on the backend; jQuery/JavaScript (and eventually TypeScript) on the frontend; and a real-time event system connecting the two. I made over 5,700 atomic commits across the codebase. My role was to improve the code along four axes: readability, reliability, usability, and performance.
 
-I was comfortable working in a large legacy codebase, and much of my work involved making difficult structural changes to it. I regularly took sprawling, tightly coupled code and extracted the key concepts into cleaner, more modular components — for example, consolidating dozens of ad hoc event-validation checks into a single shared schema, or carving a hard-to-test piece of UI logic out into its own module so the surrounding code could be tested thoroughly. These changes usually had to be made in the face of legacy constraints and other code that depended on the existing behavior, which meant understanding the system deeply before changing anything.
+Much of my work involved difficult structural changes to a large legacy codebase. I took sprawling, tightly coupled code and extracted the key concepts into cleaner, modular components — for example, consolidating dozens of ad hoc event-validation checks into a single shared schema, or carving a hard-to-test piece of UI logic into its own module so the surrounding code could be tested thoroughly. These changes had to respect legacy constraints and existing dependents, which meant understanding the system deeply before changing anything.
 
-A significant portion of my work targeted performance. On the backend, I optimized Django ORM queries — tuning queries, indexes, and Python-side ORM code to do less work.
+I also focused on performance, tuning Django ORM queries, indexes, and Python-side ORM code to do less work.
 
-I also built Zulip's unit-testing framework on Node.js in 2014, and it is still in use today.
+I built Zulip's unit-testing framework on Node.js in 2014; it remains in use today.
 
 ### Software Engineer — Dropbox
 
-*Apr 2014 – Oct 2014 · San Francisco Bay Area*
+*Apr 2014 – Oct 2014 · San Francisco, CA*
 
-Zulip was acquired by Dropbox in March 2014. I worked on various projects there, including adding groups support to Dropbox for Business and speeding up their continuous-integration steps. I worked almost exclusively in Python, interacting with proprietary Dropbox code to build web interfaces and manage distributed metadata for customers' uploaded/synced files.
+Zulip was acquired by Dropbox in March 2014. There I added groups support to Dropbox for Business and sped up their continuous-integration pipeline. I worked almost exclusively in Python, against proprietary Dropbox code, building web interfaces and managing distributed metadata for customers' uploaded and synced files.
 
 ### Software Engineer — Zulip, Inc.
 
 *Apr 2013 – Mar 2014 · Cambridge, MA*
 
-I was one of the original ten developers at the Cambridge-based Zulip startup. The company was founded by four MIT graduates who had successfully exited another startup and saw a niche for topic-based chat. We built out a successful beta program for about thirty organizations on a common tech stack for the time — jQuery on the front end, Django on the back. All team members focused on full-stack features, so I split my time roughly 50/50 between JavaScript and Python.
+I was one of the original ten developers at the Cambridge-based Zulip startup, founded by four MIT graduates who had exited another startup and saw a niche for topic-based chat. We grew a beta program to thirty organizations on the standard stack of the era — jQuery on the front end, Django on the back. Everyone worked full-stack, so I split my time evenly between JavaScript and Python.
 
 ### Software Engineer — DomainTools LLC
 
 *Feb 2012 – Apr 2013 · Seattle, WA*
 
-When I worked at domaintools.com, the company was still mostly focused on services centered on its extensive in-house database of domain records. I helped maintain their PHP website tools and Python backend systems, and I also wrote significant amounts of C. Some of the daily map/reduce jobs that analyzed vast datasets of domain data were still written in Python; I ported them to C to make the programs 30x faster. That work included a lightweight home-grown JSON parser and an arena-based allocation system to prevent memory leaks.
+DomainTools built services around its extensive in-house database of domain records. I maintained their PHP web tools and Python backend systems, and wrote C. Several daily map/reduce jobs that analyzed large domain-data sets ran in Python; I ported them to C, making them 30x faster. That work included a lightweight, home-grown JSON parser and an arena-based allocation system to prevent memory leaks.
 
 ### Software Developer — AmazonFresh
 
 *Sep 2007 – Jan 2009 · Seattle, WA*
 
-I developed software for the AmazonFresh grocery-delivery service. Our team split time between the Java-based customer-facing website and the Ruby-on-Rails-based warehouse management system (WMS). I mostly focused on the WMS, writing browser-based software for the warehouse scanner devices so associates could receive, stow, pick, pack, and load groceries. We used a MySQL database to track inventory throughout its life cycle — from the receiving truck to the delivery truck. I also worked on the reporting systems that let managers track inventory, associate productivity, and delivery status.
+I developed software for the AmazonFresh grocery-delivery service. Our team split time between the Java-based customer-facing website and the Ruby-on-Rails-based warehouse management system (WMS). I focused on the WMS, writing browser-based software for the warehouse scanner devices so associates could receive, stow, pick, pack, and load groceries. We used a MySQL database to track inventory throughout its life cycle — from the receiving truck to the delivery truck. I also built the reporting systems that let managers track inventory, associate productivity, and delivery status.
 
-Because we operated in a single exploratory market (Seattle), we were not writing software at tremendous scale, and we used rudimentary (but effective) Rails concepts to build the entire warehouse-facing system. The challenge, instead, was that we iterated very quickly on new features and new *processes* in the warehouse. The whole software team worked closely with product and warehouse managers to evaluate, improve, and automate processes for picking, stowing, packing, and more. Amazon already had tremendous experience delivering books and other consumer products, but it had never dealt with the challenges of groceries — perishables, separate picking zones for frozen/cold items, and delivery trucks owned and operated by Amazon.
+Because we operated in a single exploratory market (Seattle), we were not writing software at tremendous scale, and we used rudimentary but effective Rails concepts to build the entire warehouse-facing system. The challenge was instead the pace: we iterated quickly on new features and new *processes* in the warehouse. The whole software team worked closely with product and warehouse managers to evaluate, improve, and automate processes for picking, stowing, and packing. Amazon already had deep experience delivering books and other consumer products, but it had never faced the challenges of groceries — perishables, separate picking zones for frozen and cold items, and delivery trucks owned and operated by Amazon.
 
-During my tenure we optimized processes enough to achieve marginal profits against operating costs, though not against the full cost structure of product teams, software developers, and the like. The eventual outcome of the AmazonFresh experiment was that leadership bought Whole Foods (I may be oversimplifying). More importantly, Amazon learned a great deal about last-mile delivery in a very tricky market, and the software my teammates and I developed was integral to that exploration.
+We optimized processes enough to turn a marginal profit against operating costs, though not against the full cost structure of product teams and engineering. The AmazonFresh experiment eventually gave way to Amazon's acquisition of Whole Foods. More importantly, Amazon learned an enormous amount about last-mile delivery in a tricky market, and the software my teammates and I built was integral to that exploration.
 
 ### Software Developer — Merchant Link
 
 *Apr 2004 – Sep 2007 · Silver Spring, MD*
 
-I developed credit-card gateway applications in Python, along with supporting tools such as accounting and performance monitoring (some web-based). I also performed production-support activities such as troubleshooting and deploying major software releases.
+I developed credit-card gateway applications in Python, along with supporting tools for accounting and performance monitoring (some web-based). I also handled production support: troubleshooting and deploying major software releases.
 
 ### Software Developer — NXT
 
 *1997 – Jul 1999 · Bethesda, MD*
 
-This company later became Merchant Link / Chase Paymentech through acquisitions (where I worked again in 2004–2007). During my original tenure at NXT, I primarily wrote asynchronous credit-card gateway software in straight C on Sun/Solaris. Our small team of five wrote to multiple credit-card formats and protocols, processing nearly a million transactions per day in the 1990s, mostly through two large Unix boxes.
+This company later became Merchant Link / Chase Paymentech through acquisitions (where I worked again in 2004–2007). During my original tenure at NXT, I primarily wrote asynchronous credit-card gateway software in straight C on Sun/Solaris. Our small team of five wrote to multiple credit-card formats and protocols, processing nearly a million transactions per day in the 1990s on two large Unix boxes.
 
-I was also the primary architect of some of our monitoring and error-tracking systems, written in C/C++. We had a small suite of automated tests, but we honestly relied on extensive code review to ensure the high quality and reliability of the software. The format translations were mostly mechanical, but the protocol translations required a deep understanding of the async nature of legacy dial-up credit-card protocols and the careful construction of state machines in C to react to unexpected events and line noise.
+I was also the primary architect of our monitoring and error-tracking systems, written in C/C++. We had a small suite of automated tests, but relied on extensive code review to ensure the software's quality and reliability. The format translations were mostly mechanical, but the protocol translations required a deep understanding of the async nature of legacy dial-up credit-card protocols and the careful construction of state machines in C to react to unexpected events and line noise.
 
 ### Software Consultant — Watson Wyatt Worldwide
 
@@ -87,7 +87,7 @@ Developed applications for cafeteria-style corporate benefits. C/C++, SQL Server
 
 *Sep 1989 – Jun 1991 · Redwood City, CA*
 
-Helped automate QA for Oracle mainframe products with Rexx. Installed new database releases and reviewed documentation.
+Automated QA for Oracle mainframe products using Rexx. Installed new database releases and reviewed documentation.
 
 ### Internships
 
