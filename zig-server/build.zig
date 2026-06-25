@@ -25,6 +25,11 @@ pub fn build(b: *std.Build) void {
     // -Dcommit=$(git rev-parse --short HEAD); local/dev builds fall back to "dev".
     const build_opts = b.addOptions();
     build_opts.addOption([]const u8, "commit", b.option([]const u8, "commit", "git short hash baked into /version") orelse "dev");
+    // fake_leak: when true, /driving deliberately leaks a few bytes per hit so the
+    // stress harness's leak detector can be validated against a known leak. Default
+    // OFF and compile-time gated — there is NO runtime knob, so prod can't be made
+    // to leak. Flipped on only by ops/stress_selftest.
+    build_opts.addOption(bool, "fake_leak", b.option(bool, "fake_leak", "deliberately leak in /driving to validate the stress harness (never prod)") orelse false);
     root.addImport("build_options", build_opts.createModule());
 
     // Embedded front-end assets (the embed.go analog). Referenced in code as
@@ -99,12 +104,28 @@ pub fn build(b: *std.Build) void {
     const run_step = b.step("run", "Build and run the zig server");
     run_step.dependOn(&run_cmd.step);
 
+    // The leak stress harness (`zig build stress`): a separate executable that
+    // hammers endpoints over HTTP and watches /debug/mem. Standalone — no embedded
+    // assets — it only needs std (http.Client). Wrapped by ops/stress.
+    const stress_mod = b.createModule(.{
+        .root_source_file = b.path("src/stress.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    const stress_exe = b.addExecutable(.{ .name = "stress", .root_module = stress_mod });
+    // Build (don't run) the harness to zig-out/bin/stress. The ops scripts run the
+    // binary directly so they own the exit-code semantics — a `zig build run` step
+    // treats the harness's "leak found" exit 1 as a build failure, which is exactly
+    // backwards for ops/stress_selftest (where finding the planted leak is success).
+    const stress_step = b.step("stress", "Build the leak stress harness (zig-out/bin/stress)");
+    stress_step.dependOn(&b.addInstallArtifact(stress_exe, .{}).step);
+
     // Unit tests (`zig build test`). Each listed module is a test root; a module
     // must be in this list for its `test {}` blocks to actually run under the
     // gate (imports alone don't enroll a file's tests). Pure-logic modules tested
     // in isolation, so no embedded assets are needed.
     const test_step = b.step("test", "Run unit tests");
-    for ([_][]const u8{ "src/auth.zig", "src/users.zig", "src/markdown_fence.zig", "src/recent_feed.zig", "src/code_store.zig", "src/chat_upload.zig", "src/markdown.zig", "src/markdown_media.zig", "src/bus.zig", "src/chat_sse.zig", "src/docs_store.zig", "src/reading_list.zig", "src/chat_store.zig", "src/mem_meter.zig" }) |path| {
+    for ([_][]const u8{ "src/auth.zig", "src/users.zig", "src/markdown_fence.zig", "src/recent_feed.zig", "src/code_store.zig", "src/chat_upload.zig", "src/markdown.zig", "src/markdown_media.zig", "src/bus.zig", "src/chat_sse.zig", "src/docs_store.zig", "src/reading_list.zig", "src/chat_store.zig", "src/mem_meter.zig", "src/stress.zig" }) |path| {
         const unit = b.addTest(.{ .root_module = b.createModule(.{
             .root_source_file = b.path(path),
             .target = target,

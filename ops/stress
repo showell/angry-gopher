@@ -1,0 +1,24 @@
+#!/bin/bash
+# CANONICAL DEV-LOOP SCRIPT — DO NOT REINVENT.
+# Before composing an ad-hoc shell command for build / launch / test, run
+# `ops/list` to see what already exists.
+#
+# Leak stress hunt: hammer every endpoint against the RUNNING :9001 dev server
+# and watch /debug/mem's live_bytes for sustained growth (a leak) vs a one-time
+# plateau (a cache). Start the server first with ops/start.
+#
+# Exit 0 = all endpoints clean, 1 = a leak was detected, 2 = harness error.
+# To prove the detector itself works, see ops/stress_selftest.
+set -e
+
+source "$(dirname "$0")/_paths.sh"
+
+# Require a server to hammer — fail clearly rather than spray connection errors.
+if ! curl -s http://localhost:9001/debug/mem >/dev/null 2>&1; then
+    echo "ops/stress: nothing serving /debug/mem on :9001 — run ops/start first." >&2
+    exit 2
+fi
+
+# Build the harness, then run the binary directly (so its exit code is ours).
+( cd "$GOPHER_DIR/zig-server" && zig build stress )
+exec "$GOPHER_DIR/zig-server/zig-out/bin/stress"

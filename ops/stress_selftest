@@ -1,0 +1,69 @@
+#!/bin/bash
+# CANONICAL DEV-LOOP SCRIPT — DO NOT REINVENT.
+# Before composing an ad-hoc shell command for build / launch / test, run
+# `ops/list` to see what already exists.
+#
+# Validate the leak DETECTOR against a known leak. Builds a throwaway server with
+# -Dfake_leak (driving leaks a few bytes per hit — compile-time gated, never in a
+# normal build), runs it on :9001, and asserts the harness flags /driving. This
+# proves ops/stress can actually see a leak before we trust its "clean" verdict on
+# the subtle endpoints.
+#
+# NOTE: this STOPS your dev server (it needs :9001). Re-run ops/start afterward.
+set -e
+
+source "$(dirname "$0")/_paths.sh"
+
+LEAK_PREFIX="$GOPHER_DIR/zig-server/zig-out-leak"
+LEAK_BIN="$LEAK_PREFIX/bin/zig-server"
+SERVER_PID=""
+
+cleanup() {
+    [ -n "$SERVER_PID" ] && kill "$SERVER_PID" 2>/dev/null || true
+    lsof -ti:9001 | xargs kill -9 2>/dev/null || true
+    rm -rf "$LEAK_PREFIX"
+}
+trap cleanup EXIT
+
+cd "$GOPHER_DIR/zig-server"
+
+# The leaky server still @embedFiles the front-end bundles, so they must exist.
+"$GOPHER_DIR/ops/build_driving"
+"$GOPHER_DIR/ops/build_elm"
+
+# Build the harness and the throwaway leaky server. Separate install prefix so we
+# never clobber the real zig-out/bin/zig-server that ops/start manages.
+zig build stress
+zig build -Dfake_leak=true -p "$LEAK_PREFIX"
+
+# Free :9001 (this stops the dev server) and launch the leaky build with NO config
+# — /driving and /debug/mem need no data tree, so the selftest never touches real
+# data.
+pkill -x zig-server 2>/dev/null || true
+lsof -ti:9001 | xargs kill -9 2>/dev/null || true
+for i in $(seq 1 10); do curl -s http://localhost:9001/version >/dev/null 2>&1 || break; sleep 0.3; done
+
+env -u GOPHER_CONFIG nohup "$LEAK_BIN" > /tmp/gopher-leak.log 2>&1 &
+SERVER_PID=$!
+
+for i in $(seq 1 10); do
+    curl -s http://localhost:9001/debug/mem >/dev/null 2>&1 && break
+    sleep 0.5
+done
+
+# Run the harness; capture verdict + exit code (it exits 1 when it finds a leak).
+set +e
+OUT="$("$GOPHER_DIR/zig-server/zig-out/bin/stress")"
+RC=$?
+set -e
+echo "$OUT"
+
+# PASS iff the harness detected a leak (exit 1) AND named /driving as the leaker.
+if [ "$RC" -eq 1 ] && echo "$OUT" | grep -q "^LEAK.*/driving"; then
+    echo "stress_selftest: PASS — harness detected the planted /driving leak."
+    echo "(Dev server was stopped; run ops/start to bring the normal server back.)"
+    exit 0
+fi
+
+echo "stress_selftest: FAIL — expected a detected leak on /driving (exit 1), got exit $RC." >&2
+exit 1
