@@ -20,6 +20,7 @@ const net = std.Io.net;
 const http = @import("http.zig");
 const config = @import("config.zig");
 const driving = @import("driving.zig");
+const delivery = @import("delivery.zig");
 const puzzles = @import("puzzles.zig");
 const game = @import("game.zig");
 const chat = @import("chat.zig");
@@ -149,6 +150,8 @@ fn route(req: *std.http.Server.Request, io: std.Io, alloc: std.mem.Allocator, bu
 
     if (matchPrefix(path, "/driving")) |sub| {
         try driving.handle(req, sub);
+    } else if (matchPrefix(path, "/delivery")) |sub| {
+        try delivery.handle(req, sub);
     } else if (matchPrefix(path, "/puzzles")) |sub| {
         try puzzles.handle(req, io, alloc, sub);
     } else if (matchPrefix(path, "/game")) |sub| {

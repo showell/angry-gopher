@@ -1,0 +1,14 @@
+{
+  "name": "delivery",
+  "version": "0.0.0",
+  "type": "module",
+  "private": true,
+  "description": "Delivery-router sim (browser canvas): a winking, not-to-scale Seattle road network for capacitated vehicle routing. TS source bundled to app.js by esbuild; see ops/build_delivery.",
+  "scripts": {
+    "typecheck": "tsc --noEmit -p ."
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.1",
+    "typescript": "^6.0.3"
+  }
+}

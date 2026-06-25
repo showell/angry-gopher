@@ -59,6 +59,7 @@ cd "$GOPHER_DIR"
 # binary, so they must exist and be current before `zig build`.
 "$(dirname "$0")/build_elm"
 "$(dirname "$0")/build_driving"
+"$(dirname "$0")/build_delivery"
 
 # Build the server. set -e stops here if the build fails, so nothing relaunches.
 ( cd "$GOPHER_DIR/zig-server" && zig build )

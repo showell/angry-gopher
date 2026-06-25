@@ -1,0 +1,37 @@
+#!/bin/bash
+# CANONICAL DEV-LOOP SCRIPT — DO NOT REINVENT.
+# Before writing a new ops/* script or composing an ad-hoc
+# shell command for build / launch / test / regen, run
+# `ops/list` to see what already exists.
+#
+# Bundle the delivery-router sim's TypeScript into a single browser-
+# loadable JS file at delivery/app.js, served by the /delivery/app.js
+# route and embedded into the binary (build.zig @embedFile).
+#
+# Entry point: delivery/main.ts. Esbuild resolves the whole closure
+# (geography + map_view + main) into one IIFE. The page itself is a
+# near-empty shell; main.ts builds its own canvas and draws the map.
+#
+# esbuild is a pinned devDependency of delivery/ (alongside tsc), so we call
+# its local binary directly — mirrors ops/build_driving.
+set -e
+
+source "$(dirname "$0")/_paths.sh"
+
+ENTRY="$GOPHER_DIR/delivery/main.ts"
+OUT="$GOPHER_DIR/delivery/app.js"
+ESBUILD="$GOPHER_DIR/delivery/node_modules/.bin/esbuild"
+
+if [ ! -x "$ESBUILD" ]; then
+    echo "Error: esbuild not found at $ESBUILD — run \`npm install\` in delivery/" >&2
+    exit 1
+fi
+
+"$ESBUILD" "$ENTRY" \
+    --bundle \
+    --format=iife \
+    --platform=browser \
+    --target=es2022 \
+    --outfile="$OUT" \
+    >/dev/null 2>&1 \
+    || { echo "Warning: app.js bundle failed"; exit 1; }

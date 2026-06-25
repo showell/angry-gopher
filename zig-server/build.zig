@@ -37,6 +37,7 @@ pub fn build(b: *std.Build) void {
     // here rather than by a relative @embedFile path.
     const assets = [_]struct { name: []const u8, path: []const u8 }{
         .{ .name = "driving_app_js", .path = "../games/driving/app.js" },
+        .{ .name = "delivery_app_js", .path = "../delivery/app.js" },
         .{ .name = "puzzle_js", .path = "../games/lynrummy/elm/puzzle.js" },
         // Full-game bundles (the /game surface): the compiled Elm client, the
         // esbuild-bundled TS engine, and the Elm↔engine glue shim.
