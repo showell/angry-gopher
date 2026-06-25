@@ -30,8 +30,8 @@ export type Neighborhood = {
 /** A road between two named nodes (neighborhood names, or "FC" for the warehouse). */
 export type Road = [string, string];
 
-/** The fleet + demand. 7 trucks * 7 totes = 49 orders (Bezos will be #50, later). */
-export const FLEET = { trucks: 7, totesPerTruck: 7, orders: 49 };
+/** The fleet + demand. 8 trucks * 10 totes = 80 orders (Bezos will be the limo extra). */
+export const FLEET = { trucks: 8, totesPerTruck: 10, orders: 80 };
 
 export const MAP_W = 1000;
 export const MAP_H = 720;
@@ -179,15 +179,14 @@ export const ROADS: Road[] = [
   ["Beacon Hill", "West Seattle"],
   // Eastside arterials
   ["Medina", "Kirkland"],
-  ["Medina", "Bellevue"],
   ["Kirkland", "Redmond"],
   ["Kirkland", "Bellevue"],
   ["Bellevue", "Redmond"],
   ["Bellevue", "Factoria"],
   ["Bellevue", "FC"],
-  ["FC", "Medina"],
   ["FC", "Factoria"],
   ["Factoria", "Issaquah"],
+  ["Issaquah", "Redmond"], // the far-east "fast" bypass (I-405 / Sammamish)
 ];
 
 export const BRIDGES: Bridge[] = [
