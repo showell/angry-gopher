@@ -19,6 +19,7 @@ const edge = @import("edge.zig");
 const users = @import("users.zig");
 const chat = @import("chat.zig");
 const html = @import("html.zig");
+const mem_meter = @import("mem_meter.zig");
 
 const Alloc = std.mem.Allocator;
 const Request = std.http.Server.Request;
@@ -53,9 +54,21 @@ pub fn handleVersion(req: *Request, alloc: Alloc) !void {
     // edge.zig). The watchdog polls /version, so a climbing counter surfaces in
     // watchdog-status.txt without any extra plumbing.
     const rejects = try edge.countsJSON(alloc);
+    // `mem` is the live-byte meter (mem_meter.zig). Folding it into /version means
+    // the watchdog — which already polls /version — surfaces it with no extra
+    // plumbing; /debug/mem is the same numbers on a focused endpoint for the harness.
+    const mem = try mem_meter.snapshotJSON(alloc);
     const body = try std.fmt.allocPrint(alloc,
-        \\{{"result":"success","version":"{s}","commit":"{s}","rejects":{s}}}
-    , .{ version, build_options.commit, rejects });
+        \\{{"result":"success","version":"{s}","commit":"{s}","rejects":{s},"mem":{s}}}
+    , .{ version, build_options.commit, rejects, mem });
+    try req.respond(body, .{ .extra_headers = &.{http.json_ct} });
+}
+
+/// handleDebugMem serves the live-byte meter as focused JSON — the endpoint the
+/// stress harness polls between request bursts to watch for leaks (slope, not
+/// level). Same numbers /version embeds; this is the tight-loop surface.
+pub fn handleDebugMem(req: *Request, alloc: Alloc) !void {
+    const body = try mem_meter.snapshotJSON(alloc);
     try req.respond(body, .{ .extra_headers = &.{http.json_ct} });
 }
 

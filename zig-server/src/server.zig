@@ -32,12 +32,18 @@ const login = @import("login.zig");
 const brand = @import("brand.zig");
 const edge = @import("edge.zig");
 const users = @import("users.zig");
+const mem_meter = @import("mem_meter.zig");
 const Bus = @import("bus.zig").Bus;
 
 const PORT: u16 = 9001;
 
 pub fn main(init: std.process.Init.Minimal) !void {
-    const alloc = std.heap.page_allocator;
+    // The metered allocator wraps page_allocator and counts live bytes/allocs for
+    // /debug/mem + /version (the leak smoke detector — see mem_meter.zig). It IS
+    // the process base allocator: everything downstream (the IO pool, the bus, the
+    // per-request arenas) allocates through it, so the meter sees the whole
+    // leakable surface. presence/reading_list capture mem_meter.base() directly.
+    const alloc = mem_meter.init(std.heap.page_allocator);
     var threaded = std.Io.Threaded.init(alloc, .{ .environ = init.environ });
     defer threaded.deinit();
     const io = threaded.io();
@@ -160,6 +166,12 @@ fn route(req: *std.http.Server.Request, io: std.Io, alloc: std.mem.Allocator, bu
         try brand.handle(req, sub);
     } else if (std.mem.eql(u8, path, "/version")) {
         try home.handleVersion(req, alloc);
+    } else if (std.mem.eql(u8, path, "/debug/mem")) {
+        // The leak smoke detector: live bytes/allocs on the base allocator. The
+        // stress harness hammers an endpoint and watches this climb (leak) or
+        // plateau (legit cache). Public + ungated on purpose — it leaks no data,
+        // only aggregate counts.
+        try home.handleDebugMem(req, alloc);
     } else if (std.mem.eql(u8, path, "/")) {
         // The site root: the launch pad. TOTALLY_PUBLIC, so resolve the viewer
         // for the top bar but never gate. The explicit-"/" check plus the

@@ -21,14 +21,16 @@ const Io = std.Io;
 const Alloc = std.mem.Allocator;
 const users = @import("users.zig");
 const store = @import("chat_store.zig");
+const mem_meter = @import("mem_meter.zig");
 const Bus = @import("bus.zig").Bus;
 
 /// PresenceWindow: a markActive within this window (5 min) means online.
 const window_ns: i128 = 5 * std.time.ns_per_min;
 
 /// The lastSeen map (uid → most-recent markActive, in real-clock ns) and its
-/// guard. Process-lifetime; keys are page-allocator-owned dupes.
-var gpa = std.heap.page_allocator;
+/// guard. Process-lifetime; keys are dupes owned by the metered base allocator
+/// (mem_meter) so this map's growth shows up in the leak meter.
+const gpa = mem_meter.base();
 var mu: Io.Mutex = .init;
 var last_seen: std.StringHashMapUnmanaged(i128) = .empty;
 

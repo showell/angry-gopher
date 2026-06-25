@@ -24,6 +24,7 @@ const Io = std.Io;
 const Alloc = std.mem.Allocator;
 const store = @import("chat_store.zig");
 const docs_store = @import("docs_store.zig");
+const mem_meter = @import("mem_meter.zig");
 
 /// reading_list_slug is the fixed doc every save appends to. Valid per
 /// docs_store.validDocSlug; titleFromSlug renders it "Reading list" in the
@@ -145,7 +146,7 @@ const Entry = struct {
     refs: []Ref,
 };
 
-const cache_alloc = std.heap.page_allocator; // server-lifetime; see server.zig
+const cache_alloc = mem_meter.base(); // server-lifetime, metered so the cache's growth is visible to the leak meter
 var cache: std.StringHashMapUnmanaged(Entry) = .empty;
 var cache_mu: Io.Mutex = .init;
 
