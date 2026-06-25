@@ -178,6 +178,9 @@ fn route(req: *std.http.Server.Request, io: std.Io, alloc: std.mem.Allocator, bu
         // Public, read-only. A single server-owned markdown page (pages/steve-resume.md)
         // rendered through the trusted markdown pipeline — no viewer resolution, no gate.
         try resume_page.handle(req, io, alloc);
+    } else if (std.mem.eql(u8, path, "/steve-resume.pdf")) {
+        // The pre-generated static PDF of the same page (ops/build_resume_pdf).
+        try resume_page.handlePdf(req, io, alloc);
     } else if (std.mem.eql(u8, path, "/version")) {
         try home.handleVersion(req, alloc);
     } else if (std.mem.eql(u8, path, "/debug/mem")) {

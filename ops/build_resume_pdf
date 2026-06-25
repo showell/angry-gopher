@@ -1,0 +1,17 @@
+#!/bin/bash
+# Regenerate pages/steve-resume.pdf from the LIVE rendered resume page.
+#
+# The PDF is a checked-in static artifact: it's served at /steve-resume.pdf and
+# rsync'd to the droplet by ops/deploy, so prod never runs a PDF toolchain — it
+# just ships the bytes. Rendering goes through the running dev server (so the PDF
+# uses the same markdown renderer as the web page — single source of truth), via
+# WeasyPrint. Run this after editing pages/steve-resume.md, then commit the PDF.
+#
+# Needs: the local server up (ops/start) + WeasyPrint (pip install --user weasyprint).
+set -e
+
+source "$(dirname "$0")/_paths.sh"
+
+OUT="$GOPHER_DIR/pages/steve-resume.pdf"
+python3 "$GOPHER_DIR/tools/resume_to_pdf.py" "$OUT"
+echo "resume PDF: $OUT"

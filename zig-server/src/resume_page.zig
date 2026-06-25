@@ -28,6 +28,11 @@ const Request = std.http.Server.Request;
 /// WorkingDirectory = the deploy dir (where ops/deploy rsyncs pages/).
 pub var resume_path: []const u8 = "pages/steve-resume.md";
 
+/// resume_pdf_path is the pre-generated PDF (ops/build_resume_pdf renders it from
+/// the live page via WeasyPrint). Checked into pages/ and rsync'd on deploy, so
+/// the droplet serves it as a static file — no PDF toolchain runs in prod.
+pub var resume_pdf_path: []const u8 = "pages/steve-resume.pdf";
+
 /// handle serves GET /steve-resume. A missing source file 404s (rather than
 /// crashing) — the route exists only when the content does.
 pub fn handle(req: *Request, io: Io, alloc: Alloc) !void {
@@ -37,8 +42,17 @@ pub fn handle(req: *Request, io: Io, alloc: Alloc) !void {
     try b.appendSlice(alloc, page_head);
     // Server-owned body: the trusted (uncapped) hard-wrap render.
     try b.appendSlice(alloc, try markdown.renderTrusted(alloc, src));
+    try b.appendSlice(alloc, page_footer);
     try b.appendSlice(alloc, page_tail);
     try req.respond(b.items, .{ .extra_headers = &.{http.html_ct} });
+}
+
+/// handlePdf serves GET /steve-resume.pdf — the pre-generated static PDF, read
+/// straight from disk. A missing file 404s (the PDF is a build artifact; if it
+/// hasn't been generated, the route simply isn't there).
+pub fn handlePdf(req: *Request, io: Io, alloc: Alloc) !void {
+    const bytes = Io.Dir.cwd().readFileAlloc(io, resume_pdf_path, alloc, .unlimited) catch return http.notFound(req);
+    try req.respond(bytes, .{ .extra_headers = &.{http.pdf_ct} });
 }
 
 // A small self-contained shell — a readable text column on the generic top bar,
@@ -62,8 +76,10 @@ const page_head =
     \\.resume-wrap a { color: #000080; }
     \\.resume-wrap ul { padding-left: 1.2rem; }
     \\.resume-wrap li { margin: 3px 0; }
+    \\.resume-footer { margin-top: 2.5rem; padding-top: 1rem; border-top: 1px solid #c9bfa7;
+    \\                 font-size: 13px; color: #888; }
     \\@media print {
-    \\  .app-top { display: none; }
+    \\  .app-top, .resume-footer { display: none; }
     \\  .resume-wrap { margin: 0 auto; max-width: none; }
     \\}
     \\</style>
@@ -72,6 +88,13 @@ const page_head =
     \\<a href="/">Lyn Rummy</a> · <a href="/chat">Chat</a> · <a href="/blog">Blog</a></div></header>
     \\<div class="resume-wrap">
     \\
+;
+
+// page_footer: a small "download PDF" line below the resume body. Hidden in the
+// PDF itself (@media print drops .resume-footer) so the document doesn't
+// advertise a link back to its own download.
+const page_footer =
+    \\<p class="resume-footer"><a href="/steve-resume.pdf">Download this resume as a PDF →</a></p>
 ;
 
 const page_tail =
