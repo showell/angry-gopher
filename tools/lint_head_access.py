@@ -23,6 +23,12 @@ import sys
 SRC = os.path.join(os.path.dirname(__file__), "..", "zig-server", "src")
 ALLOWED = {"http.zig"}  # the owning chokepoint — raw head access lives here only
 
+# Standalone HTTP *client* programs, not server request handlers. The foot-gun this
+# lint guards is the SERVER head (std.http.Server.Request) dangling past a body read;
+# these touch a std.http.Client RESPONSE head instead, a different type they own and
+# read start-to-finish, so the rule simply doesn't apply. Narrow + named on purpose.
+CLIENT_MODULES = {"stress.zig"}
+
 FORBIDDEN = [
     ("head.target", "use http.target(req, alloc) — it returns an owned copy"),
     ("iterateHeaders()", "use http.header / http.cookie — they return owned copies"),
@@ -38,7 +44,7 @@ def code_part(line):
 def main():
     violations = []
     for path in sorted(glob.glob(os.path.join(SRC, "*.zig"))):
-        if os.path.basename(path) in ALLOWED:
+        if os.path.basename(path) in ALLOWED or os.path.basename(path) in CLIENT_MODULES:
             continue
         with open(path) as f:
             for n, line in enumerate(f, 1):

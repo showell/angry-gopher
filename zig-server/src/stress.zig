@@ -26,18 +26,17 @@ const bursts = 4; // burst 0 is warmup (caches fill); the slope is measured over
 const leak_threshold_bpr = 1; // sustained bytes/request of growth at/above which we call it a leak
 
 /// A Scenario is one endpoint exercise: method + path (+ optional body for POSTs).
-/// Today the list is just the driving GET; POST scenarios (docs, chat) land next,
-/// at which point `body` becomes a shared builder a correctness test also calls.
+/// `auth` scenarios carry the session cookie minted by registering at startup.
 const Scenario = struct {
     label: []const u8,
     method: std.http.Method = .GET,
     path: []const u8,
     body: ?[]const u8 = null,
+    auth: bool = false, // send the member session cookie (member-only surfaces)
 };
 
-// The public GET surface (no auth). Member-only chat GETs land in the next commit,
-// once the harness registers over HTTP and carries the session cookie.
 const scenarios = [_]Scenario{
+    // Public GET surface (no auth).
     .{ .label = "/", .path = "/" },
     .{ .label = "/version", .path = "/version" },
     .{ .label = "/driving", .path = "/driving" },
@@ -47,7 +46,22 @@ const scenarios = [_]Scenario{
     .{ .label = "/blog", .path = "/blog" },
     .{ .label = "/learn", .path = "/learn" },
     .{ .label = "/login", .path = "/login" },
+    .{ .label = "/login/full", .path = "/login/full" },
+    // Member-only GET surface — exercised with the session cookie. These are the
+    // real leak suspects: /chat touches presence (a per-uid dupe that must plateau,
+    // not climb), /chat/docs touches the reading-list cache.
+    .{ .label = "/chat", .path = "/chat", .auth = true },
+    .{ .label = "/chat/recent", .path = "/chat/recent", .auth = true },
+    .{ .label = "/chat/images", .path = "/chat/images", .auth = true },
+    .{ .label = "/chat/code", .path = "/chat/code", .auth = true },
+    .{ .label = "/chat/links", .path = "/chat/links", .auth = true },
+    .{ .label = "/chat/docs", .path = "/chat/docs", .auth = true },
 };
+
+// The member session cookie, minted by registering over HTTP at startup (see
+// registerMember). Held process-wide; auth scenarios send it.
+var cookie_buf: [1024]u8 = undefined;
+var session_cookie: ?[]const u8 = null;
 
 pub fn main(init: std.process.Init) !void {
     const io = init.io;
@@ -64,6 +78,20 @@ pub fn main(init: std.process.Init) !void {
     var stdout_buf: [4096]u8 = undefined;
     var stdout = Io.File.stdout().writer(io, &stdout_buf);
     const out = &stdout.interface;
+
+    // Register a member over HTTP (the real account-creation path — zero dogfooding
+    // otherwise) and capture its session cookie for the auth scenarios. If any
+    // scenario needs auth, a failed registration is fatal — exit 2.
+    const needs_auth = for (scenarios) |s| {
+        if (s.auth) break true;
+    } else false;
+    if (needs_auth) {
+        session_cookie = registerMember(&client) catch |e| {
+            try out.print("ERROR  register: {s}\n", .{@errorName(e)});
+            try out.flush();
+            std.process.exit(2);
+        };
+    }
 
     try out.print("stress: hammering {s} — {d} bursts x {d} requests per scenario\n", .{ base_url, bursts, burst_requests });
     try out.flush();
@@ -140,13 +168,72 @@ fn hit(client: *std.http.Client, s: Scenario) !void {
     var sink: Io.Writer.Discarding = .init(&scratch);
     var url_buf: [256]u8 = undefined;
     const url = try std.fmt.bufPrint(&url_buf, "{s}{s}", .{ base_url, s.path });
+    const extra: []const std.http.Header = if (s.auth and session_cookie != null)
+        &.{.{ .name = "cookie", .value = session_cookie.? }}
+    else
+        &.{};
     _ = try client.fetch(.{
         .location = .{ .url = url },
         .method = s.method,
         .payload = s.body,
         .response_writer = &sink.writer,
+        .extra_headers = extra,
         .keep_alive = false,
     });
+}
+
+/// registerMember creates a fresh member over the real /login/full POST and returns
+/// its session cookie ("gopher_auth=…; gopher_uid=…", owned by cookie_buf). This
+/// exercises the register/login path — code that gets zero dogfooding, since the
+/// real users ride long-lived cookies. Uses the low-level request API because
+/// fetch() doesn't surface response headers, and we need the Set-Cookie.
+fn registerMember(client: *std.http.Client) ![]const u8 {
+    var url_buf: [128]u8 = undefined;
+    const url = try std.fmt.bufPrint(&url_buf, "{s}/login/full", .{base_url});
+    const uri = try std.Uri.parse(url);
+
+    var req = try client.request(.POST, uri, .{
+        .redirect_behavior = .unhandled, // see the 303 + its Set-Cookie; don't follow it
+        .keep_alive = false,
+        .headers = .{ .content_type = .{ .override = "application/x-www-form-urlencoded" } },
+    });
+    defer req.deinit();
+
+    const payload = "name=StressBot&password=stress-pw-123456&action=register&next=/chat";
+    req.transfer_encoding = .{ .content_length = payload.len };
+    var body = try req.sendBodyUnflushed(&.{});
+    try body.writer.writeAll(payload);
+    try body.end();
+    try req.connection.?.flush();
+
+    var response = try req.receiveHead(&.{});
+
+    // Capture the cookies from Set-Cookie, copying into cookie_buf before req.deinit
+    // frees the head buffer the values point into.
+    var auth: ?[]const u8 = null;
+    var uid: ?[]const u8 = null;
+    var it = response.head.iterateHeaders();
+    while (it.next()) |h| {
+        if (!std.ascii.eqlIgnoreCase(h.name, "set-cookie")) continue;
+        if (cookiePair(h.value, "gopher_auth")) |v| auth = v;
+        if (cookiePair(h.value, "gopher_uid")) |v| uid = v;
+    }
+    const a = auth orelse return error.NoSessionCookie;
+    const cookie = try std.fmt.bufPrint(&cookie_buf, "gopher_auth={s}; gopher_uid={s}", .{ a, uid orelse "" });
+
+    const reader = response.reader(&.{});
+    _ = reader.discardRemaining() catch {};
+    return cookie;
+}
+
+/// cookiePair pulls the value of cookie `name` from one Set-Cookie header value
+/// (`<name>=<value>; Path=/; HttpOnly; …`), or null if this header isn't `name`.
+fn cookiePair(set_cookie: []const u8, name: []const u8) ?[]const u8 {
+    const semi = std.mem.indexOfScalar(u8, set_cookie, ';') orelse set_cookie.len;
+    const first = set_cookie[0..semi];
+    const eq = std.mem.indexOfScalar(u8, first, '=') orelse return null;
+    if (!std.mem.eql(u8, std.mem.trim(u8, first[0..eq], " "), name)) return null;
+    return first[eq + 1 ..];
 }
 
 /// readLiveBytes fetches /debug/mem and pulls the live_bytes count out of the JSON.
@@ -192,4 +279,10 @@ test "parseLiveBytes pulls the field out of a /debug/mem body" {
         \\{"live_bytes":0,"live_allocs":0,"total_allocs":0}
     ));
     try testing.expectError(error.BadMeterResponse, parseLiveBytes("{\"other\":1}"));
+}
+
+test "cookiePair extracts the named cookie value from a Set-Cookie header" {
+    try testing.expectEqualStrings("abc.123.def", cookiePair("gopher_auth=abc.123.def; Path=/; HttpOnly; SameSite=Lax", "gopher_auth").?);
+    try testing.expectEqualStrings("7", cookiePair("gopher_uid=7; Path=/; Max-Age=31536000", "gopher_uid").?);
+    try testing.expect(cookiePair("gopher_uid=7; Path=/", "gopher_auth") == null);
 }
