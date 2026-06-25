@@ -2,10 +2,11 @@
 
 showell285@gmail.com · 202-213-7553
 Chambersburg, PA · US-based, willing to relocate
+[lynrummy.com](https://lynrummy.com) · [lynrummy.com/blog](https://lynrummy.com/blog) · [github.com/showell](https://github.com/showell)
 
-Senior software engineer with recent experience developing alongside the Claude agent in Zig, Go, JavaScript, TypeScript, and Python.
+Forward-thinking software engineer with 35+ years across systems programming in C, web platforms, and AI-agent development.
 
-**Languages:** C / C++ / Zig / Odin · Go / Java · Python / Ruby / Perl · JS / TS / CoffeeScript / Elm · SQL / HTML / CSS
+**Languages:** C, C++, CoffeeScript, Elm, Go, Java, JavaScript, Odin, Perl, Python, Ruby, TypeScript, Zig
 
 ## Education
 
