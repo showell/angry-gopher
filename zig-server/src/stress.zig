@@ -40,7 +40,17 @@ const Scenario = struct {
     auth: bool = false, // send the member session cookie (member-only surfaces)
 };
 
-const scenarios = [_]Scenario{
+// A perfectly ordinary doc body — deliberately benign so it exercises the normal
+// path, not the hostile-markdown guard. POSTed to /chat/docs/save and /render.
+const vanilla_doc_md =
+    "# Stress Test Doc\n\nAn ordinary paragraph with a [link](https://example.com) " ++
+    "and a little *emphasis*.\n\n- one\n- two\n- three\n\nThat's all.\n";
+
+// `var` (not const) so main can patch the doc-save body once it has a real slug
+// (from createDoc). The POST suspects: /save overwrites one doc in place — flat
+// memory there means the autosave path truly doesn't leak (Steve's sneakiest
+// attack); /new creates a doc per hit; /render is a stateless markdown render.
+var scenarios = [_]Scenario{
     // Public GET surface (no auth).
     .{ .label = "/", .path = "/" },
     .{ .label = "/version", .path = "/version" },
@@ -61,7 +71,17 @@ const scenarios = [_]Scenario{
     .{ .label = "/chat/code", .path = "/chat/code", .auth = true },
     .{ .label = "/chat/links", .path = "/chat/links", .auth = true },
     .{ .label = "/chat/docs", .path = "/chat/docs", .auth = true },
+    // Member-only POST surface (the POST hunt). Bodies built in main.
+    .{ .label = "POST /chat/docs/render", .path = "/chat/docs/render", .method = .POST, .auth = true },
+    .{ .label = "POST /chat/docs/save", .path = "/chat/docs/save", .method = .POST, .auth = true },
+    .{ .label = "POST /chat/docs/new", .path = "/chat/docs/new", .method = .POST, .body = "title=Stress+Doc", .auth = true },
 };
+
+// Runtime POST bodies (built in main; hold for the process). The doc slug is
+// captured from createDoc; the encoded markdown feeds /save and /render.
+var doc_slug_buf: [128]u8 = undefined;
+var save_body_buf: [2048]u8 = undefined;
+var render_body_buf: [2048]u8 = undefined;
 
 // The member session cookie, minted by registering over HTTP at startup (see
 // registerMember). Held process-wide; auth scenarios send it.
@@ -98,6 +118,28 @@ pub fn main(init: std.process.Init) !void {
         };
     }
 
+    // Build the POST bodies: create one doc (the idempotent /save target), then
+    // url-encode the vanilla markdown into the /save and /render bodies and patch
+    // the scenarios that carry them.
+    const needs_doc = for (scenarios) |s| {
+        if (std.mem.eql(u8, s.label, "POST /chat/docs/save")) break true;
+    } else false;
+    if (needs_doc) {
+        const slug = createDoc(&client) catch |e| {
+            try out.print("ERROR  create doc: {s}\n", .{@errorName(e)});
+            try out.flush();
+            std.process.exit(2);
+        };
+        var enc_buf: [1536]u8 = undefined;
+        const enc = urlEncode(&enc_buf, vanilla_doc_md);
+        const save_body = std.fmt.bufPrint(&save_body_buf, "slug={s}&body={s}", .{ slug, enc }) catch unreachable;
+        const render_body = std.fmt.bufPrint(&render_body_buf, "body={s}", .{enc}) catch unreachable;
+        for (&scenarios) |*s| {
+            if (std.mem.eql(u8, s.label, "POST /chat/docs/save")) s.body = save_body;
+            if (std.mem.eql(u8, s.label, "POST /chat/docs/render")) s.body = render_body;
+        }
+    }
+
     try out.print("stress: hammering {s} — {d} bursts x {d} requests per scenario\n", .{ base_url, bursts, burst_requests });
     try out.flush();
 
@@ -111,8 +153,12 @@ pub fn main(init: std.process.Init) !void {
             try out.flush();
             std.process.exit(2);
         };
-        if (st != .ok) {
-            try out.print("ERROR  {s}: expected 200, got {d}\n", .{ s.label, @intFromEnum(st) });
+        // GETs must be 200; POSTs succeed with any non-error status (a save 204,
+        // a create 303). A 4xx/5xx — or a GET that isn't 200 (e.g. a silent
+        // 303-to-login) — means we're not exercising what we think.
+        const sane = if (s.method == .POST) @intFromEnum(st) < 400 else st == .ok;
+        if (!sane) {
+            try out.print("ERROR  {s}: unexpected status {d}\n", .{ s.label, @intFromEnum(st) });
             try out.flush();
             std.process.exit(2);
         }
@@ -297,6 +343,72 @@ fn registerMember(client: *std.http.Client) ![]const u8 {
     return cookie;
 }
 
+/// createDoc creates one doc via POST /chat/docs/new and returns its slug (owned
+/// by doc_slug_buf) — the idempotent target /chat/docs/save overwrites. Needs the
+/// member cookie; reads the slug out of the 303's Location header.
+fn createDoc(client: *std.http.Client) ![]const u8 {
+    var url_buf: [128]u8 = undefined;
+    const url = try std.fmt.bufPrint(&url_buf, "{s}/chat/docs/new", .{base_url});
+    const uri = try std.Uri.parse(url);
+
+    const extra: []const std.http.Header = if (session_cookie) |c|
+        &.{.{ .name = "cookie", .value = c }}
+    else
+        &.{};
+    var req = try client.request(.POST, uri, .{
+        .redirect_behavior = .unhandled,
+        .keep_alive = false,
+        .headers = .{ .content_type = .{ .override = "application/x-www-form-urlencoded" } },
+        .extra_headers = extra,
+    });
+    defer req.deinit();
+
+    const payload = "title=Stress+Doc";
+    req.transfer_encoding = .{ .content_length = payload.len };
+    var body = try req.sendBodyUnflushed(&.{});
+    try body.writer.writeAll(payload);
+    try body.end();
+    try req.connection.?.flush();
+
+    var response = try req.receiveHead(&.{});
+    var loc: ?[]const u8 = null;
+    var it = response.head.iterateHeaders();
+    while (it.next()) |h| {
+        if (std.ascii.eqlIgnoreCase(h.name, "location")) loc = h.value;
+    }
+    const l = loc orelse return error.NoLocationHeader;
+    const prefix = "/chat/docs/";
+    const at = std.mem.indexOf(u8, l, prefix) orelse return error.UnexpectedLocation;
+    const slug = l[at + prefix.len ..];
+    if (slug.len == 0 or slug.len > doc_slug_buf.len) return error.UnexpectedLocation;
+    @memcpy(doc_slug_buf[0..slug.len], slug); // copy before req.deinit frees the head buffer
+
+    const reader = response.reader(&.{});
+    _ = reader.discardRemaining() catch {};
+    return doc_slug_buf[0..slug.len];
+}
+
+/// urlEncode percent-encodes `s` into `buf` (form-urlencoded value): unreserved
+/// bytes pass through, everything else becomes %XX. `buf` must hold up to 3*len.
+fn urlEncode(buf: []u8, s: []const u8) []const u8 {
+    const hex = "0123456789ABCDEF";
+    var n: usize = 0;
+    for (s) |c| {
+        const unreserved = (c >= 'A' and c <= 'Z') or (c >= 'a' and c <= 'z') or
+            (c >= '0' and c <= '9') or c == '-' or c == '_' or c == '.' or c == '~';
+        if (unreserved) {
+            buf[n] = c;
+            n += 1;
+        } else {
+            buf[n] = '%';
+            buf[n + 1] = hex[c >> 4];
+            buf[n + 2] = hex[c & 0xf];
+            n += 3;
+        }
+    }
+    return buf[0..n];
+}
+
 /// cookiePair pulls the value of cookie `name` from one Set-Cookie header value
 /// (`<name>=<value>; Path=/; HttpOnly; …`), or null if this header isn't `name`.
 fn cookiePair(set_cookie: []const u8, name: []const u8) ?[]const u8 {
@@ -350,6 +462,13 @@ test "parseLiveBytes pulls the field out of a /debug/mem body" {
         \\{"live_bytes":0,"live_allocs":0,"total_allocs":0}
     ));
     try testing.expectError(error.BadMeterResponse, parseLiveBytes("{\"other\":1}"));
+}
+
+test "urlEncode percent-encodes form values, passes unreserved through" {
+    var buf: [64]u8 = undefined;
+    try testing.expectEqualStrings("abcABC123-_.~", urlEncode(&buf, "abcABC123-_.~"));
+    try testing.expectEqualStrings("a%20b", urlEncode(&buf, "a b"));
+    try testing.expectEqualStrings("x%0Ay%26z%3D", urlEncode(&buf, "x\ny&z="));
 }
 
 test "cookiePair extracts the named cookie value from a Set-Cookie header" {
