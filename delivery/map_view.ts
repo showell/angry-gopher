@@ -1,12 +1,13 @@
 // map_view.ts — draws the static Seattle network onto a 2D canvas, in logical
-// (1000x720) coordinates. The backdrop everything else (customers, routes, the
-// manager's overrides) will later draw on top of. Neighborhood names are
-// hover-reveal to keep the map uncluttered; pass the hovered name to drawMap.
+// (1000x720) coordinates. The backdrop everything else (routes, the manager's
+// overrides) will later draw on top of. Arteries connect to neighborhoods at
+// gates (cul-de-sac entrances); names are hover-reveal to stay uncluttered.
 
 import type { Pt, Neighborhood } from "./geography.ts";
 import {
   MAP_W,
   MAP_H,
+  FLEET,
   WEST_SHORE,
   EAST_SHORE,
   MERCER_ISLAND,
@@ -20,12 +21,16 @@ import {
   ROADS,
   MERCER_MESS,
   housesOf,
-  nodeAt,
+  roadGates,
+  bridgeDeck,
+  allGates,
 } from "./geography.ts";
 
+const HOME_COUNT = NEIGHBORHOODS.reduce((s, n) => s + n.houses, 0);
+
 const COLOR = {
-  westLand: "#e7e3ea", // Seattle — faintly cool/dense
-  eastLand: "#e7eede", // Eastside — faintly green/roomy
+  westLand: "#e7e3ea",
+  eastLand: "#e7eede",
   water: "#9fcfe6",
   waterEdge: "#6fb2d2",
   island: "#eef3df",
@@ -34,10 +39,12 @@ const COLOR = {
   traffic: "rgba(206, 64, 52, 0.14)",
   road: "#cfc7bb",
   roadCasing: "#b3aa9c",
+  gate: "#7d7464",
   ring: "#a89f90",
-  house: "#dcae6e",
-  houseEdge: "#a87b3c",
-  houseHot: "#e8732e",
+  ringHot: "#2a2e34",
+  home: "#cdc6b8",
+  homeEdge: "#a9a094",
+  order: "#e8732e",
   depot: "#c0392b",
   text: "#2a2e34",
   note: "#7b8088",
@@ -63,15 +70,12 @@ function fillPoly(ctx: CanvasRenderingContext2D, pts: Pt[], fill: string, edge?:
 }
 
 function drawLand(ctx: CanvasRenderingContext2D): void {
-  // Whole canvas is Seattle; paint the Eastside over the right portion. The lake
-  // (drawn next) hides the straight seam between them.
   ctx.fillStyle = COLOR.westLand;
   ctx.fillRect(0, 0, MAP_W, MAP_H);
   ctx.fillStyle = COLOR.eastLand;
   ctx.fillRect(540, 0, MAP_W - 540, MAP_H);
 }
 
-/** Lake Washington polygon = west shore (N->S) then east shore (S->N). */
 function lakeWashington(ctx: CanvasRenderingContext2D): void {
   ctx.beginPath();
   ctx.moveTo(WEST_SHORE[0].x, WEST_SHORE[0].y);
@@ -85,7 +89,6 @@ function lakeWashington(ctx: CanvasRenderingContext2D): void {
   ctx.stroke();
 }
 
-/** A channel: a fat water stroke with a faint bank. */
 function channel(ctx: CanvasRenderingContext2D, pts: Pt[]): void {
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
@@ -104,8 +107,7 @@ function drawWater(ctx: CanvasRenderingContext2D): void {
   fillPoly(ctx, PUGET_SOUND, COLOR.water, COLOR.waterEdge);
   channel(ctx, CANAL_WEST);
   channel(ctx, CANAL_EAST);
-  fillPoly(ctx, LAKE_UNION, COLOR.water, COLOR.waterEdge); // sits over the canal joins
-  // Mercer Island sits on top of Lake Washington.
+  fillPoly(ctx, LAKE_UNION, COLOR.water, COLOR.waterEdge);
   fillPoly(ctx, MERCER_ISLAND, COLOR.island, COLOR.waterEdge);
 }
 
@@ -124,35 +126,28 @@ function drawTraffic(ctx: CanvasRenderingContext2D): void {
   ctx.fillText("the Mercer Mess", center.x, center.y - 60);
 }
 
+function stroke(ctx: CanvasRenderingContext2D, pts: Pt[], width: number, color: string): void {
+  trace(ctx, pts, false);
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  ctx.lineWidth = width;
+  ctx.strokeStyle = color;
+  ctx.stroke();
+}
+
 function drawRoads(ctx: CanvasRenderingContext2D): void {
-  for (const [a, b] of ROADS) {
-    const p = nodeAt(a);
-    const q = nodeAt(b);
-    ctx.lineCap = "round";
-    ctx.beginPath();
-    ctx.moveTo(p.x, p.y);
-    ctx.lineTo(q.x, q.y);
-    ctx.lineWidth = 6;
-    ctx.strokeStyle = COLOR.roadCasing;
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(p.x, p.y);
-    ctx.lineTo(q.x, q.y);
-    ctx.lineWidth = 3.5;
-    ctx.strokeStyle = COLOR.road;
-    ctx.stroke();
+  for (const r of ROADS) {
+    const gates = roadGates(r);
+    stroke(ctx, gates, 6, COLOR.roadCasing);
+    stroke(ctx, gates, 3.5, COLOR.road);
   }
 }
 
 function drawBridges(ctx: CanvasRenderingContext2D): void {
   for (const b of BRIDGES) {
-    trace(ctx, b.spans, false);
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
-    ctx.lineWidth = 9;
-    ctx.strokeStyle = COLOR.bridge;
-    ctx.stroke();
-    trace(ctx, b.spans, false);
+    const deck = bridgeDeck(b);
+    stroke(ctx, deck, 9, COLOR.bridge);
+    trace(ctx, deck, false);
     ctx.lineWidth = 2;
     ctx.setLineDash([8, 7]);
     ctx.strokeStyle = COLOR.bridgeStripe;
@@ -173,8 +168,21 @@ function drawBridges(ctx: CanvasRenderingContext2D): void {
   }
 }
 
-function drawNeighborhood(ctx: CanvasRenderingContext2D, n: Neighborhood, hot: boolean): void {
-  // Optional center pond (Green Lake).
+function drawGates(ctx: CanvasRenderingContext2D): void {
+  ctx.fillStyle = COLOR.gate;
+  for (const g of allGates()) {
+    ctx.beginPath();
+    ctx.arc(g.x, g.y, 2.4, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+function drawNeighborhood(
+  ctx: CanvasRenderingContext2D,
+  n: Neighborhood,
+  hot: boolean,
+  orders: Set<string>,
+): void {
   if (n.lake) {
     ctx.beginPath();
     ctx.arc(n.center.x, n.center.y, n.lake, 0, Math.PI * 2);
@@ -189,31 +197,45 @@ function drawNeighborhood(ctx: CanvasRenderingContext2D, n: Neighborhood, hot: b
   ctx.beginPath();
   ctx.arc(n.center.x, n.center.y, n.ringRadius, 0, Math.PI * 2);
   ctx.lineWidth = hot ? 4 : 3;
-  ctx.strokeStyle = hot ? COLOR.houseHot : COLOR.ring;
+  ctx.strokeStyle = hot ? COLOR.ringHot : COLOR.ring;
   ctx.stroke();
 
-  // Houses (squares sitting on the ring).
-  const s = 7;
-  for (const h of housesOf(n)) {
-    ctx.fillStyle = hot ? COLOR.houseHot : COLOR.house;
-    ctx.strokeStyle = COLOR.houseEdge;
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.rect(h.x - s / 2, h.y - s / 2, s, s);
-    ctx.fill();
-    ctx.stroke();
-  }
+  // Houses — orders pop, plain homes recede.
+  housesOf(n).forEach((h, i) => {
+    const isOrder = orders.has(`${n.name}#${i}`);
+    if (isOrder) {
+      const s = 9;
+      ctx.fillStyle = COLOR.order;
+      ctx.strokeStyle = "#ffffff";
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.rect(h.x - s / 2, h.y - s / 2, s, s);
+      ctx.fill();
+      ctx.stroke();
+    } else {
+      const s = 6;
+      ctx.fillStyle = COLOR.home;
+      ctx.strokeStyle = COLOR.homeEdge;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.rect(h.x - s / 2, h.y - s / 2, s, s);
+      ctx.fill();
+      ctx.stroke();
+    }
+  });
 }
 
-/** A hover label: name (+ note) on a little rounded card above the neighborhood. */
-function drawHoverCard(ctx: CanvasRenderingContext2D, n: Neighborhood): void {
-  const lines = n.note ? [n.name, n.note] : [n.name];
+function drawHoverCard(ctx: CanvasRenderingContext2D, n: Neighborhood, orders: Set<string>): void {
+  let count = 0;
+  for (let i = 0; i < n.houses; i++) if (orders.has(`${n.name}#${i}`)) count++;
+  const sub = n.note ?? `${count} order${count === 1 ? "" : "s"} today`;
+
   ctx.font = "bold 13px system-ui, sans-serif";
   const nameW = ctx.measureText(n.name).width;
   ctx.font = "italic 11px system-ui, sans-serif";
-  const noteW = n.note ? ctx.measureText(n.note).width : 0;
-  const w = Math.max(nameW, noteW) + 16;
-  const h = lines.length === 2 ? 38 : 24;
+  const subW = ctx.measureText(sub).width;
+  const w = Math.max(nameW, subW) + 16;
+  const h = 38;
   const x = n.center.x - w / 2;
   const y = n.center.y - n.ringRadius - h - 8;
 
@@ -226,11 +248,9 @@ function drawHoverCard(ctx: CanvasRenderingContext2D, n: Neighborhood): void {
   ctx.fillStyle = "#ffffff";
   ctx.font = "bold 13px system-ui, sans-serif";
   ctx.fillText(n.name, n.center.x, y + 16);
-  if (n.note) {
-    ctx.fillStyle = "#bcd3df";
-    ctx.font = "italic 11px system-ui, sans-serif";
-    ctx.fillText(n.note, n.center.x, y + 31);
-  }
+  ctx.fillStyle = "#bcd3df";
+  ctx.font = "italic 11px system-ui, sans-serif";
+  ctx.fillText(sub, n.center.x, y + 31);
 }
 
 function drawWarehouse(ctx: CanvasRenderingContext2D): void {
@@ -263,16 +283,15 @@ function drawRegionLabels(ctx: CanvasRenderingContext2D): void {
   ctx.textAlign = "center";
   ctx.fillStyle = COLOR.faint;
   ctx.font = "bold 24px system-ui, sans-serif";
-  ctx.fillText("SEATTLE", 150, 52);
+  ctx.fillText("SEATTLE", 168, 250);
   ctx.font = "italic 12px system-ui, sans-serif";
-  ctx.fillText("the Westside", 150, 70);
+  ctx.fillText("the Westside", 168, 268);
 
   ctx.font = "bold 24px system-ui, sans-serif";
-  ctx.fillText("THE EASTSIDE", 840, 52);
+  ctx.fillText("THE EASTSIDE", 852, 474);
   ctx.font = "italic 12px system-ui, sans-serif";
-  ctx.fillText("warehouse country", 840, 70);
+  ctx.fillText("warehouse country", 852, 492);
 
-  // Water labels.
   ctx.save();
   ctx.translate(545, 320);
   ctx.rotate(Math.PI / 2);
@@ -283,10 +302,11 @@ function drawRegionLabels(ctx: CanvasRenderingContext2D): void {
 
   ctx.fillStyle = COLOR.waterEdge;
   ctx.font = "italic 11px system-ui, sans-serif";
+  ctx.textAlign = "center";
   ctx.fillText("Lake Union", 358, 400);
 
   ctx.save();
-  ctx.translate(48, 380);
+  ctx.translate(48, 360);
   ctx.rotate(-Math.PI / 2);
   ctx.fillStyle = COLOR.waterEdge;
   ctx.font = "italic 13px system-ui, sans-serif";
@@ -294,27 +314,53 @@ function drawRegionLabels(ctx: CanvasRenderingContext2D): void {
   ctx.restore();
 }
 
-function drawTitle(ctx: CanvasRenderingContext2D): void {
+function swatch(ctx: CanvasRenderingContext2D, x: number, y: number, fill: string, edge: string, s: number, label: string): void {
+  ctx.fillStyle = fill;
+  ctx.strokeStyle = edge;
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.rect(x, y - s / 2, s, s);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = COLOR.text;
+  ctx.font = "12px system-ui, sans-serif";
+  ctx.textAlign = "left";
+  ctx.fillText(label, x + s + 6, y + 4);
+}
+
+function drawHud(ctx: CanvasRenderingContext2D): void {
+  // Legend (top-left).
+  swatch(ctx, 24, 30, COLOR.order, "#ffffff", 9, "order today");
+  swatch(ctx, 24, 52, COLOR.home, COLOR.homeEdge, 9, "home");
+
+  // Title + problem statement (bottom-left).
   ctx.textAlign = "left";
   ctx.fillStyle = COLOR.text;
   ctx.font = "bold 18px system-ui, sans-serif";
-  ctx.fillText("Seattle Delivery Network", 24, 690);
+  ctx.fillText("Seattle Delivery Network", 24, 668);
   ctx.fillStyle = COLOR.note;
+  ctx.font = "13px system-ui, sans-serif";
+  ctx.fillText(
+    `${FLEET.orders} orders  ·  ${FLEET.trucks} trucks × ${FLEET.totesPerTruck} totes  ·  ${HOME_COUNT} homes`,
+    24,
+    688,
+  );
   ctx.font = "italic 12px system-ui, sans-serif";
-  ctx.fillText("totally not to scale  ·  hover a neighborhood for its name", 24, 708);
+  ctx.fillText("totally not to scale  ·  hover a neighborhood  ·  press R to reshuffle orders", 24, 706);
 }
 
-/** Paint the whole static map. `hover` is the hovered neighborhood name, if any. */
-export function drawMap(ctx: CanvasRenderingContext2D, hover: string | null): void {
+/** Paint the whole static map. `hover` is the hovered neighborhood; `orders` the day's picks. */
+export function drawMap(ctx: CanvasRenderingContext2D, hover: string | null, orders: Set<string>): void {
   drawLand(ctx);
   drawWater(ctx);
   drawTraffic(ctx);
   drawRegionLabels(ctx);
   drawRoads(ctx);
   drawBridges(ctx);
-  for (const n of NEIGHBORHOODS) drawNeighborhood(ctx, n, n.name === hover);
+  drawGates(ctx);
+  for (const n of NEIGHBORHOODS) drawNeighborhood(ctx, n, n.name === hover, orders);
   drawWarehouse(ctx);
   const hot = NEIGHBORHOODS.find((n) => n.name === hover);
-  if (hot) drawHoverCard(ctx, hot);
-  drawTitle(ctx);
+  if (hot) drawHoverCard(ctx, hot, orders);
+  drawHud(ctx);
 }
