@@ -75,12 +75,37 @@ var scenarios = [_]Scenario{
     .{ .label = "POST /chat/docs/render", .path = "/chat/docs/render", .method = .POST, .auth = true },
     .{ .label = "POST /chat/docs/save", .path = "/chat/docs/save", .method = .POST, .auth = true },
     .{ .label = "POST /chat/docs/new", .path = "/chat/docs/new", .method = .POST, .body = "title=Stress+Doc", .auth = true },
+    // The chat WRITE path with NO live subscribers — publish-to-nobody allocates
+    // nothing on the bus, so this isolates the append/store path. Path built in main
+    // (it needs the DM pair key). The fan-out WITH subscribers is a separate pass.
+    .{ .label = "POST chat send (no subscribers)", .path = "", .method = .POST, .body = chat_msg_body, .auth = true },
 };
 
-// Runtime POST bodies (built in main; hold for the process). The doc slug is
-// captured from createDoc; the encoded markdown feeds /save and /render.
+// A benign chat message (form-urlencoded: '+' = space). Plain text so it sails
+// past hostileReason — a rejected message would 400 and never reach the fan-out.
+const chat_msg_body = "markdown=hello+from+the+stress+harness&cid=";
+
+// ── fan-out stress (THE risk: does a message fanned out to live subscribers get
+// freed?) ────────────────────────────────────────────────────────────────────
+// publish() dupes each message into each subscriber's ring (base alloc); next()
+// frees it after the SSE write, close() drains the rest. We hold real SSE
+// subscribers open and post into them, then close + settle and check the meter
+// returned to baseline. Run per burst, so each round exercises open→push→drain→
+// close in full; a leak anywhere in that chain climbs across bursts.
+const fanout_subscribers = 3; // live SSE streams on the topic, fanned to per message
+const fanout_posts_per_burst = 200;
+
+// Runtime POST bodies/paths (built in main; hold for the process).
 var doc_slug_buf: [128]u8 = undefined;
 var save_body_buf: [2048]u8 = undefined;
+var pair_buf: [80]u8 = undefined; // the DM pair key "<a>_<b>"
+var send_path_buf: [160]u8 = undefined; // /chat/c/<pair>/stress/send
+var stream_url_buf: [224]u8 = undefined; // full URL of /chat/c/<pair>/stress/stream
+var uid_a_buf: [32]u8 = undefined;
+var uid_b_buf: [32]u8 = undefined;
+var cookie2_buf: [1024]u8 = undefined; // the second member's cookie (unused, but its reg mints uid B)
+var fanout_send_path: []const u8 = ""; // /chat/c/<pair>/stress/send
+var fanout_stream_url: []const u8 = ""; // full URL of /chat/c/<pair>/stress/stream
 var render_body_buf: [2048]u8 = undefined;
 
 // The member session cookie, minted by registering over HTTP at startup (see
@@ -104,18 +129,39 @@ pub fn main(init: std.process.Init) !void {
     var stdout = Io.File.stdout().writer(io, &stdout_buf);
     const out = &stdout.interface;
 
-    // Register a member over HTTP (the real account-creation path — zero dogfooding
-    // otherwise) and capture its session cookie for the auth scenarios. If any
-    // scenario needs auth, a failed registration is fatal — exit 2.
+    // Register members over HTTP (the real account-creation path — zero dogfooding
+    // otherwise). Two of them: StressBot is the poster/subscriber whose cookie the
+    // auth scenarios carry; StressBot2 exists so they form a DM pair to post into.
+    // A failed registration is fatal when anything needs auth — exit 2.
     const needs_auth = for (scenarios) |s| {
         if (s.auth) break true;
     } else false;
     if (needs_auth) {
-        session_cookie = registerMember(&client) catch |e| {
-            try out.print("ERROR  register: {s}\n", .{@errorName(e)});
+        const bot2 = registerMember(&client, "StressBot2", &cookie2_buf, &uid_b_buf) catch |e| {
+            try out.print("ERROR  register StressBot2: {s}\n", .{@errorName(e)});
             try out.flush();
             std.process.exit(2);
         };
+        const bot1 = registerMember(&client, "StressBot", &cookie_buf, &uid_a_buf) catch |e| {
+            try out.print("ERROR  register StressBot: {s}\n", .{@errorName(e)});
+            try out.flush();
+            std.process.exit(2);
+        };
+        session_cookie = bot1.cookie;
+
+        // The canonical DM pair key (smaller numeric id first) + a topic to post
+        // into, then patch the chat-send scenario's path with it.
+        const pair = chatPairKey(&pair_buf, bot1.uid, bot2.uid);
+        _ = postForm(&client, std.fmt.bufPrint(&send_path_buf, "/chat/c/{s}/new", .{pair}) catch unreachable, "topic=stress") catch |e| {
+            try out.print("ERROR  create topic: {s}\n", .{@errorName(e)});
+            try out.flush();
+            std.process.exit(2);
+        };
+        fanout_send_path = std.fmt.bufPrint(&send_path_buf, "/chat/c/{s}/stress/send", .{pair}) catch unreachable;
+        fanout_stream_url = std.fmt.bufPrint(&stream_url_buf, "{s}/chat/c/{s}/stress/stream", .{ base_url, pair }) catch unreachable;
+        for (&scenarios) |*s| {
+            if (std.mem.eql(u8, s.label, "POST chat send (no subscribers)")) s.path = fanout_send_path;
+        }
     }
 
     // Build the POST bodies: create one doc (the idempotent /save target), then
@@ -176,6 +222,24 @@ pub fn main(init: std.process.Init) !void {
         if (v.leaked) leaks += 1;
     }
 
+    // The fan-out pass: hold real SSE subscribers open and post into them, then
+    // close + settle and check the meter came back to baseline. THE risk Steve
+    // flagged — the part of the system the fan-out memory lives in.
+    if (needs_auth) {
+        const v = hammerFanout(io, &client, gpa, fanout_stream_url, fanout_send_path) catch |e| {
+            try out.print("ERROR  fanout: {s}\n", .{@errorName(e)});
+            try out.flush();
+            std.process.exit(2);
+        };
+        const verdict = if (v.leaked) "LEAK " else "CLEAN";
+        try out.print(
+            "{s}  FANOUT chat send ({d} subscribers)\tlive_bytes {d} -> {d} (delta {d} over {d} msgs x {d} subs, {d:.2} B/req)\n",
+            .{ verdict, fanout_subscribers, v.warm_bytes, v.final_bytes, v.growth, v.measured_reqs, fanout_subscribers, v.bytes_per_req },
+        );
+        try out.flush();
+        if (v.leaked) leaks += 1;
+    }
+
     const errs = hit_errors.load(.monotonic);
     if (errs > 0) {
         try out.print("WARNING: {d} request(s) errored mid-burst — verdicts are suspect\n", .{errs});
@@ -226,6 +290,165 @@ fn hammer(io: Io, client: *std.http.Client, gpa: std.mem.Allocator, s: Scenario)
         .bytes_per_req = bpr,
         .leaked = bpr >= leak_threshold_bpr,
     };
+}
+
+/// hammerFanout is the fan-out leak hunt. Per burst: open fanout_subscribers live
+/// SSE streams on the topic, post a batch of messages (each fans out to every
+/// subscriber's ring), then cancel the subscribers (closing them → the server
+/// drains + frees) and settle the meter. After every subscriber is gone the meter
+/// must be back to baseline; a leak in push / next-free / close-drain climbs across
+/// bursts. The baseline is taken after burst 0 (the topic's structures warm up).
+fn hammerFanout(io: Io, client: *std.http.Client, gpa: std.mem.Allocator, stream_url: []const u8, send_path: []const u8) !Verdict {
+    var warm_bytes: u64 = 0;
+    var final_bytes: u64 = 0;
+    var b: usize = 0;
+    const send = Scenario{ .label = "fanout", .path = send_path, .method = .POST, .body = chat_msg_body, .auth = true };
+    while (b < bursts) : (b += 1) {
+        var ready: std.atomic.Value(u32) = .init(0);
+        var stop: std.atomic.Value(bool) = .init(false);
+        // io.concurrent (NOT io.async): a guaranteed separate thread. io.async runs
+        // the task inline when the pool is saturated, and a drainer's blocking read
+        // would then seize this thread before it could ever post the stop.
+        var futs: [fanout_subscribers]Io.Future(void) = undefined;
+        var n_subs: usize = 0;
+        for (0..fanout_subscribers) |_| {
+            futs[n_subs] = io.concurrent(drainStream, .{ client, stream_url, &ready, &stop }) catch break;
+            n_subs += 1;
+        }
+
+        // Let the subscribers attach before posting (so messages actually fan out),
+        // polling readiness with a meter round-trip between checks rather than a
+        // tight spin. If they never attach we post anyway — fewer fan-outs, still valid.
+        var tries: usize = 0;
+        while (ready.load(.acquire) < n_subs and tries < 50) : (tries += 1) {
+            _ = readLiveBytes(client, gpa) catch {};
+        }
+
+        // Post the batch. The drainers read concurrently, so the server's next()
+        // delivers + frees each fanned-out copy in steady state.
+        var i: usize = 0;
+        while (i < fanout_posts_per_burst) : (i += 1) {
+            hit(client, send) catch {
+                _ = hit_errors.fetchAdd(1, .monotonic);
+            };
+        }
+
+        // Stop the drainers: set the flag, then post ONE wake message so an idle
+        // drainer's blocked read returns at once (rather than waiting out the 25s
+        // keepalive) — it then sees the flag and exits. (Cancel can't interrupt a
+        // blocked socket read under the threaded IO, so we stop cooperatively.)
+        stop.store(true, .release);
+        hit(client, send) catch {};
+        for (0..n_subs) |k| futs[k].await(io);
+
+        // The drainers closed their client sockets, but each server-side stream
+        // handler only frees its (arena-held) state when it NEXT tries to write and
+        // sees the dead socket — otherwise it sits in next() until the 25s keepalive.
+        // So reap: post messages to wake those handlers, and read the meter once it
+        // settles. Without this, closed-but-unreaped handlers (whose backlog grows
+        // every burst) read as a climbing "leak" that's pure measurement lag.
+        const live = try reapAndSettle(client, gpa, send);
+        if (b == 0) warm_bytes = live;
+        if (b == bursts - 1) final_bytes = live;
+    }
+
+    const growth: i64 = @as(i64, @intCast(final_bytes)) - @as(i64, @intCast(warm_bytes));
+    const measured_reqs: u64 = @as(u64, bursts - 1) * fanout_posts_per_burst;
+    const bpr: f64 = if (growth > 0) @as(f64, @floatFromInt(growth)) / @as(f64, @floatFromInt(measured_reqs)) else 0;
+    return .{
+        .warm_bytes = warm_bytes,
+        .final_bytes = final_bytes,
+        .growth = growth,
+        .measured_reqs = measured_reqs,
+        .bytes_per_req = bpr,
+        .leaked = bpr >= leak_threshold_bpr,
+    };
+}
+
+/// drainStream opens one SSE subscriber on the topic and reads (discards) it until
+/// cancelled — draining the socket so the server's next() loop keeps delivering and
+/// freeing each fanned-out message. Signals `ready` once subscribed (receiveHead
+/// returns after openStream has registered the subscriber).
+fn drainStream(client: *std.http.Client, url: []const u8, ready: *std.atomic.Value(u32), stop: *std.atomic.Value(bool)) void {
+    const uri = std.Uri.parse(url) catch return;
+    const extra: []const std.http.Header = if (session_cookie) |c|
+        &.{.{ .name = "cookie", .value = c }}
+    else
+        &.{};
+    var req = client.request(.GET, uri, .{
+        .keep_alive = false,
+        .redirect_behavior = .unhandled,
+        .extra_headers = extra,
+    }) catch return;
+    defer req.deinit();
+    req.sendBodiless() catch return;
+    var resp = req.receiveHead(&.{}) catch return;
+    _ = ready.fetchAdd(1, .release); // receiveHead returned ⇒ the server registered our subscriber
+
+    // Discard frames until told to stop. During posting, frames arrive steadily so
+    // discard returns often and we see `stop` promptly; the wake message covers the
+    // idle case. Each frame read lets the server's next() free its ring copy.
+    var tbuf: [8192]u8 = undefined;
+    const reader = resp.reader(&tbuf);
+    while (!stop.load(.acquire)) {
+        const n = reader.discard(.limited(8192)) catch return; // connection closed → done
+        if (n == 0) return;
+    }
+}
+
+/// reapAndSettle drives the server to free closed-but-unreaped stream handlers,
+/// then returns the settled live_bytes. Each iteration posts a message (which wakes
+/// any handler blocked in next() so it writes, hits the dead socket, returns, and
+/// frees) and reads the meter; once a handler is gone its key has no subscribers so
+/// the post allocates nothing. Returns when the meter holds steady (5 equal reads).
+fn reapAndSettle(client: *std.http.Client, gpa: std.mem.Allocator, send: Scenario) !u64 {
+    var prev: u64 = 0;
+    var stable: usize = 0;
+    var tries: usize = 0;
+    while (tries < 80) : (tries += 1) {
+        hit(client, send) catch {}; // wake + reap any still-closing stream handler
+        const cur = readLiveBytes(client, gpa) catch continue;
+        if (cur == prev) {
+            stable += 1;
+            if (stable >= 5) return cur;
+        } else {
+            stable = 0;
+            prev = cur;
+        }
+    }
+    return prev;
+}
+
+/// chatPairKey builds the canonical DM key (smaller numeric id first) into `buf`.
+fn chatPairKey(buf: []u8, a: []const u8, b: []const u8) []const u8 {
+    const ai = std.fmt.parseInt(i64, a, 10) catch 0;
+    const bi = std.fmt.parseInt(i64, b, 10) catch 0;
+    return if (ai <= bi)
+        std.fmt.bufPrint(buf, "{s}_{s}", .{ a, b }) catch unreachable
+    else
+        std.fmt.bufPrint(buf, "{s}_{s}", .{ b, a }) catch unreachable;
+}
+
+/// postForm POSTs a form body to `path` (with the member cookie) and returns the
+/// status — used for one-shot setup posts (create topic).
+fn postForm(client: *std.http.Client, path: []const u8, body: []const u8) !std.http.Status {
+    var scratch: [4096]u8 = undefined;
+    var sink: Io.Writer.Discarding = .init(&scratch);
+    var url_buf: [256]u8 = undefined;
+    const url = try std.fmt.bufPrint(&url_buf, "{s}{s}", .{ base_url, path });
+    const extra: []const std.http.Header = if (session_cookie) |c|
+        &.{.{ .name = "cookie", .value = c }}
+    else
+        &.{};
+    const res = try client.fetch(.{
+        .location = .{ .url = url },
+        .method = .POST,
+        .payload = body,
+        .response_writer = &sink.writer,
+        .extra_headers = extra,
+        .keep_alive = false,
+    });
+    return res.status;
 }
 
 /// fireBurst fires burst_requests at the scenario, spread across burst_workers
@@ -299,12 +522,14 @@ fn hit(client: *std.http.Client, s: Scenario) !void {
     });
 }
 
-/// registerMember creates a fresh member over the real /login/full POST and returns
-/// its session cookie ("gopher_auth=…; gopher_uid=…", owned by cookie_buf). This
-/// exercises the register/login path — code that gets zero dogfooding, since the
-/// real users ride long-lived cookies. Uses the low-level request API because
-/// fetch() doesn't surface response headers, and we need the Set-Cookie.
-fn registerMember(client: *std.http.Client) ![]const u8 {
+const Member = struct { cookie: []const u8, uid: []const u8 };
+
+/// registerMember creates a fresh member `name` over the real /login/full POST and
+/// returns its session cookie ("gopher_auth=…; gopher_uid=…", into cookie_out) plus
+/// its uid (into uid_out). This exercises the register/login path — code that gets
+/// zero dogfooding, since the real users ride long-lived cookies. Uses the low-level
+/// request API because fetch() doesn't surface response headers (the Set-Cookie).
+fn registerMember(client: *std.http.Client, name: []const u8, cookie_out: []u8, uid_out: []u8) !Member {
     var url_buf: [128]u8 = undefined;
     const url = try std.fmt.bufPrint(&url_buf, "{s}/login/full", .{base_url});
     const uri = try std.Uri.parse(url);
@@ -316,7 +541,8 @@ fn registerMember(client: *std.http.Client) ![]const u8 {
     });
     defer req.deinit();
 
-    const payload = "name=StressBot&password=stress-pw-123456&action=register&next=/chat";
+    var pbuf: [160]u8 = undefined;
+    const payload = try std.fmt.bufPrint(&pbuf, "name={s}&password=stress-pw-123456&action=register&next=/chat", .{name});
     req.transfer_encoding = .{ .content_length = payload.len };
     var body = try req.sendBodyUnflushed(&.{});
     try body.writer.writeAll(payload);
@@ -325,8 +551,8 @@ fn registerMember(client: *std.http.Client) ![]const u8 {
 
     var response = try req.receiveHead(&.{});
 
-    // Capture the cookies from Set-Cookie, copying into cookie_buf before req.deinit
-    // frees the head buffer the values point into.
+    // Capture the cookies from Set-Cookie, copying into the caller buffers before
+    // req.deinit frees the head buffer the values point into.
     var auth: ?[]const u8 = null;
     var uid: ?[]const u8 = null;
     var it = response.head.iterateHeaders();
@@ -336,11 +562,14 @@ fn registerMember(client: *std.http.Client) ![]const u8 {
         if (cookiePair(h.value, "gopher_uid")) |v| uid = v;
     }
     const a = auth orelse return error.NoSessionCookie;
-    const cookie = try std.fmt.bufPrint(&cookie_buf, "gopher_auth={s}; gopher_uid={s}", .{ a, uid orelse "" });
+    const u = uid orelse return error.NoUidCookie;
+    if (u.len == 0 or u.len > uid_out.len) return error.BadUidCookie;
+    @memcpy(uid_out[0..u.len], u);
+    const cookie = try std.fmt.bufPrint(cookie_out, "gopher_auth={s}; gopher_uid={s}", .{ a, u });
 
     const reader = response.reader(&.{});
     _ = reader.discardRemaining() catch {};
-    return cookie;
+    return .{ .cookie = cookie, .uid = uid_out[0..u.len] };
 }
 
 /// createDoc creates one doc via POST /chat/docs/new and returns its slug (owned
