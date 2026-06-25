@@ -35,7 +35,15 @@ const users = @import("users.zig");
 const mem_meter = @import("mem_meter.zig");
 const Bus = @import("bus.zig").Bus;
 
-const PORT: u16 = 9001;
+const default_port: u16 = 9001;
+
+/// portFromEnv reads GOPHER_PORT (default 9001). A port override is load-bearing
+/// for running more than one server at once — e.g. the stress harness spins a
+/// hermetic sandbox instance on a side port so the :9001 dev server keeps running.
+fn portFromEnv(env: std.process.Environ.Map) u16 {
+    const s = env.get("GOPHER_PORT") orelse return default_port;
+    return std.fmt.parseInt(u16, std.mem.trim(u8, s, " \t\r\n"), 10) catch default_port;
+}
 
 pub fn main(init: std.process.Init.Minimal) !void {
     // The metered allocator wraps page_allocator and counts live bytes/allocs for
@@ -59,11 +67,12 @@ pub fn main(init: std.process.Init.Minimal) !void {
     // lifetime; drives chat's SSE streams.
     var bus = Bus.init(io, alloc);
 
-    const addr = try net.IpAddress.parse("0.0.0.0", PORT);
+    const port = portFromEnv(env);
+    const addr = try net.IpAddress.parse("0.0.0.0", port);
     var listener = try addr.listen(io, .{ .reuse_address = true });
     defer listener.deinit(io);
 
-    std.debug.print("zig-server: http://localhost:{d}  (/driving, /puzzles, /game, /chat, /channel)\n", .{PORT});
+    std.debug.print("zig-server: http://localhost:{d}  (/driving, /puzzles, /game, /chat, /channel)\n", .{port});
 
     // Each connection becomes a concurrent task in this group. We never await it
     // — the server runs forever and completed tasks self-reap (see file header).

@@ -15,9 +15,14 @@
 const std = @import("std");
 const Io = std.Io;
 
-const base_url = "http://localhost:9001";
-const burst_requests = 1000; // requests fired per burst
-const bursts = 4; // bursts per scenario; burst 1 is warmup (caches fill), slope measured over the rest
+// base_url targets the server under test. The port is GOPHER_PORT (default 9001) —
+// the sandbox launcher sets it to a side port so we hammer the hermetic instance,
+// not the dev server. Set once in main; the request helpers read it.
+var base_url_buf: [64]u8 = undefined;
+var base_url: []const u8 = "http://localhost:9001";
+
+const burst_requests = 500; // requests fired per burst
+const bursts = 4; // burst 0 is warmup (caches fill); the slope is measured over bursts 1..N-1
 const leak_threshold_bpr = 1; // sustained bytes/request of growth at/above which we call it a leak
 
 /// A Scenario is one endpoint exercise: method + path (+ optional body for POSTs).
@@ -30,13 +35,28 @@ const Scenario = struct {
     body: ?[]const u8 = null,
 };
 
+// The public GET surface (no auth). Member-only chat GETs land in the next commit,
+// once the harness registers over HTTP and carries the session cookie.
 const scenarios = [_]Scenario{
+    .{ .label = "/", .path = "/" },
+    .{ .label = "/version", .path = "/version" },
     .{ .label = "/driving", .path = "/driving" },
+    .{ .label = "/driving/app.js", .path = "/driving/app.js" },
+    .{ .label = "/puzzles", .path = "/puzzles" },
+    .{ .label = "/game", .path = "/game" },
+    .{ .label = "/blog", .path = "/blog" },
+    .{ .label = "/learn", .path = "/learn" },
+    .{ .label = "/login", .path = "/login" },
 };
 
 pub fn main(init: std.process.Init) !void {
     const io = init.io;
     const gpa = init.gpa;
+
+    if (init.environ_map.get("GOPHER_PORT")) |s| {
+        const port = std.fmt.parseInt(u16, std.mem.trim(u8, s, " \t\r\n"), 10) catch 9001;
+        base_url = std.fmt.bufPrint(&base_url_buf, "http://localhost:{d}", .{port}) catch base_url;
+    }
 
     var client: std.http.Client = .{ .allocator = gpa, .io = io };
     defer client.deinit();
@@ -135,8 +155,10 @@ fn readLiveBytes(client: *std.http.Client, gpa: std.mem.Allocator) !u64 {
     _ = gpa;
     var body_buf: [512]u8 = undefined;
     var w = Io.Writer.fixed(&body_buf);
+    var url_buf: [128]u8 = undefined;
+    const url = try std.fmt.bufPrint(&url_buf, "{s}/debug/mem", .{base_url});
     const res = try client.fetch(.{
-        .location = .{ .url = base_url ++ "/debug/mem" },
+        .location = .{ .url = url },
         .response_writer = &w,
         .keep_alive = false,
     });
