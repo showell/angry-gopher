@@ -15,6 +15,7 @@ import {
   LAKE_UNION,
   CANAL_WEST,
   CANAL_EAST,
+  UNION_BAY,
   WAREHOUSE,
   BRIDGES,
   NEIGHBORHOODS,
@@ -25,6 +26,10 @@ import {
   bridgeDeck,
   allGates,
 } from "./geography.ts";
+import { buildSubstrate } from "./roadgraph.ts";
+
+// The routing substrate is static, so build the travel-time matrix once.
+const SUB = buildSubstrate();
 
 const HOME_COUNT = NEIGHBORHOODS.reduce((s, n) => s + n.houses, 0);
 
@@ -107,6 +112,7 @@ function drawWater(ctx: CanvasRenderingContext2D): void {
   fillPoly(ctx, PUGET_SOUND, COLOR.water, COLOR.waterEdge);
   channel(ctx, CANAL_WEST);
   channel(ctx, CANAL_EAST);
+  fillPoly(ctx, UNION_BAY, COLOR.water, COLOR.waterEdge);
   fillPoly(ctx, LAKE_UNION, COLOR.water, COLOR.waterEdge);
   fillPoly(ctx, MERCER_ISLAND, COLOR.island, COLOR.waterEdge);
 }
@@ -153,18 +159,6 @@ function drawBridges(ctx: CanvasRenderingContext2D): void {
     ctx.strokeStyle = COLOR.bridgeStripe;
     ctx.stroke();
     ctx.setLineDash([]);
-    ctx.fillStyle = "#ffffff";
-    ctx.font = "bold 14px system-ui, sans-serif";
-    ctx.textAlign = "center";
-    ctx.strokeStyle = COLOR.bridge;
-    ctx.lineWidth = 3;
-    ctx.strokeText(b.name, b.label.x, b.label.y);
-    ctx.fillText(b.name, b.label.x, b.label.y);
-    if (b.note) {
-      ctx.fillStyle = COLOR.note;
-      ctx.font = "italic 11px system-ui, sans-serif";
-      ctx.fillText(b.note, b.label.x, b.label.y + 14);
-    }
   }
 }
 
@@ -225,17 +219,31 @@ function drawNeighborhood(
   });
 }
 
+type CardLine = { text: string; font: string; color: string };
+
 function drawHoverCard(ctx: CanvasRenderingContext2D, n: Neighborhood, orders: Set<string>): void {
   let count = 0;
   for (let i = 0; i < n.houses; i++) if (orders.has(`${n.name}#${i}`)) count++;
-  const sub = n.note ?? `${count} order${count === 1 ? "" : "s"} today`;
 
-  ctx.font = "bold 13px system-ui, sans-serif";
-  const nameW = ctx.measureText(n.name).width;
-  ctx.font = "italic 11px system-ui, sans-serif";
-  const subW = ctx.measureText(sub).width;
-  const w = Math.max(nameW, subW) + 16;
-  const h = 38;
+  const bold = "bold 13px system-ui, sans-serif";
+  const italic = "italic 11px system-ui, sans-serif";
+  const lines: CardLine[] = [{ text: n.name, font: bold, color: "#ffffff" }];
+  if (n.note) lines.push({ text: n.note, font: italic, color: "#bcd3df" });
+  const fc = Math.round(SUB.time("FC", n.name));
+  lines.push({
+    text: `${count} order${count === 1 ? "" : "s"}  ·  ≈${fc} min from FC`,
+    font: italic,
+    color: "#bcd3df",
+  });
+
+  let textW = 0;
+  for (const l of lines) {
+    ctx.font = l.font;
+    textW = Math.max(textW, ctx.measureText(l.text).width);
+  }
+  const lineH = 16;
+  const w = textW + 18;
+  const h = 10 + lines.length * lineH;
   const x = n.center.x - w / 2;
   const y = n.center.y - n.ringRadius - h - 8;
 
@@ -245,12 +253,13 @@ function drawHoverCard(ctx: CanvasRenderingContext2D, n: Neighborhood, orders: S
   ctx.fill();
 
   ctx.textAlign = "center";
-  ctx.fillStyle = "#ffffff";
-  ctx.font = "bold 13px system-ui, sans-serif";
-  ctx.fillText(n.name, n.center.x, y + 16);
-  ctx.fillStyle = "#bcd3df";
-  ctx.font = "italic 11px system-ui, sans-serif";
-  ctx.fillText(sub, n.center.x, y + 31);
+  let ty = y + 18;
+  for (const l of lines) {
+    ctx.fillStyle = l.color;
+    ctx.font = l.font;
+    ctx.fillText(l.text, n.center.x, ty);
+    ty += lineH;
+  }
 }
 
 function drawWarehouse(ctx: CanvasRenderingContext2D): void {

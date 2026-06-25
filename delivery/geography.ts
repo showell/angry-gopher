@@ -113,8 +113,18 @@ export const CANAL_WEST: Pt[] = [
 ];
 export const CANAL_EAST: Pt[] = [
   { x: 378, y: 296 },
-  { x: 430, y: 248 },
-  { x: 482, y: 206 },
+  { x: 432, y: 250 },
+  { x: 486, y: 214 },
+];
+
+/** Union Bay — the little opening where the Montlake Cut meets Lake Washington. */
+export const UNION_BAY: Pt[] = [
+  { x: 484, y: 200 },
+  { x: 512, y: 196 },
+  { x: 540, y: 210 },
+  { x: 544, y: 232 },
+  { x: 516, y: 242 },
+  { x: 488, y: 228 },
 ];
 
 // ---------------------------------------------------------------------------
@@ -135,8 +145,6 @@ export type Bridge = {
   name: string;
   nodes: string[];
   waters: Pt[][]; // waters[i] = waypoints between nodes[i] and nodes[i+1]
-  label: Pt;
-  note?: string;
 };
 
 export const NEIGHBORHOODS: Neighborhood[] = [
@@ -191,20 +199,16 @@ export const ROADS: Road[] = [
 
 export const BRIDGES: Bridge[] = [
   {
-    // North crossing: Montlake (U-District) -> Medina. Tolled (a wink).
+    // North crossing: Montlake (U-District) -> Medina.
     name: "SR 520",
     nodes: ["U-District", "Medina"],
     waters: [[{ x: 554, y: 148 }]],
-    label: { x: 552, y: 126 },
-    note: "$ toll",
   },
   {
     // South crossing: Beacon Hill -> Mercer Island -> Factoria.
     name: "I-90",
     nodes: ["Beacon Hill", "Mercer Island", "Factoria"],
     waters: [[{ x: 492, y: 501 }], [{ x: 608, y: 549 }]],
-    label: { x: 478, y: 498 },
-    note: "via Mercer Is.",
   },
 ];
 
@@ -264,24 +268,26 @@ export function roadGates(road: Road): [Pt, Pt] {
   return [gateOf(a, nodeAt(b)), gateOf(b, nodeAt(a))];
 }
 
-/** The full drawn polyline of a bridge: gate -> waters -> gate, segment by segment. */
-export function bridgeDeck(b: Bridge): Pt[] {
-  const pts: Pt[] = [];
+/** Each bridge segment: the graph edge it carries and its deck (gate -> waters -> gate). */
+export function bridgeSegments(b: Bridge): { edge: Road; pts: Pt[] }[] {
+  const segs: { edge: Road; pts: Pt[] }[] = [];
   for (let i = 0; i < b.nodes.length - 1; i++) {
     const a = b.nodes[i];
     const c = b.nodes[i + 1];
-    pts.push(gateOf(a, nodeAt(c))); // exit a toward c
-    for (const w of b.waters[i] ?? []) pts.push(w);
-    pts.push(gateOf(c, nodeAt(a))); // enter c from a
+    const pts: Pt[] = [gateOf(a, nodeAt(c)), ...(b.waters[i] ?? []), gateOf(c, nodeAt(a))];
+    segs.push({ edge: [a, c], pts });
   }
-  return pts;
+  return segs;
+}
+
+/** The full drawn polyline of a bridge: each segment's deck, end to end. */
+export function bridgeDeck(b: Bridge): Pt[] {
+  return bridgeSegments(b).flatMap((s) => s.pts);
 }
 
 /** The graph edges a bridge carries (consecutive node pairs). */
 export function bridgeEdges(b: Bridge): Road[] {
-  const out: Road[] = [];
-  for (let i = 0; i < b.nodes.length - 1; i++) out.push([b.nodes[i], b.nodes[i + 1]]);
-  return out;
+  return bridgeSegments(b).map((s) => s.edge);
 }
 
 /** All gate points across every surface road and bridge — little entrance markers. */
