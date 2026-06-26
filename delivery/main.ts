@@ -60,7 +60,7 @@ function hitTest(p: Pt): string | null {
   let bestD = Infinity;
   for (const n of NEIGHBORHOODS) {
     const d = Math.hypot(p.x - n.center.x, p.y - n.center.y);
-    if (d <= n.ringRadius + 10 && d < bestD) {
+    if (d <= n.ringRadius + 18 && d < bestD) {
       bestD = d;
       best = n.name;
     }

@@ -50,9 +50,13 @@ const TRUCK_COLORS = [
   "#5c7cfa", // periwinkle
 ];
 
+// House marker sizes (squares), orders 10% larger than the base homes were.
+const ORDER_SIZE = 9.9;
+const HOME_SIZE = 6.6;
+
 // Truck-panel layout (top-right), shared by the renderer and the hit-test.
-const PANEL_X = MAP_W - 234;
-const PANEL_W = 224;
+const PANEL_X = MAP_W - 250;
+const PANEL_W = 240;
 const PANEL_ROW0 = 65; // text baseline of the first truck row
 const PANEL_ROW_H = 18;
 
@@ -222,7 +226,7 @@ function drawNeighborhood(
   housesOf(n).forEach((h, i) => {
     const isOrder = orders.has(`${n.name}#${i}`);
     if (isOrder) {
-      const s = 9;
+      const s = ORDER_SIZE;
       ctx.fillStyle = orderColor;
       ctx.strokeStyle = "#ffffff";
       ctx.lineWidth = 1.5;
@@ -231,7 +235,7 @@ function drawNeighborhood(
       ctx.fill();
       ctx.stroke();
     } else {
-      const s = 6;
+      const s = HOME_SIZE;
       ctx.fillStyle = COLOR.home;
       ctx.strokeStyle = COLOR.homeEdge;
       ctx.lineWidth = 1;
@@ -363,8 +367,8 @@ function swatch(ctx: CanvasRenderingContext2D, x: number, y: number, fill: strin
 
 function drawHud(ctx: CanvasRenderingContext2D): void {
   // Legend (top-left).
-  swatch(ctx, 24, 30, COLOR.order, "#ffffff", 9, "order today");
-  swatch(ctx, 24, 52, COLOR.home, COLOR.homeEdge, 9, "home");
+  swatch(ctx, 24, 30, COLOR.order, "#ffffff", ORDER_SIZE, "order today (tinted by truck)");
+  swatch(ctx, 24, 52, COLOR.home, COLOR.homeEdge, HOME_SIZE, "home");
 
   // Title + problem statement (bottom-left).
   ctx.textAlign = "left";
@@ -431,7 +435,7 @@ function drawRoutes(ctx: CanvasRenderingContext2D, plan: Plan, hoverNbhd: string
     const dim = focusTruck === null && hoverNbhd !== null && !serves;
     trace(ctx, pts, false);
     ctx.globalAlpha = dim ? 0.16 : 0.92;
-    ctx.lineWidth = emphasised ? 6 : 3.5;
+    ctx.lineWidth = emphasised ? 4 : 2.2;
     ctx.strokeStyle = TRUCK_COLORS[i % TRUCK_COLORS.length];
     ctx.stroke();
     ctx.globalAlpha = 1;
@@ -466,7 +470,11 @@ function drawTruckPanel(ctx: CanvasRenderingContext2D, plan: Plan, hoverNbhd: st
 
     ctx.fillStyle = lit ? COLOR.text : COLOR.note;
     ctx.font = `${lit ? "bold " : ""}12px system-ui, sans-serif`;
-    ctx.fillText(`Truck ${i + 1}: ${route.orders}t · ${Math.round(route.time)}m · ${route.stops.length} stops`, PANEL_X + 26, y);
+    ctx.fillText(
+      `Truck ${i + 1}: ${route.orders}/${FLEET.totesPerTruck} totes · ${Math.round(route.time)}m · ${route.stops.length} stops`,
+      PANEL_X + 26,
+      y,
+    );
   });
 
   if (plan.unrouted.length) {

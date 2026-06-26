@@ -35,7 +35,7 @@ export type Road = [string, string];
 // so the solver has slack — it can run trucks partial, or idle one entirely.
 export const FLEET = { trucks: 8, totesPerTruck: 10, orders: 64 };
 
-export const MAP_W = 1000;
+export const MAP_W = 1200;
 export const MAP_H = 720;
 
 // ---------------------------------------------------------------------------
@@ -229,12 +229,16 @@ function namePhase(name: string): number {
 }
 
 /** The house positions evenly spaced around a neighborhood's ring road. */
+/** Houses sit just *outside* the ring road (it's the road; they're the lots off it). */
+export const HOUSE_GAP = 9;
+
 export function housesOf(n: Neighborhood): Pt[] {
   const phase = namePhase(n.name);
+  const r = n.ringRadius + HOUSE_GAP;
   const pts: Pt[] = [];
   for (let i = 0; i < n.houses; i++) {
     const a = phase + (i / n.houses) * Math.PI * 2;
-    pts.push({ x: n.center.x + Math.cos(a) * n.ringRadius, y: n.center.y + Math.sin(a) * n.ringRadius });
+    pts.push({ x: n.center.x + Math.cos(a) * r, y: n.center.y + Math.sin(a) * r });
   }
   return pts;
 }
