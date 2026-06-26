@@ -54,7 +54,7 @@ export type Route = {
   time: number; // travel + local + service (this truck's slice of the total)
 };
 
-export type Move = { kind: "merge" | "2-opt" | "or-opt" | "balance"; saved: number; detail: string };
+export type Move = { kind: "merge" | "2-opt" | "or-opt" | "swap" | "balance"; saved: number; detail: string };
 
 export type Plan = {
   routes: Route[];
@@ -320,6 +320,60 @@ function orOpt(sub: Substrate, routes: Stop[][], log: Move[]): void {
   }
 }
 
+/** Remove stop `rm` from a route and reinsert `add` at its cheapest slot. */
+function reinsert(sub: Substrate, route: Stop[], rm: number, add: Stop): Stop[] {
+  const base = [...route.slice(0, rm), ...route.slice(rm + 1)];
+  let best = [...base, add];
+  let bestCost = Infinity;
+  for (let p = 0; p <= base.length; p++) {
+    const cand = [...base.slice(0, p), add, ...base.slice(p)];
+    const c = costOf(sub, cand);
+    if (c < bestCost) {
+      bestCost = c;
+      best = cand;
+    }
+  }
+  return best;
+}
+
+/**
+ * Inter-route exchange: trade one stop between two trucks when it cuts total
+ * time. Or-opt only *relocates* a stop, but a near-full truck has no room to
+ * receive one — so on a tight fleet (capacity binding) the sole improving move is
+ * often a swap, which keeps both loads in budget. Pinned anchor seeds never move,
+ * and we never hand a truck a neighborhood it already serves.
+ */
+function exchange(sub: Substrate, routes: Stop[][], log: Move[]): void {
+  for (let guard = 0; guard < 200; guard++) {
+    let best: { a: number; b: number; ra: Stop[]; rb: Stop[]; gain: number } | null = null;
+    for (let a = 0; a < routes.length; a++) {
+      for (let b = a + 1; b < routes.length; b++) {
+        const base = costOf(sub, routes[a]) + costOf(sub, routes[b]);
+        for (let i = 0; i < routes[a].length; i++) {
+          const sa = routes[a][i];
+          if (sa.pin !== undefined) continue;
+          for (let j = 0; j < routes[b].length; j++) {
+            const sb = routes[b][j];
+            if (sb.pin !== undefined || sa.nbhd === sb.nbhd) continue;
+            if (loadOf(routes[a]) - sa.orders + sb.orders > CAP) continue;
+            if (loadOf(routes[b]) - sb.orders + sa.orders > CAP) continue;
+            if (routes[a].some((s, k) => k !== i && s.nbhd === sb.nbhd)) continue; // no duplicate nbhd
+            if (routes[b].some((s, k) => k !== j && s.nbhd === sa.nbhd)) continue;
+            const ra = reinsert(sub, routes[a], i, sb);
+            const rb = reinsert(sub, routes[b], j, sa);
+            const gain = base - (costOf(sub, ra) + costOf(sub, rb));
+            if (gain > 1e-6 && (!best || gain > best.gain)) best = { a, b, ra, rb, gain };
+          }
+        }
+      }
+    }
+    if (!best) break;
+    routes[best.a] = best.ra;
+    routes[best.b] = best.rb;
+    log.push({ kind: "swap", saved: best.gain, detail: `traded a stop between two trucks` });
+  }
+}
+
 /** Population stdev of a set of route times — our (im)balance measure. */
 function stdev(times: number[]): number {
   if (times.length === 0) return 0;
@@ -487,6 +541,7 @@ export function solve(sub: Substrate, orders: Map<string, number[]>, allowSplit 
 
   for (const r of routes) twoOpt(sub, r, log);
   orOpt(sub, routes, log);
+  exchange(sub, routes, log); // trade stops between trucks too full to accept a relocation
   for (const r of routes) twoOpt(sub, r, log); // re-tidy after relocations
 
   rebalance(sub, routes, log); // free tie-breaks (never lengthen the day)
