@@ -7,7 +7,7 @@ import type { Pt } from "./geography.ts";
 import { chooseOrders, ordersByNeighborhood } from "./orders.ts";
 import { buildSubstrate } from "./roadgraph.ts";
 import { solve } from "./solver.ts";
-import type { Plan } from "./solver.ts";
+import type { Plan, SolveFrame } from "./solver.ts";
 import { drawMap, truckPanelHitTest, buildTracks } from "./map_view.ts";
 import type { Track } from "./map_view.ts";
 
@@ -45,6 +45,42 @@ const STEP_MIN = 2; // route-minutes the ←/→ arrows nudge the clock while pa
 let anim: { t: number; maxT: number; playing: boolean; tracks: Track[] } | null = null;
 let lastFrame = 0;
 
+// Solver animation: step through the plan's recorded frames, one every
+// SOLVE_STEP_MS, recolouring the dots as clusters form and stops hop trucks.
+// `A` plays it; ←/→ scrub; Esc/B/Space/S leave it. null = not animating.
+const SOLVE_STEP_MS = 180;
+let solveAnim: { frames: SolveFrame[]; i: number } | null = null;
+let solveTimer = 0;
+
+/** Leave the solver animation (stop the stepper, drop back to the static map). */
+function stopSolveAnim(): void {
+  if (solveTimer) {
+    window.clearInterval(solveTimer);
+    solveTimer = 0;
+  }
+  solveAnim = null;
+}
+
+/** `A`: replay the solve from the first frame, auto-advancing to the last. */
+function playSolveAnim(): void {
+  stopSolveAnim();
+  anim = null; // the two animations are mutually exclusive
+  solveAnim = { frames: plan.frames, i: 0 };
+  render();
+  solveTimer = window.setInterval(() => {
+    if (!solveAnim) return;
+    if (solveAnim.i >= solveAnim.frames.length - 1) {
+      // Parked on the final (slotted) frame — stop the clock but keep it shown,
+      // so the caption's "step N / N" stays put until you scrub or exit.
+      window.clearInterval(solveTimer);
+      solveTimer = 0;
+      return;
+    }
+    solveAnim.i++;
+    render();
+  }, SOLVE_STEP_MS);
+}
+
 /**
  * Re-roll the day's orders and re-solve. The solver blocks for a beat — long
  * enough that you might hit the key twice — so we grey the map first (a paint the
@@ -55,6 +91,7 @@ function shuffle(): void {
   if (solving) return; // already working — swallow the impatient double-tap
   solving = true;
   anim = null; // leaving any running day; the new plan would invalidate it
+  stopSolveAnim(); // a new plan means new frames; drop any running solve replay
   render(); // paint the grey "shuffling…" veil before the blocking solve
   setTimeout(() => {
     seed = (seed * 1664525 + 1013904223) >>> 0; // a fresh, deterministic seed
@@ -88,7 +125,7 @@ function render(): void {
   ctx!.fillRect(0, 0, vw, vh);
 
   ctx!.setTransform(scale * dpr, 0, 0, scale * dpr, offX * dpr, offY * dpr);
-  drawMap(ctx!, { orders, plan, hoverNbhd, hoverHouse, focusTruck, shift, solving, anim });
+  drawMap(ctx!, { orders, plan, hoverNbhd, hoverHouse, focusTruck, shift, solving, anim, solveAnim });
 }
 
 /** The playback clock: advance t by real elapsed time, redraw, stop at the end. */
@@ -104,6 +141,7 @@ function tick(now: number): void {
 
 /** Space toggles playback: start the day, pause, resume, or replay from 0. */
 function togglePlay(): void {
+  stopSolveAnim(); // the day's playback and the solve replay don't share the screen
   if (!anim) {
     const tracks = buildTracks(plan);
     const maxT = tracks.reduce((m, t) => Math.max(m, t.depart + t.total), 0);
@@ -157,6 +195,7 @@ function hitTest(p: Pt): { nbhd: string | null; house: string | null } {
 }
 
 canvas.addEventListener("mousemove", (e) => {
+  if (solveAnim) return; // the solve replay owns the dots; no hover focus over it
   if (anim && anim.playing) return; // hover wakes up only when the day is paused
   const p = { x: (e.clientX - offX) / scale, y: (e.clientY - offY) / scale };
   // The truck panel sits on top of the map; test it first.
@@ -177,19 +216,37 @@ window.addEventListener("keydown", (e) => {
     togglePlay();
   } else if (e.key === "s" || e.key === "S") {
     shuffle(); // re-roll the day into a new shift
+  } else if (e.key === "a" || e.key === "A") {
+    // Watch the solver build the plan, move by move.
+    e.preventDefault();
+    playSolveAnim();
   } else if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+    const dir = e.key === "ArrowRight" ? 1 : -1;
+    if (solveAnim) {
+      // Scrub the solve replay by hand; the first arrow press freezes auto-play.
+      e.preventDefault();
+      if (solveTimer) {
+        window.clearInterval(solveTimer);
+        solveTimer = 0;
+      }
+      solveAnim.i = Math.max(0, Math.min(solveAnim.frames.length - 1, solveAnim.i + dir));
+      render();
+      return;
+    }
     // Step the day frame-by-frame. Arrows are a paused activity: a running day
     // pauses, then each press (or held key-repeat) scrubs by STEP_MIN.
     if (!anim) return;
     e.preventDefault();
     anim.playing = false;
-    const dir = e.key === "ArrowRight" ? 1 : -1;
     anim.t = Math.max(0, Math.min(anim.maxT, anim.t + dir * STEP_MIN));
     render();
-  } else if (e.key === "b" || e.key === "B") {
-    // "Back": end playback — the trucks are back at the warehouse and we return
-    // to the static map, where you can see every route or hover one at a time.
-    if (anim) {
+  } else if (e.key === "b" || e.key === "B" || e.key === "Escape") {
+    // "Back": leave whichever animation is running and return to the static map,
+    // where you can see every route or hover one at a time.
+    if (solveAnim) {
+      stopSolveAnim();
+      render();
+    } else if (anim) {
       anim = null;
       render();
     }

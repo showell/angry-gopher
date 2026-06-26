@@ -31,7 +31,7 @@ import {
   nodeAt,
 } from "./geography.ts";
 import { buildSubstrate } from "./roadgraph.ts";
-import type { Plan, Route } from "./solver.ts";
+import type { Plan, Route, SolveFrame, Stop } from "./solver.ts";
 import { buildItinerary } from "./timeline.ts";
 import type { Itinerary, Leg } from "./timeline.ts";
 
@@ -423,7 +423,25 @@ function drawHud(ctx: CanvasRenderingContext2D, shift: number): void {
     688,
   );
   ctx.font = "italic 12px system-ui, sans-serif";
-  ctx.fillText("totally not to scale  ·  hover a neighborhood or a truck  ·  Space run the day  ·  ←/→ step (paused)  ·  S new shift  ·  B back", 24, 706);
+  ctx.fillText("totally not to scale  ·  hover a neighborhood or a truck  ·  Space run the day  ·  A watch the solve  ·  ←/→ step (paused)  ·  S new shift  ·  B back", 24, 706);
+}
+
+/** The solver-animation banner: what this step did, and how far through we are. */
+function drawSolveCaption(ctx: CanvasRenderingContext2D, label: string, i: number, n: number): void {
+  const cx = MAP_W / 2;
+  const top = 22;
+  ctx.textAlign = "center";
+  ctx.font = "bold 16px system-ui, sans-serif";
+  const w = Math.max(ctx.measureText(label).width + 48, 220);
+  ctx.fillStyle = "rgba(13, 27, 42, 0.85)";
+  ctx.beginPath();
+  ctx.roundRect(cx - w / 2, top, w, 50, 10);
+  ctx.fill();
+  ctx.fillStyle = "#ffffff";
+  ctx.fillText(label, cx, top + 22);
+  ctx.fillStyle = "#aeb6c2";
+  ctx.font = "12px system-ui, sans-serif";
+  ctx.fillText(`solving — step ${i + 1} / ${n}  ·  ←/→ scrub  ·  A replay  ·  Esc exit`, cx, top + 40);
 }
 
 /** Grey veil + label while the solver runs — the shuffle takes a beat, so say so. */
@@ -740,10 +758,11 @@ export type MapView = {
   shift: number; // which shuffle we're on (S1, S2, …)
   solving: boolean; // mid-solve → grey the map behind a "shuffling…" veil
   anim?: { t: number; maxT: number; playing: boolean; tracks: Track[] } | null; // play mode
+  solveAnim?: { frames: SolveFrame[]; i: number } | null; // `A` — watch the solver build the plan
 };
 
 /** Per-house truck colour and truck index (a split neighborhood maps to two trucks). */
-function truckColorMaps(plan: Plan): { houseColor: Map<string, string>; houseTruck: Map<string, number> } {
+function truckColorMaps(plan: { routes: { stops: Stop[] }[] }): { houseColor: Map<string, string>; houseTruck: Map<string, number> } {
   const houseColor = new Map<string, string>();
   const houseTruck = new Map<string, number>();
   plan.routes.forEach((r, i) => {
@@ -791,7 +810,27 @@ function focusOf(
  * or just the focused truck's.
  */
 export function drawMap(ctx: CanvasRenderingContext2D, view: MapView): void {
-  const { orders, plan, hoverNbhd, hoverHouse, focusTruck, shift, solving, anim } = view;
+  const { orders, plan, hoverNbhd, hoverHouse, focusTruck, shift, solving, anim, solveAnim } = view;
+
+  // Solver animation: replay the build step by step. Each frame recolours the
+  // dots from that moment's assignment — clusters coalesce, stops hop trucks,
+  // and the final frame snaps everything into its truck's lane. No routes or
+  // truck panel here; it's purely "watch who gets handed to whom".
+  if (solveAnim) {
+    const frame = solveAnim.frames[solveAnim.i];
+    const { houseColor } = truckColorMaps(frame);
+    drawLand(ctx);
+    drawWater(ctx);
+    drawRegionLabels(ctx);
+    drawRoads(ctx);
+    drawBridges(ctx);
+    drawGates(ctx);
+    for (const n of NEIGHBORHOODS) drawNeighborhood(ctx, n, orders, houseColor, null, null);
+    drawWarehouse(ctx);
+    drawHud(ctx, shift);
+    drawSolveCaption(ctx, frame.label, solveAnim.i, solveAnim.frames.length);
+    return;
+  }
 
   // Play mode: the static map underneath, then the moving dots on top. While the
   // day is actually running, hover focus is suppressed so nothing competes with
