@@ -35,8 +35,8 @@ let orders = chooseOrders(seed, FLEET.orders);
 let plan: Plan = solve(SUB, ordersByNeighborhood(orders), BALANCE_LEVELS[balance]);
 
 // Playback: a single clock (route-minutes) advances PLAY_RATE min per real
-// second, so the longest route (~200 min) plays out in ~20s. null = static map.
-const PLAY_RATE = 10;
+// second, so the longest route (~200 min) plays out in ~40s. null = static map.
+const PLAY_RATE = 5;
 let anim: { t: number; maxT: number; playing: boolean; tracks: Track[] } | null = null;
 let lastFrame = 0;
 
@@ -82,7 +82,7 @@ function tick(now: number): void {
 function togglePlay(): void {
   if (!anim) {
     const tracks = buildTracks(plan);
-    const maxT = tracks.reduce((m, t) => Math.max(m, t.time), 0);
+    const maxT = tracks.reduce((m, t) => Math.max(m, t.depart + t.total), 0);
     anim = { t: 0, maxT, playing: true, tracks };
   } else if (anim.playing) {
     anim.playing = false; // pause

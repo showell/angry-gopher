@@ -31,7 +31,7 @@ import {
   houseAngles,
   nodeAt,
 } from "./geography.ts";
-import { buildSubstrate } from "./roadgraph.ts";
+import { buildSubstrate, edges, localMinutes, ENTER, SERVICE } from "./roadgraph.ts";
 import type { Plan, Route } from "./solver.ts";
 
 // The routing substrate is static, so build the travel-time matrix once.
@@ -473,43 +473,127 @@ function drawRoutes(ctx: CanvasRenderingContext2D, plan: Plan, activeTruck: numb
 }
 
 // --- Animation: trucks as dots riding their routes (the "watch the day run"
-// flipbook). A single clock t (route-minutes) drives every truck at once; each
-// dot's position is the fraction t/route-time along its drawn polyline, so the
-// longest route fills the whole window and shorter ones park early. A growing
-// trail shows the network filling in.
+// flipbook). A single clock t (route-minutes) drives every truck. Each truck's
+// timeline is FAITHFUL to the cost model: artery edges take their real travel
+// minutes, ring driving its own, and at each delivering stop the dot PAUSES for
+// ENTER + SERVICE·orders — so a truck visibly stops at the doorstep and crawls
+// where the roads are slow. Departures stagger one minute apart, hardest route
+// first, so the fleet fans out instead of leaving in a pack. A growing trail
+// shows the network filling in.
+
+const STAGGER_MIN = 1; // minutes between successive trucks leaving the FC
+
+type Seg = { x0: number; y0: number; x1: number; y1: number; t0: number; t1: number };
 
 export type Track = {
-  pts: Pt[]; // the route polyline (same as drawRoutes traces)
-  cum: number[]; // cumulative pixel length at each vertex
-  len: number; // total pixel length
-  time: number; // route time in minutes (what t is measured against)
+  segs: Seg[]; // timed segments; a dwell (delivery pause) has x0==x1, y0==y1
+  full: Pt[]; // the whole polyline, for the faint "road ahead" underlay
+  total: number; // driving minutes start-to-finish (== route.time)
+  depart: number; // minutes after the global clock that this truck leaves the FC
+  start: Pt; // where it waits before departure (the FC)
   color: string;
 };
 
-/** Precompute each truck's polyline + arc-length table once, when play starts. */
-export function buildTracks(plan: Plan): Track[] {
-  return plan.routes.map((r, i) => {
-    const pts = routeGeometry(r);
-    const cum = [0];
-    for (let k = 1; k < pts.length; k++) {
-      cum.push(cum[k - 1] + Math.hypot(pts[k].x - pts[k - 1].x, pts[k].y - pts[k - 1].y));
-    }
-    return { pts, cum, len: cum[cum.length - 1] || 0, time: r.time, color: TRUCK_COLORS[i % TRUCK_COLORS.length] };
-  });
+function polyLen(pts: Pt[]): number {
+  let d = 0;
+  for (let i = 1; i < pts.length; i++) d += Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y);
+  return d;
 }
 
-/** Head point at the given fraction, plus the prefix polyline up to it. */
-function splitAt(track: Track, frac: number): { head: Pt; prefix: Pt[] } {
-  const { pts, cum, len } = track;
-  if (pts.length < 2 || frac <= 0) return { head: pts[0], prefix: [pts[0]] };
-  if (frac >= 1) return { head: pts[pts.length - 1], prefix: pts.slice() };
-  const target = frac * len;
-  let i = 1;
-  while (i < cum.length && cum[i] < target) i++;
-  const seg = cum[i] - cum[i - 1];
-  const tt = seg > 0 ? (target - cum[i - 1]) / seg : 0;
-  const head = { x: pts[i - 1].x + (pts[i].x - pts[i - 1].x) * tt, y: pts[i - 1].y + (pts[i].y - pts[i - 1].y) * tt };
-  return { head, prefix: [...pts.slice(0, i), head] };
+/** Lay a polyline's pixels down over `minutes`, distributed by length, from `clock`. */
+function pushMove(segs: Seg[], pts: Pt[], minutes: number, clock: number): number {
+  const total = polyLen(pts);
+  let t = clock;
+  for (let k = 1; k < pts.length; k++) {
+    const d = Math.hypot(pts[k].x - pts[k - 1].x, pts[k].y - pts[k - 1].y);
+    const dt = total > 0 ? minutes * (d / total) : 0;
+    segs.push({ x0: pts[k - 1].x, y0: pts[k - 1].y, x1: pts[k].x, y1: pts[k].y, t0: t, t1: t + dt });
+    t += dt;
+  }
+  return t;
+}
+
+/** A truck's faithful timeline: same polyline as routeGeometry, real minutes. */
+function buildTimedTrack(route: Route, edgeMin: Map<string, number>, color: string): Track {
+  const waypoints = ["FC", ...route.stops.map((s) => s.nbhd), "FC"];
+  const nodes: string[] = [];
+  for (let i = 1; i < waypoints.length; i++) {
+    const leg = SUB.path(waypoints[i - 1], waypoints[i]);
+    for (const node of leg) if (nodes[nodes.length - 1] !== node) nodes.push(node);
+  }
+  const housesAt = new Map<string, number[]>();
+  const ordersAt = new Map<string, number>();
+  for (const s of route.stops) {
+    housesAt.set(s.nbhd, (housesAt.get(s.nbhd) ?? []).concat(s.houses));
+    ordersAt.set(s.nbhd, (ordersAt.get(s.nbhd) ?? 0) + s.orders);
+  }
+
+  const segs: Seg[] = [];
+  let clock = 0;
+  for (let i = 1; i < nodes.length; i++) {
+    const prev = nodes[i - 1];
+    const node = nodes[i];
+    clock = pushMove(segs, edgePolyline(prev, node), edgeMin.get(`${prev}|${node}`) ?? 0, clock);
+    if (node !== "FC" && i < nodes.length - 1) {
+      const next = nodes[i + 1];
+      const entry = gateAngle(node, nodeAt(prev));
+      const exit = gateAngle(node, nodeAt(next));
+      const hAngles = houseAngles(node, housesAt.get(node) ?? []);
+      const ringPts = ringWalkPath(node, entry, exit, hAngles);
+      const delivering = (housesAt.get(node)?.length ?? 0) > 0;
+      // Dwell at the cul-de-sac mouth: pull in + service every order here.
+      if (delivering) {
+        const dwell = ENTER + SERVICE * (ordersAt.get(node) ?? 0);
+        const p = ringPts[0];
+        segs.push({ x0: p.x, y0: p.y, x1: p.x, y1: p.y, t0: clock, t1: clock + dwell });
+        clock += dwell;
+      }
+      // Ring driving = localMinutes minus the ENTER already counted in the dwell.
+      const arcMin = localMinutes(node, entry, exit, hAngles) - (delivering ? ENTER : 0);
+      clock = pushMove(segs, ringPts, arcMin, clock);
+    }
+  }
+
+  const full: Pt[] = segs.length ? [{ x: segs[0].x0, y: segs[0].y0 }, ...segs.map((s) => ({ x: s.x1, y: s.y1 }))] : [];
+  return { segs, full, total: clock, depart: 0, start: WAREHOUSE, color };
+}
+
+/** Build every truck's timeline once when play starts, then stagger departures. */
+export function buildTracks(plan: Plan): Track[] {
+  const edgeMin = new Map<string, number>();
+  for (const e of edges()) {
+    edgeMin.set(`${e.a}|${e.b}`, e.minutes);
+    edgeMin.set(`${e.b}|${e.a}`, e.minutes);
+  }
+  const tracks = plan.routes.map((r, i) => buildTimedTrack(r, edgeMin, TRUCK_COLORS[i % TRUCK_COLORS.length]));
+  // Hardest (longest) route leaves first, the rest a minute apart behind it.
+  const order = tracks.map((_, i) => i).sort((a, b) => tracks[b].total - tracks[a].total);
+  order.forEach((ti, rank) => (tracks[ti].depart = rank * STAGGER_MIN));
+  return tracks;
+}
+
+/** Where a truck is on the global clock: head point, travelled trail, and state. */
+function posAt(track: Track, clock: number): { head: Pt; prefix: Pt[]; moving: boolean } {
+  const e = clock - track.depart;
+  if (e <= 0 || track.segs.length === 0) return { head: track.start, prefix: [], moving: false };
+  const last = track.segs[track.segs.length - 1];
+  if (e >= last.t1) return { head: { x: last.x1, y: last.y1 }, prefix: track.full, moving: false };
+
+  const prefix: Pt[] = [{ x: track.segs[0].x0, y: track.segs[0].y0 }];
+  let head = prefix[0];
+  for (const s of track.segs) {
+    if (e >= s.t1) {
+      head = { x: s.x1, y: s.y1 };
+      prefix.push(head);
+      continue;
+    }
+    const dt = s.t1 - s.t0;
+    const f = dt > 0 ? (e - s.t0) / dt : 0;
+    head = { x: s.x0 + (s.x1 - s.x0) * f, y: s.y0 + (s.y1 - s.y0) * f };
+    prefix.push(head);
+    break;
+  }
+  return { head, prefix, moving: true };
 }
 
 function drawAnimation(ctx: CanvasRenderingContext2D, tracks: Track[], t: number): void {
@@ -518,8 +602,8 @@ function drawAnimation(ctx: CanvasRenderingContext2D, tracks: Track[], t: number
 
   // Faint full routes underneath — "the roads ahead".
   for (const track of tracks) {
-    if (track.pts.length < 2) continue;
-    trace(ctx, track.pts, false);
+    if (track.full.length < 2) continue;
+    trace(ctx, track.full, false);
     ctx.globalAlpha = 0.16;
     ctx.lineWidth = 1.4;
     ctx.strokeStyle = track.color;
@@ -528,9 +612,7 @@ function drawAnimation(ctx: CanvasRenderingContext2D, tracks: Track[], t: number
 
   // Travelled trail + the dot at each truck's head.
   for (const track of tracks) {
-    if (track.pts.length < 2) continue;
-    const frac = track.time > 0 ? Math.min(t / track.time, 1) : 1;
-    const { head, prefix } = splitAt(track, frac);
+    const { head, prefix, moving } = posAt(track, t);
 
     if (prefix.length >= 2) {
       trace(ctx, prefix, false);
@@ -540,9 +622,11 @@ function drawAnimation(ctx: CanvasRenderingContext2D, tracks: Track[], t: number
       ctx.stroke();
     }
 
-    ctx.globalAlpha = 1;
+    // Trucks waiting at the FC or already home read smaller and dimmer, so the
+    // ones actually out driving are what your eye follows.
+    ctx.globalAlpha = moving ? 1 : 0.55;
     ctx.beginPath();
-    ctx.arc(head.x, head.y, 6, 0, Math.PI * 2);
+    ctx.arc(head.x, head.y, moving ? 6 : 4.5, 0, Math.PI * 2);
     ctx.fillStyle = track.color;
     ctx.fill();
     ctx.lineWidth = 2;
