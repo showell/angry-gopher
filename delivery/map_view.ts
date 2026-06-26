@@ -503,7 +503,7 @@ function drawRoutes(ctx: CanvasRenderingContext2D, plan: Plan, activeTruck: numb
 // truck waits at the dock until the trucks ahead of it in line are loaded. So a
 // truck behind a big load waits longer — the fleet fans out on its own.
 
-const LOAD_PER_TOTE = 0.5; // minutes the crew spends loading one tote
+const DOCK_TIME = 5; // minutes to load one truck at the single dock
 
 export type Track = {
   itin: Itinerary; // the canonical sequence of timed legs
@@ -533,14 +533,10 @@ export function buildTracks(plan: Plan): Track[] {
     return { itin, full, deliveries, total: itin.total, depart: 0, color: TRUCK_COLORS[i % TRUCK_COLORS.length] };
   });
   // One loading dock: the crew loads the hardest route first, and each truck
-  // departs only once the trucks ahead of it have been loaded.
-  const load = plan.routes.map((r) => r.orders * LOAD_PER_TOTE);
+  // departs DOCK_TIME after the one ahead of it — so the longest routes fan out
+  // of the FC with the biggest head start.
   const order = tracks.map((_, i) => i).sort((a, b) => tracks[b].total - tracks[a].total);
-  let dock = 0;
-  for (const ti of order) {
-    tracks[ti].depart = dock;
-    dock += load[ti];
-  }
+  order.forEach((ti, rank) => (tracks[ti].depart = rank * DOCK_TIME));
   return tracks;
 }
 
