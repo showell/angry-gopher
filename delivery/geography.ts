@@ -30,10 +30,30 @@ export type Neighborhood = {
 /** A road between two named nodes (neighborhood names, or "FC" for the warehouse). */
 export type Road = [string, string];
 
-/** The fleet + demand. 8 trucks * 10 totes = 80 orders (Bezos will be the limo extra). */
+/** The fleet + demand. 8 trucks * 12 totes = 96 capacity for 84 orders. */
 // Capacity is a true max, not a quota: demand (orders) sits below total capacity
 // so the solver has slack — it can run trucks partial, or idle one entirely.
-export const FLEET = { trucks: 8, totesPerTruck: 12, orders: 80 };
+// 84 = 7×12 is a razor's edge: 7 trucks fit only if every one is exactly full,
+// which the geography never allows, so the 8th truck deploys nearly always.
+export const FLEET = { trucks: 8, totesPerTruck: 12, orders: 84 };
+
+/**
+ * Region anchors: each truck slot is "seeded" with one far-flung neighborhood it
+ * owns day to day, so the manager sees a consistent fleet (Truck 1 = the West
+ * Seattle truck, always). The solver pins these to their slots and never merges
+ * two anchors onto one truck; everything else flows by cost. Slot order is the
+ * truck number (index 0 = Truck 1). See solver.ts for how the pinning works.
+ */
+export const TRUCK_ANCHORS = [
+  "West Seattle", // Truck 1 — far SW
+  "Magnolia", // Truck 2 — the bluff
+  "Ballard", // Truck 3 — far NW
+  "Green Lake", // Truck 4 — N central
+  "Kirkland", // Truck 5 — far NE
+  "Redmond", // Truck 6 — far E
+  "Issaquah", // Truck 7 — far SE
+  "Mercer S", // Truck 8 — the island
+];
 
 export const MAP_W = 1200;
 export const MAP_H = 720;

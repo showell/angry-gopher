@@ -23,11 +23,29 @@
 // 2-opt within a route and Or-opt across routes. Every accepted move records a
 // "saved N min" reason, for the manager-override phase to surface later.
 
-import { FLEET, gateAngle, houseAngles, nodeAt } from "./geography.ts";
+import { FLEET, TRUCK_ANCHORS, gateAngle, houseAngles, nodeAt } from "./geography.ts";
 import { SERVICE, localMinutes } from "./roadgraph.ts";
 import type { Substrate } from "./roadgraph.ts";
 
-export type Stop = { nbhd: string; orders: number; houses: number[] }; // ordered house indices
+// A stop's `pin` (when set) is the truck slot it's frozen to: the seed houses of
+// an anchor neighborhood that lock that truck's regional identity. Pinned stops
+// never relocate, and two pinned stops never share a truck — that's the whole
+// machinery behind "Truck 1 is always the West Seattle truck".
+export type Stop = { nbhd: string; orders: number; houses: number[]; pin?: number }; // ordered house indices
+
+// How many of an anchor neighborhood's houses to freeze to its slot. Capped low
+// so the truck keeps room to gather its region (and the rest can still divert if
+// the math ever wants it); in practice anchors rarely exceed this, so the whole
+// neighborhood usually rides its own truck anyway.
+const ANCHOR_PIN = 3;
+
+/** Anchor neighborhood name -> its truck slot (index into the fleet). */
+const ANCHOR_SLOT = new Map(TRUCK_ANCHORS.map((name, slot) => [name, slot]));
+
+/** Does this route carry an anchor's frozen seed (so it owns a fixed truck slot)? */
+function hasAnchor(route: Stop[]): boolean {
+  return route.some((s) => s.pin !== undefined);
+}
 
 export type Route = {
   stops: Stop[]; // ordered neighborhoods this truck visits (FC is implicit at both ends)
@@ -133,14 +151,30 @@ function bestJoin(sub: Substrate, a: Stop[], b: Stop[]): Stop[] {
   return best;
 }
 
-/** Orders map -> customers. One per neighborhood; a forced split when demand > capacity. */
+/**
+ * Orders map -> customers. One stop per neighborhood (a forced split when demand
+ * > capacity). An anchor neighborhood is split into its frozen seed — the first
+ * ANCHOR_PIN houses, pinned to the anchor's truck slot — and the overflow, a
+ * normal free stop that flows by cost (and usually coalesces right back onto the
+ * same truck). The seed is what guarantees the slot's regional identity.
+ */
 function customers(orders: Map<string, number[]>): Stop[] {
   const out: Stop[] = [];
-  for (const [nbhd, idx] of orders) {
+  const free = (nbhd: string, idx: number[]): void => {
     for (let i = 0; i < idx.length; i += CAP) {
       const houses = idx.slice(i, i + CAP);
       out.push({ nbhd, orders: houses.length, houses });
     }
+  };
+  for (const [nbhd, idx] of orders) {
+    const slot = ANCHOR_SLOT.get(nbhd);
+    if (slot === undefined) {
+      free(nbhd, idx);
+      continue;
+    }
+    const seed = idx.slice(0, ANCHOR_PIN);
+    out.push({ nbhd, orders: seed.length, houses: seed, pin: slot });
+    free(nbhd, idx.slice(ANCHOR_PIN));
   }
   return out;
 }
@@ -152,6 +186,7 @@ function construct(sub: Substrate, routes: Stop[][], log: Move[], force: boolean
     for (let i = 0; i < routes.length; i++) {
       for (let j = i + 1; j < routes.length; j++) {
         if (loadOf(routes[i]) + loadOf(routes[j]) > CAP) continue;
+        if (hasAnchor(routes[i]) && hasAnchor(routes[j])) continue; // anchors keep their own trucks
         const merged = bestJoin(sub, routes[i], routes[j]);
         const saved = costOf(sub, routes[i]) + costOf(sub, routes[j]) - costOf(sub, merged);
         if (!best || saved > best.saved) best = { i, j, merged, saved };
@@ -164,6 +199,69 @@ function construct(sub: Substrate, routes: Stop[][], log: Move[], force: boolean
     routes[best.i] = best.merged;
     routes.splice(best.j, 1);
   }
+}
+
+/**
+ * Last-resort packing when whole-route merges can't squeeze into the fleet. The
+ * no-anchor-merge rule keeps 8 anchor routes apart, which can fragment capacity:
+ * total demand fits under total capacity, but no single truck has room for a
+ * whole leftover cluster. So we keep every anchor route (plus the biggest few
+ * non-anchor clusters, up to the fleet size) and redistribute the rest house by
+ * house into trucks with room — splitting a neighborhood if we must. Total demand
+ * sits under total capacity, so with splittable houses this always lands; the
+ * later cost passes then relocate what they can to cheaper trucks.
+ */
+function forcePlace(sub: Substrate, routes: Stop[][], log: Move[]): void {
+  const anchored = routes.filter(hasAnchor);
+  const clusters = routes.filter((r) => !hasAnchor(r) && r.length > 0).sort((a, b) => loadOf(b) - loadOf(a));
+  const keep = Math.max(0, FLEET.trucks - anchored.length);
+  const kept = [...anchored, ...clusters.slice(0, keep)];
+  const surplus = clusters.slice(keep);
+
+  const appendCost = (route: Stop[], nbhd: string, houses: number[]): number =>
+    costOf(sub, [...route, { nbhd, orders: houses.length, houses }]) - costOf(sub, route);
+
+  for (const route of surplus) {
+    for (const stop of route) {
+      let remaining = stop.houses;
+      while (remaining.length) {
+        // Prefer the cheapest truck that can take the whole remaining piece —
+        // keeps a neighborhood together and on a truck near it.
+        let whole: Stop[] | null = null;
+        let bestCost = Infinity;
+        for (const k of kept) {
+          if (CAP - loadOf(k) < remaining.length) continue;
+          const c = appendCost(k, stop.nbhd, remaining);
+          if (c < bestCost) {
+            bestCost = c;
+            whole = k;
+          }
+        }
+        if (whole) {
+          whole.push({ nbhd: stop.nbhd, orders: remaining.length, houses: remaining });
+          log.push({ kind: "or-opt", saved: 0, detail: `capacity placement: ${stop.nbhd} (${remaining.length}) onto a truck with room` });
+          break;
+        }
+        // No single truck fits it whole — drop a chunk on the roomiest and loop.
+        let into: Stop[] | null = null;
+        let room = 0;
+        for (const k of kept) {
+          const free = CAP - loadOf(k);
+          if (free > room) {
+            room = free;
+            into = k;
+          }
+        }
+        if (!into || room <= 0) throw new Error("forcePlace: no truck has room — demand exceeds fleet capacity"); // unreachable: 84 ≤ 96
+        const take = remaining.slice(0, room);
+        remaining = remaining.slice(room);
+        into.push({ nbhd: stop.nbhd, orders: take.length, houses: take });
+        log.push({ kind: "or-opt", saved: 0, detail: `capacity split: ${stop.nbhd} ${take.length} tote(s) onto a truck with room` });
+      }
+    }
+  }
+
+  routes.splice(0, routes.length, ...kept);
 }
 
 /** 2-opt: reverse a sub-segment of one route while it keeps cutting cost. */
@@ -194,6 +292,7 @@ function orOpt(sub: Substrate, routes: Stop[][], log: Move[]): void {
     for (let r = 0; r < routes.length; r++) {
       for (let s = 0; s < routes[r].length; s++) {
         const stop = routes[r][s];
+        if (stop.pin !== undefined) continue; // a frozen anchor seed never relocates
         const without = [...routes[r].slice(0, s), ...routes[r].slice(s + 1)];
         const drop = costOf(sub, routes[r]) - costOf(sub, without);
 
@@ -247,6 +346,7 @@ function rebalance(sub: Substrate, routes: Stop[][], log: Move[]): void {
     for (let r = 0; r < routes.length; r++) {
       for (let s = 0; s < routes[r].length; s++) {
         const stop = routes[r][s];
+        if (stop.pin !== undefined) continue; // a frozen anchor seed never relocates
         const without = [...routes[r].slice(0, s), ...routes[r].slice(s + 1)];
         const newRcost = costOf(sub, without);
         for (let t = 0; t < routes.length; t++) {
@@ -314,6 +414,7 @@ function splitPass(sub: Substrate, routes: Stop[][], log: Move[]): void {
 
     for (let a = 0; a < routes.length; a++) {
       for (let sa = 0; sa < routes[a].length; sa++) {
+        if (routes[a][sa].pin !== undefined) continue; // a frozen anchor seed never splits off
         const N = routes[a][sa].nbhd;
         const H = routes[a][sa].houses;
         if (H.length < 2) continue;
@@ -365,8 +466,9 @@ function coalesceStops(route: Stop[]): Stop[] {
     if (existing) {
       existing.houses = existing.houses.concat(s.houses);
       existing.orders = existing.houses.length;
+      if (s.pin !== undefined) existing.pin = s.pin; // a seed + its overflow → keep the slot
     } else {
-      const copy: Stop = { nbhd: s.nbhd, orders: s.houses.length, houses: [...s.houses] };
+      const copy: Stop = { nbhd: s.nbhd, orders: s.houses.length, houses: [...s.houses], pin: s.pin };
       byNbhd.set(s.nbhd, copy);
       out.push(copy);
     }
@@ -381,6 +483,7 @@ export function solve(sub: Substrate, orders: Map<string, number[]>, allowSplit 
 
   construct(sub, routes, log, false); // savings merges while they help
   if (routes.length > FLEET.trucks) construct(sub, routes, log, true); // squeeze into the fleet
+  if (routes.length > FLEET.trucks) forcePlace(sub, routes, log); // pack the capacity-fragmented residue
 
   for (const r of routes) twoOpt(sub, r, log);
   orOpt(sub, routes, log);
@@ -397,13 +500,28 @@ export function solve(sub: Substrate, orders: Map<string, number[]>, allowSplit 
   const unrouted: Stop[] = [];
   while (routes.length > FLEET.trucks) unrouted.push(...routes.pop()!);
 
-  const built: Route[] = routes
-    .filter((r) => r.length > 0)
-    .map((stops) => {
-      const b = breakdown(sub, stops);
-      return { stops, orders: loadOf(stops), travel: b.travel, time: b.time };
-    })
-    .sort((a, b) => b.orders - a.orders);
+  // Lay each route into its truck slot: an anchored route owns its anchor's slot
+  // (so Truck 1 is always the West Seattle truck), and any anchor-less leftover
+  // fills an empty (idle-anchor) slot. We always emit all FLEET.trucks slots, in
+  // order — an empty one is just a truck that stayed home today.
+  const bySlot: Stop[][] = Array.from({ length: FLEET.trucks }, () => []);
+  const leftover: Stop[][] = [];
+  for (const r of routes) {
+    if (r.length === 0) continue;
+    const anchor = r.find((s) => s.pin !== undefined);
+    if (anchor) bySlot[anchor.pin!] = r;
+    else leftover.push(r);
+  }
+  for (const r of leftover) {
+    const k = bySlot.findIndex((slot) => slot.length === 0);
+    if (k >= 0) bySlot[k] = r;
+    else unrouted.push(...r); // no idle slot to park a leftover cluster (shouldn't happen)
+  }
+
+  const built: Route[] = bySlot.map((stops) => {
+    const b = breakdown(sub, stops);
+    return { stops, orders: loadOf(stops), travel: b.travel, time: b.time };
+  });
 
   const total = built.reduce(
     (acc, r) => {
@@ -413,7 +531,9 @@ export function solve(sub: Substrate, orders: Map<string, number[]>, allowSplit 
     { travel: 0, local: 0, service: 0 },
   );
 
-  const ts = built.map((r) => r.time);
+  // Spread is measured over the trucks actually out (an idle truck isn't a 0-min
+  // route, it's no route) so it stays a meaningful read of deployed imbalance.
+  const ts = built.filter((r) => r.stops.length > 0).map((r) => r.time);
   const spread = ts.length ? Math.max(...ts) - Math.min(...ts) : 0;
 
   return {

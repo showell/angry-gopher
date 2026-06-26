@@ -675,10 +675,11 @@ function drawClock(ctx: CanvasRenderingContext2D, t: number, maxT: number, playi
 }
 
 function drawTruckPanel(ctx: CanvasRenderingContext2D, plan: Plan, activeTruck: number | null): void {
+  const deployed = plan.routes.filter((r) => r.stops.length > 0).length;
   ctx.textAlign = "left";
   ctx.fillStyle = COLOR.text;
   ctx.font = "bold 14px system-ui, sans-serif";
-  ctx.fillText(`Plan — ${plan.routes.length} trucks`, PANEL_X, 28);
+  ctx.fillText(`Plan — ${deployed} of ${FLEET.trucks} trucks out`, PANEL_X, 28);
   ctx.fillStyle = COLOR.note;
   ctx.font = "12px system-ui, sans-serif";
   ctx.fillText(`${Math.round(plan.totalTime)} driver-min  ·  spread ${Math.round(plan.spread)} min`, PANEL_X, 45);
@@ -686,23 +687,29 @@ function drawTruckPanel(ctx: CanvasRenderingContext2D, plan: Plan, activeTruck: 
   plan.routes.forEach((route, i) => {
     const y = PANEL_ROW0 + i * PANEL_ROW_H;
     const lit = activeTruck === i;
+    const idle = route.stops.length === 0;
 
     if (lit) {
       ctx.fillStyle = "rgba(20, 26, 34, 0.06)";
       ctx.fillRect(PANEL_X - 4, y - 13, PANEL_W + 8, PANEL_ROW_H);
     }
 
+    // The truck's colour tab — hollow for an idle truck (it never left the dock).
+    ctx.globalAlpha = idle ? 0.4 : 1;
     ctx.strokeStyle = TRUCK_COLORS[i % TRUCK_COLORS.length];
     ctx.lineWidth = lit ? 5 : 3;
     ctx.beginPath();
     ctx.moveTo(PANEL_X, y - 4);
     ctx.lineTo(PANEL_X + 18, y - 4);
     ctx.stroke();
+    ctx.globalAlpha = 1;
 
-    ctx.fillStyle = lit ? COLOR.text : COLOR.note;
-    ctx.font = `${lit ? "bold " : ""}12px system-ui, sans-serif`;
+    ctx.fillStyle = idle ? COLOR.faint : lit ? COLOR.text : COLOR.note;
+    ctx.font = `${lit && !idle ? "bold " : ""}12px system-ui, sans-serif`;
     ctx.fillText(
-      `Truck ${i + 1}: ${route.orders}/${FLEET.totesPerTruck} totes · ${Math.round(route.time)}m · ${route.stops.length} stops`,
+      idle
+        ? `Truck ${i + 1}: idle — stayed home`
+        : `Truck ${i + 1}: ${route.orders}/${FLEET.totesPerTruck} totes · ${Math.round(route.time)}m · ${route.stops.length} stops`,
       PANEL_X + 26,
       y,
     );
