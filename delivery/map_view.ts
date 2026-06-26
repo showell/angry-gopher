@@ -210,6 +210,15 @@ function drawNeighborhood(
   highlight: Set<string> | null, // houses of the focused truck, to make pop
   delivered: Set<string> | null, // houses already serviced (playback) → checkmark
 ): void {
+  if (n.houses === 0) {
+    // A bridge interchange (no homes) — a small junction disc, not a ring.
+    ctx.beginPath();
+    ctx.arc(n.center.x, n.center.y, n.ringRadius, 0, Math.PI * 2);
+    ctx.fillStyle = COLOR.gate;
+    ctx.fill();
+    return;
+  }
+
   if (n.lake) {
     ctx.beginPath();
     ctx.arc(n.center.x, n.center.y, n.lake, 0, Math.PI * 2);
@@ -564,7 +573,7 @@ function drawCheck(ctx: CanvasRenderingContext2D, cx: number, cy: number, s: num
  * Read the truck off its itinerary at the global clock: where its dot is, the
  * trail behind it, and whether it's out on the road (vs waiting at the FC or
  * already home). Walk the legs accumulating minutes; the leg holding `e` gives
- * the head (interpolated along a drive/arc, parked at an enter/service point).
+ * the head (interpolated along a drive/arc, parked at a service stop).
  */
 function posAt(track: Track, clock: number): { head: Pt; prefix: Pt[]; active: boolean } {
   const e = clock - track.depart;

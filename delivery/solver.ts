@@ -5,18 +5,19 @@
 //
 // A truck's time has three parts, all of which the solver now feels:
 //
-//   1. TRAVEL — artery time between stops (the substrate's shortest paths).
-//   2. LOCAL  — time spent *inside* each neighborhood it touches: a small ENTER
-//      overhead plus the ring driving to reach its ordered houses, entering at
-//      the gate facing where it came from and leaving at the gate facing where
-//      it's headed (see geography.ringWalk). A neighborhood merely *threaded*
-//      on the way through still costs the short arc between its two gates.
-//   3. SERVICE — per-order time at each door.
+//   1. TRAVEL — artery time between stops (the substrate's shortest paths), fast.
+//   2. LOCAL  — time driving each neighborhood's SLOW ring road to reach its
+//      ordered houses, entering at the gate facing where it came from and leaving
+//      at the gate facing where it's headed (see geography.ringWalk). A
+//      neighborhood merely *threaded* on the way through still costs the short
+//      arc between its two gates — but only the delivery visit drives the full
+//      ring; a re-thread pays transit only.
+//   3. SERVICE — a small per-order beat at each door.
 //
 // LOCAL depends on the entry/exit gates, so it depends on the route's *shape* —
 // which means reordering a route, or which truck takes a neighborhood, changes
-// the cost. The old flat per-visit RING is gone; the geometry now does the
-// consolidation-deterrence (two trucks each pay their own ENTER + ring arc).
+// the cost. There's no flat per-visit charge; the slow ring geometry itself does
+// the consolidation-deterrence (two trucks each pay their own ring driving).
 //
 // Construction is Clarke–Wright savings (greedy best-merge); improvement is
 // 2-opt within a route and Or-opt across routes. Every accepted move records a
@@ -41,7 +42,7 @@ export type Plan = {
   routes: Route[];
   totalTime: number;
   travel: number; // total artery time across the fleet
-  local: number; // total in-neighborhood driving + ENTER overhead
+  local: number; // total in-neighborhood (slow ring) driving
   service: number; // total per-order time (a constant for a given day)
   spread: number; // longest route time − shortest, a measure of (im)balance
   log: Move[];
@@ -88,13 +89,20 @@ function breakdown(sub: Substrate, stops: Stop[]): Breakdown {
   let travel = 0;
   for (let i = 1; i < nodes.length; i++) travel += sub.time(nodes[i - 1], nodes[i]);
 
+  // A neighborhood drives its full delivery ring ONCE (at its first occurrence);
+  // if the shortest path threads back through it later, that pass costs only the
+  // short gate-to-gate transit arc — you don't re-loop a town you already did.
+  const delivered = new Set<string>();
   let local = 0;
   for (let i = 1; i < nodes.length - 1; i++) {
     const node = nodes[i];
     if (node === "FC") continue;
+    const full = houses.get(node);
+    const visit = full && full.length && !delivered.has(node) ? full : [];
+    if (visit.length) delivered.add(node);
     const entry = gateAngle(node, nodeAt(nodes[i - 1]));
     const exit = gateAngle(node, nodeAt(nodes[i + 1]));
-    local += localMinutes(node, entry, exit, houseAngles(node, houses.get(node) ?? []));
+    local += localMinutes(node, entry, exit, houseAngles(node, visit));
   }
 
   const service = loadOf(stops) * SERVICE;
@@ -303,7 +311,7 @@ function arcSubsets(name: string, houses: number[]): number[][] {
 /**
  * Voluntary split delivery: hand a contiguous arc of one neighborhood's houses
  * to a SECOND truck when it improves the penalized objective (total + lambda·
- * stdev). Never forced — splitting adds an ENTER and a second ring access, so it
+ * stdev). Never forced — splitting adds a second truck's ring driving, so it
  * only happens when capacity relief or balance more than pays for it.
  */
 function splitPass(sub: Substrate, routes: Stop[][], lambda: number, log: Move[]): void {

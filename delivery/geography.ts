@@ -64,15 +64,17 @@ export const EAST_SHORE: Pt[] = [
   { x: 594, y: 720 },
 ];
 
-/** Mercer Island — "the Rock" — sitting in the lake's lower middle. I-90 crosses it. */
+/** Mercer Island — "the Rock" — sitting in the lake's lower middle. I-90 crosses
+ *  it, with a cul-de-sac on the north end and one on the south, off the bridge. */
 export const MERCER_ISLAND: Pt[] = [
-  { x: 516, y: 524 },
-  { x: 534, y: 494 },
-  { x: 566, y: 496 },
-  { x: 584, y: 526 },
-  { x: 572, y: 566 },
-  { x: 538, y: 580 },
-  { x: 514, y: 558 },
+  { x: 548, y: 456 },
+  { x: 584, y: 488 },
+  { x: 590, y: 536 },
+  { x: 582, y: 588 },
+  { x: 548, y: 618 },
+  { x: 514, y: 588 },
+  { x: 506, y: 536 },
+  { x: 514, y: 488 },
 ];
 
 /** Puget Sound / Elliott Bay — water down the far-west margin, bulging in near downtown. */
@@ -160,8 +162,12 @@ export const NEIGHBORHOODS: Neighborhood[] = [
   { name: "Downtown", center: { x: 300, y: 430 }, side: "west", ringRadius: 30, houses: 12 },
   { name: "Beacon Hill", center: { x: 432, y: 470 }, side: "west", ringRadius: 30, houses: 12 },
   { name: "West Seattle", center: { x: 200, y: 600 }, side: "west", ringRadius: 30, houses: 12 },
-  // --- Mercer Island (mid-I-90) ---
-  { name: "Mercer Island", center: { x: 548, y: 530 }, side: "island", ringRadius: 26, houses: 12, note: "the Rock" },
+  // --- Mercer Island (mid-I-90) — a bridge interchange with two cul-de-sacs off
+  //     it, north and south. "Mercer Island" itself is just the interchange (no
+  //     homes); the deliveries live on Mercer N and Mercer S. ---
+  { name: "Mercer Island", center: { x: 548, y: 536 }, side: "island", ringRadius: 10, houses: 0, note: "the Rock" },
+  { name: "Mercer N", center: { x: 548, y: 492 }, side: "island", ringRadius: 19, houses: 12 },
+  { name: "Mercer S", center: { x: 548, y: 582 }, side: "island", ringRadius: 19, houses: 12 },
   // --- Eastside — tech money, more room ---
   { name: "Medina", center: { x: 628, y: 140 }, side: "east", ringRadius: 28, houses: 12, note: "you-know-who lives here" },
   { name: "Kirkland", center: { x: 700, y: 212 }, side: "east", ringRadius: 30, houses: 12 },
@@ -197,6 +203,9 @@ export const ROADS: Road[] = [
   ["FC", "Factoria"],
   ["Factoria", "Issaquah"],
   ["Issaquah", "Redmond"], // the far-east "fast" bypass (I-405 / Sammamish)
+  // The two Mercer Island cul-de-sacs branch off the I-90 interchange.
+  ["Mercer Island", "Mercer N"],
+  ["Mercer Island", "Mercer S"],
 ];
 
 export const BRIDGES: Bridge[] = [

@@ -2,34 +2,33 @@
 // geography, weights each edge with a V1 travel-time model, and computes
 // all-pairs shortest times between every neighborhood and the warehouse (FC).
 //
-// V1 cost model — three pieces, deliberately simple and tunable:
+// Cost model — three pieces, deliberately simple and tunable:
 //
 //   1. TRAVEL — an edge's time = its drawn length (px) * a region speed factor
 //      * MIN_PER_PX. Westside city streets are slow, the Eastside normal, the
 //      Issaquah<->Redmond bypass fast, bridges a touch quick (highways). Travel
-//      between two neighborhoods = shortest path over this graph. This is the
-//      "painful to GET TO" half.
+//      between two neighborhoods = shortest path over this graph. Arteries are
+//      the FAST part — this is the "painful to GET TO" half.
 //
-//   2. RING — a FIXED cost paid every time a truck enters a neighborhood, no
-//      matter how many orders it has there. This is the "painful once you're IN
-//      it" half, and it's identical for every neighborhood (per Steve's "same
-//      cost once you're in it"). Its real job: make it egregious for two trucks
-//      to hit the same neighborhood — each pays RING + its own access travel. So
-//      the solver consolidates a neighborhood onto one truck... unless capacity
-//      forces a split (a neighborhood with more orders than a truck's spare
-//      totes MUST be split, and the math accepts the double RING).
+//   2. LOCAL — the ring driving *inside* a neighborhood: the arc you cover
+//      entering at one gate, touching your ordered houses, and leaving at
+//      another. Neighborhood streets are SLOW — NEIGHBORHOOD_SLOWDOWN× the local
+//      arteries (residential speed limits). There's no flat "enter" charge; the
+//      cost of a neighborhood is that you're *in* it, driving its slow ring. A
+//      neighborhood merely threaded on the way through still pays its short
+//      gate-to-gate arc (the "little arc to get through Downtown"). This slow
+//      ring is also what deters two trucks from both working one neighborhood.
 //
-//   3. SERVICE — a small uniform cost per order actually delivered.
-//
-// We left the get-to/once-in balance explicit (TRAVEL vs RING) precisely so we
-// can shift weight between them as we iterate.
+//   3. SERVICE — a small uniform beat per order actually delivered (the truck
+//      stopping at the door). Nearly constant across trucks, so it barely tilts
+//      the routing; it's mostly there to feel real in playback.
 
 import type { Pt } from "./geography.ts";
 import { NEIGHBORHOODS, ROADS, BRIDGES, roadGates, bridgeSegments, ringWalkArcPx } from "./geography.ts";
 
 export const MIN_PER_PX = 0.06;
 export const SPEED = { city: 1.6, suburb: 1.0, bridge: 0.9, fast: 0.5 };
-export const ENTER = 3; // fixed minutes to pull into a neighborhood (slow down, find the spot)
+export const NEIGHBORHOOD_SLOWDOWN = 2; // ring roads are this much slower than the local arteries
 export const SERVICE = 2; // minutes per order delivered, identical everywhere
 
 /** Service nodes: every neighborhood, plus the warehouse depot. */
@@ -54,16 +53,16 @@ function factor(a: string, b: string, bridge: boolean): number {
 }
 
 /**
- * Minutes a truck spends *inside* a neighborhood: a fixed ENTER overhead plus
- * the ring driving needed to enter at `entryA`, touch the ordered houses, and
- * leave at `exitA` (zero houses = a pass-through, which still costs the short
- * arc between the two gates). Westside streets are slow, everywhere else normal.
- * SERVICE (per-order time at the door) is added separately by the caller.
+ * Minutes a truck spends *inside* a neighborhood, driving its slow ring road:
+ * the arc to enter at `entryA`, touch the ordered houses, and leave at `exitA`
+ * (zero houses = a pass-through, which still costs the short arc between the two
+ * gates). Residential streets run NEIGHBORHOOD_SLOWDOWN× slower than the local
+ * arteries (Westside city, everywhere else normal). SERVICE (per-order time at
+ * the door) is added separately by the caller.
  */
 export function localMinutes(name: string, entryA: number, exitA: number, houseAngles: number[]): number {
-  const speed = isWest(name) ? SPEED.city : SPEED.suburb;
-  const enter = houseAngles.length ? ENTER : 0; // a pass-through doesn't "pull in"
-  return enter + ringWalkArcPx(name, entryA, exitA, houseAngles) * speed * MIN_PER_PX;
+  const arterial = isWest(name) ? SPEED.city : SPEED.suburb;
+  return ringWalkArcPx(name, entryA, exitA, houseAngles) * arterial * NEIGHBORHOOD_SLOWDOWN * MIN_PER_PX;
 }
 
 export type Edge = { a: string; b: string; minutes: number };
