@@ -384,7 +384,7 @@ function arcSubsets(name: string, houses: number[]): number[][] {
   const order = houses.map((h, i) => ({ h, a: ang[i] })).sort((x, y) => x.a - y.a).map((p) => p.h);
   const out: number[][] = [];
   const seen = new Set<string>();
-  const maxK = Math.min(2, houses.length - 1);
+  const maxK = Math.min(3, houses.length - 1);
   for (let k = 1; k <= maxK; k++) {
     for (let start = 0; start < order.length; start++) {
       const S: number[] = [];
