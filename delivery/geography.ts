@@ -67,14 +67,14 @@ export const EAST_SHORE: Pt[] = [
 /** Mercer Island — "the Rock" — sitting in the lake's lower middle. I-90 crosses
  *  it, with a cul-de-sac on the north end and one on the south, off the bridge. */
 export const MERCER_ISLAND: Pt[] = [
-  { x: 548, y: 456 },
-  { x: 584, y: 488 },
+  { x: 548, y: 448 },
+  { x: 584, y: 483 },
   { x: 590, y: 536 },
-  { x: 582, y: 588 },
-  { x: 548, y: 618 },
-  { x: 514, y: 588 },
+  { x: 582, y: 593 },
+  { x: 548, y: 626 },
+  { x: 514, y: 593 },
   { x: 506, y: 536 },
-  { x: 514, y: 488 },
+  { x: 514, y: 483 },
 ];
 
 /** Puget Sound / Elliott Bay — water down the far-west margin, bulging in near downtown. */
@@ -156,13 +156,13 @@ export const NEIGHBORHOODS: Neighborhood[] = [
   { name: "Ballard", center: { x: 224, y: 146 }, side: "west", ringRadius: 32, houses: 12 },
   { name: "Green Lake", center: { x: 420, y: 96 }, side: "west", ringRadius: 34, houses: 12, lake: 16 },
   { name: "Fremont", center: { x: 340, y: 212 }, side: "west", ringRadius: 30, houses: 12, note: "Center of the Universe" },
-  { name: "U-District", center: { x: 478, y: 158 }, side: "west", ringRadius: 30, houses: 12 },
-  { name: "Magnolia", center: { x: 158, y: 286 }, side: "west", ringRadius: 26, houses: 12, note: "out on the bluff" },
+  { name: "U-District", center: { x: 467, y: 169 }, side: "west", ringRadius: 30, houses: 12 },
+  { name: "Magnolia", center: { x: 170, y: 291 }, side: "west", ringRadius: 26, houses: 12, note: "out on the bluff" },
   { name: "Queen Anne", center: { x: 286, y: 316 }, side: "west", ringRadius: 32, houses: 12 },
-  { name: "Capitol Hill", center: { x: 432, y: 330 }, side: "west", ringRadius: 32, houses: 12 },
+  { name: "Capitol Hill", center: { x: 432, y: 330 }, side: "west", ringRadius: 29, houses: 12 },
   { name: "Downtown", center: { x: 300, y: 430 }, side: "west", ringRadius: 30, houses: 12 },
   { name: "Beacon Hill", center: { x: 432, y: 470 }, side: "west", ringRadius: 30, houses: 12 },
-  { name: "West Seattle", center: { x: 200, y: 600 }, side: "west", ringRadius: 30, houses: 12 },
+  { name: "West Seattle", center: { x: 211, y: 589 }, side: "west", ringRadius: 30, houses: 12 },
   // --- Mercer Island (mid-I-90) — a bridge interchange with two cul-de-sacs off
   //     it, north and south. "Mercer Island" itself is just the interchange (no
   //     homes); the deliveries live on Mercer N and Mercer S. ---
