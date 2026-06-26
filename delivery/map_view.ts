@@ -203,7 +203,6 @@ function drawGates(ctx: CanvasRenderingContext2D): void {
 function drawNeighborhood(
   ctx: CanvasRenderingContext2D,
   n: Neighborhood,
-  hot: boolean,
   orders: Set<string>,
   orderColor: string,
   highlight: Set<string> | null, // houses of the focused truck, to make pop
@@ -218,11 +217,11 @@ function drawNeighborhood(
     ctx.stroke();
   }
 
-  // Ring road.
+  // Ring road — kept neutral even on hover, so it never fights the routes.
   ctx.beginPath();
   ctx.arc(n.center.x, n.center.y, n.ringRadius, 0, Math.PI * 2);
-  ctx.lineWidth = hot ? 4 : 3;
-  ctx.strokeStyle = hot ? COLOR.ringHot : COLOR.ring;
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = COLOR.ring;
   ctx.stroke();
 
   // Houses — orders take their truck's colour and pop, plain homes recede.
@@ -235,7 +234,7 @@ function drawNeighborhood(
       const focused = focusMode && highlight.has(`${n.name}#${i}`);
       const muted = focusMode && !focused;
       const s = focused ? 13 : ORDER_SIZE;
-      ctx.globalAlpha = muted ? 0.16 : 1;
+      ctx.globalAlpha = muted ? 0.35 : 1;
       ctx.fillStyle = orderColor;
       ctx.strokeStyle = "#ffffff";
       ctx.lineWidth = focused ? 2 : 1.5;
@@ -257,46 +256,75 @@ function drawNeighborhood(
   });
 }
 
-type CardLine = { text: string; font: string; color: string };
+/**
+ * The detail panel under the truck list (top-right): a hovered neighborhood's
+ * facts, or a hovered truck's neighborhood-by-neighborhood breakdown. Lives off
+ * the map on purpose, so nothing floats over the routes.
+ */
+function drawDetail(ctx: CanvasRenderingContext2D, plan: Plan, orders: Set<string>, hoverNbhd: string | null, focusTruck: number | null): void {
+  if (hoverNbhd === null && focusTruck === null) return;
 
-function drawHoverCard(ctx: CanvasRenderingContext2D, n: Neighborhood, orders: Set<string>): void {
+  const x = PANEL_X;
+  let y = PANEL_ROW0 + plan.routes.length * PANEL_ROW_H + (plan.unrouted.length ? 18 : 0) + 20;
+  ctx.strokeStyle = "rgba(0, 0, 0, 0.12)";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(x, y - 14);
+  ctx.lineTo(x + PANEL_W, y - 14);
+  ctx.stroke();
+  ctx.textAlign = "left";
+
+  if (focusTruck !== null && plan.routes[focusTruck]) {
+    const r = plan.routes[focusTruck];
+    const color = TRUCK_COLORS[focusTruck % TRUCK_COLORS.length];
+    ctx.fillStyle = COLOR.text;
+    ctx.font = "bold 13px system-ui, sans-serif";
+    ctx.fillText(`Truck ${focusTruck + 1} — ${r.orders} totes · ${Math.round(r.time)} min`, x, y);
+    y += 19;
+    r.stops.forEach((s, k) => {
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.arc(x + 4, y - 4, 3.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = COLOR.text;
+      ctx.font = "12px system-ui, sans-serif";
+      ctx.fillText(`${k + 1}. ${s.nbhd}`, x + 14, y);
+      ctx.fillStyle = COLOR.note;
+      ctx.textAlign = "right";
+      ctx.fillText(`${s.orders} tote${s.orders === 1 ? "" : "s"}`, x + PANEL_W, y);
+      ctx.textAlign = "left";
+      y += 17;
+    });
+    return;
+  }
+
+  const n = NEIGHBORHOODS.find((m) => m.name === hoverNbhd);
+  if (!n) return;
   let count = 0;
   for (let i = 0; i < n.houses; i++) if (orders.has(`${n.name}#${i}`)) count++;
+  const truck = plan.routes.findIndex((r) => r.stops.some((s) => s.nbhd === n.name));
 
-  const bold = "bold 13px system-ui, sans-serif";
-  const italic = "italic 11px system-ui, sans-serif";
-  const lines: CardLine[] = [{ text: n.name, font: bold, color: "#ffffff" }];
-  if (n.note) lines.push({ text: n.note, font: italic, color: "#bcd3df" });
-  const fc = Math.round(SUB.time("FC", n.name));
-  lines.push({
-    text: `${count} order${count === 1 ? "" : "s"}  ·  ≈${fc} min from FC`,
-    font: italic,
-    color: "#bcd3df",
-  });
-
-  let textW = 0;
-  for (const l of lines) {
-    ctx.font = l.font;
-    textW = Math.max(textW, ctx.measureText(l.text).width);
+  ctx.fillStyle = COLOR.text;
+  ctx.font = "bold 14px system-ui, sans-serif";
+  ctx.fillText(n.name, x, y);
+  y += 18;
+  if (n.note) {
+    ctx.fillStyle = COLOR.note;
+    ctx.font = "italic 12px system-ui, sans-serif";
+    ctx.fillText(n.note, x, y);
+    y += 17;
   }
-  const lineH = 16;
-  const w = textW + 18;
-  const h = 10 + lines.length * lineH;
-  const x = n.center.x - w / 2;
-  const y = n.center.y - n.ringRadius - h - 8;
-
-  ctx.fillStyle = "rgba(20, 26, 34, 0.92)";
-  ctx.beginPath();
-  ctx.roundRect(x, y, w, h, 6);
-  ctx.fill();
-
-  ctx.textAlign = "center";
-  let ty = y + 18;
-  for (const l of lines) {
-    ctx.fillStyle = l.color;
-    ctx.font = l.font;
-    ctx.fillText(l.text, n.center.x, ty);
-    ty += lineH;
+  ctx.fillStyle = COLOR.note;
+  ctx.font = "12px system-ui, sans-serif";
+  ctx.fillText(`${count} order${count === 1 ? "" : "s"}  ·  ≈${Math.round(SUB.time("FC", n.name))} min from FC`, x, y);
+  if (truck >= 0) {
+    y += 17;
+    ctx.fillStyle = TRUCK_COLORS[truck % TRUCK_COLORS.length];
+    ctx.beginPath();
+    ctx.arc(x + 4, y - 4, 3.5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = COLOR.note;
+    ctx.fillText(`served by Truck ${truck + 1}`, x + 14, y);
   }
 }
 
@@ -445,8 +473,8 @@ function drawRoutes(ctx: CanvasRenderingContext2D, plan: Plan, hoverNbhd: string
     const emphasised = focusTruck === i || serves;
     const dim = focusTruck === null && hoverNbhd !== null && !serves;
     trace(ctx, pts, false);
-    ctx.globalAlpha = dim ? 0.16 : 0.92;
-    ctx.lineWidth = emphasised ? 4 : 2.2;
+    ctx.globalAlpha = dim ? 0.14 : 0.8;
+    ctx.lineWidth = emphasised ? 2.8 : 1.6;
     ctx.strokeStyle = TRUCK_COLORS[i % TRUCK_COLORS.length];
     ctx.stroke();
     ctx.globalAlpha = 1;
@@ -544,15 +572,14 @@ export function drawMap(ctx: CanvasRenderingContext2D, view: MapView): void {
   drawRoads(ctx);
   drawBridges(ctx);
   drawGates(ctx);
-  for (const n of NEIGHBORHOODS) drawNeighborhood(ctx, n, n.name === hoverNbhd, orders, nbhdColor.get(n.name) ?? COLOR.order, highlight);
+  for (const n of NEIGHBORHOODS) drawNeighborhood(ctx, n, orders, nbhdColor.get(n.name) ?? COLOR.order, highlight);
   drawWarehouse(ctx);
 
   // z=2 — the routes, on top so the loop around each cul-de-sac is visible.
   drawRoutes(ctx, plan, hoverNbhd, focusTruck);
 
-  // Screen furniture.
-  const hot = NEIGHBORHOODS.find((n) => n.name === hoverNbhd);
-  if (hot) drawHoverCard(ctx, hot, orders);
+  // Screen furniture — all off the map, so nothing floats over the routes.
   drawHud(ctx);
   drawTruckPanel(ctx, plan, hoverNbhd, focusTruck);
+  drawDetail(ctx, plan, orders, hoverNbhd, focusTruck);
 }
