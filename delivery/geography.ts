@@ -153,11 +153,12 @@ export type Bridge = {
 
 export const NEIGHBORHOODS: Neighborhood[] = [
   // --- Westside (Seattle) — the city, heavier traffic ---
-  { name: "Ballard", center: { x: 250, y: 120 }, side: "west", ringRadius: 32, houses: 12 },
+  { name: "Ballard", center: { x: 224, y: 146 }, side: "west", ringRadius: 32, houses: 12 },
   { name: "Green Lake", center: { x: 420, y: 96 }, side: "west", ringRadius: 34, houses: 12, lake: 16 },
   { name: "Fremont", center: { x: 340, y: 212 }, side: "west", ringRadius: 30, houses: 12, note: "Center of the Universe" },
   { name: "U-District", center: { x: 478, y: 158 }, side: "west", ringRadius: 30, houses: 12 },
-  { name: "Queen Anne", center: { x: 252, y: 318 }, side: "west", ringRadius: 32, houses: 12 },
+  { name: "Magnolia", center: { x: 158, y: 286 }, side: "west", ringRadius: 26, houses: 12, note: "out on the bluff" },
+  { name: "Queen Anne", center: { x: 286, y: 316 }, side: "west", ringRadius: 32, houses: 12 },
   { name: "Capitol Hill", center: { x: 432, y: 330 }, side: "west", ringRadius: 32, houses: 12 },
   { name: "Downtown", center: { x: 300, y: 430 }, side: "west", ringRadius: 30, houses: 12 },
   { name: "Beacon Hill", center: { x: 432, y: 470 }, side: "west", ringRadius: 30, houses: 12 },
@@ -182,6 +183,8 @@ export const ROADS: Road[] = [
   // Westside arterials
   ["Ballard", "Green Lake"],
   ["Ballard", "Fremont"],
+  ["Magnolia", "Ballard"], // an artery over the ship canal (no bridge styling)
+  ["Magnolia", "Queen Anne"],
   ["Green Lake", "Fremont"],
   ["Green Lake", "U-District"],
   ["Fremont", "U-District"],
