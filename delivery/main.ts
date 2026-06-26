@@ -38,6 +38,7 @@ let plan: Plan = solve(SUB, ordersByNeighborhood(orders), BALANCE_LEVELS[BALANCE
 // Playback: a single clock (route-minutes) advances PLAY_RATE min per real
 // second, so the longest route (~200 min) plays out in ~40s. null = static map.
 const PLAY_RATE = 5;
+const STEP_MIN = 2; // route-minutes the ←/→ arrows nudge the clock while paused
 let anim: { t: number; maxT: number; playing: boolean; tracks: Track[] } | null = null;
 let lastFrame = 0;
 
@@ -134,7 +135,7 @@ function hitTest(p: Pt): { nbhd: string | null; house: string | null } {
 }
 
 canvas.addEventListener("mousemove", (e) => {
-  if (anim) return; // hover focus is suppressed while the day is running
+  if (anim && anim.playing) return; // hover wakes up only when the day is paused
   const p = { x: (e.clientX - offX) / scale, y: (e.clientY - offY) / scale };
   // The truck panel sits on top of the map; test it first.
   const truck = truckPanelHitTest(plan, p);
@@ -159,6 +160,15 @@ window.addEventListener("keydown", (e) => {
     focusTruck = null; // truck indices may not survive a re-plan
     hoverNbhd = null;
     hoverHouse = null;
+    render();
+  } else if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+    // Step the day frame-by-frame. Arrows are a paused activity: a running day
+    // pauses, then each press (or held key-repeat) scrubs by STEP_MIN.
+    if (!anim) return;
+    e.preventDefault();
+    anim.playing = false;
+    const dir = e.key === "ArrowRight" ? 1 : -1;
+    anim.t = Math.max(0, Math.min(anim.maxT, anim.t + dir * STEP_MIN));
     render();
   } else if (e.key === "b" || e.key === "B") {
     // "Back": end playback — the trucks are back at the warehouse and we return

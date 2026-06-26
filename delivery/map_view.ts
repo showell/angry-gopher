@@ -435,7 +435,7 @@ function drawHud(ctx: CanvasRenderingContext2D): void {
     688,
   );
   ctx.font = "italic 12px system-ui, sans-serif";
-  ctx.fillText("totally not to scale  ·  hover a neighborhood or a truck  ·  Space run the day  ·  B back  ·  R reshuffle", 24, 706);
+  ctx.fillText("totally not to scale  ·  hover a neighborhood or a truck  ·  Space run the day  ·  ←/→ step (paused)  ·  B back  ·  R reshuffle", 24, 706);
 }
 
 /**
@@ -740,54 +740,33 @@ export type MapView = {
   anim?: { t: number; maxT: number; playing: boolean; tracks: Track[] } | null; // play mode
 };
 
-/**
- * Paint the frame. The map (z=1) is always the same picture — only the order
- * squares are tinted by their truck. The routes (z=2) ride on top, all of them
- * or just the focused truck's.
- */
-export function drawMap(ctx: CanvasRenderingContext2D, view: MapView): void {
-  const { orders, plan, hoverNbhd, hoverHouse, focusTruck, balanceLabel, anim } = view;
-
-  // Play mode: the static map underneath, then the moving dots on top. Hover
-  // focus is suppressed so nothing competes with the trucks running their day.
-  if (anim) {
-    const houseColor = new Map<string, string>();
-    plan.routes.forEach((r, i) => {
-      for (const s of r.stops) for (const h of s.houses) houseColor.set(`${s.nbhd}#${h}`, TRUCK_COLORS[i % TRUCK_COLORS.length]);
-    });
-    drawLand(ctx);
-    drawWater(ctx);
-    drawTraffic(ctx);
-    drawRegionLabels(ctx);
-    drawRoads(ctx);
-    drawBridges(ctx);
-    drawGates(ctx);
-    const delivered = deliveredAt(anim.tracks, anim.t);
-    for (const n of NEIGHBORHOODS) drawNeighborhood(ctx, n, orders, houseColor, null, delivered);
-    drawWarehouse(ctx);
-    drawAnimation(ctx, anim.tracks, anim.t);
-    drawHud(ctx);
-    drawTruckPanel(ctx, plan, null, balanceLabel);
-    drawClock(ctx, anim.t, anim.maxT, anim.playing);
-    return;
-  }
-
-  // Each ordered house takes the colour — and records the truck — that delivers
-  // it, so a neighborhood split between trucks shows both colours and we can ask
-  // "who delivers this house?".
+/** Per-house truck colour and truck index (a split neighborhood maps to two trucks). */
+function truckColorMaps(plan: Plan): { houseColor: Map<string, string>; houseTruck: Map<string, number> } {
   const houseColor = new Map<string, string>();
   const houseTruck = new Map<string, number>();
   plan.routes.forEach((r, i) => {
+    const c = TRUCK_COLORS[i % TRUCK_COLORS.length];
     for (const s of r.stops) for (const h of s.houses) {
-      houseColor.set(`${s.nbhd}#${h}`, TRUCK_COLORS[i % TRUCK_COLORS.length]);
+      houseColor.set(`${s.nbhd}#${h}`, c);
       houseTruck.set(`${s.nbhd}#${h}`, i);
     }
   });
+  return { houseColor, houseTruck };
+}
 
-  // The "active" truck: the one hovered directly in the panel; else the truck
-  // delivering the house nearest the cursor (so a split neighborhood surfaces the
-  // *right* truck); else, failing a specific house, whichever truck serves the
-  // hovered neighborhood. Every focus effect keys off this.
+/**
+ * The "active" truck for a hover and the set of its houses to pop. Prefer the
+ * truck hovered directly in the panel; else the truck delivering the house
+ * nearest the cursor (so a split neighborhood surfaces the *right* truck); else,
+ * failing a specific house, whichever truck serves the hovered neighborhood.
+ */
+function focusOf(
+  plan: Plan,
+  houseTruck: Map<string, number>,
+  hoverNbhd: string | null,
+  hoverHouse: string | null,
+  focusTruck: number | null,
+): { activeTruck: number | null; highlight: Set<string> | null } {
   let activeTruck = focusTruck;
   if (activeTruck === null && hoverHouse !== null && houseTruck.has(hoverHouse)) {
     activeTruck = houseTruck.get(hoverHouse)!;
@@ -796,13 +775,59 @@ export function drawMap(ctx: CanvasRenderingContext2D, view: MapView): void {
     const serving = plan.routes.findIndex((r) => r.stops.some((s) => s.nbhd === hoverNbhd));
     if (serving >= 0) activeTruck = serving;
   }
-
-  // The active truck's houses pop; everyone else's fade back.
   let highlight: Set<string> | null = null;
   if (activeTruck !== null && plan.routes[activeTruck]) {
     highlight = new Set();
     for (const s of plan.routes[activeTruck].stops) for (const i of s.houses) highlight.add(`${s.nbhd}#${i}`);
   }
+  return { activeTruck, highlight };
+}
+
+/**
+ * Paint the frame. The map (z=1) is always the same picture — only the order
+ * squares are tinted by their truck. The routes (z=2) ride on top, all of them
+ * or just the focused truck's.
+ */
+export function drawMap(ctx: CanvasRenderingContext2D, view: MapView): void {
+  const { orders, plan, hoverNbhd, hoverHouse, focusTruck, balanceLabel, anim } = view;
+
+  // Play mode: the static map underneath, then the moving dots on top. While the
+  // day is actually running, hover focus is suppressed so nothing competes with
+  // the trucks. The moment you PAUSE, hover comes back to life — you can inspect
+  // any truck's whole tour mid-day, laid over how far its dot has got.
+  if (anim) {
+    const { houseColor, houseTruck } = truckColorMaps(plan);
+    const paused = !anim.playing;
+    const { activeTruck, highlight } = paused
+      ? focusOf(plan, houseTruck, hoverNbhd, hoverHouse, focusTruck)
+      : { activeTruck: null as number | null, highlight: null as Set<string> | null };
+
+    drawLand(ctx);
+    drawWater(ctx);
+    drawTraffic(ctx);
+    drawRegionLabels(ctx);
+    drawRoads(ctx);
+    drawBridges(ctx);
+    drawGates(ctx);
+    const delivered = deliveredAt(anim.tracks, anim.t);
+    for (const n of NEIGHBORHOODS) drawNeighborhood(ctx, n, orders, houseColor, highlight, delivered);
+    drawWarehouse(ctx);
+    drawAnimation(ctx, anim.tracks, anim.t);
+    // A hovered truck (paused only): lay its full tour on top of the trail, so
+    // the road still ahead of the dot reads.
+    if (activeTruck !== null) drawRoutes(ctx, plan, activeTruck);
+    drawHud(ctx);
+    drawTruckPanel(ctx, plan, activeTruck, balanceLabel);
+    drawClock(ctx, anim.t, anim.maxT, anim.playing);
+    if (paused) drawDetail(ctx, plan, orders, hoverNbhd, activeTruck);
+    return;
+  }
+
+  // Each ordered house takes the colour — and records the truck — that delivers
+  // it, so a neighborhood split between trucks shows both colours and we can ask
+  // "who delivers this house?". The active truck's houses then pop; the rest fade.
+  const { houseColor, houseTruck } = truckColorMaps(plan);
+  const { activeTruck, highlight } = focusOf(plan, houseTruck, hoverNbhd, hoverHouse, focusTruck);
 
   // z=1 — the map itself.
   drawLand(ctx);
