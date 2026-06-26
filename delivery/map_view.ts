@@ -257,12 +257,13 @@ function drawNeighborhood(
 }
 
 /**
- * The detail panel under the truck list (top-right): a hovered neighborhood's
- * facts, or a hovered truck's neighborhood-by-neighborhood breakdown. Lives off
- * the map on purpose, so nothing floats over the routes.
+ * The detail panel under the truck list (top-right). When a neighborhood is
+ * hovered it leads with that neighborhood's facts; either way it then shows the
+ * active truck's neighborhood-by-neighborhood breakdown (the hovered one in
+ * bold). Off the map on purpose, so nothing floats over the routes.
  */
-function drawDetail(ctx: CanvasRenderingContext2D, plan: Plan, orders: Set<string>, hoverNbhd: string | null, focusTruck: number | null): void {
-  if (hoverNbhd === null && focusTruck === null) return;
+function drawDetail(ctx: CanvasRenderingContext2D, plan: Plan, orders: Set<string>, hoverNbhd: string | null, activeTruck: number | null): void {
+  if (hoverNbhd === null && activeTruck === null) return;
 
   const x = PANEL_X;
   let y = PANEL_ROW0 + plan.routes.length * PANEL_ROW_H + (plan.unrouted.length ? 18 : 0) + 20;
@@ -274,58 +275,50 @@ function drawDetail(ctx: CanvasRenderingContext2D, plan: Plan, orders: Set<strin
   ctx.stroke();
   ctx.textAlign = "left";
 
-  if (focusTruck !== null && plan.routes[focusTruck]) {
-    const r = plan.routes[focusTruck];
-    const color = TRUCK_COLORS[focusTruck % TRUCK_COLORS.length];
+  // Lead with the hovered neighborhood's facts.
+  const n = hoverNbhd ? NEIGHBORHOODS.find((m) => m.name === hoverNbhd) : undefined;
+  if (n) {
+    let count = 0;
+    for (let i = 0; i < n.houses; i++) if (orders.has(`${n.name}#${i}`)) count++;
     ctx.fillStyle = COLOR.text;
-    ctx.font = "bold 13px system-ui, sans-serif";
-    ctx.fillText(`Truck ${focusTruck + 1} — ${r.orders} totes · ${Math.round(r.time)} min`, x, y);
-    y += 19;
-    r.stops.forEach((s, k) => {
-      ctx.fillStyle = color;
-      ctx.beginPath();
-      ctx.arc(x + 4, y - 4, 3.5, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = COLOR.text;
-      ctx.font = "12px system-ui, sans-serif";
-      ctx.fillText(`${k + 1}. ${s.nbhd}`, x + 14, y);
+    ctx.font = "bold 14px system-ui, sans-serif";
+    ctx.fillText(n.name, x, y);
+    y += 18;
+    if (n.note) {
       ctx.fillStyle = COLOR.note;
-      ctx.textAlign = "right";
-      ctx.fillText(`${s.orders} tote${s.orders === 1 ? "" : "s"}`, x + PANEL_W, y);
-      ctx.textAlign = "left";
+      ctx.font = "italic 12px system-ui, sans-serif";
+      ctx.fillText(n.note, x, y);
       y += 17;
-    });
-    return;
+    }
+    ctx.fillStyle = COLOR.note;
+    ctx.font = "12px system-ui, sans-serif";
+    ctx.fillText(`${count} order${count === 1 ? "" : "s"}  ·  ≈${Math.round(SUB.time("FC", n.name))} min from FC`, x, y);
+    y += 24;
   }
 
-  const n = NEIGHBORHOODS.find((m) => m.name === hoverNbhd);
-  if (!n) return;
-  let count = 0;
-  for (let i = 0; i < n.houses; i++) if (orders.has(`${n.name}#${i}`)) count++;
-  const truck = plan.routes.findIndex((r) => r.stops.some((s) => s.nbhd === n.name));
-
+  // Then the active truck's whole route.
+  if (activeTruck === null || !plan.routes[activeTruck]) return;
+  const r = plan.routes[activeTruck];
+  const color = TRUCK_COLORS[activeTruck % TRUCK_COLORS.length];
   ctx.fillStyle = COLOR.text;
-  ctx.font = "bold 14px system-ui, sans-serif";
-  ctx.fillText(n.name, x, y);
-  y += 18;
-  if (n.note) {
-    ctx.fillStyle = COLOR.note;
-    ctx.font = "italic 12px system-ui, sans-serif";
-    ctx.fillText(n.note, x, y);
-    y += 17;
-  }
-  ctx.fillStyle = COLOR.note;
-  ctx.font = "12px system-ui, sans-serif";
-  ctx.fillText(`${count} order${count === 1 ? "" : "s"}  ·  ≈${Math.round(SUB.time("FC", n.name))} min from FC`, x, y);
-  if (truck >= 0) {
-    y += 17;
-    ctx.fillStyle = TRUCK_COLORS[truck % TRUCK_COLORS.length];
+  ctx.font = "bold 13px system-ui, sans-serif";
+  ctx.fillText(`Truck ${activeTruck + 1} — ${r.orders} totes · ${Math.round(r.time)} min`, x, y);
+  y += 19;
+  r.stops.forEach((s, k) => {
+    const here = s.nbhd === hoverNbhd;
+    ctx.fillStyle = color;
     ctx.beginPath();
-    ctx.arc(x + 4, y - 4, 3.5, 0, Math.PI * 2);
+    ctx.arc(x + 4, y - 4, here ? 4.5 : 3.5, 0, Math.PI * 2);
     ctx.fill();
+    ctx.fillStyle = COLOR.text;
+    ctx.font = `${here ? "bold " : ""}12px system-ui, sans-serif`;
+    ctx.fillText(`${k + 1}. ${s.nbhd}`, x + 14, y);
     ctx.fillStyle = COLOR.note;
-    ctx.fillText(`served by Truck ${truck + 1}`, x + 14, y);
-  }
+    ctx.textAlign = "right";
+    ctx.fillText(`${s.orders} tote${s.orders === 1 ? "" : "s"}`, x + PANEL_W, y);
+    ctx.textAlign = "left";
+    y += 17;
+  });
 }
 
 function drawWarehouse(ctx: CanvasRenderingContext2D): void {
@@ -458,22 +451,20 @@ function routeGeometry(route: Route): Pt[] {
 }
 
 /**
- * The route layer (z=2), drawn on top of the map. With a truck focused (panel
- * hover) we show ONLY that truck's tour; otherwise all of them, dimming the rest
- * when a neighborhood is hovered to spotlight whoever serves it.
+ * The route layer (z=2), drawn on top of the map. With a truck active (hovered
+ * directly, or via the neighborhood it serves) we show ONLY that truck's tour;
+ * otherwise every truck's, lighter.
  */
-function drawRoutes(ctx: CanvasRenderingContext2D, plan: Plan, hoverNbhd: string | null, focusTruck: number | null): void {
+function drawRoutes(ctx: CanvasRenderingContext2D, plan: Plan, activeTruck: number | null): void {
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
   plan.routes.forEach((route, i) => {
-    if (focusTruck !== null && i !== focusTruck) return; // single-route mode
+    if (activeTruck !== null && i !== activeTruck) return; // single-route mode
     const pts = routeGeometry(route);
     if (pts.length < 2) return;
-    const serves = route.stops.some((s) => s.nbhd === hoverNbhd);
-    const emphasised = focusTruck === i || serves;
-    const dim = focusTruck === null && hoverNbhd !== null && !serves;
+    const emphasised = activeTruck === i;
     trace(ctx, pts, false);
-    ctx.globalAlpha = dim ? 0.14 : 0.8;
+    ctx.globalAlpha = 0.8;
     ctx.lineWidth = emphasised ? 2.8 : 1.6;
     ctx.strokeStyle = TRUCK_COLORS[i % TRUCK_COLORS.length];
     ctx.stroke();
@@ -481,7 +472,7 @@ function drawRoutes(ctx: CanvasRenderingContext2D, plan: Plan, hoverNbhd: string
   });
 }
 
-function drawTruckPanel(ctx: CanvasRenderingContext2D, plan: Plan, hoverNbhd: string | null, focusTruck: number | null): void {
+function drawTruckPanel(ctx: CanvasRenderingContext2D, plan: Plan, activeTruck: number | null): void {
   ctx.textAlign = "left";
   ctx.fillStyle = COLOR.text;
   ctx.font = "bold 14px system-ui, sans-serif";
@@ -496,8 +487,7 @@ function drawTruckPanel(ctx: CanvasRenderingContext2D, plan: Plan, hoverNbhd: st
 
   plan.routes.forEach((route, i) => {
     const y = PANEL_ROW0 + i * PANEL_ROW_H;
-    const serves = route.stops.some((s) => s.nbhd === hoverNbhd);
-    const lit = focusTruck === i || serves;
+    const lit = activeTruck === i;
 
     if (lit) {
       ctx.fillStyle = "rgba(20, 26, 34, 0.06)";
@@ -557,11 +547,21 @@ export function drawMap(ctx: CanvasRenderingContext2D, view: MapView): void {
     for (const s of r.stops) nbhdColor.set(s.nbhd, TRUCK_COLORS[i % TRUCK_COLORS.length]);
   });
 
-  // When a truck is focused, the houses it delivers to get a bright border.
+  // The "active" truck: the one hovered directly in the panel, or — when a
+  // neighborhood is hovered — whichever truck serves it. Every focus effect
+  // (single route, popped houses, lit panel row, breakdown) keys off this, so
+  // hovering a neighborhood behaves exactly like hovering its truck.
+  let activeTruck = focusTruck;
+  if (activeTruck === null && hoverNbhd !== null) {
+    const serving = plan.routes.findIndex((r) => r.stops.some((s) => s.nbhd === hoverNbhd));
+    if (serving >= 0) activeTruck = serving;
+  }
+
+  // The active truck's houses pop; everyone else's fade back.
   let highlight: Set<string> | null = null;
-  if (focusTruck !== null && plan.routes[focusTruck]) {
+  if (activeTruck !== null && plan.routes[activeTruck]) {
     highlight = new Set();
-    for (const s of plan.routes[focusTruck].stops) for (const i of s.houses) highlight.add(`${s.nbhd}#${i}`);
+    for (const s of plan.routes[activeTruck].stops) for (const i of s.houses) highlight.add(`${s.nbhd}#${i}`);
   }
 
   // z=1 — the map itself.
@@ -576,10 +576,10 @@ export function drawMap(ctx: CanvasRenderingContext2D, view: MapView): void {
   drawWarehouse(ctx);
 
   // z=2 — the routes, on top so the loop around each cul-de-sac is visible.
-  drawRoutes(ctx, plan, hoverNbhd, focusTruck);
+  drawRoutes(ctx, plan, activeTruck);
 
   // Screen furniture — all off the map, so nothing floats over the routes.
   drawHud(ctx);
-  drawTruckPanel(ctx, plan, hoverNbhd, focusTruck);
-  drawDetail(ctx, plan, orders, hoverNbhd, focusTruck);
+  drawTruckPanel(ctx, plan, activeTruck);
+  drawDetail(ctx, plan, orders, hoverNbhd, activeTruck);
 }
