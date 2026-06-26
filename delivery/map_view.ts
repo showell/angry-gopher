@@ -430,18 +430,22 @@ function drawHud(ctx: CanvasRenderingContext2D, shift: number): void {
 function drawSolveCaption(ctx: CanvasRenderingContext2D, label: string, i: number, n: number): void {
   const cx = MAP_W / 2;
   const top = 22;
+  const sub = `step ${i + 1} / ${n}  ·  grey = truck not yet decided  ·  ←/→ scrub  ·  A replay  ·  Esc exit`;
   ctx.textAlign = "center";
   ctx.font = "bold 16px system-ui, sans-serif";
-  const w = Math.max(ctx.measureText(label).width + 48, 220);
+  const labelW = ctx.measureText(label).width;
+  ctx.font = "12px system-ui, sans-serif";
+  const w = Math.max(labelW, ctx.measureText(sub).width) + 48;
   ctx.fillStyle = "rgba(13, 27, 42, 0.85)";
   ctx.beginPath();
   ctx.roundRect(cx - w / 2, top, w, 50, 10);
   ctx.fill();
   ctx.fillStyle = "#ffffff";
+  ctx.font = "bold 16px system-ui, sans-serif";
   ctx.fillText(label, cx, top + 22);
   ctx.fillStyle = "#aeb6c2";
   ctx.font = "12px system-ui, sans-serif";
-  ctx.fillText(`solving — step ${i + 1} / ${n}  ·  ←/→ scrub  ·  A replay  ·  Esc exit`, cx, top + 40);
+  ctx.fillText(sub, cx, top + 40);
 }
 
 /** Grey veil + label while the solver runs — the shuffle takes a beat, so say so. */
@@ -761,6 +765,27 @@ export type MapView = {
   solveAnim?: { frames: SolveFrame[]; i: number } | null; // `A` — watch the solver build the plan
 };
 
+// A solver-animation house whose truck isn't committed yet (a "free" stop that
+// hasn't merged onto an anchored route). Neutral grey → "still up for grabs".
+const COLOR_PENDING = "#9aa0a8";
+
+/**
+ * Frame colours for the solver animation. A house wears its truck's colour the
+ * moment that truck is *committed* — which for an anchored cluster is from the
+ * very first frame (its route carries the anchor's pin). Unpinned "free" stops
+ * stay grey until they merge onto a pinned route (or get slotted at the end),
+ * so the colour never asserts a truck the solver hasn't actually chosen yet.
+ */
+function frameColorMaps(frame: { routes: { stops: Stop[] }[] }): Map<string, string> {
+  const houseColor = new Map<string, string>();
+  for (const r of frame.routes) {
+    const pin = r.stops.find((s) => s.pin !== undefined)?.pin;
+    const c = pin !== undefined ? TRUCK_COLORS[pin % TRUCK_COLORS.length] : COLOR_PENDING;
+    for (const s of r.stops) for (const h of s.houses) houseColor.set(`${s.nbhd}#${h}`, c);
+  }
+  return houseColor;
+}
+
 /** Per-house truck colour and truck index (a split neighborhood maps to two trucks). */
 function truckColorMaps(plan: { routes: { stops: Stop[] }[] }): { houseColor: Map<string, string>; houseTruck: Map<string, number> } {
   const houseColor = new Map<string, string>();
@@ -818,7 +843,10 @@ export function drawMap(ctx: CanvasRenderingContext2D, view: MapView): void {
   // truck panel here; it's purely "watch who gets handed to whom".
   if (solveAnim) {
     const frame = solveAnim.frames[solveAnim.i];
-    const { houseColor } = truckColorMaps(frame);
+    // The final frame is fully slotted (every cluster has a truck), so colour by
+    // slot; earlier frames colour by commitment, leaving undecided houses grey.
+    const isFinal = solveAnim.i === solveAnim.frames.length - 1;
+    const houseColor = isFinal ? truckColorMaps(frame).houseColor : frameColorMaps(frame);
     drawLand(ctx);
     drawWater(ctx);
     drawRegionLabels(ctx);
