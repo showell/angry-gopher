@@ -50,10 +50,18 @@ function slice(pts: Pt[], cum: number[], a: number, b: number): Pt[] {
   return out;
 }
 
-/** Cumulative length along the polyline where it passes closest to `target`. */
-function closestPos(pts: Pt[], cum: number[], target: Pt): number {
+/**
+ * Cumulative length where the polyline FIRST passes `target`. The ring walk is an
+ * out-and-back across its covered arc, so a door can be rolled over twice; the
+ * truck delivers on the first pass, not whichever pass is a hair closer. Both real
+ * passes run essentially through the door (the path is the ring at the door's
+ * radius), so we take the closest approach and return the earliest pass within a
+ * small tolerance of it — greedy delivery, no driving past your own stop.
+ */
+function firstPassPos(pts: Pt[], cum: number[], target: Pt): number {
+  const TOL = 1; // px — both genuine passes roll right over the door
+  const approaches: { pos: number; d: number }[] = [];
   let best = Infinity;
-  let pos = 0;
   for (let k = 1; k < pts.length; k++) {
     const ax = pts[k - 1].x;
     const ay = pts[k - 1].y;
@@ -61,12 +69,16 @@ function closestPos(pts: Pt[], cum: number[], target: Pt): number {
     const dy = pts[k].y - ay;
     const l2 = dx * dx + dy * dy;
     const t = l2 > 0 ? Math.max(0, Math.min(1, ((target.x - ax) * dx + (target.y - ay) * dy) / l2)) : 0;
-    const px = ax + dx * t;
-    const py = ay + dy * t;
-    const d = (target.x - px) ** 2 + (target.y - py) ** 2;
-    if (d < best) {
-      best = d;
-      pos = cum[k - 1] + t * (cum[k] - cum[k - 1]);
+    const d = Math.hypot(target.x - (ax + dx * t), target.y - (ay + dy * t));
+    if (d < best) best = d;
+    approaches.push({ pos: cum[k - 1] + t * (cum[k] - cum[k - 1]), d });
+  }
+  let pos = 0;
+  let earliest = Infinity;
+  for (const a of approaches) {
+    if (a.d <= best + TOL && a.pos < earliest) {
+      earliest = a.pos;
+      pos = a.pos;
     }
   }
   return pos;
@@ -88,7 +100,7 @@ function ringLegs(name: string, pts: Pt[], arcMin: number, houses: number[]): Le
   const stops = houses
     .map((h, i) => {
       const ring = { x: n.center.x + Math.cos(angles[i]) * n.ringRadius, y: n.center.y + Math.sin(angles[i]) * n.ringRadius };
-      return { house: `${name}#${h}`, pos: closestPos(pts, cum, ring) };
+      return { house: `${name}#${h}`, pos: firstPassPos(pts, cum, ring) };
     })
     .sort((a, b) => a.pos - b.pos);
 
