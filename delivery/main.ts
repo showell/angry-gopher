@@ -4,7 +4,7 @@
 
 import { MAP_W, MAP_H, FLEET, NEIGHBORHOODS } from "./geography.ts";
 import type { Pt } from "./geography.ts";
-import { chooseOrders, demandByNeighborhood } from "./orders.ts";
+import { chooseOrders, ordersByNeighborhood } from "./orders.ts";
 import { buildSubstrate } from "./roadgraph.ts";
 import { solve } from "./solver.ts";
 import type { Plan } from "./solver.ts";
@@ -30,7 +30,7 @@ let focusTruck: number | null = null; // truck-panel row under the cursor
 // The day's deliveries. Fixed seed => reproducible on load; R picks a new seed.
 let seed = 49;
 let orders = chooseOrders(seed, FLEET.orders);
-let plan: Plan = solve(SUB, demandByNeighborhood(orders));
+let plan: Plan = solve(SUB, ordersByNeighborhood(orders));
 
 function render(): void {
   const dpr = window.devicePixelRatio || 1;
@@ -85,7 +85,7 @@ window.addEventListener("keydown", (e) => {
   if (e.key === "r" || e.key === "R") {
     seed = (seed * 1664525 + 1013904223) >>> 0; // a fresh, deterministic seed
     orders = chooseOrders(seed, FLEET.orders);
-    plan = solve(SUB, demandByNeighborhood(orders)); // re-plan for the new day
+    plan = solve(SUB, ordersByNeighborhood(orders)); // re-plan for the new day
     focusTruck = null; // truck indices may not survive a re-plan
     hoverNbhd = null;
     render();

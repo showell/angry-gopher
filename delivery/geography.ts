@@ -333,43 +333,89 @@ export function edgePolyline(a: string, b: string): Pt[] {
   throw new Error(`no edge between adjacent nodes: ${a} -> ${b}`);
 }
 
-/** Points along a circular arc starting at angle `a0`, sweeping a signed `span` radians. */
-function arcBySpan(c: Pt, r: number, a0: number, span: number): Pt[] {
-  const steps = Math.max(1, Math.ceil(Math.abs(span) / 0.2)); // ~11° segments
-  const pts: Pt[] = [];
-  for (let k = 0; k <= steps; k++) {
-    const a = a0 + (span * k) / steps;
-    pts.push({ x: c.x + Math.cos(a) * r, y: c.y + Math.sin(a) * r });
-  }
-  return pts;
+const TAU = Math.PI * 2;
+const norm = (a: number) => ((a % TAU) + TAU) % TAU; // angle into [0, 2π)
+
+/** Angle (from the center) of the gate where the artery toward `toward` meets the ring. */
+export function gateAngle(name: string, toward: Pt): number {
+  const n = neighborhood(name);
+  if (!n) return 0; // the FC has no ring; never asked for a real gate angle
+  return Math.atan2(toward.y - n.center.y, toward.x - n.center.x);
 }
 
-/** The shorter of the two arcs from angle a0 to a1 (≤ half a turn either way). */
-function shortArc(c: Pt, r: number, a0: number, a1: number): Pt[] {
-  const TAU = Math.PI * 2;
-  let span = ((a1 - a0) % TAU + TAU) % TAU; // [0, 2π)
-  if (span > Math.PI) span -= TAU; // (-π, π], pick the near side
-  return arcBySpan(c, r, a0, span);
+/** Ring angles of the given house indices in a neighborhood. */
+export function houseAngles(name: string, indices: number[]): number[] {
+  const n = neighborhood(name);
+  if (!n) return [];
+  const phase = namePhase(name);
+  return indices.map((i) => phase + (i / n.houses) * TAU);
 }
+
+type WalkPlan = { arcPx: number; r: number; startA: number; coveredRad: number; pe: number; px: number; loop: boolean };
 
 /**
- * The path a truck drives *inside* a neighborhood, from its entry gate to its
- * exit gate along the ring road. When the truck actually delivers here (`loop`),
- * it first drives a full revolution of the cul-de-sac — that's the visible cost
- * of "going around the neighborhood" to reach the houses on the ring, even
- * though the cost model still prices the visit as a flat RING. A pass-through
- * truck just takes the short arc between the two gates. (When split delivery
- * gets smarter, the full loop becomes an arc over only this truck's houses.)
+ * The minimal in-neighborhood walk: enter at `entryA`, leave at `exitA`, touch
+ * every ordered house, driving only on the ring road. On a circle the visited
+ * set is always one arc, so the truck covers everything *except* the single
+ * largest gap among the {entry, exit, houses} points, and drives that arc
+ * out-and-back (or, when entry == exit and the gap is under half the ring, just
+ * loops once). That's what makes an opposite-side house cost a near-full lap
+ * while a house sitting between the two gates is essentially free to pass.
  */
-export function ringTour(name: string, inGate: Pt, outGate: Pt, loop: boolean): Pt[] {
+function walkPlan(name: string, entryA: number, exitA: number, hAngles: number[]): WalkPlan {
   const n = neighborhood(name);
-  if (!n) return [inGate, outGate]; // the FC has no ring
-  const c = n.center;
+  if (!n) return { arcPx: 0, r: 0, startA: 0, coveredRad: 0, pe: 0, px: 0, loop: false };
   const r = n.ringRadius;
-  const angleOf = (p: Pt) => Math.atan2(p.y - c.y, p.x - c.x);
-  const a0 = angleOf(inGate);
-  const pts: Pt[] = [];
-  if (loop) pts.push(...arcBySpan(c, r, a0, Math.PI * 2)); // around the whole cul-de-sac
-  pts.push(...shortArc(c, r, a0, angleOf(outGate))); // then off toward the exit gate
-  return pts;
+  const pts = [entryA, exitA, ...hAngles].map(norm).sort((a, b) => a - b);
+  let maxGap = -1;
+  let gapAt = 0;
+  for (let i = 0; i < pts.length; i++) {
+    const next = i + 1 < pts.length ? pts[i + 1] : pts[0] + TAU;
+    if (next - pts[i] > maxGap) {
+      maxGap = next - pts[i];
+      gapAt = i;
+    }
+  }
+  const startA = pts[(gapAt + 1) % pts.length]; // covered arc begins just past the gap
+  const coveredRad = TAU - maxGap;
+  const pe = norm(entryA - startA);
+  const px = norm(exitA - startA);
+  const sameGate = norm(entryA - exitA) < 1e-9;
+  let arcRad = 2 * coveredRad - Math.abs(pe - px); // out-and-back across the covered arc
+  let loop = false;
+  if (sameGate && 2 * coveredRad > TAU) {
+    arcRad = TAU; // a single lap beats backtracking when you return to the same gate
+    loop = true;
+  }
+  return { arcPx: arcRad * r, r, startA, coveredRad, pe, px, loop };
+}
+
+/** Just the arc length (px) of the in-neighborhood walk — for the cost model. */
+export function ringWalkArcPx(name: string, entryA: number, exitA: number, hAngles: number[]): number {
+  return walkPlan(name, entryA, exitA, hAngles).arcPx;
+}
+
+function sampleSeg(c: Pt, r: number, startA: number, from: number, to: number, out: Pt[]): void {
+  const span = to - from;
+  const steps = Math.max(1, Math.ceil(Math.abs(span) / 0.2)); // ~11° segments
+  for (let k = out.length ? 1 : 0; k <= steps; k++) {
+    const a = startA + from + (span * k) / steps;
+    out.push({ x: c.x + Math.cos(a) * r, y: c.y + Math.sin(a) * r });
+  }
+}
+
+/** The drawn polyline of the in-neighborhood walk (entry gate → houses → exit gate). */
+export function ringWalkPath(name: string, entryA: number, exitA: number, hAngles: number[]): Pt[] {
+  const n = neighborhood(name);
+  if (!n) return [];
+  const pl = walkPlan(name, entryA, exitA, hAngles);
+  const out: Pt[] = [];
+  if (pl.loop) {
+    sampleSeg(n.center, pl.r, pl.startA, pl.pe, pl.pe + TAU, out); // one lap from the gate
+    return out;
+  }
+  // Visit the near end first or the far end first, whichever ends nearer the exit.
+  const seq = pl.pe <= pl.px ? [pl.pe, 0, pl.coveredRad, pl.px] : [pl.pe, pl.coveredRad, 0, pl.px];
+  for (let i = 1; i < seq.length; i++) sampleSeg(n.center, pl.r, pl.startA, seq[i - 1], seq[i], out);
+  return out;
 }

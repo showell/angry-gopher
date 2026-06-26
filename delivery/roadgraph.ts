@@ -25,11 +25,11 @@
 // can shift weight between them as we iterate.
 
 import type { Pt } from "./geography.ts";
-import { NEIGHBORHOODS, ROADS, BRIDGES, roadGates, bridgeSegments } from "./geography.ts";
+import { NEIGHBORHOODS, ROADS, BRIDGES, roadGates, bridgeSegments, ringWalkArcPx } from "./geography.ts";
 
 export const MIN_PER_PX = 0.06;
 export const SPEED = { city: 1.6, suburb: 1.0, bridge: 0.9, fast: 0.5 };
-export const RING = 15; // fixed minutes to commit a truck to a neighborhood (once)
+export const ENTER = 3; // fixed minutes to pull into a neighborhood (slow down, find the spot)
 export const SERVICE = 2; // minutes per order delivered, identical everywhere
 
 /** Service nodes: every neighborhood, plus the warehouse depot. */
@@ -51,6 +51,19 @@ function factor(a: string, b: string, bridge: boolean): number {
   if (bridge) return SPEED.bridge;
   if (isWest(a) || isWest(b)) return SPEED.city;
   return SPEED.suburb;
+}
+
+/**
+ * Minutes a truck spends *inside* a neighborhood: a fixed ENTER overhead plus
+ * the ring driving needed to enter at `entryA`, touch the ordered houses, and
+ * leave at `exitA` (zero houses = a pass-through, which still costs the short
+ * arc between the two gates). Westside streets are slow, everywhere else normal.
+ * SERVICE (per-order time at the door) is added separately by the caller.
+ */
+export function localMinutes(name: string, entryA: number, exitA: number, houseAngles: number[]): number {
+  const speed = isWest(name) ? SPEED.city : SPEED.suburb;
+  const enter = houseAngles.length ? ENTER : 0; // a pass-through doesn't "pull in"
+  return enter + ringWalkArcPx(name, entryA, exitA, houseAngles) * speed * MIN_PER_PX;
 }
 
 export type Edge = { a: string; b: string; minutes: number };

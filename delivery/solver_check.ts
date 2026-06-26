@@ -10,7 +10,7 @@
 
 import { buildSubstrate } from "./roadgraph.ts";
 import { solve } from "./solver.ts";
-import { chooseOrders, demandByNeighborhood } from "./orders.ts";
+import { chooseOrders, ordersByNeighborhood } from "./orders.ts";
 import { FLEET } from "./geography.ts";
 
 const sub = buildSubstrate();
@@ -24,19 +24,19 @@ function check(ok: boolean, msg: string): void {
 // Solve several seeds so we exercise more than one demand shape.
 for (const seed of [49, 7, 1234, 88]) {
   const orders = chooseOrders(seed, FLEET.orders);
-  const demand = demandByNeighborhood(orders);
-  const plan = solve(sub, demand);
+  const byNbhd = ordersByNeighborhood(orders);
+  const plan = solve(sub, byNbhd);
 
-  const totalOrders = [...demand.values()].reduce((s, v) => s + v, 0);
+  const totalOrders = [...byNbhd.values()].reduce((s, v) => s + v.length, 0);
   const planned = plan.routes.reduce((s, r) => s + r.orders, 0);
 
-  console.log(`\n=== seed ${seed}: ${totalOrders} orders over ${demand.size} neighborhoods ===`);
+  console.log(`\n=== seed ${seed}: ${totalOrders} orders over ${byNbhd.size} neighborhoods ===`);
   plan.routes.forEach((r, i) => {
     const tag = `truck ${i + 1}`.padEnd(8);
     const load = `${r.orders}/${FLEET.totesPerTruck}`.padStart(5);
     console.log(`  ${tag} ${load} totes  ${Math.round(r.time).toString().padStart(3)} min   FC → ${r.stops.map((s) => `${s.nbhd}(${s.orders})`).join(" → ")} → FC`);
   });
-  console.log(`  total ${Math.round(plan.totalTime)} min  =  floor ${Math.round(plan.floor)} (RING+SERVICE) + travel ${Math.round(plan.travel)}`);
+  console.log(`  total ${Math.round(plan.totalTime)} min  =  travel ${Math.round(plan.travel)} + local ${Math.round(plan.local)} + service ${Math.round(plan.service)}`);
 
   check(plan.routes.length <= FLEET.trucks, `uses ${plan.routes.length} ≤ ${FLEET.trucks} trucks`);
   check(plan.routes.every((r) => r.orders <= FLEET.totesPerTruck), `every truck within ${FLEET.totesPerTruck}-tote capacity`);

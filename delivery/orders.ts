@@ -26,6 +26,18 @@ export function demandByNeighborhood(orders: Set<string>): Map<string, number> {
   return m;
 }
 
+/** Ordered house *indices* grouped by neighborhood — what the solver routes on. */
+export function ordersByNeighborhood(orders: Set<string>): Map<string, number[]> {
+  const m = new Map<string, number[]>();
+  for (const id of orders) {
+    const cut = id.lastIndexOf("#");
+    const nbhd = id.slice(0, cut);
+    const idx = Number(id.slice(cut + 1));
+    (m.get(nbhd) ?? m.set(nbhd, []).get(nbhd)!).push(idx);
+  }
+  return m;
+}
+
 /** mulberry32 — a tiny, fast, deterministic PRNG. Same seed => same sequence. */
 function mulberry32(seed: number): () => number {
   let s = seed >>> 0;

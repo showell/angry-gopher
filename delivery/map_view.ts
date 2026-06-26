@@ -26,8 +26,9 @@ import {
   bridgeDeck,
   allGates,
   edgePolyline,
-  ringTour,
-  gateOf,
+  ringWalkPath,
+  gateAngle,
+  houseAngles,
   nodeAt,
 } from "./geography.ts";
 import { buildSubstrate } from "./roadgraph.ts";
@@ -401,7 +402,8 @@ function routeGeometry(route: Route): Pt[] {
     const leg = SUB.path(waypoints[i - 1], waypoints[i]); // [a, ..., b]
     for (const node of leg) if (nodes[nodes.length - 1] !== node) nodes.push(node);
   }
-  const serves = new Set(route.stops.map((s) => s.nbhd));
+  const housesAt = new Map<string, number[]>();
+  for (const s of route.stops) housesAt.set(s.nbhd, (housesAt.get(s.nbhd) ?? []).concat(s.houses));
 
   const pts: Pt[] = [];
   for (let i = 1; i < nodes.length; i++) {
@@ -410,9 +412,9 @@ function routeGeometry(route: Route): Pt[] {
     pts.push(...edgePolyline(prev, node)); // the artery in, ending at node's entry gate
     if (node !== "FC" && i < nodes.length - 1) {
       const next = nodes[i + 1];
-      const inGate = gateOf(node, nodeAt(prev));
-      const outGate = gateOf(node, nodeAt(next));
-      pts.push(...ringTour(node, inGate, outGate, serves.has(node))); // around the ring to the exit gate
+      const entry = gateAngle(node, nodeAt(prev));
+      const exit = gateAngle(node, nodeAt(next));
+      pts.push(...ringWalkPath(node, entry, exit, houseAngles(node, housesAt.get(node) ?? []))); // ring to exit gate
     }
   }
   return pts;
@@ -449,7 +451,11 @@ function drawTruckPanel(ctx: CanvasRenderingContext2D, plan: Plan, hoverNbhd: st
   ctx.fillText(`Plan — ${plan.routes.length} trucks`, PANEL_X, 28);
   ctx.fillStyle = COLOR.note;
   ctx.font = "12px system-ui, sans-serif";
-  ctx.fillText(`${Math.round(plan.totalTime)} driver-min  ·  ${Math.round(plan.travel)} on the road`, PANEL_X, 45);
+  ctx.fillText(
+    `${Math.round(plan.totalTime)} driver-min  ·  ${Math.round(plan.travel)} road / ${Math.round(plan.local)} local`,
+    PANEL_X,
+    45,
+  );
 
   plan.routes.forEach((route, i) => {
     const y = PANEL_ROW0 + i * PANEL_ROW_H;
