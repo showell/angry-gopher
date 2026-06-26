@@ -205,6 +205,7 @@ function drawNeighborhood(
   hot: boolean,
   orders: Set<string>,
   orderColor: string,
+  highlight: Set<string> | null, // houses of the focused truck, to make pop
 ): void {
   if (n.lake) {
     ctx.beginPath();
@@ -227,13 +228,22 @@ function drawNeighborhood(
   housesOf(n).forEach((h, i) => {
     const isOrder = orders.has(`${n.name}#${i}`);
     if (isOrder) {
-      const s = ORDER_SIZE;
+      const focused = highlight !== null && highlight.has(`${n.name}#${i}`);
+      const s = focused ? 13 : ORDER_SIZE;
+      ctx.save();
+      if (focused) {
+        ctx.shadowColor = "rgba(255, 255, 255, 0.95)";
+        ctx.shadowBlur = 9; // a halo so the truck's stops read at a glance
+      }
       ctx.fillStyle = orderColor;
-      ctx.strokeStyle = "#ffffff";
-      ctx.lineWidth = 1.5;
       ctx.beginPath();
       ctx.rect(h.x - s / 2, h.y - s / 2, s, s);
       ctx.fill();
+      ctx.restore();
+      ctx.strokeStyle = focused ? "#fff6c0" : "#ffffff";
+      ctx.lineWidth = focused ? 2.5 : 1.5;
+      ctx.beginPath();
+      ctx.rect(h.x - s / 2, h.y - s / 2, s, s);
       ctx.stroke();
     } else {
       const s = HOME_SIZE;
@@ -520,6 +530,13 @@ export function drawMap(ctx: CanvasRenderingContext2D, view: MapView): void {
     for (const s of r.stops) nbhdColor.set(s.nbhd, TRUCK_COLORS[i % TRUCK_COLORS.length]);
   });
 
+  // When a truck is focused, the houses it delivers to get a bright border.
+  let highlight: Set<string> | null = null;
+  if (focusTruck !== null && plan.routes[focusTruck]) {
+    highlight = new Set();
+    for (const s of plan.routes[focusTruck].stops) for (const i of s.houses) highlight.add(`${s.nbhd}#${i}`);
+  }
+
   // z=1 — the map itself.
   drawLand(ctx);
   drawWater(ctx);
@@ -528,7 +545,7 @@ export function drawMap(ctx: CanvasRenderingContext2D, view: MapView): void {
   drawRoads(ctx);
   drawBridges(ctx);
   drawGates(ctx);
-  for (const n of NEIGHBORHOODS) drawNeighborhood(ctx, n, n.name === hoverNbhd, orders, nbhdColor.get(n.name) ?? COLOR.order);
+  for (const n of NEIGHBORHOODS) drawNeighborhood(ctx, n, n.name === hoverNbhd, orders, nbhdColor.get(n.name) ?? COLOR.order, highlight);
   drawWarehouse(ctx);
 
   // z=2 — the routes, on top so the loop around each cul-de-sac is visible.
