@@ -234,7 +234,7 @@ function drawNeighborhood(
       const focused = focusMode && highlight.has(`${n.name}#${i}`);
       const muted = focusMode && !focused;
       const s = focused ? 13 : ORDER_SIZE;
-      ctx.globalAlpha = muted ? 0.35 : 1;
+      ctx.globalAlpha = muted ? 0.5 : 1;
       ctx.fillStyle = orderColor;
       ctx.strokeStyle = "#ffffff";
       ctx.lineWidth = focused ? 2 : 1.5;
