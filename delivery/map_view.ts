@@ -26,6 +26,9 @@ import {
   bridgeDeck,
   allGates,
   edgePolyline,
+  ringTour,
+  gateOf,
+  nodeAt,
 } from "./geography.ts";
 import { buildSubstrate } from "./roadgraph.ts";
 import type { Plan, Route } from "./solver.ts";
@@ -373,9 +376,12 @@ function drawHud(ctx: CanvasRenderingContext2D): void {
 }
 
 /**
- * The drawn polyline of a truck's whole tour, FC -> stops -> FC, following real
- * arteries and bridges (each service-to-service leg is the substrate's shortest
- * path, stitched edge by edge).
+ * The drawn polyline of a truck's whole tour, FC -> stops -> FC. It follows real
+ * arteries and bridges (each leg is the substrate's shortest path, stitched edge
+ * by edge), and at every neighborhood it threads onto the ring road: a full loop
+ * of the cul-de-sac where the truck delivers, a short arc where it only passes
+ * through. So the line stays on the roads the whole way and visibly drives
+ * around to the houses.
  */
 function routeGeometry(route: Route): Pt[] {
   const waypoints = ["FC", ...route.stops.map((s) => s.nbhd), "FC"];
@@ -384,8 +390,20 @@ function routeGeometry(route: Route): Pt[] {
     const leg = SUB.path(waypoints[i - 1], waypoints[i]); // [a, ..., b]
     for (const node of leg) if (nodes[nodes.length - 1] !== node) nodes.push(node);
   }
+  const serves = new Set(route.stops.map((s) => s.nbhd));
+
   const pts: Pt[] = [];
-  for (let i = 1; i < nodes.length; i++) pts.push(...edgePolyline(nodes[i - 1], nodes[i]));
+  for (let i = 1; i < nodes.length; i++) {
+    const prev = nodes[i - 1];
+    const node = nodes[i];
+    pts.push(...edgePolyline(prev, node)); // the artery in, ending at node's entry gate
+    if (node !== "FC" && i < nodes.length - 1) {
+      const next = nodes[i + 1];
+      const inGate = gateOf(node, nodeAt(prev));
+      const outGate = gateOf(node, nodeAt(next));
+      pts.push(...ringTour(node, inGate, outGate, serves.has(node))); // around the ring to the exit gate
+    }
+  }
   return pts;
 }
 

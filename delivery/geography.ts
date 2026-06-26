@@ -328,3 +328,44 @@ export function edgePolyline(a: string, b: string): Pt[] {
   }
   throw new Error(`no edge between adjacent nodes: ${a} -> ${b}`);
 }
+
+/** Points along a circular arc starting at angle `a0`, sweeping a signed `span` radians. */
+function arcBySpan(c: Pt, r: number, a0: number, span: number): Pt[] {
+  const steps = Math.max(1, Math.ceil(Math.abs(span) / 0.2)); // ~11° segments
+  const pts: Pt[] = [];
+  for (let k = 0; k <= steps; k++) {
+    const a = a0 + (span * k) / steps;
+    pts.push({ x: c.x + Math.cos(a) * r, y: c.y + Math.sin(a) * r });
+  }
+  return pts;
+}
+
+/** The shorter of the two arcs from angle a0 to a1 (≤ half a turn either way). */
+function shortArc(c: Pt, r: number, a0: number, a1: number): Pt[] {
+  const TAU = Math.PI * 2;
+  let span = ((a1 - a0) % TAU + TAU) % TAU; // [0, 2π)
+  if (span > Math.PI) span -= TAU; // (-π, π], pick the near side
+  return arcBySpan(c, r, a0, span);
+}
+
+/**
+ * The path a truck drives *inside* a neighborhood, from its entry gate to its
+ * exit gate along the ring road. When the truck actually delivers here (`loop`),
+ * it first drives a full revolution of the cul-de-sac — that's the visible cost
+ * of "going around the neighborhood" to reach the houses on the ring, even
+ * though the cost model still prices the visit as a flat RING. A pass-through
+ * truck just takes the short arc between the two gates. (When split delivery
+ * gets smarter, the full loop becomes an arc over only this truck's houses.)
+ */
+export function ringTour(name: string, inGate: Pt, outGate: Pt, loop: boolean): Pt[] {
+  const n = neighborhood(name);
+  if (!n) return [inGate, outGate]; // the FC has no ring
+  const c = n.center;
+  const r = n.ringRadius;
+  const angleOf = (p: Pt) => Math.atan2(p.y - c.y, p.x - c.x);
+  const a0 = angleOf(inGate);
+  const pts: Pt[] = [];
+  if (loop) pts.push(...arcBySpan(c, r, a0, Math.PI * 2)); // around the whole cul-de-sac
+  pts.push(...shortArc(c, r, a0, angleOf(outGate))); // then off toward the exit gate
+  return pts;
+}
