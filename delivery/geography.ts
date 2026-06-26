@@ -33,9 +33,10 @@ export type Road = [string, string];
 /** The fleet + demand. 8 trucks * 12 totes = 96 capacity for 84 orders. */
 // Capacity is a true max, not a quota: demand (orders) sits below total capacity
 // so the solver has slack — it can run trucks partial, or idle one entirely.
-// 84 = 7×12 is a razor's edge: 7 trucks fit only if every one is exactly full,
-// which the geography never allows, so the 8th truck deploys nearly always.
-export const FLEET = { trucks: 8, totesPerTruck: 12, orders: 84 };
+// 90 of 96 capacity leaves only 6 totes of slack: ceil(90/12) = 8, so all eight
+// trucks must roll every shift — and several run near-full, which makes capacity
+// genuinely binding (tight packing, forced splits) instead of merely advisory.
+export const FLEET = { trucks: 8, totesPerTruck: 12, orders: 90 };
 
 /**
  * Region anchors: each truck slot is "seeded" with one far-flung neighborhood it
