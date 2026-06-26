@@ -37,7 +37,7 @@ export type Stop = { nbhd: string; orders: number; houses: number[]; pin?: numbe
 // so the truck keeps room to gather its region (and the rest can still divert if
 // the math ever wants it); in practice anchors rarely exceed this, so the whole
 // neighborhood usually rides its own truck anyway.
-const ANCHOR_PIN = 3;
+const ANCHOR_PIN = 2;
 
 /** Anchor neighborhood name -> its truck slot (index into the fleet). */
 const ANCHOR_SLOT = new Map(TRUCK_ANCHORS.map((name, slot) => [name, slot]));

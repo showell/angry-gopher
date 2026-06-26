@@ -49,8 +49,8 @@ export const TRUCK_ANCHORS = [
   "Magnolia", // Truck 2 — the bluff
   "Ballard", // Truck 3 — far NW
   "Green Lake", // Truck 4 — N central
-  "Kirkland", // Truck 5 — far NE
-  "Redmond", // Truck 6 — far E
+  "Capitol Hill", // Truck 5 — central west (relieves the west crunch)
+  "Kirkland", // Truck 6 — far NE
   "Issaquah", // Truck 7 — far SE
   "Mercer S", // Truck 8 — the island
 ];
