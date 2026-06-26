@@ -25,13 +25,27 @@ import {
   roadGates,
   bridgeDeck,
   allGates,
+  edgePolyline,
 } from "./geography.ts";
 import { buildSubstrate } from "./roadgraph.ts";
+import type { Plan, Route } from "./solver.ts";
 
 // The routing substrate is static, so build the travel-time matrix once.
 const SUB = buildSubstrate();
 
 const HOME_COUNT = NEIGHBORHOODS.reduce((s, n) => s + n.houses, 0);
+
+// One distinct colour per truck — saturated enough to read over the pale land.
+const TRUCK_COLORS = [
+  "#1f6feb", // blue
+  "#d9480f", // burnt orange
+  "#2f9e44", // green
+  "#ae3ec9", // purple
+  "#1098ad", // teal
+  "#e8590c", // amber
+  "#c2255c", // magenta
+  "#5c7cfa", // periwinkle
+];
 
 const COLOR = {
   westLand: "#e7e3ea",
@@ -358,18 +372,91 @@ function drawHud(ctx: CanvasRenderingContext2D): void {
   ctx.fillText("totally not to scale  ·  hover a neighborhood  ·  press R to reshuffle orders", 24, 706);
 }
 
-/** Paint the whole static map. `hover` is the hovered neighborhood; `orders` the day's picks. */
-export function drawMap(ctx: CanvasRenderingContext2D, hover: string | null, orders: Set<string>): void {
+/**
+ * The drawn polyline of a truck's whole tour, FC -> stops -> FC, following real
+ * arteries and bridges (each service-to-service leg is the substrate's shortest
+ * path, stitched edge by edge).
+ */
+function routeGeometry(route: Route): Pt[] {
+  const waypoints = ["FC", ...route.stops.map((s) => s.nbhd), "FC"];
+  const nodes: string[] = [];
+  for (let i = 1; i < waypoints.length; i++) {
+    const leg = SUB.path(waypoints[i - 1], waypoints[i]); // [a, ..., b]
+    for (const node of leg) if (nodes[nodes.length - 1] !== node) nodes.push(node);
+  }
+  const pts: Pt[] = [];
+  for (let i = 1; i < nodes.length; i++) pts.push(...edgePolyline(nodes[i - 1], nodes[i]));
+  return pts;
+}
+
+function drawRoutes(ctx: CanvasRenderingContext2D, plan: Plan, hover: string | null): void {
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  plan.routes.forEach((route, i) => {
+    const pts = routeGeometry(route);
+    if (pts.length < 2) return;
+    const color = TRUCK_COLORS[i % TRUCK_COLORS.length];
+    const serves = route.stops.some((s) => s.nbhd === hover);
+    trace(ctx, pts, false);
+    ctx.globalAlpha = hover && !serves ? 0.25 : 0.9;
+    ctx.lineWidth = serves ? 6 : 3.5;
+    ctx.strokeStyle = color;
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  });
+}
+
+function drawTruckPanel(ctx: CanvasRenderingContext2D, plan: Plan, hover: string | null): void {
+  const x = MAP_W - 234;
+  let y = 28;
+
+  ctx.textAlign = "left";
+  ctx.fillStyle = COLOR.text;
+  ctx.font = "bold 14px system-ui, sans-serif";
+  ctx.fillText(`Plan — ${plan.routes.length} trucks`, x, y);
+  y += 17;
+  ctx.fillStyle = COLOR.note;
+  ctx.font = "12px system-ui, sans-serif";
+  ctx.fillText(`${Math.round(plan.totalTime)} driver-min  ·  ${Math.round(plan.travel)} on the road`, x, y);
+  y += 20;
+
+  plan.routes.forEach((route, i) => {
+    const color = TRUCK_COLORS[i % TRUCK_COLORS.length];
+    const serves = route.stops.some((s) => s.nbhd === hover);
+    ctx.strokeStyle = color;
+    ctx.lineWidth = serves ? 5 : 3;
+    ctx.beginPath();
+    ctx.moveTo(x, y - 4);
+    ctx.lineTo(x + 18, y - 4);
+    ctx.stroke();
+
+    ctx.fillStyle = serves ? COLOR.text : COLOR.note;
+    ctx.font = `${serves ? "bold " : ""}12px system-ui, sans-serif`;
+    ctx.fillText(`Truck ${i + 1}: ${route.orders}t · ${Math.round(route.time)}m · ${route.stops.length} stops`, x + 26, y);
+    y += 18;
+  });
+
+  if (plan.unrouted.length) {
+    ctx.fillStyle = "#c0392b";
+    ctx.font = "bold 12px system-ui, sans-serif";
+    ctx.fillText(`⚠ ${plan.unrouted.length} stops unrouted`, x, y + 2);
+  }
+}
+
+/** Paint the whole map plus the day's plan. `hover` highlights one neighborhood + its truck. */
+export function drawMap(ctx: CanvasRenderingContext2D, hover: string | null, orders: Set<string>, plan: Plan): void {
   drawLand(ctx);
   drawWater(ctx);
   drawTraffic(ctx);
   drawRegionLabels(ctx);
   drawRoads(ctx);
   drawBridges(ctx);
+  drawRoutes(ctx, plan, hover);
   drawGates(ctx);
   for (const n of NEIGHBORHOODS) drawNeighborhood(ctx, n, n.name === hover, orders);
   drawWarehouse(ctx);
   const hot = NEIGHBORHOODS.find((n) => n.name === hover);
   if (hot) drawHoverCard(ctx, hot, orders);
   drawHud(ctx);
+  drawTruckPanel(ctx, plan, hover);
 }

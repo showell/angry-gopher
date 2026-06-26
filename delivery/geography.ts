@@ -31,7 +31,9 @@ export type Neighborhood = {
 export type Road = [string, string];
 
 /** The fleet + demand. 8 trucks * 10 totes = 80 orders (Bezos will be the limo extra). */
-export const FLEET = { trucks: 8, totesPerTruck: 10, orders: 80 };
+// Capacity is a true max, not a quota: demand (orders) sits below total capacity
+// so the solver has slack — it can run trucks partial, or idle one entirely.
+export const FLEET = { trucks: 8, totesPerTruck: 10, orders: 64 };
 
 export const MAP_W = 1000;
 export const MAP_H = 720;
@@ -303,4 +305,26 @@ export function allGates(): Pt[] {
     }
   }
   return gates;
+}
+
+/**
+ * The drawn polyline of the single graph edge between adjacent nodes `a` and
+ * `b`, oriented a -> b. Mirrors the geometry the map renders: a surface road is
+ * gate-to-gate; a bridge segment follows its deck (gate -> waters -> gate). A
+ * route's full path is these stitched together. Throws if a and b aren't a real
+ * edge — the caller has an off-graph hop.
+ */
+export function edgePolyline(a: string, b: string): Pt[] {
+  for (const r of ROADS) {
+    if (r[0] === a && r[1] === b) return roadGates(r);
+    if (r[0] === b && r[1] === a) { const [g1, g2] = roadGates(r); return [g2, g1]; }
+  }
+  for (const br of BRIDGES) {
+    for (const seg of bridgeSegments(br)) {
+      const [x, y] = seg.edge;
+      if (x === a && y === b) return seg.pts;
+      if (x === b && y === a) return [...seg.pts].reverse();
+    }
+  }
+  throw new Error(`no edge between adjacent nodes: ${a} -> ${b}`);
 }

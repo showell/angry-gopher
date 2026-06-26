@@ -4,8 +4,13 @@
 
 import { MAP_W, MAP_H, FLEET, NEIGHBORHOODS } from "./geography.ts";
 import type { Pt } from "./geography.ts";
-import { chooseOrders } from "./orders.ts";
+import { chooseOrders, demandByNeighborhood } from "./orders.ts";
+import { buildSubstrate } from "./roadgraph.ts";
+import { solve } from "./solver.ts";
+import type { Plan } from "./solver.ts";
 import { drawMap } from "./map_view.ts";
+
+const SUB = buildSubstrate();
 
 const PAGE_BG = "#0d1b2a";
 
@@ -24,6 +29,7 @@ let hover: string | null = null;
 // The day's deliveries. Fixed seed => reproducible on load; R picks a new seed.
 let seed = 49;
 let orders = chooseOrders(seed, FLEET.orders);
+let plan: Plan = solve(SUB, demandByNeighborhood(orders));
 
 function render(): void {
   const dpr = window.devicePixelRatio || 1;
@@ -44,7 +50,7 @@ function render(): void {
   ctx!.fillRect(0, 0, vw, vh);
 
   ctx!.setTransform(scale * dpr, 0, 0, scale * dpr, offX * dpr, offY * dpr);
-  drawMap(ctx!, hover, orders);
+  drawMap(ctx!, hover, orders, plan);
 }
 
 /** Nearest neighborhood whose ring the logical point falls within (else null). */
@@ -75,6 +81,7 @@ window.addEventListener("keydown", (e) => {
   if (e.key === "r" || e.key === "R") {
     seed = (seed * 1664525 + 1013904223) >>> 0; // a fresh, deterministic seed
     orders = chooseOrders(seed, FLEET.orders);
+    plan = solve(SUB, demandByNeighborhood(orders)); // re-plan for the new day
     render();
   }
 });

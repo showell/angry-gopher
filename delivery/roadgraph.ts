@@ -75,6 +75,8 @@ export type Substrate = {
   index: Map<string, number>;
   matrix: number[][]; // all-pairs shortest travel minutes
   time: (a: string, b: string) => number;
+  /** The node sequence of the shortest path from `a` to `b`, both ends inclusive. */
+  path: (a: string, b: string) => string[];
 };
 
 /** Build the graph and compute all-pairs shortest travel times (Dijkstra per source). */
@@ -93,8 +95,11 @@ export function buildSubstrate(): Substrate {
   }
 
   const matrix = nodes.map(() => new Array<number>(N).fill(Infinity));
+  // prev[s][v] = the node before v on the shortest path from s (−1 = none/source).
+  const prev = nodes.map(() => new Array<number>(N).fill(-1));
   for (let s = 0; s < N; s++) {
     const dist = matrix[s];
+    const back = prev[s];
     dist[s] = 0;
     const done = new Array<boolean>(N).fill(false);
     for (let it = 0; it < N; it++) {
@@ -106,16 +111,34 @@ export function buildSubstrate(): Substrate {
       }
       if (u === -1) break;
       done[u] = true;
-      for (const { to, w } of adj[u]) if (dist[u] + w < dist[to]) dist[to] = dist[u] + w;
+      for (const { to, w } of adj[u]) if (dist[u] + w < dist[to]) {
+        dist[to] = dist[u] + w;
+        back[to] = u;
+      }
     }
   }
 
-  const time = (a: string, b: string): number => {
-    const i = index.get(a);
-    const j = index.get(b);
-    if (i === undefined || j === undefined) throw new Error(`unknown node: ${a} or ${b}`);
-    return matrix[i][j];
+  const idOf = (name: string): number => {
+    const i = index.get(name);
+    if (i === undefined) throw new Error(`unknown node: ${name}`);
+    return i;
   };
 
-  return { nodes, index, matrix, time };
+  const time = (a: string, b: string): number => matrix[idOf(a)][idOf(b)];
+
+  const path = (a: string, b: string): string[] => {
+    const s = idOf(a);
+    let v = idOf(b);
+    if (!Number.isFinite(matrix[s][v])) throw new Error(`no path: ${a} -> ${b}`);
+    const rev: number[] = [];
+    while (v !== s) {
+      rev.push(v);
+      v = prev[s][v];
+      if (v === -1) throw new Error(`broken path chain: ${a} -> ${b}`);
+    }
+    rev.push(s);
+    return rev.reverse().map((i) => nodes[i]);
+  };
+
+  return { nodes, index, matrix, time, path };
 }
