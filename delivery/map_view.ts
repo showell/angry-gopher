@@ -733,6 +733,7 @@ export type MapView = {
   orders: Set<string>;
   plan: Plan;
   hoverNbhd: string | null; // neighborhood under the cursor (map)
+  hoverHouse: string | null; // nearest ordered house under the cursor (`nbhd#i`)
   focusTruck: number | null; // truck row under the cursor (panel)
   balanceLabel: string; // current balance level (off/low/med/high)
   anim?: { t: number; maxT: number; playing: boolean; tracks: Track[] } | null; // play mode
@@ -744,7 +745,7 @@ export type MapView = {
  * or just the focused truck's.
  */
 export function drawMap(ctx: CanvasRenderingContext2D, view: MapView): void {
-  const { orders, plan, hoverNbhd, focusTruck, balanceLabel, anim } = view;
+  const { orders, plan, hoverNbhd, hoverHouse, focusTruck, balanceLabel, anim } = view;
 
   // Play mode: the static map underneath, then the moving dots on top. Hover
   // focus is suppressed so nothing competes with the trucks running their day.
@@ -770,18 +771,26 @@ export function drawMap(ctx: CanvasRenderingContext2D, view: MapView): void {
     return;
   }
 
-  // Each ordered house takes the colour of the truck that delivers it — so a
-  // neighborhood split between two trucks shows both colours.
+  // Each ordered house takes the colour — and records the truck — that delivers
+  // it, so a neighborhood split between trucks shows both colours and we can ask
+  // "who delivers this house?".
   const houseColor = new Map<string, string>();
+  const houseTruck = new Map<string, number>();
   plan.routes.forEach((r, i) => {
-    for (const s of r.stops) for (const h of s.houses) houseColor.set(`${s.nbhd}#${h}`, TRUCK_COLORS[i % TRUCK_COLORS.length]);
+    for (const s of r.stops) for (const h of s.houses) {
+      houseColor.set(`${s.nbhd}#${h}`, TRUCK_COLORS[i % TRUCK_COLORS.length]);
+      houseTruck.set(`${s.nbhd}#${h}`, i);
+    }
   });
 
-  // The "active" truck: the one hovered directly in the panel, or — when a
-  // neighborhood is hovered — whichever truck serves it. Every focus effect
-  // (single route, popped houses, lit panel row, breakdown) keys off this, so
-  // hovering a neighborhood behaves exactly like hovering its truck.
+  // The "active" truck: the one hovered directly in the panel; else the truck
+  // delivering the house nearest the cursor (so a split neighborhood surfaces the
+  // *right* truck); else, failing a specific house, whichever truck serves the
+  // hovered neighborhood. Every focus effect keys off this.
   let activeTruck = focusTruck;
+  if (activeTruck === null && hoverHouse !== null && houseTruck.has(hoverHouse)) {
+    activeTruck = houseTruck.get(hoverHouse)!;
+  }
   if (activeTruck === null && hoverNbhd !== null) {
     const serving = plan.routes.findIndex((r) => r.stops.some((s) => s.nbhd === hoverNbhd));
     if (serving >= 0) activeTruck = serving;

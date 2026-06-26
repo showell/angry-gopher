@@ -2,7 +2,7 @@
 // logical map into it (letterboxed, DPR-aware), draws the map with the day's
 // orders, reveals a neighborhood's name on hover, and reshuffles orders on R.
 
-import { MAP_W, MAP_H, FLEET, NEIGHBORHOODS } from "./geography.ts";
+import { MAP_W, MAP_H, FLEET, NEIGHBORHOODS, housesOf } from "./geography.ts";
 import type { Pt } from "./geography.ts";
 import { chooseOrders, ordersByNeighborhood } from "./orders.ts";
 import { buildSubstrate } from "./roadgraph.ts";
@@ -26,6 +26,7 @@ let scale = 1;
 let offX = 0;
 let offY = 0;
 let hoverNbhd: string | null = null; // neighborhood under the cursor
+let hoverHouse: string | null = null; // nearest ordered house under the cursor (`nbhd#i`)
 let focusTruck: number | null = null; // truck-panel row under the cursor
 
 // The day's deliveries. Fixed seed => reproducible on load; R picks a new seed.
@@ -64,7 +65,7 @@ function render(): void {
   ctx!.fillRect(0, 0, vw, vh);
 
   ctx!.setTransform(scale * dpr, 0, 0, scale * dpr, offX * dpr, offY * dpr);
-  drawMap(ctx!, { orders, plan, hoverNbhd, focusTruck, balanceLabel: BALANCE_LABELS[BALANCE], anim });
+  drawMap(ctx!, { orders, plan, hoverNbhd, hoverHouse, focusTruck, balanceLabel: BALANCE_LABELS[BALANCE], anim });
 }
 
 /** The playback clock: advance t by real elapsed time, redraw, stop at the end. */
@@ -98,18 +99,38 @@ function togglePlay(): void {
   }
 }
 
-/** Nearest neighborhood whose ring the logical point falls within (else null). */
-function hitTest(p: Pt): string | null {
-  let best: string | null = null;
+/**
+ * The neighborhood under the cursor and, within it, the ordered house nearest
+ * the pointer. The house matters because a split neighborhood is served by more
+ * than one truck — hovering near a house should surface *that house's* truck,
+ * not whichever truck happens to be first in the list.
+ */
+function hitTest(p: Pt): { nbhd: string | null; house: string | null } {
+  let nbhd: string | null = null;
   let bestD = Infinity;
   for (const n of NEIGHBORHOODS) {
     const d = Math.hypot(p.x - n.center.x, p.y - n.center.y);
     if (d <= n.ringRadius + 18 && d < bestD) {
       bestD = d;
-      best = n.name;
+      nbhd = n.name;
     }
   }
-  return best;
+  if (nbhd === null) return { nbhd: null, house: null };
+
+  // Closest ordered house within that neighborhood (a delivered house = a truck).
+  const n = NEIGHBORHOODS.find((m) => m.name === nbhd)!;
+  let house: string | null = null;
+  let bestH = Infinity;
+  housesOf(n).forEach((h, i) => {
+    const key = `${nbhd}#${i}`;
+    if (!orders.has(key)) return;
+    const d = Math.hypot(p.x - h.x, p.y - h.y);
+    if (d < bestH) {
+      bestH = d;
+      house = key;
+    }
+  });
+  return { nbhd, house };
 }
 
 canvas.addEventListener("mousemove", (e) => {
@@ -117,11 +138,12 @@ canvas.addEventListener("mousemove", (e) => {
   const p = { x: (e.clientX - offX) / scale, y: (e.clientY - offY) / scale };
   // The truck panel sits on top of the map; test it first.
   const truck = truckPanelHitTest(plan, p);
-  const nbhd = truck === null ? hitTest(p) : null;
-  if (truck !== focusTruck || nbhd !== hoverNbhd) {
+  const hit = truck === null ? hitTest(p) : { nbhd: null, house: null };
+  if (truck !== focusTruck || hit.nbhd !== hoverNbhd || hit.house !== hoverHouse) {
     focusTruck = truck;
-    hoverNbhd = nbhd;
-    canvas.style.cursor = truck !== null || nbhd ? "pointer" : "default";
+    hoverNbhd = hit.nbhd;
+    hoverHouse = hit.house;
+    canvas.style.cursor = truck !== null || hit.nbhd ? "pointer" : "default";
     render();
   }
 });
@@ -136,6 +158,7 @@ window.addEventListener("keydown", (e) => {
     replan();
     focusTruck = null; // truck indices may not survive a re-plan
     hoverNbhd = null;
+    hoverHouse = null;
     render();
   } else if (e.key === "b" || e.key === "B") {
     // "Back": end playback — the trucks are back at the warehouse and we return
