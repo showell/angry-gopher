@@ -1,9 +1,10 @@
 // solver.ts — the routing brain. Given the day's orders (which houses ordered,
 // grouped by neighborhood) and the travel substrate, it assigns neighborhoods to
-// trucks and orders each truck's stops to minimize TOTAL driver time. Pure: no
-// DOM. The map just draws what this returns.
+// trucks and orders each truck's stops to minimize a blend of driver time and
+// tote-carrying cost — so a customer near the FC isn't served last because their
+// goods rode a far truck's whole loop. Pure: no DOM. The map draws what we return.
 //
-// A truck's time has three parts, all of which the solver now feels:
+// The PHYSICAL day a truck drives has three parts:
 //
 //   1. TRAVEL — artery time between stops (the substrate's shortest paths), fast.
 //   2. LOCAL  — time driving each neighborhood's SLOW ring road to reach its
@@ -13,6 +14,13 @@
 //      arc between its two gates — but only the delivery visit drives the full
 //      ring; a re-thread pays transit only.
 //   3. SERVICE — a small per-order beat at each door.
+//
+// Those three are the real minutes (route.time, the playback clock). The SOLVER
+// minimizes one thing more: TOTE-MINUTES — every tote still on board accrues cost
+// each minute until it's delivered (heavy truck = fuel + a waiting customer). It
+// rides on top of physical time as `time + CARRY_COST * toteMin`, weighting "drop
+// weight early / serve close customers soon" against raw distance. It never leaks
+// into reported times — those read `breakdown` straight.
 //
 // LOCAL depends on the entry/exit gates, so it depends on the route's *shape* —
 // which means reordering a route, or which truck takes a neighborhood, changes
@@ -83,15 +91,17 @@ function housesByNbhd(stops: Stop[]): Map<string, number[]> {
   return m;
 }
 
-type Breakdown = { travel: number; local: number; service: number; time: number };
+type Breakdown = { travel: number; local: number; service: number; time: number; toteMin: number };
 
 /**
  * Full cost of a stop sequence. Expands the shortest path so every neighborhood
  * the truck actually drives through (delivered-to OR threaded) is priced with
- * the correct entry/exit gates.
+ * the correct entry/exit gates. One walk also accumulates `toteMin` — the totes
+ * still aboard, integrated over the time they're carried (load drops as the truck
+ * delivers) — the solver's urgency term. `time` stays the physical day.
  */
 function breakdown(sub: Substrate, stops: Stop[]): Breakdown {
-  if (stops.length === 0) return { travel: 0, local: 0, service: 0, time: 0 };
+  if (stops.length === 0) return { travel: 0, local: 0, service: 0, time: 0, toteMin: 0 };
 
   const waypoints = ["FC", ...stops.map((s) => s.nbhd), "FC"];
   const nodes: string[] = [];
@@ -102,30 +112,46 @@ function breakdown(sub: Substrate, stops: Stop[]): Breakdown {
   }
 
   const houses = housesByNbhd(stops);
-  let travel = 0;
-  for (let i = 1; i < nodes.length; i++) travel += sub.time(nodes[i - 1], nodes[i]);
-
   // A neighborhood drives its full delivery ring ONCE (at its first occurrence);
   // if the shortest path threads back through it later, that pass costs only the
   // short gate-to-gate transit arc — you don't re-loop a town you already did.
   const delivered = new Set<string>();
+  let travel = 0;
   let local = 0;
-  for (let i = 1; i < nodes.length - 1; i++) {
+  let toteMin = 0;
+  let aboard = loadOf(stops); // totes still on the truck (all of them, leaving the FC)
+  for (let i = 1; i < nodes.length; i++) {
+    const seg = sub.time(nodes[i - 1], nodes[i]);
+    travel += seg;
+    toteMin += aboard * seg; // every tote still aboard pays for this artery leg
     const node = nodes[i];
-    if (node === "FC") continue;
+    if (node === "FC" || i >= nodes.length - 1) continue;
     const full = houses.get(node);
     const visit = full && full.length && !delivered.has(node) ? full : [];
-    if (visit.length) delivered.add(node);
     const entry = gateAngle(node, nodeAt(nodes[i - 1]));
     const exit = gateAngle(node, nodeAt(nodes[i + 1]));
-    local += localMinutes(node, entry, exit, houseAngles(node, visit));
+    const lm = localMinutes(node, entry, exit, houseAngles(node, visit));
+    local += lm;
+    toteMin += aboard * lm; // and for the slow ring drive
+    if (visit.length) {
+      delivered.add(node);
+      aboard -= visit.length; // dropped here, so lighter from now on
+    }
   }
 
   const service = loadOf(stops) * SERVICE;
-  return { travel, local, service, time: travel + local + service };
+  return { travel, local, service, time: travel + local + service, toteMin };
 }
 
-const costOf = (sub: Substrate, stops: Stop[]): number => breakdown(sub, stops).time;
+// How much a tote-minute (one tote carried one minute) costs against a plain
+// driver-minute — the N/M ratio. At 0.1 the solver will accept ~10 min of extra
+// driving to spare a tote ~100 tote-minutes of riding, which is what pulls a
+// close-but-last customer (Factoria) up to an early, fresh delivery.
+const CARRY_COST = 0.1;
+const costOf = (sub: Substrate, stops: Stop[]): number => {
+  const b = breakdown(sub, stops);
+  return b.time + CARRY_COST * b.toteMin;
+};
 
 /** Public cost of an arbitrary stop sequence — for checks and the manager-override phase. */
 export function routeTime(sub: Substrate, stops: Stop[]): number {
