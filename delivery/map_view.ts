@@ -206,6 +206,7 @@ function drawNeighborhood(
   orders: Set<string>,
   houseColor: Map<string, string>, // per-house truck colour (so a split shows two colours)
   highlight: Set<string> | null, // houses of the focused truck, to make pop
+  delivered: Set<string> | null, // houses already serviced (playback) → checkmark
 ): void {
   if (n.lake) {
     ctx.beginPath();
@@ -229,13 +230,21 @@ function drawNeighborhood(
   // truck's orders fade right back, so the route's doors read at a glance.
   const focusMode = highlight !== null;
   housesOf(n).forEach((h, i) => {
-    const isOrder = orders.has(`${n.name}#${i}`);
+    const key = `${n.name}#${i}`;
+    const isOrder = orders.has(key);
     if (isOrder) {
-      const focused = focusMode && highlight.has(`${n.name}#${i}`);
+      const focused = focusMode && highlight.has(key);
       const muted = focusMode && !focused;
+      const color = houseColor.get(key) ?? COLOR.order;
+      // Delivered (during playback): the square becomes a checkmark in the
+      // truck's colour — the moment the goods hit the doorstep.
+      if (delivered && delivered.has(key)) {
+        drawCheck(ctx, h.x, h.y, ORDER_SIZE * 1.5, color);
+        return;
+      }
       const s = focused ? 13 : ORDER_SIZE;
       ctx.globalAlpha = muted ? 0.5 : 1;
-      ctx.fillStyle = houseColor.get(`${n.name}#${i}`) ?? COLOR.order;
+      ctx.fillStyle = color;
       ctx.strokeStyle = "#ffffff";
       ctx.lineWidth = focused ? 2 : 1.5;
       ctx.beginPath();
@@ -488,6 +497,7 @@ type Seg = { x0: number; y0: number; x1: number; y1: number; t0: number; t1: num
 export type Track = {
   segs: Seg[]; // timed segments; a dwell (delivery pause) has x0==x1, y0==y1
   full: Pt[]; // the whole polyline, for the faint "road ahead" underlay
+  deliveries: { key: string; t: number }[]; // when each house flips to "done" (local time)
   total: number; // driving minutes start-to-finish (== route.time)
   depart: number; // minutes after the global clock that this truck leaves the FC
   start: Pt; // where it waits before departure (the FC)
@@ -522,13 +532,10 @@ function buildTimedTrack(route: Route, edgeMin: Map<string, number>, color: stri
     for (const node of leg) if (nodes[nodes.length - 1] !== node) nodes.push(node);
   }
   const housesAt = new Map<string, number[]>();
-  const ordersAt = new Map<string, number>();
-  for (const s of route.stops) {
-    housesAt.set(s.nbhd, (housesAt.get(s.nbhd) ?? []).concat(s.houses));
-    ordersAt.set(s.nbhd, (ordersAt.get(s.nbhd) ?? 0) + s.orders);
-  }
+  for (const s of route.stops) housesAt.set(s.nbhd, (housesAt.get(s.nbhd) ?? []).concat(s.houses));
 
   const segs: Seg[] = [];
+  const deliveries: { key: string; t: number }[] = [];
   let clock = 0;
   for (let i = 1; i < nodes.length; i++) {
     const prev = nodes[i - 1];
@@ -538,12 +545,16 @@ function buildTimedTrack(route: Route, edgeMin: Map<string, number>, color: stri
       const next = nodes[i + 1];
       const entry = gateAngle(node, nodeAt(prev));
       const exit = gateAngle(node, nodeAt(next));
-      const hAngles = houseAngles(node, housesAt.get(node) ?? []);
+      const houses = housesAt.get(node) ?? [];
+      const hAngles = houseAngles(node, houses);
       const ringPts = ringWalkPath(node, entry, exit, hAngles);
-      const delivering = (housesAt.get(node)?.length ?? 0) > 0;
-      // Dwell at the cul-de-sac mouth: pull in + service every order here.
+      const delivering = houses.length > 0;
+      // Dwell at the cul-de-sac mouth: pull in (ENTER), then service each order
+      // over SERVICE minutes — every house flips to "done" as its turn lands.
       if (delivering) {
-        const dwell = ENTER + SERVICE * (ordersAt.get(node) ?? 0);
+        const start = clock + ENTER;
+        houses.forEach((h, k) => deliveries.push({ key: `${node}#${h}`, t: start + (k + 1) * SERVICE }));
+        const dwell = ENTER + SERVICE * houses.length;
         const p = ringPts[0];
         segs.push({ x0: p.x, y0: p.y, x1: p.x, y1: p.y, t0: clock, t1: clock + dwell });
         clock += dwell;
@@ -555,7 +566,7 @@ function buildTimedTrack(route: Route, edgeMin: Map<string, number>, color: stri
   }
 
   const full: Pt[] = segs.length ? [{ x: segs[0].x0, y: segs[0].y0 }, ...segs.map((s) => ({ x: s.x1, y: s.y1 }))] : [];
-  return { segs, full, total: clock, depart: 0, start: WAREHOUSE, color };
+  return { segs, full, deliveries, total: clock, depart: 0, start: WAREHOUSE, color };
 }
 
 /** Build every truck's timeline once when play starts, then stagger departures. */
@@ -570,6 +581,32 @@ export function buildTracks(plan: Plan): Track[] {
   const order = tracks.map((_, i) => i).sort((a, b) => tracks[b].total - tracks[a].total);
   order.forEach((ti, rank) => (tracks[ti].depart = rank * STAGGER_MIN));
   return tracks;
+}
+
+/** Houses delivered by global clock `t` (a house flips once its service lands). */
+function deliveredAt(tracks: Track[], t: number): Set<string> {
+  const done = new Set<string>();
+  for (const track of tracks) {
+    const e = t - track.depart;
+    for (const d of track.deliveries) if (e >= d.t) done.add(d.key);
+  }
+  return done;
+}
+
+/** A checkmark in the truck's colour, with a white halo so it reads on the map. */
+function drawCheck(ctx: CanvasRenderingContext2D, cx: number, cy: number, s: number, color: string): void {
+  ctx.beginPath();
+  ctx.moveTo(cx - s * 0.45, cy + s * 0.05);
+  ctx.lineTo(cx - s * 0.1, cy + s * 0.4);
+  ctx.lineTo(cx + s * 0.5, cy - s * 0.45);
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  ctx.strokeStyle = "#ffffff";
+  ctx.lineWidth = s * 0.55;
+  ctx.stroke();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = s * 0.34;
+  ctx.stroke();
 }
 
 /** Where a truck is on the global clock: head point, travelled trail, and state. */
@@ -726,7 +763,8 @@ export function drawMap(ctx: CanvasRenderingContext2D, view: MapView): void {
     drawRoads(ctx);
     drawBridges(ctx);
     drawGates(ctx);
-    for (const n of NEIGHBORHOODS) drawNeighborhood(ctx, n, orders, houseColor, null);
+    const delivered = deliveredAt(anim.tracks, anim.t);
+    for (const n of NEIGHBORHOODS) drawNeighborhood(ctx, n, orders, houseColor, null, delivered);
     drawWarehouse(ctx);
     drawAnimation(ctx, anim.tracks, anim.t);
     drawHud(ctx);
@@ -767,7 +805,7 @@ export function drawMap(ctx: CanvasRenderingContext2D, view: MapView): void {
   drawRoads(ctx);
   drawBridges(ctx);
   drawGates(ctx);
-  for (const n of NEIGHBORHOODS) drawNeighborhood(ctx, n, orders, houseColor, highlight);
+  for (const n of NEIGHBORHOODS) drawNeighborhood(ctx, n, orders, houseColor, highlight, null);
   drawWarehouse(ctx);
 
   // z=2 — the routes, on top so the loop around each cul-de-sac is visible.
