@@ -414,7 +414,7 @@ function drawHud(ctx: CanvasRenderingContext2D): void {
     688,
   );
   ctx.font = "italic 12px system-ui, sans-serif";
-  ctx.fillText("totally not to scale  ·  hover a neighborhood or a truck  ·  press R to reshuffle orders", 24, 706);
+  ctx.fillText("totally not to scale  ·  hover a neighborhood or a truck  ·  R reshuffle  ·  B balance", 24, 706);
 }
 
 /**
@@ -472,18 +472,14 @@ function drawRoutes(ctx: CanvasRenderingContext2D, plan: Plan, activeTruck: numb
   });
 }
 
-function drawTruckPanel(ctx: CanvasRenderingContext2D, plan: Plan, activeTruck: number | null): void {
+function drawTruckPanel(ctx: CanvasRenderingContext2D, plan: Plan, activeTruck: number | null, balanceLabel: string): void {
   ctx.textAlign = "left";
   ctx.fillStyle = COLOR.text;
   ctx.font = "bold 14px system-ui, sans-serif";
-  ctx.fillText(`Plan — ${plan.routes.length} trucks`, PANEL_X, 28);
+  ctx.fillText(`Plan — ${plan.routes.length} trucks  ·  balance: ${balanceLabel}`, PANEL_X, 28);
   ctx.fillStyle = COLOR.note;
   ctx.font = "12px system-ui, sans-serif";
-  ctx.fillText(
-    `${Math.round(plan.totalTime)} driver-min  ·  ${Math.round(plan.travel)} road / ${Math.round(plan.local)} local`,
-    PANEL_X,
-    45,
-  );
+  ctx.fillText(`${Math.round(plan.totalTime)} driver-min  ·  spread ${Math.round(plan.spread)} min`, PANEL_X, 45);
 
   plan.routes.forEach((route, i) => {
     const y = PANEL_ROW0 + i * PANEL_ROW_H;
@@ -531,6 +527,7 @@ export type MapView = {
   plan: Plan;
   hoverNbhd: string | null; // neighborhood under the cursor (map)
   focusTruck: number | null; // truck row under the cursor (panel)
+  balanceLabel: string; // current balance level (off/low/med/high)
 };
 
 /**
@@ -539,7 +536,7 @@ export type MapView = {
  * or just the focused truck's.
  */
 export function drawMap(ctx: CanvasRenderingContext2D, view: MapView): void {
-  const { orders, plan, hoverNbhd, focusTruck } = view;
+  const { orders, plan, hoverNbhd, focusTruck, balanceLabel } = view;
 
   // Each neighborhood's order squares take the colour of the truck serving it.
   const nbhdColor = new Map<string, string>();
@@ -580,6 +577,6 @@ export function drawMap(ctx: CanvasRenderingContext2D, view: MapView): void {
 
   // Screen furniture — all off the map, so nothing floats over the routes.
   drawHud(ctx);
-  drawTruckPanel(ctx, plan, activeTruck);
+  drawTruckPanel(ctx, plan, activeTruck, balanceLabel);
   drawDetail(ctx, plan, orders, hoverNbhd, activeTruck);
 }

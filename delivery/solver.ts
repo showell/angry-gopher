@@ -35,7 +35,7 @@ export type Route = {
   time: number; // travel + local + service (this truck's slice of the total)
 };
 
-export type Move = { kind: "merge" | "2-opt" | "or-opt"; saved: number; detail: string };
+export type Move = { kind: "merge" | "2-opt" | "or-opt" | "balance"; saved: number; detail: string };
 
 export type Plan = {
   routes: Route[];
@@ -43,11 +43,17 @@ export type Plan = {
   travel: number; // total artery time across the fleet
   local: number; // total in-neighborhood driving + ENTER overhead
   service: number; // total per-order time (a constant for a given day)
+  spread: number; // longest route time − shortest, a measure of (im)balance
   log: Move[];
   unrouted: Stop[]; // demand that didn't fit the fleet (should be empty; surfaced if not)
 };
 
 const CAP = FLEET.totesPerTruck;
+
+// Balance levels for the B-knob: minutes of total time we'll spend per minute of
+// route-time stdev cut. 0 = pure total-time (but the free tie-break still runs).
+export const BALANCE_LEVELS = [0, 3, 6, 12];
+export const BALANCE_LABELS = ["off", "low", "med", "high"];
 
 function loadOf(stops: Stop[]): number {
   return stops.reduce((s, c) => s + c.orders, 0);
@@ -212,8 +218,68 @@ function orOpt(sub: Substrate, routes: Stop[][], log: Move[]): void {
   }
 }
 
-/** Plan the fleet for a day's orders. Deterministic — same orders, same plan. */
-export function solve(sub: Substrate, orders: Map<string, number[]>): Plan {
+/** Population stdev of a set of route times — our (im)balance measure. */
+function stdev(times: number[]): number {
+  if (times.length === 0) return 0;
+  const mean = times.reduce((a, b) => a + b, 0) / times.length;
+  return Math.sqrt(times.reduce((a, t) => a + (t - mean) ** 2, 0) / times.length);
+}
+
+/**
+ * Even out the fleet by relocating single stops. A FREE move is one that leaves
+ * total time unchanged (within a minute) but shrinks the route-time spread — the
+ * "give the tied neighborhood to the lighter truck" move, at no cost; it always
+ * runs. When `lambda` > 0 we also make PAID moves, spending up to `lambda` min of
+ * total time per minute of stdev cut, to compress genuinely lopsided routes.
+ */
+function rebalance(sub: Substrate, routes: Stop[][], lambda: number, log: Move[]): void {
+  const TIE = 0.75; // minutes treated as "no change in total time"
+  for (let guard = 0; guard < 400; guard++) {
+    const times = routes.map((r) => costOf(sub, r));
+    const spread0 = stdev(times.filter((_, i) => routes[i].length > 0));
+
+    type Cand = { r: number; s: number; t: number; pos: number; dTotal: number; dSpread: number; free: boolean };
+    let pick: Cand | null = null;
+    const score = (c: Cand): number => (c.free ? c.dSpread : c.dTotal + lambda * c.dSpread);
+
+    for (let r = 0; r < routes.length; r++) {
+      for (let s = 0; s < routes[r].length; s++) {
+        const stop = routes[r][s];
+        const without = [...routes[r].slice(0, s), ...routes[r].slice(s + 1)];
+        const newRcost = costOf(sub, without);
+        for (let t = 0; t < routes.length; t++) {
+          if (t === r) continue;
+          if (loadOf(routes[t]) + stop.orders > CAP) continue;
+          for (let pos = 0; pos <= routes[t].length; pos++) {
+            const newTcost = costOf(sub, [...routes[t].slice(0, pos), stop, ...routes[t].slice(pos)]);
+            const dTotal = newRcost - times[r] + (newTcost - times[t]);
+            const nt = times.slice();
+            nt[r] = newRcost;
+            nt[t] = newTcost;
+            const after = nt.filter((_, i) => (i === r ? without.length > 0 : true) && routes[i].length > 0);
+            const dSpread = stdev(after) - spread0;
+            const free = Math.abs(dTotal) <= TIE && dSpread < -1e-6;
+            const paid = lambda > 0 && dTotal > TIE && dTotal + lambda * dSpread < -1e-6;
+            if (!free && !paid) continue;
+            const cand: Cand = { r, s, t, pos, dTotal, dSpread, free };
+            const wins = !pick ? true : cand.free !== pick.free ? cand.free : score(cand) < score(pick);
+            if (wins) pick = cand;
+          }
+        }
+      }
+    }
+
+    if (!pick) break;
+    const stop = routes[pick.r][pick.s];
+    routes[pick.r] = [...routes[pick.r].slice(0, pick.s), ...routes[pick.r].slice(pick.s + 1)];
+    routes[pick.t] = [...routes[pick.t].slice(0, pick.pos), stop, ...routes[pick.t].slice(pick.pos)];
+    log.push({ kind: "balance", saved: -pick.dTotal, detail: `${pick.free ? "tie-break" : "balance"}: ${stop.nbhd} → another truck` });
+    routes.splice(0, routes.length, ...routes.filter((r) => r.length > 0));
+  }
+}
+
+/** Plan the fleet for a day's orders. Deterministic — same orders + lambda, same plan. */
+export function solve(sub: Substrate, orders: Map<string, number[]>, lambda = 0): Plan {
   const log: Move[] = [];
   const routes: Stop[][] = customers(orders).map((c) => [c]);
 
@@ -223,6 +289,9 @@ export function solve(sub: Substrate, orders: Map<string, number[]>): Plan {
   for (const r of routes) twoOpt(sub, r, log);
   orOpt(sub, routes, log);
   for (const r of routes) twoOpt(sub, r, log); // re-tidy after relocations
+
+  rebalance(sub, routes, lambda, log); // free tie-breaks always; paid balancing when lambda > 0
+  for (const r of routes) twoOpt(sub, r, log); // tidy any route the rebalance reshaped
 
   const unrouted: Stop[] = [];
   while (routes.length > FLEET.trucks) unrouted.push(...routes.pop()!);
@@ -243,12 +312,16 @@ export function solve(sub: Substrate, orders: Map<string, number[]>): Plan {
     { travel: 0, local: 0, service: 0 },
   );
 
+  const ts = built.map((r) => r.time);
+  const spread = ts.length ? Math.max(...ts) - Math.min(...ts) : 0;
+
   return {
     routes: built,
     totalTime: total.travel + total.local + total.service,
     travel: total.travel,
     local: total.local,
     service: total.service,
+    spread,
     log,
     unrouted,
   };

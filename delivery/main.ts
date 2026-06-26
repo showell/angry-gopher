@@ -6,7 +6,7 @@ import { MAP_W, MAP_H, FLEET, NEIGHBORHOODS } from "./geography.ts";
 import type { Pt } from "./geography.ts";
 import { chooseOrders, ordersByNeighborhood } from "./orders.ts";
 import { buildSubstrate } from "./roadgraph.ts";
-import { solve } from "./solver.ts";
+import { solve, BALANCE_LEVELS, BALANCE_LABELS } from "./solver.ts";
 import type { Plan } from "./solver.ts";
 import { drawMap, truckPanelHitTest } from "./map_view.ts";
 
@@ -29,8 +29,13 @@ let focusTruck: number | null = null; // truck-panel row under the cursor
 
 // The day's deliveries. Fixed seed => reproducible on load; R picks a new seed.
 let seed = 49;
+let balance = 0; // index into BALANCE_LEVELS; B cycles it
 let orders = chooseOrders(seed, FLEET.orders);
-let plan: Plan = solve(SUB, ordersByNeighborhood(orders));
+let plan: Plan = solve(SUB, ordersByNeighborhood(orders), BALANCE_LEVELS[balance]);
+
+function replan(): void {
+  plan = solve(SUB, ordersByNeighborhood(orders), BALANCE_LEVELS[balance]);
+}
 
 function render(): void {
   const dpr = window.devicePixelRatio || 1;
@@ -51,7 +56,7 @@ function render(): void {
   ctx!.fillRect(0, 0, vw, vh);
 
   ctx!.setTransform(scale * dpr, 0, 0, scale * dpr, offX * dpr, offY * dpr);
-  drawMap(ctx!, { orders, plan, hoverNbhd, focusTruck });
+  drawMap(ctx!, { orders, plan, hoverNbhd, focusTruck, balanceLabel: BALANCE_LABELS[balance] });
 }
 
 /** Nearest neighborhood whose ring the logical point falls within (else null). */
@@ -85,8 +90,14 @@ window.addEventListener("keydown", (e) => {
   if (e.key === "r" || e.key === "R") {
     seed = (seed * 1664525 + 1013904223) >>> 0; // a fresh, deterministic seed
     orders = chooseOrders(seed, FLEET.orders);
-    plan = solve(SUB, ordersByNeighborhood(orders)); // re-plan for the new day
+    replan();
     focusTruck = null; // truck indices may not survive a re-plan
+    hoverNbhd = null;
+    render();
+  } else if (e.key === "b" || e.key === "B") {
+    balance = (balance + 1) % BALANCE_LEVELS.length; // off → low → med → high → off
+    replan();
+    focusTruck = null;
     hoverNbhd = null;
     render();
   }
