@@ -6,7 +6,7 @@
 //
 //   1. TRAVEL — an edge's time = its drawn length (px) * a region speed factor
 //      * MIN_PER_PX. Westside city streets are slow, the Eastside normal, the
-//      Issaquah<->Redmond bypass fast, bridges a touch quick (highways). Travel
+//      Issaquah<->Redmond bypass fast, bridges a drag (lake crossings). Travel
 //      between two neighborhoods = shortest path over this graph. Arteries are
 //      the FAST part — this is the "painful to GET TO" half.
 //
@@ -27,8 +27,8 @@ import type { Pt } from "./geography.ts";
 import { NEIGHBORHOODS, ROADS, BRIDGES, roadGates, bridgeSegments, ringWalkArcPx } from "./geography.ts";
 
 export const MIN_PER_PX = 0.06;
-export const SPEED = { city: 1.6, suburb: 1.0, bridge: 0.9, fast: 0.5 };
-export const NEIGHBORHOOD_SLOWDOWN = 2; // ring roads are this much slower than the local arteries
+export const SPEED = { city: 1.6, suburb: 1.0, bridge: 1.2, fast: 0.6 };
+export const NEIGHBORHOOD_SLOWDOWN = 2.1; // ring roads are this much slower than the local arteries
 export const SERVICE = 2; // minutes per order delivered, identical everywhere
 
 /** Service nodes: every neighborhood, plus the warehouse depot. */
