@@ -39,16 +39,17 @@ const SUB = buildSubstrate();
 
 const HOME_COUNT = NEIGHBORHOODS.reduce((s, n) => s + n.houses, 0);
 
-// One distinct colour per truck — saturated enough to read over the pale land.
+// One colour per truck — eight hues spread ~45° around the wheel, all dark
+// enough to read over the pale land and far enough apart to tell apart.
 const TRUCK_COLORS = [
-  "#1f6feb", // blue
-  "#d9480f", // burnt orange
+  "#1c6fd6", // blue
+  "#e8590c", // orange
   "#2f9e44", // green
-  "#ae3ec9", // purple
+  "#d6336c", // magenta
   "#1098ad", // teal
-  "#e8590c", // amber
-  "#c2255c", // magenta
-  "#5c7cfa", // periwinkle
+  "#7048e8", // violet
+  "#b8860b", // dark gold
+  "#343a40", // charcoal
 ];
 
 // House marker sizes (squares), orders 10% larger than the base homes were.
@@ -225,26 +226,24 @@ function drawNeighborhood(
   ctx.stroke();
 
   // Houses — orders take their truck's colour and pop, plain homes recede.
+  // When a truck is focused, its stops stay vivid and bigger while every other
+  // truck's orders fade right back, so the route's doors read at a glance.
+  const focusMode = highlight !== null;
   housesOf(n).forEach((h, i) => {
     const isOrder = orders.has(`${n.name}#${i}`);
     if (isOrder) {
-      const focused = highlight !== null && highlight.has(`${n.name}#${i}`);
+      const focused = focusMode && highlight.has(`${n.name}#${i}`);
+      const muted = focusMode && !focused;
       const s = focused ? 13 : ORDER_SIZE;
-      ctx.save();
-      if (focused) {
-        ctx.shadowColor = "rgba(255, 255, 255, 0.95)";
-        ctx.shadowBlur = 9; // a halo so the truck's stops read at a glance
-      }
+      ctx.globalAlpha = muted ? 0.16 : 1;
       ctx.fillStyle = orderColor;
+      ctx.strokeStyle = "#ffffff";
+      ctx.lineWidth = focused ? 2 : 1.5;
       ctx.beginPath();
       ctx.rect(h.x - s / 2, h.y - s / 2, s, s);
       ctx.fill();
-      ctx.restore();
-      ctx.strokeStyle = focused ? "#fff6c0" : "#ffffff";
-      ctx.lineWidth = focused ? 2.5 : 1.5;
-      ctx.beginPath();
-      ctx.rect(h.x - s / 2, h.y - s / 2, s, s);
       ctx.stroke();
+      ctx.globalAlpha = 1;
     } else {
       const s = HOME_SIZE;
       ctx.fillStyle = COLOR.home;
