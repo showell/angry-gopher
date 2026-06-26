@@ -171,7 +171,7 @@ export const NEIGHBORHOODS: Neighborhood[] = [
   { name: "Mercer S", center: { x: 548, y: 582 }, side: "island", ringRadius: 19, houses: 12 },
   // --- Eastside — tech money, more room ---
   { name: "Medina", center: { x: 618, y: 250 }, side: "east", ringRadius: 28, houses: 12, note: "you-know-who lives here" },
-  { name: "Kirkland", center: { x: 650, y: 90 }, side: "east", ringRadius: 30, houses: 12, note: "a hike from anywhere" },
+  { name: "Kirkland", center: { x: 650, y: 90 }, side: "east", ringRadius: 30, houses: 12 },
   { name: "Redmond", center: { x: 868, y: 200 }, side: "east", ringRadius: 32, houses: 12 },
   { name: "Bellevue", center: { x: 740, y: 330 }, side: "east", ringRadius: 34, houses: 12 },
   { name: "Factoria", center: { x: 672, y: 568 }, side: "east", ringRadius: 30, houses: 12 },
@@ -225,9 +225,6 @@ export const BRIDGES: Bridge[] = [
     waters: [[{ x: 492, y: 501 }], [{ x: 608, y: 549 }]],
   },
 ];
-
-/** The Westside traffic blob — slows everything near downtown/SLU. */
-export const MERCER_MESS = { center: { x: 352, y: 408 }, radius: 150 };
 
 // ---------------------------------------------------------------------------
 // Helpers

@@ -29,8 +29,12 @@ let hoverNbhd: string | null = null; // neighborhood under the cursor
 let hoverHouse: string | null = null; // nearest ordered house under the cursor (`nbhd#i`)
 let focusTruck: number | null = null; // truck-panel row under the cursor
 
-// The day's deliveries. Fixed seed => reproducible on load; R picks a new seed.
+// The day's deliveries. Each "shift" is a fresh random draw: S1 on load (fixed
+// seed => reproducible), and S re-rolls. The number lets a particular shuffle be
+// reported back ("anomaly on S4").
 let seed = 49;
+let shift = 1;
+let solving = false; // true while the solver runs — grey the map, ignore re-presses
 let orders = chooseOrders(seed, FLEET.orders);
 let plan: Plan = solve(SUB, ordersByNeighborhood(orders));
 
@@ -41,9 +45,28 @@ const STEP_MIN = 2; // route-minutes the ←/→ arrows nudge the clock while pa
 let anim: { t: number; maxT: number; playing: boolean; tracks: Track[] } | null = null;
 let lastFrame = 0;
 
-function replan(): void {
-  plan = solve(SUB, ordersByNeighborhood(orders));
-  anim = null; // a new plan invalidates the running animation
+/**
+ * Re-roll the day's orders and re-solve. The solver blocks for a beat — long
+ * enough that you might hit the key twice — so we grey the map first (a paint the
+ * browser shows before the blocking solve), defer the solve a frame, and ignore
+ * re-presses until it lands.
+ */
+function shuffle(): void {
+  if (solving) return; // already working — swallow the impatient double-tap
+  solving = true;
+  anim = null; // leaving any running day; the new plan would invalidate it
+  render(); // paint the grey "shuffling…" veil before the blocking solve
+  setTimeout(() => {
+    seed = (seed * 1664525 + 1013904223) >>> 0; // a fresh, deterministic seed
+    orders = chooseOrders(seed, FLEET.orders);
+    plan = solve(SUB, ordersByNeighborhood(orders));
+    shift++;
+    focusTruck = null; // truck indices may not survive a re-plan
+    hoverNbhd = null;
+    hoverHouse = null;
+    solving = false;
+    render();
+  }, 30);
 }
 
 function render(): void {
@@ -65,7 +88,7 @@ function render(): void {
   ctx!.fillRect(0, 0, vw, vh);
 
   ctx!.setTransform(scale * dpr, 0, 0, scale * dpr, offX * dpr, offY * dpr);
-  drawMap(ctx!, { orders, plan, hoverNbhd, hoverHouse, focusTruck, anim });
+  drawMap(ctx!, { orders, plan, hoverNbhd, hoverHouse, focusTruck, shift, solving, anim });
 }
 
 /** The playback clock: advance t by real elapsed time, redraw, stop at the end. */
@@ -152,14 +175,8 @@ window.addEventListener("keydown", (e) => {
   if (e.key === " " || e.code === "Space") {
     e.preventDefault();
     togglePlay();
-  } else if (e.key === "r" || e.key === "R") {
-    seed = (seed * 1664525 + 1013904223) >>> 0; // a fresh, deterministic seed
-    orders = chooseOrders(seed, FLEET.orders);
-    replan();
-    focusTruck = null; // truck indices may not survive a re-plan
-    hoverNbhd = null;
-    hoverHouse = null;
-    render();
+  } else if (e.key === "s" || e.key === "S") {
+    shuffle(); // re-roll the day into a new shift
   } else if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
     // Step the day frame-by-frame. Arrows are a paused activity: a running day
     // pauses, then each press (or held key-repeat) scrubs by STEP_MIN.

@@ -20,7 +20,6 @@ import {
   BRIDGES,
   NEIGHBORHOODS,
   ROADS,
-  MERCER_MESS,
   housesOf,
   roadGates,
   bridgeDeck,
@@ -73,7 +72,6 @@ const COLOR = {
   island: "#eef3df",
   bridge: "#5b6470",
   bridgeStripe: "#d9b34a",
-  traffic: "rgba(206, 64, 52, 0.14)",
   road: "#cfc7bb",
   roadCasing: "#b3aa9c",
   gate: "#7d7464",
@@ -147,21 +145,6 @@ function drawWater(ctx: CanvasRenderingContext2D): void {
   fillPoly(ctx, UNION_BAY, COLOR.water, COLOR.waterEdge);
   fillPoly(ctx, LAKE_UNION, COLOR.water, COLOR.waterEdge);
   fillPoly(ctx, MERCER_ISLAND, COLOR.island, COLOR.waterEdge);
-}
-
-function drawTraffic(ctx: CanvasRenderingContext2D): void {
-  const { center, radius } = MERCER_MESS;
-  const g = ctx.createRadialGradient(center.x, center.y, 10, center.x, center.y, radius);
-  g.addColorStop(0, COLOR.traffic);
-  g.addColorStop(1, "rgba(206, 64, 52, 0)");
-  ctx.fillStyle = g;
-  ctx.beginPath();
-  ctx.arc(center.x, center.y, radius, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = "rgba(150, 40, 32, 0.7)";
-  ctx.font = "italic 13px system-ui, sans-serif";
-  ctx.textAlign = "center";
-  ctx.fillText("the Mercer Mess", center.x, center.y - 60);
 }
 
 function stroke(ctx: CanvasRenderingContext2D, pts: Pt[], width: number, color: string): void {
@@ -417,13 +400,18 @@ function swatch(ctx: CanvasRenderingContext2D, x: number, y: number, fill: strin
   ctx.fillText(label, x + s + 6, y + 4);
 }
 
-function drawHud(ctx: CanvasRenderingContext2D): void {
+function drawHud(ctx: CanvasRenderingContext2D, shift: number): void {
   // Legend (top-left).
   swatch(ctx, 24, 30, COLOR.order, "#ffffff", ORDER_SIZE, "order today (tinted by truck)");
   swatch(ctx, 24, 52, COLOR.home, COLOR.homeEdge, HOME_SIZE, "home");
 
-  // Title + problem statement (bottom-left).
+  // Which shift we're on — called out so a particular shuffle can be reported.
   ctx.textAlign = "left";
+  ctx.fillStyle = COLOR.text;
+  ctx.font = "bold 15px system-ui, sans-serif";
+  ctx.fillText(`Shift S${shift}`, 24, 86);
+
+  // Title + problem statement (bottom-left).
   ctx.fillStyle = COLOR.text;
   ctx.font = "bold 18px system-ui, sans-serif";
   ctx.fillText("Seattle Delivery Network", 24, 668);
@@ -435,7 +423,17 @@ function drawHud(ctx: CanvasRenderingContext2D): void {
     688,
   );
   ctx.font = "italic 12px system-ui, sans-serif";
-  ctx.fillText("totally not to scale  ·  hover a neighborhood or a truck  ·  Space run the day  ·  ←/→ step (paused)  ·  B back  ·  R reshuffle", 24, 706);
+  ctx.fillText("totally not to scale  ·  hover a neighborhood or a truck  ·  Space run the day  ·  ←/→ step (paused)  ·  S new shift  ·  B back", 24, 706);
+}
+
+/** Grey veil + label while the solver runs — the shuffle takes a beat, so say so. */
+function drawSolveVeil(ctx: CanvasRenderingContext2D): void {
+  ctx.fillStyle = "rgba(13, 27, 42, 0.5)"; // the page bg, translucent
+  ctx.fillRect(0, 0, MAP_W, MAP_H);
+  ctx.fillStyle = "#ffffff";
+  ctx.font = "bold 22px system-ui, sans-serif";
+  ctx.textAlign = "center";
+  ctx.fillText("shuffling…", MAP_W / 2, MAP_H / 2);
 }
 
 /**
@@ -503,7 +501,7 @@ function drawRoutes(ctx: CanvasRenderingContext2D, plan: Plan, activeTruck: numb
 // truck waits at the dock until the trucks ahead of it in line are loaded. So a
 // truck behind a big load waits longer — the fleet fans out on its own.
 
-const DOCK_TIME = 6; // minutes to load one truck at the single dock
+const DOCK_TIME = 8; // minutes to load one truck at the single dock
 
 export type Track = {
   itin: Itinerary; // the canonical sequence of timed legs
@@ -732,6 +730,8 @@ export type MapView = {
   hoverNbhd: string | null; // neighborhood under the cursor (map)
   hoverHouse: string | null; // nearest ordered house under the cursor (`nbhd#i`)
   focusTruck: number | null; // truck row under the cursor (panel)
+  shift: number; // which shuffle we're on (S1, S2, …)
+  solving: boolean; // mid-solve → grey the map behind a "shuffling…" veil
   anim?: { t: number; maxT: number; playing: boolean; tracks: Track[] } | null; // play mode
 };
 
@@ -784,7 +784,7 @@ function focusOf(
  * or just the focused truck's.
  */
 export function drawMap(ctx: CanvasRenderingContext2D, view: MapView): void {
-  const { orders, plan, hoverNbhd, hoverHouse, focusTruck, anim } = view;
+  const { orders, plan, hoverNbhd, hoverHouse, focusTruck, shift, solving, anim } = view;
 
   // Play mode: the static map underneath, then the moving dots on top. While the
   // day is actually running, hover focus is suppressed so nothing competes with
@@ -799,7 +799,6 @@ export function drawMap(ctx: CanvasRenderingContext2D, view: MapView): void {
 
     drawLand(ctx);
     drawWater(ctx);
-    drawTraffic(ctx);
     drawRegionLabels(ctx);
     drawRoads(ctx);
     drawBridges(ctx);
@@ -811,7 +810,7 @@ export function drawMap(ctx: CanvasRenderingContext2D, view: MapView): void {
     // A hovered truck (paused only): lay its full tour on top of the trail, so
     // the road still ahead of the dot reads.
     if (activeTruck !== null) drawRoutes(ctx, plan, activeTruck);
-    drawHud(ctx);
+    drawHud(ctx, shift);
     drawTruckPanel(ctx, plan, activeTruck);
     drawClock(ctx, anim.t, anim.maxT, anim.playing);
     if (paused) drawDetail(ctx, plan, orders, hoverNbhd, activeTruck);
@@ -827,7 +826,6 @@ export function drawMap(ctx: CanvasRenderingContext2D, view: MapView): void {
   // z=1 — the map itself.
   drawLand(ctx);
   drawWater(ctx);
-  drawTraffic(ctx);
   drawRegionLabels(ctx);
   drawRoads(ctx);
   drawBridges(ctx);
@@ -839,7 +837,10 @@ export function drawMap(ctx: CanvasRenderingContext2D, view: MapView): void {
   drawRoutes(ctx, plan, activeTruck);
 
   // Screen furniture — all off the map, so nothing floats over the routes.
-  drawHud(ctx);
+  drawHud(ctx, shift);
   drawTruckPanel(ctx, plan, activeTruck);
   drawDetail(ctx, plan, orders, hoverNbhd, activeTruck);
+
+  // While the next plan is being solved, grey the (now-stale) map behind a veil.
+  if (solving) drawSolveVeil(ctx);
 }
