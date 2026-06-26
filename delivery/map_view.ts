@@ -503,7 +503,7 @@ function drawRoutes(ctx: CanvasRenderingContext2D, plan: Plan, activeTruck: numb
 // truck waits at the dock until the trucks ahead of it in line are loaded. So a
 // truck behind a big load waits longer — the fleet fans out on its own.
 
-const DOCK_TIME = 5; // minutes to load one truck at the single dock
+const DOCK_TIME = 6; // minutes to load one truck at the single dock
 
 export type Track = {
   itin: Itinerary; // the canonical sequence of timed legs
@@ -676,11 +676,11 @@ function drawClock(ctx: CanvasRenderingContext2D, t: number, maxT: number, playi
   ctx.fillText(`${badge}  ·  ${Math.round(Math.min(t, maxT))} / ${Math.round(maxT)} min`, 24, 640);
 }
 
-function drawTruckPanel(ctx: CanvasRenderingContext2D, plan: Plan, activeTruck: number | null, balanceLabel: string): void {
+function drawTruckPanel(ctx: CanvasRenderingContext2D, plan: Plan, activeTruck: number | null): void {
   ctx.textAlign = "left";
   ctx.fillStyle = COLOR.text;
   ctx.font = "bold 14px system-ui, sans-serif";
-  ctx.fillText(`Plan — ${plan.routes.length} trucks  ·  balance: ${balanceLabel}`, PANEL_X, 28);
+  ctx.fillText(`Plan — ${plan.routes.length} trucks`, PANEL_X, 28);
   ctx.fillStyle = COLOR.note;
   ctx.font = "12px system-ui, sans-serif";
   ctx.fillText(`${Math.round(plan.totalTime)} driver-min  ·  spread ${Math.round(plan.spread)} min`, PANEL_X, 45);
@@ -732,7 +732,6 @@ export type MapView = {
   hoverNbhd: string | null; // neighborhood under the cursor (map)
   hoverHouse: string | null; // nearest ordered house under the cursor (`nbhd#i`)
   focusTruck: number | null; // truck row under the cursor (panel)
-  balanceLabel: string; // current balance level (off/low/med/high)
   anim?: { t: number; maxT: number; playing: boolean; tracks: Track[] } | null; // play mode
 };
 
@@ -785,7 +784,7 @@ function focusOf(
  * or just the focused truck's.
  */
 export function drawMap(ctx: CanvasRenderingContext2D, view: MapView): void {
-  const { orders, plan, hoverNbhd, hoverHouse, focusTruck, balanceLabel, anim } = view;
+  const { orders, plan, hoverNbhd, hoverHouse, focusTruck, anim } = view;
 
   // Play mode: the static map underneath, then the moving dots on top. While the
   // day is actually running, hover focus is suppressed so nothing competes with
@@ -813,7 +812,7 @@ export function drawMap(ctx: CanvasRenderingContext2D, view: MapView): void {
     // the road still ahead of the dot reads.
     if (activeTruck !== null) drawRoutes(ctx, plan, activeTruck);
     drawHud(ctx);
-    drawTruckPanel(ctx, plan, activeTruck, balanceLabel);
+    drawTruckPanel(ctx, plan, activeTruck);
     drawClock(ctx, anim.t, anim.maxT, anim.playing);
     if (paused) drawDetail(ctx, plan, orders, hoverNbhd, activeTruck);
     return;
@@ -841,6 +840,6 @@ export function drawMap(ctx: CanvasRenderingContext2D, view: MapView): void {
 
   // Screen furniture — all off the map, so nothing floats over the routes.
   drawHud(ctx);
-  drawTruckPanel(ctx, plan, activeTruck, balanceLabel);
+  drawTruckPanel(ctx, plan, activeTruck);
   drawDetail(ctx, plan, orders, hoverNbhd, activeTruck);
 }

@@ -6,7 +6,7 @@ import { MAP_W, MAP_H, FLEET, NEIGHBORHOODS, housesOf } from "./geography.ts";
 import type { Pt } from "./geography.ts";
 import { chooseOrders, ordersByNeighborhood } from "./orders.ts";
 import { buildSubstrate } from "./roadgraph.ts";
-import { solve, BALANCE_LEVELS, BALANCE_LABELS } from "./solver.ts";
+import { solve } from "./solver.ts";
 import type { Plan } from "./solver.ts";
 import { drawMap, truckPanelHitTest, buildTracks } from "./map_view.ts";
 import type { Track } from "./map_view.ts";
@@ -31,9 +31,8 @@ let focusTruck: number | null = null; // truck-panel row under the cursor
 
 // The day's deliveries. Fixed seed => reproducible on load; R picks a new seed.
 let seed = 49;
-const BALANCE = 1; // always 'low' — the real-world-feeling balance for the fleet
 let orders = chooseOrders(seed, FLEET.orders);
-let plan: Plan = solve(SUB, ordersByNeighborhood(orders), BALANCE_LEVELS[BALANCE]);
+let plan: Plan = solve(SUB, ordersByNeighborhood(orders));
 
 // Playback: a single clock (route-minutes) advances PLAY_RATE min per real
 // second, so the longest route (~200 min) plays out in ~40s. null = static map.
@@ -43,7 +42,7 @@ let anim: { t: number; maxT: number; playing: boolean; tracks: Track[] } | null 
 let lastFrame = 0;
 
 function replan(): void {
-  plan = solve(SUB, ordersByNeighborhood(orders), BALANCE_LEVELS[BALANCE]);
+  plan = solve(SUB, ordersByNeighborhood(orders));
   anim = null; // a new plan invalidates the running animation
 }
 
@@ -66,7 +65,7 @@ function render(): void {
   ctx!.fillRect(0, 0, vw, vh);
 
   ctx!.setTransform(scale * dpr, 0, 0, scale * dpr, offX * dpr, offY * dpr);
-  drawMap(ctx!, { orders, plan, hoverNbhd, hoverHouse, focusTruck, balanceLabel: BALANCE_LABELS[BALANCE], anim });
+  drawMap(ctx!, { orders, plan, hoverNbhd, hoverHouse, focusTruck, anim });
 }
 
 /** The playback clock: advance t by real elapsed time, redraw, stop at the end. */

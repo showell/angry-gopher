@@ -33,7 +33,7 @@ export type Road = [string, string];
 /** The fleet + demand. 8 trucks * 10 totes = 80 orders (Bezos will be the limo extra). */
 // Capacity is a true max, not a quota: demand (orders) sits below total capacity
 // so the solver has slack — it can run trucks partial, or idle one entirely.
-export const FLEET = { trucks: 8, totesPerTruck: 10, orders: 64 };
+export const FLEET = { trucks: 8, totesPerTruck: 12, orders: 80 };
 
 export const MAP_W = 1200;
 export const MAP_H = 720;

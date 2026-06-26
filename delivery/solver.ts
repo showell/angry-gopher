@@ -51,11 +51,6 @@ export type Plan = {
 
 const CAP = FLEET.totesPerTruck;
 
-// Balance levels for the B-knob: minutes of total time we'll spend per minute of
-// route-time stdev cut. 0 = pure total-time (but the free tie-break still runs).
-export const BALANCE_LEVELS = [0, 3, 6, 12];
-export const BALANCE_LABELS = ["off", "low", "med", "high"];
-
 function loadOf(stops: Stop[]): number {
   return stops.reduce((s, c) => s + c.orders, 0);
 }
@@ -234,21 +229,20 @@ function stdev(times: number[]): number {
 }
 
 /**
- * Even out the fleet by relocating single stops. A FREE move is one that leaves
- * total time unchanged (within a minute) but shrinks the route-time spread — the
- * "give the tied neighborhood to the lighter truck" move, at no cost; it always
- * runs. When `lambda` > 0 we also make PAID moves, spending up to `lambda` min of
- * total time per minute of stdev cut, to compress genuinely lopsided routes.
+ * Free tie-breaks: relocate a single stop to another truck when total driver
+ * time is unchanged (within a minute) but the route-time spread shrinks — the
+ * "give the tied neighborhood to the lighter truck" move. It never lengthens the
+ * day, so it runs unconditionally. There is no paid balancing: we minimize total
+ * driver time alone, and uneven route lengths are a feature, not a bug.
  */
-function rebalance(sub: Substrate, routes: Stop[][], lambda: number, log: Move[]): void {
+function rebalance(sub: Substrate, routes: Stop[][], log: Move[]): void {
   const TIE = 0.75; // minutes treated as "no change in total time"
   for (let guard = 0; guard < 400; guard++) {
     const times = routes.map((r) => costOf(sub, r));
     const spread0 = stdev(times.filter((_, i) => routes[i].length > 0));
 
-    type Cand = { r: number; s: number; t: number; pos: number; dTotal: number; dSpread: number; free: boolean };
+    type Cand = { r: number; s: number; t: number; pos: number; dTotal: number; dSpread: number };
     let pick: Cand | null = null;
-    const score = (c: Cand): number => (c.free ? c.dSpread : c.dTotal + lambda * c.dSpread);
 
     for (let r = 0; r < routes.length; r++) {
       for (let s = 0; s < routes[r].length; s++) {
@@ -261,17 +255,14 @@ function rebalance(sub: Substrate, routes: Stop[][], lambda: number, log: Move[]
           for (let pos = 0; pos <= routes[t].length; pos++) {
             const newTcost = costOf(sub, [...routes[t].slice(0, pos), stop, ...routes[t].slice(pos)]);
             const dTotal = newRcost - times[r] + (newTcost - times[t]);
+            if (Math.abs(dTotal) > TIE) continue; // tie-breaks only — never lengthen the day
             const nt = times.slice();
             nt[r] = newRcost;
             nt[t] = newTcost;
             const after = nt.filter((_, i) => (i === r ? without.length > 0 : true) && routes[i].length > 0);
             const dSpread = stdev(after) - spread0;
-            const free = Math.abs(dTotal) <= TIE && dSpread < -1e-6;
-            const paid = lambda > 0 && dTotal > TIE && dTotal + lambda * dSpread < -1e-6;
-            if (!free && !paid) continue;
-            const cand: Cand = { r, s, t, pos, dTotal, dSpread, free };
-            const wins = !pick ? true : cand.free !== pick.free ? cand.free : score(cand) < score(pick);
-            if (wins) pick = cand;
+            if (dSpread >= -1e-6) continue; // and only when they actually even out
+            if (!pick || dSpread < pick.dSpread) pick = { r, s, t, pos, dTotal, dSpread };
           }
         }
       }
@@ -281,7 +272,7 @@ function rebalance(sub: Substrate, routes: Stop[][], lambda: number, log: Move[]
     const stop = routes[pick.r][pick.s];
     routes[pick.r] = [...routes[pick.r].slice(0, pick.s), ...routes[pick.r].slice(pick.s + 1)];
     routes[pick.t] = [...routes[pick.t].slice(0, pick.pos), stop, ...routes[pick.t].slice(pick.pos)];
-    log.push({ kind: "balance", saved: -pick.dTotal, detail: `${pick.free ? "tie-break" : "balance"}: ${stop.nbhd} → another truck` });
+    log.push({ kind: "balance", saved: -pick.dTotal, detail: `tie-break: ${stop.nbhd} → another truck` });
     routes.splice(0, routes.length, ...routes.filter((r) => r.length > 0));
   }
 }
@@ -310,14 +301,13 @@ function arcSubsets(name: string, houses: number[]): number[][] {
 
 /**
  * Voluntary split delivery: hand a contiguous arc of one neighborhood's houses
- * to a SECOND truck when it improves the penalized objective (total + lambda·
- * stdev). Never forced — splitting adds a second truck's ring driving, so it
- * only happens when capacity relief or balance more than pays for it.
+ * to a SECOND truck when doing so lowers total driver time. Never forced —
+ * splitting adds a second truck's ring driving, so it only happens when capacity
+ * relief or geometry more than pays for it.
  */
-function splitPass(sub: Substrate, routes: Stop[][], lambda: number, log: Move[]): void {
+function splitPass(sub: Substrate, routes: Stop[][], log: Move[]): void {
   for (let guard = 0; guard < 60; guard++) {
     const times = routes.map((r) => costOf(sub, r));
-    const spread0 = stdev(times.filter((_, i) => routes[i].length > 0));
 
     type Cand = { a: number; sa: number; b: number; pos: number; S: number[]; rest: number[]; g: number };
     let pick: Cand | null = null;
@@ -345,12 +335,7 @@ function splitPass(sub: Substrate, routes: Stop[][], lambda: number, log: Move[]
                 bestPos = pos;
               }
             }
-            const dTotal = costA - times[a] + (bestB - times[b]);
-            const nt = times.slice();
-            nt[a] = costA;
-            nt[b] = bestB;
-            const dSpread = stdev(nt.filter((_, i) => routes[i].length > 0)) - spread0;
-            const g = dTotal + lambda * dSpread;
+            const g = costA - times[a] + (bestB - times[b]); // Δ total driver time
             if (g < -1e-6 && (!pick || g < pick.g)) pick = { a, sa, b, pos: bestPos, S, rest, g };
           }
         }
@@ -389,8 +374,8 @@ function coalesceStops(route: Stop[]): Stop[] {
   return out;
 }
 
-/** Plan the fleet for a day's orders. Deterministic — same orders + lambda, same plan. */
-export function solve(sub: Substrate, orders: Map<string, number[]>, lambda = 0, allowSplit = true): Plan {
+/** Plan the fleet for a day's orders. Deterministic — same orders, same plan. */
+export function solve(sub: Substrate, orders: Map<string, number[]>, allowSplit = true): Plan {
   const log: Move[] = [];
   const routes: Stop[][] = customers(orders).map((c) => [c]);
 
@@ -401,10 +386,10 @@ export function solve(sub: Substrate, orders: Map<string, number[]>, lambda = 0,
   orOpt(sub, routes, log);
   for (const r of routes) twoOpt(sub, r, log); // re-tidy after relocations
 
-  rebalance(sub, routes, lambda, log); // free tie-breaks always; paid balancing when lambda > 0
+  rebalance(sub, routes, log); // free tie-breaks (never lengthen the day)
   if (allowSplit) {
-    splitPass(sub, routes, lambda, log); // voluntary split delivery, if it pays
-    rebalance(sub, routes, lambda, log); // re-settle with any split in place
+    splitPass(sub, routes, log); // voluntary split delivery, if it lowers total time
+    rebalance(sub, routes, log); // re-settle with any split in place
   }
   for (let i = 0; i < routes.length; i++) routes[i] = coalesceStops(routes[i]); // one stop per neighborhood
   for (const r of routes) twoOpt(sub, r, log); // tidy any route the passes reshaped
