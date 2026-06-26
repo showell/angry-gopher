@@ -387,8 +387,18 @@ function walkPlan(name: string, entryA: number, exitA: number, hAngles: number[]
   }
   const startA = pts[(gapAt + 1) % pts.length]; // covered arc begins just past the gap
   const coveredRad = TAU - maxGap;
-  const pe = norm(entryA - startA);
-  const px = norm(exitA - startA);
+  // Offset of a gate within the covered arc [0, coveredRad]. The gates are always
+  // members of that arc, but floating-point drift can make norm() wrap an offset
+  // that should be ~0 round to ~TAU (or nudge coveredRad just over) — which would
+  // make arcRad go NEGATIVE and rewind the clock. Snap any offset that lands in
+  // the uncovered gap back to whichever covered end is nearer.
+  const arcOffset = (a: number): number => {
+    const o = norm(a - startA);
+    if (o <= coveredRad) return o;
+    return TAU - o < o - coveredRad ? 0 : coveredRad;
+  };
+  const pe = arcOffset(entryA);
+  const px = arcOffset(exitA);
   const sameGate = norm(entryA - exitA) < 1e-9;
   let arcRad = 2 * coveredRad - Math.abs(pe - px); // out-and-back across the covered arc
   let loop = false;
