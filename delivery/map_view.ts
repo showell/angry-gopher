@@ -204,7 +204,7 @@ function drawNeighborhood(
   ctx: CanvasRenderingContext2D,
   n: Neighborhood,
   orders: Set<string>,
-  orderColor: string,
+  houseColor: Map<string, string>, // per-house truck colour (so a split shows two colours)
   highlight: Set<string> | null, // houses of the focused truck, to make pop
 ): void {
   if (n.lake) {
@@ -235,7 +235,7 @@ function drawNeighborhood(
       const muted = focusMode && !focused;
       const s = focused ? 13 : ORDER_SIZE;
       ctx.globalAlpha = muted ? 0.5 : 1;
-      ctx.fillStyle = orderColor;
+      ctx.fillStyle = houseColor.get(`${n.name}#${i}`) ?? COLOR.order;
       ctx.strokeStyle = "#ffffff";
       ctx.lineWidth = focused ? 2 : 1.5;
       ctx.beginPath();
@@ -538,10 +538,11 @@ export type MapView = {
 export function drawMap(ctx: CanvasRenderingContext2D, view: MapView): void {
   const { orders, plan, hoverNbhd, focusTruck, balanceLabel } = view;
 
-  // Each neighborhood's order squares take the colour of the truck serving it.
-  const nbhdColor = new Map<string, string>();
+  // Each ordered house takes the colour of the truck that delivers it — so a
+  // neighborhood split between two trucks shows both colours.
+  const houseColor = new Map<string, string>();
   plan.routes.forEach((r, i) => {
-    for (const s of r.stops) nbhdColor.set(s.nbhd, TRUCK_COLORS[i % TRUCK_COLORS.length]);
+    for (const s of r.stops) for (const h of s.houses) houseColor.set(`${s.nbhd}#${h}`, TRUCK_COLORS[i % TRUCK_COLORS.length]);
   });
 
   // The "active" truck: the one hovered directly in the panel, or — when a
@@ -569,7 +570,7 @@ export function drawMap(ctx: CanvasRenderingContext2D, view: MapView): void {
   drawRoads(ctx);
   drawBridges(ctx);
   drawGates(ctx);
-  for (const n of NEIGHBORHOODS) drawNeighborhood(ctx, n, orders, nbhdColor.get(n.name) ?? COLOR.order, highlight);
+  for (const n of NEIGHBORHOODS) drawNeighborhood(ctx, n, orders, houseColor, highlight);
   drawWarehouse(ctx);
 
   // z=2 — the routes, on top so the loop around each cul-de-sac is visible.

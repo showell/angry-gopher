@@ -29,7 +29,7 @@ let focusTruck: number | null = null; // truck-panel row under the cursor
 
 // The day's deliveries. Fixed seed => reproducible on load; R picks a new seed.
 let seed = 49;
-let balance = 0; // index into BALANCE_LEVELS; B cycles it
+let balance = 1; // index into BALANCE_LEVELS; default 'low' — B cycles it
 let orders = chooseOrders(seed, FLEET.orders);
 let plan: Plan = solve(SUB, ordersByNeighborhood(orders), BALANCE_LEVELS[balance]);
 

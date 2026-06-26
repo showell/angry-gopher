@@ -278,8 +278,88 @@ function rebalance(sub: Substrate, routes: Stop[][], lambda: number, log: Move[]
   }
 }
 
+/** Contiguous arc-subsets (size 1..3) of a neighborhood's houses, by ring angle. */
+function arcSubsets(name: string, houses: number[]): number[][] {
+  if (houses.length < 2) return [];
+  const ang = houseAngles(name, houses);
+  const order = houses.map((h, i) => ({ h, a: ang[i] })).sort((x, y) => x.a - y.a).map((p) => p.h);
+  const out: number[][] = [];
+  const seen = new Set<string>();
+  const maxK = Math.min(2, houses.length - 1);
+  for (let k = 1; k <= maxK; k++) {
+    for (let start = 0; start < order.length; start++) {
+      const S: number[] = [];
+      for (let j = 0; j < k; j++) S.push(order[(start + j) % order.length]);
+      const key = [...S].sort((a, b) => a - b).join(",");
+      if (!seen.has(key)) {
+        seen.add(key);
+        out.push(S);
+      }
+    }
+  }
+  return out;
+}
+
+/**
+ * Voluntary split delivery: hand a contiguous arc of one neighborhood's houses
+ * to a SECOND truck when it improves the penalized objective (total + lambda·
+ * stdev). Never forced — splitting adds an ENTER and a second ring access, so it
+ * only happens when capacity relief or balance more than pays for it.
+ */
+function splitPass(sub: Substrate, routes: Stop[][], lambda: number, log: Move[]): void {
+  for (let guard = 0; guard < 60; guard++) {
+    const times = routes.map((r) => costOf(sub, r));
+    const spread0 = stdev(times.filter((_, i) => routes[i].length > 0));
+
+    type Cand = { a: number; sa: number; b: number; pos: number; S: number[]; rest: number[]; g: number };
+    let pick: Cand | null = null;
+
+    for (let a = 0; a < routes.length; a++) {
+      for (let sa = 0; sa < routes[a].length; sa++) {
+        const N = routes[a][sa].nbhd;
+        const H = routes[a][sa].houses;
+        if (H.length < 2) continue;
+        const subsets = arcSubsets(N, H);
+        for (let b = 0; b < routes.length; b++) {
+          if (b === a || routes[b].some((s) => s.nbhd === N)) continue;
+          for (const S of subsets) {
+            if (loadOf(routes[b]) + S.length > CAP) continue;
+            const rest = H.filter((h) => !S.includes(h));
+            const newA = routes[a].map((s, i) => (i === sa ? { nbhd: N, orders: rest.length, houses: rest } : s));
+            const costA = costOf(sub, newA);
+            const Sstop: Stop = { nbhd: N, orders: S.length, houses: S };
+            let bestB = Infinity;
+            let bestPos = 0;
+            for (let pos = 0; pos <= routes[b].length; pos++) {
+              const c = costOf(sub, [...routes[b].slice(0, pos), Sstop, ...routes[b].slice(pos)]);
+              if (c < bestB) {
+                bestB = c;
+                bestPos = pos;
+              }
+            }
+            const dTotal = costA - times[a] + (bestB - times[b]);
+            const nt = times.slice();
+            nt[a] = costA;
+            nt[b] = bestB;
+            const dSpread = stdev(nt.filter((_, i) => routes[i].length > 0)) - spread0;
+            const g = dTotal + lambda * dSpread;
+            if (g < -1e-6 && (!pick || g < pick.g)) pick = { a, sa, b, pos: bestPos, S, rest, g };
+          }
+        }
+      }
+    }
+
+    if (!pick) break;
+    const N = routes[pick.a][pick.sa].nbhd;
+    routes[pick.a] = routes[pick.a].map((s, i) => (i === pick!.sa ? { nbhd: N, orders: pick!.rest.length, houses: pick!.rest } : s));
+    const Sstop: Stop = { nbhd: N, orders: pick.S.length, houses: pick.S };
+    routes[pick.b] = [...routes[pick.b].slice(0, pick.pos), Sstop, ...routes[pick.b].slice(pick.pos)];
+    log.push({ kind: "balance", saved: -pick.g, detail: `split ${N}: ${pick.S.length} of ${pick.S.length + pick.rest.length} totes to another truck` });
+  }
+}
+
 /** Plan the fleet for a day's orders. Deterministic — same orders + lambda, same plan. */
-export function solve(sub: Substrate, orders: Map<string, number[]>, lambda = 0): Plan {
+export function solve(sub: Substrate, orders: Map<string, number[]>, lambda = 0, allowSplit = true): Plan {
   const log: Move[] = [];
   const routes: Stop[][] = customers(orders).map((c) => [c]);
 
@@ -291,7 +371,11 @@ export function solve(sub: Substrate, orders: Map<string, number[]>, lambda = 0)
   for (const r of routes) twoOpt(sub, r, log); // re-tidy after relocations
 
   rebalance(sub, routes, lambda, log); // free tie-breaks always; paid balancing when lambda > 0
-  for (const r of routes) twoOpt(sub, r, log); // tidy any route the rebalance reshaped
+  if (allowSplit) {
+    splitPass(sub, routes, lambda, log); // voluntary split delivery, if it pays
+    rebalance(sub, routes, lambda, log); // re-settle with any split in place
+  }
+  for (const r of routes) twoOpt(sub, r, log); // tidy any route the passes reshaped
 
   const unrouted: Stop[] = [];
   while (routes.length > FLEET.trucks) unrouted.push(...routes.pop()!);
