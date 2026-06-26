@@ -8,7 +8,8 @@ import { chooseOrders, ordersByNeighborhood } from "./orders.ts";
 import { buildSubstrate } from "./roadgraph.ts";
 import { solve, BALANCE_LEVELS, BALANCE_LABELS } from "./solver.ts";
 import type { Plan } from "./solver.ts";
-import { drawMap, truckPanelHitTest } from "./map_view.ts";
+import { drawMap, truckPanelHitTest, buildTracks } from "./map_view.ts";
+import type { Track } from "./map_view.ts";
 
 const SUB = buildSubstrate();
 
@@ -33,8 +34,15 @@ let balance = 1; // index into BALANCE_LEVELS; default 'low' — B cycles it
 let orders = chooseOrders(seed, FLEET.orders);
 let plan: Plan = solve(SUB, ordersByNeighborhood(orders), BALANCE_LEVELS[balance]);
 
+// Playback: a single clock (route-minutes) advances PLAY_RATE min per real
+// second, so the longest route (~200 min) plays out in ~20s. null = static map.
+const PLAY_RATE = 10;
+let anim: { t: number; maxT: number; playing: boolean; tracks: Track[] } | null = null;
+let lastFrame = 0;
+
 function replan(): void {
   plan = solve(SUB, ordersByNeighborhood(orders), BALANCE_LEVELS[balance]);
+  anim = null; // a new plan invalidates the running animation
 }
 
 function render(): void {
@@ -56,7 +64,38 @@ function render(): void {
   ctx!.fillRect(0, 0, vw, vh);
 
   ctx!.setTransform(scale * dpr, 0, 0, scale * dpr, offX * dpr, offY * dpr);
-  drawMap(ctx!, { orders, plan, hoverNbhd, focusTruck, balanceLabel: BALANCE_LABELS[balance] });
+  drawMap(ctx!, { orders, plan, hoverNbhd, focusTruck, balanceLabel: BALANCE_LABELS[balance], anim });
+}
+
+/** The playback clock: advance t by real elapsed time, redraw, stop at the end. */
+function tick(now: number): void {
+  if (!anim || !anim.playing) return;
+  const dt = lastFrame ? (now - lastFrame) / 1000 : 0;
+  lastFrame = now;
+  anim.t = Math.min(anim.t + dt * PLAY_RATE, anim.maxT);
+  if (anim.t >= anim.maxT) anim.playing = false; // day's done; dots park at the FC
+  render();
+  if (anim.playing) requestAnimationFrame(tick);
+}
+
+/** Space toggles playback: start the day, pause, resume, or replay from 0. */
+function togglePlay(): void {
+  if (!anim) {
+    const tracks = buildTracks(plan);
+    const maxT = tracks.reduce((m, t) => Math.max(m, t.time), 0);
+    anim = { t: 0, maxT, playing: true, tracks };
+  } else if (anim.playing) {
+    anim.playing = false; // pause
+  } else {
+    if (anim.t >= anim.maxT) anim.t = 0; // finished → replay
+    anim.playing = true;
+  }
+  if (anim.playing) {
+    lastFrame = 0;
+    requestAnimationFrame(tick);
+  } else {
+    render();
+  }
 }
 
 /** Nearest neighborhood whose ring the logical point falls within (else null). */
@@ -74,6 +113,7 @@ function hitTest(p: Pt): string | null {
 }
 
 canvas.addEventListener("mousemove", (e) => {
+  if (anim) return; // hover focus is suppressed while the day is running
   const p = { x: (e.clientX - offX) / scale, y: (e.clientY - offY) / scale };
   // The truck panel sits on top of the map; test it first.
   const truck = truckPanelHitTest(plan, p);
@@ -87,7 +127,10 @@ canvas.addEventListener("mousemove", (e) => {
 });
 
 window.addEventListener("keydown", (e) => {
-  if (e.key === "r" || e.key === "R") {
+  if (e.key === " " || e.code === "Space") {
+    e.preventDefault();
+    togglePlay();
+  } else if (e.key === "r" || e.key === "R") {
     seed = (seed * 1664525 + 1013904223) >>> 0; // a fresh, deterministic seed
     orders = chooseOrders(seed, FLEET.orders);
     replan();

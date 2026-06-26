@@ -414,7 +414,7 @@ function drawHud(ctx: CanvasRenderingContext2D): void {
     688,
   );
   ctx.font = "italic 12px system-ui, sans-serif";
-  ctx.fillText("totally not to scale  ·  hover a neighborhood or a truck  ·  R reshuffle  ·  B balance", 24, 706);
+  ctx.fillText("totally not to scale  ·  hover a neighborhood or a truck  ·  Space run the day  ·  R reshuffle  ·  B balance", 24, 706);
 }
 
 /**
@@ -470,6 +470,95 @@ function drawRoutes(ctx: CanvasRenderingContext2D, plan: Plan, activeTruck: numb
     ctx.stroke();
     ctx.globalAlpha = 1;
   });
+}
+
+// --- Animation: trucks as dots riding their routes (the "watch the day run"
+// flipbook). A single clock t (route-minutes) drives every truck at once; each
+// dot's position is the fraction t/route-time along its drawn polyline, so the
+// longest route fills the whole window and shorter ones park early. A growing
+// trail shows the network filling in.
+
+export type Track = {
+  pts: Pt[]; // the route polyline (same as drawRoutes traces)
+  cum: number[]; // cumulative pixel length at each vertex
+  len: number; // total pixel length
+  time: number; // route time in minutes (what t is measured against)
+  color: string;
+};
+
+/** Precompute each truck's polyline + arc-length table once, when play starts. */
+export function buildTracks(plan: Plan): Track[] {
+  return plan.routes.map((r, i) => {
+    const pts = routeGeometry(r);
+    const cum = [0];
+    for (let k = 1; k < pts.length; k++) {
+      cum.push(cum[k - 1] + Math.hypot(pts[k].x - pts[k - 1].x, pts[k].y - pts[k - 1].y));
+    }
+    return { pts, cum, len: cum[cum.length - 1] || 0, time: r.time, color: TRUCK_COLORS[i % TRUCK_COLORS.length] };
+  });
+}
+
+/** Head point at the given fraction, plus the prefix polyline up to it. */
+function splitAt(track: Track, frac: number): { head: Pt; prefix: Pt[] } {
+  const { pts, cum, len } = track;
+  if (pts.length < 2 || frac <= 0) return { head: pts[0], prefix: [pts[0]] };
+  if (frac >= 1) return { head: pts[pts.length - 1], prefix: pts.slice() };
+  const target = frac * len;
+  let i = 1;
+  while (i < cum.length && cum[i] < target) i++;
+  const seg = cum[i] - cum[i - 1];
+  const tt = seg > 0 ? (target - cum[i - 1]) / seg : 0;
+  const head = { x: pts[i - 1].x + (pts[i].x - pts[i - 1].x) * tt, y: pts[i - 1].y + (pts[i].y - pts[i - 1].y) * tt };
+  return { head, prefix: [...pts.slice(0, i), head] };
+}
+
+function drawAnimation(ctx: CanvasRenderingContext2D, tracks: Track[], t: number): void {
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+
+  // Faint full routes underneath — "the roads ahead".
+  for (const track of tracks) {
+    if (track.pts.length < 2) continue;
+    trace(ctx, track.pts, false);
+    ctx.globalAlpha = 0.16;
+    ctx.lineWidth = 1.4;
+    ctx.strokeStyle = track.color;
+    ctx.stroke();
+  }
+
+  // Travelled trail + the dot at each truck's head.
+  for (const track of tracks) {
+    if (track.pts.length < 2) continue;
+    const frac = track.time > 0 ? Math.min(t / track.time, 1) : 1;
+    const { head, prefix } = splitAt(track, frac);
+
+    if (prefix.length >= 2) {
+      trace(ctx, prefix, false);
+      ctx.globalAlpha = 0.85;
+      ctx.lineWidth = 2.4;
+      ctx.strokeStyle = track.color;
+      ctx.stroke();
+    }
+
+    ctx.globalAlpha = 1;
+    ctx.beginPath();
+    ctx.arc(head.x, head.y, 6, 0, Math.PI * 2);
+    ctx.fillStyle = track.color;
+    ctx.fill();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = "#ffffff";
+    ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+}
+
+function drawClock(ctx: CanvasRenderingContext2D, t: number, maxT: number, playing: boolean): void {
+  const done = t >= maxT;
+  ctx.textAlign = "left";
+  ctx.fillStyle = COLOR.text;
+  ctx.font = "bold 15px system-ui, sans-serif";
+  const badge = done ? "✓ day complete" : playing ? "▶ running the day" : "⏸ paused";
+  ctx.fillText(`${badge}  ·  ${Math.round(Math.min(t, maxT))} / ${Math.round(maxT)} min`, 24, 640);
 }
 
 function drawTruckPanel(ctx: CanvasRenderingContext2D, plan: Plan, activeTruck: number | null, balanceLabel: string): void {
@@ -528,6 +617,7 @@ export type MapView = {
   hoverNbhd: string | null; // neighborhood under the cursor (map)
   focusTruck: number | null; // truck row under the cursor (panel)
   balanceLabel: string; // current balance level (off/low/med/high)
+  anim?: { t: number; maxT: number; playing: boolean; tracks: Track[] } | null; // play mode
 };
 
 /**
@@ -536,7 +626,30 @@ export type MapView = {
  * or just the focused truck's.
  */
 export function drawMap(ctx: CanvasRenderingContext2D, view: MapView): void {
-  const { orders, plan, hoverNbhd, focusTruck, balanceLabel } = view;
+  const { orders, plan, hoverNbhd, focusTruck, balanceLabel, anim } = view;
+
+  // Play mode: the static map underneath, then the moving dots on top. Hover
+  // focus is suppressed so nothing competes with the trucks running their day.
+  if (anim) {
+    const houseColor = new Map<string, string>();
+    plan.routes.forEach((r, i) => {
+      for (const s of r.stops) for (const h of s.houses) houseColor.set(`${s.nbhd}#${h}`, TRUCK_COLORS[i % TRUCK_COLORS.length]);
+    });
+    drawLand(ctx);
+    drawWater(ctx);
+    drawTraffic(ctx);
+    drawRegionLabels(ctx);
+    drawRoads(ctx);
+    drawBridges(ctx);
+    drawGates(ctx);
+    for (const n of NEIGHBORHOODS) drawNeighborhood(ctx, n, orders, houseColor, null);
+    drawWarehouse(ctx);
+    drawAnimation(ctx, anim.tracks, anim.t);
+    drawHud(ctx);
+    drawTruckPanel(ctx, plan, null, balanceLabel);
+    drawClock(ctx, anim.t, anim.maxT, anim.playing);
+    return;
+  }
 
   // Each ordered house takes the colour of the truck that delivers it — so a
   // neighborhood split between two trucks shows both colours.
