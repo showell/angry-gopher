@@ -366,6 +366,29 @@ function splitPass(sub: Substrate, routes: Stop[][], lambda: number, log: Move[]
   }
 }
 
+/**
+ * Merge any stops that hit the same neighborhood into one. A relocation pass
+ * (or-opt / rebalance) can move a stop onto a truck that already serves that
+ * neighborhood, leaving the route visiting it twice; normalize to one stop per
+ * neighborhood (keeping the first occurrence's slot — twoOpt re-tidies after).
+ */
+function coalesceStops(route: Stop[]): Stop[] {
+  const byNbhd = new Map<string, Stop>();
+  const out: Stop[] = [];
+  for (const s of route) {
+    const existing = byNbhd.get(s.nbhd);
+    if (existing) {
+      existing.houses = existing.houses.concat(s.houses);
+      existing.orders = existing.houses.length;
+    } else {
+      const copy: Stop = { nbhd: s.nbhd, orders: s.houses.length, houses: [...s.houses] };
+      byNbhd.set(s.nbhd, copy);
+      out.push(copy);
+    }
+  }
+  return out;
+}
+
 /** Plan the fleet for a day's orders. Deterministic — same orders + lambda, same plan. */
 export function solve(sub: Substrate, orders: Map<string, number[]>, lambda = 0, allowSplit = true): Plan {
   const log: Move[] = [];
@@ -383,6 +406,7 @@ export function solve(sub: Substrate, orders: Map<string, number[]>, lambda = 0,
     splitPass(sub, routes, lambda, log); // voluntary split delivery, if it pays
     rebalance(sub, routes, lambda, log); // re-settle with any split in place
   }
+  for (let i = 0; i < routes.length; i++) routes[i] = coalesceStops(routes[i]); // one stop per neighborhood
   for (const r of routes) twoOpt(sub, r, log); // tidy any route the passes reshaped
 
   const unrouted: Stop[] = [];
