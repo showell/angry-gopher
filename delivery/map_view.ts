@@ -55,10 +55,9 @@ const TRUCK_COLORS = [
 ];
 
 // House marker sizes (squares). Non-customer homes are pure decoration (they show
-// the random daily sampling), so they sit just under the customer-order squares —
-// about a couple px smaller than a non-popped order.
+// the random daily sampling), so they sit well below the order squares.
 const ORDER_SIZE = 9.9;
-const HOME_SIZE = 8.0;
+const HOME_SIZE = 5.0;
 
 // Truck-panel layout (top-right), shared by the renderer and the hit-test.
 const PANEL_X = MAP_W - 250;
