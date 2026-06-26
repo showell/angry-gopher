@@ -170,7 +170,7 @@ export const NEIGHBORHOODS: Neighborhood[] = [
   { name: "Mercer S", center: { x: 548, y: 582 }, side: "island", ringRadius: 19, houses: 12 },
   // --- Eastside — tech money, more room ---
   { name: "Medina", center: { x: 628, y: 140 }, side: "east", ringRadius: 28, houses: 12, note: "you-know-who lives here" },
-  { name: "Kirkland", center: { x: 700, y: 212 }, side: "east", ringRadius: 30, houses: 12 },
+  { name: "Kirkland", center: { x: 700, y: 130 }, side: "east", ringRadius: 30, houses: 12 },
   { name: "Redmond", center: { x: 868, y: 200 }, side: "east", ringRadius: 32, houses: 12 },
   { name: "Bellevue", center: { x: 740, y: 330 }, side: "east", ringRadius: 34, houses: 12 },
   { name: "Factoria", center: { x: 672, y: 568 }, side: "east", ringRadius: 30, houses: 12 },
@@ -195,6 +195,7 @@ export const ROADS: Road[] = [
   ["Beacon Hill", "West Seattle"],
   // Eastside arterials
   ["Medina", "Kirkland"],
+  ["Medina", "Bellevue"],
   ["Kirkland", "Redmond"],
   ["Kirkland", "Bellevue"],
   ["Bellevue", "Redmond"],
