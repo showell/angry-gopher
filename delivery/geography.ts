@@ -57,13 +57,20 @@ export const TRUCK_ANCHORS = [
 ];
 
 /**
- * Defer-last neighborhoods: the two that sit right on the warehouse's doorstep
- * (direct FC roads), so almost any truck can tack them on cheaply. Assigning them
- * *first* (greedy savings loves them) burns capacity that a far, hard-to-reach
- * neighborhood needed — so we hold them out of construction and fill leftover
- * slack with them last. Cheap-from-anywhere demand is the natural slack filler.
+ * Defer-last neighborhoods: held out of construction and slotted into leftover
+ * slack at the end, because greedy savings grabs them early and burns capacity a
+ * far, hard-to-reach neighborhood needed. Only Bellevue qualifies — it's right on
+ * the warehouse's doorstep (3.4 min, direct FC road) and so omnidirectional that
+ * essentially any east-passing truck can tack it on for free: pure slack filler.
+ *
+ * Tempting near-FC neighbors do NOT belong here — verified by sweeping the real
+ * S1..S24 sequence: Factoria (11 min, on the I-90/Issaquah corridor) and Medina
+ * (8 min, the SR520 bridgehead onto the west spine) each have enough geographic
+ * specificity that deferring them HURTS — they cluster better in construction and
+ * get picked up cheaply on a truck's run home. "Near FC" isn't the test; "cheap
+ * from every direction" is, and only Bellevue passes it.
  */
-export const DEFER_LAST = ["Bellevue", "Factoria"];
+export const DEFER_LAST = ["Bellevue"];
 
 export const MAP_W = 1200;
 export const MAP_H = 720;
