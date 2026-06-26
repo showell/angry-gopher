@@ -8,7 +8,7 @@ import { chooseOrders, demandByNeighborhood } from "./orders.ts";
 import { buildSubstrate } from "./roadgraph.ts";
 import { solve } from "./solver.ts";
 import type { Plan } from "./solver.ts";
-import { drawMap } from "./map_view.ts";
+import { drawMap, truckPanelHitTest } from "./map_view.ts";
 
 const SUB = buildSubstrate();
 
@@ -24,7 +24,8 @@ if (!ctx) throw new Error("2d canvas context unavailable");
 let scale = 1;
 let offX = 0;
 let offY = 0;
-let hover: string | null = null;
+let hoverNbhd: string | null = null; // neighborhood under the cursor
+let focusTruck: number | null = null; // truck-panel row under the cursor
 
 // The day's deliveries. Fixed seed => reproducible on load; R picks a new seed.
 let seed = 49;
@@ -50,7 +51,7 @@ function render(): void {
   ctx!.fillRect(0, 0, vw, vh);
 
   ctx!.setTransform(scale * dpr, 0, 0, scale * dpr, offX * dpr, offY * dpr);
-  drawMap(ctx!, hover, orders, plan);
+  drawMap(ctx!, { orders, plan, hoverNbhd, focusTruck });
 }
 
 /** Nearest neighborhood whose ring the logical point falls within (else null). */
@@ -69,10 +70,13 @@ function hitTest(p: Pt): string | null {
 
 canvas.addEventListener("mousemove", (e) => {
   const p = { x: (e.clientX - offX) / scale, y: (e.clientY - offY) / scale };
-  const hit = hitTest(p);
-  if (hit !== hover) {
-    hover = hit;
-    canvas.style.cursor = hit ? "pointer" : "default";
+  // The truck panel sits on top of the map; test it first.
+  const truck = truckPanelHitTest(plan, p);
+  const nbhd = truck === null ? hitTest(p) : null;
+  if (truck !== focusTruck || nbhd !== hoverNbhd) {
+    focusTruck = truck;
+    hoverNbhd = nbhd;
+    canvas.style.cursor = truck !== null || nbhd ? "pointer" : "default";
     render();
   }
 });
@@ -82,6 +86,8 @@ window.addEventListener("keydown", (e) => {
     seed = (seed * 1664525 + 1013904223) >>> 0; // a fresh, deterministic seed
     orders = chooseOrders(seed, FLEET.orders);
     plan = solve(SUB, demandByNeighborhood(orders)); // re-plan for the new day
+    focusTruck = null; // truck indices may not survive a re-plan
+    hoverNbhd = null;
     render();
   }
 });
