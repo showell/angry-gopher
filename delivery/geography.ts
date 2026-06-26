@@ -56,6 +56,15 @@ export const TRUCK_ANCHORS = [
   "Mercer S", // Truck 8 — the island
 ];
 
+/**
+ * Defer-last neighborhoods: the two that sit right on the warehouse's doorstep
+ * (direct FC roads), so almost any truck can tack them on cheaply. Assigning them
+ * *first* (greedy savings loves them) burns capacity that a far, hard-to-reach
+ * neighborhood needed — so we hold them out of construction and fill leftover
+ * slack with them last. Cheap-from-anywhere demand is the natural slack filler.
+ */
+export const DEFER_LAST = ["Bellevue", "Factoria"];
+
 export const MAP_W = 1200;
 export const MAP_H = 720;
 

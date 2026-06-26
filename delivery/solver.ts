@@ -23,7 +23,7 @@
 // 2-opt within a route and Or-opt across routes. Every accepted move records a
 // "saved N min" reason, for the manager-override phase to surface later.
 
-import { FLEET, TRUCK_ANCHORS, gateAngle, houseAngles, nodeAt } from "./geography.ts";
+import { FLEET, TRUCK_ANCHORS, DEFER_LAST, gateAngle, houseAngles, nodeAt } from "./geography.ts";
 import { SERVICE, localMinutes } from "./roadgraph.ts";
 import type { Substrate } from "./roadgraph.ts";
 
@@ -41,6 +41,9 @@ const ANCHOR_PIN = 2;
 
 /** Anchor neighborhood name -> its truck slot (index into the fleet). */
 const ANCHOR_SLOT = new Map(TRUCK_ANCHORS.map((name, slot) => [name, slot]));
+
+/** FC-adjacent neighborhoods held out of construction and placed into slack last. */
+const DEFER_SET = new Set(DEFER_LAST);
 
 /** Does this route carry an anchor's frozen seed (so it owns a fixed truck slot)? */
 function hasAnchor(route: Stop[]): boolean {
@@ -262,6 +265,70 @@ function forcePlace(sub: Substrate, routes: Stop[][], log: Move[]): void {
   }
 
   routes.splice(0, routes.length, ...kept);
+}
+
+/** Insert `stop` into `route` at its cheapest position; return the new route. */
+function insertBest(sub: Substrate, route: Stop[], stop: Stop): Stop[] {
+  let best = [...route, stop];
+  let bestCost = Infinity;
+  for (let p = 0; p <= route.length; p++) {
+    const cand = [...route.slice(0, p), stop, ...route.slice(p)];
+    const c = costOf(sub, cand);
+    if (c < bestCost) {
+      bestCost = c;
+      best = cand;
+    }
+  }
+  return best;
+}
+
+/**
+ * Place the deferred FC-adjacent neighborhoods (Bellevue, Factoria) into the
+ * routes built from everything else. Each goes to the truck whose total time it
+ * grows the least (cheapest insertion), splitting across trucks only if no single
+ * one has room. Running this AFTER construction is the whole point: the far,
+ * hard-to-reach neighborhoods have already claimed their trucks, so these cheap
+ * fillers slot into leftover slack instead of crowding a hard neighborhood out.
+ */
+function placeDeferred(sub: Substrate, routes: Stop[][], deferred: Stop[], log: Move[]): void {
+  for (const stop of [...deferred].sort((a, b) => b.orders - a.orders)) {
+    let remaining = stop.houses;
+    while (remaining.length) {
+      let bestRi = -1;
+      let bestRoute: Stop[] | null = null;
+      let bestDelta = Infinity;
+      for (let ri = 0; ri < routes.length; ri++) {
+        if (CAP - loadOf(routes[ri]) < remaining.length) continue;
+        const cand = insertBest(sub, routes[ri], { nbhd: stop.nbhd, orders: remaining.length, houses: remaining });
+        const delta = costOf(sub, cand) - costOf(sub, routes[ri]);
+        if (delta < bestDelta) {
+          bestDelta = delta;
+          bestRi = ri;
+          bestRoute = cand;
+        }
+      }
+      if (bestRi >= 0 && bestRoute) {
+        routes[bestRi] = bestRoute;
+        log.push({ kind: "or-opt", saved: 0, detail: `deferred fill: ${stop.nbhd} (${remaining.length}) into slack` });
+        break;
+      }
+      // No single truck fits it whole — drop a chunk on the roomiest and loop.
+      let room = 0;
+      let ri = -1;
+      for (let k = 0; k < routes.length; k++) {
+        const free = CAP - loadOf(routes[k]);
+        if (free > room) {
+          room = free;
+          ri = k;
+        }
+      }
+      if (ri < 0 || room <= 0) throw new Error("placeDeferred: no truck has room — demand exceeds fleet capacity");
+      const take = remaining.slice(0, room);
+      remaining = remaining.slice(room);
+      routes[ri] = insertBest(sub, routes[ri], { nbhd: stop.nbhd, orders: take.length, houses: take });
+      log.push({ kind: "or-opt", saved: 0, detail: `deferred split: ${stop.nbhd} ${take.length} tote(s) into slack` });
+    }
+  }
 }
 
 /** 2-opt: reverse a sub-segment of one route while it keeps cutting cost. */
@@ -533,11 +600,14 @@ function coalesceStops(route: Stop[]): Stop[] {
 /** Plan the fleet for a day's orders. Deterministic — same orders, same plan. */
 export function solve(sub: Substrate, orders: Map<string, number[]>, allowSplit = true): Plan {
   const log: Move[] = [];
-  const routes: Stop[][] = customers(orders).map((c) => [c]);
+  const all = customers(orders);
+  const deferred = all.filter((c) => DEFER_SET.has(c.nbhd)); // FC-adjacent fillers, placed last
+  const routes: Stop[][] = all.filter((c) => !DEFER_SET.has(c.nbhd)).map((c) => [c]);
 
   construct(sub, routes, log, false); // savings merges while they help
   if (routes.length > FLEET.trucks) construct(sub, routes, log, true); // squeeze into the fleet
   if (routes.length > FLEET.trucks) forcePlace(sub, routes, log); // pack the capacity-fragmented residue
+  placeDeferred(sub, routes, deferred, log); // now slot the cheap FC-adjacent demand into leftover slack
 
   for (const r of routes) twoOpt(sub, r, log);
   orOpt(sub, routes, log);
