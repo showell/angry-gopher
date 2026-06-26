@@ -30,9 +30,9 @@ let focusTruck: number | null = null; // truck-panel row under the cursor
 
 // The day's deliveries. Fixed seed => reproducible on load; R picks a new seed.
 let seed = 49;
-let balance = 1; // index into BALANCE_LEVELS; default 'low' — B cycles it
+const BALANCE = 1; // always 'low' — the real-world-feeling balance for the fleet
 let orders = chooseOrders(seed, FLEET.orders);
-let plan: Plan = solve(SUB, ordersByNeighborhood(orders), BALANCE_LEVELS[balance]);
+let plan: Plan = solve(SUB, ordersByNeighborhood(orders), BALANCE_LEVELS[BALANCE]);
 
 // Playback: a single clock (route-minutes) advances PLAY_RATE min per real
 // second, so the longest route (~200 min) plays out in ~40s. null = static map.
@@ -41,7 +41,7 @@ let anim: { t: number; maxT: number; playing: boolean; tracks: Track[] } | null 
 let lastFrame = 0;
 
 function replan(): void {
-  plan = solve(SUB, ordersByNeighborhood(orders), BALANCE_LEVELS[balance]);
+  plan = solve(SUB, ordersByNeighborhood(orders), BALANCE_LEVELS[BALANCE]);
   anim = null; // a new plan invalidates the running animation
 }
 
@@ -64,7 +64,7 @@ function render(): void {
   ctx!.fillRect(0, 0, vw, vh);
 
   ctx!.setTransform(scale * dpr, 0, 0, scale * dpr, offX * dpr, offY * dpr);
-  drawMap(ctx!, { orders, plan, hoverNbhd, focusTruck, balanceLabel: BALANCE_LABELS[balance], anim });
+  drawMap(ctx!, { orders, plan, hoverNbhd, focusTruck, balanceLabel: BALANCE_LABELS[BALANCE], anim });
 }
 
 /** The playback clock: advance t by real elapsed time, redraw, stop at the end. */
@@ -138,11 +138,12 @@ window.addEventListener("keydown", (e) => {
     hoverNbhd = null;
     render();
   } else if (e.key === "b" || e.key === "B") {
-    balance = (balance + 1) % BALANCE_LEVELS.length; // off → low → med → high → off
-    replan();
-    focusTruck = null;
-    hoverNbhd = null;
-    render();
+    // "Back": end playback — the trucks are back at the warehouse and we return
+    // to the static map, where you can see every route or hover one at a time.
+    if (anim) {
+      anim = null;
+      render();
+    }
   }
 });
 
