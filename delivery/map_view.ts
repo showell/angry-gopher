@@ -435,29 +435,57 @@ function drawHud(ctx: CanvasRenderingContext2D, shift: number): void {
     688,
   );
   ctx.font = "italic 12px system-ui, sans-serif";
-  ctx.fillText("totally not to scale  ·  hover a neighborhood or a truck  ·  Space run the day  ·  A watch the solve  ·  ←/→ step (paused)  ·  S new shift  ·  B back", 24, 706);
+  ctx.fillText("totally not to scale  ·  hover a neighborhood or a truck  ·  Space run the day  ·  A step the solve  ·  ←/→ step (paused)  ·  S new shift  ·  B back", 24, 706);
 }
 
-/** The solver-animation banner: what this step did, and how far through we are. */
-function drawSolveCaption(ctx: CanvasRenderingContext2D, label: string, i: number, n: number): void {
-  const cx = MAP_W / 2;
-  const top = 6; // the clear band above every neighborhood (highest ring tops ~y60)
-  const sub = `step ${i + 1} / ${n}  ·  grey = truck not yet decided  ·  ←/→ scrub  ·  A replay  ·  Esc exit`;
-  ctx.textAlign = "center";
-  ctx.font = "bold 15px system-ui, sans-serif";
-  const labelW = ctx.measureText(label).width;
+/** Break `text` into lines that each fit `maxW` at the current font. */
+function wrapText(ctx: CanvasRenderingContext2D, text: string, maxW: number): string[] {
+  const lines: string[] = [];
+  let line = "";
+  for (const word of text.split(" ")) {
+    const trial = line ? `${line} ${word}` : word;
+    if (line && ctx.measureText(trial).width > maxW) {
+      lines.push(line);
+      line = word;
+    } else {
+      line = trial;
+    }
+  }
+  if (line) lines.push(line);
+  return lines;
+}
+
+/**
+ * The solver-stepper panel, in the top-right column the truck panel normally
+ * owns (empty during the stepper). The move caption wraps across lines so it
+ * never crowds the map; controls and the grey legend sit below.
+ */
+function drawSolvePanel(ctx: CanvasRenderingContext2D, label: string, i: number, n: number): void {
+  const x = PANEL_X;
+  ctx.textAlign = "left";
+
+  ctx.fillStyle = COLOR.text;
+  ctx.font = "bold 14px system-ui, sans-serif";
+  ctx.fillText("Building the plan", x, 28);
+  ctx.fillStyle = COLOR.note;
   ctx.font = "12px system-ui, sans-serif";
-  const w = Math.max(labelW, ctx.measureText(sub).width) + 44;
-  ctx.fillStyle = "rgba(13, 27, 42, 0.85)";
-  ctx.beginPath();
-  ctx.roundRect(cx - w / 2, top, w, 42, 9);
-  ctx.fill();
-  ctx.fillStyle = "#ffffff";
-  ctx.font = "bold 15px system-ui, sans-serif";
-  ctx.fillText(label, cx, top + 18);
-  ctx.fillStyle = "#aeb6c2";
+  ctx.fillText(`step ${i + 1} of ${n}`, x, 45);
+
+  let y = 76;
+  ctx.fillStyle = COLOR.text;
+  ctx.font = "bold 14px system-ui, sans-serif";
+  for (const ln of wrapText(ctx, label, PANEL_W)) {
+    ctx.fillText(ln, x, y);
+    y += 19;
+  }
+
+  y += 14;
+  ctx.fillStyle = COLOR.note;
   ctx.font = "12px system-ui, sans-serif";
-  ctx.fillText(sub, cx, top + 34);
+  for (const ln of ["A / →   next step", "←   step back", "Esc   exit", "", "grey = truck not yet decided"]) {
+    if (ln) ctx.fillText(ln, x, y);
+    y += 17;
+  }
 }
 
 /** Grey veil + label while the solver runs — the shuffle takes a beat, so say so. */
@@ -869,7 +897,7 @@ export function drawMap(ctx: CanvasRenderingContext2D, view: MapView): void {
     for (const n of NEIGHBORHOODS) drawNeighborhood(ctx, n, orders, houseColor, null, null, popped);
     drawWarehouse(ctx);
     drawHud(ctx, shift);
-    drawSolveCaption(ctx, frame.label, solveAnim.i, solveAnim.frames.length);
+    drawSolvePanel(ctx, frame.label, solveAnim.i, solveAnim.frames.length);
     return;
   }
 

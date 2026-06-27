@@ -45,40 +45,25 @@ const STEP_MIN = 2; // route-minutes the ←/→ arrows nudge the clock while pa
 let anim: { t: number; maxT: number; playing: boolean; tracks: Track[] } | null = null;
 let lastFrame = 0;
 
-// Solver animation: step through the plan's recorded frames, one every
-// SOLVE_STEP_MS, recolouring the dots as clusters form and stops hop trucks.
-// `A` plays it; ←/→ scrub; Esc/B/Space/S leave it. null = not animating.
-const SOLVE_STEP_MS = 180;
+// Solver animation: a manual stepper through the plan's recorded frames — each
+// `A` advances one move, ←/→ scrub either way. Never auto-plays: the solve is
+// dense and jarring at speed, so the eye sets its own pace. null = not stepping.
 let solveAnim: { frames: SolveFrame[]; i: number } | null = null;
-let solveTimer = 0;
 
-/** Leave the solver animation (stop the stepper, drop back to the static map). */
+/** Leave the solver stepper, back to the static map. */
 function stopSolveAnim(): void {
-  if (solveTimer) {
-    window.clearInterval(solveTimer);
-    solveTimer = 0;
-  }
   solveAnim = null;
 }
 
-/** `A`: replay the solve from the first frame, auto-advancing to the last. */
-function playSolveAnim(): void {
-  stopSolveAnim();
-  anim = null; // the two animations are mutually exclusive
-  solveAnim = { frames: plan.frames, i: 0 };
+/** `A`: enter the stepper at the first frame, or advance one move if already in it. */
+function stepSolveAnim(): void {
+  if (!solveAnim) {
+    anim = null; // the two animations are mutually exclusive
+    solveAnim = { frames: plan.frames, i: 0 };
+  } else {
+    solveAnim.i = Math.min(solveAnim.frames.length - 1, solveAnim.i + 1);
+  }
   render();
-  solveTimer = window.setInterval(() => {
-    if (!solveAnim) return;
-    if (solveAnim.i >= solveAnim.frames.length - 1) {
-      // Parked on the final (slotted) frame — stop the clock but keep it shown,
-      // so the caption's "step N / N" stays put until you scrub or exit.
-      window.clearInterval(solveTimer);
-      solveTimer = 0;
-      return;
-    }
-    solveAnim.i++;
-    render();
-  }, SOLVE_STEP_MS);
 }
 
 /**
@@ -217,18 +202,14 @@ window.addEventListener("keydown", (e) => {
   } else if (e.key === "s" || e.key === "S") {
     shuffle(); // re-roll the day into a new shift
   } else if (e.key === "a" || e.key === "A") {
-    // Watch the solver build the plan, move by move.
+    // Step through the solver build, one move per press.
     e.preventDefault();
-    playSolveAnim();
+    stepSolveAnim();
   } else if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
     const dir = e.key === "ArrowRight" ? 1 : -1;
     if (solveAnim) {
-      // Scrub the solve replay by hand; the first arrow press freezes auto-play.
+      // Scrub the solve stepper by hand, either direction.
       e.preventDefault();
-      if (solveTimer) {
-        window.clearInterval(solveTimer);
-        solveTimer = 0;
-      }
       solveAnim.i = Math.max(0, Math.min(solveAnim.frames.length - 1, solveAnim.i + dir));
       render();
       return;
