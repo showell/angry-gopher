@@ -191,7 +191,12 @@ function breakdown(sub: Substrate, stops: Stop[]): Breakdown {
 const CARRY_COST = 0.3;
 const costOf = (sub: Substrate, stops: Stop[]): number => {
   const b = breakdown(sub, stops);
-  return b.time + CARRY_COST * b.toteMin;
+  // Quantize to a milli-minute grid. The geometry uses cos/sin/hypot, which differ
+  // by ULPs between JS engines (V8 vs SpiderMonkey vs JSC); a raw float comparison
+  // lets that noise flip a near-tied greedy merge, cascading into a different plan
+  // (the S5 cross-browser divergence). Rounding makes a near-tie an EXACT tie,
+  // broken first-found identically in every engine — the solver becomes portable.
+  return Math.round((b.time + CARRY_COST * b.toteMin) * 1000) / 1000;
 };
 
 /** Public cost of an arbitrary stop sequence — for checks and the manager-override phase. */
