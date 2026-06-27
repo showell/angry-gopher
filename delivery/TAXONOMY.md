@@ -51,6 +51,51 @@ Trucks are pinned to anchor regions: **T1** West Seattle · **T2** Magnolia ·
   whatever truck has room (spread across six trucks here). Medina is the SR520
   bridgehead; Factoria sits on the FC's doorstep and the I-90/Issaquah corridor.
 
+## A second axis: transit gateways (who you pass vs who you visit)
+
+Loyalty asks *whose* totes a neighborhood gets. A different question — how often a truck
+merely **drives through** it — reveals a taxonomy orthogonal to the tiers. Measured across
+100 shifts as the **threaded : delivered** ratio (routes that passed through without
+stopping, vs routes that delivered):
+
+| neighborhood | threaded : delivered | role |
+|---|---|---|
+| Mercer Island | 330 : 0 | **ghost interchange** — `houses:0`, a routing waypoint nobody ever stops at (the I-90 circle) |
+| Factoria | 311 : 117 (2.7:1) | **transit gateway** — the FC's east door + the I-90 east landing |
+| Bellevue | 408 : 154 (2.6:1) | **transit gateway** — the universal east gateway off the FC |
+| Medina | 345 : 139 (2.5:1) | **transit gateway** — the SR-520 east bridgehead |
+| U-District | 256 : 122 (2.1:1) | **transit gateway** — the SR-520 west bridgehead |
+| Beacon Hill | 124 : 106 (1.2:1) | **half-gateway** — the I-90 west landing, but with real demand of its own |
+| Fremont | 111 : 110 (1.0:1) | **hub-with-demand** — the NW junction ("Center of the Universe"): passed through as often as visited |
+| Eastlake | 0 : 110 | **pure destination** — never threaded; its only edges are the severed CH–U-District chain, so `corridorRepair` consolidates any would-be pass-through |
+
+The four true gateways (Factoria, Bellevue, Medina, U-District) are the bridge/FC doors —
+~2.5× more pass-throughs than stops. The poles are **Mercer Island** (all transit, the
+airside-only terminal you can't leave) and **Eastlake** (all destination, the cul-de-sac
+the "no skyway" geography created). Fremont sits dead center — a transit hub that is also
+a real place.
+
+## The loop skeleton
+
+A **loop route** crosses the lake on *both* bridges — out via one, home via the other; an
+out-and-back on a single bridge doesn't count. Every loop traverses the same mandatory
+six-node ring (on **100% of the 100 loops** in a 100-shift run):
+
+```
+FC → Bellevue → Medina → [SR-520] → U-District → … west … → Beacon Hill → [I-90] → Mercer Island → Factoria → FC
+```
+
+— all four bridgeheads (U-District / Medina on 520, Beacon Hill / Factoria on I-90), the
+Mercer interchange, and Bellevue (the FC's east door). The skeleton is fixed; what varies
+is the **cargo that makes a route a loop in the first place**: Capitol Hill (69% of loops)
+and Eastlake (61%). Those two are the tell — Capitol Hill is reached via I-90/Beacon Hill,
+Eastlake via 520/U-District, so a truck serving both *must* go out one bridge and back the
+other. **T5 (Capitol Hill) runs ~62 of every 100 loops** — the fleet's designated
+lake-spanner. Under this lens the wide-loop/tight-loop pair flips from the all-routes view:
+**Eastlake (61% of loops) outranks Fremont (39%)**, because loops enter the west through
+520 / U-District — Eastlake's doorstep — while Fremont lives in the NW out-and-back
+territory that loops never reach.
+
 ## Notes worth keeping
 
 - **"Flexible spine" ≠ "disloyal."** The spine *splits*, but only between a tiny set
