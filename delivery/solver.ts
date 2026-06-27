@@ -31,7 +31,7 @@
 // 2-opt within a route and Or-opt across routes. Every accepted move records a
 // "saved N min" reason, for the manager-override phase to surface later.
 
-import { FLEET, TRUCK_ANCHORS, DEFER_LAST, gateAngle, houseAngles, nodeAt } from "./geography.ts";
+import { FLEET, TRUCK_ANCHORS, TRUCK_CAPS, MAX_CAP, DEFER_LAST, gateAngle, houseAngles, nodeAt } from "./geography.ts";
 import { SERVICE, localMinutes } from "./roadgraph.ts";
 import type { Substrate } from "./roadgraph.ts";
 
@@ -108,10 +108,21 @@ export type Plan = {
   unrouted: Stop[]; // demand that didn't fit the fleet (should be empty; surfaced if not)
 };
 
-const CAP = FLEET.totesPerTruck;
+// A chunk size for splitting a too-big neighborhood into stops — the largest a
+// single truck could ever hold. (No neighborhood exceeds this anyway, so it's a
+// safety bound, not a routine split.)
+const CAP = MAX_CAP;
 
 function loadOf(stops: Stop[]): number {
   return stops.reduce((s, c) => s + c.orders, 0);
+}
+
+// Tote capacity available to a route: its anchor's slot cap (west 14 / east 12),
+// else the max — a free cluster could still land in any idle slot, and its real
+// slot cap is enforced at final assignment. Almost every route is anchored.
+function capOf(route: Stop[]): number {
+  const anc = route.find((s) => s.pin !== undefined);
+  return anc ? TRUCK_CAPS[anc.pin!] : MAX_CAP;
 }
 
 /** Houses ordered at each neighborhood for one route (so the cost knows the ring arc). */
@@ -244,7 +255,8 @@ function construct(sub: Substrate, routes: Stop[][], log: Move[], force: boolean
     let best: { i: number; j: number; merged: Stop[]; saved: number } | null = null;
     for (let i = 0; i < routes.length; i++) {
       for (let j = i + 1; j < routes.length; j++) {
-        if (loadOf(routes[i]) + loadOf(routes[j]) > CAP) continue;
+        const cap = hasAnchor(routes[i]) ? capOf(routes[i]) : capOf(routes[j]); // merged cap = its anchor's
+        if (loadOf(routes[i]) + loadOf(routes[j]) > cap) continue;
         if (hasAnchor(routes[i]) && hasAnchor(routes[j])) continue; // anchors keep their own trucks
         const merged = bestJoin(sub, routes[i], routes[j]);
         const saved = costOf(sub, routes[i]) + costOf(sub, routes[j]) - costOf(sub, merged);
@@ -289,7 +301,7 @@ function forcePlace(sub: Substrate, routes: Stop[][], log: Move[]): void {
         let whole: Stop[] | null = null;
         let bestCost = Infinity;
         for (const k of kept) {
-          if (CAP - loadOf(k) < remaining.length) continue;
+          if (capOf(k) - loadOf(k) < remaining.length) continue;
           const c = appendCost(k, stop.nbhd, remaining);
           if (c < bestCost) {
             bestCost = c;
@@ -305,7 +317,7 @@ function forcePlace(sub: Substrate, routes: Stop[][], log: Move[]): void {
         let into: Stop[] | null = null;
         let room = 0;
         for (const k of kept) {
-          const free = CAP - loadOf(k);
+          const free = capOf(k) - loadOf(k);
           if (free > room) {
             room = free;
             into = k;
@@ -354,7 +366,7 @@ function placeDeferred(sub: Substrate, routes: Stop[][], deferred: Stop[], log: 
       let bestRoute: Stop[] | null = null;
       let bestDelta = Infinity;
       for (let ri = 0; ri < routes.length; ri++) {
-        if (CAP - loadOf(routes[ri]) < remaining.length) continue;
+        if (capOf(routes[ri]) - loadOf(routes[ri]) < remaining.length) continue;
         const cand = insertBest(sub, routes[ri], { nbhd: stop.nbhd, orders: remaining.length, houses: remaining });
         const delta = costOf(sub, cand) - costOf(sub, routes[ri]);
         if (delta < bestDelta) {
@@ -372,7 +384,7 @@ function placeDeferred(sub: Substrate, routes: Stop[][], deferred: Stop[], log: 
       let room = 0;
       let ri = -1;
       for (let k = 0; k < routes.length; k++) {
-        const free = CAP - loadOf(routes[k]);
+        const free = capOf(routes[k]) - loadOf(routes[k]);
         if (free > room) {
           room = free;
           ri = k;
@@ -422,7 +434,7 @@ function orOpt(sub: Substrate, routes: Stop[][], log: Move[]): void {
         let best: { t: number; pos: number; gain: number } | null = null;
         for (let t = 0; t < routes.length; t++) {
           if (t === r) continue;
-          if (loadOf(routes[t]) + stop.orders > CAP) continue;
+          if (loadOf(routes[t]) + stop.orders > capOf(routes[t])) continue;
           const baseT = costOf(sub, routes[t]);
           for (let pos = 0; pos <= routes[t].length; pos++) {
             const into = [...routes[t].slice(0, pos), stop, ...routes[t].slice(pos)];
@@ -478,8 +490,8 @@ function exchange(sub: Substrate, routes: Stop[][], log: Move[]): void {
           for (let j = 0; j < routes[b].length; j++) {
             const sb = routes[b][j];
             if (sb.pin !== undefined || sa.nbhd === sb.nbhd) continue;
-            if (loadOf(routes[a]) - sa.orders + sb.orders > CAP) continue;
-            if (loadOf(routes[b]) - sb.orders + sa.orders > CAP) continue;
+            if (loadOf(routes[a]) - sa.orders + sb.orders > capOf(routes[a])) continue;
+            if (loadOf(routes[b]) - sb.orders + sa.orders > capOf(routes[b])) continue;
             if (routes[a].some((s, k) => k !== i && s.nbhd === sb.nbhd)) continue; // no duplicate nbhd
             if (routes[b].some((s, k) => k !== j && s.nbhd === sa.nbhd)) continue;
             const ra = reinsert(sub, routes[a], i, sb);
@@ -528,7 +540,7 @@ function rebalance(sub: Substrate, routes: Stop[][], log: Move[]): void {
         const newRcost = costOf(sub, without);
         for (let t = 0; t < routes.length; t++) {
           if (t === r) continue;
-          if (loadOf(routes[t]) + stop.orders > CAP) continue;
+          if (loadOf(routes[t]) + stop.orders > capOf(routes[t])) continue;
           for (let pos = 0; pos <= routes[t].length; pos++) {
             const newTcost = costOf(sub, [...routes[t].slice(0, pos), stop, ...routes[t].slice(pos)]);
             const dTotal = newRcost - times[r] + (newTcost - times[t]);
@@ -599,7 +611,7 @@ function splitPass(sub: Substrate, routes: Stop[][], log: Move[]): void {
         for (let b = 0; b < routes.length; b++) {
           if (b === a || routes[b].some((s) => s.nbhd === N)) continue;
           for (const S of subsets) {
-            if (loadOf(routes[b]) + S.length > CAP) continue;
+            if (loadOf(routes[b]) + S.length > capOf(routes[b])) continue;
             const rest = H.filter((h) => !S.includes(h));
             const newA = routes[a].map((s, i) => (i === sa ? { nbhd: N, orders: rest.length, houses: rest } : s));
             const costA = costOf(sub, newA);
@@ -694,10 +706,38 @@ export function solve(sub: Substrate, orders: Map<string, number[]>, allowSplit 
     if (anchor) bySlot[anchor.pin!] = r;
     else leftover.push(r);
   }
+  leftover.sort((a, b) => loadOf(b) - loadOf(a)); // place the biggest clusters first
   for (const r of leftover) {
-    const k = bySlot.findIndex((slot) => slot.length === 0);
-    if (k >= 0) bySlot[k] = r;
-    else unrouted.push(...r); // no idle slot to park a leftover cluster (shouldn't happen)
+    // Prefer an idle slot that can hold the whole cluster (caps differ by side).
+    const whole = bySlot.findIndex((slot, i) => slot.length === 0 && loadOf(r) <= TRUCK_CAPS[i]);
+    if (whole >= 0) {
+      bySlot[whole] = r;
+      continue;
+    }
+    // No idle slot fits it whole (e.g. a 13-tote west cluster, but the only idle
+    // truck is an east 12-cap one). Spill it across slots with room, splitting a
+    // stop if we must — total capacity exceeds demand, so this always lands.
+    for (const stop of r) {
+      let houses = stop.houses;
+      while (houses.length) {
+        let best = -1;
+        let room = 0;
+        for (let i = 0; i < bySlot.length; i++) {
+          const free = TRUCK_CAPS[i] - loadOf(bySlot[i]);
+          if (free > room) {
+            room = free;
+            best = i;
+          }
+        }
+        if (best < 0 || room <= 0) {
+          unrouted.push({ nbhd: stop.nbhd, orders: houses.length, houses }); // truly no room (shouldn't happen)
+          break;
+        }
+        const take = houses.slice(0, room);
+        houses = houses.slice(room);
+        bySlot[best].push({ nbhd: stop.nbhd, orders: take.length, houses: take });
+      }
+    }
   }
 
   const built: Route[] = bySlot.map((stops) => {

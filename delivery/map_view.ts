@@ -8,6 +8,7 @@ import {
   MAP_W,
   MAP_H,
   FLEET,
+  TRUCK_CAPS,
   WEST_SHORE,
   EAST_SHORE,
   MERCER_ISLAND,
@@ -430,7 +431,7 @@ function drawHud(ctx: CanvasRenderingContext2D, shift: number): void {
   ctx.fillStyle = COLOR.note;
   ctx.font = "13px system-ui, sans-serif";
   ctx.fillText(
-    `${FLEET.orders} orders  ·  ${FLEET.trucks} trucks × ${FLEET.totesPerTruck} totes  ·  ${HOME_COUNT} homes`,
+    `${FLEET.orders} orders  ·  ${FLEET.trucks} trucks (14 west / 12 east totes)  ·  ${HOME_COUNT} homes`,
     24,
     688,
   );
@@ -771,7 +772,7 @@ function drawTruckPanel(ctx: CanvasRenderingContext2D, plan: Plan, activeTruck: 
     ctx.fillText(
       idle
         ? `Truck ${i + 1}: idle — stayed home`
-        : `Truck ${i + 1}: ${route.orders}/${FLEET.totesPerTruck} totes · ${Math.round(route.time)}m · ${route.stops.length} stops`,
+        : `Truck ${i + 1}: ${route.orders}/${TRUCK_CAPS[i]} totes · ${Math.round(route.time)}m · ${route.stops.length} stops`,
       PANEL_X + 26,
       y,
     );

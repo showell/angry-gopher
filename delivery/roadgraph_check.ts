@@ -10,7 +10,7 @@
 
 import { buildSubstrate, NEIGHBORHOOD_SLOWDOWN, SERVICE, SPEED, edges } from "./roadgraph.ts";
 import { chooseOrders, demandByNeighborhood } from "./orders.ts";
-import { FLEET, NEIGHBORHOODS } from "./geography.ts";
+import { FLEET, NEIGHBORHOODS, TOTAL_CAP, MAX_CAP } from "./geography.ts";
 
 const sub = buildSubstrate();
 
@@ -35,11 +35,10 @@ console.log(
 // 4) Demand split for the default draw, vs capacity.
 const orders = chooseOrders(49, FLEET.orders);
 const demand = demandByNeighborhood(orders);
-const cap = FLEET.trucks * FLEET.totesPerTruck;
 const total = [...demand.values()].reduce((s, v) => s + v, 0);
-console.log(`\norders=${total}  capacity=${FLEET.trucks}x${FLEET.totesPerTruck}=${cap}`);
-const over = [...demand.entries()].filter(([, d]) => d > FLEET.totesPerTruck);
-console.log(`neighborhoods forced to split (demand > ${FLEET.totesPerTruck}): ${over.length ? over.map(([n, d]) => `${n}(${d})`).join(", ") : "none"}`);
+console.log(`\norders=${total}  capacity=${TOTAL_CAP} (14 west ×5 + 12 east ×3)`);
+const over = [...demand.entries()].filter(([, d]) => d > MAX_CAP);
+console.log(`neighborhoods forced to split (demand > ${MAX_CAP}): ${over.length ? over.map(([n, d]) => `${n}(${d})`).join(", ") : "none"}`);
 
 // 5) Coarse cost floor: every active neighborhood costs at least its orders'
 //    SERVICE plus a round trip from the FC. Just a smell test, not the solver.

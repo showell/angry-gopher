@@ -11,7 +11,7 @@
 import { buildSubstrate } from "./roadgraph.ts";
 import { solve } from "./solver.ts";
 import { chooseOrders, ordersByNeighborhood } from "./orders.ts";
-import { FLEET, NEIGHBORHOODS, TRUCK_ANCHORS } from "./geography.ts";
+import { FLEET, NEIGHBORHOODS, TRUCK_ANCHORS, TRUCK_CAPS } from "./geography.ts";
 
 const sub = buildSubstrate();
 
@@ -41,14 +41,14 @@ for (const seed of [49, 7, 1234, 88]) {
       console.log(`  ${tag}  idle — ${TRUCK_ANCHORS[i] ?? "—"} had no run`);
       return;
     }
-    const load = `${r.orders}/${FLEET.totesPerTruck}`.padStart(5);
+    const load = `${r.orders}/${TRUCK_CAPS[i]}`.padStart(5);
     console.log(`  ${tag} ${load} totes  ${Math.round(r.time).toString().padStart(3)} min   FC → ${r.stops.map((s) => `${s.nbhd}(${s.orders})`).join(" → ")} → FC`);
   });
   const deployed = plan.routes.filter((r) => r.stops.length > 0).length;
   console.log(`  ${deployed} of ${FLEET.trucks} trucks out  ·  total ${Math.round(plan.totalTime)} min  =  travel ${Math.round(plan.travel)} + local ${Math.round(plan.local)} + service ${Math.round(plan.service)}`);
 
   check(plan.routes.length === FLEET.trucks, `emits all ${FLEET.trucks} truck slots (${plan.routes.length})`);
-  check(plan.routes.every((r) => r.orders <= FLEET.totesPerTruck), `every truck within ${FLEET.totesPerTruck}-tote capacity`);
+  check(plan.routes.every((r, i) => r.orders <= TRUCK_CAPS[i]), `every truck within its slot capacity (14 west / 12 east)`);
   check(plan.unrouted.length === 0, `nothing unrouted (${plan.unrouted.length} stranded)`);
   check(planned === totalOrders, `delivers all ${totalOrders} orders (planned ${planned})`);
 

@@ -30,13 +30,19 @@ export type Neighborhood = {
 /** A road between two named nodes (neighborhood names, or "FC" for the warehouse). */
 export type Road = [string, string];
 
-/** The fleet + demand. 8 trucks * 12 totes = 96 capacity for 84 orders. */
-// Capacity is a true max, not a quota: demand (orders) sits below total capacity
-// so the solver has slack — it can run trucks partial, or idle one entirely.
-// 90 of 96 capacity leaves only 6 totes of slack: ceil(90/12) = 8, so all eight
-// trucks must roll every shift — and several run near-full, which makes capacity
-// genuinely binding (tight packing, forced splits) instead of merely advisory.
-export const FLEET = { trucks: 8, totesPerTruck: 13, orders: 100 };
+/**
+ * The fleet + demand. Capacity is per-truck and ASYMMETRIC: the five westside
+ * trucks (slots 0-4) carry 14 totes, the three eastside trucks (slots 5-7) carry
+ * 12 — deliberately squeezing the east so it leans on the west less. Total 106 for
+ * 100 orders: 6 totes of slack, so all eight trucks roll and capacity stays
+ * genuinely binding (tight packing, forced splits) rather than merely advisory.
+ */
+export const FLEET = { trucks: 8, orders: 100 };
+/** Per-slot tote capacity (index = truck slot): west T1-5 = 14, east T6-8 = 12. */
+export const TRUCK_CAPS = [14, 14, 14, 14, 14, 12, 12, 12];
+export const TOTAL_CAP = TRUCK_CAPS.reduce((a, b) => a + b, 0);
+export const MAX_CAP = Math.max(...TRUCK_CAPS);
+export const MIN_CAP = Math.min(...TRUCK_CAPS);
 
 /**
  * Region anchors: each truck slot is "seeded" with one far-flung neighborhood it
@@ -103,17 +109,17 @@ export const EAST_SHORE: Pt[] = [
   { x: 594, y: 720 },
 ];
 
-/** Mercer Island — "the Rock" — sitting in the lake's lower middle. I-90 crosses
- *  it, with a cul-de-sac on the north end and one on the south, off the bridge. */
+/** Mercer Island — "the Rock" — a long island down the lake's lower middle. I-90
+ *  clips its north end at a traffic circle; the two residential necks chain south. */
 export const MERCER_ISLAND: Pt[] = [
-  { x: 548, y: 448 },
-  { x: 584, y: 483 },
-  { x: 590, y: 536 },
-  { x: 582, y: 593 },
-  { x: 548, y: 626 },
-  { x: 514, y: 593 },
-  { x: 506, y: 536 },
-  { x: 514, y: 483 },
+  { x: 548, y: 440 },
+  { x: 590, y: 482 },
+  { x: 598, y: 560 },
+  { x: 588, y: 640 },
+  { x: 548, y: 698 },
+  { x: 508, y: 640 },
+  { x: 498, y: 560 },
+  { x: 506, y: 482 },
 ];
 
 /** Puget Sound / Elliott Bay — water down the far-west margin, bulging in near downtown. */
@@ -204,20 +210,21 @@ export const NEIGHBORHOODS: Neighborhood[] = [
   // water, but the ring road stays on land.
   { name: "Eastlake", center: { x: 441, y: 311 }, side: "west", ringRadius: 24, houses: 12 },
   { name: "Downtown", center: { x: 300, y: 430 }, side: "west", ringRadius: 30, houses: 12 },
-  { name: "Beacon Hill", center: { x: 432, y: 585 }, side: "west", ringRadius: 30, houses: 12 },
+  { name: "Beacon Hill", center: { x: 432, y: 555 }, side: "west", ringRadius: 30, houses: 12 },
   { name: "West Seattle", center: { x: 211, y: 589 }, side: "west", ringRadius: 30, houses: 12 },
-  // --- Mercer Island (mid-I-90) — a bridge interchange with two cul-de-sacs off
-  //     it, north and south. "Mercer Island" itself is just the interchange (no
-  //     homes); the deliveries live on Mercer N and Mercer S. ---
-  { name: "Mercer Island", center: { x: 548, y: 536 }, side: "island", ringRadius: 10, houses: 0, note: "the Rock" },
-  { name: "Mercer N", center: { x: 548, y: 492 }, side: "island", ringRadius: 19, houses: 12 },
-  { name: "Mercer S", center: { x: 548, y: 582 }, side: "island", ringRadius: 19, houses: 12 },
+  // --- Mercer Island — I-90 clips its north END at a traffic circle (the bridge
+  //     landing); the two residential necks chain SOUTH from there, so you slog
+  //     through Mercer N's ring at residential pace to reach Mercer S. "Mercer
+  //     Island" itself is just the interchange (no homes). ---
+  { name: "Mercer Island", center: { x: 548, y: 470 }, side: "island", ringRadius: 10, houses: 0, note: "the Rock" },
+  { name: "Mercer N", center: { x: 548, y: 552 }, side: "island", ringRadius: 19, houses: 12 },
+  { name: "Mercer S", center: { x: 548, y: 635 }, side: "island", ringRadius: 19, houses: 12 },
   // --- Eastside — tech money, more room ---
   { name: "Medina", center: { x: 618, y: 250 }, side: "east", ringRadius: 28, houses: 12, note: "you-know-who lives here" },
   { name: "Kirkland", center: { x: 650, y: 90 }, side: "east", ringRadius: 30, houses: 12 },
   { name: "Redmond", center: { x: 868, y: 200 }, side: "east", ringRadius: 32, houses: 12 },
   { name: "Bellevue", center: { x: 740, y: 330 }, side: "east", ringRadius: 34, houses: 12 },
-  { name: "Factoria", center: { x: 672, y: 568 }, side: "east", ringRadius: 30, houses: 12 },
+  { name: "Factoria", center: { x: 672, y: 508 }, side: "east", ringRadius: 30, houses: 12 },
   { name: "Issaquah", center: { x: 858, y: 612 }, side: "east", ringRadius: 30, houses: 12 },
 ];
 
@@ -252,7 +259,7 @@ export const ROADS: Road[] = [
   ["Issaquah", "Redmond"], // the far-east "fast" bypass (I-405 / Sammamish)
   // The two Mercer Island cul-de-sacs branch off the I-90 interchange.
   ["Mercer Island", "Mercer N"],
-  ["Mercer Island", "Mercer S"],
+  ["Mercer N", "Mercer S"], // the necks chain: slog through Mercer N to reach Mercer S
 ];
 
 export const BRIDGES: Bridge[] = [
@@ -266,7 +273,7 @@ export const BRIDGES: Bridge[] = [
     // South crossing: Beacon Hill -> Mercer Island -> Factoria.
     name: "I-90",
     nodes: ["Beacon Hill", "Mercer Island", "Factoria"],
-    waters: [[{ x: 490, y: 560 }], [{ x: 608, y: 549 }]],
+    waters: [[{ x: 490, y: 512 }], [{ x: 610, y: 489 }]],
   },
 ];
 
