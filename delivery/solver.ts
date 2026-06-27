@@ -15,21 +15,20 @@
 //      ring; a re-thread pays transit only.
 //   3. SERVICE — a small per-order beat at each door.
 //
-// Those three are the real minutes (route.time, the playback clock). The SOLVER
-// minimizes one thing more: TOTE-MINUTES — every tote still on board accrues cost
-// each minute until it's delivered (heavy truck = fuel + a waiting customer). It
-// rides on top of physical time as `time + CARRY_COST * toteMin`, weighting "drop
-// weight early / serve close customers soon" against raw distance. It never leaks
-// into reported times — those read `breakdown` straight.
-//
-// LOCAL depends on the entry/exit gates, so it depends on the route's *shape* —
-// which means reordering a route, or which truck takes a neighborhood, changes
-// the cost. There's no flat per-visit charge; the slow ring geometry itself does
-// the consolidation-deterrence (two trucks each pay their own ring driving).
+// Those three are the real minutes (route.time, the playback clock) — breakdown()
+// computes them for DISPLAY only. The SOLVER never reads them. It optimizes a
+// separate INTEGER cost, PAIN (painOf): each segment's integer driving time weighted
+// by the load it carries — EMPTY_PAIN + TOTE_PAIN·(totes still aboard) — so a fuller,
+// later-served customer hurts more (drop weight early / serve close customers soon).
+// The ring is a flat RING_UNIT per delivered neighborhood: no trig, no shape
+// dependence. That keeps painOf transcendental-free (cos/sin/hypot differ by ULPs
+// across JS engines — integer math is bit-identical everywhere) AND fast — no
+// geometry in the hot path. Two trucks splitting a neighborhood still each pay the
+// flat ring charge, so the consolidation deterrence survives.
 //
 // Construction is Clarke–Wright savings (greedy best-merge); improvement is
 // 2-opt within a route and Or-opt across routes. Every accepted move records a
-// "saved N min" reason, for the manager-override phase to surface later.
+// "saved N pain" reason, for the manager-override phase to surface later.
 
 import { FLEET, TRUCK_ANCHORS, TRUCK_CAPS, MAX_CAP, DEFER_LAST, gateAngle, houseAngles, nodeAt } from "./geography.ts";
 import { SERVICE, localMinutes } from "./roadgraph.ts";
@@ -132,17 +131,17 @@ function housesByNbhd(stops: Stop[]): Map<string, number[]> {
   return m;
 }
 
-type Breakdown = { travel: number; local: number; service: number; time: number; toteMin: number };
+type Breakdown = { travel: number; local: number; service: number; time: number };
 
 /**
- * Full cost of a stop sequence. Expands the shortest path so every neighborhood
- * the truck actually drives through (delivered-to OR threaded) is priced with
- * the correct entry/exit gates. One walk also accumulates `toteMin` — the totes
- * still aboard, integrated over the time they're carried (load drops as the truck
- * delivers) — the solver's urgency term. `time` stays the physical day.
+ * DISPLAY breakdown of a stop sequence — the real minutes for the playback clock.
+ * Expands the shortest path so every neighborhood the truck drives through
+ * (delivered-to OR threaded) is priced with the correct entry/exit gates. `travel`
+ * is integer (rounded artery edges); `local` is the float ring-arc geometry, used
+ * ONLY here for the animation — never for a solver decision. The solver uses painOf.
  */
 function breakdown(sub: Substrate, stops: Stop[]): Breakdown {
-  if (stops.length === 0) return { travel: 0, local: 0, service: 0, time: 0, toteMin: 0 };
+  if (stops.length === 0) return { travel: 0, local: 0, service: 0, time: 0 };
 
   const waypoints = ["FC", ...stops.map((s) => s.nbhd), "FC"];
   const nodes: string[] = [];
@@ -159,45 +158,68 @@ function breakdown(sub: Substrate, stops: Stop[]): Breakdown {
   const delivered = new Set<string>();
   let travel = 0;
   let local = 0;
-  let toteMin = 0;
-  let aboard = loadOf(stops); // totes still on the truck (all of them, leaving the FC)
   for (let i = 1; i < nodes.length; i++) {
-    const seg = sub.time(nodes[i - 1], nodes[i]);
-    travel += seg;
-    toteMin += aboard * seg; // every tote still aboard pays for this artery leg
+    travel += sub.time(nodes[i - 1], nodes[i]);
     const node = nodes[i];
     if (node === "FC" || i >= nodes.length - 1) continue;
     const full = houses.get(node);
     const visit = full && full.length && !delivered.has(node) ? full : [];
     const entry = gateAngle(node, nodeAt(nodes[i - 1]));
     const exit = gateAngle(node, nodeAt(nodes[i + 1]));
-    const lm = localMinutes(node, entry, exit, houseAngles(node, visit));
-    local += lm;
-    toteMin += aboard * lm; // and for the slow ring drive
-    if (visit.length) {
-      delivered.add(node);
-      aboard -= visit.length; // dropped here, so lighter from now on
-    }
+    local += localMinutes(node, entry, exit, houseAngles(node, visit));
+    if (visit.length) delivered.add(node);
   }
 
   const service = loadOf(stops) * SERVICE;
-  return { travel, local, service, time: travel + local + service, toteMin };
+  return { travel, local, service, time: travel + local + service };
 }
 
-// How much a tote-minute (one tote carried one minute) costs against a plain
-// driver-minute — the N/M ratio. At 0.1 the solver will accept ~10 min of extra
-// driving to spare a tote ~100 tote-minutes of riding, which is what pulls a
-// close-but-last customer (Factoria) up to an early, fresh delivery.
-const CARRY_COST = 0.3;
-const costOf = (sub: Substrate, stops: Stop[]): number => {
-  const b = breakdown(sub, stops);
-  // Quantize to a milli-minute grid. The geometry uses cos/sin/hypot, which differ
-  // by ULPs between JS engines (V8 vs SpiderMonkey vs JSC); a raw float comparison
-  // lets that noise flip a near-tied greedy merge, cascading into a different plan
-  // (the S5 cross-browser divergence). Rounding makes a near-tie an EXACT tie,
-  // broken first-found identically in every engine — the solver becomes portable.
-  return Math.round((b.time + CARRY_COST * b.toteMin) * 1000) / 1000;
-};
+// The PAIN model — the solver's integer cost. A segment's driving time (integer)
+// weighted by the load it carries: an empty leg costs EMPTY_PAIN per minute, each
+// tote still aboard adds TOTE_PAIN more. So an empty truck is ×10 and a fully-loaded
+// west truck (14 totes) is ×38 — a strong bias toward dropping weight early. The
+// ring is a flat RING_UNIT per delivered neighborhood (no trig, no shape dependence).
+const EMPTY_PAIN = 10;
+const TOTE_PAIN = 2;
+const RING_UNIT = 1;
+
+/**
+ * Integer pain of a stop sequence — the ONLY cost the solver's greedy moves compare.
+ * Pure integer arithmetic (rounded artery times × integer load multiplier + flat
+ * ring), so it is bit-identical across JS engines and free of the cos/sin/hypot that
+ * made earlier float costs diverge between node and the browser. No geometry in this
+ * hot path: that's both the determinism win and the speed win.
+ */
+function painOf(sub: Substrate, stops: Stop[]): number {
+  if (stops.length === 0) return 0;
+
+  const waypoints = ["FC", ...stops.map((s) => s.nbhd), "FC"];
+  const nodes: string[] = [];
+  for (let i = 1; i < waypoints.length; i++) {
+    for (const node of sub.path(waypoints[i - 1], waypoints[i])) {
+      if (nodes[nodes.length - 1] !== node) nodes.push(node);
+    }
+  }
+
+  const houses = housesByNbhd(stops);
+  const delivered = new Set<string>();
+  let pain = 0;
+  let aboard = loadOf(stops); // totes still on the truck (all of them, leaving the FC)
+  for (let i = 1; i < nodes.length; i++) {
+    pain += sub.time(nodes[i - 1], nodes[i]) * (EMPTY_PAIN + TOTE_PAIN * aboard);
+    const node = nodes[i];
+    if (node === "FC" || i >= nodes.length - 1) continue;
+    const full = houses.get(node);
+    if (full && full.length && !delivered.has(node)) {
+      pain += RING_UNIT * (EMPTY_PAIN + TOTE_PAIN * aboard); // flat ring, charged at arrival load
+      delivered.add(node);
+      aboard -= full.length; // dropped here, so lighter from now on
+    }
+  }
+  return pain;
+}
+
+const costOf = (sub: Substrate, stops: Stop[]): number => painOf(sub, stops);
 
 /** Public cost of an arbitrary stop sequence — for checks and the manager-override phase. */
 export function routeTime(sub: Substrate, stops: Stop[]): number {
@@ -771,7 +793,7 @@ export function solve(sub: Substrate, orders: Map<string, number[]>, allowSplit 
   // plan once routes are slotted to their trucks (the honest "snap to lanes").
   const tag = { merge: "merge", "2-opt": "reorder", "or-opt": "relocate", swap: "swap", balance: "settle" } as const;
   const captionOf = (m: Move): string => {
-    const saved = m.saved > 0.5 ? `  −${Math.round(m.saved)} min` : "";
+    const saved = m.saved > 0.5 ? `  −${Math.round(m.saved)} pain` : "";
     return `${tag[m.kind]} · ${m.detail}${saved}`;
   };
   const frames: SolveFrame[] = [

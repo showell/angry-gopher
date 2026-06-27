@@ -5,10 +5,12 @@
 // Cost model — three pieces, deliberately simple and tunable:
 //
 //   1. TRAVEL — an edge's time = its drawn length (px) * a region speed factor
-//      * MIN_PER_PX. Westside city streets are slow, the Eastside normal, the
-//      Issaquah<->Redmond bypass fast, bridges a drag (lake crossings). Travel
-//      between two neighborhoods = shortest path over this graph. Arteries are
-//      the FAST part — this is the "painful to GET TO" half.
+//      * MIN_PER_PX, ROUNDED to an integer minute once up front (safelyRound).
+//      Westside city streets are slow, the Eastside normal, the Issaquah<->Redmond
+//      bypass fast, bridges a drag (lake crossings). Travel between two
+//      neighborhoods = shortest path over this integer graph. Arteries are the FAST
+//      part — this is the "painful to GET TO" half. Integer edges keep the solver's
+//      cost engine-portable: no transcendental in the hot path (see solver.ts painOf).
 //
 //   2. LOCAL — the ring driving *inside* a neighborhood: the arc you cover
 //      entering at one gate, touching your ordered houses, and leaving at
@@ -26,10 +28,26 @@
 import type { Pt } from "./geography.ts";
 import { NEIGHBORHOODS, ROADS, BRIDGES, roadGates, bridgeSegments, ringWalkArcPx } from "./geography.ts";
 
-export const MIN_PER_PX = 0.06;
+export const MIN_PER_PX = 0.0225; // arteries run ~2× faster than the slow ring; tuned so QA→Fremont ≈ 2 units
 export const SPEED = { city: 1.6, suburb: 1.0, bridge: 1.2, fast: 0.6 };
-export const NEIGHBORHOOD_SLOWDOWN = 2.1; // ring roads are this much slower than the local arteries
-export const SERVICE = 2; // minutes per order delivered, identical everywhere
+export const NEIGHBORHOOD_SLOWDOWN = 2.1; // ring roads are this much slower than the local arteries (DISPLAY only)
+export const SERVICE = 2; // minutes per order delivered, identical everywhere (DISPLAY only — a wash in the solver)
+
+/**
+ * Round to an integer, but THROW if the value sits within a hair of a .5 boundary,
+ * where two JS engines could round it oppositely. hypot/atan2 differ by ULPs across
+ * V8/SpiderMonkey/JSC — the noise that once made node analysis diverge from the
+ * browser. The threshold is ULP-scale (1e-9), not visual: real geometry clears the
+ * nearest boundary by ~1e-3, so this only fires on a genuine coin-flip. The fix when
+ * it does: nudge a neighborhood a pixel so the value moves off the boundary.
+ */
+export function safelyRound(x: number): number {
+  const r = Math.round(x);
+  if (0.5 - Math.abs(x - r) < 1e-9) {
+    throw new Error(`safelyRound(${x}) lands on a .5 boundary — cross-engine rounding could flip. Nudge a neighborhood a pixel.`);
+  }
+  return r;
+}
 
 /** Service nodes: every neighborhood, plus the warehouse depot. */
 export const NODES: string[] = [...NEIGHBORHOODS.map((n) => n.name), "FC"];
@@ -71,12 +89,12 @@ export type Edge = { a: string; b: string; minutes: number };
 export function edges(): Edge[] {
   const out: Edge[] = [];
   for (const r of ROADS) {
-    out.push({ a: r[0], b: r[1], minutes: len(roadGates(r)) * factor(r[0], r[1], false) * MIN_PER_PX });
+    out.push({ a: r[0], b: r[1], minutes: safelyRound(len(roadGates(r)) * factor(r[0], r[1], false) * MIN_PER_PX) });
   }
   for (const b of BRIDGES) {
     for (const seg of bridgeSegments(b)) {
       const [x, y] = seg.edge;
-      out.push({ a: x, b: y, minutes: len(seg.pts) * factor(x, y, true) * MIN_PER_PX });
+      out.push({ a: x, b: y, minutes: safelyRound(len(seg.pts) * factor(x, y, true) * MIN_PER_PX) });
     }
   }
   return out;

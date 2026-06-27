@@ -199,7 +199,7 @@ export type Bridge = {
 export const NEIGHBORHOODS: Neighborhood[] = [
   // --- Westside (Seattle) — the city, heavier traffic ---
   { name: "Ballard", center: { x: 224, y: 146 }, side: "west", ringRadius: 32, houses: 12 },
-  { name: "Green Lake", center: { x: 420, y: 96 }, side: "west", ringRadius: 34, houses: 12, lake: 16 },
+  { name: "Green Lake", center: { x: 385, y: 62 }, side: "west", ringRadius: 34, houses: 12, lake: 16 },
   { name: "Fremont", center: { x: 340, y: 212 }, side: "west", ringRadius: 30, houses: 12, note: "Center of the Universe" },
   { name: "U-District", center: { x: 467, y: 169 }, side: "west", ringRadius: 30, houses: 12 },
   { name: "Magnolia", center: { x: 170, y: 291 }, side: "west", ringRadius: 26, houses: 12, note: "out on the bluff" },
