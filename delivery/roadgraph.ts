@@ -29,7 +29,7 @@ import type { Pt } from "./geography.ts";
 import { NEIGHBORHOODS, ROADS, BRIDGES, roadGates, bridgeSegments, ringWalkArcPx } from "./geography.ts";
 
 export const MIN_PER_PX = 0.0225; // arteries run ~2× faster than the slow ring; tuned so QA→Fremont ≈ 2 units
-export const SPEED = { city: 1.6, suburb: 1.0, bridge: 1.2, fast: 0.6 };
+export const SPEED = { city: 1.6, suburb: 1.0, bridge: 1.2, bridge520: 1.5, fast: 0.6 };
 export const NEIGHBORHOOD_SLOWDOWN = 2.1; // ring roads are this much slower than the local arteries (DISPLAY only)
 export const SERVICE = 2; // minutes per order delivered, identical everywhere (DISPLAY only — a wash in the solver)
 
@@ -68,6 +68,9 @@ function isWest(name: string): boolean {
 /** Speed multiplier for an edge (lower = faster). The geography's texture lives here. */
 function factor(a: string, b: string, bridge: boolean): number {
   if ((a === "Issaquah" && b === "Redmond") || (a === "Redmond" && b === "Issaquah")) return SPEED.fast;
+  // SR 520 is the long, slow lake crossing: slower per-pixel than I-90 so that the two
+  // bridges cost about the same to cross despite I-90's longer (two-segment) span.
+  if ((a === "U-District" && b === "Medina") || (a === "Medina" && b === "U-District")) return SPEED.bridge520;
   if (bridge) return SPEED.bridge;
   if (isWest(a) || isWest(b)) return SPEED.city;
   return SPEED.suburb;

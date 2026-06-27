@@ -90,8 +90,9 @@ export const MAP_H = 720;
 /** Lake Washington — west (Seattle) shoreline, north to south. */
 export const WEST_SHORE: Pt[] = [
   { x: 488, y: 0 },
-  { x: 470, y: 110 },
-  { x: 498, y: 230 },
+  { x: 480, y: 105 },
+  { x: 524, y: 175 }, // bulge east — U-District sits on land, lake narrows at the 520 west landing
+  { x: 500, y: 250 },
   { x: 466, y: 350 },
   { x: 492, y: 470 },
   { x: 474, y: 590 },
@@ -201,7 +202,7 @@ export const NEIGHBORHOODS: Neighborhood[] = [
   { name: "Ballard", center: { x: 224, y: 146 }, side: "west", ringRadius: 32, houses: 12 },
   { name: "Green Lake", center: { x: 385, y: 62 }, side: "west", ringRadius: 34, houses: 12, lake: 16 },
   { name: "Fremont", center: { x: 340, y: 212 }, side: "west", ringRadius: 30, houses: 12, note: "Center of the Universe" },
-  { name: "U-District", center: { x: 467, y: 169 }, side: "west", ringRadius: 30, houses: 12 },
+  { name: "U-District", center: { x: 460, y: 169 }, side: "west", ringRadius: 30, houses: 12 },
   { name: "Magnolia", center: { x: 170, y: 291 }, side: "west", ringRadius: 26, houses: 12, note: "out on the bluff" },
   { name: "Queen Anne", center: { x: 286, y: 316 }, side: "west", ringRadius: 32, houses: 12 },
   { name: "Capitol Hill", center: { x: 432, y: 445 }, side: "west", ringRadius: 29, houses: 12 },
@@ -220,7 +221,7 @@ export const NEIGHBORHOODS: Neighborhood[] = [
   { name: "Mercer N", center: { x: 548, y: 552 }, side: "island", ringRadius: 19, houses: 12 },
   { name: "Mercer S", center: { x: 548, y: 635 }, side: "island", ringRadius: 19, houses: 12 },
   // --- Eastside — tech money, more room ---
-  { name: "Medina", center: { x: 618, y: 220 }, side: "east", ringRadius: 28, houses: 12, note: "you-know-who lives here" },
+  { name: "Medina", center: { x: 638, y: 200 }, side: "east", ringRadius: 28, houses: 12, note: "you-know-who lives here" },
   { name: "Kirkland", center: { x: 650, y: 60 }, side: "east", ringRadius: 30, houses: 12 },
   { name: "Redmond", center: { x: 868, y: 200 }, side: "east", ringRadius: 32, houses: 12 },
   { name: "Bellevue", center: { x: 740, y: 330 }, side: "east", ringRadius: 34, houses: 12 },
@@ -267,7 +268,7 @@ export const BRIDGES: Bridge[] = [
     // North crossing: Montlake (U-District) -> Medina.
     name: "SR 520",
     nodes: ["U-District", "Medina"],
-    waters: [[{ x: 545, y: 172 }]],
+    waters: [[]], // dead straight across the water — the long, slow lake crossing
   },
   {
     // South crossing: Beacon Hill -> Mercer Island -> Factoria.
