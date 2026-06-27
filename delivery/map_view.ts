@@ -366,16 +366,6 @@ function drawWarehouse(ctx: CanvasRenderingContext2D): void {
 
 function drawRegionLabels(ctx: CanvasRenderingContext2D): void {
   ctx.textAlign = "center";
-  ctx.fillStyle = COLOR.faint;
-  ctx.font = "bold 24px system-ui, sans-serif";
-  ctx.fillText("SEATTLE", 168, 250);
-  ctx.font = "italic 12px system-ui, sans-serif";
-  ctx.fillText("the Westside", 168, 268);
-
-  ctx.font = "bold 24px system-ui, sans-serif";
-  ctx.fillText("THE EASTSIDE", 852, 474);
-  ctx.font = "italic 12px system-ui, sans-serif";
-  ctx.fillText("warehouse country", 852, 492);
 
   ctx.save();
   ctx.translate(545, 320);
