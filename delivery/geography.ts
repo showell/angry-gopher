@@ -212,16 +212,16 @@ export const NEIGHBORHOODS: Neighborhood[] = [
   { name: "Downtown", center: { x: 300, y: 430 }, side: "west", ringRadius: 30, houses: 12 },
   { name: "Beacon Hill", center: { x: 432, y: 555 }, side: "west", ringRadius: 30, houses: 12 },
   { name: "West Seattle", center: { x: 211, y: 589 }, side: "west", ringRadius: 30, houses: 12 },
-  // --- Mercer Island — I-90 clips its north END at a traffic circle (the bridge
-  //     landing); the two residential necks chain SOUTH from there, so you slog
-  //     through Mercer N's ring at residential pace to reach Mercer S. "Mercer
-  //     Island" itself is just the interchange (no homes). ---
-  { name: "Mercer Island", center: { x: 548, y: 470 }, side: "island", ringRadius: 10, houses: 0, note: "the Rock" },
+  // --- Mercer Island — I-90 lands at the interchange right above the homes; a cheap
+  //     off-ramp drops onto Mercer N (≈1 time unit), and the necks chain SOUTH to
+  //     Mercer S at residential pace. "Mercer Island" itself is just the interchange
+  //     (no homes) — a routing waypoint, never a delivery stop. ---
+  { name: "Mercer Island", center: { x: 548, y: 500 }, side: "island", ringRadius: 10, houses: 0, note: "the Rock" },
   { name: "Mercer N", center: { x: 548, y: 552 }, side: "island", ringRadius: 19, houses: 12 },
   { name: "Mercer S", center: { x: 548, y: 635 }, side: "island", ringRadius: 19, houses: 12 },
   // --- Eastside — tech money, more room ---
-  { name: "Medina", center: { x: 618, y: 250 }, side: "east", ringRadius: 28, houses: 12, note: "you-know-who lives here" },
-  { name: "Kirkland", center: { x: 650, y: 90 }, side: "east", ringRadius: 30, houses: 12 },
+  { name: "Medina", center: { x: 618, y: 220 }, side: "east", ringRadius: 28, houses: 12, note: "you-know-who lives here" },
+  { name: "Kirkland", center: { x: 650, y: 60 }, side: "east", ringRadius: 30, houses: 12 },
   { name: "Redmond", center: { x: 868, y: 200 }, side: "east", ringRadius: 32, houses: 12 },
   { name: "Bellevue", center: { x: 740, y: 330 }, side: "east", ringRadius: 34, houses: 12 },
   { name: "Factoria", center: { x: 672, y: 508 }, side: "east", ringRadius: 30, houses: 12 },
@@ -267,13 +267,13 @@ export const BRIDGES: Bridge[] = [
     // North crossing: Montlake (U-District) -> Medina.
     name: "SR 520",
     nodes: ["U-District", "Medina"],
-    waters: [[{ x: 545, y: 202 }]],
+    waters: [[{ x: 545, y: 172 }]],
   },
   {
     // South crossing: Beacon Hill -> Mercer Island -> Factoria.
     name: "I-90",
     nodes: ["Beacon Hill", "Mercer Island", "Factoria"],
-    waters: [[{ x: 490, y: 512 }], [{ x: 610, y: 489 }]],
+    waters: [[{ x: 482, y: 522 }], [{ x: 610, y: 489 }]],
   },
 ];
 
