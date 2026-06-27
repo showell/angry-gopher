@@ -46,6 +46,9 @@ export function safelyRound(x: number): number {
   if (0.5 - Math.abs(x - r) < 1e-9) {
     throw new Error(`safelyRound(${x}) lands on a .5 boundary — cross-engine rounding could flip. Nudge a neighborhood a pixel.`);
   }
+  if (r < 1) {
+    throw new Error(`safelyRound(${x}) rounded to ${r} (< 1) — a zero-length segment would divide by zero in playback. Move the neighborhoods apart.`);
+  }
   return r;
 }
 
