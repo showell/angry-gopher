@@ -65,7 +65,7 @@ export type Route = {
 };
 
 export type Move = {
-  kind: "merge" | "2-opt" | "or-opt" | "swap" | "balance";
+  kind: "merge" | "2-opt" | "or-opt" | "swap" | "balance" | "corridor";
   saved: number;
   detail: string;
   // A snapshot of the whole assignment right after this move landed — present on
@@ -131,6 +131,19 @@ function housesByNbhd(stops: Stop[]): Map<string, number[]> {
   return m;
 }
 
+/** The neighborhoods a route actually drives through, FC → stops → FC, with the
+ *  shortest path between each pair expanded (so threaded-through towns appear). */
+function pathNodes(sub: Substrate, stops: Stop[]): string[] {
+  const waypoints = ["FC", ...stops.map((s) => s.nbhd), "FC"];
+  const nodes: string[] = [];
+  for (let i = 1; i < waypoints.length; i++) {
+    for (const node of sub.path(waypoints[i - 1], waypoints[i])) {
+      if (nodes[nodes.length - 1] !== node) nodes.push(node);
+    }
+  }
+  return nodes;
+}
+
 type Breakdown = { travel: number; local: number; service: number; time: number };
 
 /**
@@ -143,14 +156,7 @@ type Breakdown = { travel: number; local: number; service: number; time: number 
 function breakdown(sub: Substrate, stops: Stop[]): Breakdown {
   if (stops.length === 0) return { travel: 0, local: 0, service: 0, time: 0 };
 
-  const waypoints = ["FC", ...stops.map((s) => s.nbhd), "FC"];
-  const nodes: string[] = [];
-  for (let i = 1; i < waypoints.length; i++) {
-    for (const node of sub.path(waypoints[i - 1], waypoints[i])) {
-      if (nodes[nodes.length - 1] !== node) nodes.push(node);
-    }
-  }
-
+  const nodes = pathNodes(sub, stops);
   const houses = housesByNbhd(stops);
   // A neighborhood drives its full delivery ring ONCE (at its first occurrence);
   // if the shortest path threads back through it later, that pass costs only the
@@ -193,14 +199,7 @@ const RING_UNIT = 1;
 export function painOf(sub: Substrate, stops: Stop[]): number {
   if (stops.length === 0) return 0;
 
-  const waypoints = ["FC", ...stops.map((s) => s.nbhd), "FC"];
-  const nodes: string[] = [];
-  for (let i = 1; i < waypoints.length; i++) {
-    for (const node of sub.path(waypoints[i - 1], waypoints[i])) {
-      if (nodes[nodes.length - 1] !== node) nodes.push(node);
-    }
-  }
-
+  const nodes = pathNodes(sub, stops);
   const houses = housesByNbhd(stops);
   const delivered = new Set<string>();
   let pain = 0;
@@ -538,6 +537,79 @@ function exchange(sub: Substrate, routes: Stop[][], log: Move[]): void {
   }
 }
 
+/** Insert `add` into `route` at the cheapest position, coalescing if the route
+ *  already touches that neighborhood (e.g. it was threading it). */
+function cheapestInsert(sub: Substrate, route: Stop[], add: Stop): Stop[] {
+  let best = coalesceStops([...route, add]);
+  let bestCost = costOf(sub, best);
+  for (let p = 0; p < route.length; p++) {
+    const cand = coalesceStops([...route.slice(0, p), add, ...route.slice(p)]);
+    const c = costOf(sub, cand);
+    if (c < bestCost) {
+      bestCost = c;
+      best = cand;
+    }
+  }
+  return best;
+}
+
+/**
+ * Corridor repair — the final consolidation. After every reshaping pass, a truck can
+ * be left driving THROUGH a neighborhood (threading its gates on a shortest path)
+ * whose totes ride on a DIFFERENT truck that makes a special trip there. That's the
+ * "skip the middle" a dispatcher spots at a glance — on a chain A–B–C with no A–C
+ * shortcut, holding A and C means you pass B for free, so you may as well deliver it.
+ * ("I drive past Factoria every day — why am I being sent to Redmond?") Move the
+ * threaded middle onto the truck already passing through: directly if it has room,
+ * else by trading one of its stops to the truck that held the middle — whenever total
+ * pain drops. Only threaded nodes are candidates, so it stays cheap; it runs LAST,
+ * because the earlier passes (rebalance/split/coalesce) are what create these.
+ */
+function corridorRepair(sub: Substrate, routes: Stop[][], log: Move[], cap: (i: number) => number): void {
+  for (let guard = 0; guard < 50; guard++) {
+    let best:
+      | { t: number; tp: number; nt: Stop[]; ntp: Stop[]; gain: number; B: string; via: string; touched: string[] }
+      | null = null;
+    for (let t = 0; t < routes.length; t++) {
+      if (routes[t].length === 0) continue;
+      const delivered = new Set(routes[t].map((s) => s.nbhd));
+      const threaded = new Set(pathNodes(sub, routes[t]).filter((n) => n !== "FC" && !delivered.has(n)));
+      for (const B of threaded) {
+        const tp = routes.findIndex((r) => r.some((s) => s.nbhd === B));
+        if (tp < 0 || tp === t) continue;
+        const Bstop = routes[tp].find((s) => s.nbhd === B)!;
+        if (Bstop.pin !== undefined) continue; // a frozen anchor seed stays put
+        const base = costOf(sub, routes[t]) + costOf(sub, routes[tp]);
+        const without = routes[tp].filter((s) => s.nbhd !== B);
+        // (a) the pass-through truck just absorbs the middle, if it has room
+        if (loadOf(routes[t]) + Bstop.orders <= cap(t)) {
+          const nt = cheapestInsert(sub, routes[t], Bstop);
+          const gain = base - (costOf(sub, nt) + costOf(sub, without));
+          if (gain > 1e-9 && (!best || gain > best.gain)) {
+            best = { t, tp, nt, ntp: without, gain, B, via: "absorbed", touched: keysOf([Bstop]) };
+          }
+        }
+        // (b) it's full: trade one of its stops to the middle's truck, take B instead
+        for (const S of routes[t]) {
+          if (S.pin !== undefined) continue;
+          if (loadOf(routes[t]) - S.orders + Bstop.orders > cap(t)) continue;
+          if (loadOf(routes[tp]) - Bstop.orders + S.orders > cap(tp)) continue;
+          const nt = cheapestInsert(sub, routes[t].filter((x) => x.nbhd !== S.nbhd), Bstop);
+          const ntp = cheapestInsert(sub, without, S);
+          const gain = base - (costOf(sub, nt) + costOf(sub, ntp));
+          if (gain > 1e-9 && (!best || gain > best.gain)) {
+            best = { t, tp, nt, ntp, gain, B, via: `trading ${S.nbhd}`, touched: keysOf([Bstop, S]) };
+          }
+        }
+      }
+    }
+    if (!best) break;
+    routes[best.t] = best.nt;
+    routes[best.tp] = best.ntp;
+    log.push({ kind: "corridor", saved: best.gain, detail: `consolidated ${best.B} onto the truck passing through (${best.via})`, frame: snapshot(routes), touched: best.touched });
+  }
+}
+
 /** Population stdev of a set of route times — our (im)balance measure. */
 function stdev(times: number[]): number {
   if (times.length === 0) return 0;
@@ -771,6 +843,13 @@ export function solve(sub: Substrate, orders: Map<string, number[]>, allowSplit 
     }
   }
 
+  // Final consolidation on the SLOTTED routes, with exact per-slot caps. The spill
+  // above can hand a slot a cluster whose truck now drives THROUGH a neighborhood
+  // another slot serves — the "I pass it every day, why am I sent elsewhere?" fix.
+  for (let i = 0; i < bySlot.length; i++) bySlot[i] = coalesceStops(bySlot[i]);
+  corridorRepair(sub, bySlot, log, (i) => TRUCK_CAPS[i]);
+  for (const r of bySlot) twoOpt(sub, r, log); // re-tidy the routes a consolidation reshaped
+
   const built: Route[] = bySlot.map((stops) => {
     const b = breakdown(sub, stops);
     return { stops, orders: loadOf(stops), travel: b.travel, time: b.time };
@@ -791,7 +870,7 @@ export function solve(sub: Substrate, orders: Map<string, number[]>, allowSplit 
 
   // Replay reel: the seed, every pair-changing move in order, then the final
   // plan once routes are slotted to their trucks (the honest "snap to lanes").
-  const tag = { merge: "merge", "2-opt": "reorder", "or-opt": "relocate", swap: "swap", balance: "settle" } as const;
+  const tag = { merge: "merge", "2-opt": "reorder", "or-opt": "relocate", swap: "swap", balance: "settle", corridor: "consolidate" } as const;
   const captionOf = (m: Move): string => {
     const saved = m.saved > 0.5 ? `  −${Math.round(m.saved)} pain` : "";
     return `${tag[m.kind]} · ${m.detail}${saved}`;
