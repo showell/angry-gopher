@@ -59,18 +59,20 @@ export const TRUCK_ANCHORS = [
 /**
  * Defer-last neighborhoods: held out of construction and slotted into leftover
  * slack at the end, because greedy savings grabs them early and burns capacity a
- * far, hard-to-reach neighborhood needed. Only Bellevue qualifies — it's right on
+ * far, hard-to-reach neighborhood needed. Bellevue is the cleanest case — right on
  * the warehouse's doorstep (3.4 min, direct FC road) and so omnidirectional that
- * essentially any east-passing truck can tack it on for free: pure slack filler.
+ * essentially any east-passing truck tacks it on for free: pure slack filler.
  *
- * Tempting near-FC neighbors do NOT belong here — verified by sweeping the real
- * S1..S24 sequence: Factoria (11 min, on the I-90/Issaquah corridor) and Medina
- * (8 min, the SR520 bridgehead onto the west spine) each have enough geographic
- * specificity that deferring them HURTS — they cluster better in construction and
- * get picked up cheaply on a truck's run home. "Near FC" isn't the test; "cheap
- * from every direction" is, and only Bellevue passes it.
+ * Medina (the SR520 bridgehead) is the subtler case. An older sweep said deferring
+ * it HURT — but that was pre-Eastlake, pre-southward-shift, at 90/12 & λ=0.1. Under
+ * the current map + objective a 100-shift sweep flips the verdict: deferring Medina
+ * is a net ~1% win (helps 57 shifts, hurts 36) — clustering its 4-ish orders early
+ * over-commits the underrated Kirkland truck before the real trouble is divvied up.
+ * It's noisy, not a clean structural fix (the gain is mostly rebalancing variance),
+ * and counter-intuitively the wins cluster at MEDIUM Medina load, not light days.
+ * Factoria still does NOT belong here (it clusters cheaply on the I-90 run home).
  */
-export const DEFER_LAST = ["Bellevue"];
+export const DEFER_LAST = ["Bellevue", "Medina"];
 
 export const MAP_W = 1200;
 export const MAP_H = 720;
