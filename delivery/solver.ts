@@ -601,6 +601,22 @@ function corridorRepair(sub: Substrate, routes: Stop[][], log: Move[], cap: (i: 
             best = { t, tp, nt, ntp, gain, B, via: `trading ${S.nbhd}`, touched: keysOf([Bstop, S]) };
           }
         }
+        // (c) split-swap: B is too big to take whole, but T drives THROUGH it — hand a
+        //     detour stop X to B's truck and carve back an equal-size slice of B (a
+        //     split delivery). Capacity-neutral, so it lands where (a)/(b) can't: the
+        //     truck keeps the turf it already crosses and sheds the real detour. (S2:
+        //     Redmond ↔ half of Factoria; S4: Eastlake ↔ most of Mercer N.)
+        for (const X of routes[t]) {
+          if (X.pin !== undefined || Bstop.orders <= X.orders) continue; // need slack in B to leave some behind
+          const take: Stop = { nbhd: B, orders: X.orders, houses: Bstop.houses.slice(0, X.orders) };
+          const rest: Stop = { nbhd: B, orders: Bstop.orders - X.orders, houses: Bstop.houses.slice(X.orders) };
+          const nt = cheapestInsert(sub, routes[t].filter((s) => s !== X), take);
+          const ntp = cheapestInsert(sub, routes[tp].map((s) => (s.nbhd === B ? rest : s)), X);
+          const gain = base - (costOf(sub, nt) + costOf(sub, ntp));
+          if (gain > 1e-9 && (!best || gain > best.gain)) {
+            best = { t, tp, nt, ntp, gain, B, via: `split, trading ${X.nbhd}`, touched: keysOf([X, take]) };
+          }
+        }
       }
     }
     if (!best) break;
