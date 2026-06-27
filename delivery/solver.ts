@@ -177,7 +177,7 @@ function breakdown(sub: Substrate, stops: Stop[]): Breakdown {
 // driver-minute — the N/M ratio. At 0.1 the solver will accept ~10 min of extra
 // driving to spare a tote ~100 tote-minutes of riding, which is what pulls a
 // close-but-last customer (Factoria) up to an early, fresh delivery.
-const CARRY_COST = 0.2;
+const CARRY_COST = 0.3;
 const costOf = (sub: Substrate, stops: Stop[]): number => {
   const b = breakdown(sub, stops);
   return b.time + CARRY_COST * b.toteMin;
