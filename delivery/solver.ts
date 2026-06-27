@@ -190,7 +190,7 @@ const RING_UNIT = 1;
  * made earlier float costs diverge between node and the browser. No geometry in this
  * hot path: that's both the determinism win and the speed win.
  */
-function painOf(sub: Substrate, stops: Stop[]): number {
+export function painOf(sub: Substrate, stops: Stop[]): number {
   if (stops.length === 0) return 0;
 
   const waypoints = ["FC", ...stops.map((s) => s.nbhd), "FC"];
