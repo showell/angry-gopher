@@ -48,7 +48,7 @@ const TRUCK_COLORS = [
   "#e8590c", // orange
   "#2f9e44", // green
   "#d6336c", // magenta
-  "#1098ad", // teal
+  "#a0521d", // saddle brown — warm/light enough to part from T8 charcoal, still redder than T7 gold
   "#7048e8", // violet
   "#b8860b", // dark gold
   "#343a40", // charcoal
