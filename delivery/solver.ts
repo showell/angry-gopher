@@ -73,14 +73,27 @@ export type Move = {
   // every move that remakes a home→truck pair (so the `A` animation can replay
   // the solve frame by frame). Absent on 2-opt, which only reorders one route.
   frame?: Stop[][];
+  // The houses this move actually moved/assigned (`nbhd#h` keys) — the animation
+  // pops these so the eye lands on where the action just happened.
+  touched?: string[];
 };
 
-/** One step of the solve, ready to draw: who serves whom, plus a caption. */
-export type SolveFrame = { routes: { stops: Stop[] }[]; label: string };
+/** One step of the solve, ready to draw: who serves whom, what just moved, a caption. */
+export type SolveFrame = { routes: { stops: Stop[] }[]; touched: string[]; label: string };
 
 /** A deep-enough copy of the live routes to survive later mutation. */
 function snapshot(routes: Stop[][]): Stop[][] {
   return routes.map((r) => r.map((s) => ({ ...s, houses: [...s.houses] })));
+}
+
+/** House keys (`nbhd#h`) for a set of stops — the homes a move touched. */
+function keysOf(stops: { nbhd: string; houses: number[] }[]): string[] {
+  return stops.flatMap((s) => s.houses.map((h) => `${s.nbhd}#${h}`));
+}
+
+/** House keys for one neighborhood's houses. */
+function keys(nbhd: string, houses: number[]): string[] {
+  return houses.map((h) => `${nbhd}#${h}`);
 }
 
 export type Plan = {
@@ -241,7 +254,7 @@ function construct(sub: Substrate, routes: Stop[][], log: Move[], force: boolean
     if (!best) break; // nothing fits — capacity-stuck
     if (!force && best.saved <= 1e-9) break; // no further win
     if (force && routes.length <= FLEET.trucks) break; // fleet now fits
-    log.push({ kind: "merge", saved: best.saved, detail: `${best.merged.map((s) => s.nbhd).join(" · ")}`, frame: snapshot(routes) });
+    log.push({ kind: "merge", saved: best.saved, detail: `${best.merged.map((s) => s.nbhd).join(" · ")}`, frame: snapshot(routes), touched: keysOf(best.merged) });
     routes[best.i] = best.merged;
     routes.splice(best.j, 1);
   }
@@ -285,7 +298,7 @@ function forcePlace(sub: Substrate, routes: Stop[][], log: Move[]): void {
         }
         if (whole) {
           whole.push({ nbhd: stop.nbhd, orders: remaining.length, houses: remaining });
-          log.push({ kind: "or-opt", saved: 0, detail: `capacity placement: ${stop.nbhd} (${remaining.length}) onto a truck with room`, frame: snapshot(routes) });
+          log.push({ kind: "or-opt", saved: 0, detail: `capacity placement: ${stop.nbhd} (${remaining.length}) onto a truck with room`, frame: snapshot(routes), touched: keys(stop.nbhd, remaining) });
           break;
         }
         // No single truck fits it whole — drop a chunk on the roomiest and loop.
@@ -302,7 +315,7 @@ function forcePlace(sub: Substrate, routes: Stop[][], log: Move[]): void {
         const take = remaining.slice(0, room);
         remaining = remaining.slice(room);
         into.push({ nbhd: stop.nbhd, orders: take.length, houses: take });
-        log.push({ kind: "or-opt", saved: 0, detail: `capacity split: ${stop.nbhd} ${take.length} tote(s) onto a truck with room`, frame: snapshot(routes) });
+        log.push({ kind: "or-opt", saved: 0, detail: `capacity split: ${stop.nbhd} ${take.length} tote(s) onto a truck with room`, frame: snapshot(routes), touched: keys(stop.nbhd, take) });
       }
     }
   }
@@ -352,7 +365,7 @@ function placeDeferred(sub: Substrate, routes: Stop[][], deferred: Stop[], log: 
       }
       if (bestRi >= 0 && bestRoute) {
         routes[bestRi] = bestRoute;
-        log.push({ kind: "or-opt", saved: 0, detail: `deferred fill: ${stop.nbhd} (${remaining.length}) into slack`, frame: snapshot(routes) });
+        log.push({ kind: "or-opt", saved: 0, detail: `deferred fill: ${stop.nbhd} (${remaining.length}) into slack`, frame: snapshot(routes), touched: keys(stop.nbhd, remaining) });
         break;
       }
       // No single truck fits it whole — drop a chunk on the roomiest and loop.
@@ -369,7 +382,7 @@ function placeDeferred(sub: Substrate, routes: Stop[][], deferred: Stop[], log: 
       const take = remaining.slice(0, room);
       remaining = remaining.slice(room);
       routes[ri] = insertBest(sub, routes[ri], { nbhd: stop.nbhd, orders: take.length, houses: take });
-      log.push({ kind: "or-opt", saved: 0, detail: `deferred split: ${stop.nbhd} ${take.length} tote(s) into slack`, frame: snapshot(routes) });
+      log.push({ kind: "or-opt", saved: 0, detail: `deferred split: ${stop.nbhd} ${take.length} tote(s) into slack`, frame: snapshot(routes), touched: keys(stop.nbhd, take) });
     }
   }
 }
@@ -421,7 +434,7 @@ function orOpt(sub: Substrate, routes: Stop[][], log: Move[]): void {
         if (best) {
           routes[r] = without;
           routes[best.t] = [...routes[best.t].slice(0, best.pos), stop, ...routes[best.t].slice(best.pos)];
-          log.push({ kind: "or-opt", saved: best.gain, detail: `moved ${stop.nbhd} to another truck`, frame: snapshot(routes) });
+          log.push({ kind: "or-opt", saved: best.gain, detail: `moved ${stop.nbhd} to another truck`, frame: snapshot(routes), touched: keysOf([stop]) });
           improved = true;
         }
       }
@@ -455,7 +468,7 @@ function reinsert(sub: Substrate, route: Stop[], rm: number, add: Stop): Stop[] 
  */
 function exchange(sub: Substrate, routes: Stop[][], log: Move[]): void {
   for (let guard = 0; guard < 200; guard++) {
-    let best: { a: number; b: number; ra: Stop[]; rb: Stop[]; gain: number } | null = null;
+    let best: { a: number; b: number; ra: Stop[]; rb: Stop[]; gain: number; sa: Stop; sb: Stop } | null = null;
     for (let a = 0; a < routes.length; a++) {
       for (let b = a + 1; b < routes.length; b++) {
         const base = costOf(sub, routes[a]) + costOf(sub, routes[b]);
@@ -472,7 +485,7 @@ function exchange(sub: Substrate, routes: Stop[][], log: Move[]): void {
             const ra = reinsert(sub, routes[a], i, sb);
             const rb = reinsert(sub, routes[b], j, sa);
             const gain = base - (costOf(sub, ra) + costOf(sub, rb));
-            if (gain > 1e-6 && (!best || gain > best.gain)) best = { a, b, ra, rb, gain };
+            if (gain > 1e-6 && (!best || gain > best.gain)) best = { a, b, ra, rb, gain, sa, sb };
           }
         }
       }
@@ -480,7 +493,7 @@ function exchange(sub: Substrate, routes: Stop[][], log: Move[]): void {
     if (!best) break;
     routes[best.a] = best.ra;
     routes[best.b] = best.rb;
-    log.push({ kind: "swap", saved: best.gain, detail: `traded a stop between two trucks`, frame: snapshot(routes) });
+    log.push({ kind: "swap", saved: best.gain, detail: `traded a stop between two trucks`, frame: snapshot(routes), touched: keysOf([best.sa, best.sb]) });
   }
 }
 
@@ -536,7 +549,7 @@ function rebalance(sub: Substrate, routes: Stop[][], log: Move[]): void {
     const stop = routes[pick.r][pick.s];
     routes[pick.r] = [...routes[pick.r].slice(0, pick.s), ...routes[pick.r].slice(pick.s + 1)];
     routes[pick.t] = [...routes[pick.t].slice(0, pick.pos), stop, ...routes[pick.t].slice(pick.pos)];
-    log.push({ kind: "balance", saved: -pick.dTotal, detail: `tie-break: ${stop.nbhd} → another truck`, frame: snapshot(routes) });
+    log.push({ kind: "balance", saved: -pick.dTotal, detail: `tie-break: ${stop.nbhd} → another truck`, frame: snapshot(routes), touched: keysOf([stop]) });
     routes.splice(0, routes.length, ...routes.filter((r) => r.length > 0));
   }
 }
@@ -612,7 +625,7 @@ function splitPass(sub: Substrate, routes: Stop[][], log: Move[]): void {
     routes[pick.a] = routes[pick.a].map((s, i) => (i === pick!.sa ? { nbhd: N, orders: pick!.rest.length, houses: pick!.rest } : s));
     const Sstop: Stop = { nbhd: N, orders: pick.S.length, houses: pick.S };
     routes[pick.b] = [...routes[pick.b].slice(0, pick.pos), Sstop, ...routes[pick.b].slice(pick.pos)];
-    log.push({ kind: "balance", saved: -pick.g, detail: `split ${N}: ${pick.S.length} of ${pick.S.length + pick.rest.length} totes to another truck`, frame: snapshot(routes) });
+    log.push({ kind: "balance", saved: -pick.g, detail: `split ${N}: ${pick.S.length} of ${pick.S.length + pick.rest.length} totes to another truck`, frame: snapshot(routes), touched: keys(N, pick.S) });
   }
 }
 
@@ -713,9 +726,11 @@ export function solve(sub: Substrate, orders: Map<string, number[]>, allowSplit 
     return `${tag[m.kind]} · ${m.detail}${saved}`;
   };
   const frames: SolveFrame[] = [
-    { routes: seed.map((stops) => ({ stops })), label: `start · ${seed.length} clusters seeded` },
-    ...log.filter((m) => m.frame).map((m) => ({ routes: m.frame!.map((stops) => ({ stops })), label: captionOf(m) })),
-    { routes: built.map((r) => ({ stops: r.stops })), label: `done · trucks assigned to their lanes` },
+    { routes: seed.map((stops) => ({ stops })), touched: [], label: `start · ${seed.length} clusters seeded` },
+    ...log
+      .filter((m) => m.frame)
+      .map((m) => ({ routes: m.frame!.map((stops) => ({ stops })), touched: m.touched ?? [], label: captionOf(m) })),
+    { routes: built.map((r) => ({ stops: r.stops })), touched: [], label: `done · trucks assigned to their lanes` },
   ];
 
   return {

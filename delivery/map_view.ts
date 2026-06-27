@@ -193,6 +193,7 @@ function drawNeighborhood(
   houseColor: Map<string, string>, // per-house truck colour (so a split shows two colours)
   highlight: Set<string> | null, // houses of the focused truck, to make pop
   delivered: Set<string> | null, // houses already serviced (playback) → checkmark
+  popped: Set<string> | null = null, // houses a solver move just touched → halo + enlarge
 ): void {
   if (n.houses === 0) {
     // A bridge interchange (no homes) — a small junction disc, not a ring.
@@ -228,8 +229,9 @@ function drawNeighborhood(
     const key = `${n.name}#${i}`;
     const isOrder = orders.has(key);
     if (isOrder) {
-      const focused = focusMode && highlight.has(key);
-      const muted = focusMode && !focused;
+      const isPopped = popped !== null && popped.has(key);
+      const focused = isPopped || (focusMode && highlight!.has(key));
+      const muted = focusMode && !focused; // a popped house never mutes the rest
       const color = houseColor.get(key) ?? COLOR.order;
       // Delivered (during playback): the square becomes a checkmark in the
       // truck's colour — the moment the goods hit the doorstep.
@@ -237,11 +239,21 @@ function drawNeighborhood(
         drawCheck(ctx, h.x, h.y, ORDER_SIZE * 1.5, color);
         return;
       }
-      const s = focused ? 13 : ORDER_SIZE;
+      // A just-moved house (solver animation): a soft halo in its truck's colour
+      // so the eye lands on where the action happened this frame.
+      if (isPopped) {
+        ctx.globalAlpha = 0.3;
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.arc(h.x, h.y, 15, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+      }
+      const s = isPopped ? 16 : focused ? 13 : ORDER_SIZE;
       ctx.globalAlpha = muted ? 0.5 : 1;
       ctx.fillStyle = color;
-      ctx.strokeStyle = "#ffffff";
-      ctx.lineWidth = focused ? 2 : 1.5;
+      ctx.strokeStyle = isPopped ? "#16202b" : "#ffffff";
+      ctx.lineWidth = isPopped ? 2.5 : focused ? 2 : 1.5;
       ctx.beginPath();
       ctx.rect(h.x - s / 2, h.y - s / 2, s, s);
       ctx.fill();
@@ -429,23 +441,23 @@ function drawHud(ctx: CanvasRenderingContext2D, shift: number): void {
 /** The solver-animation banner: what this step did, and how far through we are. */
 function drawSolveCaption(ctx: CanvasRenderingContext2D, label: string, i: number, n: number): void {
   const cx = MAP_W / 2;
-  const top = 22;
+  const top = 6; // the clear band above every neighborhood (highest ring tops ~y60)
   const sub = `step ${i + 1} / ${n}  ·  grey = truck not yet decided  ·  ←/→ scrub  ·  A replay  ·  Esc exit`;
   ctx.textAlign = "center";
-  ctx.font = "bold 16px system-ui, sans-serif";
+  ctx.font = "bold 15px system-ui, sans-serif";
   const labelW = ctx.measureText(label).width;
   ctx.font = "12px system-ui, sans-serif";
-  const w = Math.max(labelW, ctx.measureText(sub).width) + 48;
+  const w = Math.max(labelW, ctx.measureText(sub).width) + 44;
   ctx.fillStyle = "rgba(13, 27, 42, 0.85)";
   ctx.beginPath();
-  ctx.roundRect(cx - w / 2, top, w, 50, 10);
+  ctx.roundRect(cx - w / 2, top, w, 42, 9);
   ctx.fill();
   ctx.fillStyle = "#ffffff";
-  ctx.font = "bold 16px system-ui, sans-serif";
-  ctx.fillText(label, cx, top + 22);
+  ctx.font = "bold 15px system-ui, sans-serif";
+  ctx.fillText(label, cx, top + 18);
   ctx.fillStyle = "#aeb6c2";
   ctx.font = "12px system-ui, sans-serif";
-  ctx.fillText(sub, cx, top + 40);
+  ctx.fillText(sub, cx, top + 34);
 }
 
 /** Grey veil + label while the solver runs — the shuffle takes a beat, so say so. */
@@ -847,13 +859,14 @@ export function drawMap(ctx: CanvasRenderingContext2D, view: MapView): void {
     // slot; earlier frames colour by commitment, leaving undecided houses grey.
     const isFinal = solveAnim.i === solveAnim.frames.length - 1;
     const houseColor = isFinal ? truckColorMaps(frame).houseColor : frameColorMaps(frame);
+    const popped = frame.touched.length ? new Set(frame.touched) : null;
     drawLand(ctx);
     drawWater(ctx);
     drawRegionLabels(ctx);
     drawRoads(ctx);
     drawBridges(ctx);
     drawGates(ctx);
-    for (const n of NEIGHBORHOODS) drawNeighborhood(ctx, n, orders, houseColor, null, null);
+    for (const n of NEIGHBORHOODS) drawNeighborhood(ctx, n, orders, houseColor, null, null, popped);
     drawWarehouse(ctx);
     drawHud(ctx, shift);
     drawSolveCaption(ctx, frame.label, solveAnim.i, solveAnim.frames.length);
