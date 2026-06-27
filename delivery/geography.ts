@@ -36,7 +36,7 @@ export type Road = [string, string];
 // 90 of 96 capacity leaves only 6 totes of slack: ceil(90/12) = 8, so all eight
 // trucks must roll every shift — and several run near-full, which makes capacity
 // genuinely binding (tight packing, forced splits) instead of merely advisory.
-export const FLEET = { trucks: 8, totesPerTruck: 12, orders: 90 };
+export const FLEET = { trucks: 8, totesPerTruck: 13, orders: 100 };
 
 /**
  * Region anchors: each truck slot is "seeded" with one far-flung neighborhood it
@@ -196,9 +196,13 @@ export const NEIGHBORHOODS: Neighborhood[] = [
   { name: "U-District", center: { x: 467, y: 169 }, side: "west", ringRadius: 30, houses: 12 },
   { name: "Magnolia", center: { x: 170, y: 291 }, side: "west", ringRadius: 26, houses: 12, note: "out on the bluff" },
   { name: "Queen Anne", center: { x: 286, y: 316 }, side: "west", ringRadius: 32, houses: 12 },
-  { name: "Capitol Hill", center: { x: 432, y: 330 }, side: "west", ringRadius: 29, houses: 12 },
+  { name: "Capitol Hill", center: { x: 432, y: 445 }, side: "west", ringRadius: 29, houses: 12 },
+  // Eastlake sits in the spot Capitol Hill vacated (a hair NNE), wired only to
+  // Capitol Hill and U-District — houseboats on Lake Union, so houses may overlap
+  // water, but the ring road stays on land.
+  { name: "Eastlake", center: { x: 441, y: 311 }, side: "west", ringRadius: 24, houses: 12 },
   { name: "Downtown", center: { x: 300, y: 430 }, side: "west", ringRadius: 30, houses: 12 },
-  { name: "Beacon Hill", center: { x: 432, y: 470 }, side: "west", ringRadius: 30, houses: 12 },
+  { name: "Beacon Hill", center: { x: 432, y: 585 }, side: "west", ringRadius: 30, houses: 12 },
   { name: "West Seattle", center: { x: 211, y: 589 }, side: "west", ringRadius: 30, houses: 12 },
   // --- Mercer Island (mid-I-90) — a bridge interchange with two cul-de-sacs off
   //     it, north and south. "Mercer Island" itself is just the interchange (no
@@ -228,7 +232,8 @@ export const ROADS: Road[] = [
   ["Fremont", "Queen Anne"],
   ["Queen Anne", "Downtown"],
   ["Downtown", "Capitol Hill"],
-  ["Capitol Hill", "U-District"],
+  ["Capitol Hill", "Eastlake"], // the only path north out of Capitol Hill — no CH↔U-District skyway
+  ["Eastlake", "U-District"],
   ["Capitol Hill", "Beacon Hill"],
   ["Downtown", "Beacon Hill"],
   ["Downtown", "West Seattle"],
@@ -259,7 +264,7 @@ export const BRIDGES: Bridge[] = [
     // South crossing: Beacon Hill -> Mercer Island -> Factoria.
     name: "I-90",
     nodes: ["Beacon Hill", "Mercer Island", "Factoria"],
-    waters: [[{ x: 492, y: 501 }], [{ x: 608, y: 549 }]],
+    waters: [[{ x: 490, y: 560 }], [{ x: 608, y: 549 }]],
   },
 ];
 
