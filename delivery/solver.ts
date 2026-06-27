@@ -565,7 +565,21 @@ function cheapestInsert(sub: Substrate, route: Stop[], add: Stop): Stop[] {
  * pain drops. Only threaded nodes are candidates, so it stays cheap; it runs LAST,
  * because the earlier passes (rebalance/split/coalesce) are what create these.
  */
-function corridorRepair(sub: Substrate, routes: Stop[][], log: Move[], cap: (i: number) => number): void {
+/** Cost of a route as the pipeline will LEAVE it — after the twoOpt re-tidy that runs
+ *  once corridorRepair finishes. Candidate moves are built with cheapestInsert, which
+ *  inserts without reordering the existing stops; an honest gain has to score the
+ *  tidied order it'll actually settle into, or it rejects moves that only pay off post-
+ *  tidy (the S14 7/1 split looked like −10 raw but is +18 once T1 reorders). */
+function tidiedCost(sub: Substrate, stops: Stop[]): number {
+  const copy = stops.map((s) => ({ ...s, houses: [...s.houses] }));
+  twoOpt(sub, copy, []);
+  return costOf(sub, copy);
+}
+
+// `shackle` keeps split-swaps capacity-neutral (carve exactly the traded stop's size) —
+// the conservative half of the corridor race. Unshackled, the slice runs as heavy as
+// capacity allows (the S14 fix). solve() runs both and keeps the cheaper.
+function corridorRepair(sub: Substrate, routes: Stop[][], log: Move[], cap: (i: number) => number, shackle = false): void {
   for (let guard = 0; guard < 50; guard++) {
     let best:
       | { t: number; tp: number; nt: Stop[]; ntp: Stop[]; gain: number; B: string; via: string; touched: string[] }
@@ -579,12 +593,12 @@ function corridorRepair(sub: Substrate, routes: Stop[][], log: Move[], cap: (i: 
         if (tp < 0 || tp === t) continue;
         const Bstop = routes[tp].find((s) => s.nbhd === B)!;
         if (Bstop.pin !== undefined) continue; // a frozen anchor seed stays put
-        const base = costOf(sub, routes[t]) + costOf(sub, routes[tp]);
+        const base = tidiedCost(sub, routes[t]) + tidiedCost(sub, routes[tp]);
         const without = routes[tp].filter((s) => s.nbhd !== B);
         // (a) the pass-through truck just absorbs the middle, if it has room
         if (loadOf(routes[t]) + Bstop.orders <= cap(t)) {
           const nt = cheapestInsert(sub, routes[t], Bstop);
-          const gain = base - (costOf(sub, nt) + costOf(sub, without));
+          const gain = base - (tidiedCost(sub, nt) + tidiedCost(sub, without));
           if (gain > 1e-9 && (!best || gain > best.gain)) {
             best = { t, tp, nt, ntp: without, gain, B, via: "absorbed", touched: keysOf([Bstop]) };
           }
@@ -596,25 +610,33 @@ function corridorRepair(sub: Substrate, routes: Stop[][], log: Move[], cap: (i: 
           if (loadOf(routes[tp]) - Bstop.orders + S.orders > cap(tp)) continue;
           const nt = cheapestInsert(sub, routes[t].filter((x) => x.nbhd !== S.nbhd), Bstop);
           const ntp = cheapestInsert(sub, without, S);
-          const gain = base - (costOf(sub, nt) + costOf(sub, ntp));
+          const gain = base - (tidiedCost(sub, nt) + tidiedCost(sub, ntp));
           if (gain > 1e-9 && (!best || gain > best.gain)) {
             best = { t, tp, nt, ntp, gain, B, via: `trading ${S.nbhd}`, touched: keysOf([Bstop, S]) };
           }
         }
         // (c) split-swap: B is too big to take whole, but T drives THROUGH it — hand a
-        //     detour stop X to B's truck and carve back an equal-size slice of B (a
-        //     split delivery). Capacity-neutral, so it lands where (a)/(b) can't: the
-        //     truck keeps the turf it already crosses and sheds the real detour. (S2:
-        //     Redmond ↔ half of Factoria; S4: Eastlake ↔ most of Mercer N.)
+        //     detour stop X to B's truck and carve a slice of B back onto T. The slice
+        //     size is FREE: carve as many of B's houses as capacity allows, not just
+        //     X.orders. The capacity-neutral X-sized carve is a special case in range;
+        //     letting the slice run heavier is the S14 fix (a 7/1 split wins where the
+        //     neutral 6/2 loses). Both trucks are held within cap by the k bounds.
+        //     (S2: Redmond ↔ half of Factoria; S4: Eastlake ↔ most of Mercer N.)
         for (const X of routes[t]) {
-          if (X.pin !== undefined || Bstop.orders <= X.orders) continue; // need slack in B to leave some behind
-          const take: Stop = { nbhd: B, orders: X.orders, houses: Bstop.houses.slice(0, X.orders) };
-          const rest: Stop = { nbhd: B, orders: Bstop.orders - X.orders, houses: Bstop.houses.slice(X.orders) };
-          const nt = cheapestInsert(sub, routes[t].filter((s) => s !== X), take);
-          const ntp = cheapestInsert(sub, routes[tp].map((s) => (s.nbhd === B ? rest : s)), X);
-          const gain = base - (costOf(sub, nt) + costOf(sub, ntp));
-          if (gain > 1e-9 && (!best || gain > best.gain)) {
-            best = { t, tp, nt, ntp, gain, B, via: `split, trading ${X.nbhd}`, touched: keysOf([X, take]) };
+          if (X.pin !== undefined) continue;
+          const kMin = Math.max(1, loadOf(routes[tp]) - cap(tp) + X.orders); // leave tp within cap
+          const kMax = Math.min(Bstop.orders - 1, cap(t) - loadOf(routes[t]) + X.orders); // keep t within cap, leave ≥1 on B
+          const lo = shackle ? Math.max(kMin, X.orders) : kMin;
+          const hi = shackle ? Math.min(kMax, X.orders) : kMax;
+          for (let k = lo; k <= hi; k++) {
+            const take: Stop = { nbhd: B, orders: k, houses: Bstop.houses.slice(0, k) };
+            const rest: Stop = { nbhd: B, orders: Bstop.orders - k, houses: Bstop.houses.slice(k) };
+            const nt = cheapestInsert(sub, routes[t].filter((s) => s !== X), take);
+            const ntp = cheapestInsert(sub, routes[tp].map((s) => (s.nbhd === B ? rest : s)), X);
+            const gain = base - (tidiedCost(sub, nt) + tidiedCost(sub, ntp));
+            if (gain > 1e-9 && (!best || gain > best.gain)) {
+              best = { t, tp, nt, ntp, gain, B, via: `split ${k}/${Bstop.orders - k}, trading ${X.nbhd}`, touched: keysOf([X, take]) };
+            }
           }
         }
       }
@@ -863,7 +885,21 @@ export function solve(sub: Substrate, orders: Map<string, number[]>, allowSplit 
   // above can hand a slot a cluster whose truck now drives THROUGH a neighborhood
   // another slot serves — the "I pass it every day, why am I sent elsewhere?" fix.
   for (let i = 0; i < bySlot.length; i++) bySlot[i] = coalesceStops(bySlot[i]);
-  corridorRepair(sub, bySlot, log, (i) => TRUCK_CAPS[i]);
+  // Race two corridor passes on the slotted routes and keep the cheaper: a CONSERVATIVE
+  // one (capacity-neutral split-swaps only) and an AGGRESSIVE one (free-slice splits — the
+  // S14 7/1 fix). The conservative pass is never worse than skipping consolidation, so the
+  // min of the two is never worse than that baseline; the aggressive free-slice split wins
+  // only on shifts where it genuinely helps, never where greedy myopia would misfire.
+  const cons = snapshot(bySlot);
+  const consLog: Move[] = [];
+  corridorRepair(sub, cons, consLog, (i) => TRUCK_CAPS[i], true);
+  const aggr = snapshot(bySlot);
+  const aggrLog: Move[] = [];
+  corridorRepair(sub, aggr, aggrLog, (i) => TRUCK_CAPS[i], false);
+  const painSum = (rs: Stop[][]): number => rs.reduce((a, r) => a + tidiedCost(sub, r), 0);
+  const winner = painSum(aggr) < painSum(cons) ? { rs: aggr, lg: aggrLog } : { rs: cons, lg: consLog };
+  bySlot.splice(0, bySlot.length, ...winner.rs);
+  for (const m of winner.lg) log.push(m);
   for (const r of bySlot) twoOpt(sub, r, log); // re-tidy the routes a consolidation reshaped
 
   const built: Route[] = bySlot.map((stops) => {
