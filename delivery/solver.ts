@@ -492,10 +492,12 @@ function exchange(sub: Substrate, routes: Stop[][], log: Move[]): void {
             if (sb.pin !== undefined || sa.nbhd === sb.nbhd) continue;
             if (loadOf(routes[a]) - sa.orders + sb.orders > capOf(routes[a])) continue;
             if (loadOf(routes[b]) - sb.orders + sa.orders > capOf(routes[b])) continue;
-            if (routes[a].some((s, k) => k !== i && s.nbhd === sb.nbhd)) continue; // no duplicate nbhd
-            if (routes[b].some((s, k) => k !== j && s.nbhd === sa.nbhd)) continue;
-            const ra = reinsert(sub, routes[a], i, sb);
-            const rb = reinsert(sub, routes[b], j, sa);
+            // A swap onto a truck that already serves the neighborhood is allowed:
+            // coalesce the duplicate before costing, so CONSOLIDATING a split
+            // neighborhood onto one truck (the natural corridor fix a human eye
+            // spots instantly) is valued for real instead of forbidden outright.
+            const ra = coalesceStops(reinsert(sub, routes[a], i, sb));
+            const rb = coalesceStops(reinsert(sub, routes[b], j, sa));
             const gain = base - (costOf(sub, ra) + costOf(sub, rb));
             if (gain > 1e-6 && (!best || gain > best.gain)) best = { a, b, ra, rb, gain, sa, sb };
           }
@@ -686,6 +688,8 @@ export function solve(sub: Substrate, orders: Map<string, number[]>, allowSplit 
   rebalance(sub, routes, log); // free tie-breaks (never lengthen the day)
   if (allowSplit) {
     splitPass(sub, routes, log); // voluntary split delivery, if it lowers total time
+    exchange(sub, routes, log); // a split can leave a neighborhood crossed between two trucks; the
+    // consolidating swap (re-merge it onto its corridor truck) only exists AFTER splitPass creates it
     rebalance(sub, routes, log); // re-settle with any split in place
   }
   for (let i = 0; i < routes.length; i++) routes[i] = coalesceStops(routes[i]); // one stop per neighborhood
