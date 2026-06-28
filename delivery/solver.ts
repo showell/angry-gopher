@@ -648,6 +648,72 @@ function corridorRepair(sub: Substrate, routes: Stop[][], log: Move[], cap: (i: 
   }
 }
 
+/**
+ * Post-slot local search — the final relocate + swap pass, on the SLOTTED routes.
+ *
+ * `orOpt` (relocate) and `exchange` (swap) run only on the pre-slot clusters. But the
+ * slot-assignment + spill stage that follows can hand a slot a split half on a worse
+ * truck than another slot could serve it from — an improvable assignment that no later
+ * pass sees, because the one pass that does run post-slot (`corridorRepair`) only
+ * consolidates *threaded* middles. So we re-run general relocate/swap here, with two
+ * differences the slotted world demands:
+ *   - EXACT slot caps `TRUCK_CAPS[i]` (the route IS its slot now; `capOf`'s optimistic
+ *     MAX_CAP for an anchor-less route could overfill an east-12 truck);
+ *   - positional routes — a slot emptied by a relocate stays in place (a truck that
+ *     stayed home), never filtered out.
+ * Scored on `tidiedCost` (the order the route settles into, the S14 discipline) and
+ * accepting only gain > 0, so it is provably never-worse than the corridor-race result.
+ */
+function postSlotLocalSearch(sub: Substrate, bySlot: Stop[][], log: Move[]): void {
+  const n = bySlot.length;
+  for (let guard = 0; guard < 200; guard++) {
+    type Best = { kind: "or-opt" | "swap"; a: number; b: number; ra: Stop[]; rb: Stop[]; gain: number; touched: string[] };
+    let best: Best | null = null;
+    const cost = (i: number) => tidiedCost(sub, bySlot[i]);
+
+    // Relocate: move one stop a → b (coalescing if b already serves that neighborhood).
+    for (let a = 0; a < n; a++) {
+      if (bySlot[a].length === 0) continue;
+      for (const stop of bySlot[a]) {
+        if (stop.pin !== undefined) continue;
+        for (let b = 0; b < n; b++) {
+          if (b === a) continue;
+          if (loadOf(bySlot[b]) + stop.orders > TRUCK_CAPS[b]) continue;
+          const ra = bySlot[a].filter((x) => x !== stop);
+          const rb = cheapestInsert(sub, bySlot[b], stop);
+          const gain = cost(a) + cost(b) - (tidiedCost(sub, ra) + tidiedCost(sub, rb));
+          if (gain > 1e-6 && (!best || gain > best.gain)) best = { kind: "or-opt", a, b, ra, rb, gain, touched: keysOf([stop]) };
+        }
+      }
+    }
+    // Swap: trade one stop between two slots when neither can simply receive a relocate.
+    for (let a = 0; a < n; a++)
+      for (let b = a + 1; b < n; b++) {
+        if (bySlot[a].length === 0 || bySlot[b].length === 0) continue;
+        for (let i = 0; i < bySlot[a].length; i++) {
+          const sa = bySlot[a][i];
+          if (sa.pin !== undefined) continue;
+          for (let j = 0; j < bySlot[b].length; j++) {
+            const sb = bySlot[b][j];
+            if (sb.pin !== undefined || sa.nbhd === sb.nbhd) continue;
+            if (loadOf(bySlot[a]) - sa.orders + sb.orders > TRUCK_CAPS[a]) continue;
+            if (loadOf(bySlot[b]) - sb.orders + sa.orders > TRUCK_CAPS[b]) continue;
+            const ra = coalesceStops(reinsert(sub, bySlot[a], i, sb));
+            const rb = coalesceStops(reinsert(sub, bySlot[b], j, sa));
+            const gain = cost(a) + cost(b) - (tidiedCost(sub, ra) + tidiedCost(sub, rb));
+            if (gain > 1e-6 && (!best || gain > best.gain)) best = { kind: "swap", a, b, ra, rb, gain, touched: keysOf([sa, sb]) };
+          }
+        }
+      }
+
+    if (!best) break;
+    bySlot[best.a] = best.ra;
+    bySlot[best.b] = best.rb;
+    const detail = best.kind === "or-opt" ? `relocated a stop to truck ${best.b + 1}` : `traded a stop between trucks ${best.a + 1} and ${best.b + 1}`;
+    log.push({ kind: best.kind, saved: best.gain, detail, frame: snapshot(bySlot), touched: best.touched });
+  }
+}
+
 /** Population stdev of a set of route times — our (im)balance measure. */
 function stdev(times: number[]): number {
   if (times.length === 0) return 0;
@@ -901,6 +967,11 @@ export function solve(sub: Substrate, orders: Map<string, number[]>, allowSplit 
   bySlot.splice(0, bySlot.length, ...winner.rs);
   for (const m of winner.lg) log.push(m);
   for (const r of bySlot) twoOpt(sub, r, log); // re-tidy the routes a consolidation reshaped
+
+  // General relocate/swap on the slotted routes — catches improvements the slot
+  // assignment + spill created, which the pre-slot orOpt/exchange never saw.
+  postSlotLocalSearch(sub, bySlot, log);
+  for (const r of bySlot) twoOpt(sub, r, log);
 
   const built: Route[] = bySlot.map((stops) => {
     const b = breakdown(sub, stops);
