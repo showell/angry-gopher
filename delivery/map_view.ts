@@ -730,18 +730,16 @@ function drawAnimation(ctx: CanvasRenderingContext2D, tracks: Track[], t: number
   ctx.globalAlpha = 1;
 }
 
-// Progress meter (lower-right): one tiny square per delivered house, appended in the
-// order doorsteps are hit across the WHOLE fleet and tinted by the delivering truck.
-const PROG_COLS = 25; // 25 × 4 = 100 cells
-const PROG_CELL = 2; // each house is a 2×2 square
-const PROG_GAP = 1;
-const PROG_PITCH = PROG_CELL + PROG_GAP;
+// Progress meter (bottom, left-aligned with the HUD): one square per delivered house in
+// a single row straight across, appended in the order doorsteps are hit across the WHOLE
+// fleet and tinted by the delivering truck.
+const PROG_CELL = 3; // each house is a 3×3 square, packed with no gaps (100 → 300px wide)
 
 /**
- * The day's deliveries as a filling grid of 2×2 squares — total progress at a glance,
- * and which trucks cleared their routes first: a truck's colour stops appearing once
- * it's done, so the slow west routes trail to the very end despite their head start out
- * of the single dock (departures stagger by load; finishing order is what this shows).
+ * The day's deliveries as a filling row of 3×3 squares — total progress at a glance, and
+ * which trucks cleared their routes first: a truck's colour stops appearing once it's
+ * done, so the slow west routes trail to the very end despite their head start out of the
+ * single dock (departures stagger by load; finishing order is what this shows).
  */
 function drawProgress(ctx: CanvasRenderingContext2D, tracks: Track[], t: number): void {
   const events: { t: number; color: string }[] = [];
@@ -751,21 +749,17 @@ function drawProgress(ctx: CanvasRenderingContext2D, tracks: Track[], t: number)
   let done = 0;
   for (const e of events) if (t >= e.t) done++;
 
-  const w = PROG_COLS * PROG_PITCH - PROG_GAP;
-  const x0 = MAP_W - 24 - w;
-  const y0 = 650;
+  const x0 = 24; // left edge aligned with the HUD
+  const y0 = 649;
+  for (let i = 0; i < total; i++) {
+    ctx.fillStyle = i < done ? events[i].color : "rgba(20, 26, 34, 0.10)";
+    ctx.fillRect(x0 + i * PROG_CELL, y0, PROG_CELL, PROG_CELL);
+  }
 
   ctx.textAlign = "left";
   ctx.fillStyle = COLOR.text;
   ctx.font = "bold 12px system-ui, sans-serif";
-  ctx.fillText(`delivered ${done} / ${total}`, x0, y0 - 7);
-
-  for (let i = 0; i < total; i++) {
-    const x = x0 + (i % PROG_COLS) * PROG_PITCH;
-    const y = y0 + Math.floor(i / PROG_COLS) * PROG_PITCH;
-    ctx.fillStyle = i < done ? events[i].color : "rgba(20, 26, 34, 0.10)";
-    ctx.fillRect(x, y, PROG_CELL, PROG_CELL);
-  }
+  ctx.fillText(`delivered ${done} / ${total}`, x0 + total * PROG_CELL + 8, y0 + PROG_CELL);
 }
 
 function drawClock(ctx: CanvasRenderingContext2D, t: number, maxT: number, playing: boolean): void {
