@@ -60,7 +60,8 @@ const HOME_SIZE = 5.0;
 // Truck-panel layout (top-right), shared by the renderer and the hit-test.
 const PANEL_X = MAP_W - 250;
 const PANEL_W = 240;
-const PANEL_ROW0 = 65; // text baseline of the first truck row
+const PANEL_TOP = 148; // top of the right-side panel — pushed below the always-on controls hints
+const PANEL_ROW0 = PANEL_TOP + 37; // text baseline of the first truck row
 const PANEL_ROW_H = 18;
 
 const COLOR = {
@@ -81,6 +82,7 @@ const COLOR = {
   text: "#2a2e34",
   note: "#7b8088",
   faint: "#b9b3bf",
+  link: "#2a6db0",
 };
 
 function trace(ctx: CanvasRenderingContext2D, pts: Pt[], close: boolean): void {
@@ -399,25 +401,69 @@ function drawRegionLabels(ctx: CanvasRenderingContext2D): void {
   ctx.restore();
 }
 
+// Hover regions over the top-left HUD text → native browser tooltips (main.ts sets
+// canvas.title from these). Logical coords, matching the baselines drawn in drawHud.
+export const HUD_TOOLTIPS: { x: number; y: number; w: number; h: number; text: string }[] = [
+  { x: 24, y: 64, w: 110, h: 18, text: "Use S to shuffle up a new shift" }, // over "Shift Sn"
+  { x: 24, y: 86, w: 100, h: 18, text: "randomly selected from 228 homes" }, // over "100 orders"
+];
+
+// Click region for the "Home" link under the order count (main.ts navigates on click).
+// Logical coords, matching the "Home" baseline drawn in drawHud.
+export const HOME_LINK = { x: 24, y: 108, w: 46, h: 18, href: "/" };
+
 function drawHud(ctx: CanvasRenderingContext2D, shift: number): void {
-  // Title + shift + order count (top-left — there's more room here than at the bottom).
   ctx.textAlign = "left";
+
+  // Title + tagline + shift + order count (top-left — there's more room here than at the bottom).
   ctx.fillStyle = COLOR.text;
   ctx.font = "bold 18px system-ui, sans-serif";
   ctx.fillText("Seattle Delivery Network", 24, 34);
 
+  ctx.fillStyle = COLOR.note;
+  ctx.font = "italic 12px system-ui, sans-serif";
+  ctx.fillText("totally not to scale", 24, 53);
+
   // Which shift we're on — called out so a particular shuffle can be reported.
+  ctx.fillStyle = COLOR.text;
   ctx.font = "bold 15px system-ui, sans-serif";
-  ctx.fillText(`Shift S${shift}`, 24, 60);
+  ctx.fillText(`Shift S${shift}`, 24, 77);
 
   // The day's order count, in a plainly legible size right under the shift.
   ctx.font = "14px system-ui, sans-serif";
-  ctx.fillText(`${FLEET.orders} orders`, 24, 82);
+  ctx.fillText(`${FLEET.orders} orders`, 24, 99);
 
-  // Controls hint (bottom-left).
-  ctx.fillStyle = COLOR.note;
-  ctx.font = "italic 12px system-ui, sans-serif";
-  ctx.fillText("totally not to scale  ·  hover a neighborhood or a truck  ·  Space run the day  ·  A step the solve  ·  ←/→ step (paused)  ·  S new shift  ·  B back", 24, 706);
+  // Home link, under the order count.
+  ctx.fillStyle = COLOR.link;
+  ctx.font = "13px system-ui, sans-serif";
+  ctx.fillText("Home", HOME_LINK.x, 121);
+  const hw = ctx.measureText("Home").width;
+  ctx.fillRect(HOME_LINK.x, 123, hw, 1); // underline
+
+  // How-to-use hints (top-right, above the plan panel) — always on, one instruction per
+  // line, with the key bolded.
+  ctx.font = "13px system-ui, sans-serif";
+  const hints: { key: string; rest: string }[] = [
+    { key: "", rest: "hover a neighborhood or a truck" },
+    { key: "Space", rest: " — run the day" },
+    { key: "A", rest: " — step the solve" },
+    { key: "←/→", rest: " — step (paused)" },
+    { key: "S", rest: " — new shift" },
+    { key: "B", rest: " — back" },
+  ];
+  hints.forEach((h, i) => {
+    const y = 24 + i * 19;
+    ctx.fillStyle = COLOR.text;
+    if (h.key) {
+      ctx.font = "bold 13px system-ui, sans-serif";
+      ctx.fillText(h.key, PANEL_X, y);
+      const kw = ctx.measureText(h.key).width;
+      ctx.font = "13px system-ui, sans-serif";
+      ctx.fillText(h.rest, PANEL_X + kw, y);
+    } else {
+      ctx.fillText(h.rest, PANEL_X, y);
+    }
+  });
 }
 
 /** Break `text` into lines that each fit `maxW` at the current font. */
@@ -448,12 +494,12 @@ function drawSolvePanel(ctx: CanvasRenderingContext2D, label: string, i: number,
 
   ctx.fillStyle = COLOR.text;
   ctx.font = "bold 14px system-ui, sans-serif";
-  ctx.fillText("Building the plan", x, 28);
+  ctx.fillText("Building the plan", x, PANEL_TOP);
   ctx.fillStyle = COLOR.note;
   ctx.font = "12px system-ui, sans-serif";
-  ctx.fillText(`step ${i + 1} of ${n}`, x, 45);
+  ctx.fillText(`step ${i + 1} of ${n}`, x, PANEL_TOP + 17);
 
-  let y = 76;
+  let y = PANEL_TOP + 48;
   ctx.fillStyle = COLOR.text;
   ctx.font = "bold 14px system-ui, sans-serif";
   for (const ln of wrapText(ctx, label, PANEL_W)) {
@@ -729,7 +775,7 @@ function drawProgress(ctx: CanvasRenderingContext2D, tracks: Track[], t: number)
   for (const e of events) if (t >= e.t) done++;
 
   const x0 = 24; // left edge aligned with the HUD
-  const y0 = 649;
+  const y0 = 699; // near the very bottom (the controls hint that used to live here moved up-right)
   for (let i = 0; i < total; i++) {
     ctx.fillStyle = i < done ? events[i].color : "rgba(20, 26, 34, 0.10)";
     ctx.fillRect(x0 + i * PROG_CELL, y0, PROG_CELL, PROG_CELL);
@@ -747,7 +793,7 @@ function drawClock(ctx: CanvasRenderingContext2D, t: number, maxT: number, playi
   ctx.fillStyle = COLOR.text;
   ctx.font = "bold 15px system-ui, sans-serif";
   const badge = done ? "✓ day complete" : playing ? "▶ running the day" : "⏸ paused";
-  ctx.fillText(`${badge}  ·  ${Math.round(Math.min(t, maxT))} / ${Math.round(maxT)} min`, 24, 640);
+  ctx.fillText(`${badge}  ·  ${Math.round(Math.min(t, maxT))} / ${Math.round(maxT)} min`, 24, 690);
 }
 
 function drawTruckPanel(ctx: CanvasRenderingContext2D, plan: Plan, activeTruck: number | null): void {
@@ -755,10 +801,10 @@ function drawTruckPanel(ctx: CanvasRenderingContext2D, plan: Plan, activeTruck: 
   ctx.textAlign = "left";
   ctx.fillStyle = COLOR.text;
   ctx.font = "bold 14px system-ui, sans-serif";
-  ctx.fillText(`Plan — ${deployed} of ${FLEET.trucks} trucks out`, PANEL_X, 28);
+  ctx.fillText(`Plan — ${deployed} of ${FLEET.trucks} trucks out`, PANEL_X, PANEL_TOP);
   ctx.fillStyle = COLOR.note;
   ctx.font = "12px system-ui, sans-serif";
-  ctx.fillText(`${Math.round(plan.totalTime)} driver-min  ·  spread ${Math.round(plan.spread)} min`, PANEL_X, 45);
+  ctx.fillText(`${Math.round(plan.totalTime)} driver-min  ·  spread ${Math.round(plan.spread)} min`, PANEL_X, PANEL_TOP + 17);
 
   plan.routes.forEach((route, i) => {
     const y = PANEL_ROW0 + i * PANEL_ROW_H;
