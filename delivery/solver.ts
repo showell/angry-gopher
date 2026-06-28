@@ -1087,15 +1087,19 @@ const DEFER_NO_MEDINA = new Set([...DEFER_SET].filter((n) => n !== "Medina"));
  * and the result is deterministic.
  *   - split:  leftover-packing — `room` (roomiest truck, biggest chunk, geography-blind)
  *             vs `cost` (cheapest truck, cheapest chunk).
- *   - arc:    free clusters — `whole` (one lot per neighborhood) vs `arc` (one lot per
- *             ring arc, so a passing truck grabs the near arc instead of the capacity
- *             auction handing the whole neighborhood to whoever has room — the S487 fix).
  *   - medina: `M+` (deferred with the FC-adjacent fillers) vs `M-` (free in construction).
+ *
+ * The arc-construction axis (`whole | arc`) was PRUNED: arc-first construction makes ~2.5×
+ * the units, so those four variants cost ~2.5× each, yet `arcRebalance` (a local-search
+ * pass present in every variant) recovers the arc wins on the whole-built plans. Dropping
+ * the axis is 3.6× faster for ≈+6 pain/shift (racerank.ts, N=100). The label keeps the
+ * `/whole/` tag for continuity (puzzle reports, baselines). `arcSplit` stays false now —
+ * the construction path still exists but the race no longer exercises it.
  */
 type Variant = { label: string; costAware: boolean; arcSplit: boolean; defer: Set<string> };
 export const RACE: Variant[] = []; // exported for racerank.ts (dev timing)
 for (const [stag, costAware] of [["room", false] as const, ["cost", true] as const])
-  for (const [atag, arcSplit] of [["whole", false] as const, ["arc", true] as const])
+  for (const [atag, arcSplit] of [["whole", false] as const])
     for (const [mtag, defer] of [["M+", DEFER_SET] as const, ["M-", DEFER_NO_MEDINA] as const])
       RACE.push({ label: `${stag}/${atag}/${mtag}`, costAware, arcSplit, defer });
 
