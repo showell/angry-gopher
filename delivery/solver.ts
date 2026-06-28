@@ -763,6 +763,85 @@ function postSlotLocalSearch(sub: Substrate, bySlot: Stop[][], log: Move[]): voi
 }
 
 /**
+ * Arc-rebalance — a compound move the plain relocate/swap can't reach. A swap (or
+ * relocate) that the EXACT slot caps would block is rescued by shifting ONE ARC of a
+ * filler from the overfull truck to the other, so a heavy neighborhood can rejoin its
+ * natural cluster while a small filler splits to absorb the overflow (the S493
+ * Medina↔Redmond rescued by a Bellevue arc). Arcs come from `arcGroups`, so exempt /
+ * cul-de-sac neighborhoods never split. Scored on `tidiedCost`, accepting only gain > 0
+ * — provably never-worse, and the race keeps the min across variants. The win is a
+ * two-step combination whose intermediate state isn't improving, so single-move greedy
+ * (postSlotLocalSearch) can't cross to it; this evaluates the pair atomically.
+ */
+type ArcCand = { a: number; b: number; ra: Stop[]; rb: Stop[]; gain: number; touched: string[] };
+function arcRebalance(sub: Substrate, bySlot: Stop[][], log: Move[]): void {
+  const n = bySlot.length;
+  const cost = (st: Stop[]) => tidiedCost(sub, st);
+  for (let guard = 0; guard < 200; guard++) {
+    let best: ArcCand | null = null;
+    const score = (a: number, b: number, ra: Stop[], rb: Stop[], touched: string[]): void => {
+      if (loadOf(ra) > TRUCK_CAPS[a] || loadOf(rb) > TRUCK_CAPS[b]) return;
+      const gain = cost(bySlot[a]) + cost(bySlot[b]) - (cost(ra) + cost(rb));
+      if (gain > 1e-6 && (!best || gain > best.gain)) best = { a, b, ra, rb, gain, touched };
+    };
+    // A base candidate (ra0 on a, rb0 on b). If it overfills exactly one side, try to
+    // rescue it by arc-shifting a filler from the overfull side to the other.
+    const withRescue = (a: number, b: number, ra0: Stop[], rb0: Stop[], touched: string[]): void => {
+      const la = loadOf(ra0);
+      const lb = loadOf(rb0);
+      if (la <= TRUCK_CAPS[a] && lb <= TRUCK_CAPS[b]) { score(a, b, ra0, rb0, touched); return; }
+      const overA = la > TRUCK_CAPS[a] && lb <= TRUCK_CAPS[b];
+      const overB = lb > TRUCK_CAPS[b] && la <= TRUCK_CAPS[a];
+      if (!overA && !overB) return; // both over — one arc can't fix it
+      const over = overA ? ra0 : rb0;
+      const under = overA ? rb0 : ra0;
+      const capUnder = overA ? TRUCK_CAPS[b] : TRUCK_CAPS[a];
+      const need = loadOf(over) - (overA ? TRUCK_CAPS[a] : TRUCK_CAPS[b]);
+      for (const F of over) {
+        if (F.pin !== undefined) continue;
+        for (const arc of arcGroups(F.nbhd, F.houses)) {
+          if (arc.length < need || arc.length >= F.orders) continue; // relieve enough, leave a remainder
+          if (loadOf(under) + arc.length > capUnder) continue;
+          const set = new Set(arc);
+          const keep = F.houses.filter((h) => !set.has(h));
+          const newOver = coalesceStops(over.map((s) => (s === F ? { ...s, orders: keep.length, houses: keep } : s)).filter((s) => s.houses.length));
+          const newUnder = cheapestInsert(sub, under, { nbhd: F.nbhd, orders: arc.length, houses: arc });
+          score(a, b, overA ? newOver : newUnder, overA ? newUnder : newOver, [...touched, ...keys(F.nbhd, arc)]);
+        }
+      }
+    };
+    for (let a = 0; a < n; a++) {
+      if (bySlot[a].length === 0) continue;
+      for (const stop of bySlot[a]) {
+        if (stop.pin !== undefined) continue;
+        for (let b = 0; b < n; b++) {
+          if (b === a) continue;
+          withRescue(a, b, bySlot[a].filter((x) => x !== stop), cheapestInsert(sub, bySlot[b], stop), keysOf([stop]));
+        }
+      }
+    }
+    for (let a = 0; a < n; a++)
+      for (let b = a + 1; b < n; b++) {
+        if (bySlot[a].length === 0 || bySlot[b].length === 0) continue;
+        for (let i = 0; i < bySlot[a].length; i++) {
+          const sa = bySlot[a][i];
+          if (sa.pin !== undefined) continue;
+          for (let j = 0; j < bySlot[b].length; j++) {
+            const sb = bySlot[b][j];
+            if (sb.pin !== undefined || sa.nbhd === sb.nbhd) continue;
+            withRescue(a, b, coalesceStops(reinsert(sub, bySlot[a], i, sb)), coalesceStops(reinsert(sub, bySlot[b], j, sa)), keysOf([sa, sb]));
+          }
+        }
+      }
+    const pick = best as ArcCand | null; // best is only ever assigned inside `score` (a closure), so CFA narrows it to null here; cast restores the real type
+    if (!pick) break;
+    bySlot[pick.a] = pick.ra;
+    bySlot[pick.b] = pick.rb;
+    log.push({ kind: "or-opt", saved: pick.gain, detail: `arc-rebalance between trucks ${pick.a + 1} and ${pick.b + 1}`, frame: snapshot(bySlot), touched: pick.touched });
+  }
+}
+
+/**
  * Entry/exit ring angles of the route's delivery visit to `nbhd` — the first time
  * the driven path reaches it (a later re-thread only transits). The gates are set
  * by the neighboring stops, NOT by which houses are delivered, so they're stable
@@ -1144,6 +1223,11 @@ function runSolve(sub: Substrate, orders: Map<string, number[]>, allowSplit: boo
   // General relocate/swap on the slotted routes — catches improvements the slot
   // assignment + spill created, which the pre-slot orOpt/exchange never saw.
   postSlotLocalSearch(sub, bySlot, log);
+  for (const r of bySlot) twoOpt(sub, r, log);
+
+  // Arc-rebalance: compound swap/relocate moves rescued by an arc-shift — lets a heavy
+  // neighborhood rejoin its cluster while a small filler splits to make room (S493).
+  arcRebalance(sub, bySlot, log);
   for (const r of bySlot) twoOpt(sub, r, log);
 
   // Final, pain-neutral polish: hand each split neighborhood's helper truck its

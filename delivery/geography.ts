@@ -483,15 +483,25 @@ export function surfaceSpokes(name: string): string[] {
 }
 
 /**
+ * Neighborhoods we deliberately never arc-split. The far-flung anchors are loyal to
+ * their one truck (West Seattle, Magnolia, Kirkland, Issaquah, Mercer S), so slicing
+ * them into arcs only wastes search; U-District is our one true cul-de-sac besides
+ * Mercer S (single Exit-5 ramp), so it has no arc to give. (Mercer S and U-District
+ * already fall out via the <2-spoke rule below; listed here to make the intent explicit.)
+ */
+export const ARC_EXEMPT = new Set(["West Seattle", "Magnolia", "Kirkland", "Issaquah", "Mercer S", "U-District"]);
+
+/**
  * Partition a neighborhood's ordered houses into ARC groups — the ring wedges between
  * consecutive surface-spoke gates. A truck arriving by one artery covers the adjacent
  * arc cheaply, so these are the natural sub-units to auction to trucks separately
  * (instead of forcing the whole neighborhood onto one truck by capacity). Returns the
- * non-empty groups, each a list of house indices; a spoke-less neighborhood stays whole.
+ * non-empty groups, each a list of house indices; an exempt or spoke-less neighborhood
+ * stays whole.
  */
 export function arcGroups(name: string, idx: number[]): number[][] {
   const spokes = surfaceSpokes(name);
-  if (spokes.length < 2 || idx.length === 0) return idx.length ? [idx] : [];
+  if (ARC_EXEMPT.has(name) || spokes.length < 2 || idx.length === 0) return idx.length ? [idx] : [];
   const gates = spokes.map((s) => norm(gateAngle(name, nodeAt(s)))).sort((a, b) => a - b);
   // Arc id = the gate just below a house's angle (wrapping past the last gate to the first).
   const arcOf = (a: number): number => {
