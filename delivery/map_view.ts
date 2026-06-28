@@ -39,8 +39,6 @@ import type { Itinerary, Leg } from "./timeline.ts";
 // The routing substrate is static, so build the travel-time matrix once.
 const SUB = buildSubstrate();
 
-const HOME_COUNT = NEIGHBORHOODS.reduce((s, n) => s + n.houses, 0);
-
 // One colour per truck — eight hues spread ~45° around the wheel, all dark
 // enough to read over the pale land and far enough apart to tell apart.
 const TRUCK_COLORS = [
@@ -401,42 +399,23 @@ function drawRegionLabels(ctx: CanvasRenderingContext2D): void {
   ctx.restore();
 }
 
-function swatch(ctx: CanvasRenderingContext2D, x: number, y: number, fill: string, edge: string, s: number, label: string): void {
-  ctx.fillStyle = fill;
-  ctx.strokeStyle = edge;
-  ctx.lineWidth = 1.5;
-  ctx.beginPath();
-  ctx.rect(x, y - s / 2, s, s);
-  ctx.fill();
-  ctx.stroke();
-  ctx.fillStyle = COLOR.text;
-  ctx.font = "12px system-ui, sans-serif";
-  ctx.textAlign = "left";
-  ctx.fillText(label, x + s + 6, y + 4);
-}
-
 function drawHud(ctx: CanvasRenderingContext2D, shift: number): void {
-  // Legend (top-left).
-  swatch(ctx, 24, 30, COLOR.order, "#ffffff", ORDER_SIZE, "order today (tinted by truck)");
-  swatch(ctx, 24, 52, COLOR.home, COLOR.homeEdge, HOME_SIZE, "home");
-
-  // Which shift we're on — called out so a particular shuffle can be reported.
+  // Title + shift + order count (top-left — there's more room here than at the bottom).
   ctx.textAlign = "left";
-  ctx.fillStyle = COLOR.text;
-  ctx.font = "bold 15px system-ui, sans-serif";
-  ctx.fillText(`Shift S${shift}`, 24, 86);
-
-  // Title + problem statement (bottom-left).
   ctx.fillStyle = COLOR.text;
   ctx.font = "bold 18px system-ui, sans-serif";
-  ctx.fillText("Seattle Delivery Network", 24, 668);
+  ctx.fillText("Seattle Delivery Network", 24, 34);
+
+  // Which shift we're on — called out so a particular shuffle can be reported.
+  ctx.font = "bold 15px system-ui, sans-serif";
+  ctx.fillText(`Shift S${shift}`, 24, 60);
+
+  // The day's order count, in a plainly legible size right under the shift.
+  ctx.font = "14px system-ui, sans-serif";
+  ctx.fillText(`${FLEET.orders} orders`, 24, 82);
+
+  // Controls hint (bottom-left).
   ctx.fillStyle = COLOR.note;
-  ctx.font = "13px system-ui, sans-serif";
-  ctx.fillText(
-    `${FLEET.orders} orders  ·  ${FLEET.trucks} trucks (14 west / 12 east totes)  ·  ${HOME_COUNT} homes`,
-    24,
-    688,
-  );
   ctx.font = "italic 12px system-ui, sans-serif";
   ctx.fillText("totally not to scale  ·  hover a neighborhood or a truck  ·  Space run the day  ·  A step the solve  ·  ←/→ step (paused)  ·  S new shift  ·  B back", 24, 706);
 }
