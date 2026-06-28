@@ -412,6 +412,44 @@ export function houseAngles(name: string, indices: number[]): number[] {
   return indices.map((i) => phase + (i / n.houses) * TAU);
 }
 
+/** Surface-road neighbors of a neighborhood. Bridges are excluded on purpose: a
+ *  bridge is a through-route, not a local spoke, so it doesn't subdivide the ring
+ *  into delivery arcs (it would split the clean far-side arc and strand a sliver). */
+export function surfaceSpokes(name: string): string[] {
+  const out: string[] = [];
+  for (const [a, b] of ROADS) {
+    if (a === name && b !== "FC") out.push(b);
+    if (b === name && a !== "FC") out.push(a);
+  }
+  return out;
+}
+
+/**
+ * Partition a neighborhood's ordered houses into ARC groups — the ring wedges between
+ * consecutive surface-spoke gates. A truck arriving by one artery covers the adjacent
+ * arc cheaply, so these are the natural sub-units to auction to trucks separately
+ * (instead of forcing the whole neighborhood onto one truck by capacity). Returns the
+ * non-empty groups, each a list of house indices; a spoke-less neighborhood stays whole.
+ */
+export function arcGroups(name: string, idx: number[]): number[][] {
+  const spokes = surfaceSpokes(name);
+  if (spokes.length < 2 || idx.length === 0) return idx.length ? [idx] : [];
+  const gates = spokes.map((s) => norm(gateAngle(name, nodeAt(s)))).sort((a, b) => a - b);
+  // Arc id = the gate just below a house's angle (wrapping past the last gate to the first).
+  const arcOf = (a: number): number => {
+    let g = gates.length - 1; // below the smallest gate → the wrap arc
+    for (let i = 0; i < gates.length; i++) if (gates[i] <= a) g = i;
+    return g;
+  };
+  const angs = houseAngles(name, idx).map(norm);
+  const buckets = new Map<number, number[]>();
+  idx.forEach((h, i) => {
+    const arc = arcOf(angs[i]);
+    (buckets.get(arc) ?? buckets.set(arc, []).get(arc)!).push(h);
+  });
+  return [...buckets.keys()].sort((a, b) => a - b).map((k) => buckets.get(k)!);
+}
+
 type WalkPlan = { arcPx: number; r: number; startA: number; coveredRad: number; pe: number; px: number; loop: boolean };
 
 /**

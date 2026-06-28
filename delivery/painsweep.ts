@@ -10,7 +10,7 @@
 // Optional: pass a shift count as argv[2] (default 200).
 
 import { buildSubstrate, edges } from "./roadgraph.ts";
-import { solve, painOf } from "./solver.ts";
+import { race, painOf } from "./solver.ts";
 import { chooseOrders, ordersByNeighborhood } from "./orders.ts";
 import { FLEET, TRUCK_CAPS } from "./geography.ts";
 
@@ -122,12 +122,14 @@ type ShiftResult = {
   demand: [string, number][];
   skips: SkipFlag[];
   raw: S[][];
+  winner: string;
+  variantPains: { label: string; pain: number }[];
 };
 
 function runShift(shift: number, seed: number): ShiftResult {
   const orders = chooseOrders(seed, FLEET.orders);
   const byNbhd = ordersByNeighborhood(orders);
-  const plan = solve(sub, byNbhd);
+  const { best: plan, winner, pains: variantPains } = race(sub, byNbhd);
 
   let westDemand = 0;
   let eastDemand = 0;
@@ -156,6 +158,8 @@ function runShift(shift: number, seed: number): ShiftResult {
     routes,
     skips: skipTheMiddle(plan.routes),
     raw: plan.routes.map((r) => r.stops as S[]),
+    winner,
+    variantPains,
   };
 }
 
@@ -243,6 +247,49 @@ const mean = Math.round(pains.reduce((s, v) => s + v, 0) / pains.length);
 
 console.log(`\n=== ${N} shifts (S1..S${N}), total fleet PAIN ===`);
 console.log(`  min ${q(0)}   p25 ${q(0.25)}   median ${q(0.5)}   mean ${mean}   p75 ${q(0.75)}   p90 ${q(0.9)}   max ${pains[pains.length - 1]}`);
+
+// --- Race variant scorecard: who wins, who never earns its slot -------------
+// Two questions: (1) which variant produces the kept (min-pain) plan, and (2) is any
+// variant a CONSISTENT LOSER we could prune? A variant earns its keep only when it is
+// the SOLE achiever of a shift's best pain (drop it and that shift gets worse). We also
+// check pairwise DOMINATION — variant A dominates B if A ≤ B on every shift — since a
+// dominated variant is pure overhead. Tie at the min is credited to the first-listed
+// variant (matches solve()'s deterministic keep-min), so "wins" sums to exactly N.
+const labels = results[0].variantPains.map((v) => v.label);
+const wins = new Map(labels.map((l) => [l, 0]));
+const sole = new Map(labels.map((l) => [l, 0])); // shifts where this variant ALONE hits the min
+for (const r of results) {
+  const min = Math.min(...r.variantPains.map((v) => v.pain));
+  wins.set(r.winner, wins.get(r.winner)! + 1);
+  const atMin = r.variantPains.filter((v) => v.pain === min);
+  if (atMin.length === 1) sole.set(atMin[0].label, sole.get(atMin[0].label)! + 1);
+}
+console.log(`\n=== RACE SCORECARD — ${labels.length} variants (split/arc/medina), ${N} shifts ===`);
+console.log(`  variant          wins   sole-best   (sole = drop it and some shift regresses)`);
+for (const l of labels)
+  console.log(`  ${l.padEnd(14)} ${String(wins.get(l)).padStart(5)}   ${String(sole.get(l)).padStart(9)}${sole.get(l) === 0 ? "   ← never decisive (prune candidate)" : ""}`);
+
+// Pairwise domination: A dominates B if A.pain ≤ B.pain on EVERY shift (and < on ≥1).
+const painOfVar = (r: ShiftResult, l: string) => r.variantPains.find((v) => v.label === l)!.pain;
+const dominated: string[] = [];
+for (const b of labels) {
+  for (const a of labels) {
+    if (a === b) continue;
+    let everyLE = true;
+    let someLT = false;
+    for (const r of results) {
+      const pa = painOfVar(r, a);
+      const pb = painOfVar(r, b);
+      if (pa > pb) everyLE = false;
+      if (pa < pb) someLT = true;
+    }
+    if (everyLE && someLT) {
+      dominated.push(`${b}  dominated by  ${a}`);
+      break;
+    }
+  }
+}
+console.log(`  domination: ${dominated.length ? dominated.join("; ") : "none — every variant wins some shift outright"}`);
 
 const worst = byPain.slice(-12).reverse();
 const best = byPain.slice(0, 3);

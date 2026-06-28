@@ -30,7 +30,7 @@
 // 2-opt within a route and Or-opt across routes. Every accepted move records a
 // "saved N pain" reason, for the manager-override phase to surface later.
 
-import { FLEET, TRUCK_ANCHORS, TRUCK_CAPS, MAX_CAP, DEFER_LAST, gateAngle, houseAngles, nodeAt } from "./geography.ts";
+import { FLEET, TRUCK_ANCHORS, TRUCK_CAPS, MAX_CAP, DEFER_LAST, gateAngle, houseAngles, nodeAt, arcGroups } from "./geography.ts";
 import { SERVICE, localMinutes } from "./roadgraph.ts";
 import type { Substrate } from "./roadgraph.ts";
 
@@ -254,13 +254,15 @@ function bestJoin(sub: Substrate, a: Stop[], b: Stop[]): Stop[] {
  * normal free stop that flows by cost (and usually coalesces right back onto the
  * same truck). The seed is what guarantees the slot's regional identity.
  */
-function customers(orders: Map<string, number[]>): Stop[] {
+function customers(orders: Map<string, number[]>, arcSplit: boolean): Stop[] {
   const out: Stop[] = [];
+  // Free (non-pinned) homes become clusters. arcSplit decomposes them by ring ARC —
+  // the natural sub-units a passing truck can each grab cheaply (the S487 fix) —
+  // instead of one monolithic lot auctioned by capacity. Either way, same-neighborhood
+  // clusters re-merge in construction when route savings don't beat the extra ring.
   const free = (nbhd: string, idx: number[]): void => {
-    for (let i = 0; i < idx.length; i += CAP) {
-      const houses = idx.slice(i, i + CAP);
-      out.push({ nbhd, orders: houses.length, houses });
-    }
+    const groups = arcSplit ? arcGroups(nbhd, idx) : chunk(idx, CAP);
+    for (const houses of groups) if (houses.length) out.push({ nbhd, orders: houses.length, houses });
   };
   for (const [nbhd, idx] of orders) {
     const slot = ANCHOR_SLOT.get(nbhd);
@@ -272,6 +274,13 @@ function customers(orders: Map<string, number[]>): Stop[] {
     out.push({ nbhd, orders: seed.length, houses: seed, pin: slot });
     free(nbhd, idx.slice(ANCHOR_PIN));
   }
+  return out;
+}
+
+/** Split a house list into chunks no larger than `size` (the no-arc-split default). */
+function chunk(idx: number[], size: number): number[][] {
+  const out: number[][] = [];
+  for (let i = 0; i < idx.length; i += size) out.push(idx.slice(i, i + size));
   return out;
 }
 
@@ -991,35 +1000,53 @@ function planPain(sub: Substrate, plan: Plan): number {
 const DEFER_NO_MEDINA = new Set([...DEFER_SET].filter((n) => n !== "Medina"));
 
 /**
- * Plan the fleet for a day's orders. Deterministic — same orders, same plan.
- *
- * Races four constructions and keeps the cheapest by total pain — two independent
- * per-shift coin-flips, each provably contributing only never-worse improvements:
- *   - leftover-packing split: "roomiest truck, biggest chunk" (geography-blind) vs
- *     "cheapest truck, cheapest chunk" (cost-aware);
- *   - Medina: deferred with the FC-adjacent fillers vs free to merge in construction.
- * Today's behavior (roomiest + Medina-deferred) is one of the four, so the min over
- * all four can never exceed it. Each runSolve is itself fast; four is well within the
- * ~5-solves/shift budget. Tie → first found (today's), so it stays deterministic.
+ * The construction race: each variant is a per-shift coin-flip with no local signal,
+ * so we solve all and keep the cheapest by pain. Every variant is a legal full solve,
+ * so the min is never worse than any single one — and today's behavior is variant 0
+ * (`room/whole`, Medina-deferred), so the race can never regress it. Order matters: a
+ * tie resolves to the FIRST listed (strict `<` below), so variant 0 stays the default
+ * and the result is deterministic.
+ *   - split:  leftover-packing — `room` (roomiest truck, biggest chunk, geography-blind)
+ *             vs `cost` (cheapest truck, cheapest chunk).
+ *   - arc:    free clusters — `whole` (one lot per neighborhood) vs `arc` (one lot per
+ *             ring arc, so a passing truck grabs the near arc instead of the capacity
+ *             auction handing the whole neighborhood to whoever has room — the S487 fix).
+ *   - medina: `M+` (deferred with the FC-adjacent fillers) vs `M-` (free in construction).
  */
-export function solve(sub: Substrate, orders: Map<string, number[]>, allowSplit = true): Plan {
+type Variant = { label: string; costAware: boolean; arcSplit: boolean; defer: Set<string> };
+const RACE: Variant[] = [];
+for (const [stag, costAware] of [["room", false] as const, ["cost", true] as const])
+  for (const [atag, arcSplit] of [["whole", false] as const, ["arc", true] as const])
+    for (const [mtag, defer] of [["M+", DEFER_SET] as const, ["M-", DEFER_NO_MEDINA] as const])
+      RACE.push({ label: `${stag}/${atag}/${mtag}`, costAware, arcSplit, defer });
+
+/** Run the full race; return the cheapest plan, plus each variant's pain for diagnostics. */
+export function race(sub: Substrate, orders: Map<string, number[]>, allowSplit = true): { best: Plan; winner: string; pains: { label: string; pain: number }[] } {
   let best: Plan | null = null;
   let bestPain = Infinity;
-  for (const defer of [DEFER_SET, DEFER_NO_MEDINA])
-    for (const costAware of [false, true]) {
-      const plan = runSolve(sub, orders, allowSplit, costAware, defer);
-      const pain = planPain(sub, plan);
-      if (pain < bestPain) {
-        bestPain = pain;
-        best = plan;
-      }
+  let winner = "";
+  const pains: { label: string; pain: number }[] = [];
+  for (const v of RACE) {
+    const plan = runSolve(sub, orders, allowSplit, v.costAware, v.defer, v.arcSplit);
+    const pain = planPain(sub, plan);
+    pains.push({ label: v.label, pain });
+    if (pain < bestPain) {
+      bestPain = pain;
+      best = plan;
+      winner = v.label;
     }
-  return best!;
+  }
+  return { best: best!, winner, pains };
 }
 
-function runSolve(sub: Substrate, orders: Map<string, number[]>, allowSplit: boolean, costAware: boolean, deferSet: Set<string>): Plan {
+/** Plan the fleet for a day's orders. Deterministic — same orders, same plan. */
+export function solve(sub: Substrate, orders: Map<string, number[]>, allowSplit = true): Plan {
+  return race(sub, orders, allowSplit).best;
+}
+
+function runSolve(sub: Substrate, orders: Map<string, number[]>, allowSplit: boolean, costAware: boolean, deferSet: Set<string>, arcSplit: boolean): Plan {
   const log: Move[] = [];
-  const all = customers(orders);
+  const all = customers(orders, arcSplit);
   const deferred = all.filter((c) => deferSet.has(c.nbhd)); // FC-adjacent fillers, placed last
   const routes: Stop[][] = all.filter((c) => !deferSet.has(c.nbhd)).map((c) => [c]);
   const seed = snapshot(routes); // the starting picture: each neighborhood its own cluster
