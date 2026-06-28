@@ -914,26 +914,42 @@ function planPain(sub: Substrate, plan: Plan): number {
   return plan.routes.reduce((s, r) => s + painOf(sub, r.stops), 0);
 }
 
+// Medina deferred (today) vs Medina free. Deferring Medina is a per-shift coin-flip
+// (helps ~37%, no local signal — it's mediated by global packing), so we race it.
+const DEFER_NO_MEDINA = new Set([...DEFER_SET].filter((n) => n !== "Medina"));
+
 /**
  * Plan the fleet for a day's orders. Deterministic — same orders, same plan.
  *
- * Races two constructions and keeps the cheaper by total pain: the leftover-packing
- * split (forcePlace + placeDeferred) is a coin-flip between "roomiest truck, biggest
- * chunk" (geography-blind) and "cheapest truck, cheapest chunk" (cost-aware) — each
- * wins on different draws (S123 loves cost-aware, S30 loves roomiest). The roomiest
- * pass is today's behavior, so the min of the two is provably never-worse.
+ * Races four constructions and keeps the cheapest by total pain — two independent
+ * per-shift coin-flips, each provably contributing only never-worse improvements:
+ *   - leftover-packing split: "roomiest truck, biggest chunk" (geography-blind) vs
+ *     "cheapest truck, cheapest chunk" (cost-aware);
+ *   - Medina: deferred with the FC-adjacent fillers vs free to merge in construction.
+ * Today's behavior (roomiest + Medina-deferred) is one of the four, so the min over
+ * all four can never exceed it. Each runSolve is itself fast; four is well within the
+ * ~5-solves/shift budget. Tie → first found (today's), so it stays deterministic.
  */
 export function solve(sub: Substrate, orders: Map<string, number[]>, allowSplit = true): Plan {
-  const roomiest = runSolve(sub, orders, allowSplit, false);
-  const costAware = runSolve(sub, orders, allowSplit, true);
-  return planPain(sub, costAware) < planPain(sub, roomiest) ? costAware : roomiest;
+  let best: Plan | null = null;
+  let bestPain = Infinity;
+  for (const defer of [DEFER_SET, DEFER_NO_MEDINA])
+    for (const costAware of [false, true]) {
+      const plan = runSolve(sub, orders, allowSplit, costAware, defer);
+      const pain = planPain(sub, plan);
+      if (pain < bestPain) {
+        bestPain = pain;
+        best = plan;
+      }
+    }
+  return best!;
 }
 
-function runSolve(sub: Substrate, orders: Map<string, number[]>, allowSplit: boolean, costAware: boolean): Plan {
+function runSolve(sub: Substrate, orders: Map<string, number[]>, allowSplit: boolean, costAware: boolean, deferSet: Set<string>): Plan {
   const log: Move[] = [];
   const all = customers(orders);
-  const deferred = all.filter((c) => DEFER_SET.has(c.nbhd)); // FC-adjacent fillers, placed last
-  const routes: Stop[][] = all.filter((c) => !DEFER_SET.has(c.nbhd)).map((c) => [c]);
+  const deferred = all.filter((c) => deferSet.has(c.nbhd)); // FC-adjacent fillers, placed last
+  const routes: Stop[][] = all.filter((c) => !deferSet.has(c.nbhd)).map((c) => [c]);
   const seed = snapshot(routes); // the starting picture: each neighborhood its own cluster
 
   construct(sub, routes, log, false); // savings merges while they help
