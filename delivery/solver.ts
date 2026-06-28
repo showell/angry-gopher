@@ -1070,7 +1070,7 @@ function coalesceStops(route: Stop[]): Stop[] {
 }
 
 /** Total fleet pain of a plan — the integer objective the solver minimizes. */
-function planPain(sub: Substrate, plan: Plan): number {
+export function planPain(sub: Substrate, plan: Plan): number {
   return plan.routes.reduce((s, r) => s + painOf(sub, r.stops), 0);
 }
 
@@ -1093,7 +1093,7 @@ const DEFER_NO_MEDINA = new Set([...DEFER_SET].filter((n) => n !== "Medina"));
  *   - medina: `M+` (deferred with the FC-adjacent fillers) vs `M-` (free in construction).
  */
 type Variant = { label: string; costAware: boolean; arcSplit: boolean; defer: Set<string> };
-const RACE: Variant[] = [];
+export const RACE: Variant[] = []; // exported for racerank.ts (dev timing)
 for (const [stag, costAware] of [["room", false] as const, ["cost", true] as const])
   for (const [atag, arcSplit] of [["whole", false] as const, ["arc", true] as const])
     for (const [mtag, defer] of [["M+", DEFER_SET] as const, ["M-", DEFER_NO_MEDINA] as const])
@@ -1123,7 +1123,7 @@ export function solve(sub: Substrate, orders: Map<string, number[]>, allowSplit 
   return race(sub, orders, allowSplit).best;
 }
 
-function runSolve(sub: Substrate, orders: Map<string, number[]>, allowSplit: boolean, costAware: boolean, deferSet: Set<string>, arcSplit: boolean): Plan {
+export function runSolve(sub: Substrate, orders: Map<string, number[]>, allowSplit: boolean, costAware: boolean, deferSet: Set<string>, arcSplit: boolean): Plan {
   const log: Move[] = [];
   const all = customers(orders, arcSplit);
   const deferred = all.filter((c) => deferSet.has(c.nbhd)); // FC-adjacent fillers, placed last
