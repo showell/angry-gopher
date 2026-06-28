@@ -91,7 +91,7 @@ export const MAP_H = 720;
 export const WEST_SHORE: Pt[] = [
   { x: 488, y: 0 },
   { x: 480, y: 105 },
-  { x: 524, y: 175 }, // bulge east — U-District sits on land, lake narrows at the 520 west landing
+  { x: 524, y: 175 }, // bulge east — U-District sits on land, lake narrows by the Montlake cut
   { x: 500, y: 250 },
   { x: 466, y: 350 },
   { x: 492, y: 470 },
@@ -203,7 +203,7 @@ export type Bridge = {
 export const NEIGHBORHOODS: Neighborhood[] = [
   // --- Westside (Seattle) — the city, heavier traffic ---
   { name: "Ballard", center: { x: 224, y: 146 }, side: "west", ringRadius: 32, houses: 12 },
-  { name: "Green Lake", center: { x: 375, y: 62 }, side: "west", ringRadius: 34, houses: 12, lake: 16 },
+  { name: "Green Lake", center: { x: 360, y: 62 }, side: "west", ringRadius: 34, houses: 12, lake: 16 },
   { name: "Fremont", center: { x: 340, y: 212 }, side: "west", ringRadius: 30, houses: 12, note: "Center of the Universe" },
   { name: "U-District", center: { x: 460, y: 169 }, side: "west", ringRadius: 30, houses: 12 },
   { name: "Magnolia", center: { x: 170, y: 291 }, side: "west", ringRadius: 26, houses: 12, note: "out on the bluff" },
@@ -224,28 +224,41 @@ export const NEIGHBORHOODS: Neighborhood[] = [
   { name: "Mercer N", center: { x: 548, y: 552 }, side: "island", ringRadius: 19, houses: 12 },
   { name: "Mercer S", center: { x: 548, y: 635 }, side: "island", ringRadius: 19, houses: 12 },
   // --- Eastside — tech money, more room ---
-  { name: "Medina", center: { x: 638, y: 200 }, side: "east", ringRadius: 28, houses: 12, note: "you-know-who lives here" },
+  { name: "Medina", center: { x: 638, y: 228 }, side: "east", ringRadius: 28, houses: 12, note: "you-know-who lives here" },
   { name: "Kirkland", center: { x: 650, y: 60 }, side: "east", ringRadius: 30, houses: 12 },
   { name: "Redmond", center: { x: 868, y: 200 }, side: "east", ringRadius: 32, houses: 12 },
   { name: "Bellevue", center: { x: 740, y: 330 }, side: "east", ringRadius: 34, houses: 12 },
   { name: "Factoria", center: { x: 672, y: 508 }, side: "east", ringRadius: 30, houses: 12 },
   { name: "Issaquah", center: { x: 858, y: 612 }, side: "east", ringRadius: 30, houses: 12 },
   // --- I-5 exits — junctions (no homes) on the freeway spine, just west of the
-  //     BH/CH/EL/UD corridor at x≈400. The eight central cities reach each other ONLY
-  //     via these exits now (the cross-corridor surface streets are severed). An artery,
-  //     not a freeway-fast bypass: its edge is skipping the slow neighborhood rings, not
-  //     raw speed. S→N: 1) WSea/BH  2) Downtown/CH  3) Eastlake  4) Fremont  5) U-Dist
-  //     6) Green Lake (nudged south to clear Green Lake's ring). ---
-  { name: "Exit 1", center: { x: 400, y: 570 }, side: "west", ringRadius: 6, houses: 0, note: "I-5" },
-  { name: "Exit 2", center: { x: 400, y: 436 }, side: "west", ringRadius: 6, houses: 0, note: "I-5" },
-  { name: "Exit 3", center: { x: 400, y: 311 }, side: "west", ringRadius: 6, houses: 0, note: "I-5" },
-  { name: "Exit 4", center: { x: 400, y: 212 }, side: "west", ringRadius: 6, houses: 0, note: "I-5" },
-  { name: "Exit 5", center: { x: 400, y: 169 }, side: "west", ringRadius: 6, houses: 0, note: "I-5" },
-  { name: "Exit 6", center: { x: 400, y: 95 }, side: "west", ringRadius: 6, houses: 0, note: "I-5" },
+  //     BH/CH/EL/UD corridor. The eight central cities reach each other ONLY via these
+  //     exits now (the cross-corridor surface streets are severed). An artery that runs
+  //     ~20% quicker than the surface streets (no lights) AND skips the slow neighborhood
+  //     rings — the combination is what tips routes into hopping an exit to grab the
+  //     stragglers. The spine is NOT a straight cardinal line (that reads un-Seattle): it
+  //     runs vertical down from Eastlake to the bottom of Lake Union (a kink in the I-5
+  //     `waters`), then bends gently SSW toward Downtown/West Seattle — leaving Capitol
+  //     Hill & Beacon Hill more breathing room — while the middle tilts a couple degrees
+  //     and the north leans east to thread the Fremont/U-District gap and pass EAST of
+  //     Green Lake (pushed west to suit). S→N: 1) WSea/BH  2) Downtown/CH  3) Eastlake
+  //     4) Fremont  5) U-Dist  6) Green Lake. ---
+  { name: "Exit 1", center: { x: 328, y: 570 }, side: "west", ringRadius: 6, houses: 0, note: "I-5" },
+  { name: "Exit 2", center: { x: 377, y: 436 }, side: "west", ringRadius: 6, houses: 0, note: "I-5" },
+  { name: "Exit 3", center: { x: 397, y: 311 }, side: "west", ringRadius: 6, houses: 0, note: "I-5" },
+  { name: "Exit 4", center: { x: 401, y: 212 }, side: "west", ringRadius: 6, houses: 0, note: "I-5" },
+  { name: "Exit 5", center: { x: 405, y: 169 }, side: "west", ringRadius: 6, houses: 0, note: "I-5" },
+  { name: "Exit 6", center: { x: 414, y: 84 }, side: "west", ringRadius: 6, houses: 0, note: "I-5" },
+  // The 5/520 interchange — a junction (no homes) on the I-5 spine, exactly midway
+  // between the Eastlake (Exit 3) and Fremont (Exit 4) exits, where SR 520 ties into I-5.
+  { name: "5/520", center: { x: 399, y: 262 }, side: "west", ringRadius: 6, houses: 0, note: "I-5 / SR 520" },
+  // Montlake — the SR 520 junction NE of Eastlake. The 520-to-Eastlake exit ramp meets
+  // the highway here, so it can land on Eastlake's NE corner at a gentle angle.
+  { name: "Montlake", center: { x: 490, y: 256 }, side: "west", ringRadius: 6, houses: 0, note: "SR 520" },
 ];
 
-/** I-5 exit junctions — 0-home freeway nodes, identified by name for the speed model. */
-export const I5_EXITS = new Set(["Exit 1", "Exit 2", "Exit 3", "Exit 4", "Exit 5", "Exit 6"]);
+/** I-5 freeway junctions — 0-home nodes routed at freeway speed (incl. the 5/520 tie-in),
+ *  identified by name for the speed model and the floor-rounded ramp lengths. */
+export const I5_EXITS = new Set(["Exit 1", "Exit 2", "Exit 3", "Exit 4", "Exit 5", "Exit 6", "5/520"]);
 
 /** Surface roads between nodes ("FC" = warehouse). Bridges (below) add the crossings. */
 export const ROADS: Road[] = [
@@ -260,7 +273,8 @@ export const ROADS: Road[] = [
   ["Fremont", "Queen Anne"],
   ["Queen Anne", "Downtown"],
   ["Capitol Hill", "Eastlake"], // corridor-internal (parallel to I-5, not across it) — kept
-  ["Eastlake", "U-District"],
+  // (Eastlake↔U-District is GONE: it was a drawbridge — perilous and unpredictable for
+  //  delivery, so drivers avoid it. U-District now reaches the network only via Exit 5.)
   ["Capitol Hill", "Beacon Hill"],
   ["Downtown", "West Seattle"], // west-internal (both west of I-5) — kept
   // I-5 exit ramps — each central city onto its freeway exit (paired cities share one).
@@ -272,6 +286,7 @@ export const ROADS: Road[] = [
   ["Exit 4", "Fremont"],
   ["Exit 5", "U-District"],
   ["Exit 6", "Green Lake"],
+  ["Eastlake", "Montlake"], // the SR 520 exit ramp into Eastlake's NE corner
   // Eastside arterials
   ["Medina", "Kirkland"],
   ["Medina", "Bellevue"],
@@ -289,10 +304,13 @@ export const ROADS: Road[] = [
 
 export const BRIDGES: Bridge[] = [
   {
-    // North crossing: Montlake (U-District) -> Medina.
+    // North crossing: the 5/520 interchange on I-5 -> Montlake -> Medina. The first
+    // segment is the short freeway run from I-5 east to the Montlake junction; the second
+    // is the long, slow lake crossing (SPEED.bridge520). Eastlake hangs off Montlake by a
+    // surface ramp (below), landing on its NE corner.
     name: "SR 520",
-    nodes: ["U-District", "Medina"],
-    waters: [[]], // dead straight across the water — the long, slow lake crossing
+    nodes: ["5/520", "Montlake", "Medina"],
+    waters: [[], []],
   },
   {
     // South crossing: Beacon Hill -> Mercer Island -> Factoria.
@@ -301,12 +319,15 @@ export const BRIDGES: Bridge[] = [
     waters: [[{ x: 482, y: 522 }], [{ x: 610, y: 489 }]],
   },
   {
-    // I-5 — the central freeway spine, south to north through its six exits. Modeled as
-    // a "bridge" only to borrow the divided-highway styling; speed is a normal artery
-    // (its advantage is bypassing the slow neighborhood rings, not raw pace).
+    // I-5 — the central freeway spine, south to north through its six exits. Kept in
+    // BRIDGES only because it's a multi-node chain with mid-span waypoints; it's drawn
+    // like a surface artery (map_view special-cases it) and runs ~20% quicker. The kink
+    // in waters[1] (Exit 2↔Exit 3) holds the spine vertical down past the bottom of
+    // Lake Union before it bends SSW — so the bend reads as a real freeway curve, not a
+    // straight diagonal off Eastlake.
     name: "I-5",
-    nodes: ["Exit 1", "Exit 2", "Exit 3", "Exit 4", "Exit 5", "Exit 6"],
-    waters: [[], [], [], [], []], // straight run between collinear exits
+    nodes: ["Exit 1", "Exit 2", "Exit 3", "5/520", "Exit 4", "Exit 5", "Exit 6"],
+    waters: [[], [{ x: 399, y: 373 }], [], [], [], []],
   },
 ];
 
@@ -373,7 +394,12 @@ export function bridgeSegments(b: Bridge): { edge: Road; pts: Pt[] }[] {
   for (let i = 0; i < b.nodes.length - 1; i++) {
     const a = b.nodes[i];
     const c = b.nodes[i + 1];
-    const pts: Pt[] = [gateOf(a, nodeAt(c)), ...(b.waters[i] ?? []), gateOf(c, nodeAt(a))];
+    // A deck leaves each ring heading toward its first turn — the nearest waypoint — not
+    // toward the far landing through its own interior. So a bridge that bends before the
+    // crossing lands on the correct side of the ring (SR 520 onto Eastlake's north).
+    // With no waypoints it's a straight shot, so aim at the far node as before.
+    const w = b.waters[i] ?? [];
+    const pts: Pt[] = [gateOf(a, w[0] ?? nodeAt(c)), ...w, gateOf(c, w[w.length - 1] ?? nodeAt(a))];
     segs.push({ edge: [a, c], pts });
   }
   return segs;
@@ -397,8 +423,8 @@ export function allGates(): Pt[] {
     gates.push(g1, g2);
   }
   for (const b of BRIDGES) {
-    for (const e of bridgeEdges(b)) {
-      gates.push(gateOf(e[0], nodeAt(e[1])), gateOf(e[1], nodeAt(e[0])));
+    for (const seg of bridgeSegments(b)) {
+      gates.push(seg.pts[0], seg.pts[seg.pts.length - 1]); // the deck's actual ring landings
     }
   }
   return gates;

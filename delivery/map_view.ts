@@ -71,8 +71,6 @@ const COLOR = {
   water: "#9fcfe6",
   waterEdge: "#6fb2d2",
   island: "#eef3df",
-  bridge: "#5b6470",
-  bridgeStripe: "#d9b34a",
   road: "#cfc7bb",
   roadCasing: "#b3aa9c",
   gate: "#7d7464",
@@ -165,16 +163,30 @@ function drawRoads(ctx: CanvasRenderingContext2D): void {
   }
 }
 
+/** Extend a freeway end past its terminal exit to the map edge at `edgeY`, holding
+ *  the road's local heading (`from` exit, coming from `prev`). Cosmetic only — this
+ *  stub is not a graph edge; it just keeps I-5 from dead-ending at the last exit. */
+function freewayStub(from: Pt, prev: Pt, edgeY: number): Pt {
+  const vx = from.x - prev.x;
+  const vy = from.y - prev.y;
+  const t = (edgeY - from.y) / vy;
+  return { x: from.x + vx * t, y: edgeY };
+}
+
 function drawBridges(ctx: CanvasRenderingContext2D): void {
+  // Bridges draw like the surface arteries (casing + tan) — no black deck or yellow
+  // centre stripe; over water they just read as the road continuing. I-5 alone extends
+  // past its end exits to the map edges, so the freeway reads as passing THROUGH the
+  // region rather than dead-ending at the last delivery exit.
   for (const b of BRIDGES) {
-    const deck = bridgeDeck(b);
-    stroke(ctx, deck, 9, COLOR.bridge);
-    trace(ctx, deck, false);
-    ctx.lineWidth = 2;
-    ctx.setLineDash([8, 7]);
-    ctx.strokeStyle = COLOR.bridgeStripe;
-    ctx.stroke();
-    ctx.setLineDash([]);
+    let deck = bridgeDeck(b);
+    if (b.name === "I-5") {
+      const south = freewayStub(nodeAt("Exit 1"), nodeAt("Exit 2"), MAP_H);
+      const north = freewayStub(nodeAt("Exit 6"), nodeAt("Exit 5"), 0);
+      deck = [south, ...deck, north];
+    }
+    stroke(ctx, deck, 6, COLOR.roadCasing);
+    stroke(ctx, deck, 3.5, COLOR.road);
   }
 }
 
@@ -718,6 +730,44 @@ function drawAnimation(ctx: CanvasRenderingContext2D, tracks: Track[], t: number
   ctx.globalAlpha = 1;
 }
 
+// Progress meter (lower-right): one tiny square per delivered house, appended in the
+// order doorsteps are hit across the WHOLE fleet and tinted by the delivering truck.
+const PROG_COLS = 25; // 25 × 4 = 100 cells
+const PROG_CELL = 2; // each house is a 2×2 square
+const PROG_GAP = 1;
+const PROG_PITCH = PROG_CELL + PROG_GAP;
+
+/**
+ * The day's deliveries as a filling grid of 2×2 squares — total progress at a glance,
+ * and which trucks cleared their routes first: a truck's colour stops appearing once
+ * it's done, so the slow west routes trail to the very end despite their head start out
+ * of the single dock (departures stagger by load; finishing order is what this shows).
+ */
+function drawProgress(ctx: CanvasRenderingContext2D, tracks: Track[], t: number): void {
+  const events: { t: number; color: string }[] = [];
+  for (const tr of tracks) for (const d of tr.deliveries) events.push({ t: tr.depart + d.t, color: tr.color });
+  events.sort((a, b) => a.t - b.t);
+  const total = events.length;
+  let done = 0;
+  for (const e of events) if (t >= e.t) done++;
+
+  const w = PROG_COLS * PROG_PITCH - PROG_GAP;
+  const x0 = MAP_W - 24 - w;
+  const y0 = 650;
+
+  ctx.textAlign = "left";
+  ctx.fillStyle = COLOR.text;
+  ctx.font = "bold 12px system-ui, sans-serif";
+  ctx.fillText(`delivered ${done} / ${total}`, x0, y0 - 7);
+
+  for (let i = 0; i < total; i++) {
+    const x = x0 + (i % PROG_COLS) * PROG_PITCH;
+    const y = y0 + Math.floor(i / PROG_COLS) * PROG_PITCH;
+    ctx.fillStyle = i < done ? events[i].color : "rgba(20, 26, 34, 0.10)";
+    ctx.fillRect(x, y, PROG_CELL, PROG_CELL);
+  }
+}
+
 function drawClock(ctx: CanvasRenderingContext2D, t: number, maxT: number, playing: boolean): void {
   const done = t >= maxT;
   ctx.textAlign = "left";
@@ -919,6 +969,7 @@ export function drawMap(ctx: CanvasRenderingContext2D, view: MapView): void {
     drawHud(ctx, shift);
     drawTruckPanel(ctx, plan, activeTruck);
     drawClock(ctx, anim.t, anim.maxT, anim.playing);
+    drawProgress(ctx, anim.tracks, anim.t);
     if (paused) drawDetail(ctx, plan, orders, hoverNbhd, activeTruck);
     return;
   }

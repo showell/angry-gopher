@@ -29,7 +29,7 @@ import type { Pt } from "./geography.ts";
 import { NEIGHBORHOODS, ROADS, BRIDGES, I5_EXITS, roadGates, bridgeSegments, ringWalkArcPx } from "./geography.ts";
 
 export const MIN_PER_PX = 0.0225; // arteries run ~2× faster than the slow ring; tuned so QA→Fremont ≈ 2 units
-export const SPEED = { city: 1.6, suburb: 1.0, bridge: 1.2, bridge520: 1.5, fast: 0.6 };
+export const SPEED = { city: 1.6, suburb: 1.0, bridge: 1.2, bridge520: 1.5, fast: 0.6, i5: 0.8 };
 export const NEIGHBORHOOD_SLOWDOWN = 2.1; // ring roads are this much slower than the local arteries (DISPLAY only)
 export const SERVICE = 2; // minutes per order delivered, identical everywhere (DISPLAY only — a wash in the solver)
 
@@ -79,14 +79,18 @@ function isWest(name: string): boolean {
 
 /** Speed multiplier for an edge (lower = faster). The geography's texture lives here. */
 function factor(a: string, b: string, bridge: boolean): number {
-  // I-5 (spine + exit ramps): a normal-pace artery, NOT a freeway-fast bypass. Its only
-  // edge is topological — it skips the slow neighborhood rings. Checked first so the
-  // bridge-styled spine doesn't pick up the slower SPEED.bridge.
-  if (I5_EXITS.has(a) || I5_EXITS.has(b)) return SPEED.suburb;
+  // SR 520's lake crossing (Montlake -> Medina): the long, slow span — slowest per-pixel
+  // of the bridges, a pricier haul than I-90, so routes prefer I-90 when they can. Checked
+  // FIRST, before the freeway rule, because Montlake is itself a freeway junction.
+  if ((a === "Montlake" && b === "Medina") || (a === "Medina" && b === "Montlake")) return SPEED.bridge520;
+  // Freeway pace (no traffic lights): the I-5 spine + its exit ramps, the 5/520 tie-in,
+  // and the 520 approach + the Eastlake exit ramp at Montlake. ~20% quicker per pixel than
+  // surface streets (still not the I-405 bypass). The bigger edge is topological — skipping
+  // the slow neighborhood rings — but the speed bump is what tips routes into hopping off a
+  // freeway to grab the stragglers.
+  if (a === "Montlake" || b === "Montlake") return SPEED.i5;
+  if (I5_EXITS.has(a) || I5_EXITS.has(b)) return SPEED.i5;
   if ((a === "Issaquah" && b === "Redmond") || (a === "Redmond" && b === "Issaquah")) return SPEED.fast;
-  // SR 520 is the long, slow lake crossing: slower per-pixel than I-90 so that the two
-  // bridges cost about the same to cross despite I-90's longer (two-segment) span.
-  if ((a === "U-District" && b === "Medina") || (a === "Medina" && b === "U-District")) return SPEED.bridge520;
   if (bridge) return SPEED.bridge;
   if (isWest(a) || isWest(b)) return SPEED.city;
   return SPEED.suburb;
