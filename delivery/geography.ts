@@ -141,12 +141,15 @@ export const PUGET_SOUND: Pt[] = [
 
 /** Lake Union — a teardrop in central Seattle, south of Fremont, between QA and Cap Hill. */
 export const LAKE_UNION: Pt[] = [
-  { x: 338, y: 292 },
-  { x: 376, y: 286 },
-  { x: 394, y: 322 },
-  { x: 376, y: 360 },
-  { x: 342, y: 366 },
-  { x: 324, y: 330 },
+  // 10% skinnier on the E-W (short) axis, long N-S axis held in place (x scaled 0.9
+  // about the centerline ≈358) to make room for the I-5 corridor. The canals still
+  // meet the outline: the east cut endpoint lands on the new E edge, the west within ~1px.
+  { x: 340, y: 292 },
+  { x: 374, y: 286 },
+  { x: 390, y: 322 },
+  { x: 374, y: 360 },
+  { x: 344, y: 366 },
+  { x: 327, y: 330 },
 ];
 
 /**
@@ -200,12 +203,12 @@ export type Bridge = {
 export const NEIGHBORHOODS: Neighborhood[] = [
   // --- Westside (Seattle) — the city, heavier traffic ---
   { name: "Ballard", center: { x: 224, y: 146 }, side: "west", ringRadius: 32, houses: 12 },
-  { name: "Green Lake", center: { x: 385, y: 62 }, side: "west", ringRadius: 34, houses: 12, lake: 16 },
+  { name: "Green Lake", center: { x: 375, y: 62 }, side: "west", ringRadius: 34, houses: 12, lake: 16 },
   { name: "Fremont", center: { x: 340, y: 212 }, side: "west", ringRadius: 30, houses: 12, note: "Center of the Universe" },
   { name: "U-District", center: { x: 460, y: 169 }, side: "west", ringRadius: 30, houses: 12 },
   { name: "Magnolia", center: { x: 170, y: 291 }, side: "west", ringRadius: 26, houses: 12, note: "out on the bluff" },
   { name: "Queen Anne", center: { x: 286, y: 316 }, side: "west", ringRadius: 32, houses: 12 },
-  { name: "Capitol Hill", center: { x: 432, y: 445 }, side: "west", ringRadius: 29, houses: 12 },
+  { name: "Capitol Hill", center: { x: 434, y: 443 }, side: "west", ringRadius: 29, houses: 12 },
   // Eastlake sits in the spot Capitol Hill vacated (a hair NNE), wired only to
   // Capitol Hill and U-District — houseboats on Lake Union, so houses may overlap
   // water, but the ring road stays on land.
@@ -227,27 +230,48 @@ export const NEIGHBORHOODS: Neighborhood[] = [
   { name: "Bellevue", center: { x: 740, y: 330 }, side: "east", ringRadius: 34, houses: 12 },
   { name: "Factoria", center: { x: 672, y: 508 }, side: "east", ringRadius: 30, houses: 12 },
   { name: "Issaquah", center: { x: 858, y: 612 }, side: "east", ringRadius: 30, houses: 12 },
+  // --- I-5 exits — junctions (no homes) on the freeway spine, just west of the
+  //     BH/CH/EL/UD corridor at x≈400. The eight central cities reach each other ONLY
+  //     via these exits now (the cross-corridor surface streets are severed). An artery,
+  //     not a freeway-fast bypass: its edge is skipping the slow neighborhood rings, not
+  //     raw speed. S→N: 1) WSea/BH  2) Downtown/CH  3) Eastlake  4) Fremont  5) U-Dist
+  //     6) Green Lake (nudged south to clear Green Lake's ring). ---
+  { name: "Exit 1", center: { x: 400, y: 570 }, side: "west", ringRadius: 6, houses: 0, note: "I-5" },
+  { name: "Exit 2", center: { x: 400, y: 436 }, side: "west", ringRadius: 6, houses: 0, note: "I-5" },
+  { name: "Exit 3", center: { x: 400, y: 311 }, side: "west", ringRadius: 6, houses: 0, note: "I-5" },
+  { name: "Exit 4", center: { x: 400, y: 212 }, side: "west", ringRadius: 6, houses: 0, note: "I-5" },
+  { name: "Exit 5", center: { x: 400, y: 169 }, side: "west", ringRadius: 6, houses: 0, note: "I-5" },
+  { name: "Exit 6", center: { x: 400, y: 95 }, side: "west", ringRadius: 6, houses: 0, note: "I-5" },
 ];
+
+/** I-5 exit junctions — 0-home freeway nodes, identified by name for the speed model. */
+export const I5_EXITS = new Set(["Exit 1", "Exit 2", "Exit 3", "Exit 4", "Exit 5", "Exit 6"]);
 
 /** Surface roads between nodes ("FC" = warehouse). Bridges (below) add the crossings. */
 export const ROADS: Road[] = [
-  // Westside arterials
+  // Westside arterials. The cross-corridor links (Downtown↔Cap Hill, Downtown↔Beacon,
+  // Beacon↔West Seattle, Green Lake↔U-Dist, Fremont↔U-Dist) are SEVERED — they crossed
+  // the I-5 line, so those trips now route via the freeway and its exits (below).
   ["Ballard", "Green Lake"],
   ["Ballard", "Fremont"],
   ["Magnolia", "Ballard"], // an artery over the ship canal (no bridge styling)
   ["Magnolia", "Queen Anne"],
   ["Green Lake", "Fremont"],
-  ["Green Lake", "U-District"],
-  ["Fremont", "U-District"],
   ["Fremont", "Queen Anne"],
   ["Queen Anne", "Downtown"],
-  ["Downtown", "Capitol Hill"],
-  ["Capitol Hill", "Eastlake"], // the only path north out of Capitol Hill — no CH↔U-District skyway
+  ["Capitol Hill", "Eastlake"], // corridor-internal (parallel to I-5, not across it) — kept
   ["Eastlake", "U-District"],
   ["Capitol Hill", "Beacon Hill"],
-  ["Downtown", "Beacon Hill"],
-  ["Downtown", "West Seattle"],
-  ["Beacon Hill", "West Seattle"],
+  ["Downtown", "West Seattle"], // west-internal (both west of I-5) — kept
+  // I-5 exit ramps — each central city onto its freeway exit (paired cities share one).
+  ["Exit 1", "West Seattle"],
+  ["Exit 1", "Beacon Hill"],
+  ["Exit 2", "Downtown"],
+  ["Exit 2", "Capitol Hill"],
+  ["Exit 3", "Eastlake"],
+  ["Exit 4", "Fremont"],
+  ["Exit 5", "U-District"],
+  ["Exit 6", "Green Lake"],
   // Eastside arterials
   ["Medina", "Kirkland"],
   ["Medina", "Bellevue"],
@@ -275,6 +299,14 @@ export const BRIDGES: Bridge[] = [
     name: "I-90",
     nodes: ["Beacon Hill", "Mercer Island", "Factoria"],
     waters: [[{ x: 482, y: 522 }], [{ x: 610, y: 489 }]],
+  },
+  {
+    // I-5 — the central freeway spine, south to north through its six exits. Modeled as
+    // a "bridge" only to borrow the divided-highway styling; speed is a normal artery
+    // (its advantage is bypassing the slow neighborhood rings, not raw pace).
+    name: "I-5",
+    nodes: ["Exit 1", "Exit 2", "Exit 3", "Exit 4", "Exit 5", "Exit 6"],
+    waters: [[], [], [], [], []], // straight run between collinear exits
   },
 ];
 

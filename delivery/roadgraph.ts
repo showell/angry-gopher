@@ -26,7 +26,7 @@
 //      the routing; it's mostly there to feel real in playback.
 
 import type { Pt } from "./geography.ts";
-import { NEIGHBORHOODS, ROADS, BRIDGES, roadGates, bridgeSegments, ringWalkArcPx } from "./geography.ts";
+import { NEIGHBORHOODS, ROADS, BRIDGES, I5_EXITS, roadGates, bridgeSegments, ringWalkArcPx } from "./geography.ts";
 
 export const MIN_PER_PX = 0.0225; // arteries run ~2× faster than the slow ring; tuned so QA→Fremont ≈ 2 units
 export const SPEED = { city: 1.6, suburb: 1.0, bridge: 1.2, bridge520: 1.5, fast: 0.6 };
@@ -52,6 +52,18 @@ export function safelyRound(x: number): number {
   return r;
 }
 
+// Like safelyRound, but a sub-1 result floors to 1 instead of throwing. For I-5 exit
+// ramps: an exit disc can sit right against a big neighborhood ring (≈0-length gate hop),
+// and a freeway exit costing one time unit is exactly right. The .5-straddle determinism
+// guard still applies above r=1 (a tiny ramp is ~0.02, nowhere near a boundary).
+export function roundExit(x: number): number {
+  const r = Math.round(x);
+  if (r >= 1 && 0.5 - Math.abs(x - r) < 1e-9) {
+    throw new Error(`roundExit(${x}) lands on a .5 boundary — cross-engine rounding could flip. Nudge a neighborhood a pixel.`);
+  }
+  return Math.max(1, r);
+}
+
 /** Service nodes: every neighborhood, plus the warehouse depot. */
 export const NODES: string[] = [...NEIGHBORHOODS.map((n) => n.name), "FC"];
 
@@ -67,6 +79,10 @@ function isWest(name: string): boolean {
 
 /** Speed multiplier for an edge (lower = faster). The geography's texture lives here. */
 function factor(a: string, b: string, bridge: boolean): number {
+  // I-5 (spine + exit ramps): a normal-pace artery, NOT a freeway-fast bypass. Its only
+  // edge is topological — it skips the slow neighborhood rings. Checked first so the
+  // bridge-styled spine doesn't pick up the slower SPEED.bridge.
+  if (I5_EXITS.has(a) || I5_EXITS.has(b)) return SPEED.suburb;
   if ((a === "Issaquah" && b === "Redmond") || (a === "Redmond" && b === "Issaquah")) return SPEED.fast;
   // SR 520 is the long, slow lake crossing: slower per-pixel than I-90 so that the two
   // bridges cost about the same to cross despite I-90's longer (two-segment) span.
@@ -94,13 +110,16 @@ export type Edge = { a: string; b: string; minutes: number };
 /** Every artery edge (surface roads + bridge segments) with its travel time. */
 export function edges(): Edge[] {
   const out: Edge[] = [];
+  const onI5 = (a: string, b: string): boolean => I5_EXITS.has(a) || I5_EXITS.has(b);
   for (const r of ROADS) {
-    out.push({ a: r[0], b: r[1], minutes: safelyRound(len(roadGates(r)) * factor(r[0], r[1], false) * MIN_PER_PX) });
+    const round = onI5(r[0], r[1]) ? roundExit : safelyRound; // exits may be ~0-length; floor to 1
+    out.push({ a: r[0], b: r[1], minutes: round(len(roadGates(r)) * factor(r[0], r[1], false) * MIN_PER_PX) });
   }
   for (const b of BRIDGES) {
     for (const seg of bridgeSegments(b)) {
       const [x, y] = seg.edge;
-      out.push({ a: x, b: y, minutes: safelyRound(len(seg.pts) * factor(x, y, true) * MIN_PER_PX) });
+      const round = onI5(x, y) ? roundExit : safelyRound;
+      out.push({ a: x, b: y, minutes: round(len(seg.pts) * factor(x, y, true) * MIN_PER_PX) });
     }
   }
   return out;

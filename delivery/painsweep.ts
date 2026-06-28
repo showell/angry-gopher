@@ -235,7 +235,7 @@ function optimalityProbe(routes: S[][]): Improve[] {
   return out.sort((x, y) => y.saved - x.saved);
 }
 
-const N = 200; // shifts S1..S200 — the standing sweep size (no CLI knobs)
+const N = 100; // shifts S1..S100 — the standing sweep size (500 only for regressions / pathology hunts)
 const seeds = shiftSeeds(N);
 const results = seeds.map((seed, i) => runShift(i + 1, seed));
 
