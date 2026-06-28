@@ -1,33 +1,33 @@
 {
   "_durability": "EPHEMERAL SNAPSHOT — descriptive analysis, NOT load-bearing. Nothing imports this. Regenerate via delivery/painreg.ts after ANY change to geography / roadgraph / solver / cost model. Coefficients are marginal pain-per-home learned independently per neighborhood (no east/west grouping).",
   "generated": "2026-06-28",
-  "topology": "7f732d78",
+  "topology": "5b3d8fd3",
   "N": 500,
   "model": {
-    "meanPain": 3885,
-    "r2": 0.69,
-    "rmsePain": 48.5
+    "meanPain": 3884,
+    "r2": 0.7109,
+    "rmsePain": 47.4
   },
   "coefficientsPainPerHome": {
-    "Magnolia": 57.73,
-    "Queen Anne": 49.63,
-    "Ballard": 49.49,
-    "Downtown": 48.81,
-    "Green Lake": 47.63,
-    "U-District": 45.23,
-    "Fremont": 44.46,
-    "Eastlake": 41.37,
+    "Magnolia": 58.49,
+    "Queen Anne": 50.37,
+    "Ballard": 50.24,
+    "Downtown": 49,
+    "Green Lake": 48.22,
+    "Fremont": 45.33,
+    "U-District": 44.41,
     "West Seattle": 39.54,
-    "Mercer S": 38.96,
-    "Capitol Hill": 38.9,
-    "Issaquah": 35.81,
-    "Kirkland": 33.92,
-    "Mercer N": 33.37,
-    "Beacon Hill": 30.43,
-    "Redmond": 29.76,
-    "Factoria": 27.2,
-    "Medina": 24.78,
-    "Bellevue": 21.24
+    "Eastlake": 39.46,
+    "Capitol Hill": 38.83,
+    "Mercer S": 37.71,
+    "Issaquah": 36.43,
+    "Kirkland": 34.74,
+    "Mercer N": 33.41,
+    "Beacon Hill": 30.25,
+    "Redmond": 28.52,
+    "Factoria": 26.86,
+    "Medina": 24.96,
+    "Bellevue": 21.27
   },
   "avgHomesPerDay": {
     "Magnolia": 5.16,
@@ -35,12 +35,12 @@
     "Ballard": 5.25,
     "Downtown": 5.29,
     "Green Lake": 5.23,
-    "U-District": 5.2,
     "Fremont": 5.3,
-    "Eastlake": 5.34,
+    "U-District": 5.2,
     "West Seattle": 5.32,
-    "Mercer S": 5.33,
+    "Eastlake": 5.34,
     "Capitol Hill": 5.31,
+    "Mercer S": 5.33,
     "Issaquah": 5.27,
     "Kirkland": 5.34,
     "Mercer N": 5.27,
@@ -55,8 +55,8 @@
       "shift": 1,
       "seed": 49,
       "actual": 3814,
-      "predicted": 3827,
-      "residual": -13,
+      "predicted": 3820,
+      "residual": -6,
       "counts": {
         "Ballard": 6,
         "Green Lake": 5,
@@ -83,8 +83,8 @@
       "shift": 2,
       "seed": 1095465948,
       "actual": 3982,
-      "predicted": 3980,
-      "residual": 2,
+      "predicted": 3990,
+      "residual": -8,
       "counts": {
         "Ballard": 6,
         "Green Lake": 6,
@@ -111,8 +111,8 @@
       "shift": 3,
       "seed": 3105482123,
       "actual": 3854,
-      "predicted": 3857,
-      "residual": -3,
+      "predicted": 3851,
+      "residual": 3,
       "counts": {
         "Ballard": 7,
         "Green Lake": 6,
@@ -139,8 +139,8 @@
       "shift": 4,
       "seed": 1590164846,
       "actual": 3968,
-      "predicted": 3953,
-      "residual": 15,
+      "predicted": 3947,
+      "residual": 21,
       "counts": {
         "Ballard": 3,
         "Green Lake": 5,
@@ -167,8 +167,8 @@
       "shift": 5,
       "seed": 2068751861,
       "actual": 3970,
-      "predicted": 3941,
-      "residual": 29,
+      "predicted": 3940,
+      "residual": 30,
       "counts": {
         "Ballard": 6,
         "Green Lake": 6,
@@ -195,8 +195,8 @@
       "shift": 6,
       "seed": 175767248,
       "actual": 3780,
-      "predicted": 3761,
-      "residual": 19,
+      "predicted": 3751,
+      "residual": 29,
       "counts": {
         "Ballard": 2,
         "Green Lake": 5,
@@ -223,8 +223,8 @@
       "shift": 7,
       "seed": 1115145199,
       "actual": 3826,
-      "predicted": 3831,
-      "residual": -5,
+      "predicted": 3828,
+      "residual": -2,
       "counts": {
         "Ballard": 5,
         "Green Lake": 5,
@@ -251,8 +251,8 @@
       "shift": 8,
       "seed": 1995186306,
       "actual": 3990,
-      "predicted": 3966,
-      "residual": 24,
+      "predicted": 3977,
+      "residual": 13,
       "counts": {
         "Ballard": 5,
         "Green Lake": 7,
@@ -278,9 +278,9 @@
     {
       "shift": 9,
       "seed": 2282907129,
-      "actual": 3908,
-      "predicted": 3837,
-      "residual": 71,
+      "actual": 3866,
+      "predicted": 3828,
+      "residual": 38,
       "counts": {
         "Ballard": 6,
         "Green Lake": 5,
@@ -306,9 +306,9 @@
     {
       "shift": 10,
       "seed": 1867536132,
-      "actual": 4002,
-      "predicted": 3931,
-      "residual": 71,
+      "actual": 4018,
+      "predicted": 3926,
+      "residual": 92,
       "counts": {
         "Ballard": 3,
         "Green Lake": 5,
@@ -334,9 +334,9 @@
     {
       "shift": 11,
       "seed": 1704130195,
-      "actual": 3840,
-      "predicted": 3907,
-      "residual": -67,
+      "actual": 3844,
+      "predicted": 3896,
+      "residual": -52,
       "counts": {
         "Ballard": 6,
         "Green Lake": 5,
@@ -362,9 +362,9 @@
     {
       "shift": 12,
       "seed": 125766358,
-      "actual": 3886,
-      "predicted": 3869,
-      "residual": 17,
+      "actual": 3872,
+      "predicted": 3873,
+      "residual": -1,
       "counts": {
         "Ballard": 6,
         "Green Lake": 3,
@@ -391,8 +391,8 @@
       "shift": 13,
       "seed": 1259979837,
       "actual": 3944,
-      "predicted": 3908,
-      "residual": 36,
+      "predicted": 3915,
+      "residual": 29,
       "counts": {
         "Ballard": 6,
         "Green Lake": 4,
@@ -418,9 +418,9 @@
     {
       "shift": 14,
       "seed": 2061711480,
-      "actual": 4010,
-      "predicted": 4005,
-      "residual": 5,
+      "actual": 4008,
+      "predicted": 4004,
+      "residual": 4,
       "counts": {
         "Ballard": 4,
         "Green Lake": 4,
@@ -446,9 +446,9 @@
     {
       "shift": 15,
       "seed": 2251334007,
-      "actual": 3830,
-      "predicted": 3843,
-      "residual": -13,
+      "actual": 3790,
+      "predicted": 3830,
+      "residual": -40,
       "counts": {
         "Ballard": 3,
         "Green Lake": 4,
@@ -475,8 +475,8 @@
       "shift": 16,
       "seed": 836472938,
       "actual": 3788,
-      "predicted": 3770,
-      "residual": 18,
+      "predicted": 3764,
+      "residual": 24,
       "counts": {
         "Ballard": 4,
         "Green Lake": 3,
@@ -503,8 +503,8 @@
       "shift": 17,
       "seed": 1517913281,
       "actual": 4018,
-      "predicted": 3949,
-      "residual": 69,
+      "predicted": 3959,
+      "residual": 59,
       "counts": {
         "Ballard": 8,
         "Green Lake": 6,
@@ -530,9 +530,9 @@
     {
       "shift": 18,
       "seed": 911775532,
-      "actual": 3976,
-      "predicted": 4002,
-      "residual": -26,
+      "actual": 4076,
+      "predicted": 4010,
+      "residual": 66,
       "counts": {
         "Ballard": 5,
         "Green Lake": 7,
@@ -559,8 +559,8 @@
       "shift": 19,
       "seed": 242624667,
       "actual": 3824,
-      "predicted": 3871,
-      "residual": -47,
+      "predicted": 3867,
+      "residual": -43,
       "counts": {
         "Ballard": 6,
         "Green Lake": 4,
@@ -587,8 +587,8 @@
       "shift": 20,
       "seed": 62899518,
       "actual": 3902,
-      "predicted": 3907,
-      "residual": -5,
+      "predicted": 3904,
+      "residual": -2,
       "counts": {
         "Ballard": 5,
         "Green Lake": 3,
@@ -615,8 +615,8 @@
       "shift": 21,
       "seed": 416328581,
       "actual": 3884,
-      "predicted": 3950,
-      "residual": -66,
+      "predicted": 3945,
+      "residual": -61,
       "counts": {
         "Ballard": 6,
         "Green Lake": 7,
@@ -643,8 +643,8 @@
       "shift": 22,
       "seed": 1666950944,
       "actual": 3746,
-      "predicted": 3761,
-      "residual": -15,
+      "predicted": 3763,
+      "residual": -17,
       "counts": {
         "Ballard": 4,
         "Green Lake": 5,
@@ -670,9 +670,9 @@
     {
       "shift": 23,
       "seed": 516763647,
-      "actual": 3942,
-      "predicted": 3948,
-      "residual": -6,
+      "actual": 3932,
+      "predicted": 3946,
+      "residual": -14,
       "counts": {
         "Ballard": 5,
         "Green Lake": 8,
@@ -699,8 +699,8 @@
       "shift": 24,
       "seed": 1038155090,
       "actual": 3824,
-      "predicted": 3827,
-      "residual": -3,
+      "predicted": 3821,
+      "residual": 3,
       "counts": {
         "Ballard": 3,
         "Green Lake": 7,
@@ -726,9 +726,9 @@
     {
       "shift": 25,
       "seed": 3268181129,
-      "actual": 3924,
+      "actual": 3918,
       "predicted": 3902,
-      "residual": 22,
+      "residual": 16,
       "counts": {
         "Ballard": 4,
         "Green Lake": 5,
@@ -754,9 +754,9 @@
     {
       "shift": 26,
       "seed": 3285245012,
-      "actual": 3930,
-      "predicted": 3839,
-      "residual": 91,
+      "actual": 3940,
+      "predicted": 3847,
+      "residual": 93,
       "counts": {
         "Ballard": 5,
         "Green Lake": 5,
@@ -810,9 +810,9 @@
     {
       "shift": 28,
       "seed": 1505741990,
-      "actual": 3872,
-      "predicted": 3900,
-      "residual": -28,
+      "actual": 3868,
+      "predicted": 3905,
+      "residual": -37,
       "counts": {
         "Ballard": 5,
         "Green Lake": 7,
@@ -838,9 +838,9 @@
     {
       "shift": 29,
       "seed": 854358989,
-      "actual": 3910,
-      "predicted": 3855,
-      "residual": 55,
+      "actual": 3900,
+      "predicted": 3866,
+      "residual": 34,
       "counts": {
         "Ballard": 8,
         "Green Lake": 7,
@@ -867,8 +867,8 @@
       "shift": 30,
       "seed": 583658184,
       "actual": 3672,
-      "predicted": 3744,
-      "residual": -72,
+      "predicted": 3746,
+      "residual": -74,
       "counts": {
         "Ballard": 4,
         "Green Lake": 7,
@@ -893,9 +893,9 @@
     {
       "shift": 31,
       "seed": 1640206215,
-      "actual": 3792,
-      "predicted": 3839,
-      "residual": -47,
+      "actual": 3828,
+      "predicted": 3836,
+      "residual": -8,
       "counts": {
         "Ballard": 5,
         "Green Lake": 7,
@@ -922,8 +922,8 @@
       "shift": 32,
       "seed": 582747962,
       "actual": 3864,
-      "predicted": 3890,
-      "residual": -26,
+      "predicted": 3888,
+      "residual": -24,
       "counts": {
         "Ballard": 5,
         "Green Lake": 8,
@@ -950,8 +950,8 @@
       "shift": 33,
       "seed": 2676387153,
       "actual": 3854,
-      "predicted": 3857,
-      "residual": -3,
+      "predicted": 3850,
+      "residual": 4,
       "counts": {
         "Ballard": 6,
         "Green Lake": 2,
@@ -977,9 +977,9 @@
     {
       "shift": 34,
       "seed": 2461648508,
-      "actual": 4026,
-      "predicted": 3912,
-      "residual": 114,
+      "actual": 4030,
+      "predicted": 3913,
+      "residual": 117,
       "counts": {
         "Ballard": 6,
         "Green Lake": 9,
@@ -1006,8 +1006,8 @@
       "shift": 35,
       "seed": 386887595,
       "actual": 3892,
-      "predicted": 3903,
-      "residual": -11,
+      "predicted": 3900,
+      "residual": -8,
       "counts": {
         "Ballard": 5,
         "Green Lake": 3,
@@ -1033,9 +1033,9 @@
     {
       "shift": 36,
       "seed": 1986576654,
-      "actual": 4142,
-      "predicted": 4033,
-      "residual": 109,
+      "actual": 4300,
+      "predicted": 4041,
+      "residual": 259,
       "counts": {
         "Ballard": 9,
         "Green Lake": 4,
@@ -1062,8 +1062,8 @@
       "shift": 37,
       "seed": 3607778581,
       "actual": 3870,
-      "predicted": 3911,
-      "residual": -41,
+      "predicted": 3902,
+      "residual": -32,
       "counts": {
         "Ballard": 6,
         "Green Lake": 6,
@@ -1089,9 +1089,9 @@
     {
       "shift": 38,
       "seed": 2498274160,
-      "actual": 3688,
-      "predicted": 3851,
-      "residual": -163,
+      "actual": 3722,
+      "predicted": 3854,
+      "residual": -132,
       "counts": {
         "Ballard": 6,
         "Green Lake": 3,
@@ -1117,8 +1117,8 @@
       "shift": 39,
       "seed": 1934483471,
       "actual": 3904,
-      "predicted": 3967,
-      "residual": -63,
+      "predicted": 3974,
+      "residual": -70,
       "counts": {
         "Ballard": 6,
         "Green Lake": 5,
@@ -1145,8 +1145,8 @@
       "shift": 40,
       "seed": 2117154,
       "actual": 3878,
-      "predicted": 3827,
-      "residual": 51,
+      "predicted": 3828,
+      "residual": 50,
       "counts": {
         "Ballard": 5,
         "Green Lake": 6,
@@ -1173,8 +1173,8 @@
       "shift": 41,
       "seed": 3196483353,
       "actual": 3980,
-      "predicted": 3879,
-      "residual": 101,
+      "predicted": 3873,
+      "residual": 107,
       "counts": {
         "Ballard": 6,
         "Green Lake": 3,
@@ -1201,8 +1201,8 @@
       "shift": 42,
       "seed": 505935268,
       "actual": 3942,
-      "predicted": 3971,
-      "residual": -29,
+      "predicted": 3964,
+      "residual": -22,
       "counts": {
         "Ballard": 7,
         "Green Lake": 6,
@@ -1229,8 +1229,8 @@
       "shift": 43,
       "seed": 2908341427,
       "actual": 3962,
-      "predicted": 3968,
-      "residual": -6,
+      "predicted": 3972,
+      "residual": -10,
       "counts": {
         "Ballard": 8,
         "Green Lake": 7,
@@ -1257,8 +1257,8 @@
       "shift": 44,
       "seed": 64504438,
       "actual": 3798,
-      "predicted": 3866,
-      "residual": -68,
+      "predicted": 3867,
+      "residual": -69,
       "counts": {
         "Ballard": 7,
         "Green Lake": 7,
@@ -1285,8 +1285,8 @@
       "shift": 45,
       "seed": 376133469,
       "actual": 3968,
-      "predicted": 3963,
-      "residual": 5,
+      "predicted": 3966,
+      "residual": 2,
       "counts": {
         "Ballard": 8,
         "Green Lake": 6,
@@ -1312,9 +1312,9 @@
     {
       "shift": 46,
       "seed": 2898686232,
-      "actual": 3936,
+      "actual": 3942,
       "predicted": 3947,
-      "residual": -11,
+      "residual": -5,
       "counts": {
         "Ballard": 7,
         "Green Lake": 5,
@@ -1341,8 +1341,8 @@
       "shift": 47,
       "seed": 518668695,
       "actual": 4002,
-      "predicted": 4018,
-      "residual": -16,
+      "predicted": 4029,
+      "residual": -27,
       "counts": {
         "Ballard": 7,
         "Green Lake": 6,
@@ -1369,8 +1369,8 @@
       "shift": 48,
       "seed": 2352312842,
       "actual": 3838,
-      "predicted": 3787,
-      "residual": 51,
+      "predicted": 3783,
+      "residual": 55,
       "counts": {
         "Ballard": 1,
         "Green Lake": 9,
@@ -1397,8 +1397,8 @@
       "shift": 49,
       "seed": 3381639649,
       "actual": 3784,
-      "predicted": 3813,
-      "residual": -29,
+      "predicted": 3810,
+      "residual": -26,
       "counts": {
         "Ballard": 3,
         "Green Lake": 6,
@@ -1425,8 +1425,8 @@
       "shift": 50,
       "seed": 3821275596,
       "actual": 3824,
-      "predicted": 3836,
-      "residual": -12,
+      "predicted": 3835,
+      "residual": -11,
       "counts": {
         "Ballard": 6,
         "Green Lake": 4,
@@ -1452,9 +1452,9 @@
     {
       "shift": 51,
       "seed": 3728128699,
-      "actual": 4080,
-      "predicted": 3956,
-      "residual": 124,
+      "actual": 4078,
+      "predicted": 3955,
+      "residual": 123,
       "counts": {
         "Ballard": 6,
         "Green Lake": 8,
@@ -1481,8 +1481,8 @@
       "shift": 52,
       "seed": 2413818078,
       "actual": 3794,
-      "predicted": 3739,
-      "residual": 55,
+      "predicted": 3724,
+      "residual": 70,
       "counts": {
         "Ballard": 6,
         "Green Lake": 3,
@@ -1509,8 +1509,8 @@
       "shift": 53,
       "seed": 1249157797,
       "actual": 3972,
-      "predicted": 3870,
-      "residual": 102,
+      "predicted": 3878,
+      "residual": 94,
       "counts": {
         "Ballard": 4,
         "Green Lake": 5,
@@ -1537,8 +1537,8 @@
       "shift": 54,
       "seed": 1598419904,
       "actual": 3932,
-      "predicted": 3904,
-      "residual": 28,
+      "predicted": 3905,
+      "residual": 27,
       "counts": {
         "Ballard": 6,
         "Green Lake": 5,
@@ -1565,8 +1565,8 @@
       "shift": 55,
       "seed": 3218789407,
       "actual": 3788,
-      "predicted": 3802,
-      "residual": -14,
+      "predicted": 3798,
+      "residual": -10,
       "counts": {
         "Ballard": 5,
         "Green Lake": 4,
@@ -1593,8 +1593,8 @@
       "shift": 56,
       "seed": 3793162994,
       "actual": 3704,
-      "predicted": 3740,
-      "residual": -36,
+      "predicted": 3729,
+      "residual": -25,
       "counts": {
         "Ballard": 3,
         "Green Lake": 5,
@@ -1621,8 +1621,8 @@
       "shift": 57,
       "seed": 3267974569,
       "actual": 3776,
-      "predicted": 3745,
-      "residual": 31,
+      "predicted": 3742,
+      "residual": 34,
       "counts": {
         "Ballard": 4,
         "Green Lake": 3,
@@ -1648,9 +1648,9 @@
     {
       "shift": 58,
       "seed": 3058344692,
-      "actual": 3924,
-      "predicted": 3845,
-      "residual": 79,
+      "actual": 3980,
+      "predicted": 3850,
+      "residual": 130,
       "counts": {
         "Ballard": 5,
         "Green Lake": 6,
@@ -1677,8 +1677,8 @@
       "shift": 59,
       "seed": 620392899,
       "actual": 3830,
-      "predicted": 3907,
-      "residual": -77,
+      "predicted": 3899,
+      "residual": -69,
       "counts": {
         "Ballard": 8,
         "Green Lake": 5,
@@ -1704,9 +1704,9 @@
     {
       "shift": 60,
       "seed": 42298438,
-      "actual": 3912,
-      "predicted": 3875,
-      "residual": 37,
+      "actual": 3896,
+      "predicted": 3874,
+      "residual": 22,
       "counts": {
         "Ballard": 6,
         "Green Lake": 3,
@@ -1733,8 +1733,8 @@
       "shift": 61,
       "seed": 422532845,
       "actual": 3884,
-      "predicted": 3845,
-      "residual": 39,
+      "predicted": 3837,
+      "residual": 47,
       "counts": {
         "Ballard": 5,
         "Green Lake": 6,
@@ -1761,8 +1761,8 @@
       "shift": 62,
       "seed": 3718105960,
       "actual": 3882,
-      "predicted": 3822,
-      "residual": 60,
+      "predicted": 3821,
+      "residual": 61,
       "counts": {
         "Ballard": 3,
         "Green Lake": 4,
@@ -1789,8 +1789,8 @@
       "shift": 63,
       "seed": 967161767,
       "actual": 3774,
-      "predicted": 3855,
-      "residual": -81,
+      "predicted": 3851,
+      "residual": -77,
       "counts": {
         "Ballard": 5,
         "Green Lake": 4,
@@ -1817,8 +1817,8 @@
       "shift": 64,
       "seed": 542429402,
       "actual": 3786,
-      "predicted": 3787,
-      "residual": -1,
+      "predicted": 3784,
+      "residual": 2,
       "counts": {
         "Ballard": 7,
         "Green Lake": 5,
@@ -1845,8 +1845,8 @@
       "shift": 65,
       "seed": 289303153,
       "actual": 3868,
-      "predicted": 3908,
-      "residual": -40,
+      "predicted": 3910,
+      "residual": -42,
       "counts": {
         "Ballard": 5,
         "Green Lake": 4,
@@ -1873,8 +1873,8 @@
       "shift": 66,
       "seed": 1611424028,
       "actual": 3904,
-      "predicted": 3970,
-      "residual": -66,
+      "predicted": 3979,
+      "residual": -75,
       "counts": {
         "Ballard": 4,
         "Green Lake": 8,
@@ -1900,9 +1900,9 @@
     {
       "shift": 67,
       "seed": 2273118667,
-      "actual": 3986,
-      "predicted": 3992,
-      "residual": -6,
+      "actual": 3968,
+      "predicted": 3995,
+      "residual": -27,
       "counts": {
         "Ballard": 5,
         "Green Lake": 8,
@@ -1928,9 +1928,9 @@
     {
       "shift": 68,
       "seed": 3833746606,
-      "actual": 3868,
-      "predicted": 3832,
-      "residual": 36,
+      "actual": 3884,
+      "predicted": 3830,
+      "residual": 54,
       "counts": {
         "Ballard": 6,
         "Green Lake": 6,
@@ -1957,8 +1957,8 @@
       "shift": 69,
       "seed": 164140085,
       "actual": 3832,
-      "predicted": 3881,
-      "residual": -49,
+      "predicted": 3866,
+      "residual": -34,
       "counts": {
         "Ballard": 6,
         "Green Lake": 5,
@@ -1985,8 +1985,8 @@
       "shift": 70,
       "seed": 534288400,
       "actual": 3854,
-      "predicted": 3841,
-      "residual": 13,
+      "predicted": 3836,
+      "residual": 18,
       "counts": {
         "Ballard": 6,
         "Green Lake": 4,
@@ -2012,9 +2012,9 @@
     {
       "shift": 71,
       "seed": 9767983,
-      "actual": 3908,
-      "predicted": 3943,
-      "residual": -35,
+      "actual": 3898,
+      "predicted": 3950,
+      "residual": -52,
       "counts": {
         "Ballard": 8,
         "Green Lake": 5,
@@ -2041,8 +2041,8 @@
       "shift": 72,
       "seed": 3614591938,
       "actual": 3968,
-      "predicted": 4002,
-      "residual": -34,
+      "predicted": 4001,
+      "residual": -33,
       "counts": {
         "Ballard": 6,
         "Green Lake": 7,
@@ -2069,8 +2069,8 @@
       "shift": 73,
       "seed": 492705849,
       "actual": 3952,
-      "predicted": 4026,
-      "residual": -74,
+      "predicted": 4028,
+      "residual": -76,
       "counts": {
         "Ballard": 6,
         "Green Lake": 4,
@@ -2097,8 +2097,8 @@
       "shift": 74,
       "seed": 2507007044,
       "actual": 3812,
-      "predicted": 3762,
-      "residual": 50,
+      "predicted": 3753,
+      "residual": 59,
       "counts": {
         "Ballard": 7,
         "Green Lake": 2,
@@ -2124,9 +2124,9 @@
     {
       "shift": 75,
       "seed": 3868893907,
-      "actual": 3962,
-      "predicted": 3980,
-      "residual": -18,
+      "actual": 3950,
+      "predicted": 3979,
+      "residual": -29,
       "counts": {
         "Ballard": 6,
         "Green Lake": 5,
@@ -2153,8 +2153,8 @@
       "shift": 76,
       "seed": 1975798294,
       "actual": 3928,
-      "predicted": 3924,
-      "residual": 4,
+      "predicted": 3920,
+      "residual": 8,
       "counts": {
         "Ballard": 5,
         "Green Lake": 5,
@@ -2181,8 +2181,8 @@
       "shift": 77,
       "seed": 2836494973,
       "actual": 3980,
-      "predicted": 4001,
-      "residual": -21,
+      "predicted": 4010,
+      "residual": -30,
       "counts": {
         "Ballard": 8,
         "Green Lake": 6,
@@ -2209,8 +2209,8 @@
       "shift": 78,
       "seed": 3210017208,
       "actual": 3936,
-      "predicted": 3870,
-      "residual": 66,
+      "predicted": 3871,
+      "residual": 65,
       "counts": {
         "Ballard": 5,
         "Green Lake": 5,
@@ -2292,9 +2292,9 @@
     {
       "shift": 81,
       "seed": 2105245441,
-      "actual": 3980,
-      "predicted": 3966,
-      "residual": 14,
+      "actual": 4030,
+      "predicted": 3968,
+      "residual": 62,
       "counts": {
         "Ballard": 4,
         "Green Lake": 4,
@@ -2348,9 +2348,9 @@
     {
       "shift": 83,
       "seed": 1588813019,
-      "actual": 4134,
-      "predicted": 3964,
-      "residual": 170,
+      "actual": 4122,
+      "predicted": 3960,
+      "residual": 162,
       "counts": {
         "Ballard": 10,
         "Green Lake": 7,
@@ -2377,8 +2377,8 @@
       "shift": 84,
       "seed": 2481777790,
       "actual": 3754,
-      "predicted": 3745,
-      "residual": 9,
+      "predicted": 3737,
+      "residual": 17,
       "counts": {
         "Ballard": 4,
         "Green Lake": 3,
@@ -2404,9 +2404,9 @@
     {
       "shift": 85,
       "seed": 1040132549,
-      "actual": 3924,
-      "predicted": 3901,
-      "residual": 23,
+      "actual": 3918,
+      "predicted": 3900,
+      "residual": 18,
       "counts": {
         "Ballard": 8,
         "Green Lake": 5,
@@ -2433,8 +2433,8 @@
       "shift": 86,
       "seed": 558207072,
       "actual": 3714,
-      "predicted": 3724,
-      "residual": -10,
+      "predicted": 3719,
+      "residual": -5,
       "counts": {
         "Ballard": 5,
         "Green Lake": 4,
@@ -2460,9 +2460,9 @@
     {
       "shift": 87,
       "seed": 3185412159,
-      "actual": 4020,
-      "predicted": 3976,
-      "residual": 44,
+      "actual": 4022,
+      "predicted": 3975,
+      "residual": 47,
       "counts": {
         "Ballard": 7,
         "Green Lake": 5,
@@ -2488,9 +2488,9 @@
     {
       "shift": 88,
       "seed": 1931409554,
-      "actual": 3832,
-      "predicted": 3794,
-      "residual": 38,
+      "actual": 3818,
+      "predicted": 3785,
+      "residual": 33,
       "counts": {
         "Ballard": 4,
         "Green Lake": 3,
@@ -2516,9 +2516,9 @@
     {
       "shift": 89,
       "seed": 2991439561,
-      "actual": 3890,
-      "predicted": 3870,
-      "residual": 20,
+      "actual": 3874,
+      "predicted": 3856,
+      "residual": 18,
       "counts": {
         "Ballard": 3,
         "Green Lake": 3,
@@ -2545,8 +2545,8 @@
       "shift": 90,
       "seed": 3859200404,
       "actual": 3938,
-      "predicted": 4014,
-      "residual": -76,
+      "predicted": 4008,
+      "residual": -70,
       "counts": {
         "Ballard": 7,
         "Green Lake": 7,
@@ -2572,9 +2572,9 @@
     {
       "shift": 91,
       "seed": 3089848291,
-      "actual": 3924,
-      "predicted": 3885,
-      "residual": 39,
+      "actual": 3910,
+      "predicted": 3883,
+      "residual": 27,
       "counts": {
         "Ballard": 5,
         "Green Lake": 5,
@@ -2601,8 +2601,8 @@
       "shift": 92,
       "seed": 1892801510,
       "actual": 3844,
-      "predicted": 3843,
-      "residual": 1,
+      "predicted": 3846,
+      "residual": -2,
       "counts": {
         "Ballard": 6,
         "Green Lake": 6,
@@ -2629,8 +2629,8 @@
       "shift": 93,
       "seed": 237683213,
       "actual": 4126,
-      "predicted": 4050,
-      "residual": 76,
+      "predicted": 4056,
+      "residual": 70,
       "counts": {
         "Ballard": 8,
         "Green Lake": 5,
@@ -2656,9 +2656,9 @@
     {
       "shift": 94,
       "seed": 4046519304,
-      "actual": 4030,
-      "predicted": 4003,
-      "residual": 27,
+      "actual": 4050,
+      "predicted": 4004,
+      "residual": 46,
       "counts": {
         "Ballard": 4,
         "Green Lake": 7,
@@ -2684,9 +2684,9 @@
     {
       "shift": 95,
       "seed": 2636050375,
-      "actual": 3866,
-      "predicted": 3847,
-      "residual": 19,
+      "actual": 3852,
+      "predicted": 3846,
+      "residual": 6,
       "counts": {
         "Ballard": 4,
         "Green Lake": 2,
@@ -2713,8 +2713,8 @@
       "shift": 96,
       "seed": 4109986426,
       "actual": 3920,
-      "predicted": 3951,
-      "residual": -31,
+      "predicted": 3954,
+      "residual": -34,
       "counts": {
         "Ballard": 5,
         "Green Lake": 6,
@@ -2768,9 +2768,9 @@
     {
       "shift": 98,
       "seed": 3807071164,
-      "actual": 3954,
-      "predicted": 3971,
-      "residual": -17,
+      "actual": 3976,
+      "predicted": 3973,
+      "residual": 3,
       "counts": {
         "Ballard": 6,
         "Green Lake": 7,
@@ -2796,9 +2796,9 @@
     {
       "shift": 99,
       "seed": 3890918379,
-      "actual": 3952,
-      "predicted": 3914,
-      "residual": 38,
+      "actual": 3934,
+      "predicted": 3911,
+      "residual": 23,
       "counts": {
         "Ballard": 3,
         "Green Lake": 9,
@@ -2825,8 +2825,8 @@
       "shift": 100,
       "seed": 419215438,
       "actual": 3928,
-      "predicted": 3912,
-      "residual": 16,
+      "predicted": 3915,
+      "residual": 13,
       "counts": {
         "Ballard": 5,
         "Green Lake": 6,
@@ -2852,9 +2852,9 @@
     {
       "shift": 101,
       "seed": 844194645,
-      "actual": 3870,
-      "predicted": 3806,
-      "residual": 64,
+      "actual": 3896,
+      "predicted": 3808,
+      "residual": 88,
       "counts": {
         "Ballard": 4,
         "Green Lake": 5,
@@ -2881,8 +2881,8 @@
       "shift": 102,
       "seed": 3950107824,
       "actual": 3810,
-      "predicted": 3860,
-      "residual": -50,
+      "predicted": 3856,
+      "residual": -46,
       "counts": {
         "Ballard": 3,
         "Green Lake": 6,
@@ -2909,8 +2909,8 @@
       "shift": 103,
       "seed": 475351119,
       "actual": 3848,
-      "predicted": 3944,
-      "residual": -96,
+      "predicted": 3943,
+      "residual": -95,
       "counts": {
         "Ballard": 5,
         "Green Lake": 5,
@@ -2937,8 +2937,8 @@
       "shift": 104,
       "seed": 3075086690,
       "actual": 3950,
-      "predicted": 3879,
-      "residual": 71,
+      "predicted": 3883,
+      "residual": 67,
       "counts": {
         "Ballard": 3,
         "Green Lake": 6,
@@ -2965,8 +2965,8 @@
       "shift": 105,
       "seed": 2346797401,
       "actual": 3888,
-      "predicted": 3883,
-      "residual": 5,
+      "predicted": 3881,
+      "residual": 7,
       "counts": {
         "Ballard": 3,
         "Green Lake": 5,
@@ -2992,9 +2992,9 @@
     {
       "shift": 106,
       "seed": 1137320676,
-      "actual": 3832,
-      "predicted": 3887,
-      "residual": -55,
+      "actual": 3822,
+      "predicted": 3884,
+      "residual": -62,
       "counts": {
         "Ballard": 4,
         "Green Lake": 3,
@@ -3020,9 +3020,9 @@
     {
       "shift": 107,
       "seed": 2682097907,
-      "actual": 3882,
+      "actual": 3840,
       "predicted": 3812,
-      "residual": 70,
+      "residual": 28,
       "counts": {
         "Ballard": 7,
         "Green Lake": 5,
@@ -3048,9 +3048,9 @@
     {
       "shift": 108,
       "seed": 3391824310,
-      "actual": 4006,
-      "predicted": 3963,
-      "residual": 43,
+      "actual": 3986,
+      "predicted": 3973,
+      "residual": 13,
       "counts": {
         "Ballard": 6,
         "Green Lake": 6,
@@ -3077,8 +3077,8 @@
       "shift": 109,
       "seed": 4208209309,
       "actual": 3868,
-      "predicted": 3934,
-      "residual": -66,
+      "predicted": 3935,
+      "residual": -67,
       "counts": {
         "Ballard": 8,
         "Green Lake": 8,
@@ -3104,9 +3104,9 @@
     {
       "shift": 110,
       "seed": 4155953752,
-      "actual": 3960,
-      "predicted": 3873,
-      "residual": 87,
+      "actual": 3944,
+      "predicted": 3866,
+      "residual": 78,
       "counts": {
         "Ballard": 5,
         "Green Lake": 7,
@@ -3132,9 +3132,9 @@
     {
       "shift": 111,
       "seed": 857649623,
-      "actual": 3870,
-      "predicted": 3912,
-      "residual": -42,
+      "actual": 3890,
+      "predicted": 3908,
+      "residual": -18,
       "counts": {
         "Ballard": 4,
         "Green Lake": 4,
@@ -3160,9 +3160,9 @@
     {
       "shift": 112,
       "seed": 1842914634,
-      "actual": 3946,
-      "predicted": 3930,
-      "residual": 16,
+      "actual": 3970,
+      "predicted": 3937,
+      "residual": 33,
       "counts": {
         "Ballard": 6,
         "Green Lake": 6,
@@ -3188,9 +3188,9 @@
     {
       "shift": 113,
       "seed": 1183110177,
-      "actual": 4002,
-      "predicted": 3972,
-      "residual": 30,
+      "actual": 4036,
+      "predicted": 3977,
+      "residual": 59,
       "counts": {
         "Ballard": 5,
         "Green Lake": 3,
@@ -3217,8 +3217,8 @@
       "shift": 114,
       "seed": 1961615116,
       "actual": 3874,
-      "predicted": 3871,
-      "residual": 3,
+      "predicted": 3864,
+      "residual": 10,
       "counts": {
         "Ballard": 3,
         "Green Lake": 5,
@@ -3245,8 +3245,8 @@
       "shift": 115,
       "seed": 4017360635,
       "actual": 3874,
-      "predicted": 3900,
-      "residual": -26,
+      "predicted": 3906,
+      "residual": -32,
       "counts": {
         "Ballard": 5,
         "Green Lake": 6,
@@ -3272,9 +3272,9 @@
     {
       "shift": 116,
       "seed": 432977950,
-      "actual": 3856,
-      "predicted": 3908,
-      "residual": -52,
+      "actual": 3858,
+      "predicted": 3909,
+      "residual": -51,
       "counts": {
         "Ballard": 5,
         "Green Lake": 2,
@@ -3329,8 +3329,8 @@
       "shift": 118,
       "seed": 2474802432,
       "actual": 3956,
-      "predicted": 3934,
-      "residual": 22,
+      "predicted": 3932,
+      "residual": 24,
       "counts": {
         "Ballard": 4,
         "Green Lake": 4,
@@ -3357,8 +3357,8 @@
       "shift": 119,
       "seed": 3973925983,
       "actual": 3910,
-      "predicted": 3929,
-      "residual": -19,
+      "predicted": 3923,
+      "residual": -13,
       "counts": {
         "Ballard": 5,
         "Green Lake": 5,
@@ -3385,8 +3385,8 @@
       "shift": 120,
       "seed": 3848318514,
       "actual": 3866,
-      "predicted": 3924,
-      "residual": -58,
+      "predicted": 3921,
+      "residual": -55,
       "counts": {
         "Ballard": 6,
         "Green Lake": 4,
@@ -3413,8 +3413,8 @@
       "shift": 121,
       "seed": 1788983273,
       "actual": 3824,
-      "predicted": 3810,
-      "residual": 14,
+      "predicted": 3809,
+      "residual": 15,
       "counts": {
         "Ballard": 2,
         "Green Lake": 5,
@@ -3441,8 +3441,8 @@
       "shift": 122,
       "seed": 195895348,
       "actual": 3838,
-      "predicted": 3890,
-      "residual": -52,
+      "predicted": 3889,
+      "residual": -51,
       "counts": {
         "Ballard": 6,
         "Green Lake": 7,
@@ -3468,8 +3468,8 @@
     {
       "shift": 123,
       "seed": 4095888899,
-      "actual": 4092,
-      "predicted": 3968,
+      "actual": 4090,
+      "predicted": 3966,
       "residual": 124,
       "counts": {
         "Ballard": 4,
@@ -3497,8 +3497,8 @@
       "shift": 124,
       "seed": 3951893382,
       "actual": 3974,
-      "predicted": 3894,
-      "residual": 80,
+      "predicted": 3886,
+      "residual": 88,
       "counts": {
         "Ballard": 5,
         "Green Lake": 4,
@@ -3525,8 +3525,8 @@
       "shift": 125,
       "seed": 463912237,
       "actual": 3910,
-      "predicted": 3898,
-      "residual": 12,
+      "predicted": 3904,
+      "residual": 6,
       "counts": {
         "Ballard": 7,
         "Green Lake": 9,
@@ -3553,8 +3553,8 @@
       "shift": 126,
       "seed": 2360048808,
       "actual": 3840,
-      "predicted": 3798,
-      "residual": 42,
+      "predicted": 3797,
+      "residual": 43,
       "counts": {
         "Ballard": 5,
         "Green Lake": 5,
@@ -3581,8 +3581,8 @@
       "shift": 127,
       "seed": 3778492391,
       "actual": 3936,
-      "predicted": 3928,
-      "residual": 8,
+      "predicted": 3925,
+      "residual": 11,
       "counts": {
         "Ballard": 5,
         "Green Lake": 5,
@@ -3608,9 +3608,9 @@
     {
       "shift": 128,
       "seed": 571593754,
-      "actual": 3792,
-      "predicted": 3886,
-      "residual": -94,
+      "actual": 3798,
+      "predicted": 3869,
+      "residual": -71,
       "counts": {
         "Ballard": 4,
         "Green Lake": 1,
@@ -3636,9 +3636,9 @@
     {
       "shift": 129,
       "seed": 3361936561,
-      "actual": 3784,
-      "predicted": 3716,
-      "residual": 68,
+      "actual": 3796,
+      "predicted": 3711,
+      "residual": 85,
       "counts": {
         "Ballard": 7,
         "Green Lake": 1,
@@ -3664,9 +3664,9 @@
     {
       "shift": 130,
       "seed": 3908994652,
-      "actual": 4030,
-      "predicted": 4017,
-      "residual": 13,
+      "actual": 4058,
+      "predicted": 4029,
+      "residual": 29,
       "counts": {
         "Ballard": 6,
         "Green Lake": 6,
@@ -3692,9 +3692,9 @@
     {
       "shift": 131,
       "seed": 2581622283,
-      "actual": 3898,
+      "actual": 3952,
       "predicted": 3930,
-      "residual": -32,
+      "residual": 22,
       "counts": {
         "Ballard": 5,
         "Green Lake": 5,
@@ -3720,9 +3720,9 @@
     {
       "shift": 132,
       "seed": 935324654,
-      "actual": 3940,
-      "predicted": 3901,
-      "residual": 39,
+      "actual": 3960,
+      "predicted": 3895,
+      "residual": 65,
       "counts": {
         "Ballard": 4,
         "Green Lake": 5,
@@ -3749,8 +3749,8 @@
       "shift": 133,
       "seed": 2473378421,
       "actual": 3932,
-      "predicted": 3931,
-      "residual": 1,
+      "predicted": 3937,
+      "residual": -5,
       "counts": {
         "Ballard": 6,
         "Green Lake": 5,
@@ -3777,8 +3777,8 @@
       "shift": 134,
       "seed": 198996304,
       "actual": 3796,
-      "predicted": 3821,
-      "residual": -25,
+      "predicted": 3822,
+      "residual": -26,
       "counts": {
         "Ballard": 7,
         "Green Lake": 4,
@@ -3804,9 +3804,9 @@
     {
       "shift": 135,
       "seed": 3163985007,
-      "actual": 3878,
+      "actual": 3844,
       "predicted": 3839,
-      "residual": 39,
+      "residual": 5,
       "counts": {
         "Ballard": 7,
         "Green Lake": 7,
@@ -3833,8 +3833,8 @@
       "shift": 136,
       "seed": 1309652738,
       "actual": 3874,
-      "predicted": 3838,
-      "residual": 36,
+      "predicted": 3836,
+      "residual": 38,
       "counts": {
         "Ballard": 5,
         "Green Lake": 3,
@@ -3860,9 +3860,9 @@
     {
       "shift": 137,
       "seed": 1431833209,
-      "actual": 3812,
-      "predicted": 3872,
-      "residual": -60,
+      "actual": 3852,
+      "predicted": 3866,
+      "residual": -14,
       "counts": {
         "Ballard": 6,
         "Green Lake": 7,
@@ -3889,8 +3889,8 @@
       "shift": 138,
       "seed": 2883891588,
       "actual": 3800,
-      "predicted": 3858,
-      "residual": -58,
+      "predicted": 3860,
+      "residual": -60,
       "counts": {
         "Ballard": 5,
         "Green Lake": 2,
@@ -3917,8 +3917,8 @@
       "shift": 139,
       "seed": 1806339859,
       "actual": 3872,
-      "predicted": 3894,
-      "residual": -22,
+      "predicted": 3886,
+      "residual": -14,
       "counts": {
         "Ballard": 8,
         "Green Lake": 4,
@@ -3945,8 +3945,8 @@
       "shift": 140,
       "seed": 2717174102,
       "actual": 3838,
-      "predicted": 3837,
-      "residual": 1,
+      "predicted": 3836,
+      "residual": 2,
       "counts": {
         "Ballard": 6,
         "Green Lake": 6,
@@ -3973,8 +3973,8 @@
       "shift": 141,
       "seed": 2809884861,
       "actual": 3804,
-      "predicted": 3860,
-      "residual": -56,
+      "predicted": 3859,
+      "residual": -55,
       "counts": {
         "Ballard": 3,
         "Green Lake": 6,
@@ -4001,8 +4001,8 @@
       "shift": 142,
       "seed": 4011064056,
       "actual": 3828,
-      "predicted": 3821,
-      "residual": 7,
+      "predicted": 3815,
+      "residual": 13,
       "counts": {
         "Ballard": 6,
         "Green Lake": 2,
@@ -4029,8 +4029,8 @@
       "shift": 143,
       "seed": 3634987511,
       "actual": 3830,
-      "predicted": 3845,
-      "residual": -15,
+      "predicted": 3838,
+      "residual": -8,
       "counts": {
         "Ballard": 8,
         "Green Lake": 4,
@@ -4057,8 +4057,8 @@
       "shift": 144,
       "seed": 2012346090,
       "actual": 3930,
-      "predicted": 3930,
-      "residual": 0,
+      "predicted": 3928,
+      "residual": 2,
       "counts": {
         "Ballard": 8,
         "Green Lake": 4,
@@ -4085,8 +4085,8 @@
       "shift": 145,
       "seed": 3639851329,
       "actual": 3704,
-      "predicted": 3722,
-      "residual": -18,
+      "predicted": 3719,
+      "residual": -15,
       "counts": {
         "Ballard": 5,
         "Green Lake": 5,
@@ -4112,9 +4112,9 @@
     {
       "shift": 146,
       "seed": 1945649580,
-      "actual": 3790,
-      "predicted": 3766,
-      "residual": 24,
+      "actual": 3768,
+      "predicted": 3754,
+      "residual": 14,
       "counts": {
         "Ballard": 6,
         "Green Lake": 5,
@@ -4140,9 +4140,9 @@
     {
       "shift": 147,
       "seed": 1946210587,
-      "actual": 3974,
-      "predicted": 3927,
-      "residual": 47,
+      "actual": 3958,
+      "predicted": 3928,
+      "residual": 30,
       "counts": {
         "Ballard": 4,
         "Green Lake": 6,
@@ -4169,8 +4169,8 @@
       "shift": 148,
       "seed": 3748484030,
       "actual": 3820,
-      "predicted": 3822,
-      "residual": -2,
+      "predicted": 3823,
+      "residual": -3,
       "counts": {
         "Ballard": 5,
         "Green Lake": 5,
@@ -4197,8 +4197,8 @@
       "shift": 149,
       "seed": 1374152709,
       "actual": 3970,
-      "predicted": 3896,
-      "residual": 74,
+      "predicted": 3881,
+      "residual": 89,
       "counts": {
         "Ballard": 7,
         "Green Lake": 5,
@@ -4252,9 +4252,9 @@
     {
       "shift": 151,
       "seed": 3840024703,
-      "actual": 3962,
-      "predicted": 3917,
-      "residual": 45,
+      "actual": 3906,
+      "predicted": 3913,
+      "residual": -7,
       "counts": {
         "Ballard": 5,
         "Green Lake": 4,
@@ -4281,8 +4281,8 @@
       "shift": 152,
       "seed": 558117842,
       "actual": 3918,
-      "predicted": 3946,
-      "residual": -28,
+      "predicted": 3942,
+      "residual": -24,
       "counts": {
         "Ballard": 4,
         "Green Lake": 8,
@@ -4309,8 +4309,8 @@
       "shift": 153,
       "seed": 688734473,
       "actual": 3748,
-      "predicted": 3811,
-      "residual": -63,
+      "predicted": 3810,
+      "residual": -62,
       "counts": {
         "Ballard": 5,
         "Green Lake": 5,
@@ -4337,8 +4337,8 @@
       "shift": 154,
       "seed": 4091926228,
       "actual": 3938,
-      "predicted": 3937,
-      "residual": 1,
+      "predicted": 3942,
+      "residual": -4,
       "counts": {
         "Ballard": 6,
         "Green Lake": 3,
@@ -4365,8 +4365,8 @@
       "shift": 155,
       "seed": 761746467,
       "actual": 4034,
-      "predicted": 3989,
-      "residual": 45,
+      "predicted": 3992,
+      "residual": 42,
       "counts": {
         "Ballard": 6,
         "Green Lake": 5,
@@ -4393,8 +4393,8 @@
       "shift": 156,
       "seed": 3986631462,
       "actual": 3864,
-      "predicted": 3917,
-      "residual": -53,
+      "predicted": 3924,
+      "residual": -60,
       "counts": {
         "Ballard": 4,
         "Green Lake": 6,
@@ -4421,8 +4421,8 @@
       "shift": 157,
       "seed": 4016785485,
       "actual": 3866,
-      "predicted": 3883,
-      "residual": -17,
+      "predicted": 3889,
+      "residual": -23,
       "counts": {
         "Ballard": 6,
         "Green Lake": 7,
@@ -4448,9 +4448,9 @@
     {
       "shift": 158,
       "seed": 859131208,
-      "actual": 3926,
-      "predicted": 3995,
-      "residual": -69,
+      "actual": 3910,
+      "predicted": 3986,
+      "residual": -76,
       "counts": {
         "Ballard": 4,
         "Green Lake": 3,
@@ -4477,8 +4477,8 @@
       "shift": 159,
       "seed": 2666958855,
       "actual": 3974,
-      "predicted": 3963,
-      "residual": 11,
+      "predicted": 3965,
+      "residual": 9,
       "counts": {
         "Ballard": 4,
         "Green Lake": 3,
@@ -4505,8 +4505,8 @@
       "shift": 160,
       "seed": 2634419642,
       "actual": 3838,
-      "predicted": 3893,
-      "residual": -55,
+      "predicted": 3891,
+      "residual": -53,
       "counts": {
         "Ballard": 6,
         "Green Lake": 6,
@@ -4533,8 +4533,8 @@
       "shift": 161,
       "seed": 4133470673,
       "actual": 3848,
-      "predicted": 3767,
-      "residual": 81,
+      "predicted": 3757,
+      "residual": 91,
       "counts": {
         "Ballard": 5,
         "Green Lake": 6,
@@ -4561,8 +4561,8 @@
       "shift": 162,
       "seed": 3555594492,
       "actual": 3926,
-      "predicted": 3978,
-      "residual": -52,
+      "predicted": 3975,
+      "residual": -49,
       "counts": {
         "Ballard": 5,
         "Green Lake": 5,
@@ -4589,8 +4589,8 @@
       "shift": 163,
       "seed": 2196125739,
       "actual": 4048,
-      "predicted": 4001,
-      "residual": 47,
+      "predicted": 4002,
+      "residual": 46,
       "counts": {
         "Ballard": 5,
         "Green Lake": 5,
@@ -4616,9 +4616,9 @@
     {
       "shift": 164,
       "seed": 414445454,
-      "actual": 3904,
-      "predicted": 3844,
-      "residual": 60,
+      "actual": 3922,
+      "predicted": 3843,
+      "residual": 79,
       "counts": {
         "Ballard": 5,
         "Green Lake": 6,
@@ -4645,8 +4645,8 @@
       "shift": 165,
       "seed": 2481107349,
       "actual": 3956,
-      "predicted": 3936,
-      "residual": 20,
+      "predicted": 3931,
+      "residual": 25,
       "counts": {
         "Ballard": 7,
         "Green Lake": 6,
@@ -4672,9 +4672,9 @@
     {
       "shift": 166,
       "seed": 1765823984,
-      "actual": 4088,
-      "predicted": 3979,
-      "residual": 109,
+      "actual": 4098,
+      "predicted": 4000,
+      "residual": 98,
       "counts": {
         "Ballard": 8,
         "Green Lake": 5,
@@ -4728,9 +4728,9 @@
     {
       "shift": 168,
       "seed": 1043014818,
-      "actual": 3972,
-      "predicted": 3915,
-      "residual": 57,
+      "actual": 4020,
+      "predicted": 3919,
+      "residual": 101,
       "counts": {
         "Ballard": 8,
         "Green Lake": 6,
@@ -4757,8 +4757,8 @@
       "shift": 169,
       "seed": 688544665,
       "actual": 3774,
-      "predicted": 3769,
-      "residual": 5,
+      "predicted": 3772,
+      "residual": 2,
       "counts": {
         "Ballard": 7,
         "Green Lake": 3,
@@ -4785,8 +4785,8 @@
       "shift": 170,
       "seed": 1684377636,
       "actual": 3750,
-      "predicted": 3800,
-      "residual": -50,
+      "predicted": 3798,
+      "residual": -48,
       "counts": {
         "Ballard": 4,
         "Green Lake": 8,
@@ -4812,9 +4812,9 @@
     {
       "shift": 171,
       "seed": 3767115059,
-      "actual": 3872,
-      "predicted": 3910,
-      "residual": -38,
+      "actual": 3890,
+      "predicted": 3906,
+      "residual": -16,
       "counts": {
         "Ballard": 4,
         "Green Lake": 6,
@@ -4841,8 +4841,8 @@
       "shift": 172,
       "seed": 3523821814,
       "actual": 3890,
-      "predicted": 3939,
-      "residual": -49,
+      "predicted": 3944,
+      "residual": -54,
       "counts": {
         "Ballard": 8,
         "Green Lake": 5,
@@ -4869,8 +4869,8 @@
       "shift": 173,
       "seed": 4006560733,
       "actual": 3804,
-      "predicted": 3808,
-      "residual": -4,
+      "predicted": 3806,
+      "residual": -2,
       "counts": {
         "Ballard": 6,
         "Green Lake": 7,
@@ -4897,8 +4897,8 @@
       "shift": 174,
       "seed": 2459202456,
       "actual": 3806,
-      "predicted": 3852,
-      "residual": -46,
+      "predicted": 3851,
+      "residual": -45,
       "counts": {
         "Ballard": 8,
         "Green Lake": 3,
@@ -4924,9 +4924,9 @@
     {
       "shift": 175,
       "seed": 501178903,
-      "actual": 3846,
-      "predicted": 3926,
-      "residual": -80,
+      "actual": 3910,
+      "predicted": 3923,
+      "residual": -13,
       "counts": {
         "Ballard": 5,
         "Green Lake": 6,
@@ -4953,8 +4953,8 @@
       "shift": 176,
       "seed": 1444616330,
       "actual": 3784,
-      "predicted": 3820,
-      "residual": -36,
+      "predicted": 3810,
+      "residual": -26,
       "counts": {
         "Ballard": 5,
         "Green Lake": 5,
@@ -4981,8 +4981,8 @@
       "shift": 177,
       "seed": 3440389729,
       "actual": 3812,
-      "predicted": 3792,
-      "residual": 20,
+      "predicted": 3780,
+      "residual": 32,
       "counts": {
         "Ballard": 3,
         "Green Lake": 6,
@@ -5009,8 +5009,8 @@
       "shift": 178,
       "seed": 2687824972,
       "actual": 3814,
-      "predicted": 3884,
-      "residual": -70,
+      "predicted": 3874,
+      "residual": -60,
       "counts": {
         "Ballard": 6,
         "Green Lake": 7,
@@ -5036,9 +5036,9 @@
     {
       "shift": 179,
       "seed": 1407296315,
-      "actual": 3822,
-      "predicted": 3759,
-      "residual": 63,
+      "actual": 3808,
+      "predicted": 3751,
+      "residual": 57,
       "counts": {
         "Ballard": 4,
         "Green Lake": 7,
@@ -5064,9 +5064,9 @@
     {
       "shift": 180,
       "seed": 1454423902,
-      "actual": 3942,
-      "predicted": 3940,
-      "residual": 2,
+      "actual": 3996,
+      "predicted": 3934,
+      "residual": 62,
       "counts": {
         "Ballard": 6,
         "Green Lake": 5,
@@ -5092,9 +5092,9 @@
     {
       "shift": 181,
       "seed": 3218480933,
-      "actual": 3782,
-      "predicted": 3724,
-      "residual": 58,
+      "actual": 3780,
+      "predicted": 3713,
+      "residual": 67,
       "counts": {
         "Ballard": 2,
         "Green Lake": 2,
@@ -5120,9 +5120,9 @@
     {
       "shift": 182,
       "seed": 1431586368,
-      "actual": 3844,
-      "predicted": 3864,
-      "residual": -20,
+      "actual": 3826,
+      "predicted": 3860,
+      "residual": -34,
       "counts": {
         "Ballard": 6,
         "Green Lake": 9,
@@ -5149,8 +5149,8 @@
       "shift": 183,
       "seed": 32769183,
       "actual": 3826,
-      "predicted": 3812,
-      "residual": 14,
+      "predicted": 3807,
+      "residual": 19,
       "counts": {
         "Ballard": 5,
         "Green Lake": 5,
@@ -5177,8 +5177,8 @@
       "shift": 184,
       "seed": 53578098,
       "actual": 3724,
-      "predicted": 3815,
-      "residual": -91,
+      "predicted": 3817,
+      "residual": -93,
       "counts": {
         "Ballard": 7,
         "Green Lake": 3,
@@ -5205,8 +5205,8 @@
       "shift": 185,
       "seed": 2396543529,
       "actual": 3776,
-      "predicted": 3803,
-      "residual": -27,
+      "predicted": 3806,
+      "residual": -30,
       "counts": {
         "Ballard": 5,
         "Green Lake": 5,
@@ -5261,8 +5261,8 @@
       "shift": 187,
       "seed": 3162663491,
       "actual": 3794,
-      "predicted": 3830,
-      "residual": -36,
+      "predicted": 3834,
+      "residual": -40,
       "counts": {
         "Ballard": 8,
         "Green Lake": 1,
@@ -5288,9 +5288,9 @@
     {
       "shift": 188,
       "seed": 636488390,
-      "actual": 3812,
-      "predicted": 3745,
-      "residual": 67,
+      "actual": 3796,
+      "predicted": 3743,
+      "residual": 53,
       "counts": {
         "Ballard": 5,
         "Green Lake": 5,
@@ -5316,9 +5316,9 @@
     {
       "shift": 189,
       "seed": 3678430061,
-      "actual": 3960,
-      "predicted": 3919,
-      "residual": 41,
+      "actual": 3910,
+      "predicted": 3911,
+      "residual": -1,
       "counts": {
         "Ballard": 5,
         "Green Lake": 3,
@@ -5373,8 +5373,8 @@
       "shift": 191,
       "seed": 3009738791,
       "actual": 3852,
-      "predicted": 3934,
-      "residual": -82,
+      "predicted": 3932,
+      "residual": -80,
       "counts": {
         "Ballard": 6,
         "Green Lake": 7,
@@ -5401,8 +5401,8 @@
       "shift": 192,
       "seed": 3476952922,
       "actual": 4070,
-      "predicted": 4025,
-      "residual": 45,
+      "predicted": 4026,
+      "residual": 44,
       "counts": {
         "Ballard": 6,
         "Green Lake": 6,
@@ -5429,8 +5429,8 @@
       "shift": 193,
       "seed": 3350068977,
       "actual": 3794,
-      "predicted": 3860,
-      "residual": -66,
+      "predicted": 3856,
+      "residual": -62,
       "counts": {
         "Ballard": 7,
         "Green Lake": 4,
@@ -5457,8 +5457,8 @@
       "shift": 194,
       "seed": 2573331356,
       "actual": 3864,
-      "predicted": 3849,
-      "residual": 15,
+      "predicted": 3846,
+      "residual": 18,
       "counts": {
         "Ballard": 6,
         "Green Lake": 4,
@@ -5484,9 +5484,9 @@
     {
       "shift": 195,
       "seed": 209982027,
-      "actual": 3904,
-      "predicted": 3884,
-      "residual": 20,
+      "actual": 3884,
+      "predicted": 3888,
+      "residual": -4,
       "counts": {
         "Ballard": 4,
         "Green Lake": 6,
@@ -5513,8 +5513,8 @@
       "shift": 196,
       "seed": 1203815214,
       "actual": 3858,
-      "predicted": 3872,
-      "residual": -14,
+      "predicted": 3876,
+      "residual": -18,
       "counts": {
         "Ballard": 5,
         "Green Lake": 6,
@@ -5541,8 +5541,8 @@
       "shift": 197,
       "seed": 3195744437,
       "actual": 3934,
-      "predicted": 3946,
-      "residual": -12,
+      "predicted": 3956,
+      "residual": -22,
       "counts": {
         "Ballard": 7,
         "Green Lake": 4,
@@ -5568,9 +5568,9 @@
     {
       "shift": 198,
       "seed": 3217394320,
-      "actual": 4062,
-      "predicted": 4025,
-      "residual": 37,
+      "actual": 4088,
+      "predicted": 4027,
+      "residual": 61,
       "counts": {
         "Ballard": 5,
         "Green Lake": 4,
@@ -5596,9 +5596,9 @@
     {
       "shift": 199,
       "seed": 918314159,
-      "actual": 3750,
-      "predicted": 3787,
-      "residual": -37,
+      "actual": 3776,
+      "predicted": 3785,
+      "residual": -9,
       "counts": {
         "Ballard": 3,
         "Green Lake": 4,
@@ -5624,9 +5624,9 @@
     {
       "shift": 200,
       "seed": 503603778,
-      "actual": 3924,
-      "predicted": 3806,
-      "residual": 118,
+      "actual": 3842,
+      "predicted": 3797,
+      "residual": 45,
       "counts": {
         "Ballard": 4,
         "Green Lake": 3,
@@ -5652,9 +5652,9 @@
     {
       "shift": 201,
       "seed": 440417465,
-      "actual": 3896,
-      "predicted": 3860,
-      "residual": 36,
+      "actual": 3890,
+      "predicted": 3849,
+      "residual": 41,
       "counts": {
         "Ballard": 5,
         "Green Lake": 5,
@@ -5680,9 +5680,9 @@
     {
       "shift": 202,
       "seed": 401915588,
-      "actual": 3884,
-      "predicted": 3882,
-      "residual": 2,
+      "actual": 3862,
+      "predicted": 3883,
+      "residual": -21,
       "counts": {
         "Ballard": 4,
         "Green Lake": 4,
@@ -5708,9 +5708,9 @@
     {
       "shift": 203,
       "seed": 2567093075,
-      "actual": 4036,
-      "predicted": 3999,
-      "residual": 37,
+      "actual": 4132,
+      "predicted": 4001,
+      "residual": 131,
       "counts": {
         "Ballard": 6,
         "Green Lake": 4,
@@ -5737,8 +5737,8 @@
       "shift": 204,
       "seed": 1666222230,
       "actual": 3868,
-      "predicted": 3911,
-      "residual": -43,
+      "predicted": 3918,
+      "residual": -50,
       "counts": {
         "Ballard": 7,
         "Green Lake": 6,
@@ -5765,8 +5765,8 @@
       "shift": 205,
       "seed": 3029837565,
       "actual": 3798,
-      "predicted": 3821,
-      "residual": -23,
+      "predicted": 3811,
+      "residual": -13,
       "counts": {
         "Ballard": 4,
         "Green Lake": 1,
@@ -5793,8 +5793,8 @@
       "shift": 206,
       "seed": 593509432,
       "actual": 4002,
-      "predicted": 3941,
-      "residual": 61,
+      "predicted": 3949,
+      "residual": 53,
       "counts": {
         "Ballard": 4,
         "Green Lake": 4,
@@ -5821,8 +5821,8 @@
       "shift": 207,
       "seed": 1103647287,
       "actual": 3852,
-      "predicted": 3831,
-      "residual": 21,
+      "predicted": 3832,
+      "residual": 20,
       "counts": {
         "Ballard": 5,
         "Green Lake": 5,
@@ -5848,9 +5848,9 @@
     {
       "shift": 208,
       "seed": 1807485482,
-      "actual": 3868,
-      "predicted": 3939,
-      "residual": -71,
+      "actual": 3892,
+      "predicted": 3938,
+      "residual": -46,
       "counts": {
         "Ballard": 5,
         "Green Lake": 6,
@@ -5876,9 +5876,9 @@
     {
       "shift": 209,
       "seed": 2669818753,
-      "actual": 3942,
+      "actual": 3902,
       "predicted": 3897,
-      "residual": 45,
+      "residual": 5,
       "counts": {
         "Ballard": 2,
         "Green Lake": 6,
@@ -5905,8 +5905,8 @@
       "shift": 210,
       "seed": 4182374124,
       "actual": 3636,
-      "predicted": 3696,
-      "residual": -60,
+      "predicted": 3699,
+      "residual": -63,
       "counts": {
         "Ballard": 4,
         "Green Lake": 6,
@@ -5932,8 +5932,8 @@
       "shift": 211,
       "seed": 2057209179,
       "actual": 4004,
-      "predicted": 3964,
-      "residual": 40,
+      "predicted": 3968,
+      "residual": 36,
       "counts": {
         "Ballard": 3,
         "Green Lake": 7,
@@ -5959,9 +5959,9 @@
     {
       "shift": 212,
       "seed": 2776693502,
-      "actual": 3854,
-      "predicted": 3807,
-      "residual": 47,
+      "actual": 3850,
+      "predicted": 3810,
+      "residual": 40,
       "counts": {
         "Ballard": 6,
         "Green Lake": 8,
@@ -5988,8 +5988,8 @@
       "shift": 213,
       "seed": 2328553029,
       "actual": 3864,
-      "predicted": 3875,
-      "residual": -11,
+      "predicted": 3869,
+      "residual": -5,
       "counts": {
         "Ballard": 4,
         "Green Lake": 8,
@@ -6016,8 +6016,8 @@
       "shift": 214,
       "seed": 2637767392,
       "actual": 3776,
-      "predicted": 3829,
-      "residual": -53,
+      "predicted": 3827,
+      "residual": -51,
       "counts": {
         "Ballard": 5,
         "Green Lake": 6,
@@ -6043,9 +6043,9 @@
     {
       "shift": 215,
       "seed": 1679489215,
-      "actual": 3874,
-      "predicted": 3851,
-      "residual": 23,
+      "actual": 3866,
+      "predicted": 3854,
+      "residual": 12,
       "counts": {
         "Ballard": 4,
         "Green Lake": 2,
@@ -6072,8 +6072,8 @@
       "shift": 216,
       "seed": 1536208658,
       "actual": 3840,
-      "predicted": 3879,
-      "residual": -39,
+      "predicted": 3876,
+      "residual": -36,
       "counts": {
         "Ballard": 7,
         "Green Lake": 6,
@@ -6099,9 +6099,9 @@
     {
       "shift": 217,
       "seed": 2706047817,
-      "actual": 3740,
-      "predicted": 3802,
-      "residual": -62,
+      "actual": 3744,
+      "predicted": 3797,
+      "residual": -53,
       "counts": {
         "Ballard": 3,
         "Green Lake": 5,
@@ -6127,9 +6127,9 @@
     {
       "shift": 218,
       "seed": 2729325588,
-      "actual": 3902,
-      "predicted": 3936,
-      "residual": -34,
+      "actual": 3898,
+      "predicted": 3929,
+      "residual": -31,
       "counts": {
         "Ballard": 4,
         "Green Lake": 9,
@@ -6155,9 +6155,9 @@
     {
       "shift": 219,
       "seed": 4261122147,
-      "actual": 4004,
-      "predicted": 4019,
-      "residual": -15,
+      "actual": 3986,
+      "predicted": 4027,
+      "residual": -41,
       "counts": {
         "Ballard": 6,
         "Green Lake": 6,
@@ -6183,9 +6183,9 @@
     {
       "shift": 220,
       "seed": 2003286630,
-      "actual": 3752,
-      "predicted": 3743,
-      "residual": 9,
+      "actual": 3782,
+      "predicted": 3749,
+      "residual": 33,
       "counts": {
         "Ballard": 5,
         "Green Lake": 4,
@@ -6212,8 +6212,8 @@
       "shift": 221,
       "seed": 3572371085,
       "actual": 3910,
-      "predicted": 3920,
-      "residual": -10,
+      "predicted": 3919,
+      "residual": -9,
       "counts": {
         "Ballard": 4,
         "Green Lake": 8,
@@ -6239,9 +6239,9 @@
     {
       "shift": 222,
       "seed": 1377230472,
-      "actual": 3922,
-      "predicted": 3837,
-      "residual": 85,
+      "actual": 3906,
+      "predicted": 3828,
+      "residual": 78,
       "counts": {
         "Ballard": 3,
         "Green Lake": 6,
@@ -6296,8 +6296,8 @@
       "shift": 224,
       "seed": 2518806778,
       "actual": 3898,
-      "predicted": 3901,
-      "residual": -3,
+      "predicted": 3890,
+      "residual": 8,
       "counts": {
         "Ballard": 7,
         "Green Lake": 6,
@@ -6324,8 +6324,8 @@
       "shift": 225,
       "seed": 3935685649,
       "actual": 3828,
-      "predicted": 3880,
-      "residual": -52,
+      "predicted": 3874,
+      "residual": -46,
       "counts": {
         "Ballard": 6,
         "Green Lake": 3,
@@ -6351,9 +6351,9 @@
     {
       "shift": 226,
       "seed": 3271693884,
-      "actual": 3892,
-      "predicted": 3912,
-      "residual": -20,
+      "actual": 3920,
+      "predicted": 3907,
+      "residual": 13,
       "counts": {
         "Ballard": 5,
         "Green Lake": 4,
@@ -6379,9 +6379,9 @@
     {
       "shift": 227,
       "seed": 608304235,
-      "actual": 3836,
-      "predicted": 3794,
-      "residual": 42,
+      "actual": 3842,
+      "predicted": 3793,
+      "residual": 49,
       "counts": {
         "Ballard": 7,
         "Green Lake": 5,
@@ -6407,9 +6407,9 @@
     {
       "shift": 228,
       "seed": 80635598,
-      "actual": 3758,
-      "predicted": 3733,
-      "residual": 25,
+      "actual": 3750,
+      "predicted": 3736,
+      "residual": 14,
       "counts": {
         "Ballard": 2,
         "Green Lake": 5,
@@ -6436,8 +6436,8 @@
       "shift": 229,
       "seed": 3254665173,
       "actual": 3854,
-      "predicted": 3905,
-      "residual": -51,
+      "predicted": 3904,
+      "residual": -50,
       "counts": {
         "Ballard": 3,
         "Green Lake": 8,
@@ -6464,8 +6464,8 @@
       "shift": 230,
       "seed": 2677280560,
       "actual": 3962,
-      "predicted": 3990,
-      "residual": -28,
+      "predicted": 3996,
+      "residual": -34,
       "counts": {
         "Ballard": 8,
         "Green Lake": 6,
@@ -6492,8 +6492,8 @@
       "shift": 231,
       "seed": 3501250767,
       "actual": 3890,
-      "predicted": 3852,
-      "residual": 38,
+      "predicted": 3843,
+      "residual": 47,
       "counts": {
         "Ballard": 6,
         "Green Lake": 5,
@@ -6520,8 +6520,8 @@
       "shift": 232,
       "seed": 2013491170,
       "actual": 3894,
-      "predicted": 3911,
-      "residual": -17,
+      "predicted": 3910,
+      "residual": -16,
       "counts": {
         "Ballard": 4,
         "Green Lake": 7,
@@ -6548,8 +6548,8 @@
       "shift": 233,
       "seed": 2688658905,
       "actual": 3866,
-      "predicted": 3803,
-      "residual": 63,
+      "predicted": 3816,
+      "residual": 50,
       "counts": {
         "Ballard": 9,
         "Green Lake": 8,
@@ -6576,8 +6576,8 @@
       "shift": 234,
       "seed": 2235186532,
       "actual": 3804,
-      "predicted": 3888,
-      "residual": -84,
+      "predicted": 3879,
+      "residual": -75,
       "counts": {
         "Ballard": 7,
         "Green Lake": 5,
@@ -6604,8 +6604,8 @@
       "shift": 235,
       "seed": 865986931,
       "actual": 3916,
-      "predicted": 3792,
-      "residual": 124,
+      "predicted": 3798,
+      "residual": 118,
       "counts": {
         "Ballard": 3,
         "Green Lake": 9,
@@ -6632,8 +6632,8 @@
       "shift": 236,
       "seed": 2461179958,
       "actual": 3748,
-      "predicted": 3771,
-      "residual": -23,
+      "predicted": 3764,
+      "residual": -16,
       "counts": {
         "Ballard": 3,
         "Green Lake": 6,
@@ -6660,8 +6660,8 @@
       "shift": 237,
       "seed": 2157746717,
       "actual": 3870,
-      "predicted": 3898,
-      "residual": -28,
+      "predicted": 3903,
+      "residual": -33,
       "counts": {
         "Ballard": 4,
         "Green Lake": 7,
@@ -6688,8 +6688,8 @@
       "shift": 238,
       "seed": 916411608,
       "actual": 3884,
-      "predicted": 3914,
-      "residual": -30,
+      "predicted": 3922,
+      "residual": -38,
       "counts": {
         "Ballard": 6,
         "Green Lake": 3,
@@ -6715,9 +6715,9 @@
     {
       "shift": 239,
       "seed": 3345764951,
-      "actual": 3918,
-      "predicted": 3837,
-      "residual": 81,
+      "actual": 3838,
+      "predicted": 3829,
+      "residual": 9,
       "counts": {
         "Ballard": 6,
         "Green Lake": 1,
@@ -6743,9 +6743,9 @@
     {
       "shift": 240,
       "seed": 2419903434,
-      "actual": 4000,
-      "predicted": 3949,
-      "residual": 51,
+      "actual": 3994,
+      "predicted": 3958,
+      "residual": 36,
       "counts": {
         "Ballard": 7,
         "Green Lake": 6,
@@ -6771,9 +6771,9 @@
     {
       "shift": 241,
       "seed": 2943469729,
-      "actual": 3858,
-      "predicted": 3900,
-      "residual": -42,
+      "actual": 3862,
+      "predicted": 3895,
+      "residual": -33,
       "counts": {
         "Ballard": 1,
         "Green Lake": 6,
@@ -6800,8 +6800,8 @@
       "shift": 242,
       "seed": 316623244,
       "actual": 3780,
-      "predicted": 3795,
-      "residual": -15,
+      "predicted": 3799,
+      "residual": -19,
       "counts": {
         "Ballard": 6,
         "Green Lake": 3,
@@ -6827,9 +6827,9 @@
     {
       "shift": 243,
       "seed": 1472165755,
-      "actual": 3892,
-      "predicted": 3911,
-      "residual": -19,
+      "actual": 3916,
+      "predicted": 3913,
+      "residual": 3,
       "counts": {
         "Ballard": 5,
         "Green Lake": 8,
@@ -6855,9 +6855,9 @@
     {
       "shift": 244,
       "seed": 2781218462,
-      "actual": 3874,
-      "predicted": 3874,
-      "residual": 0,
+      "actual": 3870,
+      "predicted": 3875,
+      "residual": -5,
       "counts": {
         "Ballard": 8,
         "Green Lake": 5,
@@ -6883,9 +6883,9 @@
     {
       "shift": 245,
       "seed": 864959845,
-      "actual": 3804,
-      "predicted": 3828,
-      "residual": -24,
+      "actual": 3770,
+      "predicted": 3825,
+      "residual": -55,
       "counts": {
         "Ballard": 5,
         "Green Lake": 5,
@@ -6912,8 +6912,8 @@
       "shift": 246,
       "seed": 2247839616,
       "actual": 3928,
-      "predicted": 3926,
-      "residual": 2,
+      "predicted": 3921,
+      "residual": 7,
       "counts": {
         "Ballard": 4,
         "Green Lake": 3,
@@ -6939,9 +6939,9 @@
     {
       "shift": 247,
       "seed": 4015979743,
-      "actual": 3940,
-      "predicted": 3886,
-      "residual": 54,
+      "actual": 3926,
+      "predicted": 3877,
+      "residual": 49,
       "counts": {
         "Ballard": 8,
         "Green Lake": 4,
@@ -6968,8 +6968,8 @@
       "shift": 248,
       "seed": 4006192306,
       "actual": 3738,
-      "predicted": 3707,
-      "residual": 31,
+      "predicted": 3705,
+      "residual": 33,
       "counts": {
         "Ballard": 4,
         "Green Lake": 6,
@@ -6996,8 +6996,8 @@
       "shift": 249,
       "seed": 3383573609,
       "actual": 3986,
-      "predicted": 3985,
-      "residual": 1,
+      "predicted": 3988,
+      "residual": -2,
       "counts": {
         "Ballard": 3,
         "Green Lake": 5,
@@ -7052,8 +7052,8 @@
       "shift": 251,
       "seed": 1381680771,
       "actual": 3822,
-      "predicted": 3846,
-      "residual": -24,
+      "predicted": 3839,
+      "residual": -17,
       "counts": {
         "Ballard": 3,
         "Green Lake": 5,
@@ -7080,8 +7080,8 @@
       "shift": 252,
       "seed": 4176361990,
       "actual": 3948,
-      "predicted": 3892,
-      "residual": 56,
+      "predicted": 3883,
+      "residual": 65,
       "counts": {
         "Ballard": 4,
         "Green Lake": 4,
@@ -7108,8 +7108,8 @@
       "shift": 253,
       "seed": 1983662509,
       "actual": 3858,
-      "predicted": 3802,
-      "residual": 56,
+      "predicted": 3804,
+      "residual": 54,
       "counts": {
         "Ballard": 7,
         "Green Lake": 5,
@@ -7135,9 +7135,9 @@
     {
       "shift": 254,
       "seed": 1958649640,
-      "actual": 3962,
-      "predicted": 3948,
-      "residual": 14,
+      "actual": 3964,
+      "predicted": 3954,
+      "residual": 10,
       "counts": {
         "Ballard": 10,
         "Green Lake": 4,
@@ -7164,8 +7164,8 @@
       "shift": 255,
       "seed": 2825844839,
       "actual": 3802,
-      "predicted": 3875,
-      "residual": -73,
+      "predicted": 3874,
+      "residual": -72,
       "counts": {
         "Ballard": 3,
         "Green Lake": 5,
@@ -7192,8 +7192,8 @@
       "shift": 256,
       "seed": 1125751450,
       "actual": 3722,
-      "predicted": 3704,
-      "residual": 18,
+      "predicted": 3701,
+      "residual": 21,
       "counts": {
         "Ballard": 4,
         "Green Lake": 5,
@@ -7220,8 +7220,8 @@
       "shift": 257,
       "seed": 4049545521,
       "actual": 3962,
-      "predicted": 3980,
-      "residual": -18,
+      "predicted": 3975,
+      "residual": -13,
       "counts": {
         "Ballard": 6,
         "Green Lake": 8,
@@ -7248,8 +7248,8 @@
       "shift": 258,
       "seed": 1853264092,
       "actual": 3788,
-      "predicted": 3830,
-      "residual": -42,
+      "predicted": 3826,
+      "residual": -38,
       "counts": {
         "Ballard": 5,
         "Green Lake": 5,
@@ -7275,9 +7275,9 @@
     {
       "shift": 259,
       "seed": 1000863371,
-      "actual": 3930,
-      "predicted": 3895,
-      "residual": 35,
+      "actual": 3914,
+      "predicted": 3889,
+      "residual": 25,
       "counts": {
         "Ballard": 8,
         "Green Lake": 3,
@@ -7304,8 +7304,8 @@
       "shift": 260,
       "seed": 1136974446,
       "actual": 3850,
-      "predicted": 3868,
-      "residual": -18,
+      "predicted": 3871,
+      "residual": -21,
       "counts": {
         "Ballard": 7,
         "Green Lake": 9,
@@ -7332,8 +7332,8 @@
       "shift": 261,
       "seed": 1899224821,
       "actual": 3910,
-      "predicted": 3902,
-      "residual": 8,
+      "predicted": 3897,
+      "residual": 13,
       "counts": {
         "Ballard": 5,
         "Green Lake": 4,
@@ -7359,9 +7359,9 @@
     {
       "shift": 262,
       "seed": 1825825744,
-      "actual": 3898,
-      "predicted": 3848,
-      "residual": 50,
+      "actual": 3896,
+      "predicted": 3849,
+      "residual": 47,
       "counts": {
         "Ballard": 5,
         "Green Lake": 7,
@@ -7388,8 +7388,8 @@
       "shift": 263,
       "seed": 1866884335,
       "actual": 3848,
-      "predicted": 3862,
-      "residual": -14,
+      "predicted": 3861,
+      "residual": -13,
       "counts": {
         "Ballard": 4,
         "Green Lake": 6,
@@ -7415,9 +7415,9 @@
     {
       "shift": 264,
       "seed": 3398454658,
-      "actual": 3910,
-      "predicted": 3887,
-      "residual": 23,
+      "actual": 3886,
+      "predicted": 3877,
+      "residual": 9,
       "counts": {
         "Ballard": 5,
         "Green Lake": 6,
@@ -7443,9 +7443,9 @@
     {
       "shift": 265,
       "seed": 2522263289,
-      "actual": 3880,
-      "predicted": 3876,
-      "residual": 4,
+      "actual": 3840,
+      "predicted": 3869,
+      "residual": -29,
       "counts": {
         "Ballard": 1,
         "Green Lake": 6,
@@ -7472,8 +7472,8 @@
       "shift": 266,
       "seed": 2128481284,
       "actual": 3852,
-      "predicted": 3850,
-      "residual": 2,
+      "predicted": 3845,
+      "residual": 7,
       "counts": {
         "Ballard": 4,
         "Green Lake": 5,
@@ -7500,8 +7500,8 @@
       "shift": 267,
       "seed": 1390618515,
       "actual": 3860,
-      "predicted": 3881,
-      "residual": -21,
+      "predicted": 3875,
+      "residual": -15,
       "counts": {
         "Ballard": 2,
         "Green Lake": 9,
@@ -7527,9 +7527,9 @@
     {
       "shift": 268,
       "seed": 3507980246,
-      "actual": 4048,
-      "predicted": 3994,
-      "residual": 54,
+      "actual": 4062,
+      "predicted": 3988,
+      "residual": 74,
       "counts": {
         "Ballard": 6,
         "Green Lake": 3,
@@ -7555,9 +7555,9 @@
     {
       "shift": 269,
       "seed": 2124815677,
-      "actual": 3832,
-      "predicted": 3810,
-      "residual": 22,
+      "actual": 3828,
+      "predicted": 3805,
+      "residual": 23,
       "counts": {
         "Ballard": 2,
         "Green Lake": 6,
@@ -7583,9 +7583,9 @@
     {
       "shift": 270,
       "seed": 3044654456,
-      "actual": 3980,
-      "predicted": 3947,
-      "residual": 33,
+      "actual": 3952,
+      "predicted": 3945,
+      "residual": 7,
       "counts": {
         "Ballard": 5,
         "Green Lake": 6,
@@ -7612,8 +7612,8 @@
       "shift": 271,
       "seed": 1976787575,
       "actual": 3902,
-      "predicted": 3911,
-      "residual": -9,
+      "predicted": 3916,
+      "residual": -14,
       "counts": {
         "Ballard": 5,
         "Green Lake": 4,
@@ -7640,8 +7640,8 @@
       "shift": 272,
       "seed": 252009834,
       "actual": 3798,
-      "predicted": 3797,
-      "residual": 1,
+      "predicted": 3796,
+      "residual": 2,
       "counts": {
         "Ballard": 4,
         "Green Lake": 5,
@@ -7667,9 +7667,9 @@
     {
       "shift": 273,
       "seed": 1111944641,
-      "actual": 3862,
-      "predicted": 3851,
-      "residual": 11,
+      "actual": 3882,
+      "predicted": 3850,
+      "residual": 32,
       "counts": {
         "Ballard": 5,
         "Green Lake": 2,
@@ -7696,8 +7696,8 @@
       "shift": 274,
       "seed": 345828396,
       "actual": 3898,
-      "predicted": 3920,
-      "residual": -22,
+      "predicted": 3919,
+      "residual": -21,
       "counts": {
         "Ballard": 6,
         "Green Lake": 6,
@@ -7724,8 +7724,8 @@
       "shift": 275,
       "seed": 3737942427,
       "actual": 3742,
-      "predicted": 3786,
-      "residual": -44,
+      "predicted": 3778,
+      "residual": -36,
       "counts": {
         "Ballard": 2,
         "Green Lake": 3,
@@ -7751,9 +7751,9 @@
     {
       "shift": 276,
       "seed": 3848790590,
-      "actual": 3924,
-      "predicted": 3931,
-      "residual": -7,
+      "actual": 3918,
+      "predicted": 3926,
+      "residual": -8,
       "counts": {
         "Ballard": 5,
         "Green Lake": 7,
@@ -7779,9 +7779,9 @@
     {
       "shift": 277,
       "seed": 1592272005,
-      "actual": 3872,
-      "predicted": 3898,
-      "residual": -26,
+      "actual": 3880,
+      "predicted": 3890,
+      "residual": -10,
       "counts": {
         "Ballard": 5,
         "Green Lake": 3,
@@ -7808,8 +7808,8 @@
       "shift": 278,
       "seed": 499305504,
       "actual": 3806,
-      "predicted": 3803,
-      "residual": 3,
+      "predicted": 3799,
+      "residual": 7,
       "counts": {
         "Ballard": 6,
         "Green Lake": 5,
@@ -7836,8 +7836,8 @@
       "shift": 279,
       "seed": 1271402751,
       "actual": 3864,
-      "predicted": 3795,
-      "residual": 69,
+      "predicted": 3805,
+      "residual": 59,
       "counts": {
         "Ballard": 6,
         "Green Lake": 3,
@@ -7864,8 +7864,8 @@
       "shift": 280,
       "seed": 1967417938,
       "actual": 3900,
-      "predicted": 3918,
-      "residual": -18,
+      "predicted": 3919,
+      "residual": -19,
       "counts": {
         "Ballard": 7,
         "Green Lake": 5,
@@ -7892,8 +7892,8 @@
       "shift": 281,
       "seed": 3578201481,
       "actual": 4042,
-      "predicted": 4003,
-      "residual": 39,
+      "predicted": 4012,
+      "residual": 30,
       "counts": {
         "Ballard": 6,
         "Green Lake": 5,
@@ -7947,9 +7947,9 @@
     {
       "shift": 283,
       "seed": 505941155,
-      "actual": 3916,
-      "predicted": 3927,
-      "residual": -11,
+      "actual": 3906,
+      "predicted": 3928,
+      "residual": -22,
       "counts": {
         "Ballard": 6,
         "Green Lake": 7,
@@ -7976,8 +7976,8 @@
       "shift": 284,
       "seed": 4117465510,
       "actual": 3952,
-      "predicted": 3861,
-      "residual": 91,
+      "predicted": 3852,
+      "residual": 100,
       "counts": {
         "Ballard": 5,
         "Green Lake": 6,
@@ -8004,8 +8004,8 @@
       "shift": 285,
       "seed": 4243789005,
       "actual": 3822,
-      "predicted": 3854,
-      "residual": -32,
+      "predicted": 3851,
+      "residual": -29,
       "counts": {
         "Ballard": 5,
         "Green Lake": 5,
@@ -8032,8 +8032,8 @@
       "shift": 286,
       "seed": 4145393608,
       "actual": 3890,
-      "predicted": 3910,
-      "residual": -20,
+      "predicted": 3912,
+      "residual": -22,
       "counts": {
         "Ballard": 8,
         "Green Lake": 4,
@@ -8059,9 +8059,9 @@
     {
       "shift": 287,
       "seed": 2535100551,
-      "actual": 3840,
-      "predicted": 3806,
-      "residual": 34,
+      "actual": 3824,
+      "predicted": 3801,
+      "residual": 23,
       "counts": {
         "Ballard": 2,
         "Green Lake": 3,
@@ -8088,8 +8088,8 @@
       "shift": 288,
       "seed": 2609714234,
       "actual": 3966,
-      "predicted": 3924,
-      "residual": 42,
+      "predicted": 3917,
+      "residual": 49,
       "counts": {
         "Ballard": 3,
         "Green Lake": 5,
@@ -8115,9 +8115,9 @@
     {
       "shift": 289,
       "seed": 1381111377,
-      "actual": 3928,
-      "predicted": 3922,
-      "residual": 6,
+      "actual": 3938,
+      "predicted": 3923,
+      "residual": 15,
       "counts": {
         "Ballard": 6,
         "Green Lake": 6,
@@ -8144,8 +8144,8 @@
       "shift": 290,
       "seed": 1298619260,
       "actual": 3928,
-      "predicted": 3961,
-      "residual": -33,
+      "predicted": 3965,
+      "residual": -37,
       "counts": {
         "Ballard": 7,
         "Green Lake": 8,
@@ -8172,8 +8172,8 @@
       "shift": 291,
       "seed": 1212022955,
       "actual": 3818,
-      "predicted": 3829,
-      "residual": -11,
+      "predicted": 3833,
+      "residual": -15,
       "counts": {
         "Ballard": 7,
         "Green Lake": 7,
@@ -8200,8 +8200,8 @@
       "shift": 292,
       "seed": 2894863886,
       "actual": 3878,
-      "predicted": 3918,
-      "residual": -40,
+      "predicted": 3915,
+      "residual": -37,
       "counts": {
         "Ballard": 7,
         "Green Lake": 8,
@@ -8227,9 +8227,9 @@
     {
       "shift": 293,
       "seed": 3269725717,
-      "actual": 4158,
-      "predicted": 4095,
-      "residual": 63,
+      "actual": 4206,
+      "predicted": 4103,
+      "residual": 103,
       "counts": {
         "Ballard": 7,
         "Green Lake": 7,
@@ -8256,8 +8256,8 @@
       "shift": 294,
       "seed": 1605175408,
       "actual": 3874,
-      "predicted": 3855,
-      "residual": 19,
+      "predicted": 3859,
+      "residual": 15,
       "counts": {
         "Ballard": 4,
         "Green Lake": 4,
@@ -8311,9 +8311,9 @@
     {
       "shift": 296,
       "seed": 2282945314,
-      "actual": 3888,
-      "predicted": 3843,
-      "residual": 45,
+      "actual": 3892,
+      "predicted": 3845,
+      "residual": 47,
       "counts": {
         "Ballard": 5,
         "Green Lake": 6,
@@ -8340,8 +8340,8 @@
       "shift": 297,
       "seed": 1002913817,
       "actual": 3940,
-      "predicted": 3959,
-      "residual": -19,
+      "predicted": 3964,
+      "residual": -24,
       "counts": {
         "Ballard": 7,
         "Green Lake": 6,
@@ -8367,9 +8367,9 @@
     {
       "shift": 298,
       "seed": 3951569572,
-      "actual": 3896,
-      "predicted": 3900,
-      "residual": -4,
+      "actual": 3898,
+      "predicted": 3899,
+      "residual": -1,
       "counts": {
         "Ballard": 8,
         "Green Lake": 6,
@@ -8395,9 +8395,9 @@
     {
       "shift": 299,
       "seed": 2639951283,
-      "actual": 3792,
-      "predicted": 3826,
-      "residual": -34,
+      "actual": 3802,
+      "predicted": 3834,
+      "residual": -32,
       "counts": {
         "Ballard": 4,
         "Green Lake": 3,
@@ -8423,9 +8423,9 @@
     {
       "shift": 300,
       "seed": 3278323574,
-      "actual": 3804,
-      "predicted": 3791,
-      "residual": 13,
+      "actual": 3800,
+      "predicted": 3793,
+      "residual": 7,
       "counts": {
         "Ballard": 6,
         "Green Lake": 2,
@@ -8480,8 +8480,8 @@
       "shift": 302,
       "seed": 3709302296,
       "actual": 3816,
-      "predicted": 3829,
-      "residual": -13,
+      "predicted": 3831,
+      "residual": -15,
       "counts": {
         "Ballard": 7,
         "Green Lake": 5,
@@ -8536,8 +8536,8 @@
       "shift": 304,
       "seed": 2810035978,
       "actual": 3950,
-      "predicted": 3972,
-      "residual": -22,
+      "predicted": 3980,
+      "residual": -30,
       "counts": {
         "Ballard": 6,
         "Green Lake": 7,
@@ -8564,8 +8564,8 @@
       "shift": 305,
       "seed": 2146018017,
       "actual": 3816,
-      "predicted": 3834,
-      "residual": -18,
+      "predicted": 3830,
+      "residual": -14,
       "counts": {
         "Ballard": 4,
         "Green Lake": 5,
@@ -8592,8 +8592,8 @@
       "shift": 306,
       "seed": 3123371724,
       "actual": 3990,
-      "predicted": 3979,
-      "residual": 11,
+      "predicted": 3988,
+      "residual": 2,
       "counts": {
         "Ballard": 6,
         "Green Lake": 6,
@@ -8619,9 +8619,9 @@
     {
       "shift": 307,
       "seed": 2270006203,
-      "actual": 3974,
-      "predicted": 3952,
-      "residual": 22,
+      "actual": 3978,
+      "predicted": 3945,
+      "residual": 33,
       "counts": {
         "Ballard": 4,
         "Green Lake": 5,
@@ -8676,8 +8676,8 @@
       "shift": 309,
       "seed": 3584072613,
       "actual": 3806,
-      "predicted": 3877,
-      "residual": -71,
+      "predicted": 3871,
+      "residual": -65,
       "counts": {
         "Ballard": 5,
         "Green Lake": 3,
@@ -8703,9 +8703,9 @@
     {
       "shift": 310,
       "seed": 1186437312,
-      "actual": 3962,
-      "predicted": 4008,
-      "residual": -46,
+      "actual": 3970,
+      "predicted": 4010,
+      "residual": -40,
       "counts": {
         "Ballard": 7,
         "Green Lake": 4,
@@ -8732,8 +8732,8 @@
       "shift": 311,
       "seed": 3848156447,
       "actual": 3914,
-      "predicted": 3939,
-      "residual": -25,
+      "predicted": 3942,
+      "residual": -28,
       "counts": {
         "Ballard": 6,
         "Green Lake": 9,
@@ -8760,8 +8760,8 @@
       "shift": 312,
       "seed": 2607349746,
       "actual": 4086,
-      "predicted": 4010,
-      "residual": 76,
+      "predicted": 4019,
+      "residual": 67,
       "counts": {
         "Ballard": 6,
         "Green Lake": 8,
@@ -8787,9 +8787,9 @@
     {
       "shift": 313,
       "seed": 4116733609,
-      "actual": 3978,
-      "predicted": 3923,
-      "residual": 55,
+      "actual": 3944,
+      "predicted": 3924,
+      "residual": 20,
       "counts": {
         "Ballard": 6,
         "Green Lake": 6,
@@ -8816,8 +8816,8 @@
       "shift": 314,
       "seed": 1452021748,
       "actual": 3768,
-      "predicted": 3832,
-      "residual": -64,
+      "predicted": 3823,
+      "residual": -55,
       "counts": {
         "Ballard": 3,
         "Green Lake": 6,
@@ -8844,8 +8844,8 @@
       "shift": 315,
       "seed": 3387646659,
       "actual": 3756,
-      "predicted": 3793,
-      "residual": -37,
+      "predicted": 3790,
+      "residual": -34,
       "counts": {
         "Ballard": 7,
         "Green Lake": 6,
@@ -8871,9 +8871,9 @@
     {
       "shift": 316,
       "seed": 3955730758,
-      "actual": 3858,
-      "predicted": 3856,
-      "residual": 2,
+      "actual": 3850,
+      "predicted": 3857,
+      "residual": -7,
       "counts": {
         "Ballard": 5,
         "Green Lake": 5,
@@ -8900,8 +8900,8 @@
       "shift": 317,
       "seed": 1255829485,
       "actual": 3910,
-      "predicted": 3938,
-      "residual": -28,
+      "predicted": 3937,
+      "residual": -27,
       "counts": {
         "Ballard": 7,
         "Green Lake": 4,
@@ -8927,9 +8927,9 @@
     {
       "shift": 318,
       "seed": 4460648,
-      "actual": 3920,
-      "predicted": 3935,
-      "residual": -15,
+      "actual": 3904,
+      "predicted": 3932,
+      "residual": -28,
       "counts": {
         "Ballard": 5,
         "Green Lake": 4,
@@ -8956,8 +8956,8 @@
       "shift": 319,
       "seed": 4170528935,
       "actual": 3884,
-      "predicted": 3910,
-      "residual": -26,
+      "predicted": 3897,
+      "residual": -13,
       "counts": {
         "Ballard": 5,
         "Green Lake": 4,
@@ -8984,8 +8984,8 @@
       "shift": 320,
       "seed": 3638844890,
       "actual": 3874,
-      "predicted": 3872,
-      "residual": 2,
+      "predicted": 3863,
+      "residual": 11,
       "counts": {
         "Ballard": 5,
         "Green Lake": 4,
@@ -9012,8 +9012,8 @@
       "shift": 321,
       "seed": 1740018545,
       "actual": 3900,
-      "predicted": 3949,
-      "residual": -49,
+      "predicted": 3939,
+      "residual": -39,
       "counts": {
         "Ballard": 4,
         "Green Lake": 6,
@@ -9039,9 +9039,9 @@
     {
       "shift": 322,
       "seed": 2776397340,
-      "actual": 3888,
-      "predicted": 3888,
-      "residual": 0,
+      "actual": 3912,
+      "predicted": 3887,
+      "residual": 25,
       "counts": {
         "Ballard": 4,
         "Green Lake": 3,
@@ -9068,8 +9068,8 @@
       "shift": 323,
       "seed": 3280739019,
       "actual": 3920,
-      "predicted": 3874,
-      "residual": 46,
+      "predicted": 3878,
+      "residual": 42,
       "counts": {
         "Ballard": 5,
         "Green Lake": 5,
@@ -9096,8 +9096,8 @@
       "shift": 324,
       "seed": 2601267630,
       "actual": 3922,
-      "predicted": 3879,
-      "residual": 43,
+      "predicted": 3872,
+      "residual": 50,
       "counts": {
         "Ballard": 6,
         "Green Lake": 5,
@@ -9123,9 +9123,9 @@
     {
       "shift": 325,
       "seed": 3520515381,
-      "actual": 3910,
-      "predicted": 3867,
-      "residual": 43,
+      "actual": 3880,
+      "predicted": 3866,
+      "residual": 14,
       "counts": {
         "Ballard": 6,
         "Green Lake": 3,
@@ -9152,8 +9152,8 @@
       "shift": 326,
       "seed": 2219277584,
       "actual": 3938,
-      "predicted": 3990,
-      "residual": -52,
+      "predicted": 3994,
+      "residual": -56,
       "counts": {
         "Ballard": 7,
         "Green Lake": 7,
@@ -9179,9 +9179,9 @@
     {
       "shift": 327,
       "seed": 2792664367,
-      "actual": 4044,
-      "predicted": 3987,
-      "residual": 57,
+      "actual": 4090,
+      "predicted": 3986,
+      "residual": 104,
       "counts": {
         "Ballard": 7,
         "Green Lake": 7,
@@ -9208,8 +9208,8 @@
       "shift": 328,
       "seed": 385054914,
       "actual": 3934,
-      "predicted": 4019,
-      "residual": -85,
+      "predicted": 4027,
+      "residual": -93,
       "counts": {
         "Ballard": 5,
         "Green Lake": 8,
@@ -9235,9 +9235,9 @@
     {
       "shift": 329,
       "seed": 870015289,
-      "actual": 3928,
-      "predicted": 3916,
-      "residual": 12,
+      "actual": 3912,
+      "predicted": 3909,
+      "residual": 3,
       "counts": {
         "Ballard": 9,
         "Green Lake": 5,
@@ -9263,9 +9263,9 @@
     {
       "shift": 330,
       "seed": 3319830852,
-      "actual": 3872,
-      "predicted": 3925,
-      "residual": -53,
+      "actual": 3888,
+      "predicted": 3930,
+      "residual": -42,
       "counts": {
         "Ballard": 5,
         "Green Lake": 7,
@@ -9291,8 +9291,8 @@
       "shift": 331,
       "seed": 3180057555,
       "actual": 3778,
-      "predicted": 3830,
-      "residual": -52,
+      "predicted": 3827,
+      "residual": -49,
       "counts": {
         "Ballard": 6,
         "Green Lake": 5,
@@ -9319,8 +9319,8 @@
       "shift": 332,
       "seed": 1116325654,
       "actual": 3928,
-      "predicted": 3972,
-      "residual": -44,
+      "predicted": 3970,
+      "residual": -42,
       "counts": {
         "Ballard": 5,
         "Green Lake": 7,
@@ -9347,8 +9347,8 @@
       "shift": 333,
       "seed": 4091990909,
       "actual": 3916,
-      "predicted": 3891,
-      "residual": 25,
+      "predicted": 3895,
+      "residual": 21,
       "counts": {
         "Ballard": 5,
         "Green Lake": 4,
@@ -9374,9 +9374,9 @@
     {
       "shift": 334,
       "seed": 1050705592,
-      "actual": 3862,
-      "predicted": 3894,
-      "residual": -32,
+      "actual": 3888,
+      "predicted": 3896,
+      "residual": -8,
       "counts": {
         "Ballard": 4,
         "Green Lake": 4,
@@ -9402,9 +9402,9 @@
     {
       "shift": 335,
       "seed": 3171594935,
-      "actual": 3900,
-      "predicted": 3935,
-      "residual": -35,
+      "actual": 3962,
+      "predicted": 3942,
+      "residual": 20,
       "counts": {
         "Ballard": 6,
         "Green Lake": 6,
@@ -9431,8 +9431,8 @@
       "shift": 336,
       "seed": 2366501034,
       "actual": 3924,
-      "predicted": 4002,
-      "residual": -78,
+      "predicted": 4008,
+      "residual": -84,
       "counts": {
         "Ballard": 6,
         "Green Lake": 7,
@@ -9458,9 +9458,9 @@
     {
       "shift": 337,
       "seed": 1956767745,
-      "actual": 3972,
-      "predicted": 3941,
-      "residual": 31,
+      "actual": 3984,
+      "predicted": 3942,
+      "residual": 42,
       "counts": {
         "Ballard": 7,
         "Green Lake": 5,
@@ -9487,8 +9487,8 @@
       "shift": 338,
       "seed": 1395728748,
       "actual": 3742,
-      "predicted": 3764,
-      "residual": -22,
+      "predicted": 3756,
+      "residual": -14,
       "counts": {
         "Ballard": 4,
         "Green Lake": 3,
@@ -9515,8 +9515,8 @@
       "shift": 339,
       "seed": 1288351195,
       "actual": 3822,
-      "predicted": 3884,
-      "residual": -62,
+      "predicted": 3885,
+      "residual": -63,
       "counts": {
         "Ballard": 5,
         "Green Lake": 6,
@@ -9543,8 +9543,8 @@
       "shift": 340,
       "seed": 3730966910,
       "actual": 4124,
-      "predicted": 4040,
-      "residual": 84,
+      "predicted": 4030,
+      "residual": 94,
       "counts": {
         "Ballard": 4,
         "Green Lake": 6,
@@ -9570,8 +9570,8 @@
       "shift": 341,
       "seed": 2222957253,
       "actual": 3866,
-      "predicted": 3898,
-      "residual": -32,
+      "predicted": 3900,
+      "residual": -34,
       "counts": {
         "Ballard": 5,
         "Green Lake": 7,
@@ -9598,8 +9598,8 @@
       "shift": 342,
       "seed": 3070342496,
       "actual": 3860,
-      "predicted": 3902,
-      "residual": -42,
+      "predicted": 3898,
+      "residual": -38,
       "counts": {
         "Ballard": 4,
         "Green Lake": 6,
@@ -9626,8 +9626,8 @@
       "shift": 343,
       "seed": 3962136895,
       "actual": 3960,
-      "predicted": 4019,
-      "residual": -59,
+      "predicted": 4025,
+      "residual": -65,
       "counts": {
         "Ballard": 6,
         "Green Lake": 3,
@@ -9653,8 +9653,8 @@
       "shift": 344,
       "seed": 27223442,
       "actual": 3778,
-      "predicted": 3822,
-      "residual": -44,
+      "predicted": 3816,
+      "residual": -38,
       "counts": {
         "Ballard": 4,
         "Green Lake": 5,
@@ -9681,8 +9681,8 @@
       "shift": 345,
       "seed": 3208726473,
       "actual": 3854,
-      "predicted": 3916,
-      "residual": -62,
+      "predicted": 3919,
+      "residual": -65,
       "counts": {
         "Ballard": 8,
         "Green Lake": 3,
@@ -9708,9 +9708,9 @@
     {
       "shift": 346,
       "seed": 4160401044,
-      "actual": 3928,
-      "predicted": 3917,
-      "residual": 11,
+      "actual": 3906,
+      "predicted": 3924,
+      "residual": -18,
       "counts": {
         "Ballard": 8,
         "Green Lake": 5,
@@ -9736,9 +9736,9 @@
     {
       "shift": 347,
       "seed": 3257714915,
-      "actual": 3968,
-      "predicted": 3943,
-      "residual": 25,
+      "actual": 3952,
+      "predicted": 3940,
+      "residual": 12,
       "counts": {
         "Ballard": 4,
         "Green Lake": 3,
@@ -9764,9 +9764,9 @@
     {
       "shift": 348,
       "seed": 2397739238,
-      "actual": 3818,
-      "predicted": 3845,
-      "residual": -27,
+      "actual": 3854,
+      "predicted": 3850,
+      "residual": 4,
       "counts": {
         "Ballard": 6,
         "Green Lake": 4,
@@ -9793,8 +9793,8 @@
       "shift": 349,
       "seed": 3854195469,
       "actual": 3828,
-      "predicted": 3878,
-      "residual": -50,
+      "predicted": 3867,
+      "residual": -39,
       "counts": {
         "Ballard": 4,
         "Green Lake": 5,
@@ -9820,9 +9820,9 @@
     {
       "shift": 350,
       "seed": 192004360,
-      "actual": 3828,
-      "predicted": 3781,
-      "residual": 47,
+      "actual": 3808,
+      "predicted": 3774,
+      "residual": 34,
       "counts": {
         "Ballard": 4,
         "Green Lake": 3,
@@ -9849,8 +9849,8 @@
       "shift": 351,
       "seed": 4259770567,
       "actual": 3890,
-      "predicted": 3913,
-      "residual": -23,
+      "predicted": 3908,
+      "residual": -18,
       "counts": {
         "Ballard": 4,
         "Green Lake": 7,
@@ -9876,9 +9876,9 @@
     {
       "shift": 352,
       "seed": 2827450234,
-      "actual": 3726,
-      "predicted": 3710,
-      "residual": 16,
+      "actual": 3718,
+      "predicted": 3717,
+      "residual": 1,
       "counts": {
         "Ballard": 9,
         "Green Lake": 2,
@@ -9905,8 +9905,8 @@
       "shift": 353,
       "seed": 1876205713,
       "actual": 3612,
-      "predicted": 3679,
-      "residual": -67,
+      "predicted": 3663,
+      "residual": -51,
       "counts": {
         "Ballard": 3,
         "Green Lake": 3,
@@ -9933,8 +9933,8 @@
       "shift": 354,
       "seed": 1348329660,
       "actual": 3864,
-      "predicted": 3786,
-      "residual": 78,
+      "predicted": 3783,
+      "residual": 81,
       "counts": {
         "Ballard": 2,
         "Green Lake": 4,
@@ -9961,8 +9961,8 @@
       "shift": 355,
       "seed": 2870625515,
       "actual": 4086,
-      "predicted": 4000,
-      "residual": 86,
+      "predicted": 4007,
+      "residual": 79,
       "counts": {
         "Ballard": 5,
         "Green Lake": 7,
@@ -9988,9 +9988,9 @@
     {
       "shift": 356,
       "seed": 523048270,
-      "actual": 3856,
-      "predicted": 3905,
-      "residual": -49,
+      "actual": 3852,
+      "predicted": 3909,
+      "residual": -57,
       "counts": {
         "Ballard": 4,
         "Green Lake": 7,
@@ -10017,8 +10017,8 @@
       "shift": 357,
       "seed": 3704888405,
       "actual": 3804,
-      "predicted": 3846,
-      "residual": -42,
+      "predicted": 3840,
+      "residual": -36,
       "counts": {
         "Ballard": 3,
         "Green Lake": 3,
@@ -10044,9 +10044,9 @@
     {
       "shift": 358,
       "seed": 3133882800,
-      "actual": 3828,
-      "predicted": 3843,
-      "residual": -15,
+      "actual": 3870,
+      "predicted": 3847,
+      "residual": 23,
       "counts": {
         "Ballard": 2,
         "Green Lake": 7,
@@ -10073,8 +10073,8 @@
       "shift": 359,
       "seed": 522021199,
       "actual": 3956,
-      "predicted": 3957,
-      "residual": -1,
+      "predicted": 3956,
+      "residual": 0,
       "counts": {
         "Ballard": 6,
         "Green Lake": 8,
@@ -10100,9 +10100,9 @@
     {
       "shift": 360,
       "seed": 3516515938,
-      "actual": 3940,
-      "predicted": 3927,
-      "residual": 13,
+      "actual": 3938,
+      "predicted": 3923,
+      "residual": 15,
       "counts": {
         "Ballard": 7,
         "Green Lake": 6,
@@ -10128,9 +10128,9 @@
     {
       "shift": 361,
       "seed": 2245726809,
-      "actual": 3994,
-      "predicted": 4016,
-      "residual": -22,
+      "actual": 4006,
+      "predicted": 4019,
+      "residual": -13,
       "counts": {
         "Ballard": 7,
         "Green Lake": 9,
@@ -10157,8 +10157,8 @@
       "shift": 362,
       "seed": 479156196,
       "actual": 3836,
-      "predicted": 3819,
-      "residual": 17,
+      "predicted": 3820,
+      "residual": 16,
       "counts": {
         "Ballard": 7,
         "Green Lake": 4,
@@ -10185,8 +10185,8 @@
       "shift": 363,
       "seed": 1644118515,
       "actual": 3792,
-      "predicted": 3802,
-      "residual": -10,
+      "predicted": 3808,
+      "residual": -16,
       "counts": {
         "Ballard": 7,
         "Green Lake": 4,
@@ -10213,8 +10213,8 @@
       "shift": 364,
       "seed": 1533484726,
       "actual": 3920,
-      "predicted": 3874,
-      "residual": 46,
+      "predicted": 3872,
+      "residual": 48,
       "counts": {
         "Ballard": 3,
         "Green Lake": 8,
@@ -10241,8 +10241,8 @@
       "shift": 365,
       "seed": 4138600093,
       "actual": 3762,
-      "predicted": 3793,
-      "residual": -31,
+      "predicted": 3781,
+      "residual": -19,
       "counts": {
         "Ballard": 5,
         "Green Lake": 5,
@@ -10268,9 +10268,9 @@
     {
       "shift": 366,
       "seed": 3208435544,
-      "actual": 3886,
-      "predicted": 3880,
-      "residual": 6,
+      "actual": 3888,
+      "predicted": 3883,
+      "residual": 5,
       "counts": {
         "Ballard": 4,
         "Green Lake": 5,
@@ -10297,8 +10297,8 @@
       "shift": 367,
       "seed": 938144471,
       "actual": 3808,
-      "predicted": 3864,
-      "residual": -56,
+      "predicted": 3863,
+      "residual": -55,
       "counts": {
         "Ballard": 7,
         "Green Lake": 4,
@@ -10325,8 +10325,8 @@
       "shift": 368,
       "seed": 1730015818,
       "actual": 3862,
-      "predicted": 3847,
-      "residual": 15,
+      "predicted": 3858,
+      "residual": 4,
       "counts": {
         "Ballard": 7,
         "Green Lake": 5,
@@ -10353,8 +10353,8 @@
       "shift": 369,
       "seed": 280476961,
       "actual": 3806,
-      "predicted": 3867,
-      "residual": -61,
+      "predicted": 3863,
+      "residual": -57,
       "counts": {
         "Ballard": 3,
         "Green Lake": 6,
@@ -10380,9 +10380,9 @@
     {
       "shift": 370,
       "seed": 3277304844,
-      "actual": 3938,
-      "predicted": 3949,
-      "residual": -11,
+      "actual": 3924,
+      "predicted": 3941,
+      "residual": -17,
       "counts": {
         "Ballard": 6,
         "Green Lake": 2,
@@ -10409,8 +10409,8 @@
       "shift": 371,
       "seed": 2932596731,
       "actual": 3934,
-      "predicted": 3923,
-      "residual": 11,
+      "predicted": 3933,
+      "residual": 1,
       "counts": {
         "Ballard": 4,
         "Green Lake": 7,
@@ -10436,9 +10436,9 @@
     {
       "shift": 372,
       "seed": 931812638,
-      "actual": 4046,
-      "predicted": 4005,
-      "residual": 41,
+      "actual": 4006,
+      "predicted": 3990,
+      "residual": 16,
       "counts": {
         "Ballard": 6,
         "Green Lake": 8,
@@ -10464,9 +10464,9 @@
     {
       "shift": 373,
       "seed": 2085435877,
-      "actual": 3900,
+      "actual": 3890,
       "predicted": 3889,
-      "residual": 11,
+      "residual": 1,
       "counts": {
         "Ballard": 7,
         "Green Lake": 5,
@@ -10493,8 +10493,8 @@
       "shift": 374,
       "seed": 4173931008,
       "actual": 3856,
-      "predicted": 3796,
-      "residual": 60,
+      "predicted": 3791,
+      "residual": 65,
       "counts": {
         "Ballard": 6,
         "Green Lake": 4,
@@ -10521,8 +10521,8 @@
       "shift": 375,
       "seed": 1412541791,
       "actual": 3850,
-      "predicted": 3892,
-      "residual": -42,
+      "predicted": 3884,
+      "residual": -34,
       "counts": {
         "Ballard": 5,
         "Green Lake": 4,
@@ -10549,8 +10549,8 @@
       "shift": 376,
       "seed": 1011850034,
       "actual": 3906,
-      "predicted": 3845,
-      "residual": 61,
+      "predicted": 3848,
+      "residual": 58,
       "counts": {
         "Ballard": 2,
         "Green Lake": 6,
@@ -10577,8 +10577,8 @@
       "shift": 377,
       "seed": 741458153,
       "actual": 3858,
-      "predicted": 3866,
-      "residual": -8,
+      "predicted": 3876,
+      "residual": -18,
       "counts": {
         "Ballard": 8,
         "Green Lake": 7,
@@ -10604,8 +10604,8 @@
       "shift": 378,
       "seed": 613651764,
       "actual": 3898,
-      "predicted": 3886,
-      "residual": 12,
+      "predicted": 3891,
+      "residual": 7,
       "counts": {
         "Ballard": 7,
         "Green Lake": 8,
@@ -10632,8 +10632,8 @@
       "shift": 379,
       "seed": 2004107011,
       "actual": 3834,
-      "predicted": 3898,
-      "residual": -64,
+      "predicted": 3896,
+      "residual": -62,
       "counts": {
         "Ballard": 6,
         "Green Lake": 6,
@@ -10659,9 +10659,9 @@
     {
       "shift": 380,
       "seed": 3317454982,
-      "actual": 3868,
-      "predicted": 3901,
-      "residual": -33,
+      "actual": 3912,
+      "predicted": 3904,
+      "residual": 8,
       "counts": {
         "Ballard": 5,
         "Green Lake": 2,
@@ -10688,8 +10688,8 @@
       "shift": 381,
       "seed": 4149925421,
       "actual": 3882,
-      "predicted": 3940,
-      "residual": -58,
+      "predicted": 3949,
+      "residual": -67,
       "counts": {
         "Ballard": 2,
         "Green Lake": 8,
@@ -10716,8 +10716,8 @@
       "shift": 382,
       "seed": 3888562600,
       "actual": 3924,
-      "predicted": 3889,
-      "residual": 35,
+      "predicted": 3896,
+      "residual": 28,
       "counts": {
         "Ballard": 5,
         "Green Lake": 6,
@@ -10743,9 +10743,9 @@
     {
       "shift": 383,
       "seed": 471316711,
-      "actual": 3916,
-      "predicted": 3888,
-      "residual": 28,
+      "actual": 3888,
+      "predicted": 3885,
+      "residual": 3,
       "counts": {
         "Ballard": 3,
         "Green Lake": 3,
@@ -10800,8 +10800,8 @@
       "shift": 385,
       "seed": 2364816817,
       "actual": 3956,
-      "predicted": 3894,
-      "residual": 62,
+      "predicted": 3888,
+      "residual": 68,
       "counts": {
         "Ballard": 4,
         "Green Lake": 7,
@@ -10828,8 +10828,8 @@
       "shift": 386,
       "seed": 3149110108,
       "actual": 3870,
-      "predicted": 3880,
-      "residual": -10,
+      "predicted": 3873,
+      "residual": -3,
       "counts": {
         "Ballard": 6,
         "Green Lake": 5,
@@ -10855,9 +10855,9 @@
     {
       "shift": 387,
       "seed": 2154856203,
-      "actual": 3996,
-      "predicted": 3978,
-      "residual": 18,
+      "actual": 3976,
+      "predicted": 3982,
+      "residual": -6,
       "counts": {
         "Ballard": 5,
         "Green Lake": 6,
@@ -10884,8 +10884,8 @@
       "shift": 388,
       "seed": 4241934574,
       "actual": 4002,
-      "predicted": 3944,
-      "residual": 58,
+      "predicted": 3954,
+      "residual": 48,
       "counts": {
         "Ballard": 7,
         "Green Lake": 10,
@@ -10912,8 +10912,8 @@
       "shift": 389,
       "seed": 1185151861,
       "actual": 3808,
-      "predicted": 3888,
-      "residual": -80,
+      "predicted": 3879,
+      "residual": -71,
       "counts": {
         "Ballard": 6,
         "Green Lake": 3,
@@ -10940,8 +10940,8 @@
       "shift": 390,
       "seed": 3076544080,
       "actual": 3872,
-      "predicted": 3887,
-      "residual": -15,
+      "predicted": 3885,
+      "residual": -13,
       "counts": {
         "Ballard": 3,
         "Green Lake": 7,
@@ -10968,8 +10968,8 @@
       "shift": 391,
       "seed": 1552364911,
       "actual": 3782,
-      "predicted": 3782,
-      "residual": 0,
+      "predicted": 3781,
+      "residual": 1,
       "counts": {
         "Ballard": 6,
         "Green Lake": 7,
@@ -10996,8 +10996,8 @@
       "shift": 392,
       "seed": 107865090,
       "actual": 3978,
-      "predicted": 3950,
-      "residual": 28,
+      "predicted": 3953,
+      "residual": 25,
       "counts": {
         "Ballard": 5,
         "Green Lake": 7,
@@ -11024,8 +11024,8 @@
       "shift": 393,
       "seed": 2634961785,
       "actual": 3852,
-      "predicted": 3884,
-      "residual": -32,
+      "predicted": 3882,
+      "residual": -30,
       "counts": {
         "Ballard": 6,
         "Green Lake": 6,
@@ -11051,9 +11051,9 @@
     {
       "shift": 394,
       "seed": 305948292,
-      "actual": 3896,
-      "predicted": 3867,
-      "residual": 29,
+      "actual": 3898,
+      "predicted": 3875,
+      "residual": 23,
       "counts": {
         "Ballard": 7,
         "Green Lake": 3,
@@ -11080,8 +11080,8 @@
       "shift": 395,
       "seed": 1027391507,
       "actual": 3920,
-      "predicted": 3920,
-      "residual": 0,
+      "predicted": 3918,
+      "residual": 2,
       "counts": {
         "Ballard": 4,
         "Green Lake": 5,
@@ -11135,9 +11135,9 @@
     {
       "shift": 397,
       "seed": 1117374909,
-      "actual": 3786,
-      "predicted": 3836,
-      "residual": -50,
+      "actual": 3808,
+      "predicted": 3831,
+      "residual": -23,
       "counts": {
         "Ballard": 6,
         "Green Lake": 6,
@@ -11164,8 +11164,8 @@
       "shift": 398,
       "seed": 2551480312,
       "actual": 3894,
-      "predicted": 3907,
-      "residual": -13,
+      "predicted": 3897,
+      "residual": -3,
       "counts": {
         "Ballard": 6,
         "Green Lake": 4,
@@ -11192,8 +11192,8 @@
       "shift": 399,
       "seed": 2678997751,
       "actual": 3968,
-      "predicted": 3942,
-      "residual": 26,
+      "predicted": 3939,
+      "residual": 29,
       "counts": {
         "Ballard": 5,
         "Green Lake": 5,
@@ -11220,8 +11220,8 @@
       "shift": 400,
       "seed": 1360380906,
       "actual": 3814,
-      "predicted": 3843,
-      "residual": -29,
+      "predicted": 3838,
+      "residual": -24,
       "counts": {
         "Ballard": 6,
         "Green Lake": 3,
@@ -11247,9 +11247,9 @@
     {
       "shift": 401,
       "seed": 678634049,
-      "actual": 3858,
-      "predicted": 3824,
-      "residual": 34,
+      "actual": 3860,
+      "predicted": 3823,
+      "residual": 37,
       "counts": {
         "Ballard": 5,
         "Green Lake": 7,
@@ -11275,9 +11275,9 @@
     {
       "shift": 402,
       "seed": 2185664172,
-      "actual": 3770,
-      "predicted": 3766,
-      "residual": 4,
+      "actual": 3742,
+      "predicted": 3753,
+      "residual": -11,
       "counts": {
         "Ballard": 4,
         "Green Lake": 3,
@@ -11331,9 +11331,9 @@
     {
       "shift": 404,
       "seed": 263155902,
-      "actual": 3988,
-      "predicted": 3889,
-      "residual": 99,
+      "actual": 3928,
+      "predicted": 3882,
+      "residual": 46,
       "counts": {
         "Ballard": 3,
         "Green Lake": 5,
@@ -11359,9 +11359,9 @@
     {
       "shift": 405,
       "seed": 4057030917,
-      "actual": 3800,
+      "actual": 3836,
       "predicted": 3811,
-      "residual": -11,
+      "residual": 25,
       "counts": {
         "Ballard": 5,
         "Green Lake": 8,
@@ -11388,8 +11388,8 @@
       "shift": 406,
       "seed": 1781915296,
       "actual": 3808,
-      "predicted": 3825,
-      "residual": -17,
+      "predicted": 3815,
+      "residual": -7,
       "counts": {
         "Ballard": 3,
         "Green Lake": 6,
@@ -11415,9 +11415,9 @@
     {
       "shift": 407,
       "seed": 3581870463,
-      "actual": 3980,
-      "predicted": 3963,
-      "residual": 17,
+      "actual": 3954,
+      "predicted": 3962,
+      "residual": -8,
       "counts": {
         "Ballard": 5,
         "Green Lake": 5,
@@ -11444,8 +11444,8 @@
       "shift": 408,
       "seed": 3554779346,
       "actual": 3848,
-      "predicted": 3864,
-      "residual": -16,
+      "predicted": 3858,
+      "residual": -10,
       "counts": {
         "Ballard": 8,
         "Green Lake": 8,
@@ -11472,8 +11472,8 @@
       "shift": 409,
       "seed": 2574895625,
       "actual": 3780,
-      "predicted": 3838,
-      "residual": -58,
+      "predicted": 3837,
+      "residual": -57,
       "counts": {
         "Ballard": 5,
         "Green Lake": 4,
@@ -11499,9 +11499,9 @@
     {
       "shift": 410,
       "seed": 1224657876,
-      "actual": 3936,
-      "predicted": 3919,
-      "residual": 17,
+      "actual": 3910,
+      "predicted": 3910,
+      "residual": 0,
       "counts": {
         "Ballard": 3,
         "Green Lake": 3,
@@ -11527,9 +11527,9 @@
     {
       "shift": 411,
       "seed": 1581892899,
-      "actual": 3930,
-      "predicted": 3949,
-      "residual": -19,
+      "actual": 3956,
+      "predicted": 3956,
+      "residual": 0,
       "counts": {
         "Ballard": 4,
         "Green Lake": 9,
@@ -11556,8 +11556,8 @@
       "shift": 412,
       "seed": 2871322662,
       "actual": 3844,
-      "predicted": 3878,
-      "residual": -34,
+      "predicted": 3881,
+      "residual": -37,
       "counts": {
         "Ballard": 6,
         "Green Lake": 5,
@@ -11584,8 +11584,8 @@
       "shift": 413,
       "seed": 1300488525,
       "actual": 3766,
-      "predicted": 3878,
-      "residual": -112,
+      "predicted": 3877,
+      "residual": -111,
       "counts": {
         "Ballard": 7,
         "Green Lake": 8,
@@ -11612,8 +11612,8 @@
       "shift": 414,
       "seed": 3094024776,
       "actual": 4090,
-      "predicted": 4022,
-      "residual": 68,
+      "predicted": 4020,
+      "residual": 70,
       "counts": {
         "Ballard": 6,
         "Green Lake": 8,
@@ -11640,8 +11640,8 @@
       "shift": 415,
       "seed": 204443911,
       "actual": 3910,
-      "predicted": 3907,
-      "residual": 3,
+      "predicted": 3915,
+      "residual": -5,
       "counts": {
         "Ballard": 6,
         "Green Lake": 7,
@@ -11668,8 +11668,8 @@
       "shift": 416,
       "seed": 4166064826,
       "actual": 3740,
-      "predicted": 3793,
-      "residual": -53,
+      "predicted": 3780,
+      "residual": -40,
       "counts": {
         "Ballard": 2,
         "Green Lake": 2,
@@ -11696,8 +11696,8 @@
       "shift": 417,
       "seed": 3311233745,
       "actual": 3808,
-      "predicted": 3860,
-      "residual": -52,
+      "predicted": 3858,
+      "residual": -50,
       "counts": {
         "Ballard": 6,
         "Green Lake": 6,
@@ -11724,8 +11724,8 @@
       "shift": 418,
       "seed": 3911558652,
       "actual": 3928,
-      "predicted": 3953,
-      "residual": -25,
+      "predicted": 3952,
+      "residual": -24,
       "counts": {
         "Ballard": 7,
         "Green Lake": 3,
@@ -11752,8 +11752,8 @@
       "shift": 419,
       "seed": 1226230059,
       "actual": 3854,
-      "predicted": 3852,
-      "residual": 2,
+      "predicted": 3841,
+      "residual": 13,
       "counts": {
         "Ballard": 5,
         "Green Lake": 7,
@@ -11779,9 +11779,9 @@
     {
       "shift": 420,
       "seed": 2884717710,
-      "actual": 3872,
-      "predicted": 3851,
-      "residual": 21,
+      "actual": 3860,
+      "predicted": 3848,
+      "residual": 12,
       "counts": {
         "Ballard": 5,
         "Green Lake": 4,
@@ -11808,8 +11808,8 @@
       "shift": 421,
       "seed": 2517527189,
       "actual": 4026,
-      "predicted": 3963,
-      "residual": 63,
+      "predicted": 3957,
+      "residual": 69,
       "counts": {
         "Ballard": 5,
         "Green Lake": 4,
@@ -11864,8 +11864,8 @@
       "shift": 423,
       "seed": 951718287,
       "actual": 3740,
-      "predicted": 3806,
-      "residual": -66,
+      "predicted": 3808,
+      "residual": -68,
       "counts": {
         "Ballard": 3,
         "Green Lake": 9,
@@ -11891,9 +11891,9 @@
     {
       "shift": 424,
       "seed": 4158116258,
-      "actual": 3920,
-      "predicted": 3873,
-      "residual": 47,
+      "actual": 3934,
+      "predicted": 3875,
+      "residual": 59,
       "counts": {
         "Ballard": 6,
         "Green Lake": 5,
@@ -11920,8 +11920,8 @@
       "shift": 425,
       "seed": 1220355225,
       "actual": 3828,
-      "predicted": 3913,
-      "residual": -85,
+      "predicted": 3909,
+      "residual": -81,
       "counts": {
         "Ballard": 5,
         "Green Lake": 4,
@@ -11947,9 +11947,9 @@
     {
       "shift": 426,
       "seed": 3717186852,
-      "actual": 3886,
-      "predicted": 3883,
-      "residual": 3,
+      "actual": 3880,
+      "predicted": 3888,
+      "residual": -8,
       "counts": {
         "Ballard": 3,
         "Green Lake": 5,
@@ -11976,8 +11976,8 @@
       "shift": 427,
       "seed": 97275443,
       "actual": 3810,
-      "predicted": 3863,
-      "residual": -53,
+      "predicted": 3870,
+      "residual": -60,
       "counts": {
         "Ballard": 6,
         "Green Lake": 4,
@@ -12004,8 +12004,8 @@
       "shift": 428,
       "seed": 2448571894,
       "actual": 3746,
-      "predicted": 3735,
-      "residual": 11,
+      "predicted": 3730,
+      "residual": 16,
       "counts": {
         "Ballard": 2,
         "Green Lake": 6,
@@ -12032,8 +12032,8 @@
       "shift": 429,
       "seed": 930225373,
       "actual": 3868,
-      "predicted": 3887,
-      "residual": -19,
+      "predicted": 3880,
+      "residual": -12,
       "counts": {
         "Ballard": 4,
         "Green Lake": 3,
@@ -12060,8 +12060,8 @@
       "shift": 430,
       "seed": 1448048792,
       "actual": 3804,
-      "predicted": 3845,
-      "residual": -41,
+      "predicted": 3850,
+      "residual": -46,
       "counts": {
         "Ballard": 7,
         "Green Lake": 7,
@@ -12116,8 +12116,8 @@
       "shift": 432,
       "seed": 3663553930,
       "actual": 3754,
-      "predicted": 3802,
-      "residual": -48,
+      "predicted": 3798,
+      "residual": -44,
       "counts": {
         "Ballard": 8,
         "Green Lake": 4,
@@ -12143,9 +12143,9 @@
     {
       "shift": 433,
       "seed": 1947998049,
-      "actual": 3928,
-      "predicted": 3871,
-      "residual": 57,
+      "actual": 3864,
+      "predicted": 3858,
+      "residual": 6,
       "counts": {
         "Ballard": 4,
         "Green Lake": 7,
@@ -12172,8 +12172,8 @@
       "shift": 434,
       "seed": 2611333452,
       "actual": 3880,
-      "predicted": 3915,
-      "residual": -35,
+      "predicted": 3924,
+      "residual": -44,
       "counts": {
         "Ballard": 9,
         "Green Lake": 5,
@@ -12200,8 +12200,8 @@
       "shift": 435,
       "seed": 3665458235,
       "actual": 3946,
-      "predicted": 3946,
-      "residual": 0,
+      "predicted": 3947,
+      "residual": -1,
       "counts": {
         "Ballard": 6,
         "Green Lake": 5,
@@ -12228,8 +12228,8 @@
       "shift": 436,
       "seed": 2025413726,
       "actual": 4048,
-      "predicted": 4009,
-      "residual": 39,
+      "predicted": 4004,
+      "residual": 44,
       "counts": {
         "Ballard": 6,
         "Green Lake": 5,
@@ -12256,8 +12256,8 @@
       "shift": 437,
       "seed": 1037309989,
       "actual": 3938,
-      "predicted": 3937,
-      "residual": 1,
+      "predicted": 3938,
+      "residual": 0,
       "counts": {
         "Ballard": 7,
         "Green Lake": 5,
@@ -12311,9 +12311,9 @@
     {
       "shift": 439,
       "seed": 3961087391,
-      "actual": 3950,
-      "predicted": 3863,
-      "residual": 87,
+      "actual": 3866,
+      "predicted": 3851,
+      "residual": 15,
       "counts": {
         "Ballard": 5,
         "Green Lake": 4,
@@ -12340,8 +12340,8 @@
       "shift": 440,
       "seed": 1153267314,
       "actual": 3818,
-      "predicted": 3761,
-      "residual": 57,
+      "predicted": 3754,
+      "residual": 64,
       "counts": {
         "Ballard": 4,
         "Green Lake": 4,
@@ -12367,9 +12367,9 @@
     {
       "shift": 441,
       "seed": 3361825577,
-      "actual": 3974,
-      "predicted": 3966,
-      "residual": 8,
+      "actual": 3954,
+      "predicted": 3972,
+      "residual": -18,
       "counts": {
         "Ballard": 5,
         "Green Lake": 6,
@@ -12396,8 +12396,8 @@
       "shift": 442,
       "seed": 3856945780,
       "actual": 3882,
-      "predicted": 3836,
-      "residual": 46,
+      "predicted": 3834,
+      "residual": 48,
       "counts": {
         "Ballard": 2,
         "Green Lake": 8,
@@ -12451,9 +12451,9 @@
     {
       "shift": 444,
       "seed": 2383169478,
-      "actual": 3818,
-      "predicted": 3771,
-      "residual": 47,
+      "actual": 3764,
+      "predicted": 3758,
+      "residual": 6,
       "counts": {
         "Ballard": 6,
         "Green Lake": 3,
@@ -12479,9 +12479,9 @@
     {
       "shift": 445,
       "seed": 1509784685,
-      "actual": 3830,
-      "predicted": 3872,
-      "residual": -42,
+      "actual": 3862,
+      "predicted": 3867,
+      "residual": -5,
       "counts": {
         "Ballard": 4,
         "Green Lake": 7,
@@ -12507,9 +12507,9 @@
     {
       "shift": 446,
       "seed": 4102468328,
-      "actual": 3932,
-      "predicted": 3894,
-      "residual": 38,
+      "actual": 3912,
+      "predicted": 3895,
+      "residual": 17,
       "counts": {
         "Ballard": 5,
         "Green Lake": 5,
@@ -12536,8 +12536,8 @@
       "shift": 447,
       "seed": 3409344807,
       "actual": 3748,
-      "predicted": 3809,
-      "residual": -61,
+      "predicted": 3800,
+      "residual": -52,
       "counts": {
         "Ballard": 7,
         "Green Lake": 4,
@@ -12564,8 +12564,8 @@
       "shift": 448,
       "seed": 390571098,
       "actual": 3896,
-      "predicted": 3888,
-      "residual": 8,
+      "predicted": 3887,
+      "residual": 9,
       "counts": {
         "Ballard": 2,
         "Green Lake": 7,
@@ -12592,8 +12592,8 @@
       "shift": 449,
       "seed": 56109041,
       "actual": 3894,
-      "predicted": 3921,
-      "residual": -27,
+      "predicted": 3922,
+      "residual": -28,
       "counts": {
         "Ballard": 4,
         "Green Lake": 7,
@@ -12648,8 +12648,8 @@
       "shift": 451,
       "seed": 2392138571,
       "actual": 3800,
-      "predicted": 3848,
-      "residual": -48,
+      "predicted": 3852,
+      "residual": -52,
       "counts": {
         "Ballard": 3,
         "Green Lake": 4,
@@ -12676,8 +12676,8 @@
       "shift": 452,
       "seed": 1482989614,
       "actual": 3980,
-      "predicted": 4037,
-      "residual": -57,
+      "predicted": 4033,
+      "residual": -53,
       "counts": {
         "Ballard": 5,
         "Green Lake": 5,
@@ -12704,8 +12704,8 @@
       "shift": 453,
       "seed": 1977313717,
       "actual": 3890,
-      "predicted": 3860,
-      "residual": 30,
+      "predicted": 3858,
+      "residual": 32,
       "counts": {
         "Ballard": 3,
         "Green Lake": 6,
@@ -12731,9 +12731,9 @@
     {
       "shift": 454,
       "seed": 4150161296,
-      "actual": 3872,
-      "predicted": 3779,
-      "residual": 93,
+      "actual": 3864,
+      "predicted": 3783,
+      "residual": 81,
       "counts": {
         "Ballard": 6,
         "Green Lake": 6,
@@ -12760,8 +12760,8 @@
       "shift": 455,
       "seed": 1371405743,
       "actual": 3980,
-      "predicted": 3908,
-      "residual": 72,
+      "predicted": 3901,
+      "residual": 79,
       "counts": {
         "Ballard": 6,
         "Green Lake": 2,
@@ -12787,9 +12787,9 @@
     {
       "shift": 456,
       "seed": 3695152962,
-      "actual": 4014,
-      "predicted": 3988,
-      "residual": 26,
+      "actual": 3998,
+      "predicted": 3992,
+      "residual": 6,
       "counts": {
         "Ballard": 7,
         "Green Lake": 4,
@@ -12815,9 +12815,9 @@
     {
       "shift": 457,
       "seed": 3157231033,
-      "actual": 3822,
-      "predicted": 3848,
-      "residual": -26,
+      "actual": 3906,
+      "predicted": 3835,
+      "residual": 71,
       "counts": {
         "Ballard": 5,
         "Green Lake": 3,
@@ -12844,8 +12844,8 @@
       "shift": 458,
       "seed": 3375461316,
       "actual": 4014,
-      "predicted": 3992,
-      "residual": 22,
+      "predicted": 4006,
+      "residual": 8,
       "counts": {
         "Ballard": 8,
         "Green Lake": 4,
@@ -12871,9 +12871,9 @@
     {
       "shift": 459,
       "seed": 1983245395,
-      "actual": 4038,
-      "predicted": 4035,
-      "residual": 3,
+      "actual": 4084,
+      "predicted": 4037,
+      "residual": 47,
       "counts": {
         "Ballard": 8,
         "Green Lake": 3,
@@ -12900,8 +12900,8 @@
       "shift": 460,
       "seed": 3446670742,
       "actual": 3896,
-      "predicted": 3853,
-      "residual": 43,
+      "predicted": 3849,
+      "residual": 47,
       "counts": {
         "Ballard": 2,
         "Green Lake": 8,
@@ -12927,9 +12927,9 @@
     {
       "shift": 461,
       "seed": 3640590333,
-      "actual": 3940,
-      "predicted": 3895,
-      "residual": 45,
+      "actual": 4020,
+      "predicted": 3893,
+      "residual": 127,
       "counts": {
         "Ballard": 4,
         "Green Lake": 5,
@@ -12956,8 +12956,8 @@
       "shift": 462,
       "seed": 3675636024,
       "actual": 3914,
-      "predicted": 3866,
-      "residual": 48,
+      "predicted": 3863,
+      "residual": 51,
       "counts": {
         "Ballard": 4,
         "Green Lake": 4,
@@ -12984,8 +12984,8 @@
       "shift": 463,
       "seed": 3858633527,
       "actual": 3718,
-      "predicted": 3826,
-      "residual": -108,
+      "predicted": 3817,
+      "residual": -99,
       "counts": {
         "Ballard": 1,
         "Green Lake": 7,
@@ -13011,9 +13011,9 @@
     {
       "shift": 464,
       "seed": 106747690,
-      "actual": 3756,
-      "predicted": 3763,
-      "residual": -7,
+      "actual": 3730,
+      "predicted": 3756,
+      "residual": -26,
       "counts": {
         "Ballard": 6,
         "Green Lake": 3,
@@ -13039,9 +13039,9 @@
     {
       "shift": 465,
       "seed": 2415565953,
-      "actual": 3978,
-      "predicted": 3971,
-      "residual": 7,
+      "actual": 3972,
+      "predicted": 3975,
+      "residual": -3,
       "counts": {
         "Ballard": 7,
         "Green Lake": 7,
@@ -13068,8 +13068,8 @@
       "shift": 466,
       "seed": 2937932780,
       "actual": 3826,
-      "predicted": 3806,
-      "residual": 20,
+      "predicted": 3809,
+      "residual": 17,
       "counts": {
         "Ballard": 3,
         "Green Lake": 4,
@@ -13123,9 +13123,9 @@
     {
       "shift": 468,
       "seed": 948967422,
-      "actual": 3924,
-      "predicted": 3862,
-      "residual": 62,
+      "actual": 3900,
+      "predicted": 3857,
+      "residual": 43,
       "counts": {
         "Ballard": 5,
         "Green Lake": 3,
@@ -13151,9 +13151,9 @@
     {
       "shift": 469,
       "seed": 3709689669,
-      "actual": 3872,
-      "predicted": 3863,
-      "residual": 9,
+      "actual": 3844,
+      "predicted": 3866,
+      "residual": -22,
       "counts": {
         "Ballard": 5,
         "Green Lake": 5,
@@ -13179,9 +13179,9 @@
     {
       "shift": 470,
       "seed": 2023704544,
-      "actual": 3864,
-      "predicted": 3851,
-      "residual": 13,
+      "actual": 3846,
+      "predicted": 3840,
+      "residual": 6,
       "counts": {
         "Ballard": 6,
         "Green Lake": 7,
@@ -13207,9 +13207,9 @@
     {
       "shift": 471,
       "seed": 3624458687,
-      "actual": 4020,
-      "predicted": 3873,
-      "residual": 147,
+      "actual": 3922,
+      "predicted": 3872,
+      "residual": 50,
       "counts": {
         "Ballard": 4,
         "Green Lake": 5,
@@ -13236,8 +13236,8 @@
       "shift": 472,
       "seed": 4283112466,
       "actual": 3832,
-      "predicted": 3870,
-      "residual": -38,
+      "predicted": 3865,
+      "residual": -33,
       "counts": {
         "Ballard": 4,
         "Green Lake": 5,
@@ -13292,8 +13292,8 @@
       "shift": 474,
       "seed": 2414618900,
       "actual": 3848,
-      "predicted": 3935,
-      "residual": -87,
+      "predicted": 3928,
+      "residual": -80,
       "counts": {
         "Ballard": 4,
         "Green Lake": 4,
@@ -13319,9 +13319,9 @@
     {
       "shift": 475,
       "seed": 2797535587,
-      "actual": 4078,
-      "predicted": 3971,
-      "residual": 107,
+      "actual": 3932,
+      "predicted": 3964,
+      "residual": -32,
       "counts": {
         "Ballard": 5,
         "Green Lake": 4,
@@ -13347,9 +13347,9 @@
     {
       "shift": 476,
       "seed": 4049237862,
-      "actual": 3864,
-      "predicted": 3867,
-      "residual": -3,
+      "actual": 3860,
+      "predicted": 3870,
+      "residual": -10,
       "counts": {
         "Ballard": 7,
         "Green Lake": 2,
@@ -13376,8 +13376,8 @@
       "shift": 477,
       "seed": 848275341,
       "actual": 3918,
-      "predicted": 3976,
-      "residual": -58,
+      "predicted": 3981,
+      "residual": -63,
       "counts": {
         "Ballard": 6,
         "Green Lake": 7,
@@ -13404,8 +13404,8 @@
       "shift": 478,
       "seed": 1732354952,
       "actual": 3944,
-      "predicted": 3988,
-      "residual": -44,
+      "predicted": 3982,
+      "residual": -38,
       "counts": {
         "Ballard": 6,
         "Green Lake": 7,
@@ -13432,8 +13432,8 @@
       "shift": 479,
       "seed": 2587128135,
       "actual": 3886,
-      "predicted": 3892,
-      "residual": -6,
+      "predicted": 3886,
+      "residual": 0,
       "counts": {
         "Ballard": 3,
         "Green Lake": 7,
@@ -13487,8 +13487,8 @@
       "shift": 481,
       "seed": 355235089,
       "actual": 4006,
-      "predicted": 3979,
-      "residual": 27,
+      "predicted": 3983,
+      "residual": 23,
       "counts": {
         "Ballard": 7,
         "Green Lake": 4,
@@ -13515,8 +13515,8 @@
       "shift": 482,
       "seed": 1962847036,
       "actual": 3972,
-      "predicted": 4014,
-      "residual": -42,
+      "predicted": 4022,
+      "residual": -50,
       "counts": {
         "Ballard": 6,
         "Green Lake": 4,
@@ -13542,9 +13542,9 @@
     {
       "shift": 483,
       "seed": 1584631147,
-      "actual": 3922,
-      "predicted": 3970,
-      "residual": -48,
+      "actual": 3918,
+      "predicted": 3972,
+      "residual": -54,
       "counts": {
         "Ballard": 5,
         "Green Lake": 6,
@@ -13570,9 +13570,9 @@
     {
       "shift": 484,
       "seed": 3793273806,
-      "actual": 4092,
-      "predicted": 4014,
-      "residual": 78,
+      "actual": 4052,
+      "predicted": 4012,
+      "residual": 40,
       "counts": {
         "Ballard": 8,
         "Green Lake": 7,
@@ -13627,8 +13627,8 @@
       "shift": 486,
       "seed": 3340203056,
       "actual": 3892,
-      "predicted": 3892,
-      "residual": 0,
+      "predicted": 3894,
+      "residual": -2,
       "counts": {
         "Ballard": 6,
         "Green Lake": 6,
@@ -13655,8 +13655,8 @@
       "shift": 487,
       "seed": 161151439,
       "actual": 3896,
-      "predicted": 3893,
-      "residual": 3,
+      "predicted": 3888,
+      "residual": 8,
       "counts": {
         "Ballard": 5,
         "Green Lake": 9,
@@ -13683,8 +13683,8 @@
       "shift": 488,
       "seed": 3725401314,
       "actual": 3914,
-      "predicted": 3912,
-      "residual": 2,
+      "predicted": 3917,
+      "residual": -3,
       "counts": {
         "Ballard": 6,
         "Green Lake": 3,
@@ -13711,8 +13711,8 @@
       "shift": 489,
       "seed": 2393732825,
       "actual": 3712,
-      "predicted": 3763,
-      "residual": -51,
+      "predicted": 3768,
+      "residual": -56,
       "counts": {
         "Ballard": 5,
         "Green Lake": 3,
@@ -13739,8 +13739,8 @@
       "shift": 490,
       "seed": 868840036,
       "actual": 3866,
-      "predicted": 3893,
-      "residual": -27,
+      "predicted": 3891,
+      "residual": -25,
       "counts": {
         "Ballard": 5,
         "Green Lake": 6,
@@ -13767,8 +13767,8 @@
       "shift": 491,
       "seed": 1291950707,
       "actual": 3952,
-      "predicted": 3921,
-      "residual": 31,
+      "predicted": 3920,
+      "residual": 32,
       "counts": {
         "Ballard": 5,
         "Green Lake": 6,
@@ -13822,9 +13822,9 @@
     {
       "shift": 493,
       "seed": 3473437469,
-      "actual": 3968,
-      "predicted": 3809,
-      "residual": 159,
+      "actual": 3860,
+      "predicted": 3788,
+      "residual": 72,
       "counts": {
         "Ballard": 4,
         "Green Lake": 3,
@@ -13851,8 +13851,8 @@
       "shift": 494,
       "seed": 1536121304,
       "actual": 3818,
-      "predicted": 3881,
-      "residual": -63,
+      "predicted": 3884,
+      "residual": -66,
       "counts": {
         "Ballard": 6,
         "Green Lake": 6,
@@ -13878,9 +13878,9 @@
     {
       "shift": 495,
       "seed": 3332019031,
-      "actual": 4108,
-      "predicted": 4013,
-      "residual": 95,
+      "actual": 4000,
+      "predicted": 4006,
+      "residual": -6,
       "counts": {
         "Ballard": 6,
         "Green Lake": 5,
@@ -13907,8 +13907,8 @@
       "shift": 496,
       "seed": 1283201226,
       "actual": 3878,
-      "predicted": 3865,
-      "residual": 13,
+      "predicted": 3868,
+      "residual": 10,
       "counts": {
         "Ballard": 6,
         "Green Lake": 5,
@@ -13934,9 +13934,9 @@
     {
       "shift": 497,
       "seed": 4233540001,
-      "actual": 4190,
-      "predicted": 4062,
-      "residual": 128,
+      "actual": 4078,
+      "predicted": 4054,
+      "residual": 24,
       "counts": {
         "Ballard": 6,
         "Green Lake": 6,
@@ -13963,8 +13963,8 @@
       "shift": 498,
       "seed": 4032110220,
       "actual": 4036,
-      "predicted": 4042,
-      "residual": -6,
+      "predicted": 4047,
+      "residual": -11,
       "counts": {
         "Ballard": 5,
         "Green Lake": 8,
@@ -13991,8 +13991,8 @@
       "shift": 499,
       "seed": 1452886139,
       "actual": 3748,
-      "predicted": 3859,
-      "residual": -111,
+      "predicted": 3855,
+      "residual": -107,
       "counts": {
         "Ballard": 8,
         "Green Lake": 6,
@@ -14017,9 +14017,9 @@
     {
       "shift": 500,
       "seed": 3374031774,
-      "actual": 3992,
-      "predicted": 3885,
-      "residual": 107,
+      "actual": 3876,
+      "predicted": 3878,
+      "residual": -2,
       "counts": {
         "Ballard": 4,
         "Green Lake": 7,
