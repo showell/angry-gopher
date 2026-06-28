@@ -753,6 +753,78 @@ function postSlotLocalSearch(sub: Substrate, bySlot: Stop[][], log: Move[]): voi
   }
 }
 
+/**
+ * Entry/exit ring angles of the route's delivery visit to `nbhd` — the first time
+ * the driven path reaches it (a later re-thread only transits). The gates are set
+ * by the neighboring stops, NOT by which houses are delivered, so they're stable
+ * as tidySplitHouses swaps house identities below. Null if the route never delivers it.
+ */
+function deliveryGates(sub: Substrate, stops: Stop[], nbhd: string): { entry: number; exit: number } | null {
+  const nodes = pathNodes(sub, stops);
+  for (let i = 1; i < nodes.length - 1; i++) {
+    if (nodes[i] !== nbhd) continue;
+    return { entry: gateAngle(nbhd, nodeAt(nodes[i - 1])), exit: gateAngle(nbhd, nodeAt(nodes[i + 1])) };
+  }
+  return null;
+}
+
+type SplitPart = { stop: Stop; gates: { entry: number; exit: number } };
+
+/**
+ * House-level tidy for SPLIT neighborhoods. painOf charges a FLAT ring per
+ * neighborhood (trig-free, house-blind), so when two trucks split a neighborhood
+ * the solver has no signal for WHICH houses each takes — it can hand a helper
+ * truck a far-side house when a near-gate one was free (the S5 "T5 dips to the
+ * far-south Mercer N house while T8 passes it anyway" flaw). This pass swaps house
+ * identities between trucks sharing a neighborhood whenever it shortens the real
+ * ring-walk. A swap keeps each truck's tote count — hence its pain — identical, so
+ * it's a pure, never-worse PHYSICAL-time tie-break the cost model cannot see.
+ */
+function tidySplitHouses(sub: Substrate, bySlot: Stop[][]): void {
+  const slotsByNbhd = new Map<string, number[]>();
+  for (let i = 0; i < bySlot.length; i++)
+    for (const s of bySlot[i])
+      if (s.houses.length) (slotsByNbhd.get(s.nbhd) ?? slotsByNbhd.set(s.nbhd, []).get(s.nbhd)!).push(i);
+
+  for (const [nbhd, slots] of slotsByNbhd) {
+    if (slots.length < 2) continue; // not split — nothing to trade
+    const parts: SplitPart[] = [];
+    for (const slot of slots) {
+      const stop = bySlot[slot].find((s) => s.nbhd === nbhd)!;
+      const gates = deliveryGates(sub, bySlot[slot], nbhd);
+      if (gates) parts.push({ stop, gates });
+    }
+    if (parts.length < 2) continue;
+    const cost = (p: SplitPart) => localMinutes(nbhd, p.gates.entry, p.gates.exit, houseAngles(nbhd, p.stop.houses));
+
+    // Swap one house between two sharing trucks while it shortens the combined walk.
+    for (;;) {
+      let best: { p: SplitPart; q: SplitPart; ai: number; bi: number; gain: number } | null = null;
+      for (let x = 0; x < parts.length; x++)
+        for (let y = x + 1; y < parts.length; y++) {
+          const p = parts[x];
+          const q = parts[y];
+          const base = cost(p) + cost(q);
+          for (let ai = 0; ai < p.stop.houses.length; ai++)
+            for (let bi = 0; bi < q.stop.houses.length; bi++) {
+              const a = p.stop.houses[ai];
+              const b = q.stop.houses[bi];
+              p.stop.houses[ai] = b;
+              q.stop.houses[bi] = a;
+              const gain = base - (cost(p) + cost(q));
+              p.stop.houses[ai] = a; // restore; the best swap is applied once, after the scan
+              q.stop.houses[bi] = b;
+              if (gain > 1e-6 && (!best || gain > best.gain)) best = { p, q, ai, bi, gain };
+            }
+        }
+      if (!best) break;
+      const a = best.p.stop.houses[best.ai];
+      best.p.stop.houses[best.ai] = best.q.stop.houses[best.bi];
+      best.q.stop.houses[best.bi] = a;
+    }
+  }
+}
+
 /** Population stdev of a set of route times — our (im)balance measure. */
 function stdev(times: number[]): number {
   if (times.length === 0) return 0;
@@ -1046,6 +1118,10 @@ function runSolve(sub: Substrate, orders: Map<string, number[]>, allowSplit: boo
   // assignment + spill created, which the pre-slot orOpt/exchange never saw.
   postSlotLocalSearch(sub, bySlot, log);
   for (const r of bySlot) twoOpt(sub, r, log);
+
+  // Final, pain-neutral polish: hand each split neighborhood's helper truck its
+  // near-gate houses (the flat ring cost is blind to which houses; the real drive isn't).
+  tidySplitHouses(sub, bySlot);
 
   const built: Route[] = bySlot.map((stops) => {
     const b = breakdown(sub, stops);
