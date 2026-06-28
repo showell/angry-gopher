@@ -20,10 +20,14 @@
 //   delivery/node_modules/.bin/esbuild delivery/painreg.ts \
 //     --bundle --platform=node --format=esm --outfile=/tmp/pr.mjs && node /tmp/pr.mjs
 
+import { writeFileSync } from "node:fs";
 import { buildSubstrate } from "./roadgraph.ts";
 import { solve, painOf } from "./solver.ts";
 import { chooseOrders, ordersByNeighborhood, demandByNeighborhood } from "./orders.ts";
 import { FLEET, NEIGHBORHOODS } from "./geography.ts";
+
+// Mercer Island folds into "east" (the lake-crossers' side), matching painsweep.ts.
+const EAST = new Set(["Bellevue", "Medina", "Kirkland", "Redmond", "Issaquah", "Factoria", "Mercer N", "Mercer S", "Mercer Island"]);
 
 const N = 500;
 const sub = buildSubstrate();
@@ -144,3 +148,42 @@ console.log("\n=== for contrast: TOP 8 by RAW PAIN (old view) — note their syn
 console.log("    shift   actual   residual    z");
 for (const s of byPain.slice(0, 8))
   console.log(`    S${String(s.shift).padEnd(4)}  ${s.actual.toFixed(0).padStart(6)}   ${s.resid.toFixed(0).padStart(8)}   ${s.z.toFixed(2).padStart(5)}`);
+
+// ---- THE PUZZLE: the single shift whose actual pain most exceeds what its
+//      per-neighborhood mix predicts. Printed blind (demand only, no diagnosis).
+const top = ranked[0];
+const ti = top.shift - 1;
+const topCounts = COLS.map((name, j) => [name, X[ti][j]] as [string, number]).filter(([, c]) => c > 0).sort((a, b) => b[1] - a[1]);
+let tw = 0;
+let te = 0;
+for (const [n, c] of topCounts) EAST.has(n) ? (te += c) : (tw += c);
+console.log("\n=== THE PUZZLE — most unexpected pain (actual ≫ predicted for its mix) ===");
+console.log(`  S${top.shift}  (seed ${seeds[ti]})   actual ${top.actual.toFixed(0)}   predicted ${top.pred.toFixed(0)}   residual +${top.resid.toFixed(0)}   z ${top.z.toFixed(2)}`);
+console.log(`  demand: ${topCounts.map(([n, c]) => `${n} ${c}`).join("  ·  ")}`);
+console.log(`  west ${tw} / east ${te} totes  (orientation only — not a model input)`);
+
+// ---- Capture the fit to source control. A regenerable snapshot, durability flagged
+//      inline: it describes ONE road topology + the integer PAIN model, nothing depends
+//      on it, and it must be re-run after any geography/solver/cost change.
+const baseline = {
+  _durability:
+    "EPHEMERAL SNAPSHOT — descriptive analysis, NOT load-bearing. Nothing imports this. " +
+    "Regenerate via delivery/painreg.ts after ANY change to geography / roadgraph / solver / cost model. " +
+    "Coefficients are marginal pain-per-home learned independently per neighborhood (no east/west grouping).",
+  generated: new Date().toISOString().slice(0, 10),
+  topology: process.env.GIT_REV ?? "unknown",
+  N,
+  model: { meanPain: Math.round(meanY), r2: Number(r2.toFixed(4)), rmsePain: Number(rmse.toFixed(1)) },
+  coefficientsPainPerHome: Object.fromEntries(order.map((j) => [COLS[j], Number(beta[j].toFixed(2))])),
+  avgHomesPerDay: Object.fromEntries(order.map((j) => [COLS[j], Number(meanCount[j].toFixed(2))])),
+  shifts: seeds.map((seed, i) => ({
+    shift: i + 1,
+    seed,
+    actual: Math.round(y[i]),
+    predicted: Math.round(pred[i]),
+    residual: Math.round(resid[i]),
+    counts: Object.fromEntries(COLS.map((name, j) => [name, X[i][j]] as [string, number]).filter(([, c]) => c > 0)),
+  })),
+};
+writeFileSync("delivery/pain_baseline.json", JSON.stringify(baseline, null, 2) + "\n");
+console.log("\nwrote delivery/pain_baseline.json (regenerable snapshot)");
