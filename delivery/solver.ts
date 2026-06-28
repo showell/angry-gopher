@@ -308,7 +308,7 @@ function construct(sub: Substrate, routes: Stop[][], log: Move[], force: boolean
  * sits under total capacity, so with splittable houses this always lands; the
  * later cost passes then relocate what they can to cheaper trucks.
  */
-function forcePlace(sub: Substrate, routes: Stop[][], log: Move[]): void {
+function forcePlace(sub: Substrate, routes: Stop[][], log: Move[], costAware: boolean): void {
   const anchored = routes.filter(hasAnchor);
   const clusters = routes.filter((r) => !hasAnchor(r) && r.length > 0).sort((a, b) => loadOf(b) - loadOf(a));
   const keep = Math.max(0, FLEET.trucks - anchored.length);
@@ -339,19 +339,39 @@ function forcePlace(sub: Substrate, routes: Stop[][], log: Move[]): void {
           log.push({ kind: "or-opt", saved: 0, detail: `capacity placement: ${stop.nbhd} (${remaining.length}) onto a truck with room`, frame: snapshot(routes), touched: keys(stop.nbhd, remaining) });
           break;
         }
-        // No single truck fits it whole — drop a chunk on the roomiest and loop.
+        // No single truck fits it whole — place a chunk and loop. Two strategies,
+        // raced by solve(): the roomiest (biggest chunk on the most-slack truck —
+        // geography-blind) or the cost-aware (cheapest chunk on the cheapest truck —
+        // keeps an island like Mercer N off an unrelated NW cluster).
         let into: Stop[] | null = null;
-        let room = 0;
-        for (const k of kept) {
-          const free = capOf(k) - loadOf(k);
-          if (free > room) {
-            room = free;
-            into = k;
+        let takeN = 0;
+        if (costAware) {
+          let bestc = Infinity;
+          for (const k of kept) {
+            const free = capOf(k) - loadOf(k);
+            if (free <= 0) continue;
+            const n = Math.min(free, remaining.length);
+            const c = appendCost(k, stop.nbhd, remaining.slice(0, n));
+            if (c < bestc) {
+              bestc = c;
+              into = k;
+              takeN = n;
+            }
+          }
+        } else {
+          let room = 0;
+          for (const k of kept) {
+            const free = capOf(k) - loadOf(k);
+            if (free > room) {
+              room = free;
+              into = k;
+              takeN = Math.min(free, remaining.length);
+            }
           }
         }
-        if (!into || room <= 0) throw new Error("forcePlace: no truck has room — demand exceeds fleet capacity"); // unreachable: 84 ≤ 96
-        const take = remaining.slice(0, room);
-        remaining = remaining.slice(room);
+        if (!into || takeN <= 0) throw new Error("forcePlace: no truck has room — demand exceeds fleet capacity"); // unreachable: 84 ≤ 96
+        const take = remaining.slice(0, takeN);
+        remaining = remaining.slice(takeN);
         into.push({ nbhd: stop.nbhd, orders: take.length, houses: take });
         log.push({ kind: "or-opt", saved: 0, detail: `capacity split: ${stop.nbhd} ${take.length} tote(s) onto a truck with room`, frame: snapshot(routes), touched: keys(stop.nbhd, take) });
       }
@@ -384,7 +404,7 @@ function insertBest(sub: Substrate, route: Stop[], stop: Stop): Stop[] {
  * hard-to-reach neighborhoods have already claimed their trucks, so these cheap
  * fillers slot into leftover slack instead of crowding a hard neighborhood out.
  */
-function placeDeferred(sub: Substrate, routes: Stop[][], deferred: Stop[], log: Move[]): void {
+function placeDeferred(sub: Substrate, routes: Stop[][], deferred: Stop[], log: Move[], costAware: boolean): void {
   for (const stop of [...deferred].sort((a, b) => b.orders - a.orders)) {
     let remaining = stop.houses;
     while (remaining.length) {
@@ -406,19 +426,38 @@ function placeDeferred(sub: Substrate, routes: Stop[][], deferred: Stop[], log: 
         log.push({ kind: "or-opt", saved: 0, detail: `deferred fill: ${stop.nbhd} (${remaining.length}) into slack`, frame: snapshot(routes), touched: keys(stop.nbhd, remaining) });
         break;
       }
-      // No single truck fits it whole — drop a chunk on the roomiest and loop.
-      let room = 0;
+      // No single truck fits it whole — place a chunk and loop (same roomiest vs
+      // cost-aware race as forcePlace, switched by the same flag).
       let ri = -1;
-      for (let k = 0; k < routes.length; k++) {
-        const free = capOf(routes[k]) - loadOf(routes[k]);
-        if (free > room) {
-          room = free;
-          ri = k;
+      let takeN = 0;
+      if (costAware) {
+        let bestc = Infinity;
+        for (let k = 0; k < routes.length; k++) {
+          const free = capOf(routes[k]) - loadOf(routes[k]);
+          if (free <= 0) continue;
+          const n = Math.min(free, remaining.length);
+          const cand = insertBest(sub, routes[k], { nbhd: stop.nbhd, orders: n, houses: remaining.slice(0, n) });
+          const delta = costOf(sub, cand) - costOf(sub, routes[k]);
+          if (delta < bestc) {
+            bestc = delta;
+            ri = k;
+            takeN = n;
+          }
+        }
+      } else {
+        let room = 0;
+        for (let k = 0; k < routes.length; k++) {
+          const free = capOf(routes[k]) - loadOf(routes[k]);
+          if (free > room) {
+            room = free;
+            ri = k;
+            takeN = Math.min(free, remaining.length);
+          }
         }
       }
-      if (ri < 0 || room <= 0) throw new Error("placeDeferred: no truck has room — demand exceeds fleet capacity");
-      const take = remaining.slice(0, room);
-      remaining = remaining.slice(room);
+      if (ri < 0 || takeN <= 0) throw new Error("placeDeferred: no truck has room — demand exceeds fleet capacity");
+      const take = remaining.slice(0, takeN);
+      remaining = remaining.slice(takeN);
       routes[ri] = insertBest(sub, routes[ri], { nbhd: stop.nbhd, orders: take.length, houses: take });
       log.push({ kind: "or-opt", saved: 0, detail: `deferred split: ${stop.nbhd} ${take.length} tote(s) into slack`, frame: snapshot(routes), touched: keys(stop.nbhd, take) });
     }
@@ -870,8 +909,27 @@ function coalesceStops(route: Stop[]): Stop[] {
   return out;
 }
 
-/** Plan the fleet for a day's orders. Deterministic — same orders, same plan. */
+/** Total fleet pain of a plan — the integer objective the solver minimizes. */
+function planPain(sub: Substrate, plan: Plan): number {
+  return plan.routes.reduce((s, r) => s + painOf(sub, r.stops), 0);
+}
+
+/**
+ * Plan the fleet for a day's orders. Deterministic — same orders, same plan.
+ *
+ * Races two constructions and keeps the cheaper by total pain: the leftover-packing
+ * split (forcePlace + placeDeferred) is a coin-flip between "roomiest truck, biggest
+ * chunk" (geography-blind) and "cheapest truck, cheapest chunk" (cost-aware) — each
+ * wins on different draws (S123 loves cost-aware, S30 loves roomiest). The roomiest
+ * pass is today's behavior, so the min of the two is provably never-worse.
+ */
 export function solve(sub: Substrate, orders: Map<string, number[]>, allowSplit = true): Plan {
+  const roomiest = runSolve(sub, orders, allowSplit, false);
+  const costAware = runSolve(sub, orders, allowSplit, true);
+  return planPain(sub, costAware) < planPain(sub, roomiest) ? costAware : roomiest;
+}
+
+function runSolve(sub: Substrate, orders: Map<string, number[]>, allowSplit: boolean, costAware: boolean): Plan {
   const log: Move[] = [];
   const all = customers(orders);
   const deferred = all.filter((c) => DEFER_SET.has(c.nbhd)); // FC-adjacent fillers, placed last
@@ -880,8 +938,8 @@ export function solve(sub: Substrate, orders: Map<string, number[]>, allowSplit 
 
   construct(sub, routes, log, false); // savings merges while they help
   if (routes.length > FLEET.trucks) construct(sub, routes, log, true); // squeeze into the fleet
-  if (routes.length > FLEET.trucks) forcePlace(sub, routes, log); // pack the capacity-fragmented residue
-  placeDeferred(sub, routes, deferred, log); // now slot the cheap FC-adjacent demand into leftover slack
+  if (routes.length > FLEET.trucks) forcePlace(sub, routes, log, costAware); // pack the capacity-fragmented residue
+  placeDeferred(sub, routes, deferred, log, costAware); // now slot the cheap FC-adjacent demand into leftover slack
 
   for (const r of routes) twoOpt(sub, r, log);
   orOpt(sub, routes, log);
