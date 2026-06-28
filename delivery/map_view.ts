@@ -836,7 +836,7 @@ export type MapView = {
   focusTruck: number | null; // truck row under the cursor (panel)
   shift: number; // which shuffle we're on (S1, S2, …)
   solving: boolean; // mid-solve → grey the map behind a "shuffling…" veil
-  anim?: { t: number; maxT: number; playing: boolean; tracks: Track[] } | null; // play mode
+  anim?: { t: number; maxT: number; playing: boolean; tracks: Track[]; blink?: boolean } | null; // play mode
   solveAnim?: { frames: SolveFrame[]; i: number } | null; // `A` — watch the solver build the plan
 };
 
@@ -953,10 +953,12 @@ export function drawMap(ctx: CanvasRenderingContext2D, view: MapView): void {
     drawRoads(ctx);
     drawBridges(ctx);
     drawGates(ctx);
-    const delivered = deliveredAt(anim.tracks, anim.t);
+    // The completion blink: a single blanked frame the instant the last tote lands —
+    // routes and checkmarks wink off, then the next frame brings them back.
+    const delivered = anim.blink ? null : deliveredAt(anim.tracks, anim.t);
     for (const n of NEIGHBORHOODS) drawNeighborhood(ctx, n, orders, houseColor, highlight, delivered);
     drawWarehouse(ctx);
-    drawAnimation(ctx, anim.tracks, anim.t);
+    if (!anim.blink) drawAnimation(ctx, anim.tracks, anim.t);
     // A hovered truck (paused only): lay its full tour on top of the trail, so
     // the road still ahead of the dot reads.
     if (activeTruck !== null) drawRoutes(ctx, plan, activeTruck);

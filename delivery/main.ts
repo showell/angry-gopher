@@ -42,7 +42,10 @@ let plan: Plan = solve(SUB, ordersByNeighborhood(orders));
 // second, so the longest route (~200 min) plays out in ~40s. null = static map.
 const PLAY_RATE = 5;
 const STEP_MIN = 2; // route-minutes the ←/→ arrows nudge the clock while paused
-let anim: { t: number; maxT: number; playing: boolean; tracks: Track[] } | null = null;
+const BLINK_MS = 130; // how long the completion blink (blank frame) holds before resuming
+// blinkAt = clock time the last tote is delivered (< maxT — a truck still drives home
+// after); blinked = whether this run's blink has already fired (reset on replay).
+let anim: { t: number; maxT: number; playing: boolean; tracks: Track[]; blink: boolean; blinkAt: number; blinked: boolean } | null = null;
 let lastFrame = 0;
 
 // Solver animation: a manual stepper through the plan's recorded frames — each
@@ -119,6 +122,21 @@ function tick(now: number): void {
   const dt = lastFrame ? (now - lastFrame) / 1000 : 0;
   lastFrame = now;
   anim.t = Math.min(anim.t + dt * PLAY_RATE, anim.maxT);
+  // The instant the last tote lands, blink: paint one blanked frame (no routes, no
+  // checkmarks), hold briefly, then resume the home stretch right where we left off.
+  if (!anim.blinked && anim.blinkAt > 0 && anim.t >= anim.blinkAt) {
+    anim.blinked = true;
+    anim.blink = true;
+    render(); // the blank frame
+    anim.blink = false;
+    setTimeout(() => {
+      if (anim && anim.playing) {
+        lastFrame = 0; // resume with no time jump across the held blink
+        requestAnimationFrame(tick);
+      }
+    }, BLINK_MS);
+    return;
+  }
   if (anim.t >= anim.maxT) anim.playing = false; // day's done; dots park at the FC
   render();
   if (anim.playing) requestAnimationFrame(tick);
@@ -130,11 +148,15 @@ function togglePlay(): void {
   if (!anim) {
     const tracks = buildTracks(plan);
     const maxT = tracks.reduce((m, t) => Math.max(m, t.depart + t.total), 0);
-    anim = { t: 0, maxT, playing: true, tracks };
+    const blinkAt = tracks.reduce((m, t) => t.deliveries.reduce((mm, d) => Math.max(mm, t.depart + d.t), m), 0);
+    anim = { t: 0, maxT, playing: true, tracks, blink: false, blinkAt, blinked: false };
   } else if (anim.playing) {
     anim.playing = false; // pause
   } else {
-    if (anim.t >= anim.maxT) anim.t = 0; // finished → replay
+    if (anim.t >= anim.maxT) {
+      anim.t = 0; // finished → replay
+      anim.blinked = false; // let the completion blink fire again
+    }
     anim.playing = true;
   }
   if (anim.playing) {
