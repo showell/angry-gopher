@@ -29,6 +29,7 @@ cta: See how we build
 lang: Zig
 tech: a hand-written markdown engine renders posts from repo files on the fly
 code: https://github.com/showell/angry-gopher/tree/master/blog
+essay: /blog/the-ghost-in-the-byline
 Notes from building this site — one zig binary, written with Claude. Essays on the code, the algorithms, and what we learned along the way.
 
 ## Play Lyn Rummy -> /game
