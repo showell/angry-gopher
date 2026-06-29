@@ -1,15 +1,33 @@
 # Angry Gopher
 
-A small, dependency-light server that hosts **Lyn Rummy** (a
-single-human card game — Elm client + TypeScript agent) and a private
-**chat** surface, plus a small admin view. Storage is plain files on
-disk — **no database**. In prod it ships as one self-contained
-embedded binary behind Caddy (TLS) under systemd; see
-[`deploy/README.md`](deploy/README.md).
+This is the source for **[lynrummy.com](https://lynrummy.com)** — Steve
+Howell's personal website. Every line of code here was written by Claude.
+"Angry Gopher" is a dated inside joke; don't ask.
+
+The site is a handful of small apps served from **one self-contained zig
+binary** — no database, storage is plain files on disk, deployed behind
+Caddy (TLS) under systemd. Each app has its own README as the canonical
+home for its design intent; this file is the developer/agent map of the
+whole thing.
+
+## The apps
+
+The home page (`/`) is a launch pad for six apps. In display order:
+
+| App | Path | What it is | Stack | README |
+|---|---|---|---|---|
+| **Seattle Delivery** | `/delivery` | A CVRP route-planning sim — eight trucks fan out across a not-to-scale Seattle. Watch a hand-built Clarke-Wright solver think. | TypeScript | [`delivery/README.md`](delivery/README.md) |
+| **Safari Screensaver** | `/driving` | A self-driving first-person motorcycle ride down a winding road, drawn from rider-relative coordinates. | TypeScript | [`games/driving/README.md`](games/driving/README.md) |
+| **Chat** | `/chat` | Real-time chat, docs, and channels over Server-Sent Events — the live surface we use daily. | Zig | [`chat/README.md`](chat/README.md) |
+| **Blog** | `/blog` | Notes on building the site, rendered from repo markdown by a hand-written engine. | Zig | [`blog/README.md`](blog/README.md) |
+| **Lyn Rummy** | `/game` | Two-player rummy against an agent that knows the rules — a TS referee engine with an Elm UI, speaking a DSL over the wire. | TypeScript + Elm | [`games/lynrummy/README.md`](games/lynrummy/README.md) |
+| **Lyn Rummy Puzzles** | `/puzzles` | A single mid-game board to solve; shares the rules engine, with deterministic undo and replay. | TypeScript + Elm | [`games/lynrummy/elm/src/Puzzle/README.md`](games/lynrummy/elm/src/Puzzle/README.md) |
 
 > **The server is the zig implementation in [`zig-server/`](zig-server/)** —
 > see [`SERVER.md`](SERVER.md). (It was ported from a Go original, now removed;
 > the routes, layout, and DSL below describe the live zig server.)
+
+The rest of this README is for developers and agents working on the code.
 
 ## Quick start
 
@@ -220,8 +238,10 @@ read-only** — a keyed request may only GET/HEAD.
 | `ops/` | the build / run / test scripts (`ops/list` enumerates them) |
 | `deploy/` | Caddyfile, systemd unit, deploy runbook |
 
-The server is dumb URL-keyed file storage; the strategic brain is the
-TS agent, and the Elm client owns the full game (dealer, referee, UI).
+The server stays deliberately dumb — URL-keyed file storage plus the
+per-surface handlers — and pushes logic to the client wherever it can.
+Lyn Rummy is the clearest case: the strategic brain is the TS agent, and
+the Elm client owns the full game (dealer, referee, UI).
 
 **Responsive / mobile** (the chat surfaces — our mobile user is Apoorva;
 Steve is desktop-only). Small-screen layout is decided client-side. One JS
@@ -232,10 +252,10 @@ JS — so the number lives in exactly one place. The shared nav drawer
 both key off it; the server (`chrome.zig`) just ships the desktop top bar and
 loads the widgets. Start at `Viewport` and follow the breadcrumbs.
 
-## The DSL is the lingua franca
+## Lyn Rummy's DSL is its lingua franca
 
-One short, canonical DSL carries the same grammar across all three
-runtimes — conformance fixtures, on-disk session files (`meta`,
+Lyn Rummy leans on one short, canonical DSL that carries the same grammar
+across all three runtimes — conformance fixtures, on-disk session files (`meta`,
 `actions.dsl`), the new-session wire body, the resume bundle, and agent
 transcripts. Sample session header:
 
@@ -276,9 +296,9 @@ consistency checks that bare commands silently skip.
 
 | Looking for… | Read |
 |---|---|
-| Lyn Rummy docs (top of tree) | [`games/lynrummy/README.md`](games/lynrummy/README.md) |
-| Rules of the game | [`games/lynrummy/RULES.md`](games/lynrummy/RULES.md) |
-| Load-bearing design decisions | [`games/lynrummy/ARCHITECTURE.md`](games/lynrummy/ARCHITECTURE.md) |
+| Any one app's design intent | its README — see [The apps](#the-apps) above |
+| The server internals (routing, modules) | [`SERVER.md`](SERVER.md) |
+| Lyn Rummy rules / architecture | [`games/lynrummy/RULES.md`](games/lynrummy/RULES.md), [`games/lynrummy/ARCHITECTURE.md`](games/lynrummy/ARCHITECTURE.md) |
 | Deploy / host setup | [`deploy/README.md`](deploy/README.md) |
 | Agent-collaboration conventions | `~/showell_repos/claude-collab/agent_collab/` |
 
