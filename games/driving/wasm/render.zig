@@ -13,10 +13,13 @@ const tree = @import("tree.zig");
 const tower = @import("tower.zig");
 const critter = @import("critter.zig");
 const mountains = @import("mountains.zig");
+const guard_rail = @import("guard_rail.zig");
 const paint = @import("paint.zig");
 
 const ROAD: u32 = 0x34353c;
 const ROAD_CHUNK: f32 = 25.0; // road strips sliced this long so the bend reads smooth
+const ENTRY_ROAD_DIST: f32 = 40.0; // metres of approach road a joint paints behind its end edge (covers the joint when it's the one BEHIND the rider). Mirrors intersection.ts.
+const RAIL_PATH_CAP: usize = 192; // max points in a corner's rail path (run-up + two legs + run-out); ample for any turn on this route, bounds the fixed buffer
 const DETAIL_DIST: f32 = 70.0; // within this, a tree draws 3D near; beyond, 2D far
 const MIN_SCENERY_PX: f32 = 2.0; // skip scenery that would project shorter than this
 const LOOK_AHEAD: usize = 7; // how many segments ahead we draw
@@ -64,6 +67,31 @@ fn at(w: *const world.World, ch: *const Chain, pose: Pose, d: usize, a: f32, x: 
         px = p.x;
     }
     return geom.toRider(pa, px, pose.along, pose.across, pose.yaw, pose.hw);
+}
+
+// A frame mapper: how to express a point (a along, x across-from-left) authored in some
+// segment's BL frame into the rider's frame. A FORWARD joint maps both its segments
+// through the chain (`at` at index d); the joint just BEHIND the rider maps its `from`
+// (the previous segment) FORWARD through the join via curToNext, then toRider. Mirrors
+// the fromMap/toMap closures view.ts hands intersectionScene (zig has no closures).
+const MapKind = enum { chain, prev };
+const Mapper = struct {
+    kind: MapKind = .chain,
+    d: usize = 0, // chain index (chain kind)
+    prev_len: f32 = 0, // previous segment's length/turn (prev kind)
+    prev_angle: f32 = 0,
+    prev_right: bool = false,
+    prev_w: f32 = 0,
+};
+
+fn mapPt(w: *const world.World, ch: *const Chain, pose: Pose, m: Mapper, a: f32, x: f32) geom.RiderPt {
+    switch (m.kind) {
+        .chain => return at(w, ch, pose, m.d, a, x),
+        .prev => {
+            const p = geom.curToNext(a, x, m.prev_len, m.prev_angle, m.prev_right, m.prev_w);
+            return geom.toRider(p.a, p.x, pose.along, pose.across, pose.yaw, pose.hw);
+        },
+    }
 }
 
 // build ground verts (curvature drop per vertex), near-clip, project, push as ROAD.
@@ -137,8 +165,12 @@ pub fn frame(w: *const world.World, seg_idx: usize, along: f32, across: f32, yaw
             emitGround(quad[0..], cam_focal);
         }
 
-        // corner pavement at this segment's exit join, when the next segment is in view.
-        if (d + 1 < ch.len) emitCorner(w, &ch, pose, d, cam_focal);
+        // this exit joint's GROUND (approach road + corner pavement), when the next
+        // segment is in view. The rail rides on top and is emitted after all ground.
+        if (d + 1 < ch.len) {
+            const to = w.segments[ch.idx[d + 1]];
+            emitJointGround(w, &ch, pose, .{ .d = d }, .{ .d = d + 1 }, seg.length, seg.width, to.width, seg.exit_right, cam_focal);
+        }
 
         // the intersection tower beyond this segment's exit, and the mid-tower on a
         // long segment. Collected (with the depth of the base centre) for sorting.
@@ -197,6 +229,26 @@ pub fn frame(w: *const world.World, seg_idx: usize, along: f32, across: f32, yaw
         }
     }
 
+    // the joint just BEHIND the rider: its ground (approach road + pavement) mapped
+    // forward through the join keeps the segment he just left from vanishing mid-crossing
+    // — the bug where the pavement popped out the instant cur.segment flipped. The route
+    // loops, so there is always a previous segment. Mirrors view.ts's behind-joint pass.
+    const prev_idx = (seg_idx + w.n_segments - 1) % w.n_segments;
+    const prev = w.segments[prev_idx];
+    const prev_map = Mapper{ .kind = .prev, .prev_len = prev.length, .prev_angle = prev.exit_angle, .prev_right = prev.exit_right, .prev_w = prev.width };
+    const cur_map = Mapper{ .kind = .chain, .d = 0 };
+    emitJointGround(w, &ch, pose, prev_map, cur_map, prev.length, prev.width, cur.width, prev.exit_right, cam_focal);
+
+    // guard rails ride ON TOP of all the ground (TS draws its raised polys after every
+    // road quad): each forward joint in view, then the joint behind.
+    var dr: usize = 0;
+    while (dr + 1 < ch.len) : (dr += 1) {
+        const fseg = w.segments[ch.idx[dr]];
+        const tseg = w.segments[ch.idx[dr + 1]];
+        emitJointRail(w, &ch, pose, .{ .d = dr }, .{ .d = dr + 1 }, fseg.length, fseg.width, tseg.width, fseg.exit_right, cam_focal);
+    }
+    emitJointRail(w, &ch, pose, prev_map, cur_map, prev.length, prev.width, cur.width, prev.exit_right, cam_focal);
+
     // merge trees + towers + cows into one depth order (far → near) so they occlude
     // right.
     const Kind = enum { tree, tower, cow };
@@ -248,22 +300,79 @@ pub fn frame(w: *const world.World, seg_idx: usize, along: f32, across: f32, yaw
     }
 }
 
-// the corner pavement: a quad from the inner fuse-corner out to the outer apex Q where
-// the two segments' extended outer shoulders meet. Mirrors intersectionScene's main
-// quad. corner(cu, cv) = at(d, from.length + cv, cu).
-fn emitCorner(w: *const world.World, ch: *const Chain, pose: Pose, d: usize, cam_focal: f32) void {
-    const from = w.segments[ch.idx[d]];
-    const to = w.segments[ch.idx[d + 1]];
-    const right = from.exit_right;
-    const wf = from.width;
-    const from_outer_cu: f32 = if (right) 0 else wf;
-    const to_outer_x: f32 = if (right) 0 else to.width;
-    const inner = at(w, ch, pose, d, from.length, if (right) wf else 0);
-    const outer_from = at(w, ch, pose, d, from.length, from_outer_cu);
-    const outer_from1 = at(w, ch, pose, d, from.length + 1, from_outer_cu);
-    const outer_to = at(w, ch, pose, d + 1, 0, to_outer_x);
-    const outer_to1 = at(w, ch, pose, d + 1, 1, to_outer_x);
-    const q = geom.lineMeet(outer_from, outer_from1, outer_to, outer_to1);
+// A joint's GROUND, in the rider's frame: the approach road (the `from` tail leading
+// into the joint) and the corner PAVEMENT quad — the inner fuse-corner out to the outer
+// apex Q where the two segments' extended outer shoulders cross. Mirrors the quad half
+// of intersectionScene. corner(cu, cv) = fromMap(from_len + cv, cu).
+fn emitJointGround(w: *const world.World, ch: *const Chain, pose: Pose, from_map: Mapper, to_map: Mapper, from_len: f32, from_w: f32, to_w: f32, exit_right: bool, cam_focal: f32) void {
+    // the approach road: `from`'s tail (end edge back ENTRY_ROAD_DIST).
+    const approach = [_]geom.RiderPt{
+        mapPt(w, ch, pose, from_map, from_len, 0),
+        mapPt(w, ch, pose, from_map, from_len, from_w),
+        mapPt(w, ch, pose, from_map, from_len - ENTRY_ROAD_DIST, from_w),
+        mapPt(w, ch, pose, from_map, from_len - ENTRY_ROAD_DIST, 0),
+    };
+    emitGround(approach[0..], cam_focal);
+
+    // the corner pavement quad: inner fuse-corner, `from`'s outer corner, the outer apex
+    // Q (the two outer shoulders extended until they cross), `to`'s outer corner.
+    const from_outer_cu: f32 = if (exit_right) 0 else from_w;
+    const to_outer_x: f32 = if (exit_right) 0 else to_w;
+    const inner = mapPt(w, ch, pose, from_map, from_len, if (exit_right) from_w else 0);
+    const outer_from = mapPt(w, ch, pose, from_map, from_len, from_outer_cu);
+    const outer_to = mapPt(w, ch, pose, to_map, 0, to_outer_x);
+    const q = geom.lineMeet(outer_from, mapPt(w, ch, pose, from_map, from_len + 1, from_outer_cu), outer_to, mapPt(w, ch, pose, to_map, 1, to_outer_x));
     const quad = [_]geom.RiderPt{ inner, outer_from, q, outer_to };
     emitGround(quad[0..], cam_focal);
+}
+
+// Append points from `from` (EXCLUSIVE) to `to` (inclusive) at ~1m spacing — one
+// guard-rail post per metre along a straight leg of the corner. Mirrors pushLeg.
+fn pushLeg(path: *[RAIL_PATH_CAP]geom.RiderPt, n0: usize, from: geom.RiderPt, to: geom.RiderPt) usize {
+    var n = n0;
+    const dr = to.right - from.right;
+    const df = to.forward - from.forward;
+    const dist = @sqrt(dr * dr + df * df);
+    const steps: usize = @intFromFloat(@max(1.0, @round(dist)));
+    var i: usize = 1;
+    while (i <= steps and n < RAIL_PATH_CAP) : (i += 1) {
+        const t: f32 = @as(f32, @floatFromInt(i)) / @as(f32, @floatFromInt(steps));
+        path[n] = .{ .right = from.right + dr * t, .forward = from.forward + df * t };
+        n += 1;
+    }
+    return n;
+}
+
+// A joint's guard RAIL: the run-up along `from`'s outer shoulder, the two legs into and
+// out of the apex Q, and the run-out along `to`'s outer shoulder — then guard_rail.emit
+// raises that path to the bar + posts. Mirrors the rail half of intersectionScene.
+fn emitJointRail(w: *const world.World, ch: *const Chain, pose: Pose, from_map: Mapper, to_map: Mapper, from_len: f32, from_w: f32, to_w: f32, exit_right: bool, cam_focal: f32) void {
+    const from_outer_cu: f32 = if (exit_right) 0 else from_w;
+    const to_outer_x: f32 = if (exit_right) 0 else to_w;
+    const outer_from = mapPt(w, ch, pose, from_map, from_len, from_outer_cu);
+    const outer_to = mapPt(w, ch, pose, to_map, 0, to_outer_x);
+    const q = geom.lineMeet(outer_from, mapPt(w, ch, pose, from_map, from_len + 1, from_outer_cu), outer_to, mapPt(w, ch, pose, to_map, 1, to_outer_x));
+
+    var path: [RAIL_PATH_CAP]geom.RiderPt = undefined;
+    var n: usize = 0;
+    // run-up along `from`'s outer edge to the end edge (m = RUNOUT .. 0; m = 0 = outer_from).
+    var m: usize = guard_rail.RAIL_RUNOUT;
+    while (true) : (m -= 1) {
+        const mm: f32 = @floatFromInt(m);
+        if (n < RAIL_PATH_CAP) {
+            path[n] = mapPt(w, ch, pose, from_map, from_len - mm, from_outer_cu);
+            n += 1;
+        }
+        if (m == 0) break;
+    }
+    n = pushLeg(&path, n, outer_from, q); // leg into the apex
+    n = pushLeg(&path, n, q, outer_to); // leg out of the apex
+    // run-out along `to`'s outer edge.
+    var mo: usize = 1;
+    while (mo <= guard_rail.RAIL_RUNOUT and n < RAIL_PATH_CAP) : (mo += 1) {
+        const mm: f32 = @floatFromInt(mo);
+        path[n] = mapPt(w, ch, pose, to_map, mm, to_outer_x);
+        n += 1;
+    }
+    guard_rail.emit(path[0..n], cam_focal);
 }

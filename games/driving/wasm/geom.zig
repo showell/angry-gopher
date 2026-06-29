@@ -49,6 +49,23 @@ pub fn nextToCur(a_b: f32, x_b: f32, L: f32, theta: f32, right: bool, W: f32) AX
     return .{ .a = a_b * c - x_b * s + W * s + L, .x = x_b * c + a_b * s + W * (1.0 - c) };
 }
 
+/// curToNext is the inverse of nextToCur: a point in the CURRENT segment's BL frame
+/// expressed in the NEXT segment's BL frame, across the same join. Used to draw the
+/// joint just BEHIND the rider — the previous segment's corner mapped FORWARD into the
+/// rider's (current) segment, so the pavement he's still crossing doesn't vanish.
+/// Mirrors curToNext() in intersection.ts. `right` is the turn direction (sign > 0).
+pub fn curToNext(a: f32, x: f32, L: f32, theta: f32, right: bool, W: f32) AX {
+    const c = @cos(theta);
+    const s = @sin(theta);
+    if (!right) {
+        const a0 = a - L;
+        return .{ .a = a0 * c - x * s, .x = a0 * s + x * c };
+    }
+    const a0 = a - L - W * s;
+    const x0 = x - W * (1.0 - c);
+    return .{ .a = a0 * c + x0 * s, .x = -a0 * s + x0 * c };
+}
+
 /// lineMeet returns where two infinite lines cross in the rider frame: line A through
 /// a0 toward a1, line B through b0 toward b1. Used for the corner's outer apex, where
 /// the two segments' outer shoulders (extended into the joint) meet. A real turn has a
