@@ -171,8 +171,19 @@ fn renderHomeBody(io: Io, alloc: Alloc) ![]const u8 {
             })
         else
             "";
+        // `lang:` is comma-separated — one `.tech-lang` chip per language (a single
+        // language or a "+"-joined pair stays one chip, since neither has a comma).
+        var chips: std.ArrayList(u8) = .empty;
+        var lit = std.mem.splitScalar(u8, a.lang, ',');
+        while (lit.next()) |raw_lang| {
+            const one = std.mem.trim(u8, raw_lang, " ");
+            if (one.len == 0) continue;
+            try chips.appendSlice(alloc, "<span class=\"tech-lang\">");
+            try chips.appendSlice(alloc, try html.htmlEscape(alloc, one));
+            try chips.appendSlice(alloc, "</span>");
+        }
         try out.print(alloc,
-            \\<div class="app-row"><div class="app-row-top">{s}<div class="app-row-main"><h2><a href="{s}">{s}</a></h2><p>{s}</p><p class="app-more">{s}<a class="tech-code" href="{s}" target="_blank" rel="noopener">Code on GitHub ↗</a></p><p class="app-feat"><span class="tech-lang">{s}</span> {s}</p></div>
+            \\<div class="app-row"><div class="app-row-top">{s}<div class="app-row-main"><h2><a href="{s}">{s}</a></h2><p>{s}</p><p class="app-more">{s}<a class="tech-code" href="{s}" target="_blank" rel="noopener">Code on GitHub ↗</a></p><p class="app-feat">{s} {s}</p></div>
             \\<div class="cta"><a class="play-btn" href="{s}">{s}</a></div></div></div>
             \\
         , .{
@@ -182,7 +193,7 @@ fn renderHomeBody(io: Io, alloc: Alloc) ![]const u8 {
             try html.htmlEscape(alloc, a.desc),
             more,
             try html.htmlEscape(alloc, a.code),
-            try html.htmlEscape(alloc, a.lang),
+            chips.items,
             try html.htmlEscape(alloc, a.tech),
             try html.htmlEscape(alloc, a.href),
             try html.htmlEscape(alloc, a.cta),
