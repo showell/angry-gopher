@@ -70,6 +70,10 @@ rsync -avz --mkpath --delete "$GOPHER_DIR/blog/posts/" "$DEPLOY_HOST:$DEPLOY_DIR
 # markdown read at request time; --delete scoped to pages/ keeps the repo the
 # single source of truth for what's live.
 rsync -avz --mkpath --delete "$GOPHER_DIR/pages/" "$DEPLOY_HOST:$DEPLOY_DIR/pages/"
+# And the gallery/ images (the /gallery preview surface) — free-standing content
+# read at request time, same as above; --delete scoped to gallery/ keeps the repo
+# authoritative. /gallery is unlinked (hidden) but public, so this ships it live.
+rsync -avz --mkpath --delete "$GOPHER_DIR/gallery/" "$DEPLOY_HOST:$DEPLOY_DIR/gallery/"
 
 echo "Restarting $DEPLOY_SERVICE ..."
 # Health check hits the REAL FRONT DOOR, not /driving. The first cutover went

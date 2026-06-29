@@ -1,0 +1,20 @@
+#!/bin/bash
+# CANONICAL DEV-LOOP SCRIPT — DO NOT REINVENT.
+# Before writing a new ops/* script or composing an ad-hoc
+# shell command for build / launch / test / regen, run
+# `ops/list` to see what already exists.
+#
+# Render the driving game's cat as a single dusk-lit HERO image
+# for the home-page gallery (gallery/safari.png), using the
+# dependency-free MiniCanvas rasterizer — the SAME real cat code
+# the game draws (cat_anatomy via catScenery), so the image stays
+# faithful and never goes stale like a screenshot would.
+#
+# Unlike ops/snap_cat (a contact sheet of poses, gitignored), this
+# writes ONE committed image. Re-run when the cat anatomy changes.
+set -e
+
+source "$(dirname "$0")/_paths.sh"
+
+cd "$GOPHER_DIR/games/driving"
+node --experimental-strip-types gallery_cat.ts

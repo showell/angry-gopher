@@ -29,6 +29,7 @@ const learn = @import("learn.zig");
 const admin = @import("admin.zig");
 const home = @import("home.zig");
 const blog = @import("blog.zig");
+const gallery = @import("gallery.zig");
 const resume_page = @import("resume_page.zig");
 const login = @import("login.zig");
 const brand = @import("brand.zig");
@@ -169,6 +170,10 @@ fn route(req: *std.http.Server.Request, io: std.Io, alloc: std.mem.Allocator, bu
         try blog.handle(req, io, alloc, bus, uid, sub);
     } else if (matchPrefix(path, "/learn")) |sub| {
         try learn.handle(req, sub);
+    } else if (matchPrefix(path, "/gallery")) |sub| {
+        // Hidden-for-now: unlinked but public + ungated. Serves the stylized app
+        // images (free-standing content read from gallery/) for the home page.
+        try gallery.handle(req, io, alloc, sub);
     } else if (matchPrefix(path, "/admin")) |sub| {
         try admin.handle(req, io, alloc, sub);
     } else if (matchPrefix(path, "/login")) |sub| {
