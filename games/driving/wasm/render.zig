@@ -134,9 +134,11 @@ pub fn frame(w: *const world.World, seg_idx: usize, along: f32, across: f32, yaw
     var t_col: [MAX_VIS_TREES]u32 = undefined;
     var nt: usize = 0;
 
-    // towers collected the same way: their owning chain index `d` + base centre/yaw,
-    // and the depth of that centre for sorting.
-    var w_d: [MAX_VIS_TOWERS]usize = undefined;
+    // towers collected the same way: how to map their owning frame (a forward chain
+    // index, or the behind joint) + base centre/yaw, and the depth of that centre for
+    // sorting. A tower is OWNED by its intersection, so the joint just behind contributes
+    // its tower too (the one we just passed) — else it pops out the instant we turn.
+    var w_map: [MAX_VIS_TOWERS]Mapper = undefined;
     var w_a0: [MAX_VIS_TOWERS]f32 = undefined;
     var w_x0: [MAX_VIS_TOWERS]f32 = undefined;
     var w_yaw: [MAX_VIS_TOWERS]f32 = undefined;
@@ -187,7 +189,7 @@ pub fn frame(w: *const world.World, seg_idx: usize, along: f32, across: f32, yaw
         if (ntw < MAX_VIS_TOWERS) {
             const c = at(w, &ch, pose, d, seg.length + TOWER_BEYOND, seg.width / 2.0 + TOWER_RIGHT);
             if (c.forward > camera.NEAR) {
-                w_d[ntw] = d;
+                w_map[ntw] = .{ .kind = .chain, .d = d };
                 w_a0[ntw] = seg.length + TOWER_BEYOND;
                 w_x0[ntw] = seg.width / 2.0 + TOWER_RIGHT;
                 w_yaw[ntw] = TOWER_YAW;
@@ -200,7 +202,7 @@ pub fn frame(w: *const world.World, seg_idx: usize, along: f32, across: f32, yaw
             const x0 = seg.width / 2.0 - SEG_TOWER_LEFT;
             const c = at(w, &ch, pose, d, a0, x0);
             if (c.forward > camera.NEAR) {
-                w_d[ntw] = d;
+                w_map[ntw] = .{ .kind = .chain, .d = d };
                 w_a0[ntw] = a0;
                 w_x0[ntw] = x0;
                 w_yaw[ntw] = 0;
@@ -248,6 +250,24 @@ pub fn frame(w: *const world.World, seg_idx: usize, along: f32, across: f32, yaw
     const prev_map = Mapper{ .kind = .prev, .prev_len = prev.length, .prev_angle = prev.exit_angle, .prev_right = prev.exit_right, .prev_w = prev.width };
     const cur_map = Mapper{ .kind = .chain, .d = 0 };
     emitJointGround(w, &ch, pose, prev_map, cur_map, prev.length, prev.width, cur.width, prev.exit_right, cam_focal);
+
+    // the tower the joint we just passed OWNS, mapped forward through the join — without
+    // it, the previous intersection's tower vanishes the moment cur.segment flips (the
+    // same symptom the pavement had). Position is unchanged: beyond the corner, +RIGHT of
+    // prev's lane centreline, yawed — exactly intersectionTower(pIxn, prev, fromPrev).
+    if (ntw < MAX_VIS_TOWERS) {
+        const a0 = prev.length + TOWER_BEYOND;
+        const x0 = prev.width / 2.0 + TOWER_RIGHT;
+        const c = mapPt(w, &ch, pose, prev_map, a0, x0);
+        if (c.forward > camera.NEAR) {
+            w_map[ntw] = prev_map;
+            w_a0[ntw] = a0;
+            w_x0[ntw] = x0;
+            w_yaw[ntw] = TOWER_YAW;
+            w_fwd[ntw] = c.forward;
+            ntw += 1;
+        }
+    }
 
     // guard rails: collect each forward joint's rail and the behind joint's. They are
     // NOT drawn here — they merge into the depth sort below so trees occlude them right.
@@ -301,9 +321,9 @@ pub fn frame(w: *const world.World, seg_idx: usize, along: f32, across: f32, yaw
                 var k: usize = 0;
                 while (k < 4) : (k += 1) {
                     const ax = tower.baseCornerAX(k, w_a0[it.i], w_x0[it.i], w_yaw[it.i]);
-                    base[k] = at(w, &ch, pose, w_d[it.i], ax.a, ax.x);
+                    base[k] = mapPt(w, &ch, pose, w_map[it.i], ax.a, ax.x);
                 }
-                const center = at(w, &ch, pose, w_d[it.i], w_a0[it.i], w_x0[it.i]);
+                const center = mapPt(w, &ch, pose, w_map[it.i], w_a0[it.i], w_x0[it.i]);
                 tower.drawFlat(base, center, cam_focal);
             },
             .cow => critter.draw(c_right[it.i], c_fwd[it.i], c_h[it.i], c_cp[it.i], c_face[it.i], cam_focal),
