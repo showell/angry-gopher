@@ -19,7 +19,7 @@ const GROUND_Y = 322;          // the road line the cat leaps over
 const UNIT_PX = 150;           // pixels per cat-unit (full standing height)
 const CAT_HEIGHT = 1.7;
 const SILH_CX = 0.30;          // x of the silhouette's centre, cat-frame units
-const CX = 330;                // a touch right of centre — the cat faces left, so leave it room ahead
+const CX = 270;                // a touch left of centre — the cat faces RIGHT (into the page), so leave it room ahead
 
 // dusk palette — evokes the app's signature sunset without importing its staging.
 const SKY_TOP = '#181f3a';     // deep dusk blue overhead
@@ -62,9 +62,10 @@ for (let i = 0; i < 5; i++) {
   ctx.fillRect(W / 2 - w / 2, y, w, dash);
 }
 
-// The cat — a grounded mid-stride profile, facing left, planted on the road. (The
-// airborne leap pose reads as "floating" out of motion; a walking profile is the
-// most legible single still — unmistakably the cat, on its feet, at dusk.)
+// The cat — a grounded mid-stride profile, facing RIGHT (walking into the page, so
+// it won't stroll off the edge when it sits left of the home-page text). The airborne
+// leap pose reads as "floating" out of motion; a walking profile is the most legible
+// single still — unmistakably the cat, on its feet, at dusk.
 const project: Project = (right, _forward, height) => ({
   x: CX + (right - SILH_CX) * UNIT_PX,
   y: GROUND_Y - (height / CAT_HEIGHT) * UNIT_PX,
@@ -72,7 +73,7 @@ const project: Project = (right, _forward, height) => ({
 const view: CatView = {
   at: { right: 0, forward: 10 },
   height: CAT_HEIGHT,
-  faceRight: false,
+  faceRight: true,
   form: CAT,
   walk: Math.PI / 2,   // mid-stride — legs clearly striding, not tucked
   headFront: false,
