@@ -346,7 +346,7 @@ const head_style =
     \\.play-btn:hover { background: #1414c8; transform: translateY(-1px); }
     \\/* Tech stack, inline in the text column: GitHub link rides the "Read more" line
     \\   (.app-more); the language chip leads the feature blurb (.app-feat). Low-key. */
-    \\.app-feat { margin: 8px 0 0; font-size: 12px; color: var(--cc-muted-fg, #888); }
+    \\.app-row-main .app-feat { margin: 8px 0 0; font-size: 12px; color: var(--cc-muted-fg, #888); }
     \\.tech-lang { display: inline-block; background: var(--cc-accent-soft-bg, #eef0f8);
     \\             color: var(--cc-accent, #000080); border-radius: 4px; padding: 2px 8px;
     \\             font-weight: 600; font-size: 11px; margin-right: 6px; }
