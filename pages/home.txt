@@ -4,34 +4,40 @@
 cta: Ship some Totes
 lang: TypeScript
 tech: Clarke-Wright savings heuristic + local search over an integer, trig-free cost
+code: https://github.com/showell/angry-gopher/tree/master/delivery
 Eight trucks fan out across a deliberately not-to-scale Seattle, delivering a hundred orders a day. The route-planning is a hand-built Clarke-Wright solver — watch it think, or shuffle up a new shift.
 
 ## Safari Screensaver -> /driving
 cta: Take a Drive
 lang: TypeScript
 tech: first-person 3D drawn from rider-relative coordinates — no global world frame
+code: https://github.com/showell/angry-gopher/tree/master/games/driving
 A first-person motorcycle ride down a winding road. Steer through the turns, or hit space and let it drive itself. No goal, no clock — just the road.
 
 ## Chat -> /chat
 cta: Be social
 lang: Zig
 tech: live updates over Server-Sent Events; messages persisted to the file system, no database
+code: https://github.com/showell/angry-gopher/tree/master/chat
 Real-time chat, docs, and channels — the live surface Steve, Claude, and friends use every day. Messages, reactions, and a markdown doc editor, all in one binary.
 
 ## Blog -> /blog
 cta: See how we build
 lang: Zig
 tech: a hand-written markdown engine renders posts from repo files on the fly
+code: https://github.com/showell/angry-gopher/tree/master/blog
 Notes from building this site — one zig binary, written with Claude. Essays on the code, the algorithms, and what we learned along the way.
 
 ## Play Lyn Rummy -> /game
 cta: Match wits with the agent
 lang: TypeScript + Elm
 tech: a rules DSL sent over the wire — a TypeScript referee engine with an Elm UI
+code: https://github.com/showell/angry-gopher/tree/master/games/lynrummy
 Two-player rummy with a real referee. Build runs and sets against an agent that actually knows the rules, and complete your turn when the board looks right.
 
 ## Lyn Rummy Puzzles -> /puzzles
 cta: Fix the board
 lang: TypeScript + Elm
 tech: shares the rules engine; deterministic undo and move-by-move replay
+code: https://github.com/showell/angry-gopher/tree/master/games/lynrummy
 A single board, mid-game. Drag stacks to merge or split your way to a clean meld layout. Solo, no opponent — undo is free, and Replay walks back your moves.
