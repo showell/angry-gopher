@@ -113,24 +113,28 @@ function hudAvg(arr) { if (!arr.length) return 0; let s = 0; for (const v of arr
 
 function drawHud(ctx, bufBytes, bufCap, cmds) {
   // always on for now — hiding it is polish for when the port is close to done.
+  // Color the total line by the RATE of missed frames, not the single worst one: a lone
+  // GC/jank spike shouldn't pin it red for the whole window. green = no misses; amber =
+  // occasional (≤20%, likely jank); red = consistently over budget (a real problem).
   const totMax = hudMax(hud.total);
-  const over = totMax > BUDGET_MS;
+  let overCount = 0;
+  for (const v of hud.total) if (v > BUDGET_MS) overCount++;
+  const frac = hud.total.length ? overCount / hud.total.length : 0;
   const fill = bufCap ? (bufBytes / bufCap) : 0;
   const lines = [
     `wasm ${hudAvg(hud.wasm).toFixed(2)}ms  blit ${hudAvg(hud.blit).toFixed(2)}ms`,
-    `total ${hudAvg(hud.total).toFixed(2)}ms  max ${totMax.toFixed(2)}ms / ${BUDGET_MS.toFixed(2)}`,
+    `total ${hudAvg(hud.total).toFixed(2)}ms  max ${totMax.toFixed(2)}  over ${overCount}/${hud.total.length} (${BUDGET_MS.toFixed(2)})`,
     `cmds ${cmds}   buf-peak ${(bufBytes / 1024).toFixed(1)}/${(bufCap / 1024).toFixed(0)} KiB (${(fill * 100).toFixed(0)}%)`,
   ];
+  const totColor = frac === 0 ? '#9be29b' : frac <= 0.2 ? '#ffd166' : '#ff6b6b';
   ctx.save();
   ctx.font = '12px ui-monospace,Menlo,monospace';
   ctx.textAlign = 'left';
   ctx.textBaseline = 'top';
   ctx.fillStyle = 'rgba(0,0,0,0.55)';
-  ctx.fillRect(8, 8, 250, 8 + lines.length * 16 + 4);
+  ctx.fillRect(8, 8, 290, 8 + lines.length * 16 + 4);
   for (let i = 0; i < lines.length; i++) {
-    // total line goes red when the worst recent frame blew the budget; buf line goes
-    // amber if we ever got within 10% of the cap (push() would start dropping).
-    ctx.fillStyle = (i === 1 && over) ? '#ff6b6b'
+    ctx.fillStyle = (i === 1) ? totColor
       : (i === 2 && fill > 0.9) ? '#ffd166'
       : '#cfe0f0';
     ctx.fillText(lines[i], 14, 14 + i * 16);
