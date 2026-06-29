@@ -146,7 +146,7 @@ fn renderHomeBody(io: Io, alloc: Alloc) ![]const u8 {
     // The headline renders as ordinary muted text, not a big H1 — the blue CTA
     // buttons are what should pop, not the page title.
     var out: std.ArrayList(u8) = .empty;
-    try out.appendSlice(alloc, "<div class=\"app-body-wrap\"><p class=\"home-intro\">");
+    try out.appendSlice(alloc, "<div class=\"app-body-wrap home-wrap\"><p class=\"home-intro\">");
     try out.appendSlice(alloc, try html.htmlEscape(alloc, headline));
     try out.appendSlice(alloc, "</p>\n<div class=\"app-list\">\n");
     for (apps.items) |a| {
@@ -316,9 +316,12 @@ const head_style =
     \\.home-intro { margin: 14px 0 4px; font-size: 14px; font-weight: normal;
     \\              color: var(--cc-body-muted-fg, #444); }
     \\.app-list { margin-top: 8px; }
+    \\/* The launch pad gets a wider column than the generic 820px wrap — the app rows
+    \\   carry an image + paragraph + button side by side and the prose was cramped. */
+    \\.home-wrap { max-width: 1040px; }
     \\.app-row { padding: 20px 0; border-bottom: 1px solid var(--cc-border, #e5e0d3); }
     \\.app-row:last-child { border-bottom: none; }
-    \\.app-row-top { display: flex; align-items: center; gap: 24px; }
+    \\.app-row-top { display: flex; align-items: flex-start; gap: 24px; }
     \\.app-thumb { flex-shrink: 0; display: block; line-height: 0; }
     \\.app-thumb img { width: 200px; height: 140px; display: block; border-radius: 8px;
     \\                 box-shadow: 0 1px 5px rgba(0,0,32,0.20); }
