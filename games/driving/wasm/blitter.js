@@ -68,9 +68,10 @@ function blit(ctx, mem, base, len) {
 }
 
 // metres advanced per frame — a CONSTANT step (no V_BASE→V_MAX ramp), so it's a
-// steady cruise at the display rate (~30 m/s at 60 Hz) and a single arrow press
-// nudges exactly one frame. The "frame" is the unit you step with the arrows.
-const STEP_M = 0.5;
+// steady cruise at the display rate and a single arrow press nudges exactly one
+// frame. TEMPORARY dev pace (fast, to explore the route quickly while building);
+// dial back down once there are critters/towers worth lingering on.
+const STEP_M = 1.0;
 
 async function main() {
   document.body.style.cssText =

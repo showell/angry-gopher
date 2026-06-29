@@ -13,7 +13,7 @@ pub const Scheme = enum { all_green, yellow_green, red_green };
 
 pub const Tree = struct { along: f32, across: f32, color: Color, height: f32 };
 
-pub const MAX_TREES = 48;
+pub const MAX_TREES = 96; // fixed-spacing trees scale with length; the long seg7 needs the headroom
 pub const MAX_SEGMENTS = 16;
 
 pub const Segment = struct {
@@ -39,7 +39,7 @@ const CONIFER_GOLD: Color = 0xcf9a18;
 const CONIFER_RED: Color = 0xb23a2a;
 const SMALL_HEIGHT: f32 = 4.5;
 const BIG_SCALE: f32 = 1.3;
-const TREES_PER_SIDE: usize = 11;
+const TREE_SPACING: f32 = 30.0; // metres between trees — FIXED (count scales with length), diverging from TS's fixed count, so density (and the speed illusion) is uniform across segments
 const TREE_ROAD_OFFSET: f32 = 1.5;
 const TREE_START_INSET: f32 = 6.0;
 const TREE_END_INSET: f32 = 85.0;
@@ -54,19 +54,18 @@ fn accentColor(scheme: Scheme) Color {
     };
 }
 
-// segmentTrees: 11 conifers per side, evenly spaced; even = green + 1.3× tall, odd =
-// the scheme's accent. Red trees 2× everything; gold 3× and set ~4× further off the
-// road. Mirrors segmentTrees() in tree.ts.
+// fillTrees: conifers every TREE_SPACING metres from the start inset to the end-clear
+// zone — a FIXED spacing, so count scales with length and density is uniform across
+// segments (no per-segment speed illusion). Even index = green + 1.3× tall, odd = the
+// scheme's accent. Red trees 2× everything; gold 3× and set ~4× further off the road.
 fn fillTrees(seg: *Segment, scheme: Scheme) void {
     const lane_half = LANE_WIDTH / 2.0;
-    const start_along = TREE_START_INSET;
     const end_along = seg.length - TREE_END_INSET;
-    const spacing = (end_along - start_along) / @as(f32, @floatFromInt(TREES_PER_SIDE - 1));
     const tree_line = lane_half + TREE_ROAD_OFFSET;
     seg.n_trees = 0;
     var k: usize = 0;
-    while (k < TREES_PER_SIDE) : (k += 1) {
-        const along = start_along + @as(f32, @floatFromInt(k)) * spacing;
+    var along = TREE_START_INSET;
+    while (along <= end_along and seg.n_trees + 2 <= MAX_TREES) : (k += 1) {
         const even = (k % 2) == 0;
         const color: Color = if (even) CONIFER_GREEN else accentColor(scheme);
         var height: f32 = if (even) SMALL_HEIGHT * BIG_SCALE else SMALL_HEIGHT;
@@ -80,6 +79,7 @@ fn fillTrees(seg: *Segment, scheme: Scheme) void {
         seg.n_trees += 1;
         seg.trees[seg.n_trees] = .{ .along = along, .across = x, .color = color, .height = height };
         seg.n_trees += 1;
+        along += TREE_SPACING;
     }
 }
 

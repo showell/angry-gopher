@@ -19,7 +19,7 @@ const DETAIL_DIST: f32 = 70.0; // within this, a tree draws 3D near; beyond, 2D 
 const MIN_SCENERY_PX: f32 = 2.0; // skip scenery that would project shorter than this
 const LOOK_AHEAD: usize = 7; // how many segments ahead we draw
 const MAX_CHAIN: usize = 8;
-const MAX_VIS_TREES: usize = 256;
+const MAX_VIS_TREES: usize = 640; // fixed-spacing trees across the whole visible chain
 
 const Chain = struct { idx: [MAX_CHAIN]usize, len: usize };
 
