@@ -106,13 +106,13 @@ function blit(ctx, mem, base, len) {
 // a rolling window so the displayed max catches the worst recent frame, not just now.
 const BUDGET_MS = 1000 / 60;
 const WINDOW = 90; // ~1.5s of frames
-const hud = { wasm: [], blit: [], total: [], on: true };
+const hud = { wasm: [], blit: [], total: [] };
 function hudPush(arr, v) { arr.push(v); if (arr.length > WINDOW) arr.shift(); }
 function hudMax(arr) { let m = 0; for (const v of arr) if (v > m) m = v; return m; }
 function hudAvg(arr) { if (!arr.length) return 0; let s = 0; for (const v of arr) s += v; return s / arr.length; }
 
 function drawHud(ctx, bufBytes, bufCap, cmds) {
-  if (!hud.on) return;
+  // always on for now — hiding it is polish for when the port is close to done.
   const totMax = hudMax(hud.total);
   const over = totMax > BUDGET_MS;
   const fill = bufCap ? (bufBytes / bufCap) : 0;
@@ -148,7 +148,7 @@ async function main() {
   canvas.style.cssText = 'display:block;background:#000;box-shadow:0 10px 40px rgba(0,0,0,0.6)';
   document.body.appendChild(canvas);
   const hint = document.createElement('div');
-  hint.textContent = 'SPACE pause/resume · ↑ step forward · ↓ step back · D toggle HUD';
+  hint.textContent = 'SPACE pause/resume · ↑ step forward · ↓ step back';
   hint.style.cssText = 'margin-top:10px;font-size:12px;color:#9aa0a6;letter-spacing:0.4px';
   document.body.appendChild(hint);
   const ctx = canvas.getContext('2d');
@@ -188,7 +188,6 @@ async function main() {
     if (e.code === 'Space') { auto = !auto; e.preventDefault(); }
     else if (e.code === 'ArrowUp') { auto = false; advance(); draw(); e.preventDefault(); }
     else if (e.code === 'ArrowDown') { auto = false; back(); draw(); e.preventDefault(); }
-    else if (e.code === 'KeyD') { hud.on = !hud.on; draw(); e.preventDefault(); }
   });
 
   draw();
