@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 420" width="600" height="420" role="img" aria-label="Chat — a conversation of message bubbles">
+  <!-- Stylized: the chat surface with mine-vs-theirs bubbles in the REAL palette
+       (theirsBg #f0f0e6 cream on the left, mineBg #e7e7ff lavender on the right). -->
+  <defs>
+    <filter id="cshadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="1.5" stdDeviation="2" flood-color="#000" flood-opacity="0.10"/>
+    </filter>
+  </defs>
+
+  <!-- warm-white chat surface + top bar (topBarBg) -->
+  <rect width="600" height="420" fill="#faf9f5"/>
+  <rect width="600" height="52" fill="#f0ede4"/>
+  <rect y="51" width="600" height="1.5" fill="#c9bfa7"/>
+  <circle cx="34" cy="26" r="12" fill="#7a86c8"/>
+  <rect x="56" y="20" width="120" height="9" rx="4.5" fill="#cfc8b6"/>
+  <rect x="520" y="21" width="46" height="9" rx="4.5" fill="#d8d8ff"/>
+
+  <!-- theirs (left, cream) -->
+  <g filter="url(#cshadow)">
+    <rect x="40" y="78" width="280" height="66" rx="14" fill="#f0f0e6"/>
+    <polygon points="40,128 40,144 26,140" fill="#f0f0e6"/>
+  </g>
+  <circle cx="372" cy="96" r="3" fill="#bdbdbd"/>
+  <g fill="#cbc6b6"><rect x="58" y="94" width="244" height="9" rx="4.5"/><rect x="58" y="111" width="210" height="9" rx="4.5"/><rect x="58" y="128" width="150" height="9" rx="4.5"/></g>
+
+  <!-- mine (right, lavender) -->
+  <g filter="url(#cshadow)">
+    <rect x="300" y="166" width="260" height="56" rx="14" fill="#e7e7ff"/>
+    <polygon points="560,206 560,222 574,218" fill="#e7e7ff"/>
+  </g>
+  <g fill="#b9b9e0"><rect x="318" y="182" width="224" height="9" rx="4.5"/><rect x="318" y="199" width="160" height="9" rx="4.5"/></g>
+
+  <!-- theirs (left, cream) -->
+  <g filter="url(#cshadow)">
+    <rect x="40" y="244" width="244" height="56" rx="14" fill="#f0f0e6"/>
+    <polygon points="40,284 40,300 26,296" fill="#f0f0e6"/>
+  </g>
+  <g fill="#cbc6b6"><rect x="58" y="260" width="208" height="9" rx="4.5"/><rect x="58" y="277" width="132" height="9" rx="4.5"/></g>
+
+  <!-- mine (right, lavender) — being typed; a couple of reaction chips -->
+  <g filter="url(#cshadow)">
+    <rect x="320" y="322" width="240" height="56" rx="14" fill="#e7e7ff"/>
+    <polygon points="560,362 560,378 574,374" fill="#e7e7ff"/>
+  </g>
+  <g fill="#b9b9e0"><rect x="338" y="338" width="204" height="9" rx="4.5"/><rect x="338" y="355" width="150" height="9" rx="4.5"/></g>
+  <g>
+    <rect x="58" y="306" width="40" height="20" rx="10" fill="#fff" stroke="#e0e0e0"/>
+    <text x="78" y="320" font-family="system-ui, sans-serif" font-size="12" text-anchor="middle">👍 2</text>
+    <rect x="104" y="306" width="40" height="20" rx="10" fill="#fff" stroke="#e0e0e0"/>
+    <text x="124" y="320" font-family="system-ui, sans-serif" font-size="12" text-anchor="middle">🎉 1</text>
+  </g>
+</svg>

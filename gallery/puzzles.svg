@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 420" width="600" height="420" role="img" aria-label="Lyn Rummy Puzzles — stacks of cards being sorted into melds, a card moving into place">
+  <!-- Stylized: a puzzle board mid-solve — a finished meld on the left, a couple of
+       stacks to fix, and a card sliding RIGHT into the stack that completes it. -->
+  <defs>
+    <radialGradient id="pfelt" cx="0.5" cy="0.4" r="0.8">
+      <stop offset="0" stop-color="#2c6f7d"/>
+      <stop offset="1" stop-color="#173f49"/>
+    </radialGradient>
+    <filter id="pshadow" x="-40%" y="-40%" width="180%" height="180%">
+      <feDropShadow dx="0" dy="2.5" stdDeviation="3.5" flood-color="#000" flood-opacity="0.35"/>
+    </filter>
+    <filter id="pglow" x="-60%" y="-60%" width="220%" height="220%">
+      <feDropShadow dx="0" dy="0" stdDeviation="6" flood-color="#ffd24a" flood-opacity="0.9"/>
+    </filter>
+  </defs>
+  <rect width="600" height="420" fill="url(#pfelt)"/>
+
+  <g font-family="Georgia, 'Times New Roman', serif" font-weight="bold">
+    <!-- stack 1 (x=120): a COMPLETED meld — a red run 4-5-6, neatly stacked, with a tick -->
+    <g filter="url(#pshadow)">
+      <g><rect x="88" y="132" width="64" height="92" rx="7" fill="#fff" stroke="#d6d6d6" stroke-width="1.5"/>
+         <text x="96" y="154" font-size="17" fill="#cc2233">4</text><text x="95" y="172" font-size="14" fill="#cc2233">&#9829;</text></g>
+      <g><rect x="88" y="158" width="64" height="92" rx="7" fill="#fff" stroke="#d6d6d6" stroke-width="1.5"/>
+         <text x="96" y="180" font-size="17" fill="#cc2233">5</text><text x="95" y="198" font-size="14" fill="#cc2233">&#9829;</text></g>
+      <g><rect x="88" y="184" width="64" height="92" rx="7" fill="#fff" stroke="#d6d6d6" stroke-width="1.5"/>
+         <text x="96" y="206" font-size="17" fill="#cc2233">6</text><text x="95" y="224" font-size="14" fill="#cc2233">&#9829;</text>
+         <text x="120" y="248" font-size="26" text-anchor="middle" fill="#cc2233">&#9829;</text></g>
+    </g>
+    <circle cx="150" cy="138" r="13" fill="#2fa85a"/>
+    <path d="M143,138 l5,5 l9,-10" stroke="#fff" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+
+    <!-- stack 2 (x=300): cards still to sort (mixed suits) -->
+    <g filter="url(#pshadow)">
+      <g><rect x="268" y="150" width="64" height="92" rx="7" fill="#fff" stroke="#d6d6d6" stroke-width="1.5"/>
+         <text x="276" y="172" font-size="17" fill="#222">9</text><text x="275" y="190" font-size="14" fill="#222">&#9824;</text></g>
+      <g><rect x="268" y="176" width="64" height="92" rx="7" fill="#fff" stroke="#d6d6d6" stroke-width="1.5"/>
+         <text x="276" y="198" font-size="17" fill="#cc2233">3</text><text x="275" y="216" font-size="14" fill="#cc2233">&#9830;</text>
+         <text x="300" y="240" font-size="26" text-anchor="middle" fill="#cc2233">&#9830;</text></g>
+    </g>
+
+    <!-- stack 3 (x=470): a club pair 7-8 waiting for the 6 to land on it -->
+    <g filter="url(#pshadow)">
+      <g><rect x="438" y="170" width="64" height="92" rx="7" fill="#fff" stroke="#d6d6d6" stroke-width="1.5"/>
+         <text x="446" y="192" font-size="17" fill="#222">7</text><text x="445" y="210" font-size="14" fill="#222">&#9827;</text></g>
+      <g><rect x="438" y="196" width="64" height="92" rx="7" fill="#fff" stroke="#d6d6d6" stroke-width="1.5"/>
+         <text x="446" y="218" font-size="17" fill="#222">8</text><text x="445" y="236" font-size="14" fill="#222">&#9827;</text>
+         <text x="470" y="260" font-size="26" text-anchor="middle" fill="#222">&#9827;</text></g>
+    </g>
+
+    <!-- the card being moved RIGHT into place: the 6 of clubs, lifted + glowing -->
+    <g transform="translate(360,84) rotate(-8)" filter="url(#pglow)">
+      <rect x="-32" y="-46" width="64" height="92" rx="7" fill="#fff" stroke="#ffd24a" stroke-width="2.5"/>
+      <text x="-24" y="-24" font-size="17" fill="#222">6</text><text x="-25" y="-6" font-size="14" fill="#222">&#9827;</text>
+      <text x="0" y="18" font-size="26" text-anchor="middle" fill="#222">&#9827;</text>
+    </g>
+    <!-- rightward move arrow, from the lifted card toward stack 3 -->
+    <path d="M392,128 L452,150" stroke="#ffd24a" stroke-width="6" fill="none" stroke-linecap="round"/>
+    <polygon points="447,138 466,154 443,160" fill="#ffd24a"/>
+  </g>
+</svg>

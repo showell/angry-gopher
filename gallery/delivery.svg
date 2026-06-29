@@ -1,0 +1,72 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 420" width="600" height="420" role="img" aria-label="Seattle Delivery — looking into the backs of three trucks loaded with region-coloured totes at the edge">
+  <!-- Stylized, not a screenshot: we look into the open backs of three trucks, each
+       loaded with totes in its REGION's colour, the front row right on the precipice
+       of the bed. Mirrors the app's idea (a fleet split into coloured regions), not
+       its pixels. -->
+  <defs>
+    <linearGradient id="dsky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#171a21"/>
+      <stop offset="1" stop-color="#202530"/>
+    </linearGradient>
+    <!-- one truck, rear 3/4 view; totes use currentColor so each instance is a region -->
+    <g id="truck">
+      <ellipse cx="75" cy="300" rx="70" ry="9" fill="#000" opacity="0.30"/>
+      <circle cx="44" cy="296" r="11" fill="#0e1116"/><circle cx="44" cy="296" r="4" fill="#39424d"/>
+      <circle cx="106" cy="296" r="11" fill="#0e1116"/><circle cx="106" cy="296" r="4" fill="#39424d"/>
+      <!-- open rear doors, swung outward -->
+      <polygon points="14,100 -8,114 -8,250 14,250" fill="#262d36" stroke="#0e1116" stroke-width="1.5"/>
+      <polygon points="136,100 158,114 158,250 136,250" fill="#2f3742" stroke="#0e1116" stroke-width="1.5"/>
+      <!-- truck body + dark hold -->
+      <rect x="12" y="74" width="126" height="214" rx="9" fill="#2c333c"/>
+      <rect x="12" y="74" width="126" height="13" rx="6" fill="#3a434e"/>
+      <rect x="26" y="95" width="98" height="182" rx="5" fill="#0f131a"/>
+      <!-- bed floor in perspective: the wide near edge (y=272) is the lip / precipice -->
+      <polygon points="30,272 120,272 99,156 51,156" fill="#3b4550"/>
+      <polygon points="30,272 51,156 41,156 18,272" fill="#323b45"/>
+      <polygon points="120,272 99,156 109,156 132,272" fill="#323b45"/>
+      <!-- back row (far, small, dim) -->
+      <g opacity="0.65" stroke="#000" stroke-opacity="0.25" stroke-width="1">
+        <rect x="52" y="140" width="17" height="15" rx="2" fill="currentColor"/>
+        <rect x="71" y="140" width="17" height="15" rx="2" fill="currentColor"/>
+        <rect x="61" y="126" width="17" height="15" rx="2" fill="currentColor"/>
+      </g>
+      <!-- mid row -->
+      <g opacity="0.85" stroke="#000" stroke-opacity="0.25" stroke-width="1.2">
+        <rect x="46" y="190" width="22" height="18" rx="2.5" fill="currentColor"/>
+        <rect x="70" y="190" width="22" height="18" rx="2.5" fill="currentColor"/>
+        <rect x="58" y="172" width="22" height="18" rx="2.5" fill="currentColor"/>
+      </g>
+      <!-- a wooden PALLET the front load rides on, right at the lip (palette → pallet) -->
+      <g>
+        <rect x="34" y="270" width="98" height="7" rx="1" fill="#7a5a34"/>
+        <g fill="#5e4427">
+          <rect x="46" y="270" width="2" height="7"/><rect x="64" y="270" width="2" height="7"/>
+          <rect x="82" y="270" width="2" height="7"/><rect x="100" y="270" width="2" height="7"/>
+          <rect x="118" y="270" width="2" height="7"/>
+        </g>
+        <rect x="38" y="277" width="13" height="9" fill="#6b4f2e"/>
+        <rect x="76" y="277" width="13" height="9" fill="#6b4f2e"/>
+        <rect x="114" y="277" width="13" height="9" fill="#6b4f2e"/>
+      </g>
+      <!-- front row, ON THE PRECIPICE: the load rides the pallet at the lip; one tips out -->
+      <g stroke="#000" stroke-opacity="0.28" stroke-width="1.4">
+        <rect x="38" y="256" width="27" height="22" rx="3" fill="currentColor"/>
+        <rect x="38" y="256" width="27" height="6" rx="3" fill="#000" opacity="0.18"/>
+        <rect x="78" y="256" width="27" height="22" rx="3" fill="currentColor"/>
+        <rect x="78" y="256" width="27" height="6" rx="3" fill="#000" opacity="0.18"/>
+        <g transform="translate(118,272) rotate(14)">
+          <rect x="-13" y="-11" width="27" height="22" rx="3" fill="currentColor"/>
+          <rect x="-13" y="-11" width="27" height="6" rx="3" fill="#000" opacity="0.18"/>
+        </g>
+      </g>
+    </g>
+  </defs>
+
+  <rect width="600" height="420" fill="url(#dsky)"/>
+  <rect y="298" width="600" height="122" fill="#14171c"/>
+  <rect y="298" width="600" height="2" fill="#262d36"/>
+
+  <use href="#truck" x="20" color="#e0653a"/>
+  <use href="#truck" x="225" color="#4fa3e0"/>
+  <use href="#truck" x="430" color="#6fcf6f"/>
+</svg>
