@@ -1,48 +1,92 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 420" width="600" height="420" role="img" aria-label="Lyn Rummy — a hand of cards fanned out">
-  <!-- Stylized: a hand of playing cards fanned to the RIGHT on green felt — a heart
-       run building, the game's whole flavour (runs + sets) in one image. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 420" width="600" height="420" role="img" aria-label="Lyn Rummy — a person and a robot playing at a kitchen table, stacks of cards between them">
+  <!-- Stylized scene: a kitchen game night. The human sits at the near-left, facing
+       RIGHT into the table; the robot sits at the far side, turned OUT toward the
+       reader (so they play each other but at right angles, not across). The robot is
+       a touch competitive — angled brow, sly look — but friendly, not menacing.
+       Several card stacks sit on the table between them. -->
   <defs>
-    <radialGradient id="felt" cx="0.42" cy="0.38" r="0.75">
-      <stop offset="0" stop-color="#2f7d54"/>
-      <stop offset="1" stop-color="#184e36"/>
-    </radialGradient>
-    <filter id="lshadow" x="-40%" y="-40%" width="180%" height="180%">
-      <feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="#000" flood-opacity="0.35"/>
+    <linearGradient id="lr-wall" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f3e8d0"/><stop offset="1" stop-color="#e9dabc"/>
+    </linearGradient>
+    <filter id="lr-soft" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#000" flood-opacity="0.22"/>
     </filter>
   </defs>
-  <rect width="600" height="420" fill="url(#felt)"/>
 
-  <g filter="url(#lshadow)" font-family="Georgia, 'Times New Roman', serif" font-weight="bold">
-    <!-- leftmost drawn first, rightmost on top; fan pivots bottom-centre, leaning right -->
-    <g transform="translate(300,392) rotate(-18)">
-      <rect x="-34" y="-152" width="68" height="96" rx="7" fill="#fff" stroke="#d6d6d6" stroke-width="1.5"/>
-      <text x="-26" y="-130" font-size="18" fill="#222">9</text>
-      <text x="-27" y="-112" font-size="15" fill="#222">&#9827;</text>
-      <text x="0" y="-92" font-size="30" text-anchor="middle" fill="#222">&#9827;</text>
-    </g>
-    <g transform="translate(300,392) rotate(-8)">
-      <rect x="-34" y="-152" width="68" height="96" rx="7" fill="#fff" stroke="#d6d6d6" stroke-width="1.5"/>
-      <text x="-29" y="-130" font-size="18" fill="#cc2233">10</text>
-      <text x="-27" y="-112" font-size="15" fill="#cc2233">&#9829;</text>
-      <text x="0" y="-92" font-size="30" text-anchor="middle" fill="#cc2233">&#9829;</text>
-    </g>
-    <g transform="translate(300,392) rotate(2)">
-      <rect x="-34" y="-152" width="68" height="96" rx="7" fill="#fff" stroke="#d6d6d6" stroke-width="1.5"/>
-      <text x="-26" y="-130" font-size="18" fill="#cc2233">J</text>
-      <text x="-27" y="-112" font-size="15" fill="#cc2233">&#9829;</text>
-      <text x="0" y="-92" font-size="30" text-anchor="middle" fill="#cc2233">&#9829;</text>
-    </g>
-    <g transform="translate(300,392) rotate(13)">
-      <rect x="-34" y="-152" width="68" height="96" rx="7" fill="#fff" stroke="#d6d6d6" stroke-width="1.5"/>
-      <text x="-26" y="-130" font-size="18" fill="#cc2233">Q</text>
-      <text x="-27" y="-112" font-size="15" fill="#cc2233">&#9829;</text>
-      <text x="0" y="-92" font-size="30" text-anchor="middle" fill="#cc2233">&#9829;</text>
-    </g>
-    <g transform="translate(300,392) rotate(25)">
-      <rect x="-34" y="-152" width="68" height="96" rx="7" fill="#fff" stroke="#d6d6d6" stroke-width="1.5"/>
-      <text x="-26" y="-130" font-size="18" fill="#222">A</text>
-      <text x="-27" y="-112" font-size="15" fill="#222">&#9824;</text>
-      <text x="0" y="-92" font-size="30" text-anchor="middle" fill="#222">&#9824;</text>
-    </g>
+  <!-- kitchen: wall, window, wood floor -->
+  <rect width="600" height="300" fill="url(#lr-wall)"/>
+  <rect y="296" width="600" height="124" fill="#b9824e"/>
+  <g stroke="#9a6838" stroke-width="2"><line x1="0" y1="340" x2="600" y2="340"/><line x1="150" y1="296" x2="150" y2="420"/><line x1="430" y1="340" x2="430" y2="420"/></g>
+  <rect y="292" width="600" height="7" fill="#d8c49e"/>
+  <g>
+    <rect x="36" y="40" width="120" height="116" rx="3" fill="#cab48a" stroke="#b09a6a" stroke-width="3"/>
+    <rect x="44" y="48" width="104" height="100" fill="#9cc3e0"/>
+    <rect x="92" y="48" width="8" height="100" fill="#cab48a"/>
+    <rect x="44" y="92" width="104" height="8" fill="#cab48a"/>
+  </g>
+
+  <!-- hanging lamp + a soft warm cone over the table -->
+  <line x1="316" y1="0" x2="316" y2="42" stroke="#5a5246" stroke-width="3"/>
+  <polygon points="296,72 336,72 328,44 304,44" fill="#e8c25a" stroke="#c89e3a" stroke-width="1.5"/>
+  <polygon points="300,70 332,70 432,300 200,300" fill="#ffe7a0" opacity="0.16"/>
+
+  <!-- ROBOT at the far side, facing OUT — drawn before the table so its lower body
+       tucks behind the table edge -->
+  <g filter="url(#lr-soft)">
+    <!-- torso -->
+    <rect x="324" y="166" width="74" height="74" rx="9" fill="#aab4be"/>
+    <rect x="342" y="184" width="38" height="28" rx="4" fill="#2c313a"/>
+    <circle cx="361" cy="198" r="6" fill="#6fd6e6"/>
+    <circle cx="322" cy="176" r="9" fill="#8e9aa6"/><circle cx="400" cy="176" r="9" fill="#8e9aa6"/>
+    <!-- head -->
+    <line x1="361" y1="122" x2="361" y2="104" stroke="#7f8a96" stroke-width="3"/>
+    <circle cx="361" cy="100" r="5" fill="#e0a030"/>
+    <rect x="331" y="118" width="60" height="52" rx="11" fill="#bcc6d0"/>
+    <ellipse cx="345" cy="132" rx="8" ry="6" fill="#fff" opacity="0.25"/>
+    <rect x="339" y="128" width="44" height="32" rx="7" fill="#2c313a"/>
+    <!-- eyes facing the reader; angled brows = a touch competitive, not menacing -->
+    <circle cx="352" cy="144" r="6.5" fill="#6fd6e6"/><circle cx="370" cy="144" r="6.5" fill="#6fd6e6"/>
+    <circle cx="353" cy="145" r="2.4" fill="#1b6d78"/><circle cx="371" cy="145" r="2.4" fill="#1b6d78"/>
+    <line x1="344" y1="133" x2="357" y2="138" stroke="#11151b" stroke-width="3" stroke-linecap="round"/>
+    <line x1="378" y1="133" x2="365" y2="138" stroke="#11151b" stroke-width="3" stroke-linecap="round"/>
+    <path d="M351,156 Q360,160 372,154" stroke="#11151b" stroke-width="2.6" fill="none" stroke-linecap="round"/>
+  </g>
+
+  <!-- the kitchen table (covers the robot's lower body) -->
+  <g filter="url(#lr-soft)">
+    <polygon points="110,330 490,330 486,350 114,350" fill="#8a5e34"/>
+    <rect x="126" y="348" width="15" height="56" fill="#7a5230"/>
+    <rect x="459" y="348" width="15" height="56" fill="#7a5230"/>
+    <polygon points="160,236 440,236 490,330 110,330" fill="#bd8650"/>
+    <polygon points="160,236 440,236 432,248 168,248" fill="#caa06a" opacity="0.6"/>
+  </g>
+
+  <!-- card stacks on the table -->
+  <g font-family="Georgia, serif" font-weight="bold" filter="url(#lr-soft)">
+    <g transform="translate(244,250)"><rect x="-3" y="-4" width="36" height="50" rx="4" fill="#f4f4f4"/><rect width="36" height="50" rx="4" fill="#fff" stroke="#d6d6d6"/><text x="6" y="20" font-size="14" fill="#cc2233">&#9829;</text></g>
+    <g transform="translate(300,242)"><rect x="-3" y="-4" width="36" height="50" rx="4" fill="#f4f4f4"/><rect width="36" height="50" rx="4" fill="#fff" stroke="#d6d6d6"/><text x="6" y="20" font-size="14" fill="#222">&#9824;</text></g>
+    <g transform="translate(356,252)"><rect x="-3" y="-4" width="36" height="50" rx="4" fill="#f4f4f4"/><rect width="36" height="50" rx="4" fill="#fff" stroke="#d6d6d6"/><text x="6" y="20" font-size="14" fill="#cc2233">&#9830;</text></g>
+    <g transform="translate(288,288)"><rect x="-3" y="-4" width="36" height="50" rx="4" fill="#f4f4f4"/><rect width="36" height="50" rx="4" fill="#fff" stroke="#d6d6d6"/><text x="6" y="20" font-size="14" fill="#222">&#9827;</text></g>
+  </g>
+
+  <!-- a robot arm laid on the table, mid-move -->
+  <g stroke="#9aa6b2" stroke-width="9" stroke-linecap="round" fill="none">
+    <path d="M332,196 L320,236 L300,270"/>
+  </g>
+  <circle cx="299" cy="271" r="8" fill="#aab4be" stroke="#7f8a96" stroke-width="1.5"/>
+
+  <!-- HUMAN at the near-left, facing RIGHT (drawn last = foreground) -->
+  <g filter="url(#lr-soft)">
+    <rect x="58" y="214" width="16" height="100" rx="6" fill="#8a5e34"/>            <!-- chair back -->
+    <polygon points="92,214 142,214 152,332 84,332" fill="#4a7fb5"/>               <!-- shirt/torso -->
+    <ellipse cx="98" cy="184" rx="7" ry="10" fill="#d9a877"/>                       <!-- ear (back of head) -->
+    <circle cx="120" cy="180" r="30" fill="#e8b98f"/>                               <!-- head -->
+    <path d="M92,180 A30,30 0 0 1 150,168 Q150,150 120,150 Q96,150 92,180 Z" fill="#5a3b22"/> <!-- hair over top/back -->
+    <polygon points="148,178 158,184 148,190" fill="#e0b184"/>                      <!-- nose (faces right) -->
+    <circle cx="134" cy="174" r="3" fill="#3a2a1c"/>                                <!-- eye -->
+    <path d="M138,192 q7,4 12,0" stroke="#9a6a4a" stroke-width="2.4" fill="none" stroke-linecap="round"/> <!-- mouth -->
+    <!-- arm reaching onto the table -->
+    <path d="M138,226 L176,250 L216,272" stroke="#4a7fb5" stroke-width="13" fill="none" stroke-linecap="round"/>
+    <circle cx="218" cy="273" r="9" fill="#e8b98f"/>
   </g>
 </svg>
