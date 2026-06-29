@@ -10,11 +10,22 @@
 const world = @import("world.zig");
 const rider = @import("rider.zig");
 const render = @import("render.zig");
+const camera = @import("camera.zig");
+const sky = @import("sky.zig");
 const paint = @import("paint.zig");
 
 var the_world: world.World = undefined;
 var cur: rider.RiderState = undefined;
 var ready = false;
+
+// the animation clock (TS step = riderHistory.length - 1): advance()++ / back()-- so it
+// scrubs on reverse and freezes on pause, driving the day→dusk sky, sun, and mountain
+// dimming. Floors at 0. f32 so the sun's linear descent reads it directly.
+var step_clock: f32 = 0;
+
+// the sun's screen placement for the current frame, recomputed in renderFrame from the
+// rider's heading + the clock; the blitter reads it to paint the disc behind the ranges.
+var sun: sky.SunPos = .{ .visible = false, .x = 0, .y = 0, .scale = 0 };
 
 // history stack (ring) of prior states, so ↓ can step backward. Bounded — back works
 // within the last HIST_CAP frames, ample for inspection; older frames drop.
@@ -38,6 +49,7 @@ export fn advance() void {
     hist_head = (hist_head + 1) % HIST_CAP;
     if (hist_count < HIST_CAP) hist_count += 1;
     cur = rider.getNextRiderState(cur, &the_world);
+    step_clock += 1;
 }
 
 /// back pops one frame off the history stack (a no-op at the bottom).
@@ -47,6 +59,7 @@ export fn back() void {
     hist_head = (hist_head + HIST_CAP - 1) % HIST_CAP;
     hist_count -= 1;
     cur = hist[hist_head];
+    if (step_clock > 0) step_clock -= 1;
 }
 
 /// renderFrame fills the draw buffer for the current rider state and returns the byte
@@ -55,7 +68,12 @@ export fn back() void {
 export fn renderFrame() u32 {
     ensure();
     paint.reset();
-    render.frame(&the_world, cur.segment, cur.along, cur.across, cur.yaw);
+    render.frame(&the_world, cur.segment, cur.along, cur.across, cur.yaw, step_clock);
+    // the sun's placement for this heading + clock, for the blitter to paint behind the
+    // ranges (which the buffer's first polys are). Heading = segment heading + yaw, the
+    // same absolute look the mountains use.
+    const heading = the_world.segments[cur.segment].north_heading + cur.yaw;
+    sun = sky.sunPos(heading, step_clock, camera.FOCAL);
     return paint.byteLen();
 }
 
@@ -79,4 +97,35 @@ export fn bufHighWater() u32 {
 /// bufCap is the fixed draw-buffer size — the ceiling bufHighWater() must stay under.
 export fn bufCap() u32 {
     return paint.capBytes();
+}
+
+// --- the day→dusk sky, for the blitter's background gradient + sun. zig owns every
+// colour and the sun's position; the blitter just paints the gradients it is handed. ---
+
+/// skyTop / skyHorizon are the upper-sky and lower-horizon-band colours (0xRRGGBB) for
+/// the current clock — the two stops of the background gradient. They dim toward dusk and
+/// the horizon reddens at sunset.
+export fn skyTop() u32 {
+    ensure();
+    return sky.skyColor(step_clock);
+}
+export fn skyHorizon() u32 {
+    ensure();
+    return sky.horizonColor(step_clock);
+}
+
+/// sunVisible is 1 when the sun is on-screen for the current heading (else the blitter
+/// skips it); sunX/sunY are its screen centre and sunScale its size factor (vertical
+/// squeeze on a lean — 1.0 in the static frame). Set by the last renderFrame().
+export fn sunVisible() u32 {
+    return if (sun.visible) 1 else 0;
+}
+export fn sunX() f32 {
+    return sun.x;
+}
+export fn sunY() f32 {
+    return sun.y;
+}
+export fn sunScale() f32 {
+    return sun.scale;
 }

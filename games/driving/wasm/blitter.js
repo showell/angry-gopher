@@ -6,18 +6,40 @@
 
 const W = 960, H = 600;
 
-// the static background zig doesn't own (yet): a sky gradient over a grass band,
-// drawn OVERSIZED so the rolled (banked) frame's corners stay filled. The world
-// polygons (mountains/road/trees) paint on top, in zig's order.
-function drawBackground(ctx) {
+// the sky + grass band, drawn OVERSIZED so the rolled (banked) frame's corners stay
+// filled. The world polygons (mountains/road/trees) paint on top, in zig's order. zig
+// owns the colours: `skyHex` (upper) → `horizonHex` (lower band) dim toward dusk and
+// redden at sunset, matching sky.ts's 0/0.2/1 gradient stops. The grass stays constant.
+function drawBackground(ctx, skyHex, horizonHex) {
   const BIG = W + H;
   const g = ctx.createLinearGradient(0, 0, 0, H / 2);
-  g.addColorStop(0, '#7ea6d8');
-  g.addColorStop(1, '#cfe0f0');
+  g.addColorStop(0, skyHex);
+  g.addColorStop(0.2, skyHex);
+  g.addColorStop(1, horizonHex);
   ctx.fillStyle = g;
   ctx.fillRect(W / 2 - BIG, H / 2 - BIG, 2 * BIG, BIG);
   ctx.fillStyle = '#4a8f43';
   ctx.fillRect(W / 2 - BIG, H / 2, 2 * BIG, BIG);
+}
+
+// the setting sun: a warm radial glow plus the disc, clipped to the sky (top half) so the
+// ground occludes the rest, at the screen centre + scale zig computed (sun.ts's drawSun,
+// minus the placement math). Painted before the buffer, so the mountain polys — first in
+// the buffer — occlude it: the sun sets BEHIND the ranges, exactly as horizon.ts layers.
+const SUN_RADIUS_PX = 46; // matches sky.zig SUN_RADIUS_PX; the gradient recipe lives here
+function drawSun(ctx, x, y, scale) {
+  ctx.save();
+  ctx.beginPath(); ctx.rect(0, 0, W, H / 2); ctx.clip(); // sky only
+  const glow = ctx.createRadialGradient(x, y, 8 * scale, x, y, 340 * scale);
+  glow.addColorStop(0, 'rgba(255,201,128,0.85)');
+  glow.addColorStop(0.4, 'rgba(255,150,92,0.32)');
+  glow.addColorStop(1, 'rgba(255,150,92,0)');
+  ctx.fillStyle = glow; ctx.fillRect(0, 0, W, H / 2);
+  const disc = ctx.createRadialGradient(x, y, 4 * scale, x, y, SUN_RADIUS_PX * scale);
+  disc.addColorStop(0, '#ffe6a3'); disc.addColorStop(1, '#ff9d5c');
+  ctx.fillStyle = disc;
+  ctx.beginPath(); ctx.arc(x, y, SUN_RADIUS_PX * scale, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
 }
 
 // 0xRRGGBB -> "#rrggbb"
@@ -158,7 +180,8 @@ async function main() {
   const ctx = canvas.getContext('2d');
 
   const { instance } = await WebAssembly.instantiateStreaming(fetch('/driving/safari.wasm'), {});
-  const { renderFrame, bufPtr, memory, advance, back, riderTilt, bufHighWater, bufCap } = instance.exports;
+  const { renderFrame, bufPtr, memory, advance, back, riderTilt, bufHighWater, bufCap,
+          skyTop, skyHorizon, sunVisible, sunX, sunY, sunScale } = instance.exports;
   const capBytes = bufCap();
 
   // The wasm owns the rider state; we drive it. The camera rolls with the bike's lean
@@ -174,7 +197,8 @@ async function main() {
     ctx.translate(W / 2, H / 2);
     ctx.rotate(-riderTilt());
     ctx.translate(-W / 2, -H / 2);
-    drawBackground(ctx);
+    drawBackground(ctx, hex(skyTop()), hex(skyHorizon()));
+    if (sunVisible()) drawSun(ctx, sunX(), sunY(), sunScale());
     const cmds = blit(ctx, memory, bufPtr(), len);
     ctx.restore();
     const t2 = performance.now();
