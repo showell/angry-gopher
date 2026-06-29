@@ -148,6 +148,11 @@ fn renderHomeBody(io: Io, alloc: Alloc) ![]const u8 {
     var out: std.ArrayList(u8) = .empty;
     try out.appendSlice(alloc, "<div class=\"app-body-wrap home-wrap\"><p class=\"home-intro\">");
     try out.appendSlice(alloc, try html.htmlEscape(alloc, headline));
+    // A link to the whole repo, riding the headline line (the per-app `code:` links
+    // point at subdirs; this one is the top level).
+    try out.appendSlice(alloc,
+        " · <a class=\"home-gh\" href=\"https://github.com/showell/angry-gopher\"" ++
+        " target=\"_blank\" rel=\"noopener\">Code on GitHub ↗</a>");
     try out.appendSlice(alloc, "</p>\n<div class=\"app-list\">\n");
     for (apps.items) |a| {
         // Optional "Read more" link to the app's essay. It shares a line with the
@@ -315,6 +320,9 @@ const head_style =
     \\   headline is deliberately quiet (.home-intro); the buttons are the loud thing. */
     \\.home-intro { margin: 14px 0 4px; font-size: 14px; font-weight: normal;
     \\              color: var(--cc-body-muted-fg, #444); }
+    \\.home-gh { white-space: nowrap; font-weight: 600; text-decoration: none;
+    \\           color: var(--cc-accent, #000080); }
+    \\.home-gh:hover { text-decoration: underline; }
     \\.app-list { margin-top: 8px; }
     \\/* The launch pad gets a wider column than the generic 820px wrap — the app rows
     \\   carry an image + paragraph + button side by side and the prose was cramped. */
