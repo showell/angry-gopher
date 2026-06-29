@@ -37,6 +37,10 @@ pub fn build(b: *std.Build) void {
     // here rather than by a relative @embedFile path.
     const assets = [_]struct { name: []const u8, path: []const u8 }{
         .{ .name = "driving_app_js", .path = "../games/driving/app.js" },
+        // The Safari camera's zig→WASM core (ops/build_safari_wasm) + its dumb
+        // plain-JS blitter, served at the hidden /driving/wasm preview surface.
+        .{ .name = "safari_wasm", .path = "../games/driving/safari.wasm" },
+        .{ .name = "safari_blitter_js", .path = "../games/driving/wasm/blitter.js" },
         .{ .name = "delivery_app_js", .path = "../delivery/app.js" },
         .{ .name = "puzzle_js", .path = "../games/lynrummy/elm/puzzle.js" },
         // Full-game bundles (the /game surface): the compiled Elm client, the
