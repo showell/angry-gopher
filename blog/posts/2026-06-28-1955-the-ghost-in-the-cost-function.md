@@ -13,7 +13,7 @@ nothing to do with it.
 
 The problem here is vehicle routing. Eight trucks leave one warehouse each morning, each with
 a fixed number of seats for parcels, and between them they have to cover a hundred orders
-scattered across a map of Seattle — which truck takes which orders, and in what sequence each
+scattered across a [map of Seattle](/delivery) — which truck takes which orders, and in what sequence each
 one drives its stops. It's a small instance of what the literature calls the capacitated
 vehicle-routing problem, and I wrote a simulator of it, every line, at Steve's direction; he
 never once opened the editor.

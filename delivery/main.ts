@@ -8,7 +8,7 @@ import { chooseOrders, ordersByNeighborhood } from "./orders.ts";
 import { buildSubstrate } from "./roadgraph.ts";
 import { solve } from "./solver.ts";
 import type { Plan, SolveFrame } from "./solver.ts";
-import { drawMap, truckPanelHitTest, buildTracks, HUD_TOOLTIPS, HOME_LINK } from "./map_view.ts";
+import { drawMap, truckPanelHitTest, buildTracks, HUD_TOOLTIPS, HUD_LINKS } from "./map_view.ts";
 import type { Track } from "./map_view.ts";
 
 const SUB = buildSubstrate();
@@ -201,8 +201,8 @@ function hitTest(p: Pt): { nbhd: string | null; house: string | null } {
   return { nbhd, house };
 }
 
-const overHomeLink = (p: Pt): boolean =>
-  p.x >= HOME_LINK.x && p.x <= HOME_LINK.x + HOME_LINK.w && p.y >= HOME_LINK.y && p.y <= HOME_LINK.y + HOME_LINK.h;
+const hitLink = (p: Pt) =>
+  HUD_LINKS.find((l) => p.x >= l.x && p.x <= l.x + l.w && p.y >= l.y && p.y <= l.y + l.h) ?? null;
 
 canvas.addEventListener("mousemove", (e) => {
   const p = { x: (e.clientX - offX) / scale, y: (e.clientY - offY) / scale };
@@ -210,11 +210,11 @@ canvas.addEventListener("mousemove", (e) => {
   // Native browser tooltips over the HUD labels — always live, even while the day runs.
   const tip = HUD_TOOLTIPS.find((r) => p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h);
   canvas.title = tip ? tip.text : "";
-  const overHome = overHomeLink(p);
+  const overLink = hitLink(p) !== null;
 
   if (solveAnim || (anim && anim.playing)) {
-    // Hover focus sleeps while an animation owns the screen, but the Home link stays live.
-    canvas.style.cursor = overHome ? "pointer" : "default";
+    // Hover focus sleeps while an animation owns the screen, but the nav links stay live.
+    canvas.style.cursor = overLink ? "pointer" : "default";
     return;
   }
   // The truck panel sits on top of the map; test it first.
@@ -226,12 +226,13 @@ canvas.addEventListener("mousemove", (e) => {
     hoverHouse = hit.house;
     render();
   }
-  canvas.style.cursor = truck !== null || hit.nbhd || overHome ? "pointer" : "default";
+  canvas.style.cursor = truck !== null || hit.nbhd || overLink ? "pointer" : "default";
 });
 
 canvas.addEventListener("click", (e) => {
   const p = { x: (e.clientX - offX) / scale, y: (e.clientY - offY) / scale };
-  if (overHomeLink(p)) window.location.href = HOME_LINK.href;
+  const lk = hitLink(p);
+  if (lk) window.location.href = lk.href;
 });
 
 window.addEventListener("keydown", (e) => {

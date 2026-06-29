@@ -408,9 +408,13 @@ export const HUD_TOOLTIPS: { x: number; y: number; w: number; h: number; text: s
   { x: 24, y: 86, w: 100, h: 18, text: "randomly selected from 228 homes" }, // over "100 orders"
 ];
 
-// Click region for the "Home" link under the order count (main.ts navigates on click).
-// Logical coords, matching the "Home" baseline drawn in drawHud.
-export const HOME_LINK = { x: 24, y: 108, w: 46, h: 18, href: "/" };
+// Nav links under the order count — single source of truth for both the drawing
+// (drawHud) and the click/hover hit-testing (main.ts). Logical coords; `y` is the
+// hit-rect top, text baseline sits at y + 13.
+export const HUD_LINKS = [
+  { label: "Home", href: "/", x: 24, y: 108, w: 46, h: 18 },
+  { label: "Blog", href: "/blog/the-ghost-in-the-cost-function", x: 24, y: 127, w: 46, h: 18 },
+];
 
 function drawHud(ctx: CanvasRenderingContext2D, shift: number): void {
   ctx.textAlign = "left";
@@ -433,12 +437,14 @@ function drawHud(ctx: CanvasRenderingContext2D, shift: number): void {
   ctx.font = "14px system-ui, sans-serif";
   ctx.fillText(`${FLEET.orders} orders`, 24, 99);
 
-  // Home link, under the order count.
+  // Nav links (Home, Blog), under the order count — each its own underlined line.
   ctx.fillStyle = COLOR.link;
   ctx.font = "13px system-ui, sans-serif";
-  ctx.fillText("Home", HOME_LINK.x, 121);
-  const hw = ctx.measureText("Home").width;
-  ctx.fillRect(HOME_LINK.x, 123, hw, 1); // underline
+  for (const l of HUD_LINKS) {
+    const baseline = l.y + 13;
+    ctx.fillText(l.label, l.x, baseline);
+    ctx.fillRect(l.x, baseline + 2, ctx.measureText(l.label).width, 1); // underline
+  }
 
   // How-to-use hints (top-right, above the plan panel) — always on, one instruction per
   // line, with the key bolded.
