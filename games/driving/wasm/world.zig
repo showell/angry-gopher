@@ -31,6 +31,7 @@ pub const Segment = struct {
     exit_angle: f32,
     exit_right: bool,
     exit_to: usize,
+    commit_along: f32, // the `along` at which the rider commits to the exit turn
     north_heading: f32, // accumulated heading vs north (seg 0 = 0)
     has_mid_tower: bool, // a long segment stands its own tower halfway down
 };
@@ -153,6 +154,9 @@ pub fn buildWorld() World {
         seg.exit_angle = @abs(c.turn_deg) * DEG;
         seg.exit_right = c.turn_deg >= 0;
         seg.exit_to = (i + 1) % route.len; // loop back at the end
+        // the rider crosses the next segment's inner-edge extension hw/tan(theta)
+        // before the segment's end and commits to the turn (road_segment.ts).
+        seg.commit_along = c.length - (LANE_WIDTH / 2.0) / @tan(seg.exit_angle);
         seg.north_heading = 0;
         seg.has_mid_tower = c.length > MID_TOWER_MIN_LENGTH;
         fillTrees(seg, c.scheme);

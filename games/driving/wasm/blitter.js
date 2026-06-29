@@ -6,16 +6,18 @@
 
 const W = 960, H = 600;
 
-// the static background zig doesn't own (yet): a sky gradient over a grass band.
-// The world polygons (mountains/road/trees) paint on top, in zig's order.
+// the static background zig doesn't own (yet): a sky gradient over a grass band,
+// drawn OVERSIZED so the rolled (banked) frame's corners stay filled. The world
+// polygons (mountains/road/trees) paint on top, in zig's order.
 function drawBackground(ctx) {
+  const BIG = W + H;
   const g = ctx.createLinearGradient(0, 0, 0, H / 2);
   g.addColorStop(0, '#7ea6d8');
   g.addColorStop(1, '#cfe0f0');
   ctx.fillStyle = g;
-  ctx.fillRect(0, 0, W, H / 2);
+  ctx.fillRect(W / 2 - BIG, H / 2 - BIG, 2 * BIG, BIG);
   ctx.fillStyle = '#4a8f43';
-  ctx.fillRect(0, H / 2, W, H / 2);
+  ctx.fillRect(W / 2 - BIG, H / 2, 2 * BIG, BIG);
 }
 
 // 0xRRGGBB -> "#rrggbb"
@@ -95,12 +97,6 @@ function blit(ctx, mem, base, len) {
   }
 }
 
-// metres advanced per frame — a CONSTANT step (no V_BASE→V_MAX ramp), so it's a
-// steady cruise at the display rate and a single arrow press nudges exactly one
-// frame. TEMPORARY dev pace (fast, to explore the route quickly while building);
-// dial back down once there are critters/towers worth lingering on.
-const STEP_M = 1.0;
-
 async function main() {
   document.body.style.cssText =
     'margin:0;background:#0b0b0d;height:100vh;display:flex;flex-direction:column;' +
@@ -117,35 +113,31 @@ async function main() {
   const ctx = canvas.getContext('2d');
 
   const { instance } = await WebAssembly.instantiateStreaming(fetch('/driving/safari.wasm'), {});
-  const { renderFrame, bufPtr, memory, segCount, segLen } = instance.exports;
+  const { renderFrame, bufPtr, memory, advance, back, riderTilt } = instance.exports;
 
-  // The animation state is (segment, along) down the looping route, so stepping is a
-  // pure function of it — no history stack. across=0, yaw=0: dead level, centred,
-  // riding each segment's centre line and rolling over to the next at its end.
-  const count = segCount();
-  let seg = 0;
-  let along = 0;
+  // The wasm owns the rider state; we drive it. The camera rolls with the bike's lean
+  // (riderTilt) — the whole world banks into a turn, like main.ts's ctx.rotate(-tilt).
   let auto = true;
 
-  function step(dir) {
-    along += dir * STEP_M;
-    while (along >= segLen(seg)) { along -= segLen(seg); seg = (seg + 1) % count; }
-    while (along < 0) { seg = (seg - 1 + count) % count; along += segLen(seg); }
-  }
   function draw() {
-    const len = renderFrame(seg, along, 0.0, 0.0);
+    const len = renderFrame();
+    ctx.save();
+    ctx.translate(W / 2, H / 2);
+    ctx.rotate(-riderTilt());
+    ctx.translate(-W / 2, -H / 2);
     drawBackground(ctx);
     blit(ctx, memory, bufPtr(), len);
+    ctx.restore();
   }
   function loop() {
-    if (auto) { step(1); draw(); }
+    if (auto) { advance(); draw(); }
     requestAnimationFrame(loop);
   }
 
   window.addEventListener('keydown', (e) => {
     if (e.code === 'Space') { auto = !auto; e.preventDefault(); }
-    else if (e.code === 'ArrowUp') { auto = false; step(1); draw(); e.preventDefault(); }
-    else if (e.code === 'ArrowDown') { auto = false; step(-1); draw(); e.preventDefault(); }
+    else if (e.code === 'ArrowUp') { auto = false; advance(); draw(); e.preventDefault(); }
+    else if (e.code === 'ArrowDown') { auto = false; back(); draw(); e.preventDefault(); }
   });
 
   draw();
