@@ -116,14 +116,16 @@ fn renderHomeBody(io: Io, alloc: Alloc) ![]const u8 {
     if (have) try pushApp(alloc, &apps, c_title, c_href, c_cta, &c_desc);
     if (headline.len == 0 or apps.items.len == 0) return error.MalformedHome;
 
+    // The headline renders as ordinary muted text, not a big H1 — the blue CTA
+    // buttons are what should pop, not the page title.
     var out: std.ArrayList(u8) = .empty;
-    try out.appendSlice(alloc, "<div class=\"app-body-wrap\"><h1>");
+    try out.appendSlice(alloc, "<div class=\"app-body-wrap\"><p class=\"home-intro\">");
     try out.appendSlice(alloc, try html.htmlEscape(alloc, headline));
-    try out.appendSlice(alloc, "</h1>\n<div class=\"app-list\">\n");
+    try out.appendSlice(alloc, "</p>\n<div class=\"app-list\">\n");
     for (apps.items) |a| {
         try out.print(alloc,
             \\<div class="app-row"><div class="app-row-main"><h2><a href="{s}">{s}</a></h2><p>{s}</p></div>
-            \\<div class="cta"><a class="play-btn" href="{s}">{s} →</a></div></div>
+            \\<div class="cta"><a class="play-btn" href="{s}">{s}</a></div></div>
             \\
         , .{
             try html.htmlEscape(alloc, a.href),
@@ -259,9 +261,12 @@ const head_style =
     \\         margin-bottom: 12px; animation: fadeout 3s forwards; }
     \\@keyframes fadeout { 0% { opacity: 1; } 70% { opacity: 1; } 100% { opacity: 0; } }
     \\/* The home launch pad: one row per app (replaces the old card grid) — a linked
-    \\   title + description on the left, the big blue CTA button on the right. */
-    \\.app-list { margin-top: 24px; }
-    \\.app-row { display: flex; align-items: center; gap: 24px; padding: 20px 0;
+    \\   title + description on the left, a uniform blue CTA button on the right. The
+    \\   headline is deliberately quiet (.home-intro); the buttons are the loud thing. */
+    \\.home-intro { margin: 14px 0 4px; font-size: 14px; font-weight: normal;
+    \\              color: var(--cc-body-muted-fg, #444); }
+    \\.app-list { margin-top: 8px; }
+    \\.app-row { display: flex; align-items: center; gap: 28px; padding: 20px 0;
     \\           border-bottom: 1px solid var(--cc-border, #e5e0d3); }
     \\.app-row:last-child { border-bottom: none; }
     \\.app-row-main { flex: 1; min-width: 0; }
@@ -270,10 +275,17 @@ const head_style =
     \\.app-row-main h2 a:hover { text-decoration: underline; }
     \\.app-row-main p { margin: 0; color: var(--cc-body-muted-fg, #444); font-size: 14px; line-height: 1.5; }
     \\.app-row .cta { flex-shrink: 0; }
-    \\.play-btn { display: inline-block; background: #000080; color: white; padding: 12px 28px;
-    \\            border-radius: 6px; text-decoration: none; font-weight: bold; font-size: 16px; white-space: nowrap; }
-    \\.play-btn:hover { background: #0000a0; }
-    \\@media (max-width: 600px) { .app-row { flex-direction: column; align-items: flex-start; gap: 12px; } }
+    \\/* Uniform footprint: every button is the same width + a single line, so the
+    \\   column reads as one tidy stack of identical calls to action. No arrow — a
+    \\   right-pointing arrow on a right-edge button reads as "look away". */
+    \\.play-btn { display: flex; align-items: center; justify-content: center;
+    \\            box-sizing: border-box; width: 252px; padding: 14px 16px; white-space: nowrap;
+    \\            background: #000080; color: white; border-radius: 8px; text-align: center;
+    \\            text-decoration: none; font-weight: bold; font-size: 16px; line-height: 1.2;
+    \\            box-shadow: 0 1px 3px rgba(0,0,32,0.28); transition: background .12s, transform .12s; }
+    \\.play-btn:hover { background: #1414c8; transform: translateY(-1px); }
+    \\@media (max-width: 600px) { .app-row { flex-direction: column; align-items: flex-start; gap: 12px; }
+    \\                            .play-btn { width: 100%; } }
     \\</style>
     \\</head><body>
     \\
