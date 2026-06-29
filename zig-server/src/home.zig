@@ -1,9 +1,17 @@
-//! home: the site root "/" — the Lyn Rummy launch pad (Game / Puzzles / Driving
-//! tiles). Public: anon visitors get the same marketing surface; the tiles route
-//! through the login flow on click.
+//! home: the site root "/" — the launch pad listing every app Steve & Claude
+//! built (Seattle Delivery / Safari / Chat / Blog / Lyn Rummy / Puzzles). Public:
+//! anon visitors get the same marketing surface; the rows route through the login
+//! flow on click where a login is needed.
+//!
+//! The app rows are NOT hard-coded HTML: they're scripted in a tiny markdown-ish
+//! DSL at `pages/home.txt` (read from disk at request time, alongside the resume —
+//! both ride the `pages/` rsync), parsed here on the fly. One `## Title -> /href`
+//! block per app, a `cta:` line for the button label, and a description paragraph.
+//! `# Headline` sets the H1. Malformed/missing → a loud error page, never a silent
+//! half-render. The resume footer line stays hard-coded below the parsed rows.
 //!
 //! This is the only surface on the GENERIC app chrome (the shared stylesheet +
-//! the "Lyn Rummy · Chat" top bar + the "Playing as X / Log in" identity area);
+//! the "Home · Chat · Blog" top bar + the "Playing as X / Log in" identity area);
 //! the chat subsystem renders its own chat-flavored chrome in chat.zig. Kept as
 //! string literals, like chat's chrome.
 //!
@@ -41,8 +49,103 @@ pub fn handleHome(req: *Request, io: Io, alloc: Alloc, uid: []const u8, path: []
     var b: std.ArrayList(u8) = .empty;
     try b.appendSlice(alloc, head_style);
     try writeTopBar(&b, alloc, name, is_admin);
-    try b.appendSlice(alloc, body_html);
+    // The body (headline + app rows) is parsed from pages/home.txt on the fly. A
+    // parse/read failure is loud, not papered over: show what broke, never a
+    // silently-truncated page.
+    if (renderHomeBody(io, alloc)) |body| {
+        try b.appendSlice(alloc, body);
+    } else |err| {
+        try b.print(alloc,
+            \\<div class="app-body-wrap"><h1>Home unavailable</h1>
+            \\<p>pages/home.txt could not be rendered: <strong>{s}</strong>.</p></div></body></html>
+        , .{@errorName(err)});
+    }
     try req.respond(b.items, .{ .extra_headers = &.{http.html_ct} });
+}
+
+/// An app row parsed from the DSL: a linked title, a CTA button label, and a
+/// description paragraph. `href` is both the title link and the button target.
+const App = struct { title: []const u8, href: []const u8, cta: []const u8, desc: []const u8 };
+
+/// renderHomeBody reads pages/home.txt, parses the mini-DSL, and returns the inner
+/// page body (the `.app-body-wrap` through `</body></html>`). Returns an error on
+/// a missing file or any malformed block — the caller renders that loudly.
+///
+/// Grammar (markdown in spirit): a `# Headline` line sets the H1; each app is a
+/// `## Title -> /href` block followed by a `cta: Label` line and one or more
+/// description lines (joined with spaces, reflowed). Blank lines separate. Any
+/// stray text outside a block, a block missing its cta/href/description, or no
+/// headline / no apps is `error.MalformedHome`.
+fn renderHomeBody(io: Io, alloc: Alloc) ![]const u8 {
+    const src = try Io.Dir.cwd().readFileAlloc(io, "pages/home.txt", alloc, .unlimited);
+
+    var headline: []const u8 = "";
+    var apps: std.ArrayList(App) = .empty;
+
+    // The block currently being accumulated. `have` is false until the first `##`.
+    var have = false;
+    var c_title: []const u8 = "";
+    var c_href: []const u8 = "";
+    var c_cta: []const u8 = "";
+    var c_desc: std.ArrayList(u8) = .empty;
+
+    var it = std.mem.splitScalar(u8, src, '\n');
+    while (it.next()) |raw| {
+        const line = std.mem.trim(u8, raw, " \t\r");
+        if (line.len == 0) continue; // blank lines only separate blocks
+        if (std.mem.startsWith(u8, line, "## ")) {
+            if (have) try pushApp(alloc, &apps, c_title, c_href, c_cta, &c_desc);
+            const rest = std.mem.trim(u8, line[3..], " ");
+            const arrow = std.mem.indexOf(u8, rest, "->") orelse return error.MalformedHome;
+            c_title = std.mem.trim(u8, rest[0..arrow], " ");
+            c_href = std.mem.trim(u8, rest[arrow + 2 ..], " ");
+            c_cta = "";
+            c_desc = .empty;
+            have = true;
+        } else if (std.mem.startsWith(u8, line, "# ")) {
+            headline = std.mem.trim(u8, line[2..], " ");
+        } else if (std.mem.startsWith(u8, line, "cta:")) {
+            if (!have) return error.MalformedHome;
+            c_cta = std.mem.trim(u8, line[4..], " ");
+        } else {
+            if (!have) return error.MalformedHome; // stray prose outside any app block
+            if (c_desc.items.len != 0) try c_desc.append(alloc, ' ');
+            try c_desc.appendSlice(alloc, line);
+        }
+    }
+    if (have) try pushApp(alloc, &apps, c_title, c_href, c_cta, &c_desc);
+    if (headline.len == 0 or apps.items.len == 0) return error.MalformedHome;
+
+    var out: std.ArrayList(u8) = .empty;
+    try out.appendSlice(alloc, "<div class=\"app-body-wrap\"><h1>");
+    try out.appendSlice(alloc, try html.htmlEscape(alloc, headline));
+    try out.appendSlice(alloc, "</h1>\n<div class=\"app-list\">\n");
+    for (apps.items) |a| {
+        try out.print(alloc,
+            \\<div class="app-row"><div class="app-row-main"><h2><a href="{s}">{s}</a></h2><p>{s}</p></div>
+            \\<div class="cta"><a class="play-btn" href="{s}">{s} →</a></div></div>
+            \\
+        , .{
+            try html.htmlEscape(alloc, a.href),
+            try html.htmlEscape(alloc, a.title),
+            try html.htmlEscape(alloc, a.desc),
+            try html.htmlEscape(alloc, a.href),
+            try html.htmlEscape(alloc, a.cta),
+        });
+    }
+    // The resume footer is hard-coded (Steve's call): the PDF link has no DSL row.
+    try out.appendSlice(alloc,
+        "</div>\n<p style=\"margin-top:28px;font-size:13px;color:#888\">" ++
+        "<a href=\"/steve-resume\">Resume for Steve Howell</a> · <a href=\"/steve-resume.pdf\">PDF</a></p>\n" ++
+        "</div></body></html>");
+    return out.toOwnedSlice(alloc);
+}
+
+/// pushApp validates a fully-accumulated block and appends it. Every field is
+/// required — a block missing its title/href/cta/description is malformed.
+fn pushApp(alloc: Alloc, apps: *std.ArrayList(App), title: []const u8, href: []const u8, cta: []const u8, desc: *std.ArrayList(u8)) !void {
+    if (title.len == 0 or href.len == 0 or cta.len == 0 or desc.items.len == 0) return error.MalformedHome;
+    try apps.append(alloc, .{ .title = title, .href = href, .cta = cta, .desc = try desc.toOwnedSlice(alloc) });
 }
 
 /// handleVersion serves the JSON build-identity probe. `commit` is the git
@@ -77,7 +180,7 @@ pub fn handleDebugMem(req: *Request, alloc: Alloc) !void {
 fn writeTopBar(b: *std.ArrayList(u8), alloc: Alloc, name: []const u8, is_admin: bool) !void {
     try b.appendSlice(alloc,
         "<header class=\"app-top\"><div class=\"app-top-home\">" ++
-        "<a href=\"/\">Lyn Rummy</a> · <a href=\"/chat\">Chat</a> · <a href=\"/blog\">Blog</a></div>" ++
+        "<a href=\"/\">Home</a> · <a href=\"/chat\">Chat</a> · <a href=\"/blog\">Blog</a></div>" ++
         "<div class=\"app-top-user\">");
     if (name.len == 0) {
         try b.appendSlice(alloc, "<a href=\"/login\">Log in</a>");
@@ -93,7 +196,7 @@ fn writeTopBar(b: *std.ArrayList(u8), alloc: Alloc, name: []const u8, is_admin: 
 // the chrome for the generic (non-chat) pages.
 const head_style =
     \\<!DOCTYPE html>
-    \\<html><head><meta charset="utf-8"><title>♦️ Lyn Rummy ♥️</title>
+    \\<html><head><meta charset="utf-8"><title>Apps by Steve and Claude</title>
     \\<style>
     \\body { font-family: sans-serif; margin: 0; padding: 0;
     \\       display: flex; flex-direction: column; min-height: 100vh; }
@@ -155,69 +258,24 @@ const head_style =
     \\.flash { background: #c6f6c6; color: #1a7a3a; padding: 8px 12px; border-radius: 4px;
     \\         margin-bottom: 12px; animation: fadeout 3s forwards; }
     \\@keyframes fadeout { 0% { opacity: 1; } 70% { opacity: 1; } 100% { opacity: 0; } }
-    \\.cards { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 20px; }
-    \\@media (max-width: 640px) { .cards { grid-template-columns: 1fr; } }
-    \\.card { border: 1px solid #ccc; border-radius: 6px; padding: 20px; background: #fcfcf8; }
-    \\.card h2 { margin: 0 0 8px; font-size: 22px; }
-    \\.card h2 a { color: #000080; text-decoration: none; }
-    \\.card h2 a:hover { text-decoration: underline; }
-    \\.card p { color: #444; margin: 0 0 12px; font-size: 14px; }
-    \\.card ul { list-style: none; padding: 0; margin: 0; }
-    \\.card li { padding: 4px 0; }
-    \\.card ul a { color: #000080; text-decoration: none; font-weight: bold; }
-    \\.card ul a:hover { text-decoration: underline; }
-    \\.card .muted { color: #888; font-weight: normal; }
+    \\/* The home launch pad: one row per app (replaces the old card grid) — a linked
+    \\   title + description on the left, the big blue CTA button on the right. */
+    \\.app-list { margin-top: 24px; }
+    \\.app-row { display: flex; align-items: center; gap: 24px; padding: 20px 0;
+    \\           border-bottom: 1px solid var(--cc-border, #e5e0d3); }
+    \\.app-row:last-child { border-bottom: none; }
+    \\.app-row-main { flex: 1; min-width: 0; }
+    \\.app-row-main h2 { margin: 0 0 4px; font-size: 22px; }
+    \\.app-row-main h2 a { color: var(--cc-accent, #000080); text-decoration: none; }
+    \\.app-row-main h2 a:hover { text-decoration: underline; }
+    \\.app-row-main p { margin: 0; color: var(--cc-body-muted-fg, #444); font-size: 14px; line-height: 1.5; }
+    \\.app-row .cta { flex-shrink: 0; }
+    \\.play-btn { display: inline-block; background: #000080; color: white; padding: 12px 28px;
+    \\            border-radius: 6px; text-decoration: none; font-weight: bold; font-size: 16px; white-space: nowrap; }
+    \\.play-btn:hover { background: #0000a0; }
+    \\@media (max-width: 600px) { .app-row { flex-direction: column; align-items: flex-start; gap: 12px; } }
     \\</style>
     \\</head><body>
     \\
 ;
 
-// body_html: the title <h1>, subtitle, and the games hero tiles. Wholly static —
-// no per-viewer variation below the top bar.
-const body_html =
-    \\<div class="app-body-wrap"><h1>Lyn Rummy</h1>
-    \\<p style="color:#666;font-size:13px;margin-top:-8px;margin-bottom:12px">Jump into a game, browse the puzzles, or take a drive.</p>
-    \\<style>
-    \\.games-hero { margin:20px 0 28px; display:grid; grid-template-columns:repeat(3, 1fr); gap:20px; }
-    \\@media (max-width: 900px) { .games-hero { grid-template-columns:1fr 1fr; } }
-    \\@media (max-width: 600px) { .games-hero { grid-template-columns:1fr; } }
-    \\.games-tile { border:1px solid #ccc; border-radius:8px; padding:22px; background:#fcfcf8;
-    \\              display:flex; flex-direction:column; }
-    \\.games-tile h2 { margin:0 0 6px; font-size:22px; color:#000080; }
-    \\.games-tile p { color:#444; margin:0 0 16px; font-size:14px; line-height:1.5; }
-    \\.games-tile .cta { margin-top:auto; }
-    \\.play-btn { display:inline-block; background:#000080; color:white; padding:12px 28px;
-    \\            border-radius:6px; text-decoration:none; font-weight:bold; font-size:16px; }
-    \\.play-btn:hover { background:#0000a0; }
-    \\</style>
-    \\<div class="games-hero">
-    \\  <div class="games-tile">
-    \\    <h2>Game</h2>
-    \\    <p>Two-player rummy with a real referee. Drag cards from your hand to the board, build runs and sets, hit Complete Turn when you're happy with your play.</p>
-    \\    <div class="cta">
-    \\      <a class="play-btn" href="/game">Play a game →</a>
-    \\    </div>
-    \\  </div>
-    \\  <div class="games-tile">
-    \\    <h2>Puzzles</h2>
-    \\    <p>A single board, mid-game. Drag stacks to merge or split your way to a clean meld layout. Solo, no opponent — undo is free, and Replay walks back through your moves.</p>
-    \\    <div class="cta">
-    \\      <a class="play-btn" href="/puzzles">Solve puzzles →</a>
-    \\    </div>
-    \\  </div>
-    \\  <div class="games-tile">
-    \\    <h2>Driving</h2>
-    \\    <p>A first-person motorcycle ride down a winding road. Steer through the turns with the arrow keys, or hit SPACE and let it drive itself. No goal, no clock — just the road.</p>
-    \\    <div class="cta">
-    \\      <a class="play-btn" href="/driving">Take a drive →</a>
-    \\    </div>
-    \\  </div>
-    \\</div>
-    \\<div class="card" style="margin-top:8px">
-    \\  <h2><a href="/blog">Blog</a></h2>
-    \\  <p>Notes from building this site — a single zig binary, written with Claude. Read along.</p>
-    \\  <ul><li><a href="/blog">Read the blog →</a></li></ul>
-    \\</div>
-    \\<p style="margin-top:28px;font-size:13px;color:#888"><a href="/steve-resume">Resume for Steve Howell</a> · <a href="/steve-resume.pdf">PDF</a></p>
-    \\</div></body></html>
-;

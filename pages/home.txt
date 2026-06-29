@@ -1,0 +1,25 @@
+# Explore apps built by Steve and Claude (2026)
+
+## Seattle Delivery -> /delivery
+cta: Ship some Totes
+Eight trucks fan out across a deliberately not-to-scale Seattle, delivering a hundred orders a day. The route-planning is a hand-built Clarke-Wright solver — watch it think, or shuffle up a new shift.
+
+## Safari Screensaver -> /driving
+cta: Take a Drive
+A first-person motorcycle ride down a winding road. Steer through the turns, or hit space and let it drive itself. No goal, no clock — just the road.
+
+## Chat -> /chat
+cta: Be social
+Real-time chat, docs, and channels — the live surface Steve, Claude, and friends use every day. Messages, reactions, and a markdown doc editor, all in one binary.
+
+## Blog -> /blog
+cta: See how we build
+Notes from building this site — one zig binary, written with Claude. Essays on the code, the algorithms, and what we learned along the way.
+
+## Play Lyn Rummy -> /game
+cta: Match wits with the agent
+Two-player rummy with a real referee. Build runs and sets against an agent that actually knows the rules, and complete your turn when the board looks right.
+
+## Lyn Rummy Puzzles -> /puzzles
+cta: Fix the board
+A single board, mid-game. Drag stacks to merge or split your way to a clean meld layout. Solo, no opponent — undo is free, and Replay walks back your moves.
