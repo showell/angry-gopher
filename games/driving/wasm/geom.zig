@@ -32,6 +32,36 @@ pub fn toRider(a: f32, x: f32, cam_along: f32, cam_across: f32, yaw: f32, hw: f3
     return .{ .forward = dA * c + dX * s, .right = -dA * s + dX * c };
 }
 
+/// A point in a segment's bottom-left frame: `a` along, `x` across-from-left.
+pub const AX = struct { a: f32, x: f32 };
+
+/// nextToCur maps a point from the NEXT segment's BL frame into the CURRENT
+/// segment's, across the join — the frame fusion. LEFT and RIGHT are NOT mirror
+/// images: a left turn fuses on the end-left edge (origin is the inner corner), a
+/// right turn fuses on the end-right edge and pays a width shift. Mirrors
+/// nextToCur() in intersection.ts. `right` is the turn direction (sign > 0).
+pub fn nextToCur(a_b: f32, x_b: f32, L: f32, theta: f32, right: bool, W: f32) AX {
+    const c = @cos(theta);
+    const s = @sin(theta);
+    if (!right) {
+        return .{ .a = a_b * c + x_b * s + L, .x = x_b * c - a_b * s };
+    }
+    return .{ .a = a_b * c - x_b * s + W * s + L, .x = x_b * c + a_b * s + W * (1.0 - c) };
+}
+
+/// lineMeet returns where two infinite lines cross in the rider frame: line A through
+/// a0 toward a1, line B through b0 toward b1. Used for the corner's outer apex, where
+/// the two segments' outer shoulders (extended into the joint) meet. A real turn has a
+/// non-zero angle, so the lines are never parallel. Mirrors lineMeet() in intersection.ts.
+pub fn lineMeet(a0: RiderPt, a1: RiderPt, b0: RiderPt, b1: RiderPt) RiderPt {
+    const dax = a1.right - a0.right;
+    const daf = a1.forward - a0.forward;
+    const dbx = b1.right - b0.right;
+    const dbf = b1.forward - b0.forward;
+    const t = ((b0.right - a0.right) * dbf - (b0.forward - a0.forward) * dbx) / (dax * dbf - daf * dbx);
+    return .{ .right = a0.right + t * dax, .forward = a0.forward + t * daf };
+}
+
 /// Clip a rider-frame polygon (vertices carrying height) against the near plane at
 /// `near` metres forward, so no vertex sits behind the eye where the perspective
 /// divide would fling it across the screen. Writes the clipped vertices into `out`

@@ -1,9 +1,10 @@
 //! render — the orchestrator: turn the world + camera pose into screen-space
-//! polygons in the paint buffer, in back-to-front paint order. Collects the road
-//! strip and the trees, projects + near-clips each, and pushes. This is the
-//! buildScene + render split of the TS, FUSED here while there is a single straight
-//! segment; scene.zig splits back out when turns (the segment chain + joins) arrive.
-//! No drawing — that is the JS blitter's only job.
+//! polygons in the paint buffer, back to front. Walks the segment CHAIN from the
+//! rider's current segment, composing each join (geom.nextToCur) so a far segment's
+//! points land in the rider's frame — the `at(d, a, x)` of view.ts. Per chain
+//! segment it lays the road strip + the corner pavement at its exit join, and
+//! collects the trees; then it depth-sorts the trees and draws them near(3D)/far(2D).
+//! No drawing — that's the JS blitter.
 
 const geom = @import("geom.zig");
 const camera = @import("camera.zig");
@@ -14,76 +15,151 @@ const paint = @import("paint.zig");
 
 const ROAD: u32 = 0x34353c;
 const ROAD_CHUNK: f32 = 25.0; // road strips sliced this long so the bend reads smooth
-const DETAIL_DIST: f32 = 70.0; // within this, a tree draws its 3D near form; beyond, 2D far
+const DETAIL_DIST: f32 = 70.0; // within this, a tree draws 3D near; beyond, 2D far
 const MIN_SCENERY_PX: f32 = 2.0; // skip scenery that would project shorter than this
+const LOOK_AHEAD: usize = 7; // how many segments ahead we draw
+const MAX_CHAIN: usize = 8;
+const MAX_VIS_TREES: usize = 256;
 
-pub fn frame(seg: world.Segment, cam_along: f32, cam_across: f32, cam_yaw: f32) void {
-    const cam_focal = camera.FOCAL; // static frame: no lean/focus pull-in yet
-    const hw = seg.width / 2.0;
+const Chain = struct { idx: [MAX_CHAIN]usize, len: usize };
 
-    // ---- the far backdrop, drawn FIRST (behind everything). The absolute look
-    // heading is the segment's north heading + the look yaw; seg1's north heading is
-    // 0, so for now it's just cam_yaw (the chain carries real headings once turns
-    // arrive). ----
-    mountains.draw(cam_yaw);
-
-    // ---- road strip (the ground plane): x = 0..width, sliced along
-    // its length so the per-vertex curvature drop reads as a smooth bend. ----
-    const chunks_f = @ceil(seg.length / ROAD_CHUNK);
-    const chunks: usize = @intFromFloat(@max(@as(f32, 1.0), chunks_f));
-    var i: usize = 0;
-    while (i < chunks) : (i += 1) {
-        const fi: f32 = @floatFromInt(i);
-        const fc: f32 = @floatFromInt(chunks);
-        const a0 = seg.length * fi / fc;
-        const a1 = seg.length * (fi + 1.0) / fc;
-        emitGroundQuad(a0, a1, seg.width, cam_along, cam_across, cam_yaw, hw, cam_focal);
+// follow exit_to from `start`, stopping at LOOK_AHEAD or when the loop closes back to
+// the start (so the rider's own segment isn't redrawn far ahead).
+fn buildChain(w: *const world.World, start: usize) Chain {
+    var ch = Chain{ .idx = undefined, .len = 0 };
+    var s = start;
+    while (ch.len < LOOK_AHEAD and ch.len < MAX_CHAIN) {
+        ch.idx[ch.len] = s;
+        ch.len += 1;
+        const next = w.segments[s].exit_to;
+        if (next == start) break;
+        s = next;
     }
-
-    // ---- trees, sorted far → near so nearer ones paint over farther ones. ----
-    var fwd: [world.MAX_TREES]f32 = undefined;
-    var idx: [world.MAX_TREES]usize = undefined;
-    var t: usize = 0;
-    while (t < seg.n_trees) : (t += 1) {
-        const tr = seg.trees[t];
-        const rp = geom.toRider(tr.along, tr.across + hw, cam_along, cam_across, cam_yaw, hw);
-        fwd[t] = rp.forward;
-        idx[t] = t;
-    }
-    sortByForwardDesc(idx[0..seg.n_trees], fwd[0..]);
-    for (idx[0..seg.n_trees]) |ti| {
-        const tr = seg.trees[ti];
-        const rp = geom.toRider(tr.along, tr.across + hw, cam_along, cam_across, cam_yaw, hw);
-        if (rp.forward <= camera.NEAR) continue;
-        if (tr.height / rp.forward * cam_focal < MIN_SCENERY_PX) continue; // too small/far to bother
-        if (rp.forward < DETAIL_DIST)
-            tree.drawNear(rp.right, rp.forward, tr.height, tr.color, cam_focal)
-        else
-            tree.drawFar(rp.right, rp.forward, tr.height, tr.color, cam_focal);
-    }
+    return ch;
 }
 
-/// emitGroundQuad builds one road-strip quad (x 0..width, along a0..a1), lowers each
-/// vertex by the ground curvature, near-clips, projects, and pushes it as ROAD.
-fn emitGroundQuad(a0: f32, a1: f32, width: f32, cam_along: f32, cam_across: f32, cam_yaw: f32, hw: f32, cam_focal: f32) void {
-    const ax = [_]f32{ a0, a0, a1, a1 };
-    const xx = [_]f32{ 0.0, width, width, 0.0 };
-    var v: [4]geom.Vec3 = undefined;
-    var n: usize = 0;
-    while (n < 4) : (n += 1) {
-        const rp = geom.toRider(ax[n], xx[n], cam_along, cam_across, cam_yaw, hw);
-        v[n] = .{ .right = rp.right, .forward = rp.forward, .height = -geom.groundDrop(rp.right, rp.forward) };
+const Pose = struct { along: f32, across: f32, yaw: f32, hw: f32 };
+
+// map (a, x) in chain[d]'s BL frame into the rider frame, composing the joins down to
+// chain[0], then the rider transform. For d = 0 this is just toRider.
+fn at(w: *const world.World, ch: *const Chain, pose: Pose, d: usize, a: f32, x: f32) geom.RiderPt {
+    var pa = a;
+    var px = x;
+    var k: usize = d;
+    while (k > 0) {
+        k -= 1; // chain[k] → chain[k+1] is chain[k]'s exit turn
+        const seg = w.segments[ch.idx[k]];
+        const p = geom.nextToCur(pa, px, seg.length, seg.exit_angle, seg.exit_right, seg.width);
+        pa = p.a;
+        px = p.x;
     }
-    var clipped: [8]geom.Vec3 = undefined;
-    const m = geom.clipNear(&v, camera.NEAR, &clipped);
+    return geom.toRider(pa, px, pose.along, pose.across, pose.yaw, pose.hw);
+}
+
+// build ground verts (curvature drop per vertex), near-clip, project, push as ROAD.
+fn emitGround(pts: []const geom.RiderPt, cam_focal: f32) void {
+    if (pts.len > 8) return;
+    var v: [8]geom.Vec3 = undefined;
+    for (pts, 0..) |p, i| v[i] = .{ .right = p.right, .forward = p.forward, .height = -geom.groundDrop(p.right, p.forward) };
+    var clipped: [16]geom.Vec3 = undefined;
+    const m = geom.clipNear(v[0..pts.len], camera.NEAR, &clipped);
     if (m < 3) return;
-    var screen: [8]camera.ScreenPt = undefined;
+    var screen: [16]camera.ScreenPt = undefined;
     var j: usize = 0;
     while (j < m) : (j += 1) screen[j] = camera.project(clipped[j], cam_focal);
     paint.pushPoly(ROAD, screen[0..m]);
 }
 
-/// insertion sort of `idx` by `fwd[idx]` descending (n is tiny — a few dozen trees).
+pub fn frame(w: *const world.World, seg_idx: usize, along: f32, across: f32, yaw: f32) void {
+    const cam_focal = camera.FOCAL; // static frame: no lean/focus pull-in yet
+    const ch = buildChain(w, seg_idx);
+    const cur = w.segments[seg_idx];
+    const pose = Pose{ .along = along, .across = across, .yaw = yaw, .hw = cur.width / 2.0 };
+
+    // the backdrop, behind everything; absolute look heading = segment heading + yaw.
+    mountains.draw(cur.north_heading + yaw);
+
+    // trees collected across the whole chain, then depth-sorted as one set.
+    var t_right: [MAX_VIS_TREES]f32 = undefined;
+    var t_fwd: [MAX_VIS_TREES]f32 = undefined;
+    var t_h: [MAX_VIS_TREES]f32 = undefined;
+    var t_col: [MAX_VIS_TREES]u32 = undefined;
+    var nt: usize = 0;
+
+    var d: usize = 0;
+    while (d < ch.len) : (d += 1) {
+        const seg = w.segments[ch.idx[d]];
+        const hw = seg.width / 2.0;
+        const wseg = seg.width;
+
+        // road strip, sliced along its length.
+        const chunks_f = @ceil(seg.length / ROAD_CHUNK);
+        const chunks: usize = @intFromFloat(@max(@as(f32, 1.0), chunks_f));
+        var ci: usize = 0;
+        while (ci < chunks) : (ci += 1) {
+            const fi: f32 = @floatFromInt(ci);
+            const fc: f32 = @floatFromInt(chunks);
+            const a0 = seg.length * fi / fc;
+            const a1 = seg.length * (fi + 1.0) / fc;
+            const quad = [_]geom.RiderPt{
+                at(w, &ch, pose, d, a0, 0),
+                at(w, &ch, pose, d, a0, wseg),
+                at(w, &ch, pose, d, a1, wseg),
+                at(w, &ch, pose, d, a1, 0),
+            };
+            emitGround(quad[0..], cam_focal);
+        }
+
+        // corner pavement at this segment's exit join, when the next segment is in view.
+        if (d + 1 < ch.len) emitCorner(w, &ch, pose, d, cam_focal);
+
+        // trees (centre-relative across + hw → from-the-left), collected for sorting.
+        var ti: usize = 0;
+        while (ti < seg.n_trees and nt < MAX_VIS_TREES) : (ti += 1) {
+            const tr = seg.trees[ti];
+            const rp = at(w, &ch, pose, d, tr.along, tr.across + hw);
+            if (rp.forward <= camera.NEAR) continue;
+            if (tr.height / rp.forward * cam_focal < MIN_SCENERY_PX) continue;
+            t_right[nt] = rp.right;
+            t_fwd[nt] = rp.forward;
+            t_h[nt] = tr.height;
+            t_col[nt] = tr.color;
+            nt += 1;
+        }
+    }
+
+    var idx: [MAX_VIS_TREES]usize = undefined;
+    var i: usize = 0;
+    while (i < nt) : (i += 1) idx[i] = i;
+    sortByForwardDesc(idx[0..nt], t_fwd[0..]);
+    for (idx[0..nt]) |ii| {
+        if (t_fwd[ii] < DETAIL_DIST)
+            tree.drawNear(t_right[ii], t_fwd[ii], t_h[ii], t_col[ii], cam_focal)
+        else
+            tree.drawFar(t_right[ii], t_fwd[ii], t_h[ii], t_col[ii], cam_focal);
+    }
+}
+
+// the corner pavement: a quad from the inner fuse-corner out to the outer apex Q where
+// the two segments' extended outer shoulders meet. Mirrors intersectionScene's main
+// quad. corner(cu, cv) = at(d, from.length + cv, cu).
+fn emitCorner(w: *const world.World, ch: *const Chain, pose: Pose, d: usize, cam_focal: f32) void {
+    const from = w.segments[ch.idx[d]];
+    const to = w.segments[ch.idx[d + 1]];
+    const right = from.exit_right;
+    const wf = from.width;
+    const from_outer_cu: f32 = if (right) 0 else wf;
+    const to_outer_x: f32 = if (right) 0 else to.width;
+    const inner = at(w, ch, pose, d, from.length, if (right) wf else 0);
+    const outer_from = at(w, ch, pose, d, from.length, from_outer_cu);
+    const outer_from1 = at(w, ch, pose, d, from.length + 1, from_outer_cu);
+    const outer_to = at(w, ch, pose, d + 1, 0, to_outer_x);
+    const outer_to1 = at(w, ch, pose, d + 1, 1, to_outer_x);
+    const q = geom.lineMeet(outer_from, outer_from1, outer_to, outer_to1);
+    const quad = [_]geom.RiderPt{ inner, outer_from, q, outer_to };
+    emitGround(quad[0..], cam_focal);
+}
+
 fn sortByForwardDesc(idx: []usize, fwd: []const f32) void {
     var i: usize = 1;
     while (i < idx.len) : (i += 1) {

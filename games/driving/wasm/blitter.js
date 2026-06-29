@@ -67,39 +67,60 @@ function blit(ctx, mem, base, len) {
   }
 }
 
-// constant cruise speed (m/s), frame-rate-independent so the velocity is truly
-// steady for perception tests — NOT the game's accelerating V_BASE→V_MAX ramp.
-const CRUISE_MPS = 30;
+// metres advanced per frame — a CONSTANT step (no V_BASE→V_MAX ramp), so it's a
+// steady cruise at the display rate (~30 m/s at 60 Hz) and a single arrow press
+// nudges exactly one frame. The "frame" is the unit you step with the arrows.
+const STEP_M = 0.5;
 
 async function main() {
   document.body.style.cssText =
-    'margin:0;background:#0b0b0d;height:100vh;display:flex;align-items:center;justify-content:center';
+    'margin:0;background:#0b0b0d;height:100vh;display:flex;flex-direction:column;' +
+    'align-items:center;justify-content:center;font-family:ui-monospace,Menlo,monospace;color:#cfd2d6';
   const canvas = document.createElement('canvas');
   canvas.width = W;
   canvas.height = H;
   canvas.style.cssText = 'display:block;background:#000;box-shadow:0 10px 40px rgba(0,0,0,0.6)';
   document.body.appendChild(canvas);
+  const hint = document.createElement('div');
+  hint.textContent = 'SPACE pause/resume · ↑ step forward · ↓ step back';
+  hint.style.cssText = 'margin-top:10px;font-size:12px;color:#9aa0a6;letter-spacing:0.4px';
+  document.body.appendChild(hint);
   const ctx = canvas.getContext('2d');
 
   const { instance } = await WebAssembly.instantiateStreaming(fetch('/driving/safari.wasm'), {});
-  const { renderFrame, bufPtr, memory, segLength } = instance.exports;
+  const { renderFrame, bufPtr, memory, segCount, segLen } = instance.exports;
 
-  // cruise straight down seg1 at a constant velocity, looping at the segment end.
-  // The camera pose is just (along, across, yaw); here across=0, yaw=0 — dead level,
-  // centred. dt-based advance keeps the speed constant regardless of refresh rate.
-  const length = segLength();
-  let along = 0, lastT = 0;
-  function frame(t) {
-    const dt = lastT ? (t - lastT) / 1000 : 0; // seconds since the last frame
-    lastT = t;
-    along += CRUISE_MPS * dt;
-    if (along >= length) along -= length; // loop the straight
-    const len = renderFrame(along, 0.0, 0.0);
+  // The animation state is (segment, along) down the looping route, so stepping is a
+  // pure function of it — no history stack. across=0, yaw=0: dead level, centred,
+  // riding each segment's centre line and rolling over to the next at its end.
+  const count = segCount();
+  let seg = 0;
+  let along = 0;
+  let auto = true;
+
+  function step(dir) {
+    along += dir * STEP_M;
+    while (along >= segLen(seg)) { along -= segLen(seg); seg = (seg + 1) % count; }
+    while (along < 0) { seg = (seg - 1 + count) % count; along += segLen(seg); }
+  }
+  function draw() {
+    const len = renderFrame(seg, along, 0.0, 0.0);
     drawBackground(ctx);
     blit(ctx, memory, bufPtr(), len);
-    requestAnimationFrame(frame);
   }
-  requestAnimationFrame(frame);
+  function loop() {
+    if (auto) { step(1); draw(); }
+    requestAnimationFrame(loop);
+  }
+
+  window.addEventListener('keydown', (e) => {
+    if (e.code === 'Space') { auto = !auto; e.preventDefault(); }
+    else if (e.code === 'ArrowUp') { auto = false; step(1); draw(); e.preventDefault(); }
+    else if (e.code === 'ArrowDown') { auto = false; step(-1); draw(); e.preventDefault(); }
+  });
+
+  draw();
+  requestAnimationFrame(loop);
 }
 
 main();

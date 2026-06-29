@@ -1,53 +1,121 @@
-//! world — the road network as data. For the first frame this is ONE straight
-//! segment lined with the alternating-conifer tree rows; the segment chain, turns,
-//! towers, and mountains arrive later. No rider, no projection, no drawing. Mirrors
-//! segmentTrees() in tree.ts + the seg1 config in world.ts (ALL_GREEN, 500 m).
+//! world — the road network as data: a chain of straight segments joined by turns.
+//! Each segment carries its length, width, tree rows, and its EXIT turn (angle +
+//! direction + the segment it leads to); buildWorld accumulates each segment's
+//! heading relative to north. A subset of the real route (world.ts) — enough to
+//! show left/right turns of varying sharpness and the gold/red tree schemes — wired
+//! into a LOOP so the screensaver runs forever. No rider, no projection, no drawing.
 
-pub const Color = u32; // 0xRRGGBB, opaque (the blitter prefixes '#')
+const std = @import("std");
+
+pub const Color = u32; // 0xRRGGBB, opaque
+
+pub const Scheme = enum { all_green, yellow_green, red_green };
 
 pub const Tree = struct { along: f32, across: f32, color: Color, height: f32 };
 
-pub const MAX_TREES = 64;
+pub const MAX_TREES = 48;
+pub const MAX_SEGMENTS = 16;
+
 pub const Segment = struct {
     length: f32,
     width: f32,
     trees: [MAX_TREES]Tree,
     n_trees: usize,
+    // exit turn: angle (rad) + right? + the index of the segment it leads to.
+    exit_angle: f32,
+    exit_right: bool,
+    exit_to: usize,
+    north_heading: f32, // accumulated heading vs north (seg 0 = 0)
 };
 
-// tree palette + dimensions, mirrored from tree.ts (ALL_GREEN scheme for now: the
-// accent is just more green, so every conifer is CONIFER_GREEN).
+pub const World = struct {
+    segments: [MAX_SEGMENTS]Segment,
+    n_segments: usize,
+};
+
+// ---- tree palette + dimensions, mirrored from tree.ts ----
 const CONIFER_GREEN: Color = 0x1c5a22;
-const SMALL_HEIGHT: f32 = 4.5; // odd-parity conifers
-const BIG_SCALE: f32 = 1.3; // even-parity conifers stand this much taller
+const CONIFER_GOLD: Color = 0xcf9a18;
+const CONIFER_RED: Color = 0xb23a2a;
+const SMALL_HEIGHT: f32 = 4.5;
+const BIG_SCALE: f32 = 1.3;
 const TREES_PER_SIDE: usize = 11;
-const TREE_ROAD_OFFSET: f32 = 1.5; // a tree stands this far beyond the lane edge
-const TREE_START_INSET: f32 = 6.0; // first tree, past the entry join
-const TREE_END_INSET: f32 = 85.0; // last tree, short of the (future) intersection
+const TREE_ROAD_OFFSET: f32 = 1.5;
+const TREE_START_INSET: f32 = 6.0;
+const TREE_END_INSET: f32 = 85.0;
 const LANE_WIDTH: f32 = 4.0;
+const DEG: f32 = std.math.pi / 180.0;
 
-/// buildWorld authors the first-frame world: seg1 (a 500 m ALL_GREEN straight) with
-/// its two tree rows — exactly segmentTrees(500, ALL_GREEN, 2) from tree.ts.
-pub fn buildWorld() Segment {
-    const length: f32 = 500.0;
+fn accentColor(scheme: Scheme) Color {
+    return switch (scheme) {
+        .yellow_green => CONIFER_GOLD,
+        .red_green => CONIFER_RED,
+        .all_green => CONIFER_GREEN,
+    };
+}
+
+// segmentTrees: 11 conifers per side, evenly spaced; even = green + 1.3× tall, odd =
+// the scheme's accent. Red trees 2× everything; gold 3× and set ~4× further off the
+// road. Mirrors segmentTrees() in tree.ts.
+fn fillTrees(seg: *Segment, scheme: Scheme) void {
     const lane_half = LANE_WIDTH / 2.0;
-    var seg = Segment{ .length = length, .width = LANE_WIDTH, .trees = undefined, .n_trees = 0 };
-
     const start_along = TREE_START_INSET;
-    const end_along = length - TREE_END_INSET;
+    const end_along = seg.length - TREE_END_INSET;
     const spacing = (end_along - start_along) / @as(f32, @floatFromInt(TREES_PER_SIDE - 1));
     const tree_line = lane_half + TREE_ROAD_OFFSET;
-
+    seg.n_trees = 0;
     var k: usize = 0;
     while (k < TREES_PER_SIDE) : (k += 1) {
         const along = start_along + @as(f32, @floatFromInt(k)) * spacing;
         const even = (k % 2) == 0;
-        const height: f32 = if (even) SMALL_HEIGHT * BIG_SCALE else SMALL_HEIGHT;
-        // both rows (alternating parity drives size; ALL_GREEN keeps one colour)
-        seg.trees[seg.n_trees] = .{ .along = along, .across = -tree_line, .color = CONIFER_GREEN, .height = height };
+        const color: Color = if (even) CONIFER_GREEN else accentColor(scheme);
+        var height: f32 = if (even) SMALL_HEIGHT * BIG_SCALE else SMALL_HEIGHT;
+        var x = tree_line;
+        if (color == CONIFER_RED) height *= 2.0;
+        if (color == CONIFER_GOLD) {
+            height *= 3.0;
+            x = lane_half + 4.0 * TREE_ROAD_OFFSET;
+        }
+        seg.trees[seg.n_trees] = .{ .along = along, .across = -x, .color = color, .height = height };
         seg.n_trees += 1;
-        seg.trees[seg.n_trees] = .{ .along = along, .across = tree_line, .color = CONIFER_GREEN, .height = height };
+        seg.trees[seg.n_trees] = .{ .along = along, .across = x, .color = color, .height = height };
         seg.n_trees += 1;
     }
-    return seg;
+}
+
+// the authored route: length, scheme, and the exit turn (signed degrees, + = right)
+// onto the next segment. The last entry loops back to segment 0.
+const Cfg = struct { length: f32, scheme: Scheme, turn_deg: f32 };
+const route = [_]Cfg{
+    .{ .length = 500, .scheme = .all_green, .turn_deg = 50 }, // seg1 → 50° right
+    .{ .length = 320, .scheme = .all_green, .turn_deg = -70 }, // seg2 → 70° left
+    .{ .length = 400, .scheme = .all_green, .turn_deg = 20 }, // seg3 → 20° right
+    .{ .length = 300, .scheme = .yellow_green, .turn_deg = 20 }, // seg4 (gold) → 20° right
+    .{ .length = 300, .scheme = .all_green, .turn_deg = -70 }, // seg5 → 70° left
+    .{ .length = 300, .scheme = .all_green, .turn_deg = -70 }, // seg6 → 70° left
+    .{ .length = 1200, .scheme = .red_green, .turn_deg = 80 }, // seg7 (red, long) → 80° right, loops to seg1
+};
+
+/// buildWorld authors the looping route, builds each segment's tree rows, and
+/// accumulates the headings.
+pub fn buildWorld() World {
+    var w = World{ .segments = undefined, .n_segments = route.len };
+    for (route, 0..) |c, i| {
+        var seg = &w.segments[i];
+        seg.length = c.length;
+        seg.width = LANE_WIDTH;
+        seg.exit_angle = @abs(c.turn_deg) * DEG;
+        seg.exit_right = c.turn_deg >= 0;
+        seg.exit_to = (i + 1) % route.len; // loop back at the end
+        seg.north_heading = 0;
+        fillTrees(seg, c.scheme);
+    }
+    // accumulate north headings along the route (seg 0 = 0); stop before wrapping so
+    // the loop's seg 0 keeps heading 0 (a clean cut, not an ever-growing spiral).
+    var i: usize = 0;
+    while (i + 1 < w.n_segments) : (i += 1) {
+        const sgn: f32 = if (w.segments[i].exit_right) 1.0 else -1.0;
+        w.segments[i + 1].north_heading = w.segments[i].north_heading + sgn * w.segments[i].exit_angle;
+    }
+    return w;
 }
