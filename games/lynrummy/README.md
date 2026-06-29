@@ -33,9 +33,24 @@ Three actors, covered in [`ARCHITECTURE.md`](./ARCHITECTURE.md):
   referees or reasons.
 
 The standout architectural idea — and the most fun to work with — is a single
-**DSL spoken over the wire** (and in fixtures, transcripts, and benchmarks). It's
-what let Steve and Claude debug the game by reading the wire together. See
-[`ARCHITECTURE.md`](./ARCHITECTURE.md).
+**DSL spoken over the wire**. One short, canonical grammar carries the same
+shape across all three runtimes: conformance fixtures, on-disk session files
+(`meta`, `actions.dsl`), the new-session wire body, the resume bundle, and agent
+transcripts. A sample session header:
+
+```
+created_at: 1778500538
+label:
+
+board:
+  at ( 20,  70): K♠ A♠ 2♠ 3♠
+  ...
+```
+
+It's what let Steve and Claude debug the game by reading the wire together. Most
+parsing happens at test time, and conformance is gated by `ops/check`. The full
+grammar tour + examples live in [`ARCHITECTURE.md`](./ARCHITECTURE.md) under "DSL
+is the lingua franca".
 
 ## Building & running
 

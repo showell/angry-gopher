@@ -241,7 +241,9 @@ read-only** — a keyed request may only GET/HEAD.
 The server stays deliberately dumb — URL-keyed file storage plus the
 per-surface handlers — and pushes logic to the client wherever it can.
 Lyn Rummy is the clearest case: the strategic brain is the TS agent, and
-the Elm client owns the full game (dealer, referee, UI).
+the Elm client owns the full game (dealer, referee, UI). Its
+[`README`](games/lynrummy/README.md) covers that split and the
+DSL-over-the-wire idea in full.
 
 **Responsive / mobile** (the chat surfaces — our mobile user is Apoorva;
 Steve is desktop-only). Small-screen layout is decided client-side. One JS
@@ -251,27 +253,6 @@ JS — so the number lives in exactly one place. The shared nav drawer
 (`chrome_drawer.js`) and the chat page's mobile layout (`chat_responsive.js`)
 both key off it; the server (`chrome.zig`) just ships the desktop top bar and
 loads the widgets. Start at `Viewport` and follow the breadcrumbs.
-
-## Lyn Rummy's DSL is its lingua franca
-
-Lyn Rummy leans on one short, canonical DSL that carries the same grammar
-across all three runtimes — conformance fixtures, on-disk session files (`meta`,
-`actions.dsl`), the new-session wire body, the resume bundle, and agent
-transcripts. Sample session header:
-
-```
-created_at: 1778500538
-label:
-
-board:
-  at ( 20,  70): K♠ A♠ 2♠ 3♠
-  ...
-```
-
-Full grammar tour + examples live in
-[`games/lynrummy/ARCHITECTURE.md`](games/lynrummy/ARCHITECTURE.md)
-under "DSL is the lingua franca". Most parsing happens at test time;
-conformance is gated by `ops/check`.
 
 ## Ops & testing
 
