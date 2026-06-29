@@ -150,9 +150,10 @@ fn renderHomeBody(io: Io, alloc: Alloc) ![]const u8 {
     try out.appendSlice(alloc, try html.htmlEscape(alloc, headline));
     try out.appendSlice(alloc, "</p>\n<div class=\"app-list\">\n");
     for (apps.items) |a| {
-        // Optional "Read more" link to the app's essay, right after the description.
+        // Optional "Read more" link to the app's essay. It shares a line with the
+        // GitHub link (rendered in the template), so this is just the inner anchor.
         const more = if (a.essay.len > 0)
-            try std.fmt.allocPrint(alloc, "<p class=\"app-more\"><a href=\"{s}\">Read more →</a></p>", .{try html.htmlEscape(alloc, a.essay)})
+            try std.fmt.allocPrint(alloc, "<a href=\"{s}\">Read more →</a>", .{try html.htmlEscape(alloc, a.essay)})
         else
             "";
         // Optional app image (left of the text), itself a link to the app. 600x420
@@ -166,8 +167,8 @@ fn renderHomeBody(io: Io, alloc: Alloc) ![]const u8 {
         else
             "";
         try out.print(alloc,
-            \\<div class="app-row"><div class="app-row-top">{s}<div class="app-row-main"><h2><a href="{s}">{s}</a></h2><p>{s}</p>{s}<p class="app-feat">{s}</p></div>
-            \\<div class="cta"><a class="play-btn" href="{s}">{s}</a><div class="cta-meta"><span class="tech-lang">{s}</span><a class="tech-code" href="{s}" target="_blank" rel="noopener">Code on GitHub ↗</a></div></div></div></div>
+            \\<div class="app-row"><div class="app-row-top">{s}<div class="app-row-main"><h2><a href="{s}">{s}</a></h2><p>{s}</p><p class="app-more">{s}<a class="tech-code" href="{s}" target="_blank" rel="noopener">Code on GitHub ↗</a></p><p class="app-feat"><span class="tech-lang">{s}</span> {s}</p></div>
+            \\<div class="cta"><a class="play-btn" href="{s}">{s}</a></div></div></div>
             \\
         , .{
             thumb,
@@ -175,11 +176,11 @@ fn renderHomeBody(io: Io, alloc: Alloc) ![]const u8 {
             try html.htmlEscape(alloc, a.title),
             try html.htmlEscape(alloc, a.desc),
             more,
+            try html.htmlEscape(alloc, a.code),
+            try html.htmlEscape(alloc, a.lang),
             try html.htmlEscape(alloc, a.tech),
             try html.htmlEscape(alloc, a.href),
             try html.htmlEscape(alloc, a.cta),
-            try html.htmlEscape(alloc, a.lang),
-            try html.htmlEscape(alloc, a.code),
         });
     }
     // The resume footer is hard-coded (Steve's call): the PDF link has no DSL row.
@@ -333,7 +334,7 @@ const head_style =
     \\.app-row-main .app-more { margin: 6px 0 0; font-size: 13px; }
     \\.app-more a { color: var(--cc-accent, #000080); text-decoration: none; font-weight: 600; }
     \\.app-more a:hover { text-decoration: underline; }
-    \\.app-row .cta { flex-shrink: 0; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+    \\.app-row .cta { flex-shrink: 0; }
     \\/* Uniform footprint: every button is the same width + a single line, so the
     \\   column reads as one tidy stack of identical calls to action. No arrow — a
     \\   right-pointing arrow on a right-edge button reads as "look away". */
@@ -343,15 +344,13 @@ const head_style =
     \\            text-decoration: none; font-weight: bold; font-size: 16px; line-height: 1.2;
     \\            box-shadow: 0 1px 3px rgba(0,0,32,0.28); transition: background .12s, transform .12s; }
     \\.play-btn:hover { background: #1414c8; transform: translateY(-1px); }
-    \\/* Tech stack, split for layout: the feature line sits under the description
-    \\   (.app-feat, beneath "Read more"); the language chip + GitHub link stack under
-    \\   the button (.cta-meta). All low-key + muted. */
-    \\.app-feat { margin: 10px 0 0; font-size: 12px; color: var(--cc-muted-fg, #888); }
-    \\.cta-meta { display: flex; flex-direction: column; align-items: center; gap: 7px; }
+    \\/* Tech stack, inline in the text column: GitHub link rides the "Read more" line
+    \\   (.app-more); the language chip leads the feature blurb (.app-feat). Low-key. */
+    \\.app-feat { margin: 8px 0 0; font-size: 12px; color: var(--cc-muted-fg, #888); }
     \\.tech-lang { display: inline-block; background: var(--cc-accent-soft-bg, #eef0f8);
     \\             color: var(--cc-accent, #000080); border-radius: 4px; padding: 2px 8px;
-    \\             font-weight: 600; font-size: 11px; }
-    \\.tech-code { white-space: nowrap; font-weight: 600; font-size: 12px;
+    \\             font-weight: 600; font-size: 11px; margin-right: 6px; }
+    \\.tech-code { margin-left: 16px; white-space: nowrap; font-weight: 600;
     \\             color: var(--cc-accent, #000080); text-decoration: none; }
     \\.tech-code:hover { text-decoration: underline; }
     \\@media (max-width: 600px) { .app-row-top { flex-direction: column; align-items: flex-start; gap: 12px; }
