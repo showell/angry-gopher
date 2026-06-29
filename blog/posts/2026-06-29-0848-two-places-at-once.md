@@ -35,7 +35,7 @@ pressure. There's nowhere to hide and no one to blame. The whole difficulty is t
 gap between the board as it sits and the board as it wants to be, and that gap is
 exactly your skill, measured.
 
-There are about forty of these, and the thing I'd point at isn't any single knot —
+There are [about forty of these](/puzzles), and the thing I'd point at isn't any single knot —
 it's the *order*. They're arranged to get harder by small steps, each board a
 half-turn past the one before. That arrangement is the oldest teaching trick there
 is; it's what a good puzzle book does, what a good coach does, what Lyn presumably

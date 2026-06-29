@@ -13,6 +13,7 @@ cta: Take a Drive
 lang: TypeScript
 tech: first-person 3D drawn from rider-relative coordinates — no global world frame
 code: https://github.com/showell/angry-gopher/tree/master/games/driving
+essay: /blog/you-cant-freeze-a-sunset
 A first-person motorcycle ride down a winding road — and it steers itself. Hit space and watch it lean through the turns, or step the ride frame by frame. No goal, no clock — just the road.
 
 ## Chat -> /chat

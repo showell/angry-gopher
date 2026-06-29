@@ -27,6 +27,10 @@ the difference is *which* hard problem sits at the center. Safari's is
 dusk, a cat that's a flipbook of poses). Delivery's is **combinatorial cost** —
 routing trucks to minimize an honest number. Same spirit, different hard part.
 
+For why the engine and the math were never the hard part — and what it means to
+build something whose only spec is a perception in someone's head — read the essay
+[**"You Can't Freeze a Sunset"**](https://lynrummy.com/blog/you-cant-freeze-a-sunset).
+
 ## Running & testing
 
 `ops/start`, then open `/driving`. Gate: `node test/test_model.ts` (drives the
