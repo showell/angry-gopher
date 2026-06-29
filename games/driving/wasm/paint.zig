@@ -16,15 +16,29 @@ const camera = @import("camera.zig");
 const CAP_WORDS: usize = (1 << 18) / 4;
 var buf: [CAP_WORDS]u32 = undefined;
 var cursor: usize = 0; // next free word
+var high_water: usize = 0; // max words used by any frame this run (instrumentation)
 
 pub fn reset() void {
     cursor = 0;
 }
 
 /// byteLen: how many bytes of `buf` this frame filled — the blitter walks exactly
-/// this many from ptr().
+/// this many from ptr(). Also rolls the run-wide high-water mark, so the HUD can show
+/// how close we ever came to the cap (a full buffer means push() silently dropped).
 pub fn byteLen() u32 {
+    if (cursor > high_water) high_water = cursor;
     return @intCast(cursor * 4);
+}
+
+/// highWaterBytes: the most bytes any single frame has used this run. If this ever
+/// reaches capBytes(), the bounded buffer overflowed and commands were dropped.
+pub fn highWaterBytes() u32 {
+    return @intCast(high_water * 4);
+}
+
+/// capBytes: the fixed buffer size — the ceiling highWaterBytes() must stay under.
+pub fn capBytes() u32 {
+    return @intCast(CAP_WORDS * 4);
 }
 
 /// ptr: the byte offset of the buffer in linear memory (fixed; the blitter reads it

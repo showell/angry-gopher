@@ -69,3 +69,14 @@ export fn riderTilt() f32 {
 export fn bufPtr() u32 {
     return paint.ptr();
 }
+
+/// bufHighWater is the most bytes any frame has used this run (instrumentation); if it
+/// ever equals bufCap() the draw buffer overflowed and commands were silently dropped.
+export fn bufHighWater() u32 {
+    return paint.highWaterBytes();
+}
+
+/// bufCap is the fixed draw-buffer size — the ceiling bufHighWater() must stay under.
+export fn bufCap() u32 {
+    return paint.capBytes();
+}

@@ -57,7 +57,9 @@ function blit(ctx, mem, base, len) {
   const u32 = new Uint32Array(mem.buffer, base, len / 4);
   const f32 = new Float32Array(mem.buffer, base, len / 4);
   let w = 0;
+  let cmds = 0;
   while (w * 4 < len) {
+    cmds++;
     const tag = u32[w++];
     if (tag === 2) {
       const cp = u32[w++], flip = u32[w++];
@@ -95,6 +97,45 @@ function blit(ctx, mem, base, len) {
     ctx.closePath();
     ctx.fill();
   }
+  return cmds;
+}
+
+// The frame-budget HUD: zig can't time itself (no clock in wasm-freestanding), so the
+// only place to measure the 16.7ms/60fps budget is here, where performance.now() lives
+// and where BOTH halves — wasm geometry compute and canvas blit — can be timed. We keep
+// a rolling window so the displayed max catches the worst recent frame, not just now.
+const BUDGET_MS = 1000 / 60;
+const WINDOW = 90; // ~1.5s of frames
+const hud = { wasm: [], blit: [], total: [], on: true };
+function hudPush(arr, v) { arr.push(v); if (arr.length > WINDOW) arr.shift(); }
+function hudMax(arr) { let m = 0; for (const v of arr) if (v > m) m = v; return m; }
+function hudAvg(arr) { if (!arr.length) return 0; let s = 0; for (const v of arr) s += v; return s / arr.length; }
+
+function drawHud(ctx, bufBytes, bufCap, cmds) {
+  if (!hud.on) return;
+  const totMax = hudMax(hud.total);
+  const over = totMax > BUDGET_MS;
+  const fill = bufCap ? (bufBytes / bufCap) : 0;
+  const lines = [
+    `wasm ${hudAvg(hud.wasm).toFixed(2)}ms  blit ${hudAvg(hud.blit).toFixed(2)}ms`,
+    `total ${hudAvg(hud.total).toFixed(2)}ms  max ${totMax.toFixed(2)}ms / ${BUDGET_MS.toFixed(2)}`,
+    `cmds ${cmds}   buf-peak ${(bufBytes / 1024).toFixed(1)}/${(bufCap / 1024).toFixed(0)} KiB (${(fill * 100).toFixed(0)}%)`,
+  ];
+  ctx.save();
+  ctx.font = '12px ui-monospace,Menlo,monospace';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'top';
+  ctx.fillStyle = 'rgba(0,0,0,0.55)';
+  ctx.fillRect(8, 8, 250, 8 + lines.length * 16 + 4);
+  for (let i = 0; i < lines.length; i++) {
+    // total line goes red when the worst recent frame blew the budget; buf line goes
+    // amber if we ever got within 10% of the cap (push() would start dropping).
+    ctx.fillStyle = (i === 1 && over) ? '#ff6b6b'
+      : (i === 2 && fill > 0.9) ? '#ffd166'
+      : '#cfe0f0';
+    ctx.fillText(lines[i], 14, 14 + i * 16);
+  }
+  ctx.restore();
 }
 
 async function main() {
@@ -107,27 +148,36 @@ async function main() {
   canvas.style.cssText = 'display:block;background:#000;box-shadow:0 10px 40px rgba(0,0,0,0.6)';
   document.body.appendChild(canvas);
   const hint = document.createElement('div');
-  hint.textContent = 'SPACE pause/resume · ↑ step forward · ↓ step back';
+  hint.textContent = 'SPACE pause/resume · ↑ step forward · ↓ step back · D toggle HUD';
   hint.style.cssText = 'margin-top:10px;font-size:12px;color:#9aa0a6;letter-spacing:0.4px';
   document.body.appendChild(hint);
   const ctx = canvas.getContext('2d');
 
   const { instance } = await WebAssembly.instantiateStreaming(fetch('/driving/safari.wasm'), {});
-  const { renderFrame, bufPtr, memory, advance, back, riderTilt } = instance.exports;
+  const { renderFrame, bufPtr, memory, advance, back, riderTilt, bufHighWater, bufCap } = instance.exports;
+  const capBytes = bufCap();
 
   // The wasm owns the rider state; we drive it. The camera rolls with the bike's lean
   // (riderTilt) — the whole world banks into a turn, like main.ts's ctx.rotate(-tilt).
   let auto = true;
 
   function draw() {
+    // time the two halves separately: wasm geometry compute, then canvas blit.
+    const t0 = performance.now();
     const len = renderFrame();
+    const t1 = performance.now();
     ctx.save();
     ctx.translate(W / 2, H / 2);
     ctx.rotate(-riderTilt());
     ctx.translate(-W / 2, -H / 2);
     drawBackground(ctx);
-    blit(ctx, memory, bufPtr(), len);
+    const cmds = blit(ctx, memory, bufPtr(), len);
     ctx.restore();
+    const t2 = performance.now();
+    hudPush(hud.wasm, t1 - t0);
+    hudPush(hud.blit, t2 - t1);
+    hudPush(hud.total, t2 - t0);
+    drawHud(ctx, bufHighWater(), capBytes, cmds); // unrolled overlay, on top
   }
   function loop() {
     if (auto) { advance(); draw(); }
@@ -138,6 +188,7 @@ async function main() {
     if (e.code === 'Space') { auto = !auto; e.preventDefault(); }
     else if (e.code === 'ArrowUp') { auto = false; advance(); draw(); e.preventDefault(); }
     else if (e.code === 'ArrowDown') { auto = false; back(); draw(); e.preventDefault(); }
+    else if (e.code === 'KeyD') { hud.on = !hud.on; draw(); e.preventDefault(); }
   });
 
   draw();
