@@ -54,6 +54,11 @@ The examples *are* the spec — read [`../../../conformance/scenarios/`](../../.
 (start with `undo_walkthrough.dsl`) rather than hunting for a syntax reference.
 It's a niche win, earned because everything here is cards-and-coordinates.
 
+For the story behind the agent — why teaching a machine an *unpublished* game ran
+exactly opposite to building the delivery solver, and how Steve's own hand-motions
+(`pluck`, `peel`, `steal`, `splice`) became the DSL — read the essay
+[**"Lyn Never Wrote It Down"**](https://lynrummy.com/blog/lyn-never-wrote-it-down).
+
 ## The `Game/` modules
 
 - [`Model.elm`](Model.elm) — the model and `applyEvent` (how a game event mutates state).

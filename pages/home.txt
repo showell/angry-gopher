@@ -35,6 +35,7 @@ cta: Match wits with the agent
 lang: TypeScript + Elm
 tech: a rules DSL sent over the wire — a TypeScript referee engine with an Elm UI
 code: https://github.com/showell/angry-gopher/tree/master/games/lynrummy
+essay: /blog/lyn-never-wrote-it-down
 Two-player rummy with a real referee. Build runs and sets against an agent that actually knows the rules, and complete your turn when the board looks right.
 
 ## Lyn Rummy Puzzles -> /puzzles
@@ -42,4 +43,5 @@ cta: Fix the board
 lang: TypeScript + Elm
 tech: shares the rules engine; deterministic undo and move-by-move replay
 code: https://github.com/showell/angry-gopher/tree/master/games/lynrummy
+essay: /blog/lyn-never-wrote-it-down
 A single board, mid-game. Drag stacks to merge or split your way to a clean meld layout. Solo, no opponent — undo is free, and Replay walks back your moves.
