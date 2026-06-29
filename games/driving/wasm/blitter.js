@@ -23,16 +23,42 @@ function hex(c) {
   return '#' + (c & 0xffffff).toString(16).padStart(6, '0');
 }
 
+// shade a 0xRRGGBB by a brightness factor (clamped) -> "rgb(r,g,b)".
+function shade(c, f) {
+  const r = Math.min(255, Math.round(((c >> 16) & 255) * f));
+  const g = Math.min(255, Math.round(((c >> 8) & 255) * f));
+  const b = Math.min(255, Math.round((c & 255) * f));
+  return `rgb(${r},${g},${b})`;
+}
+
 // Walk the draw buffer [base, base+len) and fill each polygon. Two views over the
-// SAME words: u32 for color/count, f32 for the coordinate bit patterns.
+// SAME words: u32 for tag/color/count, f32 for the coordinate bit patterns. tag 1 =
+// horizontal round gradient (dark edge → bright centre → dark edge) across the
+// polygon's x-extent — the cylinder/cone shading; tag 0 = solid.
 function blit(ctx, mem, base, len) {
   const u32 = new Uint32Array(mem.buffer, base, len / 4);
   const f32 = new Float32Array(mem.buffer, base, len / 4);
   let w = 0;
   while (w * 4 < len) {
+    const tag = u32[w++];
     const color = u32[w++];
     const n = u32[w++];
-    ctx.fillStyle = hex(color);
+    const start = w;
+    if (tag === 1) {
+      let minX = Infinity, maxX = -Infinity;
+      for (let i = 0; i < n; i++) { const x = f32[start + i * 2]; if (x < minX) minX = x; if (x > maxX) maxX = x; }
+      if (maxX - minX < 1) {
+        ctx.fillStyle = hex(color);
+      } else {
+        const g = ctx.createLinearGradient(minX, 0, maxX, 0);
+        g.addColorStop(0, shade(color, 0.6));
+        g.addColorStop(0.5, shade(color, 1.25));
+        g.addColorStop(1, shade(color, 0.6));
+        ctx.fillStyle = g;
+      }
+    } else {
+      ctx.fillStyle = hex(color);
+    }
     ctx.beginPath();
     ctx.moveTo(f32[w], f32[w + 1]); w += 2;
     for (let i = 1; i < n; i++) { ctx.lineTo(f32[w], f32[w + 1]); w += 2; }

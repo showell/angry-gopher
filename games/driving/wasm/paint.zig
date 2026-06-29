@@ -3,10 +3,12 @@
 //! the SAME bytes and fills. Pre-sized so the module never grows memory mid-frame
 //! (the determinism caveat). Layout per polygon:
 //!
-//!   [color u32][nPoints u32][x0 f32][y0 f32][x1 f32][y1 f32] ...
+//!   [tag u32][color u32][nPoints u32][x0 f32][y0 f32][x1 f32][y1 f32] ...
 //!
-//! coords are the f32 bit pattern stored in a u32 word; the blitter reads them back
-//! through a Float32Array view over the same words.
+//! tag 0 = solid fill; tag 1 = horizontal round gradient (dark edge → bright centre
+//! → dark edge, across the polygon's x-extent) — the cylinder/cone shading the near
+//! trees want. coords are the f32 bit pattern stored in a u32 word; the blitter reads
+//! them back through a Float32Array view over the same words.
 
 const camera = @import("camera.zig");
 
@@ -31,12 +33,25 @@ pub fn ptr() u32 {
     return @intCast(@intFromPtr(&buf));
 }
 
-/// pushPoly appends one filled polygon: its color (0xRRGGBB) and its screen points.
-/// Drops it silently if it has fewer than 3 points or the bounded buffer is full.
+/// pushPoly appends one SOLID-filled polygon (tag 0).
 pub fn pushPoly(color: u32, pts: []const camera.ScreenPt) void {
+    push(0, color, pts);
+}
+
+/// pushRoundPoly appends one polygon filled with a horizontal round gradient (tag 1)
+/// — the cylinder/cone shading (dark edges, bright centre) the near trees use.
+pub fn pushRoundPoly(color: u32, pts: []const camera.ScreenPt) void {
+    push(1, color, pts);
+}
+
+/// push appends one polygon command: tag, color (0xRRGGBB), and its screen points.
+/// Drops it silently if it has fewer than 3 points or the bounded buffer is full.
+fn push(tag: u32, color: u32, pts: []const camera.ScreenPt) void {
     if (pts.len < 3) return;
-    const need = 2 + pts.len * 2;
+    const need = 3 + pts.len * 2;
     if (cursor + need > CAP_WORDS) return;
+    buf[cursor] = tag;
+    cursor += 1;
     buf[cursor] = color;
     cursor += 1;
     buf[cursor] = @intCast(pts.len);

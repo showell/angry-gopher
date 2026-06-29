@@ -9,16 +9,25 @@ const geom = @import("geom.zig");
 const camera = @import("camera.zig");
 const world = @import("world.zig");
 const tree = @import("tree.zig");
+const mountains = @import("mountains.zig");
 const paint = @import("paint.zig");
 
 const ROAD: u32 = 0x34353c;
 const ROAD_CHUNK: f32 = 25.0; // road strips sliced this long so the bend reads smooth
+const DETAIL_DIST: f32 = 70.0; // within this, a tree draws its 3D near form; beyond, 2D far
+const MIN_SCENERY_PX: f32 = 2.0; // skip scenery that would project shorter than this
 
 pub fn frame(seg: world.Segment, cam_along: f32, cam_across: f32, cam_yaw: f32) void {
     const cam_focal = camera.FOCAL; // static frame: no lean/focus pull-in yet
     const hw = seg.width / 2.0;
 
-    // ---- road strip (the ground plane, drawn FIRST): x = 0..width, sliced along
+    // ---- the far backdrop, drawn FIRST (behind everything). The absolute look
+    // heading is the segment's north heading + the look yaw; seg1's north heading is
+    // 0, so for now it's just cam_yaw (the chain carries real headings once turns
+    // arrive). ----
+    mountains.draw(cam_yaw);
+
+    // ---- road strip (the ground plane): x = 0..width, sliced along
     // its length so the per-vertex curvature drop reads as a smooth bend. ----
     const chunks_f = @ceil(seg.length / ROAD_CHUNK);
     const chunks: usize = @intFromFloat(@max(@as(f32, 1.0), chunks_f));
@@ -46,7 +55,11 @@ pub fn frame(seg: world.Segment, cam_along: f32, cam_across: f32, cam_yaw: f32) 
         const tr = seg.trees[ti];
         const rp = geom.toRider(tr.along, tr.across + hw, cam_along, cam_across, cam_yaw, hw);
         if (rp.forward <= camera.NEAR) continue;
-        tree.draw(rp.right, rp.forward, tr.height, tr.color, cam_focal);
+        if (tr.height / rp.forward * cam_focal < MIN_SCENERY_PX) continue; // too small/far to bother
+        if (rp.forward < DETAIL_DIST)
+            tree.drawNear(rp.right, rp.forward, tr.height, tr.color, cam_focal)
+        else
+            tree.drawFar(rp.right, rp.forward, tr.height, tr.color, cam_focal);
     }
 }
 
