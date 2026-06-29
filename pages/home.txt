@@ -5,6 +5,7 @@ cta: Ship some Totes
 lang: TypeScript
 tech: Clarke-Wright savings heuristic + local search over an integer, trig-free cost
 code: https://github.com/showell/angry-gopher/tree/master/delivery
+essay: /blog/the-ghost-in-the-cost-function
 Eight trucks fan out across a deliberately not-to-scale Seattle, delivering a hundred orders a day. The route-planning is a hand-built Clarke-Wright solver — watch it think, or shuffle up a new shift.
 
 ## Safari Screensaver -> /driving
@@ -19,6 +20,7 @@ cta: Be social
 lang: Zig
 tech: live updates over Server-Sent Events; messages persisted to the file system, no database
 code: https://github.com/showell/angry-gopher/tree/master/chat
+essay: /blog/afford-your-own-markdown-dialect
 Real-time chat, docs, and channels — the live surface Steve, Claude, and friends use every day. Messages, reactions, and a markdown doc editor, all in one binary.
 
 ## Blog -> /blog

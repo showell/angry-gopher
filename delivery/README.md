@@ -16,11 +16,10 @@ A few keys are all you need:
 
 Hover a neighborhood to see its name; hover a delivered house to highlight its truck.
 
-## For the curious (mostly: developers)
+## Under the hood
 
-GitHub visitors are mostly engineers, so here are the brass tacks. This is a
-small, finished **capacitated vehicle-routing (CVRP)** simulator written in pure,
-client-side **TypeScript**. The zig server just bakes the esbuilt bundle into its
+This is a small, finished **capacitated vehicle-routing (CVRP)** simulator written
+in pure, client-side **TypeScript**. The zig server just bakes the esbuilt bundle into its
 binary (`@embedFile`) and serves a near-empty HTML shell; everything you see —
 the canvas, the map, the animation, the solve — runs in your browser. No server
 logic, no user data, fully deterministic.
@@ -45,11 +44,15 @@ engines, and the greedy tie-breaks never flip between Node and the browser. An
 redundant) keeps the minimum, so the solver is provably never *worse* for the
 extra search.
 
-The solver knows nothing about Seattle. A handful of small hints in `geography.ts`
-(truck anchor regions, the lake, the bridges) give the general algorithm just
-enough local knowledge to behave like a real delivery manager would expect.
-`TAXONOMY.md` reads the resulting neighborhood "roles" straight off the data —
-they're revealed, not imposed.
+Almost everything you watch is **emergent from that cost**, not coded as a rule
+about Seattle. The one genuine bit of local knowledge we lean on: Bellevue and
+Medina get deferred to the end of their routes, because they sit on the
+fulfillment center's doorstep across the lake — Bellevue a direct hop, Medina the
+SR-520 bridgehead. We're not shy about that; every city has its quirks, and coding
+a hint or two is fair game. But the real dynamics live in the **pain cost** — change
+it and the whole map reorganizes. `geography.ts` holds what little we hard-code (the
+hints, the road graph, the truck anchors) and `TAXONOMY.md` reads the resulting
+neighborhood roles straight off the data — revealed, not imposed.
 
 ### Where things live
 
