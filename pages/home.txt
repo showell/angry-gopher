@@ -43,5 +43,5 @@ cta: Fix the board
 lang: TypeScript + Elm
 tech: shares the rules engine; deterministic undo and move-by-move replay
 code: https://github.com/showell/angry-gopher/tree/master/games/lynrummy
-essay: /blog/lyn-never-wrote-it-down
+essay: /blog/two-places-at-once
 A single board, mid-game. Drag stacks to merge or split your way to a clean meld layout. Solo, no opponent — undo is free, and Replay walks back your moves.

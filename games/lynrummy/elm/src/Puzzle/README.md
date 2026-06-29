@@ -30,3 +30,7 @@ Everything else — the referee, the DSL parsers, the card and stack rendering �
 shared from [`../Lib/`](../Lib/), the same code the game runs on. Build, run, and
 gate exactly as described in the game README (`ops/start`, then `/puzzles`;
 `ops/check_lynrummy` while working).
+
+For why a composed, can't-lose board is its own small pleasure — and what the
+puzzles have in common with a hundred-year-old chess study — read the essay
+[**"Two Places at Once"**](https://lynrummy.com/blog/two-places-at-once).
