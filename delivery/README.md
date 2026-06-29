@@ -31,6 +31,14 @@ cascade of hand-offs). When the routes stopped surprising us, we stopped. **The
 code is the authority** for how anything works; this file orients a human, and the
 deeper "why" lives in the essay below.
 
+**A sibling worth knowing: [Safari Screensaver](../games/driving/README.md).**
+Delivery's twin toy, built the same way — pure client-side TypeScript, a `<canvas>`
+the client draws itself, a bundle the zig server only embeds and serves, fully
+deterministic. Same "flipbook + algorithm" paradigm; the difference is which hard
+problem sits at the center. Here it's **combinatorial cost** — route trucks to
+minimize an honest number. There it's **perception** — the cheapest lie the eye
+will accept as a sunset road. Same spirit, different hard part.
+
 ### The algorithm, in one breath
 
 Eight trucks, ~100 orders, asymmetric capacities (the west side carries more than
