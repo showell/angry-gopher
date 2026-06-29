@@ -156,9 +156,9 @@ fn renderHomeBody(io: Io, alloc: Alloc) ![]const u8 {
         else
             "";
         // Optional app image (left of the text), itself a link to the app. 600x420
-        // source → fixed 200x140 thumb (exact ratio, no distortion).
+        // source → fixed 220x154 thumb (exact ratio, no distortion).
         const thumb = if (a.image.len > 0)
-            try std.fmt.allocPrint(alloc, "<a class=\"app-thumb\" href=\"{s}\"><img src=\"{s}\" alt=\"{s}\" width=\"200\" height=\"140\" loading=\"lazy\"></a>", .{
+            try std.fmt.allocPrint(alloc, "<a class=\"app-thumb\" href=\"{s}\"><img src=\"{s}\" alt=\"{s}\" width=\"220\" height=\"154\" loading=\"lazy\"></a>", .{
                 try html.htmlEscape(alloc, a.href),
                 try html.htmlEscape(alloc, a.image),
                 try html.htmlEscape(alloc, a.title),
@@ -166,9 +166,8 @@ fn renderHomeBody(io: Io, alloc: Alloc) ![]const u8 {
         else
             "";
         try out.print(alloc,
-            \\<div class="app-row"><div class="app-row-top">{s}<div class="app-row-main"><h2><a href="{s}">{s}</a></h2><p>{s}</p>{s}</div>
-            \\<div class="cta"><a class="play-btn" href="{s}">{s}</a></div></div>
-            \\<div class="app-tech"><span class="tech-lang">{s}</span> <span class="tech-feat">{s}</span> <a class="tech-code" href="{s}" target="_blank" rel="noopener">Code on GitHub ↗</a></div></div>
+            \\<div class="app-row"><div class="app-row-top">{s}<div class="app-row-main"><h2><a href="{s}">{s}</a></h2><p>{s}</p>{s}<p class="app-feat">{s}</p></div>
+            \\<div class="cta"><a class="play-btn" href="{s}">{s}</a><div class="cta-meta"><span class="tech-lang">{s}</span><a class="tech-code" href="{s}" target="_blank" rel="noopener">Code on GitHub ↗</a></div></div></div></div>
             \\
         , .{
             thumb,
@@ -176,10 +175,10 @@ fn renderHomeBody(io: Io, alloc: Alloc) ![]const u8 {
             try html.htmlEscape(alloc, a.title),
             try html.htmlEscape(alloc, a.desc),
             more,
+            try html.htmlEscape(alloc, a.tech),
             try html.htmlEscape(alloc, a.href),
             try html.htmlEscape(alloc, a.cta),
             try html.htmlEscape(alloc, a.lang),
-            try html.htmlEscape(alloc, a.tech),
             try html.htmlEscape(alloc, a.code),
         });
     }
@@ -323,7 +322,7 @@ const head_style =
     \\.app-row:last-child { border-bottom: none; }
     \\.app-row-top { display: flex; align-items: flex-start; gap: 24px; }
     \\.app-thumb { flex-shrink: 0; display: block; line-height: 0; }
-    \\.app-thumb img { width: 200px; height: 140px; display: block; border-radius: 8px;
+    \\.app-thumb img { width: 220px; height: 154px; display: block; border-radius: 8px;
     \\                 box-shadow: 0 1px 5px rgba(0,0,32,0.20); }
     \\.app-thumb:hover img { box-shadow: 0 2px 10px rgba(0,0,32,0.32); }
     \\.app-row-main { flex: 1; min-width: 0; }
@@ -334,7 +333,7 @@ const head_style =
     \\.app-row-main .app-more { margin: 6px 0 0; font-size: 13px; }
     \\.app-more a { color: var(--cc-accent, #000080); text-decoration: none; font-weight: 600; }
     \\.app-more a:hover { text-decoration: underline; }
-    \\.app-row .cta { flex-shrink: 0; }
+    \\.app-row .cta { flex-shrink: 0; display: flex; flex-direction: column; align-items: center; gap: 10px; }
     \\/* Uniform footprint: every button is the same width + a single line, so the
     \\   column reads as one tidy stack of identical calls to action. No arrow — a
     \\   right-pointing arrow on a right-edge button reads as "look away". */
@@ -344,14 +343,15 @@ const head_style =
     \\            text-decoration: none; font-weight: bold; font-size: 16px; line-height: 1.2;
     \\            box-shadow: 0 1px 3px rgba(0,0,32,0.28); transition: background .12s, transform .12s; }
     \\.play-btn:hover { background: #1414c8; transform: translateY(-1px); }
-    \\/* Tech stack: low-key but legible. A small language chip, then the feature in
-    \\   muted text, on its own line under the description + button. */
-    \\.app-tech { margin-top: 12px; font-size: 12px; color: var(--cc-muted-fg, #888); }
+    \\/* Tech stack, split for layout: the feature line sits under the description
+    \\   (.app-feat, beneath "Read more"); the language chip + GitHub link stack under
+    \\   the button (.cta-meta). All low-key + muted. */
+    \\.app-feat { margin: 10px 0 0; font-size: 12px; color: var(--cc-muted-fg, #888); }
+    \\.cta-meta { display: flex; flex-direction: column; align-items: center; gap: 7px; }
     \\.tech-lang { display: inline-block; background: var(--cc-accent-soft-bg, #eef0f8);
     \\             color: var(--cc-accent, #000080); border-radius: 4px; padding: 2px 8px;
     \\             font-weight: 600; font-size: 11px; }
-    \\.tech-feat { margin-left: 8px; }
-    \\.tech-code { margin-left: 10px; white-space: nowrap; font-weight: 600;
+    \\.tech-code { white-space: nowrap; font-weight: 600; font-size: 12px;
     \\             color: var(--cc-accent, #000080); text-decoration: none; }
     \\.tech-code:hover { text-decoration: underline; }
     \\@media (max-width: 600px) { .app-row-top { flex-direction: column; align-items: flex-start; gap: 12px; }
