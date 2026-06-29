@@ -26,6 +26,7 @@ pub const Segment = struct {
     exit_right: bool,
     exit_to: usize,
     north_heading: f32, // accumulated heading vs north (seg 0 = 0)
+    has_mid_tower: bool, // a long segment stands its own tower halfway down
 };
 
 pub const World = struct {
@@ -45,6 +46,7 @@ const TREE_START_INSET: f32 = 6.0;
 const TREE_END_INSET: f32 = 85.0;
 const LANE_WIDTH: f32 = 4.0;
 const DEG: f32 = std.math.pi / 180.0;
+const MID_TOWER_MIN_LENGTH: f32 = 1000.0; // longer segments stand their own mid-tower
 
 fn accentColor(scheme: Scheme) Color {
     return switch (scheme) {
@@ -108,6 +110,7 @@ pub fn buildWorld() World {
         seg.exit_right = c.turn_deg >= 0;
         seg.exit_to = (i + 1) % route.len; // loop back at the end
         seg.north_heading = 0;
+        seg.has_mid_tower = c.length > MID_TOWER_MIN_LENGTH;
         fillTrees(seg, c.scheme);
     }
     // accumulate north headings along the route (seg 0 = 0); stop before wrapping so

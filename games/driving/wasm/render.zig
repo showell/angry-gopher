@@ -10,6 +10,7 @@ const geom = @import("geom.zig");
 const camera = @import("camera.zig");
 const world = @import("world.zig");
 const tree = @import("tree.zig");
+const tower = @import("tower.zig");
 const mountains = @import("mountains.zig");
 const paint = @import("paint.zig");
 
@@ -20,6 +21,13 @@ const MIN_SCENERY_PX: f32 = 2.0; // skip scenery that would project shorter than
 const LOOK_AHEAD: usize = 7; // how many segments ahead we draw
 const MAX_CHAIN: usize = 8;
 const MAX_VIS_TREES: usize = 640; // fixed-spacing trees across the whole visible chain
+const MAX_VIS_TOWERS: usize = 16;
+
+// tower placement (intersection.ts): out past the corner, off to the right, yawed.
+const TOWER_BEYOND: f32 = 160.0; // metres past the segment end
+const TOWER_RIGHT: f32 = 20.0; // metres right of the lane centreline
+const TOWER_YAW: f32 = 30.0 * 3.14159265 / 180.0;
+const SEG_TOWER_LEFT: f32 = 100.0; // a mid-tower stands this far LEFT of the centreline
 
 const Chain = struct { idx: [MAX_CHAIN]usize, len: usize };
 
@@ -86,6 +94,15 @@ pub fn frame(w: *const world.World, seg_idx: usize, along: f32, across: f32, yaw
     var t_col: [MAX_VIS_TREES]u32 = undefined;
     var nt: usize = 0;
 
+    // towers collected the same way: their owning chain index `d` + base centre/yaw,
+    // and the depth of that centre for sorting.
+    var w_d: [MAX_VIS_TOWERS]usize = undefined;
+    var w_a0: [MAX_VIS_TOWERS]f32 = undefined;
+    var w_x0: [MAX_VIS_TOWERS]f32 = undefined;
+    var w_yaw: [MAX_VIS_TOWERS]f32 = undefined;
+    var w_fwd: [MAX_VIS_TOWERS]f32 = undefined;
+    var ntw: usize = 0;
+
     var d: usize = 0;
     while (d < ch.len) : (d += 1) {
         const seg = w.segments[ch.idx[d]];
@@ -113,6 +130,33 @@ pub fn frame(w: *const world.World, seg_idx: usize, along: f32, across: f32, yaw
         // corner pavement at this segment's exit join, when the next segment is in view.
         if (d + 1 < ch.len) emitCorner(w, &ch, pose, d, cam_focal);
 
+        // the intersection tower beyond this segment's exit, and the mid-tower on a
+        // long segment. Collected (with the depth of the base centre) for sorting.
+        if (ntw < MAX_VIS_TOWERS) {
+            const c = at(w, &ch, pose, d, seg.length + TOWER_BEYOND, seg.width / 2.0 + TOWER_RIGHT);
+            if (c.forward > camera.NEAR) {
+                w_d[ntw] = d;
+                w_a0[ntw] = seg.length + TOWER_BEYOND;
+                w_x0[ntw] = seg.width / 2.0 + TOWER_RIGHT;
+                w_yaw[ntw] = TOWER_YAW;
+                w_fwd[ntw] = c.forward;
+                ntw += 1;
+            }
+        }
+        if (seg.has_mid_tower and ntw < MAX_VIS_TOWERS) {
+            const a0 = seg.length / 2.0;
+            const x0 = seg.width / 2.0 - SEG_TOWER_LEFT;
+            const c = at(w, &ch, pose, d, a0, x0);
+            if (c.forward > camera.NEAR) {
+                w_d[ntw] = d;
+                w_a0[ntw] = a0;
+                w_x0[ntw] = x0;
+                w_yaw[ntw] = 0;
+                w_fwd[ntw] = c.forward;
+                ntw += 1;
+            }
+        }
+
         // trees (centre-relative across + hw → from-the-left), collected for sorting.
         var ti: usize = 0;
         while (ti < seg.n_trees and nt < MAX_VIS_TREES) : (ti += 1) {
@@ -128,15 +172,44 @@ pub fn frame(w: *const world.World, seg_idx: usize, along: f32, across: f32, yaw
         }
     }
 
-    var idx: [MAX_VIS_TREES]usize = undefined;
+    // merge trees + towers into one depth order (far → near) so they occlude right.
+    const Item = struct { fwd: f32, tower: bool, i: usize };
+    var items: [MAX_VIS_TREES + MAX_VIS_TOWERS]Item = undefined;
+    var ni: usize = 0;
     var i: usize = 0;
-    while (i < nt) : (i += 1) idx[i] = i;
-    sortByForwardDesc(idx[0..nt], t_fwd[0..]);
-    for (idx[0..nt]) |ii| {
-        if (t_fwd[ii] < DETAIL_DIST)
-            tree.drawNear(t_right[ii], t_fwd[ii], t_h[ii], t_col[ii], cam_focal)
-        else
-            tree.drawFar(t_right[ii], t_fwd[ii], t_h[ii], t_col[ii], cam_focal);
+    while (i < nt) : (i += 1) {
+        items[ni] = .{ .fwd = t_fwd[i], .tower = false, .i = i };
+        ni += 1;
+    }
+    i = 0;
+    while (i < ntw) : (i += 1) {
+        items[ni] = .{ .fwd = w_fwd[i], .tower = true, .i = i };
+        ni += 1;
+    }
+    // insertion sort by depth descending (n is small).
+    i = 1;
+    while (i < ni) : (i += 1) {
+        const key = items[i];
+        var j: usize = i;
+        while (j > 0 and items[j - 1].fwd < key.fwd) : (j -= 1) items[j] = items[j - 1];
+        items[j] = key;
+    }
+
+    for (items[0..ni]) |it| {
+        if (it.tower) {
+            var base: [4]geom.RiderPt = undefined;
+            var k: usize = 0;
+            while (k < 4) : (k += 1) {
+                const ax = tower.baseCornerAX(k, w_a0[it.i], w_x0[it.i], w_yaw[it.i]);
+                base[k] = at(w, &ch, pose, w_d[it.i], ax.a, ax.x);
+            }
+            const center = at(w, &ch, pose, w_d[it.i], w_a0[it.i], w_x0[it.i]);
+            tower.drawFlat(base, center, cam_focal);
+        } else if (t_fwd[it.i] < DETAIL_DIST) {
+            tree.drawNear(t_right[it.i], t_fwd[it.i], t_h[it.i], t_col[it.i], cam_focal);
+        } else {
+            tree.drawFar(t_right[it.i], t_fwd[it.i], t_h[it.i], t_col[it.i], cam_focal);
+        }
     }
 }
 
@@ -158,14 +231,4 @@ fn emitCorner(w: *const world.World, ch: *const Chain, pose: Pose, d: usize, cam
     const q = geom.lineMeet(outer_from, outer_from1, outer_to, outer_to1);
     const quad = [_]geom.RiderPt{ inner, outer_from, q, outer_to };
     emitGround(quad[0..], cam_focal);
-}
-
-fn sortByForwardDesc(idx: []usize, fwd: []const f32) void {
-    var i: usize = 1;
-    while (i < idx.len) : (i += 1) {
-        const key = idx[i];
-        var j: usize = i;
-        while (j > 0 and fwd[idx[j - 1]] < fwd[key]) : (j -= 1) idx[j] = idx[j - 1];
-        idx[j] = key;
-    }
 }
