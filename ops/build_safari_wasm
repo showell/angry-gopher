@@ -1,0 +1,29 @@
+#!/bin/bash
+# CANONICAL DEV-LOOP SCRIPT — DO NOT REINVENT.
+# Before composing an ad-hoc shell command for build / test / regen, run
+# `ops/list` to see what already exists.
+#
+# Build the Safari camera's zig core into a freestanding WebAssembly module at
+# games/driving/safari.wasm. The browser fetches + instantiates it, calls the
+# exported renderFrame, and blits the screen-space polygons it writes into
+# linear memory. Pure compute: no entry point (-fno-entry), no imports, no
+# allocator — a fixed pre-sized buffer. -rdynamic exposes the `export fn`s as
+# wasm exports; ReleaseSmall keeps the module lean (it ships embedded).
+#
+# Mirrors ops/build_driving's role for the TS bundle: a single build step whose
+# output (safari.wasm) is @embedFile'd into the server binary.
+set -e
+
+source "$(dirname "$0")/_paths.sh"
+
+SRC="$GOPHER_DIR/games/driving/wasm/safari.zig"
+OUT="$GOPHER_DIR/games/driving/safari.wasm"
+
+zig build-exe "$SRC" \
+    -target wasm32-freestanding \
+    -fno-entry \
+    -rdynamic \
+    -O ReleaseSmall \
+    -femit-bin="$OUT"
+
+echo "built $OUT ($(wc -c < "$OUT") bytes)"
