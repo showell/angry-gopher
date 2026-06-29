@@ -5,8 +5,8 @@
        its pixels. -->
   <defs>
     <linearGradient id="dsky" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#171a21"/>
-      <stop offset="1" stop-color="#202530"/>
+      <stop offset="0" stop-color="#4f93cf"/>
+      <stop offset="1" stop-color="#bfe0f3"/>
     </linearGradient>
     <!-- one truck, rear 3/4 view; totes use currentColor so each instance is a region -->
     <g id="truck">
