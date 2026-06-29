@@ -250,7 +250,7 @@ fn begin(b: *std.ArrayList(u8), alloc: Alloc, tab_title: []const u8, name: []con
     // Top bar: generic app chrome, "Blog" bolded as the active surface.
     try b.appendSlice(alloc,
         "<header class=\"app-top\"><div class=\"app-top-home\">" ++
-        "<a href=\"/\">Lyn Rummy</a> · <a href=\"/chat\">Chat</a> · <strong>Blog</strong></div>" ++
+        "<a href=\"/\">Home</a> · <a href=\"/chat\">Chat</a> · <strong>Blog</strong></div>" ++
         "<div class=\"app-top-user\">");
     if (name.len == 0) {
         try b.appendSlice(alloc, "<a href=\"/login\">Log in</a>");
