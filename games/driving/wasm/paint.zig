@@ -44,6 +44,26 @@ pub fn pushRoundPoly(color: u32, pts: []const camera.ScreenPt) void {
     push(1, color, pts);
 }
 
+/// pushEmoji appends an emoji-billboard command (tag 2): a glyph the blitter draws
+/// (a polygon can't be a glyph). Layout: [tag 2][codepoint u32][faceRight u32][x][y]
+/// [size] — a `size`×`size` square centred horizontally on x with its bottom at y,
+/// flipped when faceRight. zig owns the placement + size; JS owns the glyph render.
+pub fn pushEmoji(codepoint: u32, face_right: bool, x: f32, y: f32, size: f32) void {
+    if (cursor + 6 > CAP_WORDS) return;
+    buf[cursor] = 2;
+    cursor += 1;
+    buf[cursor] = codepoint;
+    cursor += 1;
+    buf[cursor] = if (face_right) 1 else 0;
+    cursor += 1;
+    buf[cursor] = @bitCast(x);
+    cursor += 1;
+    buf[cursor] = @bitCast(y);
+    cursor += 1;
+    buf[cursor] = @bitCast(size);
+    cursor += 1;
+}
+
 /// push appends one polygon command: tag, color (0xRRGGBB), and its screen points.
 /// Drops it silently if it has fewer than 3 points or the bounded buffer is full.
 fn push(tag: u32, color: u32, pts: []const camera.ScreenPt) void {

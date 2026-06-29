@@ -13,7 +13,11 @@ pub const Scheme = enum { all_green, yellow_green, red_green };
 
 pub const Tree = struct { along: f32, across: f32, color: Color, height: f32 };
 
+// a roadside animal: an emoji billboard at (along, across-from-centre).
+pub const Critter = struct { along: f32, across: f32, codepoint: u32, height: f32, face_right: bool };
+
 pub const MAX_TREES = 96; // fixed-spacing trees scale with length; the long seg7 needs the headroom
+pub const MAX_COWS = 16; // a bull + 14 cows/calves
 pub const MAX_SEGMENTS = 16;
 
 pub const Segment = struct {
@@ -21,6 +25,8 @@ pub const Segment = struct {
     width: f32,
     trees: [MAX_TREES]Tree,
     n_trees: usize,
+    cows: [MAX_COWS]Critter,
+    n_cows: usize,
     // exit turn: angle (rad) + right? + the index of the segment it leads to.
     exit_angle: f32,
     exit_right: bool,
@@ -47,6 +53,44 @@ const TREE_END_INSET: f32 = 85.0;
 const LANE_WIDTH: f32 = 4.0;
 const DEG: f32 = std.math.pi / 180.0;
 const MID_TOWER_MIN_LENGTH: f32 = 1000.0; // longer segments stand their own mid-tower
+
+// ---- the cow herd (the boring CONSTANT on every segment, near the start, on the
+// left): a bull leading 10 cows + 4 calves, in a deterministic jittered grid.
+// Mirrors cowHerd() in farm_critter.ts. Pigs/safari creatures are NOT ported. ----
+const BULL_CP: u32 = 0x1F402; // 🐂
+const COW_CP: u32 = 0x1F404; // 🐄
+const COW_HEIGHT: f32 = 1.4;
+const CALF_HEIGHT: f32 = COW_HEIGHT / 2.0;
+const BULL_HEIGHT: f32 = COW_HEIGHT * 1.15;
+const HERD_ROAD_OFFSET: f32 = 10.0;
+const BULL_DIST: f32 = 24.0;
+const BULL_TREE_GAP: f32 = 0.5;
+const HERD_GAP_BEHIND_BULL: f32 = 6.0;
+const HERD_COL_SPACING: f32 = 6.0;
+const HERD_ROW_STAGGER: f32 = 2.0;
+const HERD_ROW_DEPTH: f32 = 5.0;
+const HERD_JITTER_ALONG: f32 = 1.5;
+const HERD_JITTER_ACROSS: f32 = 1.2;
+
+fn fillCows(seg: *Segment) void {
+    const hw = LANE_WIDTH / 2.0;
+    const edge = hw + HERD_ROAD_OFFSET;
+    const tree_x = hw + TREE_ROAD_OFFSET; // the roadside tree line the bull lines up with
+    seg.n_cows = 0;
+    seg.cows[0] = .{ .along = BULL_DIST, .across = -(tree_x + BULL_HEIGHT / 2.0 + BULL_TREE_GAP), .codepoint = BULL_CP, .height = BULL_HEIGHT, .face_right = false };
+    seg.n_cows = 1;
+    var i: usize = 0;
+    while (i < 14) : (i += 1) {
+        const fi: f32 = @floatFromInt(i);
+        const col: f32 = @floatFromInt(i / 3);
+        const row: f32 = @floatFromInt(i % 3);
+        const along = BULL_DIST + HERD_GAP_BEHIND_BULL + col * HERD_COL_SPACING + (row - 1.0) * HERD_ROW_STAGGER + HERD_JITTER_ALONG * @sin(fi * 2.7);
+        const across = -(edge + row * HERD_ROW_DEPTH + HERD_JITTER_ACROSS * @cos(fi * 1.9));
+        const calf = (i % 4) == 1; // i = 1,5,9,13 → 4 calves at half size
+        seg.cows[seg.n_cows] = .{ .along = along, .across = across, .codepoint = COW_CP, .height = if (calf) CALF_HEIGHT else COW_HEIGHT, .face_right = true };
+        seg.n_cows += 1;
+    }
+}
 
 fn accentColor(scheme: Scheme) Color {
     return switch (scheme) {
@@ -112,6 +156,7 @@ pub fn buildWorld() World {
         seg.north_heading = 0;
         seg.has_mid_tower = c.length > MID_TOWER_MIN_LENGTH;
         fillTrees(seg, c.scheme);
+        fillCows(seg);
     }
     // accumulate north headings along the route (seg 0 = 0); stop before wrapping so
     // the loop's seg 0 keeps heading 0 (a clean cut, not an ever-growing spiral).

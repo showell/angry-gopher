@@ -11,6 +11,7 @@ const camera = @import("camera.zig");
 const world = @import("world.zig");
 const tree = @import("tree.zig");
 const tower = @import("tower.zig");
+const critter = @import("critter.zig");
 const mountains = @import("mountains.zig");
 const paint = @import("paint.zig");
 
@@ -22,6 +23,7 @@ const LOOK_AHEAD: usize = 7; // how many segments ahead we draw
 const MAX_CHAIN: usize = 8;
 const MAX_VIS_TREES: usize = 640; // fixed-spacing trees across the whole visible chain
 const MAX_VIS_TOWERS: usize = 16;
+const MAX_VIS_COWS: usize = 128;
 
 // tower placement (intersection.ts): out past the corner, off to the right, yawed.
 const TOWER_BEYOND: f32 = 160.0; // metres past the segment end
@@ -103,6 +105,14 @@ pub fn frame(w: *const world.World, seg_idx: usize, along: f32, across: f32, yaw
     var w_fwd: [MAX_VIS_TOWERS]f32 = undefined;
     var ntw: usize = 0;
 
+    // cows/bulls, collected as billboards (rider-relative), drawn in the depth sort.
+    var c_right: [MAX_VIS_COWS]f32 = undefined;
+    var c_fwd: [MAX_VIS_COWS]f32 = undefined;
+    var c_h: [MAX_VIS_COWS]f32 = undefined;
+    var c_cp: [MAX_VIS_COWS]u32 = undefined;
+    var c_face: [MAX_VIS_COWS]bool = undefined;
+    var ncow: usize = 0;
+
     var d: usize = 0;
     while (d < ch.len) : (d += 1) {
         const seg = w.segments[ch.idx[d]];
@@ -170,20 +180,42 @@ pub fn frame(w: *const world.World, seg_idx: usize, along: f32, across: f32, yaw
             t_col[nt] = tr.color;
             nt += 1;
         }
+
+        // cows/bulls (centre-relative across + hw → from-the-left), collected.
+        var cti: usize = 0;
+        while (cti < seg.n_cows and ncow < MAX_VIS_COWS) : (cti += 1) {
+            const cr = seg.cows[cti];
+            const rp = at(w, &ch, pose, d, cr.along, cr.across + hw);
+            if (rp.forward <= camera.NEAR) continue;
+            if (cr.height / rp.forward * cam_focal < MIN_SCENERY_PX) continue;
+            c_right[ncow] = rp.right;
+            c_fwd[ncow] = rp.forward;
+            c_h[ncow] = cr.height;
+            c_cp[ncow] = cr.codepoint;
+            c_face[ncow] = cr.face_right;
+            ncow += 1;
+        }
     }
 
-    // merge trees + towers into one depth order (far → near) so they occlude right.
-    const Item = struct { fwd: f32, tower: bool, i: usize };
-    var items: [MAX_VIS_TREES + MAX_VIS_TOWERS]Item = undefined;
+    // merge trees + towers + cows into one depth order (far → near) so they occlude
+    // right.
+    const Kind = enum { tree, tower, cow };
+    const Item = struct { fwd: f32, kind: Kind, i: usize };
+    var items: [MAX_VIS_TREES + MAX_VIS_TOWERS + MAX_VIS_COWS]Item = undefined;
     var ni: usize = 0;
     var i: usize = 0;
     while (i < nt) : (i += 1) {
-        items[ni] = .{ .fwd = t_fwd[i], .tower = false, .i = i };
+        items[ni] = .{ .fwd = t_fwd[i], .kind = .tree, .i = i };
         ni += 1;
     }
     i = 0;
     while (i < ntw) : (i += 1) {
-        items[ni] = .{ .fwd = w_fwd[i], .tower = true, .i = i };
+        items[ni] = .{ .fwd = w_fwd[i], .kind = .tower, .i = i };
+        ni += 1;
+    }
+    i = 0;
+    while (i < ncow) : (i += 1) {
+        items[ni] = .{ .fwd = c_fwd[i], .kind = .cow, .i = i };
         ni += 1;
     }
     // insertion sort by depth descending (n is small).
@@ -196,19 +228,22 @@ pub fn frame(w: *const world.World, seg_idx: usize, along: f32, across: f32, yaw
     }
 
     for (items[0..ni]) |it| {
-        if (it.tower) {
-            var base: [4]geom.RiderPt = undefined;
-            var k: usize = 0;
-            while (k < 4) : (k += 1) {
-                const ax = tower.baseCornerAX(k, w_a0[it.i], w_x0[it.i], w_yaw[it.i]);
-                base[k] = at(w, &ch, pose, w_d[it.i], ax.a, ax.x);
-            }
-            const center = at(w, &ch, pose, w_d[it.i], w_a0[it.i], w_x0[it.i]);
-            tower.drawFlat(base, center, cam_focal);
-        } else if (t_fwd[it.i] < DETAIL_DIST) {
-            tree.drawNear(t_right[it.i], t_fwd[it.i], t_h[it.i], t_col[it.i], cam_focal);
-        } else {
-            tree.drawFar(t_right[it.i], t_fwd[it.i], t_h[it.i], t_col[it.i], cam_focal);
+        switch (it.kind) {
+            .tower => {
+                var base: [4]geom.RiderPt = undefined;
+                var k: usize = 0;
+                while (k < 4) : (k += 1) {
+                    const ax = tower.baseCornerAX(k, w_a0[it.i], w_x0[it.i], w_yaw[it.i]);
+                    base[k] = at(w, &ch, pose, w_d[it.i], ax.a, ax.x);
+                }
+                const center = at(w, &ch, pose, w_d[it.i], w_a0[it.i], w_x0[it.i]);
+                tower.drawFlat(base, center, cam_focal);
+            },
+            .cow => critter.draw(c_right[it.i], c_fwd[it.i], c_h[it.i], c_cp[it.i], c_face[it.i], cam_focal),
+            .tree => if (t_fwd[it.i] < DETAIL_DIST)
+                tree.drawNear(t_right[it.i], t_fwd[it.i], t_h[it.i], t_col[it.i], cam_focal)
+            else
+                tree.drawFar(t_right[it.i], t_fwd[it.i], t_h[it.i], t_col[it.i], cam_focal),
         }
     }
 }

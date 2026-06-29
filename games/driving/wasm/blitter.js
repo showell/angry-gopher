@@ -31,16 +31,44 @@ function shade(c, f) {
   return `rgb(${r},${g},${b})`;
 }
 
-// Walk the draw buffer [base, base+len) and fill each polygon. Two views over the
-// SAME words: u32 for tag/color/count, f32 for the coordinate bit patterns. tag 1 =
-// horizontal round gradient (dark edge → bright centre → dark edge) across the
-// polygon's x-extent — the cylinder/cone shading; tag 0 = solid.
+// Emoji are expensive to rasterise every frame, so render each glyph ONCE to an
+// offscreen sprite (keyed by codepoint) and reuse it — drawImage beats fillText.
+const spriteCache = new Map();
+function emojiSprite(cp) {
+  let c = spriteCache.get(cp);
+  if (c) return c;
+  c = document.createElement('canvas');
+  c.width = 96; c.height = 96;
+  const g = c.getContext('2d');
+  g.font = Math.round(96 * 0.8) + 'px serif';
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  g.fillText(String.fromCodePoint(cp), 48, 48 + 96 * 0.06);
+  spriteCache.set(cp, c);
+  return c;
+}
+
+// Walk the draw buffer [base, base+len). Views over the SAME words: u32 for
+// tag/color/count, f32 for coordinate bit patterns. tag 0 = solid polygon; tag 1 =
+// round-gradient polygon (cylinder/cone shading); tag 2 = emoji billboard.
 function blit(ctx, mem, base, len) {
   const u32 = new Uint32Array(mem.buffer, base, len / 4);
   const f32 = new Float32Array(mem.buffer, base, len / 4);
   let w = 0;
   while (w * 4 < len) {
     const tag = u32[w++];
+    if (tag === 2) {
+      const cp = u32[w++], flip = u32[w++];
+      const x = f32[w++], y = f32[w++], size = f32[w++];
+      if (size >= 1) {
+        ctx.save();
+        ctx.translate(x, y);
+        if (flip) ctx.scale(-1, 1); // most animal emoji face left by default
+        ctx.drawImage(emojiSprite(cp), -size / 2, -size, size, size); // square, bottom on the ground
+        ctx.restore();
+      }
+      continue;
+    }
     const color = u32[w++];
     const n = u32[w++];
     const start = w;
