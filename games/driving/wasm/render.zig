@@ -28,6 +28,12 @@ const MAX_VIS_TREES: usize = 640; // fixed-spacing trees across the whole visibl
 const MAX_VIS_TOWERS: usize = 16;
 const MAX_VIS_COWS: usize = 128;
 
+// rail polys (bar quads + posts) collected across all visible joints, merged into the
+// scenery depth sort so trees occlude rails by honest depth. Static (like paint's
+// buffer): frame() runs once per call, single-threaded, so module scratch is fine and
+// keeps these large arrays off the wasm stack.
+var rails: guard_rail.RailStore = .{};
+
 // tower placement (intersection.ts): out past the corner, off to the right, yawed.
 const TOWER_BEYOND: f32 = 160.0; // metres past the segment end
 const TOWER_RIGHT: f32 = 20.0; // metres right of the lane centreline
@@ -110,6 +116,7 @@ fn emitGround(pts: []const geom.RiderPt, cam_focal: f32) void {
 
 pub fn frame(w: *const world.World, seg_idx: usize, along: f32, across: f32, yaw: f32) void {
     const cam_focal = camera.FOCAL; // static frame: no lean/focus pull-in yet
+    rails.reset();
     const ch = buildChain(w, seg_idx);
     const cur = w.segments[seg_idx];
     const pose = Pose{ .along = along, .across = across, .yaw = yaw, .hw = cur.width / 2.0 };
@@ -239,21 +246,21 @@ pub fn frame(w: *const world.World, seg_idx: usize, along: f32, across: f32, yaw
     const cur_map = Mapper{ .kind = .chain, .d = 0 };
     emitJointGround(w, &ch, pose, prev_map, cur_map, prev.length, prev.width, cur.width, prev.exit_right, cam_focal);
 
-    // guard rails ride ON TOP of all the ground (TS draws its raised polys after every
-    // road quad): each forward joint in view, then the joint behind.
+    // guard rails: collect each forward joint's rail and the behind joint's. They are
+    // NOT drawn here — they merge into the depth sort below so trees occlude them right.
     var dr: usize = 0;
     while (dr + 1 < ch.len) : (dr += 1) {
         const fseg = w.segments[ch.idx[dr]];
         const tseg = w.segments[ch.idx[dr + 1]];
-        emitJointRail(w, &ch, pose, .{ .d = dr }, .{ .d = dr + 1 }, fseg.length, fseg.width, tseg.width, fseg.exit_right, cam_focal);
+        emitJointRail(w, &ch, pose, .{ .d = dr }, .{ .d = dr + 1 }, fseg.length, fseg.width, tseg.width, fseg.exit_right);
     }
-    emitJointRail(w, &ch, pose, prev_map, cur_map, prev.length, prev.width, cur.width, prev.exit_right, cam_focal);
+    emitJointRail(w, &ch, pose, prev_map, cur_map, prev.length, prev.width, cur.width, prev.exit_right);
 
     // merge trees + towers + cows into one depth order (far → near) so they occlude
     // right.
-    const Kind = enum { tree, tower, cow };
+    const Kind = enum { tree, tower, cow, rail };
     const Item = struct { fwd: f32, kind: Kind, i: usize };
-    var items: [MAX_VIS_TREES + MAX_VIS_TOWERS + MAX_VIS_COWS]Item = undefined;
+    var items: [MAX_VIS_TREES + MAX_VIS_TOWERS + MAX_VIS_COWS + guard_rail.MAX_RAIL_POLYS]Item = undefined;
     var ni: usize = 0;
     var i: usize = 0;
     while (i < nt) : (i += 1) {
@@ -268,6 +275,11 @@ pub fn frame(w: *const world.World, seg_idx: usize, along: f32, across: f32, yaw
     i = 0;
     while (i < ncow) : (i += 1) {
         items[ni] = .{ .fwd = c_fwd[i], .kind = .cow, .i = i };
+        ni += 1;
+    }
+    i = 0;
+    while (i < rails.n) : (i += 1) {
+        items[ni] = .{ .fwd = rails.polys[i].fwd, .kind = .rail, .i = i };
         ni += 1;
     }
     // insertion sort by depth descending (n is small).
@@ -292,6 +304,7 @@ pub fn frame(w: *const world.World, seg_idx: usize, along: f32, across: f32, yaw
                 tower.drawFlat(base, center, cam_focal);
             },
             .cow => critter.draw(c_right[it.i], c_fwd[it.i], c_h[it.i], c_cp[it.i], c_face[it.i], cam_focal),
+            .rail => guard_rail.drawPoly(rails.polys[it.i], cam_focal),
             .tree => if (t_fwd[it.i] < DETAIL_DIST)
                 tree.drawNear(t_right[it.i], t_fwd[it.i], t_h[it.i], t_col[it.i], cam_focal)
             else
@@ -345,8 +358,9 @@ fn pushLeg(path: *[RAIL_PATH_CAP]geom.RiderPt, n0: usize, from: geom.RiderPt, to
 
 // A joint's guard RAIL: the run-up along `from`'s outer shoulder, the two legs into and
 // out of the apex Q, and the run-out along `to`'s outer shoulder — then guard_rail.emit
-// raises that path to the bar + posts. Mirrors the rail half of intersectionScene.
-fn emitJointRail(w: *const world.World, ch: *const Chain, pose: Pose, from_map: Mapper, to_map: Mapper, from_len: f32, from_w: f32, to_w: f32, exit_right: bool, cam_focal: f32) void {
+// raises that path to the bar + posts and collects them for the depth sort. Mirrors the
+// rail half of intersectionScene.
+fn emitJointRail(w: *const world.World, ch: *const Chain, pose: Pose, from_map: Mapper, to_map: Mapper, from_len: f32, from_w: f32, to_w: f32, exit_right: bool) void {
     const from_outer_cu: f32 = if (exit_right) 0 else from_w;
     const to_outer_x: f32 = if (exit_right) 0 else to_w;
     const outer_from = mapPt(w, ch, pose, from_map, from_len, from_outer_cu);
@@ -374,5 +388,5 @@ fn emitJointRail(w: *const world.World, ch: *const Chain, pose: Pose, from_map: 
         path[n] = mapPt(w, ch, pose, to_map, mm, to_outer_x);
         n += 1;
     }
-    guard_rail.emit(path[0..n], cam_focal);
+    guard_rail.emit(&rails, path[0..n]);
 }
