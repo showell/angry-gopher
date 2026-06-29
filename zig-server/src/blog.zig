@@ -65,11 +65,18 @@ pub fn handle(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8, r
     // The slug must name a real (enumerated) post — no traversal, and no comment
     // thread for a post that doesn't exist.
     const metas = try listPosts(io, alloc);
-    const meta = for (metas) |m| {
-        if (std.mem.eql(u8, m.slug, slug)) break m;
+    const idx = for (metas, 0..) |m, i| {
+        if (std.mem.eql(u8, m.slug, slug)) break i;
     } else return http.notFound(req);
+    const meta = metas[idx];
 
-    if (tail.len == 0) return renderPost(req, io, alloc, name, meta);
+    if (tail.len == 0) {
+        // Prev = older neighbor, next = newer neighbor (metas is oldest-first),
+        // computed on the fly from the enumerated directory — no stored index.
+        const prev: ?PostMeta = if (idx > 0) metas[idx - 1] else null;
+        const next: ?PostMeta = if (idx + 1 < metas.len) metas[idx + 1] else null;
+        return renderPost(req, io, alloc, name, meta, prev, next);
+    }
     if (std.mem.eql(u8, tail, "/comment")) return comments.handlePost(req, io, alloc, bus, meta.slug);
     return http.notFound(req);
 }
@@ -100,7 +107,7 @@ fn renderIndex(req: *Request, io: Io, alloc: Alloc, name: []const u8) !void {
 /// renderPost serves one post (its meta already resolved by handle). The body
 /// renders whole (its own H1 is the on-page title); a date line sits above it, and
 /// the comments thread + form below.
-fn renderPost(req: *Request, io: Io, alloc: Alloc, name: []const u8, meta: PostMeta) !void {
+fn renderPost(req: *Request, io: Io, alloc: Alloc, name: []const u8, meta: PostMeta, prev: ?PostMeta, next: ?PostMeta) !void {
     const path = try std.fs.path.join(alloc, &.{ blog_root, meta.file });
     const src = Io.Dir.cwd().readFileAlloc(io, path, alloc, .unlimited) catch return http.notFound(req);
 
@@ -110,6 +117,13 @@ fn renderPost(req: *Request, io: Io, alloc: Alloc, name: []const u8, meta: PostM
     try b.print(alloc, "<p class=\"post-date\">{s}</p>", .{try formatStamp(alloc, meta.date, meta.time)});
     // Server-owned post body: the trusted (uncapped) render.
     try b.appendSlice(alloc, try markdown.renderTrustedReflow(alloc, src));
+    // Prev/Next nav — one full line each, just above the comments thread.
+    if (prev != null or next != null) {
+        try b.appendSlice(alloc, "<nav class=\"post-nav\">");
+        if (prev) |p| try b.print(alloc, "<p>previous: <a href=\"/blog/{s}\">{s}</a></p>", .{ p.slug, try html.htmlEscape(alloc, p.title) });
+        if (next) |n| try b.print(alloc, "<p>next: <a href=\"/blog/{s}\">{s}</a></p>", .{ n.slug, try html.htmlEscape(alloc, n.title) });
+        try b.appendSlice(alloc, "</nav>");
+    }
     try comments.renderThread(&b, io, alloc, meta.slug, name);
     try end(&b, alloc);
     try req.respond(b.items, .{ .extra_headers = &.{http.html_ct} });
@@ -282,6 +296,8 @@ const head_b =
     \\ul.post-list a { color: #000080; text-decoration: none; font-weight: bold; font-size: 17px; }
     \\ul.post-list a:hover { text-decoration: underline; }
     \\ul.post-list .post-date { margin: 0; white-space: nowrap; }
+    \\.post-nav { margin-top: 2.5rem; font-size: 15px; }
+    \\.post-nav p { margin: 0.3rem 0; }
     \\.comments { margin-top: 3rem; border-top: 1px solid #ddd; padding-top: 1.4rem; }
     \\.comments h2 { color: #000080; font-size: 18px; margin: 0 0 1rem; }
     \\.comment { padding: 12px 0; border-bottom: 1px solid #eee; }
