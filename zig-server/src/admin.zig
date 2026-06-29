@@ -17,6 +17,7 @@ const http = @import("http.zig");
 const users = @import("users.zig");
 const storage = @import("storage.zig");
 const chat = @import("chat.zig");
+const store = @import("chat_store.zig");
 const html = @import("html.zig");
 const settings = @import("settings.zig");
 
@@ -111,6 +112,7 @@ fn renderOverview(req: *Request, io: Io, alloc: Alloc) !void {
     }
 
     try renderMembersTable(&b, io, alloc);
+    try renderNameOnlyTable(&b, io, alloc);
 
     try b.print(alloc, "<h2>Sessions per player</h2>\n<p class=\"muted\">Read straight from {s}.</p>\n<table>\n" ++
         "<tr><th>Player</th><th class=\"n\">Games</th><th class=\"n\">Puzzles</th><th class=\"n\">Actions</th><th class=\"n\">Disk</th><th></th></tr>", .{
@@ -177,6 +179,80 @@ fn memberLessThan(_: void, a: MemberRow, b: MemberRow) bool {
     if (a_ever != b_ever) return a_ever; // active-ever first
     if (!a_ever) return false; // both never-active — preserve order
     return a.last_seen.? > b.last_seen.?; // most-recent first
+}
+
+const GuestRow = struct {
+    id: []const u8,
+    name: []const u8,
+    last_seen: ?i64,
+    games: i64,
+    moves: i64,
+    comments: i64,
+    disk_bytes: i64,
+};
+
+/// renderNameOnlyTable lists the name-only users — accounts with a name but no
+/// password (guests minted by the blog-comment / guest-login flow), excluding the
+/// agent. For each: time since last activity (last-seen is a single "last active"
+/// across every surface — a guest's only surfaces are Lyn Rummy and comments
+/// anyway), Lyn Rummy games + moves stolen from the per-player walk, and the
+/// blog-comment count (tallied by display name). This is the roster the archive
+/// tool will work from.
+fn renderNameOnlyTable(b: *std.ArrayList(u8), io: Io, alloc: Alloc) !void {
+    const tally = try store.tallyBlogComments(io, alloc);
+
+    var rows: std.ArrayList(GuestRow) = .empty;
+    for (try users.listUserIDs(io, alloc)) |id| {
+        if (users.principalAuthorized(io, alloc, id)) continue; // members + agent live above
+        const st = gatherUserStats(io, alloc, id);
+        try rows.append(alloc, .{
+            .id = id,
+            .name = st.name,
+            .last_seen = users.userLastSeen(io, alloc, id),
+            .games = st.game_sessions,
+            .moves = st.total_actions,
+            .comments = commentCount(tally, st.name),
+            .disk_bytes = st.disk_bytes,
+        });
+    }
+    std.sort.insertion(GuestRow, rows.items, {}, guestLessThan);
+
+    try b.appendSlice(alloc, name_only_table_head);
+    if (rows.items.len == 0) {
+        try b.appendSlice(alloc, "<tr><td colspan=\"6\" class=\"muted\">No name-only users.</td></tr></table>");
+        return;
+    }
+    const now = nowUnix(io);
+    for (rows.items) |row| {
+        const name = try html.htmlEscape(alloc, row.name);
+        const since = if (row.last_seen) |t| try humanizeSince(alloc, now - t) else "never";
+        try b.print(alloc, "<tr><td>{s} <span class=\"muted\">#{s}</span></td><td>{s}</td>" ++
+            "<td class=\"n\">{d}</td><td class=\"n\">{d}</td><td class=\"n\">{d}</td><td class=\"n\">{s}</td></tr>", .{
+            name,        try html.htmlEscape(alloc, row.id),
+            since,       row.games,
+            row.moves,   row.comments,
+            try humanBytes(alloc, row.disk_bytes),
+        });
+    }
+    try b.appendSlice(alloc, "</table>");
+}
+
+/// commentCount returns a name's blog-comment total from the tally (0 if none).
+fn commentCount(tally: []const store.CommentTally, name: []const u8) i64 {
+    for (tally) |t| {
+        if (std.mem.eql(u8, t.name, name)) return t.count;
+    }
+    return 0;
+}
+
+/// guestLessThan: active-ever first (most-recent first), never-active last —
+/// same ordering as the members table.
+fn guestLessThan(_: void, a: GuestRow, b: GuestRow) bool {
+    const a_ever = a.last_seen != null;
+    const b_ever = b.last_seen != null;
+    if (a_ever != b_ever) return a_ever;
+    if (!a_ever) return false;
+    return a.last_seen.? > b.last_seen.?;
 }
 
 /// appendApiKeyCell writes the API-key controls for one member: Generate (becomes
@@ -364,6 +440,13 @@ const member_table_head =
     \\<p class="muted">Members (password holders): time since last activity, lifetime image-upload total (vs the per-user cap), and a bot API key (acts as the member, no admin).</p>
     \\<table>
     \\<tr><th>Name</th><th>Last active</th><th class="n">Images</th><th>API key</th></tr>
+;
+
+const name_only_table_head =
+    \\<h2>Name-only users</h2>
+    \\<p class="muted">Accounts with a name but no password — guests minted at the blog-comment box or the guest-login flow. "Last active" spans every surface (a guest's are Lyn Rummy and comments); moves and games are their Lyn Rummy play, comments are tallied by name. The roster the archive tool draws from.</p>
+    \\<table>
+    \\<tr><th>Name</th><th>Last active</th><th class="n">Games</th><th class="n">Moves</th><th class="n">Comments</th><th class="n">Disk</th></tr>
 ;
 
 // delete_confirm_template. Args: name, games, puzzles, actions, disk, id.

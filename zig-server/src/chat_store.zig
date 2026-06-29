@@ -438,6 +438,44 @@ pub fn blogCommentDir(alloc: Alloc, slug: []const u8) ![]u8 {
     return std.fs.path.join(alloc, &.{ chat_root, "blog-comments", slug });
 }
 
+/// CommentTally aggregates one author's blog-comment footprint across every post
+/// thread. It's keyed by display name because that's the only per-comment identity
+/// on disk — the uid is never stamped on a message (only the thread's `.lastauthor`
+/// holds the most-recent one). For a name-only guest the typed name IS their
+/// identity, so name == account; for two guests who picked the same name the tally
+/// merges them (a rare, acceptable smudge for an at-a-glance admin stat).
+pub const CommentTally = struct { name: []const u8, count: i64, last: []const u8 };
+
+/// tallyBlogComments walks every {chat_root}/blog-comments/<slug> thread, decodes
+/// it, and returns one CommentTally per distinct author name. `last` is the newest
+/// comment's RFC3339 date (fixed-width UTC → lexicographic order is chronological).
+/// Missing root → empty. Strings alias the request allocator's decode buffers.
+pub fn tallyBlogComments(io: Io, alloc: Alloc) ![]CommentTally {
+    const root = try std.fs.path.join(alloc, &.{ chat_root, "blog-comments" });
+    var dir = Io.Dir.cwd().openDir(io, root, .{ .iterate = true }) catch return &.{};
+    defer dir.close(io);
+
+    var out: std.ArrayList(CommentTally) = .empty;
+    var it = dir.iterate();
+    while (try it.next(io)) |entry| {
+        if (entry.kind != .directory) continue;
+        const conv_dir = try std.fs.path.join(alloc, &.{ root, entry.name });
+        const raw = (try rawSession(io, alloc, conv_dir, "comments")) orelse continue;
+        for (try decodeChatFile(alloc, raw)) |m| {
+            var found = false;
+            for (out.items) |*t| {
+                if (!std.mem.eql(u8, t.name, m.from)) continue;
+                t.count += 1;
+                if (std.mem.order(u8, m.date, t.last) == .gt) t.last = m.date;
+                found = true;
+                break;
+            }
+            if (!found) try out.append(alloc, .{ .name = m.from, .count = 1, .last = m.date });
+        }
+    }
+    return out.toOwnedSlice(alloc);
+}
+
 /// sessionMdPath is {conv_dir}/sessions/<sid>.md.
 pub fn sessionMdPath(alloc: Alloc, conv_dir: []const u8, sid: []const u8) ![]u8 {
     const file = try std.fmt.allocPrint(alloc, "{s}.md", .{sid});
