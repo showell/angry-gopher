@@ -66,7 +66,7 @@ pub fn handleHome(req: *Request, io: Io, alloc: Alloc, uid: []const u8, path: []
 /// An app row parsed from the DSL: a linked title, a CTA button label, a
 /// description paragraph, and a low-key tech line (primary `lang` + an
 /// interesting `tech` feature). `href` is both the title link and button target.
-const App = struct { title: []const u8, href: []const u8, cta: []const u8, lang: []const u8, tech: []const u8, code: []const u8, essay: []const u8, desc: []const u8 };
+const App = struct { title: []const u8, href: []const u8, cta: []const u8, lang: []const u8, tech: []const u8, code: []const u8, essay: []const u8, image: []const u8, desc: []const u8 };
 
 /// renderHomeBody reads pages/home.txt, parses the mini-DSL, and returns the inner
 /// page body (the `.app-body-wrap` through `</body></html>`). Returns an error on
@@ -93,6 +93,7 @@ fn renderHomeBody(io: Io, alloc: Alloc) ![]const u8 {
     var c_tech: []const u8 = "";
     var c_code: []const u8 = "";
     var c_essay: []const u8 = "";
+    var c_image: []const u8 = "";
     var c_desc: std.ArrayList(u8) = .empty;
 
     var it = std.mem.splitScalar(u8, src, '\n');
@@ -100,7 +101,7 @@ fn renderHomeBody(io: Io, alloc: Alloc) ![]const u8 {
         const line = std.mem.trim(u8, raw, " \t\r");
         if (line.len == 0) continue; // blank lines only separate blocks
         if (std.mem.startsWith(u8, line, "## ")) {
-            if (have) try pushApp(alloc, &apps, c_title, c_href, c_cta, c_lang, c_tech, c_code, c_essay, &c_desc);
+            if (have) try pushApp(alloc, &apps, c_title, c_href, c_cta, c_lang, c_tech, c_code, c_essay, c_image, &c_desc);
             const rest = std.mem.trim(u8, line[3..], " ");
             const arrow = std.mem.indexOf(u8, rest, "->") orelse return error.MalformedHome;
             c_title = std.mem.trim(u8, rest[0..arrow], " ");
@@ -110,6 +111,7 @@ fn renderHomeBody(io: Io, alloc: Alloc) ![]const u8 {
             c_tech = "";
             c_code = "";
             c_essay = "";
+            c_image = "";
             c_desc = .empty;
             have = true;
         } else if (std.mem.startsWith(u8, line, "# ")) {
@@ -129,13 +131,16 @@ fn renderHomeBody(io: Io, alloc: Alloc) ![]const u8 {
         } else if (std.mem.startsWith(u8, line, "essay:")) {
             if (!have) return error.MalformedHome;
             c_essay = std.mem.trim(u8, line[6..], " ");
+        } else if (std.mem.startsWith(u8, line, "image:")) {
+            if (!have) return error.MalformedHome;
+            c_image = std.mem.trim(u8, line[6..], " ");
         } else {
             if (!have) return error.MalformedHome; // stray prose outside any app block
             if (c_desc.items.len != 0) try c_desc.append(alloc, ' ');
             try c_desc.appendSlice(alloc, line);
         }
     }
-    if (have) try pushApp(alloc, &apps, c_title, c_href, c_cta, c_lang, c_tech, c_code, c_essay, &c_desc);
+    if (have) try pushApp(alloc, &apps, c_title, c_href, c_cta, c_lang, c_tech, c_code, c_essay, c_image, &c_desc);
     if (headline.len == 0 or apps.items.len == 0) return error.MalformedHome;
 
     // The headline renders as ordinary muted text, not a big H1 — the blue CTA
@@ -150,12 +155,23 @@ fn renderHomeBody(io: Io, alloc: Alloc) ![]const u8 {
             try std.fmt.allocPrint(alloc, "<p class=\"app-more\"><a href=\"{s}\">Read more →</a></p>", .{try html.htmlEscape(alloc, a.essay)})
         else
             "";
+        // Optional app image (left of the text), itself a link to the app. 600x420
+        // source → fixed 200x140 thumb (exact ratio, no distortion).
+        const thumb = if (a.image.len > 0)
+            try std.fmt.allocPrint(alloc, "<a class=\"app-thumb\" href=\"{s}\"><img src=\"{s}\" alt=\"{s}\" width=\"200\" height=\"140\" loading=\"lazy\"></a>", .{
+                try html.htmlEscape(alloc, a.href),
+                try html.htmlEscape(alloc, a.image),
+                try html.htmlEscape(alloc, a.title),
+            })
+        else
+            "";
         try out.print(alloc,
-            \\<div class="app-row"><div class="app-row-top"><div class="app-row-main"><h2><a href="{s}">{s}</a></h2><p>{s}</p>{s}</div>
+            \\<div class="app-row"><div class="app-row-top">{s}<div class="app-row-main"><h2><a href="{s}">{s}</a></h2><p>{s}</p>{s}</div>
             \\<div class="cta"><a class="play-btn" href="{s}">{s}</a></div></div>
             \\<div class="app-tech"><span class="tech-lang">{s}</span> <span class="tech-feat">{s}</span> <a class="tech-code" href="{s}" target="_blank" rel="noopener">Code on GitHub ↗</a></div></div>
             \\
         , .{
+            thumb,
             try html.htmlEscape(alloc, a.href),
             try html.htmlEscape(alloc, a.title),
             try html.htmlEscape(alloc, a.desc),
@@ -176,11 +192,12 @@ fn renderHomeBody(io: Io, alloc: Alloc) ![]const u8 {
 }
 
 /// pushApp validates a fully-accumulated block and appends it. All fields are
-/// required except `essay` (the optional "Read more" link) — a block missing any
-/// of title/href/cta/lang/tech/code/description is malformed.
-fn pushApp(alloc: Alloc, apps: *std.ArrayList(App), title: []const u8, href: []const u8, cta: []const u8, lang: []const u8, tech: []const u8, code: []const u8, essay: []const u8, desc: *std.ArrayList(u8)) !void {
+/// required except `essay` (the optional "Read more" link) and `image` (the
+/// optional app thumbnail) — a block missing any of title/href/cta/lang/tech/code/
+/// description is malformed.
+fn pushApp(alloc: Alloc, apps: *std.ArrayList(App), title: []const u8, href: []const u8, cta: []const u8, lang: []const u8, tech: []const u8, code: []const u8, essay: []const u8, image: []const u8, desc: *std.ArrayList(u8)) !void {
     if (title.len == 0 or href.len == 0 or cta.len == 0 or lang.len == 0 or tech.len == 0 or code.len == 0 or desc.items.len == 0) return error.MalformedHome;
-    try apps.append(alloc, .{ .title = title, .href = href, .cta = cta, .lang = lang, .tech = tech, .code = code, .essay = essay, .desc = try desc.toOwnedSlice(alloc) });
+    try apps.append(alloc, .{ .title = title, .href = href, .cta = cta, .lang = lang, .tech = tech, .code = code, .essay = essay, .image = image, .desc = try desc.toOwnedSlice(alloc) });
 }
 
 /// handleVersion serves the JSON build-identity probe. `commit` is the git
@@ -301,7 +318,11 @@ const head_style =
     \\.app-list { margin-top: 8px; }
     \\.app-row { padding: 20px 0; border-bottom: 1px solid var(--cc-border, #e5e0d3); }
     \\.app-row:last-child { border-bottom: none; }
-    \\.app-row-top { display: flex; align-items: center; gap: 28px; }
+    \\.app-row-top { display: flex; align-items: center; gap: 24px; }
+    \\.app-thumb { flex-shrink: 0; display: block; line-height: 0; }
+    \\.app-thumb img { width: 200px; height: 140px; display: block; border-radius: 8px;
+    \\                 box-shadow: 0 1px 5px rgba(0,0,32,0.20); }
+    \\.app-thumb:hover img { box-shadow: 0 2px 10px rgba(0,0,32,0.32); }
     \\.app-row-main { flex: 1; min-width: 0; }
     \\.app-row-main h2 { margin: 0 0 4px; font-size: 22px; }
     \\.app-row-main h2 a { color: var(--cc-accent, #000080); text-decoration: none; }

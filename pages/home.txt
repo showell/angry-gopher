@@ -1,6 +1,7 @@
 # Explore apps built by Steve and Claude (2026)
 
 ## Seattle Delivery -> /delivery
+image: /gallery/delivery.svg
 cta: Ship some Totes
 lang: TypeScript
 tech: Clarke-Wright savings heuristic + local search over an integer, trig-free cost
@@ -9,6 +10,7 @@ essay: /blog/the-ghost-in-the-cost-function
 Eight trucks fan out across a deliberately not-to-scale Seattle, delivering a hundred orders a day. The route-planning is a hand-built Clarke-Wright solver — watch it think, or shuffle up a new shift.
 
 ## Safari Screensaver -> /driving
+image: /gallery/safari.png
 cta: Take a Drive
 lang: TypeScript
 tech: first-person 3D drawn from rider-relative coordinates — no global world frame
@@ -17,6 +19,7 @@ essay: /blog/you-cant-freeze-a-sunset
 A first-person motorcycle ride down a winding road — and it steers itself. Hit space and watch it lean through the turns, or step the ride frame by frame. No goal, no clock — just the road.
 
 ## Chat -> /chat
+image: /gallery/chat.svg
 cta: Be social
 lang: Zig
 tech: live updates over Server-Sent Events; messages persisted to the file system, no database
@@ -25,6 +28,7 @@ essay: /blog/afford-your-own-markdown-dialect
 Real-time chat, docs, and channels — the live surface Steve, Claude, and friends use every day. Messages, reactions, and a markdown doc editor, all in one binary.
 
 ## Blog -> /blog
+image: /gallery/blog.svg
 cta: See how we build
 lang: Zig
 tech: a hand-written markdown engine renders posts from repo files on the fly
@@ -33,6 +37,7 @@ essay: /blog/the-ghost-in-the-byline
 Notes from building this site — one zig binary, written with Claude. Essays on the code, the algorithms, and what we learned along the way.
 
 ## Play Lyn Rummy -> /game
+image: /gallery/lynrummy.svg
 cta: Match wits with the agent
 lang: TypeScript + Elm
 tech: a rules DSL sent over the wire — a TypeScript referee engine with an Elm UI
@@ -41,6 +46,7 @@ essay: /blog/lyn-never-wrote-it-down
 Two-player rummy with a real referee. Build runs and sets against an agent that actually knows the rules, and complete your turn when the board looks right.
 
 ## Lyn Rummy Puzzles -> /puzzles
+image: /gallery/puzzles.svg
 cta: Fix the board
 lang: TypeScript + Elm
 tech: shares the rules engine; deterministic undo and move-by-move replay
