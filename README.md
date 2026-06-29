@@ -18,7 +18,7 @@ The home page (`/`) is a launch pad for six apps. In display order:
 |---|---|---|---|---|
 | **Seattle Delivery** | `/delivery` | A CVRP route-planning sim — eight trucks fan out across a not-to-scale Seattle. Watch a hand-built Clarke-Wright solver think. | TypeScript | [`delivery/README.md`](delivery/README.md) |
 | **Safari Screensaver** | `/driving` | A self-driving first-person motorcycle ride down a winding road, drawn from rider-relative coordinates. | TypeScript | [`games/driving/README.md`](games/driving/README.md) |
-| **Chat** | `/chat` | Real-time chat, docs, and channels over Server-Sent Events — the live surface we use daily. | Zig | [`chat/README.md`](chat/README.md) |
+| **Chat** | `/chat` | Real-time chat, docs, and channels over Server-Sent Events — the live surface we use daily; a multi-page app still mostly rendered on the front end. | JavaScript + Zig | [`chat/README.md`](chat/README.md) |
 | **Blog** | `/blog` | Notes on building the site, rendered from repo markdown by a hand-written engine. | Zig | [`blog/README.md`](blog/README.md) |
 | **Lyn Rummy** | `/game` | Two-player rummy against an agent that knows the rules — a TS referee engine with an Elm UI, speaking a DSL over the wire. | TypeScript + Elm | [`games/lynrummy/README.md`](games/lynrummy/README.md) |
 | **Lyn Rummy Puzzles** | `/puzzles` | A single mid-game board to solve; shares the rules engine, with deterministic undo and replay. | TypeScript + Elm | [`games/lynrummy/elm/src/Puzzle/README.md`](games/lynrummy/elm/src/Puzzle/README.md) |
@@ -55,7 +55,7 @@ We pin these versions:
 |---|---|---|---|
 | **Zig** | 0.16.0 | the server (`zig-server/`) | system install — `zig version` |
 | **Elm** | 0.19.1 | the Lyn Rummy client | `npm install` in `games/lynrummy/elm/` (pinned in its `package.json`) |
-| **TypeScript** | 6.0.3 | the agent + game engine | `npm install` in `games/lynrummy/ts/` (pinned in its `package.json`) |
+| **TypeScript** | 6.0.3 | the Delivery & Safari clients + the Lyn Rummy agent/engine | `npm install` in `delivery/`, `games/driving/`, and `games/lynrummy/ts/` (pinned in each `package.json`) |
 | **Node** | 24 | runs the TS directly + hosts the npm-installed `elm`/`tsc` | system install — `node --version` |
 
 TypeScript runs two ways, and only one of them is transpiled:
@@ -63,20 +63,25 @@ TypeScript runs two ways, and only one of them is transpiled:
 - **Node-side** — the agent solver and its tests run the `.ts` files
   *directly* via Node's type-stripping, never transpiled (so a Node new
   enough for that is required; dev uses v24).
-- **Browser-side** — the driving game (`games/driving/main.ts`) and the
-  Lyn Rummy engine (`games/lynrummy/ts/elm_api/engine_entry.ts`) **are**
-  transpiled: `esbuild` bundles each into one IIFE JS file
-  (`games/driving/app.js`, `games/lynrummy/elm/engine.js`), and those
-  bundles — alongside the Elm output — are `@embedFile`d into the zig
-  binary at compile time. `ops/build_driving` / `ops/build_engine_js` run
-  this; `esbuild` is a pinned local devDependency (calling its binary
-  directly skips `npx`'s ~1s-per-call resolution tax).
+- **Browser-side** — three bundles **are** transpiled (`esbuild` bundles
+  each into one IIFE JS file, `@embedFile`d into the zig binary at compile
+  time). Two are *pure-TypeScript clients that do it all*: the Delivery sim
+  (`delivery/main.ts` → `delivery/app.js`) and the Safari Screensaver
+  (`games/driving/main.ts` → `games/driving/app.js`) each build their own
+  canvas and own every line of their on-screen behavior — no Elm, no server
+  logic. The third is the opposite shape: the Lyn Rummy engine
+  (`games/lynrummy/ts/elm_api/engine_entry.ts` → `games/lynrummy/elm/engine.js`)
+  is *only* the solver/referee brain plus occasional DOM glue, while Elm owns
+  the UI. `ops/build_delivery` / `ops/build_driving` / `ops/build_engine_js`
+  run these (alongside the Elm output); `esbuild` is a pinned local
+  devDependency (calling its binary directly skips `npx`'s ~1s-per-call
+  resolution tax).
 
 `tsc` itself only ever typechecks (`npm run typecheck`) — it never emits
 the JS that ships. Elm, `tsc`, and `esbuild` are all project-local (run
 from each package's `node_modules/.bin`), so a fresh checkout needs
-`npm install` in `games/lynrummy/elm/`, `games/lynrummy/ts/`, and
-`games/driving/`.
+`npm install` in `games/lynrummy/elm/`, `games/lynrummy/ts/`,
+`games/driving/`, and `delivery/`.
 
 ## Local config & identity
 
