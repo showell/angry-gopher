@@ -1,16 +1,31 @@
-# Driving Game
+# Safari Screensaver
 
-A 3D glorified screensaver. The rider drives a motorcycle through ~20 road
-segments — past farm critters and safari critters, under radio towers, as the
-sun gently sets over the mountains — chasing a blue truck into the night. Pure,
-well-organized TypeScript, esbuilt to `app.js` and `@embedFile`d into the zig
-binary; served public at `/driving` (no user data, no server CSS — `main.ts`
-builds its own canvas/DOM).
+**Welcome to the Safari!** Open [lynrummy.com/driving](https://lynrummy.com/driving),
+press **SPACE**, and settle in: you're on a motorcycle at dusk, riding a winding
+road through ~20 segments — past grazing cows and the odd giraffe, under radio
+towers, chasing a blue truck into the sunset. You don't steer; the rider steers
+*itself*, and watching it lean into each turn is the whole point. Tap **↑/↓** to
+step the ride forward or back a frame at a time, or **D** for the debug overlay.
+There's no goal and no clock — it's a 3D glorified screensaver.
+
+It's pure, well-organized **TypeScript**, esbuilt to `app.js` and `@embedFile`d
+into the zig binary, served public at `/driving` — `main.ts` builds its own
+canvas/DOM, with no server logic and no user data.
 
 **Status: parked.** It's a toy — journey over destination. The code is small,
 entirely Claude-written, and every module opens with a top-of-file comment, so
-**the code is the authority** for how anything works. This file holds only the
-design *intent* the code can't tell you, and the durable lessons from building it.
+**the code is the authority** for how anything works. This file is the canonical
+home for the design *intent* the code can't tell you and the durable lessons from
+building it (the project's memory notes now just point here).
+
+**A sibling worth knowing: [Seattle Delivery](../../delivery/README.md).** The two
+toys are cut from the same cloth — pure client-side TypeScript, a `<canvas>` the
+client builds itself, a JS bundle the zig server merely embeds and serves, fully
+deterministic, no server logic. Same stack, same "flipbook + algorithm" paradigm;
+the difference is *which* hard problem sits at the center. Safari's is
+**perception** — the cheapest lie the eye will accept (faked curvature, a ramped
+dusk, a cat that's a flipbook of poses). Delivery's is **combinatorial cost** —
+routing trucks to minimize an honest number. Same spirit, different hard part.
 
 ## Running & testing
 
