@@ -38,5 +38,10 @@ echo
 echo "===== ops/test_chat ====="
 ./ops/test_chat
 
+# Driving (Safari) subsystem: the baked-critter render cull gate.
+echo
+echo "===== ops/check_safari ====="
+./ops/check_safari
+
 echo
 echo "All gates passed in $((SECONDS - t0_total))s."

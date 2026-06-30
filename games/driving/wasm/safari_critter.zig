@@ -33,7 +33,7 @@ pub fn cornerCritters(c: world.Creature, along: f32, turn_right: bool, hw: f32, 
     const adult_h = sp.adult_h;
     const baby_h = adult_h * BABY_RATIO;
     const turn_sign: f32 = if (turn_right) 1.0 else -1.0;
-    const face_right = !turn_right; // right turn → faces left; left turn → faces right
+    const face_right = turn_right; // face INTO the turn — eyes lead the rider around the bend
     out[0] = .{ // adult, at the far (outer) corner
         .along = along,
         .across = -turn_sign * (hw + ADULT_RAIL_BUFFER + adult_h / 2.0),

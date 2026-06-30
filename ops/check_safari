@@ -1,0 +1,20 @@
+#!/bin/bash
+# CANONICAL DEV-LOOP SCRIPT — DO NOT REINVENT.
+# Before composing an ad-hoc shell command for build / test / regen, run
+# `ops/list` to see what already exists.
+#
+# Safari (driving) render gate: drive the committed safari.wasm across a full
+# course traversal and assert the critter culls hold — no draw-buffer overflow,
+# and BOTH culls (chain-segment reach + projected size) do real work so neither
+# silently goes dead. The baked-polygon critters are heavy, so this guards the
+# bounded paint buffer the way ops/check_zig guards the bundles exist.
+#
+# Reads safari.wasm AS COMMITTED (does not rebuild) — run ops/build_safari_wasm
+# after editing the wasm sources, same as the other build outputs the gate guards.
+set -e
+
+source "$(dirname "$0")/_paths.sh"
+
+cd "$GOPHER_DIR/games/driving"
+[ -f safari.wasm ] || { echo "Error: safari.wasm missing — run ops/build_safari_wasm first." >&2; exit 1; }
+node probe_safari_culls.mjs

@@ -60,26 +60,11 @@ function shade(c, f) {
   return `rgb(${r},${g},${b})`;
 }
 
-// Emoji are expensive to rasterise every frame, so render each glyph ONCE to an
-// offscreen sprite (keyed by codepoint) and reuse it — drawImage beats fillText.
-const spriteCache = new Map();
-function emojiSprite(cp) {
-  let c = spriteCache.get(cp);
-  if (c) return c;
-  c = document.createElement('canvas');
-  c.width = 96; c.height = 96;
-  const g = c.getContext('2d');
-  g.font = Math.round(96 * 0.8) + 'px serif';
-  g.textAlign = 'center';
-  g.textBaseline = 'middle';
-  g.fillText(String.fromCodePoint(cp), 48, 48 + 96 * 0.06);
-  spriteCache.set(cp, c);
-  return c;
-}
-
 // Walk the draw buffer [base, base+len). Views over the SAME words: u32 for
 // tag/color/count, f32 for coordinate bit patterns. tag 0 = solid polygon; tag 1 =
-// round-gradient polygon (cylinder/cone shading); tag 2 = emoji billboard.
+// round-gradient polygon (cylinder/cone shading). The critters used to be tag-2 emoji
+// glyphs the browser font rasterised; they are now baked to tag-0 polygons (emoji_frames.zig),
+// so this blitter draws no glyphs — it's purely polygons + gradients + the beacon disc.
 function blit(ctx, mem, base, len) {
   const u32 = new Uint32Array(mem.buffer, base, len / 4);
   const f32 = new Float32Array(mem.buffer, base, len / 4);
@@ -117,18 +102,6 @@ function blit(ctx, mem, base, len) {
         g.addColorStop(1, rgba(eCol));
         ctx.fillStyle = g;
         ctx.fill();
-      }
-      continue;
-    }
-    if (tag === 2) {
-      const cp = u32[w++], flip = u32[w++];
-      const x = f32[w++], y = f32[w++], size = f32[w++];
-      if (size >= 1) {
-        ctx.save();
-        ctx.translate(x, y);
-        if (flip) ctx.scale(-1, 1); // most animal emoji face left by default
-        ctx.drawImage(emojiSprite(cp), -size / 2, -size, size, size); // square, bottom on the ground
-        ctx.restore();
       }
       continue;
     }

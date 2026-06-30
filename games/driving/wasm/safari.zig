@@ -186,6 +186,16 @@ export fn bufCap() u32 {
     return paint.capBytes();
 }
 
+/// cullSeg / cullSize: critters dropped LAST frame by the two culls — by chain-segment reach (saves the
+/// WASM the projection work) and by projected pixel size (saves buffer + blitting). Instrumentation; the
+/// gate asserts both stay non-zero over a traversal, so neither cull silently goes dead (belt + suspenders).
+export fn cullSeg() u32 {
+    return render.cull_seg;
+}
+export fn cullSize() u32 {
+    return render.cull_size;
+}
+
 /// clock is the animation step `t` — the count of advances (minus backs). It's the clock
 /// driving the sun/sky/beacons, AND the index Steve reports to pin a frame for path sims.
 export fn clock() u32 {

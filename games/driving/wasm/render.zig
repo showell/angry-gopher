@@ -27,6 +27,19 @@ const ENTRY_ROAD_DIST: f32 = 40.0; // metres of approach road a joint paints beh
 const RAIL_PATH_CAP: usize = 192; // max points in a corner's rail path (run-up + two legs + run-out); ample for any turn on this route, bounds the fixed buffer
 const DETAIL_DIST: f32 = 70.0; // within this, a tree draws 3D near; beyond, 2D far
 const MIN_SCENERY_PX: f32 = 2.0; // skip scenery that would project shorter than this
+// critters are baked polygon sets (emoji_frames.zig), hundreds of points each — far costlier than the
+// trees' few polys, and unreadable as anything but a blob when tiny. So cull them at a much larger
+// projected height than MIN_SCENERY_PX: a distant background animal isn't worth a thousand points.
+const MIN_CRITTER_PX: f32 = 16.0;
+// Belt and suspenders. The SEGMENT cull (chain depth d) saves the WASM the work of even projecting a
+// critter: trees hide the farm animals past a few segments, and the corner safari animals carry a little
+// further before they're worth it. The SIZE cull (MIN_CRITTER_PX) then saves buffer + blitting on
+// whatever's left. The two counters below tally each cull per frame so the gate can assert BOTH stay
+// live — a reach so loose the size cull never fires, or so tight the segments do all the work, is a bug.
+const FARM_SEG_REACH: usize = 3; // cows / pigs: only the nearest 3 chain segments are worth computing
+const SAFARI_SEG_REACH: usize = 5; // corner safari animals + ducks: 5 (bigger, less occluded by trees)
+pub var cull_seg: u32 = 0; // critter instances skipped because their segment is beyond reach
+pub var cull_size: u32 = 0; // critter instances within reach but projected < MIN_CRITTER_PX
 const LOOK_AHEAD: usize = 7; // how many segments ahead we draw
 const MAX_CHAIN: usize = 8;
 const MAX_VIS_TREES: usize = 640; // fixed-spacing trees across the whole visible chain
@@ -138,6 +151,8 @@ fn emitPondGround(w: *const world.World, ch: *const Chain, pose: Pose, map: Mapp
 
 pub fn frame(w: *const world.World, seg_idx: usize, along: f32, across: f32, yaw: f32, heading: f32, step: f32, v: f32, cam_focal: f32, view_yaw: f32, tk: truck.State) void {
     rails.reset();
+    cull_seg = 0;
+    cull_size = 0;
     const ch = buildChain(w, seg_idx);
     const cur = w.segments[seg_idx];
     // view_yaw is the extra camera yaw the distracted-rider gaze (+ the subtle lean head-turn) adds on top of
@@ -265,39 +280,46 @@ pub fn frame(w: *const world.World, seg_idx: usize, along: f32, across: f32, yaw
             nt += 1;
         }
 
-        // cows/bulls (centre-relative across + hw → from-the-left), collected.
-        var cti: usize = 0;
-        while (cti < seg.n_cows and ncow < MAX_VIS_CRITTERS) : (cti += 1) {
-            const cr = seg.cows[cti];
-            const rp = at(w, &ch, pose, d, cr.along, cr.across + hw);
-            if (rp.forward <= camera.NEAR) continue;
-            if (cr.height / rp.forward * cam_focal < MIN_SCENERY_PX) continue;
-            c_right[ncow] = rp.right;
-            c_fwd[ncow] = rp.forward;
-            c_h[ncow] = cr.height;
-            c_cp[ncow] = cr.codepoint;
-            c_face[ncow] = cr.face_right;
-            ncow += 1;
-        }
-
-        // the distraction pig herd (same billboard path as the cows), when this segment has one.
-        var pti: usize = 0;
-        while (pti < seg.n_pigs and ncow < MAX_VIS_CRITTERS) : (pti += 1) {
-            const pr = seg.pigs[pti];
-            const rp = at(w, &ch, pose, d, pr.along, pr.across + hw);
-            if (rp.forward <= camera.NEAR) continue;
-            if (pr.height / rp.forward * cam_focal < MIN_SCENERY_PX) continue;
-            c_right[ncow] = rp.right;
-            c_fwd[ncow] = rp.forward;
-            c_h[ncow] = pr.height;
-            c_cp[ncow] = pr.codepoint;
-            c_face[ncow] = pr.face_right;
-            ncow += 1;
-        }
+        // cows/bulls + the distraction pig herd (centre-relative across + hw → from-the-left), collected.
+        // Farm animals are short and tree-hidden, so only the nearest FARM_SEG_REACH segments are computed.
+        if (d < FARM_SEG_REACH) {
+            var cti: usize = 0;
+            while (cti < seg.n_cows and ncow < MAX_VIS_CRITTERS) : (cti += 1) {
+                const cr = seg.cows[cti];
+                const rp = at(w, &ch, pose, d, cr.along, cr.across + hw);
+                if (rp.forward <= camera.NEAR) continue;
+                if (cr.height / rp.forward * cam_focal < MIN_CRITTER_PX) {
+                    cull_size += 1;
+                    continue;
+                }
+                c_right[ncow] = rp.right;
+                c_fwd[ncow] = rp.forward;
+                c_h[ncow] = cr.height;
+                c_cp[ncow] = cr.codepoint;
+                c_face[ncow] = cr.face_right;
+                ncow += 1;
+            }
+            var pti: usize = 0;
+            while (pti < seg.n_pigs and ncow < MAX_VIS_CRITTERS) : (pti += 1) {
+                const pr = seg.pigs[pti];
+                const rp = at(w, &ch, pose, d, pr.along, pr.across + hw);
+                if (rp.forward <= camera.NEAR) continue;
+                if (pr.height / rp.forward * cam_focal < MIN_CRITTER_PX) {
+                    cull_size += 1;
+                    continue;
+                }
+                c_right[ncow] = rp.right;
+                c_fwd[ncow] = rp.forward;
+                c_h[ncow] = pr.height;
+                c_cp[ncow] = pr.codepoint;
+                c_face[ncow] = pr.face_right;
+                ncow += 1;
+            }
+        } else cull_seg += seg.n_cows + seg.n_pigs;
 
         // the corner safari creatures at this segment's EXIT: an adult at the far corner + a baby beyond the
         // turn (same billboard path as the cows/pigs). Skipped at the terminus (no exit corner).
-        if (!seg.terminates) {
+        if (!seg.terminates and d < SAFARI_SEG_REACH) {
             var cc: [2]world.Critter = undefined;
             const ncc = safari_critter.cornerCritters(seg.exit_creature, seg.length, seg.exit_right, hw, &cc);
             var k: usize = 0;
@@ -305,7 +327,10 @@ pub fn frame(w: *const world.World, seg_idx: usize, along: f32, across: f32, yaw
                 const cr = cc[k];
                 const rp = at(w, &ch, pose, d, cr.along, cr.across + hw);
                 if (rp.forward <= camera.NEAR) continue;
-                if (cr.height / rp.forward * cam_focal < MIN_SCENERY_PX) continue;
+                if (cr.height / rp.forward * cam_focal < MIN_CRITTER_PX) {
+                    cull_size += 1;
+                    continue;
+                }
                 c_right[ncow] = rp.right;
                 c_fwd[ncow] = rp.forward;
                 c_h[ncow] = cr.height;
@@ -322,10 +347,13 @@ pub fn frame(w: *const world.World, seg_idx: usize, along: f32, across: f32, yaw
         if (seg.exit_creature == .pond) {
             emitPondGround(w, &ch, pose, .{ .kind = .chain, .d = d }, seg.length, cam_focal);
             for (pond.DUCKS) |dk| {
-                if (ncow >= MAX_VIS_CRITTERS) break;
+                if (ncow >= MAX_VIS_CRITTERS or d >= SAFARI_SEG_REACH) break;
                 const rp = at(w, &ch, pose, d, seg.length + dk.p.cv, dk.p.cu);
                 if (rp.forward <= camera.NEAR) continue;
-                if (pond.DUCK_HEIGHT / rp.forward * cam_focal < MIN_SCENERY_PX) continue;
+                if (pond.DUCK_HEIGHT / rp.forward * cam_focal < MIN_CRITTER_PX) {
+                    cull_size += 1;
+                    continue;
+                }
                 c_right[ncow] = rp.right;
                 c_fwd[ncow] = rp.forward;
                 c_h[ncow] = pond.DUCK_HEIGHT;
@@ -399,7 +427,10 @@ pub fn frame(w: *const world.World, seg_idx: usize, along: f32, across: f32, yaw
             const cr = cc[k];
             const rp = mapPt(w, &ch, pose, prev_map, cr.along, cr.across + phw);
             if (rp.forward <= camera.NEAR) continue;
-            if (cr.height / rp.forward * cam_focal < MIN_SCENERY_PX) continue;
+            if (cr.height / rp.forward * cam_focal < MIN_CRITTER_PX) {
+                cull_size += 1;
+                continue;
+            }
             c_right[ncow] = rp.right;
             c_fwd[ncow] = rp.forward;
             c_h[ncow] = cr.height;
@@ -417,7 +448,10 @@ pub fn frame(w: *const world.World, seg_idx: usize, along: f32, across: f32, yaw
             if (ncow >= MAX_VIS_CRITTERS) break;
             const rp = mapPt(w, &ch, pose, prev_map, prev.length + dk.p.cv, dk.p.cu);
             if (rp.forward <= camera.NEAR) continue;
-            if (pond.DUCK_HEIGHT / rp.forward * cam_focal < MIN_SCENERY_PX) continue;
+            if (pond.DUCK_HEIGHT / rp.forward * cam_focal < MIN_CRITTER_PX) {
+                cull_size += 1;
+                continue;
+            }
             c_right[ncow] = rp.right;
             c_fwd[ncow] = rp.forward;
             c_h[ncow] = pond.DUCK_HEIGHT;

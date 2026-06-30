@@ -10,9 +10,10 @@
 //! trees want. coords are the f32 bit pattern stored in a u32 word; the blitter reads
 //! them back through a Float32Array view over the same words.
 //!
-//! tag 2 = emoji billboard (see pushEmoji); tag 3 = an alpha disc (see pushBeacon) — a
-//! tower's blinking apex beacon; tag 4 = a radial-gradient polygon (see pushGradPoly) — the truck's
-//! headlight beams + brake glow. Tags 3 and 4 are the only commands that composite with an alpha < 1.
+//! tag 3 = an alpha disc (see pushBeacon) — a tower's blinking apex beacon; tag 4 = a radial-gradient
+//! polygon (see pushGradPoly) — the truck's headlight beams + brake glow. Tags 3 and 4 are the only
+//! commands that composite with an alpha < 1. (There is no glyph command: the critters are baked to
+//! polygons — emoji_frames.zig — so the seam is purely polygons + gradients.)
 
 const camera = @import("camera.zig");
 
@@ -60,26 +61,6 @@ pub fn pushPoly(color: u32, pts: []const camera.ScreenPt) void {
 /// — the cylinder/cone shading (dark edges, bright centre) the near trees use.
 pub fn pushRoundPoly(color: u32, pts: []const camera.ScreenPt) void {
     push(1, color, pts);
-}
-
-/// pushEmoji appends an emoji-billboard command (tag 2): a glyph the blitter draws
-/// (a polygon can't be a glyph). Layout: [tag 2][codepoint u32][faceRight u32][x][y]
-/// [size] — a `size`×`size` square centred horizontally on x with its bottom at y,
-/// flipped when faceRight. zig owns the placement + size; JS owns the glyph render.
-pub fn pushEmoji(codepoint: u32, face_right: bool, x: f32, y: f32, size: f32) void {
-    if (cursor + 6 > CAP_WORDS) return;
-    buf[cursor] = 2;
-    cursor += 1;
-    buf[cursor] = codepoint;
-    cursor += 1;
-    buf[cursor] = if (face_right) 1 else 0;
-    cursor += 1;
-    buf[cursor] = @bitCast(x);
-    cursor += 1;
-    buf[cursor] = @bitCast(y);
-    cursor += 1;
-    buf[cursor] = @bitCast(size);
-    cursor += 1;
 }
 
 /// pushBeacon appends an alpha-disc command (tag 3): the tower beacon's blinking glow.

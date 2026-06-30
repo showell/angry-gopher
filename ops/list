@@ -31,6 +31,10 @@ Available ops commands (run from repo root):
   ops/test_ts            TS solver/engine suite (~20s) — Lyn Rummy.
   ops/test_elm           Elm client suite (~5s) — Lyn Rummy.
   ops/test_chat          Chat client lint (~1s): chat.js + docs.js + chat_client.py.
+  ops/check_safari       Safari render cull gate (~1s) — driving. Drives the
+                         committed safari.wasm across a full course and asserts
+                         no draw-buffer overflow + both critter culls (segment
+                         reach + projected size) stay live. Composed by ops/check.
   ops/test_docs          doc_xref --all (~1s) — common.
   ops/test_css           check_css (~1s) — common. Flag CSS classes defined
                          in any server/**/*.go <style> block that no Go/JS/
@@ -57,6 +61,10 @@ Available ops commands (run from repo root):
                          games/driving/safari.wasm (the /driving game,
                          embedded by zig build). Called by ops/start. Run
                          after any games/driving/wasm/ edit.
+  ops/bake_emoji         Bake the safari/farm critters from vendored Twemoji
+                         SVGs (emoji_svg/) into polygons (wasm/emoji_frames.zig)
+                         + a snap/emoji_baked.png contact sheet. Re-run after
+                         editing the SVGs; the seam stays polygon-only (no glyphs).
 
   REGEN & TOOLS
   -------------

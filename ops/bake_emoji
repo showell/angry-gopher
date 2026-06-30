@@ -1,0 +1,21 @@
+#!/bin/bash
+# CANONICAL DEV-LOOP SCRIPT — DO NOT REINVENT.
+# Before writing a new ops/* script or composing an ad-hoc
+# shell command for build / launch / test / regen, run
+# `ops/list` to see what already exists.
+#
+# Bake the driving game's safari/farm emoji critters into hard-coded
+# polygons for the zig→WASM port: games/driving/wasm/emoji_frames.zig
+# (GENERATED + committed, like a gold file). Parses the vendored Twemoji
+# SVGs in games/driving/emoji_svg/ into flat polygons in the cat's unit
+# frame, so the WASM seam stays polygon-only — no emoji glyph at runtime,
+# and the look is identical in the browser and (later) native.
+#
+# Re-run after changing the vendored SVGs. Also writes a validation
+# contact sheet to snap/emoji_baked.png (every critter recognisable).
+set -e
+
+source "$(dirname "$0")/_paths.sh"
+
+cd "$GOPHER_DIR/games/driving"
+node --experimental-strip-types bake_emoji.ts
