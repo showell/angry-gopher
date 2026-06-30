@@ -17,8 +17,11 @@
 
 const camera = @import("camera.zig");
 
-// 256 KiB of words — far more than a frame needs, bounded so there is no memory.grow.
-const CAP_WORDS: usize = (1 << 18) / 4;
+// 1 MiB of words — bounded so there is no memory.grow. Generous headroom: the critters are now full-body
+// baked polygon sets (emoji_frames.zig), hundreds of points each, and we cull them only lightly (a close
+// safari corner + a pig herd can fill a frame). Static .bss — cheap to oversize, and blit cost scales with
+// polygons actually drawn, not the cap. The buf-peak HUD + ops/check_safari guard the real headroom.
+const CAP_WORDS: usize = (1 << 20) / 4;
 var buf: [CAP_WORDS]u32 = undefined;
 var cursor: usize = 0; // next free word
 var high_water: usize = 0; // max words used by any frame this run (instrumentation)
