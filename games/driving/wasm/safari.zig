@@ -60,6 +60,16 @@ fn ensure() void {
 /// back() can return to it.
 export fn advance() void {
     ensure();
+    // reached the finish line: reset the whole ride to the start so the screensaver replays the journey
+    // (rider, truck, the day→dusk clock, and the scrub history all back to frame 0). Mirrors a fresh drive.
+    if (rider.isFinished(cur, &the_world)) {
+        cur = rider.initialRiderState();
+        truck_cur = truck.initial();
+        step_clock = 0;
+        hist_head = 0;
+        hist_count = 0;
+        return;
+    }
     hist[hist_head] = cur;
     truck_hist[hist_head] = truck_cur;
     hist_head = (hist_head + 1) % HIST_CAP;

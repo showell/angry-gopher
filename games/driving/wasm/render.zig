@@ -46,17 +46,16 @@ const SEG_TOWER_LEFT: f32 = 100.0; // a mid-tower stands this far LEFT of the ce
 
 const Chain = struct { idx: [MAX_CHAIN]usize, len: usize };
 
-// follow exit_to from `start`, stopping at LOOK_AHEAD or when the loop closes back to
-// the start (so the rider's own segment isn't redrawn far ahead).
+// follow exit_to from `start`, stopping at LOOK_AHEAD or at the terminus (no segment leads out of the
+// finish line, so the chain ends there).
 fn buildChain(w: *const world.World, start: usize) Chain {
     var ch = Chain{ .idx = undefined, .len = 0 };
     var s = start;
     while (ch.len < LOOK_AHEAD and ch.len < MAX_CHAIN) {
         ch.idx[ch.len] = s;
         ch.len += 1;
-        const next = w.segments[s].exit_to;
-        if (next == start) break;
-        s = next;
+        if (w.segments[s].terminates) break; // nothing beyond the finish
+        s = w.segments[s].exit_to;
     }
     return ch;
 }
@@ -300,21 +299,22 @@ pub fn frame(w: *const world.World, seg_idx: usize, along: f32, across: f32, yaw
         seg_start_gap += seg.length; // advance to the next chain segment's start
     }
 
-    // the joint just BEHIND the rider: its ground (approach road + pavement) mapped
-    // forward through the join keeps the segment he just left from vanishing mid-crossing
-    // — the bug where the pavement popped out the instant cur.segment flipped. The route
-    // loops, so there is always a previous segment. Mirrors view.ts's behind-joint pass.
-    const prev_idx = (seg_idx + w.n_segments - 1) % w.n_segments;
+    // the joint just BEHIND the rider: its ground (approach road + pavement) mapped forward through the
+    // join keeps the segment he just left from vanishing mid-crossing — the bug where the pavement popped
+    // out the instant cur.segment flipped. The route is finite, so there's a previous segment everywhere
+    // EXCEPT the start (seg 0). Mirrors view.ts's behind-joint pass.
+    const has_prev = seg_idx > 0;
+    const prev_idx = if (has_prev) seg_idx - 1 else 0;
     const prev = w.segments[prev_idx];
     const prev_map = Mapper{ .kind = .prev, .prev_len = prev.length, .prev_angle = prev.exit_angle, .prev_right = prev.exit_right, .prev_w = prev.width };
     const cur_map = Mapper{ .kind = .chain, .d = 0 };
-    emitJointGround(w, &ch, pose, prev_map, cur_map, prev.length, prev.width, cur.width, prev.exit_right, cam_focal);
+    if (has_prev) emitJointGround(w, &ch, pose, prev_map, cur_map, prev.length, prev.width, cur.width, prev.exit_right, cam_focal);
 
     // the tower the joint we just passed OWNS, mapped forward through the join — without
     // it, the previous intersection's tower vanishes the moment cur.segment flips (the
     // same symptom the pavement had). Position is unchanged: beyond the corner, +RIGHT of
     // prev's lane centreline, yawed — exactly intersectionTower(pIxn, prev, fromPrev).
-    if (ntw < MAX_VIS_TOWERS) {
+    if (has_prev and ntw < MAX_VIS_TOWERS) {
         const a0 = prev.length + TOWER_BEYOND;
         const x0 = prev.width / 2.0 + TOWER_RIGHT;
         const c = mapPt(w, &ch, pose, prev_map, a0, x0);
@@ -337,7 +337,7 @@ pub fn frame(w: *const world.World, seg_idx: usize, along: f32, across: f32, yaw
         const tseg = w.segments[ch.idx[dr + 1]];
         emitJointRail(w, &ch, pose, .{ .d = dr }, .{ .d = dr + 1 }, fseg.length, fseg.width, tseg.width, fseg.exit_right);
     }
-    emitJointRail(w, &ch, pose, prev_map, cur_map, prev.length, prev.width, cur.width, prev.exit_right);
+    if (has_prev) emitJointRail(w, &ch, pose, prev_map, cur_map, prev.length, prev.width, cur.width, prev.exit_right);
 
     // the chased truck: walk its LEAD (its route distance minus the rider's) forward from the rider along
     // the chain to find which segment its centre lands on, exactly as truck.ts's truckScenery. Collected as

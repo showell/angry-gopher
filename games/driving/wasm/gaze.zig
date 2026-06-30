@@ -43,7 +43,7 @@ pub fn gazeFocus(focus: f32) f32 {
 // eyes not committed to a corner, the pig within GAZE_LOOK_DIST ahead, and not yet swung past
 // GAZE_RELEASE_ANGLE off his heading. null = no pig interest (gaze + brake fall back to driving normally).
 fn pigAhead(state: rider.RiderState, seg: world.Segment) ?f32 {
-    if (!seg.has_pigs) return null;
+    if (!seg.pigs_distract) return null;
     if (@abs(state.yaw) > EYES_ON_ROAD_YAW) return null; // mid straighten-out: eyes on the road
     const pig = world.gazePig(seg.length, seg.width / 2.0);
     const dist = pig.along - state.along;
@@ -91,7 +91,7 @@ pub fn nextRiderGaze(state: rider.RiderState, w: *const world.World) rider.Rider
 // Distinct from pigAhead (the HEAD-turn, which also ends once the pig is beside him); this is the MOTION
 // hold, so it ignores the eyes-on-road gate and persists into the turn. Mirrors gawkEngaged.
 pub fn gawkEngaged(state: rider.RiderState, seg: world.Segment) bool {
-    if (!seg.has_pigs) return false;
+    if (!seg.pigs_distract) return false;
     return state.along >= world.gazePig(seg.length, seg.width / 2.0).along - GAZE_LOOK_DIST;
 }
 

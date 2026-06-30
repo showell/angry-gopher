@@ -44,7 +44,10 @@ fn nextTurn(w: *const world.World, pos: f32) struct { dist: f32, v_turn: f32 } {
     var i: usize = 0;
     while (i < w.n_segments) : (i += 1) {
         cum += w.segments[i].length;
-        if (pos < cum) return .{ .dist = cum - pos, .v_turn = rider.turnSpeed(w.segments[i].exit_angle) };
+        if (pos < cum) {
+            if (w.segments[i].terminates) return .{ .dist = std.math.inf(f32), .v_turn = 0 }; // no turn at the finish — cruise in
+            return .{ .dist = cum - pos, .v_turn = rider.turnSpeed(w.segments[i].exit_angle) };
+        }
     }
     return .{ .dist = std.math.inf(f32), .v_turn = 0 };
 }

@@ -154,7 +154,7 @@ fn getForwardAccelDecel(state: RiderState, seg: world.Segment) f32 {
     const leaned = @abs(state.tilt) >= TILT_HOLD;
     var a: f32 = if (leaned) 0 else A_ACCEL;
 
-    const v_end = turnSpeed(seg.exit_angle);
+    const v_end: f32 = if (seg.terminates) 0 else turnSpeed(seg.exit_angle); // brake to a STOP at the finish
     const near = (seg.length - state.along) <= APPROACH_INTERSECTION_DIST;
     if (near) {
         const d = seg.commit_along - state.along;
@@ -234,10 +234,29 @@ pub fn getNextRiderState(state: RiderState, w: *const world.World) RiderState {
     const seg = w.segments[state.segment];
     const dec = decide(state, seg);
     const moved = simulateRiderStep(state, dec.tilt_step, dec.accel);
-    const on_next = riderStateForNextSegment(moved, w);
-    const resolved = if (@abs(on_next.across) < w.segments[seg.exit_to].width / 2.0) on_next else moved;
+    var resolved = moved;
+    if (seg.terminates) {
+        // the finish line: no segment leads out, so don't re-express him forward — clamp him to the end and
+        // stop. He brakes toward v=0 at the line (v_end=0); snap him there once he's crept to the end OR
+        // slowed to a crawl in the braking zone, so the kinematic brake can't Zeno-stall him a hair short
+        // (leaving him stopped forever, never "finished"). Mirrors riderFinished in rider.ts.
+        const in_finish_zone = (seg.length - resolved.along) < APPROACH_INTERSECTION_DIST;
+        if (resolved.along >= seg.length or (in_finish_zone and resolved.v < 0.1)) {
+            resolved.along = seg.length;
+            resolved.v = 0;
+        }
+    } else {
+        const on_next = riderStateForNextSegment(moved, w);
+        if (@abs(on_next.across) < w.segments[seg.exit_to].width / 2.0) resolved = on_next;
+    }
     // the gaze is its own step, run AFTER the bike has moved (it reads the resolved segment + position):
     // swivel his head toward the pigs / back to the road and advance the focus. Mirrors the caller running
     // nextRiderGaze right after getNextRiderState in main.ts.
     return gaze.nextRiderGaze(resolved, w);
+}
+
+/// isFinished: the rider has reached the terminus end and stopped — the journey is over (the screensaver
+/// resets to the start). Mirrors riderFinished in rider.ts.
+pub fn isFinished(s: RiderState, w: *const world.World) bool {
+    return w.segments[s.segment].terminates and s.along >= w.segments[s.segment].length;
 }
