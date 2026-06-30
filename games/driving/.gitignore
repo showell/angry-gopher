@@ -5,3 +5,8 @@ node_modules/
 
 # cat snapshot tool output
 /snap/
+
+# native renderer build outputs (ops/build_safari_native, build.zig)
+/zig-out/
+/.zig-cache/
+/native/safari_native

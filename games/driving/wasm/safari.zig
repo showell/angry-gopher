@@ -58,7 +58,7 @@ fn ensure() void {
 
 /// advance steps the rider one frame (getNextRiderState), pushing the prior state so
 /// back() can return to it.
-export fn advance() void {
+pub export fn advance() void {
     ensure();
     // reached the finish line: reset the whole ride to the start so the screensaver replays the journey
     // (rider, truck, the day→dusk clock, and the scrub history all back to frame 0). Mirrors a fresh drive.
@@ -81,7 +81,7 @@ export fn advance() void {
 }
 
 /// back pops one frame off the history stack (a no-op at the bottom).
-export fn back() void {
+pub export fn back() void {
     ensure();
     if (hist_count == 0) return;
     hist_head = (hist_head + HIST_CAP - 1) % HIST_CAP;
@@ -94,7 +94,7 @@ export fn back() void {
 /// renderFrame fills the draw buffer for the current rider state and returns the byte
 /// length. The camera pose is the rider's segment + along/across/yaw — so his drift
 /// and heading through a turn show directly; the blitter adds the roll from tilt.
-export fn renderFrame() u32 {
+pub export fn renderFrame() u32 {
     ensure();
     paint.reset();
     // the live camera focal: the deepest of the lean pull-in and the rider's attention on a crossing cat
@@ -129,76 +129,83 @@ fn catAttention() f32 {
 }
 
 /// riderTilt is the bike's lean — the blitter rolls the canvas by it (camera bank).
-export fn riderTilt() f32 {
+pub export fn riderTilt() f32 {
     ensure();
     return cur.tilt;
 }
 
 /// camFocal is the live camera focal (px) from the last renderFrame — the lean + attention pull-in. The
 /// HUD can show it; a frame pins it. FOCAL straight-and-clear, smaller as he leans or eyes a crossing cat.
-export fn camFocal() f32 {
+pub export fn camFocal() f32 {
     return cam_focal_now;
 }
 
 /// gazeYaw / riderV / riderSeg expose live rider state for the HUD + frame-pinning: the distracted-rider
 /// head-turn (rad), the speed (m/press, drops to the gawk speed at the pigs), and the current segment index.
-export fn gazeYaw() f32 {
+pub export fn gazeYaw() f32 {
     ensure();
     return cur.gaze_yaw;
 }
-export fn riderV() f32 {
+pub export fn riderV() f32 {
     ensure();
     return cur.v;
 }
-export fn riderSeg() u32 {
+pub export fn riderSeg() u32 {
     ensure();
     return @intCast(cur.segment);
 }
 
 /// truckLead / truckV / truckBraking expose the chase for the HUD + probes: the truck's lead over the
 /// rider (m along the route), its speed (m/press), and whether its brake lights are lit this frame.
-export fn truckLead() f32 {
+pub export fn truckLead() f32 {
     ensure();
     return truck_cur.pos - world.routeDistance(&the_world, cur.segment, cur.along);
 }
-export fn truckV() f32 {
+pub export fn truckV() f32 {
     ensure();
     return truck_cur.v;
 }
-export fn truckBraking() u32 {
+pub export fn truckBraking() u32 {
     ensure();
     return if (truck_cur.braking) 1 else 0;
 }
 
 /// bufPtr is the byte offset of the draw buffer in linear memory.
-export fn bufPtr() u32 {
+pub export fn bufPtr() u32 {
     return paint.ptr();
+}
+
+/// frameWords exposes the current frame's draw-command words as a slice — for the NATIVE
+/// renderer (games/driving/native), which reads the same buffer in-process rather than
+/// through a Float32Array view. (The WASM blitter uses bufPtr()/renderFrame()'s length.)
+pub fn frameWords() []const u32 {
+    return paint.frameWords();
 }
 
 /// bufHighWater is the most bytes any frame has used this run (instrumentation); if it
 /// ever equals bufCap() the draw buffer overflowed and commands were silently dropped.
-export fn bufHighWater() u32 {
+pub export fn bufHighWater() u32 {
     return paint.highWaterBytes();
 }
 
 /// bufCap is the fixed draw-buffer size — the ceiling bufHighWater() must stay under.
-export fn bufCap() u32 {
+pub export fn bufCap() u32 {
     return paint.capBytes();
 }
 
 /// cullSeg / cullSize: critters dropped LAST frame by the two culls — by chain-segment reach (saves the
 /// WASM the projection work) and by projected pixel size (saves buffer + blitting). Instrumentation; the
 /// gate asserts both stay non-zero over a traversal, so neither cull silently goes dead (belt + suspenders).
-export fn cullSeg() u32 {
+pub export fn cullSeg() u32 {
     return render.cull_seg;
 }
-export fn cullSize() u32 {
+pub export fn cullSize() u32 {
     return render.cull_size;
 }
 
 /// clock is the animation step `t` — the count of advances (minus backs). It's the clock
 /// driving the sun/sky/beacons, AND the index Steve reports to pin a frame for path sims.
-export fn clock() u32 {
+pub export fn clock() u32 {
     return @intFromFloat(step_clock);
 }
 
@@ -208,11 +215,11 @@ export fn clock() u32 {
 /// skyTop / skyHorizon are the upper-sky and lower-horizon-band colours (0xRRGGBB) for
 /// the current clock — the two stops of the background gradient. They dim toward dusk and
 /// the horizon reddens at sunset.
-export fn skyTop() u32 {
+pub export fn skyTop() u32 {
     ensure();
     return sky.skyColor(step_clock);
 }
-export fn skyHorizon() u32 {
+pub export fn skyHorizon() u32 {
     ensure();
     return sky.horizonColor(step_clock);
 }
@@ -220,15 +227,15 @@ export fn skyHorizon() u32 {
 /// sunVisible is 1 when the sun is on-screen for the current heading (else the blitter
 /// skips it); sunX/sunY are its screen centre and sunScale its size factor (vertical
 /// squeeze on a lean — 1.0 in the static frame). Set by the last renderFrame().
-export fn sunVisible() u32 {
+pub export fn sunVisible() u32 {
     return if (sun.visible) 1 else 0;
 }
-export fn sunX() f32 {
+pub export fn sunX() f32 {
     return sun.x;
 }
-export fn sunY() f32 {
+pub export fn sunY() f32 {
     return sun.y;
 }
-export fn sunScale() f32 {
+pub export fn sunScale() f32 {
     return sun.scale;
 }

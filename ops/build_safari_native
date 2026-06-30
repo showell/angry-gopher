@@ -1,0 +1,27 @@
+#!/bin/bash
+# CANONICAL DEV-LOOP SCRIPT — DO NOT REINVENT.
+# Before composing an ad-hoc shell command for build / test / regen, run
+# `ops/list` to see what already exists.
+#
+# Build the NATIVE Safari renderer — the Linux screensaver core. It reuses the same
+# zig geometry/render modules the WASM build uses (games/driving/wasm/*.zig), but blits
+# the draw-command buffer with a software rasterizer (games/driving/native/raster.zig)
+# instead of the browser canvas. The output binary is a headless verification harness:
+# it drives the full route and writes one PNG per segment to games/driving/snap/native/.
+#
+# This is the native counterpart to ops/build_safari_wasm. The live fullscreen window
+# (a per-OS windowing layer) will build on top of this same core.
+set -e
+
+source "$(dirname "$0")/_paths.sh"
+
+OUT="$GOPHER_DIR/games/driving/zig-out/bin/safari_native"
+
+# build.zig wires the shared wasm core in as a module "safari" (cross-dir imports need it).
+zig build --build-file "$GOPHER_DIR/games/driving/build.zig"
+
+echo "built $OUT ($(wc -c < "$OUT") bytes)"
+
+# Run it from the repo root so its output path (games/driving/snap/native) resolves.
+mkdir -p "$GOPHER_DIR/games/driving/snap/native"
+"$OUT"

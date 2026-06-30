@@ -57,6 +57,13 @@ pub fn ptr() u32 {
     return @intCast(@intFromPtr(&buf));
 }
 
+/// frameWords: the words this frame filled, as a slice — the in-process equivalent of
+/// (ptr, byteLen) for a NATIVE blitter (games/driving/native/raster.zig) that reads the
+/// same draw-command buffer directly instead of through a Float32Array view in JS.
+pub fn frameWords() []const u32 {
+    return buf[0..cursor];
+}
+
 /// pushPoly appends one SOLID-filled polygon (tag 0).
 pub fn pushPoly(color: u32, pts: []const camera.ScreenPt) void {
     push(0, color, pts);

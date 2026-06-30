@@ -320,7 +320,7 @@ pub fn frame(w: *const world.World, seg_idx: usize, along: f32, across: f32, yaw
                 c_face[ncow] = pr.face_right;
                 ncow += 1;
             }
-        } else cull_seg += seg.n_cows + seg.n_pigs;
+        } else cull_seg += @intCast(seg.n_cows + seg.n_pigs); // counts are tiny; usize→u32 (native usize is 64-bit)
 
         // the corner safari creatures at this segment's EXIT: an adult at the far corner + a baby beyond the
         // turn (same billboard path as the cows/pigs). Skipped at the terminus (no exit corner).
