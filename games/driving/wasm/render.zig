@@ -12,6 +12,7 @@ const world = @import("world.zig");
 const tree = @import("tree.zig");
 const tower = @import("tower.zig");
 const critter = @import("critter.zig");
+const cat = @import("cat.zig");
 const mountains = @import("mountains.zig");
 const guard_rail = @import("guard_rail.zig");
 const sky = @import("sky.zig");
@@ -28,6 +29,7 @@ const MAX_CHAIN: usize = 8;
 const MAX_VIS_TREES: usize = 640; // fixed-spacing trees across the whole visible chain
 const MAX_VIS_TOWERS: usize = 16;
 const MAX_VIS_COWS: usize = 128;
+const MAX_VIS_CATS: usize = 8; // at most a handful of cat-bearing segments are ever in view at once
 
 // rail polys (bar quads + posts) collected across all visible joints, merged into the
 // scenery depth sort so trees occlude rails by honest depth. Static (like paint's
@@ -115,7 +117,7 @@ fn emitGround(pts: []const geom.RiderPt, cam_focal: f32) void {
     paint.pushPoly(ROAD, screen[0..m]);
 }
 
-pub fn frame(w: *const world.World, seg_idx: usize, along: f32, across: f32, yaw: f32, heading: f32, step: f32) void {
+pub fn frame(w: *const world.World, seg_idx: usize, along: f32, across: f32, yaw: f32, heading: f32, step: f32, v: f32) void {
     const cam_focal = camera.FOCAL; // static frame: no lean/focus pull-in yet
     rails.reset();
     const ch = buildChain(w, seg_idx);
@@ -154,6 +156,19 @@ pub fn frame(w: *const world.World, seg_idx: usize, along: f32, across: f32, yaw
     var c_cp: [MAX_VIS_COWS]u32 = undefined;
     var c_face: [MAX_VIS_COWS]bool = undefined;
     var ncow: usize = 0;
+
+    // crossing cats, collected as billboard stills (rider-relative) for the depth sort. The cat's pose +
+    // lateral travel + hop come from its crossing clock, keyed off the rider's road-along gap to it.
+    var k_right: [MAX_VIS_CATS]f32 = undefined;
+    var k_fwd: [MAX_VIS_CATS]f32 = undefined;
+    var k_h: [MAX_VIS_CATS]f32 = undefined;
+    var k_pose: [MAX_VIS_CATS]usize = undefined;
+    var k_lift: [MAX_VIS_CATS]f32 = undefined;
+    var ncat: usize = 0;
+
+    // road-along distance from the rider to the START (along = 0) of the chain segment being walked; the
+    // cat's gap is this + its `along`. Starts negative (the rider is `along` into his current segment).
+    var seg_start_gap: f32 = -along;
 
     var d: usize = 0;
     while (d < ch.len) : (d += 1) {
@@ -243,6 +258,25 @@ pub fn frame(w: *const world.World, seg_idx: usize, along: f32, across: f32, yaw
             c_face[ncow] = cr.face_right;
             ncow += 1;
         }
+
+        // the crossing cat: its pose + lateral offset + hop from the crossing clock (rider's along-gap to
+        // it + speed), placed as a billboard at its current across. Collected for the depth sort.
+        if (seg.has_cat and ncat < MAX_VIS_CATS) {
+            const st = cat.state(seg.cat, seg_start_gap + seg.cat.along, v);
+            const rp = at(w, &ch, pose, d, seg.cat.along, st.across + hw);
+            // a billboard at one depth: cull it well before camera.NEAR or the projection flings the still
+            // across the screen as the rider passes (see cat.NEAR_CULL — the tower-streak lesson).
+            if (rp.forward > cat.NEAR_CULL and seg.cat.height / rp.forward * cam_focal >= MIN_SCENERY_PX) {
+                k_right[ncat] = rp.right;
+                k_fwd[ncat] = rp.forward;
+                k_h[ncat] = seg.cat.height;
+                k_pose[ncat] = st.pose_idx;
+                k_lift[ncat] = st.lift;
+                ncat += 1;
+            }
+        }
+
+        seg_start_gap += seg.length; // advance to the next chain segment's start
     }
 
     // the joint just BEHIND the rider: its ground (approach road + pavement) mapped
@@ -286,9 +320,9 @@ pub fn frame(w: *const world.World, seg_idx: usize, along: f32, across: f32, yaw
 
     // merge trees + towers + cows into one depth order (far → near) so they occlude
     // right.
-    const Kind = enum { tree, tower, cow, rail };
+    const Kind = enum { tree, tower, cow, cat, rail };
     const Item = struct { fwd: f32, kind: Kind, i: usize };
-    var items: [MAX_VIS_TREES + MAX_VIS_TOWERS + MAX_VIS_COWS + guard_rail.MAX_RAIL_POLYS]Item = undefined;
+    var items: [MAX_VIS_TREES + MAX_VIS_TOWERS + MAX_VIS_COWS + MAX_VIS_CATS + guard_rail.MAX_RAIL_POLYS]Item = undefined;
     var ni: usize = 0;
     var i: usize = 0;
     while (i < nt) : (i += 1) {
@@ -303,6 +337,11 @@ pub fn frame(w: *const world.World, seg_idx: usize, along: f32, across: f32, yaw
     i = 0;
     while (i < ncow) : (i += 1) {
         items[ni] = .{ .fwd = c_fwd[i], .kind = .cow, .i = i };
+        ni += 1;
+    }
+    i = 0;
+    while (i < ncat) : (i += 1) {
+        items[ni] = .{ .fwd = k_fwd[i], .kind = .cat, .i = i };
         ni += 1;
     }
     i = 0;
@@ -332,6 +371,7 @@ pub fn frame(w: *const world.World, seg_idx: usize, along: f32, across: f32, yaw
                 tower.drawFlat(base, center, cam_focal, step + w_off[it.i]);
             },
             .cow => critter.draw(c_right[it.i], c_fwd[it.i], c_h[it.i], c_cp[it.i], c_face[it.i], cam_focal),
+            .cat => cat.draw(k_right[it.i], k_fwd[it.i], k_h[it.i], k_pose[it.i], k_lift[it.i], cam_focal),
             .rail => guard_rail.drawPoly(rails.polys[it.i], cam_focal),
             .tree => if (t_fwd[it.i] < DETAIL_DIST)
                 tree.drawNear(t_right[it.i], t_fwd[it.i], t_h[it.i], t_col[it.i], cam_focal)

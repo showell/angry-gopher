@@ -68,7 +68,7 @@ export fn back() void {
 export fn renderFrame() u32 {
     ensure();
     paint.reset();
-    render.frame(&the_world, cur.segment, cur.along, cur.across, cur.yaw, cur.heading, step_clock);
+    render.frame(&the_world, cur.segment, cur.along, cur.across, cur.yaw, cur.heading, step_clock, cur.v);
     // the sun's placement for the rider's absolute heading + clock, for the blitter to
     // paint behind the ranges (the buffer's first polys). The same continuous heading the
     // mountains use, so the sun doesn't snap across the loop seam.

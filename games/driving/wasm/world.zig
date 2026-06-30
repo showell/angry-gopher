@@ -6,6 +6,7 @@
 //! into a LOOP so the screensaver runs forever. No rider, no projection, no drawing.
 
 const std = @import("std");
+const cat = @import("cat.zig");
 
 pub const Color = u32; // 0xRRGGBB, opaque
 
@@ -34,6 +35,8 @@ pub const Segment = struct {
     commit_along: f32, // the `along` at which the rider commits to the exit turn
     north_heading: f32, // accumulated heading vs north (seg 0 = 0)
     has_mid_tower: bool, // a long segment stands its own tower halfway down
+    has_cat: bool, // a cat waits beside this segment and crosses as the rider nears
+    cat: cat.Cat, // its placement + crossing endpoints (valid only when has_cat)
 };
 
 pub const World = struct {
@@ -132,16 +135,29 @@ fn fillTrees(seg: *Segment, scheme: Scheme) void {
 
 // the authored route: length, scheme, and the exit turn (signed degrees, + = right)
 // onto the next segment. The last entry loops back to segment 0.
-const Cfg = struct { length: f32, scheme: Scheme, turn_deg: f32 };
+const Cfg = struct { length: f32, scheme: Scheme, turn_deg: f32, cat: bool = false };
 const route = [_]Cfg{
-    .{ .length = 500, .scheme = .all_green, .turn_deg = 50 }, // seg1 → 50° right
+    .{ .length = 500, .scheme = .all_green, .turn_deg = 50, .cat = true }, // seg1 → 50° right, has a crossing cat
     .{ .length = 320, .scheme = .all_green, .turn_deg = -70 }, // seg2 → 70° left
     .{ .length = 400, .scheme = .all_green, .turn_deg = 20 }, // seg3 → 20° right
     .{ .length = 300, .scheme = .yellow_green, .turn_deg = 20 }, // seg4 (gold) → 20° right
     .{ .length = 300, .scheme = .all_green, .turn_deg = -70 }, // seg5 → 70° left
     .{ .length = 300, .scheme = .all_green, .turn_deg = -70 }, // seg6 → 70° left
-    .{ .length = 1200, .scheme = .red_green, .turn_deg = 80 }, // seg7 (red, long) → 80° right, loops to seg1
+    .{ .length = 1200, .scheme = .red_green, .turn_deg = 80, .cat = true }, // seg7 (red, long) → 80° right, loops to seg1
 };
+
+// the smallest right-side tree `along` at or after `desired` — the cat tucks just past it, so a tree
+// stands between the rider and the cat. Trees aren't evenly spaced, so read the segment's actual rows.
+// Mirrors nextTreeAlong in cat_motion.ts.
+fn nextTreeAlong(seg: *const Segment, desired: f32) f32 {
+    var best: f32 = std.math.inf(f32);
+    var i: usize = 0;
+    while (i < seg.n_trees) : (i += 1) {
+        const t = seg.trees[i];
+        if (t.across > 0 and t.along >= desired and t.along < best) best = t.along;
+    }
+    return if (std.math.isInf(best)) desired else best;
+}
 
 /// buildWorld authors the looping route, builds each segment's tree rows, and
 /// accumulates the headings.
@@ -161,6 +177,8 @@ pub fn buildWorld() World {
         seg.has_mid_tower = c.length > MID_TOWER_MIN_LENGTH;
         fillTrees(seg, c.scheme);
         fillCows(seg);
+        seg.has_cat = c.cat;
+        seg.cat = if (c.cat) cat.make(LANE_WIDTH / 2.0, TREE_ROAD_OFFSET, nextTreeAlong(seg, cat.CAT_ALONG)) else undefined;
     }
     // accumulate north headings along the route (seg 0 = 0); stop before wrapping so
     // the loop's seg 0 keeps heading 0 (a clean cut, not an ever-growing spiral).
