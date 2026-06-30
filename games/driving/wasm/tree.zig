@@ -1,13 +1,13 @@
-//! tree — a roadside conifer, in two forms (the renderer picks by distance, like
-//! main.ts's DETAIL_DIST switch):
-//!   • FAR / 2D (drawFar): a flat trunk bar + eight flat crown triangles. Cheap,
-//!     indistinguishable from the round form at range.
-//!   • NEAR / 3D (drawNear): a round-shaded trunk cylinder + eight crown tiers, each
-//!     a real cone — a base circle of world points (each at its own depth) plus the
-//!     apex, projected and filled to their convex-hull silhouette, so the near rim is
-//!     genuinely nearer and the perspective divide foreshortens it. No camera pitch.
-//! Mirrors drawTree / drawTreeNear / tierCone / convexHull in tree.ts. Builds
-//! screen-space polygons and pushes them to paint (solid or round-gradient).
+//! tree — a roadside conifer. One draw() with two independent detail axes the renderer sets
+//! per tree (they matter at different ranges):
+//!   • TRUNK: a round-shaded cylinder (only the nearest few trees — trunk shading reads only
+//!     up close) vs a flat bar.
+//!   • CROWN: eight 3D cone tiers (near) vs eight flat triangles (far). A cone is a base
+//!     circle of world points (each at its own depth) plus the apex, projected and filled to
+//!     its convex-hull silhouette, so the near rim is genuinely nearer and foreshortens. The
+//!     crown is SOLID either way — its roundness is the SHAPE, not lighting, which keeps it
+//!     uniform (no shaded↔solid pop) across the tree line, since crowns are seen far out.
+//! Descends from drawTree / drawTreeNear / tierCone / convexHull in tree.ts.
 
 const std = @import("std");
 const camera = @import("camera.zig");
@@ -63,22 +63,21 @@ fn tierTriangle(m: Metrics, k: usize, color: u32) void {
     paint.pushPoly(color, &tri);
 }
 
-/// drawFar: the 2D form — flat trunk + eight flat crown triangles.
-pub fn drawFar(right: f32, forward: f32, height: f32, color: u32, cam_focal: f32) void {
+/// draw a roadside conifer. Two independent detail axes (they're noticed at different
+/// ranges): `round_trunk` shades the trunk as a cylinder vs a flat bar — only the nearest
+/// few trees, since trunk shading only reads up close; `near_crown` builds the crown from 3D
+/// cone hulls vs flat triangles. Crowns are always SOLID (the roundness is the cone shape,
+/// not lighting), so there's no shaded↔solid pop across the tree line.
+pub fn draw(right: f32, forward: f32, height: f32, color: u32, cam_focal: f32, round_trunk: bool, near_crown: bool) void {
     const m = metrics(right, forward, height, cam_focal);
     if (m.ht < 1.0) return;
-    drawTrunk(m, false);
+    drawTrunk(m, round_trunk);
     var k: usize = 0;
-    while (k < 8) : (k += 1) tierTriangle(m, k, color);
-}
-
-/// drawNear: the 3D form — round-shaded trunk cylinder + eight crown cones.
-pub fn drawNear(right: f32, forward: f32, height: f32, color: u32, cam_focal: f32) void {
-    const m = metrics(right, forward, height, cam_focal);
-    if (m.ht < 1.0) return;
-    drawTrunk(m, true);
-    var k: usize = 0;
-    while (k < 8) : (k += 1) tierCone(right, forward, height, color, cam_focal, m, k);
+    if (near_crown) {
+        while (k < 8) : (k += 1) tierCone(right, forward, height, color, cam_focal, m, k);
+    } else {
+        while (k < 8) : (k += 1) tierTriangle(m, k, color);
+    }
 }
 
 // crown tier `k` as a cone: a base circle of world radius R on the trunk axis rising
@@ -104,7 +103,10 @@ fn tierCone(r0: f32, f0: f32, height: f32, color: u32, cam_focal: f32, m: Metric
     var hull: [N + 1]camera.ScreenPt = undefined;
     const hn = convexHull(ring[0 .. N + 1], hull[0..]);
     if (hn < 3) return;
-    paint.pushRoundPoly(color, hull[0..hn]);
+    // SOLID fill: the cone's roundness is in its SHAPE (the projected ring+apex hull), not
+    // shading. Keeping crowns un-shaded is cheap AND uniform across the tree line (no
+    // shaded↔solid pop, since crowns are visible far out — unlike trunks). [[shape over shading]]
+    paint.pushPoly(color, hull[0..hn]);
 }
 
 // convex hull (Andrew's monotone chain) of screen points — the cone's filled

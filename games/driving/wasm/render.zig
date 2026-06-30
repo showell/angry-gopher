@@ -561,10 +561,19 @@ pub fn frame(w: *const world.World, seg_idx: usize, along: f32, across: f32, yaw
             .cat => cat.draw(k_right[it.i], k_fwd[it.i], k_h[it.i], k_pose[it.i], k_lift[it.i], cam_focal),
             .truck => truck.drawBody(w, &ch, pose, truck_d, truck_along, w.segments[ch.idx[truck_d]].width / 2.0, tk.braking, mountains.sunBehindMountains(step), cam_focal),
             .rail => guard_rail.drawPoly(rails.polys[it.i], cam_focal),
-            .tree => if (t_fwd[it.i] < DETAIL_DIST)
-                tree.drawNear(t_right[it.i], t_fwd[it.i], t_h[it.i], t_col[it.i], cam_focal)
-            else
-                tree.drawFar(t_right[it.i], t_fwd[it.i], t_h[it.i], t_col[it.i], cam_focal),
+            // Two independent tree-detail decisions (noticed at different ranges):
+            //  • round trunk: ONLY the four nearest trees (the two closest roadside pairs — a
+            //    pair shares one forward depth, so "fewer than 4 strictly closer" = two pairs).
+            //    Trunk shading reads only up close, and the round gradient is the cost.
+            //  • cone crowns: out to DETAIL_DIST (solid, so cheap) — crowns are seen far out, so
+            //    the 3D SHAPE carries to range; beyond, flat triangles.
+            .tree => {
+                var closer: usize = 0;
+                for (t_fwd[0..nt]) |fwd| {
+                    if (fwd < t_fwd[it.i]) closer += 1;
+                }
+                tree.draw(t_right[it.i], t_fwd[it.i], t_h[it.i], t_col[it.i], cam_focal, closer < 4, t_fwd[it.i] < DETAIL_DIST);
+            },
         }
     }
 }
