@@ -171,20 +171,13 @@ function hudMax(arr) { let m = 0; for (const v of arr) if (v > m) m = v; return 
 function hudAvg(arr) { if (!arr.length) return 0; let s = 0; for (const v of arr) s += v; return s / arr.length; }
 
 function drawHud(ctx, bufBytes, bufCap, cmds, step, seg, debug) {
+  // Off by default — prod is completely clean (nothing drawn). D toggles the dev
+  // overlay on; the bottom-of-page hint is where it stays discoverable.
+  if (!debug) return;
   ctx.save();
   ctx.font = '12px ui-monospace,Menlo,monospace';
   ctx.textAlign = 'left';
   ctx.textBaseline = 'top';
-  // Off by default — prod is clean. Leave only a dim affordance so it's discoverable
-  // that D reveals the dev overlay (frame budget + step/seg + buffer peak).
-  if (!debug) {
-    ctx.fillStyle = 'rgba(0,0,0,0.38)';
-    ctx.fillRect(8, 8, 74, 22);
-    ctx.fillStyle = '#8a93a0';
-    ctx.fillText('D · debug', 14, 13);
-    ctx.restore();
-    return;
-  }
   // Color the total line by the RATE of missed frames, not the single worst one: a lone
   // GC/jank spike shouldn't pin it red for the whole window. green = no misses; amber =
   // occasional (≤20%, likely jank); red = consistently over budget (a real problem).

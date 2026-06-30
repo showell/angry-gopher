@@ -66,7 +66,7 @@ below) plus `npm run typecheck` — useful for checking the port against the sou
 **Dev hotkeys** (`wasm/blitter.js`): ↑/↓ step, SPACE auto, **J** fast-forwards the
 *real* drive (no teleport) one intersection at a time, **D** toggles the dev overlay
 (the frame-budget HUD + step/seg + buffer peak) — **off by default** so prod is
-clean, with a dim `D` affordance left on-screen so it stays discoverable.
+completely clean (the bottom-of-page hint is where it stays discoverable).
 
 ## The one durable architecture idea: rider-relative, no global coordinates
 
