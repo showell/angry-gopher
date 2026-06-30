@@ -147,7 +147,7 @@ function hudPush(arr, v) { arr.push(v); if (arr.length > WINDOW) arr.shift(); }
 function hudMax(arr) { let m = 0; for (const v of arr) if (v > m) m = v; return m; }
 function hudAvg(arr) { if (!arr.length) return 0; let s = 0; for (const v of arr) s += v; return s / arr.length; }
 
-function drawHud(ctx, bufBytes, bufCap, cmds, step) {
+function drawHud(ctx, bufBytes, bufCap, cmds, step, seg) {
   // always on for now — hiding it is polish for when the port is close to done.
   // Color the total line by the RATE of missed frames, not the single worst one: a lone
   // GC/jank spike shouldn't pin it red for the whole window. green = no misses; amber =
@@ -158,7 +158,7 @@ function drawHud(ctx, bufBytes, bufCap, cmds, step) {
   const frac = hud.total.length ? overCount / hud.total.length : 0;
   const fill = bufCap ? (bufBytes / bufCap) : 0;
   const lines = [
-    `t ${step}   (the animation step — report this to pin a frame)`,
+    `t ${step}   seg ${seg}/19`,
     `wasm ${hudAvg(hud.wasm).toFixed(2)}ms  blit ${hudAvg(hud.blit).toFixed(2)}ms`,
     `total ${hudAvg(hud.total).toFixed(2)}ms  max ${totMax.toFixed(2)}  over ${overCount}/${hud.total.length} (${BUDGET_MS.toFixed(2)})`,
     `${cmds} draw-calls   buf-peak ${(bufBytes / 1024).toFixed(1)}/${(bufCap / 1024).toFixed(0)} KiB (${(fill * 100).toFixed(0)}%)`,
@@ -197,7 +197,7 @@ async function main() {
 
   const { instance } = await WebAssembly.instantiateStreaming(fetch('/driving/safari.wasm'), {});
   const { renderFrame, bufPtr, memory, advance, back, riderTilt, bufHighWater, bufCap,
-          skyTop, skyHorizon, sunVisible, sunX, sunY, sunScale, clock } = instance.exports;
+          skyTop, skyHorizon, sunVisible, sunX, sunY, sunScale, clock, riderSeg } = instance.exports;
   const capBytes = bufCap();
 
   // The wasm owns the rider state; we drive it. The camera rolls with the bike's lean
@@ -221,7 +221,7 @@ async function main() {
     hudPush(hud.wasm, t1 - t0);
     hudPush(hud.blit, t2 - t1);
     hudPush(hud.total, t2 - t0);
-    drawHud(ctx, bufHighWater(), capBytes, cmds, clock()); // unrolled overlay, on top
+    drawHud(ctx, bufHighWater(), capBytes, cmds, clock(), riderSeg() + 1); // unrolled overlay, on top
   }
   function loop() {
     if (auto) { advance(); draw(); }
