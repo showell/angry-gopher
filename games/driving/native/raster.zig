@@ -157,7 +157,11 @@ fn skyColor(y: f32, half: f32, inv_half: f32, sky_top: u32, sky_horizon: u32) u3
 // row (one horizon test) and design-X steps by inv_ss, no per-pixel un-rotation. The disc is
 // small and crisp, so it keeps the exact sqrt (only for its handful of pixels).
 const GLOW_LUT_N: usize = 1024;
-var glow_lut: [GLOW_LUT_N]Rgba = undefined;
+// premultiplied glow sample in 8.8 FIXED-POINT: pr/pg/pb = src·alpha·256, inv = (1-alpha)·256.
+// Compositing is then pure integer — `(pre + dst·inv + 128) >> 8` — with NO per-pixel float↔int
+// conversions (those were the real cost at SS²; src·alpha and the rounding fold into LUT-build).
+const GlowSample = struct { pr: u32, pg: u32, pb: u32, inv: u32 };
+var glow_lut: [GLOW_LUT_N]GlowSample = undefined;
 const SunShade = struct { glow_outer2: f32, disc_inner: f32, disc_outer: f32, disc_outer2: f32, lut_scale: f32 };
 
 pub fn drawSun(fb: Fb, roll: Roll, sun: SunPos) void {
@@ -176,7 +180,13 @@ pub fn drawSun(fb: Fb, roll: Roll, sun: SunPos) void {
     var i: usize = 0;
     while (i < GLOW_LUT_N) : (i += 1) {
         const r = @sqrt(@as(f32, @floatFromInt(i)) / lut_scale);
-        glow_lut[i] = glowColor(clamp01((r - glow_inner) * inv_span));
+        const c = glowColor(clamp01((r - glow_inner) * inv_span));
+        glow_lut[i] = .{
+            .pr = @intFromFloat(c.r * c.a * 256.0 + 0.5),
+            .pg = @intFromFloat(c.g * c.a * 256.0 + 0.5),
+            .pb = @intFromFloat(c.b * c.a * 256.0 + 0.5),
+            .inv = @intFromFloat((1.0 - c.a) * 256.0 + 0.5),
+        };
     }
     const shade = SunShade{ .glow_outer2 = glow_outer2, .disc_inner = disc_inner, .disc_outer = disc_outer, .disc_outer2 = disc_outer * disc_outer, .lut_scale = lut_scale };
 
@@ -223,8 +233,14 @@ fn sunPixel(fb: Fb, idx: usize, r2: f32, s: SunShade) void {
     if (r2 < s.glow_outer2) {
         var b: usize = @intFromFloat(r2 * s.lut_scale);
         if (b >= GLOW_LUT_N) b = GLOW_LUT_N - 1;
-        const c = glow_lut[b];
-        blend(fb, idx, c.r, c.g, c.b, c.a);
+        const g = glow_lut[b];
+        if (g.inv < 255) { // skip the ~invisible outer ring (alpha ≲ 0.004); else integer composite
+            const dst = fb.px[idx];
+            const or_ = (g.pr + ((dst >> 16) & 0xff) * g.inv + 128) >> 8;
+            const og = (g.pg + ((dst >> 8) & 0xff) * g.inv + 128) >> 8;
+            const ob = (g.pb + (dst & 0xff) * g.inv + 128) >> 8;
+            fb.px[idx] = (or_ << 16) | (og << 8) | ob;
+        }
     }
     if (r2 <= s.disc_outer2) {
         const r = @sqrt(r2);
