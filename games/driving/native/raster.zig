@@ -150,39 +150,87 @@ fn skyColor(y: f32, half: f32, inv_half: f32, sky_top: u32, sky_horizon: u32) u3
 }
 
 // ---- the setting sun: warm radial glow + the disc, clipped to the sky (design top half). ----
-// Bounded to the glow's pixel box (not the whole sky) — the sqrt is too costly to run on
-// every pixel at SS².
+// Bounded to the glow's pixel box (not the whole sky). The glow colour is a smooth function
+// of the design radius r, so we bake it into a per-frame LUT indexed by r² — the hot loop
+// then needs NO sqrt, just dx²+dy² and a table lookup (the per-pixel sqrt was the cost at
+// SS²). Upright (st==0 — the long sunset segment) is a fast path: design-Y is constant per
+// row (one horizon test) and design-X steps by inv_ss, no per-pixel un-rotation. The disc is
+// small and crisp, so it keeps the exact sqrt (only for its handful of pixels).
+const GLOW_LUT_N: usize = 1024;
+var glow_lut: [GLOW_LUT_N]Rgba = undefined;
+const SunShade = struct { glow_outer2: f32, disc_inner: f32, disc_outer: f32, disc_outer2: f32, lut_scale: f32 };
+
 pub fn drawSun(fb: Fb, roll: Roll, sun: SunPos) void {
     const half = roll.cy;
     const glow_inner = 8.0 * sun.scale;
     const glow_outer = 340.0 * sun.scale;
     const disc_inner = 4.0 * sun.scale;
     const disc_outer = SUN_RADIUS_PX * sun.scale;
+    const glow_outer2 = glow_outer * glow_outer;
+
+    // bake glowColor(r) into glow_lut, indexed by r² scaled into [0, N). Rebuilt each frame
+    // (the radii scale with the sun); N·(one sqrt) is nothing against the SS² pixel loop.
+    const lut_scale = @as(f32, @floatFromInt(GLOW_LUT_N - 1)) / glow_outer2;
+    const span = glow_outer - glow_inner;
+    const inv_span: f32 = if (span > 1e-6) 1.0 / span else 0.0;
+    var i: usize = 0;
+    while (i < GLOW_LUT_N) : (i += 1) {
+        const r = @sqrt(@as(f32, @floatFromInt(i)) / lut_scale);
+        glow_lut[i] = glowColor(clamp01((r - glow_inner) * inv_span));
+    }
+    const shade = SunShade{ .glow_outer2 = glow_outer2, .disc_inner = disc_inner, .disc_outer = disc_outer, .disc_outer2 = disc_outer * disc_outer, .lut_scale = lut_scale };
+
     const center = roll.toPixel(sun.x, sun.y);
     const r_px = glow_outer * roll.ss;
     const ylo: i64 = @max(0, @as(i64, @intFromFloat(@floor(center.y - r_px))));
     const yhi: i64 = @min(@as(i64, @intCast(fb.h)) - 1, @as(i64, @intFromFloat(@ceil(center.y + r_px))));
     const xlo: i64 = @max(0, @as(i64, @intFromFloat(@floor(center.x - r_px))));
     const xhi: i64 = @min(@as(i64, @intCast(fb.w)) - 1, @as(i64, @intFromFloat(@ceil(center.x + r_px))));
+
+    if (roll.st == 0.0) {
+        var py: i64 = ylo;
+        while (py <= yhi) : (py += 1) {
+            const des_y = (@as(f32, @floatFromInt(py)) + 0.5) * roll.inv_ss;
+            if (des_y >= half) continue; // whole row below the horizon (design-Y constant per row)
+            const dy = des_y - sun.y;
+            const dyy = dy * dy;
+            const row = @as(usize, @intCast(py)) * fb.w;
+            var dx = (@as(f32, @floatFromInt(xlo)) + 0.5) * roll.inv_ss - sun.x;
+            var px: i64 = xlo;
+            while (px <= xhi) : (px += 1) {
+                sunPixel(fb, row + @as(usize, @intCast(px)), dx * dx + dyy, shade);
+                dx += roll.inv_ss;
+            }
+        }
+        return;
+    }
+    // rolled (turning): un-rotate each pixel to design space, then the same r²-keyed shade.
     var py: i64 = ylo;
     while (py <= yhi) : (py += 1) {
         var px: i64 = xlo;
         while (px <= xhi) : (px += 1) {
             const d = roll.toDesign(@as(f32, @floatFromInt(px)) + 0.5, @as(f32, @floatFromInt(py)) + 0.5);
             if (d.y >= half) continue; // sky-only clip
-            const r = @sqrt((d.x - sun.x) * (d.x - sun.x) + (d.y - sun.y) * (d.y - sun.y));
-            const idx = @as(usize, @intCast(py)) * fb.w + @as(usize, @intCast(px));
-            if (r < glow_outer) {
-                const t = clamp01((r - glow_inner) / (glow_outer - glow_inner));
-                const c = glowColor(t);
-                blend(fb, idx, c.r, c.g, c.b, c.a);
-            }
-            if (r <= disc_outer) {
-                const t = clamp01((r - disc_inner) / (disc_outer - disc_inner));
-                const c = lerpRgb(0xffe6a3, 0xff9d5c, t);
-                blend(fb, idx, chan(c, 16), chan(c, 8), chan(c, 0), 1.0);
-            }
+            const dx = d.x - sun.x;
+            const dy = d.y - sun.y;
+            sunPixel(fb, @as(usize, @intCast(py)) * fb.w + @as(usize, @intCast(px)), dx * dx + dy * dy, shade);
         }
+    }
+}
+
+// shade one sun pixel from its design radius² : the LUT'd glow, then the exact disc on top.
+fn sunPixel(fb: Fb, idx: usize, r2: f32, s: SunShade) void {
+    if (r2 < s.glow_outer2) {
+        var b: usize = @intFromFloat(r2 * s.lut_scale);
+        if (b >= GLOW_LUT_N) b = GLOW_LUT_N - 1;
+        const c = glow_lut[b];
+        blend(fb, idx, c.r, c.g, c.b, c.a);
+    }
+    if (r2 <= s.disc_outer2) {
+        const r = @sqrt(r2);
+        const t = clamp01((r - s.disc_inner) / (s.disc_outer - s.disc_inner));
+        const c = lerpRgb(0xffe6a3, 0xff9d5c, t);
+        blend(fb, idx, chan(c, 16), chan(c, 8), chan(c, 0), 1.0);
     }
 }
 
