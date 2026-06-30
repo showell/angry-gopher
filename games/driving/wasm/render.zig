@@ -263,9 +263,12 @@ pub fn frame(w: *const world.World, seg_idx: usize, along: f32, across: f32, yaw
         if (seg.has_cat and ncat < MAX_VIS_CATS) {
             const st = cat.state(seg.cat, seg_start_gap + seg.cat.along, v);
             const rp = at(w, &ch, pose, d, seg.cat.along, st.across + hw);
-            // a billboard at one depth: cull it well before camera.NEAR or the projection flings the still
-            // across the screen as the rider passes (see cat.NEAR_CULL — the tower-streak lesson).
-            if (rp.forward > cat.NEAR_CULL and seg.cat.height / rp.forward * cam_focal >= MIN_SCENERY_PX) {
+            // cull at NEAR like all scenery (TS draws the cat down to the near plane). It's a flat billboard
+            // at one depth, so as the rider passes, the WHOLE still scales + slides off-screen-left together
+            // (its across is left of the lane) — it never streaks across the viewport the way the towers
+            // could, so there's no need for a more generous cull. Culling earlier would vanish the collapsed
+            // cat right as the rider reaches it, instead of letting him pass it.
+            if (rp.forward > camera.NEAR and seg.cat.height / rp.forward * cam_focal >= MIN_SCENERY_PX) {
                 k_right[ncat] = rp.right;
                 k_fwd[ncat] = rp.forward;
                 k_h[ncat] = seg.cat.height;

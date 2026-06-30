@@ -57,14 +57,6 @@ pub const Cat = struct {
 // the cat's whole state this frame: which still to draw, its lateral offset, and the leap hop.
 pub const State = struct { pose_idx: usize, across: f32, lift: f32 };
 
-// Cull the cat once it's closer than this (metres). It's a FLAT billboard at a single depth, so a
-// per-vertex near-clip (the tower's fix) can't save it — every vertex shares the depth, and as that depth
-// approaches camera.NEAR the projection divide flings the whole still across the viewport (the same streak
-// the towers had). By the time the cat is this close it has already leapt to the left grass and slid off
-// the screen edge, so dropping it here is invisible — and it's behind the rider (forward < 0, culled
-// anyway) a moment later.
-pub const NEAR_CULL: f32 = 2.0;
-
 fn clamp(x: f32, lo: f32, hi: f32) f32 {
     return @max(lo, @min(hi, x));
 }
