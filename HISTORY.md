@@ -1,17 +1,22 @@
 # HISTORY — the client-side toy apps
 
-Two ~4k-LOC, pure-TypeScript "flipbook + algorithm" toys now live in production,
-both built the same way and both **parked**. The shared pattern: the zig server
-`@embedFile`s a single esbuild'd JS bundle and serves a near-empty HTML shell;
-the client builds its own `<canvas>` and animates everything. No server logic for
-the toy itself, fully deterministic, client does the rest. Each is a small,
-*finishable* problem with a real algorithm at its core.
+Two "flipbook + algorithm" toys live in production. The shared pattern: the zig
+server `@embedFile`s the front-end and serves a near-empty HTML shell; the client
+builds its own `<canvas>` and animates everything — no server logic for the toy
+itself, fully deterministic. Each is a small, *finishable* problem with a real
+algorithm at its core. They started as twins — both ~4k-LOC pure TypeScript — but
+have **diverged in stack**: Delivery is still pure TS; Safari's camera was
+re-implemented as a Zig→WASM core feeding a JS blitter.
 
-## Safari Driving — `games/driving/`, served at `/driving` — PARKED
+## Safari Driving — `games/driving/`, served at `/driving`
 
-A first-person 3D screensaver. Rider-relative coordinates (no global world frame).
-The algorithmic heart is **acceleration / turning**. Design intent and build
-lessons live in `games/driving/README.md` — read that before touching it.
+A first-person 3D screensaver: a self-steering motorcycle ride down a winding road.
+Rider-relative coordinates (no global world frame); the algorithmic heart is
+**acceleration / turning**. **Originally written in TypeScript**, then ported to a
+**Zig→WASM core + a JS blitter** — that became the official `/driving` on
+2026-06-30 (the TS bundle is retired; the `.ts` source is kept as the port
+reference). Design intent and build lessons live in `games/driving/README.md` —
+read that before touching it.
 
 ## Seattle Delivery — `delivery/`, served at `/delivery` — PARKED 2026-06-29
 
