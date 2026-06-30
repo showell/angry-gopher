@@ -129,9 +129,15 @@ fn catAttention() f32 {
 }
 
 /// riderTilt is the bike's lean — the blitter rolls the canvas by it (camera bank).
+/// The lean search leaves a sub-pixel residue (~1e-5 rad) on straights that never quite
+/// reaches 0; below ROLL_DEADBAND (~0.06°, < half a pixel of bank at the screen edge) the
+/// camera is upright for ALL practical purposes, so we snap it to exactly 0. That keeps the
+/// rendered roll HONEST — both the canvas and the native rasterizer's straight-line fast
+/// paths key on st == 0 — without perturbing the simulation (the core reads cur.tilt direct).
+const ROLL_DEADBAND: f32 = 1.0e-3;
 pub export fn riderTilt() f32 {
     ensure();
-    return cur.tilt;
+    return if (@abs(cur.tilt) < ROLL_DEADBAND) 0.0 else cur.tilt;
 }
 
 /// camFocal is the live camera focal (px) from the last renderFrame — the lean + attention pull-in. The

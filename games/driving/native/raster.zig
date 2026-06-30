@@ -105,11 +105,25 @@ pub fn downsample(src: Fb, dst: Fb) void {
 }
 
 // ---- background: vertical sky gradient (above the design mid-line) + grass. ----
-// Only design-Y matters, and it is LINEAR across a row under the roll, so we step it
-// incrementally — no per-pixel rotate/divide (this is full-screen at SS², the hot path).
+// The sky colour depends ONLY on design-Y. With no camera roll (st == 0 — the straight-
+// driving case; riderTilt() snaps its sub-pixel residue to exactly 0 at the source) design-Y
+// is constant across each row, so we compute one colour per row and @memset it: ~SH colour
+// evals instead of SW·SH, BIT-IDENTICAL. A real turn rolls the camera and takes the per-pixel
+// walk — those frames are slow + brief (the rider corners slowly), where a dropped frame is
+// fine. design-Y is linear across a row, so the walk steps it incrementally, no per-px divide.
 pub fn drawBackground(fb: Fb, roll: Roll, sky_top: u32, sky_horizon: u32) void {
     const half = roll.cy; // design H/2
     const inv_half = 1.0 / half;
+    if (roll.st == 0.0) {
+        // upright: y = (py+0.5)·inv_ss across the whole row → one colour, memset it.
+        var py: usize = 0;
+        while (py < fb.h) : (py += 1) {
+            const y = (@as(f32, @floatFromInt(py)) + 0.5) * roll.inv_ss;
+            const row = py * fb.w;
+            @memset(fb.px[row .. row + fb.w], skyColor(y, half, inv_half, sky_top, sky_horizon));
+        }
+        return;
+    }
     const delta = roll.st * roll.inv_ss; // d(design.y)/d(px)
     var py: usize = 0;
     while (py < fb.h) : (py += 1) {
@@ -119,21 +133,20 @@ pub fn drawBackground(fb: Fb, roll: Roll, sky_top: u32, sky_horizon: u32) void {
         const row = py * fb.w;
         var px: usize = 0;
         while (px < fb.w) : (px += 1) {
-            var color: u32 = GRASS;
-            if (y < half) {
-                // createLinearGradient(0,0,0,H/2): stops skyTop@0, skyTop@0.2, horizon@1.
-                const t = y * inv_half;
-                if (t <= 0.2) {
-                    color = sky_top;
-                } else {
-                    const fr = (t - 0.2) / 0.8;
-                    color = lerpRgb(sky_top, sky_horizon, if (fr > 1.0) 1.0 else fr);
-                }
-            }
-            fb.px[row + px] = color;
+            fb.px[row + px] = skyColor(y, half, inv_half, sky_top, sky_horizon);
             y += delta;
         }
     }
+}
+
+// the sky/grass colour at design-Y `y`. createLinearGradient(0,0,0,H/2): stops skyTop@0,
+// skyTop@0.2, horizon@1; below the mid-line (y >= half) it's grass.
+fn skyColor(y: f32, half: f32, inv_half: f32, sky_top: u32, sky_horizon: u32) u32 {
+    if (y >= half) return GRASS;
+    const t = y * inv_half;
+    if (t <= 0.2) return sky_top;
+    const fr = (t - 0.2) / 0.8;
+    return lerpRgb(sky_top, sky_horizon, if (fr > 1.0) 1.0 else fr);
 }
 
 // ---- the setting sun: warm radial glow + the disc, clipped to the sky (design top half). ----

@@ -21,7 +21,7 @@ const ITERS = 20; // averaged per phase per scene — enough to settle, keeps to
 var big_px: [raster.SW * raster.SH]u32 = undefined;
 var disp_px: [W * H]u32 = undefined;
 
-const Phase = struct { bg: f64, sun: f64, walk: f64, down: f64, sun_vis: bool };
+const Phase = struct { bg: f64, sun: f64, walk: f64, down: f64, sun_vis: bool, tilt: f32 };
 
 pub fn main() !void {
     var threaded = std.Io.Threaded.init(std.heap.page_allocator, .{});
@@ -29,7 +29,8 @@ pub fn main() !void {
 
     const stdout = std.debug;
     stdout.print("phase profile  (SS={d}, {d}x{d} -> {d}x{d}, {d} iters/phase, ms)\n", .{ raster.SS, raster.SW, raster.SH, W, H, ITERS });
-    stdout.print("seg   bg    sun   walk  down  | render(bg+sun+walk)\n", .{});
+    stdout.print("(bg's memset fast path needs tilt==0 — straight driving; turns roll, slow path)\n", .{});
+    stdout.print("seg   bg    sun   walk  down  | render   tilt\n", .{});
 
     var worst_seg: u32 = 0;
     var worst_render: f64 = 0;
@@ -91,6 +92,7 @@ fn profileSeg(io: std.Io) Phase {
             }
         }.run, .{ big, disp }),
         .sun_vis = sun.visible,
+        .tilt = safari.riderTilt(),
     };
 }
 
@@ -108,8 +110,8 @@ fn avgMs(io: std.Io, comptime f: anytype, args: anytype) f64 {
 
 fn report(seg: u32, p: Phase, worst_seg: *u32, worst_render: *f64) void {
     const render_ms = p.bg + p.sun + p.walk;
-    std.debug.print("{d:0>2}  {d:5.1} {d:5.1} {d:5.1} {d:5.1}  | {d:5.1}{s}\n", .{
-        seg, p.bg, p.sun, p.walk, p.down, render_ms, if (p.sun_vis) " (sun)" else "",
+    std.debug.print("{d:0>2}  {d:5.1} {d:5.1} {d:5.1} {d:5.1}  | {d:5.1}  {e:9.2}{s}\n", .{
+        seg, p.bg, p.sun, p.walk, p.down, render_ms, p.tilt, if (p.sun_vis) " (sun)" else "",
     });
     if (render_ms > worst_render.*) {
         worst_render.* = render_ms;
