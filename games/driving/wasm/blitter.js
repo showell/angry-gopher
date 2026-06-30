@@ -234,6 +234,20 @@ async function main() {
   document.body.appendChild(hint);
   const ctx = canvas.getContext('2d');
 
+  // a loading spinner over the canvas while the wasm loads + the first frames warm up (see the warmup
+  // before the loop). The cold first frames blow the 16.7ms budget, which read as a stutter at startup.
+  const spinStyle = document.createElement('style');
+  spinStyle.textContent = '@keyframes sg-spin{to{transform:rotate(360deg)}}';
+  document.head.appendChild(spinStyle);
+  const spinner = document.createElement('div');
+  spinner.style.cssText = 'position:fixed;inset:0;z-index:10;display:flex;flex-direction:column;gap:16px;' +
+    'align-items:center;justify-content:center;background:#0b0b0d;color:#9aa0a6;' +
+    'font-family:ui-monospace,Menlo,monospace;font-size:13px;letter-spacing:0.5px';
+  spinner.innerHTML = '<div style="width:42px;height:42px;border:4px solid #2a2c30;' +
+    'border-top-color:#cfd2d6;border-radius:50%;animation:sg-spin 0.8s linear infinite"></div>' +
+    '<div>Warming up the drive…</div>';
+  document.body.appendChild(spinner);
+
   const { instance } = await WebAssembly.instantiateStreaming(fetch('/driving/safari.wasm'), {});
   const { renderFrame, bufPtr, memory, advance, back, riderTilt, bufHighWater, bufCap,
           skyTop, skyHorizon, sunVisible, sunX, sunY, sunScale, clock, riderSeg } = instance.exports;
@@ -292,6 +306,22 @@ async function main() {
       e.preventDefault();
     }
   });
+
+  // Warm the JIT + canvas BEFORE the live loop and behind the spinner: the first few frames are cold
+  // (gradient objects, first paints) and overshoot the 16.7ms budget, which looked like a startup stutter.
+  // Render the opening frame across a few rAF ticks (so the spinner keeps spinning) until one comes in
+  // under budget — then reveal and start. draw() doesn't advance, so no animation is skipped.
+  await new Promise((resolve) => {
+    let i = 0;
+    (function warm() {
+      const t = performance.now();
+      draw();
+      const dt = performance.now() - t;
+      if (++i >= 30 || (i >= 4 && dt < 12)) resolve();
+      else requestAnimationFrame(warm);
+    })();
+  });
+  spinner.remove();
 
   draw();
   requestAnimationFrame(loop);

@@ -87,13 +87,17 @@ const HERD_ROW_DEPTH: f32 = 5.0;
 const HERD_JITTER_ALONG: f32 = 1.5;
 const HERD_JITTER_ACROSS: f32 = 1.2;
 
-fn fillCows(seg: *Segment) void {
+// `bull` is authored per-segment in the route table (like .cat/.pigs/.creature) so the whole schedule of
+// surprises reads in one place — the shaded Fluent-Color bull is the herd's standout, held back for a debut.
+fn fillCows(seg: *Segment, bull: bool) void {
     const hw = LANE_WIDTH / 2.0;
     const edge = hw + HERD_ROAD_OFFSET;
     const tree_x = hw + TREE_ROAD_OFFSET; // the roadside tree line the bull lines up with
     seg.n_cows = 0;
-    seg.cows[0] = .{ .along = BULL_DIST, .across = -(tree_x + BULL_HEIGHT / 2.0 + BULL_TREE_GAP), .codepoint = BULL_CP, .height = BULL_HEIGHT, .face_right = false };
-    seg.n_cows = 1;
+    if (bull) {
+        seg.cows[0] = .{ .along = BULL_DIST, .across = -(tree_x + BULL_HEIGHT / 2.0 + BULL_TREE_GAP), .codepoint = BULL_CP, .height = BULL_HEIGHT, .face_right = false };
+        seg.n_cows = 1;
+    }
     var i: usize = 0;
     while (i < 14) : (i += 1) {
         const fi: f32 = @floatFromInt(i);
@@ -219,7 +223,7 @@ fn fillTrees(seg: *Segment, scheme: Scheme) void {
 
 // turn_deg is the SIGNED exit turn onto the next segment (+ right / − left); the LAST entry has no turn —
 // it's the TERMINUS (the finish line). Mirrors the segmentConfigs + turns tables in world.ts.
-const Cfg = struct { length: f32, scheme: Scheme, turn_deg: f32 = 0, cat: bool = false, pigs: bool = false, terminates: bool = false, creature: Creature = .elephant };
+const Cfg = struct { length: f32, scheme: Scheme, turn_deg: f32 = 0, cat: bool = false, pigs: bool = false, bull: bool = false, terminates: bool = false, creature: Creature = .elephant };
 
 // The full TS route (world.ts): 19 segments. The baseline is deliberately boring (ALL_GREEN, a cow herd)
 // so the rare departures surprise; novelty is front-loaded (seg2 cat, seg3 pigs, seg4 gold), the long
@@ -229,25 +233,25 @@ const Cfg = struct { length: f32, scheme: Scheme, turn_deg: f32 = 0, cat: bool =
 // Corner CREATURES: a GIRAFFE debut (seg5), RHINOs at the sunset stretch (seg7), the duck POND (seg13, a
 // right turn — was the crocodile lagoon), a ZEBRA (seg16); ELEPHANT is the unmarked default elsewhere.
 const route = [_]Cfg{
-    .{ .length = 500, .scheme = .all_green, .turn_deg = 50 }, // seg1: plain opener
+    .{ .length = 500, .scheme = .all_green, .turn_deg = 50 }, // seg1: plain opener (no bull yet)
     .{ .length = 320, .scheme = .all_green, .turn_deg = -70, .cat = true }, // seg2: the CAT crossing debuts
     .{ .length = 400, .scheme = .all_green, .turn_deg = 20, .pigs = true }, // seg3: pigs first appear (distraction)
-    .{ .length = 300, .scheme = .yellow_green, .turn_deg = 20 }, // seg4: gold trees (one-off)
-    .{ .length = 300, .scheme = .all_green, .turn_deg = -70, .creature = .giraffe }, // seg5: first giraffe at its corner
-    .{ .length = 300, .scheme = .all_green, .turn_deg = -70 }, // seg6
-    .{ .length = 1200, .scheme = .red_green, .turn_deg = 80, .creature = .rhino }, // seg7: rhinos at the sunset-stretch corner
-    .{ .length = 300, .scheme = .all_green, .turn_deg = 15 }, // seg8
-    .{ .length = 300, .scheme = .all_green, .turn_deg = -70 }, // seg9
-    .{ .length = 800, .scheme = .all_green, .turn_deg = 15 }, // seg10: second sun-ward stretch
-    .{ .length = 300, .scheme = .all_green, .turn_deg = 15, .pigs = true }, // seg11: pigs return (2nd distraction)
-    .{ .length = 300, .scheme = .all_green, .turn_deg = 15, .pigs = true }, // seg12
-    .{ .length = 300, .scheme = .red_green, .turn_deg = 15, .cat = true, .pigs = true, .creature = .pond }, // seg13: the duck pond (right turn) + cat; red-tree clue
-    .{ .length = 400, .scheme = .all_green, .turn_deg = -50, .pigs = true }, // seg14
-    .{ .length = 300, .scheme = .all_green, .turn_deg = 50, .pigs = true }, // seg15
-    .{ .length = 300, .scheme = .red_green, .turn_deg = -50, .creature = .zebra }, // seg16: zebra; SURPRISE — pigs gone
-    .{ .length = 300, .scheme = .all_green, .turn_deg = 50, .pigs = true }, // seg17: pigs back
-    .{ .length = 300, .scheme = .all_green, .turn_deg = -50, .pigs = true }, // seg18
-    .{ .length = 300, .scheme = .red_green, .cat = true, .pigs = true, .terminates = true }, // seg19: red + cat finale, the terminus
+    .{ .length = 300, .scheme = .yellow_green, .turn_deg = 20, .bull = true }, // seg4: gold trees (one-off); the BULL debuts + is a staple from here
+    .{ .length = 300, .scheme = .all_green, .turn_deg = -70, .bull = true, .creature = .giraffe }, // seg5: first giraffe at its corner
+    .{ .length = 300, .scheme = .all_green, .turn_deg = -70, .bull = true }, // seg6
+    .{ .length = 1200, .scheme = .red_green, .turn_deg = 80, .bull = true, .creature = .rhino }, // seg7: rhinos at the sunset-stretch corner
+    .{ .length = 300, .scheme = .all_green, .turn_deg = 15, .bull = true }, // seg8
+    .{ .length = 300, .scheme = .all_green, .turn_deg = -70, .bull = true }, // seg9
+    .{ .length = 800, .scheme = .all_green, .turn_deg = 15, .bull = true }, // seg10: second sun-ward stretch
+    .{ .length = 300, .scheme = .all_green, .turn_deg = 15, .pigs = true, .bull = true }, // seg11: pigs return (2nd distraction)
+    .{ .length = 300, .scheme = .all_green, .turn_deg = 15, .pigs = true, .bull = true }, // seg12
+    .{ .length = 300, .scheme = .red_green, .turn_deg = 15, .cat = true, .pigs = true, .bull = true, .creature = .pond }, // seg13: the duck pond (right turn) + cat; red-tree clue
+    .{ .length = 400, .scheme = .all_green, .turn_deg = -50, .pigs = true, .bull = true }, // seg14
+    .{ .length = 300, .scheme = .all_green, .turn_deg = 50, .pigs = true, .bull = true }, // seg15
+    .{ .length = 300, .scheme = .red_green, .turn_deg = -50, .bull = true, .creature = .zebra }, // seg16: zebra; SURPRISE — pigs gone
+    .{ .length = 300, .scheme = .all_green, .turn_deg = 50, .pigs = true, .bull = true }, // seg17: pigs back
+    .{ .length = 300, .scheme = .all_green, .turn_deg = -50, .pigs = true, .bull = true }, // seg18
+    .{ .length = 300, .scheme = .red_green, .cat = true, .pigs = true, .bull = true, .terminates = true }, // seg19: red + cat finale, the terminus
 };
 
 // the smallest right-side tree `along` at or after `desired` — the cat tucks just past it, so a tree
@@ -303,7 +307,7 @@ pub fn buildWorld() World {
         seg.north_heading = 0;
         seg.has_mid_tower = c.length > MID_TOWER_MIN_LENGTH;
         fillTrees(seg, c.scheme);
-        fillCows(seg);
+        fillCows(seg, c.bull);
         seg.has_cat = c.cat;
         seg.cat = if (c.cat) cat.make(LANE_WIDTH / 2.0, TREE_ROAD_OFFSET, nextTreeAlong(seg, cat.CAT_ALONG)) else undefined;
         seg.n_pigs = 0;
