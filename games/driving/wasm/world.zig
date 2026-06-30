@@ -187,14 +187,18 @@ fn fillTrees(seg: *Segment, scheme: Scheme) void {
 // the authored route: length, scheme, and the exit turn (signed degrees, + = right)
 // onto the next segment. The last entry loops back to segment 0.
 const Cfg = struct { length: f32, scheme: Scheme, turn_deg: f32, cat: bool = false, pigs: bool = false };
+// Exactly the TS route's seg1–seg7 (world.ts) — lengths, schemes, turns, AND the cat/pig placement: the
+// opener is plain, the CAT crossing debuts on seg2, the pig DISTRACTION herd first appears alone on seg3,
+// gold trees on seg4, then the long red sunset stretch on seg7. That ordering gently ramps the interest and
+// is tuned so the early distractions/crossing pace the sunset run; the wasm just loops this subset.
 const route = [_]Cfg{
-    .{ .length = 500, .scheme = .all_green, .turn_deg = 50, .cat = true }, // seg1 → 50° right, has a crossing cat
-    .{ .length = 320, .scheme = .all_green, .turn_deg = -70, .pigs = true }, // seg2 → 70° left, distraction pigs
-    .{ .length = 400, .scheme = .all_green, .turn_deg = 20 }, // seg3 → 20° right
-    .{ .length = 300, .scheme = .yellow_green, .turn_deg = 20, .pigs = true }, // seg4 (gold) → 20° right, distraction pigs
+    .{ .length = 500, .scheme = .all_green, .turn_deg = 50 }, // seg1 → 50° right (plain opener)
+    .{ .length = 320, .scheme = .all_green, .turn_deg = -70, .cat = true }, // seg2 → 70° left, the CAT crossing debuts
+    .{ .length = 400, .scheme = .all_green, .turn_deg = 20, .pigs = true }, // seg3 → 20° right, pigs first appear (distraction)
+    .{ .length = 300, .scheme = .yellow_green, .turn_deg = 20 }, // seg4 (gold) → 20° right
     .{ .length = 300, .scheme = .all_green, .turn_deg = -70 }, // seg5 → 70° left
     .{ .length = 300, .scheme = .all_green, .turn_deg = -70 }, // seg6 → 70° left
-    .{ .length = 1200, .scheme = .red_green, .turn_deg = 80, .cat = true }, // seg7 (red, long) → 80° right, loops to seg1
+    .{ .length = 1200, .scheme = .red_green, .turn_deg = 80 }, // seg7 (red, long) → 80° right, sunset stretch, loops to seg1
 };
 
 // the smallest right-side tree `along` at or after `desired` — the cat tucks just past it, so a tree
