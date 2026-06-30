@@ -1,0 +1,22 @@
+#!/bin/bash
+# CANONICAL DEV-LOOP SCRIPT — DO NOT REINVENT.
+# Before writing a new ops/* script or composing an ad-hoc
+# shell command for build / launch / test / regen, run
+# `ops/list` to see what already exists.
+#
+# Bake the driving game's cat into hard-coded named-pose polygon
+# stills for the zig→WASM port: games/driving/wasm/cat_frames.zig
+# (GENERATED + committed, like a gold file). Runs the REAL cat
+# drawing code (cat_anatomy.ts) through a polygon recorder, so the
+# WASM cat is a faithful flipbook of the same shapes — the seam to
+# the blitter is polygon-only and can't run the procedural drawing.
+#
+# Re-run after any change to cat_anatomy.ts. Also writes a
+# validation contact sheet to snap/cat_baked.png — it must look
+# like snap/cat.png (ops/snap_cat), the rasterized original.
+set -e
+
+source "$(dirname "$0")/_paths.sh"
+
+cd "$GOPHER_DIR/games/driving"
+node --experimental-strip-types bake_cat.ts
