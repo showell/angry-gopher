@@ -70,9 +70,24 @@ pub fn pushPoly(color: u32, pts: []const camera.ScreenPt) void {
 }
 
 /// pushRoundPoly appends one polygon filled with a horizontal round gradient (tag 1)
-/// — the cylinder/cone shading (dark edges, bright centre) the near trees use.
-pub fn pushRoundPoly(color: u32, pts: []const camera.ScreenPt) void {
-    push(1, color, pts);
+/// — the cylinder/cone shading (dark edges, bright centre) the near trees use. `strength`
+/// (0..1) scales the light: 1 = full (shade 0.6→1.25→0.6), 0 = flat (= solid). The renderer
+/// lerps the shade factors by it, so callers can fade the effect with distance.
+/// Layout: [1][color u32][strength f32][nPts][x,y…].
+pub fn pushRoundPoly(color: u32, strength: f32, pts: []const camera.ScreenPt) void {
+    if (pts.len < 3) return;
+    const need = 4 + pts.len * 2;
+    if (cursor + need > CAP_WORDS) return;
+    buf[cursor] = 1;
+    buf[cursor + 1] = color;
+    buf[cursor + 2] = @bitCast(strength);
+    buf[cursor + 3] = @intCast(pts.len);
+    cursor += 4;
+    for (pts) |p| {
+        buf[cursor] = @bitCast(p.x);
+        buf[cursor + 1] = @bitCast(p.y);
+        cursor += 2;
+    }
 }
 
 /// pushBeacon appends an alpha-disc command (tag 3): the tower beacon's blinking glow.

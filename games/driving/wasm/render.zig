@@ -29,6 +29,7 @@ const RAIL_PATH_CAP: usize = 192; // max points in a corner's rail path (run-up 
 // the 2D→3D switch lands on small far trees (~27px) where cone ≈ triangle and the pop is imperceptible —
 // the finite chain + the MIN_SCENERY_PX cull keep the extra near-trees nearly free (peak ~37% of cap).
 const DETAIL_DIST: f32 = 200.0;
+const CROWN_SHADE_DIST: f32 = 80.0; // crown foliage gradient fades 1→0 over this depth (then solid)
 const MIN_SCENERY_PX: f32 = 2.0; // skip scenery that would project shorter than this
 // critters cull only at the SCENERY FLOOR (2 px) — within the segment reach below, even a pretty tiny
 // animal's pop-in is conspicuous (Steve), so we keep everything down to a genuine speck. Measured against
@@ -572,7 +573,10 @@ pub fn frame(w: *const world.World, seg_idx: usize, along: f32, across: f32, yaw
                 for (t_fwd[0..nt]) |fwd| {
                     if (fwd < t_fwd[it.i]) closer += 1;
                 }
-                tree.draw(t_right[it.i], t_fwd[it.i], t_h[it.i], t_col[it.i], cam_focal, closer < 4, t_fwd[it.i] < DETAIL_DIST);
+                // crown shading fades with distance: strongest on the closest crowns, 0 (solid)
+                // by CROWN_SHADE_DIST — a smooth hand-off, no abrupt shaded↔solid edge.
+                const crown_shade: f32 = @max(0.0, @min(1.0, 1.0 - t_fwd[it.i] / CROWN_SHADE_DIST));
+                tree.draw(t_right[it.i], t_fwd[it.i], t_h[it.i], t_col[it.i], cam_focal, closer < 4, t_fwd[it.i] < DETAIL_DIST, crown_shade);
             },
         }
     }

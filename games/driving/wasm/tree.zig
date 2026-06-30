@@ -49,7 +49,7 @@ fn drawTrunk(m: Metrics, round: bool) void {
         .{ .x = tx + trunk_w, .y = m.by },
         .{ .x = tx, .y = m.by },
     };
-    if (round) paint.pushRoundPoly(TRUNK, &pts) else paint.pushPoly(TRUNK, &pts);
+    if (round) paint.pushRoundPoly(TRUNK, 1.0, &pts) else paint.pushPoly(TRUNK, &pts);
 }
 
 // one flat crown tier (the far / cheap form, and the near form's bail-out for a
@@ -68,13 +68,13 @@ fn tierTriangle(m: Metrics, k: usize, color: u32) void {
 /// few trees, since trunk shading only reads up close; `near_crown` builds the crown from 3D
 /// cone hulls vs flat triangles. Crowns are always SOLID (the roundness is the cone shape,
 /// not lighting), so there's no shaded↔solid pop across the tree line.
-pub fn draw(right: f32, forward: f32, height: f32, color: u32, cam_focal: f32, round_trunk: bool, near_crown: bool) void {
+pub fn draw(right: f32, forward: f32, height: f32, color: u32, cam_focal: f32, round_trunk: bool, near_crown: bool, crown_shade: f32) void {
     const m = metrics(right, forward, height, cam_focal);
     if (m.ht < 1.0) return;
     drawTrunk(m, round_trunk);
     var k: usize = 0;
     if (near_crown) {
-        while (k < 8) : (k += 1) tierCone(right, forward, height, color, cam_focal, m, k);
+        while (k < 8) : (k += 1) tierCone(right, forward, height, color, cam_focal, m, k, crown_shade);
     } else {
         while (k < 8) : (k += 1) tierTriangle(m, k, color);
     }
@@ -83,7 +83,7 @@ pub fn draw(right: f32, forward: f32, height: f32, color: u32, cam_focal: f32, r
 // crown tier `k` as a cone: a base circle of world radius R on the trunk axis rising
 // to the tier apex. Project the apex + a ring of base points (each at its own depth)
 // and fill their convex hull — exactly the cone's silhouette (a cone is convex).
-fn tierCone(r0: f32, f0: f32, height: f32, color: u32, cam_focal: f32, m: Metrics, k: usize) void {
+fn tierCone(r0: f32, f0: f32, height: f32, color: u32, cam_focal: f32, m: Metrics, k: usize, shade: f32) void {
     const R = CROWN_W * TIER_WIDE[k] * height; // base radius (world m)
     if (f0 - R < MIN_CONE_FORWARD) { // too close — bail to the flat tier
         tierTriangle(m, k, color);
@@ -103,10 +103,11 @@ fn tierCone(r0: f32, f0: f32, height: f32, color: u32, cam_focal: f32, m: Metric
     var hull: [N + 1]camera.ScreenPt = undefined;
     const hn = convexHull(ring[0 .. N + 1], hull[0..]);
     if (hn < 3) return;
-    // SOLID fill: the cone's roundness is in its SHAPE (the projected ring+apex hull), not
-    // shading. Keeping crowns un-shaded is cheap AND uniform across the tree line (no
-    // shaded↔solid pop, since crowns are visible far out — unlike trunks). [[shape over shading]]
-    paint.pushPoly(color, hull[0..hn]);
+    // The cone's roundness is mostly its SHAPE (the projected ring+apex hull); the round
+    // gradient just adds a touch of light. `shade` (1 near → 0 by distance) fades that light
+    // so it's strongest on the closest crowns and reaches 0 (= solid, cheap) smoothly — no
+    // abrupt shaded↔solid edge across the tree line, since crowns are seen far out.
+    paint.pushRoundPoly(color, shade, hull[0..hn]);
 }
 
 // convex hull (Andrew's monotone chain) of screen points — the cone's filled

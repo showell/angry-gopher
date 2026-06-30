@@ -145,18 +145,20 @@ function blit(ctx, mem, base, len) {
       continue;
     }
     const color = u32[w++];
+    const strength = tag === 1 ? f32[w++] : 0; // tag 1 carries a per-poly shade strength (0..1)
     const n = u32[w++];
     const start = w;
-    if (tag === 1) {
+    if (tag === 1 && strength > 0) {
       let minX = Infinity, maxX = -Infinity;
       for (let i = 0; i < n; i++) { const x = f32[start + i * 2]; if (x < minX) minX = x; if (x > maxX) maxX = x; }
       if (maxX - minX < 1) {
         ctx.fillStyle = hex(color);
       } else {
+        // strength scales the shade: 1 -> 0.6/1.25 (full), 0 -> flat. Lets crown shading fade with distance.
         const g = ctx.createLinearGradient(minX, 0, maxX, 0);
-        g.addColorStop(0, shade(color, 0.6));
-        g.addColorStop(0.5, shade(color, 1.25));
-        g.addColorStop(1, shade(color, 0.6));
+        g.addColorStop(0, shade(color, 1 - 0.4 * strength));
+        g.addColorStop(0.5, shade(color, 1 + 0.25 * strength));
+        g.addColorStop(1, shade(color, 1 - 0.4 * strength));
         ctx.fillStyle = g;
       }
     } else {

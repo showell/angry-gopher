@@ -307,24 +307,32 @@ pub fn walk(fb: Fb, roll: Roll, words: []const u32) void {
                     Shader{ .ellipse = .{ .c0 = c0, .c1 = c1, .o0 = stopAt(o0, 0), .o1 = stopAt(o1, stopAt(o0, 0)), .cx = cx, .cy = cy, .ux = ux, .uy = uy, .vx = vx, .vy = vy, .det = det } };
                 w = fillPoly(fb, roll, words, w, n, sh, true);
             },
-            else => { // tag 0 = solid, tag 1 = round (horizontal) gradient
+            1 => { // round (horizontal cylinder) gradient, with a per-poly shade strength
+                const color = words[w];
+                const strength = f(words[w + 1]);
+                const n = words[w + 2];
+                w += 3;
+                // gradient axis spans the polygon's DESIGN x-extent (computed pre-rotation).
+                var minx: f32 = std.math.inf(f32);
+                var maxx: f32 = -std.math.inf(f32);
+                var i: usize = 0;
+                while (i < n) : (i += 1) {
+                    const x = f(words[w + i * 2]);
+                    if (x < minx) minx = x;
+                    if (x > maxx) maxx = x;
+                }
+                // strength scales the shade factors: 1 → 0.6/1.25 (full), 0 → flat (= solid).
+                const sh = if (strength <= 0.0 or maxx - minx < 1.0)
+                    Shader{ .solid = color }
+                else
+                    Shader{ .round = .{ .lo = shadeClamp(color, 1.0 - 0.4 * strength), .mid = shadeClamp(color, 1.0 + 0.25 * strength), .minx = minx, .maxx = maxx } };
+                w = fillPoly(fb, roll, words, w, n, sh, true);
+            },
+            else => { // tag 0 = solid
                 const color = words[w];
                 const n = words[w + 1];
                 w += 2;
-                var sh = Shader{ .solid = color };
-                if (tag == 1) {
-                    // gradient axis spans the polygon's DESIGN x-extent (computed pre-rotation).
-                    var minx: f32 = std.math.inf(f32);
-                    var maxx: f32 = -std.math.inf(f32);
-                    var i: usize = 0;
-                    while (i < n) : (i += 1) {
-                        const x = f(words[w + i * 2]);
-                        if (x < minx) minx = x;
-                        if (x > maxx) maxx = x;
-                    }
-                    sh = if (maxx - minx < 1.0) Shader{ .solid = color } else Shader{ .round = .{ .lo = shadeClamp(color, 0.6), .mid = shadeClamp(color, 1.25), .minx = minx, .maxx = maxx } };
-                }
-                w = fillPoly(fb, roll, words, w, n, sh, true);
+                w = fillPoly(fb, roll, words, w, n, Shader{ .solid = color }, true);
             },
         }
     }
