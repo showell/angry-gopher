@@ -44,7 +44,7 @@ const TOWER_RIGHT: f32 = 20.0; // metres right of the lane centreline
 const TOWER_YAW: f32 = 30.0 * 3.14159265 / 180.0;
 const SEG_TOWER_LEFT: f32 = 100.0; // a mid-tower stands this far LEFT of the centreline
 
-const Chain = struct { idx: [MAX_CHAIN]usize, len: usize };
+pub const Chain = struct { idx: [MAX_CHAIN]usize, len: usize };
 
 // follow exit_to from `start`, stopping at LOOK_AHEAD or at the terminus (no segment leads out of the
 // finish line, so the chain ends there).
@@ -60,11 +60,12 @@ fn buildChain(w: *const world.World, start: usize) Chain {
     return ch;
 }
 
-const Pose = struct { along: f32, across: f32, yaw: f32, hw: f32 };
+pub const Pose = struct { along: f32, across: f32, yaw: f32, hw: f32 };
 
 // map (a, x) in chain[d]'s BL frame into the rider frame, composing the joins down to
-// chain[0], then the rider transform. For d = 0 this is just toRider.
-fn at(w: *const world.World, ch: *const Chain, pose: Pose, d: usize, a: f32, x: f32) geom.RiderPt {
+// chain[0], then the rider transform. For d = 0 this is just toRider. pub: the truck body maps its
+// segment-local face points through this.
+pub fn at(w: *const world.World, ch: *const Chain, pose: Pose, d: usize, a: f32, x: f32) geom.RiderPt {
     var pa = a;
     var px = x;
     var k: usize = d;
@@ -343,7 +344,8 @@ pub fn frame(w: *const world.World, seg_idx: usize, along: f32, across: f32, yaw
     // the chain to find which segment its centre lands on, exactly as truck.ts's truckScenery. Collected as
     // one depth-sorted item at its centre-line position. (v1: a blue dot; the real body comes next.)
     var has_truck = false;
-    var truck_right: f32 = 0;
+    var truck_d: usize = 0;
+    var truck_along: f32 = 0;
     var truck_fwd: f32 = 0;
     const lead = tk.pos - world.routeDistance(w, seg_idx, along);
     if (lead > 0) {
@@ -357,8 +359,9 @@ pub fn frame(w: *const world.World, seg_idx: usize, along: f32, across: f32, yaw
             const c = at(w, &ch, pose, dt, remaining, w.segments[ch.idx[dt]].width / 2.0);
             if (c.forward > camera.NEAR) {
                 has_truck = true;
-                truck_right = c.right;
-                truck_fwd = c.forward;
+                truck_d = dt;
+                truck_along = remaining;
+                truck_fwd = c.forward; // the centre-line depth, for the unified sort
             }
         }
     }
@@ -420,7 +423,7 @@ pub fn frame(w: *const world.World, seg_idx: usize, along: f32, across: f32, yaw
             },
             .cow => critter.draw(c_right[it.i], c_fwd[it.i], c_h[it.i], c_cp[it.i], c_face[it.i], cam_focal),
             .cat => cat.draw(k_right[it.i], k_fwd[it.i], k_h[it.i], k_pose[it.i], k_lift[it.i], cam_focal),
-            .truck => truck.drawDot(truck_right, truck_fwd, cam_focal),
+            .truck => truck.drawBody(w, &ch, pose, truck_d, truck_along, w.segments[ch.idx[truck_d]].width / 2.0, tk.braking, cam_focal),
             .rail => guard_rail.drawPoly(rails.polys[it.i], cam_focal),
             .tree => if (t_fwd[it.i] < DETAIL_DIST)
                 tree.drawNear(t_right[it.i], t_fwd[it.i], t_h[it.i], t_col[it.i], cam_focal)
