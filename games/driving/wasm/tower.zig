@@ -3,10 +3,14 @@
 //! with a pink beacon. The owner (render, via the world) places it; this module only
 //! renders. Mirrors tower.ts.
 //!
-//! This is the FLAT form only — the four faces projected as a 2D billboard (base corners
-//! + apex projected, every ring/brace derived by screen-space lerp), which is exactly
-//! what tower.ts draws beyond TOWER_NEAR_DIST. The criss-crossing flat lattice reads as
-//! 3D as you pass it, so the near perspective lattice stays deferred. The apex beacon
+//! This is the FLAT form only — the four faces drawn as a billboard lattice, which is
+//! what tower.ts draws beyond TOWER_NEAR_DIST. We diverge from TS in ONE way: every rod
+//! stays a 3D segment and is near-clipped before projecting (see bar3d), rather than
+//! interpolating already-projected screen points. TS could skip this because it only used
+//! the flat path for FAR towers, where nothing straddles the eye plane; here the flat path
+//! runs at all distances, so a tower you pass close would otherwise streak a rod clear
+//! across the viewport. The criss-crossing flat lattice reads as 3D as you pass it, so the
+//! near perspective lattice stays deferred. The apex beacon
 //! BLINKS on the step clock (a pure function of it, so it freezes on pause and runs
 //! backwards on reverse), each tower phase-offset so they don't pulse in unison. Local
 //! ground curvature (EARTH_RADIUS) sinks a far tower so its base meets the horizon.
@@ -63,18 +67,25 @@ fn groundDrop(p: geom.RiderPt) f32 {
     return (p.right * p.right + p.forward * p.forward) / (2.0 * EARTH_RADIUS);
 }
 
-fn proj(right: f32, forward: f32, h: f32, drop: f32, cam_focal: f32) camera.ScreenPt {
-    return camera.project(.{ .right = right, .forward = forward, .height = h - drop }, cam_focal);
+fn lerp3(a: geom.Vec3, b: geom.Vec3, t: f32) geom.Vec3 {
+    return .{
+        .right = a.right + (b.right - a.right) * t,
+        .forward = a.forward + (b.forward - a.forward) * t,
+        .height = a.height + (b.height - a.height) * t,
+    };
 }
 
-fn lerp(a: camera.ScreenPt, b: camera.ScreenPt, t: f32) camera.ScreenPt {
-    return .{ .x = a.x + (b.x - a.x) * t, .y = a.y + (b.y - a.y) * t };
-}
-
-// screen point of corner k at world height h: the cross-section shrinks linearly to
-// the apex, so it's just base→apex lerp by h/HEIGHT.
-fn ring(base_s: [4]camera.ScreenPt, apex_s: camera.ScreenPt, k: usize, h: f32) camera.ScreenPt {
-    return lerp(base_s[k], apex_s, h / TOWER_HEIGHT);
+// the 3D position of cross-section corner k at world height h, lowered by the ground
+// drop: the square shrinks linearly toward the apex at the centre, so it's a base→centre
+// lerp by h/HEIGHT. (The corner stays a 3D point so each rod can be near-clipped before
+// projecting — see bar3d.)
+fn cornerAt(base: [4]geom.RiderPt, center: geom.RiderPt, k: usize, h: f32, drop: f32) geom.Vec3 {
+    const t = h / TOWER_HEIGHT;
+    return .{
+        .right = base[k].right + (center.right - base[k].right) * t,
+        .forward = base[k].forward + (center.forward - base[k].forward) * t,
+        .height = h - drop,
+    };
 }
 
 // a thick screen-space line as a filled quad of width wpx.
@@ -94,19 +105,37 @@ fn bar(a: camera.ScreenPt, b: camera.ScreenPt, wpx: f32) void {
     paint.pushPoly(TOWER_METAL, &pts);
 }
 
+// one rod, near-clipped: a 3D segment a→b clipped to forward >= NEAR before projecting,
+// so a rod straddling the eye plane (a tower you're passing close) can't fling a quad
+// clear across the viewport. Both ends behind → skip; one behind → pull it to the near
+// plane. (The flat path is used at ALL distances here — TS reserved it for far towers,
+// where nothing straddles NEAR, so it never needed this.)
+fn bar3d(a: geom.Vec3, b: geom.Vec3, wpx: f32, cam_focal: f32) void {
+    var pa = a;
+    var pb = b;
+    const a_in = pa.forward >= camera.NEAR;
+    const b_in = pb.forward >= camera.NEAR;
+    if (!a_in and !b_in) return;
+    if (a_in != b_in) {
+        const f = (camera.NEAR - pa.forward) / (pb.forward - pa.forward);
+        const mid = lerp3(pa, pb, f);
+        if (a_in) pb = mid else pa = mid;
+    }
+    bar(camera.project(pa, cam_focal), camera.project(pb, cam_focal), wpx);
+}
+
 /// drawFlat renders a tower given its four base corners + base centre already mapped
-/// into the rider frame. Projects the corners + apex, then derives every ring and
-/// brace by 2D interpolation. Sinks the tower by the local ground drop. `beacon_phase`
-/// is step + this tower's offset — the apex beacon blinks on it.
+/// into the rider frame. Each rod is a 3D segment (cross-section corners shrinking to the
+/// apex) that bar3d near-clips before projecting and drawing as a thick screen line — so a
+/// tower you pass close can't streak a rod across the screen. Sinks the tower by the local
+/// ground drop. `beacon_phase` is step + this tower's offset — the apex beacon blinks on it.
 pub fn drawFlat(base: [4]geom.RiderPt, center: geom.RiderPt, cam_focal: f32, beacon_phase: f32) void {
     if (center.forward < camera.NEAR) return;
     const drop = groundDrop(center);
     if (drop >= TOWER_HEIGHT) return; // sunk below the horizon
     const clip_h = drop;
 
-    var base_s: [4]camera.ScreenPt = undefined;
-    for (base, 0..) |b, k| base_s[k] = proj(b.right, b.forward, 0, drop, cam_focal);
-    const apex_s = proj(center.right, center.forward, TOWER_HEIGHT, drop, cam_focal);
+    const apex = geom.Vec3{ .right = center.right, .forward = center.forward, .height = TOWER_HEIGHT - drop };
 
     // rod width in px at this depth (project two ground points 1m apart).
     const px1 = camera.project(.{ .right = 1, .forward = center.forward, .height = 0 }, cam_focal).x;
@@ -115,14 +144,14 @@ pub fn drawFlat(base: [4]geom.RiderPt, center: geom.RiderPt, cam_focal: f32, bea
 
     // four legs (from the drop height up to the apex).
     var k: usize = 0;
-    while (k < 4) : (k += 1) bar(ring(base_s, apex_s, k, clip_h), apex_s, wpx);
+    while (k < 4) : (k += 1) bar3d(cornerAt(base, center, k, clip_h, drop), apex, wpx, cam_focal);
 
     // cross-beam rings at 20/40/60 (above the drop).
     var h: f32 = STAGE_HEIGHT;
     while (h < TOWER_HEIGHT) : (h += STAGE_HEIGHT) {
         if (h <= clip_h) continue;
         k = 0;
-        while (k < 4) : (k += 1) bar(ring(base_s, apex_s, k, h), ring(base_s, apex_s, (k + 1) % 4, h), wpx);
+        while (k < 4) : (k += 1) bar3d(cornerAt(base, center, k, h, drop), cornerAt(base, center, (k + 1) % 4, h, drop), wpx, cam_focal);
     }
 
     // X-braces on the bottom stages, each diagonal clipped at the drop height.
@@ -135,12 +164,13 @@ pub fn drawFlat(base: [4]geom.RiderPt, center: geom.RiderPt, cam_focal: f32, bea
         k = 0;
         while (k < 4) : (k += 1) {
             const j = (k + 1) % 4;
-            bar(lerp(ring(base_s, apex_s, k, lo), ring(base_s, apex_s, j, hi), f), ring(base_s, apex_s, j, hi), wpx);
-            bar(lerp(ring(base_s, apex_s, j, lo), ring(base_s, apex_s, k, hi), f), ring(base_s, apex_s, k, hi), wpx);
+            bar3d(lerp3(cornerAt(base, center, k, lo, drop), cornerAt(base, center, j, hi, drop), f), cornerAt(base, center, j, hi, drop), wpx, cam_focal);
+            bar3d(lerp3(cornerAt(base, center, j, lo, drop), cornerAt(base, center, k, hi, drop), f), cornerAt(base, center, k, hi, drop), wpx, cam_focal);
         }
     }
 
-    drawBeacon(apex_s, center.forward, cam_focal, beaconBrightness(beacon_phase));
+    // the apex is in front (center.forward >= NEAR, checked above), so project it directly.
+    drawBeacon(camera.project(apex, cam_focal), center.forward, cam_focal, beaconBrightness(beacon_phase));
 }
 
 // the apex beacon: a pink disc whose SIZE scales with distance but whose BRIGHTNESS is
