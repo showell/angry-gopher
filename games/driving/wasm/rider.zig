@@ -32,13 +32,20 @@ pub const RiderState = struct {
     segment: usize,
     along: f32,
     across: f32,
-    yaw: f32,
+    yaw: f32, // heading vs the CURRENT segment (frame-relative; the road geometry reads this)
     v: f32,
     tilt: f32,
+    // the bike's ABSOLUTE world heading, integrated continuously. yaw is reset into each
+    // segment's frame at a crossing, and north_heading resets to 0 at the loop seam — so
+    // north_heading[seg] + yaw JUMPS ~40deg when seg7 loops back to seg0. The backdrop
+    // (mountains + sun) reads this instead, which the crossing leaves untouched, so the
+    // horizon turns exactly as much as the bike does. (TS has a terminus, never loops, so
+    // it had no seam to cross — this field is a port-specific fix for the looping route.)
+    heading: f32,
 };
 
 pub fn initialRiderState() RiderState {
-    return .{ .segment = 0, .along = 0, .across = 0, .yaw = 0, .v = V_BASE, .tilt = 0 };
+    return .{ .segment = 0, .along = 0, .across = 0, .yaw = 0, .v = V_BASE, .tilt = 0, .heading = 0 };
 }
 
 // advance the bike one frame: a lean tip + an acceleration, integrated. The rider
@@ -53,6 +60,7 @@ fn simulateRiderStep(s: RiderState, tilt_step: f32, accel: f32) RiderState {
         .segment = s.segment,
         .tilt = tilt,
         .yaw = s.yaw + heading_change,
+        .heading = s.heading + heading_change, // absolute heading turns by the same delta as yaw
         .v = v,
         .along = s.along + v * @cos(mid),
         .across = s.across + v * @sin(mid),
@@ -184,6 +192,7 @@ fn riderStateForNextSegment(rs: RiderState, w: *const world.World) RiderState {
         .along = c * da + sgn * s * dx,
         .across = -sgn * s * da + c * dx,
         .yaw = rs.yaw - sgn * theta,
+        .heading = rs.heading, // unchanged: the crossing only re-expresses the SAME bearing in the next frame
         .v = rs.v,
         .tilt = rs.tilt,
     };

@@ -68,12 +68,11 @@ export fn back() void {
 export fn renderFrame() u32 {
     ensure();
     paint.reset();
-    render.frame(&the_world, cur.segment, cur.along, cur.across, cur.yaw, step_clock);
-    // the sun's placement for this heading + clock, for the blitter to paint behind the
-    // ranges (which the buffer's first polys are). Heading = segment heading + yaw, the
-    // same absolute look the mountains use.
-    const heading = the_world.segments[cur.segment].north_heading + cur.yaw;
-    sun = sky.sunPos(heading, step_clock, camera.FOCAL);
+    render.frame(&the_world, cur.segment, cur.along, cur.across, cur.yaw, cur.heading, step_clock);
+    // the sun's placement for the rider's absolute heading + clock, for the blitter to
+    // paint behind the ranges (the buffer's first polys). The same continuous heading the
+    // mountains use, so the sun doesn't snap across the loop seam.
+    sun = sky.sunPos(cur.heading, step_clock, camera.FOCAL);
     return paint.byteLen();
 }
 
@@ -97,6 +96,12 @@ export fn bufHighWater() u32 {
 /// bufCap is the fixed draw-buffer size — the ceiling bufHighWater() must stay under.
 export fn bufCap() u32 {
     return paint.capBytes();
+}
+
+/// clock is the animation step `t` — the count of advances (minus backs). It's the clock
+/// driving the sun/sky/beacons, AND the index Steve reports to pin a frame for path sims.
+export fn clock() u32 {
+    return @intFromFloat(step_clock);
 }
 
 // --- the day→dusk sky, for the blitter's background gradient + sun. zig owns every
