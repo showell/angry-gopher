@@ -143,6 +143,7 @@ pub fn frame(w: *const world.World, seg_idx: usize, along: f32, across: f32, yaw
     var w_x0: [MAX_VIS_TOWERS]f32 = undefined;
     var w_yaw: [MAX_VIS_TOWERS]f32 = undefined;
     var w_fwd: [MAX_VIS_TOWERS]f32 = undefined;
+    var w_off: [MAX_VIS_TOWERS]f32 = undefined; // this tower's beacon blink-phase offset
     var ntw: usize = 0;
 
     // cows/bulls, collected as billboards (rider-relative), drawn in the depth sort.
@@ -194,6 +195,7 @@ pub fn frame(w: *const world.World, seg_idx: usize, along: f32, across: f32, yaw
                 w_x0[ntw] = seg.width / 2.0 + TOWER_RIGHT;
                 w_yaw[ntw] = TOWER_YAW;
                 w_fwd[ntw] = c.forward;
+                w_off[ntw] = tower.beaconOffsetFor(ch.idx[d]); // exit-intersection tower: keyed off its segment
                 ntw += 1;
             }
         }
@@ -207,6 +209,7 @@ pub fn frame(w: *const world.World, seg_idx: usize, along: f32, across: f32, yaw
                 w_x0[ntw] = x0;
                 w_yaw[ntw] = 0;
                 w_fwd[ntw] = c.forward;
+                w_off[ntw] = tower.beaconOffsetFor(ch.idx[d] + 60); // mid-tower: +60 so it doesn't blink in step with the segment's exit tower
                 ntw += 1;
             }
         }
@@ -265,6 +268,7 @@ pub fn frame(w: *const world.World, seg_idx: usize, along: f32, across: f32, yaw
             w_x0[ntw] = x0;
             w_yaw[ntw] = TOWER_YAW;
             w_fwd[ntw] = c.forward;
+            w_off[ntw] = tower.beaconOffsetFor(prev_idx);
             ntw += 1;
         }
     }
@@ -324,7 +328,7 @@ pub fn frame(w: *const world.World, seg_idx: usize, along: f32, across: f32, yaw
                     base[k] = mapPt(w, &ch, pose, w_map[it.i], ax.a, ax.x);
                 }
                 const center = mapPt(w, &ch, pose, w_map[it.i], w_a0[it.i], w_x0[it.i]);
-                tower.drawFlat(base, center, cam_focal);
+                tower.drawFlat(base, center, cam_focal, step + w_off[it.i]);
             },
             .cow => critter.draw(c_right[it.i], c_fwd[it.i], c_h[it.i], c_cp[it.i], c_face[it.i], cam_focal),
             .rail => guard_rail.drawPoly(rails.polys[it.i], cam_focal),

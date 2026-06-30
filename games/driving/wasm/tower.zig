@@ -3,12 +3,13 @@
 //! with a pink beacon. The owner (render, via the world) places it; this module only
 //! renders. Mirrors tower.ts.
 //!
-//! For now this is the FLAT form only — the four faces projected as a 2D billboard
-//! (base corners + apex projected, every ring/brace derived by screen-space lerp),
-//! which is exactly what tower.ts draws beyond TOWER_NEAR_DIST. The near 3D-parallax
-//! lattice and the step-driven beacon blink are deferred; the beacon is drawn static.
-//! Local ground curvature (EARTH_RADIUS) sinks a far tower so its base meets the
-//! horizon and its apex pulls down.
+//! This is the FLAT form only — the four faces projected as a 2D billboard (base corners
+//! + apex projected, every ring/brace derived by screen-space lerp), which is exactly
+//! what tower.ts draws beyond TOWER_NEAR_DIST. The criss-crossing flat lattice reads as
+//! 3D as you pass it, so the near perspective lattice stays deferred. The apex beacon
+//! BLINKS on the step clock (a pure function of it, so it freezes on pause and runs
+//! backwards on reverse), each tower phase-offset so they don't pulse in unison. Local
+//! ground curvature (EARTH_RADIUS) sinks a far tower so its base meets the horizon.
 
 const std = @import("std");
 const camera = @import("camera.zig");
@@ -25,6 +26,21 @@ const TOWER_METAL: u32 = 0x9aa0a8;
 const EARTH_RADIUS: f32 = 20000; // local ground bulge (towers only — stronger than the road's)
 const BEACON_RADIUS: f32 = 3.0;
 const BEACON_COLOR: u32 = 0xff2fe6;
+const BEACON_PERIOD: f32 = 120; // frames for a full invisible → bright → invisible blink
+
+/// beaconOffsetFor spreads each tower's blink phase so they don't pulse in unison: 37 is
+/// coprime to the 120-frame period, so successive owners land on distinct offsets.
+/// Mirrors beaconOffsetFor in tower.ts (keyed off the owning segment).
+pub fn beaconOffsetFor(n: usize) f32 {
+    return @floatFromInt((n * 37) % 120);
+}
+
+// the beacon's brightness (0 = invisible at the cycle ends, 1 = full at the middle) for a
+// phase = step + the tower's offset. Pure function of the clock. Mirrors beaconBrightness.
+fn beaconBrightness(phase: f32) f32 {
+    const wrapped = @mod(@mod(phase, BEACON_PERIOD) + BEACON_PERIOD, BEACON_PERIOD);
+    return (1.0 - @cos(2.0 * std.math.pi * wrapped / BEACON_PERIOD)) / 2.0;
+}
 
 // the square's four base corners, in half-base units, before the yaw.
 const CORNERS = [4][2]f32{ .{ -1, -1 }, .{ 1, -1 }, .{ 1, 1 }, .{ -1, 1 } };
@@ -80,8 +96,9 @@ fn bar(a: camera.ScreenPt, b: camera.ScreenPt, wpx: f32) void {
 
 /// drawFlat renders a tower given its four base corners + base centre already mapped
 /// into the rider frame. Projects the corners + apex, then derives every ring and
-/// brace by 2D interpolation. Sinks the tower by the local ground drop.
-pub fn drawFlat(base: [4]geom.RiderPt, center: geom.RiderPt, cam_focal: f32) void {
+/// brace by 2D interpolation. Sinks the tower by the local ground drop. `beacon_phase`
+/// is step + this tower's offset — the apex beacon blinks on it.
+pub fn drawFlat(base: [4]geom.RiderPt, center: geom.RiderPt, cam_focal: f32, beacon_phase: f32) void {
     if (center.forward < camera.NEAR) return;
     const drop = groundDrop(center);
     if (drop >= TOWER_HEIGHT) return; // sunk below the horizon
@@ -123,21 +140,17 @@ pub fn drawFlat(base: [4]geom.RiderPt, center: geom.RiderPt, cam_focal: f32) voi
         }
     }
 
-    drawBeacon(apex_s, center.forward, cam_focal);
+    drawBeacon(apex_s, center.forward, cam_focal, beaconBrightness(beacon_phase));
 }
 
-// the apex beacon: a pink disc, size scaling with distance. Static for now (the
-// step-driven blink + alpha glow ride the deferred animation clock).
-fn drawBeacon(apex_s: camera.ScreenPt, forward: f32, cam_focal: f32) void {
+// the apex beacon: a pink disc whose SIZE scales with distance but whose BRIGHTNESS is
+// the blink alpha — a depthless glow composited over whatever's behind. Skips the
+// invisible part of the cycle (and a sub-pixel disc). Mirrors drawBeacon in tower.ts.
+fn drawBeacon(apex_s: camera.ScreenPt, forward: f32, cam_focal: f32, bright: f32) void {
+    if (bright < 0.02) return;
     const px1 = camera.project(.{ .right = 1, .forward = forward, .height = 0 }, cam_focal).x;
     const px0 = camera.project(.{ .right = 0, .forward = forward, .height = 0 }, cam_focal).x;
     const r = BEACON_RADIUS * (px1 - px0);
     if (r < 0.5) return;
-    var pts: [16]camera.ScreenPt = undefined;
-    var i: usize = 0;
-    while (i < 16) : (i += 1) {
-        const a = @as(f32, @floatFromInt(i)) / 16.0 * 2.0 * std.math.pi;
-        pts[i] = .{ .x = apex_s.x + r * @cos(a), .y = apex_s.y + r * @sin(a) };
-    }
-    paint.pushPoly(BEACON_COLOR, &pts);
+    paint.pushBeacon(BEACON_COLOR, apex_s.x, apex_s.y, r, bright);
 }

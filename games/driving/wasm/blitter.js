@@ -83,6 +83,20 @@ function blit(ctx, mem, base, len) {
   while (w * 4 < len) {
     cmds++;
     const tag = u32[w++];
+    if (tag === 3) {
+      // alpha disc: a tower beacon's blinking glow, composited at the alpha zig computed.
+      const color = u32[w++];
+      const x = f32[w++], y = f32[w++], r = f32[w++], alpha = f32[w++];
+      if (r >= 0.5 && alpha >= 0.02) {
+        ctx.globalAlpha = alpha;
+        ctx.fillStyle = hex(color);
+        ctx.beginPath();
+        ctx.arc(x, y, r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+      }
+      continue;
+    }
     if (tag === 2) {
       const cp = u32[w++], flip = u32[w++];
       const x = f32[w++], y = f32[w++], size = f32[w++];

@@ -9,6 +9,9 @@
 //! → dark edge, across the polygon's x-extent) — the cylinder/cone shading the near
 //! trees want. coords are the f32 bit pattern stored in a u32 word; the blitter reads
 //! them back through a Float32Array view over the same words.
+//!
+//! tag 2 = emoji billboard (see pushEmoji); tag 3 = an alpha disc (see pushBeacon) — a
+//! tower's blinking apex beacon, the one thing that composites with an alpha < 1.
 
 const camera = @import("camera.zig");
 
@@ -75,6 +78,27 @@ pub fn pushEmoji(codepoint: u32, face_right: bool, x: f32, y: f32, size: f32) vo
     buf[cursor] = @bitCast(y);
     cursor += 1;
     buf[cursor] = @bitCast(size);
+    cursor += 1;
+}
+
+/// pushBeacon appends an alpha-disc command (tag 3): the tower beacon's blinking glow.
+/// Layout: [tag 3][color u32][x][y][r][alpha] — a circle of radius `r` px centred at
+/// (x, y), composited at `alpha` (0..1, the blink brightness). The blitter draws a true
+/// arc at this alpha; unlike every other command it is NOT opaque, so it gets its own tag
+/// rather than riding the solid-poly path (whose colour word has no alpha).
+pub fn pushBeacon(color: u32, x: f32, y: f32, r: f32, alpha: f32) void {
+    if (cursor + 6 > CAP_WORDS) return;
+    buf[cursor] = 3;
+    cursor += 1;
+    buf[cursor] = color;
+    cursor += 1;
+    buf[cursor] = @bitCast(x);
+    cursor += 1;
+    buf[cursor] = @bitCast(y);
+    cursor += 1;
+    buf[cursor] = @bitCast(r);
+    cursor += 1;
+    buf[cursor] = @bitCast(alpha);
     cursor += 1;
 }
 
