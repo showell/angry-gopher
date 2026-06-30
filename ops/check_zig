@@ -22,8 +22,8 @@ cd "$REPO_DIR"
 # cryptic @embedFile error. (The committed assets — chat/*.js, learn/*.js,
 # catalogs, images — are always present; only these four are build outputs.)
 for f in games/lynrummy/elm/elm.js games/lynrummy/elm/puzzle.js \
-         games/lynrummy/elm/engine.js games/driving/app.js; do
-    [ -f "$f" ] || { echo "Error: $f missing — run ops/build_elm + ops/build_driving first (embedded by zig build)." >&2; exit 1; }
+         games/lynrummy/elm/engine.js games/driving/safari.wasm; do
+    [ -f "$f" ] || { echo "Error: $f missing — run ops/build_elm + ops/build_safari_wasm first (embedded by zig build)." >&2; exit 1; }
 done
 
 # Poka-yoke lint: raw request-head access (req.head.target / iterateHeaders) is

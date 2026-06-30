@@ -13,7 +13,7 @@
 # near-empty shell; main.ts builds its own canvas and draws the map.
 #
 # esbuild is a pinned devDependency of delivery/ (alongside tsc), so we call
-# its local binary directly — mirrors ops/build_driving.
+# its local binary directly (same approach as ops/build_engine_js).
 set -e
 
 source "$(dirname "$0")/_paths.sh"

@@ -10,8 +10,8 @@
 # allocator — a fixed pre-sized buffer. -rdynamic exposes the `export fn`s as
 # wasm exports; ReleaseSmall keeps the module lean (it ships embedded).
 #
-# Mirrors ops/build_driving's role for the TS bundle: a single build step whose
-# output (safari.wasm) is @embedFile'd into the server binary.
+# A single build step whose output (safari.wasm) is @embedFile'd into the server
+# binary and served at /driving. (This replaced the old TS bundle, app.js.)
 set -e
 
 source "$(dirname "$0")/_paths.sh"

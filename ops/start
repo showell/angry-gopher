@@ -58,7 +58,6 @@ cd "$GOPHER_DIR"
 # Build the front-end bundles FIRST: build.zig @embedFiles them into the
 # binary, so they must exist and be current before `zig build`.
 "$(dirname "$0")/build_elm"
-"$(dirname "$0")/build_driving"
 "$(dirname "$0")/build_delivery"
 "$(dirname "$0")/build_safari_wasm"
 

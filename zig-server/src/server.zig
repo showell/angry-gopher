@@ -11,7 +11,8 @@
 //! request then closes (keep-alive off) — that's
 //! independent of concurrency and can be revisited when chat lands.
 //!
-//! Run:  ops/build_driving && ops/build_elm   (from repo root, for the bundles)
+//! Run:  ops/build_elm && ops/build_safari_wasm && ops/build_delivery
+//!         (from the repo root, for the embedded bundles)
 //!       cd zig-server && zig build run        (serves on http://localhost:9001)
 
 const std = @import("std");

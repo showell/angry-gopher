@@ -8,8 +8,8 @@ const std = @import("std");
 //   zig build run     -> build + run the server (serves /driving on :9001)
 //   zig build         -> just build (binary in zig-build/)
 //
-// The driving bundle must exist first: run `ops/build_driving` from the repo
-// root (esbuild over games/driving/main.ts -> games/driving/app.js).
+// The embedded front-end build outputs must exist first (ops/build_safari_wasm,
+// ops/build_elm, ops/build_delivery from the repo root); see the asset list below.
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
@@ -36,9 +36,8 @@ pub fn build(b: *std.Build) void {
     // @embedFile("<name>"). All live outside this package dir, so they're wired
     // here rather than by a relative @embedFile path.
     const assets = [_]struct { name: []const u8, path: []const u8 }{
-        .{ .name = "driving_app_js", .path = "../games/driving/app.js" },
-        // The Safari camera's zig→WASM core (ops/build_safari_wasm) + its dumb
-        // plain-JS blitter, served at the hidden /driving/wasm preview surface.
+        // The Safari Screensaver (/driving): a zig→WASM core (ops/build_safari_wasm)
+        // + its dumb plain-JS blitter. This REPLACED the old pure-TS bundle (app.js).
         .{ .name = "safari_wasm", .path = "../games/driving/safari.wasm" },
         .{ .name = "safari_blitter_js", .path = "../games/driving/wasm/blitter.js" },
         .{ .name = "delivery_app_js", .path = "../delivery/app.js" },

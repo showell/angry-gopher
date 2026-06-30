@@ -53,10 +53,10 @@ Available ops commands (run from repo root):
   ops/build_engine_js    Bundle the TS engine into elm/engine.js via
                          esbuild. Run after any games/lynrummy/ts/
                          edit before testing the live Elm UI.
-  ops/build_driving      Bundle the driving game's TS into
-                         games/driving/app.js via esbuild (served at
-                         /driving, embedded by zig build). Called by
-                         ops/start. Run after any games/driving/ edit.
+  ops/build_safari_wasm  Build the Safari Screensaver's zig core into
+                         games/driving/safari.wasm (the /driving game,
+                         embedded by zig build). Called by ops/start. Run
+                         after any games/driving/wasm/ edit.
 
   REGEN & TOOLS
   -------------

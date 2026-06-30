@@ -32,12 +32,15 @@ code is the authority** for how anything works; this file orients a human, and t
 deeper "why" lives in the essay below.
 
 **A sibling worth knowing: [Safari Screensaver](../games/driving/README.md).**
-Delivery's twin toy, built the same way — pure client-side TypeScript, a `<canvas>`
-the client draws itself, a bundle the zig server only embeds and serves, fully
-deterministic. Same "flipbook + algorithm" paradigm; the difference is which hard
-problem sits at the center. Here it's **combinatorial cost** — route trucks to
-minimize an honest number. There it's **perception** — the cheapest lie the eye
-will accept as a sunset road. Same spirit, different hard part.
+Delivery's twin toy *in spirit* — a `<canvas>` the client draws itself, a near-empty
+shell the zig server only serves, fully deterministic, the same "flipbook + algorithm"
+paradigm. It's no longer a *true* sibling in build, though: Delivery is pure
+client-side TypeScript, while Safari was re-implemented as a **Zig→WASM core** that
+computes the geometry and emits draw-commands a tiny JS blitter fills — the camera now
+runs in WebAssembly, not TypeScript. Same spirit, different hard part, and now a
+different stack: here it's **combinatorial cost** (route trucks to minimize an honest
+number), there it's **perception** (the cheapest lie the eye will accept as a sunset
+road).
 
 ### The algorithm, in one breath
 

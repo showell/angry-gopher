@@ -37,10 +37,10 @@ git push
 COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo unknown)
 
 # Build the front-end bundles FIRST — build.zig embeds them (see build.zig).
-echo "Building Elm/TS + driving + delivery bundles..."
+echo "Building Elm + delivery bundles + the Safari WASM core..."
 "$GOPHER_DIR/ops/build_elm"
-"$GOPHER_DIR/ops/build_driving"
 "$GOPHER_DIR/ops/build_delivery"
+"$GOPHER_DIR/ops/build_safari_wasm"
 
 # Debug build (default optimize mode). The zig server is I/O-bound — it serves
 # embedded static JS, small files, and small markdown renders, with no hot
