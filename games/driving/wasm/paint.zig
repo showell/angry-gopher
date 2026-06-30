@@ -11,9 +11,11 @@
 //! them back through a Float32Array view over the same words.
 //!
 //! tag 3 = an alpha disc (see pushBeacon) — a tower's blinking apex beacon; tag 4 = a radial-gradient
-//! polygon (see pushGradPoly) — the truck's headlight beams + brake glow. Tags 3 and 4 are the only
-//! commands that composite with an alpha < 1. (There is no glyph command: the critters are baked to
-//! polygons — emoji_frames.zig — so the seam is purely polygons + gradients.)
+//! polygon (see pushGradPoly) — the truck's headlight beams + brake glow. tag 5 = a 2-stop LINEAR-gradient
+//! polygon (pushLinearGradPoly); tag 6 = a 2-stop RADIAL-(ellipse)-gradient polygon (pushRadialGradPoly) —
+//! together these are the bull's muscle shading (the Fluent Color art). Tags 3–6 composite with alpha < 1.
+//! (There is no glyph command: the critters are baked to polygons — emoji_frames.zig — so the seam is
+//! purely polygons + gradients.)
 
 const camera = @import("camera.zig");
 
@@ -120,6 +122,42 @@ pub fn pushGradPoly(rgba_center: u32, rgba_edge: u32, cx: f32, cy: f32, r: f32, 
 
 /// push appends one polygon command: tag, color (0xRRGGBB), and its screen points.
 /// Drops it silently if it has fewer than 3 points or the bounded buffer is full.
+/// pushLinearGradPoly appends a 2-stop LINEAR-gradient polygon (tag 5) — the bull's flat shading panels.
+/// Layout: [5][rgba0][rgba1][off0][off1][ax][ay][bx][by][nPts][x,y…]. rgba is 0xAARRGGBB; the gradient runs
+/// from stop 0 at screen point (ax,ay) to stop 1 at (bx,by). Composites with alpha (the soft overlays).
+pub fn pushLinearGradPoly(rgba0: u32, rgba1: u32, off0: f32, off1: f32, ax: f32, ay: f32, bx: f32, by: f32, pts: []const camera.ScreenPt) void {
+    if (pts.len < 3) return;
+    if (cursor + 10 + pts.len * 2 > CAP_WORDS) return;
+    const words = [_]u32{ 5, rgba0, rgba1, @bitCast(off0), @bitCast(off1), @bitCast(ax), @bitCast(ay), @bitCast(bx), @bitCast(by), @intCast(pts.len) };
+    for (words) |word| {
+        buf[cursor] = word;
+        cursor += 1;
+    }
+    for (pts) |p| {
+        buf[cursor] = @bitCast(p.x);
+        buf[cursor + 1] = @bitCast(p.y);
+        cursor += 2;
+    }
+}
+
+/// pushRadialGradPoly appends a 2-stop RADIAL-gradient polygon (tag 6) — the bull's rounded muscle shading.
+/// The gradient is a unit circle at centre (cx,cy) mapped to an ELLIPSE by the screen-space axis vectors
+/// u=(ux,uy), v=(vx,vy). Layout: [6][rgba0][rgba1][off0][off1][cx][cy][ux][uy][vx][vy][nPts][x,y…].
+pub fn pushRadialGradPoly(rgba0: u32, rgba1: u32, off0: f32, off1: f32, cx: f32, cy: f32, ux: f32, uy: f32, vx: f32, vy: f32, pts: []const camera.ScreenPt) void {
+    if (pts.len < 3) return;
+    if (cursor + 12 + pts.len * 2 > CAP_WORDS) return;
+    const words = [_]u32{ 6, rgba0, rgba1, @bitCast(off0), @bitCast(off1), @bitCast(cx), @bitCast(cy), @bitCast(ux), @bitCast(uy), @bitCast(vx), @bitCast(vy), @intCast(pts.len) };
+    for (words) |word| {
+        buf[cursor] = word;
+        cursor += 1;
+    }
+    for (pts) |p| {
+        buf[cursor] = @bitCast(p.x);
+        buf[cursor + 1] = @bitCast(p.y);
+        cursor += 2;
+    }
+}
+
 fn push(tag: u32, color: u32, pts: []const camera.ScreenPt) void {
     if (pts.len < 3) return;
     const need = 3 + pts.len * 2;

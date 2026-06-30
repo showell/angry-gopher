@@ -52,6 +52,9 @@ function rgba(c) {
   return `rgba(${(c >> 16) & 255},${(c >> 8) & 255},${c & 255},${((c >>> 24) & 255) / 255})`;
 }
 
+// clamp a gradient stop offset to [0,1], and to >= a lower bound so a 2-stop pair stays ascending.
+function stopAt(o, lo = 0) { return Math.max(lo, Math.min(1, o)); }
+
 // shade a 0xRRGGBB by a brightness factor (clamped) -> "rgb(r,g,b)".
 function shade(c, f) {
   const r = Math.min(255, Math.round(((c >> 16) & 255) * f));
@@ -103,6 +106,42 @@ function blit(ctx, mem, base, len) {
         ctx.fillStyle = g;
         ctx.fill();
       }
+      continue;
+    }
+    if (tag === 5) {
+      // 2-stop LINEAR-gradient polygon (the bull's flat shading panels): stop 0 at (ax,ay), stop 1 at (bx,by).
+      const c0 = u32[w++], c1 = u32[w++], o0 = f32[w++], o1 = f32[w++];
+      const ax = f32[w++], ay = f32[w++], bx = f32[w++], by = f32[w++], n = u32[w++];
+      ctx.beginPath();
+      ctx.moveTo(f32[w], f32[w + 1]); w += 2;
+      for (let i = 1; i < n; i++) { ctx.lineTo(f32[w], f32[w + 1]); w += 2; }
+      ctx.closePath();
+      const g = ctx.createLinearGradient(ax, ay, bx, by);
+      g.addColorStop(stopAt(o0), rgba(c0));
+      g.addColorStop(stopAt(o1, o0), rgba(c1));
+      ctx.fillStyle = g;
+      ctx.fill();
+      continue;
+    }
+    if (tag === 6) {
+      // 2-stop RADIAL-gradient polygon (the bull's rounded muscle shading): a unit circle at (cx,cy) mapped
+      // to an ellipse by axes u,v. Clip to the path, map unit space → the ellipse, fill a unit radial gradient.
+      const c0 = u32[w++], c1 = u32[w++], o0 = f32[w++], o1 = f32[w++];
+      const cx = f32[w++], cy = f32[w++], ux = f32[w++], uy = f32[w++], vx = f32[w++], vy = f32[w++], n = u32[w++];
+      ctx.beginPath();
+      ctx.moveTo(f32[w], f32[w + 1]); w += 2;
+      for (let i = 1; i < n; i++) { ctx.lineTo(f32[w], f32[w + 1]); w += 2; }
+      ctx.closePath();
+      if (Math.abs(ux * vy - uy * vx) < 1e-4) { ctx.fillStyle = rgba(c0); ctx.fill(); continue; } // degenerate → solid
+      ctx.save();
+      ctx.clip();
+      ctx.transform(ux, uy, vx, vy, cx, cy); // unit space → screen ellipse
+      const g = ctx.createRadialGradient(0, 0, 0, 0, 0, 1);
+      g.addColorStop(stopAt(o0), rgba(c0));
+      g.addColorStop(stopAt(o1, o0), rgba(c1));
+      ctx.fillStyle = g;
+      ctx.fillRect(-1e4, -1e4, 2e4, 2e4); // clipped to the path; beyond r=1 the gradient clamps to stop 1
+      ctx.restore();
       continue;
     }
     const color = u32[w++];

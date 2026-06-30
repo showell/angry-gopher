@@ -18,7 +18,7 @@ fn species(c: world.Creature) ?Species {
         .elephant => .{ .cp = 0x1F418, .adult_h = 2.8 }, // 🐘
         .giraffe => .{ .cp = 0x1F992, .adult_h = 4.5 }, // 🦒 — stands tallest
         .zebra => .{ .cp = 0x1F993, .adult_h = 1.6 }, // 🦓
-        .rhino => .{ .cp = 0x1F98F, .adult_h = 3.2 }, // 🦏
+        .rhino => .{ .cp = 0x1F98F, .adult_h = 2.2 }, // 🦏 — ~30% smaller; less sky-blend, sits against the mountains
         .pond => null, // hand-drawn duck-pond scene (pond.zig), not an emoji pair
         .none => null,
     };

@@ -33,6 +33,8 @@ for (let i = 0; i < STEPS; i++) {
     if (tag === 0 || tag === 1) { w++; const n = u[w++]; w += n * 2; }
     else if (tag === 3) { w += 5; }
     else if (tag === 4) { w += 5; const n = u[w++]; w += n * 2; }
+    else if (tag === 5) { w += 8; const n = u[w++]; w += n * 2; }
+    else if (tag === 6) { w += 10; const n = u[w++]; w += n * 2; }
     else { bad++; break; }
   }
 }
