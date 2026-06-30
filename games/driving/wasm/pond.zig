@@ -35,13 +35,15 @@ pub const BANK_COLOR: u32 = 0xc2b280;
 // intersection (smaller cv, toward the front edge at cv 3). ADULTS, drawn slightly out of proportion so they
 // read. Ducks float upright, so the billboard paradigm fits (unlike the basking crocs it replaced).
 pub const DUCK_CP: u32 = 0x1F986; // 🦆
-pub const DUCK_HEIGHT: f32 = 1.2; // m
+pub const DUCK_HEIGHT: f32 = 0.9; // m
 pub const Duck = struct { p: P, face_right: bool };
+// cu is shifted toward the road (less negative) vs the pond centre — the ducks hug the near/road side of the
+// water while still sitting inside the outline.
 pub const DUCKS = [_]Duck{
-    .{ .p = .{ .cu = -12, .cv = 11 }, .face_right = true }, // deeper trio
-    .{ .p = .{ .cu = -20, .cv = 17 }, .face_right = false },
-    .{ .p = .{ .cu = -13, .cv = 21 }, .face_right = true },
-    .{ .p = .{ .cu = -8, .cv = 6 }, .face_right = true }, // nearer trio (closer to the intersection)
-    .{ .p = .{ .cu = -16, .cv = 7 }, .face_right = false },
-    .{ .p = .{ .cu = -24, .cv = 8 }, .face_right = true },
+    .{ .p = .{ .cu = -8, .cv = 11 }, .face_right = true }, // deeper trio
+    .{ .p = .{ .cu = -16, .cv = 17 }, .face_right = false },
+    .{ .p = .{ .cu = -9, .cv = 21 }, .face_right = true },
+    .{ .p = .{ .cu = -4, .cv = 6 }, .face_right = true }, // nearer trio (closer to the intersection)
+    .{ .p = .{ .cu = -12, .cv = 7 }, .face_right = false },
+    .{ .p = .{ .cu = -20, .cv = 8 }, .face_right = true },
 };
