@@ -19,7 +19,9 @@ function drawBackground(ctx, skyHex, horizonHex) {
   ctx.fillStyle = g;
   ctx.fillRect(W / 2 - BIG, H / 2 - BIG, 2 * BIG, BIG);
   ctx.fillStyle = '#4a8f43';
-  ctx.fillRect(W / 2 - BIG, H / 2, 2 * BIG, BIG);
+  // overlap 1px up over the horizon: under the camera roll the two rects' shared edge can
+  // rasterize a sky sliver into the grass — drawing grass last + overlapping wins the seam.
+  ctx.fillRect(W / 2 - BIG, H / 2 - 1, 2 * BIG, BIG + 1);
 }
 
 // the setting sun: a warm radial glow plus the disc, clipped to the sky (top half) so the

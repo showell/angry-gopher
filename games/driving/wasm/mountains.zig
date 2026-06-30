@@ -22,6 +22,10 @@ const WEST_RANGE_BEARING: f32 = -2.0416;
 const SNOW_THRESHOLD: f32 = 124.0; // only ridge taller than this gets snow
 const SNOW_DIP: f32 = 10.0; // how far the snowline dips under the summit
 const STEP: f32 = 2.0; // column sampling step (px), like mountain.ts
+// The camera rolls with the rider's lean (up to MAX_LEAN≈20°), so the rotated viewport sees
+// design-x beyond [0,W] at the corners (~74px at 20°). Trace the silhouette this far past each
+// edge so a lean never reveals sky past the backdrop's end. Same idea as drawBackground's BIG margin.
+const ROLL_MARGIN: f32 = 200.0;
 
 // darken a 0xRRGGBB toward dusk; the multiplier keeps the rock always below the
 // (also-dimming) snow. Mirrors dimmed() in mountain.ts.
@@ -104,16 +108,16 @@ pub fn sunBehindMountains(step: f32) bool {
 // silhouette polygon. `v_scale` (= cam_focal / FOCAL) squeezes the heights vertically by the same factor
 // the pull-in squeezes them horizontally, so it reads as a real focal change (mountain.ts's vScale).
 fn silhouette(comptime f: fn (f32) f32, heading: f32, cam_focal: f32, v_scale: f32, color: u32) void {
-    var pts: [512]camera.ScreenPt = undefined;
+    var pts: [1024]camera.ScreenPt = undefined;
     var n: usize = 0;
-    var x: f32 = 0;
-    while (x <= camera.W) : (x += STEP) {
+    var x: f32 = -ROLL_MARGIN;
+    while (x <= camera.W + ROLL_MARGIN) : (x += STEP) {
         pts[n] = .{ .x = x, .y = camera.H / 2.0 - f(bearingAt(x, heading, cam_focal)) * v_scale };
         n += 1;
     }
-    pts[n] = .{ .x = camera.W, .y = camera.H / 2.0 };
+    pts[n] = .{ .x = camera.W + ROLL_MARGIN, .y = camera.H / 2.0 };
     n += 1;
-    pts[n] = .{ .x = 0, .y = camera.H / 2.0 };
+    pts[n] = .{ .x = -ROLL_MARGIN, .y = camera.H / 2.0 };
     n += 1;
     paint.pushPoly(color, pts[0..n]);
 }
