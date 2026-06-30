@@ -47,6 +47,11 @@ function hex(c) {
   return '#' + (c & 0xffffff).toString(16).padStart(6, '0');
 }
 
+// 0xAARRGGBB -> "rgba(r,g,b,a)" — the translucent colour for the gradient-polygon lights (tag 4).
+function rgba(c) {
+  return `rgba(${(c >> 16) & 255},${(c >> 8) & 255},${c & 255},${((c >>> 24) & 255) / 255})`;
+}
+
 // shade a 0xRRGGBB by a brightness factor (clamped) -> "rgb(r,g,b)".
 function shade(c, f) {
   const r = Math.min(255, Math.round(((c >> 16) & 255) * f));
@@ -94,6 +99,24 @@ function blit(ctx, mem, base, len) {
         ctx.arc(x, y, r, 0, Math.PI * 2);
         ctx.fill();
         ctx.globalAlpha = 1;
+      }
+      continue;
+    }
+    if (tag === 4) {
+      // radial-gradient polygon: the truck's headlight beams + brake glow. Fill the polygon path with a
+      // radial gradient centred at (cx,cy) radius r — bright translucent core fading to the edge colour.
+      const cCol = u32[w++], eCol = u32[w++];
+      const cx = f32[w++], cy = f32[w++], r = f32[w++], n = u32[w++];
+      ctx.beginPath();
+      ctx.moveTo(f32[w], f32[w + 1]); w += 2;
+      for (let i = 1; i < n; i++) { ctx.lineTo(f32[w], f32[w + 1]); w += 2; }
+      ctx.closePath();
+      if (r >= 0.5) {
+        const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+        g.addColorStop(0, rgba(cCol));
+        g.addColorStop(1, rgba(eCol));
+        ctx.fillStyle = g;
+        ctx.fill();
       }
       continue;
     }

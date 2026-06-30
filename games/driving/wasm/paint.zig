@@ -11,7 +11,8 @@
 //! them back through a Float32Array view over the same words.
 //!
 //! tag 2 = emoji billboard (see pushEmoji); tag 3 = an alpha disc (see pushBeacon) — a
-//! tower's blinking apex beacon, the one thing that composites with an alpha < 1.
+//! tower's blinking apex beacon; tag 4 = a radial-gradient polygon (see pushGradPoly) — the truck's
+//! headlight beams + brake glow. Tags 3 and 4 are the only commands that composite with an alpha < 1.
 
 const camera = @import("camera.zig");
 
@@ -100,6 +101,37 @@ pub fn pushBeacon(color: u32, x: f32, y: f32, r: f32, alpha: f32) void {
     cursor += 1;
     buf[cursor] = @bitCast(alpha);
     cursor += 1;
+}
+
+/// pushGradPoly appends a radial-gradient-filled polygon (tag 4): a TRANSLUCENT shape — the truck's
+/// headlight beams + brake-light glow. Layout: [tag 4][rgba_center u32][rgba_edge u32][cx][cy][r][nPts]
+/// [x,y…]. The two colours are 0xAARRGGBB (alpha in the top byte); the blitter fills the polygon path with
+/// a radial gradient centred at (cx, cy) radius r — rgba_center at the core, fading to rgba_edge at r. The
+/// only non-opaque command besides the beacon disc (tag 3), so light reads as light, not a painted shape.
+pub fn pushGradPoly(rgba_center: u32, rgba_edge: u32, cx: f32, cy: f32, r: f32, pts: []const camera.ScreenPt) void {
+    if (pts.len < 3) return;
+    const need = 6 + pts.len * 2;
+    if (cursor + need > CAP_WORDS) return;
+    buf[cursor] = 4;
+    cursor += 1;
+    buf[cursor] = rgba_center;
+    cursor += 1;
+    buf[cursor] = rgba_edge;
+    cursor += 1;
+    buf[cursor] = @bitCast(cx);
+    cursor += 1;
+    buf[cursor] = @bitCast(cy);
+    cursor += 1;
+    buf[cursor] = @bitCast(r);
+    cursor += 1;
+    buf[cursor] = @intCast(pts.len);
+    cursor += 1;
+    for (pts) |p| {
+        buf[cursor] = @bitCast(p.x);
+        cursor += 1;
+        buf[cursor] = @bitCast(p.y);
+        cursor += 1;
+    }
 }
 
 /// push appends one polygon command: tag, color (0xRRGGBB), and its screen points.

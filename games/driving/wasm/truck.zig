@@ -47,6 +47,23 @@ const SIDE: u32 = 0x152150; // darker sides (so the prism reads as solid)
 const BRAKE: u32 = 0xff2a18; // bright-red brake lights, lit only while slowing
 const TIRE: u32 = 0x15151a; // near-black
 
+// ---- headlights: two WEDGES of light thrown forward from the cab-front corners, shown only once the sun
+// is behind the mountains. Each is a flat 3D side-silhouette — a slit at the truck face fanning open down
+// the road — filled with a radial glow from the lamp, so its 3D angle alone decides how it reads (broad in
+// profile, a sliver head-/tail-on). Mirrors truck.ts. ----
+const HEADLIGHT_H: f32 = 1.0; // lamp height off the road (centre of the wedge's near edge)
+const HEADLIGHT_INSET: f32 = 0.3; // each lamp sits this far in from its cab-front corner
+const CONE_NEAR_HALF: f32 = 0.25; // half the wedge's vertical thickness at the truck face (a slit)
+const CONE_FAR_CENTER: f32 = 0.7; // centre height of the wedge's far edge
+const CONE_FAR_HALF: f32 = 0.9; // half the wedge's vertical thickness at its far edge (fanned open)
+const CONE_LENGTH: f32 = 20.4; // how far ahead the beam reaches (m)
+// the beam (warm white 255,248,214) packed 0xAARRGGBB: bright core (alpha 0.765) → soft edge (alpha 0.27).
+const BEAM_CORE: u32 = 0xC3FFF8D6;
+const BEAM_EDGE: u32 = 0x45FFF8D6;
+// the brake-light glow halo: a soft red gradient (rgba 255,80,60,0.9 core → 255,42,24,0 edge), 0xAARRGGBB.
+const GLOW_CORE: u32 = 0xE6FF503C;
+const GLOW_EDGE: u32 = 0x00FF2A18;
+
 // The truck's own state: how far it has driven along the route, its speed, and whether it's slowing this
 // frame (brake lights show only then).
 pub const State = struct { pos: f32, v: f32, braking: bool };
@@ -129,17 +146,86 @@ fn fillPoly(color: u32, pts: []const geom.Vec3, cam_focal: f32) void {
     paint.pushPoly(color, screen[0..m]);
 }
 
+// one headlight wedge from the cab-front corner at `src_x`: a flat 3D silhouette fanning forward from the
+// cab nose (a2), filled with a radial glow centred on the lamp (the near edge). The whole truck is at the
+// far end of the chase (forward > NEAR), so no near-clip is needed. Mirrors wedgeGlow in truck.ts.
+fn drawWedge(w: *const world.World, ch: *const render.Chain, pose: render.Pose, d: usize, a2: f32, src_x: f32, cam_focal: f32) void {
+    const wedge = [_]geom.Vec3{
+        p3(w, ch, pose, d, a2, src_x, HEADLIGHT_H - CONE_NEAR_HALF), // near-bottom (the slit)
+        p3(w, ch, pose, d, a2, src_x, HEADLIGHT_H + CONE_NEAR_HALF), // near-top
+        p3(w, ch, pose, d, a2 + CONE_LENGTH, src_x, CONE_FAR_CENTER + CONE_FAR_HALF), // far-top (fanned open)
+        p3(w, ch, pose, d, a2 + CONE_LENGTH, src_x, CONE_FAR_CENTER - CONE_FAR_HALF), // far-bottom
+    };
+    var screen: [4]camera.ScreenPt = undefined;
+    for (wedge, 0..) |p, i| {
+        if (p.forward <= camera.NEAR) return;
+        screen[i] = camera.project(p, cam_focal);
+    }
+    const lamp = camera.project(.{
+        .right = (wedge[0].right + wedge[1].right) / 2.0,
+        .forward = (wedge[0].forward + wedge[1].forward) / 2.0,
+        .height = (wedge[0].height + wedge[1].height) / 2.0,
+    }, cam_focal);
+    var r: f32 = 0;
+    for (screen) |s| {
+        const dx = s.x - lamp.x;
+        const dy = s.y - lamp.y;
+        r = @max(r, @sqrt(dx * dx + dy * dy));
+    }
+    paint.pushGradPoly(BEAM_CORE, BEAM_EDGE, lamp.x, lamp.y, r, &screen);
+}
+
+// the soft red glow halo behind a brake-light panel: project its corners, find the screen centre + radius,
+// and lay a radial gradient ~3× that size so the light reads as glowing. Mirrors glow() in truck.ts.
+fn drawBrakeGlow(panel: [4]geom.Vec3, cam_focal: f32) void {
+    var sp: [4]camera.ScreenPt = undefined;
+    for (panel, 0..) |p, i| {
+        if (p.forward <= camera.NEAR) return;
+        sp[i] = camera.project(p, cam_focal);
+    }
+    var cx: f32 = 0;
+    var cy: f32 = 0;
+    for (sp) |s| {
+        cx += s.x;
+        cy += s.y;
+    }
+    cx /= 4.0;
+    cy /= 4.0;
+    var r: f32 = 0;
+    for (sp) |s| {
+        const dx = s.x - cx;
+        const dy = s.y - cy;
+        r = @max(r, @sqrt(dx * dx + dy * dy));
+    }
+    const rad = r * 3.2;
+    var circle: [16]camera.ScreenPt = undefined;
+    var i: usize = 0;
+    while (i < 16) : (i += 1) {
+        const th = @as(f32, @floatFromInt(i)) / 16.0 * 2.0 * std.math.pi;
+        circle[i] = .{ .x = cx + rad * @cos(th), .y = cy + rad * @sin(th) };
+    }
+    paint.pushGradPoly(GLOW_CORE, GLOW_EDGE, cx, cy, rad, &circle);
+}
+
 // Build the truck box in the frame of chain[d] (centre line x = hw), centred at `center_along`, and draw it
 // back-to-front: a TRAILER box hovering over its tires + a lower CAB in front (windshield raking down the
 // nose), with round tires at the sides. Faces are painter-sorted by depth so the body occludes itself and
-// its far-side tires. Brake-light panels land on the (nearest) rear face when it's slowing.
-pub fn drawBody(w: *const world.World, ch: *const render.Chain, pose: render.Pose, d: usize, center_along: f32, hw: f32, braking: bool, cam_focal: f32) void {
+// its far-side tires. Headlight wedges fan out UNDER the body when `headlights` (dusk); brake-light panels
+// (with a glow halo) land on the (nearest) rear face when it's slowing.
+pub fn drawBody(w: *const world.World, ch: *const render.Chain, pose: render.Pose, d: usize, center_along: f32, hw: f32, braking: bool, headlights: bool, cam_focal: f32) void {
     const a0 = center_along - LENGTH / 2.0; // trailer rear (toward us)
     const a1 = center_along + LENGTH / 2.0; // trailer front
     const a2 = a1 + CAB_LENGTH; // cab nose
     const a_roof = a1 + CAB_LENGTH * CAB_ROOF_FRAC; // windshield top
     const xl = hw - WIDTH / 2.0;
     const xr = hw + WIDTH / 2.0;
+
+    // headlight wedges first, so the opaque body draws over them where they overlap (they fan forward from
+    // the cab nose, so mostly they spill onto the road ahead). Only at dusk.
+    if (headlights) {
+        drawWedge(w, ch, pose, d, a2, xl + HEADLIGHT_INSET, cam_focal);
+        drawWedge(w, ch, pose, d, a2, xr - HEADLIGHT_INSET, cam_focal);
+    }
 
     var faces: [16]Face = undefined;
     var nf: usize = 0;
@@ -212,7 +298,8 @@ pub fn drawBody(w: *const world.World, ch: *const render.Chain, pose: render.Pos
                 p3(w, ch, pose, d, a0, lr[0], bl), p3(w, ch, pose, d, a0, lr[1], bl),
                 p3(w, ch, pose, d, a0, lr[1], bh), p3(w, ch, pose, d, a0, lr[0], bh),
             };
-            fillPoly(BRAKE, &panel, cam_focal);
+            drawBrakeGlow(panel, cam_focal); // soft halo first…
+            fillPoly(BRAKE, &panel, cam_focal); // …then the bright core on top
         }
     }
 }

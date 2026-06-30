@@ -423,7 +423,7 @@ pub fn frame(w: *const world.World, seg_idx: usize, along: f32, across: f32, yaw
             },
             .cow => critter.draw(c_right[it.i], c_fwd[it.i], c_h[it.i], c_cp[it.i], c_face[it.i], cam_focal),
             .cat => cat.draw(k_right[it.i], k_fwd[it.i], k_h[it.i], k_pose[it.i], k_lift[it.i], cam_focal),
-            .truck => truck.drawBody(w, &ch, pose, truck_d, truck_along, w.segments[ch.idx[truck_d]].width / 2.0, tk.braking, cam_focal),
+            .truck => truck.drawBody(w, &ch, pose, truck_d, truck_along, w.segments[ch.idx[truck_d]].width / 2.0, tk.braking, mountains.sunBehindMountains(step), cam_focal),
             .rail => guard_rail.drawPoly(rails.polys[it.i], cam_focal),
             .tree => if (t_fwd[it.i] < DETAIL_DIST)
                 tree.drawNear(t_right[it.i], t_fwd[it.i], t_h[it.i], t_col[it.i], cam_focal)

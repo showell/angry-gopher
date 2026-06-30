@@ -8,6 +8,7 @@
 const std = @import("std");
 const camera = @import("camera.zig");
 const paint = @import("paint.zig");
+const sky = @import("sky.zig");
 
 const ROCK: u32 = 0x5b6a8f; // northern range
 const ROCK_WEST: u32 = 0x39435f; // westward (sunset) range — off-screen looking north
@@ -85,6 +86,18 @@ fn snowlineAt(bearing: f32, peak: f32) f32 {
 // widens the angular span across the screen, exactly as the projection does. Mirrors mountain.ts bearingAt.
 fn bearingAt(x: f32, heading: f32, cam_focal: f32) f32 {
     return heading + std.math.atan((x - camera.W / 2.0) / cam_focal);
+}
+
+// the silhouette crest height (px above the horizon) at a bearing — the tallest of the ranges + the land.
+// Mirrors horizonCrestPx in mountain.ts.
+pub fn horizonCrestPx(bearing: f32) f32 {
+    return @max(westRange(bearing), @max(northRange(bearing), groundBase(bearing)));
+}
+
+// Has the sun dropped fully BEHIND the western range (dusk arrived)? True once the whole disc is below the
+// crest at the sun's bearing — the moment the truck's headlights switch on. Mirrors sunBehindMountains.
+pub fn sunBehindMountains(step: f32) bool {
+    return sky.sunHeightPx(step) + sky.SUN_RADIUS_PX < horizonCrestPx(sky.SUN_BEARING);
 }
 
 // trace a range's crest left→right, then close down to the horizon — one filled
