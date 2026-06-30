@@ -236,8 +236,8 @@ const route = [_]Cfg{
     .{ .length = 500, .scheme = .all_green, .turn_deg = 50 }, // seg1: plain opener (no bull yet)
     .{ .length = 320, .scheme = .all_green, .turn_deg = -70, .cat = true }, // seg2: the CAT crossing debuts
     .{ .length = 400, .scheme = .all_green, .turn_deg = 20, .pigs = true }, // seg3: pigs first appear (distraction)
-    .{ .length = 300, .scheme = .yellow_green, .turn_deg = 20, .bull = true }, // seg4: gold trees (one-off); the BULL debuts + is a staple from here
-    .{ .length = 300, .scheme = .all_green, .turn_deg = -70, .bull = true, .creature = .giraffe }, // seg5: first giraffe at its corner
+    .{ .length = 300, .scheme = .yellow_green, .turn_deg = 20 }, // seg4: gold trees (one-off); still no bull (let the pigs breathe)
+    .{ .length = 300, .scheme = .all_green, .turn_deg = -70, .bull = true, .creature = .giraffe }, // seg5: first giraffe + the BULL debuts (staple from here)
     .{ .length = 300, .scheme = .all_green, .turn_deg = -70, .bull = true }, // seg6
     .{ .length = 1200, .scheme = .red_green, .turn_deg = 80, .bull = true, .creature = .rhino }, // seg7: rhinos at the sunset-stretch corner
     .{ .length = 300, .scheme = .all_green, .turn_deg = 15, .bull = true }, // seg8

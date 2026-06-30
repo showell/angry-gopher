@@ -25,7 +25,10 @@ const ROAD: u32 = 0x34353c;
 const ROAD_CHUNK: f32 = 25.0; // road strips sliced this long so the bend reads smooth
 const ENTRY_ROAD_DIST: f32 = 40.0; // metres of approach road a joint paints behind its end edge (covers the joint when it's the one BEHIND the rider). Mirrors intersection.ts.
 const RAIL_PATH_CAP: usize = 192; // max points in a corner's rail path (run-up + two legs + run-out); ample for any turn on this route, bounds the fixed buffer
-const DETAIL_DIST: f32 = 70.0; // within this, a tree draws 3D near; beyond, 2D far
+// within this, a tree draws 3D near (cone hulls); beyond, 2D far (flat triangles). Pushed out to 200m so
+// the 2D→3D switch lands on small far trees (~27px) where cone ≈ triangle and the pop is imperceptible —
+// the finite chain + the MIN_SCENERY_PX cull keep the extra near-trees nearly free (peak ~37% of cap).
+const DETAIL_DIST: f32 = 200.0;
 const MIN_SCENERY_PX: f32 = 2.0; // skip scenery that would project shorter than this
 // critters cull only at the SCENERY FLOOR (2 px) — within the segment reach below, even a pretty tiny
 // animal's pop-in is conspicuous (Steve), so we keep everything down to a genuine speck. Measured against
