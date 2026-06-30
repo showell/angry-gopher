@@ -117,8 +117,7 @@ fn emitGround(pts: []const geom.RiderPt, cam_focal: f32) void {
     paint.pushPoly(ROAD, screen[0..m]);
 }
 
-pub fn frame(w: *const world.World, seg_idx: usize, along: f32, across: f32, yaw: f32, heading: f32, step: f32, v: f32) void {
-    const cam_focal = camera.FOCAL; // static frame: no lean/focus pull-in yet
+pub fn frame(w: *const world.World, seg_idx: usize, along: f32, across: f32, yaw: f32, heading: f32, step: f32, v: f32, cam_focal: f32) void {
     rails.reset();
     const ch = buildChain(w, seg_idx);
     const cur = w.segments[seg_idx];
@@ -128,7 +127,7 @@ pub fn frame(w: *const world.World, seg_idx: usize, along: f32, across: f32, yaw
     // across the loop seam, unlike north_heading + yaw — see RiderState.heading). The sunset
     // clock dims the ranges toward dusk (the sun + dimming sky are drawn JS-side, behind
     // these polys, from the colours/placement safari.zig exports).
-    mountains.draw(heading, sky.sunSetFraction(step));
+    mountains.draw(heading, sky.sunSetFraction(step), cam_focal);
 
     // trees collected across the whole chain, then depth-sorted as one set.
     var t_right: [MAX_VIS_TREES]f32 = undefined;

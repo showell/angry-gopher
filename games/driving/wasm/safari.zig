@@ -11,6 +11,7 @@ const world = @import("world.zig");
 const rider = @import("rider.zig");
 const render = @import("render.zig");
 const camera = @import("camera.zig");
+const cat = @import("cat.zig");
 const sky = @import("sky.zig");
 const paint = @import("paint.zig");
 
@@ -26,6 +27,9 @@ var step_clock: f32 = 0;
 // the sun's screen placement for the current frame, recomputed in renderFrame from the
 // rider's heading + the clock; the blitter reads it to paint the disc behind the ranges.
 var sun: sky.SunPos = .{ .visible = false, .x = 0, .y = 0, .scale = 0 };
+
+// the live camera focal for the last frame (lean + attention pull-in), exported for the HUD / probes.
+var cam_focal_now: f32 = camera.FOCAL;
 
 // history stack (ring) of prior states, so ↓ can step backward. Bounded — back works
 // within the last HIST_CAP frames, ample for inspection; older frames drop.
@@ -68,18 +72,40 @@ export fn back() void {
 export fn renderFrame() u32 {
     ensure();
     paint.reset();
-    render.frame(&the_world, cur.segment, cur.along, cur.across, cur.yaw, cur.heading, step_clock, cur.v);
+    // the live camera focal: the deepest of the lean pull-in and the rider's attention on a crossing cat
+    // (a distracting pig will join `attention` here once pigs are ported). The whole frame — projection,
+    // backdrop, and the sun below — reads this one focal, so they stay one camera.
+    const lean_frac = @min(@abs(cur.tilt) / rider.MAX_LEAN, 1.0);
+    const attention = catAttention();
+    const cam_focal = camera.camFocal(lean_frac, attention);
+    cam_focal_now = cam_focal;
+    render.frame(&the_world, cur.segment, cur.along, cur.across, cur.yaw, cur.heading, step_clock, cur.v, cam_focal);
     // the sun's placement for the rider's absolute heading + clock, for the blitter to
     // paint behind the ranges (the buffer's first polys). The same continuous heading the
     // mountains use, so the sun doesn't snap across the loop seam.
-    sun = sky.sunPos(cur.heading, step_clock, camera.FOCAL);
+    sun = sky.sunPos(cur.heading, step_clock, cam_focal);
     return paint.byteLen();
+}
+
+// the rider's attention on an off-road distraction, for the focal pull-in: the crossing cat on his CURRENT
+// segment (the gap is measured within it). Mirrors main.ts's `attention` — a max that the pig gaze focus
+// will join later. 0 when nothing pulls his eye.
+fn catAttention() f32 {
+    const seg = the_world.segments[cur.segment];
+    if (!seg.has_cat) return 0;
+    return cat.focus(seg.cat.along - cur.along, cur.v);
 }
 
 /// riderTilt is the bike's lean — the blitter rolls the canvas by it (camera bank).
 export fn riderTilt() f32 {
     ensure();
     return cur.tilt;
+}
+
+/// camFocal is the live camera focal (px) from the last renderFrame — the lean + attention pull-in. The
+/// HUD can show it; a frame pins it. FOCAL straight-and-clear, smaller as he leans or eyes a crossing cat.
+export fn camFocal() f32 {
+    return cam_focal_now;
 }
 
 /// bufPtr is the byte offset of the draw buffer in linear memory.

@@ -29,6 +29,12 @@ const LEAP_HEIGHT: f32 = 0.18; // peak hop, in cat-heights
 const ROAD_BUFFER: f32 = 3; // metres of clear road kept between rider and cat
 const STRIDE_STEPS: f32 = 5; // target rider steps per leg cycle
 
+// the rider's FOCUS tightens as a cat crosses (the focal pull-in). It ramps UP over the crossing clock,
+// PEAKS at FOCUS_PEAK (an exaggerated 1.5×+ a normal full pull-in) at the landing, then eases back over
+// FOCUS_RAMP_DOWN frames. View-only — folded into the camera focal by camera.camFocal. Mirrors catFocus.
+const FOCUS_PEAK: f32 = 1.8;
+const FOCUS_RAMP_DOWN: f32 = 83; // frames after the landing to ease focus back to none
+
 // ---- placement / size (cat_motion.ts) ----
 pub const CAT_HEIGHT: f32 = 1.7; // metres, ground to ear tips
 pub const CAT_ALONG: f32 = 105; // desired spot down the road; rounded up to just past a tree
@@ -131,10 +137,24 @@ fn leapPoseFor(t: f32) usize {
 }
 
 // Is the cat still ahead (beyond the buffer) AND inside the crossing window — i.e. crossing in front of us
-// right now? Mirrors catInDanger; the model's accel gate would read this (not yet wired — see the header).
+// right now? Mirrors catInDanger; read by the rider's accel gate (it holds the throttle while this holds).
 pub fn inDanger(gap_along: f32, v: f32) bool {
     const e = gap_along - ROAD_BUFFER;
     return e > 0 and e <= CROSS_FRAMES * v;
+}
+
+fn smoothstep(t: f32) f32 {
+    return t * t * (3.0 - 2.0 * t);
+}
+
+// the rider's attention on this crossing cat (0 = none … FOCUS_PEAK at the landing), for the focal pull-in.
+// `gap_along` is the rider's road-along gap to the cat. Ramps UP on the same clock as the crossing, then
+// eases DOWN over FOCUS_RAMP_DOWN frames once he's level with the landing point. Mirrors catFocusOne.
+pub fn focus(gap_along: f32, v: f32) f32 {
+    if (v <= 1e-6) return 0;
+    const e = gap_along - ROAD_BUFFER; // to the landing point: >0 approaching, <=0 past it
+    if (e > 0) return smoothstep(crossT(gap_along, v)) * FOCUS_PEAK; // ramp UP with the crossing
+    return (1.0 - smoothstep(@min(-e / v / FOCUS_RAMP_DOWN, 1.0))) * FOCUS_PEAK; // ramp DOWN past it
 }
 
 // Build the segment's cat: a cat waiting beside the road on the RIGHT, just past the herd, that crosses to

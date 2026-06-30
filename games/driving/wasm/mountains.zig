@@ -81,18 +81,21 @@ fn snowlineAt(bearing: f32, peak: f32) f32 {
     return SNOW_THRESHOLD - SNOW_DIP * above;
 }
 
-fn bearingAt(x: f32, heading: f32) f32 {
-    return heading + std.math.atan((x - camera.W / 2.0) / camera.FOCAL);
+// the screen column x maps to a bearing through the LIVE focal — a smaller cam_focal (lean/focus pull-in)
+// widens the angular span across the screen, exactly as the projection does. Mirrors mountain.ts bearingAt.
+fn bearingAt(x: f32, heading: f32, cam_focal: f32) f32 {
+    return heading + std.math.atan((x - camera.W / 2.0) / cam_focal);
 }
 
 // trace a range's crest left→right, then close down to the horizon — one filled
-// silhouette polygon.
-fn silhouette(comptime f: fn (f32) f32, heading: f32, color: u32) void {
+// silhouette polygon. `v_scale` (= cam_focal / FOCAL) squeezes the heights vertically by the same factor
+// the pull-in squeezes them horizontally, so it reads as a real focal change (mountain.ts's vScale).
+fn silhouette(comptime f: fn (f32) f32, heading: f32, cam_focal: f32, v_scale: f32, color: u32) void {
     var pts: [512]camera.ScreenPt = undefined;
     var n: usize = 0;
     var x: f32 = 0;
     while (x <= camera.W) : (x += STEP) {
-        pts[n] = .{ .x = x, .y = camera.H / 2.0 - f(bearingAt(x, heading)) };
+        pts[n] = .{ .x = x, .y = camera.H / 2.0 - f(bearingAt(x, heading, cam_focal)) * v_scale };
         n += 1;
     }
     pts[n] = .{ .x = camera.W, .y = camera.H / 2.0 };
@@ -106,14 +109,14 @@ fn silhouette(comptime f: fn (f32) f32, heading: f32, color: u32) void {
 // contiguous central hump where the north range rises above its snowline. Top edge
 // L→R, bottom edge R→L. (mountain.ts clips the range to the cap; this builds the
 // band directly, the same shape without a clip primitive.)
-fn drawSnow(heading: f32, snow: u32) void {
+fn drawSnow(heading: f32, cam_focal: f32, v_scale: f32, snow: u32) void {
     const peak = snowPeakHeight();
     var pts: [1024]camera.ScreenPt = undefined;
     var xs: [512]f32 = undefined;
     var m: usize = 0;
     var x: f32 = 0;
     while (x <= camera.W) : (x += STEP) {
-        const b = bearingAt(x, heading);
+        const b = bearingAt(x, heading, cam_focal);
         if (northRange(b) > snowlineAt(b, peak) + 0.01) {
             xs[m] = x;
             m += 1;
@@ -123,15 +126,15 @@ fn drawSnow(heading: f32, snow: u32) void {
     var n: usize = 0;
     var i: usize = 0;
     while (i < m) : (i += 1) { // top edge: crest
-        const b = bearingAt(xs[i], heading);
-        pts[n] = .{ .x = xs[i], .y = camera.H / 2.0 - northRange(b) };
+        const b = bearingAt(xs[i], heading, cam_focal);
+        pts[n] = .{ .x = xs[i], .y = camera.H / 2.0 - northRange(b) * v_scale };
         n += 1;
     }
     i = m;
     while (i > 0) { // bottom edge: snowline, reversed
         i -= 1;
-        const b = bearingAt(xs[i], heading);
-        pts[n] = .{ .x = xs[i], .y = camera.H / 2.0 - snowlineAt(b, peak) };
+        const b = bearingAt(xs[i], heading, cam_focal);
+        pts[n] = .{ .x = xs[i], .y = camera.H / 2.0 - snowlineAt(b, peak) * v_scale };
         n += 1;
     }
     paint.pushPoly(snow, pts[0..n]);
@@ -140,9 +143,10 @@ fn drawSnow(heading: f32, snow: u32) void {
 /// draw the backdrop for the rider's absolute look `heading`, with the day→night `dusk`
 /// fraction dimming the light: the westward range, the snowcapped northern range, and the
 /// rolling land — back to front. The rock + snow dim toward dusk; the land does not.
-pub fn draw(heading: f32, dusk: f32) void {
-    silhouette(westRange, heading, dimmed(ROCK_WEST, dusk));
-    silhouette(northRange, heading, dimmed(ROCK, dusk));
-    drawSnow(heading, snowColor(dusk));
-    silhouette(groundBase, heading, LAND);
+pub fn draw(heading: f32, dusk: f32, cam_focal: f32) void {
+    const v_scale = cam_focal / camera.FOCAL; // squeeze the heights to match the horizontal pull-in
+    silhouette(westRange, heading, cam_focal, v_scale, dimmed(ROCK_WEST, dusk));
+    silhouette(northRange, heading, cam_focal, v_scale, dimmed(ROCK, dusk));
+    drawSnow(heading, cam_focal, v_scale, snowColor(dusk));
+    silhouette(groundBase, heading, cam_focal, v_scale, LAND);
 }

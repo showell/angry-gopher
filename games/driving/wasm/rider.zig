@@ -11,9 +11,11 @@
 
 const std = @import("std");
 const world = @import("world.zig");
+const cat = @import("cat.zig");
 
 // --- physics + decision constants (per-press; YAW_PER_TILT from bike_physics.ts) ---
 const YAW_PER_TILT: f32 = 0.1;
+pub const MAX_LEAN: f32 = 20.0 * std.math.pi / 180.0; // the route never banks past this; the focal pull-in normalises the lean by it
 pub const V_BASE: f32 = 0.3;
 const A_ACCEL: f32 = 0.010;
 const V_MAX: f32 = 2.5;
@@ -151,6 +153,12 @@ fn getForwardAccelDecel(state: RiderState, seg: world.Segment) f32 {
         const corner_a = if (d <= 1e-6) 0 else (v_end * v_end - state.v * state.v) / (2.0 * d);
         if (corner_a < a) a = corner_a;
     }
+
+    // hold the throttle for a crossing cat: while it's in its danger window he stops CLOSING on it (a→0),
+    // but never brakes — he just doesn't accelerate into it. Coasting in slows his approach, so he reaches
+    // the long final segment later (more time for the sunset). Mirrors the AVOID_CAT gate. Placed after the
+    // corner brake, before the shoulder brake — exactly rider.ts's order.
+    if (seg.has_cat and a > 0 and cat.inDanger(seg.cat.along - state.along, state.v)) a = 0;
 
     const sim = simulateRiderPath(state, seg);
     if (sim.side != .none) {
