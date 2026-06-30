@@ -12,6 +12,7 @@
 const std = @import("std");
 const world = @import("world.zig");
 const cat = @import("cat.zig");
+const gaze = @import("gaze.zig");
 
 // --- physics + decision constants (per-press; YAW_PER_TILT from bike_physics.ts) ---
 const YAW_PER_TILT: f32 = 0.1;
@@ -44,10 +45,15 @@ pub const RiderState = struct {
     // horizon turns exactly as much as the bike does. (TS has a terminus, never loops, so
     // it had no seam to cross — this field is a port-specific fix for the looping route.)
     heading: f32,
+    // the "distracted rider" (gaze.zig), both VIEW-ONLY: gaze_yaw is an extra camera yaw toward the roadside
+    // pigs (0 = eyes ahead); focus is the camera's focus-narrowing progress (0 = normal … 1 = fully narrowed)
+    // as he gawks. Updated by nextRiderGaze each frame, AFTER the bike moves.
+    gaze_yaw: f32,
+    focus: f32,
 };
 
 pub fn initialRiderState() RiderState {
-    return .{ .segment = 0, .along = 0, .across = 0, .yaw = 0, .v = V_BASE, .tilt = 0, .heading = 0 };
+    return .{ .segment = 0, .along = 0, .across = 0, .yaw = 0, .v = V_BASE, .tilt = 0, .heading = 0, .gaze_yaw = 0, .focus = 0 };
 }
 
 // advance the bike one frame: a lean tip + an acceleration, integrated. The rider
@@ -66,6 +72,8 @@ fn simulateRiderStep(s: RiderState, tilt_step: f32, accel: f32) RiderState {
         .v = v,
         .along = s.along + v * @cos(mid),
         .across = s.across + v * @sin(mid),
+        .gaze_yaw = s.gaze_yaw, // view-only; the gaze step (nextRiderGaze) advances it after the move
+        .focus = s.focus,
     };
 }
 
@@ -160,6 +168,12 @@ fn getForwardAccelDecel(state: RiderState, seg: world.Segment) f32 {
     // corner brake, before the shoulder brake — exactly rider.ts's order.
     if (seg.has_cat and a > 0 and cat.inDanger(seg.cat.along - state.along, state.v)) a = 0;
 
+    // ease down to a slow gawking speed for the roadside pigs (the gaze distraction's one reach into the
+    // motion); gaze.pigGazeBrake owns the trigger + the slow speed — fold it into the min-of-brakes.
+    if (gaze.pigGazeBrake(state, seg)) |pig_a| {
+        if (pig_a < a) a = pig_a;
+    }
+
     const sim = simulateRiderPath(state, seg);
     if (sim.side != .none) {
         const n = sim.frames;
@@ -170,7 +184,9 @@ fn getForwardAccelDecel(state: RiderState, seg: world.Segment) f32 {
     var v = state.v + a;
     if (v > V_MAX) v = V_MAX;
     if (v < 0) v = 0;
-    if (near and v < v_end) v = v_end; // don't crawl below the corner's entry speed
+    // don't crawl below the corner's entry speed approaching it — UNLESS he's gawking at the pigs, where
+    // staying at the slow gawk speed (taking the corner slow) beats snapping back up (he never re-accelerates).
+    if (near and v < v_end and !gaze.gawkEngaged(state, seg)) v = v_end;
     return v - state.v;
 }
 
@@ -203,6 +219,10 @@ fn riderStateForNextSegment(rs: RiderState, w: *const world.World) RiderState {
         .heading = rs.heading, // unchanged: the crossing only re-expresses the SAME bearing in the next frame
         .v = rs.v,
         .tilt = rs.tilt,
+        // eyes back on the road across the seam (the next frame's gaze step re-derives the turn from the new
+        // segment); the focus CARRIES, so its slow re-widen keeps easing out smoothly instead of snapping open.
+        .gaze_yaw = 0,
+        .focus = rs.focus,
     };
 }
 
@@ -215,6 +235,9 @@ pub fn getNextRiderState(state: RiderState, w: *const world.World) RiderState {
     const dec = decide(state, seg);
     const moved = simulateRiderStep(state, dec.tilt_step, dec.accel);
     const on_next = riderStateForNextSegment(moved, w);
-    if (@abs(on_next.across) < w.segments[seg.exit_to].width / 2.0) return on_next;
-    return moved;
+    const resolved = if (@abs(on_next.across) < w.segments[seg.exit_to].width / 2.0) on_next else moved;
+    // the gaze is its own step, run AFTER the bike has moved (it reads the resolved segment + position):
+    // swivel his head toward the pigs / back to the road and advance the focus. Mirrors the caller running
+    // nextRiderGaze right after getNextRiderState in main.ts.
+    return gaze.nextRiderGaze(resolved, w);
 }

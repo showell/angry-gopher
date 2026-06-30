@@ -12,6 +12,7 @@ const rider = @import("rider.zig");
 const render = @import("render.zig");
 const camera = @import("camera.zig");
 const cat = @import("cat.zig");
+const gaze = @import("gaze.zig");
 const sky = @import("sky.zig");
 const paint = @import("paint.zig");
 
@@ -76,20 +77,27 @@ export fn renderFrame() u32 {
     // (a distracting pig will join `attention` here once pigs are ported). The whole frame — projection,
     // backdrop, and the sun below — reads this one focal, so they stay one camera.
     const lean_frac = @min(@abs(cur.tilt) / rider.MAX_LEAN, 1.0);
-    const attention = catAttention();
+    const attention = @max(catAttention(), gaze.gazeFocus(cur.focus));
     const cam_focal = camera.camFocal(lean_frac, attention);
     cam_focal_now = cam_focal;
-    render.frame(&the_world, cur.segment, cur.along, cur.across, cur.yaw, cur.heading, step_clock, cur.v, cam_focal);
-    // the sun's placement for the rider's absolute heading + clock, for the blitter to
+    // the extra camera yaw on top of his heading: the distracted-rider gaze toward the pigs + a subtle
+    // head-turn into a lean (HEAD_YAW_FRAC of the tilt). Swings the whole view; render folds it into the
+    // scene pose AND the backdrop heading. Mirrors view.ts / main.ts (state.yaw + gazeAngle + headYaw).
+    const view_yaw = cur.gaze_yaw + HEAD_YAW_FRAC * cur.tilt;
+    render.frame(&the_world, cur.segment, cur.along, cur.across, cur.yaw, cur.heading, step_clock, cur.v, cam_focal, view_yaw);
+    // the sun's placement for the rider's absolute heading (+ the view yaw) + clock, for the blitter to
     // paint behind the ranges (the buffer's first polys). The same continuous heading the
     // mountains use, so the sun doesn't snap across the loop seam.
-    sun = sky.sunPos(cur.heading, step_clock, cam_focal);
+    sun = sky.sunPos(cur.heading + view_yaw, step_clock, cam_focal);
     return paint.byteLen();
 }
 
+// the rider also turns his HEAD into a corner — a subtle view-only yaw, 15% of the lean. Mirrors main.ts.
+const HEAD_YAW_FRAC: f32 = 0.15;
+
 // the rider's attention on an off-road distraction, for the focal pull-in: the crossing cat on his CURRENT
-// segment (the gap is measured within it). Mirrors main.ts's `attention` — a max that the pig gaze focus
-// will join later. 0 when nothing pulls his eye.
+// segment (the gap is measured within it). Combined with the pig gaze focus (gazeFocus) by the caller, a
+// max — exactly main.ts's `attention`. 0 when no cat pulls his eye.
 fn catAttention() f32 {
     const seg = the_world.segments[cur.segment];
     if (!seg.has_cat) return 0;
@@ -106,6 +114,21 @@ export fn riderTilt() f32 {
 /// HUD can show it; a frame pins it. FOCAL straight-and-clear, smaller as he leans or eyes a crossing cat.
 export fn camFocal() f32 {
     return cam_focal_now;
+}
+
+/// gazeYaw / riderV / riderSeg expose live rider state for the HUD + frame-pinning: the distracted-rider
+/// head-turn (rad), the speed (m/press, drops to the gawk speed at the pigs), and the current segment index.
+export fn gazeYaw() f32 {
+    ensure();
+    return cur.gaze_yaw;
+}
+export fn riderV() f32 {
+    ensure();
+    return cur.v;
+}
+export fn riderSeg() u32 {
+    ensure();
+    return @intCast(cur.segment);
 }
 
 /// bufPtr is the byte offset of the draw buffer in linear memory.

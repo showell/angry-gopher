@@ -19,6 +19,7 @@ pub const Critter = struct { along: f32, across: f32, codepoint: u32, height: f3
 
 pub const MAX_TREES = 96; // fixed-spacing trees scale with length; the long seg7 needs the headroom
 pub const MAX_COWS = 16; // a bull + 14 cows/calves
+pub const MAX_PIGS = 49; // the 7×7 big distraction herd
 pub const MAX_SEGMENTS = 16;
 
 pub const Segment = struct {
@@ -28,6 +29,9 @@ pub const Segment = struct {
     n_trees: usize,
     cows: [MAX_COWS]Critter,
     n_cows: usize,
+    pigs: [MAX_PIGS]Critter, // the distraction herd (valid only when has_pigs)
+    n_pigs: usize,
+    has_pigs: bool, // the rider gawks + slows at this segment's roadside pigs
     // exit turn: angle (rad) + right? + the index of the segment it leads to.
     exit_angle: f32,
     exit_right: bool,
@@ -96,6 +100,53 @@ fn fillCows(seg: *Segment) void {
     }
 }
 
+// ---- the pig DISTRACTION herd (farm_critter.ts): a deep 7×7 staggered block near the segment's end on
+// the RIGHT. The rider gawks at one designated pig (gazePig) — slowing + turning his head — as he passes.
+// Only the big herd is ported (the wasm flags only distraction legs); the small non-distraction pig row
+// isn't. Deterministic sine/cosine jitter, no randomness. ----
+const PIG_CP: u32 = 0x1F416; // 🐖
+const PIG_HEIGHT: f32 = 1.1;
+const PIG_DIST_BEFORE_END: f32 = 60.0; // pigs gather this far before the next intersection
+const GAZE_PIG_ALONG_OFFSET: f32 = 2.0; // the designated pig sits just past the cluster front
+const BIG_HERD_COLS: usize = 7;
+const BIG_HERD_ROWS: usize = 7;
+const PIG_COL_SPACING: f32 = 4.0;
+const PIG_ROW_DEPTH: f32 = 6.0; // across-spacing AND the per-row along-shear (45° slanted sides)
+const PIG_JITTER_ALONG: f32 = 1.2;
+const PIG_JITTER_ACROSS: f32 = 1.0;
+const PIG_HERD_FIRST_COL: f32 = -6.0; // along-offset of each row's near pig
+
+// gazePig: the ONE front-row pig the distracted rider fixes on, so the head-turn always aims at a rendered
+// pig. across = lane edge + the herd's road offset. Mirrors gazePig in farm_critter.ts.
+pub fn gazePig(length: f32, lane_half: f32) Critter {
+    return .{
+        .along = length - PIG_DIST_BEFORE_END + GAZE_PIG_ALONG_OFFSET,
+        .across = lane_half + HERD_ROAD_OFFSET,
+        .codepoint = PIG_CP,
+        .height = PIG_HEIGHT,
+        .face_right = false,
+    };
+}
+
+fn fillPigs(seg: *Segment) void {
+    const edge = LANE_WIDTH / 2.0 + HERD_ROAD_OFFSET;
+    const base = seg.length - PIG_DIST_BEFORE_END;
+    seg.n_pigs = 0;
+    var r: usize = 0;
+    while (r < BIG_HERD_ROWS) : (r += 1) {
+        var c: usize = 0;
+        while (c < BIG_HERD_COLS) : (c += 1) {
+            const i: f32 = @floatFromInt(r * BIG_HERD_COLS + c);
+            const fr: f32 = @floatFromInt(r);
+            const fc: f32 = @floatFromInt(c);
+            const along = base + PIG_HERD_FIRST_COL + fc * PIG_COL_SPACING + fr * PIG_ROW_DEPTH + PIG_JITTER_ALONG * @sin(i * 2.3);
+            const across = edge + fr * PIG_ROW_DEPTH + PIG_JITTER_ACROSS * @cos(i * 1.7);
+            seg.pigs[seg.n_pigs] = .{ .along = along, .across = across, .codepoint = PIG_CP, .height = PIG_HEIGHT, .face_right = false };
+            seg.n_pigs += 1;
+        }
+    }
+}
+
 fn accentColor(scheme: Scheme) Color {
     return switch (scheme) {
         .yellow_green => CONIFER_GOLD,
@@ -135,12 +186,12 @@ fn fillTrees(seg: *Segment, scheme: Scheme) void {
 
 // the authored route: length, scheme, and the exit turn (signed degrees, + = right)
 // onto the next segment. The last entry loops back to segment 0.
-const Cfg = struct { length: f32, scheme: Scheme, turn_deg: f32, cat: bool = false };
+const Cfg = struct { length: f32, scheme: Scheme, turn_deg: f32, cat: bool = false, pigs: bool = false };
 const route = [_]Cfg{
     .{ .length = 500, .scheme = .all_green, .turn_deg = 50, .cat = true }, // seg1 → 50° right, has a crossing cat
-    .{ .length = 320, .scheme = .all_green, .turn_deg = -70 }, // seg2 → 70° left
+    .{ .length = 320, .scheme = .all_green, .turn_deg = -70, .pigs = true }, // seg2 → 70° left, distraction pigs
     .{ .length = 400, .scheme = .all_green, .turn_deg = 20 }, // seg3 → 20° right
-    .{ .length = 300, .scheme = .yellow_green, .turn_deg = 20 }, // seg4 (gold) → 20° right
+    .{ .length = 300, .scheme = .yellow_green, .turn_deg = 20, .pigs = true }, // seg4 (gold) → 20° right, distraction pigs
     .{ .length = 300, .scheme = .all_green, .turn_deg = -70 }, // seg5 → 70° left
     .{ .length = 300, .scheme = .all_green, .turn_deg = -70 }, // seg6 → 70° left
     .{ .length = 1200, .scheme = .red_green, .turn_deg = 80, .cat = true }, // seg7 (red, long) → 80° right, loops to seg1
@@ -179,6 +230,9 @@ pub fn buildWorld() World {
         fillCows(seg);
         seg.has_cat = c.cat;
         seg.cat = if (c.cat) cat.make(LANE_WIDTH / 2.0, TREE_ROAD_OFFSET, nextTreeAlong(seg, cat.CAT_ALONG)) else undefined;
+        seg.has_pigs = c.pigs;
+        seg.n_pigs = 0;
+        if (c.pigs) fillPigs(seg);
     }
     // accumulate north headings along the route (seg 0 = 0); stop before wrapping so
     // the loop's seg 0 keeps heading 0 (a clean cut, not an ever-growing spiral).

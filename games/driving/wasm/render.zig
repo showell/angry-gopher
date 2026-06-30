@@ -28,7 +28,7 @@ const LOOK_AHEAD: usize = 7; // how many segments ahead we draw
 const MAX_CHAIN: usize = 8;
 const MAX_VIS_TREES: usize = 640; // fixed-spacing trees across the whole visible chain
 const MAX_VIS_TOWERS: usize = 16;
-const MAX_VIS_COWS: usize = 128;
+const MAX_VIS_CRITTERS: usize = 320; // cows (15/seg) + pig herds (49/distraction seg); a couple of herds can be in view at once
 const MAX_VIS_CATS: usize = 8; // at most a handful of cat-bearing segments are ever in view at once
 
 // rail polys (bar quads + posts) collected across all visible joints, merged into the
@@ -117,17 +117,20 @@ fn emitGround(pts: []const geom.RiderPt, cam_focal: f32) void {
     paint.pushPoly(ROAD, screen[0..m]);
 }
 
-pub fn frame(w: *const world.World, seg_idx: usize, along: f32, across: f32, yaw: f32, heading: f32, step: f32, v: f32, cam_focal: f32) void {
+pub fn frame(w: *const world.World, seg_idx: usize, along: f32, across: f32, yaw: f32, heading: f32, step: f32, v: f32, cam_focal: f32, view_yaw: f32) void {
     rails.reset();
     const ch = buildChain(w, seg_idx);
     const cur = w.segments[seg_idx];
-    const pose = Pose{ .along = along, .across = across, .yaw = yaw, .hw = cur.width / 2.0 };
+    // view_yaw is the extra camera yaw the distracted-rider gaze (+ the subtle lean head-turn) adds on top of
+    // his heading — it swings the WHOLE view (scene + backdrop), so it folds into both the scene pose and the
+    // backdrop heading. Mirrors view.ts (state.yaw + gazeAngle + headYaw) and main.ts's drawHorizon call.
+    const pose = Pose{ .along = along, .across = across, .yaw = yaw + view_yaw, .hw = cur.width / 2.0 };
 
     // the backdrop, behind everything; drawn from the rider's ABSOLUTE heading (continuous
-    // across the loop seam, unlike north_heading + yaw — see RiderState.heading). The sunset
-    // clock dims the ranges toward dusk (the sun + dimming sky are drawn JS-side, behind
+    // across the loop seam, unlike north_heading + yaw — see RiderState.heading) + the view yaw.
+    // The sunset clock dims the ranges toward dusk (the sun + dimming sky are drawn JS-side, behind
     // these polys, from the colours/placement safari.zig exports).
-    mountains.draw(heading, sky.sunSetFraction(step), cam_focal);
+    mountains.draw(heading + view_yaw, sky.sunSetFraction(step), cam_focal);
 
     // trees collected across the whole chain, then depth-sorted as one set.
     var t_right: [MAX_VIS_TREES]f32 = undefined;
@@ -149,11 +152,11 @@ pub fn frame(w: *const world.World, seg_idx: usize, along: f32, across: f32, yaw
     var ntw: usize = 0;
 
     // cows/bulls, collected as billboards (rider-relative), drawn in the depth sort.
-    var c_right: [MAX_VIS_COWS]f32 = undefined;
-    var c_fwd: [MAX_VIS_COWS]f32 = undefined;
-    var c_h: [MAX_VIS_COWS]f32 = undefined;
-    var c_cp: [MAX_VIS_COWS]u32 = undefined;
-    var c_face: [MAX_VIS_COWS]bool = undefined;
+    var c_right: [MAX_VIS_CRITTERS]f32 = undefined;
+    var c_fwd: [MAX_VIS_CRITTERS]f32 = undefined;
+    var c_h: [MAX_VIS_CRITTERS]f32 = undefined;
+    var c_cp: [MAX_VIS_CRITTERS]u32 = undefined;
+    var c_face: [MAX_VIS_CRITTERS]bool = undefined;
     var ncow: usize = 0;
 
     // crossing cats, collected as billboard stills (rider-relative) for the depth sort. The cat's pose +
@@ -245,7 +248,7 @@ pub fn frame(w: *const world.World, seg_idx: usize, along: f32, across: f32, yaw
 
         // cows/bulls (centre-relative across + hw → from-the-left), collected.
         var cti: usize = 0;
-        while (cti < seg.n_cows and ncow < MAX_VIS_COWS) : (cti += 1) {
+        while (cti < seg.n_cows and ncow < MAX_VIS_CRITTERS) : (cti += 1) {
             const cr = seg.cows[cti];
             const rp = at(w, &ch, pose, d, cr.along, cr.across + hw);
             if (rp.forward <= camera.NEAR) continue;
@@ -255,6 +258,21 @@ pub fn frame(w: *const world.World, seg_idx: usize, along: f32, across: f32, yaw
             c_h[ncow] = cr.height;
             c_cp[ncow] = cr.codepoint;
             c_face[ncow] = cr.face_right;
+            ncow += 1;
+        }
+
+        // the distraction pig herd (same billboard path as the cows), when this segment has one.
+        var pti: usize = 0;
+        while (pti < seg.n_pigs and ncow < MAX_VIS_CRITTERS) : (pti += 1) {
+            const pr = seg.pigs[pti];
+            const rp = at(w, &ch, pose, d, pr.along, pr.across + hw);
+            if (rp.forward <= camera.NEAR) continue;
+            if (pr.height / rp.forward * cam_focal < MIN_SCENERY_PX) continue;
+            c_right[ncow] = rp.right;
+            c_fwd[ncow] = rp.forward;
+            c_h[ncow] = pr.height;
+            c_cp[ncow] = pr.codepoint;
+            c_face[ncow] = pr.face_right;
             ncow += 1;
         }
 
@@ -324,7 +342,7 @@ pub fn frame(w: *const world.World, seg_idx: usize, along: f32, across: f32, yaw
     // right.
     const Kind = enum { tree, tower, cow, cat, rail };
     const Item = struct { fwd: f32, kind: Kind, i: usize };
-    var items: [MAX_VIS_TREES + MAX_VIS_TOWERS + MAX_VIS_COWS + MAX_VIS_CATS + guard_rail.MAX_RAIL_POLYS]Item = undefined;
+    var items: [MAX_VIS_TREES + MAX_VIS_TOWERS + MAX_VIS_CRITTERS + MAX_VIS_CATS + guard_rail.MAX_RAIL_POLYS]Item = undefined;
     var ni: usize = 0;
     var i: usize = 0;
     while (i < nt) : (i += 1) {
