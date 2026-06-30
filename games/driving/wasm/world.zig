@@ -13,9 +13,9 @@ pub const Color = u32; // 0xRRGGBB, opaque
 pub const Scheme = enum { all_green, yellow_green, red_green };
 
 // the big animal parked at a segment's EXIT corner (safari_critter.zig owns the species + placement).
-// ELEPHANT is the default; the rest are the rare departures. `none` = no corner creature (the terminus,
-// and the crocodile lagoon which is postponed).
-pub const Creature = enum { none, elephant, giraffe, zebra, rhino };
+// ELEPHANT is the default; the rest are the rare departures. `crocodile` is hand-drawn (crocodile.zig — a
+// lagoon scene, not an emoji pair); `none` = no corner creature (the terminus).
+pub const Creature = enum { none, elephant, giraffe, zebra, rhino, crocodile };
 
 pub const Tree = struct { along: f32, across: f32, color: Color, height: f32 };
 
@@ -226,7 +226,8 @@ const Cfg = struct { length: f32, scheme: Scheme, turn_deg: f32 = 0, cat: bool =
 // sunset stretches (seg7/seg10) stay calm, then a NEW/boring/boring rhythm from seg13. The CAT debuts on
 // seg2 and recurs on seg13/seg19; PIGS debut alone on seg3, then a near-constant motif from seg11 (gone on
 // seg16 as a surprise). RED trees clue the notable segments. seg19 is the terminus — the photo-finish line.
-// (Corner CREATURES — giraffe/croc/zebra/rhino — aren't ported yet; only the road + cat/pig/trees are.)
+// Corner CREATURES: a GIRAFFE debut (seg5), RHINOs at the sunset stretch (seg7), the CROCODILE lagoon
+// (seg13, a right turn), a ZEBRA (seg16); ELEPHANT is the unmarked default elsewhere.
 const route = [_]Cfg{
     .{ .length = 500, .scheme = .all_green, .turn_deg = 50 }, // seg1: plain opener
     .{ .length = 320, .scheme = .all_green, .turn_deg = -70, .cat = true }, // seg2: the CAT crossing debuts
@@ -240,7 +241,7 @@ const route = [_]Cfg{
     .{ .length = 800, .scheme = .all_green, .turn_deg = 15 }, // seg10: second sun-ward stretch
     .{ .length = 300, .scheme = .all_green, .turn_deg = 15, .pigs = true }, // seg11: pigs return (2nd distraction)
     .{ .length = 300, .scheme = .all_green, .turn_deg = 15, .pigs = true }, // seg12
-    .{ .length = 300, .scheme = .red_green, .turn_deg = 15, .cat = true, .pigs = true, .creature = .none }, // seg13: croc lagoon (POSTPONED → no creature) + cat
+    .{ .length = 300, .scheme = .red_green, .turn_deg = 15, .cat = true, .pigs = true, .creature = .crocodile }, // seg13: the crocodile lagoon (right turn) + cat; red-tree clue
     .{ .length = 400, .scheme = .all_green, .turn_deg = -50, .pigs = true }, // seg14
     .{ .length = 300, .scheme = .all_green, .turn_deg = 50, .pigs = true }, // seg15
     .{ .length = 300, .scheme = .red_green, .turn_deg = -50, .creature = .zebra }, // seg16: zebra; SURPRISE — pigs gone

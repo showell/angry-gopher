@@ -13,6 +13,7 @@ const tree = @import("tree.zig");
 const tower = @import("tower.zig");
 const critter = @import("critter.zig");
 const safari_critter = @import("safari_critter.zig");
+const crocodile = @import("crocodile.zig");
 const cat = @import("cat.zig");
 const truck = @import("truck.zig");
 const mountains = @import("mountains.zig");
@@ -105,8 +106,13 @@ fn mapPt(w: *const world.World, ch: *const Chain, pose: Pose, m: Mapper, a: f32,
     }
 }
 
-// build ground verts (curvature drop per vertex), near-clip, project, push as ROAD.
+// build ground verts (curvature drop per vertex), near-clip, project, push as the road.
 fn emitGround(pts: []const geom.RiderPt, cam_focal: f32) void {
+    emitGroundColor(pts, ROAD, cam_focal);
+}
+
+// emitGround with an explicit colour — the lagoon water + mud bank are ground quads too, just not road.
+fn emitGroundColor(pts: []const geom.RiderPt, color: u32, cam_focal: f32) void {
     if (pts.len > 8) return;
     var v: [8]geom.Vec3 = undefined;
     for (pts, 0..) |p, i| v[i] = .{ .right = p.right, .forward = p.forward, .height = -geom.groundDrop(p.right, p.forward) };
@@ -116,7 +122,18 @@ fn emitGround(pts: []const geom.RiderPt, cam_focal: f32) void {
     var screen: [16]camera.ScreenPt = undefined;
     var j: usize = 0;
     while (j < m) : (j += 1) screen[j] = camera.project(clipped[j], cam_focal);
-    paint.pushPoly(ROAD, screen[0..m]);
+    paint.pushPoly(color, screen[0..m]);
+}
+
+// the crocodile corner's GROUND: the lagoon water then the mud bank, authored in the incoming corner frame
+// (corner(cu, cv) = map(from_len + cv, cu)) and painted before the croc billboards. Mirrors the lagoon/mud
+// quads of crocodile.ts's crocodileScene. Drawn for both the forward joint and the joint just behind.
+fn emitLagoonGround(w: *const world.World, ch: *const Chain, pose: Pose, map: Mapper, from_len: f32, cam_focal: f32) void {
+    var pts: [8]geom.RiderPt = undefined;
+    for (crocodile.LAGOON, 0..) |p, i| pts[i] = mapPt(w, ch, pose, map, from_len + p.cv, p.cu);
+    emitGroundColor(pts[0..crocodile.LAGOON.len], crocodile.WATER, cam_focal);
+    for (crocodile.MUD_BANK, 0..) |p, i| pts[i] = mapPt(w, ch, pose, map, from_len + p.cv, p.cu);
+    emitGroundColor(pts[0..crocodile.MUD_BANK.len], crocodile.MUD, cam_focal);
 }
 
 pub fn frame(w: *const world.World, seg_idx: usize, along: f32, across: f32, yaw: f32, heading: f32, step: f32, v: f32, cam_focal: f32, view_yaw: f32, tk: truck.State) void {
@@ -298,6 +315,26 @@ pub fn frame(w: *const world.World, seg_idx: usize, along: f32, across: f32, yaw
             }
         }
 
+        // the crocodile lagoon at this segment's EXIT: the water + mud ground (painted now) plus seven croc
+        // billboards on the bank (collected for the depth sort). Authored in the incoming corner frame — cu
+        // is the BL-frame across directly (the lagoon's negative cu sits LEFT of the left edge), so map it
+        // raw (no +hw). Mirrors crocodile.ts's crocodileScene; safari_critter draws no emoji pair for it.
+        if (seg.exit_creature == .crocodile) {
+            emitLagoonGround(w, &ch, pose, .{ .kind = .chain, .d = d }, seg.length, cam_focal);
+            for (crocodile.CROC_BANK) |p| {
+                if (ncow >= MAX_VIS_CRITTERS) break;
+                const rp = at(w, &ch, pose, d, seg.length + p.cv, p.cu);
+                if (rp.forward <= camera.NEAR) continue;
+                if (crocodile.CROC_HEIGHT / rp.forward * cam_focal < MIN_SCENERY_PX) continue;
+                c_right[ncow] = rp.right;
+                c_fwd[ncow] = rp.forward;
+                c_h[ncow] = crocodile.CROC_HEIGHT;
+                c_cp[ncow] = crocodile.CROC_CP;
+                c_face[ncow] = crocodile.CROC_FACE_RIGHT;
+                ncow += 1;
+            }
+        }
+
         // the crossing cat: its pose + lateral offset + hop from the crossing clock (rider's along-gap to
         // it + speed), placed as a billboard at its current across. Collected for the depth sort.
         if (seg.has_cat and ncat < MAX_VIS_CATS) {
@@ -368,6 +405,24 @@ pub fn frame(w: *const world.World, seg_idx: usize, along: f32, across: f32, yaw
             c_h[ncow] = cr.height;
             c_cp[ncow] = cr.codepoint;
             c_face[ncow] = cr.face_right;
+            ncow += 1;
+        }
+    }
+
+    // the crocodile lagoon the joint we just passed OWNS, mapped forward through the join — without it the
+    // lagoon + crocs pop out the instant cur.segment flips (the same symptom the pavement/tower/creatures had).
+    if (has_prev and prev.exit_creature == .crocodile) {
+        emitLagoonGround(w, &ch, pose, prev_map, prev.length, cam_focal);
+        for (crocodile.CROC_BANK) |p| {
+            if (ncow >= MAX_VIS_CRITTERS) break;
+            const rp = mapPt(w, &ch, pose, prev_map, prev.length + p.cv, p.cu);
+            if (rp.forward <= camera.NEAR) continue;
+            if (crocodile.CROC_HEIGHT / rp.forward * cam_focal < MIN_SCENERY_PX) continue;
+            c_right[ncow] = rp.right;
+            c_fwd[ncow] = rp.forward;
+            c_h[ncow] = crocodile.CROC_HEIGHT;
+            c_cp[ncow] = crocodile.CROC_CP;
+            c_face[ncow] = crocodile.CROC_FACE_RIGHT;
             ncow += 1;
         }
     }
