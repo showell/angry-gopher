@@ -31,6 +31,18 @@ pub fn build(b: *std.Build) void {
     exe.root_module.addImport("safari", safari_mod);
     b.installArtifact(exe);
 
+    // The per-phase profiler (ops/prof_safari_native) — headless, no X11, deterministic.
+    const prof = b.addExecutable(.{
+        .name = "safari_prof",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("native/prof.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
+    });
+    prof.root_module.addImport("safari", safari_mod);
+    b.installArtifact(prof);
+
     // The live X11 window (the Linux/WSLg display layer) is opt-in via -Dwindow, so the
     // default `zig build` (the headless PNG harness) needs no X11 dev libs — it still
     // builds on a bare headless box (e.g. the Droplet, which only renders frames to disk).

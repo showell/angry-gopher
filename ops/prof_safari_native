@@ -1,0 +1,18 @@
+#!/bin/bash
+# CANONICAL DEV-LOOP SCRIPT — DO NOT REINVENT.
+# Before composing an ad-hoc shell command for build / test / regen, run
+# `ops/list` to see what already exists.
+#
+# Profile the NATIVE Safari renderer's hot path PER PHASE. The live X11 frame is ~30ms at
+# SS=2; this drives the full deterministic route and, for each scene, times the three
+# render sub-phases (drawBackground, drawSun, walk) plus downsample in isolation, so we
+# can see WHERE the frame budget goes before optimizing. No X11, no PNGs — just numbers.
+set -e
+
+source "$(dirname "$0")/_paths.sh"
+
+OUT="$GOPHER_DIR/games/driving/zig-out/bin/safari_prof"
+
+zig build --build-file "$GOPHER_DIR/games/driving/build.zig"
+
+"$OUT"

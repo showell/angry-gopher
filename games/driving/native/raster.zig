@@ -36,7 +36,7 @@ const Pt = struct { x: f32, y: f32 };
 // SS-supersampled PIXEL buffer, composing the camera roll (∓tilt about the design centre)
 // with the ×SS scale. toPixel maps design→pixel (for rasterising vertices); toDesign maps
 // pixel→design (for per-pixel gradient + background lookups, which stay in design space).
-const Roll = struct {
+pub const Roll = struct {
     cx: f32 = @as(f32, W) / 2.0, // design centre
     cy: f32 = @as(f32, H) / 2.0,
     ct: f32, // cos(tilt)
@@ -64,16 +64,17 @@ const Roll = struct {
 /// the world), then every polygon command in `words` — the paint order blitter.js used.
 /// Call downsample() to produce the W×H display image.
 pub fn render(fb: Fb, words: []const u32, tilt: f32, sky_top: u32, sky_horizon: u32, sun: SunPos) void {
-    const ss = @as(f32, @floatFromInt(fb.w)) / @as(f32, W);
-    const roll = Roll{
-        .ct = @cos(tilt),
-        .st = @sin(tilt),
-        .ss = ss,
-        .inv_ss = 1.0 / ss,
-    };
+    const roll = rollFor(fb, tilt);
     drawBackground(fb, roll, sky_top, sky_horizon);
     if (sun.visible) drawSun(fb, roll, sun);
     walk(fb, roll, words);
+}
+
+// the per-frame design<->pixel transform for a given target size + camera roll. Exposed so
+// the profiler (prof.zig) can drive the three render sub-phases individually.
+pub fn rollFor(fb: Fb, tilt: f32) Roll {
+    const ss = @as(f32, @floatFromInt(fb.w)) / @as(f32, W);
+    return .{ .ct = @cos(tilt), .st = @sin(tilt), .ss = ss, .inv_ss = 1.0 / ss };
 }
 
 /// downsample box-averages each SS×SS block of `src` (SW×SH) into `dst` (W×H) — the
@@ -106,7 +107,7 @@ pub fn downsample(src: Fb, dst: Fb) void {
 // ---- background: vertical sky gradient (above the design mid-line) + grass. ----
 // Only design-Y matters, and it is LINEAR across a row under the roll, so we step it
 // incrementally — no per-pixel rotate/divide (this is full-screen at SS², the hot path).
-fn drawBackground(fb: Fb, roll: Roll, sky_top: u32, sky_horizon: u32) void {
+pub fn drawBackground(fb: Fb, roll: Roll, sky_top: u32, sky_horizon: u32) void {
     const half = roll.cy; // design H/2
     const inv_half = 1.0 / half;
     const delta = roll.st * roll.inv_ss; // d(design.y)/d(px)
@@ -138,7 +139,7 @@ fn drawBackground(fb: Fb, roll: Roll, sky_top: u32, sky_horizon: u32) void {
 // ---- the setting sun: warm radial glow + the disc, clipped to the sky (design top half). ----
 // Bounded to the glow's pixel box (not the whole sky) — the sqrt is too costly to run on
 // every pixel at SS².
-fn drawSun(fb: Fb, roll: Roll, sun: SunPos) void {
+pub fn drawSun(fb: Fb, roll: Roll, sun: SunPos) void {
     const half = roll.cy;
     const glow_inner = 8.0 * sun.scale;
     const glow_outer = 340.0 * sun.scale;
@@ -185,7 +186,7 @@ fn glowColor(t: f32) Rgba {
 }
 
 // ---- the draw-command walk: one fill per polygon, in paint order. ----
-fn walk(fb: Fb, roll: Roll, words: []const u32) void {
+pub fn walk(fb: Fb, roll: Roll, words: []const u32) void {
     var w: usize = 0;
     while (w < words.len) {
         const tag = words[w];
