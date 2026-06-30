@@ -1,5 +1,13 @@
 # Safari Screensaver
 
+> ## ⚠️ DEPRECATED — the TypeScript source in this directory
+>
+> The live `/driving` is the **Zig→WASM** implementation in **[`wasm/`](wasm/)**
+> (`*.zig` + `blitter.js`). The `.ts` files here (`main.ts` and friends) are **no
+> longer built or served** — they survive only as the historical **port reference**
+> (a few `wasm/*.zig` comments still cite them by name). **New work goes in
+> [`wasm/`](wasm/).** Everything below describes design *intent* shared by both.
+
 **Welcome to the Safari!** Open [lynrummy.com/driving](https://lynrummy.com/driving),
 press **SPACE**, and settle in: you're on a motorcycle at dusk, riding a winding
 road through ~20 segments — past grazing cows and the odd giraffe, under radio

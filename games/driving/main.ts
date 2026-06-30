@@ -1,4 +1,9 @@
 // =============================================================================
+// DEPRECATED. This TypeScript implementation is no longer built or served — the
+// live /driving is the Zig→WASM core in ./wasm/ (*.zig + blitter.js). These .ts
+// files are kept only as the historical port reference. New work goes in ./wasm/.
+// See ./README.md.
+// =============================================================================
 // main — canvas. The frame loop is: take the current RiderState, build the
 // Rider-relative scene (view.ts), and draw it. The Rider is advanced EXPLICITLY
 // by getNextRiderState (rider.ts) before drawing — that next RiderState is what
