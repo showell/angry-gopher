@@ -12,6 +12,7 @@ const world = @import("world.zig");
 const tree = @import("tree.zig");
 const tower = @import("tower.zig");
 const critter = @import("critter.zig");
+const safari_critter = @import("safari_critter.zig");
 const cat = @import("cat.zig");
 const truck = @import("truck.zig");
 const mountains = @import("mountains.zig");
@@ -277,6 +278,26 @@ pub fn frame(w: *const world.World, seg_idx: usize, along: f32, across: f32, yaw
             ncow += 1;
         }
 
+        // the corner safari creatures at this segment's EXIT: an adult at the far corner + a baby beyond the
+        // turn (same billboard path as the cows/pigs). Skipped at the terminus (no exit corner).
+        if (!seg.terminates) {
+            var cc: [2]world.Critter = undefined;
+            const ncc = safari_critter.cornerCritters(seg.exit_creature, seg.length, seg.exit_right, hw, &cc);
+            var k: usize = 0;
+            while (k < ncc and ncow < MAX_VIS_CRITTERS) : (k += 1) {
+                const cr = cc[k];
+                const rp = at(w, &ch, pose, d, cr.along, cr.across + hw);
+                if (rp.forward <= camera.NEAR) continue;
+                if (cr.height / rp.forward * cam_focal < MIN_SCENERY_PX) continue;
+                c_right[ncow] = rp.right;
+                c_fwd[ncow] = rp.forward;
+                c_h[ncow] = cr.height;
+                c_cp[ncow] = cr.codepoint;
+                c_face[ncow] = cr.face_right;
+                ncow += 1;
+            }
+        }
+
         // the crossing cat: its pose + lateral offset + hop from the crossing clock (rider's along-gap to
         // it + speed), placed as a billboard at its current across. Collected for the depth sort.
         if (seg.has_cat and ncat < MAX_VIS_CATS) {
@@ -327,6 +348,27 @@ pub fn frame(w: *const world.World, seg_idx: usize, along: f32, across: f32, yaw
             w_fwd[ntw] = c.forward;
             w_off[ntw] = tower.beaconOffsetFor(prev_idx);
             ntw += 1;
+        }
+    }
+
+    // the corner creatures the joint we just passed OWNS, mapped forward through the join — without it they
+    // pop out the instant cur.segment flips (the same symptom the pavement + tower had).
+    if (has_prev) {
+        const phw = prev.width / 2.0;
+        var cc: [2]world.Critter = undefined;
+        const ncc = safari_critter.cornerCritters(prev.exit_creature, prev.length, prev.exit_right, phw, &cc);
+        var k: usize = 0;
+        while (k < ncc and ncow < MAX_VIS_CRITTERS) : (k += 1) {
+            const cr = cc[k];
+            const rp = mapPt(w, &ch, pose, prev_map, cr.along, cr.across + phw);
+            if (rp.forward <= camera.NEAR) continue;
+            if (cr.height / rp.forward * cam_focal < MIN_SCENERY_PX) continue;
+            c_right[ncow] = rp.right;
+            c_fwd[ncow] = rp.forward;
+            c_h[ncow] = cr.height;
+            c_cp[ncow] = cr.codepoint;
+            c_face[ncow] = cr.face_right;
+            ncow += 1;
         }
     }
 

@@ -12,6 +12,11 @@ pub const Color = u32; // 0xRRGGBB, opaque
 
 pub const Scheme = enum { all_green, yellow_green, red_green };
 
+// the big animal parked at a segment's EXIT corner (safari_critter.zig owns the species + placement).
+// ELEPHANT is the default; the rest are the rare departures. `none` = no corner creature (the terminus,
+// and the crocodile lagoon which is postponed).
+pub const Creature = enum { none, elephant, giraffe, zebra, rhino };
+
 pub const Tree = struct { along: f32, across: f32, color: Color, height: f32 };
 
 // a roadside animal: an emoji billboard at (along, across-from-centre).
@@ -42,6 +47,7 @@ pub const Segment = struct {
     has_cat: bool, // a cat waits beside this segment and crosses as the rider nears
     cat: cat.Cat, // its placement + crossing endpoints (valid only when has_cat)
     terminates: bool, // the FINISH segment: no turn leads out of it; the rider arrives and stops
+    exit_creature: Creature, // the big animal parked at this segment's exit corner
 };
 
 pub const World = struct {
@@ -213,7 +219,7 @@ fn fillTrees(seg: *Segment, scheme: Scheme) void {
 
 // turn_deg is the SIGNED exit turn onto the next segment (+ right / − left); the LAST entry has no turn —
 // it's the TERMINUS (the finish line). Mirrors the segmentConfigs + turns tables in world.ts.
-const Cfg = struct { length: f32, scheme: Scheme, turn_deg: f32 = 0, cat: bool = false, pigs: bool = false, terminates: bool = false };
+const Cfg = struct { length: f32, scheme: Scheme, turn_deg: f32 = 0, cat: bool = false, pigs: bool = false, terminates: bool = false, creature: Creature = .elephant };
 
 // The full TS route (world.ts): 19 segments. The baseline is deliberately boring (ALL_GREEN, a cow herd)
 // so the rare departures surprise; novelty is front-loaded (seg2 cat, seg3 pigs, seg4 gold), the long
@@ -226,18 +232,18 @@ const route = [_]Cfg{
     .{ .length = 320, .scheme = .all_green, .turn_deg = -70, .cat = true }, // seg2: the CAT crossing debuts
     .{ .length = 400, .scheme = .all_green, .turn_deg = 20, .pigs = true }, // seg3: pigs first appear (distraction)
     .{ .length = 300, .scheme = .yellow_green, .turn_deg = 20 }, // seg4: gold trees (one-off)
-    .{ .length = 300, .scheme = .all_green, .turn_deg = -70 }, // seg5: (giraffe corner)
+    .{ .length = 300, .scheme = .all_green, .turn_deg = -70, .creature = .giraffe }, // seg5: first giraffe at its corner
     .{ .length = 300, .scheme = .all_green, .turn_deg = -70 }, // seg6
-    .{ .length = 1200, .scheme = .red_green, .turn_deg = 80 }, // seg7: long sun-ward stretch (mid-tower + sunset)
+    .{ .length = 1200, .scheme = .red_green, .turn_deg = 80, .creature = .rhino }, // seg7: rhinos at the sunset-stretch corner
     .{ .length = 300, .scheme = .all_green, .turn_deg = 15 }, // seg8
     .{ .length = 300, .scheme = .all_green, .turn_deg = -70 }, // seg9
     .{ .length = 800, .scheme = .all_green, .turn_deg = 15 }, // seg10: second sun-ward stretch
     .{ .length = 300, .scheme = .all_green, .turn_deg = 15, .pigs = true }, // seg11: pigs return (2nd distraction)
     .{ .length = 300, .scheme = .all_green, .turn_deg = 15, .pigs = true }, // seg12
-    .{ .length = 300, .scheme = .red_green, .turn_deg = 15, .cat = true, .pigs = true }, // seg13: croc lagoon + cat
+    .{ .length = 300, .scheme = .red_green, .turn_deg = 15, .cat = true, .pigs = true, .creature = .none }, // seg13: croc lagoon (POSTPONED → no creature) + cat
     .{ .length = 400, .scheme = .all_green, .turn_deg = -50, .pigs = true }, // seg14
     .{ .length = 300, .scheme = .all_green, .turn_deg = 50, .pigs = true }, // seg15
-    .{ .length = 300, .scheme = .red_green, .turn_deg = -50 }, // seg16: zebra; SURPRISE — pigs gone
+    .{ .length = 300, .scheme = .red_green, .turn_deg = -50, .creature = .zebra }, // seg16: zebra; SURPRISE — pigs gone
     .{ .length = 300, .scheme = .all_green, .turn_deg = 50, .pigs = true }, // seg17: pigs back
     .{ .length = 300, .scheme = .all_green, .turn_deg = -50, .pigs = true }, // seg18
     .{ .length = 300, .scheme = .red_green, .cat = true, .pigs = true, .terminates = true }, // seg19: red + cat finale, the terminus
@@ -286,6 +292,7 @@ pub fn buildWorld() World {
         seg.length = c.length;
         seg.width = LANE_WIDTH;
         seg.terminates = c.terminates;
+        seg.exit_creature = if (c.terminates) .none else c.creature; // the terminus has no exit corner
         seg.exit_angle = @abs(c.turn_deg) * DEG;
         seg.exit_right = c.turn_deg >= 0;
         seg.exit_to = if (c.terminates) i else i + 1; // the terminus has no next
