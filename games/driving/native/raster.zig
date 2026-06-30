@@ -322,7 +322,7 @@ pub fn walk(fb: Fb, roll: Roll, words: []const u32) void {
                         if (x < minx) minx = x;
                         if (x > maxx) maxx = x;
                     }
-                    sh = if (maxx - minx < 1.0) Shader{ .solid = color } else Shader{ .round = .{ .color = color, .minx = minx, .maxx = maxx } };
+                    sh = if (maxx - minx < 1.0) Shader{ .solid = color } else Shader{ .round = .{ .lo = shadeClamp(color, 0.6), .mid = shadeClamp(color, 1.25), .minx = minx, .maxx = maxx } };
                 }
                 w = fillPoly(fb, roll, words, w, n, sh, true);
             },
@@ -334,7 +334,7 @@ pub fn walk(fb: Fb, roll: Roll, words: []const u32) void {
 const Shader = union(enum) {
     solid: u32, // 0xRRGGBB opaque
     solidAlpha: struct { rgba: u32 }, // 0xAARRGGBB (degenerate ellipse)
-    round: struct { color: u32, minx: f32, maxx: f32 },
+    round: struct { lo: u32, mid: u32, minx: f32, maxx: f32 }, // lo/mid = shadeClamp(color,.6/1.25), hoisted per-poly
     radial: struct { c0: u32, c1: u32, cx: f32, cy: f32, r: f32 },
     linear: struct { c0: u32, c1: u32, o0: f32, o1: f32, ax: f32, ay: f32, bx: f32, by: f32 },
     ellipse: struct { c0: u32, c1: u32, o0: f32, o1: f32, cx: f32, cy: f32, ux: f32, uy: f32, vx: f32, vy: f32, det: f32 },
@@ -365,6 +365,7 @@ fn fillPoly(fb: Fb, roll: Roll, words: []const u32, w: usize, n: u32, shader: Sh
     }
     var y: i64 = @max(0, @as(i64, @intFromFloat(@floor(miny))));
     const ylast: i64 = @min(@as(i64, @intCast(fb.h)) - 1, @as(i64, @intFromFloat(@ceil(maxy))));
+    const upright = roll.st == 0.0; // no roll → design = pixel·inv_ss, no per-pixel un-rotation
     while (y <= ylast) : (y += 1) {
         const yc = @as(f32, @floatFromInt(y)) + 0.5;
         var nx: usize = 0;
@@ -401,11 +402,21 @@ fn fillPoly(fb: Fb, roll: Roll, words: []const u32, w: usize, n: u32, shader: Sh
                 while (x <= xb) : (x += 1) fb.px[rowbase + @as(usize, @intCast(x))] = sc;
                 continue;
             }
-            var x: i64 = xa;
-            while (x <= xb) : (x += 1) {
-                const idx = rowbase + @as(usize, @intCast(x));
-                const d = roll.toDesign(@as(f32, @floatFromInt(x)) + 0.5, yc);
-                shadePixel(fb, idx, shader, d);
+            if (upright) {
+                // design.y is constant across the scanline; design.x = (x+0.5)·inv_ss (exact,
+                // = toDesign at st==0) — one multiply, no rotation. Common case (straight road).
+                const dy = yc * roll.inv_ss;
+                var x: i64 = xa;
+                while (x <= xb) : (x += 1) {
+                    const dx = (@as(f32, @floatFromInt(x)) + 0.5) * roll.inv_ss;
+                    shadePixel(fb, rowbase + @as(usize, @intCast(x)), shader, .{ .x = dx, .y = dy });
+                }
+            } else {
+                var x: i64 = xa;
+                while (x <= xb) : (x += 1) {
+                    const d = roll.toDesign(@as(f32, @floatFromInt(x)) + 0.5, yc);
+                    shadePixel(fb, rowbase + @as(usize, @intCast(x)), shader, d);
+                }
             }
         }
     }
@@ -420,11 +431,10 @@ fn shadePixel(fb: Fb, idx: usize, shader: Shader, d: Pt) void {
             blend(fb, idx, chan(s.rgba, 16), chan(s.rgba, 8), chan(s.rgba, 0), a);
         },
         .round => |s| {
+            // canvas interpolates the (clamped) stop colours shade(c,0.6)->shade(c,1.25)->shade(c,0.6);
+            // lo/mid are per-poly constants (hoisted into the shader), so the loop is just lerp+pack.
             const frac = clamp01((d.x - s.minx) / (s.maxx - s.minx));
-            // canvas interpolates the (clamped) stop colours shade(c,0.6)->shade(c,1.25)->shade(c,0.6).
-            const lo = shadeClamp(s.color, 0.6);
-            const mid = shadeClamp(s.color, 1.25);
-            const c = if (frac < 0.5) lerpRgb(lo, mid, frac / 0.5) else lerpRgb(mid, lo, (frac - 0.5) / 0.5);
+            const c = if (frac < 0.5) lerpRgb(s.lo, s.mid, frac / 0.5) else lerpRgb(s.mid, s.lo, (frac - 0.5) / 0.5);
             fb.px[idx] = c;
         },
         .radial => |s| {
