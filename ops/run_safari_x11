@@ -1,0 +1,24 @@
+#!/bin/bash
+# CANONICAL DEV-LOOP SCRIPT — DO NOT REINVENT.
+# Before composing an ad-hoc shell command for build / test / regen, run
+# `ops/list` to see what already exists.
+#
+# Build + run the native Safari renderer in a LIVE X11 WINDOW — the Linux/WSLg display
+# layer (games/driving/native/x11.zig). It reuses the exact same zig core as the WASM
+# build and the headless PNG harness; only the blit target differs (an X11 window vs the
+# browser canvas vs a PNG file). Under WSLg the window opens on the Windows desktop.
+#
+# Needs the X11 dev headers: sudo apt install libx11-dev. The window target is opt-in
+# (-Dwindow) so the default native build (ops/build_safari_native) stays X11-free.
+#
+# Controls: SPACE pause/resume · UP/DOWN step · J jump one intersection · Q/Esc quit.
+set -e
+
+source "$(dirname "$0")/_paths.sh"
+
+OUT="$GOPHER_DIR/games/driving/zig-out/bin/safari_x11"
+
+zig build --build-file "$GOPHER_DIR/games/driving/build.zig" -Dwindow=true
+
+echo "running $OUT (close the window or press Q/Esc to quit)"
+"$OUT"

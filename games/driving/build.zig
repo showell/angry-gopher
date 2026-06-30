@@ -30,4 +30,23 @@ pub fn build(b: *std.Build) void {
     });
     exe.root_module.addImport("safari", safari_mod);
     b.installArtifact(exe);
+
+    // The live X11 window (the Linux/WSLg display layer) is opt-in via -Dwindow, so the
+    // default `zig build` (the headless PNG harness) needs no X11 dev libs — it still
+    // builds on a bare headless box (e.g. the Droplet, which only renders frames to disk).
+    const want_window = b.option(bool, "window", "build the X11 live-window app (needs libx11-dev)") orelse false;
+    if (want_window) {
+        const win = b.addExecutable(.{
+            .name = "safari_x11",
+            .root_module = b.createModule(.{
+                .root_source_file = b.path("native/x11.zig"),
+                .target = target,
+                .optimize = optimize,
+                .link_libc = true, // @cImport(Xlib) needs libc
+            }),
+        });
+        win.root_module.addImport("safari", safari_mod);
+        win.root_module.linkSystemLibrary("X11", .{});
+        b.installArtifact(win);
+    }
 }
