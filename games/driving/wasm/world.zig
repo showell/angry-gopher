@@ -214,6 +214,26 @@ fn nextTreeAlong(seg: *const Segment, desired: f32) f32 {
     return if (std.math.isInf(best)) desired else best;
 }
 
+/// courseLength: the sum of the segment lengths (intersection arcs ignored as negligible) — the distance
+/// the truck's chase schedule lerps its lead down over. Mirrors courseLength in truck.ts.
+pub fn courseLength(w: *const World) f32 {
+    var l: f32 = 0;
+    var i: usize = 0;
+    while (i < w.n_segments) : (i += 1) l += w.segments[i].length;
+    return l;
+}
+
+/// routeDistance: how far along the course a point (segment + along) sits — the lengths of all earlier
+/// segments in route order plus the along. The truck anchors its schedule to the rider's routeDistance.
+/// Mirrors routeDistance in rider.ts (position-based, not arc-length). The segments ARE in route order
+/// (seg i exits to i+1), so the prefix is just the sum of lengths before `seg`.
+pub fn routeDistance(w: *const World, seg: usize, along: f32) f32 {
+    var d: f32 = 0;
+    var i: usize = 0;
+    while (i < seg) : (i += 1) d += w.segments[i].length;
+    return d + along;
+}
+
 /// buildWorld authors the looping route, builds each segment's tree rows, and
 /// accumulates the headings.
 pub fn buildWorld() World {

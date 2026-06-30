@@ -18,9 +18,9 @@ const gaze = @import("gaze.zig");
 const YAW_PER_TILT: f32 = 0.1;
 pub const MAX_LEAN: f32 = 20.0 * std.math.pi / 180.0; // the route never banks past this; the focal pull-in normalises the lean by it
 pub const V_BASE: f32 = 0.3;
-const A_ACCEL: f32 = 0.010;
-const V_MAX: f32 = 2.5;
-const APPROACH_INTERSECTION_DIST: f32 = 60.0;
+pub const A_ACCEL: f32 = 0.010; // pub: the truck claws its lead back at 1.1× this
+pub const V_MAX: f32 = 2.5; // pub: the truck caps its top speed off 1.1× this
+pub const APPROACH_INTERSECTION_DIST: f32 = 60.0; // pub: the truck brakes over this same distance
 const STRAIGHTEN_MARGIN: f32 = 0.05;
 const TURN_DANGER_STEPS: usize = 2000;
 const MIN_FORWARD_PROGRESS: f32 = 25.0;
@@ -134,8 +134,8 @@ fn bestTiltCorrection(state: RiderState, seg: world.Segment) f32 {
 }
 
 // the safe entry speed for a turn angle (the SAFE_TURN_SPEED table in intersection.ts;
-// every angle on our route is tabulated).
-fn turnSpeed(angle_rad: f32) f32 {
+// every angle on our route is tabulated). pub: the truck aims for a fraction of it.
+pub fn turnSpeed(angle_rad: f32) f32 {
     const deg = @round(angle_rad * 180.0 / std.math.pi);
     if (deg == 15) return 1.297;
     if (deg == 20) return 0.840;

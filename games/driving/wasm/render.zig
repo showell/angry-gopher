@@ -13,6 +13,7 @@ const tree = @import("tree.zig");
 const tower = @import("tower.zig");
 const critter = @import("critter.zig");
 const cat = @import("cat.zig");
+const truck = @import("truck.zig");
 const mountains = @import("mountains.zig");
 const guard_rail = @import("guard_rail.zig");
 const sky = @import("sky.zig");
@@ -117,7 +118,7 @@ fn emitGround(pts: []const geom.RiderPt, cam_focal: f32) void {
     paint.pushPoly(ROAD, screen[0..m]);
 }
 
-pub fn frame(w: *const world.World, seg_idx: usize, along: f32, across: f32, yaw: f32, heading: f32, step: f32, v: f32, cam_focal: f32, view_yaw: f32) void {
+pub fn frame(w: *const world.World, seg_idx: usize, along: f32, across: f32, yaw: f32, heading: f32, step: f32, v: f32, cam_focal: f32, view_yaw: f32, tk: truck.State) void {
     rails.reset();
     const ch = buildChain(w, seg_idx);
     const cur = w.segments[seg_idx];
@@ -338,11 +339,34 @@ pub fn frame(w: *const world.World, seg_idx: usize, along: f32, across: f32, yaw
     }
     emitJointRail(w, &ch, pose, prev_map, cur_map, prev.length, prev.width, cur.width, prev.exit_right);
 
-    // merge trees + towers + cows into one depth order (far → near) so they occlude
-    // right.
-    const Kind = enum { tree, tower, cow, cat, rail };
+    // the chased truck: walk its LEAD (its route distance minus the rider's) forward from the rider along
+    // the chain to find which segment its centre lands on, exactly as truck.ts's truckScenery. Collected as
+    // one depth-sorted item at its centre-line position. (v1: a blue dot; the real body comes next.)
+    var has_truck = false;
+    var truck_right: f32 = 0;
+    var truck_fwd: f32 = 0;
+    const lead = tk.pos - world.routeDistance(w, seg_idx, along);
+    if (lead > 0) {
+        var remaining = along + lead;
+        var dt: usize = 0;
+        while (dt < ch.len and remaining > w.segments[ch.idx[dt]].length) {
+            remaining -= w.segments[ch.idx[dt]].length;
+            dt += 1;
+        }
+        if (dt < ch.len) {
+            const c = at(w, &ch, pose, dt, remaining, w.segments[ch.idx[dt]].width / 2.0);
+            if (c.forward > camera.NEAR) {
+                has_truck = true;
+                truck_right = c.right;
+                truck_fwd = c.forward;
+            }
+        }
+    }
+
+    // merge trees + towers + cows + cat + truck into one depth order (far → near) so they occlude right.
+    const Kind = enum { tree, tower, cow, cat, truck, rail };
     const Item = struct { fwd: f32, kind: Kind, i: usize };
-    var items: [MAX_VIS_TREES + MAX_VIS_TOWERS + MAX_VIS_CRITTERS + MAX_VIS_CATS + guard_rail.MAX_RAIL_POLYS]Item = undefined;
+    var items: [MAX_VIS_TREES + MAX_VIS_TOWERS + MAX_VIS_CRITTERS + MAX_VIS_CATS + 1 + guard_rail.MAX_RAIL_POLYS]Item = undefined;
     var ni: usize = 0;
     var i: usize = 0;
     while (i < nt) : (i += 1) {
@@ -362,6 +386,10 @@ pub fn frame(w: *const world.World, seg_idx: usize, along: f32, across: f32, yaw
     i = 0;
     while (i < ncat) : (i += 1) {
         items[ni] = .{ .fwd = k_fwd[i], .kind = .cat, .i = i };
+        ni += 1;
+    }
+    if (has_truck) {
+        items[ni] = .{ .fwd = truck_fwd, .kind = .truck, .i = 0 };
         ni += 1;
     }
     i = 0;
@@ -392,6 +420,7 @@ pub fn frame(w: *const world.World, seg_idx: usize, along: f32, across: f32, yaw
             },
             .cow => critter.draw(c_right[it.i], c_fwd[it.i], c_h[it.i], c_cp[it.i], c_face[it.i], cam_focal),
             .cat => cat.draw(k_right[it.i], k_fwd[it.i], k_h[it.i], k_pose[it.i], k_lift[it.i], cam_focal),
+            .truck => truck.drawDot(truck_right, truck_fwd, cam_focal),
             .rail => guard_rail.drawPoly(rails.polys[it.i], cam_focal),
             .tree => if (t_fwd[it.i] < DETAIL_DIST)
                 tree.drawNear(t_right[it.i], t_fwd[it.i], t_h[it.i], t_col[it.i], cam_focal)

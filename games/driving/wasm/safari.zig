@@ -13,12 +13,19 @@ const render = @import("render.zig");
 const camera = @import("camera.zig");
 const cat = @import("cat.zig");
 const gaze = @import("gaze.zig");
+const truck = @import("truck.zig");
 const sky = @import("sky.zig");
 const paint = @import("paint.zig");
 
 var the_world: world.World = undefined;
 var cur: rider.RiderState = undefined;
 var ready = false;
+
+// the chased truck: its own little simulation, advanced in lockstep with the rider and kept in a parallel
+// history ring so it scrubs cleanly on pause/reverse. course_len is the fixed distance its schedule lerps
+// its lead down over (computed once the world is built).
+var truck_cur: truck.State = undefined;
+var course_len: f32 = 0;
 
 // the animation clock (TS step = riderHistory.length - 1): advance()++ / back()-- so it
 // scrubs on reverse and freezes on pause, driving the day→dusk sky, sun, and mountain
@@ -36,6 +43,7 @@ var cam_focal_now: f32 = camera.FOCAL;
 // within the last HIST_CAP frames, ample for inspection; older frames drop.
 const HIST_CAP = 8192;
 var hist: [HIST_CAP]rider.RiderState = undefined;
+var truck_hist: [HIST_CAP]truck.State = undefined; // parallel to hist; advanced/popped in lockstep
 var hist_head: usize = 0;
 var hist_count: usize = 0;
 
@@ -43,6 +51,8 @@ fn ensure() void {
     if (ready) return;
     the_world = world.buildWorld();
     cur = rider.initialRiderState();
+    truck_cur = truck.initial();
+    course_len = world.courseLength(&the_world);
     ready = true;
 }
 
@@ -51,9 +61,12 @@ fn ensure() void {
 export fn advance() void {
     ensure();
     hist[hist_head] = cur;
+    truck_hist[hist_head] = truck_cur;
     hist_head = (hist_head + 1) % HIST_CAP;
     if (hist_count < HIST_CAP) hist_count += 1;
     cur = rider.getNextRiderState(cur, &the_world);
+    // the truck advances against the NEW rider distance (its schedule anchors to where the rider is now).
+    truck_cur = truck.next(truck_cur, world.routeDistance(&the_world, cur.segment, cur.along), &the_world, course_len);
     step_clock += 1;
 }
 
@@ -64,6 +77,7 @@ export fn back() void {
     hist_head = (hist_head + HIST_CAP - 1) % HIST_CAP;
     hist_count -= 1;
     cur = hist[hist_head];
+    truck_cur = truck_hist[hist_head];
     if (step_clock > 0) step_clock -= 1;
 }
 
@@ -84,7 +98,7 @@ export fn renderFrame() u32 {
     // head-turn into a lean (HEAD_YAW_FRAC of the tilt). Swings the whole view; render folds it into the
     // scene pose AND the backdrop heading. Mirrors view.ts / main.ts (state.yaw + gazeAngle + headYaw).
     const view_yaw = cur.gaze_yaw + HEAD_YAW_FRAC * cur.tilt;
-    render.frame(&the_world, cur.segment, cur.along, cur.across, cur.yaw, cur.heading, step_clock, cur.v, cam_focal, view_yaw);
+    render.frame(&the_world, cur.segment, cur.along, cur.across, cur.yaw, cur.heading, step_clock, cur.v, cam_focal, view_yaw, truck_cur);
     // the sun's placement for the rider's absolute heading (+ the view yaw) + clock, for the blitter to
     // paint behind the ranges (the buffer's first polys). The same continuous heading the
     // mountains use, so the sun doesn't snap across the loop seam.
@@ -129,6 +143,21 @@ export fn riderV() f32 {
 export fn riderSeg() u32 {
     ensure();
     return @intCast(cur.segment);
+}
+
+/// truckLead / truckV / truckBraking expose the chase for the HUD + probes: the truck's lead over the
+/// rider (m along the route), its speed (m/press), and whether its brake lights are lit this frame.
+export fn truckLead() f32 {
+    ensure();
+    return truck_cur.pos - world.routeDistance(&the_world, cur.segment, cur.along);
+}
+export fn truckV() f32 {
+    ensure();
+    return truck_cur.v;
+}
+export fn truckBraking() u32 {
+    ensure();
+    return if (truck_cur.braking) 1 else 0;
 }
 
 /// bufPtr is the byte offset of the draw buffer in linear memory.
