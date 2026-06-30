@@ -27,10 +27,12 @@ const ENTRY_ROAD_DIST: f32 = 40.0; // metres of approach road a joint paints beh
 const RAIL_PATH_CAP: usize = 192; // max points in a corner's rail path (run-up + two legs + run-out); ample for any turn on this route, bounds the fixed buffer
 const DETAIL_DIST: f32 = 70.0; // within this, a tree draws 3D near; beyond, 2D far
 const MIN_SCENERY_PX: f32 = 2.0; // skip scenery that would project shorter than this
-// critters are baked polygon sets (emoji_frames.zig), hundreds of points each — far costlier than the
-// trees' few polys, and unreadable as anything but a blob when tiny. So cull them at a much larger
-// projected height than MIN_SCENERY_PX: a distant background animal isn't worth a thousand points.
-const MIN_CRITTER_PX: f32 = 16.0;
+// critters are baked polygon sets (emoji_frames.zig), hundreds of points each, so a sub-handful-of-pixels
+// blob isn't worth its polygons. Kept SMALL (6 px) and measured against the STABLE base FOCAL, not the
+// live cam_focal: the camera focal pulls in to 0.35x during a lean, so culling on it would yank close
+// critters (a full-grown pig, a safari baby) out of view the instant the rider turns, then pop them back.
+// The segment cull below is the real budget lever; this is the fine backstop on whatever survives it.
+const MIN_CRITTER_PX: f32 = 6.0;
 // Belt and suspenders. The SEGMENT cull (chain depth d) saves the WASM the work of even projecting a
 // critter: trees hide the farm animals past a few segments, and the corner safari animals carry a little
 // further before they're worth it. The SIZE cull (MIN_CRITTER_PX) then saves buffer + blitting on
@@ -288,7 +290,7 @@ pub fn frame(w: *const world.World, seg_idx: usize, along: f32, across: f32, yaw
                 const cr = seg.cows[cti];
                 const rp = at(w, &ch, pose, d, cr.along, cr.across + hw);
                 if (rp.forward <= camera.NEAR) continue;
-                if (cr.height / rp.forward * cam_focal < MIN_CRITTER_PX) {
+                if (cr.height / rp.forward * camera.FOCAL < MIN_CRITTER_PX) {
                     cull_size += 1;
                     continue;
                 }
@@ -304,7 +306,7 @@ pub fn frame(w: *const world.World, seg_idx: usize, along: f32, across: f32, yaw
                 const pr = seg.pigs[pti];
                 const rp = at(w, &ch, pose, d, pr.along, pr.across + hw);
                 if (rp.forward <= camera.NEAR) continue;
-                if (pr.height / rp.forward * cam_focal < MIN_CRITTER_PX) {
+                if (pr.height / rp.forward * camera.FOCAL < MIN_CRITTER_PX) {
                     cull_size += 1;
                     continue;
                 }
@@ -327,7 +329,7 @@ pub fn frame(w: *const world.World, seg_idx: usize, along: f32, across: f32, yaw
                 const cr = cc[k];
                 const rp = at(w, &ch, pose, d, cr.along, cr.across + hw);
                 if (rp.forward <= camera.NEAR) continue;
-                if (cr.height / rp.forward * cam_focal < MIN_CRITTER_PX) {
+                if (cr.height / rp.forward * camera.FOCAL < MIN_CRITTER_PX) {
                     cull_size += 1;
                     continue;
                 }
@@ -350,7 +352,7 @@ pub fn frame(w: *const world.World, seg_idx: usize, along: f32, across: f32, yaw
                 if (ncow >= MAX_VIS_CRITTERS or d >= SAFARI_SEG_REACH) break;
                 const rp = at(w, &ch, pose, d, seg.length + dk.p.cv, dk.p.cu);
                 if (rp.forward <= camera.NEAR) continue;
-                if (pond.DUCK_HEIGHT / rp.forward * cam_focal < MIN_CRITTER_PX) {
+                if (pond.DUCK_HEIGHT / rp.forward * camera.FOCAL < MIN_CRITTER_PX) {
                     cull_size += 1;
                     continue;
                 }
@@ -427,7 +429,7 @@ pub fn frame(w: *const world.World, seg_idx: usize, along: f32, across: f32, yaw
             const cr = cc[k];
             const rp = mapPt(w, &ch, pose, prev_map, cr.along, cr.across + phw);
             if (rp.forward <= camera.NEAR) continue;
-            if (cr.height / rp.forward * cam_focal < MIN_CRITTER_PX) {
+            if (cr.height / rp.forward * camera.FOCAL < MIN_CRITTER_PX) {
                 cull_size += 1;
                 continue;
             }
@@ -448,7 +450,7 @@ pub fn frame(w: *const world.World, seg_idx: usize, along: f32, across: f32, yaw
             if (ncow >= MAX_VIS_CRITTERS) break;
             const rp = mapPt(w, &ch, pose, prev_map, prev.length + dk.p.cv, dk.p.cu);
             if (rp.forward <= camera.NEAR) continue;
-            if (pond.DUCK_HEIGHT / rp.forward * cam_focal < MIN_CRITTER_PX) {
+            if (pond.DUCK_HEIGHT / rp.forward * camera.FOCAL < MIN_CRITTER_PX) {
                 cull_size += 1;
                 continue;
             }
