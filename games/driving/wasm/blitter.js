@@ -170,8 +170,21 @@ function hudPush(arr, v) { arr.push(v); if (arr.length > WINDOW) arr.shift(); }
 function hudMax(arr) { let m = 0; for (const v of arr) if (v > m) m = v; return m; }
 function hudAvg(arr) { if (!arr.length) return 0; let s = 0; for (const v of arr) s += v; return s / arr.length; }
 
-function drawHud(ctx, bufBytes, bufCap, cmds, step, seg) {
-  // always on for now — hiding it is polish for when the port is close to done.
+function drawHud(ctx, bufBytes, bufCap, cmds, step, seg, debug) {
+  ctx.save();
+  ctx.font = '12px ui-monospace,Menlo,monospace';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'top';
+  // Off by default — prod is clean. Leave only a dim affordance so it's discoverable
+  // that D reveals the dev overlay (frame budget + step/seg + buffer peak).
+  if (!debug) {
+    ctx.fillStyle = 'rgba(0,0,0,0.38)';
+    ctx.fillRect(8, 8, 74, 22);
+    ctx.fillStyle = '#8a93a0';
+    ctx.fillText('D · debug', 14, 13);
+    ctx.restore();
+    return;
+  }
   // Color the total line by the RATE of missed frames, not the single worst one: a lone
   // GC/jank spike shouldn't pin it red for the whole window. green = no misses; amber =
   // occasional (≤20%, likely jank); red = consistently over budget (a real problem).
@@ -185,18 +198,16 @@ function drawHud(ctx, bufBytes, bufCap, cmds, step, seg) {
     `wasm ${hudAvg(hud.wasm).toFixed(2)}ms  blit ${hudAvg(hud.blit).toFixed(2)}ms`,
     `total ${hudAvg(hud.total).toFixed(2)}ms  max ${totMax.toFixed(2)}  over ${overCount}/${hud.total.length} (${BUDGET_MS.toFixed(2)})`,
     `${cmds} draw-calls   buf-peak ${(bufBytes / 1024).toFixed(1)}/${(bufCap / 1024).toFixed(0)} KiB (${(fill * 100).toFixed(0)}%)`,
+    `D · hide debug`,
   ];
   const totColor = frac === 0 ? '#9be29b' : frac <= 0.2 ? '#ffd166' : '#ff6b6b';
-  ctx.save();
-  ctx.font = '12px ui-monospace,Menlo,monospace';
-  ctx.textAlign = 'left';
-  ctx.textBaseline = 'top';
   ctx.fillStyle = 'rgba(0,0,0,0.55)';
   ctx.fillRect(8, 8, 290, 8 + lines.length * 16 + 4);
   for (let i = 0; i < lines.length; i++) {
     ctx.fillStyle = (i === 0) ? '#ffe14d'      // the step `t`, highlighted — it's what Steve reports
       : (i === 2) ? totColor                   // the total-frame-time line, coloured by miss rate
       : (i === 3 && fill > 0.9) ? '#ffd166'     // the buffer line, amber when nearly full
+      : (i === 4) ? '#8a93a0'                   // the dim D-toggle hint
       : '#cfe0f0';
     ctx.fillText(lines[i], 14, 14 + i * 16);
   }
@@ -213,7 +224,7 @@ async function main() {
   canvas.style.cssText = 'display:block;background:#000;box-shadow:0 10px 40px rgba(0,0,0,0.6)';
   document.body.appendChild(canvas);
   const hint = document.createElement('div');
-  hint.textContent = 'SPACE pause/resume · ↑ step forward · ↓ step back';
+  hint.textContent = 'SPACE pause/resume · ↑/↓ step · J next intersection · D debug overlay';
   hint.style.cssText = 'margin-top:10px;font-size:12px;color:#9aa0a6;letter-spacing:0.4px';
   document.body.appendChild(hint);
   const ctx = canvas.getContext('2d');
@@ -226,6 +237,7 @@ async function main() {
   // The wasm owns the rider state; we drive it. The camera rolls with the bike's lean
   // (riderTilt) — the whole world banks into a turn, like main.ts's ctx.rotate(-tilt).
   let auto = true;
+  let debug = false; // the dev overlay (frame-budget HUD) — off by default (prod is clean); D toggles it.
 
   function draw() {
     // time the two halves separately: wasm geometry compute, then canvas blit.
@@ -244,7 +256,7 @@ async function main() {
     hudPush(hud.wasm, t1 - t0);
     hudPush(hud.blit, t2 - t1);
     hudPush(hud.total, t2 - t0);
-    drawHud(ctx, bufHighWater(), capBytes, cmds, clock(), riderSeg() + 1); // unrolled overlay, on top
+    drawHud(ctx, bufHighWater(), capBytes, cmds, clock(), riderSeg() + 1, debug); // unrolled overlay, on top
   }
   function loop() {
     if (auto) { advance(); draw(); }
@@ -267,6 +279,11 @@ async function main() {
         while (riderSeg() === from && guard++ < 200000) advance();
         draw();
       }
+      e.preventDefault();
+    } else if (e.code === 'KeyD') {
+      // toggle the dev overlay (frame-budget HUD). Off by default; redraw now so it
+      // responds even while paused.
+      if (!e.repeat) { debug = !debug; draw(); }
       e.preventDefault();
     }
   });

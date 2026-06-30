@@ -56,10 +56,9 @@ real TS model through the full route — continuity, no-loop, the authored invar
 below) plus `npm run typecheck` — useful for checking the port against the source.
 
 **Dev hotkeys** (`wasm/blitter.js`): ↑/↓ step, SPACE auto, **J** fast-forwards the
-*real* drive (no teleport) one intersection at a time. A frame-budget HUD is
-on-screen for now (hiding it is end-polish). *Not yet ported from the TS build:*
-the **D** debug overlay (the lean-probe arcs) and the **S/H** fast-forwards (to
-dusk / to seg16) — see *Known open work*.
+*real* drive (no teleport) one intersection at a time, **D** toggles the dev overlay
+(the frame-budget HUD + step/seg + buffer peak) — **off by default** so prod is
+clean, with a dim `D` affordance left on-screen so it stays discoverable.
 
 ## The one durable architecture idea: rider-relative, no global coordinates
 
@@ -139,10 +138,10 @@ landscape is monotonic (sweep left→right: off-left → on-road band → off-ri
 flip finds the on-road lean whose projected path ends closest to a target in ~12
 probes. The target is an **asymptotic glide** (a fraction of the current offset —
 ease toward centre, don't yank and overshoot) with a hold-band near centre to kill
-twitch; on-road always beats off-road. (The TS build's debug overlay drew the
+twitch; on-road always beats off-road. (In the TS build a debug overlay drew the
 *actual* probe arcs — red/green/blue, chosen lean yellow, every dot a real probe —
-so the picture couldn't lie about the algorithm; that overlay isn't ported to the
-zig version yet.)
+so the picture couldn't lie about the algorithm; the zig dev overlay shows
+frame-budget stats instead.)
 
 **Snaps are off and the wobble is honest.** Both snaps (tilt→0, yaw→aim) were
 deleted to get the clean break; the residual wobble is genuine physics (any held
@@ -203,11 +202,6 @@ sheet of the isolated cat. Both are the model for homegrown instruments here.
 
 ## Known open work
 
-- **Port-cleanup tail** (the zig version): the **D** debug overlay (lean-probe
-  arcs) and the **S/H** fast-forwards aren't ported yet; the frame-budget HUD is
-  always-on and wants a hide toggle for a clean prod view.
-- **Camera pitch.** `project()` does yaw and roll but no pitch — needed to "look up
-  under the canopy." The known missing piece.
 - Intersections keep absorbing the joint (corner creatures conceptually owned by
   the node); generalize "landmarks owned by a graph element" beyond towers.
 - Residual rider slowness (far-shoulder phantom braking in the held-tilt
