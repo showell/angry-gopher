@@ -13,13 +13,20 @@ One file per critter, named by Unicode codepoint:
 | `1f992.svg` | giraffe 🦒 | U+1F992 |
 | `1f993.svg` | zebra 🦓 | U+1F993 |
 | `1f98f.svg` | rhino 🦏 | U+1F98F |
-| `1f402.svg` | bull 🐂 | U+1F402 |
+| `1f402.svg` | bull 🐂 | U+1F402 | **Fluent** (see below) |
 | `1f404.svg` | cow 🐄 | U+1F404 |
 | `1f416.svg` | pig 🐖 | U+1F416 |
 
 ## Attribution
 
-Artwork from **Twemoji** (the [jdecked/twemoji](https://github.com/jdecked/twemoji) fork),
-licensed **CC-BY 4.0** (https://creativecommons.org/licenses/by/4.0/). Copyright Twitter, Inc
-and other contributors. Chosen because the art is flat, fill-only vector (no strokes, no
-transforms, no gradients) — which tessellates cleanly into the game's polygon seam.
+Two sources, both flat fill-only vector art (no strokes, transforms, or gradients) — which is
+what tessellates cleanly into the game's polygon seam:
+
+- **Most critters — Twemoji** (the [jdecked/twemoji](https://github.com/jdecked/twemoji) fork),
+  **CC-BY 4.0** (https://creativecommons.org/licenses/by/4.0/). Copyright Twitter, Inc and other
+  contributors.
+- **The bull (`1f402.svg`) — Microsoft [Fluent Emoji](https://github.com/microsoft/fluentui-emoji)**
+  ("Ox", Flat variant), **MIT** licensed. It's deliberately the richer one — more articulated than
+  the cartoonish herd (legs, shaded muzzle, horns) — because the bull is drawn up close and we want
+  it to carry some weight. Fluent's *Color* variant is gradient-based and the flat-polygon seam
+  can't reproduce it, so we use the *Flat* variant.
