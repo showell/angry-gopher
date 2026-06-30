@@ -17,11 +17,13 @@ const safari = @import("safari"); // the wasm core, added as a named module by b
 const raster = @import("raster.zig");
 const png = @import("png.zig");
 
-const W = 960;
-const H = 600;
+const W = raster.W;
+const H = raster.H;
 
-// the framebuffer + PNG scratch — static .bss (no allocator), like the rest of the core.
-var fb_px: [W * H]u32 = undefined;
+// static .bss (no allocator): a supersampled render target + the downsampled display image
+// + the PNG scratch. The big buffer is the anti-aliasing cost — SS² the display pixels.
+var big_px: [raster.SW * raster.SH]u32 = undefined; // supersampled render target
+var disp_px: [W * H]u32 = undefined; // downsampled (anti-aliased) image
 var raw_buf: [H * (1 + W * 3)]u8 = undefined; // filtered scanlines
 var zlib_buf: [H * (1 + W * 3) + 1024]u8 = undefined; // deflate stream (stored blocks)
 var out_buf: [H * (1 + W * 3) + 2048]u8 = undefined; // the assembled PNG file
@@ -29,19 +31,18 @@ var out_buf: [H * (1 + W * 3) + 2048]u8 = undefined; // the assembled PNG file
 pub fn main() !void {
     var threaded = std.Io.Threaded.init(std.heap.page_allocator, .{});
     const io = threaded.io();
-    const fb = raster.Fb{ .px = &fb_px, .w = W, .h = H };
     const dir = "games/driving/snap/native";
 
     // snapshot the opening frame (start of segment 0), then drive the route and snapshot
     // each time the rider crosses into a new segment — one frame per scene.
-    try snap(io, fb, dir, 0);
+    try snap(io, dir, 0);
     var prev = safari.riderSeg();
     var guard: usize = 0;
     while (guard < 2_000_000) : (guard += 1) {
         safari.advance();
         const s = safari.riderSeg();
         if (s > prev) {
-            try snap(io, fb, dir, s);
+            try snap(io, dir, s);
             prev = s;
         } else if (s < prev) {
             break; // the ride reset at the terminus — the whole route is captured
@@ -50,7 +51,7 @@ pub fn main() !void {
     std.debug.print("done: snapshots in {s}\n", .{dir});
 }
 
-fn snap(io: std.Io, fb: raster.Fb, dir: []const u8, seg: u32) !void {
+fn snap(io: std.Io, dir: []const u8, seg: u32) !void {
     _ = safari.renderFrame(); // fills paint's draw buffer for the current rider state
     const sun = raster.SunPos{
         .visible = safari.sunVisible() == 1,
@@ -58,9 +59,12 @@ fn snap(io: std.Io, fb: raster.Fb, dir: []const u8, seg: u32) !void {
         .y = safari.sunY(),
         .scale = safari.sunScale(),
     };
-    raster.render(fb, safari.frameWords(), safari.riderTilt(), safari.skyTop(), safari.skyHorizon(), sun);
+    const big = raster.Fb{ .px = &big_px, .w = raster.SW, .h = raster.SH };
+    const disp = raster.Fb{ .px = &disp_px, .w = W, .h = H };
+    raster.render(big, safari.frameWords(), safari.riderTilt(), safari.skyTop(), safari.skyHorizon(), sun);
+    raster.downsample(big, disp);
 
-    const bytes = png.encode(&fb_px, W, H, &raw_buf, &zlib_buf, &out_buf);
+    const bytes = png.encode(&disp_px, W, H, &raw_buf, &zlib_buf, &out_buf);
     var namebuf: [256]u8 = undefined;
     const path = try std.fmt.bufPrint(&namebuf, "{s}/seg{d:0>2}.png", .{ dir, seg });
     try std.Io.Dir.cwd().writeFile(io, .{ .sub_path = path, .data = bytes });

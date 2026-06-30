@@ -19,55 +19,109 @@ pub const SunPos = struct { visible: bool, x: f32, y: f32, scale: f32 };
 const GRASS: u32 = 0x4a8f43;
 const SUN_RADIUS_PX: f32 = 46.0; // matches blitter.js / sky.zig
 
+// The design canvas (the coordinate space the draw commands live in) and the supersample
+// factor. We rasterize into an SW×SH buffer and box-downsample to W×H — anti-aliasing the
+// hard scanline edges (the browser canvas did this for us for free). SS is the one knob:
+// higher = smoother edges + less temporal crawl, but SS² the pixel work. Callers size their
+// big buffer to SW×SH and the display buffer to W×H.
+pub const W: usize = 960;
+pub const H: usize = 600;
+pub const SS: usize = 2;
+pub const SW: usize = W * SS;
+pub const SH: usize = H * SS;
+
 const Pt = struct { x: f32, y: f32 };
 
-// per-frame rotation context: design<->screen about the screen centre, by ∓tilt.
+// per-frame transform context: DESIGN space (W×H, where the draw commands live) <-> the
+// SS-supersampled PIXEL buffer, composing the camera roll (∓tilt about the design centre)
+// with the ×SS scale. toPixel maps design→pixel (for rasterising vertices); toDesign maps
+// pixel→design (for per-pixel gradient + background lookups, which stay in design space).
 const Roll = struct {
-    cx: f32,
-    cy: f32,
+    cx: f32 = @as(f32, W) / 2.0, // design centre
+    cy: f32 = @as(f32, H) / 2.0,
     ct: f32, // cos(tilt)
     st: f32, // sin(tilt)
+    ss: f32, // supersample scale
+    inv_ss: f32, // 1/ss (multiply per pixel, never divide)
 
-    // design point -> screen pixel (the canvas's R(-tilt) about centre).
-    fn toScreen(self: Roll, dx: f32, dy: f32) Pt {
+    // design point -> supersampled pixel (the canvas's R(-tilt) about centre, then ×ss).
+    fn toPixel(self: Roll, dx: f32, dy: f32) Pt {
         const ex = dx - self.cx;
         const ey = dy - self.cy;
-        return .{ .x = self.cx + self.ct * ex + self.st * ey, .y = self.cy - self.st * ex + self.ct * ey };
+        const rx = self.cx + self.ct * ex + self.st * ey;
+        const ry = self.cy - self.st * ex + self.ct * ey;
+        return .{ .x = rx * self.ss, .y = ry * self.ss };
     }
-    // screen pixel -> design point (the inverse, R(+tilt)).
-    fn toDesign(self: Roll, sx: f32, sy: f32) Pt {
-        const ex = sx - self.cx;
-        const ey = sy - self.cy;
+    // supersampled pixel -> design point (×inv_ss, then the inverse roll R(+tilt)).
+    fn toDesign(self: Roll, px: f32, py: f32) Pt {
+        const ex = px * self.inv_ss - self.cx;
+        const ey = py * self.inv_ss - self.cy;
         return .{ .x = self.cx + self.ct * ex - self.st * ey, .y = self.cy + self.st * ex + self.ct * ey };
     }
 };
 
-/// render fills `fb` for one frame: background, sun (behind the world), then every
-/// polygon command in `words` — exactly the paint order blitter.js used.
+/// render fills `fb` (an SW×SH supersampled buffer) for one frame: background, sun (behind
+/// the world), then every polygon command in `words` — the paint order blitter.js used.
+/// Call downsample() to produce the W×H display image.
 pub fn render(fb: Fb, words: []const u32, tilt: f32, sky_top: u32, sky_horizon: u32, sun: SunPos) void {
+    const ss = @as(f32, @floatFromInt(fb.w)) / @as(f32, W);
     const roll = Roll{
-        .cx = @as(f32, @floatFromInt(fb.w)) / 2.0,
-        .cy = @as(f32, @floatFromInt(fb.h)) / 2.0,
         .ct = @cos(tilt),
         .st = @sin(tilt),
+        .ss = ss,
+        .inv_ss = 1.0 / ss,
     };
     drawBackground(fb, roll, sky_top, sky_horizon);
     if (sun.visible) drawSun(fb, roll, sun);
     walk(fb, roll, words);
 }
 
-// ---- background: per-pixel vertical sky gradient (above the design mid-line) + grass. ----
+/// downsample box-averages each SS×SS block of `src` (SW×SH) into `dst` (W×H) — the
+/// anti-aliasing resolve. dst pixels are 0x00RRGGBB, ready to blit / encode. SS is comptime
+/// so the /n averaging becomes a shift (SS=2) or a magic-multiply (SS=3), not a runtime
+/// integer divide — that divide was the whole frame's bottleneck (instrumented).
+pub fn downsample(src: Fb, dst: Fb) void {
+    const n: u32 = SS * SS; // comptime: divisor folds to a shift/magic-multiply
+    var dy: usize = 0;
+    while (dy < dst.h) : (dy += 1) {
+        var dx: usize = 0;
+        while (dx < dst.w) : (dx += 1) {
+            var r: u32 = 0;
+            var g: u32 = 0;
+            var b: u32 = 0;
+            inline for (0..SS) |sy| {
+                const row = (dy * SS + sy) * src.w + dx * SS;
+                inline for (0..SS) |sx| {
+                    const p = src.px[row + sx];
+                    r += (p >> 16) & 0xff;
+                    g += (p >> 8) & 0xff;
+                    b += p & 0xff;
+                }
+            }
+            dst.px[dy * dst.w + dx] = ((r / n) << 16) | ((g / n) << 8) | (b / n);
+        }
+    }
+}
+
+// ---- background: vertical sky gradient (above the design mid-line) + grass. ----
+// Only design-Y matters, and it is LINEAR across a row under the roll, so we step it
+// incrementally — no per-pixel rotate/divide (this is full-screen at SS², the hot path).
 fn drawBackground(fb: Fb, roll: Roll, sky_top: u32, sky_horizon: u32) void {
     const half = roll.cy; // design H/2
+    const inv_half = 1.0 / half;
+    const delta = roll.st * roll.inv_ss; // d(design.y)/d(px)
     var py: usize = 0;
     while (py < fb.h) : (py += 1) {
+        const ey = (@as(f32, @floatFromInt(py)) + 0.5) * roll.inv_ss - roll.cy;
+        const row_base = roll.cy + roll.ct * ey - roll.st * roll.cx; // design.y at px=0
+        var y = row_base + delta * 0.5; // design.y at the first pixel centre
+        const row = py * fb.w;
         var px: usize = 0;
         while (px < fb.w) : (px += 1) {
-            const d = roll.toDesign(@as(f32, @floatFromInt(px)) + 0.5, @as(f32, @floatFromInt(py)) + 0.5);
             var color: u32 = GRASS;
-            if (d.y < half) {
+            if (y < half) {
                 // createLinearGradient(0,0,0,H/2): stops skyTop@0, skyTop@0.2, horizon@1.
-                const t = d.y / half;
+                const t = y * inv_half;
                 if (t <= 0.2) {
                     color = sky_top;
                 } else {
@@ -75,26 +129,35 @@ fn drawBackground(fb: Fb, roll: Roll, sky_top: u32, sky_horizon: u32) void {
                     color = lerpRgb(sky_top, sky_horizon, if (fr > 1.0) 1.0 else fr);
                 }
             }
-            fb.px[py * fb.w + px] = color;
+            fb.px[row + px] = color;
+            y += delta;
         }
     }
 }
 
 // ---- the setting sun: warm radial glow + the disc, clipped to the sky (design top half). ----
+// Bounded to the glow's pixel box (not the whole sky) — the sqrt is too costly to run on
+// every pixel at SS².
 fn drawSun(fb: Fb, roll: Roll, sun: SunPos) void {
     const half = roll.cy;
     const glow_inner = 8.0 * sun.scale;
     const glow_outer = 340.0 * sun.scale;
     const disc_inner = 4.0 * sun.scale;
     const disc_outer = SUN_RADIUS_PX * sun.scale;
-    var py: usize = 0;
-    while (py < fb.h) : (py += 1) {
-        var px: usize = 0;
-        while (px < fb.w) : (px += 1) {
+    const center = roll.toPixel(sun.x, sun.y);
+    const r_px = glow_outer * roll.ss;
+    const ylo: i64 = @max(0, @as(i64, @intFromFloat(@floor(center.y - r_px))));
+    const yhi: i64 = @min(@as(i64, @intCast(fb.h)) - 1, @as(i64, @intFromFloat(@ceil(center.y + r_px))));
+    const xlo: i64 = @max(0, @as(i64, @intFromFloat(@floor(center.x - r_px))));
+    const xhi: i64 = @min(@as(i64, @intCast(fb.w)) - 1, @as(i64, @intFromFloat(@ceil(center.x + r_px))));
+    var py: i64 = ylo;
+    while (py <= yhi) : (py += 1) {
+        var px: i64 = xlo;
+        while (px <= xhi) : (px += 1) {
             const d = roll.toDesign(@as(f32, @floatFromInt(px)) + 0.5, @as(f32, @floatFromInt(py)) + 0.5);
             if (d.y >= half) continue; // sky-only clip
             const r = @sqrt((d.x - sun.x) * (d.x - sun.x) + (d.y - sun.y) * (d.y - sun.y));
-            const idx = py * fb.w + px;
+            const idx = @as(usize, @intCast(py)) * fb.w + @as(usize, @intCast(px));
             if (r < glow_outer) {
                 const t = clamp01((r - glow_inner) / (glow_outer - glow_inner));
                 const c = glowColor(t);
@@ -226,7 +289,7 @@ fn fillPoly(fb: Fb, roll: Roll, words: []const u32, w: usize, n: u32, shader: Sh
     const count: usize = @intCast(n);
     var i: usize = 0;
     while (i < count and i < sp.len) : (i += 1) {
-        sp[i] = roll.toScreen(f(words[w + i * 2]), f(words[w + i * 2 + 1]));
+        sp[i] = roll.toPixel(f(words[w + i * 2]), f(words[w + i * 2 + 1]));
     }
     const nv = @min(count, sp.len);
     const end = w + count * 2;
@@ -258,15 +321,27 @@ fn fillPoly(fb: Fb, roll: Roll, words: []const u32, w: usize, n: u32, shader: Sh
             }
         }
         insertionSort(xs[0..nx]);
+        const solid_color: ?u32 = switch (shader) {
+            .solid => |cc| cc & 0xffffff,
+            else => null,
+        };
         var s: usize = 0;
         while (s + 1 < nx) : (s += 2) {
             var xa: i64 = @intFromFloat(@ceil(xs[s] - 0.5));
             var xb: i64 = @intFromFloat(@floor(xs[s + 1] - 0.5));
             if (xa < 0) xa = 0;
             if (xb > @as(i64, @intCast(fb.w)) - 1) xb = @as(i64, @intCast(fb.w)) - 1;
+            const rowbase = @as(usize, @intCast(y)) * fb.w;
+            // Solid fills (mountains/road/most critters) don't use the per-pixel design
+            // coord — tight store loop, no toDesign/shade call. This is the bulk of the area.
+            if (solid_color) |sc| {
+                var x: i64 = xa;
+                while (x <= xb) : (x += 1) fb.px[rowbase + @as(usize, @intCast(x))] = sc;
+                continue;
+            }
             var x: i64 = xa;
             while (x <= xb) : (x += 1) {
-                const idx = @as(usize, @intCast(y)) * fb.w + @as(usize, @intCast(x));
+                const idx = rowbase + @as(usize, @intCast(x));
                 const d = roll.toDesign(@as(f32, @floatFromInt(x)) + 0.5, yc);
                 shadePixel(fb, idx, shader, d);
             }
@@ -328,8 +403,9 @@ fn blendStops(fb: Fb, idx: usize, c0: u32, c1: u32, p: f32, o0: f32, o1: f32) vo
     blend(fb, idx, chan(c, 16), chan(c, 8), chan(c, 0), a);
 }
 
-fn discFill(fb: Fb, roll: Roll, dx: f32, dy: f32, r: f32, color: u32, alpha: f32) void {
-    const c = roll.toScreen(dx, dy); // rotation preserves the radius
+fn discFill(fb: Fb, roll: Roll, dx: f32, dy: f32, r_design: f32, color: u32, alpha: f32) void {
+    const c = roll.toPixel(dx, dy); // rotation preserves the radius; scale it to pixel space
+    const r = r_design * roll.ss;
     var y: i64 = @max(0, @as(i64, @intFromFloat(@floor(c.y - r))));
     const ylast: i64 = @min(@as(i64, @intCast(fb.h)) - 1, @as(i64, @intFromFloat(@ceil(c.y + r))));
     const rr = r * r;

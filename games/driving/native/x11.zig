@@ -23,12 +23,22 @@ const c = @cImport({
     @cInclude("X11/Xlib.h");
     @cInclude("X11/keysym.h");
     @cInclude("unistd.h");
+    @cInclude("time.h");
 });
 
-const W = 960;
-const H = 600;
+const FRAME_NS: u64 = 16_666_000; // 60 fps budget
 
-var fb_px: [W * H]u32 = undefined; // the framebuffer the XImage aliases
+fn nowNs() u64 {
+    var ts: c.struct_timespec = undefined;
+    _ = c.clock_gettime(c.CLOCK_MONOTONIC, &ts);
+    return @as(u64, @intCast(ts.tv_sec)) * 1_000_000_000 + @as(u64, @intCast(ts.tv_nsec));
+}
+
+const W = raster.W;
+const H = raster.H;
+
+var big_px: [raster.SW * raster.SH]u32 = undefined; // supersampled render target (anti-aliasing)
+var fb_px: [W * H]u32 = undefined; // the downsampled framebuffer the XImage aliases
 
 pub fn main() !void {
     const display = c.XOpenDisplay(null) orelse {
@@ -60,6 +70,7 @@ pub fn main() !void {
     var dirty = true; // re-render only when something changed (a step, an expose, or auto-advancing)
     var running = true;
     while (running) {
+        const frame_start = nowNs();
         while (c.XPending(display) > 0) {
             var ev: c.XEvent = undefined;
             _ = c.XNextEvent(display, &ev);
@@ -107,14 +118,18 @@ pub fn main() !void {
             _ = c.XFlush(display);
             dirty = false;
         }
-        _ = c.usleep(16_666); // ~60 fps
+
+        // pace to the frame budget: sleep only the time LEFT after the work, not a fixed
+        // amount, so motion is even regardless of render cost.
+        const elapsed = nowNs() - frame_start;
+        if (elapsed < FRAME_NS) _ = c.usleep(@intCast((FRAME_NS - elapsed) / 1000));
     }
 
     _ = c.XCloseDisplay(display);
 }
 
 // rasterize the current rider frame into the framebuffer (the same call the PNG harness
-// makes, minus the file write).
+// makes, minus the file write): render supersampled, then downsample (anti-alias) to fb_px.
 fn renderToFb() void {
     _ = safari.renderFrame();
     const sun = raster.SunPos{
@@ -123,6 +138,8 @@ fn renderToFb() void {
         .y = safari.sunY(),
         .scale = safari.sunScale(),
     };
+    const big = raster.Fb{ .px = &big_px, .w = raster.SW, .h = raster.SH };
     const fb = raster.Fb{ .px = &fb_px, .w = W, .h = H };
-    raster.render(fb, safari.frameWords(), safari.riderTilt(), safari.skyTop(), safari.skyHorizon(), sun);
+    raster.render(big, safari.frameWords(), safari.riderTilt(), safari.skyTop(), safari.skyHorizon(), sun);
+    raster.downsample(big, fb);
 }
