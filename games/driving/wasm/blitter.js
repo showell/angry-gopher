@@ -232,6 +232,20 @@ async function main() {
     if (e.code === 'Space') { auto = !auto; e.preventDefault(); }
     else if (e.code === 'ArrowUp') { auto = false; advance(); draw(); e.preventDefault(); }
     else if (e.code === 'ArrowDown') { auto = false; back(); draw(); e.preventDefault(); }
+    else if (e.code === 'KeyJ') {
+      // jump one intersection: run the REAL drive (advance steps) until the rider crosses into the next
+      // segment, landing at its start — velocity, acceleration, and the day→dusk dimming all faithful, as
+      // if actually ridden. Repeated presses walk the route a segment at a time; pause after so you can
+      // inspect (e.g. the truck close-up once it's night). Mirrors the J hotkey in main.ts.
+      if (!e.repeat) {
+        auto = false;
+        const from = riderSeg();
+        let guard = 0;
+        while (riderSeg() === from && guard++ < 200000) advance();
+        draw();
+      }
+      e.preventDefault();
+    }
   });
 
   draw();
