@@ -2,8 +2,8 @@
 //! if it had crossed, facing into the turn, and its BABY ahead in the rider's path beyond the turn. Emoji
 //! billboards, one shared placement rule, only the per-species dimensions differ. Faithful port of
 //! safari_critter.ts's cornerCritters — MINUS the late-route giant upsizing (Steve: never effective). The
-//! adult/baby sizing IS kept. The CROCODILE is the exception: a hand-drawn lagoon scene (crocodile.zig), not
-//! an emoji pair, so it returns no pair here and render.zig draws its lagoon separately.
+//! adult/baby sizing IS kept. The POND is the exception: a hand-drawn scene (pond.zig — water + bank +
+//! ducks), not an emoji pair, so it returns no pair here and render.zig draws the pond separately.
 
 const world = @import("world.zig");
 
@@ -19,7 +19,7 @@ fn species(c: world.Creature) ?Species {
         .giraffe => .{ .cp = 0x1F992, .adult_h = 4.5 }, // 🦒 — stands tallest
         .zebra => .{ .cp = 0x1F993, .adult_h = 1.6 }, // 🦓
         .rhino => .{ .cp = 0x1F98F, .adult_h = 3.2 }, // 🦏
-        .crocodile => null, // hand-drawn lagoon scene (crocodile.zig), not an emoji pair
+        .pond => null, // hand-drawn duck-pond scene (pond.zig), not an emoji pair
         .none => null,
     };
 }

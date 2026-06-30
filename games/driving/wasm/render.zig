@@ -13,7 +13,7 @@ const tree = @import("tree.zig");
 const tower = @import("tower.zig");
 const critter = @import("critter.zig");
 const safari_critter = @import("safari_critter.zig");
-const crocodile = @import("crocodile.zig");
+const pond = @import("pond.zig");
 const cat = @import("cat.zig");
 const truck = @import("truck.zig");
 const mountains = @import("mountains.zig");
@@ -125,15 +125,15 @@ fn emitGroundColor(pts: []const geom.RiderPt, color: u32, cam_focal: f32) void {
     paint.pushPoly(color, screen[0..m]);
 }
 
-// the crocodile corner's GROUND: the lagoon water then the mud bank, authored in the incoming corner frame
-// (corner(cu, cv) = map(from_len + cv, cu)) and painted before the croc billboards. Mirrors the lagoon/mud
-// quads of crocodile.ts's crocodileScene. Drawn for both the forward joint and the joint just behind.
-fn emitLagoonGround(w: *const world.World, ch: *const Chain, pose: Pose, map: Mapper, from_len: f32, cam_focal: f32) void {
+// the duck pond's GROUND: the water then the bank, authored in the incoming corner frame (corner(cu, cv) =
+// map(from_len + cv, cu)) and painted before the duck billboards. Mirrors the water/bank quads of pond.zig.
+// Drawn for both the forward joint and the joint just behind.
+fn emitPondGround(w: *const world.World, ch: *const Chain, pose: Pose, map: Mapper, from_len: f32, cam_focal: f32) void {
     var pts: [8]geom.RiderPt = undefined;
-    for (crocodile.LAGOON, 0..) |p, i| pts[i] = mapPt(w, ch, pose, map, from_len + p.cv, p.cu);
-    emitGroundColor(pts[0..crocodile.LAGOON.len], crocodile.WATER, cam_focal);
-    for (crocodile.MUD_BANK, 0..) |p, i| pts[i] = mapPt(w, ch, pose, map, from_len + p.cv, p.cu);
-    emitGroundColor(pts[0..crocodile.MUD_BANK.len], crocodile.MUD, cam_focal);
+    for (pond.WATER_OUTLINE, 0..) |p, i| pts[i] = mapPt(w, ch, pose, map, from_len + p.cv, p.cu);
+    emitGroundColor(pts[0..pond.WATER_OUTLINE.len], pond.WATER, cam_focal);
+    for (pond.BANK, 0..) |p, i| pts[i] = mapPt(w, ch, pose, map, from_len + p.cv, p.cu);
+    emitGroundColor(pts[0..pond.BANK.len], pond.BANK_COLOR, cam_focal);
 }
 
 pub fn frame(w: *const world.World, seg_idx: usize, along: f32, across: f32, yaw: f32, heading: f32, step: f32, v: f32, cam_focal: f32, view_yaw: f32, tk: truck.State) void {
@@ -315,22 +315,22 @@ pub fn frame(w: *const world.World, seg_idx: usize, along: f32, across: f32, yaw
             }
         }
 
-        // the crocodile lagoon at this segment's EXIT: the water + mud ground (painted now) plus seven croc
-        // billboards on the bank (collected for the depth sort). Authored in the incoming corner frame — cu
-        // is the BL-frame across directly (the lagoon's negative cu sits LEFT of the left edge), so map it
-        // raw (no +hw). Mirrors crocodile.ts's crocodileScene; safari_critter draws no emoji pair for it.
-        if (seg.exit_creature == .crocodile) {
-            emitLagoonGround(w, &ch, pose, .{ .kind = .chain, .d = d }, seg.length, cam_focal);
-            for (crocodile.CROC_BANK) |p| {
+        // the duck pond at this segment's EXIT: the water + bank ground (painted now) plus three duck
+        // billboards floating on the water (collected for the depth sort). Authored in the incoming corner
+        // frame — cu is the BL-frame across directly (the pond's negative cu sits LEFT of the left edge), so
+        // map it raw (no +hw). safari_critter draws no emoji pair for a pond.
+        if (seg.exit_creature == .pond) {
+            emitPondGround(w, &ch, pose, .{ .kind = .chain, .d = d }, seg.length, cam_focal);
+            for (pond.DUCKS) |dk| {
                 if (ncow >= MAX_VIS_CRITTERS) break;
-                const rp = at(w, &ch, pose, d, seg.length + p.cv, p.cu);
+                const rp = at(w, &ch, pose, d, seg.length + dk.p.cv, dk.p.cu);
                 if (rp.forward <= camera.NEAR) continue;
-                if (crocodile.CROC_HEIGHT / rp.forward * cam_focal < MIN_SCENERY_PX) continue;
+                if (pond.DUCK_HEIGHT / rp.forward * cam_focal < MIN_SCENERY_PX) continue;
                 c_right[ncow] = rp.right;
                 c_fwd[ncow] = rp.forward;
-                c_h[ncow] = crocodile.CROC_HEIGHT;
-                c_cp[ncow] = crocodile.CROC_CP;
-                c_face[ncow] = crocodile.CROC_FACE_RIGHT;
+                c_h[ncow] = pond.DUCK_HEIGHT;
+                c_cp[ncow] = pond.DUCK_CP;
+                c_face[ncow] = dk.face_right;
                 ncow += 1;
             }
         }
@@ -409,20 +409,20 @@ pub fn frame(w: *const world.World, seg_idx: usize, along: f32, across: f32, yaw
         }
     }
 
-    // the crocodile lagoon the joint we just passed OWNS, mapped forward through the join — without it the
-    // lagoon + crocs pop out the instant cur.segment flips (the same symptom the pavement/tower/creatures had).
-    if (has_prev and prev.exit_creature == .crocodile) {
-        emitLagoonGround(w, &ch, pose, prev_map, prev.length, cam_focal);
-        for (crocodile.CROC_BANK) |p| {
+    // the duck pond the joint we just passed OWNS, mapped forward through the join — without it the pond +
+    // ducks pop out the instant cur.segment flips (the same symptom the pavement/tower/creatures had).
+    if (has_prev and prev.exit_creature == .pond) {
+        emitPondGround(w, &ch, pose, prev_map, prev.length, cam_focal);
+        for (pond.DUCKS) |dk| {
             if (ncow >= MAX_VIS_CRITTERS) break;
-            const rp = mapPt(w, &ch, pose, prev_map, prev.length + p.cv, p.cu);
+            const rp = mapPt(w, &ch, pose, prev_map, prev.length + dk.p.cv, dk.p.cu);
             if (rp.forward <= camera.NEAR) continue;
-            if (crocodile.CROC_HEIGHT / rp.forward * cam_focal < MIN_SCENERY_PX) continue;
+            if (pond.DUCK_HEIGHT / rp.forward * cam_focal < MIN_SCENERY_PX) continue;
             c_right[ncow] = rp.right;
             c_fwd[ncow] = rp.forward;
-            c_h[ncow] = crocodile.CROC_HEIGHT;
-            c_cp[ncow] = crocodile.CROC_CP;
-            c_face[ncow] = crocodile.CROC_FACE_RIGHT;
+            c_h[ncow] = pond.DUCK_HEIGHT;
+            c_cp[ncow] = pond.DUCK_CP;
+            c_face[ncow] = dk.face_right;
             ncow += 1;
         }
     }
