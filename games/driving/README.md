@@ -55,6 +55,15 @@ For why the engine and the math were never the hard part — and what it means t
 build something whose only spec is a perception in someone's head — read the essay
 [**"You Can't Freeze a Sunset"**](https://lynrummy.com/blog/you-cant-freeze-a-sunset).
 
+## Native builds — the desktop screensaver
+
+The same ride also runs as a native desktop screensaver (a Linux X11 window and a
+Windows `.scr`), reusing the exact zig core with a software rasterizer in place of the
+JS blitter. That whole path — the rasterizer, the per-OS window shims, the `.scr`
+modes, the fullscreen-by-camera-flex, and the zig-toolchain gotchas — lives in
+[**`native/README.md`**](native/README.md). Everything below this line is the design
+*intent* of the ride itself, shared by every build (browser and native alike).
+
 ## Running & testing
 
 `ops/start` builds the wasm (`ops/build_safari_wasm`) and launches the server;
