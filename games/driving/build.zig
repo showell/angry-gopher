@@ -59,6 +59,7 @@ pub fn build(b: *std.Build) void {
         });
         win.root_module.addImport("safari", safari_mod);
         win.root_module.linkSystemLibrary("X11", .{});
+        win.root_module.linkSystemLibrary("Xrender", .{}); // the scaled fullscreen blit (needs libxrender-dev)
         b.installArtifact(win);
     }
 }

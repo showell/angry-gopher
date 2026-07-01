@@ -89,7 +89,7 @@ fn snowlineAt(bearing: f32, peak: f32) f32 {
 // the screen column x maps to a bearing through the LIVE focal — a smaller cam_focal (lean/focus pull-in)
 // widens the angular span across the screen, exactly as the projection does. Mirrors mountain.ts bearingAt.
 fn bearingAt(x: f32, heading: f32, cam_focal: f32) f32 {
-    return heading + std.math.atan((x - camera.W / 2.0) / cam_focal);
+    return heading + std.math.atan((x - camera.view_w / 2.0) / cam_focal); // centre follows the live width
 }
 
 // the silhouette crest height (px above the horizon) at a bearing — the tallest of the ranges + the land.
@@ -108,14 +108,14 @@ pub fn sunBehindMountains(step: f32) bool {
 // silhouette polygon. `v_scale` (= cam_focal / FOCAL) squeezes the heights vertically by the same factor
 // the pull-in squeezes them horizontally, so it reads as a real focal change (mountain.ts's vScale).
 fn silhouette(comptime f: fn (f32) f32, heading: f32, cam_focal: f32, v_scale: f32, color: u32) void {
-    var pts: [1024]camera.ScreenPt = undefined;
+    var pts: [2048]camera.ScreenPt = undefined; // (view_w + 2·margin)/STEP columns + 2 — sized for the widest view
     var n: usize = 0;
     var x: f32 = -ROLL_MARGIN;
-    while (x <= camera.W + ROLL_MARGIN) : (x += STEP) {
+    while (x <= camera.view_w + ROLL_MARGIN) : (x += STEP) {
         pts[n] = .{ .x = x, .y = camera.H / 2.0 - f(bearingAt(x, heading, cam_focal)) * v_scale };
         n += 1;
     }
-    pts[n] = .{ .x = camera.W + ROLL_MARGIN, .y = camera.H / 2.0 };
+    pts[n] = .{ .x = camera.view_w + ROLL_MARGIN, .y = camera.H / 2.0 };
     n += 1;
     pts[n] = .{ .x = -ROLL_MARGIN, .y = camera.H / 2.0 };
     n += 1;
@@ -128,11 +128,11 @@ fn silhouette(comptime f: fn (f32) f32, heading: f32, cam_focal: f32, v_scale: f
 // band directly, the same shape without a clip primitive.)
 fn drawSnow(heading: f32, cam_focal: f32, v_scale: f32, snow: u32) void {
     const peak = snowPeakHeight();
-    var pts: [1024]camera.ScreenPt = undefined;
-    var xs: [512]f32 = undefined;
+    var pts: [2048]camera.ScreenPt = undefined; // top edge + bottom edge = 2·(view_w/STEP), sized for the widest view
+    var xs: [1024]f32 = undefined;
     var m: usize = 0;
     var x: f32 = 0;
-    while (x <= camera.W) : (x += STEP) {
+    while (x <= camera.view_w) : (x += STEP) {
         const b = bearingAt(x, heading, cam_focal);
         if (northRange(b) > snowlineAt(b, peak) + 0.01) {
             xs[m] = x;

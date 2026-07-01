@@ -93,7 +93,7 @@ pub fn sunPos(heading: f32, step: f32, cam_focal: f32) SunPos {
     const v_scale = cam_focal / camera.FOCAL;
     return .{
         .visible = true,
-        .x = camera.W / 2.0 + @tan(rel) * cam_focal,
+        .x = camera.view_w / 2.0 + @tan(rel) * cam_focal, // centre follows the live width (peripheral FOV)
         .y = camera.H / 2.0 - sunHeightPx(step) * v_scale,
         .scale = v_scale,
     };

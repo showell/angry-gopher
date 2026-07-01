@@ -13,9 +13,21 @@ pub const H: f32 = 600.0;
 pub const EYE_H: f32 = 1.2;
 pub const NEAR: f32 = 0.4;
 
+/// live projection WIDTH. The browser and the golden PNG harness leave this at the design W
+/// (960); the native window widens it toward the screen's aspect (see x11.zig) so the rider
+/// gets more PERIPHERAL vision — a wider FOV — with FOCAL held FROZEN. Because focal never
+/// moves, object sizes, depth foreshortening, and the sun's SIZE + VERTICAL position (hence
+/// the whole sunset clock) are untouched; only the horizontal field of view opens up. The
+/// world and physics are identical on every screen — the camera is the only thing that flexes.
+pub var view_w: f32 = W;
+pub fn setViewW(w: f32) void {
+    view_w = w;
+}
+
 const FOV_DEG: f32 = 70.0;
-/// base focal (pixels), looking straight ahead. The live `cam_focal` pulls IN from
-/// this as the rider leans / narrows focus on something — see camFocal.
+/// base focal (pixels), looking straight ahead — FROZEN at the design width, NOT recomputed
+/// from view_w (that is what keeps a wider window a wider FOV rather than a zoom). The live
+/// `cam_focal` pulls IN from this as the rider leans / narrows focus on something — see camFocal.
 pub const FOCAL: f32 = (W / 2.0) / @tan(FOV_DEG / 2.0 * std.math.pi / 180.0);
 
 // the focal pulls IN (widens the FOV — smaller focal) for the deepest of two narrowings: the LEAN into a
@@ -49,7 +61,7 @@ pub const ScreenPt = struct { x: f32, y: f32 };
 /// clip to NEAR first (geom.clipNear) — forward is then never ~0.
 pub fn project(p: geom.Vec3, cam_focal: f32) ScreenPt {
     return .{
-        .x = W / 2.0 + (p.right / p.forward) * cam_focal,
+        .x = view_w / 2.0 + (p.right / p.forward) * cam_focal, // centre follows the live width; focal frozen
         .y = H / 2.0 - ((p.height - EYE_H) / p.forward) * cam_focal,
     };
 }

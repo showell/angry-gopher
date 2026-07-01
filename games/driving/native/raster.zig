@@ -71,10 +71,20 @@ pub fn render(fb: Fb, words: []const u32, tilt: f32, sky_top: u32, sky_horizon: 
 }
 
 // the per-frame design<->pixel transform for a given target size + camera roll. Exposed so
-// the profiler (prof.zig) can drive the three render sub-phases individually.
+// the profiler (prof.zig) can drive the three render sub-phases individually. The design
+// centre comes from the buffer itself (fb.w/SS wide) rather than the 960 constant, so a
+// widened native view (fb.w = view_w·SS) rolls about ITS own centre — the golden harness and
+// browser, still 960 wide, are unchanged.
 pub fn rollFor(fb: Fb, tilt: f32) Roll {
-    const ss = @as(f32, @floatFromInt(fb.w)) / @as(f32, W);
-    return .{ .ct = @cos(tilt), .st = @sin(tilt), .ss = ss, .inv_ss = 1.0 / ss };
+    const ss: f32 = @floatFromInt(SS);
+    return .{
+        .cx = @as(f32, @floatFromInt(fb.w)) / (2.0 * ss),
+        .cy = @as(f32, @floatFromInt(fb.h)) / (2.0 * ss),
+        .ct = @cos(tilt),
+        .st = @sin(tilt),
+        .ss = ss,
+        .inv_ss = 1.0 / ss,
+    };
 }
 
 /// downsample box-averages each SS×SS block of `src` (SW×SH) into `dst` (W×H) — the

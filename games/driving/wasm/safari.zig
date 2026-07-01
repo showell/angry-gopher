@@ -245,3 +245,11 @@ pub export fn sunY() f32 {
 pub export fn sunScale() f32 {
     return sun.scale;
 }
+
+/// setViewW widens (or resets) the projection width — the native window calls it to match the
+/// screen's aspect for more peripheral FOV (see camera.view_w). The browser and the golden PNG
+/// harness never call it, so they stay pinned at the design width and render bit-identically.
+/// Call it BEFORE renderFrame(); the next frame's draw commands span [0, view_w].
+pub export fn setViewW(w: f32) void {
+    camera.setViewW(w);
+}
