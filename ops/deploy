@@ -42,6 +42,13 @@ echo "Building Elm + delivery bundles + the Safari WASM core..."
 "$GOPHER_DIR/ops/build_delivery"
 "$GOPHER_DIR/ops/build_safari_wasm"
 
+# Build the native Linux Safari executable — a free-standing download (NOT embedded),
+# rsync'd to downloads/ below and served by downloads.zig ("Linux Executable" on the
+# home page). Built locally because it needs the X11 dev libs the droplet lacks.
+echo "Building the native Linux Safari executable (download)..."
+"$GOPHER_DIR/ops/build_safari_download"
+SAFARI_BIN="$GOPHER_DIR/games/driving/zig-out/bin/safari_x11"
+
 # Debug build (default optimize mode). The zig server is I/O-bound — it serves
 # embedded static JS, small files, and small markdown renders, with no hot
 # compute loop — so LLVM's optimization passes (~72s for ReleaseSafe vs ~7s for
@@ -74,6 +81,11 @@ rsync -avz --mkpath --delete "$GOPHER_DIR/pages/" "$DEPLOY_HOST:$DEPLOY_DIR/page
 # read at request time, same as above; --delete scoped to gallery/ keeps the repo
 # authoritative. /gallery is unlinked (hidden) but public, so this ships it live.
 rsync -avz --mkpath --delete "$GOPHER_DIR/gallery/" "$DEPLOY_HOST:$DEPLOY_DIR/gallery/"
+# And the native Linux Safari executable (built above) — a free-standing download
+# served by downloads.zig. It's a build artifact (gitignored, not rsync'd from a
+# repo dir like the trees above), so ship the single file to downloads/safari-linux;
+# --mkpath creates the dir on first deploy.
+rsync -avz --mkpath "$SAFARI_BIN" "$DEPLOY_HOST:$DEPLOY_DIR/downloads/safari-linux"
 
 echo "Restarting $DEPLOY_SERVICE ..."
 # Health check hits the REAL FRONT DOOR, not /driving. The first cutover went

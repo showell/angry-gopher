@@ -1,0 +1,24 @@
+#!/bin/bash
+# CANONICAL DEV-LOOP SCRIPT — DO NOT REINVENT.
+# Before composing an ad-hoc shell command for build / test / regen, run
+# `ops/list` to see what already exists.
+#
+# Build the native Linux X11 Safari Screensaver as the distributable executable
+# offered on the home page ("Linux Executable" -> /downloads/safari-linux). This
+# is the exact same -Dwindow build ops/run_safari_x11 runs (ReleaseFast, hardcoded
+# in games/driving/build.zig) — just built without launching a window, so ops/deploy
+# can rsync the binary to the host's downloads/ dir.
+#
+# Needs the X11 dev headers locally: sudo apt install libx11-dev libxrender-dev.
+# The binary is dynamically linked against libX11 + libXrender, both standard on
+# any Linux desktop with an X session. The host only SERVES the file (downloads.zig);
+# it never runs it, so this always builds locally, never on the headless droplet.
+set -e
+
+source "$(dirname "$0")/_paths.sh"
+
+OUT="$GOPHER_DIR/games/driving/zig-out/bin/safari_x11"
+
+zig build --build-file "$GOPHER_DIR/games/driving/build.zig" -Dwindow=true
+
+echo "built $OUT ($(wc -c < "$OUT") bytes)"

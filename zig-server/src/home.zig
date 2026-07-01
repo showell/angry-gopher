@@ -66,7 +66,7 @@ pub fn handleHome(req: *Request, io: Io, alloc: Alloc, uid: []const u8, path: []
 /// An app row parsed from the DSL: a linked title, a CTA button label, a
 /// description paragraph, and a low-key tech line (primary `lang` + an
 /// interesting `tech` feature). `href` is both the title link and button target.
-const App = struct { title: []const u8, href: []const u8, cta: []const u8, lang: []const u8, tech: []const u8, code: []const u8, essay: []const u8, image: []const u8, desc: []const u8 };
+const App = struct { title: []const u8, href: []const u8, cta: []const u8, lang: []const u8, tech: []const u8, code: []const u8, essay: []const u8, image: []const u8, download: []const u8, desc: []const u8 };
 
 /// renderHomeBody reads pages/home.txt, parses the mini-DSL, and returns the inner
 /// page body (the `.app-body-wrap` through `</body></html>`). Returns an error on
@@ -94,6 +94,7 @@ fn renderHomeBody(io: Io, alloc: Alloc) ![]const u8 {
     var c_code: []const u8 = "";
     var c_essay: []const u8 = "";
     var c_image: []const u8 = "";
+    var c_download: []const u8 = "";
     var c_desc: std.ArrayList(u8) = .empty;
 
     var it = std.mem.splitScalar(u8, src, '\n');
@@ -101,7 +102,7 @@ fn renderHomeBody(io: Io, alloc: Alloc) ![]const u8 {
         const line = std.mem.trim(u8, raw, " \t\r");
         if (line.len == 0) continue; // blank lines only separate blocks
         if (std.mem.startsWith(u8, line, "## ")) {
-            if (have) try pushApp(alloc, &apps, c_title, c_href, c_cta, c_lang, c_tech, c_code, c_essay, c_image, &c_desc);
+            if (have) try pushApp(alloc, &apps, c_title, c_href, c_cta, c_lang, c_tech, c_code, c_essay, c_image, c_download, &c_desc);
             const rest = std.mem.trim(u8, line[3..], " ");
             const arrow = std.mem.indexOf(u8, rest, "->") orelse return error.MalformedHome;
             c_title = std.mem.trim(u8, rest[0..arrow], " ");
@@ -112,6 +113,7 @@ fn renderHomeBody(io: Io, alloc: Alloc) ![]const u8 {
             c_code = "";
             c_essay = "";
             c_image = "";
+            c_download = "";
             c_desc = .empty;
             have = true;
         } else if (std.mem.startsWith(u8, line, "# ")) {
@@ -134,13 +136,16 @@ fn renderHomeBody(io: Io, alloc: Alloc) ![]const u8 {
         } else if (std.mem.startsWith(u8, line, "image:")) {
             if (!have) return error.MalformedHome;
             c_image = std.mem.trim(u8, line[6..], " ");
+        } else if (std.mem.startsWith(u8, line, "download:")) {
+            if (!have) return error.MalformedHome;
+            c_download = std.mem.trim(u8, line[9..], " ");
         } else {
             if (!have) return error.MalformedHome; // stray prose outside any app block
             if (c_desc.items.len != 0) try c_desc.append(alloc, ' ');
             try c_desc.appendSlice(alloc, line);
         }
     }
-    if (have) try pushApp(alloc, &apps, c_title, c_href, c_cta, c_lang, c_tech, c_code, c_essay, c_image, &c_desc);
+    if (have) try pushApp(alloc, &apps, c_title, c_href, c_cta, c_lang, c_tech, c_code, c_essay, c_image, c_download, &c_desc);
     if (headline.len == 0 or apps.items.len == 0) return error.MalformedHome;
 
     // The headline renders as ordinary muted text, not a big H1 — the blue CTA
@@ -171,6 +176,13 @@ fn renderHomeBody(io: Io, alloc: Alloc) ![]const u8 {
             })
         else
             "";
+        // Optional "Linux Executable" download link (currently only Safari has one),
+        // riding the same line as Read more / Code on GitHub. `download` makes the
+        // browser save it (belt-and-suspenders with downloads.zig's attachment header).
+        const dl = if (a.download.len > 0)
+            try std.fmt.allocPrint(alloc, "<a class=\"app-dl\" href=\"{s}\" download>Linux Executable ↓</a>", .{try html.htmlEscape(alloc, a.download)})
+        else
+            "";
         // `lang:` is comma-separated — one `.tech-lang` chip per language (a single
         // language or a "+"-joined pair stays one chip, since neither has a comma).
         var chips: std.ArrayList(u8) = .empty;
@@ -183,7 +195,7 @@ fn renderHomeBody(io: Io, alloc: Alloc) ![]const u8 {
             try chips.appendSlice(alloc, "</span>");
         }
         try out.print(alloc,
-            \\<div class="app-row"><div class="app-row-top">{s}<div class="app-row-main"><h2><a href="{s}">{s}</a></h2><p>{s}</p><p class="app-more">{s}<a class="tech-code" href="{s}" target="_blank" rel="noopener">Code on GitHub ↗</a></p><p class="app-feat">{s} {s}</p></div>
+            \\<div class="app-row"><div class="app-row-top">{s}<div class="app-row-main"><h2><a href="{s}">{s}</a></h2><p>{s}</p><p class="app-more">{s}<a class="tech-code" href="{s}" target="_blank" rel="noopener">Code on GitHub ↗</a>{s}</p><p class="app-feat">{s} {s}</p></div>
             \\<div class="cta"><a class="play-btn" href="{s}">{s}</a></div></div></div>
             \\
         , .{
@@ -193,6 +205,7 @@ fn renderHomeBody(io: Io, alloc: Alloc) ![]const u8 {
             try html.htmlEscape(alloc, a.desc),
             more,
             try html.htmlEscape(alloc, a.code),
+            dl,
             chips.items,
             try html.htmlEscape(alloc, a.tech),
             try html.htmlEscape(alloc, a.href),
@@ -208,12 +221,12 @@ fn renderHomeBody(io: Io, alloc: Alloc) ![]const u8 {
 }
 
 /// pushApp validates a fully-accumulated block and appends it. All fields are
-/// required except `essay` (the optional "Read more" link) and `image` (the
-/// optional app thumbnail) — a block missing any of title/href/cta/lang/tech/code/
-/// description is malformed.
-fn pushApp(alloc: Alloc, apps: *std.ArrayList(App), title: []const u8, href: []const u8, cta: []const u8, lang: []const u8, tech: []const u8, code: []const u8, essay: []const u8, image: []const u8, desc: *std.ArrayList(u8)) !void {
+/// required except `essay` (the optional "Read more" link), `image` (the optional
+/// app thumbnail), and `download` (the optional "Linux Executable" link) — a block
+/// missing any of title/href/cta/lang/tech/code/description is malformed.
+fn pushApp(alloc: Alloc, apps: *std.ArrayList(App), title: []const u8, href: []const u8, cta: []const u8, lang: []const u8, tech: []const u8, code: []const u8, essay: []const u8, image: []const u8, download: []const u8, desc: *std.ArrayList(u8)) !void {
     if (title.len == 0 or href.len == 0 or cta.len == 0 or lang.len == 0 or tech.len == 0 or code.len == 0 or desc.items.len == 0) return error.MalformedHome;
-    try apps.append(alloc, .{ .title = title, .href = href, .cta = cta, .lang = lang, .tech = tech, .code = code, .essay = essay, .image = image, .desc = try desc.toOwnedSlice(alloc) });
+    try apps.append(alloc, .{ .title = title, .href = href, .cta = cta, .lang = lang, .tech = tech, .code = code, .essay = essay, .image = image, .download = download, .desc = try desc.toOwnedSlice(alloc) });
 }
 
 /// handleVersion serves the JSON build-identity probe. `commit` is the git
@@ -372,6 +385,9 @@ const head_style =
     \\.tech-code { margin-left: 16px; white-space: nowrap; font-weight: 600;
     \\             color: var(--cc-accent, #000080); text-decoration: none; }
     \\.tech-code:hover { text-decoration: underline; }
+    \\.app-dl { margin-left: 16px; white-space: nowrap; font-weight: 600;
+    \\          color: var(--cc-accent, #000080); text-decoration: none; }
+    \\.app-dl:hover { text-decoration: underline; }
     \\@media (max-width: 600px) { .app-row-top { flex-direction: column; align-items: flex-start; gap: 12px; }
     \\                            .play-btn { width: 100%; } }
     \\</style>
