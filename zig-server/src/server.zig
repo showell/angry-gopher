@@ -33,6 +33,7 @@ const blog = @import("blog.zig");
 const gallery = @import("gallery.zig");
 const downloads = @import("downloads.zig");
 const resume_page = @import("resume_page.zig");
+const safari_download = @import("safari_download.zig");
 const login = @import("login.zig");
 const brand = @import("brand.zig");
 const edge = @import("edge.zig");
@@ -188,6 +189,10 @@ fn route(req: *std.http.Server.Request, io: std.Io, alloc: std.mem.Allocator, bu
         try login.handleLogout(req, io, alloc);
     } else if (matchPrefix(path, "/images")) |sub| {
         try brand.handle(req, sub);
+    } else if (std.mem.eql(u8, path, "/safari_download") or std.mem.eql(u8, path, "/safari_download/")) {
+        // Public, read-only. The "Install locally" landing page for the Safari
+        // screensaver (server-owned markdown → download links) — see safari_download.zig.
+        try safari_download.handle(req, io, alloc);
     } else if (std.mem.eql(u8, path, "/steve-resume")) {
         // Public, read-only. A single server-owned markdown page (pages/steve-resume.md)
         // rendered through the trusted markdown pipeline — no viewer resolution, no gate.
