@@ -7,16 +7,24 @@
 //! StretchDIBits of a top-down 32-bit DIB, where X11 used an XImage + XRender.
 //!
 //! PIXEL FORMAT. raster fills 0x00RRGGBB per u32. A GDI 32-bit BI_RGB DIB is exactly that
-//! DWORD layout (bytes B,G,R,0 little-endian), so fb_px feeds StretchDIBits directly with no
-//! per-pixel conversion — the same free aliasing the X11 layer got from a TrueColor visual.
+//! DWORD layout (bytes B,G,R,0 little-endian), so the buffer feeds StretchDIBits directly with
+//! no per-pixel conversion — the same free aliasing the X11 layer got from a TrueColor visual.
 //! biHeight is NEGATIVE so the DIB is top-down (row 0 = top), matching our buffer's order.
+//!
+//! ANTI-ALIASING. We hand GDI the SUPERSAMPLED render (big_px, 1920×1200) rather than the
+//! box-downsampled 960×600, and let GDI resample it to the window with the HALFTONE stretch
+//! mode (bilinear-quality). At the 960 window that's a 2:1 downscale ≈ the manual box filter;
+//! expanded up to ~1080p it's near 1:1, so the snowcap keeps its AA; larger still it
+//! interpolates from 1920 instead of blocking a 960 source up. (Rendering at the monitor's
+//! true resolution is the deeper cure — that's the adaptive-camera step below.)
 //!
 //! FIRST STEP (this file). The goal here is only to get frames rendering on a clock-tick
 //! flipbook rhythm — an auto-advancing window at the DESIGN width (960×600), no adaptive
-//! camera and no screensaver logistics yet. Because it never calls safari.setViewW, it
-//! renders bit-identically to the browser + golden PNG harness. When the window isn't
-//! exactly the client size the DIB just stretches to fill it (aspect can distort on resize);
-//! the aspect-matched fullscreen fit (the view_w widening x11.zig does) is the NEXT step.
+//! camera and no screensaver logistics yet. It never calls safari.setViewW, so the SCENE is
+//! the same geometry the browser + golden PNG harness draw (only the final resample is GDI's,
+//! not our box filter). When the window isn't the exact client size the DIB just stretches to
+//! fill it (aspect can distort on resize); the aspect-matched fullscreen fit (the view_w
+//! widening x11.zig does) is the NEXT step.
 //!
 //! std.os.windows (zig 0.16) ships the base types + kernel32 but no user32/gdi32, so the
 //! GUI/GDI surface is declared inline below — the standard approach for a no-SDK cross build.
@@ -108,7 +116,7 @@ const VK_Q: WPARAM = 0x51;
 const SRCCOPY: DWORD = 0x00CC0020;
 const DIB_RGB_COLORS: UINT = 0;
 const BI_RGB: DWORD = 0;
-const COLORONCOLOR: c_int = 3;
+const HALFTONE: c_int = 4; // high-quality (bilinear-ish) stretch; needs SetBrushOrgEx after
 const IDC_ARROW: usize = 32512;
 
 // --- extern Win32 functions (no SDK: declared against the system import libs) ---
@@ -131,24 +139,28 @@ extern "kernel32" fn QueryPerformanceCounter(*i64) callconv(.winapi) BOOL;
 extern "kernel32" fn QueryPerformanceFrequency(*i64) callconv(.winapi) BOOL;
 extern "gdi32" fn StretchDIBits(HDC, c_int, c_int, c_int, c_int, c_int, c_int, c_int, c_int, *const anyopaque, *const BITMAPINFOHEADER, UINT, DWORD) callconv(.winapi) c_int;
 extern "gdi32" fn SetStretchBltMode(HDC, c_int) callconv(.winapi) c_int;
+extern "gdi32" fn SetBrushOrgEx(HDC, c_int, c_int, ?*POINT) callconv(.winapi) BOOL;
 
-// --- frame geometry (design width — bit-identical to the browser/PNG path) ---
-const W: usize = raster.W; // 960
+// --- frame geometry (design aspect — same scene the browser/PNG path draws) ---
+const W: usize = raster.W; // 960 — the window's default CLIENT size
 const H: usize = raster.H; // 600
 const W_i: c_int = @intCast(W);
 const H_i: c_int = @intCast(H);
+const SW: usize = raster.SW; // 1920 — the supersampled render GDI resamples from (the AA source)
+const SH: usize = raster.SH; // 1200
+const SW_i: c_int = @intCast(SW);
+const SH_i: c_int = @intCast(SH);
 const FRAME_MS: i64 = 16; // ~60 fps budget
 
-// Static .bss render targets (no allocator): the supersampled AA buffer + the downsampled
-// frame the DIB reads. Sized to the fixed design width; no resize reallocation.
-var big_px: [raster.SW * raster.SH]u32 = undefined;
-var fb_px: [W * H]u32 = undefined;
+// Static .bss render target (no allocator): the supersampled AA buffer. We blit THIS directly
+// and let GDI HALFTONE resample it to the window, so there's no manual downsample step here.
+var big_px: [SW * SH]u32 = undefined;
 
-// Top-down 32-bit BI_RGB DIB over fb_px — negative height means row 0 is the top.
+// Top-down 32-bit BI_RGB DIB over big_px — negative height means row 0 is the top.
 const bmih = BITMAPINFOHEADER{
     .biSize = @sizeOf(BITMAPINFOHEADER),
-    .biWidth = W_i,
-    .biHeight = -H_i,
+    .biWidth = SW_i,
+    .biHeight = -SH_i,
     .biPlanes = 1,
     .biBitCount = 32,
     .biCompression = BI_RGB,
@@ -210,7 +222,8 @@ pub fn main() !void {
     _ = ShowWindow(hwnd, SW_SHOW);
 
     const hdc = GetDC(hwnd) orelse return error.NoDC; // CS_OWNDC → valid for the window's life
-    _ = SetStretchBltMode(hdc, COLORONCOLOR);
+    _ = SetStretchBltMode(hdc, HALFTONE);
+    _ = SetBrushOrgEx(hdc, 0, 0, null); // HALFTONE requires this or the brush origin misaligns
 
     var freq: i64 = 1;
     _ = QueryPerformanceFrequency(&freq);
@@ -231,11 +244,11 @@ pub fn main() !void {
         if (!g_running) break;
 
         if (g_auto) safari.advance();
-        renderToFb();
+        renderScene();
 
         var rc: RECT = undefined;
         _ = GetClientRect(hwnd, &rc);
-        _ = StretchDIBits(hdc, 0, 0, rc.right - rc.left, rc.bottom - rc.top, 0, 0, W_i, H_i, &fb_px, &bmih, DIB_RGB_COLORS, SRCCOPY);
+        _ = StretchDIBits(hdc, 0, 0, rc.right - rc.left, rc.bottom - rc.top, 0, 0, SW_i, SH_i, &big_px, &bmih, DIB_RGB_COLORS, SRCCOPY);
 
         // pace to the frame budget: sleep only the time LEFT after the work, so motion stays
         // even regardless of render cost. Sleep granularity is coarse (~15 ms) but fine for a
@@ -247,9 +260,10 @@ pub fn main() !void {
     }
 }
 
-// rasterize the current rider frame into fb_px (the same call the PNG harness + x11 make,
-// minus the file write / X blit): render supersampled, then downsample (anti-alias).
-fn renderToFb() void {
+// rasterize the current rider frame into the supersampled buffer (the same render call the PNG
+// harness + x11 make). We DON'T downsample here — GDI does the resampling in the blit (HALFTONE),
+// which is what keeps expanded windows crisp instead of blocking up a pre-shrunk 960 frame.
+fn renderScene() void {
     _ = safari.renderFrame();
     const sun = raster.SunPos{
         .visible = safari.sunVisible() == 1,
@@ -257,8 +271,6 @@ fn renderToFb() void {
         .y = safari.sunY(),
         .scale = safari.sunScale(),
     };
-    const big = raster.Fb{ .px = &big_px, .w = raster.SW, .h = raster.SH };
-    const fb = raster.Fb{ .px = &fb_px, .w = W, .h = H };
+    const big = raster.Fb{ .px = &big_px, .w = SW, .h = SH };
     raster.render(big, safari.frameWords(), safari.riderTilt(), safari.skyTop(), safari.skyHorizon(), sun);
-    raster.downsample(big, fb);
 }
