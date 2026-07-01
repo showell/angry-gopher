@@ -42,15 +42,27 @@
 //! the blit. Idle workers (ring full — the steady state, since they outrun the 60 fps display)
 //! just Sleep(1); that poll costs nothing against the frame budget.
 //!
-//! FIRST STEP scope. Still the design width (never calls safari.setViewW), so the SCENE matches
-//! the browser + golden PNG harness (only the final resample is GDI's). No adaptive-camera
-//! fullscreen and no .scr logistics yet — those are the next steps.
+//! SCREENSAVER MODES (.scr). A Windows .scr is just this PE renamed — the OS launches it with a
+//! command-line flag that picks the mode, which we parse in parseMode():
+//!   /s            → FULLSCREEN: a borderless topmost WS_POPUP over the primary monitor, cursor
+//!                   hidden, and ANY input (key, real mouse move past a small threshold, click,
+//!                   wheel) quits — the screensaver contract.
+//!   /p <hwnd>     → PREVIEW: a WS_CHILD parented into the little monitor in the Screen-Saver
+//!                   settings dialog (hwnd is passed by the OS). Runs until that parent closes.
+//!   /c[:<hwnd>]   → CONFIG: we have no settings, so a MessageBox says so and exits.
+//!   (no args)     → WINDOWED: the 960×600 dev window (SPACE pause · Q/Esc quit). This is NOT the
+//!                   screensaver convention (no-args should mean config) but the OS never launches
+//!                   a .scr with no args through its UI (Test=/s, Configure=/c, double-click=install
+//!                   via the settings panel), so we keep no-args as the convenient dev-loop view.
+//! The scene is identical across modes — only the window kind + the client size GDI stretches into
+//! differ. Fullscreen still uses the design camera (no setViewW), so a 16:10 scene is stretched to
+//! the monitor's aspect; the true aspect-correct fit is the deferred adaptive-camera step.
 //!
 //! std.os.windows (zig 0.16) ships the base types + kernel32 but no user32/gdi32, so the
 //! GUI/GDI surface is declared inline below — the standard approach for a no-SDK cross build.
 //!
-//! Cross-compiled to x86_64-windows by ops/build_safari_windows (zig build -Dwin32). Controls
-//! mirror the browser/x11 minimally for now: SPACE pause/resume · Q/Esc quit.
+//! Cross-compiled to x86_64-windows by ops/build_safari_windows (zig build -Dwin32), which also
+//! emits the byte-identical safari.scr (the extension is all Windows needs to treat it as a saver).
 
 const std = @import("std");
 const safari = @import("safari");
@@ -126,12 +138,25 @@ const CS_VREDRAW: UINT = 0x0001;
 const CS_HREDRAW: UINT = 0x0002;
 const CS_OWNDC: UINT = 0x0020;
 const WS_OVERLAPPEDWINDOW: DWORD = 0x00CF0000;
+const WS_POPUP: DWORD = 0x80000000; // fullscreen: no border/caption
+const WS_CHILD: DWORD = 0x40000000; // preview: hosted in the settings dialog's monitor
+const WS_VISIBLE: DWORD = 0x10000000;
+const WS_EX_TOPMOST: DWORD = 0x00000008; // fullscreen sits above everything
 const CW_USEDEFAULT: c_int = @bitCast(@as(u32, 0x80000000));
 const SW_SHOW: c_int = 5;
+const SM_CXSCREEN: c_int = 0; // primary monitor width/height (GetSystemMetrics)
+const SM_CYSCREEN: c_int = 1;
+const MB_OK: UINT = 0;
 const PM_REMOVE: UINT = 0x0001;
 const WM_DESTROY: UINT = 0x0002;
 const WM_CLOSE: UINT = 0x0010;
 const WM_KEYDOWN: UINT = 0x0100;
+const WM_SYSKEYDOWN: UINT = 0x0104; // Alt+key etc. — also quits in fullscreen
+const WM_MOUSEMOVE: UINT = 0x0200;
+const WM_LBUTTONDOWN: UINT = 0x0201;
+const WM_RBUTTONDOWN: UINT = 0x0204;
+const WM_MBUTTONDOWN: UINT = 0x0207;
+const WM_MOUSEWHEEL: UINT = 0x020A;
 const WM_QUIT: UINT = 0x0012;
 const VK_ESCAPE: WPARAM = 0x1B;
 const VK_SPACE: WPARAM = 0x20;
@@ -156,7 +181,12 @@ extern "user32" fn GetClientRect(HWND, *RECT) callconv(.winapi) BOOL;
 extern "user32" fn AdjustWindowRect(*RECT, DWORD, BOOL) callconv(.winapi) BOOL;
 extern "user32" fn GetDC(?HWND) callconv(.winapi) ?HDC;
 extern "user32" fn LoadCursorW(?HINSTANCE, usize) callconv(.winapi) ?HCURSOR;
+extern "user32" fn GetSystemMetrics(c_int) callconv(.winapi) c_int;
+extern "user32" fn ShowCursor(BOOL) callconv(.winapi) c_int;
+extern "user32" fn IsWindow(?HWND) callconv(.winapi) BOOL;
+extern "user32" fn MessageBoxW(?HWND, [*:0]const WCHAR, [*:0]const WCHAR, UINT) callconv(.winapi) c_int;
 extern "kernel32" fn GetModuleHandleW(?[*:0]const WCHAR) callconv(.winapi) ?HINSTANCE;
+extern "kernel32" fn GetCommandLineW() callconv(.winapi) [*:0]const u16;
 extern "kernel32" fn Sleep(DWORD) callconv(.winapi) void;
 extern "kernel32" fn QueryPerformanceCounter(*i64) callconv(.winapi) BOOL;
 extern "kernel32" fn QueryPerformanceFrequency(*i64) callconv(.winapi) BOOL;
@@ -221,6 +251,16 @@ var g_quit = std.atomic.Value(bool).init(false); // tells the workers to exit
 var g_running: bool = true; // main loop (main thread only; set by the WndProc)
 var g_auto: bool = true; // SPACE pause: main stops producing + displaying (freeze)
 
+// which .scr mode we're in — set once by parseMode() before the window is created (main thread only).
+const Mode = enum { windowed, fullscreen, preview, config };
+var g_mode: Mode = .windowed;
+var g_preview_parent: ?HWND = null; // /p mode: the settings-dialog monitor we're a child of
+// fullscreen exit-on-mouse-move: ignore the spurious first move; quit once it travels past this.
+var g_mouse_seen: bool = false;
+var g_mouse_x: LONG = 0;
+var g_mouse_y: LONG = 0;
+const MOUSE_EXIT_PX: LONG = 8;
+
 // double-buffer state (main thread only): an off-screen DC we scale into, its client-sized
 // bitmap, and the size that bitmap is built for (rebuilt on resize). See PRESENTATION above.
 var g_memdc: ?HDC = null;
@@ -248,6 +288,25 @@ fn worker() void {
     }
 }
 
+// fullscreen only: any key/click/wheel quits, and a real mouse move (past the first spurious one,
+// far enough to be intentional) quits. Windowed/preview never call this.
+fn exitOnInput(hwnd: HWND, msg: UINT, lParam: LPARAM) void {
+    if (msg == WM_MOUSEMOVE) {
+        const lp: usize = @bitCast(lParam);
+        const x: LONG = @intCast(@as(i16, @bitCast(@as(u16, @truncate(lp))))); // GET_X_LPARAM (signed)
+        const y: LONG = @intCast(@as(i16, @bitCast(@as(u16, @truncate(lp >> 16)))));
+        if (!g_mouse_seen) {
+            g_mouse_x = x;
+            g_mouse_y = y;
+            g_mouse_seen = true;
+            return; // the first move is the OS positioning the cursor — not the user
+        }
+        if (@abs(x - g_mouse_x) > MOUSE_EXIT_PX or @abs(y - g_mouse_y) > MOUSE_EXIT_PX) _ = DestroyWindow(hwnd);
+        return;
+    }
+    _ = DestroyWindow(hwnd); // any click or wheel
+}
+
 fn wndProc(hwnd: HWND, msg: UINT, wParam: WPARAM, lParam: LPARAM) callconv(.winapi) LRESULT {
     switch (msg) {
         WM_CLOSE => {
@@ -259,23 +318,86 @@ fn wndProc(hwnd: HWND, msg: UINT, wParam: WPARAM, lParam: LPARAM) callconv(.wina
             PostQuitMessage(0);
             return 0;
         },
-        WM_KEYDOWN => {
-            switch (wParam) {
-                VK_SPACE => g_auto = !g_auto,
-                VK_ESCAPE, VK_Q => _ = DestroyWindow(hwnd),
-                else => {},
+        WM_KEYDOWN, WM_SYSKEYDOWN => {
+            switch (g_mode) {
+                .fullscreen => _ = DestroyWindow(hwnd), // any key ends the screensaver
+                .windowed => switch (wParam) {
+                    VK_SPACE => g_auto = !g_auto,
+                    VK_ESCAPE, VK_Q => _ = DestroyWindow(hwnd),
+                    else => {},
+                },
+                .preview, .config => {}, // preview ignores input; config has no window
             }
             return 0;
+        },
+        WM_MOUSEMOVE, WM_LBUTTONDOWN, WM_RBUTTONDOWN, WM_MBUTTONDOWN, WM_MOUSEWHEEL => {
+            if (g_mode == .fullscreen) {
+                exitOnInput(hwnd, msg, lParam);
+                return 0;
+            }
+            return DefWindowProcW(hwnd, msg, wParam, lParam);
         },
         else => return DefWindowProcW(hwnd, msg, wParam, lParam),
     }
 }
 
+fn isSpaceW(c: u16) bool {
+    return c == ' ' or c == '\t';
+}
+
+// read the .scr command-line flag and set g_mode (+ g_preview_parent for /p). We parse the raw
+// UTF-16 command line (GetCommandLineW) rather than std.process, whose Args API needs an OS handle
+// threaded in — this shell has no libc and the flags are trivial ASCII. No args → windowed dev
+// view; an unrecognized flag → windowed too (harmless). Case-insensitive (/S == /s).
+fn parseMode() void {
+    const cl = GetCommandLineW();
+    var i: usize = 0;
+    if (cl[0] == '"') { // skip the (possibly quoted) program path = argv[0]
+        i = 1;
+        while (cl[i] != 0 and cl[i] != '"') : (i += 1) {}
+        if (cl[i] == '"') i += 1;
+    } else {
+        while (cl[i] != 0 and !isSpaceW(cl[i])) : (i += 1) {}
+    }
+    while (cl[i] != 0 and isSpaceW(cl[i])) : (i += 1) {} // skip to the flag
+    if (cl[i] == 0 or (cl[i] != '/' and cl[i] != '-')) return; // no flag → windowed
+
+    const flag: u16 = if (cl[i + 1] >= 'A' and cl[i + 1] <= 'Z') cl[i + 1] + 32 else cl[i + 1];
+    switch (flag) {
+        's' => g_mode = .fullscreen,
+        'c' => g_mode = .config,
+        'p' => {
+            // the preview HWND is glued on (/p:1234 or /p1234) or is the next token (/p 1234).
+            var j = i + 2;
+            if (cl[j] == ':') j += 1;
+            if (cl[j] < '0' or cl[j] > '9') // not glued on — advance to the next token
+                while (cl[j] != 0 and isSpaceW(cl[j])) : (j += 1) {};
+            var h: usize = 0;
+            var any = false;
+            while (cl[j] >= '0' and cl[j] <= '9') : (j += 1) {
+                h = h * 10 + @as(usize, cl[j] - '0');
+                any = true;
+            }
+            if (!any or h == 0) return; // no valid handle → nothing to preview into; windowed
+            g_preview_parent = @ptrFromInt(h);
+            g_mode = .preview;
+        },
+        else => {},
+    }
+}
+
 pub fn main() !void {
+    parseMode();
+
     const hinstance = GetModuleHandleW(null);
+    if (g_mode == .config) {
+        // no settings — say so and exit (the /c contract still expects the process to end).
+        _ = MessageBoxW(null, std.unicode.utf8ToUtf16LeStringLiteral("Safari Drive has no options to configure."), std.unicode.utf8ToUtf16LeStringLiteral("Safari Drive"), MB_OK);
+        return;
+    }
+
     const class_name = std.unicode.utf8ToUtf16LeStringLiteral("SafariDriveWindow");
     const title = std.unicode.utf8ToUtf16LeStringLiteral("Safari Drive");
-
     const wc = WNDCLASSW{
         .style = CS_OWNDC | CS_HREDRAW | CS_VREDRAW,
         .lpfnWndProc = &wndProc,
@@ -285,15 +407,49 @@ pub fn main() !void {
     };
     if (RegisterClassW(&wc) == 0) return error.RegisterClass;
 
-    // size the window so the CLIENT area is exactly 960×600 (borders/caption sit outside it),
-    // giving a crisp 1:1 blit until the adaptive-camera fullscreen step lands.
+    const hwnd = switch (g_mode) {
+        .fullscreen => makeFullscreen(hinstance, class_name, title),
+        .preview => makePreview(hinstance, class_name, title),
+        .windowed => makeWindowed(hinstance, class_name, title),
+        .config => unreachable,
+    } orelse return error.CreateWindow;
+
+    if (g_mode == .fullscreen) _ = ShowCursor(BOOL.fromBool(false)); // hide the pointer over the saver
+    try run(hwnd);
+    if (g_mode == .fullscreen) _ = ShowCursor(BOOL.fromBool(true));
+}
+
+// windowed dev view: CLIENT area exactly 960×600 (borders/caption sit outside), for a crisp 1:1 blit.
+fn makeWindowed(hinstance: ?HINSTANCE, class_name: [*:0]const WCHAR, title: [*:0]const WCHAR) ?HWND {
     var wr = RECT{ .left = 0, .top = 0, .right = W_i, .bottom = H_i };
     _ = AdjustWindowRect(&wr, WS_OVERLAPPEDWINDOW, .FALSE);
+    const hwnd = CreateWindowExW(0, class_name, title, WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, wr.right - wr.left, wr.bottom - wr.top, null, null, hinstance, null);
+    if (hwnd) |h| _ = ShowWindow(h, SW_SHOW);
+    return hwnd;
+}
 
-    const hwnd = CreateWindowExW(0, class_name, title, WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, wr.right - wr.left, wr.bottom - wr.top, null, null, hinstance, null) orelse
-        return error.CreateWindow;
-    _ = ShowWindow(hwnd, SW_SHOW);
+// fullscreen saver: a borderless topmost popup covering the primary monitor.
+fn makeFullscreen(hinstance: ?HINSTANCE, class_name: [*:0]const WCHAR, title: [*:0]const WCHAR) ?HWND {
+    const sw = GetSystemMetrics(SM_CXSCREEN);
+    const sh = GetSystemMetrics(SM_CYSCREEN);
+    const hwnd = CreateWindowExW(WS_EX_TOPMOST, class_name, title, WS_POPUP | WS_VISIBLE, 0, 0, sw, sh, null, null, hinstance, null);
+    if (hwnd) |h| _ = ShowWindow(h, SW_SHOW);
+    return hwnd;
+}
 
+// preview: a child window filling the settings dialog's little monitor (g_preview_parent).
+fn makePreview(hinstance: ?HINSTANCE, class_name: [*:0]const WCHAR, title: [*:0]const WCHAR) ?HWND {
+    const parent = g_preview_parent orelse return null;
+    var prc: RECT = undefined;
+    if (!GetClientRect(parent, &prc).toBool()) return null;
+    const hwnd = CreateWindowExW(0, class_name, title, WS_CHILD | WS_VISIBLE, 0, 0, prc.right, prc.bottom, parent, null, hinstance, null);
+    if (hwnd) |h| _ = ShowWindow(h, SW_SHOW);
+    return hwnd;
+}
+
+// the shared render loop: set up the double buffer + workers, pump messages, produce/display at 60 fps,
+// then tear the workers down cleanly. Mode-independent except the preview parent-liveness check.
+fn run(hwnd: HWND) !void {
     const hdc = GetDC(hwnd) orelse return error.NoDC; // CS_OWNDC → valid for the window's life
     // off-screen DC we scale into (then BitBlt to the window) — the double buffer that kills tearing.
     g_memdc = CreateCompatibleDC(hdc) orelse return error.NoMemDC;
@@ -324,6 +480,11 @@ pub fn main() !void {
             _ = DispatchMessageW(&msg);
         }
         if (!g_running) break;
+
+        // preview: the settings dialog owns our parent — when it closes, our host is gone, so exit.
+        if (g_mode == .preview) {
+            if (g_preview_parent) |p| if (!IsWindow(p).toBool()) break;
+        }
 
         if (g_auto) {
             displayNext(hdc, hwnd, &display_seq);

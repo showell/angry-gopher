@@ -3,20 +3,26 @@
 # Before composing an ad-hoc shell command for build / test / regen, run
 # `ops/list` to see what already exists.
 #
-# Cross-build the Windows Safari Screensaver .exe from this Linux box. It's the
-# Win32/GDI sibling of the native X11 build (games/driving/native/win32.zig) around
-# the SAME shared zig core — a plain auto-advancing window for now (the clock-tick
-# flipbook), not yet a .scr screensaver.
+# Cross-build the Windows Safari Screensaver from this Linux box. It's the Win32/GDI
+# sibling of the native X11 build (games/driving/native/win32.zig) around the SAME
+# shared zig core. The binary is a real .scr screensaver: /s fullscreen, /p preview,
+# /c config; run with no args it's the 960×600 dev window (see win32.zig header).
 #
 # No Windows SDK or toolchain needed: zig cross-compiles to x86_64-windows and links
 # the bundled system import libs (user32/gdi32/kernel32). Output is a self-contained
-# PE32+ GUI .exe you can copy to a Windows host (e.g. the WSL2 host) and double-click.
+# PE32+ GUI binary. We emit it twice: safari_win32.exe (double-click = dev window) and
+# the BYTE-IDENTICAL safari.scr (right-click → Install/Test/Configure on a Windows host,
+# or drop in C:\Windows\System32 to pick from Screen Saver settings). Same bits — the
+# extension is all Windows reads to treat it as a screensaver.
 set -e
 
 source "$(dirname "$0")/_paths.sh"
 
 OUT="$GOPHER_DIR/games/driving/zig-out/bin/safari_win32.exe"
+SCR="$GOPHER_DIR/games/driving/zig-out/bin/safari.scr"
 
 zig build --build-file "$GOPHER_DIR/games/driving/build.zig" -Dwin32=true
+cp -f "$OUT" "$SCR"
 
 echo "built $OUT ($(wc -c < "$OUT") bytes)"
+echo "built $SCR (byte-identical .scr — right-click → Install/Test on Windows)"
