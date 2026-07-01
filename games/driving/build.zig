@@ -62,4 +62,32 @@ pub fn build(b: *std.Build) void {
         win.root_module.linkSystemLibrary("Xrender", .{}); // the scaled fullscreen blit (needs libxrender-dev)
         b.installArtifact(win);
     }
+
+    // The Windows .exe (the Win32/GDI display layer) is opt-in via -Dwin32 and always
+    // CROSS-compiled to x86_64-windows — we build it from the Linux box, so it needs its own
+    // safari module compiled for that target (the native-host safari_mod above won't do). No
+    // SDK/libc: it links the bundled system import libs (user32/gdi32/kernel32) and declares
+    // the GUI surface inline. subsystem=.Windows suppresses the console window.
+    const want_win32 = b.option(bool, "win32", "cross-build the Windows .exe (x86_64-windows)") orelse false;
+    if (want_win32) {
+        const win_target = b.resolveTargetQuery(.{ .cpu_arch = .x86_64, .os_tag = .windows, .abi = .gnu });
+        const win_safari = b.createModule(.{
+            .root_source_file = b.path("wasm/safari.zig"),
+            .target = win_target,
+            .optimize = optimize,
+        });
+        const w32 = b.addExecutable(.{
+            .name = "safari_win32",
+            .root_module = b.createModule(.{
+                .root_source_file = b.path("native/win32.zig"),
+                .target = win_target,
+                .optimize = optimize,
+            }),
+        });
+        w32.subsystem = .Windows;
+        w32.root_module.addImport("safari", win_safari);
+        w32.root_module.linkSystemLibrary("user32", .{});
+        w32.root_module.linkSystemLibrary("gdi32", .{});
+        b.installArtifact(w32);
+    }
 }

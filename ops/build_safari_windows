@@ -1,0 +1,22 @@
+#!/bin/bash
+# CANONICAL DEV-LOOP SCRIPT — DO NOT REINVENT.
+# Before composing an ad-hoc shell command for build / test / regen, run
+# `ops/list` to see what already exists.
+#
+# Cross-build the Windows Safari Screensaver .exe from this Linux box. It's the
+# Win32/GDI sibling of the native X11 build (games/driving/native/win32.zig) around
+# the SAME shared zig core — a plain auto-advancing window for now (the clock-tick
+# flipbook), not yet a .scr screensaver.
+#
+# No Windows SDK or toolchain needed: zig cross-compiles to x86_64-windows and links
+# the bundled system import libs (user32/gdi32/kernel32). Output is a self-contained
+# PE32+ GUI .exe you can copy to a Windows host (e.g. the WSL2 host) and double-click.
+set -e
+
+source "$(dirname "$0")/_paths.sh"
+
+OUT="$GOPHER_DIR/games/driving/zig-out/bin/safari_win32.exe"
+
+zig build --build-file "$GOPHER_DIR/games/driving/build.zig" -Dwin32=true
+
+echo "built $OUT ($(wc -c < "$OUT") bytes)"
