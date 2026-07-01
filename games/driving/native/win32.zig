@@ -11,20 +11,33 @@
 //! no per-pixel conversion — the same free aliasing the X11 layer got from a TrueColor visual.
 //! biHeight is NEGATIVE so the DIB is top-down (row 0 = top), matching our buffer's order.
 //!
-//! ANTI-ALIASING. We hand GDI the SUPERSAMPLED render (big_px, 1920×1200) rather than the
-//! box-downsampled 960×600, and let GDI resample it to the window with the HALFTONE stretch
-//! mode (bilinear-quality). At the 960 window that's a 2:1 downscale ≈ the manual box filter;
-//! expanded up to ~1080p it's near 1:1, so the snowcap keeps its AA; larger still it
-//! interpolates from 1920 instead of blocking a 960 source up. (Rendering at the monitor's
-//! true resolution is the deeper cure — that's the adaptive-camera step below.)
+//! ANTI-ALIASING. We hand GDI the SUPERSAMPLED render (1920×1200) rather than the box-
+//! downsampled 960×600, and let GDI resample it to the window with the HALFTONE stretch mode
+//! (bilinear-quality). At the 960 window that's a 2:1 downscale ≈ the manual box filter;
+//! expanded up to ~1080p it's near 1:1, so the snowcap keeps its AA.
 //!
-//! FIRST STEP (this file). The goal here is only to get frames rendering on a clock-tick
-//! flipbook rhythm — an auto-advancing window at the DESIGN width (960×600), no adaptive
-//! camera and no screensaver logistics yet. It never calls safari.setViewW, so the SCENE is
-//! the same geometry the browser + golden PNG harness draw (only the final resample is GDI's,
-//! not our box filter). When the window isn't the exact client size the DIB just stretches to
-//! fill it (aspect can distort on resize); the aspect-matched fullscreen fit (the view_w
-//! widening x11.zig does) is the NEXT step.
+//! THREADING (the frame-parallel pipeline). Profiling showed the frame is ~97% software raster
+//! (raster.render, 15–29 ms) and ~3% geometry (renderFrame, 0.68 ms) — single-threaded that's
+//! ~31 ms/frame (~32 fps), the sluggishness. But raster.render is a PURE function of (fb, words,
+//! tilt, sky, sun), and the depth sort that fixes paint order lives entirely in the geometry
+//! step (render.zig). So we split the work: the MAIN thread runs the sequential geometry (it
+//! owns safari's globals — the one draw buffer + rider state) and snapshots each frame's draw-
+//! words into a ring slot; two WORKER threads each rasterize a snapshot into its own pixel
+//! buffer in parallel; the main thread blits finished frames IN ORDER at the 60 fps cadence.
+//! Measured ~6.5 ms/frame with 2 workers (clears 60 fps); the shared core + golden PNG harness
+//! are untouched.
+//!
+//! It's LOCK-FREE: a slot is owned by exactly one thread in each phase, so the only shared word
+//! is its `state` enum. The atomic transitions carry the buffer handoff — main's draw-words
+//! writes are release-published by the store to .queued and a worker acquires them by the CAS
+//! that claims the slot (.queued→.rendering, so two workers never grab the same one); the
+//! worker's pixels are release-published by the store to .ready and main acquires them before
+//! the blit. Idle workers (ring full — the steady state, since they outrun the 60 fps display)
+//! just Sleep(1); that poll costs nothing against the frame budget.
+//!
+//! FIRST STEP scope. Still the design width (never calls safari.setViewW), so the SCENE matches
+//! the browser + golden PNG harness (only the final resample is GDI's). No adaptive-camera
+//! fullscreen and no .scr logistics yet — those are the next steps.
 //!
 //! std.os.windows (zig 0.16) ships the base types + kernel32 but no user32/gdi32, so the
 //! GUI/GDI surface is declared inline below — the standard approach for a no-SDK cross build.
@@ -150,13 +163,9 @@ const SW: usize = raster.SW; // 1920 — the supersampled render GDI resamples f
 const SH: usize = raster.SH; // 1200
 const SW_i: c_int = @intCast(SW);
 const SH_i: c_int = @intCast(SH);
-const FRAME_MS: i64 = 16; // ~60 fps budget
+const FRAME_MS: i64 = 16; // ~60 fps display budget
 
-// Static .bss render target (no allocator): the supersampled AA buffer. We blit THIS directly
-// and let GDI HALFTONE resample it to the window, so there's no manual downsample step here.
-var big_px: [SW * SH]u32 = undefined;
-
-// Top-down 32-bit BI_RGB DIB over big_px — negative height means row 0 is the top.
+// Top-down 32-bit BI_RGB DIB over a slot's supersampled buffer — negative height means row 0 is the top.
 const bmih = BITMAPINFOHEADER{
     .biSize = @sizeOf(BITMAPINFOHEADER),
     .biWidth = SW_i,
@@ -171,9 +180,50 @@ const bmih = BITMAPINFOHEADER{
     .biClrImportant = 0,
 };
 
-// Window state the WndProc owns (single window, so file-scope is honest here).
-var g_running: bool = true;
-var g_auto: bool = true;
+// --- the frame-parallel pipeline ---
+const NUM_WORKERS = 2; // raster workers; 2 clears 60 fps and leaves cores for blit + OS (measured)
+const RING = 4; // frame slots in flight: 2 rendering + 1 displaying + 1 free to produce into
+const MAX_WORDS = (1 << 20) / 4; // == paint.zig CAP_WORDS — the draw buffer never exceeds this
+
+// A slot moves empty → queued (main filled it) → rendering (a worker claimed it) → ready (worker
+// done) → empty (main displayed it). `state` is the only word shared between threads; the atomic
+// acquire/release on it publishes each phase's buffer writes to the next owner (see the header).
+const SlotState = enum(u8) { empty, queued, rendering, ready };
+const Slot = struct {
+    px: [SW * SH]u32 = undefined, // this frame's supersampled render (a worker fills it)
+    words: [MAX_WORDS]u32 = undefined, // this frame's draw-command snapshot (main copies it in)
+    words_len: usize = 0,
+    tilt: f32 = 0,
+    top: u32 = 0,
+    horizon: u32 = 0,
+    sun: raster.SunPos = .{ .visible = false, .x = 0, .y = 0, .scale = 0 },
+    state: std.atomic.Value(SlotState) = .init(.empty),
+};
+
+var slots: [RING]Slot = undefined; // ~41 MB of .bss — committed on demand by the OS
+var g_quit = std.atomic.Value(bool).init(false); // tells the workers to exit
+var g_running: bool = true; // main loop (main thread only; set by the WndProc)
+var g_auto: bool = true; // SPACE pause: main stops producing + displaying (freeze)
+
+// a worker: claim any queued slot (CAS, so two workers never take the same one), rasterize it into
+// its own buffer, mark it ready. When there's nothing queued, briefly poll. Repeat until quit.
+fn worker() void {
+    while (!g_quit.load(.acquire)) {
+        const claimed: ?usize = blk: {
+            for (&slots, 0..) |*s, i| {
+                if (s.state.cmpxchgStrong(.queued, .rendering, .acquire, .monotonic) == null) break :blk i;
+            }
+            break :blk null;
+        };
+        if (claimed) |i| {
+            const s = &slots[i]; // sole owner of this slot's buffers until we publish .ready
+            raster.render(.{ .px = &s.px, .w = SW, .h = SH }, s.words[0..s.words_len], s.tilt, s.top, s.horizon, s.sun);
+            s.state.store(.ready, .release);
+        } else {
+            Sleep(1); // ring full or drained — negligible against the 60 fps budget
+        }
+    }
+}
 
 fn wndProc(hwnd: HWND, msg: UINT, wParam: WPARAM, lParam: LPARAM) callconv(.winapi) LRESULT {
     switch (msg) {
@@ -225,8 +275,15 @@ pub fn main() !void {
     _ = SetStretchBltMode(hdc, HALFTONE);
     _ = SetBrushOrgEx(hdc, 0, 0, null); // HALFTONE requires this or the brush origin misaligns
 
+    for (&slots) |*s| s.state = .init(.empty);
+    var workers: [NUM_WORKERS]std.Thread = undefined;
+    for (&workers) |*t| t.* = try std.Thread.spawn(.{}, worker, .{});
+
     var freq: i64 = 1;
     _ = QueryPerformanceFrequency(&freq);
+
+    var produce_seq: usize = 0; // next frame to run geometry for
+    var display_seq: usize = 0; // next frame to blit (strict order)
 
     while (g_running) {
         var start: i64 = 0;
@@ -243,34 +300,58 @@ pub fn main() !void {
         }
         if (!g_running) break;
 
-        if (g_auto) safari.advance();
-        renderScene();
+        if (g_auto) {
+            displayNext(hdc, hwnd, &display_seq);
+            produce(&produce_seq); // refill the ring after freeing a slot
+        }
 
-        var rc: RECT = undefined;
-        _ = GetClientRect(hwnd, &rc);
-        _ = StretchDIBits(hdc, 0, 0, rc.right - rc.left, rc.bottom - rc.top, 0, 0, SW_i, SH_i, &big_px, &bmih, DIB_RGB_COLORS, SRCCOPY);
-
-        // pace to the frame budget: sleep only the time LEFT after the work, so motion stays
-        // even regardless of render cost. Sleep granularity is coarse (~15 ms) but fine for a
-        // flipbook; QPC keeps the accounting honest as render cost grows.
+        // pace to the display budget: sleep only the time LEFT after the tick's work.
         var now: i64 = 0;
         _ = QueryPerformanceCounter(&now);
         const elapsed_ms = @divTrunc((now - start) * 1000, freq);
         if (elapsed_ms < FRAME_MS) Sleep(@intCast(FRAME_MS - elapsed_ms));
     }
+
+    // tear down the workers cleanly before the window/DC go away. They poll g_quit at the top of
+    // their loop (waking within the Sleep(1) at worst), so no wakeup signal is needed.
+    g_quit.store(true, .release);
+    for (&workers) |*t| t.join();
 }
 
-// rasterize the current rider frame into the supersampled buffer (the same render call the PNG
-// harness + x11 make). We DON'T downsample here — GDI does the resampling in the blit (HALFTONE),
-// which is what keeps expanded windows crisp instead of blocking up a pre-shrunk 960 frame.
-fn renderScene() void {
-    _ = safari.renderFrame();
-    const sun = raster.SunPos{
-        .visible = safari.sunVisible() == 1,
-        .x = safari.sunX(),
-        .y = safari.sunY(),
-        .scale = safari.sunScale(),
-    };
-    const big = raster.Fb{ .px = &big_px, .w = SW, .h = SH };
-    raster.render(big, safari.frameWords(), safari.riderTilt(), safari.skyTop(), safari.skyHorizon(), sun);
+// run the cheap sequential geometry (sim + depth sort + draw-command fill — all on safari's globals,
+// so main-thread-only) for as many EMPTY ring slots as we can, snapshotting each into its slot and
+// handing it to the workers. Stops when the ring is full (workers/display haven't caught up).
+fn produce(produce_seq: *usize) void {
+    while (true) {
+        const s = &slots[produce_seq.* % RING];
+        if (s.state.load(.acquire) != .empty) return; // ring full — nothing to produce into
+
+        safari.advance();
+        _ = safari.renderFrame();
+        // the slot is .empty → no worker looks at it, so fill its buffers before publishing .queued.
+        const words = safari.frameWords();
+        @memcpy(s.words[0..words.len], words);
+        s.words_len = words.len;
+        s.tilt = safari.riderTilt();
+        s.top = safari.skyTop();
+        s.horizon = safari.skyHorizon();
+        s.sun = .{ .visible = safari.sunVisible() == 1, .x = safari.sunX(), .y = safari.sunY(), .scale = safari.sunScale() };
+
+        s.state.store(.queued, .release); // publish: a worker's claim CAS acquires the writes above
+        produce_seq.* += 1;
+    }
+}
+
+// if the next frame (in strict produced order) is rasterized, blit it and free its slot. At most one
+// frame per tick, so the display paces at 60 fps even though the workers run well ahead.
+fn displayNext(hdc: HDC, hwnd: HWND, display_seq: *usize) void {
+    const s = &slots[display_seq.* % RING];
+    if (s.state.load(.acquire) != .ready) return; // workers haven't finished it — hold the current frame
+
+    var rc: RECT = undefined;
+    _ = GetClientRect(hwnd, &rc);
+    _ = StretchDIBits(hdc, 0, 0, rc.right - rc.left, rc.bottom - rc.top, 0, 0, SW_i, SH_i, &s.px, &bmih, DIB_RGB_COLORS, SRCCOPY);
+
+    s.state.store(.empty, .release); // freed for produce() to reuse
+    display_seq.* += 1;
 }
