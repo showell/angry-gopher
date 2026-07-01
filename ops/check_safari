@@ -16,5 +16,23 @@ set -e
 source "$(dirname "$0")/_paths.sh"
 
 cd "$GOPHER_DIR/games/driving"
+
+# Reentrancy guard: raster.zig is the WORKER-PARALLEL path — the win32 shell fans
+# raster.render across threads, so it must stay free of mutable module state. A
+# file-scope `var` there is a latent cross-thread data race hiding behind a
+# pure-looking signature (the 2026-07 streaks incident: module-global scratch
+# clobbered mid-fill by two workers). The core (paint/render/safari.zig) keeps its
+# globals on purpose — that geometry runs single-threaded on the main thread and is
+# correct. This locks in the property we paid to establish, for the one module the
+# architecture requires reentrant. (`threadlocal var` is the safe escape hatch and
+# is intentionally allowed.)
+offenders=$(grep -nE '^(pub )?var ' native/raster.zig || true)
+if [ -n "$offenders" ]; then
+  echo "Error: file-scope 'var' in native/raster.zig — the worker-parallel raster path must stay reentrant." >&2
+  echo "Move it to a per-call local (or 'threadlocal var' if genuinely per-thread):" >&2
+  echo "$offenders" >&2
+  exit 1
+fi
+
 [ -f safari.wasm ] || { echo "Error: safari.wasm missing — run ops/build_safari_wasm first." >&2; exit 1; }
 node probe_safari_culls.mjs
