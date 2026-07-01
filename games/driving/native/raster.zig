@@ -171,10 +171,13 @@ const GLOW_LUT_N: usize = 1024;
 // Compositing is then pure integer — `(pre + dst·inv + 128) >> 8` — with NO per-pixel float↔int
 // conversions (those were the real cost at SS²; src·alpha and the rounding fold into LUT-build).
 const GlowSample = struct { pr: u32, pg: u32, pb: u32, inv: u32 };
-var glow_lut: [GLOW_LUT_N]GlowSample = undefined;
-const SunShade = struct { glow_outer2: f32, disc_inner: f32, disc_outer: f32, disc_outer2: f32, lut_scale: f32 };
+const SunShade = struct { glow_outer2: f32, disc_inner: f32, disc_outer: f32, disc_outer2: f32, lut_scale: f32, lut: *const [GLOW_LUT_N]GlowSample };
 
 pub fn drawSun(fb: Fb, roll: Roll, sun: SunPos) void {
+    // Per-CALL scratch (NOT module-global): the native renderer is driven from parallel worker
+    // threads (win32.zig's frame pipeline), so shared scratch would let two frames clobber each
+    // other's glow LUT mid-fill → corruption. Keep it local; sunPixel reads it via SunShade.lut.
+    var glow_lut: [GLOW_LUT_N]GlowSample = undefined;
     const half = roll.cy;
     const glow_inner = 8.0 * sun.scale;
     const glow_outer = 340.0 * sun.scale;
@@ -198,7 +201,7 @@ pub fn drawSun(fb: Fb, roll: Roll, sun: SunPos) void {
             .inv = @intFromFloat((1.0 - c.a) * 256.0 + 0.5),
         };
     }
-    const shade = SunShade{ .glow_outer2 = glow_outer2, .disc_inner = disc_inner, .disc_outer = disc_outer, .disc_outer2 = disc_outer * disc_outer, .lut_scale = lut_scale };
+    const shade = SunShade{ .glow_outer2 = glow_outer2, .disc_inner = disc_inner, .disc_outer = disc_outer, .disc_outer2 = disc_outer * disc_outer, .lut_scale = lut_scale, .lut = &glow_lut };
 
     const center = roll.toPixel(sun.x, sun.y);
     const r_px = glow_outer * roll.ss;
@@ -243,7 +246,7 @@ fn sunPixel(fb: Fb, idx: usize, r2: f32, s: SunShade) void {
     if (r2 < s.glow_outer2) {
         var b: usize = @intFromFloat(r2 * s.lut_scale);
         if (b >= GLOW_LUT_N) b = GLOW_LUT_N - 1;
-        const g = glow_lut[b];
+        const g = s.lut[b];
         if (g.inv < 255) { // skip the ~invisible outer ring (alpha ≲ 0.004); else integer composite
             const dst = fb.px[idx];
             const or_ = (g.pr + ((dst >> 16) & 0xff) * g.inv + 128) >> 8;
@@ -374,14 +377,15 @@ const Shader = union(enum) {
     ellipse: struct { c0: u32, c1: u32, o0: f32, o1: f32, cx: f32, cy: f32, ux: f32, uy: f32, vx: f32, vy: f32, det: f32 },
 };
 
-// scratch for one polygon's screen-space vertices and a scanline's edge crossings.
-var sp: [1024]Pt = undefined;
-var xs: [1024]f32 = undefined;
-
 // fillPoly reads `n` design-space points starting at word `w`, rotates them to screen
 // space, scanline-fills the polygon under `shader`, and returns the word index past the
 // points. `do_fill=false` consumes the points without drawing (e.g. a degenerate beam).
 fn fillPoly(fb: Fb, roll: Roll, words: []const u32, w: usize, n: u32, shader: Shader, do_fill: bool) usize {
+    // Per-CALL scratch (NOT module-global): the native renderer runs on parallel worker threads
+    // (win32.zig), so a shared xs/sp would let two frames corrupt each other's scanline spans →
+    // horizontal streaks. Stack-local is also faster here than TLS (no indirection in the loop).
+    var sp: [1024]Pt = undefined; // this polygon's screen-space vertices
+    var xs: [1024]f32 = undefined; // one scanline's edge crossings
     const count: usize = @intCast(n);
     var i: usize = 0;
     while (i < count and i < sp.len) : (i += 1) {
