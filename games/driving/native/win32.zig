@@ -16,6 +16,13 @@
 //! (bilinear-quality). At the 960 window that's a 2:1 downscale ≈ the manual box filter;
 //! expanded up to ~1080p it's near 1:1, so the snowcap keeps its AA.
 //!
+//! PRESENTATION (double-buffered). We do NOT StretchDIBits straight onto the window: HALFTONE
+//! scaling is slow, and the compositor samples the window surface mid-write (top-to-bottom),
+//! catching a half-updated frame — horizontal tearing streaks. So we scale into an OFF-SCREEN
+//! memory DC (a screen-compatible bitmap the size of the client area), then present the finished
+//! frame with a single fast 1:1 BitBlt. The on-screen write is then one quick copy, too brief to
+//! be caught half-done. The memory bitmap is rebuilt only on resize.
+//!
 //! THREADING (the frame-parallel pipeline). Profiling showed the frame is ~97% software raster
 //! (raster.render, 15–29 ms) and ~3% geometry (renderFrame, 0.68 ms) — single-threaded that's
 //! ~31 ms/frame (~32 fps), the sluggishness. But raster.render is a PURE function of (fb, words,
@@ -69,6 +76,9 @@ const WCHAR = w.WCHAR;
 const WPARAM = usize; // UINT_PTR
 const LPARAM = isize; // LONG_PTR
 const LRESULT = isize; // LONG_PTR
+
+const HBITMAP = *opaque {};
+const HGDIOBJ = *anyopaque;
 
 // --- Win32 structs (extern layout) ---
 const POINT = extern struct { x: LONG, y: LONG };
@@ -153,6 +163,12 @@ extern "kernel32" fn QueryPerformanceFrequency(*i64) callconv(.winapi) BOOL;
 extern "gdi32" fn StretchDIBits(HDC, c_int, c_int, c_int, c_int, c_int, c_int, c_int, c_int, *const anyopaque, *const BITMAPINFOHEADER, UINT, DWORD) callconv(.winapi) c_int;
 extern "gdi32" fn SetStretchBltMode(HDC, c_int) callconv(.winapi) c_int;
 extern "gdi32" fn SetBrushOrgEx(HDC, c_int, c_int, ?*POINT) callconv(.winapi) BOOL;
+extern "gdi32" fn CreateCompatibleDC(?HDC) callconv(.winapi) ?HDC;
+extern "gdi32" fn DeleteDC(HDC) callconv(.winapi) BOOL;
+extern "gdi32" fn CreateCompatibleBitmap(HDC, c_int, c_int) callconv(.winapi) ?HBITMAP;
+extern "gdi32" fn SelectObject(HDC, HGDIOBJ) callconv(.winapi) ?HGDIOBJ;
+extern "gdi32" fn DeleteObject(HGDIOBJ) callconv(.winapi) BOOL;
+extern "gdi32" fn BitBlt(HDC, c_int, c_int, c_int, c_int, HDC, c_int, c_int, DWORD) callconv(.winapi) BOOL;
 
 // --- frame geometry (design aspect — same scene the browser/PNG path draws) ---
 const W: usize = raster.W; // 960 — the window's default CLIENT size
@@ -204,6 +220,13 @@ var slots: [RING]Slot = undefined; // ~41 MB of .bss — committed on demand by 
 var g_quit = std.atomic.Value(bool).init(false); // tells the workers to exit
 var g_running: bool = true; // main loop (main thread only; set by the WndProc)
 var g_auto: bool = true; // SPACE pause: main stops producing + displaying (freeze)
+
+// double-buffer state (main thread only): an off-screen DC we scale into, its client-sized
+// bitmap, and the size that bitmap is built for (rebuilt on resize). See PRESENTATION above.
+var g_memdc: ?HDC = null;
+var g_bmp: ?HBITMAP = null;
+var g_bmp_w: c_int = 0;
+var g_bmp_h: c_int = 0;
 
 // a worker: claim any queued slot (CAS, so two workers never take the same one), rasterize it into
 // its own buffer, mark it ready. When there's nothing queued, briefly poll. Repeat until quit.
@@ -272,8 +295,10 @@ pub fn main() !void {
     _ = ShowWindow(hwnd, SW_SHOW);
 
     const hdc = GetDC(hwnd) orelse return error.NoDC; // CS_OWNDC → valid for the window's life
-    _ = SetStretchBltMode(hdc, HALFTONE);
-    _ = SetBrushOrgEx(hdc, 0, 0, null); // HALFTONE requires this or the brush origin misaligns
+    // off-screen DC we scale into (then BitBlt to the window) — the double buffer that kills tearing.
+    g_memdc = CreateCompatibleDC(hdc) orelse return error.NoMemDC;
+    _ = SetStretchBltMode(g_memdc.?, HALFTONE);
+    _ = SetBrushOrgEx(g_memdc.?, 0, 0, null); // HALFTONE requires this or the brush origin misaligns
 
     for (&slots) |*s| s.state = .init(.empty);
     var workers: [NUM_WORKERS]std.Thread = undefined;
@@ -316,6 +341,9 @@ pub fn main() !void {
     // their loop (waking within the Sleep(1) at worst), so no wakeup signal is needed.
     g_quit.store(true, .release);
     for (&workers) |*t| t.join();
+
+    if (g_bmp) |b| _ = DeleteObject(@ptrCast(b));
+    if (g_memdc) |m| _ = DeleteDC(m);
 }
 
 // run the cheap sequential geometry (sim + depth sort + draw-command fill — all on safari's globals,
@@ -350,7 +378,24 @@ fn displayNext(hdc: HDC, hwnd: HWND, display_seq: *usize) void {
 
     var rc: RECT = undefined;
     _ = GetClientRect(hwnd, &rc);
-    _ = StretchDIBits(hdc, 0, 0, rc.right - rc.left, rc.bottom - rc.top, 0, 0, SW_i, SH_i, &s.px, &bmih, DIB_RGB_COLORS, SRCCOPY);
+    const cw = rc.right - rc.left;
+    const ch = rc.bottom - rc.top;
+    if (cw <= 0 or ch <= 0) return; // minimised — nothing to show (don't free the slot; keep it for later)
+
+    // (re)build the off-screen bitmap when the client size changes. It's screen-COMPATIBLE (created
+    // against the window DC, not the mem DC — else it'd be 1-bpp monochrome).
+    if (g_bmp == null or cw != g_bmp_w or ch != g_bmp_h) {
+        if (g_bmp) |b| _ = DeleteObject(@ptrCast(b));
+        g_bmp = CreateCompatibleBitmap(hdc, cw, ch) orelse return;
+        _ = SelectObject(g_memdc.?, @ptrCast(g_bmp.?));
+        g_bmp_w = cw;
+        g_bmp_h = ch;
+    }
+
+    // scale the supersampled frame into the off-screen buffer (HALFTONE), then present it in one
+    // fast 1:1 BitBlt — so the on-screen write is too brief for the compositor to catch half-done.
+    _ = StretchDIBits(g_memdc.?, 0, 0, cw, ch, 0, 0, SW_i, SH_i, &s.px, &bmih, DIB_RGB_COLORS, SRCCOPY);
+    _ = BitBlt(hdc, 0, 0, cw, ch, g_memdc.?, 0, 0, SRCCOPY);
 
     s.state.store(.empty, .release); // freed for produce() to reuse
     display_seq.* += 1;
