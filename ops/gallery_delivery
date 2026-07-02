@@ -1,0 +1,21 @@
+#!/bin/bash
+# CANONICAL DEV-LOOP SCRIPT — DO NOT REINVENT.
+# Before writing a new ops/* script or composing an ad-hoc
+# shell command for build / launch / test / regen, run
+# `ops/list` to see what already exists.
+#
+# Render the Seattle Delivery HERO image for the home-page
+# gallery (gallery/delivery.svg) from the app's OWN geography.ts:
+# the real Seattle map (coastlines, lakes, Mercer Island, the road
+# network, the I-5 spine + bridges, the warehouse) with 100 homes
+# coloured across the 8 truck routes and tour lines routed over the
+# real road graph. Faithful content, gallery-cropped framing — so it
+# never goes stale like a screenshot would (same idea as ops/gallery_cat).
+#
+# Writes ONE committed SVG. Re-run when the map geometry changes.
+set -e
+
+source "$(dirname "$0")/_paths.sh"
+
+cd "$GOPHER_DIR/delivery"
+node --experimental-strip-types gen_gallery.ts

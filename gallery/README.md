@@ -29,4 +29,11 @@ Filenames are `<slug>.png` (or `.svg`), where the slugs match the manifest in
   rasterizer (`games/driving/gallery_cat.ts`), composing a single dusk-lit cat on
   the road. Faithful because it *is* the app's code; stale-proof for the same
   reason. Re-run if the cat anatomy changes.
+- **`delivery.svg`** — `ops/gallery_delivery`. Renders the app's real Seattle map
+  straight from `delivery/geography.ts` (coastlines, lakes, Mercer Island, the road
+  network, the I-5 spine + bridges, the warehouse), then colours 100 homes across the
+  8 truck routes with tour lines routed over the actual road graph (shortest paths).
+  Faithful content — the geometry is the app's own, no duplication — but stylized
+  framing: cropped to the gallery ratio and given a clean solved-looking allocation
+  (nearest-anchor grouping, not the live solver). Re-run if the map geometry changes.
 - The rest are **pending** — approach per app still to be decided.
