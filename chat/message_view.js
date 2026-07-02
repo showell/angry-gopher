@@ -1,4 +1,9 @@
-/* MessageView — exploratory abstraction (NOT wired into chat.js).
+/* MessageView — the scrollable message list widget.
+
+   Wired in one level removed from chat.js: ChatMiddlePane
+   (chat/middle_pane.js) owns the MessageView instance, and chat.js
+   drives the pane. Also stands alone as Lesson 4 of /learn, which is
+   why it knows nothing about chat itself.
 
    A scrollable list of opaque bubbles with: selection state, keyboard
    navigation, scroll-driven selection updates, programmatic-scroll
