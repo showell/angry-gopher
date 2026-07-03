@@ -4,6 +4,7 @@ module Lib.Engine exposing
     , HintResponse(..)
     , buildAgentStepRequest
     , buildGameHintRequest
+    , buildPuzzleHintRequest
     , decodeAgentStepResponse
     , decodeHintResponse
     )
@@ -15,9 +16,13 @@ the request-encoding / response-decoding shape; Game.Play
 owns the Model bookkeeping (pendingEngineRequest counter,
 status, hintedCards).
 
-Two ops live here today:
+Three ops live here today:
 
-  - `game_hint`     — Hint button. Text-only response.
+  - `game_hint`     — full-game Hint button. Text-only response.
+  - `puzzle_hint`   — puzzle Hint button. Board-only (every card is
+                      already on the board), text-only response —
+                      shares the `game_hint` response shape, so
+                      `decodeHintResponse` decodes both.
   - `agent_step`    — one play of real-time agent play.
                       Response is a primitive-DSL string the
                       caller parses + animates.
@@ -58,6 +63,20 @@ buildGameHintRequest reqId hand board =
         [ ( "request_id", Encode.int reqId )
         , ( "op", Encode.string "game_hint" )
         , ( "hand", Encode.list Card.encodeCard hand )
+        , ( "board", encodeBoardForEngine board )
+        ]
+
+
+{-| Build the `puzzle_hint` request payload. Board-only: a puzzle
+keeps every card on the board, so there's no hand to send. Replies
+on `puzzleHintResponse` with the matching `request_id`, decoded by
+the shared `decodeHintResponse`.
+-}
+buildPuzzleHintRequest : Int -> List CardStack -> Value
+buildPuzzleHintRequest reqId board =
+    Encode.object
+        [ ( "request_id", Encode.int reqId )
+        , ( "op", Encode.string "puzzle_hint" )
         , ( "board", encodeBoardForEngine board )
         ]
 

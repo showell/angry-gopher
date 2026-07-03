@@ -42,11 +42,13 @@ pub fn build(b: *std.Build) void {
         .{ .name = "safari_blitter_js", .path = "../games/driving/wasm/blitter.js" },
         .{ .name = "delivery_app_js", .path = "../delivery/app.js" },
         .{ .name = "puzzle_js", .path = "../games/lynrummy/elm/puzzle.js" },
-        // Full-game bundles (the /game surface): the compiled Elm client, the
-        // esbuild-bundled TS engine, and the Elm↔engine glue shim.
+        // The compiled Elm full-game client (the /game surface).
         .{ .name = "game_elm_js", .path = "../games/lynrummy/elm/elm.js" },
-        .{ .name = "game_engine_js", .path = "../games/lynrummy/elm/engine.js" },
-        .{ .name = "game_engine_glue_js", .path = "../games/lynrummy/elm/engine_glue.js" },
+        // Shared Lyn Rummy engine: the esbuild-bundled TS solver and the
+        // Elm↔engine glue shim. Both /game and /puzzles load these (the game
+        // for Hint + agent play, puzzles for their Hint button).
+        .{ .name = "engine_js", .path = "../games/lynrummy/elm/engine.js" },
+        .{ .name = "engine_glue_js", .path = "../games/lynrummy/elm/engine_glue.js" },
         // The puzzle catalogs, easiest-first (1-line … 6-line). Concatenated at
         // runtime into the catalog shipped in the page flag (see puzzles.zig).
         .{ .name = "puzzle_cat_1", .path = "../games/lynrummy/conformance/curated_1line_puzzles.dsl" },

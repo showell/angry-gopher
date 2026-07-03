@@ -3,6 +3,7 @@
 
 import type { Card } from "../core/card.ts";
 import { findLogicalMovesForPlay, formatHint } from "../plan/hand_play.ts";
+import { solveBoard } from "../bfs/engine_v2.ts";
 import { elmFindPlay } from "./elm_find_play.ts";
 
 /** Full-game hint entry point. Given the active player's hand and
@@ -25,6 +26,19 @@ export function elmGameHint(
   board: readonly (readonly Card[])[],
 ): readonly string[] {
   return gameHintLines(hand, board);
+}
+
+/** Board-only hint entry point for puzzles. In a puzzle every card
+ *  is already on the board — there is no hand to project — so we solve
+ *  the board directly and hand back the plan's step lines (engine DSL,
+ *  verbatim). The Puzzle UI shows the FIRST line as the hint. Returns
+ *  `[]` when the board is already solved or no plan was found. */
+export function elmPuzzleHint(
+  board: readonly (readonly Card[])[],
+): readonly string[] {
+  const result = solveBoard(board);
+  if (result === null) return [];
+  return result.plan.map(p => p.line);
 }
 
 /** Elm-facing wrapper for real-time agent play. Takes board + hand

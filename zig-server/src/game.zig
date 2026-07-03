@@ -32,8 +32,8 @@ const SessionMeta = session_meta.SessionMeta;
 
 // The compiled bundles, baked into the binary (wired in build.zig).
 const elm_js = @embedFile("game_elm_js");
-const engine_js = @embedFile("game_engine_js");
-const engine_glue_js = @embedFile("game_engine_glue_js");
+const engine_js = @embedFile("engine_js");
+const engine_glue_js = @embedFile("engine_glue_js");
 
 // Body-size caps.
 const max_new_session_bytes = 256 * 1024;

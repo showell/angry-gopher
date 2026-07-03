@@ -1,4 +1,4 @@
-module Puzzle exposing (main)
+port module Puzzle exposing (main)
 
 {-| The action log written to each player's
 puzzle/sessions/<id>/puzzle_<idx>/actions.dsl has one consumer:
@@ -20,6 +20,7 @@ import Lib.Button as Button
 import Lib.CardStack as CardStack exposing (CardStack)
 import Lib.Colors as Colors
 import Lib.Drag as Drag exposing (DragState(..))
+import Lib.Engine as Engine
 import Lib.Execute as Execute
 import Lib.GameEvent as GameEvent exposing (GameEvent(..))
 import Lib.LongPress as LongPress
@@ -34,9 +35,27 @@ import Html.Attributes as Attr exposing (style)
 import Html.Events as Events
 import Http
 import Json.Decode as Decode
+import Json.Encode as Encode
 import Puzzle.Animate as Animate
 import Task
 import Time
+
+
+-- PORTS
+
+
+{-| Send an engine request (here, always `puzzle_hint`) to the JS
+engine bundle via `engine_glue.js`. The engine replies on
+`puzzleHintResponse`.
+-}
+port engineRequest : Encode.Value -> Cmd msg
+
+
+{-| Receive the engine's reply. Decoded by `Engine.decodeHintResponse`
+against the in-flight request id (stale replies are dropped).
+-}
+port puzzleHintResponse : (Encode.Value -> msg) -> Sub msg
+
 
 
 {-| Server-baked flags. The server's handler allocates a session and
@@ -75,6 +94,13 @@ type alias Model =
     , sessionId : Int
     , replayState : Maybe Animate.AnimationState
     , congratsVisible : Bool
+
+    -- Hint request bookkeeping: the id of the in-flight puzzle_hint
+    -- request (Nothing = none pending), and the next id to hand out.
+    -- Matching the id lets us drop replies the user has superseded
+    -- (double-click, or navigating away before the reply lands).
+    , pendingEngineRequest : Maybe Int
+    , nextEngineRequestId : Int
     }
 
 
@@ -88,6 +114,8 @@ type Msg
     | ClickNextPuzzle
     | ClickUndo
     | ClickReset
+    | ClickHint
+    | EngineHintReceived Engine.HintResponse
     | ClickInstantReplay
     | ClickReplayPauseToggle
     | PuzzleSolved
@@ -142,6 +170,8 @@ init flagsValue =
               , sessionId = flags.sessionId
               , replayState = Nothing
               , congratsVisible = False
+              , pendingEngineRequest = Nothing
+              , nextEngineRequestId = 0
               }
             , Cmd.none
             )
@@ -212,6 +242,10 @@ navigateTo idx model =
         , replayState = Nothing
         , status = { text = "Drag stacks to merge or move them.", kind = Inform }
         , congratsVisible = False
+
+        -- Invalidate any in-flight hint: its reply is for the puzzle
+        -- we're leaving, so decodeHintResponse (id Nothing) drops it.
+        , pendingEngineRequest = Nothing
     }
 
 
@@ -427,6 +461,53 @@ update msg model =
                         }
             in
             ( nextModel, httpPostForAction )
+
+        ClickHint ->
+            let
+                reqId =
+                    model.nextEngineRequestId
+
+                payload =
+                    Engine.buildPuzzleHintRequest reqId (currentPuzzle model).board
+            in
+            ( { model
+                | pendingEngineRequest = Just reqId
+                , nextEngineRequestId = reqId + 1
+                , status = { text = "Thinking…", kind = Inform }
+              }
+            , engineRequest payload
+            )
+
+        EngineHintReceived response ->
+            case response of
+                Engine.HintLines lines ->
+                    ( { model
+                        | pendingEngineRequest = Nothing
+                        , status = hintStatus lines
+                      }
+                    , Cmd.none
+                    )
+
+                Engine.HintError detail ->
+                    ( { model
+                        | pendingEngineRequest = Nothing
+                        , status = { text = "Couldn't get a hint: " ++ detail, kind = Scold }
+                      }
+                    , Cmd.none
+                    )
+
+                Engine.HintDecodeError err ->
+                    ( { model
+                        | pendingEngineRequest = Nothing
+                        , status = { text = "Hint response could not be decoded: " ++ err, kind = Scold }
+                      }
+                    , Cmd.none
+                    )
+
+                Engine.HintStaleId ->
+                    -- A reply the user has superseded (double-click or
+                    -- navigation). Drop it silently.
+                    ( model, Cmd.none )
 
         ClickInstantReplay ->
             let
@@ -644,6 +725,7 @@ subscriptions model =
     Sub.batch
         [ dragSubscriptions model
         , replaySubscriptions model
+        , puzzleHintResponse (EngineHintReceived << Engine.decodeHintResponse model.pendingEngineRequest)
         ]
 
 
@@ -753,6 +835,7 @@ view model =
                 , style "gap" "8px"
                 ]
                 [ puzzleTitle model
+                , hintButton model
                 , undoButton model
                 , replayButton model
                 , resetButton model
@@ -917,6 +1000,34 @@ undoButton model =
 
     else
         Button.disabledButton "Undo"
+
+
+{-| Ask the engine for the next move. Disabled during replay (the
+board on screen isn't the live one). A pending request doesn't
+disable it — a fresh click supersedes the old one via the id check.
+-}
+hintButton : Model -> Html Msg
+hintButton model =
+    if model.replayState == Nothing then
+        Button.button "Hint" ClickHint
+
+    else
+        Button.disabledButton "Hint"
+
+
+{-| Render the engine's plan as a one-move hint: the FIRST step is
+the move to make right now. Engine DSL is shown verbatim — turning
+it into plain language is the larger, separate job on the game side.
+An empty plan means the board is already solved or no play was found.
+-}
+hintStatus : List String -> Status.StatusMessage
+hintStatus lines =
+    case lines of
+        first :: _ ->
+            { text = first, kind = Inform }
+
+        [] ->
+            { text = "No hint — no play found for this board.", kind = Inform }
 
 
 replayButton : Model -> Html Msg
