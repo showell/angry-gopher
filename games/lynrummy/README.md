@@ -60,13 +60,14 @@ the TS `engine.js` bundle) are built and `@embedFile`d into the binary;
 `ops/build_elm` / `ops/build_engine_js` regenerate them. Deploy is the occasional,
 deliberate `ops/deploy`. Run `ops/list` for the full script index.
 
-Gates (each leaf <20s warm):
+Gates (warm timings; a cold cache roughly doubles them):
 
 - **`ops/check_lynrummy`** (~30s) — the subsystem gate: zig build + a doc-link
   check + the Elm and TS suites. Use this while working here.
-- **`ops/check`** (~35s) — the full pre-commit gate (both subsystems).
-- **`ops/check_full`** (~75s) — adds the slow tier: agent self-play across 6
-  seeds + perf benches.
+- **`ops/check`** (~40s) — the full pre-commit gate (both subsystems).
+- **`ops/check_full`** (~2 min) — adds the slow tier: agent self-play across 6
+  seeds + perf benches. Dominated by self-play, which is variable — a single
+  seed can run anywhere from ~3s to ~30s, so the total wanders a fair bit.
 
 The honest test invariant: conformance calls the *same* codepath the production
 Hint path does (`findLogicalMovesForPlay` in `ts/plan/hand_play.ts`). A tuning

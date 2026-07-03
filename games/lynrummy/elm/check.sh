@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Type-check every durable LynRummy module standalone, then
-# build the Game.elm entry point, then run the test suite.
+# Type-check every durable LynRummy module standalone, then build
+# both entry points (Game.elm → elm.js, Puzzle.elm → puzzle.js), then
+# run the test suite and elm-review.
 
 set -euo pipefail
 
@@ -20,10 +21,11 @@ if [ ! -x "$ELM_BIN" ] || [ ! -x "$ELM_TEST_BIN" ]; then
   exit 1
 fi
 
-# Type-check every .elm under src/Game/ standalone. Glob-driven
-# so new modules (tricks, domain types) are picked up without
-# editing this script. src/Game.elm (the entry point) is
-# exercised by the full `elm make` build below.
+# Type-check every .elm under src/Game/ and src/Puzzle/ standalone.
+# Glob-driven so new modules (tricks, domain types) are picked up
+# without editing this script. The entry-point files src/Game.elm and
+# src/Puzzle.elm sit beside those dirs (not inside them), so they're
+# not globbed here — the full `elm make` builds below exercise them.
 echo "==> Type-checking standalone"
 t0=$SECONDS
 n=0
@@ -36,7 +38,7 @@ while IFS= read -r m; do
   if [ "$m_dt" -ge 2 ]; then
     slow_lines+="    [standalone] ${m_dt}s  ${m}"$'\n'
   fi
-done < <(find src/Game -name '*.elm' | sort)
+done < <(find src/Game src/Puzzle -name '*.elm' | sort)
 echo "    [phase] standalone (${n} modules): $((SECONDS - t0))s"
 if [ -n "$slow_lines" ]; then
   printf '%s' "$slow_lines"
@@ -46,6 +48,11 @@ echo "==> Building Game"
 t0=$SECONDS
 "$ELM_BIN" make src/Game.elm --output=elm.js >/dev/null
 echo "    [phase] build-game: $((SECONDS - t0))s"
+
+echo "==> Building Puzzle"
+t0=$SECONDS
+"$ELM_BIN" make src/Puzzle.elm --output=puzzle.js >/dev/null
+echo "    [phase] build-puzzle: $((SECONDS - t0))s"
 
 echo "==> Running LynRummy tests"
 t0=$SECONDS
