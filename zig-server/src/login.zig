@@ -25,6 +25,7 @@ const storage = @import("storage.zig");
 const chat = @import("chat.zig");
 const html = @import("html.zig");
 const store = @import("chat_store.zig");
+const chat_state = @import("chat_state.zig");
 const Bus = @import("bus.zig").Bus;
 
 const Alloc = std.mem.Allocator;
@@ -156,6 +157,7 @@ fn handleLoginFull(req: *Request, io: Io, alloc: Alloc, bus: *Bus) !void {
             if (password.len == 0) return renderPwPage(req, alloc, mode, name, next, "Please enter a password.");
             const id = try registerMember(cur, io, alloc, name, password);
             publishUserArrived(io, alloc, bus, id, name);
+            sendHostWelcome(io, alloc, bus, id);
             return loginAsMember(req, io, alloc, id, next);
         },
         .stranger => {
@@ -176,6 +178,7 @@ fn handleLoginFull(req: *Request, io: Io, alloc: Alloc, bus: *Bus) !void {
             if (password.len == 0) return renderPwPage(req, alloc, .stranger, valid, next, "Please enter a password.");
             const id = try registerMember(cur, io, alloc, valid, password);
             publishUserArrived(io, alloc, bus, id, valid);
+            sendHostWelcome(io, alloc, bus, id);
             return loginAsMember(req, io, alloc, id, next);
         },
     }
@@ -249,6 +252,47 @@ fn publishUserArrived(io: Io, alloc: Alloc, bus: *Bus, new_uid: []const u8, new_
         }) catch continue;
         bus.publish(key, ev);
     }
+}
+
+/// host_uid is uid=1 — the site's host (Steve on prod). New members get an
+/// automated welcome DM from this account so their Chat opens on a real
+/// conversation and they know a human will reply. The display name is looked up,
+/// not hard-coded.
+const host_uid = "1";
+
+/// sendHostWelcome seeds a "general" DM topic from the host to a freshly
+/// registered member with an automated hello, and points the new member's /chat
+/// resume bookmark at it (they have none yet, so /chat would otherwise show the
+/// empty state). No-op when the new member IS the host, when there's no host
+/// account, or when the host↔member DM already has a topic — so it's idempotent
+/// across re-registration. Best-effort: a failure just means no welcome, never a
+/// broken signup.
+fn sendHostWelcome(io: Io, alloc: Alloc, bus: *Bus, new_uid: []const u8) void {
+    sendHostWelcomeImpl(io, alloc, bus, new_uid) catch {};
+}
+
+fn sendHostWelcomeImpl(io: Io, alloc: Alloc, bus: *Bus, new_uid: []const u8) !void {
+    if (std.mem.eql(u8, new_uid, host_uid)) return;
+    if (!users.principalExists(io, alloc, host_uid)) return;
+
+    const host_name = try users.getUserName(io, alloc, host_uid);
+    const pair = try store.chatPairKey(alloc, host_uid, new_uid);
+    const dir = try store.dmConvDir(alloc, pair);
+
+    // Idempotent: only seed when this DM has no topics yet.
+    if ((try store.defaultSession(io, alloc, dir)).len != 0) return;
+
+    const members = try alloc.alloc([]const u8, 2);
+    members[0] = host_uid;
+    members[1] = new_uid;
+    const meta = store.ConvMeta{ .kind = .dm, .members = members };
+
+    const topic = "general";
+    const msg = try std.fmt.allocPrint(alloc, "Hi, this is an automated message from {s}. Please say hello and {s} will get back to you soon.", .{ host_name, host_name });
+    _ = try store.appendMessage(io, alloc, bus, meta, dir, pair, topic, host_name, host_uid, msg, "");
+
+    // The new member has no last-conv bookmark yet — land their /chat here.
+    chat_state.setUserLastSession(io, alloc, new_uid, pair, topic);
 }
 
 // ── cookies + response helpers ────────────────────────────────────────────────
