@@ -21,16 +21,19 @@ import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { type Card } from "../core/card.ts";
-import { solveBoard } from "../bfs/engine_v2.ts";
+import { solveBoard, PUZZLE_MAX_PLAN_LENGTH } from "../bfs/engine_v2.ts";
 import { parseBoardStackLine } from "../dsl/parse.ts";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-// 6-line catalog (curated_6line_puzzles.dsl) is deliberately
-// excluded: the production MAX_PLAN_LENGTH cap is 5, and adding
-// 6 here would silently encourage that cap to drift. The 6-line
-// puzzles ship for the UI's difficulty stretch only.
-const PLAN_LENGTHS: readonly number[] = [4, 5];
+// Every puzzle here is solved at PUZZLE_MAX_PLAN_LENGTH — the SAME cap
+// the puzzle UI's Hint uses (elmPuzzleHint) — so what the tests prove
+// and what the UI hints at can't drift. That's why the 6-line catalog
+// is now included: the puzzle path searches deeper than the agent, so
+// its 6-move solutions are reachable (they aren't at the agent's cap of
+// 5). If a deeper catalog is added, add its length here AND make sure
+// PUZZLE_MAX_PLAN_LENGTH covers it — this test will fail loudly if not.
+const PLAN_LENGTHS: readonly number[] = [4, 5, 6];
 
 function catalogPath(planLength: number): string {
   return path.resolve(
@@ -81,7 +84,7 @@ interface RunResult {
 }
 
 function runPuzzle(p: ParsedPuzzle, expectedLength: number): RunResult {
-  const result = solveBoard(p.board);
+  const result = solveBoard(p.board, PUZZLE_MAX_PLAN_LENGTH);
   if (result === null) {
     return { ok: false, msg: `no plan found (expected plan of length ${expectedLength})` };
   }

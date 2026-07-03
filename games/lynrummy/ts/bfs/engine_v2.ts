@@ -97,20 +97,38 @@ const HEURISTICS: Record<string, Heuristic> = {
 // empirically validated via generate_game.ts (seed=50, 2.15s wall,
 // max visits in any single search = 936, max plan length found = 4).
 //
-//   MAX_STATES        — A* visit budget per search.
-//   MAX_TROUBLE_OUTER — pre-flight reject above this trouble+growing card count.
-//   MAX_PLAN_LENGTH   — hard cap on plan depth (branches with length >
-//                       cap are never pushed).
+//   MAX_STATES        — A* visit budget per search. HARD-CODED.
+//   MAX_TROUBLE_OUTER — pre-flight reject above this trouble+growing card count. HARD-CODED.
+//   MAX_PLAN_LENGTH   — DEFAULT hard cap on plan depth (branches with
+//                       length > cap are never pushed).
 //
-// To change these, edit the constants — don't reintroduce an opts
-// surface. The agent path's empirical headroom (936 / 5000 = 19%) and
-// 4-step plans (well under the 5-cap) say we're not budget-limited at
-// these values.
+// MAX_STATES and MAX_TROUBLE_OUTER stay hard-coded — do NOT reintroduce
+// an opts surface for them.
+//
+// Plan depth is the ONE deliberate exception (2026-07-03): solveBoard
+// takes a single optional `maxPlanLength`, because the puzzle path
+// genuinely needs to search deeper than agent play — the 6-line curated
+// puzzles have 6-move solutions, past the agent's 5. It DEFAULTS to
+// MAX_PLAN_LENGTH, so every game-path caller (hand_play, conformance,
+// benches, tools) gets 5 with no drift possible. The puzzle UI
+// (elmPuzzleHint) and the puzzle conformance (test_curated_puzzles) BOTH
+// pass the same exported PUZZLE_MAX_PLAN_LENGTH, so test and prod can't
+// disagree — the exact failure the opts bag caused. Keep it to this one
+// numeric param; if you're tempted to add a second, stop.
 const MAX_STATES = 5000;
 const MAX_TROUBLE_OUTER = 10;
 const MAX_PLAN_LENGTH = 5;
 
-function solveTurn(initial: Buckets): SolveResult | null {
+/// The plan-depth cap for the PUZZLE path only (UI hint + its
+/// conformance). Higher than the agent's MAX_PLAN_LENGTH so the deepest
+/// curated puzzles are solvable; the agent/game path is unaffected. The
+/// deepest curated tier is 6-line (6-move solutions), so 8 covers the
+/// catalog with headroom. MAX_STATES still bounds worst-case cost, and
+/// A* returns the shortest plan, so extra headroom doesn't lengthen hints.
+/// One constant, imported by both callers, so they can't drift.
+export const PUZZLE_MAX_PLAN_LENGTH = 8;
+
+function solveTurn(initial: Buckets, maxPlanLength: number): SolveResult | null {
   const h = HEURISTICS.half_debt!;
   const cardOrderInfo = buildCardOrder(initial);
   const sigFn = (b: Buckets, lin?: Lineage): string =>
@@ -154,7 +172,7 @@ function solveTurn(initial: Buckets): SolveResult | null {
     for (const cand of candidates) {
       const newPlan = [...cur.plan, { line: describe(cand.move), move: cand.move }];
       if (best !== null && newPlan.length >= best.plan.length) continue;
-      if (newPlan.length > MAX_PLAN_LENGTH) continue;
+      if (newPlan.length > maxPlanLength) continue;
       // Dynamic doomed-singleton prune: a child state where a group
       // just graduated may have left a trouble singleton stranded
       // (its last partner sealed into COMPLETE). Gate on
@@ -183,6 +201,7 @@ function solveTurn(initial: Buckets): SolveResult | null {
 
 export function solveBoard(
   board: readonly (readonly Card[])[],
+  maxPlanLength: number = MAX_PLAN_LENGTH,
 ): SolveResult | null {
   const helper: ClassifiedCardStack[] = [];
   const trouble: ClassifiedCardStack[] = [];
@@ -208,7 +227,7 @@ export function solveBoard(
   // singleton; only fires when trouble has at least one singleton).
   if (!allTroubleSingletonsLive(classified)) return null;
 
-  return solveTurn(classified);
+  return solveTurn(classified, maxPlanLength);
 }
 
 class MinHeap<T> {

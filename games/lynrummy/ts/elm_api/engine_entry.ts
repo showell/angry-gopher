@@ -3,7 +3,7 @@
 
 import type { Card } from "../core/card.ts";
 import { findLogicalMovesForPlay, formatHint } from "../plan/hand_play.ts";
-import { solveBoard } from "../bfs/engine_v2.ts";
+import { solveBoard, PUZZLE_MAX_PLAN_LENGTH } from "../bfs/engine_v2.ts";
 import { elmFindPlay } from "./elm_find_play.ts";
 
 /** Full-game hint entry point. Given the active player's hand and
@@ -32,11 +32,16 @@ export function elmGameHint(
  *  is already on the board — there is no hand to project — so we solve
  *  the board directly and hand back the plan's step lines (engine DSL,
  *  verbatim). The Puzzle UI shows the FIRST line as the hint. Returns
- *  `[]` when the board is already solved or no plan was found. */
+ *  `[]` when the board is already solved or no plan was found.
+ *
+ *  Solves at PUZZLE_MAX_PLAN_LENGTH — deeper than the agent's cap — so
+ *  the hardest curated puzzles (6-line) are solvable. The puzzle
+ *  conformance (test_curated_puzzles) uses the same constant, so the
+ *  depth the UI hints at and the depth the tests prove can't drift. */
 export function elmPuzzleHint(
   board: readonly (readonly Card[])[],
 ): readonly string[] {
-  const result = solveBoard(board);
+  const result = solveBoard(board, PUZZLE_MAX_PLAN_LENGTH);
   if (result === null) return [];
   return result.plan.map(p => p.line);
 }
