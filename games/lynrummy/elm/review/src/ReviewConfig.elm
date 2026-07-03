@@ -8,7 +8,7 @@ module ReviewConfig exposing (config)
 
 This is the unified Elm project after the 2026-04-27
 unification — both `src/Game.elm` (full-game client) and
-`src/Puzzles.elm` (Puzzles gallery) compile from this directory.
+`src/Puzzle.elm` (puzzle gallery) compile from this directory.
 elm-review sees everything, no cross-project false positives.
 
 The auto-generated test files (DslConformanceTest,

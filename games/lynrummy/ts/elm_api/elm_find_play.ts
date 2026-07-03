@@ -1,6 +1,8 @@
-// elm_find_play.ts — Elm puzzles UI entry. Board+hand DSL in,
-// primitives DSL out (or empty string = no play). DSL vocabulary
-// lives in dsl/parse.ts + dsl/emit.ts.
+// elm_find_play.ts — the full-game agent-step entry (the real-time
+// opponent). Board+hand DSL in, primitives DSL out (or empty string =
+// no play). Reached via engine_entry.ts:elmAgentStep ← the `agent_step`
+// glue op, which only Game.elm sends; puzzles don't use it. DSL
+// vocabulary lives in dsl/parse.ts + dsl/emit.ts.
 
 import type { BoardStack } from "../geometry/geometry.ts";
 import { applyLocally } from "../game_events/primitives.ts";
