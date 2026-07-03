@@ -120,9 +120,12 @@ pub fn handle(req: *Request, io: Io, alloc: Alloc, bus: *Bus, sub: []const u8) !
     // the offline→online edge this fans a came-online event to other users.
     if (!isStreamPath(sub)) presence.markActiveAndBroadcast(io, alloc, bus, uid);
 
+    // Bare /chat is no longer a conversations INDEX — it resumes you straight
+    // into your last conversation (chatDefault), or shows the empty-state page if
+    // you have none. Every "Chat" link across the site points here, so the resume
+    // behaviour is centralized in one handler.
     if (sub.len == 0 or std.mem.eql(u8, sub, "/")) {
-        try page.indexPage(req, io, alloc, uid);
-        return;
+        return chatDefault(req, io, alloc, uid);
     }
     // /chat/docs[/...] — the three-pane authoring surface (docs.zig). Guard the
     // boundary so only "/docs" or "/docs/..." matches (".js" is already served
@@ -440,12 +443,16 @@ fn highestGeneralSession(io: Io, alloc: Alloc, dir: []const u8) !?[]const u8 {
 
 // ── default / conversations / msg-ref lookup ──────────────────────────────────
 
-/// chatDefault redirects to the user's most-recently-viewed (conv, session), or
-/// /chat when they've never been to a conv they still participate in.
+/// chatDefault resumes the viewer's last conversation: read their last-conv
+/// bookmark, resolve its landing session, and 302 into /chat/c/<conv>/<sid>. It
+/// backs both bare /chat and /chat/default. When there's no bookmark (or it names
+/// a conv they no longer participate in), we render the "no conversations" page
+/// rather than redirect — the invariant that everyone has SOME conversation isn't
+/// enforced yet, so this is the honest empty state.
 fn chatDefault(req: *Request, io: Io, alloc: Alloc, uid: []const u8) !void {
     const conv = try chat_state.lastUserConv(io, alloc, uid);
     if (conv.len == 0 or !(try store.chatKeyParticipant(alloc, conv, uid))) {
-        return http.redirect(req, "/chat");
+        return page.noConversationsPage(req, io, alloc, uid);
     }
     const sid = try chat_state.resolveSessionForUser(io, alloc, uid, conv);
     return http.redirect(req, try std.fmt.allocPrint(alloc, "/chat/c/{s}/{s}", .{ conv, sid }));

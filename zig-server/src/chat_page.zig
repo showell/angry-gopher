@@ -160,41 +160,18 @@ fn emitSessionItem(b: *std.ArrayList(u8), alloc: Alloc, base: []const u8, s: []c
     });
 }
 
-// ── the /chat index (no conv selected) ───────────────────────────────────────
+// ── the "no conversations" landing (replaces the old /chat index) ─────────────
 
-/// indexPage lists the conversations this user can see — DMs they participate in
-/// and channels they're a member of — each linking to its default topic.
-pub fn indexPage(req: *Request, io: Io, alloc: Alloc, uid: []const u8) !void {
+/// noConversationsPage is the empty state for /chat: the standard chrome shell
+/// with a plain message, rendered when the viewer has no conversation to resume.
+/// We don't yet enforce that every member has SOME conversation, so this is the
+/// honest empty case — a real page, not a redirect into a half-real index.
+pub fn noConversationsPage(req: *Request, io: Io, alloc: Alloc, uid: []const u8) !void {
+    const viewer = try users.getUserName(io, alloc, uid);
     var b: std.ArrayList(u8) = .empty;
-    try b.appendSlice(alloc, index_head);
-
-    // List every OTHER authorized principal as a startable DM — not just convs
-    // that already exist on disk. A DM directory is created lazily (first topic),
-    // so a fresh member would otherwise see "none" with no way in; clicking a
-    // partner with no topics yet lands on the first-topic bootstrap page. "none"
-    // now means exactly what it says: you're the only principal.
-    try b.appendSlice(alloc, "<h2>Direct messages</h2><ul>");
-    var any_dm = false;
-    for (try users.listAuthorized(io, alloc)) |partner| {
-        if (std.mem.eql(u8, partner.id, uid)) continue;
-        const conv = try store.chatPairKey(alloc, uid, partner.id);
-        try b.print(alloc, "<li><a href=\"/chat/c/{s}\">{s}</a></li>", .{
-            conv, try htmlEscape(alloc, partner.name),
-        });
-        any_dm = true;
-    }
-    if (!any_dm) try b.appendSlice(alloc, "<li class=\"muted\">none</li>");
-    try b.appendSlice(alloc, "</ul>");
-
-    try b.appendSlice(alloc, "<h2>Channels</h2><ul>");
-    var any_ch = false;
-    for (try store.listUserChannels(io, alloc, uid)) |name| {
-        try b.print(alloc, "<li><a href=\"/channel/{s}\">#{s}</a></li>", .{ name, try htmlEscape(alloc, name) });
-        any_ch = true;
-    }
-    if (!any_ch) try b.appendSlice(alloc, "<li class=\"muted\">none</li>");
-    try b.appendSlice(alloc, "</ul></main></body></html>");
-
+    try chrome.begin(&b, alloc, "Chat", "Chat", viewer, "chat");
+    try b.appendSlice(alloc, "<p>You do not have any conversations.</p>");
+    try chrome.end(&b, alloc);
     try req.respond(b.items, .{ .extra_headers = &.{http.html_ct} });
 }
 
@@ -213,28 +190,4 @@ const chat_css =
     \\.chat-layout { display:flex; flex-direction:row; align-items:stretch;
     \\               gap:20px; flex:1; min-height:0; }
     \\</style>
-;
-
-// index_head: the standalone /chat landing-page head — its own simple layout
-// (a <main> column, blue top nav), not the shared chrome.
-const index_head =
-    \\<!DOCTYPE html>
-    \\<html lang="en"><head><meta charset="utf-8">
-    \\<meta name="viewport" content="width=device-width, initial-scale=1">
-    \\<title>Conversations</title>
-    \\<style>
-    \\  body { font: 15px/1.6 system-ui, sans-serif; margin: 0; background: #f4f4ec; color: #222; }
-    \\  main { max-width: 40rem; margin: 0 auto; padding: 1.5rem 1.25rem 4rem; }
-    \\  h1 { font-size: 1.25rem; color: #000080; }
-    \\  h2 { font-size: 1rem; color: #000080; margin: 1.5rem 0 .4rem; }
-    \\  nav.top { background: #000080; color: #fff; padding: 8px 16px; font-size: 13px; }
-    \\  nav.top a { color: #fff; text-decoration: none; margin-right: 14px; }
-    \\  ul { list-style: none; padding: 0; margin: 0; }
-    \\  li { padding: 4px 0; }
-    \\  a { color: #000080; }
-    \\  .muted { color: #888; }
-    \\</style></head><body>
-    \\<nav class="top"><a href="/">← Home</a></nav>
-    \\<main>
-    \\<h1>Conversations</h1>
 ;
