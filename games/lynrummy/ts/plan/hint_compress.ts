@@ -1,39 +1,45 @@
-// hint_compress.ts — collapse a naive multi-line hint into the tighter
-// form that matches the player's actual gestures.
+// hint_compress.ts — rewrite a raw engine hint into the sequence a human
+// would actually perform.
 //
-// The engine emits hints one line per BFS plan step, with a leading
-// "place [X] from hand" for the cards lifted off the hand
-// (hand_play.ts:formatHint + bfs/move.ts:describe). That phrasing is
-// faithful to the SOLVER's steps but not to the player's MOTIONS: a
-// hand card that is placed and then immediately dropped onto a board
-// stack is ONE drag, yet it reads as two lines.
+// The engine emits a hint one line per BFS plan step, led by a
+// "place [X] from hand" step (hand_play.ts:formatHint + bfs/move.ts:
+// describe). Two things make that faithful-to-the-solver phrasing wrong
+// for a player:
 //
-// The verbs that consume the just-placed card as a single hand→board
-// drop are `push`, `free_pull`, and `splice` — the agent realizes each
-// as one `merge_hand` primitive. `push`/`free_pull` land the card ONTO
-// an existing group (extend); `splice` lands it INTO a run (which then
-// splits around it). The other verbs (extract_absorb, shift, decompose)
-// rearrange BOARD cards, so they never fuse with a hand placement.
+//   1. Gesture granularity. A hand card placed and then dropped onto a
+//      board stack is ONE drag, but reads as two lines.
+//   2. Ordering. The projection layer lists the hand placement FIRST and
+//      doesn't care about order, but a player holds the card and drops it
+//      only when the board is ready. So board manipulation comes FIRST and
+//      the hand card lands LAST.
 //
-// This rewrite works entirely in DSL space. It re-parses the card lists
-// with the shared DSL parser and re-emits them with the shared emitter,
-// so the output is canonical DSL — not string-spliced fragments — and a
-// malformed line simply fails to match rather than producing garbage.
+// This module reassembles the plan into: every board→board move (in the
+// solver's order), then the single hand card landing on its target, fused
+// into one line. It works entirely in DSL space — card lists round-trip
+// through the shared dsl parser/emitter (`canon`), so output is canonical
+// DSL and a malformed line just fails to match.
 //
-// Scope today: a pure single play (place [X] + one consuming move).
-// Multi-step plans pass through unchanged — later sophistication work
-// (see ts/in_progress/HINT_SOPHISTIFICATION.md).
+// Verb families:
+//   - push / free_pull / splice: consume one loose card. From HAND they are
+//     the landing step ("play|splice X from hand ..."); of a BOARD card they
+//     are board cleanup ("push|pull|splice X ...").
+//   - extract_absorb (peel/pluck/yank/steal/split_out/set_peel): always
+//     board→board — relocate a card from a source helper to a target.
+//   - shift / decompose: not yet handled; a plan containing one is left raw.
+//
+// Scope: a single hand card consumed by exactly one move. Pairs that split
+// (decompose) and shift come later. Any plan we don't fully understand is
+// returned UNCHANGED — never half-transformed.
 
 import { parseCardList } from "../dsl/parse.ts";
 import { formatCardList } from "../dsl/emit.ts";
 
 const PLACE_RE = /^place \[(.+?)\] from hand$/;
 
-// extract_absorb: a board→board relocation — take one card out of a source
-// helper and add it to a target stack. All six verbs share this shape (with
-// optional " [→COMPLETE]" and "; spawn ..." tails). The verb encodes what
-// happens to the SOURCE remnant, which the player just watches; the motion
-// is always "move this card from here to there".
+// extract_absorb: "<verb> <card> from HELPER [source], absorb onto [target]
+// → [result]" with optional " [→COMPLETE]" and "; spawn ..." tails. The verb
+// encodes the source-remnant fate (the player just watches); the motion is
+// always "move this card from source onto target".
 const EXTRACT_ABSORB_RE =
   /^(peel|pluck|yank|steal|split_out|set_peel) (.+?) from HELPER \[(.+?)\], absorb onto \[(.+?)\] → \[.+?\](?: \[→COMPLETE\])?(?: ; spawn .+)?$/;
 
@@ -49,28 +55,38 @@ const VERB_LABEL: Readonly<Record<string, string>> = {
   split_out: "split out",
 };
 
-/** One "the placed card drops directly onto/into a board stack" verb.
- *  `looseGroup` captures the card(s) the move consumes; `targetGroup`
- *  captures the destination stack; `verb`/`prep` are the human phrasing:
- *  "<verb> X from hand <prep> <target>". */
-interface FuseRule {
+/** A push/free_pull/splice move: consumes one loose card onto/into a target.
+ *  `looseGroup`/`targetGroup` are the capture indices; `handVerb` phrases it
+ *  as a hand landing, `boardVerb` as a board cleanup; `prep` is shared. */
+interface ConsumeRule {
   readonly re: RegExp;
   readonly looseGroup: number;
   readonly targetGroup: number;
-  readonly verb: "play" | "splice";
+  readonly handVerb: "play" | "splice";
+  readonly boardVerb: "push" | "pull" | "splice";
   readonly prep: "onto" | "into";
 }
 
-const FUSE_RULES: readonly FuseRule[] = [
+const CONSUME_RULES: readonly ConsumeRule[] = [
   // push: trouble card onto a complete helper (extend a run/set).
-  { re: /^push \[(.+?)\] onto HELPER \[(.+?)\] → \[.+?\]$/, looseGroup: 1, targetGroup: 2, verb: "play", prep: "onto" },
-  // free_pull: loose card onto a partial being assembled — same gesture
-  // as push; the "helper vs partial" distinction is invisible to the player.
-  { re: /^pull (.+?) onto \[(.+?)\] → \[.+?\](?: \[→COMPLETE\])?$/, looseGroup: 1, targetGroup: 2, verb: "play", prep: "onto" },
-  // splice: loose card into a run. "splice" is a verb players recognize;
-  // we don't spell out that the run divides into two — the player sees it.
-  { re: /^splice \[(.+?)\] into HELPER \[(.+?)\] → \[.+?\] \+ \[.+?\]$/, looseGroup: 1, targetGroup: 2, verb: "splice", prep: "into" },
+  { re: /^push \[(.+?)\] onto HELPER \[(.+?)\] → \[.+?\]$/, looseGroup: 1, targetGroup: 2, handVerb: "play", boardVerb: "push", prep: "onto" },
+  // free_pull: loose card onto a partial — same gesture as push; the
+  // helper-vs-partial distinction is invisible to the player.
+  { re: /^pull (.+?) onto \[(.+?)\] → \[.+?\](?: \[→COMPLETE\])?$/, looseGroup: 1, targetGroup: 2, handVerb: "play", boardVerb: "pull", prep: "onto" },
+  // splice: loose card into a run, which splits around it (unspoken — the
+  // player watches it happen). "splice" is a verb players recognize.
+  { re: /^splice \[(.+?)\] into HELPER \[(.+?)\] → \[.+?\] \+ \[.+?\]$/, looseGroup: 1, targetGroup: 2, handVerb: "splice", boardVerb: "splice", prep: "into" },
 ];
+
+/** One parsed move line. `boardLine` is always the board→board rendering.
+ *  For a consuming verb, `consumesCard` is the loose card (deck-aware) and
+ *  `handLine` is the "... from hand ..." rendering; extract_absorb leaves
+ *  both null (it never lands a hand card). */
+interface ParsedMove {
+  readonly consumesCard: string | null;
+  readonly handLine: string | null;
+  readonly boardLine: string;
+}
 
 /** Drop deck-2 markers from a canonical card-list string. The only
  *  apostrophes in a `formatCardList` result are deck-2 suffixes, so
@@ -90,65 +106,86 @@ function canon(cardsDsl: string): string | null {
   }
 }
 
-/** Rewrite a hint (one line per plan step) into the gesture-faithful
- *  form. Returns the input untouched when no rule applies. */
-export function compressHint(lines: readonly string[]): readonly string[] {
-  const fused = tryFuseSinglePlay(lines);
-  if (fused !== null) return fused;
-  // A lone board→board move (a hint that's pure board cleanup, no hand
-  // placement): humanize it in place. Multi-step plans are left untouched
-  // until cross-step assembly lands — humanizing their lines piecemeal
-  // would double-mention the placed card, which reads worse, not better.
-  if (lines.length === 1) {
-    const human = humanizeMoveLine(lines[0]!);
-    if (human !== null) return [human];
-  }
-  return lines;
-}
-
-/** Rewrite one standalone board→board move line into human phrasing, or
- *  null if it isn't a verb we humanize. Strips the algorithm decoration
- *  ("HELPER", brackets, "→ [result]", "[→COMPLETE]", "; spawn ...") the
- *  same way the play lines do — the player watches the result land. */
-function humanizeMoveLine(line: string): string | null {
-  const m = line.match(EXTRACT_ABSORB_RE);
-  if (m === null) return null;
-  const verb = VERB_LABEL[m[1]!];
-  const card = canon(m[2]!);
-  const source = canon(m[3]!);
-  const target = canon(m[4]!);
-  if (verb === undefined || card === null || source === null || target === null) {
-    return null;
-  }
-  return `${verb} ${deckBlind(card)} from ${deckBlind(source)} onto ${deckBlind(target)}`;
-}
-
-// place [X] from hand ; <push|pull|splice> [X] ... → play X from hand
-// <onto|into> <target>. Only when those two lines are the WHOLE hint and
-// the consumed cards are exactly the placed cards: the placement and the
-// drop are then a single drag, and fusing tells the player the one thing
-// they'd do.
-function tryFuseSinglePlay(lines: readonly string[]): readonly string[] | null {
-  if (lines.length !== 2) return null;
-  const place = lines[0]!.match(PLACE_RE);
-  if (place === null) return null;
-  const placed = canon(place[1]!);
-  if (placed === null) return null;
-
-  for (const rule of FUSE_RULES) {
-    const m = lines[1]!.match(rule.re);
+/** Parse one move line into board + (optional) hand renderings, or null if
+ *  it's a verb we don't handle (shift / decompose / anything unknown). */
+function parseMove(line: string): ParsedMove | null {
+  for (const r of CONSUME_RULES) {
+    const m = line.match(r.re);
     if (m === null) continue;
-    const loose = canon(m[rule.looseGroup]!);
-    const target = canon(m[rule.targetGroup]!);
-    // The consumed cards must BE the placed cards (deck-aware identity —
-    // canon keeps the deck-2 marker); otherwise the move is consuming
-    // board trouble, not the placement, and it isn't one gesture.
-    if (loose === null || target === null || loose !== placed) return null;
-    // Human phrasing: no brackets, no "HELPER" (an algorithm-internal
-    // name for the board stack), no "→ [result]" (the player watches it
-    // land), and no deck-2 apostrophe (A♠' reads as A♠ — the two physical
-    // decks are identical to the eye). Deck matters for identity, not display.
-    return [`${rule.verb} ${deckBlind(placed)} from hand ${rule.prep} ${deckBlind(target)}`];
+    const card = canon(m[r.looseGroup]!);
+    const target = canon(m[r.targetGroup]!);
+    if (card === null || target === null) return null;
+    const c = deckBlind(card);
+    const t = deckBlind(target);
+    return {
+      consumesCard: card,
+      handLine: `${r.handVerb} ${c} from hand ${r.prep} ${t}`,
+      boardLine: `${r.boardVerb} ${c} ${r.prep} ${t}`,
+    };
+  }
+  const ea = line.match(EXTRACT_ABSORB_RE);
+  if (ea !== null) {
+    const verb = VERB_LABEL[ea[1]!];
+    const card = canon(ea[2]!);
+    const source = canon(ea[3]!);
+    const target = canon(ea[4]!);
+    if (verb === undefined || card === null || source === null || target === null) {
+      return null;
+    }
+    return {
+      consumesCard: null,
+      handLine: null,
+      boardLine: `${verb} ${deckBlind(card)} from ${deckBlind(source)} onto ${deckBlind(target)}`,
+    };
   }
   return null;
+}
+
+/** Rewrite a raw engine hint into board-first, gesture-faithful form.
+ *  Returns the input unchanged when the plan doesn't fit the shape we
+ *  fully understand (never a half-transformed plan). */
+export function compressHint(lines: readonly string[]): readonly string[] {
+  if (lines.length === 0) return lines;
+
+  const place = lines[0]!.match(PLACE_RE);
+  if (place === null) {
+    // No hand placement: a pure board plan (or a lone board move). Humanize
+    // every line, or bail if any line is a verb we don't handle.
+    return humanizeAllBoard(lines) ?? lines;
+  }
+  const placed = canon(place[1]!);
+  if (placed === null) return lines;
+
+  const moveLines = lines.slice(1);
+  if (moveLines.length === 0) {
+    // Triple-in-hand on a clean board: the placed cards ARE the play.
+    return [`play ${deckBlind(placed)} from hand`];
+  }
+
+  const moves: ParsedMove[] = [];
+  for (const ml of moveLines) {
+    const pm = parseMove(ml);
+    if (pm === null) return lines; // unknown verb → leave the whole plan raw
+    moves.push(pm);
+  }
+
+  // Exactly one move must land the placed card; that's the hand step.
+  const landing = moves.filter(m => m.consumesCard === placed);
+  if (landing.length !== 1) return lines; // can't cleanly place X → bail
+
+  // Board manipulation first (solver's order), the hand card last.
+  const board = moves.filter(m => m.consumesCard !== placed);
+  return [...board.map(m => m.boardLine), landing[0]!.handLine!];
+}
+
+/** Humanize a plan with no hand placement — each line as a board move —
+ *  or null if any line is a verb we don't handle. */
+function humanizeAllBoard(lines: readonly string[]): readonly string[] | null {
+  const out: string[] = [];
+  for (const line of lines) {
+    const pm = parseMove(line);
+    if (pm === null) return null;
+    out.push(pm.boardLine);
+  }
+  return out;
 }

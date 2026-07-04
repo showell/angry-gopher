@@ -122,30 +122,52 @@ scenario set_peel_renders_as_peel
   compressed:
     - peel Q♣ from Q♥ Q♠ Q♣ onto T♣ J♦
 
-# ---- passes through unchanged: the boundary ----
+# ---- reorders: board manipulation first, the hand card lands last ----
+# The projection layer lists "place [X] from hand" first and ignores order.
+# A human drops the card only when the board is ready, so board→board moves
+# float to the front (in the solver's order) and the hand landing (fused into
+# one line) comes last. These are real seed-42 dirty-board fixtures.
 
-scenario passthrough_multistep
-  desc: a board cleanup sits between place and push — not a single gesture
+scenario reorder_board_cleanup_then_hand
+  desc: turn_2 — an unrelated board cleanup (peel) leads; the 4♠ hand play lands last
   input:
     - place [4♠] from hand
     - peel T♦ from HELPER [T♦ J♦ Q♦ K♦], absorb onto [J♦' Q♦'] → [T♦ J♦' Q♦'] [→COMPLETE]
     - push [4♠] onto HELPER [K♠ A♠ 2♠ 3♠] → [K♠ A♠ 2♠ 3♠ 4♠]
   compressed:
-    - place [4♠] from hand
-    - peel T♦ from HELPER [T♦ J♦ Q♦ K♦], absorb onto [J♦' Q♦'] → [T♦ J♦' Q♦'] [→COMPLETE]
-    - push [4♠] onto HELPER [K♠ A♠ 2♠ 3♠] → [K♠ A♠ 2♠ 3♠ 4♠]
+    - peel T♦ from T♦ J♦ Q♦ K♦ onto J♦ Q♦
+    - play 4♠ from hand onto K♠ A♠ 2♠ 3♠
 
-scenario passthrough_board_rearrange_verb
-  desc: place then a board-rearrangement verb (peel + absorb) — that verb consumes a HELPER card, not the hand card, so it never fuses even at two lines
+scenario reorder_dirty_board_with_board_push
+  desc: turn_3 — two board moves first (a peel and a push of a LOOSE BOARD 4♠, not from hand), then the 4♣' hand splice lands last
   input:
-    - place [4♠] from hand
-    - peel T♦ from HELPER [T♦ J♦ Q♦ K♦], absorb onto [J♦' Q♦'] → [T♦ J♦' Q♦'] [→COMPLETE]
+    - place [4♣'] from hand
+    - peel K♦ from HELPER [T♦ J♦ Q♦ K♦], absorb onto [J♦' Q♦'] → [J♦' Q♦' K♦] [→COMPLETE]
+    - push [4♠] onto HELPER [K♠ A♠ 2♠ 3♠] → [K♠ A♠ 2♠ 3♠ 4♠]
+    - splice [4♣'] into HELPER [2♣ 3♦ 4♣ 5♥ 6♠ 7♥] → [2♣ 3♦ 4♣'] + [4♣ 5♥ 6♠ 7♥]
   compressed:
-    - place [4♠] from hand
-    - peel T♦ from HELPER [T♦ J♦ Q♦ K♦], absorb onto [J♦' Q♦'] → [T♦ J♦' Q♦'] [→COMPLETE]
+    - peel K♦ from T♦ J♦ Q♦ K♦ onto J♦ Q♦
+    - push 4♠ onto K♠ A♠ 2♠ 3♠
+    - splice 4♣ from hand into 2♣ 3♦ 4♣ 5♥ 6♠ 7♥
 
-scenario passthrough_push_of_board_trouble
-  desc: the pushed cards are NOT the placed card — the push consumes board trouble
+scenario triple_in_hand_lands_directly
+  desc: a triple played straight from hand onto a clean board — no target, no board move
+  input:
+    - place [7♦ 8♦ 9♦] from hand
+  compressed:
+    - play 7♦ 8♦ 9♦ from hand
+
+# ---- bails: return the plan raw rather than half-transform it ----
+
+scenario passthrough_unhandled_shift
+  desc: shift isn't handled yet — a plan touching it is returned entirely raw, never half-humanized
+  input:
+    - shift 3♠ to pop K♠ [4♥ 5♣' 6♥' -> A♠ 2♠ + 3♠]; absorb onto [J♣' Q♦] → [J♣' Q♦ K♠]
+  compressed:
+    - shift 3♠ to pop K♠ [4♥ 5♣' 6♥' -> A♠ 2♠ + 3♠]; absorb onto [J♣' Q♦] → [J♣' Q♦ K♠]
+
+scenario passthrough_placed_card_never_consumed
+  desc: the placed 8♣ is never landed by any move (only a board 4♠ push) — can't reorder safely, so leave it raw
   input:
     - place [8♣] from hand
     - push [4♠] onto HELPER [K♠ A♠ 2♠ 3♠] → [K♠ A♠ 2♠ 3♠ 4♠]
