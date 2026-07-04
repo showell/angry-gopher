@@ -31,22 +31,25 @@ const PLACE_RE = /^place \[(.+?)\] from hand$/;
 
 /** One "the placed card drops directly onto/into a board stack" verb.
  *  `looseGroup` captures the card(s) the move consumes; `targetGroup`
- *  captures the destination stack; `prep` is the human preposition. */
+ *  captures the destination stack; `verb`/`prep` are the human phrasing:
+ *  "<verb> X from hand <prep> <target>". */
 interface FuseRule {
   readonly re: RegExp;
   readonly looseGroup: number;
   readonly targetGroup: number;
+  readonly verb: "play" | "splice";
   readonly prep: "onto" | "into";
 }
 
 const FUSE_RULES: readonly FuseRule[] = [
   // push: trouble card onto a complete helper (extend a run/set).
-  { re: /^push \[(.+?)\] onto HELPER \[(.+?)\] → \[.+?\]$/, looseGroup: 1, targetGroup: 2, prep: "onto" },
+  { re: /^push \[(.+?)\] onto HELPER \[(.+?)\] → \[.+?\]$/, looseGroup: 1, targetGroup: 2, verb: "play", prep: "onto" },
   // free_pull: loose card onto a partial being assembled — same gesture
   // as push; the "helper vs partial" distinction is invisible to the player.
-  { re: /^pull (.+?) onto \[(.+?)\] → \[.+?\](?: \[→COMPLETE\])?$/, looseGroup: 1, targetGroup: 2, prep: "onto" },
-  // splice: loose card into a run, which splits around it.
-  { re: /^splice \[(.+?)\] into HELPER \[(.+?)\] → \[.+?\] \+ \[.+?\]$/, looseGroup: 1, targetGroup: 2, prep: "into" },
+  { re: /^pull (.+?) onto \[(.+?)\] → \[.+?\](?: \[→COMPLETE\])?$/, looseGroup: 1, targetGroup: 2, verb: "play", prep: "onto" },
+  // splice: loose card into a run. "splice" is a verb players recognize;
+  // we don't spell out that the run divides into two — the player sees it.
+  { re: /^splice \[(.+?)\] into HELPER \[(.+?)\] → \[.+?\] \+ \[.+?\]$/, looseGroup: 1, targetGroup: 2, verb: "splice", prep: "into" },
 ];
 
 /** Drop deck-2 markers from a canonical card-list string. The only
@@ -98,7 +101,7 @@ function tryFuseSinglePlay(lines: readonly string[]): readonly string[] | null {
     // name for the board stack), no "→ [result]" (the player watches it
     // land), and no deck-2 apostrophe (A♠' reads as A♠ — the two physical
     // decks are identical to the eye). Deck matters for identity, not display.
-    return [`play ${deckBlind(placed)} from hand ${rule.prep} ${deckBlind(target)}`];
+    return [`${rule.verb} ${deckBlind(placed)} from hand ${rule.prep} ${deckBlind(target)}`];
   }
   return null;
 }

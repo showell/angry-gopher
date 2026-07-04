@@ -58,12 +58,12 @@ scenario push_target_has_deck_two
 # ---- fuses: splice (lands INTO a run, which splits around the card) ----
 
 scenario splice_into_long_run
-  desc: 4♣' splices into the long rb run — "into", and the split result is dropped (the player watches the run divide)
+  desc: 4♣' splices into the long rb run — keep the verb "splice" (players know it); don't spell out that the run divides into two
   input:
     - place [4♣'] from hand
     - splice [4♣'] into HELPER [2♣ 3♦ 4♣ 5♥ 6♠ 7♥] → [2♣ 3♦ 4♣'] + [4♣ 5♥ 6♠ 7♥]
   compressed:
-    - play 4♣ from hand into 2♣ 3♦ 4♣ 5♥ 6♠ 7♥
+    - splice 4♣ from hand into 2♣ 3♦ 4♣ 5♥ 6♠ 7♥
 
 # ---- fuses: free_pull (loose card onto a partial — same gesture as push) ----
 
