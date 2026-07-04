@@ -11,8 +11,7 @@ scenario turn_1_hint
     - A♣ A♦ A♥
     - 2♣ 3♦ 4♣ 5♥ 6♠ 7♥
   expect_steps:
-    - place [4♠] from hand
-    - push [4♠] onto HELPER [K♠ A♠ 2♠ 3♠] → [K♠ A♠ 2♠ 3♠ 4♠]
+    - play 4♠ from hand onto K♠ A♠ 2♠ 3♠
 
 scenario turn_2_hint
   op: hint_for_hand

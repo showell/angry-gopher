@@ -24,6 +24,13 @@ import { formatCardList } from "../dsl/emit.ts";
 const PLACE_RE = /^place \[(.+?)\] from hand$/;
 const PUSH_RE = /^push \[(.+?)\] onto HELPER \[(.+?)\] → \[(.+?)\]$/;
 
+/** Drop deck-2 markers from a canonical card-list string. The only
+ *  apostrophes in a `formatCardList` result are deck-2 suffixes, so
+ *  stripping them renders cards deck-blind — how the player sees them. */
+function deckBlind(cardList: string): string {
+  return cardList.replace(/'/g, "");
+}
+
 /** Canonicalize a bracketed card-list substring by round-tripping it
  *  through the shared parser + emitter. Returns null when it isn't a
  *  valid card list, so a malformed line just doesn't match. */
@@ -56,13 +63,18 @@ function tryFuseSinglePush(lines: readonly string[]): readonly string[] | null {
   const placed = canon(place[1]!);
   const pushed = canon(push[1]!);
   const target = canon(push[2]!);
-  const result = canon(push[3]!);
-  if (placed === null || pushed === null || target === null || result === null) {
+  if (placed === null || pushed === null || target === null) {
     return null;
   }
   // The pushed cards must BE the hand cards — otherwise the push is
   // consuming board trouble, not the placement, and it isn't one gesture.
+  // This identity check is deck-aware (canon keeps the deck-2 marker).
   if (placed !== pushed) return null;
 
-  return [`play [${placed}] from hand onto HELPER [${target}] → [${result}]`];
+  // Human phrasing: no brackets, no "HELPER" (an algorithm-internal name
+  // for the board stack), no "→ [result]" (redundant once it's one
+  // gesture — the player sees the result on the board), and no deck-2
+  // apostrophe (the two physical decks are identical to the player, so
+  // A♠' reads as A♠). Deck matters for identity above, never for display.
+  return [`play ${deckBlind(placed)} from hand onto ${deckBlind(target)}`];
 }

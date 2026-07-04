@@ -13,6 +13,7 @@ import { cardLabel } from "../core/card.ts";
 import { isPartialOk, isCompleteGroup } from "../core/card_stack.ts";
 import { solveBoard } from "../bfs/engine_v2.ts";
 import type { Move } from "../bfs/move.ts";
+import { compressHint } from "./hint_compress.ts";
 
 export interface LogicalMovesForPlay {
   readonly cardsToPlay: readonly Card[];
@@ -60,7 +61,8 @@ export function findLogicalMovesForPlay(
 export function formatHint(result: LogicalMovesForPlay | null): readonly string[] {
   if (result === null) return [];
   const labels = result.cardsToPlay.map(cardLabel).join(" ");
-  return [`place [${labels}] from hand`, ...result.moveLines];
+  const lines = [`place [${labels}] from hand`, ...result.moveLines];
+  return compressHint(lines);
 }
 
 // --- Pair collection ----------------------------------------------------

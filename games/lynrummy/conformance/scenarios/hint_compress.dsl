@@ -20,7 +20,7 @@ scenario push_run_end
     - place [4♠] from hand
     - push [4♠] onto HELPER [K♠ A♠ 2♠ 3♠] → [K♠ A♠ 2♠ 3♠ 4♠]
   compressed:
-    - play [4♠] from hand onto HELPER [K♠ A♠ 2♠ 3♠] → [K♠ A♠ 2♠ 3♠ 4♠]
+    - play 4♠ from hand onto K♠ A♠ 2♠ 3♠
 
 scenario push_run_front
   desc: Q♠ extends the front of the spade run
@@ -28,7 +28,7 @@ scenario push_run_front
     - place [Q♠] from hand
     - push [Q♠] onto HELPER [K♠ A♠ 2♠ 3♠] → [Q♠ K♠ A♠ 2♠ 3♠]
   compressed:
-    - play [Q♠] from hand onto HELPER [K♠ A♠ 2♠ 3♠] → [Q♠ K♠ A♠ 2♠ 3♠]
+    - play Q♠ from hand onto K♠ A♠ 2♠ 3♠
 
 scenario push_set_fourth
   desc: 7♥ completes the sevens set — set extension is a push too
@@ -36,15 +36,23 @@ scenario push_set_fourth
     - place [7♥] from hand
     - push [7♥] onto HELPER [7♠ 7♦ 7♣] → [7♠ 7♦ 7♣ 7♥]
   compressed:
-    - play [7♥] from hand onto HELPER [7♠ 7♦ 7♣] → [7♠ 7♦ 7♣ 7♥]
+    - play 7♥ from hand onto 7♠ 7♦ 7♣
 
 scenario push_deck_two_card
-  desc: deck-2 apostrophe survives the round-trip through the DSL parser
+  desc: deck-2 apostrophe is dropped for the player — A♠' reads as A♠ (decks are identical to the eye; deck still matters for the identity match)
   input:
     - place [A♠'] from hand
     - push [A♠'] onto HELPER [A♣ A♦ A♥] → [A♣ A♦ A♥ A♠']
   compressed:
-    - play [A♠'] from hand onto HELPER [A♣ A♦ A♥] → [A♣ A♦ A♥ A♠']
+    - play A♠ from hand onto A♣ A♦ A♥
+
+scenario push_target_has_deck_two
+  desc: deck-2 markers are dropped from the target cards too, not only the played card
+  input:
+    - place [9♠'] from hand
+    - push [9♠'] onto HELPER [9♦' 9♥ 9♣] → [9♦' 9♥ 9♣ 9♠']
+  compressed:
+    - play 9♠ from hand onto 9♦ 9♥ 9♣
 
 # ---- passes through unchanged: the boundary ----
 
