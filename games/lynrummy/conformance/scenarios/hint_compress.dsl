@@ -6,11 +6,12 @@
 # asserts string-equality on `compressed`. The DSL IS the contract; no
 # parse-back, no struct comparison.
 #
-# Today's single rule: a hand card placed and then immediately pushed
-# onto a helper is ONE drag, so `place [X] from hand` + `push [X] onto
-# HELPER ...` fuse into `play [X] from hand onto HELPER ...`. Scenarios
-# whose `compressed` equals `input` pin the boundary — the cases the
-# rule must leave alone.
+# The rule: a hand card placed and then immediately dropped onto/into a
+# board stack is ONE drag, so `place [X] from hand` + a consuming move
+# (push / pull / splice of exactly X) fuse into one `play X from hand
+# <onto|into> <target>` line. push/pull land ONTO an existing group;
+# splice lands INTO a run. Scenarios whose `compressed` equals `input`
+# pin the boundary — the cases the rule must leave alone.
 
 # ---- fuses: the pure single-push play ----
 
@@ -54,6 +55,26 @@ scenario push_target_has_deck_two
   compressed:
     - play 9♠ from hand onto 9♦ 9♥ 9♣
 
+# ---- fuses: splice (lands INTO a run, which splits around the card) ----
+
+scenario splice_into_long_run
+  desc: 4♣' splices into the long rb run — "into", and the split result is dropped (the player watches the run divide)
+  input:
+    - place [4♣'] from hand
+    - splice [4♣'] into HELPER [2♣ 3♦ 4♣ 5♥ 6♠ 7♥] → [2♣ 3♦ 4♣'] + [4♣ 5♥ 6♠ 7♥]
+  compressed:
+    - play 4♣ from hand into 2♣ 3♦ 4♣ 5♥ 6♠ 7♥
+
+# ---- fuses: free_pull (loose card onto a partial — same gesture as push) ----
+
+scenario free_pull_onto_partial
+  desc: 8♠' completes the partial [6♠' 7♠'] — free_pull reads ONTO, like push; the "partial vs helper" distinction is invisible to the player
+  input:
+    - place [8♠'] from hand
+    - pull 8♠' onto [6♠' 7♠'] → [6♠' 7♠' 8♠'] [→COMPLETE]
+  compressed:
+    - play 8♠ from hand onto 6♠ 7♠
+
 # ---- passes through unchanged: the boundary ----
 
 scenario passthrough_multistep
@@ -67,14 +88,14 @@ scenario passthrough_multistep
     - peel T♦ from HELPER [T♦ J♦ Q♦ K♦], absorb onto [J♦' Q♦'] → [T♦ J♦' Q♦'] [→COMPLETE]
     - push [4♠] onto HELPER [K♠ A♠ 2♠ 3♠] → [K♠ A♠ 2♠ 3♠ 4♠]
 
-scenario passthrough_splice
-  desc: splice bisects a helper — a different, non-push move, left alone for now
+scenario passthrough_board_rearrange_verb
+  desc: place then a board-rearrangement verb (peel + absorb) — that verb consumes a HELPER card, not the hand card, so it never fuses even at two lines
   input:
-    - place [4♣'] from hand
-    - splice [4♣'] into HELPER [2♣ 3♦ 4♣ 5♥ 6♠ 7♥] → [2♣ 3♦ 4♣'] + [4♣ 5♥ 6♠ 7♥]
+    - place [4♠] from hand
+    - peel T♦ from HELPER [T♦ J♦ Q♦ K♦], absorb onto [J♦' Q♦'] → [T♦ J♦' Q♦'] [→COMPLETE]
   compressed:
-    - place [4♣'] from hand
-    - splice [4♣'] into HELPER [2♣ 3♦ 4♣ 5♥ 6♠ 7♥] → [2♣ 3♦ 4♣'] + [4♣ 5♥ 6♠ 7♥]
+    - place [4♠] from hand
+    - peel T♦ from HELPER [T♦ J♦ Q♦ K♦], absorb onto [J♦' Q♦'] → [T♦ J♦' Q♦'] [→COMPLETE]
 
 scenario passthrough_push_of_board_trouble
   desc: the pushed cards are NOT the placed card — the push consumes board trouble
