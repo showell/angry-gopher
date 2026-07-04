@@ -75,6 +75,53 @@ scenario free_pull_onto_partial
   compressed:
     - play 8♠ from hand onto 6♠ 7♠
 
+# ---- humanizes: standalone extract_absorb board→board moves (1 → 1) ----
+# The verb encodes the source-remnant fate (which the player watches); the
+# motion is always "move this card from source onto target". Keep the
+# recognizable verb, strip HELPER/brackets/→result/COMPLETE/spawn, deck-blind.
+
+scenario peel_end_card
+  desc: peel — take an end card off a run onto a partial
+  input:
+    - peel K♦ from HELPER [T♦ J♦ Q♦ K♦], absorb onto [J♦' Q♦'] → [J♦' Q♦' K♦] [→COMPLETE]
+  compressed:
+    - peel K♦ from T♦ J♦ Q♦ K♦ onto J♦ Q♦
+
+scenario pluck_from_long_run
+  desc: pluck — same motion, longer source run
+  input:
+    - pluck 7♥' from HELPER [4♥' 5♥' 6♥' 7♥' 8♥' 9♥ T♥], absorb onto [7♠ 7♣] → [7♠ 7♣ 7♥'] [→COMPLETE]
+  compressed:
+    - pluck 7♥ from 4♥ 5♥ 6♥ 7♥ 8♥ 9♥ T♥ onto 7♠ 7♣
+
+scenario yank_with_spawn
+  desc: yank — pull a card leaving a spawned remnant; spawn tail is dropped
+  input:
+    - yank 6♠ from HELPER [2♣ 3♦ 4♣ 5♥ 6♠ 7♥], absorb onto [5♠] → [5♠ 6♠] ; spawn [7♥]
+  compressed:
+    - yank 6♠ from 2♣ 3♦ 4♣ 5♥ 6♠ 7♥ onto 5♠
+
+scenario steal_from_set
+  desc: steal — take a card from a set, shattering the remnant (spawn dropped)
+  input:
+    - steal A♣ from HELPER [A♣ A♦ A♥], absorb onto [Q♣ K♦] → [Q♣ K♦ A♣] [→COMPLETE] ; spawn [A♦], [A♥]
+  compressed:
+    - steal A♣ from A♣ A♦ A♥ onto Q♣ K♦
+
+scenario split_out_reads_as_two_words
+  desc: split_out — internal name renders as the natural "split out"
+  input:
+    - split_out 8♠ from HELPER [7♥' 8♠ 9♦], absorb onto [6♠ 7♥] → [6♠ 7♥ 8♠] [→COMPLETE] ; spawn [7♥'], [9♦]
+  compressed:
+    - split out 8♠ from 7♥ 8♠ 9♦ onto 6♠ 7♥
+
+scenario set_peel_renders_as_peel
+  desc: set_peel — a peel from a set; internal name renders as plain "peel"
+  input:
+    - set_peel Q♣' from HELPER [Q♥' Q♠' Q♣'], absorb onto [T♣' J♦] → [T♣' J♦ Q♣'] [→COMPLETE] ; spawn [Q♥' Q♠']
+  compressed:
+    - peel Q♣ from Q♥ Q♠ Q♣ onto T♣ J♦
+
 # ---- passes through unchanged: the boundary ----
 
 scenario passthrough_multistep

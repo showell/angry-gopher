@@ -29,6 +29,26 @@ import { formatCardList } from "../dsl/emit.ts";
 
 const PLACE_RE = /^place \[(.+?)\] from hand$/;
 
+// extract_absorb: a board→board relocation — take one card out of a source
+// helper and add it to a target stack. All six verbs share this shape (with
+// optional " [→COMPLETE]" and "; spawn ..." tails). The verb encodes what
+// happens to the SOURCE remnant, which the player just watches; the motion
+// is always "move this card from here to there".
+const EXTRACT_ABSORB_RE =
+  /^(peel|pluck|yank|steal|split_out|set_peel) (.+?) from HELPER \[(.+?)\], absorb onto \[(.+?)\] → \[.+?\](?: \[→COMPLETE\])?(?: ; spawn .+)?$/;
+
+// Display verb per extract_absorb verb. peel/pluck/yank/steal are already
+// recognizable English; the two internal names get natural substitutes
+// (set_peel IS a peel from a set; split_out reads fine as two words).
+const VERB_LABEL: Readonly<Record<string, string>> = {
+  peel: "peel",
+  pluck: "pluck",
+  yank: "yank",
+  steal: "steal",
+  set_peel: "peel",
+  split_out: "split out",
+};
+
 /** One "the placed card drops directly onto/into a board stack" verb.
  *  `looseGroup` captures the card(s) the move consumes; `targetGroup`
  *  captures the destination stack; `verb`/`prep` are the human phrasing:
@@ -73,7 +93,34 @@ function canon(cardsDsl: string): string | null {
 /** Rewrite a hint (one line per plan step) into the gesture-faithful
  *  form. Returns the input untouched when no rule applies. */
 export function compressHint(lines: readonly string[]): readonly string[] {
-  return tryFuseSinglePlay(lines) ?? lines;
+  const fused = tryFuseSinglePlay(lines);
+  if (fused !== null) return fused;
+  // A lone board→board move (a hint that's pure board cleanup, no hand
+  // placement): humanize it in place. Multi-step plans are left untouched
+  // until cross-step assembly lands — humanizing their lines piecemeal
+  // would double-mention the placed card, which reads worse, not better.
+  if (lines.length === 1) {
+    const human = humanizeMoveLine(lines[0]!);
+    if (human !== null) return [human];
+  }
+  return lines;
+}
+
+/** Rewrite one standalone board→board move line into human phrasing, or
+ *  null if it isn't a verb we humanize. Strips the algorithm decoration
+ *  ("HELPER", brackets, "→ [result]", "[→COMPLETE]", "; spawn ...") the
+ *  same way the play lines do — the player watches the result land. */
+function humanizeMoveLine(line: string): string | null {
+  const m = line.match(EXTRACT_ABSORB_RE);
+  if (m === null) return null;
+  const verb = VERB_LABEL[m[1]!];
+  const card = canon(m[2]!);
+  const source = canon(m[3]!);
+  const target = canon(m[4]!);
+  if (verb === undefined || card === null || source === null || target === null) {
+    return null;
+  }
+  return `${verb} ${deckBlind(card)} from ${deckBlind(source)} onto ${deckBlind(target)}`;
 }
 
 // place [X] from hand ; <push|pull|splice> [X] ... → play X from hand

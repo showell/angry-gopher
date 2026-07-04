@@ -75,8 +75,15 @@ function runScenario(sc: Scenario): RunResult {
   if (gotStr !== want) {
     return { ok: false, msg: `mismatch:\n  want:\n${indent(want)}\n  got:\n${indent(gotStr)}` };
   }
-  const fused = sc.input.length !== sc.compressed.length;
-  return { ok: true, msg: fused ? `OK — fused ${sc.input.length} → ${sc.compressed.length}` : "OK — passed through" };
+  let outcome: string;
+  if (sc.input.length !== sc.compressed.length) {
+    outcome = `fused ${sc.input.length} → ${sc.compressed.length}`;
+  } else if (gotStr === sc.input.join("\n")) {
+    outcome = "passed through";
+  } else {
+    outcome = "rewritten in place";
+  }
+  return { ok: true, msg: `OK — ${outcome}` };
 }
 
 function indent(s: string): string {
