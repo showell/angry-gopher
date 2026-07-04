@@ -1,11 +1,135 @@
 # HINT_SOPHISTIFICATION
 
-**Status:** QUEUED. Tabled while TS_ELM_INTEGRATION wraps up
-its closing-out / docs cleanup pass. Resume after that.
+**Status:** ACTIVE (2026-07-04). Class (A) rendering is essentially
+SHIPPED and live in the real game, and the first slice of (B) — plan
+*ordering* — is done too. The mechanism is a new module,
+`ts/plan/hint_compress.ts` (`compressHint`), wired into `formatHint`.
+The sections below the "2026-07-04 progress" block are the ORIGINAL
+2026-05-05 roadmap, kept as the map for the remaining work; read the
+progress block first, it supersedes the status.
 
-**As of:** 2026-05-05.
+---
 
-## What this is
+## 2026-07-04 progress — the hint humanizer (`compressHint`)
+
+### What now happens
+
+A raw engine hint is a list of DSL plan-step lines led by a
+`place [X] from hand` step, e.g. (seed-42 turn_3, a dirty mid-turn board):
+
+```
+place [4♣'] from hand
+peel K♦ from HELPER [T♦ J♦ Q♦ K♦], absorb onto [J♦' Q♦'] → [J♦' Q♦' K♦] [→COMPLETE]
+push [4♠] onto HELPER [K♠ A♠ 2♠ 3♠] → [K♠ A♠ 2♠ 3♠ 4♠]
+splice [4♣'] into HELPER [2♣ 3♦ 4♣ 5♥ 6♠ 7♥] → [2♣ 3♦ 4♣'] + [4♣ 5♥ 6♠ 7♥]
+```
+
+`compressHint` now rewrites that into the sequence a human would perform:
+
+```
+peel K♦ from T♦ J♦ Q♦ K♦ onto J♦ Q♦
+push 4♠ onto K♠ A♠ 2♠ 3♠
+splice 4♣ from hand into 2♣ 3♦ 4♣ 5♥ 6♠ 7♥
+```
+
+Two transformations, both driven by the insight Steve articulated: **the
+projection layer that lays hand cards onto the board is order-blind, but a
+human drops a hand card only when the board is ready for it.**
+
+1. **Board-first reorder + fuse the hand landing (was Class A + start of B).**
+   The `place [X] from hand` step is deferred and *fused* with the one move
+   that actually consumes X (a single UI drag, not two). Every OTHER move is
+   board→board manipulation and floats to the front, in the solver's order.
+   So the hand card lands LAST, after board prep.
+2. **Humanize each line** — strip the algorithm decoration: `HELPER`,
+   brackets, `→ [result]`, `[→COMPLETE]`, `; spawn ...`, and the deck-2
+   apostrophe (`A♠'` reads as `A♠`; the two physical decks are identical to
+   the eye — but deck STILL matters for the place==consume identity check).
+
+### Verb vocabulary (all decisions ratified by Steve)
+
+| engine verb(s) | as a HAND landing | as a BOARD move |
+|---|---|---|
+| `push` | `play X from hand onto <grp>` | `push X onto <grp>` |
+| `free_pull` | `play X from hand onto <grp>` | `pull X onto <grp>` |
+| `splice` | `splice X from hand into <run>` | `splice X into <run>` |
+| `peel`/`pluck`/`yank`/`steal` | — (never a hand landing) | `<verb> X from <src> onto <tgt>` |
+| `set_peel` | — | `peel X from <src> onto <tgt>` |
+| `split_out` | — | `split out X from <src> onto <tgt>` |
+| triple-in-hand (no move) | `play X Y Z from hand` | — |
+
+- `push`/`free_pull` unify to **"play … from hand onto"** for the hand case
+  (the helper-vs-partial distinction is invisible to the player); they stay
+  distinct **push/pull** for board cleanups.
+- Keep verbs players recognize (`splice`, `peel`, `yank`, `steal`) rather than
+  flattening to a generic "move" — Steve's call. `set_peel`/`split_out` are
+  internal names → natural substitutes.
+- Deliberately NOT shown: that a splice divides a run into two; that
+  steal/yank leave `spawn` cards loose. The player watches those happen. (Both
+  were flagged to Steve; he agreed to omit.)
+
+### Honesty guardrail
+
+Any plan `compressHint` does not *fully* understand is returned **entirely
+raw** — never half-transformed. That covers: an unhandled verb (`shift`,
+`decompose`), or a `place [X]` whose card no move lands. All-or-nothing per
+hint.
+
+### Where it lives / how it's tested / wired
+
+- **Module:** `ts/plan/hint_compress.ts` — `compressHint(lines) → lines`.
+  Works entirely in DSL space; card lists round-trip through the shared
+  `dsl/parse.ts` + `dsl/emit.ts` (the `canon` helper) so output is canonical
+  DSL. Line structure is matched with per-verb regexes.
+- **Wired:** `formatHint` (`ts/plan/hand_play.ts`) runs its assembled lines
+  through `compressHint`. Path to the real game: Elm `Game.elm` Hint button →
+  `engineRequest` (op `game_hint`) → `elm/engine_glue.js` → `elmGameHint`
+  (`ts/elm_api/engine_entry.ts`) → `gameHintLines` → `formatHint` →
+  `compressHint`. Game.elm shows all lines joined (status bar). **Verified
+  live** in the `:9001` binary (the bundled `engine.js` embeds it).
+- **Tests (DSL-in / DSL-out, the contract):**
+  `conformance/scenarios/hint_compress.dsl` + `test/test_hint_compress.ts`
+  (registered in `ops/test_ts`), 18 scenarios: push/splice/free_pull fusions,
+  all six extract_absorb verbs (real `describe()` inputs, spawn/COMPLETE
+  present & absent), the two reorder cases (turn_2, turn_3), triple-in-hand,
+  and two bail cases. Also re-pinned the engine-conformance hint fixtures
+  (`hint_game_seed42.dsl` turn_1/2/3) to the new output; engine 167/167.
+
+### Commits (2026-07-04)
+
+`cd4a5b8c` puzzle Hint button · `cdfa3842` compressHint push fusion (DSL→DSL)
+· `7b3eba3b` wire into formatHint + humanize · `8d3f298a` splice + free_pull
+· `3dbb88c5` "splice" as the verb · `1a7a3960` extract_absorb 1→1 ·
+`6de28049` plan-global board-first reorder.
+
+### What's LEFT (maps onto the original A/B/C below)
+
+- **`shift` and `decompose` verbs** — not yet humanized; plans touching them
+  bail to raw. `shift` describe-shape example is pinned in the bail scenario.
+- **Pairs that split** — a `place [X Y]` consumed by a `decompose` then two
+  landings. Current scope is a SINGLE hand card consumed by one move (a pair
+  pushed *as a unit* already works).
+- **Class (B) strategic ranking** and **Class (C) KICK** — untouched; the
+  reorder only handles *ordering*, not *which* plan the engine picks. See
+  below. NB the 2026-05-05 calibration already downgraded (C).
+- **Reorder assumption:** board moves are independent of the hand card, so
+  hand-last is safe. True for turn_2/turn_3 and the simple cases; a board move
+  that depends on the hand card's *result* would need finer sequencing. No
+  such case seen yet.
+
+### Landscape note — generating hard fixtures (Steve, 2026-07-04)
+
+The interesting "hand card needs *significant* board prep" cases are inherently
+DIRTY boards (a clean board + one hand card either fits directly or falls to a
+pair). Hard **puzzles** are exactly such boards, but all-on-board with no hand.
+To mint a game scenario from a puzzle, **lift some board cards back into a
+hand** — the *inverse of the projection layer* (which today pushes hand cards
+onto the board). Same operation, run backwards. Promising generator for both
+playtest positions and reorder fixtures with multi-step prep. Not built.
+
+---
+
+## What this is (ORIGINAL ROADMAP — 2026-05-05)
 
 `TS_ELM_INTEGRATION` Phase 1 routed the full-game Hint button
 through the canonical TS engine — the same engine self-play
