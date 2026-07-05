@@ -1,6 +1,7 @@
 module Lib.ActionLog exposing
     ( ActionLogEntry
     , collapseUndos
+    , lastMoveWasHandLoner
     )
 
 import Lib.GameEvent exposing (GameEvent(..))
@@ -8,6 +9,43 @@ import Lib.GameEvent exposing (GameEvent(..))
 
 type alias ActionLogEntry =
     { action : GameEvent }
+
+
+{-| True iff the player's most recent NON-COSMETIC action was laying a
+hand card onto an empty spot (a `PlaceHand` loner). Cosmetic moves —
+`MoveStack` repositioning — are ignored, and `Undo` tokens are
+collapsed first. This is the one fact the solver needs to prefer
+finishing the board with board cards before projecting more hand
+cards (see hand_play.ts `handLonerPlaced`). A bare boolean suffices:
+the solver can only sign off a play when every stack ends legal, so it
+doesn't need the loner's identity.
+-}
+lastMoveWasHandLoner : List ActionLogEntry -> Bool
+lastMoveWasHandLoner entries =
+    case lastNonCosmeticAction (collapseUndos entries) of
+        Just (PlaceHand _) ->
+            True
+
+        _ ->
+            False
+
+
+lastNonCosmeticAction : List ActionLogEntry -> Maybe GameEvent
+lastNonCosmeticAction entries =
+    entries
+        |> List.map .action
+        |> List.filter (not << isCosmetic)
+        |> List.foldl (\action _ -> Just action) Nothing
+
+
+isCosmetic : GameEvent -> Bool
+isCosmetic action =
+    case action of
+        MoveStack _ ->
+            True
+
+        _ ->
+            False
 
 
 {-| Collapse `Undo` tokens against the actions they cancel,

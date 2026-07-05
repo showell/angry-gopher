@@ -343,7 +343,10 @@ update msg model =
                         |> List.map .card
 
                 payload =
-                    Engine.buildGameHintRequest reqId hand model.gameState.board
+                    Engine.buildGameHintRequest reqId
+                        hand
+                        model.gameState.board
+                        (ActionLog.lastMoveWasHandLoner model.actionLog)
             in
             ( { model
                 | hintedCards = []

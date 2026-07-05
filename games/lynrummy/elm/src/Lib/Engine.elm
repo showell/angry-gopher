@@ -57,13 +57,14 @@ type HintResponse
 `engineRequest` port. The engine replies on `gameHintResponse`
 with the matching `request_id`.
 -}
-buildGameHintRequest : Int -> List Card -> List CardStack -> Value
-buildGameHintRequest reqId hand board =
+buildGameHintRequest : Int -> List Card -> List CardStack -> Bool -> Value
+buildGameHintRequest reqId hand board loner =
     Encode.object
         [ ( "request_id", Encode.int reqId )
         , ( "op", Encode.string "game_hint" )
         , ( "hand", Encode.list Card.encodeCard hand )
         , ( "board", encodeBoardForEngine board )
+        , ( "loner", Encode.bool loner )
         ]
 
 
