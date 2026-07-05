@@ -6,14 +6,15 @@ import type { Card } from "../core/card.ts";
 import { parseCardLabel } from "../core/card.ts";
 import { gameHintLines } from "../elm_api/engine_entry.ts";
 
-// uid 16 (Stephen2), game 2, mid-turn after 7 hand cards played.
-// Reconstructed from sessions/2/meta + replaying actions.dsl (10 actions).
+// uid 16 (Stephen2), game 2, mid-turn after 15 actions (10 hand cards played:
+// T♠' J♥' Q♠ A♠' 5♦' 5♥' 6♠' 2♥' 4♥' 2♠'). Reconstructed from sessions/2/meta
+// + replaying actions.dsl. Hand down to 5 cards.
 const handLabels = [
-  "2H'", "4H'", "8H", "2S'", "4D", "8D", "6C'", "9C'",
+  "8H", "4D", "8D", "6C'", "9C'",
 ];
 
 const boardLabels: string[][] = [
-  ["KS", "AS", "2S", "3S"],
+  ["KS", "AS", "2S"],
   ["TD", "JD", "QD", "KD"],
   ["2H", "3H", "4H", "5H'"],
   ["7S", "7D", "7C"],
@@ -21,6 +22,8 @@ const boardLabels: string[][] = [
   ["2C", "3D", "4C", "5H", "6S'"],
   ["5D'", "6S", "7H"],
   ["TS'", "JH'", "QS"],
+  ["2H'", "3S", "4H'"],
+  ["2S'"],
 ];
 
 const hand: Card[] = handLabels.map(parseCardLabel);
