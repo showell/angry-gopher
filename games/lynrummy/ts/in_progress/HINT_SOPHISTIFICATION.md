@@ -89,6 +89,19 @@ Pinned: `hint_dirty_board.dsl` scenario `loner_pair_merges_wholesale_onto_run`
 `hint_compress.dsl` `board_only_pair_push` (the seam pin for the pair-push
 line). Agent path unaffected (`play.ts` passes `loner=false`).
 
+**Refinement (same day): trouble+trouble joins come FIRST.** Next real
+game-5 position: trouble `[K♠ A♦]` + `[2♠]` — which complete each other
+(the wrap run) — and the pre-pass instead dragged both onto the healthy
+`[3♦ 4♣ 5♥ 6♠]` run because its targets were scoped to complete groups.
+Each greedy pass now tries trouble+trouble before trouble→helper. Only a
+COMPLETE result counts — two loose cards are never merged into a
+still-troublesome pair (they may have been split for good board-wide
+reasons, per Steve); the only completable shape is single+pair = the
+engine's `free_pull` (`pull 2♠ onto K♠ A♦`). Pair+pair→4 has no verb and
+no real case — invisible, falls to the solver. Pinned:
+`loner_trouble_pair_and_singleton_complete_each_other` +
+`board_only_pull_completes`.
+
 ### DEFERRED (by Steve, deliberately) — the loner that NEEDS a hand card
 
 If board-only *fails* (the loner genuinely can't complete without a hand
