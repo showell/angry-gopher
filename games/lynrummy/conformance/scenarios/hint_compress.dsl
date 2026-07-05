@@ -172,6 +172,22 @@ scenario seed_new_group_from_hand
   compressed:
     - place 2♥ on board to build K♦ A♣ 2♥
 
+# ---- collapses: a hand PAIR placed as the landing pad for a board loner ----
+#
+# The placed pair is never consumed by a move — instead the ONE move pulls a
+# board loner ONTO it. Three cards, one human thought: "put these two hand
+# cards with that board card". Scoped deliberately narrow (exactly two lines,
+# a two-card place, a pull whose target IS the placed pair) — real case:
+# Stephen2 game 5, a T♠ loner finished by the hand pair 8♠ 9♥.
+
+scenario pair_landing_pad_for_board_loner
+  desc: the T♠ sits alone on the board; the plan places the hand pair [8♠' 9♥] and pulls the T♠ onto it. One line - place the two hand cards with the loner.
+  input:
+    - place [8♠' 9♥] from hand
+    - pull T♠' onto [8♠' 9♥] → [8♠' 9♥ T♠'] [→COMPLETE]
+  compressed:
+    - place 8♠ and 9♥ with the T♠ on the board
+
 # ---- bails: return the plan raw rather than half-transform it ----
 
 scenario passthrough_unhandled_shift

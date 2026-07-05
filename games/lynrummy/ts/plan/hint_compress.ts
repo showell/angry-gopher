@@ -85,13 +85,17 @@ const CONSUME_RULES: readonly ConsumeRule[] = [
 ];
 
 /** One parsed move line. `boardLine` is always the board→board rendering.
- *  For a consuming verb, `consumesCard` is the loose card (deck-aware) and
- *  `handLine` is the "... from hand ..." rendering; extract_absorb leaves
- *  both null (it never lands a hand card). `absorbTarget`/`buildResult` are
- *  the group an extract_absorb pulls ONTO and the group it produces (both
- *  deck-aware canon), used to detect a seed-build chain; null otherwise. */
+ *  For a consuming verb, `consumesCard` is the loose card (deck-aware),
+ *  `consumeTarget`/`consumeVerb` are the group it lands on (deck-aware
+ *  canon) and the board verb, and `handLine` is the "... from hand ..."
+ *  rendering; extract_absorb leaves all four null (it never lands a hand
+ *  card). `absorbTarget`/`buildResult` are the group an extract_absorb
+ *  pulls ONTO and the group it produces (both deck-aware canon), used to
+ *  detect a seed-build chain; null otherwise. */
 interface ParsedMove {
   readonly consumesCard: string | null;
+  readonly consumeTarget: string | null;
+  readonly consumeVerb: "push" | "pull" | "splice" | null;
   readonly handLine: string | null;
   readonly boardLine: string;
   readonly absorbTarget: string | null;
@@ -129,6 +133,8 @@ function parseMove(line: string): ParsedMove | null {
     const t = deckBlind(target);
     return {
       consumesCard: card,
+      consumeTarget: target,
+      consumeVerb: r.boardVerb,
       handLine: `${r.handVerb} ${c} from hand ${r.prep} ${t}`,
       boardLine: `${r.boardVerb} ${c} ${r.prep} ${t}`,
       absorbTarget: null,
@@ -147,6 +153,8 @@ function parseMove(line: string): ParsedMove | null {
     }
     return {
       consumesCard: null,
+      consumeTarget: null,
+      consumeVerb: null,
       handLine: null,
       boardLine: `${verb} ${deckBlind(card)} from ${deckBlind(source)} onto ${deckBlind(target)}`,
       absorbTarget: target,
@@ -192,6 +200,17 @@ export function compressHint(lines: readonly string[]): readonly string[] {
     return [...board.map(m => m.boardLine), landing[0]!.handLine!];
   }
   if (landing.length === 0) {
+    // The placed PAIR is a LANDING PAD — the plan's one move pulls a board
+    // loner ONTO it. Three cards, one human thought: "put these two hand
+    // cards with that board card". Deliberately narrow (two-card place, a
+    // single pull targeting exactly the placed pair) — don't over-generalize.
+    if (moves.length === 1 && placed.split(" ").length === 2) {
+      const m = moves[0]!;
+      if (m.consumeVerb === "pull" && m.consumeTarget === placed) {
+        const [a, b] = deckBlind(placed).split(" ");
+        return [`place ${a} and ${b} with the ${deckBlind(m.consumesCard!)} on the board`];
+      }
+    }
     // The placed card is a SEED — not consumed by anything, it's the anchor a
     // chain of board cards gets absorbed onto. Collapse the whole chain to one
     // line: "place X on board to build <final group>". ("place", not "play":

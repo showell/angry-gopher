@@ -31,6 +31,29 @@ scenario triple_in_hand_with_dirty_board_returns_no_hint
 #     flag the solver projects [8♥ 9♣] and bundles an unrelated 8-9-T run;
 #     WITH it, the hint is just the two board peels that finish the 2♠.
 
+# --- loner needs a hand PAIR: board-only fails, so the solver projects a
+#     pair and the loner is pulled onto it. Real Stephen2 game-5 state: T♠'
+#     laid onto an empty spot; no 8/9/J/Q or ten is extractable from the
+#     board without stranding cards, so no board-only finish exists. The
+#     pair [8♠' 9♥] lands and the T♠' completes it. The whole hint reads as
+#     ONE line (the pair-landing-pad compression).
+
+scenario loner_ts_completed_with_hand_pair
+  desc: T♠' was just placed from hand onto an empty spot (loner=true). Board-only fails; the solver projects the hand pair [8♠' 9♥] and pulls the T♠' onto it. Compresses to a single place-with line.
+  op: hint_for_hand
+  loner: true
+  hand: 4♥' 6♥' 9♥ 8♠' 9♠' J♠' A♦' 9♦' J♦' 3♣ 5♣ 6♣ J♣ Q♣
+  board:
+    - K♠ A♠ 2♠ 3♠
+    - T♦ J♦ Q♦ K♦
+    - 2♥ 3♥ 4♥
+    - 7♠ 7♦ 7♣
+    - A♣ A♦ A♥
+    - 2♣ 3♦ 4♣ 5♥ 6♠ 7♥
+    - T♠'
+  expect_steps:
+    - place 8♠ and 9♥ with the T♠ on the board
+
 scenario loner_2s_finished_with_board_cards
   desc: 2♠ was just placed from hand onto an empty spot (loner=true). The board can be made fully legal by peeling 2♣ and 2♥ onto it (a set of 2s) — zero new hand cards. The hint is board-only; no "place from hand" line.
   op: hint_for_hand

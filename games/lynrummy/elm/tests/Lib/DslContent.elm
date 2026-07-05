@@ -1929,6 +1929,22 @@ scenario seed_new_group_from_hand
   compressed:
     - place 2♥ on board to build K♦ A♣ 2♥
 
+# ---- collapses: a hand PAIR placed as the landing pad for a board loner ----
+#
+# The placed pair is never consumed by a move — instead the ONE move pulls a
+# board loner ONTO it. Three cards, one human thought: "put these two hand
+# cards with that board card". Scoped deliberately narrow (exactly two lines,
+# a two-card place, a pull whose target IS the placed pair) — real case:
+# Stephen2 game 5, a T♠ loner finished by the hand pair 8♠ 9♥.
+
+scenario pair_landing_pad_for_board_loner
+  desc: the T♠ sits alone on the board; the plan places the hand pair [8♠' 9♥] and pulls the T♠ onto it. One line - place the two hand cards with the loner.
+  input:
+    - place [8♠' 9♥] from hand
+    - pull T♠' onto [8♠' 9♥] → [8♠' 9♥ T♠'] [→COMPLETE]
+  compressed:
+    - place 8♠ and 9♥ with the T♠ on the board
+
 # ---- bails: return the plan raw rather than half-transform it ----
 
 scenario passthrough_unhandled_shift
@@ -1981,6 +1997,29 @@ scenario triple_in_hand_with_dirty_board_returns_no_hint
 #     set of 2s using two board peels — no hand card needed. WITHOUT the loner
 #     flag the solver projects [8♥ 9♣] and bundles an unrelated 8-9-T run;
 #     WITH it, the hint is just the two board peels that finish the 2♠.
+
+# --- loner needs a hand PAIR: board-only fails, so the solver projects a
+#     pair and the loner is pulled onto it. Real Stephen2 game-5 state: T♠'
+#     laid onto an empty spot; no 8/9/J/Q or ten is extractable from the
+#     board without stranding cards, so no board-only finish exists. The
+#     pair [8♠' 9♥] lands and the T♠' completes it. The whole hint reads as
+#     ONE line (the pair-landing-pad compression).
+
+scenario loner_ts_completed_with_hand_pair
+  desc: T♠' was just placed from hand onto an empty spot (loner=true). Board-only fails; the solver projects the hand pair [8♠' 9♥] and pulls the T♠' onto it. Compresses to a single place-with line.
+  op: hint_for_hand
+  loner: true
+  hand: 4♥' 6♥' 9♥ 8♠' 9♠' J♠' A♦' 9♦' J♦' 3♣ 5♣ 6♣ J♣ Q♣
+  board:
+    - K♠ A♠ 2♠ 3♠
+    - T♦ J♦ Q♦ K♦
+    - 2♥ 3♥ 4♥
+    - 7♠ 7♦ 7♣
+    - A♣ A♦ A♥
+    - 2♣ 3♦ 4♣ 5♥ 6♠ 7♥
+    - T♠'
+  expect_steps:
+    - place 8♠ and 9♥ with the T♠ on the board
 
 scenario loner_2s_finished_with_board_cards
   desc: 2♠ was just placed from hand onto an empty spot (loner=true). The board can be made fully legal by peeling 2♣ and 2♥ onto it (a set of 2s) — zero new hand cards. The hint is board-only; no "place from hand" line.
