@@ -13,7 +13,8 @@ export function findPlayPrimitives(
   if (hand.length === 0) return null;
 
   const cardLists = board.map(s => s.cards);
-  const logicalPlay = findLogicalMovesForPlay(hand, cardLists);
+  // The agent builds a play from scratch — there is no just-placed loner.
+  const logicalPlay = findLogicalMovesForPlay(hand, cardLists, false);
   if (logicalPlay === null) return null;
 
   const prims = getPrimitivesForLogicalPlay(board, logicalPlay);

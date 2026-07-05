@@ -60,6 +60,10 @@ export interface ParsedScenario {
   hint_hand?: string[];
   hint_board?: string[][];
   hint_steps?: string[];
+  // hint_for_hand only: the last non-cosmetic move was laying a hand card
+  // onto an empty spot (a fresh loner). Tells the solver to try finishing
+  // the board with no new projection first. See hand_play.ts.
+  loner?: boolean;
   expect: Record<string, unknown>;
 }
 
@@ -193,6 +197,12 @@ function applyScalarField(sc: ParsedScenario, key: string, val: string): void {
     }
     case "hint_hand":
       sc.hint_hand = parseCardList(val).map(cardLabel);
+      return;
+    case "loner":
+      if (val !== "true" && val !== "false") {
+        throw new Error(`loner must be true|false, got "${val}"`);
+      }
+      sc.loner = val === "true";
       return;
     case "expect":
       // Shorthand: `expect: no_plan` or other simple kinds.

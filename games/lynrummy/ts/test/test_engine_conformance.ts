@@ -232,7 +232,7 @@ function runHintForHand(sc: ParsedScenario): RunResult {
   const wantSteps = sc.hint_steps ?? [];
   const hand: Card[] = handTokens.map(parseCardLabel);
   const board: Card[][] = boardTokens.map(stack => stack.map(parseCardLabel));
-  const result = findLogicalMovesForPlay(hand, board);
+  const result = findLogicalMovesForPlay(hand, board, sc.loner ?? false);
   const got = formatHint(result);
   // Strict snapshot match. Per
   // memory/feedback_strict_tests_no_ceiling.md: no "<= pinned"

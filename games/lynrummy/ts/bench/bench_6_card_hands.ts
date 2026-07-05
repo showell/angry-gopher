@@ -208,7 +208,7 @@ function main(): void {
   let totalMs = 0;
 
   for (let i = 0; i < N_HANDS; i++) {
-    const { result, minMs } = benchmarkSingleHand(() => findLogicalMovesForPlay(hands[i]!, board));
+    const { result, minMs } = benchmarkSingleHand(() => findLogicalMovesForPlay(hands[i]!, board, false));
     const kind = liveKind(result);
     const lines = liveLines(result);
     const cards: readonly Card[] = result === null ? [] : result.cardsToPlay;

@@ -77,7 +77,7 @@ function findInSeed(seed: number): Hit[] {
       }
 
       const cardLists = board.map(s => s.cards);
-      const logical = findLogicalMovesForPlay(hands[active]!, cardLists);
+      const logical = findLogicalMovesForPlay(hands[active]!, cardLists, false);
       if (logical === null) break;
 
       if (logical.moves.length === TARGET_PLAN_LENGTH) {

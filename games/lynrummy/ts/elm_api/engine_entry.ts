@@ -14,8 +14,9 @@ import { elmFindPlay } from "./elm_find_play.ts";
 export function gameHintLines(
   hand: readonly Card[],
   board: readonly (readonly Card[])[],
+  handLonerPlaced: boolean,
 ): readonly string[] {
-  return formatHint(findLogicalMovesForPlay(hand, board));
+  return formatHint(findLogicalMovesForPlay(hand, board, handLonerPlaced));
 }
 
 /** Elm-facing wrapper. Same signature; the indirection signals at
@@ -24,8 +25,9 @@ export function gameHintLines(
 export function elmGameHint(
   hand: readonly Card[],
   board: readonly (readonly Card[])[],
+  handLonerPlaced: boolean,
 ): readonly string[] {
-  return gameHintLines(hand, board);
+  return gameHintLines(hand, board, handLonerPlaced);
 }
 
 /** Board-only hint entry point for puzzles. In a puzzle every card

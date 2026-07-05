@@ -4,7 +4,9 @@
 // Wire shape (snake_case at the boundary):
 //
 //   game_hint (full-game Hint button):
-//     request:  { request_id, op: "game_hint", hand, board }
+//     request:  { request_id, op: "game_hint", hand, board, loner? }
+//       loner (optional bool): the last non-cosmetic move laid a hand
+//       card onto an empty spot — finish the board first, don't project.
 //               where hand = [{value, suit, origin_deck}, ...]
 //               and board = [[{value, suit, origin_deck}, ...], ...]
 //     response: { request_id, op: "game_hint", ok, lines: string[] }
@@ -60,7 +62,7 @@
             request_id: requestId,
             op: op,
             ok: true,
-            lines: gameHint(req.hand, req.board),
+            lines: gameHint(req.hand, req.board, req.loner === true),
           });
         } else if (op === 'puzzle_hint') {
           port.send({
@@ -95,12 +97,12 @@
     return app.ports.gameHintResponse; // game_hint (+ unknown-op errors)
   }
 
-  function gameHint(hand, board) {
+  function gameHint(hand, board, loner) {
     var handCards = hand.map(cardObjectToRecord);
     var stacks = board.map(function (stack) {
       return stack.map(cardObjectToRecord);
     });
-    return LynRummyEngine.elmGameHint(handCards, stacks);
+    return LynRummyEngine.elmGameHint(handCards, stacks, loner === true);
   }
 
   function puzzleHint(board) {

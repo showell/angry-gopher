@@ -86,7 +86,7 @@ function findFirstHit(seed: number): Hit | null {
       }
 
       const cardLists = board.map(s => s.cards);
-      const logical = findLogicalMovesForPlay(hands[active]!, cardLists);
+      const logical = findLogicalMovesForPlay(hands[active]!, cardLists, false);
       if (logical === null) break;
 
       if (logical.moveLines.length === TARGET_PLAN_LENGTH) {

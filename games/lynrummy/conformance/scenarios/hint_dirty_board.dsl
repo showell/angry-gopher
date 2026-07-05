@@ -23,3 +23,30 @@ scenario triple_in_hand_with_dirty_board_returns_no_hint
   board:
     - 5♣ 6♣
   expect_steps:
+
+# --- loner flag: a hand-origin loner should be finished with BOARD cards
+#     first, not by projecting more hand cards. Real seed-42 game-2 mid-turn
+#     state (uid 16): the 2♠ we just laid onto an empty spot completes into a
+#     set of 2s using two board peels — no hand card needed. WITHOUT the loner
+#     flag the solver projects [8♥ 9♣] and bundles an unrelated 8-9-T run;
+#     WITH it, the hint is just the two board peels that finish the 2♠.
+
+scenario loner_2s_finished_with_board_cards
+  desc: 2♠ was just placed from hand onto an empty spot (loner=true). The board can be made fully legal by peeling 2♣ and 2♥ onto it (a set of 2s) — zero new hand cards. The hint is board-only; no "place from hand" line.
+  op: hint_for_hand
+  loner: true
+  hand: 8♥ 4♦ 8♦ 6♣' 9♣'
+  board:
+    - K♠ A♠ 2♠
+    - T♦ J♦ Q♦ K♦
+    - 2♥ 3♥ 4♥ 5♥'
+    - 7♠ 7♦ 7♣
+    - A♣ A♦ A♥ A♠'
+    - 2♣ 3♦ 4♣ 5♥ 6♠'
+    - 5♦' 6♠ 7♥
+    - T♠' J♥' Q♠
+    - 2♥' 3♠ 4♥'
+    - 2♠'
+  expect_steps:
+    - peel 2♣ from 2♣ 3♦ 4♣ 5♥ 6♠ onto 2♠
+    - peel 2♥ from 2♥ 3♥ 4♥ 5♥ onto 2♣ 2♠

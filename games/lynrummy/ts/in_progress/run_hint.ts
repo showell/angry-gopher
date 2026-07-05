@@ -29,6 +29,7 @@ const boardLabels: string[][] = [
 const hand: Card[] = handLabels.map(parseCardLabel);
 const board: Card[][] = boardLabels.map(stack => stack.map(parseCardLabel));
 
-const lines = gameHintLines(hand, board);
+// game-2 state: the 2♠ was just laid from hand onto an empty spot.
+const lines = gameHintLines(hand, board, true);
 console.log("hint lines:", lines.length);
 for (const l of lines) console.log("  " + l);

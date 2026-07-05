@@ -29,7 +29,20 @@ interface MeldablePair {
 export function findLogicalMovesForPlay(
   hand: readonly Card[],
   board: readonly (readonly Card[])[],
+  handLonerPlaced: boolean,
 ): LogicalMovesForPlay | null {
+  // A hand-origin loner was just laid onto an empty spot. Try to finish the
+  // board with NO new projection first — the player's unfinished business is
+  // that loner, and opening a new front (projecting more hand cards) is what
+  // produced the bundled, over-complex hints. The dirty-board contract makes
+  // solveBoard fail unless EVERY stack (the loner included) ends legal, so a
+  // board-only success is a genuine self-contained completion. On failure we
+  // fall through to projection (today's behavior) — non-regressive.
+  if (handLonerPlaced) {
+    const boardOnly = boardOnlyPlay(board);
+    if (boardOnly !== null) return boardOnly;
+  }
+
   const meldable = collectMeldablePairs(hand);
 
   if (boardIsClean(board)) {
@@ -60,8 +73,11 @@ export function findLogicalMovesForPlay(
 
 export function formatHint(result: LogicalMovesForPlay | null): readonly string[] {
   if (result === null) return [];
-  const labels = result.cardsToPlay.map(cardLabel).join(" ");
-  const lines = [`place [${labels}] from hand`, ...result.moveLines];
+  // A board-only finish (loner completed with board cards) plays no new card,
+  // so there is no "place … from hand" line — just the board moves.
+  const lines = result.cardsToPlay.length === 0
+    ? [...result.moveLines]
+    : [`place [${result.cardsToPlay.map(cardLabel).join(" ")}] from hand`, ...result.moveLines];
   return compressHint(lines);
 }
 
@@ -151,4 +167,20 @@ function shortestPlan(candidates: readonly LogicalMovesForPlay[]): LogicalMovesF
 
 function boardIsClean(board: readonly (readonly Card[])[]): boolean {
   return board.every(isCompleteGroup);
+}
+
+/** Try to make the whole board legal using only board→board moves — no new
+ *  hand card projected. Returns a play with empty `cardsToPlay`, or null if
+ *  the board can't be resolved without a hand card (or is already clean, so
+ *  there is nothing to finish). */
+function boardOnlyPlay(
+  board: readonly (readonly Card[])[],
+): LogicalMovesForPlay | null {
+  const result = solveBoard(board);
+  if (result === null || result.plan.length === 0) return null;
+  return {
+    cardsToPlay: [],
+    moves: result.plan.map(p => p.move),
+    moveLines: result.plan.map(p => p.line),
+  };
 }
