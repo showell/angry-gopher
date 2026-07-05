@@ -82,6 +82,13 @@ scenario board_only_pair_push
   compressed:
     - push 8♠ 9♦ onto 3♦ 4♣ 5♥ 6♠ 7♥
 
+scenario board_only_pull_completes
+  desc: a pure board plan pulling a loose card onto a trouble pair (the pre-pass's trouble+trouble phase emits these) - COMPLETE tail stripped, deck-blind
+  input:
+    - pull 2♠ onto [K♠ A♦] → [K♠ A♦ 2♠] [→COMPLETE]
+  compressed:
+    - pull 2♠ onto K♠ A♦
+
 # ---- humanizes: standalone extract_absorb board→board moves (1 → 1) ----
 # The verb encodes the source-remnant fate (which the player watches); the
 # motion is always "move this card from source onto target". Keep the

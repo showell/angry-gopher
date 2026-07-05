@@ -179,38 +179,21 @@ function boardIsClean(board: readonly (readonly Card[])[]): boolean {
  *  prefers moving the broken thing onto the good structure, never shaving
  *  the good structure to feed the broken thing (which the trouble-greedy
  *  BFS happily does; it found peel-7♥-onto-the-pair where a human pushes
- *  the pair onto the run). Greedily merge each incomplete stack wholesale
- *  onto a complete group (either end) until nothing joins. Only a fully
- *  clean board counts: anything short returns null and the caller falls
- *  through to the solver — never a half-applied merge list. The merges are
- *  genuine push Moves rendered via describe(), so the line format has one
- *  authority and flows through compressHint like any solver plan. */
+ *  the pair onto the run). Each greedy pass tries trouble+trouble joins
+ *  first (fix the broken with the broken — [K♠ A♦] + [2♠] snap into the
+ *  wrap run without touching any helper), then incomplete-onto-helper
+ *  merges, until nothing joins. Only a fully clean board counts: anything
+ *  short returns null and the caller falls through to the solver — never
+ *  a half-applied merge list. The merges are genuine Moves rendered via
+ *  describe(), so the line format has one authority and flows through
+ *  compressHint like any solver plan. */
 function wholesaleMergePlay(
   board: readonly (readonly Card[])[],
 ): LogicalMovesForPlay | null {
   const stacks: (readonly Card[])[] = [...board];
   const moves: Move[] = [];
-  let progress = true;
-  while (progress) {
-    progress = false;
-    scan:
-    for (let i = 0; i < stacks.length; i++) {
-      const s = stacks[i]!;
-      if (isCompleteGroup(s)) continue;
-      for (let j = 0; j < stacks.length; j++) {
-        const t = stacks[j]!;
-        if (j === i || !isCompleteGroup(t)) continue;
-        for (const side of ["right", "left"] as const) {
-          const result = side === "right" ? [...t, ...s] : [...s, ...t];
-          if (!isCompleteGroup(result)) continue;
-          moves.push({ type: "push", troubleBefore: s, targetBefore: t, result, side });
-          stacks[j] = result;
-          stacks.splice(i, 1);
-          progress = true;
-          break scan;
-        }
-      }
-    }
+  while (troubleTroubleMerge(stacks, moves) || troubleHelperMerge(stacks, moves)) {
+    // greedy fixpoint
   }
   if (moves.length === 0 || !stacks.every(isCompleteGroup)) return null;
   return {
@@ -218,6 +201,71 @@ function wholesaleMergePlay(
     moves,
     moveLines: moves.map(describe),
   };
+}
+
+/** One trouble+trouble join, if any exists: two incomplete stacks whose
+ *  concatenation is a COMPLETE group. Board stacks are always legal-or-
+ *  partial, so incompletes are length 1–2 and the only completable shape
+ *  is single+pair — exactly the engine's free_pull (rendered `pull X onto
+ *  [pair]`). Never merges two loose cards into a still-troublesome pair:
+ *  they may have been split apart for good board-wide reasons, and only a
+ *  COMPLETE result counts. (Pair+pair→4 has no verb and no real case yet;
+ *  it stays invisible here and falls to the solver.) */
+function troubleTroubleMerge(
+  stacks: (readonly Card[])[],
+  moves: Move[],
+): boolean {
+  for (let i = 0; i < stacks.length; i++) {
+    const s = stacks[i]!;
+    if (s.length !== 1) continue;
+    for (let j = 0; j < stacks.length; j++) {
+      const t = stacks[j]!;
+      if (j === i || t.length !== 2 || isCompleteGroup(t)) continue;
+      for (const side of ["right", "left"] as const) {
+        const result = side === "right" ? [...t, ...s] : [...s, ...t];
+        if (!isCompleteGroup(result)) continue;
+        moves.push({
+          type: "free_pull",
+          loose: s[0]!,
+          targetBefore: t,
+          targetBucketBefore: "trouble",
+          result,
+          side,
+          graduated: true,
+        });
+        stacks[j] = result;
+        stacks.splice(i, 1);
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+/** One incomplete-onto-helper join, if any exists: an incomplete stack
+ *  whose wholesale concatenation onto a complete group (either end) is
+ *  itself complete — the engine's push. */
+function troubleHelperMerge(
+  stacks: (readonly Card[])[],
+  moves: Move[],
+): boolean {
+  for (let i = 0; i < stacks.length; i++) {
+    const s = stacks[i]!;
+    if (isCompleteGroup(s)) continue;
+    for (let j = 0; j < stacks.length; j++) {
+      const t = stacks[j]!;
+      if (j === i || !isCompleteGroup(t)) continue;
+      for (const side of ["right", "left"] as const) {
+        const result = side === "right" ? [...t, ...s] : [...s, ...t];
+        if (!isCompleteGroup(result)) continue;
+        moves.push({ type: "push", troubleBefore: s, targetBefore: t, result, side });
+        stacks[j] = result;
+        stacks.splice(i, 1);
+        return true;
+      }
+    }
+  }
+  return false;
 }
 
 /** Try to make the whole board legal using only board→board moves — no new

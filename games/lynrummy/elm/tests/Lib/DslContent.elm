@@ -1839,6 +1839,13 @@ scenario board_only_pair_push
   compressed:
     - push 8♠ 9♦ onto 3♦ 4♣ 5♥ 6♠ 7♥
 
+scenario board_only_pull_completes
+  desc: a pure board plan pulling a loose card onto a trouble pair (the pre-pass's trouble+trouble phase emits these) - COMPLETE tail stripped, deck-blind
+  input:
+    - pull 2♠ onto [K♠ A♦] → [K♠ A♦ 2♠] [→COMPLETE]
+  compressed:
+    - pull 2♠ onto K♠ A♦
+
 # ---- humanizes: standalone extract_absorb board→board moves (1 → 1) ----
 # The verb encodes the source-remnant fate (which the player watches); the
 # motion is always "move this card from source onto target". Keep the
@@ -2037,6 +2044,37 @@ scenario loner_ts_completed_with_hand_pair
     - T♠'
   expect_steps:
     - place 8♠ and 9♥ with the T♠ on the board
+
+# --- wholesale-merge pre-pass, trouble+trouble first: two trouble stacks
+#     that COMPLETE each other merge together before anything leans on a
+#     helper. Real Stephen2 game-5 state: after cannibalizing groups to
+#     build the ace set, [K♠ A♦] and [2♠] are left over — and they ARE the
+#     wrap run K♠ A♦ 2♠. Without this phase the pre-pass dragged each
+#     piece one-by-one onto the healthy [3♦ 4♣ 5♥ 6♠] run (two moves,
+#     touching structure the play never needed). Only COMPLETE results
+#     count: two loose cards never merge into a still-troublesome pair
+#     (they may have been split apart for good board-wide reasons).
+
+scenario loner_trouble_pair_and_singleton_complete_each_other
+  desc: trouble [K♠ A♦] + [2♠] snap together into the complete wrap run (loner=true). One free_pull, board clean; the healthy 3♦-6♠ run is never touched.
+  op: hint_for_hand
+  loner: true
+  hand: J♣
+  board:
+    - J♦ Q♦ K♦
+    - 2♥ 3♥ 4♥
+    - 7♠ 7♦ 7♣
+    - A♣ 2♣ 3♣
+    - 3♦ 4♣ 5♥ 6♠
+    - 6♣ 7♥ 8♠' 9♦'
+    - 9♥ T♠' J♦' Q♣
+    - 9♠' T♦ J♠'
+    - 3♠ 4♥' 5♣ 6♥'
+    - A♥ A♦' A♠
+    - K♠ A♦
+    - 2♠
+  expect_steps:
+    - pull 2♠ onto K♠ A♦
 
 # --- wholesale-merge pre-pass: a human looks for whole stacks that simply
 #     join BEFORE anything that merits the word "solve". Real Stephen2
