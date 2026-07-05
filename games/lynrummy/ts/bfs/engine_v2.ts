@@ -168,7 +168,7 @@ function solveTurn(initial: Buckets, maxPlanLength: number): SolveResult | null 
     }
     const focus = cur.queue[0]!;
     const parentCompleteCount = cur.buckets.complete.length;
-    const candidates = enumerateForFocus(cur.buckets, focus, new Set<string>());
+    const candidates = enumerateForFocus(cur.buckets, focus);
     for (const cand of candidates) {
       const newPlan = [...cur.plan, { line: describe(cand.move), move: cand.move }];
       if (best !== null && newPlan.length >= best.plan.length) continue;
@@ -279,7 +279,6 @@ interface Candidate {
 function enumerateForFocus(
   buckets: Buckets,
   focus: ClassifiedCardStack,
-  doomedPairs: Set<string>,
 ): Candidate[] {
   const candidates: { move: Move; afterBuckets: Buckets; tier: number; troubleAfter: number; sourceLen: number }[] = [];
   const focusCards = focus.cards;
@@ -298,7 +297,6 @@ function enumerateForFocus(
   // troubleAfter ascending.
   candidates.sort((a, b) => a.tier - b.tier || a.troubleAfter - b.troubleAfter);
   return candidates.map(c => ({ move: c.move, afterBuckets: c.afterBuckets }));
-  void doomedPairs;
 }
 
 /** Tier 0 = EXECUTE (clean: graduates + no spawn). Tier 1 = CONTINUE

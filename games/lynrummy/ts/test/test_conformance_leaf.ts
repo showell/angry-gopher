@@ -10,7 +10,8 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { type Card, type Rank, type Suit, type Deck, parseCardLabel } from "../core/card.ts";
+import { type Card, type Rank, type Suit, type Deck, parseCardLabel, RANKS, SUITS } from "../core/card.ts";
+import { completionShapes, hasDoomedThird } from "../bfs/enumerator.ts";
 import {
   classifyStack,
   KIND_RB,
@@ -595,8 +596,59 @@ function runExtenders(args: readonly string[], body: readonly BodyLine[]): RunRe
   return errors.length > 0 ? errors.join("; ") : null;
 }
 
+// --- pair futility: completionShapes / hasDoomedThird -------------------
+// These two runners pin the BFS's live futility check (bfs/enumerator.ts,
+// used by admissibleMerged): pair_extenders → the completion-shape table,
+// pair_doomed → the predicate over a donor inventory.
+
+/** Render a (rank*4 + suit) shape id as its ASCII card label (the DSL's
+ *  key vocabulary), e.g. 50 → "QS". */
+function shapeKeyLabel(key: number): string {
+  const rank = Math.floor(key / 4);
+  const suit = key % 4;
+  return RANKS[rank - 1]! + SUITS[suit]!;
+}
+
+function runPairExtenders(args: readonly string[], expected: string): RunResult {
+  if (args.length !== 2) {
+    throw new Error(`pair_extenders expects exactly 2 pair cards: ${args.join(" ")}`);
+  }
+  const pair = args.map(parseCardLabel);
+  const want = new Set<number>();
+  for (const tok of expected.split(/\s+/).filter(Boolean)) {
+    const c = parseCardLabel(tok);
+    want.add(c.rank * 4 + c.suit);
+  }
+  const fmt = (s: Set<number>): string => [...s].map(shapeKeyLabel).sort().join(" ");
+  const actual = fmt(completionShapes(pair));
+  const wanted = fmt(want);
+  return actual === wanted ? null : `expected [${wanted}], got [${actual}]`;
+}
+
+function runPairDoomed(args: readonly string[], expected: string): RunResult {
+  const barIdx = args.indexOf("|");
+  if (barIdx < 0) {
+    throw new Error(`pair_doomed scenario missing '|' separator: ${args.join(" ")}`);
+  }
+  const pairTokens = args.slice(0, barIdx);
+  const donorTokens = args.slice(barIdx + 1);
+  if (pairTokens.length !== 2) {
+    throw new Error(`pair_doomed expects exactly 2 pair cards before '|': ${args.join(" ")}`);
+  }
+  const pair = pairTokens.map(parseCardLabel);
+  const inventory = new Set<number>();
+  for (const tok of donorTokens) {
+    const c = parseCardLabel(tok);
+    inventory.add(c.rank * 4 + c.suit);
+  }
+  const actual = hasDoomedThird(pair, inventory) ? "doomed" : "alive";
+  return actual === expected ? null : `expected ${expected}, got ${actual}`;
+}
+
 const RUNNERS: Readonly<Record<string, Runner>> = {
   classify: runClassify,
+  pair_extenders: runPairExtenders,
+  pair_doomed: runPairDoomed,
   right_absorb: runRightAbsorb,
   left_absorb: runLeftAbsorb,
   peel: runPeel,

@@ -108,8 +108,9 @@ function completionInventory(
 
 /** Return the set of (value*4 + suit) shape ids that would complete a
  *  2-card partial into a legal length-3 stack. Mirrors python's
- *  `completion_shapes`. */
-function completionShapes(partial: readonly Card[]): Set<number> {
+ *  `completion_shapes`. Exported so the `pair_extenders` leaf
+ *  conformance pins this exact table. */
+export function completionShapes(partial: readonly Card[]): Set<number> {
   const c1 = partial[0]!;
   const c2 = partial[1]!;
   const v1 = c1.rank, s1 = c1.suit;
@@ -142,8 +143,9 @@ function completionShapes(partial: readonly Card[]): Set<number> {
 }
 
 /** True if NO completion shape for `partial` exists in `inventory` —
- *  the partial is doomed to remain a 2-partial. */
-function hasDoomedThird(partial: readonly Card[], inventory: Set<number>): boolean {
+ *  the partial is doomed to remain a 2-partial. Exported so the
+ *  `pair_doomed` leaf conformance pins this exact predicate. */
+export function hasDoomedThird(partial: readonly Card[], inventory: Set<number>): boolean {
   const shapes = completionShapes(partial);
   for (const s of shapes) {
     if (inventory.has(s)) return false;
