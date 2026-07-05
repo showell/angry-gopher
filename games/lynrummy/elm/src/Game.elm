@@ -122,8 +122,36 @@ init flags =
 -- UPDATE
 
 
+{-| Re-step the sticky hand-loner flag after every action. The seam is
+here — after `updateInner` — rather than in each board-mutating branch,
+because every player action funnels through `update` and every one of
+them can change the board (a hand-to-stack play can even clean it). The
+transition reads only the log's most recent event and the resulting
+board, and is idempotent under a stable (event, board), so running it on
+non-mutating messages (pointer moves, hint responses) is a safe no-op.
+-}
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
+    let
+        ( stepped, cmd ) =
+            updateInner msg model
+
+        handLonerActive =
+            case List.head (List.reverse stepped.actionLog) of
+                Just entry ->
+                    ActionLog.stepHandLonerFlag
+                        (Status.isCleanBoard stepped.gameState.board)
+                        entry.action
+                        model.handLonerActive
+
+                Nothing ->
+                    model.handLonerActive
+    in
+    ( { stepped | handLonerActive = handLonerActive }, cmd )
+
+
+updateInner : Msg -> Model -> ( Model, Cmd Msg )
+updateInner msg model =
     case msg of
         ReadyForAgentTurn { afterTurn, outboundPayload } ->
             -- Commit P1's turn-end (gameState flip, actionLog
@@ -346,7 +374,7 @@ update msg model =
                     Engine.buildGameHintRequest reqId
                         hand
                         model.gameState.board
-                        (ActionLog.lastMoveWasHandLoner model.actionLog)
+                        model.handLonerActive
             in
             ( { model
                 | hintedCards = []

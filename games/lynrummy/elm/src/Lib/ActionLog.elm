@@ -1,7 +1,7 @@
 module Lib.ActionLog exposing
     ( ActionLogEntry
     , collapseUndos
-    , lastMoveWasHandLoner
+    , stepHandLonerFlag
     )
 
 import Lib.GameEvent exposing (GameEvent(..))
@@ -11,41 +11,45 @@ type alias ActionLogEntry =
     { action : GameEvent }
 
 
-{-| True iff the player's most recent NON-COSMETIC action was laying a
-hand card onto an empty spot (a `PlaceHand` loner). Cosmetic moves —
-`MoveStack` repositioning — are ignored, and `Undo` tokens are
-collapsed first. This is the one fact the solver needs to prefer
-finishing the board with board cards before projecting more hand
-cards (see hand_play.ts `handLonerPlaced`). A bare boolean suffices:
-the solver can only sign off a play when every stack ends legal, so it
-doesn't need the loner's identity.
+{-| One transition of the sticky "an unresolved hand-origin loner sits on
+the board" flag, given the event just applied and whether the resulting
+board is fully legal.
+
+The flag exists because the solver should finish a hand-origin loner with
+BOARD cards rather than projecting more hand cards onto the already-dirty
+board (see hand_play.ts `handLonerPlaced`). Provenance is historical — it
+cannot be read off the current board — so the flag lives in the model and
+is stepped forward here:
+
+  - Laying a hand card onto the board (`PlaceHand`) SETS it. `PlaceHand`
+    always leaves a one-card (incomplete) stack, so the board is dirty and
+    the set sticks.
+  - It STAYS set through any subsequent board manipulation (split, merge,
+    peel, cosmetic reposition) — those carry `wasActive` unchanged. This is
+    what the older "last non-cosmetic move" heuristic got wrong: building a
+    loner up with board moves knocked the flag out.
+  - It CLEARS the instant the board returns to fully legal (`boardClean`),
+    however that happened — including the player completing the last stack
+    with a direct hand-card-to-stack play.
+
+A bare boolean suffices: the solver can only sign off a play when every
+stack ends legal, so it never needs the loner's identity.
+
+Idempotent under a stable (event, board), so it is safe to re-run after
+every update against the log's most recent event.
 -}
-lastMoveWasHandLoner : List ActionLogEntry -> Bool
-lastMoveWasHandLoner entries =
-    case lastNonCosmeticAction (collapseUndos entries) of
-        Just (PlaceHand _) ->
-            True
+stepHandLonerFlag : Bool -> GameEvent -> Bool -> Bool
+stepHandLonerFlag boardClean event wasActive =
+    if boardClean then
+        False
 
-        _ ->
-            False
+    else
+        case event of
+            PlaceHand _ ->
+                True
 
-
-lastNonCosmeticAction : List ActionLogEntry -> Maybe GameEvent
-lastNonCosmeticAction entries =
-    entries
-        |> List.map .action
-        |> List.filter (not << isCosmetic)
-        |> List.foldl (\action _ -> Just action) Nothing
-
-
-isCosmetic : GameEvent -> Bool
-isCosmetic action =
-    case action of
-        MoveStack _ ->
-            True
-
-        _ ->
-            False
+            _ ->
+                wasActive
 
 
 {-| Collapse `Undo` tokens against the actions they cancel,

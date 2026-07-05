@@ -6,30 +6,37 @@ import type { Card } from "../core/card.ts";
 import { parseCardLabel } from "../core/card.ts";
 import { gameHintLines } from "../elm_api/engine_entry.ts";
 
-// uid 16 (Stephen2), game 2, mid-turn after 15 actions (10 hand cards played:
-// T♠' J♥' Q♠ A♠' 5♦' 5♥' 6♠' 2♥' 4♥' 2♠'). Reconstructed from sessions/2/meta
-// + replaying actions.dsl. Hand down to 5 cards.
+// uid 16 (Stephen2), game 4, mid-turn. Reconstructed from sessions/4/meta
+// + replaying actions.dsl (21 actions). Hand down to 3 cards.
+// The dirty stack is [5S 6H]: 6H was placed as a loner (action 19), then
+// 5S was split off the spade run and merged onto it (actions 20-21).
+// So the LAST non-cosmetic move is merge_stack, NOT place_hand.
 const handLabels = [
-  "8H", "4D", "8D", "6C'", "9C'",
+  "6D'", "3C", "KC'",
 ];
 
 const boardLabels: string[][] = [
-  ["KS", "AS", "2S"],
-  ["TD", "JD", "QD", "KD"],
-  ["2H", "3H", "4H", "5H'"],
+  ["JS'", "QS'", "KS", "AS", "2S", "3S", "4S"],
+  ["8D", "9C'", "TD", "JC"],
+  ["TD'", "JD", "QD", "KD"],
+  ["AH'", "2H", "3H", "4H"],
   ["7S", "7D", "7C"],
-  ["AC", "AD", "AH", "AS'"],
-  ["2C", "3D", "4C", "5H", "6S'"],
-  ["5D'", "6S", "7H"],
-  ["TS'", "JH'", "QS"],
-  ["2H'", "3S", "4H'"],
-  ["2S'"],
+  ["AC", "AD", "AH"],
+  ["2C", "3D", "4C"],
+  ["4S'", "5H", "6S", "7H", "8S"],
+  ["5S", "6H"],
 ];
 
 const hand: Card[] = handLabels.map(parseCardLabel);
 const board: Card[][] = boardLabels.map(stack => stack.map(parseCardLabel));
 
-// game-2 state: the 2♠ was just laid from hand onto an empty spot.
-const lines = gameHintLines(hand, board, true);
-console.log("hint lines:", lines.length);
+// game-4 state: last non-cosmetic move was merge_stack (board->board), so
+// Elm's lastMoveWasHandLoner would be FALSE. Reproduce the real hint.
+const lines = gameHintLines(hand, board, false);
+console.log("hint lines (loner=false):", lines.length);
 for (const l of lines) console.log("  " + l);
+
+console.log("");
+const linesLoner = gameHintLines(hand, board, true);
+console.log("hint lines (loner=true):", linesLoner.length);
+for (const l of linesLoner) console.log("  " + l);

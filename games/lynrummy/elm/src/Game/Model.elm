@@ -20,7 +20,7 @@ import Lib.Physics.GestureArbitration as GA
 import Lib.Player exposing (Player(..))
 import Lib.Popup exposing (PopupContent)
 import Lib.Rules.Card exposing (Card)
-import Lib.Status exposing (StatusKind(..), StatusMessage)
+import Lib.Status exposing (StatusKind(..), StatusMessage, isCleanBoard)
 
 
 
@@ -46,6 +46,17 @@ type alias Model =
     , hintedCards : List Card
     , popup : Maybe { content : PopupContent, dismissMsg : Msg }
     , actionLog : List ActionLogEntry
+
+    -- Sticky "an unresolved hand-origin loner sits on the board" flag.
+    -- SET when the player lays a hand card onto the board (`PlaceHand`),
+    -- STAYS set through any board manipulation used to build that loner
+    -- up, and CLEARS the moment the board is fully legal again. Passed to
+    -- the solver on the Hint request so it finishes a hand-origin loner
+    -- with board cards instead of projecting more hand cards (see
+    -- `ActionLog.stepHandLonerFlag` for the transition, hand_play.ts
+    -- `handLonerPlaced` for the consumer). Provenance is historical, so it
+    -- must be state, not a snapshot read of the log.
+    , handLonerActive : Bool
     , nextSeq : Int
 
     -- The single in-flight animation, if any. Two flavors fill
@@ -114,6 +125,7 @@ baseModel =
     , hintedCards = []
     , popup = Nothing
     , actionLog = []
+    , handLonerActive = False
     , nextSeq = 1
     , animationState = Nothing
     , gameId = "default"
@@ -141,10 +153,24 @@ bootstrapFromBundle initialState actions model =
                 , nextSeq = List.length actions + 1
                 , gameState = initialState
                 , initialGameState = initialState
+                , handLonerActive = False
             }
     in
     List.foldl
-        (\entry m -> { m | gameState = applyEvent entry.action m.gameState })
+        (\entry m ->
+            let
+                nextState =
+                    applyEvent entry.action m.gameState
+            in
+            { m
+                | gameState = nextState
+                , handLonerActive =
+                    ActionLog.stepHandLonerFlag
+                        (isCleanBoard nextState.board)
+                        entry.action
+                        m.handLonerActive
+            }
+        )
         atInitial
         (ActionLog.collapseUndos actions)
 
