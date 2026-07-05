@@ -1907,6 +1907,16 @@ scenario reorder_dirty_board_with_board_push
     - push 4♠ onto K♠ A♠ 2♠ 3♠
     - splice 4♣ from hand into 2♣ 3♦ 4♣ 5♥ 6♠ 7♥
 
+scenario fuse_in_place_dependent_board_move
+  desc: the landing is MID-plan and the later pull's target is the landing's RESULT (the group 9♥ T♠ exists only after the 9♥ lands). Solver order is kept - the hand line fuses at its own position instead of floating last.
+  input:
+    - place [9♥] from hand
+    - pull 9♥ onto [T♠'] → [9♥ T♠']
+    - pull 8♠' onto [9♥ T♠'] → [8♠' 9♥ T♠'] [→COMPLETE]
+  compressed:
+    - play 9♥ from hand onto T♠
+    - pull 8♠ onto 9♥ T♠
+
 scenario triple_in_hand_lands_directly
   desc: a triple played straight from hand onto a clean board — no target, no board move
   input:
@@ -2020,6 +2030,31 @@ scenario loner_ts_completed_with_hand_pair
     - T♠'
   expect_steps:
     - place 8♠ and 9♥ with the T♠ on the board
+
+# --- in-place fusion: the landing is mid-plan and a later board move
+#     consumes its RESULT. Real Stephen2 game-5 follow-on state: after the
+#     pair hint, the player moved the 8♠' to the board too — two loners
+#     (T♠', 8♠'). The solver lands 9♥ on the T♠', then pulls the 8♠' onto
+#     [9♥ T♠']. Floating that pull ahead of the landing (the old reorder)
+#     told the player to pull onto a group that didn't exist yet.
+
+scenario loner_ts_and_8s_hand_card_lands_mid_plan
+  desc: two loners T♠' and 8♠' (loner=true). Board-only fails; the solver projects 9♥, lands it on the T♠', then pulls the 8♠' onto the result. Solver order is kept - play from hand FIRST, then the dependent pull.
+  op: hint_for_hand
+  loner: true
+  hand: 4♥' 6♥' 9♥ 9♠' J♠' A♦' 9♦' J♦' 3♣ 5♣ 6♣ J♣ Q♣
+  board:
+    - K♠ A♠ 2♠ 3♠
+    - T♦ J♦ Q♦ K♦
+    - 2♥ 3♥ 4♥
+    - 7♠ 7♦ 7♣
+    - A♣ A♦ A♥
+    - 2♣ 3♦ 4♣ 5♥ 6♠ 7♥
+    - T♠'
+    - 8♠'
+  expect_steps:
+    - play 9♥ from hand onto T♠
+    - pull 8♠ onto 9♥ T♠
 
 scenario loner_2s_finished_with_board_cards
   desc: 2♠ was just placed from hand onto an empty spot (loner=true). The board can be made fully legal by peeling 2♣ and 2♥ onto it (a set of 2s) — zero new hand cards. The hint is board-only; no "place from hand" line.

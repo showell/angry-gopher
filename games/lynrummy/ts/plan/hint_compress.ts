@@ -8,14 +8,17 @@
 //
 //   1. Gesture granularity. A hand card placed and then dropped onto a
 //      board stack is ONE drag, but reads as two lines.
-//   2. Ordering. The projection layer lists the hand placement FIRST and
-//      doesn't care about order, but a player holds the card and drops it
-//      only when the board is ready. So board manipulation comes FIRST and
-//      the hand card lands LAST.
+//   2. Ordering. The projection layer lists the hand placement FIRST, but
+//      the placement only happens as part of the move that consumes the
+//      card — which the solver may sequence anywhere in the plan.
 //
-// This module reassembles the plan into: every board→board move (in the
-// solver's order), then the single hand card landing on its target, fused
-// into one line. It works entirely in DSL space — card lists round-trip
+// This module fuses the place line into the consuming move IN PLACE: the
+// moves keep the solver's order (executable by construction) and the
+// landing move renders as the one "... from hand ..." line. In the common
+// case the solver lands the hand card last, so the hint naturally reads
+// board-prep-first; when a later board move consumes the landing's result,
+// the landing correctly comes before it. It works entirely in DSL space —
+// card lists round-trip
 // through the shared dsl parser/emitter (`canon`), so output is canonical
 // DSL and a malformed line just fails to match.
 //
@@ -194,10 +197,14 @@ export function compressHint(lines: readonly string[]): readonly string[] {
 
   const landing = moves.filter(m => m.consumesCard === placed);
   if (landing.length === 1) {
-    // The placed card LANDS onto existing board structure: board manipulation
-    // first (solver's order), the hand card last.
-    const board = moves.filter(m => m.consumesCard !== placed);
-    return [...board.map(m => m.boardLine), landing[0]!.handLine!];
+    // The placed card LANDS onto board structure: fuse the place line into
+    // the landing move IN PLACE, keeping the solver's move order — which is
+    // executable by construction. (Floating board moves ahead of the landing
+    // broke when a later move consumed the landing's RESULT: it told the
+    // player to pull onto a group that didn't exist yet. When the solver's
+    // order has the landing last — every plan seen before that one — in-place
+    // fusion renders the same hand-lands-last lines as the old reorder.)
+    return moves.map(m => m.consumesCard === placed ? m.handLine! : m.boardLine);
   }
   if (landing.length === 0) {
     // The placed PAIR is a LANDING PAD — the plan's one move pulls a board

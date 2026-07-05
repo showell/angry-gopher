@@ -150,6 +150,16 @@ scenario reorder_dirty_board_with_board_push
     - push 4♠ onto K♠ A♠ 2♠ 3♠
     - splice 4♣ from hand into 2♣ 3♦ 4♣ 5♥ 6♠ 7♥
 
+scenario fuse_in_place_dependent_board_move
+  desc: the landing is MID-plan and the later pull's target is the landing's RESULT (the group 9♥ T♠ exists only after the 9♥ lands). Solver order is kept - the hand line fuses at its own position instead of floating last.
+  input:
+    - place [9♥] from hand
+    - pull 9♥ onto [T♠'] → [9♥ T♠']
+    - pull 8♠' onto [9♥ T♠'] → [8♠' 9♥ T♠'] [→COMPLETE]
+  compressed:
+    - play 9♥ from hand onto T♠
+    - pull 8♠ onto 9♥ T♠
+
 scenario triple_in_hand_lands_directly
   desc: a triple played straight from hand onto a clean board — no target, no board move
   input:

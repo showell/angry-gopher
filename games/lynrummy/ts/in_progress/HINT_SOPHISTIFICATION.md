@@ -198,10 +198,14 @@ hint.
 - **Class (B) strategic ranking** and **Class (C) KICK** — untouched; the
   reorder only handles *ordering*, not *which* plan the engine picks. See
   below. NB the 2026-05-05 calibration already downgraded (C).
-- **Reorder assumption:** board moves are independent of the hand card, so
-  hand-last is safe. True for turn_2/turn_3 and the simple cases; a board move
-  that depends on the hand card's *result* would need finer sequencing. No
-  such case seen yet.
+- **Reorder assumption:** ~~board moves are independent of the hand card, so
+  hand-last is safe~~ — **falsified 2026-07-05** (Stephen2 game 5: two loners,
+  the solver landed 9♥ on the T♠' mid-plan, then pulled the 8♠' onto the
+  *result*; floating that pull ahead told the player to pull onto a group that
+  didn't exist yet). Fixed by fusing IN PLACE: moves keep the solver's order
+  (executable by construction) and the landing move renders as the hand line
+  at its own position. Hand-lands-last still falls out naturally whenever the
+  solver sequences it last — which is every previously-pinned fixture.
 
 ### Landscape note — generating hard fixtures (Steve, 2026-07-04)
 
