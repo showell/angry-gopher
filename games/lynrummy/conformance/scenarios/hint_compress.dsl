@@ -157,6 +157,21 @@ scenario triple_in_hand_lands_directly
   compressed:
     - play 7♦ 8♦ 9♦ from hand
 
+# ---- collapses: a hand card that SEEDS a new group (board cards absorb onto it) ----
+# The placed card isn't consumed by any move — it's the anchor a chain of
+# extract_absorbs builds on. "place X on board to build <final group>" says
+# it all (place, not play: you place a seed, you play a lander). Real seed-42
+# game-2 mid-turn state (uid 16), a K→A→2 rb run seeded from hand.
+
+scenario seed_new_group_from_hand
+  desc: 2♥ is dropped as a seed; A♣ then K♦ are peeled onto it to build the K♦ A♣ 2♥ rb run — the whole chain is one instruction
+  input:
+    - place [2♥'] from hand
+    - peel A♣ from HELPER [A♣ A♦ A♥ A♠'], absorb onto [2♥'] → [A♣ 2♥']
+    - peel K♦ from HELPER [T♦ J♦ Q♦ K♦], absorb onto [A♣ 2♥'] → [K♦ A♣ 2♥'] [→COMPLETE]
+  compressed:
+    - place 2♥ on board to build K♦ A♣ 2♥
+
 # ---- bails: return the plan raw rather than half-transform it ----
 
 scenario passthrough_unhandled_shift

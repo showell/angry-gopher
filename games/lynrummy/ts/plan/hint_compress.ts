@@ -19,6 +19,12 @@
 // through the shared dsl parser/emitter (`canon`), so output is canonical
 // DSL and a malformed line just fails to match.
 //
+// A second shape: the hand card is a SEED, not a lander. It isn't consumed
+// by any move — instead board cards get absorbed ONTO it to build a new
+// group (e.g. drop 2♥, peel A♣ onto it, peel K♦ onto that → K♦ A♣ 2♥). A
+// human just needs "place 2♥ on board to build K♦ A♣ 2♥", so the whole
+// build chain collapses to one line.
+//
 // Verb families:
 //   - push / free_pull / splice: consume one loose card. From HAND they are
 //     the landing step ("play|splice X from hand ..."); of a BOARD card they
@@ -41,7 +47,7 @@ const PLACE_RE = /^place \[(.+?)\] from hand$/;
 // encodes the source-remnant fate (the player just watches); the motion is
 // always "move this card from source onto target".
 const EXTRACT_ABSORB_RE =
-  /^(peel|pluck|yank|steal|split_out|set_peel) (.+?) from HELPER \[(.+?)\], absorb onto \[(.+?)\] → \[.+?\](?: \[→COMPLETE\])?(?: ; spawn .+)?$/;
+  /^(peel|pluck|yank|steal|split_out|set_peel) (.+?) from HELPER \[(.+?)\], absorb onto \[(.+?)\] → \[(.+?)\](?: \[→COMPLETE\])?(?: ; spawn .+)?$/;
 
 // Display verb per extract_absorb verb. peel/pluck/yank/steal are already
 // recognizable English; the two internal names get natural substitutes
@@ -81,11 +87,15 @@ const CONSUME_RULES: readonly ConsumeRule[] = [
 /** One parsed move line. `boardLine` is always the board→board rendering.
  *  For a consuming verb, `consumesCard` is the loose card (deck-aware) and
  *  `handLine` is the "... from hand ..." rendering; extract_absorb leaves
- *  both null (it never lands a hand card). */
+ *  both null (it never lands a hand card). `absorbTarget`/`buildResult` are
+ *  the group an extract_absorb pulls ONTO and the group it produces (both
+ *  deck-aware canon), used to detect a seed-build chain; null otherwise. */
 interface ParsedMove {
   readonly consumesCard: string | null;
   readonly handLine: string | null;
   readonly boardLine: string;
+  readonly absorbTarget: string | null;
+  readonly buildResult: string | null;
 }
 
 /** Drop deck-2 markers from a canonical card-list string. The only
@@ -121,6 +131,8 @@ function parseMove(line: string): ParsedMove | null {
       consumesCard: card,
       handLine: `${r.handVerb} ${c} from hand ${r.prep} ${t}`,
       boardLine: `${r.boardVerb} ${c} ${r.prep} ${t}`,
+      absorbTarget: null,
+      buildResult: null,
     };
   }
   const ea = line.match(EXTRACT_ABSORB_RE);
@@ -129,13 +141,16 @@ function parseMove(line: string): ParsedMove | null {
     const card = canon(ea[2]!);
     const source = canon(ea[3]!);
     const target = canon(ea[4]!);
-    if (verb === undefined || card === null || source === null || target === null) {
+    const result = canon(ea[5]!);
+    if (verb === undefined || card === null || source === null || target === null || result === null) {
       return null;
     }
     return {
       consumesCard: null,
       handLine: null,
       boardLine: `${verb} ${deckBlind(card)} from ${deckBlind(source)} onto ${deckBlind(target)}`,
+      absorbTarget: target,
+      buildResult: result,
     };
   }
   return null;
@@ -169,13 +184,38 @@ export function compressHint(lines: readonly string[]): readonly string[] {
     moves.push(pm);
   }
 
-  // Exactly one move must land the placed card; that's the hand step.
   const landing = moves.filter(m => m.consumesCard === placed);
-  if (landing.length !== 1) return lines; // can't cleanly place X → bail
+  if (landing.length === 1) {
+    // The placed card LANDS onto existing board structure: board manipulation
+    // first (solver's order), the hand card last.
+    const board = moves.filter(m => m.consumesCard !== placed);
+    return [...board.map(m => m.boardLine), landing[0]!.handLine!];
+  }
+  if (landing.length === 0) {
+    // The placed card is a SEED — not consumed by anything, it's the anchor a
+    // chain of board cards gets absorbed onto. Collapse the whole chain to one
+    // line: "place X on board to build <final group>". ("place", not "play":
+    // you play a card ONTO existing structure, you place one to START structure.)
+    const built = seedBuild(placed, moves);
+    if (built !== null) {
+      return [`place ${deckBlind(placed)} on board to build ${deckBlind(built)}`];
+    }
+  }
+  return lines; // more than one landing, or a shape we don't fully model → raw
+}
 
-  // Board manipulation first (solver's order), the hand card last.
-  const board = moves.filter(m => m.consumesCard !== placed);
-  return [...board.map(m => m.boardLine), landing[0]!.handLine!];
+/** If the placed card is grown by a pure extract_absorb chain — every move
+ *  absorbs onto the group the previous move produced, starting at the seed —
+ *  return the final built group; otherwise null (anything but a clean chain
+ *  bails, so we never half-describe a plan). */
+function seedBuild(placed: string, moves: readonly ParsedMove[]): string | null {
+  if (moves.length === 0) return null;
+  let current = placed;
+  for (const m of moves) {
+    if (m.absorbTarget === null || m.absorbTarget !== current) return null;
+    current = m.buildResult!;
+  }
+  return current;
 }
 
 /** Humanize a plan with no hand placement — each line as a board move —
