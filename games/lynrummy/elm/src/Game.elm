@@ -136,16 +136,22 @@ update msg model =
         ( stepped, cmd ) =
             updateInner msg model
 
+        -- Step from STEPPED's flag, not the pre-update model's: for every
+        -- ordinary message they are the same value, but the resume bootstrap
+        -- (ActionLogFetched) computes the flag by folding the whole action
+        -- log inside updateInner — re-stepping from the pre-bootstrap model
+        -- (init default False) would clobber that fold whenever the log's
+        -- last event merely carries the flag (e.g. a cosmetic MoveStack).
         handLonerActive =
             case List.head (List.reverse stepped.actionLog) of
                 Just entry ->
                     ActionLog.stepHandLonerFlag
                         (Status.isCleanBoard stepped.gameState.board)
                         entry.action
-                        model.handLonerActive
+                        stepped.handLonerActive
 
                 Nothing ->
-                    model.handLonerActive
+                    stepped.handLonerActive
     in
     ( { stepped | handLonerActive = handLonerActive }, cmd )
 
