@@ -37,6 +37,11 @@ split =
     Split { stack = aStack, leftCount = 1 }
 
 
+undo : GameEvent
+undo =
+    Undo
+
+
 mergeStack : GameEvent
 mergeStack =
     MergeStack
@@ -93,6 +98,10 @@ suite =
         , test "a direct hand-to-stack play that cleans the board clears it" <|
             \_ ->
                 run [ ( False, placeHand ), ( True, mergeHand ) ]
+                    |> Expect.equal False
+        , test "undoing the placement back to a clean board clears it" <|
+            \_ ->
+                run [ ( False, placeHand ), ( True, undo ) ]
                     |> Expect.equal False
         , test "board-origin dirt (split) with no prior placement never sets it" <|
             \_ ->
