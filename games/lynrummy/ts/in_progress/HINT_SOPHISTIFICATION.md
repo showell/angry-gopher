@@ -1,12 +1,98 @@
 # HINT_SOPHISTIFICATION
 
-**Status:** ACTIVE (2026-07-04). Class (A) rendering is essentially
-SHIPPED and live in the real game, and the first slice of (B) — plan
-*ordering* — is done too. The mechanism is a new module,
-`ts/plan/hint_compress.ts` (`compressHint`), wired into `formatHint`.
-The sections below the "2026-07-04 progress" block are the ORIGINAL
-2026-05-05 roadmap, kept as the map for the remaining work; read the
-progress block first, it supersedes the status.
+**Status:** ACTIVE (2026-07-05). Class (A) rendering is SHIPPED and live;
+the first slice of (B) — plan *ordering* — is done (the `compressHint`
+humanizer, 2026-07-04 block below). The 2026-07-05 work below adds a
+second, deeper slice of (B): **scoping the hint to the player's focus via
+a last-move "loner" flag**, so a just-placed hand card gets finished with
+board cards instead of bundling in an unrelated play. Read the 2026-07-05
+block, then the 2026-07-04 block; both supersede the ORIGINAL 2026-05-05
+roadmap kept at the bottom as the map for remaining work.
+
+---
+
+## 2026-07-05 progress — the "loner" flag (board-first when finishing your own placement)
+
+### The problem it fixes
+
+Real seed-42 game-2 mid-turn (uid 16): the player laid a `2♠` from hand
+onto an empty spot, then hit Hint expecting the two easy peels that finish
+a set of 2s. Instead the engine returned a **bundled four-line plan** —
+it projected `[8♥ 9♣]` from hand and welded in an unrelated `8-9-T` run
+alongside the forced `2♠` cleanup.
+
+**Root cause (Steve's diagnosis, not "the solver is greedy"):** the code
+projected *new* hand cards onto a board already dirty from a card we
+ourselves placed. `findLogicalMovesForPlay` always projected ≥1 hand card
+(singleton→pair) and never tried the empty projection — finishing the board
+with **no new card**. The dirty-board contract then forced `solveBoard` to
+also resolve the pre-existing `2♠`, welding the two independent threads
+into one plan.
+
+**The nuance that makes it correct:** finishing the `2♠` with board cards
+is *progress* only because the `2♠` is a **hand-origin loner** — melding it
+commits a hand card. If it had been split out of a board group, "cleaning"
+it would commit zero hand cards and could *reverse* progress (undo the
+split, or abandon the maneuver it served). So provenance matters, and the
+board+hand snapshot alone doesn't carry it.
+
+### The design (stateless solver, one fact from Elm)
+
+The solver stays a pure function of a board snapshot — it does NOT replay
+history. **Elm owns the move timeline and distills it to one boolean.**
+`Lib.ActionLog.lastMoveWasHandLoner`: collapse undos, ignore cosmetic
+`MoveStack` repositions, and report whether the last *structural* action
+was a `PlaceHand` (a hand card laid onto an empty spot). That rides the
+`game_hint` port as `loner` → glue `req.loner` → `elmGameHint` →
+`gameHintLines` → `findLogicalMovesForPlay(hand, board, handLonerPlaced)`.
+
+A **bare boolean is enough** (Steve's call): the solver can only sign off a
+play when *every* stack ends legal, so `solveBoard` fails on its own if the
+loner can't be melded (or melding strands another card) — no need to
+identify the specific loner.
+
+When the flag is set, `findLogicalMovesForPlay` first tries `boardOnlyPlay`
+(= `solveBoard(board)`, no projection, `cardsToPlay = []`). On success that
+*is* the hint; `formatHint` drops the `place […] from hand` line for a
+zero-new-cards play. The game-2 hint is now just:
+
+```
+peel 2♣ from 2♣ 3♦ 4♣ 5♥ 6♠ onto 2♠
+peel 2♥ from 2♥ 3♥ 4♥ 5♥ onto 2♣ 2♠
+```
+
+### DEFERRED (by Steve, deliberately) — the loner that NEEDS a hand card
+
+If board-only *fails* (the loner genuinely can't complete without a hand
+card), we currently **fall through to today's projection** — non-regressive,
+no new logic. The smart, scoped hand-card completion is **not built yet**:
+per Steve, don't write speculative fallback logic that no test drives. When
+a real position surfaces where a placed loner needs a hand card, THAT
+becomes the failing test that drives the scoped fallback (and possibly a
+`shift`/`decompose`-aware variant). Until then it stays deferred.
+
+### Where it lives / tests / commits
+
+- Engine: `ts/plan/hand_play.ts` (`handLonerPlaced`, `boardOnlyPlay`,
+  `formatHint` skip-place-line). Threaded through `elm_api/engine_entry.ts`
+  and `elm/engine_glue.js` (`req.loner`, defaults false).
+- Elm: `elm/src/Lib/ActionLog.elm` (`lastMoveWasHandLoner`),
+  `Lib/Engine.elm` (`buildGameHintRequest` gains the bool),
+  `Game.elm` (ClickHint computes it from `model.actionLog`).
+- Tests (test-first, red→green): conformance gained a `loner:` field;
+  `conformance/scenarios/hint_dirty_board.dsl` scenario
+  `loner_2s_finished_with_board_cards` (fails without the flag). Elm
+  `tests/Lib/ActionLogTest.elm` pins the flag logic (6 cases).
+- Commits: `fb7688b4` (TS core, test-first) · `d72c01cf` (Elm sends it).
+  Nothing deployed — awaits Steve's sign-off.
+
+### Gotcha logged (don't repeat)
+
+The front-end bundles (`elm.js`, `engine.js`) are `@embedFile`'d into the
+zig binary. Rebuilding them on disk does NOTHING for a running server —
+`ops/start` rebuilds bundles, `zig build` re-embeds, and restarts. A
+browser hard-reload can't fix a stale embed. Verify after with the served
+bytes / binary (`grep -ac <token> zig-server/zig-out/bin/zig-server`).
 
 ---
 
