@@ -12,7 +12,7 @@ import type { Card } from "../core/card.ts";
 import { cardLabel } from "../core/card.ts";
 import { isPartialOk, isCompleteGroup } from "../core/card_stack.ts";
 import { solveBoard } from "../bfs/engine_v2.ts";
-import type { Move } from "../bfs/move.ts";
+import { describe, type Move } from "../bfs/move.ts";
 import { compressHint } from "./hint_compress.ts";
 
 export interface LogicalMovesForPlay {
@@ -34,11 +34,16 @@ export function findLogicalMovesForPlay(
   // A hand-origin loner was just laid onto an empty spot. Try to finish the
   // board with NO new projection first — the player's unfinished business is
   // that loner, and opening a new front (projecting more hand cards) is what
-  // produced the bundled, over-complex hints. The dirty-board contract makes
-  // solveBoard fail unless EVERY stack (the loner included) ends legal, so a
-  // board-only success is a genuine self-contained completion. On failure we
-  // fall through to projection (today's behavior) — non-regressive.
+  // produced the bundled, over-complex hints. Cheapest first: wholesale
+  // merges (whole stacks that simply join — what a human sees before
+  // anything merits the word "solve"), then the board-only BFS. The
+  // dirty-board contract makes solveBoard fail unless EVERY stack (the
+  // loner included) ends legal, so a board-only success is a genuine
+  // self-contained completion. On failure we fall through to projection
+  // (today's behavior) — non-regressive.
   if (handLonerPlaced) {
+    const wholesale = wholesaleMergePlay(board);
+    if (wholesale !== null) return wholesale;
     const boardOnly = boardOnlyPlay(board);
     if (boardOnly !== null) return boardOnly;
   }
@@ -167,6 +172,52 @@ function shortestPlan(candidates: readonly LogicalMovesForPlay[]): LogicalMovesF
 
 function boardIsClean(board: readonly (readonly Card[])[]): boolean {
   return board.every(isCompleteGroup);
+}
+
+/** Wholesale-merge pre-pass: a human looks for whole stacks that simply
+ *  join BEFORE anything complicated enough to merit the word "solve" — and
+ *  prefers moving the broken thing onto the good structure, never shaving
+ *  the good structure to feed the broken thing (which the trouble-greedy
+ *  BFS happily does; it found peel-7♥-onto-the-pair where a human pushes
+ *  the pair onto the run). Greedily merge each incomplete stack wholesale
+ *  onto a complete group (either end) until nothing joins. Only a fully
+ *  clean board counts: anything short returns null and the caller falls
+ *  through to the solver — never a half-applied merge list. The merges are
+ *  genuine push Moves rendered via describe(), so the line format has one
+ *  authority and flows through compressHint like any solver plan. */
+function wholesaleMergePlay(
+  board: readonly (readonly Card[])[],
+): LogicalMovesForPlay | null {
+  const stacks: (readonly Card[])[] = [...board];
+  const moves: Move[] = [];
+  let progress = true;
+  while (progress) {
+    progress = false;
+    scan:
+    for (let i = 0; i < stacks.length; i++) {
+      const s = stacks[i]!;
+      if (isCompleteGroup(s)) continue;
+      for (let j = 0; j < stacks.length; j++) {
+        const t = stacks[j]!;
+        if (j === i || !isCompleteGroup(t)) continue;
+        for (const side of ["right", "left"] as const) {
+          const result = side === "right" ? [...t, ...s] : [...s, ...t];
+          if (!isCompleteGroup(result)) continue;
+          moves.push({ type: "push", troubleBefore: s, targetBefore: t, result, side });
+          stacks[j] = result;
+          stacks.splice(i, 1);
+          progress = true;
+          break scan;
+        }
+      }
+    }
+  }
+  if (moves.length === 0 || !stacks.every(isCompleteGroup)) return null;
+  return {
+    cardsToPlay: [],
+    moves,
+    moveLines: moves.map(describe),
+  };
 }
 
 /** Try to make the whole board legal using only board→board moves — no new

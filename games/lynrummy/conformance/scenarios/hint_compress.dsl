@@ -75,6 +75,13 @@ scenario free_pull_onto_partial
   compressed:
     - play 8♠ from hand onto 6♠ 7♠
 
+scenario board_only_pair_push
+  desc: a pure board plan pushing a whole PAIR onto a run (the wholesale-merge pre-pass emits these) - multi-card loose group humanizes like the single-card push
+  input:
+    - push [8♠' 9♦'] onto HELPER [3♦ 4♣ 5♥ 6♠ 7♥] → [3♦ 4♣ 5♥ 6♠ 7♥ 8♠' 9♦']
+  compressed:
+    - push 8♠ 9♦ onto 3♦ 4♣ 5♥ 6♠ 7♥
+
 # ---- humanizes: standalone extract_absorb board→board moves (1 → 1) ----
 # The verb encodes the source-remnant fate (which the player watches); the
 # motion is always "move this card from source onto target". Keep the

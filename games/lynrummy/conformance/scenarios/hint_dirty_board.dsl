@@ -54,6 +54,34 @@ scenario loner_ts_completed_with_hand_pair
   expect_steps:
     - place 8♠ and 9♥ with the T♠ on the board
 
+# --- wholesale-merge pre-pass: a human looks for whole stacks that simply
+#     join BEFORE anything that merits the word "solve". Real Stephen2
+#     game-5 state: the trouble pair [8♠' 9♦'] extends the rb run
+#     [3♦ 4♣ 5♥ 6♠ 7♥] wholesale. The BFS solve instead returned the
+#     trouble-greedy peel (7♥ off the run onto the pair) — same plan
+#     length, but it shaves a healthy run and keeps the stack count,
+#     where the merge grows a 7-card run and drops a stack. With the
+#     loner flag set, the pre-pass finds the merge and never solves.
+
+scenario loner_pair_merges_wholesale_onto_run
+  desc: trouble pair [8♠' 9♦'] (built from a placed loner, loner=true) joins the rb run wholesale. The pre-pass hint is the single push; the solver's peel never surfaces.
+  op: hint_for_hand
+  loner: true
+  hand: A♦' 6♣ J♣
+  board:
+    - K♠ A♠ 2♠
+    - J♦ Q♦ K♦ A♦
+    - A♥ 2♥ 3♥ 4♥
+    - 7♠ 7♦ 7♣
+    - A♣ 2♣ 3♣
+    - 3♦ 4♣ 5♥ 6♠ 7♥
+    - 9♥ T♠' J♦' Q♣
+    - 9♠' T♦ J♠'
+    - 3♠ 4♥' 5♣ 6♥'
+    - 8♠' 9♦'
+  expect_steps:
+    - push 8♠ 9♦ onto 3♦ 4♣ 5♥ 6♠ 7♥
+
 # --- in-place fusion: the landing is mid-plan and a later board move
 #     consumes its RESULT. Real Stephen2 game-5 follow-on state: after the
 #     pair hint, the player moved the 8♠' to the board too — two loners

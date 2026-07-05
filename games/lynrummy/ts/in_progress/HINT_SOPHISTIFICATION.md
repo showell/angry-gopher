@@ -61,6 +61,34 @@ peel 2♣ from 2♣ 3♦ 4♣ 5♥ 6♠ onto 2♠
 peel 2♥ from 2♥ 3♥ 4♥ 5♥ onto 2♣ 2♠
 ```
 
+### 2026-07-05 later — the wholesale-merge pre-pass (before anything merits "solve")
+
+Same game-5 session, later position: trouble pair `[8♠' 9♦']` next to the rb
+run `[3♦ 4♣ 5♥ 6♠ 7♥]`. The depth-1 frontier contains two one-move wins —
+push the pair wholesale onto the run (human: 9 stacks, one 7-card run), or
+peel the 7♥ off the run onto the pair (10 stacks, the healthy run shaved).
+The trouble-greedy solve returned the peel purely because extract_absorb
+generators enumerate before push and plan length is the only ranking; the
+trouble frame is symmetric about *who donates to whom*, humans are not (the
+broken thing moves onto the good structure, never the reverse unless forced).
+
+Fix (Steve's design): treat the human play as OUT OF SCOPE of the solve.
+When the loner flag is set, `wholesaleMergePlay` (hand_play.ts) runs FIRST:
+a greedy fixpoint loop merging each incomplete stack wholesale onto a
+complete group (either end). If that alone leaves the board fully clean,
+the merge list IS the hint; anything short discards entirely and falls
+through to `boardOnlyPlay` → solve (all-or-nothing, never half-applied).
+The merges are genuine push Moves rendered via `describe()` — one authority
+for the line format, no new DSL verb, nothing new across the TS↔Elm seam
+(the hint reply stays a list of DSL strings). compressHint's existing push
+rule already humanizes the multi-card loose group:
+`push 8♠ 9♦ onto 3♦ 4♣ 5♥ 6♠ 7♥`.
+
+Pinned: `hint_dirty_board.dsl` scenario `loner_pair_merges_wholesale_onto_run`
+(the real position; fails against the solver's peel without the pre-pass) +
+`hint_compress.dsl` `board_only_pair_push` (the seam pin for the pair-push
+line). Agent path unaffected (`play.ts` passes `loner=false`).
+
 ### DEFERRED (by Steve, deliberately) — the loner that NEEDS a hand card
 
 If board-only *fails* (the loner genuinely can't complete without a hand
