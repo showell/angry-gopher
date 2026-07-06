@@ -1,8 +1,11 @@
 module Lib.Status exposing
     ( StatusKind(..)
     , StatusMessage
+    , TextSegment(..)
     , actionLogFetchFailedStatus
     , actionRejectedStatus
+    , cardDisplay
+    , cardSegments
     , geometryFeedback
     , handNothingStatus
     , isCleanBoard
@@ -22,7 +25,7 @@ just renders a `StatusMessage`.
 
 import Lib.CardStack as CardStack exposing (CardStack)
 import Lib.Physics.BoardGeometry as BoardGeometry exposing (BoardGeometryStatus(..))
-import Lib.Rules.Card
+import Lib.Rules.Card as Card
 import Lib.Rules.StackType as StackType
 import Html exposing (Html, div)
 import Html.Attributes exposing (style)
@@ -59,7 +62,96 @@ viewStatusBar status =
         , style "border-bottom" "1px solid #eee"
         , style "white-space" "pre-wrap"
         ]
-        [ Html.text status.text ]
+        (List.map viewSegment (cardSegments status.text))
+
+
+{-| A run of status text, split so card tokens can be colored
+in their suit's color while everything else keeps the kind's
+color.
+-}
+type TextSegment
+    = Plain String
+    | CardText Card.Card
+
+
+{-| Split status text into plain runs and card tokens: a rank
+char (A23456789TJQK) immediately followed by one of the four
+suit glyphs. The glyphs never appear in any other context, so
+the general parse is safe; a glyph whose preceding char isn't
+a rank stays plain text. The origin deck is unknowable from
+text and irrelevant to display — every token gets DeckOne.
+-}
+cardSegments : String -> List TextSegment
+cardSegments text =
+    let
+        flush : List Char -> List TextSegment -> List TextSegment
+        flush buf segs =
+            case buf of
+                [] ->
+                    segs
+
+                _ ->
+                    Plain (String.fromList (List.reverse buf)) :: segs
+
+        step : Char -> ( List Char, List TextSegment ) -> ( List Char, List TextSegment )
+        step c ( buf, segs ) =
+            if isSuitGlyph c then
+                case buf of
+                    rank :: rest ->
+                        case Card.cardFromLabel (String.fromList [ rank, c ]) Card.DeckOne of
+                            Just card ->
+                                ( [], CardText card :: flush rest segs )
+
+                            Nothing ->
+                                ( c :: buf, segs )
+
+                    [] ->
+                        ( [ c ], segs )
+
+            else
+                ( c :: buf, segs )
+
+        ( leftover, reversedSegs ) =
+            String.foldl step ( [], [] ) text
+    in
+    List.reverse (flush leftover reversedSegs)
+
+
+isSuitGlyph : Char -> Bool
+isSuitGlyph c =
+    c == '♥' || c == '♦' || c == '♠' || c == '♣'
+
+
+{-| Player-facing card token: tens render as "10", as on the
+actual card faces (the "T" spelling is for parsing and
+monospace alignment, neither of which applies here).
+-}
+cardDisplay : Card.Card -> String
+cardDisplay card =
+    Card.valueDisplayStr card.value ++ Card.suitEmojiStr card.suit
+
+
+viewSegment : TextSegment -> Html msg
+viewSegment seg =
+    case seg of
+        Plain s ->
+            Html.text s
+
+        CardText card ->
+            Html.span
+                [ style "color" (cardColorStr card) ]
+                [ Html.text (cardDisplay card) ]
+
+
+{-| Same red/black the card faces use (`Lib.StackView`). -}
+cardColorStr : Card.Card -> String
+cardColorStr card =
+    case Card.cardColor card of
+        Card.Red ->
+            "red"
+
+        Card.Black ->
+            "black"
 
 
 {-| Surface a board-geometry tidiness change as a status
@@ -124,7 +216,7 @@ isCleanBoard board =
     List.all (stackCards >> StackType.getStackType >> isCompleteType) board
 
 
-stackCards : CardStack -> List Lib.Rules.Card.Card
+stackCards : CardStack -> List Card.Card
 stackCards stack =
     List.map .card stack.boardCards
 
