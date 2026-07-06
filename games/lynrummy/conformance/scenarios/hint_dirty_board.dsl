@@ -157,3 +157,40 @@ scenario loner_2s_finished_with_board_cards
   expect_steps:
     - peel 2♣ from 2♣ 3♦ 4♣ 5♥ 6♠ onto 2♠
     - peel 2♥ from 2♥ 3♥ 4♥ 5♥ onto 2♣ 2♠
+
+# --- shift humanization: a board-only plan whose second move is a shift.
+#     Real Stephen2 game-5 state: T♥' just placed as a loner (loner=true).
+#     The solve peels 9♥ onto it, then shifts 5♠ into 6♦' 7♠' 8♥ so the
+#     8♥ can pop off and complete [8♥ 9♥ T♥']. Before the shift verb was
+#     humanized, the all-or-nothing guardrail returned the ENTIRE hint in
+#     engine-speak — including the peel line we already knew how to render.
+
+scenario loner_th_peel_then_shift_frees_the_eight
+  desc: board-only two-step plan for the T♥' loner - peel 9♥ onto it, then the compound shift line (backfill 5♠, freeing the 8♥). Both lines human.
+  op: hint_for_hand
+  loner: true
+  hand: Q♥ K♣ J♥
+  board:
+    - 7♠ 7♦ 7♣
+    - 8♣' 9♦ T♣
+    - A♥ A♦' A♣
+    - T♥ J♣ Q♦
+    - K♥' K♦ K♠
+    - 4♥ 5♥ 6♥
+    - 9♥ T♠' J♦ Q♠
+    - A♣' 2♣ 3♣ 4♣
+    - Q♣ K♥ A♠' 2♦' 3♣' 4♦ 5♠
+    - J♣' J♦' J♠'
+    - Q♣' K♦' A♠ 2♥
+    - A♥' 2♠' 3♦ 4♠' 5♦' 6♠'
+    - 9♥' 9♣ 9♠
+    - 3♦' 4♣' 5♥' 6♣ 7♥ 8♠' 9♦' T♠
+    - 8♦ 9♠' T♦
+    - 6♥' 6♠ 6♣'
+    - 6♦' 7♠' 8♥
+    - A♦ 2♠ 3♥ 4♠ 5♦
+    - 2♥' 3♠ 4♥' 5♣
+    - T♥'
+  expect_steps:
+    - peel 9♥ from 9♥ T♠ J♦ Q♠ onto T♥
+    - shift 5♠ into 6♦ 7♠ 8♥, freeing the 8♥ onto 9♥ T♥

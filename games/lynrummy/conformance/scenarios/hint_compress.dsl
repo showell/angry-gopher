@@ -212,14 +212,30 @@ scenario pair_landing_pad_for_board_loner
   compressed:
     - place 8♠ and 9♥ with the T♠ on the board
 
-# ---- bails: return the plan raw rather than half-transform it ----
+# ---- shift: backfill one end of a run so the other end can pop ----
+#
+# Physically two drags, but one thought; rendered as a single compound
+# line: "shift <p> into <run>, freeing the <stolen> onto <target>". The
+# run as the player sees it isn't in the raw line — it's rebuilt from
+# the shifted remnant minus p, plus the stolen card on the popped end.
 
-scenario passthrough_unhandled_shift
-  desc: shift isn't handled yet — a plan touching it is returned entirely raw, never half-humanized
+scenario shift_pop_front
+  desc: 3♠ backfills the end of K♠ A♠ 2♠ so the K♠ can pop off the front onto J♣ Q♦ — p enters the end, stolen leaves the front
   input:
     - shift 3♠ to pop K♠ [4♥ 5♣' 6♥' -> A♠ 2♠ + 3♠]; absorb onto [J♣' Q♦] → [J♣' Q♦ K♠]
   compressed:
-    - shift 3♠ to pop K♠ [4♥ 5♣' 6♥' -> A♠ 2♠ + 3♠]; absorb onto [J♣' Q♦] → [J♣' Q♦ K♠]
+    - shift 3♠ into K♠ A♠ 2♠, freeing the K♠ onto J♣ Q♦
+
+scenario shift_pop_end_after_peel
+  desc: real Stephen2 game-5 board-only plan (T♥' loner) - peel 9♥ onto the loner, then shift 5♠ into 6♦ 7♠ 8♥ to free the 8♥ that completes it. The shift blocked the WHOLE hint from humanizing before this pin.
+  input:
+    - peel 9♥ from HELPER [9♥ T♠' J♦ Q♠], absorb onto [T♥'] → [9♥ T♥']
+    - shift 5♠ to pop 8♥ [Q♣ K♥ A♠' 2♦' 3♣' 4♦ -> 5♠ + 6♦' 7♠']; absorb onto [9♥ T♥'] → [8♥ 9♥ T♥'] [→COMPLETE]
+  compressed:
+    - peel 9♥ from 9♥ T♠ J♦ Q♠ onto T♥
+    - shift 5♠ into 6♦ 7♠ 8♥, freeing the 8♥ onto 9♥ T♥
+
+# ---- bails: return the plan raw rather than half-transform it ----
 
 scenario passthrough_placed_card_never_consumed
   desc: the placed 8♣ is never landed by any move (only a board 4♠ push) — can't reorder safely, so leave it raw

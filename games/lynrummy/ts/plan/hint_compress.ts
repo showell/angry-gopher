@@ -34,11 +34,14 @@
 //     are board cleanup ("push|pull|splice X ...").
 //   - extract_absorb (peel/pluck/yank/steal/split_out/set_peel): always
 //     board→board — relocate a card from a source helper to a target.
-//   - shift / decompose: not yet handled; a plan containing one is left raw.
+//   - shift: board→board — backfill one end of a run so the other end can
+//     pop off and land on the target. Two drags, one thought; rendered as
+//     one compound line.
+//   - decompose: not yet handled; a plan containing one is left raw.
 //
 // Scope: a single hand card consumed by exactly one move. Pairs that split
-// (decompose) and shift come later. Any plan we don't fully understand is
-// returned UNCHANGED — never half-transformed.
+// (decompose) come later. Any plan we don't fully understand is returned
+// UNCHANGED — never half-transformed.
 
 import { parseCardList } from "../dsl/parse.ts";
 import { formatCardList } from "../dsl/emit.ts";
@@ -63,6 +66,15 @@ const VERB_LABEL: Readonly<Record<string, string>> = {
   set_peel: "peel",
   split_out: "split out",
 };
+
+// shift: "shift <p> to pop <stolen> [<newDonor> -> <shifted>]; absorb onto
+// [target] → [merged]" — <p> backfills one end of a run so <stolen> can pop
+// off the other end and land on <target>. <shifted> is "<p> + <rest>" or
+// "<rest> + <p>", which side telling which end <p> entered (and so which
+// end <stolen> left). The run as the player currently SEES it isn't in the
+// line — it's rebuilt from <rest> plus <stolen> on the popped end.
+const SHIFT_RE =
+  /^shift (.+?) to pop (.+?) \[(.+?) -> (.+?)\]; absorb onto \[(.+?)\] → \[(.+?)\](?: \[→COMPLETE\])?$/;
 
 /** A push/free_pull/splice move: consumes one loose card onto/into a target.
  *  `looseGroup`/`targetGroup` are the capture indices; `handVerb` phrases it
@@ -162,6 +174,32 @@ function parseMove(line: string): ParsedMove | null {
       boardLine: `${verb} ${deckBlind(card)} from ${deckBlind(source)} onto ${deckBlind(target)}`,
       absorbTarget: target,
       buildResult: result,
+    };
+  }
+  const sh = line.match(SHIFT_RE);
+  if (sh !== null) {
+    const p = canon(sh[1]!);
+    const stolen = canon(sh[2]!);
+    const target = canon(sh[5]!);
+    const halves = sh[4]!.split(" + ");
+    if (p === null || stolen === null || target === null || halves.length !== 2) return null;
+    // Rebuild the source run: <p>'s side of <shifted> says which end the
+    // stolen card popped from — the opposite end from where <p> entered.
+    const source =
+      canon(halves[0]!) === p ? canon(`${halves[1]!} ${sh[2]!}`)
+      : canon(halves[1]!) === p ? canon(`${sh[2]!} ${halves[0]!}`)
+      : null;
+    if (source === null) return null;
+    return {
+      consumesCard: null,
+      consumeTarget: null,
+      consumeVerb: null,
+      handLine: null,
+      // A compound gesture (backfill drag + the freed card's drag) — it
+      // never lands a hand card and never joins a seed-build chain.
+      boardLine: `shift ${deckBlind(p)} into ${deckBlind(source)}, freeing the ${deckBlind(stolen)} onto ${deckBlind(target)}`,
+      absorbTarget: null,
+      buildResult: null,
     };
   }
   return null;

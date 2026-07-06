@@ -1969,14 +1969,30 @@ scenario pair_landing_pad_for_board_loner
   compressed:
     - place 8♠ and 9♥ with the T♠ on the board
 
-# ---- bails: return the plan raw rather than half-transform it ----
+# ---- shift: backfill one end of a run so the other end can pop ----
+#
+# Physically two drags, but one thought; rendered as a single compound
+# line: "shift <p> into <run>, freeing the <stolen> onto <target>". The
+# run as the player sees it isn't in the raw line — it's rebuilt from
+# the shifted remnant minus p, plus the stolen card on the popped end.
 
-scenario passthrough_unhandled_shift
-  desc: shift isn't handled yet — a plan touching it is returned entirely raw, never half-humanized
+scenario shift_pop_front
+  desc: 3♠ backfills the end of K♠ A♠ 2♠ so the K♠ can pop off the front onto J♣ Q♦ — p enters the end, stolen leaves the front
   input:
     - shift 3♠ to pop K♠ [4♥ 5♣' 6♥' -> A♠ 2♠ + 3♠]; absorb onto [J♣' Q♦] → [J♣' Q♦ K♠]
   compressed:
-    - shift 3♠ to pop K♠ [4♥ 5♣' 6♥' -> A♠ 2♠ + 3♠]; absorb onto [J♣' Q♦] → [J♣' Q♦ K♠]
+    - shift 3♠ into K♠ A♠ 2♠, freeing the K♠ onto J♣ Q♦
+
+scenario shift_pop_end_after_peel
+  desc: real Stephen2 game-5 board-only plan (T♥' loner) - peel 9♥ onto the loner, then shift 5♠ into 6♦ 7♠ 8♥ to free the 8♥ that completes it. The shift blocked the WHOLE hint from humanizing before this pin.
+  input:
+    - peel 9♥ from HELPER [9♥ T♠' J♦ Q♠], absorb onto [T♥'] → [9♥ T♥']
+    - shift 5♠ to pop 8♥ [Q♣ K♥ A♠' 2♦' 3♣' 4♦ -> 5♠ + 6♦' 7♠']; absorb onto [9♥ T♥'] → [8♥ 9♥ T♥'] [→COMPLETE]
+  compressed:
+    - peel 9♥ from 9♥ T♠ J♦ Q♠ onto T♥
+    - shift 5♠ into 6♦ 7♠ 8♥, freeing the 8♥ onto 9♥ T♥
+
+# ---- bails: return the plan raw rather than half-transform it ----
 
 scenario passthrough_placed_card_never_consumed
   desc: the placed 8♣ is never landed by any move (only a board 4♠ push) — can't reorder safely, so leave it raw
@@ -2148,6 +2164,43 @@ scenario loner_2s_finished_with_board_cards
   expect_steps:
     - peel 2♣ from 2♣ 3♦ 4♣ 5♥ 6♠ onto 2♠
     - peel 2♥ from 2♥ 3♥ 4♥ 5♥ onto 2♣ 2♠
+
+# --- shift humanization: a board-only plan whose second move is a shift.
+#     Real Stephen2 game-5 state: T♥' just placed as a loner (loner=true).
+#     The solve peels 9♥ onto it, then shifts 5♠ into 6♦' 7♠' 8♥ so the
+#     8♥ can pop off and complete [8♥ 9♥ T♥']. Before the shift verb was
+#     humanized, the all-or-nothing guardrail returned the ENTIRE hint in
+#     engine-speak — including the peel line we already knew how to render.
+
+scenario loner_th_peel_then_shift_frees_the_eight
+  desc: board-only two-step plan for the T♥' loner - peel 9♥ onto it, then the compound shift line (backfill 5♠, freeing the 8♥). Both lines human.
+  op: hint_for_hand
+  loner: true
+  hand: Q♥ K♣ J♥
+  board:
+    - 7♠ 7♦ 7♣
+    - 8♣' 9♦ T♣
+    - A♥ A♦' A♣
+    - T♥ J♣ Q♦
+    - K♥' K♦ K♠
+    - 4♥ 5♥ 6♥
+    - 9♥ T♠' J♦ Q♠
+    - A♣' 2♣ 3♣ 4♣
+    - Q♣ K♥ A♠' 2♦' 3♣' 4♦ 5♠
+    - J♣' J♦' J♠'
+    - Q♣' K♦' A♠ 2♥
+    - A♥' 2♠' 3♦ 4♠' 5♦' 6♠'
+    - 9♥' 9♣ 9♠
+    - 3♦' 4♣' 5♥' 6♣ 7♥ 8♠' 9♦' T♠
+    - 8♦ 9♠' T♦
+    - 6♥' 6♠ 6♣'
+    - 6♦' 7♠' 8♥
+    - A♦ 2♠ 3♥ 4♠ 5♦
+    - 2♥' 3♠ 4♥' 5♣
+    - T♥'
+  expect_steps:
+    - peel 9♥ from 9♥ T♠ J♦ Q♠ onto T♥
+    - shift 5♠ into 6♦ 7♠ 8♥, freeing the 8♥ onto 9♥ T♥
 """
       )
     , ( "hint_game_seed42.dsl"
