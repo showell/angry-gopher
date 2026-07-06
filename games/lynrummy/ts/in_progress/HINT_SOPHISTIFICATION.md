@@ -1,13 +1,47 @@
 # HINT_SOPHISTIFICATION
 
-**Status:** ACTIVE (2026-07-05). Class (A) rendering is SHIPPED and live;
-the first slice of (B) — plan *ordering* — is done (the `compressHint`
-humanizer, 2026-07-04 block below). The 2026-07-05 work below adds a
-second, deeper slice of (B): **scoping the hint to the player's focus via
-a last-move "loner" flag**, so a just-placed hand card gets finished with
-board cards instead of bundling in an unrelated play. Read the 2026-07-05
-block, then the 2026-07-04 block; both supersede the ORIGINAL 2026-05-05
-roadmap kept at the bottom as the map for remaining work.
+**Status: CLOSED (2026-07-06).** The project is done and Lyn Rummy is
+parked. Everything below is a historical record; the code is the truth
+(`ts/plan/hint_compress.ts`, `ts/plan/hand_play.ts`, and the two DSL
+corpora `hint_compress.dsl` / `hint_dirty_board.dsl`).
+
+## What shipped, in one breath
+
+The Hint button produces one human line. Under it: a **ladder** —
+wholesale trouble+trouble merges, then trouble→helper merges, then the
+board-only solve, then hand-card projection — each rung all-or-nothing,
+gated by the sticky Elm-side **loner flag**; and a **humanizer**
+(`compressHint`) that fuses hand landings into one gesture, collapses
+seed-builds to "place X on board to build G" via a verb-blind
+chain-follow, renders shift as a compound line, and returns any plan it
+doesn't fully understand entirely raw. The status bar shows the FIRST
+line only (full plan in the dev console), colors card tokens by suit,
+and renders tens as 10. Validated empirically: replaying every mid-turn
+state of every real game (sessions 1–6, ~280 hints) produces zero
+engine-speak lines. `ts/tools/replay_session.ts` re-runs that sweep.
+
+## Closed WITHOUT pursuing (deliberately, not lost)
+
+- **Class (B) as a scoring function** — superseded. Ranking emerged as
+  the ladder's *ordering* plus the ratified asymmetry ("broken moves onto
+  good structure; broken fixes broken first"), not a score.
+- **Class (C) targeted KICK** — never needed; no live case demanded it.
+- **`decompose` humanization / pairs-that-split** — plans touching them
+  stay raw; the sweep found none in real play.
+- **Pair+pair wholesale merges** — no verb, no real case; invisible to
+  the pre-pass, falls to the solver.
+- **Fixture generator (inverse projection)** — superseded by live-play
+  mining + the replay/sweep tool; real games mint better scenarios.
+- **Chain-follow's consumed-group hop** — implemented but unpinned: the
+  BFS prefers plans that consume the placed card directly, so the branch
+  is likely unreachable outside obscure states. Kept (it can only improve
+  narration); hints are best-effort by design — depth is capped and
+  "easiest play" is not a guarantee.
+
+---
+
+**Historical record below** (read top-down: 2026-07-05, then 2026-07-04,
+then the original 2026-05-05 roadmap they supersede).
 
 ---
 
