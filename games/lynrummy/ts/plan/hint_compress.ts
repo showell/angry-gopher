@@ -23,13 +23,19 @@
 // DSL and a malformed line just fails to match.
 //
 // A second shape: the hand card is a SEED, not a lander. It isn't consumed
-// by any move — instead board cards get absorbed ONTO it to build a new
-// group (e.g. drop 2♥, peel A♣ onto it, peel K♦ onto that → K♦ A♣ 2♥). A
-// human just needs "place 2♥ on board to build K♦ A♣ 2♥", so the whole
-// build chain collapses to one line. Side repairs interleaved with the
-// chain (an absorb spawns a remnant, a later push re-homes it) don't
-// block the collapse: placing the seed sets the loner flag, so the next
-// Hint press walks the player through the board-only cleanup.
+// by any move — instead board cards land ONTO it to build a new group
+// (e.g. drop 2♥, peel A♣ onto it, peel K♦ onto that → K♦ A♣ 2♥). A human
+// just needs "place 2♥ on board to build K♦ A♣ 2♥", so the chain collapses
+// to one line. The chain-follow is verb-blind: anything that lands a board
+// card onto the chain's current group (absorb, shift, pull, push) advances
+// it, and if the whole grown group is later consumed onto something else,
+// the chain follows it there — the line names where the placed card
+// EVENTUALLY lands. Side repairs interleaved with the chain (an absorb
+// spawns a remnant, a later push re-homes it) don't block the collapse:
+// placing the seed sets the loner flag, so the next Hint press walks the
+// player through the board-only cleanup. If the chain ever DONATES (a
+// card extracted from it, a splice into it) we can no longer name the
+// placed card's home honestly, and the whole plan stays raw.
 //
 // Verb families:
 //   - push / free_pull / splice: consume one loose card. From HAND they are
@@ -80,12 +86,15 @@ const SHIFT_RE =
   /^shift (.+?) to pop (.+?) \[(.+?) -> (.+?)\]; absorb onto \[(.+?)\] → \[(.+?)\](?: \[→COMPLETE\])?$/;
 
 /** A push/free_pull/splice move: consumes one loose card onto/into a target.
- *  `looseGroup`/`targetGroup` are the capture indices; `handVerb` phrases it
- *  as a hand landing, `boardVerb` as a board cleanup; `prep` is shared. */
+ *  `looseGroup`/`targetGroup`/`resultGroup` are the capture indices
+ *  (resultGroup null when the result isn't a single group); `handVerb`
+ *  phrases it as a hand landing, `boardVerb` as a board cleanup; `prep` is
+ *  shared. */
 interface ConsumeRule {
   readonly re: RegExp;
   readonly looseGroup: number;
   readonly targetGroup: number;
+  readonly resultGroup: number | null;
   readonly handVerb: "play" | "splice";
   readonly boardVerb: "push" | "pull" | "splice";
   readonly prep: "onto" | "into";
@@ -93,31 +102,38 @@ interface ConsumeRule {
 
 const CONSUME_RULES: readonly ConsumeRule[] = [
   // push: trouble card onto a complete helper (extend a run/set).
-  { re: /^push \[(.+?)\] onto HELPER \[(.+?)\] → \[.+?\]$/, looseGroup: 1, targetGroup: 2, handVerb: "play", boardVerb: "push", prep: "onto" },
+  { re: /^push \[(.+?)\] onto HELPER \[(.+?)\] → \[(.+?)\]$/, looseGroup: 1, targetGroup: 2, resultGroup: 3, handVerb: "play", boardVerb: "push", prep: "onto" },
   // free_pull: loose card onto a partial — same gesture as push; the
   // helper-vs-partial distinction is invisible to the player.
-  { re: /^pull (.+?) onto \[(.+?)\] → \[.+?\](?: \[→COMPLETE\])?$/, looseGroup: 1, targetGroup: 2, handVerb: "play", boardVerb: "pull", prep: "onto" },
+  { re: /^pull (.+?) onto \[(.+?)\] → \[(.+?)\](?: \[→COMPLETE\])?$/, looseGroup: 1, targetGroup: 2, resultGroup: 3, handVerb: "play", boardVerb: "pull", prep: "onto" },
   // splice: loose card into a run, which splits around it (unspoken — the
-  // player watches it happen). "splice" is a verb players recognize.
-  { re: /^splice \[(.+?)\] into HELPER \[(.+?)\] → \[.+?\] \+ \[.+?\]$/, looseGroup: 1, targetGroup: 2, handVerb: "splice", boardVerb: "splice", prep: "into" },
+  // player watches it happen). "splice" is a verb players recognize. The
+  // result is TWO groups, so a chain reaching a splice can't be followed
+  // further: resultGroup is null and the chain-follow bails.
+  { re: /^splice \[(.+?)\] into HELPER \[(.+?)\] → \[.+?\] \+ \[.+?\]$/, looseGroup: 1, targetGroup: 2, resultGroup: null, handVerb: "splice", boardVerb: "splice", prep: "into" },
 ];
 
 /** One parsed move line. `boardLine` is always the board→board rendering.
- *  For a consuming verb, `consumesCard` is the loose card (deck-aware),
- *  `consumeTarget`/`consumeVerb` are the group it lands on (deck-aware
- *  canon) and the board verb, and `handLine` is the "... from hand ..."
- *  rendering; extract_absorb leaves all four null (it never lands a hand
- *  card). `absorbTarget`/`buildResult` are the group an extract_absorb
- *  pulls ONTO and the group it produces (both deck-aware canon), used to
- *  detect a seed-build chain; null otherwise. */
+ *  For a consuming verb, `consumesCard` is the loose group (deck-aware
+ *  canon), `consumeTarget`/`consumeVerb` are the group it lands on and the
+ *  board verb, `consumeResult` the group produced (null when it isn't a
+ *  single group — splice), and `handLine` is the "... from hand ..."
+ *  rendering; extract_absorb and shift leave those null (they never land a
+ *  hand card). For the chain-follow: `chainTarget`/`chainResult` are the
+ *  group this move lands a BOARD card onto and the group produced (null
+ *  result = can't follow further); `touches` are the groups the move takes
+ *  a card FROM — a chain reaching one of those can't be narrated. All
+ *  card-list strings are deck-aware canon. */
 interface ParsedMove {
   readonly consumesCard: string | null;
   readonly consumeTarget: string | null;
   readonly consumeVerb: "push" | "pull" | "splice" | null;
+  readonly consumeResult: string | null;
   readonly handLine: string | null;
   readonly boardLine: string;
-  readonly absorbTarget: string | null;
-  readonly buildResult: string | null;
+  readonly chainTarget: string | null;
+  readonly chainResult: string | null;
+  readonly touches: readonly string[];
 }
 
 /** Drop deck-2 markers from a canonical card-list string. The only
@@ -146,17 +162,21 @@ function parseMove(line: string): ParsedMove | null {
     if (m === null) continue;
     const card = canon(m[r.looseGroup]!);
     const target = canon(m[r.targetGroup]!);
+    const result = r.resultGroup === null ? null : canon(m[r.resultGroup]!);
     if (card === null || target === null) return null;
+    if (r.resultGroup !== null && result === null) return null;
     const c = deckBlind(card);
     const t = deckBlind(target);
     return {
       consumesCard: card,
       consumeTarget: target,
       consumeVerb: r.boardVerb,
+      consumeResult: result,
       handLine: `${r.handVerb} ${c} from hand ${r.prep} ${t}`,
       boardLine: `${r.boardVerb} ${c} ${r.prep} ${t}`,
-      absorbTarget: null,
-      buildResult: null,
+      chainTarget: target,
+      chainResult: result,
+      touches: [],
     };
   }
   const ea = line.match(EXTRACT_ABSORB_RE);
@@ -173,19 +193,24 @@ function parseMove(line: string): ParsedMove | null {
       consumesCard: null,
       consumeTarget: null,
       consumeVerb: null,
+      consumeResult: null,
       handLine: null,
       boardLine: `${verb} ${deckBlind(card)} from ${deckBlind(source)} onto ${deckBlind(target)}`,
-      absorbTarget: target,
-      buildResult: result,
+      chainTarget: target,
+      chainResult: result,
+      touches: [source],
     };
   }
   const sh = line.match(SHIFT_RE);
   if (sh !== null) {
     const p = canon(sh[1]!);
     const stolen = canon(sh[2]!);
+    const newDonor = canon(sh[3]!);
     const target = canon(sh[5]!);
+    const merged = canon(sh[6]!);
     const halves = sh[4]!.split(" + ");
-    if (p === null || stolen === null || target === null || halves.length !== 2) return null;
+    if (p === null || stolen === null || newDonor === null || target === null
+      || merged === null || halves.length !== 2) return null;
     // Rebuild the source run: <p>'s side of <shifted> says which end the
     // stolen card popped from — the opposite end from where <p> entered.
     const source =
@@ -193,16 +218,23 @@ function parseMove(line: string): ParsedMove | null {
       : canon(halves[1]!) === p ? canon(`${sh[2]!} ${halves[0]!}`)
       : null;
     if (source === null) return null;
+    // Which end of the donor run <p> came from isn't in the line; a chain
+    // matching either reconstruction counts as touched.
+    const donorPre = [canon(`${sh[1]!} ${sh[3]!}`), canon(`${sh[3]!} ${sh[1]!}`)]
+      .filter((s): s is string => s !== null);
     return {
       consumesCard: null,
       consumeTarget: null,
       consumeVerb: null,
+      consumeResult: null,
       handLine: null,
       // A compound gesture (backfill drag + the freed card's drag) — it
-      // never lands a hand card and never joins a seed-build chain.
+      // never lands a HAND card, but the freed card landing on the chain
+      // advances it like any other landing.
       boardLine: `shift ${deckBlind(p)} into ${deckBlind(source)}, freeing the ${deckBlind(stolen)} onto ${deckBlind(target)}`,
-      absorbTarget: null,
-      buildResult: null,
+      chainTarget: target,
+      chainResult: merged,
+      touches: [source, ...donorPre],
     };
   }
   return null;
@@ -260,10 +292,10 @@ export function compressHint(lines: readonly string[]): readonly string[] {
       }
     }
     // The placed card is a SEED — not consumed by anything, it's the anchor a
-    // chain of board cards gets absorbed onto. Collapse the whole chain to one
+    // chain of board cards gets landed onto. Collapse the whole chain to one
     // line: "place X on board to build <final group>". ("place", not "play":
     // you play a card ONTO existing structure, you place one to START structure.)
-    const built = seedBuild(placed, moves);
+    const built = followPlacedCard(placed, moves);
     if (built !== null) {
       return [`place ${deckBlind(placed)} on board to build ${deckBlind(built)}`];
     }
@@ -271,18 +303,26 @@ export function compressHint(lines: readonly string[]): readonly string[] {
   return lines; // more than one landing, or a shape we don't fully model → raw
 }
 
-/** If the placed card is grown by an extract_absorb chain — each absorb
- *  targets the group the chain has built so far, starting at the seed —
- *  return the final built group; null if nothing ever absorbs onto the
- *  seed. Moves that DON'T touch the chain are side repairs (e.g. pushing
- *  a spawn remnant back onto a helper) and are simply skipped: the player
- *  only needs "place X to build G", and placing the seed sets the loner
- *  flag, so the NEXT hint walks them through the board-only cleanup. */
-function seedBuild(placed: string, moves: readonly ParsedMove[]): string | null {
+/** Follow the placed card's group through the plan and return the group it
+ *  eventually ends up in, or null if we can't say. Verb-blind: any move
+ *  that lands a board card onto the chain's current group advances it, and
+ *  if the grown group is itself consumed onto something else the chain
+ *  follows it there. Moves that never touch the chain are side repairs and
+ *  are simply skipped: the player only needs "place X to build G", and
+ *  placing the seed sets the loner flag, so the NEXT hint walks them
+ *  through the board-only cleanup. Bails (→ whole plan raw) when the chain
+ *  DONATES a card (extract source / shift run or donor), reaches a splice
+ *  (two result groups — no single home to name), or is never touched. */
+function followPlacedCard(placed: string, moves: readonly ParsedMove[]): string | null {
   let current = placed;
   for (const m of moves) {
-    if (m.absorbTarget !== null && m.absorbTarget === current) {
-      current = m.buildResult!;
+    if (m.touches.includes(current)) return null;
+    if (m.chainTarget === current) {
+      if (m.chainResult === null) return null;
+      current = m.chainResult;
+    } else if (m.consumesCard === current) {
+      if (m.consumeResult === null) return null;
+      current = m.consumeResult;
     }
   }
   return current === placed ? null : current;

@@ -230,3 +230,27 @@ scenario last_card_seeds_tens_set_despite_spawn_repair
     - Q♣ K♥ A♠' 2♦' 3♣' 4♦ 5♠ 6♦' 7♠' 8♥'
   expect_steps:
     - place T♦ on board to build T♣ T♦ T♠
+
+# --- seed-build chain grown by a shift. Real Stephen2 game-6 state: the
+#     projected 6♦ seeds a diamond run; the first grower is a SHIFT (4♠
+#     backfills the spade run so [5♦' 6♠] can donate the 7♦'), then a peel
+#     completes [6♦ 7♦' 8♦]. The chain-follow treats every landing verb
+#     alike, so the shift advances the chain just as an absorb does.
+
+scenario seed_grown_by_shift_then_peel
+  desc: hand has 6♦ among others (loner=false). The three-move plan collapses to the one seed line naming the run it builds.
+  op: hint_for_hand
+  loner: false
+  hand: Q♥ 9♠ J♠ 2♦' 6♦ T♣' J♣
+  board:
+    - 2♥ 3♥ 4♥
+    - K♥' K♦ K♠
+    - 5♦' 6♠ 7♦'
+    - A♣ A♦ A♥ A♠'
+    - A♠ 2♠ 3♠ 4♠
+    - 8♦ 9♦' T♦ J♦ Q♦
+    - 7♠ 7♦ 7♣
+    - 2♣ 3♦ 4♣
+    - 5♥ 6♥' 7♥
+  expect_steps:
+    - place 6♦ on board to build 6♦ 7♦ 8♦

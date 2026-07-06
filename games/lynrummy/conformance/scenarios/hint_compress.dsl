@@ -206,6 +206,15 @@ scenario seed_build_tolerates_side_repair
   compressed:
     - place T♦ on board to build T♣ T♦ T♠
 
+scenario seed_build_chain_grown_by_shift
+  desc: real Stephen2 game-6 plan - 6♦ seeds a run, a SHIFT lands the 7♦' onto it (4♠ backfills the spade run so 5♦' 6♠ can give it up), then a peel completes. Any verb that lands onto the chain advances it.
+  input:
+    - place [6♦] from hand
+    - shift 4♠ to pop 7♦' [A♠ 2♠ 3♠ -> 4♠ + 5♦' 6♠]; absorb onto [6♦] → [6♦ 7♦']
+    - peel 8♦ from HELPER [8♦ 9♦' T♦ J♦ Q♦], absorb onto [6♦ 7♦'] → [6♦ 7♦' 8♦] [→COMPLETE]
+  compressed:
+    - place 6♦ on board to build 6♦ 7♦ 8♦
+
 # ---- collapses: a hand PAIR placed as the landing pad for a board loner ----
 #
 # The placed pair is never consumed by a move — instead the ONE move pulls a
