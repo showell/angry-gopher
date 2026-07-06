@@ -196,6 +196,16 @@ scenario seed_new_group_from_hand
   compressed:
     - place 2♥ on board to build K♦ A♣ 2♥
 
+scenario seed_build_tolerates_side_repair
+  desc: real Stephen2 game-5 last-card plan - T♦' seeds the tens set, but the steal spawns [8♣' 9♦] and a push repairs it mid-plan. The side move doesn't block the collapse; placing the seed sets the loner flag, and the NEXT hint walks the player through the board cleanup.
+  input:
+    - place [T♦'] from hand
+    - steal T♣ from HELPER [8♣' 9♦ T♣], absorb onto [T♦'] → [T♣ T♦'] ; spawn [8♣' 9♦]
+    - push [8♣' 9♦] onto HELPER [T♠' J♦ Q♠] → [8♣' 9♦ T♠' J♦ Q♠]
+    - peel T♠ from HELPER [3♦' 4♣' 5♥' 6♣ 7♥ 8♠' 9♦' T♠], absorb onto [T♣ T♦'] → [T♣ T♦' T♠] [→COMPLETE]
+  compressed:
+    - place T♦ on board to build T♣ T♦ T♠
+
 # ---- collapses: a hand PAIR placed as the landing pad for a board loner ----
 #
 # The placed pair is never consumed by a move — instead the ONE move pulls a

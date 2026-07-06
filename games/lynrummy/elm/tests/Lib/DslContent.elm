@@ -1953,6 +1953,16 @@ scenario seed_new_group_from_hand
   compressed:
     - place 2♥ on board to build K♦ A♣ 2♥
 
+scenario seed_build_tolerates_side_repair
+  desc: real Stephen2 game-5 last-card plan - T♦' seeds the tens set, but the steal spawns [8♣' 9♦] and a push repairs it mid-plan. The side move doesn't block the collapse; placing the seed sets the loner flag, and the NEXT hint walks the player through the board cleanup.
+  input:
+    - place [T♦'] from hand
+    - steal T♣ from HELPER [8♣' 9♦ T♣], absorb onto [T♦'] → [T♣ T♦'] ; spawn [8♣' 9♦]
+    - push [8♣' 9♦] onto HELPER [T♠' J♦ Q♠] → [8♣' 9♦ T♠' J♦ Q♠]
+    - peel T♠ from HELPER [3♦' 4♣' 5♥' 6♣ 7♥ 8♠' 9♦' T♠], absorb onto [T♣ T♦'] → [T♣ T♦' T♠] [→COMPLETE]
+  compressed:
+    - place T♦ on board to build T♣ T♦ T♠
+
 # ---- collapses: a hand PAIR placed as the landing pad for a board loner ----
 #
 # The placed pair is never consumed by a move — instead the ONE move pulls a
@@ -2201,6 +2211,42 @@ scenario loner_th_peel_then_shift_frees_the_eight
   expect_steps:
     - peel 9♥ from 9♥ T♠ J♦ Q♠ onto T♥
     - shift 5♠ into 6♦ 7♠ 8♥, freeing the 8♥ onto 9♥ T♥
+
+# --- seed-build collapse with a side repair. Real Stephen2 game-5 state:
+#     one card left in hand (T♦'). The solve seeds the tens set with it,
+#     steals the T♣ (spawning [8♣' 9♦]), repairs the spawn onto the T♠'
+#     run, and peels the T♠ to complete [T♣ T♦' T♠]. The side repair used
+#     to block the seed collapse — the player saw four raw engine lines.
+#     One line now; placing the seed sets the loner flag, so subsequent
+#     Hint presses walk the board-only cleanup.
+
+scenario last_card_seeds_tens_set_despite_spawn_repair
+  desc: hand is just T♦' (loner=false - last action merged a hand card onto a run). Four-move plan collapses to the one seed line.
+  op: hint_for_hand
+  loner: false
+  hand: T♦'
+  board:
+    - 7♠ 7♦ 7♣
+    - 8♣' 9♦ T♣
+    - A♥ A♦' A♣
+    - T♥ J♣ Q♦
+    - K♥' K♦ K♠
+    - 4♥ 5♥ 6♥
+    - A♣' 2♣ 3♣ 4♣
+    - J♣' J♦' J♠'
+    - Q♣' K♦' A♠ 2♥
+    - A♥' 2♠' 3♦ 4♠' 5♦' 6♠'
+    - 9♥' 9♣ 9♠
+    - 3♦' 4♣' 5♥' 6♣ 7♥ 8♠' 9♦' T♠
+    - 8♦ 9♠' T♦
+    - 6♥' 6♠ 6♣'
+    - A♦ 2♠ 3♥ 4♠ 5♦
+    - 2♥' 3♠ 4♥' 5♣
+    - T♠' J♦ Q♠
+    - 8♥ 9♥ T♥'
+    - Q♣ K♥ A♠' 2♦' 3♣' 4♦ 5♠ 6♦' 7♠' 8♥'
+  expect_steps:
+    - place T♦ on board to build T♣ T♦ T♠
 """
       )
     , ( "hint_game_seed42.dsl"

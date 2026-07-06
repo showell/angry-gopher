@@ -26,7 +26,10 @@
 // by any move — instead board cards get absorbed ONTO it to build a new
 // group (e.g. drop 2♥, peel A♣ onto it, peel K♦ onto that → K♦ A♣ 2♥). A
 // human just needs "place 2♥ on board to build K♦ A♣ 2♥", so the whole
-// build chain collapses to one line.
+// build chain collapses to one line. Side repairs interleaved with the
+// chain (an absorb spawns a remnant, a later push re-homes it) don't
+// block the collapse: placing the seed sets the loner flag, so the next
+// Hint press walks the player through the board-only cleanup.
 //
 // Verb families:
 //   - push / free_pull / splice: consume one loose card. From HAND they are
@@ -268,18 +271,21 @@ export function compressHint(lines: readonly string[]): readonly string[] {
   return lines; // more than one landing, or a shape we don't fully model → raw
 }
 
-/** If the placed card is grown by a pure extract_absorb chain — every move
- *  absorbs onto the group the previous move produced, starting at the seed —
- *  return the final built group; otherwise null (anything but a clean chain
- *  bails, so we never half-describe a plan). */
+/** If the placed card is grown by an extract_absorb chain — each absorb
+ *  targets the group the chain has built so far, starting at the seed —
+ *  return the final built group; null if nothing ever absorbs onto the
+ *  seed. Moves that DON'T touch the chain are side repairs (e.g. pushing
+ *  a spawn remnant back onto a helper) and are simply skipped: the player
+ *  only needs "place X to build G", and placing the seed sets the loner
+ *  flag, so the NEXT hint walks them through the board-only cleanup. */
 function seedBuild(placed: string, moves: readonly ParsedMove[]): string | null {
-  if (moves.length === 0) return null;
   let current = placed;
   for (const m of moves) {
-    if (m.absorbTarget === null || m.absorbTarget !== current) return null;
-    current = m.buildResult!;
+    if (m.absorbTarget !== null && m.absorbTarget === current) {
+      current = m.buildResult!;
+    }
   }
-  return current;
+  return current === placed ? null : current;
 }
 
 /** Humanize a plan with no hand placement — each line as a board move —

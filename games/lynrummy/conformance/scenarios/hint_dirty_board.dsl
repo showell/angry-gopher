@@ -194,3 +194,39 @@ scenario loner_th_peel_then_shift_frees_the_eight
   expect_steps:
     - peel 9♥ from 9♥ T♠ J♦ Q♠ onto T♥
     - shift 5♠ into 6♦ 7♠ 8♥, freeing the 8♥ onto 9♥ T♥
+
+# --- seed-build collapse with a side repair. Real Stephen2 game-5 state:
+#     one card left in hand (T♦'). The solve seeds the tens set with it,
+#     steals the T♣ (spawning [8♣' 9♦]), repairs the spawn onto the T♠'
+#     run, and peels the T♠ to complete [T♣ T♦' T♠]. The side repair used
+#     to block the seed collapse — the player saw four raw engine lines.
+#     One line now; placing the seed sets the loner flag, so subsequent
+#     Hint presses walk the board-only cleanup.
+
+scenario last_card_seeds_tens_set_despite_spawn_repair
+  desc: hand is just T♦' (loner=false - last action merged a hand card onto a run). Four-move plan collapses to the one seed line.
+  op: hint_for_hand
+  loner: false
+  hand: T♦'
+  board:
+    - 7♠ 7♦ 7♣
+    - 8♣' 9♦ T♣
+    - A♥ A♦' A♣
+    - T♥ J♣ Q♦
+    - K♥' K♦ K♠
+    - 4♥ 5♥ 6♥
+    - A♣' 2♣ 3♣ 4♣
+    - J♣' J♦' J♠'
+    - Q♣' K♦' A♠ 2♥
+    - A♥' 2♠' 3♦ 4♠' 5♦' 6♠'
+    - 9♥' 9♣ 9♠
+    - 3♦' 4♣' 5♥' 6♣ 7♥ 8♠' 9♦' T♠
+    - 8♦ 9♠' T♦
+    - 6♥' 6♠ 6♣'
+    - A♦ 2♠ 3♥ 4♠ 5♦
+    - 2♥' 3♠ 4♥' 5♣
+    - T♠' J♦ Q♠
+    - 8♥ 9♥ T♥'
+    - Q♣ K♥ A♠' 2♦' 3♣' 4♦ 5♠ 6♦' 7♠' 8♥'
+  expect_steps:
+    - place T♦ on board to build T♣ T♦ T♠
