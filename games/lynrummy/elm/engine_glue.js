@@ -62,14 +62,14 @@
             request_id: requestId,
             op: op,
             ok: true,
-            lines: gameHint(req.hand, req.board, req.loner === true),
+            lines: logHint(op, gameHint(req.hand, req.board, req.loner === true)),
           });
         } else if (op === 'puzzle_hint') {
           port.send({
             request_id: requestId,
             op: op,
             ok: true,
-            lines: puzzleHint(req.board),
+            lines: logHint(op, puzzleHint(req.board)),
           });
         } else if (op === 'agent_step') {
           port.send({
@@ -95,6 +95,14 @@
     if (op === 'agent_step') return app.ports.agentStepResponse;
     if (op === 'puzzle_hint') return app.ports.puzzleHintResponse;
     return app.ports.gameHintResponse; // game_hint (+ unknown-op errors)
+  }
+
+  // The status bar shows only the hint's FIRST line; the full plan goes
+  // to the developer console here, for both apps, so it stays inspectable.
+  function logHint(op, lines) {
+    console.log('[' + op + ']\n'
+      + (lines.length ? lines.join('\n') : '(no hint)'));
+    return lines;
   }
 
   function gameHint(hand, board, loner) {

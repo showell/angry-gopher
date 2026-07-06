@@ -1016,8 +1016,9 @@ hintButton model =
 
 
 {-| Render the engine's plan as a one-move hint: the FIRST step is
-the move to make right now. Engine DSL is shown verbatim — turning
-it into plain language is the larger, separate job on the game side.
+the move to make right now (engine_glue.js logs the full plan to the
+developer console). Engine DSL is shown verbatim — turning it into
+plain language is the larger, separate job on the game side.
 An empty plan means the board is already solved or no play was found.
 -}
 hintStatus : List String -> Status.StatusMessage

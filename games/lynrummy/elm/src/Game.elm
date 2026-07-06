@@ -726,11 +726,14 @@ updateInner msg model =
             , Cmd.none
             )
 
-        HintLinesReceived lines ->
+        HintLinesReceived (first :: _) ->
+            -- The status bar has room for one line: show the plan's FIRST
+            -- step (the move to make right now). engine_glue.js logs the
+            -- full plan to the developer console.
             ( { model
                 | pendingEngineRequest = Nothing
                 , hintedCards = []
-                , status = { text = String.join "\n" lines, kind = Inform }
+                , status = { text = first, kind = Inform }
               }
             , Cmd.none
             )
