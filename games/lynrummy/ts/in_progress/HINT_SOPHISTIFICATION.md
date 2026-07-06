@@ -198,8 +198,8 @@ human drops a hand card only when the board is ready for it.**
 ### Honesty guardrail
 
 Any plan `compressHint` does not *fully* understand is returned **entirely
-raw** — never half-transformed. That covers: an unhandled verb (`shift`,
-`decompose`), or a `place [X]` whose card no move lands. All-or-nothing per
+raw** — never half-transformed. That covers: an unhandled verb
+(`decompose`), or a `place [X]` whose card no move lands. All-or-nothing per
 hint.
 
 ### Where it lives / how it's tested / wired
@@ -231,8 +231,11 @@ hint.
 
 ### What's LEFT (maps onto the original A/B/C below)
 
-- **`shift` and `decompose` verbs** — not yet humanized; plans touching them
-  bail to raw. `shift` describe-shape example is pinned in the bail scenario.
+- ~~`shift`~~ **DONE 2026-07-06** (`33cb9912`): humanized as one compound
+  line — `shift 5♠ into 6♦ 7♠ 8♥, freeing the 8♥ onto 9♥ T♥` (phrasing
+  Steve's; real game-5 board-only plan whose shift had been blocking the
+  whole hint from humanizing). `decompose` — still not humanized; plans
+  touching it bail to raw.
 - **Pairs that split** — a `place [X Y]` consumed by a `decompose` then two
   landings. Current scope is a SINGLE hand card consumed by one move (a pair
   pushed *as a unit* already works).
