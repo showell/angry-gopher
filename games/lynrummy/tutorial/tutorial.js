@@ -304,20 +304,6 @@ function stackWidth(stack) {
 
 const STACK_H = CARD_H + 6; // card box height incl. padding + border
 
-// ── Figures ─────────────────────────────────────────────────────────
-// A figure is one kitchen table with the example stacks laid on it at
-// the DSL's (left, top) offsets. The slightly-off alignment between
-// stacks is deliberate and hand-authored in the HTML — melds laid
-// down by humans, not a grid. No interaction.
-
-function hydrateFigure(root) {
-  const stacks = parseBoard(readDsl(root));
-  assertOnTable(stacks);
-  const table = tableEl();
-  for (const s of stacks) table.appendChild(stackEl(s));
-  root.appendChild(table);
-}
-
 // readDsl pulls the board text out of the .lr-dsl <pre> and removes
 // it — hydration consumes the fallback.
 function readDsl(root) {
@@ -327,9 +313,10 @@ function readDsl(root) {
   return text;
 }
 
-// ── Widgets ─────────────────────────────────────────────────────────
-// A widget is a live kitchen table with the game's full board-card
-// gesture set (ported from Lib/BoardGesture.elm):
+// ── Tables ──────────────────────────────────────────────────────────
+// Figures and widgets hydrate into the SAME live kitchen table, with
+// the game's full board-card gesture set (ported from
+// Lib/BoardGesture.elm) everywhere:
 //
 //   press, move past the threshold  → drag the whole stack; wings
 //                                     show legal landings, release on
@@ -340,18 +327,30 @@ function readDsl(root) {
 //   hold 400ms (without moving)     → isolate the pressed card and
 //                                     keep dragging it, no re-grab
 //
-// Undo and Reset walk the state back. Solved = every stack is a
-// legal meld. All gesture state lives inside hydrateWidget's closure
-// and the pointer listeners hang off this widget's own table element
-// (which also holds the pointer capture — it survives the mid-gesture
-// re-render that isolate needs), so any number of widgets coexist on
-// one page.
+// A widget additionally gets the chrome: status line + Undo/Reset,
+// with solved = every stack a legal meld. Figures get no chrome and
+// never advertise their liveness — but a reader who idly drags an
+// example apart discovers the game works right there. That's
+// deliberate.
+//
+// All gesture state lives inside hydrateTable's closure and the
+// pointer listeners hang off each table's own element (which also
+// holds the pointer capture — it survives the mid-gesture re-render
+// that isolate needs), so any number of tables coexist on one page.
 
 const PROMPT = "Drag each loose card onto the stack where it belongs.";
 const SOLVED = "✔ Solved! Every stack is a legal meld.";
 const ISOLATED = "Isolated — drag to move.";
 
+function hydrateFigure(root) {
+  hydrateTable(root, false);
+}
+
 function hydrateWidget(root) {
+  hydrateTable(root, true);
+}
+
+function hydrateTable(root, chrome) {
   const initial = parseBoard(readDsl(root));
   assertOnTable(initial);
 
@@ -360,28 +359,35 @@ function hydrateWidget(root) {
 
   const board = tableEl();
 
-  const status = document.createElement("div");
-  Object.assign(status.style, { marginTop: "8px", fontSize: "15px", minHeight: "22px" });
+  let status = null;
+  let undoBtn = null;
+  let resetBtn = null;
+  if (chrome) {
+    status = document.createElement("div");
+    Object.assign(status.style, { marginTop: "8px", fontSize: "15px", minHeight: "22px" });
 
-  const undoBtn = widgetButton("Undo");
-  const resetBtn = widgetButton("Reset");
-  const buttons = document.createElement("div");
-  Object.assign(buttons.style, { marginTop: "6px", display: "flex", gap: "8px" });
-  buttons.append(undoBtn, resetBtn);
+    undoBtn = widgetButton("Undo");
+    resetBtn = widgetButton("Reset");
+    const buttons = document.createElement("div");
+    Object.assign(buttons.style, { marginTop: "6px", display: "flex", gap: "8px" });
+    buttons.append(undoBtn, resetBtn);
 
-  root.append(board, status, buttons);
+    root.append(board, status, buttons);
 
-  undoBtn.addEventListener("click", () => {
-    if (history.length === 0) return;
-    stacks = history.pop();
-    render();
-  });
+    undoBtn.addEventListener("click", () => {
+      if (history.length === 0) return;
+      stacks = history.pop();
+      render();
+    });
 
-  resetBtn.addEventListener("click", () => {
-    stacks = cloneStacks(initial);
-    history.length = 0;
-    render();
-  });
+    resetBtn.addEventListener("click", () => {
+      stacks = cloneStacks(initial);
+      history.length = 0;
+      render();
+    });
+  } else {
+    root.appendChild(board);
+  }
 
   let stackEls = [];
 
@@ -395,20 +401,22 @@ function hydrateWidget(root) {
       board.appendChild(el);
       return el;
     });
-    const solved = isCleanBoard(stacks);
-    status.textContent = solved ? SOLVED : statusOverride || PROMPT;
-    status.style.color = solved ? "#1b5e20" : "#333";
-    status.style.fontWeight = solved ? "600" : "normal";
-    undoBtn.disabled = history.length === 0;
-    resetBtn.disabled = history.length === 0;
+    if (chrome) {
+      const solved = isCleanBoard(stacks);
+      status.textContent = solved ? SOLVED : statusOverride || PROMPT;
+      status.style.color = solved ? "#1b5e20" : "#333";
+      status.style.fontWeight = solved ? "600" : "normal";
+      undoBtn.disabled = history.length === 0;
+      resetBtn.disabled = history.length === 0;
+    }
   }
 
   // ── the gesture machine ──
-  // One gesture at a time per widget. Phase "press" is the quiet
+  // One gesture at a time per table. Phase "press" is the quiet
   // window after pointerdown: a 400ms hold isolates, escaping the
   // click threshold upgrades to phase "drag", releasing in place
-  // clicks (= splits). The pointer listeners live on this widget's
-  // table and stay registered; `gesture` gates them.
+  // clicks (= splits). The pointer listeners live on this table
+  // and stay registered; `gesture` gates them.
   let gesture = null;
 
   board.addEventListener("pointermove", onPointerMove);
