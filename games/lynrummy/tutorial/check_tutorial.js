@@ -31,6 +31,8 @@ const CASES = [
   ["Q♦ K♣ A♥ 2♠ 3♦", "rb_run"],
   ["A♠ K♠ Q♠", "bogus"], // descending is not a run
   ["A♠ A♠ A♦", "dup"],
+  ["K♠ K♣' K♦", "set"], // catalog deck-2 markers parse and are ignored
+  ["A♠ A♠' A♦", "dup"], // ...including for the dup rule, as in the game
   ["A♠ A♥", "incomplete"],
   ["A♠", "incomplete"],
   ["5♣ 6♣ 7♥", "bogus"], // mixed pattern
@@ -119,20 +121,27 @@ assert.ok(t.isCleanBoard(t.parseBoard("at (0,0): K♠ K♥ K♦\nat (0,60): 5♣
 // ── 2. tutorial.html boards ─────────────────────────────────────────
 
 const html = fs.readFileSync(path.join(__dirname, "tutorial.html"), "utf8");
-const blocks = [...html.matchAll(/<pre class="lr-dsl">([\s\S]*?)<\/pre>/g)].map((m) => m[1]);
-assert.ok(blocks.length > 0, "tutorial.html has no lr-dsl boards");
-
-const figureBlocks = [...html.matchAll(/<div class="lr-figure">\s*<pre class="lr-dsl">([\s\S]*?)<\/pre>/g)].map((m) => m[1]);
+// Each board is a figure/widget div (optionally carrying a
+// data-table="WxH" size override) wrapping its lr-dsl pre.
+const boards = [...html.matchAll(
+  /<div class="lr-(figure|widget)"(?: data-table="([^"]*)")?>[\s\S]*?<pre class="lr-dsl">([\s\S]*?)<\/pre>/g
+)].map((m) => ({ kind: m[1], dims: t.parseTableDims(m[2]), text: m[3] }));
+assert.ok(boards.length > 0, "tutorial.html has no lr-dsl boards");
+assert.strictEqual(
+  boards.length,
+  [...html.matchAll(/<pre class="lr-dsl">/g)].length,
+  "an lr-dsl board escaped the figure/widget extraction"
+);
 
 let stackCount = 0;
-for (const b of blocks) {
-  const stacks = t.parseBoard(b);
-  t.assertOnTable(stacks);
+let figureCount = 0;
+for (const b of boards) {
+  const stacks = t.parseBoard(b.text);
+  t.assertOnTable(stacks, b.dims);
   stackCount += stacks.length;
-}
-
-for (const b of figureBlocks) {
-  for (const s of t.parseBoard(b)) {
+  if (b.kind !== "figure") continue;
+  figureCount += 1;
+  for (const s of stacks) {
     const got = t.getStackType(s.cards);
     assert.ok(
       ["set", "pure_run", "rb_run"].includes(got),
@@ -143,6 +152,6 @@ for (const b of figureBlocks) {
 
 console.log(
   "tutorial gate: rules cases pass; " +
-    blocks.length + " boards (" + stackCount + " stacks) parse and fit the table; " +
-    figureBlocks.length + " figures hold only legal melds."
+    boards.length + " boards (" + stackCount + " stacks) parse and fit their tables; " +
+    figureCount + " figures hold only legal melds."
 );

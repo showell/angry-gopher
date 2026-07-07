@@ -17,6 +17,9 @@
   h1 { color: #1a237e; }
   h2 { color: #1a237e; margin-top: 40px; }
   h3 { color: #1a237e; margin-top: 28px; margin-bottom: 8px; }
+  /* Tables wider than the screen scroll sideways rather than
+     squeeze; on the default 320px square this is a no-op. */
+  .lr-figure, .lr-widget { overflow-x: auto; }
   .lr-figure { margin: 16px 0 28px 0; }
   /* Pre-hydration DSL text. Deliberately visible: if tutorial.js
      fails to load or parse, the raw board DSL shows on the page —
@@ -147,6 +150,50 @@ at (200,120): 7♣
 at (44,200): 9♥ T♠
 at (58,262): J♦</pre>
 </div>
+
+<h2>Here is where it gets fun</h2>
+
+<p>
+If you've played other rummy games, here is the twist that changes
+everything: melds on the board are never locked. The board is shared
+by all players, and on your turn you may rearrange it freely — split
+any stack, steal a card out of one meld to finish another, rebuild
+whole rows — as long as the board is clean again by the time your
+turn ends. Here's a board from the middle of a real game. (Lyn Rummy
+is played with two decks, so don't be surprised to spot the same
+card twice.)
+</p>
+
+<!-- Cards and positions verbatim from conformance/
+     curated_6line_puzzles.dsl puzzle 6line_peel_peel_push_push_
+     steal_yank_s134t3p0 (site puzzle 76), minus its 9♣ loner —
+     this figure shows a CLEAN mid-game board. Same copy-not-share
+     rationale as the Try-it widget above. -->
+<div class="lr-figure" data-table="680x540">
+  <pre class="lr-dsl">at (152,80): T♦ J♦ Q♦
+at (19,467): K♠ K♣' K♦
+at (48,200): 7♥ 7♦ 7♣
+at (157,467): K♣ A♣ 2♣
+at (320,268): 4♣ 5♥ 6♠
+at (187,152): A♠ 2♥' 3♠ 4♦ 5♣' 6♦ 7♠ 8♥' 9♠'
+at (260,343): T♥' J♥ Q♥ K♥
+at (443,347): 2♥ 3♥ 4♥
+at (19,92): A♥ A♦ A♣'
+at (52,392): 4♠' 5♦' 6♣ 7♦'
+at (345,418): 9♠ T♦' J♣ Q♦' K♠' A♦' 2♠ 3♦ 4♣'
+at (52,272): 8♠' 8♣' 8♥</pre>
+</div>
+
+<p>
+Every stack up there is a legal meld right now — but nothing is
+frozen. Look at the long red/black run that starts with the A♠.
+That ace isn't stuck: the run reads 2 through 9 perfectly well
+without it, and the three-ace set near the top-left corner is
+missing exactly one spade. The board above is live, so try the move
+yourself: click the A♠ to break it off the run, then drag it over
+to the aces. Plays like this — melds feeding each other — are the
+heart of every Lyn Rummy turn.
+</p>
 
 <footer>
 This tutorial is a work in progress.

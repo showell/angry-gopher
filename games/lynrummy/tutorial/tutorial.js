@@ -10,8 +10,10 @@
 
 // ── Card domain ─────────────────────────────────────────────────────
 // A card is { value, suit }: value 1..13 (A=1 … K=13), suit one of
-// "♠♥♦♣". No origin_deck — the tutorial never fields both copies of
-// a card, and the dup check only compares (value, suit) anyway.
+// "♠♥♦♣". No origin_deck — the parser accepts the catalogs' deck-2
+// marker (K♣') but drops it, because nothing here needs card identity
+// beyond (value, suit): the set dup rule compares exactly that, in
+// the game too.
 
 const RED_SUITS = "♥♦";
 
@@ -55,7 +57,7 @@ function parseBoard(text) {
 }
 
 function parseCard(token) {
-  const m = token.match(/^(10|[A2-9TJQK])([♠♥♦♣])$/);
+  const m = token.match(/^(10|[A2-9TJQK])([♠♥♦♣])'?$/);
   if (!m) throw new Error("tutorial board: bad card: " + token);
   return { value: VALUE_FROM_LABEL[m[1]], suit: m[2] };
 }
@@ -241,6 +243,10 @@ function cardEl(card) {
     backgroundColor: "white",
     border: "1px solid blue",
     userSelect: "none",
+    // On the cards, not the felt (the game's posture): a touch on a
+    // card is always a gesture, but a touch on the felt still scrolls
+    // — which is how a wide table stays reachable on a phone.
+    touchAction: "none",
   });
   for (const s of [VALUE_DISPLAY[card.value], card.suit]) {
     const line = document.createElement("div");
@@ -267,30 +273,39 @@ function stackEl(stack) {
   return el;
 }
 
-// Every kitchen table on the page — figure or widget — is the same
-// perfect square, compact enough for small screens (a 360px viewport
-// minus the page padding).
+// The default kitchen table is a perfect square, compact enough for
+// small screens (a 360px viewport minus the page padding). A board
+// that needs more room opts out with data-table="WxH" on its div and
+// scrolls horizontally on narrow screens instead.
 const TABLE_SIDE = 320;
 
-function tableEl() {
+// data-table="680x540" → { width: 680, height: 540 }; absent → the
+// default square. Anything else is an authoring bug.
+function parseTableDims(attr) {
+  if (attr === undefined) return { width: TABLE_SIDE, height: TABLE_SIDE };
+  const m = attr.match(/^(\d+)x(\d+)$/);
+  if (!m) throw new Error("tutorial board: bad data-table: " + attr);
+  return { width: Number(m[1]), height: Number(m[2]) };
+}
+
+function tableEl(dims) {
   const el = document.createElement("div");
   Object.assign(el.style, {
     position: "relative",
-    width: TABLE_SIDE + "px",
-    height: TABLE_SIDE + "px",
+    width: dims.width + "px",
+    height: dims.height + "px",
     backgroundColor: "khaki",
     border: "1px solid #b0a14e",
     borderRadius: "10px",
-    touchAction: "none",
   });
   return el;
 }
 
-// Authoring guard: a stack laid outside the square is a tutorial bug —
+// Authoring guard: a stack laid outside the table is a tutorial bug —
 // break the page loudly rather than render cards off the table.
-function assertOnTable(stacks) {
+function assertOnTable(stacks, dims) {
   for (const s of stacks) {
-    if (s.left < 0 || s.top < 0 || s.left + stackWidth(s) > TABLE_SIDE || s.top + STACK_H > TABLE_SIDE) {
+    if (s.left < 0 || s.top < 0 || s.left + stackWidth(s) > dims.width || s.top + STACK_H > dims.height) {
       throw new Error("tutorial board: stack off the table at (" + s.left + "," + s.top + ")");
     }
   }
@@ -351,13 +366,14 @@ function hydrateWidget(root) {
 }
 
 function hydrateTable(root, chrome) {
+  const dims = parseTableDims(root.dataset.table);
   const initial = parseBoard(readDsl(root));
-  assertOnTable(initial);
+  assertOnTable(initial, dims);
 
   let stacks = cloneStacks(initial);
   const history = [];
 
-  const board = tableEl();
+  const board = tableEl(dims);
 
   let status = null;
   let undoBtn = null;
@@ -590,7 +606,7 @@ function hydrateTable(root, chrome) {
   // side, position anchored by the target (a left merge extends
   // leftward by the source's card count — CardStack.leftMerge). The
   // one tutorial divergence: the merged loc is clamped onto the
-  // table, whose 320px square is far tighter than the game's board.
+  // table, which is far tighter than the game's board.
   function applyMerge(idx, wing) {
     const dragged = stacks[idx];
     const t = stacks[wing.target];
@@ -601,7 +617,7 @@ function hydrateTable(root, chrome) {
     } else {
       t.cards = t.cards.concat(dragged.cards);
     }
-    t.left = clamp(t.left, 0, TABLE_SIDE - stackWidth(t));
+    t.left = clamp(t.left, 0, dims.width - stackWidth(t));
     stacks.splice(idx, 1);
     render();
   }
@@ -610,8 +626,8 @@ function hydrateTable(root, chrome) {
   function applyMove(idx, dropLoc) {
     const dragged = stacks[idx];
     history.push(cloneStacks(stacks));
-    dragged.left = clamp(dropLoc.left, 0, TABLE_SIDE - stackWidth(dragged));
-    dragged.top = clamp(dropLoc.top, 0, TABLE_SIDE - STACK_H);
+    dragged.left = clamp(dropLoc.left, 0, dims.width - stackWidth(dragged));
+    dragged.top = clamp(dropLoc.top, 0, dims.height - STACK_H);
     render();
   }
 
@@ -650,6 +666,7 @@ if (typeof document !== "undefined") {
 if (typeof module !== "undefined") {
   module.exports = {
     parseBoard,
+    parseTableDims,
     getStackType,
     isCleanBoard,
     successor,
