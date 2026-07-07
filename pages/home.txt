@@ -43,6 +43,7 @@ cta: Match wits with the agent
 lang: TypeScript + Elm
 tech: a rules DSL sent over the wire — a TypeScript referee engine with an Elm UI
 code: https://github.com/showell/angry-gopher/tree/master/games/lynrummy
+tutorial: /tutorial
 essay: /blog/lyn-never-wrote-it-down
 Two-player rummy with a real referee. Build runs and sets against an agent that actually knows the rules, and complete your turn when the board looks right.
 
