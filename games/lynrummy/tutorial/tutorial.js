@@ -166,6 +166,59 @@ function hoveredWing(stacks, wings, floaterLoc, sourceWidth) {
 const WING_GREEN = "hsl(105, 72.70%, 87.10%)";
 const WING_MAUVE = "#E0B0FF";
 
+// ── Click-split and long-press isolate ──────────────────────────────
+// Ported from Lib/CardStack.elm (split / isolate geometry) and
+// Lib/BoardGesture.elm (click arbitration). A click splits the stack
+// at the pressed card; a 400ms hold isolates the pressed card and
+// hands it straight to the drag.
+
+const CLICK_THRESHOLD_SQ = 9; // GestureArbitration.clickThreshold (squared px)
+const LONG_PRESS_MS = 400; // LongPress.holdMs
+
+function distSquared(ax, ay, bx, by) {
+  return (ax - bx) * (ax - bx) + (ay - by) * (ay - by);
+}
+
+// "User clicked card at cardIndex" → the logical leftCount of the
+// split: the clicked card joins whichever chunk is smaller.
+function clickToLeftCount(cardIndex, stackSize) {
+  return cardIndex + 1 <= Math.floor(stackSize / 2) ? cardIndex + 1 : cardIndex;
+}
+
+// Split after the first leftCount cards. The pieces separate by 2px
+// each way and the smaller chunk pops up 4px — enough daylight to
+// read as two stacks. Caller guarantees 0 < leftCount < size (which
+// clickToLeftCount produces for any size ≥ 2).
+function splitStack(s, leftCount) {
+  const rightCount = s.cards.length - leftCount;
+  const leftUp = leftCount < rightCount ? -4 : 0;
+  const rightUp = leftCount < rightCount ? 0 : -4;
+  return [
+    { left: s.left - 2, top: s.top + leftUp, cards: s.cards.slice(0, leftCount) },
+    { left: s.left + leftCount * CARD_PITCH + 2, top: s.top + rightUp, cards: s.cards.slice(leftCount) },
+  ];
+}
+
+// Isolate the card at cardIndex: up to three pieces (before slides
+// 2px left, after 2px right, the singleton keeps its exact screen
+// position). Returns the singleton's index within pieces so the
+// caller can keep dragging it.
+function isolateStack(s, cardIndex) {
+  const before = s.cards.slice(0, cardIndex);
+  const after = s.cards.slice(cardIndex + 1);
+  const singleton = {
+    left: s.left + cardIndex * CARD_PITCH,
+    top: s.top,
+    cards: [s.cards[cardIndex]],
+  };
+  const pieces = [];
+  if (before.length) pieces.push({ left: s.left - 2, top: s.top, cards: before });
+  const singletonIndex = pieces.length;
+  pieces.push(singleton);
+  if (after.length) pieces.push({ left: singleton.left + CARD_PITCH + 2, top: s.top, cards: after });
+  return { pieces, singletonIndex };
+}
+
 // ── Rendering ───────────────────────────────────────────────────────
 // Inline styles mirroring Lib/StackView.elm: white card, 1px blue
 // border, value over suit glyph, red/black text.
@@ -275,13 +328,28 @@ function readDsl(root) {
 }
 
 // ── Widgets ─────────────────────────────────────────────────────────
-// A widget is a live kitchen table: grab a card to drag its whole
-// stack; drop it on another stack to merge (left half prepends, right
-// half appends); drop it on open felt to move it. Undo and Reset walk
-// the state back. Solved = every stack is a legal meld.
+// A widget is a live kitchen table with the game's full board-card
+// gesture set (ported from Lib/BoardGesture.elm):
+//
+//   press, move past the threshold  → drag the whole stack; wings
+//                                     show legal landings, release on
+//                                     a mauve wing to merge, on felt
+//                                     to move
+//   click (release without moving)  → split the stack at the clicked
+//                                     card
+//   hold 400ms (without moving)     → isolate the pressed card and
+//                                     keep dragging it, no re-grab
+//
+// Undo and Reset walk the state back. Solved = every stack is a
+// legal meld. All gesture state lives inside hydrateWidget's closure
+// and the pointer listeners hang off this widget's own table element
+// (which also holds the pointer capture — it survives the mid-gesture
+// re-render that isolate needs), so any number of widgets coexist on
+// one page.
 
 const PROMPT = "Drag each loose card onto the stack where it belongs.";
 const SOLVED = "✔ Solved! Every stack is a legal meld.";
+const ISOLATED = "Isolated — drag to move.";
 
 function hydrateWidget(root) {
   const initial = parseBoard(readDsl(root));
@@ -315,36 +383,65 @@ function hydrateWidget(root) {
     render();
   });
 
-  function render() {
+  let stackEls = [];
+
+  function render(statusOverride) {
     board.replaceChildren();
-    stacks.forEach((stack, idx) => {
+    stackEls = stacks.map((stack, idx) => {
       const el = stackEl(stack);
-      el.addEventListener("pointerdown", (e) => startDrag(e, idx, el));
+      Array.from(el.children).forEach((cardNode, cardIndex) => {
+        cardNode.addEventListener("pointerdown", (e) => onCardPointerDown(e, idx, cardIndex));
+      });
       board.appendChild(el);
+      return el;
     });
     const solved = isCleanBoard(stacks);
-    status.textContent = solved ? SOLVED : PROMPT;
+    status.textContent = solved ? SOLVED : statusOverride || PROMPT;
     status.style.color = solved ? "#1b5e20" : "#333";
     status.style.fontWeight = solved ? "600" : "normal";
     undoBtn.disabled = history.length === 0;
     resetBtn.disabled = history.length === 0;
   }
 
-  function startDrag(e, idx, el) {
-    e.preventDefault();
-    const stack = stacks[idx];
-    const startX = e.clientX;
-    const startY = e.clientY;
-    const origLeft = stack.left;
-    const origTop = stack.top;
-    const srcWidth = stackWidth(stack);
-    el.style.zIndex = "10";
-    el.setPointerCapture(e.pointerId);
+  // ── the gesture machine ──
+  // One gesture at a time per widget. Phase "press" is the quiet
+  // window after pointerdown: a 400ms hold isolates, escaping the
+  // click threshold upgrades to phase "drag", releasing in place
+  // clicks (= splits). The pointer listeners live on this widget's
+  // table and stay registered; `gesture` gates them.
+  let gesture = null;
 
-    // Wings are computed once at drag start and pinned (the board
-    // doesn't change mid-drag). Each wing renders green at its
-    // target's accepting edge, and flips mauve while the floater is
-    // in its landing area.
+  board.addEventListener("pointermove", onPointerMove);
+  board.addEventListener("pointerup", onPointerUp);
+  board.addEventListener("pointercancel", onPointerCancel);
+
+  function onCardPointerDown(e, idx, cardIndex) {
+    if (gesture) return;
+    e.preventDefault();
+    // Capture on the table, not the card: isolate re-renders the
+    // stacks mid-gesture, and capture on a removed element is
+    // silently released.
+    board.setPointerCapture(e.pointerId);
+    gesture = {
+      phase: "press",
+      idx,
+      cardIndex,
+      pointerId: e.pointerId,
+      startX: e.clientX,
+      startY: e.clientY,
+      timer: setTimeout(onLongPress, LONG_PRESS_MS),
+      drag: null,
+    };
+  }
+
+  // Upgrade the gesture to a whole-stack drag of stacks[idx]. Wings
+  // are computed once here and pinned (the board doesn't change
+  // mid-drag). Also the re-entry point after an isolate: the same
+  // press continues as a drag of the fresh singleton.
+  function beginDrag(idx) {
+    const stack = stacks[idx];
+    const el = stackEls[idx];
+    el.style.zIndex = "10";
     const wings = wingsForStack(stacks, idx);
     const wingEls = wings.map((w) => {
       const r = wingRect(stacks, w);
@@ -362,49 +459,123 @@ function hydrateWidget(root) {
       board.appendChild(wel);
       return wel;
     });
-    let hovered = null;
+    gesture.phase = "drag";
+    gesture.idx = idx;
+    gesture.drag = {
+      el,
+      wings,
+      wingEls,
+      hovered: null,
+      origLeft: stack.left,
+      origTop: stack.top,
+      srcWidth: stackWidth(stack),
+    };
+  }
 
-    function place(ev) {
-      return {
-        left: origLeft + (ev.clientX - startX),
-        top: origTop + (ev.clientY - startY),
-      };
-    }
-
-    function onMove(ev) {
-      const p = place(ev);
-      el.style.left = p.left + "px";
-      el.style.top = p.top + "px";
-      hovered = hoveredWing(stacks, wings, p, srcWidth);
-      wings.forEach((w, i) => {
-        wingEls[i].style.backgroundColor = w === hovered ? WING_MAUVE : WING_GREEN;
-      });
-    }
-
-    function onUp(ev) {
-      cleanup();
-      if (hovered) {
-        applyMerge(idx, hovered);
-      } else {
-        applyMove(idx, place(ev));
+  function onPointerMove(ev) {
+    if (!gesture || ev.pointerId !== gesture.pointerId) return;
+    if (gesture.phase === "press") {
+      if (distSquared(ev.clientX, ev.clientY, gesture.startX, gesture.startY) <= CLICK_THRESHOLD_SQ) {
+        return; // still inside the quiet window
       }
+      clearTimeout(gesture.timer);
+      beginDrag(gesture.idx);
     }
+    const d = gesture.drag;
+    const p = floaterLocOf(gesture, ev);
+    d.el.style.left = p.left + "px";
+    d.el.style.top = p.top + "px";
+    d.hovered = hoveredWing(stacks, d.wings, p, d.srcWidth);
+    d.wings.forEach((w, i) => {
+      d.wingEls[i].style.backgroundColor = w === d.hovered ? WING_MAUVE : WING_GREEN;
+    });
+  }
 
-    function onCancel() {
-      cleanup();
-      render(); // snap back
+  function onLongPress() {
+    if (!gesture || gesture.phase !== "press") return;
+    const { idx, cardIndex } = gesture;
+    const s = stacks[idx];
+    if (s.cards.length > 1) {
+      history.push(cloneStacks(stacks));
+      const { pieces, singletonIndex } = isolateStack(s, cardIndex);
+      stacks.splice(idx, 1, ...pieces);
+      render(ISOLATED);
+      beginDrag(idx + singletonIndex);
+    } else {
+      // A held singleton has nothing to isolate from; it just
+      // becomes a drag, same as escaping the threshold.
+      beginDrag(idx);
     }
+  }
 
-    function cleanup() {
-      for (const wel of wingEls) wel.remove();
-      el.removeEventListener("pointermove", onMove);
-      el.removeEventListener("pointerup", onUp);
-      el.removeEventListener("pointercancel", onCancel);
+  function onPointerUp(ev) {
+    if (!gesture || ev.pointerId !== gesture.pointerId) return;
+    const g = endGesture();
+    // Click check at RELEASE, not just escape: a drag that wanders
+    // and returns to its origin is a click too (BoardGesture.
+    // resolveBoardCardGesture).
+    if (distSquared(ev.clientX, ev.clientY, g.startX, g.startY) <= CLICK_THRESHOLD_SQ) {
+      applySplit(g.idx, g.cardIndex);
+      return;
     }
+    if (!g.drag) {
+      // A flick can reach pointerup past the threshold with no move
+      // event in between. Elm upgrades the press at release
+      // (upgradePressToBoardDrag) and resolves normally — including
+      // a merge if the flick landed in a landing area.
+      const stack = stacks[g.idx];
+      g.drag = {
+        origLeft: stack.left,
+        origTop: stack.top,
+        srcWidth: stackWidth(stack),
+        hovered: null,
+      };
+      g.drag.hovered = hoveredWing(stacks, wingsForStack(stacks, g.idx), floaterLocOf(g, ev), g.drag.srcWidth);
+    }
+    if (g.drag.hovered) {
+      applyMerge(g.idx, g.drag.hovered);
+    } else {
+      applyMove(g.idx, floaterLocOf(g, ev));
+    }
+  }
 
-    el.addEventListener("pointermove", onMove);
-    el.addEventListener("pointerup", onUp);
-    el.addEventListener("pointercancel", onCancel);
+  function floaterLocOf(g, ev) {
+    return {
+      left: g.drag.origLeft + (ev.clientX - g.startX),
+      top: g.drag.origTop + (ev.clientY - g.startY),
+    };
+  }
+
+  function onPointerCancel(ev) {
+    if (!gesture || ev.pointerId !== gesture.pointerId) return;
+    endGesture();
+    render(); // snap back
+  }
+
+  // Tear down the in-flight gesture (timer, wings, capture) and hand
+  // back its final state for the pointerup resolver.
+  function endGesture() {
+    const g = gesture;
+    gesture = null;
+    clearTimeout(g.timer);
+    if (g.drag) for (const wel of g.drag.wingEls) wel.remove();
+    try {
+      board.releasePointerCapture(g.pointerId);
+    } catch (err) {}
+    return g;
+  }
+
+  // applySplit: the click verb. Splitting a singleton is a no-op
+  // (nothing to split — not even a history entry).
+  function applySplit(idx, cardIndex) {
+    const s = stacks[idx];
+    if (s.cards.length <= 1) {
+      render();
+      return;
+    }
+    history.push(cloneStacks(stacks));
+    stacks.splice(idx, 1, ...splitStack(s, clickToLeftCount(cardIndex, s.cards.length)));
+    render();
   }
 
   // applyMerge fires the hovered wing: merged order per the wing's
@@ -478,5 +649,8 @@ if (typeof module !== "undefined") {
     wingsForStack,
     hoveredWing,
     eventualLanding,
+    clickToLeftCount,
+    splitStack,
+    isolateStack,
   };
 }

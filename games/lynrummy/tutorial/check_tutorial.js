@@ -73,6 +73,49 @@ assert.ok(t.isCleanBoard(t.parseBoard("at (0,0): K♠ K♥ K♦\nat (0,60): 5♣
   assert.deepStrictEqual(t.eventualLanding(board, leftWing, 31), { left: 69, top: 50 });
 }
 
+// ── click-split and isolate (port of CardStack.split / .isolate) ────
+
+{
+  // The clicked card joins the smaller chunk: first-half click ends
+  // the left piece, second-half click starts the right piece.
+  assert.strictEqual(t.clickToLeftCount(0, 2), 1);
+  assert.strictEqual(t.clickToLeftCount(1, 2), 1);
+  assert.strictEqual(t.clickToLeftCount(0, 5), 1);
+  assert.strictEqual(t.clickToLeftCount(2, 5), 2);
+  assert.strictEqual(t.clickToLeftCount(4, 5), 4);
+
+  // Split geometry: pieces separate ±2px; the smaller chunk pops up
+  // 4px (the left one here: 1 card vs 3).
+  const run = t.parseBoard("at (100,50): 5♥ 6♥ 7♥ 8♥")[0];
+  const [l, r] = t.splitStack(run, 1);
+  assert.deepStrictEqual(
+    { left: l.left, top: l.top, n: l.cards.length },
+    { left: 98, top: 46, n: 1 }
+  );
+  assert.deepStrictEqual(
+    { left: r.left, top: r.top, n: r.cards.length },
+    { left: 135, top: 50, n: 3 }
+  );
+
+  // Isolate a middle card: three pieces, singleton keeps its exact
+  // screen position (left + index*pitch), sides slide 2px out.
+  const iso = t.isolateStack(run, 2);
+  assert.strictEqual(iso.pieces.length, 3);
+  assert.strictEqual(iso.singletonIndex, 1);
+  const [before, single, after] = iso.pieces;
+  assert.deepStrictEqual(
+    { left: single.left, top: single.top, card: single.cards[0].value },
+    { left: 166, top: 50, card: 7 }
+  );
+  assert.strictEqual(before.left, 98);
+  assert.strictEqual(after.left, 201);
+
+  // Isolate an end card: the empty side piece is omitted.
+  const isoEnd = t.isolateStack(run, 0);
+  assert.strictEqual(isoEnd.pieces.length, 2);
+  assert.strictEqual(isoEnd.singletonIndex, 0);
+}
+
 // ── 2. tutorial.html boards ─────────────────────────────────────────
 
 const html = fs.readFileSync(path.join(__dirname, "tutorial.html"), "utf8");
