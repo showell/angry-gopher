@@ -122,16 +122,24 @@ assert.ok(t.isCleanBoard(t.parseBoard("at (0,0): K♠ K♥ K♦\nat (0,60): 5♣
 
 const html = fs.readFileSync(path.join(__dirname, "tutorial.html"), "utf8");
 // Each board is a figure/widget div (optionally carrying a
-// data-table="WxH" size override) wrapping its lr-dsl pre.
+// data-table="WxH" size override) wrapping its lr-dsl pre; a hand is
+// an lr-hand div wrapping bare card tokens.
 const boards = [...html.matchAll(
   /<div class="lr-(figure|widget)"(?: data-table="([^"]*)")?>[\s\S]*?<pre class="lr-dsl">([\s\S]*?)<\/pre>/g
 )].map((m) => ({ kind: m[1], dims: t.parseTableDims(m[2]), text: m[3] }));
+const hands = [...html.matchAll(
+  /<div class="lr-hand">\s*<pre class="lr-dsl">([\s\S]*?)<\/pre>/g
+)].map((m) => m[1]);
 assert.ok(boards.length > 0, "tutorial.html has no lr-dsl boards");
 assert.strictEqual(
-  boards.length,
+  boards.length + hands.length,
   [...html.matchAll(/<pre class="lr-dsl">/g)].length,
-  "an lr-dsl board escaped the figure/widget extraction"
+  "an lr-dsl block escaped the figure/widget/hand extraction"
 );
+
+for (const h of hands) {
+  assert.ok(t.parseHand(h).length > 0);
+}
 
 let stackCount = 0;
 let figureCount = 0;
@@ -153,5 +161,6 @@ for (const b of boards) {
 console.log(
   "tutorial gate: rules cases pass; " +
     boards.length + " boards (" + stackCount + " stacks) parse and fit their tables; " +
-    figureCount + " figures hold only legal melds."
+    figureCount + " figures hold only legal melds; " +
+    hands.length + " hands parse."
 );

@@ -328,6 +328,47 @@ function readDsl(root) {
   return text;
 }
 
+// ── Hands ───────────────────────────────────────────────────────────
+// An .lr-hand is authored as bare card tokens (no positions — a hand
+// is held, not laid out) and renders as a bridge-style fan: cards
+// overlap at a tight pitch, dip toward the ends, and tilt outward.
+// Display-only; this depicts the physical kitchen-table hand, not
+// the online game's suit-row hand area.
+
+const HAND_PITCH = 20; // px of each card left visible under the next
+const HAND_ARC = 0.55; // parabolic drop (px) per squared card-offset
+const HAND_TILT_DEG = 2; // per-card rotation step away from center
+
+function parseHand(text) {
+  const tokens = text.trim().split(/\s+/);
+  if (tokens.length === 0 || tokens[0] === "") throw new Error("tutorial hand: empty");
+  return tokens.map(parseCard);
+}
+
+function hydrateHand(root) {
+  const cards = parseHand(readDsl(root));
+  const mid = (cards.length - 1) / 2;
+  const endDrop = Math.round(HAND_ARC * mid * mid);
+  const fan = document.createElement("div");
+  Object.assign(fan.style, {
+    position: "relative",
+    width: 31 + (cards.length - 1) * HAND_PITCH + 8 + "px",
+    height: STACK_H + endDrop + 10 + "px",
+  });
+  cards.forEach((card, i) => {
+    const c = cardEl(card);
+    Object.assign(c.style, {
+      position: "absolute",
+      left: i * HAND_PITCH + "px",
+      top: Math.round(HAND_ARC * (i - mid) * (i - mid)) + "px",
+      transform: "rotate(" + (i - mid) * HAND_TILT_DEG + "deg)",
+      transformOrigin: "bottom center",
+    });
+    fan.appendChild(c);
+  });
+  root.appendChild(fan);
+}
+
 // ── Tables ──────────────────────────────────────────────────────────
 // Figures and widgets hydrate into the SAME live kitchen table, with
 // the game's full board-card gesture set (ported from
@@ -659,6 +700,7 @@ function clamp(x, lo, hi) {
 if (typeof document !== "undefined") {
   document.querySelectorAll(".lr-figure").forEach(hydrateFigure);
   document.querySelectorAll(".lr-widget").forEach(hydrateWidget);
+  document.querySelectorAll(".lr-hand").forEach(hydrateHand);
 }
 
 // Node-visible exports so the pure logic can be smoke-tested without
@@ -666,6 +708,7 @@ if (typeof document !== "undefined") {
 if (typeof module !== "undefined") {
   module.exports = {
     parseBoard,
+    parseHand,
     parseTableDims,
     getStackType,
     isCleanBoard,

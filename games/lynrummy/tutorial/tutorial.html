@@ -19,8 +19,10 @@
   h3 { color: #1a237e; margin-top: 28px; margin-bottom: 8px; }
   /* Tables wider than the screen scroll sideways rather than
      squeeze; on the default 320px square this is a no-op. */
-  .lr-figure, .lr-widget { overflow-x: auto; }
+  .lr-figure, .lr-widget, .lr-hand { overflow-x: auto; }
   .lr-figure { margin: 16px 0 28px 0; }
+  .lr-hand { margin: 12px 0 4px 0; }
+  ol li { margin-bottom: 10px; }
   /* Pre-hydration DSL text. Deliberately visible: if tutorial.js
      fails to load or parse, the raw board DSL shows on the page —
      a loud, obvious signal instead of a silent gap. */
@@ -45,7 +47,8 @@
 <h1>Learn to play Lyn Rummy</h1>
 
 <p>
-Lyn Rummy is a card game played with two decks. It works for one or
+Lyn Rummy is a card game played with two decks — a little luck,
+lots of fun, and an unexpected amount of skill. It works for one or
 more players: solitaire is a perfectly good way to play, most games
 are two or three players taking turns, and larger groups work fine
 too — just deal fewer cards per hand and bring a little patience.
@@ -68,6 +71,30 @@ You can play at a kitchen table with real cards, or right here at
 version, but it's the same game either way. This page teaches the
 rules from scratch.
 </p>
+
+<h2>Quick start</h2>
+
+<p>Got a table, two decks, and some players? Here's the whole game:</p>
+
+<ol>
+  <li>Deal 12 to 15 cards to each player seated at the table.</li>
+  <li>Arrange your hand something like this, grouping cards that
+  might meld together:
+    <div class="lr-hand">
+      <pre class="lr-dsl">7♠ 7♥ 7♦ 4♥ 5♠ 6♦ J♣ Q♣ K♣ K♠ K♦ 2♥ 3♥ 9♦ A♠</pre>
+    </div>
+  </li>
+  <li>First player: put any melds (see below) from your hand onto
+  the table. There is no discard pile! If you have no moves, draw
+  three cards instead.</li>
+  <li>Subsequent players: play the same way — but you can also use
+  the cards that are already on the board.</li>
+  <li>Play continues until somebody has played all the cards in
+  their hand. They are the victor.</li>
+  <li>You can keep playing after the victory. Draw five cards to
+  refresh your hand whenever you play out all your cards on a
+  turn.</li>
+</ol>
 
 <h2>The three legal melds</h2>
 
