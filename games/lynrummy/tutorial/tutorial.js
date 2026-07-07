@@ -338,6 +338,10 @@ function readDsl(root) {
 const HAND_PITCH = 20; // px of each card left visible under the next
 const HAND_ARC = 0.55; // parabolic drop (px) per squared card-offset
 const HAND_TILT_DEG = 2; // per-card rotation step away from center
+// The end cards' tilt swings their top corners sideways past the
+// untilted footprint; without this margin the container (overflow-x:
+// auto) clips them.
+const HAND_EDGE = 10;
 
 function parseHand(text) {
   const tokens = text.trim().split(/\s+/);
@@ -352,14 +356,14 @@ function hydrateHand(root) {
   const fan = document.createElement("div");
   Object.assign(fan.style, {
     position: "relative",
-    width: 31 + (cards.length - 1) * HAND_PITCH + 8 + "px",
+    width: 31 + (cards.length - 1) * HAND_PITCH + 2 * HAND_EDGE + "px",
     height: STACK_H + endDrop + 10 + "px",
   });
   cards.forEach((card, i) => {
     const c = cardEl(card);
     Object.assign(c.style, {
       position: "absolute",
-      left: i * HAND_PITCH + "px",
+      left: HAND_EDGE + i * HAND_PITCH + "px",
       top: Math.round(HAND_ARC * (i - mid) * (i - mid)) + "px",
       transform: "rotate(" + (i - mid) * HAND_TILT_DEG + "deg)",
       transformOrigin: "bottom center",
