@@ -27,6 +27,7 @@ const game = @import("game.zig");
 const chat = @import("chat.zig");
 const settings = @import("settings.zig");
 const learn = @import("learn.zig");
+const tutorial = @import("tutorial.zig");
 const admin = @import("admin.zig");
 const home = @import("home.zig");
 const blog = @import("blog.zig");
@@ -173,6 +174,10 @@ fn route(req: *std.http.Server.Request, io: std.Io, alloc: std.mem.Allocator, bu
         try blog.handle(req, io, alloc, bus, uid, sub);
     } else if (matchPrefix(path, "/learn")) |sub| {
         try learn.handle(req, sub);
+    } else if (matchPrefix(path, "/tutorial")) |sub| {
+        // Public + ungated: the Lyn Rummy beginner tutorial — its audience
+        // is people who haven't made an account yet.
+        try tutorial.handle(req, sub);
     } else if (matchPrefix(path, "/gallery")) |sub| {
         // Hidden-for-now: unlinked but public + ungated. Serves the stylized app
         // images (free-standing content read from gallery/) for the home page.

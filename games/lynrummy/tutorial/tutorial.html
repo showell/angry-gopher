@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Learn to play Lyn Rummy</title>
+<style>
+  body {
+    font-family: system-ui, sans-serif;
+    margin: 0 auto;
+    max-width: 840px;
+    padding: 24px 20px 80px 20px;
+    line-height: 1.55;
+    color: #222;
+    background: #fdfdf8;
+  }
+  h1 { color: #1a237e; }
+  h2 { color: #1a237e; margin-top: 40px; }
+  .lr-caption {
+    font-size: 14px;
+    color: #555;
+    margin-top: 6px;
+  }
+  .lr-figure { margin: 20px 0; }
+  /* Pre-hydration DSL text. Deliberately visible: if tutorial.js
+     fails to load or parse, the raw board DSL shows on the page —
+     a loud, obvious signal instead of a silent gap. */
+  .lr-dsl {
+    font-family: monospace;
+    font-size: 13px;
+    background: #eee;
+    padding: 8px;
+  }
+  footer {
+    margin-top: 60px;
+    font-size: 14px;
+    color: #555;
+    border-top: 1px solid #ddd;
+    padding-top: 12px;
+  }
+  a { color: #1a237e; }
+</style>
+</head>
+<body>
+
+<h1>Learn to play Lyn Rummy</h1>
+
+<p>
+Lyn Rummy is a two-player card game played with two decks. You can
+play it at a kitchen table with real cards, or right here at
+<a href="/game">/game</a> — it's the same game either way. This page
+teaches the rules from scratch.
+</p>
+
+<h2>The three legal melds</h2>
+
+<p>
+Players build <em>stacks</em> of cards on a shared board. A stack is
+legal when it has three or more cards and forms one of three shapes:
+</p>
+
+<div class="lr-figure">
+  <pre class="lr-dsl">at (10,10): A♠ A♥ A♦</pre>
+  <div class="lr-caption"><strong>Set</strong> — same value, all different
+  suits. Never longer than four cards (one per suit).</div>
+</div>
+
+<div class="lr-figure">
+  <pre class="lr-dsl">at (10,10): 5♣ 6♣ 7♣</pre>
+  <div class="lr-caption"><strong>Pure run</strong> — three or more
+  consecutive values in a single suit.</div>
+</div>
+
+<div class="lr-figure">
+  <pre class="lr-dsl">at (10,10): 9♥ 10♠ J♦</pre>
+  <div class="lr-caption"><strong>Red/black run</strong> — consecutive
+  values whose colors alternate red and black.</div>
+</div>
+
+<h2>Try it</h2>
+
+<p>
+Each loose card below belongs in exactly one of the three stacks.
+Drag every card home to finish all three melds. Grab a card to drag
+it; drop it on a stack to join that stack.
+</p>
+
+<!-- Board copied verbatim from conformance/curated_1line_puzzles.dsl
+     puzzle #4 (1line_three_pair_types). Deliberately a copy, not a
+     shared file: the curated catalogs are conformance fixtures with
+     their own lifecycle, and the tutorial owns its own boards. -->
+<div class="lr-widget">
+  <pre class="lr-dsl">at (100,90): K♠ K♥
+at (100,230): K♦
+at (320,90): 5♣ 6♣
+at (320,230): 7♣
+at (540,90): 9♥ T♠
+at (540,230): J♦</pre>
+</div>
+
+<footer>
+This tutorial is a work in progress.
+<a href="/">Go back home</a> · <a href="/game">Play the full game</a>
+</footer>
+
+<script src="/tutorial/tutorial.js"></script>
+</body>
+</html>

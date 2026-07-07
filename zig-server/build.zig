@@ -49,6 +49,10 @@ pub fn build(b: *std.Build) void {
         // for Hint + agent play, puzzles for their Hint button).
         .{ .name = "engine_js", .path = "../games/lynrummy/elm/engine.js" },
         .{ .name = "engine_glue_js", .path = "../games/lynrummy/elm/engine_glue.js" },
+        // The Lyn Rummy beginner tutorial (/tutorial): a free-standing HTML
+        // document + its self-contained plain-JS client. See tutorial.zig.
+        .{ .name = "tutorial_html", .path = "../games/lynrummy/tutorial/tutorial.html" },
+        .{ .name = "tutorial_js", .path = "../games/lynrummy/tutorial/tutorial.js" },
         // The puzzle catalogs, easiest-first (1-line … 6-line). Concatenated at
         // runtime into the catalog shipped in the page flag (see puzzles.zig).
         .{ .name = "puzzle_cat_1", .path = "../games/lynrummy/conformance/curated_1line_puzzles.dsl" },
