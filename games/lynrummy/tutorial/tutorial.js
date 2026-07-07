@@ -118,6 +118,10 @@ function cardEl(card) {
     textAlign: "center",
     verticalAlign: "top",
     fontSize: "17px",
+    // Pin the game renderer's implicit line-height: the document body
+    // sets 1.55 for prose, which would push the suit glyph past the
+    // card's bottom edge.
+    lineHeight: "normal",
     color: suitColor(card.suit),
     backgroundColor: "white",
     border: "1px solid blue",
@@ -131,18 +135,26 @@ function cardEl(card) {
   return el;
 }
 
-function stackEl(stack) {
+// The bare row of cards, unpositioned — figures center it on a
+// kitchen table, widgets absolutely position it on the board.
+function stackCardsEl(stack) {
   const el = document.createElement("div");
-  Object.assign(el.style, {
-    position: "absolute",
-    left: stack.left + "px",
-    top: stack.top + "px",
-    userSelect: "none",
-  });
+  el.style.userSelect = "none";
+  el.style.whiteSpace = "nowrap";
   stack.cards.forEach((card, i) => {
     const c = cardEl(card);
     if (i > 0) c.style.marginLeft = "2px";
     el.appendChild(c);
+  });
+  return el;
+}
+
+function stackEl(stack) {
+  const el = stackCardsEl(stack);
+  Object.assign(el.style, {
+    position: "absolute",
+    left: stack.left + "px",
+    top: stack.top + "px",
   });
   return el;
 }
@@ -168,15 +180,38 @@ function stackWidth(stack) {
 const STACK_H = CARD_H + 6; // card box height incl. padding + border
 
 // ── Figures ─────────────────────────────────────────────────────────
-// A figure is a static board sized to its content. No interaction.
+// A figure is a row of example stacks, each centered on its own small
+// khaki square — a little kitchen table. No interaction. Figures
+// ignore the DSL's (left, top): the table is the layout.
 
 function hydrateFigure(root) {
   const stacks = parseBoard(readDsl(root));
-  const w = Math.max(...stacks.map((s) => s.left + stackWidth(s))) + 10;
-  const h = Math.max(...stacks.map((s) => s.top + STACK_H)) + 10;
-  const board = boardEl(w, h);
-  for (const s of stacks) board.appendChild(stackEl(s));
-  root.insertBefore(board, root.firstChild);
+  const row = document.createElement("div");
+  Object.assign(row.style, {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: "16px",
+    alignItems: "flex-start",
+  });
+  for (const s of stacks) row.appendChild(tableEl(s));
+  root.appendChild(row);
+}
+
+function tableEl(stack) {
+  const side = Math.max(stackWidth(stack) + 40, 100);
+  const table = document.createElement("div");
+  Object.assign(table.style, {
+    width: side + "px",
+    height: side + "px",
+    backgroundColor: "khaki",
+    border: "1px solid #b0a14e",
+    borderRadius: "10px",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+  });
+  table.appendChild(stackCardsEl(stack));
+  return table;
 }
 
 // readDsl pulls the board text out of the .lr-dsl <pre> and removes

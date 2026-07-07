@@ -16,12 +16,8 @@
   }
   h1 { color: #1a237e; }
   h2 { color: #1a237e; margin-top: 40px; }
-  .lr-caption {
-    font-size: 14px;
-    color: #555;
-    margin-top: 6px;
-  }
-  .lr-figure { margin: 20px 0; }
+  h3 { color: #1a237e; margin-top: 28px; margin-bottom: 8px; }
+  .lr-figure { margin: 16px 0 28px 0; }
   /* Pre-hydration DSL text. Deliberately visible: if tutorial.js
      fails to load or parse, the raw board DSL shows on the page —
      a loud, obvious signal instead of a silent gap. */
@@ -56,25 +52,45 @@ teaches the rules from scratch.
 
 <p>
 Players build <em>stacks</em> of cards on a shared board. A stack is
-legal when it has three or more cards and forms one of three shapes:
+legal when it has three or more cards and forms one of three shapes.
+On a kitchen table you'd lay each meld out in front of you — the
+examples below each sit on their own little table.
+</p>
+
+<h3>Set — same value, all different suits</h3>
+
+<p>
+Three or four cards of the same value. No suit may repeat, so a set
+never grows past four cards — one per suit.
 </p>
 
 <div class="lr-figure">
-  <pre class="lr-dsl">at (10,10): A♠ A♥ A♦</pre>
-  <div class="lr-caption"><strong>Set</strong> — same value, all different
-  suits. Never longer than four cards (one per suit).</div>
+  <pre class="lr-dsl">at (0,0): A♠ A♥ A♦
+at (0,0): 7♣ 7♦ 7♥ 7♠</pre>
 </div>
 
-<div class="lr-figure">
-  <pre class="lr-dsl">at (10,10): 5♣ 6♣ 7♣</pre>
-  <div class="lr-caption"><strong>Pure run</strong> — three or more
-  consecutive values in a single suit.</div>
-</div>
+<h3>Pure run — consecutive values, one suit</h3>
+
+<p>
+Three or more consecutive values, all in a single suit. Runs can grow
+as long as the deck allows.
+</p>
 
 <div class="lr-figure">
-  <pre class="lr-dsl">at (10,10): 9♥ 10♠ J♦</pre>
-  <div class="lr-caption"><strong>Red/black run</strong> — consecutive
-  values whose colors alternate red and black.</div>
+  <pre class="lr-dsl">at (0,0): 5♣ 6♣ 7♣
+at (0,0): 9♥ 10♥ J♥ Q♥ K♥</pre>
+</div>
+
+<h3>Red/black run — consecutive values, alternating colors</h3>
+
+<p>
+Three or more consecutive values whose colors alternate red and black
+(the suits themselves don't matter, only the colors).
+</p>
+
+<div class="lr-figure">
+  <pre class="lr-dsl">at (0,0): 9♥ 10♠ J♦
+at (0,0): 3♠ 4♥ 5♣ 6♦ 7♣</pre>
 </div>
 
 <h2>Try it</h2>
