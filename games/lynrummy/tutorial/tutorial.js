@@ -104,6 +104,68 @@ function isCleanBoard(stacks) {
   return stacks.every((s) => isLegalMeld(s.cards));
 }
 
+// ── Wings ───────────────────────────────────────────────────────────
+// Ported from Lib/Physics/WingOracle.elm + Lib/WingView.elm: while a
+// stack is dragged, every other stack that could legally accept it
+// grows a "wing" on the accepting side — a drop zone one card-pitch
+// wide. A merge is offered iff the concatenated cards aren't Bogus or
+// Dup (Incomplete is fine: partial builds are mid-turn currency).
+
+function isProblematic(cards) {
+  const t = getStackType(cards);
+  return t === "bogus" || t === "dup";
+}
+
+// side "left" means the source attaches to the LEFT of the target
+// (merged order source ++ target); "right" is the mirror.
+function wingsForStack(stacks, srcIdx) {
+  const src = stacks[srcIdx].cards;
+  const wings = [];
+  stacks.forEach((s, i) => {
+    if (i === srcIdx) return;
+    if (!isProblematic(src.concat(s.cards))) wings.push({ target: i, side: "left" });
+    if (!isProblematic(s.cards.concat(src))) wings.push({ target: i, side: "right" });
+  });
+  return wings;
+}
+
+const CARD_PITCH = 33;
+
+// The visual wing rect: one pitch wide, card-high, flush against the
+// target's accepting edge.
+function wingRect(stacks, wing) {
+  const t = stacks[wing.target];
+  const left = wing.side === "left" ? t.left - CARD_PITCH : t.left + stackWidth(t);
+  return { left, top: t.top, width: CARD_PITCH, height: CARD_H };
+}
+
+// Where the floater's top-left will LAND if this wing's merge fires.
+// The hover hit-test checks closeness to this point, not overlap with
+// the visual rect — tighter and more accurate (WingOracle's
+// eventualFloaterTopLeft).
+function eventualLanding(stacks, wing, sourceWidth) {
+  const t = stacks[wing.target];
+  const left = wing.side === "left" ? t.left - sourceWidth : t.left + stackWidth(t);
+  return { left, top: t.top };
+}
+
+// Half a card-pitch of slop per axis (WingView.wingSnapTolerance).
+const WING_SNAP = Math.floor(CARD_PITCH / 2);
+
+function hoveredWing(stacks, wings, floaterLoc, sourceWidth) {
+  return (
+    wings.find((w) => {
+      const ev = eventualLanding(stacks, w, sourceWidth);
+      return Math.abs(floaterLoc.left - ev.left) < WING_SNAP && Math.abs(floaterLoc.top - ev.top) < WING_SNAP;
+    }) || null
+  );
+}
+
+// WingView's color constants: pastel green for "mergeable here",
+// mauve when the floater is in the landing area.
+const WING_GREEN = "hsl(105, 72.70%, 87.10%)";
+const WING_MAUVE = "#E0B0FF";
+
 // ── Rendering ───────────────────────────────────────────────────────
 // Inline styles mirroring Lib/StackView.elm: white card, 1px blue
 // border, value over suit glyph, red/black text.
@@ -182,9 +244,9 @@ function assertOnTable(stacks) {
 }
 
 // Pixel width of a rendered stack: card box 31px (27 + 2 padding +
-// 2 border) plus 33px pitch per additional card.
+// 2 border) plus one pitch per additional card.
 function stackWidth(stack) {
-  return 31 + (stack.cards.length - 1) * 33;
+  return 31 + (stack.cards.length - 1) * CARD_PITCH;
 }
 
 const STACK_H = CARD_H + 6; // card box height incl. padding + border
@@ -275,8 +337,32 @@ function hydrateWidget(root) {
     const startY = e.clientY;
     const origLeft = stack.left;
     const origTop = stack.top;
+    const srcWidth = stackWidth(stack);
     el.style.zIndex = "10";
     el.setPointerCapture(e.pointerId);
+
+    // Wings are computed once at drag start and pinned (the board
+    // doesn't change mid-drag). Each wing renders green at its
+    // target's accepting edge, and flips mauve while the floater is
+    // in its landing area.
+    const wings = wingsForStack(stacks, idx);
+    const wingEls = wings.map((w) => {
+      const r = wingRect(stacks, w);
+      const wel = document.createElement("div");
+      Object.assign(wel.style, {
+        position: "absolute",
+        left: r.left + "px",
+        top: r.top + "px",
+        width: r.width + "px",
+        height: r.height + "px",
+        backgroundColor: WING_GREEN,
+        boxSizing: "border-box",
+        border: "1px solid transparent",
+      });
+      board.appendChild(wel);
+      return wel;
+    });
+    let hovered = null;
 
     function place(ev) {
       return {
@@ -289,11 +375,19 @@ function hydrateWidget(root) {
       const p = place(ev);
       el.style.left = p.left + "px";
       el.style.top = p.top + "px";
+      hovered = hoveredWing(stacks, wings, p, srcWidth);
+      wings.forEach((w, i) => {
+        wingEls[i].style.backgroundColor = w === hovered ? WING_MAUVE : WING_GREEN;
+      });
     }
 
     function onUp(ev) {
       cleanup();
-      applyDrop(idx, place(ev));
+      if (hovered) {
+        applyMerge(idx, hovered);
+      } else {
+        applyMove(idx, place(ev));
+      }
     }
 
     function onCancel() {
@@ -302,6 +396,7 @@ function hydrateWidget(root) {
     }
 
     function cleanup() {
+      for (const wel of wingEls) wel.remove();
       el.removeEventListener("pointermove", onMove);
       el.removeEventListener("pointerup", onUp);
       el.removeEventListener("pointercancel", onCancel);
@@ -312,43 +407,32 @@ function hydrateWidget(root) {
     el.addEventListener("pointercancel", onCancel);
   }
 
-  // applyDrop resolves a released drag: merge into the most-overlapped
-  // stack if any, else move to the drop spot (clamped onto the board).
-  function applyDrop(idx, dropLoc) {
+  // applyMerge fires the hovered wing: merged order per the wing's
+  // side, position anchored by the target (a left merge extends
+  // leftward by the source's card count — CardStack.leftMerge). The
+  // one tutorial divergence: the merged loc is clamped onto the
+  // table, whose 320px square is far tighter than the game's board.
+  function applyMerge(idx, wing) {
     const dragged = stacks[idx];
-    const dropRect = {
-      left: dropLoc.left,
-      top: dropLoc.top,
-      right: dropLoc.left + stackWidth(dragged),
-      bottom: dropLoc.top + STACK_H,
-    };
-
-    let target = -1;
-    let bestArea = 0;
-    stacks.forEach((s, i) => {
-      if (i === idx) return;
-      const w = Math.min(dropRect.right, s.left + stackWidth(s)) - Math.max(dropRect.left, s.left);
-      const h = Math.min(dropRect.bottom, s.top + STACK_H) - Math.max(dropRect.top, s.top);
-      if (w > 0 && h > 0 && w * h > bestArea) {
-        bestArea = w * h;
-        target = i;
-      }
-    });
-
+    const t = stacks[wing.target];
     history.push(cloneStacks(stacks));
-    if (target >= 0) {
-      // Left half of the target prepends, right half appends. The
-      // full game offers wing previews; the tutorial keeps just the
-      // side rule.
-      const t = stacks[target];
-      const dropCenter = (dropRect.left + dropRect.right) / 2;
-      const targetCenter = t.left + stackWidth(t) / 2;
-      t.cards = dropCenter < targetCenter ? dragged.cards.concat(t.cards) : t.cards.concat(dragged.cards);
-      stacks.splice(idx, 1);
+    if (wing.side === "left") {
+      t.cards = dragged.cards.concat(t.cards);
+      t.left -= CARD_PITCH * dragged.cards.length;
     } else {
-      dragged.left = clamp(dropLoc.left, 0, TABLE_SIDE - stackWidth(dragged));
-      dragged.top = clamp(dropLoc.top, 0, TABLE_SIDE - STACK_H);
+      t.cards = t.cards.concat(dragged.cards);
     }
+    t.left = clamp(t.left, 0, TABLE_SIDE - stackWidth(t));
+    stacks.splice(idx, 1);
+    render();
+  }
+
+  // applyMove drops the stack on open felt (clamped onto the table).
+  function applyMove(idx, dropLoc) {
+    const dragged = stacks[idx];
+    history.push(cloneStacks(stacks));
+    dragged.left = clamp(dropLoc.left, 0, TABLE_SIDE - stackWidth(dragged));
+    dragged.top = clamp(dropLoc.top, 0, TABLE_SIDE - STACK_H);
     render();
   }
 
@@ -385,5 +469,14 @@ if (typeof document !== "undefined") {
 // Node-visible exports so the pure logic can be smoke-tested without
 // a browser.
 if (typeof module !== "undefined") {
-  module.exports = { parseBoard, getStackType, isCleanBoard, successor, assertOnTable };
+  module.exports = {
+    parseBoard,
+    getStackType,
+    isCleanBoard,
+    successor,
+    assertOnTable,
+    wingsForStack,
+    hoveredWing,
+    eventualLanding,
+  };
 }

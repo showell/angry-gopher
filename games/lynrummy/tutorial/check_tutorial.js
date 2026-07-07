@@ -44,6 +44,35 @@ for (const [s, want] of CASES) {
 assert.ok(!t.isCleanBoard(t.parseBoard("at (0,0): A♠ A♥")));
 assert.ok(t.isCleanBoard(t.parseBoard("at (0,0): K♠ K♥ K♦\nat (0,60): 5♣ 6♣ 7♣")));
 
+// ── wing semantics (port of WingOracle + WingView hit-test) ─────────
+
+{
+  // Dragging K♦ near K♠ K♥: both sides of the pair make a legal set,
+  // so it grows both wings; the 5♣ 6♣ pair offers neither.
+  const board = t.parseBoard("at (100,50): K♠ K♥\nat (300,50): 5♣ 6♣\nat (200,200): K♦");
+  const wings = t.wingsForStack(board, 2);
+  assert.deepStrictEqual(
+    wings.map((w) => w.target + ":" + w.side),
+    ["0:left", "0:right"]
+  );
+
+  // 7♣ dragged near 5♣ 6♣: only the right side continues the run.
+  const wings7 = t.wingsForStack(t.parseBoard("at (300,50): 5♣ 6♣\nat (200,200): 7♣"), 1);
+  assert.deepStrictEqual(wings7.map((w) => w.target + ":" + w.side), ["0:right"]);
+
+  // Hover hit-test: the right wing's landing is flush against the
+  // target's right edge (100 + 64 = 164, top 50). Within half a
+  // pitch → hovered; a card-width away → not.
+  const rightWing = wings.find((w) => w.side === "right");
+  assert.deepStrictEqual(t.eventualLanding(board, rightWing, 31), { left: 164, top: 50 });
+  assert.strictEqual(t.hoveredWing(board, wings, { left: 170, top: 55 }, 31), rightWing);
+  assert.strictEqual(t.hoveredWing(board, wings, { left: 195, top: 55 }, 31), null);
+
+  // The left wing's landing backs off by the source width.
+  const leftWing = wings.find((w) => w.side === "left");
+  assert.deepStrictEqual(t.eventualLanding(board, leftWing, 31), { left: 69, top: 50 });
+}
+
 // ── 2. tutorial.html boards ─────────────────────────────────────────
 
 const html = fs.readFileSync(path.join(__dirname, "tutorial.html"), "utf8");
