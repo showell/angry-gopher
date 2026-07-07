@@ -1,0 +1,17 @@
+#!/bin/bash
+# CANONICAL DEV-LOOP SCRIPT — DO NOT REINVENT.
+# Before writing a new ops/* script or composing an ad-hoc shell
+# command for build / launch / test / regen, run `ops/list` to see
+# what already exists.
+#
+# The /tutorial authoring gate (<1s): pins the plain-JS rules port in
+# games/lynrummy/tutorial/tutorial.js against the Elm/TS semantics,
+# and validates every board authored in tutorial.html (parses, fits
+# the table, figures hold only legal melds). Composed into
+# ops/check_lynrummy.
+
+set -e
+
+REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+
+node "$REPO_DIR/games/lynrummy/tutorial/check_tutorial.js"

@@ -30,6 +30,9 @@ Available ops commands (run from repo root):
   ops/check_common       Shared base = check_zig + test_docs + test_css (diamond floor).
   ops/test_ts            TS solver/engine suite (~20s) — Lyn Rummy.
   ops/test_elm           Elm client suite (~5s) — Lyn Rummy.
+  ops/test_tutorial      /tutorial authoring gate (<1s) — Lyn Rummy. Rules-port
+                         unit cases + every board in tutorial.html parses, fits
+                         the table, and figures hold only legal melds.
   ops/test_chat          Chat client lint (~1s): chat.js + docs.js + chat_client.py.
   ops/check_safari       Safari render cull gate (~1s) — driving. Drives the
                          committed safari.wasm across a full course and asserts

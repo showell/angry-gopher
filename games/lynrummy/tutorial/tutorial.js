@@ -152,16 +152,33 @@ function stackEl(stack) {
   return el;
 }
 
-function boardEl(width, height) {
+// Every kitchen table on the page — figure or widget — is the same
+// perfect square, compact enough for small screens (a 360px viewport
+// minus the page padding).
+const TABLE_SIDE = 320;
+
+function tableEl() {
   const el = document.createElement("div");
   Object.assign(el.style, {
     position: "relative",
-    width: width + "px",
-    height: height + "px",
+    width: TABLE_SIDE + "px",
+    height: TABLE_SIDE + "px",
     backgroundColor: "khaki",
+    border: "1px solid #b0a14e",
+    borderRadius: "10px",
     touchAction: "none",
   });
   return el;
+}
+
+// Authoring guard: a stack laid outside the square is a tutorial bug —
+// break the page loudly rather than render cards off the table.
+function assertOnTable(stacks) {
+  for (const s of stacks) {
+    if (s.left < 0 || s.top < 0 || s.left + stackWidth(s) > TABLE_SIDE || s.top + STACK_H > TABLE_SIDE) {
+      throw new Error("tutorial board: stack off the table at (" + s.left + "," + s.top + ")");
+    }
+  }
 }
 
 // Pixel width of a rendered stack: card box 31px (27 + 2 padding +
@@ -173,25 +190,15 @@ function stackWidth(stack) {
 const STACK_H = CARD_H + 6; // card box height incl. padding + border
 
 // ── Figures ─────────────────────────────────────────────────────────
-// A figure is one small kitchen table: a khaki rounded rectangle,
-// sized to fit, with the example stacks laid on it at the DSL's
-// (left, top) offsets. The slightly-off alignment between stacks is
-// deliberate and hand-authored in the HTML — melds laid down by
-// humans, not a grid. No interaction.
+// A figure is one kitchen table with the example stacks laid on it at
+// the DSL's (left, top) offsets. The slightly-off alignment between
+// stacks is deliberate and hand-authored in the HTML — melds laid
+// down by humans, not a grid. No interaction.
 
 function hydrateFigure(root) {
   const stacks = parseBoard(readDsl(root));
-  const w = Math.max(...stacks.map((s) => s.left + stackWidth(s))) + 20;
-  const h = Math.max(...stacks.map((s) => s.top + STACK_H)) + 20;
-  const table = document.createElement("div");
-  Object.assign(table.style, {
-    position: "relative",
-    width: w + "px",
-    height: h + "px",
-    backgroundColor: "khaki",
-    border: "1px solid #b0a14e",
-    borderRadius: "10px",
-  });
+  assertOnTable(stacks);
+  const table = tableEl();
   for (const s of stacks) table.appendChild(stackEl(s));
   root.appendChild(table);
 }
@@ -206,25 +213,22 @@ function readDsl(root) {
 }
 
 // ── Widgets ─────────────────────────────────────────────────────────
-// A widget is a live board: grab a card to drag its whole stack;
-// drop it on another stack to merge (left half prepends, right half
-// appends); drop it on open felt to move it. Undo and Reset walk the
-// state back. Solved = every stack is a legal meld.
-
-const BOARD_W = 800;
+// A widget is a live kitchen table: grab a card to drag its whole
+// stack; drop it on another stack to merge (left half prepends, right
+// half appends); drop it on open felt to move it. Undo and Reset walk
+// the state back. Solved = every stack is a legal meld.
 
 const PROMPT = "Drag each loose card onto the stack where it belongs.";
 const SOLVED = "✔ Solved! Every stack is a legal meld.";
 
 function hydrateWidget(root) {
   const initial = parseBoard(readDsl(root));
-  const boardH = Math.max(...initial.map((s) => s.top + STACK_H)) + 120;
+  assertOnTable(initial);
 
   let stacks = cloneStacks(initial);
   const history = [];
 
-  const board = boardEl(BOARD_W, boardH);
-  board.style.border = "1px solid #999";
+  const board = tableEl();
 
   const status = document.createElement("div");
   Object.assign(status.style, { marginTop: "8px", fontSize: "15px", minHeight: "22px" });
@@ -342,8 +346,8 @@ function hydrateWidget(root) {
       t.cards = dropCenter < targetCenter ? dragged.cards.concat(t.cards) : t.cards.concat(dragged.cards);
       stacks.splice(idx, 1);
     } else {
-      dragged.left = clamp(dropLoc.left, 0, BOARD_W - stackWidth(dragged));
-      dragged.top = clamp(dropLoc.top, 0, boardH - STACK_H);
+      dragged.left = clamp(dropLoc.left, 0, TABLE_SIDE - stackWidth(dragged));
+      dragged.top = clamp(dropLoc.top, 0, TABLE_SIDE - STACK_H);
     }
     render();
   }
@@ -381,5 +385,5 @@ if (typeof document !== "undefined") {
 // Node-visible exports so the pure logic can be smoke-tested without
 // a browser.
 if (typeof module !== "undefined") {
-  module.exports = { parseBoard, getStackType, isCleanBoard, successor };
+  module.exports = { parseBoard, getStackType, isCleanBoard, successor, assertOnTable };
 }

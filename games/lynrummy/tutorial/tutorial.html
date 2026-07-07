@@ -54,7 +54,7 @@ teaches the rules from scratch.
 Players build <em>stacks</em> of cards on a shared board. A stack is
 legal when it has three or more cards and forms one of three shapes.
 On a kitchen table you'd lay your melds out in front of you — each
-category below is shown the same way, three examples sharing one
+category below is shown the same way, its examples sharing one
 little table.
 </p>
 
@@ -66,35 +66,43 @@ never grows past four cards — one per suit.
 </p>
 
 <div class="lr-figure">
-  <pre class="lr-dsl">at (24,20): A♠ A♥ A♦
-at (31,92): 7♣ 7♦ 7♥ 7♠
-at (19,166): Q♥ Q♠ Q♣</pre>
+  <pre class="lr-dsl">at (24,16): A♠ A♥ A♦
+at (31,78): 7♣ 7♦ 7♥ 7♠
+at (19,140): Q♥ Q♠ Q♣
+at (28,202): 3♦ 3♣ 3♥
+at (22,264): 10♠ 10♥ 10♦ 10♣</pre>
 </div>
 
 <h3>Pure run — consecutive values, one suit</h3>
 
 <p>
-Three or more consecutive values, all in a single suit. Runs can grow
-as long as the deck allows.
+Three or more consecutive values, all in a single suit. Runs may also
+turn the corner at the ace: the king is followed by the ace, and the
+ace by the two, so the last example below — J&thinsp;Q&thinsp;K&thinsp;A&thinsp;2
+— is a perfectly legal run.
 </p>
 
 <div class="lr-figure">
-  <pre class="lr-dsl">at (26,22): 5♣ 6♣ 7♣
-at (18,94): 9♦ 10♦ J♦ Q♦
-at (30,170): 4♥ 5♥ 6♥ 7♥ 8♥ 9♥ 10♥ J♥</pre>
+  <pre class="lr-dsl">at (26,20): 5♣ 6♣ 7♣
+at (18,90): 9♦ 10♦ J♦ Q♦
+at (30,162): 3♥ 4♥ 5♥ 6♥ 7♥
+at (21,236): J♠ Q♠ K♠ A♠ 2♠</pre>
 </div>
 
 <h3>Red/black run — consecutive values, alternating colors</h3>
 
 <p>
 Three or more consecutive values whose colors alternate red and black
-(the suits themselves don't matter, only the colors).
+(the suits themselves don't matter, only the colors). Red/black runs
+can turn the corner at the ace too, like the
+Q&thinsp;K&thinsp;A&thinsp;2&thinsp;3 example.
 </p>
 
 <div class="lr-figure">
-  <pre class="lr-dsl">at (22,24): 9♥ 10♠ J♦
-at (33,95): 3♠ 4♥ 5♣ 6♦
-at (17,168): 8♣ 9♦ 10♠ J♥ Q♣ K♦</pre>
+  <pre class="lr-dsl">at (22,20): 9♥ 10♠ J♦
+at (33,90): 3♠ 4♥ 5♣ 6♦
+at (17,162): 8♣ 9♦ 10♠ J♥ Q♣
+at (26,236): Q♦ K♣ A♥ 2♠ 3♦</pre>
 </div>
 
 <h2>Try it</h2>
@@ -105,17 +113,18 @@ Drag every card home to finish all three melds. Grab a card to drag
 it; drop it on a stack to join that stack.
 </p>
 
-<!-- Board copied verbatim from conformance/curated_1line_puzzles.dsl
-     puzzle #4 (1line_three_pair_types). Deliberately a copy, not a
-     shared file: the curated catalogs are conformance fixtures with
-     their own lifecycle, and the tutorial owns its own boards. -->
+<!-- Cards copied verbatim from conformance/curated_1line_puzzles.dsl
+     puzzle #4 (1line_three_pair_types); positions re-laid for the
+     tutorial's square table. Deliberately a copy, not a shared file:
+     the curated catalogs are conformance fixtures with their own
+     lifecycle, and the tutorial owns its own boards. -->
 <div class="lr-widget">
-  <pre class="lr-dsl">at (100,90): K♠ K♥
-at (100,230): K♦
-at (320,90): 5♣ 6♣
-at (320,230): 7♣
-at (540,90): 9♥ T♠
-at (540,230): J♦</pre>
+  <pre class="lr-dsl">at (24,24): K♠ K♥
+at (36,96): K♦
+at (180,40): 5♣ 6♣
+at (194,120): 7♣
+at (24,200): 9♥ T♠
+at (38,262): J♦</pre>
 </div>
 
 <footer>
