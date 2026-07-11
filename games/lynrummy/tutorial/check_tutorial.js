@@ -118,6 +118,20 @@ assert.ok(t.isCleanBoard(t.parseBoard("at (0,0): K♠ K♥ K♦\nat (0,60): 5♣
   assert.strictEqual(isoEnd.singletonIndex, 0);
 }
 
+// ── the fun-section chain ───────────────────────────────────────────
+// The 'Here is where it gets fun' prose walks a specific chain on the
+// mid-game board: A♠ peels off the rb run and completes the aces; the
+// four-ace set spares the A♥; the A♥ bridges the hearts into an
+// eight-card corner run. Every intermediate state must stay legal —
+// if the board or the rules ever change, the prose must too.
+
+{
+  assert.strictEqual(t.getStackType(P("2♥ 3♠ 4♦ 5♣ 6♦ 7♠ 8♥ 9♠")), "rb_run");
+  assert.strictEqual(t.getStackType(P("A♥ A♦ A♣ A♠")), "set");
+  assert.strictEqual(t.getStackType(P("A♦ A♣ A♠")), "set");
+  assert.strictEqual(t.getStackType(P("10♥ J♥ Q♥ K♥ A♥ 2♥ 3♥ 4♥")), "pure_run");
+}
+
 // ── 2. tutorial.html boards ─────────────────────────────────────────
 
 const html = fs.readFileSync(path.join(__dirname, "tutorial.html"), "utf8");
