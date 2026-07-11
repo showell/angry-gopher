@@ -1,7 +1,8 @@
 # Lyn Rummy
 
-A 2-deck, 2-player rummy variant, built around a **shared board** where players
-assemble runs and sets from their hands. Named for **Lyn** — Steve's aunt (his
+A 2-deck rummy variant for one or more players (the hosted game plays
+two-handed), built around a **shared board** where players assemble runs and
+sets from their hands. Named for **Lyn** — Steve's aunt (his
 mother's sister), who taught the family to play. For the rules, see
 [`RULES.md`](./RULES.md); for the big-picture design, [`ARCHITECTURE.md`](./ARCHITECTURE.md).
 
@@ -9,17 +10,23 @@ It's live in production at https://lynrummy.com — a DigitalOcean droplet runni
 the zig server behind Caddy, where family and friends log in and play (solo or
 against the built-in agent: deal, play, hint, agent-play, replay, resume).
 
-## Status: mature and parked
+## Status: game and puzzles mature; tutorial active
 
-Lyn Rummy is the oldest of the site's three subsystems and is **no longer under
-active development** — it works, it ships, and attention has moved to Chat/Docs/
-Blog. It still deploys with the rest of the single binary. **The code is the
-authority** for how anything works; this doc and its siblings exist to orient a
-human reader, not to drive new engineering (for that, go to the code).
+The game and puzzles are the oldest of the site's subsystems and are **no
+longer under active development** — they work, they ship. The active piece
+(2026-07) is the **beginner tutorial** at `/tutorial`: a public, ungated page
+in plain HTML+JS (`tutorial/` — no Elm, no TS, no solver) that teaches the
+kitchen-table game with live mini-boards, gated by `ops/test_tutorial`. **The
+code is the authority** for how anything works; this doc and its siblings
+exist to orient a human reader, not to drive new engineering (for that, go to
+the code).
 
 ## How it's built
 
-Three actors, covered in [`ARCHITECTURE.md`](./ARCHITECTURE.md):
+Three actors, covered in [`ARCHITECTURE.md`](./ARCHITECTURE.md) (the tutorial
+is a deliberately separate fourth: `tutorial/tutorial.js` re-ports the rules
+and board gestures from the Elm spec into ~650 lines of dependency-free JS,
+served by its own tiny zig handler):
 
 - **`ts/`** — the TypeScript **agent**: the BFS solver, the verb→gesture
   pipeline, self-play, and the in-browser bundle that powers the Hint button.

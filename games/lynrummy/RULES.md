@@ -10,11 +10,13 @@ rearrange, how undo works). The rules below describe both.
 - **Two decks**, 104 cards total — every (value, suit) pair
   appears twice. The two-deck shape is integral; cards are
   identified by `(value, suit, origin_deck)`.
-- **Two players.**
+- **One or more players.** The hosted game plays two-handed;
+  kitchen-table games are commonly two or three, larger groups
+  deal smaller hands, and solitaire works.
 - **15-card starting hand** per player (the convention this
   codebase uses; kitchen-table rules vary on opening hand
   size).
-- A shared **board** sits between the two hands. All melding
+- A shared **board** sits between the hands. All melding
   happens on the board.
 
 ## What can sit on the board
@@ -32,7 +34,8 @@ length-3+ legal meld** of one of three kinds:
 
 The K → A → 2 wrap is integral. `[Q♠ K♠ A♠]` is a valid
 pure run. So is `[K♠ A♠ 2♠]`. `[J♠ Q♠ K♠ A♠ 2♠]` is a
-length-5 pure run. Same wrap applies to rb runs.
+length-5 pure run. Same wrap applies to rb runs. A run never
+repeats a value, so 13 cards is the maximum run length.
 
 Any stack on the board at turn-end that isn't one of the
 three legal melds is "trouble" and must be cleared.
@@ -73,7 +76,7 @@ refill.
 ## Winning
 
 The first player to clear their hand is the **victor**.
-Play continues after that — clearing your hand is the
-victory event, not the end of the game (and it can happen
-more than once). The **game** ends only when the deck runs
-low.
+Play continues after that — clearing your hand is a point
+of honor, not the end of the game (and it can happen more
+than once). There is no scorekeeping. The **game** ends
+when the draw pile is empty.
