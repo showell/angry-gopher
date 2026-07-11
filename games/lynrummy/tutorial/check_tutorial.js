@@ -136,11 +136,12 @@ assert.ok(t.isCleanBoard(t.parseBoard("at (0,0): K♠ K♥ K♦\nat (0,60): 5♣
 
 const html = fs.readFileSync(path.join(__dirname, "tutorial.html"), "utf8");
 // Each board is a figure/widget div (optionally carrying a
-// data-table="WxH" size override) wrapping its lr-dsl pre; a hand is
-// an lr-hand div wrapping bare card tokens.
+// data-table="WxH" size override and, for widgets, a data-prompt —
+// attributes in that order) wrapping its lr-dsl pre; a hand is an
+// lr-hand div wrapping bare card tokens.
 const boards = [...html.matchAll(
-  /<div class="lr-(figure|widget)"(?: data-table="([^"]*)")?>[\s\S]*?<pre class="lr-dsl">([\s\S]*?)<\/pre>/g
-)].map((m) => ({ kind: m[1], dims: t.parseTableDims(m[2]), text: m[3] }));
+  /<div class="lr-(figure|widget)"(?: data-table="([^"]*)")?(?: data-prompt="([^"]*)")?>[\s\S]*?<pre class="lr-dsl">([\s\S]*?)<\/pre>/g
+)].map((m) => ({ kind: m[1], dims: t.parseTableDims(m[2]), prompt: m[3], text: m[4] }));
 const hands = [...html.matchAll(
   /<div class="lr-hand">\s*<pre class="lr-dsl">([\s\S]*?)<\/pre>/g
 )].map((m) => m[1]);
@@ -157,11 +158,22 @@ for (const h of hands) {
 
 let stackCount = 0;
 let figureCount = 0;
+let widgetCount = 0;
 for (const b of boards) {
   const stacks = t.parseBoard(b.text);
   t.assertOnTable(stacks, b.dims);
   stackCount += stacks.length;
-  if (b.kind !== "figure") continue;
+  if (b.kind === "widget") {
+    widgetCount += 1;
+    // A widget states its goal in the HTML; hydrateTable throws on a
+    // missing prompt, so catch it here first.
+    assert.ok(b.prompt, "widget missing data-prompt");
+    // A widget that loads already-solved would greet the reader with
+    // the SOLVED banner and nothing to do.
+    assert.ok(!t.isCleanBoard(stacks), "widget board starts solved");
+    continue;
+  }
+  assert.strictEqual(b.prompt, undefined, "figure carries a data-prompt");
   figureCount += 1;
   for (const s of stacks) {
     const got = t.getStackType(s.cards);
@@ -172,9 +184,36 @@ for (const b of boards) {
   }
 }
 
+// ── the your-turn widget ────────────────────────────────────────────
+// The prose promises the puzzle's premise: the Q♥ is the board's only
+// dirt and NO stack takes it directly — the reader must break one.
+// The chain the widget expects: peel the K♠ (the spade run survives
+// as A♠ 2♠ 3♠, around the corner), pull a red ace from the four-ace
+// set (either works), build Q♥ K♠ A around the corner. The A♦
+// extending the diamond run is a legal alternate path, not a trap.
+
+{
+  const w2 = boards.filter((b) => b.kind === "widget")[1];
+  assert.ok(w2, "the your-turn widget is missing");
+  const stacks = t.parseBoard(w2.text);
+  const loners = stacks.filter((s) => s.cards.length === 1);
+  assert.strictEqual(loners.length, 1, "your-turn board wants exactly one loner");
+  assert.deepStrictEqual(loners[0].cards[0], { value: 12, suit: "♥" });
+  const qIdx = stacks.indexOf(loners[0]);
+  assert.deepStrictEqual(t.wingsForStack(stacks, qIdx), [], "the Q♥ must have no direct home");
+
+  assert.strictEqual(t.getStackType(P("Q♥ K♠ A♦")), "rb_run");
+  assert.strictEqual(t.getStackType(P("Q♥ K♠ A♥")), "rb_run");
+  assert.strictEqual(t.getStackType(P("A♠ 2♠ 3♠")), "pure_run"); // spade run minus its K♠
+  assert.strictEqual(t.getStackType(P("A♣ A♥ A♠")), "set"); // aces minus A♦
+  assert.strictEqual(t.getStackType(P("A♣ A♦ A♠")), "set"); // aces minus A♥
+  assert.strictEqual(t.getStackType(P("T♦ J♦ Q♦ K♦ A♦")), "pure_run"); // the alternate A♦ home
+}
+
 console.log(
   "tutorial gate: rules cases pass; " +
     boards.length + " boards (" + stackCount + " stacks) parse and fit their tables; " +
     figureCount + " figures hold only legal melds; " +
+    widgetCount + " widgets carry prompts and start unsolved; " +
     hands.length + " hands parse."
 );

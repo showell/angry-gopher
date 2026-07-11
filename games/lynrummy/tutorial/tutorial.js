@@ -388,7 +388,10 @@ function hydrateHand(root) {
 //                                     keep dragging it, no re-grab
 //
 // A widget additionally gets the chrome: status line + Undo/Reset,
-// with solved = every stack a legal meld. Figures get no chrome and
+// with solved = every stack a legal meld. Each widget names its own
+// goal in a data-prompt attribute — the prompt is content, so it
+// lives in the HTML next to the board it describes. Figures get no
+// chrome and
 // never advertise their liveness — but a reader who idly drags an
 // example apart discovers the game works right there. That's
 // deliberate.
@@ -398,7 +401,6 @@ function hydrateHand(root) {
 // holds the pointer capture — it survives the mid-gesture re-render
 // that isolate needs), so any number of tables coexist on one page.
 
-const PROMPT = "Drag each loose card onto the stack where it belongs.";
 const SOLVED = "✔ Solved! Every stack is a legal meld.";
 const ISOLATED = "Isolated — drag to move.";
 
@@ -423,7 +425,12 @@ function hydrateTable(root, chrome) {
   let status = null;
   let undoBtn = null;
   let resetBtn = null;
+  let prompt = null;
   if (chrome) {
+    // A widget without a stated goal is an authoring bug — break the
+    // page loudly, same posture as a bad board.
+    prompt = root.dataset.prompt;
+    if (!prompt) throw new Error("tutorial widget: missing data-prompt");
     status = document.createElement("div");
     Object.assign(status.style, { marginTop: "8px", fontSize: "15px", minHeight: "22px" });
 
@@ -464,7 +471,7 @@ function hydrateTable(root, chrome) {
     });
     if (chrome) {
       const solved = isCleanBoard(stacks);
-      status.textContent = solved ? SOLVED : statusOverride || PROMPT;
+      status.textContent = solved ? SOLVED : statusOverride || prompt;
       status.style.color = solved ? "#1b5e20" : "#333";
       status.style.fontWeight = solved ? "600" : "normal";
       undoBtn.disabled = history.length === 0;
