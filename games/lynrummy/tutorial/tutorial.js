@@ -404,6 +404,21 @@ function hydrateHand(root) {
 const SOLVED = "✔ Solved! Every stack is a legal meld.";
 const ISOLATED = "Isolated — drag to move.";
 
+// Status text renders card tokens suit-colored, same convention as
+// the prose spans and the game's status bar.
+const CARD_TOKEN = /((?:10|[A2-9TJQK])[♠♥♦♣])/;
+
+function setStatusText(el, text) {
+  el.replaceChildren();
+  for (const part of text.split(CARD_TOKEN)) {
+    if (part === "") continue;
+    const node = document.createElement("span");
+    node.textContent = part;
+    if (CARD_TOKEN.test(part)) node.style.color = suitColor(part.slice(-1));
+    el.appendChild(node);
+  }
+}
+
 function hydrateFigure(root) {
   hydrateTable(root, false);
 }
@@ -471,7 +486,7 @@ function hydrateTable(root, chrome) {
     });
     if (chrome) {
       const solved = isCleanBoard(stacks);
-      status.textContent = solved ? SOLVED : statusOverride || prompt;
+      setStatusText(status, solved ? SOLVED : statusOverride || prompt);
       status.style.color = solved ? "#1b5e20" : "#333";
       status.style.fontWeight = solved ? "600" : "normal";
       undoBtn.disabled = history.length === 0;
@@ -721,6 +736,7 @@ if (typeof module !== "undefined") {
     parseBoard,
     parseHand,
     parseTableDims,
+    suitColor,
     getStackType,
     isCleanBoard,
     successor,

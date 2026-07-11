@@ -156,6 +156,33 @@ for (const h of hands) {
   assert.ok(t.parseHand(h).length > 0);
 }
 
+// ── prose card tokens ───────────────────────────────────────────────
+// Every suit glyph in the prose sits inside a color-declaring span
+// (<span class="lr-red">Q♥</span>), and the class must tell the truth
+// about the suit's color. Boards (lr-dsl), HTML comments, and
+// attribute values (data-prompt — colored at runtime by
+// setStatusText) don't count as prose.
+
+{
+  const prose = html
+    .replace(/<pre class="lr-dsl">[\s\S]*?<\/pre>/g, "")
+    .replace(/<!--[\s\S]*?-->/g, "")
+    .replace(/data-prompt="[^"]*"/g, "");
+  const spans = [...prose.matchAll(/<span class="lr-(red|black)">([^<]*)<\/span>/g)];
+  assert.ok(spans.length > 0, "prose has no card-token spans");
+  for (const [, cls, text] of spans) {
+    const glyphs = text.match(/[♠♥♦♣]/g);
+    assert.ok(glyphs, "lr-" + cls + " span holds no suit glyph: " + text);
+    for (const g of glyphs) {
+      assert.strictEqual(t.suitColor(g), cls, "span lies about its suit color: " + text);
+    }
+  }
+  const stray = prose
+    .replace(/<span class="lr-(?:red|black)">[^<]*<\/span>/g, "")
+    .match(/[♠♥♦♣]/g);
+  assert.ok(!stray, "prose suit glyph outside a color span: " + stray);
+}
+
 let stackCount = 0;
 let figureCount = 0;
 let widgetCount = 0;
