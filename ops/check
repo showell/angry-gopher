@@ -43,7 +43,7 @@ echo
 echo "===== ops/check_safari ====="
 ./ops/check_safari
 
-# Chess toys: the Knight's Tour wasm core's native unit tests.
+# Chess toys: every toy root's native unit tests (pinned event counts).
 echo
 echo "===== ops/check_chess ====="
 ./ops/check_chess

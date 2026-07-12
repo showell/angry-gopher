@@ -12,7 +12,7 @@ whole thing.
 
 ## The apps
 
-The home page (`/`) is a launch pad for six apps. In display order:
+The home page (`/`) is a launch pad for seven apps. In display order:
 
 | App | Path | What it is | Stack | README |
 |---|---|---|---|---|
@@ -22,6 +22,7 @@ The home page (`/`) is a launch pad for six apps. In display order:
 | **Blog** | `/blog` | Notes on building the site, rendered from repo markdown by a hand-written engine. | Zig | [`blog/README.md`](blog/README.md) |
 | **Lyn Rummy** | `/game` | Two-player rummy against an agent that knows the rules — a TS referee engine with an Elm UI, speaking a DSL over the wire. | TypeScript + Elm | [`games/lynrummy/README.md`](games/lynrummy/README.md) |
 | **Lyn Rummy Puzzles** | `/puzzles` | A single mid-game board to solve; shares the rules engine, with deterministic undo and replay. | TypeScript + Elm | [`games/lynrummy/elm/src/Puzzle/README.md`](games/lynrummy/elm/src/Puzzle/README.md) |
+| **Chess Toys** | `/chess` | The newest addition: Knight's Tour and Eight Queens as watchable, scrubbable backtracking searches — each search narrates onto an event tape, and the sources themselves are exhibited at `/chess/code`. | Zig (WASM) + JS | [`games/chess/README.md`](games/chess/README.md) |
 
 > **The server is the zig implementation in [`zig-server/`](zig-server/)** —
 > see [`SERVER.md`](SERVER.md). (It was ported from a Go original, now removed;
@@ -53,7 +54,7 @@ We pin these versions:
 
 | Tool | Version | Builds | Install |
 |---|---|---|---|
-| **Zig** | 0.16.0 | the server (`zig-server/`) + the Safari Screensaver's WASM core (`games/driving/wasm/` → `games/driving/safari.wasm`) | system install — `zig version` |
+| **Zig** | 0.16.0 | the server (`zig-server/`) + the Safari Screensaver's WASM core (`games/driving/wasm/` → `games/driving/safari.wasm`) + the Chess Toys' WASM cores (`games/chess/*.zig` → `games/chess/*.wasm`) | system install — `zig version` |
 | **Elm** | 0.19.1 | the Lyn Rummy client | `npm install` in `games/lynrummy/elm/` (pinned in its `package.json`) |
 | **TypeScript** | 6.0.3 | the Delivery client + the Lyn Rummy agent/engine | `npm install` in `delivery/` and `games/lynrummy/ts/` (pinned in each `package.json`) |
 | **Node** | 24 | runs the TS directly + hosts the npm-installed `elm`/`tsc` | system install — `node --version` |
@@ -265,7 +266,7 @@ loads the widgets. Start at `Viewport` and follow the breadcrumbs.
 ```
 ops/start              Start the zig server on :9001 (rebuild + relaunch)
 ops/list               List ops commands
-ops/check              Pre-commit gate (~35s warm): check_zig + test_ts + test_elm + test_docs + test_css
+ops/check              Pre-commit gate (~40s warm): check_common + test_elm + test_ts + test_chat + check_safari + check_chess
 ops/check_full         Milestone gate: ops/check + agent self-play
 ops/check_zig          zig server compiles + unit tests (~6s)
 ops/check_markdown     Markdown dialect regression (~3s)
