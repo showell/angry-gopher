@@ -65,6 +65,7 @@ async function main() {
   const { instance } = await WebAssembly.instantiateStreaming(fetch('/chess/knight.wasm'), {});
   const wasm = instance.exports;
   const board = new Int8Array(wasm.memory.buffer, wasm.boardPtr(), 64);
+  const dead = new Uint8Array(wasm.memory.buffer, wasm.deadPtr(), 64);
   // the precomputed knight graph, read once — the hover highlights ARE this graph
   const nbrs = new Uint8Array(wasm.memory.buffer, wasm.nbrsPtr(), 64 * 8);
   const nbrCounts = new Uint8Array(wasm.memory.buffer, wasm.nbrCountsPtr(), 64);
@@ -106,6 +107,16 @@ async function main() {
       if ((sq & 7) === 0) {
         ctx.textAlign = 'left'; ctx.textBaseline = 'top';
         ctx.fillText(String((sq >> 3) + 1), x + 3, y + 2);
+      }
+    }
+    // impossible squares in red: empty squares the tour can no longer reach
+    // from the head (the wasm's BFS — see computeDead). At a literal dead end
+    // every empty square lights up: the board announces the backtrack.
+    wasm.computeDead();
+    for (let sq = 0; sq < 64; sq++) {
+      if (dead[sq]) {
+        ctx.fillStyle = 'rgba(190,40,40,0.5)';
+        ctx.fillRect(sqX(sq), sqY(sq), SQ, SQ);
       }
     }
     // the head knight's square glows so the search frontier is easy to track

@@ -194,6 +194,54 @@ pub export fn boardPtr() usize {
     return @intFromPtr(&board);
 }
 
+// dead[sq] = 1 when the square is empty but IMPOSSIBLE: the tour, extending
+// forward from the current head, can never place a knight there — it isn't
+// reachable from the head through empty squares. The host paints these red.
+// At a literal dead end (head has no empty neighbor) every empty square is
+// impossible, so the whole board flags the imminent backtrack.
+var dead: [64]u8 = [_]u8{0} ** 64;
+
+/// computeDead recomputes the impossible-square mask for the DISPLAY board —
+/// a BFS from the head knight through empty squares; empty squares the flood
+/// never reaches are dead. A pure function of the board, so it is exactly as
+/// scrubbed as the knights are. The host calls it once per drawn frame.
+pub export fn computeDead() void {
+    dead = [_]u8{0} ** 64;
+    if (on_board == 0 or on_board == 64) return;
+    var head: u8 = 0;
+    for (board, 0..) |n, sq| {
+        if (n == @as(i8, @intCast(on_board - 1))) head = @intCast(sq);
+    }
+    var reached: u64 = 0; // empty squares the tour can still enter
+    var queue: [64]u8 = undefined;
+    var q_len: usize = 0;
+    for (graph.nbrs[head][0..graph.count[head]]) |nb| {
+        if (board[nb] < 0) {
+            reached |= bit(nb);
+            queue[q_len] = nb;
+            q_len += 1;
+        }
+    }
+    while (q_len > 0) {
+        q_len -= 1;
+        const sq = queue[q_len];
+        for (graph.nbrs[sq][0..graph.count[sq]]) |nb| {
+            if (board[nb] < 0 and reached & bit(nb) == 0) {
+                reached |= bit(nb);
+                queue[q_len] = nb;
+                q_len += 1;
+            }
+        }
+    }
+    for (0..64) |sq| {
+        if (board[sq] < 0 and reached & bit(@intCast(sq)) == 0) dead[sq] = 1;
+    }
+}
+
+pub export fn deadPtr() usize {
+    return @intFromPtr(&dead);
+}
+
 /// nbrsPtr / nbrCountsPtr expose the precomputed graph: a flat [64][8]u8 of
 /// neighbor squares and the per-square count. The host reads them once — the
 /// hover highlights ARE this graph.
@@ -278,6 +326,44 @@ test "pinned event counts freeze the move ordering" {
         while (stepForward() == 1) {}
         try std.testing.expectEqual(p.events, tape_len);
     }
+    reset();
+}
+
+test "impossible-square mask: empty on a backtrack-free tour, sound when backtracking" {
+    // b2 glides to a tour with zero removals. Placements only shrink the
+    // empty subgraph, so if any square ever went unreachable it could never
+    // be filled and the tour couldn't complete — the mask must stay empty.
+    init(9);
+    while (true) {
+        computeDead();
+        for (dead) |d| try std.testing.expectEqual(@as(u8, 0), d);
+        if (stepForward() == 0) break;
+    }
+    // e4 backtracks (3876 events). At every step: a dead square is empty;
+    // its empty neighbors are dead too (a reachable neighbor would reach it);
+    // and no empty neighbor of the head is dead (it's placeable right now).
+    init(28);
+    var saw_dead = false;
+    while (true) {
+        computeDead();
+        var head: usize = 0;
+        for (board, 0..) |n, sq| {
+            if (n == @as(i8, @intCast(on_board - 1))) head = sq;
+        }
+        for (0..64) |sq| {
+            if (dead[sq] == 0) continue;
+            saw_dead = true;
+            try std.testing.expect(board[sq] < 0);
+            for (graph.nbrs[sq][0..graph.count[sq]]) |nb| {
+                if (board[nb] < 0) try std.testing.expectEqual(@as(u8, 1), dead[nb]);
+            }
+        }
+        for (graph.nbrs[head][0..graph.count[head]]) |nb| {
+            if (board[nb] < 0) try std.testing.expectEqual(@as(u8, 0), dead[nb]);
+        }
+        if (stepForward() == 0) break;
+    }
+    try std.testing.expect(saw_dead);
     reset();
 }
 
