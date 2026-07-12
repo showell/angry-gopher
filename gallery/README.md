@@ -38,8 +38,7 @@ Filenames are `<slug>.png` (or `.svg`), where the slugs match the manifest in
   framing: cropped to the gallery ratio and given a clean solved-looking allocation
   (nearest-anchor grouping, not the live solver). Re-run if the map geometry changes.
 - **`chess.svg`** — hand-authored via a one-off script (not kept): a Knight's Tour
-  mid-search using the live toy's real visual grammar (a legal knight walk with move
+  mid-search using the live toys' real visual grammar (a legal knight walk with move
   numbers, the retracted branch in red, the head's open hops as green dots), plus a
-  solid knight and an outlined queen in the foreground — outlined because eight
-  queens isn't shipped yet.
+  knight and a queen standing in the foreground — one piece per shipped toy.
 - The rest are **pending** — approach per app still to be decided.

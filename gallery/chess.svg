@@ -3,7 +3,7 @@
        board shows the Knight's Tour mid-search: a1-b3-c5-a4-b2-d1-f2 is a legal
        knight walk, red = the retracted branch b3-c1-a2, green dots = the head's
        open hops — as in the live toy. The big queen is the nod to toys to come
-       (eight queens) — outlined, not solid: not shipped yet. -->
+       (eight queens shipped 2026-07-12, so she is solid ivory like the knight). -->
   <defs>
     <radialGradient id="chbg" cx="0.42" cy="0.4" r="0.9">
       <stop offset="0" stop-color="#2a2c34"/>
@@ -109,7 +109,7 @@
     <text x="284" y="304" font-size="11" font-weight="bold" text-anchor="end" fill="#14141a" fill-opacity="0.65" font-family="ui-monospace, Menlo, monospace">7</text>
   </g>
   <g filter="url(#chpiece)">
-    <text x="530" y="368" font-family="DejaVu Sans" font-size="200" text-anchor="middle" fill="#444754" stroke="#e8e2d6" stroke-width="3.5">&#9819;</text>
+    <text x="530" y="368" font-family="DejaVu Sans" font-size="200" text-anchor="middle" fill="#e8e2d6">&#9819;</text>
     <text x="437" y="392" font-family="DejaVu Sans" font-size="160" text-anchor="middle" fill="#e8e2d6">&#9822;</text>
   </g>
 </svg>

@@ -60,6 +60,7 @@ A single board, mid-game. Drag stacks to merge or split your way to a clean meld
 image: /gallery/chess.svg
 cta: Watch it backtrack
 lang: Zig (WASM) + JavaScript
-tech: a precomputed knight-move graph and a DFS whose place/remove events land on a scrubbable tape — the whole search replays forwards or backwards
+tech: one shared engine — searches emit an event tape of place/remove moves, so every animation scrubs forwards or backwards
+essay: /chess/code
 code: https://github.com/showell/angry-gopher/tree/master/games/chess
-Little chess puzzles, starting with the Knight's Tour: a knight tries to visit all 64 squares exactly once. Watch the classic backtracking search run — knights pile onto the board, hit dead ends, and get pulled back off, red squares marking where attempts died. Pause it, scrub it backwards, or start it from any square.
+Classic backtracking searches you can watch think: the Knight's Tour (visit all 64 squares exactly once) and Eight Queens (none attacking another). Pieces pile onto the board, hit dead ends, and get pulled back off — red squares mark where attempts died. Pause, scrub backwards, start from any square — and read the zig it all runs on.
