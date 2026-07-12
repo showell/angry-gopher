@@ -42,6 +42,12 @@ A few load-bearing ideas worth knowing before you dig in:
 - **Live updates ride Server-Sent Events.** Several per-user and per-conversation
   SSE streams push new messages and activity; the client replays backlog then
   follows live.
+- **MPA at the core, SPA-feel from a user-attention layer.** One transcript =
+  one topic = one URL, and switching topics is a real page load (bookmarkable,
+  refreshable, browser-native back/forward). What makes it *feel* live is a
+  separate per-user layer that survives page loads: cross-topic notifications,
+  the violet-favicon alert, pinned sessions, and the Recent feed. The unit of
+  *identity* is the URL; the unit of *attention* is the user.
 - **Markdown is our own dialect.** Rather than pull in a parser, the server hand-rolls
   a small, deliberate markdown engine — that choice (and why it's the right one for a
   project like this) is the subject of the essay

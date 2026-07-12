@@ -218,21 +218,33 @@ against `http://localhost:9001`, and the prod key against
 
 ## Routes
 
+The authoritative dispatch is `route()` in `zig-server/src/server.zig`
+(one prefix match per surface — read it for the full story). The map:
+
 | Path | What |
 |---|---|
-| `/` | Home / launch pad |
-| `/game`, `/game/<id>`, `/game/sessions` | Full-game Elm client + session storage |
-| `/puzzles` | Single-board puzzle client |
-| `/chat` | Private one-on-one chat (members only) |
-| `/settings` | Per-user settings (read-only bot API key) |
+| `/` | Home / launch pad (public; viewer resolved for the top bar, never gated) |
+| `/delivery` | Seattle Delivery sim (public) |
+| `/driving`, `/safari_download`, `/downloads` | Safari Screensaver + its native-download landing page and artifacts (public) |
+| `/chess` | Chess Toys: `/chess/knight`, `/chess/queens`, sources at `/chess/code` (public) |
+| `/game`, `/puzzles`, `/tutorial` | Lyn Rummy: full game (guest name required), puzzle client, beginner tutorial (tutorial public) |
+| `/chat`, `/channel/<name>` | DMs + channels over SSE, `/chat/docs` authoring (members only) |
+| `/blog` | Blog (public; posting a comment mints a guest) |
+| `/learn` | Interactive site tutorial (public) |
+| `/settings` | Per-user settings incl. API-key generation (members) |
 | `/login`, `/login/full`, `/logout` | Guest name login / member password login |
-| `/admin` | Session + user overview (requires the admin flag) |
-| `/version` | Build version JSON |
+| `/admin` | Session + user overview (hardcoded to uid 1) |
+| `/gallery`, `/images` | Home-page app emblems / brand assets (public) |
+| `/steve-resume` | Server-owned markdown page + pre-built PDF |
+| `/version`, `/debug/mem` | Build version JSON; live allocator counters (the leak smoke detector) |
 
-Every request goes through a login gate: no resolvable
-identity → redirect to `/login`. Login sets a `gopher_uid` cookie;
-members additionally get a signed session cookie. Bot **API keys are
-read-only** — a keyed request may only GET/HEAD.
+There is no site-wide login gate — most surfaces are deliberately
+public and ungated (they resolve the viewer only to label the top
+bar). The gates that exist are per-surface: Lyn Rummy asks for a guest
+name, chat requires a full member. Login sets a `gopher_uid` cookie;
+members additionally get a signed session cookie. An **API key**
+(`Authorization: Bearer`) resolves to its principal exactly like a
+session — read + write as that uid, never admin.
 
 ## Layout
 
