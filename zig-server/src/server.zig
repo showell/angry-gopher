@@ -160,8 +160,10 @@ fn route(req: *std.http.Server.Request, io: std.Io, alloc: std.mem.Allocator, bu
         try delivery.handle(req, sub);
     } else if (matchPrefix(path, "/chess")) |sub| {
         // Public + ungated like /driving: little chess toys (Knight's Tour,
-        // Eight Queens) + /chess/code, the sources-as-exhibit page.
-        try chess.handle(req, alloc, sub);
+        // Eight Queens) + /chess/code, the sources-as-exhibit page. The viewer
+        // is resolved for the index's top-bar chip, never gated (like /blog).
+        const uid = try users.currentUserID(io, alloc, req);
+        try chess.handle(req, io, alloc, uid, sub);
     } else if (matchPrefix(path, "/puzzles")) |sub| {
         try puzzles.handle(req, io, alloc, sub);
     } else if (matchPrefix(path, "/game")) |sub| {

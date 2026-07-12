@@ -10,8 +10,10 @@
 //! the wasm is built from, embedded at build time).
 
 const std = @import("std");
+const Io = std.Io;
 const http = @import("http.zig");
 const html = @import("html.zig");
+const users = @import("users.zig");
 
 const knight_wasm = @embedFile("knight_wasm");
 const queens_wasm = @embedFile("queens_wasm");
@@ -66,15 +68,28 @@ const queens_page = shell("Eight Queens",
     \\}
 );
 
-// The launch pad for the toys: two cards + the under-the-hood link. Styled to
-// match the boards' dark chrome.
-const index_page =
+// The launch pad for the toys: the site's generic top bar (Home · Chat · Blog,
+// same as home.zig/blog.zig — the way back home) over two cards + the
+// under-the-hood link, styled to match the boards' dark chrome.
+const index_head =
     \\<!DOCTYPE html>
     \\<html lang="en"><head><meta charset="utf-8">
     \\<meta name="viewport" content="width=device-width, initial-scale=1">
-    \\<title>Chess Toys</title></head>
-    \\<body style="margin:0;background:#0b0b0d;min-height:100vh;display:flex;flex-direction:column;
-    \\align-items:center;justify-content:center;gap:18px;font-family:ui-monospace,Menlo,monospace;color:#cfd2d6">
+    \\<title>Chess Toys</title>
+    \\<style>
+    \\.app-top { background: #f0ede4; border-bottom: 1px solid #c9bfa7; padding: 8px 24px;
+    \\           font-family: sans-serif; display: flex; justify-content: space-between;
+    \\           align-items: baseline; position: sticky; top: 0; z-index: 10; }
+    \\.app-top-home a { color: #000080; text-decoration: none; font-weight: bold; }
+    \\.app-top-home a:hover { text-decoration: underline; }
+    \\.app-top-user { font-size: 13px; color: #444; }
+    \\.app-top-user a { color: #000080; }
+    \\</style></head>
+    \\<body style="margin:0;background:#0b0b0d;min-height:100vh;display:flex;flex-direction:column">
+;
+const index_body =
+    \\<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    \\gap:18px;padding:24px;font-family:ui-monospace,Menlo,monospace;color:#cfd2d6">
     \\<div style="font-size:24px;letter-spacing:1px;color:#e8e2d6">Chess Toys</div>
     \\<div style="font-size:13px;color:#9aa0a6;max-width:520px;text-align:center">
     \\Classic backtracking searches you can watch think — and scrub, in both directions.</div>
@@ -94,8 +109,28 @@ const index_page =
     \\</div>
     \\<div style="font-size:12px;color:#6d7278">same engine underneath —
     \\<a href="/chess/code" style="color:#8a93a0">see how it works</a></div>
-    \\</body></html>
+    \\</div></body></html>
 ;
+
+/// respondIndex renders the launch pad with the generic site top bar (the link
+/// back Home) — viewer resolved for the user chip, never gated, like /blog.
+fn respondIndex(req: *std.http.Server.Request, io: Io, alloc: std.mem.Allocator, uid: []const u8) !void {
+    var b: std.ArrayList(u8) = .empty;
+    try b.appendSlice(alloc, index_head);
+    try b.appendSlice(alloc,
+        "<header class=\"app-top\"><div class=\"app-top-home\">" ++
+        "<a href=\"/\">Home</a> · <a href=\"/chat\">Chat</a> · <a href=\"/blog\">Blog</a></div>" ++
+        "<div class=\"app-top-user\">");
+    const name = if (uid.len == 0) "" else try users.getUserName(io, alloc, uid);
+    if (name.len == 0) {
+        try b.appendSlice(alloc, "<a href=\"/login\">Log in</a>");
+    } else {
+        try b.print(alloc, "<strong>{s}</strong> · <a href=\"/logout\">Log out</a>", .{try html.htmlEscape(alloc, name)});
+    }
+    try b.appendSlice(alloc, "</div></header>");
+    try b.appendSlice(alloc, index_body);
+    try req.respond(b.items, .{ .extra_headers = &.{http.html_ct} });
+}
 
 // /chess/code: the sources as exhibit. The intro tells the architecture story;
 // the files below it are the ones the wasm is actually built from.
@@ -159,9 +194,9 @@ fn respondCodePage(req: *std.http.Server.Request, alloc: std.mem.Allocator) !voi
 }
 
 /// handle dispatches /chess/* — the route table, a switch on the path tail.
-pub fn handle(req: *std.http.Server.Request, alloc: std.mem.Allocator, sub: []const u8) !void {
+pub fn handle(req: *std.http.Server.Request, io: Io, alloc: std.mem.Allocator, uid: []const u8, sub: []const u8) !void {
     if (sub.len == 0 or std.mem.eql(u8, sub, "/")) {
-        try req.respond(index_page, .{ .extra_headers = &.{http.html_ct} });
+        try respondIndex(req, io, alloc, uid);
     } else if (std.mem.eql(u8, sub, "/knight")) {
         try req.respond(knight_page, .{ .extra_headers = &.{http.html_ct} });
     } else if (std.mem.eql(u8, sub, "/queens")) {
