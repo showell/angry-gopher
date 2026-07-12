@@ -3,13 +3,16 @@
 # Before composing an ad-hoc shell command for build / test / regen, run
 # `ops/list` to see what already exists.
 #
-# Chess-toys gate: run the Knight's Tour core's unit tests natively (the same
-# knight.zig that ships as wasm — pure logic, so `zig test` covers it). Pins
-# the graph shape, full-tour completion from all 64 starts, the exact event
-# counts that freeze the move ordering, and scrub round-trips.
+# Chess-toys gate: run each toy's unit tests natively (the same roots that
+# ship as wasm — pure logic, so `zig test` covers them; the shared tape
+# substrate is exercised through every root). Pins graph shapes, completion,
+# the exact event counts that freeze move orderings, and scrub round-trips.
 set -e
 
 REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$REPO_DIR"
 
-zig test games/chess/knight/knight.zig
+for toy in games/chess/*.zig; do
+    echo "==> zig test $toy"
+    zig test "$toy"
+done
