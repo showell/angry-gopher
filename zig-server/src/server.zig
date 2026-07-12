@@ -159,8 +159,9 @@ fn route(req: *std.http.Server.Request, io: std.Io, alloc: std.mem.Allocator, bu
     } else if (matchPrefix(path, "/delivery")) |sub| {
         try delivery.handle(req, sub);
     } else if (matchPrefix(path, "/chess")) |sub| {
-        // Public + ungated like /driving: little chess toys (the Knight's Tour).
-        try chess.handle(req, sub);
+        // Public + ungated like /driving: little chess toys (Knight's Tour,
+        // Eight Queens) + /chess/code, the sources-as-exhibit page.
+        try chess.handle(req, alloc, sub);
     } else if (matchPrefix(path, "/puzzles")) |sub| {
         try puzzles.handle(req, io, alloc, sub);
     } else if (matchPrefix(path, "/game")) |sub| {

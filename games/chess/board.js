@@ -1,9 +1,14 @@
-// board — the ONLY non-zig piece of the Knight's Tour, and deliberately dumb.
-// It owns no search logic: knight.wasm holds the precomputed move graph, the
-// DFS machine, and the scrubbable event tape; this just draws the board state
-// the wasm exposes (64 bytes of move numbers) and forwards input — click to
-// start a tour, hover to see the graph, transport controls to play/scrub.
-// Plain hand-written JS (no TS, no bundler).
+// board — the ONLY non-zig piece of the chess toys, and deliberately dumb. It
+// owns no search logic: the toy's wasm (knight.wasm, queens.wasm — same ABI,
+// emitted by core/tape.zig's exportAbi) holds the precomputed move graph, the
+// search machine, and the scrubbable event tape; this just draws the board
+// state the wasm exposes (64 bytes of move numbers + two overlay masks) and
+// forwards input — click to start a search, hover to see the graph, transport
+// controls to play/scrub. One host serves every toy: the page shell sets
+// window.CHESS_TOY (wasm url + wording); everything numeric comes from the
+// wasm itself. Plain hand-written JS (no TS, no bundler).
+
+const TOY = window.CHESS_TOY; // set by the page shell; absent = a real bug
 
 const SQ = 68, W = SQ * 8;
 const LIGHT = '#f0d9b5', DARK = '#b58863';
@@ -14,8 +19,15 @@ async function main() {
     'align-items:center;justify-content:center;gap:12px;' +
     'font-family:ui-monospace,Menlo,monospace;color:#cfd2d6';
 
+  const nav = document.createElement('div');
+  nav.innerHTML = '<a href="/chess" style="color:#8a93a0">chess toys</a>' +
+    '<span style="color:#4a4d55"> · </span>' +
+    '<a href="/chess/code" style="color:#8a93a0">under the hood</a>';
+  nav.style.cssText = 'font-size:12px;letter-spacing:0.4px';
+  document.body.appendChild(nav);
+
   const title = document.createElement('div');
-  title.textContent = "Knight's Tour";
+  title.textContent = TOY.title;
   title.style.cssText = 'font-size:20px;letter-spacing:1px;color:#e8e2d6';
   document.body.appendChild(title);
 
@@ -58,20 +70,21 @@ async function main() {
   document.body.appendChild(controls);
 
   const hint = document.createElement('div');
-  hint.textContent = 'hover · knight moves    click · start a tour there    SPACE play/pause · ←/→ step';
+  hint.textContent = `hover · ${TOY.hoverHint}    click · ${TOY.clickHint}    SPACE play/pause · ←/→ step`;
   hint.style.cssText = 'font-size:12px;color:#6d7278;letter-spacing:0.4px';
   document.body.appendChild(hint);
   const legend = document.createElement('div');
-  legend.textContent = 'red · a knight was retracted here    indigo · cut off from the tour';
+  legend.textContent = `red · a ${TOY.noun1} was retracted here    indigo · ${TOY.indigoHint}`;
   legend.style.cssText = 'font-size:12px;color:#6d7278;letter-spacing:0.4px';
   document.body.appendChild(legend);
 
-  const { instance } = await WebAssembly.instantiateStreaming(fetch('/chess/knight.wasm'), {});
+  const { instance } = await WebAssembly.instantiateStreaming(fetch(TOY.wasm), {});
   const wasm = instance.exports;
+  const target = wasm.targetCount();
   const board = new Int8Array(wasm.memory.buffer, wasm.boardPtr(), 64);
   const deadEnd = new Uint8Array(wasm.memory.buffer, wasm.deadEndPtr(), 64);
   const impossible = new Uint8Array(wasm.memory.buffer, wasm.impossiblePtr(), 64);
-  // the precomputed knight graph, read once — the hover highlights ARE this graph
+  // the precomputed move graph, read once — the hover highlights ARE this graph
   const stride = wasm.adjStride();
   const adj = new Uint8Array(wasm.memory.buffer, wasm.adjPtr(), 64 * stride);
   const adjCounts = new Uint8Array(wasm.memory.buffer, wasm.adjCountsPtr(), 64);
@@ -97,7 +110,7 @@ async function main() {
   }
 
   function draw() {
-    const knights = wasm.piecesOnBoard();
+    const pieces = wasm.piecesOnBoard();
     // squares + coordinates (letters along rank 1, numbers up file a)
     for (let sq = 0; sq < 64; sq++) {
       const x = sqX(sq), y = sqY(sq);
@@ -115,11 +128,11 @@ async function main() {
         ctx.fillText(String((sq >> 3) + 1), x + 3, y + 2);
       }
     }
-    // failure overlays (see knight.zig computeOverlays): red = a knight was
-    // placed here, found doomed, and pulled off — accumulating through
-    // removal cascades, cleared only when the search re-enters the square.
-    // Indigo = provably unreachable from the head through empty squares —
-    // the stronger fact, so it wins where both hold.
+    // failure overlays (see core/tape.zig + the toy's computeImpossible):
+    // red = a piece was placed here, found doomed, and pulled off —
+    // accumulating through removal cascades, cleared only when the search
+    // re-enters the square. Indigo = the toy's "no piece can live here right
+    // now" — the stronger fact, so it wins where both hold.
     wasm.computeOverlays();
     for (let sq = 0; sq < 64; sq++) {
       if (impossible[sq]) {
@@ -130,10 +143,10 @@ async function main() {
         ctx.fillRect(sqX(sq), sqY(sq), SQ, SQ);
       }
     }
-    // the head knight's square glows so the search frontier is easy to track
-    if (knights > 0) {
+    // the newest piece's square glows so the search frontier is easy to track
+    if (pieces > 0) {
       for (let sq = 0; sq < 64; sq++) {
-        if (board[sq] === knights - 1) {
+        if (board[sq] === pieces - 1) {
           ctx.fillStyle = 'rgba(255,214,102,0.5)';
           ctx.fillRect(sqX(sq), sqY(sq), SQ, SQ);
         }
@@ -160,36 +173,36 @@ async function main() {
         }
       }
     }
-    // the knights, with their move numbers
+    // the pieces, with their move numbers
     for (let sq = 0; sq < 64; sq++) {
       const n = board[sq];
       if (n < 0) continue;
       const x = sqX(sq), y = sqY(sq);
-      ctx.fillStyle = n === knights - 1 ? '#7a1f1f' : '#22232a';
+      ctx.fillStyle = n === pieces - 1 ? '#7a1f1f' : '#22232a';
       ctx.font = `${Math.round(SQ * 0.72)}px serif`;
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillText('♞', x + SQ / 2, y + SQ / 2 + 3);
+      ctx.fillText(TOY.piece, x + SQ / 2, y + SQ / 2 + 3);
       ctx.fillStyle = 'rgba(20,20,25,0.65)';
       ctx.font = 'bold 11px ui-monospace,Menlo,monospace';
       ctx.textAlign = 'right'; ctx.textBaseline = 'top';
       ctx.fillText(String(n + 1), x + SQ - 3, y + 2);
     }
-    drawStatus(knights);
+    drawStatus(pieces);
   }
 
-  function drawStatus(knights) {
+  function drawStatus(pieces) {
     speedLabel.textContent = stepsPerSec().toLocaleString() + '/s';
     if (!wasm.isStarted()) {
-      status.textContent = 'click a square to place the first knight';
+      status.textContent = TOY.startHint;
       return;
     }
     const cur = wasm.cursor(), len = wasm.tapeLen();
-    let s = `${knights}/64 knights · step ${cur.toLocaleString()}` +
+    let s = `${pieces}/${target} ${TOY.noun} · step ${cur.toLocaleString()}` +
       (cur < len ? ` / ${len.toLocaleString()}` : '') +
       ` · deepest ${wasm.bestDepth()}`;
     if (cur === len) {
-      if (wasm.isSolved()) s += ' — tour complete!';
-      else if (wasm.isExhausted()) s += ' — no tour from here (search exhausted)';
+      if (wasm.isSolved()) s += ` — ${TOY.solvedMsg}`;
+      else if (wasm.isExhausted()) s += ` — ${TOY.exhaustedMsg}`;
     }
     status.textContent = s;
   }

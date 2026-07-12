@@ -40,10 +40,16 @@ pub fn build(b: *std.Build) void {
         // + its dumb plain-JS blitter. This REPLACED the old pure-TS bundle (app.js).
         .{ .name = "safari_wasm", .path = "../games/driving/safari.wasm" },
         .{ .name = "safari_blitter_js", .path = "../games/driving/wasm/blitter.js" },
-        // Chess toys (/chess): the Knight's Tour — a zig→WASM search core
-        // (ops/build_chess_wasm) + its dumb plain-JS board host.
+        // Chess toys (/chess): per-toy zig→WASM search cores on one shared
+        // tape substrate (ops/build_chess_wasm) + the one dumb plain-JS board
+        // host. The chess_src_* entries are the SAME source files the wasm is
+        // built from, re-embedded as text for /chess/code (sources-as-exhibit).
         .{ .name = "knight_wasm", .path = "../games/chess/knight.wasm" },
+        .{ .name = "queens_wasm", .path = "../games/chess/queens.wasm" },
         .{ .name = "chess_board_js", .path = "../games/chess/board.js" },
+        .{ .name = "chess_src_tape", .path = "../games/chess/core/tape.zig" },
+        .{ .name = "chess_src_knight", .path = "../games/chess/knight.zig" },
+        .{ .name = "chess_src_queens", .path = "../games/chess/queens.zig" },
         .{ .name = "delivery_app_js", .path = "../delivery/app.js" },
         .{ .name = "puzzle_js", .path = "../games/lynrummy/elm/puzzle.js" },
         // The compiled Elm full-game client (the /game surface).

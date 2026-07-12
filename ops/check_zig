@@ -23,7 +23,7 @@ cd "$REPO_DIR"
 # catalogs, images — are always present; only these five are build outputs.)
 for f in games/lynrummy/elm/elm.js games/lynrummy/elm/puzzle.js \
          games/lynrummy/elm/engine.js games/driving/safari.wasm \
-         games/chess/knight.wasm; do
+         games/chess/knight.wasm games/chess/queens.wasm; do
     [ -f "$f" ] || { echo "Error: $f missing — run ops/build_elm + ops/build_safari_wasm + ops/build_chess_wasm first (embedded by zig build)." >&2; exit 1; }
 done
 
