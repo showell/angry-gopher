@@ -1,0 +1,28 @@
+#!/bin/bash
+# CANONICAL DEV-LOOP SCRIPT — DO NOT REINVENT.
+# Before composing an ad-hoc shell command for build / test / regen, run
+# `ops/list` to see what already exists.
+#
+# Build the Knight's Tour zig core into a freestanding WebAssembly module at
+# games/chess/knight.wasm. The browser fetches + instantiates it; the wasm owns
+# the precomputed knight graph + the stepwise DFS event tape, and board.js just
+# draws the board state it exposes. Same recipe as ops/build_safari_wasm: pure
+# compute, no entry point, no imports, no allocator; -rdynamic exposes the
+# `export fn`s; ReleaseSmall keeps it lean (it ships embedded).
+#
+# The output is @embedFile'd into the server binary and served at /chess.
+set -e
+
+source "$(dirname "$0")/_paths.sh"
+
+SRC="$GOPHER_DIR/games/chess/knight/knight.zig"
+OUT="$GOPHER_DIR/games/chess/knight.wasm"
+
+zig build-exe "$SRC" \
+    -target wasm32-freestanding \
+    -fno-entry \
+    -rdynamic \
+    -O ReleaseSmall \
+    -femit-bin="$OUT"
+
+echo "built $OUT ($(wc -c < "$OUT") bytes)"

@@ -22,6 +22,7 @@ const http = @import("http.zig");
 const config = @import("config.zig");
 const driving = @import("driving.zig");
 const delivery = @import("delivery.zig");
+const chess = @import("chess.zig");
 const puzzles = @import("puzzles.zig");
 const game = @import("game.zig");
 const chat = @import("chat.zig");
@@ -157,6 +158,9 @@ fn route(req: *std.http.Server.Request, io: std.Io, alloc: std.mem.Allocator, bu
         try driving.handle(req, sub);
     } else if (matchPrefix(path, "/delivery")) |sub| {
         try delivery.handle(req, sub);
+    } else if (matchPrefix(path, "/chess")) |sub| {
+        // Public + ungated like /driving: little chess toys (the Knight's Tour).
+        try chess.handle(req, sub);
     } else if (matchPrefix(path, "/puzzles")) |sub| {
         try puzzles.handle(req, io, alloc, sub);
     } else if (matchPrefix(path, "/game")) |sub| {

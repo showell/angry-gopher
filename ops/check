@@ -43,5 +43,10 @@ echo
 echo "===== ops/check_safari ====="
 ./ops/check_safari
 
+# Chess toys: the Knight's Tour wasm core's native unit tests.
+echo
+echo "===== ops/check_chess ====="
+./ops/check_chess
+
 echo
 echo "All gates passed in $((SECONDS - t0_total))s."

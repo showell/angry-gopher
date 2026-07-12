@@ -37,10 +37,11 @@ git push
 COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo unknown)
 
 # Build the front-end bundles FIRST — build.zig embeds them (see build.zig).
-echo "Building Elm + delivery bundles + the Safari WASM core..."
+echo "Building Elm + delivery bundles + the Safari + chess WASM cores..."
 "$GOPHER_DIR/ops/build_elm"
 "$GOPHER_DIR/ops/build_delivery"
 "$GOPHER_DIR/ops/build_safari_wasm"
+"$GOPHER_DIR/ops/build_chess_wasm"
 
 # Build the native Linux Safari executable — a free-standing download (NOT embedded),
 # rsync'd to downloads/ below and served by downloads.zig ("Linux Executable" on the

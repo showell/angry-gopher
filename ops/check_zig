@@ -20,10 +20,11 @@ cd "$REPO_DIR"
 
 # Guard the built bundles `zig build` embeds — fail with guidance rather than a
 # cryptic @embedFile error. (The committed assets — chat/*.js, learn/*.js,
-# catalogs, images — are always present; only these four are build outputs.)
+# catalogs, images — are always present; only these five are build outputs.)
 for f in games/lynrummy/elm/elm.js games/lynrummy/elm/puzzle.js \
-         games/lynrummy/elm/engine.js games/driving/safari.wasm; do
-    [ -f "$f" ] || { echo "Error: $f missing — run ops/build_elm + ops/build_safari_wasm first (embedded by zig build)." >&2; exit 1; }
+         games/lynrummy/elm/engine.js games/driving/safari.wasm \
+         games/chess/knight.wasm; do
+    [ -f "$f" ] || { echo "Error: $f missing — run ops/build_elm + ops/build_safari_wasm + ops/build_chess_wasm first (embedded by zig build)." >&2; exit 1; }
 done
 
 # Poka-yoke lint: raw request-head access (req.head.target / iterateHeaders) is
