@@ -15,14 +15,15 @@ set -e
 
 source "$(dirname "$0")/_paths.sh"
 
-SRC="$GOPHER_DIR/games/chess/knight/knight.zig"
-OUT="$GOPHER_DIR/games/chess/knight.wasm"
-
-zig build-exe "$SRC" \
-    -target wasm32-freestanding \
-    -fno-entry \
-    -rdynamic \
-    -O ReleaseSmall \
-    -femit-bin="$OUT"
-
-echo "built $OUT ($(wc -c < "$OUT") bytes)"
+for toy in knight queens; do
+    SRC="$GOPHER_DIR/games/chess/$toy.zig"
+    [ -f "$SRC" ] || continue # queens lands in a later commit
+    OUT="$GOPHER_DIR/games/chess/$toy.wasm"
+    zig build-exe "$SRC" \
+        -target wasm32-freestanding \
+        -fno-entry \
+        -rdynamic \
+        -O ReleaseSmall \
+        -femit-bin="$OUT"
+    echo "built $OUT ($(wc -c < "$OUT") bytes)"
+done

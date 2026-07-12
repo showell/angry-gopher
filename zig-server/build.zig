@@ -43,7 +43,7 @@ pub fn build(b: *std.Build) void {
         // Chess toys (/chess): the Knight's Tour — a zig→WASM search core
         // (ops/build_chess_wasm) + its dumb plain-JS board host.
         .{ .name = "knight_wasm", .path = "../games/chess/knight.wasm" },
-        .{ .name = "knight_board_js", .path = "../games/chess/knight/board.js" },
+        .{ .name = "chess_board_js", .path = "../games/chess/board.js" },
         .{ .name = "delivery_app_js", .path = "../delivery/app.js" },
         .{ .name = "puzzle_js", .path = "../games/lynrummy/elm/puzzle.js" },
         // The compiled Elm full-game client (the /game surface).

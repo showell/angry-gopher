@@ -70,10 +70,11 @@ async function main() {
   const wasm = instance.exports;
   const board = new Int8Array(wasm.memory.buffer, wasm.boardPtr(), 64);
   const deadEnd = new Uint8Array(wasm.memory.buffer, wasm.deadEndPtr(), 64);
-  const unreach = new Uint8Array(wasm.memory.buffer, wasm.unreachPtr(), 64);
+  const impossible = new Uint8Array(wasm.memory.buffer, wasm.impossiblePtr(), 64);
   // the precomputed knight graph, read once — the hover highlights ARE this graph
-  const nbrs = new Uint8Array(wasm.memory.buffer, wasm.nbrsPtr(), 64 * 8);
-  const nbrCounts = new Uint8Array(wasm.memory.buffer, wasm.nbrCountsPtr(), 64);
+  const stride = wasm.adjStride();
+  const adj = new Uint8Array(wasm.memory.buffer, wasm.adjPtr(), 64 * stride);
+  const adjCounts = new Uint8Array(wasm.memory.buffer, wasm.adjCountsPtr(), 64);
 
   let mode = 0; // 0 paused · 1 playing · -1 rewinding
   let hover = -1; // hovered square or -1
@@ -96,7 +97,7 @@ async function main() {
   }
 
   function draw() {
-    const knights = wasm.knightsOnBoard();
+    const knights = wasm.piecesOnBoard();
     // squares + coordinates (letters along rank 1, numbers up file a)
     for (let sq = 0; sq < 64; sq++) {
       const x = sqX(sq), y = sqY(sq);
@@ -121,7 +122,7 @@ async function main() {
     // the stronger fact, so it wins where both hold.
     wasm.computeOverlays();
     for (let sq = 0; sq < 64; sq++) {
-      if (unreach[sq]) {
+      if (impossible[sq]) {
         ctx.fillStyle = 'rgba(80,70,190,0.45)';
         ctx.fillRect(sqX(sq), sqY(sq), SQ, SQ);
       } else if (deadEnd[sq]) {
@@ -143,8 +144,8 @@ async function main() {
       ctx.strokeStyle = 'rgba(70,140,220,0.9)';
       ctx.lineWidth = 3;
       ctx.strokeRect(sqX(hover) + 1.5, sqY(hover) + 1.5, SQ - 3, SQ - 3);
-      for (let i = 0; i < nbrCounts[hover]; i++) {
-        const nb = nbrs[hover * 8 + i];
+      for (let i = 0; i < adjCounts[hover]; i++) {
+        const nb = adj[hover * stride + i];
         const cx = sqX(nb) + SQ / 2, cy = sqY(nb) + SQ / 2;
         ctx.beginPath();
         if (board[nb] < 0) {

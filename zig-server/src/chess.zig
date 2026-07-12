@@ -11,7 +11,7 @@ const std = @import("std");
 const http = @import("http.zig");
 
 const knight_wasm = @embedFile("knight_wasm");
-const knight_board_js = @embedFile("knight_board_js");
+const chess_board_js = @embedFile("chess_board_js");
 
 // A near-empty shell: board.js builds its own canvas + DOM, then fetches +
 // instantiates knight.wasm and draws the board state zig maintains.
@@ -28,7 +28,7 @@ pub fn handle(req: *std.http.Server.Request, sub: []const u8) !void {
     if (sub.len == 0 or std.mem.eql(u8, sub, "/")) {
         try req.respond(page, .{ .extra_headers = &.{http.html_ct} });
     } else if (std.mem.eql(u8, sub, "/knight.js")) {
-        try req.respond(knight_board_js, .{ .extra_headers = &.{http.js_ct} });
+        try req.respond(chess_board_js, .{ .extra_headers = &.{http.js_ct} });
     } else if (std.mem.eql(u8, sub, "/knight.wasm")) {
         try req.respond(knight_wasm, .{ .extra_headers = &.{http.wasm_ct} });
     } else {
