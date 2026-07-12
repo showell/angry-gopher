@@ -1,0 +1,115 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 420" width="600" height="420" role="img" aria-label="Chess toys — a Knight's Tour mid-search on the board, with a knight and a queen standing in the foreground">
+  <!-- Stylized chess-toys emblem (generated once by a throwaway script). The
+       board shows the Knight's Tour mid-search: a1-b3-c5-a4-b2-d1-f2 is a legal
+       knight walk, red = the retracted branch b3-c1-a2, green dots = the head's
+       open hops — as in the live toy. The big queen is the nod to toys to come
+       (eight queens) — outlined, not solid: not shipped yet. -->
+  <defs>
+    <radialGradient id="chbg" cx="0.42" cy="0.4" r="0.9">
+      <stop offset="0" stop-color="#2a2c34"/>
+      <stop offset="1" stop-color="#101116"/>
+    </radialGradient>
+    <filter id="chshadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="6" stdDeviation="9" flood-color="#000" flood-opacity="0.55"/>
+    </filter>
+    <filter id="chpiece" x="-40%" y="-40%" width="180%" height="180%">
+      <feDropShadow dx="0" dy="5" stdDeviation="6" flood-color="#000" flood-opacity="0.6"/>
+    </filter>
+  </defs>
+  <rect width="600" height="420" fill="url(#chbg)"/>
+  <g filter="url(#chshadow)"><rect x="42" y="46" width="332" height="332" rx="6" fill="#3a2f26"/></g>
+  <g>
+    <rect x="48" y="332" width="40" height="40" fill="#b58863"/>
+    <rect x="88" y="332" width="40" height="40" fill="#f0d9b5"/>
+    <rect x="128" y="332" width="40" height="40" fill="#b58863"/>
+    <rect x="168" y="332" width="40" height="40" fill="#f0d9b5"/>
+    <rect x="208" y="332" width="40" height="40" fill="#b58863"/>
+    <rect x="248" y="332" width="40" height="40" fill="#f0d9b5"/>
+    <rect x="288" y="332" width="40" height="40" fill="#b58863"/>
+    <rect x="328" y="332" width="40" height="40" fill="#f0d9b5"/>
+    <rect x="48" y="292" width="40" height="40" fill="#f0d9b5"/>
+    <rect x="88" y="292" width="40" height="40" fill="#b58863"/>
+    <rect x="128" y="292" width="40" height="40" fill="#f0d9b5"/>
+    <rect x="168" y="292" width="40" height="40" fill="#b58863"/>
+    <rect x="208" y="292" width="40" height="40" fill="#f0d9b5"/>
+    <rect x="248" y="292" width="40" height="40" fill="#b58863"/>
+    <rect x="288" y="292" width="40" height="40" fill="#f0d9b5"/>
+    <rect x="328" y="292" width="40" height="40" fill="#b58863"/>
+    <rect x="48" y="252" width="40" height="40" fill="#b58863"/>
+    <rect x="88" y="252" width="40" height="40" fill="#f0d9b5"/>
+    <rect x="128" y="252" width="40" height="40" fill="#b58863"/>
+    <rect x="168" y="252" width="40" height="40" fill="#f0d9b5"/>
+    <rect x="208" y="252" width="40" height="40" fill="#b58863"/>
+    <rect x="248" y="252" width="40" height="40" fill="#f0d9b5"/>
+    <rect x="288" y="252" width="40" height="40" fill="#b58863"/>
+    <rect x="328" y="252" width="40" height="40" fill="#f0d9b5"/>
+    <rect x="48" y="212" width="40" height="40" fill="#f0d9b5"/>
+    <rect x="88" y="212" width="40" height="40" fill="#b58863"/>
+    <rect x="128" y="212" width="40" height="40" fill="#f0d9b5"/>
+    <rect x="168" y="212" width="40" height="40" fill="#b58863"/>
+    <rect x="208" y="212" width="40" height="40" fill="#f0d9b5"/>
+    <rect x="248" y="212" width="40" height="40" fill="#b58863"/>
+    <rect x="288" y="212" width="40" height="40" fill="#f0d9b5"/>
+    <rect x="328" y="212" width="40" height="40" fill="#b58863"/>
+    <rect x="48" y="172" width="40" height="40" fill="#b58863"/>
+    <rect x="88" y="172" width="40" height="40" fill="#f0d9b5"/>
+    <rect x="128" y="172" width="40" height="40" fill="#b58863"/>
+    <rect x="168" y="172" width="40" height="40" fill="#f0d9b5"/>
+    <rect x="208" y="172" width="40" height="40" fill="#b58863"/>
+    <rect x="248" y="172" width="40" height="40" fill="#f0d9b5"/>
+    <rect x="288" y="172" width="40" height="40" fill="#b58863"/>
+    <rect x="328" y="172" width="40" height="40" fill="#f0d9b5"/>
+    <rect x="48" y="132" width="40" height="40" fill="#f0d9b5"/>
+    <rect x="88" y="132" width="40" height="40" fill="#b58863"/>
+    <rect x="128" y="132" width="40" height="40" fill="#f0d9b5"/>
+    <rect x="168" y="132" width="40" height="40" fill="#b58863"/>
+    <rect x="208" y="132" width="40" height="40" fill="#f0d9b5"/>
+    <rect x="248" y="132" width="40" height="40" fill="#b58863"/>
+    <rect x="288" y="132" width="40" height="40" fill="#f0d9b5"/>
+    <rect x="328" y="132" width="40" height="40" fill="#b58863"/>
+    <rect x="48" y="92" width="40" height="40" fill="#b58863"/>
+    <rect x="88" y="92" width="40" height="40" fill="#f0d9b5"/>
+    <rect x="128" y="92" width="40" height="40" fill="#b58863"/>
+    <rect x="168" y="92" width="40" height="40" fill="#f0d9b5"/>
+    <rect x="208" y="92" width="40" height="40" fill="#b58863"/>
+    <rect x="248" y="92" width="40" height="40" fill="#f0d9b5"/>
+    <rect x="288" y="92" width="40" height="40" fill="#b58863"/>
+    <rect x="328" y="92" width="40" height="40" fill="#f0d9b5"/>
+    <rect x="48" y="52" width="40" height="40" fill="#f0d9b5"/>
+    <rect x="88" y="52" width="40" height="40" fill="#b58863"/>
+    <rect x="128" y="52" width="40" height="40" fill="#f0d9b5"/>
+    <rect x="168" y="52" width="40" height="40" fill="#b58863"/>
+    <rect x="208" y="52" width="40" height="40" fill="#f0d9b5"/>
+    <rect x="248" y="52" width="40" height="40" fill="#b58863"/>
+    <rect x="288" y="52" width="40" height="40" fill="#f0d9b5"/>
+    <rect x="328" y="52" width="40" height="40" fill="#b58863"/>
+  </g>
+  <rect x="248" y="292" width="40" height="40" fill="#ffd666" fill-opacity="0.55"/>
+  <rect x="128" y="332" width="40" height="40" fill="#be2828" fill-opacity="0.5"/>
+  <rect x="48" y="292" width="40" height="40" fill="#be2828" fill-opacity="0.5"/>
+  <circle cx="188" cy="272" r="6" fill="#3ca05a" fill-opacity="0.9"/>
+  <circle cx="228" cy="232" r="6" fill="#3ca05a" fill-opacity="0.9"/>
+  <circle cx="308" cy="232" r="6" fill="#3ca05a" fill-opacity="0.9"/>
+  <circle cx="348" cy="272" r="6" fill="#3ca05a" fill-opacity="0.9"/>
+  <circle cx="348" cy="352" r="6" fill="#3ca05a" fill-opacity="0.9"/>
+  <g>
+    <text x="68" y="364" font-family="DejaVu Sans" font-size="34" text-anchor="middle" fill="#22232a">&#9822;</text>
+    <text x="84" y="344" font-size="11" font-weight="bold" text-anchor="end" fill="#14141a" fill-opacity="0.65" font-family="ui-monospace, Menlo, monospace">1</text>
+    <text x="108" y="284" font-family="DejaVu Sans" font-size="34" text-anchor="middle" fill="#22232a">&#9822;</text>
+    <text x="124" y="264" font-size="11" font-weight="bold" text-anchor="end" fill="#14141a" fill-opacity="0.65" font-family="ui-monospace, Menlo, monospace">2</text>
+    <text x="148" y="204" font-family="DejaVu Sans" font-size="34" text-anchor="middle" fill="#22232a">&#9822;</text>
+    <text x="164" y="184" font-size="11" font-weight="bold" text-anchor="end" fill="#14141a" fill-opacity="0.65" font-family="ui-monospace, Menlo, monospace">3</text>
+    <text x="68" y="244" font-family="DejaVu Sans" font-size="34" text-anchor="middle" fill="#22232a">&#9822;</text>
+    <text x="84" y="224" font-size="11" font-weight="bold" text-anchor="end" fill="#14141a" fill-opacity="0.65" font-family="ui-monospace, Menlo, monospace">4</text>
+    <text x="108" y="324" font-family="DejaVu Sans" font-size="34" text-anchor="middle" fill="#22232a">&#9822;</text>
+    <text x="124" y="304" font-size="11" font-weight="bold" text-anchor="end" fill="#14141a" fill-opacity="0.65" font-family="ui-monospace, Menlo, monospace">5</text>
+    <text x="188" y="364" font-family="DejaVu Sans" font-size="34" text-anchor="middle" fill="#22232a">&#9822;</text>
+    <text x="204" y="344" font-size="11" font-weight="bold" text-anchor="end" fill="#14141a" fill-opacity="0.65" font-family="ui-monospace, Menlo, monospace">6</text>
+    <text x="268" y="324" font-family="DejaVu Sans" font-size="34" text-anchor="middle" fill="#7a1f1f">&#9822;</text>
+    <text x="284" y="304" font-size="11" font-weight="bold" text-anchor="end" fill="#14141a" fill-opacity="0.65" font-family="ui-monospace, Menlo, monospace">7</text>
+  </g>
+  <g filter="url(#chpiece)">
+    <text x="530" y="368" font-family="DejaVu Sans" font-size="200" text-anchor="middle" fill="#444754" stroke="#e8e2d6" stroke-width="3.5">&#9819;</text>
+    <text x="437" y="392" font-family="DejaVu Sans" font-size="160" text-anchor="middle" fill="#e8e2d6">&#9822;</text>
+  </g>
+</svg>

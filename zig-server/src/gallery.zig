@@ -34,6 +34,7 @@ const slots = [_]Slot{
     .{ .slug = "blog", .label = "Blog" },
     .{ .slug = "lynrummy", .label = "Play Lyn Rummy" },
     .{ .slug = "puzzles", .label = "Lyn Rummy Puzzles" },
+    .{ .slug = "chess", .label = "Chess Toys" },
 };
 
 /// handle dispatches /gallery* — `sub` is the path after "/gallery".

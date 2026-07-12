@@ -21,6 +21,7 @@ Filenames are `<slug>.png` (or `.svg`), where the slugs match the manifest in
 | `blog` | Blog |
 | `lynrummy` | Play Lyn Rummy |
 | `puzzles` | Lyn Rummy Puzzles |
+| `chess` | Chess Toys |
 
 ## How each image is made
 
@@ -36,4 +37,9 @@ Filenames are `<slug>.png` (or `.svg`), where the slugs match the manifest in
   Faithful content — the geometry is the app's own, no duplication — but stylized
   framing: cropped to the gallery ratio and given a clean solved-looking allocation
   (nearest-anchor grouping, not the live solver). Re-run if the map geometry changes.
+- **`chess.svg`** — hand-authored via a one-off script (not kept): a Knight's Tour
+  mid-search using the live toy's real visual grammar (a legal knight walk with move
+  numbers, the retracted branch in red, the head's open hops as green dots), plus a
+  solid knight and an outlined queen in the foreground — outlined because eight
+  queens isn't shipped yet.
 - The rest are **pending** — approach per app still to be decided.
