@@ -61,11 +61,16 @@ async function main() {
   hint.textContent = 'hover · knight moves    click · start a tour there    SPACE play/pause · ←/→ step';
   hint.style.cssText = 'font-size:12px;color:#6d7278;letter-spacing:0.4px';
   document.body.appendChild(hint);
+  const legend = document.createElement('div');
+  legend.textContent = 'red · a knight was retracted here    indigo · cut off from the tour';
+  legend.style.cssText = 'font-size:12px;color:#6d7278;letter-spacing:0.4px';
+  document.body.appendChild(legend);
 
   const { instance } = await WebAssembly.instantiateStreaming(fetch('/chess/knight.wasm'), {});
   const wasm = instance.exports;
   const board = new Int8Array(wasm.memory.buffer, wasm.boardPtr(), 64);
-  const dead = new Uint8Array(wasm.memory.buffer, wasm.deadPtr(), 64);
+  const deadEnd = new Uint8Array(wasm.memory.buffer, wasm.deadEndPtr(), 64);
+  const unreach = new Uint8Array(wasm.memory.buffer, wasm.unreachPtr(), 64);
   // the precomputed knight graph, read once — the hover highlights ARE this graph
   const nbrs = new Uint8Array(wasm.memory.buffer, wasm.nbrsPtr(), 64 * 8);
   const nbrCounts = new Uint8Array(wasm.memory.buffer, wasm.nbrCountsPtr(), 64);
@@ -109,12 +114,17 @@ async function main() {
         ctx.fillText(String((sq >> 3) + 1), x + 3, y + 2);
       }
     }
-    // impossible squares in red: empty squares the tour can no longer reach
-    // from the head (the wasm's BFS — see computeDead). At a literal dead end
-    // every empty square lights up: the board announces the backtrack.
-    wasm.computeDead();
+    // failure overlays (see knight.zig computeOverlays): red = a knight was
+    // placed here, found doomed, and pulled off — accumulating through
+    // removal cascades, cleared only when the search re-enters the square.
+    // Indigo = provably unreachable from the head through empty squares —
+    // the stronger fact, so it wins where both hold.
+    wasm.computeOverlays();
     for (let sq = 0; sq < 64; sq++) {
-      if (dead[sq]) {
+      if (unreach[sq]) {
+        ctx.fillStyle = 'rgba(80,70,190,0.45)';
+        ctx.fillRect(sqX(sq), sqY(sq), SQ, SQ);
+      } else if (deadEnd[sq]) {
         ctx.fillStyle = 'rgba(190,40,40,0.5)';
         ctx.fillRect(sqX(sq), sqY(sq), SQ, SQ);
       }

@@ -76,6 +76,7 @@ var tape_len: u32 = 0;
 var cur: u32 = 0; // events [0..cur) are applied to the board
 var board: [64]i8 = [_]i8{-1} ** 64; // move number per square, -1 = empty
 var on_board: u32 = 0; // knights currently shown (= next move number)
+var tried: [64]u32 = [_]u32{0} ** 64; // events touching each square in [0..cur)
 
 // ---------- the machine (generates events at the tape's end) ----------
 
@@ -143,6 +144,7 @@ pub export fn reset() void {
     tape_len = 0;
     cur = 0;
     board = [_]i8{-1} ** 64;
+    tried = [_]u32{0} ** 64;
     on_board = 0;
     stack_len = 0;
     visited = 0;
@@ -161,6 +163,7 @@ pub export fn stepForward() u32 {
     const ev = tape[cur];
     cur += 1;
     const sq = ev & 63;
+    tried[sq] += 1;
     if (ev & PLACE_BIT != 0) {
         board[sq] = @intCast(on_board);
         on_board += 1;
@@ -177,6 +180,7 @@ pub export fn stepBack() u32 {
     cur -= 1;
     const ev = tape[cur];
     const sq = ev & 63;
+    tried[sq] -= 1;
     if (ev & PLACE_BIT != 0) {
         on_board -= 1;
         board[sq] = -1;
@@ -194,19 +198,38 @@ pub export fn boardPtr() usize {
     return @intFromPtr(&board);
 }
 
-// dead[sq] = 1 when the square is empty but IMPOSSIBLE: the tour, extending
-// forward from the current head, can never place a knight there — it isn't
-// reachable from the head through empty squares. The host paints these red.
-// At a literal dead end (head has no empty neighbor) every empty square is
-// impossible, so the whole board flags the imminent backtrack.
-var dead: [64]u8 = [_]u8{0} ** 64;
+// The two display overlays, recomputed per drawn frame by computeOverlays():
+//
+// dead_end[sq] = 1 when a knight was placed there, its continuations were
+// explored and found barren, and it was pulled off — and no knight has come
+// back since. Marked only at retraction (discovery), never predictively;
+// removal cascades accumulate marks. Because a square's events strictly
+// alternate place/remove, this is exactly "empty AND touched by any event",
+// so it falls out of the per-square `tried` counter and scrubs perfectly.
+//
+// unreach[sq] = 1 when the square is empty and PROVABLY out of reach: the
+// tour, extending forward from the current head, can never enter it — no
+// path of empty squares connects the head to it. The stronger, colder fact;
+// where both hold the host paints unreach.
+var dead_end: [64]u8 = [_]u8{0} ** 64;
+var unreach: [64]u8 = [_]u8{0} ** 64;
 
-/// computeDead recomputes the impossible-square mask for the DISPLAY board —
-/// a BFS from the head knight through empty squares; empty squares the flood
-/// never reaches are dead. A pure function of the board, so it is exactly as
-/// scrubbed as the knights are. The host calls it once per drawn frame.
-pub export fn computeDead() void {
-    dead = [_]u8{0} ** 64;
+/// computeOverlays refreshes both masks for the DISPLAY board — pure
+/// functions of the displayed position, so they are exactly as scrubbed as
+/// the knights are. The host calls it once per drawn frame.
+pub export fn computeOverlays() void {
+    for (0..64) |sq| {
+        dead_end[sq] = @intFromBool(board[sq] < 0 and tried[sq] > 0);
+    }
+    computeUnreach();
+}
+
+/// computeUnreach floods (BFS) from the head knight through empty squares;
+/// empty squares the flood never reaches are unreachable. At a literal dead
+/// end (head has no empty neighbor) every empty square is, announcing the
+/// imminent backtrack.
+fn computeUnreach() void {
+    unreach = [_]u8{0} ** 64;
     if (on_board == 0 or on_board == 64) return;
     var head: u8 = 0;
     for (board, 0..) |n, sq| {
@@ -234,12 +257,15 @@ pub export fn computeDead() void {
         }
     }
     for (0..64) |sq| {
-        if (board[sq] < 0 and reached & bit(@intCast(sq)) == 0) dead[sq] = 1;
+        if (board[sq] < 0 and reached & bit(@intCast(sq)) == 0) unreach[sq] = 1;
     }
 }
 
-pub export fn deadPtr() usize {
-    return @intFromPtr(&dead);
+pub export fn deadEndPtr() usize {
+    return @intFromPtr(&dead_end);
+}
+pub export fn unreachPtr() usize {
+    return @intFromPtr(&unreach);
 }
 
 /// nbrsPtr / nbrCountsPtr expose the precomputed graph: a flat [64][8]u8 of
@@ -329,41 +355,81 @@ test "pinned event counts freeze the move ordering" {
     reset();
 }
 
-test "impossible-square mask: empty on a backtrack-free tour, sound when backtracking" {
-    // b2 glides to a tour with zero removals. Placements only shrink the
-    // empty subgraph, so if any square ever went unreachable it could never
-    // be filled and the tour couldn't complete — the mask must stay empty.
+test "overlays: both stay empty on a backtrack-free tour, sound when backtracking" {
+    // b2 glides to a tour with zero removals: no square is ever retracted
+    // (no dead_end), and since placements only shrink the empty subgraph, a
+    // square that went unreachable could never be filled — contradiction with
+    // completion, so unreach must stay empty too.
     init(9);
     while (true) {
-        computeDead();
-        for (dead) |d| try std.testing.expectEqual(@as(u8, 0), d);
+        computeOverlays();
+        for (unreach) |d| try std.testing.expectEqual(@as(u8, 0), d);
+        for (dead_end) |d| try std.testing.expectEqual(@as(u8, 0), d);
         if (stepForward() == 0) break;
     }
-    // e4 backtracks (3876 events). At every step: a dead square is empty;
-    // its empty neighbors are dead too (a reachable neighbor would reach it);
-    // and no empty neighbor of the head is dead (it's placeable right now).
+    // e4 backtracks (3876 events). At every step: an unreach square is empty;
+    // its empty neighbors are unreach too (a reachable neighbor would reach
+    // it); no empty neighbor of the head is unreach (it's placeable right
+    // now); and dead_end is exactly "empty and ever touched".
     init(28);
-    var saw_dead = false;
+    var saw_unreach = false;
+    var saw_dead_end = false;
     while (true) {
-        computeDead();
+        computeOverlays();
         var head: usize = 0;
         for (board, 0..) |n, sq| {
             if (n == @as(i8, @intCast(on_board - 1))) head = sq;
         }
         for (0..64) |sq| {
-            if (dead[sq] == 0) continue;
-            saw_dead = true;
+            const expect_de: u8 = @intFromBool(board[sq] < 0 and tried[sq] > 0);
+            try std.testing.expectEqual(expect_de, dead_end[sq]);
+            if (dead_end[sq] == 1) saw_dead_end = true;
+            if (unreach[sq] == 0) continue;
+            saw_unreach = true;
             try std.testing.expect(board[sq] < 0);
             for (graph.nbrs[sq][0..graph.count[sq]]) |nb| {
-                if (board[nb] < 0) try std.testing.expectEqual(@as(u8, 1), dead[nb]);
+                if (board[nb] < 0) try std.testing.expectEqual(@as(u8, 1), unreach[nb]);
             }
         }
         for (graph.nbrs[head][0..graph.count[head]]) |nb| {
-            if (board[nb] < 0) try std.testing.expectEqual(@as(u8, 0), dead[nb]);
+            if (board[nb] < 0) try std.testing.expectEqual(@as(u8, 0), unreach[nb]);
         }
         if (stepForward() == 0) break;
     }
-    try std.testing.expect(saw_dead);
+    try std.testing.expect(saw_unreach);
+    try std.testing.expect(saw_dead_end);
+    // solved end state: board full, so both overlays are clear
+    computeOverlays();
+    for (unreach) |d| try std.testing.expectEqual(@as(u8, 0), d);
+    for (dead_end) |d| try std.testing.expectEqual(@as(u8, 0), d);
+    reset();
+}
+
+test "dead_end marks appear at retraction, clear on re-entry, scrub cleanly" {
+    // e4: run to just past the FIRST removal — that square must be marked,
+    // and one step back (knight restored) must unmark it.
+    init(28);
+    var removed_sq: usize = 65;
+    while (removed_sq == 65) {
+        const before = knightsOnBoard();
+        try std.testing.expectEqual(@as(u32, 1), stepForward());
+        if (knightsOnBoard() < before) {
+            for (0..64) |sq| {
+                if (tried[sq] > 0 and board[sq] < 0) removed_sq = sq;
+            }
+        }
+    }
+    computeOverlays();
+    try std.testing.expectEqual(@as(u8, 1), dead_end[removed_sq]);
+    _ = stepBack();
+    computeOverlays();
+    try std.testing.expectEqual(@as(u8, 0), dead_end[removed_sq]);
+    try std.testing.expect(board[removed_sq] >= 0);
+    // scrub all the way home: every counter zero, no marks anywhere
+    while (stepBack() == 1) {}
+    computeOverlays();
+    for (tried) |t| try std.testing.expectEqual(@as(u32, 0), t);
+    for (dead_end) |d| try std.testing.expectEqual(@as(u8, 0), d);
     reset();
 }
 
