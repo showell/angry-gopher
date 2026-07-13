@@ -652,6 +652,21 @@ test "dense random boards that thrashed the chain-growing search" {
     } else return error.TestUnexpectedResult;
 }
 
+test "dense boards that exposed the memo hash clustering" {
+    // Found by the phase-3 timing probe: with `key % len` slotting,
+    // nearly every memo key hashed to slot 0 and these ran as raw DFS —
+    // 274s and 3.2s respectively. With honest hashing both answer in
+    // milliseconds (2-4k distinct futile states, table holds 32k).
+    const monster: u64 = 0x3ff977fff6fef; // 43 cards
+    if (solve(monster)) |sol| {
+        try std.testing.expect(verify(monster, &sol));
+    } else return error.TestUnexpectedResult;
+    // The futile one matters more: FUTILE is the exhaustive case, so
+    // it's the one that degrades when memoization quietly dies.
+    const grinder: u64 = 0xd3f2fbcde9bfe; // 37 cards
+    try std.testing.expectEqual(@as(?Solution, null), solve(grinder));
+}
+
 test "pinned minimal solutions" {
     // 3H 4S 5H has exactly one clean arrangement.
     {
