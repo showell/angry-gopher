@@ -45,6 +45,7 @@
 const std = @import("std");
 const card = @import("card.zig");
 const graph = @import("graph.zig");
+const suit_first = @import("suit_first.zig");
 
 pub const Error = error{ OneDeckOnly, DuplicateCard };
 
@@ -119,6 +120,13 @@ fn componentsOk(board: u64) bool {
 /// card set, or null. FUTILE is a first-class answer, not an error.
 pub fn solve(board: u64) ?Solution {
     if (!componentsOk(board)) return null;
+    // Tier 0: the human prior — pure runs + sets, suit-decomposed
+    // (suit_first.zig). Answers most dense boards in microseconds with
+    // a human-shaped cover; a pass falls through to the complete sweep.
+    {
+        var sol: Solution = undefined;
+        if (suit_first.trySolve(board, &sol.next)) return sol;
+    }
     var at: [13]u8 = @splat(0); // suit mask per rank
     for (0..graph.N) |i| {
         const c: u8 = @intCast(i);
@@ -718,15 +726,33 @@ test "dense boards that exposed the memo hash clustering" {
     try std.testing.expectEqual(@as(?Solution, null), solve(grinder));
 }
 
-test "the portfolio's fallback path solves the 45-card puzzle monster" {
-    // The timing probe's all-time worst board (also served as the last
-    // gallery puzzle): ~300k steps under the scarcest-rank cut, so it
-    // trips the 50k fast-path budget and exercises the unbounded
-    // fewest-matchings retry.
+test "tier 0 reproduces Steve's human solution on the 45-card monster" {
+    // The timing probe's all-time worst board cost the sweep a full
+    // second (~300k steps, 7 wrong wrap matchings refuted); served as
+    // a gallery puzzle, Steve solved it in trivial time — six pure
+    // runs (hearts going around the ace) plus the keystone ace set,
+    // A♠ being the one card with no pure neighbors. The suit-first
+    // tier finds exactly that cover, in microseconds.
     const monster: u64 = 0x7fcbffffdfefb;
-    if (solve(monster)) |sol| {
-        try std.testing.expect(verify(monster, &sol));
-    } else return error.TestUnexpectedResult;
+    const sol = solve(monster) orelse return error.TestUnexpectedResult;
+    try std.testing.expect(verify(monster, &sol));
+    var fb: [512]u8 = undefined;
+    try std.testing.expectEqualStrings(
+        "4H>5H>6H>7H>8H | TH>JH>QH>KH>AH>2H | AD=AC=AS | 2D>3D>4D" ++
+            " | 6D>7D>8D>9D>TD>JD>QD>KD | 2C>3C>4C>5C>6C>7C>8C>9C>TC>JC>QC" ++
+            " | 4S>5S>6S>7S>8S>9S>TS>JS>QS",
+        format(monster, &sol, &fb),
+    );
+}
+
+test "a weave-heavy board passes tier 0 and rides the sweep's fallback" {
+    // 44 cards; the suit-first prior can't cover it (its sweep answer
+    // leans on eight red-black weaves), and the scarcest-rank cut
+    // trips the step budget — so this one board exercises tier-0
+    // pass-through, the budget trip, AND the fewest-matchings retry.
+    const weaver: u64 = 0xff9cff9fffbfe;
+    const sol = solve(weaver) orelse return error.TestUnexpectedResult;
+    try std.testing.expect(verify(weaver, &sol));
 }
 
 test "pinned minimal solutions" {

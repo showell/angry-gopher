@@ -31,6 +31,16 @@ Phases:
    start fresh chains. In the next-map a set is a chain of same-rank
    links, printed with `=`: `KH=KC=KS`.
 
+The solve is a **portfolio**, cheapest prior first:
+
+0. **Suit-first** (`suit_first.zig`) — the human prior: pure runs as
+   the bulk carrier, sets as patch material for orphans, no red-black
+   at all. Answers most boards in microseconds with a human-shaped
+   cover (it reproduced Steve's own solve of the probe's worst board,
+   card for card). Allowed to pass.
+1. **Rank sweep, scarcest-rank cut**, under a 50k-step budget.
+2. On a budget trip: **unbounded sweep from the fewest-matchings cut**.
+
 Next: two decks — per-rank multiplicity 4 → 8, and the set
 distinct-card constraint turns load-bearing.
 
