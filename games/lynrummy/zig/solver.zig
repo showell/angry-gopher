@@ -34,7 +34,9 @@
 //!
 //! THE WRAP: chains may cross the boundary K→A (or wherever we cut).
 //! Cut at the boundary entering the scarcest rank and branch over the
-//! concrete matchings M of cards that cross it. Each M-edge births a
+//! concrete matchings M of cards that cross it. (That's the budgeted
+//! fast path; the rare dense board that grinds retries unbounded from
+//! the fewest-matchings cut — the portfolio in solve.) Each M-edge births a
 //! chain at sweep start (its head half) whose length is recorded when
 //! it closes; at sweep end the still-open chains must feed the M-edges
 //! bijectively, with combined head+tail length 3..5. The lemma keeps
@@ -122,14 +124,56 @@ pub fn solve(board: u64) ?Solution {
         const c: u8 = @intCast(i);
         if (board & bit(c) != 0) at[graph.rankOf(c)] |= @as(u8, 1) << @intCast(graph.suitOf(c));
     }
-    // Cut entering the scarcest rank: fewest cards = fewest M guesses.
+    // Portfolio. Fast path: cut entering the scarcest rank, under a
+    // step budget that 99.9% of boards never approach (tail boards run
+    // ~300k steps; typical boards run hundreds).
     var r0: u8 = 0;
     for (1..13) |r| {
         if (@popCount(at[r]) < @popCount(at[r0])) r0 = @intCast(r);
     }
+    steps_left = 50_000;
     var s: Sweeper = .{ .at = at, .r0 = r0 };
-    if (!s.enumM(at[r0], at[(r0 + 12) % 13])) return null;
-    return .{ .next = s.next };
+    if (s.enumM(at[r0], at[(r0 + 12) % 13])) return .{ .next = s.next };
+    if (steps_left >= 0) return null; // search completed: honest FUTILE
+    // Budget tripped: a tail board. Retry unbounded from the cut with
+    // the fewest concrete wrap matchings (tie: fewest target cards) —
+    // matchings are what tail boards grind on.
+    var rb: u8 = 0;
+    var best: u64 = std.math.maxInt(u64);
+    for (0..13) |r| {
+        const cnt = countM(at[r], at[(r + 12) % 13], 0);
+        const score = (cnt << 3) | @popCount(at[r]);
+        if (score < best) {
+            best = score;
+            rb = @intCast(r);
+        }
+    }
+    steps_left = std.math.maxInt(i64);
+    var s2: Sweeper = .{ .at = at, .r0 = rb };
+    if (s2.enumM(at[rb], at[(rb + 12) % 13])) return .{ .next = s2.next };
+    return null;
+}
+
+// Step budget for the portfolio fast path (see solve). A tripped budget
+// makes every step return false immediately and suppresses memoization —
+// truncated exploration must not record futility facts.
+var steps_left: i64 = std.math.maxInt(i64);
+
+/// countM: the exact number of complete cut matchings enumM would try
+/// for this (targets, sources) pair — used to pick the fallback cut.
+fn countM(targets: u8, sources: u8, used: u8) u64 {
+    if (targets == 0) return 1;
+    const t: u8 = @intCast(@ctz(targets));
+    const rest = targets & (targets - 1);
+    var n: u64 = countM(rest, sources, used); // t not crossed
+    var srcs = sources & ~used;
+    while (srcs != 0) {
+        const x: u8 = @intCast(@ctz(srcs));
+        srcs &= srcs - 1;
+        if (x != t and (x < 2) == (t < 2)) continue; // same color, diff suit
+        n += countM(rest, sources, used | (@as(u8, 1) << @intCast(x)));
+    }
+    return n;
 }
 
 const MAX_OPEN = 4; // one deck: at most 4 cards per rank
@@ -264,11 +308,14 @@ const Sweeper = struct {
     }
 
     fn step(self: *Sweeper, pos: u8) bool {
+        steps_left -= 1;
+        if (steps_left < 0) return false; // budget tripped: unwind fast
         if (pos == 13) return self.finish();
         const key = self.encode(pos);
         if (memoHas(key)) return false;
         var new_open: [MAX_OPEN]Open = undefined;
         if (self.assign(pos, 0, self.at[self.rankAt(pos)], &new_open, 0)) return true;
+        if (steps_left < 0) return false; // truncated: not a futility fact
         memoAdd(key);
         return false;
     }
@@ -669,6 +716,17 @@ test "dense boards that exposed the memo hash clustering" {
     // it's the one that degrades when memoization quietly dies.
     const grinder: u64 = 0xd3f2fbcde9bfe; // 37 cards
     try std.testing.expectEqual(@as(?Solution, null), solve(grinder));
+}
+
+test "the portfolio's fallback path solves the 45-card puzzle monster" {
+    // The timing probe's all-time worst board (also served as the last
+    // gallery puzzle): ~300k steps under the scarcest-rank cut, so it
+    // trips the 50k fast-path budget and exercises the unbounded
+    // fewest-matchings retry.
+    const monster: u64 = 0x7fcbffffdfefb;
+    if (solve(monster)) |sol| {
+        try std.testing.expect(verify(monster, &sol));
+    } else return error.TestUnexpectedResult;
 }
 
 test "pinned minimal solutions" {
