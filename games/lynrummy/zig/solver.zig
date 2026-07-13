@@ -407,8 +407,16 @@ const Sweeper = struct {
     }
 };
 
+/// memoSlot: Fibonacci hash — the raw key's low bits are the least
+/// variable part (mrec records, often all zero), so `key % len` would
+/// cluster nearly every key onto slot 0 and reduce the table to its
+/// 8-probe window. Multiply-and-take-top-bits mixes every key bit in.
+fn memoSlot(key: u64) u64 {
+    return (key *% 0x9E3779B97F4A7C15) >> (64 - 15);
+}
+
 fn memoHas(key: u64) bool {
-    var slot = key % memo_table.len;
+    var slot = memoSlot(key);
     for (0..8) |_| {
         if (memo_table[slot] == key) return true;
         if (memo_table[slot] == 0) return false;
@@ -418,7 +426,7 @@ fn memoHas(key: u64) bool {
 }
 
 fn memoAdd(key: u64) void {
-    var slot = key % memo_table.len;
+    var slot = memoSlot(key);
     for (0..8) |_| {
         if (memo_table[slot] == 0 or memo_table[slot] == key) {
             memo_table[slot] = key;
