@@ -152,7 +152,11 @@ const MEdge = struct {
 // Futile (rank, state) keys for the current M guess. Zero = empty slot;
 // keys are never zero (pos ≥ 1 sits in the low bits). Collisions just
 // skip memoization — correctness never depends on the table.
-var memo_table: [1 << 15]u64 = undefined;
+// Sized from measurement: the densest solvable one-deck boards reach
+// ~90k distinct futile states per matching; 2^18 holds that with room
+// (2MB static). Two decks will want this revisited.
+const MEMO_BITS = 18;
+var memo_table: [1 << MEMO_BITS]u64 = undefined;
 
 /// setMasks: the ways to carve one set out of the available suits at a
 /// rank — any 3 or 4 of them; sets ignore color. One deck holds at most
@@ -412,7 +416,7 @@ const Sweeper = struct {
 /// cluster nearly every key onto slot 0 and reduce the table to its
 /// 8-probe window. Multiply-and-take-top-bits mixes every key bit in.
 fn memoSlot(key: u64) u64 {
-    return (key *% 0x9E3779B97F4A7C15) >> (64 - 15);
+    return (key *% 0x9E3779B97F4A7C15) >> (64 - MEMO_BITS);
 }
 
 fn memoHas(key: u64) bool {
