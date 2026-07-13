@@ -237,17 +237,3 @@ puzzle 6line_push_push_push_splice_steal_steal_s104t2p1
   at (322,542): Q♠' K♦ A♣
   at (232,152): 8♥' 9♣' T♥' J♠ Q♦'
   at (52,272): 8♥
-
-# --- The sweep-tail monster (added 2026-07-13) ---
-# Not a 6-line puzzle: this is the worst-case board from the zig
-# solver's 100k-board timing probe (board bits 0x7fcbffffdfefb, one
-# deck, 45 cards) — solvable, zig-verified, but it took the rank sweep
-# a full second: 7 cut matchings refuted at ~60k futile states each
-# before the winning arrangement. Served last, as a human stretch
-# puzzle; the Hint button's BFS will NOT crack this one. Rollbackable
-# commit by design.
-puzzle monster_sweep_tail_45c_7fcbffffdfefb
-  at (40,80): A♥ 2♥ 4♥ 5♥ 6♥ 7♥ 8♥ T♥ J♥ Q♥ K♥
-  at (40,200): A♦ 2♦ 3♦ 4♦ 6♦ 7♦ 8♦ 9♦ T♦ J♦ Q♦ K♦
-  at (40,320): A♣ 2♣ 3♣ 4♣ 5♣ 6♣ 7♣ 8♣ 9♣ T♣ J♣ Q♣
-  at (40,440): A♠ 4♠ 5♠ 6♠ 7♠ 8♠ 9♠ T♠ J♠ Q♠
