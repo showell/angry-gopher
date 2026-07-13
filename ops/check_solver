@@ -1,0 +1,17 @@
+#!/bin/bash
+# CANONICAL DEV-LOOP SCRIPT — DO NOT REINVENT.
+# Before composing an ad-hoc shell command for build / test / regen, run
+# `ops/list` to see what already exists.
+#
+# Solver-rethink gate (~2s): native unit tests for the fresh zig Lyn Rummy
+# solver (games/lynrummy/zig — currently phase 1, pure runs). The TS engine
+# remains production; this gate covers the new algorithm as it grows.
+set -e
+
+REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$REPO_DIR"
+
+for f in games/lynrummy/zig/*.zig; do
+    echo "==> zig test $f"
+    zig test "$f"
+done

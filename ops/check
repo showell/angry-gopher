@@ -48,5 +48,10 @@ echo
 echo "===== ops/check_chess ====="
 ./ops/check_chess
 
+# Lyn Rummy solver rethink: the fresh zig solver's native unit tests.
+echo
+echo "===== ops/check_solver ====="
+./ops/check_solver
+
 echo
 echo "All gates passed in $((SECONDS - t0_total))s."

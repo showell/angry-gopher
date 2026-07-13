@@ -34,6 +34,10 @@ Available ops commands (run from repo root):
                          unit cases + every board in tutorial.html parses, fits
                          the table, and figures hold only legal melds.
   ops/test_chat          Chat client lint (~1s): chat.js + docs.js + chat_client.py.
+  ops/check_solver       Lyn Rummy zig-solver gate (~2s): native unit tests
+                         for the fresh solver in games/lynrummy/zig (the
+                         rethink; TS engine stays production). Composed by
+                         ops/check and ops/check_lynrummy.
   ops/check_safari       Safari render cull gate (~1s) — driving. Drives the
                          committed safari.wasm across a full course and asserts
                          no draw-buffer overflow + both critter culls (segment

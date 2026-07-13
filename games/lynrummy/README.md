@@ -39,6 +39,10 @@ served by its own tiny zig handler):
 - **the zig server** — **dumb storage**: it holds session files and never
   referees or reasons.
 
+(Not an actor yet: [`zig/`](./zig/README.md) is a fresh solver being built up
+in phases — the rethink of the BFS solver above. The TS engine remains
+production until it earns its place.)
+
 The standout architectural idea — and the most fun to work with — is a single
 **DSL spoken over the wire**. One short, canonical grammar carries the same
 shape across all three runtimes: conformance fixtures, on-disk session files

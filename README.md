@@ -278,7 +278,7 @@ loads the widgets. Start at `Viewport` and follow the breadcrumbs.
 ```
 ops/start              Start the zig server on :9001 (rebuild + relaunch)
 ops/list               List ops commands
-ops/check              Pre-commit gate (~40s warm): check_common + test_elm + test_ts + test_chat + check_safari + check_chess
+ops/check              Pre-commit gate (~40s warm): check_common + test_elm + test_ts + test_chat + check_safari + check_chess + check_solver
 ops/check_full         Milestone gate: ops/check + agent self-play
 ops/check_zig          zig server compiles + unit tests (~6s)
 ops/check_markdown     Markdown dialect regression (~3s)
