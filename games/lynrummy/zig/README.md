@@ -24,9 +24,15 @@ Phases:
    matchings. Load-bearing lemma: any legal run splits into consecutive
    runs of length 3..5, so the sweep only ever builds short chains and
    loses nothing.
-3. **+ sets** — the full game. Sets are rank-LOCAL (all cards of one
-   rank), so they slot into the sweep's per-rank step rather than
-   changing its shape.
+3. **+ sets** (`solver.zig`, evolved from phase 2's `runs.zig`) — DONE.
+   Sets are rank-LOCAL (3–4 cards of one rank), so they slot into the
+   sweep's per-rank step rather than changing its shape: the leftover
+   cards at a rank may form at most one set (one deck) before the rest
+   start fresh chains. In the next-map a set is a chain of same-rank
+   links, printed with `=`: `KH=KC=KS`.
+
+Next: two decks — per-rank multiplicity 4 → 8, and the set
+distinct-card constraint turns load-bearing.
 
 Cross-cutting strategy: completely solve the ONE-deck game with a strong
 test foundation before leaning on duplicate cards — the two copies of a
@@ -41,8 +47,9 @@ Files:
   card; rb: 2 per card; the two flavors are disjoint).
 - `pure_run.zig` — phase 1: per-suit cyclic arc cover + verifier. Kept
   as a stepping stone.
-- `runs.zig` — phase 2: the rank-sweep solver, its independent strict
-  verifier, and the solution formatter (`3H>4S>5H | 9C>TC>JC`).
+- `solver.zig` — phases 2+3: the rank-sweep solver (with the component
+  prefilter), its independent strict verifier, and the solution
+  formatter (`3H>4S>5H | 9C>TC>JC | KH=KC=KS`).
 
 Gate: `ops/check_solver` (composed into `ops/check` and
 `ops/check_lynrummy`). Tests are zig-native; fixtures are board lines in

@@ -1,14 +1,17 @@
-//! runs — phase 2 of the solver rethink: solve-board when every meld is
-//! a RUN — pure (same suit) or red-black (alternating colors), both
-//! stepping rank+1 with the wrap. One deck. Sets are phase 3.
+//! solver — phase 3 of the solver rethink: solve-board for the full
+//! one-deck game. Melds are RUNS — pure (same suit) or red-black
+//! (alternating colors), both stepping rank+1 with the wrap — and SETS:
+//! 3 or 4 cards of one rank, distinct suits, color-blind.
 //!
 //! The board is the sparse successor map: each card points at the card
 //! it grabbed to its right, or at nothing. A clean board = an injective,
-//! acyclic next-map whose chains are flavor-uniform and length ≥ 3.
-//! Runs get NO length cap in the game: a long chain always splits into
-//! legal 3..13 display runs, and any ≤13 window is automatically
-//! value-repeat-free. Sets are the opposite — their constraints can't
-//! be repaired after the fact — which is why they wait.
+//! acyclic next-map whose chains are flavor-uniform and length ≥ 3; a
+//! set is a chain whose links stay inside one rank. Runs get NO length
+//! cap in the game: a long chain always splits into legal 3..13 display
+//! runs, and any ≤13 window is automatically value-repeat-free. Sets
+//! can't be repaired after the fact like that — their distinct-card
+//! constraint is enforced where they're built (trivially here: one deck
+//! holds at most 4 cards of a rank; it turns load-bearing at two decks).
 //!
 //! NORMALIZATION LEMMA (load-bearing): the search only builds chains of
 //! length 3..5, and that loses nothing — any legal chain splits into
@@ -23,11 +26,11 @@
 //! rank, flavor, capped length), at most 4 of them (a chain must
 //! consume a card at every rank it stays open through). At each rank,
 //! branch over the ways open chains continue or close and leftover
-//! cards start fresh chains; memoize futile (rank, state) pairs, which
-//! bounds the whole search by the tiny state space. A first cut of
-//! chain-growing DFS thrashed for HOURS on dense 40-card boards; this
-//! sweep is the eliminate-the-cause fix, and it extends to phase 3,
-//! because sets live entirely inside one rank.
+//! cards form at most one set (they're rank-local, so they carry no
+//! state across ranks) or start fresh chains; memoize futile
+//! (rank, state) pairs, which bounds the whole search by the tiny state
+//! space. A first cut of chain-growing DFS thrashed for HOURS on dense
+//! 40-card boards; this sweep is the eliminate-the-cause fix.
 //!
 //! THE WRAP: chains may cross the boundary K→A (or wherever we cut).
 //! Cut at the boundary entering the scarcest rank and branch over the
@@ -43,7 +46,7 @@ const graph = @import("graph.zig");
 
 pub const Error = error{ OneDeckOnly, DuplicateCard };
 
-pub const Flavor = enum { open, pure, rb };
+pub const Flavor = enum { open, pure, rb, set };
 
 /// The solved board in the sparse form: next[i] is the card index that
 /// card i points at, or NONE at a chain end (and for cards not on the
@@ -69,12 +72,13 @@ pub fn boardBits(cards: []const card.Card) Error!u64 {
     return bits;
 }
 
-/// componentsOk: every connected component of the board's run graph
-/// must have ≥ 3 cards — a component can't borrow cards from elsewhere,
-/// so a small one dooms the board. Necessary, not sufficient: a pure
-/// prefilter that answers many futile boards before any cut matching
-/// is guessed (each matching re-sweeps with a fresh memo, so global
-/// futility would otherwise be re-learned once per matching).
+/// componentsOk: every connected component of the board's meld graph
+/// (run edges both ways plus same-rank set mates) must have ≥ 3 cards —
+/// a component can't borrow cards from elsewhere, so a small one dooms
+/// the board. Necessary, not sufficient: a pure prefilter that answers
+/// many futile boards before any cut matching is guessed (each matching
+/// re-sweeps with a fresh memo, so global futility would otherwise be
+/// re-learned once per matching).
 fn componentsOk(board: u64) bool {
     var seen: u64 = 0;
     for (0..graph.N) |i| {
@@ -89,9 +93,12 @@ fn componentsOk(board: u64) bool {
             sp -= 1;
             const cur = stack[sp];
             size += 1;
-            const nb = [6]u8{
+            const r = graph.rankOf(cur);
+            const su = graph.suitOf(cur);
+            const nb = [9]u8{
                 graph.succ[cur].pure, graph.succ[cur].rb[0], graph.succ[cur].rb[1],
                 graph.pred[cur].pure, graph.pred[cur].rb[0], graph.pred[cur].rb[1],
+                ((su + 1) % 4) * 13 + r, ((su + 2) % 4) * 13 + r, ((su + 3) % 4) * 13 + r,
             };
             for (nb) |x| {
                 if (board & bit(x) != 0 and seen & bit(x) == 0) {
@@ -147,6 +154,23 @@ const MEdge = struct {
 // skip memoization — correctness never depends on the table.
 var memo_table: [1 << 15]u64 = undefined;
 
+/// setMasks: the ways to carve one set out of the available suits at a
+/// rank — any 3 or 4 of them; sets ignore color. One deck holds at most
+/// 4 cards of a rank, so at most one set fits and 5 masks bound it.
+fn setMasks(avail: u8, buf: *[5]u8) []const u8 {
+    var n: usize = 0;
+    var m = avail;
+    while (true) {
+        if (@popCount(m) >= 3) {
+            buf[n] = m;
+            n += 1;
+        }
+        if (m == 0) break;
+        m = (m - 1) & avail;
+    }
+    return buf[0..n];
+}
+
 const Sweeper = struct {
     at: [13]u8,
     r0: u8,
@@ -198,20 +222,34 @@ const Sweeper = struct {
         self.next = @splat(graph.NONE);
         self.mrec = @splat(0);
         @memset(&memo_table, 0);
-        // Rank r0 is consumed at birth: M-edge heads plus fresh starts.
-        self.open_n = 0;
+        // Rank r0 is consumed at birth: M-edge heads, then the rest
+        // form at most one set or start fresh chains.
         var born: u8 = 0;
         for (self.m_edges[0..self.m_n], 0..) |e, i| {
-            self.open[self.open_n] = .{
+            self.open[i] = .{
                 .suit = e.y_suit,
                 .flavor = e.flavor,
                 .len = 1,
                 .m_idx = @intCast(i),
             };
-            self.open_n += 1;
             born |= @as(u8, 1) << @intCast(e.y_suit);
         }
-        var rest = self.at[self.r0] & ~born;
+        const rest = self.at[self.r0] & ~born;
+        if (self.birthAndStep(rest)) return true;
+        var sbuf: [5]u8 = undefined;
+        for (setMasks(rest, &sbuf)) |sm| {
+            self.linkSet(self.r0, sm, true);
+            if (self.birthAndStep(rest & ~sm)) return true;
+            self.linkSet(self.r0, sm, false);
+        }
+        return false;
+    }
+
+    /// birthAndStep: the given r0 cards start fresh chains alongside the
+    /// already-born M-edge heads, and the sweep advances into rank 1.
+    fn birthAndStep(self: *Sweeper, fresh: u8) bool {
+        self.open_n = self.m_n;
+        var rest = fresh;
         while (rest != 0) {
             const s: u8 = @intCast(@ctz(rest));
             rest &= rest - 1;
@@ -233,26 +271,19 @@ const Sweeper = struct {
 
     /// assign decides, for open chain ci at rank position pos, whether it
     /// closes or which card it grabs; past the last chain, leftover cards
-    /// start fresh chains and the sweep advances. Continued and fresh
-    /// chains accumulate in new_open, one buffer per rank frame.
+    /// form at most one set or start fresh chains and the sweep advances.
+    /// Continued and fresh chains accumulate in new_open, one buffer per
+    /// rank frame.
     fn assign(self: *Sweeper, pos: u8, ci: u8, avail: u8, new_open: *[MAX_OPEN]Open, new_n: u8) bool {
         if (ci == self.open_n) {
-            var nn = new_n;
-            var rest = avail;
-            while (rest != 0) {
-                const s: u8 = @intCast(@ctz(rest));
-                rest &= rest - 1;
-                new_open[nn] = .{ .suit = s, .flavor = .open, .len = 1, .m_idx = -1 };
-                nn += 1;
+            if (self.freshAndStep(pos, avail, new_open, new_n)) return true;
+            var sbuf: [5]u8 = undefined;
+            for (setMasks(avail, &sbuf)) |sm| {
+                self.linkSet(self.rankAt(pos), sm, true);
+                if (self.freshAndStep(pos, avail & ~sm, new_open, new_n)) return true;
+                self.linkSet(self.rankAt(pos), sm, false);
             }
-            const saved_open = self.open;
-            const saved_n = self.open_n;
-            self.open = new_open.*;
-            self.open_n = nn;
-            const ok = self.step(pos + 1);
-            self.open = saved_open;
-            self.open_n = saved_n;
-            return ok;
+            return false;
         }
         const c = self.open[ci];
         // Option: close the chain at the previous rank.
@@ -286,6 +317,42 @@ const Sweeper = struct {
             self.next[prev] = graph.NONE;
         }
         return false;
+    }
+
+    /// freshAndStep: the leftover cards at this rank start fresh chains,
+    /// the new frontier replaces the old, and the sweep advances.
+    fn freshAndStep(self: *Sweeper, pos: u8, avail: u8, new_open: *[MAX_OPEN]Open, new_n: u8) bool {
+        var nn = new_n;
+        var rest = avail;
+        while (rest != 0) {
+            const s: u8 = @intCast(@ctz(rest));
+            rest &= rest - 1;
+            new_open[nn] = .{ .suit = s, .flavor = .open, .len = 1, .m_idx = -1 };
+            nn += 1;
+        }
+        const saved_open = self.open;
+        const saved_n = self.open_n;
+        self.open = new_open.*;
+        self.open_n = nn;
+        const ok = self.step(pos + 1);
+        self.open = saved_open;
+        self.open_n = saved_n;
+        return ok;
+    }
+
+    /// linkSet writes (or unwinds) the same-rank links of one set,
+    /// ascending by suit.
+    fn linkSet(self: *Sweeper, rank: u8, mask: u8, link: bool) void {
+        var m = mask;
+        var prev: u8 = 0xFF;
+        while (m != 0) {
+            const s: u8 = @intCast(@ctz(m));
+            m &= m - 1;
+            if (prev != 0xFF) {
+                self.next[cardOf(rank, prev)] = if (link) cardOf(rank, s) else graph.NONE;
+            }
+            prev = s;
+        }
     }
 
     /// finish: after the last rank, every M-born head must have closed,
@@ -365,6 +432,10 @@ fn memoAdd(key: u64) void {
 // ---------- verification (strict, independent of the search) ----------
 
 fn edgeFlavor(a: u8, b: u8) ?Flavor {
+    if (graph.rankOf(a) == graph.rankOf(b)) {
+        // Same rank: a set link — unless it's the same card.
+        return if (graph.suitOf(a) != graph.suitOf(b)) .set else null;
+    }
     if (graph.rankOf(b) != (graph.rankOf(a) + 1) % 13) return null;
     if (graph.suitOf(a) == graph.suitOf(b)) return .pure;
     if (graph.isRed(graph.suitOf(a)) != graph.isRed(graph.suitOf(b))) return .rb;
@@ -415,7 +486,8 @@ pub fn verify(board: u64, sol: *const Solution) bool {
 }
 
 /// format renders a solution in the human notation, chains sorted by
-/// their start card: "3H>4S>5H | 9C>TC>JC".
+/// their start card; run links print as '>' and set links as '=':
+/// "3H>4S>5H | 9C>TC>JC | KH=KC=KS".
 pub fn format(board: u64, sol: *const Solution, buf: []u8) []const u8 {
     var indeg = [_]u8{0} ** graph.N;
     for (0..graph.N) |i| {
@@ -432,13 +504,7 @@ pub fn format(board: u64, sol: *const Solution, buf: []u8) []const u8 {
         }
         first_chain = false;
         var cur = c;
-        var first_card = true;
         while (true) {
-            if (!first_card) {
-                buf[n] = '>';
-                n += 1;
-            }
-            first_card = false;
             var cb: [3]u8 = undefined;
             const s = card.formatCard(.{
                 .rank = @intCast(graph.rankOf(cur)),
@@ -447,8 +513,11 @@ pub fn format(board: u64, sol: *const Solution, buf: []u8) []const u8 {
             }, &cb);
             @memcpy(buf[n .. n + s.len], s);
             n += s.len;
-            if (sol.next[cur] == graph.NONE) break;
-            cur = sol.next[cur];
+            const nx = sol.next[cur];
+            if (nx == graph.NONE) break;
+            buf[n] = if (graph.rankOf(nx) == graph.rankOf(cur)) '=' else '>';
+            n += 1;
+            cur = nx;
         }
     }
     return buf[0..n];
@@ -487,7 +556,7 @@ fn expectFutile(fixture: []const u8) !void {
     }
 }
 
-test "solvable boards get verified all-runs next-maps" {
+test "solvable boards get verified next-maps" {
     const fixtures = [_][]const u8{
         "", // an empty board is already clean
         "3H 4H 5H", // pure, as before
@@ -499,6 +568,16 @@ test "solvable boards get verified all-runs next-maps" {
         // one long rb snake (14 cards, the value 'A' appearing twice —
         // fine in runs); the solver emits it split into short chains
         "AH 2S 3D 4C 5H 6S 7D 8C 9H TS JD QC KH AS",
+        "7H 7S 7C", // the minimal set
+        "7H 7D 7C 7S", // a full set of four
+        "3H 4H 5H | KH KC KS", // a run and a set, no interaction
+        // 3H is claimed by the run, the other three 3s form the set —
+        // the greedy set of all four 3s must be backed out of
+        "3H 3D 3C 3S 4H 5H",
+        // a set sitting on the K rank while a pure run rides the wrap
+        "QD KD AD | KH KS KC",
+        // sets or rb runs — two different full covers exist
+        "AH AS AC 2H 2S 2C 3H 3S 3C",
     };
     for (fixtures) |f| try expectSolvable(f);
 }
@@ -514,11 +593,15 @@ test "futile boards report FUTILE" {
         "8H", // a singleton
         "7H 8S", // a pair
         "3H 4H 5S", // pure then rb: chains may not change flavor
-        "3H 4D 5H", // all red, no shared suit: there are no edges at all
+        "3H 4D 5H", // all red, no shared suit, no rank triple
         "3H 4H 5H | 9C TC", // a stranded pair
-        "2H 3H 4H 4S", // the extra 4S has no third card to chain with
+        "2H 3H 4H 4S", // the extra 4S has no third card to meld with
         // every 3-chain cover of 4H strands the rest — real backtracking
         "4H 4S 5S 5D 6D 6H",
+        "7H 7S 8C", // connected (set link + rb link) but coverable by nothing
+        // the mirror of the solvable contention board: with only three
+        // 3s, the set and the run both want 3H
+        "3H 3S 3C 4H 5H",
     };
     for (fixtures) |f| try expectFutile(f);
 }
@@ -537,6 +620,7 @@ test "the component prefilter is necessary, not sufficient" {
 test "a stranded card inside a big board is caught fast" {
     // All hearts + all diamonds except 2D and 4D: with no black cards on
     // the board, 3D has no rb neighbors and its pure neighbors are gone.
+    // Sets don't rescue it either — no rank has more than two cards.
     const board = try bitsOf(
         "AH 2H 3H 4H 5H 6H 7H 8H 9H TH JH QH KH | AD 3D 5D 6D 7D 8D 9D TD JD QD KD",
     );
@@ -547,11 +631,13 @@ test "dense random boards that thrashed the chain-growing search" {
     // Both found by the random-board probe: the first hung the naive
     // chain DFS for 6+ CPU-minutes, the second survived the 3..5 cap
     // and hung anyway. The sweep answers both instantly.
-    // 41 cards, FUTILE — cross-confirmed by an independent chain-DFS
-    // oracle (the author guessed solvable; both solvers disagreed).
+    // 41 cards. FUTILE under phase-2 runs-only (oracle-confirmed);
+    // sets are exactly what it was missing — solvable since phase 3.
     const thrash1: u64 = 0xdffb7bb6efe3f;
-    try std.testing.expectEqual(@as(?Solution, null), solve(thrash1));
-    // 45 cards, solvable — the verifier is the independent proof.
+    if (solve(thrash1)) |sol| {
+        try std.testing.expect(verify(thrash1, &sol));
+    } else return error.TestUnexpectedResult;
+    // 45 cards, solvable with runs alone already.
     const thrash2: u64 = 0xf6ffb7bff9fff;
     if (solve(thrash2)) |sol| {
         try std.testing.expect(verify(thrash2, &sol));
@@ -572,6 +658,13 @@ test "pinned minimal solutions" {
         const sol = solve(board).?;
         var fb: [512]u8 = undefined;
         try std.testing.expectEqualStrings("3H>4H>5H", format(board, &sol, &fb));
+    }
+    // And the minimal set, printed with set links ascending by suit.
+    {
+        const board = try bitsOf("7H 7S 7C");
+        const sol = solve(board).?;
+        var fb: [512]u8 = undefined;
+        try std.testing.expectEqualStrings("7H=7C=7S", format(board, &sol, &fb));
     }
 }
 
