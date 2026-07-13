@@ -69,9 +69,47 @@ pub fn boardBits(cards: []const card.Card) Error!u64 {
     return bits;
 }
 
+/// componentsOk: every connected component of the board's run graph
+/// must have ≥ 3 cards — a component can't borrow cards from elsewhere,
+/// so a small one dooms the board. Necessary, not sufficient: a pure
+/// prefilter that answers many futile boards before any cut matching
+/// is guessed (each matching re-sweeps with a fresh memo, so global
+/// futility would otherwise be re-learned once per matching).
+fn componentsOk(board: u64) bool {
+    var seen: u64 = 0;
+    for (0..graph.N) |i| {
+        const c: u8 = @intCast(i);
+        if (board & bit(c) == 0 or seen & bit(c) != 0) continue;
+        var stack: [graph.N]u8 = undefined;
+        var sp: usize = 1;
+        stack[0] = c;
+        seen |= bit(c);
+        var size: u32 = 0;
+        while (sp > 0) {
+            sp -= 1;
+            const cur = stack[sp];
+            size += 1;
+            const nb = [6]u8{
+                graph.succ[cur].pure, graph.succ[cur].rb[0], graph.succ[cur].rb[1],
+                graph.pred[cur].pure, graph.pred[cur].rb[0], graph.pred[cur].rb[1],
+            };
+            for (nb) |x| {
+                if (board & bit(x) != 0 and seen & bit(x) == 0) {
+                    seen |= bit(x);
+                    stack[sp] = x;
+                    sp += 1;
+                }
+            }
+        }
+        if (size < 3) return false;
+    }
+    return true;
+}
+
 /// solve answers phase-2 solve-board: a clean all-runs next-map for the
 /// card set, or null. FUTILE is a first-class answer, not an error.
 pub fn solve(board: u64) ?Solution {
+    if (!componentsOk(board)) return null;
     var at: [13]u8 = @splat(0); // suit mask per rank
     for (0..graph.N) |i| {
         const c: u8 = @intCast(i);
@@ -483,6 +521,17 @@ test "futile boards report FUTILE" {
         "4H 4S 5S 5D 6D 6H",
     };
     for (fixtures) |f| try expectFutile(f);
+}
+
+test "the component prefilter is necessary, not sufficient" {
+    // A stranded pair fails the prefilter outright…
+    try std.testing.expect(!componentsOk(try bitsOf("3H 4H 5H | 9C TC")));
+    // …but a connected futile board sails through it (3H-4H is a pure
+    // edge, 4H-5S is rb — one component, still no solution) and must be
+    // answered by the sweep.
+    const connected_futile = try bitsOf("3H 4H 5S");
+    try std.testing.expect(componentsOk(connected_futile));
+    try std.testing.expectEqual(@as(?Solution, null), solve(connected_futile));
 }
 
 test "a stranded card inside a big board is caught fast" {
