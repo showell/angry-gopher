@@ -23,6 +23,23 @@ Filenames are `<slug>.png` (or `.svg`), where the slugs match the manifest in
 | `puzzles` | Lyn Rummy Puzzles |
 | `chess` | Chess Toys |
 
+## Authoring rules
+
+- **Anything directional faces RIGHT.** Images sit left of the text on the
+  home page, so a left-facing subject "walks off" the page. Standing rule.
+- **The image must be honest** — it can't imply a feature the app doesn't
+  have (an early chat.svg had reaction emoji; we have no reactions, so they
+  came out). Stylized is fine; fictional is not.
+- **Prefer deriving the image from the app's own code** over inventing an
+  illustration (see `safari.png` and `delivery.svg` below) — faithful and
+  stale-proof by construction. An invented 3D-truck illustration for
+  delivery went in circles until we rendered the app's real map instead.
+- **Previewing SVG:** a browser (or reading the file) shows you the source's
+  intent, but for actual pixels render locally with `cairosvg` to a PNG.
+  The gallery serves from disk at request time, so a running `ops/start`
+  server shows edits at `/gallery` with no rebuild — the final visual call
+  is a browser look.
+
 ## How each image is made
 
 - **`safari.png`** — `ops/gallery_cat`. Runs the game's REAL cat-drawing code
