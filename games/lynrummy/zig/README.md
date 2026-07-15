@@ -27,34 +27,41 @@ Phases:
 3. **+ sets** (`solver.zig`, evolved from phase 2's `runs.zig`) — DONE.
    Sets are rank-LOCAL (3–4 cards of one rank), so they slot into the
    sweep's per-rank step rather than changing its shape: the leftover
-   cards at a rank may form at most one set (one deck) before the rest
-   start fresh chains. In the next-map a set is a chain of same-rank
-   links, printed with `=`: `KH=KC=KS`.
+   cards at a rank may form sets before the rest start fresh chains. In
+   the next-map a set is a chain of same-rank links, printed with `=`:
+   `KH=KC=KS`.
+4. **Two decks** (`solver.zig`) — sweep DONE, tier 0 pending. The two
+   copies of a (suit, rank) are indistinguishable to legality (a run
+   can't repeat a value, a set can't repeat a suit), so the search stays
+   at (suit, count) level: copy 0 is consumed before copy 1 (WLOG, never
+   a choice point) and memo states carry no copy labels. The board is a
+   canonical u128 multiset bitset; per-rank frontier grows to 8 open
+   chains and up to two sets; the set distinct-SUIT constraint turns
+   load-bearing (`7H 7C 7H'` is three cards at one rank and no set).
+   Validated against a copy-blind oracle that treats all 104 slots as
+   distinct cards — agreement on uniform-random AND meld-seeded boards.
 
 The solve is a **portfolio**, cheapest prior first:
 
 0. **Suit-first** (`suit_first.zig`) — the human prior: pure runs as
    the bulk carrier, sets as patch material for orphans, no red-black
-   at all. Answers most boards in microseconds with a human-shaped
-   cover (it reproduced Steve's own solve of the probe's worst board,
-   card for card). Allowed to pass.
+   at all. Answers most one-deck boards in microseconds with a
+   human-shaped cover (it reproduced Steve's own solve of the probe's
+   worst board, card for card). Allowed to pass — and currently passes
+   on ANY board with a duplicate card: the arc machinery assumes one
+   card per (suit, rank), and its two-layer generalization is the
+   pending piece of phase 4.
 1. **Rank sweep, scarcest-rank cut**, under a 50k-step budget.
 2. On a budget trip: **unbounded sweep from the fewest-matchings cut**.
-
-Next: two decks — per-rank multiplicity 4 → 8, and the set
-distinct-card constraint turns load-bearing.
-
-Cross-cutting strategy: completely solve the ONE-deck game with a strong
-test foundation before leaning on duplicate cards — the two copies of a
-(rank, suit) are where the game's true complexity lives.
 
 Files:
 
 - `card.zig` — the vocabulary: (rank, suit, deck), the ASCII notation
   (`7H`, `TC'`), board-line parsing, and the deck-blind `Counts` view
   the solver runs on.
-- `graph.zig` — the comptime one-deck successor tables (pure: 1 per
-  card; rb: 2 per card; the two flavors are disjoint).
+- `graph.zig` — the comptime successor tables over the 52 distinct
+  (suit, rank) cards (pure: 1 per card; rb: 2 per card; the two flavors
+  are disjoint); rank/suit lookups are copy-blind across the 104 slots.
 - `pure_run.zig` — phase 1: per-suit cyclic arc cover + verifier. Kept
   as a stepping stone.
 - `solver.zig` — phases 2+3: the rank-sweep solver (with the component
