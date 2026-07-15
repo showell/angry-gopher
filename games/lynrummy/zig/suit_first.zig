@@ -49,11 +49,16 @@ const Cover = struct {
 /// trySolve attempts a pure-runs-plus-sets cover. On success it fills
 /// `next` (a fresh next-map) and returns true; on false, `next` is
 /// untouched garbage and the caller falls through to the sweep.
-pub fn trySolve(board: u64, next: *[graph.N]u8) bool {
+/// Two-deck boards pass outright for now: the arc machinery assumes one
+/// card per (suit, rank), and generalizing it (two arc layers, orphan
+/// repair across them) waits until the sweep is proven at two decks.
+pub fn trySolve(board: u128, next: *[graph.SLOTS]u8) bool {
+    if (board >> 52 != 0) return false;
+    const bits: u64 = @truncate(board);
     var st: Static = .{};
     for (0..4) |s| {
         const suit: u8 = @intCast(s);
-        const m: u16 = @intCast((board >> @intCast(s * 13)) & FULL);
+        const m: u16 = @intCast((bits >> @intCast(s * 13)) & FULL);
         if (m == 0) continue;
         if (m == FULL) {
             addArc(&st, suit, 0, 13);
@@ -180,7 +185,7 @@ fn popCountLess(_: void, a: u8, b: u8) bool {
 
 /// build writes the cover into a fresh next-map: residual arc segments
 /// as pure runs, chosen sets as same-rank chains (ascending suit).
-fn build(st: *const Static, cov: *const Cover, next: *[graph.N]u8) void {
+fn build(st: *const Static, cov: *const Cover, next: *[graph.SLOTS]u8) void {
     next.* = @splat(graph.NONE);
     for (st.arcs[0..st.arc_n], 0..) |arc, ai| {
         const d = cov.donated[ai];
@@ -225,7 +230,7 @@ fn cardAt(suit: u8, rank: u8) u8 {
 // owns the strict verifier.
 
 test "no orphans: full and partial suits stand as pure runs" {
-    var next: [graph.N]u8 = undefined;
+    var next: [graph.SLOTS]u8 = undefined;
     // All 13 hearts.
     try std.testing.expect(trySolve(0x1FFF, &next));
     // Hearts 3..7 (ranks 2..6): one arc, stands alone.
@@ -233,7 +238,7 @@ test "no orphans: full and partial suits stand as pure runs" {
 }
 
 test "orphans absorbed by a set with donor peels" {
-    var next: [graph.N]u8 = undefined;
+    var next: [graph.SLOTS]u8 = undefined;
     // The keystone shape: A♠ is an orphan; A♥ and A♦ each head a
     // 4-arc, so peeling them leaves legal 3-runs — the ace set forms.
     const hearts: u64 = 0b1111;
@@ -243,7 +248,7 @@ test "orphans absorbed by a set with donor peels" {
 }
 
 test "ejection chain: a stranding donation cascades into more sets" {
-    var next: [graph.N]u8 = undefined;
+    var next: [graph.SLOTS]u8 = undefined;
     // Board: 6H 7H 8H | 6D 8D | 6C 7C 8C? no — deliberately:
     // 6D 6C, 7S 7C, 8D 8C as loner pairs plus the 6H 7H 8H arc.
     // Rank 6 needs 6H; donating it strands 7H 8H, which then complete
@@ -260,7 +265,7 @@ test "ejection chain: a stranding donation cascades into more sets" {
 }
 
 test "tier 0 passes (returns false) when orphans can't set" {
-    var next: [graph.N]u8 = undefined;
+    var next: [graph.SLOTS]u8 = undefined;
     // Lone A♠: orphan, no donors anywhere.
     try std.testing.expect(!trySolve(@as(u64, 1) << (3 * 13), &next));
     // A♠ + one donor suit only: set can't reach 3.

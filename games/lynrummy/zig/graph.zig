@@ -1,32 +1,34 @@
-//! graph — the one-deck (52-card) successor graph, precomputed at
-//! comptime like the knight-move table in games/chess/knight.zig. Card
-//! index = suit*13 + rank (suits H,D,C,S; H,D red). Every run edge steps
-//! rank+1 mod 13 — the K→A→2 wrap is just the modulus. Two edge flavors
-//! so far, and they are DISJOINT (a same-suit step is same-color, so it
-//! can never be an rb step — a chain's flavor is decided by its first
-//! edge):
+//! graph — the successor graph over the 52 distinct (suit, rank) cards,
+//! precomputed at comptime like the knight-move table in
+//! games/chess/knight.zig. Base index = suit*13 + rank (suits H,D,C,S;
+//! H,D red); the second deck's copy of base card i lives at SLOT i+52,
+//! and rankOf/suitOf are copy-blind — no meld ever distinguishes the
+//! two copies of a (suit, rank), so the tables stay 52 wide. Every run
+//! edge steps rank+1 mod 13 — the K→A→2 wrap is just the modulus. Two
+//! run flavors, and they are DISJOINT (a same-suit step is same-color,
+//! so it can never be an rb step — a chain's flavor is decided by its
+//! first edge):
 //!
 //!   pure — same suit:            exactly 1 successor per card
 //!   rb   — opposite color:       exactly 2 successors per card
-//!
-//! Set-neighbor edges join in phase 3; the second deck later still.
 
 const std = @import("std");
 const card = @import("card.zig");
 
-pub const N = 52;
+pub const N = 52; // distinct (suit, rank) cards; tables are this wide
+pub const SLOTS = 104; // both copies; slot = deck*52 + suit*13 + rank
 pub const NONE: u8 = 0xFF;
 
 pub fn cardIndex(c: card.Card) u8 {
-    return @as(u8, c.suit) * 13 + c.rank;
+    return @as(u8, c.deck) * 52 + @as(u8, c.suit) * 13 + c.rank;
 }
 
 pub fn rankOf(i: u8) u8 {
-    return i % 13;
+    return i % 52 % 13;
 }
 
 pub fn suitOf(i: u8) u8 {
-    return i / 13;
+    return i % 52 / 13;
 }
 
 pub fn isRed(suit: u8) bool {
@@ -77,4 +79,14 @@ test "the wrap: KH's pure successor is AH" {
     const kh = cardIndex(.{ .rank = 12, .suit = 0, .deck = 0 });
     const ah = cardIndex(.{ .rank = 0, .suit = 0, .deck = 0 });
     try std.testing.expectEqual(ah, succ[kh].pure);
+}
+
+test "rankOf/suitOf are copy-blind across the two decks" {
+    for (0..N) |i| {
+        const c: u8 = @intCast(i);
+        try std.testing.expectEqual(rankOf(c), rankOf(c + 52));
+        try std.testing.expectEqual(suitOf(c), suitOf(c + 52));
+    }
+    const th1 = cardIndex(.{ .rank = 9, .suit = 0, .deck = 1 });
+    try std.testing.expectEqual(@as(u8, 9 + 52), th1);
 }

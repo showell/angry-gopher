@@ -1,7 +1,16 @@
-//! solver — phase 3 of the solver rethink: solve-board for the full
-//! one-deck game. Melds are RUNS — pure (same suit) or red-black
-//! (alternating colors), both stepping rank+1 with the wrap — and SETS:
-//! 3 or 4 cards of one rank, distinct suits, color-blind.
+//! solver — solve-board for the full TWO-DECK game. Melds are RUNS —
+//! pure (same suit) or red-black (alternating colors), both stepping
+//! rank+1 with the wrap — and SETS: 3 or 4 cards of one rank, distinct
+//! suits, color-blind.
+//!
+//! TWO DECKS: the two copies of a (suit, rank) are indistinguishable to
+//! legality — a run can't repeat a value and a set can't repeat a suit,
+//! so no meld ever tells them apart. Solvability depends only on the
+//! per-card multiplicity, and the search works at (suit, count) level:
+//! when a chain grabs "suit s at rank r" it consumes copy 0 before
+//! copy 1 (a WLOG rule, not a choice point), and the memo state carries
+//! no copy labels, so states differing only in labels merge. Copy
+//! identity exists solely in the next-map the solution is written into.
 //!
 //! The board is the sparse successor map: each card points at the card
 //! it grabbed to its right, or at nothing. A clean board = an injective,
@@ -9,9 +18,9 @@
 //! set is a chain whose links stay inside one rank. Runs get NO length
 //! cap in the game: a long chain always splits into legal 3..13 display
 //! runs, and any ≤13 window is automatically value-repeat-free. Sets
-//! can't be repaired after the fact like that — their distinct-card
-//! constraint is enforced where they're built (trivially here: one deck
-//! holds at most 4 cards of a rank; it turns load-bearing at two decks).
+//! can't be repaired after the fact like that — their distinct-SUIT
+//! constraint is enforced where they're built, and at two decks it is
+//! load-bearing: 7H 7C 7H' is three cards at one rank and still no set.
 //!
 //! NORMALIZATION LEMMA (load-bearing): the search only builds chains of
 //! length 3..5, and that loses nothing — any legal chain splits into
@@ -23,14 +32,15 @@
 //! THE SWEEP: every run edge steps rank+1, so the 13 ranks are a
 //! topological order. Sweep them once, rank by rank; the only live
 //! state is the set of OPEN chains — each just (suit at the current
-//! rank, flavor, capped length), at most 4 of them (a chain must
-//! consume a card at every rank it stays open through). At each rank,
-//! branch over the ways open chains continue or close and leftover
-//! cards form at most one set (they're rank-local, so they carry no
-//! state across ranks) or start fresh chains; memoize futile
-//! (rank, state) pairs, which bounds the whole search by the tiny state
-//! space. A first cut of chain-growing DFS thrashed for HOURS on dense
-//! 40-card boards; this sweep is the eliminate-the-cause fix.
+//! rank, flavor, capped length), at most 8 of them (a chain must
+//! consume a card at every rank it stays open through, and a rank holds
+//! at most 8 cards). At each rank, branch over the ways open chains
+//! continue or close and leftover cards form up to two sets (they're
+//! rank-local, so they carry no state across ranks) or start fresh
+//! chains; memoize futile (rank, state) pairs, which bounds the whole
+//! search by the tiny state space. A first cut of chain-growing DFS
+//! thrashed for HOURS on dense 40-card boards; this sweep is the
+//! eliminate-the-cause fix.
 //!
 //! THE WRAP: chains may cross the boundary K→A (or wherever we cut).
 //! Cut at the boundary entering the scarcest rank and branch over the
@@ -47,30 +57,37 @@ const card = @import("card.zig");
 const graph = @import("graph.zig");
 const suit_first = @import("suit_first.zig");
 
-pub const Error = error{ OneDeckOnly, DuplicateCard };
-
 pub const Flavor = enum { open, pure, rb, set };
 
-/// The solved board in the sparse form: next[i] is the card index that
-/// card i points at, or NONE at a chain end (and for cards not on the
-/// board).
+/// The board as a canonical two-deck bitset: bit i (i < 52) = at least
+/// one copy of base card i on the board, bit 52+i = a second copy. The
+/// high bit implies the low one; deck labels never survive the lowering
+/// — solvability depends only on the multiset.
+pub const Board = u128;
+
+/// The solved board in the sparse form: next[i] is the card slot that
+/// card slot i points at, or NONE at a chain end (and for cards not on
+/// the board).
 pub const Solution = struct {
-    next: [graph.N]u8,
+    next: [graph.SLOTS]u8,
 };
 
-fn bit(i: u8) u64 {
-    return @as(u64, 1) << @intCast(i);
+fn bit(i: u8) Board {
+    return @as(Board, 1) << @intCast(i);
 }
 
-/// boardBits lowers parsed cards to the one-deck bitset, failing loud on
-/// second-deck marks and on the same card twice.
-pub fn boardBits(cards: []const card.Card) Error!u64 {
-    var bits: u64 = 0;
-    for (cards) |c| {
-        if (c.deck != 0) return error.OneDeckOnly;
-        const i = graph.cardIndex(c);
-        if (bits & bit(i) != 0) return error.DuplicateCard;
-        bits |= bit(i);
+/// boardBits lowers parsed cards to the canonical bitset. Deck marks in
+/// fixtures are dressing (the multiset is the content); a third copy of
+/// a (suit, rank) fails loud.
+pub fn boardBits(cards: []const card.Card) card.Error!Board {
+    const counts = try card.buildCounts(cards);
+    var bits: Board = 0;
+    for (0..4) |s| {
+        for (0..13) |r| {
+            const base: u8 = @intCast(s * 13 + r);
+            if (counts[s][r] >= 1) bits |= bit(base);
+            if (counts[s][r] == 2) bits |= bit(base + 52);
+        }
     }
     return bits;
 }
@@ -82,20 +99,25 @@ pub fn boardBits(cards: []const card.Card) Error!u64 {
 /// many futile boards before any cut matching is guessed (each matching
 /// re-sweeps with a fresh memo, so global futility would otherwise be
 /// re-learned once per matching).
-fn componentsOk(board: u64) bool {
+fn componentsOk(board: Board) bool {
+    // Copies share all their neighbors, so BFS the base (52-card)
+    // projection and weight each card by its multiplicity. (A second
+    // copy can't meld with its twin, so multiplicity-weighted size ≥ 3
+    // stays merely necessary — which is all a prefilter needs.)
+    const present: u64 = @truncate(board); // canonical: high implies low
     var seen: u64 = 0;
     for (0..graph.N) |i| {
         const c: u8 = @intCast(i);
-        if (board & bit(c) == 0 or seen & bit(c) != 0) continue;
+        if (present >> @intCast(c) & 1 == 0 or seen >> @intCast(c) & 1 != 0) continue;
         var stack: [graph.N]u8 = undefined;
         var sp: usize = 1;
         stack[0] = c;
-        seen |= bit(c);
+        seen |= @as(u64, 1) << @intCast(c);
         var size: u32 = 0;
         while (sp > 0) {
             sp -= 1;
             const cur = stack[sp];
-            size += 1;
+            size += 1 + @as(u32, @intCast(board >> @intCast(cur + 52) & 1));
             const r = graph.rankOf(cur);
             const su = graph.suitOf(cur);
             const nb = [9]u8{
@@ -104,8 +126,8 @@ fn componentsOk(board: u64) bool {
                 ((su + 1) % 4) * 13 + r, ((su + 2) % 4) * 13 + r, ((su + 3) % 4) * 13 + r,
             };
             for (nb) |x| {
-                if (board & bit(x) != 0 and seen & bit(x) == 0) {
-                    seen |= bit(x);
+                if (present >> @intCast(x) & 1 != 0 and seen >> @intCast(x) & 1 == 0) {
+                    seen |= @as(u64, 1) << @intCast(x);
                     stack[sp] = x;
                     sp += 1;
                 }
@@ -116,9 +138,9 @@ fn componentsOk(board: u64) bool {
     return true;
 }
 
-/// solve answers phase-2 solve-board: a clean all-runs next-map for the
-/// card set, or null. FUTILE is a first-class answer, not an error.
-pub fn solve(board: u64) ?Solution {
+/// solve answers solve-board: a clean next-map for the card multiset,
+/// or null. FUTILE is a first-class answer, not an error.
+pub fn solve(board: Board) ?Solution {
     if (!componentsOk(board)) return null;
     // Tier 0: the human prior — pure runs + sets, suit-decomposed
     // (suit_first.zig). Answers most dense boards in microseconds with
@@ -127,10 +149,14 @@ pub fn solve(board: u64) ?Solution {
         var sol: Solution = undefined;
         if (suit_first.trySolve(board, &sol.next)) return sol;
     }
-    var at: [13]u8 = @splat(0); // suit mask per rank
+    // Per rank: an 8-bit SLOT mask — low nibble copy 0 of suits 0-3,
+    // high nibble copy 1. Canonical board keeps high implying low
+    // within each rank.
+    var at: [13]u8 = @splat(0);
     for (0..graph.N) |i| {
         const c: u8 = @intCast(i);
         if (board & bit(c) != 0) at[graph.rankOf(c)] |= @as(u8, 1) << @intCast(graph.suitOf(c));
+        if (board & bit(c + 52) != 0) at[graph.rankOf(c)] |= @as(u8, 1) << @intCast(graph.suitOf(c) + 4);
     }
     // Portfolio. Fast path: cut entering the scarcest rank, under a
     // step budget that 99.9% of boards never approach (tail boards run
@@ -140,8 +166,8 @@ pub fn solve(board: u64) ?Solution {
         if (@popCount(at[r]) < @popCount(at[r0])) r0 = @intCast(r);
     }
     steps_left = 50_000;
-    var s: Sweeper = .{ .at = at, .r0 = r0 };
-    if (s.enumM(at[r0], at[(r0 + 12) % 13])) return .{ .next = s.next };
+    var s = Sweeper.init(at, r0);
+    if (s.enumMFrom()) return .{ .next = s.next };
     if (steps_left >= 0) return null; // search completed: honest FUTILE
     // Budget tripped: a tail board. Retry unbounded from the cut with
     // the fewest concrete wrap matchings (tie: fewest target cards) —
@@ -149,16 +175,16 @@ pub fn solve(board: u64) ?Solution {
     var rb: u8 = 0;
     var best: u64 = std.math.maxInt(u64);
     for (0..13) |r| {
-        const cnt = countM(at[r], at[(r + 12) % 13], 0);
-        const score = (cnt << 3) | @popCount(at[r]);
+        const cnt = countMAt(at, @intCast(r));
+        const score = (cnt << 4) | @popCount(at[r]);
         if (score < best) {
             best = score;
             rb = @intCast(r);
         }
     }
     steps_left = std.math.maxInt(i64);
-    var s2: Sweeper = .{ .at = at, .r0 = rb };
-    if (s2.enumM(at[rb], at[(rb + 12) % 13])) return .{ .next = s2.next };
+    var s2 = Sweeper.init(at, rb);
+    if (s2.enumMFrom()) return .{ .next = s2.next };
     return null;
 }
 
@@ -167,37 +193,81 @@ pub fn solve(board: u64) ?Solution {
 // truncated exploration must not record futility facts.
 var steps_left: i64 = std.math.maxInt(i64);
 
-/// countM: the exact number of complete cut matchings enumM would try
-/// for this (targets, sources) pair — used to pick the fallback cut.
-fn countM(targets: u8, sources: u8, used: u8) u64 {
-    if (targets == 0) return 1;
-    const t: u8 = @intCast(@ctz(targets));
-    const rest = targets & (targets - 1);
-    var n: u64 = countM(rest, sources, used); // t not crossed
-    var srcs = sources & ~used;
-    while (srcs != 0) {
-        const x: u8 = @intCast(@ctz(srcs));
-        srcs &= srcs - 1;
+/// instances expands a rank's slot mask into target instances, suits
+/// adjacent (suit 0 copy 0, suit 0 copy 1, suit 1 copy 0, …) — the
+/// matching enumeration's copy-symmetry rules lean on that adjacency.
+fn instances(mask: u8, out: *[8]u8) []const u8 {
+    var n: usize = 0;
+    for (0..4) |s| {
+        if (mask >> @intCast(s) & 1 != 0) {
+            out[n] = @intCast(s);
+            n += 1;
+        }
+        if (mask >> @intCast(s + 4) & 1 != 0) {
+            out[n] = @intCast(s + 4);
+            n += 1;
+        }
+    }
+    return out[0..n];
+}
+
+fn suitCounts(mask: u8) [4]u8 {
+    var cnt: [4]u8 = @splat(0);
+    for (0..4) |s| {
+        cnt[s] = (mask >> @intCast(s) & 1) + (mask >> @intCast(s + 4) & 1);
+    }
+    return cnt;
+}
+
+/// countMAt: the exact number of complete cut matchings enumM would try
+/// for the cut entering rank r — used to pick the fallback cut. Mirrors
+/// enumM's canonicalization, so the count is honest.
+fn countMAt(at: [13]u8, r: u8) u64 {
+    var tb: [8]u8 = undefined;
+    const tgts = instances(at[r], &tb);
+    const src_cnt = suitCounts(at[(r + 12) % 13]);
+    var src_used: [4]u8 = @splat(0);
+    return countM(tgts, 0, 0, &src_cnt, &src_used);
+}
+
+fn countM(tgts: []const u8, ti: usize, pair_min: i8, src_cnt: *const [4]u8, src_used: *[4]u8) u64 {
+    if (ti == tgts.len) return 1;
+    const slot = tgts[ti];
+    const t: u8 = slot & 3;
+    const partnered = slot >= 4; // canonical: its copy-0 twin sits at ti-1
+    var n: u64 = countM(tgts, ti + 1, -1, src_cnt, src_used); // not crossed
+    if (partnered and pair_min < 0) return n;
+    var x: u8 = if (partnered) @intCast(pair_min) else 0;
+    while (x < 4) : (x += 1) {
+        if (src_used[x] == src_cnt[x]) continue;
         if (x != t and (x < 2) == (t < 2)) continue; // same color, diff suit
-        n += countM(rest, sources, used | (@as(u8, 1) << @intCast(x)));
+        src_used[x] += 1;
+        n += countM(tgts, ti + 1, @intCast(x), src_cnt, src_used);
+        src_used[x] -= 1;
     }
     return n;
 }
 
-const MAX_OPEN = 4; // one deck: at most 4 cards per rank
+const MAX_OPEN = 8; // two decks: at most 8 cards per rank
 
-/// An open chain, described by its card at the current sweep rank.
+/// An open chain, described by its card at the current sweep rank. The
+/// copy bit exists only to address the next-map; it stays out of the
+/// memo key, so states differing in copy labels merge.
 const Open = struct {
     suit: u8,
+    copy: u8,
     flavor: Flavor,
     len: u8, // fresh: cards so far; M-born: head cards so far
     m_idx: i8, // -1 = fresh, else index into m_edges
 };
 
-/// A guessed cut-crossing edge: card (vL, x_suit) → card (r0, y_suit).
+/// A guessed cut-crossing edge: some suit-x card at rank vL → the card
+/// at slot y of rank r0. The source stays a suit, not a slot — the
+/// concrete source card is wherever the feeding chain actually ends,
+/// bound at matchEnd time.
 const MEdge = struct {
     x_suit: u8,
-    y_suit: u8,
+    y_slot: u8,
     flavor: Flavor,
 };
 
@@ -208,11 +278,12 @@ const MEdge = struct {
 // board, dwarfing the real search on small ones — the scale probe
 // found it.) Collisions just skip memoization — correctness never
 // depends on the table.
-// Sized from measurement: the densest solvable one-deck boards reach
+// Sized from one-deck measurement: the densest solvable boards reached
 // ~90k distinct futile states per matching; 2^18 holds that with room
-// (2MB + 1MB of epochs, static). Two decks will want this revisited.
+// (4MB of u128 keys + 1MB of epochs, static). Two-deck probes will say
+// whether it still fits.
 const MEMO_BITS = 18;
-var memo_table: [1 << MEMO_BITS]u64 = undefined;
+var memo_table: [1 << MEMO_BITS]u128 = undefined;
 var memo_epoch: [1 << MEMO_BITS]u32 = @splat(0); // 0 = never used
 var epoch: u32 = 0;
 
@@ -226,19 +297,61 @@ fn nextEpoch() void {
     }
 }
 
-/// setMasks: the ways to carve one set out of the available suits at a
-/// rank — any 3 or 4 of them; sets ignore color. One deck holds at most
-/// 4 cards of a rank, so at most one set fits and 5 masks bound it.
-fn setMasks(avail: u8, buf: *[5]u8) []const u8 {
+/// suitsPresent projects a rank's slot mask down to the suits with at
+/// least one card left.
+fn suitsPresent(avail: u8) u8 {
+    return (avail | (avail >> 4)) & 0xF;
+}
+
+/// concreteSlots binds a suit mask to concrete slots in avail, copy 0
+/// first — the WLOG materialization rule.
+fn concreteSlots(avail: u8, suit_mask: u8) u8 {
+    var slots: u8 = 0;
+    var m = suit_mask;
+    while (m != 0) {
+        const s: u8 = @intCast(@ctz(m));
+        m &= m - 1;
+        slots |= if (avail >> @intCast(s) & 1 != 0)
+            @as(u8, 1) << @intCast(s)
+        else
+            @as(u8, 1) << @intCast(s + 4);
+    }
+    return slots;
+}
+
+/// A carving of sets out of one rank: concrete slot masks; b == 0 means
+/// a single set.
+const SetPair = struct { a: u8, b: u8 };
+
+/// setPairs: the ways to carve one or two sets out of a rank's
+/// available slots — a set takes 3 or 4 DISTINCT suits (the two-deck
+/// load-bearing rule); 8 cards can hold two sets. The pair is
+/// unordered, so the second suit mask never exceeds the first and the
+/// swap symmetry never branches. (Feasibility is order-free: a suit
+/// serves two sets only via its two copies.)
+fn setPairs(avail: u8, buf: *[30]SetPair) []const SetPair {
     var n: usize = 0;
-    var m = avail;
+    const suits1 = suitsPresent(avail);
+    var m1 = suits1;
     while (true) {
-        if (@popCount(m) >= 3) {
-            buf[n] = m;
+        if (@popCount(m1) >= 3) {
+            const a = concreteSlots(avail, m1);
+            buf[n] = .{ .a = a, .b = 0 };
             n += 1;
+            const avail2 = avail & ~a;
+            const suits2 = suitsPresent(avail2);
+            var m2 = suits2;
+            while (true) {
+                if (@popCount(m2) >= 3 and m2 <= m1) {
+                    buf[n] = .{ .a = a, .b = concreteSlots(avail2, m2) };
+                    n += 1;
+                }
+                if (m2 == 0) break;
+                m2 = (m2 - 1) & suits2;
+            }
         }
-        if (m == 0) break;
-        m = (m - 1) & avail;
+        if (m1 == 0) break;
+        m1 = (m1 - 1) & suits1;
     }
     return buf[0..n];
 }
@@ -246,45 +359,76 @@ fn setMasks(avail: u8, buf: *[5]u8) []const u8 {
 const Sweeper = struct {
     at: [13]u8,
     r0: u8,
-    next: [graph.N]u8 = undefined,
+    tgt: [8]u8 = undefined, // target instances at r0, suits adjacent
+    tgt_n: u8 = 0,
+    src_cnt: [4]u8, // per-suit supply at rank vL
+    src_used: [4]u8 = @splat(0),
+    next: [graph.SLOTS]u8 = undefined,
     m_edges: [MAX_OPEN]MEdge = undefined,
     m_n: u8 = 0,
-    m_used_src: u8 = 0,
     mrec: [MAX_OPEN]u8 = undefined, // closed head lengths; 0 = pending
     open: [MAX_OPEN]Open = undefined,
     open_n: u8 = 0,
+
+    fn init(at: [13]u8, r0: u8) Sweeper {
+        var s: Sweeper = .{
+            .at = at,
+            .r0 = r0,
+            .src_cnt = suitCounts(at[(r0 + 12) % 13]),
+        };
+        var tb: [8]u8 = undefined;
+        const tgts = instances(at[r0], &tb);
+        @memcpy(s.tgt[0..tgts.len], tgts);
+        s.tgt_n = @intCast(tgts.len);
+        return s;
+    }
 
     fn rankAt(self: *const Sweeper, pos: u8) u8 {
         return (self.r0 + pos) % 13;
     }
 
-    fn cardOf(rank: u8, suit: u8) u8 {
-        return suit * 13 + rank;
+    fn cardOf(rank: u8, suit: u8, copy: u8) u8 {
+        return copy * 52 + suit * 13 + rank;
     }
 
-    /// enumM branches over the concrete matchings across the cut: each
-    /// card at rank r0 is either not crossed into, or crossed into by a
-    /// legal, unused card at rank vL. Every complete guess runs a sweep.
-    fn enumM(self: *Sweeper, targets: u8, sources: u8) bool {
-        if (targets == 0) return self.trySweep();
-        const t: u8 = @intCast(@ctz(targets));
-        const rest = targets & (targets - 1);
-        if (self.enumM(rest, sources)) return true;
-        var srcs = sources & ~self.m_used_src;
-        while (srcs != 0) {
-            const x: u8 = @intCast(@ctz(srcs));
-            srcs &= srcs - 1;
+    fn cardOfSlot(rank: u8, slot: u8) u8 {
+        return (slot >> 2) * 52 + (slot & 3) * 13 + rank;
+    }
+
+    fn enumMFrom(self: *Sweeper) bool {
+        return self.enumM(0, 0);
+    }
+
+    /// enumM branches over the matchings across the cut: each card at
+    /// rank r0 is either not crossed into, or crossed into by some card
+    /// of a legal suit with supply left at rank vL. Sources are suits
+    /// (counts), not cards — inherently canonical. Copy symmetry on the
+    /// target side is broken by two rules keyed on the suit-adjacent
+    /// instance order: a copy-1 instance may cross only if its copy-0
+    /// twin crossed (pair_min < 0 says it didn't), and then only from a
+    /// source suit ≥ the twin's (pair_min carries it). Every complete
+    /// guess runs a sweep.
+    fn enumM(self: *Sweeper, ti: u8, pair_min: i8) bool {
+        if (ti == self.tgt_n) return self.trySweep();
+        const slot = self.tgt[ti];
+        const t: u8 = slot & 3;
+        const partnered = slot >= 4;
+        if (self.enumM(ti + 1, -1)) return true; // not crossed
+        if (partnered and pair_min < 0) return false;
+        var x: u8 = if (partnered) @intCast(pair_min) else 0;
+        while (x < 4) : (x += 1) {
+            if (self.src_used[x] == self.src_cnt[x]) continue;
             const flavor: Flavor = if (x == t)
                 .pure
             else if (graph.isRed(x) != graph.isRed(t))
                 .rb
             else
                 continue; // same color, different suit: no edge
-            self.m_edges[self.m_n] = .{ .x_suit = x, .y_suit = t, .flavor = flavor };
+            self.m_edges[self.m_n] = .{ .x_suit = x, .y_slot = slot, .flavor = flavor };
             self.m_n += 1;
-            self.m_used_src |= @as(u8, 1) << @intCast(x);
-            if (self.enumM(rest, sources)) return true;
-            self.m_used_src &= ~(@as(u8, 1) << @intCast(x));
+            self.src_used[x] += 1;
+            if (self.enumM(ti + 1, @intCast(x))) return true;
+            self.src_used[x] -= 1;
             self.m_n -= 1;
         }
         return false;
@@ -295,37 +439,46 @@ const Sweeper = struct {
         self.mrec = @splat(0);
         nextEpoch();
         // Rank r0 is consumed at birth: M-edge heads, then the rest
-        // form at most one set or start fresh chains.
+        // form up to two sets or start fresh chains.
         var born: u8 = 0;
         for (self.m_edges[0..self.m_n], 0..) |e, i| {
             self.open[i] = .{
-                .suit = e.y_suit,
+                .suit = e.y_slot & 3,
+                .copy = e.y_slot >> 2,
                 .flavor = e.flavor,
                 .len = 1,
                 .m_idx = @intCast(i),
             };
-            born |= @as(u8, 1) << @intCast(e.y_suit);
+            born |= @as(u8, 1) << @intCast(e.y_slot);
         }
         const rest = self.at[self.r0] & ~born;
         if (self.birthAndStep(rest)) return true;
-        var sbuf: [5]u8 = undefined;
-        for (setMasks(rest, &sbuf)) |sm| {
-            self.linkSet(self.r0, sm, true);
-            if (self.birthAndStep(rest & ~sm)) return true;
-            self.linkSet(self.r0, sm, false);
+        var sbuf: [30]SetPair = undefined;
+        for (setPairs(rest, &sbuf)) |sp| {
+            self.linkSet(self.r0, sp.a, true);
+            self.linkSet(self.r0, sp.b, true);
+            if (self.birthAndStep(rest & ~(sp.a | sp.b))) return true;
+            self.linkSet(self.r0, sp.b, false);
+            self.linkSet(self.r0, sp.a, false);
         }
         return false;
     }
 
-    /// birthAndStep: the given r0 cards start fresh chains alongside the
-    /// already-born M-edge heads, and the sweep advances into rank 1.
+    /// birthAndStep: the given r0 card slots start fresh chains alongside
+    /// the already-born M-edge heads, and the sweep advances into rank 1.
     fn birthAndStep(self: *Sweeper, fresh: u8) bool {
         self.open_n = self.m_n;
         var rest = fresh;
         while (rest != 0) {
-            const s: u8 = @intCast(@ctz(rest));
+            const slot: u8 = @intCast(@ctz(rest));
             rest &= rest - 1;
-            self.open[self.open_n] = .{ .suit = s, .flavor = .open, .len = 1, .m_idx = -1 };
+            self.open[self.open_n] = .{
+                .suit = slot & 3,
+                .copy = slot >> 2,
+                .flavor = .open,
+                .len = 1,
+                .m_idx = -1,
+            };
             self.open_n += 1;
         }
         return self.step(1);
@@ -346,17 +499,19 @@ const Sweeper = struct {
 
     /// assign decides, for open chain ci at rank position pos, whether it
     /// closes or which card it grabs; past the last chain, leftover cards
-    /// form at most one set or start fresh chains and the sweep advances.
+    /// form up to two sets or start fresh chains and the sweep advances.
     /// Continued and fresh chains accumulate in new_open, one buffer per
     /// rank frame.
     fn assign(self: *Sweeper, pos: u8, ci: u8, avail: u8, new_open: *[MAX_OPEN]Open, new_n: u8) bool {
         if (ci == self.open_n) {
             if (self.freshAndStep(pos, avail, new_open, new_n)) return true;
-            var sbuf: [5]u8 = undefined;
-            for (setMasks(avail, &sbuf)) |sm| {
-                self.linkSet(self.rankAt(pos), sm, true);
-                if (self.freshAndStep(pos, avail & ~sm, new_open, new_n)) return true;
-                self.linkSet(self.rankAt(pos), sm, false);
+            var sbuf: [30]SetPair = undefined;
+            for (setPairs(avail, &sbuf)) |sp| {
+                self.linkSet(self.rankAt(pos), sp.a, true);
+                self.linkSet(self.rankAt(pos), sp.b, true);
+                if (self.freshAndStep(pos, avail & ~(sp.a | sp.b), new_open, new_n)) return true;
+                self.linkSet(self.rankAt(pos), sp.b, false);
+                self.linkSet(self.rankAt(pos), sp.a, false);
             }
             return false;
         }
@@ -370,12 +525,13 @@ const Sweeper = struct {
             if (self.assign(pos, ci + 1, avail, new_open, new_n)) return true;
         }
         // Option: grab a card at this rank. M-born heads stop at 4 (the
-        // tail contributes at least 1); fresh chains stop at 5.
+        // tail contributes at least 1); fresh chains stop at 5. Copies
+        // never branch: the suit's copy-0 slot is consumed first, WLOG.
         const cap: u8 = if (c.m_idx >= 0) 4 else 5;
         if (c.len >= cap) return false;
         const r = self.rankAt(pos);
-        const prev = cardOf(self.rankAt(pos - 1), c.suit);
-        var suits = avail;
+        const prev = cardOf(self.rankAt(pos - 1), c.suit, c.copy);
+        var suits = suitsPresent(avail);
         while (suits != 0) {
             const s: u8 = @intCast(@ctz(suits));
             suits &= suits - 1;
@@ -386,23 +542,30 @@ const Sweeper = struct {
             else
                 continue;
             if (c.flavor != .open and c.flavor != f) continue;
-            self.next[prev] = cardOf(r, s);
-            new_open[new_n] = .{ .suit = s, .flavor = f, .len = c.len + 1, .m_idx = c.m_idx };
-            if (self.assign(pos, ci + 1, avail & ~(@as(u8, 1) << @intCast(s)), new_open, new_n + 1)) return true;
+            const slot: u8 = if (avail >> @intCast(s) & 1 != 0) s else s + 4;
+            self.next[prev] = cardOfSlot(r, slot);
+            new_open[new_n] = .{ .suit = s, .copy = slot >> 2, .flavor = f, .len = c.len + 1, .m_idx = c.m_idx };
+            if (self.assign(pos, ci + 1, avail & ~(@as(u8, 1) << @intCast(slot)), new_open, new_n + 1)) return true;
             self.next[prev] = graph.NONE;
         }
         return false;
     }
 
-    /// freshAndStep: the leftover cards at this rank start fresh chains,
-    /// the new frontier replaces the old, and the sweep advances.
+    /// freshAndStep: the leftover card slots at this rank start fresh
+    /// chains, the new frontier replaces the old, and the sweep advances.
     fn freshAndStep(self: *Sweeper, pos: u8, avail: u8, new_open: *[MAX_OPEN]Open, new_n: u8) bool {
         var nn = new_n;
         var rest = avail;
         while (rest != 0) {
-            const s: u8 = @intCast(@ctz(rest));
+            const slot: u8 = @intCast(@ctz(rest));
             rest &= rest - 1;
-            new_open[nn] = .{ .suit = s, .flavor = .open, .len = 1, .m_idx = -1 };
+            new_open[nn] = .{
+                .suit = slot & 3,
+                .copy = slot >> 2,
+                .flavor = .open,
+                .len = 1,
+                .m_idx = -1,
+            };
             nn += 1;
         }
         const saved_open = self.open;
@@ -416,17 +579,22 @@ const Sweeper = struct {
     }
 
     /// linkSet writes (or unwinds) the same-rank links of one set,
-    /// ascending by suit.
-    fn linkSet(self: *Sweeper, rank: u8, mask: u8, link: bool) void {
-        var m = mask;
+    /// ascending by suit. The slot mask holds at most one slot per suit
+    /// (a set never repeats a suit).
+    fn linkSet(self: *Sweeper, rank: u8, slots: u8, link: bool) void {
         var prev: u8 = 0xFF;
-        while (m != 0) {
-            const s: u8 = @intCast(@ctz(m));
-            m &= m - 1;
+        for (0..4) |s| {
+            const su: u8 = @intCast(s);
+            const slot: u8 = if (slots >> @intCast(s) & 1 != 0)
+                su
+            else if (slots >> @intCast(s + 4) & 1 != 0)
+                su + 4
+            else
+                continue;
             if (prev != 0xFF) {
-                self.next[cardOf(rank, prev)] = if (link) cardOf(rank, s) else graph.NONE;
+                self.next[cardOfSlot(rank, prev)] = if (link) cardOfSlot(rank, slot) else graph.NONE;
             }
-            prev = s;
+            prev = slot;
         }
     }
 
@@ -442,41 +610,42 @@ const Sweeper = struct {
 
     fn matchEnd(self: *Sweeper, ci: u8, used: u8) bool {
         if (ci == self.open_n) {
-            if (@popCount(used) != self.m_n) return false;
-            // Success: write the glue edges across the cut.
-            const vl = self.rankAt(12);
-            for (self.m_edges[0..self.m_n]) |e| {
-                self.next[cardOf(vl, e.x_suit)] = cardOf(self.r0, e.y_suit);
-            }
-            return true;
+            // The glue edges were written on the way down.
+            return @popCount(used) == self.m_n;
         }
         const c = self.open[ci];
         if (c.len >= 3 and self.matchEnd(ci + 1, used)) return true;
+        // The chain's actual end card is the edge's concrete source —
+        // writing the glue from it keeps copy binding consistent.
+        const end = cardOf(self.rankAt(12), c.suit, c.copy);
         for (self.m_edges[0..self.m_n], 0..) |e, i| {
             if (used & (@as(u8, 1) << @intCast(i)) != 0) continue;
             if (e.x_suit != c.suit) continue;
             if (c.flavor != .open and c.flavor != e.flavor) continue;
             const total = c.len + self.mrec[i];
             if (total < 3 or total > 5) continue;
+            self.next[end] = cardOfSlot(self.r0, e.y_slot);
             if (self.matchEnd(ci + 1, used | (@as(u8, 1) << @intCast(i)))) return true;
+            self.next[end] = graph.NONE;
         }
         return false;
     }
 
     /// encode packs (pos, sorted open chains, recorded head lengths)
-    /// into the memo key. 10 bits per chain, 3 per head record, 4 for
-    /// pos: 56 bits.
-    fn encode(self: *const Sweeper, pos: u8) u64 {
+    /// into the memo key. 11 bits per chain, 3 per head record, 4 for
+    /// pos: 116 bits. Copy labels stay out — states differing only in
+    /// them are the same state.
+    fn encode(self: *const Sweeper, pos: u8) u128 {
         var chains: [MAX_OPEN]u16 = @splat(0);
         for (self.open[0..self.open_n], 0..) |c, i| {
-            chains[i] = (@as(u16, c.suit) << 8) |
-                (@as(u16, @intFromEnum(c.flavor)) << 6) |
-                (@as(u16, c.len) << 3) |
+            chains[i] = (@as(u16, c.suit) << 9) |
+                (@as(u16, @intFromEnum(c.flavor)) << 7) |
+                (@as(u16, c.len) << 4) |
                 @as(u16, @intCast(c.m_idx + 1));
         }
         std.mem.sort(u16, chains[0..self.open_n], {}, std.sort.asc(u16));
-        var key: u64 = pos;
-        for (chains) |ch| key = (key << 10) | ch;
+        var key: u128 = pos;
+        for (chains) |ch| key = (key << 11) | ch;
         for (self.mrec) |h| key = (key << 3) | h;
         return key;
     }
@@ -485,12 +654,15 @@ const Sweeper = struct {
 /// memoSlot: Fibonacci hash — the raw key's low bits are the least
 /// variable part (mrec records, often all zero), so `key % len` would
 /// cluster nearly every key onto slot 0 and reduce the table to its
-/// 8-probe window. Multiply-and-take-top-bits mixes every key bit in.
-fn memoSlot(key: u64) u64 {
-    return (key *% 0x9E3779B97F4A7C15) >> (64 - MEMO_BITS);
+/// 8-probe window. Multiply-and-take-top-bits mixes every key bit in;
+/// the two u128 halves get distinct odd multipliers.
+fn memoSlot(key: u128) u64 {
+    const lo: u64 = @truncate(key);
+    const hi: u64 = @truncate(key >> 64);
+    return ((lo *% 0x9E3779B97F4A7C15) ^ (hi *% 0xC2B2AE3D27D4EB4F)) >> (64 - MEMO_BITS);
 }
 
-fn memoHas(key: u64) bool {
+fn memoHas(key: u128) bool {
     var slot = memoSlot(key);
     for (0..8) |_| {
         if (memo_epoch[slot] != epoch) return false; // empty this sweep
@@ -500,7 +672,7 @@ fn memoHas(key: u64) bool {
     return false;
 }
 
-fn memoAdd(key: u64) void {
+fn memoAdd(key: u128) void {
     var slot = memoSlot(key);
     for (0..8) |_| {
         if (memo_epoch[slot] != epoch or memo_table[slot] == key) {
@@ -516,8 +688,9 @@ fn memoAdd(key: u64) void {
 // ---------- verification (strict, independent of the search) ----------
 
 fn edgeFlavor(a: u8, b: u8) ?Flavor {
+    // rankOf/suitOf are copy-blind, so the two copies of one card
+    // compare as same rank AND same suit — no edge of any flavor.
     if (graph.rankOf(a) == graph.rankOf(b)) {
-        // Same rank: a set link — unless it's the same card.
         return if (graph.suitOf(a) != graph.suitOf(b)) .set else null;
     }
     if (graph.rankOf(b) != (graph.rankOf(a) + 1) % 13) return null;
@@ -528,10 +701,11 @@ fn edgeFlavor(a: u8, b: u8) ?Flavor {
 
 /// verify checks a claimed next-map against the board: edges legal and
 /// flavor-uniform per chain, no card grabbed twice, no cycles, every
-/// chain length ≥ 3, every board card in exactly one chain.
-pub fn verify(board: u64, sol: *const Solution) bool {
-    var indeg = [_]u8{0} ** graph.N;
-    for (0..graph.N) |i| {
+/// chain length ≥ 3, no set repeating a suit (the two-deck load-bearing
+/// rule), every board card in exactly one chain.
+pub fn verify(board: Board, sol: *const Solution) bool {
+    var indeg = [_]u8{0} ** graph.SLOTS;
+    for (0..graph.SLOTS) |i| {
         const c: u8 = @intCast(i);
         const n = sol.next[i];
         if (board & bit(c) == 0) {
@@ -539,17 +713,18 @@ pub fn verify(board: u64, sol: *const Solution) bool {
             continue;
         }
         if (n == graph.NONE) continue;
-        if (n >= graph.N or board & bit(n) == 0) return false;
+        if (n >= graph.SLOTS or board & bit(n) == 0) return false;
         if (edgeFlavor(c, n) == null) return false;
         if (indeg[n] != 0) return false;
         indeg[n] = 1;
     }
     var covered: u32 = 0;
-    for (0..graph.N) |i| {
+    for (0..graph.SLOTS) |i| {
         const c: u8 = @intCast(i);
         if (board & bit(c) == 0 or indeg[c] != 0) continue;
         // c starts a chain: walk it.
         var flavor: ?Flavor = null;
+        var set_suits: u8 = @as(u8, 1) << @intCast(graph.suitOf(c));
         var len: u32 = 1;
         var cur = c;
         while (sol.next[cur] != graph.NONE) {
@@ -558,6 +733,11 @@ pub fn verify(board: u64, sol: *const Solution) bool {
             if (flavor) |have| {
                 if (have != f) return false;
             } else flavor = f;
+            if (f == .set) {
+                const sb = @as(u8, 1) << @intCast(graph.suitOf(nx));
+                if (set_suits & sb != 0) return false; // 7H=7C=7H' is no set
+                set_suits |= sb;
+            }
             cur = nx;
             len += 1;
         }
@@ -570,16 +750,17 @@ pub fn verify(board: u64, sol: *const Solution) bool {
 }
 
 /// format renders a solution in the human notation, chains sorted by
-/// their start card; run links print as '>' and set links as '=':
-/// "3H>4S>5H | 9C>TC>JC | KH=KC=KS".
-pub fn format(board: u64, sol: *const Solution, buf: []u8) []const u8 {
-    var indeg = [_]u8{0} ** graph.N;
-    for (0..graph.N) |i| {
+/// their start card; run links print as '>' and set links as '=', and
+/// second-deck copies carry their ' mark:
+/// "3H>4S>5H | 9C>TC'>JC | KH=KC=KS".
+pub fn format(board: Board, sol: *const Solution, buf: []u8) []const u8 {
+    var indeg = [_]u8{0} ** graph.SLOTS;
+    for (0..graph.SLOTS) |i| {
         if (sol.next[i] != graph.NONE) indeg[sol.next[i]] = 1;
     }
     var n: usize = 0;
     var first_chain = true;
-    for (0..graph.N) |i| {
+    for (0..graph.SLOTS) |i| {
         const c: u8 = @intCast(i);
         if (board & bit(c) == 0 or indeg[c] != 0) continue;
         if (!first_chain) {
@@ -593,7 +774,7 @@ pub fn format(board: u64, sol: *const Solution, buf: []u8) []const u8 {
             const s = card.formatCard(.{
                 .rank = @intCast(graph.rankOf(cur)),
                 .suit = @intCast(graph.suitOf(cur)),
-                .deck = 0,
+                .deck = @intCast(cur / 52),
             }, &cb);
             @memcpy(buf[n .. n + s.len], s);
             n += s.len;
@@ -610,10 +791,11 @@ pub fn format(board: u64, sol: *const Solution, buf: []u8) []const u8 {
 // ---------- tests (native: ops/check_solver) ----------
 //
 // Fixtures are board lines in the human notation; `|` marks are
-// cosmetic. One deck: a `'` card or a repeated card is a fixture bug
-// and fails loud.
+// cosmetic and deck marks are dressing ("3H 3H" and "3H 3H'" lower to
+// the same multiset). A third copy of a card is a fixture bug and
+// fails loud.
 
-fn bitsOf(fixture: []const u8) !u64 {
+fn bitsOf(fixture: []const u8) !Board {
     var buf: [card.MAX_CARDS]card.Card = undefined;
     return try boardBits(try card.parseBoard(fixture, &buf));
 }
@@ -667,7 +849,7 @@ test "solvable boards get verified next-maps" {
 }
 
 test "the full one-deck board is solvable" {
-    const board: u64 = (1 << graph.N) - 1;
+    const board: Board = (1 << graph.N) - 1;
     const sol = solve(board) orelse return error.TestUnexpectedResult;
     try std.testing.expect(verify(board, &sol));
 }
@@ -796,14 +978,58 @@ test "pinned minimal solutions" {
     }
 }
 
-test "fixture bugs fail loud: second deck and duplicates" {
+test "fixture bugs fail loud: a third copy of a card" {
     var buf: [card.MAX_CARDS]card.Card = undefined;
     try std.testing.expectError(
-        error.OneDeckOnly,
-        boardBits(try card.parseBoard("3H 4H' 5H", &buf)),
+        error.TooManyCopies,
+        boardBits(try card.parseBoard("3H 3H 3H'", &buf)),
     );
-    try std.testing.expectError(
-        error.DuplicateCard,
-        boardBits(try card.parseBoard("3H 3H 4H", &buf)),
+}
+
+test "two decks: copies of one card can never share a meld" {
+    const fixtures = [_][]const u8{
+        // One component by multiplicity (so the prefilter passes), but
+        // the copies can't run together and no rank has three suits.
+        "7H 7H' 8H",
+        // THE load-bearing case: three cards at one rank, no set —
+        // a set may not repeat a suit.
+        "7H 7C 7H'",
+        // The set of three forms, but its leftover copy strands.
+        "7H 7C 7S 7H'",
+        // The run forms; the extra 4H has nowhere to go.
+        "3H 4H 4H' 5H",
+    };
+    for (fixtures) |f| try expectFutile(f);
+}
+
+test "two decks: parallel structures solve" {
+    const fixtures = [_][]const u8{
+        "3H 3H' 4H 4H' 5H 5H'", // two parallel pure runs
+        "QH QH' KH KH' AH AH'", // both riding the wrap
+        "3H 3H' 4S 4S' 5H 5H'", // two parallel rb runs
+        "7H 7H' 7C 7C' 7S 7S'", // two sets at one rank
+        "7H 7D 7C 7S 7H' 7D' 7C' 7S'", // two full sets of four
+        "3H 4H' 5H", // deck marks are dressing: the 3H 4H 5H multiset
+        // the set takes the first copies, the run borrows the second
+        "6H 7H 8H 7H' 7C 7S",
+        // a doubled rank feeding one set and two crossing runs
+        "6H 6D 7H 7D 7H' 7D' 7C 8H 8D",
+    };
+    for (fixtures) |f| try expectSolvable(f);
+}
+
+test "two decks: the full 104-card board is solvable" {
+    const board: Board = (@as(Board, 1) << 104) - 1;
+    const sol = solve(board) orelse return error.TestUnexpectedResult;
+    try std.testing.expect(verify(board, &sol));
+}
+
+test "two decks: pinned parallel-set solution" {
+    const board = try bitsOf("7H 7H' 7C 7C' 7S 7S'");
+    const sol = solve(board).?;
+    var fb: [512]u8 = undefined;
+    try std.testing.expectEqualStrings(
+        "7H=7C=7S | 7H'=7C'=7S'",
+        format(board, &sol, &fb),
     );
 }
