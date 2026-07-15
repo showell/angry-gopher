@@ -201,14 +201,30 @@ const MEdge = struct {
     flavor: Flavor,
 };
 
-// Futile (rank, state) keys for the current M guess. Zero = empty slot;
-// keys are never zero (pos ≥ 1 sits in the low bits). Collisions just
-// skip memoization — correctness never depends on the table.
+// Futile (rank, state) keys for the current M guess. A slot is live
+// only when its epoch stamp matches the current sweep's — so clearing
+// the table between matchings is one integer increment. (Memsetting
+// the 2MB table per matching put a flat ~ms floor under EVERY swept
+// board, dwarfing the real search on small ones — the scale probe
+// found it.) Collisions just skip memoization — correctness never
+// depends on the table.
 // Sized from measurement: the densest solvable one-deck boards reach
 // ~90k distinct futile states per matching; 2^18 holds that with room
-// (2MB static). Two decks will want this revisited.
+// (2MB + 1MB of epochs, static). Two decks will want this revisited.
 const MEMO_BITS = 18;
 var memo_table: [1 << MEMO_BITS]u64 = undefined;
+var memo_epoch: [1 << MEMO_BITS]u32 = @splat(0); // 0 = never used
+var epoch: u32 = 0;
+
+/// nextEpoch invalidates the whole table in O(1). The u32 wrap (once
+/// per ~4 billion sweeps) triggers the one honest full reset.
+fn nextEpoch() void {
+    epoch +%= 1;
+    if (epoch == 0) {
+        @memset(&memo_epoch, 0);
+        epoch = 1;
+    }
+}
 
 /// setMasks: the ways to carve one set out of the available suits at a
 /// rank — any 3 or 4 of them; sets ignore color. One deck holds at most
@@ -277,7 +293,7 @@ const Sweeper = struct {
     fn trySweep(self: *Sweeper) bool {
         self.next = @splat(graph.NONE);
         self.mrec = @splat(0);
-        @memset(&memo_table, 0);
+        nextEpoch();
         // Rank r0 is consumed at birth: M-edge heads, then the rest
         // form at most one set or start fresh chains.
         var born: u8 = 0;
@@ -477,8 +493,8 @@ fn memoSlot(key: u64) u64 {
 fn memoHas(key: u64) bool {
     var slot = memoSlot(key);
     for (0..8) |_| {
+        if (memo_epoch[slot] != epoch) return false; // empty this sweep
         if (memo_table[slot] == key) return true;
-        if (memo_table[slot] == 0) return false;
         slot = (slot + 1) % memo_table.len;
     }
     return false;
@@ -487,8 +503,9 @@ fn memoHas(key: u64) bool {
 fn memoAdd(key: u64) void {
     var slot = memoSlot(key);
     for (0..8) |_| {
-        if (memo_table[slot] == 0 or memo_table[slot] == key) {
+        if (memo_epoch[slot] != epoch or memo_table[slot] == key) {
             memo_table[slot] = key;
+            memo_epoch[slot] = epoch;
             return;
         }
         slot = (slot + 1) % memo_table.len;
