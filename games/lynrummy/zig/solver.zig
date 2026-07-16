@@ -55,7 +55,7 @@
 const std = @import("std");
 const card = @import("card.zig");
 const graph = @import("graph.zig");
-const suit_first = @import("suit_first.zig");
+pub const suit_first = @import("suit_first.zig");
 
 pub const Flavor = enum { open, pure, rb, set };
 

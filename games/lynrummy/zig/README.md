@@ -30,7 +30,7 @@ Phases:
    cards at a rank may form sets before the rest start fresh chains. In
    the next-map a set is a chain of same-rank links, printed with `=`:
    `KH=KC=KS`.
-4. **Two decks** (`solver.zig`) — sweep DONE, tier 0 pending. The two
+4. **Two decks** (`solver.zig` + `suit_first.zig`) — DONE. The two
    copies of a (suit, rank) are indistinguishable to legality (a run
    can't repeat a value, a set can't repeat a suit), so the search stays
    at (suit, count) level: copy 0 is consumed before copy 1 (WLOG, never
@@ -45,12 +45,15 @@ The solve is a **portfolio**, cheapest prior first:
 
 0. **Suit-first** (`suit_first.zig`) — the human prior: pure runs as
    the bulk carrier, sets as patch material for orphans, no red-black
-   at all. Answers most one-deck boards in microseconds with a
-   human-shaped cover (it reproduced Steve's own solve of the probe's
-   worst board, card for card). Allowed to pass — and currently passes
-   on ANY board with a duplicate card: the arc machinery assumes one
-   card per (suit, rank), and its two-layer generalization is the
-   pending piece of phase 4.
+   at all. Answers most boards in microseconds with a human-shaped
+   cover (it reproduced Steve's own solve of the probe's worst board,
+   card for card; the full 104-card board comes back as eight parallel
+   13-runs). At two decks the per-suit arc decomposition is an exact
+   tiny DP — fewest orphan cards, then fewest arcs — because the naive
+   level split loses to the staircase (`3 4 4' 5 5' 6` is two
+   overlapping runs, no set); repair may build two sets per rank, and
+   which copy a card is never enters the search. Allowed to pass —
+   failure falls through to the sweep.
 1. **Rank sweep, scarcest-rank cut**, under a 50k-step budget.
 2. On a budget trip: **unbounded sweep from the fewest-matchings cut**.
 
