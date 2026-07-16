@@ -1018,10 +1018,31 @@ test "two decks: parallel structures solve" {
     for (fixtures) |f| try expectSolvable(f);
 }
 
-test "two decks: the full 104-card board is solvable" {
+test "two decks: the full 104-card board is eight parallel 13-runs" {
     const board: Board = (@as(Board, 1) << 104) - 1;
     const sol = solve(board) orelse return error.TestUnexpectedResult;
     try std.testing.expect(verify(board, &sol));
+    // Tier 0 answers this human-shaped: per suit and copy, one pure
+    // A..K run — no set, no red-black weave anywhere.
+    for (0..2) |d| {
+        for (0..4) |s| {
+            const base: u8 = @intCast(d * 52 + s * 13);
+            for (0..12) |r| {
+                try std.testing.expectEqual(base + @as(u8, @intCast(r)) + 1, sol.next[base + r]);
+            }
+            try std.testing.expectEqual(graph.NONE, sol.next[base + 12]);
+        }
+    }
+}
+
+test "two decks: the staircase gets overlapping pure runs, not sets" {
+    const board = try bitsOf("3H 4H 4H' 5H 5H' 6H");
+    const sol = solve(board).?;
+    var fb: [512]u8 = undefined;
+    try std.testing.expectEqualStrings(
+        "3H>4H>5H | 4H'>5H'>6H",
+        format(board, &sol, &fb),
+    );
 }
 
 test "two decks: pinned parallel-set solution" {
