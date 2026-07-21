@@ -72,6 +72,16 @@ pub const Solution = struct {
     next: [graph.SLOTS]u8,
 };
 
+/// What solve knows when it stops. `futile` is a PROOF (the search
+/// completed, or the component prefilter refuted the board); `unknown`
+/// means the step budget ran out first — no verdict, never dressed up
+/// as futility.
+pub const Outcome = union(enum) {
+    solved: Solution,
+    futile,
+    unknown,
+};
+
 fn bit(i: u8) Board {
     return @as(Board, 1) << @intCast(i);
 }
@@ -139,15 +149,17 @@ fn componentsOk(board: Board) bool {
 }
 
 /// solve answers solve-board: a clean next-map for the card multiset,
-/// or null. FUTILE is a first-class answer, not an error.
-pub fn solve(board: Board) ?Solution {
-    if (!componentsOk(board)) return null;
+/// a futility PROOF, or — on boards the give-up budget abandons —
+/// an honest `unknown`. FUTILE is a first-class answer, not an error.
+pub fn solve(board: Board) Outcome {
+    steps_used = 0;
+    if (!componentsOk(board)) return .futile;
     // Tier 0: the human prior — pure runs + sets, suit-decomposed
     // (suit_first.zig). Answers most dense boards in microseconds with
     // a human-shaped cover; a pass falls through to the complete sweep.
     {
         var sol: Solution = undefined;
-        if (suit_first.trySolve(board, &sol.next)) return sol;
+        if (suit_first.trySolve(board, &sol.next)) return .{ .solved = sol };
     }
     // Per rank: an 8-bit SLOT mask — low nibble copy 0 of suits 0-3,
     // high nibble copy 1. Canonical board keeps high implying low
@@ -165,13 +177,13 @@ pub fn solve(board: Board) ?Solution {
     for (1..13) |r| {
         if (@popCount(at[r]) < @popCount(at[r0])) r0 = @intCast(r);
     }
-    steps_left = 50_000;
+    step_limit = FAST_STEPS;
     var s = Sweeper.init(at, r0);
-    if (s.enumMFrom()) return .{ .next = s.next };
-    if (steps_left >= 0) return null; // search completed: honest FUTILE
-    // Budget tripped: a tail board. Retry unbounded from the cut with
-    // the fewest concrete wrap matchings (tie: fewest target cards) —
-    // matchings are what tail boards grind on.
+    if (s.enumMFrom()) return .{ .solved = .{ .next = s.next } };
+    if (steps_used <= step_limit) return .futile; // search completed: honest FUTILE
+    // Budget tripped: a tail board. Retry from the cut with the fewest
+    // concrete wrap matchings (tie: fewest target cards) — matchings
+    // are what tail boards grind on — under the give-up budget.
     var rb: u8 = 0;
     var best: u64 = std.math.maxInt(u64);
     for (0..13) |r| {
@@ -182,16 +194,27 @@ pub fn solve(board: Board) ?Solution {
             rb = @intCast(r);
         }
     }
-    steps_left = std.math.maxInt(i64);
+    step_limit = GIVE_UP_STEPS;
     var s2 = Sweeper.init(at, rb);
-    if (s2.enumMFrom()) return .{ .next = s2.next };
-    return null;
+    if (s2.enumMFrom()) return .{ .solved = .{ .next = s2.next } };
+    if (steps_used <= step_limit) return .futile; // retry completed: proven
+    return .unknown; // give-up budget exhausted: no verdict
 }
 
-// Step budget for the portfolio fast path (see solve). A tripped budget
-// makes every step return false immediately and suppresses memoization —
-// truncated exploration must not record futility facts.
-var steps_left: i64 = std.math.maxInt(i64);
+// Step budgets for the portfolio (see solve). A tripped budget makes
+// every step return false immediately and suppresses memoization —
+// truncated exploration must not record futility facts. Steps are the
+// deterministic work unit: every matching's sweep passes through step(),
+// so one number bounds the whole solve, machine-independent.
+const FAST_STEPS = 50_000;
+// The give-up line for the retry: past this, solve stops chasing and
+// answers `unknown`. PROVISIONAL — to be tuned from the step
+// distribution of boards the solver is known to answer.
+const GIVE_UP_STEPS = 2_000_000_000;
+var step_limit: u64 = 0;
+/// Steps spent by the last solve, all phases — the deterministic
+/// difficulty telemetry probes read. 0 for tier-0/prefilter answers.
+pub var steps_used: u64 = 0;
 
 /// instances expands a rank's slot mask into target instances, suits
 /// adjacent (suit 0 copy 0, suit 0 copy 1, suit 1 copy 0, …) — the
@@ -485,14 +508,14 @@ const Sweeper = struct {
     }
 
     fn step(self: *Sweeper, pos: u8) bool {
-        steps_left -= 1;
-        if (steps_left < 0) return false; // budget tripped: unwind fast
+        steps_used += 1;
+        if (steps_used > step_limit) return false; // budget tripped: unwind fast
         if (pos == 13) return self.finish();
         const key = self.encode(pos);
         if (memoHas(key)) return false;
         var new_open: [MAX_OPEN]Open = undefined;
         if (self.assign(pos, 0, self.at[self.rankAt(pos)], &new_open, 0)) return true;
-        if (steps_left < 0) return false; // truncated: not a futility fact
+        if (steps_used > step_limit) return false; // truncated: not a futility fact
         memoAdd(key);
         return false;
     }
@@ -802,23 +825,35 @@ fn bitsOf(fixture: []const u8) !Board {
 
 fn expectSolvable(fixture: []const u8) !void {
     const board = try bitsOf(fixture);
-    const sol = solve(board) orelse {
-        std.debug.print("expected solvable, got FUTILE: \"{s}\"\n", .{fixture});
-        return error.TestUnexpectedResult;
-    };
-    if (!verify(board, &sol)) {
-        var fb: [512]u8 = undefined;
-        std.debug.print("solution fails verify: \"{s}\" → \"{s}\"\n", .{ fixture, format(board, &sol, &fb) });
-        return error.TestUnexpectedResult;
+    const out = solve(board);
+    switch (out) {
+        .solved => |sol| {
+            if (!verify(board, &sol)) {
+                var fb: [512]u8 = undefined;
+                std.debug.print("solution fails verify: \"{s}\" → \"{s}\"\n", .{ fixture, format(board, &sol, &fb) });
+                return error.TestUnexpectedResult;
+            }
+        },
+        else => {
+            std.debug.print("expected solvable, got {s}: \"{s}\"\n", .{ @tagName(out), fixture });
+            return error.TestUnexpectedResult;
+        },
     }
 }
 
 fn expectFutile(fixture: []const u8) !void {
     const board = try bitsOf(fixture);
-    if (solve(board)) |sol| {
-        var fb: [512]u8 = undefined;
-        std.debug.print("expected FUTILE, got: \"{s}\" → \"{s}\"\n", .{ fixture, format(board, &sol, &fb) });
-        return error.TestUnexpectedResult;
+    switch (solve(board)) {
+        .futile => {},
+        .solved => |sol| {
+            var fb: [512]u8 = undefined;
+            std.debug.print("expected FUTILE, got: \"{s}\" → \"{s}\"\n", .{ fixture, format(board, &sol, &fb) });
+            return error.TestUnexpectedResult;
+        },
+        .unknown => {
+            std.debug.print("expected FUTILE, search gave up: \"{s}\"\n", .{fixture});
+            return error.TestUnexpectedResult;
+        },
     }
 }
 
@@ -850,7 +885,10 @@ test "solvable boards get verified next-maps" {
 
 test "the full one-deck board is solvable" {
     const board: Board = (1 << graph.N) - 1;
-    const sol = solve(board) orelse return error.TestUnexpectedResult;
+    const sol = switch (solve(board)) {
+        .solved => |s| s,
+        else => return error.TestUnexpectedResult,
+    };
     try std.testing.expect(verify(board, &sol));
 }
 
@@ -880,7 +918,7 @@ test "the component prefilter is necessary, not sufficient" {
     // answered by the sweep.
     const connected_futile = try bitsOf("3H 4H 5S");
     try std.testing.expect(componentsOk(connected_futile));
-    try std.testing.expectEqual(@as(?Solution, null), solve(connected_futile));
+    try std.testing.expect(solve(connected_futile) == .futile);
 }
 
 test "a stranded card inside a big board is caught fast" {
@@ -890,7 +928,7 @@ test "a stranded card inside a big board is caught fast" {
     const board = try bitsOf(
         "AH 2H 3H 4H 5H 6H 7H 8H 9H TH JH QH KH | AD 3D 5D 6D 7D 8D 9D TD JD QD KD",
     );
-    try std.testing.expectEqual(@as(?Solution, null), solve(board));
+    try std.testing.expect(solve(board) == .futile);
 }
 
 test "dense random boards that thrashed the chain-growing search" {
@@ -900,14 +938,16 @@ test "dense random boards that thrashed the chain-growing search" {
     // 41 cards. FUTILE under phase-2 runs-only (oracle-confirmed);
     // sets are exactly what it was missing — solvable since phase 3.
     const thrash1: u64 = 0xdffb7bb6efe3f;
-    if (solve(thrash1)) |sol| {
-        try std.testing.expect(verify(thrash1, &sol));
-    } else return error.TestUnexpectedResult;
+    switch (solve(thrash1)) {
+        .solved => |sol| try std.testing.expect(verify(thrash1, &sol)),
+        else => return error.TestUnexpectedResult,
+    }
     // 45 cards, solvable with runs alone already.
     const thrash2: u64 = 0xf6ffb7bff9fff;
-    if (solve(thrash2)) |sol| {
-        try std.testing.expect(verify(thrash2, &sol));
-    } else return error.TestUnexpectedResult;
+    switch (solve(thrash2)) {
+        .solved => |sol| try std.testing.expect(verify(thrash2, &sol)),
+        else => return error.TestUnexpectedResult,
+    }
 }
 
 test "dense boards that exposed the memo hash clustering" {
@@ -916,13 +956,14 @@ test "dense boards that exposed the memo hash clustering" {
     // 274s and 3.2s respectively. With honest hashing both answer in
     // milliseconds (2-4k distinct futile states, table holds 32k).
     const monster: u64 = 0x3ff977fff6fef; // 43 cards
-    if (solve(monster)) |sol| {
-        try std.testing.expect(verify(monster, &sol));
-    } else return error.TestUnexpectedResult;
+    switch (solve(monster)) {
+        .solved => |sol| try std.testing.expect(verify(monster, &sol)),
+        else => return error.TestUnexpectedResult,
+    }
     // The futile one matters more: FUTILE is the exhaustive case, so
     // it's the one that degrades when memoization quietly dies.
     const grinder: u64 = 0xd3f2fbcde9bfe; // 37 cards
-    try std.testing.expectEqual(@as(?Solution, null), solve(grinder));
+    try std.testing.expect(solve(grinder) == .futile);
 }
 
 test "tier 0 reproduces Steve's human solution on the 45-card monster" {
@@ -933,7 +974,10 @@ test "tier 0 reproduces Steve's human solution on the 45-card monster" {
     // A♠ being the one card with no pure neighbors. The suit-first
     // tier finds exactly that cover, in microseconds.
     const monster: u64 = 0x7fcbffffdfefb;
-    const sol = solve(monster) orelse return error.TestUnexpectedResult;
+    const sol = switch (solve(monster)) {
+        .solved => |s| s,
+        else => return error.TestUnexpectedResult,
+    };
     try std.testing.expect(verify(monster, &sol));
     var fb: [512]u8 = undefined;
     try std.testing.expectEqualStrings(
@@ -950,7 +994,10 @@ test "a weave-heavy board passes tier 0 and rides the sweep's fallback" {
     // trips the step budget — so this one board exercises tier-0
     // pass-through, the budget trip, AND the fewest-matchings retry.
     const weaver: u64 = 0xff9cff9fffbfe;
-    const sol = solve(weaver) orelse return error.TestUnexpectedResult;
+    const sol = switch (solve(weaver)) {
+        .solved => |s| s,
+        else => return error.TestUnexpectedResult,
+    };
     try std.testing.expect(verify(weaver, &sol));
 }
 
@@ -958,21 +1005,21 @@ test "pinned minimal solutions" {
     // 3H 4S 5H has exactly one clean arrangement.
     {
         const board = try bitsOf("3H 4S 5H");
-        const sol = solve(board).?;
+        const sol = solve(board).solved;
         var fb: [512]u8 = undefined;
         try std.testing.expectEqualStrings("3H>4S>5H", format(board, &sol, &fb));
     }
     // So does 3H 4H 5H.
     {
         const board = try bitsOf("3H 4H 5H");
-        const sol = solve(board).?;
+        const sol = solve(board).solved;
         var fb: [512]u8 = undefined;
         try std.testing.expectEqualStrings("3H>4H>5H", format(board, &sol, &fb));
     }
     // And the minimal set, printed with set links ascending by suit.
     {
         const board = try bitsOf("7H 7S 7C");
-        const sol = solve(board).?;
+        const sol = solve(board).solved;
         var fb: [512]u8 = undefined;
         try std.testing.expectEqualStrings("7H=7C=7S", format(board, &sol, &fb));
     }
@@ -1020,7 +1067,10 @@ test "two decks: parallel structures solve" {
 
 test "two decks: the full 104-card board is eight parallel 13-runs" {
     const board: Board = (@as(Board, 1) << 104) - 1;
-    const sol = solve(board) orelse return error.TestUnexpectedResult;
+    const sol = switch (solve(board)) {
+        .solved => |s| s,
+        else => return error.TestUnexpectedResult,
+    };
     try std.testing.expect(verify(board, &sol));
     // Tier 0 answers this human-shaped: per suit and copy, one pure
     // A..K run — no set, no red-black weave anywhere.
@@ -1037,7 +1087,7 @@ test "two decks: the full 104-card board is eight parallel 13-runs" {
 
 test "two decks: the staircase gets overlapping pure runs, not sets" {
     const board = try bitsOf("3H 4H 4H' 5H 5H' 6H");
-    const sol = solve(board).?;
+    const sol = solve(board).solved;
     var fb: [512]u8 = undefined;
     try std.testing.expectEqualStrings(
         "3H>4H>5H | 4H'>5H'>6H",
@@ -1047,7 +1097,7 @@ test "two decks: the staircase gets overlapping pure runs, not sets" {
 
 test "two decks: pinned parallel-set solution" {
     const board = try bitsOf("7H 7H' 7C 7C' 7S 7S'");
-    const sol = solve(board).?;
+    const sol = solve(board).solved;
     var fb: [512]u8 = undefined;
     try std.testing.expectEqualStrings(
         "7H=7C=7S | 7H'=7C'=7S'",
