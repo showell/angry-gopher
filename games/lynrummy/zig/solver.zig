@@ -209,8 +209,13 @@ pub fn solve(board: Board) Outcome {
 const FAST_STEPS = 50_000;
 // The give-up line for the retry: past this, solve stops chasing and
 // answers `unknown`. PROVISIONAL — to be tuned from the step
-// distribution of boards the solver is known to answer.
-const GIVE_UP_STEPS = 2_000_000_000;
+// distribution of boards the solver is known to answer. The first cut
+// (2B) was itself a hang in disguise: ridge monsters run ~2-3M steps/s
+// once the memo saturates, so 2B ≈ a 10-15 minute chase. 500M keeps the
+// worst chase under ~4 minutes while the tuning probe measures where
+// solved boards actually top out; the tuned value scales UP from
+// evidence, not down from hope.
+const GIVE_UP_STEPS = 500_000_000;
 var step_limit: u64 = 0;
 /// Steps spent by the last solve, all phases — the deterministic
 /// difficulty telemetry probes read. 0 for tier-0/prefilter answers.
