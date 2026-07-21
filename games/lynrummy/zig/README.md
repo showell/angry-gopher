@@ -55,7 +55,21 @@ The solve is a **portfolio**, cheapest prior first:
    which copy a card is never enters the search. Allowed to pass —
    failure falls through to the sweep.
 1. **Rank sweep, scarcest-rank cut**, under a 50k-step budget.
-2. On a budget trip: **unbounded sweep from the fewest-matchings cut**.
+2. On a budget trip: **sweep from the fewest-matchings cut**, under the
+   1M-step give-up line.
+
+The answer is an **Outcome**: `solved` (verified next-map), `futile` (a
+PROOF — completed search or component prefilter, never a guess), or
+`unknown` (the give-up line tripped: no verdict, honestly labeled).
+Steps are the deterministic work unit — every matching's sweep passes
+through `step()`, and `steps_used` is public difficulty telemetry. The
+1M line is tuned from a 20,400-board coverage sweep (99.77% answered,
+no size below 98.5%, worst chase sub-second at the ~1.1M steps/s
+memo-saturated grind rate); it scales UP only on evidence of a real
+board solvable above it. `corpus_quick.txt` (149 ground-truth boards,
+gate-enforced) and `corpus_hard.txt` (the over-the-line evidence pile:
+answered-above-1M boards, unknown-at-50M boards, the named monsters)
+carry the data.
 
 Files:
 
