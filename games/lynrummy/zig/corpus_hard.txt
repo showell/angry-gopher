@@ -1,0 +1,57 @@
+# Hard corpus: every board the 2026-07-21 coverage sweep answered above 1M
+# steps (now past the give-up line -> these come back unknown under the
+# shipped cap), the sweep's 15 unknown-at-50M boards, and the three named
+# monsters (129s futile proof + the two probe10 hang boards). NOT gate
+# material: this is the scale-up evidence pile and bench fodder. For
+# solved/futile rows, outcome is ground truth established at 50M cap;
+# unknown rows are undecided at the recorded steps.
+# columns: cards hex outcome steps
+62 392cdd68b01847f7dfd7fb97e6 futile 32002921
+62 500d8d541b20cfdbfefffbface solved 11167234
+76 a714d0d17cd7abfbdfffffffff solved 10728136
+63 b624cc4644530fff7ffe7e67f3 solved 9913375
+57 40090021a1c13ff5ff3ebaffff solved 7802379
+60 403e29922a10cffbfffbe2fbce solved 6512236
+66 4e43260f150d96feb7faffdfff solved 5559891
+62 ccc009e881423defefdeeff6ff solved 5539246
+61 c5a000262017cdff3f3effff7f solved 5525945
+74 70d99e170d74fffdffe7f9ff7f solved 4584442
+66 26077a11d7426beaffb5bfffef solved 4192600
+68 a3689e75a8984bffdfffdbffac solved 3676865
+57 a1a5090204054f7ffffc35fbfd solved 3331141
+61 16311e8a01511d7fb3efeff7bf solved 3329230
+69 50c36513076a3feffef7fdfff7 solved 3290712
+67 424bd96862a08ff5fdffbfffbf solved 2767192
+58 98880781110aefbff5fdfff4f solved 2559093
+65 342e28df52428ff3ff9ff7f7ec futile 2408332
+60 496166088727bcffdffbdff7 solved 2060808
+74 eeea66a6c30d8efff7ffedfffd solved 2058821
+68 59f46630d4ee0fdf7fe7fd7fe9 solved 2051796
+62 e12284f70211cffb6dfffae9df solved 2026425
+58 58a02ea4e31005ffc6ffce777f solved 1993117
+58 e5819101ac829ff9fdfefeda7 futile 1925465
+59 810e76022cc4c97cf7e9f7effd futile 1885323
+64 915374e671c00dff7ffeef1f79 solved 1586160
+66 1a83f65e12a03ffeffe5fdbbe7 futile 1425547
+62 30d737c29d10db1f7fff3fdba solved 1422180
+71 14c5c270dcdd757ffeff3dffff solved 1240892
+61 85a069900b117bfffffd9fff9 solved 1133691
+58 202a409501d5cff3ff9df33dfe solved 1020297
+59 44318001740856fffffe3fcfff unknown 50000144
+63 450b7584183605fffffc7bfff9 unknown 50000178
+64 3a1a6927112893edbff77f5fff unknown 50000132
+64 6bf820c42c2216ffdbbffbebff unknown 50000090
+65 97320839b8166ff72bdfffe9ff unknown 50000261
+66 af6b100426c12ff7fdf7efffbe unknown 50000156
+68 c15c7bb838c95c77f7bff3fcff unknown 50000475
+70 1b488afd5bb03dfebfeff7ffe3 unknown 50000557
+70 215c14899babffbffdfadffebf unknown 50000204
+70 50735824d3a3a7ff3fffff7bff unknown 50000460
+73 ad04d155eb3ccfff5fffdfbffe unknown 50000299
+73 d2d72522e69d2ffd7fdbfffffb unknown 50000383
+75 b84d67eeeca64fe7ffffefff67 unknown 50000255
+76 767437e51bb9cffff3ff5ffbbf unknown 50000350
+82 bcfdc6daf3d8fbffdfffbffdef unknown 50000504
+59 901c82fa002a3fadde7fedfbb7 unknown 50000297
+61 100fd4340b50dffeff6fdbfde unknown 50000178
+64 808e6ba1960b4e8fffff5ffcbf unknown 50000204

@@ -208,14 +208,15 @@ pub fn solve(board: Board) Outcome {
 // so one number bounds the whole solve, machine-independent.
 const FAST_STEPS = 50_000;
 // The give-up line for the retry: past this, solve stops chasing and
-// answers `unknown`. Tuned lean, scale-up-on-evidence (Steve): the
-// largest SOLVED board any probe has recorded is 7.8M steps, so 50M
-// carries >6x margin; ridge monsters run ~2-3M steps/s once the memo
-// saturates, so the worst chase is ~20 seconds, not minutes. Raise this
-// only when a real board is shown solvable above the line. (First cut
-// was 2B — a hang in disguise: a size-59 board ate 11 CPU-minutes
-// without tripping it.)
-const GIVE_UP_STEPS = 50_000_000;
+// answers `unknown`. Tuned strict, scale-up-on-evidence (Steve, from
+// the 2026-07-21 coverage sweep: 200 boards x sizes 3..104, seed
+// bead5eed20260721): 1M steps answers 99.77% of 20,400 boards and no
+// size dips below 98.5%; the sample's solved tail tops out at 11.2M
+// steps (26 solved boards above 1M — the evidence pile a future raise
+// draws on). Monsters grind ~1.1M steps/s once the memo saturates, so
+// the worst chase is under a second. Raise only on evidence: a real
+// board shown solvable above the line.
+const GIVE_UP_STEPS = 1_000_000;
 var step_limit: u64 = 0;
 /// Steps spent by the last solve, all phases — the deterministic
 /// difficulty telemetry probes read. 0 for tier-0/prefilter answers.
@@ -1108,4 +1109,31 @@ test "two decks: pinned parallel-set solution" {
         "7H=7C=7S | 7H'=7C'=7S'",
         format(board, &sol, &fb),
     );
+}
+
+test "the quick corpus answers as recorded" {
+    // corpus_quick.txt: per (size, outcome), the hardest board a coverage
+    // sweep answered under 5k steps — ground-truth solvable and proven-
+    // futile boards across sizes 3..104. Outcomes must reproduce exactly;
+    // the recorded step counts are documentation, not assertions (an
+    // algorithm change legitimately moves them — regenerate deliberately).
+    const text = @embedFile("corpus_quick.txt");
+    var lines = std.mem.splitScalar(u8, text, '\n');
+    var n: u32 = 0;
+    while (lines.next()) |line| {
+        if (line.len == 0 or line[0] == '#') continue;
+        var toks = std.mem.splitScalar(u8, line, ' ');
+        const cards = try std.fmt.parseInt(u8, toks.next().?, 10);
+        const board = try std.fmt.parseInt(u128, toks.next().?, 16);
+        const outcome = toks.next().?;
+        try std.testing.expectEqual(cards, @popCount(board));
+        const out = solve(board);
+        if (!std.mem.eql(u8, @tagName(out), outcome)) {
+            std.debug.print("corpus mismatch: {x} recorded {s}, got {s}\n", .{ board, outcome, @tagName(out) });
+            return error.TestUnexpectedResult;
+        }
+        if (out == .solved) try std.testing.expect(verify(board, &out.solved));
+        n += 1;
+    }
+    try std.testing.expectEqual(@as(u32, 149), n);
 }
