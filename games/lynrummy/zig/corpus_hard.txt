@@ -4,7 +4,9 @@
 # monsters (129s futile proof + the two probe10 hang boards). NOT gate
 # material: this is the scale-up evidence pile and bench fodder. For
 # solved/futile rows, outcome is ground truth established at 50M cap;
-# unknown rows are undecided at the recorded steps.
+# unknown rows are undecided at the recorded steps. Exception: the 59c
+# probe10 monster (steps 0) fell to the color-tightened counting lemma
+# on 2026-07-21 — a zero-search futility proof, no sweep involved.
 # columns: cards hex outcome steps
 62 392cdd68b01847f7dfd7fb97e6 futile 32002921
 62 500d8d541b20cfdbfefffbface solved 11167234
@@ -52,6 +54,6 @@
 75 b84d67eeeca64fe7ffffefff67 unknown 50000255
 76 767437e51bb9cffff3ff5ffbbf unknown 50000350
 82 bcfdc6daf3d8fbffdfffbffdef unknown 50000504
-59 901c82fa002a3fadde7fedfbb7 unknown 50000297
+59 901c82fa002a3fadde7fedfbb7 futile 0
 61 100fd4340b50dffeff6fdbfde unknown 50000178
 64 808e6ba1960b4e8fffff5ffcbf unknown 50000204

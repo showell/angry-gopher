@@ -73,9 +73,9 @@ pub const Solution = struct {
 };
 
 /// What solve knows when it stops. `futile` is a PROOF (the search
-/// completed, or the component prefilter refuted the board); `unknown`
-/// means the step budget ran out first — no verdict, never dressed up
-/// as futility.
+/// completed, or the component prefilter or counting lemma refuted the
+/// board); `unknown` means the step budget ran out first — no verdict,
+/// never dressed up as futility.
 pub const Outcome = union(enum) {
     solved: Solution,
     futile,
@@ -170,7 +170,9 @@ pub fn solve(board: Board) Outcome {
         if (board & bit(c) != 0) at[graph.rankOf(c)] |= @as(u8, 1) << @intCast(graph.suitOf(c));
         if (board & bit(c + 52) != 0) at[graph.rankOf(c)] |= @as(u8, 1) << @intCast(graph.suitOf(c) + 4);
     }
-    force_set_ranks = computeForcedSets(&at) orelse return .futile;
+    const forced = computeForcedSets(&at) orelse return .futile;
+    force_set_ranks = forced.force;
+    force_two_set_ranks = forced.force_two;
     // Portfolio. Fast path: cut entering the scarcest rank, under a
     // step budget that 99.9% of boards never approach (tail boards run
     // ~300k steps; typical boards run hundreds).
@@ -223,24 +225,171 @@ var step_limit: u64 = 0;
 /// difficulty telemetry probes read. 0 for tier-0/prefilter answers.
 pub var steps_used: u64 = 0;
 
-/// The counting lemma. A run containing rank r either has its r−1
-/// directly before the r card, or STARTS at r and so must run r, r+1,
-/// r+2 (length ≥ 3) — hence runs-containing-r ≤ #(r−1) + min(#(r+1),
-/// #(r+2)); the mirror (ends at r → r−1 and r−2 before it) gives
-/// ≤ #(r+1) + min(#(r−1), #(r−2)). Cards at r beyond the tighter bound
-/// are FORCED into sets. Suit/color legality is ignored, so the bound
-/// only OVER-counts run capacity: every conclusion is sound. Two O(13)
-/// weapons: excess at a rank with < 3 distinct suits is futility with
-/// zero search (king scarcity is the degenerate case), and at a forced
-/// rank the sweep's no-set branch is provably dead, so it is skipped —
-/// monotone pruning, only ever removing wasted work. (Puzzle-78
-/// exemplar: 7 tens vs 3 nines + 3 queens forces a ten set; 32% fewer
-/// steps there, no corpus board slower.)
+/// The counting lemma, color-tightened. Every rank-r card in a run
+/// sits in one of three flavor-monochromatic 3-windows — TAIL
+/// (r−2, r−1, r), MID (r−1, r, r+1), HEAD (r, r+1, r+2); pure keeps
+/// one suit throughout, rb alternates colors each step — and in a
+/// cover, runs are disjoint and no run holds a rank twice, so distinct
+/// r-cards claim card-DISJOINT windows. tightBound(r) = the max number
+/// of disjoint legal windows, an exact tiny packing (≤ 8 r-cards,
+/// most-constrained-first branch & bound). Cards beyond the bound are
+/// FORCED into sets. Soundness: legality only REMOVES window options,
+/// and the packing max only over-counts a real cover's windows, so the
+/// bound never under-counts run capacity; if the B&B trips its node
+/// budget it falls back to the count-only bound
+/// min(#(r−1) + min(#(r+1), #(r+2)), #(r+1) + min(#(r−1), #(r−2))) —
+/// sound, just looser. Three weapons, all pre-search: excess beyond
+/// setCapacity(r) is futility with ZERO search (king scarcity is the
+/// degenerate case; the 59c probe10 monster that burned days of CPU
+/// falls here), a forced rank's no-set branch is skipped, and excess
+/// past one set's reach forces TWO sets, pruning single-set carvings —
+/// all monotone, only ever removing provably dead subtrees. (A/B: −21%
+/// steps on the quick corpus vs no lemma, −26% on the hard corpus's
+/// decided rows vs the count-only bound, no board slower.)
 var force_set_ranks: u16 = 0;
+var force_two_set_ranks: u16 = 0;
 
-/// null: some rank has forced set cards but cannot form a set — futile.
-fn computeForcedSets(at: *const [13]u8) ?u16 {
-    var mask: u16 = 0;
+const TIGHT_NODE_BUDGET: u32 = 20_000;
+const MAX_WINDOW_OPTS = 96;
+
+const WindowPacking = struct {
+    // Resource masks: bits 0-7 = r−2 slots, 8-15 = r−1, 16-23 = r+1,
+    // 24-31 = r+2 (slot layout as in at[]).
+    opts: [8][MAX_WINDOW_OPTS]u32 = undefined,
+    opt_n: [8]u8 = @splat(0),
+    order: [8]u8 = undefined,
+    n: u8 = 0,
+    nodes: u32 = 0,
+    best: u8 = 0,
+    overflow: bool = false,
+
+    fn addOpt(self: *WindowPacking, xi: u8, mask: u32) void {
+        if (self.opt_n[xi] == MAX_WINDOW_OPTS) {
+            self.overflow = true;
+            return;
+        }
+        self.opts[xi][self.opt_n[xi]] = mask;
+        self.opt_n[xi] += 1;
+    }
+
+    fn go(self: *WindowPacking, i: u8, used: u32, matched: u8) void {
+        if (matched + (self.n - i) <= self.best) return;
+        if (i == self.n) {
+            self.best = matched;
+            return;
+        }
+        self.nodes += 1;
+        if (self.nodes > TIGHT_NODE_BUDGET) {
+            self.overflow = true;
+            return;
+        }
+        const x = self.order[i];
+        for (self.opts[x][0..self.opt_n[x]]) |m| {
+            if (m & used != 0) continue;
+            self.go(i + 1, used | m, matched + 1);
+            if (self.best == self.n or self.overflow) return;
+        }
+        self.go(i + 1, used, matched); // x goes unmatched (set-bound)
+    }
+};
+
+/// Slots of `mask` whose suit is in `suit_mask`.
+fn slotsOfSuits(mask: u8, suit_mask: u8) u8 {
+    return mask & (suit_mask | suit_mask << 4);
+}
+
+fn oppColorSuits(suit: u8) u8 {
+    return if (graph.isRed(suit)) 0b1100 else 0b0011; // C,S : H,D
+}
+
+fn sameColorSuits(suit: u8) u8 {
+    return if (graph.isRed(suit)) 0b0011 else 0b1100;
+}
+
+/// The window-packing bound for one rank; null = budget/overflow, the
+/// caller must fall back to the count-only bound.
+fn tightBound(at: *const [13]u8, r: usize) ?u8 {
+    const l0 = at[(r + 11) % 13];
+    const l1 = at[(r + 12) % 13];
+    const l3 = at[(r + 1) % 13];
+    const l4 = at[(r + 2) % 13];
+    var ctx: WindowPacking = .{};
+    var xm = at[r];
+    while (xm != 0) : (xm &= xm - 1) {
+        const p: u8 = @intCast(@ctz(xm));
+        const xi = ctx.n;
+        ctx.n += 1;
+        const sx: u8 = p & 3;
+        const bit_sx: u8 = @as(u8, 1) << @intCast(sx);
+        // Legal suit masks per neighbor layer, one entry per flavor:
+        // pure stays suit sx; rb alternates colors around x.
+        const flavors = [2]struct { y1: u8, z1: u8 }{
+            .{ .y1 = bit_sx, .z1 = bit_sx },
+            .{ .y1 = oppColorSuits(sx), .z1 = oppColorSuits(sx) },
+        };
+        for (flavors) |f| {
+            const pure = f.y1 == bit_sx;
+            // TAIL: y0 (r−2) → y1 (r−1) → x; rb: y0 opposes y1.
+            var y1m = slotsOfSuits(l1, f.y1);
+            while (y1m != 0) : (y1m &= y1m - 1) {
+                const q: u8 = @intCast(@ctz(y1m));
+                const y0_suits = if (pure) bit_sx else oppColorSuits(q & 3);
+                var y0m = slotsOfSuits(l0, y0_suits);
+                while (y0m != 0) : (y0m &= y0m - 1) {
+                    const t: u8 = @intCast(@ctz(y0m));
+                    ctx.addOpt(xi, (@as(u32, 1) << @intCast(t)) | (@as(u32, 1) << @intCast(8 + q)));
+                }
+                // MID: y1 (r−1) → x → z1 (r+1).
+                var z1m = slotsOfSuits(l3, f.z1);
+                while (z1m != 0) : (z1m &= z1m - 1) {
+                    const u: u8 = @intCast(@ctz(z1m));
+                    ctx.addOpt(xi, (@as(u32, 1) << @intCast(8 + q)) | (@as(u32, 1) << @intCast(16 + u)));
+                }
+            }
+            // HEAD: x → z1 (r+1) → z2 (r+2); rb: z2 opposes z1.
+            var z1m = slotsOfSuits(l3, f.z1);
+            while (z1m != 0) : (z1m &= z1m - 1) {
+                const u: u8 = @intCast(@ctz(z1m));
+                const z2_suits = if (pure) bit_sx else oppColorSuits(u & 3);
+                var z2m = slotsOfSuits(l4, z2_suits);
+                while (z2m != 0) : (z2m &= z2m - 1) {
+                    const v: u8 = @intCast(@ctz(z2m));
+                    ctx.addOpt(xi, (@as(u32, 1) << @intCast(16 + u)) | (@as(u32, 1) << @intCast(24 + v)));
+                }
+            }
+        }
+    }
+    if (ctx.overflow) return null;
+    // Most-constrained-first.
+    for (0..ctx.n) |i| ctx.order[i] = @intCast(i);
+    for (0..ctx.n) |i| {
+        var m = i;
+        for (i + 1..ctx.n) |j| {
+            if (ctx.opt_n[ctx.order[j]] < ctx.opt_n[ctx.order[m]]) m = j;
+        }
+        std.mem.swap(u8, &ctx.order[i], &ctx.order[m]);
+    }
+    ctx.go(0, 0, 0);
+    if (ctx.overflow) return null;
+    return ctx.best;
+}
+
+/// Max cards of one rank that can live in sets (≤ 2 sets, each 3-4
+/// DISTINCT suits; a suit feeds two sets only via its two copies).
+fn setCapacity(mask: u8) u8 {
+    const cnt: u8 = @popCount(mask);
+    const s1: u8 = @popCount((mask | mask >> 4) & 0xF);
+    if (s1 < 3) return 0;
+    const pairs: u8 = @popCount(mask & mask >> 4 & 0xF);
+    if (cnt >= 6 and s1 + pairs >= 6) return @min(8, @min(s1 + pairs, cnt));
+    return @min(4, s1);
+}
+
+/// null: some rank's window capacity + set capacity can't cover its
+/// cards — futile before any search.
+fn computeForcedSets(at: *const [13]u8) ?struct { force: u16, force_two: u16 } {
+    var force: u16 = 0;
+    var force_two: u16 = 0;
     for (0..13) |r| {
         const cnt: u8 = @popCount(at[r]);
         if (cnt == 0) continue;
@@ -248,13 +397,16 @@ fn computeForcedSets(at: *const [13]u8) ?u16 {
         const nm2: u8 = @popCount(at[(r + 11) % 13]);
         const np1: u8 = @popCount(at[(r + 1) % 13]);
         const np2: u8 = @popCount(at[(r + 2) % 13]);
-        const cap = @min(nm1 + @min(np1, np2), np1 + @min(nm1, nm2));
-        if (cnt <= cap) continue;
-        const suits: u8 = @popCount((at[r] | at[r] >> 4) & 0xF);
-        if (suits < 3) return null;
-        mask |= @as(u16, 1) << @intCast(r);
+        const simple = @min(nm1 + @min(np1, np2), np1 + @min(nm1, nm2));
+        const bound = if (tightBound(at, r)) |tb| @min(tb, simple) else simple;
+        if (cnt <= bound) continue;
+        const needed = cnt - bound;
+        if (needed > setCapacity(at[r])) return null;
+        force |= @as(u16, 1) << @intCast(r);
+        const s1: u8 = @popCount((at[r] | at[r] >> 4) & 0xF);
+        if (needed > @min(4, s1)) force_two |= @as(u16, 1) << @intCast(r);
     }
-    return mask;
+    return .{ .force = force, .force_two = force_two };
 }
 
 /// instances expands a rank's slot mask into target instances, suits
@@ -521,6 +673,7 @@ const Sweeper = struct {
         }
         var sbuf: [30]SetPair = undefined;
         for (setPairs(rest, &sbuf)) |sp| {
+            if (sp.b == 0 and force_two_set_ranks >> @intCast(self.r0) & 1 != 0) continue;
             self.linkSet(self.r0, sp.a, true);
             self.linkSet(self.r0, sp.b, true);
             if (self.birthAndStep(rest & ~(sp.a | sp.b))) return true;
@@ -575,6 +728,7 @@ const Sweeper = struct {
             }
             var sbuf: [30]SetPair = undefined;
             for (setPairs(avail, &sbuf)) |sp| {
+                if (sp.b == 0 and force_two_set_ranks >> @intCast(self.rankAt(pos)) & 1 != 0) continue;
                 self.linkSet(self.rankAt(pos), sp.a, true);
                 self.linkSet(self.rankAt(pos), sp.b, true);
                 if (self.freshAndStep(pos, avail & ~(sp.a | sp.b), new_open, new_n)) return true;

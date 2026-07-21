@@ -42,18 +42,23 @@ Phases:
    distinct cards — agreement on uniform-random AND meld-seeded boards.
 
 Layered on the sweep: the **counting lemma**, the first of the scarcity
-lemmas. A run containing rank r either has its r−1 directly before it
-or starts at r and must run r, r+1, r+2 — so runs-containing-r ≤
-#(r−1) + min(#(r+1), #(r+2)) (mirror bound too, ranks mod 13), and
-cards beyond the bound are FORCED into sets. The bound ignores
-suit/color legality, so it only over-counts run capacity and every
-conclusion is sound. Costs 13 popcounts per solve, buys two things:
-excess at a rank with < 3 distinct suits is futility with zero search
-(king scarcity is the degenerate case), and the sweep skips the no-set
-branch at forced ranks — a provably dead subtree, so the pruning is
-monotone (A/B: −31.5% steps on the puzzle-78 exemplar where 7 tens vs
-3 nines + 3 queens force a ten set; −8.5% across the quick corpus; no
-board slower).
+lemmas, in its color-tightened form. Every rank-r card in a run sits in
+one of three flavor-monochromatic 3-windows — TAIL (r−2, r−1, r), MID
+(r−1, r, r+1), HEAD (r, r+1, r+2); your 678/789/89T — and distinct
+r-cards claim card-disjoint windows, so max-disjoint-legal-windows (an
+exact ≤8-item packing, most-constrained-first B&B, count-only bound as
+budget fallback) caps how many r-cards can live in runs. Cards beyond
+the cap are FORCED into sets. Legality only removes options and packing
+only over-counts a cover, so every conclusion is sound. Three pre-search
+weapons, all monotone: excess beyond the rank's set capacity is futility
+with ZERO search (king scarcity is the degenerate case — and the 59c
+probe10 monster that once burned days of CPU falls here), forced ranks
+skip the sweep's no-set branch, and excess past one set's reach prunes
+single-set carvings. A/B: −21% steps on the quick corpus, −26% on the
+hard corpus's decided rows, 35 of the quick corpus's futile boards
+proven with zero search, no board slower. The puzzle-78 exemplar (7
+tens vs 3 nines + 3 queens force a ten set) is where the lemma was
+mined — probes in claude-steve/random765.md.
 
 The solve is a **portfolio**, cheapest prior first:
 
