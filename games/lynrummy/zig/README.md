@@ -41,6 +41,20 @@ Phases:
    Validated against a copy-blind oracle that treats all 104 slots as
    distinct cards — agreement on uniform-random AND meld-seeded boards.
 
+Layered on the sweep: the **counting lemma**, the first of the scarcity
+lemmas. A run containing rank r either has its r−1 directly before it
+or starts at r and must run r, r+1, r+2 — so runs-containing-r ≤
+#(r−1) + min(#(r+1), #(r+2)) (mirror bound too, ranks mod 13), and
+cards beyond the bound are FORCED into sets. The bound ignores
+suit/color legality, so it only over-counts run capacity and every
+conclusion is sound. Costs 13 popcounts per solve, buys two things:
+excess at a rank with < 3 distinct suits is futility with zero search
+(king scarcity is the degenerate case), and the sweep skips the no-set
+branch at forced ranks — a provably dead subtree, so the pruning is
+monotone (A/B: −31.5% steps on the puzzle-78 exemplar where 7 tens vs
+3 nines + 3 queens force a ten set; −8.5% across the quick corpus; no
+board slower).
+
 The solve is a **portfolio**, cheapest prior first:
 
 0. **Suit-first** (`suit_first.zig`) — the human prior: pure runs as
