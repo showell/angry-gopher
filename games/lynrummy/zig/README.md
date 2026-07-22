@@ -110,6 +110,19 @@ lands in ~439 steps, three orders faster, because a near-solution
 arrangement is also a search heuristic. Still open: anytime min-break,
 breakability weights, donor-choice warmth in tier 0's repair.
 
+The edge diff then distills into HUMAN MOVES (`moves.zig`): five
+verbs — peel, steal, push, split, merge — with intact stacks silent.
+In a full cover every card ends up melded, so every break-edge pairs
+with that card's destination edge, and the pair IS the compound verb
+("peel X from [S] onto [T]"). Step 0 re-dresses the cover's copy
+labels (first-come dressing) to hug the player's physical stacks —
+otherwise the diff describes surgery on the wrong twin. The distiller
+builds the plan by SIMULATING it, and the final board must equal the
+cover exactly (runs by sequence, sets by membership) or it fails loud:
+the move list cannot lie about what it builds. It is a faithful build
+recipe, not gesture-level choreography. The 59c give-up fixture pins
+the whole 15-move plan.
+
 The answer is an **Outcome**: `solved` (verified next-map), `futile` (a
 PROOF — completed search or component prefilter, never a guess), or
 `unknown` (the give-up line tripped: no verdict, honestly labeled).
@@ -133,8 +146,10 @@ Files:
   are disjoint); rank/suit lookups are copy-blind across the 104 slots;
   `edgeFlavor`, the legal-meld-edge truth.
 - `arrangement.zig` — the board as stacks: parsing + loud validation,
-  the `Warm` counts tier 0 biases on, and `reportKept`, the kept-edges
-  scorer.
+  the `Warm` counts the solve biases on, and `reportKept`, the
+  kept-edges scorer.
+- `moves.zig` — the edge diff distilled into the five human verbs,
+  verified by construction.
 - `pure_run.zig` — phase 1: per-suit cyclic arc cover + verifier. Kept
   as a stepping stone.
 - `solver.zig` — phases 2+3: the rank-sweep solver (with the component

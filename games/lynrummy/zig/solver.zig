@@ -56,6 +56,7 @@ const std = @import("std");
 const card = @import("card.zig");
 const graph = @import("graph.zig");
 pub const arrangement = @import("arrangement.zig");
+pub const moves = @import("moves.zig");
 pub const suit_first = @import("suit_first.zig");
 
 pub const Flavor = enum { open, pure, rb, set };
@@ -1243,6 +1244,29 @@ test "board bridge acceptance: Steve's 59c give-up state" {
     // His J♣'>Q♦'>K♠ stack — the forced black-king weave random764
     // confirmed — survives intact.
     try std.testing.expectEqual(arrangement.Fate.intact, rep.fate[15]);
+    // The distilled plan rebuilds the cover from his stacks in 15
+    // moves (verified by construction inside distill); the 9 intact
+    // stacks say nothing.
+    var mplan: moves.Plan = undefined;
+    try moves.distill(&arr, &sol.next, &mplan);
+    var pb: [8192]u8 = undefined;
+    try std.testing.expectEqualStrings(
+        \\peel 4H from [JH QH KH AH 2H' 3H 4H]
+        \\peel 5H from [5H 6S' 7D] onto [4H] -> [4H 5H]
+        \\peel 6H from [6H 7S 8D' 9S] onto [4H 5H] -> [4H 5H 6H] [COMPLETE]
+        \\split [9D TS' JD] -> [9D] + [TS' JD]
+        \\peel TS' from [TS' JD] onto [TC' TD' TH] -> [TC' TD' TH TS'] [COMPLETE]
+        \\peel JH from [JH QH KH AH 2H' 3H] onto [JC JD' JS] -> [JC JD' JS JH] [COMPLETE]
+        \\peel 6D from [6D 7C' 8H' 9C]
+        \\peel 7C from [3C 4C 5C 6C 7C] onto [6D] -> [6D 7C]
+        \\steal 8H from [8H 8S 8D] onto [6D 7C] -> [6D 7C 8H] [COMPLETE]
+        \\steal 8D from [8S 8D]
+        \\push 9D onto [8D] -> [8D 9D]
+        \\steal TD' from [TC' TD' TH TS'] onto [8D 9D] -> [8D 9D TD'] [COMPLETE]
+        \\push JD onto [8D 9D TD'] -> [8D 9D TD' JD] [COMPLETE]
+        \\push QD' onto [8D 9D TD' JD] -> [8D 9D TD' JD QD'] [COMPLETE]
+        \\push 8S onto [6S' 7D] -> [6S' 7D 8S] [COMPLETE]
+    , moves.formatPlan(&mplan, &pb));
 }
 
 test "solvable boards get verified next-maps" {
