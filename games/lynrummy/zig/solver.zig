@@ -909,17 +909,7 @@ fn memoAdd(key: u128) void {
 
 // ---------- verification (strict, independent of the search) ----------
 
-fn edgeFlavor(a: u8, b: u8) ?Flavor {
-    // rankOf/suitOf are copy-blind, so the two copies of one card
-    // compare as same rank AND same suit — no edge of any flavor.
-    if (graph.rankOf(a) == graph.rankOf(b)) {
-        return if (graph.suitOf(a) != graph.suitOf(b)) .set else null;
-    }
-    if (graph.rankOf(b) != (graph.rankOf(a) + 1) % 13) return null;
-    if (graph.suitOf(a) == graph.suitOf(b)) return .pure;
-    if (graph.isRed(graph.suitOf(a)) != graph.isRed(graph.suitOf(b))) return .rb;
-    return null; // same color, different suit: no such run edge
-}
+const edgeFlavor = graph.edgeFlavor;
 
 /// verify checks a claimed next-map against the board: edges legal and
 /// flavor-uniform per chain, no card grabbed twice, no cycles, every
@@ -945,7 +935,7 @@ pub fn verify(board: Board, sol: *const Solution) bool {
         const c: u8 = @intCast(i);
         if (board & bit(c) == 0 or indeg[c] != 0) continue;
         // c starts a chain: walk it.
-        var flavor: ?Flavor = null;
+        var flavor: ?graph.EdgeFlavor = null;
         var set_suits: u8 = @as(u8, 1) << @intCast(graph.suitOf(c));
         var len: u32 = 1;
         var cur = c;

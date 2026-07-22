@@ -38,6 +38,21 @@ pub fn isRed(suit: u8) bool {
 /// A card's run neighbors on one side (successors or predecessors).
 pub const RunNbrs = struct { pure: u8, rb: [2]u8 };
 
+pub const EdgeFlavor = enum { pure, rb, set };
+
+/// edgeFlavor: the legal meld edge from slot a to slot b, or null.
+pub fn edgeFlavor(a: u8, b: u8) ?EdgeFlavor {
+    // rankOf/suitOf are copy-blind, so the two copies of one card
+    // compare as same rank AND same suit — no edge of any flavor.
+    if (rankOf(a) == rankOf(b)) {
+        return if (suitOf(a) != suitOf(b)) .set else null;
+    }
+    if (rankOf(b) != (rankOf(a) + 1) % 13) return null;
+    if (suitOf(a) == suitOf(b)) return .pure;
+    if (isRed(suitOf(a)) != isRed(suitOf(b))) return .rb;
+    return null; // same color, different suit: no such run edge
+}
+
 fn build(comptime step: comptime_int) [N]RunNbrs {
     var t: [N]RunNbrs = undefined;
     for (0..N) |i| {
