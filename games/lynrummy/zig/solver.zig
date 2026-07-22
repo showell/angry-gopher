@@ -156,15 +156,20 @@ pub fn solve(board: Board) Outcome {
     return solveWarm(board, &arrangement.Warm.EMPTY);
 }
 
-/// solveArrangement is the board bridge: the same Outcome solve gives
-/// the arrangement's multiset, but the cover CONVERGES toward the
-/// player's stacks (tier-0 warm bias — ordering only, so the verdict
-/// can never differ from solve's). Score the answer against the stacks
-/// with arrangement.reportKept.
+/// solveArrangement is the board bridge: solve on the arrangement's
+/// multiset, but the cover CONVERGES toward the player's stacks (warm
+/// branch ordering in tier 0 AND the sweep). The bias only reorders
+/// exploration, so completed searches agree with solve exactly; where
+/// the step budget trips, ordering shifts what got explored, so a warm
+/// `unknown` gets one cold retry — the verdict is never worse than
+/// solve's. Score the answer against the stacks with
+/// arrangement.reportKept.
 pub fn solveArrangement(arr: *const arrangement.Arrangement) card.Error!Outcome {
     const board = try boardBits(arr.cards[0..arr.nCards()]);
     const warm = arrangement.warmOf(arr);
-    return solveWarm(board, &warm);
+    const out = solveWarm(board, &warm);
+    if (out == .unknown) return solveWarm(board, &arrangement.Warm.EMPTY);
+    return out;
 }
 
 fn solveWarm(board: Board, warm: *const arrangement.Warm) Outcome {
@@ -197,7 +202,7 @@ fn solveWarm(board: Board, warm: *const arrangement.Warm) Outcome {
         if (@popCount(at[r]) < @popCount(at[r0])) r0 = @intCast(r);
     }
     step_limit = FAST_STEPS;
-    var s = Sweeper.init(at, r0);
+    var s = Sweeper.init(at, r0, warm);
     if (s.enumMFrom()) return .{ .solved = .{ .next = s.next } };
     if (steps_used <= step_limit) return .futile; // search completed: honest FUTILE
     // Budget tripped: a tail board. Retry from the cut with the fewest
@@ -214,7 +219,7 @@ fn solveWarm(board: Board, warm: *const arrangement.Warm) Outcome {
         }
     }
     step_limit = GIVE_UP_STEPS;
-    var s2 = Sweeper.init(at, rb);
+    var s2 = Sweeper.init(at, rb, warm);
     if (s2.enumMFrom()) return .{ .solved = .{ .next = s2.next } };
     if (steps_used <= step_limit) return .futile; // retry completed: proven
     return .unknown; // give-up budget exhausted: no verdict
@@ -591,6 +596,7 @@ fn setPairs(avail: u8, buf: *[30]SetPair) []const SetPair {
 const Sweeper = struct {
     at: [13]u8,
     r0: u8,
+    warm: *const arrangement.Warm,
     tgt: [8]u8 = undefined, // target instances at r0, suits adjacent
     tgt_n: u8 = 0,
     src_cnt: [4]u8, // per-suit supply at rank vL
@@ -602,10 +608,11 @@ const Sweeper = struct {
     open: [MAX_OPEN]Open = undefined,
     open_n: u8 = 0,
 
-    fn init(at: [13]u8, r0: u8) Sweeper {
+    fn init(at: [13]u8, r0: u8, warm: *const arrangement.Warm) Sweeper {
         var s: Sweeper = .{
             .at = at,
             .r0 = r0,
+            .warm = warm,
             .src_cnt = suitCounts(at[(r0 + 12) % 13]),
         };
         var tb: [8]u8 = undefined;
@@ -645,24 +652,46 @@ const Sweeper = struct {
         const slot = self.tgt[ti];
         const t: u8 = slot & 3;
         const partnered = slot >= 4;
-        if (self.enumM(ti + 1, -1)) return true; // not crossed
-        if (partnered and pair_min < 0) return false;
-        var x: u8 = if (partnered) @intCast(pair_min) else 0;
-        while (x < 4) : (x += 1) {
-            if (self.src_used[x] == self.src_cnt[x]) continue;
-            const flavor: Flavor = if (x == t)
-                .pure
-            else if (graph.isRed(x) != graph.isRed(t))
-                .rb
-            else
-                continue; // same color, different suit: no edge
-            self.m_edges[self.m_n] = .{ .x_suit = x, .y_slot = slot, .flavor = flavor };
-            self.m_n += 1;
-            self.src_used[x] += 1;
-            if (self.enumM(ti + 1, @intCast(x))) return true;
-            self.src_used[x] -= 1;
-            self.m_n -= 1;
+        // Warm bias: a player edge riding the cut into this target is
+        // guessed first, then not-crossed, then cold sources — the
+        // historic not-crossed-first order when nothing is warm.
+        const lo: u8 = if (!partnered) 0 else if (pair_min < 0) 4 else @intCast(pair_min);
+        var warm_src: u8 = 0;
+        for (0..4) |x| {
+            if (self.warm.runs[x][self.rankAt(12)][t] > 0) warm_src |= @as(u8, 1) << @intCast(x);
         }
+        var wm = warm_src;
+        while (wm != 0) {
+            const x: u8 = @intCast(@ctz(wm));
+            wm &= wm - 1;
+            if (x >= lo and self.cross(ti, x, slot)) return true;
+        }
+        if (self.enumM(ti + 1, -1)) return true; // not crossed
+        var x: u8 = lo;
+        while (x < 4) : (x += 1) {
+            if (warm_src >> @intCast(x) & 1 != 0) continue;
+            if (self.cross(ti, x, slot)) return true;
+        }
+        return false;
+    }
+
+    /// cross guesses one cut edge: suit x at rank vL into the target
+    /// slot at r0, if supply and flavor allow.
+    fn cross(self: *Sweeper, ti: u8, x: u8, slot: u8) bool {
+        if (self.src_used[x] == self.src_cnt[x]) return false;
+        const t: u8 = slot & 3;
+        const flavor: Flavor = if (x == t)
+            .pure
+        else if (graph.isRed(x) != graph.isRed(t))
+            .rb
+        else
+            return false; // same color, different suit: no edge
+        self.m_edges[self.m_n] = .{ .x_suit = x, .y_slot = slot, .flavor = flavor };
+        self.m_n += 1;
+        self.src_used[x] += 1;
+        if (self.enumM(ti + 1, @intCast(x))) return true;
+        self.src_used[x] -= 1;
+        self.m_n -= 1;
         return false;
     }
 
@@ -684,11 +713,16 @@ const Sweeper = struct {
             born |= @as(u8, 1) << @intCast(e.y_slot);
         }
         const rest = self.at[self.r0] & ~born;
-        if (force_set_ranks >> @intCast(self.r0) & 1 == 0) {
-            if (self.birthAndStep(rest)) return true;
-        }
         var sbuf: [30]SetPair = undefined;
-        for (setPairs(rest, &sbuf)) |sp| {
+        const pairs = setPairs(rest, &sbuf);
+        var obuf: [31]u8 = undefined;
+        for (self.setBranchOrder(self.r0, pairs, &obuf)) |bi| {
+            if (bi == NO_SET) {
+                if (force_set_ranks >> @intCast(self.r0) & 1 != 0) continue;
+                if (self.birthAndStep(rest)) return true;
+                continue;
+            }
+            const sp = pairs[bi];
             if (sp.b == 0 and force_two_set_ranks >> @intCast(self.r0) & 1 != 0) continue;
             self.linkSet(self.r0, sp.a, true);
             self.linkSet(self.r0, sp.b, true);
@@ -697,6 +731,44 @@ const Sweeper = struct {
             self.linkSet(self.r0, sp.a, false);
         }
         return false;
+    }
+
+    const NO_SET: u8 = 0xFF;
+
+    /// setBranchOrder: the branch sequence for one rank's set carving —
+    /// entries index into pairs, NO_SET is the no-set branch. A cold
+    /// rank keeps the historic order (no set first, then pairs as
+    /// enumerated); a rank the player holds warm sets at tries the
+    /// carvings that keep them BEFORE the no-set branch (stable within
+    /// equal warmth, so ties still resolve historically).
+    fn setBranchOrder(self: *const Sweeper, rank: u8, pairs: []const SetPair, order: *[31]u8) []const u8 {
+        const n = pairs.len + 1;
+        order[0] = NO_SET;
+        for (0..pairs.len) |i| order[i + 1] = @intCast(i);
+        if (self.warm.set_n[rank] == 0) return order[0..n];
+        var sc: [31]u8 = undefined;
+        sc[0] = arrangement.brokenSetPairs(self.warm, rank, 0, 0);
+        for (pairs, 0..) |sp, i| {
+            sc[i + 1] = arrangement.brokenSetPairs(
+                self.warm,
+                rank,
+                suitsPresent(sp.a),
+                suitsPresent(sp.b),
+            );
+        }
+        // Stable insertion sort by broken-warm score.
+        for (1..n) |i| {
+            const oi = order[i];
+            const si = sc[i];
+            var j = i;
+            while (j > 0 and sc[j - 1] > si) : (j -= 1) {
+                order[j] = order[j - 1];
+                sc[j] = sc[j - 1];
+            }
+            order[j] = oi;
+            sc[j] = si;
+        }
+        return order[0..n];
     }
 
     /// birthAndStep: the given r0 card slots start fresh chains alongside
@@ -739,21 +811,46 @@ const Sweeper = struct {
     /// rank frame.
     fn assign(self: *Sweeper, pos: u8, ci: u8, avail: u8, new_open: *[MAX_OPEN]Open, new_n: u8) bool {
         if (ci == self.open_n) {
-            if (force_set_ranks >> @intCast(self.rankAt(pos)) & 1 == 0) {
-                if (self.freshAndStep(pos, avail, new_open, new_n)) return true;
-            }
+            const rank = self.rankAt(pos);
             var sbuf: [30]SetPair = undefined;
-            for (setPairs(avail, &sbuf)) |sp| {
-                if (sp.b == 0 and force_two_set_ranks >> @intCast(self.rankAt(pos)) & 1 != 0) continue;
-                self.linkSet(self.rankAt(pos), sp.a, true);
-                self.linkSet(self.rankAt(pos), sp.b, true);
+            const pairs = setPairs(avail, &sbuf);
+            var obuf: [31]u8 = undefined;
+            for (self.setBranchOrder(rank, pairs, &obuf)) |bi| {
+                if (bi == NO_SET) {
+                    if (force_set_ranks >> @intCast(rank) & 1 != 0) continue;
+                    if (self.freshAndStep(pos, avail, new_open, new_n)) return true;
+                    continue;
+                }
+                const sp = pairs[bi];
+                if (sp.b == 0 and force_two_set_ranks >> @intCast(rank) & 1 != 0) continue;
+                self.linkSet(rank, sp.a, true);
+                self.linkSet(rank, sp.b, true);
                 if (self.freshAndStep(pos, avail & ~(sp.a | sp.b), new_open, new_n)) return true;
-                self.linkSet(self.rankAt(pos), sp.b, false);
-                self.linkSet(self.rankAt(pos), sp.a, false);
+                self.linkSet(rank, sp.b, false);
+                self.linkSet(rank, sp.a, false);
             }
             return false;
         }
         const c = self.open[ci];
+        // Warm bias: suits continuing a player edge are grabbed first,
+        // then the close option, then cold suits — the historic
+        // close-then-grab order when nothing is warm.
+        const wrow = &self.warm.runs[c.suit][self.rankAt(pos - 1)];
+        var warm_suits: u8 = 0;
+        {
+            var m = suitsPresent(avail);
+            while (m != 0) {
+                const s: u8 = @intCast(@ctz(m));
+                m &= m - 1;
+                if (wrow[s] > 0) warm_suits |= @as(u8, 1) << @intCast(s);
+            }
+        }
+        var wm = warm_suits;
+        while (wm != 0) {
+            const s: u8 = @intCast(@ctz(wm));
+            wm &= wm - 1;
+            if (self.grab(pos, ci, avail, new_open, new_n, s)) return true;
+        }
         // Option: close the chain at the previous rank.
         if (c.m_idx >= 0) {
             self.mrec[@intCast(c.m_idx)] = c.len;
@@ -762,30 +859,37 @@ const Sweeper = struct {
         } else if (c.len >= 3) {
             if (self.assign(pos, ci + 1, avail, new_open, new_n)) return true;
         }
-        // Option: grab a card at this rank. M-born heads stop at 4 (the
-        // tail contributes at least 1); fresh chains stop at 5. Copies
-        // never branch: the suit's copy-0 slot is consumed first, WLOG.
+        var cm = suitsPresent(avail) & ~warm_suits;
+        while (cm != 0) {
+            const s: u8 = @intCast(@ctz(cm));
+            cm &= cm - 1;
+            if (self.grab(pos, ci, avail, new_open, new_n, s)) return true;
+        }
+        return false;
+    }
+
+    /// grab: open chain ci takes the suit-s card at this rank, if the
+    /// edge is legal. M-born heads stop at 4 (the tail contributes at
+    /// least 1); fresh chains stop at 5. Copies never branch: the
+    /// suit's copy-0 slot is consumed first, WLOG.
+    fn grab(self: *Sweeper, pos: u8, ci: u8, avail: u8, new_open: *[MAX_OPEN]Open, new_n: u8, s: u8) bool {
+        const c = self.open[ci];
+        const f: Flavor = if (s == c.suit)
+            .pure
+        else if (graph.isRed(s) != graph.isRed(c.suit))
+            .rb
+        else
+            return false;
+        if (c.flavor != .open and c.flavor != f) return false;
         const cap: u8 = if (c.m_idx >= 0) 4 else 5;
         if (c.len >= cap) return false;
         const r = self.rankAt(pos);
         const prev = cardOf(self.rankAt(pos - 1), c.suit, c.copy);
-        var suits = suitsPresent(avail);
-        while (suits != 0) {
-            const s: u8 = @intCast(@ctz(suits));
-            suits &= suits - 1;
-            const f: Flavor = if (s == c.suit)
-                .pure
-            else if (graph.isRed(s) != graph.isRed(c.suit))
-                .rb
-            else
-                continue;
-            if (c.flavor != .open and c.flavor != f) continue;
-            const slot: u8 = if (avail >> @intCast(s) & 1 != 0) s else s + 4;
-            self.next[prev] = cardOfSlot(r, slot);
-            new_open[new_n] = .{ .suit = s, .copy = slot >> 2, .flavor = f, .len = c.len + 1, .m_idx = c.m_idx };
-            if (self.assign(pos, ci + 1, avail & ~(@as(u8, 1) << @intCast(slot)), new_open, new_n + 1)) return true;
-            self.next[prev] = graph.NONE;
-        }
+        const slot: u8 = if (avail >> @intCast(s) & 1 != 0) s else s + 4;
+        self.next[prev] = cardOfSlot(r, slot);
+        new_open[new_n] = .{ .suit = s, .copy = slot >> 2, .flavor = f, .len = c.len + 1, .m_idx = c.m_idx };
+        if (self.assign(pos, ci + 1, avail & ~(@as(u8, 1) << @intCast(slot)), new_open, new_n + 1)) return true;
+        self.next[prev] = graph.NONE;
         return false;
     }
 
@@ -852,12 +956,22 @@ const Sweeper = struct {
             return @popCount(used) == self.m_n;
         }
         const c = self.open[ci];
+        // Warm glue first, then closing at length, then cold glue —
+        // the historic close-then-glue order when nothing is warm.
+        if (self.glue(ci, used, true)) return true;
         if (c.len >= 3 and self.matchEnd(ci + 1, used)) return true;
+        return self.glue(ci, used, false);
+    }
+
+    fn glue(self: *Sweeper, ci: u8, used: u8, warm_pass: bool) bool {
+        const c = self.open[ci];
+        const wrow = &self.warm.runs[c.suit][self.rankAt(12)];
         // The chain's actual end card is the edge's concrete source —
         // writing the glue from it keeps copy binding consistent.
         const end = cardOf(self.rankAt(12), c.suit, c.copy);
         for (self.m_edges[0..self.m_n], 0..) |e, i| {
             if (used & (@as(u8, 1) << @intCast(i)) != 0) continue;
+            if ((wrow[e.y_slot & 3] > 0) != warm_pass) continue;
             if (e.x_suit != c.suit) continue;
             if (c.flavor != .open and c.flavor != e.flavor) continue;
             const total = c.len + self.mrec[i];
@@ -1081,15 +1195,34 @@ test "board bridge: the cover converges toward the player's stacks" {
     try std.testing.expectEqual(arrangement.Fate.shattered, cold_rep.fate[3]);
 }
 
-test "board bridge acceptance: Steve's 59c give-up state pins the v1 baseline" {
+test "sweep-warm: a warm rb stack steers which cover surfaces" {
+    // Tier 0 passes (rb-only board), so this cover is the sweep's.
+    // Four rb covers exist over {3H 3D 4S 4C 5H 5D}; the player's
+    // stack picks the one that keeps both of its edges.
+    const arr = try arrangement.parse("3H>4C>5D 3D 4S 5H");
+    const board = try boardBits(arr.cards[0..arr.nCards()]);
+    const out = try solveArrangement(&arr);
+    const sol = out.solved;
+    try std.testing.expect(verify(board, &sol));
+    const rep = arrangement.reportKept(&arr, &sol.next);
+    try std.testing.expectEqual(@as(u16, 2), rep.kept_edges);
+    try std.testing.expectEqual(arrangement.Fate.intact, rep.fate[0]);
+    // The cold solve picks a different cover — the warmth is what
+    // kept the stack together.
+    const cold = solve(board).solved;
+    const cold_rep = arrangement.reportKept(&arr, &cold.next);
+    try std.testing.expect(cold_rep.kept_edges < 2);
+}
+
+test "board bridge acceptance: Steve's 59c give-up state" {
     // stretch_59c_a, Steve's give-up consolidation: session 11
     // puzzle_77 state 145, landmark-matched to the random764 replay
-    // (the engine was six verbs from finishing here). This multiset
-    // rides the sweep — tier 0 passes — and v1 warmth lives only in
-    // tier 0, so today the bridge cover equals the cold cover and
-    // these are the honest BASELINE numbers the sweep-warm follow-on
-    // must beat: an improvement fails this test and the gold moves up
-    // consciously (benchmark pattern).
+    // (the engine was six verbs from finishing here). Benchmark-pattern
+    // gold: the cold solve keeps 16/42 of his edges in 442,848 steps;
+    // the warm sweep keeps these numbers instead — AND lands under the
+    // fast-path budget, because a near-solution arrangement is also a
+    // search heuristic. A change here is a bridge change: remeasure and
+    // move the gold consciously.
     const line = "3C'>4C'>5C'>6C'>7C' AD>2D>3D>4D 2S=2H'=2C 3C>4C>5C>6C " ++
         "8H=8S=8D' TS'=TC=TD 9D>TS>JD AC>2D'>3S JH>QH>KH>AH>2H>3H>4H " ++
         "4S>5D>6S' 5H>6S>7D 6D>7C>8H'>9C 6H>7S>8D>9S TC'=TD'=TH " ++
@@ -1100,11 +1233,15 @@ test "board bridge acceptance: Steve's 59c give-up state pins the v1 baseline" {
     const out = try solveArrangement(&arr);
     const sol = out.solved;
     try std.testing.expect(verify(board, &sol));
+    try std.testing.expect(steps_used <= FAST_STEPS); // no retry needed warm
     const rep = arrangement.reportKept(&arr, &sol.next);
     try std.testing.expectEqual(@as(u16, 42), rep.total_edges);
-    try std.testing.expectEqual(@as(u16, 16), rep.kept_edges);
+    try std.testing.expectEqual(@as(u16, 32), rep.kept_edges);
+    var fates = [3]u8{ 0, 0, 0 };
+    for (0..arr.n_stacks) |i| fates[@intFromEnum(rep.fate[i])] += 1;
+    try std.testing.expectEqual([3]u8{ 9, 5, 3 }, fates);
     // His J♣'>Q♦'>K♠ stack — the forced black-king weave random764
-    // confirmed — survives intact even in the cold cover.
+    // confirmed — survives intact.
     try std.testing.expectEqual(arrangement.Fate.intact, rep.fate[15]);
 }
 

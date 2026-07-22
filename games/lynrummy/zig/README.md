@@ -94,13 +94,21 @@ metric is the ratified nearness score: `reportKept` counts kept links
 (run links by realized (suit, rank) adjacency with honest counts, set
 links by co-membership, global consumption so two stacks can't claim
 one output suit) and grades each input stack intact / partial /
-shattered. rb stacks are always cold in v1 — tier 0 builds no rb runs
-— and the sweep takes no warm bias yet; both are measure-first
-follow-ons, like the anytime min-break pass and breakability weights.
-The measurement exists: Steve's real 59-card give-up consolidation is
-the gate's acceptance fixture, and because that board rides the sweep
-its cover comes back cold — 16 of 42 player edges kept, pinned as the
-baseline the sweep-warm work must consciously beat.
+shattered. The SWEEP is warm too: chain continuations grab suits that
+extend a player edge before considering closing or cold suits, a rank
+the player holds warm sets at tries the carvings that keep them before
+the no-set branch, and the cut guesses warm crossings first — every
+reorder keyed strictly on warmth, so a cold board explores in the
+historic order exactly. rb stacks warm the sweep (Warm.runs carries
+all run flavors; tier 0 still reads only the pure diagonal). One
+honesty seam: ordering shifts where the step budget trips, so a warm
+`unknown` gets one cold retry — the verdict is never worse than
+solve's. The acceptance fixture is Steve's real 59-card give-up
+consolidation: cold, its cover keeps 16 of his 42 edges after 442,848
+steps; warm, 32 of 42 (9 of 17 stacks fully intact) — and the solve
+lands in ~439 steps, three orders faster, because a near-solution
+arrangement is also a search heuristic. Still open: anytime min-break,
+breakability weights, donor-choice warmth in tier 0's repair.
 
 The answer is an **Outcome**: `solved` (verified next-map), `futile` (a
 PROOF — completed search or component prefilter, never a guess), or
