@@ -158,19 +158,53 @@ pub fn solve(board: Board) Outcome {
 }
 
 /// solveArrangement is the board bridge: solve on the arrangement's
-/// multiset, but the cover CONVERGES toward the player's stacks (warm
-/// branch ordering in tier 0 AND the sweep). The bias only reorders
-/// exploration, so completed searches agree with solve exactly; where
-/// the step budget trips, ordering shifts what got explored, so a warm
-/// `unknown` gets one cold retry — the verdict is never worse than
-/// solve's. Score the answer against the stacks with
-/// arrangement.reportKept.
+/// multiset, but the cover CONVERGES toward the player's stacks — warm
+/// branch ordering in tier 0 and the sweep, then ANYTIME MIN-BREAK:
+/// the sweep keeps enumerating covers under the improve budget,
+/// recording the one that keeps the most player edges (warm order
+/// means early candidates are already near; a perfect score ends the
+/// search; if enumeration COMPLETES under budget the answer is the
+/// true max-kept cover). Verdicts stay honest: enumeration that found
+/// nothing and ran out of budget falls back to the standard portfolio,
+/// with one cold retry on a warm `unknown` — never worse than solve's
+/// verdict. Score the answer with arrangement.reportKept; distill it
+/// with moves.distill.
 pub fn solveArrangement(arr: *const arrangement.Arrangement) card.Error!Outcome {
     const board = try boardBits(arr.cards[0..arr.nCards()]);
     const warm = arrangement.warmOf(arr);
+    steps_used = 0;
+    if (!componentsOk(board)) return .futile;
+    var imp = Improve{ .arr = arr, .total = totalEdges(arr) };
+    // Tier 0's warm cover is the first incumbent.
+    {
+        var sol: Solution = undefined;
+        if (suit_first.trySolve(board, &warm, &sol.next)) {
+            const rep = arrangement.reportKept(arr, &sol.next);
+            imp.best_kept = rep.kept_edges;
+            imp.best_next = sol.next;
+            if (imp.best_kept >= imp.total) return .{ .solved = sol };
+        }
+    }
+    var at = slotMasks(board);
+    const forced = computeForcedSets(&at) orelse return .futile;
+    force_set_ranks = forced.force;
+    force_two_set_ranks = forced.force_two;
+    step_limit = IMPROVE_STEPS;
+    var s = Sweeper.init(at, scarcestRank(at), &warm);
+    s.improve = &imp;
+    _ = s.enumMFrom();
+    if (imp.best_kept >= 0) return .{ .solved = .{ .next = imp.best_next } };
+    if (steps_used <= step_limit) return .futile; // enumeration completed: proven
+    // Budget out with nothing found: the standard portfolio decides.
     const out = solveWarm(board, &warm);
     if (out == .unknown) return solveWarm(board, &arrangement.Warm.EMPTY);
     return out;
+}
+
+fn totalEdges(arr: *const arrangement.Arrangement) u16 {
+    var t: u16 = 0;
+    for (0..arr.n_stacks) |si| t += @intCast(arr.stackCards(si).len - 1);
+    return t;
 }
 
 fn solveWarm(board: Board, warm: *const arrangement.Warm) Outcome {
@@ -183,27 +217,15 @@ fn solveWarm(board: Board, warm: *const arrangement.Warm) Outcome {
         var sol: Solution = undefined;
         if (suit_first.trySolve(board, warm, &sol.next)) return .{ .solved = sol };
     }
-    // Per rank: an 8-bit SLOT mask — low nibble copy 0 of suits 0-3,
-    // high nibble copy 1. Canonical board keeps high implying low
-    // within each rank.
-    var at: [13]u8 = @splat(0);
-    for (0..graph.N) |i| {
-        const c: u8 = @intCast(i);
-        if (board & bit(c) != 0) at[graph.rankOf(c)] |= @as(u8, 1) << @intCast(graph.suitOf(c));
-        if (board & bit(c + 52) != 0) at[graph.rankOf(c)] |= @as(u8, 1) << @intCast(graph.suitOf(c) + 4);
-    }
+    var at = slotMasks(board);
     const forced = computeForcedSets(&at) orelse return .futile;
     force_set_ranks = forced.force;
     force_two_set_ranks = forced.force_two;
     // Portfolio. Fast path: cut entering the scarcest rank, under a
     // step budget that 99.9% of boards never approach (tail boards run
     // ~300k steps; typical boards run hundreds).
-    var r0: u8 = 0;
-    for (1..13) |r| {
-        if (@popCount(at[r]) < @popCount(at[r0])) r0 = @intCast(r);
-    }
     step_limit = FAST_STEPS;
-    var s = Sweeper.init(at, r0, warm);
+    var s = Sweeper.init(at, scarcestRank(at), warm);
     if (s.enumMFrom()) return .{ .solved = .{ .next = s.next } };
     if (steps_used <= step_limit) return .futile; // search completed: honest FUTILE
     // Budget tripped: a tail board. Retry from the cut with the fewest
@@ -226,6 +248,44 @@ fn solveWarm(board: Board, warm: *const arrangement.Warm) Outcome {
     return .unknown; // give-up budget exhausted: no verdict
 }
 
+/// Per rank: an 8-bit SLOT mask — low nibble copy 0 of suits 0-3,
+/// high nibble copy 1. Canonical board keeps high implying low within
+/// each rank.
+fn slotMasks(board: Board) [13]u8 {
+    var at: [13]u8 = @splat(0);
+    for (0..graph.N) |i| {
+        const c: u8 = @intCast(i);
+        if (board & bit(c) != 0) at[graph.rankOf(c)] |= @as(u8, 1) << @intCast(graph.suitOf(c));
+        if (board & bit(c + 52) != 0) at[graph.rankOf(c)] |= @as(u8, 1) << @intCast(graph.suitOf(c) + 4);
+    }
+    return at;
+}
+
+fn scarcestRank(at: [13]u8) u8 {
+    var r0: u8 = 0;
+    for (1..13) |r| {
+        if (@popCount(at[r]) < @popCount(at[r0])) r0 = @intCast(r);
+    }
+    return r0;
+}
+
+/// Anytime min-break: with `improve` set on the Sweeper, a completed
+/// cover is scored and recorded instead of ending the search, and
+/// enumeration continues under the improve budget. Warm ordering means
+/// the early covers are already near; ties keep the first. A state
+/// with covers below it is NOT futile, so the memo is suppressed for
+/// it (the found counter carries that fact).
+const Improve = struct {
+    arr: *const arrangement.Arrangement,
+    total: u16, // all player edges; reaching it ends the search
+    best_kept: i32 = -1,
+    best_next: [graph.SLOTS]u8 = undefined,
+    found: u64 = 0,
+};
+
+/// Tuning probes flip this to print each improvement as it lands.
+pub var improve_log = false;
+
 // Step budgets for the portfolio (see solve). A tripped budget makes
 // every step return false immediately and suppresses memoization —
 // truncated exploration must not record futility facts. Steps are the
@@ -242,6 +302,12 @@ const FAST_STEPS = 50_000;
 // the worst chase is under a second. Raise only on evidence: a real
 // board shown solvable above the line.
 const GIVE_UP_STEPS = 1_000_000;
+// The anytime min-break budget (solveArrangement's enumeration).
+// Tuned strict on the 59c give-up fixture's improvement curve
+// (2026-07-22): kept edges 32 → 33 → 37 by 67k steps, then FLAT all
+// the way to a 20M-step probe — 200k is 3x the observed need. Raise
+// only on evidence: a real arrangement whose curve still climbs here.
+const IMPROVE_STEPS = 200_000;
 var step_limit: u64 = 0;
 /// Steps spent by the last solve, all phases — the deterministic
 /// difficulty telemetry probes read. 0 for tier-0/prefilter answers.
@@ -598,6 +664,7 @@ const Sweeper = struct {
     at: [13]u8,
     r0: u8,
     warm: *const arrangement.Warm,
+    improve: ?*Improve = null,
     tgt: [8]u8 = undefined, // target instances at r0, suits adjacent
     tgt_n: u8 = 0,
     src_cnt: [4]u8, // per-suit supply at rank vL
@@ -798,11 +865,29 @@ const Sweeper = struct {
         if (pos == 13) return self.finish();
         const key = self.encode(pos);
         if (memoHas(key)) return false;
+        const found0 = if (self.improve) |imp| imp.found else 0;
         var new_open: [MAX_OPEN]Open = undefined;
         if (self.assign(pos, 0, self.at[self.rankAt(pos)], &new_open, 0)) return true;
         if (steps_used > step_limit) return false; // truncated: not a futility fact
+        if (self.improve) |imp| {
+            // Covers were found below: this state is not futile.
+            if (imp.found != found0) return false;
+        }
         memoAdd(key);
         return false;
+    }
+
+    fn record(self: *Sweeper, imp: *Improve) bool {
+        imp.found += 1;
+        const rep = arrangement.reportKept(imp.arr, &self.next);
+        if (@as(i32, rep.kept_edges) > imp.best_kept) {
+            imp.best_kept = rep.kept_edges;
+            imp.best_next = self.next;
+            if (improve_log) {
+                std.debug.print("improve: kept {}/{} at {} steps ({} covers seen)\n", .{ rep.kept_edges, imp.total, steps_used, imp.found });
+            }
+        }
+        return imp.best_kept >= imp.total;
     }
 
     /// assign decides, for open chain ci at rank position pos, whether it
@@ -954,7 +1039,12 @@ const Sweeper = struct {
     fn matchEnd(self: *Sweeper, ci: u8, used: u8) bool {
         if (ci == self.open_n) {
             // The glue edges were written on the way down.
-            return @popCount(used) == self.m_n;
+            if (@popCount(used) != self.m_n) return false;
+            // Min-break: record this cover and keep enumerating —
+            // returning false lets every write unwind normally. A
+            // perfect score is the one true early exit.
+            if (self.improve) |imp| return self.record(imp);
+            return true;
         }
         const c = self.open[ci];
         // Warm glue first, then closing at length, then cold glue —
@@ -1220,10 +1310,10 @@ test "board bridge acceptance: Steve's 59c give-up state" {
     // puzzle_77 state 145, landmark-matched to the random764 replay
     // (the engine was six verbs from finishing here). Benchmark-pattern
     // gold: the cold solve keeps 16/42 of his edges in 442,848 steps;
-    // the warm sweep keeps these numbers instead — AND lands under the
-    // fast-path budget, because a near-solution arrangement is also a
-    // search heuristic. A change here is a bridge change: remeasure and
-    // move the gold consciously.
+    // the plain warm sweep's first cover keeps 32 in 439 steps; the
+    // min-break enumeration climbs to these numbers by 67k steps and a
+    // 20M-step probe found nothing better. A change here is a bridge
+    // change: remeasure and move the gold consciously.
     const line = "3C'>4C'>5C'>6C'>7C' AD>2D>3D>4D 2S=2H'=2C 3C>4C>5C>6C " ++
         "8H=8S=8D' TS'=TC=TD 9D>TS>JD AC>2D'>3S JH>QH>KH>AH>2H>3H>4H " ++
         "4S>5D>6S' 5H>6S>7D 6D>7C>8H'>9C 6H>7S>8D>9S TC'=TD'=TH " ++
@@ -1234,38 +1324,31 @@ test "board bridge acceptance: Steve's 59c give-up state" {
     const out = try solveArrangement(&arr);
     const sol = out.solved;
     try std.testing.expect(verify(board, &sol));
-    try std.testing.expect(steps_used <= FAST_STEPS); // no retry needed warm
     const rep = arrangement.reportKept(&arr, &sol.next);
     try std.testing.expectEqual(@as(u16, 42), rep.total_edges);
-    try std.testing.expectEqual(@as(u16, 32), rep.kept_edges);
+    try std.testing.expectEqual(@as(u16, 37), rep.kept_edges);
     var fates = [3]u8{ 0, 0, 0 };
     for (0..arr.n_stacks) |i| fates[@intFromEnum(rep.fate[i])] += 1;
-    try std.testing.expectEqual([3]u8{ 9, 5, 3 }, fates);
+    try std.testing.expectEqual([3]u8{ 13, 2, 2 }, fates);
     // His J♣'>Q♦'>K♠ stack — the forced black-king weave random764
     // confirmed — survives intact.
     try std.testing.expectEqual(arrangement.Fate.intact, rep.fate[15]);
-    // The distilled plan rebuilds the cover from his stacks in 15
-    // moves (verified by construction inside distill); the 9 intact
-    // stacks say nothing.
+    // The distilled plan rebuilds the cover from his stacks in 8
+    // moves (verified by construction inside distill) — the engine's
+    // A* needed 6 verbs from this exact state, one of them a compound
+    // shift worth two of ours. The 13 intact stacks say nothing.
     var mplan: moves.Plan = undefined;
     try moves.distill(&arr, &sol.next, &mplan);
     var pb: [8192]u8 = undefined;
     try std.testing.expectEqualStrings(
-        \\peel 4H from [JH QH KH AH 2H' 3H 4H]
-        \\peel 5H from [5H 6S' 7D] onto [4H] -> [4H 5H]
-        \\peel 6H from [6H 7S 8D' 9S] onto [4H 5H] -> [4H 5H 6H] [COMPLETE]
         \\split [9D TS' JD] -> [9D] + [TS' JD]
         \\peel TS' from [TS' JD] onto [TC' TD' TH] -> [TC' TD' TH TS'] [COMPLETE]
-        \\peel JH from [JH QH KH AH 2H' 3H] onto [JC JD' JS] -> [JC JD' JS JH] [COMPLETE]
-        \\peel 6D from [6D 7C' 8H' 9C]
-        \\peel 7C from [3C 4C 5C 6C 7C] onto [6D] -> [6D 7C]
-        \\steal 8H from [8H 8S 8D] onto [6D 7C] -> [6D 7C 8H] [COMPLETE]
-        \\steal 8D from [8S 8D]
-        \\push 9D onto [8D] -> [8D 9D]
-        \\steal TD' from [TC' TD' TH TS'] onto [8D 9D] -> [8D 9D TD'] [COMPLETE]
-        \\push JD onto [8D 9D TD'] -> [8D 9D TD' JD] [COMPLETE]
-        \\push QD' onto [8D 9D TD' JD] -> [8D 9D TD' JD QD'] [COMPLETE]
-        \\push 8S onto [6S' 7D] -> [6S' 7D 8S] [COMPLETE]
+        \\peel JH from [JH QH KH AH 2H' 3H 4H] onto [JC JD' JS] -> [JC JD' JS JH] [COMPLETE]
+        \\split [QH KH AH 2H' 3H 4H] -> [QH KH AH 2H' 3H] + [4H]
+        \\steal TD' from [TC' TD' TH TS'] onto [9D] -> [9D TD']
+        \\push JD onto [9D TD'] -> [9D TD' JD] [COMPLETE]
+        \\push QD' onto [9D TD' JD] -> [9D TD' JD QD'] [COMPLETE]
+        \\push 4H onto [AC 2D' 3S] -> [AC 2D' 3S 4H] [COMPLETE]
     , moves.formatPlan(&mplan, &pb));
 }
 
