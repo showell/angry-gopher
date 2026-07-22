@@ -1081,6 +1081,33 @@ test "board bridge: the cover converges toward the player's stacks" {
     try std.testing.expectEqual(arrangement.Fate.shattered, cold_rep.fate[3]);
 }
 
+test "board bridge acceptance: Steve's 59c give-up state pins the v1 baseline" {
+    // stretch_59c_a, Steve's give-up consolidation: session 11
+    // puzzle_77 state 145, landmark-matched to the random764 replay
+    // (the engine was six verbs from finishing here). This multiset
+    // rides the sweep — tier 0 passes — and v1 warmth lives only in
+    // tier 0, so today the bridge cover equals the cold cover and
+    // these are the honest BASELINE numbers the sweep-warm follow-on
+    // must beat: an improvement fails this test and the gold moves up
+    // consciously (benchmark pattern).
+    const line = "3C'>4C'>5C'>6C'>7C' AD>2D>3D>4D 2S=2H'=2C 3C>4C>5C>6C " ++
+        "8H=8S=8D' TS'=TC=TD 9D>TS>JD AC>2D'>3S JH>QH>KH>AH>2H>3H>4H " ++
+        "4S>5D>6S' 5H>6S>7D 6D>7C>8H'>9C 6H>7S>8D>9S TC'=TD'=TH " ++
+        "JC=JD'=JS JC'>QD'>KS QD";
+    const arr = try arrangement.parse(line);
+    try std.testing.expectEqual(@as(usize, 59), arr.nCards());
+    const board = try boardBits(arr.cards[0..arr.nCards()]);
+    const out = try solveArrangement(&arr);
+    const sol = out.solved;
+    try std.testing.expect(verify(board, &sol));
+    const rep = arrangement.reportKept(&arr, &sol.next);
+    try std.testing.expectEqual(@as(u16, 42), rep.total_edges);
+    try std.testing.expectEqual(@as(u16, 16), rep.kept_edges);
+    // His J♣'>Q♦'>K♠ stack — the forced black-king weave random764
+    // confirmed — survives intact even in the cold cover.
+    try std.testing.expectEqual(arrangement.Fate.intact, rep.fate[15]);
+}
+
 test "solvable boards get verified next-maps" {
     const fixtures = [_][]const u8{
         "", // an empty board is already clean

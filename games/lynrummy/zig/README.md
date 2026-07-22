@@ -97,6 +97,10 @@ one output suit) and grades each input stack intact / partial /
 shattered. rb stacks are always cold in v1 — tier 0 builds no rb runs
 — and the sweep takes no warm bias yet; both are measure-first
 follow-ons, like the anytime min-break pass and breakability weights.
+The measurement exists: Steve's real 59-card give-up consolidation is
+the gate's acceptance fixture, and because that board rides the sweep
+its cover comes back cold — 16 of 42 player edges kept, pinned as the
+baseline the sweep-warm work must consciously beat.
 
 The answer is an **Outcome**: `solved` (verified next-map), `futile` (a
 PROOF — completed search or component prefilter, never a guess), or
