@@ -59,6 +59,9 @@ pub fn build(b: *std.Build) void {
         // for Hint + agent play, puzzles for their Hint button).
         .{ .name = "engine_js", .path = "../games/lynrummy/elm/engine.js" },
         .{ .name = "engine_glue_js", .path = "../games/lynrummy/elm/engine_glue.js" },
+        // The zig board-bridge solver (ops/build_lynrummy_wasm): the puzzle
+        // Hint button's brain — arrangement line in, human move plan out.
+        .{ .name = "solver_wasm", .path = "../games/lynrummy/zig/solver.wasm" },
         // The Lyn Rummy beginner tutorial (/tutorial): a free-standing HTML
         // document + its self-contained plain-JS client. See tutorial.zig.
         .{ .name = "tutorial_html", .path = "../games/lynrummy/tutorial/tutorial.html" },

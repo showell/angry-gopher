@@ -883,8 +883,11 @@ const Sweeper = struct {
         if (@as(i32, rep.kept_edges) > imp.best_kept) {
             imp.best_kept = rep.kept_edges;
             imp.best_next = self.next;
-            if (improve_log) {
-                std.debug.print("improve: kept {}/{} at {} steps ({} covers seen)\n", .{ rep.kept_edges, imp.total, steps_used, imp.found });
+            // Comptime-gated: the wasm build is freestanding, no stderr.
+            if (comptime @import("builtin").os.tag != .freestanding) {
+                if (improve_log) {
+                    std.debug.print("improve: kept {}/{} at {} steps ({} covers seen)\n", .{ rep.kept_edges, imp.total, steps_used, imp.found });
+                }
             }
         }
         return imp.best_kept >= imp.total;
@@ -1099,10 +1102,11 @@ const Sweeper = struct {
 /// cluster nearly every key onto slot 0 and reduce the table to its
 /// 8-probe window. Multiply-and-take-top-bits mixes every key bit in;
 /// the two u128 halves get distinct odd multipliers.
-fn memoSlot(key: u128) u64 {
+fn memoSlot(key: u128) usize {
     const lo: u64 = @truncate(key);
     const hi: u64 = @truncate(key >> 64);
-    return ((lo *% 0x9E3779B97F4A7C15) ^ (hi *% 0xC2B2AE3D27D4EB4F)) >> (64 - MEMO_BITS);
+    // MEMO_BITS wide: fits usize on 32-bit targets (the wasm build).
+    return @intCast(((lo *% 0x9E3779B97F4A7C15) ^ (hi *% 0xC2B2AE3D27D4EB4F)) >> (64 - MEMO_BITS));
 }
 
 fn memoHas(key: u128) bool {

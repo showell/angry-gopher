@@ -31,12 +31,16 @@ shared from [`../Lib/`](../Lib/), the same code the game runs on. Build, run, an
 gate exactly as described in the game README (`ops/start`, then `/puzzles`;
 `ops/check_lynrummy` while working).
 
-The one place a puzzle reaches outside the Elm client is **Hint**: like the game,
-it asks the shared TS engine over a port (`puzzle_hint` → `LynRummyEngine.elmPuzzleHint`,
-wired by [`../../engine_glue.js`](../../engine_glue.js)). The puzzle case is the
-simple one — every card is already on the board, so the engine solves it directly
-with no hand-to-board projection — and the first step of its plan is shown, verbatim,
-in the status bar.
+The one place a puzzle reaches outside the Elm client is **Hint**: the
+`puzzle_hint` port op, wired by [`../../engine_glue.js`](../../engine_glue.js).
+Since 2026-07 it is answered by the **zig board-bridge solver**
+(`/puzzles/solver.wasm`, built from `games/lynrummy/zig/` by
+`ops/build_lynrummy_wasm`, fetched lazily on the first click): the glue lowers
+the board to an arrangement line, the solver finds a cover that keeps the most
+of the player's own stacks (anytime min-break), and the reply is the distilled
+move plan — peel / steal / push / split / merge lines. The first line shows in
+the status bar; the full plan logs to the console. The TS engine
+(`engine.js`) still answers the full game's `game_hint` and `agent_step`.
 
 For why a composed, can't-lose board is its own small pleasure — and what the
 puzzles have in common with a hundred-year-old chess study — read the essay

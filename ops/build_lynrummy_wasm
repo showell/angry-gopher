@@ -1,0 +1,25 @@
+#!/bin/bash
+# CANONICAL DEV-LOOP SCRIPT — DO NOT REINVENT.
+# Before composing an ad-hoc shell command for build / test / regen, run
+# `ops/list` to see what already exists.
+#
+# Build the Lyn Rummy board-bridge solver into a freestanding WebAssembly
+# module at games/lynrummy/zig/solver.wasm. The puzzle page's Hint button
+# drives it through engine_glue.js: arrangement line in, human move plan
+# out (see games/lynrummy/zig/wasm.zig for the ABI). Same recipe as
+# ops/build_chess_wasm: pure compute, no entry point, no imports, no
+# allocator; -rdynamic exposes the `export fn`s; ReleaseSmall keeps it
+# lean (it ships embedded in the server binary).
+set -e
+
+source "$(dirname "$0")/_paths.sh"
+
+SRC="$GOPHER_DIR/games/lynrummy/zig/wasm.zig"
+OUT="$GOPHER_DIR/games/lynrummy/zig/solver.wasm"
+zig build-exe "$SRC" \
+    -target wasm32-freestanding \
+    -fno-entry \
+    -rdynamic \
+    -O ReleaseSmall \
+    -femit-bin="$OUT"
+echo "built $OUT ($(wc -c < "$OUT") bytes)"

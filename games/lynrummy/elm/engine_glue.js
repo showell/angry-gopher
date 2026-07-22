@@ -1,5 +1,6 @@
 // engine_glue.js — bridges the Elm clients to the TS engine
-// bundle (engine.js → global `LynRummyEngine`).
+// bundle (engine.js → global `LynRummyEngine`) and, for puzzle
+// hints, to the zig board-bridge solver (solver.wasm).
 //
 // Wire shape (snake_case at the boundary):
 //
@@ -17,8 +18,16 @@
 //               where board = [[{value, suit, origin_deck}, ...], ...]
 //     response: { request_id, op: "puzzle_hint", ok, lines: string[] }
 //             — sent on `puzzleHintResponse`. Every puzzle card is
-//             already on the board, so there's no hand: the engine
-//             solves the board directly and returns the plan lines.
+//             already on the board, so there's no hand. This op is
+//             answered by the ZIG BOARD-BRIDGE solver (solver.wasm,
+//             fetched lazily on the first click): the board lowers to
+//             an arrangement line ("3H>4S>5H KH=KC=KS QD"), the wasm
+//             finds a cover that keeps the most of the player's own
+//             stacks, and the reply is the distilled move plan —
+//             peel / steal / push / split / merge lines. The status
+//             bar shows the first line; the full plan logs to the
+//             console. No TS fallback: if the wasm can't load or the
+//             board can't be lowered, the hint fails loud.
 //
 //   agent_step (real-time agent play):
 //     request:  { request_id, op: "agent_step",
@@ -65,11 +74,18 @@
             lines: logHint(op, gameHint(req.hand, req.board, req.loner === true)),
           });
         } else if (op === 'puzzle_hint') {
-          port.send({
-            request_id: requestId,
-            op: op,
-            ok: true,
-            lines: logHint(op, puzzleHint(req.board)),
+          // Async: the solver wasm loads on the first click. Elm
+          // matches replies by request_id, so latency is safe.
+          puzzleHint(req.board).then(function (lines) {
+            port.send({
+              request_id: requestId,
+              op: op,
+              ok: true,
+              lines: logHint(op, lines),
+            });
+          }, function (err) {
+            var msg = String(err && err.message ? err.message : err);
+            port.send({ request_id: requestId, op: op, ok: false, error: msg });
           });
         } else if (op === 'agent_step') {
           port.send({
@@ -113,11 +129,63 @@
     return LynRummyEngine.elmGameHint(handCards, stacks, loner === true);
   }
 
+  // --- puzzle_hint: the zig board-bridge solver ---------------------
+
+  var solverWasmPromise = null; // lazy singleton; a failed load retries
+
+  function loadSolverWasm() {
+    if (solverWasmPromise === null) {
+      solverWasmPromise = fetch('/puzzles/solver.wasm')
+        .then(function (resp) {
+          if (!resp.ok) throw new Error('solver.wasm fetch failed: ' + resp.status);
+          return resp.arrayBuffer();
+        })
+        .then(function (bytes) { return WebAssembly.instantiate(bytes); })
+        .then(function (result) { return result.instance.exports; })
+        .catch(function (err) {
+          solverWasmPromise = null; // next click retries the load
+          throw err;
+        });
+    }
+    return solverWasmPromise;
+  }
+
   function puzzleHint(board) {
-    var stacks = board.map(function (stack) {
-      return stack.map(cardObjectToRecord);
+    var line = boardToArrangementLine(board);
+    return loadSolverWasm().then(function (wasm) {
+      var bytes = new TextEncoder().encode(line);
+      if (bytes.length > wasm.ioCap()) throw new Error('board too large for the solver');
+      new Uint8Array(wasm.memory.buffer, wasm.ioPtr(), bytes.length).set(bytes);
+      var rc = wasm.puzzleHint(bytes.length);
+      if (rc === 0) return ['Board is already clean — nothing to move.'];
+      if (rc > 0) {
+        var text = new TextDecoder().decode(
+          new Uint8Array(wasm.memory.buffer, wasm.ioPtr(), rc));
+        return text.split('\n');
+      }
+      if (rc === -2) throw new Error('no clean layout exists for these cards');
+      if (rc === -3) throw new Error('the solver gave up on this board');
+      throw new Error('the solver rejected the board (code ' + rc + ')');
     });
-    return LynRummyEngine.elmPuzzleHint(stacks);
+  }
+
+  // Lower the Elm board to the solver's arrangement notation: each
+  // stack one glued token, run links '>' and set links '=' (same
+  // value = set), stacks space-separated. "3H>4S>5H KH=KC=KS QD".
+  var RANK_CHARS = 'A23456789TJQK'; // index = value - 1
+  var SUIT_CHARS = 'CDSH'; // wire suit ints 0-3
+
+  function boardToArrangementLine(board) {
+    return board.map(function (stack) {
+      var out = '';
+      for (var i = 0; i < stack.length; i++) {
+        var c = stack[i];
+        if (i > 0) out += stack[i - 1].value === c.value ? '=' : '>';
+        out += RANK_CHARS[c.value - 1] + SUIT_CHARS[c.suit]
+          + (c.origin_deck === 1 ? "'" : '');
+      }
+      return out;
+    }).join(' ');
   }
 
   function agentStep(boardDsl, handDsl) {

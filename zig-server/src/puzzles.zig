@@ -2,7 +2,8 @@
 //! Routes:
 //!   GET  /puzzles                                   the page (catalog baked in)
 //!   GET  /puzzles/puzzle.js                          the Elm bundle
-//!   GET  /puzzles/engine.js | engine_glue.js         the shared solver + glue
+//!   GET  /puzzles/engine.js | engine_glue.js         the shared TS engine + glue
+//!   GET  /puzzles/solver.wasm                         the zig board-bridge solver
 //!                                                    (powers the Hint button)
 //!   POST /puzzles/sessions/<id>/puzzles/<idx>/actions  append one action line
 //!
@@ -23,6 +24,11 @@ const puzzle_js = @embedFile("puzzle_js");
 // serves). Puzzles load these to power the Hint button. Wired in build.zig.
 const engine_js = @embedFile("engine_js");
 const engine_glue_js = @embedFile("engine_glue_js");
+
+// The zig board-bridge solver (ops/build_lynrummy_wasm). The glue fetches
+// it lazily on the first puzzle Hint click: arrangement line in, human
+// move plan out (ABI in games/lynrummy/zig/wasm.zig).
+const solver_wasm = @embedFile("solver_wasm");
 
 // maxAppendBytes caps a single action line.
 const maxAppendBytes = 64 * 1024;
@@ -60,6 +66,8 @@ pub fn handle(req: *std.http.Server.Request, io: std.Io, alloc: Alloc, sub: []co
         try req.respond(engine_js, .{ .extra_headers = &.{http.js_ct} });
     } else if (std.mem.eql(u8, sub, "/engine_glue.js")) {
         try req.respond(engine_glue_js, .{ .extra_headers = &.{http.js_ct} });
+    } else if (std.mem.eql(u8, sub, "/solver.wasm")) {
+        try req.respond(solver_wasm, .{ .extra_headers = &.{http.wasm_ct} });
     } else if (std.mem.startsWith(u8, sub, "/sessions/")) {
         try sessionRoute(req, io, alloc, user_id, sub["/sessions/".len..]);
     } else {

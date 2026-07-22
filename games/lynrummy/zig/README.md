@@ -165,6 +165,9 @@ Files:
   kept-edges scorer.
 - `moves.zig` — the edge diff distilled into the five human verbs,
   verified by construction.
+- `wasm.zig` — the browser build (ops/build_lynrummy_wasm →
+  solver.wasm): arrangement line in, move plan out. Serves the puzzle
+  Hint button via zig-server/src/puzzles.zig + engine_glue.js.
 - `pure_run.zig` — phase 1: per-suit cyclic arc cover + verifier. Kept
   as a stepping stone.
 - `solver.zig` — phases 2+3: the rank-sweep solver (with the component
