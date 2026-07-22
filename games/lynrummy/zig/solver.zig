@@ -153,6 +153,21 @@ fn componentsOk(board: Board) bool {
 /// a futility PROOF, or — on boards the give-up budget abandons —
 /// an honest `unknown`. FUTILE is a first-class answer, not an error.
 pub fn solve(board: Board) Outcome {
+    return solveWarm(board, &arrangement.Warm.EMPTY);
+}
+
+/// solveArrangement is the board bridge: the same Outcome solve gives
+/// the arrangement's multiset, but the cover CONVERGES toward the
+/// player's stacks (tier-0 warm bias — ordering only, so the verdict
+/// can never differ from solve's). Score the answer against the stacks
+/// with arrangement.reportKept.
+pub fn solveArrangement(arr: *const arrangement.Arrangement) card.Error!Outcome {
+    const board = try boardBits(arr.cards[0..arr.nCards()]);
+    const warm = arrangement.warmOf(arr);
+    return solveWarm(board, &warm);
+}
+
+fn solveWarm(board: Board, warm: *const arrangement.Warm) Outcome {
     steps_used = 0;
     if (!componentsOk(board)) return .futile;
     // Tier 0: the human prior — pure runs + sets, suit-decomposed
@@ -160,7 +175,7 @@ pub fn solve(board: Board) Outcome {
     // a human-shaped cover; a pass falls through to the complete sweep.
     {
         var sol: Solution = undefined;
-        if (suit_first.trySolve(board, &arrangement.Warm.EMPTY, &sol.next)) return .{ .solved = sol };
+        if (suit_first.trySolve(board, warm, &sol.next)) return .{ .solved = sol };
     }
     // Per rank: an 8-bit SLOT mask — low nibble copy 0 of suits 0-3,
     // high nibble copy 1. Canonical board keeps high implying low
@@ -1045,6 +1060,25 @@ fn expectFutile(fixture: []const u8) !void {
             return error.TestUnexpectedResult;
         },
     }
+}
+
+test "board bridge: the cover converges toward the player's stacks" {
+    const arr = try arrangement.parse("AH>2H>3H>4H AD>2D>3D>4D 2C>3C>4C AS=AC");
+    const board = try boardBits(arr.cards[0..arr.nCards()]);
+    const out = try solveArrangement(&arr);
+    const sol = out.solved;
+    try std.testing.expect(verify(board, &sol));
+    const rep = arrangement.reportKept(&arr, &sol.next);
+    // The player's AS=AC pair survives into the ace set, which peels
+    // its third suit from a run stack instead — one edge lost there,
+    // everything else intact.
+    try std.testing.expectEqual(arrangement.Fate.intact, rep.fate[3]);
+    try std.testing.expectEqual(@as(u16, 9), rep.total_edges);
+    try std.testing.expectEqual(@as(u16, 8), rep.kept_edges);
+    // The cold solve breaks the pair: the bias is what kept it.
+    const cold = solve(board).solved;
+    const cold_rep = arrangement.reportKept(&arr, &cold.next);
+    try std.testing.expectEqual(arrangement.Fate.shattered, cold_rep.fate[3]);
 }
 
 test "solvable boards get verified next-maps" {

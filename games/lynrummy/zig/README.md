@@ -77,6 +77,27 @@ The solve is a **portfolio**, cheapest prior first:
 2. On a budget trip: **sweep from the fewest-matchings cut**, under the
    1M-step give-up line.
 
+**The board bridge (v1)** lifts the solve off the bare multiset and
+onto the player's actual board. An arrangement is a list of stacks in
+the solver's own output notation — glued tokens are stacks
+(`3H>4S>5H`, `KH=KC=KS`), space-separated cards are singletons, `|`
+stays cosmetic — so a plain board line is the degenerate
+all-singletons arrangement and a formatted cover round-trips. Stacks
+must be valid melds relaxed only in length (a 2-stack is one card
+short; `AH 7C` can only ever be two singletons); anything else fails
+loud. `solveArrangement` answers with the SAME verdict `solve` would
+give the multiset — the bias is ordering-only — but the cover
+converges toward the player: tier 0 prefers repair sets that keep the
+player's set pairs together (co-membership, chain order irrelevant)
+and breaks full-cycle 13-runs at the coldest boundary. The EDGES
+metric is the ratified nearness score: `reportKept` counts kept links
+(run links by realized (suit, rank) adjacency with honest counts, set
+links by co-membership, global consumption so two stacks can't claim
+one output suit) and grades each input stack intact / partial /
+shattered. rb stacks are always cold in v1 — tier 0 builds no rb runs
+— and the sweep takes no warm bias yet; both are measure-first
+follow-ons, like the anytime min-break pass and breakability weights.
+
 The answer is an **Outcome**: `solved` (verified next-map), `futile` (a
 PROOF — completed search or component prefilter, never a guess), or
 `unknown` (the give-up line tripped: no verdict, honestly labeled).
@@ -97,7 +118,11 @@ Files:
   the solver runs on.
 - `graph.zig` — the comptime successor tables over the 52 distinct
   (suit, rank) cards (pure: 1 per card; rb: 2 per card; the two flavors
-  are disjoint); rank/suit lookups are copy-blind across the 104 slots.
+  are disjoint); rank/suit lookups are copy-blind across the 104 slots;
+  `edgeFlavor`, the legal-meld-edge truth.
+- `arrangement.zig` — the board as stacks: parsing + loud validation,
+  the `Warm` counts tier 0 biases on, and `reportKept`, the kept-edges
+  scorer.
 - `pure_run.zig` — phase 1: per-suit cyclic arc cover + verifier. Kept
   as a stepping stone.
 - `solver.zig` — phases 2+3: the rank-sweep solver (with the component
