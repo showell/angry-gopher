@@ -445,7 +445,7 @@ fn repair(st: *const Static, cov: Cover, attempts: *u32, warm: *const arrangemen
             cands[n_cand] = .{
                 .a = a,
                 .b = b,
-                .wb = brokenSetPairs(warm, rank, a, b),
+                .wb = arrangement.brokenSetPairs(warm, rank, a, b),
                 .don = don,
             };
             n_cand += 1;
@@ -472,27 +472,6 @@ fn candLess(_: void, x: SetCand, y: SetCand) bool {
     return x.don < y.don;
 }
 
-/// How many of the player's warm set pairs the candidate sets (a, b)
-/// would break at this rank — the same co-membership greedy the report
-/// uses, so the ordering chases the reported metric. 0 when warm is
-/// empty, keeping the sort identical to the unbiased one.
-fn brokenSetPairs(warm: *const arrangement.Warm, rank: u8, a: u8, b: u8) u8 {
-    var broken: u8 = 0;
-    var rem = [2]u8{ a, b };
-    for (warm.set_masks[rank][0..warm.set_n[rank]]) |m| {
-        var pairs: u8 = @popCount(m) - 1;
-        if (@popCount(m & rem[1]) > @popCount(m & rem[0]))
-            std.mem.swap(u8, &rem[0], &rem[1]);
-        for (&rem) |*o| {
-            const ov: u8 = @popCount(m & o.*);
-            if (ov >= 2) pairs -= @min(pairs, ov - 1);
-            o.* &= ~m;
-        }
-        broken += pairs;
-    }
-    return broken;
-}
-
 // ---------- building the next-map ----------
 
 /// build writes the cover into a fresh next-map: residual arc segments
@@ -512,7 +491,7 @@ fn build(st: *const Static, cov: *const Cover, warm: *const arrangement.Warm, ne
             var start: u8 = 0;
             var coldest: u8 = 255;
             for (0..13) |x| {
-                const wb = warm.pure[arc.suit][(x + 12) % 13];
+                const wb = warm.runs[arc.suit][(x + 12) % 13][arc.suit];
                 if (wb < coldest) {
                     coldest = wb;
                     start = @intCast(x);
@@ -676,9 +655,9 @@ test "a full-cycle 13-run breaks at the coldest boundary" {
     var next: [graph.SLOTS]u8 = undefined;
     // All 13 hearts; the player's stack rides the wrap: QH>KH>AH>2H.
     var w = arrangement.Warm.EMPTY;
-    w.pure[0][11] = 1; // Q>K
-    w.pure[0][12] = 1; // K>A
-    w.pure[0][0] = 1; // A>2
+    w.runs[0][11][0] = 1; // Q>K
+    w.runs[0][12][0] = 1; // K>A
+    w.runs[0][0][0] = 1; // A>2
     try std.testing.expect(trySolve(0x1FFF, &w, &next));
     try std.testing.expectEqual(cardAt(0, 0), next[cardAt(0, 12)]); // KH>AH kept
     try std.testing.expectEqual(cardAt(0, 1), next[cardAt(0, 0)]); // AH>2H kept

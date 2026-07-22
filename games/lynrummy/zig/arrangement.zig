@@ -104,18 +104,19 @@ fn validateStack(cards: []const card.Card, seps: []const u8) Error!void {
 /// Warm is the arrangement lowered to the counts the solver's priors
 /// consume. Copies are indistinguishable to legality, so warmth lives
 /// at (suit, rank) level: a doubled stack pair warms an edge twice.
-/// rb stacks contribute nothing here — tier 0 builds no rb runs, so
-/// there is nothing it could keep; they still count in the report.
 pub const Warm = struct {
-    /// [suit][r]: warm PURE edges rank r → r+1 (mod 13), count 0..2.
-    pure: [4][13]u8,
+    /// [from suit][r][to suit]: warm run edges rank r → r+1 (mod 13),
+    /// count 0..2. Pure edges sit on the diagonal (from == to); rb
+    /// edges off it. Tier 0 reads only the diagonal (it builds no rb
+    /// runs); the sweep reads the whole row.
+    runs: [4][13][4]u8,
     /// Input set-stack suit masks per rank. 2-stacks belong here too:
     /// a same-rank pair is a set one card short.
     set_masks: [13][4]u8,
     set_n: [13]u8,
 
     pub const EMPTY: Warm = .{
-        .pure = @splat(@splat(0)),
+        .runs = @splat(@splat(@splat(0))),
         .set_masks = @splat(@splat(0)),
         .set_n = @splat(0),
     };
@@ -127,21 +128,40 @@ pub fn warmOf(arr: *const Arrangement) Warm {
         const cs = arr.stackCards(si);
         if (cs.len < 2) continue;
         const f = graph.edgeFlavor(graph.cardIndex(cs[0]), graph.cardIndex(cs[1])).?;
-        switch (f) {
-            .pure => for (cs[0 .. cs.len - 1]) |a| {
-                w.pure[a.suit][a.rank] += 1;
-            },
-            .set => {
-                var m: u8 = 0;
-                for (cs) |c| m |= @as(u8, 1) << c.suit;
-                const r = cs[0].rank;
-                w.set_masks[r][w.set_n[r]] = m;
-                w.set_n[r] += 1;
-            },
-            .rb => {},
+        if (f == .set) {
+            var m: u8 = 0;
+            for (cs) |c| m |= @as(u8, 1) << c.suit;
+            const r = cs[0].rank;
+            w.set_masks[r][w.set_n[r]] = m;
+            w.set_n[r] += 1;
+        } else {
+            for (cs[0 .. cs.len - 1], cs[1..]) |a, b| {
+                w.runs[a.suit][a.rank][b.suit] += 1;
+            }
         }
     }
     return w;
+}
+
+/// How many of the player's warm set pairs the candidate sets (a, b —
+/// suit masks) would break at this rank: the same co-membership greedy
+/// reportKept scores, so orderings that consult it chase the reported
+/// metric. 0 when warm is empty at the rank.
+pub fn brokenSetPairs(warm: *const Warm, rank: u8, a: u8, b: u8) u8 {
+    var broken: u8 = 0;
+    var rem = [2]u8{ a, b };
+    for (warm.set_masks[rank][0..warm.set_n[rank]]) |m| {
+        var pairs: u8 = @popCount(m) - 1;
+        if (@popCount(m & rem[1]) > @popCount(m & rem[0]))
+            std.mem.swap(u8, &rem[0], &rem[1]);
+        for (&rem) |*o| {
+            const ov: u8 = @popCount(m & o.*);
+            if (ov >= 2) pairs -= @min(pairs, ov - 1);
+            o.* &= ~m;
+        }
+        broken += pairs;
+    }
+    return broken;
 }
 
 // ---------- the kept/broken report ----------
@@ -289,15 +309,17 @@ test "the multiset stays honest: a third copy fails loud" {
     try std.testing.expectError(error.TooManyCopies, parse("7H>8H 7H'>8H' 7H"));
 }
 
-test "warmOf: pure edges count, sets mask, rb stays cold" {
+test "warmOf: pure edges on the diagonal, rb off it, sets mask" {
     const arr = try parse("3H>4H>5H 3H'>4H' AH=AD 4C>5D>6C");
     const w = warmOf(&arr);
-    try std.testing.expectEqual(@as(u8, 2), w.pure[0][2]); // 3H>4H doubled
-    try std.testing.expectEqual(@as(u8, 1), w.pure[0][3]); // 4H>5H once
+    try std.testing.expectEqual(@as(u8, 2), w.runs[0][2][0]); // 3H>4H doubled
+    try std.testing.expectEqual(@as(u8, 1), w.runs[0][3][0]); // 4H>5H once
     try std.testing.expectEqual(@as(u8, 1), w.set_n[0]);
     try std.testing.expectEqual(@as(u8, 0b0011), w.set_masks[0][0]); // {H,D}
-    // The rb stack warms nothing.
-    try std.testing.expectEqual(@as(u8, 0), w.pure[2][3]);
+    // The rb stack warms its off-diagonal edges.
+    try std.testing.expectEqual(@as(u8, 1), w.runs[2][3][1]); // 4C>5D
+    try std.testing.expectEqual(@as(u8, 1), w.runs[1][4][2]); // 5D>6C
+    try std.testing.expectEqual(@as(u8, 0), w.runs[2][3][2]);
 }
 
 /// A next-map built from one arrangement line — for report tests, the
