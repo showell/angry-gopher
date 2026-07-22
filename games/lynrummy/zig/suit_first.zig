@@ -31,6 +31,7 @@
 
 const std = @import("std");
 const graph = @import("graph.zig");
+const arrangement = @import("arrangement.zig");
 
 const MAX_ARCS = 4 * 14; // per suit: worst is 14 stacked len-1 arcs
 
@@ -62,7 +63,16 @@ const Cover = struct {
 /// trySolve attempts a pure-runs-plus-sets cover. On success it fills
 /// `next` (a fresh next-map) and returns true; on false, `next` is
 /// untouched garbage and the caller falls through to the sweep.
-pub fn trySolve(board: u128, next: *[graph.SLOTS]u8) bool {
+///
+/// `warm` is the board-bridge bias: the player's arrangement, lowered
+/// to counts (arrangement.Warm). It reorders choices — which suits form
+/// a repair set, where a full-cycle 13-run breaks — and never what is
+/// reachable, so Warm.EMPTY reproduces the unbiased solve exactly.
+/// (The per-suit arc DP carries no warm term on purpose: with orphans
+/// then arcs already lexicographically minimal, the boundary-crossing
+/// profile came out count-forced in every shape probed — add a third
+/// cost component only on evidence of a real board where it isn't.)
+pub fn trySolve(board: u128, warm: *const arrangement.Warm, next: *[graph.SLOTS]u8) bool {
     var st: Static = .{};
     for (0..4) |s| {
         var counts: [13]u8 = @splat(0);
@@ -76,8 +86,8 @@ pub fn trySolve(board: u128, next: *[graph.SLOTS]u8) bool {
     var cov: Cover = .{};
     reclassify(&st, &cov);
     var attempts: u32 = 0;
-    const done = repair(&st, cov, &attempts) orelse return false;
-    build(&st, &done, next);
+    const done = repair(&st, cov, &attempts, warm) orelse return false;
+    build(&st, &done, warm, next);
     return true;
 }
 
@@ -391,11 +401,12 @@ fn consumeCards(st: *const Static, cov: *Cover, suit: usize, rank: u8, m: u8) vo
 }
 
 /// repair: find the first rank with unabsorbed orphan cards and branch
-/// over the (up to two) sets that absorb them, fewest extra donations
-/// first. Donations may strand short segments; reclassify turns those
-/// into new orphans and the recursion absorbs them in turn — or fails,
-/// backtracking. Returns the finished cover, or null.
-fn repair(st: *const Static, cov: Cover, attempts: *u32) ?Cover {
+/// over the (up to two) sets that absorb them — fewest broken warm set
+/// pairs first, then fewest extra donations. Donations may strand short
+/// segments; reclassify turns those into new orphans and the recursion
+/// absorbs them in turn — or fails, backtracking. Returns the finished
+/// cover, or null.
+fn repair(st: *const Static, cov: Cover, attempts: *u32, warm: *const arrangement.Warm) ?Cover {
     attempts.* += 1;
     if (attempts.* > 4096) return null; // cap: tier 0 may just pass
     var rank: u8 = 13;
@@ -431,11 +442,16 @@ fn repair(st: *const Static, cov: Cover, attempts: *u32) ?Cover {
                 if (fresh - oc > cnt2(cov.donor[rank], s)) continue :blk;
                 don += fresh - oc;
             }
-            cands[n_cand] = .{ .a = a, .b = b, .don = don };
+            cands[n_cand] = .{
+                .a = a,
+                .b = b,
+                .wb = brokenSetPairs(warm, rank, a, b),
+                .don = don,
+            };
             n_cand += 1;
         }
     }
-    std.mem.sort(SetCand, cands[0..n_cand], {}, donLess);
+    std.mem.sort(SetCand, cands[0..n_cand], {}, candLess);
     for (cands[0..n_cand]) |cd| {
         var nc = cov;
         nc.set_at[rank] = .{ cd.a, cd.b };
@@ -444,15 +460,37 @@ fn repair(st: *const Static, cov: Cover, attempts: *u32) ?Cover {
             if (m != 0) consumeCards(st, &nc, s, rank, m);
         }
         reclassify(st, &nc);
-        if (repair(st, nc, attempts)) |done| return done;
+        if (repair(st, nc, attempts, warm)) |done| return done;
     }
     return null;
 }
 
-const SetCand = struct { a: u8, b: u8, don: u8 };
+const SetCand = struct { a: u8, b: u8, wb: u8, don: u8 };
 
-fn donLess(_: void, x: SetCand, y: SetCand) bool {
+fn candLess(_: void, x: SetCand, y: SetCand) bool {
+    if (x.wb != y.wb) return x.wb < y.wb;
     return x.don < y.don;
+}
+
+/// How many of the player's warm set pairs the candidate sets (a, b)
+/// would break at this rank — the same co-membership greedy the report
+/// uses, so the ordering chases the reported metric. 0 when warm is
+/// empty, keeping the sort identical to the unbiased one.
+fn brokenSetPairs(warm: *const arrangement.Warm, rank: u8, a: u8, b: u8) u8 {
+    var broken: u8 = 0;
+    var rem = [2]u8{ a, b };
+    for (warm.set_masks[rank][0..warm.set_n[rank]]) |m| {
+        var pairs: u8 = @popCount(m) - 1;
+        if (@popCount(m & rem[1]) > @popCount(m & rem[0]))
+            std.mem.swap(u8, &rem[0], &rem[1]);
+        for (&rem) |*o| {
+            const ov: u8 = @popCount(m & o.*);
+            if (ov >= 2) pairs -= @min(pairs, ov - 1);
+            o.* &= ~m;
+        }
+        broken += pairs;
+    }
+    return broken;
 }
 
 // ---------- building the next-map ----------
@@ -461,16 +499,28 @@ fn donLess(_: void, x: SetCand, y: SetCand) bool {
 /// as pure runs, chosen sets as same-rank chains (ascending suit).
 /// Copies are assigned first-come per (suit, rank) — the search never
 /// distinguished them, so any consistent assignment is correct.
-fn build(st: *const Static, cov: *const Cover, next: *[graph.SLOTS]u8) void {
+fn build(st: *const Static, cov: *const Cover, warm: *const arrangement.Warm, next: *[graph.SLOTS]u8) void {
     next.* = @splat(graph.NONE);
     var used: [graph.N]u8 = @splat(0);
     for (st.arcs[0..st.arc_n], 0..) |arc, ai| {
         const d = cov.donated[ai];
         if (arc.len == 13 and d == 0) {
-            // The full cycle stands as one 13-run; break it at A.
-            var prev = takeSlot(&used, arc.suit, 0);
+            // The full cycle stands as one 13-run, broken at the
+            // COLDEST boundary — the start rank whose incoming edge
+            // carries the least warmth. All-cold scans to A, the old
+            // fixed choice.
+            var start: u8 = 0;
+            var coldest: u8 = 255;
+            for (0..13) |x| {
+                const wb = warm.pure[arc.suit][(x + 12) % 13];
+                if (wb < coldest) {
+                    coldest = wb;
+                    start = @intCast(x);
+                }
+            }
+            var prev = takeSlot(&used, arc.suit, start);
             for (1..13) |r| {
-                const cur = takeSlot(&used, arc.suit, @intCast(r));
+                const cur = takeSlot(&used, arc.suit, @intCast((start + r) % 13));
                 next[prev] = cur;
                 prev = cur;
             }
@@ -523,9 +573,9 @@ fn cardAt(suit: u8, rank: u8) u8 {
 test "no orphans: full and partial suits stand as pure runs" {
     var next: [graph.SLOTS]u8 = undefined;
     // All 13 hearts.
-    try std.testing.expect(trySolve(0x1FFF, &next));
+    try std.testing.expect(trySolve(0x1FFF, &arrangement.Warm.EMPTY, &next));
     // Hearts 3..7 (ranks 2..6): one arc, stands alone.
-    try std.testing.expect(trySolve(0b1111100, &next));
+    try std.testing.expect(trySolve(0b1111100, &arrangement.Warm.EMPTY, &next));
 }
 
 test "orphans absorbed by a set with donor peels" {
@@ -535,7 +585,7 @@ test "orphans absorbed by a set with donor peels" {
     const hearts: u64 = 0b1111;
     const diamonds: u64 = 0b1111 << 13;
     const as_bit: u64 = @as(u64, 1) << (3 * 13);
-    try std.testing.expect(trySolve(hearts | diamonds | as_bit, &next));
+    try std.testing.expect(trySolve(hearts | diamonds | as_bit, &arrangement.Warm.EMPTY, &next));
 }
 
 test "ejection chain: a stranding donation cascades into more sets" {
@@ -547,7 +597,7 @@ test "ejection chain: a stranding donation cascades into more sets" {
     | bit(1, 5) | bit(2, 5) // 6D 6C
     | bit(3, 6) | bit(2, 6) // 7S 7C
     | bit(1, 7) | bit(2, 7); // 8D 8C
-    try std.testing.expect(trySolve(b, &next));
+    try std.testing.expect(trySolve(b, &arrangement.Warm.EMPTY, &next));
     // Spot-check the cascade's output: three same-rank chains.
     try std.testing.expectEqual(cardAt(2, 5), next[cardAt(1, 5)]); // 6D=6C
     try std.testing.expectEqual(cardAt(2, 6), next[cardAt(0, 6)]); // 7H=7C
@@ -557,10 +607,10 @@ test "ejection chain: a stranding donation cascades into more sets" {
 test "tier 0 passes (returns false) when orphans can't set" {
     var next: [graph.SLOTS]u8 = undefined;
     // Lone A♠: orphan, no donors anywhere.
-    try std.testing.expect(!trySolve(@as(u64, 1) << (3 * 13), &next));
+    try std.testing.expect(!trySolve(@as(u64, 1) << (3 * 13), &arrangement.Warm.EMPTY, &next));
     // A♠ + one donor suit only: set can't reach 3.
     const hearts: u64 = 0b1111;
-    try std.testing.expect(!trySolve(hearts | @as(u64, 1) << (3 * 13), &next));
+    try std.testing.expect(!trySolve(hearts | @as(u64, 1) << (3 * 13), &arrangement.Warm.EMPTY, &next));
 }
 
 test "staircase: 3 4 4' 5 5' 6 is two overlapping runs, no set" {
@@ -569,7 +619,7 @@ test "staircase: 3 4 4' 5 5' 6 is two overlapping runs, no set" {
     // doubled pair; the DP must find 3-4-5 / 4-5-6.
     const b = dbit(0, 2, 0) | dbit(0, 3, 0) | dbit(0, 3, 1) |
         dbit(0, 4, 0) | dbit(0, 4, 1) | dbit(0, 5, 0);
-    try std.testing.expect(trySolve(b, &next));
+    try std.testing.expect(trySolve(b, &arrangement.Warm.EMPTY, &next));
     try std.testing.expectEqual(cardAt(0, 3), next[cardAt(0, 2)]); // 3H>4H
     try std.testing.expectEqual(cardAt(0, 4), next[cardAt(0, 3)]); // 4H>5H
     try std.testing.expectEqual(cardAt(0, 4) + 52, next[cardAt(0, 3) + 52]); // 4H'>5H'
@@ -579,7 +629,7 @@ test "staircase: 3 4 4' 5 5' 6 is two overlapping runs, no set" {
 test "fully doubled suit: two parallel 13-runs" {
     var next: [graph.SLOTS]u8 = undefined;
     const b: u128 = 0x1FFF | (@as(u128, 0x1FFF) << 52);
-    try std.testing.expect(trySolve(b, &next));
+    try std.testing.expect(trySolve(b, &arrangement.Warm.EMPTY, &next));
     for (0..12) |r| {
         try std.testing.expectEqual(cardAt(0, @intCast(r + 1)), next[cardAt(0, @intCast(r))]);
         try std.testing.expectEqual(cardAt(0, @intCast(r + 1)) + 52, next[cardAt(0, @intCast(r)) + 52]);
@@ -596,7 +646,46 @@ test "doubled orphan pair splits across two sets at one rank" {
         b |= dbit(1, @intCast(r), 0) | dbit(1, @intCast(r), 1);
         b |= dbit(2, @intCast(r), 0) | dbit(2, @intCast(r), 1);
     }
-    try std.testing.expect(trySolve(b, &next));
+    try std.testing.expect(trySolve(b, &arrangement.Warm.EMPTY, &next));
+}
+
+test "warm set choice steers which suits absorb the orphan" {
+    var next: [graph.SLOTS]u8 = undefined;
+    // A♠ orphan; hearts, diamonds and clubs each hold A..4, so any
+    // three-suit ace set is reachable at equal donation cost.
+    const b = bit(0, 0) | bit(0, 1) | bit(0, 2) | bit(0, 3) // AH..4H
+    | bit(1, 0) | bit(1, 1) | bit(1, 2) | bit(1, 3) // AD..4D
+    | bit(2, 0) | bit(2, 1) | bit(2, 2) | bit(2, 3) // AC..4C
+    | bit(3, 0); // AS
+    const pair = try arrangement.parse("AS=AC");
+    // Cold: the first enumerated candidate wins — {H,D,S}, no clubs.
+    try std.testing.expect(trySolve(b, &arrangement.Warm.EMPTY, &next));
+    const cold = arrangement.reportKept(&pair, &next);
+    try std.testing.expectEqual(@as(u16, 0), cold.kept_edges);
+    // The player's AS=AC pair steers the set to include clubs.
+    var w = arrangement.Warm.EMPTY;
+    w.set_masks[0][0] = 0b1100; // {C,S}
+    w.set_n[0] = 1;
+    try std.testing.expect(trySolve(b, &w, &next));
+    const rep = arrangement.reportKept(&pair, &next);
+    try std.testing.expectEqual(@as(u16, 1), rep.kept_edges);
+    try std.testing.expectEqual(arrangement.Fate.intact, rep.fate[0]);
+}
+
+test "a full-cycle 13-run breaks at the coldest boundary" {
+    var next: [graph.SLOTS]u8 = undefined;
+    // All 13 hearts; the player's stack rides the wrap: QH>KH>AH>2H.
+    var w = arrangement.Warm.EMPTY;
+    w.pure[0][11] = 1; // Q>K
+    w.pure[0][12] = 1; // K>A
+    w.pure[0][0] = 1; // A>2
+    try std.testing.expect(trySolve(0x1FFF, &w, &next));
+    try std.testing.expectEqual(cardAt(0, 0), next[cardAt(0, 12)]); // KH>AH kept
+    try std.testing.expectEqual(cardAt(0, 1), next[cardAt(0, 0)]); // AH>2H kept
+    try std.testing.expectEqual(graph.NONE, next[cardAt(0, 1)]); // cold 2H|3H broken
+    // Cold board: the old fixed break at A.
+    try std.testing.expect(trySolve(0x1FFF, &arrangement.Warm.EMPTY, &next));
+    try std.testing.expectEqual(graph.NONE, next[cardAt(0, 12)]);
 }
 
 fn bit(suit: u8, rank: u8) u64 {

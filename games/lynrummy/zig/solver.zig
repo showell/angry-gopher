@@ -55,6 +55,7 @@
 const std = @import("std");
 const card = @import("card.zig");
 const graph = @import("graph.zig");
+pub const arrangement = @import("arrangement.zig");
 pub const suit_first = @import("suit_first.zig");
 
 pub const Flavor = enum { open, pure, rb, set };
@@ -159,7 +160,7 @@ pub fn solve(board: Board) Outcome {
     // a human-shaped cover; a pass falls through to the complete sweep.
     {
         var sol: Solution = undefined;
-        if (suit_first.trySolve(board, &sol.next)) return .{ .solved = sol };
+        if (suit_first.trySolve(board, &arrangement.Warm.EMPTY, &sol.next)) return .{ .solved = sol };
     }
     // Per rank: an 8-bit SLOT mask — low nibble copy 0 of suits 0-3,
     // high nibble copy 1. Canonical board keeps high implying low
