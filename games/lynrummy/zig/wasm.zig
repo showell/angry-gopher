@@ -60,11 +60,12 @@ export fn gameHint(len: u32) i32 {
     var hb: [card.MAX_CARDS]card.Card = undefined;
     const hand = card.parseBoard(it.next() orelse "", &hb) catch return -1;
     const pref_line = std.mem.trim(u8, it.next() orelse "", " ");
-    const pref: ?card.Card = if (pref_line.len == 0)
+    const just_played = std.mem.eql(u8, pref_line, "!played");
+    const pref: ?card.Card = if (pref_line.len == 0 or just_played)
         null
     else
         card.parseCard(pref_line) catch return -1;
-    const res = hint.gameHint(&arr, hand, pref) catch |e| return switch (e) {
+    const res = hint.gameHint(&arr, hand, pref, just_played) catch |e| return switch (e) {
         error.DistillFailed => -4,
         else => -1,
     };

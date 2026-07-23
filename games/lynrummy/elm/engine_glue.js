@@ -135,12 +135,33 @@
   // The standing objective: the hand card the last game hint was
   // building toward. Sent back to the solver so hints keep walking
   // one line instead of flapping between near-equal plays (the
-  // session-8 ace loop); cleared whenever the hint isn't a play.
+  // session-8 ace loop); cleared whenever the hint isn't a play, and
+  // — because deck copies are indistinguishable — cleared by COUNT
+  // when a copy of it leaves the hand: playing one 3♣ retires the
+  // objective even while its twin is still held (game 10's lesson:
+  // the board gets cleaned before the twin becomes a new project).
   var gameObjective = '';
+  var gameObjectiveCount = 0;
+
+  function objectiveCopies(hand) {
+    var bare = gameObjective.replace("'", '');
+    return hand.filter(function (c) {
+      return cardToken(c).replace("'", '') === bare;
+    }).length;
+  }
 
   function gameHint(hand, board) {
+    var prefLine = gameObjective;
+    if (gameObjective && objectiveCopies(hand) < gameObjectiveCount) {
+      // The objective landed since the last hint: send the one-shot
+      // just-played signal so the solver biases toward cleaning the
+      // board before opening a new project (game 10's wisdom).
+      prefLine = '!played';
+      gameObjective = '';
+      gameObjectiveCount = 0;
+    }
     var input = boardToArrangementLine(board) + '\n'
-      + hand.map(cardToken).join(' ') + '\n' + gameObjective;
+      + hand.map(cardToken).join(' ') + '\n' + prefLine;
     return loadSolverWasm().then(function (wasm) {
       var bytes = new TextEncoder().encode(input);
       if (bytes.length > wasm.ioCap()) throw new Error('board too large for the solver');
@@ -148,6 +169,7 @@
       var rc = wasm.gameHint(bytes.length);
       if (rc === 0) {
         gameObjective = '';
+        gameObjectiveCount = 0;
         return ['No play — draw a card.'];
       }
       if (rc > 0) {
@@ -156,6 +178,7 @@
         var lines = text.split('\n');
         var place = firstPlaceToken(lines);
         gameObjective = place || '';
+        gameObjectiveCount = place ? objectiveCopies(hand) : 0;
         lines = lines.map(glyphCards);
         // The status bar shows only line 1: when that line isn't the
         // place itself, say which hand card the work is FOR — the
@@ -166,6 +189,7 @@
         return lines;
       }
       gameObjective = '';
+      gameObjectiveCount = 0;
       if (rc === -2) throw new Error('this board cannot be made clean — try Undo');
       if (rc === -3) throw new Error('the solver gave up on this board');
       throw new Error('the solver rejected the board (code ' + rc + ')');

@@ -538,22 +538,43 @@ fn coalesce(d: *Distiller) void {
 /// agreement between the cover and the input stacks: matching run
 /// adjacencies plus input set pairs kept co-resident in one cover set.
 fn redress(d: *Distiller) void {
-    var doubled: [graph.N]bool = undefined;
+    var dbuf: [graph.N]u8 = undefined;
+    var nd: usize = 0;
     for (0..graph.N) |b| {
-        doubled[b] = d.sim.loc_stack[b] != Sim.NOWHERE and
-            d.sim.loc_stack[b + 52] != Sim.NOWHERE;
+        if (d.sim.loc_stack[b] != Sim.NOWHERE and
+            d.sim.loc_stack[b + 52] != Sim.NOWHERE)
+        {
+            dbuf[nd] = @intCast(b);
+            nd += 1;
+        }
     }
+    const doubled = dbuf[0..nd];
     var pass: u8 = 0;
     while (pass < 8) : (pass += 1) {
         var improved = false;
-        for (0..graph.N) |b| {
-            if (!doubled[b]) continue;
+        for (doubled) |b| {
             const before = agreement(d);
-            swapCopies(&d.c2, @intCast(b));
+            swapCopies(&d.c2, b);
             if (agreement(d) > before) {
                 improved = true;
             } else {
-                swapCopies(&d.c2, @intCast(b));
+                swapCopies(&d.c2, b);
+            }
+        }
+        // Single flips get stuck when two ranks must flip TOGETHER
+        // (each alone is score-neutral — game 10 produced phantom
+        // twin-swap moves this way); a pairs sweep breaks the tie.
+        for (doubled, 0..) |b1, i| {
+            for (doubled[i + 1 ..]) |b2| {
+                const before = agreement(d);
+                swapCopies(&d.c2, b1);
+                swapCopies(&d.c2, b2);
+                if (agreement(d) > before) {
+                    improved = true;
+                } else {
+                    swapCopies(&d.c2, b2);
+                    swapCopies(&d.c2, b1);
+                }
             }
         }
         if (!improved) break;
@@ -773,6 +794,18 @@ test "a set assembles: a peel anchors it, pushes finish it" {
         "peel AH from [AH 2S 3H 4S]\n" ++
             "push AC onto [AH] -> [AH AC]\n" ++
             "push AS onto [AH AC] -> [AH AC AS] [COMPLETE]",
+    );
+}
+
+test "re-dressing escapes the pairwise trap — no phantom twin swaps" {
+    // Both spade twins are crossed between the two runs; flipping
+    // either rank alone is score-neutral, so the single-flip greedy
+    // sat still and the plan swapped copies for nothing (game 10).
+    // The pairs sweep aligns them: zero moves.
+    try expectPlan(
+        "KS>AS>2S>3S 2S'>3S'>4S",
+        "KS>AS>2S'>3S' 2S>3S>4S",
+        "",
     );
 }
 

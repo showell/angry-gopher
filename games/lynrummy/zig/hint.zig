@@ -50,7 +50,16 @@ const TRIPLE_SCAN_STEPS = 2_000;
 /// so a still-playable preferred single stays the objective unless
 /// some alternative is MORE THAN ONE MOVE cheaper. A switch therefore
 /// means the player's own work made the new line decisively better.
-pub fn gameHint(arr: *const arrangement.Arrangement, hand: []const card.Card, preferred: ?card.Card) (card.Error || moves.Error)!Result {
+/// `just_played`: the previous objective card left the hand since the
+/// last hint (the glue detects the count drop and sends a one-shot
+/// signal). Steve's game-10 wisdom applies EXACTLY then: with the
+/// objective landed and the board dirty, the loose aces find their
+/// home before more cards come down — cleaning competes with new
+/// plays and wins when strictly shorter (every play plan contains the
+/// same cleanup plus its place, so this is usually decisive). On any
+/// other fresh hint plays lead as usual — a broader clean bias was
+/// tried and it told the player to tear down work-in-progress.
+pub fn gameHint(arr: *const arrangement.Arrangement, hand: []const card.Card, preferred: ?card.Card, just_played: bool) (card.Error || moves.Error)!Result {
     var pref_idx: ?u8 = null;
     if (preferred) |p| {
         for (hand, 0..) |c, i| {
@@ -58,6 +67,17 @@ pub fn gameHint(arr: *const arrangement.Arrangement, hand: []const card.Card, pr
                 pref_idx = @intCast(i);
                 break;
             }
+        }
+    }
+    var consolidation: ?Result = null;
+    if (just_played and pref_idx == null) {
+        switch (try solver.solveArrangement(arr)) {
+            .solved => |sol| {
+                var res = Result{ .kind = .clean_board, .plan = undefined };
+                try moves.distill(arr, &sol.next, arr.n_stacks, &res.plan);
+                if (res.plan.n > 0) consolidation = res;
+            },
+            else => {},
         }
     }
     inline for (.{ 1, 2, 3 }, .{ SINGLE_SCAN_STEPS, PAIR_SCAN_STEPS, TRIPLE_SCAN_STEPS }) |k, budget| {
@@ -77,9 +97,14 @@ pub fn gameHint(arr: *const arrangement.Arrangement, hand: []const card.Card, pr
             const sol = (try solver.solveArrangement(&a)).solved;
             var res = Result{ .kind = .play, .plan = undefined };
             try moves.distill(&a, &sol.next, arr.n_stacks, &res.plan);
+            // Fair fight: both plans carry the full budget now.
+            if (consolidation) |c| {
+                if (c.plan.n < res.plan.n) return c;
+            }
             return res;
         }
     }
+    if (consolidation) |c| return c;
     // Nothing playable: the board speaks for itself.
     switch (try solver.solveArrangement(arr)) {
         .solved => |sol| {
@@ -167,7 +192,14 @@ fn hintForPref(board_line: []const u8, hand_line: []const u8, pref: ?[]const u8)
     var hb: [card.MAX_CARDS]card.Card = undefined;
     const hand = try card.parseBoard(hand_line, &hb);
     const p: ?card.Card = if (pref) |t| try card.parseCard(t) else null;
-    return gameHint(&arr, hand, p);
+    return gameHint(&arr, hand, p, false);
+}
+
+fn hintJustPlayed(board_line: []const u8, hand_line: []const u8) !Result {
+    const arr = try arrangement.parse(board_line);
+    var hb: [card.MAX_CARDS]card.Card = undefined;
+    const hand = try card.parseBoard(hand_line, &hb);
+    return gameHint(&arr, hand, null, true);
 }
 
 // The session-8 ace flip-flop, pinned from the real game (uid 16,
@@ -183,13 +215,36 @@ const G8_STATE4 = "KS>AS>2S>3S TD>JD>QD>KD 2H>3H>4H 7S=7D=7C AC AH " ++
 
 test "game 8: fresh hints pick the shortest play at each state" {
     var buf: [4096]u8 = undefined;
-    // Loose A♦: playing AH' rebuilds the aces around it — 3 moves,
-    // one cheaper than AD' (whose cover must also re-home board A♦).
+    // Fresh hints (no just-played signal) lead with plays: a broader
+    // clean bias was tried and it told the player to tear down
+    // work-in-progress.
     const s3 = try hintFor(G8_STATE3, G8_HAND);
+    try std.testing.expectEqual(Kind.play, s3.kind);
     try std.testing.expect(std.mem.indexOf(u8, planText(&s3, &buf), "place AH'") != null);
-    // A♦ committed to the club run: AD' completes the aces in 2 moves.
     const s4 = try hintFor(G8_STATE4, G8_HAND);
+    try std.testing.expectEqual(Kind.play, s4.kind);
     try std.testing.expect(std.mem.indexOf(u8, planText(&s4, &buf), "place AD'") != null);
+}
+
+test "game 10: after the objective lands, the aces find their home" {
+    // The replayed state after action 21 (3♣ just placed — the
+    // standing objective is gone from the hand): [A♦ A♥] floats, and
+    // the 2-move cleanup beats every new play (each of which contains
+    // the same cleanup plus its place).
+    const board = "KS>AS>2S>3S' 2S'>3S>4S 2H>3H>4H 7S=7D=7C AD=AH " ++
+        "AC>2C>3C 3D>4C>5H>6S 6S'>7H>8C 8D'>9D>TD>JD' JD>QD>KD";
+    const hand = "2H' 8H KH 7S' KS' 3C'";
+    const res = try hintJustPlayed(board, hand);
+    try std.testing.expectEqual(Kind.clean_board, res.kind);
+    // Without the just-played signal the same state hints a play.
+    const fresh = try hintFor(board, hand);
+    try std.testing.expectEqual(Kind.play, fresh.kind);
+    var buf: [2048]u8 = undefined;
+    try std.testing.expectEqualStrings(
+        "steal AH from [AD AH] onto [2H 3H 4H] -> [AH 2H 3H 4H] [COMPLETE]\n" ++
+            "push AD onto [JD' QD KD] -> [JD' QD KD AD] [COMPLETE]",
+        planText(&res, &buf),
+    );
 }
 
 test "game 9: extending a big run is one move, never a split" {
