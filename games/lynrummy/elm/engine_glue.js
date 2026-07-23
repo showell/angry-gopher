@@ -132,23 +132,52 @@
     return lines;
   }
 
+  // The standing objective: the hand card the last game hint was
+  // building toward. Sent back to the solver so hints keep walking
+  // one line instead of flapping between near-equal plays (the
+  // session-8 ace loop); cleared whenever the hint isn't a play.
+  var gameObjective = '';
+
   function gameHint(hand, board) {
-    var input = boardToArrangementLine(board) + '\n' + hand.map(cardToken).join(' ');
+    var input = boardToArrangementLine(board) + '\n'
+      + hand.map(cardToken).join(' ') + '\n' + gameObjective;
     return loadSolverWasm().then(function (wasm) {
       var bytes = new TextEncoder().encode(input);
       if (bytes.length > wasm.ioCap()) throw new Error('board too large for the solver');
       new Uint8Array(wasm.memory.buffer, wasm.ioPtr(), bytes.length).set(bytes);
       var rc = wasm.gameHint(bytes.length);
-      if (rc === 0) return ['No play — draw a card.'];
+      if (rc === 0) {
+        gameObjective = '';
+        return ['No play — draw a card.'];
+      }
       if (rc > 0) {
         var text = new TextDecoder().decode(
           new Uint8Array(wasm.memory.buffer, wasm.ioPtr(), rc));
-        return text.split('\n').map(glyphCards);
+        var lines = text.split('\n');
+        var place = firstPlaceToken(lines);
+        gameObjective = place || '';
+        lines = lines.map(glyphCards);
+        // The status bar shows only line 1: when that line isn't the
+        // place itself, say which hand card the work is FOR — the
+        // old engine's best habit.
+        if (place && lines[0].indexOf('place ') !== 0) {
+          lines[0] += ' — toward placing ' + glyphCards(place);
+        }
+        return lines;
       }
+      gameObjective = '';
       if (rc === -2) throw new Error('this board cannot be made clean — try Undo');
       if (rc === -3) throw new Error('the solver gave up on this board');
       throw new Error('the solver rejected the board (code ' + rc + ')');
     });
+  }
+
+  function firstPlaceToken(lines) {
+    for (var i = 0; i < lines.length; i++) {
+      var m = lines[i].match(/^place ([A2-9TJQK][HDCS]'?)/);
+      if (m) return m[1];
+    }
+    return null;
   }
 
   // --- puzzle_hint: the zig board-bridge solver ---------------------

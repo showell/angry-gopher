@@ -44,12 +44,33 @@ const SINGLE_SCAN_STEPS = 20_000;
 const PAIR_SCAN_STEPS = 5_000;
 const TRIPLE_SCAN_STEPS = 2_000;
 
-pub fn gameHint(arr: *const arrangement.Arrangement, hand: []const card.Card) (card.Error || moves.Error)!Result {
-    var pick: [3]u8 = undefined;
+/// `preferred`: the objective card of the PREVIOUS hint (the glue
+/// remembers it across clicks). A hint should walk one line until it's
+/// done or clearly beaten — session 8's ace flip-flop is the lesson —
+/// so a still-playable preferred single stays the objective unless
+/// some alternative is MORE THAN ONE MOVE cheaper. A switch therefore
+/// means the player's own work made the new line decisively better.
+pub fn gameHint(arr: *const arrangement.Arrangement, hand: []const card.Card, preferred: ?card.Card) (card.Error || moves.Error)!Result {
+    var pref_idx: ?u8 = null;
+    if (preferred) |p| {
+        for (hand, 0..) |c, i| {
+            if (c.rank == p.rank and c.suit == p.suit) {
+                pref_idx = @intCast(i);
+                break;
+            }
+        }
+    }
     inline for (.{ 1, 2, 3 }, .{ SINGLE_SCAN_STEPS, PAIR_SCAN_STEPS, TRIPLE_SCAN_STEPS }) |k, budget| {
-        if (try bestSubset(arr, hand, k, budget, &pick)) {
+        const scan = try scanSize(arr, hand, k, budget, if (k == 1) pref_idx else null);
+        const winner: ?Cand = if (scan.best) |best| blk: {
+            if (scan.pref) |pref| {
+                if (pref.len <= best.len + 1) break :blk pref;
+            }
+            break :blk best;
+        } else null;
+        if (winner) |w| {
             var a = arr.*;
-            for (pick[0..k]) |hi| appendSingle(&a, hand[hi]);
+            for (w.idx[0..k]) |hi| appendSingle(&a, hand[hi]);
             // The winner gets the full min-break budget. The probe
             // proved a cover exists inside a smaller budget, and the
             // enumeration order is deterministic, so this is .solved.
@@ -72,29 +93,44 @@ pub fn gameHint(arr: *const arrangement.Arrangement, hand: []const card.Card) (c
     }
 }
 
-/// bestSubset scans all size-k hand subsets under the probe budget and
-/// picks the playable one whose probe cover keeps the most player
-/// edges (ties: earliest in hand order). Probe give-ups count as
-/// not-playable — the budget IS the honesty line here.
-fn bestSubset(
+const Cand = struct { idx: [3]u8, len: usize, kept: i32 };
+
+/// scanSize probes all size-k hand subsets under the probe budget.
+/// The best candidate ranks by SHORTEST plan first (the beginner's
+/// simplest next thing — and an in-progress objective gets strictly
+/// shorter with each executed move, which is what keeps hints from
+/// flip-flopping), then most kept edges, then hand order. Probe
+/// give-ups count as not-playable — the budget IS the honesty line.
+fn scanSize(
     arr: *const arrangement.Arrangement,
     hand: []const card.Card,
     comptime k: usize,
     budget: u64,
-    pick: *[3]u8,
-) card.Error!bool {
-    if (hand.len < k) return false;
-    var best_kept: i32 = -1;
+    pref_idx: ?u8,
+) (card.Error || moves.Error)!struct { best: ?Cand, pref: ?Cand } {
+    var best: ?Cand = null;
+    var pref: ?Cand = null;
+    if (hand.len < k) return .{ .best = null, .pref = null };
     var idx: [3]u8 = .{ 0, 1, 2 };
     while (true) {
         var a = arr.*;
         for (idx[0..k]) |hi| appendSingle(&a, hand[hi]);
         switch (try solver.solveArrangementBudgeted(&a, budget)) {
             .solved => |sol| {
-                const kept: i32 = arrangement.reportKept(&a, &sol.next).kept_edges;
-                if (kept > best_kept) {
-                    best_kept = kept;
-                    @memcpy(pick[0..k], idx[0..k]);
+                var plan: moves.Plan = undefined;
+                try moves.distill(&a, &sol.next, arr.n_stacks, &plan);
+                const cand = Cand{
+                    .idx = idx,
+                    .len = plan.n,
+                    .kept = arrangement.reportKept(&a, &sol.next).kept_edges,
+                };
+                if (best == null or cand.len < best.?.len or
+                    (cand.len == best.?.len and cand.kept > best.?.kept))
+                {
+                    best = cand;
+                }
+                if (pref_idx) |pi| {
+                    if (k == 1 and idx[0] == pi) pref = cand;
                 }
             },
             else => {},
@@ -110,7 +146,7 @@ fn bestSubset(
         }
         if (j == 0) break;
     }
-    return best_kept >= 0;
+    return .{ .best = best, .pref = pref };
 }
 
 fn appendSingle(a: *arrangement.Arrangement, c: card.Card) void {
@@ -123,10 +159,55 @@ fn appendSingle(a: *arrangement.Arrangement, c: card.Card) void {
 // ---------- tests (native: ops/check_solver) ----------
 
 fn hintFor(board_line: []const u8, hand_line: []const u8) !Result {
+    return hintForPref(board_line, hand_line, null);
+}
+
+fn hintForPref(board_line: []const u8, hand_line: []const u8, pref: ?[]const u8) !Result {
     const arr = try arrangement.parse(board_line);
     var hb: [card.MAX_CARDS]card.Card = undefined;
     const hand = try card.parseBoard(hand_line, &hb);
-    return gameHint(&arr, hand);
+    const p: ?card.Card = if (pref) |t| try card.parseCard(t) else null;
+    return gameHint(&arr, hand, p);
+}
+
+// The session-8 ace flip-flop, pinned from the real game (uid 16,
+// game 8, 2026-07-23): three loose aces vs the freshly-built
+// A♦>2♣>3♦>4♣ toggled the best objective between the two hand aces,
+// and the hint flapped with it. States 3 and 4 are the replayed
+// arrangements; the hand is Steve's actual hand.
+const G8_HAND = "AH' 4H' 7H' 4S' 9S' JS' AD' 2D' 4D' 6D 7C' 9C JC' KC KC'";
+const G8_STATE3 = "KS>AS>2S>3S TD>JD>QD>KD 2H>3H>4H 7S=7D=7C AC AD AH " ++
+    "2C>3D>4C 5H>6S>7H";
+const G8_STATE4 = "KS>AS>2S>3S TD>JD>QD>KD 2H>3H>4H 7S=7D=7C AC AH " ++
+    "AD>2C>3D>4C 5H>6S>7H";
+
+test "game 8: fresh hints pick the shortest play at each state" {
+    var buf: [4096]u8 = undefined;
+    // Loose A♦: playing AH' rebuilds the aces around it — 3 moves,
+    // one cheaper than AD' (whose cover must also re-home board A♦).
+    const s3 = try hintFor(G8_STATE3, G8_HAND);
+    try std.testing.expect(std.mem.indexOf(u8, planText(&s3, &buf), "place AH'") != null);
+    // A♦ committed to the club run: AD' completes the aces in 2 moves.
+    const s4 = try hintFor(G8_STATE4, G8_HAND);
+    try std.testing.expect(std.mem.indexOf(u8, planText(&s4, &buf), "place AD'") != null);
+}
+
+test "game 8: a standing objective survives the ace toggle" {
+    var buf: [4096]u8 = undefined;
+    // The anti-flip pins, both directions of Steve's Aâ¦ toggle. With
+    // AD' as the standing objective at the loose-Aâ¦ state, its line
+    // (3 moves, including the very merge_hand he eventually made) is
+    // within one move of AH' â stick.
+    const stick3 = try hintForPref(G8_STATE3, G8_HAND, "AD'");
+    try std.testing.expect(std.mem.indexOf(u8, planText(&stick3, &buf), "place AD'") != null);
+    // And with AH' standing at the committed-Aâ¦ state, its 3-move
+    // line (a peel, not a split â Aâ¦ rides the run's end) is within
+    // one of AD's 2 â stick again. Either way, no flap.
+    const stick4 = try hintForPref(G8_STATE4, G8_HAND, "AH'");
+    try std.testing.expect(std.mem.indexOf(u8, planText(&stick4, &buf), "place AH'") != null);
+    // A vanished or unplayable preferred card falls back to fresh.
+    const fresh = try hintForPref(G8_STATE4, G8_HAND, "9C");
+    try std.testing.expect(std.mem.indexOf(u8, planText(&fresh, &buf), "place AD'") != null);
 }
 
 fn planText(res: *const Result, buf: []u8) []const u8 {

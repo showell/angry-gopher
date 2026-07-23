@@ -12,6 +12,7 @@
 //!   -3  the solver gave up (give-up line): no verdict
 //!   -4  internal distiller failure (a bug; fail loud, never invent)
 
+const std = @import("std");
 const card = @import("card.zig");
 const solver = @import("solver.zig");
 const arrangement = @import("arrangement.zig");
@@ -44,22 +45,26 @@ export fn puzzleHint(len: u32) i32 {
 }
 
 /// gameHint: the io buffer holds the BOARD arrangement line, a
-/// newline, then the HAND as space-separated card tokens (possibly
-/// empty). Returns like puzzleHint, with 0 meaning "nothing to play
-/// and the board is already clean — draw"; -2 meaning the BOARD
-/// multiset has no cover (undo territory). A `play` plan leads with
-/// its `place` line.
+/// newline, the HAND as space-separated card tokens (possibly empty),
+/// and optionally a third line naming the PREVIOUS hint's objective
+/// card — the stickiness that keeps hints walking one line instead of
+/// flapping (session 8's lesson). Returns like puzzleHint, with 0
+/// meaning "nothing to play and the board is already clean — draw";
+/// -2 meaning the BOARD multiset has no cover (undo territory). A
+/// `play` plan leads with its `place` line.
 export fn gameHint(len: u32) i32 {
     if (len > io_buf.len) return -1;
     const input = io_buf[0..len];
-    const nl = for (input, 0..) |b, i| {
-        if (b == '\n') break i;
-    } else input.len;
-    const arr = arrangement.parse(input[0..nl]) catch return -1;
+    var it = std.mem.splitScalar(u8, input, '\n');
+    const arr = arrangement.parse(it.next().?) catch return -1;
     var hb: [card.MAX_CARDS]card.Card = undefined;
-    const hand_line = if (nl < input.len) input[nl + 1 ..] else input[input.len..];
-    const hand = card.parseBoard(hand_line, &hb) catch return -1;
-    const res = hint.gameHint(&arr, hand) catch |e| return switch (e) {
+    const hand = card.parseBoard(it.next() orelse "", &hb) catch return -1;
+    const pref_line = std.mem.trim(u8, it.next() orelse "", " ");
+    const pref: ?card.Card = if (pref_line.len == 0)
+        null
+    else
+        card.parseCard(pref_line) catch return -1;
+    const res = hint.gameHint(&arr, hand, pref) catch |e| return switch (e) {
         error.DistillFailed => -4,
         else => -1,
     };
