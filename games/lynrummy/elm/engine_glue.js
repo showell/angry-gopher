@@ -161,11 +161,25 @@
       if (rc > 0) {
         var text = new TextDecoder().decode(
           new Uint8Array(wasm.memory.buffer, wasm.ioPtr(), rc));
-        return text.split('\n');
+        return text.split('\n').map(glyphCards);
       }
       if (rc === -2) throw new Error('no clean layout exists for these cards');
       if (rc === -3) throw new Error('the solver gave up on this board');
       throw new Error('the solver rejected the board (code ' + rc + ')');
+    });
+  }
+
+  // The solver speaks ASCII ("TC'"); the status bar colors cards
+  // red/black only when they wear suit GLYPHS (Lib.Status.cardSegments
+  // keys on ♥♦♣♠, and renders T as "10"). Presentation is the client's
+  // job, so the swap happens here, not in the solver. Safe on plan
+  // lines: the verbs are lowercase and no other uppercase pair in the
+  // vocabulary matches rank-then-suit.
+  var SUIT_GLYPHS = { H: '♥', D: '♦', C: '♣', S: '♠' };
+
+  function glyphCards(line) {
+    return line.replace(/([A2-9TJQK])([HDCS])/g, function (_, rank, suit) {
+      return rank + SUIT_GLYPHS[suit];
     });
   }
 
