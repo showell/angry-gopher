@@ -433,6 +433,7 @@ pub fn distill(arr: *const arrangement.Arrangement, cover: *const [graph.SLOTS]u
     }
 
     redress(&d);
+    coalesce(&d);
 
     // Cover chains, ascending head slot.
     var indeg: [graph.SLOTS]bool = @splat(false);
@@ -476,6 +477,59 @@ pub fn distill(arr: *const arrangement.Arrangement, cover: *const [graph.SLOTS]u
     }
 
     if (!d.verify(chains[0..nchains])) return error.DistillFailed;
+}
+
+/// The sweep normalizes covers into 3..5-length chains (its lemma:
+/// never pull from a run's middle); on the table those boundaries are
+/// noise, and diffing against them literally tells the player to
+/// split big runs for no reason (game 9's Q-K-A-2-3 lesson). Coalesce
+/// heals every boundary that cuts through an INPUT stack: join a
+/// chain's end X to another chain's head Y when Y follows X in the
+/// player's own stack, the edge is legal, all flavors agree, and the
+/// combined run stays ≤ 13 (value-repeat-free). Input-adjacent joins
+/// only — anything more would invent merge moves the plan never
+/// needed.
+fn coalesce(d: *Distiller) void {
+    outer: while (true) {
+        var indeg: [graph.SLOTS]bool = @splat(false);
+        for (d.c2) |nx| {
+            if (nx != graph.NONE) indeg[nx] = true;
+        }
+        for (0..graph.SLOTS) |i| {
+            const h: u8 = @intCast(i);
+            if (d.sim.loc_stack[h] == Sim.NOWHERE or indeg[h]) continue;
+            if (d.c2[h] == graph.NONE) continue;
+            const f = graph.edgeFlavor(h, d.c2[h]) orelse continue;
+            if (f == .set) continue;
+            var len: u8 = 1;
+            var end = h;
+            while (d.c2[end] != graph.NONE) {
+                end = d.c2[end];
+                len += 1;
+            }
+            // The one join candidate: the card after `end` in its
+            // input stack.
+            const es = d.sim.loc_stack[end];
+            const pos = d.sim.loc_pos[end];
+            if (pos + 1 >= d.sim.len[es]) continue;
+            const y = d.sim.buf[es][pos + 1];
+            if (indeg[y] or y == h) continue; // must head another chain
+            if (d.c2[y] == graph.NONE) continue;
+            const fy = graph.edgeFlavor(y, d.c2[y]) orelse continue;
+            const fj = graph.edgeFlavor(end, y) orelse continue;
+            if (fy != f or fj != f) continue;
+            var ylen: u8 = 1;
+            var ye = y;
+            while (d.c2[ye] != graph.NONE) {
+                ye = d.c2[ye];
+                ylen += 1;
+            }
+            if (len + ylen > 13) continue;
+            d.c2[end] = y;
+            continue :outer;
+        }
+        break;
+    }
 }
 
 // ---------- copy re-dressing ----------
@@ -697,11 +751,18 @@ test "steal: a set member finishes a run" {
     );
 }
 
-test "split: one break, both halves stand" {
+test "split: a genuine break survives coalescing" {
+    // The long heart run really must break: 8H belongs to the eight
+    // set, so the halves land in incompatible structures. (A cover
+    // that merely cuts a run at an input-adjacent seam gets healed by
+    // coalesce and produces no split at all — see the normalization
+    // test.)
     try expectPlan(
-        "3H>4H>5H>6H>7H>8H",
-        "3H>4H>5H 6H>7H>8H",
-        "split [3H 4H 5H 6H 7H 8H] -> [3H 4H 5H] + [6H 7H 8H]",
+        "4H>5H>6H>7H>8H>9H>TH JH 8S=8D",
+        "4H>5H>6H>7H 8H=8S=8D 9H>TH>JH",
+        "split [4H 5H 6H 7H 8H 9H TH] -> [4H 5H 6H 7H] + [8H 9H TH]\n" ++
+            "peel 8H from [8H 9H TH] onto [8S 8D] -> [8S 8D 8H] [COMPLETE]\n" ++
+            "push JH onto [9H TH] -> [9H TH JH] [COMPLETE]",
     );
 }
 
@@ -712,6 +773,18 @@ test "a set assembles: a peel anchors it, pushes finish it" {
         "peel AH from [AH 2S 3H 4S]\n" ++
             "push AC onto [AH] -> [AH AC]\n" ++
             "push AS onto [AH AC] -> [AH AC AS] [COMPLETE]",
+    );
+}
+
+test "normalization boundaries never split a player run" {
+    // Game 9's lesson: the cover arrives as [JS QS KS]+[AS 2S 3S] (the
+    // sweep's 3..5 chains), but the player's run must not be split to
+    // realize it — coalesce heals the boundary and the plan is the one
+    // obvious move.
+    try expectPlan(
+        "QS>KS>AS>2S>3S JS",
+        "JS>QS>KS AS>2S>3S",
+        "push JS onto [QS KS AS 2S 3S] -> [JS QS KS AS 2S 3S] [COMPLETE]",
     );
 }
 

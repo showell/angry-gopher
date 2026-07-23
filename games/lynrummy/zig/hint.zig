@@ -192,6 +192,22 @@ test "game 8: fresh hints pick the shortest play at each state" {
     try std.testing.expect(std.mem.indexOf(u8, planText(&s4, &buf), "place AD'") != null);
 }
 
+test "game 9: extending a big run is one move, never a split" {
+    // The replayed state where the hint said to break Q-K-A-2-3 of
+    // spades before placing J♠. With cover coalescing, the hint is
+    // the single obvious extension.
+    const board = "QS'>KS>AS>2S>3S TD>JD>QD>KD 2H>3H>4H 7S=7D=7C " ++
+        "AC=AD=AH 2C>3D>4C>5D' 3D'>4S>5H 6S>7H>8C";
+    const hand = "2H' 3H' 6H JH' KH 9S' TS' JS TD' QC'";
+    const res = try hintFor(board, hand);
+    try std.testing.expectEqual(Kind.play, res.kind);
+    var buf: [2048]u8 = undefined;
+    try std.testing.expectEqualStrings(
+        "place JS onto [QS KS AS 2S 3S] -> [JS QS KS AS 2S 3S] [COMPLETE]",
+        planText(&res, &buf),
+    );
+}
+
 test "game 8: a standing objective survives the ace toggle" {
     var buf: [4096]u8 = undefined;
     // The anti-flip pins, both directions of Steve's Aâ¦ toggle. With
