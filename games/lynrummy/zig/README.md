@@ -165,9 +165,16 @@ Files:
   kept-edges scorer.
 - `moves.zig` — the edge diff distilled into the five human verbs,
   verified by construction.
+- `hint.zig` — the game-hint orchestrator, BEGINNER-FIRST (Steve's
+  objective): scan hand subsets in ascending size (singles, pairs,
+  triples) under strict probe budgets, play the smallest workable one
+  (ties: most kept edges, then hand order), lead the plan with its
+  `place` line — the sixth verb. Nothing playable falls back
+  honestly: consolidation plan / draw / "undo territory" / give-up.
 - `wasm.zig` — the browser build (ops/build_lynrummy_wasm →
-  solver.wasm): arrangement line in, move plan out. Serves the puzzle
-  Hint button via zig-server/src/puzzles.zig + engine_glue.js.
+  solver.wasm): arrangement line in, move plan out — puzzleHint and
+  gameHint exports. Serves both Hint buttons via
+  zig-server/src/puzzles.zig + engine_glue.js.
 - `pure_run.zig` — phase 1: per-suit cyclic arc cover + verifier. Kept
   as a stepping stone.
 - `solver.zig` — phases 2+3: the rank-sweep solver (with the component

@@ -1,0 +1,189 @@
+//! hint — the game-hint orchestrator: board arrangement + hand in,
+//! human move plan out.
+//!
+//! The objective is BEGINNER-FIRST (Steve, 2026-07-23): prefer the
+//! simplest play — one card from the hand — over compound plays. The
+//! scan tries hand subsets in ASCENDING size (singles in hand order,
+//! then pairs, then triples), each candidate probed with a small
+//! improve budget; among playable candidates of the smallest workable
+//! size, the one whose probe cover kept the most player edges wins,
+//! and only the winner gets the full min-break budget. One card almost
+//! never blocks playing the rest later, and each Hint click advises
+//! the next simplest step — the same click-per-move rhythm the puzzle
+//! hints settled into.
+//!
+//! With nothing playable the hint falls back honestly: a dirty board
+//! gets its consolidation plan, a clean board says "draw", a board
+//! whose multiset can't cover says so (that means UNDO — a real state
+//! players reach), and a solver give-up stays a give-up.
+
+const std = @import("std");
+const card = @import("card.zig");
+const arrangement = @import("arrangement.zig");
+const solver = @import("solver.zig");
+const moves = @import("moves.zig");
+
+pub const Kind = enum {
+    play, // plan places hand card(s); plan is non-empty
+    clean_board, // nothing playable, board dirty: consolidation plan
+    no_play, // nothing playable, board already clean: draw
+    futile_board, // the board multiset has NO cover: undo territory
+    unknown, // the solver gave up; no verdict, honestly labeled
+};
+
+pub const Result = struct {
+    kind: Kind,
+    plan: moves.Plan,
+};
+
+// Probe budgets for the candidate scans, strict-first: a playable
+// extension usually keeps every edge (perfect score ends the improve
+// enumeration immediately), so the budget only pays on candidates
+// that force breaks. Raise only on evidence.
+const SINGLE_SCAN_STEPS = 20_000;
+const PAIR_SCAN_STEPS = 5_000;
+const TRIPLE_SCAN_STEPS = 2_000;
+
+pub fn gameHint(arr: *const arrangement.Arrangement, hand: []const card.Card) (card.Error || moves.Error)!Result {
+    var pick: [3]u8 = undefined;
+    inline for (.{ 1, 2, 3 }, .{ SINGLE_SCAN_STEPS, PAIR_SCAN_STEPS, TRIPLE_SCAN_STEPS }) |k, budget| {
+        if (try bestSubset(arr, hand, k, budget, &pick)) {
+            var a = arr.*;
+            for (pick[0..k]) |hi| appendSingle(&a, hand[hi]);
+            // The winner gets the full min-break budget. The probe
+            // proved a cover exists inside a smaller budget, and the
+            // enumeration order is deterministic, so this is .solved.
+            const sol = (try solver.solveArrangement(&a)).solved;
+            var res = Result{ .kind = .play, .plan = undefined };
+            try moves.distill(&a, &sol.next, arr.n_stacks, &res.plan);
+            return res;
+        }
+    }
+    // Nothing playable: the board speaks for itself.
+    switch (try solver.solveArrangement(arr)) {
+        .solved => |sol| {
+            var res = Result{ .kind = .clean_board, .plan = undefined };
+            try moves.distill(arr, &sol.next, arr.n_stacks, &res.plan);
+            if (res.plan.n == 0) res.kind = .no_play;
+            return res;
+        },
+        .futile => return .{ .kind = .futile_board, .plan = .{} },
+        .unknown => return .{ .kind = .unknown, .plan = .{} },
+    }
+}
+
+/// bestSubset scans all size-k hand subsets under the probe budget and
+/// picks the playable one whose probe cover keeps the most player
+/// edges (ties: earliest in hand order). Probe give-ups count as
+/// not-playable — the budget IS the honesty line here.
+fn bestSubset(
+    arr: *const arrangement.Arrangement,
+    hand: []const card.Card,
+    comptime k: usize,
+    budget: u64,
+    pick: *[3]u8,
+) card.Error!bool {
+    if (hand.len < k) return false;
+    var best_kept: i32 = -1;
+    var idx: [3]u8 = .{ 0, 1, 2 };
+    while (true) {
+        var a = arr.*;
+        for (idx[0..k]) |hi| appendSingle(&a, hand[hi]);
+        switch (try solver.solveArrangementBudgeted(&a, budget)) {
+            .solved => |sol| {
+                const kept: i32 = arrangement.reportKept(&a, &sol.next).kept_edges;
+                if (kept > best_kept) {
+                    best_kept = kept;
+                    @memcpy(pick[0..k], idx[0..k]);
+                }
+            },
+            else => {},
+        }
+        // Next k-combination of hand indices, lexicographic.
+        var j: usize = k;
+        while (j > 0) : (j -= 1) {
+            if (idx[j - 1] < hand.len - (k - j) - 1) {
+                idx[j - 1] += 1;
+                for (j..k) |m| idx[m] = idx[m - 1] + 1;
+                break;
+            }
+        }
+        if (j == 0) break;
+    }
+    return best_kept >= 0;
+}
+
+fn appendSingle(a: *arrangement.Arrangement, c: card.Card) void {
+    const n = a.start[a.n_stacks];
+    a.cards[n] = c;
+    a.n_stacks += 1;
+    a.start[a.n_stacks] = n + 1;
+}
+
+// ---------- tests (native: ops/check_solver) ----------
+
+fn hintFor(board_line: []const u8, hand_line: []const u8) !Result {
+    const arr = try arrangement.parse(board_line);
+    var hb: [card.MAX_CARDS]card.Card = undefined;
+    const hand = try card.parseBoard(hand_line, &hb);
+    return gameHint(&arr, hand);
+}
+
+fn planText(res: *const Result, buf: []u8) []const u8 {
+    return moves.formatPlan(&res.plan, buf);
+}
+
+test "one card from hand beats the compound play" {
+    // 8H extends the heart run with one move; the three kings could
+    // come down as a fresh set — the hint prefers the single.
+    const res = try hintFor("5H>6H>7H", "KC 8H KD KS");
+    try std.testing.expectEqual(Kind.play, res.kind);
+    var buf: [1024]u8 = undefined;
+    try std.testing.expectEqualStrings(
+        "place 8H onto [5H 6H 7H] -> [5H 6H 7H 8H] [COMPLETE]",
+        planText(&res, &buf),
+    );
+}
+
+test "a pair from hand plays when no single can" {
+    // Neither 7H nor 7D alone can live with the lone 7C; together
+    // they make the set. The place lines lead the plan.
+    const res = try hintFor("7C 3S>4S>5S", "7H 7D");
+    try std.testing.expectEqual(Kind.play, res.kind);
+    var buf: [1024]u8 = undefined;
+    const text = planText(&res, &buf);
+    try std.testing.expect(std.mem.startsWith(u8, text, "place 7H"));
+    try std.testing.expect(std.mem.indexOf(u8, text, "place 7D") != null);
+    try std.testing.expect(std.mem.indexOf(u8, text, "[COMPLETE]") != null);
+}
+
+test "nothing playable, dirty board: the hint consolidates" {
+    const res = try hintFor("3H>4H 5H", "KC");
+    try std.testing.expectEqual(Kind.clean_board, res.kind);
+    var buf: [1024]u8 = undefined;
+    try std.testing.expectEqualStrings(
+        "push 5H onto [3H 4H] -> [3H 4H 5H] [COMPLETE]",
+        planText(&res, &buf),
+    );
+}
+
+test "nothing playable, clean board: draw" {
+    const res = try hintFor("3H>4H>5H", "KC");
+    try std.testing.expectEqual(Kind.no_play, res.kind);
+    try std.testing.expectEqual(@as(usize, 0), res.plan.n);
+}
+
+test "an uncoverable board says so — that means undo" {
+    const res = try hintFor("3H>4H 5H KC", "");
+    try std.testing.expectEqual(Kind.futile_board, res.kind);
+}
+
+test "equally clean singles tie by hand order" {
+    // TH joins the ten set and 8H extends the run — both keep every
+    // edge, so the earlier hand card wins, deterministically.
+    const res = try hintFor("5H>6H>7H TS=TC=TD", "TH 8H");
+    try std.testing.expectEqual(Kind.play, res.kind);
+    var buf: [2048]u8 = undefined;
+    const text = planText(&res, &buf);
+    try std.testing.expect(std.mem.startsWith(u8, text, "place TH"));
+}

@@ -170,6 +170,13 @@ pub fn solve(board: Board) Outcome {
 /// verdict. Score the answer with arrangement.reportKept; distill it
 /// with moves.distill.
 pub fn solveArrangement(arr: *const arrangement.Arrangement) card.Error!Outcome {
+    return solveArrangementBudgeted(arr, IMPROVE_STEPS);
+}
+
+/// The same solve under a caller-chosen improve budget — the game
+/// hint's candidate scans probe many arrangements cheaply before
+/// giving the chosen one the full budget.
+pub fn solveArrangementBudgeted(arr: *const arrangement.Arrangement, improve_steps: u64) card.Error!Outcome {
     const board = try boardBits(arr.cards[0..arr.nCards()]);
     const warm = arrangement.warmOf(arr);
     steps_used = 0;
@@ -189,7 +196,7 @@ pub fn solveArrangement(arr: *const arrangement.Arrangement) card.Error!Outcome 
     const forced = computeForcedSets(&at) orelse return .futile;
     force_set_ranks = forced.force;
     force_two_set_ranks = forced.force_two;
-    step_limit = IMPROVE_STEPS;
+    step_limit = improve_steps;
     var s = Sweeper.init(at, scarcestRank(at), &warm);
     s.improve = &imp;
     _ = s.enumMFrom();
@@ -1342,7 +1349,7 @@ test "board bridge acceptance: Steve's 59c give-up state" {
     // A* needed 6 verbs from this exact state, one of them a compound
     // shift worth two of ours. The 13 intact stacks say nothing.
     var mplan: moves.Plan = undefined;
-    try moves.distill(&arr, &sol.next, &mplan);
+    try moves.distill(&arr, &sol.next, arr.n_stacks, &mplan);
     var pb: [8192]u8 = undefined;
     try std.testing.expectEqualStrings(
         \\split [9D TS' JD] -> [9D] + [TS' JD]

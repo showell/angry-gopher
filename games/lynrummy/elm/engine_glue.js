@@ -6,12 +6,18 @@
 //
 //   game_hint (full-game Hint button):
 //     request:  { request_id, op: "game_hint", hand, board, loner? }
-//       loner (optional bool): the last non-cosmetic move laid a hand
-//       card onto an empty spot — finish the board first, don't project.
 //               where hand = [{value, suit, origin_deck}, ...]
 //               and board = [[{value, suit, origin_deck}, ...], ...]
 //     response: { request_id, op: "game_hint", ok, lines: string[] }
-//             — sent on `gameHintResponse`
+//             — sent on `gameHintResponse`. Answered by the ZIG
+//             solver (same solver.wasm as puzzle_hint), with the
+//             BEGINNER-FIRST objective: prefer placing ONE hand card
+//             (then pairs, then triples) and lead the plan with the
+//             `place` line; with nothing playable, a dirty board gets
+//             its consolidation plan, a clean one says draw. The
+//             legacy `loner` flag is ignored — the placed loner is
+//             just a board singleton in the arrangement, and the
+//             consolidation path handles it.
 //
 //   puzzle_hint (puzzle Hint button):
 //     request:  { request_id, op: "puzzle_hint", board }
@@ -67,11 +73,16 @@
       var port = responsePortFor(app, op);
       try {
         if (op === 'game_hint') {
-          port.send({
-            request_id: requestId,
-            op: op,
-            ok: true,
-            lines: logHint(op, gameHint(req.hand, req.board, req.loner === true)),
+          gameHint(req.hand, req.board).then(function (lines) {
+            port.send({
+              request_id: requestId,
+              op: op,
+              ok: true,
+              lines: logHint(op, lines),
+            });
+          }, function (err) {
+            var msg = String(err && err.message ? err.message : err);
+            port.send({ request_id: requestId, op: op, ok: false, error: msg });
           });
         } else if (op === 'puzzle_hint') {
           // Async: the solver wasm loads on the first click. Elm
@@ -121,12 +132,23 @@
     return lines;
   }
 
-  function gameHint(hand, board, loner) {
-    var handCards = hand.map(cardObjectToRecord);
-    var stacks = board.map(function (stack) {
-      return stack.map(cardObjectToRecord);
+  function gameHint(hand, board) {
+    var input = boardToArrangementLine(board) + '\n' + hand.map(cardToken).join(' ');
+    return loadSolverWasm().then(function (wasm) {
+      var bytes = new TextEncoder().encode(input);
+      if (bytes.length > wasm.ioCap()) throw new Error('board too large for the solver');
+      new Uint8Array(wasm.memory.buffer, wasm.ioPtr(), bytes.length).set(bytes);
+      var rc = wasm.gameHint(bytes.length);
+      if (rc === 0) return ['No play — draw a card.'];
+      if (rc > 0) {
+        var text = new TextDecoder().decode(
+          new Uint8Array(wasm.memory.buffer, wasm.ioPtr(), rc));
+        return text.split('\n').map(glyphCards);
+      }
+      if (rc === -2) throw new Error('this board cannot be made clean — try Undo');
+      if (rc === -3) throw new Error('the solver gave up on this board');
+      throw new Error('the solver rejected the board (code ' + rc + ')');
     });
-    return LynRummyEngine.elmGameHint(handCards, stacks, loner === true);
   }
 
   // --- puzzle_hint: the zig board-bridge solver ---------------------
@@ -189,14 +211,17 @@
   var RANK_CHARS = 'A23456789TJQK'; // index = value - 1
   var SUIT_CHARS = 'CDSH'; // wire suit ints 0-3
 
+  function cardToken(c) {
+    return RANK_CHARS[c.value - 1] + SUIT_CHARS[c.suit]
+      + (c.origin_deck === 1 ? "'" : '');
+  }
+
   function boardToArrangementLine(board) {
     return board.map(function (stack) {
       var out = '';
       for (var i = 0; i < stack.length; i++) {
-        var c = stack[i];
-        if (i > 0) out += stack[i - 1].value === c.value ? '=' : '>';
-        out += RANK_CHARS[c.value - 1] + SUIT_CHARS[c.suit]
-          + (c.origin_deck === 1 ? "'" : '');
+        if (i > 0) out += stack[i - 1].value === stack[i].value ? '=' : '>';
+        out += cardToken(stack[i]);
       }
       return out;
     }).join(' ');

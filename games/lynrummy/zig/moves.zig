@@ -28,7 +28,7 @@ const card = @import("card.zig");
 const graph = @import("graph.zig");
 const arrangement = @import("arrangement.zig");
 
-pub const Verb = enum { peel, steal, push, split, merge };
+pub const Verb = enum { peel, steal, push, split, merge, place };
 
 pub const Error = error{DistillFailed};
 
@@ -173,6 +173,15 @@ const Distiller = struct {
     sim: Sim = .{},
     plan: *Plan,
     c2: [graph.SLOTS]u8, // the re-dressed cover
+    /// Input stacks with index in [hand_from, hand_to) are HAND cards
+    /// (singletons a game hint proposes playing); their entry verb is
+    /// `place`. Stacks born later (splits) are board material.
+    hand_from: usize,
+    hand_to: usize,
+
+    fn isHand(self: *const Distiller, si: u8) bool {
+        return si >= self.hand_from and si < self.hand_to;
+    }
 
     fn emit(self: *Distiller, m: Move) void {
         std.debug.assert(self.plan.n < MAX_MOVES);
@@ -216,12 +225,28 @@ const Distiller = struct {
     fn extractOne(self: *Distiller, slot: u8, dst: ?u8, left: bool) u8 {
         var si = self.sim.loc_stack[slot];
         if (self.sim.len[si] == 1) {
-            const di = dst orelse return si; // already loose: no move
+            const hand = self.isHand(si);
+            const di = dst orelse {
+                // Already loose: silent for board cards, but a hand
+                // card entering play must be SEEN even as an anchor.
+                if (hand) {
+                    self.emit(.{
+                        .verb = .place,
+                        .card = slot,
+                        .src = .{},
+                        .dst = .{},
+                        .result = .{},
+                        .aux = .{},
+                        .complete = false,
+                    });
+                }
+                return si;
+            };
             const pre = Snap.of(self.sim.stack(di));
             self.sim.len[si] = 0;
             self.sim.appendCard(di, slot, left);
             self.emit(.{
-                .verb = .push,
+                .verb = if (hand) .place else .push,
                 .card = slot,
                 .src = .{},
                 .dst = pre,
@@ -378,9 +403,20 @@ const Distiller = struct {
 /// the cover. The cover's copy labels are re-dressed to hug the
 /// player's stacks first; the emitted plan is verified by construction
 /// (DistillFailed = a distiller bug, never bad input).
-pub fn distill(arr: *const arrangement.Arrangement, cover: *const [graph.SLOTS]u8, plan: *Plan) Error!void {
+///
+/// `hand_from`: arrangement stacks from this index on are HAND
+/// singletons a game hint proposes playing — they enter with the
+/// `place` verb, and the chains that receive them are built FIRST so
+/// the place lands at the top of the plan. Board-only callers pass
+/// arr.n_stacks.
+pub fn distill(arr: *const arrangement.Arrangement, cover: *const [graph.SLOTS]u8, hand_from: usize, plan: *Plan) Error!void {
     plan.n = 0;
-    var d = Distiller{ .plan = plan, .c2 = cover.* };
+    var d = Distiller{
+        .plan = plan,
+        .c2 = cover.*,
+        .hand_from = hand_from,
+        .hand_to = arr.n_stacks,
+    };
 
     // Input stacks at slot level, copies first-come per base card —
     // marks in the input line are dressing, here as everywhere.
@@ -420,10 +456,23 @@ pub fn distill(arr: *const arrangement.Arrangement, cover: *const [graph.SLOTS]u
         nchains += 1;
     }
 
-    for (chains[0..nchains]) |t| {
-        const is_set = t.n >= 2 and
-            graph.rankOf(t.cards[0]) == graph.rankOf(t.cards[1]);
-        if (is_set) d.setTarget(t.cards[0..t.n]) else d.runTarget(t.cards[0..t.n]);
+    // Chains that receive a hand card build first: the `place` is the
+    // hint's headline, so it belongs at the top of the plan. Flags are
+    // snapshotted before any processing moves the cards.
+    var has_hand: [card.MAX_CARDS]bool = undefined;
+    for (chains[0..nchains], 0..) |t, i| {
+        has_hand[i] = false;
+        for (t.cards[0..t.n]) |slot| {
+            if (d.isHand(d.sim.loc_stack[slot])) has_hand[i] = true;
+        }
+    }
+    for ([2]bool{ true, false }) |hand_pass| {
+        for (chains[0..nchains], 0..) |t, i| {
+            if (has_hand[i] != hand_pass) continue;
+            const is_set = t.n >= 2 and
+                graph.rankOf(t.cards[0]) == graph.rankOf(t.cards[1]);
+            if (is_set) d.setTarget(t.cards[0..t.n]) else d.runTarget(t.cards[0..t.n]);
+        }
     }
 
     if (!d.verify(chains[0..nchains])) return error.DistillFailed;
@@ -552,7 +601,7 @@ pub fn formatMove(m: *const Move, buf: []u8) []const u8 {
         w.snap(&m.src);
     } else {
         w.slot(m.card);
-        if (m.verb != .push) {
+        if (m.verb == .peel or m.verb == .steal) {
             w.str(" from ");
             w.snap(&m.src);
         }
@@ -609,7 +658,7 @@ fn expectPlan(arr_line: []const u8, cover_line: []const u8, expected: []const u8
     const arr = try arrangement.parse(arr_line);
     const cover = try coverNext(cover_line);
     var plan: Plan = undefined;
-    try distill(&arr, &cover, &plan);
+    try distill(&arr, &cover, arr.n_stacks, &plan);
     var buf: [8192]u8 = undefined;
     try std.testing.expectEqualStrings(expected, formatPlan(&plan, &buf));
 }
