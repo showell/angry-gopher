@@ -112,14 +112,6 @@ function runCatalog(planLength: number, failures: string[]): { passed: number; t
   console.log(`\n${planLength}-line catalog (${puzzles.length} puzzles):`);
   let passed = 0;
   for (const p of puzzles) {
-    // stretch_ puzzles are human-stretch boards served past the curated
-    // catalog: no plan-length contract, and the BFS can't touch them
-    // anyway (trouble cap). Their ground truth lives with the zig
-    // solver (see the DSL comment block); here they are only carried.
-    if (p.name.startsWith("stretch_")) {
-      console.log(`  SKIP  ${p.name.padEnd(60)}  stretch puzzle: no plan-length contract`);
-      continue;
-    }
     const t0 = Date.now();
     const r = runPuzzle(p, planLength);
     const ms = Date.now() - t0;
