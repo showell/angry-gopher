@@ -54,6 +54,10 @@ pub const Move = struct {
     dst: Snap, // pre-move destination (empty: extraction to the table)
     result: Snap, // post-move destination (split: the left half)
     aux: Snap, // split only: the right half
+    /// For a bare extraction (dst empty) that anchors a new meld: the
+    /// meld it is building toward — "place JH" alone is a riddle,
+    /// "place JH to build an eventual run [JH QS KD]" is a hint.
+    goal: Snap,
     complete: bool, // result is a legal meld
 };
 
@@ -200,6 +204,7 @@ const Distiller = struct {
             .dst = .{},
             .result = Snap.of(self.sim.stack(si)),
             .aux = Snap.of(self.sim.stack(ni)),
+            .goal = .{},
             .complete = false,
         });
         return ni;
@@ -222,7 +227,7 @@ const Distiller = struct {
     /// dst is null), emitting the verb its source classifies: whole
     /// single stack → push, set stack → steal, run stack → peel (after
     /// a split if the card is mid-stack). Returns the card's stack.
-    fn extractOne(self: *Distiller, slot: u8, dst: ?u8, left: bool) u8 {
+    fn extractOne(self: *Distiller, slot: u8, dst: ?u8, left: bool, goal: []const u8) u8 {
         var si = self.sim.loc_stack[slot];
         if (self.sim.len[si] == 1) {
             const hand = self.isHand(si);
@@ -237,6 +242,7 @@ const Distiller = struct {
                         .dst = .{},
                         .result = .{},
                         .aux = .{},
+                        .goal = Snap.of(goal),
                         .complete = false,
                     });
                 }
@@ -252,6 +258,7 @@ const Distiller = struct {
                 .dst = pre,
                 .result = Snap.of(self.sim.stack(di)),
                 .aux = .{},
+                .goal = .{},
                 .complete = isMeld(self.sim.stack(di)),
             });
             return di;
@@ -279,6 +286,7 @@ const Distiller = struct {
                 .dst = pre_dst,
                 .result = Snap.of(self.sim.stack(di)),
                 .aux = .{},
+                .goal = .{},
                 .complete = isMeld(self.sim.stack(di)),
             });
             return di;
@@ -291,6 +299,7 @@ const Distiller = struct {
             .dst = .{},
             .result = .{},
             .aux = .{},
+            .goal = Snap.of(goal),
             .complete = false,
         });
         return ni;
@@ -321,7 +330,7 @@ const Distiller = struct {
         }
         // The base block stays on the table; free it of hangers-on.
         var base_si = if (seg_len[base] == 1)
-            self.extractOne(t[seg_start[base]], null, false)
+            self.extractOne(t[seg_start[base]], null, false, t)
         else
             self.isolate(t[seg_start[base]], seg_len[base]);
         // Attach rightward, then leftward.
@@ -336,7 +345,7 @@ const Distiller = struct {
     }
 
     fn attachSeg(self: *Distiller, t: []const u8, start: u8, slen: u8, dst: u8, left: bool) u8 {
-        if (slen == 1) return self.extractOne(t[start], dst, left);
+        if (slen == 1) return self.extractOne(t[start], dst, left, &.{});
         const bi = self.isolate(t[start], slen);
         const pre_src = Snap.of(self.sim.stack(bi));
         const pre_dst = Snap.of(self.sim.stack(dst));
@@ -348,6 +357,7 @@ const Distiller = struct {
             .dst = pre_dst,
             .result = Snap.of(self.sim.stack(dst)),
             .aux = .{},
+            .goal = .{},
             .complete = isMeld(self.sim.stack(dst)),
         });
         return dst;
@@ -371,11 +381,11 @@ const Distiller = struct {
         }
         if (base_si == Sim.NOWHERE) {
             // Assembled from scratch: the first member anchors loose.
-            base_si = self.extractOne(t[0], null, false);
+            base_si = self.extractOne(t[0], null, false, t);
         }
         for (t) |slot| {
             if (self.sim.loc_stack[slot] == base_si) continue;
-            base_si = self.extractOne(slot, base_si, false);
+            base_si = self.extractOne(slot, base_si, false, &.{});
         }
     }
 
@@ -687,6 +697,11 @@ pub fn formatMove(m: *const Move, buf: []u8) []const u8 {
         w.str(" -> ");
         w.snap(&m.result);
         if (m.complete) w.str(" [COMPLETE]");
+    } else if (m.goal.n > 0) {
+        const is_set = m.goal.n >= 2 and
+            graph.rankOf(m.goal.cards[0]) == graph.rankOf(m.goal.cards[1]);
+        w.str(if (is_set) " to build an eventual set " else " to build an eventual run ");
+        w.snap(&m.goal);
     }
     return buf[0..w.n];
 }
@@ -791,7 +806,7 @@ test "a set assembles: a peel anchors it, pushes finish it" {
     try expectPlan(
         "AH>2S>3H>4S AC AS",
         "2S>3H>4S AH=AC=AS",
-        "peel AH from [AH 2S 3H 4S]\n" ++
+        "peel AH from [AH 2S 3H 4S] to build an eventual set [AH AC AS]\n" ++
             "push AC onto [AH] -> [AH AC]\n" ++
             "push AS onto [AH AC] -> [AH AC AS] [COMPLETE]",
     );
