@@ -142,6 +142,21 @@
   // the board gets cleaned before the twin becomes a new project).
   var gameObjective = '';
   var gameObjectiveCount = 0;
+  // The last hint's hand, as bare (copy-blind) token counts. Diffing
+  // against it detects ANY card leaving the hand — the player's own
+  // placements included, not just the hint's objective (game 11's
+  // lesson) — and it is undo-safe by construction: an undone
+  // placement restores the count and the signal simply never arms.
+  var lastHintHand = null;
+
+  function bareCounts(hand) {
+    var m = {};
+    hand.forEach(function (c) {
+      var t = cardToken(c).replace("'", '');
+      m[t] = (m[t] || 0) + 1;
+    });
+    return m;
+  }
 
   function objectiveCopies(hand) {
     var bare = gameObjective.replace("'", '');
@@ -151,15 +166,21 @@
   }
 
   function gameHint(hand, board) {
-    var prefLine = gameObjective;
+    var played = false;
+    if (lastHintHand !== null) {
+      var now = bareCounts(hand);
+      for (var t in lastHintHand) {
+        if ((now[t] || 0) < lastHintHand[t]) played = true;
+      }
+    }
+    lastHintHand = bareCounts(hand);
     if (gameObjective && objectiveCopies(hand) < gameObjectiveCount) {
-      // The objective landed since the last hint: send the one-shot
-      // just-played signal so the solver biases toward cleaning the
-      // board before opening a new project (game 10's wisdom).
-      prefLine = '!played';
+      // The objective itself landed: it must not latch onto a held
+      // twin (copies are indistinguishable) — retire it.
       gameObjective = '';
       gameObjectiveCount = 0;
     }
+    var prefLine = gameObjective + (played ? (gameObjective ? ' ' : '') + '!played' : '');
     var input = boardToArrangementLine(board) + '\n'
       + hand.map(cardToken).join(' ') + '\n' + prefLine;
     return loadSolverWasm().then(function (wasm) {

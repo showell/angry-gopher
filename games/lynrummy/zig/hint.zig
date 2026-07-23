@@ -69,16 +69,22 @@ pub fn gameHint(arr: *const arrangement.Arrangement, hand: []const card.Card, pr
             }
         }
     }
+    // The consolidation candidate always computes (a clean board costs
+    // nothing: empty plan, no candidate). When it may WIN is the
+    // Steve-calibrated part — see consolWins.
     var consolidation: ?Result = null;
-    if (just_played and pref_idx == null) {
-        switch (try solver.solveArrangement(arr)) {
-            .solved => |sol| {
-                var res = Result{ .kind = .clean_board, .plan = undefined };
-                try moves.distill(arr, &sol.next, arr.n_stacks, &res.plan);
-                if (res.plan.n > 0) consolidation = res;
-            },
-            else => {},
-        }
+    var consol_homing = false; // breaks no player edge: pure homing
+    switch (try solver.solveArrangement(arr)) {
+        .solved => |sol| {
+            var res = Result{ .kind = .clean_board, .plan = undefined };
+            try moves.distill(arr, &sol.next, arr.n_stacks, &res.plan);
+            if (res.plan.n > 0) {
+                consolidation = res;
+                const rep = arrangement.reportKept(arr, &sol.next);
+                consol_homing = rep.kept_edges == rep.total_edges;
+            }
+        },
+        else => {},
     }
     inline for (.{ 1, 2, 3 }, .{ SINGLE_SCAN_STEPS, PAIR_SCAN_STEPS, TRIPLE_SCAN_STEPS }) |k, budget| {
         const scan = try scanSize(arr, hand, k, budget, if (k == 1) pref_idx else null);
@@ -99,7 +105,7 @@ pub fn gameHint(arr: *const arrangement.Arrangement, hand: []const card.Card, pr
             try moves.distill(&a, &sol.next, arr.n_stacks, &res.plan);
             // Fair fight: both plans carry the full budget now.
             if (consolidation) |c| {
-                if (c.plan.n < res.plan.n) return c;
+                if (consolWins(&c, consol_homing, just_played, res.plan.n)) return c;
             }
             return res;
         }
@@ -116,6 +122,25 @@ pub fn gameHint(arr: *const arrangement.Arrangement, hand: []const card.Card, pr
         .futile => return .{ .kind = .futile_board, .plan = .{} },
         .unknown => return .{ .kind = .unknown, .plan = .{} },
     }
+}
+
+/// When does cleaning beat playing? Steve's turns, distilled
+/// (games 10 and 11):
+///   - a hand card just landed (`just_played`, any card — the glue
+///     diffs the hand against its last-hint snapshot, so the player's
+///     own placements count and an undo disarms the signal): cleaning
+///     leads, ties included — "we shouldn't even be considering moves
+///     from the hand at that point". Only a play that is itself the
+///     faster cleanup (strictly shorter) overrides.
+///   - otherwise: cleaning competes only when it is PURE HOMING —
+///     it breaks no player edge, it only gives loose cards a home
+///     (the 3♥ push; never the tear-down-your-half-built-run kind,
+///     which is what sank the first draft of this rule) — and is
+///     strictly shorter than the play. This can override a standing
+///     objective: tidy-first, then the objective resumes.
+fn consolWins(c: *const Result, homing: bool, just_played: bool, play_len: usize) bool {
+    if (just_played) return c.plan.n <= play_len;
+    return homing and c.plan.n < play_len;
 }
 
 const Cand = struct { idx: [3]u8, len: usize, kept: i32 };
@@ -213,17 +238,44 @@ const G8_STATE3 = "KS>AS>2S>3S TD>JD>QD>KD 2H>3H>4H 7S=7D=7C AC AD AH " ++
 const G8_STATE4 = "KS>AS>2S>3S TD>JD>QD>KD 2H>3H>4H 7S=7D=7C AC AH " ++
     "AD>2C>3D>4C 5H>6S>7H";
 
-test "game 8: fresh hints pick the shortest play at each state" {
+test "game 8: pure homing tidies first; destructive cleanup never leads fresh" {
     var buf: [4096]u8 = undefined;
-    // Fresh hints (no just-played signal) lead with plays: a broader
-    // clean bias was tried and it told the player to tear down
-    // work-in-progress.
+    // Three loose aces are pure homing (no player edge breaks):
+    // 2 moves beat the 3-move play, tidy-first (game 11's vote).
     const s3 = try hintFor(G8_STATE3, G8_HAND);
-    try std.testing.expectEqual(Kind.play, s3.kind);
-    try std.testing.expect(std.mem.indexOf(u8, planText(&s3, &buf), "place AH'") != null);
+    try std.testing.expectEqual(Kind.clean_board, s3.kind);
+    try std.testing.expect(std.mem.indexOf(u8, planText(&s3, &buf), "push AD onto [AH]") != null);
+    // With Aâ¦ committed to the club run, cleaning would mean tearing
+    // it back out — destructive, so it never leads a fresh hint.
     const s4 = try hintFor(G8_STATE4, G8_HAND);
     try std.testing.expectEqual(Kind.play, s4.kind);
     try std.testing.expect(std.mem.indexOf(u8, planText(&s4, &buf), "place AD'") != null);
+}
+
+test "game 11: after placing 3S, the 3H loner outranks the next hand card" {
+    // Steve's kitchen-table turn, replayed: he split [2H 3H 4H] to
+    // place 3S' into a new run; the 3H loner that maneuver created
+    // must be homed before the hint proposes AC' — even though AC'
+    // stands as the objective. Pure homing, 1 move vs 2.
+    const board = "TD>JD>QD>KD 7S=7D=7C AC=AD=AH 4S'>5H>6S AS>2S>3S " ++
+        "6C>7H>8S' 9C'>TD'>JC>QH QH'>KS>AD'>2C 2S'>3D>4C 3H 2H>3S'>4H";
+    const hand = "4H' JH JH' AC'";
+    const res = try hintForPref(board, hand, "AC'");
+    try std.testing.expectEqual(Kind.clean_board, res.kind);
+    var buf: [2048]u8 = undefined;
+    try std.testing.expectEqualStrings(
+        "push 3H onto [4S 5H 6S] -> [3H 4S 5H 6S] [COMPLETE]",
+        planText(&res, &buf),
+    );
+    // One state earlier (4H still loose too): the 2-move homing beats
+    // the 3-move play.
+    const board47 = "TD>JD>QD>KD 7S=7D=7C AC=AD=AH 4S'>5H>6S AS>2S>3S " ++
+        "6C>7H>8S' 9C'>TD'>JC>QH QH'>KS>AD'>2C 2S'>3D>4C 2H>3S' 3H 4H";
+    const res47 = try hintFor(board47, hand);
+    try std.testing.expectEqual(Kind.clean_board, res47.kind);
+    const t47 = planText(&res47, &buf);
+    try std.testing.expect(std.mem.indexOf(u8, t47, "push 4H onto [2H 3S']") != null);
+    try std.testing.expect(std.mem.indexOf(u8, t47, "push 3H") != null);
 }
 
 test "game 10: after the objective lands, the aces find their home" {
@@ -265,12 +317,12 @@ test "game 9: extending a big run is one move, never a split" {
 
 test "game 8: a standing objective survives the ace toggle" {
     var buf: [4096]u8 = undefined;
-    // The anti-flip pins, both directions of Steve's Aâ¦ toggle. With
-    // AD' as the standing objective at the loose-Aâ¦ state, its line
-    // (3 moves, including the very merge_hand he eventually made) is
-    // within one move of AH' â stick.
+    // Tidy-first outranks even a standing objective when the tidy is
+    // pure homing and strictly shorter: at the loose-Aâ¦ state the
+    // 2-move ace rebuild leads; the AD' objective resumes after.
     const stick3 = try hintForPref(G8_STATE3, G8_HAND, "AD'");
-    try std.testing.expect(std.mem.indexOf(u8, planText(&stick3, &buf), "place AD'") != null);
+    try std.testing.expectEqual(Kind.clean_board, stick3.kind);
+    try std.testing.expect(std.mem.indexOf(u8, planText(&stick3, &buf), "push AD onto [AH]") != null);
     // And with AH' standing at the committed-Aâ¦ state, its 3-move
     // line (a peel, not a split â Aâ¦ rides the run's end) is within
     // one of AD's 2 â stick again. Either way, no flap.

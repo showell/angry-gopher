@@ -59,12 +59,18 @@ export fn gameHint(len: u32) i32 {
     const arr = arrangement.parse(it.next().?) catch return -1;
     var hb: [card.MAX_CARDS]card.Card = undefined;
     const hand = card.parseBoard(it.next() orelse "", &hb) catch return -1;
-    const pref_line = std.mem.trim(u8, it.next() orelse "", " ");
-    const just_played = std.mem.eql(u8, pref_line, "!played");
-    const pref: ?card.Card = if (pref_line.len == 0 or just_played)
-        null
-    else
-        card.parseCard(pref_line) catch return -1;
+    // Line 3: optional objective token and/or the "!played" flag,
+    // space-separated.
+    var just_played = false;
+    var pref: ?card.Card = null;
+    var pit = std.mem.tokenizeScalar(u8, it.next() orelse "", ' ');
+    while (pit.next()) |tok| {
+        if (std.mem.eql(u8, tok, "!played")) {
+            just_played = true;
+        } else {
+            pref = card.parseCard(tok) catch return -1;
+        }
+    }
     const res = hint.gameHint(&arr, hand, pref, just_played) catch |e| return switch (e) {
         error.DistillFailed => -4,
         else => -1,
