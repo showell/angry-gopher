@@ -108,20 +108,21 @@ consolidation: cold, its cover keeps 16 of his 42 edges after 442,848
 steps; the warm sweep's first cover keeps 32 in ~439 steps, because a
 near-solution arrangement is also a search heuristic.
 
-On top of that first cover sits ANYTIME MIN-BREAK: solveArrangement's
-sweep doesn't stop at its first cover — the completion leaf scores
-the cover (kept player edges), records the best, and keeps
-enumerating under a budget. Warm ordering makes early candidates
-near; ties keep the first; all of a player's edges kept ends the
-search; and since every cover is reachable from any one cut, an
-enumeration that COMPLETES under budget has found the true max-kept
-cover. Memoization stays sound via a found counter — a state with
-covers below it is never marked futile. The budget (200k steps) is
-tuned strict on the fixture's curve: 32 → 37 of 42 by 67k steps
-(13 of 17 stacks intact), flat from there to a 20M probe. Verdicts
-stay honest: an empty-handed budget trip falls back to the standard
-portfolio, cold-retrying a warm unknown. Still open: breakability
-weights, donor-choice warmth in tier 0's repair.
+Ahead of the sweep sits LOCAL REPAIR (`repair.zig`) — the human
+search geometry: bounded edits of the player's own arrangement
+(attach, wedge, bring with mid-run pulls, seat swap), true edge
+scores, physical dressing, no normalization seams. Together they are
+`solveArrangement`, ONE pipeline for every surface (the 2026-07-24
+convergence): repair answers the common case perfectly; the sweep is
+the oracle behind it — satisfaction, futility proofs, certificates —
+with one cold retry on a warm unknown. An earlier ANYTIME MIN-BREAK
+layer (enumerate covers, keep the max-kept) was deleted in that
+convergence: the sweep's 3..5-carved output scores long player runs
+below their true value (each carve seam read as a broken edge), so
+the layer defended exactly the boards it was built for worst — and
+repair does its job in the right representation. Its 59c high-water
+mark (37/42 kept, 8 moves) is recorded in the acceptance fixture as
+the yardstick any future polish must beat honestly.
 
 The edge diff then distills into HUMAN MOVES (`moves.zig`): five
 verbs — peel, steal, push, split, merge — with intact stacks silent.
@@ -133,10 +134,7 @@ otherwise the diff describes surgery on the wrong twin. The distiller
 builds the plan by SIMULATING it, and the final board must equal the
 cover exactly (runs by sequence, sets by membership) or it fails loud:
 the move list cannot lie about what it builds. It is a faithful build
-recipe, not gesture-level choreography. The 59c give-up fixture pins
-the whole plan: 8 moves off the min-break cover — the engine's blind
-A* needed 6 verbs from the same state, one a compound shift worth two
-of ours.
+recipe, not gesture-level choreography.
 
 The answer is an **Outcome**: `solved` (verified next-map), `futile` (a
 PROOF — completed search or component prefilter, never a guess), or

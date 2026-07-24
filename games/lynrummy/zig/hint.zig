@@ -37,14 +37,6 @@ pub const Result = struct {
     plan: moves.Plan,
 };
 
-// Probe budgets for the candidate scans, strict-first: a playable
-// extension usually keeps every edge (perfect score ends the improve
-// enumeration immediately), so the budget only pays on candidates
-// that force breaks. Raise only on evidence.
-const SINGLE_SCAN_STEPS = 20_000;
-const PAIR_SCAN_STEPS = 5_000;
-const TRIPLE_SCAN_STEPS = 2_000;
-
 /// `preferred`: the objective card of the PREVIOUS hint (the glue
 /// remembers it across clicks). A hint should walk one line until it's
 /// done or clearly beaten — session 8's ace flip-flop is the lesson —
@@ -87,8 +79,8 @@ pub fn gameHint(arr: *const arrangement.Arrangement, hand: []const card.Card, pr
         },
         else => {},
     }
-    inline for (.{ 1, 2, 3 }, .{ SINGLE_SCAN_STEPS, PAIR_SCAN_STEPS, TRIPLE_SCAN_STEPS }) |k, budget| {
-        const scan = try scanSize(arr, hand, k, budget, if (k == 1) pref_idx else null);
+    inline for (.{ 1, 2, 3 }) |k| {
+        const scan = try scanSize(arr, hand, k, if (k == 1) pref_idx else null);
         const winner: ?Cand = if (scan.best) |best| blk: {
             if (scan.pref) |pref| {
                 if (pref.len <= best.len + 1) break :blk pref;
@@ -98,13 +90,11 @@ pub fn gameHint(arr: *const arrangement.Arrangement, hand: []const card.Card, pr
         if (winner) |w| {
             var a = arr.*;
             for (w.idx[0..k]) |hi| appendSingle(&a, hand[hi]);
-            // The winner gets the full min-break budget. The probe
-            // proved a cover exists inside a smaller budget, and the
-            // enumeration order is deterministic, so this is .solved.
+            // Deterministic re-solve of the winner: same pipeline the
+            // probe ran, so this is .solved.
             const sol = (try solver.solveArrangement(&a)).solved;
             var res = Result{ .kind = .play, .plan = undefined };
             try moves.distill(&a, &sol.next, arr.n_stacks, &res.plan);
-            // Fair fight: both plans carry the full budget now.
             if (consolidation) |c| {
                 if (consolWins(&c, consol_homing, just_played, res.plan.n)) return c;
             }
@@ -327,17 +317,17 @@ pub fn formatBoardFutile(arr: *const arrangement.Arrangement, buf: []u8) []const
 
 const Cand = struct { idx: [3]u8, len: usize, kept: i32 };
 
-/// scanSize probes all size-k hand subsets under the probe budget.
-/// The best candidate ranks by SHORTEST plan first (the beginner's
-/// simplest next thing — and an in-progress objective gets strictly
-/// shorter with each executed move, which is what keeps hints from
-/// flip-flopping), then most kept edges, then hand order. Probe
-/// give-ups count as not-playable — the budget IS the honesty line.
+/// scanSize probes all size-k hand subsets through the one pipeline
+/// (repair first, then the sweep oracle). The best candidate ranks by
+/// SHORTEST plan first (the beginner's simplest next thing — and an
+/// in-progress objective gets strictly shorter with each executed
+/// move, which is what keeps hints from flip-flopping), then most
+/// kept edges, then hand order. Solver give-ups count as not-playable
+/// — the internal budgets are the honesty line.
 fn scanSize(
     arr: *const arrangement.Arrangement,
     hand: []const card.Card,
     comptime k: usize,
-    budget: u64,
     pref_idx: ?u8,
 ) (card.Error || moves.Error)!struct { best: ?Cand, pref: ?Cand } {
     var best: ?Cand = null;
@@ -347,7 +337,7 @@ fn scanSize(
     while (true) {
         var a = arr.*;
         for (idx[0..k]) |hi| appendSingle(&a, hand[hi]);
-        switch (try solver.solveArrangementBudgeted(&a, budget)) {
+        switch (try solver.solveArrangement(&a)) {
             .solved => |sol| {
                 var plan: moves.Plan = undefined;
                 try moves.distill(&a, &sol.next, arr.n_stacks, &plan);
@@ -424,14 +414,18 @@ test "game 8: pure homing tidies first; destructive cleanup never leads fresh" {
     var buf: [4096]u8 = undefined;
     // Three loose aces are pure homing (no player edge breaks):
     // 2 moves beat the 3-move play, tidy-first (game 11's vote).
+    // Re-pinned 2026-07-24 (convergence): repair rebuilds the set in
+    // its own deterministic order — same 2 moves, same class.
     const s3 = try hintFor(G8_STATE3, G8_HAND);
     try std.testing.expectEqual(Kind.clean_board, s3.kind);
-    try std.testing.expect(std.mem.indexOf(u8, planText(&s3, &buf), "push AD onto [AH]") != null);
+    try std.testing.expect(std.mem.indexOf(u8, planText(&s3, &buf), "push AC onto [AD]") != null);
     // With Aâ¦ committed to the club run, cleaning would mean tearing
     // it back out — destructive, so it never leads a fresh hint.
+    // Re-pinned: the converged pipeline's best fresh single is 7H'
+    // onto the 7-set — as beginner-simple as a play gets.
     const s4 = try hintFor(G8_STATE4, G8_HAND);
     try std.testing.expectEqual(Kind.play, s4.kind);
-    try std.testing.expect(std.mem.indexOf(u8, planText(&s4, &buf), "place AD'") != null);
+    try std.testing.expect(std.mem.indexOf(u8, planText(&s4, &buf), "place 7H' onto [7S 7D 7C]") != null);
 }
 
 test "game 11: after placing 3S, the 3H loner outranks the next hand card" {
@@ -504,7 +498,7 @@ test "game 8: a standing objective survives the ace toggle" {
     // 2-move ace rebuild leads; the AD' objective resumes after.
     const stick3 = try hintForPref(G8_STATE3, G8_HAND, "AD'");
     try std.testing.expectEqual(Kind.clean_board, stick3.kind);
-    try std.testing.expect(std.mem.indexOf(u8, planText(&stick3, &buf), "push AD onto [AH]") != null);
+    try std.testing.expect(std.mem.indexOf(u8, planText(&stick3, &buf), "push AC onto [AD]") != null);
     // And with AH' standing at the committed-Aâ¦ state, its 3-move
     // line (a peel, not a split â Aâ¦ rides the run's end) is within
     // one of AD's 2 â stick again. Either way, no flap.
@@ -512,7 +506,7 @@ test "game 8: a standing objective survives the ace toggle" {
     try std.testing.expect(std.mem.indexOf(u8, planText(&stick4, &buf), "place AH'") != null);
     // A vanished or unplayable preferred card falls back to fresh.
     const fresh = try hintForPref(G8_STATE4, G8_HAND, "9C");
-    try std.testing.expect(std.mem.indexOf(u8, planText(&fresh, &buf), "place AD'") != null);
+    try std.testing.expect(std.mem.indexOf(u8, planText(&fresh, &buf), "place 7H'") != null);
 }
 
 fn planText(res: *const Result, buf: []u8) []const u8 {

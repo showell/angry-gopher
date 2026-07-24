@@ -8,10 +8,16 @@
 //! have. This tier is that geometry, bounded.
 //!
 //! The search is PROBLEM-DIRECTED: always address the first short
-//! stack (len < 3). Three ops, each one edit of depth budget:
-//!   A: attach one of its cards to a legal seat elsewhere
-//!   B: bring a legal card to it from elsewhere
-//!   C: seat swap — its card displaces an END card of a full stack
+//! stack (len < 3). Four ops, each one edit of depth budget, and
+//! together they speak the whole table vocabulary (Steve, 2026-07-24:
+//! "people pull cards from the middle of long runs all the time" —
+//! ends-only was a machine convenience, not a game norm):
+//!   A: attach one of its cards to a legal seat elsewhere — an end,
+//!      a set, or a WEDGE (split a run to give the card a seat: the
+//!      game-17 state-2 play, split [..4C | 5H..] and place 4S)
+//!   B: bring a legal card to it from elsewhere; a mid-run pull
+//!      SPLITS the donor (split + take, one edit)
+//!   C: seat swap — its card displaces ANY seat of a full stack
 //!      (the displaced card becomes the next problem; this is the
 //!      6C'-takes-6S's-seat move, and it is what keeps the search
 //!      directed when the fixing edit touches two full stacks)
@@ -64,37 +70,61 @@ fn search(arr: *arrangement.Arrangement, depth: u8, nodes: *u32) bool {
             if (search(arr, depth - 1, nodes)) return true;
             arr.* = undo;
         }
+        // Wedge: split a run at k to give x a seat there — the head
+        // of the right part or the tail of the left part.
+        for (0..arr.n_stacks) |s| {
+            if (s == p) continue;
+            const cs = arr.stackCards(s);
+            if (cs.len < 3 or stackFlavor(cs) == .set) continue;
+            const flavor = stackFlavor(cs).?;
+            for (1..cs.len) |k| {
+                inline for (.{ true, false }) |right_head| {
+                    if (wedgeFits(cs, k, x, flavor, right_head)) {
+                        removeCard(arr, p, xi);
+                        const s_adj = if (p < s and pcs.len == 1) s - 1 else s;
+                        splitStack(arr, s_adj, k);
+                        if (right_head) {
+                            insertCard(arr, s_adj + 1, 0, x);
+                        } else {
+                            insertCard(arr, s_adj, k, x);
+                        }
+                        if (search(arr, depth - 1, nodes)) return true;
+                        arr.* = undo;
+                    }
+                }
+            }
+        }
     }
 
-    // Op B: bring a legal card to the problem stack.
+    // Op B: bring a legal card to the problem stack. A mid-run pull
+    // splits the donor (split + take, one edit).
     for (0..arr.n_stacks) |q| {
         if (q == p) continue;
         const qcs = arr.stackCards(q);
         for (0..qcs.len) |yi| {
-            if (!removable(qcs, yi)) continue;
             const y = qcs[yi];
             var pos: usize = undefined;
             if (!canAttach(arr, p, y, &pos)) continue;
-            removeCard(arr, q, yi);
-            const p_adj = if (q < p and qcs.len == 1) p - 1 else p;
+            const delta = extractCard(arr, q, yi);
+            const p_adj: usize = if (q < p) @intCast(@as(i64, @intCast(p)) + delta) else p;
             insertCard(arr, p_adj, pos, y);
             if (search(arr, depth - 1, nodes)) return true;
             arr.* = undo;
         }
     }
 
-    // Op C: seat swap — a problem card displaces an end card of a
-    // full stack; the displaced card becomes a fresh singleton (the
-    // next problem). Only from singleton problems: a 2-stack's fix
-    // should keep its own pair together, and singletons are where
-    // the human move lives (the appended hand card).
+    // Op C: seat swap — a problem card displaces ANY seat of a full
+    // stack; the displaced card becomes a fresh singleton (the next
+    // problem). Only from singleton problems: a 2-stack's fix should
+    // keep its own pair together, and singletons are where the human
+    // move lives (the appended hand card).
     if (pcs.len == 1) {
         const x = pcs[0];
         for (0..arr.n_stacks) |q| {
             if (q == p) continue;
             const qcs = arr.stackCards(q);
             if (qcs.len < 3) continue;
-            for ([2]usize{ 0, qcs.len - 1 }) |yi| {
+            for (0..qcs.len) |yi| {
                 if (!seatFits(qcs, yi, x)) continue;
                 const y = qcs[yi];
                 // Replace y with x in place; y opens as a singleton.
@@ -181,17 +211,8 @@ fn canAttach(arr: *const arrangement.Arrangement, s: usize, x: card.Card, pos: *
     return false;
 }
 
-/// Which members may leave a stack: run ends only (the never-pull-
-/// from-the-middle table norm); any member of a set; a singleton's
-/// card.
-fn removable(cs: []const card.Card, i: usize) bool {
-    if (cs.len <= 2) return true;
-    if (stackFlavor(cs) == .set) return true;
-    return i == 0 or i == cs.len - 1;
-}
-
-/// Can `x` sit in seat `yi` (an end) of full stack `cs` with the
-/// incumbent gone — same flavor into the neighbor, no rank/suit
+/// Can `x` sit in seat `yi` (any position) of full stack `cs` with
+/// the incumbent gone — same flavor into both neighbors, no rank/suit
 /// collision with the rest?
 fn seatFits(cs: []const card.Card, yi: usize, x: card.Card) bool {
     const flavor = stackFlavor(cs).?;
@@ -205,11 +226,29 @@ fn seatFits(cs: []const card.Card, yi: usize, x: card.Card) bool {
     for (cs, 0..) |c, i| {
         if (i != yi and c.rank == x.rank) return false;
     }
-    const nb = if (yi == 0) cs[1] else cs[cs.len - 2];
-    const f = if (yi == 0)
-        graph.edgeFlavor(graph.cardIndex(x), graph.cardIndex(nb))
+    if (yi > 0) {
+        const f = graph.edgeFlavor(graph.cardIndex(cs[yi - 1]), graph.cardIndex(x)) orelse return false;
+        if (f != flavor) return false;
+    }
+    if (yi + 1 < cs.len) {
+        const f = graph.edgeFlavor(graph.cardIndex(x), graph.cardIndex(cs[yi + 1])) orelse return false;
+        if (f != flavor) return false;
+    }
+    return true;
+}
+
+/// Can `x` take the seat a split at `k` opens — heading cs[k..] when
+/// `right_head`, else tailing cs[..k]? Rank must be fresh within the
+/// receiving part only; the other part is untouched.
+fn wedgeFits(cs: []const card.Card, k: usize, x: card.Card, flavor: graph.EdgeFlavor, comptime right_head: bool) bool {
+    const part = if (right_head) cs[k..] else cs[0..k];
+    for (part) |c| {
+        if (c.rank == x.rank) return false;
+    }
+    const f = if (right_head)
+        graph.edgeFlavor(graph.cardIndex(x), graph.cardIndex(cs[k])) orelse return false
     else
-        graph.edgeFlavor(graph.cardIndex(nb), graph.cardIndex(x));
+        graph.edgeFlavor(graph.cardIndex(cs[k - 1]), graph.cardIndex(x)) orelse return false;
     return f == flavor;
 }
 
@@ -226,6 +265,36 @@ fn removeCard(arr: *arrangement.Arrangement, s: usize, i: usize) void {
     } else {
         for (s + 1..arr.n_stacks + 1) |k| arr.start[k] -= 1;
     }
+}
+
+/// Remove the card at position `i` of stack `s`. A mid-run removal
+/// SPLITS the stack (split + take is one table gesture). Returns how
+/// stack indices after `s` moved: -1 vanished, 0 unchanged, +1 split.
+fn extractCard(arr: *arrangement.Arrangement, s: usize, i: usize) i8 {
+    const cs = arr.stackCards(s);
+    const mid_run = cs.len >= 3 and stackFlavor(cs) != .set and i > 0 and i + 1 < cs.len;
+    if (!mid_run) {
+        const vanished = cs.len == 1;
+        removeCard(arr, s, i);
+        return if (vanished) -1 else 0;
+    }
+    const at = arr.start[s] + i;
+    const n = arr.start[arr.n_stacks];
+    std.mem.copyForwards(card.Card, arr.cards[at .. n - 1], arr.cards[at + 1 .. n]);
+    var k = arr.n_stacks + 1;
+    while (k > s + 1) : (k -= 1) arr.start[k] = arr.start[k - 1] - 1;
+    arr.start[s + 1] = @intCast(at);
+    arr.n_stacks += 1;
+    return 1;
+}
+
+/// Split stack `s` before its card `k`: stacks s and s+1.
+fn splitStack(arr: *arrangement.Arrangement, s: usize, k: usize) void {
+    const cut = arr.start[s] + k;
+    var i = arr.n_stacks + 1;
+    while (i > s + 1) : (i -= 1) arr.start[i] = arr.start[i - 1];
+    arr.start[s + 1] = @intCast(cut);
+    arr.n_stacks += 1;
 }
 
 fn insertCard(arr: *arrangement.Arrangement, s: usize, i: usize, c: card.Card) void {
@@ -306,6 +375,23 @@ test "gathering loose cards into a fresh set" {
     // third loose seven completes the meld.
     const r = (try repairKept("7C 7D 3S>4S>5S", "7H")).?;
     try testing.expectEqual(r.total, r.kept);
+}
+
+test "the wedge: split a run to seat the new card (game-17 state 2)" {
+    // 4S's only seat is where 4C sits mid-run — the play is split
+    // [2C 3D 4C | 5H 6S 7H] and head the right part. One broken edge.
+    const r = (try repairKept("2C>3D>4C>5H>6S>7H", "4S")).?;
+    try testing.expectEqual(@as(u16, 5), r.total);
+    try testing.expectEqual(@as(u16, 4), r.kept);
+}
+
+test "mid-run pull: the donor splits and both halves stand" {
+    // The 6-set needs 6H from the middle of the heart run; pulling it
+    // leaves [3H 4H 5H] and [7H 8H 9H], both legal. Steve, 2026-07-24:
+    // people pull cards from the middle of long runs all the time.
+    const r = (try repairKept("3H>4H>5H>6H>7H>8H>9H 6C=6D", "")).?;
+    try testing.expectEqual(@as(u16, 7), r.total);
+    try testing.expectEqual(@as(u16, 5), r.kept);
 }
 
 test "deep restructures are not repair's job" {

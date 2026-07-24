@@ -30,11 +30,10 @@ pub const NUM_PLAYERS = 2;
 pub const STOP_AT_DECK = 10;
 pub const MAX_TURNS = 200;
 
-// Probes are SATISFACTION solves (solveArrangementSat): warm
-// ordering makes the first cover near, and the sim needs playable,
-// not prettiest — the min-break enumeration was 99.9% of a game's
-// solver steps when the probes ran it. A probe give-up counts as
-// not-playable AND lands in the stats — that is the late-game sensor.
+// Probes run the one converged pipeline (solveArrangement: repair,
+// then the sweep oracle) — the same solve the hints use. A probe
+// give-up counts as not-playable AND lands in the stats — that is
+// the late-game sensor.
 
 // ---------- the deal (bit-exact vs ts/baseline_deal.ts) ----------
 
@@ -266,7 +265,7 @@ fn findPlay(
         var a = arr.*;
         for (idx[0..k]) |hi| appendSingle(&a, hand[hi]);
         stats.probe_calls += 1;
-        switch (try solver.solveArrangementSat(&a)) {
+        switch (try solver.solveArrangement(&a)) {
             .solved => |sol| {
                 const kept = arrangement.reportKept(&a, &sol.next).kept_edges;
                 if (best == null or kept > best.?.kept)
@@ -496,11 +495,11 @@ test "self-play: six seeds land the pinned games" {
     // deliberately). Card conservation asserts every turn inside.
     const Pin = struct { seed: u32, turns: u16, p0: u16, p1: u16, stacks: usize };
     const pins = [_]Pin{
-        .{ .seed = 42, .turns = 10, .p0 = 30, .p1 = 35, .stacks = 22 },
-        .{ .seed = 43, .turns = 10, .p0 = 30, .p1 = 35, .stacks = 21 },
-        .{ .seed = 44, .turns = 10, .p0 = 30, .p1 = 35, .stacks = 25 },
-        .{ .seed = 100, .turns = 11, .p0 = 30, .p1 = 35, .stacks = 21 },
-        .{ .seed = 200, .turns = 10, .p0 = 30, .p1 = 35, .stacks = 22 },
+        .{ .seed = 42, .turns = 10, .p0 = 30, .p1 = 35, .stacks = 20 },
+        .{ .seed = 43, .turns = 10, .p0 = 30, .p1 = 35, .stacks = 20 },
+        .{ .seed = 44, .turns = 10, .p0 = 30, .p1 = 35, .stacks = 26 },
+        .{ .seed = 100, .turns = 11, .p0 = 30, .p1 = 35, .stacks = 23 },
+        .{ .seed = 200, .turns = 10, .p0 = 30, .p1 = 35, .stacks = 21 },
         .{ .seed = 300, .turns = 10, .p0 = 30, .p1 = 35, .stacks = 23 },
     };
     for (pins) |pin| {
