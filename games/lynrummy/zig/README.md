@@ -175,6 +175,16 @@ Files:
   solver.wasm): arrangement line in, move plan out — puzzleHint and
   gameHint exports. Serves both Hint buttons via
   zig-server/src/puzzles.zig + engine_glue.js.
+- `sim.zig` — full-game agent self-play on the ts/full_game/ rules,
+  deal bit-exact with ts/baseline_deal.ts (a seed names the same game
+  in both engines). The agent plays STRONG, not beginner-shaped:
+  greedy subset cascade, satisfaction probes (`solveArrangementSat`),
+  the winning probe's cover lands as the board. Bake-off driver:
+  `ops/bench_lynrummy_sim` (~100-300ms/game ReleaseFast vs the TS
+  harness's 1.8-11s on the same deals).
+- `cut_dump.zig` — dumps a game's CUT STATE (the board at the first
+  solver give-up) for `ops/publish_lynrummy_cut`, which publishes it
+  as a playable session via ts/publish_cut_game.ts.
 - `pure_run.zig` — phase 1: per-suit cyclic arc cover + verifier. Kept
   as a stepping stone.
 - `solver.zig` — phases 2+3: the rank-sweep solver (with the component
