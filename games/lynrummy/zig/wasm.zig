@@ -48,10 +48,14 @@ export fn puzzleHint(len: u32) i32 {
 /// newline, the HAND as space-separated card tokens (possibly empty),
 /// and optionally a third line naming the PREVIOUS hint's objective
 /// card — the stickiness that keeps hints walking one line instead of
-/// flapping (session 8's lesson). Returns like puzzleHint, with 0
-/// meaning "nothing to play and the board is already clean — draw";
-/// -2 meaning the BOARD multiset has no cover (undo territory). A
-/// `play` plan leads with its `place` line.
+/// flapping (session 8's lesson). Returns like puzzleHint, except the
+/// no-verdict states carry FUTILITY CERTIFICATES as text (Steve's
+/// ask, 2026-07-24): a positive return is the text length, and the
+/// text is either a plan or a sentinel-prefixed line —
+///   "!noplay: <why each hand card can't play>"  (draw territory)
+///   "!futile: <why the board has no cover>"     (undo territory)
+/// The glue owns presentation. A `play` plan leads with its `place`
+/// line.
 export fn gameHint(len: u32) i32 {
     if (len > io_buf.len) return -1;
     const input = io_buf[0..len];
@@ -75,10 +79,27 @@ export fn gameHint(len: u32) i32 {
         error.DistillFailed => -4,
         else => -1,
     };
-    return switch (res.kind) {
-        .play, .clean_board => @intCast(moves.formatPlan(&res.plan, &io_buf).len),
-        .no_play => 0,
-        .futile_board => -2,
-        .unknown => -3,
-    };
+    switch (res.kind) {
+        .play, .clean_board => return @intCast(moves.formatPlan(&res.plan, &io_buf).len),
+        // The parsed board and hand no longer need the input text, so
+        // the certificates write straight back into io_buf: sentinel
+        // at 0, ": " reserved, certificate text after it.
+        .no_play => {
+            const head = "!noplay";
+            @memcpy(io_buf[0..head.len], head);
+            const certs = hint.formatNoPlayCerts(&arr, hand, io_buf[head.len + 2 ..]);
+            if (certs.len == 0) return head.len;
+            @memcpy(io_buf[head.len .. head.len + 2], ": ");
+            return @intCast(head.len + 2 + certs.len);
+        },
+        .futile_board => {
+            const head = "!futile";
+            @memcpy(io_buf[0..head.len], head);
+            const why = hint.formatBoardFutile(&arr, io_buf[head.len + 2 ..]);
+            if (why.len == 0) return head.len;
+            @memcpy(io_buf[head.len .. head.len + 2], ": ");
+            return @intCast(head.len + 2 + why.len);
+        },
+        .unknown => return -3,
+    }
 }

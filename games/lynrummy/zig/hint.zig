@@ -19,6 +19,7 @@
 
 const std = @import("std");
 const card = @import("card.zig");
+const graph = @import("graph.zig");
 const arrangement = @import("arrangement.zig");
 const solver = @import("solver.zig");
 const moves = @import("moves.zig");
@@ -141,6 +142,187 @@ pub fn gameHint(arr: *const arrangement.Arrangement, hand: []const card.Card, pr
 fn consolWins(c: *const Result, homing: bool, just_played: bool, play_len: usize) bool {
     if (just_played) return c.plan.n <= play_len;
     return homing and c.plan.n < play_len;
+}
+
+// ---------- futility certificates ----------
+//
+// Steve's ask (2026-07-24, after giving up on /game/16 without a
+// proof): when nothing plays, SAY WHY. The three refutation tiers
+// translate to three grades of table English; grouping keeps it to
+// the one line the status bar shows (full text also logs to the
+// console via the glue).
+
+const Why = union(enum) {
+    futile: solver.FutileWhy,
+    undecided,
+};
+
+fn whyEql(a: Why, b: Why) bool {
+    return std.meta.eql(a, b);
+}
+
+const Sink = struct {
+    buf: []u8,
+    n: usize = 0,
+
+    fn put(self: *Sink, s: []const u8) void {
+        @memcpy(self.buf[self.n .. self.n + s.len], s);
+        self.n += s.len;
+    }
+
+    fn fmt(self: *Sink, comptime f: []const u8, args: anytype) void {
+        self.n += (std.fmt.bufPrint(self.buf[self.n..], f, args) catch unreachable).len;
+    }
+
+    fn card(self: *Sink, c: card_mod.Card) void {
+        var cb: [3]u8 = undefined;
+        self.put(card_mod.formatCard(c, &cb));
+    }
+};
+
+const card_mod = card;
+
+fn rankName(rank: u8) []const u8 {
+    const names = [13][]const u8{ "A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K" };
+    return names[rank];
+}
+
+fn ordinal(n: u8) []const u8 {
+    const words = [_][]const u8{ "second", "third", "fourth", "fifth", "sixth", "seventh", "eighth" };
+    return words[@min(n, 8) -| 2];
+}
+
+fn putWhy(s: *Sink, why: Why, base_bit: u64) void {
+    switch (why) {
+        .undecided => s.put("undecided — the search gave up"),
+        .futile => |w| switch (w) {
+            .search => s.put("nothing works — proven by full search"),
+            .counting => |c| {
+                s.fmt("the board can't take a {s} {s} — ", .{ ordinal(c.cards), rankName(c.rank) });
+                if (c.run_seats == 0) {
+                    s.put("no run can hold one");
+                } else {
+                    s.fmt("runs can hold only {d}", .{c.run_seats});
+                }
+                if (c.set_seats == 0) {
+                    s.fmt(" and no {s}-set is possible", .{rankName(c.rank)});
+                } else {
+                    s.fmt(" and sets can absorb only {d}", .{c.set_seats});
+                }
+            },
+            .component => |c| {
+                const others = c.mask & ~base_bit;
+                if (others == 0) {
+                    s.put("nothing on the board can meld with it");
+                } else {
+                    s.put("only ");
+                    var m = others;
+                    var listed: u8 = 0;
+                    while (m != 0) : (m &= m - 1) {
+                        const i: u8 = @intCast(@ctz(m));
+                        if (listed == 4) {
+                            s.put("\u{2026} ");
+                            break;
+                        }
+                        s.card(.{ .rank = @intCast(graph.rankOf(i)), .suit = @intCast(graph.suitOf(i)), .deck = 0 });
+                        s.put(" ");
+                        listed += 1;
+                    }
+                    s.put("are in reach — a meld needs three");
+                }
+            },
+        },
+    }
+}
+
+/// The one-line no-play certificate: for each hand card, why board +
+/// that card has no cover, grouped by identical stories and joined
+/// with "; ". Empty when the hand is empty.
+pub fn formatNoPlayCerts(arr: *const arrangement.Arrangement, hand: []const card.Card, buf: []u8) []const u8 {
+    var whys: [card.MAX_CARDS]Why = undefined;
+    for (hand, 0..) |c, i| {
+        var cards_buf: [card.MAX_CARDS]card.Card = undefined;
+        const n = arr.nCards();
+        @memcpy(cards_buf[0..n], arr.cards[0..n]);
+        cards_buf[n] = c;
+        const bits = solver.boardBits(cards_buf[0 .. n + 1]) catch {
+            whys[i] = .undecided;
+            continue;
+        };
+        whys[i] = switch (solver.solve(bits)) {
+            // A solved single can't reach here — the scan already ran
+            // a strictly stronger solve on it. Debug builds fail loud.
+            .solved => blk: {
+                std.debug.assert(false);
+                break :blk .undecided;
+            },
+            .unknown => .undecided,
+            .futile => .{ .futile = solver.explainFutile(bits) },
+        };
+    }
+    var s = Sink{ .buf = buf };
+    var grouped: [card.MAX_CARDS]bool = @splat(false);
+    var first_group = true;
+    for (0..hand.len) |i| {
+        if (grouped[i]) continue;
+        if (!first_group) s.put("; ");
+        first_group = false;
+        s.card(hand[i]);
+        for (i + 1..hand.len) |j| {
+            if (!grouped[j] and whyEql(whys[i], whys[j])) {
+                grouped[j] = true;
+                s.put(" ");
+                s.card(hand[j]);
+            }
+        }
+        s.put(": ");
+        const base_bit = @as(u64, 1) << @intCast(@as(u8, hand[i].suit) * 13 + hand[i].rank);
+        putWhy(&s, whys[i], base_bit);
+    }
+    return s.buf[0..s.n];
+}
+
+/// The one-line certificate for a FUTILE BOARD (undo territory): why
+/// the board's own multiset has no cover.
+pub fn formatBoardFutile(arr: *const arrangement.Arrangement, buf: []u8) []const u8 {
+    var s = Sink{ .buf = buf };
+    const bits = solver.boardBits(arr.cards[0..arr.nCards()]) catch return s.buf[0..0];
+    switch (solver.explainFutile(bits)) {
+        .search => s.put("no clean cover exists — proven by full search"),
+        .counting => |c| {
+            s.fmt("the board holds {d} {s}s but ", .{ c.cards, rankName(c.rank) });
+            if (c.run_seats == 0) {
+                s.put("no run can hold one");
+            } else {
+                s.fmt("runs can hold only {d}", .{c.run_seats});
+            }
+            if (c.set_seats == 0) {
+                s.fmt(" and no {s}-set is possible", .{rankName(c.rank)});
+            } else {
+                s.fmt(" and sets can absorb only {d}", .{c.set_seats});
+            }
+        },
+        .component => |c| {
+            var m = c.mask;
+            var listed: u8 = 0;
+            while (m != 0) : (m &= m - 1) {
+                const i: u8 = @intCast(@ctz(m));
+                if (listed == 4) {
+                    s.put("\u{2026} ");
+                    break;
+                }
+                s.card(.{ .rank = @intCast(graph.rankOf(i)), .suit = @intCast(graph.suitOf(i)), .deck = 0 });
+                s.put(" ");
+                listed += 1;
+            }
+            if (@popCount(c.mask) == 1) {
+                s.put("has nothing to meld with");
+            } else {
+                s.put("can only reach each other — a meld needs three");
+            }
+        },
+    }
+    return s.buf[0..s.n];
 }
 
 const Cand = struct { idx: [3]u8, len: usize, kept: i32 };
@@ -380,6 +562,55 @@ test "nothing playable, clean board: draw" {
 test "an uncoverable board says so — that means undo" {
     const res = try hintFor("3H>4H 5H KC", "");
     try std.testing.expectEqual(Kind.futile_board, res.kind);
+}
+
+// The /game/16 stuck state (seed 240 turn 4), pinned verbatim — the
+// board Steve gave up on without a proof (2026-07-24). The machine
+// had three: the two 8s fail the counting lemma (three 8s, two run
+// seats, no set), and 7H' needed the full search.
+const STUCK_BOARD = "3H>4S'>5H 4H>5C>6D' 7H=7D=7C TH=TD=TC JD>QC'>KH>AC " ++
+    "KD>AC'>2H>3S>4D' JC'>QD>KS>AD>2C AS>2S>3S' 6S>7D'>8C' 7S>8S>9S " ++
+    "KH'>AH>2H' TD'>JS>QH'>KS'>AD' 2C'>3D>4C 2S'>3D'>4C'";
+
+test "futility certificates: the stuck hand explains itself" {
+    const arr = try arrangement.parse(STUCK_BOARD);
+    var hb: [card.MAX_CARDS]card.Card = undefined;
+    const hand = try card.parseBoard("8C 8S' 7H'", &hb);
+    const res = try gameHint(&arr, hand, null, false);
+    try std.testing.expectEqual(Kind.no_play, res.kind);
+    var buf: [2048]u8 = undefined;
+    try std.testing.expectEqualStrings(
+        "8C 8S': the board can't take a third 8 — runs can hold only 2 " ++
+            "and no 8-set is possible; 7H': nothing works — proven by full search",
+        formatNoPlayCerts(&arr, hand, &buf),
+    );
+}
+
+test "futility certificates: a card with no neighbors says so" {
+    const arr = try arrangement.parse("3H>4H>5H");
+    var hb: [card.MAX_CARDS]card.Card = undefined;
+    const hand = try card.parseBoard("KC", &hb);
+    var buf: [512]u8 = undefined;
+    try std.testing.expectEqualStrings(
+        "KC: nothing on the board can meld with it",
+        formatNoPlayCerts(&arr, hand, &buf),
+    );
+}
+
+test "futility certificates: a dead board names its reason" {
+    // A loose QD nothing can reach: component certificate.
+    const lone = try arrangement.parse("3H>4H>5H QD");
+    var buf: [512]u8 = undefined;
+    try std.testing.expectEqualStrings(
+        "QD has nothing to meld with",
+        formatBoardFutile(&lone, &buf),
+    );
+    // The stuck board with 8C forced onto it: counting certificate.
+    const dead = try arrangement.parse(STUCK_BOARD ++ " 8C");
+    try std.testing.expectEqualStrings(
+        "the board holds 3 8s but runs can hold only 2 and no 8-set is possible",
+        formatBoardFutile(&dead, &buf),
+    );
 }
 
 test "equally clean singles tie by hand order" {

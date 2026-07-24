@@ -196,6 +196,23 @@
       if (rc > 0) {
         var text = new TextDecoder().decode(
           new Uint8Array(wasm.memory.buffer, wasm.ioPtr(), rc));
+        // Futility certificates (sentinel-prefixed): why nothing
+        // plays / why the board needs an Undo, in table English.
+        if (text.indexOf('!noplay') === 0) {
+          gameObjective = '';
+          gameObjectiveCount = 0;
+          var why = text.slice('!noplay: '.length);
+          return [why
+            ? glyphCards('No play — draw a card. (' + why + ')')
+            : 'No play — draw a card.'];
+        }
+        if (text.indexOf('!futile') === 0) {
+          gameObjective = '';
+          gameObjectiveCount = 0;
+          var bwhy = text.slice('!futile: '.length);
+          throw new Error(glyphCards('this board cannot be made clean — try Undo'
+            + (bwhy ? ' (' + bwhy + ')' : '')));
+        }
         var lines = text.split('\n');
         var place = firstPlaceToken(lines);
         gameObjective = place || '';
@@ -211,7 +228,6 @@
       }
       gameObjective = '';
       gameObjectiveCount = 0;
-      if (rc === -2) throw new Error('this board cannot be made clean — try Undo');
       if (rc === -3) throw new Error('the solver gave up on this board');
       throw new Error('the solver rejected the board (code ' + rc + ')');
     });

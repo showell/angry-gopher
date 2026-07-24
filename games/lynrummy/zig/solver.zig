@@ -113,6 +113,13 @@ pub fn boardBits(cards: []const card.Card) card.Error!Board {
 /// re-sweeps with a fresh memo, so global futility would otherwise be
 /// re-learned once per matching).
 fn componentsOk(board: Board) bool {
+    return smallComponent(board) == null;
+}
+
+/// The first too-small meld-graph component's base-card mask, or null
+/// when every component has ≥ 3 cards. The mask is the certificate
+/// witness: these are ALL the cards its members could ever meld with.
+fn smallComponent(board: Board) ?u64 {
     // Copies share all their neighbors, so BFS the base (52-card)
     // projection and weight each card by its multiplicity. (A second
     // copy can't meld with its twin, so multiplicity-weighted size ≥ 3
@@ -126,6 +133,7 @@ fn componentsOk(board: Board) bool {
         var sp: usize = 1;
         stack[0] = c;
         seen |= @as(u64, 1) << @intCast(c);
+        var comp: u64 = @as(u64, 1) << @intCast(c);
         var size: u32 = 0;
         while (sp > 0) {
             sp -= 1;
@@ -141,14 +149,53 @@ fn componentsOk(board: Board) bool {
             for (nb) |x| {
                 if (present >> @intCast(x) & 1 != 0 and seen >> @intCast(x) & 1 == 0) {
                     seen |= @as(u64, 1) << @intCast(x);
+                    comp |= @as(u64, 1) << @intCast(x);
                     stack[sp] = x;
                     sp += 1;
                 }
             }
         }
-        if (size < 3) return false;
+        if (size < 3) return comp;
     }
-    return true;
+    return null;
+}
+
+/// WHY a futile board is futile — the certificate behind the proof
+/// (Steve's ask, 2026-07-24, after /game/16: "I don't have an obvious
+/// futility proof"). Mirrors the refutation tiers: a too-small meld
+/// component, a rank whose cards outnumber its run seats + set seats
+/// (the counting lemma — the "two black 8s, one 6♠" class), or plain
+/// exhaustive search, which has no compact witness.
+pub const FutileWhy = union(enum) {
+    component: struct { mask: u64 }, // base cards of the small component
+    counting: struct { rank: u8, cards: u8, run_seats: u8, set_seats: u8 },
+    search,
+};
+
+/// Diagnose a board that solve() has ALREADY answered futile. Re-runs
+/// the cheap refutations in the same order solve consults them; when
+/// neither prefilter fires, the proof was the search itself.
+pub fn explainFutile(board: Board) FutileWhy {
+    if (smallComponent(board)) |m| return .{ .component = .{ .mask = m } };
+    const at = slotMasks(board);
+    for (0..13) |r| {
+        const cnt: u8 = @popCount(at[r]);
+        if (cnt == 0) continue;
+        const nm1: u8 = @popCount(at[(r + 12) % 13]);
+        const nm2: u8 = @popCount(at[(r + 11) % 13]);
+        const np1: u8 = @popCount(at[(r + 1) % 13]);
+        const np2: u8 = @popCount(at[(r + 2) % 13]);
+        const simple = @min(nm1 + @min(np1, np2), np1 + @min(nm1, nm2));
+        const bound = if (tightBound(&at, r)) |tb| @min(tb, simple) else simple;
+        if (cnt <= bound) continue;
+        if (cnt - bound > setCapacity(at[r])) return .{ .counting = .{
+            .rank = @intCast(r),
+            .cards = cnt,
+            .run_seats = bound,
+            .set_seats = setCapacity(at[r]),
+        } };
+    }
+    return .search;
 }
 
 /// solve answers solve-board: a clean next-map for the card multiset,
