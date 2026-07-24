@@ -1,8 +1,8 @@
 // publish_cut_game.ts — read a zig sim cut-state dump (cut_dump.zig
 // via ops/publish_lynrummy_cut) and publish it as a playable session:
-// a real late-game board whose next decision exceeded the solver
-// budget, cut so a human can play from exactly where the machine ran
-// out. No flags; the dump path is the constant below.
+// a real mid-game board where the agent got STUCK — it held cards
+// and found no play — cut so a human can try to beat the machine's
+// verdict. No flags; the dump path is the constant below.
 
 import { type Card, parseCardLabel } from "./core/card.ts";
 import type { BoardStack } from "./geometry/geometry.ts";
@@ -110,7 +110,7 @@ function main(): void {
     deck: dump.deck,
     activePlayer: dump.active,
     turnIndex: dump.turn - 1,
-    label: `zig sim cut: seed ${dump.seed}, turn ${dump.turn} (solver give-up)`,
+    label: `zig sim cut: seed ${dump.seed}, turn ${dump.turn} (agent stuck)`,
     userRoot: USER_ROOT,
   });
   const v = validateSession(t.sessionDir);

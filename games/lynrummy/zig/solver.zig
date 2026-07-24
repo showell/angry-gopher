@@ -57,6 +57,7 @@ const card = @import("card.zig");
 const graph = @import("graph.zig");
 pub const arrangement = @import("arrangement.zig");
 pub const moves = @import("moves.zig");
+pub const repair = @import("repair.zig");
 pub const suit_first = @import("suit_first.zig");
 
 pub const Flavor = enum { open, pure, rb, set };
@@ -181,6 +182,15 @@ pub fn solveArrangement(arr: *const arrangement.Arrangement) card.Error!Outcome 
 /// enumeration was 99.9% of a simulated game's solver steps, all of
 /// it spent polishing covers nobody would see).
 pub fn solveArrangementSat(arr: *const arrangement.Arrangement) card.Error!Outcome {
+    // The local-repair tier answers first: bounded edits of the
+    // player's own arrangement (repair.zig, born from Steve's 6C'
+    // find — the human search geometry the enumeration lacks). Its
+    // covers are near-best-kept by construction, and it is immune to
+    // the warm pathology below.
+    if (repair.tryRepair(arr)) |next| {
+        steps_used = 0;
+        return .{ .solved = .{ .next = next } };
+    }
     const board = try boardBits(arr.cards[0..arr.nCards()]);
     const warm = arrangement.warmOf(arr);
     const out = solveWarm(board, &warm);

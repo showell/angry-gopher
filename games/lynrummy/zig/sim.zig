@@ -148,10 +148,11 @@ pub const Stats = struct {
     probes_solved: u32 = 0,
 };
 
-/// The full game state at the START of the first turn in which a
-/// solver probe gave up — the publishable specimen: a real late-game
-/// board whose next decision exceeded the budget, cut so a human can
-/// play it from exactly where the machine ran out.
+/// The full game state at the START of the first STUCK turn — the
+/// agent held cards and found no play at all (Steve's specimen
+/// criterion, 2026-07-23, after give-up cuts proved trivially
+/// playable): the crisp human question is "the machine says nothing
+/// plays here; can you find one?"
 pub const CutState = struct {
     turn: u16,
     active: u8,
@@ -191,9 +192,8 @@ pub fn playGame(seed: u32) card.Error!GameResult {
         if (turn > MAX_TURNS) break;
         const before = deal;
         const before_pos = deck_pos;
-        const had_unknown = res.stats.first_unknown_turn != 0;
         const rec = try playTurn(&deal, active, &deck_pos, turn, &res.stats);
-        if (!had_unknown and res.stats.first_unknown_turn != 0)
+        if (res.cut == null and rec.played == 0 and before.hand_len[active] > 0)
             res.cut = cutFrom(&before, before_pos, turn, active);
         res.turns[res.n_turns] = rec;
         res.n_turns += 1;
@@ -496,12 +496,12 @@ test "self-play: six seeds land the pinned games" {
     // deliberately). Card conservation asserts every turn inside.
     const Pin = struct { seed: u32, turns: u16, p0: u16, p1: u16, stacks: usize };
     const pins = [_]Pin{
-        .{ .seed = 42, .turns = 10, .p0 = 30, .p1 = 35, .stacks = 12 },
-        .{ .seed = 43, .turns = 10, .p0 = 30, .p1 = 35, .stacks = 9 },
-        .{ .seed = 44, .turns = 10, .p0 = 30, .p1 = 35, .stacks = 15 },
-        .{ .seed = 100, .turns = 11, .p0 = 30, .p1 = 35, .stacks = 13 },
-        .{ .seed = 200, .turns = 10, .p0 = 30, .p1 = 35, .stacks = 14 },
-        .{ .seed = 300, .turns = 10, .p0 = 30, .p1 = 35, .stacks = 16 },
+        .{ .seed = 42, .turns = 10, .p0 = 30, .p1 = 35, .stacks = 22 },
+        .{ .seed = 43, .turns = 10, .p0 = 30, .p1 = 35, .stacks = 21 },
+        .{ .seed = 44, .turns = 10, .p0 = 30, .p1 = 35, .stacks = 25 },
+        .{ .seed = 100, .turns = 11, .p0 = 30, .p1 = 35, .stacks = 21 },
+        .{ .seed = 200, .turns = 10, .p0 = 30, .p1 = 35, .stacks = 22 },
+        .{ .seed = 300, .turns = 10, .p0 = 30, .p1 = 35, .stacks = 23 },
     };
     for (pins) |pin| {
         const res = try playGame(pin.seed);
