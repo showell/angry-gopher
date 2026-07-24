@@ -405,6 +405,23 @@ test "mid-run pull: the donor splits and both halves stand" {
     try testing.expectEqual(@as(u16, 5), r.kept);
 }
 
+test "the puzzle-79 acceptance: Steve's 6-verb line is found" {
+    // sim_s95t6, the board that ratified the deepening (random793):
+    // Steve solved it keeping 41/44 edges in six verbs, all in
+    // repair vocabulary, and depth-3 repair never saw it while the
+    // sweep's cover was a 34-move teardown. The work cap is tuned on
+    // exactly this line — if this pin fails after a repair change,
+    // the budget or the ordering regressed below the proven human
+    // bar.
+    const board = "AH=AD=AS 3H>4C>5H 4H=4C'=4S KH=KD=KS 2D=2C=2S 3D=3C=3S " ++
+        "5D>6S>7H>8S>9H 7D=7S=7C 8D>9S>TD>JC JD>QD>KD' TC>JC'>QC " ++
+        "JS>QH>KS'>AD' QS>KH'>AS'>2H>3S' 4H'>5H'>6H 7H'>8C>9D 7D'=7C'=7S' " ++
+        "AC>2H'>3C' QC'>KC>AC' 4S'>5D'>6C 9H'";
+    const r = (try repairKept(board, "")).?;
+    try testing.expectEqual(@as(u16, 44), r.total);
+    try testing.expectEqual(@as(u16, 41), r.kept);
+}
+
 test "deep restructures are not repair's job" {
     // 5C on the opening board forces a six-break rebuild (the sweep
     // finds kept 11/17) — far beyond three edits. Repair passes.
