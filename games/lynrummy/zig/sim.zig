@@ -507,12 +507,12 @@ test "self-play: six seeds land the pinned games" {
     // deliberately). Card conservation asserts every turn inside.
     const Pin = struct { seed: u32, turns: u16, p0: u16, p1: u16, stacks: usize };
     const pins = [_]Pin{
-        .{ .seed = 42, .turns = 10, .p0 = 30, .p1 = 35, .stacks = 20 },
-        .{ .seed = 43, .turns = 10, .p0 = 30, .p1 = 35, .stacks = 20 },
-        .{ .seed = 44, .turns = 10, .p0 = 30, .p1 = 35, .stacks = 26 },
+        .{ .seed = 42, .turns = 10, .p0 = 30, .p1 = 35, .stacks = 25 },
+        .{ .seed = 43, .turns = 10, .p0 = 30, .p1 = 35, .stacks = 22 },
+        .{ .seed = 44, .turns = 10, .p0 = 30, .p1 = 35, .stacks = 25 },
         .{ .seed = 100, .turns = 11, .p0 = 30, .p1 = 35, .stacks = 23 },
-        .{ .seed = 200, .turns = 10, .p0 = 30, .p1 = 35, .stacks = 21 },
-        .{ .seed = 300, .turns = 10, .p0 = 30, .p1 = 35, .stacks = 23 },
+        .{ .seed = 200, .turns = 10, .p0 = 30, .p1 = 35, .stacks = 22 },
+        .{ .seed = 300, .turns = 10, .p0 = 30, .p1 = 35, .stacks = 20 },
     };
     for (pins) |pin| {
         const res = try playGame(pin.seed);

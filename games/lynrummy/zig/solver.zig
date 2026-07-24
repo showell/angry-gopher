@@ -222,11 +222,18 @@ pub fn solve(board: Board) Outcome {
 /// Score answers with arrangement.reportKept; distill with
 /// moves.distill.
 pub fn solveArrangement(arr: *const arrangement.Arrangement) card.Error!Outcome {
+    const board = try boardBits(arr.cards[0..arr.nCards()]);
+    // The 0-step futility refutations run BEFORE repair: a futile
+    // multiset can never repair (repair covers are covers), and the
+    // deepened search must not burn its budget on boards the
+    // component prefilter or counting lemma kill for free.
+    steps_used = 0;
+    if (!componentsOk(board)) return .futile;
+    var at = slotMasks(board);
+    if (computeForcedSets(&at) == null) return .futile;
     if (repair.tryRepair(arr)) |next| {
-        steps_used = 0;
         return .{ .solved = .{ .next = next } };
     }
-    const board = try boardBits(arr.cards[0..arr.nCards()]);
     const warm = arrangement.warmOf(arr);
     const out = solveWarm(board, &warm);
     if (out == .unknown) return solveWarm(board, &arrangement.Warm.EMPTY);
@@ -1292,11 +1299,13 @@ test "board bridge acceptance: Steve's 59c give-up state" {
     // (the engine was six verbs from finishing here). Benchmark-pattern
     // gold: the cold solve keeps 16/42 of his edges in 442,848 steps;
     // the warm sweep's first cover keeps 32 in 439 steps. Gold MOVED
-    // CONSCIOUSLY 2026-07-24 (the convergence, random791, Steve's
-    // call): the deleted min-break enumeration reached 37/42 in an
-    // 8-move plan here — the known, accepted cost of retiring the
-    // seam-taxed improve layer. If deep-restructure polish ever earns
-    // its way back, this board is its yardstick.
+    // TWICE 2026-07-24, both consciously: down to 32 at the
+    // convergence (random791 — retiring the seam-taxed min-break,
+    // which reached 37/42 in 8 moves at 200k steps), then back UP to
+    // 37 the same day the polish earned its way back: depth-6 repair
+    // (the puzzle-79 deepening) finds a 37/42 cover in 9 verbs at
+    // ZERO sweep steps — the deleted enumerator's quality, in the
+    // human geometry, for free.
     const line = "3C'>4C'>5C'>6C'>7C' AD>2D>3D>4D 2S=2H'=2C 3C>4C>5C>6C " ++
         "8H=8S=8D' TS'=TC=TD 9D>TS>JD AC>2D'>3S JH>QH>KH>AH>2H>3H>4H " ++
         "4S>5D>6S' 5H>6S>7D 6D>7C>8H'>9C 6H>7S>8D>9S TC'=TD'=TH " ++
@@ -1309,17 +1318,20 @@ test "board bridge acceptance: Steve's 59c give-up state" {
     try std.testing.expect(verify(board, &sol));
     const rep = arrangement.reportKept(&arr, &sol.next);
     try std.testing.expectEqual(@as(u16, 42), rep.total_edges);
-    try std.testing.expectEqual(@as(u16, 32), rep.kept_edges);
-    try std.testing.expectEqual(@as(u64, 439), steps_used);
+    try std.testing.expectEqual(@as(u16, 37), rep.kept_edges);
+    try std.testing.expectEqual(@as(u64, 0), steps_used);
     var fates = [3]u8{ 0, 0, 0 };
     for (0..arr.n_stacks) |i| fates[@intFromEnum(rep.fate[i])] += 1;
-    try std.testing.expectEqual([3]u8{ 9, 5, 3 }, fates);
-    // The distilled plan rebuilds the cover from his stacks in 14
-    // moves (verified by construction inside distill; the retired
-    // min-break layer managed 8, the engine's A* six verbs).
+    try std.testing.expectEqual([3]u8{ 12, 3, 2 }, fates);
+    // His J♣'>Q♦'>K♠ stack — the forced black-king weave random764
+    // confirmed — survives intact, as it did under min-break.
+    try std.testing.expectEqual(arrangement.Fate.intact, rep.fate[15]);
+    // The distilled plan rebuilds the cover from his stacks in 9
+    // moves (verified by construction inside distill; min-break
+    // managed 8, the engine's A* six verbs).
     var mplan: moves.Plan = undefined;
     try moves.distill(&arr, &sol.next, arr.n_stacks, &mplan);
-    try std.testing.expectEqual(@as(usize, 14), mplan.n);
+    try std.testing.expectEqual(@as(usize, 9), mplan.n);
 }
 
 test "solvable boards get verified next-maps" {

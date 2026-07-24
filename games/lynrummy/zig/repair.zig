@@ -31,8 +31,16 @@ const card = @import("card.zig");
 const graph = @import("graph.zig");
 const arrangement = @import("arrangement.zig");
 
-const MAX_EDITS = 3;
-const MAX_NODES = 10_000;
+// Deepened 3 → 6 (Steve, 2026-07-24) on the puzzle-79 evidence: his
+// 6-verb line on sim_s95t6 is pure repair vocabulary, problem-
+// directed all the way down, and depth 3 never saw it — the solve
+// fell to the sweep's 34-move teardown. The work cap (every visit
+// counts, including depth-0 bounces) is the anytime budget, tuned
+// strict on that line: found at 50k, missed at 20k. Raise only on
+// the next such specimen. Failure cost is bounded by the reachable
+// tree, which the shortness prune keeps small on tidy boards.
+const MAX_EDITS = 6;
+const MAX_NODES = 50_000;
 
 /// A clean cover found by local repair, as the sparse next-map the
 /// rest of the pipeline (reportKept, distill, sim) consumes — or null:
@@ -50,9 +58,12 @@ pub fn tryRepair(arr: *const arrangement.Arrangement) ?[graph.SLOTS]u8 {
 
 fn search(arr: *arrangement.Arrangement, depth: u8, nodes: *u32) bool {
     const p = firstShort(arr) orelse return true;
+    // Count every visit INCLUDING depth-0 bounces: an applied edit is
+    // real work (apply + undo) whether or not it recurses, and the
+    // cap must bound work, not just interior nodes.
+    nodes.* += 1;
     if (depth == 0 or nodes.* >= MAX_NODES) return false;
     if (shortness(arr) > 2 * @as(u16, depth)) return false;
-    nodes.* += 1;
 
     const undo = arr.*;
     const pcs = arr.stackCards(p);
