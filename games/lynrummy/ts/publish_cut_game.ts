@@ -93,22 +93,29 @@ function parseDump(text: string): CutDump {
 
 function main(): void {
   const dump = parseDump(fs.readFileSync(DUMP_PATH, "utf8"));
+  // Seat the stuck player as Player One. In the product, Player One
+  // is the human and Player Two is the agent — publish a cut with
+  // active_player 1 and Elm auto-runs the agent's turn on load,
+  // sailing right past the state the human was meant to face
+  // (Steve, game 15). Playability only depends on board + hand, so
+  // the swap changes nothing about the question being asked.
+  const hands = dump.active === 1 ? [dump.hands[1]!, dump.hands[0]!] : dump.hands;
   const board = layoutStacks(dump.stacks);
   const violation = findViolation(board);
   if (violation !== null) {
     throw new Error(`[publish_cut_game] layout produced overlap at stack ${violation}`);
   }
   const total = board.reduce((n, s) => n + s.cards.length, 0)
-    + dump.hands.reduce((n, h) => n + h.length, 0)
+    + hands.reduce((n, h) => n + h.length, 0)
     + dump.deck.length;
   if (total !== 104) {
     throw new Error(`[publish_cut_game] card count ${total}, expected 104`);
   }
   const t = writeStateSession({
     board,
-    hands: dump.hands,
+    hands,
     deck: dump.deck,
-    activePlayer: dump.active,
+    activePlayer: 0,
     turnIndex: dump.turn - 1,
     label: `zig sim cut: seed ${dump.seed}, turn ${dump.turn} (agent stuck)`,
     userRoot: USER_ROOT,
