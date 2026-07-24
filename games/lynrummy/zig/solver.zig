@@ -183,7 +183,14 @@ pub fn solveArrangement(arr: *const arrangement.Arrangement) card.Error!Outcome 
 pub fn solveArrangementSat(arr: *const arrangement.Arrangement) card.Error!Outcome {
     const board = try boardBits(arr.cards[0..arr.nCards()]);
     const warm = arrangement.warmOf(arr);
-    return solveWarm(board, &warm);
+    const out = solveWarm(board, &warm);
+    // One cold retry on a warm unknown — same honesty rule as
+    // solveArrangementBudgeted: never worse than solve's verdict.
+    // Not theoretical: the seed-240 6C' board (2026-07-23, Steve's
+    // find) is warm-UNKNOWN at 1M steps and cold-SOLVED in 1,990 —
+    // warmth is a branch order, and a branch order can be wrong.
+    if (out == .unknown) return solveWarm(board, &arrangement.Warm.EMPTY);
+    return out;
 }
 
 /// The same solve under a caller-chosen improve budget — the game
