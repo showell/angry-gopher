@@ -40,7 +40,9 @@ puzzle sim_s107t4
 
 # Mined 64-card board from self-play seed 95, turn 6: the
 # hardest solved move of the game (580583 solver steps; the
-# reference consolidation runs 34 verb moves).
+# reference consolidation runs 34 verb moves — but Steve solved it
+# in SIX, kept 41/44 edges, all above rank 8: the 9H'-TC-JD-QC run
+# is the key the sweep never finds).
 puzzle sim_s95t6
   at (20,20): A♥ A♦ A♠
   at (137,20): 3♥ 4♣ 5♥
