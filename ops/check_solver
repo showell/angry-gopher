@@ -15,3 +15,9 @@ for f in games/lynrummy/zig/*.zig; do
     echo "==> zig test $f"
     zig test "$f"
 done
+
+# The gallery gate lives one level up so @embedFile can reach the
+# curated puzzle DSLs (module roots can't cross ".."): every gallery
+# puzzle must solve, definitively.
+echo "==> zig test games/lynrummy/puzzle_gate.zig"
+zig test games/lynrummy/puzzle_gate.zig
