@@ -37,3 +37,28 @@ puzzle sim_s107t4
   at (371,140): 9♠' T♦' J♠' Q♥
   at (521,140): Q♠' K♠ A♠ 2♠
   at (671,140): 5♣'
+
+# Mined 64-card board from self-play seed 95, turn 6: the
+# hardest solved move of the game (580583 solver steps; the
+# reference consolidation runs 34 verb moves).
+puzzle sim_s95t6
+  at (20,20): A♥ A♦ A♠
+  at (137,20): 3♥ 4♣ 5♥
+  at (254,20): 4♥ 4♣' 4♠
+  at (371,20): K♥ K♦ K♠
+  at (488,20): 2♦ 2♣ 2♠
+  at (605,20): 3♦ 3♣ 3♠
+  at (20,80): 5♦ 6♠ 7♥ 8♠ 9♥
+  at (203,80): 7♦ 7♠ 7♣
+  at (320,80): 8♦ 9♠ T♦ J♣
+  at (470,80): J♦ Q♦ K♦'
+  at (587,80): T♣ J♣' Q♣
+  at (20,140): J♠ Q♥ K♠' A♦'
+  at (170,140): Q♠ K♥' A♠' 2♥ 3♠'
+  at (353,140): 4♥' 5♥' 6♥
+  at (470,140): 7♥' 8♣ 9♦
+  at (587,140): 7♦' 7♣' 7♠'
+  at (20,200): A♣ 2♥' 3♣'
+  at (137,200): Q♣' K♣ A♣'
+  at (254,200): 4♠' 5♦' 6♣
+  at (371,200): 9♥'
