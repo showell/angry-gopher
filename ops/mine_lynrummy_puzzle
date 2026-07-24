@@ -1,0 +1,21 @@
+#!/bin/bash
+# CANONICAL DEV-LOOP SCRIPT — DO NOT REINVENT.
+# Before composing an ad-hoc shell command for build / test / regen, run
+# `ops/list` to see what already exists.
+#
+# Mine a gallery puzzle from real self-play (~30s): puzzle_mine.zig
+# plays its specimen seed (the constant in that file) and prints the
+# game's HARDEST SOLVED MOVE as a curated-catalog DSL block. Appending
+# to games/lynrummy/conformance/curated_sim_puzzles.dsl stays a human
+# act (curation!); after appending, bump the sim-catalog count pin in
+# games/lynrummy/puzzle_gate.zig and rebuild the server (the catalog
+# is embedded). Pick specimen seeds with a sweep over sim.playGame
+# comparing stats.hard_steps.
+set -e
+
+REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$REPO_DIR/games/lynrummy/zig"
+
+BIN=/tmp/lynrummy_puzzle_mine
+zig build-exe -O ReleaseFast -femit-bin="$BIN" puzzle_mine.zig
+"$BIN"

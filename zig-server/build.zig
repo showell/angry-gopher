@@ -74,6 +74,7 @@ pub fn build(b: *std.Build) void {
         .{ .name = "puzzle_cat_4", .path = "../games/lynrummy/conformance/curated_4line_puzzles.dsl" },
         .{ .name = "puzzle_cat_5", .path = "../games/lynrummy/conformance/curated_5line_puzzles.dsl" },
         .{ .name = "puzzle_cat_6", .path = "../games/lynrummy/conformance/curated_6line_puzzles.dsl" },
+        .{ .name = "puzzle_cat_sim", .path = "../games/lynrummy/conformance/curated_sim_puzzles.dsl" },
         // The chat conversation page's client bundles (chat/*.js) — served
         // byte-for-byte so the real prod client boots on the zig chat page.
         .{ .name = "chat_js_colors", .path = "../chat/colors.js" },

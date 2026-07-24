@@ -33,7 +33,8 @@ const solver_wasm = @embedFile("solver_wasm");
 // maxAppendBytes caps a single action line.
 const maxAppendBytes = 64 * 1024;
 
-// The curated catalogs, easiest-first (1-line … 6-line). Wired in build.zig.
+// The curated catalogs, easiest-first (1-line … 6-line), then the
+// sim-mined stretch boards. Wired in build.zig.
 const catalogs = [_][]const u8{
     @embedFile("puzzle_cat_1"),
     @embedFile("puzzle_cat_2"),
@@ -41,6 +42,7 @@ const catalogs = [_][]const u8{
     @embedFile("puzzle_cat_4"),
     @embedFile("puzzle_cat_5"),
     @embedFile("puzzle_cat_6"),
+    @embedFile("puzzle_cat_sim"),
 };
 
 const Alloc = std.mem.Allocator;

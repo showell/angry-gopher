@@ -145,6 +145,13 @@ pub const Stats = struct {
     steps_futile: u64 = 0,
     steps_unknown: u64 = 0,
     probes_solved: u32 = 0,
+    // The hardest SOLVED probe: the arrangement whose cover cost the
+    // most steps — raw material for mining gallery puzzles from real
+    // play (Steve's ask, 2026-07-24). The probed cards sit in it as
+    // loose singletons: exactly puzzle-shaped.
+    hard_steps: u64 = 0,
+    hard_turn: u16 = 0,
+    hard_arr: arrangement.Arrangement = undefined,
 };
 
 /// The full game state at the START of the first STUCK turn — the
@@ -272,6 +279,11 @@ fn findPlay(
                     best = .{ .idx = idx, .kept = kept, .next = sol.next };
                 stats.probes_solved += 1;
                 stats.steps_solved += solver.steps_used;
+                if (solver.steps_used > stats.hard_steps) {
+                    stats.hard_steps = solver.steps_used;
+                    stats.hard_turn = turn;
+                    stats.hard_arr = a;
+                }
             },
             .unknown => {
                 stats.probe_unknowns += 1;
