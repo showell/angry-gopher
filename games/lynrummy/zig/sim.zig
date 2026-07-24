@@ -148,6 +148,20 @@ pub const Stats = struct {
     probes_solved: u32 = 0,
 };
 
+/// The full game state at the START of the first turn in which a
+/// solver probe gave up — the publishable specimen: a real late-game
+/// board whose next decision exceeded the budget, cut so a human can
+/// play it from exactly where the machine ran out.
+pub const CutState = struct {
+    turn: u16,
+    active: u8,
+    board: arrangement.Arrangement,
+    hands: [NUM_PLAYERS][card.MAX_CARDS]card.Card,
+    hand_len: [NUM_PLAYERS]usize,
+    deck: [81]card.Card,
+    deck_len: usize,
+};
+
 pub const GameResult = struct {
     seed: u32,
     n_turns: u16,
@@ -158,6 +172,7 @@ pub const GameResult = struct {
     played_total: [NUM_PLAYERS]u16,
     deck_left: u8,
     stats: Stats,
+    cut: ?CutState,
 };
 
 pub fn playGame(seed: u32) card.Error!GameResult {
@@ -169,11 +184,17 @@ pub fn playGame(seed: u32) card.Error!GameResult {
     res.stopped = .max_turns;
     res.played_total = .{ 0, 0 };
     res.stats = .{};
+    res.cut = null;
     var active: usize = 0;
     var turn: u16 = 1;
     while (deal.deck_len - deck_pos > STOP_AT_DECK) {
         if (turn > MAX_TURNS) break;
+        const before = deal;
+        const before_pos = deck_pos;
+        const had_unknown = res.stats.first_unknown_turn != 0;
         const rec = try playTurn(&deal, active, &deck_pos, turn, &res.stats);
+        if (!had_unknown and res.stats.first_unknown_turn != 0)
+            res.cut = cutFrom(&before, before_pos, turn, active);
         res.turns[res.n_turns] = rec;
         res.n_turns += 1;
         res.played_total[active] += rec.played;
@@ -347,6 +368,46 @@ fn coverToArrangement(cards: []const card.Card, next: *const [graph.SLOTS]u8) ar
     return out;
 }
 
+fn cutFrom(deal: *const Deal, deck_pos: usize, turn: u16, active: usize) CutState {
+    var c: CutState = undefined;
+    c.turn = turn;
+    c.active = @intCast(active);
+    c.board = deal.board;
+    for (0..NUM_PLAYERS) |p| {
+        c.hand_len[p] = deal.hand_len[p];
+        @memcpy(c.hands[p][0..c.hand_len[p]], deal.hands[p][0..c.hand_len[p]]);
+    }
+    c.deck_len = deal.deck_len - deck_pos;
+    @memcpy(c.deck[0..c.deck_len], deal.deck[deck_pos..deal.deck_len]);
+    dressBoardPhysical(&c);
+    return c;
+}
+
+/// The sim's covers re-dress copies freely (dressing), but a
+/// PUBLISHED state must agree with the physical cards: a board copy
+/// of a (suit, rank) wears whatever deck flag the hands and deck do
+/// not hold. Board-holds-both pairs get 0 then 1 in board order.
+fn dressBoardPhysical(c: *CutState) void {
+    var avail: [4][13][2]u8 = @splat(@splat(.{ 1, 1 }));
+    for (0..NUM_PLAYERS) |p| {
+        for (c.hands[p][0..c.hand_len[p]]) |cd| {
+            std.debug.assert(avail[cd.suit][cd.rank][cd.deck] == 1);
+            avail[cd.suit][cd.rank][cd.deck] = 0;
+        }
+    }
+    for (c.deck[0..c.deck_len]) |cd| {
+        std.debug.assert(avail[cd.suit][cd.rank][cd.deck] == 1);
+        avail[cd.suit][cd.rank][cd.deck] = 0;
+    }
+    for (c.board.cards[0..c.board.nCards()]) |*cd| {
+        const a = &avail[cd.suit][cd.rank];
+        const flag: u1 = if (a[0] == 1) 0 else 1;
+        std.debug.assert(a[flag] == 1);
+        a[flag] = 0;
+        cd.deck = flag;
+    }
+}
+
 fn noteSteps(stats: *Stats, turn: u16) void {
     const s = solver.steps_used;
     stats.steps += s;
@@ -456,7 +517,8 @@ test "self-play: six seeds land the pinned games" {
     }
 }
 
-fn handLine(cards: []const card.Card, buf: []u8) []const u8 {
+/// Space-joined ASCII card tokens — the dump/test line format.
+pub fn handLine(cards: []const card.Card, buf: []u8) []const u8 {
     var n: usize = 0;
     for (cards, 0..) |c, i| {
         if (i > 0) {

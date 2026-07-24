@@ -90,13 +90,17 @@ function assertSessionsDirExists(): void {
  *  a human-played browser session does, but TS-side (the server is
  *  out of the loop for agent-written transcripts). */
 function allocateSessionId(): number {
+  return allocateSessionIdAt(NEXT_ID_FILE);
+}
+
+function allocateSessionIdAt(nextIdFile: string): number {
   let n = 1;
-  if (fs.existsSync(NEXT_ID_FILE)) {
-    const raw = fs.readFileSync(NEXT_ID_FILE, "utf8").trim();
+  if (fs.existsSync(nextIdFile)) {
+    const raw = fs.readFileSync(nextIdFile, "utf8").trim();
     const parsed = parseInt(raw, 10);
     if (!Number.isNaN(parsed) && parsed > 0) n = parsed;
   }
-  fs.writeFileSync(NEXT_ID_FILE, String(n + 1) + "\n");
+  fs.writeFileSync(nextIdFile, String(n + 1) + "\n");
   return n;
 }
 
@@ -183,6 +187,55 @@ export function writeSession(inputs: TranscriptInputs): TranscriptResult {
   };
 }
 
+
+interface StateSessionInputs {
+  readonly board: readonly BoardStack[];
+  readonly hands: readonly (readonly Card[])[];
+  readonly deck: readonly Card[];
+  readonly activePlayer: number;
+  readonly turnIndex: number;
+  readonly label: string;
+  /** The player's data subtree in the LIVE server tree — e.g.
+   *  ~/AngryGopher/local/lynrummy/16 — holding lynrummy-elm/sessions
+   *  and next-session-id.txt. Unlike writeSession's repo-relative
+   *  legacy layout, published cut states go where the running zig
+   *  server actually reads. */
+  readonly userRoot: string;
+}
+
+/** Write a session whose INITIAL state is an arbitrary mid-game
+ *  state, with an empty action log — how a zig-sim cut state (a
+ *  board whose next decision exceeded the solver budget) becomes a
+ *  playable session. The Elm resume path bootstraps entirely from
+ *  the meta GameState block, so no primitive history is needed. */
+export function writeStateSession(inputs: StateSessionInputs): TranscriptResult {
+  const sessionsDir = path.join(inputs.userRoot, "lynrummy-elm", "sessions");
+  const nextIdFile = path.join(inputs.userRoot, "next-session-id.txt");
+  if (!fs.existsSync(sessionsDir)) {
+    throw new Error(
+      `[transcript] sessions dir missing: ${sessionsDir} — is the user root right and the server initialized?`,
+    );
+  }
+  assertNoOverlap(inputs.board, "state-session initial board");
+  const sessionId = allocateSessionIdAt(nextIdFile);
+  const sessionDir = path.join(sessionsDir, String(sessionId));
+  fs.mkdirSync(sessionDir);
+  const gameStateDsl = formatGameState({
+    board: inputs.board,
+    hands: inputs.hands,
+    deck: inputs.deck,
+    activePlayer: inputs.activePlayer,
+    turnIndex: inputs.turnIndex,
+    cardsPlayedThisTurn: 0,
+    victorAwarded: false,
+  });
+  fs.writeFileSync(
+    path.join(sessionDir, "meta"),
+    formatMeta(Math.floor(Date.now() / 1000), inputs.label, gameStateDsl),
+  );
+  fs.writeFileSync(path.join(sessionDir, "actions.dsl"), "");
+  return { sessionId, sessionDir, actionsWritten: 0 };
+}
 
 /** Render the on-disk meta document: top-level scalars, blank
  *  line, then the game-state DSL. Trailing newline so file ends
