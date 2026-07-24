@@ -1,0 +1,19 @@
+#!/bin/bash
+# CANONICAL DEV-LOOP SCRIPT — DO NOT REINVENT.
+# Before composing an ad-hoc shell command for build / test / regen, run
+# `ops/list` to see what already exists.
+#
+# Zig self-play bake-off (~10s): builds games/lynrummy/zig/sim.zig at
+# ReleaseFast and plays the six shared seeds (42 43 44 100 200 300) with
+# per-game timing + solver telemetry. The TS side of the bake-off is
+#   cd games/lynrummy/ts && node test/test_full_game.ts
+# (same seeds, identical deals by construction — sim.zig's deal is
+# bit-exact with ts/baseline_deal.ts, pinned by test).
+set -e
+
+REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$REPO_DIR/games/lynrummy/zig"
+
+BIN=/tmp/lynrummy_sim_bench
+zig build-exe -O ReleaseFast -femit-bin="$BIN" sim.zig
+exec "$BIN"

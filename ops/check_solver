@@ -3,9 +3,9 @@
 # Before composing an ad-hoc shell command for build / test / regen, run
 # `ops/list` to see what already exists.
 #
-# Solver-rethink gate (~2s): native unit tests for the fresh zig Lyn Rummy
-# solver (games/lynrummy/zig — currently phase 1, pure runs). The TS engine
-# remains production; this gate covers the new algorithm as it grows.
+# Solver gate (~25s warm): native unit tests for the zig Lyn Rummy solver
+# (games/lynrummy/zig — board bridge, min-break, moves, hints, self-play sim).
+# The self-play pins (sim.zig) are the slow half: six full games in Debug.
 set -e
 
 REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"

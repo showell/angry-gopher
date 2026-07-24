@@ -173,6 +173,19 @@ pub fn solveArrangement(arr: *const arrangement.Arrangement) card.Error!Outcome 
     return solveArrangementBudgeted(arr, IMPROVE_STEPS);
 }
 
+/// Satisfaction-level board bridge: warm ordering steers the FIRST
+/// cover toward the player's stacks, and nothing enumerates past it —
+/// no min-break. For callers that need playability and a near cover,
+/// not the prettiest one: the self-play sim probes here at a small
+/// fraction of the improve budget (measured 2026-07-23: the improve
+/// enumeration was 99.9% of a simulated game's solver steps, all of
+/// it spent polishing covers nobody would see).
+pub fn solveArrangementSat(arr: *const arrangement.Arrangement) card.Error!Outcome {
+    const board = try boardBits(arr.cards[0..arr.nCards()]);
+    const warm = arrangement.warmOf(arr);
+    return solveWarm(board, &warm);
+}
+
 /// The same solve under a caller-chosen improve budget — the game
 /// hint's candidate scans probe many arrangements cheaply before
 /// giving the chosen one the full budget.
