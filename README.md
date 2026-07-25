@@ -20,8 +20,8 @@ The home page (`/`) is a launch pad for seven apps. In display order:
 | **Safari Screensaver** | `/driving` | A self-driving first-person motorcycle ride down a winding road, drawn from rider-relative coordinates. A Zig core (compiled to WebAssembly) computes the geometry; a tiny JS blitter fills the polygons. | Zig (WASM) + JS | [`games/driving/README.md`](games/driving/README.md) |
 | **Chat** | `/chat` | Real-time chat, docs, and channels over Server-Sent Events — the live surface we use daily; a multi-page app still mostly rendered on the front end. | JavaScript + Zig | [`chat/README.md`](chat/README.md) |
 | **Blog** | `/blog` | Notes on building the site, rendered from repo markdown by a hand-written engine. | Zig | [`blog/README.md`](blog/README.md) |
-| **Lyn Rummy** | `/game` | Two-player rummy against an agent that knows the rules — a TS referee engine with an Elm UI, speaking a DSL over the wire. | TypeScript + Elm | [`games/lynrummy/README.md`](games/lynrummy/README.md) |
-| **Lyn Rummy Puzzles** | `/puzzles` | A single mid-game board to solve; shares the rules engine, with deterministic undo and replay. | TypeScript + Elm | [`games/lynrummy/elm/src/Puzzle/README.md`](games/lynrummy/elm/src/Puzzle/README.md) |
+| **Lyn Rummy** | `/game` | Two-player rummy against an agent that knows the rules — a Zig solver (compiled to WASM) picks the plays and hints, a TS layer turns them into table gestures, an Elm UI plays them, all speaking a DSL over the wire. | Zig (WASM) + Elm + TS | [`games/lynrummy/README.md`](games/lynrummy/README.md) |
+| **Lyn Rummy Puzzles** | `/puzzles` | A single mid-game board to solve; shares the solver and rules, with deterministic undo and replay. | Zig (WASM) + Elm + TS | [`games/lynrummy/elm/src/Puzzle/README.md`](games/lynrummy/elm/src/Puzzle/README.md) |
 | **Chess Toys** | `/chess` | The newest addition: Knight's Tour and Eight Queens as watchable, scrubbable backtracking searches — each search narrates onto an event tape, and the sources themselves are exhibited at `/chess/code`. | Zig (WASM) + JS | [`games/chess/README.md`](games/chess/README.md) |
 
 > **The server is the zig implementation in [`zig-server/`](zig-server/)** —
@@ -54,9 +54,9 @@ We pin these versions:
 
 | Tool | Version | Builds | Install |
 |---|---|---|---|
-| **Zig** | 0.16.0 | the server (`zig-server/`) + the Safari Screensaver's WASM core (`games/driving/wasm/` → `games/driving/safari.wasm`) + the Chess Toys' WASM cores (`games/chess/*.zig` → `games/chess/*.wasm`) | system install — `zig version` |
+| **Zig** | 0.16.0 | the server (`zig-server/`) + the Lyn Rummy solver's WASM build (`games/lynrummy/zig/` → `solver.wasm`) + the Safari Screensaver's WASM core (`games/driving/wasm/` → `games/driving/safari.wasm`) + the Chess Toys' WASM cores (`games/chess/*.zig` → `games/chess/*.wasm`) | system install — `zig version` |
 | **Elm** | 0.19.1 | the Lyn Rummy client | `npm install` in `games/lynrummy/elm/` (pinned in its `package.json`) |
-| **TypeScript** | 6.0.3 | the Delivery client + the Lyn Rummy agent/engine | `npm install` in `delivery/` and `games/lynrummy/ts/` (pinned in each `package.json`) |
+| **TypeScript** | 6.0.3 | the Delivery client + the Lyn Rummy DSL/geometry layer and test harnesses (the solver itself is now zig) | `npm install` in `delivery/` and `games/lynrummy/ts/` (pinned in each `package.json`) |
 | **Node** | 24 | runs the TS directly + hosts the npm-installed `elm`/`tsc` | system install — `node --version` |
 
 TypeScript runs two ways, and only one of them is transpiled:
@@ -69,10 +69,12 @@ TypeScript runs two ways, and only one of them is transpiled:
   time). One is a *pure-TypeScript client that does it all*: the Delivery sim
   (`delivery/main.ts` → `delivery/app.js`) builds its own canvas and owns
   every line of its on-screen behavior — no Elm, no server logic. The other
-  is the opposite shape: the Lyn Rummy engine
+  is the opposite shape: the Lyn Rummy engine bundle
   (`games/lynrummy/ts/elm_api/engine_entry.ts` → `games/lynrummy/elm/engine.js`)
-  is *only* the solver/referee brain plus occasional DOM glue, while Elm owns
-  the UI. `ops/build_delivery` / `ops/build_engine_js` run these (alongside the
+  is a supporting layer, not a client — the *thinking* (hints, futility
+  certificates, the agent opponent) lives in the zig solver compiled to
+  `solver.wasm`, and the TS bundle translates its answers into the DSL and
+  table gestures (locations, drag paths) while Elm owns the UI. `ops/build_delivery` / `ops/build_engine_js` run these (alongside the
   Elm output); `esbuild` is a pinned local devDependency (calling its binary
   directly skips `npx`'s ~1s-per-call resolution tax). (The Safari Screensaver
   *used* to be a third pure-TS client; it's now a Zig→WASM core + a JS blitter
@@ -253,14 +255,16 @@ session — read + write as that uid, never admin.
 | [`zig-server/`](zig-server/) | **the server (zig)** — every surface (home, login, chat, docs, Lyn Rummy `/game` + `/puzzles`, driving, `/admin`, `/settings`) as per-module handlers in `src/*.zig` over the shared data tree; front-end assets embedded via `build.zig`. See [`SERVER.md`](SERVER.md). |
 | `chat/` | the embedded chat **client** (`chat.js`) + the reference API client / example bot (`chat_client.py`: discover, read, post) |
 | `games/lynrummy/elm/` | the autonomous Elm client (dealer + referee + UI) |
-| `games/lynrummy/ts/` | the TypeScript agent — the strategic brain (solver + self-play) |
+| `games/lynrummy/zig/` | the solver — the strategic brain (hints, certificates, Player Two, self-play sim), compiled to `solver.wasm` for the browser |
+| `games/lynrummy/ts/` | the original TypeScript engine, mostly retired — still the DSL/geometry layer (gesture choreography for the zig solver's plays) + the self-play harness |
 | `ops/` | the build / run / test scripts (`ops/list` enumerates them) |
 | `deploy/` | Caddyfile, systemd unit, deploy runbook |
 
 The server stays deliberately dumb — URL-keyed file storage plus the
 per-surface handlers — and pushes logic to the client wherever it can.
-Lyn Rummy is the clearest case: the strategic brain is the TS agent, and
-the Elm client owns the full game (dealer, referee, UI). Its
+Lyn Rummy is the clearest case: the strategic brain is the zig solver
+running as WASM in the browser, the TS layer turns its answers into table
+gestures, and the Elm client owns the full game (dealer, referee, UI). Its
 [`README`](games/lynrummy/README.md) covers that split and the
 DSL-over-the-wire idea in full.
 

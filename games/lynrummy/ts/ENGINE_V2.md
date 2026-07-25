@@ -1,11 +1,18 @@
 # engine_v2 — kitchen-table A* solver
 
+> **Status (2026-07): retired from production.** The live hints,
+> futility certificates, and Player Two all run the zig solver
+> (`../zig/`, compiled to `solver.wasm`); this engine no longer
+> answers anything a player sees. It still works and still has
+> callers — the TS full-game harness, `hand_play.ts`, and the
+> conformance suite keep it as the self-play baseline — and this
+> document remains its design record.
+
 The TS solver — best-first search by `f = plan_length +
 trouble heuristic`, not depth-first BFS. Boundary interface:
-`Buckets in, PlanLine[] | null out`. Used by every TS-side
-caller — the full-game loop, `hand_play.ts`, the conformance
-suite — and by the Elm UI via the `LynRummyEngine` browser
-bundle.
+`Buckets in, PlanLine[] | null out`. Used by the TS-side
+callers — the full-game loop, `hand_play.ts`, the conformance
+suite.
 
 ## What it is
 

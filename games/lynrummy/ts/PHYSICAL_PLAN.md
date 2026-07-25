@@ -1,5 +1,14 @@
 # Physical planning — the agent's gesture layer
 
+> **Status (2026-07): still live — under a new brain.** The BFS
+> solver this doc describes as the upstream planner is retired
+> from production, but this layer's helpers (`plan/verbs.ts`:
+> isolate, merge planning, split pre-flights) now serve the ZIG
+> solver instead: `elm_api/zig_agent.ts` lifts the zig build
+> recipes into primitives through the same physical rules. The
+> doctrine below — where cards are, which stack moves, keeping
+> the table legible — is unchanged and load-bearing.
+
 ## What this layer is
 
 The solver (`bfs/engine_v2.ts`) plans at the *logical* level:

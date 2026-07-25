@@ -40,8 +40,8 @@ Notes from building this site — one zig binary, written with Claude. Essays on
 ## Play Lyn Rummy -> /game
 image: /gallery/lynrummy.svg
 cta: Match wits with the agent
-lang: TypeScript + Elm
-tech: a rules DSL sent over the wire — a TypeScript referee engine with an Elm UI
+lang: Zig (WASM) + Elm + TypeScript
+tech: a rules DSL sent over the wire — a zig solver picks the plays, an Elm UI referees and renders them
 code: https://github.com/showell/angry-gopher/tree/master/games/lynrummy
 tutorial: /tutorial
 essay: /blog/lyn-never-wrote-it-down
@@ -50,8 +50,8 @@ Two-player rummy with a real referee. Build runs and sets against an agent that 
 ## Lyn Rummy Puzzles -> /puzzles
 image: /gallery/puzzles.svg
 cta: Fix the board
-lang: TypeScript + Elm
-tech: shares the rules engine; deterministic undo and move-by-move replay
+lang: Zig (WASM) + Elm + TypeScript
+tech: shares the game's solver and rules; deterministic undo and move-by-move replay
 code: https://github.com/showell/angry-gopher/tree/master/games/lynrummy
 essay: /blog/two-places-at-once
 A single board, mid-game. Drag stacks to merge or split your way to a clean meld layout. Solo, no opponent — undo is free, and Replay walks back your moves.

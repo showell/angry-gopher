@@ -17,9 +17,15 @@ assumptions invert the foundational shape.
 
 ## The three actors
 
-- **TypeScript is the agent.** It computes plays (`games/lynrummy/ts/`): the BFS
-  solver, the verb→gesture pipeline, full self-played games written as DSL
-  transcripts, and the Hint button / in-game opponent served to the UI over ports.
+- **The engine computes plays — zig brain, TypeScript body.** Since 2026-07
+  the *thinking* is the zig solver (`games/lynrummy/zig/`, compiled to
+  `solver.wasm`): the Hint buttons, futility certificates, and the in-game
+  opponent all run its one converged pipeline. TypeScript
+  (`games/lynrummy/ts/`) is the mostly-retired original engine that still
+  does real work: the DSL parsers/emitters, the verb→gesture pipeline that
+  turns the solver's answers into locations and drag paths, and the
+  full-game self-play harness. Its own BFS solver no longer serves
+  production (design record: `ts/ENGINE_V2.md`).
 - **Elm is the autonomous client.** It renders the game, runs its own referee, and
   replays its own action log. Two browser entry points — `Game.elm` (full game)
   and `Puzzle.elm` (single board) — sharing `Lib.*` for rendering, the DSL
@@ -30,7 +36,7 @@ assumptions invert the foundational shape.
 
 ## The mission
 
-A human plays through the Elm UI, against the TS agent, and watches the agent's
+A human plays through the Elm UI, against the engine's agent, and watches the agent's
 moves unfold **in a way that reads as another player playing — not a machine
 logging primitives to a server.** That third constraint does the most work: the UI
 must re-tell the agent's story visually, at human speed, with motion that looks
@@ -127,7 +133,8 @@ when it doesn't. The agent emits durable-only; Elm synthesizes the drag on repla
 Elm was the UI bet, and as a language it's a pleasure — the referee, the dealer,
 and the replay engine are clean because of it. But the honest verdict is that
 Steve wouldn't choose it again for an app like this. The ~10% of places where Elm
-has to shell out to JS/TS — for **performance** (the BFS solver moved to TS) and
+has to shell out — for **performance** (the solver was always outside: first the
+TS BFS, now the zig wasm) and
 for **browser reality** (reading DOM geometry for drags) — were more painful than
 the purity bought back. The takeaway kept here is about the *ideas* (typed
 messages, no runtime exceptions, each actor owning its view), not a recommendation
@@ -137,8 +144,11 @@ to reach for Elm next time.
 
 - [`README.md`](./README.md) — overview, status, build & gates.
 - [`RULES.md`](./RULES.md) — the game itself.
-- [`ts/ENGINE_V2.md`](./ts/ENGINE_V2.md) · [`ts/PHYSICAL_PLAN.md`](./ts/PHYSICAL_PLAN.md)
-  — solver design and the gesture layer, for reading the engine.
+- [`zig/README.md`](./zig/README.md) — the production solver (hints,
+  certificates, Player Two, the sim).
+- [`ts/PHYSICAL_PLAN.md`](./ts/PHYSICAL_PLAN.md) — the gesture layer, still
+  live · [`ts/ENGINE_V2.md`](./ts/ENGINE_V2.md) — the retired TS solver's
+  design record.
 - `conformance/scenarios/*.dsl` — the DSL examples that are the spec.
 
 All build, launch, and test work goes through `ops/` scripts (`ops/list` for the

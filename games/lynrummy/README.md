@@ -10,38 +10,44 @@ It's live in production at https://lynrummy.com — a DigitalOcean droplet runni
 the zig server behind Caddy, where family and friends log in and play (solo or
 against the built-in agent: deal, play, hint, agent-play, replay, resume).
 
-## Status: game and puzzles mature; tutorial active
+## Status: game and puzzles mature; the zig solver active
 
-The game and puzzles are the oldest of the site's subsystems and are **no
-longer under active development** — they work, they ship. The active piece
-(2026-07) is the **beginner tutorial** at `/tutorial`: a public, ungated page
-in plain HTML+JS (`tutorial/` — no Elm, no TS, no solver) that teaches the
-kitchen-table game with live mini-boards, gated by `ops/test_tutorial`. **The
-code is the authority** for how anything works; this doc and its siblings
-exist to orient a human reader, not to drive new engineering (for that, go to
-the code).
+The game and puzzles are the oldest of the site's subsystems — they work,
+they ship. The active piece (2026-07) is the **zig solver** at
+[`zig/`](./zig/README.md), which has taken over the thinking: hints,
+futility certificates, and the Player Two opponent all run it (the original
+TS engine is mostly retired but still does the DSL/geometry work — see "How
+it's built"). Also recent: the **beginner tutorial** at `/tutorial`, a
+public, ungated page in plain HTML+JS (`tutorial/` — no Elm, no TS, no
+solver), gated by `ops/test_tutorial`. **The code is the authority** for how
+anything works; this doc and its siblings exist to orient a human reader,
+not to drive new engineering (for that, go to the code).
 
 ## How it's built
 
-Three actors, covered in [`ARCHITECTURE.md`](./ARCHITECTURE.md) (the tutorial
-is a deliberately separate fourth: `tutorial/tutorial.js` re-ports the rules
+Four parts, covered in [`ARCHITECTURE.md`](./ARCHITECTURE.md) (the tutorial
+is a deliberately separate fifth: `tutorial/tutorial.js` re-ports the rules
 and board gestures from the Elm spec into ~650 lines of dependency-free JS,
 served by its own tiny zig handler):
 
-- **`ts/`** — the TypeScript **agent**: the BFS solver, the verb→gesture
-  pipeline, self-play, and the in-browser bundle that powers the Hint button.
-  The design rationale is in [`ts/ENGINE_V2.md`](./ts/ENGINE_V2.md) (solver) and
-  [`ts/PHYSICAL_PLAN.md`](./ts/PHYSICAL_PLAN.md) (how a logical play becomes
-  human-looking gestures).
+- **`zig/`** — the **solver**, and since 2026-07 the production brain: one
+  converged pipeline (futility prefilters → local repair → the rank-sweep
+  oracle) behind both Hint buttons, the futility certificates, and the
+  Player Two opponent — compiled to `solver.wasm` for the browser, tested
+  natively. Orientation in [`zig/README.md`](./zig/README.md).
+- **`ts/`** — the original TypeScript engine, now **mostly retired but still
+  working**: its BFS solver and hint logic no longer serve production, but
+  its DSL parsers/emitters and the verb→gesture layer
+  ([`ts/PHYSICAL_PLAN.md`](./ts/PHYSICAL_PLAN.md)) are live — they translate
+  the zig solver's answers into locations, drag paths, and primitives — and
+  its full-game harness still powers self-play conformance and the bake-off
+  baseline. The retired solver's design record is
+  [`ts/ENGINE_V2.md`](./ts/ENGINE_V2.md).
 - **`elm/`** — the in-browser **UI**: the full game (`Game.elm`) and the
   single-board puzzle (`Puzzle.elm`). (Elm was the original UI bet; see the
   honest retrospective in [`ARCHITECTURE.md`](./ARCHITECTURE.md).)
 - **the zig server** — **dumb storage**: it holds session files and never
   referees or reasons.
-
-(Not an actor yet: [`zig/`](./zig/README.md) is a fresh solver being built up
-in phases — the rethink of the BFS solver above. The TS engine remains
-production until it earns its place.)
 
 The standout architectural idea — and the most fun to work with — is a single
 **DSL spoken over the wire**. One short, canonical grammar carries the same
@@ -67,8 +73,9 @@ is the lingua franca".
 
 `ops/start` rebuilds everything and serves on `:9001` (open `/game` for a full
 game, `/puzzles` for the gallery). The front-end artifacts (`elm.js`, `puzzle.js`,
-the TS `engine.js` bundle) are built and `@embedFile`d into the binary;
-`ops/build_elm` / `ops/build_engine_js` regenerate them. Deploy is the occasional,
+the TS `engine.js` bundle, the solver's `solver.wasm`) are built and `@embedFile`d
+into the binary; `ops/build_elm` / `ops/build_engine_js` /
+`ops/build_lynrummy_wasm` regenerate them. Deploy is the occasional,
 deliberate `ops/deploy`. Run `ops/list` for the full script index.
 
 Gates (warm timings; a cold cache roughly doubles them):
@@ -80,11 +87,11 @@ Gates (warm timings; a cold cache roughly doubles them):
   seeds + perf benches. Dominated by self-play, which is variable — a single
   seed can run anywhere from ~3s to ~30s, so the total wanders a fair bit.
 
-The honest test invariant: conformance calls the *same* codepath the production
-Hint path does (`findLogicalMovesForPlay` in `ts/plan/hand_play.ts`). A tuning
-note worth knowing: hint plan-depth (`MAX_PLAN_LENGTH` in `ts/bfs/engine_v2.ts`)
-is **5** — depth 4 benches fine but visibly under-plays in real games (see
-[`ts/ENGINE_V2.md`](./ts/ENGINE_V2.md)).
+The honest test invariant: conformance drives the *same* codepaths production
+does. The hints and Player Two are gated through the real `solver.wasm`
+artifact plus the TS lowering (`ops/check_solver`: native zig suites, the
+79-puzzle gallery gate, and the cross-language agent wire), and every gallery
+puzzle must solve from its own stacks — exactly what the Hint button sees.
 
 ## A small glossary
 
@@ -97,7 +104,11 @@ is **5** — depth 4 benches fine but visibly under-plays in real games (see
 ## Where to read next
 
 - [`RULES.md`](./RULES.md) — what the game actually is.
-- [`ARCHITECTURE.md`](./ARCHITECTURE.md) — the three actors, the DSL-over-the-wire
+- [`ARCHITECTURE.md`](./ARCHITECTURE.md) — the actors, the DSL-over-the-wire
   idea, frames of reference, and the Elm retrospective.
-- [`ts/ENGINE_V2.md`](./ts/ENGINE_V2.md) · [`ts/PHYSICAL_PLAN.md`](./ts/PHYSICAL_PLAN.md)
-  — solver design and the gesture-layer doctrine, for anyone reading the engine.
+- [`zig/README.md`](./zig/README.md) — the production solver: the graph
+  framing, the converged pipeline, repair, the sim, and the wasm wire.
+- [`ts/PHYSICAL_PLAN.md`](./ts/PHYSICAL_PLAN.md) — the gesture-layer doctrine
+  (still live under the zig solver) ·
+  [`ts/ENGINE_V2.md`](./ts/ENGINE_V2.md) — the retired TS solver's design
+  record.
