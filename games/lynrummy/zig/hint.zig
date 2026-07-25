@@ -421,11 +421,12 @@ test "game 8: pure homing tidies first; destructive cleanup never leads fresh" {
     try std.testing.expect(std.mem.indexOf(u8, planText(&s3, &buf), "push AC onto [AD]") != null);
     // With Aâ¦ committed to the club run, cleaning would mean tearing
     // it back out — destructive, so it never leads a fresh hint.
-    // Re-pinned: the converged pipeline's best fresh single is 7H'
-    // onto the 7-set — as beginner-simple as a play gets.
+    // Re-pinned (game-19 shed-bound fix): the best fresh play is now
+    // AD' — two moves that home both loose aces while playing the
+    // hand card, shorter than any single-card drop's full cover.
     const s4 = try hintFor(G8_STATE4, G8_HAND);
     try std.testing.expectEqual(Kind.play, s4.kind);
-    try std.testing.expect(std.mem.indexOf(u8, planText(&s4, &buf), "place 7H' onto [7S 7D 7C]") != null);
+    try std.testing.expect(std.mem.indexOf(u8, planText(&s4, &buf), "place AD' onto [AH AC]") != null);
 }
 
 test "game 11: after placing 3S, the 3H loner outranks the next hand card" {
@@ -499,14 +500,16 @@ test "game 8: a standing objective survives the ace toggle" {
     const stick3 = try hintForPref(G8_STATE3, G8_HAND, "AD'");
     try std.testing.expectEqual(Kind.clean_board, stick3.kind);
     try std.testing.expect(std.mem.indexOf(u8, planText(&stick3, &buf), "push AC onto [AD]") != null);
-    // And with AH' standing at the committed-Aâ¦ state, its 3-move
-    // line (a peel, not a split â Aâ¦ rides the run's end) is within
-    // one of AD's 2 â stick again. Either way, no flap.
+    // And with AH' standing at the committed-A♦ state, its line is
+    // now 4 moves (the shed-bound fix reordered repair's first-found
+    // cover) against AD's 2 — decisively beaten, so the objective
+    // SWITCHES. That is the rule working, not a flap: every pref at
+    // this state answers the same AD' line.
     const stick4 = try hintForPref(G8_STATE4, G8_HAND, "AH'");
-    try std.testing.expect(std.mem.indexOf(u8, planText(&stick4, &buf), "place AH'") != null);
+    try std.testing.expect(std.mem.indexOf(u8, planText(&stick4, &buf), "place AD'") != null);
     // A vanished or unplayable preferred card falls back to fresh.
     const fresh = try hintForPref(G8_STATE4, G8_HAND, "9C");
-    try std.testing.expect(std.mem.indexOf(u8, planText(&fresh, &buf), "place 7H'") != null);
+    try std.testing.expect(std.mem.indexOf(u8, planText(&fresh, &buf), "place AD'") != null);
 }
 
 fn planText(res: *const Result, buf: []u8) []const u8 {

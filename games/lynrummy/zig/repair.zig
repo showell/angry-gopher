@@ -22,7 +22,7 @@
 //!      6C'-takes-6S's-seat move, and it is what keeps the search
 //!      directed when the fixing edit touches two full stacks)
 //! IDDFS depth 1..MAX_EDITS with whole-arrangement undo, a shortness
-//! bound (each edit can shed at most 2 points of shortness), and a
+//! bound (each edit can shed at most 3 points of shortness), and a
 //! hard node cap. Repair can only ever answer SOLVED — futility and
 //! give-ups stay the sweep's job.
 
@@ -36,11 +36,13 @@ const arrangement = @import("arrangement.zig");
 // directed all the way down, and depth 3 never saw it — the solve
 // fell to the sweep's 34-move teardown. The work cap (every visit
 // counts, including depth-0 bounces) is the anytime budget, tuned
-// strict on that line: found at 50k, missed at 20k. Raise only on
-// the next such specimen. Failure cost is bounded by the reachable
-// tree, which the shortness prune keeps small on tidy boards.
+// strict on that line: found at 70k, missed at 60k (retuned when the
+// game-19 shed-bound fix widened the tree; under the old 2-per-edit
+// bound it was found at 50k, missed at 20k). Raise only on the next
+// such specimen. Failure cost is bounded by the reachable tree,
+// which the shortness prune keeps small on tidy boards.
 const MAX_EDITS = 6;
-const MAX_NODES = 50_000;
+const MAX_NODES = 70_000;
 
 /// A clean cover found by local repair, as the sparse next-map the
 /// rest of the pipeline (reportKept, distill, sim) consumes — or null:
@@ -63,7 +65,15 @@ fn search(arr: *arrangement.Arrangement, depth: u8, nodes: *u32) bool {
     // cap must bound work, not just interior nodes.
     nodes.* += 1;
     if (depth == 0 or nodes.* >= MAX_NODES) return false;
-    if (shortness(arr) > 2 * @as(u16, depth)) return false;
+    // Admissible shed bound: one edit sheds at most 3 shortness —
+    // empty a singleton (-2) AND complete a 2-stack (-1) in the same
+    // move. The old 2-per-edit bound pruned depth 1 on exactly the
+    // commonest hint state (partial pair on the table + the appended
+    // hand card = shortness 3), so every "just push your card onto
+    // the partial" answer fell to depth 2, where enumeration order
+    // picked a needless board-surgery line first (game 19, 8♥ vs the
+    // 6♦'7♠' partial, 2026-07-25).
+    if (shortness(arr) > 3 * @as(u16, depth)) return false;
 
     const undo = arr.*;
     const pcs = arr.stackCards(p);
@@ -385,6 +395,16 @@ test "gathering loose cards into a fresh set" {
     // 7C loose on the board, 7H appended: repair pairs them, and a
     // third loose seven completes the meld.
     const r = (try repairKept("7C 7D 3S>4S>5S", "7H")).?;
+    try testing.expectEqual(r.total, r.kept);
+}
+
+test "one-edit direct play survives the shed bound (game 19)" {
+    // Hand 8H completes the [6D' 7S'] partial directly. Shortness is
+    // 3 (partial + appended singleton) — the commonest hint state —
+    // and a 2-per-edit shed bound pruned depth 1 here, so depth 2
+    // answered by pulling 8D out of the complete run instead. The
+    // direct play breaks nothing: kept must equal total.
+    const r = (try repairKept("6D'>7S' 8D>9S'>TH>JC'", "8H")).?;
     try testing.expectEqual(r.total, r.kept);
 }
 
