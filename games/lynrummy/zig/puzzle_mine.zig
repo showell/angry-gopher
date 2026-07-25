@@ -16,7 +16,7 @@ const solver = @import("solver.zig");
 const moves = @import("moves.zig");
 const sim = @import("sim.zig");
 
-const SEED: u32 = 95;
+const SEED: u32 = 441;
 
 // Row-wrap layout inside the 800px board, same constants as
 // ts/publish_cut_game.ts.

@@ -35,7 +35,7 @@ const CATALOGS = [_]struct { name: []const u8, text: []const u8, count: usize }{
     .{ .name = "4line", .text = @embedFile("conformance/curated_4line_puzzles.dsl"), .count = 21 },
     .{ .name = "5line", .text = @embedFile("conformance/curated_5line_puzzles.dsl"), .count = 11 },
     .{ .name = "6line", .text = @embedFile("conformance/curated_6line_puzzles.dsl"), .count = 15 },
-    .{ .name = "sim", .text = @embedFile("conformance/curated_sim_puzzles.dsl"), .count = 2 },
+    .{ .name = "sim", .text = @embedFile("conformance/curated_sim_puzzles.dsl"), .count = 3 },
 };
 
 const Puzzle = struct {

@@ -64,3 +64,26 @@ puzzle sim_s95t6
   at (137,200): Q♣' K♣ A♣'
   at (254,200): 4♠' 5♦' 6♣
   at (371,200): 9♥'
+
+# Mined 62-card board from self-play seed 441, turn 5: the
+# hardest solved move of the game (994264 solver steps — the
+# closest any mined board has come to the 1M give-up line; the
+# reference consolidation runs 22 verb moves).
+puzzle sim_s441t5
+  at (20,20): 6♥ 7♥ 8♥ 9♥
+  at (170,20): 7♦ 7♣ 7♠
+  at (287,20): 8♦ 9♣ T♦ J♣ Q♥
+  at (470,20): 9♦ T♣ J♦
+  at (587,20): Q♦ K♠ A♦ 2♠ 3♦ 4♠
+  at (20,80): K♦ K♥ K♠' K♣
+  at (170,80): 2♣ 3♥ 4♣ 5♥ 6♠
+  at (353,80): 3♣ 4♥ 5♣
+  at (470,80): Q♣ K♦' A♣ 2♦
+  at (620,80): A♠ 2♥ 3♣'
+  at (20,140): 3♠ 4♦ 5♠
+  at (137,140): Q♦' Q♥' Q♠
+  at (254,140): A♣' A♥ A♠'
+  at (371,140): 4♣' 4♦' 4♥'
+  at (488,140): 5♠' 6♦ 7♣' 8♦'
+  at (20,200): 6♠' 7♥' 8♠ 9♦' T♠
+  at (203,200): T♣'

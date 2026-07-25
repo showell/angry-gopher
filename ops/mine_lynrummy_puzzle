@@ -9,8 +9,8 @@
 # to games/lynrummy/conformance/curated_sim_puzzles.dsl stays a human
 # act (curation!); after appending, bump the sim-catalog count pin in
 # games/lynrummy/puzzle_gate.zig and rebuild the server (the catalog
-# is embedded). Pick specimen seeds with a sweep over sim.playGame
-# comparing stats.hard_steps.
+# is embedded). Pick specimen seeds with zig/seed_sweep.zig (edit its
+# range constants), which sweeps sim.playGame comparing stats.hard_steps.
 set -e
 
 REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
