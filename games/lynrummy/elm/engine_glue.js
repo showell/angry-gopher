@@ -347,11 +347,5 @@
     });
   }
 
-  function cardObjectToRecord(c) {
-    // Elm wire shape: { value, suit, origin_deck }.
-    // TS Card shape:  { rank,  suit, deck         }.
-    return { rank: c.value, suit: c.suit, deck: c.origin_deck };
-  }
-
   window.EngineGlue = { attach: attach };
 })();

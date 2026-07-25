@@ -1,10 +1,10 @@
-// One-off: invoke gameHintLines on a captured (hand, board) state
+// One-off: invoke the TS reference hint on a captured (hand, board) state
 // and print the rendered hint. Used to lock in a known engine
 // output for in_progress/*.json captures.
 
 import type { Card } from "../core/card.ts";
 import { parseCardLabel } from "../core/card.ts";
-import { gameHintLines } from "../elm_api/engine_entry.ts";
+import { findLogicalMovesForPlay, formatHint } from "../plan/hand_play.ts";
 
 // uid 16 (Stephen2), game 4, mid-turn. Reconstructed from sessions/4/meta
 // + replaying actions.dsl (21 actions). Hand down to 3 cards.
@@ -32,11 +32,11 @@ const board: Card[][] = boardLabels.map(stack => stack.map(parseCardLabel));
 
 // game-4 state: last non-cosmetic move was merge_stack (board->board), so
 // Elm's lastMoveWasHandLoner would be FALSE. Reproduce the real hint.
-const lines = gameHintLines(hand, board, false);
+const lines = formatHint(findLogicalMovesForPlay(hand, board, false));
 console.log("hint lines (loner=false):", lines.length);
 for (const l of lines) console.log("  " + l);
 
 console.log("");
-const linesLoner = gameHintLines(hand, board, true);
+const linesLoner = formatHint(findLogicalMovesForPlay(hand, board, true));
 console.log("hint lines (loner=true):", linesLoner.length);
 for (const l of linesLoner) console.log("  " + l);

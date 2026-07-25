@@ -23,7 +23,7 @@ import { isCompleteGroup } from "../core/card_stack.ts";
 import type { BoardStack } from "../geometry/geometry.ts";
 import { applyLocally } from "../game_events/primitives.ts";
 import { parseWireActionLine } from "../game_events/parse_game_event.ts";
-import { gameHintLines } from "../elm_api/engine_entry.ts";
+import { findLogicalMovesForPlay, formatHint } from "../plan/hand_play.ts";
 
 const sessionDir = process.argv[2];
 if (sessionDir === undefined) {
@@ -110,8 +110,9 @@ for (const line of collapsed) {
   if (board.every(s => isCompleteGroup(s.cards))) loner = false;
   else if (/^\d+\)\s*place_hand /.test(line)) loner = true;
 
-  // The hint the player would see if they pressed Hint right now.
-  const hint = gameHintLines(hands[active]!, board.map(s => s.cards), loner);
+  // The TS reference hint for this state (the live Hint button moved
+  // to the zig solver; this replay tool keeps the TS engine's view).
+  const hint = formatHint(findLogicalMovesForPlay(hands[active]!, board.map(s => s.cards), loner));
   const isRaw = hint.some(l =>
     l.includes("HELPER [") || l.includes(" → ") || /^place \[/.test(l));
   stats.states++;
@@ -135,6 +136,6 @@ for (const s of board) {
 console.log(`\nactive player: ${active}, loner: ${loner}, `
   + `hand: ${hands[active]!.map(cardLabel).join(" ")}`);
 
-const finalHint = gameHintLines(hands[active]!, board.map(s => s.cards), loner);
+const finalHint = formatHint(findLogicalMovesForPlay(hands[active]!, board.map(s => s.cards), loner));
 console.log(`\ncurrent hint (${finalHint.length} lines):`);
 for (const l of finalHint) console.log("  " + l);

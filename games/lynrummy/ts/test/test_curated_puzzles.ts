@@ -26,9 +26,10 @@ import { parseBoardStackLine } from "../dsl/parse.ts";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-// Every puzzle here is solved at PUZZLE_MAX_PLAN_LENGTH — the SAME cap
-// the puzzle UI's Hint uses (elmPuzzleHint) — so what the tests prove
-// and what the UI hints at can't drift. That's why the 6-line catalog
+// Every puzzle here is solved at PUZZLE_MAX_PLAN_LENGTH — the TS
+// reference solver's puzzle cap. (The live Hint button runs the zig
+// solver; its own gallery gate is games/lynrummy/puzzle_gate.zig.)
+// That's why the 6-line catalog
 // is now included: the puzzle path searches deeper than the agent, so
 // its 6-move solutions are reachable (they aren't at the agent's cap of
 // 5). If a deeper catalog is added, add its length here AND make sure

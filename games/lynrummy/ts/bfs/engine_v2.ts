@@ -110,11 +110,13 @@ const HEURISTICS: Record<string, Heuristic> = {
 // genuinely needs to search deeper than agent play — the 6-line curated
 // puzzles have 6-move solutions, past the agent's 5. It DEFAULTS to
 // MAX_PLAN_LENGTH, so every game-path caller (hand_play, conformance,
-// benches, tools) gets 5 with no drift possible. The puzzle UI
-// (elmPuzzleHint) and the puzzle conformance (test_curated_puzzles) BOTH
-// pass the same exported PUZZLE_MAX_PLAN_LENGTH, so test and prod can't
-// disagree — the exact failure the opts bag caused. Keep it to this one
-// numeric param; if you're tempted to add a second, stop.
+// benches, tools) gets 5 with no drift possible. The puzzle
+// conformance (test_curated_puzzles) passes the exported
+// PUZZLE_MAX_PLAN_LENGTH — one named constant, not a magic number, so
+// a second caller can't disagree (the exact failure the opts bag
+// caused; the puzzle UI's Hint was that caller until it moved to the
+// zig solver). Keep it to this one numeric param; if you're tempted
+// to add a second, stop.
 const MAX_STATES = 5000;
 const MAX_TROUBLE_OUTER = 10;
 const MAX_PLAN_LENGTH = 5;
