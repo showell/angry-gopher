@@ -18,9 +18,9 @@ The two big pieces built since the previous park, both live in
 production:
 
 - the **beginner tutorial** at `/tutorial` — a public, ungated page in
-  plain HTML+JS (`tutorial/` — no Elm, no TS, no solver), gated by
+  plain HTML+JS (no Elm, no TS, no solver), gated by
   `ops/test_tutorial`. Content-complete; Steve owns the remaining-gaps
-  list (top item: a real photo demonstrating a hand play).
+  list. Standing decisions in [`tutorial/README.md`](./tutorial/README.md).
 - the **zig solver** at [`zig/`](./zig/README.md), which took over the
   thinking: hints, futility certificates, and the Player Two opponent
   all run it (the original TS engine is mostly retired but still does
