@@ -4,7 +4,7 @@
 import type { Card } from "../core/card.ts";
 import { findLogicalMovesForPlay, formatHint } from "../plan/hand_play.ts";
 import { solveBoard, PUZZLE_MAX_PLAN_LENGTH } from "../bfs/engine_v2.ts";
-import { elmFindPlay } from "./elm_find_play.ts";
+import { zigAgentInput, zigPlanPrimitives } from "./zig_agent.ts";
 
 /** Full-game hint entry point. Given the active player's hand and
  *  the live board, returns the rendered hint as a flat list of step
@@ -48,10 +48,19 @@ export function elmPuzzleHint(
   return result.plan.map(p => p.line);
 }
 
-/** Elm-facing wrapper for real-time agent play. Takes board + hand
- *  as canonical DSL strings (same format used by the conformance
- *  corpus) and returns the next play's primitive sequence as a DSL
- *  string — or "" when the agent is stuck (the turn's end signal). */
-export function elmAgentStep(boardDsl: string, handDsl: string): string {
-  return elmFindPlay(boardDsl, handDsl);
+/** Elm-facing wrappers for real-time agent play (Player Two on the
+ *  ZIG solver, 2026-07-25). The glue drives the round trip: build the
+ *  wasm agentStep input from the request's board/hand DSL, call the
+ *  wasm, then lift the returned build recipe into the primitives DSL
+ *  — or "" when the agent is stuck (the turn's end signal). */
+export function elmZigAgentInput(boardDsl: string, handDsl: string): string {
+  return zigAgentInput(boardDsl, handDsl);
+}
+
+export function elmZigPlanPrimitives(
+  boardDsl: string,
+  handDsl: string,
+  planText: string,
+): string {
+  return zigPlanPrimitives(boardDsl, handDsl, planText);
 }

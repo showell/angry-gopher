@@ -1,6 +1,6 @@
-// engine_glue.js — bridges the Elm clients to the TS engine
-// bundle (engine.js → global `LynRummyEngine`) and, for puzzle
-// hints, to the zig board-bridge solver (solver.wasm).
+// engine_glue.js — bridges the Elm clients to the zig board-bridge
+// solver (solver.wasm: hints, agent play) with the TS engine bundle
+// (engine.js → global `LynRummyEngine`) as the DSL/geometry layer.
 //
 // Wire shape (snake_case at the boundary):
 //
@@ -46,7 +46,9 @@
 //             — sent on `agentStepResponse`. Empty
 //             primitives_dsl means the agent is stuck (end of
 //             turn). Non-empty = one play's primitive sequence,
-//             newline-separated.
+//             newline-separated. The ZIG solver picks the play
+//             (sim policy — stronger than the hints); the TS
+//             engine lowers its build recipe to primitives.
 //
 // The glue is shared: it attaches to both the full-game app
 // (game_hint / agent_step) and the puzzle app (puzzle_hint). Each
@@ -99,11 +101,17 @@
             port.send({ request_id: requestId, op: op, ok: false, error: msg });
           });
         } else if (op === 'agent_step') {
-          port.send({
-            request_id: requestId,
-            op: op,
-            ok: true,
-            primitives_dsl: agentStep(req.board_dsl, req.hand_dsl),
+          // Async like the hints: the solver wasm loads on first use.
+          agentStep(req.board_dsl, req.hand_dsl).then(function (dsl) {
+            port.send({
+              request_id: requestId,
+              op: op,
+              ok: true,
+              primitives_dsl: dsl,
+            });
+          }, function (err) {
+            var msg = String(err && err.message ? err.message : err);
+            port.send({ request_id: requestId, op: op, ok: false, error: msg });
           });
         } else {
           throw new Error('unknown op: ' + op);
@@ -317,8 +325,26 @@
     }).join(' ');
   }
 
+  // Player Two on the ZIG solver (2026-07-25): the wasm picks the
+  // play with the sim's policy — stronger than the beginner-first
+  // hint reveals — and returns its build recipe; the TS engine lifts
+  // the recipe into primitives with real geometry (locs, paths,
+  // crowding). Empty string = stuck, end of the agent's turn. No TS
+  // fallback: a boundary failure surfaces as an agent error.
   function agentStep(boardDsl, handDsl) {
-    return LynRummyEngine.elmAgentStep(boardDsl, handDsl);
+    var input = LynRummyEngine.elmZigAgentInput(boardDsl, handDsl);
+    return loadSolverWasm().then(function (wasm) {
+      var bytes = new TextEncoder().encode(input);
+      if (bytes.length > wasm.ioCap()) throw new Error('board too large for the solver');
+      new Uint8Array(wasm.memory.buffer, wasm.ioPtr(), bytes.length).set(bytes);
+      var rc = wasm.agentStep(bytes.length);
+      if (rc === 0) return '';
+      if (rc < 0) throw new Error('the agent solver rejected the board (code ' + rc + ')');
+      var plan = new TextDecoder().decode(
+        new Uint8Array(wasm.memory.buffer, wasm.ioPtr(), rc));
+      console.log('[agent_step plan]\n' + plan);
+      return LynRummyEngine.elmZigPlanPrimitives(boardDsl, handDsl, plan);
+    });
   }
 
   function cardObjectToRecord(c) {

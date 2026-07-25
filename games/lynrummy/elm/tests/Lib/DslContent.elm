@@ -1548,64 +1548,6 @@ scenario drag_invariant_board_drag_initial_floater
     initial_floater_at: (100, 200)
 """
       )
-    , ( "elm_find_play_corpus.dsl"
-      , """# elm_find_play_corpus — Elm puzzles wrapper integration scenarios.
-#
-# Each scenario gives a board + hand and pins the primitive sequence
-# returned by `elm_api/elm_find_play.ts:elmFindPlay`. The runner
-# treats the DSL as the assertion surface — both inputs and the
-# expected output stay as DSL strings on either side of the wrapper.
-#
-# Compared to physical_plan_corpus, scenarios here drop the explicit
-# `plan:` block: the wrapper IS the planner. The output covers the
-# full findPlayPrimitives pipeline (logical search → physical
-# lowering).
-
-scenario seed_extend_partial_run
-  desc: 5♥ from hand free-pulls onto partial [3♥ 4♥]; one merge_hand primitive.
-  board:
-    at (100,100): 3♥ 4♥
-    at (100,200): Q♣ Q♦ Q♥
-  hand: 5♥
-  expect:
-    primitives:
-      - merge_hand 5♥ -> [3♥ 4♥] at (100,100) /right
-scenario triple_in_hand_clean_board
-  desc: hand contains a complete set [5♠ 5♦ 5♣]; board is all helpers (clean). The triple-in-hand short-circuit fires — no BFS plan, just lay the three cards down at a fresh open loc as a seed chain.
-  board:
-    at (100,100): K♠ A♠ 2♠ 3♠
-    at (100,200): T♦ J♦ Q♦ K♦
-  hand: 5♠ 5♦ 5♣
-  expect:
-    primitives:
-      - place_hand 5♠ -> (52,272)
-      - merge_hand 5♦ -> [5♠] at (52,272) /right
-      - merge_hand 5♣ -> [5♠ 5♦] at (52,272) /right
-scenario pair_from_hand_then_peel
-  desc: pair [J♦' Q♦'] placed at fresh loc (multi-placement seed), then BFS plan peels T♦ off the helper run [T♦ J♦ Q♦ K♦] and merges it left onto the hand-laid pair to form the complete run [T♦ J♦' Q♦'].
-  board:
-    at (100,100): T♦ J♦ Q♦ K♦
-    at (100,200): K♠ A♠ 2♠ 3♠
-  hand: J♦' Q♦'
-  expect:
-    primitives:
-      - place_hand J♦' -> (52,272)
-      - merge_hand Q♦' -> [J♦'] at (52,272) /right
-      - isolate ( T♦ ) J♦ Q♦ K♦ at (100,100)
-      - merge_stack [T♦] at (100,100) -> [J♦' Q♦'] at (52,272) /left :: path (100,100@0)(100,100@25)(99,102@49)(98,105@74)(95,111@99)(91,120@123)(85,131@148)(79,145@173)(72,160@197)(64,177@222)(57,193@247)(49,210@271)(42,225@296)(36,239@321)(30,250@345)(26,259@370)(23,265@395)(22,268@419)(21,270@444)(21,270@469)
-scenario single_card_two_verb_plan
-  desc: 4♠ from hand; the augmented board has two troubles ([J♦' Q♦'] partial + the new 4♠ singleton). BFS finds a 2-move plan — peel T♦ onto [J♦' Q♦'] completes it, then push 4♠ onto [K♠ A♠ 2♠ 3♠] as a merge_hand, consuming the hand card directly.
-  board:
-    at (100,100): K♠ A♠ 2♠ 3♠
-    at (100,200): T♦ J♦ Q♦ K♦
-    at (100,300): J♦' Q♦'
-  hand: 4♠
-  expect:
-    primitives:
-      - isolate ( T♦ ) J♦ Q♦ K♦ at (100,200)
-      - merge_stack [T♦] at (100,200) -> [J♦' Q♦'] at (100,300) /left :: path (100,200@0)(100,200@14)(100,201@27)(99,203@41)(98,206@54)(96,212@68)(94,218@81)(92,226@95)(89,235@108)(86,244@122)(83,254@135)(80,263@149)(77,272@162)(75,280@176)(73,286@189)(71,292@203)(70,295@216)(69,297@230)(69,298@243)(69,298@257)
-      - merge_hand 4♠ -> [K♠ A♠ 2♠ 3♠] at (100,100) /right"""
-      )
     , ( "gesture.dsl"
       , """# Layout note: board/target blocks use `at (top, left): cards`
 # (top first, left second). The `floater_at:` and `cursor:` scalars
@@ -7674,6 +7616,75 @@ scenario wings_for_stack_dual_deck_both_are_targets
       side: Right
     - target: 2♣' 3♦' 4♣'
       side: Right
+"""
+      )
+    , ( "zig_agent_corpus.dsl"
+      , """# zig_agent_corpus — Player Two end-to-end conformance: board + hand
+# DSL through the REAL solver.wasm (`agentStep`) and the TS lowering
+# (`zigPlanPrimitives`), pinning the primitive sequence Elm would
+# animate. This is the cross-language drift alarm: a zig recipe-format
+# change, a policy change, or a lowering change all fail here first.
+#
+# Empty `primitives:` block = the agent is stuck (wasm returned 0) —
+# the end-of-turn signal.
+#
+# The runner also asserts the applied result: after a play, EVERY
+# stack on the simulated board must be a complete meld (a zig play is
+# a full cover by construction).
+
+scenario extend_partial_run
+  desc: 5♥ from hand completes the board's partial [3♥ 4♥]; the strongest single is also the simplest — one hand-direct merge.
+  board:
+    at (100,100): 3♥ 4♥
+    at (100,200): Q♣ Q♦ Q♥
+  hand: 5♥
+  expect:
+    primitives:
+      - merge_hand 5♥ -> [3♥ 4♥] at (100,100) /right
+scenario triple_in_hand_clean_board
+  desc: no single or pair from [5♠ 5♦ 5♣] can cover, the triple can — laid down as anchor + two joiners at a fresh loc sized for the set.
+  board:
+    at (100,100): K♠ A♠ 2♠ 3♠
+    at (100,200): T♦ J♦ Q♦ K♦
+  hand: 5♠ 5♦ 5♣
+  expect:
+    primitives:
+      - place_hand 5♦ -> (52,272)
+      - merge_hand 5♠ -> [5♦] at (52,272) /right
+      - merge_hand 5♣ -> [5♦ 5♠] at (52,272) /right
+scenario pair_needs_board_surgery
+  desc: J♦' Q♦' can only land by restructuring the diamond run — no single plays (five diamonds have no cover), the pair does. T♦ peels off as a bare anchor and the hand cards build the new run on it.
+  board:
+    at (100,100): T♦ J♦ Q♦ K♦
+    at (100,200): K♠ A♠ 2♠ 3♠
+  hand: J♦' Q♦'
+  expect:
+    primitives:
+      - isolate ( T♦ ) J♦ Q♦ K♦ at (100,100)
+      - move_stack [T♦] at (100,100) -> (52,272) :: path (100,100@0)(100,100@23)(100,102@47)(99,105@70)(97,111@94)(94,120@117)(91,132@141)(87,145@164)(83,161@188)(78,178@211)(74,194@235)(69,211@258)(65,227@282)(61,240@305)(58,252@329)(55,261@352)(53,267@376)(52,270@399)(52,272@423)(52,272@446)
+      - merge_hand J♦' -> [T♦] at (52,272) /right
+      - merge_hand Q♦' -> [T♦ J♦'] at (52,272) /right
+scenario steal_from_mid_set
+  desc: 9♦ from hand needs 6♦7♦8♦9♦ — the 8♦ comes out of the middle of the four-set (isolate), the remnant pair rejoins (zig closes the gap), then the run assembles.
+  board:
+    at (100,100): 8♥ 8♠ 8♦ 8♣
+    at (100,300): 6♦ 7♦
+  hand: 9♦
+  expect:
+    primitives:
+      - isolate 8♥ 8♠ ( 8♦ ) 8♣ at (100,100)
+      - move_stack [8♥ 8♠] at (98,100) -> (52,182) :: path (98,100@0)(98,100@12)(98,101@25)(97,103@37)(95,105@49)(93,110@62)(90,115@74)(86,122@87)(82,129@99)(77,137@111)(73,145@124)(68,153@136)(64,160@148)(60,167@161)(57,172@173)(55,177@186)(53,179@198)(52,181@210)(52,182@223)(52,182@235)
+      - merge_stack [8♣] at (201,100) -> [8♥ 8♠] at (52,182) /right :: path (201,100@0)(201,100@15)(200,101@30)(199,102@45)(196,105@60)(191,109@75)(186,115@90)(180,121@105)(172,128@120)(164,136@135)(157,144@150)(149,152@165)(141,159@180)(135,165@195)(130,171@210)(125,175@225)(122,178@240)(121,179@255)(120,180@270)(120,180@285)
+      - merge_stack [8♦] at (166,100) -> [6♦ 7♦] at (100,300) /right :: path (166,100@0)(166,100@26)(166,102@52)(166,106@78)(166,113@104)(166,123@130)(166,137@156)(167,152@182)(167,170@208)(167,189@234)(167,209@261)(167,228@287)(167,246@313)(168,261@339)(168,275@365)(168,285@391)(168,292@417)(168,296@443)(168,298@469)(168,298@495)
+      - merge_hand 9♦ -> [6♦ 7♦ 8♦] at (100,300) /right
+scenario stuck_hand_yields_turn
+  desc: 9♣ on a board with no 8♣/T♣/other 9s in reach — every probe refuted, the agent draws.
+  board:
+    at (100,100): K♠ A♠ 2♠ 3♠
+    at (100,200): 7♠ 7♦ 7♣
+  hand: 9♣
+  expect:
+    primitives:
 """
       )
     ]

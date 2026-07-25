@@ -4,8 +4,10 @@
 # `ops/list` to see what already exists.
 #
 # Solver gate (~25s warm): native unit tests for the zig Lyn Rummy solver
-# (games/lynrummy/zig — board bridge, min-break, moves, hints, self-play sim).
-# The self-play pins (sim.zig) are the slow half: six full games in Debug.
+# (games/lynrummy/zig — board bridge, repair, moves, hints, self-play sim),
+# the gallery puzzle gate, and the Player Two wasm wire (fresh build +
+# TS-side conformance). The self-play pins (sim.zig) are the slow half:
+# six full games in Debug.
 set -e
 
 REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
@@ -21,3 +23,11 @@ done
 # puzzle must solve, definitively.
 echo "==> zig test games/lynrummy/puzzle_gate.zig"
 zig test games/lynrummy/puzzle_gate.zig
+
+# Player Two end-to-end: rebuild the browser wasm from source, then
+# drive board+hand scenarios through the REAL artifact (agentStep) and
+# the TS lowering — the cross-language drift alarm. Building first
+# means the committed solver.wasm can never go stale against zig.
+echo "==> zig agent wire (build wasm + conformance)"
+./ops/build_lynrummy_wasm
+(cd games/lynrummy/ts && node test/test_zig_agent_step.ts)

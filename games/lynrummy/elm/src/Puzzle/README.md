@@ -39,8 +39,9 @@ Since 2026-07 it is answered by the **zig board-bridge solver**
 the board to an arrangement line, the solver finds a cover that keeps the most
 of the player's own stacks (anytime min-break), and the reply is the distilled
 move plan — peel / steal / push / split / merge lines. The first line shows in
-the status bar; the full plan logs to the console. The TS engine
-(`engine.js`) still answers the full game's `game_hint` and `agent_step`.
+the status bar; the full plan logs to the console. The full game's `game_hint`
+and `agent_step` ride the same wasm; the TS engine (`engine.js`) supplies the
+DSL/geometry layer around it.
 
 For why a composed, can't-lose board is its own small pleasure — and what the
 puzzles have in common with a hundred-year-old chess study — read the essay

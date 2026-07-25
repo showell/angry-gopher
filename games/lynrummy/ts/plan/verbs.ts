@@ -85,7 +85,7 @@ export function moveToPrimitives(
  *  For end-splits (one piece is a singleton), probe the post-board
  *  and pre-flight only when needed. For interior splits (both pieces
  *  multi-card), pre-flight unconditionally. */
-function planSplitAfter(
+export function planSplitAfter(
   sim: readonly BoardStack[],
   stackContent: readonly Card[],
   leftCount: number,
@@ -138,7 +138,7 @@ function planSplitAfter(
 
 /** Emit a merge. R1 (hand-direct), R2 (small→large), R3 (don't move
  *  if there's room) all live here. */
-function planMerge(
+export function planMerge(
   sim: readonly BoardStack[],
   srcContent: readonly Card[],
   tgtContent: readonly Card[],
@@ -261,7 +261,7 @@ function classifyLeaf(cards: readonly Card[]): LeafKind {
  *  same UI gesture Steve uses (long-press + drag). Returns prims,
  *  post-sim, the ext singleton card, and the non-empty remnant
  *  pieces (1 for end-extraction; 2 for interior). */
-function isolateCard(
+export function isolateCard(
   sim: readonly BoardStack[],
   stackContent: readonly Card[],
   ci: number,

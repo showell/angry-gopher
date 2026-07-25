@@ -170,9 +170,13 @@ Files:
   `place` line — the sixth verb. Nothing playable falls back
   honestly: consolidation plan / draw / "undo territory" / give-up.
 - `wasm.zig` — the browser build (ops/build_lynrummy_wasm →
-  solver.wasm): arrangement line in, move plan out — puzzleHint and
-  gameHint exports. Serves both Hint buttons via
-  zig-server/src/puzzles.zig + engine_glue.js.
+  solver.wasm): arrangement line in, move plan out — puzzleHint,
+  gameHint, and agentStep exports. Serves both Hint buttons AND
+  Player Two via zig-server/src/puzzles.zig + engine_glue.js:
+  agentStep runs sim.agentPlan (the strong policy, not the
+  beginner-first hint) and answers with the distilled build recipe;
+  ts/elm_api/zig_agent.ts lifts it into geometry primitives
+  (conformance: test_zig_agent_step.ts, wired into ops/check_solver).
 - `sim.zig` — full-game agent self-play on the ts/full_game/ rules,
   deal bit-exact with ts/baseline_deal.ts (a seed names the same game
   in both engines). The agent plays STRONG, not beginner-shaped:

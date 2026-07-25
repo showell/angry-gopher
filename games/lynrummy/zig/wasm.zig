@@ -18,6 +18,7 @@ const solver = @import("solver.zig");
 const arrangement = @import("arrangement.zig");
 const moves = @import("moves.zig");
 const hint = @import("hint.zig");
+const sim = @import("sim.zig");
 
 var io_buf: [65536]u8 = undefined;
 
@@ -42,6 +43,33 @@ export fn puzzleHint(len: u32) i32 {
         .futile => return -2,
         .unknown => return -3,
     }
+}
+
+/// agentStep: Player Two's turn engine (2026-07-25). The io buffer
+/// holds the BOARD arrangement line, a newline, and the HAND as
+/// space-separated card tokens. The zig side PICKS the play — the
+/// sim's policy (smallest hand subset that plays, most kept player
+/// edges within the size), strictly stronger than the beginner-first
+/// hint — and answers with the distilled build recipe
+/// (moves.formatPlan lines). The TS side lowers that recipe to
+/// geometry primitives; choreography (locs, paths, crowding) never
+/// enters the wasm. Returns the recipe length in bytes; 0 = stuck
+/// (no subset plays: end of turn, Elm applies the draw rule);
+/// negative like puzzleHint (-1 parse, -4 distiller bug).
+export fn agentStep(len: u32) i32 {
+    if (len > io_buf.len) return -1;
+    const input = io_buf[0..len];
+    var it = std.mem.splitScalar(u8, input, '\n');
+    const arr = arrangement.parse(it.next().?) catch return -1;
+    var hb: [card.MAX_CARDS]card.Card = undefined;
+    const hand = card.parseBoard(it.next() orelse "", &hb) catch return -1;
+    var plan: moves.Plan = undefined;
+    const played = sim.agentPlan(&arr, hand, &plan) catch |e| return switch (e) {
+        error.DistillFailed => -4,
+        else => -1,
+    };
+    if (!played) return 0;
+    return @intCast(moves.formatPlan(&plan, &io_buf).len);
 }
 
 /// gameHint: the io buffer holds the BOARD arrangement line, a

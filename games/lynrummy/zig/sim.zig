@@ -24,6 +24,7 @@ const card = @import("card.zig");
 const graph = @import("graph.zig");
 const arrangement = @import("arrangement.zig");
 const solver = @import("solver.zig");
+const moves = @import("moves.zig");
 
 pub const HAND_SIZE = 15;
 pub const NUM_PLAYERS = 2;
@@ -253,6 +254,29 @@ fn playTurn(deal: *Deal, active: usize, deck_pos: *usize, turn: u16, stats: *Sta
 }
 
 const Pick = struct { idx: [3]u8, kept: i32, next: [graph.SLOTS]u8 };
+
+/// One agent play for the LIVE game (wasm Player Two): exactly the
+/// policy playTurn runs — the smallest hand-subset size that plays,
+/// most kept edges within that size — distilled into the human build
+/// recipe. Returns false when the agent is stuck (end of turn). The
+/// caller's Elm loop re-asks after every play, so the single-step
+/// shape here IS playTurn's cascade, one wire hop at a time.
+pub fn agentPlan(
+    arr: *const arrangement.Arrangement,
+    hand: []const card.Card,
+    plan: *moves.Plan,
+) (card.Error || moves.Error)!bool {
+    var stats: Stats = .{};
+    inline for (.{ 1, 2, 3 }) |k| {
+        if (try findPlay(arr, hand, k, 0, &stats)) |pick| {
+            var a = arr.*;
+            for (pick.idx[0..k]) |hi| appendSingle(&a, hand[hi]);
+            try moves.distill(&a, &pick.next, arr.n_stacks, plan);
+            return true;
+        }
+    }
+    return false;
+}
 
 /// Probe every size-k hand subset with a satisfaction solve; the
 /// winner keeps the most player edges among the first covers found
@@ -526,6 +550,29 @@ test "self-play: six seeds land the pinned games" {
         try std.testing.expectEqual(pin.stacks, res.board.n_stacks);
         try std.testing.expectEqual(@as(u32, 0), res.stats.probe_unknowns);
     }
+}
+
+test "agentPlan: the seed-42 opening hand's first play, distilled" {
+    // Player Two's wire, native: same deal as the self-play pin, one
+    // step. The plan string is what wasm agentStep hands the glue.
+    const d = dealGame(42);
+    var plan: moves.Plan = undefined;
+    const played = try agentPlan(&d.board, d.hands[0][0..d.hand_len[0]], &plan);
+    try std.testing.expect(played);
+    var buf: [8192]u8 = undefined;
+    try std.testing.expectEqualStrings(
+        "place QS onto [KS AS 2S 3S] -> [QS KS AS 2S 3S] [COMPLETE]",
+        moves.formatPlan(&plan, &buf),
+    );
+}
+
+test "agentPlan: a hand with no play reports stuck" {
+    // 9C on the opening board: no 8C/TC/other 9s in reach — the
+    // component prefilter refutes every probe, agent yields the turn.
+    const arr = arrangement.parse(OPENING_BOARD) catch unreachable;
+    const hand = [_]card.Card{try card.parseCard("9C")};
+    var plan: moves.Plan = undefined;
+    try std.testing.expect(!(try agentPlan(&arr, &hand, &plan)));
 }
 
 /// Space-joined ASCII card tokens — the dump/test line format.
