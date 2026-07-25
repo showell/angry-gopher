@@ -1326,12 +1326,15 @@ test "board bridge acceptance: Steve's 59c give-up state" {
     // His J♣'>Q♦'>K♠ stack — the forced black-king weave random764
     // confirmed — survives intact, as it did under min-break.
     try std.testing.expectEqual(arrangement.Fate.intact, rep.fate[15]);
-    // The distilled plan rebuilds the cover from his stacks in 9
+    // The distilled plan rebuilds the cover from his stacks in 10
     // moves (verified by construction inside distill; min-break
-    // managed 8, the engine's A* six verbs).
+    // managed 8, the engine's A* six verbs). Was 9 until the recipes
+    // turned physical (game 19, 2026-07-25): the old count was
+    // measured in first-come copy labels, where a twin coincidence
+    // could save a move no player holding the real cards could make.
     var mplan: moves.Plan = undefined;
     try moves.distill(&arr, &sol.next, arr.n_stacks, &mplan);
-    try std.testing.expectEqual(@as(usize, 9), mplan.n);
+    try std.testing.expectEqual(@as(usize, 10), mplan.n);
 }
 
 test "solvable boards get verified next-maps" {

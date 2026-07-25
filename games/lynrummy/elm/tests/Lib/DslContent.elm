@@ -7685,6 +7685,19 @@ scenario stuck_hand_yields_turn
   hand: 9♣
   expect:
     primitives:
+scenario game19_lone_primed_copy
+  desc: the game-19 regression (2026-07-25) — the agent's second move plays 2♦', whose bare twin is still in the deck; the recipe must keep the prime (and A♦' on the run, whose bare twin sits in the ace set) or the lowering throws "stack not found". Board is the live state after the agent's first play.
+  board:
+    at (70,20): K♠ A♠ 2♠ 3♠
+    at (160,80): T♦ J♦ Q♦ K♦ A♦'
+    at (100,140): 2♥ 3♥ 4♥
+    at (40,200): 7♠ 7♦ 7♣
+    at (130,260): A♣ A♦ A♥
+    at (70,320): 2♣ 3♦ 4♣ 5♥ 6♠ 7♥
+  hand: 2♦' 5♦ 6♦ K♦' 4♥' 6♥' 7♥' Q♥ K♥ 4♠' T♠' 3♣ 5♣' Q♣'
+  expect:
+    primitives:
+      - merge_hand 2♦' -> [T♦ J♦ Q♦ K♦ A♦'] at (160,80) /right
 """
       )
     ]

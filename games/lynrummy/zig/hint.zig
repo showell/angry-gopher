@@ -440,7 +440,7 @@ test "game 11: after placing 3S, the 3H loner outranks the next hand card" {
     try std.testing.expectEqual(Kind.clean_board, res.kind);
     var buf: [2048]u8 = undefined;
     try std.testing.expectEqualStrings(
-        "push 3H onto [4S 5H 6S] -> [3H 4S 5H 6S] [COMPLETE]",
+        "push 3H onto [4S' 5H 6S] -> [3H 4S' 5H 6S] [COMPLETE]",
         planText(&res, &buf),
     );
     // One state earlier (4H still loose too): the 2-move homing beats
@@ -470,7 +470,7 @@ test "game 10: after the objective lands, the aces find their home" {
     var buf: [2048]u8 = undefined;
     try std.testing.expectEqualStrings(
         "steal AH from [AD AH] onto [2H 3H 4H] -> [AH 2H 3H 4H] [COMPLETE]\n" ++
-            "push AD onto [JD' QD KD] -> [JD' QD KD AD] [COMPLETE]",
+            "push AD onto [JD QD KD] -> [JD QD KD AD] [COMPLETE]",
         planText(&res, &buf),
     );
 }
@@ -486,7 +486,7 @@ test "game 9: extending a big run is one move, never a split" {
     try std.testing.expectEqual(Kind.play, res.kind);
     var buf: [2048]u8 = undefined;
     try std.testing.expectEqualStrings(
-        "place JS onto [QS KS AS 2S 3S] -> [JS QS KS AS 2S 3S] [COMPLETE]",
+        "place JS onto [QS' KS AS 2S 3S] -> [JS QS' KS AS 2S 3S] [COMPLETE]",
         planText(&res, &buf),
     );
 }

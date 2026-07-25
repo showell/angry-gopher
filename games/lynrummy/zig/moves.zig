@@ -8,11 +8,13 @@
 //! diff as MEMBERSHIP, never chain order — the same rule reportKept
 //! scores by.
 //!
-//! Copies first: a cover's deck marks are first-come dressing (the
-//! search never distinguished copies), so diffing them literally
-//! describes surgery on the wrong twin. Step 0 re-dresses the cover —
-//! greedy label swaps per doubled card — to hug the player's physical
-//! stacks, and only then is the diff taken.
+//! Copies first: a cover's deck marks are canonical dressing (the
+//! search never distinguished copies), so diffing it literally
+//! describes surgery on the wrong twin. The INPUT's marks are
+//! physical and honored (game 19: the agent executes these tokens
+//! against the real table). Step 0 aligns the cover to the board —
+//! lone copies swap outright, doubled cards by greedy label swaps
+//! maximizing physical agreement — and only then is the diff taken.
 //!
 //! The distiller BUILDS the plan by simulating it: each emitted move
 //! transforms a working board, and at the end the working board must
@@ -428,18 +430,47 @@ pub fn distill(arr: *const arrangement.Arrangement, cover: *const [graph.SLOTS]u
         .hand_to = arr.n_stacks,
     };
 
-    // Input stacks at slot level, copies first-come per base card —
-    // marks in the input line are dressing, here as everywhere.
-    var used: [graph.N]u8 = @splat(0);
+    // Input stacks at slot level, deck marks HONORED (game 19,
+    // 2026-07-25): the recipe's tokens must name the exact physical
+    // cards — Player Two executes them literally against the Elm
+    // board, and a hint naming the wrong twin sends the player to a
+    // card that isn't there. Marks are dressing INSIDE the solver,
+    // never on the way back out. A collision (two bares in a sloppy
+    // fixture) takes the twin.
+    var taken: [graph.SLOTS]bool = @splat(false);
     var slot_buf: [card.MAX_CARDS]u8 = undefined;
     for (0..arr.n_stacks) |si| {
         const cs = arr.stackCards(si);
         for (cs, 0..) |c, i| {
             const base = @as(u8, c.suit) * 13 + c.rank;
-            slot_buf[i] = base + used[base] * 52;
-            used[base] += 1;
+            var slot = base + @as(u8, c.deck) * 52;
+            if (taken[slot]) slot = (slot + 52) % graph.SLOTS;
+            taken[slot] = true;
+            slot_buf[i] = slot;
         }
         _ = d.sim.addStack(slot_buf[0..cs.len]);
+    }
+
+    // The cover speaks canonical dressing (a lone copy always sits at
+    // the bare slot); the board now speaks physical. Align the cover
+    // outright wherever each has exactly ONE copy of a base card on
+    // opposite slots — doubled bases stay redress's job below.
+    var in_cover: [graph.SLOTS]bool = @splat(false);
+    for (d.c2, 0..) |nx, i| {
+        if (nx != graph.NONE) {
+            in_cover[i] = true;
+            in_cover[nx] = true;
+        }
+    }
+    for (0..graph.N) |b| {
+        const board_primed = d.sim.loc_stack[b] == Sim.NOWHERE and
+            d.sim.loc_stack[b + 52] != Sim.NOWHERE;
+        const board_bare = d.sim.loc_stack[b] != Sim.NOWHERE and
+            d.sim.loc_stack[b + 52] == Sim.NOWHERE;
+        const cover_bare = in_cover[b] and !in_cover[b + 52];
+        const cover_primed = !in_cover[b] and in_cover[b + 52];
+        if ((board_primed and cover_bare) or (board_bare and cover_primed))
+            swapCopies(&d.c2, @intCast(b));
     }
 
     redress(&d);
@@ -758,6 +789,18 @@ test "an untouched board distills to no moves" {
         "3H>4H>5H KH=KC=KS",
         "3H>4H>5H KH=KC=KS",
         "",
+    );
+}
+
+test "a lone primed card keeps its prime in the recipe (game 19)" {
+    // The board's only copy of 5H wears the prime; the cover (like
+    // every solver cover) speaks canonical dressing — bare. The
+    // recipe must name the PHYSICAL card: the agent executes these
+    // tokens literally, and [5H] isn't on the table, 5H' is.
+    try expectPlan(
+        "3H>4H 5H'",
+        "3H>4H>5H",
+        "push 5H' onto [3H 4H] -> [3H 4H 5H'] [COMPLETE]",
     );
 }
 
