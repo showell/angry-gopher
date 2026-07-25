@@ -1,7 +1,12 @@
-# Lyn Rummy — the zig solver (rethink in progress)
+# Lyn Rummy — the zig solver
 
-A fresh solver being built up in phases, replacing nothing yet — the TS
-engine (`../ts/`) remains production. The framing: the 104-card double
+The production brain since 2026-07: both Hint buttons, the futility
+certificates, and the Player Two opponent all run this solver (compiled
+to `solver.wasm`; the TS engine keeps the DSL/geometry work). Built up
+in phases over July 2026 and **parked 2026-07-25** — the resume kit at
+the bottom of this file is where to pick the thread back up.
+
+The framing: the 104-card double
 deck has a static graph (runs = successor edges, sets = same-value
 neighbors), and a clean board is a partition of the board's cards into
 flavor-monochromatic paths of length 3+. Solvability depends only on the
@@ -161,6 +166,13 @@ Files:
 - `arrangement.zig` — the board as stacks: parsing + loud validation,
   the `Warm` counts the solve biases on, and `reportKept`, the
   kept-edges scorer.
+- `repair.zig` — the local-repair tier: problem-directed IDDFS over
+  single-card edits of the player's own arrangement (attach, wedge,
+  bring with mid-run pulls, seat swap), depth ≤ 6 under a node cap
+  tuned on Steve's puzzle-79 line. Can only answer solved; futility
+  stays the sweep's job.
+- `suit_first.zig` — portfolio tier 0, the human prior (pure runs as
+  bulk carrier, sets absorb orphans).
 - `moves.zig` — the edge diff distilled into the five human verbs,
   verified by construction.
 - `hint.zig` — the game-hint orchestrator, BEGINNER-FIRST (Steve's
@@ -187,6 +199,16 @@ Files:
 - `cut_dump.zig` — dumps a game's CUT STATE (the board at the first
   solver give-up) for `ops/publish_lynrummy_cut`, which publishes it
   as a playable session via ts/publish_cut_game.ts.
+- `puzzle_mine.zig` + `seed_sweep.zig` — the puzzle-mining pair
+  (`ops/mine_lynrummy_puzzle`): the sweep scout plays a seed range
+  through `sim.playGame` and reports each game's hardest solved probe;
+  the miner prints the winning board as a curated-catalog block.
+  Appending to `conformance/curated_sim_puzzles.dsl` stays a human
+  act; bump the count pin in `../puzzle_gate.zig` after.
+- `calib.zig` — the human-vs-solver grading ritual for mined puzzles:
+  paste the wire lines from `ts/tools/replay_puzzle.ts` (which replays
+  a puzzle session's gesture log) and it grades both lines with
+  `reportKept` + `distill`.
 - `pure_run.zig` — phase 1: per-suit cyclic arc cover + verifier. Kept
   as a stepping stone.
 - `solver.zig` — phases 2+3: the rank-sweep solver (with the component
@@ -196,3 +218,80 @@ Files:
 Gate: `ops/check_solver` (composed into `ops/check` and
 `ops/check_lynrummy`). Tests are zig-native; fixtures are board lines in
 the human notation, e.g. `"4D 5D 5D' 6D 6D' 7D"`.
+
+## Parked 2026-07-25 — the resume kit
+
+Everything above ships and is deployed. What follows is the state of
+the open threads at parking time, so un-parking starts from evidence
+instead of archaeology. Queued first, ambient after.
+
+**Queued (next in line when work resumes):**
+
+- **Certificates v2 — the packing witness.** Today's counting
+  certificate quotes capacities ("runs can hold only 2 and no 8-set is
+  possible"); the lemma's window packing knows the sharper sentence —
+  *which* cards are contended ("both black 8s need the 6♠"). Surfacing
+  the packing's used-cards witness upgrades the English. Same rails
+  would serve **puzzle-path certificates**: the puzzle hint's give-up
+  is a bare code today, while the game hint explains itself.
+- **Deeper anytime repair.** The budget has followed human evidence
+  twice: the 6♣' find created the repair tier, and puzzle 79's 6-verb
+  line drove it to depth 6 / 70k nodes. Puzzle 80 is the first
+  specimen *past* the current budget — Steve's 12-verb line is pure
+  problem-directed repair vocabulary at ~10–12 edits, so repair never
+  sees it and the sweep answers with a 22-verb teardown. One specimen
+  is not a mandate; the next one probably is. (The node cap's tuning
+  line lives in `repair.zig`; the shortness prune is 3-per-edit —
+  see the game-19 comment there before touching either.)
+- **The sets-three-away theorem** (Steve, from solving puzzle 80).
+  Pulling rank r out of the middle of a run leaves remnants
+  `[r−2 r−1]` and `[r+1 r+2]`, whose cheapest completions are ranks
+  **r−3 and r+3** — so "the only red ten is buried mid-run"
+  mechanically implies "look at the 7s and the kings for spares."
+  Worth revisiting on un-park: it is exactly the shape the
+  lemma-as-kibitz surface wants to speak, and possibly a move-ordering
+  hint for repair (when the problem card needs a buried card, try
+  donors at ±3 first).
+
+**Ambient (collecting evidence, no action owed):**
+
+- **Pure-vs-rb tension** (Steve's framing, 2026-07-23): in early hands
+  pure runs are more aesthetic but rb runs are often more strategic —
+  they create easier placements for difficult cards later in the turn.
+  Exemplar: game 11's A♦-on-rb made Q♥ playable in 2 moves vs 3 in
+  the pure world. Collecting examples before Steve votes on a
+  criterion; don't re-raise without new ones.
+- **Lemma-as-kibitz.** The per-rank lemma table (capacities, forced
+  sets) is arrangement-independent and human-meaningful — a natural
+  kibitz surface no bridge work is needed for. Sleeper until wanted.
+- **Player Two's open game-design questions** (it plays correctly and
+  strongly; these are about *feel*): full-cover plays mean the agent
+  tidies the whole table every play, including restructuring the
+  human's half-built stacks — strong tablemate or showing off? It has
+  no hold-back layer (never keeps the third 8 to starve you of the
+  fourth) — satisfaction cascade, not cunning. And it is deliberately
+  stronger than the beginner-first hints — one solver, two policies,
+  adjustable in one place if the gap ever feels wrong at the table.
+  Latency note: agent turns run on the browser main thread; if a
+  late-game turn ever stutters, the fix is a worker thread for the
+  wasm calls, not a weaker budget.
+- **Raising GIVE_UP_STEPS.** Only on evidence: a real board solvable
+  above the line. The evidence pile is `corpus_hard.txt` plus puzzle
+  78's multiset (cold-unknown at 1M, warm-solves at 623k).
+
+**Calibration record** (Steve vs the solver on the mined/stretch
+boards — the ~500k–1M-step band is his challenging-but-solvable zone;
+mine upward from there):
+
+| board | steps | Steve | solver | verdict |
+|---|---|---|---|---|
+| stretch 59c | 646,834 | solved (one give-up en route) | 37/42 kept in 10 | "challenging but clearly within my reach" |
+| puzzle 78 (s107t4) | 623,630 | 28/40 kept in 16 verbs | 29/40 in 15 | tie by different roads |
+| puzzle 79 (s95t6) | 580,583 | 41/44 in 6 | 21/44 in 34 | human rout → drove repair depth 6 |
+| puzzle 80 (s441t5) | 994,264 | 37/45 in 12 | 33/45 in 22 | human win → deeper-repair specimen |
+
+The mining/grading loop is repeatable: `seed_sweep.zig` →
+`ops/mine_lynrummy_puzzle` → curate → `puzzle_gate` count bump →
+Steve plays it → `ts/tools/replay_puzzle.ts` + `calib.zig` grade it.
+Post-solve analyses live in the essay archive (claude-steve
+random793/random798 for 79/80).

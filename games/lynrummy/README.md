@@ -10,16 +10,27 @@ It's live in production at https://lynrummy.com — a DigitalOcean droplet runni
 the zig server behind Caddy, where family and friends log in and play (solo or
 against the built-in agent: deal, play, hint, agent-play, replay, resume).
 
-## Status: game and puzzles mature; the zig solver active
+## Status: mature and parked (2026-07-25)
 
 The game and puzzles are the oldest of the site's subsystems — they work,
-they ship. The active piece (2026-07) is the **zig solver** at
-[`zig/`](./zig/README.md), which has taken over the thinking: hints,
-futility certificates, and the Player Two opponent all run it (the original
-TS engine is mostly retired but still does the DSL/geometry work — see "How
-it's built"). Also recent: the **beginner tutorial** at `/tutorial`, a
-public, ungated page in plain HTML+JS (`tutorial/` — no Elm, no TS, no
-solver), gated by `ops/test_tutorial`. **The code is the authority** for how
+they ship, and as of 2026-07-25 the whole subsystem is **parked** again.
+The two big pieces built since the previous park, both live in
+production:
+
+- the **beginner tutorial** at `/tutorial` — a public, ungated page in
+  plain HTML+JS (`tutorial/` — no Elm, no TS, no solver), gated by
+  `ops/test_tutorial`. Content-complete; Steve owns the remaining-gaps
+  list (top item: a real photo demonstrating a hand play).
+- the **zig solver** at [`zig/`](./zig/README.md), which took over the
+  thinking: hints, futility certificates, and the Player Two opponent
+  all run it (the original TS engine is mostly retired but still does
+  the DSL/geometry work — see "How it's built"). Where to resume is
+  written down in that README's **"Parked 2026-07-25 — the resume
+  kit"** section: queued work (certificate v2's packing witness,
+  puzzle-path certificates), the deeper-repair evidence pile, the
+  sets-three-away theorem, and the human-vs-solver calibration record.
+
+**The code is the authority** for how
 anything works; this doc and its siblings exist to orient a human reader,
 not to drive new engineering (for that, go to the code).
 
