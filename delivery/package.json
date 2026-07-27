@@ -8,6 +8,7 @@
     "typecheck": "tsc --noEmit -p ."
   },
   "devDependencies": {
+    "@types/node": "^26.1.1",
     "esbuild": "^0.28.1",
     "typescript": "^6.0.3"
   }

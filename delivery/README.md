@@ -74,7 +74,8 @@ neighborhood roles straight off the data — revealed, not imposed.
   data; esbuild with `--format=esm` for the `node:` imports): `painsweep.ts` (an
   N=100 scorecard), `painreg.ts` (an N=500 synergy regression → `pain_baseline.json`),
   `racerank.ts` (subtractive race-prune analysis), plus `solver_check.ts` /
-  `roadgraph_check.ts`.
+  `roadgraph_check.ts`, and `goldgen.ts` (→ `solver_gold.json`, the bit-exact
+  20-shift gold corpus the zig solver port must reproduce).
 - **`TAXONOMY.md`** — the neighborhood-role affinity matrix.
 
 ### Building, running, testing
