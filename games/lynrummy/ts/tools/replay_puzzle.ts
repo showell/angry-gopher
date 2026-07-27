@@ -69,6 +69,9 @@ for (const line of collapsed) {
   // log (e.g. `split  / Q♦` — the next action reuses the same loc).
   if (/^\d+\)\s*split\s+\//.test(line)) continue;
   const prim = parseWireActionLine(line, board);
+  // Envelope keyword, not a board gesture (cf. replay_session.ts) — a puzzle
+  // session is a single turn, so at most a trailing one appears.
+  if ("action" in prim && prim.action === "complete_turn") continue;
   board = applyLocally(board, prim);
   gestures++;
 }
