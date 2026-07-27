@@ -42,6 +42,10 @@ Available ops commands (run from repo root):
                          committed safari.wasm across a full course and asserts
                          no draw-buffer overflow + both critter culls (segment
                          reach + projected size) stay live. Composed by ops/check.
+  ops/check_delivery     Delivery TS→zig port gate: TS typecheck + zig unit
+                         tests + gold_check (all 20 gold shifts re-solved and
+                         compared bit-for-bit against delivery/solver_gold.json).
+                         Standalone for now (not composed by ops/check).
   ops/test_docs          doc_xref --all (~1s) — common.
   ops/test_css           check_css (~1s) — common. Flag CSS classes defined
                          in any server/**/*.go <style> block that no Go/JS/

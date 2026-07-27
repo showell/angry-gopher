@@ -1,0 +1,30 @@
+#!/bin/bash
+# CANONICAL DEV-LOOP SCRIPT — DO NOT REINVENT.
+# Before composing an ad-hoc shell command for build / launch / test / regen,
+# run `ops/list` to see what already exists.
+#
+# Delivery gate: the TS→zig solver port's conformance wall.
+#   1. TS typecheck (delivery/ — the reference implementation stays green).
+#   2. zig unit tests for the four port modules (delivery/zig).
+#   3. gold_check (ReleaseFast): every shift in delivery/solver_gold.json
+#      re-derived from its seed and compared BIT-FOR-BIT — substrate edges/
+#      matrix/paths, demand draws, all four race-variant pains, winners, and
+#      full route structure. Strict equality; a diff is a port bug.
+#
+# The gold corpus regenerates via delivery/goldgen.ts (see its header) ONLY
+# when the TS solver itself changes semantics.
+set -e
+
+REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$REPO_DIR"
+
+echo "==> delivery TS typecheck"
+npm --prefix delivery run --silent typecheck
+
+for f in delivery/zig/geography.zig delivery/zig/orders.zig delivery/zig/roadgraph.zig delivery/zig/solver.zig; do
+    echo "==> zig test $f"
+    zig test "$f"
+done
+
+echo "==> gold_check (20 shifts, bit-exact)"
+zig run -O ReleaseFast delivery/zig/gold_check.zig

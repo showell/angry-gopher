@@ -70,6 +70,15 @@ neighborhood roles straight off the data — revealed, not imposed.
 - **Code (the truth):** `main.ts` (canvas/input/animation), `geography.ts` (the
   map + fleet), `orders.ts` (the daily draw), `roadgraph.ts` (the road substrate),
   `solver.ts` (the heart), `map_view.ts` (drawing).
+- **`zig/` — the solver, ported (2026-07).** `geography/orders/roadgraph/solver
+  .zig` reproduce the TS solver **bit-for-bit**; `gold_check.zig` proves it
+  against `solver_gold.json` (20 shifts: demand draws, substrate, all four
+  race-variant pains, winners, full route structure — strict equality, no
+  tolerances). Gate: `ops/check_delivery`. The TS remains the reference
+  implementation and the browser still runs the TS bundle; the zig port is
+  command-line only so far. Faithfulness subtleties (tie-break order, JS
+  Map/Set insertion order, integer-collapsed epsilons) are documented at the
+  top of `zig/solver.zig`.
 - **Dev harnesses** (deterministic; run from the repo **root** so they find their
   data; esbuild with `--format=esm` for the `node:` imports): `painsweep.ts` (an
   N=100 scorecard), `painreg.ts` (an N=500 synergy regression → `pain_baseline.json`),
@@ -86,6 +95,11 @@ neighborhood roles straight off the data — revealed, not imposed.
 - **Typecheck:** `npm --prefix delivery run typecheck` (i.e. `tsc --noEmit -p .`).
   Note the conformance gate (`ops/check`) does not typecheck this directory — run
   the typecheck here when you touch the TypeScript.
+- **The port gate:** `ops/check_delivery` — TS typecheck + zig unit tests +
+  `gold_check` (every gold shift re-solved and compared bit-for-bit). Touch
+  anything in `zig/` or the TS solver chain → run it. Regenerate the gold
+  (`goldgen.ts`, header has the command) only on an INTENTIONAL solver
+  semantics change, then eyeball the git diff.
 
 ### The one essay to read
 

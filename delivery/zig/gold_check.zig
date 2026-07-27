@@ -99,8 +99,7 @@ pub fn main() !void {
     const gpaths = gsub.get("paths").?.array.items;
     for (gpaths, 0..) |grow, a| {
         for (grow.array.items, 0..) |gpath, b| {
-            var pbuf: [rg.Substrate.MAX_PATH]u8 = undefined;
-            const zpath = sub.path(@intCast(a), @intCast(b), &pbuf);
+            const zpath = sub.path(@intCast(a), @intCast(b));
             const gp = gpath.array.items;
             var ok = gp.len == zpath.len;
             if (ok) {

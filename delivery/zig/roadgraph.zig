@@ -106,6 +106,9 @@ const INF = std.math.maxInt(i64);
 pub const Substrate = struct {
     matrix: [N][N]i64, // all-pairs shortest travel minutes
     prev: [N][N]i16, // prev[s][v] = node before v on the shortest path from s (-1 = none)
+    // Paths materialized once at build (perf only — identical to walking prev):
+    path_store: [N][N][MAX_PATH]u8,
+    path_len: [N][N]u8,
 
     pub fn time(self: *const Substrate, a: u8, b: u8) i64 {
         return self.matrix[a][b];
@@ -114,21 +117,8 @@ pub const Substrate = struct {
     pub const MAX_PATH = 32;
 
     /// Node sequence of the shortest path a -> b, both ends inclusive.
-    pub fn path(self: *const Substrate, a: u8, b: u8, out: *[MAX_PATH]u8) []u8 {
-        std.debug.assert(self.matrix[a][b] != INF);
-        var rev: [MAX_PATH]u8 = undefined;
-        var rlen: usize = 0;
-        var v: i16 = b;
-        while (v != a) {
-            rev[rlen] = @intCast(v);
-            rlen += 1;
-            v = self.prev[a][@intCast(v)];
-            std.debug.assert(v != -1);
-        }
-        rev[rlen] = a;
-        rlen += 1;
-        for (0..rlen) |i| out[i] = rev[rlen - 1 - i];
-        return out[0..rlen];
+    pub fn path(self: *const Substrate, a: u8, b: u8) []const u8 {
+        return self.path_store[a][b][0..self.path_len[a][b]];
     }
 };
 
@@ -175,6 +165,26 @@ pub fn buildSubstrate() Substrate {
                     back[e.to] = u;
                 }
             }
+        }
+    }
+
+    // Materialize every path from prev (the TS reconstructs on demand).
+    for (0..N) |a| {
+        for (0..N) |b| {
+            std.debug.assert(sub.matrix[a][b] != INF);
+            var rev: [Substrate.MAX_PATH]u8 = undefined;
+            var rlen: usize = 0;
+            var v: i16 = @intCast(b);
+            while (v != a) {
+                rev[rlen] = @intCast(v);
+                rlen += 1;
+                v = sub.prev[a][@intCast(v)];
+                std.debug.assert(v != -1);
+            }
+            rev[rlen] = @intCast(a);
+            rlen += 1;
+            for (0..rlen) |i| sub.path_store[a][b][i] = rev[rlen - 1 - i];
+            sub.path_len[a][b] = @intCast(rlen);
         }
     }
     return sub;

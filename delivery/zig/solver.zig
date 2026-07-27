@@ -147,9 +147,8 @@ fn pathNodes(sub: *const Substrate, stops: []const Stop, out: *[MAX_PATH_NODES]u
     const wlen = stops.len + 2;
 
     var len: usize = 0;
-    var pbuf: [Substrate.MAX_PATH]u8 = undefined;
     for (1..wlen) |i| {
-        const p = sub.path(way[i - 1], way[i], &pbuf);
+        const p = sub.path(way[i - 1], way[i]);
         for (p) |node| {
             if (len == 0 or out[len - 1] != node) {
                 std.debug.assert(len < MAX_PATH_NODES);
@@ -260,6 +259,10 @@ fn freeClusters(nbhd: u8, idx: []const u8, out: *Routes) void {
 /// Greedy Clarke–Wright (TS construct): repeatedly apply the best merge.
 fn construct(sub: *const Substrate, routes: *Routes, force: bool) void {
     while (true) {
+        // Routes are unchanged during a scan; costing each once per scan is
+        // value-identical to the TS's per-pair recomputation.
+        var costs: [MAX_ROUTES]i64 = undefined;
+        for (0..routes.len) |i| costs[i] = costOf(sub, routes.r[i].slice());
         var found = false;
         var best_saved: i64 = undefined;
         var best_i: usize = undefined;
@@ -273,7 +276,7 @@ fn construct(sub: *const Substrate, routes: *Routes, force: bool) void {
                 if (loadOf(ri) + loadOf(rj) > cap) continue;
                 if (hasAnchor(ri) and hasAnchor(rj)) continue;
                 const merged = bestJoin(sub, ri, rj);
-                const saved = costOf(sub, ri) + costOf(sub, rj) - costOf(sub, merged.slice());
+                const saved = costs[i] + costs[j] - costOf(sub, merged.slice());
                 if (!found or saved > best_saved) {
                     found = true;
                     best_saved = saved;
@@ -486,18 +489,21 @@ fn placeDeferred(sub: *const Substrate, routes: *Routes, deferred: *const Routes
 /// winning reversal immediately and keeps scanning.
 fn twoOpt(sub: *const Substrate, route: *Route) void {
     var improved = true;
+    // `before` is always the CURRENT route's cost (the TS recomputes it per
+    // candidate pair; caching + updating on accept is value-identical).
+    var before = costOf(sub, route.slice());
     while (improved) {
         improved = false;
         var i: usize = 0;
         while (i + 1 < route.len) : (i += 1) {
             var k = i + 1;
             while (k < route.len) : (k += 1) {
-                const before = costOf(sub, route.slice());
                 var cand = route.*;
                 std.mem.reverse(Stop, cand.stops[i .. k + 1]);
-                const saved = before - costOf(sub, cand.slice());
-                if (saved >= 1) {
+                const cand_cost = costOf(sub, cand.slice());
+                if (before - cand_cost >= 1) {
                     route.* = cand;
+                    before = cand_cost;
                     improved = true;
                 }
             }
@@ -564,6 +570,8 @@ fn reinsert(sub: *const Substrate, route: []const Stop, rm: usize, add: Stop) Ro
 fn exchange(sub: *const Substrate, routes: *Routes) void {
     var guard: usize = 0;
     while (guard < 200) : (guard += 1) {
+        var costs: [MAX_ROUTES]i64 = undefined;
+        for (0..routes.len) |i| costs[i] = costOf(sub, routes.r[i].slice());
         var found = false;
         var best_gain: i64 = undefined;
         var best_a: usize = undefined;
@@ -574,7 +582,7 @@ fn exchange(sub: *const Substrate, routes: *Routes) void {
             for (a + 1..routes.len) |b| {
                 const ras = routes.r[a].slice();
                 const rbs = routes.r[b].slice();
-                const base = costOf(sub, ras) + costOf(sub, rbs);
+                const base = costs[a] + costs[b];
                 for (0..ras.len) |i| {
                     const sa = ras[i];
                     if (sa.pin != NO_PIN) continue;
@@ -662,6 +670,8 @@ const N_SLOTS = geo.TRUCKS;
 fn corridorRepair(sub: *const Substrate, by_slot: *[N_SLOTS]Route, shackle: bool) void {
     var guard: usize = 0;
     while (guard < 50) : (guard += 1) {
+        var tidied: [N_SLOTS]i64 = undefined;
+        for (0..N_SLOTS) |i| tidied[i] = tidiedCost(sub, by_slot[i].slice());
         var found = false;
         var best_gain: i64 = undefined;
         var best_t: usize = undefined;
@@ -707,7 +717,7 @@ fn corridorRepair(sub: *const Substrate, by_slot: *[N_SLOTS]Route, shackle: bool
                     }
                 }
                 if (b_stop.pin != NO_PIN) continue;
-                const base = tidiedCost(sub, by_slot[t].slice()) + tidiedCost(sub, by_slot[tpi].slice());
+                const base = tidied[t] + tidied[tpi];
                 var without = Route{};
                 for (by_slot[tpi].slice()) |s| {
                     if (s.nbhd != B) without.push(s);
@@ -805,6 +815,8 @@ fn removeByNbhd(route: *Route, nbhd: u8) void {
 fn postSlotLocalSearch(sub: *const Substrate, by_slot: *[N_SLOTS]Route) void {
     var guard: usize = 0;
     while (guard < 200) : (guard += 1) {
+        var cur: [N_SLOTS]i64 = undefined;
+        for (0..N_SLOTS) |i| cur[i] = tidiedCost(sub, by_slot[i].slice());
         var found = false;
         var best_gain: i64 = undefined;
         var best_a: usize = undefined;
@@ -826,7 +838,7 @@ fn postSlotLocalSearch(sub: *const Substrate, by_slot: *[N_SLOTS]Route) void {
                         if (i != si) ra.push(s);
                     }
                     const rb = cheapestInsert(sub, by_slot[b].slice(), stop);
-                    const gain = tidiedCost(sub, by_slot[a].slice()) + tidiedCost(sub, by_slot[b].slice()) -
+                    const gain = cur[a] + cur[b] -
                         (tidiedCost(sub, ra.slice()) + tidiedCost(sub, rb.slice()));
                     if (gain >= 1 and (!found or gain > best_gain)) {
                         found = true;
@@ -853,7 +865,7 @@ fn postSlotLocalSearch(sub: *const Substrate, by_slot: *[N_SLOTS]Route) void {
                         if (loadOf(by_slot[b].slice()) - sb.nh + sa.nh > geo.TRUCK_CAPS[b]) continue;
                         const ra = coalesceStops(reinsert(sub, by_slot[a].slice(), i, sb).slice());
                         const rb = coalesceStops(reinsert(sub, by_slot[b].slice(), j, sa).slice());
-                        const gain = tidiedCost(sub, by_slot[a].slice()) + tidiedCost(sub, by_slot[b].slice()) -
+                        const gain = cur[a] + cur[b] -
                             (tidiedCost(sub, ra.slice()) + tidiedCost(sub, rb.slice()));
                         if (gain >= 1 and (!found or gain > best_gain)) {
                             found = true;
@@ -879,6 +891,8 @@ fn postSlotLocalSearch(sub: *const Substrate, by_slot: *[N_SLOTS]Route) void {
 fn arcRebalance(sub: *const Substrate, by_slot: *[N_SLOTS]Route) void {
     var guard: usize = 0;
     while (guard < 200) : (guard += 1) {
+        var cur: [N_SLOTS]i64 = undefined;
+        for (0..N_SLOTS) |i| cur[i] = tidiedCost(sub, by_slot[i].slice());
         var found = false;
         var best_gain: i64 = undefined;
         var best_a: usize = undefined;
@@ -889,6 +903,7 @@ fn arcRebalance(sub: *const Substrate, by_slot: *[N_SLOTS]Route) void {
         const Ctx = struct {
             sub: *const Substrate,
             by_slot: *[N_SLOTS]Route,
+            cur: *const [N_SLOTS]i64,
             found: *bool,
             best_gain: *i64,
             best_a: *usize,
@@ -898,7 +913,7 @@ fn arcRebalance(sub: *const Substrate, by_slot: *[N_SLOTS]Route) void {
 
             fn score(ctx: @This(), a: usize, b: usize, ra: Route, rb: Route) void {
                 if (loadOf(ra.slice()) > geo.TRUCK_CAPS[a] or loadOf(rb.slice()) > geo.TRUCK_CAPS[b]) return;
-                const gain = tidiedCost(ctx.sub, ctx.by_slot[a].slice()) + tidiedCost(ctx.sub, ctx.by_slot[b].slice()) -
+                const gain = ctx.cur[a] + ctx.cur[b] -
                     (tidiedCost(ctx.sub, ra.slice()) + tidiedCost(ctx.sub, rb.slice()));
                 if (gain >= 1 and (!ctx.found.* or gain > ctx.best_gain.*)) {
                     ctx.found.* = true;
@@ -968,6 +983,7 @@ fn arcRebalance(sub: *const Substrate, by_slot: *[N_SLOTS]Route) void {
         const ctx = Ctx{
             .sub = sub,
             .by_slot = by_slot,
+            .cur = &cur,
             .found = &found,
             .best_gain = &best_gain,
             .best_a = &best_a,
