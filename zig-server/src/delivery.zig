@@ -9,6 +9,9 @@ const http = @import("http.zig");
 // The delivery bundle, baked into the binary (wired in build.zig). Produced by
 // `ops/build_delivery`; gitignored build output that must exist to compile.
 const app_js = @embedFile("delivery_app_js");
+// The solver core (zig→wasm, ops/build_delivery_wasm, committed): app.js
+// instantiates it and calls solveShift — the TS solver is out of the bundle.
+const solver_wasm = @embedFile("delivery_solver_wasm");
 
 // A near-empty shell: app.js builds its own canvas + DOM.
 const page =
@@ -27,6 +30,8 @@ pub fn handle(req: *std.http.Server.Request, sub: []const u8) !void {
         try req.respond(page, .{ .extra_headers = &.{http.html_ct} });
     } else if (std.mem.eql(u8, sub, "/app.js")) {
         try req.respond(app_js, .{ .extra_headers = &.{http.js_ct} });
+    } else if (std.mem.eql(u8, sub, "/solver.wasm")) {
+        try req.respond(solver_wasm, .{ .extra_headers = &.{http.wasm_ct} });
     } else {
         try http.notFound(req);
     }

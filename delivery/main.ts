@@ -4,14 +4,31 @@
 
 import { MAP_W, MAP_H, FLEET, NEIGHBORHOODS, housesOf } from "./geography.ts";
 import type { Pt } from "./geography.ts";
-import { chooseOrders, ordersByNeighborhood } from "./orders.ts";
-import { buildSubstrate } from "./roadgraph.ts";
-import { solve } from "./solver.ts";
+import { chooseOrders } from "./orders.ts";
 import type { Plan, SolveFrame } from "./solver.ts";
 import { drawMap, truckPanelHitTest, buildTracks, HUD_TOOLTIPS, HUD_LINKS } from "./map_view.ts";
 import type { Track } from "./map_view.ts";
 
-const SUB = buildSubstrate();
+// The solver lives in zig now (delivery/zig, served at /delivery/solver.wasm
+// and instantiated in boot()). solveShift writes the whole Plan — routes,
+// display minutes, the solve-replay frames — as JSON into wasm memory, in
+// exactly the shape the TS solver used to return; ops/check_delivery holds
+// the module bit-exact against that reference, so everything downstream
+// (timeline, tracks, the A-stepper) draws the same plan it always did. The
+// TS solver stays in the repo as the reference implementation but is no
+// longer in this bundle.
+type SolverWasm = {
+  memory: WebAssembly.Memory;
+  solveShift: (seed: number) => number;
+  outPtr: () => number;
+};
+let solverWasm: SolverWasm; // set once by boot(), before the first solve
+
+function solveShift(s: number): Plan {
+  const len = solverWasm.solveShift(s) >>> 0;
+  const bytes = new Uint8Array(solverWasm.memory.buffer, solverWasm.outPtr(), len);
+  return JSON.parse(new TextDecoder().decode(bytes)) as Plan;
+}
 
 const PAGE_BG = "#0d1b2a";
 
@@ -36,7 +53,7 @@ let seed = 49;
 let shift = 1;
 let solving = false; // true while the solver runs — grey the map, ignore re-presses
 let orders = chooseOrders(seed, FLEET.orders);
-let plan: Plan = solve(SUB, ordersByNeighborhood(orders));
+let plan: Plan | null = null; // null until boot() has the wasm — handlers no-op till then
 
 // Playback: a single clock (route-minutes) advances PLAY_RATE min per real
 // second, so the longest route (~200 min) plays out in ~40s. null = static map.
@@ -60,6 +77,7 @@ function stopSolveAnim(): void {
 
 /** `A`: enter the stepper at the first frame, or advance one move if already in it. */
 function stepSolveAnim(): void {
+  if (!plan) return;
   if (!solveAnim) {
     anim = null; // the two animations are mutually exclusive
     solveAnim = { frames: plan.frames, i: 0 };
@@ -76,7 +94,7 @@ function stepSolveAnim(): void {
  * re-presses until it lands.
  */
 function shuffle(): void {
-  if (solving) return; // already working — swallow the impatient double-tap
+  if (solving || !plan) return; // already working (or still booting) — swallow the tap
   solving = true;
   anim = null; // leaving any running day; the new plan would invalidate it
   stopSolveAnim(); // a new plan means new frames; drop any running solve replay
@@ -84,7 +102,7 @@ function shuffle(): void {
   setTimeout(() => {
     seed = (seed * 1664525 + 1013904223) >>> 0; // a fresh, deterministic seed
     orders = chooseOrders(seed, FLEET.orders);
-    plan = solve(SUB, ordersByNeighborhood(orders));
+    plan = solveShift(seed);
     shift++;
     focusTruck = null; // truck indices may not survive a re-plan
     hoverNbhd = null;
@@ -95,6 +113,7 @@ function shuffle(): void {
 }
 
 function render(): void {
+  if (!plan) return; // boot() renders first once the wasm is live
   const dpr = window.devicePixelRatio || 1;
   const vw = window.innerWidth;
   const vh = window.innerHeight;
@@ -144,6 +163,7 @@ function tick(now: number): void {
 
 /** Space toggles playback: start the day, pause, resume, or replay from 0. */
 function togglePlay(): void {
+  if (!plan) return;
   stopSolveAnim(); // the day's playback and the solve replay don't share the screen
   if (!anim) {
     const tracks = buildTracks(plan);
@@ -205,6 +225,7 @@ const hitLink = (p: Pt) =>
   HUD_LINKS.find((l) => p.x >= l.x && p.x <= l.x + l.w && p.y >= l.y && p.y <= l.y + l.h) ?? null;
 
 canvas.addEventListener("mousemove", (e) => {
+  if (!plan) return;
   const p = { x: (e.clientX - offX) / scale, y: (e.clientY - offY) / scale };
 
   // Native browser tooltips over the HUD labels — always live, even while the day runs.
@@ -274,5 +295,14 @@ window.addEventListener("keydown", (e) => {
   }
 });
 
-render();
+/** Fetch + instantiate the solver, solve the first shift, first paint. */
+async function boot(): Promise<void> {
+  const resp = await fetch("/delivery/solver.wasm");
+  const { instance } = await WebAssembly.instantiate(await resp.arrayBuffer(), {});
+  solverWasm = instance.exports as unknown as SolverWasm;
+  plan = solveShift(seed);
+  render();
+}
+
 window.addEventListener("resize", render);
+boot();

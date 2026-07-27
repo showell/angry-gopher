@@ -68,6 +68,11 @@ Available ops commands (run from repo root):
   ops/build_engine_js    Bundle the TS engine into elm/engine.js via
                          esbuild. Run after any games/lynrummy/ts/
                          edit before testing the live Elm UI.
+  ops/build_delivery_wasm Build the Delivery solver's zig core into
+                         delivery/solver.wasm (committed; served at
+                         /delivery/solver.wasm, embedded by zig build).
+                         Run after any delivery/zig/ edit — or just run
+                         ops/check_delivery, which rebuilds + conforms it.
   ops/build_safari_wasm  Build the Safari Screensaver's zig core into
                          games/driving/safari.wasm (the /driving game,
                          embedded by zig build). Called by ops/start. Run

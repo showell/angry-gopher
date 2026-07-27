@@ -18,11 +18,13 @@ Hover a neighborhood to see its name; hover a delivered house to highlight its t
 
 ## Under the hood
 
-This is a small, finished **capacitated vehicle-routing (CVRP)** simulator written
-in pure, client-side **TypeScript**. The zig server just bakes the esbuilt bundle into its
-binary (`@embedFile`) and serves a near-empty HTML shell; everything you see —
-the canvas, the map, the animation, the solve — runs in your browser. No server
-logic, no user data, fully deterministic.
+This is a small, finished **capacitated vehicle-routing (CVRP)** simulator. The
+canvas, map, and animation are client-side **TypeScript**; the **solver is zig**,
+compiled to WebAssembly (`solver.wasm`, from `zig/`) and called by the bundle at
+each shuffle — it returns the whole plan (routes, display minutes, the solve-replay
+frames) as one JSON blob. The zig server just bakes both artifacts into its binary
+(`@embedFile`) and serves a near-empty HTML shell; everything still runs in your
+browser. No server logic, no user data, fully deterministic.
 
 **Status: parked.** The algorithm was "declared done" in June 2026: we could no
 longer construct a day whose hardest routes were *bugs* rather than *explicable
@@ -34,13 +36,12 @@ deeper "why" lives in the essay below.
 **A sibling worth knowing: [Safari Screensaver](../games/driving/README.md).**
 Delivery's twin toy *in spirit* — a `<canvas>` the client draws itself, a near-empty
 shell the zig server only serves, fully deterministic, the same "flipbook + algorithm"
-paradigm. It's no longer a *true* sibling in build, though: Delivery is pure
-client-side TypeScript, while Safari was re-implemented as a **Zig→WASM core** that
-computes the geometry and emits draw-commands a tiny JS blitter fills — the camera now
-runs in WebAssembly, not TypeScript. Same spirit, different hard part, and now a
-different stack: here it's **combinatorial cost** (route trucks to minimize an honest
-number), there it's **perception** (the cheapest lie the eye will accept as a sunset
-road).
+paradigm. Both are now **Zig→WASM at the core**: Safari's wasm computes the
+geometry and emits draw-commands a tiny JS blitter fills, and Delivery's wasm (since
+2026-07) runs the whole solver behind the original TS canvas code. Same spirit,
+different hard part: here it's **combinatorial cost** (route trucks to minimize an
+honest number), there it's **perception** (the cheapest lie the eye will accept as a
+sunset road).
 
 ### The algorithm, in one breath
 
@@ -70,15 +71,17 @@ neighborhood roles straight off the data — revealed, not imposed.
 - **Code (the truth):** `main.ts` (canvas/input/animation), `geography.ts` (the
   map + fleet), `orders.ts` (the daily draw), `roadgraph.ts` (the road substrate),
   `solver.ts` (the heart), `map_view.ts` (drawing).
-- **`zig/` — the solver, ported (2026-07).** `geography/orders/roadgraph/solver
-  .zig` reproduce the TS solver **bit-for-bit**; `gold_check.zig` proves it
-  against `solver_gold.json` (20 shifts: demand draws, substrate, all four
-  race-variant pains, winners, full route structure — strict equality, no
-  tolerances). Gate: `ops/check_delivery`. The TS remains the reference
-  implementation and the browser still runs the TS bundle; the zig port is
-  command-line only so far. Faithfulness subtleties (tie-break order, JS
-  Map/Set insertion order, integer-collapsed epsilons) are documented at the
-  top of `zig/solver.zig`.
+- **`zig/` — the solver, ported and LIVE (2026-07).** `geography/orders/
+  roadgraph/solver.zig` reproduce the TS solver **bit-for-bit** — route
+  structure AND the replay frames/captions/display minutes — and `wasm.zig`
+  ships it as `solver.wasm`, which `main.ts` calls in the browser. Proof:
+  `gold_check.zig` (native) and `wasm_check.ts` (drives the real module)
+  against `solver_gold.json` + `solver_frames_gold.json` — strict equality,
+  trig floats at ULP tolerance. Gate: `ops/check_delivery`. `solver.ts`
+  stays as the REFERENCE implementation (goldgen runs it; it's out of the
+  browser bundle). Faithfulness subtleties (tie-break order, JS Map/Set
+  insertion order, integer-collapsed epsilons, snapshot timing) are
+  documented at the top of `zig/solver.zig`.
 - **Dev harnesses** (deterministic; run from the repo **root** so they find their
   data; esbuild with `--format=esm` for the `node:` imports): `painsweep.ts` (an
   N=100 scorecard), `painreg.ts` (an N=500 synergy regression → `pain_baseline.json`),
@@ -90,8 +93,10 @@ neighborhood roles straight off the data — revealed, not imposed.
 ### Building, running, testing
 
 - **Run it:** `ops/start`, then open `/delivery`. The bundle is built by
-  `ops/build_delivery` (esbuild `*.ts` → `app.js`) and `@embedFile`'d via
-  `build.zig`; deploy rides `ops/deploy` (Steve's sign-off only).
+  `ops/build_delivery` (esbuild `*.ts` → `app.js`), the solver by
+  `ops/build_delivery_wasm` (`zig/wasm.zig` → `solver.wasm`, committed); both
+  are `@embedFile`'d via `build.zig`; deploy rides `ops/deploy` (Steve's
+  sign-off only).
 - **Typecheck:** `npm --prefix delivery run typecheck` (i.e. `tsc --noEmit -p .`).
   Note the conformance gate (`ops/check`) does not typecheck this directory — run
   the typecheck here when you touch the TypeScript.

@@ -51,6 +51,10 @@ pub fn build(b: *std.Build) void {
         .{ .name = "chess_src_knight", .path = "../games/chess/knight.zig" },
         .{ .name = "chess_src_queens", .path = "../games/chess/queens.zig" },
         .{ .name = "delivery_app_js", .path = "../delivery/app.js" },
+        // The Delivery solver's zig→WASM core (ops/build_delivery_wasm,
+        // committed): the routing brain behind /delivery, conformance-gated
+        // bit-exact against the retired TS solver (ops/check_delivery).
+        .{ .name = "delivery_solver_wasm", .path = "../delivery/solver.wasm" },
         .{ .name = "puzzle_js", .path = "../games/lynrummy/elm/puzzle.js" },
         // The compiled Elm full-game client (the /game surface).
         .{ .name = "game_elm_js", .path = "../games/lynrummy/elm/elm.js" },
