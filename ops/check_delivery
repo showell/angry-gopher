@@ -28,3 +28,12 @@ done
 
 echo "==> gold_check (20 shifts, bit-exact)"
 zig run -O ReleaseFast delivery/zig/gold_check.zig
+
+# The browser artifact, end to end: rebuild the wasm from source, then drive
+# the REAL module over every gold seed (lynrummy's build-then-conform pattern
+# — the committed solver.wasm can never go stale against the zig).
+echo "==> wasm conformance (build + drive the real artifact)"
+./ops/build_delivery_wasm
+delivery/node_modules/.bin/esbuild delivery/wasm_check.ts \
+    --bundle --platform=node --format=esm --outfile=/tmp/delivery_wasm_check.mjs >/dev/null 2>&1
+node /tmp/delivery_wasm_check.mjs

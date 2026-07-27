@@ -1,0 +1,30 @@
+#!/bin/bash
+# CANONICAL DEV-LOOP SCRIPT — DO NOT REINVENT.
+# Before composing an ad-hoc shell command for build / launch / test / regen,
+# run `ops/list` to see what already exists.
+#
+# Build the Delivery solver's zig core into a freestanding WebAssembly module
+# at delivery/solver.wasm (same mold as ops/build_safari_wasm). The browser
+# fetches + instantiates it and calls solveShift(seed); the module writes the
+# full Plan (routes, display numbers, replay frames) as JSON into its linear
+# memory. No entry point, no imports, no allocator — fixed static buffers.
+#
+# The output is committed (like games/lynrummy/zig/solver.wasm) and embedded
+# into the server binary (build.zig @embedFile), served at
+# /delivery/solver.wasm. Conformance: delivery/wasm_check.ts drives the built
+# artifact over every gold seed (run by ops/check_delivery).
+set -e
+
+source "$(dirname "$0")/_paths.sh"
+
+SRC="$GOPHER_DIR/delivery/zig/wasm.zig"
+OUT="$GOPHER_DIR/delivery/solver.wasm"
+
+zig build-exe "$SRC" \
+    -target wasm32-freestanding \
+    -fno-entry \
+    -rdynamic \
+    -O ReleaseSmall \
+    -femit-bin="$OUT"
+
+echo "built $OUT ($(wc -c < "$OUT") bytes)"
