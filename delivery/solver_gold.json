@@ -30,6 +30,7173 @@
   "cost/whole/M+",
   "cost/whole/M-"
  ],
+ "substrate": {
+  "nodes": [
+   "Ballard",
+   "Green Lake",
+   "Fremont",
+   "U-District",
+   "Magnolia",
+   "Queen Anne",
+   "Capitol Hill",
+   "Eastlake",
+   "Downtown",
+   "Beacon Hill",
+   "West Seattle",
+   "Mercer Island",
+   "Mercer N",
+   "Mercer S",
+   "Medina",
+   "Kirkland",
+   "Redmond",
+   "Bellevue",
+   "Factoria",
+   "Issaquah",
+   "Exit 1",
+   "Exit 2",
+   "Exit 3",
+   "Exit 4",
+   "Exit 5",
+   "Exit 6",
+   "5/520",
+   "Montlake",
+   "FC"
+  ],
+  "edges": [
+   {
+    "a": "Ballard",
+    "b": "Green Lake",
+    "minutes": 3
+   },
+   {
+    "a": "Ballard",
+    "b": "Fremont",
+    "minutes": 3
+   },
+   {
+    "a": "Magnolia",
+    "b": "Ballard",
+    "minutes": 3
+   },
+   {
+    "a": "Magnolia",
+    "b": "Queen Anne",
+    "minutes": 2
+   },
+   {
+    "a": "Green Lake",
+    "b": "Fremont",
+    "minutes": 3
+   },
+   {
+    "a": "Fremont",
+    "b": "Queen Anne",
+    "minutes": 2
+   },
+   {
+    "a": "Queen Anne",
+    "b": "Downtown",
+    "minutes": 2
+   },
+   {
+    "a": "Capitol Hill",
+    "b": "Eastlake",
+    "minutes": 3
+   },
+   {
+    "a": "Capitol Hill",
+    "b": "Beacon Hill",
+    "minutes": 2
+   },
+   {
+    "a": "Downtown",
+    "b": "West Seattle",
+    "minutes": 4
+   },
+   {
+    "a": "Exit 1",
+    "b": "West Seattle",
+    "minutes": 1
+   },
+   {
+    "a": "Exit 1",
+    "b": "Beacon Hill",
+    "minutes": 1
+   },
+   {
+    "a": "Exit 2",
+    "b": "Downtown",
+    "minutes": 1
+   },
+   {
+    "a": "Exit 2",
+    "b": "Capitol Hill",
+    "minutes": 1
+   },
+   {
+    "a": "Exit 3",
+    "b": "Eastlake",
+    "minutes": 1
+   },
+   {
+    "a": "Exit 4",
+    "b": "Fremont",
+    "minutes": 1
+   },
+   {
+    "a": "Exit 5",
+    "b": "U-District",
+    "minutes": 1
+   },
+   {
+    "a": "Exit 6",
+    "b": "Green Lake",
+    "minutes": 1
+   },
+   {
+    "a": "Eastlake",
+    "b": "Montlake",
+    "minutes": 1
+   },
+   {
+    "a": "Medina",
+    "b": "Kirkland",
+    "minutes": 2
+   },
+   {
+    "a": "Medina",
+    "b": "Bellevue",
+    "minutes": 2
+   },
+   {
+    "a": "Kirkland",
+    "b": "Redmond",
+    "minutes": 4
+   },
+   {
+    "a": "Bellevue",
+    "b": "Redmond",
+    "minutes": 3
+   },
+   {
+    "a": "Bellevue",
+    "b": "Factoria",
+    "minutes": 3
+   },
+   {
+    "a": "Bellevue",
+    "b": "FC",
+    "minutes": 1
+   },
+   {
+    "a": "FC",
+    "b": "Factoria",
+    "minutes": 3
+   },
+   {
+    "a": "Factoria",
+    "b": "Issaquah",
+    "minutes": 3
+   },
+   {
+    "a": "Issaquah",
+    "b": "Redmond",
+    "minutes": 5
+   },
+   {
+    "a": "Mercer Island",
+    "b": "Mercer N",
+    "minutes": 1
+   },
+   {
+    "a": "Mercer N",
+    "b": "Mercer S",
+    "minutes": 1
+   },
+   {
+    "a": "5/520",
+    "b": "Montlake",
+    "minutes": 1
+   },
+   {
+    "a": "Montlake",
+    "b": "Medina",
+    "minutes": 4
+   },
+   {
+    "a": "Beacon Hill",
+    "b": "Mercer Island",
+    "minutes": 2
+   },
+   {
+    "a": "Mercer Island",
+    "b": "Factoria",
+    "minutes": 2
+   },
+   {
+    "a": "Exit 1",
+    "b": "Exit 2",
+    "minutes": 2
+   },
+   {
+    "a": "Exit 2",
+    "b": "Exit 3",
+    "minutes": 2
+   },
+   {
+    "a": "Exit 3",
+    "b": "5/520",
+    "minutes": 1
+   },
+   {
+    "a": "5/520",
+    "b": "Exit 4",
+    "minutes": 1
+   },
+   {
+    "a": "Exit 4",
+    "b": "Exit 5",
+    "minutes": 1
+   },
+   {
+    "a": "Exit 5",
+    "b": "Exit 6",
+    "minutes": 1
+   }
+  ],
+  "matrix": [
+   [
+    0,
+    3,
+    3,
+    6,
+    3,
+    5,
+    9,
+    7,
+    7,
+    11,
+    11,
+    13,
+    14,
+    15,
+    10,
+    12,
+    15,
+    12,
+    15,
+    18,
+    10,
+    8,
+    6,
+    4,
+    5,
+    4,
+    5,
+    6,
+    13
+   ],
+   [
+    3,
+    0,
+    3,
+    3,
+    6,
+    5,
+    8,
+    6,
+    7,
+    10,
+    10,
+    12,
+    13,
+    14,
+    9,
+    11,
+    14,
+    11,
+    14,
+    17,
+    9,
+    7,
+    5,
+    3,
+    2,
+    1,
+    4,
+    5,
+    12
+   ],
+   [
+    3,
+    3,
+    0,
+    3,
+    4,
+    2,
+    6,
+    4,
+    4,
+    8,
+    8,
+    10,
+    11,
+    12,
+    7,
+    9,
+    12,
+    9,
+    12,
+    15,
+    7,
+    5,
+    3,
+    1,
+    2,
+    3,
+    2,
+    3,
+    10
+   ],
+   [
+    6,
+    3,
+    3,
+    0,
+    7,
+    5,
+    7,
+    5,
+    7,
+    9,
+    9,
+    11,
+    12,
+    13,
+    8,
+    10,
+    13,
+    10,
+    13,
+    16,
+    8,
+    6,
+    4,
+    2,
+    1,
+    2,
+    3,
+    4,
+    11
+   ],
+   [
+    3,
+    6,
+    4,
+    7,
+    0,
+    2,
+    6,
+    8,
+    4,
+    8,
+    8,
+    10,
+    11,
+    12,
+    11,
+    13,
+    16,
+    13,
+    12,
+    15,
+    7,
+    5,
+    7,
+    5,
+    6,
+    7,
+    6,
+    7,
+    14
+   ],
+   [
+    5,
+    5,
+    2,
+    5,
+    2,
+    0,
+    4,
+    6,
+    2,
+    6,
+    6,
+    8,
+    9,
+    10,
+    9,
+    11,
+    14,
+    11,
+    10,
+    13,
+    5,
+    3,
+    5,
+    3,
+    4,
+    5,
+    4,
+    5,
+    12
+   ],
+   [
+    9,
+    8,
+    6,
+    7,
+    6,
+    4,
+    0,
+    3,
+    2,
+    2,
+    4,
+    4,
+    5,
+    6,
+    8,
+    10,
+    12,
+    9,
+    6,
+    9,
+    3,
+    1,
+    3,
+    5,
+    6,
+    7,
+    4,
+    4,
+    9
+   ],
+   [
+    7,
+    6,
+    4,
+    5,
+    8,
+    6,
+    3,
+    0,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    5,
+    7,
+    10,
+    7,
+    9,
+    12,
+    5,
+    3,
+    1,
+    3,
+    4,
+    5,
+    2,
+    1,
+    8
+   ],
+   [
+    7,
+    7,
+    4,
+    7,
+    4,
+    2,
+    2,
+    4,
+    0,
+    4,
+    4,
+    6,
+    7,
+    8,
+    9,
+    11,
+    14,
+    11,
+    8,
+    11,
+    3,
+    1,
+    3,
+    5,
+    6,
+    7,
+    4,
+    5,
+    11
+   ],
+   [
+    11,
+    10,
+    8,
+    9,
+    8,
+    6,
+    2,
+    5,
+    4,
+    0,
+    2,
+    2,
+    3,
+    4,
+    9,
+    11,
+    10,
+    7,
+    4,
+    7,
+    1,
+    3,
+    5,
+    7,
+    8,
+    9,
+    6,
+    6,
+    7
+   ],
+   [
+    11,
+    10,
+    8,
+    9,
+    8,
+    6,
+    4,
+    6,
+    4,
+    2,
+    0,
+    4,
+    5,
+    6,
+    11,
+    13,
+    12,
+    9,
+    6,
+    9,
+    1,
+    3,
+    5,
+    7,
+    8,
+    9,
+    6,
+    7,
+    9
+   ],
+   [
+    13,
+    12,
+    10,
+    11,
+    10,
+    8,
+    4,
+    7,
+    6,
+    2,
+    4,
+    0,
+    1,
+    2,
+    7,
+    9,
+    8,
+    5,
+    2,
+    5,
+    3,
+    5,
+    7,
+    9,
+    10,
+    11,
+    8,
+    8,
+    5
+   ],
+   [
+    14,
+    13,
+    11,
+    12,
+    11,
+    9,
+    5,
+    8,
+    7,
+    3,
+    5,
+    1,
+    0,
+    1,
+    8,
+    10,
+    9,
+    6,
+    3,
+    6,
+    4,
+    6,
+    8,
+    10,
+    11,
+    12,
+    9,
+    9,
+    6
+   ],
+   [
+    15,
+    14,
+    12,
+    13,
+    12,
+    10,
+    6,
+    9,
+    8,
+    4,
+    6,
+    2,
+    1,
+    0,
+    9,
+    11,
+    10,
+    7,
+    4,
+    7,
+    5,
+    7,
+    9,
+    11,
+    12,
+    13,
+    10,
+    10,
+    7
+   ],
+   [
+    10,
+    9,
+    7,
+    8,
+    11,
+    9,
+    8,
+    5,
+    9,
+    9,
+    11,
+    7,
+    8,
+    9,
+    0,
+    2,
+    5,
+    2,
+    5,
+    8,
+    10,
+    8,
+    6,
+    6,
+    7,
+    8,
+    5,
+    4,
+    3
+   ],
+   [
+    12,
+    11,
+    9,
+    10,
+    13,
+    11,
+    10,
+    7,
+    11,
+    11,
+    13,
+    9,
+    10,
+    11,
+    2,
+    0,
+    4,
+    4,
+    7,
+    9,
+    12,
+    10,
+    8,
+    8,
+    9,
+    10,
+    7,
+    6,
+    5
+   ],
+   [
+    15,
+    14,
+    12,
+    13,
+    16,
+    14,
+    12,
+    10,
+    14,
+    10,
+    12,
+    8,
+    9,
+    10,
+    5,
+    4,
+    0,
+    3,
+    6,
+    5,
+    11,
+    13,
+    11,
+    11,
+    12,
+    13,
+    10,
+    9,
+    4
+   ],
+   [
+    12,
+    11,
+    9,
+    10,
+    13,
+    11,
+    9,
+    7,
+    11,
+    7,
+    9,
+    5,
+    6,
+    7,
+    2,
+    4,
+    3,
+    0,
+    3,
+    6,
+    8,
+    10,
+    8,
+    8,
+    9,
+    10,
+    7,
+    6,
+    1
+   ],
+   [
+    15,
+    14,
+    12,
+    13,
+    12,
+    10,
+    6,
+    9,
+    8,
+    4,
+    6,
+    2,
+    3,
+    4,
+    5,
+    7,
+    6,
+    3,
+    0,
+    3,
+    5,
+    7,
+    9,
+    11,
+    12,
+    13,
+    10,
+    9,
+    3
+   ],
+   [
+    18,
+    17,
+    15,
+    16,
+    15,
+    13,
+    9,
+    12,
+    11,
+    7,
+    9,
+    5,
+    6,
+    7,
+    8,
+    9,
+    5,
+    6,
+    3,
+    0,
+    8,
+    10,
+    12,
+    14,
+    15,
+    16,
+    13,
+    12,
+    6
+   ],
+   [
+    10,
+    9,
+    7,
+    8,
+    7,
+    5,
+    3,
+    5,
+    3,
+    1,
+    1,
+    3,
+    4,
+    5,
+    10,
+    12,
+    11,
+    8,
+    5,
+    8,
+    0,
+    2,
+    4,
+    6,
+    7,
+    8,
+    5,
+    6,
+    8
+   ],
+   [
+    8,
+    7,
+    5,
+    6,
+    5,
+    3,
+    1,
+    3,
+    1,
+    3,
+    3,
+    5,
+    6,
+    7,
+    8,
+    10,
+    13,
+    10,
+    7,
+    10,
+    2,
+    0,
+    2,
+    4,
+    5,
+    6,
+    3,
+    4,
+    10
+   ],
+   [
+    6,
+    5,
+    3,
+    4,
+    7,
+    5,
+    3,
+    1,
+    3,
+    5,
+    5,
+    7,
+    8,
+    9,
+    6,
+    8,
+    11,
+    8,
+    9,
+    12,
+    4,
+    2,
+    0,
+    2,
+    3,
+    4,
+    1,
+    2,
+    9
+   ],
+   [
+    4,
+    3,
+    1,
+    2,
+    5,
+    3,
+    5,
+    3,
+    5,
+    7,
+    7,
+    9,
+    10,
+    11,
+    6,
+    8,
+    11,
+    8,
+    11,
+    14,
+    6,
+    4,
+    2,
+    0,
+    1,
+    2,
+    1,
+    2,
+    9
+   ],
+   [
+    5,
+    2,
+    2,
+    1,
+    6,
+    4,
+    6,
+    4,
+    6,
+    8,
+    8,
+    10,
+    11,
+    12,
+    7,
+    9,
+    12,
+    9,
+    12,
+    15,
+    7,
+    5,
+    3,
+    1,
+    0,
+    1,
+    2,
+    3,
+    10
+   ],
+   [
+    4,
+    1,
+    3,
+    2,
+    7,
+    5,
+    7,
+    5,
+    7,
+    9,
+    9,
+    11,
+    12,
+    13,
+    8,
+    10,
+    13,
+    10,
+    13,
+    16,
+    8,
+    6,
+    4,
+    2,
+    1,
+    0,
+    3,
+    4,
+    11
+   ],
+   [
+    5,
+    4,
+    2,
+    3,
+    6,
+    4,
+    4,
+    2,
+    4,
+    6,
+    6,
+    8,
+    9,
+    10,
+    5,
+    7,
+    10,
+    7,
+    10,
+    13,
+    5,
+    3,
+    1,
+    1,
+    2,
+    3,
+    0,
+    1,
+    8
+   ],
+   [
+    6,
+    5,
+    3,
+    4,
+    7,
+    5,
+    4,
+    1,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    4,
+    6,
+    9,
+    6,
+    9,
+    12,
+    6,
+    4,
+    2,
+    2,
+    3,
+    4,
+    1,
+    0,
+    7
+   ],
+   [
+    13,
+    12,
+    10,
+    11,
+    14,
+    12,
+    9,
+    8,
+    11,
+    7,
+    9,
+    5,
+    6,
+    7,
+    3,
+    5,
+    4,
+    1,
+    3,
+    6,
+    8,
+    10,
+    9,
+    9,
+    10,
+    11,
+    8,
+    7,
+    0
+   ]
+  ],
+  "paths": [
+   [
+    [
+     "Ballard"
+    ],
+    [
+     "Ballard",
+     "Green Lake"
+    ],
+    [
+     "Ballard",
+     "Fremont"
+    ],
+    [
+     "Ballard",
+     "Fremont",
+     "Exit 4",
+     "Exit 5",
+     "U-District"
+    ],
+    [
+     "Ballard",
+     "Magnolia"
+    ],
+    [
+     "Ballard",
+     "Fremont",
+     "Queen Anne"
+    ],
+    [
+     "Ballard",
+     "Fremont",
+     "Exit 4",
+     "5/520",
+     "Exit 3",
+     "Exit 2",
+     "Capitol Hill"
+    ],
+    [
+     "Ballard",
+     "Fremont",
+     "Exit 4",
+     "5/520",
+     "Exit 3",
+     "Eastlake"
+    ],
+    [
+     "Ballard",
+     "Fremont",
+     "Queen Anne",
+     "Downtown"
+    ],
+    [
+     "Ballard",
+     "Fremont",
+     "Exit 4",
+     "5/520",
+     "Exit 3",
+     "Exit 2",
+     "Capitol Hill",
+     "Beacon Hill"
+    ],
+    [
+     "Ballard",
+     "Fremont",
+     "Queen Anne",
+     "Downtown",
+     "West Seattle"
+    ],
+    [
+     "Ballard",
+     "Fremont",
+     "Exit 4",
+     "5/520",
+     "Exit 3",
+     "Exit 2",
+     "Capitol Hill",
+     "Beacon Hill",
+     "Mercer Island"
+    ],
+    [
+     "Ballard",
+     "Fremont",
+     "Exit 4",
+     "5/520",
+     "Exit 3",
+     "Exit 2",
+     "Capitol Hill",
+     "Beacon Hill",
+     "Mercer Island",
+     "Mercer N"
+    ],
+    [
+     "Ballard",
+     "Fremont",
+     "Exit 4",
+     "5/520",
+     "Exit 3",
+     "Exit 2",
+     "Capitol Hill",
+     "Beacon Hill",
+     "Mercer Island",
+     "Mercer N",
+     "Mercer S"
+    ],
+    [
+     "Ballard",
+     "Fremont",
+     "Exit 4",
+     "5/520",
+     "Montlake",
+     "Medina"
+    ],
+    [
+     "Ballard",
+     "Fremont",
+     "Exit 4",
+     "5/520",
+     "Montlake",
+     "Medina",
+     "Kirkland"
+    ],
+    [
+     "Ballard",
+     "Fremont",
+     "Exit 4",
+     "5/520",
+     "Montlake",
+     "Medina",
+     "Bellevue",
+     "Redmond"
+    ],
+    [
+     "Ballard",
+     "Fremont",
+     "Exit 4",
+     "5/520",
+     "Montlake",
+     "Medina",
+     "Bellevue"
+    ],
+    [
+     "Ballard",
+     "Fremont",
+     "Exit 4",
+     "5/520",
+     "Montlake",
+     "Medina",
+     "Bellevue",
+     "Factoria"
+    ],
+    [
+     "Ballard",
+     "Fremont",
+     "Exit 4",
+     "5/520",
+     "Montlake",
+     "Medina",
+     "Bellevue",
+     "Factoria",
+     "Issaquah"
+    ],
+    [
+     "Ballard",
+     "Fremont",
+     "Exit 4",
+     "5/520",
+     "Exit 3",
+     "Exit 2",
+     "Exit 1"
+    ],
+    [
+     "Ballard",
+     "Fremont",
+     "Exit 4",
+     "5/520",
+     "Exit 3",
+     "Exit 2"
+    ],
+    [
+     "Ballard",
+     "Fremont",
+     "Exit 4",
+     "5/520",
+     "Exit 3"
+    ],
+    [
+     "Ballard",
+     "Fremont",
+     "Exit 4"
+    ],
+    [
+     "Ballard",
+     "Fremont",
+     "Exit 4",
+     "Exit 5"
+    ],
+    [
+     "Ballard",
+     "Green Lake",
+     "Exit 6"
+    ],
+    [
+     "Ballard",
+     "Fremont",
+     "Exit 4",
+     "5/520"
+    ],
+    [
+     "Ballard",
+     "Fremont",
+     "Exit 4",
+     "5/520",
+     "Montlake"
+    ],
+    [
+     "Ballard",
+     "Fremont",
+     "Exit 4",
+     "5/520",
+     "Montlake",
+     "Medina",
+     "Bellevue",
+     "FC"
+    ]
+   ],
+   [
+    [
+     "Green Lake",
+     "Ballard"
+    ],
+    [
+     "Green Lake"
+    ],
+    [
+     "Green Lake",
+     "Fremont"
+    ],
+    [
+     "Green Lake",
+     "Exit 6",
+     "Exit 5",
+     "U-District"
+    ],
+    [
+     "Green Lake",
+     "Ballard",
+     "Magnolia"
+    ],
+    [
+     "Green Lake",
+     "Fremont",
+     "Queen Anne"
+    ],
+    [
+     "Green Lake",
+     "Exit 6",
+     "Exit 5",
+     "Exit 4",
+     "5/520",
+     "Exit 3",
+     "Exit 2",
+     "Capitol Hill"
+    ],
+    [
+     "Green Lake",
+     "Exit 6",
+     "Exit 5",
+     "Exit 4",
+     "5/520",
+     "Exit 3",
+     "Eastlake"
+    ],
+    [
+     "Green Lake",
+     "Fremont",
+     "Queen Anne",
+     "Downtown"
+    ],
+    [
+     "Green Lake",
+     "Exit 6",
+     "Exit 5",
+     "Exit 4",
+     "5/520",
+     "Exit 3",
+     "Exit 2",
+     "Capitol Hill",
+     "Beacon Hill"
+    ],
+    [
+     "Green Lake",
+     "Exit 6",
+     "Exit 5",
+     "Exit 4",
+     "5/520",
+     "Exit 3",
+     "Exit 2",
+     "Exit 1",
+     "West Seattle"
+    ],
+    [
+     "Green Lake",
+     "Exit 6",
+     "Exit 5",
+     "Exit 4",
+     "5/520",
+     "Exit 3",
+     "Exit 2",
+     "Capitol Hill",
+     "Beacon Hill",
+     "Mercer Island"
+    ],
+    [
+     "Green Lake",
+     "Exit 6",
+     "Exit 5",
+     "Exit 4",
+     "5/520",
+     "Exit 3",
+     "Exit 2",
+     "Capitol Hill",
+     "Beacon Hill",
+     "Mercer Island",
+     "Mercer N"
+    ],
+    [
+     "Green Lake",
+     "Exit 6",
+     "Exit 5",
+     "Exit 4",
+     "5/520",
+     "Exit 3",
+     "Exit 2",
+     "Capitol Hill",
+     "Beacon Hill",
+     "Mercer Island",
+     "Mercer N",
+     "Mercer S"
+    ],
+    [
+     "Green Lake",
+     "Exit 6",
+     "Exit 5",
+     "Exit 4",
+     "5/520",
+     "Montlake",
+     "Medina"
+    ],
+    [
+     "Green Lake",
+     "Exit 6",
+     "Exit 5",
+     "Exit 4",
+     "5/520",
+     "Montlake",
+     "Medina",
+     "Kirkland"
+    ],
+    [
+     "Green Lake",
+     "Exit 6",
+     "Exit 5",
+     "Exit 4",
+     "5/520",
+     "Montlake",
+     "Medina",
+     "Bellevue",
+     "Redmond"
+    ],
+    [
+     "Green Lake",
+     "Exit 6",
+     "Exit 5",
+     "Exit 4",
+     "5/520",
+     "Montlake",
+     "Medina",
+     "Bellevue"
+    ],
+    [
+     "Green Lake",
+     "Exit 6",
+     "Exit 5",
+     "Exit 4",
+     "5/520",
+     "Montlake",
+     "Medina",
+     "Bellevue",
+     "Factoria"
+    ],
+    [
+     "Green Lake",
+     "Exit 6",
+     "Exit 5",
+     "Exit 4",
+     "5/520",
+     "Montlake",
+     "Medina",
+     "Bellevue",
+     "Factoria",
+     "Issaquah"
+    ],
+    [
+     "Green Lake",
+     "Exit 6",
+     "Exit 5",
+     "Exit 4",
+     "5/520",
+     "Exit 3",
+     "Exit 2",
+     "Exit 1"
+    ],
+    [
+     "Green Lake",
+     "Exit 6",
+     "Exit 5",
+     "Exit 4",
+     "5/520",
+     "Exit 3",
+     "Exit 2"
+    ],
+    [
+     "Green Lake",
+     "Exit 6",
+     "Exit 5",
+     "Exit 4",
+     "5/520",
+     "Exit 3"
+    ],
+    [
+     "Green Lake",
+     "Exit 6",
+     "Exit 5",
+     "Exit 4"
+    ],
+    [
+     "Green Lake",
+     "Exit 6",
+     "Exit 5"
+    ],
+    [
+     "Green Lake",
+     "Exit 6"
+    ],
+    [
+     "Green Lake",
+     "Exit 6",
+     "Exit 5",
+     "Exit 4",
+     "5/520"
+    ],
+    [
+     "Green Lake",
+     "Exit 6",
+     "Exit 5",
+     "Exit 4",
+     "5/520",
+     "Montlake"
+    ],
+    [
+     "Green Lake",
+     "Exit 6",
+     "Exit 5",
+     "Exit 4",
+     "5/520",
+     "Montlake",
+     "Medina",
+     "Bellevue",
+     "FC"
+    ]
+   ],
+   [
+    [
+     "Fremont",
+     "Ballard"
+    ],
+    [
+     "Fremont",
+     "Green Lake"
+    ],
+    [
+     "Fremont"
+    ],
+    [
+     "Fremont",
+     "Exit 4",
+     "Exit 5",
+     "U-District"
+    ],
+    [
+     "Fremont",
+     "Queen Anne",
+     "Magnolia"
+    ],
+    [
+     "Fremont",
+     "Queen Anne"
+    ],
+    [
+     "Fremont",
+     "Exit 4",
+     "5/520",
+     "Exit 3",
+     "Exit 2",
+     "Capitol Hill"
+    ],
+    [
+     "Fremont",
+     "Exit 4",
+     "5/520",
+     "Exit 3",
+     "Eastlake"
+    ],
+    [
+     "Fremont",
+     "Queen Anne",
+     "Downtown"
+    ],
+    [
+     "Fremont",
+     "Exit 4",
+     "5/520",
+     "Exit 3",
+     "Exit 2",
+     "Capitol Hill",
+     "Beacon Hill"
+    ],
+    [
+     "Fremont",
+     "Queen Anne",
+     "Downtown",
+     "West Seattle"
+    ],
+    [
+     "Fremont",
+     "Exit 4",
+     "5/520",
+     "Exit 3",
+     "Exit 2",
+     "Capitol Hill",
+     "Beacon Hill",
+     "Mercer Island"
+    ],
+    [
+     "Fremont",
+     "Exit 4",
+     "5/520",
+     "Exit 3",
+     "Exit 2",
+     "Capitol Hill",
+     "Beacon Hill",
+     "Mercer Island",
+     "Mercer N"
+    ],
+    [
+     "Fremont",
+     "Exit 4",
+     "5/520",
+     "Exit 3",
+     "Exit 2",
+     "Capitol Hill",
+     "Beacon Hill",
+     "Mercer Island",
+     "Mercer N",
+     "Mercer S"
+    ],
+    [
+     "Fremont",
+     "Exit 4",
+     "5/520",
+     "Montlake",
+     "Medina"
+    ],
+    [
+     "Fremont",
+     "Exit 4",
+     "5/520",
+     "Montlake",
+     "Medina",
+     "Kirkland"
+    ],
+    [
+     "Fremont",
+     "Exit 4",
+     "5/520",
+     "Montlake",
+     "Medina",
+     "Bellevue",
+     "Redmond"
+    ],
+    [
+     "Fremont",
+     "Exit 4",
+     "5/520",
+     "Montlake",
+     "Medina",
+     "Bellevue"
+    ],
+    [
+     "Fremont",
+     "Exit 4",
+     "5/520",
+     "Montlake",
+     "Medina",
+     "Bellevue",
+     "Factoria"
+    ],
+    [
+     "Fremont",
+     "Exit 4",
+     "5/520",
+     "Montlake",
+     "Medina",
+     "Bellevue",
+     "Factoria",
+     "Issaquah"
+    ],
+    [
+     "Fremont",
+     "Exit 4",
+     "5/520",
+     "Exit 3",
+     "Exit 2",
+     "Exit 1"
+    ],
+    [
+     "Fremont",
+     "Exit 4",
+     "5/520",
+     "Exit 3",
+     "Exit 2"
+    ],
+    [
+     "Fremont",
+     "Exit 4",
+     "5/520",
+     "Exit 3"
+    ],
+    [
+     "Fremont",
+     "Exit 4"
+    ],
+    [
+     "Fremont",
+     "Exit 4",
+     "Exit 5"
+    ],
+    [
+     "Fremont",
+     "Exit 4",
+     "Exit 5",
+     "Exit 6"
+    ],
+    [
+     "Fremont",
+     "Exit 4",
+     "5/520"
+    ],
+    [
+     "Fremont",
+     "Exit 4",
+     "5/520",
+     "Montlake"
+    ],
+    [
+     "Fremont",
+     "Exit 4",
+     "5/520",
+     "Montlake",
+     "Medina",
+     "Bellevue",
+     "FC"
+    ]
+   ],
+   [
+    [
+     "U-District",
+     "Exit 5",
+     "Exit 6",
+     "Green Lake",
+     "Ballard"
+    ],
+    [
+     "U-District",
+     "Exit 5",
+     "Exit 6",
+     "Green Lake"
+    ],
+    [
+     "U-District",
+     "Exit 5",
+     "Exit 4",
+     "Fremont"
+    ],
+    [
+     "U-District"
+    ],
+    [
+     "U-District",
+     "Exit 5",
+     "Exit 4",
+     "Fremont",
+     "Queen Anne",
+     "Magnolia"
+    ],
+    [
+     "U-District",
+     "Exit 5",
+     "Exit 4",
+     "Fremont",
+     "Queen Anne"
+    ],
+    [
+     "U-District",
+     "Exit 5",
+     "Exit 4",
+     "5/520",
+     "Exit 3",
+     "Exit 2",
+     "Capitol Hill"
+    ],
+    [
+     "U-District",
+     "Exit 5",
+     "Exit 4",
+     "5/520",
+     "Exit 3",
+     "Eastlake"
+    ],
+    [
+     "U-District",
+     "Exit 5",
+     "Exit 4",
+     "Fremont",
+     "Queen Anne",
+     "Downtown"
+    ],
+    [
+     "U-District",
+     "Exit 5",
+     "Exit 4",
+     "5/520",
+     "Exit 3",
+     "Exit 2",
+     "Capitol Hill",
+     "Beacon Hill"
+    ],
+    [
+     "U-District",
+     "Exit 5",
+     "Exit 4",
+     "5/520",
+     "Exit 3",
+     "Exit 2",
+     "Exit 1",
+     "West Seattle"
+    ],
+    [
+     "U-District",
+     "Exit 5",
+     "Exit 4",
+     "5/520",
+     "Exit 3",
+     "Exit 2",
+     "Capitol Hill",
+     "Beacon Hill",
+     "Mercer Island"
+    ],
+    [
+     "U-District",
+     "Exit 5",
+     "Exit 4",
+     "5/520",
+     "Exit 3",
+     "Exit 2",
+     "Capitol Hill",
+     "Beacon Hill",
+     "Mercer Island",
+     "Mercer N"
+    ],
+    [
+     "U-District",
+     "Exit 5",
+     "Exit 4",
+     "5/520",
+     "Exit 3",
+     "Exit 2",
+     "Capitol Hill",
+     "Beacon Hill",
+     "Mercer Island",
+     "Mercer N",
+     "Mercer S"
+    ],
+    [
+     "U-District",
+     "Exit 5",
+     "Exit 4",
+     "5/520",
+     "Montlake",
+     "Medina"
+    ],
+    [
+     "U-District",
+     "Exit 5",
+     "Exit 4",
+     "5/520",
+     "Montlake",
+     "Medina",
+     "Kirkland"
+    ],
+    [
+     "U-District",
+     "Exit 5",
+     "Exit 4",
+     "5/520",
+     "Montlake",
+     "Medina",
+     "Bellevue",
+     "Redmond"
+    ],
+    [
+     "U-District",
+     "Exit 5",
+     "Exit 4",
+     "5/520",
+     "Montlake",
+     "Medina",
+     "Bellevue"
+    ],
+    [
+     "U-District",
+     "Exit 5",
+     "Exit 4",
+     "5/520",
+     "Montlake",
+     "Medina",
+     "Bellevue",
+     "Factoria"
+    ],
+    [
+     "U-District",
+     "Exit 5",
+     "Exit 4",
+     "5/520",
+     "Montlake",
+     "Medina",
+     "Bellevue",
+     "Factoria",
+     "Issaquah"
+    ],
+    [
+     "U-District",
+     "Exit 5",
+     "Exit 4",
+     "5/520",
+     "Exit 3",
+     "Exit 2",
+     "Exit 1"
+    ],
+    [
+     "U-District",
+     "Exit 5",
+     "Exit 4",
+     "5/520",
+     "Exit 3",
+     "Exit 2"
+    ],
+    [
+     "U-District",
+     "Exit 5",
+     "Exit 4",
+     "5/520",
+     "Exit 3"
+    ],
+    [
+     "U-District",
+     "Exit 5",
+     "Exit 4"
+    ],
+    [
+     "U-District",
+     "Exit 5"
+    ],
+    [
+     "U-District",
+     "Exit 5",
+     "Exit 6"
+    ],
+    [
+     "U-District",
+     "Exit 5",
+     "Exit 4",
+     "5/520"
+    ],
+    [
+     "U-District",
+     "Exit 5",
+     "Exit 4",
+     "5/520",
+     "Montlake"
+    ],
+    [
+     "U-District",
+     "Exit 5",
+     "Exit 4",
+     "5/520",
+     "Montlake",
+     "Medina",
+     "Bellevue",
+     "FC"
+    ]
+   ],
+   [
+    [
+     "Magnolia",
+     "Ballard"
+    ],
+    [
+     "Magnolia",
+     "Ballard",
+     "Green Lake"
+    ],
+    [
+     "Magnolia",
+     "Queen Anne",
+     "Fremont"
+    ],
+    [
+     "Magnolia",
+     "Queen Anne",
+     "Fremont",
+     "Exit 4",
+     "Exit 5",
+     "U-District"
+    ],
+    [
+     "Magnolia"
+    ],
+    [
+     "Magnolia",
+     "Queen Anne"
+    ],
+    [
+     "Magnolia",
+     "Queen Anne",
+     "Downtown",
+     "Exit 2",
+     "Capitol Hill"
+    ],
+    [
+     "Magnolia",
+     "Queen Anne",
+     "Downtown",
+     "Exit 2",
+     "Exit 3",
+     "Eastlake"
+    ],
+    [
+     "Magnolia",
+     "Queen Anne",
+     "Downtown"
+    ],
+    [
+     "Magnolia",
+     "Queen Anne",
+     "Downtown",
+     "Exit 2",
+     "Capitol Hill",
+     "Beacon Hill"
+    ],
+    [
+     "Magnolia",
+     "Queen Anne",
+     "Downtown",
+     "West Seattle"
+    ],
+    [
+     "Magnolia",
+     "Queen Anne",
+     "Downtown",
+     "Exit 2",
+     "Capitol Hill",
+     "Beacon Hill",
+     "Mercer Island"
+    ],
+    [
+     "Magnolia",
+     "Queen Anne",
+     "Downtown",
+     "Exit 2",
+     "Capitol Hill",
+     "Beacon Hill",
+     "Mercer Island",
+     "Mercer N"
+    ],
+    [
+     "Magnolia",
+     "Queen Anne",
+     "Downtown",
+     "Exit 2",
+     "Capitol Hill",
+     "Beacon Hill",
+     "Mercer Island",
+     "Mercer N",
+     "Mercer S"
+    ],
+    [
+     "Magnolia",
+     "Queen Anne",
+     "Fremont",
+     "Exit 4",
+     "5/520",
+     "Montlake",
+     "Medina"
+    ],
+    [
+     "Magnolia",
+     "Queen Anne",
+     "Fremont",
+     "Exit 4",
+     "5/520",
+     "Montlake",
+     "Medina",
+     "Kirkland"
+    ],
+    [
+     "Magnolia",
+     "Queen Anne",
+     "Fremont",
+     "Exit 4",
+     "5/520",
+     "Montlake",
+     "Medina",
+     "Bellevue",
+     "Redmond"
+    ],
+    [
+     "Magnolia",
+     "Queen Anne",
+     "Fremont",
+     "Exit 4",
+     "5/520",
+     "Montlake",
+     "Medina",
+     "Bellevue"
+    ],
+    [
+     "Magnolia",
+     "Queen Anne",
+     "Downtown",
+     "Exit 2",
+     "Capitol Hill",
+     "Beacon Hill",
+     "Mercer Island",
+     "Factoria"
+    ],
+    [
+     "Magnolia",
+     "Queen Anne",
+     "Downtown",
+     "Exit 2",
+     "Capitol Hill",
+     "Beacon Hill",
+     "Mercer Island",
+     "Factoria",
+     "Issaquah"
+    ],
+    [
+     "Magnolia",
+     "Queen Anne",
+     "Downtown",
+     "Exit 2",
+     "Exit 1"
+    ],
+    [
+     "Magnolia",
+     "Queen Anne",
+     "Downtown",
+     "Exit 2"
+    ],
+    [
+     "Magnolia",
+     "Queen Anne",
+     "Downtown",
+     "Exit 2",
+     "Exit 3"
+    ],
+    [
+     "Magnolia",
+     "Queen Anne",
+     "Fremont",
+     "Exit 4"
+    ],
+    [
+     "Magnolia",
+     "Queen Anne",
+     "Fremont",
+     "Exit 4",
+     "Exit 5"
+    ],
+    [
+     "Magnolia",
+     "Ballard",
+     "Green Lake",
+     "Exit 6"
+    ],
+    [
+     "Magnolia",
+     "Queen Anne",
+     "Fremont",
+     "Exit 4",
+     "5/520"
+    ],
+    [
+     "Magnolia",
+     "Queen Anne",
+     "Fremont",
+     "Exit 4",
+     "5/520",
+     "Montlake"
+    ],
+    [
+     "Magnolia",
+     "Queen Anne",
+     "Fremont",
+     "Exit 4",
+     "5/520",
+     "Montlake",
+     "Medina",
+     "Bellevue",
+     "FC"
+    ]
+   ],
+   [
+    [
+     "Queen Anne",
+     "Fremont",
+     "Ballard"
+    ],
+    [
+     "Queen Anne",
+     "Fremont",
+     "Green Lake"
+    ],
+    [
+     "Queen Anne",
+     "Fremont"
+    ],
+    [
+     "Queen Anne",
+     "Fremont",
+     "Exit 4",
+     "Exit 5",
+     "U-District"
+    ],
+    [
+     "Queen Anne",
+     "Magnolia"
+    ],
+    [
+     "Queen Anne"
+    ],
+    [
+     "Queen Anne",
+     "Downtown",
+     "Exit 2",
+     "Capitol Hill"
+    ],
+    [
+     "Queen Anne",
+     "Downtown",
+     "Exit 2",
+     "Exit 3",
+     "Eastlake"
+    ],
+    [
+     "Queen Anne",
+     "Downtown"
+    ],
+    [
+     "Queen Anne",
+     "Downtown",
+     "Exit 2",
+     "Capitol Hill",
+     "Beacon Hill"
+    ],
+    [
+     "Queen Anne",
+     "Downtown",
+     "West Seattle"
+    ],
+    [
+     "Queen Anne",
+     "Downtown",
+     "Exit 2",
+     "Capitol Hill",
+     "Beacon Hill",
+     "Mercer Island"
+    ],
+    [
+     "Queen Anne",
+     "Downtown",
+     "Exit 2",
+     "Capitol Hill",
+     "Beacon Hill",
+     "Mercer Island",
+     "Mercer N"
+    ],
+    [
+     "Queen Anne",
+     "Downtown",
+     "Exit 2",
+     "Capitol Hill",
+     "Beacon Hill",
+     "Mercer Island",
+     "Mercer N",
+     "Mercer S"
+    ],
+    [
+     "Queen Anne",
+     "Fremont",
+     "Exit 4",
+     "5/520",
+     "Montlake",
+     "Medina"
+    ],
+    [
+     "Queen Anne",
+     "Fremont",
+     "Exit 4",
+     "5/520",
+     "Montlake",
+     "Medina",
+     "Kirkland"
+    ],
+    [
+     "Queen Anne",
+     "Fremont",
+     "Exit 4",
+     "5/520",
+     "Montlake",
+     "Medina",
+     "Bellevue",
+     "Redmond"
+    ],
+    [
+     "Queen Anne",
+     "Fremont",
+     "Exit 4",
+     "5/520",
+     "Montlake",
+     "Medina",
+     "Bellevue"
+    ],
+    [
+     "Queen Anne",
+     "Downtown",
+     "Exit 2",
+     "Capitol Hill",
+     "Beacon Hill",
+     "Mercer Island",
+     "Factoria"
+    ],
+    [
+     "Queen Anne",
+     "Downtown",
+     "Exit 2",
+     "Capitol Hill",
+     "Beacon Hill",
+     "Mercer Island",
+     "Factoria",
+     "Issaquah"
+    ],
+    [
+     "Queen Anne",
+     "Downtown",
+     "Exit 2",
+     "Exit 1"
+    ],
+    [
+     "Queen Anne",
+     "Downtown",
+     "Exit 2"
+    ],
+    [
+     "Queen Anne",
+     "Downtown",
+     "Exit 2",
+     "Exit 3"
+    ],
+    [
+     "Queen Anne",
+     "Fremont",
+     "Exit 4"
+    ],
+    [
+     "Queen Anne",
+     "Fremont",
+     "Exit 4",
+     "Exit 5"
+    ],
+    [
+     "Queen Anne",
+     "Fremont",
+     "Exit 4",
+     "Exit 5",
+     "Exit 6"
+    ],
+    [
+     "Queen Anne",
+     "Fremont",
+     "Exit 4",
+     "5/520"
+    ],
+    [
+     "Queen Anne",
+     "Fremont",
+     "Exit 4",
+     "5/520",
+     "Montlake"
+    ],
+    [
+     "Queen Anne",
+     "Fremont",
+     "Exit 4",
+     "5/520",
+     "Montlake",
+     "Medina",
+     "Bellevue",
+     "FC"
+    ]
+   ],
+   [
+    [
+     "Capitol Hill",
+     "Exit 2",
+     "Downtown",
+     "Queen Anne",
+     "Fremont",
+     "Ballard"
+    ],
+    [
+     "Capitol Hill",
+     "Exit 2",
+     "Exit 3",
+     "5/520",
+     "Exit 4",
+     "Exit 5",
+     "Exit 6",
+     "Green Lake"
+    ],
+    [
+     "Capitol Hill",
+     "Exit 2",
+     "Downtown",
+     "Queen Anne",
+     "Fremont"
+    ],
+    [
+     "Capitol Hill",
+     "Exit 2",
+     "Exit 3",
+     "5/520",
+     "Exit 4",
+     "Exit 5",
+     "U-District"
+    ],
+    [
+     "Capitol Hill",
+     "Exit 2",
+     "Downtown",
+     "Queen Anne",
+     "Magnolia"
+    ],
+    [
+     "Capitol Hill",
+     "Exit 2",
+     "Downtown",
+     "Queen Anne"
+    ],
+    [
+     "Capitol Hill"
+    ],
+    [
+     "Capitol Hill",
+     "Eastlake"
+    ],
+    [
+     "Capitol Hill",
+     "Exit 2",
+     "Downtown"
+    ],
+    [
+     "Capitol Hill",
+     "Beacon Hill"
+    ],
+    [
+     "Capitol Hill",
+     "Exit 2",
+     "Exit 1",
+     "West Seattle"
+    ],
+    [
+     "Capitol Hill",
+     "Beacon Hill",
+     "Mercer Island"
+    ],
+    [
+     "Capitol Hill",
+     "Beacon Hill",
+     "Mercer Island",
+     "Mercer N"
+    ],
+    [
+     "Capitol Hill",
+     "Beacon Hill",
+     "Mercer Island",
+     "Mercer N",
+     "Mercer S"
+    ],
+    [
+     "Capitol Hill",
+     "Eastlake",
+     "Montlake",
+     "Medina"
+    ],
+    [
+     "Capitol Hill",
+     "Eastlake",
+     "Montlake",
+     "Medina",
+     "Kirkland"
+    ],
+    [
+     "Capitol Hill",
+     "Beacon Hill",
+     "Mercer Island",
+     "Factoria",
+     "Bellevue",
+     "Redmond"
+    ],
+    [
+     "Capitol Hill",
+     "Beacon Hill",
+     "Mercer Island",
+     "Factoria",
+     "Bellevue"
+    ],
+    [
+     "Capitol Hill",
+     "Beacon Hill",
+     "Mercer Island",
+     "Factoria"
+    ],
+    [
+     "Capitol Hill",
+     "Beacon Hill",
+     "Mercer Island",
+     "Factoria",
+     "Issaquah"
+    ],
+    [
+     "Capitol Hill",
+     "Exit 2",
+     "Exit 1"
+    ],
+    [
+     "Capitol Hill",
+     "Exit 2"
+    ],
+    [
+     "Capitol Hill",
+     "Exit 2",
+     "Exit 3"
+    ],
+    [
+     "Capitol Hill",
+     "Exit 2",
+     "Exit 3",
+     "5/520",
+     "Exit 4"
+    ],
+    [
+     "Capitol Hill",
+     "Exit 2",
+     "Exit 3",
+     "5/520",
+     "Exit 4",
+     "Exit 5"
+    ],
+    [
+     "Capitol Hill",
+     "Exit 2",
+     "Exit 3",
+     "5/520",
+     "Exit 4",
+     "Exit 5",
+     "Exit 6"
+    ],
+    [
+     "Capitol Hill",
+     "Exit 2",
+     "Exit 3",
+     "5/520"
+    ],
+    [
+     "Capitol Hill",
+     "Eastlake",
+     "Montlake"
+    ],
+    [
+     "Capitol Hill",
+     "Beacon Hill",
+     "Mercer Island",
+     "Factoria",
+     "FC"
+    ]
+   ],
+   [
+    [
+     "Eastlake",
+     "Exit 3",
+     "5/520",
+     "Exit 4",
+     "Fremont",
+     "Ballard"
+    ],
+    [
+     "Eastlake",
+     "Exit 3",
+     "5/520",
+     "Exit 4",
+     "Exit 5",
+     "Exit 6",
+     "Green Lake"
+    ],
+    [
+     "Eastlake",
+     "Exit 3",
+     "5/520",
+     "Exit 4",
+     "Fremont"
+    ],
+    [
+     "Eastlake",
+     "Exit 3",
+     "5/520",
+     "Exit 4",
+     "Exit 5",
+     "U-District"
+    ],
+    [
+     "Eastlake",
+     "Exit 3",
+     "5/520",
+     "Exit 4",
+     "Fremont",
+     "Queen Anne",
+     "Magnolia"
+    ],
+    [
+     "Eastlake",
+     "Exit 3",
+     "5/520",
+     "Exit 4",
+     "Fremont",
+     "Queen Anne"
+    ],
+    [
+     "Eastlake",
+     "Capitol Hill"
+    ],
+    [
+     "Eastlake"
+    ],
+    [
+     "Eastlake",
+     "Exit 3",
+     "Exit 2",
+     "Downtown"
+    ],
+    [
+     "Eastlake",
+     "Capitol Hill",
+     "Beacon Hill"
+    ],
+    [
+     "Eastlake",
+     "Exit 3",
+     "Exit 2",
+     "Exit 1",
+     "West Seattle"
+    ],
+    [
+     "Eastlake",
+     "Capitol Hill",
+     "Beacon Hill",
+     "Mercer Island"
+    ],
+    [
+     "Eastlake",
+     "Capitol Hill",
+     "Beacon Hill",
+     "Mercer Island",
+     "Mercer N"
+    ],
+    [
+     "Eastlake",
+     "Capitol Hill",
+     "Beacon Hill",
+     "Mercer Island",
+     "Mercer N",
+     "Mercer S"
+    ],
+    [
+     "Eastlake",
+     "Montlake",
+     "Medina"
+    ],
+    [
+     "Eastlake",
+     "Montlake",
+     "Medina",
+     "Kirkland"
+    ],
+    [
+     "Eastlake",
+     "Montlake",
+     "Medina",
+     "Bellevue",
+     "Redmond"
+    ],
+    [
+     "Eastlake",
+     "Montlake",
+     "Medina",
+     "Bellevue"
+    ],
+    [
+     "Eastlake",
+     "Capitol Hill",
+     "Beacon Hill",
+     "Mercer Island",
+     "Factoria"
+    ],
+    [
+     "Eastlake",
+     "Capitol Hill",
+     "Beacon Hill",
+     "Mercer Island",
+     "Factoria",
+     "Issaquah"
+    ],
+    [
+     "Eastlake",
+     "Exit 3",
+     "Exit 2",
+     "Exit 1"
+    ],
+    [
+     "Eastlake",
+     "Exit 3",
+     "Exit 2"
+    ],
+    [
+     "Eastlake",
+     "Exit 3"
+    ],
+    [
+     "Eastlake",
+     "Exit 3",
+     "5/520",
+     "Exit 4"
+    ],
+    [
+     "Eastlake",
+     "Exit 3",
+     "5/520",
+     "Exit 4",
+     "Exit 5"
+    ],
+    [
+     "Eastlake",
+     "Exit 3",
+     "5/520",
+     "Exit 4",
+     "Exit 5",
+     "Exit 6"
+    ],
+    [
+     "Eastlake",
+     "Exit 3",
+     "5/520"
+    ],
+    [
+     "Eastlake",
+     "Montlake"
+    ],
+    [
+     "Eastlake",
+     "Montlake",
+     "Medina",
+     "Bellevue",
+     "FC"
+    ]
+   ],
+   [
+    [
+     "Downtown",
+     "Queen Anne",
+     "Fremont",
+     "Ballard"
+    ],
+    [
+     "Downtown",
+     "Queen Anne",
+     "Fremont",
+     "Green Lake"
+    ],
+    [
+     "Downtown",
+     "Queen Anne",
+     "Fremont"
+    ],
+    [
+     "Downtown",
+     "Queen Anne",
+     "Fremont",
+     "Exit 4",
+     "Exit 5",
+     "U-District"
+    ],
+    [
+     "Downtown",
+     "Queen Anne",
+     "Magnolia"
+    ],
+    [
+     "Downtown",
+     "Queen Anne"
+    ],
+    [
+     "Downtown",
+     "Exit 2",
+     "Capitol Hill"
+    ],
+    [
+     "Downtown",
+     "Exit 2",
+     "Exit 3",
+     "Eastlake"
+    ],
+    [
+     "Downtown"
+    ],
+    [
+     "Downtown",
+     "Exit 2",
+     "Capitol Hill",
+     "Beacon Hill"
+    ],
+    [
+     "Downtown",
+     "West Seattle"
+    ],
+    [
+     "Downtown",
+     "Exit 2",
+     "Capitol Hill",
+     "Beacon Hill",
+     "Mercer Island"
+    ],
+    [
+     "Downtown",
+     "Exit 2",
+     "Capitol Hill",
+     "Beacon Hill",
+     "Mercer Island",
+     "Mercer N"
+    ],
+    [
+     "Downtown",
+     "Exit 2",
+     "Capitol Hill",
+     "Beacon Hill",
+     "Mercer Island",
+     "Mercer N",
+     "Mercer S"
+    ],
+    [
+     "Downtown",
+     "Exit 2",
+     "Exit 3",
+     "Eastlake",
+     "Montlake",
+     "Medina"
+    ],
+    [
+     "Downtown",
+     "Exit 2",
+     "Exit 3",
+     "Eastlake",
+     "Montlake",
+     "Medina",
+     "Kirkland"
+    ],
+    [
+     "Downtown",
+     "Exit 2",
+     "Capitol Hill",
+     "Beacon Hill",
+     "Mercer Island",
+     "Factoria",
+     "Bellevue",
+     "Redmond"
+    ],
+    [
+     "Downtown",
+     "Exit 2",
+     "Capitol Hill",
+     "Beacon Hill",
+     "Mercer Island",
+     "Factoria",
+     "Bellevue"
+    ],
+    [
+     "Downtown",
+     "Exit 2",
+     "Capitol Hill",
+     "Beacon Hill",
+     "Mercer Island",
+     "Factoria"
+    ],
+    [
+     "Downtown",
+     "Exit 2",
+     "Capitol Hill",
+     "Beacon Hill",
+     "Mercer Island",
+     "Factoria",
+     "Issaquah"
+    ],
+    [
+     "Downtown",
+     "Exit 2",
+     "Exit 1"
+    ],
+    [
+     "Downtown",
+     "Exit 2"
+    ],
+    [
+     "Downtown",
+     "Exit 2",
+     "Exit 3"
+    ],
+    [
+     "Downtown",
+     "Queen Anne",
+     "Fremont",
+     "Exit 4"
+    ],
+    [
+     "Downtown",
+     "Queen Anne",
+     "Fremont",
+     "Exit 4",
+     "Exit 5"
+    ],
+    [
+     "Downtown",
+     "Queen Anne",
+     "Fremont",
+     "Exit 4",
+     "Exit 5",
+     "Exit 6"
+    ],
+    [
+     "Downtown",
+     "Exit 2",
+     "Exit 3",
+     "5/520"
+    ],
+    [
+     "Downtown",
+     "Exit 2",
+     "Exit 3",
+     "Eastlake",
+     "Montlake"
+    ],
+    [
+     "Downtown",
+     "Exit 2",
+     "Capitol Hill",
+     "Beacon Hill",
+     "Mercer Island",
+     "Factoria",
+     "FC"
+    ]
+   ],
+   [
+    [
+     "Beacon Hill",
+     "Exit 1",
+     "Exit 2",
+     "Downtown",
+     "Queen Anne",
+     "Fremont",
+     "Ballard"
+    ],
+    [
+     "Beacon Hill",
+     "Exit 1",
+     "Exit 2",
+     "Exit 3",
+     "5/520",
+     "Exit 4",
+     "Exit 5",
+     "Exit 6",
+     "Green Lake"
+    ],
+    [
+     "Beacon Hill",
+     "Exit 1",
+     "Exit 2",
+     "Downtown",
+     "Queen Anne",
+     "Fremont"
+    ],
+    [
+     "Beacon Hill",
+     "Exit 1",
+     "Exit 2",
+     "Exit 3",
+     "5/520",
+     "Exit 4",
+     "Exit 5",
+     "U-District"
+    ],
+    [
+     "Beacon Hill",
+     "Exit 1",
+     "Exit 2",
+     "Downtown",
+     "Queen Anne",
+     "Magnolia"
+    ],
+    [
+     "Beacon Hill",
+     "Exit 1",
+     "Exit 2",
+     "Downtown",
+     "Queen Anne"
+    ],
+    [
+     "Beacon Hill",
+     "Capitol Hill"
+    ],
+    [
+     "Beacon Hill",
+     "Capitol Hill",
+     "Eastlake"
+    ],
+    [
+     "Beacon Hill",
+     "Exit 1",
+     "Exit 2",
+     "Downtown"
+    ],
+    [
+     "Beacon Hill"
+    ],
+    [
+     "Beacon Hill",
+     "Exit 1",
+     "West Seattle"
+    ],
+    [
+     "Beacon Hill",
+     "Mercer Island"
+    ],
+    [
+     "Beacon Hill",
+     "Mercer Island",
+     "Mercer N"
+    ],
+    [
+     "Beacon Hill",
+     "Mercer Island",
+     "Mercer N",
+     "Mercer S"
+    ],
+    [
+     "Beacon Hill",
+     "Mercer Island",
+     "Factoria",
+     "Bellevue",
+     "Medina"
+    ],
+    [
+     "Beacon Hill",
+     "Mercer Island",
+     "Factoria",
+     "Bellevue",
+     "Medina",
+     "Kirkland"
+    ],
+    [
+     "Beacon Hill",
+     "Mercer Island",
+     "Factoria",
+     "Bellevue",
+     "Redmond"
+    ],
+    [
+     "Beacon Hill",
+     "Mercer Island",
+     "Factoria",
+     "Bellevue"
+    ],
+    [
+     "Beacon Hill",
+     "Mercer Island",
+     "Factoria"
+    ],
+    [
+     "Beacon Hill",
+     "Mercer Island",
+     "Factoria",
+     "Issaquah"
+    ],
+    [
+     "Beacon Hill",
+     "Exit 1"
+    ],
+    [
+     "Beacon Hill",
+     "Exit 1",
+     "Exit 2"
+    ],
+    [
+     "Beacon Hill",
+     "Exit 1",
+     "Exit 2",
+     "Exit 3"
+    ],
+    [
+     "Beacon Hill",
+     "Exit 1",
+     "Exit 2",
+     "Exit 3",
+     "5/520",
+     "Exit 4"
+    ],
+    [
+     "Beacon Hill",
+     "Exit 1",
+     "Exit 2",
+     "Exit 3",
+     "5/520",
+     "Exit 4",
+     "Exit 5"
+    ],
+    [
+     "Beacon Hill",
+     "Exit 1",
+     "Exit 2",
+     "Exit 3",
+     "5/520",
+     "Exit 4",
+     "Exit 5",
+     "Exit 6"
+    ],
+    [
+     "Beacon Hill",
+     "Exit 1",
+     "Exit 2",
+     "Exit 3",
+     "5/520"
+    ],
+    [
+     "Beacon Hill",
+     "Capitol Hill",
+     "Eastlake",
+     "Montlake"
+    ],
+    [
+     "Beacon Hill",
+     "Mercer Island",
+     "Factoria",
+     "FC"
+    ]
+   ],
+   [
+    [
+     "West Seattle",
+     "Downtown",
+     "Queen Anne",
+     "Fremont",
+     "Ballard"
+    ],
+    [
+     "West Seattle",
+     "Exit 1",
+     "Exit 2",
+     "Exit 3",
+     "5/520",
+     "Exit 4",
+     "Exit 5",
+     "Exit 6",
+     "Green Lake"
+    ],
+    [
+     "West Seattle",
+     "Downtown",
+     "Queen Anne",
+     "Fremont"
+    ],
+    [
+     "West Seattle",
+     "Exit 1",
+     "Exit 2",
+     "Exit 3",
+     "5/520",
+     "Exit 4",
+     "Exit 5",
+     "U-District"
+    ],
+    [
+     "West Seattle",
+     "Downtown",
+     "Queen Anne",
+     "Magnolia"
+    ],
+    [
+     "West Seattle",
+     "Downtown",
+     "Queen Anne"
+    ],
+    [
+     "West Seattle",
+     "Exit 1",
+     "Beacon Hill",
+     "Capitol Hill"
+    ],
+    [
+     "West Seattle",
+     "Exit 1",
+     "Exit 2",
+     "Exit 3",
+     "Eastlake"
+    ],
+    [
+     "West Seattle",
+     "Downtown"
+    ],
+    [
+     "West Seattle",
+     "Exit 1",
+     "Beacon Hill"
+    ],
+    [
+     "West Seattle"
+    ],
+    [
+     "West Seattle",
+     "Exit 1",
+     "Beacon Hill",
+     "Mercer Island"
+    ],
+    [
+     "West Seattle",
+     "Exit 1",
+     "Beacon Hill",
+     "Mercer Island",
+     "Mercer N"
+    ],
+    [
+     "West Seattle",
+     "Exit 1",
+     "Beacon Hill",
+     "Mercer Island",
+     "Mercer N",
+     "Mercer S"
+    ],
+    [
+     "West Seattle",
+     "Exit 1",
+     "Exit 2",
+     "Exit 3",
+     "Eastlake",
+     "Montlake",
+     "Medina"
+    ],
+    [
+     "West Seattle",
+     "Exit 1",
+     "Exit 2",
+     "Exit 3",
+     "Eastlake",
+     "Montlake",
+     "Medina",
+     "Kirkland"
+    ],
+    [
+     "West Seattle",
+     "Exit 1",
+     "Beacon Hill",
+     "Mercer Island",
+     "Factoria",
+     "Bellevue",
+     "Redmond"
+    ],
+    [
+     "West Seattle",
+     "Exit 1",
+     "Beacon Hill",
+     "Mercer Island",
+     "Factoria",
+     "Bellevue"
+    ],
+    [
+     "West Seattle",
+     "Exit 1",
+     "Beacon Hill",
+     "Mercer Island",
+     "Factoria"
+    ],
+    [
+     "West Seattle",
+     "Exit 1",
+     "Beacon Hill",
+     "Mercer Island",
+     "Factoria",
+     "Issaquah"
+    ],
+    [
+     "West Seattle",
+     "Exit 1"
+    ],
+    [
+     "West Seattle",
+     "Exit 1",
+     "Exit 2"
+    ],
+    [
+     "West Seattle",
+     "Exit 1",
+     "Exit 2",
+     "Exit 3"
+    ],
+    [
+     "West Seattle",
+     "Exit 1",
+     "Exit 2",
+     "Exit 3",
+     "5/520",
+     "Exit 4"
+    ],
+    [
+     "West Seattle",
+     "Exit 1",
+     "Exit 2",
+     "Exit 3",
+     "5/520",
+     "Exit 4",
+     "Exit 5"
+    ],
+    [
+     "West Seattle",
+     "Exit 1",
+     "Exit 2",
+     "Exit 3",
+     "5/520",
+     "Exit 4",
+     "Exit 5",
+     "Exit 6"
+    ],
+    [
+     "West Seattle",
+     "Exit 1",
+     "Exit 2",
+     "Exit 3",
+     "5/520"
+    ],
+    [
+     "West Seattle",
+     "Exit 1",
+     "Exit 2",
+     "Exit 3",
+     "Eastlake",
+     "Montlake"
+    ],
+    [
+     "West Seattle",
+     "Exit 1",
+     "Beacon Hill",
+     "Mercer Island",
+     "Factoria",
+     "FC"
+    ]
+   ],
+   [
+    [
+     "Mercer Island",
+     "Beacon Hill",
+     "Exit 1",
+     "Exit 2",
+     "Downtown",
+     "Queen Anne",
+     "Fremont",
+     "Ballard"
+    ],
+    [
+     "Mercer Island",
+     "Beacon Hill",
+     "Exit 1",
+     "Exit 2",
+     "Exit 3",
+     "5/520",
+     "Exit 4",
+     "Exit 5",
+     "Exit 6",
+     "Green Lake"
+    ],
+    [
+     "Mercer Island",
+     "Beacon Hill",
+     "Exit 1",
+     "Exit 2",
+     "Downtown",
+     "Queen Anne",
+     "Fremont"
+    ],
+    [
+     "Mercer Island",
+     "Beacon Hill",
+     "Exit 1",
+     "Exit 2",
+     "Exit 3",
+     "5/520",
+     "Exit 4",
+     "Exit 5",
+     "U-District"
+    ],
+    [
+     "Mercer Island",
+     "Beacon Hill",
+     "Exit 1",
+     "Exit 2",
+     "Downtown",
+     "Queen Anne",
+     "Magnolia"
+    ],
+    [
+     "Mercer Island",
+     "Beacon Hill",
+     "Exit 1",
+     "Exit 2",
+     "Downtown",
+     "Queen Anne"
+    ],
+    [
+     "Mercer Island",
+     "Beacon Hill",
+     "Capitol Hill"
+    ],
+    [
+     "Mercer Island",
+     "Beacon Hill",
+     "Capitol Hill",
+     "Eastlake"
+    ],
+    [
+     "Mercer Island",
+     "Beacon Hill",
+     "Exit 1",
+     "Exit 2",
+     "Downtown"
+    ],
+    [
+     "Mercer Island",
+     "Beacon Hill"
+    ],
+    [
+     "Mercer Island",
+     "Beacon Hill",
+     "Exit 1",
+     "West Seattle"
+    ],
+    [
+     "Mercer Island"
+    ],
+    [
+     "Mercer Island",
+     "Mercer N"
+    ],
+    [
+     "Mercer Island",
+     "Mercer N",
+     "Mercer S"
+    ],
+    [
+     "Mercer Island",
+     "Factoria",
+     "Bellevue",
+     "Medina"
+    ],
+    [
+     "Mercer Island",
+     "Factoria",
+     "Bellevue",
+     "Medina",
+     "Kirkland"
+    ],
+    [
+     "Mercer Island",
+     "Factoria",
+     "Bellevue",
+     "Redmond"
+    ],
+    [
+     "Mercer Island",
+     "Factoria",
+     "Bellevue"
+    ],
+    [
+     "Mercer Island",
+     "Factoria"
+    ],
+    [
+     "Mercer Island",
+     "Factoria",
+     "Issaquah"
+    ],
+    [
+     "Mercer Island",
+     "Beacon Hill",
+     "Exit 1"
+    ],
+    [
+     "Mercer Island",
+     "Beacon Hill",
+     "Exit 1",
+     "Exit 2"
+    ],
+    [
+     "Mercer Island",
+     "Beacon Hill",
+     "Exit 1",
+     "Exit 2",
+     "Exit 3"
+    ],
+    [
+     "Mercer Island",
+     "Beacon Hill",
+     "Exit 1",
+     "Exit 2",
+     "Exit 3",
+     "5/520",
+     "Exit 4"
+    ],
+    [
+     "Mercer Island",
+     "Beacon Hill",
+     "Exit 1",
+     "Exit 2",
+     "Exit 3",
+     "5/520",
+     "Exit 4",
+     "Exit 5"
+    ],
+    [
+     "Mercer Island",
+     "Beacon Hill",
+     "Exit 1",
+     "Exit 2",
+     "Exit 3",
+     "5/520",
+     "Exit 4",
+     "Exit 5",
+     "Exit 6"
+    ],
+    [
+     "Mercer Island",
+     "Beacon Hill",
+     "Exit 1",
+     "Exit 2",
+     "Exit 3",
+     "5/520"
+    ],
+    [
+     "Mercer Island",
+     "Beacon Hill",
+     "Capitol Hill",
+     "Eastlake",
+     "Montlake"
+    ],
+    [
+     "Mercer Island",
+     "Factoria",
+     "FC"
+    ]
+   ],
+   [
+    [
+     "Mercer N",
+     "Mercer Island",
+     "Beacon Hill",
+     "Exit 1",
+     "Exit 2",
+     "Downtown",
+     "Queen Anne",
+     "Fremont",
+     "Ballard"
+    ],
+    [
+     "Mercer N",
+     "Mercer Island",
+     "Beacon Hill",
+     "Exit 1",
+     "Exit 2",
+     "Exit 3",
+     "5/520",
+     "Exit 4",
+     "Exit 5",
+     "Exit 6",
+     "Green Lake"
+    ],
+    [
+     "Mercer N",
+     "Mercer Island",
+     "Beacon Hill",
+     "Exit 1",
+     "Exit 2",
+     "Downtown",
+     "Queen Anne",
+     "Fremont"
+    ],
+    [
+     "Mercer N",
+     "Mercer Island",
+     "Beacon Hill",
+     "Exit 1",
+     "Exit 2",
+     "Exit 3",
+     "5/520",
+     "Exit 4",
+     "Exit 5",
+     "U-District"
+    ],
+    [
+     "Mercer N",
+     "Mercer Island",
+     "Beacon Hill",
+     "Exit 1",
+     "Exit 2",
+     "Downtown",
+     "Queen Anne",
+     "Magnolia"
+    ],
+    [
+     "Mercer N",
+     "Mercer Island",
+     "Beacon Hill",
+     "Exit 1",
+     "Exit 2",
+     "Downtown",
+     "Queen Anne"
+    ],
+    [
+     "Mercer N",
+     "Mercer Island",
+     "Beacon Hill",
+     "Capitol Hill"
+    ],
+    [
+     "Mercer N",
+     "Mercer Island",
+     "Beacon Hill",
+     "Capitol Hill",
+     "Eastlake"
+    ],
+    [
+     "Mercer N",
+     "Mercer Island",
+     "Beacon Hill",
+     "Exit 1",
+     "Exit 2",
+     "Downtown"
+    ],
+    [
+     "Mercer N",
+     "Mercer Island",
+     "Beacon Hill"
+    ],
+    [
+     "Mercer N",
+     "Mercer Island",
+     "Beacon Hill",
+     "Exit 1",
+     "West Seattle"
+    ],
+    [
+     "Mercer N",
+     "Mercer Island"
+    ],
+    [
+     "Mercer N"
+    ],
+    [
+     "Mercer N",
+     "Mercer S"
+    ],
+    [
+     "Mercer N",
+     "Mercer Island",
+     "Factoria",
+     "Bellevue",
+     "Medina"
+    ],
+    [
+     "Mercer N",
+     "Mercer Island",
+     "Factoria",
+     "Bellevue",
+     "Medina",
+     "Kirkland"
+    ],
+    [
+     "Mercer N",
+     "Mercer Island",
+     "Factoria",
+     "Bellevue",
+     "Redmond"
+    ],
+    [
+     "Mercer N",
+     "Mercer Island",
+     "Factoria",
+     "Bellevue"
+    ],
+    [
+     "Mercer N",
+     "Mercer Island",
+     "Factoria"
+    ],
+    [
+     "Mercer N",
+     "Mercer Island",
+     "Factoria",
+     "Issaquah"
+    ],
+    [
+     "Mercer N",
+     "Mercer Island",
+     "Beacon Hill",
+     "Exit 1"
+    ],
+    [
+     "Mercer N",
+     "Mercer Island",
+     "Beacon Hill",
+     "Exit 1",
+     "Exit 2"
+    ],
+    [
+     "Mercer N",
+     "Mercer Island",
+     "Beacon Hill",
+     "Exit 1",
+     "Exit 2",
+     "Exit 3"
+    ],
+    [
+     "Mercer N",
+     "Mercer Island",
+     "Beacon Hill",
+     "Exit 1",
+     "Exit 2",
+     "Exit 3",
+     "5/520",
+     "Exit 4"
+    ],
+    [
+     "Mercer N",
+     "Mercer Island",
+     "Beacon Hill",
+     "Exit 1",
+     "Exit 2",
+     "Exit 3",
+     "5/520",
+     "Exit 4",
+     "Exit 5"
+    ],
+    [
+     "Mercer N",
+     "Mercer Island",
+     "Beacon Hill",
+     "Exit 1",
+     "Exit 2",
+     "Exit 3",
+     "5/520",
+     "Exit 4",
+     "Exit 5",
+     "Exit 6"
+    ],
+    [
+     "Mercer N",
+     "Mercer Island",
+     "Beacon Hill",
+     "Exit 1",
+     "Exit 2",
+     "Exit 3",
+     "5/520"
+    ],
+    [
+     "Mercer N",
+     "Mercer Island",
+     "Beacon Hill",
+     "Capitol Hill",
+     "Eastlake",
+     "Montlake"
+    ],
+    [
+     "Mercer N",
+     "Mercer Island",
+     "Factoria",
+     "FC"
+    ]
+   ],
+   [
+    [
+     "Mercer S",
+     "Mercer N",
+     "Mercer Island",
+     "Beacon Hill",
+     "Exit 1",
+     "Exit 2",
+     "Downtown",
+     "Queen Anne",
+     "Fremont",
+     "Ballard"
+    ],
+    [
+     "Mercer S",
+     "Mercer N",
+     "Mercer Island",
+     "Beacon Hill",
+     "Exit 1",
+     "Exit 2",
+     "Exit 3",
+     "5/520",
+     "Exit 4",
+     "Exit 5",
+     "Exit 6",
+     "Green Lake"
+    ],
+    [
+     "Mercer S",
+     "Mercer N",
+     "Mercer Island",
+     "Beacon Hill",
+     "Exit 1",
+     "Exit 2",
+     "Downtown",
+     "Queen Anne",
+     "Fremont"
+    ],
+    [
+     "Mercer S",
+     "Mercer N",
+     "Mercer Island",
+     "Beacon Hill",
+     "Exit 1",
+     "Exit 2",
+     "Exit 3",
+     "5/520",
+     "Exit 4",
+     "Exit 5",
+     "U-District"
+    ],
+    [
+     "Mercer S",
+     "Mercer N",
+     "Mercer Island",
+     "Beacon Hill",
+     "Exit 1",
+     "Exit 2",
+     "Downtown",
+     "Queen Anne",
+     "Magnolia"
+    ],
+    [
+     "Mercer S",
+     "Mercer N",
+     "Mercer Island",
+     "Beacon Hill",
+     "Exit 1",
+     "Exit 2",
+     "Downtown",
+     "Queen Anne"
+    ],
+    [
+     "Mercer S",
+     "Mercer N",
+     "Mercer Island",
+     "Beacon Hill",
+     "Capitol Hill"
+    ],
+    [
+     "Mercer S",
+     "Mercer N",
+     "Mercer Island",
+     "Beacon Hill",
+     "Capitol Hill",
+     "Eastlake"
+    ],
+    [
+     "Mercer S",
+     "Mercer N",
+     "Mercer Island",
+     "Beacon Hill",
+     "Exit 1",
+     "Exit 2",
+     "Downtown"
+    ],
+    [
+     "Mercer S",
+     "Mercer N",
+     "Mercer Island",
+     "Beacon Hill"
+    ],
+    [
+     "Mercer S",
+     "Mercer N",
+     "Mercer Island",
+     "Beacon Hill",
+     "Exit 1",
+     "West Seattle"
+    ],
+    [
+     "Mercer S",
+     "Mercer N",
+     "Mercer Island"
+    ],
+    [
+     "Mercer S",
+     "Mercer N"
+    ],
+    [
+     "Mercer S"
+    ],
+    [
+     "Mercer S",
+     "Mercer N",
+     "Mercer Island",
+     "Factoria",
+     "Bellevue",
+     "Medina"
+    ],
+    [
+     "Mercer S",
+     "Mercer N",
+     "Mercer Island",
+     "Factoria",
+     "Bellevue",
+     "Medina",
+     "Kirkland"
+    ],
+    [
+     "Mercer S",
+     "Mercer N",
+     "Mercer Island",
+     "Factoria",
+     "Bellevue",
+     "Redmond"
+    ],
+    [
+     "Mercer S",
+     "Mercer N",
+     "Mercer Island",
+     "Factoria",
+     "Bellevue"
+    ],
+    [
+     "Mercer S",
+     "Mercer N",
+     "Mercer Island",
+     "Factoria"
+    ],
+    [
+     "Mercer S",
+     "Mercer N",
+     "Mercer Island",
+     "Factoria",
+     "Issaquah"
+    ],
+    [
+     "Mercer S",
+     "Mercer N",
+     "Mercer Island",
+     "Beacon Hill",
+     "Exit 1"
+    ],
+    [
+     "Mercer S",
+     "Mercer N",
+     "Mercer Island",
+     "Beacon Hill",
+     "Exit 1",
+     "Exit 2"
+    ],
+    [
+     "Mercer S",
+     "Mercer N",
+     "Mercer Island",
+     "Beacon Hill",
+     "Exit 1",
+     "Exit 2",
+     "Exit 3"
+    ],
+    [
+     "Mercer S",
+     "Mercer N",
+     "Mercer Island",
+     "Beacon Hill",
+     "Exit 1",
+     "Exit 2",
+     "Exit 3",
+     "5/520",
+     "Exit 4"
+    ],
+    [
+     "Mercer S",
+     "Mercer N",
+     "Mercer Island",
+     "Beacon Hill",
+     "Exit 1",
+     "Exit 2",
+     "Exit 3",
+     "5/520",
+     "Exit 4",
+     "Exit 5"
+    ],
+    [
+     "Mercer S",
+     "Mercer N",
+     "Mercer Island",
+     "Beacon Hill",
+     "Exit 1",
+     "Exit 2",
+     "Exit 3",
+     "5/520",
+     "Exit 4",
+     "Exit 5",
+     "Exit 6"
+    ],
+    [
+     "Mercer S",
+     "Mercer N",
+     "Mercer Island",
+     "Beacon Hill",
+     "Exit 1",
+     "Exit 2",
+     "Exit 3",
+     "5/520"
+    ],
+    [
+     "Mercer S",
+     "Mercer N",
+     "Mercer Island",
+     "Beacon Hill",
+     "Capitol Hill",
+     "Eastlake",
+     "Montlake"
+    ],
+    [
+     "Mercer S",
+     "Mercer N",
+     "Mercer Island",
+     "Factoria",
+     "FC"
+    ]
+   ],
+   [
+    [
+     "Medina",
+     "Montlake",
+     "5/520",
+     "Exit 4",
+     "Fremont",
+     "Ballard"
+    ],
+    [
+     "Medina",
+     "Montlake",
+     "5/520",
+     "Exit 4",
+     "Exit 5",
+     "Exit 6",
+     "Green Lake"
+    ],
+    [
+     "Medina",
+     "Montlake",
+     "5/520",
+     "Exit 4",
+     "Fremont"
+    ],
+    [
+     "Medina",
+     "Montlake",
+     "5/520",
+     "Exit 4",
+     "Exit 5",
+     "U-District"
+    ],
+    [
+     "Medina",
+     "Montlake",
+     "5/520",
+     "Exit 4",
+     "Fremont",
+     "Queen Anne",
+     "Magnolia"
+    ],
+    [
+     "Medina",
+     "Montlake",
+     "5/520",
+     "Exit 4",
+     "Fremont",
+     "Queen Anne"
+    ],
+    [
+     "Medina",
+     "Montlake",
+     "Eastlake",
+     "Capitol Hill"
+    ],
+    [
+     "Medina",
+     "Montlake",
+     "Eastlake"
+    ],
+    [
+     "Medina",
+     "Montlake",
+     "Eastlake",
+     "Exit 3",
+     "Exit 2",
+     "Downtown"
+    ],
+    [
+     "Medina",
+     "Bellevue",
+     "Factoria",
+     "Mercer Island",
+     "Beacon Hill"
+    ],
+    [
+     "Medina",
+     "Montlake",
+     "Eastlake",
+     "Exit 3",
+     "Exit 2",
+     "Exit 1",
+     "West Seattle"
+    ],
+    [
+     "Medina",
+     "Bellevue",
+     "Factoria",
+     "Mercer Island"
+    ],
+    [
+     "Medina",
+     "Bellevue",
+     "Factoria",
+     "Mercer Island",
+     "Mercer N"
+    ],
+    [
+     "Medina",
+     "Bellevue",
+     "Factoria",
+     "Mercer Island",
+     "Mercer N",
+     "Mercer S"
+    ],
+    [
+     "Medina"
+    ],
+    [
+     "Medina",
+     "Kirkland"
+    ],
+    [
+     "Medina",
+     "Bellevue",
+     "Redmond"
+    ],
+    [
+     "Medina",
+     "Bellevue"
+    ],
+    [
+     "Medina",
+     "Bellevue",
+     "Factoria"
+    ],
+    [
+     "Medina",
+     "Bellevue",
+     "Factoria",
+     "Issaquah"
+    ],
+    [
+     "Medina",
+     "Montlake",
+     "Eastlake",
+     "Exit 3",
+     "Exit 2",
+     "Exit 1"
+    ],
+    [
+     "Medina",
+     "Montlake",
+     "Eastlake",
+     "Exit 3",
+     "Exit 2"
+    ],
+    [
+     "Medina",
+     "Montlake",
+     "Eastlake",
+     "Exit 3"
+    ],
+    [
+     "Medina",
+     "Montlake",
+     "5/520",
+     "Exit 4"
+    ],
+    [
+     "Medina",
+     "Montlake",
+     "5/520",
+     "Exit 4",
+     "Exit 5"
+    ],
+    [
+     "Medina",
+     "Montlake",
+     "5/520",
+     "Exit 4",
+     "Exit 5",
+     "Exit 6"
+    ],
+    [
+     "Medina",
+     "Montlake",
+     "5/520"
+    ],
+    [
+     "Medina",
+     "Montlake"
+    ],
+    [
+     "Medina",
+     "Bellevue",
+     "FC"
+    ]
+   ],
+   [
+    [
+     "Kirkland",
+     "Medina",
+     "Montlake",
+     "5/520",
+     "Exit 4",
+     "Fremont",
+     "Ballard"
+    ],
+    [
+     "Kirkland",
+     "Medina",
+     "Montlake",
+     "5/520",
+     "Exit 4",
+     "Exit 5",
+     "Exit 6",
+     "Green Lake"
+    ],
+    [
+     "Kirkland",
+     "Medina",
+     "Montlake",
+     "5/520",
+     "Exit 4",
+     "Fremont"
+    ],
+    [
+     "Kirkland",
+     "Medina",
+     "Montlake",
+     "5/520",
+     "Exit 4",
+     "Exit 5",
+     "U-District"
+    ],
+    [
+     "Kirkland",
+     "Medina",
+     "Montlake",
+     "5/520",
+     "Exit 4",
+     "Fremont",
+     "Queen Anne",
+     "Magnolia"
+    ],
+    [
+     "Kirkland",
+     "Medina",
+     "Montlake",
+     "5/520",
+     "Exit 4",
+     "Fremont",
+     "Queen Anne"
+    ],
+    [
+     "Kirkland",
+     "Medina",
+     "Montlake",
+     "Eastlake",
+     "Capitol Hill"
+    ],
+    [
+     "Kirkland",
+     "Medina",
+     "Montlake",
+     "Eastlake"
+    ],
+    [
+     "Kirkland",
+     "Medina",
+     "Montlake",
+     "Eastlake",
+     "Exit 3",
+     "Exit 2",
+     "Downtown"
+    ],
+    [
+     "Kirkland",
+     "Medina",
+     "Bellevue",
+     "Factoria",
+     "Mercer Island",
+     "Beacon Hill"
+    ],
+    [
+     "Kirkland",
+     "Medina",
+     "Montlake",
+     "Eastlake",
+     "Exit 3",
+     "Exit 2",
+     "Exit 1",
+     "West Seattle"
+    ],
+    [
+     "Kirkland",
+     "Medina",
+     "Bellevue",
+     "Factoria",
+     "Mercer Island"
+    ],
+    [
+     "Kirkland",
+     "Medina",
+     "Bellevue",
+     "Factoria",
+     "Mercer Island",
+     "Mercer N"
+    ],
+    [
+     "Kirkland",
+     "Medina",
+     "Bellevue",
+     "Factoria",
+     "Mercer Island",
+     "Mercer N",
+     "Mercer S"
+    ],
+    [
+     "Kirkland",
+     "Medina"
+    ],
+    [
+     "Kirkland"
+    ],
+    [
+     "Kirkland",
+     "Redmond"
+    ],
+    [
+     "Kirkland",
+     "Medina",
+     "Bellevue"
+    ],
+    [
+     "Kirkland",
+     "Medina",
+     "Bellevue",
+     "Factoria"
+    ],
+    [
+     "Kirkland",
+     "Redmond",
+     "Issaquah"
+    ],
+    [
+     "Kirkland",
+     "Medina",
+     "Montlake",
+     "Eastlake",
+     "Exit 3",
+     "Exit 2",
+     "Exit 1"
+    ],
+    [
+     "Kirkland",
+     "Medina",
+     "Montlake",
+     "Eastlake",
+     "Exit 3",
+     "Exit 2"
+    ],
+    [
+     "Kirkland",
+     "Medina",
+     "Montlake",
+     "Eastlake",
+     "Exit 3"
+    ],
+    [
+     "Kirkland",
+     "Medina",
+     "Montlake",
+     "5/520",
+     "Exit 4"
+    ],
+    [
+     "Kirkland",
+     "Medina",
+     "Montlake",
+     "5/520",
+     "Exit 4",
+     "Exit 5"
+    ],
+    [
+     "Kirkland",
+     "Medina",
+     "Montlake",
+     "5/520",
+     "Exit 4",
+     "Exit 5",
+     "Exit 6"
+    ],
+    [
+     "Kirkland",
+     "Medina",
+     "Montlake",
+     "5/520"
+    ],
+    [
+     "Kirkland",
+     "Medina",
+     "Montlake"
+    ],
+    [
+     "Kirkland",
+     "Medina",
+     "Bellevue",
+     "FC"
+    ]
+   ],
+   [
+    [
+     "Redmond",
+     "Bellevue",
+     "Medina",
+     "Montlake",
+     "5/520",
+     "Exit 4",
+     "Fremont",
+     "Ballard"
+    ],
+    [
+     "Redmond",
+     "Bellevue",
+     "Medina",
+     "Montlake",
+     "5/520",
+     "Exit 4",
+     "Exit 5",
+     "Exit 6",
+     "Green Lake"
+    ],
+    [
+     "Redmond",
+     "Bellevue",
+     "Medina",
+     "Montlake",
+     "5/520",
+     "Exit 4",
+     "Fremont"
+    ],
+    [
+     "Redmond",
+     "Bellevue",
+     "Medina",
+     "Montlake",
+     "5/520",
+     "Exit 4",
+     "Exit 5",
+     "U-District"
+    ],
+    [
+     "Redmond",
+     "Bellevue",
+     "Medina",
+     "Montlake",
+     "5/520",
+     "Exit 4",
+     "Fremont",
+     "Queen Anne",
+     "Magnolia"
+    ],
+    [
+     "Redmond",
+     "Bellevue",
+     "Medina",
+     "Montlake",
+     "5/520",
+     "Exit 4",
+     "Fremont",
+     "Queen Anne"
+    ],
+    [
+     "Redmond",
+     "Bellevue",
+     "Factoria",
+     "Mercer Island",
+     "Beacon Hill",
+     "Capitol Hill"
+    ],
+    [
+     "Redmond",
+     "Bellevue",
+     "Medina",
+     "Montlake",
+     "Eastlake"
+    ],
+    [
+     "Redmond",
+     "Bellevue",
+     "Factoria",
+     "Mercer Island",
+     "Beacon Hill",
+     "Exit 1",
+     "Exit 2",
+     "Downtown"
+    ],
+    [
+     "Redmond",
+     "Bellevue",
+     "Factoria",
+     "Mercer Island",
+     "Beacon Hill"
+    ],
+    [
+     "Redmond",
+     "Bellevue",
+     "Factoria",
+     "Mercer Island",
+     "Beacon Hill",
+     "Exit 1",
+     "West Seattle"
+    ],
+    [
+     "Redmond",
+     "Bellevue",
+     "Factoria",
+     "Mercer Island"
+    ],
+    [
+     "Redmond",
+     "Bellevue",
+     "Factoria",
+     "Mercer Island",
+     "Mercer N"
+    ],
+    [
+     "Redmond",
+     "Bellevue",
+     "Factoria",
+     "Mercer Island",
+     "Mercer N",
+     "Mercer S"
+    ],
+    [
+     "Redmond",
+     "Bellevue",
+     "Medina"
+    ],
+    [
+     "Redmond",
+     "Kirkland"
+    ],
+    [
+     "Redmond"
+    ],
+    [
+     "Redmond",
+     "Bellevue"
+    ],
+    [
+     "Redmond",
+     "Bellevue",
+     "Factoria"
+    ],
+    [
+     "Redmond",
+     "Issaquah"
+    ],
+    [
+     "Redmond",
+     "Bellevue",
+     "Factoria",
+     "Mercer Island",
+     "Beacon Hill",
+     "Exit 1"
+    ],
+    [
+     "Redmond",
+     "Bellevue",
+     "Factoria",
+     "Mercer Island",
+     "Beacon Hill",
+     "Exit 1",
+     "Exit 2"
+    ],
+    [
+     "Redmond",
+     "Bellevue",
+     "Medina",
+     "Montlake",
+     "Eastlake",
+     "Exit 3"
+    ],
+    [
+     "Redmond",
+     "Bellevue",
+     "Medina",
+     "Montlake",
+     "5/520",
+     "Exit 4"
+    ],
+    [
+     "Redmond",
+     "Bellevue",
+     "Medina",
+     "Montlake",
+     "5/520",
+     "Exit 4",
+     "Exit 5"
+    ],
+    [
+     "Redmond",
+     "Bellevue",
+     "Medina",
+     "Montlake",
+     "5/520",
+     "Exit 4",
+     "Exit 5",
+     "Exit 6"
+    ],
+    [
+     "Redmond",
+     "Bellevue",
+     "Medina",
+     "Montlake",
+     "5/520"
+    ],
+    [
+     "Redmond",
+     "Bellevue",
+     "Medina",
+     "Montlake"
+    ],
+    [
+     "Redmond",
+     "Bellevue",
+     "FC"
+    ]
+   ],
+   [
+    [
+     "Bellevue",
+     "Medina",
+     "Montlake",
+     "5/520",
+     "Exit 4",
+     "Fremont",
+     "Ballard"
+    ],
+    [
+     "Bellevue",
+     "Medina",
+     "Montlake",
+     "5/520",
+     "Exit 4",
+     "Exit 5",
+     "Exit 6",
+     "Green Lake"
+    ],
+    [
+     "Bellevue",
+     "Medina",
+     "Montlake",
+     "5/520",
+     "Exit 4",
+     "Fremont"
+    ],
+    [
+     "Bellevue",
+     "Medina",
+     "Montlake",
+     "5/520",
+     "Exit 4",
+     "Exit 5",
+     "U-District"
+    ],
+    [
+     "Bellevue",
+     "Medina",
+     "Montlake",
+     "5/520",
+     "Exit 4",
+     "Fremont",
+     "Queen Anne",
+     "Magnolia"
+    ],
+    [
+     "Bellevue",
+     "Medina",
+     "Montlake",
+     "5/520",
+     "Exit 4",
+     "Fremont",
+     "Queen Anne"
+    ],
+    [
+     "Bellevue",
+     "Factoria",
+     "Mercer Island",
+     "Beacon Hill",
+     "Capitol Hill"
+    ],
+    [
+     "Bellevue",
+     "Medina",
+     "Montlake",
+     "Eastlake"
+    ],
+    [
+     "Bellevue",
+     "Factoria",
+     "Mercer Island",
+     "Beacon Hill",
+     "Exit 1",
+     "Exit 2",
+     "Downtown"
+    ],
+    [
+     "Bellevue",
+     "Factoria",
+     "Mercer Island",
+     "Beacon Hill"
+    ],
+    [
+     "Bellevue",
+     "Factoria",
+     "Mercer Island",
+     "Beacon Hill",
+     "Exit 1",
+     "West Seattle"
+    ],
+    [
+     "Bellevue",
+     "Factoria",
+     "Mercer Island"
+    ],
+    [
+     "Bellevue",
+     "Factoria",
+     "Mercer Island",
+     "Mercer N"
+    ],
+    [
+     "Bellevue",
+     "Factoria",
+     "Mercer Island",
+     "Mercer N",
+     "Mercer S"
+    ],
+    [
+     "Bellevue",
+     "Medina"
+    ],
+    [
+     "Bellevue",
+     "Medina",
+     "Kirkland"
+    ],
+    [
+     "Bellevue",
+     "Redmond"
+    ],
+    [
+     "Bellevue"
+    ],
+    [
+     "Bellevue",
+     "Factoria"
+    ],
+    [
+     "Bellevue",
+     "Factoria",
+     "Issaquah"
+    ],
+    [
+     "Bellevue",
+     "Factoria",
+     "Mercer Island",
+     "Beacon Hill",
+     "Exit 1"
+    ],
+    [
+     "Bellevue",
+     "Factoria",
+     "Mercer Island",
+     "Beacon Hill",
+     "Exit 1",
+     "Exit 2"
+    ],
+    [
+     "Bellevue",
+     "Medina",
+     "Montlake",
+     "Eastlake",
+     "Exit 3"
+    ],
+    [
+     "Bellevue",
+     "Medina",
+     "Montlake",
+     "5/520",
+     "Exit 4"
+    ],
+    [
+     "Bellevue",
+     "Medina",
+     "Montlake",
+     "5/520",
+     "Exit 4",
+     "Exit 5"
+    ],
+    [
+     "Bellevue",
+     "Medina",
+     "Montlake",
+     "5/520",
+     "Exit 4",
+     "Exit 5",
+     "Exit 6"
+    ],
+    [
+     "Bellevue",
+     "Medina",
+     "Montlake",
+     "5/520"
+    ],
+    [
+     "Bellevue",
+     "Medina",
+     "Montlake"
+    ],
+    [
+     "Bellevue",
+     "FC"
+    ]
+   ],
+   [
+    [
+     "Factoria",
+     "Mercer Island",
+     "Beacon Hill",
+     "Exit 1",
+     "Exit 2",
+     "Downtown",
+     "Queen Anne",
+     "Fremont",
+     "Ballard"
+    ],
+    [
+     "Factoria",
+     "Mercer Island",
+     "Beacon Hill",
+     "Exit 1",
+     "Exit 2",
+     "Exit 3",
+     "5/520",
+     "Exit 4",
+     "Exit 5",
+     "Exit 6",
+     "Green Lake"
+    ],
+    [
+     "Factoria",
+     "Mercer Island",
+     "Beacon Hill",
+     "Exit 1",
+     "Exit 2",
+     "Downtown",
+     "Queen Anne",
+     "Fremont"
+    ],
+    [
+     "Factoria",
+     "Mercer Island",
+     "Beacon Hill",
+     "Exit 1",
+     "Exit 2",
+     "Exit 3",
+     "5/520",
+     "Exit 4",
+     "Exit 5",
+     "U-District"
+    ],
+    [
+     "Factoria",
+     "Mercer Island",
+     "Beacon Hill",
+     "Exit 1",
+     "Exit 2",
+     "Downtown",
+     "Queen Anne",
+     "Magnolia"
+    ],
+    [
+     "Factoria",
+     "Mercer Island",
+     "Beacon Hill",
+     "Exit 1",
+     "Exit 2",
+     "Downtown",
+     "Queen Anne"
+    ],
+    [
+     "Factoria",
+     "Mercer Island",
+     "Beacon Hill",
+     "Capitol Hill"
+    ],
+    [
+     "Factoria",
+     "Mercer Island",
+     "Beacon Hill",
+     "Capitol Hill",
+     "Eastlake"
+    ],
+    [
+     "Factoria",
+     "Mercer Island",
+     "Beacon Hill",
+     "Exit 1",
+     "Exit 2",
+     "Downtown"
+    ],
+    [
+     "Factoria",
+     "Mercer Island",
+     "Beacon Hill"
+    ],
+    [
+     "Factoria",
+     "Mercer Island",
+     "Beacon Hill",
+     "Exit 1",
+     "West Seattle"
+    ],
+    [
+     "Factoria",
+     "Mercer Island"
+    ],
+    [
+     "Factoria",
+     "Mercer Island",
+     "Mercer N"
+    ],
+    [
+     "Factoria",
+     "Mercer Island",
+     "Mercer N",
+     "Mercer S"
+    ],
+    [
+     "Factoria",
+     "Bellevue",
+     "Medina"
+    ],
+    [
+     "Factoria",
+     "Bellevue",
+     "Medina",
+     "Kirkland"
+    ],
+    [
+     "Factoria",
+     "Bellevue",
+     "Redmond"
+    ],
+    [
+     "Factoria",
+     "Bellevue"
+    ],
+    [
+     "Factoria"
+    ],
+    [
+     "Factoria",
+     "Issaquah"
+    ],
+    [
+     "Factoria",
+     "Mercer Island",
+     "Beacon Hill",
+     "Exit 1"
+    ],
+    [
+     "Factoria",
+     "Mercer Island",
+     "Beacon Hill",
+     "Exit 1",
+     "Exit 2"
+    ],
+    [
+     "Factoria",
+     "Mercer Island",
+     "Beacon Hill",
+     "Exit 1",
+     "Exit 2",
+     "Exit 3"
+    ],
+    [
+     "Factoria",
+     "Mercer Island",
+     "Beacon Hill",
+     "Exit 1",
+     "Exit 2",
+     "Exit 3",
+     "5/520",
+     "Exit 4"
+    ],
+    [
+     "Factoria",
+     "Mercer Island",
+     "Beacon Hill",
+     "Exit 1",
+     "Exit 2",
+     "Exit 3",
+     "5/520",
+     "Exit 4",
+     "Exit 5"
+    ],
+    [
+     "Factoria",
+     "Mercer Island",
+     "Beacon Hill",
+     "Exit 1",
+     "Exit 2",
+     "Exit 3",
+     "5/520",
+     "Exit 4",
+     "Exit 5",
+     "Exit 6"
+    ],
+    [
+     "Factoria",
+     "Mercer Island",
+     "Beacon Hill",
+     "Exit 1",
+     "Exit 2",
+     "Exit 3",
+     "5/520"
+    ],
+    [
+     "Factoria",
+     "Bellevue",
+     "Medina",
+     "Montlake"
+    ],
+    [
+     "Factoria",
+     "FC"
+    ]
+   ],
+   [
+    [
+     "Issaquah",
+     "Factoria",
+     "Mercer Island",
+     "Beacon Hill",
+     "Exit 1",
+     "Exit 2",
+     "Downtown",
+     "Queen Anne",
+     "Fremont",
+     "Ballard"
+    ],
+    [
+     "Issaquah",
+     "Factoria",
+     "Mercer Island",
+     "Beacon Hill",
+     "Exit 1",
+     "Exit 2",
+     "Exit 3",
+     "5/520",
+     "Exit 4",
+     "Exit 5",
+     "Exit 6",
+     "Green Lake"
+    ],
+    [
+     "Issaquah",
+     "Factoria",
+     "Mercer Island",
+     "Beacon Hill",
+     "Exit 1",
+     "Exit 2",
+     "Downtown",
+     "Queen Anne",
+     "Fremont"
+    ],
+    [
+     "Issaquah",
+     "Factoria",
+     "Mercer Island",
+     "Beacon Hill",
+     "Exit 1",
+     "Exit 2",
+     "Exit 3",
+     "5/520",
+     "Exit 4",
+     "Exit 5",
+     "U-District"
+    ],
+    [
+     "Issaquah",
+     "Factoria",
+     "Mercer Island",
+     "Beacon Hill",
+     "Exit 1",
+     "Exit 2",
+     "Downtown",
+     "Queen Anne",
+     "Magnolia"
+    ],
+    [
+     "Issaquah",
+     "Factoria",
+     "Mercer Island",
+     "Beacon Hill",
+     "Exit 1",
+     "Exit 2",
+     "Downtown",
+     "Queen Anne"
+    ],
+    [
+     "Issaquah",
+     "Factoria",
+     "Mercer Island",
+     "Beacon Hill",
+     "Capitol Hill"
+    ],
+    [
+     "Issaquah",
+     "Factoria",
+     "Mercer Island",
+     "Beacon Hill",
+     "Capitol Hill",
+     "Eastlake"
+    ],
+    [
+     "Issaquah",
+     "Factoria",
+     "Mercer Island",
+     "Beacon Hill",
+     "Exit 1",
+     "Exit 2",
+     "Downtown"
+    ],
+    [
+     "Issaquah",
+     "Factoria",
+     "Mercer Island",
+     "Beacon Hill"
+    ],
+    [
+     "Issaquah",
+     "Factoria",
+     "Mercer Island",
+     "Beacon Hill",
+     "Exit 1",
+     "West Seattle"
+    ],
+    [
+     "Issaquah",
+     "Factoria",
+     "Mercer Island"
+    ],
+    [
+     "Issaquah",
+     "Factoria",
+     "Mercer Island",
+     "Mercer N"
+    ],
+    [
+     "Issaquah",
+     "Factoria",
+     "Mercer Island",
+     "Mercer N",
+     "Mercer S"
+    ],
+    [
+     "Issaquah",
+     "Factoria",
+     "Bellevue",
+     "Medina"
+    ],
+    [
+     "Issaquah",
+     "Redmond",
+     "Kirkland"
+    ],
+    [
+     "Issaquah",
+     "Redmond"
+    ],
+    [
+     "Issaquah",
+     "Factoria",
+     "Bellevue"
+    ],
+    [
+     "Issaquah",
+     "Factoria"
+    ],
+    [
+     "Issaquah"
+    ],
+    [
+     "Issaquah",
+     "Factoria",
+     "Mercer Island",
+     "Beacon Hill",
+     "Exit 1"
+    ],
+    [
+     "Issaquah",
+     "Factoria",
+     "Mercer Island",
+     "Beacon Hill",
+     "Exit 1",
+     "Exit 2"
+    ],
+    [
+     "Issaquah",
+     "Factoria",
+     "Mercer Island",
+     "Beacon Hill",
+     "Exit 1",
+     "Exit 2",
+     "Exit 3"
+    ],
+    [
+     "Issaquah",
+     "Factoria",
+     "Mercer Island",
+     "Beacon Hill",
+     "Exit 1",
+     "Exit 2",
+     "Exit 3",
+     "5/520",
+     "Exit 4"
+    ],
+    [
+     "Issaquah",
+     "Factoria",
+     "Mercer Island",
+     "Beacon Hill",
+     "Exit 1",
+     "Exit 2",
+     "Exit 3",
+     "5/520",
+     "Exit 4",
+     "Exit 5"
+    ],
+    [
+     "Issaquah",
+     "Factoria",
+     "Mercer Island",
+     "Beacon Hill",
+     "Exit 1",
+     "Exit 2",
+     "Exit 3",
+     "5/520",
+     "Exit 4",
+     "Exit 5",
+     "Exit 6"
+    ],
+    [
+     "Issaquah",
+     "Factoria",
+     "Mercer Island",
+     "Beacon Hill",
+     "Exit 1",
+     "Exit 2",
+     "Exit 3",
+     "5/520"
+    ],
+    [
+     "Issaquah",
+     "Factoria",
+     "Bellevue",
+     "Medina",
+     "Montlake"
+    ],
+    [
+     "Issaquah",
+     "Factoria",
+     "FC"
+    ]
+   ],
+   [
+    [
+     "Exit 1",
+     "Exit 2",
+     "Downtown",
+     "Queen Anne",
+     "Fremont",
+     "Ballard"
+    ],
+    [
+     "Exit 1",
+     "Exit 2",
+     "Exit 3",
+     "5/520",
+     "Exit 4",
+     "Exit 5",
+     "Exit 6",
+     "Green Lake"
+    ],
+    [
+     "Exit 1",
+     "Exit 2",
+     "Downtown",
+     "Queen Anne",
+     "Fremont"
+    ],
+    [
+     "Exit 1",
+     "Exit 2",
+     "Exit 3",
+     "5/520",
+     "Exit 4",
+     "Exit 5",
+     "U-District"
+    ],
+    [
+     "Exit 1",
+     "Exit 2",
+     "Downtown",
+     "Queen Anne",
+     "Magnolia"
+    ],
+    [
+     "Exit 1",
+     "Exit 2",
+     "Downtown",
+     "Queen Anne"
+    ],
+    [
+     "Exit 1",
+     "Beacon Hill",
+     "Capitol Hill"
+    ],
+    [
+     "Exit 1",
+     "Exit 2",
+     "Exit 3",
+     "Eastlake"
+    ],
+    [
+     "Exit 1",
+     "Exit 2",
+     "Downtown"
+    ],
+    [
+     "Exit 1",
+     "Beacon Hill"
+    ],
+    [
+     "Exit 1",
+     "West Seattle"
+    ],
+    [
+     "Exit 1",
+     "Beacon Hill",
+     "Mercer Island"
+    ],
+    [
+     "Exit 1",
+     "Beacon Hill",
+     "Mercer Island",
+     "Mercer N"
+    ],
+    [
+     "Exit 1",
+     "Beacon Hill",
+     "Mercer Island",
+     "Mercer N",
+     "Mercer S"
+    ],
+    [
+     "Exit 1",
+     "Exit 2",
+     "Exit 3",
+     "Eastlake",
+     "Montlake",
+     "Medina"
+    ],
+    [
+     "Exit 1",
+     "Exit 2",
+     "Exit 3",
+     "Eastlake",
+     "Montlake",
+     "Medina",
+     "Kirkland"
+    ],
+    [
+     "Exit 1",
+     "Beacon Hill",
+     "Mercer Island",
+     "Factoria",
+     "Bellevue",
+     "Redmond"
+    ],
+    [
+     "Exit 1",
+     "Beacon Hill",
+     "Mercer Island",
+     "Factoria",
+     "Bellevue"
+    ],
+    [
+     "Exit 1",
+     "Beacon Hill",
+     "Mercer Island",
+     "Factoria"
+    ],
+    [
+     "Exit 1",
+     "Beacon Hill",
+     "Mercer Island",
+     "Factoria",
+     "Issaquah"
+    ],
+    [
+     "Exit 1"
+    ],
+    [
+     "Exit 1",
+     "Exit 2"
+    ],
+    [
+     "Exit 1",
+     "Exit 2",
+     "Exit 3"
+    ],
+    [
+     "Exit 1",
+     "Exit 2",
+     "Exit 3",
+     "5/520",
+     "Exit 4"
+    ],
+    [
+     "Exit 1",
+     "Exit 2",
+     "Exit 3",
+     "5/520",
+     "Exit 4",
+     "Exit 5"
+    ],
+    [
+     "Exit 1",
+     "Exit 2",
+     "Exit 3",
+     "5/520",
+     "Exit 4",
+     "Exit 5",
+     "Exit 6"
+    ],
+    [
+     "Exit 1",
+     "Exit 2",
+     "Exit 3",
+     "5/520"
+    ],
+    [
+     "Exit 1",
+     "Exit 2",
+     "Exit 3",
+     "Eastlake",
+     "Montlake"
+    ],
+    [
+     "Exit 1",
+     "Beacon Hill",
+     "Mercer Island",
+     "Factoria",
+     "FC"
+    ]
+   ],
+   [
+    [
+     "Exit 2",
+     "Downtown",
+     "Queen Anne",
+     "Fremont",
+     "Ballard"
+    ],
+    [
+     "Exit 2",
+     "Exit 3",
+     "5/520",
+     "Exit 4",
+     "Exit 5",
+     "Exit 6",
+     "Green Lake"
+    ],
+    [
+     "Exit 2",
+     "Downtown",
+     "Queen Anne",
+     "Fremont"
+    ],
+    [
+     "Exit 2",
+     "Exit 3",
+     "5/520",
+     "Exit 4",
+     "Exit 5",
+     "U-District"
+    ],
+    [
+     "Exit 2",
+     "Downtown",
+     "Queen Anne",
+     "Magnolia"
+    ],
+    [
+     "Exit 2",
+     "Downtown",
+     "Queen Anne"
+    ],
+    [
+     "Exit 2",
+     "Capitol Hill"
+    ],
+    [
+     "Exit 2",
+     "Exit 3",
+     "Eastlake"
+    ],
+    [
+     "Exit 2",
+     "Downtown"
+    ],
+    [
+     "Exit 2",
+     "Capitol Hill",
+     "Beacon Hill"
+    ],
+    [
+     "Exit 2",
+     "Exit 1",
+     "West Seattle"
+    ],
+    [
+     "Exit 2",
+     "Capitol Hill",
+     "Beacon Hill",
+     "Mercer Island"
+    ],
+    [
+     "Exit 2",
+     "Capitol Hill",
+     "Beacon Hill",
+     "Mercer Island",
+     "Mercer N"
+    ],
+    [
+     "Exit 2",
+     "Capitol Hill",
+     "Beacon Hill",
+     "Mercer Island",
+     "Mercer N",
+     "Mercer S"
+    ],
+    [
+     "Exit 2",
+     "Exit 3",
+     "Eastlake",
+     "Montlake",
+     "Medina"
+    ],
+    [
+     "Exit 2",
+     "Exit 3",
+     "Eastlake",
+     "Montlake",
+     "Medina",
+     "Kirkland"
+    ],
+    [
+     "Exit 2",
+     "Capitol Hill",
+     "Beacon Hill",
+     "Mercer Island",
+     "Factoria",
+     "Bellevue",
+     "Redmond"
+    ],
+    [
+     "Exit 2",
+     "Capitol Hill",
+     "Beacon Hill",
+     "Mercer Island",
+     "Factoria",
+     "Bellevue"
+    ],
+    [
+     "Exit 2",
+     "Capitol Hill",
+     "Beacon Hill",
+     "Mercer Island",
+     "Factoria"
+    ],
+    [
+     "Exit 2",
+     "Capitol Hill",
+     "Beacon Hill",
+     "Mercer Island",
+     "Factoria",
+     "Issaquah"
+    ],
+    [
+     "Exit 2",
+     "Exit 1"
+    ],
+    [
+     "Exit 2"
+    ],
+    [
+     "Exit 2",
+     "Exit 3"
+    ],
+    [
+     "Exit 2",
+     "Exit 3",
+     "5/520",
+     "Exit 4"
+    ],
+    [
+     "Exit 2",
+     "Exit 3",
+     "5/520",
+     "Exit 4",
+     "Exit 5"
+    ],
+    [
+     "Exit 2",
+     "Exit 3",
+     "5/520",
+     "Exit 4",
+     "Exit 5",
+     "Exit 6"
+    ],
+    [
+     "Exit 2",
+     "Exit 3",
+     "5/520"
+    ],
+    [
+     "Exit 2",
+     "Exit 3",
+     "Eastlake",
+     "Montlake"
+    ],
+    [
+     "Exit 2",
+     "Capitol Hill",
+     "Beacon Hill",
+     "Mercer Island",
+     "Factoria",
+     "FC"
+    ]
+   ],
+   [
+    [
+     "Exit 3",
+     "5/520",
+     "Exit 4",
+     "Fremont",
+     "Ballard"
+    ],
+    [
+     "Exit 3",
+     "5/520",
+     "Exit 4",
+     "Exit 5",
+     "Exit 6",
+     "Green Lake"
+    ],
+    [
+     "Exit 3",
+     "5/520",
+     "Exit 4",
+     "Fremont"
+    ],
+    [
+     "Exit 3",
+     "5/520",
+     "Exit 4",
+     "Exit 5",
+     "U-District"
+    ],
+    [
+     "Exit 3",
+     "5/520",
+     "Exit 4",
+     "Fremont",
+     "Queen Anne",
+     "Magnolia"
+    ],
+    [
+     "Exit 3",
+     "5/520",
+     "Exit 4",
+     "Fremont",
+     "Queen Anne"
+    ],
+    [
+     "Exit 3",
+     "Exit 2",
+     "Capitol Hill"
+    ],
+    [
+     "Exit 3",
+     "Eastlake"
+    ],
+    [
+     "Exit 3",
+     "Exit 2",
+     "Downtown"
+    ],
+    [
+     "Exit 3",
+     "Exit 2",
+     "Capitol Hill",
+     "Beacon Hill"
+    ],
+    [
+     "Exit 3",
+     "Exit 2",
+     "Exit 1",
+     "West Seattle"
+    ],
+    [
+     "Exit 3",
+     "Exit 2",
+     "Capitol Hill",
+     "Beacon Hill",
+     "Mercer Island"
+    ],
+    [
+     "Exit 3",
+     "Exit 2",
+     "Capitol Hill",
+     "Beacon Hill",
+     "Mercer Island",
+     "Mercer N"
+    ],
+    [
+     "Exit 3",
+     "Exit 2",
+     "Capitol Hill",
+     "Beacon Hill",
+     "Mercer Island",
+     "Mercer N",
+     "Mercer S"
+    ],
+    [
+     "Exit 3",
+     "Eastlake",
+     "Montlake",
+     "Medina"
+    ],
+    [
+     "Exit 3",
+     "Eastlake",
+     "Montlake",
+     "Medina",
+     "Kirkland"
+    ],
+    [
+     "Exit 3",
+     "Eastlake",
+     "Montlake",
+     "Medina",
+     "Bellevue",
+     "Redmond"
+    ],
+    [
+     "Exit 3",
+     "Eastlake",
+     "Montlake",
+     "Medina",
+     "Bellevue"
+    ],
+    [
+     "Exit 3",
+     "Exit 2",
+     "Capitol Hill",
+     "Beacon Hill",
+     "Mercer Island",
+     "Factoria"
+    ],
+    [
+     "Exit 3",
+     "Exit 2",
+     "Capitol Hill",
+     "Beacon Hill",
+     "Mercer Island",
+     "Factoria",
+     "Issaquah"
+    ],
+    [
+     "Exit 3",
+     "Exit 2",
+     "Exit 1"
+    ],
+    [
+     "Exit 3",
+     "Exit 2"
+    ],
+    [
+     "Exit 3"
+    ],
+    [
+     "Exit 3",
+     "5/520",
+     "Exit 4"
+    ],
+    [
+     "Exit 3",
+     "5/520",
+     "Exit 4",
+     "Exit 5"
+    ],
+    [
+     "Exit 3",
+     "5/520",
+     "Exit 4",
+     "Exit 5",
+     "Exit 6"
+    ],
+    [
+     "Exit 3",
+     "5/520"
+    ],
+    [
+     "Exit 3",
+     "Eastlake",
+     "Montlake"
+    ],
+    [
+     "Exit 3",
+     "Eastlake",
+     "Montlake",
+     "Medina",
+     "Bellevue",
+     "FC"
+    ]
+   ],
+   [
+    [
+     "Exit 4",
+     "Fremont",
+     "Ballard"
+    ],
+    [
+     "Exit 4",
+     "Exit 5",
+     "Exit 6",
+     "Green Lake"
+    ],
+    [
+     "Exit 4",
+     "Fremont"
+    ],
+    [
+     "Exit 4",
+     "Exit 5",
+     "U-District"
+    ],
+    [
+     "Exit 4",
+     "Fremont",
+     "Queen Anne",
+     "Magnolia"
+    ],
+    [
+     "Exit 4",
+     "Fremont",
+     "Queen Anne"
+    ],
+    [
+     "Exit 4",
+     "5/520",
+     "Exit 3",
+     "Exit 2",
+     "Capitol Hill"
+    ],
+    [
+     "Exit 4",
+     "5/520",
+     "Exit 3",
+     "Eastlake"
+    ],
+    [
+     "Exit 4",
+     "Fremont",
+     "Queen Anne",
+     "Downtown"
+    ],
+    [
+     "Exit 4",
+     "5/520",
+     "Exit 3",
+     "Exit 2",
+     "Capitol Hill",
+     "Beacon Hill"
+    ],
+    [
+     "Exit 4",
+     "5/520",
+     "Exit 3",
+     "Exit 2",
+     "Exit 1",
+     "West Seattle"
+    ],
+    [
+     "Exit 4",
+     "5/520",
+     "Exit 3",
+     "Exit 2",
+     "Capitol Hill",
+     "Beacon Hill",
+     "Mercer Island"
+    ],
+    [
+     "Exit 4",
+     "5/520",
+     "Exit 3",
+     "Exit 2",
+     "Capitol Hill",
+     "Beacon Hill",
+     "Mercer Island",
+     "Mercer N"
+    ],
+    [
+     "Exit 4",
+     "5/520",
+     "Exit 3",
+     "Exit 2",
+     "Capitol Hill",
+     "Beacon Hill",
+     "Mercer Island",
+     "Mercer N",
+     "Mercer S"
+    ],
+    [
+     "Exit 4",
+     "5/520",
+     "Montlake",
+     "Medina"
+    ],
+    [
+     "Exit 4",
+     "5/520",
+     "Montlake",
+     "Medina",
+     "Kirkland"
+    ],
+    [
+     "Exit 4",
+     "5/520",
+     "Montlake",
+     "Medina",
+     "Bellevue",
+     "Redmond"
+    ],
+    [
+     "Exit 4",
+     "5/520",
+     "Montlake",
+     "Medina",
+     "Bellevue"
+    ],
+    [
+     "Exit 4",
+     "5/520",
+     "Montlake",
+     "Medina",
+     "Bellevue",
+     "Factoria"
+    ],
+    [
+     "Exit 4",
+     "5/520",
+     "Montlake",
+     "Medina",
+     "Bellevue",
+     "Factoria",
+     "Issaquah"
+    ],
+    [
+     "Exit 4",
+     "5/520",
+     "Exit 3",
+     "Exit 2",
+     "Exit 1"
+    ],
+    [
+     "Exit 4",
+     "5/520",
+     "Exit 3",
+     "Exit 2"
+    ],
+    [
+     "Exit 4",
+     "5/520",
+     "Exit 3"
+    ],
+    [
+     "Exit 4"
+    ],
+    [
+     "Exit 4",
+     "Exit 5"
+    ],
+    [
+     "Exit 4",
+     "Exit 5",
+     "Exit 6"
+    ],
+    [
+     "Exit 4",
+     "5/520"
+    ],
+    [
+     "Exit 4",
+     "5/520",
+     "Montlake"
+    ],
+    [
+     "Exit 4",
+     "5/520",
+     "Montlake",
+     "Medina",
+     "Bellevue",
+     "FC"
+    ]
+   ],
+   [
+    [
+     "Exit 5",
+     "Exit 6",
+     "Green Lake",
+     "Ballard"
+    ],
+    [
+     "Exit 5",
+     "Exit 6",
+     "Green Lake"
+    ],
+    [
+     "Exit 5",
+     "Exit 4",
+     "Fremont"
+    ],
+    [
+     "Exit 5",
+     "U-District"
+    ],
+    [
+     "Exit 5",
+     "Exit 4",
+     "Fremont",
+     "Queen Anne",
+     "Magnolia"
+    ],
+    [
+     "Exit 5",
+     "Exit 4",
+     "Fremont",
+     "Queen Anne"
+    ],
+    [
+     "Exit 5",
+     "Exit 4",
+     "5/520",
+     "Exit 3",
+     "Exit 2",
+     "Capitol Hill"
+    ],
+    [
+     "Exit 5",
+     "Exit 4",
+     "5/520",
+     "Exit 3",
+     "Eastlake"
+    ],
+    [
+     "Exit 5",
+     "Exit 4",
+     "Fremont",
+     "Queen Anne",
+     "Downtown"
+    ],
+    [
+     "Exit 5",
+     "Exit 4",
+     "5/520",
+     "Exit 3",
+     "Exit 2",
+     "Capitol Hill",
+     "Beacon Hill"
+    ],
+    [
+     "Exit 5",
+     "Exit 4",
+     "5/520",
+     "Exit 3",
+     "Exit 2",
+     "Exit 1",
+     "West Seattle"
+    ],
+    [
+     "Exit 5",
+     "Exit 4",
+     "5/520",
+     "Exit 3",
+     "Exit 2",
+     "Capitol Hill",
+     "Beacon Hill",
+     "Mercer Island"
+    ],
+    [
+     "Exit 5",
+     "Exit 4",
+     "5/520",
+     "Exit 3",
+     "Exit 2",
+     "Capitol Hill",
+     "Beacon Hill",
+     "Mercer Island",
+     "Mercer N"
+    ],
+    [
+     "Exit 5",
+     "Exit 4",
+     "5/520",
+     "Exit 3",
+     "Exit 2",
+     "Capitol Hill",
+     "Beacon Hill",
+     "Mercer Island",
+     "Mercer N",
+     "Mercer S"
+    ],
+    [
+     "Exit 5",
+     "Exit 4",
+     "5/520",
+     "Montlake",
+     "Medina"
+    ],
+    [
+     "Exit 5",
+     "Exit 4",
+     "5/520",
+     "Montlake",
+     "Medina",
+     "Kirkland"
+    ],
+    [
+     "Exit 5",
+     "Exit 4",
+     "5/520",
+     "Montlake",
+     "Medina",
+     "Bellevue",
+     "Redmond"
+    ],
+    [
+     "Exit 5",
+     "Exit 4",
+     "5/520",
+     "Montlake",
+     "Medina",
+     "Bellevue"
+    ],
+    [
+     "Exit 5",
+     "Exit 4",
+     "5/520",
+     "Montlake",
+     "Medina",
+     "Bellevue",
+     "Factoria"
+    ],
+    [
+     "Exit 5",
+     "Exit 4",
+     "5/520",
+     "Montlake",
+     "Medina",
+     "Bellevue",
+     "Factoria",
+     "Issaquah"
+    ],
+    [
+     "Exit 5",
+     "Exit 4",
+     "5/520",
+     "Exit 3",
+     "Exit 2",
+     "Exit 1"
+    ],
+    [
+     "Exit 5",
+     "Exit 4",
+     "5/520",
+     "Exit 3",
+     "Exit 2"
+    ],
+    [
+     "Exit 5",
+     "Exit 4",
+     "5/520",
+     "Exit 3"
+    ],
+    [
+     "Exit 5",
+     "Exit 4"
+    ],
+    [
+     "Exit 5"
+    ],
+    [
+     "Exit 5",
+     "Exit 6"
+    ],
+    [
+     "Exit 5",
+     "Exit 4",
+     "5/520"
+    ],
+    [
+     "Exit 5",
+     "Exit 4",
+     "5/520",
+     "Montlake"
+    ],
+    [
+     "Exit 5",
+     "Exit 4",
+     "5/520",
+     "Montlake",
+     "Medina",
+     "Bellevue",
+     "FC"
+    ]
+   ],
+   [
+    [
+     "Exit 6",
+     "Green Lake",
+     "Ballard"
+    ],
+    [
+     "Exit 6",
+     "Green Lake"
+    ],
+    [
+     "Exit 6",
+     "Exit 5",
+     "Exit 4",
+     "Fremont"
+    ],
+    [
+     "Exit 6",
+     "Exit 5",
+     "U-District"
+    ],
+    [
+     "Exit 6",
+     "Green Lake",
+     "Ballard",
+     "Magnolia"
+    ],
+    [
+     "Exit 6",
+     "Exit 5",
+     "Exit 4",
+     "Fremont",
+     "Queen Anne"
+    ],
+    [
+     "Exit 6",
+     "Exit 5",
+     "Exit 4",
+     "5/520",
+     "Exit 3",
+     "Exit 2",
+     "Capitol Hill"
+    ],
+    [
+     "Exit 6",
+     "Exit 5",
+     "Exit 4",
+     "5/520",
+     "Exit 3",
+     "Eastlake"
+    ],
+    [
+     "Exit 6",
+     "Exit 5",
+     "Exit 4",
+     "Fremont",
+     "Queen Anne",
+     "Downtown"
+    ],
+    [
+     "Exit 6",
+     "Exit 5",
+     "Exit 4",
+     "5/520",
+     "Exit 3",
+     "Exit 2",
+     "Capitol Hill",
+     "Beacon Hill"
+    ],
+    [
+     "Exit 6",
+     "Exit 5",
+     "Exit 4",
+     "5/520",
+     "Exit 3",
+     "Exit 2",
+     "Exit 1",
+     "West Seattle"
+    ],
+    [
+     "Exit 6",
+     "Exit 5",
+     "Exit 4",
+     "5/520",
+     "Exit 3",
+     "Exit 2",
+     "Capitol Hill",
+     "Beacon Hill",
+     "Mercer Island"
+    ],
+    [
+     "Exit 6",
+     "Exit 5",
+     "Exit 4",
+     "5/520",
+     "Exit 3",
+     "Exit 2",
+     "Capitol Hill",
+     "Beacon Hill",
+     "Mercer Island",
+     "Mercer N"
+    ],
+    [
+     "Exit 6",
+     "Exit 5",
+     "Exit 4",
+     "5/520",
+     "Exit 3",
+     "Exit 2",
+     "Capitol Hill",
+     "Beacon Hill",
+     "Mercer Island",
+     "Mercer N",
+     "Mercer S"
+    ],
+    [
+     "Exit 6",
+     "Exit 5",
+     "Exit 4",
+     "5/520",
+     "Montlake",
+     "Medina"
+    ],
+    [
+     "Exit 6",
+     "Exit 5",
+     "Exit 4",
+     "5/520",
+     "Montlake",
+     "Medina",
+     "Kirkland"
+    ],
+    [
+     "Exit 6",
+     "Exit 5",
+     "Exit 4",
+     "5/520",
+     "Montlake",
+     "Medina",
+     "Bellevue",
+     "Redmond"
+    ],
+    [
+     "Exit 6",
+     "Exit 5",
+     "Exit 4",
+     "5/520",
+     "Montlake",
+     "Medina",
+     "Bellevue"
+    ],
+    [
+     "Exit 6",
+     "Exit 5",
+     "Exit 4",
+     "5/520",
+     "Montlake",
+     "Medina",
+     "Bellevue",
+     "Factoria"
+    ],
+    [
+     "Exit 6",
+     "Exit 5",
+     "Exit 4",
+     "5/520",
+     "Montlake",
+     "Medina",
+     "Bellevue",
+     "Factoria",
+     "Issaquah"
+    ],
+    [
+     "Exit 6",
+     "Exit 5",
+     "Exit 4",
+     "5/520",
+     "Exit 3",
+     "Exit 2",
+     "Exit 1"
+    ],
+    [
+     "Exit 6",
+     "Exit 5",
+     "Exit 4",
+     "5/520",
+     "Exit 3",
+     "Exit 2"
+    ],
+    [
+     "Exit 6",
+     "Exit 5",
+     "Exit 4",
+     "5/520",
+     "Exit 3"
+    ],
+    [
+     "Exit 6",
+     "Exit 5",
+     "Exit 4"
+    ],
+    [
+     "Exit 6",
+     "Exit 5"
+    ],
+    [
+     "Exit 6"
+    ],
+    [
+     "Exit 6",
+     "Exit 5",
+     "Exit 4",
+     "5/520"
+    ],
+    [
+     "Exit 6",
+     "Exit 5",
+     "Exit 4",
+     "5/520",
+     "Montlake"
+    ],
+    [
+     "Exit 6",
+     "Exit 5",
+     "Exit 4",
+     "5/520",
+     "Montlake",
+     "Medina",
+     "Bellevue",
+     "FC"
+    ]
+   ],
+   [
+    [
+     "5/520",
+     "Exit 4",
+     "Fremont",
+     "Ballard"
+    ],
+    [
+     "5/520",
+     "Exit 4",
+     "Exit 5",
+     "Exit 6",
+     "Green Lake"
+    ],
+    [
+     "5/520",
+     "Exit 4",
+     "Fremont"
+    ],
+    [
+     "5/520",
+     "Exit 4",
+     "Exit 5",
+     "U-District"
+    ],
+    [
+     "5/520",
+     "Exit 4",
+     "Fremont",
+     "Queen Anne",
+     "Magnolia"
+    ],
+    [
+     "5/520",
+     "Exit 4",
+     "Fremont",
+     "Queen Anne"
+    ],
+    [
+     "5/520",
+     "Exit 3",
+     "Exit 2",
+     "Capitol Hill"
+    ],
+    [
+     "5/520",
+     "Exit 3",
+     "Eastlake"
+    ],
+    [
+     "5/520",
+     "Exit 3",
+     "Exit 2",
+     "Downtown"
+    ],
+    [
+     "5/520",
+     "Exit 3",
+     "Exit 2",
+     "Capitol Hill",
+     "Beacon Hill"
+    ],
+    [
+     "5/520",
+     "Exit 3",
+     "Exit 2",
+     "Exit 1",
+     "West Seattle"
+    ],
+    [
+     "5/520",
+     "Exit 3",
+     "Exit 2",
+     "Capitol Hill",
+     "Beacon Hill",
+     "Mercer Island"
+    ],
+    [
+     "5/520",
+     "Exit 3",
+     "Exit 2",
+     "Capitol Hill",
+     "Beacon Hill",
+     "Mercer Island",
+     "Mercer N"
+    ],
+    [
+     "5/520",
+     "Exit 3",
+     "Exit 2",
+     "Capitol Hill",
+     "Beacon Hill",
+     "Mercer Island",
+     "Mercer N",
+     "Mercer S"
+    ],
+    [
+     "5/520",
+     "Montlake",
+     "Medina"
+    ],
+    [
+     "5/520",
+     "Montlake",
+     "Medina",
+     "Kirkland"
+    ],
+    [
+     "5/520",
+     "Montlake",
+     "Medina",
+     "Bellevue",
+     "Redmond"
+    ],
+    [
+     "5/520",
+     "Montlake",
+     "Medina",
+     "Bellevue"
+    ],
+    [
+     "5/520",
+     "Montlake",
+     "Medina",
+     "Bellevue",
+     "Factoria"
+    ],
+    [
+     "5/520",
+     "Montlake",
+     "Medina",
+     "Bellevue",
+     "Factoria",
+     "Issaquah"
+    ],
+    [
+     "5/520",
+     "Exit 3",
+     "Exit 2",
+     "Exit 1"
+    ],
+    [
+     "5/520",
+     "Exit 3",
+     "Exit 2"
+    ],
+    [
+     "5/520",
+     "Exit 3"
+    ],
+    [
+     "5/520",
+     "Exit 4"
+    ],
+    [
+     "5/520",
+     "Exit 4",
+     "Exit 5"
+    ],
+    [
+     "5/520",
+     "Exit 4",
+     "Exit 5",
+     "Exit 6"
+    ],
+    [
+     "5/520"
+    ],
+    [
+     "5/520",
+     "Montlake"
+    ],
+    [
+     "5/520",
+     "Montlake",
+     "Medina",
+     "Bellevue",
+     "FC"
+    ]
+   ],
+   [
+    [
+     "Montlake",
+     "5/520",
+     "Exit 4",
+     "Fremont",
+     "Ballard"
+    ],
+    [
+     "Montlake",
+     "5/520",
+     "Exit 4",
+     "Exit 5",
+     "Exit 6",
+     "Green Lake"
+    ],
+    [
+     "Montlake",
+     "5/520",
+     "Exit 4",
+     "Fremont"
+    ],
+    [
+     "Montlake",
+     "5/520",
+     "Exit 4",
+     "Exit 5",
+     "U-District"
+    ],
+    [
+     "Montlake",
+     "5/520",
+     "Exit 4",
+     "Fremont",
+     "Queen Anne",
+     "Magnolia"
+    ],
+    [
+     "Montlake",
+     "5/520",
+     "Exit 4",
+     "Fremont",
+     "Queen Anne"
+    ],
+    [
+     "Montlake",
+     "Eastlake",
+     "Capitol Hill"
+    ],
+    [
+     "Montlake",
+     "Eastlake"
+    ],
+    [
+     "Montlake",
+     "Eastlake",
+     "Exit 3",
+     "Exit 2",
+     "Downtown"
+    ],
+    [
+     "Montlake",
+     "Eastlake",
+     "Capitol Hill",
+     "Beacon Hill"
+    ],
+    [
+     "Montlake",
+     "Eastlake",
+     "Exit 3",
+     "Exit 2",
+     "Exit 1",
+     "West Seattle"
+    ],
+    [
+     "Montlake",
+     "Eastlake",
+     "Capitol Hill",
+     "Beacon Hill",
+     "Mercer Island"
+    ],
+    [
+     "Montlake",
+     "Eastlake",
+     "Capitol Hill",
+     "Beacon Hill",
+     "Mercer Island",
+     "Mercer N"
+    ],
+    [
+     "Montlake",
+     "Eastlake",
+     "Capitol Hill",
+     "Beacon Hill",
+     "Mercer Island",
+     "Mercer N",
+     "Mercer S"
+    ],
+    [
+     "Montlake",
+     "Medina"
+    ],
+    [
+     "Montlake",
+     "Medina",
+     "Kirkland"
+    ],
+    [
+     "Montlake",
+     "Medina",
+     "Bellevue",
+     "Redmond"
+    ],
+    [
+     "Montlake",
+     "Medina",
+     "Bellevue"
+    ],
+    [
+     "Montlake",
+     "Medina",
+     "Bellevue",
+     "Factoria"
+    ],
+    [
+     "Montlake",
+     "Medina",
+     "Bellevue",
+     "Factoria",
+     "Issaquah"
+    ],
+    [
+     "Montlake",
+     "Eastlake",
+     "Exit 3",
+     "Exit 2",
+     "Exit 1"
+    ],
+    [
+     "Montlake",
+     "Eastlake",
+     "Exit 3",
+     "Exit 2"
+    ],
+    [
+     "Montlake",
+     "Eastlake",
+     "Exit 3"
+    ],
+    [
+     "Montlake",
+     "5/520",
+     "Exit 4"
+    ],
+    [
+     "Montlake",
+     "5/520",
+     "Exit 4",
+     "Exit 5"
+    ],
+    [
+     "Montlake",
+     "5/520",
+     "Exit 4",
+     "Exit 5",
+     "Exit 6"
+    ],
+    [
+     "Montlake",
+     "5/520"
+    ],
+    [
+     "Montlake"
+    ],
+    [
+     "Montlake",
+     "Medina",
+     "Bellevue",
+     "FC"
+    ]
+   ],
+   [
+    [
+     "FC",
+     "Bellevue",
+     "Medina",
+     "Montlake",
+     "5/520",
+     "Exit 4",
+     "Fremont",
+     "Ballard"
+    ],
+    [
+     "FC",
+     "Bellevue",
+     "Medina",
+     "Montlake",
+     "5/520",
+     "Exit 4",
+     "Exit 5",
+     "Exit 6",
+     "Green Lake"
+    ],
+    [
+     "FC",
+     "Bellevue",
+     "Medina",
+     "Montlake",
+     "5/520",
+     "Exit 4",
+     "Fremont"
+    ],
+    [
+     "FC",
+     "Bellevue",
+     "Medina",
+     "Montlake",
+     "5/520",
+     "Exit 4",
+     "Exit 5",
+     "U-District"
+    ],
+    [
+     "FC",
+     "Bellevue",
+     "Medina",
+     "Montlake",
+     "5/520",
+     "Exit 4",
+     "Fremont",
+     "Queen Anne",
+     "Magnolia"
+    ],
+    [
+     "FC",
+     "Bellevue",
+     "Medina",
+     "Montlake",
+     "5/520",
+     "Exit 4",
+     "Fremont",
+     "Queen Anne"
+    ],
+    [
+     "FC",
+     "Factoria",
+     "Mercer Island",
+     "Beacon Hill",
+     "Capitol Hill"
+    ],
+    [
+     "FC",
+     "Bellevue",
+     "Medina",
+     "Montlake",
+     "Eastlake"
+    ],
+    [
+     "FC",
+     "Factoria",
+     "Mercer Island",
+     "Beacon Hill",
+     "Exit 1",
+     "Exit 2",
+     "Downtown"
+    ],
+    [
+     "FC",
+     "Factoria",
+     "Mercer Island",
+     "Beacon Hill"
+    ],
+    [
+     "FC",
+     "Factoria",
+     "Mercer Island",
+     "Beacon Hill",
+     "Exit 1",
+     "West Seattle"
+    ],
+    [
+     "FC",
+     "Factoria",
+     "Mercer Island"
+    ],
+    [
+     "FC",
+     "Factoria",
+     "Mercer Island",
+     "Mercer N"
+    ],
+    [
+     "FC",
+     "Factoria",
+     "Mercer Island",
+     "Mercer N",
+     "Mercer S"
+    ],
+    [
+     "FC",
+     "Bellevue",
+     "Medina"
+    ],
+    [
+     "FC",
+     "Bellevue",
+     "Medina",
+     "Kirkland"
+    ],
+    [
+     "FC",
+     "Bellevue",
+     "Redmond"
+    ],
+    [
+     "FC",
+     "Bellevue"
+    ],
+    [
+     "FC",
+     "Factoria"
+    ],
+    [
+     "FC",
+     "Factoria",
+     "Issaquah"
+    ],
+    [
+     "FC",
+     "Factoria",
+     "Mercer Island",
+     "Beacon Hill",
+     "Exit 1"
+    ],
+    [
+     "FC",
+     "Factoria",
+     "Mercer Island",
+     "Beacon Hill",
+     "Exit 1",
+     "Exit 2"
+    ],
+    [
+     "FC",
+     "Bellevue",
+     "Medina",
+     "Montlake",
+     "Eastlake",
+     "Exit 3"
+    ],
+    [
+     "FC",
+     "Bellevue",
+     "Medina",
+     "Montlake",
+     "5/520",
+     "Exit 4"
+    ],
+    [
+     "FC",
+     "Bellevue",
+     "Medina",
+     "Montlake",
+     "5/520",
+     "Exit 4",
+     "Exit 5"
+    ],
+    [
+     "FC",
+     "Bellevue",
+     "Medina",
+     "Montlake",
+     "5/520",
+     "Exit 4",
+     "Exit 5",
+     "Exit 6"
+    ],
+    [
+     "FC",
+     "Bellevue",
+     "Medina",
+     "Montlake",
+     "5/520"
+    ],
+    [
+     "FC",
+     "Bellevue",
+     "Medina",
+     "Montlake"
+    ],
+    [
+     "FC"
+    ]
+   ]
+  ]
+ },
  "shifts": [
   {
    "shift": 1,
