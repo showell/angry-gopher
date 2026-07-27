@@ -189,6 +189,147 @@ fn costOf(sub: *const Substrate, stops: []const Stop) i64 {
     return painOf(sub, stops);
 }
 
+// --- Display breakdown (TS breakdown) -------------------------------------
+// The REAL minutes for the playback clock: integer artery travel + float
+// ring-arc geometry + per-order service. Never consulted by a solver
+// decision; ported because the browser's Plan carries it.
+
+pub const Breakdown = struct { travel: i64 = 0, local: f64 = 0, service: i64 = 0, time: f64 = 0 };
+
+pub fn breakdown(sub: *const Substrate, stops: []const Stop) Breakdown {
+    if (stops.len == 0) return .{};
+    var buf: [MAX_PATH_NODES]u8 = undefined;
+    const nodes = pathNodes(sub, stops, &buf);
+
+    // Houses per neighborhood, concatenated in stop order (TS housesByNbhd).
+    var houses: [geo.N_NODES][geo.MAX_HOUSES]u8 = undefined;
+    var counts = [_]u8{0} ** geo.N_NODES;
+    for (stops) |s| {
+        @memcpy(houses[s.nbhd][counts[s.nbhd] .. counts[s.nbhd] + s.nh], s.hs());
+        counts[s.nbhd] += s.nh;
+    }
+
+    var delivered = [_]bool{false} ** geo.N_NODES;
+    var travel: i64 = 0;
+    var local: f64 = 0;
+    for (1..nodes.len) |i| {
+        travel += sub.time(nodes[i - 1], nodes[i]);
+        const node = nodes[i];
+        if (node == geo.FC or i >= nodes.len - 1) continue;
+        const visit: []const u8 = if (counts[node] > 0 and !delivered[node]) houses[node][0..counts[node]] else &.{};
+        const entry = geo.gateAngle(node, geo.nodeAt(nodes[i - 1]));
+        const exit = geo.gateAngle(node, geo.nodeAt(nodes[i + 1]));
+        var ang_buf: [geo.MAX_HOUSES]f64 = undefined;
+        local += rg.localMinutes(node, entry, exit, geo.houseAngles(node, visit, &ang_buf));
+        if (visit.len > 0) delivered[node] = true;
+    }
+    const service: i64 = @as(i64, loadOf(stops)) * rg.SERVICE;
+    return .{
+        .travel = travel,
+        .local = local,
+        .service = service,
+        .time = @as(f64, @floatFromInt(travel)) + local + @as(f64, @floatFromInt(service)),
+    };
+}
+
+// --- The move recorder (TS log/frames) ------------------------------------
+// Only frame-bearing moves are recorded (2-opt reorders carry no frame and
+// never appear in the replay). Snapshot TIMING mirrors each TS log.push site:
+// construct snapshots BEFORE applying its merge; forcePlace snapshots the
+// ORIGINAL routes list (whose kept entries alias the mutated routes in TS);
+// every other site snapshots after applying, before any empty-route filter.
+
+pub const MoveKind = enum { merge, or_opt, swap, balance, corridor };
+
+pub const HouseKey = struct { nbhd: u8, h: u8 };
+
+pub const MAX_TOUCHED = 32;
+pub const MAX_DETAIL = 256;
+pub const MAX_MOVES = 128;
+
+pub const Move = struct {
+    kind: MoveKind,
+    saved: i64,
+    detail: [MAX_DETAIL]u8,
+    detail_len: u16,
+    frame: Routes,
+    touched: [MAX_TOUCHED]HouseKey,
+    touched_len: u8,
+
+    pub fn detailStr(self: *const Move) []const u8 {
+        return self.detail[0..self.detail_len];
+    }
+
+    pub fn touchedKeys(self: *const Move) []const HouseKey {
+        return self.touched[0..self.touched_len];
+    }
+};
+
+pub const Recorder = struct {
+    moves: [MAX_MOVES]Move,
+    len: usize,
+    start_frame: Routes, // the seeded clusters, pre-construction
+    end_frame: Routes, // the final slotted routes
+
+    pub fn reset(self: *Recorder) void {
+        self.len = 0;
+        self.start_frame = .{};
+        self.end_frame = .{};
+    }
+
+    fn rec(self: *Recorder, kind: MoveKind, saved: i64, comptime fmt: []const u8, args: anytype, frame: *const Routes, touched: []const HouseKey) void {
+        std.debug.assert(self.len < MAX_MOVES);
+        const m = &self.moves[self.len];
+        m.kind = kind;
+        m.saved = saved;
+        const d = std.fmt.bufPrint(&m.detail, fmt, args) catch unreachable;
+        m.detail_len = @intCast(d.len);
+        m.frame = frame.*;
+        std.debug.assert(touched.len <= MAX_TOUCHED);
+        @memcpy(m.touched[0..touched.len], touched);
+        m.touched_len = @intCast(touched.len);
+        self.len += 1;
+    }
+
+    pub fn slice(self: *const Recorder) []const Move {
+        return self.moves[0..self.len];
+    }
+};
+
+/// House keys of a run of stops (TS keysOf) — stop order, house order.
+fn keysOf(stops: []const Stop, out: *[MAX_TOUCHED]HouseKey) []HouseKey {
+    var n: usize = 0;
+    for (stops) |s| {
+        for (s.hs()) |h| {
+            out[n] = .{ .nbhd = s.nbhd, .h = h };
+            n += 1;
+        }
+    }
+    return out[0..n];
+}
+
+/// House keys of one neighborhood's houses (TS keys).
+fn keysFor(nbhd: u8, houses: []const u8, out: *[MAX_TOUCHED]HouseKey) []HouseKey {
+    for (houses, 0..) |h, i| out[i] = .{ .nbhd = nbhd, .h = h };
+    return out[0..houses.len];
+}
+
+/// The frame caption (TS captionOf): `{tag} · {detail}` plus a pain suffix
+/// when the move saved anything (integer gains, so `> 0.5` means `>= 1`).
+pub fn captionOf(m: *const Move, buf: []u8) []const u8 {
+    const tag = switch (m.kind) {
+        .merge => "merge",
+        .or_opt => "relocate",
+        .swap => "swap",
+        .balance => "settle",
+        .corridor => "consolidate",
+    };
+    if (m.saved >= 1) {
+        return std.fmt.bufPrint(buf, "{s} · {s}  −{d} pain", .{ tag, m.detailStr(), m.saved }) catch unreachable;
+    }
+    return std.fmt.bufPrint(buf, "{s} · {s}", .{ tag, m.detailStr() }) catch unreachable;
+}
+
 // --- Construction --------------------------------------------------------
 
 /// Lay a and b end-to-end the cheapest of four ways (TS bestJoin) — option
@@ -257,7 +398,7 @@ fn freeClusters(nbhd: u8, idx: []const u8, out: *Routes) void {
 }
 
 /// Greedy Clarke–Wright (TS construct): repeatedly apply the best merge.
-fn construct(sub: *const Substrate, routes: *Routes, force: bool) void {
+fn construct(sub: *const Substrate, routes: *Routes, force: bool, rec: ?*Recorder) void {
     while (true) {
         // Routes are unchanged during a scan; costing each once per scan is
         // value-identical to the TS's per-pair recomputation.
@@ -289,30 +430,84 @@ fn construct(sub: *const Substrate, routes: *Routes, force: bool) void {
         if (!found) break;
         if (!force and best_saved <= 0) break;
         if (force and routes.len <= geo.TRUCKS) break;
+        if (rec) |r| {
+            // TS pushes the merge move BEFORE applying it — frame = pre-merge.
+            var dbuf: [MAX_DETAIL]u8 = undefined;
+            var dlen: usize = 0;
+            for (best_merged.slice(), 0..) |s, si| {
+                const name = geo.nameOf(s.nbhd);
+                if (si > 0) {
+                    const sep = " \xc2\xb7 "; // " · " (U+00B7), 4 bytes
+                    @memcpy(dbuf[dlen .. dlen + sep.len], sep);
+                    dlen += sep.len;
+                }
+                @memcpy(dbuf[dlen .. dlen + name.len], name);
+                dlen += name.len;
+            }
+            var tbuf: [MAX_TOUCHED]HouseKey = undefined;
+            r.rec(.merge, best_saved, "{s}", .{dbuf[0..dlen]}, routes, keysOf(best_merged.slice(), &tbuf));
+        }
         routes.r[best_i] = best_merged;
         routes.removeAt(best_j);
     }
 }
 
 /// Last-resort packing when merges can't reach fleet size (TS forcePlace).
-fn forcePlace(sub: *const Substrate, routes: *Routes, cost_aware: bool) void {
+fn forcePlace(sub: *const Substrate, routes: *Routes, cost_aware: bool, rec: ?*Recorder) void {
     var kept = Routes{};
     var surplus = Routes{};
+    // In the TS, kept routes ALIAS entries of the original routes array, so
+    // snapshot(routes) at a log site reflects kept's mutations in the
+    // original order (surplus untouched). kept_orig maps kept index -> the
+    // original slot so frames can rebuild that aliased view.
+    var kept_orig: [MAX_ROUTES]u8 = undefined;
     // anchored (in order) ...
     for (0..routes.len) |i| {
-        if (hasAnchor(routes.r[i].slice())) kept.push(routes.r[i]);
+        if (hasAnchor(routes.r[i].slice())) {
+            kept_orig[kept.len] = @intCast(i);
+            kept.push(routes.r[i]);
+        }
     }
-    // ... plus the biggest few free clusters (stable sort by load desc).
+    // ... plus the biggest few free clusters (stable sort by load desc,
+    // original index carried through the sort).
     var clusters = Routes{};
+    var cluster_orig: [MAX_ROUTES]u8 = undefined;
     for (0..routes.len) |i| {
         const r = routes.r[i];
-        if (!hasAnchor(r.slice()) and r.len > 0) clusters.push(r);
+        if (!hasAnchor(r.slice()) and r.len > 0) {
+            cluster_orig[clusters.len] = @intCast(i);
+            clusters.push(r);
+        }
     }
-    sortRoutesByLoadDesc(&clusters);
+    {
+        var i: usize = 1;
+        while (i < clusters.len) : (i += 1) {
+            const key = clusters.r[i];
+            const key_orig = cluster_orig[i];
+            const key_load = loadOf(key.slice());
+            var j = i;
+            while (j > 0 and loadOf(clusters.r[j - 1].slice()) < key_load) : (j -= 1) {
+                clusters.r[j] = clusters.r[j - 1];
+                cluster_orig[j] = cluster_orig[j - 1];
+            }
+            clusters.r[j] = key;
+            cluster_orig[j] = key_orig;
+        }
+    }
     const keep: usize = if (kept.len < geo.TRUCKS) geo.TRUCKS - kept.len else 0;
     for (0..clusters.len) |i| {
-        if (i < keep) kept.push(clusters.r[i]) else surplus.push(clusters.r[i]);
+        if (i < keep) {
+            kept_orig[kept.len] = cluster_orig[i];
+            kept.push(clusters.r[i]);
+        } else surplus.push(clusters.r[i]);
     }
+    const alias_view = struct {
+        fn make(orig: *const Routes, k: *const Routes, ko: *const [MAX_ROUTES]u8) Routes {
+            var v = orig.*;
+            for (0..k.len) |ki| v.r[ko[ki]] = k.r[ki];
+            return v;
+        }
+    }.make;
 
     for (0..surplus.len) |si| {
         for (surplus.r[si].slice()) |stop| {
@@ -332,6 +527,11 @@ fn forcePlace(sub: *const Substrate, routes: *Routes, cost_aware: bool) void {
                 }
                 if (whole) |k| {
                     kept.r[k].push(Stop.init(stop.nbhd, remaining, NO_PIN));
+                    if (rec) |r| {
+                        const view = alias_view(routes, &kept, &kept_orig);
+                        var tbuf: [MAX_TOUCHED]HouseKey = undefined;
+                        r.rec(.or_opt, 0, "capacity placement: {s} ({d}) onto a truck with room", .{ geo.nameOf(stop.nbhd), remaining.len }, &view, keysFor(stop.nbhd, remaining, &tbuf));
+                    }
                     break;
                 }
                 // No fit: place a chunk (roomiest vs cost-aware, raced).
@@ -364,8 +564,14 @@ fn forcePlace(sub: *const Substrate, routes: *Routes, cost_aware: bool) void {
                     }
                 }
                 if (into == null or take_n == 0) std.debug.panic("forcePlace: no truck has room", .{});
-                kept.r[into.?].push(Stop.init(stop.nbhd, remaining[0..take_n], NO_PIN));
+                const take = remaining[0..take_n];
                 remaining = remaining[take_n..];
+                kept.r[into.?].push(Stop.init(stop.nbhd, take, NO_PIN));
+                if (rec) |r| {
+                    const view = alias_view(routes, &kept, &kept_orig);
+                    var tbuf: [MAX_TOUCHED]HouseKey = undefined;
+                    r.rec(.or_opt, 0, "capacity split: {s} {d} tote(s) onto a truck with room", .{ geo.nameOf(stop.nbhd), take.len }, &view, keysFor(stop.nbhd, take, &tbuf));
+                }
             }
         }
     }
@@ -411,7 +617,7 @@ fn insertBest(sub: *const Substrate, route: []const Stop, stop: Stop) Route {
 }
 
 /// Place the deferred FC-adjacent clusters into leftover slack (TS placeDeferred).
-fn placeDeferred(sub: *const Substrate, routes: *Routes, deferred: *const Routes, cost_aware: bool) void {
+fn placeDeferred(sub: *const Substrate, routes: *Routes, deferred: *const Routes, cost_aware: bool, rec: ?*Recorder) void {
     // Stable sort by orders desc — deferred entries are single-stop routes.
     var ordered = deferred.*;
     var i: usize = 1;
@@ -444,6 +650,10 @@ fn placeDeferred(sub: *const Substrate, routes: *Routes, deferred: *const Routes
             }
             if (best_ri) |ri| {
                 routes.r[ri] = best_route;
+                if (rec) |r| {
+                    var tbuf: [MAX_TOUCHED]HouseKey = undefined;
+                    r.rec(.or_opt, 0, "deferred fill: {s} ({d}) into slack", .{ geo.nameOf(stop.nbhd), remaining.len }, routes, keysFor(stop.nbhd, remaining, &tbuf));
+                }
                 break;
             }
             // No single truck fits it whole — chunk (same race as forcePlace).
@@ -477,8 +687,13 @@ fn placeDeferred(sub: *const Substrate, routes: *Routes, deferred: *const Routes
                 }
             }
             if (ri == null or take_n == 0) std.debug.panic("placeDeferred: no truck has room", .{});
-            routes.r[ri.?] = insertBest(sub, routes.r[ri.?].slice(), Stop.init(stop.nbhd, remaining[0..take_n], NO_PIN));
+            const take = remaining[0..take_n];
             remaining = remaining[take_n..];
+            routes.r[ri.?] = insertBest(sub, routes.r[ri.?].slice(), Stop.init(stop.nbhd, take, NO_PIN));
+            if (rec) |r| {
+                var tbuf: [MAX_TOUCHED]HouseKey = undefined;
+                r.rec(.or_opt, 0, "deferred split: {s} {d} tote(s) into slack", .{ geo.nameOf(stop.nbhd), take.len }, routes, keysFor(stop.nbhd, take, &tbuf));
+            }
         }
     }
 }
@@ -512,7 +727,7 @@ fn twoOpt(sub: *const Substrate, route: *Route) void {
 }
 
 /// Or-opt: relocate one stop to the best slot in any route (TS orOpt).
-fn orOpt(sub: *const Substrate, routes: *Routes) void {
+fn orOpt(sub: *const Substrate, routes: *Routes, rec: ?*Recorder) void {
     var improved = true;
     while (improved) {
         improved = false;
@@ -550,6 +765,10 @@ fn orOpt(sub: *const Substrate, routes: *Routes) void {
                 if (found) {
                     routes.r[r] = without;
                     routes.r[best_t].insertAt(best_pos, stop);
+                    if (rec) |rr| {
+                        var tbuf: [MAX_TOUCHED]HouseKey = undefined;
+                        rr.rec(.or_opt, best_gain, "moved {s} to another truck", .{geo.nameOf(stop.nbhd)}, routes, keysOf(&.{stop}, &tbuf));
+                    }
                     improved = true;
                 }
             }
@@ -567,7 +786,7 @@ fn reinsert(sub: *const Substrate, route: []const Stop, rm: usize, add: Stop) Ro
 }
 
 /// Inter-route exchange: trade one stop between two trucks (TS exchange).
-fn exchange(sub: *const Substrate, routes: *Routes) void {
+fn exchange(sub: *const Substrate, routes: *Routes, rec: ?*Recorder) void {
     var guard: usize = 0;
     while (guard < 200) : (guard += 1) {
         var costs: [MAX_ROUTES]i64 = undefined;
@@ -578,6 +797,8 @@ fn exchange(sub: *const Substrate, routes: *Routes) void {
         var best_b: usize = undefined;
         var best_ra: Route = undefined;
         var best_rb: Route = undefined;
+        var best_sa: Stop = undefined;
+        var best_sb: Stop = undefined;
         for (0..routes.len) |a| {
             for (a + 1..routes.len) |b| {
                 const ras = routes.r[a].slice();
@@ -601,6 +822,8 @@ fn exchange(sub: *const Substrate, routes: *Routes) void {
                             best_b = b;
                             best_ra = ra;
                             best_rb = rb;
+                            best_sa = sa;
+                            best_sb = sb;
                         }
                     }
                 }
@@ -609,6 +832,10 @@ fn exchange(sub: *const Substrate, routes: *Routes) void {
         if (!found) break;
         routes.r[best_a] = best_ra;
         routes.r[best_b] = best_rb;
+        if (rec) |rr| {
+            var tbuf: [MAX_TOUCHED]HouseKey = undefined;
+            rr.rec(.swap, best_gain, "traded a stop between two trucks", .{}, routes, keysOf(&.{ best_sa, best_sb }, &tbuf));
+        }
     }
 }
 
@@ -663,11 +890,18 @@ fn tidiedCost(sub: *const Substrate, stops: []const Stop) i64 {
 
 const N_SLOTS = geo.TRUCKS;
 
+/// The 8 slots as a Routes snapshot (empty slots included — TS snapshot(bySlot)).
+fn slotsFrame(by_slot: *const [N_SLOTS]Route) Routes {
+    var out = Routes{};
+    for (by_slot) |r| out.push(r);
+    return out;
+}
+
 /// Corridor repair (TS corridorRepair): consolidate a threaded-through
 /// neighborhood onto the truck already passing it — absorb, trade, or
 /// split-swap. `shackle` = capacity-neutral splits only (the conservative
 /// half of the corridor race).
-fn corridorRepair(sub: *const Substrate, by_slot: *[N_SLOTS]Route, shackle: bool) void {
+fn corridorRepair(sub: *const Substrate, by_slot: *[N_SLOTS]Route, shackle: bool, rec: ?*Recorder) void {
     var guard: usize = 0;
     while (guard < 50) : (guard += 1) {
         var tidied: [N_SLOTS]i64 = undefined;
@@ -678,6 +912,11 @@ fn corridorRepair(sub: *const Substrate, by_slot: *[N_SLOTS]Route, shackle: bool
         var best_tp: usize = undefined;
         var best_nt: Route = undefined;
         var best_ntp: Route = undefined;
+        var best_b: u8 = undefined;
+        var best_via: [64]u8 = undefined;
+        var best_via_len: usize = undefined;
+        var best_touched: [MAX_TOUCHED]HouseKey = undefined;
+        var best_touched_len: usize = undefined;
 
         for (0..N_SLOTS) |t| {
             if (by_slot[t].len == 0) continue;
@@ -733,6 +972,12 @@ fn corridorRepair(sub: *const Substrate, by_slot: *[N_SLOTS]Route, shackle: bool
                         best_tp = tpi;
                         best_nt = nt;
                         best_ntp = without;
+                        best_b = B;
+                        best_via_len = (std.fmt.bufPrint(&best_via, "absorbed", .{}) catch unreachable).len;
+                        var tb: [MAX_TOUCHED]HouseKey = undefined;
+                        const tk = keysOf(&.{b_stop}, &tb);
+                        @memcpy(best_touched[0..tk.len], tk);
+                        best_touched_len = tk.len;
                     }
                 }
                 // (b) full: trade one of t's stops to B's truck, take B instead.
@@ -753,6 +998,12 @@ fn corridorRepair(sub: *const Substrate, by_slot: *[N_SLOTS]Route, shackle: bool
                         best_tp = tpi;
                         best_nt = nt;
                         best_ntp = ntp;
+                        best_b = B;
+                        best_via_len = (std.fmt.bufPrint(&best_via, "trading {s}", .{geo.nameOf(S.nbhd)}) catch unreachable).len;
+                        var tb: [MAX_TOUCHED]HouseKey = undefined;
+                        const tk = keysOf(&.{ b_stop, S }, &tb);
+                        @memcpy(best_touched[0..tk.len], tk);
+                        best_touched_len = tk.len;
                     }
                 }
                 // (c) split-swap: trade X away and carve a slice of B onto t.
@@ -786,6 +1037,12 @@ fn corridorRepair(sub: *const Substrate, by_slot: *[N_SLOTS]Route, shackle: bool
                             best_tp = tpi;
                             best_nt = nt;
                             best_ntp = ntp;
+                            best_b = B;
+                            best_via_len = (std.fmt.bufPrint(&best_via, "split {d}/{d}, trading {s}", .{ ku, b_stop.nh - ku, geo.nameOf(X.nbhd) }) catch unreachable).len;
+                            var tb: [MAX_TOUCHED]HouseKey = undefined;
+                            const tk = keysOf(&.{ X, take }, &tb);
+                            @memcpy(best_touched[0..tk.len], tk);
+                            best_touched_len = tk.len;
                         }
                     }
                 }
@@ -794,6 +1051,10 @@ fn corridorRepair(sub: *const Substrate, by_slot: *[N_SLOTS]Route, shackle: bool
         if (!found) break;
         by_slot[best_t] = best_nt;
         by_slot[best_tp] = best_ntp;
+        if (rec) |rr| {
+            const frame = slotsFrame(by_slot);
+            rr.rec(.corridor, best_gain, "consolidated {s} onto the truck passing through ({s})", .{ geo.nameOf(best_b), best_via[0..best_via_len] }, &frame, best_touched[0..best_touched_len]);
+        }
     }
 }
 
@@ -812,7 +1073,7 @@ fn removeByNbhd(route: *Route, nbhd: u8) void {
 }
 
 /// Post-slot relocate + swap with exact slot caps (TS postSlotLocalSearch).
-fn postSlotLocalSearch(sub: *const Substrate, by_slot: *[N_SLOTS]Route) void {
+fn postSlotLocalSearch(sub: *const Substrate, by_slot: *[N_SLOTS]Route, rec: ?*Recorder) void {
     var guard: usize = 0;
     while (guard < 200) : (guard += 1) {
         var cur: [N_SLOTS]i64 = undefined;
@@ -823,6 +1084,9 @@ fn postSlotLocalSearch(sub: *const Substrate, by_slot: *[N_SLOTS]Route) void {
         var best_b: usize = undefined;
         var best_ra: Route = undefined;
         var best_rb: Route = undefined;
+        var best_is_swap: bool = undefined;
+        var best_touched: [MAX_TOUCHED]HouseKey = undefined;
+        var best_touched_len: usize = undefined;
 
         // Relocate a -> b.
         for (0..N_SLOTS) |a| {
@@ -847,6 +1111,11 @@ fn postSlotLocalSearch(sub: *const Substrate, by_slot: *[N_SLOTS]Route) void {
                         best_b = b;
                         best_ra = ra;
                         best_rb = rb;
+                        best_is_swap = false;
+                        var tb: [MAX_TOUCHED]HouseKey = undefined;
+                        const tk = keysOf(&.{stop}, &tb);
+                        @memcpy(best_touched[0..tk.len], tk);
+                        best_touched_len = tk.len;
                     }
                 }
             }
@@ -874,6 +1143,11 @@ fn postSlotLocalSearch(sub: *const Substrate, by_slot: *[N_SLOTS]Route) void {
                             best_b = b;
                             best_ra = ra;
                             best_rb = rb;
+                            best_is_swap = true;
+                            var tb: [MAX_TOUCHED]HouseKey = undefined;
+                            const tk = keysOf(&.{ sa, sb }, &tb);
+                            @memcpy(best_touched[0..tk.len], tk);
+                            best_touched_len = tk.len;
                         }
                     }
                 }
@@ -883,12 +1157,20 @@ fn postSlotLocalSearch(sub: *const Substrate, by_slot: *[N_SLOTS]Route) void {
         if (!found) break;
         by_slot[best_a] = best_ra;
         by_slot[best_b] = best_rb;
+        if (rec) |rr| {
+            const frame = slotsFrame(by_slot);
+            if (best_is_swap) {
+                rr.rec(.swap, best_gain, "traded a stop between trucks {d} and {d}", .{ best_a + 1, best_b + 1 }, &frame, best_touched[0..best_touched_len]);
+            } else {
+                rr.rec(.or_opt, best_gain, "relocated a stop to truck {d}", .{best_b + 1}, &frame, best_touched[0..best_touched_len]);
+            }
+        }
     }
 }
 
 /// Arc-rebalance (TS arcRebalance): a relocate/swap rescued by shifting one
 /// arc of a filler from the overfull side to the other.
-fn arcRebalance(sub: *const Substrate, by_slot: *[N_SLOTS]Route) void {
+fn arcRebalance(sub: *const Substrate, by_slot: *[N_SLOTS]Route, rec: ?*Recorder) void {
     var guard: usize = 0;
     while (guard < 200) : (guard += 1) {
         var cur: [N_SLOTS]i64 = undefined;
@@ -899,6 +1181,8 @@ fn arcRebalance(sub: *const Substrate, by_slot: *[N_SLOTS]Route) void {
         var best_b: usize = undefined;
         var best_ra: Route = undefined;
         var best_rb: Route = undefined;
+        var best_touched: [MAX_TOUCHED]HouseKey = undefined;
+        var best_touched_len: usize = undefined;
 
         const Ctx = struct {
             sub: *const Substrate,
@@ -910,8 +1194,10 @@ fn arcRebalance(sub: *const Substrate, by_slot: *[N_SLOTS]Route) void {
             best_b: *usize,
             best_ra: *Route,
             best_rb: *Route,
+            best_touched: *[MAX_TOUCHED]HouseKey,
+            best_touched_len: *usize,
 
-            fn score(ctx: @This(), a: usize, b: usize, ra: Route, rb: Route) void {
+            fn score(ctx: @This(), a: usize, b: usize, ra: Route, rb: Route, touched: []const HouseKey) void {
                 if (loadOf(ra.slice()) > geo.TRUCK_CAPS[a] or loadOf(rb.slice()) > geo.TRUCK_CAPS[b]) return;
                 const gain = ctx.cur[a] + ctx.cur[b] -
                     (tidiedCost(ctx.sub, ra.slice()) + tidiedCost(ctx.sub, rb.slice()));
@@ -922,14 +1208,16 @@ fn arcRebalance(sub: *const Substrate, by_slot: *[N_SLOTS]Route) void {
                     ctx.best_b.* = b;
                     ctx.best_ra.* = ra;
                     ctx.best_rb.* = rb;
+                    @memcpy(ctx.best_touched[0..touched.len], touched);
+                    ctx.best_touched_len.* = touched.len;
                 }
             }
 
-            fn withRescue(ctx: @This(), a: usize, b: usize, ra0: Route, rb0: Route) void {
+            fn withRescue(ctx: @This(), a: usize, b: usize, ra0: Route, rb0: Route, touched: []const HouseKey) void {
                 const la = loadOf(ra0.slice());
                 const lb = loadOf(rb0.slice());
                 if (la <= geo.TRUCK_CAPS[a] and lb <= geo.TRUCK_CAPS[b]) {
-                    ctx.score(a, b, ra0, rb0);
+                    ctx.score(a, b, ra0, rb0, touched);
                     return;
                 }
                 const over_a = la > geo.TRUCK_CAPS[a] and lb <= geo.TRUCK_CAPS[b];
@@ -971,10 +1259,18 @@ fn arcRebalance(sub: *const Substrate, by_slot: *[N_SLOTS]Route) void {
                         }
                         const new_over = coalesceStops(new_over_raw.slice());
                         const new_under = cheapestInsert(ctx.sub, under.slice(), Stop.init(F.nbhd, arc, NO_PIN));
+                        // touched = the base move's keys + the shifted arc (TS order).
+                        var ext: [MAX_TOUCHED]HouseKey = undefined;
+                        @memcpy(ext[0..touched.len], touched);
+                        var en = touched.len;
+                        for (arc) |h| {
+                            ext[en] = .{ .nbhd = F.nbhd, .h = h };
+                            en += 1;
+                        }
                         if (over_a) {
-                            ctx.score(a, b, new_over, new_under);
+                            ctx.score(a, b, new_over, new_under, ext[0..en]);
                         } else {
-                            ctx.score(a, b, new_under, new_over);
+                            ctx.score(a, b, new_under, new_over, ext[0..en]);
                         }
                     }
                 }
@@ -990,6 +1286,8 @@ fn arcRebalance(sub: *const Substrate, by_slot: *[N_SLOTS]Route) void {
             .best_b = &best_b,
             .best_ra = &best_ra,
             .best_rb = &best_rb,
+            .best_touched = &best_touched,
+            .best_touched_len = &best_touched_len,
         };
 
         // Relocate candidates, then swap candidates — TS scan order.
@@ -1004,7 +1302,8 @@ fn arcRebalance(sub: *const Substrate, by_slot: *[N_SLOTS]Route) void {
                     for (by_slot[a].slice(), 0..) |s, i| {
                         if (i != si) ra0.push(s);
                     }
-                    ctx.withRescue(a, b, ra0, cheapestInsert(sub, by_slot[b].slice(), stop));
+                    var tb: [MAX_TOUCHED]HouseKey = undefined;
+                    ctx.withRescue(a, b, ra0, cheapestInsert(sub, by_slot[b].slice(), stop), keysOf(&.{stop}, &tb));
                 }
             }
         }
@@ -1017,7 +1316,8 @@ fn arcRebalance(sub: *const Substrate, by_slot: *[N_SLOTS]Route) void {
                     for (0..by_slot[b].len) |j| {
                         const sb = by_slot[b].stops[j];
                         if (sb.pin != NO_PIN or sa.nbhd == sb.nbhd) continue;
-                        ctx.withRescue(a, b, coalesceStops(reinsert(sub, by_slot[a].slice(), i, sb).slice()), coalesceStops(reinsert(sub, by_slot[b].slice(), j, sa).slice()));
+                        var tb: [MAX_TOUCHED]HouseKey = undefined;
+                        ctx.withRescue(a, b, coalesceStops(reinsert(sub, by_slot[a].slice(), i, sb).slice()), coalesceStops(reinsert(sub, by_slot[b].slice(), j, sa).slice()), keysOf(&.{ sa, sb }, &tb));
                     }
                 }
             }
@@ -1026,6 +1326,10 @@ fn arcRebalance(sub: *const Substrate, by_slot: *[N_SLOTS]Route) void {
         if (!found) break;
         by_slot[best_a] = best_ra;
         by_slot[best_b] = best_rb;
+        if (rec) |rr| {
+            const frame = slotsFrame(by_slot);
+            rr.rec(.or_opt, best_gain, "arc-rebalance between trucks {d} and {d}", .{ best_a + 1, best_b + 1 }, &frame, best_touched[0..best_touched_len]);
+        }
     }
 }
 
@@ -1044,7 +1348,7 @@ fn stdev(times: []const f64) f64 {
 
 /// Free tie-breaks: relocate when total pain is unchanged but the spread
 /// shrinks (TS rebalance — |dTotal| > 0.75 on integers means dTotal must be 0).
-fn rebalance(sub: *const Substrate, routes: *Routes) void {
+fn rebalance(sub: *const Substrate, routes: *Routes, rec: ?*Recorder) void {
     var guard: usize = 0;
     while (guard < 400) : (guard += 1) {
         var times: [MAX_ROUTES]i64 = undefined;
@@ -1112,6 +1416,11 @@ fn rebalance(sub: *const Substrate, routes: *Routes) void {
         const stop = routes.r[best_r].stops[best_s];
         routes.r[best_r].removeAt(best_s);
         routes.r[best_t].insertAt(best_pos, stop);
+        if (rec) |rr| {
+            // saved = -dTotal = 0 for a tie-break; frame BEFORE the empty filter.
+            var tbuf: [MAX_TOUCHED]HouseKey = undefined;
+            rr.rec(.balance, 0, "tie-break: {s} \xe2\x86\x92 another truck", .{geo.nameOf(stop.nbhd)}, routes, keysOf(&.{stop}, &tbuf));
+        }
         routes.dropEmpties();
     }
 }
@@ -1187,7 +1496,7 @@ fn arcSubsets(nbhd: u8, houses: []const u8) ArcSubsets {
 
 /// Voluntary split delivery (TS splitPass): hand a contiguous arc to a second
 /// truck when it lowers total pain.
-fn splitPass(sub: *const Substrate, routes: *Routes) void {
+fn splitPass(sub: *const Substrate, routes: *Routes, rec: ?*Recorder) void {
     var guard: usize = 0;
     while (guard < 60) : (guard += 1) {
         var times: [MAX_ROUTES]i64 = undefined;
@@ -1267,6 +1576,10 @@ fn splitPass(sub: *const Substrate, routes: *Routes) void {
         if (!found) break;
         routes.r[best_a].stops[best_sa] = best_rest;
         routes.r[best_b].insertAt(best_pos, best_take);
+        if (rec) |rr| {
+            var tbuf: [MAX_TOUCHED]HouseKey = undefined;
+            rr.rec(.balance, -best_g, "split {s}: {d} of {d} totes to another truck", .{ geo.nameOf(best_take.nbhd), best_take.nh, @as(u32, best_take.nh) + best_rest.nh }, routes, keysFor(best_take.nbhd, best_take.hs(), &tbuf));
+        }
     }
 }
 
@@ -1380,7 +1693,17 @@ fn partCost(nbhd: u8, p: anytype) f64 {
 
 pub const Plan = struct {
     by_slot: [N_SLOTS]Route,
-    unrouted: u8, // stop count that found no room (legality demands 0)
+    unrouted: [16]Stop, // stops that found no room (legality demands none)
+    unrouted_len: u8,
+    // Display fields (TS Plan) — the playback clock's numbers, never a
+    // solver input. Floats ride the trig path (localMinutes).
+    route_travel: [N_SLOTS]i64,
+    route_time: [N_SLOTS]f64,
+    total_travel: i64,
+    total_local: f64,
+    total_service: i64,
+    total_time: f64,
+    spread: f64,
 
     pub fn pain(self: *const Plan, sub: *const Substrate) i64 {
         var total: i64 = 0;
@@ -1389,10 +1712,15 @@ pub const Plan = struct {
     }
 };
 
+// Corridor-race sub-recorders (only the winner's moves join the main log).
+// Static: a Recorder is ~1.5MB and runSolve is single-threaded.
+var g_cons_rec: Recorder = undefined;
+var g_aggr_rec: Recorder = undefined;
+
 const Orders = @import("orders.zig");
 
 /// One full solve at one race-variant configuration (TS runSolve).
-pub fn runSolve(sub: *const Substrate, demand: *const Orders.Demand, allow_split: bool, cost_aware: bool, defer_medina: bool) Plan {
+pub fn runSolve(sub: *const Substrate, demand: *const Orders.Demand, allow_split: bool, cost_aware: bool, defer_medina: bool, rec: ?*Recorder) Plan {
     var all = Routes{};
     customers(demand, &all);
 
@@ -1407,28 +1735,34 @@ pub fn runSolve(sub: *const Substrate, demand: *const Orders.Demand, allow_split
         if (in_defer[nbhd]) deferred.push(all.r[i]) else routes.push(all.r[i]);
     }
 
-    construct(sub, &routes, false);
-    if (routes.len > geo.TRUCKS) construct(sub, &routes, true);
-    if (routes.len > geo.TRUCKS) forcePlace(sub, &routes, cost_aware);
-    placeDeferred(sub, &routes, &deferred, cost_aware);
+    if (rec) |r| r.start_frame = routes; // TS: seed = snapshot(routes), pre-construction
+
+    construct(sub, &routes, false, rec);
+    if (routes.len > geo.TRUCKS) construct(sub, &routes, true, rec);
+    if (routes.len > geo.TRUCKS) forcePlace(sub, &routes, cost_aware, rec);
+    placeDeferred(sub, &routes, &deferred, cost_aware, rec);
 
     for (0..routes.len) |i| twoOpt(sub, &routes.r[i]);
-    orOpt(sub, &routes);
-    exchange(sub, &routes);
+    orOpt(sub, &routes, rec);
+    exchange(sub, &routes, rec);
     for (0..routes.len) |i| twoOpt(sub, &routes.r[i]);
 
-    rebalance(sub, &routes);
+    rebalance(sub, &routes, rec);
     if (allow_split) {
-        splitPass(sub, &routes);
-        exchange(sub, &routes);
-        rebalance(sub, &routes);
+        splitPass(sub, &routes, rec);
+        exchange(sub, &routes, rec);
+        rebalance(sub, &routes, rec);
     }
     for (0..routes.len) |i| routes.r[i] = coalesceStops(routes.r[i].slice());
     for (0..routes.len) |i| twoOpt(sub, &routes.r[i]);
 
-    var unrouted: u8 = 0;
+    var unrouted: [16]Stop = undefined;
+    var unrouted_len: u8 = 0;
     while (routes.len > geo.TRUCKS) {
-        unrouted += routes.r[routes.len - 1].len;
+        for (routes.r[routes.len - 1].slice()) |s| {
+            unrouted[unrouted_len] = s;
+            unrouted_len += 1;
+        }
         routes.len -= 1;
     }
 
@@ -1475,7 +1809,8 @@ pub fn runSolve(sub: *const Substrate, demand: *const Orders.Demand, allow_split
                     }
                 }
                 if (best == null or room <= 0) {
-                    unrouted += 1;
+                    unrouted[unrouted_len] = Stop.init(stop.nbhd, houses, NO_PIN);
+                    unrouted_len += 1;
                     break;
                 }
                 const take: usize = @min(@as(usize, @intCast(room)), houses.len);
@@ -1490,27 +1825,79 @@ pub fn runSolve(sub: *const Substrate, demand: *const Orders.Demand, allow_split
     // Corridor race: conservative (shackled) vs aggressive, keep the cheaper
     // by tidied pain sum — ties go to the conservative pass (strict <).
     var cons = by_slot;
-    corridorRepair(sub, &cons, true);
     var aggr = by_slot;
-    corridorRepair(sub, &aggr, false);
+    if (rec != null) {
+        g_cons_rec.reset();
+        g_aggr_rec.reset();
+        corridorRepair(sub, &cons, true, &g_cons_rec);
+        corridorRepair(sub, &aggr, false, &g_aggr_rec);
+    } else {
+        corridorRepair(sub, &cons, true, null);
+        corridorRepair(sub, &aggr, false, null);
+    }
     var cons_pain: i64 = 0;
     var aggr_pain: i64 = 0;
     for (0..N_SLOTS) |i| {
         cons_pain += tidiedCost(sub, cons[i].slice());
         aggr_pain += tidiedCost(sub, aggr[i].slice());
     }
-    by_slot = if (aggr_pain < cons_pain) aggr else cons;
+    const aggr_wins = aggr_pain < cons_pain;
+    by_slot = if (aggr_wins) aggr else cons;
+    if (rec) |r| {
+        // Only the winning corridor pass's moves join the log (TS winner.lg).
+        const wrec: *const Recorder = if (aggr_wins) &g_aggr_rec else &g_cons_rec;
+        for (wrec.slice()) |m| {
+            std.debug.assert(r.len < MAX_MOVES);
+            r.moves[r.len] = m;
+            r.len += 1;
+        }
+    }
     for (0..N_SLOTS) |i| twoOpt(sub, &by_slot[i]);
 
-    postSlotLocalSearch(sub, &by_slot);
+    postSlotLocalSearch(sub, &by_slot, rec);
     for (0..N_SLOTS) |i| twoOpt(sub, &by_slot[i]);
 
-    arcRebalance(sub, &by_slot);
+    arcRebalance(sub, &by_slot, rec);
     for (0..N_SLOTS) |i| twoOpt(sub, &by_slot[i]);
 
     tidySplitHouses(sub, &by_slot);
 
-    return .{ .by_slot = by_slot, .unrouted = unrouted };
+    if (rec) |r| r.end_frame = slotsFrame(&by_slot);
+
+    // Display numbers (TS built + total reduce): per-route breakdown, plan
+    // totals in route order, spread over deployed trucks.
+    var plan = Plan{
+        .by_slot = by_slot,
+        .unrouted = unrouted,
+        .unrouted_len = unrouted_len,
+        .route_travel = undefined,
+        .route_time = undefined,
+        .total_travel = 0,
+        .total_local = 0,
+        .total_service = 0,
+        .total_time = 0,
+        .spread = 0,
+    };
+    for (0..N_SLOTS) |i| {
+        const b = breakdown(sub, by_slot[i].slice());
+        plan.route_travel[i] = b.travel;
+        plan.route_time[i] = b.time;
+        plan.total_travel += b.travel;
+        plan.total_local += b.local;
+        plan.total_service += b.service;
+    }
+    plan.total_time = @as(f64, @floatFromInt(plan.total_travel)) + plan.total_local + @as(f64, @floatFromInt(plan.total_service));
+    var t_max: f64 = -std.math.inf(f64);
+    var t_min: f64 = std.math.inf(f64);
+    var deployed: usize = 0;
+    for (0..N_SLOTS) |i| {
+        if (by_slot[i].len == 0) continue;
+        deployed += 1;
+        t_max = @max(t_max, plan.route_time[i]);
+        t_min = @min(t_min, plan.route_time[i]);
+    }
+    plan.spread = if (deployed > 0) t_max - t_min else 0;
+    return plan;
 }
 
 pub const RaceResult = struct {
@@ -1528,11 +1915,11 @@ pub const VARIANTS = [_]struct { label: []const u8, cost_aware: bool, defer_medi
 
 /// The construction race (TS race): solve all variants, keep the cheapest by
 /// pain; a tie resolves to the FIRST listed.
-pub fn race(sub: *const Substrate, demand: *const Orders.Demand) RaceResult {
+pub fn race(sub: *const Substrate, demand: *const Orders.Demand, rec: ?*Recorder) RaceResult {
     var out: RaceResult = undefined;
     var best_pain: i64 = std.math.maxInt(i64);
     for (VARIANTS, 0..) |v, vi| {
-        const plan = runSolve(sub, demand, true, v.cost_aware, v.defer_medina);
+        const plan = runSolve(sub, demand, true, v.cost_aware, v.defer_medina, null);
         const pain = plan.pain(sub);
         out.pains[vi] = pain;
         if (pain < best_pain) {
@@ -1541,14 +1928,24 @@ pub fn race(sub: *const Substrate, demand: *const Orders.Demand) RaceResult {
             out.winner = @intCast(vi);
         }
     }
+    if (rec) |r| {
+        // Deterministic re-run of the winner with recording on — identical
+        // plan (asserted), so the log is the winner's own, exactly as the TS
+        // keeps each runSolve's log with its plan.
+        r.reset();
+        const v = VARIANTS[out.winner];
+        const replay = runSolve(sub, demand, true, v.cost_aware, v.defer_medina, r);
+        std.debug.assert(replay.pain(sub) == best_pain);
+        out.best = replay;
+    }
     return out;
 }
 
 test "solve seed 49 produces a legal plan" {
     const sub = rg.buildSubstrate();
     const demand = Orders.chooseOrders(49, geo.ORDERS);
-    const result = race(&sub, &demand);
-    try std.testing.expectEqual(@as(u8, 0), result.best.unrouted);
+    const result = race(&sub, &demand, null);
+    try std.testing.expectEqual(@as(u8, 0), result.best.unrouted_len);
     var total: i32 = 0;
     for (&result.best.by_slot, 0..) |*r, i| {
         const load = loadOf(r.slice());

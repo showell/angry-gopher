@@ -6,6 +6,11 @@
 // the winner, and the winning plan's full route structure with per-route
 // pain. Any diff is a port bug; there are no tolerances by design.
 //
+// A second gold (solver_frames_gold.json) pins the browser half of the Plan:
+// the solve-replay frames (labels, touched keys, route snapshots) and the
+// display numbers. Strings/integers strict; trig-derived floats compared at
+// ULP-scale tolerance (engine libm variance, not semantics).
+//
 //   zig run -O ReleaseFast delivery/zig/gold_check.zig     (from the repo root)
 
 const std = @import("std");
@@ -19,6 +24,66 @@ var fail_count: usize = 0;
 fn fail(comptime fmt: []const u8, args: anytype) void {
     fail_count += 1;
     std.debug.print("  FAIL " ++ fmt ++ "\n", args);
+}
+
+var g_rec: solver.Recorder = undefined;
+
+/// Trig-derived display floats: ULP-scale agreement only (documented above).
+fn floatClose(gold: f64, z: f64) bool {
+    return @abs(gold - z) <= 1e-9 + @abs(gold) * 1e-12;
+}
+
+fn numOf(v: std.json.Value) f64 {
+    return switch (v) {
+        .integer => |i| @floatFromInt(i),
+        .float => |f| f,
+        else => std.debug.panic("gold number has unexpected type", .{}),
+    };
+}
+
+/// Compare one gold frame's routes array against a zig Routes snapshot.
+fn checkFrameRoutes(shift_no: i64, fi: usize, groutes: []const std.json.Value, frame: *const solver.Routes) void {
+    if (groutes.len != frame.len) {
+        fail("S{d} frame {d}: {d} routes vs gold {d}", .{ shift_no, fi, frame.len, groutes.len });
+        return;
+    }
+    for (groutes, 0..) |gr, ri| {
+        const gstops = gr.object.get("stops").?.array.items;
+        const zr = &frame.r[ri];
+        if (gstops.len != zr.len) {
+            fail("S{d} frame {d} route {d}: {d} stops vs gold {d}", .{ shift_no, fi, ri, zr.len, gstops.len });
+            continue;
+        }
+        for (gstops, 0..) |gs, si| {
+            const o = gs.object;
+            const zs = &zr.stops[si];
+            var ok = std.mem.eql(u8, o.get("nbhd").?.string, geo.nameOf(zs.nbhd));
+            ok = ok and o.get("orders").?.integer == zs.nh;
+            const gh = o.get("houses").?.array.items;
+            ok = ok and gh.len == zs.nh;
+            if (ok) for (gh, 0..) |h, k| {
+                if (h.integer != zs.houses[k]) ok = false;
+            };
+            if (o.get("pin")) |gpin| {
+                ok = ok and zs.pin != solver.NO_PIN and gpin.integer == zs.pin;
+            } else ok = ok and zs.pin == solver.NO_PIN;
+            if (!ok) fail("S{d} frame {d} route {d} stop {d} diverges", .{ shift_no, fi, ri, si });
+        }
+    }
+}
+
+fn checkTouched(shift_no: i64, fi: usize, gtouched: []const std.json.Value, keys: []const solver.HouseKey) void {
+    if (gtouched.len != keys.len) {
+        fail("S{d} frame {d}: {d} touched vs gold {d}", .{ shift_no, fi, keys.len, gtouched.len });
+        return;
+    }
+    for (gtouched, 0..) |gt, ki| {
+        var buf: [40]u8 = undefined;
+        const zk = std.fmt.bufPrint(&buf, "{s}#{d}", .{ geo.nameOf(keys[ki].nbhd), keys[ki].h }) catch unreachable;
+        if (!std.mem.eql(u8, gt.string, zk)) {
+            fail("S{d} frame {d} touched[{d}]: {s} vs gold {s}", .{ shift_no, fi, ki, zk, gt.string });
+        }
+    }
 }
 
 fn nodeIdOf(name: []const u8) u8 {
@@ -41,10 +106,18 @@ pub fn main() !void {
             std.process.exit(2);
         };
 
+    const raw_frames = std.Io.Dir.cwd().readFileAlloc(io, "delivery/solver_frames_gold.json", alloc, .unlimited) catch
+        std.Io.Dir.cwd().readFileAlloc(io, "../solver_frames_gold.json", alloc, .unlimited) catch {
+            std.debug.print("cannot read delivery/solver_frames_gold.json (run from the repo root)\n", .{});
+            std.process.exit(2);
+        };
+
     var arena = std.heap.ArenaAllocator.init(alloc);
     defer arena.deinit();
     const parsed = try std.json.parseFromSlice(std.json.Value, arena.allocator(), raw, .{});
     const root = parsed.value.object;
+    const parsed_frames = try std.json.parseFromSlice(std.json.Value, arena.allocator(), raw_frames, .{});
+    const frames_shifts = parsed_frames.value.object.get("shifts").?.array.items;
 
     // --- fleet + race variant labels ------------------------------------
     const fleet = root.get("fleet").?.object;
@@ -114,7 +187,7 @@ pub fn main() !void {
 
     // --- shifts ---------------------------------------------------------
     const shifts = root.get("shifts").?.array.items;
-    for (shifts) |gshift_v| {
+    for (shifts, 0..) |gshift_v, shift_idx| {
         const gshift = gshift_v.object;
         const shift_no = gshift.get("shift").?.integer;
         const seed: u32 = @intCast(gshift.get("seed").?.integer);
@@ -148,8 +221,9 @@ pub fn main() !void {
             }
         }
 
-        // The race: variant pains, winner, and the winning plan.
-        const result = solver.race(&sub, &demand);
+        // The race: variant pains, winner, and the winning plan (recorded, so
+        // the replay frames can be verified too).
+        const result = solver.race(&sub, &demand, &g_rec);
         const grace = gshift.get("race").?.object;
         const gpains = grace.get("pains").?.array.items;
         for (gpains, 0..) |gp, vi| {
@@ -201,6 +275,58 @@ pub fn main() !void {
         const gtotal = gshift.get("totalPain").?.integer;
         const ztotal = result.best.pain(&sub);
         if (gtotal != ztotal) fail("S{d}: totalPain gold {d} vs zig {d}", .{ shift_no, gtotal, ztotal });
+
+        // --- Display numbers + replay frames (solver_frames_gold.json) ---
+        const fshift = frames_shifts[@intCast(shift_idx)].object;
+        std.debug.assert(fshift.get("seed").?.integer == seed);
+        const plan = &result.best;
+        const froutes = fshift.get("routes").?.array.items;
+        for (froutes, 0..) |fr, ri| {
+            const o = fr.object;
+            if (o.get("travel").?.integer != plan.route_travel[ri]) {
+                fail("S{d} truck {d}: display travel gold {d} vs zig {d}", .{ shift_no, ri + 1, o.get("travel").?.integer, plan.route_travel[ri] });
+            }
+            if (!floatClose(numOf(o.get("time").?), plan.route_time[ri])) {
+                fail("S{d} truck {d}: display time gold {d} vs zig {d}", .{ shift_no, ri + 1, numOf(o.get("time").?), plan.route_time[ri] });
+            }
+        }
+        if (fshift.get("travel").?.integer != plan.total_travel) fail("S{d}: plan travel diverges", .{shift_no});
+        if (fshift.get("service").?.integer != plan.total_service) fail("S{d}: plan service diverges", .{shift_no});
+        if (!floatClose(numOf(fshift.get("local").?), plan.total_local)) fail("S{d}: plan local gold {d} vs zig {d}", .{ shift_no, numOf(fshift.get("local").?), plan.total_local });
+        if (!floatClose(numOf(fshift.get("totalTime").?), plan.total_time)) fail("S{d}: plan totalTime diverges", .{shift_no});
+        if (!floatClose(numOf(fshift.get("spread").?), plan.spread)) fail("S{d}: plan spread gold {d} vs zig {d}", .{ shift_no, numOf(fshift.get("spread").?), plan.spread });
+
+        const gframes = fshift.get("frames").?.array.items;
+        const zn = g_rec.len + 2; // start + moves + done
+        if (gframes.len != zn) {
+            fail("S{d}: {d} frames vs gold {d}", .{ shift_no, zn, gframes.len });
+        } else {
+            var lbuf: [solver.MAX_DETAIL + 64]u8 = undefined;
+            for (gframes, 0..) |gf_v, fi| {
+                const gf = gf_v.object;
+                const glabel = gf.get("label").?.string;
+                var zlabel: []const u8 = undefined;
+                var zframe: *const solver.Routes = undefined;
+                var ztouched: []const solver.HouseKey = &.{};
+                if (fi == 0) {
+                    zlabel = std.fmt.bufPrint(&lbuf, "start \xc2\xb7 {d} clusters seeded", .{g_rec.start_frame.len}) catch unreachable;
+                    zframe = &g_rec.start_frame;
+                } else if (fi == gframes.len - 1) {
+                    zlabel = "done \xc2\xb7 trucks assigned to their lanes";
+                    zframe = &g_rec.end_frame;
+                } else {
+                    const m = &g_rec.moves[fi - 1];
+                    zlabel = solver.captionOf(m, &lbuf);
+                    zframe = &m.frame;
+                    ztouched = m.touchedKeys();
+                }
+                if (!std.mem.eql(u8, glabel, zlabel)) {
+                    fail("S{d} frame {d}: label \"{s}\" vs gold \"{s}\"", .{ shift_no, fi, zlabel, glabel });
+                }
+                checkTouched(shift_no, fi, gf.get("touched").?.array.items, ztouched);
+                checkFrameRoutes(shift_no, fi, gf.get("routes").?.array.items, zframe);
+            }
+        }
 
         std.debug.print("S{d} (seed {d}): {s}\n", .{ shift_no, seed, if (fail_count == fails_before) "OK" else "DIVERGED" });
     }
