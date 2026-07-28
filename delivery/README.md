@@ -26,12 +26,24 @@ frames) as one JSON blob. The zig server just bakes both artifacts into its bina
 (`@embedFile`) and serves a near-empty HTML shell; everything still runs in your
 browser. No server logic, no user data, fully deterministic.
 
-**Status: parked.** The algorithm was "declared done" in June 2026: we could no
-longer construct a day whose hardest routes were *bugs* rather than *explicable
-structure* (a corridor that's simply overloaded, a sacrificial "hero" haul, a
-cascade of hand-offs). When the routes stopped surprising us, we stopped. **The
-code is the authority** for how anything works; this file orients a human, and the
-deeper "why" lives in the essay below.
+**Status: parked (again).** The algorithm was "declared done" in June 2026: we
+could no longer construct a day whose hardest routes were *bugs* rather than
+*explicable structure* (a corridor that's simply overloaded, a sacrificial "hero"
+haul, a cascade of hand-offs). When the routes stopped surprising us, we stopped.
+In July 2026 the solver was **ported to zig and deployed** (see `zig/` below);
+with that done, the toy is parked once more. **The code is the authority** for how
+anything works; this file orients a human, and the deeper "why" lives in the essay
+below.
+
+**The language boundary is a standing decision, not a way-station (2026-07-28):
+zig for the algorithm, TS for the display.** Safari's central aspect is its UI, so
+it earned the nearly-full-zig treatment (draw-commands + a JS blitter); Delivery's
+center is the solver, and the display code is ordinary canvas work that gains
+nothing from a port. Consequence: the geography/road-graph data lives on BOTH
+sides — the wasm needs it to decide, the TS to draw. That duplication is accepted:
+the gold's substrate section pins the two in agreement (any drift fails
+`ops/check_delivery` loudly), and unifying them would just be a single source file
+plus deserializers in two languages — not an interesting problem. Don't "fix" it.
 
 **A sibling worth knowing: [Safari Screensaver](../games/driving/README.md).**
 Delivery's twin toy *in spirit* — a `<canvas>` the client draws itself, a near-empty
@@ -116,4 +128,7 @@ the repo's top-level `HISTORY.md`.
 
 This was built by Steve and Claude together. It's parked, but the code is tidy and
 the harnesses still run — if you (or an agent you're working with) want to build on
-top of what we wrote, start with this file, then the essay, then `solver.ts`.
+top of what we wrote, start with this file, then the essay, then the solver:
+`zig/solver.zig` is production, `solver.ts` the readable reference the gold is
+minted from. Change either only in lockstep with the other, gated by
+`ops/check_delivery`.

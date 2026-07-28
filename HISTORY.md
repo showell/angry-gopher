@@ -4,9 +4,11 @@ Two "flipbook + algorithm" toys live in production. The shared pattern: the zig
 server `@embedFile`s the front-end and serves a near-empty HTML shell; the client
 builds its own `<canvas>` and animates everything — no server logic for the toy
 itself, fully deterministic. Each is a small, *finishable* problem with a real
-algorithm at its core. They started as twins — both ~4k-LOC pure TypeScript — but
-have **diverged in stack**: Delivery is still pure TS; Safari's camera was
-re-implemented as a Zig→WASM core feeding a JS blitter.
+algorithm at its core. They started as twins — both ~4k-LOC pure TypeScript — and
+both now carry a **Zig→WASM core**, with deliberately different boundaries
+(settled 2026-07-28): Safari's central aspect is its UI, so nearly everything is
+zig (draw-commands feeding a JS blitter); Delivery's center is the solver, so the
+boundary is **zig for the algorithm, TS for the display**.
 
 ## Safari Driving — `games/driving/`, served at `/driving`
 
@@ -18,7 +20,7 @@ Rider-relative coordinates (no global world frame); the algorithmic heart is
 reference). Design intent and build lessons live in `games/driving/README.md` —
 read that before touching it.
 
-## Seattle Delivery — `delivery/`, served at `/delivery` — PARKED 2026-06-29
+## Seattle Delivery — `delivery/`, served at `/delivery` — PARKED (2026-06-29; solver ported to zig + deployed 2026-07, then re-parked)
 
 A capacitated vehicle-routing (CVRP) sim: schedule 8 trucks to deliver 100 orders a
 day across a deliberately not-to-scale, "winking" Seattle (Steve's AmazonFresh
@@ -35,8 +37,17 @@ day whose hardest routes weren't *explicable* (corridor-overload, a sacrificial
 "hero" haul, cascading hand-offs) rather than solver bugs. When the stories stopped
 surprising us, we stopped.
 
+In July 2026 the **solver was ported to zig** — `delivery/zig/`, shipped as a
+committed `solver.wasm` the browser calls, reproducing the TS solver bit-for-bit
+(route structure, replay frames, captions, display minutes). Two gold files +
+`ops/check_delivery` (native check + driving the real wasm artifact) hold the port
+exact; `solver.ts` stays as the readable reference the gold is minted from. The
+display half (map_view/timeline/canvas) stays TS **by decision, not by debt** —
+see `delivery/README.md` for the boundary rationale.
+
 Where things live (code is truth — ignore stale session notes):
-- Code: `delivery/{main,map_view,geography,roadgraph,orders,solver}.ts`.
+- Code: `delivery/{main,map_view,geography,roadgraph,orders}.ts` (display +
+  input), `delivery/zig/` (the production solver), `solver.ts` (the reference).
 - Dev harnesses (deterministic; run from the repo **root**; esbuild `--format=esm`
   for the `node:fs` imports): `painsweep.ts` (N=100 scorecard), `painreg.ts` (N=500
   synergy regression → `pain_baseline.json`), `racerank.ts` (subtractive

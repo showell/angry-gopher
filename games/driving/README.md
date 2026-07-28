@@ -43,13 +43,16 @@ where the two genuinely diverge it's called out.
 **A sibling worth knowing: [Seattle Delivery](../../delivery/README.md).** The two
 toys are cut from the same cloth *in spirit* — a `<canvas>` the client builds
 itself, an asset the zig server merely embeds and serves, fully deterministic, no
-server logic, the same "flipbook + algorithm" paradigm. They no longer share a
-*stack*, though: Delivery is pure client-side TypeScript, while Safari's camera now
-runs as a Zig→WASM core feeding a JS blitter. The deeper difference is *which* hard
-problem sits at the center. Safari's is **perception** — the cheapest lie the eye
-will accept (faked curvature, a ramped dusk, a cat that's a flipbook of poses).
-Delivery's is **combinatorial cost** — routing trucks to minimize an honest number.
-Same spirit, different hard part, now a different stack.
+server logic, the same "flipbook + algorithm" paradigm. Both carry a Zig→WASM core
+now, with deliberately different boundaries (settled 2026-07): Safari is nearly all
+zig — the camera and geometry feed a thin JS blitter — while Delivery keeps **zig
+for the solver, TS for the display**. The split follows *which* hard problem sits
+at the center. Safari's is **perception** — the cheapest lie the eye will accept
+(faked curvature, a ramped dusk, a cat that's a flipbook of poses) — so the UI IS
+the toy and earned the full treatment. Delivery's is **combinatorial cost** —
+routing trucks to minimize an honest number — so the brain crossed and the canvas
+code stayed. Same spirit, different hard part, each with the boundary its hard
+part deserves.
 
 For why the engine and the math were never the hard part — and what it means to
 build something whose only spec is a perception in someone's head — read the essay
