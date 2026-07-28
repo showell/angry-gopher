@@ -16,7 +16,7 @@ The home page (`/`) is a launch pad for seven apps. In display order:
 
 | App | Path | What it is | Stack | README |
 |---|---|---|---|---|
-| **Seattle Delivery** | `/delivery` | A CVRP route-planning sim — eight trucks fan out across a not-to-scale Seattle. Watch a hand-built Clarke-Wright solver think. | TypeScript | [`delivery/README.md`](delivery/README.md) |
+| **Seattle Delivery** | `/delivery` | A CVRP route-planning sim — eight trucks fan out across a not-to-scale Seattle. Watch a hand-built Clarke-Wright solver think. A Zig solver (compiled to WASM) plans the routes; the TS client draws and animates them. | Zig (WASM) + TS | [`delivery/README.md`](delivery/README.md) |
 | **Safari Screensaver** | `/driving` | A self-driving first-person motorcycle ride down a winding road, drawn from rider-relative coordinates. A Zig core (compiled to WebAssembly) computes the geometry; a tiny JS blitter fills the polygons. | Zig (WASM) + JS | [`games/driving/README.md`](games/driving/README.md) |
 | **Chat** | `/chat` | Real-time chat, docs, and channels over Server-Sent Events — the live surface we use daily; a multi-page app still mostly rendered on the front end. | JavaScript + Zig | [`chat/README.md`](chat/README.md) |
 | **Blog** | `/blog` | Notes on building the site, rendered from repo markdown by a hand-written engine. | Zig | [`blog/README.md`](blog/README.md) |
@@ -54,9 +54,9 @@ We pin these versions:
 
 | Tool | Version | Builds | Install |
 |---|---|---|---|
-| **Zig** | 0.16.0 | the server (`zig-server/`) + the Lyn Rummy solver's WASM build (`games/lynrummy/zig/` → `solver.wasm`) + the Safari Screensaver's WASM core (`games/driving/wasm/` → `games/driving/safari.wasm`) + the Chess Toys' WASM cores (`games/chess/*.zig` → `games/chess/*.wasm`) | system install — `zig version` |
+| **Zig** | 0.16.0 | the server (`zig-server/`) + the Lyn Rummy solver's WASM build (`games/lynrummy/zig/` → `solver.wasm`) + the Safari Screensaver's WASM core (`games/driving/wasm/` → `games/driving/safari.wasm`) + the Delivery solver's WASM build (`delivery/zig/` → `delivery/solver.wasm`) + the Chess Toys' WASM cores (`games/chess/*.zig` → `games/chess/*.wasm`) | system install — `zig version` |
 | **Elm** | 0.19.1 | the Lyn Rummy client | `npm install` in `games/lynrummy/elm/` (pinned in its `package.json`) |
-| **TypeScript** | 6.0.3 | the Delivery client + the Lyn Rummy DSL/geometry layer and test harnesses (the solver itself is now zig) | `npm install` in `delivery/` and `games/lynrummy/ts/` (pinned in each `package.json`) |
+| **TypeScript** | 6.0.3 | the Delivery display client + the Lyn Rummy DSL/geometry layer and test harnesses (both solvers are now zig; each `.ts` solver stays as the port reference) | `npm install` in `delivery/` and `games/lynrummy/ts/` (pinned in each `package.json`) |
 | **Node** | 24 | runs the TS directly + hosts the npm-installed `elm`/`tsc` | system install — `node --version` |
 
 TypeScript runs two ways, and only one of them is transpiled:
@@ -66,10 +66,11 @@ TypeScript runs two ways, and only one of them is transpiled:
   enough for that is required; dev uses v24).
 - **Browser-side** — two bundles **are** transpiled (`esbuild` bundles
   each into one IIFE JS file, `@embedFile`d into the zig binary at compile
-  time). One is a *pure-TypeScript client that does it all*: the Delivery sim
+  time), and both now pair with a zig brain. The Delivery sim
   (`delivery/main.ts` → `delivery/app.js`) builds its own canvas and owns
-  every line of its on-screen behavior — no Elm, no server logic. The other
-  is the opposite shape: the Lyn Rummy engine bundle
+  the whole display — but the *solver* runs in `delivery/solver.wasm`
+  (`delivery/zig/`, `ops/build_delivery_wasm`), which the bundle calls for
+  each shift's plan. The Lyn Rummy engine bundle
   (`games/lynrummy/ts/elm_api/engine_entry.ts` → `games/lynrummy/elm/engine.js`)
   is a supporting layer, not a client — the *thinking* (hints, futility
   certificates, the agent opponent) lives in the zig solver compiled to
@@ -77,9 +78,10 @@ TypeScript runs two ways, and only one of them is transpiled:
   table gestures (locations, drag paths) while Elm owns the UI. `ops/build_delivery` / `ops/build_engine_js` run these (alongside the
   Elm output); `esbuild` is a pinned local devDependency (calling its binary
   directly skips `npx`'s ~1s-per-call resolution tax). (The Safari Screensaver
-  *used* to be a third pure-TS client; it's now a Zig→WASM core + a JS blitter
-  — `ops/build_safari_wasm` — and no longer transpiled. The `.ts` source is
-  kept as the port reference; see `HISTORY.md`.)
+  *used* to be a pure-TS client too; it's now a Zig→WASM core + a JS blitter
+  — `ops/build_safari_wasm` — and no longer transpiled. Each toy's `.ts`
+  source is kept as the port reference; see `HISTORY.md` for who sits where
+  on the zig↔TS spectrum and why.)
 
 `tsc` itself only ever typechecks (`npm run typecheck`) — it never emits
 the JS that ships. Elm, `tsc`, and `esbuild` are all project-local (run
@@ -254,6 +256,7 @@ session — read + write as that uid, never admin.
 |---|---|
 | [`zig-server/`](zig-server/) | **the server (zig)** — every surface (home, login, chat, docs, Lyn Rummy `/game` + `/puzzles`, driving, `/admin`, `/settings`) as per-module handlers in `src/*.zig` over the shared data tree; front-end assets embedded via `build.zig`. See [`SERVER.md`](SERVER.md). |
 | `chat/` | the embedded chat **client** (`chat.js`) + the reference API client / example bot (`chat_client.py`: discover, read, post) |
+| `delivery/` | the Delivery display client (TS) + `delivery/zig/` — the CVRP solver, compiled to `solver.wasm`, gated bit-exact against the retired TS solver (`ops/check_delivery`) |
 | `games/lynrummy/elm/` | the autonomous Elm client (dealer + referee + UI) |
 | `games/lynrummy/zig/` | the solver — the strategic brain (hints, certificates, Player Two, self-play sim), compiled to `solver.wasm` for the browser |
 | `games/lynrummy/ts/` | the original TypeScript engine, mostly retired — still the DSL/geometry layer (gesture choreography for the zig solver's plays) + the self-play harness |
@@ -286,6 +289,9 @@ ops/check              Pre-commit gate (~40s warm): check_common + test_elm + te
 ops/check_full         Milestone gate: ops/check + agent self-play
 ops/check_zig          zig server compiles + unit tests (~6s)
 ops/check_markdown     Markdown dialect regression (~3s)
+ops/check_delivery     Delivery zig-solver conformance (~30s warm): native
+                       gold check + the built solver.wasm driven over every
+                       gold shift (standalone; run after delivery/ edits)
 ops/test_ts            Fast TS gate (~15s)
 ops/test_elm           Fast Elm gate (~4s)
 ops/test_docs          Fast docs gate (~1s): doc_xref --all (dead links/paths)
