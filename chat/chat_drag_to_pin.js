@@ -37,29 +37,41 @@ window.ChatDragToPin = (function(){
     if(stylesInjected) return;
     var s = document.createElement('style');
     s.textContent = ''
-      + '.chat-session-item { touch-action:none; cursor:grab;'
+      /* touch-action:pan-y keeps vertical drawer scroll on the browser
+         until a pin-drag actually starts (then we set touch-action:none
+         on that row so the same finger can move between lists). */
+      + '.chat-session-item { touch-action:pan-y; cursor:grab;'
       +                     ' user-select:none; -webkit-user-select:none; }'
+      + '.chat-session-item.drag-armed { cursor:grabbing; }'
       + '.chat-session-item.dragging { opacity:0.5; cursor:grabbing; }'
       + '.chat-session-drop { min-height:14px; border-radius:4px; }'
       + '.chat-session-drop.drop-active { outline:2px dashed var(--cc-notify-fg);'
       +                                 ' outline-offset:-2px;'
       +                                 ' background:var(--cc-accent-soft-bg); }'
       /* Drag ghost is appended to document.body (not a sidebar) so a
-         narrow sidebar doesn't clip it; position:fixed makes that fine. */
+         narrow sidebar doesn't clip it; position:fixed makes that fine.
+         Larger type + scale + hard shadow keep the label readable when a
+         finger covers the row under the contact point. */
       + '.chat-drag-ghost { position:fixed; z-index:1000; pointer-events:none;'
-      +                   ' background:var(--cc-accent); color:var(--cc-bg); font-size:12px;'
-      +                   ' padding:3px 9px; border-radius:4px;'
-      +                   ' box-shadow:0 2px 8px rgba(0,0,0,0.35);'
-      +                   ' opacity:0.92; white-space:nowrap; max-width:170px;'
-      +                   ' overflow:hidden; text-overflow:ellipsis; }';
+      +                   ' background:var(--cc-accent); color:var(--cc-bg);'
+      +                   ' font-size:15px; font-weight:bold; line-height:1.2;'
+      +                   ' padding:8px 14px; border-radius:8px;'
+      +                   ' box-shadow:0 8px 22px rgba(0,0,0,0.45),'
+      +                              ' 0 0 0 2px var(--cc-bg);'
+      +                   ' opacity:1; white-space:nowrap; max-width:220px;'
+      +                   ' overflow:hidden; text-overflow:ellipsis;'
+      +                   ' transform:scale(1.15); transform-origin:left bottom; }';
     document.head.appendChild(s);
     stylesInjected = true;
   }
 
-  /* PRODUCT_DECISION: a 5px move threshold gates drag-start so a plain
-     tap still navigates the link. Pointer is captured AT drag-start,
-     not at pointerdown — capturing earlier steals the click. */
-  var DRAG_THRESHOLD=5, drag=null;
+  /* PRODUCT_DECISION: pin/unpin is a full-axis drag between stacked
+     lists. Mouse starts after a 5px move so taps still navigate.
+     Touch/pen: a horizontal-dominant swipe arms drag immediately so
+     pin mode is reachable without a long-press; vertical-dominant
+     movement before arm is scroll and abandons the pending drag.
+     A short still-hold still arms for vertical pin moves. */
+  var DRAG_THRESHOLD=5, TOUCH_HOLD_MS=280, drag=null;
 
   function sectionAt(x,y){
     var el=document.elementFromPoint(x,y);
@@ -69,30 +81,90 @@ window.ChatDragToPin = (function(){
     var a=document.querySelectorAll('.chat-session-drop.drop-active');
     for(var i=0;i<a.length;i++) a[i].classList.remove('drop-active');
   }
+  function clearHoldTimer(d){
+    if(d && d.holdTimer){ clearTimeout(d.holdTimer); d.holdTimer=null; }
+  }
+  function resetItemGesture(item){
+    item.classList.remove('dragging','drag-armed');
+    item.style.touchAction='';
+  }
+  function armDrag(d){
+    if(!d || d.armed || d.started) return;
+    d.armed=true;
+    d.item.classList.add('drag-armed');
+    /* Once armed, take over the finger so vertical pin moves are not
+       consumed as overflow scroll on the drawer. */
+    d.item.style.touchAction='none';
+  }
 
   function onDown(e){
     if(e.button>0) return; /* PRODUCT_DECISION: primary button / touch / pen only. */
     var item=e.currentTarget;
     delete item.dataset.justDragged;
+    if(drag){ clearHoldTimer(drag); resetItemGesture(drag.item); }
     drag={ item:item, sid:item.getAttribute('data-sid'),
            sourceUl:item.closest('[data-section]'),
-           x0:e.clientX, y0:e.clientY, pointerId:e.pointerId, started:false };
+           x0:e.clientX, y0:e.clientY, pointerId:e.pointerId,
+           pointerType:e.pointerType||'mouse',
+           started:false, armed:false, holdTimer:null };
+    /* Mouse is armed immediately; touch/pen wait for TOUCH_HOLD_MS. */
+    if(e.pointerType==='mouse' || e.pointerType===''){
+      armDrag(drag);
+    }else{
+      drag.holdTimer=setTimeout(function(){
+        if(!drag || drag.item!==item) return;
+        armDrag(drag);
+      }, TOUCH_HOLD_MS);
+    }
+  }
+  function startDragging(d, e){
+    d.started=true;
+    d.item.classList.add('dragging');
+    d.item.classList.remove('drag-armed');
+    try{ d.item.setPointerCapture(d.pointerId); }catch(_){}
+    /* BROWSER_WORKAROUND: pointer-events:none on the ghost so
+       elementFromPoint's hit-test of the drop section isn't shadowed. */
+    d.ghost=document.createElement('div');
+    d.ghost.className='chat-drag-ghost';
+    d.ghost.textContent=d.item.textContent.trim();
+    document.body.appendChild(d.ghost);
+    if(e && e.cancelable) e.preventDefault();
   }
   function onMove(e){
     if(!drag) return;
+    var dx=e.clientX-drag.x0, dy=e.clientY-drag.y0;
+    var dist=Math.hypot(dx, dy);
     if(!drag.started){
-      if(Math.hypot(e.clientX-drag.x0, e.clientY-drag.y0) < DRAG_THRESHOLD) return;
-      drag.started=true; drag.item.classList.add('dragging');
-      try{ drag.item.setPointerCapture(drag.pointerId); }catch(_){}
-      /* BROWSER_WORKAROUND: pointer-events:none on the ghost so
-         elementFromPoint's hit-test of the drop section isn't shadowed. */
-      drag.ghost=document.createElement('div');
-      drag.ghost.className='chat-drag-ghost';
-      drag.ghost.textContent=drag.item.textContent.trim();
-      document.body.appendChild(drag.ghost);
+      if(!drag.armed){
+        if(dist<DRAG_THRESHOLD) return;
+        /* Horizontal-dominant finger motion enters pin-drag immediately.
+           Vertical-dominant motion is scroll; cancel the pending drag. */
+        if(Math.abs(dx)>Math.abs(dy)){
+          clearHoldTimer(drag);
+          armDrag(drag);
+          startDragging(drag, e);
+        }else{
+          clearHoldTimer(drag);
+          resetItemGesture(drag.item);
+          drag=null;
+          return;
+        }
+      }else if(dist<DRAG_THRESHOLD){
+        return;
+      }else{
+        startDragging(drag, e);
+      }
+    }else if(e.cancelable){
+      e.preventDefault();
     }
-    drag.ghost.style.left=(e.clientX+12)+'px';
-    drag.ghost.style.top=(e.clientY+10)+'px';
+    /* Touch: park the ghost above the contact so the thumb does not cover
+       the label. Mouse keeps a small offset to the lower-right of the cursor. */
+    var offX=14, offY=12;
+    if(drag.pointerType==='touch' || drag.pointerType==='pen'){
+      offX=10; offY=-52;
+    }
+    drag.ghost.style.left=(e.clientX+offX)+'px';
+    drag.ghost.style.top=(e.clientY+offY)+'px';
     clearActive();
     var sec=sectionAt(e.clientX, e.clientY);
     if(sec && sec!==drag.sourceUl) sec.classList.add('drop-active');
@@ -100,8 +172,9 @@ window.ChatDragToPin = (function(){
   function onUp(e){
     if(!drag) return;
     var d=drag; drag=null;
+    clearHoldTimer(d);
     if(d.started){ try{ d.item.releasePointerCapture(e.pointerId); }catch(_){} }
-    d.item.classList.remove('dragging'); clearActive();
+    resetItemGesture(d.item); clearActive();
     if(d.ghost) d.ghost.remove();
     if(!d.started) return; /* PRODUCT_DECISION: tap, not drag — let the link navigate. */
     d.item.dataset.justDragged='1'; /* PRODUCT_DECISION: suppress the click that follows the drag. */
