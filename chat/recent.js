@@ -42,6 +42,7 @@
       +              ' padding:10px 8px 10px 12px; text-decoration:none;'
       +              ' color:inherit; border-radius:10px; }'
       + '.recent-tile:hover { background:var(--cc-quote-bg); }'
+      + '.recent-tile:focus-visible { outline:2px solid var(--cc-accent); outline-offset:2px; }'
       + '.recent-lead { flex:none; width:32px; display:flex; justify-content:center; }'
       + '.recent-avatar { width:32px; height:32px; border-radius:50%;'
       +                ' background:var(--cc-accent-soft-bg); color:var(--cc-accent);'
@@ -139,6 +140,8 @@
   // lint:called-once row-factory
   function buildTile(evt){
     if(evt.kind!=='chat' && evt.kind!=='doc') return null;
+    if(evt.kind==='chat' && !evt.url) return null;
+    if(evt.kind==='doc' && !evt.slug) return null;
     var a=document.createElement('a');
     a.className='recent-tile';
     a.href=evt.kind==='chat' ? evt.url : '/chat/docs/'+encodeURIComponent(evt.slug);
@@ -169,6 +172,7 @@
       /* DM / doc: the topic (or doc title) is the row. The avatar already
          names the partner — repeating it on every DM made a Steve-only
          feed look like one conversation. */
+      /* DM title is the topic; the partner is the avatar. Doc title is the row. */
       context.className='recent-title';
       context.textContent=evt.kind==='doc' ? (evt.title||evt.slug||'') : (evt.topic||'');
     }
@@ -215,8 +219,12 @@
   // lint:called-once sse-handler
   function upsert(evt){
     var key=eventKey(evt);
-    var existing=listEl.querySelector('.recent-tile[data-key="'+key+'"]');
-    if(existing) existing.remove();
+    /* Match on dataset, not a concatenated attribute selector: a key with
+       a quote or bracket would break querySelector('[data-key="…"]'). */
+    var tiles=listEl.querySelectorAll('.recent-tile');
+    for(var i=0;i<tiles.length;i++){
+      if(tiles[i].dataset.key===key){ tiles[i].remove(); break; }
+    }
     var tile=buildTile(evt); if(!tile) return;
     insertSorted(tile);
     if(emptyEl && emptyEl.parentNode){ emptyEl.remove(); }
