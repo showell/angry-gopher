@@ -1,14 +1,15 @@
 /* /chat/recent client — flat reverse-chronological feed of activity.
 
    Server ships the initial rows as inline JSON (#recent-data) next to the
-   mount slot (#recent-mount). This script builds the table, holds an
-   EventSource on /chat/recent/stream for upserts, and re-humanizes the
-   Ago column on a 20s tick (from each row's data-ts).
+   mount slot (#recent-mount). This script builds one tile per event, holds
+   an EventSource on /chat/recent/stream for upserts, and re-humanizes the
+   relative time on a 20s tick (from each tile's data-ts).
 
    ALL styling for this page is client-side — the server emits zero CSS for
-   /chat/recent. A small injected <style> (below) sets the table spacing,
-   top-aligns cells, and caps the page width; per-cell inline styles handle
-   the Ago column (right-align/tabular-nums) and the excerpt/context spans. */
+   /chat/recent. The tile shape matches the Flutter recents item: a leading
+   mark (avatar / channel bar), context + topic, relative time, and a one-
+   line "Who: excerpt" preview. The feed itself stays a flat newest-first
+   list; this file does not add search, filters, or section headers. */
 (function(){
   'use strict';
 
@@ -21,67 +22,59 @@
   catch(err){ console.error('recent: malformed JSON payload', err); return; }
   if(!Array.isArray(initial)) initial = [];
 
-  /* Page-owned layout. border-spacing (not border-collapse) names the
-     inter-column and inter-row gaps directly: 5px/4px over the UA default
-     2px/2px. Cells top-align so a multi-line excerpt doesn't vertically
-     center the short cells beside it. */
-  var layoutStyle = document.createElement('style');
-  layoutStyle.textContent =
-      '.app-body-wrap { max-width: 800px; }'
-    + '#recent-mount table { width: 100%; border-collapse: separate; border-spacing: 5px 4px; }'
-    + '#recent-mount th, #recent-mount td { vertical-align: top; }';
-  document.head.appendChild(layoutStyle);
+  /* Identity colors for the channel bar — stable per channel name, not
+     theme tokens (they don't flip with light/dark; stream colors don't
+     either). */
+  var CHANNEL_COLORS = [
+    '#3faf8a','#5b8def','#e07a5f','#9b72cf',
+    '#e2b340','#4ecdc4','#f28482','#7b8cde',
+  ];
 
-  /* Ago column: right-aligned tabular nums in a tight nowrap column, so the
-     short relative ages ("5m", "2h", "3d") line up. Applied per cell so the
-     page emits no CSS of its own. */
-  var AGO_STYLE_TH = {
-    textAlign:'right', fontVariantNumeric:'tabular-nums',
-    whiteSpace:'nowrap', width:'1%',
-  };
-  /* metaFg (not mutedFg) for Ago + Message: the muted gray washed out
-     against both light and dark backgrounds, so these use the higher-contrast
-     meta token. */
-  var AGO_STYLE_TD = {
-    textAlign:'right', fontVariantNumeric:'tabular-nums',
-    whiteSpace:'nowrap', width:'1%', color: ChatColors.metaFg,
-  };
+  // lint:called-once init-once-guard
+  function ensureStyles(){
+    if(document.getElementById('recent-style')) return;
+    var s = document.createElement('style');
+    s.id = 'recent-style';
+    s.textContent = ''
+      + '.app-body-wrap { max-width: 720px; }'
+      + '.recent-list { display:flex; flex-direction:column; }'
+      + '.recent-tile { display:flex; align-items:flex-start; gap:10px;'
+      +              ' padding:10px 8px 10px 12px; text-decoration:none;'
+      +              ' color:inherit; border-radius:10px; }'
+      + '.recent-tile:hover { background:var(--cc-quote-bg); }'
+      + '.recent-lead { flex:none; width:32px; display:flex; justify-content:center; }'
+      + '.recent-avatar { width:32px; height:32px; border-radius:50%;'
+      +                ' background:var(--cc-accent-soft-bg); color:var(--cc-accent);'
+      +                ' font-size:13px; font-weight:700;'
+      +                ' display:flex; align-items:center; justify-content:center; }'
+      + '.recent-bar { width:8px; height:40px; margin-top:2px; border-radius:99px; }'
+      + '.recent-body { flex:1; min-width:0; }'
+      + '.recent-top { display:flex; align-items:baseline; gap:8px; }'
+      + '.recent-context { flex:1; min-width:0; font-size:13px; font-weight:600;'
+      +                 ' color:var(--cc-body-muted-fg); white-space:nowrap;'
+      +                 ' overflow:hidden; text-overflow:ellipsis; }'
+      + '.recent-topic { color:var(--cc-fg); font-weight:600; letter-spacing:-0.2px; }'
+      + '.recent-dot { color:var(--cc-muted-fg); font-weight:600; }'
+      + '.recent-ago { flex:none; font-size:12px; font-weight:500;'
+      +             ' font-variant-numeric:tabular-nums; color:var(--cc-muted-fg); }'
+      + '.recent-title { margin-top:1px; font-size:15px; font-weight:600;'
+      +               ' letter-spacing:-0.2px; white-space:nowrap;'
+      +               ' overflow:hidden; text-overflow:ellipsis; }'
+      + '.recent-preview { margin-top:2px; font-size:13px; line-height:1.3;'
+      +                 ' color:var(--cc-body-muted-fg); white-space:nowrap;'
+      +                 ' overflow:hidden; text-overflow:ellipsis; }';
+    document.head.appendChild(s);
+  }
+  ensureStyles();
 
-  /* Who column shrinks to its content (names are short). */
-  var WHO_STYLE = { whiteSpace:'nowrap', width:'1%' };
-
-  /* The Message column shows a plain-text preview the server already
-     trimmed; we clamp the visible height to three lines with the
-     -webkit-box line-clamp idiom (applied to an inner div so the td keeps
-     normal table-cell layout). */
-  var EXCERPT_STYLE = {
-    color: ChatColors.metaFg, whiteSpace:'normal', maxWidth:'44ch',
-    display:'-webkit-box', WebkitBoxOrient:'vertical', WebkitLineClamp:'3',
-    overflow:'hidden',
-  };
-
-  var tableEl = document.createElement('table');
-  var thead   = document.createElement('thead');
-  var headRow = document.createElement('tr');
-  var thWho   = document.createElement('th'); thWho.textContent = 'Who';
-  Object.assign(thWho.style, WHO_STYLE);
-  var thWhat  = document.createElement('th'); thWhat.textContent = 'What';
-  var thAgo   = document.createElement('th'); thAgo.textContent = 'Ago';
-  Object.assign(thAgo.style, AGO_STYLE_TH);
-  var thMsg   = document.createElement('th'); thMsg.textContent = 'Message';
-  headRow.appendChild(thWho); headRow.appendChild(thWhat);
-  headRow.appendChild(thAgo); headRow.appendChild(thMsg);
-  thead.appendChild(headRow); tableEl.appendChild(thead);
-  var tbodyEl = document.createElement('tbody');
-  tableEl.appendChild(tbodyEl);
-  mount.appendChild(tableEl);
+  var listEl = document.createElement('div');
+  listEl.className = 'recent-list';
+  mount.appendChild(listEl);
 
   var emptyEl = document.createElement('p');
   Object.assign(emptyEl.style, { color: ChatColors.mutedFg });
   emptyEl.textContent = 'Nothing yet.';
 
-  /* The "Ago" header carries the relative-time framing, so the cells drop the
-     redundant " ago" suffix — "5m", "2h", "3d" ("just now" is its own phrase). */
   function humanize(iso){
     var d=Date.now()-new Date(iso).getTime();
     if(d<60000) return 'just now';
@@ -93,98 +86,157 @@
   }
 
   function rePaintAges(){
-    var rows=tbodyEl.querySelectorAll('tr[data-ts]');
-    for(var i=0;i<rows.length;i++){
-      var tr=rows[i], ts=tr.dataset.ts; if(!ts) continue;
-      var ago=tr.querySelector('td.recent-ago');
+    var tiles=listEl.querySelectorAll('.recent-tile[data-ts]');
+    for(var i=0;i<tiles.length;i++){
+      var tile=tiles[i], ts=tile.dataset.ts; if(!ts) continue;
+      var ago=tile.querySelector('.recent-ago');
       if(ago) ago.textContent=humanize(ts);
     }
   }
   setInterval(rePaintAges, 20000);
 
-  // lint:called-once row-factory
-  function buildRow(evt){
-    var tr=document.createElement('tr');
-    var ago=document.createElement('td');
-    /* The class is kept ONLY as a query handle for rePaintAges; styling
-       is inline. */
-    ago.className='recent-ago';
-    Object.assign(ago.style, AGO_STYLE_TD);
-    ago.textContent=humanize(evt.at);
-    /* Who: the author, already rendered "You" server-side for the viewer.
-       Empty for legacy sessions with no recorded author. */
-    var who=document.createElement('td');
-    Object.assign(who.style, WHO_STYLE);
-    who.textContent=evt.who||'';
-    var what=document.createElement('td');
-    tr.dataset.ts=evt.at;
+  function eventKey(evt){
+    return evt.kind==='chat' ? 'chat:'+evt.url : 'doc:'+evt.slug;
+  }
+
+  /* where is "to <partner>" (DM) or "in <channel>" (channel). Incoming DMs
+     already name the partner in who; outgoing ones keep it only in where. */
+  function partnerOf(evt){
+    if(!evt.dm) return '';
+    if(evt.who && evt.who!=='You') return evt.who;
+    if(evt.where && evt.where.indexOf('to ')===0) return evt.where.slice(3);
+    return '';
+  }
+
+  function channelOf(evt){
+    if(evt.kind!=='chat' || evt.dm) return '';
+    if(evt.where && evt.where.indexOf('in ')===0) return evt.where.slice(3);
+    return '';
+  }
+
+  // lint:called-once lead-factory
+  function buildLead(evt){
+    var lead=document.createElement('div');
+    lead.className='recent-lead';
+    if(evt.kind==='chat' && evt.dm){
+      var av=document.createElement('div');
+      av.className='recent-avatar';
+      var name=partnerOf(evt);
+      av.textContent=name ? name.charAt(0).toUpperCase() : '?';
+      lead.appendChild(av);
+      return lead;
+    }
+    var bar=document.createElement('div');
+    bar.className='recent-bar';
     if(evt.kind==='chat'){
-      tr.dataset.key='chat:'+evt.url;
-      /* Lead with the topic (the scannable thing) and link it to the
-         transcript; the partner/channel context trails in parens. where is
-         "to <partner>" (DM) or "in <channel>" (channel). An INCOMING DM (a 1:1
-         conv whose latest message isn't ours) is labeled just "(DM)" — "message
-         to <me>" would be backwards, and the Who cell already names the partner.
-         Our own DMs keep "message to <partner>"; channels keep "message in …". */
-      var a=document.createElement('a');
-      a.href=evt.url; a.textContent=evt.topic;
-      what.appendChild(a);
-      var context = (evt.dm && evt.who !== 'You') ? ' (DM)'
-                  : evt.where ? ' (message '+evt.where+')'
-                  : ' (message)';
-      what.appendChild(document.createTextNode(context));
-    }else if(evt.kind==='doc'){
-      tr.dataset.key='doc:'+evt.slug;
-      var da=document.createElement('a');
-      da.href='/chat/docs/'+encodeURIComponent(evt.slug);
-      da.textContent=evt.title||evt.slug;
-      what.appendChild(da);
-      what.appendChild(document.createTextNode(' (edited)'));
+      var ch=channelOf(evt);
+      var h=0;
+      for(var i=0;i<ch.length;i++) h=((h<<5)-h)+ch.charCodeAt(i);
+      bar.style.background=CHANNEL_COLORS[Math.abs(h)%CHANNEL_COLORS.length];
     }else{
-      return null;
+      bar.style.background=ChatColors.mutedFg;
     }
-    var preview=document.createElement('td');
+    lead.appendChild(bar);
+    return lead;
+  }
+
+  // lint:called-once row-factory
+  function buildTile(evt){
+    if(evt.kind!=='chat' && evt.kind!=='doc') return null;
+    var a=document.createElement('a');
+    a.className='recent-tile';
+    a.href=evt.kind==='chat' ? evt.url : '/chat/docs/'+encodeURIComponent(evt.slug);
+    a.dataset.key=eventKey(evt);
+    a.dataset.ts=evt.at;
+    a.appendChild(buildLead(evt));
+
+    var body=document.createElement('div');
+    body.className='recent-body';
+
+    var top=document.createElement('div');
+    top.className='recent-top';
+    var context=document.createElement('div');
+    context.className='recent-context';
+    if(evt.kind==='chat' && !evt.dm){
+      var hash=document.createElement('span');
+      hash.textContent='#'+(channelOf(evt)||'channel');
+      var dot=document.createElement('span');
+      dot.className='recent-dot';
+      dot.textContent='  ·  ';
+      var topic=document.createElement('span');
+      topic.className='recent-topic';
+      topic.textContent=evt.topic||'';
+      context.appendChild(hash);
+      context.appendChild(dot);
+      context.appendChild(topic);
+    }else if(evt.kind==='chat'){
+      /* Partner in the subtitle, topic as the title: a Gopher DM is many
+         named sessions with one person, not one conversation. */
+      context.textContent=partnerOf(evt)||'direct message';
+    }else{
+      context.textContent='doc';
+    }
+    var ago=document.createElement('span');
+    ago.className='recent-ago';
+    ago.textContent=humanize(evt.at);
+    top.appendChild(context);
+    top.appendChild(ago);
+    body.appendChild(top);
+
+    if(evt.kind==='chat' && evt.dm){
+      var title=document.createElement('div');
+      title.className='recent-title';
+      title.textContent=evt.topic||'';
+      body.appendChild(title);
+    }else if(evt.kind==='doc'){
+      var dtitle=document.createElement('div');
+      dtitle.className='recent-title';
+      dtitle.textContent=evt.title||evt.slug||'';
+      body.appendChild(dtitle);
+    }
+
     if(evt.kind==='chat' && evt.excerpt){
-      var clamp=document.createElement('div');
-      Object.assign(clamp.style, EXCERPT_STYLE);
-      clamp.textContent=evt.excerpt;
-      preview.appendChild(clamp);
+      var who=evt.who ? evt.who.split(' ')[0] : '';
+      var preview=document.createElement('div');
+      preview.className='recent-preview';
+      preview.textContent=who ? (who+': '+evt.excerpt) : evt.excerpt;
+      body.appendChild(preview);
     }
-    tr.appendChild(who); tr.appendChild(what);
-    tr.appendChild(ago); tr.appendChild(preview);
-    return tr;
+
+    a.appendChild(body);
+    return a;
   }
 
   /* PRODUCT_DECISION: data-ts desc (newest first); equal timestamps tie-break
-     stably by inserting above the older row of the same instant. */
+     stably by inserting above the older tile of the same instant. */
   // lint:called-once named-algorithm
-  function insertSorted(tr){
-    var ts=tr.dataset.ts;
-    var rows=tbodyEl.querySelectorAll('tr[data-ts]');
-    for(var i=0;i<rows.length;i++){
-      if(rows[i].dataset.ts < ts){
-        tbodyEl.insertBefore(tr, rows[i]);
+  function insertSorted(tile){
+    var ts=tile.dataset.ts;
+    var tiles=listEl.querySelectorAll('.recent-tile[data-ts]');
+    for(var i=0;i<tiles.length;i++){
+      if(tiles[i].dataset.ts < ts){
+        listEl.insertBefore(tile, tiles[i]);
         return;
       }
     }
-    tbodyEl.appendChild(tr);
+    listEl.appendChild(tile);
   }
 
   // lint:called-once sse-handler
   function upsert(evt){
-    var key=evt.kind==='chat' ? 'chat:'+evt.url : 'doc:'+evt.slug;
-    var existing=tbodyEl.querySelector('tr[data-key="'+key+'"]');
+    var key=eventKey(evt);
+    var existing=listEl.querySelector('.recent-tile[data-key="'+key+'"]');
     if(existing) existing.remove();
-    var tr=buildRow(evt); if(!tr) return;
-    insertSorted(tr);
+    var tile=buildTile(evt); if(!tile) return;
+    insertSorted(tile);
     if(emptyEl && emptyEl.parentNode){ emptyEl.remove(); }
   }
 
   /* Initial paint: server-provided rows are already newest-first, so a
-     plain append per row preserves order. Empty state shows when the
+     plain append per tile preserves order. Empty state shows when the
      payload is empty. */
   for(var i=0;i<initial.length;i++){
-    var tr=buildRow(initial[i]); if(tr) tbodyEl.appendChild(tr);
+    var tile=buildTile(initial[i]); if(tile) listEl.appendChild(tile);
   }
   if(initial.length===0) mount.appendChild(emptyEl);
 
