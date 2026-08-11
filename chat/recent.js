@@ -57,7 +57,7 @@
       + '.recent-dot { color:var(--cc-muted-fg); font-weight:600; }'
       + '.recent-ago { flex:none; font-size:12px; font-weight:500;'
       +             ' font-variant-numeric:tabular-nums; color:var(--cc-muted-fg); }'
-      + '.recent-title { margin-top:1px; font-size:15px; font-weight:600;'
+      + '.recent-title { min-width:0; font-size:15px; font-weight:600;'
       +               ' letter-spacing:-0.2px; white-space:nowrap;'
       +               ' overflow:hidden; text-overflow:ellipsis; }'
       + '.recent-preview { margin-top:2px; font-size:13px; line-height:1.3;'
@@ -99,15 +99,6 @@
     return evt.kind==='chat' ? 'chat:'+evt.url : 'doc:'+evt.slug;
   }
 
-  /* where is "to <partner>" (DM) or "in <channel>" (channel). Incoming DMs
-     already name the partner in who; outgoing ones keep it only in where. */
-  function partnerOf(evt){
-    if(!evt.dm) return '';
-    if(evt.who && evt.who!=='You') return evt.who;
-    if(evt.where && evt.where.indexOf('to ')===0) return evt.where.slice(3);
-    return '';
-  }
-
   function channelOf(evt){
     if(evt.kind!=='chat' || evt.dm) return '';
     if(evt.where && evt.where.indexOf('in ')===0) return evt.where.slice(3);
@@ -121,7 +112,11 @@
     if(evt.kind==='chat' && evt.dm){
       var av=document.createElement('div');
       av.className='recent-avatar';
-      var name=partnerOf(evt);
+      /* Avatar initial is the partner: incoming DMs name them in who,
+         outgoing ones only in where ("to Steve"). */
+      var name=(evt.who && evt.who!=='You') ? evt.who
+             : (evt.where && evt.where.indexOf('to ')===0) ? evt.where.slice(3)
+             : '';
       av.textContent=name ? name.charAt(0).toUpperCase() : '?';
       lead.appendChild(av);
       return lead;
@@ -156,8 +151,8 @@
     var top=document.createElement('div');
     top.className='recent-top';
     var context=document.createElement('div');
-    context.className='recent-context';
     if(evt.kind==='chat' && !evt.dm){
+      context.className='recent-context';
       var hash=document.createElement('span');
       hash.textContent='#'+(channelOf(evt)||'channel');
       var dot=document.createElement('span');
@@ -169,12 +164,12 @@
       context.appendChild(hash);
       context.appendChild(dot);
       context.appendChild(topic);
-    }else if(evt.kind==='chat'){
-      /* Partner in the subtitle, topic as the title: a Gopher DM is many
-         named sessions with one person, not one conversation. */
-      context.textContent=partnerOf(evt)||'direct message';
     }else{
-      context.textContent='doc';
+      /* DM / doc: the topic (or doc title) is the row. The avatar already
+         names the partner — repeating it on every DM made a Steve-only
+         feed look like one conversation. */
+      context.className='recent-title';
+      context.textContent=evt.kind==='doc' ? (evt.title||evt.slug||'') : (evt.topic||'');
     }
     var ago=document.createElement('span');
     ago.className='recent-ago';
@@ -183,23 +178,10 @@
     top.appendChild(ago);
     body.appendChild(top);
 
-    if(evt.kind==='chat' && evt.dm){
-      var title=document.createElement('div');
-      title.className='recent-title';
-      title.textContent=evt.topic||'';
-      body.appendChild(title);
-    }else if(evt.kind==='doc'){
-      var dtitle=document.createElement('div');
-      dtitle.className='recent-title';
-      dtitle.textContent=evt.title||evt.slug||'';
-      body.appendChild(dtitle);
-    }
-
     if(evt.kind==='chat' && evt.excerpt){
-      var who=evt.who ? evt.who.split(' ')[0] : '';
       var preview=document.createElement('div');
       preview.className='recent-preview';
-      preview.textContent=who ? (who+': '+evt.excerpt) : evt.excerpt;
+      preview.textContent=evt.excerpt;
       body.appendChild(preview);
     }
 
