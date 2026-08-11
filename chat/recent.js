@@ -62,7 +62,8 @@
       +               ' overflow:hidden; text-overflow:ellipsis; }'
       + '.recent-preview { margin-top:2px; font-size:13px; line-height:1.3;'
       +                 ' color:var(--cc-body-muted-fg); white-space:nowrap;'
-      +                 ' overflow:hidden; text-overflow:ellipsis; }';
+      +                 ' overflow:hidden; text-overflow:ellipsis; }'
+      + '.recent-who { font-weight:600; color:var(--cc-meta-fg); }';
     document.head.appendChild(s);
   }
   ensureStyles();
@@ -181,7 +182,14 @@
     if(evt.kind==='chat' && evt.excerpt){
       var preview=document.createElement('div');
       preview.className='recent-preview';
-      preview.textContent=evt.excerpt;
+      /* Last author, already "You" for the viewer — not the DM partner. */
+      if(evt.who){
+        var who=document.createElement('span');
+        who.className='recent-who';
+        who.textContent=evt.who.split(' ')[0]+': ';
+        preview.appendChild(who);
+      }
+      preview.appendChild(document.createTextNode(evt.excerpt));
       body.appendChild(preview);
     }
 
