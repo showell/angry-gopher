@@ -20,6 +20,11 @@ It's live and dogfooded daily; the architecture has settled. **The code is the
 authority** for how anything works — this file is the human orientation, and the
 deeper "why" of one of its best ideas lives in the essay linked below.
 
+A native iOS/Android client lives in [`mobile/`](../mobile/README.md). Someone
+with an iPhone and no Mac should use this website
+([lynrummy.com/chat](https://lynrummy.com/chat)), or SideStore, or TestFlight —
+those three paths are written up in the mobile README.
+
 ## The shape of it: a thin backend, behavior in the browser
 
 The one principle that organizes everything: **keep the backend thin.** The
