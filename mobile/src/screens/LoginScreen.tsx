@@ -10,22 +10,23 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { profileLabel } from '../session/profiles';
 import { useSession } from '../session/Session';
 import { useTheme } from '../theme/Theme';
 
 export function LoginScreen() {
   const { colors } = useTheme();
-  const { signIn, error } = useSession();
+  const { signIn, error, profiles } = useSession();
   const [base, setBase] = useState(
     __DEV__ ? 'http://127.0.0.1:9001' : 'https://lynrummy.com',
   );
   const [key, setKey] = useState('');
   const [busy, setBusy] = useState(false);
 
-  async function submit() {
+  async function submit(nextBase?: string, nextKey?: string) {
     setBusy(true);
     try {
-      await signIn(base.trim(), key.trim());
+      await signIn((nextBase || base).trim(), (nextKey || key).trim());
     } catch {
       /* error lands on the session */
     } finally {
@@ -41,9 +42,30 @@ export function LoginScreen() {
       <View style={styles.col}>
         <Text style={[styles.title, { color: colors.fg }]}>Angry Gopher</Text>
         <Text style={[styles.blurb, { color: colors.bodyMutedFg }]}>
-          Sign in with a chat API key from Settings on the web. The key is
-          stored in the device keychain.
+          Sign in with a chat API key from Settings on the web. A successful
+          login is saved on this device so you can come back without pasting
+          the key again.
         </Text>
+        {profiles.length ? (
+          <View style={{ marginBottom: 20 }}>
+            <Text style={[styles.label, { color: colors.metaFg }]}>Saved on this device</Text>
+            {profiles.map(p => (
+              <Pressable
+                key={p.id}
+                testID={'login-profile-' + p.uid}
+                disabled={busy}
+                onPress={() => {
+                  submit(p.base, p.key).catch(() => {});
+                }}
+                style={[
+                  styles.input,
+                  { backgroundColor: colors.cardBg, borderColor: colors.inputBorder, marginTop: 8 },
+                ]}>
+                <Text style={{ color: colors.fg, fontWeight: '600' }}>{profileLabel(p)}</Text>
+              </Pressable>
+            ))}
+          </View>
+        ) : null}
         <Text style={[styles.label, { color: colors.metaFg }]}>Server</Text>
         <TextInput
           testID="login-server"

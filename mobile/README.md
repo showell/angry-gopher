@@ -22,7 +22,9 @@ npx react-native run-android
 
 Sign in with a chat API key from web Settings (`POST /settings/apikey`).
 Point the server field at `http://<lan-ip>:9001` for a phone on the same
-network, or `https://lynrummy.com`.
+network, or `https://lynrummy.com`. A successful login is saved in the
+device keychain as a profile (server + uid + key). Sign out leaves it
+there so you can tap it next time; Settings → Forget this login deletes it.
 
 ## Tests / publish
 
