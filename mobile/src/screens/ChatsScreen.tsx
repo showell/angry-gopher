@@ -1,17 +1,18 @@
 import React, { useEffect, useState } from 'react';
-import {
-  ActivityIndicator,
-  FlatList,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { CompositeScreenProps } from '@react-navigation/native';
 import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import type { SidebarItem } from '../api/types';
+import {
+  applySidebarEvent,
+  convBaseFromUrl,
+  convKeyFromPath,
+  emptySidebar,
+  parseTopicHref,
+} from '../api/parse';
+import type { Sidebar, SidebarItem } from '../api/types';
+import { ChatSidebar } from '../components/ChatSidebar';
 import type { MainTabParamList, RootStackParamList } from '../navigation/types';
 import { useSession } from '../session/Session';
 import { useTheme } from '../theme/Theme';
@@ -24,35 +25,58 @@ type Props = CompositeScreenProps<
 export function ChatsScreen({ navigation }: Props) {
   const { colors } = useTheme();
   const { session } = useSession();
-  const [rows, setRows] = useState<SidebarItem[]>([]);
+  const [path, setPath] = useState('');
+  const [data, setData] = useState<Sidebar>(emptySidebar());
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
+  const convKey = convKeyFromPath(path);
+  const convBase = convBaseFromUrl(path) || path;
 
   useEffect(() => {
     if (!session) {
       return;
     }
-    let cancelled = false;
     const seed = session.conversations[0];
-    const path = seed ? '/chat/c/' + seed.conv : '/chat';
+    load(seed ? '/chat/c/' + seed.conv : '/chat');
+  }, [session]);
+
+  useEffect(() => {
+    if (!session) {
+      return;
+    }
+    return session.client.streamSidebar(evt => {
+      setData(cur => applySidebarEvent(cur, evt, convKey));
+    });
+  }, [session, convKey]);
+
+  function load(next: string) {
+    if (!session) {
+      return;
+    }
+    setLoading(true);
+    setError('');
+    setPath(next);
     session.client
-      .sidebar(path)
+      .sidebar(next)
       .then(side => {
-        if (!cancelled) {
-          setRows(side.conversations);
-          setLoading(false);
-        }
+        setData(side);
+        setLoading(false);
       })
       .catch(e => {
-        if (!cancelled) {
-          setError(e instanceof Error ? e.message : 'Failed to load chats');
-          setLoading(false);
-        }
+        setError(e instanceof Error ? e.message : 'Failed to load sidebar');
+        setLoading(false);
       });
-    return () => {
-      cancelled = true;
-    };
-  }, [session]);
+  }
+
+  function openSession(item: SidebarItem) {
+    const ref = parseTopicHref(item.url);
+    const base = ref ? ref.convBase : convBaseFromUrl(item.url);
+    const sid = ref ? ref.sid : item.id;
+    if (!base || !sid) {
+      return;
+    }
+    navigation.navigate('Topic', { convBase: base, sid, title: item.label });
+  }
 
   return (
     <SafeAreaView
@@ -64,37 +88,22 @@ export function ChatsScreen({ navigation }: Props) {
       ) : error ? (
         <Text style={{ color: colors.error, padding: 20 }}>{error}</Text>
       ) : (
-        <FlatList
-          data={rows}
-          keyExtractor={item => item.id}
-          renderItem={({ item }) => (
-            <Pressable
-              onPress={() =>
-                navigation.navigate('Sessions', {
-                  convUrl: item.url,
-                  title: item.label,
-                })
-              }
-              style={({ pressed }) => [styles.row, { opacity: pressed ? 0.7 : 1 }]}>
-              <View
-                style={[
-                  styles.dot,
-                  {
-                    backgroundColor: item.online
-                      ? colors.presenceOnline
-                      : 'transparent',
-                    borderColor: item.online
-                      ? colors.presenceOnline
-                      : colors.presenceIdle,
-                  },
-                ]}
-              />
-              <Text style={[styles.label, { color: colors.fg }]} numberOfLines={1}>
-                {item.label}
-              </Text>
-            </Pressable>
-          )}
-        />
+        <View style={styles.body}>
+          <ChatSidebar
+            data={data}
+            colors={colors}
+            onSelectConversation={item => load(item.url)}
+            onSelectSession={openSession}
+            onAddTopic={async name => {
+              const j = await session!.client.addTopic(convBase, name);
+              openSession({
+                id: j.sid,
+                label: j.sid,
+                url: convBase + '/' + j.sid,
+              });
+            }}
+          />
+        </View>
       )}
     </SafeAreaView>
   );
@@ -110,18 +119,5 @@ const styles = StyleSheet.create({
     paddingTop: 8,
     paddingBottom: 10,
   },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    gap: 12,
-  },
-  dot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    borderWidth: 1.5,
-  },
-  label: { fontSize: 16, fontWeight: '600', flex: 1 },
+  body: { flex: 1, paddingLeft: 16 },
 });

@@ -77,6 +77,41 @@ export class ChatClient {
     return this.text('/chat/docs/' + encodeURIComponent(slug) + '.md');
   }
 
+  streamSidebar(
+    onEvent: (evt: { kind: string; [k: string]: unknown }) => void,
+    onError?: () => void,
+  ): () => void {
+    return openEventSource(this.base + '/chat/sidebar/stream', this.headers(), {
+      onEvent(_event, data) {
+        try {
+          const parsed = JSON.parse(data) as { kind: string };
+          if (parsed && parsed.kind) {
+            onEvent(parsed);
+          }
+        } catch {
+          /* keep the stream */
+        }
+      },
+      onError,
+    });
+  }
+
+  async addTopic(
+    convBase: string,
+    topic: string,
+  ): Promise<{ conv: string; sid: string }> {
+    const res = await this.request(convBase + '/new', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: 'topic=' + encodeURIComponent(topic),
+    });
+    if (!res.ok) {
+      const t = (await res.text()).trim();
+      throw new ApiError(res.status, t || 'Add topic failed');
+    }
+    return res.json() as Promise<{ conv: string; sid: string }>;
+  }
+
   async renderMarkdown(body: string): Promise<string> {
     const res = await this.request('/chat/docs/render', {
       method: 'POST',

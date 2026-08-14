@@ -38,6 +38,74 @@ export function parseSidebarPage(html: string): Sidebar {
   };
 }
 
+export function emptySidebar(): Sidebar {
+  return { conversations: [], pinned_sessions: [], sessions: [] };
+}
+
+export function convKeyFromPath(path: string): string {
+  const dm = path.match(/^\/chat\/c\/([^/?#]+)/);
+  if (dm) {
+    return decodeURIComponent(dm[1]);
+  }
+  const ch = path.match(/^\/channel\/([^/?#]+)/);
+  if (ch) {
+    return decodeURIComponent(ch[1]);
+  }
+  return '';
+}
+
+export function applySidebarEvent(
+  side: Sidebar,
+  evt: { kind: string; [k: string]: unknown },
+  convKey: string,
+): Sidebar {
+  if (evt.kind === 'user-arrived') {
+    const userId = String(evt.user_id || '');
+    const url = String(evt.url || '');
+    if (!userId || !url) {
+      return side;
+    }
+    const id = 'uid:' + userId;
+    if (side.conversations.some(c => c.id === id)) {
+      return side;
+    }
+    return {
+      ...side,
+      conversations: side.conversations.concat([
+        {
+          id,
+          label: String(evt.user_name || userId),
+          url,
+          active: false,
+        },
+      ]),
+    };
+  }
+  if (evt.kind === 'topic-added') {
+    const sid = String(evt.sid || '');
+    const url = String(evt.url || '');
+    if (!sid || !url || String(evt.conv || '') !== convKey) {
+      return side;
+    }
+    if (side.sessions.some(s => s.id === sid) || side.pinned_sessions.some(s => s.id === sid)) {
+      return side;
+    }
+    const next = side.sessions.concat([{ id: sid, label: sid, url, active: false }]);
+    next.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+    return { ...side, sessions: next };
+  }
+  if (evt.kind === 'user-online') {
+    const id = 'uid:' + String(evt.user_id || '');
+    return {
+      ...side,
+      conversations: side.conversations.map(c =>
+        c.id === id ? { ...c, online: true } : c,
+      ),
+    };
+  }
+  return side;
+}
+
 export function convBaseFromUrl(url: string): string | null {
   const dm = url.match(/^\/chat\/c\/([^/?#]+)/);
   if (dm) {

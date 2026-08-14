@@ -12,7 +12,6 @@ import { DocScreen } from './src/screens/DocScreen';
 import { DocsScreen } from './src/screens/DocsScreen';
 import { LoginScreen } from './src/screens/LoginScreen';
 import { RecentScreen } from './src/screens/RecentScreen';
-import { SessionsScreen } from './src/screens/SessionsScreen';
 import { SettingsScreen } from './src/screens/SettingsScreen';
 import { TopicScreen } from './src/screens/TopicScreen';
 import { SessionProvider, useSession } from './src/session/Session';
@@ -106,7 +105,6 @@ function Root() {
                 options={{ headerShown: false }}
               />
               <Stack.Screen name="Topic" component={TopicScreen} />
-              <Stack.Screen name="Sessions" component={SessionsScreen} />
               <Stack.Screen name="Doc" component={DocScreen} />
             </>
           ) : (

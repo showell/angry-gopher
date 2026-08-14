@@ -12,8 +12,16 @@ import {
 } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { launchImageLibrary } from 'react-native-image-picker';
-import { sessionOfMsgId } from '../api/parse';
-import type { WireMessage } from '../api/types';
+import {
+  applySidebarEvent,
+  convBaseFromUrl,
+  convKeyFromPath,
+  emptySidebar,
+  parseTopicHref,
+  sessionOfMsgId,
+} from '../api/parse';
+import type { Sidebar, SidebarItem, WireMessage } from '../api/types';
+import { ChatSidebar } from '../components/ChatSidebar';
 import { ComposeBox } from '../components/ComposeBox';
 import { MessageBubble, type BubbleRecord } from '../components/MessageBubble';
 import {
@@ -44,6 +52,8 @@ export function TopicScreen({ route, navigation }: Props) {
   const [statusError, setStatusError] = useState(false);
   const [pending, setPending] = useState(false);
   const [codeText, setCodeText] = useState('');
+  const [rail, setRail] = useState(false);
+  const [side, setSide] = useState<Sidebar>(emptySidebar());
   const pendingCid = useRef<string | null>(null);
   const pendingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const listRef = useRef<FlatList<BubbleRecord>>(null);
@@ -52,8 +62,28 @@ export function TopicScreen({ route, navigation }: Props) {
   const nav = useMemo(() => createNavStack(() => selectedRef.current), []);
 
   useEffect(() => {
-    navigation.setOptions({ title });
-  }, [navigation, title]);
+    navigation.setOptions({
+      title,
+      headerLeft: () => (
+        <Pressable onPress={() => setRail(true)} hitSlop={8} style={{ marginRight: 12 }}>
+          <Text style={{ color: colors.accent, fontSize: 18, fontWeight: '700' }}>☰</Text>
+        </Pressable>
+      ),
+    });
+  }, [navigation, title, colors.accent]);
+
+  useEffect(() => {
+    if (!session) {
+      return;
+    }
+    session.client
+      .sidebar(convBase + '/' + encodeURIComponent(sid))
+      .then(setSide)
+      .catch(() => {});
+    return session.client.streamSidebar(evt => {
+      setSide(cur => applySidebarEvent(cur, evt, convKeyFromPath(convBase)));
+    });
+  }, [session, convBase, sid]);
 
   useEffect(() => {
     if (!session) {
@@ -227,6 +257,17 @@ export function TopicScreen({ route, navigation }: Props) {
     }
   }
 
+  function openSession(item: SidebarItem) {
+    const ref = parseTopicHref(item.url);
+    const base = ref ? ref.convBase : convBaseFromUrl(item.url) || convBase;
+    const nextSid = ref ? ref.sid : item.id;
+    setRail(false);
+    if (base === convBase && nextSid === sid) {
+      return;
+    }
+    navigation.replace('Topic', { convBase: base, sid: nextSid, title: item.label });
+  }
+
   if (!session) {
     return null;
   }
@@ -279,6 +320,38 @@ export function TopicScreen({ route, navigation }: Props) {
           upload().catch(() => {});
         }}
       />
+      <Modal visible={rail} animationType="slide" onRequestClose={() => setRail(false)}>
+        <View style={[styles.railWrap, { backgroundColor: colors.bg }]}>
+          <Pressable onPress={() => setRail(false)} style={{ padding: 16 }}>
+            <Text style={{ color: colors.accent, fontWeight: '600' }}>Close</Text>
+          </Pressable>
+          <ChatSidebar
+            data={side}
+            colors={colors}
+            onSelectConversation={item => {
+              session.client
+                .sidebar(item.url)
+                .then(next => {
+                  setSide(next);
+                  const land = next.sessions.find(s => s.active) || next.sessions[0] || next.pinned_sessions[0];
+                  if (land) {
+                    openSession(land);
+                  }
+                })
+                .catch(() => {});
+            }}
+            onSelectSession={openSession}
+            onAddTopic={async name => {
+              const j = await session.client.addTopic(convBase, name);
+              openSession({
+                id: j.sid,
+                label: j.sid,
+                url: convBase + '/' + j.sid,
+              });
+            }}
+          />
+        </View>
+      </Modal>
       <Modal visible={!!codeText} animationType="slide" onRequestClose={() => setCodeText('')}>
         <View style={[styles.codeWrap, { backgroundColor: colors.bg }]}>
           <Pressable onPress={() => setCodeText('')} style={{ padding: 16 }}>
@@ -315,4 +388,5 @@ const styles = StyleSheet.create({
   wrap: { flex: 1 },
   list: { paddingHorizontal: 12, paddingTop: 12, paddingBottom: 8 },
   codeWrap: { flex: 1, paddingTop: 48 },
+  railWrap: { flex: 1, paddingTop: 48, paddingLeft: 16 },
 });

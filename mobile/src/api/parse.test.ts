@@ -1,6 +1,8 @@
 import {
+  applySidebarEvent,
   channelOf,
   dmPartnerName,
+  emptySidebar,
   humanizeAgo,
   parseRecentPage,
   parseSidebarPage,
@@ -41,6 +43,38 @@ describe('parseSidebarPage', () => {
     const side = parseSidebarPage(html);
     expect(side.conversations[0].label).toBe('Steve');
     expect(side.sessions[0].url).toBe('/chat/c/1_3/ChitChat');
+  });
+});
+
+describe('applySidebarEvent', () => {
+  it('appends a partner, a same-conv topic, and an online flip', () => {
+    let side = emptySidebar();
+    side = applySidebarEvent(
+      side,
+      { kind: 'user-arrived', user_id: '1', user_name: 'Steve', url: '/chat/c/1_3' },
+      '1_3',
+    );
+    side = applySidebarEvent(
+      side,
+      { kind: 'topic-added', conv: '1_3', sid: 'yo', url: '/chat/c/1_3/yo' },
+      '1_3',
+    );
+    side = applySidebarEvent(side, { kind: 'user-online', user_id: '1' }, '1_3');
+    expect(side.conversations[0]).toMatchObject({
+      id: 'uid:1',
+      label: 'Steve',
+      online: true,
+    });
+    expect(side.sessions[0].id).toBe('yo');
+  });
+
+  it('ignores a topic-added for another conversation', () => {
+    const side = applySidebarEvent(
+      emptySidebar(),
+      { kind: 'topic-added', conv: 'other', sid: 'x', url: '/chat/c/x/x' },
+      '1_3',
+    );
+    expect(side.sessions).toHaveLength(0);
   });
 });
 
