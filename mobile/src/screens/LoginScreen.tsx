@@ -16,7 +16,9 @@ import { useTheme } from '../theme/Theme';
 export function LoginScreen() {
   const { colors } = useTheme();
   const { signIn, error } = useSession();
-  const [base, setBase] = useState('http://127.0.0.1:9001');
+  const [base, setBase] = useState(
+    __DEV__ ? 'http://127.0.0.1:9001' : 'https://lynrummy.com',
+  );
   const [key, setKey] = useState('');
   const [busy, setBusy] = useState(false);
 
