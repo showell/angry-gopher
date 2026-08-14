@@ -19,6 +19,7 @@ import {
   emptySidebar,
   parseTopicHref,
   sessionOfMsgId,
+  topicPeerLabel,
 } from '../api/parse';
 import type { Sidebar, SidebarItem } from '../api/types';
 import { ChatSidebar } from '../components/ChatSidebar';
@@ -42,6 +43,8 @@ export function TopicScreen({ route, navigation }: Props) {
   const { convBase, sid, title, focusId } = route.params;
   const { colors } = useTheme();
   const { session } = useSession();
+  const peer =
+    topicPeerLabel(convBase, session?.conversations || []) || route.params.peer || '';
   const [records, setRecords] = useState<BubbleRecord[]>([]);
   const [selected, setSelected] = useState('');
   const [draft, setDraft] = useState('');
@@ -79,7 +82,28 @@ export function TopicScreen({ route, navigation }: Props) {
 
   useEffect(() => {
     navigation.setOptions({
-      title,
+      title: peer || title,
+      headerTitle: () => (
+        <View style={styles.headerTitle} testID="topic-header">
+          {peer ? (
+            <Text
+              testID="topic-peer"
+              numberOfLines={1}
+              style={[styles.headerPeer, { color: colors.fg }]}>
+              {peer}
+            </Text>
+          ) : null}
+          <Text
+            testID="topic-heading"
+            numberOfLines={1}
+            style={[
+              styles.headerTopic,
+              { color: peer ? colors.mutedFg : colors.fg, fontSize: peer ? 12 : 17 },
+            ]}>
+            {title}
+          </Text>
+        </View>
+      ),
       headerRight: () => (
         <Pressable
           testID="topic-sidebar"
@@ -90,7 +114,7 @@ export function TopicScreen({ route, navigation }: Props) {
         </Pressable>
       ),
     });
-  }, [navigation, title, colors.accent]);
+  }, [navigation, title, peer, colors.accent, colors.fg, colors.mutedFg]);
 
   useEffect(() => {
     if (!session) {
@@ -459,6 +483,9 @@ export function TopicScreen({ route, navigation }: Props) {
 const styles = StyleSheet.create({
   wrap: { flex: 1 },
   feed: { flex: 1 },
+  headerTitle: { alignItems: 'center', maxWidth: 220 },
+  headerPeer: { fontSize: 16, fontWeight: '700' },
+  headerTopic: { fontWeight: '500' },
   list: { paddingHorizontal: 12, paddingTop: 12, paddingBottom: 8 },
   jump: {
     position: 'absolute',

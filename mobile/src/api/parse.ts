@@ -60,6 +60,22 @@ export function emptySidebar(): Sidebar {
   return { conversations: [], pinned_sessions: [], sessions: [] };
 }
 
+export function topicPeerLabel(
+  convBase: string,
+  conversations: Array<{ conv: string; partner: { name: string } }>,
+): string | null {
+  if (convBase.indexOf('/channel/') === 0) {
+    const name = convBase.slice('/channel/'.length).split('/')[0];
+    return name ? '#' + decodeURIComponent(name) : null;
+  }
+  const key = convKeyFromPath(convBase);
+  if (!key) {
+    return null;
+  }
+  const hit = conversations.find(c => c.conv === key);
+  return hit && hit.partner.name ? hit.partner.name : null;
+}
+
 export function convKeyFromPath(path: string): string {
   const dm = path.match(/^\/chat\/c\/([^/?#]+)/);
   if (dm) {

@@ -1,7 +1,7 @@
 export type RootStackParamList = {
   Login: undefined;
   Main: undefined;
-  Topic: { convBase: string; sid: string; title: string; focusId?: string };
+  Topic: { convBase: string; sid: string; title: string; peer?: string; focusId?: string };
   Doc: { slug: string; title: string };
 };
 

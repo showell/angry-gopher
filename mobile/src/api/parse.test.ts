@@ -3,6 +3,7 @@ import {
   channelOf,
   convBaseFromUrl,
   convKeyFromPath,
+  topicPeerLabel,
   dmPartnerName,
   emptySidebar,
   humanizeAgo,
@@ -159,5 +160,12 @@ describe('recent helpers', () => {
     expect(convBaseFromUrl('/chat/c/1_2/ChitChat')).toBe('/chat/c/1_2');
     expect(convBaseFromUrl('/channel/General/ops')).toBe('/channel/General');
     expect(convBaseFromUrl('/chat/recent')).toBeNull();
+  });
+
+  it('names the DM partner or the channel for the topic header', () => {
+    const convs = [{ conv: '4_5', partner: { name: 'Sam' } }];
+    expect(topicPeerLabel('/chat/c/4_5', convs)).toBe('Sam');
+    expect(topicPeerLabel('/chat/c/1_2', convs)).toBeNull();
+    expect(topicPeerLabel('/channel/General', [])).toBe('#General');
   });
 });

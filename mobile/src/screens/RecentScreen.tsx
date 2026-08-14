@@ -10,7 +10,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import type { CompositeScreenProps } from '@react-navigation/native';
 import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { parseTopicHref, recentKey } from '../api/parse';
+import { dmPartnerName, parseTopicHref, recentKey } from '../api/parse';
 import type { RecentEvent } from '../api/types';
 import { canOpenEvent, RecentTile } from '../components/RecentTile';
 import { useSession } from '../session/Session';
@@ -83,6 +83,7 @@ export function RecentScreen({ navigation }: Props) {
       convBase: ref.convBase,
       sid: ref.sid,
       title: evt.topic || ref.sid,
+      peer: evt.dm ? dmPartnerName(evt) : undefined,
     });
   }
 
