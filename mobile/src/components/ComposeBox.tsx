@@ -7,6 +7,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { composeMarkers } from '../compose/actions';
 import type { Palette } from '../theme/colors';
 
 type Props = {
@@ -93,6 +94,16 @@ export function ComposeBox({
           Markdown · image or screencast
         </Text>
       )}
+      {__DEV__
+        ? composeMarkers(draft).map(kind => (
+            <Text
+              key={kind}
+              testID={'compose-has-' + kind}
+              style={{ color: colors.softMutedFg, fontSize: 11 }}>
+              {kind}
+            </Text>
+          ))
+        : null}
     </View>
   );
 }

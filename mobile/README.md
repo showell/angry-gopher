@@ -27,10 +27,17 @@ network, or `https://lynrummy.com`.
 ## Tests / publish
 
 ```bash
-ops/test_mobile          # jest unit tests (parsers, compose, SSE framing)
+ops/test_mobile          # jest: api / parse / compose / scroll (no simulator)
+ops/test_mobile_e2e      # Maestro: login, tabs, rail, quote / refer / edit
+ops/test_mobile_scroll   # Maestro: own-send jumps, ↓, stick-on-receive
 ops/build_mobile         # iOS simulator app, and an Android debug APK if the SDK is present
 ops/publish_testflight   # Release archive + IPA (add --upload after the paid team is live)
 ```
+
+Unit tests sit next to the modules (`src/**/*.test.ts`), the same split the
+Zulip Flutter client uses: wire/API, model (compose + feed append +
+caught-up), and a Maestro pass for the screens. The default
+`__tests__/App.test.tsx` is a placeholder; the real suite is under `src/`.
 
 `ops/build_mobile` is the agent publish path: `xcodebuild` / `gradlew`, no
 cloud builder, no login token.

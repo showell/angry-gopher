@@ -20,16 +20,12 @@ import {
   parseTopicHref,
   sessionOfMsgId,
 } from '../api/parse';
-import type { Sidebar, SidebarItem, WireMessage } from '../api/types';
+import type { Sidebar, SidebarItem } from '../api/types';
 import { ChatSidebar } from '../components/ChatSidebar';
 import { ComposeBox } from '../components/ComposeBox';
 import { MessageBubble, type BubbleRecord } from '../components/MessageBubble';
-import {
-  editMarkdown,
-  editedOriginalId,
-  quoteMarkdown,
-  referMarkdown,
-} from '../compose/actions';
+import { editMarkdown, quoteMarkdown, referMarkdown } from '../compose/actions';
+import { appendRecord } from '../compose/records';
 import { isCaughtUp, shouldStickOnEvent } from '../nav/scroll';
 import { createNavStack } from '../nav/stack';
 import type { RootStackParamList } from '../navigation/types';
@@ -353,11 +349,12 @@ export function TopicScreen({ route, navigation }: Props) {
             stickToBottom(false);
           }
         }}
-        renderItem={({ item }) => (
+        renderItem={({ item, index }) => (
           <MessageBubble
             rec={item}
             colors={colors}
             selected={selected === item.id}
+            exposeActions={index === records.length - 1}
             resolveMedia={src => session.client.mediaUrl(src)}
             onSelect={() => {
               setSelected(item.id);
@@ -457,18 +454,6 @@ export function TopicScreen({ route, navigation }: Props) {
       </Modal>
     </KeyboardAvoidingView>
   );
-}
-
-function appendRecord(cur: BubbleRecord[], m: WireMessage): BubbleRecord[] {
-  if (cur.some(r => r.id === m.id)) {
-    return cur;
-  }
-  const next = cur.concat([m]);
-  const orig = editedOriginalId(m.markdown);
-  if (!orig) {
-    return next;
-  }
-  return next.map(r => (r.id === orig ? { ...r, editedBy: m.id } : r));
 }
 
 const styles = StyleSheet.create({

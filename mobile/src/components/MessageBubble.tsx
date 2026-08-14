@@ -22,6 +22,7 @@ type Props = {
   onSave: () => void;
   onMsgRef: (id: string) => void;
   onCode?: (text: string) => void;
+  exposeActions?: boolean;
 };
 
 function Action({
@@ -64,6 +65,7 @@ export function MessageBubble({
   onSave,
   onMsgRef,
   onCode,
+  exposeActions,
 }: Props) {
   return (
     <Pressable
@@ -86,11 +88,26 @@ export function MessageBubble({
           {'#' + (rec.index + 1) + ' ' + rec.from + ' · ' + formatLocalTime(rec.at)}
         </Text>
         <View style={styles.actions}>
-          <Action testID="msg-quote" label="quote" onPress={onQuote} color={colors.mutedFg} />
-          <Action testID="msg-refer" label="refer" onPress={onRefer} color={colors.mutedFg} />
-          <Action testID="msg-edit" label="edit" onPress={onEdit} color={colors.mutedFg} />
           <Action
-            testID="msg-save"
+            testID={exposeActions ? 'msg-quote' : undefined}
+            label="quote"
+            onPress={onQuote}
+            color={colors.mutedFg}
+          />
+          <Action
+            testID={exposeActions ? 'msg-refer' : undefined}
+            label="refer"
+            onPress={onRefer}
+            color={colors.mutedFg}
+          />
+          <Action
+            testID={exposeActions ? 'msg-edit' : undefined}
+            label="edit"
+            onPress={onEdit}
+            color={colors.mutedFg}
+          />
+          <Action
+            testID={exposeActions ? 'msg-save' : undefined}
             label={rec.saved ? '✓ saved' : 'save'}
             onPress={onSave}
             color={rec.saved ? colors.savedFg : colors.mutedFg}

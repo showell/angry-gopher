@@ -53,3 +53,17 @@ export function editedOriginalId(markdown: string): string | null {
   const m = markdown.match(EDIT_RE);
   return m ? m[1] : null;
 }
+
+export function composeMarkers(draft: string): Array<'quote' | 'refer' | 'edit'> {
+  const out: Array<'quote' | 'refer' | 'edit'> = [];
+  if (/In MSG_\S+ (I|you) said:/.test(draft)) {
+    out.push('quote');
+  }
+  if (/\bSee MSG_/.test(draft)) {
+    out.push('refer');
+  }
+  if (EDIT_RE.test(draft)) {
+    out.push('edit');
+  }
+  return out;
+}

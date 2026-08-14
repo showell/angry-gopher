@@ -70,7 +70,7 @@ export function LoginScreen() {
           onChangeText={setKey}
           autoCapitalize="none"
           autoCorrect={false}
-          secureTextEntry
+          secureTextEntry={!__DEV__}
           placeholder="id-secret"
           placeholderTextColor={colors.mutedFg}
           style={[

@@ -1,5 +1,6 @@
 import {
   EDIT_RE,
+  composeMarkers,
   editMarkdown,
   editedOriginalId,
   pickQuoteFence,
@@ -43,5 +44,20 @@ describe('compose inserts', () => {
     expect(editedOriginalId('Edit of MSG_yo_1\n\nnew')).toBe('yo_1');
     expect(editedOriginalId('See MSG_yo_1')).toBeNull();
     expect(EDIT_RE.test('Edit of MSG_not-an-id')).toBe(false);
+  });
+});
+
+describe('composeMarkers', () => {
+  it('flags quote, refer, and edit independently', () => {
+    expect(composeMarkers(quoteMarkdown({ id: 'yo_1', markdown: 'hi', mine: false }))).toEqual([
+      'quote',
+    ]);
+    expect(composeMarkers(referMarkdown('yo_1'))).toEqual(['refer']);
+    expect(composeMarkers(editMarkdown({ id: 'yo_1', markdown: 'old', mine: true }).text)).toEqual([
+      'edit',
+    ]);
+    expect(
+      composeMarkers(referMarkdown('yo_1') + quoteMarkdown({ id: 'yo_2', markdown: 'x', mine: true })),
+    ).toEqual(['quote', 'refer']);
   });
 });

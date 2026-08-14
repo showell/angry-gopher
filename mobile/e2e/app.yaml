@@ -2,15 +2,7 @@ appId: org.lynrummy.gopher
 name: Angry Gopher smoke
 ---
 - launchApp
-- runFlow:
-    when:
-      visible: "Sign in"
-    commands:
-      - tapOn:
-          id: "login-key"
-      - inputText: ${API_KEY}
-      - tapOn:
-          id: "login-submit"
+- runFlow: login.yaml
 - extendedWaitUntil:
     visible: "Recent"
     timeout: 15000
@@ -46,7 +38,7 @@ name: Angry Gopher smoke
     id: "tab-recent"
 - assertVisible: "Recent"
 - tapOn:
-    id: "recent-flutter-recents"
+    id: "recent-row-0"
 - extendedWaitUntil:
     visible:
       id: "msg-quote"

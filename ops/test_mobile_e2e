@@ -1,6 +1,7 @@
 #!/bin/bash
 # CANONICAL DEV-LOOP SCRIPT — DO NOT REINVENT.
-# Drive the iOS Simulator with Maestro. Does not ask a human to click around.
+# Drive the iOS Simulator with Maestro. Smoke + compose (quote/refer/edit).
+# Scroll stick/hold is ops/test_mobile_scroll (it posts to the open topic).
 # Requires: a booted simulator, Gopher installed, Metro (or a release build),
 # and GOPHER_API_KEY or auth_data/3/api-key for the login branch.
 
@@ -27,5 +28,11 @@ if [ -z "${GOPHER_API_KEY:-}" ] && [ -f "$REPO_DIR/auth_data/3/api-key" ]; then
     export GOPHER_API_KEY
 fi
 
+SERVER="${GOPHER_SERVER:-http://127.0.0.1:9001}"
+export MAESTRO_CLI_NO_ANALYTICS=true
+export MAESTRO_CLI_ANALYSIS_NOTIFICATION_DISABLED=true
 cd "$REPO_DIR/mobile"
-exec "$MAESTRO" test -e API_KEY="${GOPHER_API_KEY:-}" e2e/app.yaml
+
+"$MAESTRO" test -e API_KEY="${GOPHER_API_KEY:-}" -e SERVER="$SERVER" e2e/app.yaml
+"$MAESTRO" test -e API_KEY="${GOPHER_API_KEY:-}" -e SERVER="$SERVER" e2e/compose.yaml
+echo "mobile e2e passed"

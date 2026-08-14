@@ -35,7 +35,7 @@ Available ops commands (run from repo root):
                          the table, and figures hold only legal melds.
   ops/test_chat          Chat client lint (~1s): chat.js + docs.js + chat_client.py.
   ops/test_mobile        React Native unit suite (parsers, compose, SSE).
-  ops/test_mobile_e2e    Maestro flow on a booted iOS simulator (login, rail, quote).
+  ops/test_mobile_e2e    Maestro: login, tabs, rail, quote/refer/edit.
   ops/test_mobile_scroll Maestro: scroll away, own-send jumps, ↓, stick on receive.
   ops/build_mobile       Agent publish path: test_mobile + iOS sim app + Android APK.
   ops/publish_testflight Archive (and optionally --upload) the iOS app for TestFlight.

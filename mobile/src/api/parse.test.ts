@@ -1,6 +1,8 @@
 import {
   applySidebarEvent,
   channelOf,
+  convBaseFromUrl,
+  convKeyFromPath,
   dmPartnerName,
   emptySidebar,
   humanizeAgo,
@@ -149,5 +151,13 @@ describe('recent helpers', () => {
     expect(sessionOfMsgId('ChitChat_12')).toBe('ChitChat');
     expect(sessionOfMsgId('2026-05-28_5')).toBe('2026-05-28');
     expect(sessionOfMsgId('nope')).toBeNull();
+  });
+
+  it('reads a conversation key and base from a path', () => {
+    expect(convKeyFromPath('/chat/c/1_2/ChitChat')).toBe('1_2');
+    expect(convKeyFromPath('/channel/General/ops')).toBe('General');
+    expect(convBaseFromUrl('/chat/c/1_2/ChitChat')).toBe('/chat/c/1_2');
+    expect(convBaseFromUrl('/channel/General/ops')).toBe('/channel/General');
+    expect(convBaseFromUrl('/chat/recent')).toBeNull();
   });
 });

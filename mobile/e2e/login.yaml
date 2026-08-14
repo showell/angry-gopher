@@ -1,0 +1,19 @@
+appId: org.lynrummy.gopher
+name: sign in if needed
+---
+- runFlow:
+    when:
+      visible: "Sign in"
+    commands:
+      - tapOn:
+          id: "login-server"
+      - eraseText: 80
+      - inputText: ${SERVER}
+      - tapOn:
+          id: "login-key"
+      - inputText: ${API_KEY}
+      - tapOn:
+          id: "login-submit"
+      - extendedWaitUntil:
+          visible: "Recent"
+          timeout: 15000
