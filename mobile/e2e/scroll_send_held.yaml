@@ -1,0 +1,12 @@
+appId: org.lynrummy.gopher
+name: send while scrolled away
+---
+- tapOn:
+    id: "compose-input"
+- inputText: ${HELD_TOKEN}
+- tapOn:
+    id: "compose-send"
+- extendedWaitUntil:
+    visible:
+      id: "jump-bottom"
+    timeout: 8000

@@ -1,0 +1,6 @@
+appId: org.lynrummy.gopher
+name: stay put while scrolled away
+---
+- assertVisible:
+    id: "jump-bottom"
+- assertNotVisible: ${HELD_TOKEN}

@@ -107,9 +107,10 @@ export function RecentScreen({ navigation }: Props) {
         <FlatList
           data={rows}
           keyExtractor={recentKey}
-          renderItem={({ item }) => (
+          renderItem={({ item, index }) => (
             <RecentTile
               event={item}
+              rowIndex={index}
               colors={colors}
               now={now}
               onPress={() => canOpenEvent(item) && open(item)}

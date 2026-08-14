@@ -30,6 +30,7 @@ import {
   quoteMarkdown,
   referMarkdown,
 } from '../compose/actions';
+import { isCaughtUp } from '../nav/scroll';
 import { createNavStack } from '../nav/stack';
 import type { RootStackParamList } from '../navigation/types';
 import { useSession } from '../session/Session';
@@ -60,6 +61,25 @@ export function TopicScreen({ route, navigation }: Props) {
   const selectedRef = useRef('');
   selectedRef.current = selected;
   const nav = useMemo(() => createNavStack(() => selectedRef.current), []);
+  const caughtUpRef = useRef(true);
+  const progScroll = useRef(false);
+  const [showJump, setShowJump] = useState(false);
+
+  function markCaughtUp(next: boolean) {
+    caughtUpRef.current = next;
+    setShowJump(!next);
+  }
+
+  function stickToBottom(animated: boolean) {
+    progScroll.current = true;
+    markCaughtUp(true);
+    requestAnimationFrame(() => {
+      listRef.current?.scrollToEnd({ animated });
+      setTimeout(() => {
+        progScroll.current = false;
+      }, 200);
+    });
+  }
 
   useEffect(() => {
     navigation.setOptions({
@@ -110,7 +130,17 @@ export function TopicScreen({ route, navigation }: Props) {
         if (cancelled) {
           return;
         }
-        setRecords(cur => appendRecord(cur, m));
+        const stick = caughtUpRef.current;
+        setRecords(cur => {
+          const next = appendRecord(cur, m);
+          if (stick && next.length) {
+            setSelected(next[next.length - 1].id);
+          }
+          return next;
+        });
+        if (stick) {
+          stickToBottom(true);
+        }
         if (pendingCid.current && m.cid === pendingCid.current) {
           clearPending(true);
         }
@@ -281,12 +311,46 @@ export function TopicScreen({ route, navigation }: Props) {
       style={[styles.wrap, { backgroundColor: colors.bg }]}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       keyboardVerticalOffset={88}>
+      <View style={styles.feed}>
       <FlatList
         ref={listRef}
+        testID="topic-feed"
         data={records}
         keyExtractor={r => r.id}
         contentContainerStyle={styles.list}
         onScrollToIndexFailed={() => {}}
+        scrollEventThrottle={16}
+        onScroll={e => {
+          if (progScroll.current) {
+            return;
+          }
+          const n = e.nativeEvent;
+          markCaughtUp(
+            isCaughtUp({
+              offsetY: n.contentOffset.y,
+              viewportH: n.layoutMeasurement.height,
+              contentH: n.contentSize.height,
+            }),
+          );
+        }}
+        onScrollEndDrag={e => {
+          if (progScroll.current) {
+            return;
+          }
+          const n = e.nativeEvent;
+          markCaughtUp(
+            isCaughtUp({
+              offsetY: n.contentOffset.y,
+              viewportH: n.layoutMeasurement.height,
+              contentH: n.contentSize.height,
+            }),
+          );
+        }}
+        onContentSizeChange={() => {
+          if (caughtUpRef.current) {
+            stickToBottom(false);
+          }
+        }}
         renderItem={({ item }) => (
           <MessageBubble
             rec={item}
@@ -311,6 +375,23 @@ export function TopicScreen({ route, navigation }: Props) {
           />
         )}
       />
+      {showJump ? (
+        <Pressable
+          testID="jump-bottom"
+          onPress={() => {
+            if (records.length) {
+              setSelected(records[records.length - 1].id);
+            }
+            stickToBottom(true);
+          }}
+          style={[
+            styles.jump,
+            { backgroundColor: colors.accent },
+          ]}>
+          <Text style={styles.jumpLabel}>↓</Text>
+        </Pressable>
+      ) : null}
+      </View>
       <ComposeBox
         colors={colors}
         disabled={pending}
@@ -390,7 +471,19 @@ function appendRecord(cur: BubbleRecord[], m: WireMessage): BubbleRecord[] {
 
 const styles = StyleSheet.create({
   wrap: { flex: 1 },
+  feed: { flex: 1 },
   list: { paddingHorizontal: 12, paddingTop: 12, paddingBottom: 8 },
+  jump: {
+    position: 'absolute',
+    right: 16,
+    bottom: 12,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  jumpLabel: { color: '#fff', fontSize: 22, fontWeight: '700', lineHeight: 24 },
   codeWrap: { flex: 1, paddingTop: 48 },
   railWrap: { flex: 1, paddingTop: 48, paddingLeft: 16 },
 });

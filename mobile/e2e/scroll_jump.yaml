@@ -1,0 +1,9 @@
+appId: org.lynrummy.gopher
+name: jump to bottom then stick
+---
+- tapOn:
+    id: "jump-bottom"
+- extendedWaitUntil:
+    notVisible:
+      id: "jump-bottom"
+    timeout: 8000

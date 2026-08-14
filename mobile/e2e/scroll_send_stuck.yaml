@@ -1,0 +1,8 @@
+appId: org.lynrummy.gopher
+name: send while caught up
+---
+- tapOn:
+    id: "compose-input"
+- inputText: ${STUCK_TOKEN}
+- tapOn:
+    id: "compose-send"

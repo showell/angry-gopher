@@ -11,6 +11,7 @@ import { channelColor, type Palette } from '../theme/colors';
 
 type Props = {
   event: RecentEvent;
+  rowIndex?: number;
   colors: Palette;
   now: number;
   onPress: () => void;
@@ -30,7 +31,7 @@ export function canOpenEvent(event: RecentEvent): boolean {
   return !!event.url && !!parseTopicHref(event.url);
 }
 
-export function RecentTile({ event, colors, now, onPress }: Props) {
+export function RecentTile({ event, rowIndex, colors, now, onPress }: Props) {
   const isChat = event.kind === 'chat';
   const isDm = isChat && !!event.dm;
   const channel = isChat ? channelOf(event) : '';
@@ -39,7 +40,11 @@ export function RecentTile({ event, colors, now, onPress }: Props) {
 
   return (
     <Pressable
-      testID={'recent-' + (event.kind === 'chat' ? event.topic || event.url : event.slug)}
+      testID={
+        rowIndex === 0
+          ? 'recent-row-0'
+          : 'recent-' + (event.kind === 'chat' ? event.topic || event.url : event.slug)
+      }
       accessibilityLabel={topicLabel(event)}
       onPress={onPress}
       style={({ pressed }) => [

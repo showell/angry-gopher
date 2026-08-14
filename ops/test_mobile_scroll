@@ -1,0 +1,33 @@
+#!/bin/bash
+# Drive the simulator: scroll away, inject a live message, confirm we
+# do not jump; tap ↓; inject another; confirm we stick. Matches the web
+# caughtUp / stick-on-receive rule.
+
+set -e
+
+REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+if [ -z "${JAVA_HOME:-}" ] && [ -x /opt/homebrew/opt/openjdk/libexec/openjdk.jdk/Contents/Home/bin/java ]; then
+    export JAVA_HOME=/opt/homebrew/opt/openjdk/libexec/openjdk.jdk/Contents/Home
+    export PATH="$JAVA_HOME/bin:$PATH"
+fi
+MAESTRO="${HOME}/.maestro/bin/maestro"
+if [ ! -x "$MAESTRO" ]; then
+    echo "maestro not installed at $MAESTRO" >&2
+    exit 1
+fi
+
+stamp=$(date +%s)
+held="HOLD${stamp}"
+stuck="STICK${stamp}"
+
+export MAESTRO_CLI_NO_ANALYTICS=true
+export MAESTRO_CLI_ANALYSIS_NOTIFICATION_DISABLED=true
+cd "$REPO_DIR/mobile"
+
+"$MAESTRO" test e2e/scroll_away.yaml
+"$MAESTRO" test -e HELD_TOKEN="$held" e2e/scroll_send_held.yaml
+"$MAESTRO" test -e HELD_TOKEN="$held" e2e/scroll_held.yaml
+"$MAESTRO" test -e HELD_TOKEN="$held" e2e/scroll_jump.yaml
+"$MAESTRO" test -e STUCK_TOKEN="$stuck" e2e/scroll_send_stuck.yaml
+"$MAESTRO" test -e STUCK_TOKEN="$stuck" e2e/scroll_stuck.yaml
+echo "scroll stick/hold passed"
