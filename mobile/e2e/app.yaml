@@ -1,0 +1,64 @@
+appId: org.lynrummy.gopher
+name: Angry Gopher smoke
+---
+- launchApp
+- runFlow:
+    when:
+      visible: "Sign in"
+    commands:
+      - tapOn:
+          id: "login-key"
+      - inputText: ${API_KEY}
+      - tapOn:
+          id: "login-submit"
+- extendedWaitUntil:
+    visible: "Recent"
+    timeout: 15000
+- assertVisible: "Chats"
+- assertVisible: "Docs"
+- assertVisible: "Settings"
+
+- tapOn:
+    id: "tab-chats"
+- extendedWaitUntil:
+    visible:
+      id: "sidebar-conversations"
+    timeout: 15000
+- assertVisible:
+    id: "sidebar-pinned"
+- assertVisible:
+    id: "sidebar-sessions"
+- assertVisible: "Add Topic"
+- assertVisible: "ChitChat"
+- assertVisible: "Steve"
+
+- tapOn:
+    id: "tab-docs"
+- extendedWaitUntil:
+    visible: "Docs"
+    timeout: 10000
+
+- tapOn:
+    id: "tab-settings"
+- assertVisible: "Sign out"
+
+- tapOn:
+    id: "tab-recent"
+- assertVisible: "Recent"
+- tapOn:
+    id: "recent-flutter-recents"
+- extendedWaitUntil:
+    visible:
+      id: "msg-quote"
+    timeout: 15000
+- assertVisible:
+    id: "msg-refer"
+- assertVisible:
+    id: "msg-edit"
+- assertVisible:
+    id: "msg-save"
+- tapOn:
+    id: "msg-quote"
+- assertVisible:
+    id: "compose-input"
+- back

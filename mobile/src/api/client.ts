@@ -35,7 +35,13 @@ export class ChatClient {
     if (init && init.headers) {
       Object.assign(headers, init.headers as Record<string, string>);
     }
-    const res = await fetch(this.base + path, Object.assign({}, init, { headers }));
+    const url = path.indexOf('http') === 0 ? path : this.base + path;
+    let res = await fetch(url, Object.assign({}, init, { headers, redirect: 'manual' }));
+    const loc = res.headers.get('Location') || res.headers.get('location');
+    if (loc && (res.status === 301 || res.status === 302 || res.status === 303 || res.status === 307 || res.status === 308)) {
+      const next = loc.indexOf('http') === 0 ? loc : this.base + loc;
+      res = await fetch(next, Object.assign({}, init, { method: 'GET', headers, redirect: 'manual' }));
+    }
     return res;
   }
 

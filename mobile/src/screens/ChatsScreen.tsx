@@ -37,7 +37,11 @@ export function ChatsScreen({ navigation }: Props) {
       return;
     }
     const seed = session.conversations[0];
-    load(seed ? '/chat/c/' + seed.conv : '/chat');
+    load(
+      seed
+        ? '/chat/c/' + seed.conv + '/' + encodeURIComponent(seed.default)
+        : '/chat',
+    );
   }, [session]);
 
   useEffect(() => {

@@ -39,6 +39,7 @@ export function ComposeBox({
         { backgroundColor: colors.topBarBg, borderTopColor: colors.topBarBorder },
       ]}>
       <TextInput
+        testID="compose-input"
         value={draft}
         onChangeText={onDraft}
         editable={!disabled}
@@ -65,6 +66,7 @@ export function ComposeBox({
           <Text style={{ color: colors.fg, fontWeight: '600' }}>Upload</Text>
         </Pressable>
         <Pressable
+          testID="compose-send"
           onPress={() => onSend(draft)}
           disabled={disabled || !draft.trim()}
           style={[

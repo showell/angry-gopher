@@ -64,8 +64,12 @@ export function TopicScreen({ route, navigation }: Props) {
   useEffect(() => {
     navigation.setOptions({
       title,
-      headerLeft: () => (
-        <Pressable onPress={() => setRail(true)} hitSlop={8} style={{ marginRight: 12 }}>
+      headerRight: () => (
+        <Pressable
+          testID="topic-sidebar"
+          onPress={() => setRail(true)}
+          hitSlop={8}
+          style={{ marginRight: 4 }}>
           <Text style={{ color: colors.accent, fontSize: 18, fontWeight: '700' }}>☰</Text>
         </Pressable>
       ),

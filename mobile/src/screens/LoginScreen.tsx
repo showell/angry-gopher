@@ -44,6 +44,7 @@ export function LoginScreen() {
         </Text>
         <Text style={[styles.label, { color: colors.metaFg }]}>Server</Text>
         <TextInput
+          testID="login-server"
           value={base}
           onChangeText={setBase}
           autoCapitalize="none"
@@ -62,6 +63,7 @@ export function LoginScreen() {
         />
         <Text style={[styles.label, { color: colors.metaFg }]}>API key</Text>
         <TextInput
+          testID="login-key"
           value={key}
           onChangeText={setKey}
           autoCapitalize="none"
@@ -82,6 +84,7 @@ export function LoginScreen() {
           <Text style={{ color: colors.error, marginTop: 8 }}>{error}</Text>
         ) : null}
         <Pressable
+          testID="login-submit"
           onPress={submit}
           disabled={busy || !base.trim() || !key.trim()}
           style={[

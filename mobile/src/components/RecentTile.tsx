@@ -39,6 +39,8 @@ export function RecentTile({ event, colors, now, onPress }: Props) {
 
   return (
     <Pressable
+      testID={'recent-' + (event.kind === 'chat' ? event.topic || event.url : event.slug)}
+      accessibilityLabel={topicLabel(event)}
       onPress={onPress}
       style={({ pressed }) => [
         styles.row,

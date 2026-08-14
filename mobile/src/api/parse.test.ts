@@ -4,6 +4,7 @@ import {
   dmPartnerName,
   emptySidebar,
   humanizeAgo,
+  parseChatRootAttrs,
   parseRecentPage,
   parseSidebarPage,
   parseTopicHref,
@@ -29,6 +30,18 @@ describe('parseRecentPage', () => {
 
   it('throws when the page has no payload', () => {
     expect(() => parseRecentPage('<html></html>')).toThrow(/recent-data/);
+  });
+});
+
+describe('parseChatRootAttrs', () => {
+  it('reads data-conv, data-conv-base, and data-session', () => {
+    const html =
+      '<div id="chat-root" data-conv="1_3" data-conv-base="/chat/c/1_3" data-session="ChitChat">';
+    expect(parseChatRootAttrs(html)).toEqual({
+      conv: '1_3',
+      convBase: '/chat/c/1_3',
+      session: 'ChitChat',
+    });
   });
 });
 

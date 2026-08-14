@@ -98,6 +98,7 @@ export function ChatSidebar({
       />
       <View style={styles.add}>
         <TextInput
+          testID="add-topic-input"
           value={topic}
           onChangeText={setTopic}
           placeholder="new-topic"
@@ -116,6 +117,7 @@ export function ChatSidebar({
           ]}
         />
         <Pressable
+          testID="add-topic-submit"
           onPress={submit}
           disabled={busy}
           style={[styles.addBtn, { borderColor: colors.border }]}>
@@ -156,7 +158,10 @@ function Section({
   }, [items, empty, colors.mutedFg, renderItem]);
 
   return (
-    <View style={styles.section} accessibilityLabel={section}>
+    <View
+      style={styles.section}
+      testID={'sidebar-' + section}
+      accessibilityLabel={section}>
       <Pressable onPress={() => setCollapsed(c => !c)} style={styles.title}>
         <Text style={[styles.caret, { color: colors.mutedFg }]}>
           {collapsed ? '▸' : '▾'}

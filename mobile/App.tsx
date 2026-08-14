@@ -1,7 +1,7 @@
 import React from 'react';
 import { ActivityIndicator, LogBox, StatusBar, Text, View } from 'react-native';
 
-LogBox.ignoreLogs(['Attempted to import the module']);
+LogBox.ignoreAllLogs(true);
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -43,6 +43,8 @@ function MainTabs() {
         component={RecentScreen}
         options={{
           tabBarLabel: 'Recent',
+          tabBarButtonTestID: 'tab-recent',
+          tabBarAccessibilityLabel: 'Recent',
           tabBarIcon: ({ color }) => <Text style={{ color, fontSize: 16 }}>●</Text>,
         }}
       />
@@ -51,6 +53,8 @@ function MainTabs() {
         component={ChatsScreen}
         options={{
           tabBarLabel: 'Chats',
+          tabBarButtonTestID: 'tab-chats',
+          tabBarAccessibilityLabel: 'Chats',
           tabBarIcon: ({ color }) => <Text style={{ color, fontSize: 16 }}>☰</Text>,
         }}
       />
@@ -59,6 +63,8 @@ function MainTabs() {
         component={DocsScreen}
         options={{
           tabBarLabel: 'Docs',
+          tabBarButtonTestID: 'tab-docs',
+          tabBarAccessibilityLabel: 'Docs',
           tabBarIcon: ({ color }) => <Text style={{ color, fontSize: 16 }}>¶</Text>,
         }}
       />
@@ -67,6 +73,8 @@ function MainTabs() {
         component={SettingsScreen}
         options={{
           tabBarLabel: 'Settings',
+          tabBarButtonTestID: 'tab-settings',
+          tabBarAccessibilityLabel: 'Settings',
           tabBarIcon: ({ color }) => <Text style={{ color, fontSize: 16 }}>⚙</Text>,
         }}
       />

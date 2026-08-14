@@ -25,18 +25,20 @@ type Props = {
 };
 
 function Action({
+  testID,
   label,
   onPress,
   color,
   saved,
 }: {
+  testID?: string;
   label: string;
   onPress: () => void;
   color: string;
   saved?: boolean;
 }) {
   return (
-    <Pressable onPress={onPress} hitSlop={8}>
+    <Pressable testID={testID} onPress={onPress} hitSlop={8}>
       <Text
         style={{
           fontSize: 12,
@@ -65,6 +67,7 @@ export function MessageBubble({
 }: Props) {
   return (
     <Pressable
+      testID={'msg-' + rec.id}
       onPress={onSelect}
       style={[
         styles.bubble,
@@ -83,10 +86,11 @@ export function MessageBubble({
           {'#' + (rec.index + 1) + ' ' + rec.from + ' · ' + formatLocalTime(rec.at)}
         </Text>
         <View style={styles.actions}>
-          <Action label="quote" onPress={onQuote} color={colors.mutedFg} />
-          <Action label="refer" onPress={onRefer} color={colors.mutedFg} />
-          <Action label="edit" onPress={onEdit} color={colors.mutedFg} />
+          <Action testID="msg-quote" label="quote" onPress={onQuote} color={colors.mutedFg} />
+          <Action testID="msg-refer" label="refer" onPress={onRefer} color={colors.mutedFg} />
+          <Action testID="msg-edit" label="edit" onPress={onEdit} color={colors.mutedFg} />
           <Action
+            testID="msg-save"
             label={rec.saved ? '✓ saved' : 'save'}
             onPress={onSave}
             color={rec.saved ? colors.savedFg : colors.mutedFg}

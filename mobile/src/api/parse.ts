@@ -26,6 +26,24 @@ export function parseRecentPage(html: string): RecentEvent[] {
   return parsed as RecentEvent[];
 }
 
+export function parseChatRootAttrs(html: string): {
+  conv: string;
+  convBase: string;
+  session: string;
+} {
+  const m = html.match(/id="chat-root"[^>]*>/);
+  const tag = m ? m[0] : '';
+  function attr(name: string): string {
+    const a = tag.match(new RegExp('data-' + name + '="([^"]*)"'));
+    return a ? a[1] : '';
+  }
+  return {
+    conv: attr('conv'),
+    convBase: attr('conv-base'),
+    session: attr('session'),
+  };
+}
+
 export function parseSidebarPage(html: string): Sidebar {
   const parsed = parseEmbeddedJson(html, 'chat-sidebar-data') as Sidebar;
   if (!parsed || !Array.isArray(parsed.conversations)) {
