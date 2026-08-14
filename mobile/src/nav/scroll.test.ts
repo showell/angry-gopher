@@ -1,4 +1,4 @@
-import { isCaughtUp } from './scroll';
+import { isCaughtUp, shouldStickOnEvent } from './scroll';
 
 describe('isCaughtUp', () => {
   it('is true when the last pixel of content is in the viewport', () => {
@@ -17,5 +17,17 @@ describe('isCaughtUp', () => {
     expect(
       isCaughtUp({ offsetY: 0, viewportH: 800, contentH: 200, slop: 24 }),
     ).toBe(true);
+  });
+});
+
+describe('shouldStickOnEvent', () => {
+  it('follows an own send even when the user has scrolled away', () => {
+    expect(shouldStickOnEvent('own-send', false)).toBe(true);
+    expect(shouldStickOnEvent('own-send', true)).toBe(true);
+  });
+
+  it('follows incoming only while caught up', () => {
+    expect(shouldStickOnEvent('incoming', true)).toBe(true);
+    expect(shouldStickOnEvent('incoming', false)).toBe(false);
   });
 });

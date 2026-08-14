@@ -1,6 +1,13 @@
 appId: org.lynrummy.gopher
-name: stay put while scrolled away
+name: scroll away again after own send
 ---
-- assertVisible:
-    id: "jump-bottom"
-- assertNotVisible: ${HELD_TOKEN}
+- swipe:
+    start: 50%, 30%
+    end: 50%, 85%
+- swipe:
+    start: 50%, 30%
+    end: 50%, 85%
+- extendedWaitUntil:
+    visible:
+      id: "jump-bottom"
+    timeout: 8000

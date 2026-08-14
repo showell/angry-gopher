@@ -30,7 +30,7 @@ import {
   quoteMarkdown,
   referMarkdown,
 } from '../compose/actions';
-import { isCaughtUp } from '../nav/scroll';
+import { isCaughtUp, shouldStickOnEvent } from '../nav/scroll';
 import { createNavStack } from '../nav/stack';
 import type { RootStackParamList } from '../navigation/types';
 import { useSession } from '../session/Session';
@@ -130,7 +130,8 @@ export function TopicScreen({ route, navigation }: Props) {
         if (cancelled) {
           return;
         }
-        const stick = caughtUpRef.current;
+        const own = !!(pendingCid.current && m.cid === pendingCid.current);
+        const stick = shouldStickOnEvent(own ? 'own-send' : 'incoming', caughtUpRef.current);
         setRecords(cur => {
           const next = appendRecord(cur, m);
           if (stick && next.length) {
@@ -141,7 +142,7 @@ export function TopicScreen({ route, navigation }: Props) {
         if (stick) {
           stickToBottom(true);
         }
-        if (pendingCid.current && m.cid === pendingCid.current) {
+        if (own) {
           clearPending(true);
         }
       },
@@ -222,6 +223,7 @@ export function TopicScreen({ route, navigation }: Props) {
     setPending(true);
     setStatusError(false);
     setStatus('Sending…');
+    stickToBottom(true);
     pendingTimer.current = setTimeout(hostDown, 3000);
     try {
       await session.client.send(convBase, sid, text, cid);

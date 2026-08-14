@@ -1,7 +1,7 @@
 #!/bin/bash
-# Drive the simulator: scroll away, inject a live message, confirm we
-# do not jump; tap ↓; inject another; confirm we stick. Matches the web
-# caughtUp / stick-on-receive rule.
+# Drive the simulator: scroll away, send (own send jumps to bottom),
+# scroll away again, tap ↓, send while caught up (stay stuck). Incoming
+# still follows only when caughtUp; own send always jumps.
 
 set -e
 
