@@ -1,5 +1,6 @@
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSession } from '../session/Session';
 import { useTheme } from '../theme/Theme';
 
@@ -8,7 +9,9 @@ export function SettingsScreen() {
   const { session, signOut } = useSession();
 
   return (
-    <View style={[styles.wrap, { backgroundColor: colors.bg }]}>
+    <SafeAreaView
+      edges={['top']}
+      style={[styles.wrap, { backgroundColor: colors.bg }]}>
       <Text style={[styles.row, { color: colors.fg }]}>
         Signed in as uid {session?.me || '?'}
       </Text>
@@ -29,7 +32,7 @@ export function SettingsScreen() {
         style={[styles.btn, { borderColor: colors.error }]}>
         <Text style={{ color: colors.error, fontWeight: '600' }}>Sign out</Text>
       </Pressable>
-    </View>
+    </SafeAreaView>
   );
 }
 

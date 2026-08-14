@@ -1,22 +1,53 @@
-import type { RecentEvent, TopicRef } from './types';
+import type { RecentEvent, Sidebar, TopicRef } from './types';
 
-export function parseRecentPage(html: string): RecentEvent[] {
-  const open = '<script id="recent-data" type="application/json">';
-  const start = html.indexOf(open);
-  if (start < 0) {
-    throw new Error('recent page is missing #recent-data');
+export function parseEmbeddedJson(html: string, id: string): unknown {
+  const needle = 'id="' + id + '"';
+  const mark = html.indexOf(needle);
+  if (mark < 0) {
+    throw new Error('page is missing #' + id);
   }
-  const from = start + open.length;
+  const gt = html.indexOf('>', mark);
+  if (gt < 0) {
+    throw new Error('#' + id + ' is unclosed');
+  }
+  const from = gt + 1;
   const end = html.indexOf('</script>', from);
   if (end < 0) {
-    throw new Error('recent page #recent-data is unclosed');
+    throw new Error('#' + id + ' is unclosed');
   }
-  const raw = html.slice(from, end).replace(/<\\\//g, '</');
-  const parsed: unknown = JSON.parse(raw);
+  return JSON.parse(html.slice(from, end).replace(/<\\\//g, '</'));
+}
+
+export function parseRecentPage(html: string): RecentEvent[] {
+  const parsed = parseEmbeddedJson(html, 'recent-data');
   if (!Array.isArray(parsed)) {
     throw new Error('recent page #recent-data is not an array');
   }
   return parsed as RecentEvent[];
+}
+
+export function parseSidebarPage(html: string): Sidebar {
+  const parsed = parseEmbeddedJson(html, 'chat-sidebar-data') as Sidebar;
+  if (!parsed || !Array.isArray(parsed.conversations)) {
+    throw new Error('conversation page is missing sidebar conversations');
+  }
+  return {
+    conversations: parsed.conversations || [],
+    pinned_sessions: parsed.pinned_sessions || [],
+    sessions: parsed.sessions || [],
+  };
+}
+
+export function convBaseFromUrl(url: string): string | null {
+  const dm = url.match(/^\/chat\/c\/([^/?#]+)/);
+  if (dm) {
+    return '/chat/c/' + decodeURIComponent(dm[1]);
+  }
+  const ch = url.match(/^\/channel\/([^/?#]+)/);
+  if (ch) {
+    return '/channel/' + decodeURIComponent(ch[1]);
+  }
+  return null;
 }
 
 export function parseTopicHref(href: string): TopicRef | null {

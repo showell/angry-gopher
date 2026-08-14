@@ -55,3 +55,22 @@ export type UploadResult = {
   width: number;
   height: number;
 };
+
+export type SidebarItem = {
+  id: string;
+  label: string;
+  url: string;
+  active?: boolean;
+  online?: boolean;
+};
+
+export type Sidebar = {
+  conversations: SidebarItem[];
+  pinned_sessions: SidebarItem[];
+  sessions: SidebarItem[];
+};
+
+export type DocListItem = {
+  slug: string;
+  title: string;
+};

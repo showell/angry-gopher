@@ -2,21 +2,25 @@ import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
-  Pressable,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import type { CompositeScreenProps } from '@react-navigation/native';
+import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { parseTopicHref, recentKey } from '../api/parse';
 import type { RecentEvent } from '../api/types';
 import { canOpenEvent, RecentTile } from '../components/RecentTile';
 import { useSession } from '../session/Session';
 import { useTheme } from '../theme/Theme';
-import type { RootStackParamList } from '../navigation/types';
+import type { MainTabParamList, RootStackParamList } from '../navigation/types';
 
-type Props = NativeStackScreenProps<RootStackParamList, 'Recent'>;
+type Props = CompositeScreenProps<
+  BottomTabScreenProps<MainTabParamList, 'Recent'>,
+  NativeStackScreenProps<RootStackParamList>
+>;
 
 export function RecentScreen({ navigation }: Props) {
   const { colors } = useTheme();
@@ -65,6 +69,10 @@ export function RecentScreen({ navigation }: Props) {
 
   function open(evt: RecentEvent) {
     if (evt.kind === 'doc') {
+      navigation.navigate('Doc', {
+        slug: evt.slug,
+        title: evt.title || evt.slug,
+      });
       return;
     }
     const ref = parseTopicHref(evt.url);
@@ -79,16 +87,15 @@ export function RecentScreen({ navigation }: Props) {
   }
 
   return (
-    <SafeAreaView style={[styles.wrap, { backgroundColor: colors.bg }]}>
+    <SafeAreaView
+      edges={['top']}
+      style={[styles.wrap, { backgroundColor: colors.bg }]}>
       <View
         style={[
           styles.bar,
           { backgroundColor: colors.topBarBg, borderBottomColor: colors.topBarBorder },
         ]}>
         <Text style={[styles.title, { color: colors.fg }]}>Recent</Text>
-        <Pressable onPress={() => navigation.navigate('Settings')} hitSlop={8}>
-          <Text style={{ color: colors.accent, fontWeight: '600' }}>Settings</Text>
-        </Pressable>
       </View>
       {loading ? (
         <ActivityIndicator style={{ marginTop: 40 }} color={colors.accent} />

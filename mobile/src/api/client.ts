@@ -1,8 +1,10 @@
 import { openEventSource } from './sse';
-import { parseRecentPage } from './parse';
+import { parseRecentPage, parseSidebarPage } from './parse';
 import type {
   ConversationsResponse,
+  DocListItem,
   RecentEvent,
+  Sidebar,
   UploadResult,
   WireMessage,
 } from './types';
@@ -60,6 +62,31 @@ export class ChatClient {
   async recent(): Promise<RecentEvent[]> {
     const html = await this.text('/chat/recent');
     return parseRecentPage(html);
+  }
+
+  async sidebar(path: string): Promise<Sidebar> {
+    const html = await this.text(path);
+    return parseSidebarPage(html);
+  }
+
+  docs(): Promise<{ me: string; docs: DocListItem[] }> {
+    return this.json('/chat/docs/list');
+  }
+
+  docMarkdown(slug: string): Promise<string> {
+    return this.text('/chat/docs/' + encodeURIComponent(slug) + '.md');
+  }
+
+  async renderMarkdown(body: string): Promise<string> {
+    const res = await this.request('/chat/docs/render', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: 'body=' + encodeURIComponent(body),
+    });
+    if (!res.ok) {
+      throw new ApiError(res.status, 'Render failed');
+    }
+    return res.text();
   }
 
   saved(convBase: string, sid: string): Promise<string[]> {

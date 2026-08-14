@@ -3,6 +3,7 @@ import {
   dmPartnerName,
   humanizeAgo,
   parseRecentPage,
+  parseSidebarPage,
   parseTopicHref,
   recentKey,
   sessionOfMsgId,
@@ -26,6 +27,20 @@ describe('parseRecentPage', () => {
 
   it('throws when the page has no payload', () => {
     expect(() => parseRecentPage('<html></html>')).toThrow(/recent-data/);
+  });
+});
+
+describe('parseSidebarPage', () => {
+  it('reads conversations and sessions from the chat page payload', () => {
+    const html =
+      '<script type="application/json" id="chat-sidebar-data">' +
+      '{"conversations":[{"id":"uid:1","label":"Steve","url":"/chat/c/1_3","active":true}],' +
+      '"pinned_sessions":[],' +
+      '"sessions":[{"id":"ChitChat","label":"ChitChat","url":"/chat/c/1_3/ChitChat","active":true}]}' +
+      '</script>';
+    const side = parseSidebarPage(html);
+    expect(side.conversations[0].label).toBe('Steve');
+    expect(side.sessions[0].url).toBe('/chat/c/1_3/ChitChat');
   });
 });
 
