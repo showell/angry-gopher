@@ -49,17 +49,46 @@ All eight rungs are green as of this writing, each on real compiler source.
 
 ## What Update 43 merged
 
-Damian absorbed the first fourteen commits of PR 64, in two batches. On the
-emitter side that is: typed signatures and a runtime prelude for the zig 0.15+
-dialect; typed unions; CCE-encoded text; reference-semantic mutable records;
-boxed recursive types; generic types emitted as zig functions from types to a
-type, so `Maybe Token` becomes `Maybe(Token)` and zig keeps the monomorphisation
-books; flattened function types, because definitions and calls both flatten and a
+Damian absorbed the first fourteen commits of PR 64, in two batches.
+
+Some of it is breadth. The emitter dispatches Codex builtins through a table of
+small emitter functions, and that table went from 18 entries to 42 — text
+predicates and slicing, `substring`, `text-split`, `text-concat-list`, the five
+bitwise operators, the character-code conversions, the linked-list primitives the
+desugarer synthesizes, `list-set-at`, `list-push`, `__record-set`. Each one needs
+something on the zig side to call, so the runtime prelude the plug emits ahead of
+the translated program grew to 29 functions. None of that is clever. It is the
+part that has to exist before a real program will compile at all, and its absence
+is why the plug had never been pointed at one.
+
+The rest is structural, and targets zig 0.16: typed signatures throughout; sum
+types as tagged unions; CCE-encoded text; reference-semantic mutable records;
+boxed recursive types; empty lists taking their element type from context;
+exhaustive switches emitted without an `else`, since zig rejects one it can prove
+unreachable; generic types emitted as zig functions from types to a type, so
+`Maybe Token` becomes `Maybe(Token)` and zig keeps the monomorphisation books;
+flattened function types, because definitions and calls both flatten and a
 function *type* has to flatten the same way; and function values emitted as
 closures rather than function pointers, because Codex applies partially — a
 four-argument function called with two yields something callable with the
 remaining two — and a `*const fn` has nowhere to keep the arguments already
 supplied.
+
+Damian suggested early on that we use the C# plug as our reference, and that was
+good advice repeatedly. One example of many: running an emitted compiler chapter
+overflowed the stack, and our first take called the large stack we gave it a
+workaround, with the real fix being emitting loops for self-tail-calls. The C#
+plug's notes say why that is wrong. The recursion that reaches the limit is
+*mutual*: the lexer's `scan-token` → `skip-prose-line` → `scan-token`. Tail-call
+optimization cannot flatten that, so it would be a real feature and would still
+not remove the need for the stack.
+
+The same notes reframe the problem entirely. .NET gives its main thread 1 MB and
+overflows on a **96-byte** chapter. The depth is a property of how Codex source
+is written, not of large input. We only met it at 18,812 tokens because zig's
+default is 8 MB, eight times more generous — which made a structural fact look
+like a scale problem. The plug now runs its entry point on a 512 MB thread,
+matching the C# default exactly so the two plugs agree on the number.
 
 Alongside that, five defects. These are the part worth writing down.
 
@@ -147,3 +176,31 @@ against it before anything else happens. The first check — the newly built plu
 run against the previously banked IR — reproduced all eight rungs byte for byte,
 which says Update 43 changed nothing about how the plug behaves. The full
 re-bank is what will confirm it.
+
+## Postscript: the fixes broke our harness, correctly
+
+Rebasing onto the new seed produced a tidy result. The re-bank failed twice, and
+both failures were the merge doing its job.
+
+The oracle harness bundles a subset of the compiler for each rung, and to do that
+it had accumulated *accommodations* — small local answers to things that were
+wrong with Codex. One bundle named `Capability` outright, because `TypeChecker`
+used a name from it without citing it: finding 4. Update 43 added the cite, so
+the chapter now arrives on its own, and our copy became a second one. The bundle
+stopped compiling with a duplicate type definition.
+
+The second failure came from a cite Update 42 added elsewhere, which meant one of
+our bundles could no longer be assembled at all. Damian's bundler said so and
+exited — correctly, and loudly. Our script ran it through a pipe, so the status
+it checked belonged to the last command in the pipe rather than to the bundler,
+and four rungs went on to compile whatever subject was left on disk from the
+previous run. The failure eventually surfaced as CDX2096 — finding 5, refusing an
+unreachable arm the current source no longer contains, in a subject old enough to
+still have it. The harness now runs the bundler unpiped and deletes the subject
+first, so a refusal cannot leave a stale one behind.
+
+Both are worth writing down for the same reason. An accommodation is a record of
+a defect, held somewhere that has no way to know when the defect goes away. When
+it does, the accommodation is the thing that breaks. That is the system working,
+and it is a good argument for keeping accommodations few, local, and loud about
+what they are for.
