@@ -57,7 +57,8 @@ We pin these versions:
 | **Zig** | 0.16.0 | the server (`zig-server/`) + the Lyn Rummy solver's WASM build (`games/lynrummy/zig/` → `solver.wasm`) + the Safari Screensaver's WASM core (`games/driving/wasm/` → `games/driving/safari.wasm`) + the Delivery solver's WASM build (`delivery/zig/` → `delivery/solver.wasm`) + the Chess Toys' WASM cores (`games/chess/*.zig` → `games/chess/*.wasm`) | system install — `zig version` |
 | **Elm** | 0.19.1 | the Lyn Rummy client | `npm install` in `games/lynrummy/elm/` (pinned in its `package.json`) |
 | **TypeScript** | 6.0.3 | the Delivery display client + the Lyn Rummy DSL/geometry layer and test harnesses (both solvers are now zig; each `.ts` solver stays as the port reference) | `npm install` in `delivery/` and `games/lynrummy/ts/` (pinned in each `package.json`) |
-| **Node** | 24 | runs the TS directly + hosts the npm-installed `elm`/`tsc` | system install — `node --version` |
+| **Node** | 22.18+ | runs the TS directly + hosts the npm-installed `elm`/`tsc` | system install — `node --version` |
+| **X11 dev headers** | — | only `ops/build_safari_download`, the free-standing Linux Safari binary | `apt install libx11-dev libxrender-dev` (see below) |
 
 TypeScript runs two ways, and only one of them is transpiled:
 
@@ -86,8 +87,35 @@ TypeScript runs two ways, and only one of them is transpiled:
 `tsc` itself only ever typechecks (`npm run typecheck`) — it never emits
 the JS that ships. Elm, `tsc`, and `esbuild` are all project-local (run
 from each package's `node_modules/.bin`), so a fresh checkout needs
-`npm install` in `games/lynrummy/elm/`, `games/lynrummy/ts/`, and
-`delivery/`.
+`npm install` in **four** places: `games/lynrummy/elm/`,
+`games/lynrummy/ts/`, `delivery/`, and `games/driving/`.
+
+### Fresh box, in order
+
+Recorded 2026-08-28, standing up a second dev box, because every item below
+was discovered by a build failing rather than by reading this file.
+
+1. **Node.** The version above is the floor for unflagged type-stripping,
+   which the node-side TS relies on. 22.23.2 works; an older 22 will not.
+2. **`npm install` in all four package directories** — the fourth,
+   `games/driving/`, was missing from this list.
+3. **Zig 0.16.0**, on `PATH`. Every `ops/build_*` script and the server
+   itself go through it.
+4. **`libx11-dev` and `libxrender-dev`**, and only for
+   `ops/build_safari_download`. `games/driving/build.zig:61-62` links exactly
+   `X11` and `Xrender`; nothing else in the tree needs a system library. The
+   error is `unable to find dynamic system library 'X11'`, and it arrives
+   part-way through `ops/deploy`, after the server has already built — which
+   is the worst moment to learn it.
+5. **The WASM cores before `zig build`.** `zig-server/build.zig` `@embedFile`s
+   five artifacts that a fresh clone does not have — `games/driving/safari.wasm`,
+   `games/chess/{knight,queens}.wasm`, `delivery/solver.wasm`,
+   `games/lynrummy/zig/solver.wasm` — so `ops/build_safari_wasm`,
+   `ops/build_chess_wasm`, `ops/build_lynrummy_wasm` and
+   `ops/build_delivery_wasm` must run first. `ops/deploy` runs the first two;
+   the solver WASMs are built by their own scripts. The failure is
+   `failed to check cache: '…/safari.wasm' file_hash FileNotFound`, which does
+   not name the script that produces it.
 
 ## Local config & identity
 
