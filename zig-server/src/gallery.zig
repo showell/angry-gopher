@@ -16,6 +16,7 @@ const Io = std.Io;
 const Alloc = std.mem.Allocator;
 const http = @import("http.zig");
 const html = @import("html.zig");
+const home = @import("home.zig");
 
 const Request = std.http.Server.Request;
 
@@ -24,18 +25,34 @@ const Request = std.http.Server.Request;
 /// WorkingDirectory = the deploy dir, where ops/deploy rsyncs gallery/).
 pub var gallery_root: []const u8 = "gallery";
 
-/// One card per app, in the same order as pages/home.txt. `slug` is the image
-/// basename we look for (gallery/<slug>.png|svg); `label` is the caption.
+/// One card per app, DERIVED from pages/home.txt rather than copied from it.
+///
+/// This was a hand-written array carrying a comment that said "in the same
+/// order as pages/home.txt". It was not: moving Seattle Delivery below Blog in
+/// that file left this list untouched and nothing complained, because /gallery
+/// is unlinked and no build or deploy reads it. A comment asserting an
+/// invariant nothing checks is how the two disagreed silently.
+///
+/// `slug` is the image basename we probe for (gallery/<slug>.png|svg) and it
+/// comes from the app's own `image:` line; `label` is its title. Both already
+/// live in the file, so neither is re-typed here.
 const Slot = struct { slug: []const u8, label: []const u8 };
-const slots = [_]Slot{
-    .{ .slug = "safari", .label = "Safari Screensaver" },
-    .{ .slug = "chat", .label = "Chat" },
-    .{ .slug = "blog", .label = "Blog" },
-    .{ .slug = "delivery", .label = "Seattle Delivery" },
-    .{ .slug = "lynrummy", .label = "Play Lyn Rummy" },
-    .{ .slug = "puzzles", .label = "Lyn Rummy Puzzles" },
-    .{ .slug = "chess", .label = "Chess Toys" },
-};
+
+/// slugFromImage turns "/gallery/delivery.svg" into "delivery". An `image:`
+/// that is not under /gallery/ yields "", which probes nothing and renders the
+/// pending placeholder -- the same answer this page already gives an app whose
+/// image has not been drawn yet.
+fn slugFromImage(image: []const u8) []const u8 {
+    const base = if (std.mem.lastIndexOfScalar(u8, image, '/')) |i| image[i + 1 ..] else image;
+    const dot = std.mem.lastIndexOfScalar(u8, base, '.') orelse return base;
+    return base[0..dot];
+}
+
+fn slotsFrom(alloc: Alloc, apps: []const home.App) ![]Slot {
+    const out = try alloc.alloc(Slot, apps.len);
+    for (apps, 0..) |a, i| out[i] = .{ .slug = slugFromImage(a.image), .label = a.title };
+    return out;
+}
 
 /// handle dispatches /gallery* — `sub` is the path after "/gallery".
 pub fn handle(req: *Request, io: Io, alloc: Alloc, sub: []const u8) !void {
@@ -48,6 +65,21 @@ pub fn handle(req: *Request, io: Io, alloc: Alloc, sub: []const u8) !void {
 fn renderIndex(req: *Request, io: Io, alloc: Alloc) !void {
     var b: std.ArrayList(u8) = .empty;
     try b.appendSlice(alloc, page_head);
+
+    // Parsed fresh per request, like the home page itself -- pages/home.txt is
+    // content rsync'd on deploy, so a card order baked in at compile time could
+    // outlive the file that decides it. A parse failure is LOUD here for the
+    // same reason it is loud on the home page: a silently empty gallery reads
+    // as "no images yet", which is a different and wrong answer.
+    const parsed = home.parseHome(io, alloc) catch |err| {
+        try b.print(alloc,
+            \\<p class="pending">pages/home.txt could not be parsed: <strong>{s}</strong>.</p>
+        , .{@errorName(err)});
+        try b.appendSlice(alloc, "</main></body></html>");
+        return req.respond(b.items, .{ .extra_headers = &.{http.html_ct} });
+    };
+    const slots = try slotsFrom(alloc, parsed.apps.items);
+
     for (slots) |s| {
         try b.appendSlice(alloc, "<figure class=\"card\">");
         if (try imageFile(io, alloc, s.slug)) |file| {

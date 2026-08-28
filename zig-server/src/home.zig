@@ -68,7 +68,7 @@ pub fn handleHome(req: *Request, io: Io, alloc: Alloc, uid: []const u8, path: []
 /// An app row parsed from the DSL: a linked title, a CTA button label, a
 /// description paragraph, and a low-key tech line (primary `lang` + an
 /// interesting `tech` feature). `href` is both the title link and button target.
-const App = struct { title: []const u8, href: []const u8, cta: []const u8, lang: []const u8, tech: []const u8, code: []const u8, tutorial: []const u8, essay: []const u8, image: []const u8, install: []const u8, desc: []const u8 };
+pub const App = struct { title: []const u8, href: []const u8, cta: []const u8, lang: []const u8, tech: []const u8, code: []const u8, tutorial: []const u8, essay: []const u8, image: []const u8, install: []const u8, desc: []const u8 };
 
 /// renderHomeBody reads pages/home.txt, parses the mini-DSL, and returns the inner
 /// page body (the `.app-body-wrap` through `</body></html>`). Returns an error on
@@ -82,7 +82,14 @@ const App = struct { title: []const u8, href: []const u8, cta: []const u8, lang:
 /// `install:` line adds an "Install locally" link (to a per-app download page). Blank
 /// lines separate. Any stray text outside a block, a block missing any required
 /// field, or no headline / no apps is `error.MalformedHome`.
-fn renderHomeBody(io: Io, alloc: Alloc) ![]const u8 {
+/// The parsed file: the headline and the apps, IN FILE ORDER. Split out of
+/// renderHomeBody so /gallery can share it — that page shows one card per app
+/// and used to keep its own hand-copied list "in the same order as
+/// pages/home.txt", which is a promise a comment cannot keep. It went stale the
+/// first time a row moved. One parse, two renderers, no order to re-copy.
+pub const Parsed = struct { headline: []const u8, apps: std.ArrayList(App) };
+
+pub fn parseHome(io: Io, alloc: Alloc) !Parsed {
     const src = try Io.Dir.cwd().readFileAlloc(io, "pages/home.txt", alloc, .unlimited);
 
     var headline: []const u8 = "";
@@ -156,6 +163,13 @@ fn renderHomeBody(io: Io, alloc: Alloc) ![]const u8 {
     }
     if (have) try pushApp(alloc, &apps, c_title, c_href, c_cta, c_lang, c_tech, c_code, c_tutorial, c_essay, c_image, c_install, &c_desc);
     if (headline.len == 0 or apps.items.len == 0) return error.MalformedHome;
+    return .{ .headline = headline, .apps = apps };
+}
+
+fn renderHomeBody(io: Io, alloc: Alloc) ![]const u8 {
+    const parsed = try parseHome(io, alloc);
+    const headline = parsed.headline;
+    const apps = parsed.apps;
 
     // The headline renders as ordinary muted text, not a big H1 — the blue CTA
     // buttons are what should pop, not the page title.
