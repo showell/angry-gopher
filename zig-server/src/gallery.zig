@@ -28,10 +28,10 @@ pub var gallery_root: []const u8 = "gallery";
 /// basename we look for (gallery/<slug>.png|svg); `label` is the caption.
 const Slot = struct { slug: []const u8, label: []const u8 };
 const slots = [_]Slot{
-    .{ .slug = "delivery", .label = "Seattle Delivery" },
     .{ .slug = "safari", .label = "Safari Screensaver" },
     .{ .slug = "chat", .label = "Chat" },
     .{ .slug = "blog", .label = "Blog" },
+    .{ .slug = "delivery", .label = "Seattle Delivery" },
     .{ .slug = "lynrummy", .label = "Play Lyn Rummy" },
     .{ .slug = "puzzles", .label = "Lyn Rummy Puzzles" },
     .{ .slug = "chess", .label = "Chess Toys" },
