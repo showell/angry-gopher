@@ -1,7 +1,9 @@
 //! home: the site root "/" — the launch pad listing every app Steve & Claude
-//! built (Seattle Delivery / Safari / Chat / Blog / Lyn Rummy / Puzzles). Public:
-//! anon visitors get the same marketing surface; the rows route through the login
-//! flow on click where a login is needed.
+//! built. WHICH apps, and in WHAT ORDER, is `pages/home.txt` and only that:
+//! this comment used to name them and had already gone stale (it omitted Chess
+//! Toys and fixed an order the file no longer had), so it points now instead of
+//! enumerating. Public: anon visitors get the same marketing surface; the rows
+//! route through the login flow on click where a login is needed.
 //!
 //! The app rows are NOT hard-coded HTML: they're scripted in a tiny markdown-ish
 //! DSL at `pages/home.txt` (read from disk at request time, alongside the resume —
