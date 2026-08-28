@@ -19,15 +19,6 @@ code: https://github.com/showell/angry-gopher/tree/master/chat
 essay: /blog/afford-your-own-markdown-dialect
 Real-time chat, docs, and channels — the live surface Steve, Claude, and friends use every day. A multi-page app that's still mostly rendered on the front end, all served from one binary.
 
-## Blog -> /blog
-image: /gallery/blog.svg
-cta: See how we build
-lang: Zig
-tech: a hand-written markdown engine renders posts from repo files on the fly
-code: https://github.com/showell/angry-gopher/tree/master/blog
-essay: /blog/the-ghost-in-the-byline
-Notes from building this site — one zig binary, written with Claude. Essays on the code, the algorithms, and what we learned along the way.
-
 ## Seattle Delivery -> /delivery
 image: /gallery/delivery.svg
 cta: Ship some Totes
@@ -36,6 +27,15 @@ tech: Clarke-Wright savings heuristic + local search over an integer, trig-free 
 code: https://github.com/showell/angry-gopher/tree/master/delivery
 essay: /blog/the-ghost-in-the-cost-function
 Eight trucks fan out across a deliberately not-to-scale Seattle, delivering a hundred orders a day. The route-planning is a hand-built Clarke-Wright solver — watch it think, or shuffle up a new shift.
+
+## Blog -> /blog
+image: /gallery/blog.svg
+cta: See how we build
+lang: Zig
+tech: a hand-written markdown engine renders posts from repo files on the fly
+code: https://github.com/showell/angry-gopher/tree/master/blog
+essay: /blog/the-ghost-in-the-byline
+Notes from building this site — one zig binary, written with Claude. Essays on the code, the algorithms, and what we learned along the way.
 
 ## Play Lyn Rummy -> /game
 image: /gallery/lynrummy.svg
