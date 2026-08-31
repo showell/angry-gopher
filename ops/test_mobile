@@ -1,0 +1,20 @@
+#!/bin/bash
+# CANONICAL DEV-LOOP SCRIPT — DO NOT REINVENT.
+# Before writing a new ops/* script or composing an ad-hoc shell
+# command for build / launch / test / regen, run `ops/list` to see
+# what already exists.
+#
+# Mobile unit gate: the React Native client's Jest suite (parsers, compose
+# inserts, SSE framing, HTML mapper). No simulator.
+
+set -e
+
+REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$REPO_DIR/mobile"
+
+if [ ! -x node_modules/.bin/jest ]; then
+    echo "mobile/node_modules missing — run npm install in mobile/" >&2
+    exit 1
+fi
+
+./node_modules/.bin/jest --watchAll=false

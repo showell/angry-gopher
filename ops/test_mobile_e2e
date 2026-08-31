@@ -1,0 +1,38 @@
+#!/bin/bash
+# CANONICAL DEV-LOOP SCRIPT — DO NOT REINVENT.
+# Drive the iOS Simulator with Maestro. Smoke + compose (quote/refer/edit).
+# Scroll stick/hold is ops/test_mobile_scroll (it posts to the open topic).
+# Requires: a booted simulator, Gopher installed, Metro (or a release build),
+# and GOPHER_API_KEY or auth_data/3/api-key for the login branch.
+
+set -e
+
+REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+if [ -z "${JAVA_HOME:-}" ] && [ -x /opt/homebrew/opt/openjdk/libexec/openjdk.jdk/Contents/Home/bin/java ]; then
+    export JAVA_HOME=/opt/homebrew/opt/openjdk/libexec/openjdk.jdk/Contents/Home
+    export PATH="$JAVA_HOME/bin:$PATH"
+fi
+MAESTRO="${HOME}/.maestro/bin/maestro"
+if [ ! -x "$MAESTRO" ]; then
+    echo "maestro not installed at $MAESTRO" >&2
+    exit 1
+fi
+
+if ! xcrun simctl list devices | grep -q Booted; then
+    echo "no booted iOS simulator" >&2
+    exit 1
+fi
+
+if [ -z "${GOPHER_API_KEY:-}" ] && [ -f "$REPO_DIR/auth_data/3/api-key" ]; then
+    GOPHER_API_KEY="$(tr -d '\n' < "$REPO_DIR/auth_data/3/api-key")"
+    export GOPHER_API_KEY
+fi
+
+SERVER="${GOPHER_SERVER:-http://127.0.0.1:9001}"
+export MAESTRO_CLI_NO_ANALYTICS=true
+export MAESTRO_CLI_ANALYSIS_NOTIFICATION_DISABLED=true
+cd "$REPO_DIR/mobile"
+
+"$MAESTRO" test -e API_KEY="${GOPHER_API_KEY:-}" -e SERVER="$SERVER" e2e/app.yaml
+"$MAESTRO" test -e API_KEY="${GOPHER_API_KEY:-}" -e SERVER="$SERVER" e2e/compose.yaml
+echo "mobile e2e passed"

@@ -1,0 +1,152 @@
+#!/bin/bash
+# Seed the *local* gopher with fictional users and chat so mobile
+# screenshots never need prod transcripts.
+#
+#   GOPHER_CONFIG=./gopher.conf ops/seed_mobile_demo
+#
+# Creates Ada / Sam / Riley (or reuses them), mints API keys, opens a
+# few topics, and posts a long design-review thread. Prints Ada's key
+# path for the simulator login.
+
+set -euo pipefail
+
+source "$(dirname "$0")/_paths.sh"
+cd "$GOPHER_DIR"
+
+BASE="${GOPHER_BASE:-http://127.0.0.1:9001}"
+AUTH_DIR="${GOPHER_AUTH_DIR:-$GOPHER_DIR/auth_data}"
+PW='demo-pass-not-prod'
+
+register() {
+    local name="$1"
+    curl -sS -o /dev/null -X POST "$BASE/login/full" \
+        --data-urlencode "name=$name" \
+        --data-urlencode "password=$PW" \
+        --data-urlencode "confirm=$PW" \
+        --data-urlencode "action=register" \
+        --data-urlencode "next=/"
+}
+
+uid_of() {
+    local name="$1" d
+    for d in "$AUTH_DIR"/[0-9]*; do
+        if [ -f "$d/name" ] && [ "$(cat "$d/name")" = "$name" ]; then
+            basename "$d"
+            return 0
+        fi
+    done
+    return 1
+}
+
+mint_key() {
+    local name="$1" jar
+    jar=$(mktemp)
+    curl -sS -o /dev/null -c "$jar" -X POST "$BASE/login/full" \
+        --data-urlencode "name=$name" \
+        --data-urlencode "password=$PW" \
+        --data-urlencode "action=login" \
+        --data-urlencode "next=/"
+    curl -sS -o /dev/null -b "$jar" -X POST "$BASE/settings/apikey"
+    rm -f "$jar"
+}
+
+post() {
+    local key="$1" conv="$2" sid="$3" md="$4"
+    local code
+    code=$(curl -sS -o /dev/null -w '%{http_code}' \
+        -H "Authorization: Bearer $key" \
+        -H "X-Chat-Async: 1" \
+        --data-urlencode "markdown=$md" \
+        "$BASE/chat/c/$conv/$sid/send")
+    if [ "$code" != "204" ]; then
+        echo "post failed HTTP $code ($conv/$sid)" >&2
+        exit 1
+    fi
+}
+
+new_topic() {
+    local key="$1" conv="$2" topic="$3"
+    local code
+    code=$(curl -sS -o /tmp/gopher_new_topic.json -w '%{http_code}' \
+        -H "Authorization: Bearer $key" \
+        --data-urlencode "topic=$topic" \
+        "$BASE/chat/c/$conv/new")
+    if [ "$code" = "200" ] || [ "$code" = "409" ]; then
+        return 0
+    fi
+    echo "new topic failed HTTP $code: $(cat /tmp/gopher_new_topic.json)" >&2
+    exit 1
+}
+
+code=$(curl -sS -o /dev/null -w '%{http_code}' "$BASE/")
+if [ "$code" != "200" ]; then
+    echo "local server not up at $BASE" >&2
+    exit 1
+fi
+
+for who in Ada Sam Riley; do
+    if ! uid_of "$who" >/dev/null; then
+        echo "register $who"
+        register "$who"
+    fi
+    id=$(uid_of "$who")
+    if [ ! -f "$AUTH_DIR/$id/api-key" ]; then
+        echo "mint key $who ($id)"
+        mint_key "$who"
+    fi
+done
+
+ADA=$(uid_of Ada)
+SAM=$(uid_of Sam)
+RILEY=$(uid_of Riley)
+ADA_KEY=$(tr -d '\n' < "$AUTH_DIR/$ADA/api-key")
+SAM_KEY=$(tr -d '\n' < "$AUTH_DIR/$SAM/api-key")
+RILEY_KEY=$(tr -d '\n' < "$AUTH_DIR/$RILEY/api-key")
+
+if [ "$ADA" -lt "$SAM" ]; then
+    CONV_AS="${ADA}_${SAM}"
+else
+    CONV_AS="${SAM}_${ADA}"
+fi
+if [ "$ADA" -lt "$RILEY" ]; then
+    CONV_AR="${ADA}_${RILEY}"
+else
+    CONV_AR="${RILEY}_${ADA}"
+fi
+
+echo "Ada=$ADA Sam=$SAM Riley=$RILEY convs $CONV_AS $CONV_AR"
+
+new_topic "$ADA_KEY" "$CONV_AS" "design-review"
+new_topic "$ADA_KEY" "$CONV_AS" "ship-checklist"
+new_topic "$ADA_KEY" "$CONV_AR" "weekend-hike"
+
+# Long enough that the topic feed scrolls on a phone.
+post "$SAM_KEY" "$CONV_AS" "design-review" "The jump-to-bottom chip should only show after a manual scroll. Incoming must not yank you if you walked away."
+post "$ADA_KEY" "$CONV_AS" "design-review" "Agreed. Own send is different — that is the user saying they are back at the live edge."
+post "$SAM_KEY" "$CONV_AS" "design-review" "Same split as iMessage / WhatsApp / Telegram. Slack does it too."
+post "$ADA_KEY" "$CONV_AS" "design-review" "See MSG_design-review_2 for the send rule. I will wire shouldStickOnEvent(own-send) to always return true."
+post "$SAM_KEY" "$CONV_AS" "design-review" "In MSG_design-review_1 you said:
+~~~ quote
+The jump-to-bottom chip should only show after a manual scroll.
+~~~
+
+Yes — capture caughtUp *before* the append or the new bubble makes the check lie."
+post "$ADA_KEY" "$CONV_AS" "design-review" "Markdown check: **bold**, *em*, and \`scrollToEnd\` in the compose hint."
+post "$SAM_KEY" "$CONV_AS" "design-review" "Also need a 1024 icon or App Store Connect rejects the archive. Solid navy, no watermark."
+post "$ADA_KEY" "$CONV_AS" "design-review" "TestFlight still needs the paid team. Until then the colleague uses lynrummy.com/chat or SideStore."
+post "$SAM_KEY" "$CONV_AS" "design-review" "SideStore: LocalDevVPN, iloader once, refresh every 7 days. Their Apple ID, not ours."
+post "$ADA_KEY" "$CONV_AS" "design-review" "I will keep ops/publish_testflight in the tree so the upload is one command after enrollment."
+post "$SAM_KEY" "$CONV_AS" "design-review" "Quote / refer / edit stay markdown inserts. No extra server endpoints."
+post "$ADA_KEY" "$CONV_AS" "design-review" "E2E should hit this local instance, never prod. auth_data keys are localhost only."
+post "$SAM_KEY" "$CONV_AS" "design-review" "Recent tiles: partner initial, topic title, relative time, last author plus excerpt."
+post "$ADA_KEY" "$CONV_AS" "design-review" "Ship the rail as three sections — conversations, pinned, sessions. Same as the web default widget."
+post "$SAM_KEY" "$CONV_AS" "design-review" "Ready for screenshots on Ada's login. Nothing here is a real transcript."
+
+post "$ADA_KEY" "$CONV_AS" "ship-checklist" "Simulator build, Maestro smoke, then the scroll suite."
+post "$SAM_KEY" "$CONV_AS" "ship-checklist" "Do not attach an IPA to a GitHub Release and call it an install path."
+
+post "$RILEY_KEY" "$CONV_AR" "weekend-hike" "Trailhead at 8. Bring water. No laptops."
+post "$ADA_KEY" "$CONV_AR" "weekend-hike" "I will leave the demo phone at home."
+
+echo "seeded. Ada key: $AUTH_DIR/$ADA/api-key"
+echo "login in the app: server $BASE  (debug default is already 127.0.0.1:9001)"

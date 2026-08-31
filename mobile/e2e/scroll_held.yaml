@@ -1,0 +1,13 @@
+appId: org.lynrummy.gopher
+name: scroll away again after own send
+---
+- swipe:
+    start: 50%, 30%
+    end: 50%, 85%
+- swipe:
+    start: 50%, 30%
+    end: 50%, 85%
+- extendedWaitUntil:
+    visible:
+      id: "jump-bottom"
+    timeout: 8000

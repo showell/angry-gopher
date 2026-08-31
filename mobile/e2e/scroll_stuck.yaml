@@ -1,0 +1,7 @@
+appId: org.lynrummy.gopher
+name: stick on receive when caught up
+---
+- extendedWaitUntil:
+    notVisible:
+      id: "jump-bottom"
+    timeout: 8000

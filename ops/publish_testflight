@@ -1,0 +1,108 @@
+#!/bin/bash
+# Archive Angry Gopher for TestFlight and optionally upload it.
+#
+# TestFlight is not a file drop. Apple only accepts a signed App Store
+# build from a paid Developer Program team. This Mac's Xcode account is
+# currently a free Personal Team (63958776FZ) — enroll first:
+#   https://developer.apple.com/programs/enroll/
+# Then in Xcode: Settings → Accounts → select the team → Download Manual
+# Profiles. Create the app in App Store Connect (bundle id
+# org.lynrummy.gopher, name Angry Gopher) before the first upload.
+#
+#   ops/publish_testflight           # archive + IPA
+#   ops/publish_testflight --upload  # archive + upload to App Store Connect
+#
+# Override team / version with APPLE_TEAM_ID, APPLE_VERSION, APPLE_BUILD.
+# Build number defaults to the git commit count (TestFlight needs it unique).
+
+set -euo pipefail
+
+source "$(dirname "$0")/_paths.sh"
+cd "$GOPHER_DIR"
+
+UPLOAD=0
+if [ "${1:-}" = "--upload" ]; then
+    UPLOAD=1
+elif [ -n "${1:-}" ]; then
+    echo "usage: ops/publish_testflight [--upload]" >&2
+    exit 2
+fi
+
+TEAM="${APPLE_TEAM_ID:-63958776FZ}"
+VERSION="${APPLE_VERSION:-1.0}"
+BUILD="${APPLE_BUILD:-$(git rev-list --count HEAD)}"
+ARCHIVE="$GOPHER_DIR/mobile/ios/build/Gopher.xcarchive"
+EXPORT_DIR="$GOPHER_DIR/mobile/ios/build/export"
+OPTS="$GOPHER_DIR/mobile/ios/build/ExportOptions.plist"
+
+if defaults read com.apple.dt.Xcode 2>/dev/null | grep -q 'isFreeProvisioningTeam = 1'; then
+    echo "This Apple ID is a free Personal Team ($TEAM)." >&2
+    echo "TestFlight needs the paid Apple Developer Program:" >&2
+    echo "  https://developer.apple.com/programs/enroll/" >&2
+    if [ "$UPLOAD" = 1 ]; then
+        exit 1
+    fi
+    echo "Continuing with an archive-only attempt (export will likely fail)." >&2
+fi
+
+./ops/test_mobile
+
+if [ ! -d mobile/ios/Pods ]; then
+    (cd mobile && bundle install --path vendor/bundle && bundle exec pod install --project-directory=ios)
+fi
+
+mkdir -p "$(dirname "$ARCHIVE")" "$EXPORT_DIR"
+
+echo "==> archive Angry Gopher $VERSION ($BUILD) team $TEAM"
+xcodebuild \
+    -workspace mobile/ios/Gopher.xcworkspace \
+    -scheme Gopher \
+    -configuration Release \
+    -destination 'generic/platform=iOS' \
+    -archivePath "$ARCHIVE" \
+    DEVELOPMENT_TEAM="$TEAM" \
+    MARKETING_VERSION="$VERSION" \
+    CURRENT_PROJECT_VERSION="$BUILD" \
+    archive
+
+DEST=export
+if [ "$UPLOAD" = 1 ]; then
+    DEST=upload
+fi
+
+cat > "$OPTS" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>destination</key>
+	<string>${DEST}</string>
+	<key>manageAppVersionAndBuildNumber</key>
+	<false/>
+	<key>method</key>
+	<string>app-store-connect</string>
+	<key>signingStyle</key>
+	<string>automatic</string>
+	<key>teamID</key>
+	<string>${TEAM}</string>
+	<key>uploadSymbols</key>
+	<true/>
+</dict>
+</plist>
+EOF
+
+echo "==> export ($DEST)"
+xcodebuild \
+    -exportArchive \
+    -archivePath "$ARCHIVE" \
+    -exportPath "$EXPORT_DIR" \
+    -exportOptionsPlist "$OPTS"
+
+if [ "$UPLOAD" = 1 ]; then
+    echo "Uploaded build $BUILD. In App Store Connect: TestFlight → add an"
+    echo "internal tester, or an external group and invite the colleague."
+    echo "They install TestFlight from the App Store and redeem the invite."
+else
+    echo "    IPA: $EXPORT_DIR/Gopher.ipa"
+    echo "Upload later with: ops/publish_testflight --upload"
+fi

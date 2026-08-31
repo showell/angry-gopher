@@ -1,0 +1,48 @@
+#!/bin/bash
+# CANONICAL DEV-LOOP SCRIPT — DO NOT REINVENT.
+# Before writing a new ops/* script or composing an ad-hoc shell
+# command for build / launch / test / regen, run `ops/list` to see
+# what already exists.
+#
+# Agent-publishable mobile build. No Expo, no cloud account.
+# Always runs the unit suite, then builds iOS for the simulator when
+# Xcode is present, and an Android debug APK when ANDROID_HOME + a JDK
+# are present.
+
+set -e
+
+REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$REPO_DIR"
+
+./ops/test_mobile
+
+if command -v xcodebuild >/dev/null 2>&1; then
+    echo "==> iOS simulator build"
+    if [ ! -d mobile/ios/Pods ]; then
+        (cd mobile && bundle install --path vendor/bundle && bundle exec pod install --project-directory=ios)
+    fi
+    xcodebuild \
+        -workspace mobile/ios/Gopher.xcworkspace \
+        -scheme Gopher \
+        -configuration Debug \
+        -sdk iphonesimulator \
+        -destination 'generic/platform=iOS Simulator' \
+        -derivedDataPath mobile/ios/build \
+        CODE_SIGNING_ALLOWED=NO \
+        build
+    echo "    iOS app: mobile/ios/build/Build/Products/Debug-iphonesimulator/Gopher.app"
+else
+    echo "skip iOS: xcodebuild not on PATH"
+fi
+
+if [ -n "${ANDROID_HOME:-}" ] && [ -x mobile/android/gradlew ]; then
+    if command -v java >/dev/null 2>&1; then
+        echo "==> Android debug APK"
+        (cd mobile/android && ./gradlew assembleDebug)
+        echo "    APK: mobile/android/app/build/outputs/apk/debug/app-debug.apk"
+    else
+        echo "skip Android: no Java runtime"
+    fi
+else
+    echo "skip Android: ANDROID_HOME unset"
+fi

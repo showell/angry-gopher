@@ -1,0 +1,22 @@
+appId: org.lynrummy.gopher
+name: scroll away from bottom
+---
+- launchApp
+- tapOn:
+    id: "tab-recent"
+- extendedWaitUntil:
+    visible:
+      id: "recent-row-0"
+    timeout: 15000
+- tapOn:
+    id: "recent-row-0"
+- swipe:
+    start: 50%, 30%
+    end: 50%, 85%
+- swipe:
+    start: 50%, 30%
+    end: 50%, 85%
+- extendedWaitUntil:
+    visible:
+      id: "jump-bottom"
+    timeout: 8000

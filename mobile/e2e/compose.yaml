@@ -1,0 +1,33 @@
+appId: org.lynrummy.gopher
+name: quote refer edit insert
+---
+- launchApp
+- runFlow: login.yaml
+- tapOn:
+    id: "tab-recent"
+- tapOn:
+    id: "recent-row-0"
+- extendedWaitUntil:
+    visible:
+      id: "msg-quote"
+    timeout: 15000
+- tapOn:
+    id: "msg-refer"
+- extendedWaitUntil:
+    visible:
+      id: "compose-has-refer"
+    timeout: 5000
+- tapOn:
+    id: "msg-quote"
+- extendedWaitUntil:
+    visible:
+      id: "compose-has-quote"
+    timeout: 5000
+- tapOn:
+    id: "msg-edit"
+- extendedWaitUntil:
+    visible:
+      id: "compose-has-edit"
+    timeout: 5000
+- assertNotVisible:
+    id: "compose-has-refer"

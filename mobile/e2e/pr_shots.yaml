@@ -1,0 +1,52 @@
+appId: org.lynrummy.gopher
+name: PR screenshots local demo
+---
+- launchApp
+- runFlow:
+    when:
+      visible: "Recent"
+    commands:
+      - tapOn:
+          id: "tab-settings"
+      - tapOn: "Sign out"
+      - extendedWaitUntil:
+          visible: "Sign in"
+          timeout: 8000
+- runFlow: login.yaml
+- takeScreenshot: 01-recent
+- tapOn:
+    id: "tab-chats"
+- extendedWaitUntil:
+    visible:
+      id: "sidebar-conversations"
+    timeout: 15000
+- takeScreenshot: 02-chats
+- tapOn:
+    id: "tab-recent"
+- tapOn:
+    id: "recent-design-review"
+- extendedWaitUntil:
+    visible:
+      id: "topic-feed"
+    timeout: 15000
+- takeScreenshot: 03-topic
+- swipe:
+    start: 50%, 30%
+    end: 50%, 85%
+- swipe:
+    start: 50%, 30%
+    end: 50%, 85%
+- extendedWaitUntil:
+    visible:
+      id: "jump-bottom"
+    timeout: 8000
+- takeScreenshot: 04-jump
+- tapOn: "Main"
+- tapOn:
+    id: "tab-settings"
+- takeScreenshot: 05-settings
+- tapOn: "Sign out"
+- extendedWaitUntil:
+    visible: "Sign in"
+    timeout: 8000
+- takeScreenshot: 06-login
