@@ -188,6 +188,67 @@ pub fn appendMessage(io: Io, alloc: Alloc, bus: *Bus, meta: ConvMeta, conv_dir: 
     return msg;
 }
 
+// ── reactions sidecar ─────────────────────────────────────────────────────────
+
+/// reactionsPath is {conv_dir}/sessions/<sid>.reactions.jsonl — the per-topic
+/// reaction sidecar: one JSON event per line, append-only like the transcript
+/// it sits beside, and deliberately a SEPARATE file so the transcript never
+/// changes shape. Read whole by the client, which folds the events itself.
+pub fn reactionsPath(alloc: Alloc, conv_dir: []const u8, sid: []const u8) ![]u8 {
+    const file = try std.fmt.allocPrint(alloc, "{s}.reactions.jsonl", .{sid});
+    return std.fs.path.join(alloc, &.{ conv_dir, "sessions", file });
+}
+
+/// readReactions returns the sidecar's bytes, or "" when nobody has reacted yet.
+pub fn readReactions(io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8) ![]const u8 {
+    const path = try reactionsPath(alloc, conv_dir, sid);
+    return Io.Dir.cwd().readFileAlloc(io, path, alloc, .unlimited) catch "";
+}
+
+/// appendReaction records one event `{msg, uid, from, emoji, on, at}` on the
+/// sidecar and fans it out live on the topic's bus key, wrapped as
+/// `{"reaction":<line>}` so the transcript stream can tell it from a message
+/// blob. Under chat_mu so `msg_num` (1-based, the N of MSG_<sid>_N) is checked
+/// against the transcript's real count. Returns the stored line.
+pub fn appendReaction(io: Io, alloc: Alloc, bus: *Bus, conv_dir: []const u8, conv_key: []const u8, sid: []const u8, msg_num: usize, uid: []const u8, from_name: []const u8, emoji: []const u8, on: bool) ![]const u8 {
+    chat_mu.lockUncancelable(io);
+    defer chat_mu.unlock(io);
+
+    const md_path = try sessionMdPath(alloc, conv_dir, sid);
+    const raw = Io.Dir.cwd().readFileAlloc(io, md_path, alloc, .unlimited) catch "";
+    const count = (try decodeChatFile(alloc, raw)).len;
+    if (msg_num == 0 or msg_num > count) return error.NoSuchMessage;
+
+    const at = try timefmt.formatRFC3339UTC(alloc, nowUnix(io));
+    const line = try reactionLine(alloc, msg_num, uid, from_name, emoji, on, at);
+    try appendRawBytes(io, try reactionsPath(alloc, conv_dir, sid), try std.fmt.allocPrint(alloc, "{s}\n", .{line}));
+
+    const key = try std.fmt.allocPrint(alloc, "{s}/{s}", .{ conv_key, sid });
+    bus.publish(key, try std.fmt.allocPrint(alloc, "{{\"reaction\":{s}}}", .{line}));
+    return line;
+}
+
+/// reactionLine is the ONE place the sidecar's line shape is written. `on`
+/// false is a retraction: the client folds by last-event-wins per
+/// (msg, uid, emoji), so the file stays append-only.
+fn reactionLine(alloc: Alloc, msg_num: usize, uid: []const u8, from: []const u8, emoji: []const u8, on: bool, at: []const u8) ![]u8 {
+    return std.fmt.allocPrint(alloc, "{{\"msg\":{d},\"uid\":{f},\"from\":{f},\"emoji\":{f},\"on\":{},\"at\":{f}}}", .{
+        msg_num,                  std.json.fmt(uid, .{}), std.json.fmt(from, .{}),
+        std.json.fmt(emoji, .{}), on,                     std.json.fmt(at, .{}),
+    });
+}
+
+test "reactionLine is one JSON object with the six fields, strings escaped" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    const line = try reactionLine(a, 3, "1", "Ste\"ve", "👍", false, "2026-09-10T12:00:00Z");
+    try std.testing.expectEqualStrings(
+        "{\"msg\":3,\"uid\":\"1\",\"from\":\"Ste\\\"ve\",\"emoji\":\"👍\",\"on\":false,\"at\":\"2026-09-10T12:00:00Z\"}",
+        line,
+    );
+}
+
 /// ConvKind discriminates the conversation shapes for the fanout (DM "where"
 /// names the other party; channel "where" names the channel). `blog_comment` is a
 /// public, MEMBERLESS thread: because the cross-page fanout is keyed

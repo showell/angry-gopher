@@ -83,9 +83,18 @@ const BusMsg = struct {
     markdown: []const u8,
 };
 
-/// liveFrame turns one bus blob into this viewer's SSE event: parse it, render
-/// html from the markdown, compute `mine` against the viewer's name, emit.
+/// A reaction event rides the same topic key as messages, wrapped by
+/// chat_store.appendReaction as `{"reaction":<line>}`; the unwrapped line is the
+/// sidecar's own line, so the wire and the file agree byte-for-byte.
+const reaction_prefix = "{\"reaction\":";
+
+/// liveFrame turns one bus blob into this viewer's SSE event: a reaction blob
+/// becomes `event: reaction` carrying the sidecar line verbatim; a message blob
+/// is parsed, its markdown rendered, `mine` computed against the viewer's name.
 fn liveFrame(alloc: Alloc, raw: []const u8, viewer: []const u8) ![]const u8 {
+    if (std.mem.startsWith(u8, raw, reaction_prefix) and raw.len > reaction_prefix.len + 1) {
+        return std.fmt.allocPrint(alloc, "event: reaction\ndata: {s}\n\n", .{raw[reaction_prefix.len .. raw.len - 1]});
+    }
     const parsed = try std.json.parseFromSlice(BusMsg, alloc, raw, .{});
     defer parsed.deinit();
     const m = parsed.value;
@@ -195,6 +204,16 @@ fn parseWire(comptime T: type, a: Alloc, frame: []const u8) !std.json.Parsed(T) 
     const start = (std.mem.indexOf(u8, frame, pfx) orelse return error.NoData) + pfx.len;
     const end = (std.mem.indexOf(u8, frame[start..], "\n\n") orelse return error.NoEnd) + start;
     return std.json.parseFromSlice(T, a, frame[start..end], .{});
+}
+
+test "liveFrame unwraps a reaction blob into an event: reaction frame carrying the line verbatim" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    const line = "{\"msg\":2,\"uid\":\"1\",\"from\":\"Steve\",\"emoji\":\"👍\",\"on\":true,\"at\":\"2026-09-10T12:00:00Z\"}";
+    const blob = try std.fmt.allocPrint(a, "{{\"reaction\":{s}}}", .{line});
+    const frame = try liveFrame(a, blob, "Steve");
+    try testing.expectEqualStrings(try std.fmt.allocPrint(a, "event: reaction\ndata: {s}\n\n", .{line}), frame);
 }
 
 const WireView = struct {

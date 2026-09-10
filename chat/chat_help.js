@@ -1,7 +1,7 @@
 /* PRODUCT_DECISION: keymap drives both keyboard dispatch AND the rendered
    keyhelp panel — one source of truth, no drift. Letter shortcuts are sorted
-   alphabetically (no functional grouping); '/' lives at the end as the only
-   non-letter. Each shortcut's "button" in the panel is a real <button> that
+   alphabetically (no functional grouping); the non-letters ('/', ':', '+')
+   live at the end. Each shortcut's "button" in the panel is a real <button> that
    triggers the same action as the key — they look pressable AND they are.
    ChatHelp owns the keyhelp CSS — the panel itself, the kbd-look key
    buttons, and their hover/active feedback. */
@@ -46,6 +46,8 @@ window.ChatHelp = (function(){
       { key: 's', label: 'save selected message to your reading list', requiresSelection: true, action: function(s){ deps.save(s); } },
       { key: 't', label: 'open the raw transcript in a new tab', requiresSelection: false, action: function(){ deps.viewRaw(); } },
       { key: '/', label: 'search messages',                     requiresSelection: false, action: function(){ ChatSearch.open(); } },
+      { key: ':', label: 'react to selected message (pick an emoji)', requiresSelection: true, action: function(s){ deps.pickReaction(s); } },
+      { key: '+', label: 'thumbs-up the selected message',      requiresSelection: true,  action: function(s){ deps.thumbsUp(s); } },
     ];
   }
 

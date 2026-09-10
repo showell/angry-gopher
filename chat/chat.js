@@ -24,7 +24,6 @@
   var messages = [];
   var byId = new Map(); // id -> position in records / messages
   function recordById(id){ var i=byId.get(id); return i==null ? null : records[i]; }   // lint:null-undefined-check map-get
-  // lint:called-once supersession-only — named to match recordById sibling
   function widgetById(id){ var i=byId.get(id); return i==null ? null : messages[i]; }  // lint:null-undefined-check map-get
 
   /* ===== reading-list "already saved" set =====
@@ -84,6 +83,16 @@
     var prefix='Edit of MSG_'+rec.id+'\n\n';
     ChatRightSidebar.openCompose();
     ChatCompose.setMarkdown(prefix+rec.markdown, prefix.length);
+  }
+
+  /* Reactions: a chip click or the '+' key toggles one emoji; the ':' key opens
+     the picker over the bubble. ChatReactions owns the state and the POST. */
+  function doReact(rec, emoji){ ChatReactions.toggle(rec.index + 1, emoji); }
+  function doPickReaction(rec){
+    var w = widgetById(rec.id);
+    if(!w) return;
+    pane.focusBubble(rec.index + 1);
+    ChatEmoji.pick({ anchor: w.getElement(), onPick: function(entry){ doReact(rec, entry.glyph); }, onClose: pane.focus });
   }
 
   /* PRODUCT_DECISION: save = snapshot this message into your reading-list doc.
@@ -158,6 +167,7 @@
         onRefer:  doRefer,
         onEdit:   doEdit,
         onSave:   doSave,
+        onReact:  doReact,
         onMsgRef: navigateRef,
       });
       byId.set(m.id, records.length);
@@ -193,9 +203,17 @@
   function appendMessage(m){
     var empty=document.getElementById('chat-empty'); if(empty) empty.remove();
     pane.append(m);
+    ChatReactions.paint(m.index + 1); /* reactions that arrived before this bubble */
     var em=(m.markdown||'').match(EDIT_RE);
     if(em){ var orig=widgetById(em[1]); if(orig) orig.markEdited(m.id); }
   }
+
+  /* Reactions fold client-side; the widget for message number n is messages[n-1]. */
+  ChatReactions.init({
+    sessionBase: SESSION_BASE,
+    me: root.dataset.me,
+    widgetByMsg: function(n){ return messages[n-1] || null; },
+  });
 
   /* ===== entry-point fragment (#msg-<id>) ===== */
   /* PRODUCT_DECISION: #msg-<hash> fragments (e.g. from Docs' Post-to-chat) get
@@ -236,6 +254,8 @@
     pane.startBacklog(backlogSize);
     if(backlogSize===0) finishBacklog();
   });
+
+  es.addEventListener('reaction', function(e){ ChatReactions.apply(e.data); });
 
   es.onmessage=function(e){
     var m=JSON.parse(e.data);
@@ -323,6 +343,8 @@
     referReply:  doRefer,
     editMessage: doEdit,
     save:        doSave,
+    pickReaction: doPickReaction,
+    thumbsUp:    function(rec){ doReact(rec, ChatEmoji.glyphOf('thumbsup')); },
     /* Raw transcript = the literal on-disk .md file, opened in a new tab
        via the same server endpoint fetch_prod_transcript backs up from. */
     viewRaw:     function(){ window.open(SESSION_BASE + '/raw', '_blank'); },

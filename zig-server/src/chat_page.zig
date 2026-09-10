@@ -29,7 +29,7 @@ const page_scripts = [_][]const u8{
     "message.js",          "message_view.js",      "nav_stack.js",
     "middle_pane.js",      "chat_search.js",       "chat_drag_to_pin.js",
     "chat_add_topic.js",   "chat_left_sidebar.js", "chat_right_sidebar.js",
-    "chat_emoji.js",       "chat_compose.js",      "chat_help.js",
+    "chat_emoji.js",       "chat_reactions.js",    "chat_compose.js",      "chat_help.js",
     "chat_responsive.js",
     "chat.js",
     "notify.js",
@@ -69,8 +69,9 @@ pub fn conversationPage(req: *Request, io: Io, alloc: Alloc, uid: []const u8, to
     try chrome.begin(&b, alloc, "Chat", topic.title, viewer, "");
 
     try b.appendSlice(alloc, chat_css);
-    try b.print(alloc, "<div id=\"chat-root\" data-conv=\"{s}\" data-conv-base=\"{s}\" data-session=\"{s}\">", .{
-        try htmlEscape(alloc, conv.key), try htmlEscape(alloc, conv.base), try htmlEscape(alloc, topic.sid),
+    // data-me: the viewer's uid, so the client can tell its own reactions apart.
+    try b.print(alloc, "<div id=\"chat-root\" data-conv=\"{s}\" data-conv-base=\"{s}\" data-session=\"{s}\" data-me=\"{s}\">", .{
+        try htmlEscape(alloc, conv.key), try htmlEscape(alloc, conv.base), try htmlEscape(alloc, topic.sid), try htmlEscape(alloc, uid),
     });
     try b.appendSlice(alloc, "<div class=\"chat-notify\" id=\"chat-notify\"></div>");
     try b.appendSlice(alloc, "<div class=\"chat-layout\">");

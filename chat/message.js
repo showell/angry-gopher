@@ -21,6 +21,7 @@
      refer button             → deps.onRefer(record)     (affects compose)
      edit button              → deps.onEdit(record)      (affects compose)
      save button              → deps.onSave(record)      (save to reading list)
+     reaction chip            → deps.onReact(record, emoji)  (toggle my reaction)
      external <a> / plain     → no-op (browser default + bubble up)
 
    The record passed to onQuote/onRefer/onEdit is the same SSE payload
@@ -114,6 +115,13 @@ window.Message = (function(){
          zoom-click — that's IMG-only). max-height keeps a tall clip in check. */
       + '.chat-body video {'
       +   ' max-width:100%; max-height:480px; display:block; margin:6px 0; border-radius:6px; }'
+      /* Reaction chips under the body: "👍 2", mine highlighted; ChatReactions
+         supplies the list, the chip click toggles. */
+      + '.chat-reactions { display:flex; flex-wrap:wrap; gap:4px; margin-top:6px; }'
+      + '.chat-react-chip { font-size:12px; line-height:1.2; padding:2px 7px; border-radius:10px; cursor:pointer;'
+      +   ' background:var(--cc-bg); color:var(--cc-fg); border:1px solid var(--cc-border); }'
+      + '.chat-react-chip:hover { border-color:var(--cc-accent); }'
+      + '.chat-react-chip.mine { background:var(--cc-accent-soft-bg); border-color:var(--cc-accent); }'
       /* Supersession spoiler (Edit of MSG_<id>). */
       + '.chat-edited-note { font-size:12px; color:var(--cc-muted-fg); margin-bottom:4px; }'
       + '.chat-edited-spoiler > summary {'
@@ -172,6 +180,7 @@ window.Message = (function(){
     var onRefer  = deps.onRefer  || function(){};
     var onEdit   = deps.onEdit   || function(){};
     var onSave   = deps.onSave   || function(){};
+    var onReact  = deps.onReact  || function(){};
     var onMsgRef = deps.onMsgRef || function(){};
 
     var bubble = null;
@@ -226,6 +235,8 @@ window.Message = (function(){
       if(t.closest && t.closest('.msg-refer')){ onRefer(data); return; }
       if(t.closest && t.closest('.msg-edit')){  onEdit(data);  return; }
       if(t.closest && t.closest('.msg-save')){  onSave(data);  return; }
+      var chip = t.closest && t.closest('.chat-react-chip');
+      if(chip){ onReact(data, chip.getAttribute('data-emoji')); return; }
       if(!t.closest || !t.closest('.chat-body')) return;
       var hit = classifyBodyClick(t);
       if(hit.kind === 'image'){ ChatImagePopup.show(hit.src); return; }
@@ -268,10 +279,29 @@ window.Message = (function(){
       bodyEl.appendChild(note); bodyEl.appendChild(spoiler);
     }
 
+    /* setReactions repaints the chip strip from a folded list
+       [{emoji, count, names, mine}] — empty removes the strip. */
+    function setReactions(chips){
+      if(!bubble) return;
+      var strip = bubble.querySelector('.chat-reactions');
+      if(chips.length === 0){ if(strip) strip.remove(); return; }
+      if(!strip){ strip = document.createElement('div'); strip.className = 'chat-reactions'; bubble.appendChild(strip); }
+      strip.textContent = '';
+      chips.forEach(function(c){
+        var b = document.createElement('button'); b.type = 'button';
+        b.className = 'chat-react-chip' + (c.mine ? ' mine' : '');
+        b.setAttribute('data-emoji', c.emoji);
+        b.title = c.names.join(', ') + (c.mine ? ' — click to remove yours' : ' — click to react too');
+        b.textContent = c.emoji + ' ' + c.count;
+        strip.appendChild(b);
+      });
+    }
+
     return {
       render:     render,
       markEdited: markEdited,
       setSaved:   applySaved,
+      setReactions: setReactions,
       getElement: function(){ return bubble; },
     };
   }

@@ -11,6 +11,8 @@
 //!   GET  /chat/c/<conv>/<sid>/stream   SSE: backlog replay + LIVE fan-out
 //!   POST /chat/c/<conv>/<sid>/send     post a message (fans out to live streams)
 //!   GET  /chat/c/<conv>/<sid>/raw      the literal on-disk .md bytes
+//!   GET  /chat/c/<conv>/<sid>/reactions  the reaction sidecar (ndjson; reactions.zig)
+//!   POST /chat/c/<conv>/<sid>/react    toggle one reaction (fans out as event: reaction)
 //!   {GET,POST} /channel/<name>/<topic>{,/stream,/send,/raw}   the channel equivalents
 //!   GET  /chat/notifications           SSE: per-uid notify strip (status pings +
 //!                                      came-online), a notifyBusKey subscriber
@@ -48,6 +50,7 @@ const upload = @import("chat_upload.zig");
 const presence = @import("presence.zig");
 const chat_state = @import("chat_state.zig");
 const download = @import("chat_download.zig");
+const reactions = @import("reactions.zig");
 const Bus = @import("bus.zig").Bus;
 
 const Alloc = std.mem.Allocator;
@@ -85,6 +88,7 @@ const assets = [_]Asset{
     .{ .name = "chat_left_sidebar.js", .body = @embedFile("chat_js_left_sidebar") },
     .{ .name = "chat_right_sidebar.js", .body = @embedFile("chat_js_right_sidebar") },
     .{ .name = "chat_emoji.js", .body = @embedFile("chat_js_emoji") },
+    .{ .name = "chat_reactions.js", .body = @embedFile("chat_js_reactions") },
     .{ .name = "chat_compose.js", .body = @embedFile("chat_js_compose") },
     .{ .name = "chat_help.js", .body = @embedFile("chat_js_help") },
     .{ .name = "chat_responsive.js", .body = @embedFile("chat_js_responsive") },
@@ -307,6 +311,10 @@ fn topicRoute(req: *Request, io: Io, alloc: Alloc, bus: *Bus, segs: *SegIter, ui
         try download.serveBundle(req, io, alloc, conv.dir, topic.sid);
     } else if (std.mem.eql(u8, tail, "saved")) {
         try savedIds(req, io, alloc, uid, conv.key, topic.sid);
+    } else if (std.mem.eql(u8, tail, "reactions")) {
+        try reactions.serveFile(req, io, alloc, conv.dir, topic.sid);
+    } else if (std.mem.eql(u8, tail, "react")) {
+        try reactions.handleReact(req, io, alloc, bus, conv.dir, conv.key, topic.sid, uid);
     } else {
         try http.notFound(req);
     }

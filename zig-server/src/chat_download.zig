@@ -3,6 +3,7 @@
 //! gzipped tar of one topic:
 //!
 //!   <sid>/<sid>.md         the literal transcript (same bytes as /raw)
+//!   <sid>/<sid>.reactions.jsonl   the reaction sidecar, when anyone has reacted
 //!   <sid>/uploads/<file>   every image in the topic's .uploads sidecar
 //!
 //! The .lastauthor companion is deliberately omitted (internal bookkeeping, not
@@ -14,6 +15,7 @@ const std = @import("std");
 const Io = std.Io;
 const Alloc = std.mem.Allocator;
 const http = @import("http.zig");
+const store = @import("chat_store.zig");
 const flate = std.compress.flate;
 
 const Request = std.http.Server.Request;
@@ -28,6 +30,13 @@ pub fn serveBundle(req: *Request, io: Io, alloc: Alloc, conv_dir: []const u8, si
     var tar: std.ArrayList(u8) = .empty;
     const md_entry = try std.fmt.allocPrint(alloc, "{s}/{s}.md", .{ sid, sid });
     try addTarFile(&tar, alloc, md_entry, md, fileMtime(io, md_path));
+
+    // The reaction sidecar rides along when present (absent = nobody reacted).
+    const rx_path = try store.reactionsPath(alloc, conv_dir, sid);
+    if (Io.Dir.cwd().readFileAlloc(io, rx_path, alloc, .unlimited)) |rx| {
+        const rx_entry = try std.fmt.allocPrint(alloc, "{s}/{s}.reactions.jsonl", .{ sid, sid });
+        try addTarFile(&tar, alloc, rx_entry, rx, fileMtime(io, rx_path));
+    } else |_| {}
 
     // Images — append-only once written, so an unlocked read is safe. A missing
     // dir (no images yet) yields nothing; an unreadable file is skipped, not fatal.
