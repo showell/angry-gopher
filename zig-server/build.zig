@@ -99,6 +99,7 @@ pub fn build(b: *std.Build) void {
         .{ .name = "chat_js_first_topic", .path = "../chat/chat_first_topic.js" },
         .{ .name = "chat_js_left_sidebar", .path = "../chat/chat_left_sidebar.js" },
         .{ .name = "chat_js_right_sidebar", .path = "../chat/chat_right_sidebar.js" },
+        .{ .name = "chat_js_emoji", .path = "../chat/chat_emoji.js" },
         .{ .name = "chat_js_compose", .path = "../chat/chat_compose.js" },
         .{ .name = "chat_js_help", .path = "../chat/chat_help.js" },
         .{ .name = "chat_js_responsive", .path = "../chat/chat_responsive.js" },

@@ -8,6 +8,8 @@ day. Log in at [lynrummy.com/chat](https://lynrummy.com/chat) and you get:
   written in **markdown**, updating **live** as people type-and-send.
 - **Topics** — each conversation is split into named threads (a "topic" is just a
   named session), so a chat can hold many parallel threads without losing the plot.
+- **Emoji** by shortcode — type `:ta` and pick 🎉 from the autocomplete (a fixed,
+  client-side whitelist in `chat_emoji.js`; the server only ever sees the glyph).
 - **Images & screencasts** you can drag in, a world-clock you get by clicking any
   timestamp, cross-message references (`MSG_…` links that jump straight to the
   quoted message), and a **keyboard-first** feel — arrows to move, `/` to search,

@@ -175,7 +175,7 @@ window.ChatCompose = (function(){
     body.appendChild(statusEl);
 
     var hint = document.createElement('div'); hint.className = 'chat-hint';
-    hint.textContent = 'Markdown supported · attach an image or screencast · Ctrl/⌘-Enter to send';
+    hint.textContent = 'Markdown supported · :emoji: autocompletes · attach an image or screencast · Ctrl/⌘-Enter to send';
     body.appendChild(hint);
 
     return { body:body, form:form, textarea:ta, uploadBtn:upBtn, fileInput:file, status:statusEl };
@@ -204,6 +204,7 @@ window.ChatCompose = (function(){
       if((e.ctrlKey||e.metaKey)&&e.key==='Enter'){ e.preventDefault(); send(); return; }
       if(e.key==='Escape'&&textarea.value.trim()===''){ e.preventDefault(); closeCompose(); } /* PRODUCT_DECISION: Esc closes only when empty — never lose a draft. */
     });
+    ChatEmoji.attach(textarea); /* the :name: autocomplete; the whitelist lives in ChatEmoji */
     uploadBtn.addEventListener('click', function(){ fileInput.click(); });
     fileInput.addEventListener('change', function(){ uploadFile(fileInput.files[0]); fileInput.value=''; });
     textarea.addEventListener('paste', function(e){

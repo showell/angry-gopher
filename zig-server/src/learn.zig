@@ -57,6 +57,7 @@ fn sourceBytes(file: []const u8) ?[]const u8 {
         .{ "nav_stack.js", @embedFile("chat_js_nav_stack") },
         .{ "middle_pane.js", @embedFile("chat_js_middle_pane") },
         .{ "chat_right_sidebar.js", @embedFile("chat_js_right_sidebar") },
+        .{ "chat_emoji.js", @embedFile("chat_js_emoji") },
         .{ "chat_compose.js", @embedFile("chat_js_compose") },
         .{ "chat_add_topic.js", @embedFile("chat_js_add_topic") },
         .{ "chat_drag_to_pin.js", @embedFile("chat_js_drag_to_pin") },
@@ -87,6 +88,7 @@ const scripts =
     "<script src=\"/chat/nav_stack.js?v=" ++ v ++ "\"></script>" ++
     "<script src=\"/chat/middle_pane.js?v=" ++ v ++ "\"></script>" ++
     "<script src=\"/chat/chat_right_sidebar.js?v=" ++ v ++ "\"></script>" ++
+    "<script src=\"/chat/chat_emoji.js?v=" ++ v ++ "\"></script>" ++
     "<script src=\"/chat/chat_compose.js?v=" ++ v ++ "\"></script>" ++
     "<script src=\"/chat/chat_add_topic.js?v=" ++ v ++ "\"></script>" ++
     "<script src=\"/chat/chat_drag_to_pin.js?v=" ++ v ++ "\"></script>" ++

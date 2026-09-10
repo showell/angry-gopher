@@ -84,6 +84,7 @@ const assets = [_]Asset{
     .{ .name = "chat_first_topic.js", .body = @embedFile("chat_js_first_topic") },
     .{ .name = "chat_left_sidebar.js", .body = @embedFile("chat_js_left_sidebar") },
     .{ .name = "chat_right_sidebar.js", .body = @embedFile("chat_js_right_sidebar") },
+    .{ .name = "chat_emoji.js", .body = @embedFile("chat_js_emoji") },
     .{ .name = "chat_compose.js", .body = @embedFile("chat_js_compose") },
     .{ .name = "chat_help.js", .body = @embedFile("chat_js_help") },
     .{ .name = "chat_responsive.js", .body = @embedFile("chat_js_responsive") },
