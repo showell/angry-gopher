@@ -36,3 +36,8 @@ lynrummy.com {
 	# The zig server listens on :9001.
 	reverse_proxy localhost:9001
 }
+
+# The other sites on this host, one file each, which their own deploys install
+# and this file never names: roc.lynrummy.com is roc-apps' ops/roc.lynrummy.com.caddy,
+# installed by its site/deploy.sh. A pattern that matches no file is only a warning.
+import /etc/caddy/sites/*.caddy
