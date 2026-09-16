@@ -1,4 +1,4 @@
-//! links: /chat/links — a per-user curated links page. Renders the viewer's
+//! chat_links: /chat/links — a per-user curated links page. Renders the viewer's
 //! links.md (manually dropped at {chat_root}/users/<uid>/links.md) through the
 //! chat markdown processor, so external links open in a new tab exactly like
 //! chat. Deliberately minimal: a static server-rendered page, no stream, no JS.
