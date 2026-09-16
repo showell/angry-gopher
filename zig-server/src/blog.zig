@@ -20,7 +20,6 @@
 const std = @import("std");
 const Io = std.Io;
 const http = @import("http.zig");
-const users = @import("users.zig");
 const markdown = @import("markdown.zig");
 const html = @import("html.zig");
 
@@ -45,10 +44,9 @@ const PostMeta = struct {
 };
 
 /// handle serves /blog (index), /blog/<slug> (one post + its comments), and
-/// `uid` is the resolved viewer ("" for anon), used for the top bar; reading
+/// `name` is the viewer's display name ("" for anon), used for the top bar; reading
 /// never gates.
-pub fn handle(req: *Request, io: Io, alloc: Alloc, uid: []const u8, rest: []const u8) !void {
-    const name = if (uid.len == 0) "" else try users.getUserName(io, alloc, uid);
+pub fn handle(req: *Request, io: Io, alloc: Alloc, name: []const u8, rest: []const u8) !void {
 
     if (rest.len == 0 or std.mem.eql(u8, rest, "/")) {
         return renderIndex(req, io, alloc, name);
@@ -249,7 +247,7 @@ fn begin(b: *std.ArrayList(u8), alloc: Alloc, tab_title: []const u8, name: []con
         "<a href=\"/\">Home</a> · <a href=\"/chat\">Chat</a> · <strong>Blog</strong></div>" ++
         "<div class=\"app-top-user\">");
     if (name.len == 0) {
-        try b.appendSlice(alloc, "<a href=\"/login\">Log in</a>");
+        try b.appendSlice(alloc, "<a href=\"/play\">Log in</a>");
     } else {
         try b.print(alloc, "<strong>{s}</strong> · <a href=\"/logout\">Log out</a>", .{try html.htmlEscape(alloc, name)});
     }

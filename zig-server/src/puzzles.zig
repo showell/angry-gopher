@@ -7,16 +7,15 @@
 //!                                                    (powers the Hint button)
 //!   POST /puzzles/sessions/<id>/puzzles/<idx>/actions  append one action line
 //!
-//! Phase 3 (now): the whole surface is gated JUST_NEEDS_NAME — every request
-//! resolves its identity (users.currentUserID), and with no identity we redirect
-//! to /login. The resolved id is the storage key
-//! (replacing the phase-2 stub). The page allocates a real session id + writes
-//! meta; POST .../actions appends to disk.
+//! The whole surface is gated JUST_NEEDS_NAME — every request resolves a LOCAL
+//! player (player.zig), and with none we redirect to /play. It wants *a* user,
+//! not *the* user: a key to file puzzle sessions under. Nothing here reads the
+//! chat account store.
 
 const std = @import("std");
 const http = @import("http.zig");
 const storage = @import("storage.zig");
-const users = @import("users.zig");
+const player = @import("player.zig");
 
 const puzzle_js = @embedFile("puzzle_js");
 
@@ -50,13 +49,13 @@ const Alloc = std.mem.Allocator;
 /// handle dispatches /puzzles/* — the route table (a switch on the path tail).
 /// `sub` keeps its leading '/' (e.g. "/puzzle.js", "/sessions/3/...").
 ///
-/// The whole surface is gated JUST_NEEDS_NAME: resolve identity first and, with
-/// none, redirect to /login. The gate IS the contract — the inner handlers never
-/// re-check. The resolved id is the storage key for every write below.
+/// The whole surface is gated JUST_NEEDS_NAME: resolve the player first and,
+/// with none, redirect to /play. The gate IS the contract — the inner handlers
+/// never re-check. The resolved id is the storage key for every write below.
 pub fn handle(req: *std.http.Server.Request, io: std.Io, alloc: Alloc, sub: []const u8) !void {
-    const user_id = try users.currentUserID(io, alloc, req);
+    const user_id = (try player.current(io, alloc, req)).id;
     if (user_id.len == 0) {
-        try http.redirect(req, "/login");
+        try http.redirect(req, "/play?next=/puzzles");
         return;
     }
 

@@ -30,7 +30,7 @@ const admin_uid = "1";
 /// handle dispatches /admin* — `sub` is the path after "/admin".
 pub fn handle(req: *Request, io: Io, alloc: Alloc, sub: []const u8) !void {
     const uid = try users.currentUserID(io, alloc, req);
-    if (uid.len == 0) return http.redirect(req, "/login");
+    if (uid.len == 0) return http.redirect(req, "/login/full");
     if (!std.mem.eql(u8, uid, admin_uid)) return http.notFound(req); // ADMIN_ONLY
 
     if (std.mem.eql(u8, sub, "/delete")) return handleDelete(req, io, alloc);

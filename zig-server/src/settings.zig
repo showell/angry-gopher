@@ -24,7 +24,7 @@ const Request = std.http.Server.Request;
 /// "/apikey"). Members only; presence is marked on entry.
 pub fn handle(req: *Request, io: Io, alloc: Alloc, bus: *Bus, sub: []const u8) !void {
     const uid = try users.currentUserID(io, alloc, req);
-    if (uid.len == 0) return http.redirect(req, "/login");
+    if (uid.len == 0) return http.redirect(req, "/login/full");
     if (!users.isMember(io, alloc, uid)) return http.notFound(req); // NEED_PASSWORD
     presence.markActiveAndBroadcast(io, alloc, bus, uid);
 

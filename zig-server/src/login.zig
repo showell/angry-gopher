@@ -1,14 +1,19 @@
-//! login: the identity-ISSUANCE front door.
-//! Two tiers, both keyed by a numeric user id (the cookie carries the id, not the
-//! name):
-//!   /login       — guests: pick a non-reserved name; a fresh login allocates a
-//!                  new user id. Plays Lyn Rummy, no chat.
+//! login: CHAT's identity-ISSUANCE front door, keyed by a numeric user id (the
+//! cookie carries the id, not the name):
 //!   /login/full  — the chat password gate (members get a signed session cookie).
 //!                  A stranger types a name and picks Log in or Create account; a
 //!                  cookied guest upgrades in place (name locked); an existing
 //!                  member name verifies. A show/hide eyeball replaces a confirm
 //!                  field. See PwMode.
 //!   /logout      — clears the cookies; "release" also deletes the user's data.
+//!
+//! **THE NAME-ONLY TIER LEFT.** Playing Lyn Rummy needs *a* user, not *the*
+//! user, so it resolves a LOCAL player (player.zig, at /play) that knows nothing
+//! about passwords. `/login` is kept only as a redirect to that page, for the
+//! links and the muscle memory that still point at it. The one call the other
+//! way — player.mirror in loginAsMember — gives a member a player row under the
+//! same id so their games follow them; it goes away with this file when the chat
+//! surface moves house.
 //!
 //! This is the last piece the resolution port (users.zig) deliberately left for
 //! last: resolution reads identity, issuance CREATES it. The account-store
@@ -21,6 +26,8 @@ const std = @import("std");
 const Io = std.Io;
 const http = @import("http.zig");
 const users = @import("users.zig");
+const names = @import("names.zig");
+const player = @import("player.zig");
 const storage = @import("storage.zig");
 const chat = @import("chat.zig");
 const html = @import("html.zig");
@@ -38,43 +45,12 @@ const uid_max_age = 60 * 60 * 24 * 365;
 const clear_uid_cookie = "gopher_uid=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax";
 const clear_auth_cookie = "gopher_auth=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax";
 
-/// handle dispatches /login* — `sub` is the path after "/login" ("" for the guest
-/// page, "/full" for the password gate).
+/// handle dispatches /login* — `sub` is the path after "/login" ("/full" for the
+/// password gate; bare "/login" is the old name-only door, now at /play).
 pub fn handle(req: *Request, io: Io, alloc: Alloc, bus: *Bus, sub: []const u8) !void {
-    if (sub.len == 0) return handleLogin(req, io, alloc);
+    if (sub.len == 0) return http.redirect(req, "/play");
     if (std.mem.eql(u8, sub, "/full")) return handleLoginFull(req, io, alloc, bus);
     return http.notFound(req);
-}
-
-// ── /login (guest tier) ───────────────────────────────────────────────────────
-
-/// handleLogin: GET renders the name-entry page; POST validates the name and
-/// either flags a reserved name, or allocates a fresh guest id and logs in.
-fn handleLogin(req: *Request, io: Io, alloc: Alloc) !void {
-    if (req.head.method == .POST) {
-        // Resolve identity (reads cookie headers) BEFORE the body: iterateHeaders
-        // asserts on received_head, and reading the body invalidates header
-        // strings. The "currently playing as" line needs it on the error path.
-        const cur = try users.currentUser(io, alloc, req);
-        const body = (try http.readLimitedBody(req, alloc, 64 * 1024)) orelse return;
-        const raw = (try chat.formField(alloc, body, "name")) orelse "";
-        const vr = try users.validateUserName(alloc, raw);
-        if (vr.err.len != 0) {
-            return renderLoginPage(req, alloc, cur.name, vr.err);
-        }
-        if (users.isNameReserved(io, alloc, vr.name)) {
-            // Password-protected name — guests can't claim it.
-            return renderReservedNotice(req, alloc, vr.name);
-        }
-        // Guests are honor-system: a fresh login allocates a new user id with
-        // this name. Identity is the cookie; protect a name by becoming a member.
-        const id = try users.allocateUser(io, alloc, vr.name);
-        // loginAsGuest: set the identity cookie, clear any stale member session.
-        const uid_ck = try uidCookie(alloc, id);
-        return sendRedirect(req, alloc, "/", &.{ uid_ck, clear_auth_cookie });
-    }
-    const cur = try users.currentUser(io, alloc, req);
-    return renderLoginPage(req, alloc, cur.name, "");
 }
 
 // ── /login/full (member tier) ─────────────────────────────────────────────────
@@ -115,7 +91,7 @@ fn handleLoginFull(req: *Request, io: Io, alloc: Alloc, bus: *Bus) !void {
     //   2. else, with an identity, the name is the cookie's (locked, so we ignore
     //      any posted name): a member re-verifies, a guest upgrades in place.
     //   3. else a free-choosing stranger (editable name, Log in / Create account).
-    const explicit = try users.sanitizeUser(alloc, (try formValue(alloc, target, body, "name")) orelse "");
+    const explicit = try names.sanitizeUser(alloc, (try formValue(alloc, target, body, "name")) orelse "");
     const wants_register = std.mem.eql(u8, (try formValue(alloc, target, body, "action")) orelse "", "register");
     const explicit_member = explicit.len != 0 and (try users.findMemberByName(io, alloc, explicit)) != null;
 
@@ -161,7 +137,7 @@ fn handleLoginFull(req: *Request, io: Io, alloc: Alloc, bus: *Bus) !void {
             return loginAsMember(req, io, alloc, id, next);
         },
         .stranger => {
-            const vr = try users.validateUserName(alloc, name);
+            const vr = try names.validateUserName(alloc, name);
             if (vr.err.len != 0) return renderPwPage(req, alloc, .stranger, name, next, vr.err);
             const valid = vr.name;
             const member_id = try users.findMemberByName(io, alloc, valid);
@@ -209,6 +185,8 @@ fn loginAsMember(req: *Request, io: Io, alloc: Alloc, id: []const u8, next: []co
     const uid_ck = try uidCookie(alloc, id);
     const auth_ck = try authCookie(alloc, signed);
     users.touchUser(io, alloc, id); // logging on counts as activity
+    // Same id on both sides, so a member's Lyn Rummy history follows them.
+    player.mirror(io, alloc, id, try users.getUserName(io, alloc, id));
     return sendRedirect(req, alloc, next, &.{ uid_ck, auth_ck });
 }
 
@@ -217,21 +195,28 @@ fn loginAsMember(req: *Request, io: Io, alloc: Alloc, id: []const u8, next: []co
 /// handleLogout shows the logout page (GET) and performs logout (POST). A
 /// "release" deletes the account + all its data, freeing the name; the default
 /// (unchecked) just clears the cookies and keeps the data.
+///
+/// It is the whole site's door, so it answers to EITHER identity: a chat member
+/// or a name-only player (whose Log out chip the public pages render just the
+/// same). A player has no account record to delete, only game data.
 pub fn handleLogout(req: *Request, io: Io, alloc: Alloc) !void {
     const user = try users.currentUser(io, alloc, req);
+    const local = if (user.id.len == 0) try player.current(io, alloc, req) else player.Player{ .id = "", .name = "" };
+    const id = if (user.id.len != 0) user.id else local.id;
+
     if (req.head.method == .POST) {
         const body = (try http.readLimitedBody(req, alloc, 64 * 1024)) orelse return;
         const release = (try chat.formField(alloc, body, "release")) orelse "";
-        if (std.mem.eql(u8, release, "yes") and user.id.len != 0) {
-            // Release: delete game data and the user record (frees the name; no id
-            // is ever reissued, so no name-backdoor remains).
-            storage.deleteUserData(io, alloc, user.id) catch {};
-            users.deleteUserRecord(io, alloc, user.id);
+        if (std.mem.eql(u8, release, "yes") and id.len != 0) {
+            // Release: delete game data and the identity record (frees the name;
+            // no id is ever reissued, so no name-backdoor remains).
+            storage.deleteUserData(io, alloc, id) catch {};
+            if (user.id.len != 0) users.deleteUserRecord(io, alloc, id) else player.deleteRecord(io, alloc, id);
         }
         return renderLogoutComplete(req, alloc);
     }
-    if (user.id.len == 0) return sendRedirect(req, alloc, "/", &.{});
-    return renderLogoutPage(req, alloc, user.name);
+    if (id.len == 0) return sendRedirect(req, alloc, "/", &.{});
+    return renderLogoutPage(req, alloc, if (user.id.len != 0) user.name else local.name);
 }
 
 // ── new-member fan-out ──────────────
@@ -346,47 +331,6 @@ fn sanitizeNext(next: []const u8) []const u8 {
 
 // ── HTML pages (verbatim ports of the render* funcs) ──────────────────────────
 
-/// renderLoginPage: the guest name-entry screen. `current` is the current display
-/// name (the "Currently playing as" line); `err_msg` an optional error.
-fn renderLoginPage(req: *Request, alloc: Alloc, current: []const u8, err_msg: []const u8) !void {
-    var b: std.ArrayList(u8) = .empty;
-    try b.appendSlice(alloc, login_page_head);
-    if (current.len != 0) {
-        try b.print(alloc, "<p class=\"muted\">Currently playing as <strong>{s}</strong>.</p>", .{try html.htmlEscape(alloc, current)});
-    }
-    if (err_msg.len != 0) {
-        try b.print(alloc, "<p class=\"err\">{s}</p>", .{try html.htmlEscape(alloc, err_msg)});
-    }
-    try b.appendSlice(alloc, login_page_tail);
-    try sendHTML(req, alloc, b.items, &.{});
-}
-
-/// renderReservedNotice tells a guest a name belongs to a member, offering the
-/// password login or a different name.
-fn renderReservedNotice(req: *Request, alloc: Alloc, name: []const u8) !void {
-    const esc = try html.htmlEscape(alloc, name);
-    var b: std.ArrayList(u8) = .empty;
-    try b.print(alloc,
-        \\<!DOCTYPE html>
-        \\<html><head><meta charset="utf-8"><title>♦️ Lyn Rummy ♥️</title>
-        \\<style>
-        \\body {{ font-family: sans-serif; margin: 80px auto; max-width: 440px; padding: 0 24px; }}
-        \\h1 {{ color: #000080; font-size: 22px; }}
-        \\.muted {{ color: #888; font-size: 14px; }}
-        \\button {{ background: #000080; color: white; border: none; padding: 10px 20px;
-        \\         font-size: 15px; border-radius: 4px; cursor: pointer; }}
-        \\a {{ color: #000080; }}
-        \\</style></head><body>
-        \\<h1>“{s}” is reserved</h1>
-        \\<p>That name belongs to a registered member.</p>
-        \\<form method="get" action="/login/full"><input type="hidden" name="name" value="{s}">
-        \\  <button type="submit">Log in with your password</button></form>
-        \\<p class="muted" style="margin-top:16px"><a href="/login">← Pick a different name</a></p>
-        \\</body></html>
-    , .{ esc, esc });
-    try sendHTML(req, alloc, b.items, &.{});
-}
-
 /// renderPwPage renders the chat password screen in one of three modes (see
 /// PwMode). The name is an editable field for a stranger and a locked
 /// display + hidden input otherwise; the password box carries a show/hide
@@ -454,8 +398,8 @@ fn renderPwPage(req: *Request, alloc: Alloc, mode: PwMode, name: []const u8, nex
     // Footer: a stranger / reserved-name visitor can drop to the no-password
     // game; the cookied upgrader just steps back.
     switch (mode) {
-        .stranger => try b.appendSlice(alloc, "<p class=\"muted\" style=\"margin-top:16px\">Just want to play Lyn Rummy? <a href=\"/login\">No password needed →</a></p>"),
-        .member_login => try b.appendSlice(alloc, "<p class=\"muted\" style=\"margin-top:16px\"><a href=\"/login\">← Pick a different name</a></p>"),
+        .stranger => try b.appendSlice(alloc, "<p class=\"muted\" style=\"margin-top:16px\">Just want to play Lyn Rummy? <a href=\"/play\">No password needed →</a></p>"),
+        .member_login => try b.appendSlice(alloc, "<p class=\"muted\" style=\"margin-top:16px\"><a href=\"/play\">← Pick a different name</a></p>"),
         .upgrade => try b.appendSlice(alloc, "<p class=\"muted\" style=\"margin-top:16px\"><a href=\"/\">← Back</a></p>"),
     }
 
@@ -554,39 +498,3 @@ const pw_toggle_script =
     \\</script>
 ;
 
-// login_page_head / login_page_tail bracket the guest-login page's two optional
-// lines (currentLine + errLine).
-const login_page_head =
-    \\<!DOCTYPE html>
-    \\<html><head><meta charset="utf-8"><title>♦️ Lyn Rummy ♥️</title>
-    \\<style>
-    \\body { font-family: sans-serif; margin: 80px auto; max-width: 420px; padding: 0 24px; }
-    \\h1 { color: #000080; }
-    \\.muted { color: #888; font-size: 14px; }
-    \\.err { color: #b00020; font-size: 14px; }
-    \\input[type=text] { font-size: 16px; padding: 8px; width: 100%; box-sizing: border-box; margin: 8px 0; }
-    \\button { background: #000080; color: white; border: none; padding: 10px 20px;
-    \\         font-size: 15px; border-radius: 4px; cursor: pointer; }
-    \\button:hover { background: #0000a0; }
-    \\</style>
-    \\</head><body>
-    \\<h1>Log in to Lyn Rummy</h1>
-    \\<p class="muted">No password — just a name. Letters, numbers, spaces, and apostrophes; names are unique.</p>
-    \\
-;
-
-const login_page_tail =
-    \\
-    \\<form id="f" method="post" action="/login">
-    \\  <input id="name" name="name" type="text" maxlength="40" placeholder="Your name" autofocus>
-    \\  <button type="submit">Continue</button>
-    \\</form>
-    \\<script>
-    \\  var inp = document.getElementById('name');
-    \\  if (!inp.value) { var n = localStorage.getItem('gopher_user'); if (n) inp.value = n; }
-    \\  document.getElementById('f').addEventListener('submit', function () {
-    \\    localStorage.setItem('gopher_user', inp.value);
-    \\  });
-    \\</script>
-    \\</body></html>
-;

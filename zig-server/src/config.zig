@@ -6,6 +6,7 @@
 //!   chat       = {data_dir}/chat       -> users.session_secret_dir (the secret)
 //!                                       + chat_store.chat_root (conversations)
 //!   users      = {data_dir}/users      -> users.users_root
+//!   players    = {data_dir}/players    -> player.player_root  (the LOCAL identity)
 //!   auth       = {auth_dir} or ~/Auth  -> users.auth_root  (shared account store)
 //!
 //! When GOPHER_CONFIG is unset we leave each module's repo-relative default in
@@ -14,6 +15,7 @@
 const std = @import("std");
 const storage = @import("storage.zig");
 const users = @import("users.zig");
+const player = @import("player.zig");
 const chat_store = @import("chat_store.zig");
 const blog = @import("blog.zig");
 
@@ -61,6 +63,7 @@ pub fn load(io: std.Io, alloc: std.mem.Allocator, env: std.process.Environ.Map) 
 
     storage.data_root = try std.fs.path.join(alloc, &.{ dd, "lynrummy" });
     users.users_root = try std.fs.path.join(alloc, &.{ dd, "users" });
+    player.player_root = try std.fs.path.join(alloc, &.{ dd, "players" });
     users.session_secret_dir = try std.fs.path.join(alloc, &.{ dd, "chat" });
     chat_store.chat_root = try std.fs.path.join(alloc, &.{ dd, "chat" });
     users.auth_root = auth_dir orelse try expandHome(alloc, env, "~/Auth");

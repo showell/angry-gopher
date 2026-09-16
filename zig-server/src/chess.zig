@@ -10,10 +10,8 @@
 //! the wasm is built from, embedded at build time).
 
 const std = @import("std");
-const Io = std.Io;
 const http = @import("http.zig");
 const html = @import("html.zig");
-const users = @import("users.zig");
 
 const knight_wasm = @embedFile("knight_wasm");
 const queens_wasm = @embedFile("queens_wasm");
@@ -114,16 +112,15 @@ const index_body =
 
 /// respondIndex renders the launch pad with the generic site top bar (the link
 /// back Home) — viewer resolved for the user chip, never gated, like /blog.
-fn respondIndex(req: *std.http.Server.Request, io: Io, alloc: std.mem.Allocator, uid: []const u8) !void {
+fn respondIndex(req: *std.http.Server.Request, alloc: std.mem.Allocator, name: []const u8) !void {
     var b: std.ArrayList(u8) = .empty;
     try b.appendSlice(alloc, index_head);
     try b.appendSlice(alloc,
         "<header class=\"app-top\"><div class=\"app-top-home\">" ++
         "<a href=\"/\">Home</a> · <a href=\"/chat\">Chat</a> · <a href=\"/blog\">Blog</a></div>" ++
         "<div class=\"app-top-user\">");
-    const name = if (uid.len == 0) "" else try users.getUserName(io, alloc, uid);
     if (name.len == 0) {
-        try b.appendSlice(alloc, "<a href=\"/login\">Log in</a>");
+        try b.appendSlice(alloc, "<a href=\"/play\">Log in</a>");
     } else {
         try b.print(alloc, "<strong>{s}</strong> · <a href=\"/logout\">Log out</a>", .{try html.htmlEscape(alloc, name)});
     }
@@ -194,9 +191,9 @@ fn respondCodePage(req: *std.http.Server.Request, alloc: std.mem.Allocator) !voi
 }
 
 /// handle dispatches /chess/* — the route table, a switch on the path tail.
-pub fn handle(req: *std.http.Server.Request, io: Io, alloc: std.mem.Allocator, uid: []const u8, sub: []const u8) !void {
+pub fn handle(req: *std.http.Server.Request, alloc: std.mem.Allocator, name: []const u8, sub: []const u8) !void {
     if (sub.len == 0 or std.mem.eql(u8, sub, "/")) {
-        try respondIndex(req, io, alloc, uid);
+        try respondIndex(req, alloc, name);
     } else if (std.mem.eql(u8, sub, "/knight")) {
         try req.respond(knight_page, .{ .extra_headers = &.{http.html_ct} });
     } else if (std.mem.eql(u8, sub, "/queens")) {

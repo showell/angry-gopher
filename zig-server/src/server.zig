@@ -36,6 +36,7 @@ const downloads = @import("downloads.zig");
 const resume_page = @import("resume_page.zig");
 const safari_download = @import("safari_download.zig");
 const login = @import("login.zig");
+const player = @import("player.zig");
 const brand = @import("brand.zig");
 const edge = @import("edge.zig");
 const users = @import("users.zig");
@@ -161,8 +162,7 @@ fn route(req: *std.http.Server.Request, io: std.Io, alloc: std.mem.Allocator, bu
         // Public + ungated like /driving: little chess toys (Knight's Tour,
         // Eight Queens) + /chess/code, the sources-as-exhibit page. The viewer
         // is resolved for the index's top-bar chip, never gated (like /blog).
-        const uid = try users.currentUserID(io, alloc, req);
-        try chess.handle(req, io, alloc, uid, sub);
+        try chess.handle(req, alloc, (try viewer(io, alloc, req)).name, sub);
     } else if (matchPrefix(path, "/puzzles")) |sub| {
         try puzzles.handle(req, io, alloc, sub);
     } else if (matchPrefix(path, "/game")) |sub| {
@@ -176,8 +176,7 @@ fn route(req: *std.http.Server.Request, io: std.Io, alloc: std.mem.Allocator, bu
     } else if (matchPrefix(path, "/blog")) |sub| {
         // Public. Reading never gates; posting a comment mints a guest if needed.
         // Resolve the viewer (for the top bar + comment attribution) but never gate.
-        const uid = try users.currentUserID(io, alloc, req);
-        try blog.handle(req, io, alloc, uid, sub);
+        try blog.handle(req, io, alloc, (try viewer(io, alloc, req)).name, sub);
     } else if (matchPrefix(path, "/tutorial")) |sub| {
         // Public + ungated: the Lyn Rummy beginner tutorial — its audience
         // is people who haven't made an account yet.
@@ -192,6 +191,11 @@ fn route(req: *std.http.Server.Request, io: std.Io, alloc: std.mem.Allocator, bu
         try downloads.handle(req, io, alloc, sub);
     } else if (matchPrefix(path, "/admin")) |sub| {
         try admin.handle(req, io, alloc, sub);
+    } else if (std.mem.eql(u8, path, "/play") or std.mem.eql(u8, path, "/play/")) {
+        // The LOCAL identity: a name, no password, for /game and /puzzles. It
+        // reads its own small store and never touches the chat account store —
+        // see player.zig.
+        try player.handle(req, io, alloc);
     } else if (matchPrefix(path, "/login")) |sub| {
         try login.handle(req, io, alloc, bus, sub);
     } else if (std.mem.eql(u8, path, "/logout")) {
@@ -221,11 +225,28 @@ fn route(req: *std.http.Server.Request, io: std.Io, alloc: std.mem.Allocator, bu
         // The site root: the launch pad. TOTALLY_PUBLIC, so resolve the viewer
         // for the top bar but never gate. The explicit-"/" check plus the
         // notFound fallthrough below means any non-"/" path 404s.
-        const uid = try users.currentUserID(io, alloc, req);
-        try home.handleHome(req, io, alloc, uid, path);
+        const v = try viewer(io, alloc, req);
+        try home.handleHome(req, io, alloc, v.name, v.is_admin, path);
     } else {
         try http.notFound(req);
     }
+}
+
+/// Viewer is what a PUBLIC page needs for its top bar: a name to print, and
+/// whether this is the host. EITHER identity can supply the name — a chat member
+/// through the account store, a Lyn Rummy player through the local one — and a
+/// page that only prints a chip should not have to know which it got. Anonymous
+/// is the empty name, which those pages already render as a Log in link.
+const Viewer = struct { name: []const u8, is_admin: bool };
+
+fn viewer(io: std.Io, alloc: std.mem.Allocator, req: *std.http.Server.Request) !Viewer {
+    const uid = try users.currentUserID(io, alloc, req);
+    if (uid.len != 0) return .{
+        .name = try users.getUserName(io, alloc, uid),
+        // The host is uid "1" (see admin.zig), so this does too.
+        .is_admin = std.mem.eql(u8, uid, "1"),
+    };
+    return .{ .name = (try player.current(io, alloc, req)).name, .is_admin = false };
 }
 
 /// matchPrefix returns the path tail after `prefix` when `path` is exactly

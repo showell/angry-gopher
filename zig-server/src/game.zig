@@ -13,15 +13,16 @@
 //!   GET  /game/sessions/<id>/actions   bootstrap: meta + "---" + actions
 //!   POST /game/sessions/<id>/annotations  append one JSONL line
 //!
-//! Like puzzles, the whole surface is gated JUST_NEEDS_NAME: resolve identity
-//! first and, with none, redirect to /login. The resolved id is the storage key.
+//! Like puzzles, the whole surface is gated JUST_NEEDS_NAME: resolve a LOCAL
+//! player (player.zig) first and, with none, redirect to /play. The resolved id
+//! is the storage key.
 //! The big difference from puzzles is READ-BACK — resume + the list/detail pages
 //! read sessions off disk; the puzzle surface was write-only.
 
 const std = @import("std");
 const http = @import("http.zig");
 const storage = @import("storage.zig");
-const users = @import("users.zig");
+const player = @import("player.zig");
 const session_meta = @import("session_meta.zig");
 const timefmt = @import("timefmt.zig");
 const html = @import("html.zig");
@@ -42,9 +43,9 @@ const max_append_bytes = 64 * 1024;
 /// handle dispatches /game/* — `sub` keeps its leading '/' (e.g. "/elm.js",
 /// "/sessions/3/actions"), empty for exactly "/game".
 pub fn handle(req: *Request, io: std.Io, alloc: Alloc, sub: []const u8) !void {
-    const user_id = try users.currentUserID(io, alloc, req);
+    const user_id = (try player.current(io, alloc, req)).id;
     if (user_id.len == 0) {
-        try http.redirect(req, "/login");
+        try http.redirect(req, "/play?next=/game");
         return;
     }
 
@@ -144,7 +145,7 @@ fn appendSessionLine(req: *Request, io: std.Io, alloc: Alloc, user_id: []const u
     switch (kind) {
         .actions => {
             try storage.appendSessionDslLine(io, alloc, user_id, session_id, "actions.dsl", body);
-            users.touchUser(io, alloc, user_id); // a move counts as activity
+            player.touch(io, alloc, user_id); // a move counts as activity
         },
         .annotations => {
             try storage.appendSessionJSONLLine(io, alloc, user_id, session_id, "annotations.jsonl", body);
@@ -246,7 +247,7 @@ fn playPage(req: *Request, io: std.Io, alloc: Alloc, user_id: []const u8, sessio
         try std.fmt.allocPrint(alloc, "{d}", .{session_id})
     else
         "null";
-    const name = try users.getUserName(io, alloc, user_id);
+    const name = try player.nameOf(io, alloc, user_id);
     const name_json = try std.fmt.allocPrint(alloc, "{f}", .{std.json.fmt(name, .{})});
 
     // The two spaces in the format are the literal spaces after `=` and after

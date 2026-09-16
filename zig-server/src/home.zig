@@ -26,7 +26,6 @@ const build_options = @import("build_options");
 const Io = std.Io;
 const http = @import("http.zig");
 const edge = @import("edge.zig");
-const users = @import("users.zig");
 const html = @import("html.zig");
 const mem_meter = @import("mem_meter.zig");
 
@@ -38,14 +37,10 @@ const Request = std.http.Server.Request;
 pub const version = "0.1-zig";
 
 /// handleHome serves "/" exactly; any other path that falls through here 404s.
-/// `uid` is the resolved viewer ("" for anon).
-pub fn handleHome(req: *Request, io: Io, alloc: Alloc, uid: []const u8, path: []const u8) !void {
+/// `name` is the viewer's display name ("" for anon), from whichever identity
+/// they hold; `is_admin` is the host flag. server.zig resolves both.
+pub fn handleHome(req: *Request, io: Io, alloc: Alloc, name: []const u8, is_admin: bool, path: []const u8) !void {
     if (!std.mem.eql(u8, path, "/")) return http.notFound(req);
-
-    const name = if (uid.len == 0) "" else try users.getUserName(io, alloc, uid);
-    // Show the Admin link exactly when /admin is reachable: that gate keys on
-    // uid "1" (see admin.zig), so this does too — link and gate stay honest.
-    const is_admin = std.mem.eql(u8, uid, "1");
 
     var b: std.ArrayList(u8) = .empty;
     try b.appendSlice(alloc, head_style);
@@ -295,7 +290,7 @@ fn writeTopBar(b: *std.ArrayList(u8), alloc: Alloc, name: []const u8, is_admin: 
         "<a href=\"/\">Home</a> · <a href=\"/chat\">Chat</a> · <a href=\"/blog\">Blog</a></div>" ++
         "<div class=\"app-top-user\">");
     if (name.len == 0) {
-        try b.appendSlice(alloc, "<a href=\"/login\">Log in</a>");
+        try b.appendSlice(alloc, "<a href=\"/play\">Log in</a>");
     } else {
         const esc = try html.htmlEscape(alloc, name);
         const admin_link = if (is_admin) " · <a href=\"/admin\">Admin</a>" else "";
