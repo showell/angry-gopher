@@ -261,7 +261,7 @@ fn playPage(req: *Request, io: Io, alloc: Alloc, user_id: []const u8, session_id
 // ── small helpers ────────────────────────────────────────────────────────────
 
 fn nowUnix(io: Io) i64 {
-    return @intCast(@divFloor(std.Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
+    return @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
 }
 
 /// readMeta loads + parses <session>/meta, or a zero SessionMeta when absent

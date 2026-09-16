@@ -17,6 +17,7 @@
 //! byte is the entire migration story: no re-hashing of existing users needed.
 
 const std = @import("std");
+const Io = std.Io;
 const bcrypt = std.crypto.pwhash.bcrypt;
 
 /// Cost factor — bcrypt's common default. Must match whatever cost set the
@@ -50,7 +51,7 @@ pub fn verifyPassword(stored: []const u8, password: []const u8) bool {
 
 /// hashPassword computes a fresh bcrypt hash (modular-crypt `$2b$` form) for a
 /// new or changed password. The output lands in `out` (must be >= 60 bytes).
-pub fn hashPassword(password: []const u8, out: []u8, io: std.Io) ![]const u8 {
+pub fn hashPassword(password: []const u8, out: []u8, io: Io) ![]const u8 {
     return bcrypt.strHash(password, .{
         .params = .{ .rounds_log = cost, .silently_truncate_password = false },
         .encoding = .crypt,

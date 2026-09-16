@@ -49,7 +49,7 @@ fn verifyFile(
     label: []const u8,
     detail: usize,
 ) !Tally {
-    const data = std.Io.Dir.cwd().readFileAlloc(io, path, alloc, .unlimited) catch |e| {
+    const data = Io.Dir.cwd().readFileAlloc(io, path, alloc, .unlimited) catch |e| {
         std.debug.print("({s}: cannot read {s}: {s})\n", .{ label, path, @errorName(e) });
         return .{};
     };
@@ -91,7 +91,7 @@ fn rebaselineFile(
     path: []const u8,
     label: []const u8,
 ) !void {
-    const data = std.Io.Dir.cwd().readFileAlloc(io, path, alloc, .unlimited) catch |e| {
+    const data = Io.Dir.cwd().readFileAlloc(io, path, alloc, .unlimited) catch |e| {
         std.debug.print("({s}: cannot read {s}: {s})\n", .{ label, path, @errorName(e) });
         return;
     };
@@ -113,7 +113,7 @@ fn rebaselineFile(
         });
         n += 1;
     }
-    try std.Io.Dir.cwd().writeFile(io, .{ .sub_path = path, .data = out.items });
+    try Io.Dir.cwd().writeFile(io, .{ .sub_path = path, .data = out.items });
     std.debug.print("== {s}: re-baselined {d} cases -> {s}\n", .{ label, n, path });
 }
 

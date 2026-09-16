@@ -128,7 +128,7 @@ fn page(req: *std.http.Server.Request, io: Io, alloc: Alloc, user_id: []const u8
 
     // meta DSL: server-owned created_at, then a snapshot of the catalog this
     // session was bound to (so replay-by-index survives later catalog drift).
-    const created_at: i64 = @intCast(@divFloor(std.Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
+    const created_at: i64 = @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
     const meta_dsl = try std.fmt.allocPrint(alloc, "created_at: {d}\n\ncatalog:\n{s}\n", .{ created_at, indented });
     try storage.writePuzzleSessionFile(io, alloc, user_id, session_id, "meta", meta_dsl);
 

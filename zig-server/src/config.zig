@@ -13,6 +13,7 @@
 //! place, so a standalone `/driving` run still works with no config.
 
 const std = @import("std");
+const Io = std.Io;
 const storage = @import("storage.zig");
 const users = @import("users.zig");
 const player = @import("player.zig");
@@ -22,13 +23,13 @@ const chat_store = @import("chat_store.zig");
 /// the live tree. Strings are allocated from `alloc` (expected to be a
 /// long-lived allocator — the roots live for the whole process). No-op when the
 /// var is unset, so a standalone /driving run needs no config.
-pub fn load(io: std.Io, alloc: std.mem.Allocator, env: std.process.Environ.Map) !void {
+pub fn load(io: Io, alloc: std.mem.Allocator, env: std.process.Environ.Map) !void {
     const path = env.get("GOPHER_CONFIG") orelse {
         std.debug.print("config: GOPHER_CONFIG unset — using repo-relative defaults\n", .{});
         return;
     };
 
-    const body = std.Io.Dir.cwd().readFileAlloc(io, path, alloc, .unlimited) catch |e| {
+    const body = Io.Dir.cwd().readFileAlloc(io, path, alloc, .unlimited) catch |e| {
         std.debug.print("config: cannot read {s}: {s}\n", .{ path, @errorName(e) });
         return e;
     };

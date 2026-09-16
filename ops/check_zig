@@ -33,6 +33,13 @@ done
 echo "==> head-access lint"
 python3 "$REPO_DIR/tools/lint_head_access.py"
 
+# Poka-yoke lint: `const Io = std.Io;` is the seam gopher-metal rewrites to port
+# this server to a machine with no operating system. A call spelled std.Io.Dir
+# instead of Io.Dir is one the port cannot reach — and does not merely behave
+# differently there, but fails to compile.
+echo "==> io-alias lint"
+python3 "$REPO_DIR/tools/lint_io_alias.py"
+
 cd "$REPO_DIR/zig-server"
 t0=$SECONDS
 zig build           # compile the whole server
