@@ -18,12 +18,10 @@
 const std = @import("std");
 const Io = std.Io;
 const Alloc = std.mem.Allocator;
+const counter = @import("counter.zig");
 
 /// data_root is the live game-data dir (repo-relative from zig-server/, hence the `..`).
 pub var data_root: []const u8 = "../games/lynrummy/data";
-
-// idMu serializes counter increments within this process.
-var id_mu: Io.Mutex = .init;
 
 fn join(alloc: Alloc, parts: []const []const u8) ![]u8 {
     return std.fs.path.join(alloc, parts);
@@ -75,33 +73,9 @@ pub fn puzzleSessionDir(alloc: Alloc, user_id: []const u8, session_id: i64) ![]u
 /// allocatePuzzleSessionID returns the next sequential puzzle session id (1-based)
 /// for a player, persisted in their next-puzzle-id.txt.
 pub fn allocatePuzzleSessionID(io: Io, alloc: Alloc, user_id: []const u8) !i64 {
-    return allocateID(io, alloc, try nextPuzzleIDPath(alloc, user_id));
+    return counter.next(io, alloc, try nextPuzzleIDPath(alloc, user_id));
 }
 
-/// allocateID is the shared counter-bump primitive: read the counter, return the
-/// current value, write value+1, auto-creating the file. Floors at 1. Public so
-/// the user registry (users.zig) can drive the account-id counter
-/// (auth_root/next-id.txt) through this same primitive.
-pub fn allocateID(io: Io, alloc: Alloc, path: []const u8) !i64 {
-    id_mu.lockUncancelable(io);
-    defer id_mu.unlock(io);
-
-    try mkParentDirs(io, path);
-
-    var n: i64 = 0;
-    if (Io.Dir.cwd().readFileAlloc(io, path, alloc, .unlimited)) |body| {
-        const trimmed = std.mem.trim(u8, body, " \t\r\n");
-        if (std.fmt.parseInt(i64, trimmed, 10)) |parsed| {
-            n = parsed;
-        } else |_| {}
-    } else |_| {}
-    if (n < 1) n = 1;
-    const next = n + 1;
-
-    const out = try std.fmt.allocPrint(alloc, "{d}\n", .{next});
-    try Io.Dir.cwd().writeFile(io, .{ .sub_path = path, .data = out });
-    return n;
-}
 
 /// writePuzzleSessionFile writes body to <session-dir>/<rel>, creating parent
 /// dirs. Last-write-wins (used for meta).
@@ -152,7 +126,7 @@ fn appendTextLine(io: Io, alloc: Alloc, path: []const u8, body: []const u8) !voi
 /// allocateSessionID returns the next sequential full-game session id (1-based)
 /// for a player, persisted in their next-session-id.txt.
 pub fn allocateSessionID(io: Io, alloc: Alloc, user_id: []const u8) !i64 {
-    return allocateID(io, alloc, try nextSessionIDPath(alloc, user_id));
+    return counter.next(io, alloc, try nextSessionIDPath(alloc, user_id));
 }
 
 /// sessionDir is {lynrummyElmRoot}/sessions/<id>.

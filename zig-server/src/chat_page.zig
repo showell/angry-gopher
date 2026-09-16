@@ -1,7 +1,7 @@
 //! chat_page: the chat subsystem's HTML pages — the conversation view, the
 //! first-topic bootstrap shell, the /chat index, and the inline sidebar payload
 //! they boot with. The "skeleton" half of chat.zig: it owns the page DOM, the
-//! chat-specific CSS overrides, and the bundle list, and leans on chrome.zig for
+//! chat-specific CSS overrides, and the bundle list, and leans on chat_chrome.zig for
 //! the shared shell. chat.zig (the dispatcher) calls in here; nothing here calls
 //! back, so the dependency is one-way.
 
@@ -13,13 +13,13 @@ const store = @import("chat_store.zig");
 const chat_state = @import("chat_state.zig");
 const presence = @import("presence.zig");
 const html = @import("html.zig");
-const chrome = @import("chrome.zig");
-const Topic = @import("conv.zig").Topic;
+const chrome = @import("chat_chrome.zig");
+const Topic = @import("chat_conv.zig").Topic;
 
 const Alloc = std.mem.Allocator;
 const Request = std.http.Server.Request;
 const htmlEscape = html.htmlEscape; // internal alias; impl in html.zig
-const asset_v = chrome.asset_v; // internal alias; canonical const in chrome.zig
+const asset_v = chrome.asset_v; // internal alias; canonical const in chat_chrome.zig
 
 /// The sibling bundles the conversation page loads, in document order (after the
 /// head's colors.js + chat_theme.js).
@@ -177,7 +177,7 @@ pub fn noConversationsPage(req: *Request, io: Io, alloc: Alloc, uid: []const u8)
     try req.respond(b.items, .{ .extra_headers = &.{http.html_ct} });
 }
 
-// ── chat-specific templates (shared chrome lives in chrome.zig) ──────────────
+// ── chat-specific templates (shared chrome lives in chat_chrome.zig) ──────────────
 
 // chat_css: the page-shell layout — only the rules that span <html> down to
 // .chat-layout; per-widget CSS is injected by the JS modules. The .app-body-wrap

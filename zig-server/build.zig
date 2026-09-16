@@ -149,7 +149,7 @@ pub fn build(b: *std.Build) void {
     // gate (imports alone don't enroll a file's tests). Pure-logic modules tested
     // in isolation, so no embedded assets are needed.
     const test_step = b.step("test", "Run unit tests");
-    for ([_][]const u8{ "src/auth.zig", "src/users.zig", "src/names.zig", "src/player.zig", "src/markdown_fence.zig", "src/recent_feed.zig", "src/code_store.zig", "src/chat_upload.zig", "src/markdown.zig", "src/markdown_media.zig", "src/bus.zig", "src/chat_sse.zig", "src/docs_store.zig", "src/reading_list.zig", "src/chat_store.zig", "src/reactions.zig", "src/mem_meter.zig", "src/stress.zig" }) |path| {
+    for ([_][]const u8{ "src/auth.zig", "src/users.zig", "src/names.zig", "src/player.zig", "src/counter.zig", "src/admin_ui.zig", "src/markdown_fence.zig", "src/recent_feed.zig", "src/code_store.zig", "src/chat_upload.zig", "src/markdown.zig", "src/markdown_media.zig", "src/bus.zig", "src/chat_sse.zig", "src/docs_store.zig", "src/reading_list.zig", "src/chat_store.zig", "src/reactions.zig", "src/mem_meter.zig", "src/stress.zig" }) |path| {
         const unit = b.addTest(.{ .root_module = b.createModule(.{
             .root_source_file = b.path(path),
             .target = target,

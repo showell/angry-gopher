@@ -33,7 +33,7 @@ const std = @import("std");
 const Io = std.Io;
 const Alloc = std.mem.Allocator;
 const auth = @import("auth.zig");
-const storage = @import("storage.zig");
+const counter = @import("counter.zig");
 const http = @import("http.zig");
 const names = @import("names.zig");
 
@@ -459,10 +459,10 @@ pub fn currentUser(io: Io, alloc: Alloc, req: *std.http.Server.Request) !Resolve
 }
 
 /// allocateUser creates a new account with `name` and returns its id, bumping
-/// the shared id counter (auth_root/next-id.txt) through storage.allocateID.
+/// the account-id counter (auth_root/next-id.txt).
 pub fn allocateUser(io: Io, alloc: Alloc, name: []const u8) ![]const u8 {
-    const counter = try std.fs.path.join(alloc, &.{ auth_root, "next-id.txt" });
-    const n = try storage.allocateID(io, alloc, counter);
+    const counter_path = try std.fs.path.join(alloc, &.{ auth_root, "next-id.txt" });
+    const n = try counter.next(io, alloc, counter_path);
     const id = try std.fmt.allocPrint(alloc, "{d}", .{n});
     try setUserName(io, alloc, id, name);
     return id;

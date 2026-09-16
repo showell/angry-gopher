@@ -11,7 +11,7 @@ const http = @import("http.zig");
 const users = @import("users.zig");
 const store = @import("chat_store.zig");
 const chat = @import("chat.zig");
-const chrome = @import("chrome.zig");
+const chrome = @import("chat_chrome.zig");
 const markdown = @import("markdown.zig");
 
 const Alloc = std.mem.Allocator;

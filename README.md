@@ -306,7 +306,7 @@ authority, `Viewport` (`chat/viewport.js`), owns the single breakpoint and
 exposes it two ways — an `html.vp-narrow` class for CSS and `onChange` for
 JS — so the number lives in exactly one place. The shared nav drawer
 (`chrome_drawer.js`) and the chat page's mobile layout (`chat_responsive.js`)
-both key off it; the server (`chrome.zig`) just ships the desktop top bar and
+both key off it; the server (`chat_chrome.zig`) just ships the desktop top bar and
 loads the widgets. Start at `Viewport` and follow the breadcrumbs.
 
 ## Ops & testing

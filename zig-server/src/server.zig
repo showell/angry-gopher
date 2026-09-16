@@ -29,6 +29,7 @@ const chat = @import("chat.zig");
 const settings = @import("settings.zig");
 const tutorial = @import("tutorial.zig");
 const admin = @import("admin.zig");
+const admin_lynrummy = @import("admin_lynrummy.zig");
 const home = @import("home.zig");
 const gallery = @import("gallery.zig");
 const downloads = @import("downloads.zig");
@@ -184,6 +185,10 @@ fn route(req: *std.http.Server.Request, io: std.Io, alloc: std.mem.Allocator, bu
         // Public + ungated: downloadable artifacts (the native Linux Safari
         // executable) read from downloads/, rsync'd on deploy — see downloads.zig.
         try downloads.handle(req, io, alloc, sub);
+    } else if (matchPrefix(path, "/admin/lynrummy")) |sub| {
+        // The GAME roster. Checked before /admin, which would otherwise swallow
+        // it: matchPrefix takes the first arm that matches.
+        try admin_lynrummy.handle(req, io, alloc, sub);
     } else if (matchPrefix(path, "/admin")) |sub| {
         try admin.handle(req, io, alloc, sub);
     } else if (std.mem.eql(u8, path, "/play") or std.mem.eql(u8, path, "/play/")) {

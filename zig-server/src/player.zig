@@ -40,7 +40,7 @@ const Alloc = std.mem.Allocator;
 const http = @import("http.zig");
 const html = @import("html.zig");
 const names = @import("names.zig");
-const storage = @import("storage.zig");
+const counter = @import("counter.zig");
 
 /// player_root is the local player directory (config.zig points it at
 /// {data_dir}/players at startup; the default is repo-relative from zig-server/).
@@ -86,8 +86,8 @@ fn isSafeID(id: []const u8) bool {
 
 /// allocate mints a fresh local player with `name` and returns its id (`p<n>`).
 pub fn allocate(io: Io, alloc: Alloc, name: []const u8) ![]const u8 {
-    const counter = try std.fs.path.join(alloc, &.{ player_root, "next-id.txt" });
-    const n = try storage.allocateID(io, alloc, counter);
+    const counter_path = try std.fs.path.join(alloc, &.{ player_root, "next-id.txt" });
+    const n = try counter.next(io, alloc, counter_path);
     const id = try std.fmt.allocPrint(alloc, "{s}{d}", .{ local_prefix, n });
     try setName(io, alloc, id, name);
     return id;
@@ -125,6 +125,46 @@ pub fn deleteRecord(io: Io, alloc: Alloc, id: []const u8) void {
 pub fn nameOf(io: Io, alloc: Alloc, id: []const u8) ![]const u8 {
     if (!isSafeID(id)) return "";
     return (try readField(io, alloc, id, "name")) orelse "";
+}
+
+/// list enumerates every player, id-sorted with the seeded numeric ids ahead of
+/// the locally-minted `p<n>` ones. The player store IS the roster of everyone who
+/// can have Lyn Rummy data: the seed brought the account-store names across, and
+/// a chat member who logs in is mirrored in. Powers the game admin.
+pub fn list(io: Io, alloc: Alloc) ![]Player {
+    var dir = Io.Dir.cwd().openDir(io, player_root, .{ .iterate = true }) catch return &.{};
+    defer dir.close(io);
+
+    var out: std.ArrayList(Player) = .empty;
+    var it = dir.iterate();
+    while (try it.next(io)) |entry| {
+        if (entry.kind != .directory) continue;
+        const id = try alloc.dupe(u8, entry.name);
+        if (!isSafeID(id)) continue;
+        const name = (try readField(io, alloc, id, "name")) orelse continue;
+        try out.append(alloc, .{ .id = id, .name = name });
+    }
+    const slice = try out.toOwnedSlice(alloc);
+    std.mem.sort(Player, slice, {}, lessThanByID);
+    return slice;
+}
+
+/// lessThanByID sorts numerically within each spelling, seeded ids first: the
+/// numeric ones came from the account store and are the older players.
+fn lessThanByID(_: void, a: Player, b: Player) bool {
+    const an = std.fmt.parseInt(i64, a.id, 10) catch null;
+    const bn = std.fmt.parseInt(i64, b.id, 10) catch null;
+    if (an != null and bn != null) return an.? < bn.?;
+    if (an != null) return true;
+    if (bn != null) return false;
+    return std.mem.lessThan(u8, a.id, b.id);
+}
+
+/// lastSeen answers a player's last-activity time (Unix seconds), or null.
+pub fn lastSeen(io: Io, alloc: Alloc, id: []const u8) ?i64 {
+    if (!isSafeID(id)) return null;
+    const raw = (readField(io, alloc, id, "last-seen") catch return null) orelse return null;
+    return std.fmt.parseInt(i64, std.mem.trim(u8, raw, " \t\r\n"), 10) catch null;
 }
 
 /// touch records "now" as this player's last-seen time. Best-effort: a failed

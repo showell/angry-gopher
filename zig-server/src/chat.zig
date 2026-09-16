@@ -35,10 +35,10 @@ const store = @import("chat_store.zig");
 const markdown = @import("markdown.zig");
 const html = @import("html.zig");
 const htmlEscape = html.htmlEscape; // internal alias; the impl lives in html.zig
-const chrome = @import("chrome.zig");
+const chrome = @import("chat_chrome.zig");
 const page = @import("chat_page.zig");
 const sse = @import("chat_sse.zig");
-const asset_v = chrome.asset_v; // internal alias; the canonical const lives in chrome.zig
+const asset_v = chrome.asset_v; // internal alias; the canonical const lives in chat_chrome.zig
 const edge = @import("edge.zig");
 const docs = @import("docs.zig");
 const reading_list = @import("reading_list.zig");
@@ -59,10 +59,10 @@ const Request = std.http.Server.Request;
 /// Max bytes for one posted message.
 const max_message_bytes = 64 * 1024;
 
-// Resolved-conversation domain types (Conv, Topic) live in conv.zig — shared
+// Resolved-conversation domain types (Conv, Topic) live in chat_conv.zig — shared
 // with the page renderer (chat_page.zig) so neither side re-discriminates kind.
-const Conv = @import("conv.zig").Conv;
-const Topic = @import("conv.zig").Topic;
+const Conv = @import("chat_conv.zig").Conv;
+const Topic = @import("chat_conv.zig").Topic;
 
 const Asset = struct { name: []const u8, body: []const u8 };
 

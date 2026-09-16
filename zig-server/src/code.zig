@@ -13,7 +13,7 @@ const store = @import("chat_store.zig");
 const code_store = @import("code_store.zig");
 const images_store = @import("images_store.zig");
 const chat_sse = @import("chat_sse.zig");
-const chrome = @import("chrome.zig");
+const chrome = @import("chat_chrome.zig");
 const html = @import("html.zig");
 const Bus = @import("bus.zig").Bus;
 
