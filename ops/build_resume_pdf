@@ -7,7 +7,7 @@
 # uses the same markdown renderer as the web page — single source of truth), via
 # WeasyPrint. Run this after editing pages/steve-resume.md, then commit the PDF.
 #
-# Needs: the local server up (ops/start) + WeasyPrint (pip install --user weasyprint).
+# Needs: the local server up (ops/start) + WeasyPrint (apt: `weasyprint`).
 set -e
 
 source "$(dirname "$0")/_paths.sh"

@@ -7,9 +7,14 @@ markdown in Python — so the PDF can never drift from the web page's own markdo
 dialect. The page's own `@media print` rules drop the nav bar and the in-page
 "download PDF" link; the @page block below only sets paper size + margins.
 
-Requires WeasyPrint (`pip install --user weasyprint`; its native libs — pango,
-cairo, gdk-pixbuf — are already present on this box) and the local server up
-(ops/start). Driven by ops/build_resume_pdf.
+Requires WeasyPrint and the local server up (ops/start). Driven by
+ops/build_resume_pdf. On this box WeasyPrint came from apt
+(`sudo apt-get install weasyprint`) — there is no pip here, and the native libs
+it wants (pango, cairo, gdk-pixbuf) come along with the package.
+
+**REGENERATE AFTER EVERY EDIT TO pages/steve-resume.md.** The PDF is a
+checked-in artifact that ops/deploy ships as-is, so an edit to the markdown
+alone leaves /steve-resume.pdf saying something the page no longer says.
 
 Usage: resume_to_pdf.py <out.pdf> [url]
 """
