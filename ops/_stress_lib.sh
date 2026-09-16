@@ -40,7 +40,7 @@ EOF
         && zig build stress \
         && zig build "$@" -p "$SANDBOX_DIR/srv" )
 
-    # Launch from the repo root so the read-only blog/posts default resolves; point
+    # Launch from the repo root so the read-only content defaults resolve; point
     # data + auth at the sandbox; listen on the side port.
     lsof -ti:"$STRESS_PORT" | xargs kill -9 2>/dev/null || true
     ( cd "$GOPHER_DIR" \

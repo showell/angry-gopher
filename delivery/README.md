@@ -121,8 +121,8 @@ neighborhood roles straight off the data — revealed, not imposed.
 ### The one essay to read
 
 The clearest single account of the cost model, the race, and what the routes
-*mean* is the blog post **"The Ghost in the Cost Function"** at
-[lynrummy.com/blog/the-ghost-in-the-cost-function](https://lynrummy.com/blog/the-ghost-in-the-cost-function).
+*mean* is the essay **"The Ghost in the Cost Function"** (unpublished since the
+blog was retired).
 For the lineage of this and its sibling toy (the Safari driving screensaver), see
 the repo's top-level `HISTORY.md`.
 

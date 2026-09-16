@@ -3,7 +3,7 @@
 //! in. Unlinked (no nav points here) but public + ungated; it leaks nothing.
 //!
 //! Images are free-standing CONTENT, read from `gallery_root` at request time
-//! (like blog posts + pages/, rsync'd on deploy — NOT @embedFile'd). The index
+//! (like pages/, rsync'd on deploy — NOT @embedFile'd). The index
 //! shows one card per app in home-page order: the image if `gallery/<slug>.png`
 //! (or `.svg`) exists, else a "pending" placeholder, so it doubles as a progress
 //! view over the six-app set.

@@ -67,7 +67,7 @@ const queens_page = shell("Eight Queens",
 );
 
 // The launch pad for the toys: the site's generic top bar (Home · Chat · Blog,
-// same as home.zig/blog.zig — the way back home) over two cards + the
+// same as home.zig — the way back home) over two cards + the
 // under-the-hood link, styled to match the boards' dark chrome.
 const index_head =
     \\<!DOCTYPE html>
@@ -111,13 +111,13 @@ const index_body =
 ;
 
 /// respondIndex renders the launch pad with the generic site top bar (the link
-/// back Home) — viewer resolved for the user chip, never gated, like /blog.
+/// back Home) — viewer resolved for the user chip, never gated.
 fn respondIndex(req: *std.http.Server.Request, alloc: std.mem.Allocator, name: []const u8) !void {
     var b: std.ArrayList(u8) = .empty;
     try b.appendSlice(alloc, index_head);
     try b.appendSlice(alloc,
         "<header class=\"app-top\"><div class=\"app-top-home\">" ++
-        "<a href=\"/\">Home</a> · <a href=\"/chat\">Chat</a> · <a href=\"/blog\">Blog</a></div>" ++
+        "<a href=\"/\">Home</a> · <a href=\"/chat\">Chat</a></div>" ++
         "<div class=\"app-top-user\">");
     if (name.len == 0) {
         try b.appendSlice(alloc, "<a href=\"/play\">Log in</a>");

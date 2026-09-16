@@ -45,4 +45,4 @@ DSL/geometry layer around it.
 
 For why a composed, can't-lose board is its own small pleasure — and what the
 puzzles have in common with a hundred-year-old chess study — read the essay
-[**"Two Places at Once"**](https://lynrummy.com/blog/two-places-at-once).
+**"Two Places at Once"** (unpublished since the blog was retired).

@@ -3,7 +3,7 @@
 //! executable (safari-linux) and the Windows .scr (safari-windows.scr). Both are
 //! built on deploy (ops/build_safari_download + ops/build_safari_windows) and rsync'd
 //! to `downloads/` — NOT @embedFile'd (they're big native binaries, and they ride
-//! alongside the server like gallery/ + blog posts rather than bloating the server
+//! alongside the server like gallery/ + pages/ rather than bloating the server
 //! binary they're served BY).
 //!
 //!   GET /downloads/<file>   one artifact, streamed as an attachment

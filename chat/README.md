@@ -56,8 +56,7 @@ A few load-bearing ideas worth knowing before you dig in:
 - **Markdown is our own dialect.** Rather than pull in a parser, the server hand-rolls
   a small, deliberate markdown engine — that choice (and why it's the right one for a
   project like this) is the subject of the essay
-  **"Afford Your Own Markdown Dialect"**:
-  [lynrummy.com/blog/afford-your-own-markdown-dialect](https://lynrummy.com/blog/afford-your-own-markdown-dialect).
+  **"Afford Your Own Markdown Dialect"** (unpublished since the blog was retired).
 
 ## This directory — the browser client
 

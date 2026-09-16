@@ -2,7 +2,7 @@
 
 showell285@gmail.com · 202-213-7553
 Chambersburg, PA · US-based, willing to relocate
-[lynrummy.com](https://lynrummy.com) · [lynrummy.com/blog](https://lynrummy.com/blog) · [github.com/showell](https://github.com/showell)
+[lynrummy.com](https://lynrummy.com) · [github.com/showell](https://github.com/showell)
 
 Forward-thinking software engineer with 35+ years across systems programming in C, web platforms, and AI-agent development.
 

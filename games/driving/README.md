@@ -56,7 +56,7 @@ part deserves.
 
 For why the engine and the math were never the hard part — and what it means to
 build something whose only spec is a perception in someone's head — read the essay
-[**"You Can't Freeze a Sunset"**](https://lynrummy.com/blog/you-cant-freeze-a-sunset).
+**"You Can't Freeze a Sunset"** (unpublished since the blog was retired).
 
 ## Native builds — the desktop screensaver
 

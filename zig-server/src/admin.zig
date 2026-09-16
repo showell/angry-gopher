@@ -190,12 +190,15 @@ const GuestRow = struct {
     disk_bytes: i64,
 };
 
-/// renderNameOnlyTable lists the name-only users — accounts with a name but no
-/// password (guests minted by the blog-comment / guest-login flow), excluding the
-/// agent. For each: time since last activity (last-seen is a single "last active"
-/// across every surface — Lyn Rummy is a guest's only one now that blog comments
-/// are gone) and their Lyn Rummy games + moves, stolen from the per-player walk.
-/// This is the roster the archive tool will work from.
+/// renderNameOnlyTable lists the name-only ACCOUNTS — a name with no password,
+/// excluding the agent. For each: time since last activity (last-seen is a single
+/// "last active" across every surface) and their Lyn Rummy games + moves, stolen
+/// from the per-player walk. This is the roster the archive tool will work from.
+///
+/// **THIS SET NO LONGER GROWS.** Name-only accounts were minted at the old guest
+/// login, which player.zig replaced: a new name-only visitor now becomes a local
+/// PLAYER and never touches the account store. The rows here are the ones that
+/// already existed. Pointing this table at the player store is the follow-up.
 fn renderNameOnlyTable(b: *std.ArrayList(u8), io: Io, alloc: Alloc) !void {
     var rows: std.ArrayList(GuestRow) = .empty;
     for (try users.listUserIDs(io, alloc)) |id| {

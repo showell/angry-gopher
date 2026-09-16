@@ -23,7 +23,6 @@ moved. If they disagree, `pages/home.txt` is right.
 | **Safari Screensaver** | `/driving` | A self-driving first-person motorcycle ride down a winding road, drawn from rider-relative coordinates. A Zig core (compiled to WebAssembly) computes the geometry; a tiny JS blitter fills the polygons. | Zig (WASM) + JS | [`games/driving/README.md`](games/driving/README.md) |
 | **Chat** | `/chat` | Real-time chat, docs, and channels over Server-Sent Events — the live surface we use daily; a multi-page app still mostly rendered on the front end. | JavaScript + Zig | [`chat/README.md`](chat/README.md) |
 | **Seattle Delivery** | `/delivery` | A CVRP route-planning sim — eight trucks fan out across a not-to-scale Seattle. Watch a hand-built Clarke-Wright solver think. A Zig solver (compiled to WASM) plans the routes; the TS client draws and animates them. | Zig (WASM) + TS | [`delivery/README.md`](delivery/README.md) |
-| **Blog** | `/blog` | Notes on building the site, rendered from repo markdown by a hand-written engine. | Zig | [`blog/README.md`](blog/README.md) |
 | **Lyn Rummy** | `/game` | Two-player rummy against an agent that knows the rules — a Zig solver (compiled to WASM) picks the plays and hints, a TS layer turns them into table gestures, an Elm UI plays them, all speaking a DSL over the wire. | Zig (WASM) + Elm + TS | [`games/lynrummy/README.md`](games/lynrummy/README.md) |
 | **Lyn Rummy Puzzles** | `/puzzles` | A single mid-game board to solve; shares the solver and rules, with deterministic undo and replay. | Zig (WASM) + Elm + TS | [`games/lynrummy/elm/src/Puzzle/README.md`](games/lynrummy/elm/src/Puzzle/README.md) |
 | **Chess Toys** | `/chess` | The newest addition: Knight's Tour and Eight Queens as watchable, scrubbable backtracking searches — each search narrates onto an event tape, and the sources themselves are exhibited at `/chess/code`. | Zig (WASM) + JS | [`games/chess/README.md`](games/chess/README.md) |
@@ -265,10 +264,8 @@ The authoritative dispatch is `route()` in `zig-server/src/server.zig`
 | `/chess` | Chess Toys: `/chess/knight`, `/chess/queens`, sources at `/chess/code` (public) |
 | `/game`, `/puzzles`, `/tutorial` | Lyn Rummy: full game (guest name required), puzzle client, beginner tutorial (tutorial public) |
 | `/chat`, `/channel/<name>` | DMs + channels over SSE, `/chat/docs` authoring (members only) |
-| `/blog` | Blog (public; posting a comment mints a guest) |
-| `/learn` | Interactive site tutorial (public) |
 | `/settings` | Per-user settings incl. API-key generation (members) |
-| `/login`, `/login/full`, `/logout` | Guest name login / member password login |
+| `/play`, `/login/full`, `/logout` | Name-only player login / member password login |
 | `/admin` | Session + user overview (hardcoded to uid 1) |
 | `/gallery`, `/images` | Home-page app emblems / brand assets (public) |
 | `/steve-resume` | Server-owned markdown page + pre-built PDF |

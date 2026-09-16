@@ -30,7 +30,6 @@ const settings = @import("settings.zig");
 const tutorial = @import("tutorial.zig");
 const admin = @import("admin.zig");
 const home = @import("home.zig");
-const blog = @import("blog.zig");
 const gallery = @import("gallery.zig");
 const downloads = @import("downloads.zig");
 const resume_page = @import("resume_page.zig");
@@ -161,7 +160,7 @@ fn route(req: *std.http.Server.Request, io: std.Io, alloc: std.mem.Allocator, bu
     } else if (matchPrefix(path, "/chess")) |sub| {
         // Public + ungated like /driving: little chess toys (Knight's Tour,
         // Eight Queens) + /chess/code, the sources-as-exhibit page. The viewer
-        // is resolved for the index's top-bar chip, never gated (like /blog).
+        // is resolved for the index's top-bar chip, never gated.
         try chess.handle(req, alloc, (try viewer(io, alloc, req)).name, sub);
     } else if (matchPrefix(path, "/puzzles")) |sub| {
         try puzzles.handle(req, io, alloc, sub);
@@ -173,10 +172,6 @@ fn route(req: *std.http.Server.Request, io: std.Io, alloc: std.mem.Allocator, bu
         try chat.handleChannel(req, io, alloc, bus, sub);
     } else if (matchPrefix(path, "/settings")) |sub| {
         try settings.handle(req, io, alloc, bus, sub);
-    } else if (matchPrefix(path, "/blog")) |sub| {
-        // Public. Reading never gates; posting a comment mints a guest if needed.
-        // Resolve the viewer (for the top bar + comment attribution) but never gate.
-        try blog.handle(req, io, alloc, (try viewer(io, alloc, req)).name, sub);
     } else if (matchPrefix(path, "/tutorial")) |sub| {
         // Public + ungated: the Lyn Rummy beginner tutorial — its audience
         // is people who haven't made an account yet.

@@ -52,8 +52,8 @@ Where things live (code is truth — ignore stale session notes):
   for the `node:fs` imports): `painsweep.ts` (N=100 scorecard), `painreg.ts` (N=500
   synergy regression → `pain_baseline.json`), `racerank.ts` (subtractive
   race-prune analysis).
-- **The human-facing explainer of the whole design is the blog post "The Ghost in
-  the Cost Function"** (`/blog/the-ghost-in-the-cost-function`) — the clearest single
+- **The human-facing explainer of the whole design is the essay "The Ghost in
+  the Cost Function"** (written for the blog, retired with it) — the clearest single
   account of the cost model, the race, and what the routes "mean." The toy and the
   essay cross-link each other.
 

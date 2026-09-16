@@ -59,8 +59,7 @@ pub fn currentUserID(io: Io, alloc: Alloc, req: *std.http.Server.Request) ![]con
     // 2. API key.
     if (try apiKeyUserID(io, alloc, req)) |id| return id;
     // 3. guest gopher_uid — only a non-authorized principal that exists.
-    // http.cookie owns the value, so it survives a later body read (matters once
-    // guests can post — e.g. name-only blog commenters).
+    // http.cookie owns the value, so it survives a later body read.
     if (try http.cookie(req, alloc, "gopher_uid")) |uid| {
         if (allDigits(uid) and try userExists(io, alloc, uid) and !try userIsAuthorized(io, alloc, uid)) {
             return uid;

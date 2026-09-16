@@ -58,8 +58,7 @@ var scenarios = [_]Scenario{
     .{ .label = "/driving/app.js", .path = "/driving/app.js" },
     .{ .label = "/puzzles", .path = "/puzzles" },
     .{ .label = "/game", .path = "/game" },
-    .{ .label = "/blog", .path = "/blog" },
-    .{ .label = "/login", .path = "/login" },
+    .{ .label = "/play", .path = "/play" },
     .{ .label = "/login/full", .path = "/login/full" },
     // Member-only GET surface — exercised with the session cookie. These are the
     // real leak suspects: /chat touches presence (a per-uid dupe that must plateau,

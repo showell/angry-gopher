@@ -1,16 +1,16 @@
 //! resume_page: /steve-resume — Steve's resume as a single server-owned markdown
-//! page, rendered through the SAME trusted markdown pipeline as the blog. The
+//! page, rendered through the trusted markdown pipeline. The
 //! source lives in the repo at pages/steve-resume.md and is rsync'd to the droplet
 //! by ops/deploy (NOT @embedFile'd — it's free-standing content, so editing the
 //! resume is a content change, not a recompile), read from `resume_root` at
 //! request time.
 //!
-//! Renders with markdown.renderTrusted (the HARD-WRAP trusted variant, not the
-//! blog's reflow): a resume's line breaks are meaningful — the contact block and
+//! Renders with markdown.renderTrusted (the HARD-WRAP trusted variant, not
+//! renderTrustedReflow): a resume's line breaks are meaningful — the contact block and
 //! each role's italic date line must stay on their own lines — while a single
 //! long prose line still wraps naturally to the viewport. The body is server-
 //! owned (in the repo), so it's exempt from render()'s hostile-token cap exactly
-//! like the blog and the curated Links page.
+//! like the Safari download page and the curated Links page.
 //!
 //! The module name avoids `resume` (a zig keyword for async resume); the import
 //! binding in server.zig is `resume_page`.
@@ -55,8 +55,8 @@ pub fn handlePdf(req: *Request, io: Io, alloc: Alloc) !void {
     try req.respond(bytes, .{ .extra_headers = &.{http.pdf_ct} });
 }
 
-// A small self-contained shell — a readable text column on the generic top bar,
-// mirroring blog.zig's chrome. Print-friendly (the top bar drops away on @media
+// A small self-contained shell — a readable text column on the generic top bar.
+// Print-friendly (the top bar drops away on @media
 // print) so "save as PDF" from the browser yields a clean page too.
 const page_head =
     \\<!DOCTYPE html>
@@ -85,7 +85,7 @@ const page_head =
     \\</style>
     \\</head><body>
     \\<header class="app-top"><div class="app-top-home">
-    \\<a href="/">Lyn Rummy</a> · <a href="/chat">Chat</a> · <a href="/blog">Blog</a></div></header>
+    \\<a href="/">Lyn Rummy</a> · <a href="/chat">Chat</a></div></header>
     \\<div class="resume-wrap">
     \\
 ;

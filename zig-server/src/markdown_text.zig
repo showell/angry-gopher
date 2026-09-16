@@ -36,7 +36,8 @@ pub const Budget = struct {
         return .{ .ceiling = per_byte * md.len + base };
     }
 
-    /// unlimited never blows — for trusted server content (blog, Links page) and
+    /// unlimited never blows — for trusted server content (the resume, the
+    /// Safari download page, the Links page) and
     /// for measurement runs that want the raw `spent` count.
     pub fn unlimited() Budget {
         return .{ .ceiling = std.math.maxInt(usize) };

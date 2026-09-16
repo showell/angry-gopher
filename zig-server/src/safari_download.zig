@@ -4,7 +4,7 @@
 //! instead of pointing straight at one platform's binary.
 //!
 //! The page body is server-owned prose in pages/safari-download.md, rendered through
-//! the SAME trusted markdown pipeline as the blog + resume (renderTrustedReflow, so
+//! the same trusted markdown pipeline as the resume (renderTrustedReflow, so
 //! paragraphs reflow to the viewport). Like the resume it's free-standing content —
 //! read from disk at request time and rsync'd on deploy, NOT @embedFile'd — so
 //! editing the instructions is a content change, not a recompile.
@@ -33,7 +33,7 @@ pub fn handle(req: *Request, io: Io, alloc: Alloc) !void {
 
     var b: std.ArrayList(u8) = .empty;
     try b.appendSlice(alloc, page_head);
-    // Server-owned body: the trusted (uncapped) reflow render, like the blog's prose.
+    // Server-owned body: the trusted (uncapped) reflow render, for prose.
     try b.appendSlice(alloc, try markdown.renderTrustedReflow(alloc, src));
     try b.appendSlice(alloc, page_tail);
     try req.respond(b.items, .{ .extra_headers = &.{http.html_ct} });
@@ -63,7 +63,7 @@ const page_head =
     \\</style>
     \\</head><body>
     \\<header class="app-top"><div class="app-top-home">
-    \\<a href="/">Home</a> · <a href="/chat">Chat</a> · <a href="/blog">Blog</a></div></header>
+    \\<a href="/">Home</a> · <a href="/chat">Chat</a></div></header>
     \\<div class="doc-wrap">
     \\
 ;

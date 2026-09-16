@@ -70,7 +70,8 @@ pub fn renderTrusted(a: std.mem.Allocator, md: []const u8) ![]const u8 {
     };
 }
 
-/// renderTrustedReflow is renderTrusted for PROSE (blog articles): paragraphs
+/// renderTrustedReflow is renderTrusted for PROSE (the Safari download page):
+/// paragraphs
 /// reflow to the reader's viewport. A source line wrap joins with a single space
 /// rather than a hard `<br>`, so an inline span (emphasis, code, link) can cross
 /// an author's line wrap, and the text rewraps to the reader's width. The

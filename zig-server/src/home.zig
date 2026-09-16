@@ -287,7 +287,7 @@ pub fn handleDebugMem(req: *Request, alloc: Alloc) !void {
 fn writeTopBar(b: *std.ArrayList(u8), alloc: Alloc, name: []const u8, is_admin: bool) !void {
     try b.appendSlice(alloc,
         "<header class=\"app-top\"><div class=\"app-top-home\">" ++
-        "<a href=\"/\">Home</a> · <a href=\"/chat\">Chat</a> · <a href=\"/blog\">Blog</a></div>" ++
+        "<a href=\"/\">Home</a> · <a href=\"/chat\">Chat</a></div>" ++
         "<div class=\"app-top-user\">");
     if (name.len == 0) {
         try b.appendSlice(alloc, "<a href=\"/play\">Log in</a>");
