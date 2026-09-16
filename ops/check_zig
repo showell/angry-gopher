@@ -33,12 +33,15 @@ done
 echo "==> head-access lint"
 python3 "$REPO_DIR/tools/lint_head_access.py"
 
-# Poka-yoke lint: `const Io = std.Io;` is the seam gopher-metal rewrites to port
-# this server to a machine with no operating system. A call spelled std.Io.Dir
-# instead of Io.Dir is one the port cannot reach — and does not merely behave
-# differently there, but fails to compile.
-echo "==> io-alias lint"
-python3 "$REPO_DIR/tools/lint_io_alias.py"
+# Poka-yoke lint: nothing the route table reaches may reach for the host.
+# router.zig is what this site serves, and gopher-metal calls it from a machine
+# with no operating system — where a host dependency is not a slower path but a
+# compile error. The set it checks is DERIVED from router.zig's imports, so
+# there is no exemption list to rot. Its own tests run first: a lint that never
+# fires looks exactly like a clean tree.
+echo "==> portable lint (its tests, then the tree)"
+python3 "$REPO_DIR/tools/test_lint_portable.py"
+python3 "$REPO_DIR/tools/lint_portable.py"
 
 cd "$REPO_DIR/zig-server"
 t0=$SECONDS

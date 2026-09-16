@@ -132,13 +132,18 @@ fn isIdChar(c: u8) bool {
 
 // ── per-user saved-ref cache (the read-back lookup) ──────────────────────────
 //
-// Keyed by uid; each entry owns a page_allocator-backed arena holding the parsed
-// refs (and the doc bytes they alias). We re-parse only when the reading-list
-// doc's mtime advances past the cached one — a real edit moves mtime by seconds,
-// so we err naturally toward a cache miss rather than a stale hit. Module-level
-// and lazy (no startup init); cache_mu serialises access. Entries persist for the
-// server's lifetime (a handful of users); the page_allocator arena is freed
-// wholesale on each refresh.
+// Keyed by uid; each entry owns an arena over the process's metered base
+// allocator (mem_meter.base()), holding the parsed refs and the doc bytes they
+// alias. We re-parse only when the reading-list doc's mtime advances past the
+// cached one — a real edit moves mtime by seconds, so we err naturally toward a
+// cache miss rather than a stale hit. Module-level and lazy (no startup init);
+// cache_mu serialises access. Entries persist for the server's lifetime (a
+// handful of users); an entry's arena is freed wholesale on each refresh.
+//
+// The base allocator is whatever the HOST named at startup — page_allocator on
+// Linux, a fixed heap on bare metal. On bare metal mtime is always zero (FAT16
+// carries no nanoseconds), so this cache parses once and then trusts itself;
+// that is correct while documents arrive with the disk image.
 
 const Entry = struct {
     mtime_ns: i96,
@@ -180,6 +185,21 @@ pub fn savedIdsFor(io: Io, req_alloc: Alloc, uid: []const u8, conv: []const u8, 
         }
     }
     return ids.toOwnedSlice(req_alloc);
+}
+
+/// dropCache frees every entry, every key and the map itself. Nothing in the
+/// server calls it — the cache lives as long as the process — but the test below
+/// does, so it can run over testing.allocator and prove a refresh frees what it
+/// replaces. A cache that leaked on re-parse would grow with every edit to a
+/// reading list, which is exactly the slope the leak meter exists to catch.
+fn dropCache() void {
+    var it = cache.iterator();
+    while (it.next()) |kv| {
+        kv.value_ptr.arena.deinit();
+        cache_alloc.free(kv.key_ptr.*);
+    }
+    cache.deinit(cache_alloc);
+    cache = .empty;
 }
 
 /// buildEntry reads + parses the reading-list doc into a fresh per-entry arena.
@@ -323,6 +343,13 @@ fn writeReadingList(io: Io, a: Alloc, uid: []const u8, body: []const u8, mtime_n
 }
 
 test "savedIdsFor: filters by conv+sid, re-parses only when mtime advances" {
+    // Be the host: name the base allocator before anything allocates through it.
+    // testing.allocator, so that dropCache() below turns any refresh that failed
+    // to free its predecessor into a reported leak.
+    const prev = mem_meter.replace(testing.allocator);
+    defer _ = mem_meter.replace(prev);
+    defer dropCache();
+
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();
     const a = arena.allocator();
@@ -358,4 +385,35 @@ test "savedIdsFor: filters by conv+sid, re-parses only when mtime advances" {
     // mtime advanced → re-parse, now reflects the emptied doc
     try writeReadingList(io, a, uid, "(emptied)", 2_000_000_000);
     try testing.expectEqual(@as(usize, 0), (try savedIdsFor(io, a, uid, "1_2", "2026-05-28")).len);
+
+    // And back again, twice, so there are several refreshes for a leak to show
+    // up in rather than one.
+    try writeReadingList(io, a, uid, v1, 3_000_000_000);
+    try testing.expectEqual(@as(usize, 1), (try savedIdsFor(io, a, uid, "1_2", "2026-05-28")).len);
+    try writeReadingList(io, a, uid, v1, 4_000_000_000);
+    try testing.expectEqual(@as(usize, 1), (try savedIdsFor(io, a, uid, "General", "general1")).len);
+}
+
+test "savedIdsFor: a missing doc is nothing saved, and allocates nothing process-wide" {
+    const prev = mem_meter.replace(testing.allocator);
+    defer _ = mem_meter.replace(prev);
+    defer dropCache();
+
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var tmp = testing.tmpDir(.{});
+    defer tmp.cleanup();
+    const saved_root = store.chat_root;
+    defer store.chat_root = saved_root;
+    store.chat_root = try std.fs.path.join(a, &.{ ".zig-cache", "tmp", &tmp.sub_path });
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+
+    const before = mem_meter.snapshot();
+    try testing.expectEqual(@as(usize, 0), (try savedIdsFor(io, a, "888", "1_2", "x")).len);
+    // No doc → an early return, before the cache is touched.
+    try testing.expectEqual(before.total_allocs, mem_meter.snapshot().total_allocs);
+    try testing.expectEqual(@as(u32, 0), cache.count());
 }
