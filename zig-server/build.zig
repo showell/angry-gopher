@@ -111,13 +111,7 @@ pub fn build(b: *std.Build) void {
         .{ .name = "chat_js_styles", .path = "../chat/styles.js" },
         .{ .name = "chat_js_images", .path = "../chat/images.js" },
         .{ .name = "chat_js_code", .path = "../chat/code.js" },
-        // The /learn tutorial's own bundles (the page also reuses many chat/*.js
-        // modules above, both to run its demos and to reveal as spoiler source).
-        .{ .name = "learn_js", .path = "../learn/learn.js" },
-        .{ .name = "learn_callback_log_js", .path = "../learn/callback_log.js" },
-        .{ .name = "learn_fake_host_js", .path = "../learn/fake_host.js" },
-        // Shared brand/avatar assets served from /images/<file> (brand.zig). The
-        // cat professor is the /learn page's mascot.
+        // Shared brand/avatar assets served from /images/<file> (brand.zig).
         .{ .name = "image_cat_professor", .path = "../images/cat_professor.webp" },
     };
     for (assets) |a| {

@@ -27,7 +27,6 @@ const puzzles = @import("puzzles.zig");
 const game = @import("game.zig");
 const chat = @import("chat.zig");
 const settings = @import("settings.zig");
-const learn = @import("learn.zig");
 const tutorial = @import("tutorial.zig");
 const admin = @import("admin.zig");
 const home = @import("home.zig");
@@ -179,8 +178,6 @@ fn route(req: *std.http.Server.Request, io: std.Io, alloc: std.mem.Allocator, bu
         // Resolve the viewer (for the top bar + comment attribution) but never gate.
         const uid = try users.currentUserID(io, alloc, req);
         try blog.handle(req, io, alloc, bus, uid, sub);
-    } else if (matchPrefix(path, "/learn")) |sub| {
-        try learn.handle(req, sub);
     } else if (matchPrefix(path, "/tutorial")) |sub| {
         // Public + ungated: the Lyn Rummy beginner tutorial — its audience
         // is people who haven't made an account yet.

@@ -322,12 +322,11 @@ const head_style =
     \\   / Settings / Learn / etc. On the chat conversation page the document
     \\   doesn't scroll (the feed scrolls internally), so sticky is a no-op
     \\   there. When a page builds its own top bar in JS rather than reusing
-    \\   this stylesheet (e.g. learn/learn.js's buildTopBar), it MUST replicate
-    \\   the sticky + opaque-background contract. Cross-ref in buildTopBar
-    \\   names this file as the canonical exemplar. */
+    \\   this stylesheet, it MUST replicate the sticky + opaque-background
+    \\   contract, and name this file as the canonical exemplar. */
     \\/* PRODUCT_DECISION: every color is var(--cc-..., #hex). The fallback is
     \\   the original light-mode hex, so pages that don't load chat/colors.js
-    \\   (home, settings, lynrummy, learn) keep the legacy palette untouched.
+    \\   (home, settings, lynrummy) keep the legacy palette untouched.
     \\   Pages that DO load colors.js (chat-subsystem) get the dark palette
     \\   when the user toggles. */
     \\.app-top { background: var(--cc-top-bar-bg, #f0ede4);

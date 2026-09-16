@@ -59,7 +59,6 @@ var scenarios = [_]Scenario{
     .{ .label = "/puzzles", .path = "/puzzles" },
     .{ .label = "/game", .path = "/game" },
     .{ .label = "/blog", .path = "/blog" },
-    .{ .label = "/learn", .path = "/learn" },
     .{ .label = "/login", .path = "/login" },
     .{ .label = "/login/full", .path = "/login/full" },
     // Member-only GET surface — exercised with the session cookie. These are the

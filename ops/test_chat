@@ -6,7 +6,7 @@
 #
 # Chat subsystem leaf gate (~1s). The chat SERVER (zig) is compiled by
 # ops/check_zig; this leaf lints the chat CLIENT artifacts that nothing else
-# checks — the embedded chat/*.js (+ learn/*.js) and the example bot client. We
+# checks — the embedded chat/*.js and the example bot client. We
 # iterate fast and dogfooding catches the shallow bugs.
 
 set -e
@@ -25,8 +25,8 @@ phase() {
 # Syntax-check every client script in ONE node process (vm parses without
 # running). Globbed, not hand-listed, so a new chat/*.js can't slip the gate —
 # and it skips the ~40ms-per-file node-startup tax of a `node --check` loop.
-echo "==> JS syntax (chat/*.js + learn/*.js, batched)"
-phase "js-syntax" node tools/check_js_syntax.mjs chat/*.js learn/*.js
+echo "==> JS syntax (chat/*.js, batched)"
+phase "js-syntax" node tools/check_js_syntax.mjs chat/*.js
 
 echo "==> chat_client.py syntax"
 phase "chat-py" python3 -m py_compile chat/chat_client.py

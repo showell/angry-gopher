@@ -19,7 +19,7 @@ REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$REPO_DIR"
 
 # Guard the built bundles `zig build` embeds — fail with guidance rather than a
-# cryptic @embedFile error. (The committed assets — chat/*.js, learn/*.js,
+# cryptic @embedFile error. (The committed assets — chat/*.js,
 # catalogs, images — are always present; only these five are build outputs.)
 for f in games/lynrummy/elm/elm.js games/lynrummy/elm/puzzle.js \
          games/lynrummy/elm/engine.js games/driving/safari.wasm \
