@@ -177,7 +177,7 @@ fn route(req: *std.http.Server.Request, io: std.Io, alloc: std.mem.Allocator, bu
         // Public. Reading never gates; posting a comment mints a guest if needed.
         // Resolve the viewer (for the top bar + comment attribution) but never gate.
         const uid = try users.currentUserID(io, alloc, req);
-        try blog.handle(req, io, alloc, bus, uid, sub);
+        try blog.handle(req, io, alloc, uid, sub);
     } else if (matchPrefix(path, "/tutorial")) |sub| {
         // Public + ungated: the Lyn Rummy beginner tutorial — its audience
         // is people who haven't made an account yet.

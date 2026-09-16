@@ -27,7 +27,6 @@ const Io = std.Io;
 const http = @import("http.zig");
 const edge = @import("edge.zig");
 const users = @import("users.zig");
-const chat = @import("chat.zig");
 const html = @import("html.zig");
 const mem_meter = @import("mem_meter.zig");
 

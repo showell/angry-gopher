@@ -23,8 +23,6 @@ const http = @import("http.zig");
 const users = @import("users.zig");
 const markdown = @import("markdown.zig");
 const html = @import("html.zig");
-const comments = @import("comments.zig");
-const Bus = @import("bus.zig").Bus;
 
 const Alloc = std.mem.Allocator;
 const Request = std.http.Server.Request;
@@ -47,9 +45,9 @@ const PostMeta = struct {
 };
 
 /// handle serves /blog (index), /blog/<slug> (one post + its comments), and
-/// POST /blog/<slug>/comment (add a comment). `uid` is the resolved viewer ("" for
-/// anon) — used for the top bar and the comment form; reading never gates.
-pub fn handle(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8, rest: []const u8) !void {
+/// `uid` is the resolved viewer ("" for anon), used for the top bar; reading
+/// never gates.
+pub fn handle(req: *Request, io: Io, alloc: Alloc, uid: []const u8, rest: []const u8) !void {
     const name = if (uid.len == 0) "" else try users.getUserName(io, alloc, uid);
 
     if (rest.len == 0 or std.mem.eql(u8, rest, "/")) {
@@ -77,7 +75,6 @@ pub fn handle(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8, r
         const next: ?PostMeta = if (idx + 1 < metas.len) metas[idx + 1] else null;
         return renderPost(req, io, alloc, name, meta, prev, next);
     }
-    if (std.mem.eql(u8, tail, "/comment")) return comments.handlePost(req, io, alloc, bus, meta.slug);
     return http.notFound(req);
 }
 
@@ -124,7 +121,6 @@ fn renderPost(req: *Request, io: Io, alloc: Alloc, name: []const u8, meta: PostM
         if (next) |n| try b.print(alloc, "<p>next: <a href=\"/blog/{s}\">{s}</a></p>", .{ n.slug, try html.htmlEscape(alloc, n.title) });
         try b.appendSlice(alloc, "</nav>");
     }
-    try comments.renderThread(&b, io, alloc, meta.slug, name);
     try end(&b, alloc);
     try req.respond(b.items, .{ .extra_headers = &.{http.html_ct} });
 }
@@ -298,24 +294,6 @@ const head_b =
     \\ul.post-list .post-date { margin: 0; white-space: nowrap; }
     \\.post-nav { margin-top: 2.5rem; font-size: 15px; }
     \\.post-nav p { margin: 0.3rem 0; }
-    \\.comments { margin-top: 3rem; border-top: 1px solid #ddd; padding-top: 1.4rem; }
-    \\.comments h2 { color: #000080; font-size: 18px; margin: 0 0 1rem; }
-    \\.comment { padding: 12px 0; border-bottom: 1px solid #eee; }
-    \\.comment-head { font-size: 14px; }
-    \\.comment-date { color: #888; font-size: 12px; margin-left: 8px; }
-    \\.comment-body { margin-top: 4px; }
-    \\.comment-body p { margin: 0.4rem 0; }
-    \\.comment-form { margin-top: 1.6rem; display: flex; flex-direction: column; gap: 8px;
-    \\               align-items: flex-start; }
-    \\.comment-form .comment-name { font-size: 15px; padding: 7px; width: 100%; max-width: 280px;
-    \\                              box-sizing: border-box; }
-    \\.comment-form .comment-text { font-size: 15px; padding: 8px; width: 100%; box-sizing: border-box;
-    \\                              font-family: inherit; }
-    \\.comment-form button { background: #000080; color: white; border: none; padding: 9px 18px;
-    \\                       font-size: 14px; border-radius: 4px; cursor: pointer; }
-    \\.comment-form button:hover { background: #0000a0; }
-    \\.comment-form button:disabled { opacity: 0.6; cursor: default; }
-    \\.comment-err { color: #b00020; font-size: 14px; margin: 0 0 6px; }
     \\</style>
     \\</head><body>
     \\
