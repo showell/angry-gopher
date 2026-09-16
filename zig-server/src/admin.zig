@@ -187,20 +187,16 @@ const GuestRow = struct {
     last_seen: ?i64,
     games: i64,
     moves: i64,
-    comments: i64,
     disk_bytes: i64,
 };
 
 /// renderNameOnlyTable lists the name-only users — accounts with a name but no
 /// password (guests minted by the blog-comment / guest-login flow), excluding the
 /// agent. For each: time since last activity (last-seen is a single "last active"
-/// across every surface — a guest's only surfaces are Lyn Rummy and comments
-/// anyway), Lyn Rummy games + moves stolen from the per-player walk, and the
-/// blog-comment count (tallied by display name). This is the roster the archive
-/// tool will work from.
+/// across every surface — Lyn Rummy is a guest's only one now that blog comments
+/// are gone) and their Lyn Rummy games + moves, stolen from the per-player walk.
+/// This is the roster the archive tool will work from.
 fn renderNameOnlyTable(b: *std.ArrayList(u8), io: Io, alloc: Alloc) !void {
-    const tally = try store.tallyBlogComments(io, alloc);
-
     var rows: std.ArrayList(GuestRow) = .empty;
     for (try users.listUserIDs(io, alloc)) |id| {
         if (users.principalAuthorized(io, alloc, id)) continue; // members + agent live above
@@ -211,7 +207,6 @@ fn renderNameOnlyTable(b: *std.ArrayList(u8), io: Io, alloc: Alloc) !void {
             .last_seen = users.userLastSeen(io, alloc, id),
             .games = st.game_sessions,
             .moves = st.total_actions,
-            .comments = commentCount(tally, st.name),
             .disk_bytes = st.disk_bytes,
         });
     }
@@ -219,7 +214,7 @@ fn renderNameOnlyTable(b: *std.ArrayList(u8), io: Io, alloc: Alloc) !void {
 
     try b.appendSlice(alloc, name_only_table_head);
     if (rows.items.len == 0) {
-        try b.appendSlice(alloc, "<tr><td colspan=\"6\" class=\"muted\">No name-only users.</td></tr></table>");
+        try b.appendSlice(alloc, "<tr><td colspan=\"5\" class=\"muted\">No name-only users.</td></tr></table>");
         return;
     }
     const now = nowUnix(io);
@@ -227,23 +222,15 @@ fn renderNameOnlyTable(b: *std.ArrayList(u8), io: Io, alloc: Alloc) !void {
         const name = try html.htmlEscape(alloc, row.name);
         const since = if (row.last_seen) |t| try humanizeSince(alloc, now - t) else "never";
         try b.print(alloc, "<tr><td>{s} <span class=\"muted\">#{s}</span></td><td>{s}</td>" ++
-            "<td class=\"n\">{d}</td><td class=\"n\">{d}</td><td class=\"n\">{d}</td><td class=\"n\">{s}</td></tr>", .{
-            name,        try html.htmlEscape(alloc, row.id),
-            since,       row.games,
-            row.moves,   row.comments,
-            try humanBytes(alloc, row.disk_bytes),
+            "<td class=\"n\">{d}</td><td class=\"n\">{d}</td><td class=\"n\">{s}</td></tr>", .{
+            name,      try html.htmlEscape(alloc, row.id),
+            since,     row.games,
+            row.moves, try humanBytes(alloc, row.disk_bytes),
         });
     }
     try b.appendSlice(alloc, "</table>");
 }
 
-/// commentCount returns a name's blog-comment total from the tally (0 if none).
-fn commentCount(tally: []const store.CommentTally, name: []const u8) i64 {
-    for (tally) |t| {
-        if (std.mem.eql(u8, t.name, name)) return t.count;
-    }
-    return 0;
-}
 
 /// guestLessThan: active-ever first (most-recent first), never-active last —
 /// same ordering as the members table.
@@ -444,9 +431,9 @@ const member_table_head =
 
 const name_only_table_head =
     \\<h2>Name-only users</h2>
-    \\<p class="muted">Accounts with a name but no password — guests minted at the blog-comment box or the guest-login flow. "Last active" spans every surface (a guest's are Lyn Rummy and comments); moves and games are their Lyn Rummy play, comments are tallied by name. The roster the archive tool draws from.</p>
+    \\<p class="muted">Accounts with a name but no password — guests minted at the guest-login flow. "Last active" spans every surface; games and moves are their Lyn Rummy play. The roster the archive tool draws from.</p>
     \\<table>
-    \\<tr><th>Name</th><th>Last active</th><th class="n">Games</th><th class="n">Moves</th><th class="n">Comments</th><th class="n">Disk</th></tr>
+    \\<tr><th>Name</th><th>Last active</th><th class="n">Games</th><th class="n">Moves</th><th class="n">Disk</th></tr>
 ;
 
 // delete_confirm_template. Args: name, games, puzzles, actions, disk, id.
