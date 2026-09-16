@@ -78,9 +78,8 @@ window.ChatAddTopic = (function(){
       }).then(function(j){
         /* PRODUCT_DECISION: clear the input + re-enable BEFORE firing
            onCreated. In prod, onCreated navigates the whole page away
-           so the cleanup is invisible; in non-navigating callers (the
-           /learn demo, future surfaces) the form is left ready for
-           another topic. */
+           so the cleanup is invisible; in a non-navigating caller the
+           form is left ready for another topic. */
         input.value = '';
         btn.disabled = false;
         onCreated(j);

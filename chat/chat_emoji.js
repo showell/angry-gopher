@@ -175,8 +175,8 @@ window.ChatEmoji = (function(){
     }
 
     /* PRODUCT_DECISION: anchored to the textarea's bottom-left as a fixed
-       overlay, so it works wherever the textarea sits (the chat rail, the
-       /learn demo) without the host reserving layout for it. */
+       overlay, so it works wherever the textarea sits without the host
+       reserving layout for it. */
     function refresh(){
       var h = shortcodeAtCaret(textarea);
       var list = h ? matches(h.query, COMPOSE_ROWS) : [];

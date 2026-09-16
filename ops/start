@@ -68,7 +68,7 @@ BIN="$GOPHER_DIR/zig-server/zig-out/bin/zig-server"
 
 # GOPHER_CONFIG (resolved + verified to exist above) points storage + auth at
 # the live tree; without it the server falls back to repo-relative defaults
-# (and a stranger gets a 303 to /login).
+# (and a stranger gets a 303 to /play).
 nohup "$BIN" > /tmp/angry-gopher.log 2>&1 &
 
 # Wait for the freshly-built server to answer on :9001.

@@ -71,7 +71,7 @@ into the zig binary (`@embedFile`) and served as-is. It's organized by a deliber
 - **Substrate** (`message.js`, `message_view.js`, `nav_stack.js`, the popups) are
   the shared abstractions — one bubble, the list-of-bubbles widget, the
   back/forward state machine. They self-style, so they drop into other pages
-  (even the `/learn` demos) and just work.
+  and just work.
 
 The JS is held honest by a homegrown linter: `tools/jsparse.py` parses the (ES5-ish)
 dialect we actually write here, and `tools/lint.py` runs rules over the AST

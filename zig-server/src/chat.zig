@@ -24,7 +24,7 @@
 //! in every open tab. The notify / sidebar / recent / images / code fan-out and
 //! presence are likewise in-process (in-memory, lost on restart).
 //!
-//! Access: identity-or-/login; DM participant gate; channel membership gate;
+//! Access: member-or-/login/full; DM participant gate; channel membership gate;
 //! opaque 404 (no existence leak); sid path-traversal guard.
 
 const std = @import("std");

@@ -137,7 +137,7 @@ auth_dir = /home/steve/Auth               # account store; defaults to ~/Auth
 (`{auth_dir}/<id>/{name,password,api-key}`) plus `next-id.txt` for
 allocation. One uid is the same person across every surface. With the
 config above, `~/Auth/1` resolves to **Steve (uid 1)**, so a browser hits
-`/chat` as Steve rather than getting bounced to `/login`.
+`/chat` as Steve rather than getting bounced to `/login/full`.
 
 **Policy: keep server data OUTSIDE the repository.** Point `data_dir` and
 `auth_dir` at paths outside the source tree (e.g. `~/AngryGopher/…` and
@@ -153,28 +153,36 @@ The site optimizes for frictionless exploration, asking for a password
 only where it must — at the chat boundary, which holds private data. That
 produces a natural progression:
 
-**STRANGER → GUEST → FULL MEMBER**
+**STRANGER → PLAYER → FULL MEMBER**
 
-- **Stranger** — no cookie, no account. Can browse public surfaces (e.g.
+- **Stranger** — no cookie, no identity. Can browse public surfaces (e.g.
   `/driving`).
-- **Guest** — a name, no password (`{auth_dir}/<id>/` has `name` only).
-  You become one by entering a name at `/login`; enough to play **Lyn
-  Rummy**, which needs a unique name to track game history but no
-  password. Names are unique, so a guest can't take a member's name.
-- **Full member** — a guest who has set a password (`name` + `password`),
-  or a stranger who registered directly. Required for **chat**. A guest
-  upgrades *in place* — same uid, so game history carries over.
+- **Player** — a name, no password, in the LOCAL player store
+  (`{data_dir}/players/<id>/name`, see `player.zig`). You become one by
+  entering a name at `/play`; enough for **Lyn Rummy** and the puzzles,
+  which need somewhere to file a board and a name to print on it.
+  **This tier is honour-system.** Names are not reserved, so anyone may
+  type any name, and anyone who sets the `gopher_uid` cookie by hand
+  reaches that player's game list. Nothing behind a real gate — chat,
+  settings, admin, uploads — resolves through it.
+- **Full member** — an account in `{auth_dir}` with a password. Required
+  for **chat**. Logging in mirrors the member into the player store under
+  the same id, so their game history follows them.
 
-Many users skip the middle step and go **straight from stranger to full
-member** — anyone who heads to chat without playing Lyn Rummy first. The
-`/login/full` page handles all three on-ramps (see `login.zig`): a
-stranger picks *Log in* or *Create account*; a cookied guest just sets a
-password; an existing member verifies one.
+A locally-minted player id is spelled `p<n>`; an account id is a bare
+decimal. The two identities ride the same `gopher_uid` cookie, so the
+spellings are disjoint on purpose, and the account resolver's guest arm
+requires all digits — a player can never be read as a chat principal.
+
+The `/login/full` page handles the member on-ramps (see `login.zig`): a
+stranger picks *Log in* or *Create account*, and an existing member
+verifies a password.
 
 Two accounts stand apart from this progression:
 
-- **Admin** — **uid 1** (Steve). The first account; `/admin` is
-  hardcoded to uid 1 (`admin.zig`), not a per-account flag.
+- **Admin** — **uid 1** (Steve). The first account; both admin screens
+  (`/admin` for chat, `/admin/lynrummy` for the game) are hardcoded to
+  uid 1 via `admin_ui.requireAdmin`, not a per-account flag.
 - **Agent** — **uid 3** (Claude). A full member that authenticates by API
   key instead of a browser session (read + write, never admin). See
   "Reading chat as the agent" below.

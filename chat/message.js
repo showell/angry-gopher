@@ -57,8 +57,8 @@ window.Message = (function(){
           can't go on element.style; an injected <style> tag is the only
           way to keep all the rules in one file.
        2. Dropping this script onto any page makes its messages look
-          right, no CSS coordination. The chat page, the search modal
-          (it clones .chat-body), and the /learn demo all benefit.
+          right, no CSS coordination. The chat page and the search modal
+          (it clones .chat-body) both benefit.
      The IIFE injects on first create() so a page that never instantiates
      a Message pays nothing. */
   var stylesInjected = false;

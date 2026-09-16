@@ -86,8 +86,15 @@ def rss_kb():
     return -1
 
 def alive():
-    """Liveness probe: a normal public GET must return 200."""
-    st, _ = req("GET", "/learn")
+    """Liveness probe: a normal public GET must return 200.
+
+    It is deliberately a real PAGE (embedded HTML, no identity, no store) and
+    not /version, so that "alive" means "still rendering" rather than "still
+    answering". It was /learn until that page was retired — at which point this
+    returned 404 and would have reported the server dead after every single
+    entry in the crash battery below.
+    """
+    st, _ = req("GET", "/tutorial")
     return st == 200
 
 # ── crash battery ─────────────────────────────────────────────────────────────
@@ -123,11 +130,11 @@ def malformed_lines():
     return [
         ("9000-char path",        lambda: raw(f"GET /{LONG} HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n".encode())),
         ("no path",               lambda: raw(b"GET  HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n")),
-        ("bogus method",          lambda: raw(b"ZZZZZZ /learn HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n")),
+        ("bogus method",          lambda: raw(b"ZZZZZZ /version HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n")),
         ("garbage line",          lambda: raw(b"\x00\x01\x02 not http\r\n\r\n")),
         ("bare CRLF flood",       lambda: raw(b"\r\n" * 500)),
-        ("no HTTP version",       lambda: raw(b"GET /learn\r\n\r\n")),
-        ("absurd version",        lambda: raw(b"GET /learn HTTP/9.99\r\nHost: x\r\nConnection: close\r\n\r\n")),
+        ("no HTTP version",       lambda: raw(b"GET /version\r\n\r\n")),
+        ("absurd version",        lambda: raw(b"GET /version HTTP/9.99\r\nHost: x\r\nConnection: close\r\n\r\n")),
         ("slashes",               lambda: req("GET", "//////////")),
         ("traversal enc",         lambda: req("GET", "/chat/c/1_2/general1/uploads/..%2f..%2f..%2f..%2fetc%2fpasswd", [AUTH])),
         ("traversal raw",         lambda: req("GET", "/chat/c/1_2/general1/uploads/../../../../etc/passwd", [AUTH])),
@@ -153,8 +160,8 @@ def malformed_query():
 
 def malformed_headers():
     return [
-        ("1000 headers",    lambda: req("GET", "/learn", [f"X-{i}: v" for i in range(1000)])),
-        ("100KB header",    lambda: req("GET", "/learn", ["X-Big: " + "v" * (100 * 1024)])),
+        ("1000 headers",    lambda: req("GET", "/tutorial", [f"X-{i}: v" for i in range(1000)])),
+        ("100KB header",    lambda: req("GET", "/tutorial", ["X-Big: " + "v" * (100 * 1024)])),
         ("huge cookie",     lambda: req("GET", "/chat", ["Cookie: gopher_auth=" + "z" * 60000])),
         ("bearer no token", lambda: req("GET", "/chat", ["Authorization: Bearer"])),
         ("bearer huge",     lambda: req("GET", "/chat", ["Authorization: Bearer " + "x" * 40000])),
@@ -333,9 +340,13 @@ def edge_policy():
     probe("header_too_large", {431, None},
           lambda: raw(b"GET /version HTTP/1.1\r\nHost: x\r\nX-Big: " + b"A" * 20000 +
                       b"\r\nConnection: close\r\n\r\n")[0])
-    # body_too_large: a POST body over /login's 64 KB cap -> 413.
+    # body_too_large: a POST body over /play's 64 KB cap -> 413.
+    # It was /login, which now answers 303 (a redirect to /play) WITHOUT reading
+    # the body — so the cap never fired, the counter never moved, and this probe
+    # passed on nothing. Verified by hand: /login 303 with the counter at 0,
+    # /play 413 with the counter at 1.
     probe("body_too_large", {413},
-          lambda: req("POST", "/login", body=b"x" * 70000)[0])
+          lambda: req("POST", "/play", body=b"x" * 70000)[0])
     # malformed_markdown: hostile over-formatted input to the preview endpoint.
     # Returns 200 with the visible placeholder (harmless), counter fires.
     probe("malformed_markdown", {200},
@@ -359,7 +370,7 @@ def edge_policy():
 # ── leak phase ────────────────────────────────────────────────────────────────
 
 def hammer_sequential(n):
-    paths = ["/learn", "/chat", "/chat/recent", "/chat/images", "/chat/code",
+    paths = ["/", "/chat", "/chat/recent", "/chat/images", "/chat/code",
              "/chat/conversations", "/settings", "/admin", "/chat/c/1_2/general1",
              "/channel/General/ChitChat", "/chat/docs", "/driving"]
     for i in range(n):
@@ -380,7 +391,7 @@ def sse_churn(n):
             pass
 
 def flood(total, threads):
-    paths = ["/learn", "/chat/recent", "/chat/c/1_2/general1", "/admin", "/settings"]
+    paths = ["/", "/chat/recent", "/chat/c/1_2/general1", "/admin", "/settings"]
     per = total // threads
     def worker(tid):
         for i in range(per):

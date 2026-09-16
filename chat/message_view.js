@@ -2,8 +2,8 @@
 
    Wired in one level removed from chat.js: ChatMiddlePane
    (chat/middle_pane.js) owns the MessageView instance, and chat.js
-   drives the pane. Also stands alone as Lesson 4 of /learn, which is
-   why it knows nothing about chat itself.
+   drives the pane. It knows nothing about chat itself — it was written
+   to stand alone, which is what lets other hosts reuse it.
 
    A scrollable list of opaque bubbles with: selection state, keyboard
    navigation, scroll-driven selection updates, programmatic-scroll
@@ -326,7 +326,7 @@ window.MessageView = (function(){
 
     /* BROWSER_WORKAROUND: element.scrollIntoView walks UP every scrollable
        ancestor — fine on the chat page (html/body don't scroll) but on
-       any page where the document scrolls (e.g. /learn), centering the
+       any page where the document scrolls, centering the
        bubble in the inner container ALSO scrolls the page to bring that
        container into view, yanking the rest of the layout around. Compute
        the centered scrollTop against the container directly so the
