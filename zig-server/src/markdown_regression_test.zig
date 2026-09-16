@@ -1,4 +1,5 @@
 const std = @import("std");
+const Io = std.Io;
 const markdown = @import("markdown.zig");
 
 // The markdown DIALECT regression baseline. Our zig renderer (markdown.zig) IS
@@ -41,7 +42,7 @@ const Tally = struct { pass: usize = 0, fail: usize = 0 };
 /// printing a greppable FAILID per mismatch and full md/exp/got detail for the
 /// first `detail` of them. The arena is reset per case — the per-message lifetime.
 fn verifyFile(
-    io: std.Io,
+    io: Io,
     alloc: std.mem.Allocator,
     arena: *std.heap.ArenaAllocator,
     path: []const u8,
@@ -84,7 +85,7 @@ fn verifyFile(
 /// owns the baseline — after an intentional dialect change, re-freeze, then read
 /// the git diff to confirm only the intended cases moved.
 fn rebaselineFile(
-    io: std.Io,
+    io: Io,
     alloc: std.mem.Allocator,
     arena: *std.heap.ArenaAllocator,
     path: []const u8,

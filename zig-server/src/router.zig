@@ -19,6 +19,7 @@
 //! test, without a socket.
 
 const std = @import("std");
+const Io = std.Io;
 const http = @import("http.zig");
 const driving = @import("driving.zig");
 const delivery = @import("delivery.zig");
@@ -39,13 +40,16 @@ const login = @import("login.zig");
 const player = @import("player.zig");
 const brand = @import("brand.zig");
 const users = @import("users.zig");
-const Bus = @import("bus.zig").Bus;
+/// Bus is re-exported because it is part of `route`'s signature: a host has to
+/// construct one to call the table, and the kernel that does has no other
+/// contact with the application.
+pub const Bus = @import("bus.zig").Bus;
 
 /// route picks the handler by path prefix, passing the remainder (the path with
 /// the prefix stripped, e.g. "/app.js" or "/sessions/3/..."). The table below IS
 /// the site: every surface appears exactly once, and the comment on each arm
 /// says who may reach it.
-pub fn route(req: *std.http.Server.Request, io: std.Io, alloc: std.mem.Allocator, bus: *Bus) !void {
+pub fn route(req: *std.http.Server.Request, io: Io, alloc: std.mem.Allocator, bus: *Bus) !void {
     const path = stripQuery(try http.target(req, alloc));
 
     if (matchPrefix(path, "/driving")) |sub| {
@@ -133,7 +137,7 @@ pub fn route(req: *std.http.Server.Request, io: std.Io, alloc: std.mem.Allocator
 /// is the empty name, which those pages already render as a Log in link.
 const Viewer = struct { name: []const u8, is_admin: bool };
 
-fn viewer(io: std.Io, alloc: std.mem.Allocator, req: *std.http.Server.Request) !Viewer {
+fn viewer(io: Io, alloc: std.mem.Allocator, req: *std.http.Server.Request) !Viewer {
     const uid = try users.currentUserID(io, alloc, req);
     if (uid.len != 0) return .{
         .name = try users.getUserName(io, alloc, uid),
@@ -172,7 +176,7 @@ const testing = std.testing;
 /// serve runs one raw HTTP request through `route` and answers the raw response.
 /// This is the whole harness: `std.http.Server` over a reader that is a string
 /// and a writer that is a buffer.
-fn serve(alloc: std.mem.Allocator, io: std.Io, raw: []const u8) ![]const u8 {
+fn serve(alloc: std.mem.Allocator, io: Io, raw: []const u8) ![]const u8 {
     var reader: std.Io.Reader = .fixed(raw);
     var out: std.Io.Writer.Allocating = .init(alloc);
     var server = std.http.Server.init(&reader, &out.writer);
@@ -186,7 +190,7 @@ fn serve(alloc: std.mem.Allocator, io: std.Io, raw: []const u8) ![]const u8 {
     return out.written();
 }
 
-fn get(alloc: std.mem.Allocator, io: std.Io, target: []const u8) ![]const u8 {
+fn get(alloc: std.mem.Allocator, io: Io, target: []const u8) ![]const u8 {
     const raw = try std.fmt.allocPrint(alloc, "GET {s} HTTP/1.1\r\nHost: x\r\n\r\n", .{target});
     return serve(alloc, io, raw);
 }

@@ -13,6 +13,7 @@
 //! chat account store.
 
 const std = @import("std");
+const Io = std.Io;
 const http = @import("http.zig");
 const storage = @import("storage.zig");
 const player = @import("player.zig");
@@ -52,7 +53,7 @@ const Alloc = std.mem.Allocator;
 /// The whole surface is gated JUST_NEEDS_NAME: resolve the player first and,
 /// with none, redirect to /play. The gate IS the contract — the inner handlers
 /// never re-check. The resolved id is the storage key for every write below.
-pub fn handle(req: *std.http.Server.Request, io: std.Io, alloc: Alloc, sub: []const u8) !void {
+pub fn handle(req: *std.http.Server.Request, io: Io, alloc: Alloc, sub: []const u8) !void {
     const user_id = (try player.current(io, alloc, req)).id;
     if (user_id.len == 0) {
         try http.redirect(req, "/play?next=/puzzles");
@@ -79,7 +80,7 @@ pub fn handle(req: *std.http.Server.Request, io: std.Io, alloc: Alloc, sub: []co
 /// sessionRoute handles the one session route:
 ///   POST /sessions/<id>/puzzles/<idx>/actions  — append one action line.
 /// `rest` is the path after "/sessions/".
-fn sessionRoute(req: *std.http.Server.Request, io: std.Io, alloc: Alloc, user_id: []const u8, rest: []const u8) !void {
+fn sessionRoute(req: *std.http.Server.Request, io: Io, alloc: Alloc, user_id: []const u8, rest: []const u8) !void {
     var it = std.mem.splitScalar(u8, rest, '/');
     const id_str = it.next() orelse return http.notFound(req);
     const session_id = std.fmt.parseInt(i64, id_str, 10) catch return http.notFound(req);
@@ -104,7 +105,7 @@ fn sessionRoute(req: *std.http.Server.Request, io: std.Io, alloc: Alloc, user_id
 /// appendAction appends the POST body verbatim as one line in
 /// puzzle_<idx>/actions.dsl.
 /// The per-puzzle dir is created on first append.
-fn appendAction(req: *std.http.Server.Request, io: std.Io, alloc: Alloc, user_id: []const u8, session_id: i64, puzzle_idx: i32) !void {
+fn appendAction(req: *std.http.Server.Request, io: Io, alloc: Alloc, user_id: []const u8, session_id: i64, puzzle_idx: i32) !void {
     if (!try storage.puzzleSessionExists(io, alloc, user_id, session_id)) {
         return http.notFound(req);
     }
@@ -119,7 +120,7 @@ fn appendAction(req: *std.http.Server.Request, io: std.Io, alloc: Alloc, user_id
 /// page allocates a puzzle session, writes meta, and renders the HTML host with
 /// both session_id and the full catalog baked into the Elm flag. Zero post-load
 /// round trips before play.
-fn page(req: *std.http.Server.Request, io: std.Io, alloc: Alloc, user_id: []const u8) !void {
+fn page(req: *std.http.Server.Request, io: Io, alloc: Alloc, user_id: []const u8) !void {
     const catalog = try loadCatalog(alloc);
     const indented = try indentLines(alloc, catalog);
 
