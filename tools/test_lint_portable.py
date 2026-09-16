@@ -132,7 +132,14 @@ class Host(unittest.TestCase):
         ("std.fs.cwd", "const d = std.fs.cwd();"),
         ("std.fs.File", "const F = std.fs.File;"),
         ("std.debug.print", 'std.debug.print("x", .{});'),
+        ("bcrypt.strHash(", "return bcrypt.strHash(pw, opts, out, io);"),
+        ("pwhash.argon2.strHash(", "_ = std.crypto.pwhash.argon2.strHash(pw, opts, out, io);"),
     ]
+
+    def test_strHashWithSalt_is_allowed(self):
+        body = "return bcrypt.strHashWithSalt(pw, opts, out, salt);\n"
+        with Tree(with_router(**{"a.zig": body})) as t:
+            self.assertEqual(t.scan(), [])
 
     def test_each_host_reach_fires(self):
         for want, line in self.CASES:

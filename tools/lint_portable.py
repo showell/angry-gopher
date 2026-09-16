@@ -39,6 +39,12 @@ WHAT IT ALLOWS:
   anything in a `test {}` block   tests run on the host: they spin a real thread
                                   pool and write to a real temp directory.
 
+WHAT IT CANNOT SEE. A std function that takes a real `std.Io` compiles on
+Linux when handed our `io`, because there the alias IS std.Io. This lint names
+the ones that have bitten (the password hashers' strHash); it cannot know every
+std signature. The bare-metal build — gopher-metal's `zig build gopher` — is
+the check that sees them all, and this lint is the fast, local subset.
+
 WHY IT EXISTS. Every rule here was a compile error on the bare-metal target
 first, found one at a time, each hiding behind the last: twenty-one bare
 `std.Io` signatures, then six `std.Io.Dir`/`.Clock` spellings, then a single
@@ -84,6 +90,11 @@ RULES = [
      "std.fs.{0} is the old host file API — use Io.Dir"),
     (re.compile(r"\bstd\.debug\.print\b"),
      "std.debug.print writes the host's stderr"),
+    # std functions that take a REAL std.Io. Our `io` is only std.Io where the
+    # alias happens to be std's, so passing it compiles on Linux and nowhere
+    # else. The password hashers draw their salt through it.
+    (re.compile(r"\b(?:bcrypt|scrypt|argon2|pwhash\.[a-z0-9]+)\.strHash\s*\("),
+     "strHash takes a real std.Io — draw the salt with io.random and call strHashWithSalt"),
 ]
 
 
