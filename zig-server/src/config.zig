@@ -1,23 +1,18 @@
-//! config: reads GOPHER_CONFIG (a flat `key = value` file, path from the env var)
-//! and points the storage + identity layers at the live data tree.
+//! config: how a LINUX process learns where its data is. Reads GOPHER_CONFIG
+//! (a flat `key = value` file, path from the env var) for `data_dir` and
+//! `auth_dir`, then hands both to roots.point — which owns the mapping from two
+//! directories to every store's root. `auth_dir` defaults to ~/Auth.
 //!
-//! Four roots are wired from data_dir + auth_dir:
-//!   lynrummy   = {data_dir}/lynrummy   -> storage.data_root
-//!   chat       = {data_dir}/chat       -> users.session_secret_dir (the secret)
-//!                                       + chat_store.chat_root (conversations)
-//!   users      = {data_dir}/users      -> users.users_root
-//!   players    = {data_dir}/players    -> player.player_root  (the LOCAL identity)
-//!   auth       = {auth_dir} or ~/Auth  -> users.auth_root  (shared account store)
+//! This file is host-side: it reads the environment, which a machine with no
+//! operating system does not have. roots.zig is the half that crosses.
 //!
 //! When GOPHER_CONFIG is unset we leave each module's repo-relative default in
 //! place, so a standalone `/driving` run still works with no config.
 
 const std = @import("std");
 const Io = std.Io;
-const storage = @import("storage.zig");
+const roots = @import("roots.zig");
 const users = @import("users.zig");
-const player = @import("player.zig");
-const chat_store = @import("chat_store.zig");
 
 /// load reads GOPHER_CONFIG (if set in `env`) and points storage + identity at
 /// the live tree. Strings are allocated from `alloc` (expected to be a
@@ -56,12 +51,10 @@ pub fn load(io: Io, alloc: std.mem.Allocator, env: std.process.Environ.Map) !voi
         return;
     };
 
-    storage.data_root = try std.fs.path.join(alloc, &.{ dd, "lynrummy" });
-    users.users_root = try std.fs.path.join(alloc, &.{ dd, "users" });
-    player.player_root = try std.fs.path.join(alloc, &.{ dd, "players" });
-    users.session_secret_dir = try std.fs.path.join(alloc, &.{ dd, "chat" });
-    chat_store.chat_root = try std.fs.path.join(alloc, &.{ dd, "chat" });
-    users.auth_root = auth_dir orelse try expandHome(alloc, env, "~/Auth");
+    try roots.point(alloc, .{
+        .data_dir = dd,
+        .auth_dir = auth_dir orelse try expandHome(alloc, env, "~/Auth"),
+    });
 
     std.debug.print("config: data_dir={s}  auth_root={s}\n", .{ dd, users.auth_root });
 }

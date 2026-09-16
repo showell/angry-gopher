@@ -40,10 +40,26 @@ const login = @import("login.zig");
 const player = @import("player.zig");
 const brand = @import("brand.zig");
 const users = @import("users.zig");
-/// Bus is re-exported because it is part of `route`'s signature: a host has to
-/// construct one to call the table, and the kernel that does has no other
-/// contact with the application.
+// ── THE HOST CONTRACT ────────────────────────────────────────────────────────
+//
+// What any host must do before it calls `route`, and everything it needs to do
+// it with. A kernel that boots this table has no other contact with the
+// application, so all of it is exported from here:
+//
+//   1. mem_meter.init(base)     name the process-lifetime allocator. There is no
+//                               default: an allocation before this panics.
+//   2. roots.point(base, r)     point every store at the data. Without it the
+//                               stores read repo-relative defaults, which is
+//                               right for a dev checkout and nothing else.
+//   3. a Bus, built over base   route() takes it; chat publishes through it.
+//
+// server.zig does these for Linux, via config.zig. gopher-metal's kernel does
+// them with a fixed heap and paths on its own volume.
+
+/// Bus is part of `route`'s signature.
 pub const Bus = @import("bus.zig").Bus;
+pub const mem_meter = @import("mem_meter.zig");
+pub const roots = @import("roots.zig");
 
 /// route picks the handler by path prefix, passing the remainder (the path with
 /// the prefix stripped, e.g. "/app.js" or "/sessions/3/..."). The table below IS
