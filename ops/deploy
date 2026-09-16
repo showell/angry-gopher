@@ -79,7 +79,9 @@ BIN="$GOPHER_DIR/zig-server/zig-out/bin/zig-server"
 # file a new route depends on is present when the fresh binary starts.
 echo "Syncing to $DEPLOY_HOST:$DEPLOY_DIR ..."
 rsync -avz "$BIN" "$DEPLOY_HOST:$DEPLOY_DIR/zig-server"
-# The pages/ tree (currently just steve-resume.md).
+# The pages/ tree: the resume (markdown + its pre-rendered PDF), the Safari
+# download page, and the home blurb. The PDF is a checked-in artifact, so it
+# ships as-is whether or not the markdown beside it changed.
 rsync -avz --mkpath --delete "$GOPHER_DIR/pages/" "$DEPLOY_HOST:$DEPLOY_DIR/pages/"
 # And the gallery/ images (the /gallery preview surface) — free-standing content
 # read at request time, same as above; --delete scoped to gallery/ keeps the repo

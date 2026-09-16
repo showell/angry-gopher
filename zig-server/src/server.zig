@@ -1,6 +1,11 @@
-//! server: the HTTP entry point of the zig port. Listens, accepts, and routes
-//! by path prefix to the per-feature handlers (driving.zig, puzzles.zig). One
-//! module per surface; build.zig wires the embedded assets.
+//! server: HOW THIS PROCESS STARTS. The allocator, the thread pool, the
+//! environment, the config file, the socket, and one request per accepted
+//! connection — then it hands that request to router.zig, which is the only
+//! thing here that knows what the site serves.
+//!
+//! That division is the whole point of the file: everything below is a Linux
+//! process detail, and a machine with no operating system replaces all of it
+//! while calling the same `router.route`.
 //!
 //! Concurrency: each accepted connection runs as its own task on the std.Io
 //! thread pool (a never-awaited Io.Group + group.concurrent — see main). The
@@ -18,28 +23,9 @@
 const std = @import("std");
 const Io = std.Io;
 const net = std.Io.net;
-const http = @import("http.zig");
+const router = @import("router.zig");
 const config = @import("config.zig");
-const driving = @import("driving.zig");
-const delivery = @import("delivery.zig");
-const chess = @import("chess.zig");
-const puzzles = @import("puzzles.zig");
-const game = @import("game.zig");
-const chat = @import("chat.zig");
-const settings = @import("settings.zig");
-const tutorial = @import("tutorial.zig");
-const admin = @import("admin.zig");
-const admin_lynrummy = @import("admin_lynrummy.zig");
-const home = @import("home.zig");
-const gallery = @import("gallery.zig");
-const downloads = @import("downloads.zig");
-const resume_page = @import("resume_page.zig");
-const safari_download = @import("safari_download.zig");
-const login = @import("login.zig");
-const player = @import("player.zig");
-const brand = @import("brand.zig");
 const edge = @import("edge.zig");
-const users = @import("users.zig");
 const mem_meter = @import("mem_meter.zig");
 const Bus = @import("bus.zig").Bus;
 
@@ -146,121 +132,5 @@ fn handleConn(io: std.Io, alloc: std.mem.Allocator, bus: *Bus, stream: net.Strea
         else => return e,
     };
     req.head.keep_alive = false; // force `connection: close` without touching each handler
-    try route(&req, io, arena.allocator(), bus);
-}
-
-/// route picks the handler by path prefix, passing the remainder (the path with
-/// the prefix stripped, e.g. "/app.js" or "/sessions/3/...").
-fn route(req: *std.http.Server.Request, io: std.Io, alloc: std.mem.Allocator, bus: *Bus) !void {
-    const path = stripQuery(try http.target(req, alloc));
-
-    if (matchPrefix(path, "/driving")) |sub| {
-        try driving.handle(req, sub);
-    } else if (matchPrefix(path, "/delivery")) |sub| {
-        try delivery.handle(req, sub);
-    } else if (matchPrefix(path, "/chess")) |sub| {
-        // Public + ungated like /driving: little chess toys (Knight's Tour,
-        // Eight Queens) + /chess/code, the sources-as-exhibit page. The viewer
-        // is resolved for the index's top-bar chip, never gated.
-        try chess.handle(req, alloc, (try viewer(io, alloc, req)).name, sub);
-    } else if (matchPrefix(path, "/puzzles")) |sub| {
-        try puzzles.handle(req, io, alloc, sub);
-    } else if (matchPrefix(path, "/game")) |sub| {
-        try game.handle(req, io, alloc, sub);
-    } else if (matchPrefix(path, "/chat")) |sub| {
-        try chat.handle(req, io, alloc, bus, sub);
-    } else if (matchPrefix(path, "/channel")) |sub| {
-        try chat.handleChannel(req, io, alloc, bus, sub);
-    } else if (matchPrefix(path, "/settings")) |sub| {
-        try settings.handle(req, io, alloc, bus, sub);
-    } else if (matchPrefix(path, "/tutorial")) |sub| {
-        // Public + ungated: the Lyn Rummy beginner tutorial — its audience
-        // is people who haven't made an account yet.
-        try tutorial.handle(req, sub);
-    } else if (matchPrefix(path, "/gallery")) |sub| {
-        // Hidden-for-now: unlinked but public + ungated. Serves the stylized app
-        // images (free-standing content read from gallery/) for the home page.
-        try gallery.handle(req, io, alloc, sub);
-    } else if (matchPrefix(path, "/downloads")) |sub| {
-        // Public + ungated: downloadable artifacts (the native Linux Safari
-        // executable) read from downloads/, rsync'd on deploy — see downloads.zig.
-        try downloads.handle(req, io, alloc, sub);
-    } else if (matchPrefix(path, "/admin/lynrummy")) |sub| {
-        // The GAME roster. Checked before /admin, which would otherwise swallow
-        // it: matchPrefix takes the first arm that matches.
-        try admin_lynrummy.handle(req, io, alloc, sub);
-    } else if (matchPrefix(path, "/admin")) |sub| {
-        try admin.handle(req, io, alloc, sub);
-    } else if (std.mem.eql(u8, path, "/play") or std.mem.eql(u8, path, "/play/")) {
-        // The LOCAL identity: a name, no password, for /game and /puzzles. It
-        // reads its own small store and never touches the chat account store —
-        // see player.zig.
-        try player.handle(req, io, alloc);
-    } else if (matchPrefix(path, "/login")) |sub| {
-        try login.handle(req, io, alloc, bus, sub);
-    } else if (std.mem.eql(u8, path, "/logout")) {
-        try login.handleLogout(req, io, alloc);
-    } else if (matchPrefix(path, "/images")) |sub| {
-        try brand.handle(req, sub);
-    } else if (std.mem.eql(u8, path, "/safari_download") or std.mem.eql(u8, path, "/safari_download/")) {
-        // Public, read-only. The "Install locally" landing page for the Safari
-        // screensaver (server-owned markdown → download links) — see safari_download.zig.
-        try safari_download.handle(req, io, alloc);
-    } else if (std.mem.eql(u8, path, "/steve-resume")) {
-        // Public, read-only. A single server-owned markdown page (pages/steve-resume.md)
-        // rendered through the trusted markdown pipeline — no viewer resolution, no gate.
-        try resume_page.handle(req, io, alloc);
-    } else if (std.mem.eql(u8, path, "/steve-resume.pdf")) {
-        // The pre-generated static PDF of the same page (ops/build_resume_pdf).
-        try resume_page.handlePdf(req, io, alloc);
-    } else if (std.mem.eql(u8, path, "/version")) {
-        try home.handleVersion(req, alloc);
-    } else if (std.mem.eql(u8, path, "/debug/mem")) {
-        // The leak smoke detector: live bytes/allocs on the base allocator. The
-        // stress harness hammers an endpoint and watches this climb (leak) or
-        // plateau (legit cache). Public + ungated on purpose — it leaks no data,
-        // only aggregate counts.
-        try home.handleDebugMem(req, alloc);
-    } else if (std.mem.eql(u8, path, "/")) {
-        // The site root: the launch pad. TOTALLY_PUBLIC, so resolve the viewer
-        // for the top bar but never gate. The explicit-"/" check plus the
-        // notFound fallthrough below means any non-"/" path 404s.
-        const v = try viewer(io, alloc, req);
-        try home.handleHome(req, io, alloc, v.name, v.is_admin, path);
-    } else {
-        try http.notFound(req);
-    }
-}
-
-/// Viewer is what a PUBLIC page needs for its top bar: a name to print, and
-/// whether this is the host. EITHER identity can supply the name — a chat member
-/// through the account store, a Lyn Rummy player through the local one — and a
-/// page that only prints a chip should not have to know which it got. Anonymous
-/// is the empty name, which those pages already render as a Log in link.
-const Viewer = struct { name: []const u8, is_admin: bool };
-
-fn viewer(io: std.Io, alloc: std.mem.Allocator, req: *std.http.Server.Request) !Viewer {
-    const uid = try users.currentUserID(io, alloc, req);
-    if (uid.len != 0) return .{
-        .name = try users.getUserName(io, alloc, uid),
-        // The host is uid "1" (see admin.zig), so this does too.
-        .is_admin = std.mem.eql(u8, uid, "1"),
-    };
-    return .{ .name = (try player.current(io, alloc, req)).name, .is_admin = false };
-}
-
-/// matchPrefix returns the path tail after `prefix` when `path` is exactly
-/// `prefix` or `prefix` followed by '/'. Returns null otherwise — so "/drivingX"
-/// does NOT match "/driving". The tail keeps its leading '/' (or is empty).
-fn matchPrefix(path: []const u8, prefix: []const u8) ?[]const u8 {
-    if (!std.mem.startsWith(u8, path, prefix)) return null;
-    const tail = path[prefix.len..];
-    if (tail.len == 0 or tail[0] == '/') return tail;
-    return null;
-}
-
-/// stripQuery returns the target up to the first '?' (e.g. /driving/app.js?v=…).
-fn stripQuery(target: []const u8) []const u8 {
-    if (std.mem.indexOfScalar(u8, target, '?')) |q| return target[0..q];
-    return target;
+    try router.route(&req, io, arena.allocator(), bus);
 }

@@ -148,7 +148,22 @@ pub fn build(b: *std.Build) void {
     // must be in this list for its `test {}` blocks to actually run under the
     // gate (imports alone don't enroll a file's tests). Pure-logic modules tested
     // in isolation, so no embedded assets are needed.
+    // router.zig's tests call the REAL route table, so they reach handlers that
+    // @embedFile assets and read build_options. Its test module therefore needs
+    // the same wiring `root` got above — a plain module (the loop below) would
+    // fail to compile on the first @embedFile.
+    const router_tests = b.addTest(.{ .root_module = b.createModule(.{
+        .root_source_file = b.path("src/router.zig"),
+        .target = target,
+        .optimize = optimize,
+    }) });
+    router_tests.root_module.addImport("build_options", build_opts.createModule());
+    for (assets) |a| {
+        router_tests.root_module.addAnonymousImport(a.name, .{ .root_source_file = b.path(a.path) });
+    }
+
     const test_step = b.step("test", "Run unit tests");
+    test_step.dependOn(&b.addRunArtifact(router_tests).step);
     for ([_][]const u8{ "src/auth.zig", "src/users.zig", "src/names.zig", "src/player.zig", "src/counter.zig", "src/admin_ui.zig", "src/markdown_fence.zig", "src/recent_feed.zig", "src/code_store.zig", "src/chat_upload.zig", "src/markdown.zig", "src/markdown_media.zig", "src/bus.zig", "src/chat_sse.zig", "src/docs_store.zig", "src/reading_list.zig", "src/chat_store.zig", "src/reactions.zig", "src/mem_meter.zig", "src/stress.zig" }) |path| {
         const unit = b.addTest(.{ .root_module = b.createModule(.{
             .root_source_file = b.path(path),
