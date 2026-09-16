@@ -13,7 +13,7 @@ these exact sources at [/chess/code](https://lynrummy.com/chess/code)
 — embedded from the same files the wasm modules are built from, so the
 exhibit can't drift from what runs. The home-page row's `essay:` link
 points there. The companion blog essay is **"Watching the Textbook
-Think"** (`blog/posts/2026-07-12-1338-watching-the-textbook-think.md`).
+Think"** (written for the blog, retired with it).
 
 ## The event tape
 

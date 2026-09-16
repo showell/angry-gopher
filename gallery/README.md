@@ -7,7 +7,7 @@ one-time render or hand-authored asset, committed here as content.
 Served by `zig-server/src/gallery.zig` at **`/gallery`** — a hidden-for-now
 preview surface (unlinked, but public): one card per app, in home-page order,
 showing the image if present or a `pending` placeholder otherwise. Images are read
-from this directory at request time and rsync'd by `ops/deploy` (like `blog/posts/`
+from this directory at request time and rsync'd by `ops/deploy` (like `pages/`
 and `pages/`), not embedded in the binary.
 
 Filenames are `<slug>.png` (or `.svg`), where the slugs match the manifest in

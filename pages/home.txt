@@ -6,7 +6,6 @@ cta: Take a Drive
 lang: Zig (WASM) + JavaScript
 tech: a Zig core compiled to WebAssembly computes the 3D geometry; a tiny JS blitter just fills the polygons it emits
 code: https://github.com/showell/angry-gopher/tree/master/games/driving/wasm
-essay: /blog/you-cant-freeze-a-sunset
 install: /safari_download/
 A first-person motorcycle ride down a winding road — and it steers itself. Hit space and watch it lean through the turns, or step the ride frame by frame. No goal, no clock — just the road.
 
@@ -16,7 +15,6 @@ cta: Be social
 lang: JavaScript, Zig
 tech: live updates over Server-Sent Events; messages persisted to the file system, no database
 code: https://github.com/showell/angry-gopher/tree/master/chat
-essay: /blog/afford-your-own-markdown-dialect
 Real-time chat, docs, and channels — the live surface Steve, Claude, and friends use every day. A multi-page app that's still mostly rendered on the front end, all served from one binary.
 
 ## Seattle Delivery -> /delivery
@@ -25,17 +23,7 @@ cta: Ship some Totes
 lang: TypeScript
 tech: Clarke-Wright savings heuristic + local search over an integer, trig-free cost
 code: https://github.com/showell/angry-gopher/tree/master/delivery
-essay: /blog/the-ghost-in-the-cost-function
 Eight trucks fan out across a deliberately not-to-scale Seattle, delivering a hundred orders a day. The route-planning is a hand-built Clarke-Wright solver — watch it think, or shuffle up a new shift.
-
-## Blog -> /blog
-image: /gallery/blog.svg
-cta: See how we build
-lang: Zig
-tech: a hand-written markdown engine renders posts from repo files on the fly
-code: https://github.com/showell/angry-gopher/tree/master/blog
-essay: /blog/the-ghost-in-the-byline
-Notes from building this site — one zig binary, written with Claude. Essays on the code, the algorithms, and what we learned along the way.
 
 ## Play Lyn Rummy -> /game
 image: /gallery/lynrummy.svg
@@ -44,7 +32,6 @@ lang: Zig (WASM) + Elm + TypeScript
 tech: a rules DSL sent over the wire — a zig solver picks the plays, an Elm UI referees and renders them
 code: https://github.com/showell/angry-gopher/tree/master/games/lynrummy
 tutorial: /tutorial
-essay: /blog/lyn-never-wrote-it-down
 Two-player rummy with a real referee. Build runs and sets against an agent that actually knows the rules, and complete your turn when the board looks right.
 
 ## Lyn Rummy Puzzles -> /puzzles
@@ -53,7 +40,6 @@ cta: Fix the board
 lang: Zig (WASM) + Elm + TypeScript
 tech: shares the game's solver and rules; deterministic undo and move-by-move replay
 code: https://github.com/showell/angry-gopher/tree/master/games/lynrummy
-essay: /blog/two-places-at-once
 A single board, mid-game. Drag stacks to merge or split your way to a clean meld layout. Solo, no opponent — undo is free, and Replay walks back your moves.
 
 ## Chess Toys -> /chess

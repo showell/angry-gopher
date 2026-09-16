@@ -413,7 +413,6 @@ export const HUD_TOOLTIPS: { x: number; y: number; w: number; h: number; text: s
 // hit-rect top, text baseline sits at y + 13.
 export const HUD_LINKS = [
   { label: "Home", href: "/", x: 24, y: 108, w: 46, h: 18 },
-  { label: "Blog", href: "/blog/the-ghost-in-the-cost-function", x: 24, y: 127, w: 46, h: 18 },
 ];
 
 function drawHud(ctx: CanvasRenderingContext2D, shift: number): void {
