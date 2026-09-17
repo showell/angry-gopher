@@ -55,7 +55,7 @@ var scenarios = [_]Scenario{
     .{ .label = "/", .path = "/" },
     .{ .label = "/version", .path = "/version" },
     .{ .label = "/driving", .path = "/driving" },
-    .{ .label = "/driving/app.js", .path = "/driving/app.js" },
+    .{ .label = "/driving/blitter.js", .path = "/driving/blitter.js" },
     .{ .label = "/puzzles", .path = "/puzzles" },
     .{ .label = "/game", .path = "/game" },
     .{ .label = "/play", .path = "/play" },

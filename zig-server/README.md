@@ -28,13 +28,13 @@ ops/start                        # build bundles + zig + run on :9001
 ops/build_driving && cd zig-server && zig build run
 ```
 
-Assets that live elsewhere in the repo (the driving bundle) are baked in via
+Assets that live elsewhere in the repo (Safari's wasm and blitter) are baked in via
 `build.zig` — where cross-package embedding is wired up: `@embedFile` can't
 reach outside its own package dir, so each external asset is declared there as a
 named import.
 
 ```
-ops/build_driving            # from repo root: builds games/driving/app.js (esbuild)
+ops/build_safari_wasm        # from repo root: builds games/driving/safari.wasm
 cd zig-server && zig build run   # serves /driving on http://localhost:9001
 ```
 
