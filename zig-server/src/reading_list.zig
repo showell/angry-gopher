@@ -141,9 +141,10 @@ fn isIdChar(c: u8) bool {
 // handful of users); an entry's arena is freed wholesale on each refresh.
 //
 // The base allocator is whatever the HOST named at startup — page_allocator on
-// Linux, a fixed heap on bare metal. On bare metal mtime is always zero (FAT16
-// carries no nanoseconds), so this cache parses once and then trusts itself;
-// that is correct while documents arrive with the disk image.
+// Linux, a fixed heap on bare metal. A host whose filesystem has coarser
+// timestamps than Linux's still works here: bare metal's FAT16 carries whole
+// even seconds, which moves on a real edit, and the comparison is "advanced
+// past", not "differs".
 
 const Entry = struct {
     mtime_ns: i96,
