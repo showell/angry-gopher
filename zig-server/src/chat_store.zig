@@ -173,7 +173,6 @@ pub fn appendMessage(io: Io, alloc: Alloc, bus: *Bus, meta: ConvMeta, conv_dir: 
     // The size check is the protection, not the ordering.
     writeCount(io, alloc, conv_dir, sid, index + 1, new_size, .{
         .offset = new_size - stored.len,
-        .date = at,
         .uid = from_id,
     });
 
@@ -470,13 +469,13 @@ pub const LastMessage = struct {
     markdown: []const u8,
     date: []const u8,
     uid: []const u8,
-    /// Which message of the session this is — the tiebreaker when two sessions
-    /// carry the same second.
+    /// Which message of the session this is, counting from one.
     number: usize,
 };
 
 /// lastMessage answers a session's last message **without a stat and without
-/// reading the transcript**, when the sidecar can say where it begins.
+/// reading the whole transcript**, when the sidecar can say where it begins:
+/// one small read of the sidecar, one bounded read of the tail.
 ///
 /// **NO STAT.** /chat/recent used to order by file mtime, which meant statting
 /// every session; the message carries its own date, so neither is needed. The
@@ -486,31 +485,53 @@ pub const LastMessage = struct {
 /// misnumbered message. That is why the count checks the size and this does
 /// not.
 ///
-/// It is not trusted blindly: the block at the offset must be the message the
-/// sidecar says it is. Anything else — a hand-edited transcript, a sidecar from
-/// another file — falls back to reading the whole thing.
+/// It is not trusted blindly: the last block in the window must be a message of
+/// this session, numbered at least what the sidecar says. Anything else — a
+/// hand-edited transcript, a sidecar from another file, a message too long for
+/// the window — falls back to reading the whole thing.
 pub fn lastMessage(io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8) !?LastMessage {
     if (readCount(io, alloc, conv_dir, sid)) |c| {
-        if (c.last) |l| if (c.count > 0 and l.offset < c.size) {
+        if (c.last) |l| if (c.count > 0) {
             const path = try sessionMdPath(alloc, conv_dir, sid);
-            const tail = try alloc.alloc(u8, c.size - l.offset);
+            const buf = try alloc.alloc(u8, tail_window);
             var f = Io.Dir.cwd().openFile(io, path, .{}) catch return fallbackLast(io, alloc, conv_dir, sid);
             defer f.close(io);
-            const n = f.readPositionalAll(io, tail, l.offset) catch return fallbackLast(io, alloc, conv_dir, sid);
-            const msgs = try decodeChatFile(alloc, tail[0..n]);
-            if (msgs.len > 0) {
-                const want = try std.fmt.allocPrint(alloc, "{s}_{d}", .{ sid, c.count });
-                const got = msgs[msgs.len - 1];
-                if (std.mem.eql(u8, got.id, want)) return .{
-                    .markdown = got.markdown,
-                    .date = l.date,
-                    .uid = l.uid,
-                    .number = c.count,
-                };
+            const n = f.readPositionalAll(io, buf, l.offset) catch return fallbackLast(io, alloc, conv_dir, sid);
+            // **A WINDOW THAT CAME BACK FULL MAY HAVE CUT A MESSAGE IN HALF**,
+            // and nothing below could tell. Read it the slow way instead.
+            if (n < tail_window) {
+                _ = alloc.resize(buf, n);
+                const msgs = try decodeChatFile(alloc, buf[0..n]);
+                if (msgs.len > 0) {
+                    const got = msgs[msgs.len - 1];
+                    // **AT LEAST what the sidecar says, not exactly.** A crash
+                    // or a failed write between appending a message and
+                    // recording it leaves an offset one message behind — and
+                    // it would VERIFY, because the count is one behind too.
+                    // Reading to the end of the file instead of to a recorded
+                    // size means the newer message is right there, so the
+                    // answer is the true last one and the record repairs
+                    // itself on the next send.
+                    if (numberIn(got.id, sid)) |number| if (number >= c.count) return .{
+                        .markdown = got.markdown,
+                        .date = got.date,
+                        .uid = if (number == c.count) l.uid else lastAuthorUid(io, alloc, conv_dir, sid),
+                        .number = number,
+                    };
+                }
             }
         };
     }
     return fallbackLast(io, alloc, conv_dir, sid);
+}
+
+/// The N of a `<sid>_<N>` message id, or null when the id is not this
+/// session's — which is what a sidecar pointing at the wrong place looks like.
+fn numberIn(id: []const u8, sid: []const u8) ?usize {
+    if (!std.mem.startsWith(u8, id, sid)) return null;
+    const rest = id[sid.len..];
+    if (rest.len < 2 or rest[0] != '_') return null;
+    return std.fmt.parseInt(usize, rest[1..], 10) catch null;
 }
 
 /// The whole transcript, decoded, for a session whose sidecar cannot say. What
@@ -534,20 +555,27 @@ fn fallbackLast(io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8) !?L
 /// Answers how many it wrote.
 pub fn backfillSidecars(io: Io, alloc: Alloc, conv_dirs: []const []const u8) usize {
     var wrote: usize = 0;
+    // **ONE SESSION'S TRANSCRIPT AT A TIME.** The first boot after this arrives
+    // reads every transcript there is; holding them all at once would make the
+    // pass cost the whole corpus, several times over, on the one host with no
+    // operating system to ask for more.
+    var per_session = std.heap.ArenaAllocator.init(alloc);
+    defer per_session.deinit();
     for (conv_dirs) |dir| {
         const sids = listSessions(io, alloc, dir) catch continue;
         for (sids) |sid| {
-            if (readCount(io, alloc, dir, sid)) |c| if (c.last != null) continue;
-            const raw = (rawSession(io, alloc, dir, sid) catch continue) orelse continue;
-            const msgs = decodeChatFile(alloc, raw) catch continue;
+            _ = per_session.reset(.retain_capacity);
+            const a = per_session.allocator();
+            if (readCount(io, a, dir, sid)) |c| if (c.last != null) continue;
+            const raw = (rawSession(io, a, dir, sid) catch continue) orelse continue;
+            const msgs = decodeChatFile(a, raw) catch continue;
             if (msgs.len == 0) continue;
             // The last block begins at the last separator; a lone message
             // begins at the start of the file.
             const offset = if (std.mem.lastIndexOf(u8, raw, sep)) |at| at else 0;
-            writeCount(io, alloc, dir, sid, msgs.len, raw.len, .{
+            writeCount(io, a, dir, sid, msgs.len, raw.len, .{
                 .offset = offset,
-                .date = msgs[msgs.len - 1].date,
-                .uid = lastAuthorUid(io, alloc, dir, sid),
+                .uid = lastAuthorUid(io, a, dir, sid),
             });
             wrote += 1;
         }
@@ -565,6 +593,8 @@ pub fn listConvDirs(io: Io, alloc: Alloc) ![][]const u8 {
     var it = root.iterate();
     while (try it.next(io)) |entry| {
         if (entry.kind != .directory) continue;
+        // Not a conversation: per-uid state (last-conv, last-sessions) lives here.
+        if (std.mem.eql(u8, entry.name, "users")) continue;
         if (std.mem.eql(u8, entry.name, "channels")) {
             const channels = try std.fs.path.join(alloc, &.{ chat_root, "channels" });
             var dir = Io.Dir.cwd().openDir(io, channels, .{ .iterate = true }) catch continue;
@@ -633,13 +663,25 @@ fn messageCount(io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8) !us
 /// second line of the sidecar, and everything /chat/recent needs to list a
 /// session without reading its transcript.
 ///
-/// **THE OFFSET, NOT THE WORDS.** Keeping the text here would be a second copy
-/// of it on disk, and a rendered excerpt would be a copy that goes stale the
-/// day the excerpt is rendered differently. The offset points at the last
-/// block, which is read positionally and decoded by the one decoder — so the
-/// words live in exactly one place and the cache can be wrong about nothing
-/// but where they begin, which `lastMessage` checks.
-const Last = struct { offset: u64, date: []const u8, uid: []const u8 };
+/// **THE OFFSET, NOT THE WORDS, AND NOT THE DATE EITHER.** Keeping the text
+/// here would be a second copy of it on disk, and a rendered excerpt would be a
+/// copy that goes stale the day excerpts are rendered differently. The offset
+/// points at the last block, which is read positionally and decoded by the one
+/// decoder — so the words, and the date they carry, live in exactly one place,
+/// and the cache can be wrong about nothing but where to start reading.
+///
+/// The uid is here because the transcript does not hold one: a block records
+/// the author's NAME, and "is this the viewer" is a question about the uid.
+const Last = struct { offset: u64, uid: []const u8 };
+
+/// A uid that is not known is written as this, because a field left empty would
+/// make the line one field short and the whole record unreadable — which is
+/// exactly the case the backfill exists for.
+const no_uid = "-";
+
+/// How much of the tail is read looking for the last block. A message longer
+/// than this is served the old way, by reading the whole transcript.
+const tail_window = 64 * 1024;
 
 const Count = struct { count: usize, size: u64, last: ?Last = null };
 
@@ -665,10 +707,9 @@ fn readCount(io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8) ?Count
 fn parseLast(line: []const u8) ?Last {
     var it = std.mem.tokenizeScalar(u8, line, ' ');
     const offset = std.fmt.parseInt(u64, it.next() orelse return null, 10) catch return null;
-    const date = it.next() orelse return null;
     const uid = it.next() orelse return null;
     if (it.next() != null) return null;
-    return .{ .offset = offset, .date = date, .uid = uid };
+    return .{ .offset = offset, .uid = if (std.mem.eql(u8, uid, no_uid)) "" else uid };
 }
 
 /// writeCount records the count and, when there is one, where the last message
@@ -678,7 +719,9 @@ fn writeCount(io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8, count
     const path = countPath(alloc, conv_dir, sid) catch return;
     const head = std.fmt.allocPrint(alloc, "{d} {d}\n", .{ count, size }) catch return;
     const text = if (last) |l|
-        std.fmt.allocPrint(alloc, "{s}{d} {s} {s}\n", .{ head, l.offset, l.date, l.uid }) catch return
+        std.fmt.allocPrint(alloc, "{s}{d} {s}\n", .{
+            head, l.offset, if (l.uid.len > 0) l.uid else no_uid,
+        }) catch return
     else
         head;
     Io.Dir.cwd().writeFile(io, .{ .sub_path = path, .data = text }) catch {};
@@ -1015,11 +1058,10 @@ test "count: every send records the count and the transcript size it was taken a
     const text = (try f.sidecar()).?;
     var lines = std.mem.splitScalar(u8, text, '\n');
     try testing.expectEqualStrings(try std.fmt.allocPrint(a, "5 {d}", .{size}), lines.next().?);
-    // And where the last message begins, when it was sent, and by whom.
+    // And where the last message begins, and who sent it.
     const last = parseLast(lines.next().?).?;
     try testing.expect(last.offset < size);
     try testing.expectEqualStrings("1", last.uid);
-    try testing.expect(timefmt.unixFromRFC3339(last.date) != null);
     try testing.expectEqual(@as(usize, 5), try f.decoded());
 }
 
@@ -1072,7 +1114,7 @@ test "count: a sidecar that does not parse is a stale one" {
     try f.init(threaded.io());
     defer f.deinit();
     for (0..2) |_| _ = try f.send("x");
-    for ([_][]const u8{ "", "banana", "2", "2 x", "2 10 extra", "-1 10", "2 10\n0 x" }) |junk| {
+    for ([_][]const u8{ "", "banana", "2", "2 x", "2 10 extra", "-1 10", "2 10\n0" }) |junk| {
         try f.setSidecar(junk);
         const before = try f.decoded();
         const m = try f.send("x");
@@ -1180,8 +1222,8 @@ test "last message: a sidecar pointing at the wrong place is not believed" {
     // An offset into the middle of a block, and one that claims a message the
     // session does not have.
     for ([_][]const u8{
-        try std.fmt.allocPrint(a, "2 {d}\n7 2026-01-01T00:00:00Z 1\n", .{size}),
-        try std.fmt.allocPrint(a, "9 {d}\n0 2026-01-01T00:00:00Z 1\n", .{size}),
+        try std.fmt.allocPrint(a, "2 {d}\n7 1\n", .{size}), // into the middle of a block
+        try std.fmt.allocPrint(a, "9 {d}\n0 1\n", .{size}), // a message the session does not have
     }) |junk| {
         try f.setSidecar(junk);
         const got = (try lastMessage(f.io, a, f.dir, "topic")).?;
@@ -1266,4 +1308,96 @@ test "backfill: one pass reaches DMs and channels alike" {
     const got = (try lastMessage(f.io, a, chan, "topic")).?;
     try testing.expectEqualStrings("in a channel", got.markdown);
     try testing.expectEqualStrings("2026-06-19T14:34:07Z", got.date);
+}
+
+test "backfill: the record it writes can be read back" {
+    // **THE ASSERTION THAT WAS MISSING.** A session with no `.lastauthor` has
+    // no uid to record, and a field left empty made the line one field short —
+    // so the record was unreadable, `lastMessage` quietly read the whole
+    // transcript instead, and every test still passed. What the backfill
+    // writes has to PARSE, not merely lead to the right answer.
+    var threaded = std.Io.Threaded.init(testing.allocator, .{});
+    defer threaded.deinit();
+    var f: CountFixture = undefined;
+    try f.init(threaded.io());
+    defer f.deinit();
+    const a = f.arena.allocator();
+    const dir = try channelConvDir(a, "nameless");
+    const sessions = try std.fs.path.join(a, &.{ dir, "sessions" });
+    try Io.Dir.cwd().createDirPath(f.io, sessions);
+    try Io.Dir.cwd().writeFile(f.io, .{
+        .sub_path = try std.fs.path.join(a, &.{ sessions, "topic.md" }),
+        .data = "MSG_topic_1\nfrom: Nobody\ndate: 2026-06-19T14:34:07Z\n\nwho said this",
+    });
+
+    const dirs = [_][]const u8{dir};
+    try testing.expectEqual(@as(usize, 1), backfillSidecars(f.io, a, &dirs));
+    const c = readCount(f.io, a, dir, "topic").?;
+    try testing.expect(c.last != null); // it parses
+    try testing.expectEqualStrings("", c.last.?.uid); // and says it does not know
+    // Which makes the pass idempotent: nothing left to do next boot.
+    try testing.expectEqual(@as(usize, 0), backfillSidecars(f.io, a, &dirs));
+
+    const got = (try lastMessage(f.io, a, dir, "topic")).?;
+    try testing.expectEqualStrings("who said this", got.markdown);
+    try testing.expectEqualStrings("2026-06-19T14:34:07Z", got.date);
+}
+
+test "last message: a record left one behind still answers with the true last message" {
+    // A crash, or a sidecar write that failed, between appending a message and
+    // recording it: the count and the offset are BOTH one behind, so the block
+    // at the offset is exactly the message the record claims — it verifies,
+    // and a reader that stopped there would show the previous message, name
+    // the previous author, and sort the row by the previous date, until
+    // somebody posted again.
+    var threaded = std.Io.Threaded.init(testing.allocator, .{});
+    defer threaded.deinit();
+    var f: CountFixture = undefined;
+    try f.init(threaded.io());
+    defer f.deinit();
+    const a = f.arena.allocator();
+    _ = try f.send("the first");
+    const after_first = try f.transcriptSize();
+    _ = try f.send("the second");
+    // The sidecar as it stood before the second message was recorded.
+    try f.setSidecar(try std.fmt.allocPrint(a, "1 {d}\n0 9\n", .{after_first}));
+
+    const got = (try lastMessage(f.io, a, f.dir, "topic")).?;
+    try testing.expectEqualStrings("the second", got.markdown);
+    try testing.expectEqual(@as(usize, 2), got.number);
+    // The stale uid is not used: `.lastauthor` was written for the new message.
+    try testing.expectEqualStrings("1", got.uid);
+}
+
+test "last message: one too long for the window is read the slow way, and is right" {
+    var threaded = std.Io.Threaded.init(testing.allocator, .{});
+    defer threaded.deinit();
+    var f: CountFixture = undefined;
+    try f.init(threaded.io());
+    defer f.deinit();
+    const a = f.arena.allocator();
+    _ = try f.send("small");
+    const huge = try a.alloc(u8, tail_window + 4096);
+    for (huge, 0..) |*b, i| b.* = 'a' + @as(u8, @intCast(i % 26));
+    _ = try f.send(huge);
+
+    const got = (try lastMessage(f.io, a, f.dir, "topic")).?;
+    try testing.expectEqual(huge.len, got.markdown.len);
+    try testing.expectEqualStrings(huge, got.markdown);
+    try testing.expectEqual(@as(usize, 2), got.number);
+}
+
+test "last message: a sidecar claiming a size far past the file does not ask for that much" {
+    // The size field is never checked against the file — by design, since
+    // nothing stats. It must therefore not be what a read is sized by.
+    var threaded = std.Io.Threaded.init(testing.allocator, .{});
+    defer threaded.deinit();
+    var f: CountFixture = undefined;
+    try f.init(threaded.io());
+    defer f.deinit();
+    const a = f.arena.allocator();
+    _ = try f.send("modest");
+    try f.setSidecar("1 999999999999\n0 1\n");
+    const got = (try lastMessage(f.io, a, f.dir, "topic")).?;
+    try testing.expectEqualStrings("modest", got.markdown);
 }

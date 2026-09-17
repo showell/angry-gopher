@@ -168,24 +168,21 @@ fn gatherConvSessions(io: Io, alloc: Alloc, items: *std.ArrayList(RecentItem), d
     for (try store.listSessions(io, alloc, dir)) |sid| {
         const url = try std.fmt.allocPrint(alloc, "{s}/{s}", .{ base, sid });
         const last = (try store.lastMessage(io, alloc, dir, sid)) orelse {
-            // A session nobody has written to yet: it still belongs on the
-            // page, and the file's own time is all there is to order it by.
-            const path = try store.sessionMdPath(alloc, dir, sid);
-            const st = Io.Dir.cwd().statFile(io, path, .{}) catch continue;
-            try items.append(alloc, .{
-                .kind = .chat,
-                .at_ns = st.mtime.nanoseconds,
-                .at = try timefmt.formatRFC3339UTC(alloc, secsOf(st.mtime.nanoseconds)),
-                .url = url,
-                .where = where,
-                .topic = sid,
-                .dm = dm,
-            });
+            // A session nobody has written to yet: it still belongs on the page.
+            try byFileTime(io, alloc, items, dir, sid, url, where, dm);
+            continue;
+        };
+        const at = timefmt.unixFromRFC3339(last.date) orelse {
+            // A message whose date header is missing or malformed — a
+            // transcript written by something other than this server. Ordering
+            // it at the epoch would bury it, and shipping its empty date to
+            // the client renders as "NaNd", so it falls back to the file.
+            try byFileTime(io, alloc, items, dir, sid, url, where, dm);
             continue;
         };
         try items.append(alloc, .{
             .kind = .chat,
-            .at_ns = @as(i96, timefmt.unixFromRFC3339(last.date) orelse 0) * std.time.ns_per_s,
+            .at_ns = @as(i96, at) * std.time.ns_per_s,
             .at = last.date,
             .who = try authorName(io, alloc, dir, sid, viewer, last.uid),
             .url = url,
@@ -210,6 +207,23 @@ fn newestFirst(_: void, a: RecentItem, b: RecentItem) bool {
     const ka = if (a.url.len > 0) a.url else a.slug;
     const kb = if (b.url.len > 0) b.url else b.slug;
     return std.mem.lessThan(u8, ka, kb);
+}
+
+/// byFileTime appends a row ordered by the session file's own mtime, with no
+/// excerpt: for a session with no messages, and for one whose last message
+/// carries no date this server can read.
+fn byFileTime(io: Io, alloc: Alloc, items: *std.ArrayList(RecentItem), dir: []const u8, sid: []const u8, url: []const u8, where: []const u8, dm: bool) !void {
+    const path = try store.sessionMdPath(alloc, dir, sid);
+    const st = Io.Dir.cwd().statFile(io, path, .{}) catch return;
+    try items.append(alloc, .{
+        .kind = .chat,
+        .at_ns = st.mtime.nanoseconds,
+        .at = try timefmt.formatRFC3339UTC(alloc, secsOf(st.mtime.nanoseconds)),
+        .url = url,
+        .where = where,
+        .topic = sid,
+        .dm = dm,
+    });
 }
 
 /// authorName renders the most-recent author's display name, "You" when that is

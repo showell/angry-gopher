@@ -11,7 +11,7 @@ pub const Civil = struct { year: i64, month: u32, day: u32 };
 /// Hinnant's algorithm; valid across the full range).
 pub fn civilFromDays(days: i64) Civil {
     const z = days + 719468;
-    const era = @divFloor(if (z >= 0) z else z - 146096, 146097);
+    const era = @divFloor(z, 146097);
     const doe = z - era * 146097; // [0, 146096]
     const yoe = @divFloor(doe - @divFloor(doe, 1460) + @divFloor(doe, 36524) - @divFloor(doe, 146096), 365); // [0,399]
     const y = yoe + era * 400;
@@ -47,7 +47,7 @@ pub fn formatRFC3339UTC(alloc: std.mem.Allocator, unix_secs: i64) ![]u8 {
 /// algorithm, inverted).
 pub fn daysFromCivil(year: i64, month: u32, day: u32) i64 {
     const y = year - @as(i64, if (month <= 2) 1 else 0);
-    const era = @divFloor(if (y >= 0) y else y - 399, 400);
+    const era = @divFloor(y, 400);
     const yoe = y - era * 400; // [0, 399]
     const m: i64 = month;
     const mp = if (m > 2) m - 3 else m + 9; // [0, 11]
@@ -92,6 +92,24 @@ test "a formatted timestamp reads back as the seconds it was made from" {
         defer a.free(text);
         try testing.expectEqual(secs, unixFromRFC3339(text).?);
     }
+}
+
+test "the two conversions are inverses, including before year one" {
+    // @divFloor already floors; the `- 146096` and `- 399` these two carried
+    // were the adjustment a TRUNCATING divide needs, so the negative era was
+    // floored twice and every day from 0000-02-29 back was off by one.
+    var days: i64 = -800000;
+    while (days < 800000) : (days += 7) {
+        const c = civilFromDays(days);
+        try testing.expectEqual(days, daysFromCivil(c.year, c.month, c.day));
+    }
+    // Year zero was a leap year, and 0000-03-01 is day -719468 by definition
+    // of the epoch offset — so the day before it is the 29th.
+    const leap = civilFromDays(-719469);
+    try testing.expectEqual(@as(i64, 0), leap.year);
+    try testing.expectEqual(@as(u32, 2), leap.month);
+    try testing.expectEqual(@as(u32, 29), leap.day);
+    try testing.expectEqual(@as(i64, -719468), daysFromCivil(0, 3, 1));
 }
 
 test "a leap day reads back" {
