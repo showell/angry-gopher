@@ -55,8 +55,8 @@ const users = @import("users.zig");
 //                               through. Each request gets a Bus handle on it.
 //   4. after route() returns,   if the request's Bus holds a kept stream, serve
 //      serve what it kept       it: `streams.serveKept` blocks until the client
-//                               goes away; `streams.drainKept` hands over what
-//                               has arrived, for a host with one loop. Either
+//                               goes away; `streams.nextFrame` hands over the
+//                               next event, for a host with one loop. Either
 //                               way `streams.drop` ends it.
 //
 // server.zig does these for Linux, via config.zig. gopher-metal's kernel does
