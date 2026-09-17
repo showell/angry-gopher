@@ -6,8 +6,8 @@
 //!   <sid>/<sid>.reactions.jsonl   the reaction sidecar, when anyone has reacted
 //!   <sid>/uploads/<file>   every image in the topic's .uploads sidecar
 //!
-//! The .lastauthor companion is deliberately omitted (internal bookkeeping, not
-//! the human transcript). A topic is small, so the whole bundle is built in
+//! The .lastauthor and .count companions are deliberately omitted (internal
+//! bookkeeping, not the human transcript). A topic is small, so the whole bundle is built in
 //! memory then gzipped — no streaming-response machinery. The tar headers are
 //! hand-rolled ustar (zig std has no tar writer).
 

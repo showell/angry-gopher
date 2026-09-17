@@ -5,6 +5,7 @@
 //!
 //! On-disk shape:
 //!   {chat_root}/<a>_<b>/sessions/<sid>.md              — a 1:1 DM transcript
+//!   {chat_root}/<a>_<b>/sessions/<sid>.count           — its message count (a cache)
 //!   {chat_root}/channels/<name>/sessions/<sid>.md      — a channel topic
 //!   {chat_root}/channels/<name>.channel                — channel member uids
 //!
@@ -159,16 +160,18 @@ pub fn appendMessage(io: Io, alloc: Alloc, bus: *Bus, meta: ConvMeta, conv_dir: 
     chat_mu.lockUncancelable(io);
     defer chat_mu.unlock(io);
 
-    const raw = Io.Dir.cwd().readFileAlloc(io, path, alloc, .unlimited) catch "";
-    const existing = try decodeChatFile(alloc, raw);
-    const index = existing.len;
+    const index = try messageCount(io, alloc, conv_dir, sid);
 
     const id = try std.fmt.allocPrint(alloc, "{s}_{d}", .{ sid, index + 1 });
     const at = try timefmt.formatRFC3339UTC(alloc, nowUnix(io));
     const msg = ChatMessage{ .id = id, .from = from_name, .date = at, .markdown = markdown };
 
     const stored = try chatStoredForm(alloc, index, msg);
-    try appendRawBytes(io, path, stored);
+    const new_size = try appendRawBytes(io, path, stored);
+    // A crash between the append and this leaves a count whose size is not the
+    // transcript's — in either order — so messageCount refuses it and recounts.
+    // The size check is the protection, not the ordering.
+    writeCount(io, alloc, conv_dir, sid, index + 1, new_size);
 
     // Last-author companion (best-effort).
     const la = try std.fs.path.join(alloc, &.{ conv_dir, "sessions", try std.fmt.allocPrint(alloc, "{s}.lastauthor", .{sid}) });
@@ -214,14 +217,12 @@ pub fn appendReaction(io: Io, alloc: Alloc, bus: *Bus, conv_dir: []const u8, con
     chat_mu.lockUncancelable(io);
     defer chat_mu.unlock(io);
 
-    const md_path = try sessionMdPath(alloc, conv_dir, sid);
-    const raw = Io.Dir.cwd().readFileAlloc(io, md_path, alloc, .unlimited) catch "";
-    const count = (try decodeChatFile(alloc, raw)).len;
+    const count = try messageCount(io, alloc, conv_dir, sid);
     if (msg_num == 0 or msg_num > count) return error.NoSuchMessage;
 
     const at = try timefmt.formatRFC3339UTC(alloc, nowUnix(io));
     const line = try reactionLine(alloc, msg_num, uid, from_name, emoji, on, at);
-    try appendRawBytes(io, try reactionsPath(alloc, conv_dir, sid), try std.fmt.allocPrint(alloc, "{s}\n", .{line}));
+    _ = try appendRawBytes(io, try reactionsPath(alloc, conv_dir, sid), try std.fmt.allocPrint(alloc, "{s}\n", .{line}));
 
     const key = try std.fmt.allocPrint(alloc, "{s}/{s}", .{ conv_key, sid });
     bus.publish(key, try std.fmt.allocPrint(alloc, "{{\"reaction\":{s}}}", .{line}));
@@ -442,15 +443,71 @@ fn escapeBodyLine(alloc: Alloc, line: []const u8) ![]const u8 {
 }
 
 /// appendRawBytes appends `bytes` verbatim at the current end of `path` (creating
-/// parents). Unlike appendTextLine it adds no newline — chatStoredForm is already
-/// the exact bytes. Single positional write at EOF; see the top-of-file atomicity
-/// note (chat_mu serializes this process; the file is only ever appended).
-fn appendRawBytes(io: Io, path: []const u8, bytes: []const u8) !void {
+/// parents), and answers the file's size afterwards. Unlike appendTextLine it
+/// adds no newline — chatStoredForm is already the exact bytes. Single
+/// positional write at EOF; see the top-of-file atomicity note (chat_mu
+/// serializes this process; the file is only ever appended).
+fn appendRawBytes(io: Io, path: []const u8, bytes: []const u8) !u64 {
     try mkParentDirs(io, path);
     var file = try Io.Dir.cwd().createFile(io, path, .{ .truncate = false });
     defer file.close(io);
     const st = try file.stat(io);
     try file.writePositionalAll(io, bytes, st.size);
+    return st.size + bytes.len;
+}
+
+// ── the message count ─────────
+
+/// countPath is {conv_dir}/sessions/<sid>.count — the session's message count,
+/// and the transcript size it was taken at: "<count> <size>\n".
+fn countPath(alloc: Alloc, conv_dir: []const u8, sid: []const u8) ![]u8 {
+    const file = try std.fmt.allocPrint(alloc, "{s}.count", .{sid});
+    return std.fs.path.join(alloc, &.{ conv_dir, "sessions", file });
+}
+
+/// messageCount is how many messages a session holds — the N that numbers the
+/// next one — WITHOUT reading the transcript when the count sidecar can say.
+///
+/// Numbering a message used to mean reading and decoding the whole transcript
+/// on every send. That is cheap out of Linux's page cache and was the largest
+/// cost of a send on a host without one, growing with the conversation.
+///
+/// **THE SIDECAR IS A CACHE; THE TRANSCRIPT IS THE TRUTH.** The count is
+/// trusted only when the transcript is still the size it was taken at — one
+/// stat, not a read. Anything else is recounted from the transcript: a
+/// conversation from before the sidecar existed, a crash between an append and
+/// its count, or the file edited by hand. The one thing a size cannot catch is
+/// a rewrite to exactly the same length with a different number of messages.
+fn messageCount(io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8) !usize {
+    const md = try sessionMdPath(alloc, conv_dir, sid);
+    const size = (Io.Dir.cwd().statFile(io, md, .{}) catch return 0).size;
+    if (readCount(io, alloc, conv_dir, sid)) |c| {
+        if (c.size == size) return c.count;
+    }
+    const raw = Io.Dir.cwd().readFileAlloc(io, md, alloc, .unlimited) catch "";
+    return (try decodeChatFile(alloc, raw)).len;
+}
+
+const Count = struct { count: usize, size: u64 };
+
+/// readCount parses the sidecar, or null for anything that is not exactly
+/// "<count> <size>" — a malformed sidecar is a stale one.
+fn readCount(io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8) ?Count {
+    const path = countPath(alloc, conv_dir, sid) catch return null;
+    const raw = Io.Dir.cwd().readFileAlloc(io, path, alloc, .limited(64)) catch return null;
+    var it = std.mem.tokenizeAny(u8, raw, " \n");
+    const count = std.fmt.parseInt(usize, it.next() orelse return null, 10) catch return null;
+    const size = std.fmt.parseInt(u64, it.next() orelse return null, 10) catch return null;
+    if (it.next() != null) return null;
+    return .{ .count = count, .size = size };
+}
+
+/// writeCount records the count. Best effort, like `.lastauthor`: a count that
+/// fails to write is a count recomputed next time, never a wrong one.
+fn writeCount(io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8, count: usize, size: u64) void {
+    const path = countPath(alloc, conv_dir, sid) catch return;
+    const text = std.fmt.allocPrint(alloc, "{d} {d}\n", .{ count, size }) catch return;
+    Io.Dir.cwd().writeFile(io, .{ .sub_path = path, .data = text }) catch {};
 }
 
 /// mkParentDirs creates the directory containing `path` (mkdir -p). No-op when
@@ -716,4 +773,150 @@ test "fs: a posted message round-trips through the store (real Io over a temp di
     try testing.expectEqual(@as(usize, 1), msgs.len);
     try testing.expectEqualStrings("Tester", msgs[0].from);
     try testing.expectEqualStrings("hello world", msgs[0].markdown);
+}
+
+/// A store over a throwaway directory, for the count tests below.
+const CountFixture = struct {
+    arena: std.heap.ArenaAllocator,
+    tmp: testing.TmpDir,
+    threaded: std.Io.Threaded,
+    bus: Bus,
+    dir: []const u8,
+
+    fn init(self: *CountFixture) !void {
+        self.arena = std.heap.ArenaAllocator.init(testing.allocator);
+        const a = self.arena.allocator();
+        self.tmp = testing.tmpDir(.{});
+        chat_root = try std.fs.path.join(a, &.{ ".zig-cache", "tmp", &self.tmp.sub_path });
+        self.threaded = std.Io.Threaded.init(a, .{});
+        self.bus = Bus.init(self.threaded.io(), a);
+        self.dir = try dmConvDir(a, "1_2");
+    }
+
+    fn deinit(self: *CountFixture) void {
+        self.threaded.deinit();
+        self.tmp.cleanup();
+        self.arena.deinit();
+    }
+
+    fn send(self: *CountFixture, text: []const u8) !ChatMessage {
+        const meta = ConvMeta{ .kind = .dm, .members = &[_][]const u8{} };
+        return appendMessage(self.threaded.io(), self.arena.allocator(), &self.bus, meta, self.dir, "1_2", "topic", "Tester", "1", text, "");
+    }
+
+    fn sidecar(self: *CountFixture) !?[]u8 {
+        const a = self.arena.allocator();
+        return Io.Dir.cwd().readFileAlloc(self.threaded.io(), try countPath(a, self.dir, "topic"), a, .limited(64)) catch null;
+    }
+
+    fn setSidecar(self: *CountFixture, text: []const u8) !void {
+        const a = self.arena.allocator();
+        try Io.Dir.cwd().writeFile(self.threaded.io(), .{ .sub_path = try countPath(a, self.dir, "topic"), .data = text });
+    }
+
+    fn transcriptSize(self: *CountFixture) !u64 {
+        const a = self.arena.allocator();
+        return (try Io.Dir.cwd().statFile(self.threaded.io(), try sessionMdPath(a, self.dir, "topic"), .{})).size;
+    }
+
+    fn decoded(self: *CountFixture) !usize {
+        const a = self.arena.allocator();
+        return (try decodeChatFile(a, (try rawSession(self.threaded.io(), a, self.dir, "topic")).?)).len;
+    }
+};
+
+test "count: every send records the count and the transcript size it was taken at" {
+    var f: CountFixture = undefined;
+    try f.init();
+    defer f.deinit();
+    for (0..5) |_| _ = try f.send("hello");
+    const a = f.arena.allocator();
+    const want = try std.fmt.allocPrint(a, "5 {d}\n", .{try f.transcriptSize()});
+    try testing.expectEqualStrings(want, (try f.sidecar()).?);
+    try testing.expectEqual(@as(usize, 5), try f.decoded());
+}
+
+test "count: ids stay consecutive, and agree with the transcript's own numbering" {
+    var f: CountFixture = undefined;
+    try f.init();
+    defer f.deinit();
+    for (1..8) |n| {
+        const m = try f.send("x");
+        const want = try std.fmt.allocPrint(f.arena.allocator(), "topic_{d}", .{n});
+        try testing.expectEqualStrings(want, m.id);
+    }
+}
+
+test "count: a conversation from before the sidecar is counted from its transcript" {
+    // Prod has every existing conversation in this state on the first deploy.
+    var f: CountFixture = undefined;
+    try f.init();
+    defer f.deinit();
+    for (0..3) |_| _ = try f.send("old");
+    const a = f.arena.allocator();
+    try Io.Dir.cwd().deleteFile(f.threaded.io(), try countPath(a, f.dir, "topic"));
+    const m = try f.send("new");
+    try testing.expectEqualStrings("topic_4", m.id);
+    try testing.expect((try f.sidecar()) != null);
+}
+
+test "count: a count taken at another size is not believed" {
+    // A crash between the append and its count leaves exactly this: a count
+    // one short, recorded at the transcript's previous size.
+    var f: CountFixture = undefined;
+    try f.init();
+    defer f.deinit();
+    for (0..4) |_| _ = try f.send("x");
+    try f.setSidecar("3 1\n");
+    const m = try f.send("after the crash");
+    try testing.expectEqualStrings("topic_5", m.id);
+}
+
+test "count: a sidecar that does not parse is a stale one" {
+    var f: CountFixture = undefined;
+    try f.init();
+    defer f.deinit();
+    for (0..2) |_| _ = try f.send("x");
+    for ([_][]const u8{ "", "banana", "2", "2 x", "2 10 extra", "-1 10" }) |junk| {
+        try f.setSidecar(junk);
+        const before = try f.decoded();
+        const m = try f.send("x");
+        const want = try std.fmt.allocPrint(f.arena.allocator(), "topic_{d}", .{before + 1});
+        try testing.expectEqualStrings(want, m.id);
+    }
+}
+
+test "count: a sidecar at the RIGHT size is believed — the transcript is not read" {
+    // The point of the sidecar, pinned: when size agrees, the count is taken
+    // as written. (This is also the documented blind spot: a rewrite to the
+    // same length would go unnoticed.)
+    var f: CountFixture = undefined;
+    try f.init();
+    defer f.deinit();
+    for (0..2) |_| _ = try f.send("x");
+    const a = f.arena.allocator();
+    try f.setSidecar(try std.fmt.allocPrint(a, "41 {d}\n", .{try f.transcriptSize()}));
+    const m = try f.send("x");
+    try testing.expectEqualStrings("topic_42", m.id);
+}
+
+test "count: a reaction is checked against the count" {
+    var f: CountFixture = undefined;
+    try f.init();
+    defer f.deinit();
+    for (0..2) |_| _ = try f.send("x");
+    const io = f.threaded.io();
+    const a = f.arena.allocator();
+    _ = try appendReaction(io, a, &f.bus, f.dir, "1_2", "topic", 2, "1", "Tester", "+1", true);
+    try testing.expectError(error.NoSuchMessage, appendReaction(io, a, &f.bus, f.dir, "1_2", "topic", 3, "1", "Tester", "+1", true));
+    try testing.expectError(error.NoSuchMessage, appendReaction(io, a, &f.bus, f.dir, "1_2", "topic", 0, "1", "Tester", "+1", true));
+}
+
+test "count: an empty conversation has none, and its first message is number one" {
+    var f: CountFixture = undefined;
+    try f.init();
+    defer f.deinit();
+    try testing.expectEqual(@as(usize, 0), try messageCount(f.threaded.io(), f.arena.allocator(), f.dir, "topic"));
+    const m = try f.send("first");
+    try testing.expectEqualStrings("topic_1", m.id);
 }
