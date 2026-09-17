@@ -763,7 +763,8 @@ test "fs: a posted message round-trips through the store (real Io over a temp di
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
-    var bus = Bus.init(io, a);
+    var hub = bus_mod.Hub.init(io, a);
+    var bus = Bus.of(&hub);
 
     const dir = try dmConvDir(a, "1_2");
     const meta = ConvMeta{ .kind = .dm, .members = &[_][]const u8{} };
@@ -775,59 +776,64 @@ test "fs: a posted message round-trips through the store (real Io over a temp di
     try testing.expectEqualStrings("hello world", msgs[0].markdown);
 }
 
-/// A store over a throwaway directory, for the count tests below.
+/// A store over a throwaway directory, for the count tests below. The test
+/// makes the Io and hands it in: the host's thread pool may only be named inside
+/// a `test {}` block (tools/lint_portable.py).
 const CountFixture = struct {
     arena: std.heap.ArenaAllocator,
     tmp: testing.TmpDir,
-    threaded: std.Io.Threaded,
+    io: Io,
+    hub: bus_mod.Hub,
     bus: Bus,
     dir: []const u8,
 
-    fn init(self: *CountFixture) !void {
+    fn init(self: *CountFixture, io: Io) !void {
         self.arena = std.heap.ArenaAllocator.init(testing.allocator);
         const a = self.arena.allocator();
         self.tmp = testing.tmpDir(.{});
         chat_root = try std.fs.path.join(a, &.{ ".zig-cache", "tmp", &self.tmp.sub_path });
-        self.threaded = std.Io.Threaded.init(a, .{});
-        self.bus = Bus.init(self.threaded.io(), a);
+        self.io = io;
+        self.hub = bus_mod.Hub.init(io, a);
+        self.bus = Bus.of(&self.hub);
         self.dir = try dmConvDir(a, "1_2");
     }
 
     fn deinit(self: *CountFixture) void {
-        self.threaded.deinit();
         self.tmp.cleanup();
         self.arena.deinit();
     }
 
     fn send(self: *CountFixture, text: []const u8) !ChatMessage {
         const meta = ConvMeta{ .kind = .dm, .members = &[_][]const u8{} };
-        return appendMessage(self.threaded.io(), self.arena.allocator(), &self.bus, meta, self.dir, "1_2", "topic", "Tester", "1", text, "");
+        return appendMessage(self.io, self.arena.allocator(), &self.bus, meta, self.dir, "1_2", "topic", "Tester", "1", text, "");
     }
 
     fn sidecar(self: *CountFixture) !?[]u8 {
         const a = self.arena.allocator();
-        return Io.Dir.cwd().readFileAlloc(self.threaded.io(), try countPath(a, self.dir, "topic"), a, .limited(64)) catch null;
+        return Io.Dir.cwd().readFileAlloc(self.io, try countPath(a, self.dir, "topic"), a, .limited(64)) catch null;
     }
 
     fn setSidecar(self: *CountFixture, text: []const u8) !void {
         const a = self.arena.allocator();
-        try Io.Dir.cwd().writeFile(self.threaded.io(), .{ .sub_path = try countPath(a, self.dir, "topic"), .data = text });
+        try Io.Dir.cwd().writeFile(self.io, .{ .sub_path = try countPath(a, self.dir, "topic"), .data = text });
     }
 
     fn transcriptSize(self: *CountFixture) !u64 {
         const a = self.arena.allocator();
-        return (try Io.Dir.cwd().statFile(self.threaded.io(), try sessionMdPath(a, self.dir, "topic"), .{})).size;
+        return (try Io.Dir.cwd().statFile(self.io, try sessionMdPath(a, self.dir, "topic"), .{})).size;
     }
 
     fn decoded(self: *CountFixture) !usize {
         const a = self.arena.allocator();
-        return (try decodeChatFile(a, (try rawSession(self.threaded.io(), a, self.dir, "topic")).?)).len;
+        return (try decodeChatFile(a, (try rawSession(self.io, a, self.dir, "topic")).?)).len;
     }
 };
 
 test "count: every send records the count and the transcript size it was taken at" {
+    var threaded = std.Io.Threaded.init(testing.allocator, .{});
+    defer threaded.deinit();
     var f: CountFixture = undefined;
-    try f.init();
+    try f.init(threaded.io());
     defer f.deinit();
     for (0..5) |_| _ = try f.send("hello");
     const a = f.arena.allocator();
@@ -837,8 +843,10 @@ test "count: every send records the count and the transcript size it was taken a
 }
 
 test "count: ids stay consecutive, and agree with the transcript's own numbering" {
+    var threaded = std.Io.Threaded.init(testing.allocator, .{});
+    defer threaded.deinit();
     var f: CountFixture = undefined;
-    try f.init();
+    try f.init(threaded.io());
     defer f.deinit();
     for (1..8) |n| {
         const m = try f.send("x");
@@ -849,12 +857,14 @@ test "count: ids stay consecutive, and agree with the transcript's own numbering
 
 test "count: a conversation from before the sidecar is counted from its transcript" {
     // Prod has every existing conversation in this state on the first deploy.
+    var threaded = std.Io.Threaded.init(testing.allocator, .{});
+    defer threaded.deinit();
     var f: CountFixture = undefined;
-    try f.init();
+    try f.init(threaded.io());
     defer f.deinit();
     for (0..3) |_| _ = try f.send("old");
     const a = f.arena.allocator();
-    try Io.Dir.cwd().deleteFile(f.threaded.io(), try countPath(a, f.dir, "topic"));
+    try Io.Dir.cwd().deleteFile(f.io, try countPath(a, f.dir, "topic"));
     const m = try f.send("new");
     try testing.expectEqualStrings("topic_4", m.id);
     try testing.expect((try f.sidecar()) != null);
@@ -863,8 +873,10 @@ test "count: a conversation from before the sidecar is counted from its transcri
 test "count: a count taken at another size is not believed" {
     // A crash between the append and its count leaves exactly this: a count
     // one short, recorded at the transcript's previous size.
+    var threaded = std.Io.Threaded.init(testing.allocator, .{});
+    defer threaded.deinit();
     var f: CountFixture = undefined;
-    try f.init();
+    try f.init(threaded.io());
     defer f.deinit();
     for (0..4) |_| _ = try f.send("x");
     try f.setSidecar("3 1\n");
@@ -873,8 +885,10 @@ test "count: a count taken at another size is not believed" {
 }
 
 test "count: a sidecar that does not parse is a stale one" {
+    var threaded = std.Io.Threaded.init(testing.allocator, .{});
+    defer threaded.deinit();
     var f: CountFixture = undefined;
-    try f.init();
+    try f.init(threaded.io());
     defer f.deinit();
     for (0..2) |_| _ = try f.send("x");
     for ([_][]const u8{ "", "banana", "2", "2 x", "2 10 extra", "-1 10" }) |junk| {
@@ -890,8 +904,10 @@ test "count: a sidecar at the RIGHT size is believed — the transcript is not r
     // The point of the sidecar, pinned: when size agrees, the count is taken
     // as written. (This is also the documented blind spot: a rewrite to the
     // same length would go unnoticed.)
+    var threaded = std.Io.Threaded.init(testing.allocator, .{});
+    defer threaded.deinit();
     var f: CountFixture = undefined;
-    try f.init();
+    try f.init(threaded.io());
     defer f.deinit();
     for (0..2) |_| _ = try f.send("x");
     const a = f.arena.allocator();
@@ -901,11 +917,13 @@ test "count: a sidecar at the RIGHT size is believed — the transcript is not r
 }
 
 test "count: a reaction is checked against the count" {
+    var threaded = std.Io.Threaded.init(testing.allocator, .{});
+    defer threaded.deinit();
     var f: CountFixture = undefined;
-    try f.init();
+    try f.init(threaded.io());
     defer f.deinit();
     for (0..2) |_| _ = try f.send("x");
-    const io = f.threaded.io();
+    const io = f.io;
     const a = f.arena.allocator();
     _ = try appendReaction(io, a, &f.bus, f.dir, "1_2", "topic", 2, "1", "Tester", "+1", true);
     try testing.expectError(error.NoSuchMessage, appendReaction(io, a, &f.bus, f.dir, "1_2", "topic", 3, "1", "Tester", "+1", true));
@@ -913,10 +931,12 @@ test "count: a reaction is checked against the count" {
 }
 
 test "count: an empty conversation has none, and its first message is number one" {
+    var threaded = std.Io.Threaded.init(testing.allocator, .{});
+    defer threaded.deinit();
     var f: CountFixture = undefined;
-    try f.init();
+    try f.init(threaded.io());
     defer f.deinit();
-    try testing.expectEqual(@as(usize, 0), try messageCount(f.threaded.io(), f.arena.allocator(), f.dir, "topic"));
+    try testing.expectEqual(@as(usize, 0), try messageCount(f.io, f.arena.allocator(), f.dir, "topic"));
     const m = try f.send("first");
     try testing.expectEqualStrings("topic_1", m.id);
 }
