@@ -26,22 +26,28 @@ const Request = std.http.Server.Request;
 
 // ── per-topic stream (backlog replay + live + keepalive) ──────────────────────
 
-/// streamTranscript serves /<…>/<sid>/stream: the `backlog-size` preamble, the
-/// backlog replay from the cursor, then LIVE messages off the bus (a message
-/// posted to this conv/sid via /send fans out here), with `: ping` keepalives
-/// when idle. openStream decodes the backlog and subscribes atomically, so each
-/// message lands in EITHER the backlog OR the live stream — never both, never
-/// neither.
+/// streamTranscript serves /<…>/<sid>/stream: the `backlog-size` preamble and
+/// the backlog replay from the cursor, then hands the LIVE part to the host (a
+/// message posted to this conv/sid via /send fans out to it), which also sends
+/// the `: ping` keepalives. openStream decodes the backlog and subscribes
+/// atomically, so each message lands in EITHER the backlog OR the live stream —
+/// never both, never neither.
+///
+/// **THE BODY IS DELIMITED BY THE CONNECTION CLOSING**, not chunked: the host
+/// writes each live frame as it is, long after this handler has returned, and
+/// there is no chunk framing for it to carry on.
 pub fn streamTranscript(req: *Request, io: Io, alloc: Alloc, bus: *Bus, conv_dir: []const u8, conv_key: []const u8, sid: []const u8, uid: []const u8) !void {
     const since = try parseSince(req, alloc);
     const viewer = try users.getUserName(io, alloc, uid);
 
     const stream = try store.openStream(io, alloc, bus, conv_dir, conv_key, sid);
-    defer bus.close(stream.sub);
+    // This handler owns the subscriber until the host takes it.
+    var kept = false;
+    defer if (!kept) bus.close(stream.sub);
 
     var hbuf: [4096]u8 = undefined;
     var body = req.respondStreaming(&hbuf, .{
-        .respond_options = .{ .extra_headers = &http.sse_headers },
+        .respond_options = .{ .extra_headers = &http.sse_headers, .transfer_encoding = .none },
     }) catch return;
 
     const backlog_size = if (stream.backlog.len > since) stream.backlog.len - since else 0;
@@ -57,19 +63,14 @@ pub fn streamTranscript(req: *Request, io: Io, alloc: Alloc, bus: *Bus, conv_dir
         http.pushFrame(&body, frame) catch return;
     }
 
-    // Live: drain the subscriber. `.msg` is one fan-out blob (caller frees);
-    // `.idle` is the keepalive window — send a ping so a vanished client is
-    // noticed (the failed write ends the loop and the defer closes the sub).
-    while (true) {
-        switch (stream.sub.next()) {
-            .msg => |raw| {
-                defer stream.sub.gpa.free(raw);
-                const frame = liveFrame(alloc, raw, viewer) catch continue;
-                http.pushFrame(&body, frame) catch return;
-            },
-            .idle => http.pushFrame(&body, ": ping\n\n") catch return,
-        }
-    }
+    // Live: the host's. The viewer outlives this request's arena.
+    bus.keep(.{ .sub = stream.sub, .render = renderLive, .ctx = try bus.gpa().dupe(u8, viewer) });
+    kept = true;
+}
+
+/// One live frame for this viewer, or nothing if the blob does not render.
+fn renderLive(viewer: []const u8, arena: Alloc, raw: []const u8) ?[]const u8 {
+    return liveFrame(arena, raw, viewer) catch null;
 }
 
 /// The fan-out blob shape appendMessage publishes (every wire field except the
@@ -127,28 +128,30 @@ fn emitWire(alloc: Alloc, index: usize, from: []const u8, at: []const u8, md: []
 // ── per-uid cross-page stream ─────────────────────────────────────────────────
 
 /// forwardUserStream subscribes to a per-uid cross-page bus key (recent/images)
-/// and forwards each published blob verbatim as one SSE `data:` frame. Live-only
-/// (the server-rendered page is the backlog); `: ping` keepalive when idle. The
-/// published blob is already the exact event JSON the page's client parses.
+/// and hands it to the host, which forwards each published blob verbatim as one
+/// SSE `data:` frame. Live-only (the server-rendered page is the backlog); the
+/// host sends the `: ping` keepalives. The published blob is already the exact
+/// event JSON the page's client parses.
 pub fn forwardUserStream(req: *Request, alloc: Alloc, bus: *Bus, key: []const u8) !void {
+    _ = alloc;
     const sub = try bus.open(key);
-    defer bus.close(sub);
+    var kept = false;
+    defer if (!kept) bus.close(sub);
 
     var hbuf: [4096]u8 = undefined;
     var body = req.respondStreaming(&hbuf, .{
-        .respond_options = .{ .extra_headers = &http.sse_headers },
+        .respond_options = .{ .extra_headers = &http.sse_headers, .transfer_encoding = .none },
     }) catch return;
+    // Send the head now: a live-only stream may have nothing to say for a
+    // while, and the browser should know it is connected.
+    body.flush() catch return;
 
-    while (true) {
-        switch (sub.next()) {
-            .msg => |blob| {
-                defer sub.gpa.free(blob);
-                const frame = std.fmt.allocPrint(alloc, "data: {s}\n\n", .{blob}) catch continue;
-                http.pushFrame(&body, frame) catch return;
-            },
-            .idle => http.pushFrame(&body, ": ping\n\n") catch return,
-        }
-    }
+    bus.keep(.{ .sub = sub, .render = renderForward });
+    kept = true;
+}
+
+fn renderForward(_: []const u8, arena: Alloc, blob: []const u8) ?[]const u8 {
+    return std.fmt.allocPrint(arena, "data: {s}\n\n", .{blob}) catch null;
 }
 
 // ── replay cursor ──────────────────────────────────────────────────────────────
@@ -272,4 +275,18 @@ test "liveFrame computes mine against the viewer from a bus blob" {
     const theirs = try parseWire(WireView, a, try liveFrame(a, raw, "apoorva"));
     defer theirs.deinit();
     try testing.expect(!theirs.value.mine);
+}
+
+test "renderForward wraps a blob as one data frame; renderLive passes the viewer through" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    try testing.expectEqualStrings("data: {\"x\":1}\n\n", renderForward("", a, "{\"x\":1}").?);
+    const blob = "{\"index\":0,\"from\":\"Ann\",\"at\":\"2pm\",\"id\":\"general_1\",\"cid\":\"\",\"markdown\":\"hi\"}";
+    // A blob that does not parse renders nothing, rather than a broken frame.
+    try testing.expect(renderLive("Ann", a, "{\"index\":0}") == null);
+    const mine = renderLive("Ann", a, blob).?;
+    const theirs = renderLive("Bob", a, blob).?;
+    try testing.expect(std.mem.indexOf(u8, mine, "\"mine\":true") != null);
+    try testing.expect(std.mem.indexOf(u8, theirs, "\"mine\":false") != null);
 }

@@ -51,13 +51,22 @@ const users = @import("users.zig");
 //   2. roots.point(base, r)     point every store at the data. Without it the
 //                               stores read repo-relative defaults, which is
 //                               right for a dev checkout and nothing else.
-//   3. a Bus, built over base   route() takes it; chat publishes through it.
+//   3. a Hub, built over base   one per process: the registry chat publishes
+//                               through. Each request gets a Bus handle on it.
+//   4. after route() returns,   if the request's Bus holds a kept stream, serve
+//      serve what it kept       it: `streams.serveKept` blocks until the client
+//                               goes away; `streams.drainKept` hands over what
+//                               has arrived, for a host with one loop. Either
+//                               way `streams.drop` ends it.
 //
 // server.zig does these for Linux, via config.zig. gopher-metal's kernel does
-// them with a fixed heap and paths on its own volume.
+// them with its own heap and paths on its own volume.
 
-/// Bus is part of `route`'s signature.
-pub const Bus = @import("bus.zig").Bus;
+/// The streaming seam: Hub, Bus (part of `route`'s signature), Kept, and the
+/// two ways to serve a kept stream.
+pub const streams = @import("bus.zig");
+pub const Bus = streams.Bus;
+pub const Hub = streams.Hub;
 pub const mem_meter = @import("mem_meter.zig");
 pub const roots = @import("roots.zig");
 
@@ -173,7 +182,7 @@ fn matchPrefix(path: []const u8, prefix: []const u8) ?[]const u8 {
     return null;
 }
 
-/// stripQuery returns the target up to the first '?' (e.g. /driving/app.js?v=…).
+/// stripQuery returns the target up to the first '?' (e.g. /driving/blitter.js?v=…).
 fn stripQuery(target: []const u8) []const u8 {
     if (std.mem.indexOfScalar(u8, target, '?')) |q| return target[0..q];
     return target;
@@ -200,8 +209,10 @@ fn serve(alloc: std.mem.Allocator, io: Io, raw: []const u8) ![]const u8 {
     var req = try server.receiveHead();
     req.head.keep_alive = false;
 
-    var bus = Bus.init(io, alloc);
-    try route(&req, io, alloc, &bus);
+    var hub = Hub.init(io, alloc);
+    var b = Bus.of(&hub);
+    try route(&req, io, alloc, &b);
+    if (b.kept) |k| streams.drop(&hub, k);
     try out.writer.flush();
     return out.written();
 }

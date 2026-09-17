@@ -27,7 +27,9 @@ const router = @import("router.zig");
 const config = @import("config.zig");
 const edge = @import("edge.zig");
 const mem_meter = @import("mem_meter.zig");
-const Bus = @import("bus.zig").Bus;
+const bus_mod = @import("bus.zig");
+const Hub = bus_mod.Hub;
+const Bus = bus_mod.Bus;
 
 const default_port: u16 = 9001;
 
@@ -58,8 +60,9 @@ pub fn main(init: std.process.Init.Minimal) !void {
     try config.load(io, alloc, env);
 
     // The pub/sub fan-out shared across all connections. Lives for the process
-    // lifetime; drives chat's SSE streams.
-    var bus = Bus.init(io, alloc);
+    // lifetime; drives chat's SSE streams. Each request gets its own handle on
+    // it (a Bus), which is where a stream handler leaves the stream it kept.
+    var hub = Hub.init(io, alloc);
 
     const port = portFromEnv(env);
     const addr = try net.IpAddress.parse("0.0.0.0", port);
@@ -76,19 +79,19 @@ pub fn main(init: std.process.Init.Minimal) !void {
             std.debug.print("accept failed: {s}\n", .{@errorName(e)});
             continue;
         };
-        conns.concurrent(io, serveConn, .{ io, alloc, &bus, stream }) catch |e| {
+        conns.concurrent(io, serveConn, .{ io, alloc, &hub, stream }) catch |e| {
             // Pool exhausted / concurrency unavailable: fall back to serving
             // this one inline rather than dropping it.
             std.debug.print("spawn failed ({s}); serving inline\n", .{@errorName(e)});
-            serveConn(io, alloc, &bus, stream);
+            serveConn(io, alloc, &hub, stream);
         };
     }
 }
 
 /// serveConn is the per-connection task body. It returns void (swallowing all
 /// errors) so it coerces to the Cancelable!void that Io.Group requires.
-fn serveConn(io: std.Io, alloc: std.mem.Allocator, bus: *Bus, stream: net.Stream) void {
-    handleConn(io, alloc, bus, stream) catch |e| {
+fn serveConn(io: std.Io, alloc: std.mem.Allocator, hub: *Hub, stream: net.Stream) void {
+    handleConn(io, alloc, hub, stream) catch |e| {
         std.debug.print("connection error: {s}\n", .{@errorName(e)});
     };
 }
@@ -103,7 +106,7 @@ fn serveConn(io: std.Io, alloc: std.mem.Allocator, bus: *Bus, stream: net.Stream
 /// connection keeps the simple blocking model working for every surface here.
 /// Real concurrency + keep-alive (and streaming) wait for chat's SSE to force
 /// the model decision — see the file header.
-fn handleConn(io: std.Io, alloc: std.mem.Allocator, bus: *Bus, stream: net.Stream) !void {
+fn handleConn(io: std.Io, alloc: std.mem.Allocator, hub: *Hub, stream: net.Stream) !void {
     defer stream.close(io);
 
     var read_buf: [16 * 1024]u8 = undefined; // must hold the full request header
@@ -132,5 +135,9 @@ fn handleConn(io: std.Io, alloc: std.mem.Allocator, bus: *Bus, stream: net.Strea
         else => return e,
     };
     req.head.keep_alive = false; // force `connection: close` without touching each handler
-    try router.route(&req, io, arena.allocator(), bus);
+    var bus = Bus.of(hub);
+    try router.route(&req, io, arena.allocator(), &bus);
+    // A stream the handler kept is served here, on this connection's own task,
+    // until its client goes away — the loop the handler used to run itself.
+    if (bus.kept) |kept| bus_mod.serveKept(hub, kept, &sw.interface);
 }
