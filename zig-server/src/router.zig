@@ -53,7 +53,13 @@ const users = @import("users.zig");
 //                               right for a dev checkout and nothing else.
 //   3. a Hub, built over base   one per process: the registry chat publishes
 //                               through. Each request gets a Bus handle on it.
-//   4. after route() returns,   if the request's Bus holds a kept stream, serve
+//   4. store.backfillAll(...)   once, before the first request: give every chat
+//                               session on disk its last-message record, which
+//                               /chat/recent reads instead of every transcript
+//                               in full. A host that skips it answers the same
+//                               but slower — and leaves different files behind,
+//                               which is a difference the judge next door sees.
+//   5. after route() returns,   if the request's Bus holds a kept stream, serve
 //      serve what it kept       it: `streams.serveKept` blocks until the client
 //                               goes away; `streams.nextFrame` hands over the
 //                               next event, for a host with one loop. Either
@@ -69,6 +75,9 @@ pub const Bus = streams.Bus;
 pub const Hub = streams.Hub;
 pub const mem_meter = @import("mem_meter.zig");
 pub const roots = @import("roots.zig");
+/// Chat's on-disk store, for the one thing a host does with it directly:
+/// `store.backfillAll` at startup.
+pub const store = @import("chat_store.zig");
 
 /// route picks the handler by path prefix, passing the remainder (the path with
 /// the prefix stripped, e.g. "/app.js" or "/sessions/3/..."). The table below IS

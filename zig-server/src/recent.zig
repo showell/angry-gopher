@@ -154,24 +154,44 @@ fn gatherRecentItems(io: Io, alloc: Alloc, uid: []const u8) ![]RecentItem {
     return slice;
 }
 
-/// gatherConvSessions appends a chat row for each session in one conv: stat its
-/// mtime, resolve the last author ("You" for the viewer) from the .lastauthor
-/// companion, and build a one-line excerpt of the latest message. `base`/`where`
-/// are the conv's pre-resolved URL base and per-viewer context label; `dm` flags
-/// a 1:1 conv (vs a channel) for the wire.
+/// gatherConvSessions appends a chat row for each session in one conv: its last
+/// message, when it was sent and by whom, and a one-line excerpt of it.
+/// `base`/`where` are the conv's pre-resolved URL base and per-viewer context
+/// label; `dm` flags a 1:1 conv (vs a channel) for the wire.
+///
+/// **NEITHER A STAT NOR A TRANSCRIPT READ.** Both were per-session costs that
+/// grew with the conversation: this page used to read and decode every
+/// transcript in full to take the last message of each. `store.lastMessage`
+/// answers from the session's sidecar, and the date it carries is the message's
+/// own — which is also the order, so there is no mtime to stat for.
 fn gatherConvSessions(io: Io, alloc: Alloc, items: *std.ArrayList(RecentItem), dir: []const u8, base: []const u8, where: []const u8, viewer: []const u8, dm: bool) !void {
     for (try store.listSessions(io, alloc, dir)) |sid| {
-        const path = try store.sessionMdPath(alloc, dir, sid);
-        const st = Io.Dir.cwd().statFile(io, path, .{}) catch continue;
+        const url = try std.fmt.allocPrint(alloc, "{s}/{s}", .{ base, sid });
+        const last = (try store.lastMessage(io, alloc, dir, sid)) orelse {
+            // A session nobody has written to yet: it still belongs on the
+            // page, and the file's own time is all there is to order it by.
+            const path = try store.sessionMdPath(alloc, dir, sid);
+            const st = Io.Dir.cwd().statFile(io, path, .{}) catch continue;
+            try items.append(alloc, .{
+                .kind = .chat,
+                .at_ns = st.mtime.nanoseconds,
+                .at = try timefmt.formatRFC3339UTC(alloc, secsOf(st.mtime.nanoseconds)),
+                .url = url,
+                .where = where,
+                .topic = sid,
+                .dm = dm,
+            });
+            continue;
+        };
         try items.append(alloc, .{
             .kind = .chat,
-            .at_ns = st.mtime.nanoseconds,
-            .at = try timefmt.formatRFC3339UTC(alloc, secsOf(st.mtime.nanoseconds)),
-            .who = try lastAuthorName(io, alloc, dir, sid, viewer),
-            .url = try std.fmt.allocPrint(alloc, "{s}/{s}", .{ base, sid }),
+            .at_ns = @as(i96, timefmt.unixFromRFC3339(last.date) orelse 0) * std.time.ns_per_s,
+            .at = last.date,
+            .who = try authorName(io, alloc, dir, sid, viewer, last.uid),
+            .url = url,
             .where = where,
             .topic = sid,
-            .excerpt = try feed.recentExcerpt(alloc, try lastMessageMarkdown(io, alloc, dir, sid)),
+            .excerpt = try feed.recentExcerpt(alloc, last.markdown),
             .dm = dm,
         });
     }
@@ -181,31 +201,26 @@ fn secsOf(ns: i96) i64 {
     return @intCast(@divFloor(ns, std.time.ns_per_s));
 }
 
+/// newestFirst orders the feed. **A TIE IS BROKEN BY THE URL**, because a
+/// message's date is recorded to the second: two sessions written inside one
+/// second must still come out in the same order on every host that serves this
+/// data, or the two builds of this application would disagree about a page.
 fn newestFirst(_: void, a: RecentItem, b: RecentItem) bool {
-    return a.at_ns > b.at_ns;
+    if (a.at_ns != b.at_ns) return a.at_ns > b.at_ns;
+    const ka = if (a.url.len > 0) a.url else a.slug;
+    const kb = if (b.url.len > 0) b.url else b.slug;
+    return std.mem.lessThan(u8, ka, kb);
 }
 
-/// lastAuthorName resolves the most-recent author's display name for a session,
-/// rendered "You" when the author is the viewer: read the `<sid>.lastauthor`
-/// companion uid, map to a name. "" when the companion is missing (legacy
-/// pre-companion sessions → an empty Who cell).
-fn lastAuthorName(io: Io, alloc: Alloc, dir: []const u8, sid: []const u8, viewer: []const u8) ![]const u8 {
-    const file = try std.fmt.allocPrint(alloc, "{s}.lastauthor", .{sid});
-    const path = try std.fs.path.join(alloc, &.{ dir, "sessions", file });
-    const raw = Io.Dir.cwd().readFileAlloc(io, path, alloc, .unlimited) catch return "";
-    const auid = std.mem.trim(u8, raw, " \t\r\n");
+/// authorName renders the most-recent author's display name, "You" when that is
+/// the viewer. `uid` is what the session's sidecar recorded; a session written
+/// before it recorded one falls back to the `.lastauthor` companion, and ""
+/// when neither knows (legacy pre-companion sessions → an empty Who cell).
+fn authorName(io: Io, alloc: Alloc, dir: []const u8, sid: []const u8, viewer: []const u8, uid: []const u8) ![]const u8 {
+    const auid = if (uid.len > 0) uid else store.lastAuthorUid(io, alloc, dir, sid);
     if (auid.len == 0) return "";
     if (std.mem.eql(u8, auid, viewer)) return "You";
     return users.getUserName(io, alloc, auid);
 }
 
-/// lastMessageMarkdown returns the raw markdown of a session's most recent
-/// message, or "" if empty/unreadable. Reads the whole transcript — fine at our
-/// scale (the page already stats every session file).
-fn lastMessageMarkdown(io: Io, alloc: Alloc, dir: []const u8, sid: []const u8) ![]const u8 {
-    const raw = (try store.rawSession(io, alloc, dir, sid)) orelse return "";
-    const msgs = try store.decodeChatFile(alloc, raw);
-    if (msgs.len == 0) return "";
-    return msgs[msgs.len - 1].markdown;
-}
 

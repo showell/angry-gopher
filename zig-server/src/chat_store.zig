@@ -171,7 +171,11 @@ pub fn appendMessage(io: Io, alloc: Alloc, bus: *Bus, meta: ConvMeta, conv_dir: 
     // A crash between the append and this leaves a count whose size is not the
     // transcript's — in either order — so messageCount refuses it and recounts.
     // The size check is the protection, not the ordering.
-    writeCount(io, alloc, conv_dir, sid, index + 1, new_size);
+    writeCount(io, alloc, conv_dir, sid, index + 1, new_size, .{
+        .offset = new_size - stored.len,
+        .date = at,
+        .uid = from_id,
+    });
 
     // Last-author companion (best-effort).
     const la = try std.fs.path.join(alloc, &.{ conv_dir, "sessions", try std.fmt.allocPrint(alloc, "{s}.lastauthor", .{sid}) });
@@ -456,6 +460,143 @@ fn appendRawBytes(io: Io, path: []const u8, bytes: []const u8) !u64 {
     return st.size + bytes.len;
 }
 
+// ── the last message, for /chat/recent ────────────────────────────────────────
+
+/// What a session's last message is, for a listing that must not read the
+/// transcript: the words, when they were sent, and the uid that sent them
+/// (empty for a session written before the sidecar carried one, where the
+/// caller falls back to the `.lastauthor` companion).
+pub const LastMessage = struct {
+    markdown: []const u8,
+    date: []const u8,
+    uid: []const u8,
+    /// Which message of the session this is — the tiebreaker when two sessions
+    /// carry the same second.
+    number: usize,
+};
+
+/// lastMessage answers a session's last message **without a stat and without
+/// reading the transcript**, when the sidecar can say where it begins.
+///
+/// **NO STAT.** /chat/recent used to order by file mtime, which meant statting
+/// every session; the message carries its own date, so neither is needed. The
+/// price is that a transcript appended to behind this server's back is not
+/// noticed until the next message or the next read of the whole thing — which
+/// for a listing is a stale excerpt, where for `messageCount` it would be a
+/// misnumbered message. That is why the count checks the size and this does
+/// not.
+///
+/// It is not trusted blindly: the block at the offset must be the message the
+/// sidecar says it is. Anything else — a hand-edited transcript, a sidecar from
+/// another file — falls back to reading the whole thing.
+pub fn lastMessage(io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8) !?LastMessage {
+    if (readCount(io, alloc, conv_dir, sid)) |c| {
+        if (c.last) |l| if (c.count > 0 and l.offset < c.size) {
+            const path = try sessionMdPath(alloc, conv_dir, sid);
+            const tail = try alloc.alloc(u8, c.size - l.offset);
+            var f = Io.Dir.cwd().openFile(io, path, .{}) catch return fallbackLast(io, alloc, conv_dir, sid);
+            defer f.close(io);
+            const n = f.readPositionalAll(io, tail, l.offset) catch return fallbackLast(io, alloc, conv_dir, sid);
+            const msgs = try decodeChatFile(alloc, tail[0..n]);
+            if (msgs.len > 0) {
+                const want = try std.fmt.allocPrint(alloc, "{s}_{d}", .{ sid, c.count });
+                const got = msgs[msgs.len - 1];
+                if (std.mem.eql(u8, got.id, want)) return .{
+                    .markdown = got.markdown,
+                    .date = l.date,
+                    .uid = l.uid,
+                    .number = c.count,
+                };
+            }
+        };
+    }
+    return fallbackLast(io, alloc, conv_dir, sid);
+}
+
+/// The whole transcript, decoded, for a session whose sidecar cannot say. What
+/// every session cost before the sidecar carried a last message.
+fn fallbackLast(io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8) !?LastMessage {
+    const raw = (try rawSession(io, alloc, conv_dir, sid)) orelse return null;
+    const msgs = try decodeChatFile(alloc, raw);
+    if (msgs.len == 0) return null;
+    const last = msgs[msgs.len - 1];
+    return .{ .markdown = last.markdown, .date = last.date, .uid = "", .number = msgs.len };
+}
+
+/// **EVERY SESSION GETS A SIDECAR AT BOOT.** A conversation written before this
+/// existed, or repaired by hand, would otherwise cost a whole-transcript read
+/// on every listing for as long as nobody posts to it. Both hosts run this —
+/// the Linux server and the machine with no operating system — because they are
+/// judged on the files they leave behind as well as the answers they give.
+///
+/// One pass over the conversations, reading only what it has to: a session
+/// whose sidecar already says where its last message is costs one small read.
+/// Answers how many it wrote.
+pub fn backfillSidecars(io: Io, alloc: Alloc, conv_dirs: []const []const u8) usize {
+    var wrote: usize = 0;
+    for (conv_dirs) |dir| {
+        const sids = listSessions(io, alloc, dir) catch continue;
+        for (sids) |sid| {
+            if (readCount(io, alloc, dir, sid)) |c| if (c.last != null) continue;
+            const raw = (rawSession(io, alloc, dir, sid) catch continue) orelse continue;
+            const msgs = decodeChatFile(alloc, raw) catch continue;
+            if (msgs.len == 0) continue;
+            // The last block begins at the last separator; a lone message
+            // begins at the start of the file.
+            const offset = if (std.mem.lastIndexOf(u8, raw, sep)) |at| at else 0;
+            writeCount(io, alloc, dir, sid, msgs.len, raw.len, .{
+                .offset = offset,
+                .date = msgs[msgs.len - 1].date,
+                .uid = lastAuthorUid(io, alloc, dir, sid),
+            });
+            wrote += 1;
+        }
+    }
+    return wrote;
+}
+
+/// listConvDirs is every conversation on disk: each DM directory directly under
+/// chat_root, and each channel under `channels/`. For a pass over all of them,
+/// where the per-viewer listings are not the question.
+pub fn listConvDirs(io: Io, alloc: Alloc) ![][]const u8 {
+    var out: std.ArrayList([]const u8) = .empty;
+    var root = Io.Dir.cwd().openDir(io, chat_root, .{ .iterate = true }) catch return &.{};
+    defer root.close(io);
+    var it = root.iterate();
+    while (try it.next(io)) |entry| {
+        if (entry.kind != .directory) continue;
+        if (std.mem.eql(u8, entry.name, "channels")) {
+            const channels = try std.fs.path.join(alloc, &.{ chat_root, "channels" });
+            var dir = Io.Dir.cwd().openDir(io, channels, .{ .iterate = true }) catch continue;
+            defer dir.close(io);
+            var cit = dir.iterate();
+            while (try cit.next(io)) |ch| {
+                if (ch.kind != .directory) continue;
+                try out.append(alloc, try std.fs.path.join(alloc, &.{ channels, ch.name }));
+            }
+            continue;
+        }
+        try out.append(alloc, try std.fs.path.join(alloc, &.{ chat_root, entry.name }));
+    }
+    return out.toOwnedSlice(alloc);
+}
+
+/// backfillAll gives every session on disk a last-message record. **Both hosts
+/// call this once at startup** — see `backfillSidecars`.
+pub fn backfillAll(io: Io, alloc: Alloc) usize {
+    const dirs = listConvDirs(io, alloc) catch return 0;
+    return backfillSidecars(io, alloc, dirs);
+}
+
+/// The uid in the `.lastauthor` companion, or "" — the only place a session
+/// written before now records who spoke last.
+pub fn lastAuthorUid(io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8) []const u8 {
+    const file = std.fmt.allocPrint(alloc, "{s}.lastauthor", .{sid}) catch return "";
+    const path = std.fs.path.join(alloc, &.{ conv_dir, "sessions", file }) catch return "";
+    const raw = Io.Dir.cwd().readFileAlloc(io, path, alloc, .limited(64)) catch return "";
+    return std.mem.trim(u8, raw, " \t\r\n");
+}
+
 // ── the message count ─────────
 
 /// countPath is {conv_dir}/sessions/<sid>.count — the session's message count,
@@ -488,25 +629,58 @@ fn messageCount(io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8) !us
     return (try decodeChatFile(alloc, raw)).len;
 }
 
-const Count = struct { count: usize, size: u64 };
+/// **WHERE THE LAST MESSAGE STARTS, WHEN IT WAS SENT, AND BY WHOM** — the
+/// second line of the sidecar, and everything /chat/recent needs to list a
+/// session without reading its transcript.
+///
+/// **THE OFFSET, NOT THE WORDS.** Keeping the text here would be a second copy
+/// of it on disk, and a rendered excerpt would be a copy that goes stale the
+/// day the excerpt is rendered differently. The offset points at the last
+/// block, which is read positionally and decoded by the one decoder — so the
+/// words live in exactly one place and the cache can be wrong about nothing
+/// but where they begin, which `lastMessage` checks.
+const Last = struct { offset: u64, date: []const u8, uid: []const u8 };
 
-/// readCount parses the sidecar, or null for anything that is not exactly
-/// "<count> <size>" — a malformed sidecar is a stale one.
+const Count = struct { count: usize, size: u64, last: ?Last = null };
+
+/// readCount parses the sidecar: "<count> <size>" on the first line, and
+/// optionally "<offset> <date> <uid>" on the second. Null for a first line that
+/// is not exactly two numbers — a malformed sidecar is a stale one. A second
+/// line that does not parse is simply absent: the count is still good, and the
+/// caller falls back to the transcript for the rest.
+///
+/// An older build reading a sidecar written here sees a second line, refuses
+/// the whole thing and recounts from the transcript — slower, never wrong.
 fn readCount(io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8) ?Count {
     const path = countPath(alloc, conv_dir, sid) catch return null;
-    const raw = Io.Dir.cwd().readFileAlloc(io, path, alloc, .limited(64)) catch return null;
-    var it = std.mem.tokenizeAny(u8, raw, " \n");
-    const count = std.fmt.parseInt(usize, it.next() orelse return null, 10) catch return null;
-    const size = std.fmt.parseInt(u64, it.next() orelse return null, 10) catch return null;
-    if (it.next() != null) return null;
-    return .{ .count = count, .size = size };
+    const raw = Io.Dir.cwd().readFileAlloc(io, path, alloc, .limited(1024)) catch return null;
+    var lines = std.mem.splitScalar(u8, raw, '\n');
+    var head = std.mem.tokenizeScalar(u8, lines.next() orelse return null, ' ');
+    const count = std.fmt.parseInt(usize, head.next() orelse return null, 10) catch return null;
+    const size = std.fmt.parseInt(u64, head.next() orelse return null, 10) catch return null;
+    if (head.next() != null) return null;
+    return .{ .count = count, .size = size, .last = parseLast(lines.next() orelse "") };
 }
 
-/// writeCount records the count. Best effort, like `.lastauthor`: a count that
-/// fails to write is a count recomputed next time, never a wrong one.
-fn writeCount(io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8, count: usize, size: u64) void {
+fn parseLast(line: []const u8) ?Last {
+    var it = std.mem.tokenizeScalar(u8, line, ' ');
+    const offset = std.fmt.parseInt(u64, it.next() orelse return null, 10) catch return null;
+    const date = it.next() orelse return null;
+    const uid = it.next() orelse return null;
+    if (it.next() != null) return null;
+    return .{ .offset = offset, .date = date, .uid = uid };
+}
+
+/// writeCount records the count and, when there is one, where the last message
+/// begins. Best effort, like `.lastauthor`: a sidecar that fails to write is
+/// one recomputed next time, never a wrong one.
+fn writeCount(io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8, count: usize, size: u64, last: ?Last) void {
     const path = countPath(alloc, conv_dir, sid) catch return;
-    const text = std.fmt.allocPrint(alloc, "{d} {d}\n", .{ count, size }) catch return;
+    const head = std.fmt.allocPrint(alloc, "{d} {d}\n", .{ count, size }) catch return;
+    const text = if (last) |l|
+        std.fmt.allocPrint(alloc, "{s}{d} {s} {s}\n", .{ head, l.offset, l.date, l.uid }) catch return
+    else
+        head;
     Io.Dir.cwd().writeFile(io, .{ .sub_path = path, .data = text }) catch {};
 }
 
@@ -810,7 +984,7 @@ const CountFixture = struct {
 
     fn sidecar(self: *CountFixture) !?[]u8 {
         const a = self.arena.allocator();
-        return Io.Dir.cwd().readFileAlloc(self.io, try countPath(a, self.dir, "topic"), a, .limited(64)) catch null;
+        return Io.Dir.cwd().readFileAlloc(self.io, try countPath(a, self.dir, "topic"), a, .limited(1024)) catch null;
     }
 
     fn setSidecar(self: *CountFixture, text: []const u8) !void {
@@ -837,8 +1011,15 @@ test "count: every send records the count and the transcript size it was taken a
     defer f.deinit();
     for (0..5) |_| _ = try f.send("hello");
     const a = f.arena.allocator();
-    const want = try std.fmt.allocPrint(a, "5 {d}\n", .{try f.transcriptSize()});
-    try testing.expectEqualStrings(want, (try f.sidecar()).?);
+    const size = try f.transcriptSize();
+    const text = (try f.sidecar()).?;
+    var lines = std.mem.splitScalar(u8, text, '\n');
+    try testing.expectEqualStrings(try std.fmt.allocPrint(a, "5 {d}", .{size}), lines.next().?);
+    // And where the last message begins, when it was sent, and by whom.
+    const last = parseLast(lines.next().?).?;
+    try testing.expect(last.offset < size);
+    try testing.expectEqualStrings("1", last.uid);
+    try testing.expect(timefmt.unixFromRFC3339(last.date) != null);
     try testing.expectEqual(@as(usize, 5), try f.decoded());
 }
 
@@ -891,7 +1072,7 @@ test "count: a sidecar that does not parse is a stale one" {
     try f.init(threaded.io());
     defer f.deinit();
     for (0..2) |_| _ = try f.send("x");
-    for ([_][]const u8{ "", "banana", "2", "2 x", "2 10 extra", "-1 10" }) |junk| {
+    for ([_][]const u8{ "", "banana", "2", "2 x", "2 10 extra", "-1 10", "2 10\n0 x" }) |junk| {
         try f.setSidecar(junk);
         const before = try f.decoded();
         const m = try f.send("x");
@@ -939,4 +1120,150 @@ test "count: an empty conversation has none, and its first message is number one
     try testing.expectEqual(@as(usize, 0), try messageCount(f.io, f.arena.allocator(), f.dir, "topic"));
     const m = try f.send("first");
     try testing.expectEqualStrings("topic_1", m.id);
+}
+
+test "last message: the sidecar answers without reading the transcript" {
+    var threaded = std.Io.Threaded.init(testing.allocator, .{});
+    defer threaded.deinit();
+    var f: CountFixture = undefined;
+    try f.init(threaded.io());
+    defer f.deinit();
+    _ = try f.send("first");
+    _ = try f.send("second");
+    const sent = try f.send("the last word");
+
+    const got = (try lastMessage(f.io, f.arena.allocator(), f.dir, "topic")).?;
+    try testing.expectEqualStrings("the last word", got.markdown);
+    try testing.expectEqualStrings(sent.date, got.date);
+    try testing.expectEqualStrings("1", got.uid);
+    try testing.expectEqual(@as(usize, 3), got.number);
+}
+
+test "last message: one message, and the block that begins the file" {
+    var threaded = std.Io.Threaded.init(testing.allocator, .{});
+    defer threaded.deinit();
+    var f: CountFixture = undefined;
+    try f.init(threaded.io());
+    defer f.deinit();
+    _ = try f.send("alone");
+    const got = (try lastMessage(f.io, f.arena.allocator(), f.dir, "topic")).?;
+    try testing.expectEqualStrings("alone", got.markdown);
+    try testing.expectEqual(@as(usize, 1), got.number);
+}
+
+test "last message: a body that contains the separator still comes back whole" {
+    // The transcript escapes a body line that would look like the separator;
+    // reading the tail goes through the same decoder, so it is unescaped there.
+    var threaded = std.Io.Threaded.init(testing.allocator, .{});
+    defer threaded.deinit();
+    var f: CountFixture = undefined;
+    try f.init(threaded.io());
+    defer f.deinit();
+    _ = try f.send("innocent");
+    const nasty = "before\n-------------\nafter";
+    _ = try f.send(nasty);
+    const got = (try lastMessage(f.io, f.arena.allocator(), f.dir, "topic")).?;
+    try testing.expectEqualStrings(nasty, got.markdown);
+    try testing.expectEqual(@as(usize, 2), got.number);
+}
+
+test "last message: a sidecar pointing at the wrong place is not believed" {
+    var threaded = std.Io.Threaded.init(testing.allocator, .{});
+    defer threaded.deinit();
+    var f: CountFixture = undefined;
+    try f.init(threaded.io());
+    defer f.deinit();
+    _ = try f.send("first");
+    _ = try f.send("the real last");
+    const a = f.arena.allocator();
+    const size = try f.transcriptSize();
+    // An offset into the middle of a block, and one that claims a message the
+    // session does not have.
+    for ([_][]const u8{
+        try std.fmt.allocPrint(a, "2 {d}\n7 2026-01-01T00:00:00Z 1\n", .{size}),
+        try std.fmt.allocPrint(a, "9 {d}\n0 2026-01-01T00:00:00Z 1\n", .{size}),
+    }) |junk| {
+        try f.setSidecar(junk);
+        const got = (try lastMessage(f.io, a, f.dir, "topic")).?;
+        try testing.expectEqualStrings("the real last", got.markdown);
+    }
+}
+
+test "last message: a session from before the sidecar is read from its transcript" {
+    var threaded = std.Io.Threaded.init(testing.allocator, .{});
+    defer threaded.deinit();
+    var f: CountFixture = undefined;
+    try f.init(threaded.io());
+    defer f.deinit();
+    _ = try f.send("first");
+    _ = try f.send("second");
+    const a = f.arena.allocator();
+    try Io.Dir.cwd().deleteFile(f.io, try countPath(a, f.dir, "topic"));
+    const got = (try lastMessage(f.io, a, f.dir, "topic")).?;
+    try testing.expectEqualStrings("second", got.markdown);
+    try testing.expectEqual(@as(usize, 2), got.number);
+    try testing.expectEqualStrings("", got.uid); // only .lastauthor knows, and the caller asks it
+}
+
+test "backfill: a session with no last-message record gets one, and only once" {
+    var threaded = std.Io.Threaded.init(testing.allocator, .{});
+    defer threaded.deinit();
+    var f: CountFixture = undefined;
+    try f.init(threaded.io());
+    defer f.deinit();
+    _ = try f.send("first");
+    _ = try f.send("last");
+    const a = f.arena.allocator();
+    // A sidecar as an older build left it: a count and a size, nothing more.
+    try f.setSidecar(try std.fmt.allocPrint(a, "2 {d}\n", .{try f.transcriptSize()}));
+
+    const dirs = [_][]const u8{f.dir};
+    try testing.expectEqual(@as(usize, 1), backfillSidecars(f.io, a, &dirs));
+    const got = (try lastMessage(f.io, a, f.dir, "topic")).?;
+    try testing.expectEqualStrings("last", got.markdown);
+    try testing.expectEqualStrings("1", got.uid); // from the .lastauthor companion
+    // A second pass finds nothing to do.
+    try testing.expectEqual(@as(usize, 0), backfillSidecars(f.io, a, &dirs));
+}
+
+test "backfill: a session with no sidecar at all gets one" {
+    var threaded = std.Io.Threaded.init(testing.allocator, .{});
+    defer threaded.deinit();
+    var f: CountFixture = undefined;
+    try f.init(threaded.io());
+    defer f.deinit();
+    _ = try f.send("only");
+    const a = f.arena.allocator();
+    try Io.Dir.cwd().deleteFile(f.io, try countPath(a, f.dir, "topic"));
+    const dirs = [_][]const u8{f.dir};
+    try testing.expectEqual(@as(usize, 1), backfillSidecars(f.io, a, &dirs));
+    const got = (try lastMessage(f.io, a, f.dir, "topic")).?;
+    try testing.expectEqualStrings("only", got.markdown);
+    try testing.expectEqual(@as(usize, 1), got.number);
+}
+
+test "backfill: one pass reaches DMs and channels alike" {
+    var threaded = std.Io.Threaded.init(testing.allocator, .{});
+    defer threaded.deinit();
+    var f: CountFixture = undefined;
+    try f.init(threaded.io());
+    defer f.deinit();
+    const a = f.arena.allocator();
+    _ = try f.send("in a dm");
+    // A channel with a session of its own, written as the store lays it out.
+    const chan = try channelConvDir(a, "general");
+    const sessions = try std.fs.path.join(a, &.{ chan, "sessions" });
+    try Io.Dir.cwd().createDirPath(f.io, sessions);
+    try Io.Dir.cwd().writeFile(f.io, .{
+        .sub_path = try std.fs.path.join(a, &.{ sessions, "topic.md" }),
+        .data = "MSG_topic_1\nfrom: Tester\ndate: 2026-06-19T14:34:07Z\n\nin a channel",
+    });
+
+    const dirs = try listConvDirs(f.io, a);
+    try testing.expectEqual(@as(usize, 2), dirs.len);
+    // The DM already has its record from the send; the channel does not.
+    try testing.expectEqual(@as(usize, 1), backfillAll(f.io, a));
+    const got = (try lastMessage(f.io, a, chan, "topic")).?;
+    try testing.expectEqualStrings("in a channel", got.markdown);
+    try testing.expectEqualStrings("2026-06-19T14:34:07Z", got.date);
 }

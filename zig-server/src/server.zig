@@ -28,6 +28,7 @@ const config = @import("config.zig");
 const edge = @import("edge.zig");
 const mem_meter = @import("mem_meter.zig");
 const bus_mod = @import("bus.zig");
+const chat_store = @import("chat_store.zig");
 const Hub = bus_mod.Hub;
 const Bus = bus_mod.Bus;
 
@@ -58,6 +59,18 @@ pub fn main(init: std.process.Init.Minimal) !void {
     var env = try std.process.Environ.createMap(init.environ, alloc);
     defer env.deinit();
     try config.load(io, alloc, env);
+
+    // **EVERY SESSION GETS ITS LAST-MESSAGE RECORD BEFORE THE FIRST REQUEST.**
+    // /chat/recent reads that record instead of every transcript in full; a
+    // conversation written before the record existed would otherwise cost the
+    // old price on every listing until someone posted to it. One pass, and a
+    // session that already has one costs a small read.
+    {
+        var boot = std.heap.ArenaAllocator.init(alloc);
+        defer boot.deinit();
+        const wrote = chat_store.backfillAll(io, boot.allocator());
+        if (wrote > 0) std.debug.print("zig-server: wrote a last-message record for {d} session(s)\n", .{wrote});
+    }
 
     // The pub/sub fan-out shared across all connections. Lives for the process
     // lifetime; drives chat's SSE streams. Each request gets its own handle on
