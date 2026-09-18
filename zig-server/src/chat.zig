@@ -425,7 +425,13 @@ fn newTopic(req: *Request, io: Io, alloc: Alloc, bus: *Bus, conv: Conv, uid: []c
         if (try highestGeneralSession(io, alloc, conv.dir)) |gen| {
             if (!std.mem.eql(u8, gen, topic)) {
                 const note = try std.fmt.allocPrint(alloc, "New topic: [{s}]({s}/{s})", .{ topic, conv.base, topic });
-                _ = store.appendMessage(io, alloc, bus, conv.meta, conv.dir, conv.key, gen, from_name, uid, note, "") catch {};
+                // **NOT BEST-EFFORT ANY MORE.** This used to be `catch {}`, so
+                // a partner could simply never hear about a topic and nobody
+                // would ever know why. The host logs what it is handed and
+                // closes the connection; a retry then meets the duplicate
+                // check above and says the topic already exists, which is true
+                // and is a great deal more use than silence.
+                _ = try store.appendMessage(io, alloc, bus, conv.meta, conv.dir, conv.key, gen, from_name, uid, note, "");
             }
         }
     }

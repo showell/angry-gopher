@@ -19,6 +19,7 @@ const std = @import("std");
 const Io = std.Io;
 const Alloc = std.mem.Allocator;
 const store = @import("chat_store.zig");
+const files = @import("files.zig");
 
 /// images_sep joins entries on disk (blank line, 13 hyphens, blank line).
 pub const images_sep = "\n\n-------------\n\n";
@@ -111,7 +112,10 @@ pub fn appendImagesEntry(io: Io, alloc: Alloc, uid: []const u8, e: ImagesEntry) 
     defer imagesMu.unlock(io);
 
     if (std.fs.path.dirname(path)) |d| try Io.Dir.cwd().createDirPath(io, d);
-    const existing = Io.Dir.cwd().readFileAlloc(io, path, alloc, .unlimited) catch "";
+    // The read only decides whether a separator is needed — the write below
+    // appends rather than replacing, so a failed read cost a separator and ran
+    // two entries together rather than losing any. Still worth telling apart.
+    const existing = try files.readOrEmpty(io, alloc, path, .unlimited);
     const bytes = if (existing.len > 0)
         try std.fmt.allocPrint(alloc, "{s}{s}", .{ images_sep, entry })
     else

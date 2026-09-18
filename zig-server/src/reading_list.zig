@@ -23,6 +23,7 @@ const std = @import("std");
 const Io = std.Io;
 const Alloc = std.mem.Allocator;
 const store = @import("chat_store.zig");
+const files = @import("files.zig");
 const docs_store = @import("docs_store.zig");
 const mem_meter = @import("mem_meter.zig");
 
@@ -208,7 +209,12 @@ fn buildEntry(io: Io, path: []const u8, mtime_ns: i96) !Entry {
     var arena = std.heap.ArenaAllocator.init(cache_alloc);
     errdefer arena.deinit();
     const aa = arena.allocator();
-    const doc = Io.Dir.cwd().readFileAlloc(io, path, aa, .unlimited) catch "";
+    // **A FAILED READ MUST NOT BE CACHED AS AN EMPTY LIST.** This entry is
+    // kept against the file's modification time, so "" here used to empty a
+    // reading list until the file next changed. A missing file is genuinely
+    // empty; anything else is the caller's problem, and the cache keeps what
+    // it already had.
+    const doc = try files.readOrEmpty(io, aa, path, .unlimited);
     const refs = try parseRefs(aa, doc); // refs alias `doc`, both arena-owned
     return .{ .mtime_ns = mtime_ns, .arena = arena, .refs = refs };
 }

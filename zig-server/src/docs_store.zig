@@ -15,6 +15,7 @@ const std = @import("std");
 const Io = std.Io;
 const Alloc = std.mem.Allocator;
 const store = @import("chat_store.zig");
+const files = @import("files.zig");
 
 /// DocSummary is one sidebar entry: the slug + a display title derived from it.
 pub const DocSummary = struct { slug: []const u8, title: []const u8 };
@@ -230,7 +231,11 @@ pub fn appendToUserDoc(io: Io, alloc: Alloc, uid: []const u8, slug: []const u8, 
     defer append_mu.unlock(io);
 
     try Io.Dir.cwd().createDirPath(io, try userDocsDir(alloc, uid));
-    const existing = Io.Dir.cwd().readFileAlloc(io, path, alloc, .unlimited) catch "";
+    // **A DOCUMENT THAT WILL NOT READ IS NOT AN EMPTY DOCUMENT.** The write
+    // below replaces the file with what was read plus this addition, so a
+    // failed read here used to hand the user back their newest paragraph and
+    // nothing else. files.zig draws the line.
+    const existing = try files.readOrEmpty(io, alloc, path, .unlimited);
     if (max_bytes != 0 and existing.len + addition.len > max_bytes) return error.DocTooLarge;
     const combined = try std.mem.concat(alloc, u8, &.{ existing, addition });
     try Io.Dir.cwd().writeFile(io, .{ .sub_path = path, .data = combined });

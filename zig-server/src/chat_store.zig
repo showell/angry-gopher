@@ -19,6 +19,7 @@ const std = @import("std");
 const Io = std.Io;
 const Alloc = std.mem.Allocator;
 const timefmt = @import("timefmt.zig");
+const files = @import("files.zig");
 const bus_mod = @import("bus.zig");
 const Bus = bus_mod.Bus;
 const users = @import("users.zig");
@@ -141,7 +142,9 @@ pub fn openStream(io: Io, alloc: Alloc, bus: *Bus, conv_dir: []const u8, conv_ke
     chat_mu.lockUncancelable(io);
     defer chat_mu.unlock(io);
 
-    const raw = Io.Dir.cwd().readFileAlloc(io, path, alloc, .unlimited) catch "";
+    // A session nobody has written to is genuinely empty; a session that will
+    // not read is not, and showing it as empty is how a transcript looks lost.
+    const raw = try files.readOrEmpty(io, alloc, path, .unlimited);
     const msgs = try decodeChatFile(alloc, raw);
     const sub = try bus.open(key);
     return .{ .backlog = msgs, .sub = sub };
@@ -208,7 +211,7 @@ pub fn reactionsPath(alloc: Alloc, conv_dir: []const u8, sid: []const u8) ![]u8 
 /// readReactions returns the sidecar's bytes, or "" when nobody has reacted yet.
 pub fn readReactions(io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8) ![]const u8 {
     const path = try reactionsPath(alloc, conv_dir, sid);
-    return Io.Dir.cwd().readFileAlloc(io, path, alloc, .unlimited) catch "";
+    return files.readOrEmpty(io, alloc, path, .unlimited);
 }
 
 /// appendReaction records one event `{msg, uid, from, emoji, on, at}` on the

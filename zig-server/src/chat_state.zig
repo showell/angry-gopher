@@ -16,6 +16,7 @@ const std = @import("std");
 const Io = std.Io;
 const Alloc = std.mem.Allocator;
 const store = @import("chat_store.zig");
+const files = @import("files.zig");
 const timefmt = @import("timefmt.zig");
 
 /// userChatStateDir is a user's per-chat-state directory ({chat_root}/users/<uid>),
@@ -66,8 +67,7 @@ pub fn setUserLastSession(io: Io, alloc: Alloc, uid: []const u8, conv_key: []con
 /// conversation `conv_key`, sorted (the file's content order). A missing file →
 /// empty. Stale ids are harmless — callers intersect with the live session list.
 pub fn pinnedSessions(io: Io, alloc: Alloc, uid: []const u8, conv_key: []const u8) ![][]const u8 {
-    const b = readPinnedFile(io, alloc, uid, conv_key) catch return &.{};
-    return parsePinned(alloc, b);
+    return parsePinned(alloc, try readPinnedFile(io, alloc, uid, conv_key));
 }
 
 fn parsePinned(alloc: Alloc, b: []const u8) ![][]const u8 {
@@ -96,7 +96,11 @@ pub fn isPinned(set: [][]const u8, sid: []const u8) bool {
 /// Best-effort.
 pub fn setSessionPinned(io: Io, alloc: Alloc, uid: []const u8, conv_key: []const u8, sid: []const u8, pinned: bool) void {
     if (uid.len == 0 or sid.len == 0) return;
-    const existing = readPinnedFile(io, alloc, uid, conv_key) catch "";
+    // **A SET THAT WILL NOT READ IS NOT AN EMPTY SET.** What is read here is
+    // rewritten below, so treating a failed read as "no pins" used to delete
+    // every pin the user had — silently, on the way to adding one. No pins is
+    // a missing file (files.zig answers ""); anything else leaves them alone.
+    const existing = readPinnedFile(io, alloc, uid, conv_key) catch return;
     const cur = parsePinned(alloc, existing) catch return;
 
     // Rebuild the set with sid added/removed, kept sorted and de-duped.
@@ -134,7 +138,7 @@ fn pinnedPath(alloc: Alloc, uid: []const u8, conv_key: []const u8) ![]u8 {
 
 fn readPinnedFile(io: Io, alloc: Alloc, uid: []const u8, conv_key: []const u8) ![]u8 {
     const path = try pinnedPath(alloc, uid, conv_key);
-    return Io.Dir.cwd().readFileAlloc(io, path, alloc, .unlimited);
+    return files.readOrEmpty(io, alloc, path, .unlimited);
 }
 
 fn lessThanStr(_: void, a: []const u8, b: []const u8) bool {
