@@ -13,6 +13,7 @@ const store = @import("chat_store.zig");
 const chat = @import("chat.zig");
 const chrome = @import("chat_chrome.zig");
 const markdown = @import("markdown.zig");
+const disk = @import("store.zig");
 
 const Alloc = std.mem.Allocator;
 const Request = std.http.Server.Request;
@@ -22,7 +23,7 @@ pub fn handle(req: *Request, io: Io, alloc: Alloc, uid: []const u8, rest: []cons
     if (rest.len != 0) return http.notFound(req);
     const viewer = try users.getUserName(io, alloc, uid);
     const path = try std.fs.path.join(alloc, &.{ store.chat_root, "users", uid, "links.md" });
-    const md: ?[]u8 = Io.Dir.cwd().readFileAlloc(io, path, alloc, .unlimited) catch null;
+    const md: ?[]u8 = disk.read(io, alloc, path, .unlimited) catch null;
 
     var b: std.ArrayList(u8) = .empty;
     try chrome.begin(&b, alloc, "Links", "Links", viewer, "links");
