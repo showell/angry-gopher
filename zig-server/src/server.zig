@@ -27,6 +27,7 @@ const router = @import("router.zig");
 const config = @import("config.zig");
 const edge = @import("edge.zig");
 const mem_meter = @import("mem_meter.zig");
+const bind = @import("bind.zig");
 const bus_mod = @import("bus.zig");
 const chat_store = @import("chat_store.zig");
 const host_status = router.host_status;
@@ -82,11 +83,11 @@ pub fn main(init: std.process.Init.Minimal) !void {
     host_status.provide(linuxFacts);
 
     const port = portFromEnv(env);
-    const addr = try net.IpAddress.parse("0.0.0.0", port);
+    const addr = try bind.address(env.get("GOPHER_BIND"), port);
     var listener = try addr.listen(io, .{ .reuse_address = true });
     defer listener.deinit(io);
 
-    std.debug.print("zig-server: http://localhost:{d}  (/driving, /puzzles, /game, /chat, /channel)\n", .{port});
+    std.debug.print("zig-server: http://localhost:{d}, bound to {f}  (/driving, /puzzles, /game, /chat, /channel)\n", .{ port, addr });
 
     // Each connection becomes a concurrent task in this group. We never await it
     // — the server runs forever and completed tasks self-reap (see file header).
