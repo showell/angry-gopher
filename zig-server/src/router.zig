@@ -755,3 +755,36 @@ test "route: an address names 5 players an hour and saves 20 MB of games, then 4
     try testing.expectEqualStrings("200 OK", status(try serveFrom(a, io, try std.fmt.allocPrint(a,
         "POST /game/new-session HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\nContent-Length: 5\r\n\r\nstate", .{try signedUid(a, ids[0])}), "198.51.100.1")));
 }
+
+// ── /admin/backup (gopher-metal REVIEW-admin-backup.md) ──────────────────────
+
+/// An admin session for UidSite: uid 1, with a password.
+fn adminSession(a: std.mem.Allocator, io: Io) ![]const u8 {
+    try users.setUserName(io, a, "1", "Steve");
+    try users.setUserPassword(io, a, "1", "hunter2");
+    const now: i64 = @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
+    return std.fmt.allocPrint(a, "gopher_auth={s}", .{try users.signSession(a, UidSite.secret, "1", now)});
+}
+
+test "route: HEAD /admin/backup reads nothing" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var site = try UidSite.init(a, io);
+    defer site.deinit();
+    const admin_backup = @import("admin_backup.zig");
+    const me = try adminSession(a, io);
+
+    const before = admin_backup.files_archived;
+    const head = try serve(a, io, try std.fmt.allocPrint(a, "HEAD /admin/backup HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\n\r\n", .{me}));
+    try testing.expectEqualStrings("200 OK", status(head));
+    try testing.expect(std.mem.indexOf(u8, head, "application/x-tar") != null);
+    try testing.expectEqual(before, admin_backup.files_archived);
+    // A GET does walk it: the secret and the account files, at least.
+    const got = try UidSite.ask(a, io, "/admin/backup", me);
+    try testing.expectEqualStrings("200 OK", status(got));
+    try testing.expect(admin_backup.files_archived >= before + 3);
+}

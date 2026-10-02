@@ -32,17 +32,29 @@ const Request = std.http.Server.Request;
 /// How much of a file is read at a time.
 const piece = 64 * 1024;
 
+const tar_headers = [_]std.http.Header{
+    .{ .name = "content-type", .value = "application/x-tar" },
+    .{ .name = "content-disposition", .value = "attachment; filename=\"gopher-backup.tar\"" },
+    .{ .name = "cache-control", .value = "no-store" },
+};
+
+/// How many files this process has put into archives: for a test to see
+/// whether a request walked the data.
+pub var files_archived: usize = 0;
+
 pub fn render(req: *Request, io: Io, alloc: Alloc) !void {
     const data = store.data_base orelse return req.respond("the data roots are not configured here\n", .{ .status = .service_unavailable });
     const auth = store.auth_base orelse return req.respond("the data roots are not configured here\n", .{ .status = .service_unavailable });
 
+    // **A HEAD READS NOTHING** (gopher-metal REVIEW-admin-backup.md, finding
+    // 7). The body is left out of the answer anyway, and walking the data to
+    // write it into nothing cost a whole backup's reads; on metal, that is
+    // every other request waiting.
+    if (req.head.method == .HEAD) return req.respond("", .{ .extra_headers = &tar_headers });
+
     var hbuf: [4096]u8 = undefined;
     var body = req.respondStreaming(&hbuf, .{
-        .respond_options = .{ .extra_headers = &.{
-            .{ .name = "content-type", .value = "application/x-tar" },
-            .{ .name = "content-disposition", .value = "attachment; filename=\"gopher-backup.tar\"" },
-            .{ .name = "cache-control", .value = "no-store" },
-        } },
+        .respond_options = .{ .extra_headers = &tar_headers },
     }) catch return;
 
     var skipped: std.ArrayList(u8) = .empty;
@@ -89,6 +101,7 @@ fn walk(io: Io, alloc: Alloc, t: *Tar, dir: []const u8, name: []const u8, buf: [
                     at += n;
                 }
                 try t.pad(fst.size);
+                files_archived += 1;
             },
             .other => {},
         }
