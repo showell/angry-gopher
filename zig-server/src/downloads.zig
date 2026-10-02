@@ -17,6 +17,7 @@ const std = @import("std");
 const Io = std.Io;
 const Alloc = std.mem.Allocator;
 const http = @import("http.zig");
+const store = @import("store.zig");
 
 const Request = std.http.Server.Request;
 
@@ -37,7 +38,7 @@ pub fn handle(req: *Request, io: Io, alloc: Alloc, sub: []const u8) !void {
 fn serve(req: *Request, io: Io, alloc: Alloc, name: []const u8) !void {
     if (!isSafeName(name)) return http.notFound(req);
     const path = try std.fs.path.join(alloc, &.{ downloads_root, name });
-    const bytes = Io.Dir.cwd().readFileAlloc(io, path, alloc, .unlimited) catch return http.notFound(req);
+    const bytes = store.read(io, alloc, path, .unlimited) catch return http.notFound(req);
     const disposition = std.http.Header{
         .name = "content-disposition",
         .value = try std.fmt.allocPrint(alloc, "attachment; filename=\"{s}\"", .{name}),
