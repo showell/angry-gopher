@@ -17,6 +17,7 @@ const std = @import("std");
 const Io = std.Io;
 const http = @import("http.zig");
 const markdown = @import("markdown.zig");
+const store = @import("store.zig");
 
 const Alloc = std.mem.Allocator;
 const Request = std.http.Server.Request;
@@ -29,7 +30,7 @@ pub var page_path: []const u8 = "pages/safari-download.md";
 /// handle serves GET /safari_download. A missing source file 404s (rather than
 /// crashing) — the route exists only when the content does.
 pub fn handle(req: *Request, io: Io, alloc: Alloc) !void {
-    const src = Io.Dir.cwd().readFileAlloc(io, page_path, alloc, .unlimited) catch return http.notFound(req);
+    const src = store.read(io, alloc, page_path, .unlimited) catch return http.notFound(req);
 
     var b: std.ArrayList(u8) = .empty;
     try b.appendSlice(alloc, page_head);
