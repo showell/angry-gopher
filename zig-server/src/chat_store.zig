@@ -837,12 +837,19 @@ pub fn listUserChannels(io: Io, alloc: Alloc, uid: []const u8) ![][]const u8 {
 /// chatKeyParticipant reports whether `user` participates in DM key `key`
 /// ("<a>_<b>"). The key must be canonical (smaller numeric id first) — a
 /// non-canonical or malformed key is rejected.
+///
+/// **BOTH HALVES ARE UIDS.** Each is a path component (the conversation's
+/// folder) and the other is a member the fan-out writes for
+/// ({chat_root}/users/<member>/images.md), so each must be what allocateUser
+/// makes: digits, with no leading zero. A half like `..` would otherwise
+/// write one level up on Linux, and `05_5` and `5_05` would split one DM in
+/// two (gopher-metal's REVIEW-request-paths.md, finding 3). Whether the other
+/// half is an account that exists is the route's to ask: this has no Io.
 pub fn chatKeyParticipant(alloc: Alloc, key: []const u8, user: []const u8) !bool {
     const cut = cutSeq(key, "_") orelse return false;
     const x = cut.before;
     const y = cut.after;
-    if (x.len == 0 or y.len == 0) return false;
-    if (std.mem.indexOfScalar(u8, y, '_') != null) return false; // exactly one '_'
+    if (!canonicalUid(x) or !canonicalUid(y)) return false;
     const canon = try chatPairKey(alloc, x, y);
     if (!std.mem.eql(u8, canon, key)) return false;
     return std.mem.eql(u8, user, x) or std.mem.eql(u8, user, y);
@@ -855,6 +862,15 @@ pub fn chatPairKey(alloc: Alloc, a: []const u8, b: []const u8) ![]u8 {
         std.fmt.allocPrint(alloc, "{s}_{s}", .{ a, b })
     else
         std.fmt.allocPrint(alloc, "{s}_{s}", .{ b, a });
+}
+
+/// A uid as allocateUser writes one: digits, the first not zero.
+fn canonicalUid(s: []const u8) bool {
+    if (s.len == 0 or s[0] == '0') return false;
+    for (s) |c| {
+        if (c < '0' or c > '9') return false;
+    }
+    return true;
 }
 
 fn atoiOr0(s: []const u8) i64 {
@@ -920,6 +936,21 @@ fn isAlnum(c: u8) bool {
 }
 
 const testing = std.testing;
+
+test "chatKeyParticipant: both halves are canonical uids, in order, and the user is one" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    try testing.expect(try chatKeyParticipant(a, "1_2", "1"));
+    try testing.expect(try chatKeyParticipant(a, "1_2", "2"));
+    try testing.expect(try chatKeyParticipant(a, "2_10", "10"));
+    try testing.expect(!try chatKeyParticipant(a, "1_2", "3"));
+    try testing.expect(!try chatKeyParticipant(a, "2_1", "1")); // not canonical
+    // REVIEW-request-paths.md finding 3: the other half was any text.
+    for ([_][]const u8{ ".._5", "._5", "abc_5", "05_5", "5_05", "0_5", "_5", "5_", "5_5_6", "5_6/x", "-1_5" }) |key| {
+        try testing.expect(!try chatKeyParticipant(a, key, "5"));
+    }
+}
 
 test "validMsgRefID: accepts slug_index, rejects everything off-shape" {
     // canonical shapes (DM date-sid, channel word-sid, hyphenated sid)

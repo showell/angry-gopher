@@ -248,6 +248,10 @@ fn convRoute(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8, re
 
     // DM members are the two uids in the (already participant-checked) pair key.
     const us = std.mem.indexOfScalar(u8, pair, '_').?;
+    // The other half must be an account: a DM is between two people, and its
+    // folder and the fan-out's writes are named after both.
+    const other = if (std.mem.eql(u8, pair[0..us], uid)) pair[us + 1 ..] else pair[0..us];
+    if (!users.principalExists(io, alloc, other)) return http.notFound(req);
     const members = try alloc.alloc([]const u8, 2);
     members[0] = pair[0..us];
     members[1] = pair[us + 1 ..];
