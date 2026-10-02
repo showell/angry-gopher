@@ -22,6 +22,7 @@ const html = @import("html.zig");
 const settings = @import("settings.zig");
 const ui = @import("admin_ui.zig");
 const admin_host = @import("admin_host.zig");
+const admin_backup = @import("admin_backup.zig");
 
 const Request = std.http.Server.Request;
 
@@ -30,6 +31,7 @@ pub fn handle(req: *Request, io: Io, alloc: Alloc, sub: []const u8) !void {
     if (!try ui.requireAdmin(req, io, alloc)) return;
     if (std.mem.eql(u8, sub, "/apikey")) return handleAPIKey(req, io, alloc);
     if (std.mem.eql(u8, sub, "/host")) return admin_host.render(req, io, alloc);
+    if (std.mem.eql(u8, sub, "/backup")) return admin_backup.render(req, io, alloc);
     if (sub.len != 0 and !std.mem.eql(u8, sub, "/")) return http.notFound(req);
     return renderRoster(req, io, alloc);
 }
