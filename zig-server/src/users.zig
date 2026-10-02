@@ -36,6 +36,7 @@ const auth = @import("auth.zig");
 const counter = @import("counter.zig");
 const http = @import("http.zig");
 const names = @import("names.zig");
+const store = @import("store.zig");
 
 const HmacSha256 = std.crypto.auth.hmac.sha2.HmacSha256;
 const b64 = std.base64.url_safe_no_pad;
@@ -172,7 +173,7 @@ fn checkAPIKey(io: Io, alloc: Alloc, presented: []const u8) !?[]const u8 {
 fn userExists(io: Io, alloc: Alloc, id: []const u8) !bool {
     if (std.mem.trim(u8, id, " \t\r\n").len == 0) return false;
     const dir = try std.fs.path.join(alloc, &.{ auth_root, id });
-    const st = Io.Dir.cwd().statFile(io, dir, .{}) catch return false;
+    const st = store.stat(io, alloc, dir) catch return false;
     return st.kind == .directory;
 }
 
@@ -199,12 +200,10 @@ pub const AuthorizedUser = struct { id: []const u8, name: []const u8 };
 /// its display name, sorted by numeric id.
 /// Missing auth_root → empty.
 pub fn listAuthorized(io: Io, alloc: Alloc) ![]AuthorizedUser {
-    var dir = Io.Dir.cwd().openDir(io, auth_root, .{ .iterate = true }) catch return &.{};
-    defer dir.close(io);
+    const entries = store.list(io, alloc, auth_root) catch return &.{};
 
     var out: std.ArrayList(AuthorizedUser) = .empty;
-    var it = dir.iterate();
-    while (try it.next(io)) |entry| {
+    for (entries) |entry| {
         if (entry.kind != .directory) continue;
         // numeric id only (the account dirs); skips next-id.txt etc.
         if (std.fmt.parseInt(i64, entry.name, 10)) |_| {} else |_| continue;
@@ -242,11 +241,9 @@ pub fn touchUser(io: Io, alloc: Alloc, id: []const u8) void {
 }
 
 fn touchUserImpl(io: Io, alloc: Alloc, id: []const u8) !void {
-    const dir = try std.fs.path.join(alloc, &.{ users_root, id });
-    try Io.Dir.cwd().createDirPath(io, dir);
-    const path = try std.fs.path.join(alloc, &.{ dir, "last-seen" });
+    const path = try std.fs.path.join(alloc, &.{ users_root, id, "last-seen" });
     const body = try std.fmt.allocPrint(alloc, "{d}", .{nowUnix(io)});
-    try Io.Dir.cwd().writeFile(io, .{ .sub_path = path, .data = body });
+    try store.write(io, alloc, path, body, .{});
 }
 
 /// max_upload_lifetime_bytes caps the cumulative bytes one user may ever upload —
@@ -261,7 +258,7 @@ var upload_bytes_mu: Io.Mutex = .init;
 /// ({users_root}/{id}/upload-bytes), or 0 when absent/unparseable.
 pub fn userUploadBytes(io: Io, alloc: Alloc, id: []const u8) i64 {
     const path = std.fs.path.join(alloc, &.{ users_root, id, "upload-bytes" }) catch return 0;
-    const b = Io.Dir.cwd().readFileAlloc(io, path, alloc, .unlimited) catch return 0;
+    const b = store.read(io, alloc, path, .unlimited) catch return 0;
     return std.fmt.parseInt(i64, std.mem.trim(u8, b, " \t\r\n"), 10) catch 0;
 }
 
@@ -275,10 +272,10 @@ pub fn reserveUploadBytes(io: Io, alloc: Alloc, id: []const u8, n: i64) bool {
     const total = userUploadBytes(io, alloc, id) + n;
     if (total > max_upload_lifetime_bytes) return false;
     const dir = std.fs.path.join(alloc, &.{ users_root, id }) catch return false;
-    Io.Dir.cwd().createDirPath(io, dir) catch return false;
+    store.makeDir(io, alloc, dir) catch return false;
     const path = std.fs.path.join(alloc, &.{ dir, "upload-bytes" }) catch return false;
     const body = std.fmt.allocPrint(alloc, "{d}", .{total}) catch return false;
-    Io.Dir.cwd().writeFile(io, .{ .sub_path = path, .data = body }) catch {};
+    store.write(io, alloc, path, body, .{}) catch {};
     return true;
 }
 
@@ -305,10 +302,8 @@ pub fn setUserAPIKey(io: Io, alloc: Alloc, id: []const u8) ![]const u8 {
     io.random(b[0..]);
     const hex = std.fmt.bytesToHex(b, .lower); // [32]u8
     const key = try std.fmt.allocPrint(alloc, "{s}-{s}", .{ id, &hex });
-    const dir = try std.fs.path.join(alloc, &.{ auth_root, id });
-    try Io.Dir.cwd().createDirPath(io, dir);
-    const path = try std.fs.path.join(alloc, &.{ dir, "api-key" });
-    try Io.Dir.cwd().writeFile(io, .{ .sub_path = path, .data = key, .flags = .{ .permissions = @enumFromInt(0o600) } });
+    const path = try std.fs.path.join(alloc, &.{ auth_root, id, "api-key" });
+    try store.write(io, alloc, path, key, .{ .private = true });
     return key;
 }
 
@@ -316,7 +311,7 @@ pub fn setUserAPIKey(io: Io, alloc: Alloc, id: []const u8) ![]const u8 {
 /// Best-effort.
 pub fn clearUserAPIKey(io: Io, alloc: Alloc, id: []const u8) void {
     const path = std.fs.path.join(alloc, &.{ auth_root, id, "api-key" }) catch return;
-    Io.Dir.cwd().deleteFile(io, path) catch {};
+    store.remove(io, alloc, path) catch {};
 }
 
 /// isMember reports whether `id` is a password member.
@@ -340,12 +335,10 @@ pub fn principalIsAgent(id: []const u8) bool {
 /// listUserIDs returns every account id (numeric dir under auth_root), sorted
 /// numerically. An id exists iff it has an account dir.
 pub fn listUserIDs(io: Io, alloc: Alloc) ![][]const u8 {
-    var dir = Io.Dir.cwd().openDir(io, auth_root, .{ .iterate = true }) catch return &.{};
-    defer dir.close(io);
+    const entries = store.list(io, alloc, auth_root) catch return &.{};
 
     var out: std.ArrayList([]const u8) = .empty;
-    var it = dir.iterate();
-    while (try it.next(io)) |entry| {
+    for (entries) |entry| {
         if (entry.kind != .directory) continue;
         if (std.fmt.parseInt(i64, entry.name, 10)) |_| {} else |_| continue;
         try out.append(alloc, try alloc.dupe(u8, entry.name));
@@ -363,27 +356,26 @@ fn lessThanNumericID(_: void, a: []const u8, b: []const u8) bool {
 /// never recorded.
 pub fn userLastSeen(io: Io, alloc: Alloc, id: []const u8) ?i64 {
     const path = std.fs.path.join(alloc, &.{ users_root, id, "last-seen" }) catch return null;
-    const b = Io.Dir.cwd().readFileAlloc(io, path, alloc, .unlimited) catch return null;
+    const b = store.read(io, alloc, path, .unlimited) catch return null;
     return std.fmt.parseInt(i64, std.mem.trim(u8, b, " \t\r\n"), 10) catch null;
 }
 
 fn authFileExists(io: Io, alloc: Alloc, id: []const u8, name: []const u8) !bool {
     const path = try std.fs.path.join(alloc, &.{ auth_root, id, name });
-    _ = Io.Dir.cwd().statFile(io, path, .{}) catch return false;
-    return true;
+    return store.has(io, alloc, path);
 }
 
 /// readAuthFile reads {auth_root}/{id}/{name}, or null if absent.
 fn readAuthFile(io: Io, alloc: Alloc, id: []const u8, name: []const u8) !?[]u8 {
     const path = try std.fs.path.join(alloc, &.{ auth_root, id, name });
-    return Io.Dir.cwd().readFileAlloc(io, path, alloc, .unlimited) catch return null;
+    return store.read(io, alloc, path, .unlimited) catch return null;
 }
 
 /// loadSecret reads {session_secret_dir}/_session_secret (>= 32 bytes), or null.
 /// Read-only: we never GENERATE a secret — we require the one already on disk.
 fn loadSecret(io: Io, alloc: Alloc) !?[]const u8 {
     const path = try std.fs.path.join(alloc, &.{ session_secret_dir, "_session_secret" });
-    const b = Io.Dir.cwd().readFileAlloc(io, path, alloc, .unlimited) catch return null;
+    const b = store.read(io, alloc, path, .unlimited) catch return null;
     if (b.len < 32) return null;
     return b;
 }
@@ -475,10 +467,8 @@ pub fn allocateUser(io: Io, alloc: Alloc, name: []const u8) ![]const u8 {
 /// setUserName writes a user's display name ({auth_root}/{id}/name), creating the
 /// account dir (whose existence IS the user).
 pub fn setUserName(io: Io, alloc: Alloc, id: []const u8, name: []const u8) !void {
-    const dir = try std.fs.path.join(alloc, &.{ auth_root, id });
-    try Io.Dir.cwd().createDirPath(io, dir);
-    const path = try std.fs.path.join(alloc, &.{ dir, "name" });
-    try Io.Dir.cwd().writeFile(io, .{ .sub_path = path, .data = name });
+    const path = try std.fs.path.join(alloc, &.{ auth_root, id, "name" });
+    try store.write(io, alloc, path, name, .{});
 }
 
 /// setUserPassword bcrypt-hashes `password` and stores it (mode 0o600), making
@@ -487,10 +477,8 @@ pub fn setUserName(io: Io, alloc: Alloc, id: []const u8, name: []const u8) !void
 pub fn setUserPassword(io: Io, alloc: Alloc, id: []const u8, password: []const u8) !void {
     var buf: [60]u8 = undefined;
     const hash = try auth.hashPassword(password, &buf, io);
-    const dir = try std.fs.path.join(alloc, &.{ auth_root, id });
-    try Io.Dir.cwd().createDirPath(io, dir);
-    const path = try std.fs.path.join(alloc, &.{ dir, "password" });
-    try Io.Dir.cwd().writeFile(io, .{ .sub_path = path, .data = hash, .flags = .{ .permissions = @enumFromInt(0o600) } });
+    const path = try std.fs.path.join(alloc, &.{ auth_root, id, "password" });
+    try store.write(io, alloc, path, hash, .{ .private = true });
 }
 
 /// checkUserPassword verifies `password` against a member's stored bcrypt hash.
@@ -523,10 +511,10 @@ pub fn isNameReserved(io: Io, alloc: Alloc, name: []const u8) bool {
 pub fn deleteUserRecord(io: Io, alloc: Alloc, id: []const u8) void {
     if (std.mem.trim(u8, id, " \t\r\n").len == 0) return;
     if (std.fs.path.join(alloc, &.{ auth_root, id })) |p| {
-        Io.Dir.cwd().deleteTree(io, p) catch {};
+        store.removeTree(io, alloc, p) catch {};
     } else |_| {}
     if (std.fs.path.join(alloc, &.{ users_root, id })) |p| {
-        Io.Dir.cwd().deleteTree(io, p) catch {};
+        store.removeTree(io, alloc, p) catch {};
     } else |_| {}
 }
 
