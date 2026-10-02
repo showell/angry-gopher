@@ -33,6 +33,7 @@ const http = @import("http.zig");
 const store = @import("store.zig");
 const users = @import("users.zig");
 const player = @import("player.zig");
+const game_limits = @import("game_limits.zig");
 
 const HmacSha256 = std.crypto.auth.hmac.sha2.HmacSha256;
 const b64 = std.base64.url_safe_no_pad;
@@ -157,16 +158,26 @@ pub fn resolve(io: Io, alloc: Alloc, req: *std.http.Server.Request) !?[]const u8
     return verify(secret, value);
 }
 
+pub const Reissue = union(enum) {
+    /// The Set-Cookie for the signed cookie: the router redirects with it.
+    cookie: []const u8,
+    /// This address has had its share of re-signs this hour.
+    refused: game_limits.Refusal,
+};
+
 /// **THE ONE RE-IDENTIFICATION.** For a GET carrying an unsigned cookie the
 /// window still honours: the Set-Cookie for the signed one, with the id
 /// marked so the unsigned spelling is refused from now on. The router
-/// answers it with a redirect to the same page. Null otherwise.
-pub fn reissue(io: Io, alloc: Alloc, req: *std.http.Server.Request) !?[]const u8 {
+/// answers it with a redirect to the same page. **Counted per address**
+/// (`client`, game_limits.admitResign), so one address cannot sweep every
+/// legacy id. Null when there is nothing to re-sign.
+pub fn reissue(io: Io, alloc: Alloc, req: *std.http.Server.Request, client: ?[]const u8) !?Reissue {
     if (req.head.method != .GET) return null;
     if (try resolve(io, alloc, req)) |_| return null;
     const value = (try http.cookie(req, alloc, cookie_name)) orelse return null;
     if (!legacyHonoured(io, alloc, value)) return null;
-    return issue(io, alloc, value);
+    if (try game_limits.admitResign(io, client)) |r| return .{ .refused = r };
+    return .{ .cookie = (try issue(io, alloc, value)) orelse return null };
 }
 
 // ── tests ────────────────────────────────────────────────────────────────────

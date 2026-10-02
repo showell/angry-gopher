@@ -39,6 +39,11 @@ pub const max_sessions: u32 = 500;
 pub const max_bytes: u64 = 16 << 20;
 
 pub const players_per_hour: u32 = 5;
+/// Legacy gopher_uid cookies one address may have re-signed in an hour
+/// (uid_cookie.zig): an owner needs one, a household a few. Without a bound,
+/// one GET per id took every player not yet back, and locked the owners out
+/// (gopher-metal REVIEW-signed-uid-and-limits.md, finding 1).
+pub const resigns_per_hour: u32 = 3;
 pub const bytes_per_hour: u64 = 20_000_000;
 const hour: i64 = 60 * 60;
 
@@ -65,6 +70,7 @@ pub const Refusal = enum {
     floor,
     address_players,
     address_bytes,
+    address_resigns,
 
     pub fn text(r: Refusal) []const u8 {
         return switch (r) {
@@ -72,6 +78,7 @@ pub const Refusal = enum {
             .bytes => std.fmt.comptimePrint("This player's games already take {d} MiB, the most one may. Nothing was saved.\n", .{max_bytes >> 20}),
             .floor => "The server is low on disk, so games are not being saved for now. Nothing was saved.\n",
             .address_players => std.fmt.comptimePrint("{d} new players have been named from this address in the last hour, the most it may. Try again later.\n", .{players_per_hour}),
+            .address_resigns => std.fmt.comptimePrint("{d} old cookies have been renewed from this address in the last hour, the most it may. Try again later.\n", .{resigns_per_hour}),
             .address_bytes => std.fmt.comptimePrint("This address has saved {d} MB of games in the last hour, the most it may. Nothing was saved; try again later.\n", .{bytes_per_hour / 1_000_000}),
         };
     }
@@ -82,7 +89,7 @@ pub const Refusal = enum {
 pub fn refuse(req: *std.http.Server.Request, r: Refusal) !void {
     const status: std.http.Status = switch (r) {
         .sessions, .bytes, .floor => .insufficient_storage,
-        .address_players, .address_bytes => .too_many_requests,
+        .address_players, .address_bytes, .address_resigns => .too_many_requests,
     };
     try req.respond(r.text(), .{ .status = status });
 }
@@ -143,6 +150,18 @@ pub fn admit(io: Io, alloc: Alloc, id: []const u8, client: ?[]const u8, new_sess
     return null;
 }
 
+/// Whether `client` may have another legacy cookie re-signed this hour; null
+/// when it may, and then it is counted.
+pub fn admitResign(io: Io, client: ?[]const u8) !?Refusal {
+    const c = client orelse return null;
+    mu.lockUncancelable(io);
+    defer mu.unlock(io);
+    const s = seenSlot(c, now(io));
+    if (s.resigns >= resigns_per_hour) return .address_resigns;
+    s.resigns += 1;
+    return null;
+}
+
 /// Whether `client` may name another player this hour; null when it may, and
 /// then it is counted.
 pub fn admitPlayer(io: Io, client: ?[]const u8) !?Refusal {
@@ -185,6 +204,7 @@ const Seen = struct {
     len: u8 = 0, // 0: an empty slot
     since: i64 = 0, // the hour's start: its first count
     players: u32 = 0,
+    resigns: u32 = 0,
     bytes: u64 = 0,
 };
 

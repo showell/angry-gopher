@@ -113,16 +113,17 @@ pub fn route(req: *std.http.Server.Request, io: Io, alloc: std.mem.Allocator, bu
     // **AN UNSIGNED gopher_uid IS RE-IDENTIFIED ONCE** (uid_cookie.zig): its
     // first GET inside the window comes back to the same page with the
     // signed cookie set, and the unsigned spelling is refused from then on.
-    if (try uid_cookie.reissue(io, alloc, req)) |set_cookie| {
-        return req.respond("", .{ .status = .see_other, .extra_headers = &.{
-            .{ .name = "location", .value = localTarget(try http.target(req, alloc)) },
-            .{ .name = "set-cookie", .value = set_cookie },
-        } });
-    }
-    const path = stripQuery(try http.target(req, alloc));
     // Who is asking, for the bounds on what one address may make and write
     // (game_limits.zig). Read with the head, which a body read invalidates.
     const client = try game_limits.clientAddress(alloc, req, bus.peer);
+    if (try uid_cookie.reissue(io, alloc, req, client)) |re| switch (re) {
+        .cookie => |set_cookie| return req.respond("", .{ .status = .see_other, .extra_headers = &.{
+            .{ .name = "location", .value = localTarget(try http.target(req, alloc)) },
+            .{ .name = "set-cookie", .value = set_cookie },
+        } }),
+        .refused => |r| return game_limits.refuse(req, r),
+    };
+    const path = stripQuery(try http.target(req, alloc));
 
     if (matchPrefix(path, "/driving")) |sub| {
         try driving.handle(req, sub);
@@ -877,4 +878,37 @@ test "route: the re-sign's redirect stays on this site" {
         try testing.expectEqualStrings("303 See Other", status(r));
         try testing.expect(std.mem.indexOf(u8, r, try std.fmt.allocPrint(a, "location: {s}\r\n", .{c[1]})) != null);
     }
+}
+
+test "route: one address may have 3 legacy cookies re-signed an hour, then 429" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var site = try UidSite.init(a, io);
+    defer site.deinit();
+    const limits = UidSite.game_limits;
+
+    var ids: [5][]const u8 = undefined;
+    for (&ids) |*id| id.* = try player.allocate(io, a, "Nikhil");
+    const from = struct {
+        fn get(al: std.mem.Allocator, i: Io, id: []const u8, peer: []const u8) ![]const u8 {
+            return serveFrom(al, i, try std.fmt.allocPrint(al, "GET /play HTTP/1.1\r\nHost: x\r\nCookie: gopher_uid={s}\r\n\r\n", .{id}), peer);
+        }
+    };
+    for (ids[0..limits.resigns_per_hour]) |id|
+        try testing.expectEqualStrings("303 See Other", status(try from.get(a, io, id, "203.0.113.7")));
+    // The sweep's next id: refused, saying why, and not marked, so its owner
+    // can still come back.
+    const swept = try from.get(a, io, ids[3], "203.0.113.7");
+    try testing.expectEqualStrings("429 Too Many Requests", status(swept));
+    try testing.expect(std.mem.indexOf(u8, swept, "renewed") != null);
+    try testing.expect(setUid(swept) == null);
+    try testing.expect(!UidSite.marked(a, io, ids[3]));
+    // Its owner, from their own address, is re-signed.
+    try testing.expectEqualStrings("303 See Other", status(try from.get(a, io, ids[3], "198.51.100.1")));
+    // And an ordinary visit from the swept-out address is untouched.
+    try testing.expectEqualStrings("200 OK", status(try serveFrom(a, io, "GET /play HTTP/1.1\r\nHost: x\r\n\r\n", "203.0.113.7")));
 }
