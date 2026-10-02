@@ -9,17 +9,25 @@
 //!   meta                       — created_at + catalog snapshot (DSL)
 //!   puzzle_<idx>/actions.dsl   — one `<seq>) <action>` line per append
 //!
-//! Atomicity note: appendTextLine (store.append) does stat-size-then-positional-write (the
-//! std.Io file API exposes no O_APPEND). That is fully atomic for THIS design
-//! because session ids come from the shared counter, so a given actions.dsl is
-//! only ever appended by the one request that allocated its session — there are
-//! never two concurrent appenders to the same file.
+//! **APPENDS ARE SERIALIZED** (append_mu). store.append stats the file's size
+//! and then writes at it (the std.Io file API exposes no O_APPEND), so two
+//! appends to one file at once could both write at the old end, one over the
+//! other. This file once said that could not happen, because one request
+//! allocates a session; but the append routes take any session the player
+//! owns, so one player in two tabs, or a client retrying, appends to one file
+//! twice at once. Measured: 1,814 of 2,000 lines landed from 8 concurrent
+//! writers (gopher-metal's GROWTH-game-store.md).
 
 const std = @import("std");
 const Io = std.Io;
 const Alloc = std.mem.Allocator;
 const counter = @import("counter.zig");
 const store = @import("store.zig");
+
+/// append_mu serializes every game-store append (see the file header). One
+/// lock for the store, as chat_mu is for chat: appends are one positional
+/// write each, so contention costs little.
+var append_mu: Io.Mutex = .init;
 
 /// data_root is the live game-data dir (repo-relative from zig-server/, hence the `..`).
 pub var data_root: []const u8 = "../games/lynrummy/data";
@@ -107,6 +115,8 @@ pub fn appendPuzzleSessionDslLine(io: Io, alloc: Alloc, user_id: []const u8, ses
 fn appendTextLine(io: Io, alloc: Alloc, path: []const u8, body: []const u8) !void {
     const trimmed = std.mem.trimEnd(u8, body, "\n");
     const line = try std.fmt.allocPrint(alloc, "{s}\n", .{trimmed});
+    append_mu.lockUncancelable(io);
+    defer append_mu.unlock(io);
     _ = try store.append(io, alloc, path, line);
 }
 
@@ -212,6 +222,8 @@ pub fn countSessionActions(io: Io, alloc: Alloc, user_id: []const u8, session_id
 /// compacted body never contains a newline.
 fn appendRawLine(io: Io, alloc: Alloc, path: []const u8, body: []const u8) !void {
     const line = try std.fmt.allocPrint(alloc, "{s}\n", .{body});
+    append_mu.lockUncancelable(io);
+    defer append_mu.unlock(io);
     _ = try store.append(io, alloc, path, line);
 }
 
@@ -245,4 +257,59 @@ fn compactJSON(alloc: Alloc, src: []const u8) ![]u8 {
         }
     }
     return out.toOwnedSlice(alloc);
+}
+
+// ── tests ────────────────────────────────────────────────────────────────────
+
+const testing = std.testing;
+
+/// One writer of the concurrent-append test. `parent` must be thread-safe:
+/// the test passes the page allocator (named only inside a test block).
+fn appendMany(io: Io, parent: Alloc, user_id: []const u8, session_id: i64, writer: usize, n: usize) void {
+    var arena = std.heap.ArenaAllocator.init(parent);
+    defer arena.deinit();
+    const alloc = arena.allocator();
+    var buf: [2048]u8 = undefined;
+    var i: usize = 0;
+    while (i < n) : (i += 1) {
+        // A line long enough that two writes at one offset overlap.
+        const line = std.fmt.bufPrint(&buf, "{d}-{d}) {s}", .{ writer, i, "x" ** 1500 }) catch return;
+        appendSessionDslLine(io, alloc, user_id, session_id, "actions.dsl", line) catch return;
+    }
+}
+
+test "fs: appends to one session from many writers at once all land, whole" {
+    var tmp = testing.tmpDir(.{});
+    defer tmp.cleanup();
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(std.heap.page_allocator, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    const saved = data_root;
+    defer data_root = saved;
+    data_root = try std.fs.path.join(testing.allocator, &.{ ".zig-cache", "tmp", &tmp.sub_path, "data" });
+    defer testing.allocator.free(data_root);
+
+    const id = try allocateSessionID(io, a, "p1");
+    try writeSessionFile(io, a, "p1", id, "meta", "m");
+    const writers = 8;
+    const each = 100;
+    var group: Io.Group = .init;
+    var w: usize = 0;
+    while (w < writers) : (w += 1) {
+        group.concurrent(io, appendMany, .{ io, std.heap.page_allocator, "p1", id, w, each }) catch
+            group.async(io, appendMany, .{ io, std.heap.page_allocator, "p1", id, w, each });
+    }
+    try group.await(io);
+
+    const body = (try readSessionFile(io, a, "p1", id, "actions.dsl")).?;
+    var lines: usize = 0;
+    var it = std.mem.splitScalar(u8, std.mem.trimEnd(u8, body, "\n"), '\n');
+    while (it.next()) |line| {
+        try testing.expect(std.mem.endsWith(u8, line, "x" ** 1500)); // whole, not overwritten
+        lines += 1;
+    }
+    try testing.expectEqual(@as(usize, writers * each), lines);
 }
