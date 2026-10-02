@@ -158,7 +158,10 @@ fn apiKeyMatches(stored: []const u8, presented: []const u8) bool {
 fn checkAPIKey(io: Io, alloc: Alloc, presented: []const u8) !?[]const u8 {
     const dash = std.mem.indexOfScalar(u8, presented, '-') orelse return null;
     const id = presented[0..dash];
-    if (id.len == 0 or !try userIsAuthorized(io, alloc, id)) return null;
+    // **A UID, BEFORE IT IS A PATH.** The prefix names {auth_root}/<id>/...,
+    // and an id with `/` or `..` in it reached other folders' password and
+    // api-key files (gopher-metal's REVIEW-request-paths.md, finding 4).
+    if (!allDigits(id) or !try userIsAuthorized(io, alloc, id)) return null;
 
     const stored_opt = readAuthFile(io, alloc, id, "api-key") catch return null;
     const stored = std.mem.trim(u8, stored_opt orelse return null, " \t\r\n");
@@ -704,6 +707,33 @@ test "fs: api key issue, read back, clear; legacy bare-hash is held but not disp
     try Io.Dir.cwd().writeFile(io, .{ .sub_path = path, .data = "abc123def" });
     try testing.expect(userHasAPIKey(io, a, id));
     try testing.expect((try getUserAPIKey(io, a, id)) == null);
+}
+
+test "fs: an API key whose id is not a uid authenticates no one" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var tmp = testing.tmpDir(.{});
+    defer tmp.cleanup();
+    try tmpRoots(&tmp, a);
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+
+    // Account 7, a member, whose api-key file holds a key whose prefix is
+    // "7/." (as finding 5's admin write could leave). That prefix names
+    // account 7's own folder, so the old check found a password and a
+    // matching key there, and authenticated "7/." as a uid.
+    const dir = try std.fs.path.join(a, &.{ auth_root, "7" });
+    try store.makeDir(io, a, dir);
+    try store.write(io, a, try std.fs.path.join(a, &.{ dir, "password" }), "x", .{});
+    try store.write(io, a, try std.fs.path.join(a, &.{ dir, "api-key" }), "7/.-abc", .{});
+    try testing.expect((try checkAPIKey(io, a, "7/.-abc")) == null);
+    try testing.expect((try checkAPIKey(io, a, "../auth/7-abc")) == null);
+
+    // A real key still authenticates.
+    try store.write(io, a, try std.fs.path.join(a, &.{ dir, "api-key" }), "7-abc", .{});
+    try testing.expectEqualStrings("7", (try checkAPIKey(io, a, "7-abc")).?);
 }
 
 // ── issuance (account allocation, deletion, live session signing) ─────────────
