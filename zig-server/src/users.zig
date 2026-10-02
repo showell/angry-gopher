@@ -35,7 +35,6 @@ const Alloc = std.mem.Allocator;
 const auth = @import("auth.zig");
 const counter = @import("counter.zig");
 const http = @import("http.zig");
-const names = @import("names.zig");
 const store = @import("store.zig");
 const uid_cookie = @import("uid_cookie.zig");
 
@@ -563,11 +562,6 @@ pub fn findMemberByName(io: Io, alloc: Alloc, name: []const u8) !?[]const u8 {
     return null;
 }
 
-/// isNameReserved reports whether some member currently holds `name`.
-pub fn isNameReserved(io: Io, alloc: Alloc, name: []const u8) bool {
-    return (findMemberByName(io, alloc, name) catch null) != null;
-}
-
 /// deleteUserRecord removes a user's account dir (auth_root: name/password/
 /// api-key) and gopher-private dir (users_root: admin/last-seen/upload-bytes).
 /// Game/chat data is deleted separately (storage.deleteUserData). Refuses an
@@ -728,14 +722,12 @@ test "fs: only members reserve a name; findMemberByName resolves it" {
     // a freshly allocated account (name only, no password) is NOT yet a member,
     // so its name is NOT reserved — a half-registered guest can't squat a name.
     const id = try allocateUser(io, a, "Alice");
-    try testing.expect(!isNameReserved(io, a, "Alice"));
     try testing.expect((try findMemberByName(io, a, "Alice")) == null);
 
     // becoming a member (password set) reserves the name and makes it resolvable
     try setUserPassword(io, a, id, "pw");
-    try testing.expect(isNameReserved(io, a, "Alice"));
     try testing.expectEqualStrings(id, (try findMemberByName(io, a, "Alice")).?);
-    try testing.expect(!isNameReserved(io, a, "Bob")); // an unrelated name is free
+    try testing.expect((try findMemberByName(io, a, "Bob")) == null); // an unrelated name is free
 }
 
 test "fs: api key issue, read back, clear; legacy bare-hash is held but not displayable" {
