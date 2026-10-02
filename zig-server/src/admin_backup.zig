@@ -9,8 +9,16 @@
 //! memory, so the archive is written as it is walked: one header, then the
 //! file in 64 KiB pieces read positionally, then the next. Memory is one
 //! piece, whatever the data's size. The price: an error after the first byte
-//! cannot become an error status, so it ends the archive early, and a
-//! truncated tar is what the admin gets. A tar reader says so.
+//! cannot become an error status, so it ends the archive early.
+//!
+//! **SO THE LAST MEMBER SAYS IT IS WHOLE.** A tar cut between two members
+//! reads as complete: GNU tar and Python's tarfile list it and exit 0
+//! (gopher-metal REVIEW-admin-backup.md, finding 2, measured). So the archive
+//! ends with `backup-manifest.txt`, written only once everything before it
+//! was: every file's SHA-256, size and path, then `end: N files, M bytes`.
+//! An archive without it, or whose files do not match it, was cut short.
+//! gopher-metal's droplet/check_backup.py checks one, and refuses one that
+//! does not hold.
 //!
 //! **WHAT IS IN IT:** the two roots roots.point gave the Store, spelled as
 //! gopher-metal spells them (`data/...`, `auth/...`), every folder and file,
@@ -56,23 +64,57 @@ pub fn render(req: *Request, io: Io, alloc: Alloc) !void {
     var body = req.respondStreaming(&hbuf, .{
         .respond_options = .{ .extra_headers = &tar_headers },
     }) catch return;
-
-    var skipped: std.ArrayList(u8) = .empty;
-    const buf = try alloc.alloc(u8, piece);
-    var t = Tar{ .w = &body.writer };
-    for ([_][2][]const u8{ .{ "data", data }, .{ "auth", auth } }) |root| {
-        walk(io, alloc, &t, root[1], root[0], buf, &skipped) catch return;
-    }
-    if (skipped.items.len > 0) {
-        t.file("backup-skipped.txt", skipped.items) catch return;
-    }
-    t.end() catch return;
+    archive(io, alloc, &body.writer, data, auth) catch return;
     body.end() catch return;
 }
 
+pub const manifest_name = "backup-manifest.txt";
+
+/// The whole archive of the two roots into `w`: their members, then
+/// `backup-skipped.txt` if anything was, then the manifest, then the end. An
+/// error stops it where it is, with no manifest.
+pub fn archive(io: Io, alloc: Alloc, w: *std.Io.Writer, data: []const u8, auth: []const u8) !void {
+    var skipped: std.ArrayList(u8) = .empty;
+    var m = Manifest{};
+    const buf = try alloc.alloc(u8, piece);
+    var t = Tar{ .w = w };
+    for ([_][2][]const u8{ .{ "data", data }, .{ "auth", auth } }) |root| {
+        try walk(io, alloc, &t, root[1], root[0], buf, &skipped, &m);
+    }
+    if (skipped.items.len > 0) {
+        try t.file("backup-skipped.txt", skipped.items);
+        try m.add(alloc, "backup-skipped.txt", skipped.items.len, digest(skipped.items));
+    }
+    try m.lines.print(alloc, "end: {d} files, {d} bytes\n", .{ m.files, m.bytes });
+    try t.file(manifest_name, m.lines.items);
+    try t.end();
+}
+
+/// What the manifest says: a line per file, and the totals.
+const Manifest = struct {
+    lines: std.ArrayList(u8) = .empty,
+    files: u64 = 0,
+    bytes: u64 = 0,
+
+    fn add(m: *Manifest, alloc: Alloc, path: []const u8, size: u64, sum: [Sha256.digest_length]u8) !void {
+        if (m.files == 0) try m.lines.appendSlice(alloc, "gopher-backup manifest 1\n");
+        try m.lines.print(alloc, "{x} {d} {s}\n", .{ sum, size, path });
+        m.files += 1;
+        m.bytes += size;
+    }
+};
+
+const Sha256 = std.crypto.hash.sha2.Sha256;
+
+fn digest(bytes: []const u8) [Sha256.digest_length]u8 {
+    var out: [Sha256.digest_length]u8 = undefined;
+    Sha256.hash(bytes, &out, .{});
+    return out;
+}
+
 /// Writes `dir` (on this host) as `name` (in the archive) and everything
-/// under it, in name order.
-fn walk(io: Io, alloc: Alloc, t: *Tar, dir: []const u8, name: []const u8, buf: []u8, skipped: *std.ArrayList(u8)) !void {
+/// under it, in name order, each file into the manifest as it goes.
+fn walk(io: Io, alloc: Alloc, t: *Tar, dir: []const u8, name: []const u8, buf: []u8, skipped: *std.ArrayList(u8), m: *Manifest) !void {
     const st = store.stat(io, alloc, dir) catch return; // a root not there yet
     if (!try t.folder(name, mtimeOf(st))) {
         try skipped.print(alloc, "{s}/\n", .{name});
@@ -84,7 +126,7 @@ fn walk(io: Io, alloc: Alloc, t: *Tar, dir: []const u8, name: []const u8, buf: [
         const host_path = try std.fs.path.join(alloc, &.{ dir, e.name });
         const arc_path = try std.fmt.allocPrint(alloc, "{s}/{s}", .{ name, e.name });
         switch (e.kind) {
-            .directory => try walk(io, alloc, t, host_path, arc_path, buf, skipped),
+            .directory => try walk(io, alloc, t, host_path, arc_path, buf, skipped, m),
             .file => {
                 const fst = store.stat(io, alloc, host_path) catch continue;
                 if (!fits(arc_path)) {
@@ -92,15 +134,18 @@ fn walk(io: Io, alloc: Alloc, t: *Tar, dir: []const u8, name: []const u8, buf: [
                     continue;
                 }
                 try t.header(arc_path, fst.size, mtimeOf(fst), '0');
+                var h = Sha256.init(.{});
                 var at: u64 = 0;
                 while (at < fst.size) {
                     const want: usize = @intCast(@min(buf.len, fst.size - at));
                     const n = try store.readAt(io, alloc, host_path, at, buf[0..want]);
                     if (n == 0) return error.FileShrank; // the header promised more
+                    h.update(buf[0..n]);
                     try t.w.writeAll(buf[0..n]);
                     at += n;
                 }
                 try t.pad(fst.size);
+                try m.add(alloc, arc_path, fst.size, h.finalResult());
                 files_archived += 1;
             },
             .other => {},
@@ -233,4 +278,69 @@ test "a long path goes in ustar's prefix, split at a slash, and one too long doe
     // Nor a prefix over 155.
     try std.testing.expect(split("p" ** 160 ++ "/name") == null);
     try std.testing.expect(fits("data/" ++ "y" ** 95));
+}
+
+/// The file members of a ustar archive, as (name, content), in order.
+fn members(alloc: Alloc, tar: []const u8) ![]const [2][]const u8 {
+    var out: std.ArrayList([2][]const u8) = .empty;
+    var at: usize = 0;
+    while (at + 512 <= tar.len) {
+        const h = tar[at..][0..512];
+        if (std.mem.allEqual(u8, h, 0)) break;
+        const name_end = std.mem.indexOfScalar(u8, h[0..100], 0) orelse 100;
+        const prefix_end = std.mem.indexOfScalar(u8, h[345..500], 0) orelse 155;
+        const name = if (prefix_end > 0)
+            try std.fmt.allocPrint(alloc, "{s}/{s}", .{ h[345..][0..prefix_end], h[0..name_end] })
+        else
+            h[0..name_end];
+        const size = try std.fmt.parseInt(u64, std.mem.trimEnd(u8, h[124..136], &.{ 0, ' ' }), 8);
+        at += 512;
+        if (h[156] == '0') try out.append(alloc, .{ name, tar[at..][0..@intCast(size)] });
+        at += @intCast((size + 511) / 512 * 512);
+    }
+    return out.items;
+}
+
+test "fs: the archive ends with a manifest of every file; one cut short has none" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    const base = try std.fs.path.join(a, &.{ ".zig-cache", "tmp", &tmp.sub_path });
+    const data = try std.fs.path.join(a, &.{ base, "data" });
+    const auth = try std.fs.path.join(a, &.{ base, "auth" });
+    const big = try a.alloc(u8, 3 * piece + 17); // more than one piece
+    for (big, 0..) |*c, i| c.* = @truncate(i *% 31);
+    try store.write(io, a, try std.fs.path.join(a, &.{ data, "chat", "_session_secret" }), "a secret, at least 32 bytes long....", .{});
+    try store.write(io, a, try std.fs.path.join(a, &.{ data, "lynrummy", "p1", "big" }), big, .{});
+    try store.write(io, a, try std.fs.path.join(a, &.{ auth, "1", "name" }), "Steve", .{});
+
+    var whole: std.Io.Writer.Allocating = .init(a);
+    try archive(io, a, &whole.writer, data, auth);
+    const got = try members(a, whole.written());
+    try std.testing.expectEqual(@as(usize, 4), got.len);
+    try std.testing.expectEqualStrings(manifest_name, got[3][0]);
+    var lines = std.mem.splitScalar(u8, got[3][1], '\n');
+    try std.testing.expectEqualStrings("gopher-backup manifest 1", lines.next().?);
+    for (got[0..3]) |m| {
+        var want: [Sha256.digest_length]u8 = undefined;
+        Sha256.hash(m[1], &want, .{});
+        const line = try std.fmt.allocPrint(a, "{x} {d} {s}", .{ want, m[1].len, m[0] });
+        try std.testing.expectEqualStrings(line, lines.next().?);
+    }
+    var total: usize = 0;
+    for (got[0..3]) |m| total += m[1].len;
+    try std.testing.expectEqual(big.len + 36 + 5, total); // the three files written
+    try std.testing.expectEqualStrings(try std.fmt.allocPrint(a, "end: 3 files, {d} bytes", .{total}), lines.next().?);
+
+    // The same archive, into a writer that runs out partway through the big
+    // file: an error, and no manifest in what was written.
+    const cut = try a.alloc(u8, 2048 + piece);
+    var short: std.Io.Writer = .fixed(cut);
+    try std.testing.expectError(error.WriteFailed, archive(io, a, &short, data, auth));
+    try std.testing.expect(std.mem.indexOf(u8, short.buffered(), manifest_name) == null);
 }
