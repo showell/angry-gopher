@@ -20,6 +20,7 @@ const Io = std.Io;
 const Alloc = std.mem.Allocator;
 const timefmt = @import("timefmt.zig");
 const files = @import("files.zig");
+const store = @import("store.zig");
 const bus_mod = @import("bus.zig");
 const Bus = bus_mod.Bus;
 const users = @import("users.zig");
@@ -170,7 +171,7 @@ pub fn appendMessage(io: Io, alloc: Alloc, bus: *Bus, meta: ConvMeta, conv_dir: 
     const msg = ChatMessage{ .id = id, .from = from_name, .date = at, .markdown = markdown };
 
     const stored = try chatStoredForm(alloc, index, msg);
-    const new_size = try appendRawBytes(io, path, stored);
+    const new_size = try store.append(io, alloc, path, stored);
     // A crash between the append and this leaves a count whose size is not the
     // transcript's — in either order — so messageCount refuses it and recounts.
     // The size check is the protection, not the ordering.
@@ -181,7 +182,7 @@ pub fn appendMessage(io: Io, alloc: Alloc, bus: *Bus, meta: ConvMeta, conv_dir: 
 
     // Last-author companion (best-effort).
     const la = try std.fs.path.join(alloc, &.{ conv_dir, "sessions", try std.fmt.allocPrint(alloc, "{s}.lastauthor", .{sid}) });
-    Io.Dir.cwd().writeFile(io, .{ .sub_path = la, .data = from_id }) catch {};
+    store.write(io, alloc, la, from_id, .{}) catch {};
 
     // Fan out to live subscribers on this conv/sid (best-effort).
     const key = try std.fmt.allocPrint(alloc, "{s}/{s}", .{ conv_key, sid });
@@ -228,7 +229,7 @@ pub fn appendReaction(io: Io, alloc: Alloc, bus: *Bus, conv_dir: []const u8, con
 
     const at = try timefmt.formatRFC3339UTC(alloc, nowUnix(io));
     const line = try reactionLine(alloc, msg_num, uid, from_name, emoji, on, at);
-    _ = try appendRawBytes(io, try reactionsPath(alloc, conv_dir, sid), try std.fmt.allocPrint(alloc, "{s}\n", .{line}));
+    _ = try store.append(io, alloc, try reactionsPath(alloc, conv_dir, sid), try std.fmt.allocPrint(alloc, "{s}\n", .{line}));
 
     const key = try std.fmt.allocPrint(alloc, "{s}/{s}", .{ conv_key, sid });
     bus.publish(key, try std.fmt.allocPrint(alloc, "{{\"reaction\":{s}}}", .{line}));
@@ -448,20 +449,6 @@ fn escapeBodyLine(alloc: Alloc, line: []const u8) ![]const u8 {
     return line;
 }
 
-/// appendRawBytes appends `bytes` verbatim at the current end of `path` (creating
-/// parents), and answers the file's size afterwards. Unlike appendTextLine it
-/// adds no newline — chatStoredForm is already the exact bytes. Single
-/// positional write at EOF; see the top-of-file atomicity note (chat_mu
-/// serializes this process; the file is only ever appended).
-fn appendRawBytes(io: Io, path: []const u8, bytes: []const u8) !u64 {
-    try mkParentDirs(io, path);
-    var file = try Io.Dir.cwd().createFile(io, path, .{ .truncate = false });
-    defer file.close(io);
-    const st = try file.stat(io);
-    try file.writePositionalAll(io, bytes, st.size);
-    return st.size + bytes.len;
-}
-
 // ── the last message, for /chat/recent ────────────────────────────────────────
 
 /// What a session's last message is, for a listing that must not read the
@@ -497,9 +484,7 @@ pub fn lastMessage(io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8) 
         if (c.last) |l| if (c.count > 0) {
             const path = try sessionMdPath(alloc, conv_dir, sid);
             const buf = try alloc.alloc(u8, tail_window);
-            var f = Io.Dir.cwd().openFile(io, path, .{}) catch return fallbackLast(io, alloc, conv_dir, sid);
-            defer f.close(io);
-            const n = f.readPositionalAll(io, buf, l.offset) catch return fallbackLast(io, alloc, conv_dir, sid);
+            const n = store.readAt(io, alloc, path, l.offset, buf) catch return fallbackLast(io, alloc, conv_dir, sid);
             // **A WINDOW THAT CAME BACK FULL MAY HAVE CUT A MESSAGE IN HALF**,
             // and nothing below could tell. Read it the slow way instead.
             if (n < tail_window) {
@@ -591,19 +576,15 @@ pub fn backfillSidecars(io: Io, alloc: Alloc, conv_dirs: []const []const u8) usi
 /// where the per-viewer listings are not the question.
 pub fn listConvDirs(io: Io, alloc: Alloc) ![][]const u8 {
     var out: std.ArrayList([]const u8) = .empty;
-    var root = Io.Dir.cwd().openDir(io, chat_root, .{ .iterate = true }) catch return &.{};
-    defer root.close(io);
-    var it = root.iterate();
-    while (try it.next(io)) |entry| {
+    const entries = store.list(io, alloc, chat_root) catch return &.{};
+    for (entries) |entry| {
         if (entry.kind != .directory) continue;
         // Not a conversation: per-uid state (last-conv, last-sessions) lives here.
         if (std.mem.eql(u8, entry.name, "users")) continue;
         if (std.mem.eql(u8, entry.name, "channels")) {
             const channels = try std.fs.path.join(alloc, &.{ chat_root, "channels" });
-            var dir = Io.Dir.cwd().openDir(io, channels, .{ .iterate = true }) catch continue;
-            defer dir.close(io);
-            var cit = dir.iterate();
-            while (try cit.next(io)) |ch| {
+            const chans = store.list(io, alloc, channels) catch continue;
+            for (chans) |ch| {
                 if (ch.kind != .directory) continue;
                 try out.append(alloc, try std.fs.path.join(alloc, &.{ channels, ch.name }));
             }
@@ -626,7 +607,7 @@ pub fn backfillAll(io: Io, alloc: Alloc) usize {
 pub fn lastAuthorUid(io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8) []const u8 {
     const file = std.fmt.allocPrint(alloc, "{s}.lastauthor", .{sid}) catch return "";
     const path = std.fs.path.join(alloc, &.{ conv_dir, "sessions", file }) catch return "";
-    const raw = Io.Dir.cwd().readFileAlloc(io, path, alloc, .limited(64)) catch return "";
+    const raw = store.read(io, alloc, path, .limited(64)) catch return "";
     return std.mem.trim(u8, raw, " \t\r\n");
 }
 
@@ -654,11 +635,11 @@ fn countPath(alloc: Alloc, conv_dir: []const u8, sid: []const u8) ![]u8 {
 /// a rewrite to exactly the same length with a different number of messages.
 fn messageCount(io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8) !usize {
     const md = try sessionMdPath(alloc, conv_dir, sid);
-    const size = (Io.Dir.cwd().statFile(io, md, .{}) catch return 0).size;
+    const size = (store.stat(io, alloc, md) catch return 0).size;
     if (readCount(io, alloc, conv_dir, sid)) |c| {
         if (c.size == size) return c.count;
     }
-    const raw = Io.Dir.cwd().readFileAlloc(io, md, alloc, .unlimited) catch "";
+    const raw = store.read(io, alloc, md, .unlimited) catch "";
     return (try decodeChatFile(alloc, raw)).len;
 }
 
@@ -698,7 +679,7 @@ const Count = struct { count: usize, size: u64, last: ?Last = null };
 /// the whole thing and recounts from the transcript — slower, never wrong.
 fn readCount(io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8) ?Count {
     const path = countPath(alloc, conv_dir, sid) catch return null;
-    const raw = Io.Dir.cwd().readFileAlloc(io, path, alloc, .limited(1024)) catch return null;
+    const raw = store.read(io, alloc, path, .limited(1024)) catch return null;
     var lines = std.mem.splitScalar(u8, raw, '\n');
     var head = std.mem.tokenizeScalar(u8, lines.next() orelse return null, ' ');
     const count = std.fmt.parseInt(usize, head.next() orelse return null, 10) catch return null;
@@ -727,15 +708,7 @@ fn writeCount(io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8, count
         }) catch return
     else
         head;
-    Io.Dir.cwd().writeFile(io, .{ .sub_path = path, .data = text }) catch {};
-}
-
-/// mkParentDirs creates the directory containing `path` (mkdir -p). No-op when
-/// `path` has no directory component.
-fn mkParentDirs(io: Io, path: []const u8) !void {
-    if (std.fs.path.dirname(path)) |d| {
-        try Io.Dir.cwd().createDirPath(io, d);
-    }
+    store.write(io, alloc, path, text, .{}) catch {};
 }
 
 fn nowUnix(io: Io) i64 {
@@ -777,19 +750,17 @@ pub fn sessionMdPath(alloc: Alloc, conv_dir: []const u8, sid: []const u8) ![]u8 
 /// these bytes verbatim.
 pub fn rawSession(io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8) !?[]u8 {
     const path = try sessionMdPath(alloc, conv_dir, sid);
-    return Io.Dir.cwd().readFileAlloc(io, path, alloc, .unlimited) catch return null;
+    return store.read(io, alloc, path, .unlimited) catch return null;
 }
 
 /// listSessions returns the session ids (the `.md` basenames) under
 /// {conv_dir}/sessions, sorted ascending. Missing dir → empty.
 pub fn listSessions(io: Io, alloc: Alloc, conv_dir: []const u8) ![][]const u8 {
     const dir_path = try std.fs.path.join(alloc, &.{ conv_dir, "sessions" });
-    var dir = Io.Dir.cwd().openDir(io, dir_path, .{ .iterate = true }) catch return &.{};
-    defer dir.close(io);
+    const entries = store.list(io, alloc, dir_path) catch return &.{};
 
     var out: std.ArrayList([]const u8) = .empty;
-    var it = dir.iterate();
-    while (try it.next(io)) |entry| {
+    for (entries) |entry| {
         if (entry.kind == .directory) continue;
         if (!std.mem.endsWith(u8, entry.name, ".md")) continue;
         const sid = entry.name[0 .. entry.name.len - ".md".len];
@@ -823,7 +794,7 @@ fn lessThanStr(_: void, a: []const u8, b: []const u8) bool {
 pub fn channelMembers(io: Io, alloc: Alloc, name: []const u8) !?[][]const u8 {
     const file = try std.fmt.allocPrint(alloc, "{s}.channel", .{name});
     const path = try std.fs.path.join(alloc, &.{ chat_root, "channels", file });
-    const body = Io.Dir.cwd().readFileAlloc(io, path, alloc, .unlimited) catch return null;
+    const body = store.read(io, alloc, path, .unlimited) catch return null;
 
     var out: std.ArrayList([]const u8) = .empty;
     var it = std.mem.splitScalar(u8, body, '\n');
@@ -847,12 +818,10 @@ pub fn hasMember(members: [][]const u8, uid: []const u8) bool {
 /// Scans {chat_root}/channels/*.channel. Missing dir → empty.
 pub fn listUserChannels(io: Io, alloc: Alloc, uid: []const u8) ![][]const u8 {
     const dir_path = try std.fs.path.join(alloc, &.{ chat_root, "channels" });
-    var dir = Io.Dir.cwd().openDir(io, dir_path, .{ .iterate = true }) catch return &.{};
-    defer dir.close(io);
+    const entries = store.list(io, alloc, dir_path) catch return &.{};
 
     var out: std.ArrayList([]const u8) = .empty;
-    var it = dir.iterate();
-    while (try it.next(io)) |entry| {
+    for (entries) |entry| {
         if (!std.mem.endsWith(u8, entry.name, ".channel")) continue;
         const name = entry.name[0 .. entry.name.len - ".channel".len];
         const members = (try channelMembers(io, alloc, name)) orelse continue;
