@@ -17,6 +17,7 @@ const Alloc = std.mem.Allocator;
 const http = @import("http.zig");
 const html = @import("html.zig");
 const home = @import("home.zig");
+const store = @import("store.zig");
 
 const Request = std.http.Server.Request;
 
@@ -102,7 +103,7 @@ fn imageFile(io: Io, alloc: Alloc, slug: []const u8) !?[]const u8 {
     for ([_][]const u8{ "png", "svg" }) |ext| {
         const name = try std.fmt.allocPrint(alloc, "{s}.{s}", .{ slug, ext });
         const path = try std.fs.path.join(alloc, &.{ gallery_root, name });
-        if (Io.Dir.cwd().statFile(io, path, .{})) |_| return name else |_| {}
+        if (store.stat(io, alloc, path)) |_| return name else |_| {}
     }
     return null;
 }
@@ -116,7 +117,7 @@ fn serveImage(req: *Request, io: Io, alloc: Alloc, name: []const u8) !void {
     const ct = imageContentType(name) orelse return http.notFound(req);
     if (!isSafeName(name)) return http.notFound(req);
     const path = try std.fs.path.join(alloc, &.{ gallery_root, name });
-    const bytes = Io.Dir.cwd().readFileAlloc(io, path, alloc, .unlimited) catch return http.notFound(req);
+    const bytes = store.read(io, alloc, path, .unlimited) catch return http.notFound(req);
     try req.respond(bytes, .{ .extra_headers = &.{ct} });
 }
 
