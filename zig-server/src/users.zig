@@ -37,6 +37,7 @@ const counter = @import("counter.zig");
 const http = @import("http.zig");
 const names = @import("names.zig");
 const store = @import("store.zig");
+const uid_cookie = @import("uid_cookie.zig");
 
 const HmacSha256 = std.crypto.auth.hmac.sha2.HmacSha256;
 const b64 = std.base64.url_safe_no_pad;
@@ -59,9 +60,13 @@ pub fn currentUserID(io: Io, alloc: Alloc, req: *std.http.Server.Request) ![]con
     if (try sessionUserID(io, alloc, req)) |id| return id;
     // 2. API key.
     if (try apiKeyUserID(io, alloc, req)) |id| return id;
-    // 3. guest gopher_uid — only a non-authorized principal that exists.
-    // http.cookie owns the value, so it survives a later body read.
-    if (try http.cookie(req, alloc, "gopher_uid")) |uid| {
+    // 3. guest gopher_uid — only a non-authorized principal that exists, and
+    // only signed (an unsigned one is re-signed once by the router's GET, in
+    // uid_cookie's window, and is no one here). An unsigned cookie used to be
+    // enough, which let anyone set a guest's password (REVIEW-request-paths
+    // finding 2). The value is owned by http.cookie, so it survives a later
+    // body read.
+    if (try uid_cookie.resolve(io, alloc, req)) |uid| {
         if (allDigits(uid) and try userExists(io, alloc, uid) and !try userIsAuthorized(io, alloc, uid)) {
             return uid;
         }
@@ -376,6 +381,17 @@ fn readAuthFile(io: Io, alloc: Alloc, id: []const u8, name: []const u8) !?[]u8 {
 
 /// loadSecret reads {session_secret_dir}/_session_secret (>= 32 bytes), or null.
 /// Read-only: we never GENERATE a secret — we require the one already on disk.
+/// The session secret, for the other signed cookie (uid_cookie.zig), or null.
+pub fn sessionSecret(io: Io, alloc: Alloc) !?[]const u8 {
+    return loadSecret(io, alloc);
+}
+
+/// The member a valid gopher_auth names, or null: player.zig's way to file a
+/// member's games under their session when their gopher_uid is unsigned.
+pub fn sessionUser(io: Io, alloc: Alloc, req: *std.http.Server.Request) !?[]const u8 {
+    return sessionUserID(io, alloc, req);
+}
+
 fn loadSecret(io: Io, alloc: Alloc) !?[]const u8 {
     const path = try std.fs.path.join(alloc, &.{ session_secret_dir, "_session_secret" });
     const b = store.read(io, alloc, path, .unlimited) catch return null;

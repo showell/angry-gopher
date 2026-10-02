@@ -28,6 +28,7 @@ const http = @import("http.zig");
 const users = @import("users.zig");
 const names = @import("names.zig");
 const player = @import("player.zig");
+const uid_cookie = @import("uid_cookie.zig");
 const storage = @import("storage.zig");
 const chat = @import("chat.zig");
 const html = @import("html.zig");
@@ -182,7 +183,8 @@ fn loginAsMember(req: *Request, io: Io, alloc: Alloc, id: []const u8, next: []co
         // has it). Fail loudly rather than issue an unsigned/forgeable cookie.
         return req.respond("session unavailable\n", .{ .status = .internal_server_error });
     };
-    const uid_ck = try uidCookie(alloc, id);
+    const uid_ck = (try uid_cookie.issue(io, alloc, id)) orelse
+        return req.respond("session unavailable\n", .{ .status = .internal_server_error });
     const auth_ck = try authCookie(alloc, signed);
     users.touchUser(io, alloc, id); // logging on counts as activity
     // Same id on both sides, so a member's Lyn Rummy history follows them.
@@ -307,12 +309,8 @@ fn sendHostWelcomeImpl(io: Io, alloc: Alloc, bus: *Bus, new_uid: []const u8) !vo
 
 // ── cookies + response helpers ────────────────────────────────────────────────
 
-/// uidCookie is the long-lived identity cookie (the user id). player.zig writes
-/// the same cookie for a name-only player — see its header for why they share
-/// one spelling.
-pub fn uidCookie(alloc: Alloc, id: []const u8) ![]const u8 {
-    return std.fmt.allocPrint(alloc, "gopher_uid={s}; Path=/; Max-Age={d}; HttpOnly; SameSite=Lax", .{ id, uid_max_age });
-}
+// The long-lived identity cookie, gopher_uid, is uid_cookie.zig's: signed, as
+// player.zig's is for a name-only player.
 
 /// authCookie is the signed member session cookie.
 fn authCookie(alloc: Alloc, signed: []const u8) ![]const u8 {

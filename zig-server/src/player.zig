@@ -42,6 +42,8 @@ const html = @import("html.zig");
 const names = @import("names.zig");
 const counter = @import("counter.zig");
 const store = @import("store.zig");
+const uid_cookie = @import("uid_cookie.zig");
+const users = @import("users.zig");
 
 /// player_root is the local player directory (config.zig points it at
 /// {data_dir}/players at startup; the default is repo-relative from zig-server/).
@@ -67,7 +69,13 @@ pub const Player = struct { id: []const u8, name: []const u8 };
 /// no identity at all, so a stale cookie sends someone to the name page rather
 /// than filing games under a phantom.
 pub fn current(io: Io, alloc: Alloc, req: *std.http.Server.Request) !Player {
-    const id = (try http.cookie(req, alloc, cookie_name)) orelse return .{ .id = "", .name = "" };
+    // **SIGNED, OR ONCE** (uid_cookie.zig): a gopher_uid set by hand names no
+    // one. A member whose cookie is unsigned is filed under their session.
+    const id = blk: {
+        if (try uid_cookie.resolve(io, alloc, req)) |signed| break :blk signed;
+        if (try users.sessionUser(io, alloc, req)) |member| break :blk member;
+        return .{ .id = "", .name = "" };
+    };
     if (!isSafeID(id)) return .{ .id = "", .name = "" };
     const name = (try readField(io, alloc, id, "name")) orelse return .{ .id = "", .name = "" };
     return .{ .id = id, .name = name };
@@ -184,9 +192,11 @@ fn readField(io: Io, alloc: Alloc, id: []const u8, field: []const u8) !?[]const 
     return std.mem.trimEnd(u8, raw, "\r\n");
 }
 
-/// cookie is the Set-Cookie value that binds a browser to a player.
-pub fn cookie(alloc: Alloc, id: []const u8) ![]const u8 {
-    return std.fmt.allocPrint(alloc, "{s}={s}; Path=/; Max-Age={d}; HttpOnly; SameSite=Lax", .{ cookie_name, id, cookie_max_age });
+/// cookie is the Set-Cookie value that binds a browser to a player: signed,
+/// with the player marked so an unsigned spelling of it is never honoured.
+/// Null without a session secret: nothing unsigned is issued.
+pub fn cookie(io: Io, alloc: Alloc, id: []const u8) !?[]const u8 {
+    return uid_cookie.issue(io, alloc, id);
 }
 
 // ── /play, the name page ─────────────────────────────────────────────────────
@@ -214,7 +224,9 @@ pub fn handle(req: *std.http.Server.Request, io: Io, alloc: Alloc) !void {
     const id = try allocate(io, alloc, vr.name);
     var hs: std.ArrayList(std.http.Header) = .empty;
     try hs.append(alloc, .{ .name = "location", .value = next });
-    try hs.append(alloc, .{ .name = "set-cookie", .value = try cookie(alloc, id) });
+    const ck = (try cookie(io, alloc, id)) orelse
+        return req.respond("session unavailable\n", .{ .status = .internal_server_error });
+    try hs.append(alloc, .{ .name = "set-cookie", .value = ck });
     try req.respond("", .{ .status = .see_other, .extra_headers = hs.items });
 }
 

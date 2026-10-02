@@ -40,6 +40,7 @@ const login = @import("login.zig");
 const player = @import("player.zig");
 const brand = @import("brand.zig");
 const users = @import("users.zig");
+const uid_cookie = @import("uid_cookie.zig");
 // ── THE HOST CONTRACT ────────────────────────────────────────────────────────
 //
 // What any host must do before it calls `route`, and everything it needs to do
@@ -91,6 +92,15 @@ pub const store = @import("chat_store.zig");
 /// the site: every surface appears exactly once, and the comment on each arm
 /// says who may reach it.
 pub fn route(req: *std.http.Server.Request, io: Io, alloc: std.mem.Allocator, bus: *Bus) !void {
+    // **AN UNSIGNED gopher_uid IS RE-IDENTIFIED ONCE** (uid_cookie.zig): its
+    // first GET inside the window comes back to the same page with the
+    // signed cookie set, and the unsigned spelling is refused from then on.
+    if (try uid_cookie.reissue(io, alloc, req)) |set_cookie| {
+        return req.respond("", .{ .status = .see_other, .extra_headers = &.{
+            .{ .name = "location", .value = try http.target(req, alloc) },
+            .{ .name = "set-cookie", .value = set_cookie },
+        } });
+    }
     const path = stripQuery(try http.target(req, alloc));
 
     if (matchPrefix(path, "/driving")) |sub| {
@@ -318,4 +328,228 @@ test "route: ADMIN_ONLY — both admin screens refuse an anonymous request" {
     const raw = "GET /admin HTTP/1.1\r\nHost: x\r\nCookie: gopher_uid=1\r\n\r\n";
     const r = try serve(a, io, raw);
     try testing.expect(std.mem.indexOf(u8, r, "200 OK") == null);
+}
+
+// ── gopher_uid, signed (uid_cookie.zig) ──────────────────────────────────────
+
+/// A site in a temporary folder, every root pointed at it, with a session
+/// secret; `deinit` puts the roots back for the rest of the test binary.
+const UidSite = struct {
+    tmp: testing.TmpDir,
+    saved: [8]?[]const u8,
+    base: []const u8,
+
+    const storage = @import("storage.zig");
+    const chat_store = @import("chat_store.zig");
+    const disk = @import("store.zig");
+    const secret = "a session secret of thirty-two bytes or more, for router tests";
+
+    fn init(a: std.mem.Allocator, io: Io) !UidSite {
+        var s: UidSite = .{ .tmp = testing.tmpDir(.{}), .saved = .{
+            storage.data_root,       users.users_root,     player.player_root, users.session_secret_dir,
+            chat_store.chat_root,    users.auth_root,      disk.data_base,    disk.auth_base,
+        }, .base = undefined };
+        s.base = try std.fs.path.join(a, &.{ ".zig-cache", "tmp", &s.tmp.sub_path });
+        try roots.point(a, .{
+            .data_dir = try std.fs.path.join(a, &.{ s.base, "data" }),
+            .auth_dir = try std.fs.path.join(a, &.{ s.base, "auth" }),
+        });
+        try disk.write(io, a, try std.fs.path.join(a, &.{ users.session_secret_dir, "_session_secret" }), secret, .{});
+        return s;
+    }
+
+    fn deinit(s: *UidSite) void {
+        storage.data_root = s.saved[0].?;
+        users.users_root = s.saved[1].?;
+        player.player_root = s.saved[2].?;
+        users.session_secret_dir = s.saved[3].?;
+        chat_store.chat_root = s.saved[4].?;
+        users.auth_root = s.saved[5].?;
+        disk.data_base = s.saved[6];
+        disk.auth_base = s.saved[7];
+        s.tmp.cleanup();
+    }
+
+    /// GET `target` with `cookies` as the Cookie header.
+    fn ask(a: std.mem.Allocator, io: Io, target: []const u8, cookies: []const u8) ![]const u8 {
+        return serve(a, io, try std.fmt.allocPrint(a, "GET {s} HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\n\r\n", .{ target, cookies }));
+    }
+
+    /// Closes the window for unsigned cookies: a time in the past.
+    fn closeWindow(a: std.mem.Allocator, io: Io) !void {
+        try disk.replace(io, a, try std.fs.path.join(a, &.{ player.player_root, "unsigned-window" }), "1\n", .{});
+    }
+
+    fn marked(a: std.mem.Allocator, io: Io, id: []const u8) bool {
+        return disk.has(io, a, std.fs.path.join(a, &.{ player.player_root, id, "signed" }) catch return false);
+    }
+};
+
+/// The value of the response's gopher_uid Set-Cookie, or null.
+fn setUid(response: []const u8) ?[]const u8 {
+    const at = std.mem.indexOf(u8, response, "set-cookie: gopher_uid=") orelse return null;
+    const rest = response[at + "set-cookie: gopher_uid=".len ..];
+    return rest[0 .. std.mem.indexOfScalar(u8, rest, ';') orelse rest.len];
+}
+
+fn playingAs(response: []const u8, name: []const u8) bool {
+    var buf: [128]u8 = undefined;
+    const want = std.fmt.bufPrint(&buf, "Currently playing as <strong>{s}</strong>", .{name}) catch return false;
+    return std.mem.indexOf(u8, response, want) != null;
+}
+
+test "route: an unsigned gopher_uid is re-identified once, then never" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var site = try UidSite.init(a, io);
+    defer site.deinit();
+
+    const id = try player.allocate(io, a, "Nikhil");
+    const unsigned = try std.fmt.allocPrint(a, "gopher_uid={s}", .{id});
+
+    // The owner's first visit: a redirect to the same page that sets the
+    // signed cookie, and the id marked.
+    const first = try UidSite.ask(a, io, "/play?next=/game", unsigned);
+    try testing.expectEqualStrings("303 See Other", status(first));
+    try testing.expect(std.mem.indexOf(u8, first, "location: /play?next=/game") != null);
+    const signed = setUid(first) orelse return error.NoSetCookie;
+    try testing.expectEqualStrings(id, uid_cookie.verify(UidSite.secret, signed).?);
+    try testing.expect(UidSite.marked(a, io, id));
+
+    // The signed cookie is the player.
+    const with_signed = try std.fmt.allocPrint(a, "gopher_uid={s}", .{signed});
+    const page = try UidSite.ask(a, io, "/play", with_signed);
+    try testing.expectEqualStrings("200 OK", status(page));
+    try testing.expect(playingAs(page, "Nikhil"));
+
+    // The unsigned spelling, again: no one, and no cookie handed out.
+    const again = try UidSite.ask(a, io, "/play", unsigned);
+    try testing.expectEqualStrings("200 OK", status(again));
+    try testing.expect(!playingAs(again, "Nikhil"));
+    try testing.expect(setUid(again) == null);
+    const game_page = try UidSite.ask(a, io, "/game", unsigned);
+    try testing.expect(std.mem.indexOf(u8, game_page, "location: /play?next=/game") != null);
+
+    // A POST with it is never the re-identification: no redirect, no cookie.
+    const other = try player.allocate(io, a, "Debbie");
+    const post = try serve(a, io, try std.fmt.allocPrint(a,
+        "POST /play HTTP/1.1\r\nHost: x\r\nCookie: gopher_uid={s}\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: 0\r\n\r\n", .{other}));
+    try testing.expect(setUid(post) == null); // an empty name: the form again, no player made
+    try testing.expect(!playingAs(post, "Debbie")); // and the form names no one
+    try testing.expect(!UidSite.marked(a, io, other));
+}
+
+test "route: a guest upgrades only with a signed cookie" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var site = try UidSite.init(a, io);
+    defer site.deinit();
+
+    // A legacy guest: an account with a name and no password.
+    try users.setUserName(io, a, "7", "Gus");
+    const upgrade = "Set a password to use chat";
+    const post_body = "name=Gus&password=forged&action=register&next=%2F";
+    const post = try std.fmt.allocPrint(a,
+        "POST /login/full HTTP/1.1\r\nHost: x\r\nCookie: gopher_uid=7\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: {d}\r\n\r\n{s}", .{ post_body.len, post_body });
+
+    // Unsigned, straight to the POST: the stranger form, and no password set.
+    const forged = try serve(a, io, post);
+    try testing.expect(std.mem.indexOf(u8, forged, upgrade) == null);
+    try testing.expect(!users.isMember(io, a, "7"));
+
+    // The guest's own first GET re-signs, and the signed cookie upgrades.
+    const first = try UidSite.ask(a, io, "/login/full", "gopher_uid=7");
+    try testing.expectEqualStrings("303 See Other", status(first));
+    const signed = setUid(first) orelse return error.NoSetCookie;
+    const page = try UidSite.ask(a, io, "/login/full", try std.fmt.allocPrint(a, "gopher_uid={s}", .{signed}));
+    try testing.expect(std.mem.indexOf(u8, page, upgrade) != null);
+
+    // After it, the unsigned spelling is the stranger form, POST or GET.
+    try testing.expect(std.mem.indexOf(u8, try serve(a, io, post), upgrade) == null);
+    try testing.expect(std.mem.indexOf(u8, try UidSite.ask(a, io, "/login/full", "gopher_uid=7"), upgrade) == null);
+    try testing.expect(!users.isMember(io, a, "7"));
+}
+
+test "route: an unsigned gopher_uid never names a member, the agent, a stranger, or anyone once the window shuts" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var site = try UidSite.init(a, io);
+    defer site.deinit();
+
+    // A member, with a game identity under their own number.
+    try users.setUserName(io, a, "1", "Steve");
+    try users.setUserPassword(io, a, "1", "hunter2");
+    player.mirror(io, a, "1", "Steve");
+    // The agent.
+    try users.setUserName(io, a, "3", "Claude");
+    player.mirror(io, a, "3", "Claude");
+    for ([_][]const u8{ "gopher_uid=1", "gopher_uid=3", "gopher_uid=p99", "gopher_uid=../1" }) |c| {
+        const r = try UidSite.ask(a, io, "/play", c);
+        try testing.expectEqualStrings("200 OK", status(r));
+        try testing.expect(setUid(r) == null);
+        try testing.expect(!playingAs(r, "Steve") and !playingAs(r, "Claude"));
+    }
+    try testing.expect(!UidSite.marked(a, io, "1"));
+
+    // A forged signature: the right shape, the wrong MAC.
+    const forged = try uid_cookie.sign(a, "not the site's secret, though just as long", "1", 1_790_000_000);
+    const f = try UidSite.ask(a, io, "/play", try std.fmt.allocPrint(a, "gopher_uid={s}", .{forged}));
+    try testing.expect(!playingAs(f, "Steve"));
+
+    // The member's games follow their session.
+    const session = try users.signSession(a, UidSite.secret, "1", @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s)));
+    const m = try UidSite.ask(a, io, "/play", try std.fmt.allocPrint(a, "gopher_auth={s}", .{session}));
+    try testing.expect(playingAs(m, "Steve"));
+
+    // A player never yet signed, once the window has shut: no one.
+    const id = try player.allocate(io, a, "Nikhil");
+    try UidSite.closeWindow(a, io);
+    const late = try UidSite.ask(a, io, "/play", try std.fmt.allocPrint(a, "gopher_uid={s}", .{id}));
+    try testing.expectEqualStrings("200 OK", status(late));
+    try testing.expect(setUid(late) == null);
+    try testing.expect(!playingAs(late, "Nikhil"));
+    try testing.expect(!UidSite.marked(a, io, id));
+}
+
+test "route: /play mints a signed gopher_uid, marked as signed" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var site = try UidSite.init(a, io);
+    defer site.deinit();
+
+    const r = try serve(a, io,
+        "POST /play HTTP/1.1\r\nHost: x\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: 23\r\n\r\nname=Nikhil&next=%2Fgame");
+    try testing.expectEqualStrings("303 See Other", status(r));
+    const v = setUid(r) orelse return error.NoSetCookie;
+    const id = uid_cookie.verify(UidSite.secret, v) orelse return error.Unsigned;
+    try testing.expect(UidSite.marked(a, io, id));
+    // Its unsigned spelling is refused from the start.
+    const bare = try UidSite.ask(a, io, "/play", try std.fmt.allocPrint(a, "gopher_uid={s}", .{id}));
+    try testing.expect(!playingAs(bare, "Nikhil"));
+    // With no session secret, nothing is minted: no unsigned cookie instead.
+    try removeSecret(a, io);
+    const none = try serve(a, io,
+        "POST /play HTTP/1.1\r\nHost: x\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: 23\r\n\r\nname=Debbie&next=%2Fgame");
+    try testing.expectEqualStrings("500 Internal Server Error", status(none));
+    try testing.expect(setUid(none) == null);
+}
+
+fn removeSecret(a: std.mem.Allocator, io: Io) !void {
+    try UidSite.disk.remove(io, a, try std.fs.path.join(a, &.{ users.session_secret_dir, "_session_secret" }));
 }
