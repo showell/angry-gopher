@@ -386,6 +386,12 @@ fn loadSecret(io: Io, alloc: Alloc) !?[]const u8 {
 // ── request parsing ──────────────────────────────────────────────────────────
 
 /// allDigits reports whether `s` is non-empty and all ASCII digits (a well-formed uid).
+/// Whether `id` has the shape of an account id: what allocateUser makes,
+/// digits. For callers outside this file that take an id from a request.
+pub fn validUid(id: []const u8) bool {
+    return allDigits(id);
+}
+
 fn allDigits(s: []const u8) bool {
     if (s.len == 0) return false;
     for (s) |ch| {
