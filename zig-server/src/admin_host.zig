@@ -45,6 +45,17 @@ pub fn render(req: *Request, io: Io, alloc: Alloc) !void {
         for (facts) |f| try row(&b, alloc, f.label, f.value);
         try b.appendSlice(alloc, "</table>\n");
     }
+
+    // The host's own log, newest last: on gopher-metal the serial ring, its
+    // secrets taken out as they were written.
+    try b.appendSlice(alloc, "<h2>The log</h2>\n");
+    if (try host_status.logText(io, alloc)) |text| {
+        try b.print(alloc, "<p class=\"muted\">The newest {d} lines, secrets taken out as they were written.</p>\n<pre class=\"log\">{s}</pre>\n", .{
+            host_status.log_lines, try html.htmlEscape(alloc, text),
+        });
+    } else {
+        try b.appendSlice(alloc, "<p class=\"muted\">This host keeps no log of its own to show here.</p>\n");
+    }
     try ui.end(&b, alloc);
     try req.respond(b.items, .{ .extra_headers = &.{http.html_ct} });
 }
