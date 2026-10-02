@@ -108,7 +108,7 @@ pub fn mirror(io: Io, alloc: Alloc, id: []const u8, name: []const u8) void {
 /// the player).
 fn setName(io: Io, alloc: Alloc, id: []const u8, name: []const u8) !void {
     const path = try std.fs.path.join(alloc, &.{ player_root, id, "name" });
-    try store.write(io, alloc, path, name, .{});
+    try store.replace(io, alloc, path, name, .{});
 }
 
 /// deleteRecord removes a player's row (name + last-seen). Their game data is
