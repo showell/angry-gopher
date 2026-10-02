@@ -26,6 +26,13 @@
 //! are included: the session secret and the password hashes are part of
 //! what a restore needs, and the route is admin-only.
 //!
+//! **IT ASKS FOR THE PASSWORD AGAIN** (gopher-metal REVIEW-admin-backup.md,
+//! finding 1). The session secret is in it, and the secret mints every
+//! session and every player's cookie. A session lasts a year and cannot be
+//! revoked, so a copied cookie must not be enough for it. A GET (or HEAD)
+//! shows a form; the archive is the answer to a POST with uid 1's password.
+//! An API key reaches the form and no further, since it carries no password.
+//!
 //! A path ustar cannot hold (longer than its 255 bytes) is left out and
 //! named in a last member, `backup-skipped.txt`. The Store's path limit
 //! (256 as gopher-metal spells it) means at most a path of exactly 256.
@@ -34,6 +41,11 @@ const std = @import("std");
 const Io = std.Io;
 const Alloc = std.mem.Allocator;
 const store = @import("store.zig");
+const http = @import("http.zig");
+const users = @import("users.zig");
+const chat = @import("chat.zig");
+const html = @import("html.zig");
+const ui = @import("admin_ui.zig");
 
 const Request = std.http.Server.Request;
 
@@ -55,10 +67,14 @@ pub fn render(req: *Request, io: Io, alloc: Alloc) !void {
     const auth = store.auth_base orelse return req.respond("the data roots are not configured here\n", .{ .status = .service_unavailable });
 
     // **A HEAD READS NOTHING** (gopher-metal REVIEW-admin-backup.md, finding
-    // 7). The body is left out of the answer anyway, and walking the data to
-    // write it into nothing cost a whole backup's reads; on metal, that is
-    // every other request waiting.
-    if (req.head.method == .HEAD) return req.respond("", .{ .extra_headers = &tar_headers });
+    // 7): it is the form's, as a GET is. Walking the data to write it into
+    // nothing cost a whole backup's reads; on metal, that is every other
+    // request waiting.
+    if (req.head.method != .POST) return form(req, alloc, "", .ok);
+    const sent = (try http.readLimitedBody(req, alloc, 4096)) orelse return;
+    const password = (try chat.formField(alloc, sent, "password")) orelse "";
+    if (!users.checkUserPassword(io, alloc, ui.admin_uid, password))
+        return form(req, alloc, "That is not the password.", .forbidden);
 
     var hbuf: [4096]u8 = undefined;
     var body = req.respondStreaming(&hbuf, .{
@@ -66,6 +82,29 @@ pub fn render(req: *Request, io: Io, alloc: Alloc) !void {
     }) catch return;
     archive(io, alloc, &body.writer, data, auth) catch return;
     body.end() catch return;
+}
+
+/// The page that asks for the password, with `err` above the form if any.
+fn form(req: *Request, alloc: Alloc, err: []const u8, status: std.http.Status) !void {
+    var b: std.ArrayList(u8) = .empty;
+    try ui.begin(&b, alloc, "Download a backup", "");
+    try b.appendSlice(alloc,
+        \\<p>The backup is everything the site keeps, as one tar: the session secret, every
+        \\password hash and every API key among it. So it asks for your password again.</p>
+        \\
+    );
+    if (err.len != 0) try b.print(alloc, "<p class=\"err\">{s}</p>\n", .{try html.htmlEscape(alloc, err)});
+    try b.appendSlice(alloc,
+        \\<form method="post" action="/admin/backup">
+        \\<label>Password <input type="password" name="password" autofocus></label>
+        \\<button type="submit">Download the backup</button>
+        \\</form>
+        \\<p class="muted">On gopher-metal, take it from prod over the private network, never through
+        \\Caddy from a home connection: metal answers nothing else while it streams.</p>
+        \\
+    );
+    try ui.end(&b, alloc);
+    try req.respond(b.items, .{ .status = status, .extra_headers = &.{http.html_ct} });
 }
 
 pub const manifest_name = "backup-manifest.txt";

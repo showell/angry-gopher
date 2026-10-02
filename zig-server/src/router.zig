@@ -781,10 +781,63 @@ test "route: HEAD /admin/backup reads nothing" {
     const before = admin_backup.files_archived;
     const head = try serve(a, io, try std.fmt.allocPrint(a, "HEAD /admin/backup HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\n\r\n", .{me}));
     try testing.expectEqualStrings("200 OK", status(head));
-    try testing.expect(std.mem.indexOf(u8, head, "application/x-tar") != null);
     try testing.expectEqual(before, admin_backup.files_archived);
-    // A GET does walk it: the secret and the account files, at least.
-    const got = try UidSite.ask(a, io, "/admin/backup", me);
+    // The download (a POST with the password) does walk it: the secret and
+    // the account files, at least.
+    const got = try postForm(a, io, "/admin/backup", me, "password=hunter2");
     try testing.expectEqualStrings("200 OK", status(got));
     try testing.expect(admin_backup.files_archived >= before + 3);
+}
+
+fn postForm(a: std.mem.Allocator, io: Io, target: []const u8, cookies: []const u8, body: []const u8) ![]const u8 {
+    return serve(a, io, try std.fmt.allocPrint(a,
+        "POST {s} HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: {d}\r\n\r\n{s}", .{ target, cookies, body.len, body }));
+}
+
+test "route: /admin/backup asks for the password again, and gives nothing without it" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var site = try UidSite.init(a, io);
+    defer site.deinit();
+    const admin_backup = @import("admin_backup.zig");
+    const me = try adminSession(a, io);
+    const before = admin_backup.files_archived;
+
+    // The session alone: a form, not the archive.
+    const page = try UidSite.ask(a, io, "/admin/backup", me);
+    try testing.expectEqualStrings("200 OK", status(page));
+    try testing.expect(std.mem.indexOf(u8, page, "type=\"password\"") != null);
+    try testing.expect(std.mem.indexOf(u8, page, "application/x-tar") == null);
+    // A wrong password, and none: refused, nothing walked.
+    for ([_][]const u8{ "password=wrong", "", "pass=hunter2" }) |body| {
+        const r = try postForm(a, io, "/admin/backup", me, body);
+        try testing.expectEqualStrings("403 Forbidden", status(r));
+        try testing.expect(std.mem.indexOf(u8, r, "application/x-tar") == null);
+    }
+    try testing.expectEqual(before, admin_backup.files_archived);
+    // The right one: the archive, ending with its manifest.
+    const tar = try postForm(a, io, "/admin/backup", me, "password=hunter2");
+    try testing.expectEqualStrings("200 OK", status(tar));
+    try testing.expect(std.mem.indexOf(u8, tar, "application/x-tar") != null);
+    try testing.expect(std.mem.indexOf(u8, tar, admin_backup.manifest_name) != null);
+    // Nobody else gets as far as the form, with the admin's password or not:
+    // no identity is sent to log in, and a member who is not the admin is a 404.
+    try testing.expectEqualStrings("303 See Other", status(try postForm(a, io, "/admin/backup", "gopher_uid=1", "password=hunter2")));
+    try users.setUserName(io, a, "2", "apoorva");
+    try users.setUserPassword(io, a, "2", "hunter2");
+    const now: i64 = @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
+    const other = try std.fmt.allocPrint(a, "gopher_auth={s}", .{try users.signSession(a, UidSite.secret, "2", now)});
+    try testing.expectEqualStrings("404 Not Found", status(try postForm(a, io, "/admin/backup", other, "password=hunter2")));
+    try testing.expectEqual(@as(usize, 0), admin_backup.files_archived - before - countFiles(tar));
+}
+
+/// How many manifest lines name a file, in an archive's text.
+fn countFiles(tar: []const u8) usize {
+    const at = std.mem.lastIndexOf(u8, tar, "\nend: ") orelse return 0;
+    var it = std.mem.tokenizeAny(u8, tar[at + "\nend: ".len ..], " ");
+    return std.fmt.parseInt(usize, it.next() orelse "0", 10) catch 0;
 }
