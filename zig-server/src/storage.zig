@@ -9,7 +9,7 @@
 //!   meta                       — created_at + catalog snapshot (DSL)
 //!   puzzle_<idx>/actions.dsl   — one `<seq>) <action>` line per append
 //!
-//! Atomicity note: appendTextLine does stat-size-then-positional-write (the
+//! Atomicity note: appendTextLine (store.append) does stat-size-then-positional-write (the
 //! std.Io file API exposes no O_APPEND). That is fully atomic for THIS design
 //! because session ids come from the shared counter, so a given actions.dsl is
 //! only ever appended by the one request that allocated its session — there are
@@ -19,6 +19,7 @@ const std = @import("std");
 const Io = std.Io;
 const Alloc = std.mem.Allocator;
 const counter = @import("counter.zig");
+const store = @import("store.zig");
 
 /// data_root is the live game-data dir (repo-relative from zig-server/, hence the `..`).
 pub var data_root: []const u8 = "../games/lynrummy/data";
@@ -43,7 +44,7 @@ pub fn userDataDir(alloc: Alloc, user_id: []const u8) ![]u8 {
 pub fn deleteUserData(io: Io, alloc: Alloc, user_id: []const u8) !void {
     if (std.mem.trim(u8, user_id, " \t\r\n").len == 0) return error.EmptyUserID;
     const root = try userRoot(alloc, user_id);
-    Io.Dir.cwd().deleteTree(io, root) catch {};
+    store.removeTree(io, alloc, root) catch {};
 }
 
 fn puzzleRoot(alloc: Alloc, user_id: []const u8) ![]u8 {
@@ -82,14 +83,13 @@ pub fn allocatePuzzleSessionID(io: Io, alloc: Alloc, user_id: []const u8) !i64 {
 pub fn writePuzzleSessionFile(io: Io, alloc: Alloc, user_id: []const u8, session_id: i64, rel: []const u8, body: []const u8) !void {
     const dir = try puzzleSessionDir(alloc, user_id, session_id);
     const full = try join(alloc, &.{ dir, rel });
-    try mkParentDirs(io, full);
-    try Io.Dir.cwd().writeFile(io, .{ .sub_path = full, .data = body });
+    try store.write(io, alloc, full, body, .{});
 }
 
 /// puzzleSessionExists reports whether a session directory is on disk.
 pub fn puzzleSessionExists(io: Io, alloc: Alloc, user_id: []const u8, session_id: i64) !bool {
     const dir = try puzzleSessionDir(alloc, user_id, session_id);
-    const st = Io.Dir.cwd().statFile(io, dir, .{}) catch return false;
+    const st = store.stat(io, alloc, dir) catch return false;
     return st.kind == .directory;
 }
 
@@ -105,16 +105,9 @@ pub fn appendPuzzleSessionDslLine(io: Io, alloc: Alloc, user_id: []const u8, ses
 /// write at the current end. See the atomicity note
 /// at the top of this file.
 fn appendTextLine(io: Io, alloc: Alloc, path: []const u8, body: []const u8) !void {
-    try mkParentDirs(io, path);
-
     const trimmed = std.mem.trimEnd(u8, body, "\n");
     const line = try std.fmt.allocPrint(alloc, "{s}\n", .{trimmed});
-
-    // truncate=false: open-or-create without clobbering existing content.
-    var file = try Io.Dir.cwd().createFile(io, path, .{ .truncate = false });
-    defer file.close(io);
-    const st = try file.stat(io);
-    try file.writePositionalAll(io, line, st.size);
+    _ = try store.append(io, alloc, path, line);
 }
 
 // ── full-game (lynrummy-elm) namespace ──────────────────────────────────────
@@ -141,8 +134,7 @@ pub fn sessionDir(alloc: Alloc, user_id: []const u8, session_id: i64) ![]u8 {
 pub fn writeSessionFile(io: Io, alloc: Alloc, user_id: []const u8, session_id: i64, rel: []const u8, body: []const u8) !void {
     const dir = try sessionDir(alloc, user_id, session_id);
     const full = try join(alloc, &.{ dir, rel });
-    try mkParentDirs(io, full);
-    try Io.Dir.cwd().writeFile(io, .{ .sub_path = full, .data = body });
+    try store.write(io, alloc, full, body, .{});
 }
 
 /// readSessionFile reads <session-dir>/<rel>, or null when the file (or session)
@@ -150,13 +142,13 @@ pub fn writeSessionFile(io: Io, alloc: Alloc, user_id: []const u8, session_id: i
 pub fn readSessionFile(io: Io, alloc: Alloc, user_id: []const u8, session_id: i64, rel: []const u8) !?[]u8 {
     const dir = try sessionDir(alloc, user_id, session_id);
     const full = try join(alloc, &.{ dir, rel });
-    return Io.Dir.cwd().readFileAlloc(io, full, alloc, .unlimited) catch return null;
+    return store.read(io, alloc, full, .unlimited) catch return null;
 }
 
 /// sessionExists reports whether a full-game session directory is on disk.
 pub fn sessionExists(io: Io, alloc: Alloc, user_id: []const u8, session_id: i64) !bool {
     const dir = try sessionDir(alloc, user_id, session_id);
-    const st = Io.Dir.cwd().statFile(io, dir, .{}) catch return false;
+    const st = store.stat(io, alloc, dir) catch return false;
     return st.kind == .directory;
 }
 
@@ -182,12 +174,10 @@ pub fn listSessionIDs(io: Io, alloc: Alloc, user_id: []const u8) ![]i64 {
     const root = try lynrummyElmRoot(alloc, user_id);
     const sessions = try join(alloc, &.{ root, "sessions" });
 
-    var dir = Io.Dir.cwd().openDir(io, sessions, .{ .iterate = true }) catch return &.{};
-    defer dir.close(io);
+    const entries = store.list(io, alloc, sessions) catch return &.{};
 
     var ids: std.ArrayList(i64) = .empty;
-    var it = dir.iterate();
-    while (try it.next(io)) |entry| {
+    for (entries) |entry| {
         if (entry.kind != .directory) continue;
         const id = std.fmt.parseInt(i64, entry.name, 10) catch continue;
         if (id <= 0) continue;
@@ -201,7 +191,7 @@ pub fn listSessionIDs(io: Io, alloc: Alloc, user_id: []const u8) ![]i64 {
 /// countTextLines returns the number of non-empty lines in `path`, or 0 if the
 /// file is missing.
 pub fn countTextLines(io: Io, alloc: Alloc, path: []const u8) !usize {
-    const body = Io.Dir.cwd().readFileAlloc(io, path, alloc, .unlimited) catch return 0;
+    const body = store.read(io, alloc, path, .unlimited) catch return 0;
     var n: usize = 0;
     var it = std.mem.splitScalar(u8, body, '\n');
     while (it.next()) |line| {
@@ -221,12 +211,8 @@ pub fn countSessionActions(io: Io, alloc: Alloc, user_id: []const u8, session_id
 /// trimming — `body` is already exactly one line). Used by the JSONL path, whose
 /// compacted body never contains a newline.
 fn appendRawLine(io: Io, alloc: Alloc, path: []const u8, body: []const u8) !void {
-    try mkParentDirs(io, path);
     const line = try std.fmt.allocPrint(alloc, "{s}\n", .{body});
-    var file = try Io.Dir.cwd().createFile(io, path, .{ .truncate = false });
-    defer file.close(io);
-    const st = try file.stat(io);
-    try file.writePositionalAll(io, line, st.size);
+    _ = try store.append(io, alloc, path, line);
 }
 
 /// compactJSON strips insignificant whitespace (outside string literals) from
@@ -259,12 +245,4 @@ fn compactJSON(alloc: Alloc, src: []const u8) ![]u8 {
         }
     }
     return out.toOwnedSlice(alloc);
-}
-
-/// mkParentDirs creates the directory containing `path` (mkdir -p). No-op when
-/// `path` has no directory component.
-fn mkParentDirs(io: Io, path: []const u8) !void {
-    if (std.fs.path.dirname(path)) |d| {
-        try Io.Dir.cwd().createDirPath(io, d);
-    }
 }
