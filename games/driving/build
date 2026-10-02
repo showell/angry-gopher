@@ -1,5 +1,5 @@
 #!/bin/bash
-# Thin delegator — the canonical build now lives in ops/build_driving
-# (so it shares _paths.sh and is listed by ops/list, like every other
-# bundle build). Kept here for muscle memory: `./build` from this dir.
-exec "$(dirname "$0")/../../ops/build_driving"
+# Thin delegator — the canonical build lives in ops/build_safari_wasm (the
+# zig/WASM Safari that replaced the TS bundle, ea516760; ops/build_driving
+# went with it). Kept here for muscle memory: `./build` from this dir.
+exec "$(dirname "$0")/../../ops/build_safari_wasm"
