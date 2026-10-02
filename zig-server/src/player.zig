@@ -41,6 +41,7 @@ const http = @import("http.zig");
 const html = @import("html.zig");
 const names = @import("names.zig");
 const counter = @import("counter.zig");
+const store = @import("store.zig");
 
 /// player_root is the local player directory (config.zig points it at
 /// {data_dir}/players at startup; the default is repo-relative from zig-server/).
@@ -106,10 +107,8 @@ pub fn mirror(io: Io, alloc: Alloc, id: []const u8, name: []const u8) void {
 /// setName writes a player's display name, creating the row (whose existence IS
 /// the player).
 fn setName(io: Io, alloc: Alloc, id: []const u8, name: []const u8) !void {
-    const dir = try std.fs.path.join(alloc, &.{ player_root, id });
-    try Io.Dir.cwd().createDirPath(io, dir);
-    const path = try std.fs.path.join(alloc, &.{ dir, "name" });
-    try Io.Dir.cwd().writeFile(io, .{ .sub_path = path, .data = name });
+    const path = try std.fs.path.join(alloc, &.{ player_root, id, "name" });
+    try store.write(io, alloc, path, name, .{});
 }
 
 /// deleteRecord removes a player's row (name + last-seen). Their game data is
@@ -118,7 +117,7 @@ fn setName(io: Io, alloc: Alloc, id: []const u8, name: []const u8) !void {
 pub fn deleteRecord(io: Io, alloc: Alloc, id: []const u8) void {
     if (!isSafeID(id)) return;
     const dir = std.fs.path.join(alloc, &.{ player_root, id }) catch return;
-    Io.Dir.cwd().deleteTree(io, dir) catch {};
+    store.removeTree(io, alloc, dir) catch {};
 }
 
 /// nameOf answers a player's display name, "" when there is none.
@@ -132,12 +131,10 @@ pub fn nameOf(io: Io, alloc: Alloc, id: []const u8) ![]const u8 {
 /// can have Lyn Rummy data: the seed brought the account-store names across, and
 /// a chat member who logs in is mirrored in. Powers the game admin.
 pub fn list(io: Io, alloc: Alloc) ![]Player {
-    var dir = Io.Dir.cwd().openDir(io, player_root, .{ .iterate = true }) catch return &.{};
-    defer dir.close(io);
+    const entries = store.list(io, alloc, player_root) catch return &.{};
 
     var out: std.ArrayList(Player) = .empty;
-    var it = dir.iterate();
-    while (try it.next(io)) |entry| {
+    for (entries) |entry| {
         if (entry.kind != .directory) continue;
         const id = try alloc.dupe(u8, entry.name);
         if (!isSafeID(id)) continue;
@@ -175,17 +172,15 @@ pub fn touch(io: Io, alloc: Alloc, id: []const u8) void {
 
 fn touchImpl(io: Io, alloc: Alloc, id: []const u8) !void {
     if (!isSafeID(id)) return;
-    const dir = try std.fs.path.join(alloc, &.{ player_root, id });
-    try Io.Dir.cwd().createDirPath(io, dir);
-    const path = try std.fs.path.join(alloc, &.{ dir, "last-seen" });
+    const path = try std.fs.path.join(alloc, &.{ player_root, id, "last-seen" });
     const now: i64 = @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
     const body = try std.fmt.allocPrint(alloc, "{d}", .{now});
-    try Io.Dir.cwd().writeFile(io, .{ .sub_path = path, .data = body });
+    try store.write(io, alloc, path, body, .{});
 }
 
 fn readField(io: Io, alloc: Alloc, id: []const u8, field: []const u8) !?[]const u8 {
     const path = try std.fs.path.join(alloc, &.{ player_root, id, field });
-    const raw = Io.Dir.cwd().readFileAlloc(io, path, alloc, .limited(4096)) catch return null;
+    const raw = store.read(io, alloc, path, .limited(4096)) catch return null;
     return std.mem.trimEnd(u8, raw, "\r\n");
 }
 
