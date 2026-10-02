@@ -207,16 +207,41 @@ pub fn handleLogout(req: *Request, io: Io, alloc: Alloc) !void {
     if (req.head.method == .POST) {
         const body = (try http.readLimitedBody(req, alloc, 64 * 1024)) orelse return;
         const release = (try chat.formField(alloc, body, "release")) orelse "";
-        if (std.mem.eql(u8, release, "yes") and id.len != 0) {
+        const target = releaseTarget(user.id, local.id, local.id.len != 0 and users.principalExists(io, alloc, local.id));
+        if (std.mem.eql(u8, release, "yes")) if (target) |t| {
             // Release: delete game data and the identity record (frees the name;
             // no id is ever reissued, so no name-backdoor remains).
-            storage.deleteUserData(io, alloc, id) catch {};
-            if (user.id.len != 0) users.deleteUserRecord(io, alloc, id) else player.deleteRecord(io, alloc, id);
-        }
+            storage.deleteUserData(io, alloc, t) catch {};
+            if (user.id.len != 0) users.deleteUserRecord(io, alloc, t) else player.deleteRecord(io, alloc, t);
+        };
         return renderLogoutComplete(req, alloc);
     }
     if (id.len == 0) return sendRedirect(req, alloc, "/", &.{});
     return renderLogoutPage(req, alloc, if (user.id.len != 0) user.name else local.name);
+}
+
+/// releaseTarget is the id a release may delete, or null.
+///
+/// **A PLAYER COOKIE NAMING AN ACCOUNT RELEASES NOTHING.** `gopher_uid` is not
+/// signed, and every member is mirrored into the player store at login (same
+/// id), so a bare `gopher_uid=<a member's id>` with no session used to reach
+/// `player.current` and delete that member's game data and player row
+/// (gopher-metal REVIEW-request-paths.md, finding 1). An account's data is
+/// released only by the account itself (`user_id`: a session, an API key, or
+/// a guest's cookie); a cookie-only player may release itself only when no
+/// account has its id.
+fn releaseTarget(user_id: []const u8, player_id: []const u8, player_is_account: bool) ?[]const u8 {
+    if (user_id.len != 0) return user_id;
+    if (player_id.len != 0 and !player_is_account) return player_id;
+    return null;
+}
+
+test "a release deletes the caller's own account, or a player no account has" {
+    try std.testing.expectEqualStrings("7", releaseTarget("7", "", false).?);
+    try std.testing.expectEqualStrings("p3", releaseTarget("", "p3", false).?);
+    // A member's id in a bare player cookie, with no session: nothing.
+    try std.testing.expect(releaseTarget("", "1", true) == null);
+    try std.testing.expect(releaseTarget("", "", false) == null);
 }
 
 // ── new-member fan-out ──────────────
