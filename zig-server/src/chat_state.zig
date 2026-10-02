@@ -16,7 +16,7 @@ const std = @import("std");
 const Io = std.Io;
 const Alloc = std.mem.Allocator;
 const store = @import("chat_store.zig");
-const files = @import("files.zig");
+const disk = @import("store.zig");
 const timefmt = @import("timefmt.zig");
 
 /// userChatStateDir is a user's per-chat-state directory ({chat_root}/users/<uid>),
@@ -32,7 +32,7 @@ fn userChatStateDir(alloc: Alloc, uid: []const u8) ![]u8 {
 pub fn lastUserConv(io: Io, alloc: Alloc, uid: []const u8) ![]const u8 {
     const dir = try userChatStateDir(alloc, uid);
     const path = try std.fs.path.join(alloc, &.{ dir, "last-conv" });
-    const b = Io.Dir.cwd().readFileAlloc(io, path, alloc, .unlimited) catch return "";
+    const b = disk.read(io, alloc, path, .unlimited) catch return "";
     return std.mem.trim(u8, b, " \t\r\n");
 }
 
@@ -41,7 +41,7 @@ pub fn lastUserConv(io: Io, alloc: Alloc, uid: []const u8) ![]const u8 {
 pub fn lastUserSession(io: Io, alloc: Alloc, uid: []const u8, conv_key: []const u8) ![]const u8 {
     const dir = try userChatStateDir(alloc, uid);
     const path = try std.fs.path.join(alloc, &.{ dir, "last-sessions", conv_key });
-    const b = Io.Dir.cwd().readFileAlloc(io, path, alloc, .unlimited) catch return "";
+    const b = disk.read(io, alloc, path, .unlimited) catch return "";
     return std.mem.trim(u8, b, " \t\r\n");
 }
 
@@ -52,13 +52,13 @@ pub fn setUserLastSession(io: Io, alloc: Alloc, uid: []const u8, conv_key: []con
     if (uid.len == 0 or sid.len == 0) return;
     const dir = userChatStateDir(alloc, uid) catch return;
     const ls_dir = std.fs.path.join(alloc, &.{ dir, "last-sessions" }) catch return;
-    Io.Dir.cwd().createDirPath(io, ls_dir) catch return;
+    disk.makeDir(io, alloc, ls_dir) catch return;
     const ls_path = std.fs.path.join(alloc, &.{ ls_dir, conv_key }) catch return;
     const sv = std.fmt.allocPrint(alloc, "{s}\n", .{sid}) catch return;
-    Io.Dir.cwd().writeFile(io, .{ .sub_path = ls_path, .data = sv }) catch {};
+    disk.write(io, alloc, ls_path, sv, .{}) catch {};
     const lc_path = std.fs.path.join(alloc, &.{ dir, "last-conv" }) catch return;
     const cv = std.fmt.allocPrint(alloc, "{s}\n", .{conv_key}) catch return;
-    Io.Dir.cwd().writeFile(io, .{ .sub_path = lc_path, .data = cv }) catch {};
+    disk.write(io, alloc, lc_path, cv, .{}) catch {};
 }
 
 // ── pinned sessions (the sidebar's Pinned group) ──────────────────────────────
@@ -99,7 +99,7 @@ pub fn setSessionPinned(io: Io, alloc: Alloc, uid: []const u8, conv_key: []const
     // **A SET THAT WILL NOT READ IS NOT AN EMPTY SET.** What is read here is
     // rewritten below, so treating a failed read as "no pins" used to delete
     // every pin the user had — silently, on the way to adding one. No pins is
-    // a missing file (files.zig answers ""); anything else leaves them alone.
+    // a missing file (store.zig answers ""); anything else leaves them alone.
     const existing = readPinnedFile(io, alloc, uid, conv_key) catch return;
     const cur = parsePinned(alloc, existing) catch return;
 
@@ -117,7 +117,7 @@ pub fn setSessionPinned(io: Io, alloc: Alloc, uid: []const u8, conv_key: []const
 
     const path = pinnedPath(alloc, uid, conv_key) catch return;
     if (next.items.len == 0) {
-        Io.Dir.cwd().deleteFile(io, path) catch {};
+        disk.remove(io, alloc, path) catch {};
         return;
     }
     std.mem.sort([]const u8, next.items, {}, lessThanStr);
@@ -127,8 +127,8 @@ pub fn setSessionPinned(io: Io, alloc: Alloc, uid: []const u8, conv_key: []const
         body.appendSlice(alloc, s) catch return;
         body.append(alloc, '\n') catch return;
     }
-    if (std.fs.path.dirname(path)) |d| Io.Dir.cwd().createDirPath(io, d) catch return;
-    Io.Dir.cwd().writeFile(io, .{ .sub_path = path, .data = body.items }) catch {};
+    if (std.fs.path.dirname(path)) |d| disk.makeDir(io, alloc, d) catch return;
+    disk.write(io, alloc, path, body.items, .{}) catch {};
 }
 
 fn pinnedPath(alloc: Alloc, uid: []const u8, conv_key: []const u8) ![]u8 {
@@ -138,7 +138,7 @@ fn pinnedPath(alloc: Alloc, uid: []const u8, conv_key: []const u8) ![]u8 {
 
 fn readPinnedFile(io: Io, alloc: Alloc, uid: []const u8, conv_key: []const u8) ![]u8 {
     const path = try pinnedPath(alloc, uid, conv_key);
-    return files.readOrEmpty(io, alloc, path, .unlimited);
+    return disk.readOrEmpty(io, alloc, path, .unlimited);
 }
 
 fn lessThanStr(_: void, a: []const u8, b: []const u8) bool {
