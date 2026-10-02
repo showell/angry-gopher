@@ -100,9 +100,23 @@ pub fn header(alloc: Alloc, value: []const u8) ![]const u8 {
 /// its unsigned spelling is refused from now on. Null when there is no
 /// session secret: nothing unsigned is ever issued.
 pub fn issue(io: Io, alloc: Alloc, id: []const u8) !?[]const u8 {
+    return issueMarked(io, alloc, id, "");
+}
+
+/// **A RE-SIGN CAN BE ASKED AGAIN, BRIEFLY.** The marker is written before
+/// the answer leaves, and if the signed cookie never reached the browser
+/// (the tab closed, the connection dropped), the owner had neither cookie
+/// (gopher-metal REVIEW-signed-uid-and-limits.md, finding 3). So a re-sign's
+/// marker holds the second it was written, and the same unsigned cookie is
+/// honoured again for `grace_seconds` after it: a reload recovers. A marker
+/// written for a new player or a login holds nothing, and has no grace:
+/// those ids never had an unsigned cookie to come back with.
+pub const grace_seconds: i64 = 10 * 60;
+
+fn issueMarked(io: Io, alloc: Alloc, id: []const u8, marker: []const u8) !?[]const u8 {
     const secret = (try users.sessionSecret(io, alloc)) orelse return null;
     const now: i64 = @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
-    try markSigned(io, alloc, id);
+    try store.write(io, alloc, try markerPath(alloc, id), marker, .{});
     return try header(alloc, try sign(alloc, secret, id, now));
 }
 
@@ -110,13 +124,15 @@ fn markerPath(alloc: Alloc, id: []const u8) ![]const u8 {
     return std.fs.path.join(alloc, &.{ player.player_root, id, "signed" });
 }
 
-fn markSigned(io: Io, alloc: Alloc, id: []const u8) !void {
-    try store.write(io, alloc, try markerPath(alloc, id), "", .{});
-}
-
+/// Whether `id`'s unsigned spelling is refused for good: marked, and not a
+/// re-sign still inside its grace. A marker that will not read is refused.
 fn isMarked(io: Io, alloc: Alloc, id: []const u8) bool {
     const p = markerPath(alloc, id) catch return true;
-    return store.has(io, alloc, p);
+    if (!store.has(io, alloc, p)) return false;
+    const raw = store.read(io, alloc, p, .limited(64)) catch return true;
+    const at = std.fmt.parseInt(i64, std.mem.trim(u8, raw, " \t\r\n"), 10) catch return true;
+    const now: i64 = @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
+    return now - at >= grace_seconds;
 }
 
 /// Whether unsigned cookies are still honoured. The window opens the first
@@ -177,7 +193,9 @@ pub fn reissue(io: Io, alloc: Alloc, req: *std.http.Server.Request, client: ?[]c
     const value = (try http.cookie(req, alloc, cookie_name)) orelse return null;
     if (!legacyHonoured(io, alloc, value)) return null;
     if (try game_limits.admitResign(io, client)) |r| return .{ .refused = r };
-    return .{ .cookie = (try issue(io, alloc, value)) orelse return null };
+    const now: i64 = @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
+    const marker = try std.fmt.allocPrint(alloc, "{d}\n", .{now});
+    return .{ .cookie = (try issueMarked(io, alloc, value, marker)) orelse return null };
 }
 
 // ── tests ────────────────────────────────────────────────────────────────────

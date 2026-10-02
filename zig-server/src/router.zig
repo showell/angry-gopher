@@ -457,7 +457,13 @@ test "route: an unsigned gopher_uid is re-identified once, then never" {
     try testing.expectEqualStrings("200 OK", status(page));
     try testing.expect(playingAs(page, "Nikhil"));
 
-    // The unsigned spelling, again: no one, and no cookie handed out.
+    // The same unsigned cookie again within the grace (the answer may have
+    // been lost): re-signed again. Once the grace is over: no one.
+    const lost = try UidSite.ask(a, io, "/play", unsigned);
+    try testing.expectEqualStrings("303 See Other", status(lost));
+    try testing.expectEqualStrings(id, uid_cookie.verify(UidSite.secret, setUid(lost).?).?);
+    const marker = try std.fs.path.join(a, &.{ player.player_root, id, "signed" });
+    try UidSite.disk.replace(io, a, marker, "1790000000\n", .{}); // signed long ago
     const again = try UidSite.ask(a, io, "/play", unsigned);
     try testing.expectEqualStrings("200 OK", status(again));
     try testing.expect(!playingAs(again, "Nikhil"));
@@ -570,8 +576,11 @@ test "route: /play mints a signed gopher_uid, marked as signed" {
     const v = setUid(r) orelse return error.NoSetCookie;
     const id = uid_cookie.verify(UidSite.secret, v) orelse return error.Unsigned;
     try testing.expect(UidSite.marked(a, io, id));
-    // Its unsigned spelling is refused from the start.
+    // Its unsigned spelling is refused from the start: not re-signed, even
+    // within a re-sign's grace, since this id never had an unsigned cookie.
     const bare = try UidSite.ask(a, io, "/play", try std.fmt.allocPrint(a, "gopher_uid={s}", .{id}));
+    try testing.expectEqualStrings("200 OK", status(bare));
+    try testing.expect(setUid(bare) == null);
     try testing.expect(!playingAs(bare, "Nikhil"));
     // With no session secret, nothing is minted: no unsigned cookie instead.
     try removeSecret(a, io);
