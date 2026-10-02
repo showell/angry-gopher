@@ -27,6 +27,7 @@ const storage = @import("storage.zig");
 const users = @import("users.zig");
 const player = @import("player.zig");
 const chat_store = @import("chat_store.zig");
+const store = @import("store.zig");
 
 pub const Roots = struct {
     data_dir: []const u8,
@@ -42,6 +43,7 @@ pub fn point(alloc: std.mem.Allocator, r: Roots) !void {
     users.session_secret_dir = try std.fs.path.join(alloc, &.{ r.data_dir, "chat" });
     chat_store.chat_root = try std.fs.path.join(alloc, &.{ r.data_dir, "chat" });
     users.auth_root = try alloc.dupe(u8, r.auth_dir);
+    store.setBases(try alloc.dupe(u8, r.data_dir), users.auth_root);
 }
 
 // ══ TESTS ════════════════════════════════════════════════════════════════════
@@ -57,6 +59,8 @@ const Snapshot = struct {
     secret: []const u8,
     chat: []const u8,
     auth: []const u8,
+    store_data: ?[]const u8,
+    store_auth: ?[]const u8,
 
     fn take() Snapshot {
         return .{
@@ -66,6 +70,8 @@ const Snapshot = struct {
             .secret = users.session_secret_dir,
             .chat = chat_store.chat_root,
             .auth = users.auth_root,
+            .store_data = store.data_base,
+            .store_auth = store.auth_base,
         };
     }
 
@@ -76,6 +82,8 @@ const Snapshot = struct {
         users.session_secret_dir = s.secret;
         chat_store.chat_root = s.chat;
         users.auth_root = s.auth;
+        store.data_base = s.store_data;
+        store.auth_base = s.store_auth;
     }
 };
 
