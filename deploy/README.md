@@ -97,8 +97,16 @@ line includes the build's git commit hash (baked in via `ops/deploy`'s
 `-Dcommit`), and a `zig-uptime` line shows how long the running binary has
 been up.
 
+It also watches gopher-metal, when `~/metal-url` on the host names it (one
+line, `http://<metal's private address>`; the address stays off the repo):
+`metal` FAILs when metal's `/version` does not answer and WARNs when metal
+runs another commit than this server, and `metal-clock` WARNs at 2 s and
+FAILs at 60 s between the two clocks. Without the file the `metal` line
+says "not watched". `python3 deploy/test_watchdog.py` tests those checks
+against two local servers, one of them stopped (needs `zig build` first).
+
 It takes no arguments (thresholds are constants at the top of the file) and
-opens no network except to curl the local server. ONE-TIME install as a
+opens no network except to curl the local server and metal's `/version`. ONE-TIME install as a
 systemd service (auto-start on boot, auto-restart on crash — survives a
 droplet reboot, same as `gopher-server`):
 

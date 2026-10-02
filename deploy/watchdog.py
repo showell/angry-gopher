@@ -17,9 +17,27 @@ What it checks (all thresholds are constants below — no CLI args, by design):
   - disk      : the root filesystem still has free space
   - processes : nothing unexpected is running as `steve` (a rogue-binary smell
                 test) + a list of the heavy processes for eyeballing
+  - metal     : gopher-metal, on the private network, answers GET /version, and
+                runs the same commit as this server (gopher-metal QUEUE item 56)
+  - metal-clock: metal's clock against this server's, from both /version's
+                `now_ms`, each read as its quickest of three requests with the
+                round trip halved out (gopher-metal's droplet/drift.py does the
+                same over an hour)
+
+Metal's address is not in the repo: it is one line in ~/metal-url on the host
+(`http://<metal's private address>`). Without that file metal is not
+watched, and the `metal` line says so rather than leaving it out.
+
+HOW A METAL FAILURE SHOWS: `[FAIL] metal  cannot reach .../version: <why>`
+(metal down, or its network), and `overall: FAIL`, also appended to
+watchdog.log; a `[WARN] metal` when it answers with another commit than
+this server's (one of the two was deployed without the other); and
+`[WARN]`/`[FAIL] metal-clock` when its clock is 2 s / 60 s off this
+server's. Metal sets its clock once, from the hardware clock at boot, and
+never corrects it, so a slow drift shows here first, as a WARN.
 
 It does NOT listen on any port or open the network except to curl the local
-server. It is intentionally robust: a bad check or a thrown exception is caught,
+server and, when ~/metal-url names it, metal's /version. It is intentionally robust: a bad check or a thrown exception is caught,
 written to the status file, and the loop keeps going — a watchdog that dies is
 worse than none.
 
@@ -66,6 +84,13 @@ EXPECTED_NAMES = {
     "zig-server", "python3", "python", "bash", "sh", "dash",
     "sshd", "ssh", "scp", "rsync", "systemd", "(sd-pam)", "sftp-server",
 }
+
+# Metal: its URL, one line, e.g. http://10.0.0.5 (kept off the repo: it names a
+# machine). Its clock is compared with this server's.
+METAL_URL_FILE = os.path.expanduser("~/metal-url")
+CLOCK_WARN_MS = 2000         # warn if metal's clock is this far off this server's
+CLOCK_FAIL_MS = 60000        # fail if this far
+CLOCK_TRIES = 3              # requests per host per cycle; the quickest is used
 
 STATUS_FILE = os.path.expanduser("~/watchdog-status.txt")  # overwritten each cycle
 LOG_FILE = os.path.expanduser("~/watchdog.log")            # appended on WARN/FAIL
@@ -173,6 +198,75 @@ def check_server():
         return Check("server", WARN, f"/version {code} unexpected body: {body}")
     except Exception as e:
         return Check("server", FAIL, f"cannot reach {VERSION_URL}: {e}")
+
+
+def read_version(url):
+    """(the /version JSON, its clock's offset from this machine's in ms, round
+    trip in ms) from the quickest of CLOCK_TRIES requests. The offset is the
+    host's `now_ms` less the request's midpoint: the round trip halved out, so
+    a slow network is not read as a slow clock. Offset None when the answer
+    has no now_ms (a build from before it)."""
+    best = None
+    for _ in range(CLOCK_TRIES):
+        t0 = time.time()
+        with urllib.request.urlopen(url, timeout=5) as r:
+            code = r.status
+            body = r.read(4000)
+        t1 = time.time()
+        data = json.loads(body)
+        if code != 200 or data.get("result") != "success":
+            raise ValueError(f"/version {code} unexpected body: {body[:200]!r}")
+        rtt = (t1 - t0) * 1000
+        off = data["now_ms"] - (t0 + t1) * 500 if isinstance(data.get("now_ms"), (int, float)) else None
+        if best is None or rtt < best[2]:
+            best = (data, off, rtt)
+    return best
+
+
+def metal_url():
+    """Metal's base URL from METAL_URL_FILE, or None when it is not there."""
+    try:
+        with open(METAL_URL_FILE) as f:
+            url = f.read().strip()
+    except FileNotFoundError:
+        return None
+    return url.rstrip("/") or None
+
+
+def check_metal():
+    """The `metal` and `metal-clock` checks."""
+    url = metal_url()
+    if url is None:
+        return [Check("metal", OK, f"not watched: no {METAL_URL_FILE}")]
+    try:
+        metal, metal_off, metal_rtt = read_version(url + "/version")
+    except Exception as e:
+        return [Check("metal", FAIL, f"cannot reach {url}/version: {e}"),
+                Check("metal-clock", WARN, "metal did not answer")]
+    try:
+        prod, prod_off, _ = read_version(VERSION_URL)
+    except Exception as e:
+        prod, prod_off = None, None
+        prod_err = e
+    ours = prod.get("commit") if prod else None
+    theirs = metal.get("commit")
+    detail = f"/version 200, commit {theirs}, {metal_rtt:.1f} ms"
+    if prod is None:
+        checks = [Check("metal", OK, detail + " (this server did not answer to compare)")]
+    elif theirs != ours:
+        checks = [Check("metal", WARN, f"{detail}; this server runs {ours}")]
+    else:
+        checks = [Check("metal", OK, detail + ", the same as this server")]
+    if prod is None:
+        checks.append(Check("metal-clock", WARN, f"this server did not answer: {prod_err}"))
+    elif metal_off is None or prod_off is None:
+        checks.append(Check("metal-clock", WARN, "a /version without now_ms; the clocks cannot be compared"))
+    else:
+        d = metal_off - prod_off
+        level = FAIL if abs(d) >= CLOCK_FAIL_MS else WARN if abs(d) >= CLOCK_WARN_MS else OK
+        checks.append(Check("metal-clock", level, f"metal is {d:+.0f} ms from this server  "
+                                                   f"(warn at {CLOCK_WARN_MS} ms, fail at {CLOCK_FAIL_MS} ms)"))
+    return checks
 
 
 def check_zig_process(zigs):
@@ -309,6 +403,7 @@ def run_once():
         check_sys_memory(),
         check_disk(),
         check_unexpected(procs),
+        *check_metal(),
     ]
     overall = worst(checks)
     write_status(render(checks, heavy_processes(procs), overall, stamp))
