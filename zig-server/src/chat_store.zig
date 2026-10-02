@@ -707,7 +707,7 @@ fn writeCount(io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8, count
         }) catch return
     else
         head;
-    store.write(io, alloc, path, text, .{}) catch {};
+    store.replace(io, alloc, path, text, .{}) catch {};
 }
 
 fn nowUnix(io: Io) i64 {
