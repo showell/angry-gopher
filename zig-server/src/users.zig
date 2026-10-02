@@ -477,7 +477,7 @@ pub fn allocateUser(io: Io, alloc: Alloc, name: []const u8) ![]const u8 {
 /// account dir (whose existence IS the user).
 pub fn setUserName(io: Io, alloc: Alloc, id: []const u8, name: []const u8) !void {
     const path = try std.fs.path.join(alloc, &.{ auth_root, id, "name" });
-    try store.write(io, alloc, path, name, .{});
+    try store.replace(io, alloc, path, name, .{});
 }
 
 /// setUserPassword bcrypt-hashes `password` and stores it (mode 0o600), making
