@@ -15,7 +15,7 @@ const std = @import("std");
 const Io = std.Io;
 const Alloc = std.mem.Allocator;
 const store = @import("chat_store.zig");
-const files = @import("files.zig");
+const disk = @import("store.zig");
 
 /// DocSummary is one sidebar entry: the slug + a display title derived from it.
 pub const DocSummary = struct { slug: []const u8, title: []const u8 };
@@ -106,24 +106,17 @@ fn uniqueDocSlug(io: Io, alloc: Alloc, uid: []const u8, base: []const u8) ![]con
 fn docFileExists(io: Io, alloc: Alloc, uid: []const u8, slug: []const u8) !bool {
     const file = try std.fmt.allocPrint(alloc, "{s}.md", .{slug});
     const path = try std.fs.path.join(alloc, &.{ try userDocsDir(alloc, uid), file });
-    return fileExists(io, path);
-}
-
-fn fileExists(io: Io, path: []const u8) bool {
-    Io.Dir.cwd().access(io, path, .{}) catch return false;
-    return true;
+    return disk.has(io, alloc, path);
 }
 
 /// listUserDocs enumerates a user's docs, alphabetically by slug. A missing dir
 /// means "no docs yet," not an error.
 pub fn listUserDocs(io: Io, alloc: Alloc, uid: []const u8) ![]DocSummary {
     const dir_path = try userDocsDir(alloc, uid);
-    var dir = Io.Dir.cwd().openDir(io, dir_path, .{ .iterate = true }) catch return &.{};
-    defer dir.close(io);
+    const entries = disk.list(io, alloc, dir_path) catch return &.{};
 
     var out: std.ArrayList(DocSummary) = .empty;
-    var it = dir.iterate();
-    while (try it.next(io)) |entry| {
+    for (entries) |entry| {
         if (entry.kind == .directory) continue;
         if (!std.mem.endsWith(u8, entry.name, ".md")) continue;
         const slug = entry.name[0 .. entry.name.len - ".md".len];
@@ -147,21 +140,19 @@ fn lessThanSlug(_: void, a: DocSummary, b: DocSummary) bool {
 /// a message you land in your reading list.
 pub fn mostRecentDocSlug(io: Io, alloc: Alloc, uid: []const u8) !?[]const u8 {
     const dir_path = try userDocsDir(alloc, uid);
-    var dir = Io.Dir.cwd().openDir(io, dir_path, .{ .iterate = true }) catch return null;
-    defer dir.close(io);
+    const entries = disk.list(io, alloc, dir_path) catch return null;
 
     var best_slug: ?[]const u8 = null;
     var best_mtime: i96 = 0;
-    var it = dir.iterate();
-    while (try it.next(io)) |entry| {
+    for (entries) |entry| {
         if (entry.kind == .directory) continue;
         if (!std.mem.endsWith(u8, entry.name, ".md")) continue;
         const slug = entry.name[0 .. entry.name.len - ".md".len];
         if (!validDocSlug(slug)) continue;
         const path = try std.fs.path.join(alloc, &.{ dir_path, entry.name });
-        const st = Io.Dir.cwd().statFile(io, path, .{}) catch continue;
-        if (best_slug == null or st.mtime.nanoseconds > best_mtime) {
-            best_mtime = st.mtime.nanoseconds;
+        const st = disk.stat(io, alloc, path) catch continue;
+        if (best_slug == null or st.mtime > best_mtime) {
+            best_mtime = st.mtime;
             best_slug = try alloc.dupe(u8, slug);
         }
     }
@@ -182,14 +173,14 @@ pub fn titleFromSlug(alloc: Alloc, slug: []const u8) ![]u8 {
 /// (empty, ok) — the route distinguishes "not found".
 pub fn readUserDoc(io: Io, alloc: Alloc, uid: []const u8, slug: []const u8) ![]const u8 {
     const path = try docPath(alloc, uid, slug);
-    return Io.Dir.cwd().readFileAlloc(io, path, alloc, .unlimited) catch "";
+    return disk.read(io, alloc, path, .unlimited) catch "";
 }
 
 /// docExists reports whether the doc's file is present (the route uses this to
 /// 404 an unknown slug; readUserDoc can't tell missing from empty).
 pub fn docExists(io: Io, alloc: Alloc, uid: []const u8, slug: []const u8) !bool {
     const path = try docPath(alloc, uid, slug);
-    return fileExists(io, path);
+    return disk.has(io, alloc, path);
 }
 
 /// writeUserDoc overwrites a doc's body. Refuses to CREATE a doc that doesn't
@@ -197,18 +188,16 @@ pub fn docExists(io: Io, alloc: Alloc, uid: []const u8, slug: []const u8) !bool 
 /// createUserDoc).
 pub fn writeUserDoc(io: Io, alloc: Alloc, uid: []const u8, slug: []const u8, body: []const u8) !void {
     const path = try docPath(alloc, uid, slug);
-    if (!fileExists(io, path)) return error.DocDoesNotExist;
-    try Io.Dir.cwd().writeFile(io, .{ .sub_path = path, .data = body });
+    if (!disk.has(io, alloc, path)) return error.DocDoesNotExist;
+    try disk.write(io, alloc, path, body, .{});
 }
 
 /// createUserDoc creates a new empty doc with a title-derived, collision-suffixed
 /// slug, and returns the chosen slug.
 pub fn createUserDoc(io: Io, alloc: Alloc, uid: []const u8, title: []const u8) ![]const u8 {
-    const dir = try userDocsDir(alloc, uid);
-    try Io.Dir.cwd().createDirPath(io, dir);
     const slug = try uniqueDocSlug(io, alloc, uid, try slugifyTitle(alloc, title));
     const path = try docPath(alloc, uid, slug);
-    try Io.Dir.cwd().writeFile(io, .{ .sub_path = path, .data = "" });
+    try disk.write(io, alloc, path, "", .{});
     return slug;
 }
 
@@ -230,15 +219,14 @@ pub fn appendToUserDoc(io: Io, alloc: Alloc, uid: []const u8, slug: []const u8, 
     append_mu.lockUncancelable(io);
     defer append_mu.unlock(io);
 
-    try Io.Dir.cwd().createDirPath(io, try userDocsDir(alloc, uid));
     // **A DOCUMENT THAT WILL NOT READ IS NOT AN EMPTY DOCUMENT.** The write
     // below replaces the file with what was read plus this addition, so a
     // failed read here used to hand the user back their newest paragraph and
-    // nothing else. files.zig draws the line.
-    const existing = try files.readOrEmpty(io, alloc, path, .unlimited);
+    // nothing else. store.zig draws the line.
+    const existing = try disk.readOrEmpty(io, alloc, path, .unlimited);
     if (max_bytes != 0 and existing.len + addition.len > max_bytes) return error.DocTooLarge;
     const combined = try std.mem.concat(alloc, u8, &.{ existing, addition });
-    try Io.Dir.cwd().writeFile(io, .{ .sub_path = path, .data = combined });
+    try disk.write(io, alloc, path, combined, .{});
 }
 
 const testing = std.testing;
