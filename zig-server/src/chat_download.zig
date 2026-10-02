@@ -16,6 +16,7 @@ const Io = std.Io;
 const Alloc = std.mem.Allocator;
 const http = @import("http.zig");
 const store = @import("chat_store.zig");
+const disk = @import("store.zig");
 const flate = std.compress.flate;
 
 const Request = std.http.Server.Request;
@@ -25,33 +26,30 @@ const Request = std.http.Server.Request;
 pub fn serveBundle(req: *Request, io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8) !void {
     const md_name = try std.fmt.allocPrint(alloc, "{s}.md", .{sid});
     const md_path = try std.fs.path.join(alloc, &.{ conv_dir, "sessions", md_name });
-    const md = Io.Dir.cwd().readFileAlloc(io, md_path, alloc, .unlimited) catch return http.notFound(req);
+    const md = disk.read(io, alloc, md_path, .unlimited) catch return http.notFound(req);
 
     var tar: std.ArrayList(u8) = .empty;
     const md_entry = try std.fmt.allocPrint(alloc, "{s}/{s}.md", .{ sid, sid });
-    try addTarFile(&tar, alloc, md_entry, md, fileMtime(io, md_path));
+    try addTarFile(&tar, alloc, md_entry, md, fileMtime(io, alloc, md_path));
 
     // The reaction sidecar rides along when present (absent = nobody reacted).
     const rx_path = try store.reactionsPath(alloc, conv_dir, sid);
-    if (Io.Dir.cwd().readFileAlloc(io, rx_path, alloc, .unlimited)) |rx| {
+    if (disk.read(io, alloc, rx_path, .unlimited)) |rx| {
         const rx_entry = try std.fmt.allocPrint(alloc, "{s}/{s}.reactions.jsonl", .{ sid, sid });
-        try addTarFile(&tar, alloc, rx_entry, rx, fileMtime(io, rx_path));
+        try addTarFile(&tar, alloc, rx_entry, rx, fileMtime(io, alloc, rx_path));
     } else |_| {}
 
     // Images — append-only once written, so an unlocked read is safe. A missing
     // dir (no images yet) yields nothing; an unreadable file is skipped, not fatal.
     const updir_name = try std.fmt.allocPrint(alloc, "{s}.uploads", .{sid});
     const updir = try std.fs.path.join(alloc, &.{ conv_dir, "sessions", updir_name });
-    if (Io.Dir.cwd().openDir(io, updir, .{ .iterate = true })) |*d_const| {
-        var d = d_const.*;
-        defer d.close(io);
-        var it = d.iterate();
-        while (try it.next(io)) |entry| {
+    if (disk.list(io, alloc, updir)) |entries| {
+        for (entries) |entry| {
             if (entry.kind == .directory) continue;
             const p = try std.fs.path.join(alloc, &.{ updir, entry.name });
-            const data = Io.Dir.cwd().readFileAlloc(io, p, alloc, .unlimited) catch continue;
+            const data = disk.read(io, alloc, p, .unlimited) catch continue;
             const nm = try std.fmt.allocPrint(alloc, "{s}/uploads/{s}", .{ sid, entry.name });
-            try addTarFile(&tar, alloc, nm, data, fileMtime(io, p));
+            try addTarFile(&tar, alloc, nm, data, fileMtime(io, alloc, p));
         }
     } else |_| {}
 
@@ -68,11 +66,9 @@ pub fn serveBundle(req: *Request, io: Io, alloc: Alloc, conv_dir: []const u8, si
 
 /// fileMtime returns a file's mtime in whole Unix seconds, or 0 on any error
 /// (the mtime is cosmetic in the archive, so 0 is harmless).
-fn fileMtime(io: Io, path: []const u8) u64 {
-    var f = Io.Dir.cwd().openFile(io, path, .{}) catch return 0;
-    defer f.close(io);
-    const st = f.stat(io) catch return 0;
-    const s = @divFloor(st.mtime.nanoseconds, std.time.ns_per_s);
+fn fileMtime(io: Io, alloc: Alloc, path: []const u8) u64 {
+    const st = disk.stat(io, alloc, path) catch return 0;
+    const s = @divFloor(st.mtime, std.time.ns_per_s);
     return if (s < 0) 0 else @intCast(s);
 }
 
