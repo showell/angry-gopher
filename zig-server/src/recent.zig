@@ -19,6 +19,7 @@ const http = @import("http.zig");
 const users = @import("users.zig");
 const store = @import("chat_store.zig");
 const docs_store = @import("docs_store.zig");
+const disk = @import("store.zig");
 const chat_sse = @import("chat_sse.zig");
 const chrome = @import("chat_chrome.zig");
 const html = @import("html.zig");
@@ -138,11 +139,11 @@ fn gatherRecentItems(io: Io, alloc: Alloc, uid: []const u8) ![]RecentItem {
     // The viewer's own docs.
     for (try docs_store.listUserDocs(io, alloc, uid)) |d| {
         const path = docs_store.docPath(alloc, uid, d.slug) catch continue;
-        const st = Io.Dir.cwd().statFile(io, path, .{}) catch continue;
+        const st = disk.stat(io, alloc, path) catch continue;
         try items.append(alloc, .{
             .kind = .doc,
-            .at_ns = st.mtime.nanoseconds,
-            .at = try timefmt.formatRFC3339UTC(alloc, secsOf(st.mtime.nanoseconds)),
+            .at_ns = st.mtime,
+            .at = try timefmt.formatRFC3339UTC(alloc, secsOf(st.mtime)),
             .who = "You",
             .slug = d.slug,
             .title = d.title,
@@ -214,11 +215,11 @@ fn newestFirst(_: void, a: RecentItem, b: RecentItem) bool {
 /// carries no date this server can read.
 fn byFileTime(io: Io, alloc: Alloc, items: *std.ArrayList(RecentItem), dir: []const u8, sid: []const u8, url: []const u8, where: []const u8, dm: bool) !void {
     const path = try store.sessionMdPath(alloc, dir, sid);
-    const st = Io.Dir.cwd().statFile(io, path, .{}) catch return;
+    const st = disk.stat(io, alloc, path) catch return;
     try items.append(alloc, .{
         .kind = .chat,
-        .at_ns = st.mtime.nanoseconds,
-        .at = try timefmt.formatRFC3339UTC(alloc, secsOf(st.mtime.nanoseconds)),
+        .at_ns = st.mtime,
+        .at = try timefmt.formatRFC3339UTC(alloc, secsOf(st.mtime)),
         .url = url,
         .where = where,
         .topic = sid,
