@@ -17,6 +17,7 @@ const Io = std.Io;
 const http = @import("http.zig");
 const edge = @import("edge.zig");
 const users = @import("users.zig");
+const disk = @import("store.zig");
 
 const Alloc = std.mem.Allocator;
 const Request = std.http.Server.Request;
@@ -70,9 +71,9 @@ pub fn handleUpload(req: *Request, io: Io, alloc: Alloc, uid: []const u8, conv_d
     const token = randHex16(io, alloc) catch return req.respond("token\n", .{ .status = .internal_server_error });
     const name = try std.fmt.allocPrint(alloc, "{s}.{s}", .{ token, sniff.ext });
     const dir = try std.fs.path.join(alloc, &.{ conv_dir, "sessions", try std.fmt.allocPrint(alloc, "{s}.uploads", .{sid}) });
-    Io.Dir.cwd().createDirPath(io, dir) catch return req.respond("mkdir\n", .{ .status = .internal_server_error });
+    disk.makeDir(io, alloc, dir) catch return req.respond("mkdir\n", .{ .status = .internal_server_error });
     const path = try std.fs.path.join(alloc, &.{ dir, name });
-    Io.Dir.cwd().writeFile(io, .{ .sub_path = path, .data = part.data }) catch
+    disk.write(io, alloc, path, part.data, .{}) catch
         return req.respond("write\n", .{ .status = .internal_server_error });
 
     const out = try std.fmt.allocPrint(alloc, "{{\"url\":\"{s}/{s}/uploads/{s}\",\"name\":{f},\"kind\":\"{s}\",\"width\":0,\"height\":0}}", .{
@@ -96,9 +97,7 @@ pub fn serveUpload(req: *Request, io: Io, alloc: Alloc, conv_dir: []const u8, si
     const updir = try std.fmt.allocPrint(alloc, "{s}.uploads", .{sid});
     const path = try std.fs.path.join(alloc, &.{ conv_dir, "sessions", updir, file });
 
-    var f = Io.Dir.cwd().openFile(io, path, .{}) catch return http.notFound(req);
-    defer f.close(io);
-    const size = (f.stat(io) catch return http.notFound(req)).size;
+    const size = (disk.stat(io, alloc, path) catch return http.notFound(req)).size;
 
     if (try http.header(req, alloc, "range")) |range_hdr| {
         const r = parseRange(range_hdr, size) orelse {
@@ -110,7 +109,7 @@ pub fn serveUpload(req: *Request, io: Io, alloc: Alloc, conv_dir: []const u8, si
         };
         const len: usize = @intCast(r.end - r.start + 1);
         const buf = try alloc.alloc(u8, len);
-        const n = f.readPositionalAll(io, buf, r.start) catch return http.notFound(req);
+        const n = disk.readAt(io, alloc, path, r.start, buf) catch return http.notFound(req);
         const cr = try std.fmt.allocPrint(alloc, "bytes {d}-{d}/{d}", .{ r.start, r.start + n - 1, size });
         return req.respond(buf[0..n], .{ .status = .partial_content, .extra_headers = &.{
             .{ .name = "content-type", .value = ct },
@@ -122,7 +121,7 @@ pub fn serveUpload(req: *Request, io: Io, alloc: Alloc, conv_dir: []const u8, si
     }
 
     const data = try alloc.alloc(u8, @intCast(size));
-    const n = f.readPositionalAll(io, data, 0) catch return http.notFound(req);
+    const n = disk.readAt(io, alloc, path, 0, data) catch return http.notFound(req);
     try req.respond(data[0..n], .{ .extra_headers = &.{
         .{ .name = "content-type", .value = ct },
         .{ .name = "accept-ranges", .value = "bytes" },
