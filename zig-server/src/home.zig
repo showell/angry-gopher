@@ -28,6 +28,7 @@ const http = @import("http.zig");
 const edge = @import("edge.zig");
 const html = @import("html.zig");
 const mem_meter = @import("mem_meter.zig");
+const store = @import("store.zig");
 
 const Alloc = std.mem.Allocator;
 const Request = std.http.Server.Request;
@@ -84,7 +85,7 @@ pub const App = struct { title: []const u8, href: []const u8, cta: []const u8, l
 pub const Parsed = struct { headline: []const u8, apps: std.ArrayList(App) };
 
 pub fn parseHome(io: Io, alloc: Alloc) !Parsed {
-    const src = try Io.Dir.cwd().readFileAlloc(io, "pages/home.txt", alloc, .unlimited);
+    const src = try store.read(io, alloc, "pages/home.txt", .unlimited);
 
     var headline: []const u8 = "";
     var apps: std.ArrayList(App) = .empty;
