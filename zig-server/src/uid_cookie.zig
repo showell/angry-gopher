@@ -12,6 +12,11 @@
 //! neither cookie's MAC can pass as the other's. It does not expire: for a
 //! player it is the only identity, and expiring it would lose their games.
 //!
+//! **AFTER THE SECRET CHANGES** (/admin/secret, users.rotateSecret), a cookie
+//! signed with the previous secret still names its player for the days the
+//! change allowed, and the next GET re-signs it with the new one. That is not
+//! counted against the address: it was validly signed.
+//!
 //! **COOKIES ALREADY IN BROWSERS ARE RE-IDENTIFIED ONCE.** An unsigned
 //! `gopher_uid` is honoured only:
 //!   - while the window is open (`{player_root}/unsigned-window` holds the
