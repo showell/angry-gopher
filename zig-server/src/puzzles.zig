@@ -103,11 +103,15 @@ fn sessionRoute(req: *std.http.Server.Request, io: Io, alloc: Alloc, user_id: []
 }
 
 /// appendAction appends the POST body verbatim as one line in
-/// puzzle_<idx>/actions.dsl.
+/// puzzle_<idx>/actions.dsl. **THE FIRST MOVE MAKES THE SESSION:** the page
+/// only offered its id (gopher-metal QUEUE item 52), so a session that is not
+/// there yet is made here, with its meta, if it is the one offered. Two tabs
+/// opened before either moved were offered the same id, and share it.
 /// The per-puzzle dir is created on first append.
 fn appendAction(req: *std.http.Server.Request, io: Io, alloc: Alloc, user_id: []const u8, session_id: i64, puzzle_idx: i32) !void {
     if (!try storage.puzzleSessionExists(io, alloc, user_id, session_id)) {
-        return http.notFound(req);
+        const meta = try metaDsl(io, alloc);
+        if (!try storage.ensurePuzzleSession(io, alloc, user_id, session_id, meta)) return http.notFound(req);
     }
 
     const body = (try http.readLimitedBody(req, alloc, maxAppendBytes)) orelse return;
@@ -117,20 +121,25 @@ fn appendAction(req: *std.http.Server.Request, io: Io, alloc: Alloc, user_id: []
     try req.respond("", .{ .status = .no_content });
 }
 
-/// page allocates a puzzle session, writes meta, and renders the HTML host with
-/// both session_id and the full catalog baked into the Elm flag. Zero post-load
-/// round trips before play.
+/// A session's meta DSL: server-owned created_at (its first move), then a
+/// snapshot of the catalog it was bound to (so replay-by-index survives later
+/// catalog drift). The catalog is compiled in, so it is the one the page
+/// offered.
+fn metaDsl(io: Io, alloc: Alloc) ![]const u8 {
+    const indented = try indentLines(alloc, try loadCatalog(alloc));
+    const created_at: i64 = @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
+    return std.fmt.allocPrint(alloc, "created_at: {d}\n\ncatalog:\n{s}\n", .{ created_at, indented });
+}
+
+/// page renders the HTML host with the session id its first move will make and
+/// the full catalog baked into the Elm flag. Zero post-load round trips before
+/// play, and **NOTHING WRITTEN**: a GET made a session (a folder and its meta)
+/// on every load, which a bot reloading the page could turn into a full disk.
 fn page(req: *std.http.Server.Request, io: Io, alloc: Alloc, user_id: []const u8) !void {
     const catalog = try loadCatalog(alloc);
     const indented = try indentLines(alloc, catalog);
 
-    const session_id = try storage.allocatePuzzleSessionID(io, alloc, user_id);
-
-    // meta DSL: server-owned created_at, then a snapshot of the catalog this
-    // session was bound to (so replay-by-index survives later catalog drift).
-    const created_at: i64 = @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
-    const meta_dsl = try std.fmt.allocPrint(alloc, "created_at: {d}\n\ncatalog:\n{s}\n", .{ created_at, indented });
-    try storage.writePuzzleSessionFile(io, alloc, user_id, session_id, "meta", meta_dsl);
+    const session_id = try storage.nextPuzzleSessionID(io, alloc, user_id);
 
     // Flag is one DSL string — `session_id:` scalar then a `catalog:` block.
     // Elm's Lib.PuzzleFlagDsl parses it whole.

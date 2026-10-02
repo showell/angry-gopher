@@ -553,3 +553,55 @@ test "route: /play mints a signed gopher_uid, marked as signed" {
 fn removeSecret(a: std.mem.Allocator, io: Io) !void {
     try UidSite.disk.remove(io, a, try std.fs.path.join(a, &.{ users.session_secret_dir, "_session_secret" }));
 }
+
+// ── the game store's growth (gopher-metal QUEUE item 52) ─────────────────────
+
+/// A signed gopher_uid cookie for `id`, as /play would have set.
+fn signedUid(a: std.mem.Allocator, id: []const u8) ![]const u8 {
+    return std.fmt.allocPrint(a, "gopher_uid={s}", .{try uid_cookie.sign(a, UidSite.secret, id, 1_790_000_000)});
+}
+
+fn postAs(a: std.mem.Allocator, io: Io, target: []const u8, cookies: []const u8, body: []const u8) ![]const u8 {
+    return serve(a, io, try std.fmt.allocPrint(a,
+        "POST {s} HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\nContent-Length: {d}\r\n\r\n{s}", .{ target, cookies, body.len, body }));
+}
+
+test "route: /puzzles writes nothing; a session is made by its first move" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var site = try UidSite.init(a, io);
+    defer site.deinit();
+
+    const id = try player.allocate(io, a, "Nikhil");
+    const me = try signedUid(a, id);
+    const games = try std.fs.path.join(a, &.{ UidSite.storage.data_root, id });
+
+    // Loaded three times: the same session offered, and nothing on disk.
+    for (0..3) |_| {
+        const page = try UidSite.ask(a, io, "/puzzles", me);
+        try testing.expectEqualStrings("200 OK", status(page));
+        try testing.expect(std.mem.indexOf(u8, page, "session_id: 1\\n") != null);
+    }
+    try testing.expect(!UidSite.disk.has(io, a, games));
+
+    // An id never offered makes nothing.
+    try testing.expectEqualStrings("404 Not Found", status(try postAs(a, io, "/puzzles/sessions/5/puzzles/0/actions", me, "1) x")));
+    try testing.expect(!UidSite.disk.has(io, a, games));
+
+    // The first move makes the session, with its meta, and lands.
+    try testing.expectEqualStrings("204 No Content", status(try postAs(a, io, "/puzzles/sessions/1/puzzles/0/actions", me, "1) x")));
+    const s1 = try std.fs.path.join(a, &.{ games, "puzzle", "sessions", "1" });
+    const meta = try UidSite.disk.read(io, a, try std.fs.path.join(a, &.{ s1, "meta" }), .limited(1 << 20));
+    try testing.expect(std.mem.startsWith(u8, meta, "created_at: "));
+    try testing.expect(std.mem.indexOf(u8, meta, "\ncatalog:\n") != null);
+    // A second move, from a tab offered the same id, lands in the same one.
+    try testing.expectEqualStrings("204 No Content", status(try postAs(a, io, "/puzzles/sessions/1/puzzles/0/actions", me, "2) y")));
+    try testing.expectEqualStrings("1) x\n2) y\n", try UidSite.disk.read(io, a, try std.fs.path.join(a, &.{ s1, "puzzle_0", "actions.dsl" }), .limited(64)));
+
+    // The next load offers the next session.
+    try testing.expect(std.mem.indexOf(u8, try UidSite.ask(a, io, "/puzzles", me), "session_id: 2\\n") != null);
+}

@@ -85,6 +85,29 @@ pub fn allocatePuzzleSessionID(io: Io, alloc: Alloc, user_id: []const u8) !i64 {
     return counter.next(io, alloc, try nextPuzzleIDPath(alloc, user_id));
 }
 
+/// The puzzle session id a page offers: the one its first move will make.
+/// Nothing is written (gopher-metal QUEUE item 52: no write on a GET).
+pub fn nextPuzzleSessionID(io: Io, alloc: Alloc, user_id: []const u8) !i64 {
+    return counter.peek(io, alloc, try nextPuzzleIDPath(alloc, user_id));
+}
+
+/// create_mu makes "is it there, and is it the one offered" and the making of
+/// it one step, so two first moves at once make one session, not two.
+var create_mu: Io.Mutex = .init;
+
+/// Makes puzzle session `session_id`, with `meta`, if it is the one a page
+/// offered (`nextPuzzleSessionID`) and is not there yet; answers whether the
+/// session is there afterwards. An id never offered makes nothing.
+pub fn ensurePuzzleSession(io: Io, alloc: Alloc, user_id: []const u8, session_id: i64, meta: []const u8) !bool {
+    create_mu.lockUncancelable(io);
+    defer create_mu.unlock(io);
+    if (try puzzleSessionExists(io, alloc, user_id, session_id)) return true;
+    if (session_id != try nextPuzzleSessionID(io, alloc, user_id)) return false;
+    const got = try allocatePuzzleSessionID(io, alloc, user_id);
+    std.debug.assert(got == session_id); // under create_mu, and counter's own lock
+    try writePuzzleSessionFile(io, alloc, user_id, session_id, "meta", meta);
+    return true;
+}
 
 /// writePuzzleSessionFile writes body to <session-dir>/<rel>, creating parent
 /// dirs. Last-write-wins (used for meta).
