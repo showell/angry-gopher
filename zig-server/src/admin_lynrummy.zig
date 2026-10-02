@@ -31,6 +31,7 @@ const http = @import("http.zig");
 const html = @import("html.zig");
 const player = @import("player.zig");
 const storage = @import("storage.zig");
+const store = @import("store.zig");
 const ui = @import("admin_ui.zig");
 
 const Request = std.http.Server.Request;
@@ -178,31 +179,23 @@ fn gatherStats(io: Io, alloc: Alloc, p: player.Player) PlayerStats {
     const games_dir = std.fs.path.join(alloc, &.{ uroot, "lynrummy-elm", "sessions" }) catch return st;
     const puzzles_dir = std.fs.path.join(alloc, &.{ uroot, "puzzle", "sessions" }) catch return st;
 
-    st.game_sessions = countSubdirs(io, games_dir);
-    st.puzzle_sessions = countSubdirs(io, puzzles_dir);
+    st.game_sessions = countSubdirs(io, alloc, games_dir);
+    st.puzzle_sessions = countSubdirs(io, alloc, puzzles_dir);
     st.disk_bytes = dirBytes(io, alloc, uroot);
 
     // Total actions = nonempty lines across every game session's actions.dsl.
-    if (Io.Dir.cwd().openDir(io, games_dir, .{ .iterate = true })) |*d_const| {
-        var d = d_const.*;
-        defer d.close(io);
-        var it = d.iterate();
-        while (it.next(io) catch null) |entry| {
-            if (entry.kind != .directory) continue;
-            const dsl = std.fs.path.join(alloc, &.{ games_dir, entry.name, "actions.dsl" }) catch continue;
-            st.total_actions += countTextLines(io, alloc, dsl);
-        }
-    } else |_| {}
+    for (store.list(io, alloc, games_dir) catch &.{}) |entry| {
+        if (entry.kind != .directory) continue;
+        const dsl = std.fs.path.join(alloc, &.{ games_dir, entry.name, "actions.dsl" }) catch continue;
+        st.total_actions += countTextLines(io, alloc, dsl);
+    }
     return st;
 }
 
 /// countSubdirs counts immediate subdirectories of `dir_path` (0 if missing).
-fn countSubdirs(io: Io, dir_path: []const u8) i64 {
-    var dir = Io.Dir.cwd().openDir(io, dir_path, .{ .iterate = true }) catch return 0;
-    defer dir.close(io);
+fn countSubdirs(io: Io, alloc: Alloc, dir_path: []const u8) i64 {
     var n: i64 = 0;
-    var it = dir.iterate();
-    while (it.next(io) catch null) |entry| {
+    for (store.list(io, alloc, dir_path) catch return 0) |entry| {
         if (entry.kind == .directory) n += 1;
     }
     return n;
@@ -210,16 +203,13 @@ fn countSubdirs(io: Io, dir_path: []const u8) i64 {
 
 /// dirBytes sums file sizes under `path`, recursively (0 if missing).
 fn dirBytes(io: Io, alloc: Alloc, path: []const u8) i64 {
-    var dir = Io.Dir.cwd().openDir(io, path, .{ .iterate = true }) catch return 0;
-    defer dir.close(io);
     var total: i64 = 0;
-    var it = dir.iterate();
-    while (it.next(io) catch null) |entry| {
+    for (store.list(io, alloc, path) catch return 0) |entry| {
         const child = std.fs.path.join(alloc, &.{ path, entry.name }) catch continue;
         switch (entry.kind) {
             .directory => total += dirBytes(io, alloc, child),
             .file => {
-                const body = Io.Dir.cwd().readFileAlloc(io, child, alloc, .unlimited) catch continue;
+                const body = store.read(io, alloc, child, .unlimited) catch continue;
                 total += @intCast(body.len);
             },
             else => {},
@@ -230,7 +220,7 @@ fn dirBytes(io: Io, alloc: Alloc, path: []const u8) i64 {
 
 /// countTextLines counts nonempty lines in a file (0 if missing).
 fn countTextLines(io: Io, alloc: Alloc, path: []const u8) i64 {
-    const body = Io.Dir.cwd().readFileAlloc(io, path, alloc, .unlimited) catch return 0;
+    const body = store.read(io, alloc, path, .unlimited) catch return 0;
     var n: i64 = 0;
     var it = std.mem.splitScalar(u8, body, '\n');
     while (it.next()) |line| {
