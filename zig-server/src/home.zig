@@ -260,7 +260,11 @@ fn pushApp(alloc: Alloc, apps: *std.ArrayList(App), title: []const u8, href: []c
 /// short-hash baked in at build time (ops/deploy passes -Dcommit=...); it reads
 /// "dev" for local builds. Together with `version` it pins exactly which build
 /// is serving — the watchdog surfaces both in watchdog-status.txt.
-pub fn handleVersion(req: *Request, alloc: Alloc) !void {
+///
+/// `now_ms` is this host's wall clock, in milliseconds since 1970:
+/// gopher-metal's droplet/drift.py compares two hosts' clocks with it, halving
+/// the round trip out, which a Date header's whole seconds could not resolve.
+pub fn handleVersion(req: *Request, io: Io, alloc: Alloc) !void {
     // `rejects` is the edge-policy observable: a counter per reject kind (see
     // edge.zig). The watchdog polls /version, so a climbing counter surfaces in
     // watchdog-status.txt without any extra plumbing.
@@ -269,9 +273,10 @@ pub fn handleVersion(req: *Request, alloc: Alloc) !void {
     // the watchdog — which already polls /version — surfaces it with no extra
     // plumbing; /debug/mem is the same numbers on a focused endpoint for the harness.
     const mem = try mem_meter.snapshotJSON(alloc);
+    const now_ms: i64 = @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_ms));
     const body = try std.fmt.allocPrint(alloc,
-        \\{{"result":"success","version":"{s}","commit":"{s}","rejects":{s},"mem":{s}}}
-    , .{ version, build_options.commit, rejects, mem });
+        \\{{"result":"success","version":"{s}","commit":"{s}","rejects":{s},"mem":{s},"now_ms":{d}}}
+    , .{ version, build_options.commit, rejects, mem, now_ms });
     try req.respond(body, .{ .extra_headers = &.{http.json_ct} });
 }
 

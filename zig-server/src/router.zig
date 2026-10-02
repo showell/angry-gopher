@@ -153,7 +153,7 @@ pub fn route(req: *std.http.Server.Request, io: Io, alloc: std.mem.Allocator, bu
         // The pre-generated static PDF of the same page (ops/build_resume_pdf).
         try resume_page.handlePdf(req, io, alloc);
     } else if (std.mem.eql(u8, path, "/version")) {
-        try home.handleVersion(req, alloc);
+        try home.handleVersion(req, io, alloc);
     } else if (std.mem.eql(u8, path, "/debug/mem")) {
         // The leak smoke detector: live bytes/allocs on the base allocator. The
         // stress harness hammers an endpoint and watches this climb (leak) or
