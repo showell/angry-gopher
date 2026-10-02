@@ -171,7 +171,12 @@ fn legacyHonoured(io: Io, alloc: Alloc, id: []const u8) bool {
 pub fn resolve(io: Io, alloc: Alloc, req: *std.http.Server.Request) !?[]const u8 {
     const value = (try http.cookie(req, alloc, cookie_name)) orelse return null;
     const secret = (try users.sessionSecret(io, alloc)) orelse return null;
-    return verify(secret, value);
+    if (verify(secret, value)) |id| return id;
+    // **AFTER A CHANGE OF SECRET**, a player's cookie signed with the old one
+    // still names them for the days the change allowed (users.rotateSecret);
+    // the next GET re-signs it (`reissue`).
+    if (try users.previousSecret(io, alloc)) |prev| return verify(prev, value);
+    return null;
 }
 
 pub const Reissue = union(enum) {
@@ -189,8 +194,14 @@ pub const Reissue = union(enum) {
 /// legacy id. Null when there is nothing to re-sign.
 pub fn reissue(io: Io, alloc: Alloc, req: *std.http.Server.Request, client: ?[]const u8) !?Reissue {
     if (req.head.method != .GET) return null;
-    if (try resolve(io, alloc, req)) |_| return null;
     const value = (try http.cookie(req, alloc, cookie_name)) orelse return null;
+    const secret = (try users.sessionSecret(io, alloc)) orelse return null;
+    if (verify(secret, value)) |_| return null;
+    // Signed with the secret before a change, and still taken: re-signed
+    // with the current one. It was validly signed, so it is not counted.
+    if (try users.previousSecret(io, alloc)) |prev| if (verify(prev, value)) |id| {
+        return .{ .cookie = (try issue(io, alloc, id)) orelse return null };
+    };
     if (!legacyHonoured(io, alloc, value)) return null;
     if (try game_limits.admitResign(io, client)) |r| return .{ .refused = r };
     const now: i64 = @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));

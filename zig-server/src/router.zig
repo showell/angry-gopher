@@ -921,3 +921,55 @@ test "route: one address may have 3 legacy cookies re-signed an hour, then 429" 
     // And an ordinary visit from the swept-out address is untouched.
     try testing.expectEqualStrings("200 OK", status(try serveFrom(a, io, "GET /play HTTP/1.1\r\nHost: x\r\n\r\n", "203.0.113.7")));
 }
+
+test "route: /admin/secret changes the secret: members log in again, players are re-signed for the days given" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var site = try UidSite.init(a, io);
+    defer site.deinit();
+    const me = try adminSession(a, io);
+    const id = try player.allocate(io, a, "Nikhil");
+    const old_uid = try signedUid(a, id); // signed with the secret before the change
+    const secret_path = try std.fs.path.join(a, &.{ users.session_secret_dir, "_session_secret" });
+
+    // The form; a wrong password and bad days change nothing.
+    try testing.expect(std.mem.indexOf(u8, try UidSite.ask(a, io, "/admin/secret", me), "type=\"password\"") != null);
+    try testing.expectEqualStrings("403 Forbidden", status(try postForm(a, io, "/admin/secret", me, "password=wrong&days=7")));
+    try testing.expectEqualStrings("400 Bad Request", status(try postForm(a, io, "/admin/secret", me, "password=hunter2&days=abc")));
+    try testing.expectEqualStrings("400 Bad Request", status(try postForm(a, io, "/admin/secret", me, "password=hunter2&days=91")));
+    try testing.expectEqualStrings(UidSite.secret, try UidSite.disk.read(io, a, secret_path, .limited(256)));
+    // Nobody but the admin reaches it.
+    try testing.expectEqualStrings("303 See Other", status(try postForm(a, io, "/admin/secret", "gopher_uid=1", "password=hunter2&days=7")));
+
+    // The change.
+    const done = try postForm(a, io, "/admin/secret", me, "password=hunter2&days=7");
+    try testing.expectEqualStrings("200 OK", status(done));
+    const new_secret = try UidSite.disk.read(io, a, secret_path, .limited(256));
+    try testing.expect(!std.mem.eql(u8, new_secret, UidSite.secret));
+    try testing.expectEqual(@as(usize, 64), new_secret.len);
+
+    // The admin's session has ended; the password still logs in.
+    try testing.expectEqualStrings("303 See Other", status(try UidSite.ask(a, io, "/admin", me)));
+    const relogin = try postForm(a, io, "/login/full", "x=y", "name=Steve&password=hunter2&action=login");
+    try testing.expect(std.mem.indexOf(u8, relogin, "set-cookie: gopher_auth=") != null);
+
+    // The player's old cookie still names them, on a POST too, and a GET
+    // re-signs it with the new secret.
+    try testing.expect(playingAs(try postForm(a, io, "/play", old_uid, ""), "Nikhil"));
+    const renewed = try UidSite.ask(a, io, "/play", old_uid);
+    try testing.expectEqualStrings("303 See Other", status(renewed));
+    const fresh = setUid(renewed) orelse return error.NoSetCookie;
+    try testing.expectEqualStrings(id, uid_cookie.verify(new_secret, fresh).?);
+    try testing.expect(playingAs(try UidSite.ask(a, io, "/play", try std.fmt.allocPrint(a, "gopher_uid={s}", .{fresh})), "Nikhil"));
+
+    // Once the days are over, the old cookie names no one.
+    try UidSite.disk.replace(io, a, try std.fs.path.join(a, &.{ users.session_secret_dir, "_session_secret.previous-until" }), "1\n", .{});
+    const late = try UidSite.ask(a, io, "/play", old_uid);
+    try testing.expectEqualStrings("200 OK", status(late));
+    try testing.expect(!playingAs(late, "Nikhil"));
+    try testing.expect(setUid(late) == null);
+}
