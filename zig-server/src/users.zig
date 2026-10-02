@@ -232,9 +232,12 @@ pub fn getUserName(io: Io, alloc: Alloc, id: []const u8) ![]const u8 {
 
 /// touchUser records "now" as the user's last-seen time
 /// ({users_root}/{id}/last-seen = unix seconds), best-effort (a write failure
-/// isn't worth surfacing). Bumped on each Lyn Rummy move.
+/// isn't worth surfacing). Bumped on each Lyn Rummy move. An id that is not a
+/// well-formed uid writes nothing: joined onto users_root it would make a
+/// directory of its own (prod's users/r and users/y, from the chunked-body
+/// identity bug).
 pub fn touchUser(io: Io, alloc: Alloc, id: []const u8) void {
-    if (std.mem.trim(u8, id, " \t\r\n").len == 0) return;
+    if (!allDigits(id)) return;
     touchUserImpl(io, alloc, id) catch {};
 }
 
@@ -266,6 +269,7 @@ pub fn userUploadBytes(io: Io, alloc: Alloc, id: []const u8) i64 {
 /// that stays within max_upload_lifetime_bytes, returning true; otherwise nothing
 /// changes and it returns false. Serialized via upload_bytes_mu.
 pub fn reserveUploadBytes(io: Io, alloc: Alloc, id: []const u8, n: i64) bool {
+    if (!allDigits(id)) return false;
     upload_bytes_mu.lockUncancelable(io);
     defer upload_bytes_mu.unlock(io);
     const total = userUploadBytes(io, alloc, id) + n;
@@ -740,6 +744,37 @@ test "fs: allocateUser hands out distinct increasing ids and persists the name" 
     // a freshly allocated account exists but is not yet a member (no password)
     try testing.expect(principalExists(io, a, id1));
     try testing.expect(!isMember(io, a, id1));
+}
+
+test "fs: touchUser and reserveUploadBytes write only under a well-formed uid" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var tmp = testing.tmpDir(.{});
+    defer tmp.cleanup();
+    try tmpRoots(&tmp, a);
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+
+    touchUser(io, a, "7");
+    try testing.expect(userLastSeen(io, a, "7") != null);
+    try testing.expect(reserveUploadBytes(io, a, "7", 100));
+
+    for ([_][]const u8{ "", "   ", "r", "y", "7x", "p3", "../7", "7/.." }) |bad| {
+        touchUser(io, a, bad);
+        try testing.expect(!reserveUploadBytes(io, a, bad, 100));
+    }
+    // Nothing but the well-formed uid's directory was made.
+    var dir = try Io.Dir.cwd().openDir(io, users_root, .{ .iterate = true });
+    defer dir.close(io);
+    var it = dir.iterate();
+    var entries: usize = 0;
+    while (try it.next(io)) |e| {
+        try testing.expectEqualStrings("7", e.name);
+        entries += 1;
+    }
+    try testing.expectEqual(@as(usize, 1), entries);
 }
 
 test "fs: deleteUserRecord refuses an empty id, removes one principal, spares others" {
