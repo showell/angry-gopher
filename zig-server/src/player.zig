@@ -11,7 +11,9 @@
 //! On-disk shape under {player_root}/:
 //!   {id}/name        the display name
 //!   {id}/last-seen   unix seconds, bumped on a move
+//!   {id}/signed      this id's cookie has been signed (uid_cookie.zig)
 //!   next-id.txt      the counter for locally-minted ids
+//!   unsigned-window  when legacy unsigned cookies stop being honoured
 //!
 //! **A LOCALLY-MINTED ID IS `p<n>`, NEVER A BARE NUMBER.** Account ids are bare
 //! decimals, and both identities ride the same `gopher_uid` cookie during the
@@ -27,12 +29,11 @@
 //! seeded names in deploy/seed-players.sh are the other half. uid_cookie.zig
 //! names it, signs it and sets it.
 //!
-//! **WHAT THIS DOES NOT DO, ON PURPOSE.** There is no password, no session
-//! signature, and no check that the name is free. Anyone who sets
-//! `gopher_uid` by hand reaches that player's game list. That is the same
-//! honour-system the guest tier has always had — protection here would mean
-//! carrying the account store across the boundary, which is the thing being
-//! undone. Nothing behind a real gate (chat, settings, admin, uploads) resolves
+//! **WHAT THIS DOES NOT DO, ON PURPOSE.** There is no password and no check
+//! that the name is free: anyone may play under any name. But the cookie is
+//! signed (uid_cookie.zig), so a `gopher_uid` set by hand names no one; only
+//! a legacy unsigned one is honoured, once, inside its window, and re-signed.
+//! Nothing behind a real gate (chat, settings, admin, uploads) resolves
 //! through this module.
 
 const std = @import("std");

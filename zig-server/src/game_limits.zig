@@ -13,8 +13,9 @@
 //!   - **the floor:** no game write while the data volume has less than a
 //!     quarter of itself free, as the host reports it (`free_space`). Chat,
 //!     accounts and uploads do not ask, so they carry on.
-//!   - **per address, an hour:** `players_per_hour` new players (/play) and
-//!     `bytes_per_hour` bytes of game writes; past either, a 429. The address
+//!   - **per address, an hour:** `players_per_hour` new players (/play),
+//!     `bytes_per_hour` bytes of game writes, and `resigns_per_hour` re-signs
+//!     of a legacy unsigned cookie (uid_cookie.zig); past any, a 429. The address
 //!     is the connection's (the host's `Bus.peer`), or, when that is the
 //!     reverse proxy in front (`trusted_proxy`: Caddy), the last address in
 //!     its X-Forwarded-For, which is the one Caddy added. Kept in a fixed

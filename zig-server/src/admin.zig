@@ -5,6 +5,8 @@
 //!   GET  /admin          the roster
 //!   POST /admin/apikey   generate (or revoke=1) a member's API key
 //!   GET  /admin/host     the running server: admin_host.zig
+//!   *    /admin/backup   an archive of data/ and auth/: admin_backup.zig
+//!   *    /admin/secret   change the session secret: admin_secret.zig
 //!
 //! The GAME roster — players, sessions, disk, delete — is a separate screen at
 //! /admin/lynrummy (admin_lynrummy.zig), and the two cross-link. They were one

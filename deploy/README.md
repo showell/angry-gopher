@@ -3,15 +3,17 @@
 The production host is a DigitalOcean droplet (NYC3, Ubuntu 24.04,
 x86_64). Caddy fronts the **zig server** (see `SERVER.md`) for TLS and a
 body cap; the server listens on `localhost:9001`. (`/admin` is gated by
-the app's per-user admin flag, not the proxy.)
+the app, to uid 1 (`admin_ui.requireAdmin`), not by the proxy.)
 
 The host runs **no zig/Go/Node/Elm toolchain** — we build locally and
-ship a **single self-contained binary**: the Elm/TS/driving bundles +
-puzzle catalogs are baked in at compile time (`build.zig` `@embedFile`),
-and the binary is statically linked, so there are no runtime file
-dependencies and no working-dir assumptions. Because the bundles are
-embedded at compile time, `ops/build_elm` + `ops/build_driving` run
-*before* `zig build` (the deploy script handles this ordering). See
+ship a **single statically linked binary**: the Elm/TS bundles, the
+Safari and chess WASM cores and the puzzle catalogs are baked in at
+compile time (`build.zig` `@embedFile`). The site's own files —
+`pages/`, `gallery/`, `downloads/` — are read from the working directory
+at request time, and the deploy rsyncs them. Because the bundles are
+embedded, `ops/build_elm`, `ops/build_delivery`, `ops/build_safari_wasm`
+and `ops/build_chess_wasm` run *before* `zig build` (the deploy script
+handles this ordering). See
 `ops/deploy`.
 
 We ship a **Debug build**, not ReleaseSafe. The server is I/O-bound (static
@@ -42,7 +44,8 @@ the SSH key was added at droplet creation).
    ```
 
 2. **Config** — copy the local `gopher.conf` and repoint `data_dir`.
-   The config (`port`, `data_dir`) lives only on the host, never in git.
+   The config (`data_dir`, `auth_dir`) lives only on the host, never in
+   git. The port is not in it: `GOPHER_PORT`, default 9001.
 
    ```
    scp ~/AngryGopher/gopher.conf steve@<IP>:~/AngryGopher/gopher.conf
@@ -142,7 +145,7 @@ repo — no manual update step. To bounce it by hand anyway:
   default `~/Auth`), deliberately OUTSIDE `data_dir`. So it is **not** in the
   `ops/backup` tarball (back it up separately — it holds credentials), and a
   sibling app can share accounts without reaching into `~/AngryGopher`.
-  gopher-private per-user data (admin, last-seen, upload-bytes) stays under
+  gopher-private per-user data (last-seen, upload-bytes) stays under
   `{data_dir}/users/<id>/`. A fresh host starts already-split; the prod host
   was migrated 2026-05-29 (the one-shot migration tool has since been removed —
   pull it from git history if another existing host ever needs it).

@@ -13,7 +13,7 @@
 //! half-render. The resume footer line stays hard-coded below the parsed rows.
 //!
 //! This is the only surface on the GENERIC app chrome (the shared stylesheet +
-//! the "Home · Chat · Blog" top bar + the "Playing as X / Log in" identity area);
+//! the "Home · Chat" top bar + the "Playing as X / Log in" identity area);
 //! the chat subsystem renders its own chat-flavored chrome in chat.zig. Kept as
 //! string literals, like chat's chrome.
 //!

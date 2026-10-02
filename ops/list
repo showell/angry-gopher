@@ -17,10 +17,10 @@ Available ops commands (run from repo root):
                          SKIPS the Lyn Rummy solver + Elm suites.
   ops/check_lynrummy     Lyn Rummy gate (~30s): common base + Elm + TS
                          solver. SKIPS the chat lint.
-  ops/check_zig          zig-server gate (~6s): compiles the WHOLE server (the
-                         "binary compiles" floor, the role go build had) + runs
-                         the unit tests (auth's legacy-$2a$ read path, users'
-                         session HMAC verify). Composed by ops/check_common.
+  ops/check_zig          zig-server gate (~20s): compiles the WHOLE server (the
+                         "binary compiles" floor, the role go build had), runs
+                         the head-access and portable lints, and every zig-server
+                         unit test. Composed by ops/check_common.
   ops/check_markdown     Markdown dialect regression gate (~3s): renders every
                          frozen corpus case with the zig renderer and asserts the
                          output is unchanged. No Go, no goldmark oracle — our

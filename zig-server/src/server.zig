@@ -13,8 +13,7 @@
 //! goroutine-per-connection. This is the model chat needs (long-lived SSE
 //! streams that mustn't starve other connections); bus.zig is the keyed
 //! fan-out runtime those streams run on. Each connection still serves ONE
-//! request then closes (keep-alive off) — that's
-//! independent of concurrency and can be revisited when chat lands.
+//! request then closes (keep-alive off): see handleConn.
 //!
 //! Run:  ops/build_elm && ops/build_safari_wasm && ops/build_delivery
 //!         (from the repo root, for the embedded bundles)
@@ -123,15 +122,11 @@ fn serveConn(io: std.Io, alloc: std.mem.Allocator, hub: *Hub, stream: net.Stream
 }
 
 /// handleConn serves exactly ONE request, then closes the connection
-/// (`connection: close`). Keep-alive is deliberately OFF: the accept loop is
-/// single-threaded, so a held-open idle keep-alive connection would block it
-/// while a browser's OTHER parallel connections starve in the accept backlog.
-/// That deadlocked /game — its page pulls three scripts at once (engine.js,
-/// elm.js, engine_glue.js), so the browser opens parallel connections; /driving
-/// and /puzzles load a single script each and never tripped it. One-request-per-
-/// connection keeps the simple blocking model working for every surface here.
-/// Real concurrency + keep-alive (and streaming) wait for chat's SSE to force
-/// the model decision — see the file header.
+/// (`connection: close`). Keep-alive is OFF. It was first turned off when the
+/// accept loop was single-threaded and a held-open idle connection deadlocked
+/// /game's three parallel script loads; connections now run concurrently (the
+/// file header), and keep-alive is still off. gopher-metal serves the same
+/// route table one request per connection too, so the two hosts answer alike.
 fn handleConn(io: std.Io, alloc: std.mem.Allocator, hub: *Hub, stream: net.Stream) !void {
     defer stream.close(io);
 

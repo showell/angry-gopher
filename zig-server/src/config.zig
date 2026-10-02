@@ -47,7 +47,7 @@ pub fn load(io: Io, alloc: std.mem.Allocator, env: std.process.Environ.Map) !voi
         } else if (std.mem.eql(u8, key, "auth_dir")) {
             auth_dir = try expandHome(alloc, env, val);
         }
-        // the config's port key is ignored; the server hardcodes PORT in server.zig.
+        // the config's port key is ignored: the port is GOPHER_PORT (server.zig).
     }
 
     if (data_dir) |dd| data_dir_shown = dd;

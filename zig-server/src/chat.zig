@@ -4,7 +4,9 @@
 //! receives them live.
 //!
 //! Routes:
-//!   GET  /chat                         index: the conversations this user can see
+//!   GET  /chat                         resume: your last conversation (chatDefault),
+//!                                      or the empty-state page
+//!   GET  /chat/default, /chat/conversations, /chat/msg/<id>   (see route below)
 //!   GET  /chat/<file>.js               an embedded client bundle (colors.js, …)
 //!   GET  /chat/c/<conv>                303 → its default topic
 //!   GET  /chat/c/<conv>/<sid>          the conversation page (boots the prod JS)
@@ -13,6 +15,7 @@
 //!   GET  /chat/c/<conv>/<sid>/raw      the literal on-disk .md bytes
 //!   GET  /chat/c/<conv>/<sid>/reactions  the reaction sidecar (ndjson; reactions.zig)
 //!   POST /chat/c/<conv>/<sid>/react    toggle one reaction (fans out as event: reaction)
+//!   .../<sid>/{upload,uploads,download,pin,unpin,saved}   see topicRoute
 //!   {GET,POST} /channel/<name>/<topic>{,/stream,/send,/raw}   the channel equivalents
 //!   GET  /chat/notifications           SSE: per-uid notify strip (status pings +
 //!                                      came-online), a notifyBusKey subscriber

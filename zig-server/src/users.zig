@@ -44,7 +44,7 @@ const b64 = std.base64.url_safe_no_pad;
 // Roots (config.zig overrides these at startup from GOPHER_CONFIG). Defaults are
 // repo-relative, adjusted for the zig-server cwd.
 pub var auth_root: []const u8 = "../games/lynrummy/auth-data"; // shared account store (name/password/api-key)
-pub var users_root: []const u8 = "../games/lynrummy/users-data"; // gopher-private (admin/last-seen/...)
+pub var users_root: []const u8 = "../games/lynrummy/users-data"; // gopher-private (last-seen, upload-bytes)
 pub var session_secret_dir: []const u8 = "../games/lynrummy/data/chat"; // holds _session_secret
 
 const claude_agent_id = "3";
@@ -378,8 +378,6 @@ fn readAuthFile(io: Io, alloc: Alloc, id: []const u8, name: []const u8) !?[]u8 {
     return store.read(io, alloc, path, .unlimited) catch return null;
 }
 
-/// loadSecret reads {session_secret_dir}/_session_secret (>= 32 bytes), or null.
-/// Read-only: we never GENERATE a secret — we require the one already on disk.
 /// The session secret, for the other signed cookie (uid_cookie.zig), or null.
 pub fn sessionSecret(io: Io, alloc: Alloc) !?[]const u8 {
     return loadSecret(io, alloc);
@@ -430,6 +428,9 @@ pub fn rotateSecret(io: Io, alloc: Alloc, players_days: i64) !void {
     try store.replace(io, alloc, try std.fs.path.join(alloc, &.{ dir, "_session_secret" }), &hex, .{ .private = true });
 }
 
+/// loadSecret reads {session_secret_dir}/_session_secret (>= 32 bytes), or null.
+/// Nothing makes a first secret: it is seeded on disk (README, "Bootstrapping").
+/// Only rotateSecret, from /admin/secret, replaces one that exists.
 fn loadSecret(io: Io, alloc: Alloc) !?[]const u8 {
     const path = try std.fs.path.join(alloc, &.{ session_secret_dir, "_session_secret" });
     const b = store.read(io, alloc, path, .unlimited) catch return null;

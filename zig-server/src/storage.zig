@@ -1,9 +1,11 @@
 //! storage: filesystem-backed puzzle-session storage. A dumb id-keyed file
 //! store; meta is last-write-wins, actions.dsl is append-only.
 //!
+//! It also keeps the full game's sessions (the `lynrummy-elm` namespace, below).
+//!
 //! data_root is the live game-data dir. The zig server runs
-//! from zig-server/, so the repo-relative path carries the `..`. Per the port
-//! decision, both binaries read/write the same tree.
+//! from zig-server/, so the repo-relative path carries the `..`; a host points
+//! it at {data_dir}/lynrummy (roots.zig).
 //!
 //! On-disk shape under {data_root}/{userID}/puzzle/sessions/<id>/:
 //!   meta                       — created_at + catalog snapshot (DSL)

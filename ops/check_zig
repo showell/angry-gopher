@@ -9,9 +9,9 @@
 # full pre-commit gate.
 #
 # `zig build` compiles the server, which @embedFiles the built front-end bundles
-# (so they must exist first — same prerequisite the old go build had). `zig build
-# test` runs the pure-logic unit tests: auth's legacy-$2a$ hash read path and
-# users' session-cookie HMAC verify, each pinned by a frozen in-repo vector.
+# (so they must exist first — same prerequisite the old go build had). Then two
+# lints (head access, portability), and `zig build test`: every unit test in
+# zig-server's build.zig (the router's, the Store's, auth's, the cookies', …).
 
 set -e
 
@@ -20,7 +20,7 @@ cd "$REPO_DIR"
 
 # Guard the built bundles `zig build` embeds — fail with guidance rather than a
 # cryptic @embedFile error. (The committed assets — chat/*.js,
-# catalogs, images — are always present; only these five are build outputs.)
+# catalogs, images — are always present; only these six are build outputs.)
 for f in games/lynrummy/elm/elm.js games/lynrummy/elm/puzzle.js \
          games/lynrummy/elm/engine.js games/driving/safari.wasm \
          games/chess/knight.wasm games/chess/queens.wasm; do

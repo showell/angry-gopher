@@ -124,15 +124,18 @@ was discovered by a build failing rather than by reading this file.
 
 The config is a flat `key = value` file (`#` comments). The zig server
 honors exactly **two** keys — everything else (including any `port =`
-line) is ignored; the listen port is hardcoded to `:9001` in
-`zig-server/src/server.zig`.
+line) is ignored. The listen port is `:9001` unless `GOPHER_PORT` says
+otherwise; `GOPHER_BIND` picks the address, and `GOPHER_TRUSTED_PROXY`
+whose `X-Forwarded-For` names the client (default `127.0.0.1`, the
+local Caddy). All three are read in `zig-server/src/server.zig`.
 
 ```
 data_dir = /home/steve/AngryGopher/local  # all writable state lives here
 auth_dir = /home/steve/Auth               # account store; defaults to ~/Auth
 ```
 
-`data_dir` holds three trees: `{data_dir}/lynrummy`, `/chat`, `/users`.
+`data_dir` holds four trees: `{data_dir}/lynrummy`, `/chat`, `/users`,
+`/players` (`roots.zig` points them all).
 `auth_dir` is the shared account store — one directory per uid
 (`{auth_dir}/<id>/{name,password,api-key}`) plus `next-id.txt` for
 allocation. One uid is the same person across every surface. With the
@@ -161,10 +164,11 @@ produces a natural progression:
   (`{data_dir}/players/<id>/name`, see `player.zig`). You become one by
   entering a name at `/play`; enough for **Lyn Rummy** and the puzzles,
   which need somewhere to file a board and a name to print on it.
-  **This tier is honour-system.** Names are not reserved, so anyone may
-  type any name, and anyone who sets the `gopher_uid` cookie by hand
-  reaches that player's game list. Nothing behind a real gate — chat,
-  settings, admin, uploads — resolves through it.
+  **Names are not reserved**, so anyone may type any name. The
+  `gopher_uid` cookie is signed (`uid_cookie.zig`), so one set by hand
+  names no one; a legacy unsigned cookie is re-signed once, inside its
+  window. Nothing behind a real gate — chat, settings, admin, uploads —
+  resolves through this tier.
 - **Full member** — an account in `{auth_dir}` with a password. Required
   for **chat**. Logging in mirrors the member into the player store under
   the same id, so their game history follows them.
@@ -195,9 +199,11 @@ order (the counter floors at 1). **Convention: uid 1 and 2 are people;
 uid 3 is the agent (Claude).**
 
 **1. Seed the session secret.** Members get a *signed* session cookie,
-keyed by `{data_dir}/chat/_session_secret`. The server *reads* this file
-but never creates it — so registration 500s ("session unavailable")
-until it exists. Seed it once with ≥ 32 random bytes:
+keyed by `{data_dir}/chat/_session_secret`, and so is every player's
+`gopher_uid`. The server *reads* this file but never creates the first
+one — so registration 500s ("session unavailable"), and `/play` sets no
+cookie, until it exists. (`/admin/secret` replaces one that exists;
+SECRET-LEAK.md in gopher-metal says when.) Seed it once with ≥ 32 random bytes:
 
 ```bash
 mkdir -p "$DATA_DIR/chat"
@@ -261,7 +267,7 @@ against `http://localhost:9001`, and the prod key against
 
 ## Routes
 
-The authoritative dispatch is `route()` in `zig-server/src/server.zig`
+The authoritative dispatch is `route()` in `zig-server/src/router.zig`
 (one prefix match per surface — read it for the full story). The map:
 
 | Path | What |
@@ -274,7 +280,7 @@ The authoritative dispatch is `route()` in `zig-server/src/server.zig`
 | `/chat`, `/channel/<name>` | DMs + channels over SSE, `/chat/docs` authoring (members only) |
 | `/settings` | Per-user settings incl. API-key generation (members) |
 | `/play`, `/login/full`, `/logout` | Name-only player login / member password login |
-| `/admin` | Session + user overview (hardcoded to uid 1) |
+| `/admin` | The chat roster and API keys; `/admin/host` (the running server), `/admin/backup` (an archive of `data/` and `auth/`), `/admin/secret` (change the session secret); `/admin/lynrummy` (the game roster). All hardcoded to uid 1 |
 | `/gallery`, `/images` | Home-page app emblems / brand assets (public) |
 | `/steve-resume` | Server-owned markdown page + pre-built PDF |
 | `/version`, `/debug/mem` | Build version JSON; live allocator counters (the leak smoke detector) |
@@ -282,8 +288,9 @@ The authoritative dispatch is `route()` in `zig-server/src/server.zig`
 There is no site-wide login gate — most surfaces are deliberately
 public and ungated (they resolve the viewer only to label the top
 bar). The gates that exist are per-surface: Lyn Rummy asks for a guest
-name, chat requires a full member. Login sets a `gopher_uid` cookie;
-members additionally get a signed session cookie. An **API key**
+name, chat requires a full member. `/play` and login set a signed
+`gopher_uid` cookie; members additionally get a signed session cookie,
+`gopher_auth`. An **API key**
 (`Authorization: Bearer`) resolves to its principal exactly like a
 session — read + write as that uid, never admin.
 

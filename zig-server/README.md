@@ -13,19 +13,20 @@ zig **0.16.0** (`zig version`).
 
 `server.zig` is the entry point: it listens on **:9001**, runs each accepted
 connection as its own task on the `std.Io` thread pool (so long-lived SSE
-streams don't starve other connections), and routes by path prefix to the
-per-surface handlers (`chat.zig`, `puzzles.zig`, `game.zig`, `driving.zig`, …).
-The port is hardcoded; `data_dir` + auth come from `GOPHER_CONFIG`.
+streams don't starve other connections), and hands each request to
+`router.zig`, which routes by path prefix to the per-surface handlers
+(`chat.zig`, `puzzles.zig`, `game.zig`, `driving.zig`, …). The port is
+`GOPHER_PORT` (default 9001); `data_dir` + auth come from `GOPHER_CONFIG`.
 
-Front-end assets that live elsewhere in the repo (the Elm/TS/driving bundles,
-the chat client, the puzzle catalogs) are baked in at compile time via
-`build.zig` `@embedFile`, so the binary is self-contained — no runtime file
-dependencies.
+Front-end assets that live elsewhere in the repo (the Elm/TS bundles, the
+Safari and chess WASM cores, the chat client, the puzzle catalogs) are baked
+in at compile time via `build.zig` `@embedFile`. The site's own files —
+`pages/`, `gallery/`, `downloads/` — are read from the working directory.
 
 ```
 ops/start                        # build bundles + zig + run on :9001
 # or, for just /driving:
-ops/build_driving && cd zig-server && zig build run
+ops/build_safari_wasm && cd zig-server && zig build run
 ```
 
 Assets that live elsewhere in the repo (Safari's wasm and blitter) are baked in via
