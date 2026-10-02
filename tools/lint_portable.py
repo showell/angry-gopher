@@ -22,6 +22,11 @@ WHAT IT FORBIDS, inside the set and outside `test {}` blocks:
                      bare `std.Io` in a signature. Spelled `std.` they are
                      unreachable by the port, and `std.Io.Dir.cwd()` reaches for
                      `std.posix.AT.FDCWD`.
+  THE STORE'S SEAM   `Io.Dir.cwd()` anywhere but store.zig (gopher-metal QUEUE
+                     item 54). The Store is the one way to the disk: it keeps
+                     FAT's rules (case, names, lengths) on every host, so a
+                     direct call beside it is a path where Linux and the
+                     machine with no operating system can answer differently.
   THE HOST ITSELF    Thread pools and sockets (`std.Io.Threaded`, `std.Io.net`),
                      host allocators (`std.heap.page_allocator` and friends —
                      page_allocator is mmap), `std.process`, `std.posix`,
@@ -38,6 +43,12 @@ WHAT IT ALLOWS:
   std.fs.path                     string manipulation; no file system.
   anything in a `test {}` block   tests run on the host: they spin a real thread
                                   pool and write to a real temp directory.
+  a test's own helper             a private top-level `fn` or `const` that only
+                                  tests (or other such helpers) name. Zig
+                                  compiles a declaration only where it is used,
+                                  so one only tests use is never in the route
+                                  table's build. A `pub` one may be used from
+                                  another file, and is checked.
 
 WHAT IT CANNOT SEE. A std function that takes a real `std.Io` compiles on
 Linux when handed our `io`, because there the alias IS std.Io. This lint names
@@ -65,6 +76,12 @@ ROOT_MODULE = "router.zig"
 IMPORT = re.compile(r'@import\("([A-Za-z0-9_]+\.zig)"\)')
 
 # (pattern, advice). Checked in order; one finding per match.
+# The Store's seam: what may call Io.Dir.cwd(). Checked in every reached file
+# but this one.
+STORE = "store.zig"
+CWD = (re.compile(r"\bIo\.Dir\.cwd\s*\("),
+       "the disk is the Store's: call store.zig (read, write, list, stat...) — it keeps FAT's rules on every host")
+
 RULES = [
     # The porting seam.
     (re.compile(r"\bstd\.Io\.(Dir|Clock|Mutex|Group)\b"),
@@ -139,6 +156,64 @@ def test_lines(lines):
     return out
 
 
+TOP_DECL = re.compile(r"^(?:(pub)\s+)?(?:inline\s+)?(?:fn\s+([A-Za-z_]\w*)\s*\(|(?:const|var)\s+([A-Za-z_]\w*)\b)")
+
+
+def test_only_lines(lines, tests):
+    """The 1-based lines of private top-level declarations that only tests
+    use: a test fixture or helper written outside a `test {}` block.
+
+    A declaration is test-only when its name appears, outside its own body,
+    on at least one test line (or in another test-only declaration), and
+    nowhere else. Found by repeating until nothing more is found. One that
+    nothing names is checked like any other, and so is a `pub` one: another
+    file may name it.
+    """
+    decls = []  # (name, first, last)
+    depth, current = 0, None
+    for n, line in enumerate(lines, 1):
+        c = code(line)
+        if depth == 0 and n not in tests:
+            m = TOP_DECL.match(c)
+            if m and not m.group(1):
+                current = [m.group(2) or m.group(3), n, n]
+        in_str, prev = False, ""
+        for ch in c:
+            if ch == '"' and prev != "\\":
+                in_str = not in_str
+            elif not in_str and ch == "{":
+                depth += 1
+            elif not in_str and ch == "}":
+                depth = max(0, depth - 1)
+            prev = ch
+        if current:
+            current[2] = n
+            if depth == 0 and (c.rstrip().endswith(";") or c.rstrip().endswith("}")):
+                decls.append(tuple(current))
+                current = None
+    only = set()
+    changed = True
+    while changed:
+        changed = False
+        for name, first, last in decls:
+            if (first, last) in only:
+                continue
+            word = re.compile(r"\b" + re.escape(name) + r"\b")
+            used_elsewhere, used_by_tests = False, False
+            for n, line in enumerate(lines, 1):
+                if first <= n <= last or not word.search(code(line)):
+                    continue
+                if n in tests or any(a <= n <= b for a, b in only):
+                    used_by_tests = True
+                else:
+                    used_elsewhere = True
+                    break
+            if used_by_tests and not used_elsewhere:
+                only.add((first, last))
+                changed = True
+    return {n for a, b in only for n in range(a, b + 1)}
+
+
 def closure(src_dir: str, root: str = ROOT_MODULE):
     """Every local .zig file reachable from `root` by @import, root included.
 
@@ -172,13 +247,15 @@ def scan(src_dir: str, root: str = ROOT_MODULE):
         with open(os.path.join(src_dir, name), encoding="utf-8") as f:
             lines = f.readlines()
         tests = test_lines(lines)
+        tests |= test_only_lines(lines, tests)
+        rules = RULES if name == STORE else RULES + [CWD]
         for n, line in enumerate(lines, 1):
             if n in tests:
                 continue
             c = code(line)
             if re.search(r"\bconst\s+Io\s*=\s*std\.Io\s*;", c):
                 c = re.sub(r"\bconst\s+Io\s*=\s*std\.Io\s*;", "", c)  # the alias itself
-            for pattern, advice in RULES:
+            for pattern, advice in rules:
                 for m in pattern.finditer(c):
                     arg = m.group(1) if m.groups() else ""
                     found.append((name, n, m.group(0), advice.format(arg)))

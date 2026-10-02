@@ -313,5 +313,79 @@ class Exemptions(unittest.TestCase):
             self.assertEqual(t.scan(), [])
 
 
+
+class StoreSeam(unittest.TestCase):
+    """Io.Dir.cwd() is store.zig's alone (gopher-metal QUEUE item 54)."""
+
+    CWD = 'fn f(io: Io) !void { try Io.Dir.cwd().writeFile(io, .{ .sub_path = "x", .data = "" }); }\n'
+
+    def test_a_direct_call_beside_the_store_fires(self):
+        with Tree(with_router(**{"a.zig": "pub " + self.CWD})) as t:
+            self.assertEqual(t.texts(), [("a.zig", "Io.Dir.cwd(")])
+
+    def test_the_store_itself_may(self):
+        with Tree(with_router(**{"store.zig": "pub " + self.CWD})) as t:
+            self.assertEqual(t.scan(), [])
+
+    def test_a_module_the_route_table_does_not_reach_is_not_checked(self):
+        files = dict(ROUTER_ONLY)
+        files["bench.zig"] = "pub " + self.CWD
+        with Tree(files) as t:
+            self.assertEqual(t.scan(), [])
+
+    def test_inside_a_test_block_it_is_allowed(self):
+        body = 'test "x" {\n    try Io.Dir.cwd().writeFile(io, .{ .sub_path = "x", .data = "" });\n}\n'
+        with Tree(with_router(**{"a.zig": body})) as t:
+            self.assertEqual(t.scan(), [])
+
+    def test_a_helper_only_tests_use_is_allowed_and_so_is_its_own_helper(self):
+        body = textwrap.dedent("""\
+            fn lower(io: Io) !void { try Io.Dir.cwd().deleteFile(io, "x"); }
+            const Fixture = struct {
+                io: Io,
+                fn seed(self: *Fixture) !void {
+                    try Io.Dir.cwd().writeFile(self.io, .{ .sub_path = "x", .data = "" });
+                    try lower(self.io);
+                }
+            };
+            test "uses the fixture" {
+                var f = Fixture{ .io = io };
+                try f.seed();
+            }
+        """)
+        with Tree(with_router(**{"a.zig": body})) as t:
+            self.assertEqual(t.scan(), [])
+
+    def test_a_helper_the_code_also_uses_fires(self):
+        body = textwrap.dedent("""\
+            fn helper(io: Io) !void { try Io.Dir.cwd().deleteFile(io, "x"); }
+            pub fn serve(io: Io) !void { try helper(io); }
+            test "and a test" { try helper(io); }
+        """)
+        with Tree(with_router(**{"a.zig": body})) as t:
+            self.assertEqual([(name, line) for name, line, _, _ in t.scan()], [("a.zig", 1)])
+
+    def test_a_helper_nothing_uses_fires(self):
+        # Nothing uses it yet: the first caller could be the route table.
+        with Tree(with_router(**{"a.zig": self.CWD})) as t:
+            self.assertEqual(t.texts(), [("a.zig", "Io.Dir.cwd(")])
+
+    def test_a_pub_helper_fires_even_if_only_this_files_tests_use_it(self):
+        body = "pub " + self.CWD + 'test "x" { try f(io); }\n'
+        with Tree(with_router(**{"a.zig": body})) as t:
+            self.assertEqual(t.texts(), [("a.zig", "Io.Dir.cwd(")])
+
+    def test_the_exemption_is_for_tests_helpers_not_for_other_rules_reasons(self):
+        # A host call in a helper only tests use is as harmless as one in a
+        # test block, and is exempt the same way; in code, it still fires.
+        body = textwrap.dedent("""\
+            fn hostHelper() void { const a = std.heap.page_allocator; _ = a; }
+            test "x" { hostHelper(); }
+            pub fn serve() void { const a = std.heap.page_allocator; _ = a; }
+        """)
+        with Tree(with_router(**{"a.zig": body})) as t:
+            self.assertEqual([line for _, line, _, _ in t.scan()], [3])
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=1)
