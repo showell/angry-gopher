@@ -24,7 +24,8 @@
 //! every returning visitor's browser carrying the id their games are filed
 //! under, guest and member alike (the member login sets it too). Reusing it is
 //! what lets this ship without anyone re-registering or losing a game; the
-//! seeded names in deploy/seed-players.sh are the other half.
+//! seeded names in deploy/seed-players.sh are the other half. uid_cookie.zig
+//! names it, signs it and sets it.
 //!
 //! **WHAT THIS DOES NOT DO, ON PURPOSE.** There is no password, no session
 //! signature, and no check that the name is free. Anyone who sets
@@ -49,13 +50,6 @@ const users = @import("users.zig");
 /// player_root is the local player directory (config.zig points it at
 /// {data_dir}/players at startup; the default is repo-relative from zig-server/).
 pub var player_root: []const u8 = "../games/lynrummy/players-data";
-
-/// cookie_name is shared with the account store's guest arm on purpose — see the
-/// module header.
-pub const cookie_name = "gopher_uid";
-
-/// cookie_max_age is one year, matching the identity cookie login.zig issues.
-const cookie_max_age = 60 * 60 * 24 * 365;
 
 /// local_prefix marks an id this module minted, keeping it out of the account
 /// store's decimal space.
