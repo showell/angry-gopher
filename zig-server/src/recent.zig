@@ -140,10 +140,11 @@ fn gatherRecentItems(io: Io, alloc: Alloc, uid: []const u8) ![]RecentItem {
     for (try docs_store.listUserDocs(io, alloc, uid)) |d| {
         const path = docs_store.docPath(alloc, uid, d.slug) catch continue;
         const st = disk.stat(io, alloc, path) catch continue;
+        const secs = fileSeconds(st.mtime);
         try items.append(alloc, .{
             .kind = .doc,
-            .at_ns = st.mtime,
-            .at = try timefmt.formatRFC3339UTC(alloc, secsOf(st.mtime)),
+            .at_ns = @as(i96, secs) * std.time.ns_per_s,
+            .at = try timefmt.formatRFC3339UTC(alloc, secs),
             .who = "You",
             .slug = d.slug,
             .title = d.title,
@@ -184,7 +185,9 @@ fn gatherConvSessions(io: Io, alloc: Alloc, items: *std.ArrayList(RecentItem), d
         try items.append(alloc, .{
             .kind = .chat,
             .at_ns = @as(i96, at) * std.time.ns_per_s,
-            .at = last.date,
+            // Normalized, so a date written with an offset reads as this
+            // server's own do; for those it is the same text.
+            .at = try timefmt.formatRFC3339UTC(alloc, at),
             .who = try authorName(io, alloc, dir, sid, viewer, last.uid),
             .url = url,
             .where = where,
@@ -195,8 +198,16 @@ fn gatherConvSessions(io: Io, alloc: Alloc, items: *std.ArrayList(RecentItem), d
     }
 }
 
-fn secsOf(ns: i96) i64 {
-    return @intCast(@divFloor(ns, std.time.ns_per_s));
+/// **A FILE'S TIME, AS FAT KEEPS IT: IN EVEN SECONDS.** A row with no
+/// recorded date (a doc, a session with no messages, a message whose date
+/// will not read) is ordered and shown by its file's modification time. FAT
+/// keeps that in two-second steps, rounded down, so a file written at an odd
+/// second reads a second earlier on gopher-metal than on Linux, and the two
+/// hosts showed the same data differently (gopher-metal's MIGRATION.md,
+/// "Rehearsed": 7 sessions). Every host floors it, so they agree.
+fn fileSeconds(mtime_ns: i96) i64 {
+    const secs: i64 = @intCast(@divFloor(mtime_ns, std.time.ns_per_s));
+    return secs - @mod(secs, 2);
 }
 
 /// newestFirst orders the feed. **A TIE IS BROKEN BY THE URL**, because a
@@ -216,10 +227,11 @@ fn newestFirst(_: void, a: RecentItem, b: RecentItem) bool {
 fn byFileTime(io: Io, alloc: Alloc, items: *std.ArrayList(RecentItem), dir: []const u8, sid: []const u8, url: []const u8, where: []const u8, dm: bool) !void {
     const path = try store.sessionMdPath(alloc, dir, sid);
     const st = disk.stat(io, alloc, path) catch return;
+    const secs = fileSeconds(st.mtime);
     try items.append(alloc, .{
         .kind = .chat,
-        .at_ns = st.mtime,
-        .at = try timefmt.formatRFC3339UTC(alloc, secsOf(st.mtime)),
+        .at_ns = @as(i96, secs) * std.time.ns_per_s,
+        .at = try timefmt.formatRFC3339UTC(alloc, secs),
         .url = url,
         .where = where,
         .topic = sid,
@@ -239,3 +251,39 @@ fn authorName(io: Io, alloc: Alloc, dir: []const u8, sid: []const u8, viewer: []
 }
 
 
+
+// ── tests ────────────────────────────────────────────────────────────────────
+
+const testing = std.testing;
+
+test "a file's time is floored to an even second, as FAT keeps it" {
+    try testing.expectEqual(@as(i64, 1790000000), fileSeconds(1790000000 * std.time.ns_per_s));
+    try testing.expectEqual(@as(i64, 1790000000), fileSeconds(1790000001 * std.time.ns_per_s + 999_999_999));
+    try testing.expectEqual(@as(i64, 1790000002), fileSeconds(1790000002 * std.time.ns_per_s + 1));
+}
+
+test "fs: a session with no messages, written at an odd second, shows the even second before it" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var tmp = testing.tmpDir(.{});
+    defer tmp.cleanup();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+
+    const dir = try std.fs.path.join(a, &.{ ".zig-cache", "tmp", &tmp.sub_path, "chat", "1_2" });
+    const md = try store.sessionMdPath(a, dir, "empty");
+    try disk.write(io, a, md, "", .{});
+    // 2026-09-21T14:13:21Z: an odd second, half a second in.
+    const odd: i96 = 1790000001 * std.time.ns_per_s + 500_000_000;
+    var f = try std.Io.Dir.cwd().openFile(io, md, .{ .mode = .read_write });
+    try f.setTimestamps(io, .{ .modify_timestamp = .{ .new = .{ .nanoseconds = odd } } });
+    f.close(io);
+
+    var items: std.ArrayList(RecentItem) = .empty;
+    try byFileTime(io, a, &items, dir, "empty", "/chat/c/1_2/empty", "to Bob", true);
+    try testing.expectEqual(@as(usize, 1), items.items.len);
+    try testing.expectEqualStrings(try timefmt.formatRFC3339UTC(a, 1790000000), items.items[0].at);
+    try testing.expectEqual(@as(i96, 1790000000) * std.time.ns_per_s, items.items[0].at_ns);
+}
