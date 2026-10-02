@@ -54,7 +54,8 @@ const Alloc = std.mem.Allocator;
 /// The whole surface is gated JUST_NEEDS_NAME: resolve the player first and,
 /// with none, redirect to /play. The gate IS the contract — the inner handlers
 /// never re-check. The resolved id is the storage key for every write below.
-pub fn handle(req: *std.http.Server.Request, io: Io, alloc: Alloc, sub: []const u8) !void {
+/// `client`: the caller's address, as game.handle takes it.
+pub fn handle(req: *std.http.Server.Request, io: Io, alloc: Alloc, sub: []const u8, client: ?[]const u8) !void {
     const user_id = (try player.current(io, alloc, req)).id;
     if (user_id.len == 0) {
         try http.redirect(req, "/play?next=/puzzles");
@@ -72,7 +73,7 @@ pub fn handle(req: *std.http.Server.Request, io: Io, alloc: Alloc, sub: []const 
     } else if (std.mem.eql(u8, sub, "/solver.wasm")) {
         try req.respond(solver_wasm, .{ .extra_headers = &.{http.wasm_ct} });
     } else if (std.mem.startsWith(u8, sub, "/sessions/")) {
-        try sessionRoute(req, io, alloc, user_id, sub["/sessions/".len..]);
+        try sessionRoute(req, io, alloc, user_id, client, sub["/sessions/".len..]);
     } else {
         try http.notFound(req);
     }
@@ -81,7 +82,7 @@ pub fn handle(req: *std.http.Server.Request, io: Io, alloc: Alloc, sub: []const 
 /// sessionRoute handles the one session route:
 ///   POST /sessions/<id>/puzzles/<idx>/actions  — append one action line.
 /// `rest` is the path after "/sessions/".
-fn sessionRoute(req: *std.http.Server.Request, io: Io, alloc: Alloc, user_id: []const u8, rest: []const u8) !void {
+fn sessionRoute(req: *std.http.Server.Request, io: Io, alloc: Alloc, user_id: []const u8, client: ?[]const u8, rest: []const u8) !void {
     var it = std.mem.splitScalar(u8, rest, '/');
     const id_str = it.next() orelse return http.notFound(req);
     const session_id = std.fmt.parseInt(i64, id_str, 10) catch return http.notFound(req);
@@ -100,7 +101,7 @@ fn sessionRoute(req: *std.http.Server.Request, io: Io, alloc: Alloc, user_id: []
     const puzzle_idx = std.fmt.parseInt(i32, idx_str, 10) catch return http.notFound(req);
     if (puzzle_idx < 0) return http.notFound(req);
 
-    try appendAction(req, io, alloc, user_id, session_id, puzzle_idx);
+    try appendAction(req, io, alloc, user_id, client, session_id, puzzle_idx);
 }
 
 /// appendAction appends the POST body verbatim as one line in
@@ -109,16 +110,16 @@ fn sessionRoute(req: *std.http.Server.Request, io: Io, alloc: Alloc, user_id: []
 /// there yet is made here, with its meta, if it is the one offered. Two tabs
 /// opened before either moved were offered the same id, and share it.
 /// The per-puzzle dir is created on first append.
-fn appendAction(req: *std.http.Server.Request, io: Io, alloc: Alloc, user_id: []const u8, session_id: i64, puzzle_idx: i32) !void {
+fn appendAction(req: *std.http.Server.Request, io: Io, alloc: Alloc, user_id: []const u8, client: ?[]const u8, session_id: i64, puzzle_idx: i32) !void {
     const body = (try http.readLimitedBody(req, alloc, maxAppendBytes)) orelse return;
     const line_bytes = std.mem.trimEnd(u8, body, "\n").len + 1;
 
     if (!try storage.puzzleSessionExists(io, alloc, user_id, session_id)) {
         if (session_id != try storage.nextPuzzleSessionID(io, alloc, user_id)) return http.notFound(req);
         const meta = try metaDsl(io, alloc);
-        if (try game_limits.admit(io, alloc, user_id, true, meta.len + line_bytes)) |r| return game_limits.refuse(req, r);
+        if (try game_limits.admit(io, alloc, user_id, client, true, meta.len + line_bytes)) |r| return game_limits.refuse(req, r);
         if (!try storage.ensurePuzzleSession(io, alloc, user_id, session_id, meta)) return http.notFound(req);
-    } else if (try game_limits.admit(io, alloc, user_id, false, line_bytes)) |r| return game_limits.refuse(req, r);
+    } else if (try game_limits.admit(io, alloc, user_id, client, false, line_bytes)) |r| return game_limits.refuse(req, r);
 
     const rel = try std.fmt.allocPrint(alloc, "puzzle_{d}/actions.dsl", .{puzzle_idx});
     try storage.appendPuzzleSessionDslLine(io, alloc, user_id, session_id, rel, body);

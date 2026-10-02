@@ -108,6 +108,9 @@ pub fn route(req: *std.http.Server.Request, io: Io, alloc: std.mem.Allocator, bu
         } });
     }
     const path = stripQuery(try http.target(req, alloc));
+    // Who is asking, for the bounds on what one address may make and write
+    // (game_limits.zig). Read with the head, which a body read invalidates.
+    const client = try game_limits.clientAddress(alloc, req, bus.peer);
 
     if (matchPrefix(path, "/driving")) |sub| {
         try driving.handle(req, sub);
@@ -119,9 +122,9 @@ pub fn route(req: *std.http.Server.Request, io: Io, alloc: std.mem.Allocator, bu
         // is resolved for the index's top-bar chip, never gated.
         try chess.handle(req, alloc, (try viewer(io, alloc, req)).name, sub);
     } else if (matchPrefix(path, "/puzzles")) |sub| {
-        try puzzles.handle(req, io, alloc, sub);
+        try puzzles.handle(req, io, alloc, sub, client);
     } else if (matchPrefix(path, "/game")) |sub| {
-        try game.handle(req, io, alloc, sub);
+        try game.handle(req, io, alloc, sub, client);
     } else if (matchPrefix(path, "/chat")) |sub| {
         try chat.handle(req, io, alloc, bus, sub);
     } else if (matchPrefix(path, "/channel")) |sub| {
@@ -150,7 +153,7 @@ pub fn route(req: *std.http.Server.Request, io: Io, alloc: std.mem.Allocator, bu
         // The LOCAL identity: a name, no password, for /game and /puzzles. It
         // reads its own small store and never touches the chat account store —
         // see player.zig.
-        try player.handle(req, io, alloc);
+        try player.handle(req, io, alloc, client);
     } else if (matchPrefix(path, "/login")) |sub| {
         try login.handle(req, io, alloc, bus, sub);
     } else if (std.mem.eql(u8, path, "/logout")) {
@@ -234,6 +237,11 @@ const testing = std.testing;
 /// This is the whole harness: `std.http.Server` over a reader that is a string
 /// and a writer that is a buffer.
 fn serve(alloc: std.mem.Allocator, io: Io, raw: []const u8) ![]const u8 {
+    return serveFrom(alloc, io, raw, null);
+}
+
+/// serve, from a connection whose address the host knows to be `peer`.
+fn serveFrom(alloc: std.mem.Allocator, io: Io, raw: []const u8, peer: ?[]const u8) ![]const u8 {
     var reader: std.Io.Reader = .fixed(raw);
     var out: std.Io.Writer.Allocating = .init(alloc);
     var server = std.http.Server.init(&reader, &out.writer);
@@ -243,6 +251,7 @@ fn serve(alloc: std.mem.Allocator, io: Io, raw: []const u8) ![]const u8 {
 
     var hub = Hub.init(io, alloc);
     var b = Bus.of(&hub);
+    b.peer = peer;
     try route(&req, io, alloc, &b);
     if (b.kept) |k| streams.drop(&hub, k);
     try out.writer.flush();
@@ -681,4 +690,68 @@ test "route: a player's games are refused, 507, past 16 MiB or 500 sessions, and
 
 fn lowDisk() ?@import("game_limits.zig").Space {
     return .{ .free = 1 << 30, .total = 5 << 30 };
+}
+
+test "route: an address names 5 players an hour and saves 20 MB of games, then 429" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var site = try UidSite.init(a, io);
+    defer site.deinit();
+    const limits = UidSite.game_limits;
+    limits.trusted_proxy = "10.0.0.1";
+    defer limits.trusted_proxy = null;
+
+    const Name = struct {
+        fn post(al: std.mem.Allocator, i: Io, peer: []const u8, xff: []const u8) ![]const u8 {
+            const body = "name=Ann&next=%2Fgame";
+            return serveFrom(al, i, try std.fmt.allocPrint(al,
+                "POST /play HTTP/1.1\r\nHost: x\r\n{s}Content-Type: application/x-www-form-urlencoded\r\nContent-Length: {d}\r\n\r\n{s}", .{ xff, body.len, body }), peer);
+        }
+    };
+
+    // Straight from an address: five, then a 429 that says why.
+    for (0..limits.players_per_hour) |_|
+        try testing.expectEqualStrings("303 See Other", status(try Name.post(a, io, "203.0.113.7", "")));
+    const sixth = try Name.post(a, io, "203.0.113.7", "");
+    try testing.expectEqualStrings("429 Too Many Requests", status(sixth));
+    try testing.expect(std.mem.indexOf(u8, sixth, "the last hour") != null);
+    try testing.expect(setUid(sixth) == null);
+    // Another address is its own.
+    try testing.expectEqualStrings("303 See Other", status(try Name.post(a, io, "198.51.100.1", "")));
+    // An X-Forwarded-For from anyone but the proxy is not believed: still 203.0.113.7.
+    try testing.expectEqualStrings("429 Too Many Requests", status(try Name.post(a, io, "203.0.113.7", "X-Forwarded-For: 192.0.2.50\r\n")));
+
+    // Through the proxy: the last address it forwarded for is the one counted,
+    // whatever the client put before it.
+    for (0..limits.players_per_hour) |_|
+        try testing.expectEqualStrings("303 See Other", status(try Name.post(a, io, "10.0.0.1", "X-Forwarded-For: 1.2.3.4, 192.0.2.9\r\n")));
+    try testing.expectEqualStrings("429 Too Many Requests", status(try Name.post(a, io, "10.0.0.1", "X-Forwarded-For: 5.6.7.8, 192.0.2.9\r\n")));
+    try testing.expectEqualStrings("303 See Other", status(try Name.post(a, io, "10.0.0.1", "X-Forwarded-For: 192.0.2.9, 192.0.2.10\r\n")));
+
+    // Game writes: 20 MB from one address an hour, across players.
+    const ids = [_][]const u8{ try player.allocate(io, a, "One"), try player.allocate(io, a, "Two") };
+    const big = try a.alloc(u8, 200 * 1024);
+    @memset(big, 's');
+    var sent: u64 = 0;
+    var refused: ?[]const u8 = null;
+    var n: usize = 0;
+    while (refused == null) : (n += 1) {
+        const r = try serveFrom(a, io, try std.fmt.allocPrint(a,
+            "POST /game/new-session HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\nContent-Length: {d}\r\n\r\n{s}", .{ try signedUid(a, ids[n % 2]), big.len, big }), "203.0.113.7");
+        if (std.mem.eql(u8, status(r), "429 Too Many Requests")) refused = r else {
+            try testing.expectEqualStrings("200 OK", status(r));
+            sent += big.len;
+        }
+    }
+    try testing.expect(std.mem.indexOf(u8, refused.?, "20 MB") != null);
+    try testing.expect(sent <= limits.bytes_per_hour and sent + 2 * big.len > limits.bytes_per_hour);
+    // Neither player is near their own 16 MiB: it was the address.
+    try testing.expect(sent / 2 < limits.max_bytes);
+    // From elsewhere, the same player still saves.
+    try testing.expectEqualStrings("200 OK", status(try serveFrom(a, io, try std.fmt.allocPrint(a,
+        "POST /game/new-session HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\nContent-Length: 5\r\n\r\nstate", .{try signedUid(a, ids[0])}), "198.51.100.1")));
 }

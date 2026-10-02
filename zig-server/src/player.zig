@@ -43,6 +43,7 @@ const names = @import("names.zig");
 const counter = @import("counter.zig");
 const store = @import("store.zig");
 const uid_cookie = @import("uid_cookie.zig");
+const game_limits = @import("game_limits.zig");
 const users = @import("users.zig");
 
 /// player_root is the local player directory (config.zig points it at
@@ -204,7 +205,9 @@ pub fn cookie(io: Io, alloc: Alloc, id: []const u8) !?[]const u8 {
 /// handle serves /play: GET asks for a name, POST mints a player and returns to
 /// `next` (an internal path, default "/"). This is the door /game and /puzzles
 /// send a nameless visitor to.
-pub fn handle(req: *std.http.Server.Request, io: Io, alloc: Alloc) !void {
+/// `client`: the caller's address, for the bound on new players per address
+/// (game_limits.zig); null when the host gave none.
+pub fn handle(req: *std.http.Server.Request, io: Io, alloc: Alloc, client: ?[]const u8) !void {
     // Header-derived state is read BEFORE the body: the body read invalidates
     // the live head, so the target and the current player are resolved up front.
     const target = try http.target(req, alloc);
@@ -221,6 +224,7 @@ pub fn handle(req: *std.http.Server.Request, io: Io, alloc: Alloc) !void {
     const vr = try names.validateUserName(alloc, (try formField(alloc, body, "name")) orelse "");
     if (vr.err.len != 0) return renderPage(req, alloc, cur.name, next, vr.err);
 
+    if (try game_limits.admitPlayer(io, client)) |r| return game_limits.refuse(req, r);
     const id = try allocate(io, alloc, vr.name);
     var hs: std.ArrayList(std.http.Header) = .empty;
     try hs.append(alloc, .{ .name = "location", .value = next });

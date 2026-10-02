@@ -44,7 +44,9 @@ const max_append_bytes = 64 * 1024;
 
 /// handle dispatches /game/* — `sub` keeps its leading '/' (e.g. "/elm.js",
 /// "/sessions/3/actions"), empty for exactly "/game".
-pub fn handle(req: *Request, io: Io, alloc: Alloc, sub: []const u8) !void {
+/// `client` is the caller's address as the router read it, for the bound on
+/// what one address may write (game_limits.zig); null when the host gave none.
+pub fn handle(req: *Request, io: Io, alloc: Alloc, sub: []const u8, client: ?[]const u8) !void {
     const user_id = (try player.current(io, alloc, req)).id;
     if (user_id.len == 0) {
         try http.redirect(req, "/play?next=/game");
@@ -60,13 +62,13 @@ pub fn handle(req: *Request, io: Io, alloc: Alloc, sub: []const u8) !void {
     } else if (std.mem.eql(u8, sub, "/engine_glue.js")) {
         try req.respond(engine_glue_js, .{ .extra_headers = &.{http.js_ct} });
     } else if (std.mem.eql(u8, sub, "/new-session")) {
-        try newSession(req, io, alloc, user_id);
+        try newSession(req, io, alloc, user_id, client);
     } else if (std.mem.eql(u8, sub, "/sessions")) {
         try sessionsList(req, io, alloc, user_id);
     } else if (std.mem.eql(u8, sub, "/api/sessions")) {
         try sessionsJSON(req, io, alloc, user_id);
     } else if (std.mem.startsWith(u8, sub, "/sessions/")) {
-        try sessionRoute(req, io, alloc, user_id, sub["/sessions/".len..]);
+        try sessionRoute(req, io, alloc, user_id, client, sub["/sessions/".len..]);
     } else {
         // /game/<id> — resume a session by numeric id.
         const trimmed = std.mem.trim(u8, sub, "/");
@@ -78,7 +80,7 @@ pub fn handle(req: *Request, io: Io, alloc: Alloc, sub: []const u8) !void {
 
 /// sessionRoute fans out the per-session URL space (`rest` is the path after
 /// "/sessions/").
-fn sessionRoute(req: *Request, io: Io, alloc: Alloc, user_id: []const u8, rest: []const u8) !void {
+fn sessionRoute(req: *Request, io: Io, alloc: Alloc, user_id: []const u8, client: ?[]const u8, rest: []const u8) !void {
     var it = std.mem.splitScalar(u8, rest, '/');
     const id_str = it.next() orelse return http.notFound(req);
     const session_id = std.fmt.parseInt(i64, id_str, 10) catch return http.notFound(req);
@@ -94,12 +96,12 @@ fn sessionRoute(req: *Request, io: Io, alloc: Alloc, user_id: []const u8, rest: 
 
     if (std.mem.eql(u8, seg1.?, "actions")) {
         if (req.head.method == .POST) {
-            try appendSessionLine(req, io, alloc, user_id, session_id, .actions);
+            try appendSessionLine(req, io, alloc, user_id, client, session_id, .actions);
         } else {
             try sessionBootstrap(req, io, alloc, user_id, session_id);
         }
     } else if (std.mem.eql(u8, seg1.?, "annotations")) {
-        try appendSessionLine(req, io, alloc, user_id, session_id, .annotations);
+        try appendSessionLine(req, io, alloc, user_id, client, session_id, .annotations);
     } else {
         try http.notFound(req);
     }
@@ -111,7 +113,7 @@ fn sessionRoute(req: *Request, io: Io, alloc: Alloc, user_id: []const u8, rest: 
 /// DSL-encoded GameState; the server prepends a server-owned created_at, writes
 /// the merged DSL to <session>/meta, and returns the id as JSON. The game-state
 /// DSL is stored verbatim.
-fn newSession(req: *Request, io: Io, alloc: Alloc, user_id: []const u8) !void {
+fn newSession(req: *Request, io: Io, alloc: Alloc, user_id: []const u8, client: ?[]const u8) !void {
     if (req.head.method != .POST) return http.methodNotAllowed(req);
 
     const game_state_dsl = (try http.readLimitedBody(req, alloc, max_new_session_bytes)) orelse return;
@@ -122,7 +124,7 @@ fn newSession(req: *Request, io: Io, alloc: Alloc, user_id: []const u8) !void {
         .game_state_dsl = game_state_dsl,
     };
     const meta_bytes = try session_meta.formatSessionMeta(alloc, meta);
-    if (try game_limits.admit(io, alloc, user_id, true, meta_bytes.len)) |r| return game_limits.refuse(req, r);
+    if (try game_limits.admit(io, alloc, user_id, client, true, meta_bytes.len)) |r| return game_limits.refuse(req, r);
 
     const id = try storage.allocateSessionID(io, alloc, user_id);
     try storage.writeSessionFile(io, alloc, user_id, id, "meta", meta_bytes);
@@ -139,14 +141,14 @@ const LineKind = enum { actions, annotations };
 /// appendSessionLine is the universal write handler: POST body → one appended
 /// line in <session>/<rel>. Actions are wire-DSL text (actions.dsl); annotations
 /// are JSONL (compacted). A Lyn Rummy move bumps last-seen.
-fn appendSessionLine(req: *Request, io: Io, alloc: Alloc, user_id: []const u8, session_id: i64, kind: LineKind) !void {
+fn appendSessionLine(req: *Request, io: Io, alloc: Alloc, user_id: []const u8, client: ?[]const u8, session_id: i64, kind: LineKind) !void {
     if (req.head.method != .POST) return http.methodNotAllowed(req);
     if (!try storage.sessionExists(io, alloc, user_id, session_id)) return http.notFound(req);
 
     const body = (try http.readLimitedBody(req, alloc, max_append_bytes)) orelse return;
     // The line as storage writes it: trailing newlines trimmed, one added.
     const line_bytes = std.mem.trimEnd(u8, body, "\n").len + 1;
-    if (try game_limits.admit(io, alloc, user_id, false, line_bytes)) |r| return game_limits.refuse(req, r);
+    if (try game_limits.admit(io, alloc, user_id, client, false, line_bytes)) |r| return game_limits.refuse(req, r);
 
     switch (kind) {
         .actions => {

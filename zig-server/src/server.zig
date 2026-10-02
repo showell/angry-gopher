@@ -81,6 +81,8 @@ pub fn main(init: std.process.Init.Minimal) !void {
 
     started_unix = nowUnix(io);
     host_status.provide(linuxFacts);
+    // Whose X-Forwarded-For names the client: Caddy, on this machine.
+    router.game_limits.trusted_proxy = env.get("GOPHER_TRUSTED_PROXY") orelse "127.0.0.1";
     // The game store's floor reads the data volume's free space. A test host
     // whose data sits on a full development disk turns it off, out loud:
     // the floor is then about that disk, not about the server under test.
@@ -159,10 +161,26 @@ fn handleConn(io: std.Io, alloc: std.mem.Allocator, hub: *Hub, stream: net.Strea
     };
     req.head.keep_alive = false; // force `connection: close` without touching each handler
     var bus = Bus.of(hub);
+    var peer_buf: [64]u8 = undefined;
+    bus.peer = peerText(&peer_buf, stream.socket.address);
     try router.route(&req, io, arena.allocator(), &bus);
     // A stream the handler kept is served here, on this connection's own task,
     // until its client goes away — the loop the handler used to run itself.
     if (bus.kept) |kept| bus_mod.serveKept(hub, kept, &sw.interface);
+}
+
+/// The connection's address as text with no port (`203.0.113.7`,
+/// `2001:db8::1`): what the game store's per-address bounds count.
+fn peerText(buf: []u8, a: net.IpAddress) ?[]const u8 {
+    switch (a) {
+        .ip4 => |v| return std.fmt.bufPrint(buf, "{d}.{d}.{d}.{d}", .{ v.bytes[0], v.bytes[1], v.bytes[2], v.bytes[3] }) catch null,
+        .ip6 => {
+            const t = std.fmt.bufPrint(buf, "{f}", .{a}) catch return null; // "[addr]:port"
+            const close = std.mem.indexOfScalar(u8, t, ']') orelse return null;
+            if (t.len == 0 or t[0] != '[') return null;
+            return t[1..close];
+        },
+    }
 }
 
 // ── the data volume's free space, for the game store's floor ─────────────────
