@@ -14,6 +14,10 @@ const Io = std.Io;
 const roots = @import("roots.zig");
 const users = @import("users.zig");
 
+/// The data directory this process serves, for /admin/host: GOPHER_CONFIG's
+/// `data_dir`, or the repository-relative defaults when there is none.
+pub var data_dir_shown: []const u8 = "the repository's defaults (no GOPHER_CONFIG)";
+
 /// load reads GOPHER_CONFIG (if set in `env`) and points storage + identity at
 /// the live tree. Strings are allocated from `alloc` (expected to be a
 /// long-lived allocator — the roots live for the whole process). No-op when the
@@ -46,6 +50,7 @@ pub fn load(io: Io, alloc: std.mem.Allocator, env: std.process.Environ.Map) !voi
         // the config's port key is ignored; the server hardcodes PORT in server.zig.
     }
 
+    if (data_dir) |dd| data_dir_shown = dd;
     const dd = data_dir orelse {
         std.debug.print("config: {s} has no data_dir — using defaults\n", .{path});
         return;

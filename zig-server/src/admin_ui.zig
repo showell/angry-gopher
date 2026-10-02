@@ -52,6 +52,8 @@ pub fn begin(b: *std.ArrayList(u8), alloc: Alloc, heading: []const u8, here: []c
     try tab(b, alloc, "/admin", "Chat", here);
     try b.appendSlice(alloc, " · ");
     try tab(b, alloc, "/admin/lynrummy", "Lyn Rummy", here);
+    try b.appendSlice(alloc, " · ");
+    try tab(b, alloc, "/admin/host", "Server", here);
     try b.print(alloc, "</nav>\n<h1>{s}</h1>\n", .{heading});
 }
 

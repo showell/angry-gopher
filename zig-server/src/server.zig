@@ -29,6 +29,7 @@ const edge = @import("edge.zig");
 const mem_meter = @import("mem_meter.zig");
 const bus_mod = @import("bus.zig");
 const chat_store = @import("chat_store.zig");
+const host_status = router.host_status;
 const Hub = bus_mod.Hub;
 const Bus = bus_mod.Bus;
 
@@ -76,6 +77,9 @@ pub fn main(init: std.process.Init.Minimal) !void {
     // lifetime; drives chat's SSE streams. Each request gets its own handle on
     // it (a Bus), which is where a stream handler leaves the stream it kept.
     var hub = Hub.init(io, alloc);
+
+    started_unix = nowUnix(io);
+    host_status.provide(linuxFacts);
 
     const port = portFromEnv(env);
     const addr = try net.IpAddress.parse("0.0.0.0", port);
@@ -139,9 +143,8 @@ fn handleConn(io: std.Io, alloc: std.mem.Allocator, hub: *Hub, stream: net.Strea
         // write is swallowed on failure — the count is the part we rely on.
         error.HttpHeadersOversize => {
             edge.count(.header_too_large);
-            sw.interface.writeAll(
-                "HTTP/1.1 431 Request Header Fields Too Large\r\n" ++
-                    "connection: close\r\ncontent-length: 0\r\n\r\n") catch {};
+            sw.interface.writeAll("HTTP/1.1 431 Request Header Fields Too Large\r\n" ++
+                "connection: close\r\ncontent-length: 0\r\n\r\n") catch {};
             sw.interface.flush() catch {};
             return;
         },
@@ -153,4 +156,58 @@ fn handleConn(io: std.Io, alloc: std.mem.Allocator, hub: *Hub, stream: net.Strea
     // A stream the handler kept is served here, on this connection's own task,
     // until its client goes away — the loop the handler used to run itself.
     if (bus.kept) |kept| bus_mod.serveKept(hub, kept, &sw.interface);
+}
+
+// ── /admin/host: what this Linux process says about itself ───────────────────
+
+var started_unix: i64 = 0;
+
+fn nowUnix(io: Io) i64 {
+    return @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
+}
+
+/// This process's facts for /admin/host. Memory is the kernel's own account of
+/// it (/proc/self/status), which is the whole process, not just what the
+/// meter sees. Free disk is not here: std has no statfs, and `df` on the box
+/// answers it.
+fn linuxFacts(io: Io, alloc: std.mem.Allocator) anyerror![]const host_status.Fact {
+    var facts: std.ArrayList(host_status.Fact) = .empty;
+    try facts.append(alloc, .{ .label = "host", .value = try std.fmt.allocPrint(alloc, "Linux, zig-server, pid {d}", .{std.os.linux.getpid()}) });
+    try facts.append(alloc, .{ .label = "started", .value = try host_status.utc(alloc, started_unix) });
+    try facts.append(alloc, .{ .label = "up for", .value = try host_status.duration(alloc, nowUnix(io) - started_unix) });
+    try facts.append(alloc, .{ .label = "data directory", .value = config.data_dir_shown });
+    const status = readProcFile(alloc, "/proc/self/status") catch |e| {
+        try facts.append(alloc, .{ .label = "memory", .value = try std.fmt.allocPrint(alloc, "/proc/self/status: {s}", .{@errorName(e)}) });
+        return facts.items;
+    };
+    var lines = std.mem.splitScalar(u8, status, '\n');
+    while (lines.next()) |line| {
+        const label: []const u8 = if (std.mem.startsWith(u8, line, "VmRSS:"))
+            "memory now (resident)"
+        else if (std.mem.startsWith(u8, line, "VmHWM:"))
+            "memory at most (resident)"
+        else
+            continue;
+        const colon = std.mem.indexOfScalar(u8, line, ':').?;
+        try facts.append(alloc, .{ .label = label, .value = std.mem.trim(u8, line[colon + 1 ..], " \t") });
+    }
+    return facts.items;
+}
+
+/// A /proc file, read to its end. Not `readFileAlloc`: /proc files say their
+/// size is zero, and a read sized by that comes back empty.
+fn readProcFile(alloc: std.mem.Allocator, path: [*:0]const u8) ![]u8 {
+    const linux = std.os.linux;
+    const rc = linux.open(path, .{ .ACCMODE = .RDONLY }, 0);
+    if (linux.errno(rc) != .SUCCESS) return error.OpenFailed;
+    const fd: i32 = @intCast(rc);
+    defer _ = linux.close(fd);
+    var out: std.ArrayList(u8) = .empty;
+    var buf: [4096]u8 = undefined;
+    while (true) {
+        const n = linux.read(fd, &buf, buf.len);
+        if (linux.errno(n) != .SUCCESS) return error.ReadFailed;
+        if (n == 0) return out.items;
+        try out.appendSlice(alloc, buf[0..n]);
+    }
 }

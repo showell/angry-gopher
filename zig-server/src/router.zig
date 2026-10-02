@@ -64,6 +64,9 @@ const users = @import("users.zig");
 //                               goes away; `streams.nextFrame` hands over the
 //                               next event, for a host with one loop. Either
 //                               way `streams.drop` ends it.
+//   6. optionally,              hand /admin/host the host's own facts: start
+//      host_status.provide(r)   time, disks, memory. Skipped, that page shows
+//                               the application's half only.
 //
 // server.zig does these for Linux, via config.zig. gopher-metal's kernel does
 // them with its own heap and paths on its own volume.
@@ -75,6 +78,10 @@ pub const Bus = streams.Bus;
 pub const Hub = streams.Hub;
 pub const mem_meter = @import("mem_meter.zig");
 pub const roots = @import("roots.zig");
+/// Optional: `host_status.provide(report)` hands /admin/host the host's own
+/// facts (start time, disks, memory). A host that skips it gets the
+/// application's half of that page only.
+pub const host_status = @import("host_status.zig");
 /// Chat's on-disk store, for the one thing a host does with it directly:
 /// `store.backfillAll` at startup.
 pub const store = @import("chat_store.zig");
