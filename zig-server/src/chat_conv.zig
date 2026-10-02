@@ -3,7 +3,6 @@
 //! once by routing — where the dm/channel distinction is concrete — then travels
 //! as data, so neither side has to re-discriminate the kind.
 
-const std = @import("std");
 const store = @import("chat_store.zig");
 
 /// Conv is a resolved, access-checked conversation: the kind+members the fanout
