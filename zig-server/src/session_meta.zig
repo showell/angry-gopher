@@ -63,11 +63,6 @@ pub fn parseSessionMeta(src: []const u8) SessionMeta {
     return m;
 }
 
-/// createdAt returns the meta's created_at (0 if absent).
-pub fn createdAt(m: SessionMeta) i64 {
-    return m.created_at;
-}
-
 /// label returns meta.label.
 pub fn label(m: SessionMeta) []const u8 {
     return m.label;
