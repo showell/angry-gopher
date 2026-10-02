@@ -23,6 +23,7 @@ const Io = std.Io;
 const Alloc = std.mem.Allocator;
 const counter = @import("counter.zig");
 const store = @import("store.zig");
+const game_limits = @import("game_limits.zig");
 
 /// append_mu serializes every game-store append (see the file header). One
 /// lock for the store, as chat_mu is for chat: appends are one positional
@@ -53,6 +54,7 @@ pub fn deleteUserData(io: Io, alloc: Alloc, user_id: []const u8) !void {
     if (std.mem.trim(u8, user_id, " \t\r\n").len == 0) return error.EmptyUserID;
     const root = try userRoot(alloc, user_id);
     store.removeTree(io, alloc, root) catch {};
+    game_limits.forget(io, user_id); // what they held is gone
 }
 
 fn puzzleRoot(alloc: Alloc, user_id: []const u8) ![]u8 {

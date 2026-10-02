@@ -81,6 +81,12 @@ pub fn main(init: std.process.Init.Minimal) !void {
 
     started_unix = nowUnix(io);
     host_status.provide(linuxFacts);
+    // The game store's floor reads the data volume's free space. A test host
+    // whose data sits on a full development disk turns it off, out loud:
+    // the floor is then about that disk, not about the server under test.
+    if (std.mem.eql(u8, env.get("GOPHER_GAME_FLOOR") orelse "", "off")) {
+        std.debug.print("zig-server: GOPHER_GAME_FLOOR=off: game writes have no free-space floor\n", .{});
+    } else router.game_limits.free_space = linuxFreeSpace;
 
     const port = portFromEnv(env);
     const addr = try bind.address(env.get("GOPHER_BIND"), port);
@@ -157,6 +163,42 @@ fn handleConn(io: std.Io, alloc: std.mem.Allocator, hub: *Hub, stream: net.Strea
     // A stream the handler kept is served here, on this connection's own task,
     // until its client goes away — the loop the handler used to run itself.
     if (bus.kept) |kept| bus_mod.serveKept(hub, kept, &sw.interface);
+}
+
+// ── the data volume's free space, for the game store's floor ─────────────────
+
+/// statfs(2)'s answer, as the kernel lays it out on a 64-bit machine. std has
+/// no statfs, so it is asked directly.
+const Statfs = extern struct {
+    type: i64,
+    bsize: i64,
+    blocks: u64,
+    bfree: u64,
+    bavail: u64,
+    files: u64,
+    ffree: u64,
+    fsid: [2]i32,
+    namelen: i64,
+    frsize: i64,
+    flags: i64,
+    spare: [4]i64,
+};
+
+/// Free (to an unprivileged writer) and total bytes on the volume the game
+/// store is on; null when statfs will not say.
+fn linuxFreeSpace() ?router.game_limits.Space {
+    if (@import("builtin").os.tag != .linux or @sizeOf(usize) != 8) return null;
+    const linux = std.os.linux;
+    var path: [std.fs.max_path_bytes:0]u8 = undefined;
+    const root = router.game_limits.dataRoot();
+    if (root.len >= path.len) return null;
+    @memcpy(path[0..root.len], root);
+    path[root.len] = 0;
+    var st: Statfs = undefined;
+    const rc = linux.syscall2(.statfs, @intFromPtr(&path), @intFromPtr(&st));
+    if (linux.errno(rc) != .SUCCESS or st.bsize <= 0) return null;
+    const bsize: u64 = @intCast(st.bsize);
+    return .{ .free = st.bavail * bsize, .total = st.blocks * bsize };
 }
 
 // ── /admin/host: what this Linux process says about itself ───────────────────

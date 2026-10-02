@@ -16,6 +16,7 @@ const std = @import("std");
 const Io = std.Io;
 const http = @import("http.zig");
 const storage = @import("storage.zig");
+const game_limits = @import("game_limits.zig");
 const player = @import("player.zig");
 
 const puzzle_js = @embedFile("puzzle_js");
@@ -109,12 +110,15 @@ fn sessionRoute(req: *std.http.Server.Request, io: Io, alloc: Alloc, user_id: []
 /// opened before either moved were offered the same id, and share it.
 /// The per-puzzle dir is created on first append.
 fn appendAction(req: *std.http.Server.Request, io: Io, alloc: Alloc, user_id: []const u8, session_id: i64, puzzle_idx: i32) !void {
-    if (!try storage.puzzleSessionExists(io, alloc, user_id, session_id)) {
-        const meta = try metaDsl(io, alloc);
-        if (!try storage.ensurePuzzleSession(io, alloc, user_id, session_id, meta)) return http.notFound(req);
-    }
-
     const body = (try http.readLimitedBody(req, alloc, maxAppendBytes)) orelse return;
+    const line_bytes = std.mem.trimEnd(u8, body, "\n").len + 1;
+
+    if (!try storage.puzzleSessionExists(io, alloc, user_id, session_id)) {
+        if (session_id != try storage.nextPuzzleSessionID(io, alloc, user_id)) return http.notFound(req);
+        const meta = try metaDsl(io, alloc);
+        if (try game_limits.admit(io, alloc, user_id, true, meta.len + line_bytes)) |r| return game_limits.refuse(req, r);
+        if (!try storage.ensurePuzzleSession(io, alloc, user_id, session_id, meta)) return http.notFound(req);
+    } else if (try game_limits.admit(io, alloc, user_id, false, line_bytes)) |r| return game_limits.refuse(req, r);
 
     const rel = try std.fmt.allocPrint(alloc, "puzzle_{d}/actions.dsl", .{puzzle_idx});
     try storage.appendPuzzleSessionDslLine(io, alloc, user_id, session_id, rel, body);

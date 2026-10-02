@@ -68,6 +68,9 @@ const uid_cookie = @import("uid_cookie.zig");
 //   6. optionally,              hand /admin/host the host's own facts: start
 //      host_status.provide(r)   time, disks, memory. Skipped, that page shows
 //                               the application's half only.
+//   7. game_limits.free_space   how much of the data volume is free. Without
+//      = fn                     it there is no floor under the game store
+//                               (game_limits.zig): set it.
 //
 // server.zig does these for Linux, via config.zig. gopher-metal's kernel does
 // them with its own heap and paths on its own volume.
@@ -86,6 +89,9 @@ pub const host_status = @import("host_status.zig");
 /// Chat's on-disk store, for the one thing a host does with it directly:
 /// `store.backfillAll` at startup.
 pub const store = @import("chat_store.zig");
+/// The game store's bounds (gopher-metal QUEUE item 52): a host sets
+/// `game_limits.free_space` so that game writes stop before the volume fills.
+pub const game_limits = @import("game_limits.zig");
 
 /// route picks the handler by path prefix, passing the remainder (the path with
 /// the prefix stripped, e.g. "/app.js" or "/sessions/3/..."). The table below IS
@@ -342,6 +348,7 @@ const UidSite = struct {
     const storage = @import("storage.zig");
     const chat_store = @import("chat_store.zig");
     const disk = @import("store.zig");
+    const game_limits = @import("game_limits.zig");
     const secret = "a session secret of thirty-two bytes or more, for router tests";
 
     fn init(a: std.mem.Allocator, io: Io) !UidSite {
@@ -355,6 +362,7 @@ const UidSite = struct {
             .auth_dir = try std.fs.path.join(a, &.{ s.base, "auth" }),
         });
         try disk.write(io, a, try std.fs.path.join(a, &.{ users.session_secret_dir, "_session_secret" }), secret, .{});
+        UidSite.game_limits.forgetAll(); // what it kept was measured under other roots
         return s;
     }
 
@@ -367,6 +375,7 @@ const UidSite = struct {
         users.auth_root = s.saved[5].?;
         disk.data_base = s.saved[6];
         disk.auth_base = s.saved[7];
+        UidSite.game_limits.forgetAll();
         s.tmp.cleanup();
     }
 
@@ -604,4 +613,72 @@ test "route: /puzzles writes nothing; a session is made by its first move" {
 
     // The next load offers the next session.
     try testing.expect(std.mem.indexOf(u8, try UidSite.ask(a, io, "/puzzles", me), "session_id: 2\\n") != null);
+}
+
+test "route: a player's games are refused, 507, past 16 MiB or 500 sessions, and all below a quarter free" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var site = try UidSite.init(a, io);
+    defer site.deinit();
+    const limits = UidSite.game_limits;
+
+    const id = try player.allocate(io, a, "Nikhil");
+    const me = try signedUid(a, id);
+    const games = try std.fs.path.join(a, &.{ UidSite.storage.data_root, id });
+
+    // A game, then its folder filled to 100 bytes short of the bound.
+    const made = try postAs(a, io, "/game/new-session", me, "state");
+    try testing.expectEqualStrings("200 OK", status(made));
+    limits.forgetAll(); // the filler below is written behind its back
+    const meta_len = (try UidSite.disk.stat(io, a, try std.fs.path.join(a, &.{ games, "lynrummy-elm", "sessions", "1", "meta" }))).size;
+    const counter_len = (try UidSite.disk.stat(io, a, try std.fs.path.join(a, &.{ games, "next-session-id.txt" }))).size;
+    const filler = try a.alloc(u8, limits.max_bytes - meta_len - counter_len - 100);
+    @memset(filler, 'x');
+    try UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ games, "filler" }), filler, .{});
+
+    // 99 bytes and its newline: exactly to the bound. Then one byte more is refused.
+    const line = "y" ** 99;
+    try testing.expectEqualStrings("204 No Content", status(try postAs(a, io, "/game/sessions/1/actions", me, line)));
+    const over = try postAs(a, io, "/game/sessions/1/actions", me, "z");
+    try testing.expectEqualStrings("507 Insufficient Storage", status(over));
+    try testing.expect(std.mem.indexOf(u8, over, "16 MiB") != null);
+    try testing.expectEqualStrings("507 Insufficient Storage", status(try postAs(a, io, "/game/new-session", me, "state")));
+    try testing.expectEqualStrings("507 Insufficient Storage", status(try postAs(a, io, "/puzzles/sessions/1/puzzles/0/actions", me, "1) x")));
+    // Nothing of the refused writes landed.
+    const actions = try UidSite.disk.read(io, a, try std.fs.path.join(a, &.{ games, "lynrummy-elm", "sessions", "1", "actions.dsl" }), .limited(1 << 10));
+    try testing.expectEqual(@as(usize, 100), actions.len);
+    try testing.expect(!UidSite.disk.has(io, a, try std.fs.path.join(a, &.{ games, "lynrummy-elm", "sessions", "2" })));
+    try testing.expect(!UidSite.disk.has(io, a, try std.fs.path.join(a, &.{ games, "puzzle" })));
+
+    // Sessions: another player with 500 on disk may not make one more,
+    // but may still play in the ones they have.
+    const other = try player.allocate(io, a, "Debbie");
+    const them = try signedUid(a, other);
+    for (1..limits.max_sessions + 1) |n| {
+        try UidSite.disk.write(io, a, try std.fmt.allocPrint(a, "{s}/{s}/puzzle/sessions/{d}/meta", .{ UidSite.storage.data_root, other, n }), "m", .{});
+    }
+    const refused = try postAs(a, io, "/game/new-session", them, "state");
+    try testing.expectEqualStrings("507 Insufficient Storage", status(refused));
+    try testing.expect(std.mem.indexOf(u8, refused, "500 game sessions") != null);
+    try testing.expectEqualStrings("204 No Content", status(try postAs(a, io, "/puzzles/sessions/7/puzzles/0/actions", them, "1) x")));
+
+    // The floor: below a quarter free, nobody's game is saved; /play still
+    // names a new player (the player store is not the game store).
+    limits.free_space = lowDisk;
+    defer limits.free_space = null;
+    const third = try player.allocate(io, a, "Gus");
+    const floor = try postAs(a, io, "/game/new-session", try signedUid(a, third), "state");
+    try testing.expectEqualStrings("507 Insufficient Storage", status(floor));
+    try testing.expect(std.mem.indexOf(u8, floor, "low on disk") != null);
+    const named = try serve(a, io,
+        "POST /play HTTP/1.1\r\nHost: x\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: 21\r\n\r\nname=Ann&next=%2Fgame");
+    try testing.expectEqualStrings("303 See Other", status(named));
+}
+
+fn lowDisk() ?@import("game_limits.zig").Space {
+    return .{ .free = 1 << 30, .total = 5 << 30 };
 }

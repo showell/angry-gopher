@@ -23,6 +23,7 @@ const std = @import("std");
 const Io = std.Io;
 const http = @import("http.zig");
 const storage = @import("storage.zig");
+const game_limits = @import("game_limits.zig");
 const player = @import("player.zig");
 const session_meta = @import("session_meta.zig");
 const timefmt = @import("timefmt.zig");
@@ -115,14 +116,15 @@ fn newSession(req: *Request, io: Io, alloc: Alloc, user_id: []const u8) !void {
 
     const game_state_dsl = (try http.readLimitedBody(req, alloc, max_new_session_bytes)) orelse return;
 
-    const id = try storage.allocateSessionID(io, alloc, user_id);
-
     const meta = SessionMeta{
         .created_at = nowUnix(io),
         .label = "",
         .game_state_dsl = game_state_dsl,
     };
     const meta_bytes = try session_meta.formatSessionMeta(alloc, meta);
+    if (try game_limits.admit(io, alloc, user_id, true, meta_bytes.len)) |r| return game_limits.refuse(req, r);
+
+    const id = try storage.allocateSessionID(io, alloc, user_id);
     try storage.writeSessionFile(io, alloc, user_id, id, "meta", meta_bytes);
 
     // {"session_id":N}\n — no spaces, trailing newline.
@@ -142,6 +144,9 @@ fn appendSessionLine(req: *Request, io: Io, alloc: Alloc, user_id: []const u8, s
     if (!try storage.sessionExists(io, alloc, user_id, session_id)) return http.notFound(req);
 
     const body = (try http.readLimitedBody(req, alloc, max_append_bytes)) orelse return;
+    // The line as storage writes it: trailing newlines trimmed, one added.
+    const line_bytes = std.mem.trimEnd(u8, body, "\n").len + 1;
+    if (try game_limits.admit(io, alloc, user_id, false, line_bytes)) |r| return game_limits.refuse(req, r);
 
     switch (kind) {
         .actions => {
