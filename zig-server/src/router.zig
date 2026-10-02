@@ -93,6 +93,18 @@ pub const store = @import("chat_store.zig");
 /// `game_limits.free_space` so that game writes stop before the volume fills.
 pub const game_limits = @import("game_limits.zig");
 
+/// **BACK TO THE SAME PAGE, ON THIS SITE ONLY.** The re-sign's redirect named
+/// the request target as it came, so `GET //evil.example/x` answered
+/// `location: //evil.example/x`, which a browser reads as another host, and
+/// the absolute form `GET http://evil.example/` named one outright
+/// (gopher-metal REVIEW-signed-uid-and-limits.md, finding 2). A target that is
+/// not a plain local path is sent to `/` instead.
+fn localTarget(target: []const u8) []const u8 {
+    if (target.len == 0 or target[0] != '/') return "/";
+    if (target.len > 1 and (target[1] == '/' or target[1] == '\\')) return "/";
+    return target;
+}
+
 /// route picks the handler by path prefix, passing the remainder (the path with
 /// the prefix stripped, e.g. "/app.js" or "/sessions/3/..."). The table below IS
 /// the site: every surface appears exactly once, and the comment on each arm
@@ -103,7 +115,7 @@ pub fn route(req: *std.http.Server.Request, io: Io, alloc: std.mem.Allocator, bu
     // signed cookie set, and the unsigned spelling is refused from then on.
     if (try uid_cookie.reissue(io, alloc, req)) |set_cookie| {
         return req.respond("", .{ .status = .see_other, .extra_headers = &.{
-            .{ .name = "location", .value = try http.target(req, alloc) },
+            .{ .name = "location", .value = localTarget(try http.target(req, alloc)) },
             .{ .name = "set-cookie", .value = set_cookie },
         } });
     }
@@ -840,4 +852,29 @@ fn countFiles(tar: []const u8) usize {
     const at = std.mem.lastIndexOf(u8, tar, "\nend: ") orelse return 0;
     var it = std.mem.tokenizeAny(u8, tar[at + "\nend: ".len ..], " ");
     return std.fmt.parseInt(usize, it.next() orelse "0", 10) catch 0;
+}
+
+test "route: the re-sign's redirect stays on this site" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var site = try UidSite.init(a, io);
+    defer site.deinit();
+
+    const cases = [_][2][]const u8{
+        .{ "//evil.example/x", "/" },
+        .{ "/\\evil.example/x", "/" },
+        .{ "http://evil.example/y", "/" },
+        .{ "/play?next=/game", "/play?next=/game" },
+    };
+    for (cases) |c| {
+        // A fresh legacy player each time: a re-sign happens once per id.
+        const id = try player.allocate(io, a, "Nikhil");
+        const r = try serve(a, io, try std.fmt.allocPrint(a, "GET {s} HTTP/1.1\r\nHost: x\r\nCookie: gopher_uid={s}\r\n\r\n", .{ c[0], id }));
+        try testing.expectEqualStrings("303 See Other", status(r));
+        try testing.expect(std.mem.indexOf(u8, r, try std.fmt.allocPrint(a, "location: {s}\r\n", .{c[1]})) != null);
+    }
 }
