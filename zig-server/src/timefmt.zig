@@ -57,7 +57,9 @@ pub fn daysFromCivil(year: i64, month: u32, day: u32) i64 {
 }
 
 /// unixFromRFC3339 reads back what formatRFC3339UTC wrote — `2026-06-19T14:34:07Z`
-/// — as Unix seconds, or null for anything else.
+/// — as Unix seconds, or null for anything else. Also read, so that a
+/// transcript another writer made still carries its own date: a fraction of
+/// a second (dropped), and a `+hh:mm` or `-hh:mm` offset in place of `Z`.
 ///
 /// **A DATE THAT WAS RECORDED BEATS A FILE'S MTIME.** /chat/recent orders by
 /// this: mtime is two-second granular on FAT16 and nanosecond on ext4, so the
@@ -65,10 +67,11 @@ pub fn daysFromCivil(year: i64, month: u32, day: u32) i64 {
 /// messages sent close together — and mtime moves for any write, where the
 /// date says when the message was actually sent.
 pub fn unixFromRFC3339(text: []const u8) ?i64 {
-    if (text.len != 20 or text[4] != '-' or text[7] != '-' or text[10] != 'T' or
-        text[13] != ':' or text[16] != ':' or text[19] != 'Z') return null;
+    if (text.len < 20 or text[4] != '-' or text[7] != '-' or (text[10] != 'T' and text[10] != 't') or
+        text[13] != ':' or text[16] != ':') return null;
     const num = struct {
         fn at(s: []const u8, start: usize, len: usize) ?i64 {
+            for (s[start..][0..len]) |c| if (c < '0' or c > '9') return null;
             return std.fmt.parseInt(i64, s[start..][0..len], 10) catch null;
         }
     };
@@ -80,10 +83,38 @@ pub fn unixFromRFC3339(text: []const u8) ?i64 {
     const second = num.at(text, 17, 2) orelse return null;
     if (month < 1 or month > 12 or day < 1 or day > 31) return null;
     if (hour > 23 or minute > 59 or second > 60) return null;
-    return daysFromCivil(year, @intCast(month), @intCast(day)) * 86400 + hour * 3600 + minute * 60 + second;
+
+    var rest = text[19..];
+    if (rest.len > 0 and rest[0] == '.') {
+        var k: usize = 1;
+        while (k < rest.len and rest[k] >= '0' and rest[k] <= '9') k += 1;
+        if (k == 1) return null;
+        rest = rest[k..];
+    }
+    var offset: i64 = 0;
+    if (rest.len == 1 and (rest[0] == 'Z' or rest[0] == 'z')) {
+        offset = 0;
+    } else if (rest.len == 6 and (rest[0] == '+' or rest[0] == '-') and rest[3] == ':') {
+        const oh = num.at(rest, 1, 2) orelse return null;
+        const om = num.at(rest, 4, 2) orelse return null;
+        if (oh > 23 or om > 59) return null;
+        offset = (oh * 3600 + om * 60) * @as(i64, if (rest[0] == '+') 1 else -1);
+    } else return null;
+    return daysFromCivil(year, @intCast(month), @intCast(day)) * 86400 + hour * 3600 + minute * 60 + second - offset;
 }
 
 const testing = std.testing;
+
+test "a date another writer made reads back too: a fraction, an offset" {
+    const base = unixFromRFC3339("2026-05-28T10:00:00Z").?;
+    try testing.expectEqual(base, unixFromRFC3339("2026-05-28T10:00:00.123Z").?);
+    try testing.expectEqual(base, unixFromRFC3339("2026-05-28T06:00:00-04:00").?);
+    try testing.expectEqual(base, unixFromRFC3339("2026-05-28T15:30:00+05:30").?);
+    try testing.expectEqual(base, unixFromRFC3339("2026-05-28T06:00:00.5-04:00").?);
+    for ([_][]const u8{ "", "2026-05-28T10:00:00", "2026-05-28T10:00:00.Z", "2026-05-28T10:00:00+0400", "2026-05-28T10:00:00+24:00", "2026-05-28 10:00:00Z", "2026-05-28T10:00:00Zjunk", "2026-13-28T10:00:00Z", "2026-05-28T1a:00:00Z" }) |bad| {
+        try testing.expect(unixFromRFC3339(bad) == null);
+    }
+}
 
 test "a formatted timestamp reads back as the seconds it was made from" {
     const a = testing.allocator;
