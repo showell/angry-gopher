@@ -23,7 +23,7 @@ const std = @import("std");
 const Io = std.Io;
 const Alloc = std.mem.Allocator;
 const store = @import("chat_store.zig");
-const files = @import("files.zig");
+const disk = @import("store.zig");
 const docs_store = @import("docs_store.zig");
 const mem_meter = @import("mem_meter.zig");
 
@@ -166,8 +166,8 @@ pub fn savedIdsFor(io: Io, req_alloc: Alloc, uid: []const u8, conv: []const u8, 
     defer cache_mu.unlock(io);
 
     const path = docs_store.docPath(req_alloc, uid, reading_list_slug) catch return &.{};
-    const st = Io.Dir.cwd().statFile(io, path, .{}) catch return &.{}; // no doc → nothing saved
-    const file_mtime: i96 = st.mtime.nanoseconds;
+    const st = disk.stat(io, req_alloc, path) catch return &.{}; // no doc → nothing saved
+    const file_mtime: i96 = st.mtime;
 
     const gop = try cache.getOrPut(cache_alloc, uid);
     if (!gop.found_existing or gop.value_ptr.mtime_ns < file_mtime) {
@@ -214,7 +214,7 @@ fn buildEntry(io: Io, path: []const u8, mtime_ns: i96) !Entry {
     // reading list until the file next changed. A missing file is genuinely
     // empty; anything else is the caller's problem, and the cache keeps what
     // it already had.
-    const doc = try files.readOrEmpty(io, aa, path, .unlimited);
+    const doc = try disk.readOrEmpty(io, aa, path, .unlimited);
     const refs = try parseRefs(aa, doc); // refs alias `doc`, both arena-owned
     return .{ .mtime_ns = mtime_ns, .arena = arena, .refs = refs };
 }
