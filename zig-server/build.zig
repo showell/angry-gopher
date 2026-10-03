@@ -144,6 +144,17 @@ pub fn build(b: *std.Build) void {
     const stress_step = b.step("stress", "Build the leak stress harness (zig-out/bin/stress)");
     stress_step.dependOn(&b.addInstallArtifact(stress_exe, .{}).step);
 
+    // `zig build hash-password`: a password on stdin, its bcrypt hash out, as
+    // the server stores it. For resetting a lost admin password
+    // (ops/reset_admin_password; gopher-metal's droplet/chat.py).
+    const hash_mod = b.createModule(.{
+        .root_source_file = b.path("src/hash_password.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    const hash_exe = b.addExecutable(.{ .name = "hash-password", .root_module = hash_mod });
+    b.step("hash-password", "Build zig-out/bin/hash-password").dependOn(&b.addInstallArtifact(hash_exe, .{}).step);
+
     // Unit tests (`zig build test`). Each listed module is a test root; a module
     // must be in this list for its `test {}` blocks to actually run under the
     // gate (imports alone don't enroll a file's tests). Pure-logic modules tested
