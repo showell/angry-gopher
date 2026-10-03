@@ -362,6 +362,35 @@ test "route: ADMIN_ONLY — both admin screens refuse an anonymous request" {
     try testing.expect(std.mem.indexOf(u8, r, "200 OK") == null);
 }
 
+test "route: ADMIN_ONLY — a logged-in non-admin member is refused the secret-bearing screens" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var site = try UidSite.init(a, io);
+    defer site.deinit();
+
+    // A real, AUTHORIZED member — uid 2, with a password and a valid signed
+    // session — not a guest. `/admin/backup` holds every password hash and
+    // the session secret, so the gate that keeps a member out of it (and out
+    // of /admin/secret and /admin/apikey) is the one that matters most for a
+    // secret leak (QUEUE.md item 92; the gate is admin_ui.requireAdmin, which
+    // 404s a uid that is not "1"). The anonymous/guest case is above; this is
+    // the member case, which a bare gopher_uid cannot stand in for.
+    try users.setUserPassword(io, a, "2", "hunter2");
+    const now: i64 = @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
+    const member = try std.fmt.allocPrint(a, "gopher_auth={s}", .{try users.signSession(a, UidSite.secret, "2", now)});
+
+    for ([_][]const u8{ "/admin", "/admin/backup", "/admin/secret", "/admin/apikey", "/admin/host", "/admin/lynrummy" }) |path| {
+        const resp = try UidSite.ask(a, io, path, member);
+        try testing.expect(std.mem.indexOf(u8, resp, "200 OK") == null); // never served to a member
+        try testing.expect(std.mem.indexOf(u8, resp, "$2") == null); // no bcrypt hash in the body
+        try testing.expect(std.mem.indexOf(u8, resp, UidSite.secret) == null); // nor the session secret
+    }
+}
+
 // ── gopher_uid, signed (uid_cookie.zig) ──────────────────────────────────────
 
 /// A site in a temporary folder, every root pointed at it, with a session
