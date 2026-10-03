@@ -817,6 +817,35 @@ test "route: HEAD /admin/backup reads nothing" {
     try testing.expect(admin_backup.files_archived >= before + 3);
 }
 
+test "route: only a member's own session is the admin; a non-member's session, or a gopher_uid, is no one" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var site = try UidSite.init(a, io);
+    defer site.deinit();
+    const now: i64 = @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
+    const ask = struct {
+        fn admin(al: std.mem.Allocator, i: Io, cookie: []const u8) ![]const u8 {
+            return serve(al, i, try std.fmt.allocPrint(al, "GET /admin HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\n\r\n", .{cookie}));
+        }
+    };
+
+    // uid 1 with a name and no password is not a member: a session signed
+    // rightly for it names no one.
+    try users.setUserName(io, a, "1", "Steve");
+    const early = try std.fmt.allocPrint(a, "gopher_auth={s}", .{try users.signSession(a, UidSite.secret, "1", now)});
+    try testing.expectEqualStrings("303 See Other", status(try ask.admin(a, io, early)));
+
+    // Once a member, the session is the admin; a signed gopher_uid for the
+    // same id is not a session, and is no one here.
+    const me = try adminSession(a, io);
+    try testing.expectEqualStrings("200 OK", status(try ask.admin(a, io, me)));
+    try testing.expectEqualStrings("303 See Other", status(try ask.admin(a, io, try signedUid(a, "1"))));
+}
+
 fn postForm(a: std.mem.Allocator, io: Io, target: []const u8, cookies: []const u8, body: []const u8) ![]const u8 {
     return serve(a, io, try std.fmt.allocPrint(a,
         "POST {s} HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: {d}\r\n\r\n{s}", .{ target, cookies, body.len, body }));
