@@ -92,6 +92,10 @@ pub const store = @import("chat_store.zig");
 /// The game store's bounds (gopher-metal QUEUE item 52): a host sets
 /// `game_limits.free_space` so that game writes stop before the volume fills.
 pub const game_limits = @import("game_limits.zig");
+/// The edge's refusal counts, which /version reports: a host counts what it
+/// refuses before the route table sees a request (`edge.count(.header_too_large)`
+/// for a head past its read buffer), in the same counters the routes use.
+pub const edge = @import("edge.zig");
 
 /// **BACK TO THE SAME PAGE, ON THIS SITE ONLY.** The re-sign's redirect named
 /// the request target as it came, so `GET //evil.example/x` answered
