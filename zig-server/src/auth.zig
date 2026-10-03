@@ -17,12 +17,23 @@
 //! byte is the entire migration story: no re-hashing of existing users needed.
 
 const std = @import("std");
+const builtin = @import("builtin");
 const Io = std.Io;
 const bcrypt = std.crypto.pwhash.bcrypt;
 
 /// Cost factor — bcrypt's common default. Must match whatever cost set the
 /// existing hashes (it does: those were also written at cost 10).
 pub const cost: u6 = 10;
+
+/// **THE COST A NEW HASH IS WRITTEN AT: `cost`, EXCEPT IN A TEST BUILD.** A
+/// cost-10 hash is a few hundred milliseconds in a Debug test binary, and the
+/// router's, users' and stores' tests make members by the dozen; at bcrypt's
+/// minimum, 4, they are 64 times cheaper. Nothing a test checks depends on the
+/// cost, because verifyPassword reads it from the stored hash. This file's own
+/// tests still write at `cost` where the cost is the point (the known answer,
+/// and the `$2b$10$` form). Never a test build: every deployed binary, and
+/// gopher-metal's kernel, which builds the route table for a machine.
+pub const hashing_cost: u6 = if (builtin.is_test) 4 else cost;
 
 const crypt_len: usize = 60; // a modular-crypt bcrypt string is exactly 60 bytes
 
@@ -69,8 +80,14 @@ pub fn hashPassword(password: []const u8, out: []u8, io: Io) ![]const u8 {
 /// hashPasswordWithSalt is hashPassword with the salt supplied — deterministic,
 /// and the half that carries the known-answer test below.
 pub fn hashPasswordWithSalt(password: []const u8, out: []u8, salt: [bcrypt.salt_length]u8) ![]const u8 {
+    return hashPasswordWithSaltAt(password, out, salt, hashing_cost);
+}
+
+/// hashPasswordWithSalt at a given cost: the known-answer test's way to hash at
+/// `cost` in a test build.
+pub fn hashPasswordWithSaltAt(password: []const u8, out: []u8, salt: [bcrypt.salt_length]u8, rounds_log: u6) ![]const u8 {
     return bcrypt.strHashWithSalt(password, .{
-        .params = .{ .rounds_log = cost, .silently_truncate_password = false },
+        .params = .{ .rounds_log = rounds_log, .silently_truncate_password = false },
         .encoding = .crypt,
     }, out, salt);
 }
@@ -111,7 +128,7 @@ fn saltOf(crypt: []const u8) ![bcrypt.salt_length]u8 {
 
 test "hashPasswordWithSalt reproduces Go's hash byte for byte (known answer)" {
     var out: [crypt_len]u8 = undefined;
-    const got = try hashPasswordWithSalt(legacy_password, &out, try saltOf(legacy_hash));
+    const got = try hashPasswordWithSaltAt(legacy_password, &out, try saltOf(legacy_hash), cost);
     // Same salt, same cost, same ciphertext: everything but the version tag.
     try std.testing.expectEqualStrings("$2b$" ++ legacy_hash[4..], got);
 }
@@ -126,6 +143,15 @@ test "hashPasswordWithSalt: a different password under the same salt is a differ
     try std.testing.expect(!std.mem.eql(u8, ha[29..], hb[29..])); // different ciphertext
 }
 
+test "the cost: a deployed build writes at 10, the cost the existing hashes have; a test build at 4" {
+    try std.testing.expectEqual(@as(u6, 10), cost);
+    try std.testing.expectEqual(@as(u6, 4), hashing_cost);
+    var out: [crypt_len]u8 = undefined;
+    const h = try hashPasswordWithSaltAt("hunter2", &out, try saltOf(legacy_hash), cost);
+    try std.testing.expect(std.mem.startsWith(u8, h, "$2b$10$"));
+    try std.testing.expect(verifyPassword(h, "hunter2"));
+}
+
 test "hashPassword: the form, the cost, and it verifies" {
     var threaded = std.Io.Threaded.init(std.testing.allocator, .{});
     defer threaded.deinit();
@@ -134,7 +160,7 @@ test "hashPassword: the form, the cost, and it verifies" {
     var out: [crypt_len]u8 = undefined;
     const h = try hashPassword("hunter2", &out, io);
     try std.testing.expectEqual(crypt_len, h.len);
-    try std.testing.expect(std.mem.startsWith(u8, h, "$2b$10$"));
+    try std.testing.expect(std.mem.startsWith(u8, h, "$2b$04$")); // hashing_cost, in a test build
     try std.testing.expect(verifyPassword(h, "hunter2"));
     try std.testing.expect(!verifyPassword(h, "hunter3"));
     try std.testing.expect(!verifyPassword(h, ""));
