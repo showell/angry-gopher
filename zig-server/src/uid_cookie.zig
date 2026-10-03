@@ -259,4 +259,22 @@ test "a gopher_auth session's MAC does not pass as a gopher_uid" {
 test "ids the cookie may carry" {
     for ([_][]const u8{ "1", "12", "p1", "p123" }) |ok| try testing.expect(validId(ok));
     for ([_][]const u8{ "", "p", "P3", "p3x", "x", "1.2", "../1", "p-1" }) |bad| try testing.expect(!validId(bad));
+    // Twenty digits at most, with or without the p: the edge, both sides.
+    try testing.expect(validId("9" ** 20));
+    try testing.expect(validId("p" ++ "9" ** 20));
+    try testing.expect(!validId("9" ** 21));
+    try testing.expect(!validId("p" ++ "9" ** 21));
+}
+
+test "a value signed rightly over an id the cookie may not carry names no one" {
+    // The MAC holds: what is refused is the id. Nothing here signs such an
+    // id, but a secret that leaked could, and the id becomes a path.
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    const secret = "a secret of thirty-two bytes or more, for tests";
+    for ([_][]const u8{ "x", "p3x", "P3", "p", "9" ** 21 }) |bad| {
+        const v = try sign(a, secret, bad, 1_790_000_000);
+        try testing.expect(verify(secret, v) == null);
+    }
 }
