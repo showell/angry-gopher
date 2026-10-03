@@ -753,6 +753,12 @@ test "route: an address names 5 players an hour and saves 20 MB of games, then 4
         try testing.expectEqualStrings("303 See Other", status(try Name.post(a, io, "10.0.0.1", "X-Forwarded-For: 1.2.3.4, 192.0.2.9\r\n")));
     try testing.expectEqualStrings("429 Too Many Requests", status(try Name.post(a, io, "10.0.0.1", "X-Forwarded-For: 5.6.7.8, 192.0.2.9\r\n")));
     try testing.expectEqualStrings("303 See Other", status(try Name.post(a, io, "10.0.0.1", "X-Forwarded-For: 192.0.2.9, 192.0.2.10\r\n")));
+    // What the proxy forwards that is not an address is not believed: the
+    // request counts against the proxy itself, so six different pieces of
+    // garbage are one address, and the sixth is refused.
+    for (0..limits.players_per_hour) |k|
+        try testing.expectEqualStrings("303 See Other", status(try Name.post(a, io, "10.0.0.1", try std.fmt.allocPrint(a, "X-Forwarded-For: 192.0.2.11, not-one-{d}\r\n", .{k}))));
+    try testing.expectEqualStrings("429 Too Many Requests", status(try Name.post(a, io, "10.0.0.1", "X-Forwarded-For: 192.0.2.11, not-one-9\r\n")));
 
     // Game writes: 20 MB from one address an hour, across players.
     const ids = [_][]const u8{ try player.allocate(io, a, "One"), try player.allocate(io, a, "Two") };

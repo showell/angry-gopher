@@ -339,6 +339,11 @@ test "fs: a player is measured once, counted up, and refused at each bound" {
     for (0..max_sessions) |_| try testing.expect((try admit(io, a, "p2", null, true, 0)) == null);
     try testing.expectEqual(Refusal.sessions, (try admit(io, a, "p2", null, true, 0)).?);
     try testing.expect((try admit(io, a, "p2", null, false, 10)) == null);
+
+    // An id that is no player's, empty or past id_max, is refused before
+    // anything is measured or counted.
+    try testing.expectEqual(Refusal.bytes, (try admit(io, a, "", null, false, 1)).?);
+    try testing.expectEqual(Refusal.bytes, (try admit(io, a, "p" ++ "1" ** id_max, null, false, 1)).?);
 }
 
 test "fs: the floor refuses every game write below a quarter free, and only then" {
