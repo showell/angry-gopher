@@ -80,7 +80,7 @@ class Clean(unittest.TestCase):
         every = {f for f in os.listdir(src) if f.endswith(".zig")}
         outside = every - L.closure(src)
         self.assertEqual(outside, {
-            "server.zig", "config.zig", "bind.zig", "stress.zig",
+            "server.zig", "config.zig", "bind.zig", "stress.zig", "hash_password.zig",
             "markdown_bench.zig", "markdown_hostile_probe.zig", "markdown_regression_test.zig",
         })
 
