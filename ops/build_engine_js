@@ -6,8 +6,9 @@
 #
 # Bundle the LynRummy TypeScript engine into a single browser-
 # loadable JS file at games/lynrummy/elm/engine.js, served by the
-# /game/engine.js route. The full-game Elm client's Hint button calls
-# the bundle via Elm ports + a thin JS glue (engine_glue.js).
+# /game/engine.js route. The Elm clients reach it through Elm ports + a
+# thin JS glue (engine_glue.js), as the DSL/geometry layer; the Hint button
+# and agent play are answered by the zig solver (solver.wasm), not this.
 #
 # Entry point: games/lynrummy/ts/elm_api/engine_entry.ts. Esbuild
 # resolves the full closure (engine_v2 + hand_play + buckets +

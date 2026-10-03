@@ -12,11 +12,12 @@ whole thing.
 
 ## The apps
 
-The home page (`/`) is a launch pad for seven apps, in the display order
+The home page (`/`) is a launch pad for six apps, in the display order
 below. **That order lives in `pages/home.txt` and nowhere else is
-authoritative** — this table and `zig-server/src/gallery.zig`'s card list
-both mirror it by hand, and both silently went stale the first time a row
-moved. If they disagree, `pages/home.txt` is right.
+authoritative** — this table mirrors it by hand, and went stale the first
+time a row moved; `/gallery` (`zig-server/src/gallery.zig`) derives its
+cards from the file at request time. If they disagree, `pages/home.txt` is
+right.
 
 | App | Path | What it is | Stack | README |
 |---|---|---|---|---|
@@ -40,8 +41,9 @@ bash ops/start        # zig server on :9001
 ```
 
 `ops/start` is the canonical dev loop: it kills anything on :9001,
-rebuilds the Elm/TS bundles (`ops/build_elm`) and the zig binary —
-which embeds those bundles (see `zig-server/build.zig`) — then relaunches
+rebuilds the front-end bundles and WASM cores (`ops/build_elm`,
+`ops/build_delivery`, `ops/build_safari_wasm`, `ops/build_chess_wasm`) and
+the zig binary — which embeds them (see `zig-server/build.zig`) — then relaunches
 and waits for the port to respond. Always use it; don't hand-roll
 `zig build run`.
 
@@ -59,14 +61,14 @@ We pin these versions:
 |---|---|---|---|
 | **Zig** | 0.16.0 | the server (`zig-server/`) + the Lyn Rummy solver's WASM build (`games/lynrummy/zig/` → `solver.wasm`) + the Safari Screensaver's WASM core (`games/driving/wasm/` → `games/driving/safari.wasm`) + the Delivery solver's WASM build (`delivery/zig/` → `delivery/solver.wasm`) + the Chess Toys' WASM cores (`games/chess/*.zig` → `games/chess/*.wasm`) | system install — `zig version` |
 | **Elm** | 0.19.1 | the Lyn Rummy client | `npm install` in `games/lynrummy/elm/` (pinned in its `package.json`) |
-| **TypeScript** | 6.0.3 | the Delivery display client + the Lyn Rummy DSL/geometry layer and test harnesses (both solvers are now zig; each `.ts` solver stays as the port reference) | `npm install` in `delivery/` and `games/lynrummy/ts/` (pinned in each `package.json`) |
+| **TypeScript** | 6.0.3 | the Delivery display client + the Lyn Rummy DSL/geometry layer and test harnesses (both solvers are now zig; each `.ts` solver stays as the port reference) | `npm install` in `delivery/`, `games/lynrummy/ts/` and `games/driving/` (pinned in each `package.json`) |
 | **Node** | 22.18+ | runs the TS directly + hosts the npm-installed `elm`/`tsc` | system install — `node --version` |
 | **X11 dev headers** | — | only `ops/build_safari_download`, the free-standing Linux Safari binary | `apt install libx11-dev libxrender-dev` (see below) |
 
 TypeScript runs two ways, and only one of them is transpiled:
 
-- **Node-side** — the agent solver and its tests run the `.ts` files
-  *directly* via Node's type-stripping, never transpiled (so a Node new
+- **Node-side** — the TS engine's tests and the self-play harness run the
+  `.ts` files *directly* via Node's type-stripping, never transpiled (so a Node new
   enough for that is required; dev uses v24).
 - **Browser-side** — two bundles **are** transpiled (`esbuild` bundles
   each into one IIFE JS file, `@embedFile`d into the zig binary at compile
@@ -108,15 +110,16 @@ was discovered by a build failing rather than by reading this file.
    `ops/build_safari_download`. `games/driving/build.zig:61-62` links exactly
    `X11` and `Xrender`; nothing else in the tree needs a system library. The
    error is `unable to find dynamic system library 'X11'`, and it arrives
-   part-way through `ops/deploy`, after the server has already built — which
-   is the worst moment to learn it.
+   part-way through `ops/deploy`, after the front-end bundles are built and
+   before the server is — the worst moment to learn it.
 5. **The WASM cores before `zig build`.** `zig-server/build.zig` `@embedFile`s
-   five artifacts that a fresh clone does not have — `games/driving/safari.wasm`,
-   `games/chess/{knight,queens}.wasm`, `delivery/solver.wasm`,
-   `games/lynrummy/zig/solver.wasm` — so `ops/build_safari_wasm`,
-   `ops/build_chess_wasm`, `ops/build_lynrummy_wasm` and
-   `ops/build_delivery_wasm` must run first. `ops/deploy` runs the first two;
-   the solver WASMs are built by their own scripts. The failure is
+   three artifacts that a fresh clone does not have (they are gitignored) —
+   `games/driving/safari.wasm` and `games/chess/{knight,queens}.wasm` — so
+   `ops/build_safari_wasm` and `ops/build_chess_wasm` must run first
+   (`ops/start` and `ops/deploy` both do). The two solver WASMs,
+   `delivery/solver.wasm` and `games/lynrummy/zig/solver.wasm`, are
+   committed; rebuild them with `ops/build_delivery_wasm` and
+   `ops/build_lynrummy_wasm` only after editing their zig. The failure is
    `failed to check cache: '…/safari.wasm' file_hash FileNotFound`, which does
    not name the script that produces it.
 
@@ -329,14 +332,14 @@ loads the widgets. Start at `Viewport` and follow the breadcrumbs.
 ```
 ops/start              Start the zig server on :9001 (rebuild + relaunch)
 ops/list               List ops commands
-ops/check              Pre-commit gate (~40s warm): check_common + test_elm + test_ts + test_chat + check_safari + check_chess + check_solver
-ops/check_full         Milestone gate: ops/check + agent self-play
-ops/check_zig          zig server compiles + unit tests (~6s)
+ops/check              Pre-commit gate (~35s warm): check_common + test_elm + test_ts + test_chat + check_safari + check_chess + check_solver
+ops/check_full         Milestone gate: ops/check + the heavy conformance suites + agent self-play + benches
+ops/check_zig          zig server compiles + two lints + every unit test (~20s)
 ops/check_markdown     Markdown dialect regression (~3s)
 ops/check_delivery     Delivery zig-solver conformance (~30s warm): native
                        gold check + the built solver.wasm driven over every
                        gold shift (standalone; run after delivery/ edits)
-ops/test_ts            Fast TS gate (~15s)
+ops/test_ts            Fast TS gate (~4s warm)
 ops/test_elm           Fast Elm gate (~4s)
 ops/test_docs          Fast docs gate (~1s): doc_xref --all (dead links/paths)
 ops/deploy             Build + ship to the prod droplet (see deploy/README.md)
