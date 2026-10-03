@@ -30,6 +30,8 @@ const names = @import("names.zig");
 const player = @import("player.zig");
 const uid_cookie = @import("uid_cookie.zig");
 const storage = @import("storage.zig");
+const game_limits = @import("game_limits.zig");
+const throttle = @import("login_throttle.zig");
 const chat = @import("chat.zig");
 const html = @import("html.zig");
 const store = @import("chat_store.zig");
@@ -77,6 +79,10 @@ fn handleLoginFull(req: *Request, io: Io, alloc: Alloc, bus: *Bus) !void {
     // strings — so resolve identity and dup the query target up front.
     const cur = try users.currentUser(io, alloc, req);
     const target = try http.target(req, alloc);
+    // The login throttle's address must be read from the headers BEFORE the
+    // body read invalidates them (the gotcha this whole function opens with);
+    // clientAddress dups into `alloc`, so it outlives the read.
+    const address = game_limits.clientAddress(alloc, req, bus.peer) catch null;
     var body: []const u8 = "";
     if (req.head.method == .POST) {
         body = (try http.readLimitedBody(req, alloc, 64 * 1024)) orelse return;
@@ -124,10 +130,11 @@ fn handleLoginFull(req: *Request, io: Io, alloc: Alloc, bus: *Bus) !void {
                 // typed a non-member and clicked Log in — offer to register.
                 return renderPwPage(req, alloc, .stranger, name, next, try std.fmt.allocPrint(alloc, "No account named \u{201C}{s}\u{201D}. Create one instead?", .{name}));
             }
-            if (!users.checkUserPassword(io, alloc, member_id.?, password)) {
-                return renderPwPage(req, alloc, mode, name, next, try std.fmt.allocPrint(alloc, "Wrong password for \u{201C}{s}\u{201D}.", .{name}));
+            switch (try gatedCheck(req, io, alloc, address, member_id.?, password)) {
+                .refused => return, // the 429 has been sent
+                .wrong => return renderPwPage(req, alloc, mode, name, next, try std.fmt.allocPrint(alloc, "Wrong password for \u{201C}{s}\u{201D}.", .{name})),
+                .ok => return loginAsMember(req, io, alloc, member_id.?, next),
             }
-            return loginAsMember(req, io, alloc, member_id.?, next);
         },
         .upgrade => {
             // Cookied guest → member, in place (registerMember keeps cur.id).
@@ -145,10 +152,11 @@ fn handleLoginFull(req: *Request, io: Io, alloc: Alloc, bus: *Bus) !void {
             const action = (try chat.formField(alloc, body, "action")) orelse "";
             if (std.mem.eql(u8, action, "login")) {
                 if (member_id == null) return renderPwPage(req, alloc, .stranger, valid, next, try std.fmt.allocPrint(alloc, "No account named \u{201C}{s}\u{201D}. Create one instead?", .{valid}));
-                if (!users.checkUserPassword(io, alloc, member_id.?, password)) {
-                    return renderPwPage(req, alloc, .stranger, valid, next, try std.fmt.allocPrint(alloc, "Wrong password for \u{201C}{s}\u{201D}.", .{valid}));
+                switch (try gatedCheck(req, io, alloc, address, member_id.?, password)) {
+                    .refused => return, // the 429 has been sent
+                    .wrong => return renderPwPage(req, alloc, .stranger, valid, next, try std.fmt.allocPrint(alloc, "Wrong password for \u{201C}{s}\u{201D}.", .{valid})),
+                    .ok => return loginAsMember(req, io, alloc, member_id.?, next),
                 }
-                return loginAsMember(req, io, alloc, member_id.?, next);
             }
             // Create account.
             if (member_id != null) return renderPwPage(req, alloc, .stranger, valid, next, try std.fmt.allocPrint(alloc, "\u{201C}{s}\u{201D} is taken — log in instead.", .{valid}));
@@ -159,6 +167,27 @@ fn handleLoginFull(req: *Request, io: Io, alloc: Alloc, bus: *Bus) !void {
             return loginAsMember(req, io, alloc, id, next);
         },
     }
+}
+
+const GateResult = enum { ok, wrong, refused };
+
+/// **THE THROTTLE, AROUND THE ONE EXPENSIVE CHECK** (QUEUE.md item 97). Before
+/// the bcrypt, `login_throttle.check` may refuse a flood of guesses (by address
+/// and by account) with a 429, which this sends and reports `.refused` for — so
+/// the guess never reaches `checkUserPassword`. A failed check is counted
+/// against both bounds; a success clears the address's count. The account key is
+/// the resolved member id, so two spellings of a name are one account.
+fn gatedCheck(req: *Request, io: Io, alloc: Alloc, address: ?[]const u8, member_id: []const u8, password: []const u8) !GateResult {
+    if (throttle.check(io, address, member_id)) |bound| {
+        try req.respond(bound.text(), .{ .status = .too_many_requests });
+        return .refused;
+    }
+    if (!users.checkUserPassword(io, alloc, member_id, password)) {
+        throttle.recordFailure(io, address, member_id);
+        return .wrong;
+    }
+    throttle.clearAddress(io, address);
+    return .ok;
 }
 
 /// registerMember turns `name` into a password member and returns its id. If the
@@ -520,4 +549,3 @@ const pw_toggle_script =
     \\})();
     \\</script>
 ;
-

@@ -26,6 +26,7 @@ const build_options = @import("build_options");
 const Io = std.Io;
 const http = @import("http.zig");
 const edge = @import("edge.zig");
+const throttle = @import("login_throttle.zig");
 const html = @import("html.zig");
 const mem_meter = @import("mem_meter.zig");
 const store = @import("store.zig");
@@ -173,8 +174,7 @@ fn renderHomeBody(io: Io, alloc: Alloc) ![]const u8 {
     try out.appendSlice(alloc, try html.htmlEscape(alloc, headline));
     // A link to the whole repo, riding the headline line (the per-app `code:` links
     // point at subdirs; this one is the top level).
-    try out.appendSlice(alloc,
-        " · <a class=\"home-gh\" href=\"https://github.com/showell/angry-gopher\"" ++
+    try out.appendSlice(alloc, " · <a class=\"home-gh\" href=\"https://github.com/showell/angry-gopher\"" ++
         " target=\"_blank\" rel=\"noopener\">Code on GitHub ↗</a>");
     try out.appendSlice(alloc, "</p>\n<div class=\"app-list\">\n");
     for (apps.items) |a| {
@@ -239,8 +239,7 @@ fn renderHomeBody(io: Io, alloc: Alloc) ![]const u8 {
         });
     }
     // The resume footer is hard-coded (Steve's call): the PDF link has no DSL row.
-    try out.appendSlice(alloc,
-        "</div>\n<p style=\"margin-top:28px;font-size:13px;color:#888\">" ++
+    try out.appendSlice(alloc, "</div>\n<p style=\"margin-top:28px;font-size:13px;color:#888\">" ++
         "<a href=\"/steve-resume\">Resume for Steve Howell</a> · <a href=\"/steve-resume.pdf\">PDF</a></p>\n" ++
         "</div></body></html>");
     return out.toOwnedSlice(alloc);
@@ -275,8 +274,8 @@ pub fn handleVersion(req: *Request, io: Io, alloc: Alloc) !void {
     const mem = try mem_meter.snapshotJSON(alloc);
     const now_ms: i64 = @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_ms));
     const body = try std.fmt.allocPrint(alloc,
-        \\{{"result":"success","version":"{s}","commit":"{s}","rejects":{s},"mem":{s},"now_ms":{d}}}
-    , .{ version, build_options.commit, rejects, mem, now_ms });
+        \\{{"result":"success","version":"{s}","commit":"{s}","rejects":{s},"mem":{s},"login_throttle":{{"refused":{d}}},"now_ms":{d}}}
+    , .{ version, build_options.commit, rejects, mem, throttle.refused(), now_ms });
     try req.respond(body, .{ .extra_headers = &.{http.json_ct} });
 }
 
@@ -291,8 +290,7 @@ pub fn handleDebugMem(req: *Request, alloc: Alloc) !void {
 /// writeTopBar emits the generic app top bar. Anon visitors get a "Log in" link;
 /// named visitors get "Playing as X [· Admin] · Log out" (name html-escaped).
 fn writeTopBar(b: *std.ArrayList(u8), alloc: Alloc, name: []const u8, is_admin: bool) !void {
-    try b.appendSlice(alloc,
-        "<header class=\"app-top\"><div class=\"app-top-home\">" ++
+    try b.appendSlice(alloc, "<header class=\"app-top\"><div class=\"app-top-home\">" ++
         "<a href=\"/\">Home</a> · <a href=\"/chat\">Chat</a></div>" ++
         "<div class=\"app-top-user\">");
     if (name.len == 0) {
@@ -428,4 +426,3 @@ const head_style =
     \\</head><body>
     \\
 ;
-
