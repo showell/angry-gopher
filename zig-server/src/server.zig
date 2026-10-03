@@ -90,7 +90,10 @@ pub fn main(init: std.process.Init.Minimal) !void {
     } else router.game_limits.free_space = linuxFreeSpace;
 
     const port = portFromEnv(env);
-    const addr = try bind.address(env.get("GOPHER_BIND"), port);
+    const addr = bind.address(env.get("GOPHER_BIND"), port) catch |e| {
+        std.debug.print("zig-server: GOPHER_BIND={s} is not an IP address; not starting\n", .{env.get("GOPHER_BIND") orelse ""});
+        return e;
+    };
     var listener = try addr.listen(io, .{ .reuse_address = true });
     defer listener.deinit(io);
 
