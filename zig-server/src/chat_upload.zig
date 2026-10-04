@@ -36,11 +36,10 @@ const range_window = 8 << 20; // 8 MiB
 /// **THE LINE BETWEEN HELD-WHOLE AND STREAMED** (QUEUE.md item 105). A plain GET
 /// of a file up to this is read whole — the read gopher-metal's page cache keeps
 /// (item 102), so a kept picture comes from memory — and a bigger one is
-/// streamed. Set to the page cache's default largest (4 MiB, `page_cache.zig`'s
-/// `largest` as `probe/gopher.zig` sets it): "small enough to cache" and "small
-/// enough to hold whole" are then the same line, so the two levers compose. If
-/// the cache's cap is raised on the machine, raise this to match.
-const whole_read_max = 4 << 20; // 4 MiB
+/// streamed. **gopher-metal's page cache takes its default `largest` from this
+/// constant** (`probe/gopher.zig`), so "small enough to cache" and "small enough
+/// to hold whole" are one number, in one place.
+pub const whole_read_max = 4 << 20; // 4 MiB
 
 /// How much is read and written at a time when a file is streamed, so the
 /// request heap holds a piece, not the file.

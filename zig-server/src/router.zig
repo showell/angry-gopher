@@ -96,6 +96,10 @@ pub const game_limits = @import("game_limits.zig");
 /// refuses before the route table sees a request (`edge.count(.header_too_large)`
 /// for a head past its read buffer), in the same counters the routes use.
 pub const edge = @import("edge.zig");
+/// The largest upload a plain GET reads whole; a bigger one is streamed. A host
+/// with a page cache keeps files up to this by default, so what it keeps and
+/// what is read whole are one line (gopher-metal's `probe/gopher.zig`).
+pub const whole_read_max = @import("chat_upload.zig").whole_read_max;
 
 /// **BACK TO THE SAME PAGE, ON THIS SITE ONLY.** The re-sign's redirect named
 /// the request target as it came, so `GET //evil.example/x` answered
