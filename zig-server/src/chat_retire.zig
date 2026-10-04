@@ -13,9 +13,11 @@
 //!
 //! **WHAT IT REMOVES:**
 //!   - **Old topics:** a session whose newest message (`date:` lines) is older
-//!     than `days`, or that holds no dated message at all — its `.md`, and the
-//!     `.count`, `.lastauthor`, `.reactions.jsonl` and `.uploads/` beside it. A
-//!     conversation left with no topics stays (the app offers to start one).
+//!     than `days` — its `.md`, and the `.count`, `.lastauthor`,
+//!     `.reactions.jsonl` and `.uploads/` beside it. **A topic that holds no
+//!     datable message is kept** (Steve, 2026-10-04): it may be one someone just
+//!     made. A conversation left with no topics stays (the app offers to start
+//!     one).
 //!   - **Users not kept:** every account whose name is not in `keep`, everywhere
 //!     it lives — `auth/<id>`, `players/<id>`, `users/<id>`, `chat/users/<id>`,
 //!     `lynrummy/<id>`, every DM `a_b` that includes it, and its id's line in
@@ -142,8 +144,12 @@ pub fn plan(io: Io, alloc: Alloc, p: Params, apply: bool) !Plan {
         const key = try convDisplayKey(alloc, dir);
         const sids = chat_store.listSessions(io, alloc, dir) catch continue;
         for (sids) |sid| {
-            const newest = newestUnix(io, alloc, dir, sid);
-            if (newest) |t| if (t >= cutoff) continue; // recent enough to keep
+            // **A TOPIC WE CANNOT DATE IS KEPT** (Steve, 2026-10-04): an empty
+            // or hand-damaged transcript may be a fresh topic someone just
+            // made, so only a topic with a datable message older than the
+            // cutoff is retired.
+            const newest = newestUnix(io, alloc, dir, sid) orelse continue;
+            if (newest >= cutoff) continue; // recent enough to keep
             try retireTopic(&pl, dir, key, sid);
         }
     }
@@ -176,7 +182,7 @@ pub fn plan(io: Io, alloc: Alloc, p: Params, apply: bool) !Plan {
 
 /// The newest `date:` across a session's messages, in unix seconds, or null
 /// when it has no message that carries a parseable date (an empty or
-/// hand-damaged transcript) — which counts as old.
+/// hand-damaged transcript) — which the caller keeps, not retires.
 fn newestUnix(io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8) ?i64 {
     const raw = (chat_store.rawSession(io, alloc, conv_dir, sid) catch return null) orelse return null;
     const msgs = chat_store.decodeChatFile(alloc, raw) catch return null;
@@ -548,7 +554,7 @@ test "fs: the dry run lists exactly what a confirm removes, and a second confirm
     try testing.expectEqual(@as(usize, 0), again.members_removed);
 }
 
-test "an empty or undated topic counts as old; a topic with a recent message is kept" {
+test "an empty or undated topic is kept (it may be fresh); only a datably-old topic is retired" {
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();
     const a = arena.allocator();
@@ -569,9 +575,12 @@ test "an empty or undated topic counts as old; a topic with a recent message is 
     try store.write(io, a, try sessionPath(a, dm, "empty"), "", .{});
     try store.write(io, a, try sessionPath(a, dm, "undated"), "MSG_undated_1\nfrom: X\n\nbody", .{});
     try store.write(io, a, try sessionPath(a, dm, "recent"), try tx(a, "recent", new_at), .{});
+    try store.write(io, a, try sessionPath(a, dm, "stale"), try tx(a, "stale", old_at), .{});
 
     var dry = try plan(io, a, .{ .days = 30, .keep = &.{}, .now = now }, false);
-    // empty + undated retire; recent stays. (No accounts, so no user removals.)
-    try testing.expectEqual(@as(usize, 2), dry.countOf(.topic));
+    // Only the datably-old topic retires; empty, undated and recent all stay.
+    // (No accounts, so no user removals.)
+    try testing.expectEqual(@as(usize, 1), dry.countOf(.topic));
     try testing.expectEqual(@as(usize, 0), dry.members_removed);
+    try testing.expectEqualStrings("1_2/stale", dry.items.items[0].name);
 }
