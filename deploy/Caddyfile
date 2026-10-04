@@ -33,8 +33,10 @@ lynrummy.com {
 		X-Frame-Options "SAMEORIGIN"
 	}
 
-	# The zig server listens on :9001.
-	reverse_proxy localhost:9001
+	# Since 2026-10-04 the site is served by gopher-metal, on its private
+	# card (gopher-metal's CUTOVER.md). The way back is `localhost:9001`, the
+	# zig server on this droplet, which stays stopped while metal serves.
+	reverse_proxy 10.100.0.4:80
 }
 
 # The other sites on this host, one file each, which their own deploys install
