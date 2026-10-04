@@ -28,11 +28,13 @@ What it checks (all thresholds are constants below — no CLI args, by design):
                 13-17 s restart that fell between two polls still surfaces here
                 as a WARN (QUEUE item 107, fire drill 4)
 
-When ~/metal-serves is present (after the 2026-10-04 cutover), metal is the
-live server and THIS host's own Linux server is stopped by design. The `server`
-and `process` checks then read a stopped local server as OK ("as expected"), a
-running one as a WARN, and `overall` follows metal and the host's own health
-(disk, memory) rather than a server that is meant to be down.
+When ~/linux-serves is ABSENT (the production state after the 2026-10-04
+cutover), metal is the live server and THIS host's own Linux server is stopped
+by design. The `server` and `process` checks then read a stopped local server
+as OK ("as expected"), a running one as a WARN, and `overall` follows metal and
+the host's own health (disk, memory) rather than a server that is meant to be
+down. The marker present means Linux serves, and the local server is the
+subject as before.
 
 Metal's address is not in the repo: it is one line in ~/metal-url on the host
 (`http://<metal's private address>`). Without that file metal is not
@@ -98,13 +100,15 @@ EXPECTED_NAMES = {
 # Metal: its URL, one line, e.g. http://10.0.0.5 (kept off the repo: it names a
 # machine). Its clock is compared with this server's.
 METAL_URL_FILE = os.path.expanduser("~/metal-url")
-# **METAL SERVES lynrummy.com.** After the 2026-10-04 cutover this file exists on
-# the prod host, and prod's own Linux server is stopped by design (two hosts
-# writing two copies of the data cannot be merged). With it present, a stopped
-# local server is EXPECTED (not a FAIL), metal is the subject, and `overall`
-# follows metal and the host's own health (QUEUE item 107). ops/deploy reads the
-# same marker to refuse starting the Linux server (item 108).
-METAL_SERVES_FILE = os.path.expanduser("~/metal-serves")
+# **WHICH HOST SERVES lynrummy.com**, told by one marker, ~/linux-serves, whose
+# ABSENCE is the production state: metal serves and prod's own Linux server is
+# stopped by design (two hosts writing two copies of the data cannot be merged).
+# So absent → metal serves: a stopped local server is EXPECTED (not a FAIL),
+# metal is the subject, and `overall` follows metal and the host's own health
+# (QUEUE item 107). Present → Linux serves (CUTOVER.md's way back creates it; the
+# cutover removes it), and the local server is the subject as before. ops/deploy
+# reads the same marker the same way to decide whether to start Linux (item 109).
+LINUX_SERVES_FILE = os.path.expanduser("~/linux-serves")
 CLOCK_WARN_MS = 2000         # warn if metal's clock is this far off this server's
 CLOCK_FAIL_MS = 60000        # fail if this far
 CLOCK_TRIES = 3              # requests per host per cycle; the quickest is used
@@ -261,8 +265,10 @@ def metal_url():
 
 
 def metal_serving():
-    """Whether metal is the live server (the ~/metal-serves marker is present)."""
-    return os.path.exists(METAL_SERVES_FILE)
+    """Whether metal is the live server. The marker ~/linux-serves names the
+    exception (Linux serves); its ABSENCE is the production state, so absent =
+    metal serves (QUEUE item 109)."""
+    return not os.path.exists(LINUX_SERVES_FILE)
 
 
 # The metal `started_ms` seen last cycle, so a change reveals a restart that

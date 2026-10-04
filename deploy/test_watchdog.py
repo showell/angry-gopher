@@ -109,21 +109,30 @@ class MetalChecks(unittest.TestCase):
 
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
-        self.saved = (W.VERSION_URL, W.METAL_URL_FILE, W.METAL_SERVES_FILE, W.STATUS_FILE, W.LOG_FILE)
+        self.saved = (W.VERSION_URL, W.METAL_URL_FILE, W.LINUX_SERVES_FILE, W.STATUS_FILE, W.LOG_FILE)
         W.VERSION_URL = self.prod.url + "/version"
         W.METAL_URL_FILE = os.path.join(self.tmp.name, "metal-url")
-        W.METAL_SERVES_FILE = os.path.join(self.tmp.name, "metal-serves")  # absent by default
+        # The marker names the Linux-serves exception; absent (the default here)
+        # is the production state: metal serves.
+        W.LINUX_SERVES_FILE = os.path.join(self.tmp.name, "linux-serves")
         W.STATUS_FILE = os.path.join(self.tmp.name, "watchdog-status.txt")
         W.LOG_FILE = os.path.join(self.tmp.name, "watchdog.log")
         W._metal_started_seen = None  # no restart-tracking carried in from another test
 
     def tearDown(self):
-        W.VERSION_URL, W.METAL_URL_FILE, W.METAL_SERVES_FILE, W.STATUS_FILE, W.LOG_FILE = self.saved
+        W.VERSION_URL, W.METAL_URL_FILE, W.LINUX_SERVES_FILE, W.STATUS_FILE, W.LOG_FILE = self.saved
         W._metal_started_seen = None
         self.tmp.cleanup()
 
     def serve(self):
-        with open(W.METAL_SERVES_FILE, "w") as f:
+        """Metal serves — the production state: ensure the ~/linux-serves marker
+        is absent."""
+        if os.path.exists(W.LINUX_SERVES_FILE):
+            os.remove(W.LINUX_SERVES_FILE)
+
+    def linux_serves(self):
+        """Linux serves — the marker is present."""
+        with open(W.LINUX_SERVES_FILE, "w") as f:
             f.write("")
 
     def point_at(self, url):
@@ -243,6 +252,23 @@ class MetalChecks(unittest.TestCase):
             self.assertIn("overall: FAIL", status)
         finally:
             metal.stop()
+
+    def test_the_marker_is_inverted_absent_means_metal_serves(self):
+        # Absent (the default): metal serves. Present: Linux serves.
+        self.assertTrue(W.metal_serving())
+        self.linux_serves()
+        self.assertFalse(W.metal_serving())
+        self.serve()
+        self.assertTrue(W.metal_serving())
+
+    def test_linux_serves_marker_makes_the_local_server_the_subject(self):
+        # With the marker present, prod (up, from setUp) is the subject again:
+        # the server check is a plain OK, not the "running but metal serves" WARN.
+        self.linux_serves()
+        self.assertFalse(W.metal_serving())
+        srv = W.check_server(serving=W.metal_serving())
+        self.assertEqual(srv.level, W.OK)
+        self.assertNotIn("metal serves", srv.detail)
 
     def test_serving_metal_clock_is_measured_against_the_host(self):
         metal = Server()
