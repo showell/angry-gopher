@@ -23,6 +23,16 @@ What it checks (all thresholds are constants below — no CLI args, by design):
                 `now_ms`, each read as its quickest of three requests with the
                 round trip halved out (gopher-metal's droplet/drift.py does the
                 same over an hour)
+  - metal-uptime: metal's uptime from /version's `started_ms`, and a RESTART
+                made to show — `started_ms` changes only across a restart, so a
+                13-17 s restart that fell between two polls still surfaces here
+                as a WARN (QUEUE item 107, fire drill 4)
+
+When ~/metal-serves is present (after the 2026-10-04 cutover), metal is the
+live server and THIS host's own Linux server is stopped by design. The `server`
+and `process` checks then read a stopped local server as OK ("as expected"), a
+running one as a WARN, and `overall` follows metal and the host's own health
+(disk, memory) rather than a server that is meant to be down.
 
 Metal's address is not in the repo: it is one line in ~/metal-url on the host
 (`http://<metal's private address>`). Without that file metal is not
@@ -88,6 +98,13 @@ EXPECTED_NAMES = {
 # Metal: its URL, one line, e.g. http://10.0.0.5 (kept off the repo: it names a
 # machine). Its clock is compared with this server's.
 METAL_URL_FILE = os.path.expanduser("~/metal-url")
+# **METAL SERVES lynrummy.com.** After the 2026-10-04 cutover this file exists on
+# the prod host, and prod's own Linux server is stopped by design (two hosts
+# writing two copies of the data cannot be merged). With it present, a stopped
+# local server is EXPECTED (not a FAIL), metal is the subject, and `overall`
+# follows metal and the host's own health (QUEUE item 107). ops/deploy reads the
+# same marker to refuse starting the Linux server (item 108).
+METAL_SERVES_FILE = os.path.expanduser("~/metal-serves")
 CLOCK_WARN_MS = 2000         # warn if metal's clock is this far off this server's
 CLOCK_FAIL_MS = 60000        # fail if this far
 CLOCK_TRIES = 3              # requests per host per cycle; the quickest is used
@@ -187,16 +204,26 @@ def human_duration(secs):
 
 # ── the checks ────────────────────────────────────────────────────────────────
 
-def check_server():
+def check_server(serving=False):
+    """The local Linux server's liveness. When metal serves (`serving`), a
+    stopped local server is EXPECTED — it is OK, said so — and a RUNNING one is
+    a WARN, because two servers writing two copies of the data cannot be merged.
+    When metal does not serve, the local server is the subject, as before."""
     try:
         with urllib.request.urlopen(VERSION_URL, timeout=5) as r:
             code = r.status
             body = r.read(2000).decode("utf-8", "replace").strip()
         data = json.loads(body)
-        if code == 200 and data.get("result") == "success":
+        up = code == 200 and data.get("result") == "success"
+        if serving:
+            return Check("server", WARN, "the local server is RUNNING, but metal serves — "
+                                         "two servers would split the data; stop it")
+        if up:
             return Check("server", OK, f"/version {code} {body}")
         return Check("server", WARN, f"/version {code} unexpected body: {body}")
     except Exception as e:
+        if serving:
+            return Check("server", OK, "stopped, as expected (metal serves)")
         return Check("server", FAIL, f"cannot reach {VERSION_URL}: {e}")
 
 
@@ -233,8 +260,26 @@ def metal_url():
     return url.rstrip("/") or None
 
 
-def check_metal():
-    """The `metal` and `metal-clock` checks."""
+def metal_serving():
+    """Whether metal is the live server (the ~/metal-serves marker is present)."""
+    return os.path.exists(METAL_SERVES_FILE)
+
+
+# The metal `started_ms` seen last cycle, so a change reveals a restart that
+# happened between two polls (QUEUE item 107). In memory across the loop's
+# cycles; a watchdog restart clears it, and the next cycle simply re-learns it.
+_metal_started_seen = None
+
+
+def check_metal(serving=False):
+    """The `metal`, `metal-clock` and `metal-uptime` checks.
+
+    When metal does NOT serve, metal is compared to THIS server (same commit,
+    same clock) — the original item-56 behavior. When metal SERVES (`serving`),
+    this host's own server is stopped by design, so there is nothing local to
+    compare to: metal's commit is reported on its own, and its clock is measured
+    against the watchdog HOST's clock (NTP-kept), which `metal_off` already is —
+    the round trip halved out."""
     url = metal_url()
     if url is None:
         return [Check("metal", OK, f"not watched: no {METAL_URL_FILE}")]
@@ -242,15 +287,30 @@ def check_metal():
         metal, metal_off, metal_rtt = read_version(url + "/version")
     except Exception as e:
         return [Check("metal", FAIL, f"cannot reach {url}/version: {e}"),
-                Check("metal-clock", WARN, "metal did not answer")]
+                Check("metal-clock", WARN, "metal did not answer"),
+                Check("metal-uptime", WARN, "metal did not answer")]
+    theirs = metal.get("commit")
+    detail = f"/version 200, commit {theirs}, {metal_rtt:.1f} ms"
+
+    if serving:
+        # metal IS the server; report it standalone and measure its clock
+        # against this (NTP-kept) host's clock.
+        checks = [Check("metal", OK, detail + " (metal serves)")]
+        if metal_off is None:
+            checks.append(Check("metal-clock", WARN, "a /version without now_ms; the clock cannot be read"))
+        else:
+            level = FAIL if abs(metal_off) >= CLOCK_FAIL_MS else WARN if abs(metal_off) >= CLOCK_WARN_MS else OK
+            checks.append(Check("metal-clock", level, f"metal is {metal_off:+.0f} ms from this host  "
+                                                      f"(warn at {CLOCK_WARN_MS} ms, fail at {CLOCK_FAIL_MS} ms)"))
+        checks.append(check_metal_uptime(metal))
+        return checks
+
     try:
         prod, prod_off, _ = read_version(VERSION_URL)
     except Exception as e:
         prod, prod_off = None, None
         prod_err = e
     ours = prod.get("commit") if prod else None
-    theirs = metal.get("commit")
-    detail = f"/version 200, commit {theirs}, {metal_rtt:.1f} ms"
     if prod is None:
         checks = [Check("metal", OK, detail + " (this server did not answer to compare)")]
     elif theirs != ours:
@@ -266,20 +326,48 @@ def check_metal():
         level = FAIL if abs(d) >= CLOCK_FAIL_MS else WARN if abs(d) >= CLOCK_WARN_MS else OK
         checks.append(Check("metal-clock", level, f"metal is {d:+.0f} ms from this server  "
                                                    f"(warn at {CLOCK_WARN_MS} ms, fail at {CLOCK_FAIL_MS} ms)"))
+    checks.append(check_metal_uptime(metal))
     return checks
 
 
-def check_zig_process(zigs):
+def check_metal_uptime(metal):
+    """metal's uptime, and a restart made to SHOW. metal's /version stamps
+    `started_ms` once per boot, so it changes only across a restart; comparing
+    it to last cycle's catches a 13-17 s restart that fell between two polls and
+    would otherwise be invisible (fire drill 4). On a change it is a WARN — and
+    the WARN lands in watchdog.log, so the restart is on the record even though
+    metal is back up and fine by the time this reads."""
+    global _metal_started_seen
+    started = metal.get("started_ms")
+    now_ms = metal.get("now_ms")
+    if not isinstance(started, (int, float)):
+        return Check("metal-uptime", WARN, "a /version without started_ms; uptime cannot be read")
+    restarted = _metal_started_seen is not None and started != _metal_started_seen
+    _metal_started_seen = started
+    up = f"up {human_duration((now_ms - started) / 1000)}" if isinstance(now_ms, (int, float)) else "up unknown"
+    if restarted:
+        return Check("metal-uptime", WARN, f"metal RESTARTED since last check ({up})")
+    return Check("metal-uptime", OK, up)
+
+
+def check_zig_process(zigs, serving=False):
     if not zigs:
+        if serving:
+            return Check("process", OK, "no local zig-server, as expected (metal serves)")
         return Check("process", FAIL, "zig-server is NOT running")
+    if serving:
+        pids = ", ".join(str(p["pid"]) for p in zigs)
+        return Check("process", WARN, f"zig-server is running (pids {pids}), but metal serves — stop it")
     if len(zigs) == 1:
         return Check("process", OK, f"zig-server up (pid {zigs[0]['pid']})")
     pids = ", ".join(str(p["pid"]) for p in zigs)
     return Check("process", WARN, f"{len(zigs)} zig-server processes (pids {pids}); expected exactly 1")
 
 
-def check_zig_uptime(zigs):
+def check_zig_uptime(zigs, serving=False):
     if not zigs:
+        if serving:
+            return Check("zig-uptime", OK, "no local server (metal serves)")
         return Check("zig-uptime", WARN, "no zig-server process to measure")
     ups = [u for u in (proc_uptime_secs(p["pid"]) for p in zigs) if u is not None]
     if not ups:
@@ -287,8 +375,10 @@ def check_zig_uptime(zigs):
     return Check("zig-uptime", OK, f"up {human_duration(max(ups))}")
 
 
-def check_zig_memory(zigs):
+def check_zig_memory(zigs, serving=False):
     if not zigs:
+        if serving:
+            return Check("zig-memory", OK, "no local server (metal serves)")
         return Check("zig-memory", WARN, "no zig-server process to measure")
     total_mb = sum(mb(p["rss_kb"]) for p in zigs)
     detail = f"RSS {total_mb:.1f} MB  (warn >= {ZIG_RSS_WARN_MB} MB)"
@@ -393,20 +483,25 @@ def append_log(checks, overall, stamp):
 
 def run_once():
     stamp = now_str()
+    serving = metal_serving()
     procs = read_processes()
     zigs = [p for p in procs if p["name"] == "zig-server"]
     checks = [
-        check_server(),
-        check_zig_process(zigs),
-        check_zig_uptime(zigs),
-        check_zig_memory(zigs),
+        check_server(serving),
+        check_zig_process(zigs, serving),
+        check_zig_uptime(zigs, serving),
+        check_zig_memory(zigs, serving),
         check_sys_memory(),
         check_disk(),
         check_unexpected(procs),
-        *check_metal(),
+        *check_metal(serving),
     ]
+    # When metal serves, the local-server checks above read OK-when-stopped, so
+    # `overall` follows metal and the host's own health — exactly what it should
+    # watch now (QUEUE item 107).
     overall = worst(checks)
-    write_status(render(checks, heavy_processes(procs), overall, stamp))
+    mode = "metal serves (this host is the aux box)" if serving else "this host serves"
+    write_status(render(checks, heavy_processes(procs), overall, f"{stamp}  —  mode: {mode}"))
     if overall != OK:
         append_log(checks, overall, stamp)
     print(f"{stamp}  overall={overall}")
