@@ -27,8 +27,8 @@ it, on its own DigitalOcean droplet. The two repos stay separate:
   not through `ops/deploy`. The old Linux droplet still runs Caddy (TLS,
   body caps), which proxies to metal over the private network
   (`deploy/Caddyfile`); its own zig server is **stopped and must stay
-  stopped**, because `ops/deploy` restarts it (being fixed: gopher-metal
-  QUEUE item 108). Starting it again is the way back, in gopher-metal's
+  stopped**. `ops/deploy` fails closed: it restarts that server only when
+  `~/linux-serves` is on prod (`deploy/README.md`). Starting it again is the way back, in gopher-metal's
   `CUTOVER.md`.
 
 

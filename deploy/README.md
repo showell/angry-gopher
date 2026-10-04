@@ -2,9 +2,9 @@
 
 > **Since 2026-10-04 lynrummy.com is served by gopher-metal** (see the
 > top-level README, "Where it runs"). This droplet now runs Caddy, which
-> proxies to metal, and the watchdog; its zig server is stopped. **Do not run
-> `ops/deploy`**: it restarts that server (gopher-metal QUEUE item 108). What
-> follows is how the Linux host works, which is also the way back.
+> proxies to metal, and the watchdog; its zig server is stopped. `ops/deploy`
+> fails closed (below): while metal serves it refreshes the watchdog and
+> nothing else. The Linux-host sections are also the way back.
 
 The production host is a DigitalOcean droplet (NYC3, Ubuntu 24.04,
 x86_64). Caddy fronts the **zig server** (see `SERVER.md`) for TLS and a
