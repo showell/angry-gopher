@@ -23,7 +23,30 @@ carries the *full* set of runtime safety checks (a superset of ReleaseSafe's).
 It's also the mode `ops/start` runs locally, so prod ships what we dogfood. Flip
 `ops/deploy` back to `-Doptimize=ReleaseSafe` only if a CPU-bound path lands.
 
-## Repeat deploys
+## A deploy, after the 2026-10-04 cutover
+
+**metal serves lynrummy.com now, and prod's Linux `gopher-server` is stopped by
+design** — two hosts writing two copies of the data cannot be merged
+(`CUTOVER.md` in gopher-metal). So a deploy means two different things:
+
+- **The program** ships as a new **gopher-metal image** (built and deployed in
+  the gopher-metal repo). `ops/deploy` does NOT touch the program on prod.
+- **The content trees** (`pages/`, `gallery/`) **and the watchdog** still ship
+  to the prod host, which is now the aux box the watchdog runs on.
+
+`ops/deploy` reads the marker file `~/metal-serves` on the prod host (the
+cutover creates it): while it is there, the script ships content + the watchdog
+and **refuses to build or start the Linux server**. `ops/test_deploy` pins that
+refusal.
+
+```
+ops/deploy        # metal serving: ships content + watchdog, never starts Linux
+```
+
+## Repeat deploys (pre-cutover / a fallback to Linux only)
+
+With `~/metal-serves` absent — a box before the cutover, or a deliberate
+fallback to the Linux server — `ops/deploy` is the full deploy as before:
 
 ```
 ops/deploy

@@ -1,0 +1,57 @@
+#!/bin/bash
+# ops/deploy's metal-serves guard (QUEUE.md item 108): when metal serves,
+# the deploy must ship the content trees and the watchdog but NEVER start the
+# Linux server. This drives the script with ssh/rsync/scp stubbed (so no host
+# is touched) and METAL_SERVES=1, then checks what it did and did not do.
+set -euo pipefail
+
+source "$(dirname "$0")/_paths.sh"
+source "$GOPHER_DIR/deploy/deploy.conf"
+
+stub="$(mktemp -d)"
+log="$stub/calls.log"
+trap 'rm -rf "$stub"' EXIT
+
+# Stub the three commands that reach the host: each logs its argv and succeeds.
+for cmd in ssh rsync scp; do
+    cat > "$stub/$cmd" <<EOF
+#!/bin/bash
+echo "$cmd \$*" >> "$log"
+exit 0
+EOF
+    chmod +x "$stub/$cmd"
+done
+: > "$log"
+
+out="$(PATH="$stub:$PATH" METAL_SERVES=1 DEPLOY_SKIP_PUSH=1 "$GOPHER_DIR/ops/deploy" 2>&1)"
+code=$?
+
+failed=0
+check() { local what="$1"; shift; if "$@"; then echo "ok   $what"; else echo "FAIL $what"; failed=1; fi; }
+
+check "the deploy succeeds in metal-serving mode" test "$code" = 0
+# The Linux server is never restarted — the whole point.
+check "the Linux server ($DEPLOY_SERVICE) is NOT restarted" \
+    bash -c "! grep -q 'systemctl restart $DEPLOY_SERVICE' '$log'"
+# No binary ships, and the fresh-binary health probe never runs.
+check "the server binary is NOT shipped" \
+    bash -c "! grep -q 'zig-server' '$log'"
+# Content trees still ship.
+check "the pages/ tree ships" bash -c "grep -q 'rsync .*pages/' '$log'"
+check "the gallery/ tree ships" bash -c "grep -q 'rsync .*gallery/' '$log'"
+# The watchdog still ships (and only the watchdog service is bounced).
+check "the watchdog.py ships" bash -c "grep -q 'scp .*watchdog.py' '$log'"
+check "the watchdog service is bounced" bash -c "grep -q 'systemctl restart watchdog' '$log'"
+# It says what a deploy is now.
+check "it says the Linux server stayed stopped" \
+    bash -c "printf '%s' \"\$1\" | grep -qi 'NOT started'" _ "$out"
+check "it points at the gopher-metal image" \
+    bash -c "printf '%s' \"\$1\" | grep -qi 'gopher-metal image'" _ "$out"
+
+if [ "$failed" = 0 ]; then
+    echo "PASS ops/test_deploy"
+else
+    echo "---- deploy output ----"; printf '%s\n' "$out"
+    echo "---- host calls ----"; cat "$log"
+    exit 1
+fi
