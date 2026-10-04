@@ -383,7 +383,7 @@ test "route: ADMIN_ONLY — a logged-in non-admin member is refused the secret-b
     const now: i64 = @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
     const member = try std.fmt.allocPrint(a, "gopher_auth={s}", .{try users.signSession(a, UidSite.secret, "2", now)});
 
-    for ([_][]const u8{ "/admin", "/admin/backup", "/admin/secret", "/admin/apikey", "/admin/host", "/admin/lynrummy" }) |path| {
+    for ([_][]const u8{ "/admin", "/admin/backup", "/admin/secret", "/admin/retire", "/admin/apikey", "/admin/host", "/admin/lynrummy" }) |path| {
         const resp = try UidSite.ask(a, io, path, member);
         try testing.expect(std.mem.indexOf(u8, resp, "200 OK") == null); // never served to a member
         try testing.expect(std.mem.indexOf(u8, resp, "$2") == null); // no bcrypt hash in the body
