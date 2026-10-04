@@ -7,6 +7,7 @@
 //!   GET  /admin/host     the running server: admin_host.zig
 //!   *    /admin/backup   an archive of data/ and auth/: admin_backup.zig
 //!   *    /admin/secret   change the session secret: admin_secret.zig
+//!   *    /admin/retire   retire old topics and users: admin_retire.zig
 //!
 //! The GAME roster — players, sessions, disk, delete — is a separate screen at
 //! /admin/lynrummy (admin_lynrummy.zig), and the two cross-link. They were one
@@ -26,6 +27,7 @@ const ui = @import("admin_ui.zig");
 const admin_host = @import("admin_host.zig");
 const admin_backup = @import("admin_backup.zig");
 const admin_secret = @import("admin_secret.zig");
+const admin_retire = @import("admin_retire.zig");
 
 const Request = std.http.Server.Request;
 
@@ -38,6 +40,7 @@ pub fn handle(req: *Request, io: Io, alloc: Alloc, client: ?[]const u8, sub: []c
     if (std.mem.eql(u8, sub, "/host")) return admin_host.render(req, io, alloc);
     if (std.mem.eql(u8, sub, "/backup")) return admin_backup.render(req, io, alloc, client);
     if (std.mem.eql(u8, sub, "/secret")) return admin_secret.render(req, io, alloc, client);
+    if (std.mem.eql(u8, sub, "/retire")) return admin_retire.render(req, io, alloc, client);
     if (sub.len != 0 and !std.mem.eql(u8, sub, "/")) return http.notFound(req);
     return renderRoster(req, io, alloc);
 }

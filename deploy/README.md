@@ -29,14 +29,42 @@ carries the *full* set of runtime safety checks (a superset of ReleaseSafe's).
 It's also the mode `ops/start` runs locally, so prod ships what we dogfood. Flip
 `ops/deploy` back to `-Doptimize=ReleaseSafe` only if a CPU-bound path lands.
 
-## Repeat deploys
+## A deploy, after the 2026-10-04 cutover
+
+**metal serves lynrummy.com now, and prod's Linux `gopher-server` is stopped by
+design** — two hosts writing two copies of the data cannot be merged
+(`CUTOVER.md` in gopher-metal). So:
+
+- **The program AND the content** (`pages/`, `gallery/`) ship as a new
+  **gopher-metal image**, built and deployed in the gopher-metal repo. metal
+  serves the content from its own boot image, so `ops/deploy` does NOT ship it
+  to prod — shipping it there would ship content nothing serves.
+- **Only the watchdog** still ships to the prod host, which is now the aux box
+  the watchdog runs on.
+
+**`ops/deploy` fails closed** (QUEUE item 109): it builds and restarts the Linux
+server ONLY when prod says, in so many words, that Linux serves — the marker
+`~/linux-serves` present, `ssh` exit 0. Its **absence is the production state**
+(metal serves): the script refreshes the watchdog and stops. An `ssh` failure,
+or any answer it cannot read cleanly, **refuses** and names what it saw — it
+never guesses "Linux serves". `CUTOVER.md`'s way back creates the marker; the
+cutover removes it; the watchdog reads the same file the same way.
+`ops/test_deploy` pins every path, `ssh` failure included.
+
+```
+ops/deploy        # metal serving (marker absent): refreshes the watchdog only
+```
+
+## When Linux serves (pre-cutover, or a fallback via CUTOVER.md's way back)
+
+With `~/linux-serves` present on the prod host, `ops/deploy` is the full deploy:
 
 ```
 ops/deploy
 ```
 
-Builds locally, rsyncs to the droplet (target in `deploy/deploy.conf`),
-restarts the `gopher-server` systemd service.
+Builds locally, rsyncs the binary and the content trees to the droplet (target
+in `deploy/deploy.conf`), restarts the `gopher-server` systemd service.
 
 ## One-time host setup
 

@@ -263,6 +263,17 @@ fn pushApp(alloc: Alloc, apps: *std.ArrayList(App), title: []const u8, href: []c
 /// `now_ms` is this host's wall clock, in milliseconds since 1970:
 /// gopher-metal's droplet/drift.py compares two hosts' clocks with it, halving
 /// the round trip out, which a Date header's whole seconds could not resolve.
+/// started_ms is the server's start, in ms since 1970. It is stamped on the
+/// FIRST /version after boot (close enough: the watchdog polls within a cycle
+/// of boot) and never again, so it is constant for the life of a process — and
+/// **resets to 0 on a restart**, so the next poll stamps the new start and the
+/// watchdog sees the value change. That is how a metal restart SHOWS (QUEUE item
+/// 107): a 13-17 s restart between two 60 s polls is otherwise invisible, since
+/// polling cannot catch a window it never lands in. A set from two threads at
+/// once (Linux's pool) races to the same value, harmlessly; metal is
+/// single-threaded.
+var started_ms: i64 = 0;
+
 pub fn handleVersion(req: *Request, io: Io, alloc: Alloc) !void {
     // `rejects` is the edge-policy observable: a counter per reject kind (see
     // edge.zig). The watchdog polls /version, so a climbing counter surfaces in
@@ -273,9 +284,10 @@ pub fn handleVersion(req: *Request, io: Io, alloc: Alloc) !void {
     // plumbing; /debug/mem is the same numbers on a focused endpoint for the harness.
     const mem = try mem_meter.snapshotJSON(alloc);
     const now_ms: i64 = @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_ms));
+    if (started_ms == 0) started_ms = now_ms;
     const body = try std.fmt.allocPrint(alloc,
-        \\{{"result":"success","version":"{s}","commit":"{s}","rejects":{s},"mem":{s},"login_throttle":{{"refused":{d}}},"now_ms":{d}}}
-    , .{ version, build_options.commit, rejects, mem, throttle.refused(), now_ms });
+        \\{{"result":"success","version":"{s}","commit":"{s}","rejects":{s},"mem":{s},"login_throttle":{{"refused":{d}}},"now_ms":{d},"started_ms":{d}}}
+    , .{ version, build_options.commit, rejects, mem, throttle.refused(), now_ms, started_ms });
     try req.respond(body, .{ .extra_headers = &.{http.json_ct} });
 }
 

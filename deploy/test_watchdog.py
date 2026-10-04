@@ -67,13 +67,19 @@ class Server:
 
 
 class Skewed:
-    """A /version whose clock is `offset_ms` off, with a commit of its own."""
+    """A /version whose clock is `offset_ms` off, with a commit of its own and a
+    settable `started_ms` (default ~100 s of uptime). Change `started_ms` to
+    stand in for a restart between polls."""
 
     def __init__(self, offset_ms, commit="another-commit"):
+        outer = self
+        outer.started_ms = int(time.time() * 1000) - 100_000
+
         class H(http.server.BaseHTTPRequestHandler):
             def do_GET(self):
                 body = json.dumps({"result": "success", "commit": commit,
-                                   "now_ms": int(time.time() * 1000 + offset_ms)}).encode()
+                                   "now_ms": int(time.time() * 1000 + offset_ms),
+                                   "started_ms": outer.started_ms}).encode()
                 self.send_response(200)
                 self.send_header("content-length", str(len(body)))
                 self.end_headers()
@@ -103,15 +109,31 @@ class MetalChecks(unittest.TestCase):
 
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
-        self.saved = (W.VERSION_URL, W.METAL_URL_FILE, W.STATUS_FILE, W.LOG_FILE)
+        self.saved = (W.VERSION_URL, W.METAL_URL_FILE, W.LINUX_SERVES_FILE, W.STATUS_FILE, W.LOG_FILE)
         W.VERSION_URL = self.prod.url + "/version"
         W.METAL_URL_FILE = os.path.join(self.tmp.name, "metal-url")
+        # The marker names the Linux-serves exception; absent (the default here)
+        # is the production state: metal serves.
+        W.LINUX_SERVES_FILE = os.path.join(self.tmp.name, "linux-serves")
         W.STATUS_FILE = os.path.join(self.tmp.name, "watchdog-status.txt")
         W.LOG_FILE = os.path.join(self.tmp.name, "watchdog.log")
+        W._metal_started_seen = None  # no restart-tracking carried in from another test
 
     def tearDown(self):
-        W.VERSION_URL, W.METAL_URL_FILE, W.STATUS_FILE, W.LOG_FILE = self.saved
+        W.VERSION_URL, W.METAL_URL_FILE, W.LINUX_SERVES_FILE, W.STATUS_FILE, W.LOG_FILE = self.saved
+        W._metal_started_seen = None
         self.tmp.cleanup()
+
+    def serve(self):
+        """Metal serves — the production state: ensure the ~/linux-serves marker
+        is absent."""
+        if os.path.exists(W.LINUX_SERVES_FILE):
+            os.remove(W.LINUX_SERVES_FILE)
+
+    def linux_serves(self):
+        """Linux serves — the marker is present."""
+        with open(W.LINUX_SERVES_FILE, "w") as f:
+            f.write("")
 
     def point_at(self, url):
         with open(W.METAL_URL_FILE, "w") as f:
@@ -132,7 +154,7 @@ class MetalChecks(unittest.TestCase):
             checks = W.check_metal()
         finally:
             metal.stop()
-        self.assertEqual(self.levels(checks), {"metal": W.OK, "metal-clock": W.OK}, [c.detail for c in checks])
+        self.assertEqual(self.levels(checks), {"metal": W.OK, "metal-clock": W.OK, "metal-uptime": W.OK}, [c.detail for c in checks])
         self.assertIn("the same as this server", checks[0].detail)
 
     def test_metal_stopped_is_a_fail_that_shows_in_the_status_and_the_log(self):
@@ -158,7 +180,7 @@ class MetalChecks(unittest.TestCase):
             checks = W.check_metal()
         finally:
             metal.stop()
-        self.assertEqual(self.levels(checks), {"metal": W.WARN, "metal-clock": W.WARN}, [c.detail for c in checks])
+        self.assertEqual(self.levels(checks), {"metal": W.WARN, "metal-clock": W.WARN, "metal-uptime": W.OK}, [c.detail for c in checks])
         self.assertIn("this server runs", checks[0].detail)
         # About +5000: the round trips are halved out, so not far from it.
         d = float(checks[1].detail.split()[2])
@@ -172,6 +194,94 @@ class MetalChecks(unittest.TestCase):
         finally:
             metal.stop()
         self.assertEqual(self.levels(checks)["metal-clock"], W.FAIL)
+
+    # ── restarts must show (QUEUE item 107, fire drill 4) ────────────────────
+
+    def test_a_metal_restart_shows_as_a_warn(self):
+        metal = Skewed(0)
+        try:
+            self.point_at(metal.url)
+            first = {c.name: c for c in W.check_metal()}
+            self.assertEqual(first["metal-uptime"].level, W.OK, first["metal-uptime"].detail)
+            # A restart between polls: /version stamps a new started_ms.
+            metal.started_ms = int(time.time() * 1000)
+            second = {c.name: c for c in W.check_metal()}
+            self.assertEqual(second["metal-uptime"].level, W.WARN)
+            self.assertIn("RESTARTED", second["metal-uptime"].detail)
+            # It settles: no further change reads OK again.
+            third = {c.name: c for c in W.check_metal()}
+            self.assertEqual(third["metal-uptime"].level, W.OK)
+        finally:
+            metal.stop()
+
+    # ── metal serves: this host's own server is stopped by design ────────────
+
+    def test_serving_a_stopped_local_server_is_expected_ok(self):
+        W.VERSION_URL = f"http://127.0.0.1:{free_port()}/version"  # nothing listening
+        ok = W.check_server(serving=True)
+        self.assertEqual(ok.level, W.OK)
+        self.assertIn("stopped, as expected", ok.detail)
+        # Without the serving flag, the same down server is a FAIL.
+        self.assertEqual(W.check_server(serving=False).level, W.FAIL)
+
+    def test_serving_a_running_local_server_warns(self):
+        # VERSION_URL is prod (up) from setUp; a running local server while metal
+        # serves is the split-brain hazard.
+        warn = W.check_server(serving=True)
+        self.assertEqual(warn.level, W.WARN)
+        self.assertIn("split the data", warn.detail)
+
+    def test_serving_overall_follows_metal_not_the_stopped_local_server(self):
+        W.VERSION_URL = f"http://127.0.0.1:{free_port()}/version"  # local server down
+        self.serve()
+        metal = Server()
+        self.point_at(metal.url)
+        try:
+            W.run_once()
+            with open(W.STATUS_FILE) as f:
+                status = f.read()
+            # The stopped local server does not drag overall; metal is up.
+            self.assertIn("stopped, as expected", status)
+            self.assertNotIn("overall: FAIL", status)
+            # Metal down → overall FAIL, because metal is the subject now.
+            metal.stop()
+            W.run_once()
+            with open(W.STATUS_FILE) as f:
+                status = f.read()
+            self.assertIn("[FAIL] metal ", status)
+            self.assertIn("overall: FAIL", status)
+        finally:
+            metal.stop()
+
+    def test_the_marker_is_inverted_absent_means_metal_serves(self):
+        # Absent (the default): metal serves. Present: Linux serves.
+        self.assertTrue(W.metal_serving())
+        self.linux_serves()
+        self.assertFalse(W.metal_serving())
+        self.serve()
+        self.assertTrue(W.metal_serving())
+
+    def test_linux_serves_marker_makes_the_local_server_the_subject(self):
+        # With the marker present, prod (up, from setUp) is the subject again:
+        # the server check is a plain OK, not the "running but metal serves" WARN.
+        self.linux_serves()
+        self.assertFalse(W.metal_serving())
+        srv = W.check_server(serving=W.metal_serving())
+        self.assertEqual(srv.level, W.OK)
+        self.assertNotIn("metal serves", srv.detail)
+
+    def test_serving_metal_clock_is_measured_against_the_host(self):
+        metal = Server()
+        self.serve()
+        try:
+            self.point_at(metal.url)
+            checks = {c.name: c for c in W.check_metal(serving=True)}
+        finally:
+            metal.stop()
+        self.assertEqual(checks["metal"].level, W.OK)
+        self.assertIn("metal serves", checks["metal"].detail)
+        self.assertEqual(checks["metal-clock"].level, W.OK, checks["metal-clock"].detail)
+        self.assertIn("from this host", checks["metal-clock"].detail)
 
 
 if __name__ == "__main__":

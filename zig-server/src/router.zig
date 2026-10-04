@@ -96,6 +96,10 @@ pub const game_limits = @import("game_limits.zig");
 /// refuses before the route table sees a request (`edge.count(.header_too_large)`
 /// for a head past its read buffer), in the same counters the routes use.
 pub const edge = @import("edge.zig");
+/// The largest upload a plain GET reads whole; a bigger one is streamed. A host
+/// with a page cache keeps files up to this by default, so what it keeps and
+/// what is read whole are one line (gopher-metal's `probe/gopher.zig`).
+pub const whole_read_max = @import("chat_upload.zig").whole_read_max;
 
 /// **BACK TO THE SAME PAGE, ON THIS SITE ONLY.** The re-sign's redirect named
 /// the request target as it came, so `GET //evil.example/x` answered
@@ -383,7 +387,7 @@ test "route: ADMIN_ONLY — a logged-in non-admin member is refused the secret-b
     const now: i64 = @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
     const member = try std.fmt.allocPrint(a, "gopher_auth={s}", .{try users.signSession(a, UidSite.secret, "2", now)});
 
-    for ([_][]const u8{ "/admin", "/admin/backup", "/admin/secret", "/admin/apikey", "/admin/host", "/admin/lynrummy" }) |path| {
+    for ([_][]const u8{ "/admin", "/admin/backup", "/admin/secret", "/admin/retire", "/admin/apikey", "/admin/host", "/admin/lynrummy" }) |path| {
         const resp = try UidSite.ask(a, io, path, member);
         try testing.expect(std.mem.indexOf(u8, resp, "200 OK") == null); // never served to a member
         try testing.expect(std.mem.indexOf(u8, resp, "$2") == null); // no bcrypt hash in the body

@@ -1,0 +1,89 @@
+#!/bin/bash
+# ops/deploy's fail-closed guard (QUEUE.md item 109): the Linux server is built
+# and restarted ONLY when prod says Linux serves (~/linux-serves present, ssh
+# exit 0). Absent (exit 1) is the production state — metal serves — so only the
+# watchdog is refreshed and no content ships. An ssh failure (255) or any other
+# answer REFUSES, naming it, and never guesses "Linux serves".
+#
+# ssh/rsync/scp are stubbed, so no host is touched. The ssh stub keys on the
+# guard command and returns $GUARD_CODE for it (0/1/255/other), 0 for the
+# watchdog's own ssh; DEPLOY_GUARD_ONLY stops the "Linux serves" case before the
+# real build.
+set -euo pipefail
+
+source "$(dirname "$0")/_paths.sh"
+source "$GOPHER_DIR/deploy/deploy.conf"
+
+stub="$(mktemp -d)"
+log="$stub/calls.log"
+trap 'rm -rf "$stub"' EXIT
+
+cat > "$stub/ssh" <<EOF
+#!/bin/bash
+echo "ssh \$*" >> "$log"
+case "\$*" in
+    *"test -f ~/linux-serves"*) exit \${GUARD_CODE:-0} ;;
+    *) exit 0 ;;
+esac
+EOF
+for cmd in rsync scp; do
+    cat > "$stub/$cmd" <<EOF
+#!/bin/bash
+echo "$cmd \$*" >> "$log"
+exit 0
+EOF
+done
+chmod +x "$stub"/ssh "$stub"/rsync "$stub"/scp
+
+failed=0
+check() { local what="$1"; shift; if "$@"; then echo "ok   $what"; else echo "FAIL $what"; failed=1; fi; }
+
+# Run ops/deploy with the stubs on PATH and the guard code `$1`; sets `out`,
+# `code`, and resets the call log. `$2`..: extra env (e.g. DEPLOY_GUARD_ONLY=1).
+run() {
+    local guard="$1"; shift
+    : > "$log"
+    set +e
+    out="$(PATH="$stub:$PATH" DEPLOY_SKIP_PUSH=1 GUARD_CODE="$guard" "$@" "$GOPHER_DIR/ops/deploy" 2>&1)"
+    code=$?
+    set -e
+}
+
+has() { grep -q "$1" "$log"; }
+nohas() { ! grep -q "$1" "$log"; }
+says() { printf '%s' "$out" | grep -qi "$1"; }
+
+# ── Linux serves (~/linux-serves present, ssh exit 0): the full deploy runs ──
+run 0 env DEPLOY_GUARD_ONLY=1
+check "linux-serves: the guard admits the Linux deploy" test "$code" = 0
+check "linux-serves: it says Linux serves" bash -c 'printf "%s" "$0" | grep -qi "Linux serves"' "$out"
+check "linux-serves: it stops before the build under DEPLOY_GUARD_ONLY" says "stopping before the build"
+
+# ── marker absent (ssh exit 1): metal serves — watchdog only, nothing else ──
+run 1 env
+check "absent: the deploy succeeds (metal-serving mode)" test "$code" = 0
+check "absent: it says metal serves" says "metal serves"
+check "absent: the watchdog is refreshed" has "scp .*watchdog.py"
+check "absent: only the WATCHDOG service is bounced" has "systemctl restart watchdog"
+check "absent: the Linux server ($DEPLOY_SERVICE) is NOT restarted" nohas "systemctl restart $DEPLOY_SERVICE"
+check "absent: no content ships (metal serves it from its image)" nohas "rsync "
+check "absent: no binary ships" nohas "zig-server"
+
+# ── ssh failure (exit 255): refuse, name it, do nothing ──
+run 255 env
+check "ssh-fail: the deploy refuses (non-zero exit)" test "$code" != 0
+check "ssh-fail: it names the unreachable host / 255" says "cannot reach"
+check "ssh-fail: nothing is shipped (no watchdog either)" nohas "scp "
+check "ssh-fail: the Linux server is NOT restarted" nohas "systemctl restart $DEPLOY_SERVICE"
+
+# ── any other code (e.g. 2): refuse, name the code ──
+run 2 env
+check "other-code: the deploy refuses (non-zero exit)" test "$code" != 0
+check "other-code: it names the code it saw" says "returned 2"
+check "other-code: the Linux server is NOT restarted" nohas "systemctl restart $DEPLOY_SERVICE"
+
+if [ "$failed" = 0 ]; then
+    echo "PASS ops/test_deploy"
+else
+    exit 1
+fi
