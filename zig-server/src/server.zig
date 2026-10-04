@@ -61,6 +61,11 @@ pub fn main(init: std.process.Init.Minimal) !void {
     defer env.deinit();
     try config.load(io, alloc, env);
 
+    // **THE SESSION SECRET MOVES INTO auth/, ONCE** (QUEUE item 106): a tree
+    // written before the move keeps it in data/chat/; carry it over before the
+    // first request so no session is lost. No-op once it is in auth/.
+    router.roots.migrateSecret(io, alloc);
+
     // **EVERY SESSION GETS ITS LAST-MESSAGE RECORD BEFORE THE FIRST REQUEST.**
     // /chat/recent reads that record instead of every transcript in full; a
     // conversation written before the record existed would otherwise cost the

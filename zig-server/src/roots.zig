@@ -6,9 +6,14 @@
 //!   {data_dir}/lynrummy   storage.data_root          game + puzzle sessions
 //!   {data_dir}/users      users.users_root           last-seen, upload quota
 //!   {data_dir}/players    player.player_root         the LOCAL identity
-//!   {data_dir}/chat       users.session_secret_dir   _session_secret
 //!   {data_dir}/chat       chat_store.chat_root       conversations
 //!   {auth_dir}            users.auth_root            the account store
+//!   {auth_dir}            users.session_secret_dir   _session_secret
+//!
+//! **auth/ HOLDS EVERY SECRET, data/ NONE** (QUEUE item 106): the session
+//! secret used to sit in data/chat/, mixed with chat data; now it is beside the
+//! password hashes and API keys in auth/, so a leak surface is one tree, not
+//! two. `migrateSecret` moves an existing secret there once at startup.
 //!
 //! **IT IS SEPARATE FROM config.zig BECAUSE IT CAN CROSS.** config.zig reads an
 //! environment variable and opens the file it names — which is how a Linux
@@ -23,6 +28,7 @@
 //! resolve against wherever the host is standing.
 
 const std = @import("std");
+const Io = std.Io;
 const storage = @import("storage.zig");
 const users = @import("users.zig");
 const player = @import("player.zig");
@@ -40,10 +46,44 @@ pub fn point(alloc: std.mem.Allocator, r: Roots) !void {
     storage.data_root = try std.fs.path.join(alloc, &.{ r.data_dir, "lynrummy" });
     users.users_root = try std.fs.path.join(alloc, &.{ r.data_dir, "users" });
     player.player_root = try std.fs.path.join(alloc, &.{ r.data_dir, "players" });
-    users.session_secret_dir = try std.fs.path.join(alloc, &.{ r.data_dir, "chat" });
     chat_store.chat_root = try std.fs.path.join(alloc, &.{ r.data_dir, "chat" });
     users.auth_root = try alloc.dupe(u8, r.auth_dir);
+    // The session secret lives in auth/ now (QUEUE item 106), beside the hashes.
+    users.session_secret_dir = users.auth_root;
     store.setBases(try alloc.dupe(u8, r.data_dir), users.auth_root);
+}
+
+/// **MOVE THE SESSION SECRET INTO auth/, ONCE** (QUEUE item 106). `point` points
+/// the reads at auth/; this carries an existing secret there from its old home,
+/// data/chat/, so a volume or tree written before the move still serves and no
+/// session is lost. Both hosts call it at startup after `point`, before the
+/// first request — like `store.backfillAll`. Best-effort and idempotent.
+///
+/// **NEVER TWO COPIES.** Each of the three secret files is written to auth/ and
+/// read back before the old one in data/chat/ is removed; a stop in between
+/// leaves both, and the next startup finishes the job (auth/ already has it, so
+/// the old is just removed). The end state is always the secret in auth/ alone.
+pub fn migrateSecret(io: Io, alloc: std.mem.Allocator) void {
+    const new_dir = users.session_secret_dir; // auth/, after point()
+    const old_dir = chat_store.chat_root; // data/chat/, the old home
+    if (std.mem.eql(u8, new_dir, old_dir)) return; // already the same place
+    for ([_][]const u8{
+        "_session_secret",
+        "_session_secret.previous",
+        "_session_secret.previous-until",
+    }) |name| {
+        const old_path = std.fs.path.join(alloc, &.{ old_dir, name }) catch continue;
+        if (!store.has(io, alloc, old_path)) continue;
+        const new_path = std.fs.path.join(alloc, &.{ new_dir, name }) catch continue;
+        if (!store.has(io, alloc, new_path)) {
+            const bytes = store.read(io, alloc, old_path, .unlimited) catch continue;
+            store.write(io, alloc, new_path, bytes, .{ .private = true }) catch continue;
+            // Confirm the new copy reads back whole before dropping the old.
+            const back = store.read(io, alloc, new_path, .unlimited) catch continue;
+            if (!std.mem.eql(u8, back, bytes)) continue;
+        }
+        store.remove(io, alloc, old_path) catch {};
+    }
 }
 
 // ══ TESTS ════════════════════════════════════════════════════════════════════
@@ -97,9 +137,57 @@ test "point sets all six roots from two directories" {
     try testing.expectEqualStrings("/srv/gopher/lynrummy", storage.data_root);
     try testing.expectEqualStrings("/srv/gopher/users", users.users_root);
     try testing.expectEqualStrings("/srv/gopher/players", player.player_root);
-    try testing.expectEqualStrings("/srv/gopher/chat", users.session_secret_dir);
     try testing.expectEqualStrings("/srv/gopher/chat", chat_store.chat_root);
     try testing.expectEqualStrings("/srv/auth", users.auth_root);
+    // The session secret is in auth/ now, not data/chat/ (QUEUE item 106).
+    try testing.expectEqualStrings("/srv/auth", users.session_secret_dir);
+}
+
+test "migrateSecret moves the secret from data/chat to auth once, and never leaves two copies" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var tmp = testing.tmpDir(.{});
+    defer tmp.cleanup();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    const saved = Snapshot.take();
+    defer saved.restore();
+
+    const base = try std.fs.path.join(a, &.{ ".zig-cache", "tmp", &tmp.sub_path });
+    try point(a, .{
+        .data_dir = try std.fs.path.join(a, &.{ base, "data" }),
+        .auth_dir = try std.fs.path.join(a, &.{ base, "auth" }),
+    });
+    const old = chat_store.chat_root; // data/chat, the old home
+    const new = users.session_secret_dir; // auth, the new one
+    const secret = "a session secret at least thirty-two bytes!";
+    const join = struct {
+        fn f(al: std.mem.Allocator, dir: []const u8, name: []const u8) ![]u8 {
+            return std.fs.path.join(al, &.{ dir, name });
+        }
+    }.f;
+    try store.write(io, a, try join(a, old, "_session_secret"), secret, .{});
+    try store.write(io, a, try join(a, old, "_session_secret.previous"), "the previous secret, also thirty-two+", .{});
+    try store.write(io, a, try join(a, old, "_session_secret.previous-until"), "9999999999\n", .{});
+
+    migrateSecret(io, a);
+
+    // It is in auth/ now, gone from data/chat/, and read from the new place.
+    try testing.expectEqualStrings(secret, try store.read(io, a, try join(a, new, "_session_secret"), .unlimited));
+    for ([_][]const u8{ "_session_secret", "_session_secret.previous", "_session_secret.previous-until" }) |name| {
+        try testing.expect(!store.has(io, a, try join(a, old, name)));
+        try testing.expect(store.has(io, a, try join(a, new, name)));
+    }
+    try testing.expectEqualStrings(secret, (try users.sessionSecret(io, a)).?);
+
+    // A stale copy left in the old home (a crash mid-move) is cleaned, not kept
+    // beside the new one, and the new secret is untouched.
+    try store.write(io, a, try join(a, old, "_session_secret"), "stale", .{});
+    migrateSecret(io, a);
+    try testing.expect(!store.has(io, a, try join(a, old, "_session_secret")));
+    try testing.expectEqualStrings(secret, (try users.sessionSecret(io, a)).?);
 }
 
 test "point takes the relative paths a kernel uses on its own volume" {
