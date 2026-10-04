@@ -38,10 +38,17 @@ pub const addr_window_s: i64 = 15 * 60;
 /// Failed sign-ins against one account before it is refused, and the window.
 pub const account_fails: u32 = 30;
 pub const account_window_s: i64 = 60 * 60;
+/// Accounts one address may CREATE in a window before it is refused (QUEUE.md
+/// item 100). Every creation is a bcrypt (`setUserPassword`), so an unbounded
+/// creator is a CPU flood on metal's one core and a way to fill the account
+/// table; a real person makes one account, so five an hour is generous.
+pub const create_max: u32 = 5;
+pub const create_window_s: i64 = 60 * 60;
 
 pub const Bound = enum {
     address,
     account,
+    creates,
 
     /// The 429's body: it names the bound without naming the account or the
     /// address (a guesser learns nothing from it).
@@ -52,6 +59,7 @@ pub const Bound = enum {
                 .{@divTrunc(addr_window_s, 60)},
             ),
             .account => "Too many sign-in attempts for this account. Wait up to an hour and try again.\n",
+            .creates => "Too many accounts created from your network. Wait up to an hour and try again.\n",
         };
     }
 };
@@ -69,6 +77,7 @@ const Slot = struct {
 
 var addrs: [slots]Slot = @splat(.{});
 var accounts: [slots]Slot = @splat(.{});
+var creates: [slots]Slot = @splat(.{}); // accounts created, per address (item 100)
 var mu: Io.Mutex = .init;
 
 /// **THE PROOF THE REFUSAL NEVER REACHED BCRYPT** (item 97): every refusal
@@ -81,8 +90,14 @@ pub fn refused() u64 {
     return @atomicLoad(u64, &refused_count, .monotonic);
 }
 
+/// A clock the tests can hand the module (QUEUE.md item 101), so `check`,
+/// `recordFailure`, `clearAddress`, `createAllowed` and `recordCreate` — not
+/// just the helpers — are exercised with time under control. Null in
+/// production: the real wall clock.
+var test_now: ?i64 = null;
+
 fn now(io: Io) i64 {
-    return @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
+    return test_now orelse @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
 }
 
 /// The current fail count for `key` in `table`, or 0 if it is absent or its
@@ -99,22 +114,30 @@ fn peek(table: []const Slot, key_in: []const u8, t: i64, window: i64) u32 {
     return 0;
 }
 
-/// Bumps `key`'s fail count in `table`, creating or re-windowing its slot. A
-/// full table gives up its oldest, as game_limits' does.
-fn bump(table: []Slot, key_in: []const u8, t: i64, window: i64) void {
+/// Bumps `key`'s count in `table`, creating or re-windowing its slot. When the
+/// table is full it gives up a slot, but **never a throttled one** (QUEUE.md
+/// item 101): the oldest slot still UNDER its `bound` goes, and only if every
+/// live slot is already over its bound does the oldest of those. Otherwise ~256
+/// cheap failures could flush uid 1's count and earn another round of guesses.
+fn bump(table: []Slot, key_in: []const u8, t: i64, window: i64, bound: u32) void {
     const key = key_in[0..@min(key_in.len, max_key)];
-    var free: ?*Slot = null;
-    var oldest: ?*Slot = null;
+    var free: ?*Slot = null; // empty or expired: reuse first, it throttles nobody
+    var oldest_under: ?*Slot = null; // live, below its bound: safe to evict
+    var oldest_any: ?*Slot = null; // the last resort, if all are over bound
     for (table) |*s| {
         if (s.len != 0 and std.mem.eql(u8, s.key[0..s.len], key)) {
             if (t - s.since >= window) fresh(s, key, t);
             s.fails += 1;
             return;
         }
-        if (free == null and (s.len == 0 or t - s.since >= window)) free = s;
-        if (s.len != 0 and (oldest == null or s.since < oldest.?.since)) oldest = s;
+        const expired = s.len == 0 or t - s.since >= window;
+        if (free == null and expired) free = s;
+        if (s.len != 0 and !expired) {
+            if (oldest_any == null or s.since < oldest_any.?.since) oldest_any = s;
+            if (s.fails < bound and (oldest_under == null or s.since < oldest_under.?.since)) oldest_under = s;
+        }
     }
-    const s = free orelse oldest.?;
+    const s = free orelse oldest_under orelse oldest_any.?;
     fresh(s, key, t);
     s.fails = 1;
 }
@@ -149,8 +172,8 @@ pub fn recordFailure(io: Io, address: ?[]const u8, account_id: []const u8) void 
     mu.lockUncancelable(io);
     defer mu.unlock(io);
     const t = now(io);
-    if (address) |a| bump(&addrs, a, t, addr_window_s);
-    bump(&accounts, account_id, t, account_window_s);
+    if (address) |a| bump(&addrs, a, t, addr_window_s, addr_fails);
+    bump(&accounts, account_id, t, account_window_s, account_fails);
 }
 
 /// A password check succeeded: clear this address's count, so a member who
@@ -170,10 +193,34 @@ pub fn clearAddress(io: Io, address: ?[]const u8) void {
     }
 }
 
+/// **BEFORE THE BCRYPT, FOR ACCOUNT CREATION** (QUEUE.md item 100). Whether this
+/// address may create another account, or the bound that is over. `address`
+/// null (no peer) is allowed — nothing to key on. Does not count; the caller
+/// counts the creation it goes on to make with `recordCreate`.
+pub fn createAllowed(io: Io, address: ?[]const u8) ?Bound {
+    const a = address orelse return null;
+    mu.lockUncancelable(io);
+    defer mu.unlock(io);
+    if (peek(&creates, a, now(io), create_window_s) >= create_max) {
+        _ = @atomicRmw(u64, &refused_count, .Add, 1, .monotonic);
+        return .creates;
+    }
+    return null;
+}
+
+/// An account was created from `address`: count it.
+pub fn recordCreate(io: Io, address: ?[]const u8) void {
+    const a = address orelse return;
+    mu.lockUncancelable(io);
+    defer mu.unlock(io);
+    bump(&creates, a, now(io), create_window_s, create_max);
+}
+
 /// For the tests: forget everything (the tables are process-lifetime).
 pub fn forgetAllForTest() void {
     for (&addrs) |*s| s.* = .{};
     for (&accounts) |*s| s.* = .{};
+    for (&creates) |*s| s.* = .{};
     @atomicStore(u64, &refused_count, 0, .monotonic);
 }
 
@@ -181,72 +228,99 @@ pub fn forgetAllForTest() void {
 
 const testing = std.testing;
 
-fn testIo() Io {
-    return undefined; // now() is the only user of io, and the tests set the clock
+/// The public surface (QUEUE.md item 101): the tests drive the real `check` /
+/// `recordFailure` / `clearAddress` / `createAllowed` / `recordCreate`, with
+/// the module's clock set, so they exercise what the handlers call — not the
+/// helpers under them. `io` is unused once `test_now` is set.
+const tio: Io = undefined;
+
+fn at(t: i64) void {
+    test_now = t;
 }
 
-// The tests drive `now` through a fake clock by calling the windowed helpers
-// directly with an explicit `t`, which is what `check`/`record` compute from io.
-test "a bound trips only after N failures, and the count proves the refusal is before any check" {
+fn reset() void {
     forgetAllForTest();
-    defer forgetAllForTest();
-    const t: i64 = 1_000_000;
+    test_now = null;
+}
+
+test "the Nth failure from an address is refused before the check, and the count moves" {
+    reset();
+    defer reset();
+    at(1_000);
     const addr = "203.0.113.7";
-    const acct = "1";
-    // Under the bound: peek stays below, so a real check would proceed.
     for (0..addr_fails) |_| {
-        try testing.expect(peek(&addrs, addr, t, addr_window_s) < addr_fails);
-        bump(&addrs, addr, t, addr_window_s);
-        bump(&accounts, acct, t, account_window_s);
+        try testing.expect(check(tio, addr, "1") == null); // under the bound: proceed
+        recordFailure(tio, addr, "1");
     }
-    // The (N+1)th: the address bound is reached, so a check refuses.
-    try testing.expectEqual(addr_fails, peek(&addrs, addr, t, addr_window_s));
-    try testing.expect(peek(&addrs, addr, t, addr_window_s) >= addr_fails);
+    try testing.expect(check(tio, addr, "1") == .address); // the (N+1)th is refused
+    try testing.expect(refused() >= 1);
 }
 
-test "the window resets: after it, the count starts again" {
-    forgetAllForTest();
-    defer forgetAllForTest();
-    const addr = "198.51.100.9";
-    var t: i64 = 5_000_000;
-    for (0..addr_fails) |_| bump(&addrs, addr, t, addr_window_s);
-    try testing.expectEqual(addr_fails, peek(&addrs, addr, t, addr_window_s));
-    t += addr_window_s; // the window has passed
-    try testing.expectEqual(@as(u32, 0), peek(&addrs, addr, t, addr_window_s));
-}
-
-test "the account bound is independent of the address, and survives a cleared address" {
-    forgetAllForTest();
-    defer forgetAllForTest();
-    const t: i64 = 9_000_000;
+test "a success clears the address but not the account" {
+    reset();
+    defer reset();
+    at(2_000);
     const acct = "1";
-    // Many addresses, one account: each address stays well under its bound,
-    // but the account climbs to its own.
+    // Many addresses hit the account bound; each address well under its own.
     for (0..account_fails) |i| {
-        var buf: [16]u8 = undefined;
-        const addr = std.fmt.bufPrint(&buf, "10.0.0.{d}", .{i % 250}) catch unreachable;
-        bump(&addrs, addr, t, addr_window_s);
-        bump(&accounts, acct, t, account_window_s);
+        var buf: [20]u8 = undefined;
+        const a = std.fmt.bufPrint(&buf, "10.1.{d}.{d}", .{ i / 250, i % 250 }) catch unreachable;
+        try testing.expect(check(tio, a, acct) == null);
+        recordFailure(tio, a, acct);
     }
-    try testing.expect(peek(&accounts, acct, t, account_window_s) >= account_fails);
-    // Clearing one address does not clear the account.
-    for (&addrs) |*s| s.len = 0;
-    try testing.expect(peek(&accounts, acct, t, account_window_s) >= account_fails);
+    // A fresh address is now refused on the ACCOUNT bound alone.
+    try testing.expect(check(tio, "198.51.100.5", acct) == .account);
+    // Clearing an address does not clear the account.
+    clearAddress(tio, "10.1.0.0");
+    try testing.expect(check(tio, "198.51.100.5", acct) == .account);
+
+    // Separately: an address that mistyped then succeeded is not throttled.
+    const m = "203.0.113.9";
+    for (0..addr_fails - 1) |_| recordFailure(tio, m, "2"); // 9 of 10, under the bound
+    clearAddress(tio, m); // the correct password
+    try testing.expect(check(tio, m, "2") == null);
 }
 
-test "a full address table gives up its oldest, not a newer one" {
-    forgetAllForTest();
-    defer forgetAllForTest();
-    var t: i64 = 2_000_000;
-    // Fill every slot, each at a distinct, increasing time.
-    for (0..slots) |i| {
-        var buf: [24]u8 = undefined;
-        const addr = std.fmt.bufPrint(&buf, "172.16.{d}.{d}", .{ i / 250, i % 250 }) catch unreachable;
-        bump(&addrs, addr, t, addr_window_s);
-        t += 1;
+test "the window reopens: after it passes, the count starts again" {
+    reset();
+    defer reset();
+    const addr = "198.51.100.9";
+    at(5_000);
+    for (0..addr_fails) |_| recordFailure(tio, addr, "1");
+    try testing.expect(check(tio, addr, "1") == .address);
+    at(5_000 + addr_window_s); // the window has passed
+    try testing.expect(check(tio, addr, "1") == null);
+}
+
+test "account creation is bounded per address, before the hash" {
+    reset();
+    defer reset();
+    at(7_000);
+    const addr = "203.0.113.20";
+    for (0..create_max) |_| {
+        try testing.expect(createAllowed(tio, addr) == null);
+        recordCreate(tio, addr);
     }
-    // One more, within every window: it evicts the oldest (the first), and the
-    // newest is still counted.
-    bump(&addrs, "172.31.255.254", t, addr_window_s);
-    try testing.expect(peek(&addrs, "172.31.255.254", t, addr_window_s) >= 1);
+    try testing.expect(createAllowed(tio, addr) == .creates); // the (N+1)th
+    // A null address (no peer) is never create-throttled.
+    try testing.expect(createAllowed(tio, null) == null);
+}
+
+test "a full table never evicts a throttled slot, so a flood cannot flush an account" {
+    reset();
+    defer reset();
+    at(9_000);
+    // Throttle one account past its bound from a dedicated address.
+    const victim = "192.0.2.1";
+    for (0..addr_fails) |_| recordFailure(tio, victim, "1");
+    try testing.expect(check(tio, victim, "1") == .address);
+    // Now flood the address table full with other addresses, each a single
+    // failure (well under the bound). The victim's slot must survive, because
+    // eviction takes an under-bound slot before a throttled one.
+    for (0..slots * 2) |i| {
+        var buf: [24]u8 = undefined;
+        const a = std.fmt.bufPrint(&buf, "172.16.{d}.{d}", .{ i / 250, i % 250 }) catch unreachable;
+        recordFailure(tio, a, "2");
+    }
+    try testing.expect(check(tio, victim, "1") == .address); // still throttled
 }

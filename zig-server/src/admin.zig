@@ -29,13 +29,15 @@ const admin_secret = @import("admin_secret.zig");
 
 const Request = std.http.Server.Request;
 
-/// handle dispatches /admin* — `sub` is the path after "/admin".
-pub fn handle(req: *Request, io: Io, alloc: Alloc, sub: []const u8) !void {
+/// handle dispatches /admin* — `sub` is the path after "/admin". `client` is the
+/// request's address (router.zig's resolved `clientAddress`), for the login
+/// throttle on the password re-entries (QUEUE.md item 100).
+pub fn handle(req: *Request, io: Io, alloc: Alloc, client: ?[]const u8, sub: []const u8) !void {
     if (!try ui.requireAdmin(req, io, alloc)) return;
     if (std.mem.eql(u8, sub, "/apikey")) return handleAPIKey(req, io, alloc);
     if (std.mem.eql(u8, sub, "/host")) return admin_host.render(req, io, alloc);
-    if (std.mem.eql(u8, sub, "/backup")) return admin_backup.render(req, io, alloc);
-    if (std.mem.eql(u8, sub, "/secret")) return admin_secret.render(req, io, alloc);
+    if (std.mem.eql(u8, sub, "/backup")) return admin_backup.render(req, io, alloc, client);
+    if (std.mem.eql(u8, sub, "/secret")) return admin_secret.render(req, io, alloc, client);
     if (sub.len != 0 and !std.mem.eql(u8, sub, "/")) return http.notFound(req);
     return renderRoster(req, io, alloc);
 }

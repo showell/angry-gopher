@@ -165,7 +165,7 @@ pub fn route(req: *std.http.Server.Request, io: Io, alloc: std.mem.Allocator, bu
         // it: matchPrefix takes the first arm that matches.
         try admin_lynrummy.handle(req, io, alloc, sub);
     } else if (matchPrefix(path, "/admin")) |sub| {
-        try admin.handle(req, io, alloc, sub);
+        try admin.handle(req, io, alloc, client, sub);
     } else if (std.mem.eql(u8, path, "/play") or std.mem.eql(u8, path, "/play/")) {
         // The LOCAL identity: a name, no password, for /game and /puzzles. It
         // reads its own small store and never touches the chat account store —
@@ -408,8 +408,8 @@ const UidSite = struct {
 
     fn init(a: std.mem.Allocator, io: Io) !UidSite {
         var s: UidSite = .{ .tmp = testing.tmpDir(.{}), .saved = .{
-            storage.data_root,       users.users_root,     player.player_root, users.session_secret_dir,
-            chat_store.chat_root,    users.auth_root,      disk.data_base,    disk.auth_base,
+            storage.data_root,    users.users_root, player.player_root, users.session_secret_dir,
+            chat_store.chat_root, users.auth_root,  disk.data_base,     disk.auth_base,
         }, .base = undefined };
         s.base = try std.fs.path.join(a, &.{ ".zig-cache", "tmp", &s.tmp.sub_path });
         try roots.point(a, .{
@@ -506,8 +506,7 @@ test "route: an unsigned gopher_uid is re-identified once, then never" {
 
     // A POST with it is never the re-identification: no redirect, no cookie.
     const other = try player.allocate(io, a, "Debbie");
-    const post = try serve(a, io, try std.fmt.allocPrint(a,
-        "POST /play HTTP/1.1\r\nHost: x\r\nCookie: gopher_uid={s}\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: 0\r\n\r\n", .{other}));
+    const post = try serve(a, io, try std.fmt.allocPrint(a, "POST /play HTTP/1.1\r\nHost: x\r\nCookie: gopher_uid={s}\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: 0\r\n\r\n", .{other}));
     try testing.expect(setUid(post) == null); // an empty name: the form again, no player made
     try testing.expect(!playingAs(post, "Debbie")); // and the form names no one
     try testing.expect(!UidSite.marked(a, io, other));
@@ -527,8 +526,7 @@ test "route: a guest upgrades only with a signed cookie" {
     try users.setUserName(io, a, "7", "Gus");
     const upgrade = "Set a password to use chat";
     const post_body = "name=Gus&password=forged&action=register&next=%2F";
-    const post = try std.fmt.allocPrint(a,
-        "POST /login/full HTTP/1.1\r\nHost: x\r\nCookie: gopher_uid=7\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: {d}\r\n\r\n{s}", .{ post_body.len, post_body });
+    const post = try std.fmt.allocPrint(a, "POST /login/full HTTP/1.1\r\nHost: x\r\nCookie: gopher_uid=7\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: {d}\r\n\r\n{s}", .{ post_body.len, post_body });
 
     // Unsigned, straight to the POST: the stranger form, and no password set.
     const forged = try serve(a, io, post);
@@ -603,8 +601,7 @@ test "route: /play mints a signed gopher_uid, marked as signed" {
     var site = try UidSite.init(a, io);
     defer site.deinit();
 
-    const r = try serve(a, io,
-        "POST /play HTTP/1.1\r\nHost: x\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: 23\r\n\r\nname=Nikhil&next=%2Fgame");
+    const r = try serve(a, io, "POST /play HTTP/1.1\r\nHost: x\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: 23\r\n\r\nname=Nikhil&next=%2Fgame");
     try testing.expectEqualStrings("303 See Other", status(r));
     const v = setUid(r) orelse return error.NoSetCookie;
     const id = uid_cookie.verify(UidSite.secret, v) orelse return error.Unsigned;
@@ -617,8 +614,7 @@ test "route: /play mints a signed gopher_uid, marked as signed" {
     try testing.expect(!playingAs(bare, "Nikhil"));
     // With no session secret, nothing is minted: no unsigned cookie instead.
     try removeSecret(a, io);
-    const none = try serve(a, io,
-        "POST /play HTTP/1.1\r\nHost: x\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: 23\r\n\r\nname=Debbie&next=%2Fgame");
+    const none = try serve(a, io, "POST /play HTTP/1.1\r\nHost: x\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: 23\r\n\r\nname=Debbie&next=%2Fgame");
     try testing.expectEqualStrings("500 Internal Server Error", status(none));
     try testing.expect(setUid(none) == null);
 }
@@ -635,8 +631,7 @@ fn signedUid(a: std.mem.Allocator, id: []const u8) ![]const u8 {
 }
 
 fn postAs(a: std.mem.Allocator, io: Io, target: []const u8, cookies: []const u8, body: []const u8) ![]const u8 {
-    return serve(a, io, try std.fmt.allocPrint(a,
-        "POST {s} HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\nContent-Length: {d}\r\n\r\n{s}", .{ target, cookies, body.len, body }));
+    return serve(a, io, try std.fmt.allocPrint(a, "POST {s} HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\nContent-Length: {d}\r\n\r\n{s}", .{ target, cookies, body.len, body }));
 }
 
 test "route: /puzzles writes nothing; a session is made by its first move" {
@@ -738,8 +733,7 @@ test "route: a player's games are refused, 507, past 16 MiB or 500 sessions, and
     const floor = try postAs(a, io, "/game/new-session", try signedUid(a, third), "state");
     try testing.expectEqualStrings("507 Insufficient Storage", status(floor));
     try testing.expect(std.mem.indexOf(u8, floor, "low on disk") != null);
-    const named = try serve(a, io,
-        "POST /play HTTP/1.1\r\nHost: x\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: 21\r\n\r\nname=Ann&next=%2Fgame");
+    const named = try serve(a, io, "POST /play HTTP/1.1\r\nHost: x\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: 21\r\n\r\nname=Ann&next=%2Fgame");
     try testing.expectEqualStrings("303 See Other", status(named));
 }
 
@@ -763,8 +757,7 @@ test "route: an address names 5 players an hour and saves 20 MB of games, then 4
     const Name = struct {
         fn post(al: std.mem.Allocator, i: Io, peer: []const u8, xff: []const u8) ![]const u8 {
             const body = "name=Ann&next=%2Fgame";
-            return serveFrom(al, i, try std.fmt.allocPrint(al,
-                "POST /play HTTP/1.1\r\nHost: x\r\n{s}Content-Type: application/x-www-form-urlencoded\r\nContent-Length: {d}\r\n\r\n{s}", .{ xff, body.len, body }), peer);
+            return serveFrom(al, i, try std.fmt.allocPrint(al, "POST /play HTTP/1.1\r\nHost: x\r\n{s}Content-Type: application/x-www-form-urlencoded\r\nContent-Length: {d}\r\n\r\n{s}", .{ xff, body.len, body }), peer);
         }
     };
 
@@ -801,8 +794,7 @@ test "route: an address names 5 players an hour and saves 20 MB of games, then 4
     var refused: ?[]const u8 = null;
     var n: usize = 0;
     while (refused == null) : (n += 1) {
-        const r = try serveFrom(a, io, try std.fmt.allocPrint(a,
-            "POST /game/new-session HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\nContent-Length: {d}\r\n\r\n{s}", .{ try signedUid(a, ids[n % 2]), big.len, big }), "203.0.113.7");
+        const r = try serveFrom(a, io, try std.fmt.allocPrint(a, "POST /game/new-session HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\nContent-Length: {d}\r\n\r\n{s}", .{ try signedUid(a, ids[n % 2]), big.len, big }), "203.0.113.7");
         if (std.mem.eql(u8, status(r), "429 Too Many Requests")) refused = r else {
             try testing.expectEqualStrings("200 OK", status(r));
             sent += big.len;
@@ -813,8 +805,7 @@ test "route: an address names 5 players an hour and saves 20 MB of games, then 4
     // Neither player is near their own 16 MiB: it was the address.
     try testing.expect(sent / 2 < limits.max_bytes);
     // From elsewhere, the same player still saves.
-    try testing.expectEqualStrings("200 OK", status(try serveFrom(a, io, try std.fmt.allocPrint(a,
-        "POST /game/new-session HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\nContent-Length: 5\r\n\r\nstate", .{try signedUid(a, ids[0])}), "198.51.100.1")));
+    try testing.expectEqualStrings("200 OK", status(try serveFrom(a, io, try std.fmt.allocPrint(a, "POST /game/new-session HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\nContent-Length: 5\r\n\r\nstate", .{try signedUid(a, ids[0])}), "198.51.100.1")));
 }
 
 // ── /admin/backup (gopher-metal REVIEW-admin-backup.md) ──────────────────────
@@ -880,8 +871,7 @@ test "route: only a member's own session is the admin; a non-member's session, o
 }
 
 fn postForm(a: std.mem.Allocator, io: Io, target: []const u8, cookies: []const u8, body: []const u8) ![]const u8 {
-    return serve(a, io, try std.fmt.allocPrint(a,
-        "POST {s} HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: {d}\r\n\r\n{s}", .{ target, cookies, body.len, body }));
+    return serve(a, io, try std.fmt.allocPrint(a, "POST {s} HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: {d}\r\n\r\n{s}", .{ target, cookies, body.len, body }));
 }
 
 test "route: /admin/backup asks for the password again, and gives nothing without it" {

@@ -21,18 +21,25 @@ const users = @import("users.zig");
 const chat = @import("chat.zig");
 const html = @import("html.zig");
 const ui = @import("admin_ui.zig");
+const throttle = @import("login_throttle.zig");
 
 const Request = std.http.Server.Request;
 
 /// The most days the old secret may be kept for players.
 pub const max_days = 90;
 
-pub fn render(req: *Request, io: Io, alloc: Alloc) !void {
+pub fn render(req: *Request, io: Io, alloc: Alloc, client: ?[]const u8) !void {
     if (req.head.method != .POST) return form(req, alloc, "", .ok);
+    // Throttled like sign-in (QUEUE.md item 100): refused before the hash,
+    // against the address and uid 1's account.
+    if (throttle.check(io, client, ui.admin_uid)) |b| return form(req, alloc, b.text(), .too_many_requests);
     const sent = (try http.readLimitedBody(req, alloc, 4096)) orelse return;
     const password = (try chat.formField(alloc, sent, "password")) orelse "";
-    if (!users.checkUserPassword(io, alloc, ui.admin_uid, password))
+    if (!users.checkUserPassword(io, alloc, ui.admin_uid, password)) {
+        throttle.recordFailure(io, client, ui.admin_uid);
         return form(req, alloc, "That is not the password.", .forbidden);
+    }
+    throttle.clearAddress(io, client);
     const days_text = std.mem.trim(u8, (try chat.formField(alloc, sent, "days")) orelse "", " ");
     const days = std.fmt.parseInt(i64, days_text, 10) catch -1;
     if (days < 0 or days > max_days)

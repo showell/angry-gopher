@@ -46,6 +46,7 @@ const users = @import("users.zig");
 const chat = @import("chat.zig");
 const html = @import("html.zig");
 const ui = @import("admin_ui.zig");
+const throttle = @import("login_throttle.zig");
 
 const Request = std.http.Server.Request;
 
@@ -62,7 +63,7 @@ const tar_headers = [_]std.http.Header{
 /// whether a request walked the data.
 pub var files_archived: usize = 0;
 
-pub fn render(req: *Request, io: Io, alloc: Alloc) !void {
+pub fn render(req: *Request, io: Io, alloc: Alloc, client: ?[]const u8) !void {
     const data = store.data_base orelse return req.respond("the data roots are not configured here\n", .{ .status = .service_unavailable });
     const auth = store.auth_base orelse return req.respond("the data roots are not configured here\n", .{ .status = .service_unavailable });
 
@@ -71,10 +72,18 @@ pub fn render(req: *Request, io: Io, alloc: Alloc) !void {
     // nothing cost a whole backup's reads; on metal, that is every other
     // request waiting.
     if (req.head.method != .POST) return form(req, alloc, "", .ok);
+    // **THE RE-ENTRY IS THROTTLED LIKE SIGN-IN** (QUEUE.md item 100): a stolen
+    // admin session must not guess the password unbounded, which is what the
+    // re-entry exists to stop. Refused before the hash, against the address and
+    // uid 1's account (the same counters sign-in uses).
+    if (throttle.check(io, client, ui.admin_uid)) |b| return form(req, alloc, b.text(), .too_many_requests);
     const sent = (try http.readLimitedBody(req, alloc, 4096)) orelse return;
     const password = (try chat.formField(alloc, sent, "password")) orelse "";
-    if (!users.checkUserPassword(io, alloc, ui.admin_uid, password))
+    if (!users.checkUserPassword(io, alloc, ui.admin_uid, password)) {
+        throttle.recordFailure(io, client, ui.admin_uid);
         return form(req, alloc, "That is not the password.", .forbidden);
+    }
+    throttle.clearAddress(io, client);
 
     var hbuf: [4096]u8 = undefined;
     var body = req.respondStreaming(&hbuf, .{

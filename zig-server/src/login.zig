@@ -139,7 +139,9 @@ fn handleLoginFull(req: *Request, io: Io, alloc: Alloc, bus: *Bus) !void {
         .upgrade => {
             // Cookied guest → member, in place (registerMember keeps cur.id).
             if (password.len == 0) return renderPwPage(req, alloc, mode, name, next, "Please enter a password.");
+            if (throttle.createAllowed(io, address)) |b| return req.respond(b.text(), .{ .status = .too_many_requests });
             const id = try registerMember(cur, io, alloc, name, password);
+            throttle.recordCreate(io, address);
             publishUserArrived(io, alloc, bus, id, name);
             sendHostWelcome(io, alloc, bus, id);
             return loginAsMember(req, io, alloc, id, next);
@@ -161,7 +163,9 @@ fn handleLoginFull(req: *Request, io: Io, alloc: Alloc, bus: *Bus) !void {
             // Create account.
             if (member_id != null) return renderPwPage(req, alloc, .stranger, valid, next, try std.fmt.allocPrint(alloc, "\u{201C}{s}\u{201D} is taken — log in instead.", .{valid}));
             if (password.len == 0) return renderPwPage(req, alloc, .stranger, valid, next, "Please enter a password.");
+            if (throttle.createAllowed(io, address)) |b| return req.respond(b.text(), .{ .status = .too_many_requests });
             const id = try registerMember(cur, io, alloc, valid, password);
+            throttle.recordCreate(io, address);
             publishUserArrived(io, alloc, bus, id, valid);
             sendHostWelcome(io, alloc, bus, id);
             return loginAsMember(req, io, alloc, id, next);
