@@ -10,7 +10,27 @@ Caddy (TLS) under systemd. Each app has its own README as the canonical
 home for its design intent; this file is the developer/agent map of the
 whole thing.
 
-## The apps
+## Where it runs: on gopher-metal, since 2026-10-04
+
+**lynrummy.com is served by [gopher-metal](https://github.com/showell/gopher-metal)**,
+this repo's zig server compiled into a kernel with no operating system under
+it, on its own DigitalOcean droplet. The two repos stay separate:
+
+- **This repo is the program.** Every route, page and app is written and
+  tested here, on Linux, as always (`ops/start`, `ops/check`).
+- **gopher-metal is the machine.** Its `port.sh` reads `zig-server/src` from
+  a sibling checkout and swaps `std.Io` for metal's own, one line per file;
+  its gates judge metal against this repo's Linux build, page by page, and
+  run metal-vmm (the third repo, test-only). Its `README.md` and
+  `CUTOVER.md` say how a release reaches the droplet.
+- **A change to the program reaches the site as a new gopher-metal image**,
+  not through `ops/deploy`. The old Linux droplet still runs Caddy (TLS,
+  body caps), which proxies to metal over the private network
+  (`deploy/Caddyfile`); its own zig server is **stopped and must stay
+  stopped**, because `ops/deploy` restarts it (being fixed: gopher-metal
+  QUEUE item 108). Starting it again is the way back, in gopher-metal's
+  `CUTOVER.md`.
+
 
 The home page (`/`) is a launch pad for six apps, in the display order
 below. **That order lives in `pages/home.txt` and nowhere else is
