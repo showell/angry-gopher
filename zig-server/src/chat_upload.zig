@@ -28,9 +28,23 @@ const Request = std.http.Server.Request;
 const max_any_upload = @max(UploadKind.image.cap(), UploadKind.video.cap()) + (1 << 20);
 
 /// range_window caps the bytes served for one Range request, so a single 206
-/// (and its in-RAM buffer) stays bounded no matter how open-ended the range —
-/// the browser just requests the next window as playback advances.
+/// stays bounded no matter how open-ended the range — the browser just requests
+/// the next window as playback advances. The window is now streamed in
+/// `stream_piece` chunks (item 105), so this bounds the response, not the heap.
 const range_window = 8 << 20; // 8 MiB
+
+/// **THE LINE BETWEEN HELD-WHOLE AND STREAMED** (QUEUE.md item 105). A plain GET
+/// of a file up to this is read whole — the read gopher-metal's page cache keeps
+/// (item 102), so a kept picture comes from memory — and a bigger one is
+/// streamed. Set to the page cache's default largest (4 MiB, `page_cache.zig`'s
+/// `largest` as `probe/gopher.zig` sets it): "small enough to cache" and "small
+/// enough to hold whole" are then the same line, so the two levers compose. If
+/// the cache's cap is raised on the machine, raise this to match.
+const whole_read_max = 4 << 20; // 4 MiB
+
+/// How much is read and written at a time when a file is streamed, so the
+/// request heap holds a piece, not the file.
+const stream_piece = 256 << 10; // 256 KiB
 
 // ── write path (POST <base>/<sid>/upload) ─────────────────────────────────────
 
@@ -111,6 +125,9 @@ pub fn serveUpload(req: *Request, io: Io, alloc: Alloc, conv_dir: []const u8, si
         const buf = try alloc.alloc(u8, len);
         const n = disk.readAt(io, alloc, path, r.start, buf) catch return http.notFound(req);
         const cr = try std.fmt.allocPrint(alloc, "bytes {d}-{d}/{d}", .{ r.start, r.start + n - 1, size });
+        // The Range window is already bounded to `range_window`, so it is read
+        // and sent whole with a content-length (the plain GET below is the one
+        // that was unbounded — item 105).
         return req.respond(buf[0..n], .{ .status = .partial_content, .extra_headers = &.{
             .{ .name = "content-type", .value = ct },
             .{ .name = "content-range", .value = cr },
@@ -120,14 +137,56 @@ pub fn serveUpload(req: *Request, io: Io, alloc: Alloc, conv_dir: []const u8, si
         } });
     }
 
-    const data = try alloc.alloc(u8, @intCast(size));
-    const n = disk.readAt(io, alloc, path, 0, data) catch return http.notFound(req);
-    try req.respond(data[0..n], .{ .extra_headers = &.{
+    const headers = [_]std.http.Header{
         .{ .name = "content-type", .value = ct },
         .{ .name = "accept-ranges", .value = "bytes" },
         .{ .name = "cache-control", .value = "private, max-age=31536000, immutable" },
         .{ .name = "x-content-type-options", .value = "nosniff" },
-    } });
+    };
+    // **A FILE SMALL ENOUGH TO CACHE IS READ WHOLE; A BIGGER ONE IS STREAMED**
+    // (QUEUE.md item 105, composing with item 102). A whole read (offset 0, the
+    // buffer holding all of it) is the read gopher-metal's page cache keeps, so
+    // a kept picture is served from memory; a file past the cap the cache keeps
+    // — which is `whole_read_max` — would both fill that heap buffer and not be
+    // cacheable, so it is streamed in `stream_piece` chunks: the heap holds a
+    // piece, not the file (a 100 MiB screencast downloaded whole was 100 MiB of
+    // request heap before this).
+    if (size <= whole_read_max) {
+        const data = try alloc.alloc(u8, @intCast(size));
+        const n = disk.readAt(io, alloc, path, 0, data) catch return http.notFound(req);
+        return req.respond(data[0..n], .{ .extra_headers = &headers });
+    }
+    return streamFile(req, io, alloc, path, size, &headers);
+}
+
+/// Streams `len` bytes of `path` from the start into the response, `stream_piece`
+/// at a time, so the request heap holds a piece, not the file.
+///
+/// **CHUNKED, NOT CONTENT-LENGTH.** Once the first byte is out the status cannot
+/// change, so a read that fails partway cannot become a 404 — it just ends the
+/// stream (the same bargain admin_backup.zig makes). A content-length header
+/// would then be a promise broken by a short body — std's `end()` asserts every
+/// promised byte was written — so a device fault mid-serve would panic the
+/// machine. Chunked has no such promise: a truncated stream is simply missing
+/// its terminator, which the client reads as the error it is. A HEAD gets the
+/// headers and no body, and reads nothing.
+fn streamFile(req: *Request, io: Io, alloc: Alloc, path: []const u8, len: u64, headers: []const std.http.Header) !void {
+    var hbuf: [1024]u8 = undefined;
+    var body = req.respondStreaming(&hbuf, .{
+        .respond_options = .{ .extra_headers = headers },
+    }) catch return;
+    if (req.head.method != .HEAD) {
+        const buf = try alloc.alloc(u8, @intCast(@min(len, stream_piece)));
+        var at: u64 = 0;
+        while (at < len) {
+            const want: usize = @intCast(@min(@as(u64, buf.len), len - at));
+            const n = disk.readAt(io, alloc, path, at, buf[0..want]) catch break;
+            if (n == 0) break; // the file shrank under us — stop where we are
+            body.writer.writeAll(buf[0..n]) catch break;
+            at += n;
+        }
+    }
+    body.end() catch {};
 }
 
 const Range = struct { start: u64, end: u64 }; // inclusive byte offsets
