@@ -20,7 +20,7 @@ Real-time chat, docs, and channels — the live surface Steve, Claude, and frien
 ## Seattle Delivery -> /delivery
 image: /gallery/delivery.svg
 cta: Ship some Totes
-lang: TypeScript
+lang: Zig (WASM) + TypeScript
 tech: Clarke-Wright savings heuristic + local search over an integer, trig-free cost
 code: https://github.com/showell/angry-gopher/tree/master/delivery
 Eight trucks fan out across a deliberately not-to-scale Seattle, delivering a hundred orders a day. The route-planning is a hand-built Clarke-Wright solver — watch it think, or shuffle up a new shift.
