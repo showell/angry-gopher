@@ -5,8 +5,8 @@ Howell's personal website. Every line of code here was written by Claude.
 "Angry Gopher" is a dated inside joke; don't ask.
 
 The site is a handful of small apps served from **one self-contained zig
-binary** — no database, storage is plain files on disk, deployed behind
-Caddy (TLS) under systemd. Each app has its own README as the canonical
+binary** — no database, storage is plain files on disk — served by
+gopher-metal behind Caddy (TLS); see "Where it runs" below. Each app has its own README as the canonical
 home for its design intent; this file is the developer/agent map of the
 whole thing.
 
@@ -28,8 +28,11 @@ it, on its own DigitalOcean droplet. The two repos stay separate:
   body caps), which proxies to metal over the private network
   (`deploy/Caddyfile`); its own zig server is **stopped and must stay
   stopped**. `ops/deploy` fails closed: it restarts that server only when
-  `~/linux-serves` is on prod (`deploy/README.md`). Starting it again is the way back, in gopher-metal's
-  `CUTOVER.md`.
+  `~/linux-serves` is on prod (`deploy/README.md`).
+- **The way back is the previous gopher-metal image** on the same volume
+  (gopher-metal's `README.md`). Restarting the Linux server (`CUTOVER.md`) is
+  the last resort: its data is a copy frozen at the 2026-10-04 cutover, so
+  everything written since would be lost.
 
 
 The home page (`/`) is a launch pad for six apps, in the display order
@@ -362,7 +365,9 @@ ops/check_delivery     Delivery zig-solver conformance (~30s warm): native
 ops/test_ts            Fast TS gate (~4s warm)
 ops/test_elm           Fast Elm gate (~4s)
 ops/test_docs          Fast docs gate (~1s): doc_xref --all (dead links/paths)
-ops/deploy             Build + ship to the prod droplet (see deploy/README.md)
+ops/deploy             While metal serves: refresh prod's watchdog only. The full
+                       Linux build + ship runs only with ~/linux-serves on prod
+                       (see deploy/README.md)
 ```
 
 Don't hand-compose `zig build` / `elm make` / `tsc` — the ops

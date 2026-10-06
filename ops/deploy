@@ -1,7 +1,12 @@
 #!/bin/bash
 # CANONICAL DEPLOY SCRIPT — DO NOT REINVENT.
 #
-# Build the zig server + front-end bundles locally, rsync the single
+# **WHILE METAL SERVES lynrummy.com (since 2026-10-04) THIS ONLY REFRESHES THE
+# WATCHDOG on prod.** The program reaches the site as a gopher-metal image.
+# Everything below the next paragraph is the Linux path, which runs only when
+# ~/linux-serves exists on prod (see "IT FAILS CLOSED").
+#
+# The Linux path: build the zig server + front-end bundles locally, rsync the single
 # self-contained binary to the production droplet, then restart the
 # systemd service. The host runs no zig/Go/Node/Elm toolchain — it only
 # runs the binary. The zig binary is STATICALLY LINKED and embeds every
