@@ -21,6 +21,7 @@
 //! active="docs"; the rest of the layout/CSS is rendered below.
 
 const std = @import("std");
+const limits = @import("limits.zig");
 const Io = std.Io;
 const http = @import("http.zig");
 const users = @import("users.zig");
@@ -42,7 +43,7 @@ const Request = std.http.Server.Request;
 
 /// maxDocBytes caps a single doc body — generous (1 MiB) but
 /// bounded so a runaway client can't fill the disk.
-const max_doc_bytes = 1 << 20;
+const max_doc_bytes = limits.body.doc;
 
 /// handle dispatches /chat/docs* — `rest` is the path after "/docs" (keeps its
 /// leading '/', empty for "/chat/docs"). The docs URL space is flat (one segment

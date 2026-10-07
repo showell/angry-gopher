@@ -148,7 +148,7 @@ fn serveConn(io: std.Io, alloc: std.mem.Allocator, hub: *Hub, stream: net.Stream
 fn handleConn(io: std.Io, alloc: std.mem.Allocator, hub: *Hub, stream: net.Stream) !void {
     defer stream.close(io);
 
-    var read_buf: [16 * 1024]u8 = undefined; // must hold the full request header
+    var read_buf: [router.request_limits.head_bytes]u8 = undefined; // must hold the full request header
     var write_buf: [64 * 1024]u8 = undefined;
     var sr = stream.reader(io, &read_buf);
     var sw = stream.writer(io, &write_buf);

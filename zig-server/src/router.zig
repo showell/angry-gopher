@@ -86,6 +86,9 @@ pub const roots = @import("roots.zig");
 /// facts (start time, disks, memory). A host that skips it gets the
 /// application's half of that page only.
 pub const host_status = @import("host_status.zig");
+/// Every bound on what a request may bring (limits.zig): a host sizes its
+/// request-head buffer from `request_limits.head_bytes`.
+pub const request_limits = @import("limits.zig");
 /// Chat's on-disk store, for the one thing a host does with it directly:
 /// `store.backfillAll` at startup.
 pub const store = @import("chat_store.zig");

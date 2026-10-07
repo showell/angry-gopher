@@ -14,6 +14,7 @@
 //!     being used.
 
 const std = @import("std");
+const limits = @import("limits.zig");
 const Io = std.Io;
 const Alloc = std.mem.Allocator;
 const http = @import("http.zig");
@@ -33,7 +34,7 @@ pub fn render(req: *Request, io: Io, alloc: Alloc, client: ?[]const u8) !void {
     // Throttled like sign-in (QUEUE.md item 100): refused before the hash,
     // against the address and uid 1's account.
     if (throttle.check(io, client, ui.admin_uid)) |b| return form(req, alloc, b.text(), .too_many_requests);
-    const sent = (try http.readLimitedBody(req, alloc, 4096)) orelse return;
+    const sent = (try http.readLimitedBody(req, alloc, limits.body.secret_form)) orelse return;
     const password = (try chat.formField(alloc, sent, "password")) orelse "";
     if (!users.checkUserPassword(io, alloc, ui.admin_uid, password)) {
         throttle.recordFailure(io, client, ui.admin_uid);

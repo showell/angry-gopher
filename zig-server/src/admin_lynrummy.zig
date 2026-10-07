@@ -25,6 +25,7 @@
 //! surfaces separate is the open question written up in that file.
 
 const std = @import("std");
+const limits = @import("limits.zig");
 const Io = std.Io;
 const Alloc = std.mem.Allocator;
 const http = @import("http.zig");
@@ -53,7 +54,7 @@ const self_url = "/admin/lynrummy";
 /// deletes what they PLAYED, not who they are.
 fn handleDelete(req: *Request, io: Io, alloc: Alloc) !void {
     if (req.head.method == .POST) {
-        const body = (try http.readLimitedBody(req, alloc, 64 * 1024)) orelse return;
+        const body = (try http.readLimitedBody(req, alloc, limits.body.form)) orelse return;
         const id = std.mem.trim(u8, (try formField(alloc, body, "user")) orelse "", " \t\r\n");
         if (!try exists(io, alloc, id)) return http.redirect(req, self_url);
         storage.deleteUserData(io, alloc, id) catch return req.respond("delete failed\n", .{ .status = .internal_server_error });

@@ -13,6 +13,7 @@
 //! chat account store.
 
 const std = @import("std");
+const limits = @import("limits.zig");
 const Io = std.Io;
 const http = @import("http.zig");
 const storage = @import("storage.zig");
@@ -32,7 +33,7 @@ const engine_glue_js = @embedFile("engine_glue_js");
 const solver_wasm = @embedFile("solver_wasm");
 
 // maxAppendBytes caps a single action line.
-const maxAppendBytes = 64 * 1024;
+const maxAppendBytes = limits.body.game_append;
 
 // The curated catalogs, easiest-first (1-line … 6-line), then the
 // sim-mined stretch boards. Wired in build.zig.

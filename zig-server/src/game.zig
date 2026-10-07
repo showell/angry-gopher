@@ -20,6 +20,7 @@
 //! read sessions off disk; the puzzle surface was write-only.
 
 const std = @import("std");
+const limits = @import("limits.zig");
 const Io = std.Io;
 const http = @import("http.zig");
 const storage = @import("storage.zig");
@@ -39,8 +40,8 @@ const engine_js = @embedFile("engine_js");
 const engine_glue_js = @embedFile("engine_glue_js");
 
 // Body-size caps.
-const max_new_session_bytes = 256 * 1024;
-const max_append_bytes = 64 * 1024;
+const max_new_session_bytes = limits.body.game_new_session;
+const max_append_bytes = limits.body.game_append;
 
 /// handle dispatches /game/* — `sub` keeps its leading '/' (e.g. "/elm.js",
 /// "/sessions/3/actions"), empty for exactly "/game".

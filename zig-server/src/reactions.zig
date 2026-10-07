@@ -15,6 +15,7 @@
 //!   POST /<…>/<sid>/react       form msg=<n> emoji=<glyph> on=<1|0> → 204
 
 const std = @import("std");
+const limits = @import("limits.zig");
 const Io = std.Io;
 const http = @import("http.zig");
 const users = @import("users.zig");
@@ -26,7 +27,7 @@ const Alloc = std.mem.Allocator;
 const Request = std.http.Server.Request;
 
 /// A react form is three short fields; anything bigger is not a reaction.
-const max_body_bytes = 1024;
+const max_body_bytes = limits.body.reaction;
 /// The longest whitelisted glyph is a base character plus a variation selector
 /// (7 bytes); 16 leaves room without admitting a sentence.
 pub const max_emoji_bytes = 16;

@@ -31,6 +31,7 @@
 //! opaque 404 (no existence leak); sid path-traversal guard.
 
 const std = @import("std");
+const limits = @import("limits.zig");
 const Io = std.Io;
 const http = @import("http.zig");
 const users = @import("users.zig");
@@ -60,7 +61,7 @@ const Alloc = std.mem.Allocator;
 const Request = std.http.Server.Request;
 
 /// Max bytes for one posted message.
-const max_message_bytes = 64 * 1024;
+const max_message_bytes = limits.body.chat_message;
 
 // Resolved-conversation domain types (Conv, Topic) live in chat_conv.zig — shared
 // with the page renderer (chat_page.zig) so neither side re-discriminates kind.

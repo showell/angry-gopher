@@ -15,6 +15,7 @@
 //! state, so it is idempotent).
 
 const std = @import("std");
+const limits = @import("limits.zig");
 const Io = std.Io;
 const Alloc = std.mem.Allocator;
 const http = @import("http.zig");
@@ -36,7 +37,7 @@ pub fn render(req: *Request, io: Io, alloc: Alloc, client: ?[]const u8) !void {
 
     // The re-entry, throttled like sign-in (QUEUE.md item 100).
     if (throttle.check(io, client, ui.admin_uid)) |b| return form(req, alloc, defaults(), b.text(), .too_many_requests);
-    const sent = (try http.readLimitedBody(req, alloc, 16 * 1024)) orelse return;
+    const sent = (try http.readLimitedBody(req, alloc, limits.body.retire_form)) orelse return;
     const password = (try chat.formField(alloc, sent, "password")) orelse "";
     const in = try readForm(alloc, sent);
     if (!users.checkUserPassword(io, alloc, ui.admin_uid, password)) {

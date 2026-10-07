@@ -23,7 +23,7 @@ lynrummy.com {
 	}
 	@notupload not path_regexp nup ^(/chat/c/[^/]+/[^/]+|/channel/[^/]+/[^/]+)/upload$
 	request_body @notupload {
-		max_size 1MB
+		max_size 1MiB
 	}
 
 	header {

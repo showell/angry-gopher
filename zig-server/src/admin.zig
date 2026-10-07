@@ -16,6 +16,7 @@
 //! subject, and the shell and the gate they share live in admin_ui.zig.
 
 const std = @import("std");
+const limits = @import("limits.zig");
 const Io = std.Io;
 const Alloc = std.mem.Allocator;
 const http = @import("http.zig");
@@ -51,7 +52,7 @@ pub fn handle(req: *Request, io: Io, alloc: Alloc, client: ?[]const u8, sub: []c
 /// the admin acting on any member.
 fn handleAPIKey(req: *Request, io: Io, alloc: Alloc) !void {
     if (req.head.method != .POST) return http.redirect(req, "/admin");
-    const body = (try http.readLimitedBody(req, alloc, 64 * 1024)) orelse return;
+    const body = (try http.readLimitedBody(req, alloc, limits.body.form)) orelse return;
     const id = std.mem.trim(u8, (try chat.formField(alloc, body, "user")) orelse "", " \t\r\n");
     if (!apiKeyTarget(io, alloc, id)) return http.redirect(req, "/admin");
     const revoke = (try chat.formField(alloc, body, "revoke")) orelse "";

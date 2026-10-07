@@ -37,6 +37,7 @@
 //! through this module.
 
 const std = @import("std");
+const limits = @import("limits.zig");
 const Io = std.Io;
 const Alloc = std.mem.Allocator;
 const http = @import("http.zig");
@@ -214,7 +215,7 @@ pub fn handle(req: *std.http.Server.Request, io: Io, alloc: Alloc, client: ?[]co
         return renderPage(req, alloc, cur.name, from_query, "");
     }
 
-    const body = (try http.readLimitedBody(req, alloc, 64 * 1024)) orelse return;
+    const body = (try http.readLimitedBody(req, alloc, limits.body.form)) orelse return;
     const next = sanitizeNext((try formField(alloc, body, "next")) orelse from_query);
     const vr = try names.validateUserName(alloc, (try formField(alloc, body, "name")) orelse "");
     if (vr.err.len != 0) return renderPage(req, alloc, cur.name, next, vr.err);

@@ -8,6 +8,7 @@
 //!   POST /settings/apikey   generate (or revoke=1) the caller's key
 
 const std = @import("std");
+const limits = @import("limits.zig");
 const Io = std.Io;
 const Alloc = std.mem.Allocator;
 const http = @import("http.zig");
@@ -37,7 +38,7 @@ pub fn handle(req: *Request, io: Io, alloc: Alloc, bus: *Bus, sub: []const u8) !
 /// resolved identity. GET falls back to the settings page.
 fn handleAPIKey(req: *Request, io: Io, alloc: Alloc, uid: []const u8) !void {
     if (req.head.method != .POST) return http.redirect(req, "/settings");
-    const body = (try http.readLimitedBody(req, alloc, 64 * 1024)) orelse return;
+    const body = (try http.readLimitedBody(req, alloc, limits.body.form)) orelse return;
     const revoke = (try chat.formField(alloc, body, "revoke")) orelse "";
     if (std.mem.eql(u8, revoke, "1")) {
         users.clearUserAPIKey(io, alloc, uid);

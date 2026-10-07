@@ -13,6 +13,7 @@
 //! whole-file download (and bounds the bytes held in RAM per request).
 
 const std = @import("std");
+const limits = @import("limits.zig");
 const Io = std.Io;
 const http = @import("http.zig");
 const edge = @import("edge.zig");
@@ -25,7 +26,7 @@ const Request = std.http.Server.Request;
 /// max_any_upload bounds the body read before the kind is known (sniffing needs
 /// the bytes in hand): the largest per-file cap across kinds, plus multipart
 /// slack. The per-kind caps themselves live on UploadKind.cap().
-const max_any_upload = @max(UploadKind.image.cap(), UploadKind.video.cap()) + (1 << 20);
+const max_any_upload = limits.body.upload_any;
 
 /// range_window caps the bytes served for one Range request, so a single 206
 /// stays bounded no matter how open-ended the range — the browser just requests
@@ -245,8 +246,8 @@ const UploadKind = enum {
     /// per-file upload cap for this kind (the shared lifetime quota is separate).
     fn cap(k: UploadKind) usize {
         return switch (k) {
-            .image => 10 << 20, // 10 MiB
-            .video => 100 << 20, // 100 MiB
+            .image => limits.body.upload_image,
+            .video => limits.body.upload_video,
         };
     }
     /// the noun for this kind in size-limit messages.

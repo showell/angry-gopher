@@ -23,6 +23,7 @@
 //! (a direct call here — there's only the one listener).
 
 const std = @import("std");
+const limits = @import("limits.zig");
 const Io = std.Io;
 const http = @import("http.zig");
 const users = @import("users.zig");
@@ -85,7 +86,7 @@ fn handleLoginFull(req: *Request, io: Io, alloc: Alloc, bus: *Bus) !void {
     const address = game_limits.clientAddress(alloc, req, bus.peer) catch null;
     var body: []const u8 = "";
     if (req.head.method == .POST) {
-        body = (try http.readLimitedBody(req, alloc, 64 * 1024)) orelse return;
+        body = (try http.readLimitedBody(req, alloc, limits.body.form)) orelse return;
     }
     const next = sanitizeNext((try formValue(alloc, target, body, "next")) orelse "");
     const has_identity = cur.id.len != 0;
@@ -240,7 +241,7 @@ pub fn handleLogout(req: *Request, io: Io, alloc: Alloc) !void {
     const id = if (user.id.len != 0) user.id else local.id;
 
     if (req.head.method == .POST) {
-        const body = (try http.readLimitedBody(req, alloc, 64 * 1024)) orelse return;
+        const body = (try http.readLimitedBody(req, alloc, limits.body.form)) orelse return;
         const release = (try chat.formField(alloc, body, "release")) orelse "";
         const target = releaseTarget(user.id, local.id, local.id.len != 0 and users.principalExists(io, alloc, local.id));
         if (std.mem.eql(u8, release, "yes")) if (target) |t| {
