@@ -335,6 +335,12 @@ pub fn principalExists(io: Io, alloc: Alloc, id: []const u8) bool {
 pub fn principalAuthorized(io: Io, alloc: Alloc, id: []const u8) bool {
     return userIsAuthorized(io, alloc, id) catch false;
 }
+/// As `principalAuthorized`, with an error left to the caller: for a check
+/// whose safe answer to "could not tell" is "a member" (uid_cookie's legacy
+/// cookies, where "not a member" would honour one).
+pub fn principalAuthorizedOrError(io: Io, alloc: Alloc, id: []const u8) !bool {
+    return userIsAuthorized(io, alloc, id);
+}
 pub fn principalIsAgent(id: []const u8) bool {
     return isAgent(id);
 }

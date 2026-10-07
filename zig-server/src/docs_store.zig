@@ -188,7 +188,7 @@ pub fn docExists(io: Io, alloc: Alloc, uid: []const u8, slug: []const u8) !bool 
 /// createUserDoc).
 pub fn writeUserDoc(io: Io, alloc: Alloc, uid: []const u8, slug: []const u8, body: []const u8) !void {
     const path = try docPath(alloc, uid, slug);
-    if (!disk.has(io, alloc, path)) return error.DocDoesNotExist;
+    if (!try disk.has(io, alloc, path)) return error.DocDoesNotExist;
     try disk.write(io, alloc, path, body, .{});
 }
 

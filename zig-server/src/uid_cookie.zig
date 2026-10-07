@@ -160,7 +160,8 @@ pub fn windowOpen(io: Io, alloc: Alloc) bool {
 /// Whether an unsigned cookie naming `id` is honoured: see the file header.
 fn legacyHonoured(io: Io, alloc: Alloc, id: []const u8) bool {
     if (!validId(id)) return false;
-    if (users.principalAuthorized(io, alloc, id)) return false; // a member or an agent: never
+    // A member or an agent: never. One that cannot be told is taken as one.
+    if (users.principalAuthorizedOrError(io, alloc, id) catch true) return false;
     if (isMarked(io, alloc, id)) return false;
     const row = std.fs.path.join(alloc, &.{ player.player_root, id, "name" }) catch return false;
     if (!(store.has(io, alloc, row) catch return false) and !users.principalExists(io, alloc, id)) return false;

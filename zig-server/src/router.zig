@@ -449,7 +449,8 @@ const UidSite = struct {
     }
 
     fn marked(a: std.mem.Allocator, io: Io, id: []const u8) bool {
-        return disk.has(io, a, std.fs.path.join(a, &.{ player.player_root, id, "signed" }) catch return false);
+        const p = std.fs.path.join(a, &.{ player.player_root, id, "signed" }) catch return false;
+        return disk.has(io, a, p) catch false;
     }
 };
 
@@ -658,11 +659,11 @@ test "route: /puzzles writes nothing; a session is made by its first move" {
         try testing.expectEqualStrings("200 OK", status(page));
         try testing.expect(std.mem.indexOf(u8, page, "session_id: 1\\n") != null);
     }
-    try testing.expect(!UidSite.disk.has(io, a, games));
+    try testing.expect(!try UidSite.disk.has(io, a, games));
 
     // An id never offered makes nothing.
     try testing.expectEqualStrings("404 Not Found", status(try postAs(a, io, "/puzzles/sessions/5/puzzles/0/actions", me, "1) x")));
-    try testing.expect(!UidSite.disk.has(io, a, games));
+    try testing.expect(!try UidSite.disk.has(io, a, games));
 
     // The first move makes the session, with its meta, and lands.
     try testing.expectEqualStrings("204 No Content", status(try postAs(a, io, "/puzzles/sessions/1/puzzles/0/actions", me, "1) x")));
@@ -714,8 +715,8 @@ test "route: a player's games are refused, 507, past 16 MiB or 500 sessions, and
     // Nothing of the refused writes landed.
     const actions = try UidSite.disk.read(io, a, try std.fs.path.join(a, &.{ games, "lynrummy-elm", "sessions", "1", "actions.dsl" }), .limited(1 << 10));
     try testing.expectEqual(@as(usize, 100), actions.len);
-    try testing.expect(!UidSite.disk.has(io, a, try std.fs.path.join(a, &.{ games, "lynrummy-elm", "sessions", "2" })));
-    try testing.expect(!UidSite.disk.has(io, a, try std.fs.path.join(a, &.{ games, "puzzle" })));
+    try testing.expect(!try UidSite.disk.has(io, a, try std.fs.path.join(a, &.{ games, "lynrummy-elm", "sessions", "2" })));
+    try testing.expect(!try UidSite.disk.has(io, a, try std.fs.path.join(a, &.{ games, "puzzle" })));
 
     // Sessions: another player with 500 on disk may not make one more,
     // but may still play in the ones they have.
