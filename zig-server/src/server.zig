@@ -173,6 +173,17 @@ fn handleConn(io: std.Io, alloc: std.mem.Allocator, hub: *Hub, stream: net.Strea
         else => return e,
     };
     req.head.keep_alive = false; // force `connection: close` without touching each handler
+    // **A SMALL BODY ARRIVES BEFORE THE TURN** (gopher-metal HOST.md; metal's
+    // ready.zig waits the same way): a body of a stated length, not chunked,
+    // not waiting on `100-continue`, that fits the buffer after the head
+    // without moving it (the head's strings point into the buffer), is read
+    // in here, so a client slow to send it holds up no other handler. Any
+    // other body is read by its handler inside the turn, as on metal.
+    if (req.head.content_length) |len| {
+        const r = &sr.interface;
+        if (req.head.transfer_encoding == .none and req.head.expect == null and len <= r.buffer.len - r.seek)
+            r.fill(@intCast(len)) catch {};
+    }
     var bus = Bus.of(hub);
     var peer_buf: [64]u8 = undefined;
     bus.peer = peerText(&peer_buf, stream.socket.address);
