@@ -10,9 +10,11 @@
 //! Concurrency: each accepted connection runs as its own task on the std.Io
 //! thread pool (a never-awaited Io.Group + group.concurrent — see main). The
 //! pool grows on demand and finished tasks self-reap, so it's effectively
-//! goroutine-per-connection. This is the model chat needs (long-lived SSE
-//! streams that mustn't starve other connections); bus.zig is the keyed
-//! fan-out runtime those streams run on. Each connection still serves ONE
+//! goroutine-per-connection: connections are accepted, read and written at
+//! once, and a kept stream is served on its own task (bus.zig). **But only
+//! one handler runs at a time** (`turn`): the route table runs as it does on
+//! gopher-metal's single loop, so the two hosts are one machine (Steve,
+//! 2026-10-07; gopher-metal HOST.md). Each connection still serves ONE
 //! request then closes (keep-alive off): see handleConn.
 //!
 //! Run:  ops/build_elm && ops/build_safari_wasm && ops/build_delivery
@@ -121,6 +123,14 @@ pub fn main(init: std.process.Init.Minimal) !void {
     }
 }
 
+/// **ONE HANDLER AT A TIME** (gopher-metal HOST.md): held while `route`
+/// runs, so no two handlers interleave, as on gopher-metal, where one loop
+/// runs each to its end. Reading the head comes before it and serving a kept
+/// stream after it, so a slow client holds nobody up but a handler reading
+/// its body, which is metal's rule too (ready.zig: a body too big to wait for
+/// is read by the handler as it arrives).
+var turn: Io.Mutex = .init;
+
 /// serveConn is the per-connection task body. It returns void (swallowing all
 /// errors) so it coerces to the Cancelable!void that Io.Group requires.
 fn serveConn(io: std.Io, alloc: std.mem.Allocator, hub: *Hub, stream: net.Stream) void {
@@ -166,7 +176,10 @@ fn handleConn(io: std.Io, alloc: std.mem.Allocator, hub: *Hub, stream: net.Strea
     var bus = Bus.of(hub);
     var peer_buf: [64]u8 = undefined;
     bus.peer = peerText(&peer_buf, stream.socket.address);
-    try router.route(&req, io, arena.allocator(), &bus);
+    turn.lockUncancelable(io);
+    const routed = router.route(&req, io, arena.allocator(), &bus);
+    turn.unlock(io);
+    try routed;
     // A stream the handler kept is served here, on this connection's own task,
     // until its client goes away — the loop the handler used to run itself.
     if (bus.kept) |kept| bus_mod.serveKept(hub, kept, &sw.interface);
