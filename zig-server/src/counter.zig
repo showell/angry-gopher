@@ -16,15 +16,10 @@ const Io = std.Io;
 const Alloc = std.mem.Allocator;
 const store = @import("store.zig");
 
-/// mu serializes the read-add-write within this process, so two requests cannot
-/// be handed the same id.
-var mu: Io.Mutex = .init;
 
 /// next returns the counter's current value and persists value+1, creating the
 /// file and its parent directories. Floors at 1.
 pub fn next(io: Io, alloc: Alloc, path: []const u8) !i64 {
-    mu.lockUncancelable(io);
-    defer mu.unlock(io);
 
     var n: i64 = 0;
     if (store.read(io, alloc, path, .limited(64))) |body| {
@@ -44,8 +39,6 @@ pub fn next(io: Io, alloc: Alloc, path: []const u8) !i64 {
 /// page offers before anything is made (puzzles.zig, a session made on its
 /// first move). Floors at 1, as `next` does.
 pub fn peek(io: Io, alloc: Alloc, path: []const u8) i64 {
-    mu.lockUncancelable(io);
-    defer mu.unlock(io);
     const body = store.read(io, alloc, path, .limited(64)) catch return 1;
     const n = std.fmt.parseInt(i64, std.mem.trim(u8, body, " \t\r\n"), 10) catch return 1;
     return @max(n, 1);

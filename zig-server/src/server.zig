@@ -25,6 +25,7 @@ const std = @import("std");
 const Io = std.Io;
 const net = std.Io.net;
 const router = @import("router.zig");
+const turn = @import("turn.zig");
 const store = @import("store.zig");
 const request = @import("request.zig");
 const config = @import("config.zig");
@@ -151,13 +152,6 @@ fn syncWrites() void {
     };
 }
 
-/// **ONE HANDLER AT A TIME** (gopher-metal HOST.md): held while `route`
-/// runs, so no two handlers interleave, as on gopher-metal, where one loop
-/// runs each to its end. Reading the head comes before it and serving a kept
-/// stream after it, so a slow client holds nobody up but a handler reading
-/// its body, which is metal's rule too (ready.zig: a body too big to wait for
-/// is read by the handler as it arrives).
-var turn: Io.Mutex = .init;
 
 /// serveConn is the per-connection task body. It returns void (swallowing all
 /// errors) so it coerces to the Cancelable!void that Io.Group requires.
@@ -215,9 +209,12 @@ fn handleConn(io: std.Io, alloc: std.mem.Allocator, hub: *Hub, stream: net.Strea
     var bus = Bus.of(hub);
     var peer_buf: [64]u8 = undefined;
     bus.peer = peerText(&peer_buf, stream.socket.address);
-    turn.lockUncancelable(io);
+    // **ONE HANDLER AT A TIME** (turn.zig): reading the head came before
+    // the turn and serving a kept stream comes after it, so a slow client
+    // holds nobody up but a handler reading its body, as on gopher-metal.
+    turn.enter(io);
     const routed = router.route(&req, io, arena.allocator(), &bus);
-    turn.unlock(io);
+    turn.leave(io);
     try routed;
     // A stream the handler kept is served here, on this connection's own task,
     // until its client goes away — the loop the handler used to run itself.

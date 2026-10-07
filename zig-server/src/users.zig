@@ -258,9 +258,6 @@ fn touchUserImpl(io: Io, alloc: Alloc, id: []const u8) !void {
 /// a runaway/abuse backstop, not a tight quota.
 pub const max_upload_lifetime_bytes: i64 = 1 << 30; // 1 GiB per user, lifetime
 
-/// upload_bytes_mu serializes the read-add-write on the lifetime upload total so
-/// two concurrent uploads can't both slip past the cap.
-var upload_bytes_mu: Io.Mutex = .init;
 
 /// userUploadBytes returns the cumulative bytes a user has ever uploaded
 /// ({users_root}/{id}/upload-bytes), or 0 when absent/unparseable.
@@ -272,11 +269,9 @@ pub fn userUploadBytes(io: Io, alloc: Alloc, id: []const u8) i64 {
 
 /// reserveUploadBytes atomically adds `n` to the user's lifetime upload total if
 /// that stays within max_upload_lifetime_bytes, returning true; otherwise nothing
-/// changes and it returns false. Serialized via upload_bytes_mu.
+/// changes and it returns false. One handler runs at a time, so the check and the add are one step.
 pub fn reserveUploadBytes(io: Io, alloc: Alloc, id: []const u8, n: i64) bool {
     if (!allDigits(id)) return false;
-    upload_bytes_mu.lockUncancelable(io);
-    defer upload_bytes_mu.unlock(io);
     const total = userUploadBytes(io, alloc, id) + n;
     if (total > max_upload_lifetime_bytes) return false;
     const dir = std.fs.path.join(alloc, &.{ users_root, id }) catch return false;

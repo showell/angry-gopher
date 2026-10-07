@@ -31,7 +31,6 @@ const window_ns: i128 = 5 * std.time.ns_per_min;
 /// guard. Process-lifetime; keys are dupes owned by the metered base allocator
 /// (mem_meter) so this map's growth shows up in the leak meter.
 const gpa = mem_meter.base();
-var mu: Io.Mutex = .init;
 var last_seen: std.StringHashMapUnmanaged(i128) = .empty;
 
 fn nowNs(io: Io) i128 {
@@ -45,8 +44,6 @@ fn nowNs(io: Io) i128 {
 pub fn markActive(io: Io, uid: []const u8) bool {
     if (uid.len == 0) return false;
     const now = nowNs(io);
-    mu.lockUncancelable(io);
-    defer mu.unlock(io);
     const gop = last_seen.getOrPut(gpa, uid) catch return false;
     if (!gop.found_existing) {
         // getOrPut stored the borrowed (arena) key slice; replace it with a
@@ -68,8 +65,6 @@ pub fn markActive(io: Io, uid: []const u8) bool {
 /// first-paint Online flag.
 pub fn isOnline(io: Io, uid: []const u8) bool {
     if (uid.len == 0) return false;
-    mu.lockUncancelable(io);
-    defer mu.unlock(io);
     const v = last_seen.get(uid) orelse return false;
     return (nowNs(io) - v) < window_ns;
 }

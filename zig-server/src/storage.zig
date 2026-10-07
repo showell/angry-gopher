@@ -11,7 +11,7 @@
 //!   meta                       — created_at + catalog snapshot (DSL)
 //!   puzzle_<idx>/actions.dsl   — one `<seq>) <action>` line per append
 //!
-//! **APPENDS ARE SERIALIZED** (append_mu). store.append stats the file's size
+//! **APPENDS ARE SERIALIZED** by the host: one handler runs at a time (gopher-metal HOST.md). store.append stats the file's size
 //! and then writes at it (the std.Io file API exposes no O_APPEND), so two
 //! appends to one file at once could both write at the old end, one over the
 //! other. This file once said that could not happen, because one request
@@ -27,10 +27,6 @@ const counter = @import("counter.zig");
 const store = @import("store.zig");
 const game_limits = @import("game_limits.zig");
 
-/// append_mu serializes every game-store append (see the file header). One
-/// lock for the store, as chat_mu is for chat: appends are one positional
-/// write each, so contention costs little.
-var append_mu: Io.Mutex = .init;
 
 /// data_root is the live game-data dir (repo-relative from zig-server/, hence the `..`).
 pub var data_root: []const u8 = "../games/lynrummy/data";
@@ -95,20 +91,15 @@ pub fn nextPuzzleSessionID(io: Io, alloc: Alloc, user_id: []const u8) !i64 {
     return counter.peek(io, alloc, try nextPuzzleIDPath(alloc, user_id));
 }
 
-/// create_mu makes "is it there, and is it the one offered" and the making of
-/// it one step, so two first moves at once make one session, not two.
-var create_mu: Io.Mutex = .init;
 
 /// Makes puzzle session `session_id`, with `meta`, if it is the one a page
 /// offered (`nextPuzzleSessionID`) and is not there yet; answers whether the
 /// session is there afterwards. An id never offered makes nothing.
 pub fn ensurePuzzleSession(io: Io, alloc: Alloc, user_id: []const u8, session_id: i64, meta: []const u8) !bool {
-    create_mu.lockUncancelable(io);
-    defer create_mu.unlock(io);
     if (try puzzleSessionExists(io, alloc, user_id, session_id)) return true;
     if (session_id != try nextPuzzleSessionID(io, alloc, user_id)) return false;
     const got = try allocatePuzzleSessionID(io, alloc, user_id);
-    std.debug.assert(got == session_id); // under create_mu, and counter's own lock
+    std.debug.assert(got == session_id); // one handler at a time
     try writePuzzleSessionFile(io, alloc, user_id, session_id, "meta", meta);
     return true;
 }
@@ -142,8 +133,6 @@ pub fn appendPuzzleSessionDslLine(io: Io, alloc: Alloc, user_id: []const u8, ses
 fn appendTextLine(io: Io, alloc: Alloc, path: []const u8, body: []const u8) !void {
     const trimmed = std.mem.trimEnd(u8, body, "\n");
     const line = try std.fmt.allocPrint(alloc, "{s}\n", .{trimmed});
-    append_mu.lockUncancelable(io);
-    defer append_mu.unlock(io);
     _ = try store.append(io, alloc, path, line);
 }
 
@@ -249,8 +238,6 @@ pub fn countSessionActions(io: Io, alloc: Alloc, user_id: []const u8, session_id
 /// compacted body never contains a newline.
 fn appendRawLine(io: Io, alloc: Alloc, path: []const u8, body: []const u8) !void {
     const line = try std.fmt.allocPrint(alloc, "{s}\n", .{body});
-    append_mu.lockUncancelable(io);
-    defer append_mu.unlock(io);
     _ = try store.append(io, alloc, path, line);
 }
 
@@ -301,11 +288,15 @@ fn appendMany(io: Io, parent: Alloc, user_id: []const u8, session_id: i64, write
     while (i < n) : (i += 1) {
         // A line long enough that two writes at one offset overlap.
         const line = std.fmt.bufPrint(&buf, "{d}-{d}) {s}", .{ writer, i, "x" ** 1500 }) catch return;
+        // Each append in a turn of its own, as a handler's would be: the host
+        // serializes handlers (turn.zig), and this file keeps no lock.
+        @import("turn.zig").enter(io);
+        defer @import("turn.zig").leave(io);
         appendSessionDslLine(io, alloc, user_id, session_id, "actions.dsl", line) catch return;
     }
 }
 
-test "fs: appends to one session from many writers at once all land, whole" {
+test "fs: appends to one session from many writers at once all land, whole, each in the host's turn" {
     var tmp = testing.tmpDir(.{});
     defer tmp.cleanup();
     var arena = std.heap.ArenaAllocator.init(testing.allocator);

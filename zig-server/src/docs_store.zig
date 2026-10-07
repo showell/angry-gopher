@@ -201,11 +201,6 @@ pub fn createUserDoc(io: Io, alloc: Alloc, uid: []const u8, title: []const u8) !
     return slug;
 }
 
-/// append_mu guards the read-modify-write in appendToUserDoc. An overwrite
-/// (writeUserDoc / autosave) is last-writer-wins and needs no lock, but an APPEND
-/// reads-then-writes, so two concurrent appends (the same user saving from two
-/// tabs) could otherwise drop one writer's bytes.
-var append_mu: Io.Mutex = .init;
 
 /// appendToUserDoc appends `addition` to a doc, CREATING it at the exact slug
 /// (never collision-suffixed, unlike createUserDoc) when it doesn't exist yet —
@@ -216,8 +211,6 @@ var append_mu: Io.Mutex = .init;
 pub fn appendToUserDoc(io: Io, alloc: Alloc, uid: []const u8, slug: []const u8, addition: []const u8, max_bytes: usize) !void {
     const path = try docPath(alloc, uid, slug); // re-validates the slug (traversal chokepoint)
 
-    append_mu.lockUncancelable(io);
-    defer append_mu.unlock(io);
 
     // **A DOCUMENT THAT WILL NOT READ IS NOT AN EMPTY DOCUMENT.** The write
     // below replaces the file with what was read plus this addition, so a

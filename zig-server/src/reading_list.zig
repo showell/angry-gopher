@@ -138,7 +138,7 @@ fn isIdChar(c: u8) bool {
 // alias. We re-parse only when the reading-list doc's mtime advances past the
 // cached one — a real edit moves mtime by seconds, so we err naturally toward a
 // cache miss rather than a stale hit. Module-level and lazy (no startup init);
-// cache_mu serialises access. Entries persist for the server's lifetime (a
+// One handler runs at a time (gopher-metal HOST.md), so nothing else touches it meanwhile. Entries persist for the server's lifetime (a
 // handful of users); an entry's arena is freed wholesale on each refresh.
 //
 // The base allocator is whatever the HOST named at startup — page_allocator on
@@ -155,15 +155,12 @@ const Entry = struct {
 
 const cache_alloc = mem_meter.base(); // server-lifetime, metered so the cache's growth is visible to the leak meter
 var cache: std.StringHashMapUnmanaged(Entry) = .empty;
-var cache_mu: Io.Mutex = .init;
 
 /// savedIdsFor returns the message ids the user has saved within (conv, sid) —
 /// the read-back set a chat page marks its bubbles against. Consults the cache,
 /// re-parsing the reading-list doc only when its mtime has advanced. The returned
 /// ids are copied into `req_alloc`, so nothing cache-owned escapes the lock.
 pub fn savedIdsFor(io: Io, req_alloc: Alloc, uid: []const u8, conv: []const u8, sid: []const u8) ![]const []const u8 {
-    cache_mu.lockUncancelable(io);
-    defer cache_mu.unlock(io);
 
     const path = docs_store.docPath(req_alloc, uid, reading_list_slug) catch return &.{};
     const st = disk.stat(io, req_alloc, path) catch return &.{}; // no doc → nothing saved

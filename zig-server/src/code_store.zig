@@ -22,8 +22,6 @@ const fence = @import("markdown_fence.zig");
 /// code_sep joins entries on disk (same shape as the Images feed).
 const code_sep = "\n\n-------------\n\n";
 
-/// codeMu serializes all code.md reads/appends (one global lock; code writes are rare).
-var codeMu: Io.Mutex = .init;
 
 pub const CodeBlock = struct { lang: []const u8, body: []const u8 };
 
@@ -117,8 +115,6 @@ pub fn appendCodeEntry(io: Io, alloc: Alloc, uid: []const u8, e: CodeEntry) !voi
     const path = try userCodePath(alloc, uid);
     const entry = try formatCodeEntry(alloc, e);
 
-    codeMu.lockUncancelable(io);
-    defer codeMu.unlock(io);
 
     // The read only decides whether a separator is needed — the write below
     // appends rather than replacing, so a failed read cost a separator and ran
@@ -136,8 +132,6 @@ pub fn appendCodeEntry(io: Io, alloc: Alloc, uid: []const u8, e: CodeEntry) !voi
 /// file → empty.
 pub fn readCodeForUser(io: Io, alloc: Alloc, uid: []const u8) ![]CodeEntry {
     const path = try userCodePath(alloc, uid);
-    codeMu.lockUncancelable(io);
-    defer codeMu.unlock(io);
     const data = disk.read(io, alloc, path, .unlimited) catch return &.{};
     return parseCodeFile(alloc, data);
 }

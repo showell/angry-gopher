@@ -78,7 +78,6 @@ const Slot = struct {
 var addrs: [slots]Slot = @splat(.{});
 var accounts: [slots]Slot = @splat(.{});
 var creates: [slots]Slot = @splat(.{}); // accounts created, per address (item 100)
-var mu: Io.Mutex = .init;
 
 /// **THE PROOF THE REFUSAL NEVER REACHED BCRYPT** (item 97): every refusal
 /// `check` returns is counted here, and it is exposed on `/version`
@@ -153,8 +152,6 @@ fn fresh(s: *Slot, key: []const u8, t: i64) void {
 /// password be checked. `address` may be null (the host gave no peer); then only
 /// the account dimension applies. A refusal is counted (`refused`).
 pub fn check(io: Io, address: ?[]const u8, account_id: []const u8) ?Bound {
-    mu.lockUncancelable(io);
-    defer mu.unlock(io);
     const t = now(io);
     if (address) |a| if (peek(&addrs, a, t, addr_window_s) >= addr_fails) {
         _ = @atomicRmw(u64, &refused_count, .Add, 1, .monotonic);
@@ -169,8 +166,6 @@ pub fn check(io: Io, address: ?[]const u8, account_id: []const u8) ?Bound {
 
 /// A password check failed: count it against both the address and the account.
 pub fn recordFailure(io: Io, address: ?[]const u8, account_id: []const u8) void {
-    mu.lockUncancelable(io);
-    defer mu.unlock(io);
     const t = now(io);
     if (address) |a| bump(&addrs, a, t, addr_window_s, addr_fails);
     bump(&accounts, account_id, t, account_window_s, account_fails);
@@ -179,10 +174,8 @@ pub fn recordFailure(io: Io, address: ?[]const u8, account_id: []const u8) void 
 /// A password check succeeded: clear this address's count, so a member who
 /// mistyped and then got it right is not throttled. The account's count is left
 /// (a correct password does not undo a distributed attack on it).
-pub fn clearAddress(io: Io, address: ?[]const u8) void {
+pub fn clearAddress(_: Io, address: ?[]const u8) void {
     const a = address orelse return;
-    mu.lockUncancelable(io);
-    defer mu.unlock(io);
     const key = a[0..@min(a.len, max_key)];
     for (&addrs) |*s| {
         if (s.len != 0 and std.mem.eql(u8, s.key[0..s.len], key)) {
@@ -199,8 +192,6 @@ pub fn clearAddress(io: Io, address: ?[]const u8) void {
 /// counts the creation it goes on to make with `recordCreate`.
 pub fn createAllowed(io: Io, address: ?[]const u8) ?Bound {
     const a = address orelse return null;
-    mu.lockUncancelable(io);
-    defer mu.unlock(io);
     if (peek(&creates, a, now(io), create_window_s) >= create_max) {
         _ = @atomicRmw(u64, &refused_count, .Add, 1, .monotonic);
         return .creates;
@@ -211,8 +202,6 @@ pub fn createAllowed(io: Io, address: ?[]const u8) ?Bound {
 /// An account was created from `address`: count it.
 pub fn recordCreate(io: Io, address: ?[]const u8) void {
     const a = address orelse return;
-    mu.lockUncancelable(io);
-    defer mu.unlock(io);
     bump(&creates, a, now(io), create_window_s, create_max);
 }
 

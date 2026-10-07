@@ -24,9 +24,6 @@ const disk = @import("store.zig");
 /// images_sep joins entries on disk (blank line, 13 hyphens, blank line).
 pub const images_sep = "\n\n-------------\n\n";
 
-/// imagesMu serializes all images.md reads/appends. One global lock (coarse, but
-/// correct — image writes are rare).
-var imagesMu: Io.Mutex = .init;
 
 /// ImagesEntry is one decoded/encoded block. `at` is the RFC3339 string as
 /// stored — the read+wire path needs no parsed timestamp, so the string suffices.
@@ -108,8 +105,6 @@ pub fn appendImagesEntry(io: Io, alloc: Alloc, uid: []const u8, e: ImagesEntry) 
     const path = try userImagesPath(alloc, uid);
     const entry = try formatImagesEntry(alloc, e);
 
-    imagesMu.lockUncancelable(io);
-    defer imagesMu.unlock(io);
 
     // The read only decides whether a separator is needed — the write below
     // appends rather than replacing, so a failed read cost a separator and ran
@@ -127,8 +122,6 @@ pub fn appendImagesEntry(io: Io, alloc: Alloc, uid: []const u8, e: ImagesEntry) 
 /// missing file → empty.
 pub fn readImagesForUser(io: Io, alloc: Alloc, uid: []const u8) ![]ImagesEntry {
     const path = try userImagesPath(alloc, uid);
-    imagesMu.lockUncancelable(io);
-    defer imagesMu.unlock(io);
     const data = disk.read(io, alloc, path, .unlimited) catch return &.{};
     return parseImagesFile(alloc, data);
 }

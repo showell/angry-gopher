@@ -132,15 +132,12 @@ const Usage = struct {
 
 var table: [slots]Usage = @splat(.{});
 var tick: u64 = 0;
-var mu: Io.Mutex = .init;
 
 /// Whether `id`, from `client`, may add `bytes`, and a session if
 /// `new_session`; null when it may, and then it is counted against both.
 pub fn admit(io: Io, alloc: Alloc, id: []const u8, client: ?[]const u8, new_session: bool, bytes: u64) !?Refusal {
     if (free_space) |f| if (f()) |s| if (s.free < s.total / 4) return .floor;
     if (id.len == 0 or id.len > id_max) return .bytes; // never a player's: refuse rather than miscount
-    mu.lockUncancelable(io);
-    defer mu.unlock(io);
     const u = try slot(io, alloc, id);
     if (new_session and u.sessions >= max_sessions) return .sessions;
     if (u.bytes + bytes > max_bytes) return .bytes;
@@ -156,8 +153,6 @@ pub fn admit(io: Io, alloc: Alloc, id: []const u8, client: ?[]const u8, new_sess
 /// when it may, and then it is counted.
 pub fn admitResign(io: Io, client: ?[]const u8) !?Refusal {
     const c = client orelse return null;
-    mu.lockUncancelable(io);
-    defer mu.unlock(io);
     const s = seenSlot(c, now(io));
     if (s.resigns >= resigns_per_hour) return .address_resigns;
     s.resigns += 1;
@@ -168,8 +163,6 @@ pub fn admitResign(io: Io, client: ?[]const u8) !?Refusal {
 /// then it is counted.
 pub fn admitPlayer(io: Io, client: ?[]const u8) !?Refusal {
     const c = client orelse return null;
-    mu.lockUncancelable(io);
-    defer mu.unlock(io);
     const s = seenSlot(c, now(io));
     if (s.players >= players_per_hour) return .address_players;
     s.players += 1;
@@ -182,9 +175,7 @@ fn now(io: Io) i64 {
 
 /// Drops what is kept for `id`: their folder has gone (a release), or changed
 /// behind the table's back.
-pub fn forget(io: Io, id: []const u8) void {
-    mu.lockUncancelable(io);
-    defer mu.unlock(io);
+pub fn forget(_: Io, id: []const u8) void {
     for (&table) |*u| if (u.len != 0 and std.mem.eql(u8, u.id[0..u.len], id)) {
         u.len = 0;
     };
