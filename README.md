@@ -38,6 +38,13 @@ it, on its own DigitalOcean droplet. The two repos stay separate:
   `tools/lint_portable.py` (run by `ops/check_zig`) fails a change that
   reaches around it. A change ships only after gopher-metal's gates pass on
   it.
+- **The two hosts are one machine, by contract** (gopher-metal `HOST.md`,
+  `STORE.md`): Linux runs **one handler at a time** as metal's single loop
+  does (`server.zig`'s turn); every bound on a request is in
+  [`zig-server/src/limits.zig`](zig-server/src/limits.zig), which both hosts
+  size their buffers from and `tools/check_caddy_limits.py` holds the
+  Caddyfile to; and `store.zig` answers the same on Linux and on metal, which
+  gopher-metal's `zig build store-judge` checks operation by operation.
 - **Which commit is live:** the "Serving" line in gopher-metal's `README.md`
   names the release and its angry-gopher commit; `https://lynrummy.com/version`
   reports the running build's `commit`.
