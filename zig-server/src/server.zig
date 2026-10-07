@@ -25,6 +25,8 @@ const std = @import("std");
 const Io = std.Io;
 const net = std.Io.net;
 const router = @import("router.zig");
+const store = @import("store.zig");
+const request = @import("request.zig");
 const config = @import("config.zig");
 const edge = @import("edge.zig");
 const mem_meter = @import("mem_meter.zig");
@@ -62,6 +64,17 @@ pub fn main(init: std.process.Init.Minimal) !void {
     var env = try std.process.Environ.createMap(init.environ, alloc);
     defer env.deinit();
     try config.load(io, alloc, env);
+
+    // **NO RESPONSE BEFORE ITS WRITES ARE DURABLE** (gopher-metal HOST.md,
+    // "Durability"), as gopher-metal flushes before a response: the data's
+    // two roots are opened once, and request.zig's hook syncs their
+    // filesystems before a response that follows a write.
+    for ([_]?[]const u8{ store.data_base, store.auth_base }, 0..) |base, i| {
+        const b = base orelse continue;
+        const dir = Io.Dir.cwd().openDir(io, b, .{}) catch continue;
+        sync_fds[i] = dir.handle;
+    }
+    request.before_response = syncWrites;
 
     // **THE SESSION SECRET MOVES INTO auth/, ONCE** (QUEUE item 106): a tree
     // written before the move keeps it in data/chat/; carry it over before the
@@ -121,6 +134,21 @@ pub fn main(init: std.process.Init.Minimal) !void {
             serveConn(io, alloc, &hub, stream);
         };
     }
+}
+
+/// The data's roots, open for `syncWrites`; -1 where a root is not set.
+var sync_fds: [2]std.posix.fd_t = .{ -1, -1 };
+
+/// Before a response's first byte: if the store wrote since the last time,
+/// the filesystems under the data's roots are synced (`syncfs`), so "saved"
+/// in a response means on the disk. One handler at a time (`turn`), so the
+/// store's one flag is this request's.
+fn syncWrites() void {
+    if (!store.wrote) return;
+    store.wrote = false;
+    for (sync_fds) |fd| if (fd >= 0) {
+        _ = std.os.linux.syncfs(fd);
+    };
 }
 
 /// **ONE HANDLER AT A TIME** (gopher-metal HOST.md): held while `route`

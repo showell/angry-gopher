@@ -28,6 +28,14 @@ pub const RespondStreamingOptions = Raw.RespondStreamingOptions;
 pub const BodyWriter = std.http.BodyWriter;
 pub const Error = Raw.ExpectContinueError;
 
+/// **WHAT THE HOST DOES BEFORE A RESPONSE'S FIRST BYTE** (gopher-metal
+/// HOST.md, "Durability"): no response leaves before the writes ahead of it
+/// are durable. Linux sets this (server.zig: a `syncfs` when the store has
+/// written); gopher-metal leaves it null, since its io makes writes durable
+/// before any byte is sent (`io.durable`). Called by `respond` and
+/// `respondStreaming`, the only ways a response leaves.
+pub var before_response: ?*const fn () void = null;
+
 pub const Request = struct {
     raw: *Raw,
 
@@ -37,12 +45,14 @@ pub const Request = struct {
 
     /// The whole response: status and headers in `options`, then `content`.
     pub fn respond(r: *Request, content: []const u8, options: RespondOptions) Error!void {
+        if (before_response) |f| f();
         return r.raw.respond(content, options);
     }
 
     /// A response written in parts (a live stream, a large download): the
     /// head now, the body through the writer this answers.
     pub fn respondStreaming(r: *Request, buffer: []u8, options: RespondStreamingOptions) Error!BodyWriter {
+        if (before_response) |f| f();
         return r.raw.respondStreaming(buffer, options);
     }
 
@@ -51,3 +61,35 @@ pub const Request = struct {
         r.raw.head.keep_alive = false;
     }
 };
+
+// ── tests ───────────────────────────────────────────────────────────────────
+
+const testing = std.testing;
+
+var hook_calls: usize = 0;
+fn countHook() void {
+    hook_calls += 1;
+}
+
+test "a response, whole or in parts, calls the host's hook before it leaves" {
+    hook_calls = 0;
+    before_response = countHook;
+    defer before_response = null;
+    for (0..2) |i| {
+        var reader: std.Io.Reader = .fixed("GET / HTTP/1.1\r\nhost: x\r\n\r\n");
+        var out: std.Io.Writer.Allocating = .init(testing.allocator);
+        defer out.deinit();
+        var server = std.http.Server.init(&reader, &out.writer);
+        var raw = try server.receiveHead();
+        var req: Request = .{ .raw = &raw };
+        if (i == 0) {
+            try req.respond("hi", .{});
+        } else {
+            var buf: [64]u8 = undefined;
+            var body = try req.respondStreaming(&buf, .{});
+            try body.writer.writeAll("hi");
+            try body.end();
+        }
+    }
+    try testing.expectEqual(@as(usize, 2), hook_calls);
+}

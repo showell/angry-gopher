@@ -76,6 +76,14 @@ pub const Error = error{ BadName, PathTooLong, PathTooDeep };
 // test's temporary folder, the site's own files) is not measured.
 
 /// The two roots roots.point sets, as this host spells them; null until then.
+/// **WRITTEN SINCE THE LAST DURABLE POINT** (gopher-metal HOST.md,
+/// "Durability"): every call that changes the disk sets it, before it does.
+/// A host that makes writes durable before a response reads and clears it
+/// (Linux: server.zig, through request.zig's `before_response`); gopher-metal's
+/// io keeps its own account. One handler runs at a time, so one flag is
+/// enough.
+pub var wrote: bool = false;
+
 pub var data_base: ?[]const u8 = null;
 pub var auth_base: ?[]const u8 = null;
 
@@ -312,6 +320,7 @@ pub const WriteOptions = struct {
 
 /// Makes `path` hold exactly `data`, making the folders above it.
 pub fn write(io: Io, alloc: Alloc, path: []const u8, data: []const u8, opts: WriteOptions) !void {
+    wrote = true;
     const p = try forWrite(io, alloc, path);
     if (std.fs.path.dirname(p)) |d| try makeDir(io, alloc, d);
     // The flags are spelled in place, not named: std.Io and gopher-metal's io
@@ -341,6 +350,7 @@ pub fn write(io: Io, alloc: Alloc, path: []const u8, data: []const u8, opts: Wri
 /// Nothing is flushed: on Linux the rename is atomic in the namespace, but a
 /// power cut can still lose recent data that the kernel had not written.
 pub fn replace(io: Io, alloc: Alloc, path: []const u8, data: []const u8, opts: WriteOptions) !void {
+    wrote = true;
     const p = try forWrite(io, alloc, path);
     const dir = std.fs.path.dirname(p);
     if (dir) |d| try makeDir(io, alloc, d);
@@ -373,6 +383,7 @@ fn siblingName(alloc: Alloc, name: []const u8) ![]u8 {
 /// Adds `bytes` at the end of `path`, making it and the folders above it if
 /// needed, and answers its size afterwards. One positional write at the end.
 pub fn append(io: Io, alloc: Alloc, path: []const u8, bytes: []const u8) !u64 {
+    wrote = true;
     const p = try forWrite(io, alloc, path);
     if (std.fs.path.dirname(p)) |d| try makeDir(io, alloc, d);
     var file = try Io.Dir.cwd().createFile(io, p, .{ .truncate = false });
@@ -384,12 +395,14 @@ pub fn append(io: Io, alloc: Alloc, path: []const u8, bytes: []const u8) !u64 {
 
 /// Makes the folder `path` and every folder above it that is missing.
 pub fn makeDir(io: Io, alloc: Alloc, path: []const u8) !void {
+    wrote = true;
     try Io.Dir.cwd().createDirPath(io, try forMakeDir(io, alloc, path));
 }
 
 /// Removes the file at `path`. Not there is not an error: the caller wanted
 /// it gone, and it is.
 pub fn remove(io: Io, alloc: Alloc, path: []const u8) !void {
+    wrote = true;
     Io.Dir.cwd().deleteFile(io, path) catch |e| switch (e) {
         error.FileNotFound => {
             const p = (try retry(io, alloc, path)) orelse return;
@@ -403,6 +416,7 @@ pub fn remove(io: Io, alloc: Alloc, path: []const u8) !void {
 /// is not one FAT holds** (an empty or blank id joined onto a root would
 /// otherwise name the root itself).
 pub fn removeTree(io: Io, alloc: Alloc, path: []const u8) !void {
+    wrote = true;
     if (!fatName(std.fs.path.basename(path))) return error.BadName;
     const p = (try retry(io, alloc, path)) orelse path;
     try Io.Dir.cwd().deleteTree(io, p);
