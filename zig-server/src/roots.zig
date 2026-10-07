@@ -73,9 +73,10 @@ pub fn migrateSecret(io: Io, alloc: std.mem.Allocator) void {
         "_session_secret.previous-until",
     }) |name| {
         const old_path = std.fs.path.join(alloc, &.{ old_dir, name }) catch continue;
-        if (!store.has(io, alloc, old_path)) continue;
+        if (!(store.has(io, alloc, old_path) catch continue)) continue;
         const new_path = std.fs.path.join(alloc, &.{ new_dir, name }) catch continue;
-        if (!store.has(io, alloc, new_path)) {
+        // An error is not "absent": nothing is written over what may be there.
+        if (!(store.has(io, alloc, new_path) catch continue)) {
             const bytes = store.read(io, alloc, old_path, .unlimited) catch continue;
             store.write(io, alloc, new_path, bytes, .{ .private = true }) catch continue;
             // Confirm the new copy reads back whole before dropping the old.
@@ -177,8 +178,8 @@ test "migrateSecret moves the secret from data/chat to auth once, and never leav
     // It is in auth/ now, gone from data/chat/, and read from the new place.
     try testing.expectEqualStrings(secret, try store.read(io, a, try join(a, new, "_session_secret"), .unlimited));
     for ([_][]const u8{ "_session_secret", "_session_secret.previous", "_session_secret.previous-until" }) |name| {
-        try testing.expect(!store.has(io, a, try join(a, old, name)));
-        try testing.expect(store.has(io, a, try join(a, new, name)));
+        try testing.expect(!try store.has(io, a, try join(a, old, name)));
+        try testing.expect(try store.has(io, a, try join(a, new, name)));
     }
     try testing.expectEqualStrings(secret, (try users.sessionSecret(io, a)).?);
 
@@ -186,7 +187,7 @@ test "migrateSecret moves the secret from data/chat to auth once, and never leav
     // beside the new one, and the new secret is untouched.
     try store.write(io, a, try join(a, old, "_session_secret"), "stale", .{});
     migrateSecret(io, a);
-    try testing.expect(!store.has(io, a, try join(a, old, "_session_secret")));
+    try testing.expect(!try store.has(io, a, try join(a, old, "_session_secret")));
     try testing.expectEqualStrings(secret, (try users.sessionSecret(io, a)).?);
 }
 

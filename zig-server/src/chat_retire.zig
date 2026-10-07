@@ -365,7 +365,9 @@ fn convGone(io: Io, alloc: Alloc, conv: []const u8, gone_dms: *const UidSet) boo
         std.fs.path.join(alloc, &.{ chat_store.chat_root, conv }) catch return false
     else
         std.fs.path.join(alloc, &.{ chat_store.chat_root, "channels", conv }) catch return false;
-    return !store.has(io, alloc, dir);
+    // A folder that will not say whether it is there is not gone: nothing is
+    // swept on an error.
+    return !(store.has(io, alloc, dir) catch return false);
 }
 
 /// Whether `uid` is an account being kept: its auth dir is present and its name
@@ -515,27 +517,27 @@ test "fs: the dry run lists exactly what a confirm removes, and a second confirm
     try testing.expectEqual(@as(usize, 1), dry.countOf(.ref_last_session)); // 1/last-sessions/1_9
     try testing.expectEqual(@as(usize, 0), dry.countOf(.ref_pinned)); // 1_2 survives
     // The dry run touched nothing.
-    try testing.expect(store.has(io, a, try std.fs.path.join(a, &.{ users.auth_root, "9", "name" })));
-    try testing.expect(store.has(io, a, try sessionPath(a, try chat_store.dmConvDir(a, "1_2"), "oldtopic")));
+    try testing.expect(try store.has(io, a, try std.fs.path.join(a, &.{ users.auth_root, "9", "name" })));
+    try testing.expect(try store.has(io, a, try sessionPath(a, try chat_store.dmConvDir(a, "1_2"), "oldtopic")));
 
     // Confirm: the same report, carried out.
     var done = try plan(io, a, p, true);
     try testing.expectEqual(dry.total(), done.total());
 
     // The removed user is gone everywhere.
-    try testing.expect(!store.has(io, a, try std.fs.path.join(a, &.{ users.auth_root, "9" })));
-    try testing.expect(!store.has(io, a, try std.fs.path.join(a, &.{ player.player_root, "9" })));
-    try testing.expect(!store.has(io, a, try std.fs.path.join(a, &.{ users.users_root, "9" })));
-    try testing.expect(!store.has(io, a, try std.fs.path.join(a, &.{ storage.data_root, "9" })));
-    try testing.expect(!store.has(io, a, try std.fs.path.join(a, &.{ chat_store.chat_root, "users", "9" })));
-    try testing.expect(!store.has(io, a, try chat_store.dmConvDir(a, "1_9")));
+    try testing.expect(!try store.has(io, a, try std.fs.path.join(a, &.{ users.auth_root, "9" })));
+    try testing.expect(!try store.has(io, a, try std.fs.path.join(a, &.{ player.player_root, "9" })));
+    try testing.expect(!try store.has(io, a, try std.fs.path.join(a, &.{ users.users_root, "9" })));
+    try testing.expect(!try store.has(io, a, try std.fs.path.join(a, &.{ storage.data_root, "9" })));
+    try testing.expect(!try store.has(io, a, try std.fs.path.join(a, &.{ chat_store.chat_root, "users", "9" })));
+    try testing.expect(!try store.has(io, a, try chat_store.dmConvDir(a, "1_9")));
 
     // The old topic and its sidecars are gone; the fresh topic stays.
     const dm12 = try chat_store.dmConvDir(a, "1_2");
-    try testing.expect(!store.has(io, a, try sessionPath(a, dm12, "oldtopic")));
-    try testing.expect(!store.has(io, a, try std.fs.path.join(a, &.{ dm12, "sessions", "oldtopic.count" })));
-    try testing.expect(!store.has(io, a, try std.fs.path.join(a, &.{ dm12, "sessions", "oldtopic.uploads" })));
-    try testing.expect(store.has(io, a, try sessionPath(a, dm12, "freshtopic")));
+    try testing.expect(!try store.has(io, a, try sessionPath(a, dm12, "oldtopic")));
+    try testing.expect(!try store.has(io, a, try std.fs.path.join(a, &.{ dm12, "sessions", "oldtopic.count" })));
+    try testing.expect(!try store.has(io, a, try std.fs.path.join(a, &.{ dm12, "sessions", "oldtopic.uploads" })));
+    try testing.expect(try store.has(io, a, try sessionPath(a, dm12, "freshtopic")));
 
     // The channel stays, without uid 9; members 1 and 2 remain.
     const chan = try store.read(io, a, try std.fs.path.join(a, &.{ chat_store.chat_root, "channels", "general.channel" }), .unlimited);
@@ -544,9 +546,9 @@ test "fs: the dry run lists exactly what a confirm removes, and a second confirm
 
     // Kept user 1: the pointer into the gone DM is cleared; the surviving pin stays.
     const user1 = try std.fs.path.join(a, &.{ chat_store.chat_root, "users", "1" });
-    try testing.expect(!store.has(io, a, try std.fs.path.join(a, &.{ user1, "last-conv" })));
-    try testing.expect(!store.has(io, a, try std.fs.path.join(a, &.{ user1, "last-sessions", "1_9" })));
-    try testing.expect(store.has(io, a, try std.fs.path.join(a, &.{ user1, "pinned-sessions", "1_2" })));
+    try testing.expect(!try store.has(io, a, try std.fs.path.join(a, &.{ user1, "last-conv" })));
+    try testing.expect(!try store.has(io, a, try std.fs.path.join(a, &.{ user1, "last-sessions", "1_9" })));
+    try testing.expect(try store.has(io, a, try std.fs.path.join(a, &.{ user1, "pinned-sessions", "1_2" })));
 
     // A second confirm finds nothing left to do.
     var again = try plan(io, a, p, true);

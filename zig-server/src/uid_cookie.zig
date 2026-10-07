@@ -133,7 +133,7 @@ fn markerPath(alloc: Alloc, id: []const u8) ![]const u8 {
 /// re-sign still inside its grace. A marker that will not read is refused.
 fn isMarked(io: Io, alloc: Alloc, id: []const u8) bool {
     const p = markerPath(alloc, id) catch return true;
-    if (!store.has(io, alloc, p)) return false;
+    if (!(store.has(io, alloc, p) catch return true)) return false;
     const raw = store.read(io, alloc, p, .limited(64)) catch return true;
     const at = std.fmt.parseInt(i64, std.mem.trim(u8, raw, " \t\r\n"), 10) catch return true;
     const now: i64 = @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
@@ -163,7 +163,7 @@ fn legacyHonoured(io: Io, alloc: Alloc, id: []const u8) bool {
     if (users.principalAuthorized(io, alloc, id)) return false; // a member or an agent: never
     if (isMarked(io, alloc, id)) return false;
     const row = std.fs.path.join(alloc, &.{ player.player_root, id, "name" }) catch return false;
-    if (!store.has(io, alloc, row) and !users.principalExists(io, alloc, id)) return false;
+    if (!(store.has(io, alloc, row) catch return false) and !users.principalExists(io, alloc, id)) return false;
     return windowOpen(io, alloc);
 }
 

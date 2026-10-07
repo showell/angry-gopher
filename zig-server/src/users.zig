@@ -369,7 +369,7 @@ pub fn userLastSeen(io: Io, alloc: Alloc, id: []const u8) ?i64 {
 
 fn authFileExists(io: Io, alloc: Alloc, id: []const u8, name: []const u8) !bool {
     const path = try std.fs.path.join(alloc, &.{ auth_root, id, name });
-    return store.has(io, alloc, path);
+    return try store.has(io, alloc, path);
 }
 
 /// readAuthFile reads {auth_root}/{id}/{name}, or null if absent.
