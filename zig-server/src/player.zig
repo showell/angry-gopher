@@ -37,6 +37,7 @@
 //! through this module.
 
 const std = @import("std");
+const Request = @import("request.zig").Request;
 const limits = @import("limits.zig");
 const Io = std.Io;
 const Alloc = std.mem.Allocator;
@@ -65,7 +66,7 @@ pub const Player = struct { id: []const u8, name: []const u8 };
 /// player on disk, else the zero value (id == ""). An id that does not exist is
 /// no identity at all, so a stale cookie sends someone to the name page rather
 /// than filing games under a phantom.
-pub fn current(io: Io, alloc: Alloc, req: *std.http.Server.Request) !Player {
+pub fn current(io: Io, alloc: Alloc, req: *Request) !Player {
     // **SIGNED, OR ONCE** (uid_cookie.zig): a gopher_uid set by hand names no
     // one. A member whose cookie is unsigned is filed under their session.
     const id = blk: {
@@ -203,7 +204,7 @@ pub fn cookie(io: Io, alloc: Alloc, id: []const u8) !?[]const u8 {
 /// send a nameless visitor to.
 /// `client`: the caller's address, for the bound on new players per address
 /// (game_limits.zig); null when the host gave none.
-pub fn handle(req: *std.http.Server.Request, io: Io, alloc: Alloc, client: ?[]const u8) !void {
+pub fn handle(req: *Request, io: Io, alloc: Alloc, client: ?[]const u8) !void {
     // Header-derived state is read BEFORE the body: the body read invalidates
     // the live head, so the target and the current player are resolved up front.
     const target = try http.target(req, alloc);
@@ -211,7 +212,7 @@ pub fn handle(req: *std.http.Server.Request, io: Io, alloc: Alloc, client: ?[]co
 
     const from_query = try queryNext(alloc, target);
 
-    if (req.head.method != .POST) {
+    if (req.method() != .POST) {
         return renderPage(req, alloc, cur.name, from_query, "");
     }
 
@@ -275,7 +276,7 @@ fn formDecode(alloc: Alloc, raw: []const u8) ![]const u8 {
     return out.items;
 }
 
-fn renderPage(req: *std.http.Server.Request, alloc: Alloc, current_name: []const u8, next: []const u8, err_msg: []const u8) !void {
+fn renderPage(req: *Request, alloc: Alloc, current_name: []const u8, next: []const u8, err_msg: []const u8) !void {
     var b: std.ArrayList(u8) = .empty;
     try b.appendSlice(alloc, page_head);
     if (current_name.len != 0) {

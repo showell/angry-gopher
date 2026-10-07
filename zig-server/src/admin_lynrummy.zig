@@ -35,7 +35,7 @@ const storage = @import("storage.zig");
 const store = @import("store.zig");
 const ui = @import("admin_ui.zig");
 
-const Request = std.http.Server.Request;
+const Request = @import("request.zig").Request;
 
 /// handle dispatches /admin/lynrummy* — `sub` is the path after it.
 pub fn handle(req: *Request, io: Io, alloc: Alloc, sub: []const u8) !void {
@@ -53,7 +53,7 @@ const self_url = "/admin/lynrummy";
 /// on-disk game data. The player's row in the identity store is left alone: this
 /// deletes what they PLAYED, not who they are.
 fn handleDelete(req: *Request, io: Io, alloc: Alloc) !void {
-    if (req.head.method == .POST) {
+    if (req.method() == .POST) {
         const body = (try http.readLimitedBody(req, alloc, limits.body.form)) orelse return;
         const id = std.mem.trim(u8, (try formField(alloc, body, "user")) orelse "", " \t\r\n");
         if (!try exists(io, alloc, id)) return http.redirect(req, self_url);

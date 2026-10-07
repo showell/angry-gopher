@@ -18,7 +18,7 @@ const html = @import("html.zig");
 const Bus = @import("bus.zig").Bus;
 
 const Alloc = std.mem.Allocator;
-const Request = std.http.Server.Request;
+const Request = @import("request.zig").Request;
 
 /// handle dispatches /chat/code* — `rest` is the path after "/code" ("" or
 /// "/stream").

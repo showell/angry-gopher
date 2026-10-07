@@ -22,7 +22,7 @@ const markdown = @import("markdown.zig");
 const Bus = @import("bus.zig").Bus;
 
 const Alloc = std.mem.Allocator;
-const Request = std.http.Server.Request;
+const Request = @import("request.zig").Request;
 
 // ── per-topic stream (backlog replay + live + keepalive) ──────────────────────
 

@@ -30,6 +30,7 @@
 //! the next start measures afresh. A release forgets the player (`forget`).
 
 const std = @import("std");
+const Request = @import("request.zig").Request;
 const Io = std.Io;
 const Alloc = std.mem.Allocator;
 const store = @import("store.zig");
@@ -87,7 +88,7 @@ pub const Refusal = enum {
 
 /// The answer to a refusal: 507 for what is held, 429 for what an address did
 /// this hour.
-pub fn refuse(req: *std.http.Server.Request, r: Refusal) !void {
+pub fn refuse(req: *Request, r: Refusal) !void {
     const status: std.http.Status = switch (r) {
         .sessions, .bytes, .floor => .insufficient_storage,
         .address_players, .address_bytes, .address_resigns => .too_many_requests,
@@ -98,7 +99,7 @@ pub fn refuse(req: *std.http.Server.Request, r: Refusal) !void {
 /// The address a request is from, for the per-address bounds: `peer`, or the
 /// last X-Forwarded-For entry when `peer` is the trusted proxy. Null when the
 /// host gave no peer. Owned by `alloc`, so it outlives a body read.
-pub fn clientAddress(alloc: Alloc, req: *std.http.Server.Request, peer: ?[]const u8) !?[]const u8 {
+pub fn clientAddress(alloc: Alloc, req: *Request, peer: ?[]const u8) !?[]const u8 {
     const p = peer orelse return null;
     const proxy = trusted_proxy orelse return try alloc.dupe(u8, p);
     if (!std.mem.eql(u8, p, proxy)) return try alloc.dupe(u8, p);

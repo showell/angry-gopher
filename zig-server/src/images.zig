@@ -18,7 +18,7 @@ const html = @import("html.zig");
 const Bus = @import("bus.zig").Bus;
 
 const Alloc = std.mem.Allocator;
-const Request = std.http.Server.Request;
+const Request = @import("request.zig").Request;
 
 /// imagesPageLimit caps how many of the most-recent entries the page renders —
 /// it's a "what got shared lately" feed and every entry is a full image, so the

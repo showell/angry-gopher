@@ -32,7 +32,7 @@ const mem_meter = @import("mem_meter.zig");
 const store = @import("store.zig");
 
 const Alloc = std.mem.Allocator;
-const Request = std.http.Server.Request;
+const Request = @import("request.zig").Request;
 
 /// version is the build identity reported at /version. Bump it to make a
 /// redeploy observable (the "minor observable change" smoke test).

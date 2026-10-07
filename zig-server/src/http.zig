@@ -2,6 +2,7 @@
 //! the common responses. Keeps the per-feature handlers terse.
 
 const std = @import("std");
+const Request = @import("request.zig").Request;
 const Io = std.Io;
 const edge = @import("edge.zig");
 
@@ -30,14 +31,14 @@ pub const octet_ct = std.http.Header{ .name = "content-type", .value = "applicat
 // silently becomes garbage afterward, which once mis-attributed an authenticated
 // post to the wrong principal. So every accessor here returns memory OWNED by the
 // caller's allocator — a head value you hold can never dangle. This module is the
-// ONLY place allowed to touch `req.head.target` / `req.iterateHeaders()` directly;
+// ONLY place allowed to touch `req.raw.head.target` / `req.raw.iterateHeaders()` directly;
 // tools/lint_head_access.py enforces that, which is what makes the foot-gun
 // impossible to reintroduce rather than merely fixed once.
 
 /// header returns the value of the first request header whose name
 /// case-insensitively matches `name`, OWNED (duped into `alloc`), or null.
-pub fn header(req: *std.http.Server.Request, alloc: std.mem.Allocator, name: []const u8) !?[]const u8 {
-    var it = req.iterateHeaders();
+pub fn header(req: *Request, alloc: std.mem.Allocator, name: []const u8) !?[]const u8 {
+    var it = req.raw.iterateHeaders();
     while (it.next()) |h| {
         if (std.ascii.eqlIgnoreCase(h.name, name)) return try alloc.dupe(u8, h.value);
     }
@@ -46,13 +47,13 @@ pub fn header(req: *std.http.Server.Request, alloc: std.mem.Allocator, name: []c
 
 /// target returns the request target (`/path?query`), OWNED. Routing keeps
 /// slices of it alive past body reads, so it must not borrow from the head.
-pub fn target(req: *std.http.Server.Request, alloc: std.mem.Allocator) ![]const u8 {
-    return alloc.dupe(u8, req.head.target);
+pub fn target(req: *Request, alloc: std.mem.Allocator) ![]const u8 {
+    return alloc.dupe(u8, req.raw.head.target);
 }
 
 /// cookie returns the value of cookie `name` from any Cookie header, OWNED, or null.
-pub fn cookie(req: *std.http.Server.Request, alloc: std.mem.Allocator, name: []const u8) !?[]const u8 {
-    var it = req.iterateHeaders();
+pub fn cookie(req: *Request, alloc: std.mem.Allocator, name: []const u8) !?[]const u8 {
+    var it = req.raw.iterateHeaders();
     while (it.next()) |h| {
         if (!std.ascii.eqlIgnoreCase(h.name, "cookie")) continue;
         if (parseCookieValue(h.value, name)) |v| return try alloc.dupe(u8, v);
@@ -86,11 +87,11 @@ pub fn queryValue(target_str: []const u8, name: []const u8) ?[]const u8 {
     return null;
 }
 
-pub fn notFound(req: *std.http.Server.Request) !void {
+pub fn notFound(req: *Request) !void {
     try req.respond("not found\n", .{ .status = .not_found });
 }
 
-pub fn methodNotAllowed(req: *std.http.Server.Request) !void {
+pub fn methodNotAllowed(req: *Request) !void {
     try req.respond("method not allowed\n", .{ .status = .method_not_allowed });
 }
 
@@ -109,12 +110,12 @@ pub fn methodNotAllowed(req: *std.http.Server.Request) !void {
 /// response, hangs forever. A browser form post always sends Content-Length (0
 /// for an empty form), so this only bites a malformed/handcrafted client; we
 /// treat it as the empty body it spec'ly is rather than hang. (Steve, 2026-06-19.)
-pub fn readLimitedBody(req: *std.http.Server.Request, alloc: std.mem.Allocator, max: usize) !?[]u8 {
-    if (req.head.content_length == null and req.head.transfer_encoding == .none) {
+pub fn readLimitedBody(req: *Request, alloc: std.mem.Allocator, max: usize) !?[]u8 {
+    if (req.raw.head.content_length == null and req.raw.head.transfer_encoding == .none) {
         return try alloc.alloc(u8, 0);
     }
     var buf: [4 * 1024]u8 = undefined;
-    const reader = try req.readerExpectContinue(&buf);
+    const reader = try req.raw.readerExpectContinue(&buf);
     return reader.allocRemaining(alloc, .limited(max + 1)) catch |e| switch (e) {
         error.StreamTooLong => {
             try edge.reject(req, .body_too_large, "request body too large\n");
@@ -128,7 +129,7 @@ pub fn readLimitedBody(req: *std.http.Server.Request, alloc: std.mem.Allocator, 
 }
 
 /// redirect sends a 303 See Other to `location`.
-pub fn redirect(req: *std.http.Server.Request, location: []const u8) !void {
+pub fn redirect(req: *Request, location: []const u8) !void {
     try req.respond("", .{
         .status = .see_other,
         .extra_headers = &.{.{ .name = "location", .value = location }},

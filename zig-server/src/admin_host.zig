@@ -19,7 +19,7 @@ const edge = @import("edge.zig");
 const host_status = @import("host_status.zig");
 const build_options = @import("build_options");
 
-const Request = std.http.Server.Request;
+const Request = @import("request.zig").Request;
 
 /// render writes the page. The caller has already checked the admin gate.
 pub fn render(req: *Request, io: Io, alloc: Alloc) !void {

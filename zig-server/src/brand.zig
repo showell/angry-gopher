@@ -9,7 +9,7 @@
 const std = @import("std");
 const http = @import("http.zig");
 
-const Request = std.http.Server.Request;
+const Request = @import("request.zig").Request;
 
 const cat_professor = @embedFile("image_cat_professor");
 

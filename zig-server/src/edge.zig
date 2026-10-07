@@ -30,7 +30,7 @@
 
 const std = @import("std");
 const Alloc = std.mem.Allocator;
-const Request = std.http.Server.Request;
+const Request = @import("request.zig").Request;
 
 /// RejectKind is the closed set of edge-bound rejections. Each maps to a fixed
 /// HTTP status (statusFor). Add a kind here and it appears in /version's

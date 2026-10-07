@@ -19,6 +19,8 @@
 //! test, without a socket.
 
 const std = @import("std");
+const Request = @import("request.zig").Request;
+const request = @import("request.zig");
 const Io = std.Io;
 const http = @import("http.zig");
 const driving = @import("driving.zig");
@@ -120,7 +122,11 @@ fn localTarget(target: []const u8) []const u8 {
 /// the prefix stripped, e.g. "/app.js" or "/sessions/3/..."). The table below IS
 /// the site: every surface appears exactly once, and the comment on each arm
 /// says who may reach it.
-pub fn route(req: *std.http.Server.Request, io: Io, alloc: std.mem.Allocator, bus: *Bus) !void {
+/// `raw` is the host's request; the application sees it only through the
+/// door made here (request.zig).
+pub fn route(raw: *request.Raw, io: Io, alloc: std.mem.Allocator, bus: *Bus) !void {
+    var door: Request = .{ .raw = raw };
+    const req = &door;
     // **AN UNSIGNED gopher_uid IS RE-IDENTIFIED ONCE** (uid_cookie.zig): its
     // first GET inside the window comes back to the same page with the
     // signed cookie set, and the unsigned spelling is refused from then on.
@@ -221,7 +227,7 @@ pub fn route(req: *std.http.Server.Request, io: Io, alloc: std.mem.Allocator, bu
 /// is the empty name, which those pages already render as a Log in link.
 const Viewer = struct { name: []const u8, is_admin: bool };
 
-fn viewer(io: Io, alloc: std.mem.Allocator, req: *std.http.Server.Request) !Viewer {
+fn viewer(io: Io, alloc: std.mem.Allocator, req: *Request) !Viewer {
     const uid = try users.currentUserID(io, alloc, req);
     if (uid.len != 0) return .{
         .name = try users.getUserName(io, alloc, uid),

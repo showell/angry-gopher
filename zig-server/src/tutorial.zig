@@ -10,7 +10,7 @@
 const std = @import("std");
 const http = @import("http.zig");
 
-const Request = std.http.Server.Request;
+const Request = @import("request.zig").Request;
 
 const tutorial_html = @embedFile("tutorial_html");
 const tutorial_js = @embedFile("tutorial_js");

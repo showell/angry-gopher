@@ -22,7 +22,7 @@ const markdown = @import("markdown.zig");
 const store = @import("store.zig");
 
 const Alloc = std.mem.Allocator;
-const Request = std.http.Server.Request;
+const Request = @import("request.zig").Request;
 
 /// resume_path is the markdown source, repo-relative so it resolves in BOTH
 /// environments: ops/start runs with cwd = repo root, and the systemd unit's

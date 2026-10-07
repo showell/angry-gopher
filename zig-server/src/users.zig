@@ -30,6 +30,7 @@
 //! has a frozen-vector regression test at the bottom of this file.
 
 const std = @import("std");
+const Request = @import("request.zig").Request;
 const Io = std.Io;
 const Alloc = std.mem.Allocator;
 const auth = @import("auth.zig");
@@ -54,7 +55,7 @@ const session_max_age_secs: i64 = 365 * 24 * 60 * 60;
 
 /// currentUserID resolves the id a request acts as, or "" when there's no valid
 /// identity.
-pub fn currentUserID(io: Io, alloc: Alloc, req: *std.http.Server.Request) ![]const u8 {
+pub fn currentUserID(io: Io, alloc: Alloc, req: *Request) ![]const u8 {
     // 1. member session cookie (authoritative).
     if (try sessionUserID(io, alloc, req)) |id| return id;
     // 2. API key.
@@ -75,7 +76,7 @@ pub fn currentUserID(io: Io, alloc: Alloc, req: *std.http.Server.Request) ![]con
 
 /// sessionUserID returns the member id from a valid gopher_auth cookie whose id
 /// is still a member.
-fn sessionUserID(io: Io, alloc: Alloc, req: *std.http.Server.Request) !?[]const u8 {
+fn sessionUserID(io: Io, alloc: Alloc, req: *Request) !?[]const u8 {
     const val = (try http.cookie(req, alloc, "gopher_auth")) orelse return null;
     const secret = (try loadSecret(io, alloc)) orelse return null;
     const now = nowUnix(io);
@@ -85,7 +86,7 @@ fn sessionUserID(io: Io, alloc: Alloc, req: *std.http.Server.Request) !?[]const 
 }
 
 /// apiKeyUserID resolves the principal id from an Authorization: Bearer key.
-fn apiKeyUserID(io: Io, alloc: Alloc, req: *std.http.Server.Request) !?[]const u8 {
+fn apiKeyUserID(io: Io, alloc: Alloc, req: *Request) !?[]const u8 {
     const key = (try bearerToken(req, alloc)) orelse return null;
     return checkAPIKey(io, alloc, key);
 }
@@ -391,7 +392,7 @@ pub fn sessionSecret(io: Io, alloc: Alloc) !?[]const u8 {
 
 /// The member a valid gopher_auth names, or null: player.zig's way to file a
 /// member's games under their session when their gopher_uid is unsigned.
-pub fn sessionUser(io: Io, alloc: Alloc, req: *std.http.Server.Request) !?[]const u8 {
+pub fn sessionUser(io: Io, alloc: Alloc, req: *Request) !?[]const u8 {
     return sessionUserID(io, alloc, req);
 }
 
@@ -464,7 +465,7 @@ fn allDigits(s: []const u8) bool {
 /// bearerToken extracts the (owned) token from an Authorization: Bearer <token>
 /// header. The token is duped by http.header, so slices of it (the "<id>-" prefix
 /// in checkAPIKey) survive a later body read.
-fn bearerToken(req: *std.http.Server.Request, alloc: Alloc) !?[]const u8 {
+fn bearerToken(req: *Request, alloc: Alloc) !?[]const u8 {
     const h = (try http.header(req, alloc, "authorization")) orelse return null;
     const prefix = "Bearer ";
     if (!std.mem.startsWith(u8, h, prefix)) return null;
@@ -514,7 +515,7 @@ pub const ResolvedUser = struct { id: []const u8, name: []const u8, member: bool
 
 /// currentUser resolves the full identity a request acts as.
 /// Zero value (id == "") when there's no identity.
-pub fn currentUser(io: Io, alloc: Alloc, req: *std.http.Server.Request) !ResolvedUser {
+pub fn currentUser(io: Io, alloc: Alloc, req: *Request) !ResolvedUser {
     const id = try currentUserID(io, alloc, req);
     if (id.len == 0) return .{ .id = "", .name = "", .member = false };
     return .{

@@ -32,6 +32,7 @@
 //! their session instead (player.current).
 
 const std = @import("std");
+const Request = @import("request.zig").Request;
 const Io = std.Io;
 const Alloc = std.mem.Allocator;
 const http = @import("http.zig");
@@ -174,7 +175,7 @@ fn legacyHonoured(io: Io, alloc: Alloc, id: []const u8) bool {
 /// (`reissue`), so a handler only ever sees a signed id. A POST, which is
 /// never redirected, with the unsigned spelling is no one, so the hole is
 /// not open to anyone who skips the GET that would close it.
-pub fn resolve(io: Io, alloc: Alloc, req: *std.http.Server.Request) !?[]const u8 {
+pub fn resolve(io: Io, alloc: Alloc, req: *Request) !?[]const u8 {
     const value = (try http.cookie(req, alloc, cookie_name)) orelse return null;
     const secret = (try users.sessionSecret(io, alloc)) orelse return null;
     if (verify(secret, value)) |id| return id;
@@ -198,8 +199,8 @@ pub const Reissue = union(enum) {
 /// answers it with a redirect to the same page. **Counted per address**
 /// (`client`, game_limits.admitResign), so one address cannot sweep every
 /// legacy id. Null when there is nothing to re-sign.
-pub fn reissue(io: Io, alloc: Alloc, req: *std.http.Server.Request, client: ?[]const u8) !?Reissue {
-    if (req.head.method != .GET) return null;
+pub fn reissue(io: Io, alloc: Alloc, req: *Request, client: ?[]const u8) !?Reissue {
+    if (req.method() != .GET) return null;
     const value = (try http.cookie(req, alloc, cookie_name)) orelse return null;
     const secret = (try users.sessionSecret(io, alloc)) orelse return null;
     if (verify(secret, value)) |_| return null;

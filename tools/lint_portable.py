@@ -82,6 +82,15 @@ STORE = "store.zig"
 CWD = (re.compile(r"\bIo\.Dir\.cwd\s*\("),
        "the disk is the Store's: call store.zig (read, write, list, stat...) — it keeps FAT's rules on every host")
 
+# **THE REQUEST'S DOOR** (request.zig, Steve 2026-10-07): only request.zig
+# names zig's server request, and only the edge reaches under the door.
+REQUEST_DOOR = "request.zig"
+EDGE = {"request.zig", "http.zig", "edge.zig", "router.zig"}
+RAW_TYPE = (re.compile(r"\bstd\.http\.Server\.Request\b"),
+            "a handler takes request.zig's Request: zig's server request is the host's, behind the door")
+RAW_REACH = (re.compile(r"\breq\.raw\b"),
+             "the host's request is the edge's (http.zig, edge.zig, router.zig): add what you need to request.zig")
+
 RULES = [
     # The porting seam.
     (re.compile(r"\bstd\.Io\.(Dir|Clock|Mutex|Group)\b"),
@@ -249,6 +258,10 @@ def scan(src_dir: str, root: str = ROOT_MODULE):
         tests = test_lines(lines)
         tests |= test_only_lines(lines, tests)
         rules = RULES if name == STORE else RULES + [CWD]
+        if name != REQUEST_DOOR:
+            rules = rules + [RAW_TYPE]
+        if name not in EDGE:
+            rules = rules + [RAW_REACH]
         for n, line in enumerate(lines, 1):
             if n in tests:
                 continue

@@ -49,7 +49,7 @@ const html = @import("html.zig");
 const ui = @import("admin_ui.zig");
 const throttle = @import("login_throttle.zig");
 
-const Request = std.http.Server.Request;
+const Request = @import("request.zig").Request;
 
 /// How much of a file is read at a time.
 const piece = 64 * 1024;
@@ -72,7 +72,7 @@ pub fn render(req: *Request, io: Io, alloc: Alloc, client: ?[]const u8) !void {
     // 7): it is the form's, as a GET is. Walking the data to write it into
     // nothing cost a whole backup's reads; on metal, that is every other
     // request waiting.
-    if (req.head.method != .POST) return form(req, alloc, "", .ok);
+    if (req.method() != .POST) return form(req, alloc, "", .ok);
     // **THE RE-ENTRY IS THROTTLED LIKE SIGN-IN** (QUEUE.md item 100): a stolen
     // admin session must not guess the password unbounded, which is what the
     // re-entry exists to stop. Refused before the hash, against the address and

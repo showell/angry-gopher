@@ -10,6 +10,7 @@
 //! the wasm is built from, embedded at build time).
 
 const std = @import("std");
+const Request = @import("request.zig").Request;
 const http = @import("http.zig");
 const html = @import("html.zig");
 
@@ -112,7 +113,7 @@ const index_body =
 
 /// respondIndex renders the launch pad with the generic site top bar (the link
 /// back Home) — viewer resolved for the user chip, never gated.
-fn respondIndex(req: *std.http.Server.Request, alloc: std.mem.Allocator, name: []const u8) !void {
+fn respondIndex(req: *Request, alloc: std.mem.Allocator, name: []const u8) !void {
     var b: std.ArrayList(u8) = .empty;
     try b.appendSlice(alloc, index_head);
     try b.appendSlice(alloc,
@@ -165,7 +166,7 @@ const code_files = [_]CodeFile{
     .{ .name = "games/chess/board.js", .body = chess_board_js },
 };
 
-fn respondCodePage(req: *std.http.Server.Request, alloc: std.mem.Allocator) !void {
+fn respondCodePage(req: *Request, alloc: std.mem.Allocator) !void {
     var out: std.ArrayList(u8) = .empty;
     try out.appendSlice(alloc,
         \\<!DOCTYPE html>
@@ -191,7 +192,7 @@ fn respondCodePage(req: *std.http.Server.Request, alloc: std.mem.Allocator) !voi
 }
 
 /// handle dispatches /chess/* — the route table, a switch on the path tail.
-pub fn handle(req: *std.http.Server.Request, alloc: std.mem.Allocator, name: []const u8, sub: []const u8) !void {
+pub fn handle(req: *Request, alloc: std.mem.Allocator, name: []const u8, sub: []const u8) !void {
     if (sub.len == 0 or std.mem.eql(u8, sub, "/")) {
         try respondIndex(req, alloc, name);
     } else if (std.mem.eql(u8, sub, "/knight")) {

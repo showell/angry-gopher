@@ -19,7 +19,7 @@ const store = @import("chat_store.zig");
 const disk = @import("store.zig");
 const flate = std.compress.flate;
 
-const Request = std.http.Server.Request;
+const Request = @import("request.zig").Request;
 
 /// serveBundle responds with the topic's .tar.gz, or 404 when the transcript is
 /// missing/unreadable (don't distinguish — same as /raw).

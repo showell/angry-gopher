@@ -40,7 +40,7 @@ const chat_state = @import("chat_state.zig");
 const Bus = @import("bus.zig").Bus;
 
 const Alloc = std.mem.Allocator;
-const Request = std.http.Server.Request;
+const Request = @import("request.zig").Request;
 
 /// uid_max_age is the long-lived identity cookie's lifetime (one year).
 const uid_max_age = 60 * 60 * 24 * 365;
@@ -85,7 +85,7 @@ fn handleLoginFull(req: *Request, io: Io, alloc: Alloc, bus: *Bus) !void {
     // clientAddress dups into `alloc`, so it outlives the read.
     const address = game_limits.clientAddress(alloc, req, bus.peer) catch null;
     var body: []const u8 = "";
-    if (req.head.method == .POST) {
+    if (req.method() == .POST) {
         body = (try http.readLimitedBody(req, alloc, limits.body.form)) orelse return;
     }
     const next = sanitizeNext((try formValue(alloc, target, body, "next")) orelse "");
@@ -116,7 +116,7 @@ fn handleLoginFull(req: *Request, io: Io, alloc: Alloc, bus: *Bus) !void {
         mode = .stranger;
     }
 
-    if (req.head.method != .POST) {
+    if (req.method() != .POST) {
         return renderPwPage(req, alloc, mode, name, next, "");
     }
 
@@ -240,7 +240,7 @@ pub fn handleLogout(req: *Request, io: Io, alloc: Alloc) !void {
     const local = if (user.id.len == 0) try player.current(io, alloc, req) else player.Player{ .id = "", .name = "" };
     const id = if (user.id.len != 0) user.id else local.id;
 
-    if (req.head.method == .POST) {
+    if (req.method() == .POST) {
         const body = (try http.readLimitedBody(req, alloc, limits.body.form)) orelse return;
         const release = (try chat.formField(alloc, body, "release")) orelse "";
         const target = releaseTarget(user.id, local.id, local.id.len != 0 and users.principalExists(io, alloc, local.id));

@@ -17,7 +17,7 @@ const chrome = @import("chat_chrome.zig");
 const Topic = @import("chat_conv.zig").Topic;
 
 const Alloc = std.mem.Allocator;
-const Request = std.http.Server.Request;
+const Request = @import("request.zig").Request;
 const htmlEscape = html.htmlEscape; // internal alias; impl in html.zig
 const asset_v = chrome.asset_v; // internal alias; canonical const in chat_chrome.zig
 

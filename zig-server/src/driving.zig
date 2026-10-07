@@ -9,6 +9,7 @@
 //! lineage (see HISTORY.md), but it is no longer built or served.
 
 const std = @import("std");
+const Request = @import("request.zig").Request;
 const build_options = @import("build_options");
 const http = @import("http.zig");
 const mem_meter = @import("mem_meter.zig");
@@ -29,7 +30,7 @@ const page =
     "</body></html>";
 
 /// handle dispatches /driving/* — the route table, a switch on the path tail.
-pub fn handle(req: *std.http.Server.Request, sub: []const u8) !void {
+pub fn handle(req: *Request, sub: []const u8) !void {
     // -Dfake_leak only: leak a few bytes per hit on the metered base allocator and
     // drop the pointer, so /debug/mem climbs ~linearly and the stress harness's
     // detector can be validated against a known leak. Compiled out of normal builds

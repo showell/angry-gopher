@@ -30,7 +30,7 @@ const admin_backup = @import("admin_backup.zig");
 const admin_secret = @import("admin_secret.zig");
 const admin_retire = @import("admin_retire.zig");
 
-const Request = std.http.Server.Request;
+const Request = @import("request.zig").Request;
 
 /// handle dispatches /admin* — `sub` is the path after "/admin". `client` is the
 /// request's address (router.zig's resolved `clientAddress`), for the login
@@ -51,7 +51,7 @@ pub fn handle(req: *Request, io: Io, alloc: Alloc, client: ?[]const u8, sub: []c
 /// handleAPIKey generates (POST) or revokes (POST revoke=1) a member's API key —
 /// the admin acting on any member.
 fn handleAPIKey(req: *Request, io: Io, alloc: Alloc) !void {
-    if (req.head.method != .POST) return http.redirect(req, "/admin");
+    if (req.method() != .POST) return http.redirect(req, "/admin");
     const body = (try http.readLimitedBody(req, alloc, limits.body.form)) orelse return;
     const id = std.mem.trim(u8, (try chat.formField(alloc, body, "user")) orelse "", " \t\r\n");
     if (!apiKeyTarget(io, alloc, id)) return http.redirect(req, "/admin");

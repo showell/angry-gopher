@@ -19,7 +19,7 @@ const Alloc = std.mem.Allocator;
 const http = @import("http.zig");
 const users = @import("users.zig");
 
-const Request = std.http.Server.Request;
+const Request = @import("request.zig").Request;
 
 /// admin_uid is the sole admin. Hardcoded to Steve's uid 1 (per his call) until
 /// an admin flag is added.

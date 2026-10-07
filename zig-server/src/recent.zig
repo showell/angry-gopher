@@ -28,7 +28,7 @@ const feed = @import("recent_feed.zig");
 const Bus = @import("bus.zig").Bus;
 
 const Alloc = std.mem.Allocator;
-const Request = std.http.Server.Request;
+const Request = @import("request.zig").Request;
 
 const Kind = enum { chat, doc };
 

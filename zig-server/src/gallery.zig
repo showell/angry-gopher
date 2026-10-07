@@ -19,7 +19,7 @@ const html = @import("html.zig");
 const home = @import("home.zig");
 const store = @import("store.zig");
 
-const Request = std.http.Server.Request;
+const Request = @import("request.zig").Request;
 
 /// gallery_root is the image directory. Repo-relative default resolves both
 /// locally (ops/start runs with cwd = repo root) and on the droplet (systemd

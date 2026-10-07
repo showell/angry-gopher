@@ -4,6 +4,7 @@
 //! server just ships the bundle.
 
 const std = @import("std");
+const Request = @import("request.zig").Request;
 const http = @import("http.zig");
 
 // The delivery bundle, baked into the binary (wired in build.zig). Produced by
@@ -25,7 +26,7 @@ const page =
     "</body></html>";
 
 /// handle dispatches /delivery/* — the route table, a switch on the path tail.
-pub fn handle(req: *std.http.Server.Request, sub: []const u8) !void {
+pub fn handle(req: *Request, sub: []const u8) !void {
     if (sub.len == 0 or std.mem.eql(u8, sub, "/")) {
         try req.respond(page, .{ .extra_headers = &.{http.html_ct} });
     } else if (std.mem.eql(u8, sub, "/app.js")) {

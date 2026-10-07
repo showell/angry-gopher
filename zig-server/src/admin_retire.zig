@@ -26,14 +26,14 @@ const ui = @import("admin_ui.zig");
 const throttle = @import("login_throttle.zig");
 const retire = @import("chat_retire.zig");
 
-const Request = std.http.Server.Request;
+const Request = @import("request.zig").Request;
 
 /// The most days back the form accepts (ten years): a guard on a fat-fingered
 /// number, not a real limit.
 const max_days = 3650;
 
 pub fn render(req: *Request, io: Io, alloc: Alloc, client: ?[]const u8) !void {
-    if (req.head.method != .POST) return form(req, alloc, defaults(), "", .ok);
+    if (req.method() != .POST) return form(req, alloc, defaults(), "", .ok);
 
     // The re-entry, throttled like sign-in (QUEUE.md item 100).
     if (throttle.check(io, client, ui.admin_uid)) |b| return form(req, alloc, defaults(), b.text(), .too_many_requests);

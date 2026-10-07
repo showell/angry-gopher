@@ -31,7 +31,7 @@ const timefmt = @import("timefmt.zig");
 const html = @import("html.zig");
 
 const Alloc = std.mem.Allocator;
-const Request = std.http.Server.Request;
+const Request = @import("request.zig").Request;
 const SessionMeta = session_meta.SessionMeta;
 
 // The compiled bundles, baked into the binary (wired in build.zig).
@@ -96,7 +96,7 @@ fn sessionRoute(req: *Request, io: Io, alloc: Alloc, user_id: []const u8, client
     if (it.next() != null) return http.notFound(req); // more than two segments
 
     if (std.mem.eql(u8, seg1.?, "actions")) {
-        if (req.head.method == .POST) {
+        if (req.method() == .POST) {
             try appendSessionLine(req, io, alloc, user_id, client, session_id, .actions);
         } else {
             try sessionBootstrap(req, io, alloc, user_id, session_id);
@@ -115,7 +115,7 @@ fn sessionRoute(req: *Request, io: Io, alloc: Alloc, user_id: []const u8, client
 /// the merged DSL to <session>/meta, and returns the id as JSON. The game-state
 /// DSL is stored verbatim.
 fn newSession(req: *Request, io: Io, alloc: Alloc, user_id: []const u8, client: ?[]const u8) !void {
-    if (req.head.method != .POST) return http.methodNotAllowed(req);
+    if (req.method() != .POST) return http.methodNotAllowed(req);
 
     const game_state_dsl = (try http.readLimitedBody(req, alloc, max_new_session_bytes)) orelse return;
 
@@ -143,7 +143,7 @@ const LineKind = enum { actions, annotations };
 /// line in <session>/<rel>. Actions are wire-DSL text (actions.dsl); annotations
 /// are JSONL (compacted). A Lyn Rummy move bumps last-seen.
 fn appendSessionLine(req: *Request, io: Io, alloc: Alloc, user_id: []const u8, client: ?[]const u8, session_id: i64, kind: LineKind) !void {
-    if (req.head.method != .POST) return http.methodNotAllowed(req);
+    if (req.method() != .POST) return http.methodNotAllowed(req);
     if (!try storage.sessionExists(io, alloc, user_id, session_id)) return http.notFound(req);
 
     const body = (try http.readLimitedBody(req, alloc, max_append_bytes)) orelse return;

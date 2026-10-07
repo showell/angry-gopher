@@ -21,7 +21,7 @@ const users = @import("users.zig");
 const disk = @import("store.zig");
 
 const Alloc = std.mem.Allocator;
-const Request = std.http.Server.Request;
+const Request = @import("request.zig").Request;
 
 /// max_any_upload bounds the body read before the kind is known (sniffing needs
 /// the bytes in hand): the largest per-file cap across kinds, plus multipart
@@ -54,7 +54,7 @@ const stream_piece = 256 << 10; // 256 KiB
 /// or "video" so the client inserts the right tag; width/height are 0 (we don't
 /// decode dimensions — the client omits the attrs then, per its BROWSER_WORKAROUND).
 pub fn handleUpload(req: *Request, io: Io, alloc: Alloc, uid: []const u8, conv_dir: []const u8, base: []const u8, sid: []const u8) !void {
-    if (req.head.method != .POST) return http.methodNotAllowed(req);
+    if (req.method() != .POST) return http.methodNotAllowed(req);
 
     // Read the Content-Type (for the multipart boundary) BEFORE the body: reading
     // the body advances the reader past received_head (after which iterateHeaders
@@ -175,7 +175,7 @@ fn streamFile(req: *Request, io: Io, alloc: Alloc, path: []const u8, len: u64, h
     var body = req.respondStreaming(&hbuf, .{
         .respond_options = .{ .extra_headers = headers },
     }) catch return;
-    if (req.head.method != .HEAD) {
+    if (req.method() != .HEAD) {
         const buf = try alloc.alloc(u8, @intCast(@min(len, stream_piece)));
         var at: u64 = 0;
         while (at < len) {

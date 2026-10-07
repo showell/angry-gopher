@@ -24,13 +24,13 @@ const html = @import("html.zig");
 const ui = @import("admin_ui.zig");
 const throttle = @import("login_throttle.zig");
 
-const Request = std.http.Server.Request;
+const Request = @import("request.zig").Request;
 
 /// The most days the old secret may be kept for players.
 pub const max_days = 90;
 
 pub fn render(req: *Request, io: Io, alloc: Alloc, client: ?[]const u8) !void {
-    if (req.head.method != .POST) return form(req, alloc, "", .ok);
+    if (req.method() != .POST) return form(req, alloc, "", .ok);
     // Throttled like sign-in (QUEUE.md item 100): refused before the hash,
     // against the address and uid 1's account.
     if (throttle.check(io, client, ui.admin_uid)) |b| return form(req, alloc, b.text(), .too_many_requests);

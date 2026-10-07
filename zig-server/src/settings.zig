@@ -19,7 +19,7 @@ const html = @import("html.zig");
 const presence = @import("presence.zig");
 const Bus = @import("bus.zig").Bus;
 
-const Request = std.http.Server.Request;
+const Request = @import("request.zig").Request;
 
 /// handle dispatches /settings* — `sub` is the path after "/settings" ("" or
 /// "/apikey"). Members only; presence is marked on entry.
@@ -37,7 +37,7 @@ pub fn handle(req: *Request, io: Io, alloc: Alloc, bus: *Bus, sub: []const u8) !
 /// handleAPIKey generates or revokes the caller's key (POST), acting only on the
 /// resolved identity. GET falls back to the settings page.
 fn handleAPIKey(req: *Request, io: Io, alloc: Alloc, uid: []const u8) !void {
-    if (req.head.method != .POST) return http.redirect(req, "/settings");
+    if (req.method() != .POST) return http.redirect(req, "/settings");
     const body = (try http.readLimitedBody(req, alloc, limits.body.form)) orelse return;
     const revoke = (try chat.formField(alloc, body, "revoke")) orelse "";
     if (std.mem.eql(u8, revoke, "1")) {

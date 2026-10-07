@@ -15,7 +15,7 @@ const markdown = @import("markdown.zig");
 const disk = @import("store.zig");
 
 const Alloc = std.mem.Allocator;
-const Request = std.http.Server.Request;
+const Request = @import("request.zig").Request;
 
 /// handle serves /chat/links — `rest` must be empty (no sub-routes).
 pub fn handle(req: *Request, io: Io, alloc: Alloc, uid: []const u8, rest: []const u8) !void {

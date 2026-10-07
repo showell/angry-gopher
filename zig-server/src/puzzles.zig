@@ -13,6 +13,7 @@
 //! chat account store.
 
 const std = @import("std");
+const Request = @import("request.zig").Request;
 const limits = @import("limits.zig");
 const Io = std.Io;
 const http = @import("http.zig");
@@ -56,7 +57,7 @@ const Alloc = std.mem.Allocator;
 /// with none, redirect to /play. The gate IS the contract — the inner handlers
 /// never re-check. The resolved id is the storage key for every write below.
 /// `client`: the caller's address, as game.handle takes it.
-pub fn handle(req: *std.http.Server.Request, io: Io, alloc: Alloc, sub: []const u8, client: ?[]const u8) !void {
+pub fn handle(req: *Request, io: Io, alloc: Alloc, sub: []const u8, client: ?[]const u8) !void {
     const user_id = (try player.current(io, alloc, req)).id;
     if (user_id.len == 0) {
         try http.redirect(req, "/play?next=/puzzles");
@@ -83,7 +84,7 @@ pub fn handle(req: *std.http.Server.Request, io: Io, alloc: Alloc, sub: []const 
 /// sessionRoute handles the one session route:
 ///   POST /sessions/<id>/puzzles/<idx>/actions  — append one action line.
 /// `rest` is the path after "/sessions/".
-fn sessionRoute(req: *std.http.Server.Request, io: Io, alloc: Alloc, user_id: []const u8, client: ?[]const u8, rest: []const u8) !void {
+fn sessionRoute(req: *Request, io: Io, alloc: Alloc, user_id: []const u8, client: ?[]const u8, rest: []const u8) !void {
     var it = std.mem.splitScalar(u8, rest, '/');
     const id_str = it.next() orelse return http.notFound(req);
     const session_id = std.fmt.parseInt(i64, id_str, 10) catch return http.notFound(req);
@@ -97,7 +98,7 @@ fn sessionRoute(req: *std.http.Server.Request, io: Io, alloc: Alloc, user_id: []
     if (!std.mem.eql(u8, seg_puzzles, "puzzles") or !std.mem.eql(u8, seg_actions, "actions")) {
         return http.notFound(req);
     }
-    if (req.head.method != .POST) return http.notFound(req);
+    if (req.method() != .POST) return http.notFound(req);
 
     const puzzle_idx = std.fmt.parseInt(i32, idx_str, 10) catch return http.notFound(req);
     if (puzzle_idx < 0) return http.notFound(req);
@@ -111,7 +112,7 @@ fn sessionRoute(req: *std.http.Server.Request, io: Io, alloc: Alloc, user_id: []
 /// there yet is made here, with its meta, if it is the one offered. Two tabs
 /// opened before either moved were offered the same id, and share it.
 /// The per-puzzle dir is created on first append.
-fn appendAction(req: *std.http.Server.Request, io: Io, alloc: Alloc, user_id: []const u8, client: ?[]const u8, session_id: i64, puzzle_idx: i32) !void {
+fn appendAction(req: *Request, io: Io, alloc: Alloc, user_id: []const u8, client: ?[]const u8, session_id: i64, puzzle_idx: i32) !void {
     const body = (try http.readLimitedBody(req, alloc, maxAppendBytes)) orelse return;
     const line_bytes = std.mem.trimEnd(u8, body, "\n").len + 1;
 
@@ -141,7 +142,7 @@ fn metaDsl(io: Io, alloc: Alloc) ![]const u8 {
 /// the full catalog baked into the Elm flag. Zero post-load round trips before
 /// play, and **NOTHING WRITTEN**: a GET made a session (a folder and its meta)
 /// on every load, which a bot reloading the page could turn into a full disk.
-fn page(req: *std.http.Server.Request, io: Io, alloc: Alloc, user_id: []const u8) !void {
+fn page(req: *Request, io: Io, alloc: Alloc, user_id: []const u8) !void {
     const catalog = try loadCatalog(alloc);
     const indented = try indentLines(alloc, catalog);
 

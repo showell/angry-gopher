@@ -19,7 +19,7 @@ const Alloc = std.mem.Allocator;
 const http = @import("http.zig");
 const store = @import("store.zig");
 
-const Request = std.http.Server.Request;
+const Request = @import("request.zig").Request;
 
 /// downloads_root is the artifact directory. Repo-relative default resolves on
 /// the droplet (systemd WorkingDirectory = the deploy dir, where ops/deploy
