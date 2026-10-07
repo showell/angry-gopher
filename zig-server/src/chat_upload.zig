@@ -173,7 +173,7 @@ pub fn serveUpload(req: *Request, io: Io, alloc: Alloc, conv_dir: []const u8, si
 fn streamFile(req: *Request, io: Io, alloc: Alloc, path: []const u8, len: u64, headers: []const std.http.Header) !void {
     var hbuf: [1024]u8 = undefined;
     var body = req.respondStreaming(&hbuf, .{
-        .respond_options = .{ .extra_headers = headers },
+        .extra_headers = headers,
     }) catch return;
     if (req.method() != .HEAD) {
         const buf = try alloc.alloc(u8, @intCast(@min(len, stream_piece)));

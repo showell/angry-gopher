@@ -23,8 +23,26 @@ const std = @import("std");
 /// The host's request, as zig's HTTP server parses it.
 pub const Raw = std.http.Server.Request;
 pub const Method = std.http.Method;
-pub const RespondOptions = Raw.RespondOptions;
-pub const RespondStreamingOptions = Raw.RespondStreamingOptions;
+/// A response's status and a header: plain data, zig's own spelling of it.
+pub const Status = std.http.Status;
+pub const Header = std.http.Header;
+
+/// **WHAT A WHOLE RESPONSE MAY SAY:** a status and headers, nothing else (no
+/// HTTP version, no reason phrase, no keep-alive: the host closes every
+/// connection after its response). The same field names as zig's own, so a
+/// handler's `.{ .status = .not_found }` reads as it always did.
+pub const Options = struct {
+    status: Status = .ok,
+    extra_headers: []const Header = &.{},
+};
+
+/// **WHAT A RESPONSE IN PARTS MAY SAY:** headers, and whether the body ends
+/// when the connection does (a live stream: no length, not chunked); otherwise
+/// zig's server chunks it.
+pub const StreamOptions = struct {
+    extra_headers: []const Header = &.{},
+    ends_with_connection: bool = false,
+};
 pub const BodyWriter = std.http.BodyWriter;
 pub const Error = Raw.ExpectContinueError;
 
@@ -44,16 +62,19 @@ pub const Request = struct {
     }
 
     /// The whole response: status and headers in `options`, then `content`.
-    pub fn respond(r: *Request, content: []const u8, options: RespondOptions) Error!void {
+    pub fn respond(r: *Request, content: []const u8, options: Options) Error!void {
         if (before_response) |f| f();
-        return r.raw.respond(content, options);
+        return r.raw.respond(content, .{ .status = options.status, .extra_headers = options.extra_headers });
     }
 
     /// A response written in parts (a live stream, a large download): the
     /// head now, the body through the writer this answers.
-    pub fn respondStreaming(r: *Request, buffer: []u8, options: RespondStreamingOptions) Error!BodyWriter {
+    pub fn respondStreaming(r: *Request, buffer: []u8, options: StreamOptions) Error!BodyWriter {
         if (before_response) |f| f();
-        return r.raw.respondStreaming(buffer, options);
+        return r.raw.respondStreaming(buffer, .{ .respond_options = .{
+            .extra_headers = options.extra_headers,
+            .transfer_encoding = if (options.ends_with_connection) .none else null,
+        } });
     }
 
     /// The connection closes after this response (`connection: close`).

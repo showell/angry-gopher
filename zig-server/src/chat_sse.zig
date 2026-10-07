@@ -47,7 +47,8 @@ pub fn streamTranscript(req: *Request, io: Io, alloc: Alloc, bus: *Bus, conv_dir
 
     var hbuf: [4096]u8 = undefined;
     var body = req.respondStreaming(&hbuf, .{
-        .respond_options = .{ .extra_headers = &http.sse_headers, .transfer_encoding = .none },
+        .extra_headers = &http.sse_headers,
+        .ends_with_connection = true,
     }) catch return;
 
     const backlog_size = if (stream.backlog.len > since) stream.backlog.len - since else 0;
@@ -140,7 +141,8 @@ pub fn forwardUserStream(req: *Request, alloc: Alloc, bus: *Bus, key: []const u8
 
     var hbuf: [4096]u8 = undefined;
     var body = req.respondStreaming(&hbuf, .{
-        .respond_options = .{ .extra_headers = &http.sse_headers, .transfer_encoding = .none },
+        .extra_headers = &http.sse_headers,
+        .ends_with_connection = true,
     }) catch return;
     // Send the head now: a live-only stream may have nothing to say for a
     // while, and the browser should know it is connected.

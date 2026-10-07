@@ -88,7 +88,7 @@ pub fn render(req: *Request, io: Io, alloc: Alloc, client: ?[]const u8) !void {
 
     var hbuf: [4096]u8 = undefined;
     var body = req.respondStreaming(&hbuf, .{
-        .respond_options = .{ .extra_headers = &tar_headers },
+        .extra_headers = &tar_headers,
     }) catch return;
     archive(io, alloc, &body.writer, data, auth) catch return;
     body.end() catch return;
