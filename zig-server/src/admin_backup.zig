@@ -419,3 +419,58 @@ test "fs: a root that cannot be looked at fails the backup, no archive (metal-vm
     var fine: std.Io.Writer.Allocating = .init(a);
     try archive(io, a, &fine.writer, data, try std.fs.path.join(a, &.{ base, "not-yet" }));
 }
+
+test "fs: a root that is a file fails the backup before the answer starts (metal-vmm QUEUE 118)" {
+    // It stats, so checkRoots passed it, and the archive then wrote it as a
+    // folder and failed to list it with the 200 already sent: an archive cut
+    // short with no line to say why.
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    const base = try std.fs.path.join(a, &.{ ".zig-cache", "tmp", &tmp.sub_path });
+    const data = try std.fs.path.join(a, &.{ base, "data" });
+    try store.write(io, a, try std.fs.path.join(a, &.{ data, "chat", "kept" }), "kept", .{});
+    const auth = try std.fs.path.join(a, &.{ base, "auth" });
+    try store.write(io, a, auth, "a file where the auth folder should be", .{});
+    try std.testing.expect(std.meta.isError(checkRoots(io, a, data, auth)));
+    try std.testing.expect(std.meta.isError(checkRoots(io, a, auth, data)));
+}
+
+test "fs: a folder inside that stats and cannot be listed is a named skip, and the archive is whole (metal-vmm QUEUE 118)" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    const base = try std.fs.path.join(a, &.{ ".zig-cache", "tmp", &tmp.sub_path });
+    const data = try std.fs.path.join(a, &.{ base, "data" });
+    try store.write(io, a, try std.fs.path.join(a, &.{ data, "chat", "kept" }), "kept", .{});
+    try store.write(io, a, try std.fs.path.join(a, &.{ data, "shut", "inside" }), "x", .{});
+    const shut = try std.fs.path.joinZ(a, &.{ data, "shut" });
+    _ = std.os.linux.chmod(shut, 0);
+    defer _ = std.os.linux.chmod(shut, 0o755);
+    // Root reads past a folder's permissions: there is nothing to test.
+    if (store.list(io, a, shut)) |_| return error.SkipZigTest else |_| {}
+    const auth = try std.fs.path.join(a, &.{ base, "auth" });
+
+    var whole: std.Io.Writer.Allocating = .init(a);
+    try archive(io, a, &whole.writer, data, auth);
+    const got = try members(a, whole.written());
+    var skipped: ?[]const u8 = null;
+    var manifest = false;
+    for (got) |m| {
+        if (std.mem.eql(u8, m[0], "backup-skipped.txt")) skipped = m[1];
+        if (std.mem.eql(u8, m[0], manifest_name)) manifest = true;
+    }
+    try std.testing.expect(manifest);
+    try std.testing.expect(skipped != null);
+    try std.testing.expect(std.mem.indexOf(u8, skipped.?, "data/shut/") != null);
+}
