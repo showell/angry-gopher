@@ -38,6 +38,7 @@
 //! (256 as gopher-metal spells it) means at most a path of exactly 256.
 
 const std = @import("std");
+const ustar = @import("ustar.zig");
 const limits = @import("limits.zig");
 const Io = std.Io;
 const Alloc = std.mem.Allocator;
@@ -178,7 +179,7 @@ fn walk(io: Io, alloc: Alloc, t: *Tar, dir: []const u8, name: []const u8, buf: [
             .directory => try walk(io, alloc, t, host_path, arc_path, buf, skipped, m),
             .file => {
                 const fst = store.stat(io, alloc, host_path) catch continue;
-                if (!fits(arc_path)) {
+                if (!ustar.fits(arc_path)) {
                     try skipped.print(alloc, "{s}\n", .{arc_path});
                     continue;
                 }
@@ -213,27 +214,6 @@ fn mtimeOf(st: store.Stat) u64 {
 
 // ── ustar ────────────────────────────────────────────────────────────────────
 
-/// Whether ustar can hold `path`: in its 100-byte name field, or split at a
-/// slash into a 155-byte prefix and the name.
-pub fn fits(path: []const u8) bool {
-    return split(path) != null;
-}
-
-/// `path` as (prefix, name) for a ustar header, or null when it cannot be.
-pub fn split(path: []const u8) ?struct { prefix: []const u8, name: []const u8 } {
-    if (path.len <= 100) return .{ .prefix = "", .name = path };
-    // The latest slash that leaves a name of at most 100 and a prefix of at
-    // most 155.
-    var i: usize = path.len;
-    while (i > 0) {
-        i -= 1;
-        if (path[i] != '/') continue;
-        if (path.len - i - 1 > 100) return null;
-        if (i <= 155 and path.len - i - 1 > 0) return .{ .prefix = path[0..i], .name = path[i + 1 ..] };
-    }
-    return null;
-}
-
 const Tar = struct {
     w: *std.Io.Writer,
 
@@ -243,7 +223,7 @@ const Tar = struct {
         @memcpy(with_slash_buf[0..name.len], name);
         with_slash_buf[name.len] = '/';
         const with_slash = with_slash_buf[0 .. name.len + 1];
-        if (!fits(with_slash)) return false;
+        if (!ustar.fits(with_slash)) return false;
         try t.header(with_slash, 0, mtime, '5');
         return true;
     }
@@ -255,25 +235,7 @@ const Tar = struct {
     }
 
     fn header(t: *Tar, path: []const u8, size: u64, mtime: u64, typeflag: u8) !void {
-        const parts = split(path) orelse return error.NameTooLong;
-        var hdr: [512]u8 = @splat(0);
-        @memcpy(hdr[0..parts.name.len], parts.name);
-        octalField(hdr[100..108], if (typeflag == '5') 0o755 else 0o644);
-        octalField(hdr[108..116], 0);
-        octalField(hdr[116..124], 0);
-        octalField(hdr[124..136], size);
-        octalField(hdr[136..148], mtime);
-        @memset(hdr[148..156], ' ');
-        hdr[156] = typeflag;
-        @memcpy(hdr[257..263], "ustar\x00");
-        hdr[263] = '0';
-        hdr[264] = '0';
-        @memcpy(hdr[345..][0..parts.prefix.len], parts.prefix);
-        var sum: u32 = 0;
-        for (hdr) |c| sum += c;
-        octalDigits(hdr[148..154], sum);
-        hdr[154] = 0;
-        hdr[155] = ' ';
+        const hdr = try ustar.header(path, size, mtime, typeflag);
         try t.w.writeAll(&hdr);
     }
 
@@ -289,45 +251,6 @@ const Tar = struct {
         try t.w.writeAll(&zeros);
     }
 };
-
-/// `value` as (field.len - 1) octal digits and a NUL: ustar's numeric fields.
-fn octalField(field: []u8, value: u64) void {
-    const digits = field.len - 1;
-    var v = value;
-    var i = digits;
-    while (i > 0) {
-        i -= 1;
-        field[i] = '0' + @as(u8, @intCast(v & 7));
-        v >>= 3;
-    }
-    field[digits] = 0;
-}
-
-/// Exactly field.len octal digits: the checksum's six.
-fn octalDigits(field: []u8, value: u64) void {
-    var v = value;
-    var i = field.len;
-    while (i > 0) {
-        i -= 1;
-        field[i] = '0' + @as(u8, @intCast(v & 7));
-        v >>= 3;
-    }
-}
-
-test "a long path goes in ustar's prefix, split at a slash, and one too long does not fit" {
-    const short = split("data/chat/1_2/sessions/topic.md").?;
-    try std.testing.expectEqualStrings("", short.prefix);
-    const sid = "A" ++ "b" ** 78 ++ "9";
-    const long_path = "data/chat/1_2/sessions/" ++ sid ++ ".reactions.jsonl";
-    const got = split(long_path).?;
-    try std.testing.expectEqualStrings("data/chat/1_2/sessions", got.prefix);
-    try std.testing.expectEqualStrings(sid ++ ".reactions.jsonl", got.name);
-    // A last name over 100 bytes cannot be held, whatever the prefix.
-    try std.testing.expect(split("data/" ++ "x" ** 101) == null);
-    // Nor a prefix over 155.
-    try std.testing.expect(split("p" ** 160 ++ "/name") == null);
-    try std.testing.expect(fits("data/" ++ "y" ** 95));
-}
 
 /// The file members of a ustar archive, as (name, content), in order.
 fn members(alloc: Alloc, tar: []const u8) ![]const [2][]const u8 {

@@ -9,7 +9,7 @@
 //! The .lastauthor and .count companions are deliberately omitted (internal
 //! bookkeeping, not the human transcript). A topic is small, so the whole bundle is built in
 //! memory then gzipped — no streaming-response machinery. The tar headers are
-//! hand-rolled ustar (zig std has no tar writer).
+//! ustar.zig's.
 
 const std = @import("std");
 const Io = std.Io;
@@ -18,6 +18,7 @@ const http = @import("http.zig");
 const store = @import("chat_store.zig");
 const disk = @import("store.zig");
 const flate = std.compress.flate;
+const ustar = @import("ustar.zig");
 
 const Request = std.http.Server.Request;
 
@@ -33,25 +34,28 @@ pub fn serveBundle(req: *Request, io: Io, alloc: Alloc, conv_dir: []const u8, si
     try addTarFile(&tar, alloc, md_entry, md, fileMtime(io, alloc, md_path));
 
     // The reaction sidecar rides along when present (absent = nobody reacted).
+    // Only absence leaves it out: a sidecar that cannot be read fails the
+    // download rather than giving a bundle without it.
     const rx_path = try store.reactionsPath(alloc, conv_dir, sid);
     if (disk.read(io, alloc, rx_path, .unlimited)) |rx| {
         const rx_entry = try std.fmt.allocPrint(alloc, "{s}/{s}.reactions.jsonl", .{ sid, sid });
         try addTarFile(&tar, alloc, rx_entry, rx, fileMtime(io, alloc, rx_path));
-    } else |_| {}
+    } else |e| if (e != error.FileNotFound) return e;
 
-    // Images — append-only once written, so an unlocked read is safe. A missing
-    // dir (no images yet) yields nothing; an unreadable file is skipped, not fatal.
+    // Images — append-only once written, so an unlocked read is safe. No
+    // folder is no images yet; any other failure, the folder's or an image's,
+    // fails the download: a bundle is the whole topic or nothing.
     const updir_name = try std.fmt.allocPrint(alloc, "{s}.uploads", .{sid});
     const updir = try std.fs.path.join(alloc, &.{ conv_dir, "sessions", updir_name });
     if (disk.list(io, alloc, updir)) |entries| {
         for (entries) |entry| {
             if (entry.kind == .directory) continue;
             const p = try std.fs.path.join(alloc, &.{ updir, entry.name });
-            const data = disk.read(io, alloc, p, .unlimited) catch continue;
+            const data = try disk.read(io, alloc, p, .unlimited);
             const nm = try std.fmt.allocPrint(alloc, "{s}/uploads/{s}", .{ sid, entry.name });
             try addTarFile(&tar, alloc, nm, data, fileMtime(io, alloc, p));
         }
-    } else |_| {}
+    } else |e| if (e != error.FileNotFound) return e;
 
     // Two zero blocks terminate a tar archive.
     try tar.appendNTimes(alloc, 0, 512 * 2);
@@ -74,60 +78,15 @@ fn fileMtime(io: Io, alloc: Alloc, path: []const u8) u64 {
 
 // ── ustar tar writer (hand-rolled — one regular file per 512-byte header) ─────
 
-/// addTarFile appends one regular-file entry (a 512-byte ustar header + the data
-/// padded to a 512-byte boundary) to `tar`. `name` is truncated to the 100-byte
-/// name field (our paths are short: "<sid>/<sid>.md", "<sid>/uploads/<hex>.png").
+/// addTarFile appends one regular-file entry (a 512-byte ustar header and the
+/// data padded to a 512-byte boundary) to `tar`. A name ustar cannot hold is
+/// an error (ustar.zig), never cut.
 fn addTarFile(tar: *std.ArrayList(u8), alloc: Alloc, name: []const u8, data: []const u8, mtime: u64) !void {
-    var hdr: [512]u8 = @splat(0);
-    const nlen = @min(name.len, 100);
-    @memcpy(hdr[0..nlen], name[0..nlen]);
-    octalField(hdr[100..108], 0o644); // mode
-    octalField(hdr[108..116], 0); // uid
-    octalField(hdr[116..124], 0); // gid
-    octalField(hdr[124..136], data.len); // size
-    octalField(hdr[136..148], mtime); // mtime
-    @memset(hdr[148..156], ' '); // chksum field = spaces while summing
-    hdr[156] = '0'; // typeflag: regular file
-    @memcpy(hdr[257..263], "ustar\x00"); // magic
-    hdr[263] = '0'; // version "00"
-    hdr[264] = '0';
-
-    var sum: u32 = 0;
-    for (hdr) |c| sum += c;
-    octalDigits(hdr[148..154], sum); // 6 octal digits …
-    hdr[154] = 0; // … NUL …
-    hdr[155] = ' '; // … space (the ustar chksum convention)
-
+    const hdr = try ustar.header(name, data.len, mtime, '0');
     try tar.appendSlice(alloc, &hdr);
     try tar.appendSlice(alloc, data);
     const pad = (512 - (data.len % 512)) % 512;
     try tar.appendNTimes(alloc, 0, pad);
-}
-
-/// octalField writes `value` as (field.len - 1) zero-padded octal digits followed
-/// by a trailing NUL — the ustar numeric-field convention (mode/uid/gid/size/mtime).
-fn octalField(field: []u8, value: u64) void {
-    const digits = field.len - 1;
-    var v = value;
-    var i = digits;
-    while (i > 0) {
-        i -= 1;
-        field[i] = '0' + @as(u8, @intCast(v & 7));
-        v >>= 3;
-    }
-    field[digits] = 0;
-}
-
-/// octalDigits fills `field` with exactly field.len zero-padded octal digits (no
-/// terminator) — used for the checksum's 6-digit run.
-fn octalDigits(field: []u8, value: u64) void {
-    var v = value;
-    var i = field.len;
-    while (i > 0) {
-        i -= 1;
-        field[i] = '0' + @as(u8, @intCast(v & 7));
-        v >>= 3;
-    }
 }
 
 // ── gzip (whole-bundle, in memory) ────────────────────────────────────────────
