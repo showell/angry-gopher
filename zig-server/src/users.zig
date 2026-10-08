@@ -951,3 +951,26 @@ test "fs: signSessionNow needs a valid secret, and the cookie it signs verifies"
     try testing.expectEqualStrings(id, verifySessionWithSecret(a, secret, cookie_val, issued).?);
     try testing.expect(verifySessionWithSecret(a, secret, cookie_val, issued + session_max_age_secs + 1) == null);
 }
+
+test "fs: a member whose password cannot be looked at is an error, never a free name (metal-vmm QUEUE 108)" {
+    // findMemberByName read a stat error on the password as "not a member",
+    // so "Create account" with that member's name, while the read failed,
+    // made a second account of the same name.
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var tmp = testing.tmpDir(.{});
+    defer tmp.cleanup();
+    try tmpRoots(&tmp, a);
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+
+    const id = try allocateUser(io, a, "Alice");
+    try setUserPassword(io, a, id, "pw");
+    // The password, there and unreadable: a link to itself loops.
+    const pw = try std.fs.path.join(a, &.{ auth_root, id, "password" });
+    try store.remove(io, a, pw);
+    try std.Io.Dir.cwd().symLink(io, "password", pw, .{});
+    try testing.expect(std.meta.isError(findMemberByName(io, a, "Alice")));
+}
