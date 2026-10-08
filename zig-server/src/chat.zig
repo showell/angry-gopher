@@ -120,7 +120,7 @@ pub fn handle(req: *Request, io: Io, alloc: Alloc, bus: *Bus, sub: []const u8) !
     // the conversations API) is members + agents only. A guest (name-only, no
     // password) or a stranger is sent to set a password and returned here —
     // guests may play the game, but chat requires membership.
-    if (!users.principalAuthorized(io, alloc, uid)) {
+    if (!try users.principalAuthorized(io, alloc, uid)) {
         return http.redirect(req, try std.fmt.allocPrint(alloc, "/login/full?next=/chat{s}", .{sub}));
     }
 
@@ -200,7 +200,7 @@ pub fn handle(req: *Request, io: Io, alloc: Alloc, bus: *Bus, sub: []const u8) !
 pub fn handleChannel(req: *Request, io: Io, alloc: Alloc, bus: *Bus, sub: []const u8) !void {
     const uid = try users.currentUserID(io, alloc, req);
     // NEED_PASSWORD: channels are members + agents only (same gate as /chat).
-    if (!users.principalAuthorized(io, alloc, uid)) {
+    if (!try users.principalAuthorized(io, alloc, uid)) {
         return http.redirect(req, try std.fmt.allocPrint(alloc, "/login/full?next=/channel{s}", .{sub}));
     }
     if (!isStreamPath(sub)) presence.markActiveAndBroadcast(io, alloc, bus, uid);
@@ -255,7 +255,7 @@ fn convRoute(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8, re
     // The other half must be an account: a DM is between two people, and its
     // folder and the fan-out's writes are named after both.
     const other = if (std.mem.eql(u8, pair[0..us], uid)) pair[us + 1 ..] else pair[0..us];
-    if (!users.principalExists(io, alloc, other)) return http.notFound(req);
+    if (!try users.principalExists(io, alloc, other)) return http.notFound(req);
     const members = try alloc.alloc([]const u8, 2);
     members[0] = pair[0..us];
     members[1] = pair[us + 1 ..];

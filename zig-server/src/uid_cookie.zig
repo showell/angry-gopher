@@ -168,7 +168,7 @@ fn legacyHonoured(io: Io, alloc: Alloc, id: []const u8) bool {
     if (isMarked(io, alloc, id)) return false;
     const row = std.fs.path.join(alloc, &.{ player.player_root, id, "name" }) catch return false;
     // Fails closed: a player that cannot be looked up is not honoured.
-    if (!(store.has(io, alloc, row) catch return false) and !users.principalExists(io, alloc, id)) return false;
+    if (!(store.has(io, alloc, row) catch return false) and !(users.principalExists(io, alloc, id) catch return false)) return false;
     return windowOpen(io, alloc);
 }
 
