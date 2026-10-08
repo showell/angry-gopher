@@ -1046,3 +1046,36 @@ test "route: /admin/secret changes the secret: members log in again, players are
     try testing.expect(!playingAs(late, "Nikhil"));
     try testing.expect(setUid(late) == null);
 }
+
+test "fs: a doc that cannot be looked at is a server error, never a 404 (metal-vmm QUEUE 114)" {
+    // A 404 says "no such doc", and an API client's next save may then
+    // replace one that is there (QUEUE 105's pattern, through a wrapper:
+    // docs_store.docExists).
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var site = try UidSite.init(a, io);
+    defer site.deinit();
+    const docs_store = @import("docs_store.zig");
+    const prev = mem_meter.replace(a); // the docs page allocates through it
+    defer _ = mem_meter.replace(prev);
+
+    try users.setUserPassword(io, a, "2", "hunter2");
+    const now: i64 = @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
+    const member = try std.fmt.allocPrint(a, "gopher_auth={s}", .{try users.signSession(a, UidSite.secret, "2", now)});
+
+    const kept = try docs_store.docPath(a, "2", "kept");
+    try UidSite.disk.write(io, a, kept, "# kept\n", .{});
+    const fine = try UidSite.ask(a, io, "/chat/docs/kept.md", member);
+    try testing.expectEqualStrings("200 OK", status(fine));
+
+    // The same doc, now a link to itself: it cannot be looked at.
+    const lost = try docs_store.docPath(a, "2", "lost");
+    try std.Io.Dir.cwd().symLink(io, "lost.md", lost, .{});
+    const resp = try UidSite.ask(a, io, "/chat/docs/lost.md", member);
+    try testing.expect(std.mem.indexOf(u8, status(resp), "404") == null);
+    try testing.expect(std.mem.startsWith(u8, status(resp), "5"));
+}
