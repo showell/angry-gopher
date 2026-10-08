@@ -586,3 +586,33 @@ test "an empty or undated topic is kept (it may be fresh); only a datably-old to
     try testing.expectEqual(@as(usize, 0), dry.members_removed);
     try testing.expectEqualStrings("1_2/stale", dry.items.items[0].name);
 }
+
+test "fs: a member whose name cannot be read is not retired as nobody (metal-vmm QUEUE 105)" {
+    // users.getUserName read an unreadable name file as "", no name is on
+    // the keep list, and a kept member was removed everywhere.
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var tmp = testing.tmpDir(.{});
+    defer tmp.cleanup();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+
+    const saved = Saved.take();
+    defer saved.restore();
+    const base = try std.fs.path.join(a, &.{ ".zig-cache", "tmp", &tmp.sub_path });
+    try roots.point(a, .{
+        .data_dir = try std.fs.path.join(a, &.{ base, "data" }),
+        .auth_dir = try std.fs.path.join(a, &.{ base, "auth" }),
+    });
+    try stage(io, a);
+    // apoorva's name: there, and unreadable.
+    const name = try std.fs.path.join(a, &.{ users.auth_root, "2", "name" });
+    try store.remove(io, a, name);
+    try store.makeDir(io, a, name);
+
+    const p = Params{ .days = 30, .keep = &.{ "Steve", "apoorva" }, .now = now };
+    _ = plan(io, a, p, true) catch {}; // refusing is right; removing her is not
+    try testing.expect(try store.has(io, a, try std.fs.path.join(a, &.{ users.auth_root, "2" })));
+}
