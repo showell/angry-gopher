@@ -89,6 +89,13 @@ pub fn render(req: *Request, io: Io, alloc: Alloc, client: ?[]const u8) !void {
     }
     throttle.clearAddress(io, client);
 
+    // A failed backup is an error answer, never an archive cut short: what
+    // can be known before the answer starts is asked first (QUEUE 110).
+    checkRoots(io, alloc, data, auth) catch |e| {
+        const msg = try std.fmt.allocPrint(alloc, "The backup failed: a root cannot be looked at ({s}).\n", .{@errorName(e)});
+        return req.respond(msg, .{ .status = .internal_server_error });
+    };
+
     var hbuf: [4096]u8 = undefined;
     var body = req.respondStreaming(&hbuf, .{
         .respond_options = .{ .extra_headers = &tar_headers },
@@ -126,12 +133,13 @@ pub const manifest_name = "backup-manifest.txt";
 /// `backup-skipped.txt` if anything was, then the manifest, then the end. An
 /// error stops it where it is, with no manifest.
 pub fn archive(io: Io, alloc: Alloc, w: *std.Io.Writer, data: []const u8, auth: []const u8) !void {
+    try checkRoots(io, alloc, data, auth);
     var skipped: std.ArrayList(u8) = .empty;
     var m = Manifest{};
     const buf = try alloc.alloc(u8, piece);
     var t = Tar{ .w = w };
     for ([_][2][]const u8{ .{ "data", data }, .{ "auth", auth } }) |root| {
-        try walk(io, alloc, &t, root[1], root[0], buf, &skipped, &m);
+        try walk(io, alloc, &t, root[1], root[0], buf, &skipped, &m, true);
     }
     if (skipped.items.len > 0) {
         try t.file("backup-skipped.txt", skipped.items);
@@ -140,6 +148,16 @@ pub fn archive(io: Io, alloc: Alloc, w: *std.Io.Writer, data: []const u8, auth: 
     try m.lines.print(alloc, "end: {d} files, {d} bytes\n", .{ m.files, m.bytes });
     try t.file(manifest_name, m.lines.items);
     try t.end();
+}
+
+/// **A ROOT THAT CANNOT BE LOOKED AT FAILS THE BACKUP** (metal-vmm QUEUE 110,
+/// Steve: louder is better): an error, and no archive. Only a root not there
+/// yet is no failure. Asked before the answer starts, so a failed backup is
+/// an error answer, not an archive cut short; `archive` asks again.
+pub fn checkRoots(io: Io, alloc: Alloc, data: []const u8, auth: []const u8) !void {
+    for ([_][]const u8{ data, auth }) |root| {
+        _ = try store.statOrNull(io, alloc, root);
+    }
 }
 
 /// What the manifest says: a line per file, and the totals.
@@ -166,17 +184,16 @@ fn digest(bytes: []const u8) [Sha256.digest_length]u8 {
 
 /// Writes `dir` (on this host) as `name` (in the archive) and everything
 /// under it, in name order, each file into the manifest as it goes.
-fn walk(io: Io, alloc: Alloc, t: *Tar, dir: []const u8, name: []const u8, buf: []u8, skipped: *std.ArrayList(u8), m: *Manifest) !void {
-    // **WHAT IS NOT TAKEN IS NAMED** (metal-vmm QUEUE 104): only a root not
-    // there yet is left out unsaid; anything that cannot be looked at, or is
-    // neither a file nor a folder, goes in backup-skipped.txt with why.
-    const st = store.stat(io, alloc, dir) catch |e| switch (e) {
-        error.FileNotFound => return, // a root not there yet
-        else => {
-            try skipped.print(alloc, "{s}/ (cannot be looked at: {s})\n", .{ name, @errorName(e) });
-            return;
-        },
-    };
+fn walk(io: Io, alloc: Alloc, t: *Tar, dir: []const u8, name: []const u8, buf: []u8, skipped: *std.ArrayList(u8), m: *Manifest, root: bool) !void {
+    // **WHAT IS NOT TAKEN IS NAMED** (metal-vmm QUEUE 104): a folder inside
+    // that cannot be looked at, or anything neither a file nor a folder, goes
+    // in backup-skipped.txt with why. A root is not a skip: one not there yet
+    // is left out unsaid, and one that cannot be looked at fails the backup
+    // (QUEUE 110, `checkRoots`).
+    const st = (if (root) try store.statOrNull(io, alloc, dir) else store.statOrNull(io, alloc, dir) catch |e| {
+        try skipped.print(alloc, "{s}/ (cannot be looked at: {s})\n", .{ name, @errorName(e) });
+        return;
+    }) orelse return;
     if (!try t.folder(name, mtimeOf(st))) {
         try skipped.print(alloc, "{s}/\n", .{name});
         return;
@@ -187,7 +204,7 @@ fn walk(io: Io, alloc: Alloc, t: *Tar, dir: []const u8, name: []const u8, buf: [
         const host_path = try std.fs.path.join(alloc, &.{ dir, e.name });
         const arc_path = try std.fmt.allocPrint(alloc, "{s}/{s}", .{ name, e.name });
         switch (e.kind) {
-            .directory => try walk(io, alloc, t, host_path, arc_path, buf, skipped, m),
+            .directory => try walk(io, alloc, t, host_path, arc_path, buf, skipped, m, false),
             .file => {
                 // absent-ok: a file inside that cannot be looked at is a named skip (backup-skipped.txt), not a failed backup (QUEUE 110).
                 const fst = store.stat(io, alloc, host_path) catch |err| {
@@ -346,10 +363,7 @@ test "fs: what the backup cannot take is named in backup-skipped.txt, never drop
     try store.write(io, a, try std.fs.path.join(a, &.{ data, "chat", "kept" }), "kept", .{});
     // A link in the tree is neither a file nor a folder the backup takes.
     try tmp.dir.symLink(io, "kept", "data/chat/link", .{});
-    // A root that cannot be looked at (its path runs through a file) is not
-    // a root that is not there yet.
-    try store.write(io, a, try std.fs.path.join(a, &.{ base, "afile" }), "x", .{});
-    const auth = try std.fs.path.join(a, &.{ base, "afile", "auth" });
+    const auth = try std.fs.path.join(a, &.{ base, "auth" });
 
     var whole: std.Io.Writer.Allocating = .init(a);
     try archive(io, a, &whole.writer, data, auth);
@@ -360,7 +374,6 @@ test "fs: what the backup cannot take is named in backup-skipped.txt, never drop
     };
     try std.testing.expect(skipped != null);
     try std.testing.expect(std.mem.indexOf(u8, skipped.?, "data/chat/link") != null);
-    try std.testing.expect(std.mem.indexOf(u8, skipped.?, "auth/") != null);
 }
 
 test "fs: a root that cannot be looked at fails the backup, no archive (metal-vmm QUEUE 110)" {
@@ -377,8 +390,9 @@ test "fs: a root that cannot be looked at fails the backup, no archive (metal-vm
     const base = try std.fs.path.join(a, &.{ ".zig-cache", "tmp", &tmp.sub_path });
     const data = try std.fs.path.join(a, &.{ base, "data" });
     try store.write(io, a, try std.fs.path.join(a, &.{ data, "chat", "kept" }), "kept", .{});
-    try store.write(io, a, try std.fs.path.join(a, &.{ base, "afile" }), "x", .{});
-    const auth = try std.fs.path.join(a, &.{ base, "afile", "auth" }); // through a file
+    // There, and not to be looked at: a link to itself loops.
+    try tmp.dir.symLink(io, "auth", "auth", .{});
+    const auth = try std.fs.path.join(a, &.{ base, "auth" });
 
     var whole: std.Io.Writer.Allocating = .init(a);
     try std.testing.expect(std.meta.isError(archive(io, a, &whole.writer, data, auth)));
