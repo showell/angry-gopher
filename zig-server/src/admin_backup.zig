@@ -155,9 +155,13 @@ pub fn archive(io: Io, alloc: Alloc, w: *std.Io.Writer, data: []const u8, auth: 
 /// Steve: louder is better): an error, and no archive. Only a root not there
 /// yet is no failure. Asked before the answer starts, so a failed backup is
 /// an error answer, not an archive cut short; `archive` asks again.
+///
+/// **LOOKED AT IS LISTED** (QUEUE 118): a root that stats and cannot be
+/// listed (a file where the folder should be, a folder this user may not
+/// read) failed only once the archive had begun.
 pub fn checkRoots(io: Io, alloc: Alloc, data: []const u8, auth: []const u8) !void {
     for ([_][]const u8{ data, auth }) |root| {
-        _ = try rootStat(io, alloc, root);
+        if (try rootStat(io, alloc, root) != null) _ = try store.list(io, alloc, root);
     }
 }
 
@@ -208,11 +212,18 @@ fn walk(io: Io, alloc: Alloc, t: *Tar, dir: []const u8, name: []const u8, buf: [
         try skipped.print(alloc, "{s}/ (cannot be looked at: {s})\n", .{ name, @errorName(e) });
         return;
     }) orelse return;
+    // Listed before the folder goes in: one that stats and cannot be listed
+    // is a named skip too (QUEUE 118), and a root that cannot be is a failed
+    // backup, which `checkRoots` asked before the answer began.
+    // absent-ok: a folder inside that cannot be listed is a named skip, in backup-skipped.txt (QUEUE 118).
+    const entries = (if (root) try store.list(io, alloc, dir) else store.list(io, alloc, dir) catch |e| {
+        try skipped.print(alloc, "{s}/ (cannot be listed: {s})\n", .{ name, @errorName(e) });
+        return;
+    });
     if (!try t.folder(name, mtimeOf(st))) {
         try skipped.print(alloc, "{s}/\n", .{name});
         return;
     }
-    const entries = try store.list(io, alloc, dir);
     std.mem.sort(store.Entry, entries, {}, byName);
     for (entries) |e| {
         const host_path = try std.fs.path.join(alloc, &.{ dir, e.name });
