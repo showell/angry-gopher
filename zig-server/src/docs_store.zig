@@ -113,7 +113,7 @@ fn docFileExists(io: Io, alloc: Alloc, uid: []const u8, slug: []const u8) !bool 
 /// means "no docs yet," not an error.
 pub fn listUserDocs(io: Io, alloc: Alloc, uid: []const u8) ![]DocSummary {
     const dir_path = try userDocsDir(alloc, uid);
-    const entries = disk.list(io, alloc, dir_path) catch return &.{};
+    const entries = try disk.list(io, alloc, dir_path);
 
     var out: std.ArrayList(DocSummary) = .empty;
     for (entries) |entry| {
@@ -140,7 +140,7 @@ fn lessThanSlug(_: void, a: DocSummary, b: DocSummary) bool {
 /// a message you land in your reading list.
 pub fn mostRecentDocSlug(io: Io, alloc: Alloc, uid: []const u8) !?[]const u8 {
     const dir_path = try userDocsDir(alloc, uid);
-    const entries = disk.list(io, alloc, dir_path) catch return null;
+    const entries = try disk.list(io, alloc, dir_path);
 
     var best_slug: ?[]const u8 = null;
     var best_mtime: i96 = 0;
@@ -150,7 +150,7 @@ pub fn mostRecentDocSlug(io: Io, alloc: Alloc, uid: []const u8) !?[]const u8 {
         const slug = entry.name[0 .. entry.name.len - ".md".len];
         if (!validDocSlug(slug)) continue;
         const path = try std.fs.path.join(alloc, &.{ dir_path, entry.name });
-        const st = disk.stat(io, alloc, path) catch continue;
+        const st = (try disk.statOrNull(io, alloc, path)) orelse continue;
         if (best_slug == null or st.mtime > best_mtime) {
             best_mtime = st.mtime;
             best_slug = try alloc.dupe(u8, slug);

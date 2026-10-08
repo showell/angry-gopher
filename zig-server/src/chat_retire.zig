@@ -217,7 +217,7 @@ const Member = struct { id: []const u8, name: []const u8 };
 /// account to keep or remove); `next-id.txt` and other non-numeric names are
 /// skipped.
 fn allMembers(io: Io, alloc: Alloc) ![]Member {
-    const entries = store.list(io, alloc, users.auth_root) catch return &.{};
+    const entries = try store.list(io, alloc, users.auth_root);
     var out: std.ArrayList(Member) = .empty;
     for (entries) |e| {
         if (e.kind != .directory) continue;
@@ -251,7 +251,7 @@ fn retireUser(pl: *Plan, id: []const u8) !void {
 /// messages too — the other party is gone), the key noted in `gone`.
 fn retireDMs(pl: *Plan, removed: *const UidSet, gone: *UidSet) !void {
     const alloc = pl.alloc;
-    const entries = store.list(pl.io, alloc, chat_store.chat_root) catch return;
+    const entries = try store.list(pl.io, alloc, chat_store.chat_root);
     for (entries) |e| {
         if (e.kind != .directory) continue;
         const pair = dmPair(e.name) orelse continue;
@@ -284,11 +284,11 @@ fn canonicalUid(s: []const u8) bool {
 fn pruneChannels(pl: *Plan, removed: *const UidSet) !void {
     const alloc = pl.alloc;
     const chan_dir = try std.fs.path.join(alloc, &.{ chat_store.chat_root, "channels" });
-    const entries = store.list(pl.io, alloc, chan_dir) catch return;
+    const entries = try store.list(pl.io, alloc, chan_dir);
     for (entries) |e| {
         if (!std.mem.endsWith(u8, e.name, ".channel")) continue;
         const path = try std.fs.path.join(alloc, &.{ chan_dir, e.name });
-        const body = store.read(pl.io, alloc, path, .unlimited) catch continue;
+        const body = (try store.readOrNull(pl.io, alloc, path, .unlimited)) orelse continue;
         var kept: std.ArrayList(u8) = .empty;
         var dropped: usize = 0;
         var it = std.mem.splitScalar(u8, body, '\n');
@@ -319,7 +319,7 @@ fn pruneChannels(pl: *Plan, removed: *const UidSet) !void {
 fn sweepReferences(pl: *Plan, removed: *const UidSet, gone_dms: *const UidSet, keep: []const []const u8) !void {
     const alloc = pl.alloc;
     const users_dir = try std.fs.path.join(alloc, &.{ chat_store.chat_root, "users" });
-    const entries = store.list(pl.io, alloc, users_dir) catch return;
+    const entries = try store.list(pl.io, alloc, users_dir);
     for (entries) |e| {
         if (e.kind != .directory) continue;
         const uid = e.name;
@@ -332,11 +332,11 @@ fn sweepReferences(pl: *Plan, removed: *const UidSet, gone_dms: *const UidSet, k
 
         // last-conv: a single conv key.
         const lc = try std.fs.path.join(alloc, &.{ udir, "last-conv" });
-        if (store.read(pl.io, alloc, lc, .unlimited)) |raw| {
+        if (try store.readOrNull(pl.io, alloc, lc, .unlimited)) |raw| {
             const conv = std.mem.trim(u8, raw, " \t\r\n");
             if (conv.len != 0 and convGone(pl.io, alloc, conv, gone_dms))
                 try pl.rmFile(.ref_last_conv, try std.fmt.allocPrint(alloc, "{s} -> {s}", .{ uid, conv }), lc);
-        } else |_| {}
+        }
 
         // last-sessions/<conv>, pinned-sessions/<conv>: a file named by conv.
         try sweepDir(pl, udir, "last-sessions", .ref_last_session, uid, gone_dms);
@@ -347,7 +347,7 @@ fn sweepReferences(pl: *Plan, removed: *const UidSet, gone_dms: *const UidSet, k
 fn sweepDir(pl: *Plan, udir: []const u8, sub: []const u8, kind: Kind, uid: []const u8, gone_dms: *const UidSet) !void {
     const alloc = pl.alloc;
     const dir = try std.fs.path.join(alloc, &.{ udir, sub });
-    const entries = store.list(pl.io, alloc, dir) catch return;
+    const entries = try store.list(pl.io, alloc, dir);
     for (entries) |e| {
         if (e.kind == .directory) continue;
         if (!convGone(pl.io, alloc, e.name, gone_dms)) continue;
@@ -375,6 +375,7 @@ fn convGone(io: Io, alloc: Alloc, conv: []const u8, gone_dms: *const UidSet) boo
 /// not swept here — it is nobody's live pointer.)
 fn keptUser(io: Io, alloc: Alloc, uid: []const u8, keep: []const []const u8) bool {
     const namef = std.fs.path.join(alloc, &.{ users.auth_root, uid, "name" }) catch return false;
+    // Not kept here is only not swept (sweepReferences): the failure does less, never more.
     const raw = store.read(io, alloc, namef, .unlimited) catch return false;
     return inList(keep, std.mem.trimEnd(u8, raw, "\r\n"));
 }
@@ -585,4 +586,34 @@ test "an empty or undated topic is kept (it may be fresh); only a datably-old to
     try testing.expectEqual(@as(usize, 1), dry.countOf(.topic));
     try testing.expectEqual(@as(usize, 0), dry.members_removed);
     try testing.expectEqualStrings("1_2/stale", dry.items.items[0].name);
+}
+
+test "fs: a member whose name cannot be read is not retired as nobody (metal-vmm QUEUE 105)" {
+    // users.getUserName read an unreadable name file as "", no name is on
+    // the keep list, and a kept member was removed everywhere.
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var tmp = testing.tmpDir(.{});
+    defer tmp.cleanup();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+
+    const saved = Saved.take();
+    defer saved.restore();
+    const base = try std.fs.path.join(a, &.{ ".zig-cache", "tmp", &tmp.sub_path });
+    try roots.point(a, .{
+        .data_dir = try std.fs.path.join(a, &.{ base, "data" }),
+        .auth_dir = try std.fs.path.join(a, &.{ base, "auth" }),
+    });
+    try stage(io, a);
+    // apoorva's name: there, and unreadable.
+    const name = try std.fs.path.join(a, &.{ users.auth_root, "2", "name" });
+    try store.remove(io, a, name);
+    try store.makeDir(io, a, name);
+
+    const p = Params{ .days = 30, .keep = &.{ "Steve", "apoorva" }, .now = now };
+    _ = plan(io, a, p, true) catch {}; // refusing is right; removing her is not
+    try testing.expect(try store.has(io, a, try std.fs.path.join(a, &.{ users.auth_root, "2" })));
 }

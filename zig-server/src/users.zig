@@ -180,7 +180,7 @@ fn checkAPIKey(io: Io, alloc: Alloc, presented: []const u8) !?[]const u8 {
 fn userExists(io: Io, alloc: Alloc, id: []const u8) !bool {
     if (std.mem.trim(u8, id, " \t\r\n").len == 0) return false;
     const dir = try std.fs.path.join(alloc, &.{ auth_root, id });
-    const st = store.stat(io, alloc, dir) catch return false;
+    const st = (try store.statOrNull(io, alloc, dir)) orelse return false;
     return st.kind == .directory;
 }
 
@@ -207,7 +207,7 @@ pub const AuthorizedUser = struct { id: []const u8, name: []const u8 };
 /// its display name, sorted by numeric id.
 /// Missing auth_root → empty.
 pub fn listAuthorized(io: Io, alloc: Alloc) ![]AuthorizedUser {
-    const entries = store.list(io, alloc, auth_root) catch return &.{};
+    const entries = try store.list(io, alloc, auth_root);
 
     var out: std.ArrayList(AuthorizedUser) = .empty;
     for (entries) |entry| {
@@ -355,7 +355,7 @@ pub fn principalIsAgent(id: []const u8) bool {
 /// listUserIDs returns every account id (numeric dir under auth_root), sorted
 /// numerically. An id exists iff it has an account dir.
 pub fn listUserIDs(io: Io, alloc: Alloc) ![][]const u8 {
-    const entries = store.list(io, alloc, auth_root) catch return &.{};
+    const entries = try store.list(io, alloc, auth_root);
 
     var out: std.ArrayList([]const u8) = .empty;
     for (entries) |entry| {
@@ -376,6 +376,7 @@ fn lessThanNumericID(_: void, a: []const u8, b: []const u8) bool {
 /// never recorded.
 pub fn userLastSeen(io: Io, alloc: Alloc, id: []const u8) ?i64 {
     const path = std.fs.path.join(alloc, &.{ users_root, id, "last-seen" }) catch return null;
+    // Shown on the admin page only: a time that will not read is no time.
     const b = store.read(io, alloc, path, .unlimited) catch return null;
     return std.fmt.parseInt(i64, std.mem.trim(u8, b, " \t\r\n"), 10) catch null;
 }
@@ -388,7 +389,7 @@ fn authFileExists(io: Io, alloc: Alloc, id: []const u8, name: []const u8) !bool 
 /// readAuthFile reads {auth_root}/{id}/{name}, or null if absent.
 fn readAuthFile(io: Io, alloc: Alloc, id: []const u8, name: []const u8) !?[]u8 {
     const path = try std.fs.path.join(alloc, &.{ auth_root, id, name });
-    return store.read(io, alloc, path, .unlimited) catch return null;
+    return store.readOrNull(io, alloc, path, .unlimited);
 }
 
 /// The session secret, for the other signed cookie (uid_cookie.zig), or null.
@@ -412,12 +413,12 @@ const previous_until_name = "_session_secret.previous-until";
 /// there is none. Members' sessions are never checked against it.
 pub fn previousSecret(io: Io, alloc: Alloc) !?[]const u8 {
     const until_path = try std.fs.path.join(alloc, &.{ session_secret_dir, previous_until_name });
-    const raw = store.read(io, alloc, until_path, .limited(64)) catch return null;
+    const raw = (try store.readOrNull(io, alloc, until_path, .limited(64))) orelse return null;
     const until = std.fmt.parseInt(i64, std.mem.trim(u8, raw, " \t\r\n"), 10) catch return null;
     const now: i64 = @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
     if (now >= until) return null;
     const path = try std.fs.path.join(alloc, &.{ session_secret_dir, previous_name });
-    const b = store.read(io, alloc, path, .unlimited) catch return null;
+    const b = (try store.readOrNull(io, alloc, path, .unlimited)) orelse return null;
     if (b.len < 32) return null;
     return b;
 }
@@ -445,7 +446,7 @@ pub fn rotateSecret(io: Io, alloc: Alloc, players_days: i64) !void {
 /// Only rotateSecret, from /admin/secret, replaces one that exists.
 fn loadSecret(io: Io, alloc: Alloc) !?[]const u8 {
     const path = try std.fs.path.join(alloc, &.{ session_secret_dir, "_session_secret" });
-    const b = store.read(io, alloc, path, .unlimited) catch return null;
+    const b = (try store.readOrNull(io, alloc, path, .unlimited)) orelse return null;
     if (b.len < 32) return null;
     return b;
 }

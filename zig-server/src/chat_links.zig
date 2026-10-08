@@ -22,7 +22,7 @@ pub fn handle(req: *Request, io: Io, alloc: Alloc, uid: []const u8, rest: []cons
     if (rest.len != 0) return http.notFound(req);
     const viewer = try users.getUserName(io, alloc, uid);
     const path = try std.fs.path.join(alloc, &.{ store.chat_root, "users", uid, "links.md" });
-    const md: ?[]u8 = disk.read(io, alloc, path, .unlimited) catch null;
+    const md: ?[]u8 = try disk.readOrNull(io, alloc, path, .unlimited);
 
     var b: std.ArrayList(u8) = .empty;
     try chrome.begin(&b, alloc, "Links", "Links", viewer, "links");

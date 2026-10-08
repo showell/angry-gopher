@@ -37,7 +37,7 @@ pub var resume_pdf_path: []const u8 = "pages/steve-resume.pdf";
 /// handle serves GET /steve-resume. A missing source file 404s (rather than
 /// crashing) — the route exists only when the content does.
 pub fn handle(req: *Request, io: Io, alloc: Alloc) !void {
-    const src = store.read(io, alloc, resume_path, .unlimited) catch return http.notFound(req);
+    const src = (try store.readOrNull(io, alloc, resume_path, .unlimited)) orelse return http.notFound(req);
 
     var b: std.ArrayList(u8) = .empty;
     try b.appendSlice(alloc, page_head);
@@ -52,7 +52,7 @@ pub fn handle(req: *Request, io: Io, alloc: Alloc) !void {
 /// straight from disk. A missing file 404s (the PDF is a build artifact; if it
 /// hasn't been generated, the route simply isn't there).
 pub fn handlePdf(req: *Request, io: Io, alloc: Alloc) !void {
-    const bytes = store.read(io, alloc, resume_pdf_path, .unlimited) catch return http.notFound(req);
+    const bytes = (try store.readOrNull(io, alloc, resume_pdf_path, .unlimited)) orelse return http.notFound(req);
     try req.respond(bytes, .{ .extra_headers = &.{http.pdf_ct} });
 }
 

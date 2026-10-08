@@ -35,7 +35,9 @@
 //!
 //! A path ustar cannot hold (longer than its 255 bytes) is left out and
 //! named in a last member, `backup-skipped.txt`. The Store's path limit
-//! (256 as gopher-metal spells it) means at most a path of exactly 256.
+//! (256 as gopher-metal spells it) means at most a path of exactly 256. So
+//! is anything that cannot be looked at, or is neither a file nor a folder
+//! (a link), each with why: only a root not there yet is left out unsaid.
 
 const std = @import("std");
 const ustar = @import("ustar.zig");
@@ -165,7 +167,16 @@ fn digest(bytes: []const u8) [Sha256.digest_length]u8 {
 /// Writes `dir` (on this host) as `name` (in the archive) and everything
 /// under it, in name order, each file into the manifest as it goes.
 fn walk(io: Io, alloc: Alloc, t: *Tar, dir: []const u8, name: []const u8, buf: []u8, skipped: *std.ArrayList(u8), m: *Manifest) !void {
-    const st = store.stat(io, alloc, dir) catch return; // a root not there yet
+    // **WHAT IS NOT TAKEN IS NAMED** (metal-vmm QUEUE 104): only a root not
+    // there yet is left out unsaid; anything that cannot be looked at, or is
+    // neither a file nor a folder, goes in backup-skipped.txt with why.
+    const st = store.stat(io, alloc, dir) catch |e| switch (e) {
+        error.FileNotFound => return, // a root not there yet
+        else => {
+            try skipped.print(alloc, "{s}/ (cannot be looked at: {s})\n", .{ name, @errorName(e) });
+            return;
+        },
+    };
     if (!try t.folder(name, mtimeOf(st))) {
         try skipped.print(alloc, "{s}/\n", .{name});
         return;
@@ -178,7 +189,10 @@ fn walk(io: Io, alloc: Alloc, t: *Tar, dir: []const u8, name: []const u8, buf: [
         switch (e.kind) {
             .directory => try walk(io, alloc, t, host_path, arc_path, buf, skipped, m),
             .file => {
-                const fst = store.stat(io, alloc, host_path) catch continue;
+                const fst = store.stat(io, alloc, host_path) catch |err| {
+                    try skipped.print(alloc, "{s} (cannot be looked at: {s})\n", .{ arc_path, @errorName(err) });
+                    continue;
+                };
                 if (!ustar.fits(arc_path)) {
                     try skipped.print(alloc, "{s}\n", .{arc_path});
                     continue;
@@ -198,7 +212,7 @@ fn walk(io: Io, alloc: Alloc, t: *Tar, dir: []const u8, name: []const u8, buf: [
                 try m.add(alloc, arc_path, fst.size, h.finalResult());
                 files_archived += 1;
             },
-            .other => {},
+            .other => try skipped.print(alloc, "{s} (neither a file nor a folder)\n", .{arc_path}),
         }
     }
 }
@@ -315,4 +329,35 @@ test "fs: the archive ends with a manifest of every file; one cut short has none
     var short: std.Io.Writer = .fixed(cut);
     try std.testing.expectError(error.WriteFailed, archive(io, a, &short, data, auth));
     try std.testing.expect(std.mem.indexOf(u8, short.buffered(), manifest_name) == null);
+}
+
+test "fs: what the backup cannot take is named in backup-skipped.txt, never dropped (metal-vmm QUEUE 104)" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    const base = try std.fs.path.join(a, &.{ ".zig-cache", "tmp", &tmp.sub_path });
+    const data = try std.fs.path.join(a, &.{ base, "data" });
+    try store.write(io, a, try std.fs.path.join(a, &.{ data, "chat", "kept" }), "kept", .{});
+    // A link in the tree is neither a file nor a folder the backup takes.
+    try tmp.dir.symLink(io, "kept", "data/chat/link", .{});
+    // A root that cannot be looked at (its path runs through a file) is not
+    // a root that is not there yet.
+    try store.write(io, a, try std.fs.path.join(a, &.{ base, "afile" }), "x", .{});
+    const auth = try std.fs.path.join(a, &.{ base, "afile", "auth" });
+
+    var whole: std.Io.Writer.Allocating = .init(a);
+    try archive(io, a, &whole.writer, data, auth);
+    const got = try members(a, whole.written());
+    var skipped: ?[]const u8 = null;
+    for (got) |m| if (std.mem.eql(u8, m[0], "backup-skipped.txt")) {
+        skipped = m[1];
+    };
+    try std.testing.expect(skipped != null);
+    try std.testing.expect(std.mem.indexOf(u8, skipped.?, "data/chat/link") != null);
+    try std.testing.expect(std.mem.indexOf(u8, skipped.?, "auth/") != null);
 }

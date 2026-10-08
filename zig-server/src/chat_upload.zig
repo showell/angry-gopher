@@ -111,7 +111,7 @@ pub fn serveUpload(req: *Request, io: Io, alloc: Alloc, conv_dir: []const u8, si
     const updir = try std.fmt.allocPrint(alloc, "{s}.uploads", .{sid});
     const path = try std.fs.path.join(alloc, &.{ conv_dir, "sessions", updir, file });
 
-    const size = (disk.stat(io, alloc, path) catch return http.notFound(req)).size;
+    const size = ((try disk.statOrNull(io, alloc, path)) orelse return http.notFound(req)).size;
 
     if (try http.header(req, alloc, "range")) |range_hdr| {
         const r = parseRange(range_hdr, size) orelse {
@@ -123,7 +123,10 @@ pub fn serveUpload(req: *Request, io: Io, alloc: Alloc, conv_dir: []const u8, si
         };
         const len: usize = @intCast(r.end - r.start + 1);
         const buf = try alloc.alloc(u8, len);
-        const n = disk.readAt(io, alloc, path, r.start, buf) catch return http.notFound(req);
+        const n = disk.readAt(io, alloc, path, r.start, buf) catch |e| switch (e) {
+            error.FileNotFound => return http.notFound(req), // gone since its stat
+            else => return e,
+        };
         const cr = try std.fmt.allocPrint(alloc, "bytes {d}-{d}/{d}", .{ r.start, r.start + n - 1, size });
         // The Range window is already bounded to `range_window`, so it is read
         // and sent whole with a content-length (the plain GET below is the one
@@ -153,7 +156,10 @@ pub fn serveUpload(req: *Request, io: Io, alloc: Alloc, conv_dir: []const u8, si
     // request heap before this).
     if (size <= whole_read_max) {
         const data = try alloc.alloc(u8, @intCast(size));
-        const n = disk.readAt(io, alloc, path, 0, data) catch return http.notFound(req);
+        const n = disk.readAt(io, alloc, path, 0, data) catch |e| switch (e) {
+            error.FileNotFound => return http.notFound(req), // gone since its stat
+            else => return e,
+        };
         return req.respond(data[0..n], .{ .extra_headers = &headers });
     }
     return streamFile(req, io, alloc, path, size, &headers);
@@ -180,6 +186,7 @@ fn streamFile(req: *Request, io: Io, alloc: Alloc, path: []const u8, len: u64, h
         var at: u64 = 0;
         while (at < len) {
             const want: usize = @intCast(@min(@as(u64, buf.len), len - at));
+            // The headers are out: a read that fails can only end the stream short of its length.
             const n = disk.readAt(io, alloc, path, at, buf[0..want]) catch break;
             if (n == 0) break; // the file shrank under us — stop where we are
             body.writer.writeAll(buf[0..n]) catch break;

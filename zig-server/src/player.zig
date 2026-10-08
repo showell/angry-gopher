@@ -136,7 +136,7 @@ pub fn nameOf(io: Io, alloc: Alloc, id: []const u8) ![]const u8 {
 /// can have Lyn Rummy data: the seed brought the account-store names across, and
 /// a chat member who logs in is mirrored in. Powers the game admin.
 pub fn list(io: Io, alloc: Alloc) ![]Player {
-    const entries = store.list(io, alloc, player_root) catch return &.{};
+    const entries = try store.list(io, alloc, player_root);
 
     var out: std.ArrayList(Player) = .empty;
     for (entries) |entry| {
@@ -185,7 +185,7 @@ fn touchImpl(io: Io, alloc: Alloc, id: []const u8) !void {
 
 fn readField(io: Io, alloc: Alloc, id: []const u8, field: []const u8) !?[]const u8 {
     const path = try std.fs.path.join(alloc, &.{ player_root, id, field });
-    const raw = store.read(io, alloc, path, .limited(4096)) catch return null;
+    const raw = (try store.readOrNull(io, alloc, path, .limited(4096))) orelse return null;
     return std.mem.trimEnd(u8, raw, "\r\n");
 }
 

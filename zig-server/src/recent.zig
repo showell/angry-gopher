@@ -139,7 +139,7 @@ fn gatherRecentItems(io: Io, alloc: Alloc, uid: []const u8) ![]RecentItem {
     // The viewer's own docs.
     for (try docs_store.listUserDocs(io, alloc, uid)) |d| {
         const path = docs_store.docPath(alloc, uid, d.slug) catch continue;
-        const st = disk.stat(io, alloc, path) catch continue;
+        const st = (try disk.statOrNull(io, alloc, path)) orelse continue;
         const secs = fileSeconds(st.mtime);
         try items.append(alloc, .{
             .kind = .doc,
@@ -226,7 +226,7 @@ fn newestFirst(_: void, a: RecentItem, b: RecentItem) bool {
 /// carries no date this server can read.
 fn byFileTime(io: Io, alloc: Alloc, items: *std.ArrayList(RecentItem), dir: []const u8, sid: []const u8, url: []const u8, where: []const u8, dm: bool) !void {
     const path = try store.sessionMdPath(alloc, dir, sid);
-    const st = disk.stat(io, alloc, path) catch return;
+    const st = (try disk.statOrNull(io, alloc, path)) orelse return;
     const secs = fileSeconds(st.mtime);
     try items.append(alloc, .{
         .kind = .chat,
