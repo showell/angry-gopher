@@ -42,6 +42,15 @@ python3 "$REPO_DIR/tools/lint_head_access.py"
 echo "==> portable lint (its tests, then the tree)"
 python3 "$REPO_DIR/tools/test_lint_portable.py"
 python3 "$REPO_DIR/tools/lint_portable.py"
+
+# Poka-yoke lint: a read of the store whose failure is caught into a value
+# ("", 0, null, [], a skip) makes a disk that failed look like a file that is
+# not there, and four such reads lost data in one week (ef3091eb). Absence is
+# store.readOrNull / statOrNull / list's own []; anything else is named or
+# defended by a comment on the line before. Its own tests run first.
+echo "==> store-absence lint (its tests, then the tree)"
+python3 "$REPO_DIR/tools/test_lint_store_absence.py"
+python3 "$REPO_DIR/tools/lint_store_absence.py"
 # Caddy's body caps against zig-server/src/limits.zig: it must let through
 # what the application allows.
 python3 "$REPO_DIR/tools/check_caddy_limits.py"
