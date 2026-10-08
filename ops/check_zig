@@ -47,7 +47,9 @@ python3 "$REPO_DIR/tools/lint_portable.py"
 # ("", 0, null, [], a skip) makes a disk that failed look like a file that is
 # not there, and four such reads lost data in one week (ef3091eb). Absence is
 # store.readOrNull / statOrNull / list's own []; anything else is named or
-# defended by a comment on the line before. Its own tests run first.
+# defended by `// absent-ok: <why>` on the line before. It follows every
+# function that reads the store, directly or through others (metal-vmm QUEUE
+# 114). Its own tests run first.
 echo "==> store-absence lint (its tests, then the tree)"
 python3 "$REPO_DIR/tools/test_lint_store_absence.py"
 python3 "$REPO_DIR/tools/lint_store_absence.py"
@@ -56,6 +58,12 @@ python3 "$REPO_DIR/tools/lint_store_absence.py"
 python3 "$REPO_DIR/tools/check_caddy_limits.py"
 
 cd "$REPO_DIR/zig-server"
+
+# Formatted as zig fmt formats it (metal-vmm QUEUE 116), as gopher-metal's
+# `zig build test` already asks: a diff is then the change, not the layout.
+echo "==> zig fmt --check"
+zig fmt --check src build.zig || { echo "Error: the files above are not as zig fmt formats them: run zig fmt on them." >&2; exit 1; }
+
 t0=$SECONDS
 zig build           # compile the whole server
 zig build test      # run the unit tests
