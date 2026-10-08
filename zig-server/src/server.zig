@@ -172,18 +172,28 @@ fn handleConn(io: std.Io, alloc: std.mem.Allocator, hub: *Hub, stream: net.Strea
         },
         else => return e,
     };
-    req.head.keep_alive = false; // force `connection: close` without touching each handler
     // **A SMALL BODY ARRIVES BEFORE THE TURN** (gopher-metal HOST.md; metal's
     // ready.zig waits the same way): a body of a stated length, not chunked,
-    // not waiting on `100-continue`, that fits the buffer after the head
-    // without moving it (the head's strings point into the buffer), is read
-    // in here, so a client slow to send it holds up no other handler. Any
-    // other body is read by its handler inside the turn, as on metal.
+    // not waiting on `100-continue`, that fits the buffer after the head, is
+    // read in here, so a client slow to send it holds up no other handler.
+    // Any other body is read by its handler inside the turn, as on metal.
+    //
+    // **THE HEAD IS COPIED OUT FIRST.** Its strings point into the read
+    // buffer, and a read into that buffer starts over from its beginning
+    // when all it held has been taken (std.Io.Reader.writableVectorPosix):
+    // a body sent after its head, as most clients send one, was read over
+    // the head, and the request was routed by its body's bytes (a login
+    // answered 404, or a header lookup that panicked).
     if (req.head.content_length) |len| {
         const r = &sr.interface;
-        if (req.head.transfer_encoding == .none and req.head.expect == null and len <= r.buffer.len - r.seek)
+        if (req.head.transfer_encoding == .none and req.head.expect == null and len <= r.buffer.len - r.seek) {
+            const head = try arena.allocator().dupe(u8, req.head_buffer);
+            req.head_buffer = head;
+            req.head = std.http.Server.Request.Head.parse(head) catch return error.HttpHeadersInvalid;
             r.fill(@intCast(len)) catch {};
+        }
     }
+    req.head.keep_alive = false; // force `connection: close` without touching each handler
     var bus = Bus.of(hub);
     var peer_buf: [64]u8 = undefined;
     bus.peer = peerText(&peer_buf, stream.socket.address);
