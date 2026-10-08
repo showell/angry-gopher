@@ -329,18 +329,23 @@ pub fn clearUserAPIKey(io: Io, alloc: Alloc, id: []const u8) void {
 }
 
 /// isMember reports whether `id` is a password member.
-pub fn isMember(io: Io, alloc: Alloc, id: []const u8) bool {
-    return userIsMember(io, alloc, id) catch false;
+///
+/// **AN ERROR IS NOT "NO"** (metal-vmm QUEUE 108), here or in the wrappers
+/// below: a password file that cannot be looked at is not a missing one, and
+/// answered "no" it freed a member's name for a stranger's account
+/// (findMemberByName). The caller says what "could not tell" means there.
+pub fn isMember(io: Io, alloc: Alloc, id: []const u8) !bool {
+    return userIsMember(io, alloc, id);
 }
 
 /// principalExists / principalAuthorized / principalIsAgent are the public
-/// admin-facing wrappers over the account-store predicates,
-/// swallowing errors to a plain bool.
-pub fn principalExists(io: Io, alloc: Alloc, id: []const u8) bool {
-    return userExists(io, alloc, id) catch false;
+/// admin-facing wrappers over the account-store predicates; an error is the
+/// caller's.
+pub fn principalExists(io: Io, alloc: Alloc, id: []const u8) !bool {
+    return userExists(io, alloc, id);
 }
-pub fn principalAuthorized(io: Io, alloc: Alloc, id: []const u8) bool {
-    return userIsAuthorized(io, alloc, id) catch false;
+pub fn principalAuthorized(io: Io, alloc: Alloc, id: []const u8) !bool {
+    return userIsAuthorized(io, alloc, id);
 }
 /// As `principalAuthorized`, with an error left to the caller: for a check
 /// whose safe answer to "could not tell" is "a member" (uid_cookie's legacy
@@ -376,7 +381,7 @@ fn lessThanNumericID(_: void, a: []const u8, b: []const u8) bool {
 /// never recorded.
 pub fn userLastSeen(io: Io, alloc: Alloc, id: []const u8) ?i64 {
     const path = std.fs.path.join(alloc, &.{ users_root, id, "last-seen" }) catch return null;
-    // Shown on the admin page only: a time that will not read is no time.
+    // absent-ok: shown on the admin page only: a time that will not read is no time.
     const b = store.read(io, alloc, path, .unlimited) catch return null;
     return std.fmt.parseInt(i64, std.mem.trim(u8, b, " \t\r\n"), 10) catch null;
 }
@@ -526,7 +531,7 @@ pub fn currentUser(io: Io, alloc: Alloc, req: *std.http.Server.Request) !Resolve
     return .{
         .id = id,
         .name = try getUserName(io, alloc, id),
-        .member = userIsMember(io, alloc, id) catch false,
+        .member = try userIsMember(io, alloc, id),
     };
 }
 
@@ -569,7 +574,7 @@ pub fn checkUserPassword(io: Io, alloc: Alloc, id: []const u8, password: []const
 /// regardless of validateUserName's policy.
 pub fn findMemberByName(io: Io, alloc: Alloc, name: []const u8) !?[]const u8 {
     for (try listUserIDs(io, alloc)) |id| {
-        if ((userIsMember(io, alloc, id) catch false) and
+        if ((try userIsMember(io, alloc, id)) and
             std.mem.eql(u8, try getUserName(io, alloc, id), name)) return id;
     }
     return null;
@@ -683,9 +688,9 @@ test "fs: password set then verify; wrong and missing both reject" {
     const io = threaded.io();
 
     try setUserName(io, a, "100", "Tester");
-    try testing.expect(!isMember(io, a, "100")); // a name, but no password yet
+    try testing.expect(!try isMember(io, a, "100")); // a name, but no password yet
     try setUserPassword(io, a, "100", "hunter2");
-    try testing.expect(isMember(io, a, "100"));
+    try testing.expect(try isMember(io, a, "100"));
     try testing.expect(checkUserPassword(io, a, "100", "hunter2"));
     try testing.expect(!checkUserPassword(io, a, "100", "wrong")); // wrong password
     try testing.expect(!checkUserPassword(io, a, "999", "anything")); // no such member
@@ -848,8 +853,8 @@ test "fs: allocateUser hands out distinct increasing ids and persists the name" 
     try testing.expectEqualStrings("First", try getUserName(io, a, id1));
     try testing.expectEqualStrings("Second", try getUserName(io, a, id2));
     // a freshly allocated account exists but is not yet a member (no password)
-    try testing.expect(principalExists(io, a, id1));
-    try testing.expect(!isMember(io, a, id1));
+    try testing.expect(try principalExists(io, a, id1));
+    try testing.expect(!try isMember(io, a, id1));
 }
 
 test "fs: touchUser and reserveUploadBytes write only under a well-formed uid" {
@@ -904,17 +909,17 @@ test "fs: deleteUserRecord refuses an empty id, removes one principal, spares ot
     // would otherwise deleteTree the whole account store. Both principals survive.
     deleteUserRecord(io, a, "");
     deleteUserRecord(io, a, "   ");
-    try testing.expect(principalExists(io, a, keep));
-    try testing.expect(principalExists(io, a, gone));
+    try testing.expect(try principalExists(io, a, keep));
+    try testing.expect(try principalExists(io, a, gone));
 
     // Deleting the goner removes BOTH its account dir (auth_root) and its private
     // dir (users_root); the upload total is gone with it.
     deleteUserRecord(io, a, gone);
-    try testing.expect(!principalExists(io, a, gone));
+    try testing.expect(!try principalExists(io, a, gone));
     try testing.expectEqual(@as(i64, 0), try userUploadBytes(io, a, gone));
     // …and the unrelated principal is untouched.
-    try testing.expect(principalExists(io, a, keep));
-    try testing.expect(isMember(io, a, keep));
+    try testing.expect(try principalExists(io, a, keep));
+    try testing.expect(try isMember(io, a, keep));
 }
 
 test "fs: signSessionNow needs a valid secret, and the cookie it signs verifies" {
@@ -950,4 +955,27 @@ test "fs: signSessionNow needs a valid secret, and the cookie it signs verifies"
     const issued = try std.fmt.parseInt(i64, it.next().?, 10);
     try testing.expectEqualStrings(id, verifySessionWithSecret(a, secret, cookie_val, issued).?);
     try testing.expect(verifySessionWithSecret(a, secret, cookie_val, issued + session_max_age_secs + 1) == null);
+}
+
+test "fs: a member whose password cannot be looked at is an error, never a free name (metal-vmm QUEUE 108)" {
+    // findMemberByName read a stat error on the password as "not a member",
+    // so "Create account" with that member's name, while the read failed,
+    // made a second account of the same name.
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var tmp = testing.tmpDir(.{});
+    defer tmp.cleanup();
+    try tmpRoots(&tmp, a);
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+
+    const id = try allocateUser(io, a, "Alice");
+    try setUserPassword(io, a, id, "pw");
+    // The password, there and unreadable: a link to itself loops.
+    const pw = try std.fs.path.join(a, &.{ auth_root, id, "password" });
+    try store.remove(io, a, pw);
+    try std.Io.Dir.cwd().symLink(io, "password", pw, .{});
+    try testing.expect(std.meta.isError(findMemberByName(io, a, "Alice")));
 }

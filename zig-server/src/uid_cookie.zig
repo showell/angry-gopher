@@ -133,9 +133,9 @@ fn markerPath(alloc: Alloc, id: []const u8) ![]const u8 {
 /// re-sign still inside its grace. A marker that will not read is refused.
 fn isMarked(io: Io, alloc: Alloc, id: []const u8) bool {
     const p = markerPath(alloc, id) catch return true;
-    // Fails closed: a marker that cannot be looked at refuses the unsigned spelling.
+    // absent-ok: fails closed: a marker that cannot be looked at refuses the unsigned spelling.
     if (!(store.has(io, alloc, p) catch return true)) return false;
-    // Fails closed, as above.
+    // absent-ok: fails closed, as above.
     const raw = store.read(io, alloc, p, .limited(64)) catch return true;
     const at = std.fmt.parseInt(i64, std.mem.trim(u8, raw, " \t\r\n"), 10) catch return true;
     const now: i64 = @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
@@ -149,7 +149,7 @@ fn isMarked(io: Io, alloc: Alloc, id: []const u8) bool {
 pub fn windowOpen(io: Io, alloc: Alloc) bool {
     const path = std.fs.path.join(alloc, &.{ player.player_root, "unsigned-window" }) catch return false;
     const now: i64 = @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
-    // Fails closed: a window that will not read is shut.
+    // absent-ok: fails closed: a window that will not read is shut.
     const raw = store.readOrEmpty(io, alloc, path, .limited(64)) catch return false;
     if (raw.len == 0) {
         const body = std.fmt.allocPrint(alloc, "{d}\n", .{now + window_seconds}) catch return false;
@@ -167,8 +167,8 @@ fn legacyHonoured(io: Io, alloc: Alloc, id: []const u8) bool {
     if (users.principalAuthorizedOrError(io, alloc, id) catch true) return false;
     if (isMarked(io, alloc, id)) return false;
     const row = std.fs.path.join(alloc, &.{ player.player_root, id, "name" }) catch return false;
-    // Fails closed: a player that cannot be looked up is not honoured.
-    if (!(store.has(io, alloc, row) catch return false) and !users.principalExists(io, alloc, id)) return false;
+    // absent-ok: fails closed: a player that cannot be looked up is not honoured.
+    if (!(store.has(io, alloc, row) catch return false) and !(users.principalExists(io, alloc, id) catch return false)) return false;
     return windowOpen(io, alloc);
 }
 

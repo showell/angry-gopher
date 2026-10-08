@@ -185,6 +185,7 @@ fn gatherStats(io: Io, alloc: Alloc, p: player.Player) PlayerStats {
     st.disk_bytes = dirBytes(io, alloc, uroot);
 
     // Total actions = nonempty lines across every game session's actions.dsl.
+    // absent-ok: an admin count; a folder that will not list counts nothing, on this page only.
     for (store.list(io, alloc, games_dir) catch &.{}) |entry| {
         if (entry.kind != .directory) continue;
         const dsl = std.fs.path.join(alloc, &.{ games_dir, entry.name, "actions.dsl" }) catch continue;
@@ -196,7 +197,7 @@ fn gatherStats(io: Io, alloc: Alloc, p: player.Player) PlayerStats {
 /// countSubdirs counts immediate subdirectories of `dir_path` (0 if missing).
 fn countSubdirs(io: Io, alloc: Alloc, dir_path: []const u8) i64 {
     var n: i64 = 0;
-    // An admin count: a folder that will not list counts nothing, on this page only.
+    // absent-ok: an admin count: a folder that will not list counts nothing, on this page only.
     for (store.list(io, alloc, dir_path) catch return 0) |entry| {
         if (entry.kind == .directory) n += 1;
     }
@@ -206,13 +207,13 @@ fn countSubdirs(io: Io, alloc: Alloc, dir_path: []const u8) i64 {
 /// dirBytes sums file sizes under `path`, recursively (0 if missing).
 fn dirBytes(io: Io, alloc: Alloc, path: []const u8) i64 {
     var total: i64 = 0;
-    // An admin size: a folder that will not list counts nothing, on this page only.
+    // absent-ok: an admin size: a folder that will not list counts nothing, on this page only.
     for (store.list(io, alloc, path) catch return 0) |entry| {
         const child = std.fs.path.join(alloc, &.{ path, entry.name }) catch continue;
         switch (entry.kind) {
             .directory => total += dirBytes(io, alloc, child),
             .file => {
-                // An admin size: a file that will not read counts nothing, on this page only.
+                // absent-ok: an admin size: a file that will not read counts nothing, on this page only.
                 const body = store.read(io, alloc, child, .unlimited) catch continue;
                 total += @intCast(body.len);
             },
@@ -224,7 +225,7 @@ fn dirBytes(io: Io, alloc: Alloc, path: []const u8) i64 {
 
 /// countTextLines counts nonempty lines in a file (0 if missing).
 fn countTextLines(io: Io, alloc: Alloc, path: []const u8) i64 {
-    // An admin count: a file that will not read counts nothing, on this page only.
+    // absent-ok: an admin count: a file that will not read counts nothing, on this page only.
     const body = store.read(io, alloc, path, .unlimited) catch return 0;
     var n: i64 = 0;
     var it = std.mem.splitScalar(u8, body, '\n');

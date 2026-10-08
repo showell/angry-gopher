@@ -243,7 +243,7 @@ pub fn handleLogout(req: *Request, io: Io, alloc: Alloc) !void {
     if (req.head.method == .POST) {
         const body = (try http.readLimitedBody(req, alloc, limits.body.form)) orelse return;
         const release = (try chat.formField(alloc, body, "release")) orelse "";
-        const target = releaseTarget(user.id, local.id, local.id.len != 0 and users.principalExists(io, alloc, local.id));
+        const target = releaseTarget(user.id, local.id, local.id.len != 0 and try users.principalExists(io, alloc, local.id));
         if (std.mem.eql(u8, release, "yes")) if (target) |t| {
             // Release: delete game data and the identity record (frees the name;
             // no id is ever reissued, so no name-backdoor remains).
@@ -319,7 +319,7 @@ fn sendHostWelcome(io: Io, alloc: Alloc, bus: *Bus, new_uid: []const u8) void {
 
 fn sendHostWelcomeImpl(io: Io, alloc: Alloc, bus: *Bus, new_uid: []const u8) !void {
     if (std.mem.eql(u8, new_uid, host_uid)) return;
-    if (!users.principalExists(io, alloc, host_uid)) return;
+    if (!try users.principalExists(io, alloc, host_uid)) return;
 
     const host_name = try users.getUserName(io, alloc, host_uid);
     const pair = try store.chatPairKey(alloc, host_uid, new_uid);

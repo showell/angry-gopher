@@ -110,17 +110,40 @@ class Fires(unittest.TestCase):
             self.assertEqual(t.lines(), [("a.zig", 4), ("a.zig", 7)])
 
 
+    def test_a_comment_that_is_not_a_defence(self):
+        # admin_lynrummy.zig:188 passed on a comment about something else.
+        for comment in ["// Total actions = nonempty lines in actions.dsl.", "// absent-ok:", "// absent-ok"]:
+            with self.subTest(comment=comment), Tree(one(f"""\
+                fn f() i64 {{
+                    {comment}
+                    const raw = store.read(io, a, p, .unlimited) catch return 0;
+                }}
+            """)) as t:
+                self.assertEqual(t.lines(), [("a.zig", 4)])
+
+    def test_a_named_error_made_a_value(self):
+        for handler in ["|e| { log(e); return null; }", "|err| return null", "|e| switch (e) { else => \"\" }",
+                        "|e| blk: { _ = e; break :blk 0; }"]:
+            with self.subTest(handler=handler), Tree(one(f"""\
+                fn f() !?[]u8 {{
+                    const raw = store.read(io, a, p, .unlimited) catch {handler};
+                    return raw;
+                }}
+            """)) as t:
+                self.assertEqual(t.lines(), [("a.zig", 3)])
+
+
 class Holds(unittest.TestCase):
-    def test_a_comment_on_the_line_before_says_why(self):
+    def test_a_marked_defence_on_the_line_before_says_why(self):
         with Tree(one("""\
             fn f() void {
-                // A companion: absent or unreadable, the page shows no author.
+                // absent-ok: a companion; unreadable, the page shows no author.
                 const raw = store.read(io, a, p, .unlimited) catch "";
             }
         """)) as t:
             self.assertEqual(t.lines(), [])
 
-    def test_an_error_that_is_named_is_the_handler_s_to_judge(self):
+    def test_a_named_error_that_is_passed_on(self):
         with Tree(one("""\
             fn f() !void {
                 const raw = store.read(io, a, p, .unlimited) catch |e| switch (e) {
@@ -143,6 +166,18 @@ class Holds(unittest.TestCase):
             }
         """)) as t:
             self.assertEqual(t.lines(), [])
+
+    def test_each_way_of_passing_a_named_error_on(self):
+        for handler in ["|e| return e", "|err| switch (err) { error.FileNotFound => null, else => return err }",
+                        "|e| switch (e) { error.FileNotFound => \"\", else => e }",
+                        "|e| { log(e); return e; }"]:
+            with self.subTest(handler=handler), Tree(one(f"""\
+                fn f() !?[]u8 {{
+                    const raw = store.read(io, a, p, .unlimited) catch {handler};
+                    return raw;
+                }}
+            """)) as t:
+                self.assertEqual(t.lines(), [])
 
     def test_try_unreachable_and_panic(self):
         with Tree(one("""\

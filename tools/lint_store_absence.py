@@ -13,19 +13,22 @@ WHAT IT REFUSES, in every zig-server/src file but store.zig and outside
 `readAt`, `stat`, `has`, `list`), under whatever name the file gives
 store.zig, followed by a `catch` that makes its error a value without naming
 it: `catch ""`, `catch return 0`, `catch null`, `catch {}`, `catch continue`,
-`catch |_| ...` and the like; or an `if (read) |v| ... else |_| ...`, which
+`catch |_| ...`, a named `catch |e|` whose handler never passes `e` on, and
+the like; or an `if (read) |v| ... else |_| ...`, which
 drops it the same way (counter.zig's `next` read an unreadable counter as a
 new one, and handed out ids already given).
 
 WHAT IT LETS PASS:
 
-  catch |e| ...                 the error is named, and the handler says what
-                                each one means (`error.FileNotFound => ""`).
+  catch |e| ... e ...           the error is named and passed on (`return e`,
+                                or an arm `=> e`), absence alone made a value
+                                (`error.FileNotFound => ""`).
   try, catch unreachable,       the failure goes on, or stops the program.
   catch @panic(...)
-  a `//` comment on the line    the failure may be read so there, and the
-  before the call               comment says why (as gopher-metal presumes an
-                                omitted flush a bug unless a comment defends it).
+  `// absent-ok: <why>` on      the failure may be read so there, and the
+  the line before the call      marker says why (as gopher-metal presumes an
+                                omitted flush a bug unless a comment defends
+                                it). Any other comment defends nothing.
   the store's writes            a write whose failure is swallowed is another
                                 question: this lint is about absence.
 
@@ -73,6 +76,42 @@ def blank(line: str) -> str:
             out.append(ch)
         i += 1
     return "".join(out)
+
+
+DEFENCE = re.compile(r"^\s*//\s*absent-ok:\s*\S")
+
+
+def defended(lines, n: int) -> bool:
+    """Whether the line before line `n` says, with the marker, why the
+    failure may be read so: `// absent-ok: <why>`."""
+    return n >= 2 and bool(DEFENCE.match(lines[n - 2]))
+
+
+def handler_of(rest: str) -> str:
+    """The handler after `catch |e|`: up to the end of its statement, or the
+    `,` or `)` that closes what holds it, at the handler's own depth."""
+    depth, at = 0, 0
+    while at < len(rest):
+        ch = rest[at]
+        if ch in "([{":
+            depth += 1
+        elif ch in ")]}":
+            if depth == 0:
+                break
+            depth -= 1
+        elif ch in ";," and depth == 0:
+            break
+        at += 1
+    return rest[:at]
+
+
+def passes_on(handler: str, name: str) -> bool:
+    """Whether a handler hands its named error on: `return e`, an arm that
+    is `=> e` or `=> return e`, or `e` itself."""
+    e = re.escape(name)
+    return bool(re.search(r"\breturn\s+" + e + r"\b", handler) or
+                re.search(r"=>\s*" + e + r"\s*(?:[,}]|$)", handler) or
+                handler.strip() == name)
 
 
 def dropped_by_else(rest: str) -> bool:
@@ -148,19 +187,20 @@ def findings(name: str, lines):
         rest = text[at + 1:].lstrip()
         if re.search(r"\bif\s*\(\s*$", text[:m.start()]):
             if dropped_by_else(rest):
-                if not (n >= 2 and lines[n - 2].strip().startswith("//")):
+                if not defended(lines, n):
                     out.append((n, f"if ({m.group(1)}.{m.group(2)}(...)) ... else |_|"))
             continue
         if not re.match(r"catch\b", rest):
             continue
         handler = rest[len("catch"):].lstrip()
         if handler.startswith("|"):
-            if handler[1:handler.find("|", 1)].strip() != "_":
-                continue  # named: the handler judges each error
+            name = handler[1:handler.find("|", 1)].strip()
+            if name != "_" and passes_on(handler_of(handler[handler.find("|", 1) + 1:]), name):
+                continue  # named, and passed on: absence is the handler's to say
         elif handler.startswith("unreachable") or handler.startswith("@panic"):
             continue
-        if n >= 2 and lines[n - 2].strip().startswith("//"):
-            continue  # defended
+        if defended(lines, n):
+            continue
         out.append((n, f"{m.group(1)}.{m.group(2)}(...) catch {handler.split(chr(10))[0].strip()}"))
     return out
 

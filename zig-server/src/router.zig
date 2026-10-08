@@ -546,7 +546,7 @@ test "route: a guest upgrades only with a signed cookie" {
     // Unsigned, straight to the POST: the stranger form, and no password set.
     const forged = try serve(a, io, post);
     try testing.expect(std.mem.indexOf(u8, forged, upgrade) == null);
-    try testing.expect(!users.isMember(io, a, "7"));
+    try testing.expect(!try users.isMember(io, a, "7"));
 
     // The guest's own first GET re-signs, and the signed cookie upgrades.
     const first = try UidSite.ask(a, io, "/login/full", "gopher_uid=7");
@@ -558,7 +558,7 @@ test "route: a guest upgrades only with a signed cookie" {
     // After it, the unsigned spelling is the stranger form, POST or GET.
     try testing.expect(std.mem.indexOf(u8, try serve(a, io, post), upgrade) == null);
     try testing.expect(std.mem.indexOf(u8, try UidSite.ask(a, io, "/login/full", "gopher_uid=7"), upgrade) == null);
-    try testing.expect(!users.isMember(io, a, "7"));
+    try testing.expect(!try users.isMember(io, a, "7"));
 }
 
 test "route: an unsigned gopher_uid never names a member, the agent, a stranger, or anyone once the window shuts" {
