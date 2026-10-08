@@ -164,6 +164,48 @@ class Fires(unittest.TestCase):
             """)) as t:
                 self.assertEqual(t.lines(), [("a.zig", 4)])
 
+    def test_the_reads_that_already_answer_absence(self):
+        # readOrNull and statOrNull make absence null and pass the rest on:
+        # caught into a value, the rest is dropped too.
+        for fn in ["readOrNull", "statOrNull"]:
+            with self.subTest(fn=fn), Tree(one(f"""\
+                fn f() void {{
+                    _ = store.{fn}(io, a, p) catch null;
+                }}
+            """)) as t:
+                self.assertEqual(t.lines(), [("a.zig", 3)])
+
+    def test_a_wrapper_in_another_file(self):
+        # metal-vmm QUEUE 114: users.isMember was such a wrapper.
+        with Tree({**one("""\
+            pub fn load(io: Io, a: Alloc, p: []const u8) ![]u8 {
+                return store.read(io, a, p, .unlimited);
+            }
+        """, name="b.zig"), "a.zig": """\
+            const b = @import("b.zig");
+            fn f() []const u8 {
+                return b.load(io, a, p) catch "";
+            }
+        """}) as t:
+            self.assertEqual(t.lines(), [("a.zig", 3)])
+
+    def test_a_wrapper_in_the_same_file_and_one_through_another(self):
+        with Tree(one("""\
+            fn load(p: []const u8) ![]u8 {
+                return try store.read(io, a, p, .unlimited);
+            }
+            fn loadTwice(p: []const u8) ![]u8 {
+                _ = try load(p);
+                return load(p);
+            }
+            fn f() bool {
+                const x = load("x") catch return false;
+                if (loadTwice("y")) |_| {} else |_| return false;
+                return x.len > 0;
+            }
+        """)) as t:
+            self.assertEqual(t.lines(), [("a.zig", 10), ("a.zig", 11)])
+
 
 class Holds(unittest.TestCase):
     def test_a_marked_defence_on_the_line_before_says_why(self):
@@ -239,6 +281,89 @@ class Holds(unittest.TestCase):
                 }}
             """)) as t:
                 self.assertEqual(t.lines(), [])
+
+    def test_a_wrapper_caught_as_the_store_would_be(self):
+        with Tree({**one("""\
+            pub fn load(p: []const u8) ![]u8 {
+                return store.read(io, a, p, .unlimited);
+            }
+        """, name="b.zig"), "a.zig": """\
+            const b = @import("b.zig");
+            fn f() !?[]u8 {
+                const x = try b.load("x");
+                // absent-ok: a companion; unreadable, the page shows none.
+                const y = b.load("y") catch "";
+                return b.load("z") catch |e| switch (e) {
+                    error.FileNotFound => null,
+                    else => return e,
+                };
+            }
+        """}) as t:
+            self.assertEqual(t.lines(), [])
+
+    def test_a_failure_answered_as_a_server_error(self):
+        # Told to the client as a 5xx, a failure is no file that is not there.
+        for handler in ['return req.respond("save failed\\n", .{ .status = .internal_server_error })',
+                        '|e| return form(req, alloc, @errorName(e), .internal_server_error)',
+                        '|e| switch (e) { error.FileNotFound => null, else => return req.respond("", .{ .status = .service_unavailable }) }']:
+            with self.subTest(handler=handler), Tree(one(f"""\
+                fn f() !void {{
+                    const raw = store.read(io, a, p, .unlimited) catch {handler};
+                    _ = raw;
+                }}
+            """)) as t:
+                self.assertEqual(t.lines(), [])
+
+    def test_a_wrappers_own_errors_named_by_its_caller(self):
+        # A wrapper has errors of its own (`NoSuchMessage`); an arm that
+        # names one has looked at it. Its catch-all is still held.
+        files = {**one("""\
+            pub fn react(p: []const u8) !void {
+                const raw = try store.read(io, a, p, .unlimited);
+                if (raw.len == 0) return error.NoSuchMessage;
+            }
+        """, name="b.zig")}
+        with Tree({**files, "a.zig": """\
+            const b = @import("b.zig");
+            fn f() !void {
+                b.react("x") catch |e| switch (e) {
+                    error.NoSuchMessage => return badRequest(req),
+                    else => return e,
+                };
+            }
+        """}) as t:
+            self.assertEqual(t.lines(), [])
+        with Tree({**files, "a.zig": """\
+            const b = @import("b.zig");
+            fn f() !void {
+                b.react("x") catch |e| switch (e) {
+                    error.NoSuchMessage => return badRequest(req),
+                    else => {},
+                };
+            }
+        """}) as t:
+            self.assertEqual(t.lines(), [("a.zig", 3)])
+
+    def test_a_function_that_never_reads_the_store(self):
+        with Tree({**one("""\
+            pub fn parse(s: []const u8) !u32 {
+                return std.fmt.parseInt(u32, s, 10);
+            }
+            pub fn load() ![]u8 {
+                return store.read(io, a, "x", .unlimited);
+            }
+        """, name="b.zig"), "a.zig": """\
+            const b = @import("b.zig");
+            fn load() !void {}
+            fn f() u32 {
+                load() catch {};
+                return b.parse("7") catch 0;
+            }
+            test "a test may" {
+                _ = b.load() catch "";
+            }
+        """}) as t:
+            self.assertEqual(t.lines(), [])
 
     def test_try_unreachable_and_panic(self):
         with Tree(one("""\
