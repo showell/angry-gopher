@@ -156,8 +156,20 @@ pub fn archive(io: Io, alloc: Alloc, w: *std.Io.Writer, data: []const u8, auth: 
 /// an error answer, not an archive cut short; `archive` asks again.
 pub fn checkRoots(io: Io, alloc: Alloc, data: []const u8, auth: []const u8) !void {
     for ([_][]const u8{ data, auth }) |root| {
-        _ = try store.statOrNull(io, alloc, root);
+        _ = try rootStat(io, alloc, root);
     }
+}
+
+/// **A ROOT IS "NOT THERE YET" ONLY IF IT IS NOT FOUND**: a root whose path
+/// runs through a file (`NotDir`), or whose name is too long, is a root that
+/// cannot be looked at, and fails the backup. `store.statOrNull` counts those
+/// as absent, as a lookup by a request's name should; a root is the
+/// backup's own setting, and missing it whole must be loud.
+fn rootStat(io: Io, alloc: Alloc, path: []const u8) !?store.Stat {
+    return store.stat(io, alloc, path) catch |e| switch (e) {
+        error.FileNotFound => null,
+        else => e,
+    };
 }
 
 /// What the manifest says: a line per file, and the totals.
@@ -190,7 +202,7 @@ fn walk(io: Io, alloc: Alloc, t: *Tar, dir: []const u8, name: []const u8, buf: [
     // in backup-skipped.txt with why. A root is not a skip: one not there yet
     // is left out unsaid, and one that cannot be looked at fails the backup
     // (QUEUE 110, `checkRoots`).
-    const st = (if (root) try store.statOrNull(io, alloc, dir) else store.statOrNull(io, alloc, dir) catch |e| {
+    const st = (if (root) try rootStat(io, alloc, dir) else store.statOrNull(io, alloc, dir) catch |e| {
         try skipped.print(alloc, "{s}/ (cannot be looked at: {s})\n", .{ name, @errorName(e) });
         return;
     }) orelse return;
@@ -396,6 +408,11 @@ test "fs: a root that cannot be looked at fails the backup, no archive (metal-vm
 
     var whole: std.Io.Writer.Allocating = .init(a);
     try std.testing.expect(std.meta.isError(archive(io, a, &whole.writer, data, auth)));
+    // A root whose path runs through a file cannot be looked at either: it is
+    // NotDir, not "not there yet" (a cold review of 110, 2026-10-08).
+    try store.write(io, a, try std.fs.path.join(a, &.{ base, "afile" }), "x", .{});
+    var through: std.Io.Writer.Allocating = .init(a);
+    try std.testing.expect(std.meta.isError(archive(io, a, &through.writer, data, try std.fs.path.join(a, &.{ base, "afile", "auth" }))));
     // A root not there yet is no failure.
     var fine: std.Io.Writer.Allocating = .init(a);
     try archive(io, a, &fine.writer, data, try std.fs.path.join(a, &.{ base, "not-yet" }));
