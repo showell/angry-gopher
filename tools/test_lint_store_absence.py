@@ -132,6 +132,38 @@ class Fires(unittest.TestCase):
             """)) as t:
                 self.assertEqual(t.lines(), [("a.zig", 3)])
 
+    def test_a_switch_that_makes_another_failure_a_value(self):
+        # metal-vmm QUEUE 117: one arm passes the rest on, and another makes a
+        # failure that is not absence a value.
+        for handler in ["|e| switch (e) { error.AccessDenied => null, else => return e }",
+                        "|err| switch (err) { error.FileNotFound, error.AccessDenied => null, else => return err }",
+                        "|e| switch (e) {\n        error.FileNotFound => null,\n        error.IsDir => \"\",\n        else => return e,\n    }",
+                        "|e| switch (e) { error.FileNotFound => null, else => |other| blk: { log(other); break :blk null; } }",
+                        "|e| if (e == error.AccessDenied) null else return e"]:
+            with self.subTest(handler=handler), Tree(one(f"""\
+                fn f() !?[]u8 {{
+                    const raw = store.read(io, a, p, .unlimited) catch {handler};
+                    return raw;
+                }}
+            """)) as t:
+                self.assertEqual(t.lines(), [("a.zig", 3)])
+
+    def test_an_else_whose_named_error_is_made_a_value(self):
+        # metal-vmm QUEUE 117: `else |e|` was never looked at.
+        for tail in ["else |e| { log(e); n = 0; }",
+                     "else |e| switch (e) { error.AccessDenied => {}, else => return e }",
+                     "else |err| n = if (err == error.FileNotFound) 0 else 1;"]:
+            with self.subTest(tail=tail), Tree(one(f"""\
+                fn f() !i64 {{
+                    var n: i64 = 0;
+                    if (store.read(io, a, p, .limited(64))) |body| {{
+                        n = parse(body);
+                    }} {tail}
+                    return n;
+                }}
+            """)) as t:
+                self.assertEqual(t.lines(), [("a.zig", 4)])
+
 
 class Holds(unittest.TestCase):
     def test_a_marked_defence_on_the_line_before_says_why(self):
@@ -175,6 +207,35 @@ class Holds(unittest.TestCase):
                 fn f() !?[]u8 {{
                     const raw = store.read(io, a, p, .unlimited) catch {handler};
                     return raw;
+                }}
+            """)) as t:
+                self.assertEqual(t.lines(), [])
+
+    def test_a_switch_whose_values_are_absence_alone(self):
+        for handler in ["|e| switch (e) { error.FileNotFound, error.NotDir, error.NameTooLong => null, else => return e }",
+                        "|e| switch (e) { error.FileNotFound => null, error.AccessDenied => return error.Forbidden, else => return e }",
+                        "|e| switch (e) { error.FileNotFound => null, else => |other| return other }",
+                        "|e| switch (e) { error.FileNotFound => null, else => @panic(\"no\") }",
+                        "|e| if (e == error.FileNotFound) null else return e"]:
+            with self.subTest(handler=handler), Tree(one(f"""\
+                fn f() !?[]u8 {{
+                    const raw = store.read(io, a, p, .unlimited) catch {handler};
+                    return raw;
+                }}
+            """)) as t:
+                self.assertEqual(t.lines(), [])
+
+    def test_an_else_that_names_its_error_and_passes_it_on(self):
+        for tail in ["else |e| return e;",
+                     "else |e| switch (e) { error.FileNotFound => {}, else => return e }",
+                     "else |e| { log(e); return e; }"]:
+            with self.subTest(tail=tail), Tree(one(f"""\
+                fn f() !i64 {{
+                    var n: i64 = 0;
+                    if (store.read(io, a, p, .limited(64))) |body| {{
+                        n = parse(body);
+                    }} {tail}
+                    return n;
                 }}
             """)) as t:
                 self.assertEqual(t.lines(), [])
