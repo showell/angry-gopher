@@ -310,7 +310,14 @@ test "route: the table answers, and an unknown path is a 404" {
     try testing.expectEqualStrings("404 Not Found", status(try get(a, io, "/drivingX")));
 
     // Only "/" is the index; the notFound fallthrough catches everything else.
-    try testing.expectEqualStrings("200 OK", status(try get(a, io, "/")));
+    // The home page reads pages/home.txt from the repo's root, and a test runs
+    // in zig-server/, where it is not: so here "/" is the home handler's own
+    // 500 ("Home unavailable"), never the fallthrough's 404. (It answered 200
+    // with that page until a failed render became a 500, which is how this
+    // test came to pass on a page that never rendered.)
+    const index = try get(a, io, "/");
+    try testing.expect(!std.mem.eql(u8, status(index), "404 Not Found"));
+    try testing.expect(std.mem.indexOf(u8, index, "Home unavailable") != null or std.mem.eql(u8, status(index), "200 OK"));
 }
 
 test "route: a query string never changes which arm is taken" {
