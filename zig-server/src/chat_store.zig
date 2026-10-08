@@ -335,7 +335,7 @@ fn fanoutCrossPage(io: Io, alloc: Alloc, bus: *Bus, meta: ConvMeta, conv_key: []
         if (!std.mem.eql(u8, uid, from_id)) {
             var nj: std.ArrayList(u8) = .empty;
             nj.print(alloc, "{{\"conv\":{f},\"session\":{f},\"text\":{f},\"link_url\":{f}}}", .{
-                std.json.fmt(conv_key, .{}), std.json.fmt(sid, .{}),
+                std.json.fmt(conv_key, .{}),    std.json.fmt(sid, .{}),
                 std.json.fmt(notify_text, .{}), std.json.fmt(rec_url, .{}),
             }) catch {};
             if (nj.items.len > 0) {
@@ -634,11 +634,17 @@ fn countPath(alloc: Alloc, conv_dir: []const u8, sid: []const u8) ![]u8 {
 /// a rewrite to exactly the same length with a different number of messages.
 fn messageCount(io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8) !usize {
     const md = try sessionMdPath(alloc, conv_dir, sid);
-    const size = (store.stat(io, alloc, md) catch return 0).size;
+    // No transcript is no messages; a transcript that cannot be looked at or
+    // read is an error, never 0: numbering from 0 would glue the next message
+    // onto the last and count wrong from then on.
+    const size = (store.stat(io, alloc, md) catch |e| switch (e) {
+        error.FileNotFound => return 0,
+        else => return e,
+    }).size;
     if (readCount(io, alloc, conv_dir, sid)) |c| {
         if (c.size == size) return c.count;
     }
-    const raw = store.read(io, alloc, md, .unlimited) catch "";
+    const raw = try store.read(io, alloc, md, .unlimited);
     return (try decodeChatFile(alloc, raw)).len;
 }
 
@@ -735,7 +741,6 @@ pub fn dmConvDir(alloc: Alloc, conv: []const u8) ![]u8 {
 pub fn channelConvDir(alloc: Alloc, name: []const u8) ![]u8 {
     return std.fs.path.join(alloc, &.{ chat_root, "channels", name });
 }
-
 
 /// sessionMdPath is {conv_dir}/sessions/<sid>.md.
 pub fn sessionMdPath(alloc: Alloc, conv_dir: []const u8, sid: []const u8) ![]u8 {
@@ -1164,6 +1169,18 @@ test "count: an empty conversation has none, and its first message is number one
     try testing.expectEqual(@as(usize, 0), try messageCount(f.io, f.arena.allocator(), f.dir, "topic"));
     const m = try f.send("first");
     try testing.expectEqualStrings("topic_1", m.id);
+}
+
+test "count: a transcript that cannot be read is an error, never no messages" {
+    var threaded = std.Io.Threaded.init(testing.allocator, .{});
+    defer threaded.deinit();
+    var f: CountFixture = undefined;
+    try f.init(threaded.io());
+    defer f.deinit();
+    const a = f.arena.allocator();
+    // A folder where the transcript should be: there, and unreadable.
+    try store.makeDir(f.io, a, try sessionMdPath(a, f.dir, "topic"));
+    try testing.expect(std.meta.isError(messageCount(f.io, a, f.dir, "topic")));
 }
 
 test "last message: the sidecar answers without reading the transcript" {

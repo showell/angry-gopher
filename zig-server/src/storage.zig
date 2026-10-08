@@ -175,11 +175,15 @@ pub fn writeSessionFile(io: Io, alloc: Alloc, user_id: []const u8, session_id: i
 }
 
 /// readSessionFile reads <session-dir>/<rel>, or null when the file (or session)
-/// is missing.
+/// is missing. Any other failure is an error: a game resumed from an empty log
+/// it could not read would be played on from the start and appended to.
 pub fn readSessionFile(io: Io, alloc: Alloc, user_id: []const u8, session_id: i64, rel: []const u8) !?[]u8 {
     const dir = try sessionDir(alloc, user_id, session_id);
     const full = try join(alloc, &.{ dir, rel });
-    return store.read(io, alloc, full, .unlimited) catch return null;
+    return store.read(io, alloc, full, .unlimited) catch |e| switch (e) {
+        error.FileNotFound, error.NotDir => null,
+        else => e,
+    };
 }
 
 /// sessionExists reports whether a full-game session directory is on disk.
@@ -339,4 +343,23 @@ test "fs: appends to one session from many writers at once all land, whole" {
         lines += 1;
     }
     try testing.expectEqual(@as(usize, writers * each), lines);
+}
+
+test "fs: a session file that cannot be read is an error, never a fresh game" {
+    var tmp = testing.tmpDir(.{});
+    defer tmp.cleanup();
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(std.heap.page_allocator, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    const saved = data_root;
+    defer data_root = saved;
+    data_root = try std.fs.path.join(a, &.{ ".zig-cache", "tmp", &tmp.sub_path, "data" });
+
+    const id = try allocateSessionID(io, a, "p1");
+    try testing.expectEqual(@as(?[]u8, null), try readSessionFile(io, a, "p1", id, "meta")); // not there
+    try store.makeDir(io, a, try join(a, &.{ try sessionDir(a, "p1", id), "actions.dsl" }));
+    try testing.expect(std.meta.isError(readSessionFile(io, a, "p1", id, "actions.dsl")));
 }

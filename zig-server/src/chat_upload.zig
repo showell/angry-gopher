@@ -77,7 +77,7 @@ pub fn handleUpload(req: *Request, io: Io, alloc: Alloc, uid: []const u8, conv_d
 
     // Lifetime per-user quota — atomic add-if-under-cap. Images and screencasts
     // share the one allowance.
-    if (!users.reserveUploadBytes(io, alloc, uid, @intCast(part.data.len))) {
+    if (!try users.reserveUploadBytes(io, alloc, uid, @intCast(part.data.len))) {
         const msg = try std.fmt.allocPrint(alloc, "Upload limit reached — you've used your {d} GB upload allowance.\n", .{users.max_upload_lifetime_bytes >> 30});
         return req.respond(msg, .{ .status = .forbidden });
     }

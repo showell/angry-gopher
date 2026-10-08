@@ -262,27 +262,34 @@ pub const max_upload_lifetime_bytes: i64 = 1 << 30; // 1 GiB per user, lifetime
 var upload_bytes_mu: Io.Mutex = .init;
 
 /// userUploadBytes returns the cumulative bytes a user has ever uploaded
-/// ({users_root}/{id}/upload-bytes), or 0 when absent/unparseable.
-pub fn userUploadBytes(io: Io, alloc: Alloc, id: []const u8) i64 {
-    const path = std.fs.path.join(alloc, &.{ users_root, id, "upload-bytes" }) catch return 0;
-    const b = store.read(io, alloc, path, .unlimited) catch return 0;
-    return std.fmt.parseInt(i64, std.mem.trim(u8, b, " \t\r\n"), 10) catch 0;
+/// ({users_root}/{id}/upload-bytes), 0 when there is no such file. A file
+/// that cannot be read, or does not hold a number, is an error: counting it
+/// as 0 would give the user their whole allowance again.
+pub fn userUploadBytes(io: Io, alloc: Alloc, id: []const u8) !i64 {
+    const path = try std.fs.path.join(alloc, &.{ users_root, id, "upload-bytes" });
+    const b = store.read(io, alloc, path, .unlimited) catch |e| switch (e) {
+        error.FileNotFound => return 0,
+        else => return e,
+    };
+    return std.fmt.parseInt(i64, std.mem.trim(u8, b, " \t\r\n"), 10);
 }
 
 /// reserveUploadBytes atomically adds `n` to the user's lifetime upload total if
 /// that stays within max_upload_lifetime_bytes, returning true; otherwise nothing
 /// changes and it returns false. Serialized via upload_bytes_mu.
-pub fn reserveUploadBytes(io: Io, alloc: Alloc, id: []const u8, n: i64) bool {
+/// A total that cannot be read or written is an error, and the upload is
+/// refused with it: neither may let an upload past the cap uncounted.
+pub fn reserveUploadBytes(io: Io, alloc: Alloc, id: []const u8, n: i64) !bool {
     if (!allDigits(id)) return false;
     upload_bytes_mu.lockUncancelable(io);
     defer upload_bytes_mu.unlock(io);
-    const total = userUploadBytes(io, alloc, id) + n;
+    const total = (try userUploadBytes(io, alloc, id)) + n;
     if (total > max_upload_lifetime_bytes) return false;
-    const dir = std.fs.path.join(alloc, &.{ users_root, id }) catch return false;
-    store.makeDir(io, alloc, dir) catch return false;
-    const path = std.fs.path.join(alloc, &.{ dir, "upload-bytes" }) catch return false;
-    const body = std.fmt.allocPrint(alloc, "{d}", .{total}) catch return false;
-    store.write(io, alloc, path, body, .{}) catch {};
+    const dir = try std.fs.path.join(alloc, &.{ users_root, id });
+    try store.makeDir(io, alloc, dir);
+    const path = try std.fs.path.join(alloc, &.{ dir, "upload-bytes" });
+    const body = try std.fmt.allocPrint(alloc, "{d}", .{total});
+    try store.write(io, alloc, path, body, .{});
     return true;
 }
 
@@ -426,8 +433,7 @@ pub fn rotateSecret(io: Io, alloc: Alloc, players_days: i64) !void {
     const now: i64 = @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
     const dir = session_secret_dir;
     try store.replace(io, alloc, try std.fs.path.join(alloc, &.{ dir, previous_name }), current, .{ .private = true });
-    try store.replace(io, alloc, try std.fs.path.join(alloc, &.{ dir, previous_until_name }),
-        try std.fmt.allocPrint(alloc, "{d}\n", .{now + players_days * 24 * 60 * 60}), .{});
+    try store.replace(io, alloc, try std.fs.path.join(alloc, &.{ dir, previous_until_name }), try std.fmt.allocPrint(alloc, "{d}\n", .{now + players_days * 24 * 60 * 60}), .{});
     var b: [32]u8 = undefined;
     io.random(b[0..]);
     const hex = std.fmt.bytesToHex(b, .lower);
@@ -471,7 +477,6 @@ fn bearerToken(req: *std.http.Server.Request, alloc: Alloc) !?[]const u8 {
     const tok = std.mem.trim(u8, h[prefix.len..], " \t");
     return if (tok.len == 0) null else tok;
 }
-
 
 // ── small helpers ────────────────────────────────────────────────────────────
 
@@ -698,21 +703,43 @@ test "fs: upload quota reserves under the cap, refuses over it without mutating"
 
     const id = "200";
     const cap = max_upload_lifetime_bytes;
-    try testing.expectEqual(@as(i64, 0), userUploadBytes(io, a, id));
+    try testing.expectEqual(@as(i64, 0), try userUploadBytes(io, a, id));
 
     // reserve almost the whole allowance
-    try testing.expect(reserveUploadBytes(io, a, id, cap - 10));
-    try testing.expectEqual(cap - 10, userUploadBytes(io, a, id));
+    try testing.expect(try reserveUploadBytes(io, a, id, cap - 10));
+    try testing.expectEqual(cap - 10, try userUploadBytes(io, a, id));
 
     // a reservation that would exceed the cap is refused AND leaves the total put
-    try testing.expect(!reserveUploadBytes(io, a, id, 20));
-    try testing.expectEqual(cap - 10, userUploadBytes(io, a, id));
+    try testing.expect(!(try reserveUploadBytes(io, a, id, 20)));
+    try testing.expectEqual(cap - 10, try userUploadBytes(io, a, id));
 
     // exactly to the cap is allowed; one byte beyond is not
-    try testing.expect(reserveUploadBytes(io, a, id, 10));
-    try testing.expectEqual(cap, userUploadBytes(io, a, id));
-    try testing.expect(!reserveUploadBytes(io, a, id, 1));
-    try testing.expectEqual(cap, userUploadBytes(io, a, id));
+    try testing.expect(try reserveUploadBytes(io, a, id, 10));
+    try testing.expectEqual(cap, try userUploadBytes(io, a, id));
+    try testing.expect(!(try reserveUploadBytes(io, a, id, 1)));
+    try testing.expectEqual(cap, try userUploadBytes(io, a, id));
+}
+
+test "fs: an upload total that cannot be read is an error, never a fresh allowance" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var tmp = testing.tmpDir(.{});
+    defer tmp.cleanup();
+    try tmpRoots(&tmp, a);
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+
+    // A folder where the total should be: a read that fails, not one that
+    // finds nothing.
+    try store.makeDir(io, a, try std.fs.path.join(a, &.{ users_root, "201", "upload-bytes" }));
+    try testing.expect(std.meta.isError(userUploadBytes(io, a, "201")));
+    try testing.expect(std.meta.isError(reserveUploadBytes(io, a, "201", 1)));
+    // A total that is not a number is not 0 either.
+    try store.makeDir(io, a, try std.fs.path.join(a, &.{ users_root, "202" }));
+    try store.write(io, a, try std.fs.path.join(a, &.{ users_root, "202", "upload-bytes" }), "lots", .{});
+    try testing.expect(std.meta.isError(userUploadBytes(io, a, "202")));
 }
 
 test "fs: only members reserve a name; findMemberByName resolves it" {
@@ -837,11 +864,11 @@ test "fs: touchUser and reserveUploadBytes write only under a well-formed uid" {
 
     touchUser(io, a, "7");
     try testing.expect(userLastSeen(io, a, "7") != null);
-    try testing.expect(reserveUploadBytes(io, a, "7", 100));
+    try testing.expect(try reserveUploadBytes(io, a, "7", 100));
 
     for ([_][]const u8{ "", "   ", "r", "y", "7x", "p3", "../7", "7/.." }) |bad| {
         touchUser(io, a, bad);
-        try testing.expect(!reserveUploadBytes(io, a, bad, 100));
+        try testing.expect(!(try reserveUploadBytes(io, a, bad, 100)));
     }
     // Nothing but the well-formed uid's directory was made.
     var dir = try Io.Dir.cwd().openDir(io, users_root, .{ .iterate = true });
@@ -870,7 +897,7 @@ test "fs: deleteUserRecord refuses an empty id, removes one principal, spares ot
     try setUserPassword(io, a, keep, "pw");
     const gone = try allocateUser(io, a, "Goner");
     try setUserPassword(io, a, gone, "pw");
-    try testing.expect(reserveUploadBytes(io, a, gone, 100)); // give it users_root state too
+    try testing.expect(try reserveUploadBytes(io, a, gone, 100)); // give it users_root state too
 
     // The safety guard: an empty/blank id must be a no-op — joined onto a root it
     // would otherwise deleteTree the whole account store. Both principals survive.
@@ -883,7 +910,7 @@ test "fs: deleteUserRecord refuses an empty id, removes one principal, spares ot
     // dir (users_root); the upload total is gone with it.
     deleteUserRecord(io, a, gone);
     try testing.expect(!principalExists(io, a, gone));
-    try testing.expectEqual(@as(i64, 0), userUploadBytes(io, a, gone));
+    try testing.expectEqual(@as(i64, 0), try userUploadBytes(io, a, gone));
     // …and the unrelated principal is untouched.
     try testing.expect(principalExists(io, a, keep));
     try testing.expect(isMember(io, a, keep));

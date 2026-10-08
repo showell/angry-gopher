@@ -170,10 +170,12 @@ pub fn titleFromSlug(alloc: Alloc, slug: []const u8) ![]u8 {
 }
 
 /// readUserDoc returns a doc's raw markdown body. A missing file gives
-/// (empty, ok) — the route distinguishes "not found".
+/// (empty, ok) — the route distinguishes "not found". One that cannot be read
+/// is an error: served as empty, the editor's next save would replace the
+/// real doc with nothing.
 pub fn readUserDoc(io: Io, alloc: Alloc, uid: []const u8, slug: []const u8) ![]const u8 {
     const path = try docPath(alloc, uid, slug);
-    return disk.read(io, alloc, path, .unlimited) catch "";
+    return disk.readOrEmpty(io, alloc, path, .unlimited);
 }
 
 /// docExists reports whether the doc's file is present (the route uses this to
@@ -255,4 +257,22 @@ test "appendToUserDoc creates on first call, appends after, and caps at max_byte
     // over-cap append refuses WITHOUT mutating (existing 8 + "CCCC\n" 5 = 13 > 12)
     try testing.expectError(error.DocTooLarge, appendToUserDoc(io, a, "1", "reading-list", "CCCC\n", 12));
     try testing.expectEqualStrings("AAA\nBBB\n", try readUserDoc(io, a, "1", "reading-list"));
+}
+
+test "a doc that cannot be read is an error, never an empty doc for the editor to save over" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var tmp = testing.tmpDir(.{});
+    defer tmp.cleanup();
+    const saved_root = store.chat_root;
+    defer store.chat_root = saved_root;
+    store.chat_root = try std.fs.path.join(a, &.{ ".zig-cache", "tmp", &tmp.sub_path });
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+
+    try testing.expectEqualStrings("", try readUserDoc(io, a, "1", "notes")); // not there: empty
+    try disk.makeDir(io, a, try docPath(a, "1", "notes")); // there, and unreadable
+    try testing.expect(std.meta.isError(readUserDoc(io, a, "1", "notes")));
 }
