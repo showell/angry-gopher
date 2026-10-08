@@ -170,7 +170,10 @@ fn renderDocsPage(req: *Request, io: Io, alloc: Alloc, uid: []const u8, list: []
 /// serveRawDoc returns a doc's raw markdown body (text/markdown). Acts on the
 /// authenticated principal only.
 fn serveRawDoc(req: *Request, io: Io, alloc: Alloc, uid: []const u8, slug: []const u8) !void {
-    const exists = docs_store.docExists(io, alloc, uid, slug) catch return http.notFound(req);
+    // **AN ERROR IS NOT "NO SUCH DOC"** (metal-vmm QUEUE 114): a 404 would
+    // tell an API client there is none, and invite a save over it.
+    const exists = docs_store.docExists(io, alloc, uid, slug) catch |e|
+        return req.respond(try std.fmt.allocPrint(alloc, "The doc cannot be read: {s}.\n", .{@errorName(e)}), .{ .status = .internal_server_error });
     if (!exists) return http.notFound(req);
     const body = try docs_store.readUserDoc(io, alloc, uid, slug);
     try req.respond(body, .{ .extra_headers = &.{
