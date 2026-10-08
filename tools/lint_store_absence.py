@@ -13,16 +13,21 @@ WHAT IT REFUSES, in every zig-server/src file but store.zig and outside
 `readAt`, `stat`, `has`, `list`), under whatever name the file gives
 store.zig, followed by a `catch` that makes its error a value without naming
 it: `catch ""`, `catch return 0`, `catch null`, `catch {}`, `catch continue`,
-`catch |_| ...`, a named `catch |e|` whose handler never passes `e` on, and
-the like; or an `if (read) |v| ... else |_| ...`, which
-drops it the same way (counter.zig's `next` read an unreadable counter as a
-new one, and handed out ids already given).
+`catch |_| ...`, a named `catch |e|` whose handler never passes `e` on, or
+passes some failures on and makes another one but absence a value (`switch
+(e) { error.AccessDenied => null, else => return e }`), and the like; or an
+`if (read) |v| ... else |_| ...`, or an `else |e|` that does any of that,
+which drops it the same way (counter.zig's `next` read an unreadable counter
+as a new one, and handed out ids already given). Absence is what store.zig
+reads as "not there": FileNotFound, NotDir, NameTooLong.
 
 WHAT IT LETS PASS:
 
   catch |e| ... e ...           the error is named and passed on (`return e`,
-                                or an arm `=> e`), absence alone made a value
-                                (`error.FileNotFound => ""`).
+                                an arm `=> e`, another error returned in its
+                                place), absence alone made a value
+                                (`error.FileNotFound => ""`). The same after
+                                `else |e|`.
   try, catch unreachable,       the failure goes on, or stops the program.
   catch @panic(...)
   `// absent-ok: <why>` on      the failure may be read so there, and the
@@ -114,9 +119,85 @@ def passes_on(handler: str, name: str) -> bool:
                 handler.strip() == name)
 
 
+# What the store itself reads as "not there" (store.zig's readOrNull,
+# statOrNull, has): the only failures a handler may make a value of.
+ABSENT = ("FileNotFound", "NotDir", "NameTooLong")
+
+
+def braced(text: str) -> str:
+    """What is inside the `{...}` that `text` starts with."""
+    depth = 0
+    for at, ch in enumerate(text):
+        depth += {"{": 1, "}": -1}.get(ch, 0)
+        if depth == 0:
+            return text[1:at]
+    return text[1:]
+
+
+def arms(body: str):
+    """A switch's arms, as (pattern, what it does), from inside its braces."""
+    out, at = [], 0
+    while at < len(body):
+        arrow = body.find("=>", at)
+        if arrow < 0:
+            break
+        depth, end = 0, arrow + 2
+        while end < len(body):
+            ch = body[end]
+            if ch in "([{":
+                depth += 1
+            elif ch in ")]}":
+                depth -= 1
+            elif ch == "," and depth == 0:
+                break
+            end += 1
+        out.append((body[at:arrow].strip(), body[arrow + 2:end].strip()))
+        at = end + 1
+    return out
+
+
+def fails_still(does: str, names) -> bool:
+    """Whether an arm (or a branch) leaves the failure a failure: the error
+    passed on, another error returned in its place, or the program stopped."""
+    does = does.strip()
+    if does.startswith("|"):  # `else => |other| ...`: another name for it
+        names = list(names) + [does[1:does.find("|", 1)].strip()]
+        does = does[does.find("|", 1) + 1:].strip()
+    return (any(passes_on(does, n) for n in names) or
+            bool(re.match(r"return\s+(?:error|[A-Z]\w*)\.\w+", does)) or
+            does.startswith("unreachable") or does.startswith("@panic"))
+
+
+def only_absence(pattern: str) -> bool:
+    """Whether a switch arm's pattern names absence and nothing else."""
+    items = [i.strip() for i in pattern.split(",") if i.strip()]
+    return bool(items) and all(re.fullmatch(r"error\.(?:" + "|".join(ABSENT) + r")", i) for i in items)
+
+
+def handler_keeps(handler: str, name: str) -> bool:
+    """Whether a handler of a named error keeps every failure but absence a
+    failure (metal-vmm QUEUE 117): a switch on it whose every arm either
+    passes the failure on or names absence alone; an `if (e == error.X)`
+    whose X is absence, the rest passed on; or any other handler that
+    passes it on."""
+    h = handler.strip()
+    e = re.escape(name)
+    m = re.match(r"switch\s*\(\s*" + e + r"\s*\)\s*", h)
+    if m and h[m.end():].startswith("{"):
+        return all(fails_still(does, [name]) or only_absence(pattern)
+                   for pattern, does in arms(braced(h[m.end():])))
+    m = re.match(r"if\s*\(\s*" + e + r"\s*==\s*error\.(\w+)\s*\)", h)
+    if m:
+        otherwise = re.search(r"\belse\b(.*)$", h[m.end():], re.S)
+        return m.group(1) in ABSENT and otherwise is not None and fails_still(otherwise.group(1), [name])
+    return passes_on(h, name)
+
+
 def dropped_by_else(rest: str) -> bool:
-    """After the call in `if (call) |v| body else |_| ...`: whether its error
-    goes to an `else |_|`. `rest` starts just past the call's `)`."""
+    """After the call in `if (call) |v| body else |e| ...`: whether its error
+    is dropped there, by `else |_|`, or by a named `else |e|` whose handler
+    makes a failure but absence a value (metal-vmm QUEUE 117). `rest`
+    starts just past the call's `)`."""
     if not rest.startswith(")"):
         return False
     rest = rest[1:].lstrip()
@@ -142,7 +223,10 @@ def dropped_by_else(rest: str) -> bool:
     if not re.match(r"else\b", rest):
         return False
     rest = rest[len("else"):].lstrip()
-    return bool(re.match(r"\|\s*_\s*\|", rest))
+    m = re.match(r"\|\s*(\w+)\s*\|", rest)
+    if not m:
+        return False
+    return m.group(1) == "_" or not handler_keeps(handler_of(rest[m.end():]), m.group(1))
 
 
 def findings(name: str, lines):
@@ -188,15 +272,15 @@ def findings(name: str, lines):
         if re.search(r"\bif\s*\(\s*$", text[:m.start()]):
             if dropped_by_else(rest):
                 if not defended(lines, n):
-                    out.append((n, f"if ({m.group(1)}.{m.group(2)}(...)) ... else |_|"))
+                    out.append((n, f"if ({m.group(1)}.{m.group(2)}(...)) ... else |...| that makes a failure a value"))
             continue
         if not re.match(r"catch\b", rest):
             continue
         handler = rest[len("catch"):].lstrip()
         if handler.startswith("|"):
             name = handler[1:handler.find("|", 1)].strip()
-            if name != "_" and passes_on(handler_of(handler[handler.find("|", 1) + 1:]), name):
-                continue  # named, and passed on: absence is the handler's to say
+            if name != "_" and handler_keeps(handler_of(handler[handler.find("|", 1) + 1:]), name):
+                continue  # named, and passed on: absence alone is the handler's to make a value
         elif handler.startswith("unreachable") or handler.startswith("@panic"):
             continue
         if defended(lines, n):
