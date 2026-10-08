@@ -316,3 +316,34 @@ test "fs: the archive ends with a manifest of every file; one cut short has none
     try std.testing.expectError(error.WriteFailed, archive(io, a, &short, data, auth));
     try std.testing.expect(std.mem.indexOf(u8, short.buffered(), manifest_name) == null);
 }
+
+test "fs: what the backup cannot take is named in backup-skipped.txt, never dropped (metal-vmm QUEUE 104)" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    const base = try std.fs.path.join(a, &.{ ".zig-cache", "tmp", &tmp.sub_path });
+    const data = try std.fs.path.join(a, &.{ base, "data" });
+    try store.write(io, a, try std.fs.path.join(a, &.{ data, "chat", "kept" }), "kept", .{});
+    // A link in the tree is neither a file nor a folder the backup takes.
+    try tmp.dir.symLink(io, "kept", "data/chat/link", .{});
+    // A root that cannot be looked at (its path runs through a file) is not
+    // a root that is not there yet.
+    try store.write(io, a, try std.fs.path.join(a, &.{ base, "afile" }), "x", .{});
+    const auth = try std.fs.path.join(a, &.{ base, "afile", "auth" });
+
+    var whole: std.Io.Writer.Allocating = .init(a);
+    try archive(io, a, &whole.writer, data, auth);
+    const got = try members(a, whole.written());
+    var skipped: ?[]const u8 = null;
+    for (got) |m| if (std.mem.eql(u8, m[0], "backup-skipped.txt")) {
+        skipped = m[1];
+    };
+    try std.testing.expect(skipped != null);
+    try std.testing.expect(std.mem.indexOf(u8, skipped.?, "data/chat/link") != null);
+    try std.testing.expect(std.mem.indexOf(u8, skipped.?, "auth/") != null);
+}
