@@ -381,7 +381,7 @@ fn lessThanNumericID(_: void, a: []const u8, b: []const u8) bool {
 /// never recorded.
 pub fn userLastSeen(io: Io, alloc: Alloc, id: []const u8) ?i64 {
     const path = std.fs.path.join(alloc, &.{ users_root, id, "last-seen" }) catch return null;
-    // Shown on the admin page only: a time that will not read is no time.
+    // absent-ok: shown on the admin page only: a time that will not read is no time.
     const b = store.read(io, alloc, path, .unlimited) catch return null;
     return std.fmt.parseInt(i64, std.mem.trim(u8, b, " \t\r\n"), 10) catch null;
 }

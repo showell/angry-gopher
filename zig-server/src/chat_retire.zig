@@ -367,6 +367,7 @@ fn convGone(io: Io, alloc: Alloc, conv: []const u8, gone_dms: *const UidSet) boo
         std.fs.path.join(alloc, &.{ chat_store.chat_root, "channels", conv }) catch return false;
     // A folder that will not say whether it is there is not gone: nothing is
     // swept on an error.
+    // absent-ok: not kept here is only not swept (sweepReferences): the failure does less, never more.
     return !(store.has(io, alloc, dir) catch return false);
 }
 
@@ -375,7 +376,7 @@ fn convGone(io: Io, alloc: Alloc, conv: []const u8, gone_dms: *const UidSet) boo
 /// not swept here — it is nobody's live pointer.)
 fn keptUser(io: Io, alloc: Alloc, uid: []const u8, keep: []const []const u8) bool {
     const namef = std.fs.path.join(alloc, &.{ users.auth_root, uid, "name" }) catch return false;
-    // Not kept here is only not swept (sweepReferences): the failure does less, never more.
+    // absent-ok: not kept here is only not swept (sweepReferences): the failure does less, never more.
     const raw = store.read(io, alloc, namef, .unlimited) catch return false;
     return inList(keep, std.mem.trimEnd(u8, raw, "\r\n"));
 }

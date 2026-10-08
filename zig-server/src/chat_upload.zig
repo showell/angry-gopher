@@ -186,7 +186,7 @@ fn streamFile(req: *Request, io: Io, alloc: Alloc, path: []const u8, len: u64, h
         var at: u64 = 0;
         while (at < len) {
             const want: usize = @intCast(@min(@as(u64, buf.len), len - at));
-            // The headers are out: a read that fails can only end the stream short of its length.
+            // absent-ok: the headers are out: a read that fails can only end the stream short of its length.
             const n = disk.readAt(io, alloc, path, at, buf[0..want]) catch break;
             if (n == 0) break; // the file shrank under us — stop where we are
             body.writer.writeAll(buf[0..n]) catch break;

@@ -71,7 +71,7 @@ pub fn serveBundle(req: *Request, io: Io, alloc: Alloc, conv_dir: []const u8, si
 /// fileMtime returns a file's mtime in whole Unix seconds, or 0 on any error
 /// (the mtime is cosmetic in the archive, so 0 is harmless).
 fn fileMtime(io: Io, alloc: Alloc, path: []const u8) u64 {
-    // Cosmetic: an archive member dated 1970 is still the member.
+    // absent-ok: cosmetic: an archive member dated 1970 is still the member.
     const st = disk.stat(io, alloc, path) catch return 0;
     const s = @divFloor(st.mtime, std.time.ns_per_s);
     return if (s < 0) 0 else @intCast(s);

@@ -483,7 +483,7 @@ pub fn lastMessage(io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8) 
         if (c.last) |l| if (c.count > 0) {
             const path = try sessionMdPath(alloc, conv_dir, sid);
             const buf = try alloc.alloc(u8, tail_window);
-            // The sidecar is a cache: a window that will not read falls back to the transcript.
+            // absent-ok: the sidecar is a cache: a window that will not read falls back to the transcript.
             const n = store.readAt(io, alloc, path, l.offset, buf) catch return fallbackLast(io, alloc, conv_dir, sid);
             // **A WINDOW THAT CAME BACK FULL MAY HAVE CUT A MESSAGE IN HALF**,
             // and nothing below could tell. Read it the slow way instead.
@@ -607,7 +607,7 @@ pub fn backfillAll(io: Io, alloc: Alloc) usize {
 pub fn lastAuthorUid(io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8) []const u8 {
     const file = std.fmt.allocPrint(alloc, "{s}.lastauthor", .{sid}) catch return "";
     const path = std.fs.path.join(alloc, &.{ conv_dir, "sessions", file }) catch return "";
-    // A companion, best-effort as it is written: no author is shown, nothing is written from it.
+    // absent-ok: a companion, best-effort as it is written: no author is shown, nothing is written from it.
     const raw = store.read(io, alloc, path, .limited(64)) catch return "";
     return std.mem.trim(u8, raw, " \t\r\n");
 }
@@ -686,7 +686,7 @@ const Count = struct { count: usize, size: u64, last: ?Last = null };
 /// the whole thing and recounts from the transcript — slower, never wrong.
 fn readCount(io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8) ?Count {
     const path = countPath(alloc, conv_dir, sid) catch return null;
-    // A cache: a count that will not read is recounted from the transcript (messageCount).
+    // absent-ok: a cache: a count that will not read is recounted from the transcript (messageCount).
     const raw = store.read(io, alloc, path, .limited(1024)) catch return null;
     var lines = std.mem.splitScalar(u8, raw, '\n');
     var head = std.mem.tokenizeScalar(u8, lines.next() orelse return null, ' ');

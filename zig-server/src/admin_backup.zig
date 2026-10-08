@@ -189,6 +189,7 @@ fn walk(io: Io, alloc: Alloc, t: *Tar, dir: []const u8, name: []const u8, buf: [
         switch (e.kind) {
             .directory => try walk(io, alloc, t, host_path, arc_path, buf, skipped, m),
             .file => {
+                // absent-ok: a file inside that cannot be looked at is a named skip (backup-skipped.txt), not a failed backup (QUEUE 110).
                 const fst = store.stat(io, alloc, host_path) catch |err| {
                     try skipped.print(alloc, "{s} (cannot be looked at: {s})\n", .{ arc_path, @errorName(err) });
                     continue;
