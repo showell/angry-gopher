@@ -121,6 +121,16 @@ class Fires(unittest.TestCase):
             """)) as t:
                 self.assertEqual(t.lines(), [("a.zig", 4)])
 
+    def test_a_catch_inside_an_if(self):
+        # `if (call() catch v)` was taken for `if (call) |x|`, and never checked.
+        with Tree(one("""\
+            fn f() bool {
+                if (store.has(io, a, p) catch false) return true;
+                return false;
+            }
+        """)) as t:
+            self.assertEqual(t.lines(), [("a.zig", 3)])
+
     def test_a_named_error_made_a_value(self):
         for handler in ["|e| { log(e); return null; }", "|err| return null", "|e| switch (e) { else => \"\" }",
                         "|e| blk: { _ = e; break :blk 0; }"]:
