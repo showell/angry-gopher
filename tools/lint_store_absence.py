@@ -380,7 +380,9 @@ def findings(name: str, lines, found=frozenset()):
                     break
             at += 1
         rest = text[at + 1:].lstrip()
-        if re.search(r"\bif\s*\(\s*$", text[:m.start()]):
+        if re.search(r"\bif\s*\(\s*$", text[:m.start()]) and rest.startswith(")"):
+            # `if (call) |v| ... else |e| ...`; an `if (call() catch v)` is a
+            # catch like any other, below.
             if dropped_by_else(rest, wrapper):
                 if not defended(lines, n):
                     out.append((n, f"if ({what}) ... else |...| that makes a failure a value"))
