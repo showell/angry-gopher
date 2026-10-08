@@ -128,7 +128,7 @@ fn renderMembersTable(b: *std.ArrayList(u8), io: Io, alloc: Alloc) !void {
         if (row.is_admin) name = try std.fmt.allocPrint(alloc, "{s} <span class=\"muted\">(admin)</span>", .{name});
         if (row.is_agent) name = try std.fmt.allocPrint(alloc, "{s} <span class=\"muted\">(agent)</span>", .{name});
         const since = try ui.sinceOrNever(alloc, now, row.last_seen);
-        // A total that cannot be read says so, rather than 0.
+        // absent-ok: a total that cannot be read is shown as "unreadable", never as 0.
         const used = if (users.userUploadBytes(io, alloc, row.id)) |n| try ui.humanBytes(alloc, n) else |_| "unreadable";
         const images = try std.fmt.allocPrint(alloc, "{s} / {s}", .{
             used,

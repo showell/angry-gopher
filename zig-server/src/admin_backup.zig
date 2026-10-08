@@ -100,6 +100,7 @@ pub fn render(req: *Request, io: Io, alloc: Alloc, client: ?[]const u8) !void {
     var body = req.respondStreaming(&hbuf, .{
         .respond_options = .{ .extra_headers = &tar_headers },
     }) catch return;
+    // absent-ok: the 200 and the archive have begun; a failure from here cuts the archive short where the client sees it.
     archive(io, alloc, &body.writer, data, auth) catch return;
     body.end() catch return;
 }
@@ -202,6 +203,7 @@ fn walk(io: Io, alloc: Alloc, t: *Tar, dir: []const u8, name: []const u8, buf: [
     // in backup-skipped.txt with why. A root is not a skip: one not there yet
     // is left out unsaid, and one that cannot be looked at fails the backup
     // (QUEUE 110, `checkRoots`).
+    // absent-ok: a folder inside the tree that cannot be looked at is a named skip, in backup-skipped.txt (QUEUE 104, 110).
     const st = (if (root) try rootStat(io, alloc, dir) else store.statOrNull(io, alloc, dir) catch |e| {
         try skipped.print(alloc, "{s}/ (cannot be looked at: {s})\n", .{ name, @errorName(e) });
         return;

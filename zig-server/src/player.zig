@@ -165,6 +165,7 @@ fn lessThanByID(_: void, a: Player, b: Player) bool {
 /// lastSeen answers a player's last-activity time (Unix seconds), or null.
 pub fn lastSeen(io: Io, alloc: Alloc, id: []const u8) ?i64 {
     if (!isSafeID(id)) return null;
+    // absent-ok: a last-seen time for display: one that cannot be read shows as never.
     const raw = (readField(io, alloc, id, "last-seen") catch return null) orelse return null;
     return std.fmt.parseInt(i64, std.mem.trim(u8, raw, " \t\r\n"), 10) catch null;
 }

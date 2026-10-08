@@ -81,7 +81,9 @@ pub fn isOnline(io: Io, uid: []const u8) bool {
 /// swallowed.
 pub fn markActiveAndBroadcast(io: Io, alloc: Alloc, bus: *Bus, uid: []const u8) void {
     if (!markActive(io, uid)) return;
+    // absent-ok: a best-effort online broadcast: nothing is written from it.
     const name = users.getUserName(io, alloc, uid) catch return;
+    // absent-ok: the same.
     const authorized = users.listAuthorized(io, alloc) catch return;
     const text = std.fmt.allocPrint(alloc, "{s} has come online.", .{name}) catch return;
 

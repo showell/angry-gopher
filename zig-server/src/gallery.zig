@@ -72,6 +72,7 @@ fn renderIndex(req: *Request, io: Io, alloc: Alloc) !void {
     // outlive the file that decides it. A parse failure is LOUD here for the
     // same reason it is loud on the home page: a silently empty gallery reads
     // as "no images yet", which is a different and wrong answer.
+    // absent-ok: said on the page, with the error's name: never a silently empty gallery.
     const parsed = home.parseHome(io, alloc) catch |err| {
         try b.print(alloc,
             \\<p class="pending">pages/home.txt could not be parsed: <strong>{s}</strong>.</p>

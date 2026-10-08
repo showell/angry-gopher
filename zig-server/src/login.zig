@@ -287,6 +287,7 @@ test "a release deletes the caller's own account, or a player no account has" {
 /// upsert a row. URL is pre-resolved per-recipient (the client builds /chat/c/<conv>
 /// without knowing its own uid). Best-effort.
 fn publishUserArrived(io: Io, alloc: Alloc, bus: *Bus, new_uid: []const u8, new_name: []const u8) void {
+    // absent-ok: a best-effort sidebar broadcast; the signup itself is done.
     const authorized = users.listAuthorized(io, alloc) catch return;
     for (authorized) |u| {
         if (std.mem.eql(u8, u.id, new_uid)) continue;
@@ -314,6 +315,7 @@ const host_uid = "1";
 /// across re-registration. Best-effort: a failure just means no welcome, never a
 /// broken signup.
 fn sendHostWelcome(io: Io, alloc: Alloc, bus: *Bus, new_uid: []const u8) void {
+    // absent-ok: a best-effort welcome: a failure means no welcome, never a broken signup.
     sendHostWelcomeImpl(io, alloc, bus, new_uid) catch {};
 }
 

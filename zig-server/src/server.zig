@@ -134,6 +134,7 @@ var turn: Io.Mutex = .init;
 /// serveConn is the per-connection task body. It returns void (swallowing all
 /// errors) so it coerces to the Cancelable!void that Io.Group requires.
 fn serveConn(io: std.Io, alloc: std.mem.Allocator, hub: *Hub, stream: net.Stream) void {
+    // absent-ok: the connection's own task: the error is logged, and the connection closes without an answer.
     handleConn(io, alloc, hub, stream) catch |e| {
         std.debug.print("connection error: {s}\n", .{@errorName(e)});
     };

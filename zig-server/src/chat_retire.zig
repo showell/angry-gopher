@@ -139,9 +139,11 @@ pub fn plan(io: Io, alloc: Alloc, p: Params, apply: bool) !Plan {
     const cutoff = p.now - @as(i64, p.days) * std.time.s_per_day;
 
     // Phase 1: old topics, in every conversation (DMs and channels alike).
+    // absent-ok: a retire that cannot list the conversations retires none: it removes less, never more.
     const convs = chat_store.listConvDirs(io, alloc) catch &.{};
     for (convs) |dir| {
         const key = try convDisplayKey(alloc, dir);
+        // absent-ok: the same, for one conversation's topics: kept.
         const sids = chat_store.listSessions(io, alloc, dir) catch continue;
         for (sids) |sid| {
             // **A TOPIC WE CANNOT DATE IS KEPT** (Steve, 2026-10-04): an empty
@@ -184,6 +186,7 @@ pub fn plan(io: Io, alloc: Alloc, p: Params, apply: bool) !Plan {
 /// when it has no message that carries a parseable date (an empty or
 /// hand-damaged transcript) — which the caller keeps, not retires.
 fn newestUnix(io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8) ?i64 {
+    // absent-ok: a topic that cannot be dated is kept, not retired (Steve, 2026-10-04).
     const raw = (chat_store.rawSession(io, alloc, conv_dir, sid) catch return null) orelse return null;
     const msgs = chat_store.decodeChatFile(alloc, raw) catch return null;
     var newest: ?i64 = null;
@@ -232,6 +235,7 @@ fn allMembers(io: Io, alloc: Alloc) ![]Member {
 /// DM shared by two removed users is listed once).
 fn retireUser(pl: *Plan, id: []const u8) !void {
     const alloc = pl.alloc;
+    // absent-ok: the name only labels the plan's line; the removal goes by uid.
     const name = users.getUserName(pl.io, alloc, id) catch "";
     try pl.record(.user, try std.fmt.allocPrint(alloc, "{s} (uid {s})", .{ name, id }));
     const locations = [_][]const u8{

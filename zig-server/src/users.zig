@@ -167,6 +167,7 @@ fn checkAPIKey(io: Io, alloc: Alloc, presented: []const u8) !?[]const u8 {
     // api-key files (gopher-metal's REVIEW-request-paths.md, finding 4).
     if (!allDigits(id) or !try userIsAuthorized(io, alloc, id)) return null;
 
+    // absent-ok: fails closed: a key that cannot be read admits no one.
     const stored_opt = readAuthFile(io, alloc, id, "api-key") catch return null;
     const stored = std.mem.trim(u8, stored_opt orelse return null, " \t\r\n");
     // `id` is a slice into `presented`, which bearerToken already owns (via
@@ -297,6 +298,7 @@ pub fn reserveUploadBytes(io: Io, alloc: Alloc, id: []const u8, n: i64) !bool {
 
 /// userHasAPIKey reports whether the principal has an API-key file.
 pub fn userHasAPIKey(io: Io, alloc: Alloc, id: []const u8) bool {
+    // absent-ok: display only: a key that cannot be looked at shows as none, and Generate replaces it as Regenerate would.
     return authFileExists(io, alloc, id, "api-key") catch false;
 }
 
@@ -565,6 +567,7 @@ pub fn setUserPassword(io: Io, alloc: Alloc, id: []const u8, password: []const u
 /// checkUserPassword verifies `password` against a member's stored bcrypt hash.
 /// false when the member has no password file.
 pub fn checkUserPassword(io: Io, alloc: Alloc, id: []const u8, password: []const u8) bool {
+    // absent-ok: fails closed: a password that cannot be read admits no one.
     const stored = (readAuthFile(io, alloc, id, "password") catch return false) orelse return false;
     return auth.verifyPassword(std.mem.trimEnd(u8, stored, "\r\n"), password);
 }

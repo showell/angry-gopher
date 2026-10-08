@@ -350,6 +350,7 @@ fn fanoutCrossPage(io: Io, alloc: Alloc, bus: *Bus, meta: ConvMeta, conv_key: []
 
         // recent — every member sees the row (sender included). `who` renders
         // "You" for the recipient who authored it; everyone else sees the name.
+        // absent-ok: the recent feed's "where" label only; the message itself is saved.
         const where = recentWhere(io, alloc, meta, conv_key, uid) catch "";
         const who = if (std.mem.eql(u8, uid, from_id)) "You" else msg.from;
         var rj: std.ArrayList(u8) = .empty;
@@ -365,6 +366,7 @@ fn fanoutCrossPage(io: Io, alloc: Alloc, bus: *Bus, meta: ConvMeta, conv_key: []
                 .at = msg.date,
                 .images = tags,
             };
+            // absent-ok: the gallery's index of a message's images, best-effort; the message itself is saved.
             images_store.appendImagesEntry(io, alloc, uid, e) catch continue;
             var ij: std.ArrayList(u8) = .empty;
             images_store.encodeImagesEvent(&ij, alloc, e, src_url) catch continue;
@@ -380,6 +382,7 @@ fn fanoutCrossPage(io: Io, alloc: Alloc, bus: *Bus, meta: ConvMeta, conv_key: []
                 .at = msg.date,
                 .blocks = blocks,
             };
+            // absent-ok: the code view's index of a message's blocks, best-effort; the message itself is saved.
             code_store.appendCodeEntry(io, alloc, uid, e) catch continue;
             var cj: std.ArrayList(u8) = .empty;
             code_store.encodeCodeEvent(&cj, alloc, e, src_url) catch continue;
@@ -550,11 +553,13 @@ pub fn backfillSidecars(io: Io, alloc: Alloc, conv_dirs: []const []const u8) usi
     var per_session = std.heap.ArenaAllocator.init(alloc);
     defer per_session.deinit();
     for (conv_dirs) |dir| {
+        // absent-ok: the startup backfill skips a conversation it cannot list; it writes only what it can derive.
         const sids = listSessions(io, alloc, dir) catch continue;
         for (sids) |sid| {
             _ = per_session.reset(.retain_capacity);
             const a = per_session.allocator();
             if (readCount(io, a, dir, sid)) |c| if (c.last != null) continue;
+            // absent-ok: the same, for a transcript it cannot read: no sidecar is written for it.
             const raw = (rawSession(io, a, dir, sid) catch continue) orelse continue;
             const msgs = decodeChatFile(a, raw) catch continue;
             if (msgs.len == 0) continue;
@@ -598,6 +603,7 @@ pub fn listConvDirs(io: Io, alloc: Alloc) ![][]const u8 {
 /// backfillAll gives every session on disk a last-message record. **Both hosts
 /// call this once at startup** — see `backfillSidecars`.
 pub fn backfillAll(io: Io, alloc: Alloc) usize {
+    // absent-ok: the startup backfill does nothing if it cannot list: nothing is written.
     const dirs = listConvDirs(io, alloc) catch return 0;
     return backfillSidecars(io, alloc, dirs);
 }

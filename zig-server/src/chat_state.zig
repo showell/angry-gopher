@@ -100,6 +100,7 @@ pub fn setSessionPinned(io: Io, alloc: Alloc, uid: []const u8, conv_key: []const
     // rewritten below, so treating a failed read as "no pins" used to delete
     // every pin the user had — silently, on the way to adding one. No pins is
     // a missing file (store.zig answers ""); anything else leaves them alone.
+    // absent-ok: best-effort: a pin set that will not read is left as it is, never rewritten as empty.
     const existing = readPinnedFile(io, alloc, uid, conv_key) catch return;
     const cur = parsePinned(alloc, existing) catch return;
 
