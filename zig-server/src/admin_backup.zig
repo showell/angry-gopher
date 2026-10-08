@@ -362,3 +362,27 @@ test "fs: what the backup cannot take is named in backup-skipped.txt, never drop
     try std.testing.expect(std.mem.indexOf(u8, skipped.?, "data/chat/link") != null);
     try std.testing.expect(std.mem.indexOf(u8, skipped.?, "auth/") != null);
 }
+
+test "fs: a root that cannot be looked at fails the backup, no archive (metal-vmm QUEUE 110)" {
+    // It was named in backup-skipped.txt and the backup answered OK: a whole
+    // root missing from a backup is louder as a failure (Steve, 2026-10-08).
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    const base = try std.fs.path.join(a, &.{ ".zig-cache", "tmp", &tmp.sub_path });
+    const data = try std.fs.path.join(a, &.{ base, "data" });
+    try store.write(io, a, try std.fs.path.join(a, &.{ data, "chat", "kept" }), "kept", .{});
+    try store.write(io, a, try std.fs.path.join(a, &.{ base, "afile" }), "x", .{});
+    const auth = try std.fs.path.join(a, &.{ base, "afile", "auth" }); // through a file
+
+    var whole: std.Io.Writer.Allocating = .init(a);
+    try std.testing.expect(std.meta.isError(archive(io, a, &whole.writer, data, auth)));
+    // A root not there yet is no failure.
+    var fine: std.Io.Writer.Allocating = .init(a);
+    try archive(io, a, &fine.writer, data, try std.fs.path.join(a, &.{ base, "not-yet" }));
+}
