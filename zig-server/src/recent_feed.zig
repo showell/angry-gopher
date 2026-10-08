@@ -84,7 +84,7 @@ fn collapseQuotes(alloc: Alloc, markdown: []const u8) ![]const u8 {
             } else {
                 // A real code block — keep it verbatim so its interior lines
                 // aren't re-read as quote openers.
-                for (ls[i .. @min(j + 1, ls.len)]) |code_line| {
+                for (ls[i..@min(j + 1, ls.len)]) |code_line| {
                     try out.appendSlice(alloc, code_line);
                     try out.append(alloc, '\n');
                 }

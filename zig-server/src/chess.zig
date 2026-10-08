@@ -115,8 +115,7 @@ const index_body =
 fn respondIndex(req: *std.http.Server.Request, alloc: std.mem.Allocator, name: []const u8) !void {
     var b: std.ArrayList(u8) = .empty;
     try b.appendSlice(alloc, index_head);
-    try b.appendSlice(alloc,
-        "<header class=\"app-top\"><div class=\"app-top-home\">" ++
+    try b.appendSlice(alloc, "<header class=\"app-top\"><div class=\"app-top-home\">" ++
         "<a href=\"/\">Home</a> · <a href=\"/chat\">Chat</a></div>" ++
         "<div class=\"app-top-user\">");
     if (name.len == 0) {

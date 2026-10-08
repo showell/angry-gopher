@@ -139,9 +139,9 @@ fn writeRow(b: *std.ArrayList(u8), alloc: Alloc, st: PlayerStats, cls: []const u
         });
     try b.print(alloc, "<tr{s}><td>{s}</td><td>{s}</td><td class=\"n\">{d}</td><td class=\"n\">{d}</td>" ++
         "<td class=\"n\">{d}</td><td class=\"n\">{s}</td><td>{s}</td></tr>", .{
-        row_class,        who,
-        since,            st.game_sessions,
-        st.puzzle_sessions, st.total_actions,
+        row_class,                               who,
+        since,                                   st.game_sessions,
+        st.puzzle_sessions,                      st.total_actions,
         try ui.humanBytes(alloc, st.disk_bytes), actions_cell,
     });
 }

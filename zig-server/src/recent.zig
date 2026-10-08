@@ -250,8 +250,6 @@ fn authorName(io: Io, alloc: Alloc, dir: []const u8, sid: []const u8, viewer: []
     return users.getUserName(io, alloc, auid);
 }
 
-
-
 // ── tests ────────────────────────────────────────────────────────────────────
 
 const testing = std.testing;

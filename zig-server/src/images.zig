@@ -73,4 +73,3 @@ fn emitImagesData(b: *std.ArrayList(u8), alloc: Alloc, entries: []images_store.I
     try b.appendSlice(alloc, safe);
     try b.appendSlice(alloc, "</script>");
 }
-

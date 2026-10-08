@@ -140,4 +140,3 @@ test "sanitizeUser strips disallowed bytes, collapses whitespace, caps length" {
     // capped to max_user_len bytes
     try testing.expectEqual(@as(usize, max_user_len), (try sanitizeUser(a, "a" ** 80)).len);
 }
-

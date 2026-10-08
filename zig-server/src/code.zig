@@ -66,4 +66,3 @@ fn emitCodeData(b: *std.ArrayList(u8), alloc: Alloc, entries: []code_store.CodeE
     try b.appendSlice(alloc, safe);
     try b.appendSlice(alloc, "</script>");
 }
-
