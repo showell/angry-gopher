@@ -50,15 +50,21 @@ pub fn handleHome(req: *Request, io: Io, alloc: Alloc, name: []const u8, is_admi
     // The body (headline + app rows) is parsed from pages/home.txt on the fly. A
     // parse/read failure is loud, not papered over: show what broke, never a
     // silently-truncated page.
+    // **A HOME THAT CANNOT BE RENDERED IS A 500, NOT A 200**: the page says
+    // so in words, and its status says so to every cache and monitor (a
+    // refused disk read once answered 200 with "Home unavailable", which a
+    // sweep could not tell from a page served).
+    var status: std.http.Status = .ok;
     if (renderHomeBody(io, alloc)) |body| {
         try b.appendSlice(alloc, body);
     } else |err| {
+        status = .internal_server_error;
         try b.print(alloc,
             \\<div class="app-body-wrap"><h1>Home unavailable</h1>
             \\<p>pages/home.txt could not be rendered: <strong>{s}</strong>.</p></div></body></html>
         , .{@errorName(err)});
     }
-    try req.respond(b.items, .{ .extra_headers = &.{http.html_ct} });
+    try req.respond(b.items, .{ .status = status, .extra_headers = &.{http.html_ct} });
 }
 
 /// An app row parsed from the DSL: a linked title, a CTA button label, a
