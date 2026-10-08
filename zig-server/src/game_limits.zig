@@ -283,7 +283,7 @@ fn sizeOf(io: Io, alloc: Alloc, dir: []const u8, depth: u8) !u64 {
     for (try store.list(io, alloc, dir)) |e| {
         const p = try std.fs.path.join(alloc, &.{ dir, e.name });
         switch (e.kind) {
-            .file => total += (store.stat(io, alloc, p) catch continue).size,
+            .file => total += ((try store.statOrNull(io, alloc, p)) orelse continue).size,
             .directory => total += try sizeOf(io, alloc, p, depth + 1),
             .other => {},
         }

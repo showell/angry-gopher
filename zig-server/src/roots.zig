@@ -73,10 +73,12 @@ pub fn migrateSecret(io: Io, alloc: std.mem.Allocator) void {
         "_session_secret.previous-until",
     }) |name| {
         const old_path = std.fs.path.join(alloc, &.{ old_dir, name }) catch continue;
+        // A migration that cannot look does nothing: the next startup tries again.
         if (!(store.has(io, alloc, old_path) catch continue)) continue;
         const new_path = std.fs.path.join(alloc, &.{ new_dir, name }) catch continue;
         // An error is not "absent": nothing is written over what may be there.
         if (!(store.has(io, alloc, new_path) catch continue)) {
+            // Nothing read is nothing written, and the old copy stays.
             const bytes = store.read(io, alloc, old_path, .unlimited) catch continue;
             store.write(io, alloc, new_path, bytes, .{ .private = true }) catch continue;
             // Confirm the new copy reads back whole before dropping the old.

@@ -124,7 +124,7 @@ pub fn writePuzzleSessionFile(io: Io, alloc: Alloc, user_id: []const u8, session
 /// puzzleSessionExists reports whether a session directory is on disk.
 pub fn puzzleSessionExists(io: Io, alloc: Alloc, user_id: []const u8, session_id: i64) !bool {
     const dir = try puzzleSessionDir(alloc, user_id, session_id);
-    const st = store.stat(io, alloc, dir) catch return false;
+    const st = (try store.statOrNull(io, alloc, dir)) orelse return false;
     return st.kind == .directory;
 }
 
@@ -189,7 +189,7 @@ pub fn readSessionFile(io: Io, alloc: Alloc, user_id: []const u8, session_id: i6
 /// sessionExists reports whether a full-game session directory is on disk.
 pub fn sessionExists(io: Io, alloc: Alloc, user_id: []const u8, session_id: i64) !bool {
     const dir = try sessionDir(alloc, user_id, session_id);
-    const st = store.stat(io, alloc, dir) catch return false;
+    const st = (try store.statOrNull(io, alloc, dir)) orelse return false;
     return st.kind == .directory;
 }
 
@@ -215,7 +215,7 @@ pub fn listSessionIDs(io: Io, alloc: Alloc, user_id: []const u8) ![]i64 {
     const root = try lynrummyElmRoot(alloc, user_id);
     const sessions = try join(alloc, &.{ root, "sessions" });
 
-    const entries = store.list(io, alloc, sessions) catch return &.{};
+    const entries = try store.list(io, alloc, sessions);
 
     var ids: std.ArrayList(i64) = .empty;
     for (entries) |entry| {
@@ -232,7 +232,7 @@ pub fn listSessionIDs(io: Io, alloc: Alloc, user_id: []const u8) ![]i64 {
 /// countTextLines returns the number of non-empty lines in `path`, or 0 if the
 /// file is missing.
 pub fn countTextLines(io: Io, alloc: Alloc, path: []const u8) !usize {
-    const body = store.read(io, alloc, path, .unlimited) catch return 0;
+    const body = (try store.readOrNull(io, alloc, path, .unlimited)) orelse return 0;
     var n: usize = 0;
     var it = std.mem.splitScalar(u8, body, '\n');
     while (it.next()) |line| {

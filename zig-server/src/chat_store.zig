@@ -483,6 +483,7 @@ pub fn lastMessage(io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8) 
         if (c.last) |l| if (c.count > 0) {
             const path = try sessionMdPath(alloc, conv_dir, sid);
             const buf = try alloc.alloc(u8, tail_window);
+            // The sidecar is a cache: a window that will not read falls back to the transcript.
             const n = store.readAt(io, alloc, path, l.offset, buf) catch return fallbackLast(io, alloc, conv_dir, sid);
             // **A WINDOW THAT CAME BACK FULL MAY HAVE CUT A MESSAGE IN HALF**,
             // and nothing below could tell. Read it the slow way instead.
@@ -575,14 +576,14 @@ pub fn backfillSidecars(io: Io, alloc: Alloc, conv_dirs: []const []const u8) usi
 /// where the per-viewer listings are not the question.
 pub fn listConvDirs(io: Io, alloc: Alloc) ![][]const u8 {
     var out: std.ArrayList([]const u8) = .empty;
-    const entries = store.list(io, alloc, chat_root) catch return &.{};
+    const entries = try store.list(io, alloc, chat_root);
     for (entries) |entry| {
         if (entry.kind != .directory) continue;
         // Not a conversation: per-uid state (last-conv, last-sessions) lives here.
         if (std.mem.eql(u8, entry.name, "users")) continue;
         if (std.mem.eql(u8, entry.name, "channels")) {
             const channels = try std.fs.path.join(alloc, &.{ chat_root, "channels" });
-            const chans = store.list(io, alloc, channels) catch continue;
+            const chans = try store.list(io, alloc, channels);
             for (chans) |ch| {
                 if (ch.kind != .directory) continue;
                 try out.append(alloc, try std.fs.path.join(alloc, &.{ channels, ch.name }));
@@ -606,6 +607,7 @@ pub fn backfillAll(io: Io, alloc: Alloc) usize {
 pub fn lastAuthorUid(io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8) []const u8 {
     const file = std.fmt.allocPrint(alloc, "{s}.lastauthor", .{sid}) catch return "";
     const path = std.fs.path.join(alloc, &.{ conv_dir, "sessions", file }) catch return "";
+    // A companion, best-effort as it is written: no author is shown, nothing is written from it.
     const raw = store.read(io, alloc, path, .limited(64)) catch return "";
     return std.mem.trim(u8, raw, " \t\r\n");
 }
@@ -684,6 +686,7 @@ const Count = struct { count: usize, size: u64, last: ?Last = null };
 /// the whole thing and recounts from the transcript — slower, never wrong.
 fn readCount(io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8) ?Count {
     const path = countPath(alloc, conv_dir, sid) catch return null;
+    // A cache: a count that will not read is recounted from the transcript (messageCount).
     const raw = store.read(io, alloc, path, .limited(1024)) catch return null;
     var lines = std.mem.splitScalar(u8, raw, '\n');
     var head = std.mem.tokenizeScalar(u8, lines.next() orelse return null, ' ');
@@ -754,14 +757,14 @@ pub fn sessionMdPath(alloc: Alloc, conv_dir: []const u8, sid: []const u8) ![]u8 
 /// these bytes verbatim.
 pub fn rawSession(io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8) !?[]u8 {
     const path = try sessionMdPath(alloc, conv_dir, sid);
-    return store.read(io, alloc, path, .unlimited) catch return null;
+    return store.readOrNull(io, alloc, path, .unlimited);
 }
 
 /// listSessions returns the session ids (the `.md` basenames) under
 /// {conv_dir}/sessions, sorted ascending. Missing dir → empty.
 pub fn listSessions(io: Io, alloc: Alloc, conv_dir: []const u8) ![][]const u8 {
     const dir_path = try std.fs.path.join(alloc, &.{ conv_dir, "sessions" });
-    const entries = store.list(io, alloc, dir_path) catch return &.{};
+    const entries = try store.list(io, alloc, dir_path);
 
     var out: std.ArrayList([]const u8) = .empty;
     for (entries) |entry| {
@@ -798,7 +801,7 @@ fn lessThanStr(_: void, a: []const u8, b: []const u8) bool {
 pub fn channelMembers(io: Io, alloc: Alloc, name: []const u8) !?[][]const u8 {
     const file = try std.fmt.allocPrint(alloc, "{s}.channel", .{name});
     const path = try std.fs.path.join(alloc, &.{ chat_root, "channels", file });
-    const body = store.read(io, alloc, path, .unlimited) catch return null;
+    const body = (try store.readOrNull(io, alloc, path, .unlimited)) orelse return null;
 
     var out: std.ArrayList([]const u8) = .empty;
     var it = std.mem.splitScalar(u8, body, '\n');
@@ -822,7 +825,7 @@ pub fn hasMember(members: [][]const u8, uid: []const u8) bool {
 /// Scans {chat_root}/channels/*.channel. Missing dir → empty.
 pub fn listUserChannels(io: Io, alloc: Alloc, uid: []const u8) ![][]const u8 {
     const dir_path = try std.fs.path.join(alloc, &.{ chat_root, "channels" });
-    const entries = store.list(io, alloc, dir_path) catch return &.{};
+    const entries = try store.list(io, alloc, dir_path);
 
     var out: std.ArrayList([]const u8) = .empty;
     for (entries) |entry| {

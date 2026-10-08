@@ -166,7 +166,7 @@ pub fn savedIdsFor(io: Io, req_alloc: Alloc, uid: []const u8, conv: []const u8, 
     defer cache_mu.unlock(io);
 
     const path = docs_store.docPath(req_alloc, uid, reading_list_slug) catch return &.{};
-    const st = disk.stat(io, req_alloc, path) catch return &.{}; // no doc → nothing saved
+    const st = (try disk.statOrNull(io, req_alloc, path)) orelse return &.{}; // no doc → nothing saved
     const file_mtime: i96 = st.mtime;
 
     const gop = try cache.getOrPut(cache_alloc, uid);

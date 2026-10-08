@@ -129,7 +129,7 @@ pub fn readImagesForUser(io: Io, alloc: Alloc, uid: []const u8) ![]ImagesEntry {
     const path = try userImagesPath(alloc, uid);
     imagesMu.lockUncancelable(io);
     defer imagesMu.unlock(io);
-    const data = disk.read(io, alloc, path, .unlimited) catch return &.{};
+    const data = (try disk.readOrNull(io, alloc, path, .unlimited)) orelse return &.{};
     return parseImagesFile(alloc, data);
 }
 

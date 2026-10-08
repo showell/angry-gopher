@@ -32,7 +32,7 @@ fn userChatStateDir(alloc: Alloc, uid: []const u8) ![]u8 {
 pub fn lastUserConv(io: Io, alloc: Alloc, uid: []const u8) ![]const u8 {
     const dir = try userChatStateDir(alloc, uid);
     const path = try std.fs.path.join(alloc, &.{ dir, "last-conv" });
-    const b = disk.read(io, alloc, path, .unlimited) catch return "";
+    const b = (try disk.readOrNull(io, alloc, path, .unlimited)) orelse return "";
     return std.mem.trim(u8, b, " \t\r\n");
 }
 
@@ -41,7 +41,7 @@ pub fn lastUserConv(io: Io, alloc: Alloc, uid: []const u8) ![]const u8 {
 pub fn lastUserSession(io: Io, alloc: Alloc, uid: []const u8, conv_key: []const u8) ![]const u8 {
     const dir = try userChatStateDir(alloc, uid);
     const path = try std.fs.path.join(alloc, &.{ dir, "last-sessions", conv_key });
-    const b = disk.read(io, alloc, path, .unlimited) catch return "";
+    const b = (try disk.readOrNull(io, alloc, path, .unlimited)) orelse return "";
     return std.mem.trim(u8, b, " \t\r\n");
 }
 

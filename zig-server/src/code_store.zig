@@ -138,7 +138,7 @@ pub fn readCodeForUser(io: Io, alloc: Alloc, uid: []const u8) ![]CodeEntry {
     const path = try userCodePath(alloc, uid);
     codeMu.lockUncancelable(io);
     defer codeMu.unlock(io);
-    const data = disk.read(io, alloc, path, .unlimited) catch return &.{};
+    const data = (try disk.readOrNull(io, alloc, path, .unlimited)) orelse return &.{};
     return parseCodeFile(alloc, data);
 }
 
