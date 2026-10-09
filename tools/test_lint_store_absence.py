@@ -174,6 +174,37 @@ class Fires(unittest.TestCase):
             """)) as t:
                 self.assertEqual(t.lines(), [("a.zig", 4)])
 
+    def test_a_wrappers_caller_naming_errors_the_wrapper_does_not_make(self):
+        # metal-vmm QUEUE 120: any error.X passed as "the wrapper's own".
+        wrapper = one("""\
+            pub fn react(p: []const u8) !void {
+                const raw = try store.read(io, a, p, .unlimited);
+                if (raw.len == 0) return error.NoSuchMessage;
+            }
+        """, name="b.zig")
+        for handler in ['|e| switch (e) { error.AccessDenied => null, error.InputOutput => "", else => return e }',
+                        "|e| switch (e) { error.NoSuchMessage, error.AccessDenied => null, else => return e }",
+                        "|e| if (e == error.AccessDenied) null else return e"]:
+            with self.subTest(handler=handler), Tree({**wrapper, "a.zig": f"""\
+                const b = @import("b.zig");
+                fn f() !?[]const u8 {{
+                    return b.react("x") catch {handler};
+                }}
+            """}) as t:
+                self.assertEqual(t.lines(), [("a.zig", 3)])
+
+    def test_a_handler_that_answers_a_500_on_one_way_only(self):
+        # metal-vmm QUEUE 120: a 500 anywhere in the handler passed it.
+        for handler in ["blk: { if (c) return req.respond(\"\", .{ .status = .internal_server_error }); break :blk null; }",
+                        "|e| { if (e == error.X) return req.respond(\"\", .{ .status = .internal_server_error }); return null; }",
+                        "|e| switch (e) { error.FileNotFound => null, else => { if (c) return req.respond(\"\", .{ .status = .internal_server_error }); return null; } }"]:
+            with self.subTest(handler=handler), Tree(one(f"""\
+                fn f() !?[]const u8 {{
+                    return store.read(io, a, p, .unlimited) catch {handler};
+                }}
+            """)) as t:
+                self.assertEqual(t.lines(), [("a.zig", 3)])
+
     def test_the_reads_that_already_answer_absence(self):
         # readOrNull and statOrNull make absence null and pass the rest on:
         # caught into a value, the rest is dropped too.
@@ -353,6 +384,39 @@ class Holds(unittest.TestCase):
             }
         """}) as t:
             self.assertEqual(t.lines(), [("a.zig", 3)])
+
+    def test_errors_a_wrapper_has_from_a_wrapper_it_calls(self):
+        with Tree({**one("""\
+            pub fn react(p: []const u8) !void {
+                const raw = try store.read(io, a, p, .unlimited);
+                if (raw.len == 0) return error.NoSuchMessage;
+            }
+            pub fn reactTwice(p: []const u8) !void {
+                try react(p);
+                try react(p);
+            }
+        """, name="b.zig"), "a.zig": """\
+            const b = @import("b.zig");
+            fn f() !void {
+                b.reactTwice("x") catch |e| switch (e) {
+                    error.NoSuchMessage => return badRequest(req),
+                    else => return e,
+                };
+            }
+        """}) as t:
+            self.assertEqual(t.lines(), [])
+
+    def test_a_block_that_is_the_500_answer(self):
+        with Tree(one("""\
+            fn f() !void {
+                const raw = store.read(io, a, p, .unlimited) catch |e| {
+                    const msg = try std.fmt.allocPrint(alloc, "failed: {s}", .{@errorName(e)});
+                    return req.respond(msg, .{ .status = .internal_server_error });
+                };
+                _ = raw;
+            }
+        """)) as t:
+            self.assertEqual(t.lines(), [])
 
     def test_a_function_that_never_reads_the_store(self):
         with Tree({**one("""\
