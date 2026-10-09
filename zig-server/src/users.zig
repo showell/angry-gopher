@@ -324,10 +324,14 @@ pub fn setUserAPIKey(io: Io, alloc: Alloc, id: []const u8) ![]const u8 {
 }
 
 /// clearUserAPIKey revokes the principal's key (deletes the file; absent is OK).
-/// Best-effort.
-pub fn clearUserAPIKey(io: Io, alloc: Alloc, id: []const u8) void {
-    const path = std.fs.path.join(alloc, &.{ auth_root, id, "api-key" }) catch return;
-    store.remove(io, alloc, path) catch {};
+///
+/// **A REVOKE THAT FAILED IS NOT DONE** (metal-vmm QUEUE 129): it was
+/// best-effort, `catch {}`, and both callers then said "revoked" while the
+/// key went on authenticating. The error goes to the caller, which answers
+/// it as the failure it is.
+pub fn clearUserAPIKey(io: Io, alloc: Alloc, id: []const u8) !void {
+    const path = try std.fs.path.join(alloc, &.{ auth_root, id, "api-key" });
+    try store.remove(io, alloc, path);
 }
 
 /// isMember reports whether `id` is a password member.
@@ -580,15 +584,16 @@ pub fn findMemberByName(io: Io, alloc: Alloc, name: []const u8) !?[]const u8 {
 /// deleteUserRecord removes a user's account dir (auth_root: name/password/
 /// api-key) and gopher-private dir (users_root: admin/last-seen/upload-bytes).
 /// Game/chat data is deleted separately (storage.deleteUserData). Refuses an
-/// empty id so it can never target a root. Best-effort.
-pub fn deleteUserRecord(io: Io, alloc: Alloc, id: []const u8) void {
+/// empty id so it can never target a root.
+///
+/// **A REMOVAL THAT FAILED IS NOT DONE** (metal-vmm QUEUE 129): it was
+/// best-effort, and a refused removal of auth_root left the released account
+/// logging in. The auth record goes first, so a failure after it has at
+/// least taken the account's authority; the error goes to the caller.
+pub fn deleteUserRecord(io: Io, alloc: Alloc, id: []const u8) !void {
     if (std.mem.trim(u8, id, " \t\r\n").len == 0) return;
-    if (std.fs.path.join(alloc, &.{ auth_root, id })) |p| {
-        store.removeTree(io, alloc, p) catch {};
-    } else |_| {}
-    if (std.fs.path.join(alloc, &.{ users_root, id })) |p| {
-        store.removeTree(io, alloc, p) catch {};
-    } else |_| {}
+    try store.removeTree(io, alloc, try std.fs.path.join(alloc, &.{ auth_root, id }));
+    try store.removeTree(io, alloc, try std.fs.path.join(alloc, &.{ users_root, id }));
 }
 
 /// signSessionNow signs a live member session cookie value for `id` (loads the
@@ -788,8 +793,9 @@ test "fs: api key issue, read back, clear; legacy bare-hash is held but not disp
     try testing.expectEqualStrings(key, (try getUserAPIKey(io, a, id)).?); // round-trips for display
     try testing.expect(apiKeyMatches(key, key)); // and authenticates against itself
 
-    clearUserAPIKey(io, a, id);
+    try clearUserAPIKey(io, a, id);
     try testing.expect(!userHasAPIKey(io, a, id));
+    try clearUserAPIKey(io, a, id); // absent is revoked already
     try testing.expect((try getUserAPIKey(io, a, id)) == null);
 
     // a legacy bare-hash key (no '-') is honored for auth but never echoed back
@@ -904,15 +910,16 @@ test "fs: deleteUserRecord refuses an empty id, removes one principal, spares ot
 
     // The safety guard: an empty/blank id must be a no-op — joined onto a root it
     // would otherwise deleteTree the whole account store. Both principals survive.
-    deleteUserRecord(io, a, "");
-    deleteUserRecord(io, a, "   ");
+    try deleteUserRecord(io, a, "");
+    try deleteUserRecord(io, a, "   ");
     try testing.expect(try principalExists(io, a, keep));
     try testing.expect(try principalExists(io, a, gone));
 
     // Deleting the goner removes BOTH its account dir (auth_root) and its private
     // dir (users_root); the upload total is gone with it.
-    deleteUserRecord(io, a, gone);
+    try deleteUserRecord(io, a, gone);
     try testing.expect(!try principalExists(io, a, gone));
+    try deleteUserRecord(io, a, gone); // gone already: done
     try testing.expectEqual(@as(i64, 0), try userUploadBytes(io, a, gone));
     // …and the unrelated principal is untouched.
     try testing.expect(try principalExists(io, a, keep));

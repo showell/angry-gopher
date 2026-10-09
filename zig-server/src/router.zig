@@ -121,6 +121,92 @@ fn localTarget(target: []const u8) []const u8 {
 /// the site: every surface appears exactly once, and the comment on each arm
 /// says who may reach it.
 pub fn route(req: *std.http.Server.Request, io: Io, alloc: std.mem.Allocator, bus: *Bus) !void {
+    var sent: Sent = undefined;
+    // Small, on the stack: only a chunk's header is formatted in place, and
+    // anything longer passes straight to the connection's own buffer.
+    var buffer: [1024]u8 = undefined;
+    sent.lend(req, &buffer);
+    const done = routed(req, io, alloc, bus);
+    sent.giveBack(req);
+    done catch |e| {
+        // **A FAILURE IS A 500, NEVER SILENCE** (metal-vmm QUEUE 123, Steve:
+        // louder is better): an error that escapes a handler before its
+        // head is sent is answered here, for both hosts, and still goes on
+        // to the host to log. Once the head is out, the answer is the
+        // handler's, cut short, and only the connection's close can say so.
+        answerFailure(req, alloc, &sent, e);
+        return e;
+    };
+}
+
+/// **WHETHER ANY OF THE ANSWER WENT OUT** (metal-vmm QUEUE 127(b)): the
+/// reader's state cannot say, since reading a body moves it on as answering
+/// does. So the router lends each handler a writer of its own in place of
+/// the connection's, which passes every byte through to it, and notes that
+/// one was written. It buffers as the connection's does (the protocol's
+/// writers format chunk headers in place), and is given back, its buffer
+/// passed on unflushed, when the handler returns: before the host flushes
+/// or serves a kept stream, on the connection's own writer.
+const Sent = struct {
+    to: *std.Io.Writer,
+    any: bool,
+    writer: std.Io.Writer,
+
+    const vtable: std.Io.Writer.VTable = .{ .drain = drain, .sendFile = sendFile, .flush = flush };
+
+    fn lend(self: *Sent, req: *std.http.Server.Request, buffer: []u8) void {
+        self.* = .{ .to = req.server.out, .any = false, .writer = .{ .buffer = buffer, .vtable = &vtable } };
+        req.server.out = &self.writer;
+    }
+
+    /// Back to the connection's writer, with what this one still holds.
+    fn giveBack(self: *Sent, req: *std.http.Server.Request) void {
+        self.pass() catch {};
+        req.server.out = self.to;
+    }
+
+    /// What is buffered, to the connection's writer.
+    fn pass(self: *Sent) std.Io.Writer.Error!void {
+        const w = &self.writer;
+        if (w.end == 0) return;
+        self.any = true;
+        defer w.end = 0;
+        try self.to.writeAll(w.buffer[0..w.end]);
+    }
+
+    fn drain(w: *std.Io.Writer, data: []const []const u8, splat: usize) std.Io.Writer.Error!usize {
+        const self: *Sent = @alignCast(@fieldParentPtr("writer", w));
+        try self.pass();
+        const n = try self.to.writeSplat(data, splat);
+        if (n > 0) self.any = true;
+        return n;
+    }
+
+    fn sendFile(w: *std.Io.Writer, file_reader: *std.Io.File.Reader, limit: std.Io.Limit) std.Io.Writer.FileError!usize {
+        const self: *Sent = @alignCast(@fieldParentPtr("writer", w));
+        try self.pass();
+        const n = try self.to.sendFile(file_reader, limit);
+        if (n > 0) self.any = true;
+        return n;
+    }
+
+    fn flush(w: *std.Io.Writer) std.Io.Writer.Error!void {
+        const self: *Sent = @alignCast(@fieldParentPtr("writer", w));
+        try self.pass();
+        return self.to.flush();
+    }
+};
+
+/// The 500 for an error no byte of an answer went out before; nothing once
+/// one did. Not kept alive, so whatever of the request's body is unread
+/// stays unread.
+fn answerFailure(req: *std.http.Server.Request, alloc: std.mem.Allocator, sent: *const Sent, e: anyerror) void {
+    if (sent.any) return;
+    const msg = std.fmt.allocPrint(alloc, "The server failed: {s}.\n", .{@errorName(e)}) catch "The server failed.\n";
+    req.respond(msg, .{ .status = .internal_server_error, .keep_alive = false }) catch {};
+}
+
+fn routed(req: *std.http.Server.Request, io: Io, alloc: std.mem.Allocator, bus: *Bus) !void {
     // **AN UNSIGNED gopher_uid IS RE-IDENTIFIED ONCE** (uid_cookie.zig): its
     // first GET inside the window comes back to the same page with the
     // signed cookie set, and the unsigned spelling is refused from then on.
@@ -1060,7 +1146,10 @@ test "fs: a doc that cannot be looked at is a server error, never a 404 (metal-v
     var site = try UidSite.init(a, io);
     defer site.deinit();
     const docs_store = @import("docs_store.zig");
-    const prev = mem_meter.replace(a); // the docs page allocates through it
+    // The docs page allocates through it, and presence keeps a map in it for
+    // the life of the process: an arena freed at the test's end would leave
+    // the next test that marks someone active a map in freed memory.
+    const prev = mem_meter.replace(std.heap.page_allocator);
     defer _ = mem_meter.replace(prev);
 
     try users.setUserPassword(io, a, "2", "hunter2");
@@ -1078,4 +1167,199 @@ test "fs: a doc that cannot be looked at is a server error, never a 404 (metal-v
     const resp = try UidSite.ask(a, io, "/chat/docs/lost.md", member);
     try testing.expect(std.mem.indexOf(u8, status(resp), "404") == null);
     try testing.expect(std.mem.startsWith(u8, status(resp), "5"));
+}
+
+/// The host's Io, but every file removal fails: a store whose delete is
+/// refused, while reads and writes go on (metal-vmm QUEUE 129).
+fn removalsFail(io: Io, vt: *Io.VTable) Io {
+    const refused = struct {
+        // Not std's failingDirDeleteFile, which answers FileNotFound: that
+        // is "already gone", which a revoke rightly takes as done.
+        fn deleteFile(_: ?*anyopaque, _: Io.Dir, _: []const u8) Io.Dir.DeleteFileError!void {
+            return error.AccessDenied;
+        }
+    };
+    vt.* = io.vtable.*;
+    vt.dirDeleteFile = refused.deleteFile;
+    return .{ .userdata = io.userdata, .vtable = vt };
+}
+
+test "route: a key revoke whose removal fails is not answered as revoked, and the key is still there to say so (metal-vmm QUEUE 129)" {
+    // `clearUserAPIKey` was `store.remove(...) catch {}`, and /settings/apikey
+    // then redirected to `?keyrevoked=1`: the member told their key was gone
+    // while it went on authenticating.
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var site = try UidSite.init(a, io);
+    defer site.deinit();
+    const prev = mem_meter.replace(std.heap.page_allocator); // presence outlives the test
+    defer _ = mem_meter.replace(prev);
+
+    try users.setUserPassword(io, a, "2", "hunter2");
+    const now: i64 = @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
+    const member = try std.fmt.allocPrint(a, "gopher_auth={s}", .{try users.signSession(a, UidSite.secret, "2", now)});
+    const key = try users.setUserAPIKey(io, a, "2");
+
+    var vt: Io.VTable = undefined;
+    const failing = removalsFail(io, &vt);
+    const raw = try std.fmt.allocPrint(a, "POST /settings/apikey HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: 8\r\n\r\nrevoke=1", .{member});
+    var reader: std.Io.Reader = .fixed(raw);
+    var out: std.Io.Writer.Allocating = .init(a);
+    var server = std.http.Server.init(&reader, &out.writer);
+    var req = try server.receiveHead();
+    req.head.keep_alive = false;
+    var hub = Hub.init(failing, a);
+    var b = Bus.of(&hub);
+    _ = route(&req, failing, a, &b) catch {};
+    try out.writer.flush();
+    try testing.expect(std.mem.indexOf(u8, out.written(), "keyrevoked") == null);
+    try testing.expect(std.mem.startsWith(u8, status(out.written()), "500"));
+    // The key is there, and still the key.
+    try testing.expectEqualStrings(key, (try users.getUserAPIKey(io, a, "2")).?);
+}
+
+test "route: a release whose removals fail is not answered as done, and the account is still there (metal-vmm QUEUE 129)" {
+    // Logout's release ran `deleteUserData(...) catch {}`, then deleted the
+    // record (each removal itself `catch {}`), then said "logged out": a
+    // refused removal left the account logging in, or its data kept, while
+    // its member was told both were gone.
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var site = try UidSite.init(a, io);
+    defer site.deinit();
+    const prev = mem_meter.replace(std.heap.page_allocator); // presence outlives the test
+    defer _ = mem_meter.replace(prev);
+
+    try users.setUserPassword(io, a, "2", "hunter2");
+    const now: i64 = @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
+    const member = try std.fmt.allocPrint(a, "gopher_auth={s}", .{try users.signSession(a, UidSite.secret, "2", now)});
+    const data = try std.fs.path.join(a, &.{ UidSite.storage.data_root, "2", "next-session-id.txt" });
+    try UidSite.disk.write(io, a, data, "2\n", .{});
+
+    var vt: Io.VTable = undefined;
+    const failing = removalsFail(io, &vt);
+    const raw = try std.fmt.allocPrint(a, "POST /logout HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: 11\r\n\r\nrelease=yes", .{member});
+    var reader: std.Io.Reader = .fixed(raw);
+    var out: std.Io.Writer.Allocating = .init(a);
+    var server = std.http.Server.init(&reader, &out.writer);
+    var req = try server.receiveHead();
+    req.head.keep_alive = false;
+    var hub = Hub.init(failing, a);
+    var b = Bus.of(&hub);
+    _ = route(&req, failing, a, &b) catch {};
+    try out.writer.flush();
+    try testing.expect(std.mem.startsWith(u8, status(out.written()), "500"));
+    // The account is there, and still logs in.
+    try testing.expect(try users.principalExists(io, a, "2"));
+    try testing.expect(users.checkUserPassword(io, a, "2", "hunter2"));
+    _ = try UidSite.disk.stat(io, a, data); // and its data, which the release could not remove
+}
+
+test "route: an error after a request's body was read is answered 500 too, never with silence (metal-vmm QUEUE 127(b))" {
+    // Reading the body moves the reader past `received_head`, so that state
+    // cannot say whether a head went out: a move whose append fails, after
+    // its body was read, was answered with nothing. Here the session's
+    // actions.dsl is a folder: the session is there, and the append fails.
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var site = try UidSite.init(a, io);
+    defer site.deinit();
+
+    const id = try player.allocate(io, a, "Nikhil");
+    const me = try signedUid(a, id);
+    try testing.expectEqualStrings("200 OK", status(try postAs(a, io, "/game/new-session", me, "state")));
+    const s1 = try std.fs.path.join(a, &.{ UidSite.storage.data_root, id, "lynrummy-elm", "sessions", "1" });
+    try std.Io.Dir.cwd().createDirPath(io, try std.fs.path.join(a, &.{ s1, "actions.dsl" }));
+
+    const raw = try std.fmt.allocPrint(a, "POST /game/sessions/1/actions HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\nContent-Length: 4\r\n\r\nmove", .{me});
+    var reader: std.Io.Reader = .fixed(raw);
+    var out: std.Io.Writer.Allocating = .init(a);
+    var server = std.http.Server.init(&reader, &out.writer);
+    var req = try server.receiveHead();
+    req.head.keep_alive = false;
+    var hub = Hub.init(io, a);
+    var b = Bus.of(&hub);
+    try testing.expect(std.meta.isError(route(&req, io, a, &b)));
+    try out.writer.flush();
+    try testing.expect(std.mem.startsWith(u8, status(out.written()), "500"));
+    // And the writer the router lent the handler is given back.
+    try testing.expect(server.out == &out.writer);
+}
+
+test "route: an error after the head went out is not answered again (metal-vmm QUEUE 127(b))" {
+    // A handler that answered, then failed: the answer stands, cut short or
+    // whole, and no second head follows it.
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var out: std.Io.Writer.Allocating = .init(a);
+    var reader: std.Io.Reader = .fixed("GET / HTTP/1.1\r\nHost: x\r\n\r\n");
+    var server = std.http.Server.init(&reader, &out.writer);
+    var req = try server.receiveHead();
+    req.head.keep_alive = false;
+    const failing = struct {
+        fn handle(r: *std.http.Server.Request) !void {
+            try r.respond("fine", .{ .keep_alive = false });
+            return error.AfterTheHead;
+        }
+    };
+    var sent: Sent = undefined;
+    var buffer: [4096]u8 = undefined;
+    sent.lend(&req, &buffer);
+    const got = failing.handle(&req);
+    sent.giveBack(&req);
+    try testing.expectError(error.AfterTheHead, got);
+    try testing.expect(sent.any);
+    answerFailure(&req, a, &sent, error.AfterTheHead);
+    try out.writer.flush();
+    try testing.expect(std.mem.startsWith(u8, out.written(), "HTTP/1.1 200"));
+    try testing.expect(std.mem.indexOf(u8, out.written(), "500") == null);
+}
+
+test "fs: a handler's error is answered 500, never with silence (metal-vmm QUEUE 123)" {
+    // On metal, `GET /puzzles -> ReadFailed` reached the console and the
+    // client got nothing (the box's durable sweep, seed 173): an error that
+    // escapes a handler was dropped by the host. Here a doc that is a
+    // folder: it is there, and reading it fails.
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var site = try UidSite.init(a, io);
+    defer site.deinit();
+    const docs_store = @import("docs_store.zig");
+    const prev = mem_meter.replace(std.heap.page_allocator); // as above: presence outlives the test
+    defer _ = mem_meter.replace(prev);
+
+    try users.setUserPassword(io, a, "2", "hunter2");
+    const now: i64 = @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
+    const member = try std.fmt.allocPrint(a, "gopher_auth={s}", .{try users.signSession(a, UidSite.secret, "2", now)});
+    try std.Io.Dir.cwd().createDirPath(io, try docs_store.docPath(a, "2", "folder"));
+
+    const raw = try std.fmt.allocPrint(a, "GET /chat/docs/folder.md HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\n\r\n", .{member});
+    var reader: std.Io.Reader = .fixed(raw);
+    var out: std.Io.Writer.Allocating = .init(a);
+    var server = std.http.Server.init(&reader, &out.writer);
+    var req = try server.receiveHead();
+    req.head.keep_alive = false;
+    var hub = Hub.init(io, a);
+    var b = Bus.of(&hub);
+    // The error still goes to the host, to log; the client is told first.
+    try testing.expect(std.meta.isError(route(&req, io, a, &b)));
+    try out.writer.flush();
+    try testing.expect(std.mem.startsWith(u8, status(out.written()), "500"));
 }

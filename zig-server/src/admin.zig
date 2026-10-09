@@ -57,7 +57,7 @@ fn handleAPIKey(req: *Request, io: Io, alloc: Alloc) !void {
     if (!try apiKeyTarget(io, alloc, id)) return http.redirect(req, "/admin");
     const revoke = (try chat.formField(alloc, body, "revoke")) orelse "";
     if (std.mem.eql(u8, revoke, "1")) {
-        users.clearUserAPIKey(io, alloc, id);
+        try users.clearUserAPIKey(io, alloc, id);
         return http.redirect(req, try std.fmt.allocPrint(alloc, "/admin?keyrevoked={s}", .{id}));
     }
     const key = try users.setUserAPIKey(io, alloc, id);

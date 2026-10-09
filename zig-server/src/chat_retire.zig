@@ -84,15 +84,18 @@ pub const Plan = struct {
     }
 
     /// Record a file/dir removal, and carry it out when applying. A file not
-    /// there is not an error — the caller wanted it gone.
+    /// there is not an error — the caller wanted it gone. **ONE THAT FAILED
+    /// IS** (metal-vmm QUEUE 129): it was `catch {}`, and a confirm on a
+    /// store that refused reported everything removed. The error ends the
+    /// confirm, and the admin's page is the router's 500.
     fn rmFile(self: *Plan, kind: Kind, name: []const u8, path: []const u8) !void {
         try self.record(kind, name);
-        if (self.apply) store.remove(self.io, self.alloc, path) catch {};
+        if (self.apply) try store.remove(self.io, self.alloc, path);
     }
 
     fn rmTree(self: *Plan, kind: Kind, name: []const u8, path: []const u8) !void {
         try self.record(kind, name);
-        if (self.apply) store.removeTree(self.io, self.alloc, path) catch {};
+        if (self.apply) try store.removeTree(self.io, self.alloc, path);
     }
 
     /// Count the items of each kind, for the summary line.
@@ -177,6 +180,15 @@ pub fn plan(io: Io, alloc: Alloc, p: Params, apply: bool) !Plan {
     // Phase 3: a kept user's pointers into a conversation now gone.
     try sweepReferences(&pl, &removed, &gone_dms, p.keep);
 
+    // **AUTHORITY GOES LAST** (metal-vmm QUEUE 129): the roster is read from
+    // auth_root, so a removed user's account goes only once everything else
+    // of theirs did. A removal refused before it leaves the user listed, and
+    // the next confirm finishes the job; refused here, the account stays,
+    // still able to log in, and the confirm is an error, never "removed".
+    if (pl.apply) for (removed.ids.items) |id| {
+        try store.removeTree(io, alloc, try std.fs.path.join(alloc, &.{ users.auth_root, id }));
+    };
+
     return pl;
 }
 
@@ -205,10 +217,10 @@ fn retireTopic(pl: *Plan, conv_dir: []const u8, key: []const u8, sid: []const u8
     // Sidecars go with the topic; they are not listed on their own.
     for ([_][]const u8{ ".count", ".lastauthor", ".reactions.jsonl" }) |suf| {
         const f = try std.fs.path.join(alloc, &.{ sess, try std.fmt.allocPrint(alloc, "{s}{s}", .{ sid, suf }) });
-        if (pl.apply) store.remove(pl.io, alloc, f) catch {};
+        if (pl.apply) try store.remove(pl.io, alloc, f);
     }
     const up = try std.fs.path.join(alloc, &.{ sess, try std.fmt.allocPrint(alloc, "{s}.uploads", .{sid}) });
-    if (pl.apply) store.removeTree(pl.io, alloc, up) catch {};
+    if (pl.apply) try store.removeTree(pl.io, alloc, up);
 }
 
 // ── phase 2: users ──────────────────────────────────────────────────────────
@@ -232,14 +244,14 @@ fn allMembers(io: Io, alloc: Alloc) ![]Member {
 }
 
 /// A removed user, everywhere it lives but the DMs (those are retireDMs, so a
-/// DM shared by two removed users is listed once).
+/// DM shared by two removed users is listed once) and its account (auth_root,
+/// removed last, by `plan`).
 fn retireUser(pl: *Plan, id: []const u8) !void {
     const alloc = pl.alloc;
     // absent-ok: the name only labels the plan's line; the removal goes by uid.
     const name = users.getUserName(pl.io, alloc, id) catch "";
     try pl.record(.user, try std.fmt.allocPrint(alloc, "{s} (uid {s})", .{ name, id }));
     const locations = [_][]const u8{
-        users.auth_root,
         player.player_root,
         users.users_root,
         storage.data_root,
@@ -247,7 +259,7 @@ fn retireUser(pl: *Plan, id: []const u8) !void {
     };
     for (locations) |root| {
         const path = try std.fs.path.join(alloc, &.{ root, id });
-        if (pl.apply) store.removeTree(pl.io, alloc, path) catch {};
+        if (pl.apply) try store.removeTree(pl.io, alloc, path);
     }
 }
 
@@ -262,7 +274,7 @@ fn retireDMs(pl: *Plan, removed: *const UidSet, gone: *UidSet) !void {
         if (!removed.has(pair.a) and !removed.has(pair.b)) continue;
         try pl.record(.dm, e.name);
         try gone.add(alloc, try alloc.dupe(u8, e.name));
-        if (pl.apply) store.removeTree(pl.io, alloc, try std.fs.path.join(alloc, &.{ chat_store.chat_root, e.name })) catch {};
+        if (pl.apply) try store.removeTree(pl.io, alloc, try std.fs.path.join(alloc, &.{ chat_store.chat_root, e.name }));
     }
 }
 
@@ -310,7 +322,7 @@ fn pruneChannels(pl: *Plan, removed: *const UidSet) !void {
         if (dropped == 0) continue;
         const chan = e.name[0 .. e.name.len - ".channel".len];
         try pl.record(.channel_member, try std.fmt.allocPrint(alloc, "{s} ({d} dropped)", .{ chan, dropped }));
-        if (pl.apply) store.replace(pl.io, alloc, path, kept.items, .{}) catch {};
+        if (pl.apply) try store.replace(pl.io, alloc, path, kept.items, .{});
     }
 }
 
@@ -591,6 +603,63 @@ test "an empty or undated topic is kept (it may be fresh); only a datably-old to
     try testing.expectEqual(@as(usize, 1), dry.countOf(.topic));
     try testing.expectEqual(@as(usize, 0), dry.members_removed);
     try testing.expectEqualStrings("1_2/stale", dry.items.items[0].name);
+}
+
+/// An Io whose file removals are refused under one path (all of them when
+/// it is ""), as a store that will not delete (metal-vmm QUEUE 129).
+var refuse_under: []const u8 = "";
+fn refusingRemovals(io: Io, vt: *Io.VTable) Io {
+    const refused = struct {
+        fn deleteFile(userdata: ?*anyopaque, dir: Io.Dir, sub_path: []const u8) Io.Dir.DeleteFileError!void {
+            if (std.mem.indexOf(u8, sub_path, refuse_under) != null) return error.AccessDenied;
+            return real.?.dirDeleteFile(userdata, dir, sub_path);
+        }
+        var real: ?*const Io.VTable = null;
+    };
+    refused.real = io.vtable;
+    vt.* = io.vtable.*;
+    vt.dirDeleteFile = refused.deleteFile;
+    return .{ .userdata = io.userdata, .vtable = vt };
+}
+
+test "fs: a confirm whose removals fail is an error, not a report of what went (metal-vmm QUEUE 129)" {
+    // Every removal was `catch {}`: a confirm on a store that refused them
+    // reported each user, DM and topic as removed, and the users went on
+    // logging in.
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var tmp = testing.tmpDir(.{});
+    defer tmp.cleanup();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+
+    const saved = Saved.take();
+    defer saved.restore();
+    const base = try std.fs.path.join(a, &.{ ".zig-cache", "tmp", &tmp.sub_path });
+    try roots.point(a, .{
+        .data_dir = try std.fs.path.join(a, &.{ base, "data" }),
+        .auth_dir = try std.fs.path.join(a, &.{ base, "auth" }),
+    });
+    try stage(io, a);
+    const p = Params{ .days = 30, .keep = &.{ "Steve", "apoorva" }, .now = now };
+
+    var vt: Io.VTable = undefined;
+    refuse_under = "";
+    try testing.expect(std.meta.isError(plan(refusingRemovals(io, &vt), a, p, true)));
+    try testing.expect(try store.has(io, a, try std.fs.path.join(a, &.{ users.auth_root, "9", "name" })));
+
+    // **AUTHORITY GOES LAST**: a removal refused under the user's game data
+    // leaves the account, so it is still listed, and the next confirm
+    // finishes the job.
+    refuse_under = try std.fs.path.join(a, &.{ storage.data_root, "9" });
+    try testing.expect(std.meta.isError(plan(refusingRemovals(io, &vt), a, p, true)));
+    try testing.expect(try store.has(io, a, try std.fs.path.join(a, &.{ users.auth_root, "9", "name" })));
+    _ = try plan(io, a, p, true);
+    try testing.expect(!try store.has(io, a, try std.fs.path.join(a, &.{ users.auth_root, "9" })));
+    try testing.expect(!try store.has(io, a, try std.fs.path.join(a, &.{ storage.data_root, "9" })));
+    try testing.expect(!try store.has(io, a, try chat_store.dmConvDir(a, "1_9")));
 }
 
 test "fs: a member whose name cannot be read is not retired as nobody (metal-vmm QUEUE 105)" {

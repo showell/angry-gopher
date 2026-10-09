@@ -118,11 +118,11 @@ fn setName(io: Io, alloc: Alloc, id: []const u8, name: []const u8) !void {
 
 /// deleteRecord removes a player's row (name + last-seen). Their game data is
 /// deleted separately, by storage.deleteUserData. Refuses an unsafe id so it can
-/// never target a root; best-effort.
-pub fn deleteRecord(io: Io, alloc: Alloc, id: []const u8) void {
+/// never target a root. A removal that failed is the caller's error, not
+/// done (metal-vmm QUEUE 129).
+pub fn deleteRecord(io: Io, alloc: Alloc, id: []const u8) !void {
     if (!isSafeID(id)) return;
-    const dir = std.fs.path.join(alloc, &.{ player_root, id }) catch return;
-    store.removeTree(io, alloc, dir) catch {};
+    try store.removeTree(io, alloc, try std.fs.path.join(alloc, &.{ player_root, id }));
 }
 
 /// nameOf answers a player's display name, "" when there is none.

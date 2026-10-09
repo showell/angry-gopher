@@ -51,12 +51,15 @@ pub fn userDataDir(alloc: Alloc, user_id: []const u8) ![]u8 {
 }
 
 /// deleteUserData removes a player's entire game-data subtree.
-/// Refuses an empty id. Absent is OK.
+/// Refuses an empty id. Absent is OK; a removal that failed is an error, and
+/// the caller's to answer (metal-vmm QUEUE 129: both callers said "deleted").
 pub fn deleteUserData(io: Io, alloc: Alloc, user_id: []const u8) !void {
     if (std.mem.trim(u8, user_id, " \t\r\n").len == 0) return error.EmptyUserID;
     const root = try userRoot(alloc, user_id);
-    store.removeTree(io, alloc, root) catch {};
-    game_limits.forget(io, user_id); // what they held is gone
+    // What they held is forgotten whatever the removal did: the next write
+    // measures the folder afresh.
+    defer game_limits.forget(io, user_id);
+    try store.removeTree(io, alloc, root);
 }
 
 fn puzzleRoot(alloc: Alloc, user_id: []const u8) ![]u8 {

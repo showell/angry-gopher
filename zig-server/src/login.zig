@@ -247,8 +247,12 @@ pub fn handleLogout(req: *Request, io: Io, alloc: Alloc) !void {
         if (std.mem.eql(u8, release, "yes")) if (target) |t| {
             // Release: delete game data and the identity record (frees the name;
             // no id is ever reissued, so no name-backdoor remains).
-            storage.deleteUserData(io, alloc, t) catch {};
-            if (user.id.len != 0) users.deleteUserRecord(io, alloc, t) else player.deleteRecord(io, alloc, t);
+            // **NOT "DONE" UNLESS DONE** (metal-vmm QUEUE 129): the data
+            // first, and a failure there keeps the account and its name, to be
+            // released again; any failure is the router's 500, never "logged
+            // out".
+            try storage.deleteUserData(io, alloc, t);
+            if (user.id.len != 0) try users.deleteUserRecord(io, alloc, t) else try player.deleteRecord(io, alloc, t);
         };
         return renderLogoutComplete(req, alloc);
     }
