@@ -1174,12 +1174,17 @@ test "fs: a doc that cannot be looked at is a server error, never a 404 (metal-v
 /// refused, while reads and writes go on (metal-vmm QUEUE 129).
 /// Refused only under paths holding this, when it is set (QUEUE 134(e)).
 var refuse_under: []const u8 = "";
+/// Or, when set, a file of this name wherever it is, by a full path or by
+/// the name alone as std's deleteTree asks (QUEUE 138(f)).
+var refuse_named: []const u8 = "";
 fn removalsFail(io: Io, vt: *Io.VTable) Io {
     const refused = struct {
         // Not std's failingDirDeleteFile, which answers FileNotFound: that
         // is "already gone", which a revoke rightly takes as done.
         fn deleteFile(userdata: ?*anyopaque, dir: Io.Dir, sub_path: []const u8) Io.Dir.DeleteFileError!void {
-            if (std.mem.indexOf(u8, sub_path, refuse_under) == null) return real.?.dirDeleteFile(userdata, dir, sub_path);
+            const named = refuse_named.len > 0 and std.mem.eql(u8, std.fs.path.basename(sub_path), refuse_named);
+            const under = refuse_named.len == 0 and std.mem.indexOf(u8, sub_path, refuse_under) != null;
+            if (!named and !under) return real.?.dirDeleteFile(userdata, dir, sub_path);
             return error.AccessDenied;
         }
         var real: ?*const Io.VTable = null;
@@ -1313,6 +1318,60 @@ test "route: a release whose last removal fails leaves an account that can relea
     try testing.expect(std.mem.indexOf(u8, try postForm(a, io, "/logout", member, "release=yes"), "500") == null);
     try testing.expect(!try users.principalExists(io, a, "2"));
     try testing.expect(!try UidSite.disk.has(io, a, private));
+}
+
+test "route: a release whose removal inside the account fails keeps the password, whatever order the folder is walked in (metal-vmm QUEUE 138(f))" {
+    // The account's folder (auth_root/<id>) went by std's deleteTree, in the
+    // order the folder was read: the password could go before a file whose
+    // removal then failed, and the account was gone with its leftovers kept.
+    // Each of the account's other files is refused in turn: the password
+    // goes last, so it is there every time. (QUEUE 134(e)'s test refused all
+    // of users_root, which depended on how std's deleteTree walks.)
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var site = try UidSite.init(a, io);
+    defer site.deinit();
+    const prev = mem_meter.replace(std.heap.page_allocator); // presence outlives the test
+    defer _ = mem_meter.replace(prev);
+
+    const account = try std.fs.path.join(a, &.{ users.auth_root, "2" });
+    // Thirty files besides it: whatever order a folder is read in, the
+    // password is last of them one time in thirty-one, so the walk that
+    // removed it before a refused file is seen.
+    const others = [_][]const u8{ "name", "api-key", "f1", "f2", "f3", "f4", "f5", "f6", "f7", "f8", "f9", "f10", "f11", "f12", "f13", "f14", "f15", "f16", "f17", "f18", "f19", "f20", "f21", "f22", "f23", "f24", "f25", "f26", "f27", "f28" };
+    for (others) |refused| {
+        try users.setUserPassword(io, a, "2", "hunter2");
+        for (others) |f| try UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ account, f }), "x", .{});
+        const now: i64 = @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
+        const member = try std.fmt.allocPrint(a, "gopher_auth={s}", .{try users.signSession(a, UidSite.secret, "2", now)});
+
+        var vt: Io.VTable = undefined;
+        refuse_named = refused;
+        defer refuse_named = "";
+        const failing = removalsFail(io, &vt);
+        const raw = try std.fmt.allocPrint(a, "POST /logout HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: 11\r\n\r\nrelease=yes", .{member});
+        var reader: std.Io.Reader = .fixed(raw);
+        var out: std.Io.Writer.Allocating = .init(a);
+        var server = std.http.Server.init(&reader, &out.writer);
+        var req = try server.receiveHead();
+        req.head.keep_alive = false;
+        var hub = Hub.init(failing, a);
+        var b = Bus.of(&hub);
+        _ = route(&req, failing, a, &b) catch {};
+        try out.writer.flush();
+        try testing.expect(std.mem.startsWith(u8, status(out.written()), "500"));
+        // Still an account that logs in, to release again.
+        try testing.expect(users.checkUserPassword(io, a, "2", "hunter2"));
+        // And again, the disk willing: released, nothing left.
+        refuse_named = "";
+        try testing.expect(std.mem.indexOf(u8, try postForm(a, io, "/logout", member, "release=yes"), "500") == null);
+        try testing.expect(!try users.principalExists(io, a, "2"));
+        try testing.expect(!try UidSite.disk.has(io, a, account));
+    }
 }
 
 test "route: an error after a request's body was read is answered 500 too, never with silence (metal-vmm QUEUE 127(b))" {

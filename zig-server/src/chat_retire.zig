@@ -186,7 +186,8 @@ pub fn plan(io: Io, alloc: Alloc, p: Params, apply: bool) !Plan {
     // the next confirm finishes the job; refused here, the account stays,
     // still able to log in, and the confirm is an error, never "removed".
     if (pl.apply) for (removed.ids.items) |id| {
-        try store.removeTree(io, alloc, try std.fs.path.join(alloc, &.{ users.auth_root, id }));
+        // Its password last within it (`users.removeAccount`, QUEUE 138(f)).
+        try users.removeAccount(io, alloc, id);
     };
 
     return pl;

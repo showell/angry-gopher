@@ -598,7 +598,26 @@ pub fn findMemberByName(io: Io, alloc: Alloc, name: []const u8) !?[]const u8 {
 pub fn deleteUserRecord(io: Io, alloc: Alloc, id: []const u8) !void {
     if (std.mem.trim(u8, id, " \t\r\n").len == 0) return;
     try store.removeTree(io, alloc, try std.fs.path.join(alloc, &.{ users_root, id }));
-    try store.removeTree(io, alloc, try std.fs.path.join(alloc, &.{ auth_root, id }));
+    try removeAccount(io, alloc, id);
+}
+
+/// removeAccount removes a user's account dir ({auth_root}/{id}), **ITS
+/// PASSWORD LAST** (metal-vmm QUEUE 138(f)): std's deleteTree removes a
+/// folder's files in the order the disk lists them, so a refused removal
+/// after the password's left an account nobody could log in to release
+/// again, its leftovers kept. Here every other file goes first, then the
+/// password, then the empty folder: a failure before the password leaves
+/// an account that still logs in, whatever order the disk keeps.
+pub fn removeAccount(io: Io, alloc: Alloc, id: []const u8) !void {
+    if (std.mem.trim(u8, id, " \t\r\n").len == 0) return;
+    const dir = try std.fs.path.join(alloc, &.{ auth_root, id });
+    for (try store.list(io, alloc, dir)) |entry| {
+        if (std.mem.eql(u8, entry.name, "password")) continue;
+        const path = try std.fs.path.join(alloc, &.{ dir, entry.name });
+        if (entry.kind == .directory) try store.removeTree(io, alloc, path) else try store.remove(io, alloc, path);
+    }
+    try store.remove(io, alloc, try std.fs.path.join(alloc, &.{ dir, "password" }));
+    try store.removeTree(io, alloc, dir);
 }
 
 /// signSessionNow signs a live member session cookie value for `id` (loads the
