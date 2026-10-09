@@ -40,10 +40,12 @@ WHAT IT LETS PASS:
   the store's writes            a write whose failure is swallowed is another
                                 question: this lint is about absence.
 
-A WRAPPER'S OWN ERRORS: an arm that names an error a wrapper has of its own
-(`error.NoSuchMessage => return badRequest(...)`) has looked at it; only a
-wrapper's catch-all is held to absence. A failure answered as a server error
-(`.internal_server_error`) is told, not read as absence, for any call.
+A WRAPPER'S OWN ERRORS: an arm that names an error a wrapper makes itself
+(`error.NoSuchMessage => return badRequest(...)`: one it returns or declares
+by name, or one a reader it calls does) has looked at it; a disk's failure
+is held to absence however it is reached. A handler that *is* a server
+error's answer (`return` it, or a block every way out of which returns it)
+tells the failure, and does not read it as absence (metal-vmm QUEUE 120).
 
 WHAT IT CANNOT SEE: a method reached through a value (`x.f()`): only a
 file's top-level functions are followed, by their bare name in their own
@@ -170,10 +172,39 @@ def arms(body: str):
 ANSWERED = re.compile(r"\.(?:internal_server_error|service_unavailable)\b|\.status\s*=\s*5\d\d\b")
 
 
+def statement(text: str) -> str:
+    """`text` up to the `;` that ends its first statement, at its own depth."""
+    depth = 0
+    for at, ch in enumerate(text):
+        if ch in "([{":
+            depth += 1
+        elif ch in ")]}":
+            depth -= 1
+        elif ch == ";" and depth == 0:
+            return text[:at]
+    return text
+
+
 def answered(does: str) -> bool:
-    """Whether a handler answers the request as a server error: the client
-    is told it failed, which is no file that is not there."""
-    return bool(ANSWERED.search(does))
+    """Whether a handler *is* the request answered as a server error: the
+    client is told it failed, which is no file that is not there. Either
+    `return <the 5xx answer>`, or a block every way out of which is one: no
+    `break` or `continue`, every `return` a 5xx answer, and it ends in one
+    (metal-vmm QUEUE 120: a 500 on one branch passed the whole handler)."""
+    d = does.strip()
+    if d.startswith("|"):
+        d = d[d.find("|", 1) + 1:].strip()
+    m = re.match(r"(?:[A-Za-z_]\w*\s*:\s*)?\{", d)
+    if m:
+        body = braced(d[m.end() - 1:])
+        if re.search(r"\b(?:break|continue)\b", body):
+            return False
+        returns = [r.start() for r in re.finditer(r"\breturn\b", body)]
+        if not returns or not all(ANSWERED.search(statement(body[at:])) for at in returns):
+            return False
+        last = returns[-1]
+        return body[last + len(statement(body[last:])):].strip().lstrip(";").strip() == ""
+    return d.startswith("return") and bool(ANSWERED.search(statement(d)))
 
 
 def fails_still(does: str, names) -> bool:
@@ -189,17 +220,18 @@ def fails_still(does: str, names) -> bool:
             does.startswith("unreachable") or does.startswith("@panic"))
 
 
-def only_absence(pattern: str, wrapper: bool = False) -> bool:
-    """Whether a switch arm's pattern names absence and nothing else. Of a
-    wrapper (`readers`), any error it names: a wrapper has errors of its own
-    (reactions' `NoSuchMessage`), and an arm that names one has looked at
-    it. Only a catch-all (`else`) is held to absence there."""
+def only_absence(pattern: str, own=frozenset()) -> bool:
+    """Whether a switch arm's pattern names absence and nothing else, or, of
+    a wrapper, errors it makes itself (`own`, from `readers`): reactions'
+    `NoSuchMessage` is no disk's, and an arm that names one has looked at
+    it. A failure of the disk's is held to absence however it is reached
+    (metal-vmm QUEUE 120: any `error.X` passed as a wrapper's own)."""
     items = [i.strip() for i in pattern.split(",") if i.strip()]
-    one = r"error\.\w+" if wrapper else r"error\.(?:" + "|".join(ABSENT) + r")"
-    return bool(items) and all(re.fullmatch(one, i) for i in items)
+    allowed = set(ABSENT) | set(own)
+    return bool(items) and all(re.fullmatch(r"error\.\w+", i) and i[len("error."):] in allowed for i in items)
 
 
-def handler_keeps(handler: str, name: str, wrapper: bool = False) -> bool:
+def handler_keeps(handler: str, name: str, own=frozenset()) -> bool:
     """Whether a handler of a named error keeps every failure but absence a
     failure (metal-vmm QUEUE 117): a switch on it whose every arm either
     passes the failure on or names absence alone; an `if (e == error.X)`
@@ -209,16 +241,16 @@ def handler_keeps(handler: str, name: str, wrapper: bool = False) -> bool:
     e = re.escape(name)
     m = re.match(r"switch\s*\(\s*" + e + r"\s*\)\s*", h)
     if m and h[m.end():].startswith("{"):
-        return all(fails_still(does, [name]) or only_absence(pattern, wrapper)
+        return all(fails_still(does, [name]) or only_absence(pattern, own)
                    for pattern, does in arms(braced(h[m.end():])))
     m = re.match(r"if\s*\(\s*" + e + r"\s*==\s*error\.(\w+)\s*\)", h)
     if m:
         otherwise = re.search(r"\belse\b(.*)$", h[m.end():], re.S)
-        return (m.group(1) in ABSENT or wrapper) and otherwise is not None and fails_still(otherwise.group(1), [name])
+        return (m.group(1) in ABSENT or m.group(1) in own) and otherwise is not None and fails_still(otherwise.group(1), [name])
     return passes_on(h, name) or answered(h)
 
 
-def dropped_by_else(rest: str, wrapper: bool = False) -> bool:
+def dropped_by_else(rest: str, own=frozenset()) -> bool:
     """After the call in `if (call) |v| body else |e| ...`: whether its error
     is dropped there, by `else |_|`, or by a named `else |e|` whose handler
     makes a failure but absence a value (metal-vmm QUEUE 117). `rest`
@@ -251,7 +283,7 @@ def dropped_by_else(rest: str, wrapper: bool = False) -> bool:
     m = re.match(r"\|\s*(\w+)\s*\|", rest)
     if not m:
         return False
-    return m.group(1) == "_" or not handler_keeps(handler_of(rest[m.end():]), m.group(1), wrapper)
+    return m.group(1) == "_" or not handler_keeps(handler_of(rest[m.end():]), m.group(1), own)
 
 
 def imports(lines):
@@ -281,11 +313,16 @@ def functions(lines):
     return out
 
 
+MAKES = re.compile(r"(?:\breturn|=>|\borelse|\bcatch)\s+error\.(\w+)|\berror\s*\{([^}]*)\}")
+
+
 def readers(files):
     """**THE FUNCTIONS THAT READ THE STORE, DIRECTLY OR THROUGH OTHERS**
-    (metal-vmm QUEUE 114), as {(file, name)}, from `files` ({name: lines}):
-    computed on every run, so a new wrapper is followed without anyone
-    listing it. users.isMember was one the lint could not see."""
+    (metal-vmm QUEUE 114), as {(file, name): the errors it makes itself}, from
+    `files` ({name: lines}): computed on every run, so a new wrapper is
+    followed without anyone listing it. users.isMember was one the lint
+    could not see. The errors a function makes are those it returns or
+    declares by name, and those of the readers it calls (QUEUE 120)."""
     bodies = {(f, fn): body for f, lines in files.items() if f != STORE for fn, body in functions(lines).items()}
     found = set()
     for (f, fn), body in bodies.items():
@@ -314,24 +351,42 @@ def readers(files):
             if key not in found and targets & found:
                 found.add(key)
                 grew = True
-    return found
+    own = {}
+    for key in found:
+        names = set()
+        for m in MAKES.finditer(bodies[key]):
+            if m.group(1):
+                names.add(m.group(1))
+            else:
+                names |= {n.strip() for n in m.group(2).split(",") if n.strip()}
+        own[key] = names
+    grew = True
+    while grew:
+        grew = False
+        for key in found:
+            more = set().union(*(own[t] for t in edges[key] if t in own)) - own[key]
+            if more:
+                own[key] |= more
+                grew = True
+    return {key: frozenset(names) for key, names in own.items()}
 
 
 def calls_of(found, f, lines):
-    """(pattern, label) for a call, from file `f`, of each function in
-    `found`: by its bare name in its own file, by `alias.name` elsewhere."""
+    """(pattern, label, the errors it makes) for a call, from file `f`, of
+    each function in `found` (`readers`): by its bare name in its own file,
+    by `alias.name` elsewhere."""
     mods = imports(lines)
     out = []
-    for rf, rfn in sorted(found):
+    for (rf, rfn), own in sorted(found.items()):
         if rf == f:
-            out.append((r"(?<![\w.])(?<!fn )" + re.escape(rfn) + r"\s*\(", rfn))
+            out.append((r"(?<![\w.])(?<!fn )" + re.escape(rfn) + r"\s*\(", rfn, own))
         for a, target in mods.items():
             if target == rf:
-                out.append((r"(?<![\w.])" + re.escape(a) + r"\." + re.escape(rfn) + r"\s*\(", f"{a}.{rfn}"))
+                out.append((r"(?<![\w.])" + re.escape(a) + r"\." + re.escape(rfn) + r"\s*\(", f"{a}.{rfn}", own))
     return out
 
 
-def findings(name: str, lines, found=frozenset()):
+def findings(name: str, lines, found=None):
     """(line, text) for each read whose failure is caught into a value: a
     read of the store, or a call of a function in `found` (`readers`)."""
     tests = test_lines(lines)
@@ -339,7 +394,7 @@ def findings(name: str, lines, found=frozenset()):
     code = [blank(l) for l in lines]
     # Read from the lines themselves: blanking empties "store.zig" too.
     aliases = {m.group(1) for l in lines for m in ALIAS.finditer(l.split("//")[0])}
-    wrappers = calls_of(found, name, lines)
+    wrappers = calls_of(found or {}, name, lines)
     if not aliases and not wrappers:
         return []
     text = "".join(c if c.endswith("\n") else c + "\n" for c in code)
@@ -357,16 +412,16 @@ def findings(name: str, lines, found=frozenset()):
                 hi = mid - 1
         return lo + 1
 
-    patterns = [(r"\b(?:" + "|".join(map(re.escape, sorted(aliases))) + r")\.(?:" + "|".join(READS) + r")\s*\(", None)] if aliases else []
+    patterns = [(r"\b(?:" + "|".join(map(re.escape, sorted(aliases))) + r")\.(?:" + "|".join(READS) + r")\s*\(", None, frozenset())] if aliases else []
     patterns += wrappers
     sites = []
-    for pattern, label in patterns:
+    for pattern, label, own in patterns:
         for m in re.finditer(pattern, text):
             what = label or m.group(0).rstrip("( \t\n")
-            sites.append((m, what + ("(...), which reads the store," if label else "(...)"), label is not None))
+            sites.append((m, what + ("(...), which reads the store," if label else "(...)"), own))
     sites.sort(key=lambda s: s[0].start())
     out = []
-    for m, what, wrapper in sites:
+    for m, what, own in sites:
         n = line_of(m.start())
         if n in tests:
             continue
@@ -383,7 +438,7 @@ def findings(name: str, lines, found=frozenset()):
         if re.search(r"\bif\s*\(\s*$", text[:m.start()]) and rest.startswith(")"):
             # `if (call) |v| ... else |e| ...`; an `if (call() catch v)` is a
             # catch like any other, below.
-            if dropped_by_else(rest, wrapper):
+            if dropped_by_else(rest, own):
                 if not defended(lines, n):
                     out.append((n, f"if ({what}) ... else |...| that makes a failure a value"))
             continue
@@ -392,7 +447,7 @@ def findings(name: str, lines, found=frozenset()):
         handler = rest[len("catch"):].lstrip()
         if handler.startswith("|"):
             name = handler[1:handler.find("|", 1)].strip()
-            if name != "_" and handler_keeps(handler_of(handler[handler.find("|", 1) + 1:]), name, wrapper):
+            if name != "_" and handler_keeps(handler_of(handler[handler.find("|", 1) + 1:]), name, own):
                 continue  # named, and passed on: absence alone is the handler's to make a value
         elif handler.startswith("unreachable") or handler.startswith("@panic") or answered(handler_of(handler)):
             continue

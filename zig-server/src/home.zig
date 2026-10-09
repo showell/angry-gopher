@@ -55,6 +55,7 @@ pub fn handleHome(req: *Request, io: Io, alloc: Alloc, name: []const u8, is_admi
     // refused disk read once answered 200 with "Home unavailable", which a
     // sweep could not tell from a page served).
     var status: std.http.Status = .ok;
+    // absent-ok: no failure is a value here: it sets `status` to 500, and the page names it.
     if (renderHomeBody(io, alloc)) |body| {
         try b.appendSlice(alloc, body);
     } else |err| {
