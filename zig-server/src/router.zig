@@ -1169,6 +1169,59 @@ test "fs: a doc that cannot be looked at is a server error, never a 404 (metal-v
     try testing.expect(std.mem.startsWith(u8, status(resp), "5"));
 }
 
+/// The host's Io, but every file removal fails: a store whose delete is
+/// refused, while reads and writes go on (metal-vmm QUEUE 129).
+fn removalsFail(io: Io, vt: *Io.VTable) Io {
+    const refused = struct {
+        // Not std's failingDirDeleteFile, which answers FileNotFound: that
+        // is "already gone", which a revoke rightly takes as done.
+        fn deleteFile(_: ?*anyopaque, _: Io.Dir, _: []const u8) Io.Dir.DeleteFileError!void {
+            return error.AccessDenied;
+        }
+    };
+    vt.* = io.vtable.*;
+    vt.dirDeleteFile = refused.deleteFile;
+    return .{ .userdata = io.userdata, .vtable = vt };
+}
+
+test "route: a key revoke whose removal fails is not answered as revoked, and the key is still there to say so (metal-vmm QUEUE 129)" {
+    // `clearUserAPIKey` was `store.remove(...) catch {}`, and /settings/apikey
+    // then redirected to `?keyrevoked=1`: the member told their key was gone
+    // while it went on authenticating.
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var site = try UidSite.init(a, io);
+    defer site.deinit();
+    const prev = mem_meter.replace(std.heap.page_allocator); // presence outlives the test
+    defer _ = mem_meter.replace(prev);
+
+    try users.setUserPassword(io, a, "2", "hunter2");
+    const now: i64 = @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
+    const member = try std.fmt.allocPrint(a, "gopher_auth={s}", .{try users.signSession(a, UidSite.secret, "2", now)});
+    const key = try users.setUserAPIKey(io, a, "2");
+
+    var vt: Io.VTable = undefined;
+    const failing = removalsFail(io, &vt);
+    const raw = try std.fmt.allocPrint(a, "POST /settings/apikey HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: 8\r\n\r\nrevoke=1", .{member});
+    var reader: std.Io.Reader = .fixed(raw);
+    var out: std.Io.Writer.Allocating = .init(a);
+    var server = std.http.Server.init(&reader, &out.writer);
+    var req = try server.receiveHead();
+    req.head.keep_alive = false;
+    var hub = Hub.init(failing, a);
+    var b = Bus.of(&hub);
+    _ = route(&req, failing, a, &b) catch {};
+    try out.writer.flush();
+    try testing.expect(std.mem.indexOf(u8, out.written(), "keyrevoked") == null);
+    try testing.expect(std.mem.startsWith(u8, status(out.written()), "500"));
+    // The key is there, and still the key.
+    try testing.expectEqualStrings(key, (try users.getUserAPIKey(io, a, "2")).?);
+}
+
 test "route: an error after a request's body was read is answered 500 too, never with silence (metal-vmm QUEUE 127(b))" {
     // Reading the body moves the reader past `received_head`, so that state
     // cannot say whether a head went out: a move whose append fails, after

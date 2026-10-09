@@ -324,10 +324,14 @@ pub fn setUserAPIKey(io: Io, alloc: Alloc, id: []const u8) ![]const u8 {
 }
 
 /// clearUserAPIKey revokes the principal's key (deletes the file; absent is OK).
-/// Best-effort.
-pub fn clearUserAPIKey(io: Io, alloc: Alloc, id: []const u8) void {
-    const path = std.fs.path.join(alloc, &.{ auth_root, id, "api-key" }) catch return;
-    store.remove(io, alloc, path) catch {};
+///
+/// **A REVOKE THAT FAILED IS NOT DONE** (metal-vmm QUEUE 129): it was
+/// best-effort, `catch {}`, and both callers then said "revoked" while the
+/// key went on authenticating. The error goes to the caller, which answers
+/// it as the failure it is.
+pub fn clearUserAPIKey(io: Io, alloc: Alloc, id: []const u8) !void {
+    const path = try std.fs.path.join(alloc, &.{ auth_root, id, "api-key" });
+    try store.remove(io, alloc, path);
 }
 
 /// isMember reports whether `id` is a password member.
@@ -788,8 +792,9 @@ test "fs: api key issue, read back, clear; legacy bare-hash is held but not disp
     try testing.expectEqualStrings(key, (try getUserAPIKey(io, a, id)).?); // round-trips for display
     try testing.expect(apiKeyMatches(key, key)); // and authenticates against itself
 
-    clearUserAPIKey(io, a, id);
+    try clearUserAPIKey(io, a, id);
     try testing.expect(!userHasAPIKey(io, a, id));
+    try clearUserAPIKey(io, a, id); // absent is revoked already
     try testing.expect((try getUserAPIKey(io, a, id)) == null);
 
     // a legacy bare-hash key (no '-') is honored for auth but never echoed back
