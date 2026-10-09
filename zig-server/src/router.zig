@@ -1222,6 +1222,47 @@ test "route: a key revoke whose removal fails is not answered as revoked, and th
     try testing.expectEqualStrings(key, (try users.getUserAPIKey(io, a, "2")).?);
 }
 
+test "route: a release whose removals fail is not answered as done, and the account is still there (metal-vmm QUEUE 129)" {
+    // Logout's release ran `deleteUserData(...) catch {}`, then deleted the
+    // record (each removal itself `catch {}`), then said "logged out": a
+    // refused removal left the account logging in, or its data kept, while
+    // its member was told both were gone.
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var site = try UidSite.init(a, io);
+    defer site.deinit();
+    const prev = mem_meter.replace(std.heap.page_allocator); // presence outlives the test
+    defer _ = mem_meter.replace(prev);
+
+    try users.setUserPassword(io, a, "2", "hunter2");
+    const now: i64 = @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
+    const member = try std.fmt.allocPrint(a, "gopher_auth={s}", .{try users.signSession(a, UidSite.secret, "2", now)});
+    const data = try std.fs.path.join(a, &.{ UidSite.storage.data_root, "2", "next-session-id.txt" });
+    try UidSite.disk.write(io, a, data, "2\n", .{});
+
+    var vt: Io.VTable = undefined;
+    const failing = removalsFail(io, &vt);
+    const raw = try std.fmt.allocPrint(a, "POST /logout HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: 11\r\n\r\nrelease=yes", .{member});
+    var reader: std.Io.Reader = .fixed(raw);
+    var out: std.Io.Writer.Allocating = .init(a);
+    var server = std.http.Server.init(&reader, &out.writer);
+    var req = try server.receiveHead();
+    req.head.keep_alive = false;
+    var hub = Hub.init(failing, a);
+    var b = Bus.of(&hub);
+    _ = route(&req, failing, a, &b) catch {};
+    try out.writer.flush();
+    try testing.expect(std.mem.startsWith(u8, status(out.written()), "500"));
+    // The account is there, and still logs in.
+    try testing.expect(try users.principalExists(io, a, "2"));
+    try testing.expect(users.checkUserPassword(io, a, "2", "hunter2"));
+    _ = try UidSite.disk.stat(io, a, data); // and its data, which the release could not remove
+}
+
 test "route: an error after a request's body was read is answered 500 too, never with silence (metal-vmm QUEUE 127(b))" {
     // Reading the body moves the reader past `received_head`, so that state
     // cannot say whether a head went out: a move whose append fails, after
