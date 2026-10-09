@@ -121,6 +121,21 @@ fn localTarget(target: []const u8) []const u8 {
 /// the site: every surface appears exactly once, and the comment on each arm
 /// says who may reach it.
 pub fn route(req: *std.http.Server.Request, io: Io, alloc: std.mem.Allocator, bus: *Bus) !void {
+    return routed(req, io, alloc, bus) catch |e| {
+        // **A FAILURE IS A 500, NEVER SILENCE** (metal-vmm QUEUE 123, Steve:
+        // louder is better): an error that escapes a handler before its
+        // head is sent is answered here, for both hosts, and still goes on
+        // to the host to log. Once the head is out, the answer is the
+        // handler's, cut short, and only the connection's close can say so.
+        if (req.server.reader.state == .received_head) {
+            const msg = std.fmt.allocPrint(alloc, "The server failed: {s}.\n", .{@errorName(e)}) catch "The server failed.\n";
+            req.respond(msg, .{ .status = .internal_server_error, .keep_alive = false }) catch {};
+        }
+        return e;
+    };
+}
+
+fn routed(req: *std.http.Server.Request, io: Io, alloc: std.mem.Allocator, bus: *Bus) !void {
     // **AN UNSIGNED gopher_uid IS RE-IDENTIFIED ONCE** (uid_cookie.zig): its
     // first GET inside the window comes back to the same page with the
     // signed cookie set, and the unsigned spelling is refused from then on.
