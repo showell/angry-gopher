@@ -1060,7 +1060,10 @@ test "fs: a doc that cannot be looked at is a server error, never a 404 (metal-v
     var site = try UidSite.init(a, io);
     defer site.deinit();
     const docs_store = @import("docs_store.zig");
-    const prev = mem_meter.replace(a); // the docs page allocates through it
+    // The docs page allocates through it, and presence keeps a map in it for
+    // the life of the process: an arena freed at the test's end would leave
+    // the next test that marks someone active a map in freed memory.
+    const prev = mem_meter.replace(std.heap.page_allocator);
     defer _ = mem_meter.replace(prev);
 
     try users.setUserPassword(io, a, "2", "hunter2");
@@ -1078,4 +1081,40 @@ test "fs: a doc that cannot be looked at is a server error, never a 404 (metal-v
     const resp = try UidSite.ask(a, io, "/chat/docs/lost.md", member);
     try testing.expect(std.mem.indexOf(u8, status(resp), "404") == null);
     try testing.expect(std.mem.startsWith(u8, status(resp), "5"));
+}
+
+test "fs: a handler's error is answered 500, never with silence (metal-vmm QUEUE 123)" {
+    // On metal, `GET /puzzles -> ReadFailed` reached the console and the
+    // client got nothing (the box's durable sweep, seed 173): an error that
+    // escapes a handler was dropped by the host. Here a doc that is a
+    // folder: it is there, and reading it fails.
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var site = try UidSite.init(a, io);
+    defer site.deinit();
+    const docs_store = @import("docs_store.zig");
+    const prev = mem_meter.replace(std.heap.page_allocator); // as above: presence outlives the test
+    defer _ = mem_meter.replace(prev);
+
+    try users.setUserPassword(io, a, "2", "hunter2");
+    const now: i64 = @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
+    const member = try std.fmt.allocPrint(a, "gopher_auth={s}", .{try users.signSession(a, UidSite.secret, "2", now)});
+    try std.Io.Dir.cwd().createDirPath(io, try docs_store.docPath(a, "2", "folder"));
+
+    const raw = try std.fmt.allocPrint(a, "GET /chat/docs/folder.md HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\n\r\n", .{member});
+    var reader: std.Io.Reader = .fixed(raw);
+    var out: std.Io.Writer.Allocating = .init(a);
+    var server = std.http.Server.init(&reader, &out.writer);
+    var req = try server.receiveHead();
+    req.head.keep_alive = false;
+    var hub = Hub.init(io, a);
+    var b = Bus.of(&hub);
+    // The error still goes to the host, to log; the client is told first.
+    try testing.expect(std.meta.isError(route(&req, io, a, &b)));
+    try out.writer.flush();
+    try testing.expect(std.mem.startsWith(u8, status(out.written()), "500"));
 }
