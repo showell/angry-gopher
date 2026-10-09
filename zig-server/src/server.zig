@@ -96,6 +96,16 @@ pub fn main(init: std.process.Init.Minimal) !void {
         std.debug.print("zig-server: GOPHER_GAME_FLOOR=off: game writes have no free-space floor\n", .{});
     } else router.game_limits.free_space = linuxFreeSpace;
 
+    // How long a quiet stream waits before a ping (metal-vmm QUEUE 137): for
+    // tests; unset is 25 s.
+    if (bus_mod.keepaliveSetting(env.get("GOPHER_KEEPALIVE_MS")) catch |e| {
+        std.debug.print("zig-server: GOPHER_KEEPALIVE_MS={s} is not a number of milliseconds above zero; not starting\n", .{env.get("GOPHER_KEEPALIVE_MS") orelse ""});
+        return e;
+    }) |ms| {
+        bus_mod.Subscriber.keepalive_ms = ms;
+        std.debug.print("zig-server: GOPHER_KEEPALIVE_MS={d}: a quiet stream pings after {d} ms\n", .{ ms, ms });
+    }
+
     const port = portFromEnv(env);
     const addr = bind.address(env.get("GOPHER_BIND"), port) catch |e| {
         std.debug.print("zig-server: GOPHER_BIND={s} is not an IP address; not starting\n", .{env.get("GOPHER_BIND") orelse ""});
