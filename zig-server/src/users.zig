@@ -588,12 +588,17 @@ pub fn findMemberByName(io: Io, alloc: Alloc, name: []const u8) !?[]const u8 {
 ///
 /// **A REMOVAL THAT FAILED IS NOT DONE** (metal-vmm QUEUE 129): it was
 /// best-effort, and a refused removal of auth_root left the released account
-/// logging in. The auth record goes first, so a failure after it has at
-/// least taken the account's authority; the error goes to the caller.
+/// logging in. The error goes to the caller.
+///
+/// **AUTHORITY GOES LAST** (metal-vmm QUEUE 134(e)), as the retire's does:
+/// the private state (users_root) first, then the account (auth_root). A
+/// failure before the account goes leaves one that still logs in, to be
+/// released again; the other order answered 500 for an account already
+/// gone, which nobody could log in to retry, its folder kept.
 pub fn deleteUserRecord(io: Io, alloc: Alloc, id: []const u8) !void {
     if (std.mem.trim(u8, id, " \t\r\n").len == 0) return;
-    try store.removeTree(io, alloc, try std.fs.path.join(alloc, &.{ auth_root, id }));
     try store.removeTree(io, alloc, try std.fs.path.join(alloc, &.{ users_root, id }));
+    try store.removeTree(io, alloc, try std.fs.path.join(alloc, &.{ auth_root, id }));
 }
 
 /// signSessionNow signs a live member session cookie value for `id` (loads the

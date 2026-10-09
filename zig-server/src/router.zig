@@ -134,7 +134,7 @@ pub fn route(req: *std.http.Server.Request, io: Io, alloc: std.mem.Allocator, bu
         // head is sent is answered here, for both hosts, and still goes on
         // to the host to log. Once the head is out, the answer is the
         // handler's, cut short, and only the connection's close can say so.
-        answerFailure(req, alloc, &sent, e);
+        answerFailure(req, &sent);
         return e;
     };
 }
@@ -199,11 +199,12 @@ const Sent = struct {
 
 /// The 500 for an error no byte of an answer went out before; nothing once
 /// one did. Not kept alive, so whatever of the request's body is unread
-/// stays unread.
-fn answerFailure(req: *std.http.Server.Request, alloc: std.mem.Allocator, sent: *const Sent, e: anyerror) void {
+/// stays unread. **ITS BODY NAMES NOTHING** (metal-vmm QUEUE 134(f)): an
+/// error's name says what of the server failed, which is the log's to know,
+/// not a client's; `route` returns the error for the host to log.
+fn answerFailure(req: *std.http.Server.Request, sent: *const Sent) void {
     if (sent.any) return;
-    const msg = std.fmt.allocPrint(alloc, "The server failed: {s}.\n", .{@errorName(e)}) catch "The server failed.\n";
-    req.respond(msg, .{ .status = .internal_server_error, .keep_alive = false }) catch {};
+    req.respond("The server failed.\n", .{ .status = .internal_server_error, .keep_alive = false }) catch {};
 }
 
 fn routed(req: *std.http.Server.Request, io: Io, alloc: std.mem.Allocator, bus: *Bus) !void {
@@ -1171,14 +1172,19 @@ test "fs: a doc that cannot be looked at is a server error, never a 404 (metal-v
 
 /// The host's Io, but every file removal fails: a store whose delete is
 /// refused, while reads and writes go on (metal-vmm QUEUE 129).
+/// Refused only under paths holding this, when it is set (QUEUE 134(e)).
+var refuse_under: []const u8 = "";
 fn removalsFail(io: Io, vt: *Io.VTable) Io {
     const refused = struct {
         // Not std's failingDirDeleteFile, which answers FileNotFound: that
         // is "already gone", which a revoke rightly takes as done.
-        fn deleteFile(_: ?*anyopaque, _: Io.Dir, _: []const u8) Io.Dir.DeleteFileError!void {
+        fn deleteFile(userdata: ?*anyopaque, dir: Io.Dir, sub_path: []const u8) Io.Dir.DeleteFileError!void {
+            if (std.mem.indexOf(u8, sub_path, refuse_under) == null) return real.?.dirDeleteFile(userdata, dir, sub_path);
             return error.AccessDenied;
         }
+        var real: ?*const Io.VTable = null;
     };
+    refused.real = io.vtable;
     vt.* = io.vtable.*;
     vt.dirDeleteFile = refused.deleteFile;
     return .{ .userdata = io.userdata, .vtable = vt };
@@ -1263,6 +1269,52 @@ test "route: a release whose removals fail is not answered as done, and the acco
     _ = try UidSite.disk.stat(io, a, data); // and its data, which the release could not remove
 }
 
+test "route: a release whose last removal fails leaves an account that can release again, never one gone with its leftovers kept (metal-vmm QUEUE 134(e))" {
+    // The account record went first (auth_root: its password), then its
+    // private state (users_root). A failure there answered 500 for an
+    // account already released: nobody could log in to try again, and the
+    // folder stayed. Authority goes last, as the retire's does.
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var site = try UidSite.init(a, io);
+    defer site.deinit();
+    const prev = mem_meter.replace(std.heap.page_allocator); // presence outlives the test
+    defer _ = mem_meter.replace(prev);
+
+    try users.setUserPassword(io, a, "2", "hunter2");
+    const now: i64 = @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
+    const member = try std.fmt.allocPrint(a, "gopher_auth={s}", .{try users.signSession(a, UidSite.secret, "2", now)});
+    const private = try std.fs.path.join(a, &.{ users.users_root, "2" });
+    try UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ private, "last-seen" }), "1\n", .{});
+
+    var vt: Io.VTable = undefined;
+    refuse_under = private;
+    defer refuse_under = "";
+    const failing = removalsFail(io, &vt);
+    const raw = try std.fmt.allocPrint(a, "POST /logout HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: 11\r\n\r\nrelease=yes", .{member});
+    var reader: std.Io.Reader = .fixed(raw);
+    var out: std.Io.Writer.Allocating = .init(a);
+    var server = std.http.Server.init(&reader, &out.writer);
+    var req = try server.receiveHead();
+    req.head.keep_alive = false;
+    var hub = Hub.init(failing, a);
+    var b = Bus.of(&hub);
+    _ = route(&req, failing, a, &b) catch {};
+    try out.writer.flush();
+    try testing.expect(std.mem.startsWith(u8, status(out.written()), "500"));
+    // Still an account that logs in, to release again.
+    try testing.expect(users.checkUserPassword(io, a, "2", "hunter2"));
+    // And again, the disk willing: released, nothing left.
+    refuse_under = "";
+    try testing.expect(std.mem.indexOf(u8, try postForm(a, io, "/logout", member, "release=yes"), "500") == null);
+    try testing.expect(!try users.principalExists(io, a, "2"));
+    try testing.expect(!try UidSite.disk.has(io, a, private));
+}
+
 test "route: an error after a request's body was read is answered 500 too, never with silence (metal-vmm QUEUE 127(b))" {
     // Reading the body moves the reader past `received_head`, so that state
     // cannot say whether a head went out: a move whose append fails, after
@@ -1322,7 +1374,7 @@ test "route: an error after the head went out is not answered again (metal-vmm Q
     sent.giveBack(&req);
     try testing.expectError(error.AfterTheHead, got);
     try testing.expect(sent.any);
-    answerFailure(&req, a, &sent, error.AfterTheHead);
+    answerFailure(&req, &sent);
     try out.writer.flush();
     try testing.expect(std.mem.startsWith(u8, out.written(), "HTTP/1.1 200"));
     try testing.expect(std.mem.indexOf(u8, out.written(), "500") == null);
@@ -1358,8 +1410,10 @@ test "fs: a handler's error is answered 500, never with silence (metal-vmm QUEUE
     req.head.keep_alive = false;
     var hub = Hub.init(io, a);
     var b = Bus.of(&hub);
-    // The error still goes to the host, to log; the client is told first.
+    // The error still goes to the host, to log; the client is told first,
+    // and told nothing of it (QUEUE 134(f)): its name is the log's.
     try testing.expect(std.meta.isError(route(&req, io, a, &b)));
     try out.writer.flush();
     try testing.expect(std.mem.startsWith(u8, status(out.written()), "500"));
+    try testing.expect(std.mem.endsWith(u8, out.written(), "\r\n\r\nThe server failed.\n"));
 }
