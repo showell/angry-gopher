@@ -385,8 +385,11 @@ fn sendMessage(req: *Request, io: Io, alloc: Alloc, bus: *Bus, topic: Topic, uid
     }
 
     const from_name = try users.getUserName(io, alloc, uid);
+    // The bookmark first (metal-vmm QUEUE 156(g)): one that fails is a 500
+    // with nothing stored, never a 500 for a message that was, which the
+    // client would send again.
+    if (conv.persistsCursor()) try chat_state.setUserLastSession(io, alloc, uid, conv.key, topic.sid);
     _ = try store.appendMessage(io, alloc, bus, conv.meta, conv.dir, conv.key, topic.sid, from_name, uid, md, cid);
-    if (conv.persistsCursor()) chat_state.setUserLastSession(io, alloc, uid, conv.key, topic.sid);
     return sendDone(req, alloc, is_async, conv.base, topic.sid);
 }
 
@@ -395,7 +398,7 @@ fn sendMessage(req: *Request, io: Io, alloc: Alloc, bus: *Bus, topic: Topic, uid
 /// state; conv-level auth already passed (any participant pins their own view).
 fn pinSession(req: *Request, io: Io, alloc: Alloc, uid: []const u8, conv_key: []const u8, sid: []const u8, pinned: bool) !void {
     if (req.head.method != .POST) return http.methodNotAllowed(req);
-    chat_state.setSessionPinned(io, alloc, uid, conv_key, sid, pinned);
+    try chat_state.setSessionPinned(io, alloc, uid, conv_key, sid, pinned);
     return req.respond("", .{ .status = .no_content });
 }
 
@@ -438,7 +441,7 @@ fn newTopic(req: *Request, io: Io, alloc: Alloc, bus: *Bus, conv: Conv, uid: []c
     _ = try store.appendMessage(io, alloc, bus, conv.meta, conv.dir, conv.key, topic, from_name, uid, "hi", "");
 
     if (conv.persistsCursor()) {
-        chat_state.setUserLastSession(io, alloc, uid, conv.key, topic);
+        try chat_state.setUserLastSession(io, alloc, uid, conv.key, topic);
         // Announce the new topic where the partner already watches (best-effort).
         if (try highestGeneralSession(io, alloc, conv.dir)) |gen| {
             if (!std.mem.eql(u8, gen, topic)) {

@@ -666,10 +666,10 @@ test "route: an unsigned gopher_uid never names a member, the agent, a stranger,
     // A member, with a game identity under their own number.
     try users.setUserName(io, a, "1", "Steve");
     try users.setUserPassword(io, a, "1", "hunter2");
-    player.mirror(io, a, "1", "Steve");
+    try player.mirror(io, a, "1", "Steve");
     // The agent.
     try users.setUserName(io, a, "3", "Claude");
-    player.mirror(io, a, "3", "Claude");
+    try player.mirror(io, a, "3", "Claude");
     for ([_][]const u8{ "gopher_uid=1", "gopher_uid=3", "gopher_uid=p99", "gopher_uid=../1" }) |c| {
         const r = try UidSite.ask(a, io, "/play", c);
         try testing.expectEqualStrings("200 OK", status(r));
@@ -1865,4 +1865,50 @@ test "route: sign-up refuses a name it would have to change, never registering a
     _ = try memberSession(a, io, "1", "Steve");
     const as_steve = try postForm(a, io, "/login/full", "x=y", "name=Steve%3C&password=pw&action=login");
     try testing.expect(std.mem.indexOf(u8, as_steve, "set-cookie: gopher_auth=") == null);
+}
+
+/// A POST whose handler fails: the answer it was given (route answers the
+/// failure, then hands the error on to the host, to log).
+fn postFailing(a: std.mem.Allocator, io: Io, target: []const u8, cookies: []const u8, body: []const u8) ![]const u8 {
+    const raw = try std.fmt.allocPrint(a, "POST {s} HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: {d}\r\n\r\n{s}", .{ target, cookies, body.len, body });
+    var reader: std.Io.Reader = .fixed(raw);
+    var out: std.Io.Writer.Allocating = .init(a);
+    var server = std.http.Server.init(&reader, &out.writer);
+    var req = try server.receiveHead();
+    req.head.keep_alive = false;
+    var hub = Hub.init(io, a);
+    var b = Bus.of(&hub);
+    try testing.expect(std.meta.isError(route(&req, io, a, &b)));
+    try out.writer.flush();
+    return out.written();
+}
+
+test "route: a pin, a bookmark or the login mirror that will not write is a 500, never a quiet success (156(g))" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var site = try UidSite.init(a, io);
+    defer site.deinit();
+    const prev = mem_meter.replace(std.heap.page_allocator);
+    defer _ = mem_meter.replace(prev);
+    const chat_store = @import("chat_store.zig");
+    const steve = try memberSession(a, io, "1", "Steve");
+    _ = try memberSession(a, io, "2", "Debbie");
+    try testing.expectEqualStrings("200 OK", status(try postAs(a, io, "/chat/c/1_2/new", steve, "topic=Plans")));
+    // The pins' folder is a file: the pin cannot be written.
+    try UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ chat_store.chat_root, "users", "1", "pinned-sessions" }), "", .{});
+    try testing.expectEqualStrings("500 Internal Server Error", status(try postFailing(a, io, "/chat/c/1_2/Plans/pin", steve, "")));
+    // The bookmarks' folder is a file: a send is refused before it stores.
+    const bookmarks = try std.fs.path.join(a, &.{ chat_store.chat_root, "users", "1", "last-sessions" });
+    try std.Io.Dir.cwd().deleteTree(io, bookmarks);
+    try UidSite.disk.write(io, a, bookmarks, "", .{});
+    try testing.expectEqualStrings("500 Internal Server Error", status(try postFailing(a, io, "/chat/c/1_2/Plans/send", steve, "markdown=hello&cid=x")));
+    const raw = (try chat_store.rawSession(io, a, try chat_store.dmConvDir(a, "1_2"), "Plans")).?;
+    try testing.expectEqual(@as(usize, 1), (try chat_store.decodeChatFile(a, raw)).len);
+    // The player row is a file where its folder goes: the login's mirror fails.
+    try UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ player.player_root, "1" }), "", .{});
+    try testing.expectEqualStrings("500 Internal Server Error", status(try postFailing(a, io, "/login/full", "x=y", "name=Steve&password=pw&action=login")));
 }

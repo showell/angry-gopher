@@ -107,11 +107,15 @@ pub fn allocate(io: Io, alloc: Alloc, name: []const u8) ![]const u8 {
 /// **WRITTEN ONLY WHEN THE NAME CHANGED** (gopher-metal 153(3)): it runs on
 /// every login, the name is nearly always the one there, and a `replace` is
 /// many disk requests on gopher-metal; the read is from memory.
-pub fn mirror(io: Io, alloc: Alloc, id: []const u8, name: []const u8) void {
+///
+/// **ITS WRITE IS THE LOGIN'S** (metal-vmm QUEUE 156(g)): a mirror that did
+/// not land fails the login, where it was swallowed and the member's games
+/// went on under a row that did not hold their name.
+pub fn mirror(io: Io, alloc: Alloc, id: []const u8, name: []const u8) !void {
     if (!isSafeID(id) or name.len == 0) return;
-    // absent-ok: a name that cannot be read is written again, which is what an absent one asks.
+    // absent-ok: a name that cannot be read is written again, which is what an absent one asks; the write says whether it can be.
     if (readField(io, alloc, id, "name") catch null) |was| if (std.mem.eql(u8, was, name)) return;
-    setName(io, alloc, id, name) catch {};
+    try setName(io, alloc, id, name);
 }
 
 /// setName writes a player's display name, creating the row (whose existence IS
@@ -375,7 +379,7 @@ test "fs: a minted player is p-prefixed, readable back, and disjoint from accoun
     try testing.expect(!std.mem.eql(u8, id, id2));
 
     // mirror gives an account id a row under its own numeric spelling.
-    mirror(io, a, "1", "Steve");
+    try mirror(io, a, "1", "Steve");
     try testing.expectEqualStrings("Steve", try nameOf(io, a, "1"));
 
     // An id with no row is no identity.
@@ -397,8 +401,8 @@ test "fs: mirror writes a name only when it changed (gopher-metal 153(3))" {
     const path = try std.fs.path.join(a, &.{ player_root, "1", "name" });
     // The same name, kept with a newline the write would not put.
     try store.write(io, a, path, "Steve\n", .{});
-    mirror(io, a, "1", "Steve");
+    try mirror(io, a, "1", "Steve");
     try testing.expectEqualStrings("Steve\n", try store.read(io, a, path, .limited(64)));
-    mirror(io, a, "1", "Stephen");
+    try mirror(io, a, "1", "Stephen");
     try testing.expectEqualStrings("Stephen", try store.read(io, a, path, .limited(64)));
 }

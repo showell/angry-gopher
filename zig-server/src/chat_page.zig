@@ -57,7 +57,7 @@ pub fn conversationPage(req: *Request, io: Io, alloc: Alloc, uid: []const u8, to
     const conv = topic.conv;
     // Remember where this user is — the /chat/default resume pointer, keyed by
     // pair. Only convs that persist a cursor (DMs) do this; channels don't.
-    if (conv.persistsCursor()) chat_state.setUserLastSession(io, alloc, uid, conv.key, topic.sid);
+    if (conv.persistsCursor()) try chat_state.setUserLastSession(io, alloc, uid, conv.key, topic.sid);
     const viewer = try users.getUserName(io, alloc, uid);
     const sidebar_json = try buildSidebarJSON(io, alloc, uid, topic);
 

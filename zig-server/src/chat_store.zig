@@ -1607,7 +1607,7 @@ test "the last session and conversation are written only when they change (gophe
     try f.init(threaded.io());
     defer f.deinit();
     const a = f.arena.allocator();
-    chat_state.setUserLastSession(f.io, a, "1", "1_2", "topic");
+    try chat_state.setUserLastSession(f.io, a, "1", "1_2", "topic");
     const lc = try std.fs.path.join(a, &.{ chat_root, "users", "1", "last-conv" });
     const ls = try std.fs.path.join(a, &.{ chat_root, "users", "1", "last-sessions", "1_2" });
     try testing.expectEqualStrings("1_2\n", try store.read(f.io, a, lc, .limited(64)));
@@ -1615,11 +1615,11 @@ test "the last session and conversation are written only when they change (gophe
     // it back.
     try store.write(f.io, a, lc, "1_2", .{});
     try store.write(f.io, a, ls, "topic", .{});
-    chat_state.setUserLastSession(f.io, a, "1", "1_2", "topic");
+    try chat_state.setUserLastSession(f.io, a, "1", "1_2", "topic");
     try testing.expectEqualStrings("1_2", try store.read(f.io, a, lc, .limited(64)));
     try testing.expectEqualStrings("topic", try store.read(f.io, a, ls, .limited(64)));
     // A new one is written.
-    chat_state.setUserLastSession(f.io, a, "1", "1_2", "other");
+    try chat_state.setUserLastSession(f.io, a, "1", "1_2", "other");
     try testing.expectEqualStrings("other\n", try store.read(f.io, a, ls, .limited(64)));
 }
 

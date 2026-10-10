@@ -225,7 +225,7 @@ fn loginAsMember(req: *Request, io: Io, alloc: Alloc, id: []const u8, next: []co
         return req.respond("session unavailable\n", .{ .status = .internal_server_error });
     const auth_ck = try authCookie(alloc, signed);
     // Same id on both sides, so a member's Lyn Rummy history follows them.
-    player.mirror(io, alloc, id, try users.getUserName(io, alloc, id));
+    try player.mirror(io, alloc, id, try users.getUserName(io, alloc, id));
     return sendRedirect(req, alloc, next, &.{ uid_ck, auth_ck });
 }
 
@@ -347,7 +347,7 @@ fn sendHostWelcomeImpl(io: Io, alloc: Alloc, bus: *Bus, new_uid: []const u8) !vo
     _ = try store.appendMessage(io, alloc, bus, meta, dir, pair, topic, host_name, host_uid, msg, "");
 
     // The new member has no last-conv bookmark yet — land their /chat here.
-    chat_state.setUserLastSession(io, alloc, new_uid, pair, topic);
+    try chat_state.setUserLastSession(io, alloc, new_uid, pair, topic);
 }
 
 // ── cookies + response helpers ────────────────────────────────────────────────
