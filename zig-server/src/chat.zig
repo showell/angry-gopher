@@ -47,6 +47,7 @@ const edge = @import("edge.zig");
 const docs = @import("docs.zig");
 const reading_list = @import("reading_list.zig");
 const recent = @import("recent.zig");
+const chat_search = @import("chat_search.zig");
 const images = @import("images.zig");
 const code = @import("code.zig");
 const links = @import("chat_links.zig");
@@ -173,6 +174,9 @@ pub fn handle(req: *Request, io: Io, alloc: Alloc, bus: *Bus, sub: []const u8) !
             return;
         }
     }
+    // /chat/search/words, /chat/search/messages — search across every
+    // conversation the viewer can see (chat_search.zig), JSON.
+    if (matchPrefix(sub, "/search")) |rest| return chat_search.handle(req, io, alloc, uid, rest);
     // /chat/default — resume the last (conv, session); /chat/conversations —
     // the (partner × session) matrix as JSON (the API-key discovery entry point);
     // /chat/msg/<id> — resolve a global MSG_ ref to its thread and 302 there.

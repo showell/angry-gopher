@@ -79,6 +79,17 @@ pub fn main(init: std.process.Init.Minimal) !void {
         const wrote = chat_store.backfillAll(io, boot.allocator());
         if (wrote > 0) std.debug.print("zig-server: wrote a last-message record for {d} session(s)\n", .{wrote});
     }
+    // **SEARCH'S INDEX, BUILT BEFORE THE FIRST REQUEST** (metal-vmm 155(b),
+    // host contract step 4b): every transcript read once, into memory.
+    {
+        var boot = std.heap.ArenaAllocator.init(alloc);
+        defer boot.deinit();
+        const t0 = Io.Clock.now(.awake, io);
+        if (router.search_index.buildAll(io, boot.allocator())) |s| {
+            const ms = @divFloor(t0.durationTo(Io.Clock.now(.awake, io)).nanoseconds, std.time.ns_per_ms);
+            std.debug.print("zig-server: search index: {d} messages in {d} transcripts ({d} bytes, {d} words, {d} unreadable) in {d} ms\n", .{ s.messages, s.transcripts, s.bytes, s.words, s.unreadable, ms });
+        } else std.debug.print("zig-server: search index not built (out of memory?): the first search builds it\n", .{});
+    }
 
     // The pub/sub fan-out shared across all connections. Lives for the process
     // lifetime; drives chat's SSE streams. Each request gets its own handle on

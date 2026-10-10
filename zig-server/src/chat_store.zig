@@ -26,6 +26,7 @@ const users = @import("users.zig");
 const recent_feed = @import("recent_feed.zig");
 const images_store = @import("images_store.zig");
 const code_store = @import("code_store.zig");
+const search_index = @import("search_index.zig");
 
 /// chat_root is {data_dir}/chat. config.zig overrides this at startup; the
 /// default is repo-relative-from-zig-server like the others.
@@ -180,6 +181,9 @@ pub fn appendMessage(io: Io, alloc: Alloc, bus: *Bus, meta: ConvMeta, conv_dir: 
         .offset = new_size - stored.len,
         .uid = from_id,
     });
+    // **SEARCH SEES IT AS IT LANDS** (metal-vmm 155(b)): the index in memory
+    // takes the message, or drops itself whole if it cannot.
+    search_index.noteAppend(conv_dir, sid, msg);
 
     // Fan out to live subscribers on this conv/sid (best-effort).
     const key = try std.fmt.allocPrint(alloc, "{s}/{s}", .{ conv_key, sid });
@@ -453,9 +457,8 @@ fn escapeBodyLine(alloc: Alloc, line: []const u8) ![]const u8 {
 
 /// What a session's last message is, for a listing that must not read the
 /// transcript: the words, when they were sent, and the uid that sent them
-/// (empty where nothing says: a record behind the transcript, or a session
-/// whose author no sidecar ever held; never an older author, gopher-metal
-/// 153(1)).
+/// (where the sidecar does not say, the member the last message names; empty
+/// when none does: never an older author, gopher-metal 153(1)).
 pub const LastMessage = struct {
     markdown: []const u8,
     date: []const u8,
@@ -506,8 +509,8 @@ pub fn lastMessage(io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8) 
                     if (numberIn(got.id, sid)) |number| if (number >= c.count) return .{
                         .markdown = got.markdown,
                         .date = got.date,
-                        // A record behind: who wrote the newer message is unknown.
-                        .uid = if (number == c.count) l.uid else "",
+                        // A record behind: the newer message's author by name.
+                        .uid = authorOf(io, alloc, if (number == c.count) l.uid else "", got.from),
                         .number = number,
                     };
                 }
@@ -515,6 +518,17 @@ pub fn lastMessage(io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8) 
         };
     }
     return fallbackLast(io, alloc, conv_dir, sid, counted);
+}
+
+/// **THE AUTHOR WHERE NO SIDECAR SAYS** (the box's must-fix after 153(1)):
+/// `uid` when the sidecar knows it, else the member named `from`, the last
+/// message's name (names are unique among members; login finds members by
+/// name), else "". The next sidecar written carries it (`backfillSidecars`,
+/// and every send writes its own author). Never an older author.
+fn authorOf(io: Io, alloc: Alloc, uid: []const u8, from: []const u8) []const u8 {
+    if (uid.len > 0 or from.len == 0) return uid;
+    // absent-ok: an author that cannot be looked up is shown as nobody; what a sidecar records from it is a cache, recounted from the transcript.
+    return (users.findMemberByName(io, alloc, from) catch return "") orelse "";
 }
 
 /// The N of a `<sid>_<N>` message id, or null when the id is not this
@@ -540,7 +554,7 @@ fn fallbackLast(io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8, cou
     if (msgs.len == 0) return null;
     const last = msgs[msgs.len - 1];
     const uid = if (counted) |c| (if (c.last) |l| (if (c.count == msgs.len and c.size == raw.len) l.uid else "") else "") else "";
-    return .{ .markdown = last.markdown, .date = last.date, .uid = uid, .number = msgs.len };
+    return .{ .markdown = last.markdown, .date = last.date, .uid = authorOf(io, alloc, uid, last.from), .number = msgs.len };
 }
 
 /// **EVERY SESSION GETS A SIDECAR AT BOOT.** A conversation written before this
@@ -576,11 +590,9 @@ pub fn backfillSidecars(io: Io, alloc: Alloc, conv_dirs: []const []const u8) usi
             const offset = if (std.mem.lastIndexOf(u8, raw, sep)) |at| at else 0;
             writeCount(io, a, dir, sid, msgs.len, raw.len, .{
                 .offset = offset,
-                // Unknown: the author is in no transcript, and an older
-                // server's `.lastauthor` is no longer read (153(1)); every
-                // session production holds was given its uid by an earlier
-                // boot's pass.
-                .uid = "",
+                // The last message's author, found by name (the box's
+                // must-fix after 153(1)); unknown, "", when no member has it.
+                .uid = authorOf(io, a, "", msgs[msgs.len - 1].from),
             });
             wrote += 1;
         }
@@ -1059,12 +1071,17 @@ const CountFixture = struct {
     hub: bus_mod.Hub,
     bus: Bus,
     dir: []const u8,
+    saved_auth: []const u8,
 
     fn init(self: *CountFixture, io: Io) !void {
         self.arena = std.heap.ArenaAllocator.init(testing.allocator);
         const a = self.arena.allocator();
         self.tmp = testing.tmpDir(.{});
         chat_root = try std.fs.path.join(a, &.{ ".zig-cache", "tmp", &self.tmp.sub_path });
+        // Its own accounts, empty unless a test makes one: an author is
+        // looked up by name where no sidecar says.
+        self.saved_auth = users.auth_root;
+        users.auth_root = try std.fs.path.join(a, &.{ chat_root, "auth" });
         self.io = io;
         self.hub = bus_mod.Hub.init(io, a);
         self.bus = Bus.of(&self.hub);
@@ -1072,6 +1089,7 @@ const CountFixture = struct {
     }
 
     fn deinit(self: *CountFixture) void {
+        users.auth_root = self.saved_auth;
         self.tmp.cleanup();
         self.arena.deinit();
     }
@@ -1486,7 +1504,7 @@ test "last message: a sidecar claiming a size far past the file does not ask for
     try testing.expectEqualStrings("modest", got.markdown);
 }
 
-test "a send writes no .lastauthor, and one an older server wrote is never read (gopher-metal 153(1))" {
+test "a send writes no .lastauthor, and its .count names the author over one an older server left (gopher-metal 153(1); that none is read even behind is the one-behind test's)" {
     // The `.count` carries the author now. A `.lastauthor` left from before
     // names the previous author once a send no longer writes it: it is left
     // where it is, and nothing asks it.
@@ -1527,4 +1545,31 @@ test "the last session and conversation are written only when they change (gophe
     // A new one is written.
     chat_state.setUserLastSession(f.io, a, "1", "1_2", "other");
     try testing.expectEqualStrings("other\n", try store.read(f.io, a, ls, .limited(64)));
+}
+
+test "the author where no sidecar says is the member the last message names; the backfill writes it in (the box's must-fix)" {
+    var threaded = std.Io.Threaded.init(testing.allocator, .{});
+    defer threaded.deinit();
+    var f: CountFixture = undefined;
+    try f.init(threaded.io());
+    defer f.deinit();
+    const a = f.arena.allocator();
+    try users.setUserName(f.io, a, "1", "Tester");
+    try users.setUserPassword(f.io, a, "1", "pw");
+    _ = try f.send("the first");
+    const after_first = try f.transcriptSize();
+    _ = try f.send("the second");
+    // One behind, its uid someone else's: the newer message's author by name.
+    try f.setSidecar(try std.fmt.allocPrint(a, "1 {d}\n0 9\n", .{after_first}));
+    try testing.expectEqualStrings("1", (try lastMessage(f.io, a, f.dir, "topic")).?.uid);
+    // No sidecar at all: the slow path, and the backfill's record, by name.
+    try Io.Dir.cwd().deleteFile(f.io, try countPath(a, f.dir, "topic"));
+    try testing.expectEqualStrings("1", (try lastMessage(f.io, a, f.dir, "topic")).?.uid);
+    const dirs = [_][]const u8{f.dir};
+    try testing.expectEqual(@as(usize, 1), backfillSidecars(f.io, a, &dirs));
+    try testing.expectEqualStrings("1", readCount(f.io, a, f.dir, "topic").?.last.?.uid);
+    // A name no member has: nobody, never a guess.
+    try users.setUserName(f.io, a, "1", "Renamed");
+    try f.setSidecar(try std.fmt.allocPrint(a, "1 {d}\n0 9\n", .{after_first}));
+    try testing.expectEqualStrings("", (try lastMessage(f.io, a, f.dir, "topic")).?.uid);
 }

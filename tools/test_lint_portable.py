@@ -82,6 +82,7 @@ class Clean(unittest.TestCase):
         self.assertEqual(outside, {
             "server.zig", "config.zig", "bind.zig", "stress.zig", "hash_password.zig",
             "markdown_bench.zig", "markdown_hostile_probe.zig", "markdown_regression_test.zig",
+            "search_bench.zig",
         })
 
 
