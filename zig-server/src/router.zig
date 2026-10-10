@@ -1959,3 +1959,40 @@ test "route: an admin delete of a player there is not says so, 404, where it wen
     const id = try player.allocate(io, a, "Nikhil");
     try testing.expectEqualStrings("200 OK", status(try UidSite.ask(a, io, try std.fmt.allocPrint(a, "/admin/lynrummy/delete?user={s}", .{id}), me)));
 }
+
+test "route: a topic that is not there is a 404 that says so, on every tail but send, and never becomes where /chat/default resumes; a channel not the viewer's says why (156(j))" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var site = try UidSite.init(a, io);
+    defer site.deinit();
+    const prev = mem_meter.replace(std.heap.page_allocator);
+    defer _ = mem_meter.replace(prev);
+    const chat_store = @import("chat_store.zig");
+    const steve = try memberSession(a, io, "1", "Steve");
+    _ = try memberSession(a, io, "2", "Debbie");
+    try testing.expectEqualStrings("200 OK", status(try postAs(a, io, "/chat/c/1_2/new", steve, "topic=Plans")));
+    const page = try UidSite.ask(a, io, "/chat/c/1_2/Nowhere", steve);
+    try testing.expectEqualStrings("404 Not Found", status(page));
+    try testing.expect(std.mem.indexOf(u8, page, "Nowhere") != null);
+    for ([_][]const u8{ "/chat/c/1_2/Nowhere/raw", "/chat/c/1_2/Nowhere/stream", "/chat/c/1_2/Nowhere/reactions" }) |t|
+        try testing.expectEqualStrings("404 Not Found", status(try UidSite.ask(a, io, t, steve)));
+    try testing.expectEqualStrings("404 Not Found", status(try postAs(a, io, "/chat/c/1_2/Nowhere/react", steve, "msg=1&emoji=%F0%9F%91%8D")));
+    try testing.expect((try chat_store.rawSession(io, a, try chat_store.dmConvDir(a, "1_2"), "Nowhere")) == null);
+    // Another case is the same topic (Steve, 2026-10-02).
+    try testing.expectEqualStrings("200 OK", status(try UidSite.ask(a, io, "/chat/c/1_2/PLANS/raw", steve)));
+    // The resume pointer still names Plans.
+    const last = try std.fs.path.join(a, &.{ chat_store.chat_root, "users", "1", "last-sessions", "1_2" });
+    try testing.expectEqualStrings("Plans\n", try UidSite.disk.read(io, a, last, .limited(64)));
+    // A channel the viewer is not in: a page that says why, worded as for one that is not there.
+    try UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ chat_store.chat_root, "channels", "quiet.channel" }), "2\n", .{});
+    const removed = try UidSite.ask(a, io, "/channel/quiet", steve);
+    const absent = try UidSite.ask(a, io, "/channel/nothere", steve);
+    try testing.expectEqualStrings("404 Not Found", status(removed));
+    try testing.expectEqualStrings("404 Not Found", status(absent));
+    const why = "is not a channel you are a member of";
+    try testing.expect(std.mem.indexOf(u8, removed, why) != null and std.mem.indexOf(u8, absent, why) != null);
+}

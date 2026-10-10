@@ -216,8 +216,12 @@ pub fn handleChannel(req: *Request, io: Io, alloc: Alloc, bus: *Bus, sub: []cons
     // path-derived slices already survive the body read.
     const name = name_raw;
 
-    const members = (try store.channelMembers(io, alloc, name)) orelse return http.notFound(req);
-    if (!store.hasMember(members, uid)) return http.notFound(req);
+    // **ONE ANSWER, THAT SAYS WHY** (metal-vmm QUEUE 156(j)): a channel that
+    // is not there and one the viewer is not in (or was removed from) read
+    // alike, so the page names no channel a viewer cannot see.
+    const not_yours = try std.fmt.allocPrint(alloc, "#{s} is not a channel you are a member of.", .{name});
+    const members = (try store.channelMembers(io, alloc, name)) orelse return page.notFoundPage(req, io, alloc, uid, not_yours, "/chat");
+    if (!store.hasMember(members, uid)) return page.notFoundPage(req, io, alloc, uid, not_yours, "/chat");
 
     const conv = Conv{
         .meta = .{ .kind = .channel, .members = members },
@@ -296,6 +300,18 @@ fn convRoute(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8, re
 /// `segs` is positioned just after the sid. `title` is the top-bar title.
 fn topicRoute(req: *Request, io: Io, alloc: Alloc, bus: *Bus, segs: *SegIter, uid: []const u8, topic: Topic) !void {
     const conv = topic.conv;
+    // **A TOPIC THAT IS NOT THERE IS A 404 THAT SAYS SO** (metal-vmm QUEUE
+    // 156(j)), where its page was served as an empty one and became where
+    // /chat/default resumes. Every tail but `send`, which makes a topic as
+    // its first message does (the judges send to one first). Without case,
+    // as Steve's rule has it (2026-10-02, option 1: case does not tell
+    // topics apart, on FAT or on Linux).
+    var peek = segs.*;
+    const is_send = if (peek.next()) |t| std.mem.eql(u8, t, "send") else false;
+    if (!is_send and !try topicExists(io, alloc, conv.dir, topic.sid)) {
+        const what = try std.fmt.allocPrint(alloc, "There is no topic \u{201C}{s}\u{201D} in this conversation.", .{topic.sid});
+        return page.notFoundPage(req, io, alloc, uid, what, conv.base);
+    }
     const tail = segs.next() orelse {
         try page.conversationPage(req, io, alloc, uid, topic);
         return;
@@ -330,6 +346,13 @@ fn topicRoute(req: *Request, io: Io, alloc: Alloc, bus: *Bus, segs: *SegIter, ui
     } else {
         try http.notFound(req);
     }
+}
+
+fn topicExists(io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8) !bool {
+    for (try store.listSessions(io, alloc, conv_dir)) |s| {
+        if (std.ascii.eqlIgnoreCase(s, sid)) return true;
+    }
+    return false;
 }
 
 /// savedIds answers GET /<conv>/<sid>/saved → JSON array of the message ids the
