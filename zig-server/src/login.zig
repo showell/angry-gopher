@@ -385,10 +385,10 @@ fn formValue(alloc: Alloc, target: []const u8, body: []const u8, name: []const u
     return chat.formField(alloc, target[q + 1 ..], name);
 }
 
-/// sanitizeNext keeps only internal redirect targets, to avoid open redirects.
+/// sanitizeNext keeps only internal redirect targets, to avoid open redirects
+/// (`http.internalTarget`).
 fn sanitizeNext(next: []const u8) []const u8 {
-    if (std.mem.startsWith(u8, next, "/") and !std.mem.startsWith(u8, next, "//")) return next;
-    return "/";
+    return http.internalTarget(next);
 }
 
 // ── HTML pages (verbatim ports of the render* funcs) ──────────────────────────
