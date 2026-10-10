@@ -346,6 +346,12 @@
   ChatCompose.init({
     sessionBase: SESSION_BASE,
     closeCompose: ChatRightSidebar.closeCompose,
+    /* The server's caps and types, from the page (metal-vmm QUEUE 157(d)). */
+    uploads: {
+      imageMax: Number(root.dataset.uploadImageMax),
+      videoMax: Number(root.dataset.uploadVideoMax),
+      accept:   root.dataset.uploadAccept,
+    },
   });
   /* PRODUCT_DECISION: keys map 1:1 to the chat-keyhelp panel on the closed-compose side.
      Arrow / Home / End / PgUp / PgDn are NOT here — MessageView owns those internally. */

@@ -2140,3 +2140,29 @@ test "route: every game write is counted as exactly what it wrote: an annotation
         try testing.expectEqual(after - before, limits.countedBytes(io, id).? - counted);
     }
 }
+
+test "route: the conversation page hands the client the upload caps and the accepted types, the server's own, where chat_compose.js kept copies (metal-vmm QUEUE 157(d))" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var site = try UidSite.init(a, io);
+    defer site.deinit();
+    const prev = mem_meter.replace(std.heap.page_allocator);
+    defer _ = mem_meter.replace(prev);
+    const chat_upload = @import("chat_upload.zig");
+    const steve = try memberSession(a, io, "1", "Steve");
+    _ = try memberSession(a, io, "2", "Debbie");
+    try testing.expectEqualStrings("200 OK", status(try postAs(a, io, "/chat/c/1_2/new", steve, "topic=Plans")));
+    const page = try UidSite.ask(a, io, "/chat/c/1_2/Plans", steve);
+    try testing.expect(std.mem.indexOf(u8, page, try std.fmt.allocPrint(a, "data-upload-image-max=\"{d}\"", .{@import("limits.zig").body.upload_image})) != null);
+    try testing.expect(std.mem.indexOf(u8, page, try std.fmt.allocPrint(a, "data-upload-video-max=\"{d}\"", .{@import("limits.zig").body.upload_video})) != null);
+    try testing.expect(std.mem.indexOf(u8, page, "data-upload-accept=\"" ++ chat_upload.accept ++ "\"") != null);
+    // Every type the server takes is in the list, and nothing else.
+    var n: usize = 0;
+    var it = std.mem.splitScalar(u8, chat_upload.accept, ',');
+    while (it.next()) |mime| : (n += 1) try testing.expect(chat_upload.extOf(mime) != null);
+    try testing.expectEqual(chat_upload.accepted.len, n);
+}

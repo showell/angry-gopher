@@ -6,6 +6,7 @@
 //! back, so the dependency is one-way.
 
 const std = @import("std");
+const chat_upload = @import("chat_upload.zig");
 const Io = std.Io;
 const http = @import("http.zig");
 const users = @import("users.zig");
@@ -79,8 +80,11 @@ pub fn conversationPage(req: *Request, io: Io, alloc: Alloc, uid: []const u8, to
 
     try b.appendSlice(alloc, chat_css);
     // data-me: the viewer's uid, so the client can tell its own reactions apart.
-    try b.print(alloc, "<div id=\"chat-root\" data-conv=\"{s}\" data-conv-base=\"{s}\" data-session=\"{s}\" data-me=\"{s}\">", .{
+    // data-upload-*: the server's caps and accepted types, the client's only
+    // copy (metal-vmm QUEUE 157(d)).
+    try b.print(alloc, "<div id=\"chat-root\" data-conv=\"{s}\" data-conv-base=\"{s}\" data-session=\"{s}\" data-me=\"{s}\" data-upload-image-max=\"{d}\" data-upload-video-max=\"{d}\" data-upload-accept=\"{s}\">", .{
         try htmlEscape(alloc, conv.key), try htmlEscape(alloc, conv.base), try htmlEscape(alloc, topic.sid), try htmlEscape(alloc, uid),
+        chat_upload.image_max,           chat_upload.video_max,            chat_upload.accept,
     });
     try b.appendSlice(alloc, "<div class=\"chat-notify\" id=\"chat-notify\"></div>");
     try b.appendSlice(alloc, "<div class=\"chat-layout\">");

@@ -295,14 +295,39 @@ fn detectVideoExt(data: []const u8) ?[]const u8 {
     return null;
 }
 
+/// **EVERY TYPE AN UPLOAD MAY BE, ONCE** (metal-vmm QUEUE 157(d)): what a
+/// stored file is served as, and the list the page hands the client for its
+/// file picker (`accept`), where chat_compose.js kept a copy that "must
+/// match". The sniffers above decide what a file is; this names it.
+pub const accepted = [_]struct { ext: []const u8, mime: []const u8 }{
+    .{ .ext = "png", .mime = "image/png" },
+    .{ .ext = "jpg", .mime = "image/jpeg" },
+    .{ .ext = "gif", .mime = "image/gif" },
+    .{ .ext = "webp", .mime = "image/webp" },
+    .{ .ext = "mp4", .mime = "video/mp4" },
+    .{ .ext = "webm", .mime = "video/webm" },
+    .{ .ext = "mov", .mime = "video/quicktime" },
+};
+
+/// The accepted types as a file picker's `accept` attribute takes them.
+pub const accept = blk: {
+    var s: []const u8 = "";
+    for (accepted, 0..) |t, i| s = s ++ (if (i == 0) "" else ",") ++ t.mime;
+    break :blk s;
+};
+
+/// The per-file caps, as the page hands them to the client.
+pub const image_max = limits.body.upload_image;
+pub const video_max = limits.body.upload_video;
+
 fn extMime(ext: []const u8) ?[]const u8 {
-    if (std.mem.eql(u8, ext, "png")) return "image/png";
-    if (std.mem.eql(u8, ext, "jpg")) return "image/jpeg";
-    if (std.mem.eql(u8, ext, "gif")) return "image/gif";
-    if (std.mem.eql(u8, ext, "webp")) return "image/webp";
-    if (std.mem.eql(u8, ext, "mp4")) return "video/mp4";
-    if (std.mem.eql(u8, ext, "webm")) return "video/webm";
-    if (std.mem.eql(u8, ext, "mov")) return "video/quicktime";
+    for (accepted) |t| if (std.mem.eql(u8, t.ext, ext)) return t.mime;
+    return null;
+}
+
+/// The extension a MIME type is stored under, or null when it is not taken.
+pub fn extOf(mime: []const u8) ?[]const u8 {
+    for (accepted) |t| if (std.mem.eql(u8, t.mime, mime)) return t.ext;
     return null;
 }
 

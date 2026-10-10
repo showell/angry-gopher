@@ -10,11 +10,10 @@ window.ChatCompose = (function(){
   var textarea, form, status, uploadBtn, fileInput;
   var SESSION_BASE, closeCompose;
   var pendingCid=null, pendingTimer=null;
-  /* PRODUCT_DECISION: must match the server's per-kind caps (UploadKind.cap) and
-     stay under Caddy's body cap. Images are small; screencasts get more room. */
-  var MAX_IMAGE_BYTES=10*1024*1024;
-  var MAX_VIDEO_BYTES=100*1024*1024;
-  var UPLOAD_ACCEPT='image/png,image/jpeg,image/gif,image/webp,video/mp4,video/webm,video/quicktime';
+  /* PRODUCT_DECISION: the server's per-kind caps and accepted types, handed
+     over by init from the page (metal-vmm QUEUE 157(d)): the server's own,
+     where this file kept copies that "must match". */
+  var MAX_IMAGE_BYTES, MAX_VIDEO_BYTES, UPLOAD_ACCEPT;
 
   /* PRODUCT_DECISION: widget owns its own CSS. Selectors are scoped to
      .chat-compose (the right-rail wrapper class set by ChatRightSidebar).
@@ -182,6 +181,9 @@ window.ChatCompose = (function(){
   }
 
   function init(deps){
+    var u=deps.uploads;
+    if(!u || !(u.imageMax>0) || !(u.videoMax>0) || !u.accept) throw new Error('ChatCompose.init: the page gave no upload limits');
+    MAX_IMAGE_BYTES=u.imageMax; MAX_VIDEO_BYTES=u.videoMax; UPLOAD_ACCEPT=u.accept;
     ensureStyles();
     var built = buildComposeBody();
     textarea = built.textarea; form = built.form; status = built.status;
