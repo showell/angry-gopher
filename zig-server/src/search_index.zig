@@ -130,6 +130,21 @@ fn inPlace(a: Alloc, piece: []const u8) !chat_store.ChatMessage {
     return m;
 }
 
+/// **WHAT `s` COSTS AS A JSON STRING, AT MOST** (the review of 155's
+/// follow-ups): a control byte as `\u00XX` (6), a quote or backslash
+/// escaped (2), a byte >= 0x80 as U+FFFD if it is not UTF-8 (3, so every
+/// such byte is charged 3). Raw bytes undercount it up to six times.
+pub fn jsonCost(s: []const u8) usize {
+    var n: usize = 0;
+    for (s) |c| n += switch (c) {
+        0...0x1F => 6,
+        '"', '\\' => 2,
+        0x80...0xFF => 3,
+        else => 1,
+    };
+    return n;
+}
+
 /// Whether `markdown` holds `word` (folded) as a word of its own.
 fn holds(markdown: []const u8, word: []const u8) bool {
     // Most messages do not hold it even as a substring: a quick no.
@@ -310,8 +325,8 @@ pub const Index = struct {
     /// The messages holding `word` (a key, folded) in the conversations of
     /// `reach` and no others, in `reach`'s order, each conversation's in the
     /// order they came; at most `most` listed, and their text at most
-    /// `budget` bytes (past it the listing stops; the first is always
-    /// listed), every one counted.
+    /// `budget` bytes as a JSON string writes it (`jsonCost`; past it the
+    /// listing stops; the first is always listed), every one counted.
     pub fn messagesFor(self: *const Index, alloc: Alloc, reach: []const chat_store.Reach, word: []const u8, most: usize, budget: usize) !Found {
         var hits: std.ArrayList(Found.Hit) = .empty;
         var matched: usize = 0;
@@ -328,11 +343,12 @@ pub const Index = struct {
                 const m = c.msg(ref);
                 if (!holds(m.markdown, word)) continue;
                 left -= 1;
-                if (hits.items.len > 0 and bytes + m.markdown.len > budget) {
+                const cost = jsonCost(m.markdown);
+                if (hits.items.len > 0 and bytes + cost > budget) {
                     full = true;
                     break;
                 }
-                bytes += m.markdown.len;
+                bytes += cost;
                 try hits.append(alloc, .{ .conv = r, .msg = m });
             }
         }
@@ -602,4 +618,20 @@ test "a word too long to ask for is never suggested (the box's review of 155, 2)
     var buf: [tokens.max_word]u8 = undefined;
     const k = tokens.key(got[0].word, &buf);
     try testing.expectEqual(@as(usize, 1), (try idx.messagesFor(arena.allocator(), &mine, k, 10, std.math.maxInt(usize))).matched);
+}
+
+test "the budget is charged what the JSON costs, not the raw bytes (the review of 155's follow-ups)" {
+    try testing.expectEqual(@as(usize, 6 + 2 + 2 + 3 + 1), jsonCost("\x01\"\\\xff" ++ "a"));
+    var idx = Index.init(testing.allocator);
+    defer idx.deinit();
+    // Two messages of 1000 raw bytes, nearly all control bytes: 6000 each.
+    const hostile = "word " ++ "\x01" ** 995;
+    try idx.add("c/1_2", "t", msg("t_1", hostile));
+    try idx.add("c/1_2", "t", msg("t_2", hostile));
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const mine = [_]chat_store.Reach{.{ .dir = "c/1_2", .base = "/chat/c/1_2", .kind = .dm }};
+    const f = try idx.messagesFor(arena.allocator(), &mine, "word", 10, 8000);
+    try testing.expectEqual(@as(usize, 2), f.matched);
+    try testing.expectEqual(@as(usize, 1), f.hits.len);
 }

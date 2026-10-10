@@ -9,7 +9,8 @@
 //!   GET /chat/search/messages?word=layout   the messages holding the word:
 //!       {"word":"layout","matched":N,"unreadable":0,"messages":[{"conv":"/chat/c/1_2",
 //!       "kind":"dm","sid":..,"id":..,"from":..,"date":..,"markdown":..},...]}
-//!       at most `most_messages` listed, every one counted.
+//!       at most `most_messages` listed, and at most `most_bytes` of their
+//!       text as JSON writes it, every one counted.
 //!
 //! **WHAT THE VIEWER CAN SEE, ASKED ON EVERY REQUEST** (`chat_store.
 //! visibleConvs`), never a list kept from an earlier one: a DM between two
@@ -41,9 +42,10 @@ const Request = std.http.Server.Request;
 pub const most_words = 20;
 pub const most_messages = 500;
 pub const per_second = 5;
-/// The most bytes of message text one answer lists (a doc posted to chat is
-/// one message of up to 1 MiB): past it the listing stops, every match still
-/// counted (the box's review of 155).
+/// The most bytes of message text one answer lists, as JSON writes it
+/// (`search_index.jsonCost`; a doc posted to chat is one message of up to
+/// 1 MiB): past it the listing stops, every match still counted (the box's
+/// review of 155, and the review of its fix).
 pub const most_bytes = 2 << 20;
 
 /// `rest` is the path after "/chat/search".
@@ -78,6 +80,12 @@ pub fn handle(req: *Request, io: Io, alloc: Alloc, uid: []const u8, rest: []cons
         const f = if (key.len < tokens.min_len) search_index.Found{ .hits = &.{}, .matched = 0 } else try idx.messagesFor(alloc, reach, key, most_messages, most_bytes);
         try b.appendSlice(alloc, "{\"word\":");
         try str(&b, alloc, key);
+        // **SIZED ONCE**: grown as it is written, the request's arena would
+        // keep every smaller copy of the answer besides the last.
+        var size: usize = 128;
+        for (f.hits) |h| size += 128 + search_index.jsonCost(h.msg.markdown) + search_index.jsonCost(h.msg.from) +
+            search_index.jsonCost(h.msg.sid) + search_index.jsonCost(h.msg.id) + search_index.jsonCost(h.msg.date) + search_index.jsonCost(h.conv.base);
+        try b.ensureTotalCapacity(alloc, b.items.len + size);
         try b.print(alloc, ",\"matched\":{d},\"unreadable\":{d},\"messages\":[", .{ f.matched, idx.unreadableFor(reach) });
         for (f.hits, 0..) |h, i| {
             if (i > 0) try b.append(alloc, ',');
