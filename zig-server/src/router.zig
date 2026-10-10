@@ -1004,6 +1004,36 @@ test "route: /admin/search finds a key in every conversation the admin can see, 
     try testing.expect(std.mem.indexOf(u8, typed, "3 messages match") != null);
 }
 
+test "route: Recent's Who cell names the last author where the .count is behind its transcript, \"You\" for the viewer (the box's must-fix)" {
+    // A sidecar write that failed leaves the .count one message behind. With
+    // .lastauthor gone (153(1)) the cell showed nobody; the author is found
+    // by the last message's name, as login finds members.
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var site = try UidSite.init(a, io);
+    defer site.deinit();
+    const prev = mem_meter.replace(std.heap.page_allocator); // presence outlives the test
+    defer _ = mem_meter.replace(prev);
+    const chat_store = @import("chat_store.zig");
+    const steve = try memberSession(a, io, "1", "Steve");
+    const debbie = try memberSession(a, io, "2", "Debbie");
+    const first = "MSG_ChitChat_1\nfrom: Debbie\ndate: 2026-10-10T00:00:00Z\n\nhello";
+    try writeTranscript(a, io, "1_2", "ChitChat", &.{}); // the folder
+    const md = try std.fs.path.join(a, &.{ chat_store.chat_root, "1_2", "sessions", "ChitChat.md" });
+    try UidSite.disk.write(io, a, md, first ++ chat_store.sep ++ "MSG_ChitChat_2\nfrom: Steve\ndate: 2026-10-10T00:01:00Z\n\nhi back", .{});
+    // The .count as it stood after the first message: one behind.
+    try UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ chat_store.chat_root, "1_2", "sessions", "ChitChat.count" }), try std.fmt.allocPrint(a, "1 {d}\n0 2\n", .{first.len}), .{});
+
+    const mine = try UidSite.ask(a, io, "/chat/recent", steve);
+    try testing.expect(std.mem.indexOf(u8, mine, "\"who\":\"You\"") != null);
+    const theirs = try UidSite.ask(a, io, "/chat/recent", debbie);
+    try testing.expect(std.mem.indexOf(u8, theirs, "\"who\":\"Steve\"") != null);
+}
+
 // ── search (metal-vmm QUEUE 155) ─────────────────────────────────────────────
 
 /// A member's session for UidSite.
