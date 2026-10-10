@@ -68,13 +68,13 @@ pub fn start(io: Io, host: Host) !Started {
         roots.migrateSecret(io, pass.allocator());
     }
     // Every chat session's last-message record, which /chat/recent reads
-    // instead of every transcript in full (host contract step 4).
+    // instead of every transcript in full.
     const backfilled = blk: {
         var pass = std.heap.ArenaAllocator.init(base);
         defer pass.deinit();
         break :blk chat_store.backfillAll(io, pass.allocator());
     };
-    // Search's index in memory (step 4b).
+    // Search's index in memory.
     const t0 = Io.Clock.now(.awake, io);
     const search = blk: {
         var pass = std.heap.ArenaAllocator.init(base);

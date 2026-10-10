@@ -76,22 +76,35 @@ pub const mem_meter = @import("mem_meter.zig");
 pub const host_start = @import("host_start.zig");
 pub const start = host_start.start;
 pub const Host = host_start.Host;
-pub const roots = @import("roots.zig");
+/// **ONLY WHAT A HOST NEEDS IS EXPORTED**: the types `Host` is made of and a
+/// host's facts are written in. The setup's modules (roots, the stores, the
+/// search index, the game limits) are not, so nothing but `start` sets them.
+pub const Roots = roots.Roots;
+pub const Space = game_limits.Space;
+/// Where the game store is, for a host's `Host.floor` to read the free space
+/// of (read only).
+pub const dataRoot = game_limits.dataRoot;
+pub const host_facts = struct {
+    pub const Fact = host_status.Fact;
+    pub const utc = host_status.utc;
+    pub const duration = host_status.duration;
+};
+const roots = @import("roots.zig");
 /// /admin/host's host half: the types a host's facts and log are (`Host.facts`,
 /// `Host.log`); `start` hands them over.
-pub const host_status = @import("host_status.zig");
+const host_status = @import("host_status.zig");
 /// Every bound on what a request may bring (limits.zig): a host sizes its
 /// request-head buffer from `request_limits.head_bytes`.
 pub const request_limits = @import("limits.zig");
 /// Chat's on-disk store; `start` gives every session its last-message record.
-pub const store = @import("chat_store.zig");
+const store = @import("chat_store.zig");
 /// Search's index in memory; `start` builds it, and its Stats is what
 /// `Started.search` says.
-pub const search_index = @import("search_index.zig");
+const search_index = @import("search_index.zig");
 /// The game store's bounds (gopher-metal QUEUE item 52): the free space a
 /// host's `Host.floor` reads (`Space`), and where the game store is
 /// (`dataRoot`).
-pub const game_limits = @import("game_limits.zig");
+const game_limits = @import("game_limits.zig");
 /// The edge's refusal counts, which /version reports: a host counts what it
 /// refuses before the route table sees a request (`edge.count(.header_too_large)`
 /// for a head past its read buffer), in the same counters the routes use.

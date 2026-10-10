@@ -2,8 +2,8 @@
 //! 155(b)), so a search reads no disk.
 //!
 //! **DERIVED FROM THE TRANSCRIPTS, NEVER WRITTEN.** Built once at boot, after
-//! the sidecar backfill, one transcript at a time (`buildAll`, host contract
-//! step 4b); kept current by `chat_store.appendMessage` as each message lands
+//! the sidecar backfill, one transcript at a time (`buildAll`, which
+//! `host_start.start` calls); kept current by `chat_store.appendMessage` as each message lands
 //! (`noteAppend`; docs.zig and login.zig append through it too); and built
 //! again whole after a retire applies (`rebuild`), which is rare and always
 //! right. A host that never builds it gets one built by the first search.
@@ -370,8 +370,8 @@ var the: ?Index = null;
 var failed_at_ms: ?i64 = null;
 pub const retry_ms = 60_000;
 
-/// **HOST CONTRACT STEP 4b**: once, after `chat_store.backfillAll`, before the
-/// first request: every transcript on disk into memory. `scratch` is for the
+/// Every transcript on disk into memory, once, before the first request:
+/// `host_start.start` calls it after the sidecar backfill. `scratch` is for the
 /// reading only, given back as each transcript is done; the index itself
 /// lives on the process's allocator (`mem_meter.base()`). Answers what it
 /// read; on failure (out of memory) there is no index, and the first search

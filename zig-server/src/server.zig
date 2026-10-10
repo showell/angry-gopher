@@ -31,7 +31,7 @@ const mem_meter = @import("mem_meter.zig");
 const bind = @import("bind.zig");
 const bus_mod = @import("bus.zig");
 const chat_store = @import("chat_store.zig");
-const host_status = router.host_status;
+const host_status = router.host_facts;
 const Hub = bus_mod.Hub;
 const Bus = bus_mod.Bus;
 
@@ -245,11 +245,11 @@ const Statfs = extern struct {
 
 /// Free (to an unprivileged writer) and total bytes on the volume the game
 /// store is on; null when statfs will not say.
-fn linuxFreeSpace() ?router.game_limits.Space {
+fn linuxFreeSpace() ?router.Space {
     if (@import("builtin").os.tag != .linux or @sizeOf(usize) != 8) return null;
     const linux = std.os.linux;
     var path: [std.fs.max_path_bytes:0]u8 = undefined;
-    const root = router.game_limits.dataRoot();
+    const root = router.dataRoot();
     if (root.len >= path.len) return null;
     @memcpy(path[0..root.len], root);
     path[root.len] = 0;

@@ -56,8 +56,8 @@ pub fn point(alloc: std.mem.Allocator, r: Roots) !void {
 /// **MOVE THE SESSION SECRET INTO auth/, ONCE** (QUEUE item 106). `point` points
 /// the reads at auth/; this carries an existing secret there from its old home,
 /// data/chat/, so a volume or tree written before the move still serves and no
-/// session is lost. Both hosts call it at startup after `point`, before the
-/// first request — like `store.backfillAll`. Best-effort and idempotent.
+/// session is lost. `host_start.start` calls it after `point`, before the
+/// first request. Best-effort and idempotent.
 ///
 /// **NEVER TWO COPIES.** Each of the three secret files is written to auth/ and
 /// read back before the old one in data/chat/ is removed; a stop in between
