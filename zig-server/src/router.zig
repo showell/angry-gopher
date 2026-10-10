@@ -943,7 +943,7 @@ test "route: HEAD /admin/backup reads nothing" {
     try testing.expect(admin_backup.files_archived >= before + 3);
 }
 
-test "route: /admin/search finds a key in every conversation, DMs and channels, ASCII case folded" {
+test "route: /admin/search finds a key in every conversation the admin can see, DMs and channels, ASCII case folded, and nowhere else" {
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();
     const a = arena.allocator();
@@ -955,10 +955,20 @@ test "route: /admin/search finds a key in every conversation, DMs and channels, 
     const me = try adminSession(a, io);
     const chat_store = @import("chat_store.zig");
     const disk = @import("store.zig");
+    // Two more members; the admin is in channel "general", not in "quiet".
+    for ([_][2][]const u8{ .{ "2", "Debbie" }, .{ "3", "Apoorva" } }) |m| {
+        try users.setUserName(io, a, m[0], m[1]);
+        try users.setUserPassword(io, a, m[0], "pw");
+    }
+    try disk.write(io, a, try std.fs.path.join(a, &.{ chat_store.chat_root, "channels", "general.channel" }), "1\n2\n", .{});
+    try disk.write(io, a, try std.fs.path.join(a, &.{ chat_store.chat_root, "channels", "quiet.channel" }), "2\n3\n", .{});
     const transcripts = [_]struct { dir: []const u8, sid: []const u8, body: []const u8 }{
         .{ .dir = "1_2", .sid = "ChitChat", .body = "MSG_ChitChat_1\nfrom: Steve\ndate: 2026-10-10T00:00:00Z\n\nthe page LAYOUT is off" ++ chat_store.sep ++ "MSG_ChitChat_2\nfrom: Claude\ndate: 2026-10-10T00:01:00Z\n\nnothing to see" },
         .{ .dir = "channels/general", .sid = "Trips", .body = "MSG_Trips_1\nfrom: Debbie\ndate: 2026-10-10T00:02:00Z\n\na long layover in Denver" },
         .{ .dir = "2_3", .sid = "Cards", .body = "MSG_Cards_1\nfrom: Apoorva\ndate: 2026-10-10T00:03:00Z\n\ndeal the seven" },
+        // Not the admin's: a DM between two others, and a channel the admin is not in.
+        .{ .dir = "2_3", .sid = "Private", .body = "MSG_Private_1\nfrom: Debbie\ndate: 2026-10-10T00:04:00Z\n\nthe layaway plan" },
+        .{ .dir = "channels/quiet", .sid = "Hush", .body = "MSG_Hush_1\nfrom: Apoorva\ndate: 2026-10-10T00:05:00Z\n\na layer cake" },
     };
     for (transcripts) |t| {
         const path = try std.fs.path.join(a, &.{ chat_store.chat_root, t.dir, "sessions", try std.fmt.allocPrint(a, "{s}.md", .{t.sid}) });
@@ -970,7 +980,9 @@ test "route: /admin/search finds a key in every conversation, DMs and channels, 
     try testing.expect(std.mem.indexOf(u8, got, "/channel/general/Trips#msg-Trips_1") != null);
     try testing.expect(std.mem.indexOf(u8, got, "ChitChat_2") == null);
     try testing.expect(std.mem.indexOf(u8, got, "Cards_1") == null);
-    try testing.expect(std.mem.indexOf(u8, got, "2 messages match, of 4 in 3 transcripts") != null);
+    try testing.expect(std.mem.indexOf(u8, got, "Private_1") == null);
+    try testing.expect(std.mem.indexOf(u8, got, "Hush_1") == null);
+    try testing.expect(std.mem.indexOf(u8, got, "2 messages match, of 3 in 2 transcripts") != null);
 }
 
 test "route: only a member's own session is the admin; a non-member's session, or a gopher_uid, is no one" {

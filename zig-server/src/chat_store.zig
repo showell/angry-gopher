@@ -576,6 +576,27 @@ pub fn backfillSidecars(io: Io, alloc: Alloc, conv_dirs: []const []const u8) usi
     return wrote;
 }
 
+/// A conversation one viewer may read: its directory, its URL root, and what
+/// kind it is.
+pub const Reach = struct { dir: []const u8, base: []const u8, kind: ConvKind };
+
+/// **WHAT ONE VIEWER CAN SEE**: every DM they are half of (one per other
+/// authorized member, as the sidebar lists them) and every channel they are a
+/// member of. A reader across conversations walks this list and nothing else,
+/// so nothing outside it can reach the viewer: the boundary is the walk.
+pub fn visibleConvs(io: Io, alloc: Alloc, uid: []const u8) ![]Reach {
+    var out: std.ArrayList(Reach) = .empty;
+    for (try users.listAuthorized(io, alloc)) |partner| {
+        if (std.mem.eql(u8, partner.id, uid)) continue;
+        const conv = try chatPairKey(alloc, uid, partner.id);
+        try out.append(alloc, .{ .dir = try dmConvDir(alloc, conv), .base = try std.fmt.allocPrint(alloc, "/chat/c/{s}", .{conv}), .kind = .dm });
+    }
+    for (try listUserChannels(io, alloc, uid)) |name| {
+        try out.append(alloc, .{ .dir = try channelConvDir(alloc, name), .base = try std.fmt.allocPrint(alloc, "/channel/{s}", .{name}), .kind = .channel });
+    }
+    return out.toOwnedSlice(alloc);
+}
+
 /// listConvDirs is every conversation on disk: each DM directory directly under
 /// chat_root, and each channel under `channels/`. For a pass over all of them,
 /// where the per-viewer listings are not the question.
