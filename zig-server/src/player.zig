@@ -222,10 +222,9 @@ fn queryNext(alloc: Alloc, target: []const u8) ![]const u8 {
 }
 
 /// sanitizeNext keeps only internal redirect targets, so ?next= is never an open
-/// redirect.
+/// redirect (`http.internalTarget`).
 fn sanitizeNext(next: []const u8) []const u8 {
-    if (std.mem.startsWith(u8, next, "/") and !std.mem.startsWith(u8, next, "//")) return next;
-    return "/";
+    return http.internalTarget(next);
 }
 
 /// formField reads one `a=b&c=d` field, percent- and plus-decoded. A local copy
@@ -334,6 +333,13 @@ test "sanitizeNext keeps internal paths and refuses an open redirect" {
     try testing.expectEqualStrings("/", sanitizeNext("//evil.example"));
     try testing.expectEqualStrings("/", sanitizeNext("https://evil.example"));
     try testing.expectEqualStrings("/", sanitizeNext(""));
+    // **WHAT A BROWSER READS AS ANOTHER HOST** (the normalization hunt,
+    // 2026-10-10): a backslash after the slash is a second slash to a
+    // browser, and a tab or newline inside is dropped before it looks.
+    for ([_][]const u8{ "/\\evil.example", "/\\/evil.example", "/\t/evil.example", "/\n/evil.example", "/x\\y", "/\x7f/evil.example" }) |bad| {
+        try testing.expectEqualStrings("/", sanitizeNext(bad));
+    }
+    try testing.expectEqualStrings("/chat/c/1_2/ChitChat?x=1#msg-ChitChat_3", sanitizeNext("/chat/c/1_2/ChitChat?x=1#msg-ChitChat_3"));
 }
 
 test "formField decodes plus and percent escapes" {
