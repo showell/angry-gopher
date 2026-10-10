@@ -509,8 +509,9 @@ pub fn lastMessage(io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8) 
                     if (numberIn(got.id, sid)) |number| if (number >= c.count) return .{
                         .markdown = got.markdown,
                         .date = got.date,
-                        // A record behind: the newer message's author by name.
-                        .uid = authorOf(io, alloc, if (number == c.count) l.uid else "", got.from),
+                        // A current record's answer stands, nobody included;
+                        // a record behind: the newer message's author by name.
+                        .uid = if (number == c.count) l.uid else authorByName(io, alloc, got.from),
                         .number = number,
                     };
                 }
@@ -521,12 +522,17 @@ pub fn lastMessage(io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8) 
 }
 
 /// **THE AUTHOR WHERE NO SIDECAR SAYS** (the box's must-fix after 153(1)):
-/// `uid` when the sidecar knows it, else the member named `from`, the last
-/// message's name (names are unique among members; login finds members by
-/// name), else "". The next sidecar written carries it (`backfillSidecars`,
-/// and every send writes its own author). Never an older author.
-fn authorOf(io: Io, alloc: Alloc, uid: []const u8, from: []const u8) []const u8 {
-    if (uid.len > 0 or from.len == 0) return uid;
+/// where the record is behind its transcript or missing, the member named
+/// `from`, the last message's name (names are unique among members; login
+/// finds members by name), else "". The backfill records it; a send records
+/// its own author. Never an older author.
+///
+/// **A CURRENT RECORD IS NOT ASKED AGAIN** (the review): one that says
+/// nobody was looked up when it was written, and a name a member released
+/// and a newcomer took would credit the newcomer, "You" included; and the
+/// lookup reads every account, on every read.
+fn authorByName(io: Io, alloc: Alloc, from: []const u8) []const u8 {
+    if (from.len == 0) return "";
     // absent-ok: an author that cannot be looked up is shown as nobody; what a sidecar records from it is a cache, recounted from the transcript.
     return (users.findMemberByName(io, alloc, from) catch return "") orelse "";
 }
@@ -553,8 +559,10 @@ fn fallbackLast(io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8, cou
     const msgs = try decodeChatFile(alloc, raw);
     if (msgs.len == 0) return null;
     const last = msgs[msgs.len - 1];
-    const uid = if (counted) |c| (if (c.last) |l| (if (c.count == msgs.len and c.size == raw.len) l.uid else "") else "") else "";
-    return .{ .markdown = last.markdown, .date = last.date, .uid = authorOf(io, alloc, uid, last.from), .number = msgs.len };
+    // The record's answer where it speaks for this transcript, nobody
+    // included; else the last author by name.
+    const recorded: ?[]const u8 = if (counted) |c| (if (c.last) |l| (if (c.count == msgs.len and c.size == raw.len) l.uid else null) else null) else null;
+    return .{ .markdown = last.markdown, .date = last.date, .uid = recorded orelse authorByName(io, alloc, last.from), .number = msgs.len };
 }
 
 /// **EVERY SESSION GETS A SIDECAR AT BOOT.** A conversation written before this
@@ -592,7 +600,7 @@ pub fn backfillSidecars(io: Io, alloc: Alloc, conv_dirs: []const []const u8) usi
                 .offset = offset,
                 // The last message's author, found by name (the box's
                 // must-fix after 153(1)); unknown, "", when no member has it.
-                .uid = authorOf(io, a, "", msgs[msgs.len - 1].from),
+                .uid = authorByName(io, a, msgs[msgs.len - 1].from),
             });
             wrote += 1;
         }
@@ -1571,5 +1579,25 @@ test "the author where no sidecar says is the member the last message names; the
     // A name no member has: nobody, never a guess.
     try users.setUserName(f.io, a, "1", "Renamed");
     try f.setSidecar(try std.fmt.allocPrint(a, "1 {d}\n0 9\n", .{after_first}));
+    try testing.expectEqualStrings("", (try lastMessage(f.io, a, f.dir, "topic")).?.uid);
+}
+
+test "a current record that says nobody is believed: a name reused after its member left gets no credit (the Who cell's review)" {
+    var threaded = std.Io.Threaded.init(testing.allocator, .{});
+    defer threaded.deinit();
+    var f: CountFixture = undefined;
+    try f.init(threaded.io());
+    defer f.deinit();
+    const a = f.arena.allocator();
+    // The last message is "Tester"'s, and no member has that name now: the
+    // backfill records nobody.
+    _ = try f.send("from someone since gone");
+    try Io.Dir.cwd().deleteFile(f.io, try countPath(a, f.dir, "topic"));
+    const dirs = [_][]const u8{f.dir};
+    try testing.expectEqual(@as(usize, 1), backfillSidecars(f.io, a, &dirs));
+    try testing.expectEqualStrings("", readCount(f.io, a, f.dir, "topic").?.last.?.uid);
+    // A newcomer takes the name: the record still says nobody.
+    try users.setUserName(f.io, a, "9", "Tester");
+    try users.setUserPassword(f.io, a, "9", "pw");
     try testing.expectEqualStrings("", (try lastMessage(f.io, a, f.dir, "topic")).?.uid);
 }
