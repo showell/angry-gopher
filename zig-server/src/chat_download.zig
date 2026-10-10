@@ -6,7 +6,7 @@
 //!   <sid>/<sid>.reactions.jsonl   the reaction sidecar, when anyone has reacted
 //!   <sid>/uploads/<file>   every image in the topic's .uploads sidecar
 //!
-//! The .lastauthor and .count companions are deliberately omitted (internal
+//! The .count companion, and any .lastauthor an older server left, are deliberately omitted (internal
 //! bookkeeping, not the human transcript). A topic is small, so the whole bundle is built in
 //! memory then gzipped — no streaming-response machinery. The tar headers are
 //! ustar.zig's.

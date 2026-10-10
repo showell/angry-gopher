@@ -1382,8 +1382,8 @@ test "backfill: one pass reaches DMs and channels alike" {
 }
 
 test "backfill: the record it writes can be read back" {
-    // **THE ASSERTION THAT WAS MISSING.** A session with no `.lastauthor` has
-    // no uid to record, and a field left empty made the line one field short —
+    // **THE ASSERTION THAT WAS MISSING.** The backfill has no uid to record
+    // (no `.lastauthor` is read, gopher-metal 153(1)), and a field left empty made the line one field short —
     // so the record was unreadable, `lastMessage` quietly read the whole
     // transcript instead, and every test still passed. What the backfill
     // writes has to PARSE, not merely lead to the right answer.

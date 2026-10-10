@@ -215,7 +215,9 @@ fn retireTopic(pl: *Plan, conv_dir: []const u8, key: []const u8, sid: []const u8
     const alloc = pl.alloc;
     const sess = try std.fs.path.join(alloc, &.{ conv_dir, "sessions" });
     try pl.rmFile(.topic, try std.fmt.allocPrint(alloc, "{s}/{s}", .{ key, sid }), try std.fs.path.join(alloc, &.{ sess, try std.fmt.allocPrint(alloc, "{s}.md", .{sid}) }));
-    // Sidecars go with the topic; they are not listed on their own.
+    // Sidecars go with the topic; they are not listed on their own. No server
+    // writes `.lastauthor` now (gopher-metal 153(1)): one an older server
+    // left goes too.
     for ([_][]const u8{ ".count", ".lastauthor", ".reactions.jsonl" }) |suf| {
         const f = try std.fs.path.join(alloc, &.{ sess, try std.fmt.allocPrint(alloc, "{s}{s}", .{ sid, suf }) });
         if (pl.apply) try store.remove(pl.io, alloc, f);
