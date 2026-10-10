@@ -130,7 +130,13 @@ fn localTarget(target: []const u8) []const u8 {
 /// the prefix stripped, e.g. "/app.js" or "/sessions/3/..."). The table below IS
 /// the site: every surface appears exactly once, and the comment on each arm
 /// says who may reach it.
-pub fn route(req: *std.http.Server.Request, io: Io, alloc: std.mem.Allocator, bus: *Bus) !void {
+///
+/// **THE KEPT STREAM IS ITS ANSWER** (metal-vmm QUEUE 157(a)): the stream a
+/// handler kept, which the host must serve or drop (`streams.serveKept`,
+/// `streams.nextFrame`, `streams.drop`); Zig makes the caller use it. On an
+/// error it is dropped here, where a host that read `bus.kept` after `try`
+/// left a kept stream's subscriber in the Hub for ever.
+pub fn route(req: *std.http.Server.Request, io: Io, alloc: std.mem.Allocator, bus: *Bus) !?streams.Kept {
     var sent: Sent = undefined;
     // Small, on the stack: only a chunk's header is formatted in place, and
     // anything longer passes straight to the connection's own buffer.
@@ -138,7 +144,7 @@ pub fn route(req: *std.http.Server.Request, io: Io, alloc: std.mem.Allocator, bu
     sent.lend(req, &buffer);
     const done = routed(req, io, alloc, bus);
     sent.giveBack(req);
-    done catch |e| {
+    return settle(bus, done) catch |e| {
         // **A FAILURE IS A 500, NEVER SILENCE** (metal-vmm QUEUE 123, Steve:
         // louder is better): an error that escapes a handler before its
         // head is sent is answered here, for both hosts, and still goes on
@@ -148,11 +154,24 @@ pub fn route(req: *std.http.Server.Request, io: Io, alloc: std.mem.Allocator, bu
             // The client's, not the server's (http.formField): said as such,
             // and nothing for the host to log.
             if (!sent.any) req.respond("The form was malformed.\n", .{ .status = .bad_request, .keep_alive = false }) catch {};
-            return;
+            return null;
         }
         answerFailure(req, &sent);
         return e;
     };
+}
+
+/// What `route` hands the host: the kept stream on success, taken off the
+/// bus; on an error, none, and a stream the handler kept before it failed is
+/// dropped, never left for a host to forget.
+fn settle(bus: *Bus, done: anyerror!void) anyerror!?streams.Kept {
+    const kept = bus.kept;
+    bus.kept = null;
+    done catch |e| {
+        if (kept) |k| streams.drop(bus.hub, k);
+        return e;
+    };
+    return kept;
 }
 
 /// **WHETHER ANY OF THE ANSWER WENT OUT** (metal-vmm QUEUE 127(b)): the
@@ -379,8 +398,7 @@ fn serveFrom(alloc: std.mem.Allocator, io: Io, raw: []const u8, peer: ?[]const u
     var hub = Hub.init(io, alloc);
     var b = Bus.of(&hub);
     b.peer = peer;
-    try route(&req, io, alloc, &b);
-    if (b.kept) |k| streams.drop(&hub, k);
+    if (try route(&req, io, alloc, &b)) |k| streams.drop(&hub, k);
     try out.writer.flush();
     return out.written();
 }
@@ -2082,4 +2100,24 @@ test "route: a GET re-signs a gopher_uid past half its life, so an active player
     try testing.expect(playingAs(try postForm(a, io, "/play", old, ""), "Nikhil"));
     // Young: no re-sign.
     try testing.expect(setUid(try UidSite.ask(a, io, "/play", try signedUid(a, id))) == null);
+}
+
+test "a stream a handler kept and then failed is dropped, and a kept one is the host's to take (metal-vmm QUEUE 157(a))" {
+    var threaded = std.Io.Threaded.init(testing.allocator, .{});
+    defer threaded.deinit();
+    var hub = Hub.init(threaded.io(), testing.allocator);
+    defer hub.entries.deinit(testing.allocator);
+    var b = Bus.of(&hub);
+    const sub = try b.open("k");
+    b.keep(.{ .sub = sub, .render = undefined });
+    try testing.expectError(error.HandlerFailed, settle(&b, error.HandlerFailed));
+    try testing.expectEqual(@as(usize, 0), hub.entries.items.len);
+    try testing.expect(b.kept == null);
+    // On success the stream is the answer, and off the bus.
+    const sub2 = try b.open("k");
+    b.keep(.{ .sub = sub2, .render = undefined });
+    const k = (try settle(&b, {})).?;
+    try testing.expect(b.kept == null);
+    streams.drop(&hub, k);
+    try testing.expectEqual(@as(usize, 0), hub.entries.items.len);
 }

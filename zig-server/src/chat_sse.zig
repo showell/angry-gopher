@@ -42,8 +42,8 @@ pub fn streamTranscript(req: *Request, io: Io, alloc: Alloc, bus: *Bus, conv_dir
 
     const stream = try store.openStream(io, alloc, bus, conv_dir, conv_key, sid);
     // This handler owns the subscriber until the host takes it.
-    var kept = false;
-    defer if (!kept) bus.close(stream.sub);
+    var held = bus.hold(stream.sub);
+    defer held.release();
 
     var hbuf: [4096]u8 = undefined;
     var body = req.respondStreaming(&hbuf, .{
@@ -66,8 +66,7 @@ pub fn streamTranscript(req: *Request, io: Io, alloc: Alloc, bus: *Bus, conv_dir
     }
 
     // Live: the host's. The viewer outlives this request's arena.
-    bus.keep(.{ .sub = stream.sub, .render = renderLive, .ctx = try bus.gpa().dupe(u8, viewer) });
-    kept = true;
+    held.keep(renderLive, try bus.gpa().dupe(u8, viewer));
 }
 
 /// One live frame for this viewer, or nothing if the blob does not render.
@@ -137,8 +136,8 @@ fn emitWire(alloc: Alloc, index: usize, from: []const u8, at: []const u8, md: []
 pub fn forwardUserStream(req: *Request, alloc: Alloc, bus: *Bus, key: []const u8) !void {
     _ = alloc;
     const sub = try bus.open(key);
-    var kept = false;
-    defer if (!kept) bus.close(sub);
+    var held = bus.hold(sub);
+    defer held.release();
 
     var hbuf: [4096]u8 = undefined;
     var body = req.respondStreaming(&hbuf, .{
@@ -148,8 +147,7 @@ pub fn forwardUserStream(req: *Request, alloc: Alloc, bus: *Bus, key: []const u8
     // while, and the browser should know it is connected.
     body.flush() catch return;
 
-    bus.keep(.{ .sub = sub, .render = renderForward });
-    kept = true;
+    held.keep(renderForward, "");
 }
 
 fn renderForward(_: []const u8, arena: Alloc, blob: []const u8) ?[]const u8 {

@@ -204,10 +204,10 @@ fn handleConn(io: std.Io, alloc: std.mem.Allocator, hub: *Hub, stream: net.Strea
     turn.lockUncancelable(io);
     const routed = router.route(&req, io, arena.allocator(), &bus);
     turn.unlock(io);
-    try routed;
-    // A stream the handler kept is served here, on this connection's own task,
-    // until its client goes away — the loop the handler used to run itself.
-    if (bus.kept) |kept| bus_mod.serveKept(hub, kept, &sw.interface);
+    // A stream the handler kept is route's answer, served here, on this
+    // connection's own task, until its client goes away; on an error route
+    // has dropped it (metal-vmm QUEUE 157(a)).
+    if (try routed) |kept| bus_mod.serveKept(hub, kept, &sw.interface);
 }
 
 /// The connection's address as text with no port (`203.0.113.7`,
