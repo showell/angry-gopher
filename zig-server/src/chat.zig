@@ -352,8 +352,14 @@ fn savedIds(req: *Request, io: Io, alloc: Alloc, uid: []const u8, conv_key: []co
 /// sendMessage handles POST /<…>/<sid>/send: parse the markdown+cid form, then
 /// append (which fans out live to
 /// every open stream on this conv/sid), and report. `X-Chat-Async: 1` → 204;
-/// a plain form post → 303 back to the topic. Empty / DROP_ON_FLOOR bodies report
-/// success without appending (the client's no-echo path).
+/// a plain form post → 303 back to the topic.
+///
+/// **A SEND STORES WHAT WAS SENT, OR IS REFUSED** (metal-vmm QUEUE 156(b)):
+/// no `markdown` field, or one that is only whitespace, is a 400, where it
+/// answered success having stored nothing; the text is stored as sent (a
+/// trim, once, stripped a code block's first indentation), and trimmed only
+/// to ask whether it is empty. (`DROP_ON_FLOOR`, which dropped a real
+/// message that began with it, is gone: nothing used it.)
 fn sendMessage(req: *Request, io: Io, alloc: Alloc, bus: *Bus, topic: Topic, uid: []const u8) !void {
     const conv = topic.conv;
     if (req.head.method != .POST) return http.methodNotAllowed(req);
@@ -364,12 +370,11 @@ fn sendMessage(req: *Request, io: Io, alloc: Alloc, bus: *Bus, topic: Topic, uid
     const is_async = if (try http.header(req, alloc, "x-chat-async")) |v| std.mem.eql(u8, v, "1") else false;
 
     const body = (try http.readLimitedBody(req, alloc, max_message_bytes)) orelse return;
-    const md_raw = (try formField(alloc, body, "markdown")) orelse "";
+    const md = (try formField(alloc, body, "markdown")) orelse
+        return req.respond("not sent: no message (the form has no markdown field)\n", .{ .status = .bad_request });
     const cid = (try formField(alloc, body, "cid")) orelse "";
-    const md = std.mem.trim(u8, md_raw, " \t\r\n");
-
-    if (md.len == 0 or std.mem.startsWith(u8, md, "DROP_ON_FLOOR")) {
-        return sendDone(req, alloc, is_async, conv.base, topic.sid);
+    if (std.mem.trim(u8, md, " \t\r\n").len == 0) {
+        return req.respond("not sent: the message is empty\n", .{ .status = .bad_request });
     }
 
     // Refuse hostile / absurdly over-formatted markdown at the door rather than
@@ -394,7 +399,7 @@ fn pinSession(req: *Request, io: Io, alloc: Alloc, uid: []const u8, conv_key: []
     return req.respond("", .{ .status = .no_content });
 }
 
-/// sendDone reports a (possibly no-op) send: 204 for async fetch callers, else a
+/// sendDone reports a send: 204 for async fetch callers, else a
 /// 303 back to the topic page (the no-JS form-post fallback).
 fn sendDone(req: *Request, alloc: Alloc, is_async: bool, base: []const u8, sid: []const u8) !void {
     if (is_async) return req.respond("", .{ .status = .no_content });
@@ -419,11 +424,14 @@ fn newTopic(req: *Request, io: Io, alloc: Alloc, bus: *Bus, conv: Conv, uid: []c
     if (!store.validSessionID(topic)) {
         return req.respond("Topic must be letters, digits, and hyphens only — no spaces, underscores, or punctuation.\n", .{ .status = .bad_request });
     }
-    if (std.mem.eql(u8, topic, "new")) {
+    if (std.ascii.eqlIgnoreCase(topic, "new")) {
         return req.respond("\"new\" is reserved — pick another topic name.\n", .{ .status = .bad_request });
     }
+    // **WITHOUT CASE** (metal-vmm QUEUE 156(a)): the store's names are not
+    // (FAT folds them), so "plans" beside "Plans" was one file, the new
+    // topic's first message landing in the old.
     for (try store.listSessions(io, alloc, conv.dir)) |s| {
-        if (std.mem.eql(u8, s, topic)) return req.respond("That topic already exists.\n", .{ .status = .conflict });
+        if (std.ascii.eqlIgnoreCase(s, topic)) return req.respond("That topic already exists.\n", .{ .status = .conflict });
     }
 
     const from_name = try users.getUserName(io, alloc, uid);

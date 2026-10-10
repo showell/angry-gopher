@@ -1788,3 +1788,53 @@ test "fs: a handler's error is answered 500, never with silence (metal-vmm QUEUE
     try testing.expect(std.mem.startsWith(u8, status(out.written()), "500"));
     try testing.expect(std.mem.endsWith(u8, out.written(), "\r\n\r\nThe server failed.\n"));
 }
+
+// ── the normalization hunt's app findings (metal-vmm QUEUE 156) ──────────────
+
+test "route: a new topic differing only in case from one there is refused, 409, where the store would merge them (156(a))" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var site = try UidSite.init(a, io);
+    defer site.deinit();
+    const prev = mem_meter.replace(std.heap.page_allocator); // presence outlives the test
+    defer _ = mem_meter.replace(prev);
+    const steve = try memberSession(a, io, "1", "Steve");
+    _ = try memberSession(a, io, "2", "Debbie");
+    try testing.expectEqualStrings("200 OK", status(try postAs(a, io, "/chat/c/1_2/new", steve, "topic=Plans")));
+    try testing.expectEqualStrings("409 Conflict", status(try postAs(a, io, "/chat/c/1_2/new", steve, "topic=plans")));
+    try testing.expectEqualStrings("409 Conflict", status(try postAs(a, io, "/chat/c/1_2/new", steve, "topic=PLANS")));
+    try testing.expectEqualStrings("400 Bad Request", status(try postAs(a, io, "/chat/c/1_2/new", steve, "topic=New")));
+}
+
+test "route: a send that would store nothing is refused, 400, and a message is stored as sent (156(b))" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var site = try UidSite.init(a, io);
+    defer site.deinit();
+    const prev = mem_meter.replace(std.heap.page_allocator);
+    defer _ = mem_meter.replace(prev);
+    const chat_store = @import("chat_store.zig");
+    const steve = try memberSession(a, io, "1", "Steve");
+    _ = try memberSession(a, io, "2", "Debbie");
+    try testing.expectEqualStrings("200 OK", status(try postAs(a, io, "/chat/c/1_2/new", steve, "topic=Plans")));
+    // No markdown field at all; one that is only whitespace.
+    try testing.expectEqualStrings("400 Bad Request", status(try postAs(a, io, "/chat/c/1_2/Plans/send", steve, "cid=x")));
+    try testing.expectEqualStrings("400 Bad Request", status(try postAs(a, io, "/chat/c/1_2/Plans/send", steve, "markdown=+%0A+&cid=x")));
+    // A message that began DROP_ON_FLOOR is a message.
+    try testing.expectEqualStrings("303 See Other", status(try postAs(a, io, "/chat/c/1_2/Plans/send", steve, "markdown=DROP_ON_FLOOR+is+a+phrase&cid=y")));
+    // A code block's indentation stays.
+    try testing.expectEqualStrings("303 See Other", status(try postAs(a, io, "/chat/c/1_2/Plans/send", steve, "markdown=++++code%0A++++more&cid=z")));
+    const raw = (try chat_store.rawSession(io, a, try chat_store.dmConvDir(a, "1_2"), "Plans")).?;
+    const msgs = try chat_store.decodeChatFile(a, raw);
+    try testing.expectEqual(@as(usize, 3), msgs.len);
+    try testing.expectEqualStrings("DROP_ON_FLOOR is a phrase", msgs[1].markdown);
+    try testing.expectEqualStrings("    code\n    more", msgs[2].markdown);
+}
