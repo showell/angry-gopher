@@ -49,6 +49,10 @@ pub var session_secret_dir: []const u8 = "../games/lynrummy/data/chat"; // holds
 
 const claude_agent_id = "3";
 const session_max_age_secs: i64 = 365 * 24 * 60 * 60;
+/// **HOW FAR AHEAD A COOKIE'S `issued` MAY BE** (metal-vmm QUEUE 156(f)): a
+/// clock a little behind the one that signed it. Past this it is refused: an
+/// `issued` in the future never expired, whatever the max age.
+pub const clock_skew_secs: i64 = 5 * 60;
 
 // ── the resolver ────────────────────────────────────────────────────────────
 
@@ -125,6 +129,7 @@ pub fn verifySessionWithSecret(alloc: Alloc, secret: []const u8, val: []const u8
     // expiry: issued must parse and be within max age.
     const n = std.fmt.parseInt(i64, issued, 10) catch return null;
     if (now_unix - n > session_max_age_secs) return null;
+    if (n - now_unix > clock_skew_secs) return null;
     return id;
 }
 
@@ -665,6 +670,11 @@ test "verifySessionWithSecret accepts a genuine cookie and rejects every forgery
     try testing.expectEqualStrings("42", verifySessionWithSecret(a, secret, signed, issued + session_max_age_secs).?);
     // …one second later is not.
     try testing.expect(verifySessionWithSecret(a, secret, signed, issued + session_max_age_secs + 1) == null);
+    // Issued in the future: a small skew is a clock, more is refused (156(f)).
+    try testing.expectEqualStrings("42", verifySessionWithSecret(a, secret, signed, issued - clock_skew_secs).?);
+    try testing.expect(verifySessionWithSecret(a, secret, signed, issued - clock_skew_secs - 1) == null);
+    const far = try signSession(a, secret, "42", std.math.maxInt(i64));
+    try testing.expect(verifySessionWithSecret(a, secret, far, issued) == null);
 }
 
 test "apiKeyMatches: plaintext constant-time arm and legacy sha256-hex arm" {

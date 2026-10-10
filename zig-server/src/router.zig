@@ -588,7 +588,7 @@ test "route: an unsigned gopher_uid is re-identified once, then never" {
     try testing.expectEqualStrings("303 See Other", status(first));
     try testing.expect(std.mem.indexOf(u8, first, "location: /play?next=/game") != null);
     const signed = setUid(first) orelse return error.NoSetCookie;
-    try testing.expectEqualStrings(id, uid_cookie.verify(UidSite.secret, signed).?);
+    try testing.expectEqualStrings(id, uid_cookie.verify(UidSite.secret, signed, nowSecs(io)).?);
     try testing.expect(UidSite.marked(a, io, id));
 
     // The signed cookie is the player.
@@ -601,7 +601,7 @@ test "route: an unsigned gopher_uid is re-identified once, then never" {
     // been lost): re-signed again. Once the grace is over: no one.
     const lost = try UidSite.ask(a, io, "/play", unsigned);
     try testing.expectEqualStrings("303 See Other", status(lost));
-    try testing.expectEqualStrings(id, uid_cookie.verify(UidSite.secret, setUid(lost).?).?);
+    try testing.expectEqualStrings(id, uid_cookie.verify(UidSite.secret, setUid(lost).?, nowSecs(io)).?);
     const marker = try std.fs.path.join(a, &.{ player.player_root, id, "signed" });
     try UidSite.disk.replace(io, a, marker, "1790000000\n", .{}); // signed long ago
     const again = try UidSite.ask(a, io, "/play", unsigned);
@@ -711,7 +711,7 @@ test "route: /play mints a signed gopher_uid, marked as signed" {
     const r = try serve(a, io, "POST /play HTTP/1.1\r\nHost: x\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: 23\r\n\r\nname=Nikhil&next=%2Fgame");
     try testing.expectEqualStrings("303 See Other", status(r));
     const v = setUid(r) orelse return error.NoSetCookie;
-    const id = uid_cookie.verify(UidSite.secret, v) orelse return error.Unsigned;
+    const id = uid_cookie.verify(UidSite.secret, v, nowSecs(io)) orelse return error.Unsigned;
     try testing.expect(UidSite.marked(a, io, id));
     // Its unsigned spelling is refused from the start: not re-signed, even
     // within a re-sign's grace, since this id never had an unsigned cookie.
@@ -732,9 +732,16 @@ fn removeSecret(a: std.mem.Allocator, io: Io) !void {
 
 // ── the game store's growth (gopher-metal QUEUE item 52) ─────────────────────
 
-/// A signed gopher_uid cookie for `id`, as /play would have set.
+fn nowSecs(io: Io) i64 {
+    return @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
+}
+
+/// A signed gopher_uid cookie for `id`, as /play would have set: signed an
+/// hour ago, so it is inside its lifetime whenever the tests run.
 fn signedUid(a: std.mem.Allocator, id: []const u8) ![]const u8 {
-    return std.fmt.allocPrint(a, "gopher_uid={s}", .{try uid_cookie.sign(a, UidSite.secret, id, 1_790_000_000)});
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    return std.fmt.allocPrint(a, "gopher_uid={s}", .{try uid_cookie.sign(a, UidSite.secret, id, nowSecs(threaded.io()) - 3600)});
 }
 
 fn postAs(a: std.mem.Allocator, io: Io, target: []const u8, cookies: []const u8, body: []const u8) ![]const u8 {
@@ -1435,7 +1442,7 @@ test "route: /admin/secret changes the secret: members log in again, players are
     const renewed = try UidSite.ask(a, io, "/play", old_uid);
     try testing.expectEqualStrings("303 See Other", status(renewed));
     const fresh = setUid(renewed) orelse return error.NoSetCookie;
-    try testing.expectEqualStrings(id, uid_cookie.verify(new_secret, fresh).?);
+    try testing.expectEqualStrings(id, uid_cookie.verify(new_secret, fresh, nowSecs(io)).?);
     try testing.expect(playingAs(try UidSite.ask(a, io, "/play", try std.fmt.allocPrint(a, "gopher_uid={s}", .{fresh})), "Nikhil"));
 
     // Once the days are over, the old cookie names no one.
