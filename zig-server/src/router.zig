@@ -2121,3 +2121,35 @@ test "a stream a handler kept and then failed is dropped, and a kept one is the 
     streams.drop(&hub, k);
     try testing.expectEqual(@as(usize, 0), hub.entries.items.len);
 }
+
+test "route: every game write is counted as exactly what it wrote: an annotation compacted, a line trimmed, a puzzle's first move with its meta (metal-vmm QUEUE 157(b))" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var site = try UidSite.init(a, io);
+    defer site.deinit();
+    const limits = UidSite.game_limits;
+    const id = try player.allocate(io, a, "Nikhil");
+    const me = try signedUid(a, id);
+    const games = try std.fs.path.join(a, &.{ UidSite.storage.data_root, id });
+    try testing.expectEqualStrings("200 OK", status(try postAs(a, io, "/game/new-session", me, "state")));
+    const Write = struct { target: []const u8, body: []const u8, files: []const []const u8 };
+    const writes = [_]Write{
+        .{ .target = "/game/sessions/1/annotations", .body = "{ \"a\" : 1,\n  \"b\" : \"x y\" }\n\n", .files = &.{"lynrummy-elm/sessions/1/annotations.jsonl"} },
+        .{ .target = "/game/sessions/1/actions", .body = "move one\n\n\n", .files = &.{"lynrummy-elm/sessions/1/actions.dsl"} },
+        .{ .target = "/puzzles/sessions/1/puzzles/0/actions", .body = "1) x\n", .files = &.{ "puzzle/sessions/1/meta", "puzzle/sessions/1/puzzle_0/actions.dsl" } },
+        .{ .target = "/puzzles/sessions/1/puzzles/0/actions", .body = "2) y", .files = &.{"puzzle/sessions/1/puzzle_0/actions.dsl"} },
+    };
+    for (writes) |w| {
+        var before: u64 = 0;
+        for (w.files) |f| before += if (try UidSite.disk.statOrNull(io, a, try std.fs.path.join(a, &.{ games, f }))) |st| st.size else 0;
+        const counted = limits.countedBytes(io, id) orelse 0;
+        try testing.expectEqualStrings("204 No Content", status(try postAs(a, io, w.target, me, w.body)));
+        var after: u64 = 0;
+        for (w.files) |f| after += (try UidSite.disk.stat(io, a, try std.fs.path.join(a, &.{ games, f }))).size;
+        try testing.expectEqual(after - before, limits.countedBytes(io, id).? - counted);
+    }
+}

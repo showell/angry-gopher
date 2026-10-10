@@ -189,6 +189,15 @@ pub fn forget(io: Io, id: []const u8) void {
     };
 }
 
+/// What is counted for `id` so far, or null when nothing is: for a test that
+/// holds the count to what landed (metal-vmm QUEUE 157(b)).
+pub fn countedBytes(io: Io, id: []const u8) ?u64 {
+    mu.lockUncancelable(io);
+    defer mu.unlock(io);
+    for (&table) |*u| if (u.len != 0 and std.mem.eql(u8, u.id[0..u.len], id)) return u.bytes;
+    return null;
+}
+
 /// Forgets everyone, and every address: for a test that moves the data root.
 pub fn forgetAll() void {
     table = @splat(.{});

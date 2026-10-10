@@ -19,6 +19,14 @@
 //! owns, so one player in two tabs, or a client retrying, appends to one file
 //! twice at once. Measured: 1,814 of 2,000 lines landed from 8 concurrent
 //! writers (gopher-metal's GROWTH-game-store.md).
+//!
+//! **EVERY GAME WRITE IS ADMITTED BY WHAT IT WRITES** (metal-vmm QUEUE
+//! 157(b)): a handler writes through `makeGameSession`, `appendGameLine` or
+//! `appendPuzzleMove`, each of which builds the bytes it will write, asks
+//! `game_limits.admit` for exactly their length, and writes them. The writers
+//! under them are not `pub`: a caller once counted the bytes by hand, "as
+//! storage writes it", and the annotation it counted was not the compacted
+//! one storage wrote.
 
 const std = @import("std");
 const Io = std.Io;
@@ -105,7 +113,7 @@ var create_mu: Io.Mutex = .init;
 /// Makes puzzle session `session_id`, with `meta`, if it is the one a page
 /// offered (`nextPuzzleSessionID`) and is not there yet; answers whether the
 /// session is there afterwards. An id never offered makes nothing.
-pub fn ensurePuzzleSession(io: Io, alloc: Alloc, user_id: []const u8, session_id: i64, meta: []const u8) !bool {
+fn ensurePuzzleSession(io: Io, alloc: Alloc, user_id: []const u8, session_id: i64, meta: []const u8) !bool {
     create_mu.lockUncancelable(io);
     defer create_mu.unlock(io);
     if (try puzzleSessionExists(io, alloc, user_id, session_id)) return true;
@@ -118,7 +126,7 @@ pub fn ensurePuzzleSession(io: Io, alloc: Alloc, user_id: []const u8, session_id
 
 /// writePuzzleSessionFile writes body to <session-dir>/<rel>, creating parent
 /// dirs. Last-write-wins (used for meta).
-pub fn writePuzzleSessionFile(io: Io, alloc: Alloc, user_id: []const u8, session_id: i64, rel: []const u8, body: []const u8) !void {
+fn writePuzzleSessionFile(io: Io, alloc: Alloc, user_id: []const u8, session_id: i64, rel: []const u8, body: []const u8) !void {
     const dir = try puzzleSessionDir(alloc, user_id, session_id);
     const full = try join(alloc, &.{ dir, rel });
     try store.write(io, alloc, full, body, .{});
@@ -131,20 +139,69 @@ pub fn puzzleSessionExists(io: Io, alloc: Alloc, user_id: []const u8, session_id
     return st.kind == .directory;
 }
 
-/// appendPuzzleSessionDslLine appends one DSL line to <session-dir>/<rel>.
-pub fn appendPuzzleSessionDslLine(io: Io, alloc: Alloc, user_id: []const u8, session_id: i64, rel: []const u8, body: []const u8) !void {
-    const dir = try puzzleSessionDir(alloc, user_id, session_id);
-    const full = try join(alloc, &.{ dir, rel });
-    try appendTextLine(io, alloc, full, body);
+// ── game writes, admitted by what they write (metal-vmm QUEUE 157(b)) ──────
+
+/// Who a game write is charged to: the player and the address it came from
+/// (`game_limits.admit`).
+pub const Payer = struct { id: []const u8, client: ?[]const u8 };
+
+/// The two kinds of line a session takes: a DSL action (trailing newlines
+/// trimmed, one added) and a JSON annotation (compacted, one newline added).
+pub const LineKind = enum { actions, annotations };
+
+/// The line `body` lands as.
+fn lineOf(alloc: Alloc, kind: LineKind, body: []const u8) ![]u8 {
+    const text = switch (kind) {
+        .actions => std.mem.trimEnd(u8, body, "\n"),
+        .annotations => try compactJSON(alloc, body),
+    };
+    return std.fmt.allocPrint(alloc, "{s}\n", .{text});
 }
 
-/// appendTextLine appends `body` (trailing newlines stripped) + one '\n' to
-/// `path`, creating parent dirs. The line is written in a single positional
-/// write at the current end. See the atomicity note
-/// at the top of this file.
-fn appendTextLine(io: Io, alloc: Alloc, path: []const u8, body: []const u8) !void {
-    const trimmed = std.mem.trimEnd(u8, body, "\n");
-    const line = try std.fmt.allocPrint(alloc, "{s}\n", .{trimmed});
+/// A new full-game session holding `meta`, its id; or why not.
+pub const Made = union(enum) { refused: game_limits.Refusal, id: i64 };
+
+pub fn makeGameSession(io: Io, alloc: Alloc, payer: Payer, meta: []const u8) !Made {
+    if (try game_limits.admit(io, alloc, payer.id, payer.client, true, meta.len)) |r| return .{ .refused = r };
+    const id = try allocateSessionID(io, alloc, payer.id);
+    try writeSessionFile(io, alloc, payer.id, id, "meta", meta);
+    return .{ .id = id };
+}
+
+/// One line appended to full-game session `session_id`, or why not.
+pub fn appendGameLine(io: Io, alloc: Alloc, payer: Payer, session_id: i64, kind: LineKind, body: []const u8) !?game_limits.Refusal {
+    const line = try lineOf(alloc, kind, body);
+    if (try game_limits.admit(io, alloc, payer.id, payer.client, false, line.len)) |r| return r;
+    const rel = switch (kind) {
+        .actions => "actions.dsl",
+        .annotations => "annotations.jsonl",
+    };
+    try appendLine(io, alloc, try join(alloc, &.{ try sessionDir(alloc, payer.id, session_id), rel }), line);
+    return null;
+}
+
+/// A puzzle move's outcome.
+pub const Moved = union(enum) { done, refused: game_limits.Refusal, not_offered };
+
+/// One move appended to puzzle `puzzle_idx` of puzzle session `session_id`.
+/// `new_meta` is the meta of a session the move makes (THE FIRST MOVE MAKES
+/// THE SESSION, puzzles.zig): admitted with the move as one write, and made
+/// only if it is the session the page offered; null for a session there.
+pub fn appendPuzzleMove(io: Io, alloc: Alloc, payer: Payer, session_id: i64, puzzle_idx: i32, body: []const u8, new_meta: ?[]const u8) !Moved {
+    const line = try lineOf(alloc, .actions, body);
+    if (new_meta) |meta| {
+        if (try game_limits.admit(io, alloc, payer.id, payer.client, true, meta.len + line.len)) |r| return .{ .refused = r };
+        if (!try ensurePuzzleSession(io, alloc, payer.id, session_id, meta)) return .not_offered;
+    } else if (try game_limits.admit(io, alloc, payer.id, payer.client, false, line.len)) |r| return .{ .refused = r };
+    const rel = try std.fmt.allocPrint(alloc, "puzzle_{d}/actions.dsl", .{puzzle_idx});
+    try appendLine(io, alloc, try join(alloc, &.{ try puzzleSessionDir(alloc, payer.id, session_id), rel }), line);
+    return .done;
+}
+
+/// appendLine appends `line`, already whole with its newline, to `path`,
+/// creating parent dirs: one positional write at the current end, under
+/// append_mu (see the atomicity note at the top of this file).
+fn appendLine(io: Io, alloc: Alloc, path: []const u8, line: []const u8) !void {
     append_mu.lockUncancelable(io);
     defer append_mu.unlock(io);
     _ = try store.append(io, alloc, path, line);
@@ -171,7 +228,7 @@ pub fn sessionDir(alloc: Alloc, user_id: []const u8, session_id: i64) ![]u8 {
 
 /// writeSessionFile writes body to <session-dir>/<rel>, creating parent dirs.
 /// Last-write-wins (used for meta).
-pub fn writeSessionFile(io: Io, alloc: Alloc, user_id: []const u8, session_id: i64, rel: []const u8, body: []const u8) !void {
+fn writeSessionFile(io: Io, alloc: Alloc, user_id: []const u8, session_id: i64, rel: []const u8, body: []const u8) !void {
     const dir = try sessionDir(alloc, user_id, session_id);
     const full = try join(alloc, &.{ dir, rel });
     try store.write(io, alloc, full, body, .{});
@@ -194,22 +251,6 @@ pub fn sessionExists(io: Io, alloc: Alloc, user_id: []const u8, session_id: i64)
     const dir = try sessionDir(alloc, user_id, session_id);
     const st = (try store.statOrNull(io, alloc, dir)) orelse return false;
     return st.kind == .directory;
-}
-
-/// appendSessionDslLine appends one DSL line to <session-dir>/<rel> (actions.dsl).
-pub fn appendSessionDslLine(io: Io, alloc: Alloc, user_id: []const u8, session_id: i64, rel: []const u8, body: []const u8) !void {
-    const dir = try sessionDir(alloc, user_id, session_id);
-    const full = try join(alloc, &.{ dir, rel });
-    try appendTextLine(io, alloc, full, body);
-}
-
-/// appendSessionJSONLLine appends one JSON-compacted line to <session-dir>/<rel>
-/// (annotations.jsonl).
-pub fn appendSessionJSONLLine(io: Io, alloc: Alloc, user_id: []const u8, session_id: i64, rel: []const u8, body: []const u8) !void {
-    const dir = try sessionDir(alloc, user_id, session_id);
-    const full = try join(alloc, &.{ dir, rel });
-    const compact = try compactJSON(alloc, body);
-    try appendRawLine(io, alloc, full, compact);
 }
 
 /// listSessionIDs returns every full-game session-id directory for a player,
@@ -249,16 +290,6 @@ pub fn countSessionActions(io: Io, alloc: Alloc, user_id: []const u8, session_id
     const dir = try sessionDir(alloc, user_id, session_id);
     const full = try join(alloc, &.{ dir, "actions.dsl" });
     return countTextLines(io, alloc, full);
-}
-
-/// appendRawLine appends `body` + one '\n' to `path` (no trailing-newline
-/// trimming — `body` is already exactly one line). Used by the JSONL path, whose
-/// compacted body never contains a newline.
-fn appendRawLine(io: Io, alloc: Alloc, path: []const u8, body: []const u8) !void {
-    const line = try std.fmt.allocPrint(alloc, "{s}\n", .{body});
-    append_mu.lockUncancelable(io);
-    defer append_mu.unlock(io);
-    _ = try store.append(io, alloc, path, line);
 }
 
 /// compactJSON strips insignificant whitespace (outside string literals) from
@@ -308,7 +339,9 @@ fn appendMany(io: Io, parent: Alloc, user_id: []const u8, session_id: i64, write
     while (i < n) : (i += 1) {
         // A line long enough that two writes at one offset overlap.
         const line = std.fmt.bufPrint(&buf, "{d}-{d}) {s}", .{ writer, i, "x" ** 1500 }) catch return;
-        appendSessionDslLine(io, alloc, user_id, session_id, "actions.dsl", line) catch return;
+        const dir = sessionDir(alloc, user_id, session_id) catch return;
+        const path = join(alloc, &.{ dir, "actions.dsl" }) catch return;
+        appendLine(io, alloc, path, lineOf(alloc, .actions, line) catch return) catch return;
     }
 }
 

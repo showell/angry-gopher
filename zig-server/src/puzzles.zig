@@ -113,18 +113,16 @@ fn sessionRoute(req: *std.http.Server.Request, io: Io, alloc: Alloc, user_id: []
 /// The per-puzzle dir is created on first append.
 fn appendAction(req: *std.http.Server.Request, io: Io, alloc: Alloc, user_id: []const u8, client: ?[]const u8, session_id: i64, puzzle_idx: i32) !void {
     const body = (try http.readLimitedBody(req, alloc, maxAppendBytes)) orelse return;
-    const line_bytes = std.mem.trimEnd(u8, body, "\n").len + 1;
-
-    if (!try storage.puzzleSessionExists(io, alloc, user_id, session_id)) {
+    // The meta of the session this move makes, if it is the one offered.
+    const new_meta: ?[]const u8 = if (try storage.puzzleSessionExists(io, alloc, user_id, session_id)) null else blk: {
         if (session_id != try storage.nextPuzzleSessionID(io, alloc, user_id)) return http.notFound(req);
-        const meta = try metaDsl(io, alloc);
-        if (try game_limits.admit(io, alloc, user_id, client, true, meta.len + line_bytes)) |r| return game_limits.refuse(req, r);
-        if (!try storage.ensurePuzzleSession(io, alloc, user_id, session_id, meta)) return http.notFound(req);
-    } else if (try game_limits.admit(io, alloc, user_id, client, false, line_bytes)) |r| return game_limits.refuse(req, r);
-
-    const rel = try std.fmt.allocPrint(alloc, "puzzle_{d}/actions.dsl", .{puzzle_idx});
-    try storage.appendPuzzleSessionDslLine(io, alloc, user_id, session_id, rel, body);
-    try req.respond("", .{ .status = .no_content });
+        break :blk try metaDsl(io, alloc);
+    };
+    switch (try storage.appendPuzzleMove(io, alloc, .{ .id = user_id, .client = client }, session_id, puzzle_idx, body, new_meta)) {
+        .done => try req.respond("", .{ .status = .no_content }),
+        .refused => |r| try game_limits.refuse(req, r),
+        .not_offered => try http.notFound(req),
+    }
 }
 
 /// A session's meta DSL: server-owned created_at (its first move), then a

@@ -125,10 +125,10 @@ fn newSession(req: *Request, io: Io, alloc: Alloc, user_id: []const u8, client: 
         .game_state_dsl = game_state_dsl,
     };
     const meta_bytes = try session_meta.formatSessionMeta(alloc, meta);
-    if (try game_limits.admit(io, alloc, user_id, client, true, meta_bytes.len)) |r| return game_limits.refuse(req, r);
-
-    const id = try storage.allocateSessionID(io, alloc, user_id);
-    try storage.writeSessionFile(io, alloc, user_id, id, "meta", meta_bytes);
+    const id = switch (try storage.makeGameSession(io, alloc, .{ .id = user_id, .client = client }, meta_bytes)) {
+        .refused => |r| return game_limits.refuse(req, r),
+        .id => |id| id,
+    };
 
     // {"session_id":N}\n — no spaces, trailing newline.
     const body = try std.fmt.allocPrint(alloc, "{{\"session_id\":{d}}}\n", .{id});
@@ -137,7 +137,7 @@ fn newSession(req: *Request, io: Io, alloc: Alloc, user_id: []const u8, client: 
 
 // ── action / annotation writes (the dumb path) ───────────────────────────────
 
-const LineKind = enum { actions, annotations };
+const LineKind = storage.LineKind;
 
 /// appendSessionLine is the universal write handler: POST body → one appended
 /// line in <session>/<rel>. Actions are wire-DSL text (actions.dsl); annotations
@@ -147,18 +147,7 @@ fn appendSessionLine(req: *Request, io: Io, alloc: Alloc, user_id: []const u8, c
     if (!try storage.sessionExists(io, alloc, user_id, session_id)) return http.notFound(req);
 
     const body = (try http.readLimitedBody(req, alloc, max_append_bytes)) orelse return;
-    // The line as storage writes it: trailing newlines trimmed, one added.
-    const line_bytes = std.mem.trimEnd(u8, body, "\n").len + 1;
-    if (try game_limits.admit(io, alloc, user_id, client, false, line_bytes)) |r| return game_limits.refuse(req, r);
-
-    switch (kind) {
-        .actions => {
-            try storage.appendSessionDslLine(io, alloc, user_id, session_id, "actions.dsl", body);
-        },
-        .annotations => {
-            try storage.appendSessionJSONLLine(io, alloc, user_id, session_id, "annotations.jsonl", body);
-        },
-    }
+    if (try storage.appendGameLine(io, alloc, .{ .id = user_id, .client = client }, session_id, kind, body)) |r| return game_limits.refuse(req, r);
     try req.respond("", .{ .status = .no_content });
 }
 
