@@ -55,15 +55,60 @@ pub const ChatMessage = struct {
 
 // ── decode ──────────────────────────────────────────────────────────────────
 
+/// Reads that met a refused transcript block, since boot (metal-vmm QUEUE
+/// 156(h)): a block with no `MSG_` id, author or date, which decoded as a
+/// message of "" before. **A COUNT OF READS, NOT OF BLOCKS**: one bad block
+/// is counted again by every page, stream and search build that reads it, so
+/// the number grows with traffic; any number above none is the signal, and
+/// /admin/host (`refusedText`) names the last one's first line.
+pub var refused_blocks: usize = 0;
+var refused_last_buf: [96]u8 = undefined;
+var refused_last: []const u8 = "";
+
+/// The refused blocks as /admin/host shows them.
+pub fn refusedText(alloc: Alloc) ![]const u8 {
+    if (refused_blocks == 0) return "none";
+    return std.fmt.allocPrint(alloc, "{d}; the last began: {s}", .{ refused_blocks, refused_last });
+}
+
+/// Whether a decoded block is a message: it has an id, an author and a date
+/// (the decoder and search's in-place reading ask the same).
+pub fn isMessage(m: ChatMessage) bool {
+    return m.id.len > 0 and m.from.len > 0 and m.date.len > 0;
+}
+
+/// A block that is not a message: counted, and its first line kept to say.
+pub fn refuseBlock(piece: []const u8) void {
+    refused_blocks += 1;
+    const first = piece[0 .. std.mem.indexOfScalar(u8, piece, '\n') orelse piece.len];
+    const n = @min(first.len, refused_last_buf.len);
+    @memcpy(refused_last_buf[0..n], first[0..n]);
+    refused_last = refused_last_buf[0..n];
+}
+
 /// decodeChatFile parses a whole session file into messages. Splits on `sep`
-/// (no trailing separator on disk, so one piece per message), skipping any
-/// all-whitespace piece.
+/// (no trailing separator on disk, so one piece per message).
+///
+/// **TWO SKIPS, NAMED** (metal-vmm QUEUE 156(h)):
+/// - an all-whitespace piece is no block, and uncounted: an append torn
+///   right after its separator leaves one, as a file that begins with one
+///   does;
+/// - a block that is not a message (`isMessage`: no `MSG_` id, author or
+///   date; an append torn inside its header is one) is refused, counted and
+///   said (`refuseBlock`), where it decoded as a message of "". Never the
+///   whole transcript: the next append lands after it, so a torn block is
+///   not only ever the last.
 pub fn decodeChatFile(alloc: Alloc, data: []const u8) ![]ChatMessage {
     var out: std.ArrayList(ChatMessage) = .empty;
     var it = std.mem.splitSequence(u8, data, sep);
     while (it.next()) |piece| {
         if (std.mem.trim(u8, piece, " \t\r\n").len == 0) continue;
-        try out.append(alloc, try decodeChatBlock(alloc, piece));
+        const m = try decodeChatBlock(alloc, piece);
+        if (!isMessage(m)) {
+            refuseBlock(piece);
+            continue;
+        }
+        try out.append(alloc, m);
     }
     return out.toOwnedSlice(alloc);
 }
@@ -159,6 +204,10 @@ pub fn openStream(io: Io, alloc: Alloc, bus: *Bus, conv_dir: []const u8, conv_ke
 /// the stored message (id + server-stamped date). NO render here: the blob
 /// carries raw markdown; each stream renders per-viewer.
 pub fn appendMessage(io: Io, alloc: Alloc, bus: *Bus, meta: ConvMeta, conv_dir: []const u8, conv_key: []const u8, sid: []const u8, from_name: []const u8, from_id: []const u8, markdown: []const u8, cid: []const u8) !ChatMessage {
+    // **NO MESSAGE WITHOUT AN AUTHOR** (the review of 156): the decoder
+    // refuses such a block on every read, so it would go out live and be gone
+    // on reload. A nameless member (a release cut short) cannot post.
+    if (from_name.len == 0) return error.NoAuthor;
     const path = try sessionMdPath(alloc, conv_dir, sid);
 
     chat_mu.lockUncancelable(io);
@@ -298,11 +347,25 @@ pub fn convKeyBaseURL(alloc: Alloc, conv_key: []const u8) ![]u8 {
     return std.fmt.allocPrint(alloc, "/channel/{s}", .{conv_key});
 }
 
+/// The fan-out's failures since boot: a surface that failed for one member
+/// (metal-vmm QUEUE 156(c)). Said on /admin/host (`fanoutText`), with the
+/// last one named: the route table has no stderr of its own.
+pub var fanout_failures: usize = 0;
+var fanout_last_buf: [192]u8 = undefined;
+var fanout_last: []const u8 = "";
+
+/// The fan-out's failures as /admin/host shows them.
+pub fn fanoutText(alloc: Alloc) ![]const u8 {
+    if (fanout_failures == 0) return "none";
+    return std.fmt.allocPrint(alloc, "{d}; the last: {s}", .{ fanout_failures, fanout_last });
+}
+
 /// fanoutCrossPage publishes one new message to every cross-page attention feed
 ///: notify (status strip), recent (Recent page), images /
 /// code (per-user transcripts) per member, plus a sidebar topic-added on the
-/// session's FIRST message (index == 0). Best-effort: a failure for one
-/// member/surface is swallowed so it never blocks the write.
+/// session's FIRST message (index == 0). Best-effort: the message is saved
+/// before; a failure for one member's surface is counted and said, and never
+/// blocks the write or that member's other surfaces.
 fn fanoutCrossPage(io: Io, alloc: Alloc, bus: *Bus, meta: ConvMeta, conv_key: []const u8, sid: []const u8, msg: ChatMessage, from_id: []const u8, index: usize) void {
     const base = convKeyBaseURL(alloc, conv_key) catch return;
     const rec_url = std.fmt.allocPrint(alloc, "{s}/{s}", .{ base, sid }) catch return;
@@ -326,72 +389,109 @@ fn fanoutCrossPage(io: Io, alloc: Alloc, bus: *Bus, meta: ConvMeta, conv_key: []
     else
         "";
 
+    const fan = Fan{
+        .io = io,
+        .alloc = alloc,
+        .bus = bus,
+        .meta = meta,
+        .conv_key = conv_key,
+        .sid = sid,
+        .msg = msg,
+        .from_id = from_id,
+        .rec_url = rec_url,
+        .src_url = src_url,
+        .excerpt = excerpt,
+        .tags = tags,
+        .blocks = blocks,
+        .notify_text = notify_text,
+        .topic_added = topic_added,
+    };
+    // **ONE SURFACE AT A TIME** (metal-vmm QUEUE 156(c)): a failure costs
+    // that member that surface and is said; it never skips their others (a
+    // `catch continue` on images lost their code, which is durable and has
+    // no rebuild).
     for (meta.members) |uid| {
-        // notify — every member EXCEPT the author is pinged. The favicon dot
-        // means "a partner did something"; you don't notify yourself about your
-        // own message (the author already sees the self-confirm via the main
-        // feed echo). Skipping the author here is the real invariant — the
-        // open-feed conv+session suppression in notify.js only covers the
-        // currently-viewed thread, so author-skip is what keeps the dot quiet
-        // when you send to a thread you're not actively staring at.
-        if (!std.mem.eql(u8, uid, from_id)) {
-            var nj: std.ArrayList(u8) = .empty;
-            nj.print(alloc, "{{\"conv\":{f},\"session\":{f},\"text\":{f},\"link_url\":{f}}}", .{
-                std.json.fmt(conv_key, .{}),    std.json.fmt(sid, .{}),
-                std.json.fmt(notify_text, .{}), std.json.fmt(rec_url, .{}),
-            }) catch {};
-            if (nj.items.len > 0) {
-                if (notifyBusKey(alloc, uid)) |k| bus.publish(k, nj.items) else |_| {}
-            }
-        }
-
-        // sidebar — topic-added to every member on the first message only.
-        if (topic_added.len > 0) {
-            if (sidebarBusKey(alloc, uid)) |k| bus.publish(k, topic_added) else |_| {}
-        }
-
-        // recent — every member sees the row (sender included). `who` renders
-        // "You" for the recipient who authored it; everyone else sees the name.
-        // absent-ok: the recent feed's "where" label only; the message itself is saved.
-        const where = recentWhere(io, alloc, meta, conv_key, uid) catch "";
-        const who = if (std.mem.eql(u8, uid, from_id)) "You" else msg.from;
-        var rj: std.ArrayList(u8) = .empty;
-        recent_feed.encodeChatEvent(&rj, alloc, msg.date, rec_url, who, where, sid, excerpt, meta.kind == .dm) catch continue;
-        if (recentBusKey(alloc, uid)) |k| bus.publish(k, rj.items) else |_| {}
-
-        // images — only when the message carried <img> tags.
-        if (tags.len > 0) {
-            const e = images_store.ImagesEntry{
-                .source_id = msg.id,
-                .from = msg.from,
-                .conv = conv_key,
-                .at = msg.date,
-                .images = tags,
+        inline for (.{ "notify", "sidebar", "recent", "images", "code" }) |surface| {
+            @field(Fan, surface)(&fan, uid) catch |e| {
+                fanout_failures += 1;
+                fanout_last = std.fmt.bufPrint(&fanout_last_buf, "{s} for member {s}, {s}, on {s}/{s}", .{ surface, uid, @errorName(e), conv_key, sid }) catch surface;
             };
-            // absent-ok: the gallery's index of a message's images, best-effort; the message itself is saved.
-            images_store.appendImagesEntry(io, alloc, uid, e) catch continue;
-            var ij: std.ArrayList(u8) = .empty;
-            images_store.encodeImagesEvent(&ij, alloc, e, src_url) catch continue;
-            if (imagesBusKey(alloc, uid)) |k| bus.publish(k, ij.items) else |_| {}
-        }
-
-        // code — only when the message carried fenced code blocks.
-        if (blocks.len > 0) {
-            const e = code_store.CodeEntry{
-                .source_id = msg.id,
-                .from = msg.from,
-                .conv = conv_key,
-                .at = msg.date,
-                .blocks = blocks,
-            };
-            // absent-ok: the code view's index of a message's blocks, best-effort; the message itself is saved.
-            code_store.appendCodeEntry(io, alloc, uid, e) catch continue;
-            var cj: std.ArrayList(u8) = .empty;
-            code_store.encodeCodeEvent(&cj, alloc, e, src_url) catch continue;
-            if (codeBusKey(alloc, uid)) |k| bus.publish(k, cj.items) else |_| {}
         }
     }
 }
+
+/// One message's fan-out, a function per surface, each failing alone.
+const Fan = struct {
+    io: Io,
+    alloc: Alloc,
+    bus: *Bus,
+    meta: ConvMeta,
+    conv_key: []const u8,
+    sid: []const u8,
+    msg: ChatMessage,
+    from_id: []const u8,
+    rec_url: []const u8,
+    src_url: []const u8,
+    excerpt: []const u8,
+    tags: []const []const u8,
+    blocks: []const code_store.CodeBlock,
+    notify_text: []const u8,
+    topic_added: []const u8,
+
+    /// Every member EXCEPT the author is pinged. The favicon dot means "a
+    /// partner did something"; you don't notify yourself about your own
+    /// message (the author already sees the self-confirm via the main feed
+    /// echo). Skipping the author here is the real invariant — the open-feed
+    /// conv+session suppression in notify.js only covers the currently-viewed
+    /// thread, so author-skip is what keeps the dot quiet when you send to a
+    /// thread you're not actively staring at.
+    fn notify(f: *const Fan, uid: []const u8) !void {
+        if (std.mem.eql(u8, uid, f.from_id)) return;
+        var nj: std.ArrayList(u8) = .empty;
+        try nj.print(f.alloc, "{{\"conv\":{f},\"session\":{f},\"text\":{f},\"link_url\":{f}}}", .{
+            std.json.fmt(f.conv_key, .{}),    std.json.fmt(f.sid, .{}),
+            std.json.fmt(f.notify_text, .{}), std.json.fmt(f.rec_url, .{}),
+        });
+        f.bus.publish(try notifyBusKey(f.alloc, uid), nj.items);
+    }
+
+    /// topic-added to every member on the first message only.
+    fn sidebar(f: *const Fan, uid: []const u8) !void {
+        if (f.topic_added.len == 0) return;
+        f.bus.publish(try sidebarBusKey(f.alloc, uid), f.topic_added);
+    }
+
+    /// Every member sees the row (sender included). `who` renders "You" for
+    /// the recipient who authored it; everyone else sees the name.
+    fn recent(f: *const Fan, uid: []const u8) !void {
+        // absent-ok: the recent feed's "where" label only; the row itself is sent.
+        const where = recentWhere(f.io, f.alloc, f.meta, f.conv_key, uid) catch "";
+        const who = if (std.mem.eql(u8, uid, f.from_id)) "You" else f.msg.from;
+        var rj: std.ArrayList(u8) = .empty;
+        try recent_feed.encodeChatEvent(&rj, f.alloc, f.msg.date, f.rec_url, who, where, f.sid, f.excerpt, f.meta.kind == .dm);
+        f.bus.publish(try recentBusKey(f.alloc, uid), rj.items);
+    }
+
+    /// Only when the message carried <img> tags.
+    fn images(f: *const Fan, uid: []const u8) !void {
+        if (f.tags.len == 0) return;
+        const e = images_store.ImagesEntry{ .source_id = f.msg.id, .from = f.msg.from, .conv = f.conv_key, .at = f.msg.date, .images = f.tags };
+        try images_store.appendImagesEntry(f.io, f.alloc, uid, e);
+        var ij: std.ArrayList(u8) = .empty;
+        try images_store.encodeImagesEvent(&ij, f.alloc, e, f.src_url);
+        f.bus.publish(try imagesBusKey(f.alloc, uid), ij.items);
+    }
+
+    /// Only when the message carried fenced code blocks.
+    fn code(f: *const Fan, uid: []const u8) !void {
+        if (f.blocks.len == 0) return;
+        const e = code_store.CodeEntry{ .source_id = f.msg.id, .from = f.msg.from, .conv = f.conv_key, .at = f.msg.date, .blocks = f.blocks };
+        try code_store.appendCodeEntry(f.io, f.alloc, uid, e);
+        var cj: std.ArrayList(u8) = .empty;
+        try code_store.encodeCodeEvent(&cj, f.alloc, e, f.src_url);
+        f.bus.publish(try codeBusKey(f.alloc, uid), cj.items);
+    }
+};
 
 /// recentWhere is the per-recipient context label the What column reads as
 /// "message <where> (<topic>)": a channel names itself ("in <name>"); a DM names
@@ -535,9 +635,16 @@ pub fn lastMessage(io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8) 
 /// **ONE MEMBER, OR NOBODY** (the box's review of 155): a name two members
 /// share (108's sign-up race) names neither.
 fn authorByName(io: Io, alloc: Alloc, from: []const u8) []const u8 {
+    // absent-ok: an author that cannot be looked up is shown as nobody, for this read only: nothing records it.
+    return lookupAuthor(io, alloc, from) catch "";
+}
+
+/// `authorByName`, its failure kept: what the backfill records is believed
+/// for good (a current record is never asked again), so a lookup that
+/// failed must record nothing, never nobody (the box's should-fix).
+fn lookupAuthor(io: Io, alloc: Alloc, from: []const u8) ![]const u8 {
     if (from.len == 0) return "";
-    // absent-ok: an author that cannot be looked up is shown as nobody; what a sidecar records from it is a cache, recounted from the transcript.
-    return (users.onlyMemberNamed(io, alloc, from) catch return "") orelse "";
+    return (try users.onlyMemberNamed(io, alloc, from)) orelse "";
 }
 
 /// The N of a `<sid>_<N>` message id, or null when the id is not this
@@ -564,8 +671,9 @@ fn fallbackLast(io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8, cou
     const last = msgs[msgs.len - 1];
     // The record's answer where it speaks for this transcript, nobody
     // included; else the last author by name.
-    const recorded: ?[]const u8 = if (counted) |c| (if (c.last) |l| (if (c.count == msgs.len and c.size == raw.len) l.uid else null) else null) else null;
-    return .{ .markdown = last.markdown, .date = last.date, .uid = recorded orelse authorByName(io, alloc, last.from), .number = msgs.len };
+    const blocks = countBlocks(raw);
+    const recorded: ?[]const u8 = if (counted) |c| (if (c.last) |l| (if (c.count == blocks and c.size == raw.len) l.uid else null) else null) else null;
+    return .{ .markdown = last.markdown, .date = last.date, .uid = recorded orelse authorByName(io, alloc, last.from), .number = blocks };
 }
 
 /// **EVERY SESSION GETS A SIDECAR AT BOOT.** A conversation written before this
@@ -599,12 +707,12 @@ pub fn backfillSidecars(io: Io, alloc: Alloc, conv_dirs: []const []const u8) usi
             // The last block begins at the last separator; a lone message
             // begins at the start of the file.
             const offset = if (std.mem.lastIndexOf(u8, raw, sep)) |at| at else 0;
-            writeCount(io, a, dir, sid, msgs.len, raw.len, .{
-                .offset = offset,
-                // The last message's author, found by name (the box's
-                // must-fix after 153(1)); unknown, "", when no member has it.
-                .uid = authorByName(io, a, msgs[msgs.len - 1].from),
-            });
+            // The last message's author, found by name (the box's must-fix
+            // after 153(1)); "", when no member has it. A lookup that fails
+            // writes nothing: the next boot asks again.
+            // absent-ok: the startup backfill skips a session whose author it cannot look up; reads find the author by name meanwhile.
+            const uid = lookupAuthor(io, a, msgs[msgs.len - 1].from) catch continue;
+            writeCount(io, a, dir, sid, countBlocks(raw), raw.len, .{ .offset = offset, .uid = uid });
             wrote += 1;
         }
     }
@@ -706,8 +814,27 @@ fn messageCount(io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8) !us
     if (readCount(io, alloc, conv_dir, sid)) |c| {
         if (c.size == size) return c.count;
     }
-    const raw = try store.read(io, alloc, md, .unlimited);
-    return (try decodeChatFile(alloc, raw)).len;
+    return countBlocks(try store.read(io, alloc, md, .unlimited));
+}
+
+/// **MESSAGES ARE NUMBERED BY BLOCK** (the review of 156): a block the
+/// decoder refuses keeps its number, so a recount, which numbers the next
+/// message, counts every block that is not blank, and never gives a number
+/// twice; readers take a message's index from its id (`indexOf`), not its
+/// place among the ones that decoded.
+pub fn countBlocks(raw: []const u8) usize {
+    var n: usize = 0;
+    var it = std.mem.splitSequence(u8, raw, sep);
+    while (it.next()) |piece| {
+        if (std.mem.trim(u8, piece, " \t\r\n").len != 0) n += 1;
+    }
+    return n;
+}
+
+/// A message's index (its number less one) from its id in `sid`, or null.
+pub fn indexOf(id: []const u8, sid: []const u8) ?usize {
+    const n = numberIn(id, sid) orelse return null;
+    return if (n == 0) null else n - 1;
 }
 
 /// **WHERE THE LAST MESSAGE STARTS, WHEN IT WAS SENT, AND BY WHOM** — the
@@ -867,6 +994,13 @@ fn lessThanStr(_: void, a: []const u8, b: []const u8) bool {
 /// channelMembers reads {chat_root}/channels/<name>.channel: one uid per line,
 /// blank/`#`-comment lines skipped. Missing file → null (the channel does not
 /// exist).
+///
+/// **A LINE IS A CANONICAL UID, ONCE, OR THE CHANNEL IS MALFORMED**
+/// (metal-vmm QUEUE 156(d)): each member is a path the fan-out writes under
+/// (`../../x` was one), a line with a comment after it (`3 # Claude`) dropped
+/// that member, and a duplicate notified twice. `error.MalformedChannel`,
+/// never a guess at what the line meant: whoever wrote the file fixes it.
+/// Its own route refuses it; a listing skips and counts it.
 pub fn channelMembers(io: Io, alloc: Alloc, name: []const u8) !?[][]const u8 {
     const file = try std.fmt.allocPrint(alloc, "{s}.channel", .{name});
     const path = try std.fs.path.join(alloc, &.{ chat_root, "channels", file });
@@ -877,6 +1011,7 @@ pub fn channelMembers(io: Io, alloc: Alloc, name: []const u8) !?[][]const u8 {
     while (it.next()) |raw| {
         const line = std.mem.trim(u8, raw, " \t\r");
         if (line.len == 0 or line[0] == '#') continue;
+        if (!canonicalUid(line) or hasMember(out.items, line)) return error.MalformedChannel;
         try out.append(alloc, line);
     }
     return try out.toOwnedSlice(alloc);
@@ -890,6 +1025,21 @@ pub fn hasMember(members: [][]const u8, uid: []const u8) bool {
     return false;
 }
 
+/// Channel files a listing skipped as malformed, since boot (Steve,
+/// 2026-10-10, on 156(d)): a listing reads every channel for every member,
+/// so one bad file made chat a 500 for everyone; now each listing that meets
+/// it skips it, counts it, and names it on /admin/host (`malformedText`). The
+/// channel's own route still refuses it. Counted per listing, not per file.
+pub var malformed_channels: usize = 0;
+var malformed_last_buf: [64]u8 = undefined;
+pub var malformed_last: []const u8 = "";
+
+/// The malformed channels as /admin/host shows them.
+pub fn malformedText(alloc: Alloc) ![]const u8 {
+    if (malformed_channels == 0) return "none";
+    return std.fmt.allocPrint(alloc, "{d}; the last: #{s}", .{ malformed_channels, malformed_last });
+}
+
 /// listUserChannels returns the names of channels `uid` is a member of, sorted.
 /// Scans {chat_root}/channels/*.channel. Missing dir → empty.
 pub fn listUserChannels(io: Io, alloc: Alloc, uid: []const u8) ![][]const u8 {
@@ -900,7 +1050,16 @@ pub fn listUserChannels(io: Io, alloc: Alloc, uid: []const u8) ![][]const u8 {
     for (entries) |entry| {
         if (!std.mem.endsWith(u8, entry.name, ".channel")) continue;
         const name = entry.name[0 .. entry.name.len - ".channel".len];
-        const members = (try channelMembers(io, alloc, name)) orelse continue;
+        const members = (channelMembers(io, alloc, name) catch |e| switch (e) {
+            error.MalformedChannel => {
+                malformed_channels += 1;
+                const n = @min(name.len, malformed_last_buf.len);
+                @memcpy(malformed_last_buf[0..n], name[0..n]);
+                malformed_last = malformed_last_buf[0..n];
+                continue;
+            },
+            else => return e,
+        }) orelse continue;
         if (!hasMember(members, uid)) continue;
         try out.append(alloc, try alloc.dupe(u8, name));
     }
@@ -1542,7 +1701,7 @@ test "the last session and conversation are written only when they change (gophe
     try f.init(threaded.io());
     defer f.deinit();
     const a = f.arena.allocator();
-    chat_state.setUserLastSession(f.io, a, "1", "1_2", "topic");
+    try chat_state.setUserLastSession(f.io, a, "1", "1_2", "topic");
     const lc = try std.fs.path.join(a, &.{ chat_root, "users", "1", "last-conv" });
     const ls = try std.fs.path.join(a, &.{ chat_root, "users", "1", "last-sessions", "1_2" });
     try testing.expectEqualStrings("1_2\n", try store.read(f.io, a, lc, .limited(64)));
@@ -1550,11 +1709,11 @@ test "the last session and conversation are written only when they change (gophe
     // it back.
     try store.write(f.io, a, lc, "1_2", .{});
     try store.write(f.io, a, ls, "topic", .{});
-    chat_state.setUserLastSession(f.io, a, "1", "1_2", "topic");
+    try chat_state.setUserLastSession(f.io, a, "1", "1_2", "topic");
     try testing.expectEqualStrings("1_2", try store.read(f.io, a, lc, .limited(64)));
     try testing.expectEqualStrings("topic", try store.read(f.io, a, ls, .limited(64)));
     // A new one is written.
-    chat_state.setUserLastSession(f.io, a, "1", "1_2", "other");
+    try chat_state.setUserLastSession(f.io, a, "1", "1_2", "other");
     try testing.expectEqualStrings("other\n", try store.read(f.io, a, ls, .limited(64)));
 }
 
@@ -1621,4 +1780,114 @@ test "a name two members share names nobody (the box's review of 155, 4)" {
     _ = try f.send("the second");
     try f.setSidecar(try std.fmt.allocPrint(a, "1 {d}\n0 9\n", .{after_first}));
     try testing.expectEqualStrings("", (try lastMessage(f.io, a, f.dir, "topic")).?.uid);
+}
+
+test "a lookup that fails at boot records nothing, so a later boot finds the author (the box's should-fix after fce504f)" {
+    var threaded = std.Io.Threaded.init(testing.allocator, .{});
+    defer threaded.deinit();
+    var f: CountFixture = undefined;
+    try f.init(threaded.io());
+    defer f.deinit();
+    const a = f.arena.allocator();
+    try users.setUserName(f.io, a, "1", "Tester");
+    try users.setUserPassword(f.io, a, "1", "pw");
+    // An account whose name will not read: the lookup fails.
+    try Io.Dir.cwd().createDirPath(f.io, try std.fs.path.join(a, &.{ users.auth_root, "5", "name" }));
+    _ = try f.send("hello");
+    try Io.Dir.cwd().deleteFile(f.io, try countPath(a, f.dir, "topic"));
+    const dirs = [_][]const u8{f.dir};
+    try testing.expectEqual(@as(usize, 0), backfillSidecars(f.io, a, &dirs));
+    try testing.expect(readCount(f.io, a, f.dir, "topic") == null);
+    // The account heals; the next boot finds the author.
+    try Io.Dir.cwd().deleteTree(f.io, try std.fs.path.join(a, &.{ users.auth_root, "5" }));
+    try testing.expectEqual(@as(usize, 1), backfillSidecars(f.io, a, &dirs));
+    try testing.expectEqualStrings("1", readCount(f.io, a, f.dir, "topic").?.last.?.uid);
+}
+
+test "the fan-out's surfaces fail one at a time, each said: a member's images that will not write still leave their code (metal-vmm QUEUE 156(c))" {
+    var threaded = std.Io.Threaded.init(testing.allocator, .{});
+    defer threaded.deinit();
+    var f: CountFixture = undefined;
+    try f.init(threaded.io());
+    defer f.deinit();
+    const a = f.arena.allocator();
+    // Member 2's images.md is a folder: its write fails.
+    try Io.Dir.cwd().createDirPath(f.io, try std.fs.path.join(a, &.{ chat_root, "users", "2", "images.md" }));
+    const before = fanout_failures;
+    const meta = ConvMeta{ .kind = .dm, .members = &[_][]const u8{ "1", "2" } };
+    _ = try appendMessage(f.io, a, &f.bus, meta, f.dir, "1_2", "topic", "Tester", "1", "<img src=\"/x.png\">\n\n```\ncode\n```", "");
+    try testing.expectEqual(before + 1, fanout_failures);
+    try testing.expect(std.mem.startsWith(u8, fanout_last, "images for member 2, "));
+    const code = try std.fs.path.join(a, &.{ chat_root, "users", "2", "code.md" });
+    try testing.expect((try Io.Dir.cwd().readFileAlloc(f.io, code, a, .limited(4096))).len > 0);
+    // And member 1's surfaces are whole.
+    _ = try Io.Dir.cwd().readFileAlloc(f.io, try std.fs.path.join(a, &.{ chat_root, "users", "1", "images.md" }), a, .limited(4096));
+}
+
+test "a channel's member lines are canonical uids, each once, or the channel is malformed (metal-vmm QUEUE 156(d))" {
+    var threaded = std.Io.Threaded.init(testing.allocator, .{});
+    defer threaded.deinit();
+    var f: CountFixture = undefined;
+    try f.init(threaded.io());
+    defer f.deinit();
+    const a = f.arena.allocator();
+    const path = try std.fs.path.join(a, &.{ chat_root, "channels", "team.channel" });
+    try Io.Dir.cwd().createDirPath(f.io, std.fs.path.dirname(path).?);
+    try Io.Dir.cwd().writeFile(f.io, .{ .sub_path = path, .data = "# the team\n1\n\n 2 \r\n" });
+    const ok = (try channelMembers(f.io, a, "team")).?;
+    try testing.expectEqual(@as(usize, 2), ok.len);
+    for ([_][]const u8{ "1\n../../x\n", "1\n3 # Claude\n", "1\n2\n1\n", "007\n", "+7\n" }) |bad| {
+        try Io.Dir.cwd().writeFile(f.io, .{ .sub_path = path, .data = bad });
+        try testing.expectError(error.MalformedChannel, channelMembers(f.io, a, "team"));
+        // A listing skips it and counts it (Steve, 2026-10-10): one bad file
+        // is not every member's chat down.
+        const before = malformed_channels;
+        try testing.expectEqual(@as(usize, 0), (try listUserChannels(f.io, a, "1")).len);
+        try testing.expectEqual(before + 1, malformed_channels);
+        try testing.expectEqualStrings("team", malformed_last);
+    }
+}
+
+test "the decoder refuses a block with no id, author or date, counted; a blank piece is a torn append's and skipped (metal-vmm QUEUE 156(h))" {
+    const a = testing.allocator;
+    var arena = std.heap.ArenaAllocator.init(a);
+    defer arena.deinit();
+    const x = arena.allocator();
+    const good = "MSG_t_1\nfrom: Steve\ndate: 2026-10-10T00:00:00Z\n\nhello";
+    const before = refused_blocks;
+    inline for ([_][]const u8{
+        "from: Steve\ndate: 2026-10-10T00:00:00Z\n\nno id",
+        "MSG_t_2\ndate: 2026-10-10T00:00:00Z\n\nno author",
+        "MSG_t_2\nfrom: Steve\n\nno date",
+        "MSG_t_2\nfro", // an append torn inside its header
+    }, 1..) |bad, n| {
+        const msgs = try decodeChatFile(x, good ++ sep ++ bad);
+        try testing.expectEqual(@as(usize, 1), msgs.len);
+        try testing.expectEqual(before + n, refused_blocks);
+    }
+    // A blank piece (an append torn right after its separator) is no block.
+    try testing.expectEqual(@as(usize, 1), (try decodeChatFile(x, good ++ sep ++ "  \n")).len);
+    try testing.expectEqual(before + 4, refused_blocks);
+}
+
+test "a refused block keeps its number: a recount counts blocks, so no id is given twice; and no message is written with no author (the review of 156)" {
+    var threaded = std.Io.Threaded.init(testing.allocator, .{});
+    defer threaded.deinit();
+    var f: CountFixture = undefined;
+    try f.init(threaded.io());
+    defer f.deinit();
+    const a = f.arena.allocator();
+    const meta = ConvMeta{ .kind = .dm, .members = &[_][]const u8{} };
+    try testing.expectError(error.NoAuthor, appendMessage(f.io, a, &f.bus, meta, f.dir, "1_2", "topic", "", "1", "hi", ""));
+    // As one written before: t_2 has no author, and the sidecar is gone.
+    _ = try f.send("one");
+    const md = try sessionMdPath(a, f.dir, "topic");
+    try Io.Dir.cwd().writeFile(f.io, .{ .sub_path = md, .data = try std.fmt.allocPrint(a, "{s}{s}MSG_topic_2\nfrom: \ndate: 2026-10-10T00:00:00Z\n\nnameless{s}MSG_topic_3\nfrom: Tester\ndate: 2026-10-10T00:00:01Z\n\nthree", .{ (try rawSession(f.io, a, f.dir, "topic")).?, sep, sep }) });
+    try Io.Dir.cwd().deleteFile(f.io, try countPath(a, f.dir, "topic"));
+    try testing.expectEqualStrings("topic_4", (try f.send("four")).id);
+    try Io.Dir.cwd().deleteFile(f.io, try countPath(a, f.dir, "topic"));
+    const dirs = [_][]const u8{f.dir};
+    _ = backfillSidecars(f.io, a, &dirs);
+    try testing.expectEqual(@as(usize, 4), readCount(f.io, a, f.dir, "topic").?.count);
+    try testing.expectEqual(@as(usize, 3), indexOf("topic_4", "topic").?);
 }

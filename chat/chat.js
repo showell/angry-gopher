@@ -35,9 +35,11 @@
   var savedIds = new Set();
   function markSaved(id){ savedIds.add(id); var w=widgetById(id); if(w) w.setSaved(true); }
   function loadSavedSet(){  // lint:called-once load-once-on-init
-    fetch(SESSION_BASE+'/saved').then(function(r){ return r.ok ? r.json() : []; })
+    /* PRODUCT_DECISION: a saved set that will not read says so (metal-vmm
+       QUEUE 156(i)), where it read as none saved and no bubble said otherwise. */
+    fetch(SESSION_BASE+'/saved').then(function(r){ if(!r.ok) throw new Error('status '+r.status); return r.json(); })
       .then(function(ids){ for(var i=0;i<ids.length;i++) markSaved(ids[i]); })
-      .catch(function(){});
+      .catch(function(err){ console.error('chat: the saved set did not load', err); ChatNotify.show('Could not read which messages you saved; reload to try again.'); });
   }
   loadSavedSet();
 
@@ -254,7 +256,16 @@
     /* PRODUCT_DECISION: per-connection reset — fires on initial load AND every reconnect. */
     wasCaughtUpAtBacklogStart=pane.caughtUp();
     inBacklog=true; backlogSeen=0;
-    backlogSize=parseInt(e.data,10) || 0;
+    /* PRODUCT_DECISION: a size that is not a count stops the topic and says
+       so (metal-vmm QUEUE 156(i)), where it read as 0: the backlog ended at
+       once and every old message after it was taken as a new one. */
+    if(!/^[0-9]+$/.test(e.data)){
+      console.error('chat: backlog-size is not a count: '+JSON.stringify(e.data));
+      ChatNotify.show('This topic did not load right; reload to try again.');
+      es.close();
+      return;
+    }
+    backlogSize=Number(e.data);
     pane.startBacklog(backlogSize);
     if(backlogSize===0) finishBacklog();
   });

@@ -49,6 +49,10 @@ pub var session_secret_dir: []const u8 = "../games/lynrummy/data/chat"; // holds
 
 const claude_agent_id = "3";
 const session_max_age_secs: i64 = 365 * 24 * 60 * 60;
+/// **HOW FAR AHEAD A COOKIE'S `issued` MAY BE** (metal-vmm QUEUE 156(f)): a
+/// clock a little behind the one that signed it. Past this it is refused: an
+/// `issued` in the future never expired, whatever the max age.
+pub const clock_skew_secs: i64 = 5 * 60;
 
 // ── the resolver ────────────────────────────────────────────────────────────
 
@@ -125,6 +129,7 @@ pub fn verifySessionWithSecret(alloc: Alloc, secret: []const u8, val: []const u8
     // expiry: issued must parse and be within max age.
     const n = std.fmt.parseInt(i64, issued, 10) catch return null;
     if (now_unix - n > session_max_age_secs) return null;
+    if (n - now_unix > clock_skew_secs) return null;
     return id;
 }
 
@@ -214,7 +219,7 @@ pub fn listAuthorized(io: Io, alloc: Alloc) ![]AuthorizedUser {
     for (entries) |entry| {
         if (entry.kind != .directory) continue;
         // numeric id only (the account dirs); skips next-id.txt etc.
-        if (std.fmt.parseInt(i64, entry.name, 10)) |_| {} else |_| continue;
+        if (!allDigits(entry.name)) continue; // canonical only (156(i)): a 007 or +7 folder is no account
         const id = try alloc.dupe(u8, entry.name);
         if (!try userIsAuthorized(io, alloc, id)) continue;
         const name = try getUserName(io, alloc, id);
@@ -230,8 +235,15 @@ fn lessThanByNumericID(_: void, a: AuthorizedUser, b: AuthorizedUser) bool {
 }
 
 /// getUserName returns a user's display name ({auth_root}/{id}/name, trailing
-/// CR/LF trimmed), or "" when absent. Allocated from
-/// `alloc`.
+/// CR/LF trimmed), or "" when there is none. Allocated from `alloc`.
+///
+/// **A MEMBER WITH NO NAME FILE READS "", ON PURPOSE** (metal-vmm QUEUE
+/// 156(i), a decision named): an account is made name first, so one with a
+/// password and no name is a release cut short, which removes the name
+/// before the password (134(e), 138(f)), and that member must still log in
+/// by cookie to release again. What must not take "" as a name refuses it:
+/// retire's plan refuses a nameless account (the box's A2), and
+/// `onlyMemberNamed` never matches "".
 pub fn getUserName(io: Io, alloc: Alloc, id: []const u8) ![]const u8 {
     const b = (try readAuthFile(io, alloc, id, "name")) orelse return "";
     return std.mem.trimEnd(u8, b, "\r\n");
@@ -348,7 +360,7 @@ pub fn listUserIDs(io: Io, alloc: Alloc) ![][]const u8 {
     var out: std.ArrayList([]const u8) = .empty;
     for (entries) |entry| {
         if (entry.kind != .directory) continue;
-        if (std.fmt.parseInt(i64, entry.name, 10)) |_| {} else |_| continue;
+        if (!allDigits(entry.name)) continue; // canonical only (156(i)): a 007 or +7 folder is no account
         try out.append(alloc, try alloc.dupe(u8, entry.name));
     }
     const slice = try out.toOwnedSlice(alloc);
@@ -439,8 +451,11 @@ pub fn validUid(id: []const u8) bool {
     return allDigits(id);
 }
 
+/// **CANONICAL, AS A COUNTER WRITES ONE** (metal-vmm QUEUE 156(i)): digits,
+/// the first not zero (counters start at 1), so `007` and `7` are never two
+/// spellings of one account, nor `007` a folder of its own.
 fn allDigits(s: []const u8) bool {
-    if (s.len == 0) return false;
+    if (s.len == 0 or s[0] == '0') return false;
     for (s) |ch| {
         if (ch < '0' or ch > '9') return false;
     }
@@ -549,6 +564,7 @@ pub fn checkUserPassword(io: Io, alloc: Alloc, id: []const u8, password: []const
 /// would be worse than nobody. The name first: most accounts are not it, and
 /// membership costs a look at the password.
 pub fn onlyMemberNamed(io: Io, alloc: Alloc, name: []const u8) !?[]const u8 {
+    if (name.len == 0) return null; // "" is no name: a nameless member is no match
     var found: ?[]const u8 = null;
     for (try listUserIDs(io, alloc)) |id| {
         if (!std.mem.eql(u8, try getUserName(io, alloc, id), name) or !(try userIsMember(io, alloc, id))) continue;
@@ -562,6 +578,7 @@ pub fn onlyMemberNamed(io: Io, alloc: Alloc, name: []const u8) !?[]const u8 {
 /// A small scan. Exact byte compare, so existing unicode-named members match
 /// regardless of validateUserName's policy.
 pub fn findMemberByName(io: Io, alloc: Alloc, name: []const u8) !?[]const u8 {
+    if (name.len == 0) return null; // "" is no name: a nameless member is no match
     for (try listUserIDs(io, alloc)) |id| {
         if ((try userIsMember(io, alloc, id)) and
             std.mem.eql(u8, try getUserName(io, alloc, id), name)) return id;
@@ -665,6 +682,11 @@ test "verifySessionWithSecret accepts a genuine cookie and rejects every forgery
     try testing.expectEqualStrings("42", verifySessionWithSecret(a, secret, signed, issued + session_max_age_secs).?);
     // …one second later is not.
     try testing.expect(verifySessionWithSecret(a, secret, signed, issued + session_max_age_secs + 1) == null);
+    // Issued in the future: a small skew is a clock, more is refused (156(f)).
+    try testing.expectEqualStrings("42", verifySessionWithSecret(a, secret, signed, issued - clock_skew_secs).?);
+    try testing.expect(verifySessionWithSecret(a, secret, signed, issued - clock_skew_secs - 1) == null);
+    const far = try signSession(a, secret, "42", std.math.maxInt(i64));
+    try testing.expect(verifySessionWithSecret(a, secret, far, issued) == null);
 }
 
 test "apiKeyMatches: plaintext constant-time arm and legacy sha256-hex arm" {
@@ -991,4 +1013,27 @@ test "fs: a member whose password cannot be looked at is an error, never a free 
     try store.remove(io, a, pw);
     try std.Io.Dir.cwd().symLink(io, "password", pw, .{});
     try testing.expect(std.meta.isError(findMemberByName(io, a, "Alice")));
+}
+
+test "a member with no name file reads as nobody, and no name lookup finds them (metal-vmm QUEUE 156(i))" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var tmp = testing.tmpDir(.{});
+    defer tmp.cleanup();
+    const saved = auth_root;
+    defer auth_root = saved;
+    auth_root = try std.fs.path.join(a, &.{ ".zig-cache", "tmp", &tmp.sub_path });
+    try setUserPassword(io, a, "4", "pw");
+    try testing.expectEqualStrings("", try getUserName(io, a, "4"));
+    try testing.expectEqual(@as(?[]const u8, null), try onlyMemberNamed(io, a, ""));
+    try testing.expectEqual(@as(?[]const u8, null), try findMemberByName(io, a, ""));
+}
+
+test "an account id is canonical: digits, the first not zero (metal-vmm QUEUE 156(i))" {
+    for ([_][]const u8{ "1", "7", "10", "123" }) |ok| try testing.expect(validUid(ok));
+    for ([_][]const u8{ "", "0", "007", "+7", "-7", " 7", "7 ", "7a" }) |bad| try testing.expect(!validUid(bad));
 }

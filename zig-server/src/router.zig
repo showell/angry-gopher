@@ -144,6 +144,12 @@ pub fn route(req: *std.http.Server.Request, io: Io, alloc: std.mem.Allocator, bu
         // head is sent is answered here, for both hosts, and still goes on
         // to the host to log. Once the head is out, the answer is the
         // handler's, cut short, and only the connection's close can say so.
+        if (e == error.MalformedForm) {
+            // The client's, not the server's (http.formField): said as such,
+            // and nothing for the host to log.
+            if (!sent.any) req.respond("The form was malformed.\n", .{ .status = .bad_request, .keep_alive = false }) catch {};
+            return;
+        }
         answerFailure(req, &sent);
         return e;
     };
@@ -593,7 +599,7 @@ test "route: an unsigned gopher_uid is re-identified once, then never" {
     try testing.expectEqualStrings("303 See Other", status(first));
     try testing.expect(std.mem.indexOf(u8, first, "location: /play?next=/game") != null);
     const signed = setUid(first) orelse return error.NoSetCookie;
-    try testing.expectEqualStrings(id, uid_cookie.verify(UidSite.secret, signed).?);
+    try testing.expectEqualStrings(id, uid_cookie.verify(UidSite.secret, signed, nowSecs(io)).?);
     try testing.expect(UidSite.marked(a, io, id));
 
     // The signed cookie is the player.
@@ -606,7 +612,7 @@ test "route: an unsigned gopher_uid is re-identified once, then never" {
     // been lost): re-signed again. Once the grace is over: no one.
     const lost = try UidSite.ask(a, io, "/play", unsigned);
     try testing.expectEqualStrings("303 See Other", status(lost));
-    try testing.expectEqualStrings(id, uid_cookie.verify(UidSite.secret, setUid(lost).?).?);
+    try testing.expectEqualStrings(id, uid_cookie.verify(UidSite.secret, setUid(lost).?, nowSecs(io)).?);
     const marker = try std.fs.path.join(a, &.{ player.player_root, id, "signed" });
     try UidSite.disk.replace(io, a, marker, "1790000000\n", .{}); // signed long ago
     const again = try UidSite.ask(a, io, "/play", unsigned);
@@ -671,10 +677,10 @@ test "route: an unsigned gopher_uid never names a member, the agent, a stranger,
     // A member, with a game identity under their own number.
     try users.setUserName(io, a, "1", "Steve");
     try users.setUserPassword(io, a, "1", "hunter2");
-    player.mirror(io, a, "1", "Steve");
+    try player.mirror(io, a, "1", "Steve");
     // The agent.
     try users.setUserName(io, a, "3", "Claude");
-    player.mirror(io, a, "3", "Claude");
+    try player.mirror(io, a, "3", "Claude");
     for ([_][]const u8{ "gopher_uid=1", "gopher_uid=3", "gopher_uid=p99", "gopher_uid=../1" }) |c| {
         const r = try UidSite.ask(a, io, "/play", c);
         try testing.expectEqualStrings("200 OK", status(r));
@@ -716,7 +722,7 @@ test "route: /play mints a signed gopher_uid, marked as signed" {
     const r = try serve(a, io, "POST /play HTTP/1.1\r\nHost: x\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: 23\r\n\r\nname=Nikhil&next=%2Fgame");
     try testing.expectEqualStrings("303 See Other", status(r));
     const v = setUid(r) orelse return error.NoSetCookie;
-    const id = uid_cookie.verify(UidSite.secret, v) orelse return error.Unsigned;
+    const id = uid_cookie.verify(UidSite.secret, v, nowSecs(io)) orelse return error.Unsigned;
     try testing.expect(UidSite.marked(a, io, id));
     // Its unsigned spelling is refused from the start: not re-signed, even
     // within a re-sign's grace, since this id never had an unsigned cookie.
@@ -737,9 +743,16 @@ fn removeSecret(a: std.mem.Allocator, io: Io) !void {
 
 // ── the game store's growth (gopher-metal QUEUE item 52) ─────────────────────
 
-/// A signed gopher_uid cookie for `id`, as /play would have set.
+fn nowSecs(io: Io) i64 {
+    return @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
+}
+
+/// A signed gopher_uid cookie for `id`, as /play would have set: signed an
+/// hour ago, so it is inside its lifetime whenever the tests run.
 fn signedUid(a: std.mem.Allocator, id: []const u8) ![]const u8 {
-    return std.fmt.allocPrint(a, "gopher_uid={s}", .{try uid_cookie.sign(a, UidSite.secret, id, 1_790_000_000)});
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    return std.fmt.allocPrint(a, "gopher_uid={s}", .{try uid_cookie.sign(a, UidSite.secret, id, nowSecs(threaded.io()) - 3600)});
 }
 
 fn postAs(a: std.mem.Allocator, io: Io, target: []const u8, cookies: []const u8, body: []const u8) ![]const u8 {
@@ -1473,7 +1486,7 @@ test "route: /admin/secret changes the secret: members log in again, players are
     const renewed = try UidSite.ask(a, io, "/play", old_uid);
     try testing.expectEqualStrings("303 See Other", status(renewed));
     const fresh = setUid(renewed) orelse return error.NoSetCookie;
-    try testing.expectEqualStrings(id, uid_cookie.verify(new_secret, fresh).?);
+    try testing.expectEqualStrings(id, uid_cookie.verify(new_secret, fresh, nowSecs(io)).?);
     try testing.expect(playingAs(try UidSite.ask(a, io, "/play", try std.fmt.allocPrint(a, "gopher_uid={s}", .{fresh})), "Nikhil"));
 
     // Once the days are over, the old cookie names no one.
@@ -1825,4 +1838,248 @@ test "fs: a handler's error is answered 500, never with silence (metal-vmm QUEUE
     try out.writer.flush();
     try testing.expect(std.mem.startsWith(u8, status(out.written()), "500"));
     try testing.expect(std.mem.endsWith(u8, out.written(), "\r\n\r\nThe server failed.\n"));
+}
+
+// ── the normalization hunt's app findings (metal-vmm QUEUE 156) ──────────────
+
+test "route: a new topic differing only in case from one there is refused, 409, where the store would merge them (156(a))" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var site = try UidSite.init(a, io);
+    defer site.deinit();
+    const prev = mem_meter.replace(std.heap.page_allocator); // presence outlives the test
+    defer _ = mem_meter.replace(prev);
+    const steve = try memberSession(a, io, "1", "Steve");
+    _ = try memberSession(a, io, "2", "Debbie");
+    try testing.expectEqualStrings("200 OK", status(try postAs(a, io, "/chat/c/1_2/new", steve, "topic=Plans")));
+    try testing.expectEqualStrings("409 Conflict", status(try postAs(a, io, "/chat/c/1_2/new", steve, "topic=plans")));
+    try testing.expectEqualStrings("409 Conflict", status(try postAs(a, io, "/chat/c/1_2/new", steve, "topic=PLANS")));
+    try testing.expectEqualStrings("400 Bad Request", status(try postAs(a, io, "/chat/c/1_2/new", steve, "topic=New")));
+}
+
+test "route: a send that would store nothing is refused, 400, and a message is stored as sent (156(b))" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var site = try UidSite.init(a, io);
+    defer site.deinit();
+    const prev = mem_meter.replace(std.heap.page_allocator);
+    defer _ = mem_meter.replace(prev);
+    const chat_store = @import("chat_store.zig");
+    const steve = try memberSession(a, io, "1", "Steve");
+    _ = try memberSession(a, io, "2", "Debbie");
+    try testing.expectEqualStrings("200 OK", status(try postAs(a, io, "/chat/c/1_2/new", steve, "topic=Plans")));
+    // No markdown field at all; one that is only whitespace.
+    try testing.expectEqualStrings("400 Bad Request", status(try postAs(a, io, "/chat/c/1_2/Plans/send", steve, "cid=x")));
+    try testing.expectEqualStrings("400 Bad Request", status(try postAs(a, io, "/chat/c/1_2/Plans/send", steve, "markdown=+%0A+&cid=x")));
+    // A message that began DROP_ON_FLOOR is a message.
+    try testing.expectEqualStrings("303 See Other", status(try postAs(a, io, "/chat/c/1_2/Plans/send", steve, "markdown=DROP_ON_FLOOR+is+a+phrase&cid=y")));
+    // A code block's indentation stays.
+    try testing.expectEqualStrings("303 See Other", status(try postAs(a, io, "/chat/c/1_2/Plans/send", steve, "markdown=++++code%0A++++more&cid=z")));
+    const raw = (try chat_store.rawSession(io, a, try chat_store.dmConvDir(a, "1_2"), "Plans")).?;
+    const msgs = try chat_store.decodeChatFile(a, raw);
+    try testing.expectEqual(@as(usize, 3), msgs.len);
+    try testing.expectEqualStrings("DROP_ON_FLOOR is a phrase", msgs[1].markdown);
+    try testing.expectEqualStrings("    code\n    more", msgs[2].markdown);
+}
+
+test "route: sign-up refuses a name it would have to change, never registering another (156(e))" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var site = try UidSite.init(a, io);
+    defer site.deinit();
+    const prev = mem_meter.replace(std.heap.page_allocator);
+    defer _ = mem_meter.replace(prev);
+    const page = try postForm(a, io, "/login/full", "x=y", "name=Bob%3Cx%3E&password=pw&action=register");
+    try testing.expect(std.mem.indexOf(u8, page, "set-cookie: gopher_auth=") == null);
+    try testing.expect(std.mem.indexOf(u8, page, "Names can use only") != null);
+    try testing.expectEqual(@as(?[]const u8, null), try users.findMemberByName(io, a, "Bobx"));
+    // Nor logs in as the member the cleaned name would have been.
+    _ = try memberSession(a, io, "1", "Steve");
+    const as_steve = try postForm(a, io, "/login/full", "x=y", "name=Steve%3C&password=pw&action=login");
+    try testing.expect(std.mem.indexOf(u8, as_steve, "set-cookie: gopher_auth=") == null);
+}
+
+/// A POST whose handler fails: the answer it was given (route answers the
+/// failure, then hands the error on to the host, to log).
+fn postFailing(a: std.mem.Allocator, io: Io, target: []const u8, cookies: []const u8, body: []const u8) ![]const u8 {
+    const raw = try std.fmt.allocPrint(a, "POST {s} HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: {d}\r\n\r\n{s}", .{ target, cookies, body.len, body });
+    var reader: std.Io.Reader = .fixed(raw);
+    var out: std.Io.Writer.Allocating = .init(a);
+    var server = std.http.Server.init(&reader, &out.writer);
+    var req = try server.receiveHead();
+    req.head.keep_alive = false;
+    var hub = Hub.init(io, a);
+    var b = Bus.of(&hub);
+    try testing.expect(std.meta.isError(route(&req, io, a, &b)));
+    try out.writer.flush();
+    return out.written();
+}
+
+test "route: a pin, a bookmark or the login mirror that will not write is a 500, never a quiet success (156(g))" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var site = try UidSite.init(a, io);
+    defer site.deinit();
+    const prev = mem_meter.replace(std.heap.page_allocator);
+    defer _ = mem_meter.replace(prev);
+    const chat_store = @import("chat_store.zig");
+    const steve = try memberSession(a, io, "1", "Steve");
+    _ = try memberSession(a, io, "2", "Debbie");
+    try testing.expectEqualStrings("200 OK", status(try postAs(a, io, "/chat/c/1_2/new", steve, "topic=Plans")));
+    // The pins' folder is a file: the pin cannot be written.
+    try UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ chat_store.chat_root, "users", "1", "pinned-sessions" }), "", .{});
+    try testing.expectEqualStrings("500 Internal Server Error", status(try postFailing(a, io, "/chat/c/1_2/Plans/pin", steve, "")));
+    // The bookmarks' folder is a file: a send is refused before it stores.
+    const bookmarks = try std.fs.path.join(a, &.{ chat_store.chat_root, "users", "1", "last-sessions" });
+    try std.Io.Dir.cwd().deleteTree(io, bookmarks);
+    try UidSite.disk.write(io, a, bookmarks, "", .{});
+    try testing.expectEqualStrings("500 Internal Server Error", status(try postFailing(a, io, "/chat/c/1_2/Plans/send", steve, "markdown=hello&cid=x")));
+    const raw = (try chat_store.rawSession(io, a, try chat_store.dmConvDir(a, "1_2"), "Plans")).?;
+    try testing.expectEqual(@as(usize, 1), (try chat_store.decodeChatFile(a, raw)).len);
+    // The player row is a file where its folder goes: the login's mirror fails.
+    try UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ player.player_root, "1" }), "", .{});
+    try testing.expectEqualStrings("500 Internal Server Error", status(try postFailing(a, io, "/login/full", "x=y", "name=Steve&password=pw&action=login")));
+}
+
+test "route: one form decoder: a bad escape or a field sent twice is a 400 on every form, where chat took them and players refused them as a 500 (156(i))" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var site = try UidSite.init(a, io);
+    defer site.deinit();
+    const prev = mem_meter.replace(std.heap.page_allocator);
+    defer _ = mem_meter.replace(prev);
+    const chat_store = @import("chat_store.zig");
+    const steve = try memberSession(a, io, "1", "Steve");
+    _ = try memberSession(a, io, "2", "Debbie");
+    try testing.expectEqualStrings("200 OK", status(try postAs(a, io, "/chat/c/1_2/new", steve, "topic=Plans")));
+    for ([_][]const u8{ "markdown=100%zz&cid=x", "markdown=a&markdown=b&cid=x", "markdown=50%&cid=x" }) |bad| {
+        try testing.expectEqualStrings("400 Bad Request", status(try postAs(a, io, "/chat/c/1_2/Plans/send", steve, bad)));
+    }
+    const raw = (try chat_store.rawSession(io, a, try chat_store.dmConvDir(a, "1_2"), "Plans")).?;
+    try testing.expectEqual(@as(usize, 1), (try chat_store.decodeChatFile(a, raw)).len);
+    try testing.expectEqualStrings("400 Bad Request", status(try postForm(a, io, "/play", "x=y", "name=Ada%zz&next=%2Fgame")));
+    // A well-formed escape still decodes.
+    try testing.expectEqualStrings("303 See Other", status(try postAs(a, io, "/chat/c/1_2/Plans/send", steve, "markdown=100%25&cid=y")));
+}
+
+test "route: an admin delete of a player there is not says so, 404, where it went back to the roster as if done (156(i))" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var site = try UidSite.init(a, io);
+    defer site.deinit();
+    const me = try adminSession(a, io);
+    try testing.expectEqualStrings("404 Not Found", status(try postForm(a, io, "/admin/lynrummy/delete", me, "user=p999")));
+    try testing.expectEqualStrings("404 Not Found", status(try UidSite.ask(a, io, "/admin/lynrummy/delete?user=p999", me)));
+    const id = try player.allocate(io, a, "Nikhil");
+    try testing.expectEqualStrings("200 OK", status(try UidSite.ask(a, io, try std.fmt.allocPrint(a, "/admin/lynrummy/delete?user={s}", .{id}), me)));
+}
+
+test "route: a topic that is not there is a 404 that says so, on every tail but send, and never becomes where /chat/default resumes; a channel not the viewer's says why (156(j))" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var site = try UidSite.init(a, io);
+    defer site.deinit();
+    const prev = mem_meter.replace(std.heap.page_allocator);
+    defer _ = mem_meter.replace(prev);
+    const chat_store = @import("chat_store.zig");
+    const steve = try memberSession(a, io, "1", "Steve");
+    _ = try memberSession(a, io, "2", "Debbie");
+    try testing.expectEqualStrings("200 OK", status(try postAs(a, io, "/chat/c/1_2/new", steve, "topic=Plans")));
+    const page = try UidSite.ask(a, io, "/chat/c/1_2/Nowhere", steve);
+    try testing.expectEqualStrings("404 Not Found", status(page));
+    try testing.expect(std.mem.indexOf(u8, page, "Nowhere") != null);
+    for ([_][]const u8{ "/chat/c/1_2/Nowhere/raw", "/chat/c/1_2/Nowhere/stream", "/chat/c/1_2/Nowhere/reactions" }) |t|
+        try testing.expectEqualStrings("404 Not Found", status(try UidSite.ask(a, io, t, steve)));
+    try testing.expectEqualStrings("404 Not Found", status(try postAs(a, io, "/chat/c/1_2/Nowhere/react", steve, "msg=1&emoji=%F0%9F%91%8D")));
+    try testing.expect((try chat_store.rawSession(io, a, try chat_store.dmConvDir(a, "1_2"), "Nowhere")) == null);
+    // Another case is the same topic (Steve, 2026-10-02).
+    try testing.expectEqualStrings("200 OK", status(try UidSite.ask(a, io, "/chat/c/1_2/PLANS/raw", steve)));
+    // The resume pointer still names Plans.
+    const last = try std.fs.path.join(a, &.{ chat_store.chat_root, "users", "1", "last-sessions", "1_2" });
+    try testing.expectEqualStrings("Plans\n", try UidSite.disk.read(io, a, last, .limited(64)));
+    // A channel the viewer is not in: a page that says why, worded as for one that is not there.
+    try UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ chat_store.chat_root, "channels", "quiet.channel" }), "2\n", .{});
+    const removed = try UidSite.ask(a, io, "/channel/quiet", steve);
+    const absent = try UidSite.ask(a, io, "/channel/nothere", steve);
+    try testing.expectEqualStrings("404 Not Found", status(removed));
+    try testing.expectEqualStrings("404 Not Found", status(absent));
+    const why = "is not a channel you are a member of";
+    try testing.expect(std.mem.indexOf(u8, removed, why) != null and std.mem.indexOf(u8, absent, why) != null);
+}
+
+test "route: a send makes the topic it names, and /chat over a conversation with no topic lands on its page, never on a 404 (the review of 156(j))" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var site = try UidSite.init(a, io);
+    defer site.deinit();
+    const prev = mem_meter.replace(std.heap.page_allocator);
+    defer _ = mem_meter.replace(prev);
+    const chat_store = @import("chat_store.zig");
+    const chat_state = @import("chat_state.zig");
+    const steve = try memberSession(a, io, "1", "Steve");
+    _ = try memberSession(a, io, "2", "Debbie");
+    // /chat, its bookmark on a conversation with no topic.
+    try UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ chat_store.chat_root, "users", "1", "last-conv" }), "1_2\n", .{});
+    const landed = try UidSite.ask(a, io, "/chat/default", steve);
+    try testing.expectEqualStrings("303 See Other", status(landed));
+    try testing.expect(std.mem.indexOf(u8, landed, "location: /chat/c/1_2\r\n") != null);
+    // A send to a topic not yet there makes it.
+    try testing.expectEqualStrings("303 See Other", status(try postAs(a, io, "/chat/c/1_2/Fresh/send", steve, "markdown=first&cid=x")));
+    const raw = (try chat_store.rawSession(io, a, try chat_store.dmConvDir(a, "1_2"), "Fresh")).?;
+    try testing.expectEqual(@as(usize, 1), (try chat_store.decodeChatFile(a, raw)).len);
+    _ = chat_state;
+}
+
+test "route: a GET re-signs a gopher_uid past half its life, so an active player keeps who they are; a younger one is left alone (Steve, 2026-10-10)" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var site = try UidSite.init(a, io);
+    defer site.deinit();
+    const id = try player.allocate(io, a, "Nikhil");
+    const now = nowSecs(io);
+    const old = try std.fmt.allocPrint(a, "gopher_uid={s}", .{try uid_cookie.sign(a, UidSite.secret, id, now - uid_cookie.lifetime_secs / 2 - 60)});
+    const renewed = try UidSite.ask(a, io, "/play", old);
+    try testing.expectEqualStrings("303 See Other", status(renewed));
+    const fresh = setUid(renewed) orelse return error.NoSetCookie;
+    try testing.expectEqualStrings(id, uid_cookie.verify(UidSite.secret, fresh, now + uid_cookie.lifetime_secs - 3600).?);
+    // A POST is never redirected: the old cookie still names them there.
+    try testing.expect(playingAs(try postForm(a, io, "/play", old, ""), "Nikhil"));
+    // Young: no re-sign.
+    try testing.expect(setUid(try UidSite.ask(a, io, "/play", try signedUid(a, id))) == null);
 }

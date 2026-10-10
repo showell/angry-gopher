@@ -216,8 +216,12 @@ pub fn handleChannel(req: *Request, io: Io, alloc: Alloc, bus: *Bus, sub: []cons
     // path-derived slices already survive the body read.
     const name = name_raw;
 
-    const members = (try store.channelMembers(io, alloc, name)) orelse return http.notFound(req);
-    if (!store.hasMember(members, uid)) return http.notFound(req);
+    // **ONE ANSWER, THAT SAYS WHY** (metal-vmm QUEUE 156(j)): a channel that
+    // is not there and one the viewer is not in (or was removed from) read
+    // alike, so the page names no channel a viewer cannot see.
+    const not_yours = try std.fmt.allocPrint(alloc, "#{s} is not a channel you are a member of.", .{name});
+    const members = (try store.channelMembers(io, alloc, name)) orelse return page.notFoundPage(req, io, alloc, uid, not_yours, "/chat");
+    if (!store.hasMember(members, uid)) return page.notFoundPage(req, io, alloc, uid, not_yours, "/chat");
 
     const conv = Conv{
         .meta = .{ .kind = .channel, .members = members },
@@ -296,6 +300,18 @@ fn convRoute(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8, re
 /// `segs` is positioned just after the sid. `title` is the top-bar title.
 fn topicRoute(req: *Request, io: Io, alloc: Alloc, bus: *Bus, segs: *SegIter, uid: []const u8, topic: Topic) !void {
     const conv = topic.conv;
+    // **A TOPIC THAT IS NOT THERE IS A 404 THAT SAYS SO** (metal-vmm QUEUE
+    // 156(j)), where its page was served as an empty one and became where
+    // /chat/default resumes. Every tail but `send`, which makes a topic as
+    // its first message does (the judges send to one first). Without case,
+    // as Steve's rule has it (2026-10-02, option 1: case does not tell
+    // topics apart, on FAT or on Linux).
+    var peek = segs.*;
+    const is_send = if (peek.next()) |t| std.mem.eql(u8, t, "send") else false;
+    if (!is_send and !try topicExists(io, alloc, conv.dir, topic.sid)) {
+        const what = try std.fmt.allocPrint(alloc, "There is no topic \u{201C}{s}\u{201D} in this conversation.", .{topic.sid});
+        return page.notFoundPage(req, io, alloc, uid, what, conv.base);
+    }
     const tail = segs.next() orelse {
         try page.conversationPage(req, io, alloc, uid, topic);
         return;
@@ -332,6 +348,13 @@ fn topicRoute(req: *Request, io: Io, alloc: Alloc, bus: *Bus, segs: *SegIter, ui
     }
 }
 
+fn topicExists(io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8) !bool {
+    for (try store.listSessions(io, alloc, conv_dir)) |s| {
+        if (std.ascii.eqlIgnoreCase(s, sid)) return true;
+    }
+    return false;
+}
+
 /// savedIds answers GET /<conv>/<sid>/saved → JSON array of the message ids the
 /// caller has saved to their reading list within this topic, for the page to
 /// mark its bubbles. Served from reading_list's mtime-cached parse.
@@ -352,8 +375,14 @@ fn savedIds(req: *Request, io: Io, alloc: Alloc, uid: []const u8, conv_key: []co
 /// sendMessage handles POST /<…>/<sid>/send: parse the markdown+cid form, then
 /// append (which fans out live to
 /// every open stream on this conv/sid), and report. `X-Chat-Async: 1` → 204;
-/// a plain form post → 303 back to the topic. Empty / DROP_ON_FLOOR bodies report
-/// success without appending (the client's no-echo path).
+/// a plain form post → 303 back to the topic.
+///
+/// **A SEND STORES WHAT WAS SENT, OR IS REFUSED** (metal-vmm QUEUE 156(b)):
+/// no `markdown` field, or one that is only whitespace, is a 400, where it
+/// answered success having stored nothing; the text is stored as sent (a
+/// trim, once, stripped a code block's first indentation), and trimmed only
+/// to ask whether it is empty. (`DROP_ON_FLOOR`, which dropped a real
+/// message that began with it, is gone: nothing used it.)
 fn sendMessage(req: *Request, io: Io, alloc: Alloc, bus: *Bus, topic: Topic, uid: []const u8) !void {
     const conv = topic.conv;
     if (req.head.method != .POST) return http.methodNotAllowed(req);
@@ -364,12 +393,11 @@ fn sendMessage(req: *Request, io: Io, alloc: Alloc, bus: *Bus, topic: Topic, uid
     const is_async = if (try http.header(req, alloc, "x-chat-async")) |v| std.mem.eql(u8, v, "1") else false;
 
     const body = (try http.readLimitedBody(req, alloc, max_message_bytes)) orelse return;
-    const md_raw = (try formField(alloc, body, "markdown")) orelse "";
+    const md = (try formField(alloc, body, "markdown")) orelse
+        return req.respond("not sent: no message (the form has no markdown field)\n", .{ .status = .bad_request });
     const cid = (try formField(alloc, body, "cid")) orelse "";
-    const md = std.mem.trim(u8, md_raw, " \t\r\n");
-
-    if (md.len == 0 or std.mem.startsWith(u8, md, "DROP_ON_FLOOR")) {
-        return sendDone(req, alloc, is_async, conv.base, topic.sid);
+    if (std.mem.trim(u8, md, " \t\r\n").len == 0) {
+        return req.respond("not sent: the message is empty\n", .{ .status = .bad_request });
     }
 
     // Refuse hostile / absurdly over-formatted markdown at the door rather than
@@ -380,8 +408,11 @@ fn sendMessage(req: *Request, io: Io, alloc: Alloc, bus: *Bus, topic: Topic, uid
     }
 
     const from_name = try users.getUserName(io, alloc, uid);
+    // The bookmark first (metal-vmm QUEUE 156(g)): one that fails is a 500
+    // with nothing stored, never a 500 for a message that was, which the
+    // client would send again.
+    if (conv.persistsCursor()) try chat_state.setUserLastSession(io, alloc, uid, conv.key, topic.sid);
     _ = try store.appendMessage(io, alloc, bus, conv.meta, conv.dir, conv.key, topic.sid, from_name, uid, md, cid);
-    if (conv.persistsCursor()) chat_state.setUserLastSession(io, alloc, uid, conv.key, topic.sid);
     return sendDone(req, alloc, is_async, conv.base, topic.sid);
 }
 
@@ -390,11 +421,11 @@ fn sendMessage(req: *Request, io: Io, alloc: Alloc, bus: *Bus, topic: Topic, uid
 /// state; conv-level auth already passed (any participant pins their own view).
 fn pinSession(req: *Request, io: Io, alloc: Alloc, uid: []const u8, conv_key: []const u8, sid: []const u8, pinned: bool) !void {
     if (req.head.method != .POST) return http.methodNotAllowed(req);
-    chat_state.setSessionPinned(io, alloc, uid, conv_key, sid, pinned);
+    try chat_state.setSessionPinned(io, alloc, uid, conv_key, sid, pinned);
     return req.respond("", .{ .status = .no_content });
 }
 
-/// sendDone reports a (possibly no-op) send: 204 for async fetch callers, else a
+/// sendDone reports a send: 204 for async fetch callers, else a
 /// 303 back to the topic page (the no-JS form-post fallback).
 fn sendDone(req: *Request, alloc: Alloc, is_async: bool, base: []const u8, sid: []const u8) !void {
     if (is_async) return req.respond("", .{ .status = .no_content });
@@ -419,18 +450,24 @@ fn newTopic(req: *Request, io: Io, alloc: Alloc, bus: *Bus, conv: Conv, uid: []c
     if (!store.validSessionID(topic)) {
         return req.respond("Topic must be letters, digits, and hyphens only — no spaces, underscores, or punctuation.\n", .{ .status = .bad_request });
     }
-    if (std.mem.eql(u8, topic, "new")) {
+    if (std.ascii.eqlIgnoreCase(topic, "new")) {
         return req.respond("\"new\" is reserved — pick another topic name.\n", .{ .status = .bad_request });
     }
+    // **WITHOUT CASE** (metal-vmm QUEUE 156(a)): the store's names are not
+    // (FAT folds them), so "plans" beside "Plans" was one file, the new
+    // topic's first message landing in the old.
     for (try store.listSessions(io, alloc, conv.dir)) |s| {
-        if (std.mem.eql(u8, s, topic)) return req.respond("That topic already exists.\n", .{ .status = .conflict });
+        if (std.ascii.eqlIgnoreCase(s, topic)) return req.respond("That topic already exists.\n", .{ .status = .conflict });
     }
 
     const from_name = try users.getUserName(io, alloc, uid);
+    // The bookmark first, as a send's (156(g)): one that fails makes no topic,
+    // where it answered 500 for a topic made, and a retry met 409. A bookmark
+    // to a topic not made is never followed (resolveSessionForUser).
+    if (conv.persistsCursor()) try chat_state.setUserLastSession(io, alloc, uid, conv.key, topic);
     _ = try store.appendMessage(io, alloc, bus, conv.meta, conv.dir, conv.key, topic, from_name, uid, "hi", "");
 
     if (conv.persistsCursor()) {
-        chat_state.setUserLastSession(io, alloc, uid, conv.key, topic);
         // Announce the new topic where the partner already watches (best-effort).
         if (try highestGeneralSession(io, alloc, conv.dir)) |gen| {
             if (!std.mem.eql(u8, gen, topic)) {
@@ -478,6 +515,12 @@ fn chatDefault(req: *Request, io: Io, alloc: Alloc, uid: []const u8) !void {
     const conv = try chat_state.lastUserConv(io, alloc, uid);
     if (conv.len == 0 or !(try store.chatKeyParticipant(alloc, conv, uid))) {
         return page.noConversationsPage(req, io, alloc, uid);
+    }
+    // A conversation with no topic yet lands on its own page, which offers to
+    // start the first, where it went to today's date as a topic: a send makes
+    // one there, but a page of a topic not there is a 404 (156(j)'s review).
+    if ((try store.defaultSession(io, alloc, try store.dmConvDir(alloc, conv))).len == 0) {
+        return http.redirect(req, try std.fmt.allocPrint(alloc, "/chat/c/{s}", .{conv}));
     }
     const sid = try chat_state.resolveSessionForUser(io, alloc, uid, conv);
     return http.redirect(req, try std.fmt.allocPrint(alloc, "/chat/c/{s}/{s}", .{ conv, sid }));
@@ -623,39 +666,10 @@ fn isStreamPath(sub: []const u8) bool {
 /// percent/plus-decoded, or null when absent. Field names here ("markdown",
 /// "cid") are literal, so only the value is decoded.
 pub fn formField(alloc: Alloc, body: []const u8, name: []const u8) !?[]const u8 {
-    var it = std.mem.splitScalar(u8, body, '&');
-    while (it.next()) |pair| {
-        const eq = std.mem.indexOfScalar(u8, pair, '=') orelse continue;
-        if (std.mem.eql(u8, pair[0..eq], name)) return try urlDecode(alloc, pair[eq + 1 ..]);
-    }
-    return null;
+    return http.formField(alloc, body, name);
 }
 
-/// urlDecode reverses form-urlencoding: '+' → space, '%XX' → byte, else verbatim.
+/// urlDecode is `http.formDecode`: one decoder for every form.
 pub fn urlDecode(alloc: Alloc, s: []const u8) ![]u8 {
-    var out: std.ArrayList(u8) = .empty;
-    var i: usize = 0;
-    while (i < s.len) : (i += 1) {
-        const c = s[i];
-        if (c == '+') {
-            try out.append(alloc, ' ');
-        } else if (c == '%' and i + 2 < s.len) {
-            const hi = hexVal(s[i + 1]);
-            const lo = hexVal(s[i + 2]);
-            if (hi != null and lo != null) {
-                try out.append(alloc, hi.? * 16 + lo.?);
-                i += 2;
-            } else try out.append(alloc, c);
-        } else try out.append(alloc, c);
-    }
-    return out.toOwnedSlice(alloc);
-}
-
-fn hexVal(c: u8) ?u8 {
-    return switch (c) {
-        '0'...'9' => c - '0',
-        'a'...'f' => c - 'a' + 10,
-        'A'...'F' => c - 'A' + 10,
-        else => null,
-    };
+    return http.formDecode(alloc, s);
 }

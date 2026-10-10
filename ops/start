@@ -48,10 +48,21 @@ export GOPHER_CONFIG
 # launch ordering instead of a /version nonce.)
 pkill -x zig-server 2>/dev/null || true
 lsof -ti:9001 | xargs kill -9 2>/dev/null || true
+port_free=0
 for i in $(seq 1 10); do
-    curl -s http://localhost:9001/version >/dev/null 2>&1 || break
+    if ! curl -s http://localhost:9001/version >/dev/null 2>&1; then
+        port_free=1
+        break
+    fi
     sleep 0.3
 done
+# **A PORT THAT NEVER FREES STOPS HERE** (metal-vmm QUEUE 156(i)): the loop
+# used to fall through, and the old server's answer below was reported as the
+# new one ready.
+if [ "$port_free" != 1 ]; then
+    echo "ops/start: :9001 still answers after the kill; not starting (whatever holds it would be reported ready)" >&2
+    exit 1
+fi
 
 cd "$GOPHER_DIR"
 
@@ -70,9 +81,15 @@ BIN="$GOPHER_DIR/zig-server/zig-out/bin/zig-server"
 # the live tree; without it the server falls back to repo-relative defaults
 # (and a stranger gets a 303 to /play).
 nohup "$BIN" > /tmp/angry-gopher.log 2>&1 &
+PID=$!
 
 # Wait for the freshly-built server to answer on :9001.
 for i in $(seq 1 10); do
+    # The server we launched, still running, is what answers.
+    if ! kill -0 "$PID" 2>/dev/null; then
+        echo "ops/start: the new server exited; see /tmp/angry-gopher.log" >&2
+        exit 1
+    fi
     if curl -s http://localhost:9001/version 2>/dev/null | grep -qF '"version"'; then
         echo "Gopher (zig): http://localhost:9001 (ready)"
         exit 0

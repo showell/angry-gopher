@@ -59,7 +59,10 @@ pub fn streamTranscript(req: *Request, io: Io, alloc: Alloc, bus: *Bus, conv_dir
     var i: usize = since;
     while (i < stream.backlog.len) : (i += 1) {
         const m = stream.backlog[i];
-        const frame = try emitWire(alloc, i, m.from, m.date, m.markdown, m.id, std.mem.eql(u8, m.from, viewer), "");
+        // Its index from its id, as the live stream's: a refused block before
+        // it keeps its number (chat_store.countBlocks).
+        const index = store.indexOf(m.id, sid) orelse i;
+        const frame = try emitWire(alloc, index, m.from, m.date, m.markdown, m.id, std.mem.eql(u8, m.from, viewer), "");
         http.pushFrame(&body, frame) catch return;
     }
 

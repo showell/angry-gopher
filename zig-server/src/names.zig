@@ -68,27 +68,6 @@ pub fn validateUserName(alloc: Alloc, raw: []const u8) !NameResult {
     return .{ .name = out, .err = "" };
 }
 
-/// sanitizeUser scrubs a name into a clean attribute value: keeps allowed bytes,
-/// collapses whitespace runs, caps length, "" if nothing usable remains. Lenient
-/// (strips rather than rejects) — login re-checks with validateUserName.
-pub fn sanitizeUser(alloc: Alloc, raw: []const u8) ![]const u8 {
-    var b: std.ArrayList(u8) = .empty;
-    var last_space = false;
-    for (std.mem.trim(u8, raw, " \t\r\n")) |c| {
-        if (c == ' ') {
-            if (!last_space and b.items.len > 0) {
-                try b.append(alloc, ' ');
-                last_space = true;
-            }
-        } else if (allowedNameByte(c)) {
-            try b.append(alloc, c);
-            last_space = false;
-        }
-        if (b.items.len >= max_user_len) break;
-    }
-    return std.mem.trimEnd(u8, b.items, " ");
-}
-
 test "validateUserName collapses whitespace, requires alnum, rejects punctuation/overlength" {
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();
@@ -125,18 +104,4 @@ test "validateUserName collapses whitespace, requires alnum, rejects punctuation
     // but names that merely CONTAIN them are fine
     try testing.expectEqualStrings("Mel", (try validateUserName(a, "Mel")).name);
     try testing.expectEqualStrings("You Two", (try validateUserName(a, "You Two")).name);
-}
-
-test "sanitizeUser strips disallowed bytes, collapses whitespace, caps length" {
-    var arena = std.heap.ArenaAllocator.init(testing.allocator);
-    defer arena.deinit();
-    const a = arena.allocator();
-
-    // lenient: strips rather than rejects, and collapses the gap left behind
-    try testing.expectEqualStrings("ab", try sanitizeUser(a, "a<b>"));
-    try testing.expectEqualStrings("a b", try sanitizeUser(a, "  a < b  "));
-    // nothing usable → empty
-    try testing.expectEqualStrings("", try sanitizeUser(a, "<<>>"));
-    // capped to max_user_len bytes
-    try testing.expectEqual(@as(usize, max_user_len), (try sanitizeUser(a, "a" ** 80)).len);
 }

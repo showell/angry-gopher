@@ -51,13 +51,24 @@ pub fn firstTopicPage(req: *Request, io: Io, alloc: Alloc, uid: []const u8, base
     try req.respond(b.items, .{ .extra_headers = &.{http.html_ct} });
 }
 
+/// **A 404 THAT SAYS WHY** (metal-vmm QUEUE 156(j)): `what` names what is not
+/// there, and `back` is where to go instead. A page, not a bare "not found".
+pub fn notFoundPage(req: *Request, io: Io, alloc: Alloc, uid: []const u8, what: []const u8, back: []const u8) !void {
+    const viewer = try users.getUserName(io, alloc, uid);
+    var b: std.ArrayList(u8) = .empty;
+    try chrome.begin(&b, alloc, "Chat", "Not here", viewer, "chat");
+    try b.print(alloc, "<p>{s}</p><p><a href=\"{s}\">Go back</a></p>", .{ try htmlEscape(alloc, what), try htmlEscape(alloc, back) });
+    try chrome.end(&b, alloc);
+    try req.respond(b.items, .{ .status = .not_found, .extra_headers = &.{http.html_ct} });
+}
+
 // ── the conversation page (boots the prod JS) ────────────────────────────────
 
 pub fn conversationPage(req: *Request, io: Io, alloc: Alloc, uid: []const u8, topic: Topic) !void {
     const conv = topic.conv;
     // Remember where this user is — the /chat/default resume pointer, keyed by
     // pair. Only convs that persist a cursor (DMs) do this; channels don't.
-    if (conv.persistsCursor()) chat_state.setUserLastSession(io, alloc, uid, conv.key, topic.sid);
+    if (conv.persistsCursor()) try chat_state.setUserLastSession(io, alloc, uid, conv.key, topic.sid);
     const viewer = try users.getUserName(io, alloc, uid);
     const sidebar_json = try buildSidebarJSON(io, alloc, uid, topic);
 

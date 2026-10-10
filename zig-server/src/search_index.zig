@@ -104,8 +104,23 @@ pub const Found = struct {
 /// copy, so the build's scratch is the transcript and not several times it.
 /// A block whose body holds an escaped separator line, which the decoder
 /// unescapes, goes through the decoder (into `a`).
-fn inPlace(a: Alloc, piece: []const u8) !chat_store.ChatMessage {
-    if (std.mem.indexOf(u8, piece, "\\-------------") != null) return (try chat_store.decodeChatFile(a, piece))[0];
+///
+/// Null for a block that is not a message (`chat_store.isMessage`), refused
+/// and counted as the decoder does: the two read the same messages.
+fn inPlace(a: Alloc, piece: []const u8) !?chat_store.ChatMessage {
+    if (std.mem.indexOf(u8, piece, "\\-------------") != null) {
+        const got = try chat_store.decodeChatFile(a, piece);
+        return if (got.len > 0) got[0] else null;
+    }
+    const m = inPlaceRead(piece);
+    if (!chat_store.isMessage(m)) {
+        chat_store.refuseBlock(piece);
+        return null;
+    }
+    return m;
+}
+
+fn inPlaceRead(piece: []const u8) chat_store.ChatMessage {
     var m: chat_store.ChatMessage = .{ .id = "", .from = "", .date = "", .markdown = "" };
     var lines = std.mem.splitScalar(u8, piece, '\n');
     var first = true;
@@ -273,7 +288,7 @@ pub const Index = struct {
                 var blocks = std.mem.splitSequence(u8, raw, chat_store.sep);
                 while (blocks.next()) |piece| {
                     if (std.mem.trim(u8, piece, " \t\r\n").len == 0) continue;
-                    try self.add(dir, sid, try inPlace(a, piece));
+                    if (try inPlace(a, piece)) |m| try self.add(dir, sid, m);
                 }
             }
         }
@@ -566,17 +581,19 @@ test "a block read in place is what the decoder makes of it (155's review)" {
     const sep = chat_store.sep;
     const file = "MSG_t_1\nfrom: Steve\ndate: 2026-10-10T00:00:00Z\n\nhello\nthere\n\n  indented" ++ sep ++
         "MSG_t_2\nfrom: A: B\nnote: x\ndate: d\n\n" ++ sep ++ // an empty body; a colon in the name
-        "MSG_t_3\nfrom: C\n" ++ sep ++ // no blank line: no body
-        "\nfrom: D\n\nno id line" ++ sep ++ // the first line empty
-        "MSG_t_5\nfrom: E\n\nabove\n\\-------------\nbelow" ++ sep ++ // an escaped separator line
-        "not a header\n\nbody" ++ sep ++ "  \n\t" ++ sep ++ "MSG_t_8\n\nlast";
+        "MSG_t_3\nfrom: C\ndate: d\n" ++ sep ++ // no blank line: no body
+        "\nfrom: D\ndate: d\n\nno id line" ++ sep ++ // the first line empty: refused by both
+        "MSG_t_5\nfrom: E\ndate: d\n\nabove\n\\-------------\nbelow" ++ sep ++ // an escaped separator line
+        "not a header\n\nbody" ++ sep ++ "  \n\t" ++ sep ++ "MSG_t_8\nfrom: F\ndate: d\n\nlast" ++ sep ++
+        "MSG_t_9\nfrom: G\n\nno date"; // refused by both
     const want = try chat_store.decodeChatFile(a, file);
     var got: std.ArrayList(chat_store.ChatMessage) = .empty;
     var blocks = std.mem.splitSequence(u8, file, sep);
     while (blocks.next()) |piece| {
         if (std.mem.trim(u8, piece, " \t\r\n").len == 0) continue;
-        try got.append(a, try inPlace(a, piece));
+        if (try inPlace(a, piece)) |m| try got.append(a, m);
     }
+    try testing.expectEqual(@as(usize, 5), want.len); // t_1, t_2, t_3, t_5, t_8
     try testing.expectEqual(want.len, got.items.len);
     for (want, got.items) |w, g| {
         try testing.expectEqualStrings(w.id, g.id);

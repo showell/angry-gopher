@@ -52,22 +52,19 @@ pub fn lastUserSession(io: Io, alloc: Alloc, uid: []const u8, conv_key: []const 
 /// **WRITTEN ONLY WHEN IT CHANGES** (gopher-metal 153(1)): on every send and
 /// view the value is usually the one already there, and a write is disk
 /// requests each time; the read is from memory. `write` makes the folders.
-pub fn setUserLastSession(io: Io, alloc: Alloc, uid: []const u8, conv_key: []const u8, sid: []const u8) void {
+pub fn setUserLastSession(io: Io, alloc: Alloc, uid: []const u8, conv_key: []const u8, sid: []const u8) !void {
     if (uid.len == 0 or sid.len == 0) return;
-    const dir = userChatStateDir(alloc, uid) catch return;
-    const ls_path = std.fs.path.join(alloc, &.{ dir, "last-sessions", conv_key }) catch return;
-    writeIfChanged(io, alloc, ls_path, sid);
-    const lc_path = std.fs.path.join(alloc, &.{ dir, "last-conv" }) catch return;
-    writeIfChanged(io, alloc, lc_path, conv_key);
+    const dir = try userChatStateDir(alloc, uid);
+    try writeIfChanged(io, alloc, try std.fs.path.join(alloc, &.{ dir, "last-sessions", conv_key }), sid);
+    try writeIfChanged(io, alloc, try std.fs.path.join(alloc, &.{ dir, "last-conv" }), conv_key);
 }
 
 /// `value` and a newline at `path`, unless it already holds `value`.
-fn writeIfChanged(io: Io, alloc: Alloc, path: []const u8, value: []const u8) void {
-    // absent-ok: a bookmark that cannot be read is written again.
+fn writeIfChanged(io: Io, alloc: Alloc, path: []const u8, value: []const u8) !void {
+    // absent-ok: a bookmark that cannot be read is written again; the write says whether it can be.
     const was = disk.readOrNull(io, alloc, path, .limited(256)) catch null;
     if (was) |w| if (std.mem.eql(u8, std.mem.trim(u8, w, " \t\r\n"), value)) return;
-    const v = std.fmt.allocPrint(alloc, "{s}\n", .{value}) catch return;
-    disk.write(io, alloc, path, v, .{}) catch {};
+    try disk.write(io, alloc, path, try std.fmt.allocPrint(alloc, "{s}\n", .{value}), .{});
 }
 
 // ── pinned sessions (the sidebar's Pinned group) ──────────────────────────────
@@ -102,16 +99,16 @@ pub fn isPinned(set: [][]const u8, sid: []const u8) bool {
 
 /// setSessionPinned adds or removes one session from the user's pinned set for
 /// `conv_key`, persisting it sorted. Removing the last pin deletes the file.
-/// Best-effort.
-pub fn setSessionPinned(io: Io, alloc: Alloc, uid: []const u8, conv_key: []const u8, sid: []const u8, pinned: bool) void {
+/// **A PIN THAT DID NOT LAND SAYS SO** (metal-vmm QUEUE 156(g)): every
+/// failure is the caller's, where it answered 204 having written nothing.
+pub fn setSessionPinned(io: Io, alloc: Alloc, uid: []const u8, conv_key: []const u8, sid: []const u8, pinned: bool) !void {
     if (uid.len == 0 or sid.len == 0) return;
     // **A SET THAT WILL NOT READ IS NOT AN EMPTY SET.** What is read here is
     // rewritten below, so treating a failed read as "no pins" used to delete
     // every pin the user had — silently, on the way to adding one. No pins is
     // a missing file (store.zig answers ""); anything else leaves them alone.
-    // absent-ok: best-effort: a pin set that will not read is left as it is, never rewritten as empty.
-    const existing = readPinnedFile(io, alloc, uid, conv_key) catch return;
-    const cur = parsePinned(alloc, existing) catch return;
+    const existing = try readPinnedFile(io, alloc, uid, conv_key);
+    const cur = try parsePinned(alloc, existing);
 
     // Rebuild the set with sid added/removed, kept sorted and de-duped.
     var next: std.ArrayList([]const u8) = .empty;
@@ -121,24 +118,21 @@ pub fn setSessionPinned(io: Io, alloc: Alloc, uid: []const u8, conv_key: []const
             have = true;
             if (!pinned) continue; // drop it
         }
-        next.append(alloc, s) catch return;
+        try next.append(alloc, s);
     }
-    if (pinned and !have) next.append(alloc, sid) catch return;
+    if (pinned and !have) try next.append(alloc, sid);
 
-    const path = pinnedPath(alloc, uid, conv_key) catch return;
-    if (next.items.len == 0) {
-        disk.remove(io, alloc, path) catch {};
-        return;
-    }
+    const path = try pinnedPath(alloc, uid, conv_key);
+    if (next.items.len == 0) return disk.remove(io, alloc, path);
     std.mem.sort([]const u8, next.items, {}, lessThanStr);
 
     var body: std.ArrayList(u8) = .empty;
     for (next.items) |s| {
-        body.appendSlice(alloc, s) catch return;
-        body.append(alloc, '\n') catch return;
+        try body.appendSlice(alloc, s);
+        try body.append(alloc, '\n');
     }
-    if (std.fs.path.dirname(path)) |d| disk.makeDir(io, alloc, d) catch return;
-    disk.write(io, alloc, path, body.items, .{}) catch {};
+    if (std.fs.path.dirname(path)) |d| try disk.makeDir(io, alloc, d);
+    try disk.write(io, alloc, path, body.items, .{});
 }
 
 fn pinnedPath(alloc: Alloc, uid: []const u8, conv_key: []const u8) ![]u8 {
