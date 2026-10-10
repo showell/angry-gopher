@@ -1172,6 +1172,7 @@ fn isAlnum(c: u8) bool {
 }
 
 const testing = std.testing;
+const roots = @import("roots.zig");
 
 test "chatKeyParticipant: both halves are canonical uids, in order, and the user is one" {
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
@@ -1213,7 +1214,10 @@ test "fs: a posted message round-trips through the store (real Io over a temp di
 
     var tmp = testing.tmpDir(.{});
     defer tmp.cleanup();
-    chat_root = try std.fs.path.join(a, &.{ ".zig-cache", "tmp", &tmp.sub_path });
+    // Every root under the temp tree, and back after (157(c)): it set this
+    // one and never put it back.
+    const saved = try roots.pointForTest(a, try std.fs.path.join(a, &.{ ".zig-cache", "tmp", &tmp.sub_path }));
+    defer saved.restore();
 
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
@@ -1241,17 +1245,16 @@ const CountFixture = struct {
     hub: bus_mod.Hub,
     bus: Bus,
     dir: []const u8,
-    saved_auth: []const u8,
+    saved: roots.Saved,
 
     fn init(self: *CountFixture, io: Io) !void {
         self.arena = std.heap.ArenaAllocator.init(testing.allocator);
         const a = self.arena.allocator();
         self.tmp = testing.tmpDir(.{});
-        chat_root = try std.fs.path.join(a, &.{ ".zig-cache", "tmp", &self.tmp.sub_path });
-        // Its own accounts, empty unless a test makes one: an author is
-        // looked up by name where no sidecar says.
-        self.saved_auth = users.auth_root;
-        users.auth_root = try std.fs.path.join(a, &.{ chat_root, "auth" });
+        // Every root under its own tree (157(c)), accounts included, empty
+        // unless a test makes one: an author is looked up by name where no
+        // sidecar says.
+        self.saved = try roots.pointForTest(a, try std.fs.path.join(a, &.{ ".zig-cache", "tmp", &self.tmp.sub_path }));
         self.io = io;
         self.hub = bus_mod.Hub.init(io, a);
         self.bus = Bus.of(&self.hub);
@@ -1259,7 +1262,7 @@ const CountFixture = struct {
     }
 
     fn deinit(self: *CountFixture) void {
-        users.auth_root = self.saved_auth;
+        self.saved.restore();
         self.tmp.cleanup();
         self.arena.deinit();
     }

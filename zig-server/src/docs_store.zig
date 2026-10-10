@@ -232,6 +232,7 @@ pub fn appendToUserDoc(io: Io, alloc: Alloc, uid: []const u8, slug: []const u8, 
 }
 
 const testing = std.testing;
+const roots = @import("roots.zig");
 
 test "appendToUserDoc creates on first call, appends after, and caps at max_bytes" {
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
@@ -239,9 +240,8 @@ test "appendToUserDoc creates on first call, appends after, and caps at max_byte
     const a = arena.allocator();
     var tmp = testing.tmpDir(.{});
     defer tmp.cleanup();
-    const saved_root = store.chat_root;
-    defer store.chat_root = saved_root;
-    store.chat_root = try std.fs.path.join(a, &.{ ".zig-cache", "tmp", &tmp.sub_path });
+    const saved_root = try roots.pointForTest(a, try std.fs.path.join(a, &.{ ".zig-cache", "tmp", &tmp.sub_path }));
+    defer saved_root.restore();
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
@@ -265,9 +265,8 @@ test "a doc that cannot be read is an error, never an empty doc for the editor t
     const a = arena.allocator();
     var tmp = testing.tmpDir(.{});
     defer tmp.cleanup();
-    const saved_root = store.chat_root;
-    defer store.chat_root = saved_root;
-    store.chat_root = try std.fs.path.join(a, &.{ ".zig-cache", "tmp", &tmp.sub_path });
+    const saved_root = try roots.pointForTest(a, try std.fs.path.join(a, &.{ ".zig-cache", "tmp", &tmp.sub_path }));
+    defer saved_root.restore();
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();

@@ -459,6 +459,7 @@ pub fn stats() ?Stats {
 // ── tests ────────────────────────────────────────────────────────────────────
 
 const testing = std.testing;
+const roots = @import("roots.zig");
 
 fn msg(id: []const u8, text: []const u8) chat_store.ChatMessage {
     return .{ .id = id, .from = "Tester", .date = "2026-10-10T00:00:00Z", .markdown = text };
@@ -537,9 +538,8 @@ test "fs: a build out of memory fails, never an index missing what it could not 
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
-    const saved = chat_store.chat_root;
-    defer chat_store.chat_root = saved;
-    chat_store.chat_root = try std.fs.path.join(a, &.{ ".zig-cache", "tmp", &tmp.sub_path });
+    const saved = try roots.pointForTest(a, try std.fs.path.join(a, &.{ ".zig-cache", "tmp", &tmp.sub_path }));
+    defer saved.restore();
     var body: std.ArrayList(u8) = .empty;
     for (0..200) |i| {
         if (i > 0) try body.appendSlice(a, chat_store.sep);

@@ -643,6 +643,7 @@ pub fn signSessionNow(io: Io, alloc: Alloc, id: []const u8) !?[]const u8 {
 // disk effect IS the thing under test, not an obstacle to mock away.
 
 const testing = std.testing;
+const roots = @import("roots.zig");
 
 test "verifySessionWithSecret accepts a genuine cookie and rejects every forgery" {
     // A frozen `base64url(id).issued.HMAC` cookie signed with a SYNTHETIC secret
@@ -701,15 +702,14 @@ test "apiKeyMatches: plaintext constant-time arm and legacy sha256-hex arm" {
     try testing.expect(!apiKeyMatches(legacy, "3-wrongkey"));
 }
 
-/// tmpRoots points the three module roots at a fresh temp tree so the fs-backed
-/// tests write real files without touching the live data dir.
-fn tmpRoots(tmp: *testing.TmpDir, a: Alloc) !void {
+/// tmpRoots points every root at a fresh temp tree so the fs-backed tests
+/// write real files without touching the live data dir, and answers the roots
+/// as they stood, to `defer` back (metal-vmm QUEUE 157(c)): it set three and
+/// never put them back.
+fn tmpRoots(tmp: *testing.TmpDir, a: Alloc) !roots.Saved {
     // tmpDir() makes .zig-cache/tmp/<sub_path> via Io.Dir.cwd(); users.zig's file
     // ops use that same cwd, so a relative base reaches the same tree.
-    const base = try std.fs.path.join(a, &.{ ".zig-cache", "tmp", &tmp.sub_path });
-    auth_root = try std.fs.path.join(a, &.{ base, "auth" });
-    users_root = try std.fs.path.join(a, &.{ base, "users" });
-    session_secret_dir = try std.fs.path.join(a, &.{ base, "secret" });
+    return roots.pointForTest(a, try std.fs.path.join(a, &.{ ".zig-cache", "tmp", &tmp.sub_path }));
 }
 
 test "fs: password set then verify; wrong and missing both reject" {
@@ -718,7 +718,8 @@ test "fs: password set then verify; wrong and missing both reject" {
     const a = arena.allocator();
     var tmp = testing.tmpDir(.{});
     defer tmp.cleanup();
-    try tmpRoots(&tmp, a);
+    const saved_roots = try tmpRoots(&tmp, a);
+    defer saved_roots.restore();
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
@@ -738,7 +739,8 @@ test "fs: upload quota reserves under the cap, refuses over it without mutating"
     const a = arena.allocator();
     var tmp = testing.tmpDir(.{});
     defer tmp.cleanup();
-    try tmpRoots(&tmp, a);
+    const saved_roots = try tmpRoots(&tmp, a);
+    defer saved_roots.restore();
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
@@ -768,7 +770,8 @@ test "fs: an upload total that cannot be read is an error, never a fresh allowan
     const a = arena.allocator();
     var tmp = testing.tmpDir(.{});
     defer tmp.cleanup();
-    try tmpRoots(&tmp, a);
+    const saved_roots = try tmpRoots(&tmp, a);
+    defer saved_roots.restore();
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
@@ -790,7 +793,8 @@ test "fs: only members reserve a name; findMemberByName resolves it" {
     const a = arena.allocator();
     var tmp = testing.tmpDir(.{});
     defer tmp.cleanup();
-    try tmpRoots(&tmp, a);
+    const saved_roots = try tmpRoots(&tmp, a);
+    defer saved_roots.restore();
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
@@ -812,7 +816,8 @@ test "fs: api key issue, read back, clear; legacy bare-hash is held but not disp
     const a = arena.allocator();
     var tmp = testing.tmpDir(.{});
     defer tmp.cleanup();
-    try tmpRoots(&tmp, a);
+    const saved_roots = try tmpRoots(&tmp, a);
+    defer saved_roots.restore();
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
@@ -845,7 +850,8 @@ test "fs: an API key whose id is not a uid authenticates no one" {
     const a = arena.allocator();
     var tmp = testing.tmpDir(.{});
     defer tmp.cleanup();
-    try tmpRoots(&tmp, a);
+    const saved_roots = try tmpRoots(&tmp, a);
+    defer saved_roots.restore();
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
@@ -874,7 +880,8 @@ test "fs: allocateUser hands out distinct increasing ids and persists the name" 
     const a = arena.allocator();
     var tmp = testing.tmpDir(.{});
     defer tmp.cleanup();
-    try tmpRoots(&tmp, a);
+    const saved_roots = try tmpRoots(&tmp, a);
+    defer saved_roots.restore();
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
@@ -900,7 +907,8 @@ test "fs: reserveUploadBytes writes only under a well-formed uid" {
     const a = arena.allocator();
     var tmp = testing.tmpDir(.{});
     defer tmp.cleanup();
-    try tmpRoots(&tmp, a);
+    const saved_roots = try tmpRoots(&tmp, a);
+    defer saved_roots.restore();
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
@@ -928,7 +936,8 @@ test "fs: deleteUserRecord refuses an empty id, removes one principal, spares ot
     const a = arena.allocator();
     var tmp = testing.tmpDir(.{});
     defer tmp.cleanup();
-    try tmpRoots(&tmp, a);
+    const saved_roots = try tmpRoots(&tmp, a);
+    defer saved_roots.restore();
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
@@ -963,7 +972,8 @@ test "fs: signSessionNow needs a valid secret, and the cookie it signs verifies"
     const a = arena.allocator();
     var tmp = testing.tmpDir(.{});
     defer tmp.cleanup();
-    try tmpRoots(&tmp, a);
+    const saved_roots = try tmpRoots(&tmp, a);
+    defer saved_roots.restore();
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
@@ -1001,7 +1011,8 @@ test "fs: a member whose password cannot be looked at is an error, never a free 
     const a = arena.allocator();
     var tmp = testing.tmpDir(.{});
     defer tmp.cleanup();
-    try tmpRoots(&tmp, a);
+    const saved_roots = try tmpRoots(&tmp, a);
+    defer saved_roots.restore();
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
@@ -1024,9 +1035,8 @@ test "a member with no name file reads as nobody, and no name lookup finds them 
     const io = threaded.io();
     var tmp = testing.tmpDir(.{});
     defer tmp.cleanup();
-    const saved = auth_root;
-    defer auth_root = saved;
-    auth_root = try std.fs.path.join(a, &.{ ".zig-cache", "tmp", &tmp.sub_path });
+    const saved = try roots.pointForTest(a, try std.fs.path.join(a, &.{ ".zig-cache", "tmp", &tmp.sub_path }));
+    defer saved.restore();
     try setUserPassword(io, a, "4", "pw");
     try testing.expectEqualStrings("", try getUserName(io, a, "4"));
     try testing.expectEqual(@as(?[]const u8, null), try onlyMemberNamed(io, a, ""));

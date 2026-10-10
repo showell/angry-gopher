@@ -40,6 +40,56 @@ pub const Roots = struct {
     auth_dir: []const u8,
 };
 
+/// **EVERY GLOBAL `point` SETS, IN ONE LIST** (metal-vmm QUEUE 157(c)):
+/// what `save` saves and `restore` puts back, where three test fixtures each
+/// copied the eight by hand and restored them by index. A test holds `point`
+/// to it (`point` assigns nothing it does not name).
+const all = .{
+    .{ "storage", storage, "data_root" },
+    .{ "users", users, "users_root" },
+    .{ "player", player, "player_root" },
+    .{ "chat_store", chat_store, "chat_root" },
+    .{ "users", users, "auth_root" },
+    .{ "users", users, "session_secret_dir" },
+    .{ "store", store, "data_base" }, // by store.setBases
+    .{ "store", store, "auth_base" }, // by store.setBases
+};
+
+const Values = blk: {
+    var types: [all.len]type = undefined;
+    for (all, 0..) |e, i| types[i] = @TypeOf(@field(e[1], e[2]));
+    break :blk std.meta.Tuple(&types);
+};
+
+/// Every root as it stood: `restore` puts each back, in one call.
+pub const Saved = struct {
+    values: Values,
+
+    pub fn restore(self: Saved) void {
+        inline for (all, 0..) |e, i| @field(e[1], e[2]) = self.values[i];
+    }
+};
+
+pub fn save() Saved {
+    var v: Values = undefined;
+    inline for (all, 0..) |e, i| v[i] = @field(e[1], e[2]);
+    return .{ .values = v };
+}
+
+/// **FOR A TEST: EVERY ROOT UNDER `base`**, `base/data` and `base/auth`, and
+/// the roots as they stood to `defer` back (`saved.restore()`). One root
+/// moved by hand left the others at the repo-relative defaults, so a test of
+/// one store read another's real data.
+pub fn pointForTest(alloc: std.mem.Allocator, base: []const u8) !Saved {
+    const saved = save();
+    errdefer saved.restore();
+    try point(alloc, .{
+        .data_dir = try std.fs.path.join(alloc, &.{ base, "data" }),
+        .auth_dir = try std.fs.path.join(alloc, &.{ base, "auth" }),
+    });
+    return saved;
+}
+
 /// point sets every root from `r`. The strings are allocated from `alloc` and
 /// must live as long as the process, so a host passes its base allocator.
 pub fn point(alloc: std.mem.Allocator, r: Roots) !void {
@@ -94,47 +144,10 @@ pub fn migrateSecret(io: Io, alloc: std.mem.Allocator) void {
 
 const testing = std.testing;
 
-/// Snapshot restores every root a test moved, so the defaults the rest of the
-/// test binary expects are still there afterwards.
-const Snapshot = struct {
-    data: []const u8,
-    users_r: []const u8,
-    players: []const u8,
-    secret: []const u8,
-    chat: []const u8,
-    auth: []const u8,
-    store_data: ?[]const u8,
-    store_auth: ?[]const u8,
-
-    fn take() Snapshot {
-        return .{
-            .data = storage.data_root,
-            .users_r = users.users_root,
-            .players = player.player_root,
-            .secret = users.session_secret_dir,
-            .chat = chat_store.chat_root,
-            .auth = users.auth_root,
-            .store_data = store.data_base,
-            .store_auth = store.auth_base,
-        };
-    }
-
-    fn restore(s: Snapshot) void {
-        storage.data_root = s.data;
-        users.users_root = s.users_r;
-        player.player_root = s.players;
-        users.session_secret_dir = s.secret;
-        chat_store.chat_root = s.chat;
-        users.auth_root = s.auth;
-        store.data_base = s.store_data;
-        store.auth_base = s.store_auth;
-    }
-};
-
 test "point sets all six roots from two directories" {
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();
-    const saved = Snapshot.take();
+    const saved = save();
     defer saved.restore();
 
     try point(arena.allocator(), .{ .data_dir = "/srv/gopher", .auth_dir = "/srv/auth" });
@@ -156,7 +169,7 @@ test "migrateSecret moves the secret from data/chat to auth once, and never leav
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
-    const saved = Snapshot.take();
+    const saved = save();
     defer saved.restore();
 
     const base = try std.fs.path.join(a, &.{ ".zig-cache", "tmp", &tmp.sub_path });
@@ -197,7 +210,7 @@ test "migrateSecret moves the secret from data/chat to auth once, and never leav
 test "point takes the relative paths a kernel uses on its own volume" {
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();
-    const saved = Snapshot.take();
+    const saved = save();
     defer saved.restore();
 
     try point(arena.allocator(), .{ .data_dir = "data", .auth_dir = "auth" });
@@ -214,7 +227,7 @@ test "point takes the relative paths a kernel uses on its own volume" {
 test "a trailing slash on the data directory changes nothing" {
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();
-    const saved = Snapshot.take();
+    const saved = save();
     defer saved.restore();
 
     try point(arena.allocator(), .{ .data_dir = "/srv/gopher/", .auth_dir = "/srv/auth" });
@@ -225,7 +238,7 @@ test "a trailing slash on the data directory changes nothing" {
 test "point copies the auth directory rather than aliasing the caller's buffer" {
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();
-    const saved = Snapshot.take();
+    const saved = save();
     defer saved.restore();
 
     var buf = "/srv/auth".*;
@@ -238,10 +251,50 @@ test "an allocation failure is reported, not swallowed" {
     // point is called once, at startup, and a failure there must end the
     // process: some roots would be new and the rest still defaults, and serving
     // from that mix would read one store and write another.
-    const saved = Snapshot.take();
+    const saved = save();
     defer saved.restore();
 
     var tiny: [8]u8 = undefined;
     var fba = std.heap.FixedBufferAllocator.init(&tiny);
     try testing.expectError(error.OutOfMemory, point(fba.allocator(), .{ .data_dir = "/srv/gopher", .auth_dir = "/a" }));
+}
+
+test "point assigns no global the list of roots does not name, and restore puts every one back (metal-vmm QUEUE 157(c))" {
+    // point's own source: every `x.y =` in its body is in `all`.
+    const src = @embedFile("roots.zig");
+    const start = std.mem.indexOf(u8, src, "pub fn point(").?;
+    const body = src[start .. start + std.mem.indexOf(u8, src[start..], "\n}\n").?];
+    var names: std.ArrayList([]const u8) = .empty;
+    defer names.deinit(testing.allocator);
+    var lines = std.mem.splitScalar(u8, body, '\n');
+    while (lines.next()) |raw| {
+        const line = std.mem.trim(u8, raw, " ");
+        const eq = std.mem.indexOf(u8, line, " = ") orelse continue;
+        if (std.mem.startsWith(u8, line, "//") or std.mem.startsWith(u8, line, "const ") or std.mem.startsWith(u8, line, "var ")) continue;
+        try names.append(testing.allocator, line[0..eq]);
+    }
+    try testing.expect(names.items.len >= 6);
+    // store.setBases(...) sets the last two; it is a call, and they are listed.
+    for (names.items) |n| {
+        var found = false;
+        inline for (all) |e| {
+            if (std.mem.eql(u8, n, e[0] ++ "." ++ e[2])) found = true;
+        }
+        if (!found) std.debug.print("point assigns {s}, which roots.all does not list\n", .{n});
+        try testing.expect(found);
+    }
+    // And the list is what restore puts back.
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const before = save();
+    {
+        const saved = try pointForTest(arena.allocator(), "/nowhere");
+        try testing.expectEqualStrings("/nowhere/data/chat", chat_store.chat_root);
+        saved.restore();
+    }
+    inline for (all, 0..) |e, i| {
+        const was = before.values[i];
+        const now = @field(e[1], e[2]);
+        if (@TypeOf(was) == []const u8) try testing.expectEqualStrings(was, now) else try testing.expectEqual(was, now);
+    }
 }

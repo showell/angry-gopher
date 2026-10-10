@@ -327,6 +327,7 @@ fn compactJSON(alloc: Alloc, src: []const u8) ![]u8 {
 // ── tests ────────────────────────────────────────────────────────────────────
 
 const testing = std.testing;
+const roots = @import("roots.zig");
 
 /// One writer of the concurrent-append test. `parent` must be thread-safe:
 /// the test passes the page allocator (named only inside a test block).
@@ -354,10 +355,8 @@ test "fs: appends to one session from many writers at once all land, whole" {
     var threaded = std.Io.Threaded.init(std.heap.page_allocator, .{});
     defer threaded.deinit();
     const io = threaded.io();
-    const saved = data_root;
-    defer data_root = saved;
-    data_root = try std.fs.path.join(testing.allocator, &.{ ".zig-cache", "tmp", &tmp.sub_path, "data" });
-    defer testing.allocator.free(data_root);
+    const saved = try roots.pointForTest(a, try std.fs.path.join(a, &.{ ".zig-cache", "tmp", &tmp.sub_path }));
+    defer saved.restore();
 
     const id = try allocateSessionID(io, a, "p1");
     try writeSessionFile(io, a, "p1", id, "meta", "m");
@@ -390,9 +389,8 @@ test "fs: a session file that cannot be read is an error, never a fresh game" {
     var threaded = std.Io.Threaded.init(std.heap.page_allocator, .{});
     defer threaded.deinit();
     const io = threaded.io();
-    const saved = data_root;
-    defer data_root = saved;
-    data_root = try std.fs.path.join(a, &.{ ".zig-cache", "tmp", &tmp.sub_path, "data" });
+    const saved = try roots.pointForTest(a, try std.fs.path.join(a, &.{ ".zig-cache", "tmp", &tmp.sub_path }));
+    defer saved.restore();
 
     const id = try allocateSessionID(io, a, "p1");
     try testing.expectEqual(@as(?[]u8, null), try readSessionFile(io, a, "p1", id, "meta")); // not there

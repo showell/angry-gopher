@@ -532,7 +532,7 @@ test "route: ADMIN_ONLY — a logged-in non-admin member is refused the secret-b
 /// secret; `deinit` puts the roots back for the rest of the test binary.
 const UidSite = struct {
     tmp: testing.TmpDir,
-    saved: [8]?[]const u8,
+    saved: roots.Saved,
     base: []const u8,
 
     const storage = @import("storage.zig");
@@ -542,29 +542,16 @@ const UidSite = struct {
     const secret = "a session secret of thirty-two bytes or more, for router tests";
 
     fn init(a: std.mem.Allocator, io: Io) !UidSite {
-        var s: UidSite = .{ .tmp = testing.tmpDir(.{}), .saved = .{
-            storage.data_root,    users.users_root, player.player_root, users.session_secret_dir,
-            chat_store.chat_root, users.auth_root,  disk.data_base,     disk.auth_base,
-        }, .base = undefined };
+        var s: UidSite = .{ .tmp = testing.tmpDir(.{}), .saved = undefined, .base = undefined };
         s.base = try std.fs.path.join(a, &.{ ".zig-cache", "tmp", &s.tmp.sub_path });
-        try roots.point(a, .{
-            .data_dir = try std.fs.path.join(a, &.{ s.base, "data" }),
-            .auth_dir = try std.fs.path.join(a, &.{ s.base, "auth" }),
-        });
+        s.saved = try roots.pointForTest(a, s.base);
         try disk.write(io, a, try std.fs.path.join(a, &.{ users.session_secret_dir, "_session_secret" }), secret, .{});
         UidSite.game_limits.forgetAll(); // what it kept was measured under other roots
         return s;
     }
 
     fn deinit(s: *UidSite) void {
-        storage.data_root = s.saved[0].?;
-        users.users_root = s.saved[1].?;
-        player.player_root = s.saved[2].?;
-        users.session_secret_dir = s.saved[3].?;
-        chat_store.chat_root = s.saved[4].?;
-        users.auth_root = s.saved[5].?;
-        disk.data_base = s.saved[6];
-        disk.auth_base = s.saved[7];
+        s.saved.restore();
         UidSite.game_limits.forgetAll();
         s.tmp.cleanup();
     }

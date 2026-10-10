@@ -167,6 +167,7 @@ const member_table_head =
 // ── tests ────────────────────────────────────────────────────────────────────
 
 const testing = std.testing;
+const roots = @import("roots.zig");
 const store = @import("store.zig");
 
 test "fs: the admin's key form and revoked flash take uids only" {
@@ -178,9 +179,8 @@ test "fs: the admin's key form and revoked flash take uids only" {
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
-    const saved = users.auth_root;
-    defer users.auth_root = saved;
-    users.auth_root = try std.fs.path.join(a, &.{ ".zig-cache", "tmp", &tmp.sub_path, "auth" });
+    const saved = try roots.pointForTest(a, try std.fs.path.join(a, &.{ ".zig-cache", "tmp", &tmp.sub_path }));
+    defer saved.restore();
 
     // Members 1 and 2, each with a password and a name.
     for ([_][]const u8{ "1", "2" }) |id| {

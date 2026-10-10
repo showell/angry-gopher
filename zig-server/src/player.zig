@@ -295,6 +295,7 @@ const page_tail =
 // policies are pure and get their own cases.
 
 const testing = std.testing;
+const roots = @import("roots.zig");
 
 test "isSafeID accepts account and local spellings, rejects traversal" {
     try testing.expect(isSafeID("1"));
@@ -335,9 +336,8 @@ test "fs: a minted player is p-prefixed, readable back, and disjoint from accoun
     const a = arena.allocator();
     var tmp = testing.tmpDir(.{});
     defer tmp.cleanup();
-    const saved = player_root;
-    defer player_root = saved;
-    player_root = try std.fs.path.join(a, &.{ ".zig-cache", "tmp", &tmp.sub_path, "players" });
+    const saved = try roots.pointForTest(a, try std.fs.path.join(a, &.{ ".zig-cache", "tmp", &tmp.sub_path }));
+    defer saved.restore();
 
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
@@ -366,9 +366,8 @@ test "fs: mirror writes a name only when it changed (gopher-metal 153(3))" {
     const a = arena.allocator();
     var tmp = testing.tmpDir(.{});
     defer tmp.cleanup();
-    const saved = player_root;
-    defer player_root = saved;
-    player_root = try std.fs.path.join(a, &.{ ".zig-cache", "tmp", &tmp.sub_path, "players" });
+    const saved = try roots.pointForTest(a, try std.fs.path.join(a, &.{ ".zig-cache", "tmp", &tmp.sub_path }));
+    defer saved.restore();
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();

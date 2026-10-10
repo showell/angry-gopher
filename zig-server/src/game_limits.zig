@@ -303,6 +303,7 @@ fn sizeOf(io: Io, alloc: Alloc, dir: []const u8, depth: u8) !u64 {
 // ── tests ────────────────────────────────────────────────────────────────────
 
 const testing = std.testing;
+const roots = @import("roots.zig");
 
 var test_space: ?Space = null;
 fn testSpace() ?Space {
@@ -318,9 +319,8 @@ test "fs: a player is measured once, counted up, and refused at each bound" {
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
-    const saved = storage.data_root;
-    defer storage.data_root = saved;
-    storage.data_root = try std.fs.path.join(a, &.{ ".zig-cache", "tmp", &tmp.sub_path, "lynrummy" });
+    const saved = try roots.pointForTest(a, try std.fs.path.join(a, &.{ ".zig-cache", "tmp", &tmp.sub_path }));
+    defer saved.restore();
     forgetAll();
     defer forgetAll();
 
@@ -364,9 +364,8 @@ test "fs: the floor refuses every game write below a quarter free, and only then
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
-    const saved = storage.data_root;
-    defer storage.data_root = saved;
-    storage.data_root = try std.fs.path.join(a, &.{ ".zig-cache", "tmp", &tmp.sub_path, "lynrummy" });
+    const saved = try roots.pointForTest(a, try std.fs.path.join(a, &.{ ".zig-cache", "tmp", &tmp.sub_path }));
+    defer saved.restore();
     forgetAll();
     defer forgetAll();
     free_space = testSpace;
@@ -387,9 +386,8 @@ test "slots: the least recently asked player is the one pushed out" {
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
-    const saved = storage.data_root;
-    defer storage.data_root = saved;
-    storage.data_root = ".zig-cache/tmp/game-limits-nowhere"; // nobody has anything
+    const saved = try roots.pointForTest(a, ".zig-cache/tmp/game-limits-nowhere"); // nobody has anything
+    defer saved.restore();
     forgetAll();
     defer forgetAll();
 

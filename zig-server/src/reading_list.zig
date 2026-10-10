@@ -249,6 +249,7 @@ fn quoteFence(alloc: Alloc, body: []const u8) ![]u8 {
 }
 
 const testing = std.testing;
+const roots = @import("roots.zig");
 
 // composeEntry/jumpURL allocate intermediates (the fence, one-lined fields) that
 // production frees via the per-request arena; the tests mirror that with an arena
@@ -362,9 +363,8 @@ test "savedIdsFor: filters by conv+sid, re-parses only when mtime advances" {
     const a = arena.allocator();
     var tmp = testing.tmpDir(.{});
     defer tmp.cleanup();
-    const saved_root = store.chat_root;
-    defer store.chat_root = saved_root;
-    store.chat_root = try std.fs.path.join(a, &.{ ".zig-cache", "tmp", &tmp.sub_path });
+    const saved_root = try roots.pointForTest(a, try std.fs.path.join(a, &.{ ".zig-cache", "tmp", &tmp.sub_path }));
+    defer saved_root.restore();
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
@@ -411,9 +411,8 @@ test "savedIdsFor: a missing doc is nothing saved, and allocates nothing process
     const a = arena.allocator();
     var tmp = testing.tmpDir(.{});
     defer tmp.cleanup();
-    const saved_root = store.chat_root;
-    defer store.chat_root = saved_root;
-    store.chat_root = try std.fs.path.join(a, &.{ ".zig-cache", "tmp", &tmp.sub_path });
+    const saved_root = try roots.pointForTest(a, try std.fs.path.join(a, &.{ ".zig-cache", "tmp", &tmp.sub_path }));
+    defer saved_root.restore();
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();

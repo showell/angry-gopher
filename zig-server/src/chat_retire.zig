@@ -442,40 +442,6 @@ fn inList(list: []const []const u8, name: []const u8) bool {
 const testing = std.testing;
 const roots = @import("roots.zig");
 
-/// Roots the test moved, restored so the rest of the binary sees the defaults.
-const Saved = struct {
-    data: []const u8,
-    users_r: []const u8,
-    players: []const u8,
-    secret: []const u8,
-    chat: []const u8,
-    auth: []const u8,
-    sd: ?[]const u8,
-    sa: ?[]const u8,
-    fn take() Saved {
-        return .{
-            .data = storage.data_root,
-            .users_r = users.users_root,
-            .players = player.player_root,
-            .secret = users.session_secret_dir,
-            .chat = chat_store.chat_root,
-            .auth = users.auth_root,
-            .sd = store.data_base,
-            .sa = store.auth_base,
-        };
-    }
-    fn restore(s: Saved) void {
-        storage.data_root = s.data;
-        users.users_root = s.users_r;
-        player.player_root = s.players;
-        users.session_secret_dir = s.secret;
-        chat_store.chat_root = s.chat;
-        users.auth_root = s.auth;
-        store.data_base = s.sd;
-        store.auth_base = s.sa;
-    }
-};
-
 /// A transcript of one message dated `at`, in the on-disk form the decoder reads.
 fn tx(a: Alloc, sid: []const u8, at: i64) ![]u8 {
     const date = try timefmt.formatRFC3339UTC(a, at);
@@ -541,13 +507,9 @@ test "fs: the dry run lists exactly what a confirm removes, and a second confirm
     defer threaded.deinit();
     const io = threaded.io();
 
-    const saved = Saved.take();
-    defer saved.restore();
     const base = try std.fs.path.join(a, &.{ ".zig-cache", "tmp", &tmp.sub_path });
-    try roots.point(a, .{
-        .data_dir = try std.fs.path.join(a, &.{ base, "data" }),
-        .auth_dir = try std.fs.path.join(a, &.{ base, "auth" }),
-    });
+    const saved = try roots.pointForTest(a, base);
+    defer saved.restore();
     try stage(io, a);
 
     const p = Params{ .days = 30, .keep = &.{ "Steve", "apoorva" }, .now = now };
@@ -627,13 +589,9 @@ test "an empty or undated topic is kept (it may be fresh); only a datably-old to
     defer threaded.deinit();
     const io = threaded.io();
 
-    const saved = Saved.take();
-    defer saved.restore();
     const base = try std.fs.path.join(a, &.{ ".zig-cache", "tmp", &tmp.sub_path });
-    try roots.point(a, .{
-        .data_dir = try std.fs.path.join(a, &.{ base, "data" }),
-        .auth_dir = try std.fs.path.join(a, &.{ base, "auth" }),
-    });
+    const saved = try roots.pointForTest(a, base);
+    defer saved.restore();
     const dm = try chat_store.dmConvDir(a, "1_2");
     try store.write(io, a, try sessionPath(a, dm, "empty"), "", .{});
     try store.write(io, a, try sessionPath(a, dm, "undated"), "MSG_undated_1\nfrom: X\n\nbody", .{});
@@ -678,13 +636,9 @@ test "fs: a confirm whose removals fail is an error, not a report of what went (
     defer threaded.deinit();
     const io = threaded.io();
 
-    const saved = Saved.take();
-    defer saved.restore();
     const base = try std.fs.path.join(a, &.{ ".zig-cache", "tmp", &tmp.sub_path });
-    try roots.point(a, .{
-        .data_dir = try std.fs.path.join(a, &.{ base, "data" }),
-        .auth_dir = try std.fs.path.join(a, &.{ base, "auth" }),
-    });
+    const saved = try roots.pointForTest(a, base);
+    defer saved.restore();
     try stage(io, a);
     const p = Params{ .days = 30, .keep = &.{ "Steve", "apoorva" }, .now = now };
 
@@ -717,13 +671,9 @@ test "fs: a member whose name cannot be read is not retired as nobody (metal-vmm
     defer threaded.deinit();
     const io = threaded.io();
 
-    const saved = Saved.take();
-    defer saved.restore();
     const base = try std.fs.path.join(a, &.{ ".zig-cache", "tmp", &tmp.sub_path });
-    try roots.point(a, .{
-        .data_dir = try std.fs.path.join(a, &.{ base, "data" }),
-        .auth_dir = try std.fs.path.join(a, &.{ base, "auth" }),
-    });
+    const saved = try roots.pointForTest(a, base);
+    defer saved.restore();
     try stage(io, a);
     // apoorva's name: there, and unreadable.
     const name = try std.fs.path.join(a, &.{ users.auth_root, "2", "name" });
@@ -746,13 +696,9 @@ test "fs: a keep name that matches no account refuses the whole plan, the dry ru
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
-    const saved = Saved.take();
-    defer saved.restore();
     const base = try std.fs.path.join(a, &.{ ".zig-cache", "tmp", &tmp.sub_path });
-    try roots.point(a, .{
-        .data_dir = try std.fs.path.join(a, &.{ base, "data" }),
-        .auth_dir = try std.fs.path.join(a, &.{ base, "auth" }),
-    });
+    const saved = try roots.pointForTest(a, base);
+    defer saved.restore();
     try stage(io, a);
     const typo = Params{ .days = 30, .keep = &.{ "Stve", "apoorva" }, .now = now };
     try testing.expectEqualStrings("The keep list names \"Stve\", which is no account's name.", (try keepProblem(io, a, typo.keep)).?);
@@ -774,13 +720,9 @@ test "fs: an account with no name refuses the whole plan, and nothing goes (the 
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
-    const saved = Saved.take();
-    defer saved.restore();
     const base = try std.fs.path.join(a, &.{ ".zig-cache", "tmp", &tmp.sub_path });
-    try roots.point(a, .{
-        .data_dir = try std.fs.path.join(a, &.{ base, "data" }),
-        .auth_dir = try std.fs.path.join(a, &.{ base, "auth" }),
-    });
+    const saved = try roots.pointForTest(a, base);
+    defer saved.restore();
     try stage(io, a);
     try store.remove(io, a, try std.fs.path.join(a, &.{ users.auth_root, "2", "name" }));
     const p = Params{ .days = 30, .keep = &.{"Steve"}, .now = now };
