@@ -141,7 +141,7 @@ const LineKind = enum { actions, annotations };
 
 /// appendSessionLine is the universal write handler: POST body → one appended
 /// line in <session>/<rel>. Actions are wire-DSL text (actions.dsl); annotations
-/// are JSONL (compacted). A Lyn Rummy move bumps last-seen.
+/// are JSONL (compacted).
 fn appendSessionLine(req: *Request, io: Io, alloc: Alloc, user_id: []const u8, client: ?[]const u8, session_id: i64, kind: LineKind) !void {
     if (req.head.method != .POST) return http.methodNotAllowed(req);
     if (!try storage.sessionExists(io, alloc, user_id, session_id)) return http.notFound(req);
@@ -154,7 +154,6 @@ fn appendSessionLine(req: *Request, io: Io, alloc: Alloc, user_id: []const u8, c
     switch (kind) {
         .actions => {
             try storage.appendSessionDslLine(io, alloc, user_id, session_id, "actions.dsl", body);
-            player.touch(io, alloc, user_id); // a move counts as activity
         },
         .annotations => {
             try storage.appendSessionJSONLLine(io, alloc, user_id, session_id, "annotations.jsonl", body);

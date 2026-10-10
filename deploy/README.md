@@ -179,7 +179,7 @@ repo — no manual update step. To bounce it by hand anyway:
   default `~/Auth`), deliberately OUTSIDE `data_dir`. So it is **not** in the
   `ops/backup` tarball (back it up separately — it holds credentials), and a
   sibling app can share accounts without reaching into `~/AngryGopher`.
-  gopher-private per-user data (last-seen, upload-bytes) stays under
+  gopher-private per-user data (upload-bytes) stays under
   `{data_dir}/users/<id>/`. A fresh host starts already-split; the prod host
   was migrated 2026-05-29 (the one-shot migration tool has since been removed —
   pull it from git history if another existing host ever needs it).

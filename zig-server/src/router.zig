@@ -1350,7 +1350,7 @@ test "route: a release whose last removal fails leaves an account that can relea
     const now: i64 = @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
     const member = try std.fmt.allocPrint(a, "gopher_auth={s}", .{try users.signSession(a, UidSite.secret, "2", now)});
     const private = try std.fs.path.join(a, &.{ users.users_root, "2" });
-    try UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ private, "last-seen" }), "1\n", .{});
+    try UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ private, "upload-bytes" }), "1\n", .{});
 
     var vt: Io.VTable = undefined;
     refuse_under = private;

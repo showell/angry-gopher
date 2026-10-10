@@ -1,7 +1,7 @@
 //! admin_ui: the shell and the gate the two admin screens share.
 //!
 //! There are two screens, because there are two subjects: `admin.zig` is the
-//! CHAT roster (members, last-seen, image quota, API keys) and
+//! CHAT roster (members, image quota, API keys) and
 //! `admin_lynrummy.zig` is the GAME roster (players, sessions, disk, delete).
 //! Splitting them stopped chat's admin from reaching into the game store for a
 //! stats column, which was the one place a chat module imported `storage`.
@@ -71,22 +71,6 @@ pub fn end(b: *std.ArrayList(u8), alloc: Alloc) !void {
 
 // ── format helpers ───────────────────────────────────────────────────────────
 
-/// humanizeSince renders elapsed seconds as a coarse relative string ("just now",
-/// "Nm ago", "Nh ago", "Nd ago").
-pub fn humanizeSince(alloc: Alloc, elapsed_s: i64) ![]const u8 {
-    const d = if (elapsed_s < 0) 0 else elapsed_s;
-    if (d < 60) return "just now";
-    if (d < 3600) return std.fmt.allocPrint(alloc, "{d}m ago", .{@divTrunc(d, 60)});
-    if (d < 86400) return std.fmt.allocPrint(alloc, "{d}h ago", .{@divTrunc(d, 3600)});
-    return std.fmt.allocPrint(alloc, "{d}d ago", .{@divTrunc(d, 86400)});
-}
-
-/// sinceOrNever is humanizeSince for an optional timestamp — "never" when a
-/// principal has no recorded activity at all.
-pub fn sinceOrNever(alloc: Alloc, now: i64, last_seen: ?i64) ![]const u8 {
-    return if (last_seen) |t| humanizeSince(alloc, now - t) else "never";
-}
-
 /// humanBytes renders a byte count as "N B" / "N.N {K,M,G,…}B" (1024-based).
 pub fn humanBytes(alloc: Alloc, n: i64) ![]const u8 {
     const unit: i64 = 1024;
@@ -100,15 +84,6 @@ pub fn humanBytes(alloc: Alloc, n: i64) ![]const u8 {
     }
     const val = @as(f64, @floatFromInt(n)) / @as(f64, @floatFromInt(div));
     return std.fmt.allocPrint(alloc, "{d:.1} {c}B", .{ val, "KMGTPE"[exp] });
-}
-
-/// mostRecentFirst orders a roster: anyone active-ever above anyone never
-/// active, most-recent first within that. Both screens sort the same way, and
-/// the rosters are tiny, so this pairs with a stable insertion sort.
-pub fn mostRecentFirst(a: ?i64, b: ?i64) bool {
-    if ((a != null) != (b != null)) return a != null;
-    if (a == null) return false; // both never-active — preserve order
-    return a.? > b.?;
 }
 
 pub fn nowUnix(io: Io) i64 {
@@ -158,23 +133,4 @@ test "humanBytes crosses each unit boundary" {
     try testing.expectEqualStrings("1.5 KB", try humanBytes(a, 1536));
     try testing.expectEqualStrings("1.0 MB", try humanBytes(a, 1024 * 1024));
     try testing.expectEqualStrings("1.0 GB", try humanBytes(a, 1024 * 1024 * 1024));
-}
-
-test "humanizeSince is coarse, and never negative" {
-    var arena = std.heap.ArenaAllocator.init(testing.allocator);
-    defer arena.deinit();
-    const a = arena.allocator();
-    try testing.expectEqualStrings("just now", try humanizeSince(a, 0));
-    try testing.expectEqualStrings("just now", try humanizeSince(a, -99)); // clock skew
-    try testing.expectEqualStrings("59m ago", try humanizeSince(a, 3599));
-    try testing.expectEqualStrings("1h ago", try humanizeSince(a, 3600));
-    try testing.expectEqualStrings("2d ago", try humanizeSince(a, 2 * 86400));
-}
-
-test "mostRecentFirst puts the active above the never-active" {
-    try testing.expect(mostRecentFirst(100, 50));
-    try testing.expect(!mostRecentFirst(50, 100));
-    try testing.expect(mostRecentFirst(1, null)); // active-ever wins
-    try testing.expect(!mostRecentFirst(null, 1));
-    try testing.expect(!mostRecentFirst(null, null)); // stable: preserve order
 }

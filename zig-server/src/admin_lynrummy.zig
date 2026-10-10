@@ -77,7 +77,6 @@ fn exists(io: Io, alloc: Alloc, id: []const u8) !bool {
 const PlayerStats = struct {
     id: []const u8,
     name: []const u8,
-    last_seen: ?i64,
     game_sessions: i64,
     puzzle_sessions: i64,
     total_actions: i64,
@@ -86,7 +85,7 @@ const PlayerStats = struct {
 
 fn renderRoster(req: *Request, io: Io, alloc: Alloc) !void {
     var rows: std.ArrayList(PlayerStats) = .empty;
-    var grand = PlayerStats{ .id = "", .name = "All players", .last_seen = null, .game_sessions = 0, .puzzle_sessions = 0, .total_actions = 0, .disk_bytes = 0 };
+    var grand = PlayerStats{ .id = "", .name = "All players", .game_sessions = 0, .puzzle_sessions = 0, .total_actions = 0, .disk_bytes = 0 };
     for (try player.list(io, alloc)) |p| {
         const st = gatherStats(io, alloc, p);
         try rows.append(alloc, st);
@@ -95,7 +94,6 @@ fn renderRoster(req: *Request, io: Io, alloc: Alloc) !void {
         grand.total_actions += st.total_actions;
         grand.disk_bytes += st.disk_bytes;
     }
-    std.sort.insertion(PlayerStats, rows.items, {}, byRecency);
 
     var b: std.ArrayList(u8) = .empty;
     try ui.begin(&b, alloc, "🐹 Lyn Rummy players", self_url);
@@ -109,27 +107,22 @@ fn renderRoster(req: *Request, io: Io, alloc: Alloc) !void {
 
     try b.print(alloc, roster_head, .{try html.htmlEscape(alloc, storage.data_root)});
     if (rows.items.len == 0) {
-        try b.appendSlice(alloc, "<tr><td colspan=\"7\" class=\"muted\">No players yet.</td></tr>");
+        try b.appendSlice(alloc, "<tr><td colspan=\"6\" class=\"muted\">No players yet.</td></tr>");
     }
-    const now = ui.nowUnix(io);
     for (rows.items) |st| {
         const del = try std.fmt.allocPrint(alloc, "<a class=\"del\" href=\"" ++ self_url ++ "/delete?user={s}\">Delete sessions</a>", .{
             try html.htmlEscape(alloc, st.id),
         });
-        try writeRow(&b, alloc, st, "", try ui.sinceOrNever(alloc, now, st.last_seen), del);
+        try writeRow(&b, alloc, st, "", del);
     }
-    if (rows.items.len > 1) try writeRow(&b, alloc, grand, "total", "", "");
+    if (rows.items.len > 1) try writeRow(&b, alloc, grand, "total", "");
     try b.appendSlice(alloc, "</table>");
     try ui.end(&b, alloc);
 
     try req.respond(b.items, .{ .extra_headers = &.{http.html_ct} });
 }
 
-fn byRecency(_: void, a: PlayerStats, b: PlayerStats) bool {
-    return ui.mostRecentFirst(a.last_seen, b.last_seen);
-}
-
-fn writeRow(b: *std.ArrayList(u8), alloc: Alloc, st: PlayerStats, cls: []const u8, since: []const u8, actions_cell: []const u8) !void {
+fn writeRow(b: *std.ArrayList(u8), alloc: Alloc, st: PlayerStats, cls: []const u8, actions_cell: []const u8) !void {
     const row_class = if (cls.len != 0) try std.fmt.allocPrint(alloc, " class=\"{s}\"", .{cls}) else "";
     const who = if (st.id.len == 0)
         try html.htmlEscape(alloc, st.name)
@@ -137,12 +130,12 @@ fn writeRow(b: *std.ArrayList(u8), alloc: Alloc, st: PlayerStats, cls: []const u
         try std.fmt.allocPrint(alloc, "{s} <span class=\"muted\">#{s}</span>", .{
             try html.htmlEscape(alloc, st.name), try html.htmlEscape(alloc, st.id),
         });
-    try b.print(alloc, "<tr{s}><td>{s}</td><td>{s}</td><td class=\"n\">{d}</td><td class=\"n\">{d}</td>" ++
+    try b.print(alloc, "<tr{s}><td>{s}</td><td class=\"n\">{d}</td><td class=\"n\">{d}</td>" ++
         "<td class=\"n\">{d}</td><td class=\"n\">{s}</td><td>{s}</td></tr>", .{
-        row_class,                               who,
-        since,                                   st.game_sessions,
-        st.puzzle_sessions,                      st.total_actions,
-        try ui.humanBytes(alloc, st.disk_bytes), actions_cell,
+        row_class,        who,
+        st.game_sessions, st.puzzle_sessions,
+        st.total_actions, try ui.humanBytes(alloc, st.disk_bytes),
+        actions_cell,
     });
 }
 
@@ -170,7 +163,6 @@ fn gatherStats(io: Io, alloc: Alloc, p: player.Player) PlayerStats {
     var st = PlayerStats{
         .id = p.id,
         .name = p.name,
-        .last_seen = player.lastSeen(io, alloc, p.id),
         .game_sessions = 0,
         .puzzle_sessions = 0,
         .total_actions = 0,
@@ -252,9 +244,9 @@ fn formField(alloc: Alloc, body: []const u8, name: []const u8) !?[]const u8 {
 // ── page markup ──────────────────────────────────────────────────────────────
 
 const roster_head =
-    \\<p class="muted">Everyone with a name on this machine, and what they have in {s}. "Last active" is their most recent move.</p>
+    \\<p class="muted">Everyone with a name on this machine, and what they have in {s}.</p>
     \\<table>
-    \\<tr><th>Player</th><th>Last active</th><th class="n">Games</th><th class="n">Puzzles</th><th class="n">Actions</th><th class="n">Disk</th><th></th></tr>
+    \\<tr><th>Player</th><th class="n">Games</th><th class="n">Puzzles</th><th class="n">Actions</th><th class="n">Disk</th><th></th></tr>
 ;
 
 // delete_confirm_template. Args: name, games, puzzles, actions, disk, id.

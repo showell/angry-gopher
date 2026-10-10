@@ -101,11 +101,12 @@ fn renderRoster(req: *Request, io: Io, alloc: Alloc) !void {
     try req.respond(b.items, .{ .extra_headers = &.{http.html_ct} });
 }
 
-const MemberRow = struct { id: []const u8, name: []const u8, is_admin: bool, is_agent: bool, last_seen: ?i64 };
+const MemberRow = struct { id: []const u8, name: []const u8, is_admin: bool, is_agent: bool };
 
-/// renderMembersTable lists the official principals (members + agents) with time
-/// since last active (most-recent first; never-active last), lifetime image total
-/// vs the cap, and per-member API-key controls.
+/// renderMembersTable lists the official principals (members + agents), in the
+/// order `listAuthorized` gives them, with their lifetime image total vs the
+/// cap and per-member API-key controls. No "last active": last-seen is no
+/// longer kept (gopher-metal 153(2)), a disk write on every send and move.
 fn renderMembersTable(b: *std.ArrayList(u8), io: Io, alloc: Alloc) !void {
     var rows: std.ArrayList(MemberRow) = .empty;
     for (try users.listAuthorized(io, alloc)) |m| {
@@ -114,38 +115,28 @@ fn renderMembersTable(b: *std.ArrayList(u8), io: Io, alloc: Alloc) !void {
             .name = m.name,
             .is_admin = std.mem.eql(u8, m.id, ui.admin_uid),
             .is_agent = users.principalIsAgent(m.id),
-            .last_seen = users.userLastSeen(io, alloc, m.id),
         });
     }
-    // Active-ever sorts above never-active; among active, most-recent first.
-    // Insertion sort = stable, and the roster is tiny.
-    std.sort.insertion(MemberRow, rows.items, {}, memberLessThan);
 
     try b.appendSlice(alloc, member_table_head);
     if (rows.items.len == 0) {
-        try b.appendSlice(alloc, "<tr><td colspan=\"4\" class=\"muted\">No members yet.</td></tr>");
+        try b.appendSlice(alloc, "<tr><td colspan=\"3\" class=\"muted\">No members yet.</td></tr>");
     }
-    const now = ui.nowUnix(io);
     for (rows.items) |row| {
         var name = try html.htmlEscape(alloc, row.name);
         if (row.is_admin) name = try std.fmt.allocPrint(alloc, "{s} <span class=\"muted\">(admin)</span>", .{name});
         if (row.is_agent) name = try std.fmt.allocPrint(alloc, "{s} <span class=\"muted\">(agent)</span>", .{name});
-        const since = try ui.sinceOrNever(alloc, now, row.last_seen);
         // absent-ok: a total that cannot be read is shown as "unreadable", never as 0.
         const used = if (users.userUploadBytes(io, alloc, row.id)) |n| try ui.humanBytes(alloc, n) else |_| "unreadable";
         const images = try std.fmt.allocPrint(alloc, "{s} / {s}", .{
             used,
             try ui.humanBytes(alloc, users.max_upload_lifetime_bytes),
         });
-        try b.print(alloc, "<tr><td>{s}</td><td>{s}</td><td class=\"n\">{s}</td><td>", .{ name, since, images });
+        try b.print(alloc, "<tr><td>{s}</td><td class=\"n\">{s}</td><td>", .{ name, images });
         try appendApiKeyCell(b, io, alloc, row.id);
         try b.appendSlice(alloc, "</td></tr>");
     }
     try b.appendSlice(alloc, "</table>");
-}
-
-fn memberLessThan(_: void, a: MemberRow, b: MemberRow) bool {
-    return ui.mostRecentFirst(a.last_seen, b.last_seen);
 }
 
 /// appendApiKeyCell writes the API-key controls for one member: Generate (becomes
@@ -168,9 +159,9 @@ fn appendApiKeyCell(b: *std.ArrayList(u8), io: Io, alloc: Alloc, id: []const u8)
 
 const member_table_head =
     \\<h2>Official users</h2>
-    \\<p class="muted">Members (password holders): time since last activity, lifetime image-upload total (vs the per-user cap), and a bot API key (acts as the member, no admin).</p>
+    \\<p class="muted">Members (password holders): lifetime image-upload total (vs the per-user cap), and a bot API key (acts as the member, no admin).</p>
     \\<table>
-    \\<tr><th>Name</th><th>Last active</th><th class="n">Images</th><th>API key</th></tr>
+    \\<tr><th>Name</th><th class="n">Images</th><th>API key</th></tr>
 ;
 
 // ── tests ────────────────────────────────────────────────────────────────────

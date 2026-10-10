@@ -220,7 +220,6 @@ fn loginAsMember(req: *Request, io: Io, alloc: Alloc, id: []const u8, next: []co
     const uid_ck = (try uid_cookie.issue(io, alloc, id)) orelse
         return req.respond("session unavailable\n", .{ .status = .internal_server_error });
     const auth_ck = try authCookie(alloc, signed);
-    users.touchUser(io, alloc, id); // logging on counts as activity
     // Same id on both sides, so a member's Lyn Rummy history follows them.
     player.mirror(io, alloc, id, try users.getUserName(io, alloc, id));
     return sendRedirect(req, alloc, next, &.{ uid_ck, auth_ck });

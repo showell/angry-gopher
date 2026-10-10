@@ -377,7 +377,6 @@ fn sendMessage(req: *Request, io: Io, alloc: Alloc, bus: *Bus, topic: Topic, uid
 
     const from_name = try users.getUserName(io, alloc, uid);
     _ = try store.appendMessage(io, alloc, bus, conv.meta, conv.dir, conv.key, topic.sid, from_name, uid, md, cid);
-    users.touchUser(io, alloc, uid);
     if (conv.persistsCursor()) chat_state.setUserLastSession(io, alloc, uid, conv.key, topic.sid);
     return sendDone(req, alloc, is_async, conv.base, topic.sid);
 }
@@ -425,7 +424,6 @@ fn newTopic(req: *Request, io: Io, alloc: Alloc, bus: *Bus, conv: Conv, uid: []c
 
     const from_name = try users.getUserName(io, alloc, uid);
     _ = try store.appendMessage(io, alloc, bus, conv.meta, conv.dir, conv.key, topic, from_name, uid, "hi", "");
-    users.touchUser(io, alloc, uid);
 
     if (conv.persistsCursor()) {
         chat_state.setUserLastSession(io, alloc, uid, conv.key, topic);

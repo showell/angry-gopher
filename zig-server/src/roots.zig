@@ -4,7 +4,7 @@
 //! roots the stores read:
 //!
 //!   {data_dir}/lynrummy   storage.data_root          game + puzzle sessions
-//!   {data_dir}/users      users.users_root           last-seen, upload quota
+//!   {data_dir}/users      users.users_root           upload quota
 //!   {data_dir}/players    player.player_root         the LOCAL identity
 //!   {data_dir}/chat       chat_store.chat_root       conversations
 //!   {auth_dir}            users.auth_root            the account store

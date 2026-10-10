@@ -291,7 +291,6 @@ fn docsPost(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8) !vo
     members[1] = partner;
     const meta = store.ConvMeta{ .kind = .dm, .members = members };
     const msg = try store.appendMessage(io, alloc, bus, meta, conv_dir, conv, sid, from_name, uid, doc_body, "");
-    users.touchUser(io, alloc, uid);
 
     const out = try std.fmt.allocPrint(alloc, "{{\"conv\":{f},\"session\":{f},\"id\":{f}}}", .{
         std.json.fmt(conv, .{}), std.json.fmt(sid, .{}), std.json.fmt(msg.id, .{}),

@@ -7,7 +7,7 @@
 //! else reaches past this module's API to touch their files):
 //!   • auth_root          — the SHARED account store: name, password, api-key,
 //!                          next-id. Identity + credentials + issuance.
-//!   • users_root         — gopher-private per-user STATE: last-seen,
+//!   • users_root         — gopher-private per-user STATE:
 //!                          upload-bytes (the upload quota). Same file shape —
 //!                          one small scalar per fact under {users_root}/{id}/.
 //!   • session_secret_dir — _session_secret, the HMAC key for session cookies.
@@ -44,7 +44,7 @@ const b64 = std.base64.url_safe_no_pad;
 // Roots (config.zig overrides these at startup from GOPHER_CONFIG). Defaults are
 // repo-relative, adjusted for the zig-server cwd.
 pub var auth_root: []const u8 = "../games/lynrummy/auth-data"; // shared account store (name/password/api-key)
-pub var users_root: []const u8 = "../games/lynrummy/users-data"; // gopher-private (last-seen, upload-bytes)
+pub var users_root: []const u8 = "../games/lynrummy/users-data"; // gopher-private (upload-bytes)
 pub var session_secret_dir: []const u8 = "../games/lynrummy/data/chat"; // holds _session_secret
 
 const claude_agent_id = "3";
@@ -237,40 +237,6 @@ pub fn getUserName(io: Io, alloc: Alloc, id: []const u8) ![]const u8 {
     return std.mem.trimEnd(u8, b, "\r\n");
 }
 
-/// touchUser records "now" as the user's last-seen time
-/// ({users_root}/{id}/last-seen = unix seconds), best-effort (a write failure
-/// isn't worth surfacing). Bumped on each Lyn Rummy move. An id that is not a
-/// well-formed uid writes nothing: joined onto users_root it would make a
-/// directory of its own (prod's users/r and users/y, from the chunked-body
-/// identity bug).
-pub fn touchUser(io: Io, alloc: Alloc, id: []const u8) void {
-    if (!allDigits(id)) return;
-    // absent-ok: a last-seen, best-effort: one that cannot be read or written is left, and nothing is decided from it.
-    touchUserImpl(io, alloc, id) catch {};
-}
-
-/// **LAST-SEEN AT MOST EVERY `last_seen_every_s`** (gopher-metal 153(2)): it
-/// is written on every send, move and login, and each write is disk requests
-/// on gopher-metal; a time a few minutes stale is as good to show. The read
-/// is from memory.
-pub const last_seen_every_s: i64 = 5 * 60;
-
-fn touchUserImpl(io: Io, alloc: Alloc, id: []const u8) !void {
-    const path = try std.fs.path.join(alloc, &.{ users_root, id, "last-seen" });
-    const now = nowUnix(io);
-    if (recentlySeen(io, alloc, path, now)) return;
-    const body = try std.fmt.allocPrint(alloc, "{d}", .{now});
-    try store.write(io, alloc, path, body, .{});
-}
-
-/// Whether the last-seen at `path` is under `last_seen_every_s` old.
-pub fn recentlySeen(io: Io, alloc: Alloc, path: []const u8, now: i64) bool {
-    // absent-ok: a last-seen that cannot be read is written again.
-    const raw = (store.readOrNull(io, alloc, path, .limited(64)) catch return false) orelse return false;
-    const then = std.fmt.parseInt(i64, std.mem.trim(u8, raw, " \t\r\n"), 10) catch return false;
-    return now >= then and now - then < last_seen_every_s;
-}
-
 /// max_upload_lifetime_bytes caps the cumulative bytes one user may ever upload —
 /// a runaway/abuse backstop, not a tight quota.
 pub const max_upload_lifetime_bytes: i64 = 1 << 30; // 1 GiB per user, lifetime
@@ -392,15 +358,6 @@ pub fn listUserIDs(io: Io, alloc: Alloc) ![][]const u8 {
 
 fn lessThanNumericID(_: void, a: []const u8, b: []const u8) bool {
     return (std.fmt.parseInt(i64, a, 10) catch 0) < (std.fmt.parseInt(i64, b, 10) catch 0);
-}
-
-/// userLastSeen returns a user's last-activity time (Unix seconds), or null if
-/// never recorded.
-pub fn userLastSeen(io: Io, alloc: Alloc, id: []const u8) ?i64 {
-    const path = std.fs.path.join(alloc, &.{ users_root, id, "last-seen" }) catch return null;
-    // absent-ok: shown on the admin page only: a time that will not read is no time.
-    const b = store.read(io, alloc, path, .unlimited) catch return null;
-    return std.fmt.parseInt(i64, std.mem.trim(u8, b, " \t\r\n"), 10) catch null;
 }
 
 fn authFileExists(io: Io, alloc: Alloc, id: []const u8, name: []const u8) !bool {
@@ -599,7 +556,7 @@ pub fn findMemberByName(io: Io, alloc: Alloc, name: []const u8) !?[]const u8 {
 }
 
 /// deleteUserRecord removes a user's account dir (auth_root: name/password/
-/// api-key) and gopher-private dir (users_root: admin/last-seen/upload-bytes).
+/// api-key) and gopher-private dir (users_root: admin/upload-bytes).
 /// Game/chat data is deleted separately (storage.deleteUserData). Refuses an
 /// empty id so it can never target a root.
 ///
@@ -901,7 +858,7 @@ test "fs: allocateUser hands out distinct increasing ids and persists the name" 
     try testing.expect(!try isMember(io, a, id1));
 }
 
-test "fs: touchUser and reserveUploadBytes write only under a well-formed uid" {
+test "fs: reserveUploadBytes writes only under a well-formed uid" {
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();
     const a = arena.allocator();
@@ -912,12 +869,9 @@ test "fs: touchUser and reserveUploadBytes write only under a well-formed uid" {
     defer threaded.deinit();
     const io = threaded.io();
 
-    touchUser(io, a, "7");
-    try testing.expect(userLastSeen(io, a, "7") != null);
     try testing.expect(try reserveUploadBytes(io, a, "7", 100));
 
     for ([_][]const u8{ "", "   ", "r", "y", "7x", "p3", "../7", "7/.." }) |bad| {
-        touchUser(io, a, bad);
         try testing.expect(!(try reserveUploadBytes(io, a, bad, 100)));
     }
     // Nothing but the well-formed uid's directory was made.
@@ -1023,26 +977,4 @@ test "fs: a member whose password cannot be looked at is an error, never a free 
     try store.remove(io, a, pw);
     try std.Io.Dir.cwd().symLink(io, "password", pw, .{});
     try testing.expect(std.meta.isError(findMemberByName(io, a, "Alice")));
-}
-
-test "fs: last-seen is written at most every last_seen_every_s seconds (gopher-metal 153(2))" {
-    var arena = std.heap.ArenaAllocator.init(testing.allocator);
-    defer arena.deinit();
-    const a = arena.allocator();
-    var tmp = testing.tmpDir(.{});
-    defer tmp.cleanup();
-    try tmpRoots(&tmp, a);
-    var threaded = std.Io.Threaded.init(a, .{});
-    defer threaded.deinit();
-    const io = threaded.io();
-    const path = try std.fs.path.join(a, &.{ users_root, "7", "last-seen" });
-    const recent = try std.fmt.allocPrint(a, "{d}", .{nowUnix(io) - 10});
-    try store.write(io, a, path, recent, .{});
-    touchUser(io, a, "7");
-    try testing.expectEqualStrings(recent, try store.read(io, a, path, .limited(64)));
-    // Older than that: written again.
-    const old = try std.fmt.allocPrint(a, "{d}", .{nowUnix(io) - last_seen_every_s - 5});
-    try store.write(io, a, path, old, .{});
-    touchUser(io, a, "7");
-    try testing.expect(!std.mem.eql(u8, old, try store.read(io, a, path, .limited(64))));
 }
