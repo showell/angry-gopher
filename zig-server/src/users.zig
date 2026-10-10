@@ -245,13 +245,30 @@ pub fn getUserName(io: Io, alloc: Alloc, id: []const u8) ![]const u8 {
 /// identity bug).
 pub fn touchUser(io: Io, alloc: Alloc, id: []const u8) void {
     if (!allDigits(id)) return;
+    // absent-ok: a last-seen, best-effort: one that cannot be read or written is left, and nothing is decided from it.
     touchUserImpl(io, alloc, id) catch {};
 }
 
+/// **LAST-SEEN AT MOST EVERY `last_seen_every_s`** (gopher-metal 153(2)): it
+/// is written on every send, move and login, and each write is disk requests
+/// on gopher-metal; a time a few minutes stale is as good to show. The read
+/// is from memory.
+pub const last_seen_every_s: i64 = 5 * 60;
+
 fn touchUserImpl(io: Io, alloc: Alloc, id: []const u8) !void {
     const path = try std.fs.path.join(alloc, &.{ users_root, id, "last-seen" });
-    const body = try std.fmt.allocPrint(alloc, "{d}", .{nowUnix(io)});
+    const now = nowUnix(io);
+    if (recentlySeen(io, alloc, path, now)) return;
+    const body = try std.fmt.allocPrint(alloc, "{d}", .{now});
     try store.write(io, alloc, path, body, .{});
+}
+
+/// Whether the last-seen at `path` is under `last_seen_every_s` old.
+pub fn recentlySeen(io: Io, alloc: Alloc, path: []const u8, now: i64) bool {
+    // absent-ok: a last-seen that cannot be read is written again.
+    const raw = (store.readOrNull(io, alloc, path, .limited(64)) catch return false) orelse return false;
+    const then = std.fmt.parseInt(i64, std.mem.trim(u8, raw, " \t\r\n"), 10) catch return false;
+    return now >= then and now - then < last_seen_every_s;
 }
 
 /// max_upload_lifetime_bytes caps the cumulative bytes one user may ever upload —
@@ -1006,4 +1023,26 @@ test "fs: a member whose password cannot be looked at is an error, never a free 
     try store.remove(io, a, pw);
     try std.Io.Dir.cwd().symLink(io, "password", pw, .{});
     try testing.expect(std.meta.isError(findMemberByName(io, a, "Alice")));
+}
+
+test "fs: last-seen is written at most every last_seen_every_s seconds (gopher-metal 153(2))" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var tmp = testing.tmpDir(.{});
+    defer tmp.cleanup();
+    try tmpRoots(&tmp, a);
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    const path = try std.fs.path.join(a, &.{ users_root, "7", "last-seen" });
+    const recent = try std.fmt.allocPrint(a, "{d}", .{nowUnix(io) - 10});
+    try store.write(io, a, path, recent, .{});
+    touchUser(io, a, "7");
+    try testing.expectEqualStrings(recent, try store.read(io, a, path, .limited(64)));
+    // Older than that: written again.
+    const old = try std.fmt.allocPrint(a, "{d}", .{nowUnix(io) - last_seen_every_s - 5});
+    try store.write(io, a, path, old, .{});
+    touchUser(io, a, "7");
+    try testing.expect(!std.mem.eql(u8, old, try store.read(io, a, path, .limited(64))));
 }

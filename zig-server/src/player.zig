@@ -173,13 +173,19 @@ pub fn lastSeen(io: Io, alloc: Alloc, id: []const u8) ?i64 {
 /// touch records "now" as this player's last-seen time. Best-effort: a failed
 /// write is not worth failing a move over.
 pub fn touch(io: Io, alloc: Alloc, id: []const u8) void {
+    // absent-ok: a last-seen, best-effort: one that cannot be read or written is left, and nothing is decided from it.
     touchImpl(io, alloc, id) catch {};
 }
+
+/// At most every `last_seen_every_s`, as a member's is (users.zig, gopher-metal
+/// 153(2)).
+pub const last_seen_every_s = users.last_seen_every_s;
 
 fn touchImpl(io: Io, alloc: Alloc, id: []const u8) !void {
     if (!isSafeID(id)) return;
     const path = try std.fs.path.join(alloc, &.{ player_root, id, "last-seen" });
     const now: i64 = @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
+    if (users.recentlySeen(io, alloc, path, now)) return;
     const body = try std.fmt.allocPrint(alloc, "{d}", .{now});
     try store.write(io, alloc, path, body, .{});
 }
@@ -391,4 +397,28 @@ test "fs: a minted player is p-prefixed, readable back, and disjoint from accoun
 
     // An id with no row is no identity.
     try testing.expectEqualStrings("", try nameOf(io, a, "p999"));
+}
+
+test "fs: a player's last-seen is written at most every last_seen_every_s seconds (gopher-metal 153(2))" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var tmp = testing.tmpDir(.{});
+    defer tmp.cleanup();
+    const saved = player_root;
+    defer player_root = saved;
+    player_root = try std.fs.path.join(a, &.{ ".zig-cache", "tmp", &tmp.sub_path, "players" });
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    const now: i64 = @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
+    const path = try std.fs.path.join(a, &.{ player_root, "p3", "last-seen" });
+    const recent = try std.fmt.allocPrint(a, "{d}", .{now - 10});
+    try store.write(io, a, path, recent, .{});
+    touch(io, a, "p3");
+    try testing.expectEqualStrings(recent, try store.read(io, a, path, .limited(64)));
+    const old = try std.fmt.allocPrint(a, "{d}", .{now - last_seen_every_s - 5});
+    try store.write(io, a, path, old, .{});
+    touch(io, a, "p3");
+    try testing.expect(!std.mem.eql(u8, old, try store.read(io, a, path, .limited(64))));
 }
