@@ -56,13 +56,20 @@ fn handleDelete(req: *Request, io: Io, alloc: Alloc) !void {
     if (req.head.method == .POST) {
         const body = (try http.readLimitedBody(req, alloc, limits.body.form)) orelse return;
         const id = std.mem.trim(u8, (try formField(alloc, body, "user")) orelse "", " \t\r\n");
-        if (!try exists(io, alloc, id)) return http.redirect(req, self_url);
+        if (!try exists(io, alloc, id)) return noSuchPlayer(req, alloc, id);
         storage.deleteUserData(io, alloc, id) catch return req.respond("delete failed\n", .{ .status = .internal_server_error });
         return http.redirect(req, try std.fmt.allocPrint(alloc, self_url ++ "?deleted={s}", .{id}));
     }
     const id = std.mem.trim(u8, http.queryValue(try http.target(req, alloc), "user") orelse "", " \t\r\n");
-    if (!try exists(io, alloc, id)) return http.redirect(req, self_url);
+    if (!try exists(io, alloc, id)) return noSuchPlayer(req, alloc, id);
     return renderDeleteConfirm(req, io, alloc, id);
+}
+
+/// **A DELETE OF NO ONE SAYS SO** (metal-vmm QUEUE 156(i)): a 404 naming the
+/// id, where it went back to the roster as a delete that worked does.
+fn noSuchPlayer(req: *Request, alloc: Alloc, id: []const u8) !void {
+    const text = try std.fmt.allocPrint(alloc, "No player with id \u{201C}{s}\u{201D}: nothing was deleted.\n", .{id});
+    return req.respond(text, .{ .status = .not_found });
 }
 
 /// exists is the guard every id from a form or a query passes through: a player

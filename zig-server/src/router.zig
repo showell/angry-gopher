@@ -1943,3 +1943,19 @@ test "route: one form decoder: a bad escape or a field sent twice is a 400 on ev
     // A well-formed escape still decodes.
     try testing.expectEqualStrings("303 See Other", status(try postAs(a, io, "/chat/c/1_2/Plans/send", steve, "markdown=100%25&cid=y")));
 }
+
+test "route: an admin delete of a player there is not says so, 404, where it went back to the roster as if done (156(i))" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var site = try UidSite.init(a, io);
+    defer site.deinit();
+    const me = try adminSession(a, io);
+    try testing.expectEqualStrings("404 Not Found", status(try postForm(a, io, "/admin/lynrummy/delete", me, "user=p999")));
+    try testing.expectEqualStrings("404 Not Found", status(try UidSite.ask(a, io, "/admin/lynrummy/delete?user=p999", me)));
+    const id = try player.allocate(io, a, "Nikhil");
+    try testing.expectEqualStrings("200 OK", status(try UidSite.ask(a, io, try std.fmt.allocPrint(a, "/admin/lynrummy/delete?user={s}", .{id}), me)));
+}

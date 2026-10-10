@@ -451,8 +451,11 @@ pub fn validUid(id: []const u8) bool {
     return allDigits(id);
 }
 
+/// **CANONICAL, AS A COUNTER WRITES ONE** (metal-vmm QUEUE 156(i)): digits,
+/// the first not zero (counters start at 1), so `007` and `7` are never two
+/// spellings of one account, nor `007` a folder of its own.
 fn allDigits(s: []const u8) bool {
-    if (s.len == 0) return false;
+    if (s.len == 0 or s[0] == '0') return false;
     for (s) |ch| {
         if (ch < '0' or ch > '9') return false;
     }
@@ -1028,4 +1031,9 @@ test "a member with no name file reads as nobody, and no name lookup finds them 
     try testing.expectEqualStrings("", try getUserName(io, a, "4"));
     try testing.expectEqual(@as(?[]const u8, null), try onlyMemberNamed(io, a, ""));
     try testing.expectEqual(@as(?[]const u8, null), try findMemberByName(io, a, ""));
+}
+
+test "an account id is canonical: digits, the first not zero (metal-vmm QUEUE 156(i))" {
+    for ([_][]const u8{ "1", "7", "10", "123" }) |ok| try testing.expect(validUid(ok));
+    for ([_][]const u8{ "", "0", "007", "+7", "-7", " 7", "7 ", "7a" }) |bad| try testing.expect(!validUid(bad));
 }

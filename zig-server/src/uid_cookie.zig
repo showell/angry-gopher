@@ -63,7 +63,9 @@ pub const window_seconds: i64 = 30 * 24 * 60 * 60;
 /// digits (a player). Neither holds a `.`, so the value splits plainly.
 pub fn validId(id: []const u8) bool {
     const digits = if (id.len > 1 and id[0] == 'p') id[1..] else id;
-    if (digits.len == 0 or digits.len > 20) return false;
+    // Canonical (metal-vmm QUEUE 156(i)): the first digit not zero, as the
+    // counters (from 1) write them, so p007 is not p7's other spelling.
+    if (digits.len == 0 or digits.len > 20 or digits[0] == '0') return false;
     for (digits) |c| if (c < '0' or c > '9') return false;
     return true;
 }
@@ -282,7 +284,7 @@ test "a gopher_auth session's MAC does not pass as a gopher_uid" {
 
 test "ids the cookie may carry" {
     for ([_][]const u8{ "1", "12", "p1", "p123" }) |ok| try testing.expect(validId(ok));
-    for ([_][]const u8{ "", "p", "P3", "p3x", "x", "1.2", "../1", "p-1" }) |bad| try testing.expect(!validId(bad));
+    for ([_][]const u8{ "", "p", "P3", "p3x", "x", "1.2", "../1", "p-1", "0", "007", "p0", "p007", "+7" }) |bad| try testing.expect(!validId(bad));
     // Twenty digits at most, with or without the p: the edge, both sides.
     try testing.expect(validId("9" ** 20));
     try testing.expect(validId("p" ++ "9" ** 20));
