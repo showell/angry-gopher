@@ -1000,6 +1000,7 @@ fn lessThanStr(_: void, a: []const u8, b: []const u8) bool {
 /// (`../../x` was one), a line with a comment after it (`3 # Claude`) dropped
 /// that member, and a duplicate notified twice. `error.MalformedChannel`,
 /// never a guess at what the line meant: whoever wrote the file fixes it.
+/// Its own route refuses it; a listing skips and counts it.
 pub fn channelMembers(io: Io, alloc: Alloc, name: []const u8) !?[][]const u8 {
     const file = try std.fmt.allocPrint(alloc, "{s}.channel", .{name});
     const path = try std.fs.path.join(alloc, &.{ chat_root, "channels", file });
@@ -1024,6 +1025,21 @@ pub fn hasMember(members: [][]const u8, uid: []const u8) bool {
     return false;
 }
 
+/// Channel files a listing skipped as malformed, since boot (Steve,
+/// 2026-10-10, on 156(d)): a listing reads every channel for every member,
+/// so one bad file made chat a 500 for everyone; now each listing that meets
+/// it skips it, counts it, and names it on /admin/host (`malformedText`). The
+/// channel's own route still refuses it. Counted per listing, not per file.
+pub var malformed_channels: usize = 0;
+var malformed_last_buf: [64]u8 = undefined;
+pub var malformed_last: []const u8 = "";
+
+/// The malformed channels as /admin/host shows them.
+pub fn malformedText(alloc: Alloc) ![]const u8 {
+    if (malformed_channels == 0) return "none";
+    return std.fmt.allocPrint(alloc, "{d}; the last: #{s}", .{ malformed_channels, malformed_last });
+}
+
 /// listUserChannels returns the names of channels `uid` is a member of, sorted.
 /// Scans {chat_root}/channels/*.channel. Missing dir → empty.
 pub fn listUserChannels(io: Io, alloc: Alloc, uid: []const u8) ![][]const u8 {
@@ -1034,7 +1050,16 @@ pub fn listUserChannels(io: Io, alloc: Alloc, uid: []const u8) ![][]const u8 {
     for (entries) |entry| {
         if (!std.mem.endsWith(u8, entry.name, ".channel")) continue;
         const name = entry.name[0 .. entry.name.len - ".channel".len];
-        const members = (try channelMembers(io, alloc, name)) orelse continue;
+        const members = (channelMembers(io, alloc, name) catch |e| switch (e) {
+            error.MalformedChannel => {
+                malformed_channels += 1;
+                const n = @min(name.len, malformed_last_buf.len);
+                @memcpy(malformed_last_buf[0..n], name[0..n]);
+                malformed_last = malformed_last_buf[0..n];
+                continue;
+            },
+            else => return e,
+        }) orelse continue;
         if (!hasMember(members, uid)) continue;
         try out.append(alloc, try alloc.dupe(u8, name));
     }
@@ -1814,7 +1839,12 @@ test "a channel's member lines are canonical uids, each once, or the channel is 
     for ([_][]const u8{ "1\n../../x\n", "1\n3 # Claude\n", "1\n2\n1\n", "007\n", "+7\n" }) |bad| {
         try Io.Dir.cwd().writeFile(f.io, .{ .sub_path = path, .data = bad });
         try testing.expectError(error.MalformedChannel, channelMembers(f.io, a, "team"));
-        try testing.expectError(error.MalformedChannel, listUserChannels(f.io, a, "1"));
+        // A listing skips it and counts it (Steve, 2026-10-10): one bad file
+        // is not every member's chat down.
+        const before = malformed_channels;
+        try testing.expectEqual(@as(usize, 0), (try listUserChannels(f.io, a, "1")).len);
+        try testing.expectEqual(before + 1, malformed_channels);
+        try testing.expectEqualStrings("team", malformed_last);
     }
 }
 

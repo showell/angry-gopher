@@ -36,6 +36,7 @@ pub fn render(req: *Request, io: Io, alloc: Alloc) !void {
     try row(&b, alloc, "base heap, allocations ever", try std.fmt.allocPrint(alloc, "{d}", .{mem.total_allocs}));
     try row(&b, alloc, "requests refused at the edge", try edge.countsText(alloc));
     try row(&b, alloc, "chat fan-out failures since boot", try @import("chat_store.zig").fanoutText(alloc));
+    try row(&b, alloc, "listings that skipped a malformed channel", try @import("chat_store.zig").malformedText(alloc));
     try row(&b, alloc, "reads that met a refused transcript block", try @import("chat_store.zig").refusedText(alloc));
     try b.appendSlice(alloc, "</table>\n<h2>The host</h2>\n");
 
