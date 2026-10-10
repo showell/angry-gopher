@@ -48,17 +48,26 @@ pub fn lastUserSession(io: Io, alloc: Alloc, uid: []const u8, conv_key: []const 
 /// setUserLastSession persists which session this user last viewed for `conv_key`
 /// AND bumps the last-conv pointer so /chat/default resumes the right pair.
 /// Best-effort.
+///
+/// **WRITTEN ONLY WHEN IT CHANGES** (gopher-metal 153(1)): on every send and
+/// view the value is usually the one already there, and a write is disk
+/// requests each time; the read is from memory. `write` makes the folders.
 pub fn setUserLastSession(io: Io, alloc: Alloc, uid: []const u8, conv_key: []const u8, sid: []const u8) void {
     if (uid.len == 0 or sid.len == 0) return;
     const dir = userChatStateDir(alloc, uid) catch return;
-    const ls_dir = std.fs.path.join(alloc, &.{ dir, "last-sessions" }) catch return;
-    disk.makeDir(io, alloc, ls_dir) catch return;
-    const ls_path = std.fs.path.join(alloc, &.{ ls_dir, conv_key }) catch return;
-    const sv = std.fmt.allocPrint(alloc, "{s}\n", .{sid}) catch return;
-    disk.write(io, alloc, ls_path, sv, .{}) catch {};
+    const ls_path = std.fs.path.join(alloc, &.{ dir, "last-sessions", conv_key }) catch return;
+    writeIfChanged(io, alloc, ls_path, sid);
     const lc_path = std.fs.path.join(alloc, &.{ dir, "last-conv" }) catch return;
-    const cv = std.fmt.allocPrint(alloc, "{s}\n", .{conv_key}) catch return;
-    disk.write(io, alloc, lc_path, cv, .{}) catch {};
+    writeIfChanged(io, alloc, lc_path, conv_key);
+}
+
+/// `value` and a newline at `path`, unless it already holds `value`.
+fn writeIfChanged(io: Io, alloc: Alloc, path: []const u8, value: []const u8) void {
+    // absent-ok: a bookmark that cannot be read is written again.
+    const was = disk.readOrNull(io, alloc, path, .limited(256)) catch null;
+    if (was) |w| if (std.mem.eql(u8, std.mem.trim(u8, w, " \t\r\n"), value)) return;
+    const v = std.fmt.allocPrint(alloc, "{s}\n", .{value}) catch return;
+    disk.write(io, alloc, path, v, .{}) catch {};
 }
 
 // ── pinned sessions (the sidebar's Pinned group) ──────────────────────────────

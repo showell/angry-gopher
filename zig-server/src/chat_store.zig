@@ -152,8 +152,8 @@ pub fn openStream(io: Io, alloc: Alloc, bus: *Bus, conv_dir: []const u8, conv_ke
 
 /// appendMessage stores one message: under
 /// chat_mu, read the current count → the message index, encode the on-disk block
-/// (with separator + body-line escaping), append it, write the .lastauthor
-/// companion, then publish a fan-out blob to the live subscribers — all under the
+/// (with separator + body-line escaping), append it, record the count and the
+/// author in the `.count`, then publish a fan-out blob to the live subscribers — all under the
 /// one lock so a concurrent openStream can't double- or zero-count it. Returns
 /// the stored message (id + server-stamped date). NO render here: the blob
 /// carries raw markdown; each stream renders per-viewer.
@@ -179,9 +179,13 @@ pub fn appendMessage(io: Io, alloc: Alloc, bus: *Bus, meta: ConvMeta, conv_dir: 
         .uid = from_id,
     });
 
-    // Last-author companion (best-effort).
+    // **NO `.lastauthor`** (gopher-metal 153(1)): the `.count` carries the
+    // author. One an older server left would now name the previous author,
+    // so the first send takes it away, and one that is there is always right
+    // (the session's, from before anyone posted again). Best-effort.
     const la = try std.fs.path.join(alloc, &.{ conv_dir, "sessions", try std.fmt.allocPrint(alloc, "{s}.lastauthor", .{sid}) });
-    store.write(io, alloc, la, from_id, .{}) catch {};
+    // absent-ok: a companion that cannot be asked after is left: nothing is written from it.
+    if (store.has(io, alloc, la) catch false) store.remove(io, alloc, la) catch {};
 
     // Fan out to live subscribers on this conv/sid (best-effort).
     const key = try std.fmt.allocPrint(alloc, "{s}/{s}", .{ conv_key, sid });
@@ -722,7 +726,11 @@ fn writeCount(io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8, count
         }) catch return
     else
         head;
-    store.replace(io, alloc, path, text, .{}) catch {};
+    // **A `write`, NOT A `replace`** (gopher-metal 153(1)): the sidecar is a
+    // cache, checked against the transcript's size, so one a crash left
+    // empty or half is recounted; and on gopher-metal a write is as safe as a
+    // replace (STORE.md) at about half the disk requests.
+    store.write(io, alloc, path, text, .{}) catch {};
 }
 
 fn nowUnix(io: Io) i64 {
@@ -1284,8 +1292,10 @@ test "backfill: a session with no last-message record gets one, and only once" {
     _ = try f.send("first");
     _ = try f.send("last");
     const a = f.arena.allocator();
-    // A sidecar as an older build left it: a count and a size, nothing more.
+    // A sidecar as an older build left it: a count and a size, nothing more,
+    // and the `.lastauthor` it wrote beside.
     try f.setSidecar(try std.fmt.allocPrint(a, "2 {d}\n", .{try f.transcriptSize()}));
+    try store.write(f.io, a, try std.fs.path.join(a, &.{ f.dir, "sessions", "topic.lastauthor" }), "1", .{});
 
     const dirs = [_][]const u8{f.dir};
     try testing.expectEqual(@as(usize, 1), backfillSidecars(f.io, a, &dirs));
@@ -1393,8 +1403,9 @@ test "last message: a record left one behind still answers with the true last me
     const got = (try lastMessage(f.io, a, f.dir, "topic")).?;
     try testing.expectEqualStrings("the second", got.markdown);
     try testing.expectEqual(@as(usize, 2), got.number);
-    // The stale uid is not used: `.lastauthor` was written for the new message.
-    try testing.expectEqualStrings("1", got.uid);
+    // The stale uid is not used. No `.lastauthor` says who wrote the newer
+    // message (gopher-metal 153(1)), so no author, never the wrong one.
+    try testing.expectEqualStrings("", got.uid);
 }
 
 test "last message: one too long for the window is read the slow way, and is right" {
@@ -1428,4 +1439,48 @@ test "last message: a sidecar claiming a size far past the file does not ask for
     try f.setSidecar("1 999999999999\n0 1\n");
     const got = (try lastMessage(f.io, a, f.dir, "topic")).?;
     try testing.expectEqualStrings("modest", got.markdown);
+}
+
+test "a send writes no .lastauthor, and takes away one an older server wrote (gopher-metal 153(1))" {
+    // The `.count` carries the author now. A `.lastauthor` left from before
+    // would be the previous author once a send no longer writes it, so the
+    // first send takes it away: one that is there is always right.
+    var threaded = std.Io.Threaded.init(testing.allocator, .{});
+    defer threaded.deinit();
+    var f: CountFixture = undefined;
+    try f.init(threaded.io());
+    defer f.deinit();
+    const a = f.arena.allocator();
+    const la = try std.fs.path.join(a, &.{ f.dir, "sessions", "topic.lastauthor" });
+    _ = try f.send("the first");
+    try testing.expect(!try store.has(f.io, a, la));
+    try store.write(f.io, a, la, "9", .{}); // as an older server left it
+    _ = try f.send("the second");
+    try testing.expect(!try store.has(f.io, a, la));
+    const got = (try lastMessage(f.io, a, f.dir, "topic")).?;
+    try testing.expectEqualStrings("1", got.uid);
+}
+
+test "the last session and conversation are written only when they change (gopher-metal 153(1))" {
+    const chat_state = @import("chat_state.zig");
+    var threaded = std.Io.Threaded.init(testing.allocator, .{});
+    defer threaded.deinit();
+    var f: CountFixture = undefined;
+    try f.init(threaded.io());
+    defer f.deinit();
+    const a = f.arena.allocator();
+    chat_state.setUserLastSession(f.io, a, "1", "1_2", "topic");
+    const lc = try std.fs.path.join(a, &.{ chat_root, "users", "1", "last-conv" });
+    const ls = try std.fs.path.join(a, &.{ chat_root, "users", "1", "last-sessions", "1_2" });
+    try testing.expectEqualStrings("1_2\n", try store.read(f.io, a, lc, .limited(64)));
+    // The same values again, stored without their newline: a write would put
+    // it back.
+    try store.write(f.io, a, lc, "1_2", .{});
+    try store.write(f.io, a, ls, "topic", .{});
+    chat_state.setUserLastSession(f.io, a, "1", "1_2", "topic");
+    try testing.expectEqualStrings("1_2", try store.read(f.io, a, lc, .limited(64)));
+    try testing.expectEqualStrings("topic", try store.read(f.io, a, ls, .limited(64)));
+    // A new one is written.
+    chat_state.setUserLastSession(f.io, a, "1", "1_2", "other");
+    try testing.expectEqualStrings("other\n", try store.read(f.io, a, ls, .limited(64)));
 }
