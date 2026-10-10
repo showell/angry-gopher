@@ -43,40 +43,28 @@ const users = @import("users.zig");
 const uid_cookie = @import("uid_cookie.zig");
 // ── THE HOST CONTRACT ────────────────────────────────────────────────────────
 //
-// What any host must do before it calls `route`, and everything it needs to do
-// it with. A kernel that boots this table has no other contact with the
-// application, so all of it is exported from here:
+// What any host does to serve this table. A kernel that boots it has no other
+// contact with the application, so all of it is exported from here. Three
+// calls (Steve, 2026-10-10: one call for the setup, not a list a host follows
+// by hand):
 //
-//   1. mem_meter.init(base)     name the process-lifetime allocator. There is no
-//                               default: an allocation before this panics.
-//   2. roots.point(base, r)     point every store at the data. Without it the
-//                               stores read repo-relative defaults, which is
-//                               right for a dev checkout and nothing else.
-//   3. a Hub, built over base   one per process: the registry chat publishes
-//                               through. Each request gets a Bus handle on it.
-//   4. store.backfillAll(...)   once, before the first request: give every chat
-//                               session on disk its last-message record, which
-//                               /chat/recent reads instead of every transcript
-//                               in full. A host that skips it answers the same
-//                               but slower — and leaves different files behind,
-//                               which is a difference the judge next door sees.
-//   4b. search_index.buildAll   once, after 4: every transcript into the
-//                               search index in memory. A host that skips it
-//                               has the first search build it, in that request.
-//   5. after route() returns,   if the request's Bus holds a kept stream, serve
-//      serve what it kept       it: `streams.serveKept` blocks until the client
-//                               goes away; `streams.nextFrame` hands over the
-//                               next event, for a host with one loop. Either
-//                               way `streams.drop` ends it.
-//   6. optionally,              hand /admin/host the host's own facts: start
-//      host_status.provide(r)   time, disks, memory. Skipped, that page shows
-//                               the application's half only.
-//   7. game_limits.free_space   how much of the data volume is free. Without
-//      = fn                     it there is no floor under the game store
-//                               (game_limits.zig): set it.
+//   1. mem_meter.init(base)     name the process-lifetime allocator, before
+//                               anything else (a host builds its own I/O and
+//                               heaps on it). An allocation before it panics.
+//   2. start(io, Host)          once, before the first request: everything the
+//                               host supplies in one struct (where the data
+//                               is, the game store's floor, the trusted proxy,
+//                               /admin/host's facts), and the setup done in
+//                               the one right order (host_start.zig). Answers
+//                               the Hub, and what its one-time passes did.
+//   3. per request: route(),    then, if the request's Bus holds a kept stream,
+//      then serve what it kept  serve it: `streams.serveKept` blocks until the
+//                               client goes away; `streams.nextFrame` hands
+//                               over the next event, for a host with one loop.
+//                               Either way `streams.drop` ends it.
 //
-// server.zig does these for Linux, via config.zig. gopher-metal's kernel does
-// them with its own heap and paths on its own volume.
+// server.zig does these for Linux, gopher-metal's kernel with its own heap and
+// paths on its own volume.
 
 /// The streaming seam: Hub, Bus (part of `route`'s signature), Kept, and the
 /// two ways to serve a kept stream.
@@ -84,21 +72,25 @@ pub const streams = @import("bus.zig");
 pub const Bus = streams.Bus;
 pub const Hub = streams.Hub;
 pub const mem_meter = @import("mem_meter.zig");
+/// The setup as one call (host_start.zig): contract step 2.
+pub const host_start = @import("host_start.zig");
+pub const start = host_start.start;
+pub const Host = host_start.Host;
 pub const roots = @import("roots.zig");
-/// Optional: `host_status.provide(report)` hands /admin/host the host's own
-/// facts (start time, disks, memory). A host that skips it gets the
-/// application's half of that page only.
+/// /admin/host's host half: the types a host's facts and log are (`Host.facts`,
+/// `Host.log`); `start` hands them over.
 pub const host_status = @import("host_status.zig");
 /// Every bound on what a request may bring (limits.zig): a host sizes its
 /// request-head buffer from `request_limits.head_bytes`.
 pub const request_limits = @import("limits.zig");
-/// Chat's on-disk store, for the one thing a host does with it directly:
-/// `store.backfillAll` at startup.
+/// Chat's on-disk store; `start` gives every session its last-message record.
 pub const store = @import("chat_store.zig");
-/// Search's index in memory: `search_index.buildAll` at startup (step 4b).
+/// Search's index in memory; `start` builds it, and its Stats is what
+/// `Started.search` says.
 pub const search_index = @import("search_index.zig");
-/// The game store's bounds (gopher-metal QUEUE item 52): a host sets
-/// `game_limits.free_space` so that game writes stop before the volume fills.
+/// The game store's bounds (gopher-metal QUEUE item 52): the free space a
+/// host's `Host.floor` reads (`Space`), and where the game store is
+/// (`dataRoot`).
 pub const game_limits = @import("game_limits.zig");
 /// The edge's refusal counts, which /version reports: a host counts what it
 /// refuses before the route table sees a request (`edge.count(.header_too_large)`
@@ -946,6 +938,39 @@ test "route: HEAD /admin/backup reads nothing" {
     const got = try postForm(a, io, "/admin/backup", me, "password=hunter2");
     try testing.expectEqualStrings("200 OK", status(got));
     try testing.expect(admin_backup.files_archived >= before + 3);
+}
+
+test "route: start does the host's setup in one call: the data pointed at, every session's record, search's index, the floor and the proxy" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var site = try UidSite.init(a, io);
+    defer site.deinit();
+    const prev = mem_meter.replace(a);
+    defer _ = mem_meter.replace(prev);
+    defer search_index.drop();
+    const saved_floor = game_limits.free_space;
+    const saved_proxy = game_limits.trusted_proxy;
+    defer game_limits.free_space = saved_floor;
+    defer game_limits.trusted_proxy = saved_proxy;
+    const chat_store = @import("chat_store.zig");
+    const disk = @import("store.zig");
+    const md = try std.fs.path.join(a, &.{ chat_store.chat_root, "1_2", "sessions", "ChitChat.md" });
+    try disk.write(io, a, md, "MSG_ChitChat_1\nfrom: Steve\ndate: 2026-10-10T00:00:00Z\n\nhello world", .{});
+    var started = try start(io, .{
+        .roots = .{ .data_dir = try std.fs.path.join(a, &.{ site.base, "data" }), .auth_dir = try std.fs.path.join(a, &.{ site.base, "auth" }) },
+        .floor = .none_for_a_test,
+        .trusted_proxy = "10.0.0.2",
+    });
+    _ = &started;
+    try testing.expectEqual(@as(usize, 1), started.backfilled);
+    try testing.expect(try disk.has(io, a, try std.fs.path.join(a, &.{ chat_store.chat_root, "1_2", "sessions", "ChitChat.count" })));
+    try testing.expectEqual(@as(usize, 1), started.search.?.messages);
+    try testing.expectEqual(@as(?*const fn () ?game_limits.Space, null), game_limits.free_space);
+    try testing.expectEqualStrings("10.0.0.2", game_limits.trusted_proxy.?);
 }
 
 test "route: /admin/search finds a key in every conversation the admin can see, DMs and channels, ASCII case folded, and nowhere else" {

@@ -61,51 +61,33 @@ pub fn main(init: std.process.Init.Minimal) !void {
     // (0.16 routes the OS environment through main's Init, not a global.)
     var env = try std.process.Environ.createMap(init.environ, alloc);
     defer env.deinit();
-    try config.load(io, alloc, env);
-
-    // **THE SESSION SECRET MOVES INTO auth/, ONCE** (QUEUE item 106): a tree
-    // written before the move keeps it in data/chat/; carry it over before the
-    // first request so no session is lost. No-op once it is in auth/.
-    router.roots.migrateSecret(io, alloc);
-
-    // **EVERY SESSION GETS ITS LAST-MESSAGE RECORD BEFORE THE FIRST REQUEST.**
-    // /chat/recent reads that record instead of every transcript in full; a
-    // conversation written before the record existed would otherwise cost the
-    // old price on every listing until someone posted to it. One pass, and a
-    // session that already has one costs a small read.
-    {
-        var boot = std.heap.ArenaAllocator.init(alloc);
-        defer boot.deinit();
-        const wrote = chat_store.backfillAll(io, boot.allocator());
-        if (wrote > 0) std.debug.print("zig-server: wrote a last-message record for {d} session(s)\n", .{wrote});
-    }
-    // **SEARCH'S INDEX, BUILT BEFORE THE FIRST REQUEST** (metal-vmm 155(b),
-    // host contract step 4b): every transcript read once, into memory.
-    {
-        var boot = std.heap.ArenaAllocator.init(alloc);
-        defer boot.deinit();
-        const t0 = Io.Clock.now(.awake, io);
-        if (router.search_index.buildAll(io, boot.allocator())) |s| {
-            const ms = @divFloor(t0.durationTo(Io.Clock.now(.awake, io)).nanoseconds, std.time.ns_per_ms);
-            std.debug.print("zig-server: search index: {d} messages in {d} transcripts ({d} bytes, {d} words, {d} unreadable) in {d} ms\n", .{ s.messages, s.transcripts, s.bytes, s.words, s.unreadable, ms });
-        } else std.debug.print("zig-server: search index not built (out of memory?): the first search builds it\n", .{});
-    }
-
-    // The pub/sub fan-out shared across all connections. Lives for the process
-    // lifetime; drives chat's SSE streams. Each request gets its own handle on
-    // it (a Bus), which is where a stream handler leaves the stream it kept.
-    var hub = Hub.init(io, alloc);
-
+    // **THE HOST CONTRACT, ONE CALL** (router.zig, host_start.zig): where the
+    // data is (GOPHER_CONFIG; null: repo-relative defaults, which keep
+    // /driving working standalone), the game store's floor, whose
+    // X-Forwarded-For is believed (Caddy, on this machine), and this host's
+    // facts for /admin/host; `start` does the setup in its one order (the
+    // session secret's move, every session's last-message record, search's
+    // index) before the first request.
     started_unix = nowUnix(io);
-    host_status.provide(linuxFacts);
-    // Whose X-Forwarded-For names the client: Caddy, on this machine.
-    router.game_limits.trusted_proxy = env.get("GOPHER_TRUSTED_PROXY") orelse "127.0.0.1";
     // The game store's floor reads the data volume's free space. A test host
     // whose data sits on a full development disk turns it off, out loud:
     // the floor is then about that disk, not about the server under test.
-    if (std.mem.eql(u8, env.get("GOPHER_GAME_FLOOR") orelse "", "off")) {
-        std.debug.print("zig-server: GOPHER_GAME_FLOOR=off: game writes have no free-space floor\n", .{});
-    } else router.game_limits.free_space = linuxFreeSpace;
+    const no_floor = std.mem.eql(u8, env.get("GOPHER_GAME_FLOOR") orelse "", "off");
+    if (no_floor) std.debug.print("zig-server: GOPHER_GAME_FLOOR=off: game writes have no free-space floor\n", .{});
+    var started = try router.start(io, .{
+        .roots = try config.load(io, alloc, env),
+        .floor = if (no_floor) .none_for_a_test else .{ .free_space = linuxFreeSpace },
+        .trusted_proxy = env.get("GOPHER_TRUSTED_PROXY") orelse "127.0.0.1",
+        .facts = linuxFacts,
+    });
+    if (started.backfilled > 0) std.debug.print("zig-server: wrote a last-message record for {d} session(s)\n", .{started.backfilled});
+    if (started.search) |st| {
+        std.debug.print("zig-server: search index: {d} messages in {d} transcripts ({d} bytes, {d} words, {d} unreadable) in {d} ms\n", .{ st.messages, st.transcripts, st.bytes, st.words, st.unreadable, started.search_ms });
+    } else std.debug.print("zig-server: search index not built (out of memory?): the first search builds it\n", .{});
+    // The pub/sub fan-out shared across all connections, for the process's
+    // lifetime: chat's SSE streams. Each request gets its own handle on it (a
+    // Bus), which is where a stream handler leaves the stream it kept.
+    const hub = &started.hub;
 
     // How long a quiet stream waits before a ping (metal-vmm QUEUE 137): for
     // tests; unset is 25 s.
@@ -135,11 +117,11 @@ pub fn main(init: std.process.Init.Minimal) !void {
             std.debug.print("accept failed: {s}\n", .{@errorName(e)});
             continue;
         };
-        conns.concurrent(io, serveConn, .{ io, alloc, &hub, stream }) catch |e| {
+        conns.concurrent(io, serveConn, .{ io, alloc, hub, stream }) catch |e| {
             // Pool exhausted / concurrency unavailable: fall back to serving
             // this one inline rather than dropping it.
             std.debug.print("spawn failed ({s}); serving inline\n", .{@errorName(e)});
-            serveConn(io, alloc, &hub, stream);
+            serveConn(io, alloc, hub, stream);
         };
     }
 }

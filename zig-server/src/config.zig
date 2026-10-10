@@ -18,14 +18,16 @@ const users = @import("users.zig");
 /// `data_dir`, or the repository-relative defaults when there is none.
 pub var data_dir_shown: []const u8 = "the repository's defaults (no GOPHER_CONFIG)";
 
-/// load reads GOPHER_CONFIG (if set in `env`) and points storage + identity at
-/// the live tree. Strings are allocated from `alloc` (expected to be a
-/// long-lived allocator — the roots live for the whole process). No-op when the
-/// var is unset, so a standalone /driving run needs no config.
-pub fn load(io: Io, alloc: std.mem.Allocator, env: std.process.Environ.Map) !void {
+/// load reads GOPHER_CONFIG (if set in `env`) and answers where the live tree
+/// is, for `router.start` to point storage and identity at. Strings are
+/// allocated from `alloc` (expected to be a long-lived allocator — the roots
+/// live for the whole process). Null when the var is unset (or the file names
+/// no data_dir): the repo-relative defaults, so a standalone /driving run
+/// needs no config.
+pub fn load(io: Io, alloc: std.mem.Allocator, env: std.process.Environ.Map) !?roots.Roots {
     const path = env.get("GOPHER_CONFIG") orelse {
         std.debug.print("config: GOPHER_CONFIG unset — using repo-relative defaults\n", .{});
-        return;
+        return null;
     };
 
     const body = Io.Dir.cwd().readFileAlloc(io, path, alloc, .unlimited) catch |e| {
@@ -53,15 +55,11 @@ pub fn load(io: Io, alloc: std.mem.Allocator, env: std.process.Environ.Map) !voi
     if (data_dir) |dd| data_dir_shown = dd;
     const dd = data_dir orelse {
         std.debug.print("config: {s} has no data_dir — using defaults\n", .{path});
-        return;
+        return null;
     };
-
-    try roots.point(alloc, .{
-        .data_dir = dd,
-        .auth_dir = auth_dir orelse try expandHome(alloc, env, "~/Auth"),
-    });
-
-    std.debug.print("config: data_dir={s}  auth_root={s}\n", .{ dd, users.auth_root });
+    const ad = auth_dir orelse try expandHome(alloc, env, "~/Auth");
+    std.debug.print("config: data_dir={s}  auth_dir={s}\n", .{ dd, ad });
+    return .{ .data_dir = dd, .auth_dir = ad };
 }
 
 /// expandHome turns a leading `~/` into $HOME. Other
