@@ -183,7 +183,7 @@ pub fn appendMessage(io: Io, alloc: Alloc, bus: *Bus, meta: ConvMeta, conv_dir: 
     });
     // **SEARCH SEES IT AS IT LANDS** (metal-vmm 155(b)): the index in memory
     // takes the message, or drops itself whole if it cannot.
-    search_index.noteAppend(conv_dir, sid, msg);
+    search_index.noteAppend(io, conv_dir, sid, msg);
 
     // Fan out to live subscribers on this conv/sid (best-effort).
     const key = try std.fmt.allocPrint(alloc, "{s}/{s}", .{ conv_key, sid });
@@ -531,10 +531,13 @@ pub fn lastMessage(io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8) 
 /// nobody was looked up when it was written, and a name a member released
 /// and a newcomer took would credit the newcomer, "You" included; and the
 /// lookup reads every account, on every read.
+///
+/// **ONE MEMBER, OR NOBODY** (the box's review of 155): a name two members
+/// share (108's sign-up race) names neither.
 fn authorByName(io: Io, alloc: Alloc, from: []const u8) []const u8 {
     if (from.len == 0) return "";
     // absent-ok: an author that cannot be looked up is shown as nobody; what a sidecar records from it is a cache, recounted from the transcript.
-    return (users.findMemberByName(io, alloc, from) catch return "") orelse "";
+    return (users.onlyMemberNamed(io, alloc, from) catch return "") orelse "";
 }
 
 /// The N of a `<sid>_<N>` message id, or null when the id is not this
@@ -1599,5 +1602,23 @@ test "a current record that says nobody is believed: a name reused after its mem
     // A newcomer takes the name: the record still says nobody.
     try users.setUserName(f.io, a, "9", "Tester");
     try users.setUserPassword(f.io, a, "9", "pw");
+    try testing.expectEqualStrings("", (try lastMessage(f.io, a, f.dir, "topic")).?.uid);
+}
+
+test "a name two members share names nobody (the box's review of 155, 4)" {
+    var threaded = std.Io.Threaded.init(testing.allocator, .{});
+    defer threaded.deinit();
+    var f: CountFixture = undefined;
+    try f.init(threaded.io());
+    defer f.deinit();
+    const a = f.arena.allocator();
+    for ([_][]const u8{ "1", "2" }) |id| {
+        try users.setUserName(f.io, a, id, "Tester");
+        try users.setUserPassword(f.io, a, id, "pw");
+    }
+    _ = try f.send("the first");
+    const after_first = try f.transcriptSize();
+    _ = try f.send("the second");
+    try f.setSidecar(try std.fmt.allocPrint(a, "1 {d}\n0 9\n", .{after_first}));
     try testing.expectEqualStrings("", (try lastMessage(f.io, a, f.dir, "topic")).?.uid);
 }

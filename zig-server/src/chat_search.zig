@@ -41,8 +41,10 @@ const Request = std.http.Server.Request;
 pub const most_words = 20;
 pub const most_messages = 500;
 pub const per_second = 5;
-/// The longest key read: a word longer than this is never typed.
-pub const max_key = 256;
+/// The most bytes of message text one answer lists (a doc posted to chat is
+/// one message of up to 1 MiB): past it the listing stops, every match still
+/// counted (the box's review of 155).
+pub const most_bytes = 2 << 20;
 
 /// `rest` is the path after "/chat/search".
 pub fn handle(req: *Request, io: Io, alloc: Alloc, uid: []const u8, rest: []const u8) !void {
@@ -53,7 +55,7 @@ pub fn handle(req: *Request, io: Io, alloc: Alloc, uid: []const u8, rest: []cons
         return req.respond("{\"error\":\"too many searches; wait a second\"}", .{ .status = .too_many_requests, .extra_headers = &.{http.json_ct} });
     }
     const raw = http.queryValue(try http.target(req, alloc), if (words_route) "prefix" else "word") orelse "";
-    var buf: [max_key]u8 = undefined;
+    var buf: [tokens.max_word]u8 = undefined;
     const key = tokens.key(try chat.urlDecode(alloc, raw), &buf);
     const reach = try chat_store.visibleConvs(io, alloc, uid);
     const idx = search_index.ready(io, alloc) orelse {
@@ -73,7 +75,7 @@ pub fn handle(req: *Request, io: Io, alloc: Alloc, uid: []const u8, rest: []cons
             try b.print(alloc, ",\"count\":{d}}}", .{w.count});
         }
     } else {
-        const f = if (key.len < tokens.min_len) search_index.Found{ .hits = &.{}, .matched = 0 } else try idx.messagesFor(alloc, reach, key, most_messages);
+        const f = if (key.len < tokens.min_len) search_index.Found{ .hits = &.{}, .matched = 0 } else try idx.messagesFor(alloc, reach, key, most_messages, most_bytes);
         try b.appendSlice(alloc, "{\"word\":");
         try str(&b, alloc, key);
         try b.print(alloc, ",\"matched\":{d},\"unreadable\":{d},\"messages\":[", .{ f.matched, idx.unreadableFor(reach) });

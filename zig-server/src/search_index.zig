@@ -262,10 +262,16 @@ pub const Index = struct {
                 }
             }
         }
+        // **ROOM LEFT TO GROW** (the box's review of 155): trimmed to the
+        // byte, the first message to land would grow a buffer by half, both
+        // copies live at once; an eighth more is room for a while.
+        // Shrunk in place where the allocator can; left as grown where not.
         var it = self.convs.valueIterator();
         while (it.next()) |c| {
-            c.text.shrinkAndFree(self.gpa, c.text.items.len);
-            c.refs.shrinkAndFree(self.gpa, c.refs.items.len);
+            const t = c.text.items.len + c.text.items.len / 8;
+            if (t < c.text.capacity and self.gpa.resize(c.text.allocatedSlice(), t)) c.text.capacity = t;
+            const r = c.refs.items.len + c.refs.items.len / 8;
+            if (r < c.refs.capacity and self.gpa.resize(c.refs.allocatedSlice(), r)) c.refs.capacity = r;
         }
         self.seen.clearAndFree(self.gpa);
         self.fold.clearAndFree(self.gpa);
@@ -287,6 +293,7 @@ pub const Index = struct {
             const c = self.convs.getPtr(r.dir) orelse continue;
             var it = c.counts.iterator();
             while (it.next()) |e| {
+                if (e.key_ptr.len > tokens.max_word) continue; // no key names it
                 if (!std.mem.startsWith(u8, e.key_ptr.*, prefix)) continue;
                 const g = try sums.getOrPut(alloc, e.key_ptr.*);
                 if (!g.found_existing) g.value_ptr.* = 0;
@@ -302,21 +309,30 @@ pub const Index = struct {
 
     /// The messages holding `word` (a key, folded) in the conversations of
     /// `reach` and no others, in `reach`'s order, each conversation's in the
-    /// order they came; at most `most` listed, every one counted.
-    pub fn messagesFor(self: *const Index, alloc: Alloc, reach: []const chat_store.Reach, word: []const u8, most: usize) !Found {
+    /// order they came; at most `most` listed, and their text at most
+    /// `budget` bytes (past it the listing stops; the first is always
+    /// listed), every one counted.
+    pub fn messagesFor(self: *const Index, alloc: Alloc, reach: []const chat_store.Reach, word: []const u8, most: usize, budget: usize) !Found {
         var hits: std.ArrayList(Found.Hit) = .empty;
         var matched: usize = 0;
+        var bytes: usize = 0;
+        var full = false;
         for (reach) |r| {
             const c = self.convs.getPtr(r.dir) orelse continue;
             const n = c.counts.get(word) orelse continue;
             matched += n;
-            if (hits.items.len == most) continue;
+            if (full or hits.items.len == most) continue;
             var left = n;
             for (c.refs.items) |ref| {
                 if (left == 0 or hits.items.len == most) break;
                 const m = c.msg(ref);
                 if (!holds(m.markdown, word)) continue;
                 left -= 1;
+                if (hits.items.len > 0 and bytes + m.markdown.len > budget) {
+                    full = true;
+                    break;
+                }
+                bytes += m.markdown.len;
                 try hits.append(alloc, .{ .conv = r, .msg = m });
             }
         }
@@ -380,9 +396,14 @@ pub fn ready(io: Io, scratch: Alloc) ?*Index {
 
 /// A message that landed (`chat_store.appendMessage`). Before the index is
 /// built there is nothing to do: the build reads it from the disk. A failure
-/// drops the whole index, so no search answers from one that misses it.
-pub fn noteAppend(conv_dir: []const u8, sid: []const u8, m: chat_store.ChatMessage) void {
-    if (the) |*i| i.add(conv_dir, sid, m) catch drop();
+/// drops the whole index, so no search answers from one that misses it, and
+/// waits `retry_ms` as a failed build does: the memory that refused one
+/// message would refuse a build at once (the box's review of 155).
+pub fn noteAppend(io: Io, conv_dir: []const u8, sid: []const u8, m: chat_store.ChatMessage) void {
+    if (the) |*i| i.add(conv_dir, sid, m) catch {
+        drop();
+        failed_at_ms = nowMs(io);
+    };
 }
 
 /// After a retire applies: the whole index again, from the disk. With no
@@ -450,14 +471,14 @@ test "messages for a word, at most so many listed and every one counted" {
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();
     const mine = [_]chat_store.Reach{.{ .dir = "c/1_2", .base = "/chat/c/1_2", .kind = .dm }};
-    const f = try idx.messagesFor(arena.allocator(), &mine, "tonight", 3);
+    const f = try idx.messagesFor(arena.allocator(), &mine, "tonight", 3, std.math.maxInt(usize));
     try testing.expectEqual(@as(usize, 4), f.matched);
     try testing.expectEqual(@as(usize, 3), f.hits.len);
     try testing.expectEqualStrings("t_1", f.hits[0].msg.id);
     try testing.expectEqualStrings("t_3", f.hits[1].msg.id);
     try testing.expectEqualStrings("dinner tonight?", f.hits[0].msg.markdown);
     // A word that is only a prefix finds nothing: words are whole.
-    try testing.expectEqual(@as(usize, 0), (try idx.messagesFor(arena.allocator(), &mine, "tonig", 10)).matched);
+    try testing.expectEqual(@as(usize, 0), (try idx.messagesFor(arena.allocator(), &mine, "tonig", 10, std.math.maxInt(usize))).matched);
 }
 
 test "an index that runs out of memory part way can be dropped without a leak" {
@@ -515,8 +536,11 @@ test "fs: a build out of memory fails, never an index missing what it could not 
 
     // An append the memory refuses drops the whole index.
     failing.fail_index = failing.alloc_index;
-    noteAppend(try chat_store.dmConvDir(a, "1_2"), "t", msg("t_201", "a brand new word"));
+    noteAppend(io, try chat_store.dmConvDir(a, "1_2"), "t", msg("t_201", "a brand new word"));
     try testing.expectEqual(@as(?Stats, null), stats());
+    // And a search does not build it again at once (the box's review of 155, 3).
+    failing.fail_index = std.math.maxInt(usize);
+    try testing.expectEqual(@as(?*Index, null), ready(io, a));
 }
 
 test "a block read in place is what the decoder makes of it (155's review)" {
@@ -544,4 +568,38 @@ test "a block read in place is what the decoder makes of it (155's review)" {
         try testing.expectEqualStrings(w.date, g.date);
         try testing.expectEqualStrings(w.markdown, g.markdown);
     }
+}
+
+test "messages for a word stop at a byte budget, every one still counted (the box's review of 155, 1)" {
+    var idx = Index.init(testing.allocator);
+    defer idx.deinit();
+    const long = "word " ++ "x" ** 995;
+    for (0..3) |i| {
+        var buf: [16]u8 = undefined;
+        try idx.add("c/1_2", "t", msg(try std.fmt.bufPrint(&buf, "t_{d}", .{i + 1}), long));
+    }
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const mine = [_]chat_store.Reach{.{ .dir = "c/1_2", .base = "/chat/c/1_2", .kind = .dm }};
+    const f = try idx.messagesFor(arena.allocator(), &mine, "word", 10, 2500);
+    try testing.expectEqual(@as(usize, 3), f.matched);
+    try testing.expectEqual(@as(usize, 2), f.hits.len);
+    // One message past the whole budget is still listed: the first always is.
+    try testing.expectEqual(@as(usize, 1), (try idx.messagesFor(arena.allocator(), &mine, "word", 10, 10)).hits.len);
+}
+
+test "a word too long to ask for is never suggested (the box's review of 155, 2)" {
+    var idx = Index.init(testing.allocator);
+    defer idx.deinit();
+    try idx.add("c/1_2", "t", msg("t_1", "a" ** (tokens.max_word + 1) ++ " " ++ "a" ** tokens.max_word));
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const mine = [_]chat_store.Reach{.{ .dir = "c/1_2", .base = "/chat/c/1_2", .kind = .dm }};
+    const got = try idx.wordsFor(arena.allocator(), &mine, "aaa", 20);
+    try testing.expectEqual(@as(usize, 1), got.len);
+    try testing.expectEqual(tokens.max_word, got[0].word.len);
+    // And what is suggested, a key of it finds.
+    var buf: [tokens.max_word]u8 = undefined;
+    const k = tokens.key(got[0].word, &buf);
+    try testing.expectEqual(@as(usize, 1), (try idx.messagesFor(arena.allocator(), &mine, k, 10, std.math.maxInt(usize))).matched);
 }
