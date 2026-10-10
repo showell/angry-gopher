@@ -298,11 +298,25 @@ pub fn convKeyBaseURL(alloc: Alloc, conv_key: []const u8) ![]u8 {
     return std.fmt.allocPrint(alloc, "/channel/{s}", .{conv_key});
 }
 
+/// The fan-out's failures since boot: a surface that failed for one member
+/// (metal-vmm QUEUE 156(c)). Said on /admin/host (`fanoutText`), with the
+/// last one named: the route table has no stderr of its own.
+pub var fanout_failures: usize = 0;
+var fanout_last_buf: [192]u8 = undefined;
+var fanout_last: []const u8 = "";
+
+/// The fan-out's failures as /admin/host shows them.
+pub fn fanoutText(alloc: Alloc) ![]const u8 {
+    if (fanout_failures == 0) return "none";
+    return std.fmt.allocPrint(alloc, "{d}; the last: {s}", .{ fanout_failures, fanout_last });
+}
+
 /// fanoutCrossPage publishes one new message to every cross-page attention feed
 ///: notify (status strip), recent (Recent page), images /
 /// code (per-user transcripts) per member, plus a sidebar topic-added on the
-/// session's FIRST message (index == 0). Best-effort: a failure for one
-/// member/surface is swallowed so it never blocks the write.
+/// session's FIRST message (index == 0). Best-effort: the message is saved
+/// before; a failure for one member's surface is counted and said, and never
+/// blocks the write or that member's other surfaces.
 fn fanoutCrossPage(io: Io, alloc: Alloc, bus: *Bus, meta: ConvMeta, conv_key: []const u8, sid: []const u8, msg: ChatMessage, from_id: []const u8, index: usize) void {
     const base = convKeyBaseURL(alloc, conv_key) catch return;
     const rec_url = std.fmt.allocPrint(alloc, "{s}/{s}", .{ base, sid }) catch return;
@@ -326,72 +340,109 @@ fn fanoutCrossPage(io: Io, alloc: Alloc, bus: *Bus, meta: ConvMeta, conv_key: []
     else
         "";
 
+    const fan = Fan{
+        .io = io,
+        .alloc = alloc,
+        .bus = bus,
+        .meta = meta,
+        .conv_key = conv_key,
+        .sid = sid,
+        .msg = msg,
+        .from_id = from_id,
+        .rec_url = rec_url,
+        .src_url = src_url,
+        .excerpt = excerpt,
+        .tags = tags,
+        .blocks = blocks,
+        .notify_text = notify_text,
+        .topic_added = topic_added,
+    };
+    // **ONE SURFACE AT A TIME** (metal-vmm QUEUE 156(c)): a failure costs
+    // that member that surface and is said; it never skips their others (a
+    // `catch continue` on images lost their code, which is durable and has
+    // no rebuild).
     for (meta.members) |uid| {
-        // notify — every member EXCEPT the author is pinged. The favicon dot
-        // means "a partner did something"; you don't notify yourself about your
-        // own message (the author already sees the self-confirm via the main
-        // feed echo). Skipping the author here is the real invariant — the
-        // open-feed conv+session suppression in notify.js only covers the
-        // currently-viewed thread, so author-skip is what keeps the dot quiet
-        // when you send to a thread you're not actively staring at.
-        if (!std.mem.eql(u8, uid, from_id)) {
-            var nj: std.ArrayList(u8) = .empty;
-            nj.print(alloc, "{{\"conv\":{f},\"session\":{f},\"text\":{f},\"link_url\":{f}}}", .{
-                std.json.fmt(conv_key, .{}),    std.json.fmt(sid, .{}),
-                std.json.fmt(notify_text, .{}), std.json.fmt(rec_url, .{}),
-            }) catch {};
-            if (nj.items.len > 0) {
-                if (notifyBusKey(alloc, uid)) |k| bus.publish(k, nj.items) else |_| {}
-            }
-        }
-
-        // sidebar — topic-added to every member on the first message only.
-        if (topic_added.len > 0) {
-            if (sidebarBusKey(alloc, uid)) |k| bus.publish(k, topic_added) else |_| {}
-        }
-
-        // recent — every member sees the row (sender included). `who` renders
-        // "You" for the recipient who authored it; everyone else sees the name.
-        // absent-ok: the recent feed's "where" label only; the message itself is saved.
-        const where = recentWhere(io, alloc, meta, conv_key, uid) catch "";
-        const who = if (std.mem.eql(u8, uid, from_id)) "You" else msg.from;
-        var rj: std.ArrayList(u8) = .empty;
-        recent_feed.encodeChatEvent(&rj, alloc, msg.date, rec_url, who, where, sid, excerpt, meta.kind == .dm) catch continue;
-        if (recentBusKey(alloc, uid)) |k| bus.publish(k, rj.items) else |_| {}
-
-        // images — only when the message carried <img> tags.
-        if (tags.len > 0) {
-            const e = images_store.ImagesEntry{
-                .source_id = msg.id,
-                .from = msg.from,
-                .conv = conv_key,
-                .at = msg.date,
-                .images = tags,
+        inline for (.{ "notify", "sidebar", "recent", "images", "code" }) |surface| {
+            @field(Fan, surface)(&fan, uid) catch |e| {
+                fanout_failures += 1;
+                fanout_last = std.fmt.bufPrint(&fanout_last_buf, "{s} for member {s}, {s}, on {s}/{s}", .{ surface, uid, @errorName(e), conv_key, sid }) catch surface;
             };
-            // absent-ok: the gallery's index of a message's images, best-effort; the message itself is saved.
-            images_store.appendImagesEntry(io, alloc, uid, e) catch continue;
-            var ij: std.ArrayList(u8) = .empty;
-            images_store.encodeImagesEvent(&ij, alloc, e, src_url) catch continue;
-            if (imagesBusKey(alloc, uid)) |k| bus.publish(k, ij.items) else |_| {}
-        }
-
-        // code — only when the message carried fenced code blocks.
-        if (blocks.len > 0) {
-            const e = code_store.CodeEntry{
-                .source_id = msg.id,
-                .from = msg.from,
-                .conv = conv_key,
-                .at = msg.date,
-                .blocks = blocks,
-            };
-            // absent-ok: the code view's index of a message's blocks, best-effort; the message itself is saved.
-            code_store.appendCodeEntry(io, alloc, uid, e) catch continue;
-            var cj: std.ArrayList(u8) = .empty;
-            code_store.encodeCodeEvent(&cj, alloc, e, src_url) catch continue;
-            if (codeBusKey(alloc, uid)) |k| bus.publish(k, cj.items) else |_| {}
         }
     }
 }
+
+/// One message's fan-out, a function per surface, each failing alone.
+const Fan = struct {
+    io: Io,
+    alloc: Alloc,
+    bus: *Bus,
+    meta: ConvMeta,
+    conv_key: []const u8,
+    sid: []const u8,
+    msg: ChatMessage,
+    from_id: []const u8,
+    rec_url: []const u8,
+    src_url: []const u8,
+    excerpt: []const u8,
+    tags: []const []const u8,
+    blocks: []const code_store.CodeBlock,
+    notify_text: []const u8,
+    topic_added: []const u8,
+
+    /// Every member EXCEPT the author is pinged. The favicon dot means "a
+    /// partner did something"; you don't notify yourself about your own
+    /// message (the author already sees the self-confirm via the main feed
+    /// echo). Skipping the author here is the real invariant — the open-feed
+    /// conv+session suppression in notify.js only covers the currently-viewed
+    /// thread, so author-skip is what keeps the dot quiet when you send to a
+    /// thread you're not actively staring at.
+    fn notify(f: *const Fan, uid: []const u8) !void {
+        if (std.mem.eql(u8, uid, f.from_id)) return;
+        var nj: std.ArrayList(u8) = .empty;
+        try nj.print(f.alloc, "{{\"conv\":{f},\"session\":{f},\"text\":{f},\"link_url\":{f}}}", .{
+            std.json.fmt(f.conv_key, .{}),    std.json.fmt(f.sid, .{}),
+            std.json.fmt(f.notify_text, .{}), std.json.fmt(f.rec_url, .{}),
+        });
+        f.bus.publish(try notifyBusKey(f.alloc, uid), nj.items);
+    }
+
+    /// topic-added to every member on the first message only.
+    fn sidebar(f: *const Fan, uid: []const u8) !void {
+        if (f.topic_added.len == 0) return;
+        f.bus.publish(try sidebarBusKey(f.alloc, uid), f.topic_added);
+    }
+
+    /// Every member sees the row (sender included). `who` renders "You" for
+    /// the recipient who authored it; everyone else sees the name.
+    fn recent(f: *const Fan, uid: []const u8) !void {
+        // absent-ok: the recent feed's "where" label only; the row itself is sent.
+        const where = recentWhere(f.io, f.alloc, f.meta, f.conv_key, uid) catch "";
+        const who = if (std.mem.eql(u8, uid, f.from_id)) "You" else f.msg.from;
+        var rj: std.ArrayList(u8) = .empty;
+        try recent_feed.encodeChatEvent(&rj, f.alloc, f.msg.date, f.rec_url, who, where, f.sid, f.excerpt, f.meta.kind == .dm);
+        f.bus.publish(try recentBusKey(f.alloc, uid), rj.items);
+    }
+
+    /// Only when the message carried <img> tags.
+    fn images(f: *const Fan, uid: []const u8) !void {
+        if (f.tags.len == 0) return;
+        const e = images_store.ImagesEntry{ .source_id = f.msg.id, .from = f.msg.from, .conv = f.conv_key, .at = f.msg.date, .images = f.tags };
+        try images_store.appendImagesEntry(f.io, f.alloc, uid, e);
+        var ij: std.ArrayList(u8) = .empty;
+        try images_store.encodeImagesEvent(&ij, f.alloc, e, f.src_url);
+        f.bus.publish(try imagesBusKey(f.alloc, uid), ij.items);
+    }
+
+    /// Only when the message carried fenced code blocks.
+    fn code(f: *const Fan, uid: []const u8) !void {
+        if (f.blocks.len == 0) return;
+        const e = code_store.CodeEntry{ .source_id = f.msg.id, .from = f.msg.from, .conv = f.conv_key, .at = f.msg.date, .blocks = f.blocks };
+        try code_store.appendCodeEntry(f.io, f.alloc, uid, e);
+        var cj: std.ArrayList(u8) = .empty;
+        try code_store.encodeCodeEvent(&cj, f.alloc, e, f.src_url);
+        f.bus.publish(try codeBusKey(f.alloc, uid), cj.items);
+    }
+};
 
 /// recentWhere is the per-recipient context label the What column reads as
 /// "message <where> (<topic>)": a channel names itself ("in <name>"); a DM names
@@ -1650,4 +1701,24 @@ test "a lookup that fails at boot records nothing, so a later boot finds the aut
     try Io.Dir.cwd().deleteTree(f.io, try std.fs.path.join(a, &.{ users.auth_root, "5" }));
     try testing.expectEqual(@as(usize, 1), backfillSidecars(f.io, a, &dirs));
     try testing.expectEqualStrings("1", readCount(f.io, a, f.dir, "topic").?.last.?.uid);
+}
+
+test "the fan-out's surfaces fail one at a time, each said: a member's images that will not write still leave their code (metal-vmm QUEUE 156(c))" {
+    var threaded = std.Io.Threaded.init(testing.allocator, .{});
+    defer threaded.deinit();
+    var f: CountFixture = undefined;
+    try f.init(threaded.io());
+    defer f.deinit();
+    const a = f.arena.allocator();
+    // Member 2's images.md is a folder: its write fails.
+    try Io.Dir.cwd().createDirPath(f.io, try std.fs.path.join(a, &.{ chat_root, "users", "2", "images.md" }));
+    const before = fanout_failures;
+    const meta = ConvMeta{ .kind = .dm, .members = &[_][]const u8{ "1", "2" } };
+    _ = try appendMessage(f.io, a, &f.bus, meta, f.dir, "1_2", "topic", "Tester", "1", "<img src=\"/x.png\">\n\n```\ncode\n```", "");
+    try testing.expectEqual(before + 1, fanout_failures);
+    try testing.expect(std.mem.startsWith(u8, fanout_last, "images for member 2, "));
+    const code = try std.fs.path.join(a, &.{ chat_root, "users", "2", "code.md" });
+    try testing.expect((try Io.Dir.cwd().readFileAlloc(f.io, code, a, .limited(4096))).len > 0);
+    // And member 1's surfaces are whole.
+    _ = try Io.Dir.cwd().readFileAlloc(f.io, try std.fs.path.join(a, &.{ chat_root, "users", "1", "images.md" }), a, .limited(4096));
 }
