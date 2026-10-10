@@ -300,7 +300,7 @@
   ChatSearch.init({
     navbar:    pane.navbar,
     focusFeed: pane.focus,
-    records:   records, /* live ref — same array chat.js pushes onto */
+    sessionBase: SESSION_BASE, /* a result here jumps; one elsewhere opens its topic */
     jumpToId: function(id){
       var rec=recordById(id);
       if(rec) pane.focusBubble(rec.index+1);
