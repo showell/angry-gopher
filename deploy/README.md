@@ -117,47 +117,33 @@ the SSH key was added at droplet creation).
 
 ## Watchdog
 
-`deploy/watchdog.py` is a dead-simple, stdlib-only health monitor that runs
-ON the host as `steve` (not on the dev box). Every minute it checks: the
-local server answers `GET /version`, exactly one `zig-server` process is up
-and not hogging memory, the box has free RAM and disk, and nothing
-unexpected is running as `steve`. It overwrites a plain-text snapshot you
-read over ssh:
+`deploy/watchdog.py` is a dead-simple, stdlib-only health check that lives
+ON the host as `steve` (not on the dev box), **run by hand when you want a
+look**, not as a service (Steve, 2026-10-10: as a service it polled every
+minute, four requests to metal's `/version` each time, most of the site's
+traffic, and nobody read it continuously). One run checks: the local server
+answers `GET /version` (or is stopped, as it should be while metal serves),
+exactly one `zig-server` process when it should be up, free RAM and disk,
+nothing unexpected running as `steve`; and gopher-metal, when `~/metal-url`
+on the host names it (one line, `http://<metal's private address>`; the
+address stays off the repo): `metal` FAILs when metal's `/version` does not
+answer and WARNs when metal runs another commit than this server,
+`metal-clock` WARNs at 2 s and FAILs at 60 s between the two clocks, and
+`metal-uptime` says how long metal has been up (short: a recent restart).
 
 ```
-ssh steve@<IP> cat watchdog-status.txt      # latest snapshot
-ssh steve@<IP> cat watchdog.log             # appended history of WARN/FAIL cycles
+ssh steve@<IP> python3 watchdog.py          # every check once; the report; exit 0 only when all is OK
+ssh steve@<IP> cat watchdog.log             # the WARN/FAIL runs so far
 ```
 
-The snapshot header carries both UTC and New York wall-clock; the `server`
+The report's header carries both UTC and New York wall-clock; the `server`
 line includes the build's git commit hash (baked in via `ops/deploy`'s
-`-Dcommit`), and a `zig-uptime` line shows how long the running binary has
-been up.
-
-It also watches gopher-metal, when `~/metal-url` on the host names it (one
-line, `http://<metal's private address>`; the address stays off the repo):
-`metal` FAILs when metal's `/version` does not answer and WARNs when metal
-runs another commit than this server, and `metal-clock` WARNs at 2 s and
-FAILs at 60 s between the two clocks. Without the file the `metal` line
-says "not watched". `python3 deploy/test_watchdog.py` tests those checks
-against two local servers, one of them stopped (needs `zig build` first).
-
-It takes no arguments (thresholds are constants at the top of the file) and
-opens no network except to curl the local server and metal's `/version`. ONE-TIME install as a
-systemd service (auto-start on boot, auto-restart on crash — survives a
-droplet reboot, same as `gopher-server`):
-
-```
-scp deploy/watchdog.py steve@<IP>:~/watchdog.py
-scp deploy/watchdog.service steve@<IP>:/tmp/
-ssh steve@<IP> 'sudo mv /tmp/watchdog.service /etc/systemd/system/ && \
-  sudo systemctl daemon-reload && sudo systemctl enable --now watchdog'
-```
-
-After that, `ops/deploy` ships the current `watchdog.py` and restarts the
-service on every deploy (best-effort), so the host copy never drifts from the
-repo — no manual update step. To bounce it by hand anyway:
-`ssh steve@<IP> 'sudo systemctl restart watchdog'`.
+`-Dcommit`). `ops/deploy` copies the current `watchdog.py` to the host on
+every deploy, and a copy that fails fails the deploy. It takes no arguments
+(thresholds are constants at the top of the file) and opens no network
+except to curl the local server and metal's `/version`.
+`python3 deploy/test_watchdog.py` tests the metal checks against two local
+servers, one of them stopped (needs `zig build` first).
 
 ## Hardening (applied 2026-05-21)
 

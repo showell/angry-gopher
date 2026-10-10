@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
-"""watchdog — a dead-simple health monitor for the zig-server droplet.
+"""watchdog — a dead-simple health check of the zig-server droplet, run when
+you want a look (Steve, 2026-10-10: ad hoc, not a service; as a service it
+polled every minute, 4 requests to metal's /version each time, most of the
+site's traffic, and no one read it continuously).
 
-Runs on the PROD HOST as the `steve` user, beside the server (not on the dev
-box). Every minute it runs a handful of basic checks and overwrites a plain-text
-status file you can read from the dev box over ssh:
+It lives on the PROD HOST, beside the server (not on the dev box). One run
+makes every check once, prints the report, writes it to a status file, and
+exits non-zero when anything is not OK:
 
-    ssh steve@<host> cat watchdog-status.txt
+    ssh steve@<host> python3 watchdog.py
 
 What it checks (all thresholds are constants below — no CLI args, by design):
   - server    : the local server answers GET /version with a success JSON
@@ -23,10 +26,8 @@ What it checks (all thresholds are constants below — no CLI args, by design):
                 `now_ms`, each read as its quickest of three requests with the
                 round trip halved out (gopher-metal's droplet/drift.py does the
                 same over an hour)
-  - metal-uptime: metal's uptime from /version's `started_ms`, and a RESTART
-                made to show — `started_ms` changes only across a restart, so a
-                13-17 s restart that fell between two polls still surfaces here
-                as a WARN (QUEUE item 107, fire drill 4)
+  - metal-uptime: metal's uptime from /version's `started_ms`: a short one is
+                a recent restart (QUEUE item 107, fire drill 4)
 
 When ~/linux-serves is ABSENT (the production state after the 2026-10-04
 cutover), metal is the live server and THIS host's own Linux server is stopped
@@ -56,8 +57,7 @@ worse than none.
 This is the program that would have caught the first cutover's front-door gap:
 /version 404 (the route wasn't ported) would have shown up as a server FAIL.
 
-Run it (foreground, for a look):   python3 deploy/watchdog.py
-Run it on the host (background):    nohup python3 watchdog.py >/dev/null 2>&1 &
+Run it on the host:   ssh steve@<host> python3 watchdog.py   (ops/deploy copies it there)
 (A systemd unit is the eventual home; nohup is fine for a first cut.)
 """
 
@@ -81,7 +81,6 @@ except Exception:
 # ── configuration (edit here; the program takes no arguments) ─────────────────
 
 VERSION_URL = "http://127.0.0.1:9001/version"  # the local server liveness probe
-INTERVAL_SECS = 60                             # sleep between cycles
 DISK_PATH = "/"                                # filesystem to watch
 
 ZIG_RSS_WARN_MB = 512        # warn if zig-server RSS climbs past this
@@ -171,8 +170,8 @@ def mb(kb):
 def proc_uptime_secs(pid):
     """Seconds the given pid has been running, derived from /proc against the
     same boot reference as /proc/uptime (so no wall-clock drift). Returns None if
-    it can't be read. Sampled once per cycle, so up to INTERVAL_SECS stale — fine
-    for an at-a-glance "how long has this build been up" line."""
+    it can't be read. Sampled when the check runs, for an at-a-glance "how long
+    has this build been up" line."""
     try:
         with open("/proc/uptime") as f:
             sys_up = float(f.read().split()[0])
@@ -507,26 +506,24 @@ def run_once():
     # watch now (QUEUE item 107).
     overall = worst(checks)
     mode = "metal serves (this host is the aux box)" if serving else "this host serves"
-    write_status(render(checks, heavy_processes(procs), overall, f"{stamp}  —  mode: {mode}"))
+    report = render(checks, heavy_processes(procs), overall, f"{stamp}  —  mode: {mode}")
+    write_status(report)
     if overall != OK:
         append_log(checks, overall, stamp)
-    print(f"{stamp}  overall={overall}")
+    print(report)
+    return overall
 
 
 def main():
-    while True:
-        try:
-            run_once()
-        except Exception:
-            # A watchdog must not die. Record the failure and keep going.
-            stamp = now_str()
-            try:
-                write_status(f"zig-server watchdog — {stamp}\n\nWATCHDOG ERROR:\n{traceback.format_exc()}\n")
-            except Exception:
-                pass
-            print(f"{stamp}  watchdog cycle error (see status file)")
-        time.sleep(INTERVAL_SECS)
+    """One cycle: every check once, the report printed, and the exit code 0
+    only when all is OK."""
+    try:
+        overall = run_once()
+    except Exception:
+        print(f"{now_str()}  WATCHDOG ERROR:\n{traceback.format_exc()}")
+        return 2
+    return 0 if overall == OK else 1
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

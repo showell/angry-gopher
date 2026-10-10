@@ -72,16 +72,15 @@ ship_content() {
     rsync -avz --mkpath --delete "$GOPHER_DIR/gallery/" "$DEPLOY_HOST:$DEPLOY_DIR/gallery/"
 }
 
-# The watchdog runs on the prod host (the aux box now), refreshed in BOTH modes.
-# Best-effort: a hiccup here WARNs, never fails the deploy.
+# The watchdog lives on the prod host (the aux box now), copied in BOTH modes.
+# It is run by hand, not as a service (Steve, 2026-10-10: as a service it was
+# most of the site's traffic): `ssh <host> python3 watchdog.py`. A copy that
+# fails fails the deploy (fail, never warn).
 ship_watchdog() {
-    echo "Refreshing watchdog ..."
-    if scp "$GOPHER_DIR/deploy/watchdog.py" "$DEPLOY_HOST:~/watchdog.py" && \
-       ssh "$DEPLOY_HOST" "sudo systemctl restart watchdog && systemctl is-active watchdog"; then
-        echo "watchdog refreshed (latest watchdog.py, restarted)"
-    else
-        echo "WARNING: watchdog refresh failed (fix the watchdog by hand)" >&2
-    fi
+    echo "Copying watchdog ..."
+    scp "$GOPHER_DIR/deploy/watchdog.py" "$DEPLOY_HOST:~/watchdog.py" ||
+        { echo "the watchdog could not be copied to $DEPLOY_HOST" >&2; exit 1; }
+    echo "watchdog copied (run it: ssh $DEPLOY_HOST python3 watchdog.py)"
 }
 
 # **DOES LINUX SERVE? — fail closed** (QUEUE item 109). The Linux build-and-

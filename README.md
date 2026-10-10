@@ -378,7 +378,7 @@ ops/check_delivery     Delivery zig-solver conformance (~30s warm): native
 ops/test_ts            Fast TS gate (~4s warm)
 ops/test_elm           Fast Elm gate (~4s)
 ops/test_docs          Fast docs gate (~1s): doc_xref --all (dead links/paths)
-ops/deploy             While metal serves: refresh prod's watchdog only. The full
+ops/deploy             While metal serves: copy prod's watchdog only. The full
                        Linux build + ship runs only with ~/linux-serves on prod
                        (see deploy/README.md)
 ```
