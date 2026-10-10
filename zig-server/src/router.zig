@@ -1838,3 +1838,24 @@ test "route: a send that would store nothing is refused, 400, and a message is s
     try testing.expectEqualStrings("DROP_ON_FLOOR is a phrase", msgs[1].markdown);
     try testing.expectEqualStrings("    code\n    more", msgs[2].markdown);
 }
+
+test "route: sign-up refuses a name it would have to change, never registering another (156(e))" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var site = try UidSite.init(a, io);
+    defer site.deinit();
+    const prev = mem_meter.replace(std.heap.page_allocator);
+    defer _ = mem_meter.replace(prev);
+    const page = try postForm(a, io, "/login/full", "x=y", "name=Bob%3Cx%3E&password=pw&action=register");
+    try testing.expect(std.mem.indexOf(u8, page, "set-cookie: gopher_auth=") == null);
+    try testing.expect(std.mem.indexOf(u8, page, "Names can use only") != null);
+    try testing.expectEqual(@as(?[]const u8, null), try users.findMemberByName(io, a, "Bobx"));
+    // Nor logs in as the member the cleaned name would have been.
+    _ = try memberSession(a, io, "1", "Steve");
+    const as_steve = try postForm(a, io, "/login/full", "x=y", "name=Steve%3C&password=pw&action=login");
+    try testing.expect(std.mem.indexOf(u8, as_steve, "set-cookie: gopher_auth=") == null);
+}

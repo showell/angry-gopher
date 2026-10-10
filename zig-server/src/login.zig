@@ -99,7 +99,11 @@ fn handleLoginFull(req: *Request, io: Io, alloc: Alloc, bus: *Bus) !void {
     //   2. else, with an identity, the name is the cookie's (locked, so we ignore
     //      any posted name): a member re-verifies, a guest upgrades in place.
     //   3. else a free-choosing stranger (editable name, Log in / Create account).
-    const explicit = try names.sanitizeUser(alloc, (try formValue(alloc, target, body, "name")) orelse "");
+    // **WHAT WAS SENT, NEVER A CLEANED COPY** (metal-vmm QUEUE 156(e)): a
+    // name scrubbed before it was checked registered `Bob<x>` as `Bobx`, and
+    // logged `Steve<` in as Steve. Only the ends' whitespace goes; the
+    // stranger's form checks the rest (validateUserName) and refuses it.
+    const explicit = std.mem.trim(u8, (try formValue(alloc, target, body, "name")) orelse "", " \t\r\n");
     const wants_register = std.mem.eql(u8, (try formValue(alloc, target, body, "action")) orelse "", "register");
     const explicit_member = explicit.len != 0 and (try users.findMemberByName(io, alloc, explicit)) != null;
 
