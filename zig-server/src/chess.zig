@@ -200,11 +200,11 @@ pub fn handle(req: *std.http.Server.Request, alloc: std.mem.Allocator, name: []c
     } else if (std.mem.eql(u8, sub, "/code")) {
         try respondCodePage(req, alloc);
     } else if (std.mem.eql(u8, sub, "/board.js")) {
-        try req.respond(chess_board_js, .{ .extra_headers = &.{http.js_ct} });
+        try http.serveEmbedded(req, chess_board_js, http.js_ct);
     } else if (std.mem.eql(u8, sub, "/knight.wasm")) {
-        try req.respond(knight_wasm, .{ .extra_headers = &.{http.wasm_ct} });
+        try http.serveEmbedded(req, knight_wasm, http.wasm_ct);
     } else if (std.mem.eql(u8, sub, "/queens.wasm")) {
-        try req.respond(queens_wasm, .{ .extra_headers = &.{http.wasm_ct} });
+        try http.serveEmbedded(req, queens_wasm, http.wasm_ct);
     } else {
         try http.notFound(req);
     }

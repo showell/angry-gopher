@@ -616,7 +616,7 @@ fn rawTranscript(req: *Request, io: Io, alloc: Alloc, conv_dir: []const u8, sid:
 fn serveAsset(req: *Request, name: []const u8) !void {
     for (assets) |a| {
         if (std.mem.eql(u8, a.name, name)) {
-            return req.respond(a.body, .{ .extra_headers = &.{http.js_ct} });
+            return http.serveEmbedded(req, a.body, http.js_ct);
         }
     }
     return http.notFound(req);

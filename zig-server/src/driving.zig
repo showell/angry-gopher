@@ -43,9 +43,9 @@ pub fn handle(req: *std.http.Server.Request, sub: []const u8) !void {
     if (sub.len == 0 or std.mem.eql(u8, sub, "/")) {
         try req.respond(page, .{ .extra_headers = &.{http.html_ct} });
     } else if (std.mem.eql(u8, sub, "/blitter.js")) {
-        try req.respond(safari_blitter_js, .{ .extra_headers = &.{http.js_ct} });
+        try http.serveEmbedded(req, safari_blitter_js, http.js_ct);
     } else if (std.mem.eql(u8, sub, "/safari.wasm")) {
-        try req.respond(safari_wasm, .{ .extra_headers = &.{http.wasm_ct} });
+        try http.serveEmbedded(req, safari_wasm, http.wasm_ct);
     } else {
         try http.notFound(req);
     }

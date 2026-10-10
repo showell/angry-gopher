@@ -396,6 +396,60 @@ fn status(response: []const u8) []const u8 {
     return response[sp + 1 .. line_end];
 }
 
+/// The value of response header `name`, or null.
+fn responseHeader(response: []const u8, name: []const u8) ?[]const u8 {
+    const head_end = std.mem.indexOf(u8, response, "\r\n\r\n") orelse response.len;
+    var lines = std.mem.splitSequence(u8, response[0..head_end], "\r\n");
+    _ = lines.next();
+    while (lines.next()) |line| {
+        const colon = std.mem.indexOfScalar(u8, line, ':') orelse continue;
+        if (std.ascii.eqlIgnoreCase(line[0..colon], name)) return std.mem.trim(u8, line[colon + 1 ..], " ");
+    }
+    return null;
+}
+
+fn responseBody(response: []const u8) []const u8 {
+    const head_end = std.mem.indexOf(u8, response, "\r\n\r\n") orelse return "";
+    return response[head_end + 4 ..];
+}
+
+test "every embedded asset is kept by the browser and asked about each use: ETag, no-cache, 304 (metal-vmm QUEUE 158)" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    // /game and /puzzles serve their scripts to a player only.
+    var site = try UidSite.init(a, io);
+    defer site.deinit();
+    const me = try signedUid(a, try player.allocate(io, a, "Ada"));
+    const paths = [_][]const u8{
+        "/chat/chat.js",         "/chat/colors.js",         "/tutorial/tutorial.js", "/game/elm.js",
+        "/game/engine.js",       "/game/engine_glue.js",    "/driving/blitter.js",   "/driving/safari.wasm",
+        "/chess/board.js",       "/chess/knight.wasm",      "/chess/queens.wasm",    "/puzzles/puzzle.js",
+        "/puzzles/engine.js",    "/puzzles/engine_glue.js", "/puzzles/solver.wasm",  "/delivery/app.js",
+        "/delivery/solver.wasm",
+    };
+    for (paths) |path| {
+        errdefer std.debug.print("asset {s}\n", .{path});
+        const first = try serve(a, io, try std.fmt.allocPrint(a, "GET {s} HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\n\r\n", .{ path, me }));
+        try testing.expectEqualStrings("200 OK", status(first));
+        try testing.expectEqualStrings("no-cache", responseHeader(first, "cache-control") orelse "");
+        const tag = responseHeader(first, "etag") orelse return error.NoETag;
+        try testing.expect(tag.len > 2 and tag[0] == '"' and tag[tag.len - 1] == '"');
+
+        const again = try serve(a, io, try std.fmt.allocPrint(a, "GET {s} HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\nIf-None-Match: {s}\r\n\r\n", .{ path, me, tag }));
+        try testing.expectEqualStrings("304 Not Modified", status(again));
+        try testing.expectEqualStrings("", responseBody(again));
+        try testing.expectEqualStrings(tag, responseHeader(again, "etag") orelse "");
+
+        const other = try serve(a, io, try std.fmt.allocPrint(a, "GET {s} HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\nIf-None-Match: \"0\"\r\n\r\n", .{ path, me }));
+        try testing.expectEqualStrings("200 OK", status(other));
+        try testing.expectEqualStrings(responseBody(first), responseBody(other));
+    }
+}
+
 test "route: the table answers, and an unknown path is a 404" {
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();

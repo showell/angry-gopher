@@ -57,11 +57,11 @@ pub fn handle(req: *Request, io: Io, alloc: Alloc, sub: []const u8, client: ?[]c
     if (sub.len == 0 or std.mem.eql(u8, sub, "/")) {
         try playPage(req, io, alloc, user_id, 0);
     } else if (std.mem.eql(u8, sub, "/elm.js")) {
-        try req.respond(elm_js, .{ .extra_headers = &.{http.js_ct} });
+        try http.serveEmbedded(req, elm_js, http.js_ct);
     } else if (std.mem.eql(u8, sub, "/engine.js")) {
-        try req.respond(engine_js, .{ .extra_headers = &.{http.js_ct} });
+        try http.serveEmbedded(req, engine_js, http.js_ct);
     } else if (std.mem.eql(u8, sub, "/engine_glue.js")) {
-        try req.respond(engine_glue_js, .{ .extra_headers = &.{http.js_ct} });
+        try http.serveEmbedded(req, engine_glue_js, http.js_ct);
     } else if (std.mem.eql(u8, sub, "/new-session")) {
         try newSession(req, io, alloc, user_id, client);
     } else if (std.mem.eql(u8, sub, "/sessions")) {
