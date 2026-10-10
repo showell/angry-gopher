@@ -50,15 +50,14 @@ pub fn streamTranscript(req: *Request, io: Io, alloc: Alloc, bus: *Bus, conv_dir
         .respond_options = .{ .extra_headers = &http.sse_headers, .transfer_encoding = .none },
     }) catch return;
 
-    const backlog_size = if (stream.backlog.len > since) stream.backlog.len - since else 0;
+    const rest = backlogFrom(stream.backlog, sid, since);
     {
-        const pre = try std.fmt.allocPrint(alloc, "event: backlog-size\ndata: {d}\n\n", .{backlog_size});
+        const pre = try std.fmt.allocPrint(alloc, "event: backlog-size\ndata: {d}\n\n", .{rest.len});
         http.pushFrame(&body, pre) catch return;
     }
 
-    var i: usize = since;
-    while (i < stream.backlog.len) : (i += 1) {
-        const m = stream.backlog[i];
+    const first = stream.backlog.len - rest.len;
+    for (rest, first..) |m, i| {
         // Its index from its id, as the live stream's: a refused block before
         // it keeps its number (chat_store.countBlocks).
         const index = store.indexOf(m.id, sid) orelse i;
@@ -162,6 +161,16 @@ fn renderForward(_: []const u8, arena: Alloc, blob: []const u8) ?[]const u8 {
 /// parseSince extracts the replay cursor from the request: Last-Event-ID
 /// (reconnect) → n+1, else ?since=N (initial load) → n, else 0. The decision is
 /// sinceFrom; this is just the Io-free read of the two header/query sources.
+/// The backlog from index `since` on. **AN INDEX, NOT A POSITION**: a frame's
+/// `id:` is its message's index, so a refused block before it leaves the
+/// backlog's positions behind the indexes after it.
+fn backlogFrom(backlog: []const store.ChatMessage, sid: []const u8, since: usize) []const store.ChatMessage {
+    for (backlog, 0..) |m, i| {
+        if ((store.indexOf(m.id, sid) orelse i) >= since) return backlog[i..];
+    }
+    return backlog[backlog.len..];
+}
+
 fn parseSince(req: *Request, alloc: Alloc) !usize {
     return sinceFrom(try http.header(req, alloc, "last-event-id"), http.queryValue(try http.target(req, alloc), "since"));
 }
@@ -184,6 +193,23 @@ fn sinceFrom(last_event_id: ?[]const u8, since_q: ?[]const u8) usize {
 // ── tests ────────────────────────────────────────────────────────────────────
 
 const testing = std.testing;
+
+test "a reconnect past a refused block misses nothing: since is an index, not a position in the backlog" {
+    // t_2 was refused, so the backlog holds t_1, t_3, t_4. A client that saw
+    // t_3 (its id: 2) reconnects with since = 3 and must get t_4.
+    const m = struct {
+        fn of(id: []const u8) store.ChatMessage {
+            return .{ .id = id, .from = "a", .date = "d", .markdown = "x" };
+        }
+    };
+    const backlog = [_]store.ChatMessage{ m.of("t_1"), m.of("t_3"), m.of("t_4") };
+    const rest = backlogFrom(&backlog, "t", 3);
+    try testing.expectEqual(@as(usize, 1), rest.len);
+    try testing.expectEqualStrings("t_4", rest[0].id);
+    try testing.expectEqual(@as(usize, 3), backlogFrom(&backlog, "t", 0).len);
+    try testing.expectEqual(@as(usize, 2), backlogFrom(&backlog, "t", 1).len); // t_3 is index 2
+    try testing.expectEqual(@as(usize, 0), backlogFrom(&backlog, "t", 4).len);
+}
 
 test "sinceFrom: Last-Event-ID resumes after n; ?since resumes at n; junk falls through" {
     // Last-Event-ID (reconnect) → n+1
