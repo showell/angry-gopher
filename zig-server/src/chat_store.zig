@@ -925,6 +925,12 @@ fn lessThanStr(_: void, a: []const u8, b: []const u8) bool {
 /// channelMembers reads {chat_root}/channels/<name>.channel: one uid per line,
 /// blank/`#`-comment lines skipped. Missing file → null (the channel does not
 /// exist).
+///
+/// **A LINE IS A CANONICAL UID, ONCE, OR THE CHANNEL IS MALFORMED**
+/// (metal-vmm QUEUE 156(d)): each member is a path the fan-out writes under
+/// (`../../x` was one), a line with a comment after it (`3 # Claude`) dropped
+/// that member, and a duplicate notified twice. `error.MalformedChannel`,
+/// never a guess at what the line meant: whoever wrote the file fixes it.
 pub fn channelMembers(io: Io, alloc: Alloc, name: []const u8) !?[][]const u8 {
     const file = try std.fmt.allocPrint(alloc, "{s}.channel", .{name});
     const path = try std.fs.path.join(alloc, &.{ chat_root, "channels", file });
@@ -935,6 +941,7 @@ pub fn channelMembers(io: Io, alloc: Alloc, name: []const u8) !?[][]const u8 {
     while (it.next()) |raw| {
         const line = std.mem.trim(u8, raw, " \t\r");
         if (line.len == 0 or line[0] == '#') continue;
+        if (!canonicalUid(line) or hasMember(out.items, line)) return error.MalformedChannel;
         try out.append(alloc, line);
     }
     return try out.toOwnedSlice(alloc);
@@ -1721,4 +1728,23 @@ test "the fan-out's surfaces fail one at a time, each said: a member's images th
     try testing.expect((try Io.Dir.cwd().readFileAlloc(f.io, code, a, .limited(4096))).len > 0);
     // And member 1's surfaces are whole.
     _ = try Io.Dir.cwd().readFileAlloc(f.io, try std.fs.path.join(a, &.{ chat_root, "users", "1", "images.md" }), a, .limited(4096));
+}
+
+test "a channel's member lines are canonical uids, each once, or the channel is malformed (metal-vmm QUEUE 156(d))" {
+    var threaded = std.Io.Threaded.init(testing.allocator, .{});
+    defer threaded.deinit();
+    var f: CountFixture = undefined;
+    try f.init(threaded.io());
+    defer f.deinit();
+    const a = f.arena.allocator();
+    const path = try std.fs.path.join(a, &.{ chat_root, "channels", "team.channel" });
+    try Io.Dir.cwd().createDirPath(f.io, std.fs.path.dirname(path).?);
+    try Io.Dir.cwd().writeFile(f.io, .{ .sub_path = path, .data = "# the team\n1\n\n 2 \r\n" });
+    const ok = (try channelMembers(f.io, a, "team")).?;
+    try testing.expectEqual(@as(usize, 2), ok.len);
+    for ([_][]const u8{ "1\n../../x\n", "1\n3 # Claude\n", "1\n2\n1\n", "007\n", "+7\n" }) |bad| {
+        try Io.Dir.cwd().writeFile(f.io, .{ .sub_path = path, .data = bad });
+        try testing.expectError(error.MalformedChannel, channelMembers(f.io, a, "team"));
+        try testing.expectError(error.MalformedChannel, listUserChannels(f.io, a, "1"));
+    }
 }
