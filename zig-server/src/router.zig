@@ -2023,3 +2023,25 @@ test "route: a send makes the topic it names, and /chat over a conversation with
     try testing.expectEqual(@as(usize, 1), (try chat_store.decodeChatFile(a, raw)).len);
     _ = chat_state;
 }
+
+test "route: a GET re-signs a gopher_uid past half its life, so an active player keeps who they are; a younger one is left alone (Steve, 2026-10-10)" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var site = try UidSite.init(a, io);
+    defer site.deinit();
+    const id = try player.allocate(io, a, "Nikhil");
+    const now = nowSecs(io);
+    const old = try std.fmt.allocPrint(a, "gopher_uid={s}", .{try uid_cookie.sign(a, UidSite.secret, id, now - uid_cookie.lifetime_secs / 2 - 60)});
+    const renewed = try UidSite.ask(a, io, "/play", old);
+    try testing.expectEqualStrings("303 See Other", status(renewed));
+    const fresh = setUid(renewed) orelse return error.NoSetCookie;
+    try testing.expectEqualStrings(id, uid_cookie.verify(UidSite.secret, fresh, now + uid_cookie.lifetime_secs - 3600).?);
+    // A POST is never redirected: the old cookie still names them there.
+    try testing.expect(playingAs(try postForm(a, io, "/play", old, ""), "Nikhil"));
+    // Young: no re-sign.
+    try testing.expect(setUid(try UidSite.ask(a, io, "/play", try signedUid(a, id))) == null);
+}

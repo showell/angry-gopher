@@ -15,10 +15,11 @@
 //! QUEUE 156(f)): the browser's Max-Age, held server-side too, so a cookie
 //! kept past it (copied, or stolen) names no one; and an `issued` in the
 //! future past `users.clock_skew_secs` names no one. It was said not to
-//! expire, but the browser dropped it at the year all along: nothing re-signs
-//! a valid cookie, so a player loses their identity a year after it was
-//! signed, active or not. That is the box's and Steve's to weigh (a GET
-//! re-signing a cookie past half its life would keep an active player).
+//! expire, but the browser dropped it at the year all along, and nothing
+//! re-signed a valid cookie, so a player lost their identity a year after it
+//! was signed, active or not. Now a GET re-signs one past half its life
+//! (`reissue`; Steve, 2026-10-10): a player who comes back at least every
+//! six months keeps who they are.
 //!
 //! **AFTER THE SECRET CHANGES** (/admin/secret, users.rotateSecret), a cookie
 //! signed with the previous secret still names its player for the days the
@@ -108,6 +109,13 @@ pub fn verify(secret: []const u8, value: []const u8, now_unix: i64) ?[]const u8 
     b64.Decoder.decode(&got, m64) catch return null;
     if (!std.crypto.timing_safe.eql([HmacSha256.mac_length]u8, want, got)) return null;
     return id;
+}
+
+/// The second a value verify has passed was signed.
+fn issuedOf(value: []const u8) i64 {
+    var it = std.mem.splitScalar(u8, value, '.');
+    _ = it.next();
+    return std.fmt.parseInt(i64, it.next() orelse return 0, 10) catch 0;
 }
 
 fn nowUnix(io: Io) i64 {
@@ -228,7 +236,13 @@ pub fn reissue(io: Io, alloc: Alloc, req: *std.http.Server.Request, client: ?[]c
     const value = (try http.cookie(req, alloc, cookie_name)) orelse return null;
     const secret = (try users.sessionSecret(io, alloc)) orelse return null;
     const now = nowUnix(io);
-    if (verify(secret, value, now)) |_| return null;
+    // **PAST HALF ITS LIFE, RE-SIGNED** (Steve, 2026-10-10): nothing else
+    // re-signs a valid cookie, so a player active all year lost who they
+    // were at the year. Validly signed, so not counted against the address.
+    if (verify(secret, value, now)) |id| {
+        if (now -| issuedOf(value) <= lifetime_secs / 2) return null;
+        return .{ .cookie = (try issue(io, alloc, id)) orelse return null };
+    }
     // Signed with the secret before a change, and still taken: re-signed
     // with the current one. It was validly signed, so it is not counted.
     if (try users.previousSecret(io, alloc)) |prev| if (verify(prev, value, now)) |id| {
