@@ -630,7 +630,7 @@ pub fn formField(alloc: Alloc, body: []const u8, name: []const u8) !?[]const u8 
 }
 
 /// urlDecode reverses form-urlencoding: '+' → space, '%XX' → byte, else verbatim.
-fn urlDecode(alloc: Alloc, s: []const u8) ![]u8 {
+pub fn urlDecode(alloc: Alloc, s: []const u8) ![]u8 {
     var out: std.ArrayList(u8) = .empty;
     var i: usize = 0;
     while (i < s.len) : (i += 1) {

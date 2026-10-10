@@ -484,7 +484,7 @@ test "route: ADMIN_ONLY — a logged-in non-admin member is refused the secret-b
     const now: i64 = @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
     const member = try std.fmt.allocPrint(a, "gopher_auth={s}", .{try users.signSession(a, UidSite.secret, "2", now)});
 
-    for ([_][]const u8{ "/admin", "/admin/backup", "/admin/secret", "/admin/retire", "/admin/apikey", "/admin/host", "/admin/lynrummy" }) |path| {
+    for ([_][]const u8{ "/admin", "/admin/backup", "/admin/secret", "/admin/retire", "/admin/apikey", "/admin/host", "/admin/lynrummy", "/admin/search?key=lay" }) |path| {
         const resp = try UidSite.ask(a, io, path, member);
         try testing.expect(std.mem.indexOf(u8, resp, "200 OK") == null); // never served to a member
         try testing.expect(std.mem.indexOf(u8, resp, "$2") == null); // no bcrypt hash in the body
@@ -941,6 +941,36 @@ test "route: HEAD /admin/backup reads nothing" {
     const got = try postForm(a, io, "/admin/backup", me, "password=hunter2");
     try testing.expectEqualStrings("200 OK", status(got));
     try testing.expect(admin_backup.files_archived >= before + 3);
+}
+
+test "route: /admin/search finds a key in every conversation, DMs and channels, ASCII case folded" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var site = try UidSite.init(a, io);
+    defer site.deinit();
+    const me = try adminSession(a, io);
+    const chat_store = @import("chat_store.zig");
+    const disk = @import("store.zig");
+    const transcripts = [_]struct { dir: []const u8, sid: []const u8, body: []const u8 }{
+        .{ .dir = "1_2", .sid = "ChitChat", .body = "MSG_ChitChat_1\nfrom: Steve\ndate: 2026-10-10T00:00:00Z\n\nthe page LAYOUT is off" ++ chat_store.sep ++ "MSG_ChitChat_2\nfrom: Claude\ndate: 2026-10-10T00:01:00Z\n\nnothing to see" },
+        .{ .dir = "channels/general", .sid = "Trips", .body = "MSG_Trips_1\nfrom: Debbie\ndate: 2026-10-10T00:02:00Z\n\na long layover in Denver" },
+        .{ .dir = "2_3", .sid = "Cards", .body = "MSG_Cards_1\nfrom: Apoorva\ndate: 2026-10-10T00:03:00Z\n\ndeal the seven" },
+    };
+    for (transcripts) |t| {
+        const path = try std.fs.path.join(a, &.{ chat_store.chat_root, t.dir, "sessions", try std.fmt.allocPrint(a, "{s}.md", .{t.sid}) });
+        try disk.write(io, a, path, t.body, .{});
+    }
+    const got = try UidSite.ask(a, io, "/admin/search?key=lay", me);
+    try testing.expectEqualStrings("200 OK", status(got));
+    try testing.expect(std.mem.indexOf(u8, got, "/chat/c/1_2/ChitChat#msg-ChitChat_1") != null);
+    try testing.expect(std.mem.indexOf(u8, got, "/channel/general/Trips#msg-Trips_1") != null);
+    try testing.expect(std.mem.indexOf(u8, got, "ChitChat_2") == null);
+    try testing.expect(std.mem.indexOf(u8, got, "Cards_1") == null);
+    try testing.expect(std.mem.indexOf(u8, got, "2 messages match, of 4 in 3 transcripts") != null);
 }
 
 test "route: only a member's own session is the admin; a non-member's session, or a gopher_uid, is no one" {
