@@ -170,6 +170,14 @@ pub fn appendMessage(io: Io, alloc: Alloc, bus: *Bus, meta: ConvMeta, conv_dir: 
     const msg = ChatMessage{ .id = id, .from = from_name, .date = at, .markdown = markdown };
 
     const stored = try chatStoredForm(alloc, index, msg);
+    // **NO `.lastauthor`** (gopher-metal 153(1)): the `.count` carries the
+    // author. One an older server left would now name the previous author,
+    // so the first send takes it away, before the message lands, so no
+    // reader or crash between them finds it naming the new one's author
+    // wrongly (the review). One that is there is always right. Best-effort.
+    const la = try std.fs.path.join(alloc, &.{ conv_dir, "sessions", try std.fmt.allocPrint(alloc, "{s}.lastauthor", .{sid}) });
+    // absent-ok: a companion that cannot be asked after is left: nothing is written from it.
+    if (store.has(io, alloc, la) catch false) store.remove(io, alloc, la) catch {};
     const new_size = try store.append(io, alloc, path, stored);
     // A crash between the append and this leaves a count whose size is not the
     // transcript's — in either order — so messageCount refuses it and recounts.
@@ -178,14 +186,6 @@ pub fn appendMessage(io: Io, alloc: Alloc, bus: *Bus, meta: ConvMeta, conv_dir: 
         .offset = new_size - stored.len,
         .uid = from_id,
     });
-
-    // **NO `.lastauthor`** (gopher-metal 153(1)): the `.count` carries the
-    // author. One an older server left would now name the previous author,
-    // so the first send takes it away, and one that is there is always right
-    // (the session's, from before anyone posted again). Best-effort.
-    const la = try std.fs.path.join(alloc, &.{ conv_dir, "sessions", try std.fmt.allocPrint(alloc, "{s}.lastauthor", .{sid}) });
-    // absent-ok: a companion that cannot be asked after is left: nothing is written from it.
-    if (store.has(io, alloc, la) catch false) store.remove(io, alloc, la) catch {};
 
     // Fan out to live subscribers on this conv/sid (best-effort).
     const key = try std.fmt.allocPrint(alloc, "{s}/{s}", .{ conv_key, sid });
@@ -486,12 +486,13 @@ pub const LastMessage = struct {
 /// hand-edited transcript, a sidecar from another file, a message too long for
 /// the window — falls back to reading the whole thing.
 pub fn lastMessage(io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8) !?LastMessage {
-    if (readCount(io, alloc, conv_dir, sid)) |c| {
+    const counted = readCount(io, alloc, conv_dir, sid);
+    if (counted) |c| {
         if (c.last) |l| if (c.count > 0) {
             const path = try sessionMdPath(alloc, conv_dir, sid);
             const buf = try alloc.alloc(u8, tail_window);
             // absent-ok: the sidecar is a cache: a window that will not read falls back to the transcript.
-            const n = store.readAt(io, alloc, path, l.offset, buf) catch return fallbackLast(io, alloc, conv_dir, sid);
+            const n = store.readAt(io, alloc, path, l.offset, buf) catch return fallbackLast(io, alloc, conv_dir, sid, counted);
             // **A WINDOW THAT CAME BACK FULL MAY HAVE CUT A MESSAGE IN HALF**,
             // and nothing below could tell. Read it the slow way instead.
             if (n < tail_window) {
@@ -517,7 +518,7 @@ pub fn lastMessage(io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8) 
             }
         };
     }
-    return fallbackLast(io, alloc, conv_dir, sid);
+    return fallbackLast(io, alloc, conv_dir, sid, counted);
 }
 
 /// The N of a `<sid>_<N>` message id, or null when the id is not this
@@ -531,12 +532,19 @@ fn numberIn(id: []const u8, sid: []const u8) ?usize {
 
 /// The whole transcript, decoded, for a session whose sidecar cannot say. What
 /// every session cost before the sidecar carried a last message.
-fn fallbackLast(io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8) !?LastMessage {
+///
+/// **THE AUTHOR FROM THE SIDECAR, WHERE IT SPEAKS FOR THIS MESSAGE**
+/// (gopher-metal 153(1)'s review): a message too long for the window, or a
+/// tail that would not read, still has its author in the `.count` when the
+/// transcript holds exactly the messages it counted. Otherwise none, and the
+/// caller asks an older server's `.lastauthor`.
+fn fallbackLast(io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8, counted: ?Count) !?LastMessage {
     const raw = (try rawSession(io, alloc, conv_dir, sid)) orelse return null;
     const msgs = try decodeChatFile(alloc, raw);
     if (msgs.len == 0) return null;
     const last = msgs[msgs.len - 1];
-    return .{ .markdown = last.markdown, .date = last.date, .uid = "", .number = msgs.len };
+    const uid = if (counted) |c| (if (c.last) |l| (if (c.count == msgs.len) l.uid else "") else "") else "";
+    return .{ .markdown = last.markdown, .date = last.date, .uid = uid, .number = msgs.len };
 }
 
 /// **EVERY SESSION GETS A SIDECAR AT BOOT.** A conversation written before this
@@ -698,6 +706,10 @@ fn readCount(io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8) ?Count
     const path = countPath(alloc, conv_dir, sid) catch return null;
     // absent-ok: a cache: a count that will not read is recounted from the transcript (messageCount).
     const raw = store.read(io, alloc, path, .limited(1024)) catch return null;
+    // **WHOLE, OR NOT AT ALL**: written by `write`, a crash can leave it cut
+    // short, and a uid cut short is another uid (the review of 153(1)).
+    // Every record ends in a newline.
+    if (raw.len == 0 or raw[raw.len - 1] != '\n') return null;
     var lines = std.mem.splitScalar(u8, raw, '\n');
     var head = std.mem.tokenizeScalar(u8, lines.next() orelse return null, ' ');
     const count = std.fmt.parseInt(usize, head.next() orelse return null, 10) catch return null;
@@ -1424,6 +1436,9 @@ test "last message: one too long for the window is read the slow way, and is rig
     try testing.expectEqual(huge.len, got.markdown.len);
     try testing.expectEqualStrings(huge, got.markdown);
     try testing.expectEqual(@as(usize, 2), got.number);
+    // And its author, from the sidecar: no `.lastauthor` is written now
+    // (gopher-metal 153(1)'s review).
+    try testing.expectEqualStrings("1", got.uid);
 }
 
 test "last message: a sidecar claiming a size far past the file does not ask for that much" {
