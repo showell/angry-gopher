@@ -136,9 +136,29 @@ pub const Params = struct {
     now: i64,
 };
 
+/// **THE KEEP LIST NAMES REAL ACCOUNTS, AND EVERY ACCOUNT HAS A NAME** (the
+/// normalization hunt, 2026-10-10): every account not kept is removed, so a
+/// keep name that matches no account (a typo) would keep no one by it, and an
+/// account with no name could not be kept at all. Either is said, and the
+/// whole plan is refused, the dry run too, before anything is touched.
+/// Answers what is wrong, or null.
+pub fn keepProblem(io: Io, alloc: Alloc, keep: []const []const u8) !?[]const u8 {
+    const members = try allMembers(io, alloc);
+    for (members) |m| {
+        if (m.name.len == 0) return try std.fmt.allocPrint(alloc, "Account {s} has no name; give it one before retiring.", .{m.id});
+    }
+    for (keep) |k| {
+        for (members) |m| {
+            if (std.mem.eql(u8, m.name, k)) break;
+        } else return try std.fmt.allocPrint(alloc, "The keep list names \"{s}\", which is no account's name.", .{k});
+    }
+    return null;
+}
+
 /// Builds (and, when `apply`, carries out) the retirement. The returned Plan's
 /// `items` and strings are allocated from `alloc`.
 pub fn plan(io: Io, alloc: Alloc, p: Params, apply: bool) !Plan {
+    if (try keepProblem(io, alloc, p.keep) != null) return error.BadKeepList;
     var pl = Plan{ .alloc = alloc, .io = io, .apply = apply };
     // **AFTER A RETIRE APPLIES, SEARCH IS BUILT AGAIN WHOLE** (metal-vmm
     // 155(b)): rare, and always right, a failure part way included.
@@ -712,5 +732,59 @@ test "fs: a member whose name cannot be read is not retired as nobody (metal-vmm
 
     const p = Params{ .days = 30, .keep = &.{ "Steve", "apoorva" }, .now = now };
     _ = plan(io, a, p, true) catch {}; // refusing is right; removing her is not
+    try testing.expect(try store.has(io, a, try std.fs.path.join(a, &.{ users.auth_root, "2" })));
+}
+
+test "fs: a keep name that matches no account refuses the whole plan, the dry run too, and nothing goes (the normalization hunt)" {
+    // A typo in a keep name ("Stve") matched nothing, silently, and Steve was
+    // removed everywhere as one of the accounts not kept.
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var tmp = testing.tmpDir(.{});
+    defer tmp.cleanup();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    const saved = Saved.take();
+    defer saved.restore();
+    const base = try std.fs.path.join(a, &.{ ".zig-cache", "tmp", &tmp.sub_path });
+    try roots.point(a, .{
+        .data_dir = try std.fs.path.join(a, &.{ base, "data" }),
+        .auth_dir = try std.fs.path.join(a, &.{ base, "auth" }),
+    });
+    try stage(io, a);
+    const typo = Params{ .days = 30, .keep = &.{ "Stve", "apoorva" }, .now = now };
+    try testing.expectEqualStrings("The keep list names \"Stve\", which is no account's name.", (try keepProblem(io, a, typo.keep)).?);
+    try testing.expectError(error.BadKeepList, plan(io, a, typo, false));
+    try testing.expectError(error.BadKeepList, plan(io, a, typo, true));
+    try testing.expect(try store.has(io, a, try std.fs.path.join(a, &.{ users.auth_root, "1" })));
+    // The names as they are pass.
+    try testing.expectEqual(@as(?[]const u8, null), try keepProblem(io, a, &.{ "Steve", "apoorva" }));
+}
+
+test "fs: an account with no name refuses the whole plan, and nothing goes (the normalization hunt)" {
+    // A missing name file read as "", which no keep list holds: the account
+    // was removed as one not kept.
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var tmp = testing.tmpDir(.{});
+    defer tmp.cleanup();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    const saved = Saved.take();
+    defer saved.restore();
+    const base = try std.fs.path.join(a, &.{ ".zig-cache", "tmp", &tmp.sub_path });
+    try roots.point(a, .{
+        .data_dir = try std.fs.path.join(a, &.{ base, "data" }),
+        .auth_dir = try std.fs.path.join(a, &.{ base, "auth" }),
+    });
+    try stage(io, a);
+    try store.remove(io, a, try std.fs.path.join(a, &.{ users.auth_root, "2", "name" }));
+    const p = Params{ .days = 30, .keep = &.{"Steve"}, .now = now };
+    try testing.expectEqualStrings("Account 2 has no name; give it one before retiring.", (try keepProblem(io, a, p.keep)).?);
+    try testing.expectError(error.BadKeepList, plan(io, a, p, true));
     try testing.expect(try store.has(io, a, try std.fs.path.join(a, &.{ users.auth_root, "2" })));
 }

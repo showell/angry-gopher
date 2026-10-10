@@ -48,6 +48,8 @@ pub fn render(req: *Request, io: Io, alloc: Alloc, client: ?[]const u8) !void {
 
     if (in.days_err) return form(req, alloc, in, std.fmt.comptimePrint("The days are a number from 0 to {d}.", .{max_days}), .bad_request);
 
+    if (try retire.keepProblem(io, alloc, in.keep)) |why| return form(req, alloc, in, why, .bad_request);
+
     const confirm = std.mem.eql(u8, (try chat.formField(alloc, sent, "confirm")) orelse "", "1");
     var pl = try retire.plan(io, alloc, .{ .days = in.days, .keep = in.keep, .now = ui.nowUnix(io) }, confirm);
     return result(req, alloc, in, &pl, confirm);
