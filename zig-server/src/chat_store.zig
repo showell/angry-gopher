@@ -171,13 +171,7 @@ pub fn appendMessage(io: Io, alloc: Alloc, bus: *Bus, meta: ConvMeta, conv_dir: 
 
     const stored = try chatStoredForm(alloc, index, msg);
     // **NO `.lastauthor`** (gopher-metal 153(1)): the `.count` carries the
-    // author. One an older server left would now name the previous author,
-    // so the first send takes it away, before the message lands, so no
-    // reader or crash between them finds it naming the new one's author
-    // wrongly (the review). One that is there is always right. Best-effort.
-    const la = try std.fs.path.join(alloc, &.{ conv_dir, "sessions", try std.fmt.allocPrint(alloc, "{s}.lastauthor", .{sid}) });
-    // absent-ok: a companion that cannot be asked after is left: nothing is written from it.
-    if (store.has(io, alloc, la) catch false) store.remove(io, alloc, la) catch {};
+    // author, and nothing reads one an older server left.
     const new_size = try store.append(io, alloc, path, stored);
     // A crash between the append and this leaves a count whose size is not the
     // transcript's — in either order — so messageCount refuses it and recounts.
@@ -459,8 +453,9 @@ fn escapeBodyLine(alloc: Alloc, line: []const u8) ![]const u8 {
 
 /// What a session's last message is, for a listing that must not read the
 /// transcript: the words, when they were sent, and the uid that sent them
-/// (empty for a session written before the sidecar carried one, where the
-/// caller falls back to the `.lastauthor` companion).
+/// (empty where nothing says: a record behind the transcript, or a session
+/// whose author no sidecar ever held; never an older author, gopher-metal
+/// 153(1)).
 pub const LastMessage = struct {
     markdown: []const u8,
     date: []const u8,
@@ -511,7 +506,8 @@ pub fn lastMessage(io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8) 
                     if (numberIn(got.id, sid)) |number| if (number >= c.count) return .{
                         .markdown = got.markdown,
                         .date = got.date,
-                        .uid = if (number == c.count) l.uid else lastAuthorUid(io, alloc, conv_dir, sid),
+                        // A record behind: who wrote the newer message is unknown.
+                        .uid = if (number == c.count) l.uid else "",
                         .number = number,
                     };
                 }
@@ -536,14 +532,14 @@ fn numberIn(id: []const u8, sid: []const u8) ?usize {
 /// **THE AUTHOR FROM THE SIDECAR, WHERE IT SPEAKS FOR THIS MESSAGE**
 /// (gopher-metal 153(1)'s review): a message too long for the window, or a
 /// tail that would not read, still has its author in the `.count` when the
-/// transcript holds exactly the messages it counted. Otherwise none, and the
-/// caller asks an older server's `.lastauthor`.
+/// transcript is exactly the one it counted, in messages and in size.
+/// Otherwise none: unknown, never an older author.
 fn fallbackLast(io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8, counted: ?Count) !?LastMessage {
     const raw = (try rawSession(io, alloc, conv_dir, sid)) orelse return null;
     const msgs = try decodeChatFile(alloc, raw);
     if (msgs.len == 0) return null;
     const last = msgs[msgs.len - 1];
-    const uid = if (counted) |c| (if (c.last) |l| (if (c.count == msgs.len) l.uid else "") else "") else "";
+    const uid = if (counted) |c| (if (c.last) |l| (if (c.count == msgs.len and c.size == raw.len) l.uid else "") else "") else "";
     return .{ .markdown = last.markdown, .date = last.date, .uid = uid, .number = msgs.len };
 }
 
@@ -580,7 +576,11 @@ pub fn backfillSidecars(io: Io, alloc: Alloc, conv_dirs: []const []const u8) usi
             const offset = if (std.mem.lastIndexOf(u8, raw, sep)) |at| at else 0;
             writeCount(io, a, dir, sid, msgs.len, raw.len, .{
                 .offset = offset,
-                .uid = lastAuthorUid(io, a, dir, sid),
+                // Unknown: the author is in no transcript, and an older
+                // server's `.lastauthor` is no longer read (153(1)); every
+                // session production holds was given its uid by an earlier
+                // boot's pass.
+                .uid = "",
             });
             wrote += 1;
         }
@@ -649,16 +649,6 @@ pub fn backfillAll(io: Io, alloc: Alloc) usize {
     return backfillSidecars(io, alloc, dirs);
 }
 
-/// The uid in the `.lastauthor` companion, or "" — the only place a session
-/// written before now records who spoke last.
-pub fn lastAuthorUid(io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8) []const u8 {
-    const file = std.fmt.allocPrint(alloc, "{s}.lastauthor", .{sid}) catch return "";
-    const path = std.fs.path.join(alloc, &.{ conv_dir, "sessions", file }) catch return "";
-    // absent-ok: a companion, best-effort as it is written: no author is shown, nothing is written from it.
-    const raw = store.read(io, alloc, path, .limited(64)) catch return "";
-    return std.mem.trim(u8, raw, " \t\r\n");
-}
-
 // ── the message count ─────────
 
 /// countPath is {conv_dir}/sessions/<sid>.count — the session's message count,
@@ -724,7 +714,7 @@ const tail_window = 64 * 1024;
 const Count = struct { count: usize, size: u64, last: ?Last = null };
 
 /// readCount parses the sidecar: "<count> <size>" on the first line, and
-/// optionally "<offset> <date> <uid>" on the second. Null for a first line that
+/// optionally "<offset> <uid>" on the second. Null for a first line that
 /// is not exactly two numbers — a malformed sidecar is a stale one. A second
 /// line that does not parse is simply absent: the count is still good, and the
 /// caller falls back to the transcript for the rest.
@@ -756,8 +746,8 @@ fn parseLast(line: []const u8) ?Last {
 }
 
 /// writeCount records the count and, when there is one, where the last message
-/// begins. Best effort, like `.lastauthor`: a sidecar that fails to write is
-/// one recomputed next time, never a wrong one.
+/// begins. Best effort: a sidecar that fails to write is one recomputed next
+/// time, never a wrong one.
 fn writeCount(io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8, count: usize, size: u64, last: ?Last) void {
     const path = countPath(alloc, conv_dir, sid) catch return;
     const head = std.fmt.allocPrint(alloc, "{d} {d}\n", .{ count, size }) catch return;
@@ -769,8 +759,9 @@ fn writeCount(io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8, count
         head;
     // **A `write`, NOT A `replace`** (gopher-metal 153(1)): the sidecar is a
     // cache, checked against the transcript's size, so one a crash left
-    // empty or half is recounted; and on gopher-metal a write is as safe as a
-    // replace (STORE.md) at about half the disk requests.
+    // empty or torn is recounted, on either host (and `readCount` refuses
+    // one cut short of its newline); on gopher-metal a write is as safe as a
+    // replace besides (STORE.md), at about half the disk requests.
     store.write(io, alloc, path, text, .{}) catch {};
 }
 
@@ -1321,7 +1312,7 @@ test "last message: a session from before the sidecar is read from its transcrip
     const got = (try lastMessage(f.io, a, f.dir, "topic")).?;
     try testing.expectEqualStrings("second", got.markdown);
     try testing.expectEqual(@as(usize, 2), got.number);
-    try testing.expectEqualStrings("", got.uid); // only .lastauthor knows, and the caller asks it
+    try testing.expectEqualStrings("", got.uid); // nothing says (153(1))
 }
 
 test "backfill: a session with no last-message record gets one, and only once" {
@@ -1334,7 +1325,8 @@ test "backfill: a session with no last-message record gets one, and only once" {
     _ = try f.send("last");
     const a = f.arena.allocator();
     // A sidecar as an older build left it: a count and a size, nothing more,
-    // and the `.lastauthor` it wrote beside.
+    // and the `.lastauthor` it wrote beside, which is no longer read
+    // (gopher-metal 153(1)).
     try f.setSidecar(try std.fmt.allocPrint(a, "2 {d}\n", .{try f.transcriptSize()}));
     try store.write(f.io, a, try std.fs.path.join(a, &.{ f.dir, "sessions", "topic.lastauthor" }), "1", .{});
 
@@ -1342,7 +1334,7 @@ test "backfill: a session with no last-message record gets one, and only once" {
     try testing.expectEqual(@as(usize, 1), backfillSidecars(f.io, a, &dirs));
     const got = (try lastMessage(f.io, a, f.dir, "topic")).?;
     try testing.expectEqualStrings("last", got.markdown);
-    try testing.expectEqualStrings("1", got.uid); // from the .lastauthor companion
+    try testing.expectEqualStrings("", got.uid); // unknown
     // A second pass finds nothing to do.
     try testing.expectEqual(@as(usize, 0), backfillSidecars(f.io, a, &dirs));
 }
@@ -1438,14 +1430,17 @@ test "last message: a record left one behind still answers with the true last me
     _ = try f.send("the first");
     const after_first = try f.transcriptSize();
     _ = try f.send("the second");
-    // The sidecar as it stood before the second message was recorded.
+    // The sidecar as it stood before the second message was recorded, and a
+    // `.lastauthor` an older server left, naming someone else.
     try f.setSidecar(try std.fmt.allocPrint(a, "1 {d}\n0 9\n", .{after_first}));
+    try store.write(f.io, a, try std.fs.path.join(a, &.{ f.dir, "sessions", "topic.lastauthor" }), "9", .{});
 
     const got = (try lastMessage(f.io, a, f.dir, "topic")).?;
     try testing.expectEqualStrings("the second", got.markdown);
     try testing.expectEqual(@as(usize, 2), got.number);
-    // The stale uid is not used. No `.lastauthor` says who wrote the newer
-    // message (gopher-metal 153(1)), so no author, never the wrong one.
+    // The stale uid is not used, nor a `.lastauthor` (gopher-metal 153(1)):
+    // nothing says who wrote the newer message, so no author, never one that
+    // could be wrong (a "You" for a message the viewer did not write).
     try testing.expectEqualStrings("", got.uid);
 }
 
@@ -1468,6 +1463,12 @@ test "last message: one too long for the window is read the slow way, and is rig
     // And its author, from the sidecar: no `.lastauthor` is written now
     // (gopher-metal 153(1)'s review).
     try testing.expectEqualStrings("1", got.uid);
+
+    // A sidecar whose count matches but whose size does not (the transcript
+    // edited by hand since) speaks for some other last message: no author.
+    const c = readCount(f.io, a, f.dir, "topic").?;
+    try f.setSidecar(try std.fmt.allocPrint(a, "{d} {d}\n{d} 9\n", .{ c.count, c.size + 1, c.last.?.offset }));
+    try testing.expectEqualStrings("", (try lastMessage(f.io, a, f.dir, "topic")).?.uid);
 }
 
 test "last message: a sidecar claiming a size far past the file does not ask for that much" {
@@ -1485,10 +1486,10 @@ test "last message: a sidecar claiming a size far past the file does not ask for
     try testing.expectEqualStrings("modest", got.markdown);
 }
 
-test "a send writes no .lastauthor, and takes away one an older server wrote (gopher-metal 153(1))" {
+test "a send writes no .lastauthor, and one an older server wrote is never read (gopher-metal 153(1))" {
     // The `.count` carries the author now. A `.lastauthor` left from before
-    // would be the previous author once a send no longer writes it, so the
-    // first send takes it away: one that is there is always right.
+    // names the previous author once a send no longer writes it: it is left
+    // where it is, and nothing asks it.
     var threaded = std.Io.Threaded.init(testing.allocator, .{});
     defer threaded.deinit();
     var f: CountFixture = undefined;
@@ -1500,7 +1501,6 @@ test "a send writes no .lastauthor, and takes away one an older server wrote (go
     try testing.expect(!try store.has(f.io, a, la));
     try store.write(f.io, a, la, "9", .{}); // as an older server left it
     _ = try f.send("the second");
-    try testing.expect(!try store.has(f.io, a, la));
     const got = (try lastMessage(f.io, a, f.dir, "topic")).?;
     try testing.expectEqualStrings("1", got.uid);
 }

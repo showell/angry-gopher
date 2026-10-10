@@ -188,7 +188,7 @@ fn gatherConvSessions(io: Io, alloc: Alloc, items: *std.ArrayList(RecentItem), d
             // Normalized, so a date written with an offset reads as this
             // server's own do; for those it is the same text.
             .at = try timefmt.formatRFC3339UTC(alloc, at),
-            .who = try authorName(io, alloc, dir, sid, viewer, last.uid),
+            .who = try authorName(io, alloc, viewer, last.uid),
             .url = url,
             .where = where,
             .topic = sid,
@@ -240,14 +240,13 @@ fn byFileTime(io: Io, alloc: Alloc, items: *std.ArrayList(RecentItem), dir: []co
 }
 
 /// authorName renders the most-recent author's display name, "You" when that is
-/// the viewer. `uid` is what the session's sidecar recorded; a session written
-/// before it recorded one falls back to the `.lastauthor` companion, and ""
-/// when neither knows (legacy pre-companion sessions → an empty Who cell).
-fn authorName(io: Io, alloc: Alloc, dir: []const u8, sid: []const u8, viewer: []const u8, uid: []const u8) ![]const u8 {
-    const auid = if (uid.len > 0) uid else store.lastAuthorUid(io, alloc, dir, sid);
-    if (auid.len == 0) return "";
-    if (std.mem.eql(u8, auid, viewer)) return "You";
-    return users.getUserName(io, alloc, auid);
+/// the viewer. `uid` is what the session's sidecar recorded, and "" where it
+/// does not know: an empty Who cell, never an older author, which could be a
+/// "You" the viewer did not write (gopher-metal 153(1)).
+fn authorName(io: Io, alloc: Alloc, viewer: []const u8, uid: []const u8) ![]const u8 {
+    if (uid.len == 0) return "";
+    if (std.mem.eql(u8, uid, viewer)) return "You";
+    return users.getUserName(io, alloc, uid);
 }
 
 // ── tests ────────────────────────────────────────────────────────────────────
