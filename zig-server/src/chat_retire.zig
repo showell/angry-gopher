@@ -545,9 +545,25 @@ test "fs: the dry run lists exactly what a confirm removes, and a second confirm
     try testing.expect(try store.has(io, a, try std.fs.path.join(a, &.{ users.auth_root, "9", "name" })));
     try testing.expect(try store.has(io, a, try sessionPath(a, try chat_store.dmConvDir(a, "1_2"), "oldtopic")));
 
+    // Search's index, built before the confirm (metal-vmm 155(b)).
+    const mem_meter = @import("mem_meter.zig");
+    const prev = mem_meter.replace(testing.allocator);
+    defer _ = mem_meter.replace(prev);
+    defer search_index.drop();
+    _ = search_index.buildAll(io, a).?;
+    const dm12_reach = [_]chat_store.Reach{.{ .dir = try chat_store.dmConvDir(a, "1_2"), .base = "/chat/c/1_2", .kind = .dm }};
+    const dm19_reach = [_]chat_store.Reach{.{ .dir = try chat_store.dmConvDir(a, "1_9"), .base = "/chat/c/1_9", .kind = .dm }};
+    try testing.expectEqual(@as(usize, 2), (try search_index.ready(io, a).?.messagesFor(a, &dm12_reach, "hello", 10)).matched);
+    try testing.expectEqual(@as(usize, 1), (try search_index.ready(io, a).?.messagesFor(a, &dm19_reach, "hello", 10)).matched);
+
     // Confirm: the same report, carried out.
     var done = try plan(io, a, p, true);
     try testing.expectEqual(dry.total(), done.total());
+
+    // **SEARCH IS BUILT AGAIN AFTER IT**: the old topic and the gone DM are
+    // found no more; the fresh topic still is.
+    try testing.expectEqual(@as(usize, 1), (try search_index.ready(io, a).?.messagesFor(a, &dm12_reach, "hello", 10)).matched);
+    try testing.expectEqual(@as(usize, 0), (try search_index.ready(io, a).?.messagesFor(a, &dm19_reach, "hello", 10)).matched);
 
     // The removed user is gone everywhere.
     try testing.expect(!try store.has(io, a, try std.fs.path.join(a, &.{ users.auth_root, "9" })));

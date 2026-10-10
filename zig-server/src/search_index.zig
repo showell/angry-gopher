@@ -54,6 +54,9 @@ const Conv = struct {
     sids: std.ArrayList([]const u8) = .empty,
     /// A word (folded, in the index's arena) → how many messages hold it.
     counts: std.StringHashMapUnmanaged(u32) = .empty,
+    /// Transcripts of it the build could not read or decode (or the
+    /// conversation itself, unlisted): a search here may miss their words.
+    unreadable: u32 = 0,
 
     fn deinit(c: *Conv, gpa: Alloc) void {
         c.text.deinit(gpa);
@@ -96,6 +99,37 @@ pub const Found = struct {
     matched: usize,
 };
 
+/// **ONE BLOCK OF A TRANSCRIPT, READ IN PLACE** (155's review): what
+/// `chat_store.decodeChatFile` makes of it, as slices of `piece` with no
+/// copy, so the build's scratch is the transcript and not several times it.
+/// A block whose body holds an escaped separator line, which the decoder
+/// unescapes, goes through the decoder (into `a`).
+fn inPlace(a: Alloc, piece: []const u8) !chat_store.ChatMessage {
+    if (std.mem.indexOf(u8, piece, "\\-------------") != null) return (try chat_store.decodeChatFile(a, piece))[0];
+    var m: chat_store.ChatMessage = .{ .id = "", .from = "", .date = "", .markdown = "" };
+    var lines = std.mem.splitScalar(u8, piece, '\n');
+    var first = true;
+    while (lines.next()) |ln| {
+        if (first) {
+            first = false;
+            if (std.mem.startsWith(u8, ln, "MSG_")) {
+                m.id = ln["MSG_".len..];
+                continue;
+            }
+        }
+        // A blank line ends the header; the body is everything after it.
+        if (ln.len == 0) {
+            m.markdown = piece[lines.index orelse piece.len ..];
+            return m;
+        }
+        if (std.mem.indexOf(u8, ln, ": ")) |at| {
+            const k = ln[0..at];
+            if (std.mem.eql(u8, k, "from")) m.from = ln[at + 2 ..] else if (std.mem.eql(u8, k, "date")) m.date = ln[at + 2 ..];
+        }
+    }
+    return m;
+}
+
 /// Whether `markdown` holds `word` (folded) as a word of its own.
 fn holds(markdown: []const u8, word: []const u8) bool {
     // Most messages do not hold it even as a substring: a quick no.
@@ -131,18 +165,27 @@ pub const Index = struct {
         self.strings.deinit();
     }
 
-    /// One message, at the end of its conversation.
-    pub fn add(self: *Index, conv_dir: []const u8, sid: []const u8, m: chat_store.ChatMessage) !void {
-        const s = self.strings.allocator();
+    fn convOf(self: *Index, conv_dir: []const u8) !*Conv {
         const gop = try self.convs.getOrPut(self.gpa, conv_dir);
         if (!gop.found_existing) {
-            gop.key_ptr.* = s.dupe(u8, conv_dir) catch |e| {
+            gop.key_ptr.* = self.strings.allocator().dupe(u8, conv_dir) catch |e| {
                 self.convs.removeByPtr(gop.key_ptr);
                 return e;
             };
             gop.value_ptr.* = .{};
         }
-        const c = gop.value_ptr;
+        return gop.value_ptr;
+    }
+
+    fn unreadableIn(self: *Index, conv_dir: []const u8) !void {
+        (try self.convOf(conv_dir)).unreadable += 1;
+        self.stats.unreadable += 1;
+    }
+
+    /// One message, at the end of its conversation.
+    pub fn add(self: *Index, conv_dir: []const u8, sid: []const u8, m: chat_store.ChatMessage) !void {
+        const s = self.strings.allocator();
+        const c = try self.convOf(conv_dir);
         // The topic: the last one named, as a build names them in turn.
         const sid_at: u32 = for (0..c.sids.items.len) |k| {
             const back = c.sids.items.len - 1 - k;
@@ -182,13 +225,20 @@ pub const Index = struct {
 
     /// Every transcript of `conv_dirs`, read one at a time into `scratch`'s
     /// arena and given back before the next; then each text trimmed to fit.
+    ///
+    /// **OUT OF MEMORY FAILS THE BUILD** (155's review): a transcript too big
+    /// for the scratch is not one that cannot be read, and an index that
+    /// quietly missed it would answer with confidence and wrong counts. Only
+    /// a transcript that will not read or decode is counted unreadable, in
+    /// its conversation, and a search there says so.
     pub fn build(self: *Index, io: Io, scratch: Alloc, conv_dirs: []const []const u8) !void {
         var per = std.heap.ArenaAllocator.init(scratch);
         defer per.deinit();
         for (conv_dirs) |dir| {
             // absent-ok: a conversation that will not list is counted unreadable and skipped; nothing is written from it.
-            const sids = chat_store.listSessions(io, scratch, dir) catch {
-                self.stats.unreadable += 1;
+            const sids = chat_store.listSessions(io, scratch, dir) catch |e| {
+                if (e == error.OutOfMemory) return e;
+                try self.unreadableIn(dir);
                 continue;
             };
             for (sids) |sid| {
@@ -196,16 +246,20 @@ pub const Index = struct {
                 const a = per.allocator();
                 self.stats.transcripts += 1;
                 // absent-ok: a transcript that cannot be read is counted unreadable, never taken as empty.
-                const raw = (chat_store.rawSession(io, a, dir, sid) catch null) orelse {
-                    self.stats.unreadable += 1;
+                const raw = (chat_store.rawSession(io, a, dir, sid) catch |e| {
+                    if (e == error.OutOfMemory) return e;
+                    try self.unreadableIn(dir);
+                    continue;
+                }) orelse {
+                    try self.unreadableIn(dir);
                     continue;
                 };
                 self.stats.bytes += raw.len;
-                const msgs = chat_store.decodeChatFile(a, raw) catch {
-                    self.stats.unreadable += 1;
-                    continue;
-                };
-                for (msgs) |m| try self.add(dir, sid, m);
+                var blocks = std.mem.splitSequence(u8, raw, chat_store.sep);
+                while (blocks.next()) |piece| {
+                    if (std.mem.trim(u8, piece, " \t\r\n").len == 0) continue;
+                    try self.add(dir, sid, try inPlace(a, piece));
+                }
             }
         }
         var it = self.convs.valueIterator();
@@ -215,6 +269,13 @@ pub const Index = struct {
         }
         self.seen.clearAndFree(self.gpa);
         self.fold.clearAndFree(self.gpa);
+    }
+
+    /// Transcripts the build could not read, in the conversations of `reach`.
+    pub fn unreadableFor(self: *const Index, reach: []const chat_store.Reach) usize {
+        var n: usize = 0;
+        for (reach) |r| n += if (self.convs.getPtr(r.dir)) |c| c.unreadable else 0;
+        return n;
     }
 
     /// At most `most` words beginning with `prefix` (a key, folded), each
@@ -271,6 +332,11 @@ fn mostFirst(_: void, a: WordCount, b: WordCount) bool {
 // ── the one index the routes ask ─────────────────────────────────────────────
 
 var the: ?Index = null;
+/// When the last build failed (the monotonic clock, ms), if it did: a search
+/// does not build again until `retry_ms` after, so a corpus too big for the
+/// memory is not read whole on every search.
+var failed_at_ms: ?i64 = null;
+pub const retry_ms = 60_000;
 
 /// **HOST CONTRACT STEP 4b**: once, after `chat_store.backfillAll`, before the
 /// first request: every transcript on disk into memory. `scratch` is for the
@@ -284,19 +350,31 @@ pub fn buildAll(io: Io, scratch: Alloc) ?Stats {
     // absent-ok: no conversations listed is no index, and the first search builds again; nothing is written.
     const dirs = chat_store.listConvDirs(io, scratch) catch {
         idx.deinit();
+        failed_at_ms = nowMs(io);
         return null;
     };
     idx.build(io, scratch, dirs) catch {
         idx.deinit();
+        failed_at_ms = nowMs(io);
         return null;
     };
     the = idx;
+    failed_at_ms = null;
     return idx.stats;
 }
 
-/// The index, built now if no host built it, or a failure dropped it.
+fn nowMs(io: Io) i64 {
+    return @intCast(@divFloor(Io.Clock.now(.awake, io).nanoseconds, std.time.ns_per_ms));
+}
+
+/// The index, built now if no host built it, or a failure dropped it, but
+/// not within `retry_ms` of a build that failed.
 pub fn ready(io: Io, scratch: Alloc) ?*Index {
-    if (the == null) _ = buildAll(io, scratch);
+    if (the == null) {
+        const now = nowMs(io);
+        const waiting = if (failed_at_ms) |t| now >= t and now - t < retry_ms else false;
+        if (!waiting) _ = buildAll(io, scratch);
+    }
     return if (the) |*i| i else null;
 }
 
@@ -318,6 +396,7 @@ pub fn rebuild(io: Io, scratch: Alloc) void {
 pub fn drop() void {
     if (the) |*i| i.deinit();
     the = null;
+    failed_at_ms = null;
 }
 
 /// What the last build read, and what has landed since, or null with no index.
@@ -394,4 +473,75 @@ test "an index that runs out of memory part way can be dropped without a leak" {
         };
     }
     try testing.expect(hit_oom);
+}
+
+test "fs: a build out of memory fails, never an index missing what it could not hold; an append out of memory drops the index (155's review)" {
+    const store = @import("store.zig");
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var tmp = testing.tmpDir(.{});
+    defer tmp.cleanup();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    const saved = chat_store.chat_root;
+    defer chat_store.chat_root = saved;
+    chat_store.chat_root = try std.fs.path.join(a, &.{ ".zig-cache", "tmp", &tmp.sub_path });
+    var body: std.ArrayList(u8) = .empty;
+    for (0..200) |i| {
+        if (i > 0) try body.appendSlice(a, chat_store.sep);
+        try body.print(a, "MSG_t_{d}\nfrom: Tester\ndate: 2026-10-10T00:00:00Z\n\nwords of message {d}, and more words", .{ i + 1, i });
+    }
+    try store.write(io, a, try chat_store.sessionMdPath(a, try chat_store.dmConvDir(a, "1_2"), "t"), body.items, .{});
+
+    var failing = testing.FailingAllocator.init(testing.allocator, .{});
+    const prev = mem_meter.replace(failing.allocator());
+    defer _ = mem_meter.replace(prev);
+    defer drop();
+
+    // A scratch too small for the transcript: no index, not one without it.
+    var small: [512]u8 = undefined;
+    var fba = std.heap.FixedBufferAllocator.init(&small);
+    try testing.expectEqual(@as(?Stats, null), buildAll(io, fba.allocator()));
+    try testing.expectEqual(@as(?Stats, null), stats());
+    // And a search does not build again at once.
+    try testing.expectEqual(@as(?*Index, null), ready(io, fba.allocator()));
+
+    // With room: every message, none unreadable.
+    const s = buildAll(io, a).?;
+    try testing.expectEqual(@as(usize, 200), s.messages);
+    try testing.expectEqual(@as(usize, 0), s.unreadable);
+
+    // An append the memory refuses drops the whole index.
+    failing.fail_index = failing.alloc_index;
+    noteAppend(try chat_store.dmConvDir(a, "1_2"), "t", msg("t_201", "a brand new word"));
+    try testing.expectEqual(@as(?Stats, null), stats());
+}
+
+test "a block read in place is what the decoder makes of it (155's review)" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    const sep = chat_store.sep;
+    const file = "MSG_t_1\nfrom: Steve\ndate: 2026-10-10T00:00:00Z\n\nhello\nthere\n\n  indented" ++ sep ++
+        "MSG_t_2\nfrom: A: B\nnote: x\ndate: d\n\n" ++ sep ++ // an empty body; a colon in the name
+        "MSG_t_3\nfrom: C\n" ++ sep ++ // no blank line: no body
+        "\nfrom: D\n\nno id line" ++ sep ++ // the first line empty
+        "MSG_t_5\nfrom: E\n\nabove\n\\-------------\nbelow" ++ sep ++ // an escaped separator line
+        "not a header\n\nbody" ++ sep ++ "  \n\t" ++ sep ++ "MSG_t_8\n\nlast";
+    const want = try chat_store.decodeChatFile(a, file);
+    var got: std.ArrayList(chat_store.ChatMessage) = .empty;
+    var blocks = std.mem.splitSequence(u8, file, sep);
+    while (blocks.next()) |piece| {
+        if (std.mem.trim(u8, piece, " \t\r\n").len == 0) continue;
+        try got.append(a, try inPlace(a, piece));
+    }
+    try testing.expectEqual(want.len, got.items.len);
+    for (want, got.items) |w, g| {
+        try testing.expectEqualStrings(w.id, g.id);
+        try testing.expectEqualStrings(w.from, g.from);
+        try testing.expectEqualStrings(w.date, g.date);
+        try testing.expectEqualStrings(w.markdown, g.markdown);
+    }
 }

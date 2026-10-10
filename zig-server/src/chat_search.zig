@@ -5,9 +5,9 @@
 //!   GET /chat/search/words?prefix=la    the words beginning so, each with
 //!       how many messages hold it, summed over what the viewer can see; at
 //!       most `most_words`, the most held first:
-//!       {"prefix":"la","words":[{"word":"layout","count":3},...]}
+//!       {"prefix":"la","unreadable":0,"words":[{"word":"layout","count":3},...]}
 //!   GET /chat/search/messages?word=layout   the messages holding the word:
-//!       {"word":"layout","matched":N,"messages":[{"conv":"/chat/c/1_2",
+//!       {"word":"layout","matched":N,"unreadable":0,"messages":[{"conv":"/chat/c/1_2",
 //!       "kind":"dm","sid":..,"id":..,"from":..,"date":..,"markdown":..},...]}
 //!       at most `most_messages` listed, every one counted.
 //!
@@ -18,6 +18,9 @@
 //! **A CRUDE RATE LIMIT** (Steve): `per_second` searches a second per
 //! person, both routes together, which debounced typing never meets; past
 //! it, 429.
+//!
+//! `unreadable` counts the transcripts of the viewer's conversations the
+//! index could not read: a search there may miss their words.
 //!
 //! The words are the server's alone (`search_tokens`): the client sends what
 //! was typed and renders what comes back. The UI is later (`chat_search.js`
@@ -60,26 +63,61 @@ pub fn handle(req: *Request, io: Io, alloc: Alloc, uid: []const u8, rest: []cons
     if (words_route) {
         // An empty prefix suggests nothing: every word is not a suggestion.
         const got = if (key.len == 0) &[_]search_index.WordCount{} else try idx.wordsFor(alloc, reach, key, most_words);
-        try b.print(alloc, "{{\"prefix\":{f},\"words\":[", .{std.json.fmt(key, .{})});
+        try b.appendSlice(alloc, "{\"prefix\":");
+        try str(&b, alloc, key);
+        try b.print(alloc, ",\"unreadable\":{d},\"words\":[", .{idx.unreadableFor(reach)});
         for (got, 0..) |w, i| {
             if (i > 0) try b.append(alloc, ',');
-            try b.print(alloc, "{{\"word\":{f},\"count\":{d}}}", .{ std.json.fmt(w.word, .{}), w.count });
+            try b.appendSlice(alloc, "{\"word\":");
+            try str(&b, alloc, w.word);
+            try b.print(alloc, ",\"count\":{d}}}", .{w.count});
         }
     } else {
         const f = if (key.len < tokens.min_len) search_index.Found{ .hits = &.{}, .matched = 0 } else try idx.messagesFor(alloc, reach, key, most_messages);
-        try b.print(alloc, "{{\"word\":{f},\"matched\":{d},\"messages\":[", .{ std.json.fmt(key, .{}), f.matched });
+        try b.appendSlice(alloc, "{\"word\":");
+        try str(&b, alloc, key);
+        try b.print(alloc, ",\"matched\":{d},\"unreadable\":{d},\"messages\":[", .{ f.matched, idx.unreadableFor(reach) });
         for (f.hits, 0..) |h, i| {
             if (i > 0) try b.append(alloc, ',');
-            try b.print(alloc, "{{\"conv\":{f},\"kind\":{f},\"sid\":{f},\"id\":{f},\"from\":{f},\"date\":{f},\"markdown\":{f}}}", .{
-                std.json.fmt(h.conv.base, .{}),    std.json.fmt(@tagName(h.conv.kind), .{}),
-                std.json.fmt(h.msg.sid, .{}),      std.json.fmt(h.msg.id, .{}),
-                std.json.fmt(h.msg.from, .{}),     std.json.fmt(h.msg.date, .{}),
-                std.json.fmt(h.msg.markdown, .{}),
-            });
+            const fields = [_][2][]const u8{
+                .{ "{\"conv\":", h.conv.base },
+                .{ ",\"kind\":", @tagName(h.conv.kind) },
+                .{ ",\"sid\":", h.msg.sid },
+                .{ ",\"id\":", h.msg.id },
+                .{ ",\"from\":", h.msg.from },
+                .{ ",\"date\":", h.msg.date },
+                .{ ",\"markdown\":", h.msg.markdown },
+            };
+            for (fields) |fv| {
+                try b.appendSlice(alloc, fv[0]);
+                try str(&b, alloc, fv[1]);
+            }
+            try b.append(alloc, '}');
         }
     }
     try b.appendSlice(alloc, "]}");
     try req.respond(b.items, .{ .extra_headers = &.{http.json_ct} });
+}
+
+/// `s` as a JSON string. **ALWAYS A STRING** (155's review): std.json writes
+/// bytes that are not UTF-8 as an array of numbers, and nothing checks a
+/// message's bytes on the way in; each byte that does not begin a whole
+/// UTF-8 sequence is written as U+FFFD.
+fn str(b: *std.ArrayList(u8), alloc: Alloc, s: []const u8) !void {
+    if (std.unicode.utf8ValidateSlice(s)) return b.print(alloc, "{f}", .{std.json.fmt(s, .{})});
+    var clean: std.ArrayList(u8) = .empty;
+    var i: usize = 0;
+    while (i < s.len) {
+        const n = std.unicode.utf8ByteSequenceLength(s[i]) catch 0;
+        if (n > 0 and i + n <= s.len and std.unicode.utf8ValidateSlice(s[i..][0..n])) {
+            try clean.appendSlice(alloc, s[i..][0..n]);
+            i += n;
+        } else {
+            try clean.appendSlice(alloc, "\u{FFFD}");
+            i += 1;
+        }
+    }
+    return b.print(alloc, "{f}", .{std.json.fmt(clean.items, .{})});
 }
 
 // ── the rate limit ───────────────────────────────────────────────────────────
@@ -120,6 +158,18 @@ pub fn forgetAll() void {
 }
 
 const testing = std.testing;
+
+test "a string in the answer is always a JSON string, its bytes that are not UTF-8 as U+FFFD (155's review)" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var b: std.ArrayList(u8) = .empty;
+    try str(&b, a, "caf\u{00E9} \"q\"");
+    try testing.expectEqualStrings("\"caf\u{00E9} \\\"q\\\"\"", b.items);
+    b.clearRetainingCapacity();
+    try str(&b, a, "x\xc3 \xff\xe2\x80y");
+    try testing.expectEqualStrings("\"x\u{FFFD} \u{FFFD}\u{FFFD}\u{FFFD}y\"", b.items);
+}
 
 test "a few searches a second, then 429 until the second is over" {
     const prev = mem_meter.replace(testing.allocator);

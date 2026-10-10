@@ -1061,16 +1061,21 @@ test "route: search suggests and finds only in what the viewer can see; a word o
     try testing.expect(std.mem.indexOf(u8, words, "{\"word\":\"layover\",\"count\":1}") != null);
     try testing.expect(std.mem.indexOf(u8, words, "layaway") == null);
     try testing.expect(std.mem.indexOf(u8, words, "layer") == null);
+    // A word in what I can see and in what I cannot: counted in mine only
+    // ("the" is in 1_2 once, and in 2_3).
+    try testing.expect(std.mem.indexOf(u8, try UidSite.ask(a, io, "/chat/search/words?prefix=the", me), "{\"word\":\"the\",\"count\":1}") != null);
+    try testing.expect(std.mem.indexOf(u8, try UidSite.ask(a, io, "/chat/search/messages?word=the", me), "\"matched\":1,") != null);
 
     const found = try UidSite.ask(a, io, "/chat/search/messages?word=layout", me);
     try testing.expect(std.mem.indexOf(u8, found, "\"matched\":2") != null);
     try testing.expect(std.mem.indexOf(u8, found, "\"conv\":\"/chat/c/1_2\",\"kind\":\"dm\",\"sid\":\"ChitChat\",\"id\":\"ChitChat_1\"") != null);
     try testing.expect(std.mem.indexOf(u8, found, "\"conv\":\"/channel/general\",\"kind\":\"channel\",\"sid\":\"Trips\",\"id\":\"Trips_1\"") != null);
     // **THE LEAK**: words only in what others can see.
+    chat_search.forgetAll();
     for ([_][]const u8{ "/chat/search/messages?word=secretly", "/chat/search/messages?word=layaway", "/chat/search/words?prefix=secr" }) |target| {
         const got = try UidSite.ask(a, io, target, me);
         try testing.expectEqualStrings("200 OK", status(got));
-        try testing.expect(std.mem.indexOf(u8, got, "secretly") == null or std.mem.indexOf(u8, got, "\"word\":\"secretly\",\"matched\":0,\"messages\":[]") != null);
+        try testing.expect(std.mem.indexOf(u8, got, "secretly") == null or std.mem.indexOf(u8, got, "\"word\":\"secretly\",\"matched\":0,\"unreadable\":0,\"messages\":[]") != null);
         try testing.expect(std.mem.indexOf(u8, got, "layaway plan") == null);
         try testing.expect(std.mem.indexOf(u8, got, "\"count\"") == null);
     }
@@ -1154,6 +1159,31 @@ test "search agrees with /admin/search: for every word, the baseline's messages 
         while (it.next()) |w| try keys.put(a, try std.ascii.allocLowerString(a, w), {});
     }
     try testing.expect(keys.count() > 10);
+    // Built; then messages that land after it, through appendMessage, as
+    // the index takes them (and the disk, which the baseline reads).
+    _ = search_index.ready(io, a).?;
+    var hub = Hub.init(io, a);
+    var bus = Bus.of(&hub);
+    for (0..12) |n| {
+        const pl = places[rand.uintLessThan(usize, places.len)];
+        const channel = std.mem.startsWith(u8, pl[0], "channels/");
+        const meta = chat_store.ConvMeta{ .kind = if (channel) .channel else .dm, .members = &[_][]const u8{} };
+        var body: std.ArrayList(u8) = .empty;
+        for (0..rand.intRangeAtMost(usize, 1, 6)) |w| {
+            if (w > 0) try body.append(a, ' ');
+            try body.appendSlice(a, vocabulary[rand.uintLessThan(usize, vocabulary.len)]);
+        }
+        const dir = try std.fs.path.join(a, &.{ chat_store.chat_root, pl[0] });
+        const m = try chat_store.appendMessage(io, a, &bus, meta, dir, pl[0], pl[1], "Someone", "1", body.items, "");
+        const base = if (channel) try std.fmt.allocPrint(a, "/channel/{s}", .{pl[0]["channels/".len..]}) else try std.fmt.allocPrint(a, "/chat/c/{s}", .{pl[0]});
+        try holds.put(a, try std.fmt.allocPrint(a, "{s} {s} {s}", .{ base, pl[1], m.id }), body.items);
+        _ = n;
+    }
+    hit_it = holds.valueIterator();
+    while (hit_it.next()) |body| {
+        var it = tokens.words(body.*);
+        while (it.next()) |w| try keys.put(a, try std.ascii.allocLowerString(a, w), {});
+    }
     const idx = search_index.ready(io, a).?;
     var compared: usize = 0;
     for ([_][]const u8{ "1", "2", "3" }) |who| {
