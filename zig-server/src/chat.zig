@@ -634,39 +634,10 @@ fn isStreamPath(sub: []const u8) bool {
 /// percent/plus-decoded, or null when absent. Field names here ("markdown",
 /// "cid") are literal, so only the value is decoded.
 pub fn formField(alloc: Alloc, body: []const u8, name: []const u8) !?[]const u8 {
-    var it = std.mem.splitScalar(u8, body, '&');
-    while (it.next()) |pair| {
-        const eq = std.mem.indexOfScalar(u8, pair, '=') orelse continue;
-        if (std.mem.eql(u8, pair[0..eq], name)) return try urlDecode(alloc, pair[eq + 1 ..]);
-    }
-    return null;
+    return http.formField(alloc, body, name);
 }
 
-/// urlDecode reverses form-urlencoding: '+' → space, '%XX' → byte, else verbatim.
+/// urlDecode is `http.formDecode`: one decoder for every form.
 pub fn urlDecode(alloc: Alloc, s: []const u8) ![]u8 {
-    var out: std.ArrayList(u8) = .empty;
-    var i: usize = 0;
-    while (i < s.len) : (i += 1) {
-        const c = s[i];
-        if (c == '+') {
-            try out.append(alloc, ' ');
-        } else if (c == '%' and i + 2 < s.len) {
-            const hi = hexVal(s[i + 1]);
-            const lo = hexVal(s[i + 2]);
-            if (hi != null and lo != null) {
-                try out.append(alloc, hi.? * 16 + lo.?);
-                i += 2;
-            } else try out.append(alloc, c);
-        } else try out.append(alloc, c);
-    }
-    return out.toOwnedSlice(alloc);
-}
-
-fn hexVal(c: u8) ?u8 {
-    return switch (c) {
-        '0'...'9' => c - '0',
-        'a'...'f' => c - 'a' + 10,
-        'A'...'F' => c - 'A' + 10,
-        else => null,
-    };
+    return http.formDecode(alloc, s);
 }

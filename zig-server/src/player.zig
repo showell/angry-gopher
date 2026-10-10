@@ -231,35 +231,9 @@ fn sanitizeNext(next: []const u8) []const u8 {
     return http.internalTarget(next);
 }
 
-/// formField reads one `a=b&c=d` field, percent- and plus-decoded. A local copy
-/// of the parse chat.zig also has: this module does not import chat.
+/// formField is `http.formField`: one decoder for every form.
 fn formField(alloc: Alloc, body: []const u8, name: []const u8) !?[]const u8 {
-    var it = std.mem.splitScalar(u8, body, '&');
-    while (it.next()) |pair| {
-        const eq = std.mem.indexOfScalar(u8, pair, '=') orelse continue;
-        if (!std.mem.eql(u8, pair[0..eq], name)) continue;
-        return try formDecode(alloc, pair[eq + 1 ..]);
-    }
-    return null;
-}
-
-fn formDecode(alloc: Alloc, raw: []const u8) ![]const u8 {
-    var out: std.ArrayList(u8) = .empty;
-    var i: usize = 0;
-    while (i < raw.len) : (i += 1) {
-        switch (raw[i]) {
-            '+' => try out.append(alloc, ' '),
-            '%' => {
-                if (i + 2 >= raw.len) return error.BadEscape;
-                const hi = std.fmt.charToDigit(raw[i + 1], 16) catch return error.BadEscape;
-                const lo = std.fmt.charToDigit(raw[i + 2], 16) catch return error.BadEscape;
-                try out.append(alloc, @intCast(hi * 16 + lo));
-                i += 2;
-            },
-            else => try out.append(alloc, raw[i]),
-        }
-    }
-    return out.items;
+    return http.formField(alloc, body, name);
 }
 
 fn renderPage(req: *std.http.Server.Request, alloc: Alloc, current_name: []const u8, next: []const u8, err_msg: []const u8) !void {

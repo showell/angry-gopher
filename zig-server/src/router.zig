@@ -139,6 +139,12 @@ pub fn route(req: *std.http.Server.Request, io: Io, alloc: std.mem.Allocator, bu
         // head is sent is answered here, for both hosts, and still goes on
         // to the host to log. Once the head is out, the answer is the
         // handler's, cut short, and only the connection's close can say so.
+        if (e == error.MalformedForm) {
+            // The client's, not the server's (http.formField): said as such,
+            // and nothing for the host to log.
+            if (!sent.any) req.respond("The form was malformed.\n", .{ .status = .bad_request, .keep_alive = false }) catch {};
+            return;
+        }
         answerFailure(req, &sent);
         return e;
     };
@@ -1911,4 +1917,29 @@ test "route: a pin, a bookmark or the login mirror that will not write is a 500,
     // The player row is a file where its folder goes: the login's mirror fails.
     try UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ player.player_root, "1" }), "", .{});
     try testing.expectEqualStrings("500 Internal Server Error", status(try postFailing(a, io, "/login/full", "x=y", "name=Steve&password=pw&action=login")));
+}
+
+test "route: one form decoder: a bad escape or a field sent twice is a 400 on every form, where chat took them and players refused them as a 500 (156(i))" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var site = try UidSite.init(a, io);
+    defer site.deinit();
+    const prev = mem_meter.replace(std.heap.page_allocator);
+    defer _ = mem_meter.replace(prev);
+    const chat_store = @import("chat_store.zig");
+    const steve = try memberSession(a, io, "1", "Steve");
+    _ = try memberSession(a, io, "2", "Debbie");
+    try testing.expectEqualStrings("200 OK", status(try postAs(a, io, "/chat/c/1_2/new", steve, "topic=Plans")));
+    for ([_][]const u8{ "markdown=100%zz&cid=x", "markdown=a&markdown=b&cid=x", "markdown=50%&cid=x" }) |bad| {
+        try testing.expectEqualStrings("400 Bad Request", status(try postAs(a, io, "/chat/c/1_2/Plans/send", steve, bad)));
+    }
+    const raw = (try chat_store.rawSession(io, a, try chat_store.dmConvDir(a, "1_2"), "Plans")).?;
+    try testing.expectEqual(@as(usize, 1), (try chat_store.decodeChatFile(a, raw)).len);
+    try testing.expectEqualStrings("400 Bad Request", status(try postForm(a, io, "/play", "x=y", "name=Ada%zz&next=%2Fgame")));
+    // A well-formed escape still decodes.
+    try testing.expectEqualStrings("303 See Other", status(try postAs(a, io, "/chat/c/1_2/Plans/send", steve, "markdown=100%25&cid=y")));
 }

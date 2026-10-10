@@ -235,8 +235,15 @@ fn lessThanByNumericID(_: void, a: AuthorizedUser, b: AuthorizedUser) bool {
 }
 
 /// getUserName returns a user's display name ({auth_root}/{id}/name, trailing
-/// CR/LF trimmed), or "" when absent. Allocated from
-/// `alloc`.
+/// CR/LF trimmed), or "" when there is none. Allocated from `alloc`.
+///
+/// **A MEMBER WITH NO NAME FILE READS "", ON PURPOSE** (metal-vmm QUEUE
+/// 156(i), a decision named): an account is made name first, so one with a
+/// password and no name is a release cut short, which removes the name
+/// before the password (134(e), 138(f)), and that member must still log in
+/// by cookie to release again. What must not take "" as a name refuses it:
+/// retire's plan refuses a nameless account (the box's A2), and
+/// `onlyMemberNamed` never matches "".
 pub fn getUserName(io: Io, alloc: Alloc, id: []const u8) ![]const u8 {
     const b = (try readAuthFile(io, alloc, id, "name")) orelse return "";
     return std.mem.trimEnd(u8, b, "\r\n");
@@ -554,6 +561,7 @@ pub fn checkUserPassword(io: Io, alloc: Alloc, id: []const u8, password: []const
 /// would be worse than nobody. The name first: most accounts are not it, and
 /// membership costs a look at the password.
 pub fn onlyMemberNamed(io: Io, alloc: Alloc, name: []const u8) !?[]const u8 {
+    if (name.len == 0) return null; // "" is no name: a nameless member is no match
     var found: ?[]const u8 = null;
     for (try listUserIDs(io, alloc)) |id| {
         if (!std.mem.eql(u8, try getUserName(io, alloc, id), name) or !(try userIsMember(io, alloc, id))) continue;
@@ -567,6 +575,7 @@ pub fn onlyMemberNamed(io: Io, alloc: Alloc, name: []const u8) !?[]const u8 {
 /// A small scan. Exact byte compare, so existing unicode-named members match
 /// regardless of validateUserName's policy.
 pub fn findMemberByName(io: Io, alloc: Alloc, name: []const u8) !?[]const u8 {
+    if (name.len == 0) return null; // "" is no name: a nameless member is no match
     for (try listUserIDs(io, alloc)) |id| {
         if ((try userIsMember(io, alloc, id)) and
             std.mem.eql(u8, try getUserName(io, alloc, id), name)) return id;
@@ -1001,4 +1010,22 @@ test "fs: a member whose password cannot be looked at is an error, never a free 
     try store.remove(io, a, pw);
     try std.Io.Dir.cwd().symLink(io, "password", pw, .{});
     try testing.expect(std.meta.isError(findMemberByName(io, a, "Alice")));
+}
+
+test "a member with no name file reads as nobody, and no name lookup finds them (metal-vmm QUEUE 156(i))" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var tmp = testing.tmpDir(.{});
+    defer tmp.cleanup();
+    const saved = auth_root;
+    defer auth_root = saved;
+    auth_root = try std.fs.path.join(a, &.{ ".zig-cache", "tmp", &tmp.sub_path });
+    try setUserPassword(io, a, "4", "pw");
+    try testing.expectEqualStrings("", try getUserName(io, a, "4"));
+    try testing.expectEqual(@as(?[]const u8, null), try onlyMemberNamed(io, a, ""));
+    try testing.expectEqual(@as(?[]const u8, null), try findMemberByName(io, a, ""));
 }
