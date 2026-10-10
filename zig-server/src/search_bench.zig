@@ -188,7 +188,7 @@ pub fn main(init: std.process.Init.Minimal) !void {
             var q = std.heap.ArenaAllocator.init(page);
             defer q.deinit();
             const q0 = Io.Clock.now(.awake, io);
-            const f = try idx.messagesFor(q.allocator(), reach.items, word, 500);
+            const f = try idx.messagesFor(q.allocator(), reach.items, word, 500, 2 << 20);
             std.debug.print("messages for \"{s}\": {d} matched, {d} listed, in {d:.2} ms\n", .{ word, f.matched, f.hits.len, ms(q0, Io.Clock.now(.awake, io)) });
         }
     }
