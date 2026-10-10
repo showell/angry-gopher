@@ -238,8 +238,12 @@
     var opts={};
     if(wantFocusID){
       var rec=recordById(wantFocusID);
-      wantFocusID=null;
+      /* PRODUCT_DECISION: a #msg- that names no message here (retired, or a
+         link gone stale) says so and lands at the newest, never silently at
+         the top. */
       if(rec) opts.focusIdx=rec.index+1;
+      else { opts.anchor='bottom'; ChatNotify.show('That message is no longer here.'); console.error('chat: #msg-'+wantFocusID+' names no message in this topic'); }
+      wantFocusID=null;
     } else if(wasCaughtUpAtBacklogStart){
       opts.anchor='bottom';
     }
@@ -303,7 +307,10 @@
     sessionBase: SESSION_BASE, /* a result here jumps; one elsewhere opens its topic */
     jumpToId: function(id){
       var rec=recordById(id);
+      /* PRODUCT_DECISION: a result the server found that this page has not
+         streamed yet (just sent) says so, never does nothing. */
       if(rec) pane.focusBubble(rec.index+1);
+      else ChatNotify.show('That message has not reached this page yet; try again in a moment.');
     },
   });
   /* PRODUCT_DECISION: left rail data ships inline as a sibling <script>

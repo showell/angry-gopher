@@ -45,7 +45,7 @@ window.ChatHelp = (function(){
       { key: 'r', label: 'refer (drop a "See MSG_…" link)',     requiresSelection: true,  action: function(s){ deps.referReply(s); } },
       { key: 's', label: 'save selected message to your reading list', requiresSelection: true, action: function(s){ deps.save(s); } },
       { key: 't', label: 'open the raw transcript in a new tab', requiresSelection: false, action: function(){ deps.viewRaw(); } },
-      { key: '/', label: 'search messages',                     requiresSelection: false, action: function(){ ChatSearch.open(); } },
+      { key: '/', label: 'search every topic',                  requiresSelection: false, action: function(){ ChatSearch.open(); } },
       { key: ':', label: 'react to selected message (pick an emoji)', requiresSelection: true, action: function(s){ deps.pickReaction(s); } },
       { key: '+', label: 'thumbs-up the selected message',      requiresSelection: true,  action: function(s){ deps.thumbsUp(s); } },
     ];

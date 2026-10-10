@@ -44,17 +44,11 @@ window.ChatSearch = (function(){
       +              ' align-items:baseline; gap:8px; }'
       + '.chat-sr-cnt { font-weight:normal; font-size:11px; color:var(--cc-soft-muted-fg); }'
       + '.chat-sr-rhead { font-size:11px; color:var(--cc-muted-fg); margin-bottom:2px; }'
-      /* phase 1: limited RAW context while typing */
+      /* phase 2: a result's excerpt, the raw markdown around the word */
       + '.chat-sr-ctx { font-family:ui-monospace,Menlo,Consolas,monospace;'
       +              ' font-size:12px; color:var(--cc-body-muted-fg); white-space:pre-wrap;'
       +              ' overflow-wrap:anywhere; margin-top:3px;'
       +              ' max-height:4.6em; overflow:hidden; }'
-      /* phase 2: full RENDERED message */
-      + '.chat-sr-rbody { margin-top:3px; color:var(--cc-meta-fg); font-size:13px;'
-      +                ' overflow-wrap:anywhere; }'
-      /* MSG_ refs are inert inside results (they'd jump the hidden feed, not
-         the modal), so drop the link affordance. */
-      + '.chat-sr-rbody a.msg-ref { cursor:default; }'
       + '.chat-search-modal mark { background:var(--cc-search-mark-bg); color:inherit;'
       +                          ' border-radius:2px; padding:0; }';
     document.head.appendChild(s);
@@ -67,16 +61,33 @@ window.ChatSearch = (function(){
      focusFeed restores keyboard focus after the modal closes. */
   var focusFeed, jumpToId, sessionBase;
 
-  var SEARCH_MIN=2, SNIPPET_PAD=90, DEBOUNCE_MS=150;
-  /* PRODUCT_DECISION: marks are case-insensitive: the server folds ASCII case,
-     so the word it answers for is lower-case and matches every spelling. */
-  function foldIndexOf(hay,q,from){ return hay.toLowerCase().indexOf(q.toLowerCase(),from||0); }
+  /* WORDS_CAP is the server's (chat_search.zig: at most 20 words). */
+  var SEARCH_MIN=2, SNIPPET_PAD=90, DEBOUNCE_MS=150, WORDS_CAP=20;
+  /* PRODUCT_DECISION: marks fold case as the server does, ASCII only, which
+     also keeps every index the same length as the text's. */
+  function asciiLower(s){ return s.replace(/[A-Z]/g, function(c){ return c.toLowerCase(); }); }
+  /* A character the server counts as part of a word: not whitespace, not
+     ASCII punctuation, not one of the server's trimmed table (curly quotes,
+     guillemets, the ellipsis and dashes, the inverted marks, the primes, the
+     no-break space: search_tokens.zig `trimmed`), which it trims from a
+     word's edges. */
+  function wordChar(c){ return !!c && !/[\s!-\/:-@\[-`{-~\u2018-\u201F\u00AB\u00BB\u2039\u203A\u2026\u2013-\u2015\u00A1\u00BF\u2032\u2033\u00A0]/.test(c); }
+  /* Where `q` next stands in `hay` from `from`, folded; with `whole`, only
+     where it is a whole word as the server reads one. */
+  function foldIndexOf(hay,q,from,whole){
+    var h=asciiLower(hay), t=asciiLower(q), at=from||0, m;
+    while((m=h.indexOf(t,at))>=0){
+      if(!whole || (!wordChar(hay.charAt(m-1)) && !wordChar(hay.charAt(m+t.length)))) return m;
+      at=m+1;
+    }
+    return -1;
+  }
   /* PRODUCT_DECISION: builds <mark>s as DOM nodes (never innerHTML): the raw
-     body is untrusted text. */
-  function highlightInto(node,text,term){
+     body is untrusted text. `whole`: mark the word, not every substring. */
+  function highlightInto(node,text,term,whole){
     if(!term){ node.appendChild(document.createTextNode(text)); return; }
     var pos=0,m;
-    while((m=foldIndexOf(text,term,pos))>=0){
+    while((m=foldIndexOf(text,term,pos,whole))>=0){
       if(m>pos) node.appendChild(document.createTextNode(text.slice(pos,m)));
       var mk=document.createElement('mark'); mk.textContent=text.slice(m,m+term.length); node.appendChild(mk);
       pos=m+term.length;
@@ -85,11 +96,11 @@ window.ChatSearch = (function(){
   }
   // lint:called-once named-algorithm
   function appendSnippet(node,markdown,term){
-    var idx=foldIndexOf(markdown,term,0), start=0, end=markdown.length;
+    var idx=foldIndexOf(markdown,term,0,true), start=0, end=markdown.length;
     if(idx>=0){ start=Math.max(0,idx-SNIPPET_PAD); end=Math.min(markdown.length,idx+term.length+SNIPPET_PAD); }
     else end=Math.min(markdown.length,180);
     if(start>0) node.appendChild(document.createTextNode('…'));
-    highlightInto(node, markdown.slice(start,end), term);
+    highlightInto(node, markdown.slice(start,end), term, true);
     if(end<markdown.length) node.appendChild(document.createTextNode('…'));
   }
 
@@ -100,10 +111,13 @@ window.ChatSearch = (function(){
   function ask(url, done){
     var mine=++asked;
     fetch(url,{credentials:'same-origin'}).then(function(r){
+      /* The /chat gate answers a session gone by sending to the login page. */
+      if(r.redirected) return {status:401, json:null};
       return r.json().then(function(j){ return {status:r.status, json:j}; },
                           function(){ return {status:r.status, json:null}; });
     }).then(function(a){
       if(mine!==asked || !SR) return;
+      if(a.status===401){ SR.status.textContent='You are signed out; reload the page to sign in again.'; return; }
       if(a.status===429){ SR.status.textContent='Searching too fast; one moment and try again.'; return; }
       if(a.status===503){ SR.status.textContent='Search is still getting ready; try again in a moment.'; return; }
       if(a.status!==200 || !a.json){ SR.status.textContent='Search failed ('+a.status+').'; console.error('chat search: '+url+' answered '+a.status); return; }
@@ -140,7 +154,7 @@ window.ChatSearch = (function(){
       else closeSearchModal();
     });
     dlg.addEventListener('click', onSearchClick);
-    dlg.addEventListener('close', function(){ if(SR && SR.timer) clearTimeout(SR.timer); dlg.remove(); SR=null; focusFeed(); });
+    dlg.addEventListener('close', function(){ if(SR && SR.timer) clearTimeout(SR.timer); asked++; dlg.remove(); SR=null; focusFeed(); });
     dlg.showModal(); input.focus(); renderPrompt();
   }
   function closeSearchModal(){ if(SR) SR.dlg.close(); }
@@ -155,11 +169,17 @@ window.ChatSearch = (function(){
   }
   /* PRODUCT_DECISION: typing waits DEBOUNCE_MS for a pause before asking, so
      a word typed quickly is one question, not one a keystroke. */
+  /* PRODUCT_DECISION: the list empties as soon as the text changes, so Enter
+     before the new words arrive searches what is typed, never a word left
+     over from the last prefix. */
   function scheduleSuggest(){
     if(SR.timer) clearTimeout(SR.timer);
     var q=SR.input.value.trim();
-    if(q.length<SEARCH_MIN){ asked++; renderPrompt(); return; }
-    SR.timer=setTimeout(function(){ if(SR){ SR.timer=null; suggest(q); } }, DEBOUNCE_MS);
+    asked++;
+    SR.list.textContent=''; SR.items=[]; SR.sel=-1;
+    if(q.length<SEARCH_MIN){ renderPrompt(); return; }
+    SR.status.textContent='Searching…';
+    SR.timer=setTimeout(function(){ if(SR && SR.phase==='suggest'){ SR.timer=null; suggest(q); } }, DEBOUNCE_MS);
   }
   // lint:called-once the-step-the-debounce-timer-runs
   function suggest(q){
@@ -169,14 +189,14 @@ window.ChatSearch = (function(){
       SR.list.textContent=''; SR.items=[]; SR.sel=-1;
       var words=j.words||[];
       if(!words.length){ SR.status.textContent='No word starts with “'+q+'” — press Enter to search it anyway.'+unreadableNote(j.unreadable); return; }
-      SR.status.textContent=words.length+(words.length===1?' word':' words')+' · ↑↓ choose, Enter to search'+unreadableNote(j.unreadable);
+      SR.status.textContent=(words.length===WORDS_CAP?'The top '+WORDS_CAP+' words':words.length+(words.length===1?' word':' words'))+' · ↑↓ choose, Enter to search'+unreadableNote(j.unreadable);
       for(var i=0;i<words.length;i++){
         var w=words[i];
         var row=document.createElement('div'); row.className='chat-sr-row'; row.setAttribute('data-i',i);
         var head=document.createElement('div'); head.className='chat-sr-tok';
         /* BROWSER_WORKAROUND: wrap the highlighted word in ONE child so the flex
            row's gap:8px only sits between word-and-count, never inside the word. */
-        var tok=document.createElement('span'); highlightInto(tok, w.word, q); head.appendChild(tok);
+        var tok=document.createElement('span'); highlightInto(tok, w.word, q, false); head.appendChild(tok);
         var cnt=document.createElement('span'); cnt.className='chat-sr-cnt'; cnt.textContent=w.count+(w.count===1?' msg':' msgs');
         head.appendChild(cnt);
         row.appendChild(head);
@@ -185,7 +205,17 @@ window.ChatSearch = (function(){
       SR.sel=0; paintSel();
     });
   }
-  function runResults(word){
+  /* The conversation a result is in, as a reader names it: a channel by its
+     name, a DM as one; and whether choosing it leaves this page. */
+  // lint:called-once named-for-the-row-it-labels
+  function whereLabel(m){
+    var here=(m.conv+'/'+encodeURIComponent(m.sid))===sessionBase;
+    var conv=m.kind==='channel' ? ('#'+m.conv.slice(m.conv.lastIndexOf('/')+1)) : 'a direct message';
+    return here ? (m.sid+' (this topic)') : (conv+' · '+m.sid+' →');
+  }
+  function runResults(word, keepSel){
+    if(SR.timer){ clearTimeout(SR.timer); SR.timer=null; }
+    var was=keepSel ? SR.sel : 0;
     SR.term=word; SR.phase='results'; SR.list.textContent=''; SR.items=[]; SR.sel=-1;
     SR.status.textContent='Searching…';
     ask('/chat/search/messages?word='+encodeURIComponent(word), function(j){
@@ -198,12 +228,12 @@ window.ChatSearch = (function(){
         var m=msgs[k];
         var row=document.createElement('div'); row.className='chat-sr-row'; row.setAttribute('data-i',k);
         var head=document.createElement('div'); head.className='chat-sr-rhead';
-        head.textContent=m.sid+' · '+m.from+' · '+Message.formatLocalTime(m.date);
+        head.textContent=whereLabel(m)+' · '+m.from+' · '+Message.formatLocalTime(m.date);
         var ctx=document.createElement('div'); ctx.className='chat-sr-ctx'; appendSnippet(ctx, m.markdown||'', word);
         row.appendChild(head); row.appendChild(ctx);
         SR.list.appendChild(row); SR.items.push({conv:m.conv, sid:m.sid, id:m.id});
       }
-      SR.sel=0; paintSel();
+      SR.sel=Math.min(Math.max(was,0), SR.items.length-1); paintSel();
     });
   }
   function finalizeSearch(){
@@ -237,7 +267,7 @@ window.ChatSearch = (function(){
     /* PRODUCT_DECISION: triggered by chat.js when a message streamed in while
        the modal was open: ask the same question again. */
     if(!SR) return;
-    if(SR.phase==='suggest') scheduleSuggest(); else runResults(SR.term);
+    if(SR.phase==='suggest') scheduleSuggest(); else runResults(SR.term, true);
   }
 
   function init(deps){
