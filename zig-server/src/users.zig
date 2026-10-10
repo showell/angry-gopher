@@ -544,6 +544,20 @@ pub fn checkUserPassword(io: Io, alloc: Alloc, id: []const u8, password: []const
     return auth.verifyPassword(std.mem.trimEnd(u8, stored, "\r\n"), password);
 }
 
+/// The one member named `name`, or null when none is or more than one is
+/// (108's sign-up race): for naming an author, where a guess between two
+/// would be worse than nobody. The name first: most accounts are not it, and
+/// membership costs a look at the password.
+pub fn onlyMemberNamed(io: Io, alloc: Alloc, name: []const u8) !?[]const u8 {
+    var found: ?[]const u8 = null;
+    for (try listUserIDs(io, alloc)) |id| {
+        if (!std.mem.eql(u8, try getUserName(io, alloc, id), name) or !(try userIsMember(io, alloc, id))) continue;
+        if (found != null) return null;
+        found = id;
+    }
+    return found;
+}
+
 /// findMemberByName returns the id of the member currently using `name`, or null.
 /// A small scan. Exact byte compare, so existing unicode-named members match
 /// regardless of validateUserName's policy.

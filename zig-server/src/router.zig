@@ -1233,7 +1233,7 @@ test "search agrees with /admin/search: for every word, the baseline's messages 
                 }
                 if (has) try want.put(a, where, {});
             }
-            const got = try idx.messagesFor(a, reach, k.*, 10_000);
+            const got = try idx.messagesFor(a, reach, k.*, 10_000, std.math.maxInt(usize));
             try testing.expectEqual(got.matched, got.hits.len);
             var got_set: std.StringHashMapUnmanaged(void) = .empty;
             for (got.hits) |h| try got_set.put(a, try std.fmt.allocPrint(a, "{s} {s} {s}", .{ h.conv.base, h.msg.sid, h.msg.id }), {});
@@ -1243,6 +1243,12 @@ test "search agrees with /admin/search: for every word, the baseline's messages 
             }
             var want_it = want.keyIterator();
             while (want_it.next()) |w| try testing.expect(got_set.contains(w.*));
+            // And the words route counts it so (the box's review of 155).
+            var counted: usize = 0;
+            for (try idx.wordsFor(a, reach, k.*, 100_000)) |wc| {
+                if (std.mem.eql(u8, wc.word, k.*)) counted = wc.count;
+            }
+            try testing.expectEqual(want.count(), counted);
             compared += 1;
         }
     }

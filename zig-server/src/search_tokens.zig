@@ -2,7 +2,9 @@
 //! (metal-vmm QUEUE 155(a)). **THE SERVER'S ALONE**: the client asks the
 //! server for words and messages and renders them; it never tokenizes.
 //!
-//! - **Words split on whitespace** (ASCII whitespace).
+//! - **Words split on ASCII whitespace** only: a no-break or zero-width
+//!   space inside a run glues the words either side into one (a no-break
+//!   space at a word's edge is trimmed, below).
 //! - **Edge punctuation trimmed**, from both ends, again and again: ASCII
 //!   punctuation, and the curly quotes and apostrophes phones type, with
 //!   others like them, all in `trimmed` (Steve: trim curlies and similar).
@@ -22,6 +24,10 @@ const std = @import("std");
 
 /// The shortest word, in bytes.
 pub const min_len = 2;
+/// **THE LONGEST WORD A KEY CAN NAME**, in bytes: the routes read a key of at
+/// most this, and suggest no longer word (a URL is one word today), so a word
+/// suggested is always one a search finds (the box's review of 155).
+pub const max_word = 256;
 
 /// **WHAT IS TRIMMED FROM A WORD'S ENDS BESIDES ASCII PUNCTUATION**, as
 /// UTF-8: quotes and apostrophes of every kind a keyboard or a phone types,
