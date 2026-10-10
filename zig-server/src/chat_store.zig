@@ -55,15 +55,58 @@ pub const ChatMessage = struct {
 
 // ── decode ──────────────────────────────────────────────────────────────────
 
+/// Transcript blocks the decoder refused since boot (metal-vmm QUEUE
+/// 156(h)): one with no `MSG_` id, author or date, which it decoded as a
+/// message of "" before. Counted per read that met one, and said on
+/// /admin/host (`refusedText`) with the last one's first line.
+pub var refused_blocks: usize = 0;
+var refused_last_buf: [96]u8 = undefined;
+var refused_last: []const u8 = "";
+
+/// The refused blocks as /admin/host shows them.
+pub fn refusedText(alloc: Alloc) ![]const u8 {
+    if (refused_blocks == 0) return "none";
+    return std.fmt.allocPrint(alloc, "{d}; the last began: {s}", .{ refused_blocks, refused_last });
+}
+
+/// Whether a decoded block is a message: it has an id, an author and a date
+/// (the decoder and search's in-place reading ask the same).
+pub fn isMessage(m: ChatMessage) bool {
+    return m.id.len > 0 and m.from.len > 0 and m.date.len > 0;
+}
+
+/// A block that is not a message: counted, and its first line kept to say.
+pub fn refuseBlock(piece: []const u8) void {
+    refused_blocks += 1;
+    const first = piece[0 .. std.mem.indexOfScalar(u8, piece, '\n') orelse piece.len];
+    const n = @min(first.len, refused_last_buf.len);
+    @memcpy(refused_last_buf[0..n], first[0..n]);
+    refused_last = refused_last_buf[0..n];
+}
+
 /// decodeChatFile parses a whole session file into messages. Splits on `sep`
-/// (no trailing separator on disk, so one piece per message), skipping any
-/// all-whitespace piece.
+/// (no trailing separator on disk, so one piece per message).
+///
+/// **TWO SKIPS, NAMED** (metal-vmm QUEUE 156(h)):
+/// - an all-whitespace piece is no block, and uncounted: an append torn
+///   right after its separator leaves one, as a file that begins with one
+///   does;
+/// - a block that is not a message (`isMessage`: no `MSG_` id, author or
+///   date; an append torn inside its header is one) is refused, counted and
+///   said (`refuseBlock`), where it decoded as a message of "". Never the
+///   whole transcript: the next append lands after it, so a torn block is
+///   not only ever the last.
 pub fn decodeChatFile(alloc: Alloc, data: []const u8) ![]ChatMessage {
     var out: std.ArrayList(ChatMessage) = .empty;
     var it = std.mem.splitSequence(u8, data, sep);
     while (it.next()) |piece| {
         if (std.mem.trim(u8, piece, " \t\r\n").len == 0) continue;
-        try out.append(alloc, try decodeChatBlock(alloc, piece));
+        const m = try decodeChatBlock(alloc, piece);
+        if (!isMessage(m)) {
+            refuseBlock(piece);
+            continue;
+        }
+        try out.append(alloc, m);
     }
     return out.toOwnedSlice(alloc);
 }
@@ -1747,4 +1790,26 @@ test "a channel's member lines are canonical uids, each once, or the channel is 
         try testing.expectError(error.MalformedChannel, channelMembers(f.io, a, "team"));
         try testing.expectError(error.MalformedChannel, listUserChannels(f.io, a, "1"));
     }
+}
+
+test "the decoder refuses a block with no id, author or date, counted; a blank piece is a torn append's and skipped (metal-vmm QUEUE 156(h))" {
+    const a = testing.allocator;
+    var arena = std.heap.ArenaAllocator.init(a);
+    defer arena.deinit();
+    const x = arena.allocator();
+    const good = "MSG_t_1\nfrom: Steve\ndate: 2026-10-10T00:00:00Z\n\nhello";
+    const before = refused_blocks;
+    inline for ([_][]const u8{
+        "from: Steve\ndate: 2026-10-10T00:00:00Z\n\nno id",
+        "MSG_t_2\ndate: 2026-10-10T00:00:00Z\n\nno author",
+        "MSG_t_2\nfrom: Steve\n\nno date",
+        "MSG_t_2\nfro", // an append torn inside its header
+    }, 1..) |bad, n| {
+        const msgs = try decodeChatFile(x, good ++ sep ++ bad);
+        try testing.expectEqual(@as(usize, 1), msgs.len);
+        try testing.expectEqual(before + n, refused_blocks);
+    }
+    // A blank piece (an append torn right after its separator) is no block.
+    try testing.expectEqual(@as(usize, 1), (try decodeChatFile(x, good ++ sep ++ "  \n")).len);
+    try testing.expectEqual(before + 4, refused_blocks);
 }

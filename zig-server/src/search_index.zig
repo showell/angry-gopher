@@ -104,8 +104,23 @@ pub const Found = struct {
 /// copy, so the build's scratch is the transcript and not several times it.
 /// A block whose body holds an escaped separator line, which the decoder
 /// unescapes, goes through the decoder (into `a`).
-fn inPlace(a: Alloc, piece: []const u8) !chat_store.ChatMessage {
-    if (std.mem.indexOf(u8, piece, "\\-------------") != null) return (try chat_store.decodeChatFile(a, piece))[0];
+///
+/// Null for a block that is not a message (`chat_store.isMessage`), refused
+/// and counted as the decoder does: the two read the same messages.
+fn inPlace(a: Alloc, piece: []const u8) !?chat_store.ChatMessage {
+    if (std.mem.indexOf(u8, piece, "\\-------------") != null) {
+        const got = try chat_store.decodeChatFile(a, piece);
+        return if (got.len > 0) got[0] else null;
+    }
+    const m = inPlaceRead(piece);
+    if (!chat_store.isMessage(m)) {
+        chat_store.refuseBlock(piece);
+        return null;
+    }
+    return m;
+}
+
+fn inPlaceRead(piece: []const u8) chat_store.ChatMessage {
     var m: chat_store.ChatMessage = .{ .id = "", .from = "", .date = "", .markdown = "" };
     var lines = std.mem.splitScalar(u8, piece, '\n');
     var first = true;
@@ -273,7 +288,7 @@ pub const Index = struct {
                 var blocks = std.mem.splitSequence(u8, raw, chat_store.sep);
                 while (blocks.next()) |piece| {
                     if (std.mem.trim(u8, piece, " \t\r\n").len == 0) continue;
-                    try self.add(dir, sid, try inPlace(a, piece));
+                    if (try inPlace(a, piece)) |m| try self.add(dir, sid, m);
                 }
             }
         }
@@ -575,7 +590,7 @@ test "a block read in place is what the decoder makes of it (155's review)" {
     var blocks = std.mem.splitSequence(u8, file, sep);
     while (blocks.next()) |piece| {
         if (std.mem.trim(u8, piece, " \t\r\n").len == 0) continue;
-        try got.append(a, try inPlace(a, piece));
+        if (try inPlace(a, piece)) |m| try got.append(a, m);
     }
     try testing.expectEqual(want.len, got.items.len);
     for (want, got.items) |w, g| {
