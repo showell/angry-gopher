@@ -535,9 +535,16 @@ pub fn lastMessage(io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8) 
 /// **ONE MEMBER, OR NOBODY** (the box's review of 155): a name two members
 /// share (108's sign-up race) names neither.
 fn authorByName(io: Io, alloc: Alloc, from: []const u8) []const u8 {
+    // absent-ok: an author that cannot be looked up is shown as nobody, for this read only: nothing records it.
+    return lookupAuthor(io, alloc, from) catch "";
+}
+
+/// `authorByName`, its failure kept: what the backfill records is believed
+/// for good (a current record is never asked again), so a lookup that
+/// failed must record nothing, never nobody (the box's should-fix).
+fn lookupAuthor(io: Io, alloc: Alloc, from: []const u8) ![]const u8 {
     if (from.len == 0) return "";
-    // absent-ok: an author that cannot be looked up is shown as nobody; what a sidecar records from it is a cache, recounted from the transcript.
-    return (users.onlyMemberNamed(io, alloc, from) catch return "") orelse "";
+    return (try users.onlyMemberNamed(io, alloc, from)) orelse "";
 }
 
 /// The N of a `<sid>_<N>` message id, or null when the id is not this
@@ -599,12 +606,12 @@ pub fn backfillSidecars(io: Io, alloc: Alloc, conv_dirs: []const []const u8) usi
             // The last block begins at the last separator; a lone message
             // begins at the start of the file.
             const offset = if (std.mem.lastIndexOf(u8, raw, sep)) |at| at else 0;
-            writeCount(io, a, dir, sid, msgs.len, raw.len, .{
-                .offset = offset,
-                // The last message's author, found by name (the box's
-                // must-fix after 153(1)); unknown, "", when no member has it.
-                .uid = authorByName(io, a, msgs[msgs.len - 1].from),
-            });
+            // The last message's author, found by name (the box's must-fix
+            // after 153(1)); "", when no member has it. A lookup that fails
+            // writes nothing: the next boot asks again.
+            // absent-ok: the startup backfill skips a session whose author it cannot look up; reads find the author by name meanwhile.
+            const uid = lookupAuthor(io, a, msgs[msgs.len - 1].from) catch continue;
+            writeCount(io, a, dir, sid, msgs.len, raw.len, .{ .offset = offset, .uid = uid });
             wrote += 1;
         }
     }
@@ -1621,4 +1628,26 @@ test "a name two members share names nobody (the box's review of 155, 4)" {
     _ = try f.send("the second");
     try f.setSidecar(try std.fmt.allocPrint(a, "1 {d}\n0 9\n", .{after_first}));
     try testing.expectEqualStrings("", (try lastMessage(f.io, a, f.dir, "topic")).?.uid);
+}
+
+test "a lookup that fails at boot records nothing, so a later boot finds the author (the box's should-fix after fce504f)" {
+    var threaded = std.Io.Threaded.init(testing.allocator, .{});
+    defer threaded.deinit();
+    var f: CountFixture = undefined;
+    try f.init(threaded.io());
+    defer f.deinit();
+    const a = f.arena.allocator();
+    try users.setUserName(f.io, a, "1", "Tester");
+    try users.setUserPassword(f.io, a, "1", "pw");
+    // An account whose name will not read: the lookup fails.
+    try Io.Dir.cwd().createDirPath(f.io, try std.fs.path.join(a, &.{ users.auth_root, "5", "name" }));
+    _ = try f.send("hello");
+    try Io.Dir.cwd().deleteFile(f.io, try countPath(a, f.dir, "topic"));
+    const dirs = [_][]const u8{f.dir};
+    try testing.expectEqual(@as(usize, 0), backfillSidecars(f.io, a, &dirs));
+    try testing.expect(readCount(f.io, a, f.dir, "topic") == null);
+    // The account heals; the next boot finds the author.
+    try Io.Dir.cwd().deleteTree(f.io, try std.fs.path.join(a, &.{ users.auth_root, "5" }));
+    try testing.expectEqual(@as(usize, 1), backfillSidecars(f.io, a, &dirs));
+    try testing.expectEqualStrings("1", readCount(f.io, a, f.dir, "topic").?.last.?.uid);
 }
