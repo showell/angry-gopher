@@ -104,8 +104,14 @@ pub fn allocate(io: Io, alloc: Alloc, name: []const u8) ![]const u8 {
 /// name, since the account store is that name's owner while both exist.
 /// This is the ONLY call into this module from the chat side, and it goes away
 /// with login.zig when the surfaces separate.
+///
+/// **WRITTEN ONLY WHEN THE NAME CHANGED** (gopher-metal 153(3)): it runs on
+/// every login, the name is nearly always the one there, and a `replace` is
+/// many disk requests on gopher-metal; the read is from memory.
 pub fn mirror(io: Io, alloc: Alloc, id: []const u8, name: []const u8) void {
     if (!isSafeID(id) or name.len == 0) return;
+    // absent-ok: a name that cannot be read is written again, which is what an absent one asks.
+    if (readField(io, alloc, id, "name") catch null) |was| if (std.mem.eql(u8, was, name)) return;
     setName(io, alloc, id, name) catch {};
 }
 
@@ -421,4 +427,25 @@ test "fs: a player's last-seen is written at most every last_seen_every_s second
     try store.write(io, a, path, old, .{});
     touch(io, a, "p3");
     try testing.expect(!std.mem.eql(u8, old, try store.read(io, a, path, .limited(64))));
+}
+
+test "fs: mirror writes a name only when it changed (gopher-metal 153(3))" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var tmp = testing.tmpDir(.{});
+    defer tmp.cleanup();
+    const saved = player_root;
+    defer player_root = saved;
+    player_root = try std.fs.path.join(a, &.{ ".zig-cache", "tmp", &tmp.sub_path, "players" });
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    const path = try std.fs.path.join(a, &.{ player_root, "1", "name" });
+    // The same name, kept with a newline the write would not put.
+    try store.write(io, a, path, "Steve\n", .{});
+    mirror(io, a, "1", "Steve");
+    try testing.expectEqualStrings("Steve\n", try store.read(io, a, path, .limited(64)));
+    mirror(io, a, "1", "Stephen");
+    try testing.expectEqualStrings("Stephen", try store.read(io, a, path, .limited(64)));
 }
