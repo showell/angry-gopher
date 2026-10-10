@@ -29,6 +29,9 @@ const Request = std.http.Server.Request;
 pub const min_key = 2;
 /// The most matches listed; every one is counted.
 pub const max_listed = 500;
+/// Transcripts read by every search since start, for the tests: a HEAD or a
+/// link from another site must read none.
+pub var transcripts_read: usize = 0;
 
 /// One message that matched, its text copied out of the transcript's arena.
 pub const Hit = struct {
@@ -50,15 +53,21 @@ pub const Result = struct {
     bytes: u64,
     /// Transcripts that could not be read or decoded, each skipped and counted.
     unreadable: usize,
+    /// Transcripts too large for the request's memory, each skipped and counted.
+    too_big: usize,
 };
 
 /// Every message `uid` can see whose markdown contains `key`: DMs first,
 /// then channels, each transcript in session order.
 pub fn search(io: Io, alloc: Alloc, uid: []const u8, key: []const u8) !Result {
     var hits: std.ArrayList(Hit) = .empty;
-    var r: Result = .{ .hits = &.{}, .matched = 0, .transcripts = 0, .messages = 0, .bytes = 0, .unreadable = 0 };
+    var r: Result = .{ .hits = &.{}, .matched = 0, .transcripts = 0, .messages = 0, .bytes = 0, .unreadable = 0, .too_big = 0 };
     // **ONE TRANSCRIPT AT A TIME**, as the startup backfill reads them: a
-    // match is copied out to `alloc`, and the rest goes with the arena.
+    // match is copied out to `alloc`, and the rest goes with the arena. The
+    // request's own allocator is an arena too (on both hosts), so a reset
+    // here gives back what the parent can take again only in part: what the
+    // search holds at its peak is a few transcripts' worth, not one, and
+    // never the whole of chat.
     var per = std.heap.ArenaAllocator.init(alloc);
     defer per.deinit();
     for (try store.visibleConvs(io, alloc, uid)) |conv| {
@@ -68,14 +77,18 @@ pub fn search(io: Io, alloc: Alloc, uid: []const u8, key: []const u8) !Result {
             _ = per.reset(.retain_capacity);
             const a = per.allocator();
             r.transcripts += 1;
-            // absent-ok: a transcript that cannot be read is counted and said on the page, never taken as no match.
-            const raw = (store.rawSession(io, a, dir, sid) catch null) orelse {
+            transcripts_read += 1;
+            // absent-ok: a transcript gone since the listing, or one that cannot be read, is counted and said on the page, never taken as no match.
+            const raw = (store.rawSession(io, a, dir, sid) catch |e| {
+                if (e == error.OutOfMemory) r.too_big += 1 else r.unreadable += 1;
+                continue;
+            }) orelse {
                 r.unreadable += 1;
                 continue;
             };
             r.bytes += raw.len;
-            const msgs = store.decodeChatFile(a, raw) catch {
-                r.unreadable += 1;
+            const msgs = store.decodeChatFile(a, raw) catch |e| {
+                if (e == error.OutOfMemory) r.too_big += 1 else r.unreadable += 1;
                 continue;
             };
             for (msgs) |m| {
@@ -114,7 +127,15 @@ pub fn render(req: *Request, io: Io, alloc: Alloc) !void {
     try ui.begin(&b, alloc, "🐹 Search your messages", "/admin/search");
     try b.print(alloc, "<form method=\"get\" action=\"/admin/search\"><input name=\"key\" value=\"{s}\" autofocus> <button>Search</button></form>\n", .{try html.htmlEscape(alloc, key)});
     try b.appendSlice(alloc, "<p class=\"muted\">Reads every transcript you can see, and every other request waits while it does. A baseline, not the search people use.</p>\n");
-    if (key.len == 0) {
+    // **ONLY A GET FROM THIS SITE SEARCHES**: a HEAD reads nothing (as
+    // /admin/backup's), and a link from another site, which the admin's
+    // cookie follows, gets the form, not a walk that stalls every request.
+    // A typed URL or a bookmark says `none`; a client that sends no
+    // Sec-Fetch-Site (curl) is taken as typed.
+    const site = try http.header(req, alloc, "sec-fetch-site");
+    const from_here = if (site) |s| std.mem.eql(u8, s, "same-origin") or std.mem.eql(u8, s, "none") else true;
+    if (key.len == 0 or req.head.method != .GET or !from_here) {
+        if (key.len != 0 and !from_here) try b.appendSlice(alloc, "<p>A search from another site's link does not run; press Search.</p>\n");
         try ui.end(&b, alloc);
         return req.respond(b.items, .{ .extra_headers = &.{http.html_ct} });
     }
@@ -124,12 +145,13 @@ pub fn render(req: *Request, io: Io, alloc: Alloc) !void {
         return req.respond(b.items, .{ .extra_headers = &.{http.html_ct} });
     }
     const r = try search(io, alloc, ui.admin_uid, key);
-    try b.print(alloc, "<p>{d} messages match, of {d} in {d} transcripts ({s}){s}.</p>\n", .{
+    try b.print(alloc, "<p>{d} messages match, of {d} in {d} transcripts ({s}){s}{s}.</p>\n", .{
         r.matched,
         r.messages,
         r.transcripts,
         try ui.humanBytes(alloc, @intCast(r.bytes)),
         if (r.unreadable > 0) try std.fmt.allocPrint(alloc, "; {d} could not be read", .{r.unreadable}) else "",
+        if (r.too_big > 0) try std.fmt.allocPrint(alloc, "; {d} too large to read here", .{r.too_big}) else "",
     });
     if (r.matched > r.hits.len) try b.print(alloc, "<p class=\"muted\">The first {d} are listed.</p>\n", .{r.hits.len});
     try b.appendSlice(alloc, "<table>");
