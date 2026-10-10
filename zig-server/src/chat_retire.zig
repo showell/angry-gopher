@@ -32,6 +32,7 @@ const std = @import("std");
 const Io = std.Io;
 const Alloc = std.mem.Allocator;
 const store = @import("store.zig");
+const search_index = @import("search_index.zig");
 const chat_store = @import("chat_store.zig");
 const timefmt = @import("timefmt.zig");
 const users = @import("users.zig");
@@ -139,6 +140,9 @@ pub const Params = struct {
 /// `items` and strings are allocated from `alloc`.
 pub fn plan(io: Io, alloc: Alloc, p: Params, apply: bool) !Plan {
     var pl = Plan{ .alloc = alloc, .io = io, .apply = apply };
+    // **AFTER A RETIRE APPLIES, SEARCH IS BUILT AGAIN WHOLE** (metal-vmm
+    // 155(b)): rare, and always right, a failure part way included.
+    defer if (apply) search_index.rebuild(io, alloc);
     const cutoff = p.now - @as(i64, p.days) * std.time.s_per_day;
 
     // Phase 1: old topics, in every conversation (DMs and channels alike).

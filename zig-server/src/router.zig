@@ -60,6 +60,9 @@ const uid_cookie = @import("uid_cookie.zig");
 //                               in full. A host that skips it answers the same
 //                               but slower — and leaves different files behind,
 //                               which is a difference the judge next door sees.
+//   4b. search_index.buildAll   once, after 4: every transcript into the
+//                               search index in memory. A host that skips it
+//                               has the first search build it, in that request.
 //   5. after route() returns,   if the request's Bus holds a kept stream, serve
 //      serve what it kept       it: `streams.serveKept` blocks until the client
 //                               goes away; `streams.nextFrame` hands over the
@@ -92,6 +95,8 @@ pub const request_limits = @import("limits.zig");
 /// Chat's on-disk store, for the one thing a host does with it directly:
 /// `store.backfillAll` at startup.
 pub const store = @import("chat_store.zig");
+/// Search's index in memory: `search_index.buildAll` at startup (step 4b).
+pub const search_index = @import("search_index.zig");
 /// The game store's bounds (gopher-metal QUEUE item 52): a host sets
 /// `game_limits.free_space` so that game writes stop before the volume fills.
 pub const game_limits = @import("game_limits.zig");
@@ -997,6 +1002,191 @@ test "route: /admin/search finds a key in every conversation the admin can see, 
     try testing.expect(std.mem.indexOf(u8, cross, "does not run; press Search") != null);
     const typed = try serve(a, io, try std.fmt.allocPrint(a, "GET /admin/search?key=lay HTTP/1.1\r\nHost: x\r\nSec-Fetch-Site: none\r\nCookie: {s}\r\n\r\n", .{me}));
     try testing.expect(std.mem.indexOf(u8, typed, "3 messages match") != null);
+}
+
+// ── search (metal-vmm QUEUE 155) ─────────────────────────────────────────────
+
+/// A member's session for UidSite.
+fn memberSession(a: std.mem.Allocator, io: Io, uid: []const u8, name: []const u8) ![]const u8 {
+    try users.setUserName(io, a, uid, name);
+    try users.setUserPassword(io, a, uid, "pw");
+    const now: i64 = @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
+    return std.fmt.allocPrint(a, "gopher_auth={s}", .{try users.signSession(a, UidSite.secret, uid, now)});
+}
+
+/// A transcript as the store lays it out: one message a body, numbered from 1.
+fn writeTranscript(a: std.mem.Allocator, io: Io, dir: []const u8, sid: []const u8, bodies: []const []const u8) !void {
+    const chat_store = @import("chat_store.zig");
+    var t: std.ArrayList(u8) = .empty;
+    for (bodies, 1..) |body, n| {
+        if (n > 1) try t.appendSlice(a, chat_store.sep);
+        try t.print(a, "MSG_{s}_{d}\nfrom: Someone\ndate: 2026-10-10T00:{d:0>2}:00Z\n\n{s}", .{ sid, n, n % 60, body });
+    }
+    const path = try std.fs.path.join(a, &.{ chat_store.chat_root, dir, "sessions", try std.fmt.allocPrint(a, "{s}.md", .{sid}) });
+    try UidSite.disk.write(io, a, path, t.items, .{});
+}
+
+test "route: search suggests and finds only in what the viewer can see; a word only in another pair's DM is neither (metal-vmm 155(d))" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var site = try UidSite.init(a, io);
+    defer site.deinit();
+    const prev = mem_meter.replace(std.heap.page_allocator); // presence outlives the test
+    defer _ = mem_meter.replace(prev);
+    const chat_search = @import("chat_search.zig");
+    search_index.drop();
+    defer search_index.drop();
+    chat_search.forgetAll();
+    defer chat_search.forgetAll();
+    const chat_store = @import("chat_store.zig");
+
+    const me = try memberSession(a, io, "1", "Steve");
+    _ = try memberSession(a, io, "2", "Debbie");
+    _ = try memberSession(a, io, "3", "Apoorva");
+    try UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ chat_store.chat_root, "channels", "general.channel" }), "1\n2\n", .{});
+    try UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ chat_store.chat_root, "channels", "quiet.channel" }), "2\n3\n", .{});
+    try writeTranscript(a, io, "1_2", "ChitChat", &.{ "the page LAYOUT is off", "\u{201C}Layover\u{201D} in Denver?" });
+    try writeTranscript(a, io, "channels/general", "Trips", &.{"a layout, again"});
+    // Not mine: another pair's DM, and a channel I am not in.
+    try writeTranscript(a, io, "2_3", "Private", &.{"the layaway plan, secretly"});
+    try writeTranscript(a, io, "channels/quiet", "Hush", &.{"a layer cake, secretly"});
+
+    const words = try UidSite.ask(a, io, "/chat/search/words?prefix=LAY", me);
+    try testing.expectEqualStrings("200 OK", status(words));
+    try testing.expect(std.mem.indexOf(u8, words, "{\"word\":\"layout\",\"count\":2}") != null);
+    try testing.expect(std.mem.indexOf(u8, words, "{\"word\":\"layover\",\"count\":1}") != null);
+    try testing.expect(std.mem.indexOf(u8, words, "layaway") == null);
+    try testing.expect(std.mem.indexOf(u8, words, "layer") == null);
+
+    const found = try UidSite.ask(a, io, "/chat/search/messages?word=layout", me);
+    try testing.expect(std.mem.indexOf(u8, found, "\"matched\":2") != null);
+    try testing.expect(std.mem.indexOf(u8, found, "\"conv\":\"/chat/c/1_2\",\"kind\":\"dm\",\"sid\":\"ChitChat\",\"id\":\"ChitChat_1\"") != null);
+    try testing.expect(std.mem.indexOf(u8, found, "\"conv\":\"/channel/general\",\"kind\":\"channel\",\"sid\":\"Trips\",\"id\":\"Trips_1\"") != null);
+    // **THE LEAK**: words only in what others can see.
+    for ([_][]const u8{ "/chat/search/messages?word=secretly", "/chat/search/messages?word=layaway", "/chat/search/words?prefix=secr" }) |target| {
+        const got = try UidSite.ask(a, io, target, me);
+        try testing.expectEqualStrings("200 OK", status(got));
+        try testing.expect(std.mem.indexOf(u8, got, "secretly") == null or std.mem.indexOf(u8, got, "\"word\":\"secretly\",\"matched\":0,\"messages\":[]") != null);
+        try testing.expect(std.mem.indexOf(u8, got, "layaway plan") == null);
+        try testing.expect(std.mem.indexOf(u8, got, "\"count\"") == null);
+    }
+    // And one who can see them finds them.
+    const deb = try memberSession(a, io, "2", "Debbie");
+    try testing.expect(std.mem.indexOf(u8, try UidSite.ask(a, io, "/chat/search/messages?word=secretly", deb), "\"matched\":2") != null);
+
+    // **A MESSAGE THAT LANDS IS FOUND**, without a build from the disk.
+    var hub = Hub.init(io, a);
+    var bus = Bus.of(&hub);
+    const meta = chat_store.ConvMeta{ .kind = .dm, .members = &[_][]const u8{ "1", "2" } };
+    _ = try chat_store.appendMessage(io, a, &bus, meta, try chat_store.dmConvDir(a, "1_2"), "1_2", "ChitChat", "Steve", "1", "zeppelins, tonight", "");
+    chat_search.forgetAll();
+    try testing.expect(std.mem.indexOf(u8, try UidSite.ask(a, io, "/chat/search/messages?word=zeppelins", me), "\"matched\":1") != null);
+
+    // **A FEW SEARCHES A SECOND**, then 429.
+    chat_search.forgetAll();
+    var refused = false;
+    for (0..chat_search.per_second + 1) |_| {
+        if (std.mem.eql(u8, status(try UidSite.ask(a, io, "/chat/search/words?prefix=la", me)), "429 Too Many Requests")) refused = true;
+    }
+    try testing.expect(refused);
+}
+
+test "search agrees with /admin/search: for every word, the baseline's messages that hold it (metal-vmm 155(c))" {
+    // /admin/search matches a key as a substring ("lay" finds "player"); the
+    // index, whole words. So for every key that is a word of the corpus, and
+    // every viewer: the index's messages are exactly the baseline's whose
+    // words include the key. The corpus stays under the baseline's 500
+    // listed, and no transcript is too large for it.
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var site = try UidSite.init(a, io);
+    defer site.deinit();
+    const tokens = @import("search_tokens.zig");
+    const admin_search = @import("admin_search.zig");
+    const chat_store = @import("chat_store.zig");
+    const prev = mem_meter.replace(testing.allocator);
+    defer _ = mem_meter.replace(prev);
+    search_index.drop();
+    defer search_index.drop();
+
+    for ([_][2][]const u8{ .{ "1", "Steve" }, .{ "2", "Debbie" }, .{ "3", "Apoorva" } }) |m| {
+        try users.setUserName(io, a, m[0], m[1]);
+        try users.setUserPassword(io, a, m[0], "pw");
+    }
+    try UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ chat_store.chat_root, "channels", "general.channel" }), "1\n2\n", .{});
+    try UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ chat_store.chat_root, "channels", "quiet.channel" }), "2\n3\n", .{});
+    const vocabulary = [_][]const u8{
+        "Layout",      "layout,",     "\u{201C}layout\u{201D}", "lay", "player", "LAY!", "(lay)", "layer",    "don't",                "don\u{2019}t",
+        "caf\u{00E9}", "CAF\u{00C9}", "\u{65E5}\u{672C}",       "a",   "x1",     "e.g.", "3.14",  "**bold**", "\u{2014}dash\u{2014}", "plan",
+    };
+    const places = [_][2][]const u8{ .{ "1_2", "Alpha" }, .{ "1_2", "Beta" }, .{ "1_3", "Gamma" }, .{ "2_3", "Delta" }, .{ "channels/general", "Trips" }, .{ "channels/quiet", "Hush" } };
+    // The words of each message by where it is: "<base> <sid> <id>".
+    var holds: std.StringHashMapUnmanaged([]const u8) = .empty;
+    var prng = std.Random.DefaultPrng.init(155);
+    const rand = prng.random();
+    for (places) |pl| {
+        var bodies: std.ArrayList([]const u8) = .empty;
+        for (0..rand.intRangeAtMost(usize, 1, 12)) |_| {
+            var body: std.ArrayList(u8) = .empty;
+            for (0..rand.intRangeAtMost(usize, 1, 8)) |w| {
+                if (w > 0) try body.append(a, if (rand.boolean()) ' ' else '\n');
+                try body.appendSlice(a, vocabulary[rand.uintLessThan(usize, vocabulary.len)]);
+            }
+            try bodies.append(a, body.items);
+        }
+        try writeTranscript(a, io, pl[0], pl[1], bodies.items);
+        const base = if (std.mem.startsWith(u8, pl[0], "channels/")) try std.fmt.allocPrint(a, "/channel/{s}", .{pl[0]["channels/".len..]}) else try std.fmt.allocPrint(a, "/chat/c/{s}", .{pl[0]});
+        for (bodies.items, 1..) |body, n| try holds.put(a, try std.fmt.allocPrint(a, "{s} {s} {s}_{d}", .{ base, pl[1], pl[1], n }), body);
+    }
+    // Every key: every word of the corpus, folded.
+    var keys: std.StringHashMapUnmanaged(void) = .empty;
+    var hit_it = holds.valueIterator();
+    while (hit_it.next()) |body| {
+        var it = tokens.words(body.*);
+        while (it.next()) |w| try keys.put(a, try std.ascii.allocLowerString(a, w), {});
+    }
+    try testing.expect(keys.count() > 10);
+    const idx = search_index.ready(io, a).?;
+    var compared: usize = 0;
+    for ([_][]const u8{ "1", "2", "3" }) |who| {
+        const reach = try chat_store.visibleConvs(io, a, who);
+        var key_it = keys.keyIterator();
+        while (key_it.next()) |k| {
+            const base_r = try admin_search.search(io, a, who, k.*);
+            try testing.expect(base_r.matched == base_r.hits.len); // under its cap
+            try testing.expectEqual(@as(usize, 0), base_r.unreadable + base_r.too_big);
+            var want: std.StringHashMapUnmanaged(void) = .empty;
+            for (base_r.hits) |h| {
+                const where = try std.fmt.allocPrint(a, "{s} {s} {s}", .{ h.base, h.sid, h.id });
+                var it = tokens.words(holds.get(where).?);
+                var has = false;
+                while (it.next()) |w| {
+                    if (std.ascii.eqlIgnoreCase(w, k.*) and w.len == k.len) has = true;
+                }
+                if (has) try want.put(a, where, {});
+            }
+            const got = try idx.messagesFor(a, reach, k.*, 10_000);
+            try testing.expectEqual(got.matched, got.hits.len);
+            var got_set: std.StringHashMapUnmanaged(void) = .empty;
+            for (got.hits) |h| try got_set.put(a, try std.fmt.allocPrint(a, "{s} {s} {s}", .{ h.conv.base, h.msg.sid, h.msg.id }), {});
+            if (want.count() != got_set.count()) {
+                std.debug.print("viewer {s}, key \"{s}\": the baseline's messages holding it {d}, the index's {d}\n", .{ who, k.*, want.count(), got_set.count() });
+                return error.Disagree;
+            }
+            var want_it = want.keyIterator();
+            while (want_it.next()) |w| try testing.expect(got_set.contains(w.*));
+            compared += 1;
+        }
+    }
+    try testing.expect(compared > 30);
 }
 
 test "route: only a member's own session is the admin; a non-member's session, or a gopher_uid, is no one" {

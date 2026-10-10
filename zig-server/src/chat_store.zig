@@ -26,6 +26,7 @@ const users = @import("users.zig");
 const recent_feed = @import("recent_feed.zig");
 const images_store = @import("images_store.zig");
 const code_store = @import("code_store.zig");
+const search_index = @import("search_index.zig");
 
 /// chat_root is {data_dir}/chat. config.zig overrides this at startup; the
 /// default is repo-relative-from-zig-server like the others.
@@ -180,6 +181,9 @@ pub fn appendMessage(io: Io, alloc: Alloc, bus: *Bus, meta: ConvMeta, conv_dir: 
         .offset = new_size - stored.len,
         .uid = from_id,
     });
+    // **SEARCH SEES IT AS IT LANDS** (metal-vmm 155(b)): the index in memory
+    // takes the message, or drops itself whole if it cannot.
+    search_index.noteAppend(conv_dir, sid, msg);
 
     // Fan out to live subscribers on this conv/sid (best-effort).
     const key = try std.fmt.allocPrint(alloc, "{s}/{s}", .{ conv_key, sid });
