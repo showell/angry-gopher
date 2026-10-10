@@ -1996,3 +1996,30 @@ test "route: a topic that is not there is a 404 that says so, on every tail but 
     const why = "is not a channel you are a member of";
     try testing.expect(std.mem.indexOf(u8, removed, why) != null and std.mem.indexOf(u8, absent, why) != null);
 }
+
+test "route: a send makes the topic it names, and /chat over a conversation with no topic lands on its page, never on a 404 (the review of 156(j))" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var site = try UidSite.init(a, io);
+    defer site.deinit();
+    const prev = mem_meter.replace(std.heap.page_allocator);
+    defer _ = mem_meter.replace(prev);
+    const chat_store = @import("chat_store.zig");
+    const chat_state = @import("chat_state.zig");
+    const steve = try memberSession(a, io, "1", "Steve");
+    _ = try memberSession(a, io, "2", "Debbie");
+    // /chat, its bookmark on a conversation with no topic.
+    try UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ chat_store.chat_root, "users", "1", "last-conv" }), "1_2\n", .{});
+    const landed = try UidSite.ask(a, io, "/chat/default", steve);
+    try testing.expectEqualStrings("303 See Other", status(landed));
+    try testing.expect(std.mem.indexOf(u8, landed, "location: /chat/c/1_2\r\n") != null);
+    // A send to a topic not yet there makes it.
+    try testing.expectEqualStrings("303 See Other", status(try postAs(a, io, "/chat/c/1_2/Fresh/send", steve, "markdown=first&cid=x")));
+    const raw = (try chat_store.rawSession(io, a, try chat_store.dmConvDir(a, "1_2"), "Fresh")).?;
+    try testing.expectEqual(@as(usize, 1), (try chat_store.decodeChatFile(a, raw)).len);
+    _ = chat_state;
+}

@@ -219,7 +219,7 @@ pub fn listAuthorized(io: Io, alloc: Alloc) ![]AuthorizedUser {
     for (entries) |entry| {
         if (entry.kind != .directory) continue;
         // numeric id only (the account dirs); skips next-id.txt etc.
-        if (std.fmt.parseInt(i64, entry.name, 10)) |_| {} else |_| continue;
+        if (!allDigits(entry.name)) continue; // canonical only (156(i)): a 007 or +7 folder is no account
         const id = try alloc.dupe(u8, entry.name);
         if (!try userIsAuthorized(io, alloc, id)) continue;
         const name = try getUserName(io, alloc, id);
@@ -360,7 +360,7 @@ pub fn listUserIDs(io: Io, alloc: Alloc) ![][]const u8 {
     var out: std.ArrayList([]const u8) = .empty;
     for (entries) |entry| {
         if (entry.kind != .directory) continue;
-        if (std.fmt.parseInt(i64, entry.name, 10)) |_| {} else |_| continue;
+        if (!allDigits(entry.name)) continue; // canonical only (156(i)): a 007 or +7 folder is no account
         try out.append(alloc, try alloc.dupe(u8, entry.name));
     }
     const slice = try out.toOwnedSlice(alloc);

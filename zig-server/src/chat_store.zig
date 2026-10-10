@@ -55,10 +55,12 @@ pub const ChatMessage = struct {
 
 // ── decode ──────────────────────────────────────────────────────────────────
 
-/// Transcript blocks the decoder refused since boot (metal-vmm QUEUE
-/// 156(h)): one with no `MSG_` id, author or date, which it decoded as a
-/// message of "" before. Counted per read that met one, and said on
-/// /admin/host (`refusedText`) with the last one's first line.
+/// Reads that met a refused transcript block, since boot (metal-vmm QUEUE
+/// 156(h)): a block with no `MSG_` id, author or date, which decoded as a
+/// message of "" before. **A COUNT OF READS, NOT OF BLOCKS**: one bad block
+/// is counted again by every page, stream and search build that reads it, so
+/// the number grows with traffic; any number above none is the signal, and
+/// /admin/host (`refusedText`) names the last one's first line.
 pub var refused_blocks: usize = 0;
 var refused_last_buf: [96]u8 = undefined;
 var refused_last: []const u8 = "";
@@ -202,6 +204,10 @@ pub fn openStream(io: Io, alloc: Alloc, bus: *Bus, conv_dir: []const u8, conv_ke
 /// the stored message (id + server-stamped date). NO render here: the blob
 /// carries raw markdown; each stream renders per-viewer.
 pub fn appendMessage(io: Io, alloc: Alloc, bus: *Bus, meta: ConvMeta, conv_dir: []const u8, conv_key: []const u8, sid: []const u8, from_name: []const u8, from_id: []const u8, markdown: []const u8, cid: []const u8) !ChatMessage {
+    // **NO MESSAGE WITHOUT AN AUTHOR** (the review of 156): the decoder
+    // refuses such a block on every read, so it would go out live and be gone
+    // on reload. A nameless member (a release cut short) cannot post.
+    if (from_name.len == 0) return error.NoAuthor;
     const path = try sessionMdPath(alloc, conv_dir, sid);
 
     chat_mu.lockUncancelable(io);
@@ -665,8 +671,9 @@ fn fallbackLast(io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8, cou
     const last = msgs[msgs.len - 1];
     // The record's answer where it speaks for this transcript, nobody
     // included; else the last author by name.
-    const recorded: ?[]const u8 = if (counted) |c| (if (c.last) |l| (if (c.count == msgs.len and c.size == raw.len) l.uid else null) else null) else null;
-    return .{ .markdown = last.markdown, .date = last.date, .uid = recorded orelse authorByName(io, alloc, last.from), .number = msgs.len };
+    const blocks = countBlocks(raw);
+    const recorded: ?[]const u8 = if (counted) |c| (if (c.last) |l| (if (c.count == blocks and c.size == raw.len) l.uid else null) else null) else null;
+    return .{ .markdown = last.markdown, .date = last.date, .uid = recorded orelse authorByName(io, alloc, last.from), .number = blocks };
 }
 
 /// **EVERY SESSION GETS A SIDECAR AT BOOT.** A conversation written before this
@@ -705,7 +712,7 @@ pub fn backfillSidecars(io: Io, alloc: Alloc, conv_dirs: []const []const u8) usi
             // writes nothing: the next boot asks again.
             // absent-ok: the startup backfill skips a session whose author it cannot look up; reads find the author by name meanwhile.
             const uid = lookupAuthor(io, a, msgs[msgs.len - 1].from) catch continue;
-            writeCount(io, a, dir, sid, msgs.len, raw.len, .{ .offset = offset, .uid = uid });
+            writeCount(io, a, dir, sid, countBlocks(raw), raw.len, .{ .offset = offset, .uid = uid });
             wrote += 1;
         }
     }
@@ -807,8 +814,27 @@ fn messageCount(io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8) !us
     if (readCount(io, alloc, conv_dir, sid)) |c| {
         if (c.size == size) return c.count;
     }
-    const raw = try store.read(io, alloc, md, .unlimited);
-    return (try decodeChatFile(alloc, raw)).len;
+    return countBlocks(try store.read(io, alloc, md, .unlimited));
+}
+
+/// **MESSAGES ARE NUMBERED BY BLOCK** (the review of 156): a block the
+/// decoder refuses keeps its number, so a recount, which numbers the next
+/// message, counts every block that is not blank, and never gives a number
+/// twice; readers take a message's index from its id (`indexOf`), not its
+/// place among the ones that decoded.
+pub fn countBlocks(raw: []const u8) usize {
+    var n: usize = 0;
+    var it = std.mem.splitSequence(u8, raw, sep);
+    while (it.next()) |piece| {
+        if (std.mem.trim(u8, piece, " \t\r\n").len != 0) n += 1;
+    }
+    return n;
+}
+
+/// A message's index (its number less one) from its id in `sid`, or null.
+pub fn indexOf(id: []const u8, sid: []const u8) ?usize {
+    const n = numberIn(id, sid) orelse return null;
+    return if (n == 0) null else n - 1;
 }
 
 /// **WHERE THE LAST MESSAGE STARTS, WHEN IT WAS SENT, AND BY WHOM** — the
@@ -1812,4 +1838,26 @@ test "the decoder refuses a block with no id, author or date, counted; a blank p
     // A blank piece (an append torn right after its separator) is no block.
     try testing.expectEqual(@as(usize, 1), (try decodeChatFile(x, good ++ sep ++ "  \n")).len);
     try testing.expectEqual(before + 4, refused_blocks);
+}
+
+test "a refused block keeps its number: a recount counts blocks, so no id is given twice; and no message is written with no author (the review of 156)" {
+    var threaded = std.Io.Threaded.init(testing.allocator, .{});
+    defer threaded.deinit();
+    var f: CountFixture = undefined;
+    try f.init(threaded.io());
+    defer f.deinit();
+    const a = f.arena.allocator();
+    const meta = ConvMeta{ .kind = .dm, .members = &[_][]const u8{} };
+    try testing.expectError(error.NoAuthor, appendMessage(f.io, a, &f.bus, meta, f.dir, "1_2", "topic", "", "1", "hi", ""));
+    // As one written before: t_2 has no author, and the sidecar is gone.
+    _ = try f.send("one");
+    const md = try sessionMdPath(a, f.dir, "topic");
+    try Io.Dir.cwd().writeFile(f.io, .{ .sub_path = md, .data = try std.fmt.allocPrint(a, "{s}{s}MSG_topic_2\nfrom: \ndate: 2026-10-10T00:00:00Z\n\nnameless{s}MSG_topic_3\nfrom: Tester\ndate: 2026-10-10T00:00:01Z\n\nthree", .{ (try rawSession(f.io, a, f.dir, "topic")).?, sep, sep }) });
+    try Io.Dir.cwd().deleteFile(f.io, try countPath(a, f.dir, "topic"));
+    try testing.expectEqualStrings("topic_4", (try f.send("four")).id);
+    try Io.Dir.cwd().deleteFile(f.io, try countPath(a, f.dir, "topic"));
+    const dirs = [_][]const u8{f.dir};
+    _ = backfillSidecars(f.io, a, &dirs);
+    try testing.expectEqual(@as(usize, 4), readCount(f.io, a, f.dir, "topic").?.count);
+    try testing.expectEqual(@as(usize, 3), indexOf("topic_4", "topic").?);
 }

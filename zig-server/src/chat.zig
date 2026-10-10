@@ -461,10 +461,13 @@ fn newTopic(req: *Request, io: Io, alloc: Alloc, bus: *Bus, conv: Conv, uid: []c
     }
 
     const from_name = try users.getUserName(io, alloc, uid);
+    // The bookmark first, as a send's (156(g)): one that fails makes no topic,
+    // where it answered 500 for a topic made, and a retry met 409. A bookmark
+    // to a topic not made is never followed (resolveSessionForUser).
+    if (conv.persistsCursor()) try chat_state.setUserLastSession(io, alloc, uid, conv.key, topic);
     _ = try store.appendMessage(io, alloc, bus, conv.meta, conv.dir, conv.key, topic, from_name, uid, "hi", "");
 
     if (conv.persistsCursor()) {
-        try chat_state.setUserLastSession(io, alloc, uid, conv.key, topic);
         // Announce the new topic where the partner already watches (best-effort).
         if (try highestGeneralSession(io, alloc, conv.dir)) |gen| {
             if (!std.mem.eql(u8, gen, topic)) {
@@ -512,6 +515,12 @@ fn chatDefault(req: *Request, io: Io, alloc: Alloc, uid: []const u8) !void {
     const conv = try chat_state.lastUserConv(io, alloc, uid);
     if (conv.len == 0 or !(try store.chatKeyParticipant(alloc, conv, uid))) {
         return page.noConversationsPage(req, io, alloc, uid);
+    }
+    // A conversation with no topic yet lands on its own page, which offers to
+    // start the first, where it went to today's date as a topic: a send makes
+    // one there, but a page of a topic not there is a 404 (156(j)'s review).
+    if ((try store.defaultSession(io, alloc, try store.dmConvDir(alloc, conv))).len == 0) {
+        return http.redirect(req, try std.fmt.allocPrint(alloc, "/chat/c/{s}", .{conv}));
     }
     const sid = try chat_state.resolveSessionForUser(io, alloc, uid, conv);
     return http.redirect(req, try std.fmt.allocPrint(alloc, "/chat/c/{s}/{s}", .{ conv, sid }));
