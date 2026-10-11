@@ -556,14 +556,14 @@ fn registerMember(client: *std.http.Client, name: []const u8, cookie_out: []u8, 
     var it = response.head.iterateHeaders();
     while (it.next()) |h| {
         if (!std.ascii.eqlIgnoreCase(h.name, "set-cookie")) continue;
-        if (cookiePair(h.value, "__Host-gopher_auth")) |v| auth = v;
-        if (cookiePair(h.value, "__Host-gopher_uid")) |v| uid = v;
+        if (cookiePair(h.value, "gopher_auth")) |v| auth = v;
+        if (cookiePair(h.value, "gopher_uid")) |v| uid = v;
     }
     const a = auth orelse return error.NoSessionCookie;
     const u = uid orelse return error.NoUidCookie;
     if (u.len == 0 or u.len > uid_out.len) return error.BadUidCookie;
     @memcpy(uid_out[0..u.len], u);
-    const cookie = try std.fmt.bufPrint(cookie_out, "__Host-gopher_auth={s}; __Host-gopher_uid={s}", .{ a, u });
+    const cookie = try std.fmt.bufPrint(cookie_out, "gopher_auth={s}; gopher_uid={s}", .{ a, u });
 
     const reader = response.reader(&.{});
     _ = reader.discardRemaining() catch {};

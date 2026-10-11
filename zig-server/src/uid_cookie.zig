@@ -52,10 +52,7 @@ const game_limits = @import("game_limits.zig");
 const signed = @import("signed.zig");
 const signed_cookie = @import("signed_cookie.zig");
 
-pub const cookie_name = http.host_prefix ++ "gopher_uid";
-/// Its name before the `__Host-` prefix (metal-vmm QUEUE 167.5): read when a
-/// request has none of the new name, and moved to it on the next GET.
-pub const legacy_cookie_name = "gopher_uid";
+pub const cookie_name = "gopher_uid";
 const label = "gopher_uid\n";
 
 /// How long the window for unsigned cookies stays open, from its first use.
@@ -93,7 +90,7 @@ pub fn verify(secret: []const u8, value: []const u8, now_unix: i64) ?[]const u8 
 }
 
 /// The cookie, for webbox's reading and writing of signed cookies.
-const cookie: signed_cookie.Cookie = .{ .name = cookie_name, .legacy_name = legacy_cookie_name, .kind = kind };
+const cookie: signed_cookie.Cookie = .{ .name = cookie_name, .kind = kind };
 
 fn nowUnix(io: Io) i64 {
     return @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
@@ -226,8 +223,7 @@ pub fn reissue(io: Io, alloc: Alloc, req: *std.http.Server.Request, client: ?[]c
         .invalid => {},
     }
     // One unsigned value only: of several, which is meant cannot be told.
-    // Never issued unsigned under the new name.
-    const value = switch (try http.cookie(req, alloc, legacy_cookie_name)) {
+    const value = switch (try http.cookie(req, alloc, cookie_name)) {
         .one => |v| v,
         .none, .several => return null,
     };

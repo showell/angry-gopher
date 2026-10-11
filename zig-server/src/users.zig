@@ -78,12 +78,6 @@ pub fn currentUserID(io: Io, alloc: Alloc, req: *std.http.Server.Request) ![]con
     return "";
 }
 
-/// The member session cookie's name (metal-vmm QUEUE 167.5: `__Host-`, so no
-/// sibling subdomain can plant one), and its name before, still read when a
-/// request has none of the new one; a login sets the new one.
-pub const session_cookie = http.host_prefix ++ "gopher_auth";
-pub const session_cookie_legacy = "gopher_auth";
-
 /// sessionUserID returns the member id from a valid gopher_auth cookie whose id
 /// is still a member. Reading a cookie is what identity does and nothing else
 /// needs to: `http.cookie`'s callers are this file and uid_cookie.zig. A head
@@ -91,7 +85,7 @@ pub const session_cookie_legacy = "gopher_auth";
 /// to the wrong principal, which is why `http.cookie` returns an owned copy.
 fn sessionUserID(io: Io, alloc: Alloc, req: *std.http.Server.Request) !?[]const u8 {
     var one: [1][]const u8 = undefined;
-    const values: []const []const u8 = switch ((try http.cookieOrLegacy(req, alloc, session_cookie, session_cookie_legacy)).values) {
+    const values: []const []const u8 = switch (try http.cookie(req, alloc, "gopher_auth")) {
         .none => return null,
         .one => |v| blk: {
             one[0] = v;
