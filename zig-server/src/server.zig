@@ -43,6 +43,7 @@ pub fn main(init: std.process.Init.Minimal) !void {
         .default_trusted_proxy = "127.0.0.1",
         .default_auth_dir = "~/Auth",
         .routes_hint = "(/driving, /puzzles, /game, /chat, /channel)",
+        .largest_body = @import("limits.zig").body.upload_any,
         .free_space = gameFloor,
     }, report);
 }
