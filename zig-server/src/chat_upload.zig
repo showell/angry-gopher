@@ -442,3 +442,88 @@ test "every type the table offers is one the sniffers find, of the table's kind,
         try std.testing.expect(std.mem.startsWith(u8, t.mime, @tagName(t.kind)));
     }
 }
+
+test "parseRange: a first-pos of size - 1 is the last byte, one of size is unsatisfiable (RFC 9110 §14.1.2)" {
+    const size: u64 = 1000;
+    try testing.expectEqual(Range{ .start = size - 1, .end = size - 1 }, parseRange("bytes=999-", size).?);
+    try testing.expect(parseRange("bytes=1000-", size) == null);
+    // A one-byte file: its only byte, and nothing past it.
+    try testing.expectEqual(Range{ .start = 0, .end = 0 }, parseRange("bytes=0-", 1).?);
+    try testing.expect(parseRange("bytes=1-", 1) == null);
+}
+
+test "parseRange: a last-pos of size - 1 and one of size both end at the last byte" {
+    const size: u64 = 1000;
+    try testing.expectEqual(Range{ .start = 0, .end = size - 1 }, parseRange("bytes=0-999", size).?);
+    try testing.expectEqual(Range{ .start = 0, .end = size - 1 }, parseRange("bytes=0-1000", size).?);
+    // A last-pos one short of first-pos is invalid; equal to it is one byte.
+    try testing.expectEqual(Range{ .start = 500, .end = 500 }, parseRange("bytes=500-500", size).?);
+    try testing.expect(parseRange("bytes=500-499", size) == null);
+}
+
+test "parseRange: a suffix of size - 1 leaves the first byte, one of size or more is the whole file" {
+    const size: u64 = 1000;
+    try testing.expectEqual(Range{ .start = 1, .end = size - 1 }, parseRange("bytes=-999", size).?);
+    try testing.expectEqual(Range{ .start = 0, .end = size - 1 }, parseRange("bytes=-1000", size).?);
+    try testing.expectEqual(Range{ .start = 0, .end = size - 1 }, parseRange("bytes=-1001", size).?);
+    // The last byte alone, and a suffix of nothing, which no file satisfies.
+    try testing.expectEqual(Range{ .start = size - 1, .end = size - 1 }, parseRange("bytes=-1", size).?);
+    try testing.expect(parseRange("bytes=-0", size) == null);
+}
+
+test "parseRange: a range of exactly range_window bytes is served whole, one byte more is cut to the window" {
+    const size: u64 = 64 << 20;
+    try testing.expectEqual(Range{ .start = 0, .end = range_window - 1 }, parseRange(std.fmt.comptimePrint("bytes=0-{d}", .{range_window - 1}), size).?);
+    try testing.expectEqual(Range{ .start = 0, .end = range_window - 1 }, parseRange(std.fmt.comptimePrint("bytes=0-{d}", .{range_window}), size).?);
+    // From a start past zero, the window is counted from the start.
+    try testing.expectEqual(Range{ .start = 5, .end = 5 + range_window - 1 }, parseRange(std.fmt.comptimePrint("bytes=5-{d}", .{5 + range_window - 1}), size).?);
+    try testing.expectEqual(Range{ .start = 5, .end = 5 + range_window - 1 }, parseRange(std.fmt.comptimePrint("bytes=5-{d}", .{5 + range_window}), size).?);
+}
+
+test "the sniffers: data exactly a magic's length is found, one byte less is not" {
+    const cases = [_]struct { data: []const u8, ext: []const u8 }{
+        .{ .data = "\x89PNG\r\n\x1a\n", .ext = "png" },
+        .{ .data = "\xff\xd8\xff", .ext = "jpg" },
+        .{ .data = "GIF87a", .ext = "gif" },
+        .{ .data = "GIF89a", .ext = "gif" },
+        .{ .data = "RIFF\x00\x00\x00\x00WEBP", .ext = "webp" },
+        .{ .data = "\x1a\x45\xdf\xa3", .ext = "webm" },
+        .{ .data = "\x00\x00\x00\x18ftypisom", .ext = "mp4" },
+        .{ .data = "\x00\x00\x00\x14ftypqt  ", .ext = "mov" },
+    };
+    for (cases) |c| {
+        try testing.expectEqualStrings(c.ext, detectUpload(c.data).?.ext);
+        try testing.expect(detectUpload(c.data[0 .. c.data.len - 1]) == null);
+    }
+}
+
+test "parseMultipartFile: a part of no bytes is empty, a part of one byte is that byte" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    const head = "--B\r\nContent-Disposition: form-data; name=\"file\"; filename=\"x.png\"\r\n\r\n";
+    try testing.expectEqualStrings("", parseMultipartFile(a, head ++ "\r\n--B--\r\n", "B").?.data);
+    try testing.expectEqualStrings("Z", parseMultipartFile(a, head ++ "Z\r\n--B--\r\n", "B").?.data);
+    // Data that is itself a CRLF keeps it: only the delimiter's CRLF is trimmed.
+    try testing.expectEqualStrings("\r\n", parseMultipartFile(a, head ++ "\r\n\r\n--B--\r\n", "B").?.data);
+    // A delimiter with no CRLF before it trims nothing, at one byte or none.
+    try testing.expectEqualStrings("Z", parseMultipartFile(a, head ++ "Z--B--", "B").?.data);
+    try testing.expectEqualStrings("", parseMultipartFile(a, head ++ "--B--", "B").?.data);
+}
+
+test "parseMultipartFile: a delimiter at the very end of the body closes the part; a body ending inside a part has none" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    const head = "--B\r\nContent-Disposition: form-data; name=\"file\"\r\n\r\n";
+    try testing.expectEqualStrings("abc", parseMultipartFile(a, head ++ "abc\r\n--B", "B").?.data);
+    try testing.expect(parseMultipartFile(a, head ++ "abc\r\n--", "B") == null);
+    // Another field first, the body ending at its closing delimiter: no file.
+    const other = "--B\r\nContent-Disposition: form-data; name=\"note\"\r\n\r\nhi\r\n--B";
+    try testing.expect(parseMultipartFile(a, other, "B") == null);
+    try testing.expect(parseMultipartFile(a, other ++ "-", "B") == null);
+    try testing.expect(parseMultipartFile(a, other ++ "--", "B") == null);
+    // A body that is the delimiter alone, and one byte short of it.
+    try testing.expect(parseMultipartFile(a, "--B", "B") == null);
+    try testing.expect(parseMultipartFile(a, "--", "B") == null);
+}
