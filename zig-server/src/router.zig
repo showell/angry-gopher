@@ -134,7 +134,8 @@ fn routeBodyLimit(path: []const u8) u64 {
     const caps = request_limits.body;
     const in_chat = http.pathUnder(path, "/chat") orelse http.pathUnder(path, "/channel");
     if (in_chat) |sub| {
-        if (std.mem.endsWith(u8, sub, "/upload")) return caps.upload_any;
+        // chat.zig's segments skip empty ones: `.../upload/` is the upload.
+        if (std.mem.endsWith(u8, std.mem.trimEnd(u8, sub, "/"), "/upload")) return caps.upload_any;
         if (http.pathUnder(sub, "/docs") != null) return caps.doc;
         return caps.chat_message;
     }
@@ -448,13 +449,15 @@ test "routeBodyLimit: every handler's cap is within its path's, and only the upl
         .{ .path = "/chat/docs/new", .cap = caps.doc },
         .{ .path = "/chat/c/ada_bo/main/upload", .cap = caps.upload_any },
         .{ .path = "/channel/general/main/upload", .cap = caps.upload_any },
+        .{ .path = "/chat/c/ada_bo/main/upload/", .cap = caps.upload_any },
+        .{ .path = "/chat/c/ada_bo/main/upload//", .cap = caps.upload_any },
     }) |c| {
         const limit = bodyLimit(c.path);
         if (limit < c.cap) {
             std.debug.print("{s}: its handler reads {d}, its path allows {d}\n", .{ c.path, c.cap, limit });
             return error.TestExpectedEqual;
         }
-        const uploads = std.mem.endsWith(u8, c.path, "/upload");
+        const uploads = std.mem.endsWith(u8, std.mem.trimEnd(u8, c.path, "/"), "/upload");
         try testing.expectEqual(!uploads, limit <= body_rule.before_turn_most);
     }
     // The query is no part of the path.
