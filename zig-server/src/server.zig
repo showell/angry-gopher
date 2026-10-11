@@ -64,8 +64,9 @@ fn gameStoreSpace() ?free_space.Space {
 /// What this application's setup did (app_start.zig), said before the
 /// listener opens.
 fn report(started: *const router.Started) void {
-    if (started.app.backfilled > 0) std.debug.print("zig-server: wrote a last-message record for {d} session(s)\n", .{started.app.backfilled});
-    if (started.app.search) |st| {
-        std.debug.print("zig-server: search index: {d} messages in {d} transcripts ({d} bytes, {d} words, {d} unreadable) in {d} ms\n", .{ st.messages, st.transcripts, st.bytes, st.words, st.unreadable, started.app.search_ms });
-    } else std.debug.print("zig-server: search index not built (out of memory?): the first search builds it\n", .{});
+    var buf: [1024]u8 = undefined;
+    var w: std.Io.Writer = .fixed(&buf);
+    router.hosting.describeStart(started.app, &w) catch {};
+    var lines = std.mem.splitScalar(u8, std.mem.trimEnd(u8, w.buffered(), "\n"), '\n');
+    while (lines.next()) |line| std.debug.print("zig-server: {s}\n", .{line});
 }
