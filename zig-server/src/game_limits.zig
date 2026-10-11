@@ -198,6 +198,21 @@ pub fn countedBytes(io: Io, id: []const u8) ?u64 {
     return null;
 }
 
+/// The two settings a host hands over (host_start), as they stood: for a
+/// test that sets one, to `defer` both back (the review of 157).
+pub const Settings = struct {
+    free_space: @TypeOf(free_space),
+    trusted_proxy: @TypeOf(trusted_proxy),
+    pub fn restore(self: Settings) void {
+        free_space = self.free_space;
+        trusted_proxy = self.trusted_proxy;
+    }
+};
+
+pub fn saveSettings() Settings {
+    return .{ .free_space = free_space, .trusted_proxy = trusted_proxy };
+}
+
 /// **FOR A TEST: NOTHING KEPT NOW, AND NOTHING AFTER** (`defer forgot.end()`;
 /// 157(e)).
 pub fn forgetForTest() Forgot {
@@ -381,8 +396,9 @@ test "fs: the floor refuses every game write below a quarter free, and only then
     defer saved.restore();
     const forgot = forgetForTest();
     defer forgot.end();
+    const host_settings = saveSettings();
+    defer host_settings.restore();
     free_space = testSpace;
-    defer free_space = null;
 
     test_space = .{ .free = 25, .total = 100 }; // exactly a quarter: allowed
     try testing.expect((try admit(io, a, "p1", null, true, 10)) == null);

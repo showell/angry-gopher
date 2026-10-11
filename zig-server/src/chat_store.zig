@@ -164,8 +164,8 @@ fn unescapeBodyLine(line: []const u8) []const u8 {
 // ── write path + live fan-out ───────────
 
 /// Stream is the result of openStream: the decoded backlog + a live Subscriber.
-/// The caller replays backlog[since..] then drains the subscriber, and MUST pair
-/// this with `bus.close(sub)` when the connection ends.
+/// The caller replays backlog[since..] and holds the subscriber (`Bus.hold`),
+/// which either keeps it for the host or closes it (157(a)).
 ///
 /// Two lifetimes deliberately bundled here — keep them straight:
 ///   backlog: REQUEST-scoped. Decoded into openStream's arena `alloc`; valid only

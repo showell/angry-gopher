@@ -57,11 +57,13 @@ const uid_cookie = @import("uid_cookie.zig");
 //                               /admin/host's facts), and the setup done in
 //                               the one right order (host_start.zig). Answers
 //                               the Hub, and what its one-time passes did.
-//   3. per request: route(),    then, if the request's Bus holds a kept stream,
-//      then serve what it kept  serve it: `streams.serveKept` blocks until the
-//                               client goes away; `streams.nextFrame` hands
-//                               over the next event, for a host with one loop.
-//                               Either way `streams.drop` ends it.
+//   3. per request: route(),    which answers the stream a handler kept, if
+//      then serve what it       one did (157(a)), for the host to serve:
+//      answered                 `streams.serveKept` blocks until the client
+//                               goes away; `streams.nextFrame` hands over the
+//                               next event, for a host with one loop. Either
+//                               way `streams.drop` ends it. On an error route
+//                               has dropped it already.
 //
 // server.zig does these for Linux, gopher-metal's kernel with its own heap and
 // paths on its own volume.
@@ -534,6 +536,7 @@ const UidSite = struct {
     tmp: testing.TmpDir,
     saved: roots.Saved,
     base: []const u8,
+    forgot: @import("game_limits.zig").Forgot,
 
     const storage = @import("storage.zig");
     const chat_store = @import("chat_store.zig");
@@ -542,17 +545,18 @@ const UidSite = struct {
     const secret = "a session secret of thirty-two bytes or more, for router tests";
 
     fn init(a: std.mem.Allocator, io: Io) !UidSite {
-        var s: UidSite = .{ .tmp = testing.tmpDir(.{}), .saved = undefined, .base = undefined };
+        var s: UidSite = .{ .tmp = testing.tmpDir(.{}), .saved = undefined, .base = undefined, .forgot = undefined };
         s.base = try std.fs.path.join(a, &.{ ".zig-cache", "tmp", &s.tmp.sub_path });
         s.saved = try roots.pointForTest(a, s.base);
+        errdefer s.saved.restore();
         try disk.write(io, a, try std.fs.path.join(a, &.{ users.session_secret_dir, "_session_secret" }), secret, .{});
-        UidSite.game_limits.forgetAll(); // what it kept was measured under other roots
+        s.forgot = UidSite.game_limits.forgetForTest(); // what it kept was measured under other roots
         return s;
     }
 
     fn deinit(s: *UidSite) void {
+        s.forgot.end();
         s.saved.restore();
-        UidSite.game_limits.forgetAll();
         s.tmp.cleanup();
     }
 
@@ -857,8 +861,9 @@ test "route: a player's games are refused, 507, past 16 MiB or 500 sessions, and
 
     // The floor: below a quarter free, nobody's game is saved; /play still
     // names a new player (the player store is not the game store).
+    const host_settings = limits.saveSettings();
+    defer host_settings.restore();
     limits.free_space = lowDisk;
-    defer limits.free_space = null;
     const third = try player.allocate(io, a, "Gus");
     const floor = try postAs(a, io, "/game/new-session", try signedUid(a, third), "state");
     try testing.expectEqualStrings("507 Insufficient Storage", status(floor));
@@ -881,8 +886,9 @@ test "route: an address names 5 players an hour and saves 20 MB of games, then 4
     var site = try UidSite.init(a, io);
     defer site.deinit();
     const limits = UidSite.game_limits;
+    const host_settings = limits.saveSettings();
+    defer host_settings.restore();
     limits.trusted_proxy = "10.0.0.1";
-    defer limits.trusted_proxy = null;
 
     const Name = struct {
         fn post(al: std.mem.Allocator, i: Io, peer: []const u8, xff: []const u8) ![]const u8 {
@@ -984,10 +990,8 @@ test "route: start does the host's setup in one call: the data pointed at, every
     defer meter.restore();
     const emptied = search_index.emptyForTest();
     defer emptied.end();
-    const saved_floor = game_limits.free_space;
-    const saved_proxy = game_limits.trusted_proxy;
-    defer game_limits.free_space = saved_floor;
-    defer game_limits.trusted_proxy = saved_proxy;
+    const host_settings = game_limits.saveSettings();
+    defer host_settings.restore();
     const chat_store = @import("chat_store.zig");
     const disk = @import("store.zig");
     const md = try std.fs.path.join(a, &.{ chat_store.chat_root, "1_2", "sessions", "ChitChat.md" });

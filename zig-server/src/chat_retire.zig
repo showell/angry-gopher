@@ -645,6 +645,7 @@ test "fs: a confirm whose removals fail is an error, not a report of what went (
 
     var vt: Io.VTable = undefined;
     refuse_under = "";
+    defer refuse_under = ""; // the test's own global, never left pointing into its arena
     try testing.expect(std.meta.isError(plan(refusingRemovals(io, &vt), a, p, true)));
     try testing.expect(try store.has(io, a, try std.fs.path.join(a, &.{ users.auth_root, "9", "name" })));
 
