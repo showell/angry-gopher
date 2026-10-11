@@ -35,33 +35,38 @@ pub fn build(b: *std.Build) void {
     // Embedded front-end assets (the embed.go analog). Referenced in code as
     // @embedFile("<name>"). All live outside this package dir, so they're wired
     // here rather than by a relative @embedFile path.
-    const assets = [_]struct { name: []const u8, path: []const u8 }{
+    //
+    // **A GENERATED ONE NAMES WHAT BUILDS IT** (`.built_by`, metal-vmm QUEUE
+    // 157(d)): ops/check_zig reads this list, and refuses with that guidance
+    // when one is missing, and when a file here that git does not track names
+    // nothing. It kept a list of its own, which had lost delivery/app.js.
+    const assets = [_]struct { name: []const u8, path: []const u8, built_by: []const u8 = "" }{
         // The Safari Screensaver (/driving): a zig→WASM core (ops/build_safari_wasm)
         // + its dumb plain-JS blitter. This REPLACED the old pure-TS bundle (app.js).
-        .{ .name = "safari_wasm", .path = "../games/driving/safari.wasm" },
+        .{ .name = "safari_wasm", .path = "../games/driving/safari.wasm", .built_by = "ops/build_safari_wasm" },
         .{ .name = "safari_blitter_js", .path = "../games/driving/wasm/blitter.js" },
         // Chess toys (/chess): per-toy zig→WASM search cores on one shared
         // tape substrate (ops/build_chess_wasm) + the one dumb plain-JS board
         // host. The chess_src_* entries are the SAME source files the wasm is
         // built from, re-embedded as text for /chess/code (sources-as-exhibit).
-        .{ .name = "knight_wasm", .path = "../games/chess/knight.wasm" },
-        .{ .name = "queens_wasm", .path = "../games/chess/queens.wasm" },
+        .{ .name = "knight_wasm", .path = "../games/chess/knight.wasm", .built_by = "ops/build_chess_wasm" },
+        .{ .name = "queens_wasm", .path = "../games/chess/queens.wasm", .built_by = "ops/build_chess_wasm" },
         .{ .name = "chess_board_js", .path = "../games/chess/board.js" },
         .{ .name = "chess_src_tape", .path = "../games/chess/core/tape.zig" },
         .{ .name = "chess_src_knight", .path = "../games/chess/knight.zig" },
         .{ .name = "chess_src_queens", .path = "../games/chess/queens.zig" },
-        .{ .name = "delivery_app_js", .path = "../delivery/app.js" },
+        .{ .name = "delivery_app_js", .path = "../delivery/app.js", .built_by = "ops/build_delivery" },
         // The Delivery solver's zig→WASM core (ops/build_delivery_wasm,
         // committed): the routing brain behind /delivery, conformance-gated
         // bit-exact against the retired TS solver (ops/check_delivery).
         .{ .name = "delivery_solver_wasm", .path = "../delivery/solver.wasm" },
-        .{ .name = "puzzle_js", .path = "../games/lynrummy/elm/puzzle.js" },
+        .{ .name = "puzzle_js", .path = "../games/lynrummy/elm/puzzle.js", .built_by = "ops/build_elm" },
         // The compiled Elm full-game client (the /game surface).
-        .{ .name = "game_elm_js", .path = "../games/lynrummy/elm/elm.js" },
+        .{ .name = "game_elm_js", .path = "../games/lynrummy/elm/elm.js", .built_by = "ops/build_elm" },
         // Shared Lyn Rummy engine: the esbuild-bundled TS solver and the
         // Elm↔engine glue shim. Both /game and /puzzles load these (the game
         // for Hint + agent play, puzzles for their Hint button).
-        .{ .name = "engine_js", .path = "../games/lynrummy/elm/engine.js" },
+        .{ .name = "engine_js", .path = "../games/lynrummy/elm/engine.js", .built_by = "ops/build_elm" },
         .{ .name = "engine_glue_js", .path = "../games/lynrummy/elm/engine_glue.js" },
         // The zig board-bridge solver (ops/build_lynrummy_wasm): the puzzle
         // Hint button's brain — arrangement line in, human move plan out.

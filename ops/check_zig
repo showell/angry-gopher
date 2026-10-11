@@ -19,13 +19,27 @@ REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$REPO_DIR"
 
 # Guard the built bundles `zig build` embeds — fail with guidance rather than a
-# cryptic @embedFile error. (The committed assets — chat/*.js,
-# catalogs, images — are always present; only these six are build outputs.)
-for f in games/lynrummy/elm/elm.js games/lynrummy/elm/puzzle.js \
-         games/lynrummy/elm/engine.js games/driving/safari.wasm \
-         games/chess/knight.wasm games/chess/queens.wasm; do
-    [ -f "$f" ] || { echo "Error: $f missing — run ops/build_elm + ops/build_safari_wasm + ops/build_chess_wasm first (embedded by zig build)." >&2; exit 1; }
-done
+# cryptic @embedFile error. The list is build.zig's own: every asset with a
+# `.built_by` is a build output, named with the script that builds it; and an
+# embedded file git does not track must name one (metal-vmm QUEUE 157(d): a
+# copy of the list here had lost delivery/app.js).
+python3 - "$REPO_DIR" <<'PY'
+import os, re, subprocess, sys
+root = sys.argv[1]
+src = open(os.path.join(root, "zig-server/build.zig")).read()
+bad = []
+for m in re.finditer(r'\.path = "\.\./([^"]+)"(?:, \.built_by = "([^"]+)")?', src):
+    path, by = m.group(1), m.group(2)
+    full = os.path.join(root, path)
+    tracked = subprocess.run(["git", "-C", root, "ls-files", "--error-unmatch", path], capture_output=True).returncode == 0
+    if by and not os.path.isfile(full):
+        bad.append(f"{path} missing: run {by} first (embedded by zig build)")
+    elif not by and not tracked:
+        bad.append(f"{path} is embedded and not in git, but build.zig names no .built_by for it")
+if bad:
+    print("Error:\n  " + "\n  ".join(bad), file=sys.stderr)
+    sys.exit(1)
+PY
 
 # Poka-yoke lint: raw request-head access (req.head.target / iterateHeaders) is
 # confined to http.zig, whose accessors return OWNED copies — so a head value can
