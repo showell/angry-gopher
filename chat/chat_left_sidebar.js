@@ -287,6 +287,8 @@ window.ChatLeftSidebar = (function(){
     }));
 
     wireSidebarStream();
+    /* What ChatResponsive.init takes (157(e)). */
+    return { mount: mount };
   }
   return { init:init };
 })();

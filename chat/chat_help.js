@@ -92,8 +92,9 @@ window.ChatHelp = (function(){
     var byKey = Object.create(null);
     entries.forEach(function(entry){ byKey[entry.key] = entry; });
 
-    var panel = document.getElementById('chat-closed-panel');
-    if(panel) panel.appendChild(renderKeyhelp(entries, deps));
+    /* The rail's closed panel, from ChatRightSidebar.init (157(e)). */
+    if(!deps.rail || !deps.rail.closedPanel) throw new Error('ChatHelp.init: no rail (ChatRightSidebar.init returns it)');
+    deps.rail.closedPanel.appendChild(renderKeyhelp(entries, deps));
 
     document.addEventListener('keydown', function(e){
       var ae = document.activeElement;

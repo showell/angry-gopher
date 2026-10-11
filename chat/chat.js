@@ -329,22 +329,23 @@
      tag next to the mount slot; we parse it once and pass to the widget. */
   var sidebarDataEl = document.getElementById('chat-sidebar-data');
   var sidebarData = sidebarDataEl ? JSON.parse(sidebarDataEl.textContent) : {};
-  ChatLeftSidebar.init({
+  var leftRail = ChatLeftSidebar.init({
     mount: document.getElementById('chat-left-sidebar'),
     conv: CONV,
     convBase: CONV_BASE,
     data: sidebarData,
   });
   /* PRODUCT_DECISION: ChatRightSidebar builds the wrapper + closed-panel +
-     "Open compose box" button — ChatCompose then inserts its body into the
-     wrapper (before the closed-panel) and registers it for the toggle. So
-     ChatRightSidebar.init MUST run first. */
-  ChatRightSidebar.init({
+     "Open compose box" button, and returns them as the rail; ChatCompose
+     inserts its body into it and ChatHelp its keyhelp. Each init returns what
+     the next takes, so the order is the code's (metal-vmm QUEUE 157(e)). */
+  var rail = ChatRightSidebar.init({
     mount:   document.getElementById('chat-right-sidebar'),
     onOpen:  function(){ ChatCompose.focus(); },
     onClose: pane.focus,
   });
-  ChatCompose.init({
+  var compose = ChatCompose.init({
+    rail: rail,
     sessionBase: SESSION_BASE,
     closeCompose: ChatRightSidebar.closeCompose,
     /* The server's caps and types, from the page (metal-vmm QUEUE 157(d)). */
@@ -357,6 +358,7 @@
   /* PRODUCT_DECISION: keys map 1:1 to the chat-keyhelp panel on the closed-compose side.
      Arrow / Home / End / PgUp / PgDn are NOT here — MessageView owns those internally. */
   ChatHelp.init({
+    rail:        rail,
     openCompose: ChatRightSidebar.openCompose,
     back:        pane.back,
     forward:     pane.forward,
@@ -386,9 +388,9 @@
   });
   /* PRODUCT_DECISION: ChatResponsive owns the chat page's small-screen layout
      (full-width feed, fixed bottom compose bar, and relocating the conversations
-     rail into the shared ChromeDrawer). Must run AFTER ChatLeftSidebar,
-     ChatRightSidebar, and ChatCompose so their mount elements exist. The shared
-     hamburger + nav drawer are ChromeDrawer's job (chrome_drawer.js, every page). */
-  ChatResponsive.init();
+     rail into the shared ChromeDrawer). It takes the left rail and the compose
+     body their inits returned. The shared hamburger + nav drawer are
+     ChromeDrawer's job (chrome_drawer.js, every page). */
+  ChatResponsive.init({ sidebar: leftRail.mount, composeBody: compose.body });
   ChatCompose.focus();
 })();

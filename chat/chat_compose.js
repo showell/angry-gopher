@@ -180,7 +180,11 @@ window.ChatCompose = (function(){
     return { body:body, form:form, textarea:ta, uploadBtn:upBtn, fileInput:file, status:statusEl };
   }
 
+  /* Takes the right rail ChatRightSidebar.init returned (deps.rail), and
+     returns its body, which ChatResponsive.init takes (157(e)). */
   function init(deps){
+    var rail=deps.rail;
+    if(!rail || !rail.wrapper) throw new Error('ChatCompose.init: no rail (ChatRightSidebar.init returns it)');
     var u=deps.uploads;
     if(!u || !(u.imageMax>0) || !(u.videoMax>0) || !u.accept) throw new Error('ChatCompose.init: the page gave no upload limits');
     MAX_IMAGE_BYTES=u.imageMax; MAX_VIDEO_BYTES=u.videoMax; UPLOAD_ACCEPT=u.accept;
@@ -193,13 +197,10 @@ window.ChatCompose = (function(){
     /* PRODUCT_DECISION: insert before the closed-panel so the open state
        shows above the keyhelp side. ChatRightSidebar built both the
        wrapper and the closed-panel; we ride on top with our compose body.
-       We pull the refs from ChatRightSidebar (no global DOM queries) so
-       this widget works whether or not the rail is attached to the page
-       at init time. */
-    var rightSidebar = ChatRightSidebar.getWrapper();
-    var closedPanel = ChatRightSidebar.getClosedPanel();
-    rightSidebar.insertBefore(built.body, closedPanel);
-    ChatRightSidebar.registerComposeBody(built.body);
+       The refs are the rail's (no global DOM queries), so this widget works
+       whether or not the rail is attached to the page at init time. */
+    rail.wrapper.insertBefore(built.body, rail.closedPanel);
+    rail.registerComposeBody(built.body);
 
     form.addEventListener('submit', function(e){ e.preventDefault(); send(); });
     textarea.addEventListener('keydown', function(e){
@@ -216,6 +217,7 @@ window.ChatCompose = (function(){
         if(t.indexOf('image/')===0 || t.indexOf('video/')===0){ e.preventDefault(); uploadFile(files[i]); return; }
       }
     });
+    return { body: built.body };
   }
   function isPending(){ return !!pendingCid; }
   /* PRODUCT_DECISION: SSE echo arrived for our pending cid — clear the box and re-enable. */

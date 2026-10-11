@@ -70,9 +70,8 @@ window.ChatResponsive = (function(){
   /* Relocate the conversations rail between the desktop layout column and
      the shared mobile drawer, by current breakpoint. Moving the node (vs
      rebuilding) preserves the widget's listeners + live SSE subscription. */
+  var sb;
   function placeSidebar(){
-    var sb = document.getElementById('chat-left-sidebar');
-    if(!sb) return;
     if(Viewport.isNarrow()){
       var slot = document.getElementById('chrome-drawer-extra');
       if(slot) slot.appendChild(sb);
@@ -83,14 +82,19 @@ window.ChatResponsive = (function(){
     }
   }
 
-  function init(){
+  /* Takes the left rail (ChatLeftSidebar.init's) and the compose body
+     (ChatCompose.init's): it cannot run before them (157(e)), where a comment
+     said it must run AFTER them. */
+  function init(deps){
+    if(!deps || !deps.sidebar || !deps.composeBody) throw new Error('ChatResponsive.init: needs the left rail and the compose body');
     ensureStyles();
+    sb = deps.sidebar;
 
     /* Compose collapse bar — a ▾ button prepended to the compose body so
        mobile users can dismiss the compose panel without Esc. Hidden on
        desktop (shown only under html.vp-narrow) by the rule above. */
-    var composeBody = document.getElementById('chat-compose-body');
-    if(composeBody){
+    var composeBody = deps.composeBody;
+    {
       var bar = document.createElement('div');
       bar.className = 'chat-compose-collapse';
       var btn = document.createElement('button');

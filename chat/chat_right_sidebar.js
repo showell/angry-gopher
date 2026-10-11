@@ -11,9 +11,9 @@
      </mount>
 
    Two children, two states, flipped by openCompose / closeCompose.
-   getWrapper() / getClosedPanel() expose those refs to ChatCompose so
-   it doesn't need to re-query the DOM (and works in demos where the
-   widget isn't attached to document.body at init time).
+   init returns the rail (wrapper, closedPanel, registerComposeBody),
+   which ChatCompose.init and ChatHelp.init take: the order is the code's,
+   not a comment's (metal-vmm QUEUE 157(e)), and neither re-queries the DOM.
 
    Parallels chat_left_sidebar.js so future-Claude finds each rail in a
    predictable file. */
@@ -82,16 +82,13 @@ window.ChatRightSidebar = (function(){
 
     /* ChatCompose.init() will set this once its body lands in the DOM. */
     composeBody = null;
+    return { wrapper:wrapper, closedPanel:closedPanel, registerComposeBody:registerComposeBody };
   }
 
   /* PRODUCT_DECISION: ChatCompose hands us its body element on init so
      we have a stable reference for the open/closed toggle, without
      re-querying the DOM each time. */
   function registerComposeBody(el){ composeBody = el; }
-  function getWrapper(){ return wrapper; }
-  function getClosedPanel(){ return closedPanel; }
 
-  return { init:init, openCompose:openCompose, closeCompose:closeCompose,
-           registerComposeBody:registerComposeBody,
-           getWrapper:getWrapper, getClosedPanel:getClosedPanel };
+  return { init:init, openCompose:openCompose, closeCompose:closeCompose };
 })();
