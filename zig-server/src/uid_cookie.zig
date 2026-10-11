@@ -308,3 +308,18 @@ test "a signed value names its id for its lifetime, and not from the future (met
     try testing.expect(verify(secret, try sign(a, secret, "p3", std.math.maxInt(i64)), t) == null);
     try testing.expect(verify(secret, try sign(a, secret, "p3", std.math.minInt(i64)), t) == null);
 }
+
+test "an id of 20 digits is a name, not a number: u64's largest and one past it both sign and read back" {
+    // validId bounds the digits' count, not their value: no reader of a
+    // cookie's id parses it as an integer (users.currentUserID and
+    // player.current use it as a path's name), so 18446744073709551616,
+    // past u64, is an id like any other of 20 digits.
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    const secret = "a secret of thirty-two bytes or more, for tests";
+    for ([_][]const u8{ "18446744073709551615", "18446744073709551616", "p18446744073709551615", "p18446744073709551616" }) |id| {
+        try testing.expect(validId(id));
+        try testing.expectEqualStrings(id, verify(secret, try sign(a, secret, id, 1_790_000_000), 1_790_000_000).?);
+    }
+}
