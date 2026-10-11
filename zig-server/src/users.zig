@@ -84,10 +84,26 @@ pub fn currentUserID(io: Io, alloc: Alloc, req: *std.http.Server.Request) ![]con
 /// value borrowed past the body read once mis-attributed an authenticated post
 /// to the wrong principal, which is why `http.cookie` returns an owned copy.
 fn sessionUserID(io: Io, alloc: Alloc, req: *std.http.Server.Request) !?[]const u8 {
-    const val = (try http.cookie(req, alloc, "gopher_auth")) orelse return null;
+    var one: [1][]const u8 = undefined;
+    const values: []const []const u8 = switch (try http.cookie(req, alloc, "gopher_auth")) {
+        .none => return null,
+        .one => |v| blk: {
+            one[0] = v;
+            break :blk &one;
+        },
+        .several => |vs| vs,
+    };
     const secret = (try loadSecret(io, alloc)) orelse return null;
     const now = nowUnix(io);
-    const id = verifySessionWithSecret(alloc, secret, val, now) orelse return null;
+    // Of several (a parent domain's beside this site's own), the one that
+    // verifies; none, or more than one, is no one (metal-vmm QUEUE 162.4,
+    // as signed_cookie.read).
+    var verified: ?[]const u8 = null; // the one that verified, until a second does
+    for (values) |val| if (verifySessionWithSecret(alloc, secret, val, now)) |id| {
+        if (verified != null) return null;
+        verified = id;
+    };
+    const id = verified orelse return null;
     if (!try userIsMember(io, alloc, id)) return null;
     return id;
 }

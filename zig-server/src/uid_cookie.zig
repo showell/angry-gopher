@@ -222,7 +222,11 @@ pub fn reissue(io: Io, alloc: Alloc, req: *std.http.Server.Request, client: ?[]c
         // Perhaps a legacy unsigned spelling: below.
         .invalid => {},
     }
-    const value = (try http.cookie(req, alloc, cookie_name)) orelse return null;
+    // One unsigned value only: of several, which is meant cannot be told.
+    const value = switch (try http.cookie(req, alloc, cookie_name)) {
+        .one => |v| v,
+        .none, .several => return null,
+    };
     if (!legacyHonoured(io, alloc, value)) return null;
     if (try game_limits.admitResign(io, client)) |r| return .{ .refused = r };
     const marker = try std.fmt.allocPrint(alloc, "{d}\n", .{now});
