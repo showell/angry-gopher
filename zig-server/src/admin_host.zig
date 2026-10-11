@@ -5,7 +5,8 @@
 //! public /version serves as JSON for the watchdog. And the HOST's: whatever
 //! the host handed over through host_facts.zig — on Linux its start time and
 //! memory, on gopher-metal its volumes, clocks and counters. The page is the
-//! same on both; only the second table differs.
+//! same on both; only the second table differs. The host hands its half over
+//! because the route table must not reach for the machine (router.zig's rule).
 
 const std = @import("std");
 const Io = std.Io;

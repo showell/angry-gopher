@@ -283,8 +283,10 @@ var started_ms: i64 = 0;
 
 pub fn handleVersion(req: *Request, io: Io, alloc: Alloc) !void {
     // `rejects` is the edge-policy observable: a counter per reject kind (see
-    // edge.zig). The watchdog polls /version, so a climbing counter surfaces in
-    // watchdog-status.txt without any extra plumbing.
+    // edge.zig); a new edge.RejectKind appears in it automatically. The
+    // watchdog polls /version every minute, so a climbing counter surfaces in
+    // watchdog-status.txt without any extra plumbing: "someone is probing us"
+    // becomes an ssh-readable signal.
     const rejects = try edge.countsJSON(alloc);
     // `mem` is the live-byte meter (mem_meter.zig). Folding it into /version means
     // the watchdog — which already polls /version — surfaces it with no extra

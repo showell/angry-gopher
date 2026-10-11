@@ -38,6 +38,8 @@ const users = @import("users.zig");
 const store = @import("chat_store.zig");
 const markdown = @import("markdown.zig");
 const html = @import("html.zig");
+// Escaping lives in html.zig, not here, so chat_chrome.zig and the non-chat
+// pages (login, game, admin, …) escape without importing the chat dispatcher.
 const htmlEscape = html.htmlEscape; // internal alias; the impl lives in html.zig
 const chrome = @import("chat_chrome.zig");
 const page = @import("chat_page.zig");

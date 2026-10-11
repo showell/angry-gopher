@@ -78,7 +78,10 @@ pub fn currentUserID(io: Io, alloc: Alloc, req: *std.http.Server.Request) ![]con
 }
 
 /// sessionUserID returns the member id from a valid gopher_auth cookie whose id
-/// is still a member.
+/// is still a member. Reading a cookie is what identity does and nothing else
+/// needs to: `http.cookie`'s callers are this file and uid_cookie.zig. A head
+/// value borrowed past the body read once mis-attributed an authenticated post
+/// to the wrong principal, which is why `http.cookie` returns an owned copy.
 fn sessionUserID(io: Io, alloc: Alloc, req: *std.http.Server.Request) !?[]const u8 {
     const val = (try http.cookie(req, alloc, "gopher_auth")) orelse return null;
     const secret = (try loadSecret(io, alloc)) orelse return null;

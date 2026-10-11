@@ -73,12 +73,14 @@ import re
 import sys
 from collections import deque
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import zig_source  # noqa: E402  the one reading of a source file the lints share
+
 ROOT_MODULE = "router.zig"
 # The roots the real tree is checked from: the route table, and the webbox
 # library. Both must be there.
 ROOTS = (ROOT_MODULE, "webbox.zig")
 
-IMPORT = re.compile(r'@import\("([A-Za-z0-9_]+\.zig)"\)')
 
 # (pattern, advice). Checked in order; one finding per match.
 # The Store's seam: what may call Io.Dir.cwd(). Checked in every reached file
@@ -121,22 +123,17 @@ RULES = [
 
 
 def code(line: str) -> str:
-    """The part of a line before any comment. `//!` and `///` count too.
-
-    A `//` inside a string literal would cut the line short; that can only
-    HIDE a finding after it on the same line, never invent one.
-    """
-    at = line.find("//")
-    return line if at < 0 else line[:at]
+    """The part of a line before any comment (`//!` and `///` too), literals
+    kept whole: zig_source.code."""
+    return zig_source.code(line)
 
 
 def test_lines(lines):
     """The 1-based line numbers inside a `test {}` block.
 
-    Braces inside double-quoted strings are skipped, so a test whose body
-    prints "{" does not end early. Multi-line `\\\\` string literals carry no
-    quotes, and their braces are counted — zig test bodies here do not put
-    unbalanced braces in them.
+    Braces inside string and character literals, and in a multi-line
+    `\\\\` string, are not counted (zig_source.blank), so a test whose body
+    prints "{" or compares a character with '{' does not end early.
     """
     inside, depth, out = False, 0, set()
     for n, line in enumerate(lines, 1):
@@ -145,19 +142,14 @@ def test_lines(lines):
             inside = True
         if inside:
             out.add(n)
-        in_str = False
-        prev = ""
-        for ch in c:
-            if ch == '"' and prev != "\\":
-                in_str = not in_str
-            elif not in_str and ch == "{":
+        for ch in zig_source.blank(line):
+            if ch == "{":
                 depth += 1
-            elif not in_str and ch == "}":
+            elif ch == "}":
                 depth -= 1
                 if depth <= 0:
                     depth = 0
                     inside = False
-            prev = ch
     return out
 
 
@@ -182,15 +174,11 @@ def test_only_lines(lines, tests):
             m = TOP_DECL.match(c)
             if m and not m.group(1):
                 current = [m.group(2) or m.group(3), n, n]
-        in_str, prev = False, ""
-        for ch in c:
-            if ch == '"' and prev != "\\":
-                in_str = not in_str
-            elif not in_str and ch == "{":
+        for ch in zig_source.blank(line):
+            if ch == "{":
                 depth += 1
-            elif not in_str and ch == "}":
+            elif ch == "}":
                 depth = max(0, depth - 1)
-            prev = ch
         if current:
             current[2] = n
             if depth == 0 and (c.rstrip().endswith(";") or c.rstrip().endswith("}")):
@@ -241,10 +229,9 @@ def closure(src_dir: str, root=ROOT_MODULE):
             continue  # a dangling import is zig's error to report, not ours
         seen.add(name)
         with open(path, encoding="utf-8") as f:
-            for line in f:
-                for dep in IMPORT.findall(code(line)):
-                    if dep not in seen:
-                        todo.append(dep)
+            for dep in zig_source.imports(f.read()):
+                if dep not in seen:
+                    todo.append(dep)
     return seen
 
 

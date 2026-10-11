@@ -27,6 +27,8 @@ python3 "$REPO_DIR/tools/embedded_assets.py" check
 
 # The `webbox` library (zig-server/src/webbox.zig) is the files it names, and
 # they import std and one another only: what a program built on it gets.
+# Both lints below read the source through tools/zig_source.py: its test first.
+python3 "$REPO_DIR/tools/zig_source.py"
 echo "==> webbox library lint (its test, then the tree)"
 python3 "$REPO_DIR/tools/lint_webbox_library.py" --self-test
 python3 "$REPO_DIR/tools/lint_webbox_library.py"

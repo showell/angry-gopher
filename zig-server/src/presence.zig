@@ -29,7 +29,11 @@ const window_ns: i128 = 5 * std.time.ns_per_min;
 
 /// The lastSeen map (uid → most-recent markActive, in real-clock ns) and its
 /// guard. Process-lifetime; keys are dupes owned by the metered base allocator
-/// (mem_meter) so this map's growth shows up in the leak meter.
+/// (mem_meter) so this map's growth shows up in the leak meter. Captured at
+/// module level, so the route table reaches the meter's singleton: that is why
+/// the meter's child has no default. It once defaulted to page_allocator, "so
+/// base() is valid even before init() runs", and that mmap was the one thing
+/// standing between gopher-metal and angry-gopher's real dispatch.
 const gpa = mem_meter.base();
 var mu: Io.Mutex = .init;
 var last_seen: std.StringHashMapUnmanaged(i128) = .empty;

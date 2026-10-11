@@ -22,7 +22,9 @@ pub fn build(b: *std.Build) void {
 
     // **THE `webbox` LIBRARY** (src/webbox.zig, a web server in a box): what
     // an application built on this server imports as one module, dog-park
-    // first. ops/check_zig holds its files to importing std and one another.
+    // first. ops/check_zig holds its files to importing std and one another
+    // (tools/lint_webbox_library.py), so nothing else of angry-gopher's rides
+    // along.
     _ = b.addModule("webbox", .{ .root_source_file = b.path("src/webbox.zig") });
 
     // Bake the deploy's git short-hash into the binary so /version (and thus the

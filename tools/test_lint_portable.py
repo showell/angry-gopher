@@ -215,6 +215,31 @@ class Reach(unittest.TestCase):
             self.assertEqual([name for name, _, _, _ in L.scan(t.dir, L.ROOTS)], ["only.zig"])
             self.assertEqual(t.scan(), [])  # from the route table alone it was unseen
 
+    def test_an_import_split_over_lines_is_followed(self):
+        # zig fmt keeps this form; a line-at-a-time reading never saw it.
+        files = {
+            "router.zig": 'const a = @import(\n    "a.zig",\n);\n',
+            "a.zig": "const p = std.heap.page_allocator;\n",
+        }
+        with Tree(files) as t:
+            self.assertEqual(L.closure(t.dir), {"router.zig", "a.zig"})
+            self.assertEqual([name for name, _, _, _ in t.scan()], ["a.zig"])
+
+    def test_a_brace_in_a_character_literal_does_not_hold_a_test_open(self):
+        files = {"router.zig": (
+            "test \"x\" {\n"
+            "    if (c == '{') {}\n"
+            "}\n"
+            "const p = std.heap.page_allocator;\n"
+        )}
+        with Tree(files) as t:
+            self.assertEqual([(n, line) for n, line, _, _ in t.scan()], [("router.zig", 4)])
+
+    def test_a_double_slash_in_a_string_hides_nothing_after_it(self):
+        files = {"router.zig": 'const u = "http://x"; const p = std.heap.page_allocator;\n'}
+        with Tree(files) as t:
+            self.assertEqual([n for n, _, _, _ in t.scan()], ["router.zig"])
+
     def test_a_missing_library_root_is_loud(self):
         with Tree({"router.zig": "\n"}) as t:
             with self.assertRaises(FileNotFoundError):

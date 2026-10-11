@@ -90,7 +90,9 @@ pub fn main(init: std.process.Init.Minimal) !void {
     const hub = &started.hub;
 
     // How long a quiet stream waits before a ping (metal-vmm QUEUE 137): for
-    // tests; unset is 25 s.
+    // tests; unset is 25 s. A value that is not a whole number of milliseconds
+    // above zero stops the server, as for GOPHER_BIND. gopher-metal's kernel
+    // has the same knob (`keepalive_ms`).
     if (bus_mod.keepaliveSetting(env.get("GOPHER_KEEPALIVE_MS")) catch |e| {
         std.debug.print("zig-server: GOPHER_KEEPALIVE_MS={s} is not a number of milliseconds above zero; not starting\n", .{env.get("GOPHER_KEEPALIVE_MS") orelse ""});
         return e;

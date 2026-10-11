@@ -12,6 +12,12 @@
 //! compute viewer-relative `mine`); parseSince is the replay cursor. The bus
 //! fan-out itself lives in bus.zig; openStream (decode backlog + subscribe
 //! atomically) in chat_store.zig — this module is purely the HTTP/SSE edge.
+//! The bus was prototyped on a standalone concurrency spike (since removed)
+//! before chat was ported onto it.
+//!
+//! This module is the only caller of http.zig's Server-Sent Events pieces
+//! (`sse_headers`, `pushFrame`): every chat stream's head, preamble and backlog
+//! go through them; the live frames are the host's (bus.zig's `Kept`).
 
 const std = @import("std");
 const Io = std.Io;

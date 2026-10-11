@@ -154,7 +154,10 @@ pub fn route(req: *std.http.Server.Request, io: Io, alloc: std.mem.Allocator, bu
         // handler's, cut short, and only the connection's close can say so.
         if (e == error.MalformedForm) {
             // The client's, not the server's (http.formField): said as such,
-            // and nothing for the host to log.
+            // and nothing for the host to log. One decoder for every form
+            // (metal-vmm QUEUE 156(i)): chat's own took a bad escape as text
+            // and the first of two fields, while players' refused the escape
+            // as a 500.
             if (!sent.any) req.respond("The form was malformed.\n", .{ .status = .bad_request, .keep_alive = false }) catch {};
             return null;
         }

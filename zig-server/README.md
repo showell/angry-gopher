@@ -43,6 +43,19 @@ Port 9001 is where `ops/start` serves locally — it runs this same zig binary
 (the Go original is gone). Each accepted connection runs as its own task on a
 std.Io thread pool, so requests are served concurrently.
 
+## The edge's threat model, as deployed
+
+`src/edge.zig`'s policy assumes runtime safety is on, and it is on every
+build that serves: production is gopher-metal's ReleaseSafe kernel, and the
+Linux build is Debug (`ops/start`, `ops/deploy`; Debug's checks are a superset
+of ReleaseSafe's). An out-of-bounds index or copy panics, and the host
+restarts. `stress_test.py`'s edge-policy job is the test that asserts each
+reject counter moved. The counters reach the watchdog (run by hand) through
+`/version`'s `rejects` (`home.zig`).
+
+The bare-metal side of `src/bus.zig`'s mailbox contract (the seeded simulator
+at the bottom of that file) is gopher-metal's HOST.md, "Live streams".
+
 ## Markdown dialect regression harness
 
 The zig renderer (`src/markdown.zig`) **is** the definition of lynrummy's

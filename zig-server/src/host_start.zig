@@ -82,6 +82,8 @@ pub fn start(io: Io, host: Host) !Started {
         break :blk search_index.buildAll(io, pass.allocator());
     };
     const search_ms: i64 = @intCast(@divFloor(Io.Clock.now(.awake, io).nanoseconds - t0.nanoseconds, std.time.ns_per_ms));
+    // The host's half of /admin/host (admin_host.zig): its facts and its log,
+    // if it gives them.
     if (host.facts) |f| host_facts.provide(f);
     if (host.log) |l| host_facts.provideLog(l);
     game_limits.free_space = switch (host.floor) {
