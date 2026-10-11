@@ -128,3 +128,50 @@ test "a topic's download, at the longest topic name, reads back whole through zi
 test "a path no ustar header can hold is refused, not cut" {
     try testing.expectError(error.NameTooLong, header("x" ** 120, 0, 0, '0'));
 }
+
+const max_name = 100;
+const max_prefix = 155;
+
+test "ustar.split: a path of 100 bytes is all name, 101 needs a prefix" {
+    const at = split("n" ** max_name).?;
+    try testing.expectEqualStrings("", at.prefix);
+    try testing.expectEqual(max_name, at.name.len);
+    try testing.expect(split("n" ** (max_name + 1)) == null); // no slash to split at
+    const past = split("d/" ++ "n" ** (max_name - 1)).?; // 101 bytes, with a slash
+    try testing.expectEqualStrings("d", past.prefix);
+    try testing.expectEqual(max_name - 1, past.name.len);
+}
+
+test "ustar.split: a name of 100 bytes after the slash fits, 101 does not" {
+    try testing.expectEqual(max_name, split("d/" ++ "n" ** max_name).?.name.len);
+    try testing.expect(split("d/" ++ "n" ** (max_name + 1)) == null);
+}
+
+test "ustar.split: a slash at index 155 leaves a prefix of 155, at 156 one too long" {
+    const at = split("p" ** max_prefix ++ "/n").?;
+    try testing.expectEqual(max_prefix, at.prefix.len);
+    try testing.expectEqualStrings("n", at.name);
+    try testing.expect(split("p" ** (max_prefix + 1) ++ "/n") == null);
+}
+
+test "ustar.split: a path of 256 bytes fits, 257 does not, and the 256 reads back whole" {
+    const longest = "p" ** max_prefix ++ "/" ++ "n" ** max_name;
+    try testing.expectEqual(256, longest.len);
+    try testing.expect(fits(longest));
+    try testing.expect(!fits("p" ** max_prefix ++ "/" ++ "n" ** (max_name + 1)));
+    try testing.expect(!fits("p" ** (max_prefix + 1) ++ "/" ++ "n" ** max_name));
+
+    var tar: [512 + 512 + 1024]u8 = @splat(0);
+    tar[0..512].* = try header(longest, 2, 0, '0');
+    @memcpy(tar[512..514], "ok");
+    var reader: std.Io.Reader = .fixed(&tar);
+    var name_buf: [std.fs.max_path_bytes]u8 = undefined;
+    var link_buf: [std.fs.max_path_bytes]u8 = undefined;
+    var it: std.tar.Iterator = .init(&reader, .{ .file_name_buffer = &name_buf, .link_name_buffer = &link_buf });
+    try testing.expectEqualStrings(longest, (try it.next()).?.name);
+}
+
+test "ustar.split: a slash at the end leaves no name and does not fit; one byte after it does" {
+    try testing.expect(split("p" ** (max_name + 1) ++ "/") == null);
+    try testing.expectEqualStrings("n", split("p" ** (max_name + 1) ++ "/n").?.name);
+}
