@@ -61,47 +61,19 @@ window.ChatSearch = (function(){
      focusFeed restores keyboard focus after the modal closes. */
   var focusFeed, jumpToId, sessionBase;
 
-  /* WORDS_CAP is the server's (chat_search.zig: at most 20 words). */
-  var SEARCH_MIN=2, SNIPPET_PAD=90, DEBOUNCE_MS=150, WORDS_CAP=20;
-  /* PRODUCT_DECISION: marks fold case as the server does, ASCII only, which
-     also keeps every index the same length as the text's. */
-  function asciiLower(s){ return s.replace(/[A-Z]/g, function(c){ return c.toLowerCase(); }); }
-  /* A character the server counts as part of a word: not whitespace, not
-     ASCII punctuation, not one of the server's trimmed table (curly quotes,
-     guillemets, the ellipsis and dashes, the inverted marks, the primes, the
-     no-break space: search_tokens.zig `trimmed`), which it trims from a
-     word's edges. */
-  function wordChar(c){ return !!c && !/[\s!-\/:-@\[-`{-~\u2018-\u201F\u00AB\u00BB\u2039\u203A\u2026\u2013-\u2015\u00A1\u00BF\u2032\u2033\u00A0]/.test(c); }
-  /* Where `q` next stands in `hay` from `from`, folded; with `whole`, only
-     where it is a whole word as the server reads one. */
-  function foldIndexOf(hay,q,from,whole){
-    var h=asciiLower(hay), t=asciiLower(q), at=from||0, m;
-    while((m=h.indexOf(t,at))>=0){
-      if(!whole || (!wordChar(hay.charAt(m-1)) && !wordChar(hay.charAt(m+t.length)))) return m;
-      at=m+1;
-    }
-    return -1;
-  }
+  /* PRODUCT_DECISION: the server's words, never re-read here (metal-vmm
+     QUEUE 157(d)): the shortest word comes from the page (init), each
+     answer says its own cap ("most"), and each message comes as its excerpt
+     already cut, the word marked as the index read it. This file once kept
+     a regex for a word's edges, a copy of the cap and of the shortest word,
+     and they had come apart from the server's on Unicode spaces. */
+  var SEARCH_MIN, DEBOUNCE_MS=150;
   /* PRODUCT_DECISION: builds <mark>s as DOM nodes (never innerHTML): the raw
-     body is untrusted text. `whole`: mark the word, not every substring. */
-  function highlightInto(node,text,term,whole){
-    if(!term){ node.appendChild(document.createTextNode(text)); return; }
-    var pos=0,m;
-    while((m=foldIndexOf(text,term,pos,whole))>=0){
-      if(m>pos) node.appendChild(document.createTextNode(text.slice(pos,m)));
-      var mk=document.createElement('mark'); mk.textContent=text.slice(m,m+term.length); node.appendChild(mk);
-      pos=m+term.length;
-    }
-    if(pos<text.length) node.appendChild(document.createTextNode(text.slice(pos)));
-  }
-  // lint:called-once named-algorithm
-  function appendSnippet(node,markdown,term){
-    var idx=foldIndexOf(markdown,term,0,true), start=0, end=markdown.length;
-    if(idx>=0){ start=Math.max(0,idx-SNIPPET_PAD); end=Math.min(markdown.length,idx+term.length+SNIPPET_PAD); }
-    else end=Math.min(markdown.length,180);
-    if(start>0) node.appendChild(document.createTextNode('…'));
-    highlightInto(node, markdown.slice(start,end), term, true);
-    if(end<markdown.length) node.appendChild(document.createTextNode('…'));
+     body is untrusted text. */
+  function markedInto(node,before,mark,after){
+    if(before) node.appendChild(document.createTextNode(before));
+    if(mark){ var mk=document.createElement('mark'); mk.textContent=mark; node.appendChild(mk); }
+    if(after) node.appendChild(document.createTextNode(after));
   }
 
   /* **ONE QUESTION IN FLIGHT THAT COUNTS**: every request takes a number, and
@@ -189,14 +161,15 @@ window.ChatSearch = (function(){
       SR.list.textContent=''; SR.items=[]; SR.sel=-1;
       var words=j.words||[];
       if(!words.length){ SR.status.textContent='No word starts with “'+q+'” — press Enter to search it anyway.'+unreadableNote(j.unreadable); return; }
-      SR.status.textContent=(words.length===WORDS_CAP?'The top '+WORDS_CAP+' words':words.length+(words.length===1?' word':' words'))+' · ↑↓ choose, Enter to search'+unreadableNote(j.unreadable);
+      SR.status.textContent=(words.length===j.most?'The top '+j.most+' words':words.length+(words.length===1?' word':' words'))+' · ↑↓ choose, Enter to search'+unreadableNote(j.unreadable);
       for(var i=0;i<words.length;i++){
         var w=words[i];
         var row=document.createElement('div'); row.className='chat-sr-row'; row.setAttribute('data-i',i);
         var head=document.createElement('div'); head.className='chat-sr-tok';
         /* BROWSER_WORKAROUND: wrap the highlighted word in ONE child so the flex
            row's gap:8px only sits between word-and-count, never inside the word. */
-        var tok=document.createElement('span'); highlightInto(tok, w.word, q, false); head.appendChild(tok);
+        /* Every word answered begins with the prefix as the server read it. */
+        var tok=document.createElement('span'); markedInto(tok, '', w.word.slice(0, j.prefix.length), w.word.slice(j.prefix.length)); head.appendChild(tok);
         var cnt=document.createElement('span'); cnt.className='chat-sr-cnt'; cnt.textContent=w.count+(w.count===1?' msg':' msgs');
         head.appendChild(cnt);
         row.appendChild(head);
@@ -229,7 +202,7 @@ window.ChatSearch = (function(){
         var row=document.createElement('div'); row.className='chat-sr-row'; row.setAttribute('data-i',k);
         var head=document.createElement('div'); head.className='chat-sr-rhead';
         head.textContent=whereLabel(m)+' · '+m.from+' · '+Message.formatLocalTime(m.date);
-        var ctx=document.createElement('div'); ctx.className='chat-sr-ctx'; appendSnippet(ctx, m.markdown||'', word);
+        var ctx=document.createElement('div'); ctx.className='chat-sr-ctx'; markedInto(ctx, m.before, m.mark, m.after);
         row.appendChild(head); row.appendChild(ctx);
         SR.list.appendChild(row); SR.items.push({conv:m.conv, sid:m.sid, id:m.id});
       }
@@ -271,6 +244,8 @@ window.ChatSearch = (function(){
   }
 
   function init(deps){
+    if(!(deps.minWord>0)) throw new Error('ChatSearch.init: the page gave no shortest word');
+    SEARCH_MIN  = deps.minWord;
     focusFeed   = deps.focusFeed;
     jumpToId    = deps.jumpToId;
     sessionBase = deps.sessionBase;

@@ -162,13 +162,20 @@ pub fn jsonCost(s: []const u8) usize {
 
 /// Whether `markdown` holds `word` (folded) as a word of its own.
 fn holds(markdown: []const u8, word: []const u8) bool {
+    return wordAt(markdown, word) != null;
+}
+
+/// Where `word` (folded) first stands in `markdown` as a word of its own, as
+/// the tokenizer reads one: the byte offset, or null. What a search marks
+/// (chat_search's excerpt), so the mark is the word the index counted.
+pub fn wordAt(markdown: []const u8, word: []const u8) ?usize {
     // Most messages do not hold it even as a substring: a quick no.
-    if (std.ascii.indexOfIgnoreCase(markdown, word) == null) return false;
+    if (std.ascii.indexOfIgnoreCase(markdown, word) == null) return null;
     var it = tokens.words(markdown);
     while (it.next()) |w| {
-        if (w.len == word.len and std.ascii.eqlIgnoreCase(w, word)) return true;
+        if (w.len == word.len and std.ascii.eqlIgnoreCase(w, word)) return @intFromPtr(w.ptr) - @intFromPtr(markdown.ptr);
     }
-    return false;
+    return null;
 }
 
 pub const Index = struct {

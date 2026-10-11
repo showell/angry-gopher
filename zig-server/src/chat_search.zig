@@ -4,13 +4,17 @@
 //!
 //!   GET /chat/search/words?prefix=la    the words beginning so, each with
 //!       how many messages hold it, summed over what the viewer can see; at
-//!       most `most_words`, the most held first:
-//!       {"prefix":"la","unreadable":0,"words":[{"word":"layout","count":3},...]}
+//!       most `most_words` (said as "most"), the most held first:
+//!       {"prefix":"la","most":20,"unreadable":0,"words":[{"word":"layout","count":3},...]}
 //!   GET /chat/search/messages?word=layout   the messages holding the word:
 //!       {"word":"layout","matched":N,"unreadable":0,"messages":[{"conv":"/chat/c/1_2",
-//!       "kind":"dm","sid":..,"id":..,"from":..,"date":..,"markdown":..},...]}
+//!       "kind":"dm","sid":..,"id":..,"from":..,"date":..,"before":..,"mark":..,"after":..},...]}
 //!       at most `most_messages` listed, and at most `most_bytes` of their
-//!       text as JSON writes it, every one counted.
+//!       text as JSON writes it, every one counted. Each message is its
+//!       excerpt, cut here (`excerptOf`): the word as the index read it,
+//!       marked, and up to `excerpt_pad` bytes either side, "…" where cut
+//!       (metal-vmm QUEUE 157(d): the client re-read the word's edges with a
+//!       regex of its own, and they had already come apart on Unicode spaces).
 //!
 //! **WHAT THE VIEWER CAN SEE, ASKED ON EVERY REQUEST** (`chat_store.
 //! visibleConvs`), never a list kept from an earlier one: a DM between two
@@ -40,6 +44,8 @@ const mem_meter = @import("mem_meter.zig");
 const Request = std.http.Server.Request;
 
 pub const most_words = 20;
+/// Bytes of a message either side of the marked word in its excerpt.
+pub const excerpt_pad = 90;
 pub const most_messages = 500;
 pub const per_second = 5;
 /// The most bytes of message text one answer lists, as JSON writes it
@@ -69,7 +75,7 @@ pub fn handle(req: *Request, io: Io, alloc: Alloc, uid: []const u8, rest: []cons
         const got = if (key.len == 0) &[_]search_index.WordCount{} else try idx.wordsFor(alloc, reach, key, most_words);
         try b.appendSlice(alloc, "{\"prefix\":");
         try str(&b, alloc, key);
-        try b.print(alloc, ",\"unreadable\":{d},\"words\":[", .{idx.unreadableFor(reach)});
+        try b.print(alloc, ",\"most\":{d},\"unreadable\":{d},\"words\":[", .{ most_words, idx.unreadableFor(reach) });
         for (got, 0..) |w, i| {
             if (i > 0) try b.append(alloc, ',');
             try b.appendSlice(alloc, "{\"word\":");
@@ -89,6 +95,7 @@ pub fn handle(req: *Request, io: Io, alloc: Alloc, uid: []const u8, rest: []cons
         try b.print(alloc, ",\"matched\":{d},\"unreadable\":{d},\"messages\":[", .{ f.matched, idx.unreadableFor(reach) });
         for (f.hits, 0..) |h, i| {
             if (i > 0) try b.append(alloc, ',');
+            const ex = try excerptOf(alloc, h.msg.markdown, key);
             const fields = [_][2][]const u8{
                 .{ "{\"conv\":", h.conv.base },
                 .{ ",\"kind\":", @tagName(h.conv.kind) },
@@ -96,7 +103,9 @@ pub fn handle(req: *Request, io: Io, alloc: Alloc, uid: []const u8, rest: []cons
                 .{ ",\"id\":", h.msg.id },
                 .{ ",\"from\":", h.msg.from },
                 .{ ",\"date\":", h.msg.date },
-                .{ ",\"markdown\":", h.msg.markdown },
+                .{ ",\"before\":", ex.before },
+                .{ ",\"mark\":", ex.mark },
+                .{ ",\"after\":", ex.after },
             };
             for (fields) |fv| {
                 try b.appendSlice(alloc, fv[0]);
@@ -107,6 +116,45 @@ pub fn handle(req: *Request, io: Io, alloc: Alloc, uid: []const u8, rest: []cons
     }
     try b.appendSlice(alloc, "]}");
     try req.respond(b.items, .{ .extra_headers = &.{http.json_ct} });
+}
+
+pub const Excerpt = struct { before: []const u8, mark: []const u8, after: []const u8 };
+
+/// A message's excerpt around `key` (folded): the word as written, where the
+/// index finds it (`search_index.wordAt`), and up to `excerpt_pad` bytes
+/// either side, cut on a character's edge, "…" where cut. A message the index
+/// matched always holds it; one that somehow does not is its first bytes,
+/// unmarked.
+pub fn excerptOf(alloc: Alloc, md: []const u8, key: []const u8) !Excerpt {
+    const at = search_index.wordAt(md, key) orelse {
+        const end = charEdgeBack(md, @min(md.len, 2 * excerpt_pad));
+        return .{ .before = "", .mark = "", .after = try cut(alloc, "", md[0..end], end < md.len) };
+    };
+    const start = charEdgeFwd(md, at -| excerpt_pad);
+    const end = charEdgeBack(md, @min(md.len, at + key.len + excerpt_pad));
+    return .{
+        .before = try cut(alloc, if (start > 0) "\u{2026}" else "", md[start..at], false),
+        .mark = md[at .. at + key.len],
+        .after = try cut(alloc, "", md[at + key.len .. end], end < md.len),
+    };
+}
+
+fn cut(alloc: Alloc, lead: []const u8, s: []const u8, trailing: bool) ![]const u8 {
+    return std.fmt.allocPrint(alloc, "{s}{s}{s}", .{ lead, s, if (trailing) "\u{2026}" else "" });
+}
+
+/// `i`, or the next character's start after it: never inside a UTF-8 sequence.
+fn charEdgeFwd(s: []const u8, i: usize) usize {
+    var j = i;
+    while (j < s.len and s[j] & 0xC0 == 0x80) j += 1;
+    return j;
+}
+
+/// `i`, or the start of the character it falls inside.
+fn charEdgeBack(s: []const u8, i: usize) usize {
+    var j = i;
+    while (j > 0 and j < s.len and s[j] & 0xC0 == 0x80) j -= 1;
+    return j;
 }
 
 /// `s` as a JSON string. **ALWAYS A STRING** (155's review): std.json writes
@@ -190,4 +238,20 @@ test "a few searches a second, then 429 until the second is over" {
     // Another person's searches are their own.
     try testing.expect(admit("8", 1500));
     try testing.expect(admit("7", 2000));
+}
+
+test "an excerpt is cut on a character's edge, never inside one, and says where it was cut (metal-vmm QUEUE 157(d))" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    const e = "\u{00E9}" ** 60; // 120 bytes, two a character
+    const ex = try excerptOf(a, e ++ " word " ++ e, "word");
+    try testing.expectEqualStrings("word", ex.mark);
+    try testing.expect(std.unicode.utf8ValidateSlice(ex.before) and std.unicode.utf8ValidateSlice(ex.after));
+    try testing.expect(std.mem.startsWith(u8, ex.before, "\u{2026}") and std.mem.endsWith(u8, ex.after, "\u{2026}"));
+    // Short: whole, nothing cut.
+    const whole = try excerptOf(a, "a Word here", "word");
+    try testing.expectEqualStrings("a ", whole.before);
+    try testing.expectEqualStrings("Word", whole.mark);
+    try testing.expectEqualStrings(" here", whole.after);
 }

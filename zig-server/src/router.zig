@@ -2166,3 +2166,38 @@ test "route: the conversation page hands the client the upload caps and the acce
     while (it.next()) |mime| : (n += 1) try testing.expect(chat_upload.extOf(mime) != null);
     try testing.expectEqual(chat_upload.accepted.len, n);
 }
+
+test "route: search answers each message's excerpt cut, the word marked as the index reads it, and says its own cap; the client copies neither (metal-vmm QUEUE 157(d))" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var site = try UidSite.init(a, io);
+    defer site.deinit();
+    const prev = mem_meter.replace(std.heap.page_allocator);
+    defer _ = mem_meter.replace(prev);
+    const chat_search = @import("chat_search.zig");
+    search_index.drop();
+    defer search_index.drop();
+    chat_search.forgetAll();
+    defer chat_search.forgetAll();
+    const me = try memberSession(a, io, "1", "Steve");
+    _ = try memberSession(a, io, "2", "Debbie");
+    // The word inside curly quotes and a comma, after a word that holds it
+    // ("layouts"): the mark is the word the tokenizer reads, which the
+    // client's regex once had to guess.
+    const long = "x" ** 200;
+    try writeTranscript(a, io, "1_2", "ChitChat", &.{"see layouts, then \u{201C}LAYOUT\u{201D}, here " ++ long});
+    const found = try UidSite.ask(a, io, "/chat/search/messages?word=layout", me);
+    try testing.expect(std.mem.indexOf(u8, found, "\"before\":\"see layouts, then \u{201C}\",\"mark\":\"LAYOUT\",\"after\":\"\u{201D}, here ") != null);
+    try testing.expect(std.mem.indexOf(u8, found, "x\u{2026}\"") != null); // cut, and says so
+    try testing.expect(std.mem.indexOf(u8, found, "\"markdown\":") == null); // the excerpt, not the message
+    const words = try UidSite.ask(a, io, "/chat/search/words?prefix=lay", me);
+    try testing.expect(std.mem.indexOf(u8, words, try std.fmt.allocPrint(a, "\"most\":{d}", .{chat_search.most_words})) != null);
+    // And the page carries the shortest word a search takes.
+    try testing.expectEqualStrings("200 OK", status(try postAs(a, io, "/chat/c/1_2/new", me, "topic=Plans")));
+    const page = try UidSite.ask(a, io, "/chat/c/1_2/Plans", me);
+    try testing.expect(std.mem.indexOf(u8, page, try std.fmt.allocPrint(a, "data-search-min=\"{d}\"", .{@import("search_tokens.zig").min_len})) != null);
+}

@@ -313,6 +313,7 @@
 
   /* ===== sibling module wiring ===== */
   ChatSearch.init({
+    minWord:   Number(root.dataset.searchMin), /* the server's (157(d)) */
     navbar:    pane.navbar,
     focusFeed: pane.focus,
     sessionBase: SESSION_BASE, /* a result here jumps; one elsewhere opens its topic */
