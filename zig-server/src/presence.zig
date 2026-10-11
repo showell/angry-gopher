@@ -17,7 +17,7 @@
 //! process-lifetime page allocator, NOT the per-request arena.
 
 const std = @import("std");
-const Io = std.Io;
+const Io = @import("host_io").Io;
 const Alloc = std.mem.Allocator;
 const users = @import("users.zig");
 const store = @import("chat_store.zig");

@@ -31,11 +31,25 @@ pub fn build(b: *std.Build) void {
     // **TWO MODULES**: `webbox`, portable, which everything imports; and
     // `webbox_linux` (src/webbox_linux.zig), the Linux host, which only a
     // Linux `main` imports and which reaches the portable half as `webbox`.
-    const webbox = b.addModule("webbox", .{ .root_source_file = b.path("src/webbox.zig") });
+    //
+    // **`host_io`, THE ONE FILE THAT NAMES THE HOST**: every file takes its
+    // `Io` from it (`@import("host_io").Io`). Here it is src/host_io_std.zig,
+    // the standard library's; gopher-metal's build hands the same sources
+    // its own, the machine's. Exported, so an application's build hands
+    // its own code the same one.
+    const host_io = b.addModule("host_io", .{ .root_source_file = b.path("src/host_io_std.zig") });
+    const webbox = b.addModule("webbox", .{
+        .root_source_file = b.path("src/webbox.zig"),
+        .imports = &.{.{ .name = "host_io", .module = host_io }},
+    });
     const webbox_linux = b.addModule("webbox_linux", .{
         .root_source_file = b.path("src/webbox_linux.zig"),
-        .imports = &.{.{ .name = "webbox", .module = webbox }},
+        .imports = &.{
+            .{ .name = "webbox", .module = webbox },
+            .{ .name = "host_io", .module = host_io },
+        },
     });
+    root.addImport("host_io", host_io);
     root.addImport("webbox", webbox);
     root.addImport("webbox_linux", webbox_linux);
 
@@ -160,6 +174,7 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
+    stress_mod.addImport("host_io", host_io);
     const stress_exe = b.addExecutable(.{ .name = "stress", .root_module = stress_mod });
     // Build (don't run) the harness to zig-out/bin/stress. The ops scripts run the
     // binary directly so they own the exit-code semantics — a `zig build run` step
@@ -177,6 +192,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
     hash_mod.addImport("webbox", webbox);
+    hash_mod.addImport("host_io", host_io);
     const hash_exe = b.addExecutable(.{ .name = "hash-password", .root_module = hash_mod });
     b.step("hash-password", "Build zig-out/bin/hash-password").dependOn(&b.addInstallArtifact(hash_exe, .{}).step);
 
@@ -188,9 +204,11 @@ pub fn build(b: *std.Build) void {
         .{ .step = "search-bench", .path = "src/search_bench.zig", .optimize = .ReleaseFast, .help = "Measure what search's index costs to build (src/search_bench.zig)" },
         .{ .step = "markdown-bench", .path = "src/markdown_bench.zig", .optimize = optimize, .help = "Render a corpus and report the slowest messages (src/markdown_bench.zig)" },
         .{ .step = "markdown-probe", .path = "src/markdown_hostile_probe.zig", .optimize = optimize, .help = "Check the renderer stays linear on hostile shapes (src/markdown_hostile_probe.zig)" },
+        .{ .step = "markdown-regression", .path = "src/markdown_regression_test.zig", .optimize = optimize, .help = "Render the corpora and compare with the gold (ops/check_markdown; -- --rebaseline rewrites it)" },
     }) |tool| {
         const tool_mod = b.createModule(.{ .root_source_file = b.path(tool.path), .target = target, .optimize = tool.optimize });
         tool_mod.addImport("webbox", webbox);
+        tool_mod.addImport("host_io", host_io);
         const tool_exe = b.addExecutable(.{ .name = tool.step, .root_module = tool_mod });
         const tool_run = b.addRunArtifact(tool_exe);
         if (b.args) |args| tool_run.addArgs(args);
@@ -212,6 +230,7 @@ pub fn build(b: *std.Build) void {
     }) });
     router_tests.root_module.addImport("build_options", build_opts.createModule());
     router_tests.root_module.addImport("webbox", webbox);
+    router_tests.root_module.addImport("host_io", host_io);
     for (assets) |a| {
         router_tests.root_module.addAnonymousImport(a.name, .{ .root_source_file = b.path(a.path) });
     }
@@ -228,6 +247,7 @@ pub fn build(b: *std.Build) void {
         // library as the module; a file of the library, by path.
         unit.root_module.addImport("webbox", webbox);
         unit.root_module.addImport("webbox_linux", webbox_linux);
+        unit.root_module.addImport("host_io", host_io);
         test_step.dependOn(&b.addRunArtifact(unit).step);
     }
 }

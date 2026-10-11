@@ -13,7 +13,7 @@
 //! (errors are never surfaced to the request).
 
 const std = @import("std");
-const Io = std.Io;
+const Io = @import("host_io").Io;
 const Alloc = std.mem.Allocator;
 const store = @import("chat_store.zig");
 const disk = @import("webbox").store;

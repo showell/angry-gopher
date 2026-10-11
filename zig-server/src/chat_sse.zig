@@ -19,7 +19,7 @@
 //! (`respond`, `push`); the live frames are the host's (bus.zig's `Kept`).
 
 const std = @import("std");
-const Io = std.Io;
+const Io = @import("host_io").Io;
 const users = @import("users.zig");
 const store = @import("chat_store.zig");
 const markdown = @import("markdown.zig");

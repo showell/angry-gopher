@@ -19,7 +19,7 @@
 //! test, without a socket.
 
 const std = @import("std");
-const Io = std.Io;
+const Io = @import("host_io").Io;
 const http = @import("webbox").http;
 const driving = @import("driving.zig");
 const delivery = @import("delivery.zig");

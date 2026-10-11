@@ -47,7 +47,7 @@ class Tree:
 ROUTER_ONLY = {
     "router.zig": """\
         const std = @import("std");
-        const Io = std.Io;
+        const Io = @import("host_io").Io;
         pub fn route(io: Io) void { _ = io; }
     """,
 }
@@ -56,13 +56,13 @@ ROUTER_ONLY = {
 def with_router(**extra):
     """router.zig importing each extra file, plus those files."""
     imports = "".join(f'const _{i} = @import("{n}");\n' for i, n in enumerate(extra))
-    files = {"router.zig": 'const std = @import("std");\nconst Io = std.Io;\n' + imports}
+    files = {"router.zig": 'const std = @import("std");\nconst Io = @import("host_io").Io;\n' + imports}
     files.update(extra)
     return files
 
 
 class Clean(unittest.TestCase):
-    def test_the_alias_line_itself_is_not_a_finding(self):
+    def test_io_from_host_io_is_not_a_finding(self):
         with Tree(ROUTER_ONLY) as t:
             self.assertEqual(t.scan(), [])
 
@@ -80,7 +80,7 @@ class Clean(unittest.TestCase):
         every = {f for f in os.listdir(src) if f.endswith(".zig")}
         outside = every - L.closure(src, L.ROOTS)
         self.assertEqual(outside, {
-            "server.zig", "webbox_linux.zig", "linux_host.zig", "linux_config.zig", "bind.zig", "stress.zig", "hash_password.zig",
+            "server.zig", "host_io_std.zig", "webbox_linux.zig", "linux_host.zig", "linux_config.zig", "bind.zig", "stress.zig", "hash_password.zig",
             "markdown_bench.zig", "markdown_hostile_probe.zig", "markdown_regression_test.zig",
             "search_bench.zig",
         })
@@ -106,9 +106,13 @@ class Seam(unittest.TestCase):
         with Tree(with_router(**{"a.zig": body})) as t:
             self.assertEqual(t.scan(), [])
 
-    def test_the_alias_spelled_with_extra_spaces_is_still_the_alias(self):
-        with Tree(with_router(**{"a.zig": "const  Io  =  std.Io ;\n"})) as t:
-            self.assertEqual(t.scan(), [])
+    def test_the_old_alias_to_std_is_a_finding_however_spaced(self):
+        # Io comes from host_io, the one file the build swaps; an alias
+        # straight to std's would be std's on every host, the machine too.
+        for line in ("const Io = std.Io;", "const  Io  =  std.Io ;"):
+            with self.subTest(line=line):
+                with Tree(with_router(**{"a.zig": line + "\n"})) as t:
+                    self.assertEqual(t.texts(), [("a.zig", "std.Io")])
 
 
 class Host(unittest.TestCase):

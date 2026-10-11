@@ -18,7 +18,7 @@
 
 const std = @import("std");
 const builtin = @import("builtin");
-const Io = std.Io;
+const Io = @import("host_io").Io;
 const bcrypt = std.crypto.pwhash.bcrypt;
 
 /// Cost factor — bcrypt's common default. Must match whatever cost set the

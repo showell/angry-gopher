@@ -14,7 +14,7 @@
 //! existing free-standing-download precedent this page is a landing surface for.
 
 const std = @import("std");
-const Io = std.Io;
+const Io = @import("host_io").Io;
 const http = @import("webbox").http;
 const markdown = @import("markdown.zig");
 const store = @import("webbox").store;

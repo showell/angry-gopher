@@ -12,7 +12,7 @@
 //!   GET /gallery/<file>     one image (png/svg), served from gallery_root
 
 const std = @import("std");
-const Io = std.Io;
+const Io = @import("host_io").Io;
 const Alloc = std.mem.Allocator;
 const http = @import("webbox").http;
 const html = @import("webbox").html;

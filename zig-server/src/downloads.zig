@@ -14,7 +14,7 @@
 //! it on the host — the same free-standing-content posture as gallery images.
 
 const std = @import("std");
-const Io = std.Io;
+const Io = @import("host_io").Io;
 const Alloc = std.mem.Allocator;
 const http = @import("webbox").http;
 const store = @import("webbox").store;

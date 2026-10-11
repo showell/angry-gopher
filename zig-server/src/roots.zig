@@ -49,7 +49,7 @@
 //! resolve against wherever the host is standing.
 
 const std = @import("std");
-const Io = std.Io;
+const Io = @import("host_io").Io;
 const storage = @import("storage.zig");
 const users = @import("users.zig");
 const player = @import("player.zig");

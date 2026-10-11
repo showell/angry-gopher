@@ -10,7 +10,8 @@ host, which only a Linux `main` imports). For each root:
   that reaches for the rest of angry-gopher (users, the chat) fails here
   rather than dragging the application into every program built on it;
 - its files import only the modules it may: `std` and `builtin` for
-  `webbox`, and also `webbox` for `webbox_linux` (the Linux host reaches the
+  `webbox` (and `host_io`, the one file a build swaps to name the host),
+  and also `webbox` for `webbox_linux` (the Linux host reaches the
   portable half as the module, never by path: one file, one module);
 - no file embeds a file (`@embedFile`): what a page serves is the
   application's.
@@ -45,8 +46,8 @@ def imports(path):
 
 # Each root, and the named modules its files may import.
 ROOTS = {
-    "webbox.zig": {"std", "builtin"},
-    "webbox_linux.zig": {"std", "builtin", "webbox"},
+    "webbox.zig": {"std", "builtin", "host_io"},
+    "webbox_linux.zig": {"std", "builtin", "host_io", "webbox"},
 }
 
 

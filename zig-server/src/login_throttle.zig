@@ -29,7 +29,7 @@
 //! both hosts to it identically.
 
 const std = @import("std");
-const Io = std.Io;
+const Io = @import("host_io").Io;
 
 // ── the numbers, in one place ─────────────────────────────────────────────────
 /// Failed sign-ins one address may make before it is refused, and the window.

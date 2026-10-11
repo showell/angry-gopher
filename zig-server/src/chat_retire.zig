@@ -29,7 +29,7 @@
 //!     conversation now gone is dropped, so no kept user's page lands on a 404.
 
 const std = @import("std");
-const Io = std.Io;
+const Io = @import("host_io").Io;
 const Alloc = std.mem.Allocator;
 const store = @import("webbox").store;
 const search_index = @import("search_index.zig");

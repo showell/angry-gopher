@@ -12,7 +12,7 @@
 //! and a few queries. The disk cost on gopher-metal is the box's to measure.
 
 const std = @import("std");
-const Io = std.Io;
+const Io = @import("host_io").Io;
 const chat_store = @import("chat_store.zig");
 const search_index = @import("search_index.zig");
 const mem_meter = @import("webbox").mem_meter;

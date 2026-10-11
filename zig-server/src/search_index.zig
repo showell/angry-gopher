@@ -27,7 +27,7 @@
 //! nothing here locks.
 
 const std = @import("std");
-const Io = std.Io;
+const Io = @import("host_io").Io;
 const Alloc = std.mem.Allocator;
 const tokens = @import("search_tokens.zig");
 const chat_store = @import("chat_store.zig");

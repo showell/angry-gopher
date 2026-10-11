@@ -30,7 +30,7 @@
 //! has a frozen-vector regression test at the bottom of this file.
 
 const std = @import("std");
-const Io = std.Io;
+const Io = @import("host_io").Io;
 const Alloc = std.mem.Allocator;
 const auth = @import("auth.zig");
 const counter = @import("webbox").counter;

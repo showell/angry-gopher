@@ -16,7 +16,7 @@
 //! this decoder parses them).
 
 const std = @import("std");
-const Io = std.Io;
+const Io = @import("host_io").Io;
 const Alloc = std.mem.Allocator;
 const timefmt = @import("timefmt.zig");
 const store = @import("webbox").store;

@@ -13,7 +13,7 @@
 //! Exit code: 0 = all clean, 1 = a leak was detected, 2 = harness/connection error.
 
 const std = @import("std");
-const Io = std.Io;
+const Io = @import("host_io").Io;
 
 // base_url targets the server under test. The port is GOPHER_PORT (default 9001) —
 // the sandbox launcher sets it to a side port so we hammer the hermetic instance,

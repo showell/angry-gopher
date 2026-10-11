@@ -31,13 +31,15 @@ THE LIBRARY'S EDGES, inside the set:
 
 WHAT IT FORBIDS, inside the set and outside `test {}` blocks:
 
-  THE PORTING SEAM   Every file opens with `const Io = std.Io;`, and gopher-metal
-                     rewrites exactly that line. So `std.Io.Dir`, `.Clock`,
-                     `.Mutex` and `.Group` — the namespaces that machine
-                     replaces — must be spelled through the alias, and so must a
-                     bare `std.Io` in a signature. Spelled `std.` they are
-                     unreachable by the port, and `std.Io.Dir.cwd()` reaches for
-                     `std.posix.AT.FDCWD`.
+  THE HOST'S SEAM    Every file takes its `Io` from the `host_io` module
+                     (`const Io = @import("host_io").Io;`), one file each build
+                     chooses: std's on Linux, the machine's on gopher-metal. So
+                     `std.Io.Dir`, `.Clock`, `.Mutex` and `.Group` (the
+                     namespaces that machine replaces) are spelled through
+                     `Io`, and so is a bare `std.Io` in a signature, the old
+                     `const Io = std.Io;` alias included. Spelled `std.` they
+                     are std's on every host, and `std.Io.Dir.cwd()` reaches
+                     for `std.posix.AT.FDCWD`.
   THE STORE'S SEAM   `Io.Dir.cwd()` anywhere but store.zig (gopher-metal QUEUE
                      item 54). The Store is the one way to the disk: it keeps
                      FAT's rules (case, names, lengths) on every host, so a
@@ -113,11 +115,11 @@ CWD = (re.compile(r"\bIo\.Dir\.cwd\s*\("),
        "the disk is the Store's: call store.zig (read, write, list, stat...) — it keeps FAT's rules on every host")
 
 RULES = [
-    # The porting seam.
+    # The host's seam.
     (re.compile(r"\bstd\.Io\.(Dir|Clock|Mutex|Group)\b"),
-     "spell it Io.{0} — the alias is what the port rewrites"),
+     "spell it Io.{0}, with Io from host_io: the build chooses the host there"),
     (re.compile(r"\bstd\.Io\b(?!\s*\.)"),
-     "spell it Io — the alias is what the port rewrites"),
+     'take it from host_io (const Io = @import("host_io").Io;): the build chooses the host there'),
     # The host.
     (re.compile(r"\bstd\.Io\.(Threaded|net)\b"),
      "std.Io.{0} is the host's thread pool / sockets"),
@@ -305,8 +307,6 @@ def scan(src_dir: str, root=ROOT_MODULE):
             if n in tests:
                 continue
             c = code(line)
-            if re.search(r"\bconst\s+Io\s*=\s*std\.Io\s*;", c):
-                c = re.sub(r"\bconst\s+Io\s*=\s*std\.Io\s*;", "", c)  # the alias itself
             for pattern, advice in rules:
                 for m in pattern.finditer(c):
                     arg = m.group(1) if m.groups() else ""

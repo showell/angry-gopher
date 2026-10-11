@@ -30,7 +30,7 @@
 //! the next start measures afresh. A release forgets the player (`forget`).
 
 const std = @import("std");
-const Io = std.Io;
+const Io = @import("host_io").Io;
 const Alloc = std.mem.Allocator;
 const store = @import("webbox").store;
 const storage = @import("storage.zig");

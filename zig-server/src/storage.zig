@@ -29,7 +29,7 @@
 //! one storage wrote.
 
 const std = @import("std");
-const Io = std.Io;
+const Io = @import("host_io").Io;
 const Alloc = std.mem.Allocator;
 const counter = @import("webbox").counter;
 const store = @import("webbox").store;

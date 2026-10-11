@@ -23,7 +23,7 @@
 
 const std = @import("std");
 const build_options = @import("build_options");
-const Io = std.Io;
+const Io = @import("host_io").Io;
 const http = @import("webbox").http;
 const edge = @import("webbox").edge;
 const throttle = @import("login_throttle.zig");

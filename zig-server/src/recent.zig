@@ -14,7 +14,7 @@
 //! 20s timer and upserts rows from onmessage events.
 
 const std = @import("std");
-const Io = std.Io;
+const Io = @import("host_io").Io;
 const http = @import("webbox").http;
 const users = @import("users.zig");
 const store = @import("chat_store.zig");

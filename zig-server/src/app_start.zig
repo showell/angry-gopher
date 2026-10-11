@@ -7,7 +7,7 @@
 //! arena of its own over the process allocator, given back when it ends.
 
 const std = @import("std");
-const Io = std.Io;
+const Io = @import("host_io").Io;
 const roots = @import("roots.zig");
 const chat_store = @import("chat_store.zig");
 const search_index = @import("search_index.zig");

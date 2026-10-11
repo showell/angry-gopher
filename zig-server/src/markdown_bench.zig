@@ -1,7 +1,7 @@
 const std = @import("std");
 const markdown = @import("markdown.zig");
 const chat_store = @import("chat_store.zig");
-const Io = std.Io;
+const Io = @import("host_io").Io;
 
 // Diagnostic timing probe for the markdown renderer over the REAL prod chat
 // corpus — NOT a gate, a measuring stick. It walks every chat transcript under
