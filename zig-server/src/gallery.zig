@@ -78,7 +78,9 @@ fn renderIndex(req: *Request, io: Io, alloc: Alloc) !void {
             \\<p class="pending">pages/home.txt could not be parsed: <strong>{s}</strong>.</p>
         , .{@errorName(err)});
         try b.appendSlice(alloc, "</main></body></html>");
-        return req.respond(b.items, .{ .extra_headers = &.{http.html_ct} });
+        // A 500, as the home page's (metal-vmm QUEUE 172): a 200 a sweep or
+        // a cache could not tell from a gallery served.
+        return req.respond(b.items, .{ .status = .internal_server_error, .extra_headers = &.{http.html_ct} });
     };
     const slots = try slotsFrom(alloc, parsed.apps.items);
 

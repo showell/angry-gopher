@@ -221,10 +221,18 @@ fn docsSave(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8) !vo
     const body = (try http.readLimitedBody(req, alloc, max_doc_bytes)) orelse return;
     const slug_raw = (try chat.formField(alloc, body, "slug")) orelse "";
     const slug = std.mem.trim(u8, slug_raw, " \t\r\n");
-    const doc_body = (try chat.formField(alloc, body, "body")) orelse "";
     if (!docs_store.validDocSlug(slug)) return req.respond("bad slug\n", .{ .status = .bad_request });
-    docs_store.writeUserDoc(io, alloc, uid, slug, doc_body) catch
-        return req.respond("save failed\n", .{ .status = .internal_server_error });
+    // **A SAVE SAYS WHAT IT SAVES** (metal-vmm QUEUE 172): a request with no
+    // body field is refused, never read as an empty doc that wipes the one
+    // there (as 156(b) found for /send). An empty field is an emptied doc.
+    const doc_body = (try chat.formField(alloc, body, "body")) orelse
+        return req.respond("not saved: no body\n", .{ .status = .bad_request });
+    // A doc that is gone (a stale tab's autosave) is a 404; any other failure
+    // goes on to the host's log as the 500 it is.
+    docs_store.writeUserDoc(io, alloc, uid, slug, doc_body) catch |e| switch (e) {
+        error.DocDoesNotExist => return req.respond("no such doc\n", .{ .status = .not_found }),
+        else => return e,
+    };
     publishDocRecent(io, alloc, bus, uid, slug);
     return req.respond("", .{ .status = .no_content });
 }
@@ -301,7 +309,7 @@ fn docsPost(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8) !vo
 /// snapshot as-seen (body markdown, author, display date) plus the conv/sid/id
 /// locating the source message, plus the annotation. Acts only on the
 /// authenticated principal's own doc — uid is the session principal, never the
-/// request. reading_list.save caps the doc size (DocTooLarge → 500 here; a
+/// request. reading_list.save caps the doc size (DocTooLarge → 413 here; a
 /// hammering client hits the bound, not unbounded growth).
 fn docsSaveToReadingList(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8) !void {
     if (req.head.method != .POST) return http.methodNotAllowed(req);
@@ -316,8 +324,12 @@ fn docsSaveToReadingList(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []
     if (conv.len == 0 or sid.len == 0 or id.len == 0 or msg_body.len == 0) {
         return req.respond("missing field\n", .{ .status = .bad_request });
     }
-    reading_list.save(io, alloc, uid, conv, sid, id, from, at, msg_body, note) catch
-        return req.respond("save failed\n", .{ .status = .internal_server_error });
+    // A reading list at its cap is the client's limit (413); any other
+    // failure goes on to the host's log (metal-vmm QUEUE 172).
+    reading_list.save(io, alloc, uid, conv, sid, id, from, at, msg_body, note) catch |e| switch (e) {
+        error.DocTooLarge => return req.respond("not saved: the reading list is full\n", .{ .status = .payload_too_large }),
+        else => return e,
+    };
     publishDocRecent(io, alloc, bus, uid, reading_list.reading_list_slug);
     return req.respond("", .{ .status = .no_content });
 }
