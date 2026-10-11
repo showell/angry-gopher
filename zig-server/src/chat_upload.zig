@@ -127,7 +127,10 @@ pub fn serveUpload(req: *Request, io: Io, alloc: Alloc, conv_dir: []const u8, si
             error.FileNotFound => return http.notFound(req), // gone since its stat
             else => return e,
         };
-        const cr = try std.fmt.allocPrint(alloc, "bytes {d}-{d}/{d}", .{ r.start, r.start + n - 1, size });
+        // An upload is never rewritten, so a read shorter than its stat
+        // promised is a fault, not a range to answer from.
+        if (n != len) return error.UploadShorterThanItsStat;
+        const cr = try std.fmt.allocPrint(alloc, "bytes {d}-{d}/{d}", .{ r.start, r.end, size });
         // The Range window is already bounded to `range_window`, so it is read
         // and sent whole with a content-length (the plain GET below is the one
         // that was unbounded — item 105).
