@@ -121,7 +121,33 @@ const App = struct {
     pub const routes = routed;
     pub const setup = app_start.setup;
     pub const StartReport = app_start.StartReport;
+    pub const bodyLimit = routeBodyLimit;
 };
+
+/// **EACH ROUTE'S CAP ON A BODY, FROM ITS PATH** (metal-vmm QUEUE 167.2): the
+/// most any handler under the path reads, which the host reads the body by
+/// (webbox's body.zig: before the turn, or in it under its deadline). Every
+/// handler checks its own cap again (`http.readLimitedBody`), so a path's
+/// is the largest of its handlers', and the test below holds each handler's
+/// within its path's. Only the upload's is past `body_rule.before_turn_most`.
+fn routeBodyLimit(path: []const u8) u64 {
+    const caps = request_limits.body;
+    const in_chat = http.pathUnder(path, "/chat") orelse http.pathUnder(path, "/channel");
+    if (in_chat) |sub| {
+        if (std.mem.endsWith(u8, sub, "/upload")) return caps.upload_any;
+        if (http.pathUnder(sub, "/docs") != null) return caps.doc;
+        return caps.chat_message;
+    }
+    if (http.pathUnder(path, "/game") != null) return caps.game_new_session;
+    return caps.largest_form;
+}
+
+/// When a request's body is read, and how long it may take (webbox's
+/// body.zig): the rule a host reads `bodyLimit` by.
+pub const body_rule = @import("body.zig");
+/// The route's cap on a body, from the head's target: contract step 3's
+/// first half, before the body is read.
+pub const bodyLimit = Served.bodyLimit;
 const Served = webbox_site.Site(App);
 
 /// route picks the handler by path prefix, passing the remainder (the path with
@@ -399,6 +425,41 @@ test "every page names its scripts by their bytes, and a script asked for by its
         }
         try testing.expect(scripts > 0);
     }
+}
+
+test "routeBodyLimit: every handler's cap is within its path's, and only the upload's is read in the turn on Linux (metal-vmm QUEUE 167.2)" {
+    const caps = request_limits.body;
+    const Case = struct { path: []const u8, cap: u64 };
+    for ([_]Case{
+        .{ .path = "/settings", .cap = caps.form },
+        .{ .path = "/login", .cap = caps.form },
+        .{ .path = "/play", .cap = caps.form },
+        .{ .path = "/admin", .cap = caps.form },
+        .{ .path = "/admin/lynrummy/x", .cap = caps.form },
+        .{ .path = "/admin/retire", .cap = caps.retire_form },
+        .{ .path = "/admin/backup", .cap = caps.secret_form },
+        .{ .path = "/admin/secret", .cap = caps.secret_form },
+        .{ .path = "/puzzles/sessions/1/puzzles/0/actions", .cap = caps.game_append },
+        .{ .path = "/game/new-session", .cap = caps.game_new_session },
+        .{ .path = "/game/sessions/1/actions", .cap = caps.game_append },
+        .{ .path = "/chat/c/ada_bo/main/send", .cap = caps.chat_message },
+        .{ .path = "/channel/general/main/send", .cap = caps.chat_message },
+        .{ .path = "/chat/c/ada_bo/main/react", .cap = caps.reaction },
+        .{ .path = "/chat/docs/new", .cap = caps.doc },
+        .{ .path = "/chat/c/ada_bo/main/upload", .cap = caps.upload_any },
+        .{ .path = "/channel/general/main/upload", .cap = caps.upload_any },
+    }) |c| {
+        const limit = bodyLimit(c.path);
+        if (limit < c.cap) {
+            std.debug.print("{s}: its handler reads {d}, its path allows {d}\n", .{ c.path, c.cap, limit });
+            return error.TestExpectedEqual;
+        }
+        const uploads = std.mem.endsWith(u8, c.path, "/upload");
+        try testing.expectEqual(!uploads, limit <= body_rule.before_turn_most);
+    }
+    // The query is no part of the path.
+    try testing.expectEqual(@as(u64, caps.upload_any), bodyLimit("/chat/c/ada_bo/main/upload?x=1"));
+    try testing.expectEqual(@as(u64, caps.largest_form), bodyLimit("/nope"));
 }
 
 test "route: the table answers, and an unknown path is a 404" {

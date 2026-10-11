@@ -51,6 +51,10 @@ pub const body = struct {
     /// larger kind, and a margin for the multipart framing around it.
     pub const upload_any = upload_video + (1 << 20);
 
+    /// The largest of the small forms, which every route not named in
+    /// router.zig's `routeBodyLimit` takes at most.
+    pub const largest_form = @max(secret_form, retire_form, form, reaction, game_append);
+
     /// The largest body any route but the upload takes: Caddy's ordinary cap
     /// must be at least this.
     pub const largest_ordinary = @max(secret_form, retire_form, form, chat_message, reaction, doc, game_new_session, game_append);
