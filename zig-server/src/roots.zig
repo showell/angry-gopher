@@ -266,6 +266,8 @@ test "point assigns no global the list of roots does not name, and restore puts 
     const body = src[start .. start + std.mem.indexOf(u8, src[start..], "\n}\n").?];
     var names: std.ArrayList([]const u8) = .empty;
     defer names.deinit(testing.allocator);
+    var arena_names = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena_names.deinit();
     var lines = std.mem.splitScalar(u8, body, '\n');
     while (lines.next()) |raw| {
         const line = std.mem.trim(u8, raw, " ");
@@ -273,7 +275,19 @@ test "point assigns no global the list of roots does not name, and restore puts 
         if (std.mem.startsWith(u8, line, "//") or std.mem.startsWith(u8, line, "const ") or std.mem.startsWith(u8, line, "var ")) continue;
         try names.append(testing.allocator, line[0..eq]);
     }
-    try testing.expect(names.items.len >= 6);
+    // And what store.setBases, which point calls, assigns (the review of 157:
+    // the test was blind to it).
+    const store_src = @embedFile("store.zig");
+    const sb = std.mem.indexOf(u8, store_src, "pub fn setBases(").?;
+    const sb_body = store_src[sb .. sb + std.mem.indexOf(u8, store_src[sb..], "\n}\n").?];
+    var sb_lines = std.mem.splitScalar(u8, sb_body, '\n');
+    while (sb_lines.next()) |raw| {
+        const line = std.mem.trim(u8, raw, " ");
+        const eq = std.mem.indexOf(u8, line, " = ") orelse continue;
+        if (std.mem.startsWith(u8, line, "//") or std.mem.startsWith(u8, line, "const ")) continue;
+        try names.append(testing.allocator, try std.fmt.allocPrint(arena_names.allocator(), "store.{s}", .{line[0..eq]}));
+    }
+    try testing.expect(names.items.len >= 8);
     // store.setBases(...) sets the last two; it is a call, and they are listed.
     for (names.items) |n| {
         var found = false;
