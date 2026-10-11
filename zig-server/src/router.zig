@@ -399,7 +399,7 @@ test "every page names its scripts by their bytes, and a script asked for by its
     try users.setUserPassword(io, a, ada, "a password for Ada");
     const bo = try users.allocateUser(io, a, "Bo");
     try users.setUserPassword(io, a, bo, "a password for Bo");
-    const cookies = try std.fmt.allocPrint(a, "{s}; gopher_auth={s}", .{ me, (try users.signSessionNow(io, a, ada)).? });
+    const cookies = try std.fmt.allocPrint(a, "{s}; __Host-gopher_auth={s}", .{ me, (try users.signSessionNow(io, a, ada)).? });
     const dm = try std.fmt.allocPrint(a, "/chat/c/{s}_{s}/scripts", .{ ada, bo });
     const body = "markdown=hello";
     const sent = try serve(a, io, try std.fmt.allocPrint(a, "POST {s}/send HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: {d}\r\n\r\n{s}", .{ dm, cookies, body.len, body }));
@@ -581,7 +581,7 @@ test "route: ADMIN_ONLY — a logged-in non-admin member is refused the secret-b
     // the member case, which a bare gopher_uid cannot stand in for.
     try users.setUserPassword(io, a, "2", "hunter2");
     const now: i64 = @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
-    const member = try std.fmt.allocPrint(a, "gopher_auth={s}", .{try users.signSession(a, UidSite.secret, "2", now)});
+    const member = try std.fmt.allocPrint(a, "__Host-gopher_auth={s}", .{try users.signSession(a, UidSite.secret, "2", now)});
 
     for ([_][]const u8{ "/admin", "/admin/backup", "/admin/secret", "/admin/retire", "/admin/apikey", "/admin/host", "/admin/lynrummy", "/admin/search?key=lay" }) |path| {
         const resp = try UidSite.ask(a, io, path, member);
@@ -639,10 +639,10 @@ const UidSite = struct {
     }
 };
 
-/// The value of the response's gopher_uid Set-Cookie, or null.
+/// The value of the response's __Host-gopher_uid Set-Cookie, or null.
 fn setUid(response: []const u8) ?[]const u8 {
-    const at = std.mem.indexOf(u8, response, "set-cookie: gopher_uid=") orelse return null;
-    const rest = response[at + "set-cookie: gopher_uid=".len ..];
+    const at = std.mem.indexOf(u8, response, "set-cookie: __Host-gopher_uid=") orelse return null;
+    const rest = response[at + "set-cookie: __Host-gopher_uid=".len ..];
     return rest[0 .. std.mem.indexOfScalar(u8, rest, ';') orelse rest.len];
 }
 
@@ -675,7 +675,7 @@ test "route: an unsigned gopher_uid is re-identified once, then never" {
     try testing.expect(UidSite.marked(a, io, id));
 
     // The signed cookie is the player.
-    const with_signed = try std.fmt.allocPrint(a, "gopher_uid={s}", .{signed});
+    const with_signed = try std.fmt.allocPrint(a, "__Host-gopher_uid={s}", .{signed});
     const page = try UidSite.ask(a, io, "/play", with_signed);
     try testing.expectEqualStrings("200 OK", status(page));
     try testing.expect(playingAs(page, "Nikhil"));
@@ -727,7 +727,7 @@ test "route: a guest upgrades only with a signed cookie" {
     const first = try UidSite.ask(a, io, "/login/full", "gopher_uid=7");
     try testing.expectEqualStrings("303 See Other", status(first));
     const signed = setUid(first) orelse return error.NoSetCookie;
-    const page = try UidSite.ask(a, io, "/login/full", try std.fmt.allocPrint(a, "gopher_uid={s}", .{signed}));
+    const page = try UidSite.ask(a, io, "/login/full", try std.fmt.allocPrint(a, "__Host-gopher_uid={s}", .{signed}));
     try testing.expect(std.mem.indexOf(u8, page, upgrade) != null);
 
     // After it, the unsigned spelling is the stranger form, POST or GET.
@@ -768,7 +768,7 @@ test "route: an unsigned gopher_uid never names a member, the agent, a stranger,
 
     // The member's games follow their session.
     const session = try users.signSession(a, UidSite.secret, "1", @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s)));
-    const m = try UidSite.ask(a, io, "/play", try std.fmt.allocPrint(a, "gopher_auth={s}", .{session}));
+    const m = try UidSite.ask(a, io, "/play", try std.fmt.allocPrint(a, "__Host-gopher_auth={s}", .{session}));
     try testing.expect(playingAs(m, "Steve"));
 
     // A player never yet signed, once the window has shut: no one.
@@ -824,7 +824,7 @@ fn nowSecs(io: Io) i64 {
 fn signedUid(a: std.mem.Allocator, id: []const u8) ![]const u8 {
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
-    return std.fmt.allocPrint(a, "gopher_uid={s}", .{try uid_cookie.sign(a, UidSite.secret, id, nowSecs(threaded.io()) - 3600)});
+    return std.fmt.allocPrint(a, "__Host-gopher_uid={s}", .{try uid_cookie.sign(a, UidSite.secret, id, nowSecs(threaded.io()) - 3600)});
 }
 
 fn postAs(a: std.mem.Allocator, io: Io, target: []const u8, cookies: []const u8, body: []const u8) ![]const u8 {
@@ -1014,7 +1014,7 @@ fn adminSession(a: std.mem.Allocator, io: Io) ![]const u8 {
     try users.setUserName(io, a, "1", "Steve");
     try users.setUserPassword(io, a, "1", "hunter2");
     const now: i64 = @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
-    return std.fmt.allocPrint(a, "gopher_auth={s}", .{try users.signSession(a, UidSite.secret, "1", now)});
+    return std.fmt.allocPrint(a, "__Host-gopher_auth={s}", .{try users.signSession(a, UidSite.secret, "1", now)});
 }
 
 test "route: HEAD /admin/backup reads nothing" {
@@ -1176,7 +1176,7 @@ fn memberSession(a: std.mem.Allocator, io: Io, uid: []const u8, name: []const u8
     try users.setUserName(io, a, uid, name);
     try users.setUserPassword(io, a, uid, "pw");
     const now: i64 = @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
-    return std.fmt.allocPrint(a, "gopher_auth={s}", .{try users.signSession(a, UidSite.secret, uid, now)});
+    return std.fmt.allocPrint(a, "__Host-gopher_auth={s}", .{try users.signSession(a, UidSite.secret, uid, now)});
 }
 
 /// A transcript as the store lays it out: one message a body, numbered from 1.
@@ -1409,7 +1409,7 @@ test "route: only a member's own session is the admin; a non-member's session, o
     // uid 1 with a name and no password is not a member: a session signed
     // rightly for it names no one.
     try users.setUserName(io, a, "1", "Steve");
-    const early = try std.fmt.allocPrint(a, "gopher_auth={s}", .{try users.signSession(a, UidSite.secret, "1", now)});
+    const early = try std.fmt.allocPrint(a, "__Host-gopher_auth={s}", .{try users.signSession(a, UidSite.secret, "1", now)});
     try testing.expectEqualStrings("303 See Other", status(try ask.admin(a, io, early)));
 
     // Once a member, the session is the admin; a signed gopher_uid for the
@@ -1459,7 +1459,7 @@ test "route: /admin/backup asks for the password again, and gives nothing withou
     try users.setUserName(io, a, "2", "apoorva");
     try users.setUserPassword(io, a, "2", "hunter2");
     const now: i64 = @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
-    const other = try std.fmt.allocPrint(a, "gopher_auth={s}", .{try users.signSession(a, UidSite.secret, "2", now)});
+    const other = try std.fmt.allocPrint(a, "__Host-gopher_auth={s}", .{try users.signSession(a, UidSite.secret, "2", now)});
     try testing.expectEqualStrings("404 Not Found", status(try postForm(a, io, "/admin/backup", other, "password=hunter2")));
     try testing.expectEqual(@as(usize, 0), admin_backup.files_archived - before - countFiles(tar));
 }
@@ -1562,7 +1562,7 @@ test "route: /admin/secret changes the secret: members log in again, players are
     // The admin's session has ended; the password still logs in.
     try testing.expectEqualStrings("303 See Other", status(try UidSite.ask(a, io, "/admin", me)));
     const relogin = try postForm(a, io, "/login/full", "x=y", "name=Steve&password=hunter2&action=login");
-    try testing.expect(std.mem.indexOf(u8, relogin, "set-cookie: gopher_auth=") != null);
+    try testing.expect(std.mem.indexOf(u8, relogin, "set-cookie: __Host-gopher_auth=") != null);
 
     // The player's old cookie still names them, on a POST too, and a GET
     // re-signs it with the new secret.
@@ -1571,7 +1571,7 @@ test "route: /admin/secret changes the secret: members log in again, players are
     try testing.expectEqualStrings("303 See Other", status(renewed));
     const fresh = setUid(renewed) orelse return error.NoSetCookie;
     try testing.expectEqualStrings(id, uid_cookie.verify(new_secret, fresh, nowSecs(io)).?);
-    try testing.expect(playingAs(try UidSite.ask(a, io, "/play", try std.fmt.allocPrint(a, "gopher_uid={s}", .{fresh})), "Nikhil"));
+    try testing.expect(playingAs(try UidSite.ask(a, io, "/play", try std.fmt.allocPrint(a, "__Host-gopher_uid={s}", .{fresh})), "Nikhil"));
 
     // Once the days are over, the old cookie names no one.
     try UidSite.disk.replace(io, a, try std.fs.path.join(a, &.{ users.session_secret_dir, "_session_secret.previous-until" }), "1\n", .{});
@@ -1602,7 +1602,7 @@ test "fs: a doc that cannot be looked at is a server error, never a 404 (metal-v
 
     try users.setUserPassword(io, a, "2", "hunter2");
     const now: i64 = @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
-    const member = try std.fmt.allocPrint(a, "gopher_auth={s}", .{try users.signSession(a, UidSite.secret, "2", now)});
+    const member = try std.fmt.allocPrint(a, "__Host-gopher_auth={s}", .{try users.signSession(a, UidSite.secret, "2", now)});
 
     const kept = try docs_store.docPath(a, "2", "kept");
     try UidSite.disk.write(io, a, kept, "# kept\n", .{});
@@ -1659,7 +1659,7 @@ test "route: a key revoke whose removal fails is not answered as revoked, and th
 
     try users.setUserPassword(io, a, "2", "hunter2");
     const now: i64 = @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
-    const member = try std.fmt.allocPrint(a, "gopher_auth={s}", .{try users.signSession(a, UidSite.secret, "2", now)});
+    const member = try std.fmt.allocPrint(a, "__Host-gopher_auth={s}", .{try users.signSession(a, UidSite.secret, "2", now)});
     const key = try users.setUserAPIKey(io, a, "2");
 
     var vt: Io.VTable = undefined;
@@ -1698,7 +1698,7 @@ test "route: a release whose removals fail is not answered as done, and the acco
 
     try users.setUserPassword(io, a, "2", "hunter2");
     const now: i64 = @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
-    const member = try std.fmt.allocPrint(a, "gopher_auth={s}", .{try users.signSession(a, UidSite.secret, "2", now)});
+    const member = try std.fmt.allocPrint(a, "__Host-gopher_auth={s}", .{try users.signSession(a, UidSite.secret, "2", now)});
     const data = try std.fs.path.join(a, &.{ UidSite.storage.data_root, "2", "next-session-id.txt" });
     try UidSite.disk.write(io, a, data, "2\n", .{});
 
@@ -1739,7 +1739,7 @@ test "route: a release whose last removal fails leaves an account that can relea
 
     try users.setUserPassword(io, a, "2", "hunter2");
     const now: i64 = @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
-    const member = try std.fmt.allocPrint(a, "gopher_auth={s}", .{try users.signSession(a, UidSite.secret, "2", now)});
+    const member = try std.fmt.allocPrint(a, "__Host-gopher_auth={s}", .{try users.signSession(a, UidSite.secret, "2", now)});
     const private = try std.fs.path.join(a, &.{ users.users_root, "2" });
     try UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ private, "upload-bytes" }), "1\n", .{});
 
@@ -1794,7 +1794,7 @@ test "route: a release whose removal inside the account fails keeps the password
         try users.setUserPassword(io, a, "2", "hunter2");
         for (others) |f| try UidSite.disk.write(io, a, try std.fs.path.join(a, &.{ account, f }), "x", .{});
         const now: i64 = @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
-        const member = try std.fmt.allocPrint(a, "gopher_auth={s}", .{try users.signSession(a, UidSite.secret, "2", now)});
+        const member = try std.fmt.allocPrint(a, "__Host-gopher_auth={s}", .{try users.signSession(a, UidSite.secret, "2", now)});
 
         var vt: Io.VTable = undefined;
         refuse_named = refused;
@@ -1875,7 +1875,7 @@ test "fs: a handler's error is answered 500, never with silence (metal-vmm QUEUE
 
     try users.setUserPassword(io, a, "2", "hunter2");
     const now: i64 = @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
-    const member = try std.fmt.allocPrint(a, "gopher_auth={s}", .{try users.signSession(a, UidSite.secret, "2", now)});
+    const member = try std.fmt.allocPrint(a, "__Host-gopher_auth={s}", .{try users.signSession(a, UidSite.secret, "2", now)});
     try std.Io.Dir.cwd().createDirPath(io, try docs_store.docPath(a, "2", "folder"));
 
     const raw = try std.fmt.allocPrint(a, "GET /chat/docs/folder.md HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\n\r\n", .{member});
@@ -1956,13 +1956,13 @@ test "route: sign-up refuses a name it would have to change, never registering a
     const meter = mem_meter.useForTest(std.heap.page_allocator);
     defer meter.restore();
     const page = try postForm(a, io, "/login/full", "x=y", "name=Bob%3Cx%3E&password=pw&action=register");
-    try testing.expect(std.mem.indexOf(u8, page, "set-cookie: gopher_auth=") == null);
+    try testing.expect(std.mem.indexOf(u8, page, "set-cookie: __Host-gopher_auth=") == null);
     try testing.expect(std.mem.indexOf(u8, page, "Names can use only") != null);
     try testing.expectEqual(@as(?[]const u8, null), try users.findMemberByName(io, a, "Bobx"));
     // Nor logs in as the member the cleaned name would have been.
     _ = try memberSession(a, io, "1", "Steve");
     const as_steve = try postForm(a, io, "/login/full", "x=y", "name=Steve%3C&password=pw&action=login");
-    try testing.expect(std.mem.indexOf(u8, as_steve, "set-cookie: gopher_auth=") == null);
+    try testing.expect(std.mem.indexOf(u8, as_steve, "set-cookie: __Host-gopher_auth=") == null);
 }
 
 /// A POST whose handler fails: the answer it was given (route answers the
@@ -2116,6 +2116,30 @@ test "route: a send makes the topic it names, and /chat over a conversation with
     _ = chat_state;
 }
 
+test "route: a signed gopher_uid under its old name is moved to __Host-gopher_uid by the next GET, and still names its player meanwhile (metal-vmm QUEUE 167.5)" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var site = try UidSite.init(a, io);
+    defer site.deinit();
+    const id = try player.allocate(io, a, "Nikhil");
+    const value = try uid_cookie.sign(a, UidSite.secret, id, nowSecs(io));
+    const legacy = try std.fmt.allocPrint(a, "gopher_uid={s}", .{value});
+    const moved = try UidSite.ask(a, io, "/play", legacy);
+    try testing.expectEqualStrings("303 See Other", status(moved));
+    try testing.expect(setUid(moved) != null);
+    // A POST is never redirected: the old name still names them there.
+    try testing.expect(playingAs(try postForm(a, io, "/play", legacy, ""), "Nikhil"));
+    // A sibling's plant under the old name, beside the site's own new one,
+    // is not read at all.
+    const other = try player.allocate(io, a, "Debbie");
+    const planted = try std.fmt.allocPrint(a, "gopher_uid={s}; __Host-gopher_uid={s}", .{ try uid_cookie.sign(a, UidSite.secret, other, nowSecs(io)), value });
+    try testing.expect(playingAs(try UidSite.ask(a, io, "/play", planted), "Nikhil"));
+}
+
 test "route: a GET re-signs a gopher_uid past half its life, so an active player keeps who they are; a younger one is left alone (Steve, 2026-10-10)" {
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();
@@ -2127,7 +2151,7 @@ test "route: a GET re-signs a gopher_uid past half its life, so an active player
     defer site.deinit();
     const id = try player.allocate(io, a, "Nikhil");
     const now = nowSecs(io);
-    const old = try std.fmt.allocPrint(a, "gopher_uid={s}", .{try uid_cookie.sign(a, UidSite.secret, id, now - uid_cookie.lifetime_secs / 2 - 60)});
+    const old = try std.fmt.allocPrint(a, "__Host-gopher_uid={s}", .{try uid_cookie.sign(a, UidSite.secret, id, now - uid_cookie.lifetime_secs / 2 - 60)});
     const renewed = try UidSite.ask(a, io, "/play", old);
     try testing.expectEqualStrings("303 See Other", status(renewed));
     const fresh = setUid(renewed) orelse return error.NoSetCookie;

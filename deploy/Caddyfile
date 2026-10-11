@@ -4,8 +4,12 @@
 # Let's Encrypt cert and redirects HTTP->HTTPS. (.com is not HSTS-
 # preloaded, unlike .app, so we set the HSTS header ourselves below.)
 #
-# /admin is gated by the app itself, not the proxy. To test on the bare
-# droplet IP (no TLS), set the site address to `:80`.
+# /admin is gated by the app itself, not the proxy. Testing on the bare
+# droplet IP with the site address set to `:80` (no TLS) serves pages, but
+# signs no one in: every cookie the app sets is Secure, and the identity ones
+# are `__Host-` (metal-vmm QUEUE 162.2, 167.5), which a browser keeps only
+# over HTTPS (localhost aside, in Chrome and Firefox). Test signing in over
+# HTTPS: a hostname with its own certificate, or `tls internal`.
 lynrummy.com {
 	encode gzip
 
