@@ -191,14 +191,10 @@ test "migrateSecret moves the secret from data/chat to auth once, and never leav
     var threaded = std.Io.Threaded.init(a, .{});
     defer threaded.deinit();
     const io = threaded.io();
-    const saved = save();
+    // The roots and the store's bases, as a host's start leaves them, so the
+    // secret's writes are held to the store's path limits.
+    const saved = try pointForTest(a, try std.fs.path.join(a, &.{ ".zig-cache", "tmp", &tmp.sub_path }));
     defer saved.restore();
-
-    const base = try std.fs.path.join(a, &.{ ".zig-cache", "tmp", &tmp.sub_path });
-    try point(a, .{
-        .data_dir = try std.fs.path.join(a, &.{ base, "data" }),
-        .auth_dir = try std.fs.path.join(a, &.{ base, "auth" }),
-    });
     const old = chat_store.chat_root; // data/chat, the old home
     const new = users.session_secret_dir; // auth, the new one
     const secret = "a session secret at least thirty-two bytes!";
@@ -297,8 +293,8 @@ test "point assigns no global the list of roots does not name, and restore puts 
         if (std.mem.startsWith(u8, line, "//") or std.mem.startsWith(u8, line, "const ") or std.mem.startsWith(u8, line, "var ")) continue;
         try names.append(testing.allocator, line[0..eq]);
     }
-    // And what store.setBases, which point calls, assigns (the review of 157:
-    // the test was blind to it).
+    // And what store.setBases assigns, which webbox's start and pointForTest
+    // call (the review of 157: the test was blind to it).
     const store_src = @embedFile("store.zig");
     const sb = std.mem.indexOf(u8, store_src, "pub fn setBases(").?;
     const sb_body = store_src[sb .. sb + std.mem.indexOf(u8, store_src[sb..], "\n}\n").?];

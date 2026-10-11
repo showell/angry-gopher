@@ -20,7 +20,7 @@
 //! gopher-metal's droplet/check_backup.py checks one, and refuses one that
 //! does not hold.
 //!
-//! **WHAT IS IN IT:** the two roots roots.point gave the Store, spelled as
+//! **WHAT IS IN IT:** the two roots the host's start gave the Store, spelled as
 //! gopher-metal spells them (`data/...`, `auth/...`), every folder and file,
 //! in name order on both hosts, with each file's modification time. Secrets
 //! are included: the session secret and the password hashes are part of

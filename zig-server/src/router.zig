@@ -990,7 +990,7 @@ test "route: start does the host's setup in one call: the data and the store poi
     const auth_dir = try std.fs.path.join(a, &.{ site.base, "auth" });
     var started = try start(io, .{
         .roots = .{ .data_dir = data_dir, .auth_dir = auth_dir },
-        .free_space = .none_for_a_test,
+        .free_space = .unknown,
         .trusted_proxy = "10.0.0.2",
     });
     _ = &started;
@@ -1001,6 +1001,8 @@ test "route: start does the host's setup in one call: the data and the store poi
     try testing.expectEqualStrings("10.0.0.2", client_address.trusted_proxy.?);
     try testing.expectEqualStrings(data_dir, disk.data_base.?);
     try testing.expectEqualStrings(auth_dir, disk.auth_base.?);
+    // Its own copies, which outlive whatever the host built its Host from.
+    try testing.expect(disk.data_base.?.ptr != data_dir.ptr and disk.auth_base.?.ptr != auth_dir.ptr);
 }
 
 test "route: /admin/search finds a key in every conversation the admin can see, DMs and channels, ASCII case folded, and nowhere else" {

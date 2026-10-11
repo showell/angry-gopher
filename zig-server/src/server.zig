@@ -76,7 +76,7 @@ pub fn main(init: std.process.Init.Minimal) !void {
     if (no_floor) std.debug.print("zig-server: GOPHER_GAME_FLOOR=off: game writes have no free-space floor\n", .{});
     var started = try router.start(io, .{
         .roots = try config.load(io, alloc, env),
-        .free_space = if (no_floor) .none_for_a_test else .{ .reader = linuxFreeSpace },
+        .free_space = if (no_floor) .unknown else .{ .reader = linuxFreeSpace },
         .trusted_proxy = env.get("GOPHER_TRUSTED_PROXY") orelse "127.0.0.1",
         .facts = linuxFacts,
     });

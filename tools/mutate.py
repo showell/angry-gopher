@@ -16,7 +16,7 @@ which means the list here has fallen behind the code.
 
 The rules are the ones an attacker would want broken: the signed cookie
 (uid_cookie), the Store's names and paths (store), the game store's limits
-and whose address counts (game_limits), the admin's gate and the password
+and whose address counts (game_limits, client_address), the admin's gate and the password
 asked again (admin_ui, admin_secret, admin_backup), and the member session
 (users). gopher-metal's tools/mutate_tcp.py is the same idea for its TCP.
 
@@ -101,19 +101,20 @@ MUTANTS = [
      "if (rest.len != 0 and rest[0] != '/') continue;", ""),
     ("store", "case-not-folded", "a name in another case is a new file",
      "if (std.ascii.eqlIgnoreCase(entry.name, name))", "if (std.mem.eql(u8, entry.name, name))"),
-    # ── the game store's limits ──
-    ("game_limits", "xff-from-anyone", "anyone's X-Forwarded-For believed",
+    # ── which address a request is from ──
+    ("client_address", "xff-from-anyone", "anyone's X-Forwarded-For believed",
      "if (!std.mem.eql(u8, p, proxy)) return try alloc.dupe(u8, p);", "_ = proxy;"),
-    ("game_limits", "xff-first-entry", "the client's own first entry believed",
+    ("client_address", "xff-first-entry", "the client's own first entry believed",
      "var parts = std.mem.splitBackwardsScalar(u8, xff, ',');", "var parts = std.mem.splitScalar(u8, xff, ',');"),
-    ("game_limits", "xff-garbage", "a forwarded entry that is no address believed",
-     "if (plausibleAddress(last)) return last;", "return last;"),
-    ("game_limits", "address-any-length", "an address of any length",
+    ("client_address", "xff-garbage", "a forwarded entry that is no address believed",
+     "if (plausible(last)) return last;", "return last;"),
+    ("client_address", "address-any-length", "an address of any length",
      "if (s.len == 0 or s.len > addr_max) return false;", "if (s.len == 0) return false;"),
-    ("game_limits", "address-any-character", "an address of any characters",
+    ("client_address", "address-any-character", "an address of any characters",
      "for (s) |c| if (!(std.ascii.isHex(c) or c == '.' or c == ':')) return false;", ""),
+    # ── the game store's limits ──
     ("game_limits", "no-floor", "game writes below a quarter free",
-     "if (free_space) |f| if (f()) |s| if (s.free < s.total / 4) return .floor;", ""),
+     "if (free_space.read()) |s| if (s.free < s.total / 4) return .floor;", ""),
     ("game_limits", "floor-at-a-tenth", "the floor moved",
      "if (s.free < s.total / 4) return .floor;", "if (s.free < s.total / 10) return .floor;"),
     ("game_limits", "bad-id-counted", "an empty or overlong id admitted",
