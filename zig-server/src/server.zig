@@ -31,7 +31,7 @@ const mem_meter = @import("mem_meter.zig");
 const bind = @import("bind.zig");
 const bus_mod = @import("bus.zig");
 const chat_store = @import("chat_store.zig");
-const host_status = router.host_facts;
+const host_facts = router.host_facts;
 const Hub = bus_mod.Hub;
 const Bus = bus_mod.Bus;
 
@@ -272,11 +272,11 @@ fn nowUnix(io: Io) i64 {
 /// it (/proc/self/status), which is the whole process, not just what the
 /// meter sees. Free disk is not here: std has no statfs, and `df` on the box
 /// answers it.
-fn linuxFacts(io: Io, alloc: std.mem.Allocator) anyerror![]const host_status.Fact {
-    var facts: std.ArrayList(host_status.Fact) = .empty;
+fn linuxFacts(io: Io, alloc: std.mem.Allocator) anyerror![]const host_facts.Fact {
+    var facts: std.ArrayList(host_facts.Fact) = .empty;
     try facts.append(alloc, .{ .label = "host", .value = try std.fmt.allocPrint(alloc, "Linux, zig-server, pid {d}", .{std.os.linux.getpid()}) });
-    try facts.append(alloc, .{ .label = "started", .value = try host_status.utc(alloc, started_unix) });
-    try facts.append(alloc, .{ .label = "up for", .value = try host_status.duration(alloc, nowUnix(io) - started_unix) });
+    try facts.append(alloc, .{ .label = "started", .value = try host_facts.utc(alloc, started_unix) });
+    try facts.append(alloc, .{ .label = "up for", .value = try host_facts.duration(alloc, nowUnix(io) - started_unix) });
     try facts.append(alloc, .{ .label = "data directory", .value = config.data_dir_shown });
     const status = readProcFile(alloc, "/proc/self/status") catch |e| {
         try facts.append(alloc, .{ .label = "memory", .value = try std.fmt.allocPrint(alloc, "/proc/self/status: {s}", .{@errorName(e)}) });

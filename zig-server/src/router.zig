@@ -86,15 +86,15 @@ pub const Space = game_limits.Space;
 /// Where the game store is, for a host's `Host.floor` to read the free space
 /// of (read only).
 pub const dataRoot = game_limits.dataRoot;
+/// /admin/host's host half (host_facts.zig): what a host's facts are made of,
+/// and the two ways it writes a time; `start` hands its report over.
 pub const host_facts = struct {
-    pub const Fact = host_status.Fact;
-    pub const utc = host_status.utc;
-    pub const duration = host_status.duration;
+    pub const Fact = facts.Fact;
+    pub const utc = facts.utc;
+    pub const duration = facts.duration;
+    const facts = @import("host_facts.zig");
 };
 const roots = @import("roots.zig");
-/// /admin/host's host half: the types a host's facts and log are (`Host.facts`,
-/// `Host.log`); `start` hands them over.
-const host_status = @import("host_status.zig");
 /// Every bound on what a request may bring (limits.zig): a host sizes its
 /// request-head buffer from `request_limits.head_bytes`.
 pub const request_limits = @import("limits.zig");

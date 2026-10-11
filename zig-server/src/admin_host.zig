@@ -3,7 +3,7 @@
 //! Two halves. The APPLICATION's: its version, the commit it was built from,
 //! the live-byte meter and the edge's reject counters — the same numbers the
 //! public /version serves as JSON for the watchdog. And the HOST's: whatever
-//! the host handed over through host_status.zig — on Linux its start time and
+//! the host handed over through host_facts.zig — on Linux its start time and
 //! memory, on gopher-metal its volumes, clocks and counters. The page is the
 //! same on both; only the second table differs.
 
@@ -16,7 +16,7 @@ const ui = @import("admin_ui.zig");
 const home = @import("home.zig");
 const mem_meter = @import("mem_meter.zig");
 const edge = @import("edge.zig");
-const host_status = @import("host_status.zig");
+const host_facts = @import("host_facts.zig");
 const build_options = @import("build_options");
 
 const Request = std.http.Server.Request;
@@ -40,7 +40,7 @@ pub fn render(req: *Request, io: Io, alloc: Alloc) !void {
     try row(&b, alloc, "reads that met a refused transcript block", try @import("chat_store.zig").refusedText(alloc));
     try b.appendSlice(alloc, "</table>\n<h2>The host</h2>\n");
 
-    const facts = try host_status.facts(io, alloc);
+    const facts = try host_facts.facts(io, alloc);
     if (facts.len == 0) {
         try b.appendSlice(alloc, "<p class=\"muted\">This host reports nothing about itself.</p>\n");
     } else {
@@ -52,9 +52,9 @@ pub fn render(req: *Request, io: Io, alloc: Alloc) !void {
     // The host's own log, newest last: on gopher-metal the serial ring, its
     // secrets taken out as they were written.
     try b.appendSlice(alloc, "<h2>The log</h2>\n");
-    if (try host_status.logText(io, alloc)) |text| {
+    if (try host_facts.logText(io, alloc)) |text| {
         try b.print(alloc, "<p class=\"muted\">The newest {d} lines, secrets taken out as they were written.</p>\n<pre class=\"log\">{s}</pre>\n", .{
-            host_status.log_lines, try html.htmlEscape(alloc, text),
+            host_facts.log_lines, try html.htmlEscape(alloc, text),
         });
     } else {
         try b.appendSlice(alloc, "<p class=\"muted\">This host keeps no log of its own to show here.</p>\n");

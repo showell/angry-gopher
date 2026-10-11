@@ -17,7 +17,7 @@ const mem_meter = @import("mem_meter.zig");
 const roots = @import("roots.zig");
 const chat_store = @import("chat_store.zig");
 const search_index = @import("search_index.zig");
-const host_status = @import("host_status.zig");
+const host_facts = @import("host_facts.zig");
 const game_limits = @import("game_limits.zig");
 const bus = @import("bus.zig");
 
@@ -40,8 +40,8 @@ pub const Host = struct {
     trusted_proxy: ?[]const u8,
     /// /admin/host's host half, and the host's own log; null: that page
     /// shows the application's half only.
-    facts: ?host_status.Report = null,
-    log: ?host_status.Log = null,
+    facts: ?host_facts.Report = null,
+    log: ?host_facts.Log = null,
 };
 
 /// What `start` made and did.
@@ -82,8 +82,8 @@ pub fn start(io: Io, host: Host) !Started {
         break :blk search_index.buildAll(io, pass.allocator());
     };
     const search_ms: i64 = @intCast(@divFloor(Io.Clock.now(.awake, io).nanoseconds - t0.nanoseconds, std.time.ns_per_ms));
-    if (host.facts) |f| host_status.provide(f);
-    if (host.log) |l| host_status.provideLog(l);
+    if (host.facts) |f| host_facts.provide(f);
+    if (host.log) |l| host_facts.provideLog(l);
     game_limits.free_space = switch (host.floor) {
         .free_space => |f| f,
         .none_for_a_test => null,

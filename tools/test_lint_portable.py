@@ -70,7 +70,7 @@ class Clean(unittest.TestCase):
         # The lint's own subject. If this fails, run the lint for the details.
         here = os.path.dirname(os.path.abspath(__file__))
         src = os.path.join(here, "..", "zig-server", "src")
-        self.assertEqual(L.scan(src), [])
+        self.assertEqual(L.scan(src, L.ROOTS), [])
 
     def test_the_real_partition_is_the_hosts_plus_config(self):
         # The set is DERIVED; this pins what it derives today, so a module that
@@ -78,14 +78,11 @@ class Clean(unittest.TestCase):
         here = os.path.dirname(os.path.abspath(__file__))
         src = os.path.join(here, "..", "zig-server", "src")
         every = {f for f in os.listdir(src) if f.endswith(".zig")}
-        outside = every - L.closure(src)
+        outside = every - L.closure(src, L.ROOTS)
         self.assertEqual(outside, {
             "server.zig", "config.zig", "bind.zig", "stress.zig", "hash_password.zig",
             "markdown_bench.zig", "markdown_hostile_probe.zig", "markdown_regression_test.zig",
             "search_bench.zig",
-            # The `webbox` library's root: what it names (http, edge, signed)
-            # the route table reaches, so it is portable by that alone.
-            "webbox.zig",
         })
 
 
@@ -204,6 +201,24 @@ class Reach(unittest.TestCase):
         with Tree(files) as t:
             self.assertEqual(L.closure(t.dir), {"router.zig", "a.zig", "b.zig"})
             self.assertEqual(t.scan(), [])
+
+    def test_a_file_only_the_library_reaches_is_checked(self):
+        # webbox.zig is a root too: the metal port carries the library whole,
+        # so a file of it the route table never imports must still port.
+        files = {
+            "router.zig": "\n",
+            "webbox.zig": 'pub const only = @import("only.zig");\n',
+            "only.zig": "const a = std.heap.page_allocator;\n",
+        }
+        with Tree(files) as t:
+            self.assertEqual(L.closure(t.dir, L.ROOTS), {"router.zig", "webbox.zig", "only.zig"})
+            self.assertEqual([name for name, _, _, _ in L.scan(t.dir, L.ROOTS)], ["only.zig"])
+            self.assertEqual(t.scan(), [])  # from the route table alone it was unseen
+
+    def test_a_missing_library_root_is_loud(self):
+        with Tree({"router.zig": "\n"}) as t:
+            with self.assertRaises(FileNotFoundError):
+                L.closure(t.dir, L.ROOTS)
 
     def test_named_modules_are_not_followed(self):
         files = {"router.zig": 'const std = @import("std");\nconst o = @import("build_options");\n'}

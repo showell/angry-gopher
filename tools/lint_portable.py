@@ -8,8 +8,10 @@ gopher-metal boots it on a machine with no operating system. That only works if
 every module the route table transitively imports stays off the host — and a
 module that does not is not a slower path there. It FAILS TO COMPILE.
 
-This lint computes that set from the import graph, starting at router.zig, and
-checks every file in it. A module outside the set (server.zig, config.zig, the
+This lint computes that set from the import graph, starting at router.zig and
+at webbox.zig (the library an application built on this server imports, which
+the metal port carries too, whether or not this site's routes reach a file of
+it), and checks every file in it. A module outside the set (server.zig, config.zig, the
 stress harness, the markdown tools) is host-side by definition and is not
 checked. There is no hardcoded list of exemptions to fall out of date.
 
@@ -72,6 +74,9 @@ import sys
 from collections import deque
 
 ROOT_MODULE = "router.zig"
+# The roots the real tree is checked from: the route table, and the webbox
+# library. Both must be there.
+ROOTS = (ROOT_MODULE, "webbox.zig")
 
 IMPORT = re.compile(r'@import\("([A-Za-z0-9_]+\.zig)"\)')
 
@@ -214,16 +219,19 @@ def test_only_lines(lines, tests):
     return {n for a, b in only for n in range(a, b + 1)}
 
 
-def closure(src_dir: str, root: str = ROOT_MODULE):
-    """Every local .zig file reachable from `root` by @import, root included.
+def closure(src_dir: str, root=ROOT_MODULE):
+    """Every local .zig file reachable from `root` (a name, or several) by
+    @import, the roots included.
 
     Named modules (`@import("std")`, `@import("build_options")`) and embedded
     assets are not files in src_dir and are not followed. A cycle terminates.
     """
-    start = os.path.join(src_dir, root)
-    if not os.path.isfile(start):
-        raise FileNotFoundError(f"the route table is not at {start}")
-    seen, todo = set(), deque([root])
+    roots = (root,) if isinstance(root, str) else tuple(root)
+    for r in roots:
+        start = os.path.join(src_dir, r)
+        if not os.path.isfile(start):
+            raise FileNotFoundError(f"the root {r} is not at {start}")
+    seen, todo = set(), deque(roots)
     while todo:
         name = todo.popleft()
         if name in seen:
@@ -240,7 +248,7 @@ def closure(src_dir: str, root: str = ROOT_MODULE):
     return seen
 
 
-def scan(src_dir: str, root: str = ROOT_MODULE):
+def scan(src_dir: str, root=ROOT_MODULE):
     """Findings as (file, line, text, advice), in file then line order."""
     found = []
     for name in sorted(closure(src_dir, root)):
@@ -265,10 +273,10 @@ def scan(src_dir: str, root: str = ROOT_MODULE):
 def main() -> int:
     here = os.path.dirname(os.path.abspath(__file__))
     src = os.path.normpath(os.path.join(here, "..", "zig-server", "src"))
-    reach = closure(src)
-    found = scan(src)
+    reach = closure(src, ROOTS)
+    found = scan(src, ROOTS)
     if not found:
-        print(f"portable lint: the {len(reach)} modules the route table reaches stay off the host")
+        print(f"portable lint: the {len(reach)} modules the route table and the webbox library reach stay off the host")
         return 0
 
     print("portable lint FAILED — the route table reaches the host here, "
