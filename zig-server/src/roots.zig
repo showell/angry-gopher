@@ -54,15 +54,15 @@ const player = @import("player.zig");
 const chat_store = @import("chat_store.zig");
 const store = @import("store.zig");
 
-pub const Roots = struct {
-    data_dir: []const u8,
-    auth_dir: []const u8,
-};
+/// Where the data and the accounts live, as the host spells them (webbox's).
+pub const Roots = @import("site.zig").Roots;
 
-/// **EVERY GLOBAL `point` SETS, IN ONE LIST** (metal-vmm QUEUE 157(c)):
-/// what `save` saves and `restore` puts back, where three test fixtures each
-/// copied the eight by hand and restored them by index. A test holds `point`
-/// to it (`point` assigns nothing it does not name).
+/// **EVERY GLOBAL `point` SETS, IN ONE LIST** (metal-vmm QUEUE 157(c)), and
+/// the store's two bases, which webbox's `start` sets for a host and
+/// `pointForTest` for a test: what `save` saves and `restore` puts back,
+/// where three test fixtures each copied the eight by hand and restored them
+/// by index. A test holds `point` to it (`point` assigns nothing it does not
+/// name).
 const all = .{
     .{ "storage", storage, "data_root" },
     .{ "users", users, "users_root" },
@@ -70,8 +70,8 @@ const all = .{
     .{ "chat_store", chat_store, "chat_root" },
     .{ "users", users, "auth_root" },
     .{ "users", users, "session_secret_dir" },
-    .{ "store", store, "data_base" }, // by store.setBases
-    .{ "store", store, "auth_base" }, // by store.setBases
+    .{ "store", store, "data_base" }, // by store.setBases: start, pointForTest
+    .{ "store", store, "auth_base" }, // by store.setBases: start, pointForTest
 };
 
 const Values = blk: {
@@ -102,15 +102,19 @@ pub fn save() Saved {
 pub fn pointForTest(alloc: std.mem.Allocator, base: []const u8) !Saved {
     const saved = save();
     errdefer saved.restore();
-    try point(alloc, .{
+    const r: Roots = .{
         .data_dir = try std.fs.path.join(alloc, &.{ base, "data" }),
         .auth_dir = try std.fs.path.join(alloc, &.{ base, "auth" }),
-    });
+    };
+    try point(alloc, r);
+    // What webbox's `start` does for a host before the application's setup:
+    // the store measures paths under the same roots.
+    store.setBases(r.data_dir, r.auth_dir);
     return saved;
 }
 
 /// point sets every root from `r`. The strings are allocated from `alloc` and
-/// must live as long as the process, so a host passes its base allocator.
+/// must live as long as the process, so the setup passes the base allocator.
 pub fn point(alloc: std.mem.Allocator, r: Roots) !void {
     storage.data_root = try std.fs.path.join(alloc, &.{ r.data_dir, "lynrummy" });
     users.users_root = try std.fs.path.join(alloc, &.{ r.data_dir, "users" });
@@ -119,13 +123,12 @@ pub fn point(alloc: std.mem.Allocator, r: Roots) !void {
     users.auth_root = try alloc.dupe(u8, r.auth_dir);
     // The session secret lives in auth/ now (QUEUE item 106), beside the hashes.
     users.session_secret_dir = users.auth_root;
-    store.setBases(try alloc.dupe(u8, r.data_dir), users.auth_root);
 }
 
 /// **MOVE THE SESSION SECRET INTO auth/, ONCE** (QUEUE item 106). `point` points
 /// the reads at auth/; this carries an existing secret there from its old home,
 /// data/chat/, so a volume or tree written before the move still serves and no
-/// session is lost. `host_start.start` calls it after `point`, before the
+/// session is lost. `app_start.setup` calls it after `point`, before the
 /// first request. Best-effort and idempotent.
 ///
 /// **NEVER TWO COPIES.** Each of the three secret files is written to auth/ and

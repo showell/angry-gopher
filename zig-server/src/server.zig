@@ -61,9 +61,9 @@ pub fn main(init: std.process.Init.Minimal) !void {
     // (0.16 routes the OS environment through main's Init, not a global.)
     var env = try std.process.Environ.createMap(init.environ, alloc);
     defer env.deinit();
-    // **THE HOST CONTRACT, ONE CALL** (router.zig, host_start.zig): where the
-    // data is (GOPHER_CONFIG; null: repo-relative defaults, which keep
-    // /driving working standalone), the game store's floor, whose
+    // **THE HOST CONTRACT, ONE CALL** (router.zig, webbox's site.zig): where
+    // the data is (GOPHER_CONFIG; null: repo-relative defaults, which keep
+    // /driving working standalone), how its free space is read, whose
     // X-Forwarded-For is believed (Caddy, on this machine), and this host's
     // facts for /admin/host; `start` does the setup in its one order (the
     // session secret's move, every session's last-message record, search's
@@ -76,13 +76,13 @@ pub fn main(init: std.process.Init.Minimal) !void {
     if (no_floor) std.debug.print("zig-server: GOPHER_GAME_FLOOR=off: game writes have no free-space floor\n", .{});
     var started = try router.start(io, .{
         .roots = try config.load(io, alloc, env),
-        .floor = if (no_floor) .none_for_a_test else .{ .free_space = linuxFreeSpace },
+        .free_space = if (no_floor) .none_for_a_test else .{ .reader = linuxFreeSpace },
         .trusted_proxy = env.get("GOPHER_TRUSTED_PROXY") orelse "127.0.0.1",
         .facts = linuxFacts,
     });
-    if (started.backfilled > 0) std.debug.print("zig-server: wrote a last-message record for {d} session(s)\n", .{started.backfilled});
-    if (started.search) |st| {
-        std.debug.print("zig-server: search index: {d} messages in {d} transcripts ({d} bytes, {d} words, {d} unreadable) in {d} ms\n", .{ st.messages, st.transcripts, st.bytes, st.words, st.unreadable, started.search_ms });
+    if (started.app.backfilled > 0) std.debug.print("zig-server: wrote a last-message record for {d} session(s)\n", .{started.app.backfilled});
+    if (started.app.search) |st| {
+        std.debug.print("zig-server: search index: {d} messages in {d} transcripts ({d} bytes, {d} words, {d} unreadable) in {d} ms\n", .{ st.messages, st.transcripts, st.bytes, st.words, st.unreadable, started.app.search_ms });
     } else std.debug.print("zig-server: search index not built (out of memory?): the first search builds it\n", .{});
     // The pub/sub fan-out shared across all connections, for the process's
     // lifetime: chat's SSE streams. Each request gets its own handle on it (a

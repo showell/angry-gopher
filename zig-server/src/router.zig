@@ -45,30 +45,13 @@ const client_address = @import("client_address.zig");
 const free_space = @import("free_space.zig");
 // ── THE HOST CONTRACT ────────────────────────────────────────────────────────
 //
-// What any host does to serve this table. A kernel that boots it has no other
-// contact with the application, so all of it is exported from here. Three
-// calls (Steve, 2026-10-10: one call for the setup, not a list a host follows
-// by hand):
-//
-//   1. mem_meter.init(base)     name the process-lifetime allocator, before
-//                               anything else (a host builds its own I/O and
-//                               heaps on it). An allocation before it panics.
-//   2. start(io, Host)          once, before the first request: everything the
-//                               host supplies in one struct (where the data
-//                               is, the game store's floor, the trusted proxy,
-//                               /admin/host's facts), and the setup done in
-//                               the one right order (host_start.zig). Answers
-//                               the Hub, and what its one-time passes did.
-//   3. per request: route(),    which answers the stream a handler kept, if
-//      then serve what it       one did (157(a)), for the host to serve:
-//      answered                 `streams.serveKept` blocks until the client
-//                               goes away; `streams.nextFrame` hands over the
-//                               next event, for a host with one loop. Either
-//                               way `streams.drop` ends it. On an error route
-//                               has dropped it already.
-//
-// server.zig does these for Linux, gopher-metal's kernel with its own heap and
-// paths on its own volume.
+// webbox's site.zig says it, three calls (Steve, 2026-10-10: one call for the
+// setup, not a list a host follows by hand): `mem_meter.init(base)`,
+// `start(io, Host)`, then per request `route` and serve what it answered. A
+// kernel that boots this table has no other contact with the application, so
+// everything a host calls is exported from here, by the names both hosts use.
+// server.zig does these for Linux, gopher-metal's kernel with its own heap
+// and paths on its own volume.
 
 /// The streaming seam: Hub, Bus (part of `route`'s signature), Kept, and the
 /// two ways to serve a kept stream.
@@ -76,17 +59,18 @@ pub const streams = @import("bus.zig");
 pub const Bus = streams.Bus;
 pub const Hub = streams.Hub;
 pub const mem_meter = @import("mem_meter.zig");
-/// The setup as one call (host_start.zig): contract step 2.
-pub const host_start = @import("host_start.zig");
-pub const start = host_start.start;
-pub const Host = host_start.Host;
+/// The setup as one call (site.zig's `start`, around this application's own:
+/// app_start.zig): contract step 2.
+pub const start = Served.start;
+pub const Started = Served.Started;
+pub const Host = webbox_site.Host;
 /// **ONLY WHAT A HOST NEEDS IS EXPORTED**: the types `Host` is made of and a
 /// host's facts are written in. The setup's modules (roots, the stores, the
 /// search index, the game limits) are not, so nothing but `start` sets them.
-pub const Roots = roots.Roots;
+pub const Roots = webbox_site.Roots;
 pub const Space = free_space.Space;
-/// Where the game store is, for a host's `Host.floor` to read the free space
-/// of (read only).
+/// Where the game store is, for a host to read the free space of its volume
+/// (read only).
 pub const dataRoot = game_limits.dataRoot;
 /// /admin/host's host half (host_facts.zig): what a host's facts are made of,
 /// and the two ways it writes a time; `start` hands its report over.
@@ -96,18 +80,15 @@ pub const host_facts = struct {
     pub const duration = facts.duration;
     const facts = @import("host_facts.zig");
 };
+const webbox_site = @import("site.zig");
+const app_start = @import("app_start.zig");
 const roots = @import("roots.zig");
+const search_index = @import("search_index.zig");
 /// Every bound on what a request may bring (limits.zig): a host sizes its
 /// request-head buffer from `request_limits.head_bytes`.
 pub const request_limits = @import("limits.zig");
-/// Chat's on-disk store; `start` gives every session its last-message record.
-const store = @import("chat_store.zig");
-/// Search's index in memory; `start` builds it, and its Stats is what
-/// `Started.search` says.
-const search_index = @import("search_index.zig");
-/// The game store's bounds (gopher-metal QUEUE item 52): the free space a
-/// host's `Host.floor` reads (`Space`), and where the game store is
-/// (`dataRoot`).
+/// The game store's bounds (gopher-metal QUEUE item 52), and where the game
+/// store is (`dataRoot`).
 const game_limits = @import("game_limits.zig");
 /// The edge's refusal counts, which /version reports: a host counts what it
 /// refuses before the route table sees a request (`edge.count(.header_too_large)`
@@ -138,8 +119,10 @@ fn localTarget(target: []const u8) []const u8 {
 /// players' refused the escape as a 500.
 const App = struct {
     pub const routes = routed;
+    pub const setup = app_start.setup;
+    pub const StartReport = app_start.StartReport;
 };
-const Served = @import("site.zig").Site(App);
+const Served = webbox_site.Site(App);
 
 /// route picks the handler by path prefix, passing the remainder (the path with
 /// the prefix stripped, e.g. "/app.js" or "/sessions/3/..."). The table below IS
@@ -979,7 +962,7 @@ test "route: HEAD /admin/backup reads nothing" {
     try testing.expect(admin_backup.files_archived >= before + 3);
 }
 
-test "route: start does the host's setup in one call: the data pointed at, every session's record, search's index, the floor and the proxy" {
+test "route: start does the host's setup in one call: the data and the store pointed at, every session's record, search's index, the free space and the proxy" {
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();
     const a = arena.allocator();
@@ -1000,17 +983,24 @@ test "route: start does the host's setup in one call: the data pointed at, every
     const disk = @import("store.zig");
     const md = try std.fs.path.join(a, &.{ chat_store.chat_root, "1_2", "sessions", "ChitChat.md" });
     try disk.write(io, a, md, "MSG_ChitChat_1\nfrom: Steve\ndate: 2026-10-10T00:00:00Z\n\nhello world", .{});
+    // The store's bases are start's to set (webbox's site.zig), not the
+    // application's: cleared here, so only start can have set them.
+    disk.setBases("", "");
+    const data_dir = try std.fs.path.join(a, &.{ site.base, "data" });
+    const auth_dir = try std.fs.path.join(a, &.{ site.base, "auth" });
     var started = try start(io, .{
-        .roots = .{ .data_dir = try std.fs.path.join(a, &.{ site.base, "data" }), .auth_dir = try std.fs.path.join(a, &.{ site.base, "auth" }) },
-        .floor = .none_for_a_test,
+        .roots = .{ .data_dir = data_dir, .auth_dir = auth_dir },
+        .free_space = .none_for_a_test,
         .trusted_proxy = "10.0.0.2",
     });
     _ = &started;
-    try testing.expectEqual(@as(usize, 1), started.backfilled);
+    try testing.expectEqual(@as(usize, 1), started.app.backfilled);
     try testing.expect(try disk.has(io, a, try std.fs.path.join(a, &.{ chat_store.chat_root, "1_2", "sessions", "ChitChat.count" })));
-    try testing.expectEqual(@as(usize, 1), started.search.?.messages);
+    try testing.expectEqual(@as(usize, 1), started.app.search.?.messages);
     try testing.expectEqual(@as(?*const fn () ?free_space.Space, null), free_space.reader);
     try testing.expectEqualStrings("10.0.0.2", client_address.trusted_proxy.?);
+    try testing.expectEqualStrings(data_dir, disk.data_base.?);
+    try testing.expectEqualStrings(auth_dir, disk.auth_base.?);
 }
 
 test "route: /admin/search finds a key in every conversation the admin can see, DMs and channels, ASCII case folded, and nowhere else" {
