@@ -130,8 +130,11 @@ pub fn excerptOf(alloc: Alloc, md: []const u8, key: []const u8) !Excerpt {
         const end = charEdgeBack(md, @min(md.len, 2 * excerpt_pad));
         return .{ .before = "", .mark = "", .after = try cut(alloc, "", md[0..end], end < md.len) };
     };
-    const start = charEdgeFwd(md, at -| excerpt_pad);
-    const end = charEdgeBack(md, @min(md.len, at + key.len + excerpt_pad));
+    // Never across the word (the review of 157): a word may begin or end in
+    // stray continuation bytes, which the tokenizer counts as a word's, and
+    // moving to a character's edge would cross it.
+    const start = @min(charEdgeFwd(md, at -| excerpt_pad), at);
+    const end = @max(charEdgeBack(md, @min(md.len, at + key.len + excerpt_pad)), at + key.len);
     return .{
         .before = try cut(alloc, if (start > 0) "\u{2026}" else "", md[start..at], false),
         .mark = md[at .. at + key.len],
@@ -267,4 +270,17 @@ test "an excerpt is cut on a character's edge, never inside one, and says where 
     try testing.expectEqualStrings("a ", whole.before);
     try testing.expectEqualStrings("Word", whole.mark);
     try testing.expectEqualStrings(" here", whole.after);
+}
+
+test "an excerpt of a word that begins with a stray continuation byte never starts past it (the review of 157)" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    // The tokenizer counts any byte >= 0x80 as a word's; nothing checks a
+    // message's bytes on the way in. The cut's start crossed the word.
+    const ex = try excerptOf(a, "\x80\x80ab rest", "\x80\x80ab");
+    try testing.expectEqualStrings("", ex.before);
+    try testing.expectEqualStrings("\x80\x80ab", ex.mark);
+    const mid = try excerptOf(a, "x" ** 100 ++ " \x80\x80ab", "\x80\x80ab");
+    try testing.expectEqualStrings("\x80\x80ab", mid.mark);
 }
