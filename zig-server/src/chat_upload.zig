@@ -64,7 +64,7 @@ pub fn handleUpload(req: *Request, io: Io, alloc: Alloc, uid: []const u8, conv_d
     const boundary = multipartBoundary(ct) orelse return edge.reject(req, .malformed_multipart, "no file\n");
 
     const body = (try http.readLimitedBody(req, alloc, max_any_upload)) orelse return;
-    const part = parseMultipartFile(alloc, body, boundary) orelse
+    const part = parseMultipartFile(body, boundary) orelse
         return edge.reject(req, .malformed_multipart, "no file\n");
 
     // Sniff the kind FIRST — it carries the per-file cap and the user-facing noun.
@@ -375,8 +375,12 @@ fn multipartBoundary(ct: []const u8) ?[]const u8 {
 /// parseMultipartFile returns the first part whose Content-Disposition name is
 /// "file" (its filename + raw bytes), or null. A focused parser for the single
 /// FormData field the compose client sends — not a general multipart decoder.
-fn parseMultipartFile(alloc: Alloc, body: []const u8, boundary: []const u8) ?Part {
-    const delim = std.fmt.allocPrint(alloc, "--{s}", .{boundary}) catch return null;
+fn parseMultipartFile(body: []const u8, boundary: []const u8) ?Part {
+    // No allocation, so memory that runs out is never "no file" (metal-vmm
+    // QUEUE 172): a boundary is at most 70 bytes (RFC 2046 §5.1.1), and one
+    // longer is no multipart we read.
+    var delim_buf: [2 + 70]u8 = undefined;
+    const delim = std.fmt.bufPrint(&delim_buf, "--{s}", .{boundary}) catch return null;
     var pos = std.mem.indexOf(u8, body, delim) orelse return null;
     while (true) {
         var i = pos + delim.len;
@@ -508,34 +512,28 @@ test "the sniffers: data exactly a magic's length is found, one byte less is not
 }
 
 test "parseMultipartFile: a part of no bytes is empty, a part of one byte is that byte" {
-    var arena = std.heap.ArenaAllocator.init(testing.allocator);
-    defer arena.deinit();
-    const a = arena.allocator();
     const head = "--B\r\nContent-Disposition: form-data; name=\"file\"; filename=\"x.png\"\r\n\r\n";
-    try testing.expectEqualStrings("", parseMultipartFile(a, head ++ "\r\n--B--\r\n", "B").?.data);
-    try testing.expectEqualStrings("Z", parseMultipartFile(a, head ++ "Z\r\n--B--\r\n", "B").?.data);
+    try testing.expectEqualStrings("", parseMultipartFile(head ++ "\r\n--B--\r\n", "B").?.data);
+    try testing.expectEqualStrings("Z", parseMultipartFile(head ++ "Z\r\n--B--\r\n", "B").?.data);
     // Data that is itself a CRLF keeps it: only the delimiter's CRLF is trimmed.
-    try testing.expectEqualStrings("\r\n", parseMultipartFile(a, head ++ "\r\n\r\n--B--\r\n", "B").?.data);
+    try testing.expectEqualStrings("\r\n", parseMultipartFile(head ++ "\r\n\r\n--B--\r\n", "B").?.data);
     // A delimiter with no CRLF before it trims nothing, at one byte or none.
-    try testing.expectEqualStrings("Z", parseMultipartFile(a, head ++ "Z--B--", "B").?.data);
-    try testing.expectEqualStrings("", parseMultipartFile(a, head ++ "--B--", "B").?.data);
+    try testing.expectEqualStrings("Z", parseMultipartFile(head ++ "Z--B--", "B").?.data);
+    try testing.expectEqualStrings("", parseMultipartFile(head ++ "--B--", "B").?.data);
 }
 
 test "parseMultipartFile: a delimiter at the very end of the body closes the part; a body ending inside a part has none" {
-    var arena = std.heap.ArenaAllocator.init(testing.allocator);
-    defer arena.deinit();
-    const a = arena.allocator();
     const head = "--B\r\nContent-Disposition: form-data; name=\"file\"\r\n\r\n";
-    try testing.expectEqualStrings("abc", parseMultipartFile(a, head ++ "abc\r\n--B", "B").?.data);
-    try testing.expect(parseMultipartFile(a, head ++ "abc\r\n--", "B") == null);
+    try testing.expectEqualStrings("abc", parseMultipartFile(head ++ "abc\r\n--B", "B").?.data);
+    try testing.expect(parseMultipartFile(head ++ "abc\r\n--", "B") == null);
     // Another field first, the body ending at its closing delimiter: no file.
     const other = "--B\r\nContent-Disposition: form-data; name=\"note\"\r\n\r\nhi\r\n--B";
-    try testing.expect(parseMultipartFile(a, other, "B") == null);
-    try testing.expect(parseMultipartFile(a, other ++ "-", "B") == null);
-    try testing.expect(parseMultipartFile(a, other ++ "--", "B") == null);
+    try testing.expect(parseMultipartFile(other, "B") == null);
+    try testing.expect(parseMultipartFile(other ++ "-", "B") == null);
+    try testing.expect(parseMultipartFile(other ++ "--", "B") == null);
     // A body that is the delimiter alone, and one byte short of it.
-    try testing.expect(parseMultipartFile(a, "--B", "B") == null);
-    try testing.expect(parseMultipartFile(a, "--", "B") == null);
+    try testing.expect(parseMultipartFile("--B", "B") == null);
+    try testing.expect(parseMultipartFile("--", "B") == null);
 }
 
 test "a stream whose file ends before its length is cut, never ended as whole: no last chunk, and an error for the host's log (metal-vmm QUEUE 172)" {
@@ -558,4 +556,9 @@ test "a stream whose file ends before its length is cut, never ended as whole: n
     try std.testing.expectError(error.UploadShorterThanItsStat, streamFile(&req, io, a, path, 2000, &.{}));
     out.writer.flush() catch {};
     try std.testing.expect(!std.mem.endsWith(u8, out.written(), "0\r\n\r\n"));
+}
+
+test "parseMultipartFile allocates nothing: memory that runs out is never 'no file', a 400 (metal-vmm QUEUE 172)" {
+    const body = "--B\r\nContent-Disposition: form-data; name=\"file\"; filename=\"a.png\"\r\n\r\nZ\r\n--B--\r\n";
+    try std.testing.expectEqualStrings("Z", parseMultipartFile(body, "B").?.data);
 }
