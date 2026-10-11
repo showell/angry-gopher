@@ -194,8 +194,11 @@ pub fn resolve(io: Io, alloc: Alloc, req: *std.http.Server.Request) !?[]const u8
 }
 
 pub const Reissue = union(enum) {
-    /// The Set-Cookie for the signed cookie: the router redirects with it.
-    cookie: []const u8,
+    /// The Set-Cookie for the signed cookie: the router redirects with it,
+    /// and clears the legacy-named one when that was what came (metal-vmm
+    /// QUEUE 170.8: moved, never left to be read again, and a browser that
+    /// drops the new one over plain http is a new visitor, not a loop).
+    cookie: struct { set: []const u8, clear_legacy: bool },
     /// This address has had its share of re-signs this hour.
     refused: game_limits.Refusal,
 };
@@ -220,7 +223,7 @@ pub fn reissue(io: Io, alloc: Alloc, req: *std.http.Server.Request, client: ?[]c
         // signed either way, so not counted against the address.
         .verified => |v| {
             if (!signed_cookie.needsRenewal(cookie, v, now)) return null;
-            return .{ .cookie = (try issue(io, alloc, v.id)) orelse return null };
+            return .{ .cookie = .{ .set = (try issue(io, alloc, v.id)) orelse return null, .clear_legacy = v.legacy } };
         },
         // Perhaps a legacy unsigned spelling: below.
         .invalid => {},
@@ -234,7 +237,7 @@ pub fn reissue(io: Io, alloc: Alloc, req: *std.http.Server.Request, client: ?[]c
     if (!legacyHonoured(io, alloc, value)) return null;
     if (try game_limits.admitResign(io, client)) |r| return .{ .refused = r };
     const marker = try std.fmt.allocPrint(alloc, "{d}\n", .{now});
-    return .{ .cookie = (try issueMarked(io, alloc, value, marker)) orelse return null };
+    return .{ .cookie = .{ .set = (try issueMarked(io, alloc, value, marker)) orelse return null, .clear_legacy = true } };
 }
 
 // ── tests ────────────────────────────────────────────────────────────────────

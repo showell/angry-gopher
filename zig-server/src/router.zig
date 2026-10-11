@@ -180,12 +180,21 @@ fn routed(req: *std.http.Server.Request, io: Io, alloc: std.mem.Allocator, bus: 
     // (game_limits.zig). Read with the head, which a body read invalidates.
     const client = try client_address.resolve(alloc, req, bus.peer);
     if (try uid_cookie.reissue(io, alloc, req, client)) |re| switch (re) {
-        .cookie => |set_cookie| return req.respond("", .{ .status = .see_other, .extra_headers = &.{
-            .{ .name = "location", .value = localTarget(try http.target(req, alloc)) },
-            .{ .name = "set-cookie", .value = set_cookie },
-        } }),
+        .cookie => |c| {
+            const location: std.http.Header = .{ .name = "location", .value = localTarget(try http.target(req, alloc)) };
+            const set: std.http.Header = .{ .name = "set-cookie", .value = c.set };
+            const clear: std.http.Header = .{ .name = "set-cookie", .value = http.clearCookie(uid_cookie.legacy_cookie_name) };
+            return req.respond("", .{ .status = .see_other, .extra_headers = if (c.clear_legacy) &.{ location, set, clear } else &.{ location, set } });
+        },
         .refused => |r| return game_limits.refuse(req, r),
     };
+    // **A SESSION UNDER ITS LEGACY NAME MOVES ON ITS NEXT GET** (metal-vmm
+    // QUEUE 170.8), back to the same page, the legacy one cleared.
+    if (try users.sessionToMove(io, alloc, req)) |value| return req.respond("", .{ .status = .see_other, .extra_headers = &.{
+        .{ .name = "location", .value = localTarget(try http.target(req, alloc)) },
+        .{ .name = "set-cookie", .value = try login.authCookie(alloc, value) },
+        .{ .name = "set-cookie", .value = http.clearCookie(users.session_cookie_legacy) },
+    } });
     const path = http.pathOf(try http.target(req, alloc));
 
     if (http.pathUnder(path, "/driving")) |sub| {
@@ -2116,6 +2125,27 @@ test "route: a send makes the topic it names, and /chat over a conversation with
     _ = chat_state;
 }
 
+test "route: a session under its legacy name is moved to __Host-gopher_auth by the next GET, the legacy one cleared; a POST is still read (metal-vmm QUEUE 170.8)" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var site = try UidSite.init(a, io);
+    defer site.deinit();
+    try users.setUserPassword(io, a, "2", "hunter2");
+    const now: i64 = @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
+    const value = try users.signSession(a, UidSite.secret, "2", now);
+    const legacy = try std.fmt.allocPrint(a, "gopher_auth={s}", .{value});
+    const moved = try UidSite.ask(a, io, "/play", legacy);
+    try testing.expectEqualStrings("303 See Other", status(moved));
+    try testing.expect(std.mem.indexOf(u8, moved, try std.fmt.allocPrint(a, "set-cookie: __Host-gopher_auth={s};", .{value})) != null);
+    try testing.expect(std.mem.indexOf(u8, moved, "set-cookie: gopher_auth=; Path=/; Max-Age=0") != null);
+    // Under the new name: nothing to move.
+    try testing.expect(!std.mem.startsWith(u8, status(try UidSite.ask(a, io, "/play", try std.fmt.allocPrint(a, "__Host-gopher_auth={s}", .{value}))), "303"));
+}
+
 test "route: a signed gopher_uid under its old name is moved to __Host-gopher_uid by the next GET, and still names its player meanwhile (metal-vmm QUEUE 167.5)" {
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();
@@ -2131,6 +2161,10 @@ test "route: a signed gopher_uid under its old name is moved to __Host-gopher_ui
     const moved = try UidSite.ask(a, io, "/play", legacy);
     try testing.expectEqualStrings("303 See Other", status(moved));
     try testing.expect(setUid(moved) != null);
+    // The legacy one cleared in the same answer (metal-vmm QUEUE 170.8): a
+    // browser that drops the new one (plain http) is a new visitor, never
+    // a loop of 303s.
+    try testing.expect(std.mem.indexOf(u8, moved, "set-cookie: gopher_uid=; Path=/; Max-Age=0") != null);
     // A POST is never redirected: the old name still names them there.
     try testing.expect(playingAs(try postForm(a, io, "/play", legacy, ""), "Nikhil"));
     // A sibling's plant under the old name, beside the site's own new one,

@@ -90,8 +90,19 @@ pub const session_cookie_legacy = "gopher_auth";
 /// value borrowed past the body read once mis-attributed an authenticated post
 /// to the wrong principal, which is why `http.cookie` returns an owned copy.
 fn sessionUserID(io: Io, alloc: Alloc, req: *std.http.Server.Request) !?[]const u8 {
+    const s = (try sessionRead(io, alloc, req)) orelse return null;
+    return s.id;
+}
+
+const SessionRead = struct { id: []const u8, value: []const u8, legacy: bool };
+
+/// The session a request carries, verified, and whether under the legacy
+/// name (until `http.legacy_names_until_unix`).
+fn sessionRead(io: Io, alloc: Alloc, req: *std.http.Server.Request) !?SessionRead {
+    const now = nowUnix(io);
     var one: [1][]const u8 = undefined;
-    const values: []const []const u8 = switch ((try http.cookieOrLegacy(req, alloc, session_cookie, session_cookie_legacy)).values) {
+    const named = try http.cookieOrLegacy(req, alloc, session_cookie, session_cookie_legacy, now);
+    const values: []const []const u8 = switch (named.values) {
         .none => return null,
         .one => |v| blk: {
             one[0] = v;
@@ -100,18 +111,27 @@ fn sessionUserID(io: Io, alloc: Alloc, req: *std.http.Server.Request) !?[]const 
         .several => |vs| vs,
     };
     const secret = (try loadSecret(io, alloc)) orelse return null;
-    const now = nowUnix(io);
     // Of several (a parent domain's beside this site's own), the one that
     // verifies; none, or more than one, is no one (metal-vmm QUEUE 162.4,
     // as signed_cookie.read).
-    var verified: ?[]const u8 = null; // the one that verified, until a second does
+    var verified: ?SessionRead = null; // the one that verified, until a second does
     for (values) |val| if (verifySessionWithSecret(alloc, secret, val, now)) |id| {
         if (verified != null) return null;
-        verified = id;
+        verified = .{ .id = id, .value = val, .legacy = named.legacy };
     };
-    const id = verified orelse return null;
-    if (!try userIsMember(io, alloc, id)) return null;
-    return id;
+    const s = verified orelse return null;
+    if (!try userIsMember(io, alloc, s.id)) return null;
+    return s;
+}
+
+/// **A SESSION UNDER ITS LEGACY NAME IS MOVED ON ITS NEXT GET** (metal-vmm
+/// QUEUE 170.8): the signed value, to be set under `session_cookie` (the
+/// signature does not name the cookie) while the legacy one is cleared; null
+/// when there is nothing to move.
+pub fn sessionToMove(io: Io, alloc: Alloc, req: *std.http.Server.Request) !?[]const u8 {
+    if (req.head.method != .GET) return null;
+    const s = (try sessionRead(io, alloc, req)) orelse return null;
+    return if (s.legacy) s.value else null;
 }
 
 /// apiKeyUserID resolves the principal id from an Authorization: Bearer key.

@@ -359,7 +359,7 @@ fn sendHostWelcomeImpl(io: Io, alloc: Alloc, bus: *Bus, new_uid: []const u8) !vo
 // player.zig's is for a name-only player.
 
 /// authCookie is the signed member session cookie.
-fn authCookie(alloc: Alloc, signed: []const u8) ![]const u8 {
+pub fn authCookie(alloc: Alloc, signed: []const u8) ![]const u8 {
     return std.fmt.allocPrint(alloc, users.session_cookie ++ "={s}; Path=/; Max-Age={d}; " ++ http.cookie_attributes, .{ signed, uid_max_age });
 }
 
