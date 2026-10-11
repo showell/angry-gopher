@@ -46,8 +46,11 @@ const Request = std.http.Server.Request;
 const uid_max_age = 60 * 60 * 24 * 365;
 
 // Cleared cookies use Max-Age=0, which tells the browser to delete the cookie now.
-const clear_uid_cookie = "gopher_uid=; Path=/; Max-Age=0; " ++ http.cookie_attributes;
-const clear_auth_cookie = "gopher_auth=; Path=/; Max-Age=0; " ++ http.cookie_attributes;
+const clear_uid_cookie = uid_cookie.cookie_name ++ "=; Path=/; Max-Age=0; " ++ http.cookie_attributes;
+const clear_auth_cookie = users.session_cookie ++ "=; Path=/; Max-Age=0; " ++ http.cookie_attributes;
+// The names before `__Host-` (metal-vmm QUEUE 167.5), cleared too.
+const clear_legacy_uid_cookie = uid_cookie.legacy_cookie_name ++ "=; Path=/; Max-Age=0; " ++ http.cookie_attributes;
+const clear_legacy_auth_cookie = users.session_cookie_legacy ++ "=; Path=/; Max-Age=0; " ++ http.cookie_attributes;
 
 /// handle dispatches /login* — `sub` is the path after "/login" ("/full" for the
 /// password gate; bare "/login" is the old name-only door, now at /play).
@@ -357,7 +360,7 @@ fn sendHostWelcomeImpl(io: Io, alloc: Alloc, bus: *Bus, new_uid: []const u8) !vo
 
 /// authCookie is the signed member session cookie.
 fn authCookie(alloc: Alloc, signed: []const u8) ![]const u8 {
-    return std.fmt.allocPrint(alloc, "gopher_auth={s}; Path=/; Max-Age={d}; " ++ http.cookie_attributes, .{ signed, uid_max_age });
+    return std.fmt.allocPrint(alloc, users.session_cookie ++ "={s}; Path=/; Max-Age={d}; " ++ http.cookie_attributes, .{ signed, uid_max_age });
 }
 
 /// sendRedirect issues a 303 See Other to `location` carrying any Set-Cookie
@@ -519,7 +522,7 @@ fn renderLogoutComplete(req: *Request, alloc: Alloc) !void {
         \\  location.replace('/');
         \\</script>
     ;
-    try sendHTML(req, alloc, body, &.{ clear_uid_cookie, clear_auth_cookie });
+    try sendHTML(req, alloc, body, &.{ clear_uid_cookie, clear_auth_cookie, clear_legacy_uid_cookie, clear_legacy_auth_cookie });
 }
 
 // login_full_css: the shared stylesheet for the chat password screens.
@@ -567,7 +570,20 @@ const pw_toggle_script =
 test "every cookie this sets or clears is Secure, HttpOnly and SameSite=Lax (metal-vmm QUEUE 162.2)" {
     const set = try authCookie(std.testing.allocator, "1.2.mac");
     defer std.testing.allocator.free(set);
-    for ([_][]const u8{ set, clear_uid_cookie, clear_auth_cookie }) |c| {
+    for ([_][]const u8{ set, clear_uid_cookie, clear_auth_cookie, clear_legacy_uid_cookie, clear_legacy_auth_cookie }) |c| {
         try std.testing.expect(std.mem.endsWith(u8, c, "; HttpOnly; Secure; SameSite=Lax"));
+    }
+}
+
+test "the session and uid cookies are __Host- ones: Secure, Path=/, no Domain, so no sibling can plant one (metal-vmm QUEUE 167.5)" {
+    const set = try authCookie(std.testing.allocator, "1.2.mac");
+    defer std.testing.allocator.free(set);
+    const uid_set = try uid_cookie.header(std.testing.allocator, "1.2.mac");
+    defer std.testing.allocator.free(uid_set);
+    for ([_][]const u8{ set, uid_set, clear_uid_cookie, clear_auth_cookie }) |c| {
+        try std.testing.expect(std.mem.startsWith(u8, c, "__Host-"));
+        try std.testing.expect(std.mem.indexOf(u8, c, "; Path=/;") != null);
+        try std.testing.expect(std.mem.indexOf(u8, c, "Secure") != null);
+        try std.testing.expect(std.ascii.indexOfIgnoreCase(c, "domain") == null);
     }
 }
