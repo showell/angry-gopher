@@ -23,6 +23,25 @@
 //! parsing; a kernel calls it with paths on its own volume. Neither restates the
 //! mapping, so the two hosts cannot disagree about where a store lives.
 //!
+//! **HOW FAR THESE FOLDERS CAN GROW** (the store's 65,536-entry bound on a
+//! FAT folder, store.zig; gopher-metal QUEUE item 68; prod's counts from
+//! 2026-10-02):
+//!
+//!   - `data/players`: one folder per player, two entries each, so about
+//!     32,000 players. **Nothing bounds it** but game_limits' 5 new players
+//!     an address an hour. Prod: 19.
+//!   - `data/lynrummy`: one folder per player who has played. Prod: 5.
+//!   - a player's `sessions` folders: at most 500 (game_limits). Prod's
+//!     largest: 65.
+//!   - a conversation's `sessions`: a topic is about five files of 2-4
+//!     entries each, so a few thousand topics. A topic's uploads: about
+//!     16,000. Prod's largest folder of all: 70 entries.
+//!
+//! So prod is a few hundred times inside every one of them. The players
+//! folder is the one that grows without a bound of its own; when it nears
+//! the limit, the fix is a fan-out (`data/players/<first digit>/p...`),
+//! not a bigger folder.
+//!
 //! Content read relative to the working directory — `pages/`, `gallery/`,
 //! `downloads/` — is not here: those are the site, not its data, and they
 //! resolve against wherever the host is standing.
