@@ -470,7 +470,7 @@ const Fan = struct {
         if (std.mem.eql(u8, uid, f.from_id)) return;
         var nj: std.ArrayList(u8) = .empty;
         try nj.print(f.alloc, "{{\"conv\":{f},\"session\":{f},\"text\":{f},\"link_url\":{f}}}", .{
-            std.json.fmt(f.conv_key, .{}),    std.json.fmt(f.sid, .{}),
+            std.json.fmt(f.conv_key, .{}),        std.json.fmt(f.sid, .{}),
             std.json.fmt(try f.notify_text, .{}), std.json.fmt(f.rec_url, .{}),
         });
         f.bus.publish(try notifyBusKey(f.alloc, uid), nj.items);
