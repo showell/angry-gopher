@@ -23,23 +23,7 @@ cd "$REPO_DIR"
 # `.built_by` is a build output, named with the script that builds it; and an
 # embedded file git does not track must name one (metal-vmm QUEUE 157(d): a
 # copy of the list here had lost delivery/app.js).
-python3 - "$REPO_DIR" <<'PY'
-import os, re, subprocess, sys
-root = sys.argv[1]
-src = open(os.path.join(root, "zig-server/build.zig")).read()
-bad = []
-for m in re.finditer(r'\.path = "\.\./([^"]+)"(?:, \.built_by = "([^"]+)")?', src):
-    path, by = m.group(1), m.group(2)
-    full = os.path.join(root, path)
-    tracked = subprocess.run(["git", "-C", root, "ls-files", "--error-unmatch", path], capture_output=True).returncode == 0
-    if by and not os.path.isfile(full):
-        bad.append(f"{path} missing: run {by} first (embedded by zig build)")
-    elif not by and not tracked:
-        bad.append(f"{path} is embedded and not in git, but build.zig names no .built_by for it")
-if bad:
-    print("Error:\n  " + "\n  ".join(bad), file=sys.stderr)
-    sys.exit(1)
-PY
+python3 "$REPO_DIR/tools/embedded_assets.py" check
 
 # Poka-yoke lint: raw request-head access (req.head.target / iterateHeaders) is
 # confined to http.zig, whose accessors return OWNED copies — so a head value can

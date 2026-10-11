@@ -68,10 +68,7 @@ cd "$GOPHER_DIR"
 
 # Build the front-end bundles FIRST: build.zig @embedFiles them into the
 # binary, so they must exist and be current before `zig build`.
-"$(dirname "$0")/build_elm"
-"$(dirname "$0")/build_delivery"
-"$(dirname "$0")/build_safari_wasm"
-"$(dirname "$0")/build_chess_wasm"
+"$(dirname "$0")/build_embedded" # each builder build.zig's table names
 
 # Build the server. set -e stops here if the build fails, so nothing relaunches.
 ( cd "$GOPHER_DIR/zig-server" && zig build )

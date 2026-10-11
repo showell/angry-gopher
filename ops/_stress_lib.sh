@@ -35,8 +35,7 @@ EOF
     # harness into zig-out, and the server into the sandbox (so a -Dfake_leak build
     # never clobbers the real zig-out/bin/zig-server, and it's auto-cleaned).
     ( cd "$GOPHER_DIR/zig-server" \
-        && "$GOPHER_DIR/ops/build_safari_wasm" \
-        && "$GOPHER_DIR/ops/build_elm" \
+        && "$GOPHER_DIR/ops/build_embedded" \
         && zig build stress \
         && zig build "$@" -p "$SANDBOX_DIR/srv" )
 

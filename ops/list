@@ -62,9 +62,12 @@ Available ops commands (run from repo root):
                          Do not replace with ad-hoc 'zig build run' —
                          you will skip those steps.
 
+  ops/build_embedded     Run every builder build.zig's asset table names
+                         (.built_by), once each: what zig build embeds.
+                         Called by ops/start and the stress harness.
   ops/build_elm          Compile Game.elm + Puzzle.elm into elm.js and
                          puzzle.js. Calls ops/build_engine_js first.
-                         Called automatically by ops/start.
+                         Called by ops/build_embedded.
   ops/build_engine_js    Bundle the TS engine into elm/engine.js via
                          esbuild. Run after any games/lynrummy/ts/
                          edit before testing the live Elm UI.

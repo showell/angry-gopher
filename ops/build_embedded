@@ -1,0 +1,13 @@
+#!/bin/bash
+# CANONICAL DEV-LOOP SCRIPT — DO NOT REINVENT.
+#
+# Builds every front-end asset zig-server embeds that is a build output, by the
+# script build.zig's table names for it (`.built_by`), once each. The one list
+# of builders (metal-vmm QUEUE 157(d)): ops/start and the stress harness call
+# this rather than naming the builders themselves.
+set -e
+REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+builders="$(python3 "$REPO_DIR/tools/embedded_assets.py" builders)"
+for b in $builders; do
+    "$REPO_DIR/$b"
+done
