@@ -43,14 +43,14 @@
 const std = @import("std");
 const Io = std.Io;
 const Alloc = std.mem.Allocator;
-const http = @import("http.zig");
-const store = @import("store.zig");
+const http = @import("webbox").http;
+const store = @import("webbox").store;
 const users = @import("users.zig");
 const player = @import("player.zig");
 const game_limits = @import("game_limits.zig");
 
-const signed = @import("signed.zig");
-const signed_cookie = @import("signed_cookie.zig");
+const signed = @import("webbox").signed;
+const signed_cookie = @import("webbox").signed_cookie;
 
 pub const cookie_name = http.host_prefix ++ "gopher_uid";
 /// Its name before the `__Host-` prefix (metal-vmm QUEUE 167.5): read when a

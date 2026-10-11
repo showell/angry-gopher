@@ -15,8 +15,8 @@ const std = @import("std");
 const Io = std.Io;
 const chat_store = @import("chat_store.zig");
 const search_index = @import("search_index.zig");
-const mem_meter = @import("mem_meter.zig");
-const store = @import("store.zig");
+const mem_meter = @import("webbox").mem_meter;
+const store = @import("webbox").store;
 
 const corpus_bytes = 10 << 20;
 const vocabulary = 20_000;

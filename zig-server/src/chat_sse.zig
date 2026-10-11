@@ -23,8 +23,8 @@ const Io = std.Io;
 const users = @import("users.zig");
 const store = @import("chat_store.zig");
 const markdown = @import("markdown.zig");
-const Bus = @import("bus.zig").Bus;
-const sse = @import("sse.zig");
+const Bus = @import("webbox").bus.Bus;
+const sse = @import("webbox").sse;
 
 const Alloc = std.mem.Allocator;
 const Request = std.http.Server.Request;

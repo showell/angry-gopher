@@ -28,11 +28,11 @@ const std = @import("std");
 const limits = @import("limits.zig");
 const Io = std.Io;
 const Alloc = std.mem.Allocator;
-const http = @import("http.zig");
-const html = @import("html.zig");
+const http = @import("webbox").http;
+const html = @import("webbox").html;
 const player = @import("player.zig");
 const storage = @import("storage.zig");
-const store = @import("store.zig");
+const store = @import("webbox").store;
 const ui = @import("admin_ui.zig");
 
 const Request = std.http.Server.Request;

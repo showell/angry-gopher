@@ -22,10 +22,21 @@ pub fn build(b: *std.Build) void {
 
     // **THE `webbox` LIBRARY** (src/webbox.zig, a web server in a box): what
     // an application built on this server imports as one module, dog-park
-    // first. ops/check_zig holds its files to importing std and one another
-    // (tools/lint_webbox_library.py), so nothing else of angry-gopher's rides
-    // along.
-    _ = b.addModule("webbox", .{ .root_source_file = b.path("src/webbox.zig") });
+    // first, and angry-gopher itself: no file of the application imports a
+    // file of the library by path. ops/check_zig holds the library's files
+    // to importing std and one another (tools/lint_webbox_library.py), so
+    // nothing else of angry-gopher's rides along.
+    //
+    // **TWO MODULES**: `webbox`, portable, which everything imports; and
+    // `webbox_linux` (src/webbox_linux.zig), the Linux host, which only a
+    // Linux `main` imports and which reaches the portable half as `webbox`.
+    const webbox = b.addModule("webbox", .{ .root_source_file = b.path("src/webbox.zig") });
+    const webbox_linux = b.addModule("webbox_linux", .{
+        .root_source_file = b.path("src/webbox_linux.zig"),
+        .imports = &.{.{ .name = "webbox", .module = webbox }},
+    });
+    root.addImport("webbox", webbox);
+    root.addImport("webbox_linux", webbox_linux);
 
     // Bake the deploy's git short-hash into the binary so /version (and thus the
     // watchdog) reports exactly which commit is serving. ops/deploy passes
@@ -148,6 +159,7 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
+    stress_mod.addImport("webbox", webbox);
     const stress_exe = b.addExecutable(.{ .name = "stress", .root_module = stress_mod });
     // Build (don't run) the harness to zig-out/bin/stress. The ops scripts run the
     // binary directly so they own the exit-code semantics — a `zig build run` step
@@ -164,6 +176,7 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
+    hash_mod.addImport("webbox", webbox);
     const hash_exe = b.addExecutable(.{ .name = "hash-password", .root_module = hash_mod });
     b.step("hash-password", "Build zig-out/bin/hash-password").dependOn(&b.addInstallArtifact(hash_exe, .{}).step);
 
@@ -181,18 +194,23 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     }) });
     router_tests.root_module.addImport("build_options", build_opts.createModule());
+    router_tests.root_module.addImport("webbox", webbox);
     for (assets) |a| {
         router_tests.root_module.addAnonymousImport(a.name, .{ .root_source_file = b.path(a.path) });
     }
 
     const test_step = b.step("test", "Run unit tests");
     test_step.dependOn(&b.addRunArtifact(router_tests).step);
-    for ([_][]const u8{ "src/auth.zig", "src/users.zig", "src/store.zig", "src/login.zig", "src/names.zig", "src/player.zig", "src/counter.zig", "src/admin_ui.zig", "src/roots.zig", "src/markdown_fence.zig", "src/recent_feed.zig", "src/code_store.zig", "src/chat_upload.zig", "src/markdown.zig", "src/markdown_media.zig", "src/bus.zig", "src/chat_sse.zig", "src/docs_store.zig", "src/reading_list.zig", "src/chat_store.zig", "src/reactions.zig", "src/mem_meter.zig", "src/stress.zig", "src/host_facts.zig", "src/bind.zig", "src/admin_backup.zig", "src/ustar.zig", "src/storage.zig", "src/uid_cookie.zig", "src/game_limits.zig", "src/admin_secret.zig", "src/login_throttle.zig", "src/chat_retire.zig", "src/admin_retire.zig", "src/search_tokens.zig", "src/search_index.zig", "src/chat_search.zig", "src/webbox.zig" }) |path| {
+    for ([_][]const u8{ "src/auth.zig", "src/users.zig", "src/store.zig", "src/login.zig", "src/names.zig", "src/player.zig", "src/counter.zig", "src/admin_ui.zig", "src/roots.zig", "src/markdown_fence.zig", "src/recent_feed.zig", "src/code_store.zig", "src/chat_upload.zig", "src/markdown.zig", "src/markdown_media.zig", "src/bus.zig", "src/chat_sse.zig", "src/docs_store.zig", "src/reading_list.zig", "src/chat_store.zig", "src/reactions.zig", "src/mem_meter.zig", "src/stress.zig", "src/host_facts.zig", "src/bind.zig", "src/admin_backup.zig", "src/ustar.zig", "src/storage.zig", "src/uid_cookie.zig", "src/game_limits.zig", "src/admin_secret.zig", "src/login_throttle.zig", "src/chat_retire.zig", "src/admin_retire.zig", "src/search_tokens.zig", "src/search_index.zig", "src/chat_search.zig", "src/webbox.zig", "src/webbox_linux.zig" }) |path| {
         const unit = b.addTest(.{ .root_module = b.createModule(.{
             .root_source_file = b.path(path),
             .target = target,
             .optimize = optimize,
         }) });
+        // A file of the application, or of the Linux host, reaches the
+        // library as the module; a file of the library, by path.
+        unit.root_module.addImport("webbox", webbox);
+        unit.root_module.addImport("webbox_linux", webbox_linux);
         test_step.dependOn(&b.addRunArtifact(unit).step);
     }
 }

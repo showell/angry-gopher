@@ -11,13 +11,13 @@ const std = @import("std");
 const limits = @import("limits.zig");
 const Io = std.Io;
 const Alloc = std.mem.Allocator;
-const http = @import("http.zig");
+const http = @import("webbox").http;
 const users = @import("users.zig");
 const chat = @import("chat.zig");
 const chrome = @import("chat_chrome.zig");
-const html = @import("html.zig");
+const html = @import("webbox").html;
 const presence = @import("presence.zig");
-const Bus = @import("bus.zig").Bus;
+const Bus = @import("webbox").bus.Bus;
 
 const Request = std.http.Server.Request;
 

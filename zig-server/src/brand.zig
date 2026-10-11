@@ -7,7 +7,7 @@
 //! Adding an image is two edits: a build.zig embed + one line in assetFor here.
 
 const std = @import("std");
-const http = @import("http.zig");
+const http = @import("webbox").http;
 
 const Request = std.http.Server.Request;
 

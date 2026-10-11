@@ -12,9 +12,22 @@ module that does not is not a slower path there. It FAILS TO COMPILE.
 This lint computes that set from the import graph, starting at router.zig and
 at webbox.zig (the library an application built on this server imports, which
 the metal port carries too, whether or not this site's routes reach a file of
-it), and checks every file in it. A module outside the set (server.zig, the
-library's host-only part, the stress harness, the markdown tools) is
-host-side by definition and is not checked. There is no hardcoded list of exemptions to fall out of date.
+it), and checks every file in it. It follows a file's imports by path and its
+import of the `webbox` module (to webbox.zig). A module outside the set
+(server.zig, the library's Linux half `webbox_linux`, the stress harness, the
+markdown tools) is host-side by definition and is not checked. There is no
+hardcoded list of exemptions to fall out of date.
+
+THE LIBRARY'S EDGES, inside the set:
+
+  THE LINUX HALF     `@import("webbox_linux")`, or a file of it by path
+                     (linux_host.zig, bind.zig, linux_config.zig,
+                     webbox_linux.zig): the host itself.
+  BY ITS FILES       an application's file importing a file of the library
+                     by path (`@import("http.zig")`, `@import("webbox.zig")`):
+                     it imports the `webbox` module (`@import("webbox").http`).
+                     One file belongs to one module, and the metal port hands
+                     the library to the kernel as a module of its own.
 
 WHAT IT FORBIDS, inside the set and outside `test {}` blocks:
 
@@ -80,14 +93,16 @@ import zig_source  # noqa: E402  the one reading of a source file the lints shar
 ROOT_MODULE = "router.zig"
 # The roots the real tree is checked from: the route table, and the webbox
 # library. Both must be there.
-ROOTS = (ROOT_MODULE, "webbox.zig")
-# The library's host-only files: a site served as a Linux process. webbox.zig
-# names them, for an application's Linux `main`; Zig analyses only what a
-# program uses, so the metal port never compiles them. Only webbox.zig may
-# import one: the closure stops at them there, and any other file reaching
-# one is a finding (HOST_ONLY_REACHED).
 LIBRARY_ROOT = "webbox.zig"
-HOST_ONLY = frozenset({"linux_host.zig", "bind.zig", "linux_config.zig"})
+ROOTS = (ROOT_MODULE, LIBRARY_ROOT)
+# The named modules a portable file may import that are files here, and the
+# file each is: the closure follows them.
+MODULE_FILES = {"webbox": LIBRARY_ROOT}
+# The library's Linux half, its own module (`webbox_linux`), and its files: a
+# site served as a Linux process, which only a Linux `main` imports. Any
+# portable file reaching one is a finding; the closure stops there.
+HOST_MODULES = frozenset({"webbox_linux"})
+HOST_ONLY = frozenset({"webbox_linux.zig", "linux_host.zig", "bind.zig", "linux_config.zig"})
 
 
 # (pattern, advice). Checked in order; one finding per match.
@@ -215,12 +230,29 @@ def test_only_lines(lines, tests):
     return {n for a, b in only for n in range(a, b + 1)}
 
 
+def library_files(src_dir: str):
+    """The library's portable files: webbox.zig and the files it names. Empty
+    in a tree without a library."""
+    path = os.path.join(src_dir, LIBRARY_ROOT)
+    if not os.path.isfile(path):
+        return set()
+    with open(path, encoding="utf-8") as f:
+        return {LIBRARY_ROOT} | set(zig_source.imports(f.read()))
+
+
+def deps_of(text):
+    """What a file imports that is a file here: by path, and the `webbox`
+    module as webbox.zig."""
+    return zig_source.imports(text) + [MODULE_FILES[m] for m in zig_source.modules(text) if m in MODULE_FILES]
+
+
 def closure(src_dir: str, root=ROOT_MODULE):
     """Every local .zig file reachable from `root` (a name, or several) by
-    @import, the roots included.
+    @import, the roots included: by path, and through the `webbox` module.
 
-    Named modules (`@import("std")`, `@import("build_options")`) and embedded
-    assets are not files in src_dir and are not followed. A cycle terminates.
+    Other named modules (`@import("std")`, `@import("build_options")`) and
+    embedded assets are not files in src_dir and are not followed; nor is the
+    library's Linux half, which is a finding. A cycle terminates.
     """
     roots = (root,) if isinstance(root, str) else tuple(root)
     for r in roots:
@@ -237,9 +269,9 @@ def closure(src_dir: str, root=ROOT_MODULE):
             continue  # a dangling import is zig's error to report, not ours
         seen.add(name)
         with open(path, encoding="utf-8") as f:
-            for dep in zig_source.imports(f.read()):
-                if name == LIBRARY_ROOT and dep in HOST_ONLY:
-                    continue  # the library's host-only part: not portable, by design
+            for dep in deps_of(f.read()):
+                if os.path.basename(dep) in HOST_ONLY:
+                    continue  # the Linux half: a finding (scan), not followed
                 if dep not in seen:
                     todo.append(dep)
     return seen
@@ -248,24 +280,22 @@ def closure(src_dir: str, root=ROOT_MODULE):
 def scan(src_dir: str, root=ROOT_MODULE):
     """Findings as (file, line, text, advice), in file then line order."""
     found = []
+    library = library_files(src_dir)
     for name in sorted(closure(src_dir, root)):
-        if name in HOST_ONLY:
-            continue  # reached from a file not allowed it: said below, not scanned
         with open(os.path.join(src_dir, name), encoding="utf-8") as f:
             text = f.read()
-        if name != LIBRARY_ROOT:
-            for dep in zig_source.imports(text):
-                base = os.path.basename(dep)
-                if base in HOST_ONLY:
-                    found.append((name, 0, f'@import("{dep}")',
-                                  f"{base} is the library's host-only part: only webbox.zig may import it"))
-                elif base == LIBRARY_ROOT:
-                    # Through the library's front door the host-only part is
-                    # one field away (`.linux_host`), and on the bare-metal
-                    # host it still compiles: a portable file imports the
-                    # library's members by their own files.
-                    found.append((name, 0, f'@import("{dep}")',
-                                  "a portable file imports a library member by its own file, never webbox.zig, which names the host-only part too"))
+        for m in zig_source.modules(text):
+            if m in HOST_MODULES:
+                found.append((name, 0, f'@import("{m}")',
+                              f"{m} is the library's Linux half: only a Linux main imports it"))
+        for dep in zig_source.imports(text):
+            base = os.path.basename(dep)
+            if base in HOST_ONLY:
+                found.append((name, 0, f'@import("{dep}")',
+                              f"{base} is the library's Linux half: only a Linux main reaches it, through the webbox_linux module"))
+            elif name not in library and base in library:
+                found.append((name, 0, f'@import("{dep}")',
+                              f'import the library as its module: @import("webbox"){"" if base == LIBRARY_ROOT else "." + base[:-4]}'))
         with open(os.path.join(src_dir, name), encoding="utf-8") as f:
             lines = f.readlines()
         tests = test_lines(lines)

@@ -10,8 +10,8 @@
 
 const std = @import("std");
 const build_options = @import("build_options");
-const http = @import("http.zig");
-const mem_meter = @import("mem_meter.zig");
+const http = @import("webbox").http;
+const mem_meter = @import("webbox").mem_meter;
 
 // The Safari camera's zig→WASM core (ops/build_safari_wasm — a gitignored build
 // output that must exist to compile) + its dumb plain-JS blitter (build.zig).

@@ -15,7 +15,7 @@ const std = @import("std");
 const Io = std.Io;
 const Alloc = std.mem.Allocator;
 const store = @import("chat_store.zig");
-const disk = @import("store.zig");
+const disk = @import("webbox").store;
 
 /// DocSummary is one sidebar entry: the slug + a display title derived from it.
 pub const DocSummary = struct { slug: []const u8, title: []const u8 };

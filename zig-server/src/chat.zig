@@ -33,19 +33,19 @@
 const std = @import("std");
 const limits = @import("limits.zig");
 const Io = std.Io;
-const http = @import("http.zig");
+const http = @import("webbox").http;
 const users = @import("users.zig");
 const store = @import("chat_store.zig");
 const markdown = @import("markdown.zig");
-const html = @import("html.zig");
+const html = @import("webbox").html;
 // Escaping lives in html.zig, not here, so chat_chrome.zig and the non-chat
 // pages (login, game, admin, …) escape without importing the chat dispatcher.
 const htmlEscape = html.htmlEscape; // internal alias; the impl lives in html.zig
 const chrome = @import("chat_chrome.zig");
 const page = @import("chat_page.zig");
 const chat_sse = @import("chat_sse.zig");
-const sse = @import("sse.zig");
-const edge = @import("edge.zig");
+const sse = @import("webbox").sse;
+const edge = @import("webbox").edge;
 const docs = @import("docs.zig");
 const reading_list = @import("reading_list.zig");
 const recent = @import("recent.zig");
@@ -58,7 +58,7 @@ const presence = @import("presence.zig");
 const chat_state = @import("chat_state.zig");
 const download = @import("chat_download.zig");
 const reactions = @import("reactions.zig");
-const Bus = @import("bus.zig").Bus;
+const Bus = @import("webbox").bus.Bus;
 
 const Alloc = std.mem.Allocator;
 const Request = std.http.Server.Request;

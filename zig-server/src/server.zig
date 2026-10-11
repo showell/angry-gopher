@@ -25,8 +25,8 @@
 
 const std = @import("std");
 const router = @import("router.zig");
-const linux_host = @import("linux_host.zig");
-const free_space = @import("free_space.zig");
+const linux_host = @import("webbox_linux").linux_host;
+const free_space = @import("webbox").free_space;
 
 pub fn main(init: std.process.Init.Minimal) !void {
     try linux_host.Server(router).run(init, .{

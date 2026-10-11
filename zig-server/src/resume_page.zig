@@ -17,9 +17,9 @@
 
 const std = @import("std");
 const Io = std.Io;
-const http = @import("http.zig");
+const http = @import("webbox").http;
 const markdown = @import("markdown.zig");
-const store = @import("store.zig");
+const store = @import("webbox").store;
 
 const Alloc = std.mem.Allocator;
 const Request = std.http.Server.Request;

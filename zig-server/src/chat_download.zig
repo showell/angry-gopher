@@ -14,9 +14,9 @@
 const std = @import("std");
 const Io = std.Io;
 const Alloc = std.mem.Allocator;
-const http = @import("http.zig");
+const http = @import("webbox").http;
 const store = @import("chat_store.zig");
-const disk = @import("store.zig");
+const disk = @import("webbox").store;
 const flate = std.compress.flate;
 const ustar = @import("ustar.zig");
 

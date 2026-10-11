@@ -20,7 +20,7 @@
 
 const std = @import("std");
 const Io = std.Io;
-const http = @import("http.zig");
+const http = @import("webbox").http;
 const driving = @import("driving.zig");
 const delivery = @import("delivery.zig");
 const chess = @import("chess.zig");
@@ -41,8 +41,8 @@ const player = @import("player.zig");
 const brand = @import("brand.zig");
 const users = @import("users.zig");
 const uid_cookie = @import("uid_cookie.zig");
-const client_address = @import("client_address.zig");
-const free_space = @import("free_space.zig");
+const client_address = @import("webbox").client_address;
+const free_space = @import("webbox").free_space;
 // ── THE HOST CONTRACT ────────────────────────────────────────────────────────
 //
 // webbox's site.zig says it, three calls (Steve, 2026-10-10: one call for the
@@ -55,10 +55,10 @@ const free_space = @import("free_space.zig");
 
 /// The streaming seam: Hub, Bus (part of `route`'s signature), Kept, and the
 /// two ways to serve a kept stream.
-pub const streams = @import("bus.zig");
+pub const streams = @import("webbox").bus;
 pub const Bus = streams.Bus;
 pub const Hub = streams.Hub;
-pub const mem_meter = @import("mem_meter.zig");
+pub const mem_meter = @import("webbox").mem_meter;
 /// The setup as one call (site.zig's `start`, around this application's own:
 /// app_start.zig): contract step 2.
 pub const start = Served.start;
@@ -78,9 +78,9 @@ pub const host_facts = struct {
     pub const Fact = facts.Fact;
     pub const utc = facts.utc;
     pub const duration = facts.duration;
-    const facts = @import("host_facts.zig");
+    const facts = @import("webbox").host_facts;
 };
-const webbox_site = @import("site.zig");
+const webbox_site = @import("webbox").site;
 const app_start = @import("app_start.zig");
 const roots = @import("roots.zig");
 const search_index = @import("search_index.zig");
@@ -93,7 +93,7 @@ const game_limits = @import("game_limits.zig");
 /// The edge's refusal counts, which /version reports: a host counts what it
 /// refuses before the route table sees a request (`edge.count(.header_too_large)`
 /// for a head past its read buffer), in the same counters the routes use.
-pub const edge = @import("edge.zig");
+pub const edge = @import("webbox").edge;
 /// The largest upload a plain GET reads whole; a bigger one is streamed. A host
 /// with a page cache keeps files up to this by default, so what it keeps and
 /// what is read whole are one line (gopher-metal's `probe/gopher.zig`).
@@ -157,7 +157,7 @@ fn routeBodyLimit(path: []const u8) u64 {
 
 /// When a request's body is read, and how long it may take (webbox's
 /// body.zig): the rule a host reads `bodyLimit` by.
-pub const body_rule = @import("body.zig");
+pub const body_rule = @import("webbox").body;
 /// The route's cap on a body, from the head's target: contract step 3's
 /// first half, before the body is read.
 pub const bodyLimit = Served.bodyLimit;
@@ -405,7 +405,7 @@ test "every page names its scripts by their bytes, and a script asked for by its
     const io = threaded.io();
     var site = try UidSite.init(a, io);
     defer site.deinit();
-    const meter = @import("mem_meter.zig").useForTest(std.heap.page_allocator); // a send allocates through it
+    const meter = @import("webbox").mem_meter.useForTest(std.heap.page_allocator); // a send allocates through it
     defer meter.restore();
     // A player for the games; two members and a topic between them for chat.
     const me = try signedUid(a, try player.allocate(io, a, "Ada"));
@@ -617,7 +617,7 @@ const UidSite = struct {
 
     const storage = @import("storage.zig");
     const chat_store = @import("chat_store.zig");
-    const disk = @import("store.zig");
+    const disk = @import("webbox").store;
     const game_limits = @import("game_limits.zig");
     const secret = "a session secret of thirty-two bytes or more, for router tests";
 
@@ -1072,7 +1072,7 @@ test "route: start does the host's setup in one call: the data and the store poi
     const host_proxy = client_address.save();
     defer host_proxy.restore();
     const chat_store = @import("chat_store.zig");
-    const disk = @import("store.zig");
+    const disk = @import("webbox").store;
     const md = try std.fs.path.join(a, &.{ chat_store.chat_root, "1_2", "sessions", "ChitChat.md" });
     try disk.write(io, a, md, "MSG_ChitChat_1\nfrom: Steve\ndate: 2026-10-10T00:00:00Z\n\nhello world", .{});
     // The store's bases are start's to set (webbox's site.zig), not the
@@ -1108,7 +1108,7 @@ test "route: /admin/search finds a key in every conversation the admin can see, 
     defer site.deinit();
     const me = try adminSession(a, io);
     const chat_store = @import("chat_store.zig");
-    const disk = @import("store.zig");
+    const disk = @import("webbox").store;
     // Two more members; the admin is in channel "general", not in "quiet".
     for ([_][2][]const u8{ .{ "2", "Debbie" }, .{ "3", "Apoorva" } }) |m| {
         try users.setUserName(io, a, m[0], m[1]);

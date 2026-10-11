@@ -8,7 +8,7 @@
 //!   GET /tutorial/tutorial.js  the embedded client bundle
 
 const std = @import("std");
-const http = @import("http.zig");
+const http = @import("webbox").http;
 
 const Request = std.http.Server.Request;
 

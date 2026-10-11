@@ -22,13 +22,13 @@
 const std = @import("std");
 const limits = @import("limits.zig");
 const Io = std.Io;
-const http = @import("http.zig");
+const http = @import("webbox").http;
 const storage = @import("storage.zig");
 const game_limits = @import("game_limits.zig");
 const player = @import("player.zig");
 const session_meta = @import("session_meta.zig");
 const timefmt = @import("timefmt.zig");
-const html = @import("html.zig");
+const html = @import("webbox").html;
 
 const Alloc = std.mem.Allocator;
 const Request = std.http.Server.Request;

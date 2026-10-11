@@ -21,8 +21,8 @@ const Io = std.Io;
 const Alloc = std.mem.Allocator;
 const users = @import("users.zig");
 const store = @import("chat_store.zig");
-const mem_meter = @import("mem_meter.zig");
-const Bus = @import("bus.zig").Bus;
+const mem_meter = @import("webbox").mem_meter;
+const Bus = @import("webbox").bus.Bus;
 
 /// PresenceWindow: a markActive within this window (5 min) means online.
 const window_ns: i128 = 5 * std.time.ns_per_min;

@@ -13,6 +13,8 @@ the way Zig does, as far as the lints need:
                 counting braces.
   imports(text) every `@import("x.zig")` in the file's code, however it is
                 split over lines, in order.
+  modules(text) every named module a file imports (`@import("webbox")`,
+                `@import("std")`), likewise.
   embeds(text)  every `@embedFile("...")` likewise.
 
 What it does not see: an import through a name (`const s = @import("std");
@@ -22,6 +24,7 @@ there.
 import re
 
 _IMPORT = re.compile(r'@import\(\s*"([^"]+\.zig)"\s*,?\s*\)')
+_MODULE = re.compile(r'@import\(\s*"([A-Za-z_][A-Za-z0-9_]*)"\s*,?\s*\)')
 _EMBED = re.compile(r'@embedFile\(\s*"([^"]+)"\s*,?\s*\)')
 
 
@@ -69,6 +72,10 @@ def imports(text):
     return _IMPORT.findall(_code_text(text))
 
 
+def modules(text):
+    return _MODULE.findall(_code_text(text))
+
+
 def embeds(text):
     return _EMBED.findall(_code_text(text))
 
@@ -83,6 +90,7 @@ def _self_test():
     assert imports('// const a = @import("users.zig");\n') == []
     assert imports('const s = "@import(\\"x.zig\\")";\n') == []
     assert embeds('const j = @embedFile("chat.js");\n') == ["chat.js"]
+    assert modules('const std = @import("std");\nconst w = @import(\n    "webbox",\n).http;\nconst u = @import("users.zig");\n') == ["std", "webbox"]
 
 
 if __name__ == "__main__":

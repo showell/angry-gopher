@@ -24,12 +24,12 @@
 const std = @import("std");
 const build_options = @import("build_options");
 const Io = std.Io;
-const http = @import("http.zig");
-const edge = @import("edge.zig");
+const http = @import("webbox").http;
+const edge = @import("webbox").edge;
 const throttle = @import("login_throttle.zig");
-const html = @import("html.zig");
-const mem_meter = @import("mem_meter.zig");
-const store = @import("store.zig");
+const html = @import("webbox").html;
+const mem_meter = @import("webbox").mem_meter;
+const store = @import("webbox").store;
 
 const Alloc = std.mem.Allocator;
 const Request = std.http.Server.Request;
