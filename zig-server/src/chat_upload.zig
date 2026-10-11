@@ -246,7 +246,7 @@ fn uploadContentType(name: []const u8) ?[]const u8 {
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
-const UploadKind = enum {
+pub const UploadKind = enum {
     image,
     video,
 
@@ -270,9 +270,13 @@ const Sniffed = struct { ext: []const u8, kind: UploadKind };
 /// detectUpload sniffs the magic bytes of every allowed type (image first, then
 /// video) and returns our canonical extension + kind. We sniff rather than trust
 /// the client's filename / Content-Type.
+///
+/// **ITS KIND IS THE TABLE'S** (the review of 157): an extension the sniffers
+/// find and `accepted` does not list is refused, never stored to be served
+/// as nothing; every row's sample sniffs as that row (a test).
 fn detectUpload(data: []const u8) ?Sniffed {
-    if (detectImageExt(data)) |e| return .{ .ext = e, .kind = .image };
-    if (detectVideoExt(data)) |e| return .{ .ext = e, .kind = .video };
+    const ext = detectImageExt(data) orelse detectVideoExt(data) orelse return null;
+    for (accepted) |t| if (std.mem.eql(u8, t.ext, ext)) return .{ .ext = t.ext, .kind = t.kind };
     return null;
 }
 
@@ -299,14 +303,16 @@ fn detectVideoExt(data: []const u8) ?[]const u8 {
 /// stored file is served as, and the list the page hands the client for its
 /// file picker (`accept`), where chat_compose.js kept a copy that "must
 /// match". The sniffers above decide what a file is; this names it.
-pub const accepted = [_]struct { ext: []const u8, mime: []const u8 }{
-    .{ .ext = "png", .mime = "image/png" },
-    .{ .ext = "jpg", .mime = "image/jpeg" },
-    .{ .ext = "gif", .mime = "image/gif" },
-    .{ .ext = "webp", .mime = "image/webp" },
-    .{ .ext = "mp4", .mime = "video/mp4" },
-    .{ .ext = "webm", .mime = "video/webm" },
-    .{ .ext = "mov", .mime = "video/quicktime" },
+/// Each row also names its kind (its cap) and the least a file of it begins
+/// with, so a test holds the sniffers to the table.
+pub const accepted = [_]struct { ext: []const u8, mime: []const u8, kind: UploadKind, sample: []const u8 }{
+    .{ .ext = "png", .mime = "image/png", .kind = .image, .sample = "\x89PNG\r\n\x1a\n" },
+    .{ .ext = "jpg", .mime = "image/jpeg", .kind = .image, .sample = "\xff\xd8\xff\xe0" },
+    .{ .ext = "gif", .mime = "image/gif", .kind = .image, .sample = "GIF89a" },
+    .{ .ext = "webp", .mime = "image/webp", .kind = .image, .sample = "RIFF\x00\x00\x00\x00WEBP" },
+    .{ .ext = "mp4", .mime = "video/mp4", .kind = .video, .sample = "\x00\x00\x00\x18ftypisom" },
+    .{ .ext = "webm", .mime = "video/webm", .kind = .video, .sample = "\x1a\x45\xdf\xa3" },
+    .{ .ext = "mov", .mime = "video/quicktime", .kind = .video, .sample = "\x00\x00\x00\x14ftypqt  " },
 };
 
 /// The accepted types as a file picker's `accept` attribute takes them.
@@ -425,4 +431,14 @@ test "parseRange clamps to the file and to one window" {
     try testing.expect(parseRange("bytes=2000-", 1000) == null);
     try testing.expect(parseRange("0-100", 1000) == null);
     try testing.expect(parseRange("bytes=abc", 1000) == null);
+}
+
+test "every type the table offers is one the sniffers find, of the table's kind, and served as its type (the review of 157)" {
+    for (accepted) |t| {
+        const got = detectUpload(t.sample) orelse return error.NotSniffed;
+        try std.testing.expectEqualStrings(t.ext, got.ext);
+        try std.testing.expectEqual(t.kind, got.kind);
+        try std.testing.expectEqualStrings(t.mime, extMime(got.ext).?);
+        try std.testing.expect(std.mem.startsWith(u8, t.mime, @tagName(t.kind)));
+    }
 }
