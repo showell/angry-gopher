@@ -5,8 +5,9 @@
 //! plants set), the game store's floor, and the lines its setup's report
 //! prints.
 //!
-//! Prod runs on gopher-metal, which calls the same `router.start` and
-//! `router.route` with no operating system. On a Linux box the default bind
+//! Prod runs on gopher-metal, which takes this same application as a module
+//! (`router.site`, `router.hosting`) and calls the same `start` and `route`
+//! with no operating system. On a Linux box the default bind
 //! is every interface; a firewall keeps 9001 private and Caddy reaches it on
 //! localhost, and with GOPHER_BIND=127.0.0.1 a rehearsal on real data answers
 //! on loopback only.
@@ -66,7 +67,7 @@ fn gameStoreSpace() ?free_space.Space {
 fn report(started: *const router.Started) void {
     var buf: [1024]u8 = undefined;
     var w: std.Io.Writer = .fixed(&buf);
-    router.hosting.describeStart(started.app, &w) catch {};
+    router.hosting.describeStart(started.app, &w) catch @panic("the application's start report is past its 1 KiB buffer (router.hosting.describeStart)");
     var lines = std.mem.splitScalar(u8, std.mem.trimEnd(u8, w.buffered(), "\n"), '\n');
     while (lines.next()) |line| std.debug.print("zig-server: {s}\n", .{line});
 }

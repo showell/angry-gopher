@@ -94,11 +94,6 @@ const game_limits = @import("game_limits.zig");
 /// refuses before the route table sees a request (`edge.count(.header_too_large)`
 /// for a head past its read buffer), in the same counters the routes use.
 pub const edge = @import("webbox").edge;
-/// The largest upload a plain GET reads whole; a bigger one is streamed. A host
-/// with a page cache keeps files up to this by default, so what it keeps and
-/// what is read whole are one line (gopher-metal's `probe/gopher.zig`).
-pub const whole_read_max = @import("chat_upload.zig").whole_read_max;
-
 /// **THIS APPLICATION, AS A HOST TAKES IT** (Phase B step 1): `site`, the
 /// library's `Site(App)` around this application (start, route, the body
 /// rule's two questions), and `hosting`, what only the application can say
@@ -109,9 +104,15 @@ pub const hosting = struct {
     /// What its data is called, where a host names it (gopher-metal's
     /// console and /admin/host).
     pub const data_name = "chat's data";
-    /// The largest file a plain GET reads whole: a page cache's default.
+    /// The largest upload a plain GET reads whole; a bigger one is streamed.
+    /// A host with a page cache keeps files up to this by default, so what it
+    /// keeps and what is read whole are one line.
     pub const whole_read_max = @import("chat_upload.zig").whole_read_max;
-    /// Its setup's report, a line each, for the host's log.
+    /// The largest file worth keeping whole in a page cache: its largest
+    /// picture. A cache told to keep bigger ones keeps nothing more.
+    pub const cache_largest_most = request_limits.body.upload_image;
+    /// Its setup's report, a line each, for the host's log. It fits a host's
+    /// 1 KiB buffer; past it is a bug here, and a host stops on it.
     pub fn describeStart(r: app_start.StartReport, w: *std.Io.Writer) std.Io.Writer.Error!void {
         return app_start.describeStart(r, w);
     }
@@ -794,7 +795,7 @@ test "route: an unsigned gopher_uid never names a member, the agent, a stranger,
     try testing.expect(!UidSite.marked(a, io, "1"));
 
     // A forged signature: the right shape, the wrong MAC.
-    const forged = try uid_cookie.sign(a, "not the uid_site's secret, though just as long", "1", 1_790_000_000);
+    const forged = try uid_cookie.sign(a, "not the site's secret, though just as long", "1", 1_790_000_000);
     const f = try UidSite.ask(a, io, "/play", try std.fmt.allocPrint(a, "gopher_uid={s}", .{forged}));
     try testing.expect(!playingAs(f, "Steve"));
 
@@ -1164,7 +1165,7 @@ test "route: /admin/search finds a key in every conversation the admin can see, 
     const head = try serve(a, io, try std.fmt.allocPrint(a, "HEAD /admin/search?key=lay HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\n\r\n", .{me}));
     try testing.expectEqualStrings("200 OK", status(head));
     try testing.expectEqual(read_before, admin_search.transcripts_read);
-    const cross = try serve(a, io, try std.fmt.allocPrint(a, "GET /admin/search?key=lay HTTP/1.1\r\nHost: x\r\nSec-Fetch-Site: cross-uid_site\r\nCookie: {s}\r\n\r\n", .{me}));
+    const cross = try serve(a, io, try std.fmt.allocPrint(a, "GET /admin/search?key=lay HTTP/1.1\r\nHost: x\r\nSec-Fetch-Site: cross-site\r\nCookie: {s}\r\n\r\n", .{me}));
     try testing.expect(std.mem.indexOf(u8, cross, "messages match") == null);
     try testing.expect(std.mem.indexOf(u8, cross, "does not run; press Search") != null);
     const typed = try serve(a, io, try std.fmt.allocPrint(a, "GET /admin/search?key=lay HTTP/1.1\r\nHost: x\r\nSec-Fetch-Site: none\r\nCookie: {s}\r\n\r\n", .{me}));
@@ -1503,7 +1504,7 @@ fn countFiles(tar: []const u8) usize {
     return std.fmt.parseInt(usize, it.next() orelse "0", 10) catch 0;
 }
 
-test "route: the re-sign's redirect stays on this uid_site" {
+test "route: the re-sign's redirect stays on this site" {
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();
     const a = arena.allocator();
