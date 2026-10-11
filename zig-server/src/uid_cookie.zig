@@ -50,6 +50,7 @@ const player = @import("player.zig");
 const game_limits = @import("game_limits.zig");
 
 const signed = @import("signed.zig");
+const signed_cookie = @import("signed_cookie.zig");
 
 pub const cookie_name = "gopher_uid";
 const label = "gopher_uid\n";
@@ -88,7 +89,8 @@ pub fn verify(secret: []const u8, value: []const u8, now_unix: i64) ?[]const u8 
     return signed.verify(kind, secret, value, now_unix);
 }
 
-const issuedOf = signed.issuedOf;
+/// The cookie, for webbox's reading and writing of signed cookies.
+const cookie: signed_cookie.Cookie = .{ .name = cookie_name, .kind = kind };
 
 fn nowUnix(io: Io) i64 {
     return @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
@@ -96,7 +98,7 @@ fn nowUnix(io: Io) i64 {
 
 /// The Set-Cookie header value for a signed id.
 pub fn header(alloc: Alloc, value: []const u8) ![]const u8 {
-    return std.fmt.allocPrint(alloc, "{s}={s}; Path=/; Max-Age={d}; HttpOnly; SameSite=Lax", .{ cookie_name, value, lifetime_secs });
+    return signed_cookie.header(cookie, alloc, value);
 }
 
 // ── against the disk ─────────────────────────────────────────────────────────
@@ -179,15 +181,11 @@ fn legacyHonoured(io: Io, alloc: Alloc, id: []const u8) bool {
 /// never redirected, with the unsigned spelling is no one, so the hole is
 /// not open to anyone who skips the GET that would close it.
 pub fn resolve(io: Io, alloc: Alloc, req: *std.http.Server.Request) !?[]const u8 {
-    const value = (try http.cookie(req, alloc, cookie_name)) orelse return null;
-    const secret = (try users.sessionSecret(io, alloc)) orelse return null;
-    const now = nowUnix(io);
-    if (verify(secret, value, now)) |id| return id;
     // **AFTER A CHANGE OF SECRET**, a player's cookie signed with the old one
     // still names them for the days the change allowed (users.rotateSecret);
     // the next GET re-signs it (`reissue`).
-    if (try users.previousSecret(io, alloc)) |prev| return verify(prev, value, now);
-    return null;
+    const r = (try signed_cookie.read(cookie, io, alloc, req, users.session_secret_dir, nowUnix(io))) orelse return null;
+    return r.id;
 }
 
 pub const Reissue = union(enum) {
@@ -206,20 +204,18 @@ pub const Reissue = union(enum) {
 pub fn reissue(io: Io, alloc: Alloc, req: *std.http.Server.Request, client: ?[]const u8) !?Reissue {
     if (req.head.method != .GET) return null;
     const value = (try http.cookie(req, alloc, cookie_name)) orelse return null;
-    const secret = (try users.sessionSecret(io, alloc)) orelse return null;
+    // No secret, nothing re-signed, and nothing counted against the address.
+    if ((try users.sessionSecret(io, alloc)) == null) return null;
     const now = nowUnix(io);
     // **PAST HALF ITS LIFE, RE-SIGNED** (Steve, 2026-10-10): nothing else
     // re-signs a valid cookie, so a player active all year lost who they
-    // were at the year. Validly signed, so not counted against the address.
-    if (verify(secret, value, now)) |id| {
-        if (now -| issuedOf(value) <= lifetime_secs / 2) return null;
-        return .{ .cookie = (try issue(io, alloc, id)) orelse return null };
+    // were at the year. And signed with the secret before a change, and
+    // still taken: re-signed with the current one. Validly signed either
+    // way, so not counted against the address.
+    if (try signed_cookie.read(cookie, io, alloc, req, users.session_secret_dir, now)) |r| {
+        if (!signed_cookie.due(cookie, r, now)) return null;
+        return .{ .cookie = (try issue(io, alloc, r.id)) orelse return null };
     }
-    // Signed with the secret before a change, and still taken: re-signed
-    // with the current one. It was validly signed, so it is not counted.
-    if (try users.previousSecret(io, alloc)) |prev| if (verify(prev, value, now)) |id| {
-        return .{ .cookie = (try issue(io, alloc, id)) orelse return null };
-    };
     if (!legacyHonoured(io, alloc, value)) return null;
     if (try game_limits.admitResign(io, client)) |r| return .{ .refused = r };
     const marker = try std.fmt.allocPrint(alloc, "{d}\n", .{now});

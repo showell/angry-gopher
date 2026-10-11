@@ -40,6 +40,7 @@ const uid_cookie = @import("uid_cookie.zig");
 
 const HmacSha256 = std.crypto.auth.hmac.sha2.HmacSha256;
 const b64 = std.base64.url_safe_no_pad;
+const site_secret = @import("secret.zig");
 
 // Roots (roots.point overrides these at startup, from the host's roots). Defaults are
 // repo-relative, adjusted for the zig-server cwd.
@@ -398,51 +399,30 @@ pub fn sessionUser(io: Io, alloc: Alloc, req: *std.http.Server.Request) !?[]cons
 }
 
 // ── changing the secret (gopher-metal QUEUE item 66, SECRET-LEAK.md) ─────────
-
-const previous_name = "_session_secret.previous";
-const previous_until_name = "_session_secret.previous-until";
+//
+// The secret's files are webbox's (secret.zig, site_secret here), in
+// session_secret_dir.
 
 /// The secret before the last change, while players' cookies signed with it
 /// are still taken (`previous-until`, Unix seconds); null past that, or when
 /// there is none. Members' sessions are never checked against it.
 pub fn previousSecret(io: Io, alloc: Alloc) !?[]const u8 {
-    const until_path = try std.fs.path.join(alloc, &.{ session_secret_dir, previous_until_name });
-    const raw = (try store.readOrNull(io, alloc, until_path, .limited(64))) orelse return null;
-    const until = std.fmt.parseInt(i64, std.mem.trim(u8, raw, " \t\r\n"), 10) catch return null;
-    const now: i64 = @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
-    if (now >= until) return null;
-    const path = try std.fs.path.join(alloc, &.{ session_secret_dir, previous_name });
-    const b = (try store.readOrNull(io, alloc, path, .unlimited)) orelse return null;
-    if (b.len < 32) return null;
-    return b;
+    return site_secret.previous(io, alloc, session_secret_dir);
 }
 
-/// **CHANGES THE SECRET.** The current one becomes the previous one, taken
-/// for players' cookies for `players_days` more days (0: not at all), and a
-/// new one, 32 random bytes as 64 hex digits, takes its place. Every
-/// member's session ends at once; a player's cookie is re-signed on their
-/// next visit inside the days. Written previous first and the new secret
-/// last, so a stop part-way leaves the old secret in force.
+/// **CHANGES THE SECRET** (secret.rotate). The current one becomes the
+/// previous one, taken for players' cookies for `players_days` more days (0:
+/// not at all). Every member's session ends at once; a player's cookie is
+/// re-signed on their next visit inside the days.
 pub fn rotateSecret(io: Io, alloc: Alloc, players_days: i64) !void {
-    const current = (try loadSecret(io, alloc)) orelse return error.NoSecret;
-    const now: i64 = @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
-    const dir = session_secret_dir;
-    try store.replace(io, alloc, try std.fs.path.join(alloc, &.{ dir, previous_name }), current, .{ .private = true });
-    try store.replace(io, alloc, try std.fs.path.join(alloc, &.{ dir, previous_until_name }), try std.fmt.allocPrint(alloc, "{d}\n", .{now + players_days * 24 * 60 * 60}), .{});
-    var b: [32]u8 = undefined;
-    io.random(b[0..]);
-    const hex = std.fmt.bytesToHex(b, .lower);
-    try store.replace(io, alloc, try std.fs.path.join(alloc, &.{ dir, "_session_secret" }), &hex, .{ .private = true });
+    return site_secret.rotate(io, alloc, session_secret_dir, players_days);
 }
 
-/// loadSecret reads {session_secret_dir}/_session_secret (>= 32 bytes), or null.
-/// Nothing makes a first secret: it is seeded on disk (README, "Bootstrapping").
-/// Only rotateSecret, from /admin/secret, replaces one that exists.
+/// The secret (>= 32 bytes), or null. Nothing makes a first secret: it is
+/// seeded on disk (README, "Bootstrapping"). Only rotateSecret, from
+/// /admin/secret, replaces one that exists.
 fn loadSecret(io: Io, alloc: Alloc) !?[]const u8 {
-    const path = try std.fs.path.join(alloc, &.{ session_secret_dir, "_session_secret" });
-    const b = (try store.readOrNull(io, alloc, path, .unlimited)) orelse return null;
-    if (b.len < 32) return null;
-    return b;
+    return site_secret.load(io, alloc, session_secret_dir);
 }
 
 // ── request parsing ──────────────────────────────────────────────────────────
