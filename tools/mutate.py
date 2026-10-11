@@ -15,7 +15,7 @@ tests and is reported apart; so is one whose text is no longer in its file,
 which means the list here has fallen behind the code.
 
 The rules are the ones an attacker would want broken: the signed cookie
-(uid_cookie), the Store's names and paths (store), the game store's limits
+(signed, signed_cookie, uid_cookie), the Store's names and paths (store), the game store's limits
 and whose address counts (game_limits, client_address), the admin's gate and the password
 asked again (admin_ui, admin_secret, admin_backup), and the member session
 (users). gopher-metal's tools/mutate_tcp.py is the same idea for its TCP.
@@ -48,14 +48,14 @@ SRC = "zig-server/src"
 # exactly once in the file.
 MUTANTS = [
     # ── the signed gopher_uid ──
-    ("uid_cookie", "mac-not-compared", "any MAC verifies",
+    ("signed", "mac-not-compared", "any MAC verifies",
      "if (!std.crypto.timing_safe.eql([HmacSha256.mac_length]u8, want, got)) return null;", "_ = &want;\n    _ = &got;"),
-    ("uid_cookie", "id-not-validated", "a signed value over a bad id verifies",
-     "if (it.next() != null or !validId(id)) return null;", "if (it.next() != null) return null;"),
+    ("signed", "id-not-validated", "a signed value over a bad id verifies",
+     "if (it.next() != null or !kind.validId(id)) return null;", "if (it.next() != null) return null;"),
     ("uid_cookie", "id-over-20-digits", "validId takes 21 digits",
-     "if (digits.len == 0 or digits.len > 20) return false;", "if (digits.len == 0) return false;"),
+     "if (digits.len == 0 or digits.len > 20 or digits[0] == '0') return false;", "if (digits.len == 0 or digits[0] == '0') return false;"),
     ("uid_cookie", "member-re-signed", "a member's unsigned cookie is re-signed",
-     "if (users.principalAuthorized(io, alloc, id)) return false;", ""),
+     "if (users.principalAuthorized(io, alloc, id) catch true) return false;", ""),
     ("uid_cookie", "marker-ignored", "an id already signed is re-signed again",
      "if (isMarked(io, alloc, id)) return false;", ""),
     ("uid_cookie", "no-grace", "a lost re-sign answer cannot be asked again",
@@ -63,9 +63,9 @@ MUTANTS = [
     ("uid_cookie", "window-never-shuts", "unsigned cookies honoured for ever",
      "return now < ends;", "_ = now < ends;\n    return true;"),
     ("uid_cookie", "unknown-id-re-signed", "an id no one has is re-signed",
-     "if (!store.has(io, alloc, row) and !users.principalExists(io, alloc, id)) return false;", "_ = row;"),
-    ("uid_cookie", "previous-secret-refused", "after a change of secret, players are lost",
-     "if (try users.previousSecret(io, alloc)) |prev| return verify(prev, value);", ""),
+     "if (!(store.has(io, alloc, row) catch return false) and !(users.principalExists(io, alloc, id) catch return false)) return false;", "_ = row;"),
+    ("signed_cookie", "previous-secret-refused", "after a change of secret, players are lost",
+     "|prev| if (signed.verify(c.kind, prev, value, now)) |id| {", "|prev| if (signed.verify(c.kind, prev[0..0], value, now)) |id| {"),
     ("uid_cookie", "post-re-signed", "a POST is re-signed",
      "if (req.head.method != .GET) return null;", ""),
     ("uid_cookie", "re-signs-not-counted", "re-signs per address unbounded",

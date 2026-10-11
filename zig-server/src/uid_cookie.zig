@@ -121,10 +121,10 @@ pub fn issue(io: Io, alloc: Alloc, id: []const u8) !?[]const u8 {
 pub const grace_seconds: i64 = 10 * 60;
 
 fn issueMarked(io: Io, alloc: Alloc, id: []const u8, marker: []const u8) !?[]const u8 {
-    const secret = (try users.sessionSecret(io, alloc)) orelse return null;
+    if ((try users.sessionSecret(io, alloc)) == null) return null;
     const now: i64 = @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
     try store.write(io, alloc, try markerPath(alloc, id), marker, .{});
-    return try header(alloc, try sign(alloc, secret, id, now));
+    return signed_cookie.issue(cookie, io, alloc, users.session_secret_dir, id, now);
 }
 
 fn markerPath(alloc: Alloc, id: []const u8) ![]const u8 {
@@ -184,8 +184,10 @@ pub fn resolve(io: Io, alloc: Alloc, req: *std.http.Server.Request) !?[]const u8
     // **AFTER A CHANGE OF SECRET**, a player's cookie signed with the old one
     // still names them for the days the change allowed (users.rotateSecret);
     // the next GET re-signs it (`reissue`).
-    const r = (try signed_cookie.read(cookie, io, alloc, req, users.session_secret_dir, nowUnix(io))) orelse return null;
-    return r.id;
+    return switch (try signed_cookie.read(cookie, io, alloc, req, users.session_secret_dir, nowUnix(io))) {
+        .verified => |v| v.id,
+        .none, .no_secret, .invalid => null,
+    };
 }
 
 pub const Reissue = union(enum) {
@@ -203,19 +205,24 @@ pub const Reissue = union(enum) {
 /// legacy id. Null when there is nothing to re-sign.
 pub fn reissue(io: Io, alloc: Alloc, req: *std.http.Server.Request, client: ?[]const u8) !?Reissue {
     if (req.head.method != .GET) return null;
-    const value = (try http.cookie(req, alloc, cookie_name)) orelse return null;
-    // No secret, nothing re-signed, and nothing counted against the address.
-    if ((try users.sessionSecret(io, alloc)) == null) return null;
     const now = nowUnix(io);
-    // **PAST HALF ITS LIFE, RE-SIGNED** (Steve, 2026-10-10): nothing else
-    // re-signs a valid cookie, so a player active all year lost who they
-    // were at the year. And signed with the secret before a change, and
-    // still taken: re-signed with the current one. Validly signed either
-    // way, so not counted against the address.
-    if (try signed_cookie.read(cookie, io, alloc, req, users.session_secret_dir, now)) |r| {
-        if (!signed_cookie.due(cookie, r, now)) return null;
-        return .{ .cookie = (try issue(io, alloc, r.id)) orelse return null };
+    switch (try signed_cookie.read(cookie, io, alloc, req, users.session_secret_dir, now)) {
+        // No cookie, or no secret: nothing re-signed, and nothing counted
+        // against the address.
+        .none, .no_secret => return null,
+        // **PAST HALF ITS LIFE, RE-SIGNED** (Steve, 2026-10-10): nothing
+        // else re-signs a valid cookie, so a player active all year lost
+        // who they were at the year. And signed with the secret before a
+        // change, and still taken: re-signed with the current one. Validly
+        // signed either way, so not counted against the address.
+        .verified => |v| {
+            if (!signed_cookie.needsRenewal(cookie, v, now)) return null;
+            return .{ .cookie = (try issue(io, alloc, v.id)) orelse return null };
+        },
+        // Perhaps a legacy unsigned spelling: below.
+        .invalid => {},
     }
+    const value = (try http.cookie(req, alloc, cookie_name)) orelse return null;
     if (!legacyHonoured(io, alloc, value)) return null;
     if (try game_limits.admitResign(io, client)) |r| return .{ .refused = r };
     const marker = try std.fmt.allocPrint(alloc, "{d}\n", .{now});

@@ -40,7 +40,7 @@ const uid_cookie = @import("uid_cookie.zig");
 
 const HmacSha256 = std.crypto.auth.hmac.sha2.HmacSha256;
 const b64 = std.base64.url_safe_no_pad;
-const site_secret = @import("secret.zig");
+const site_secret = @import("site_secret.zig");
 
 // Roots (roots.point overrides these at startup, from the host's roots). Defaults are
 // repo-relative, adjusted for the zig-server cwd.
@@ -400,17 +400,17 @@ pub fn sessionUser(io: Io, alloc: Alloc, req: *std.http.Server.Request) !?[]cons
 
 // ── changing the secret (gopher-metal QUEUE item 66, SECRET-LEAK.md) ─────────
 //
-// The secret's files are webbox's (secret.zig, site_secret here), in
-// session_secret_dir.
+// The secret's files are webbox's (site_secret.zig), in session_secret_dir.
 
 /// The secret before the last change, while players' cookies signed with it
 /// are still taken (`previous-until`, Unix seconds); null past that, or when
 /// there is none. Members' sessions are never checked against it.
 pub fn previousSecret(io: Io, alloc: Alloc) !?[]const u8 {
-    return site_secret.previous(io, alloc, session_secret_dir);
+    const now: i64 = @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
+    return site_secret.previous(io, alloc, session_secret_dir, now);
 }
 
-/// **CHANGES THE SECRET** (secret.rotate). The current one becomes the
+/// **CHANGES THE SECRET** (site_secret.rotate). The current one becomes the
 /// previous one, taken for players' cookies for `players_days` more days (0:
 /// not at all). Every member's session ends at once; a player's cookie is
 /// re-signed on their next visit inside the days.
