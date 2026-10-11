@@ -126,14 +126,17 @@ pub fn verifySessionWithSecret(alloc: Alloc, secret: []const u8, val: []const u8
     // recompute MAC, compare to the decoded presented MAC (32 bytes).
     var computed: [HmacSha256.mac_length]u8 = undefined;
     sessionMAC(secret, id, issued, &computed);
+    // A MAC of any other length is no one's, said before it is decoded:
+    // decode writes as many bytes as the text holds (signed.zig's verify).
+    if ((b64.Decoder.calcSizeForSlice(p2) catch return null) != HmacSha256.mac_length) return null;
     var presented: [HmacSha256.mac_length]u8 = undefined;
-    (b64.Decoder.decode(&presented, p2)) catch return null; // wrong length/charset -> reject
+    (b64.Decoder.decode(&presented, p2)) catch return null; // wrong charset -> reject
     if (!std.crypto.timing_safe.eql([HmacSha256.mac_length]u8, computed, presented)) return null;
 
     // expiry: issued must parse and be within max age.
     const n = std.fmt.parseInt(i64, issued, 10) catch return null;
-    if (now_unix - n > session_max_age_secs) return null;
-    if (n - now_unix > clock_skew_secs) return null;
+    if (now_unix -| n > session_max_age_secs) return null;
+    if (n -| now_unix > clock_skew_secs) return null;
     return id;
 }
 
@@ -671,6 +674,16 @@ test "verifySessionWithSecret accepts a genuine cookie and rejects every forgery
     try testing.expect(verifySessionWithSecret(a, secret, signed, issued - clock_skew_secs - 1) == null);
     const far = try signSession(a, secret, "42", std.math.maxInt(i64));
     try testing.expect(verifySessionWithSecret(a, secret, far, issued) == null);
+    // A MAC of any other length, decoded as it came, ran past its 32 bytes:
+    // a client's cookie a character longer was an index out of bounds.
+    for ([_][]const u8{ "A", "AA", "AAAA", "AAAAAAAAAAAA" }) |more| {
+        try testing.expect(verifySessionWithSecret(a, secret, try std.fmt.allocPrint(a, "{s}{s}", .{ val, more }), issued) == null);
+    }
+    try testing.expect(verifySessionWithSecret(a, secret, val[0 .. val.len - 1], issued) == null);
+    // An issued time at the edge of i64, the MAC right for it: the age's
+    // subtraction overflowed.
+    const ancient = try signSession(a, secret, "42", std.math.minInt(i64));
+    try testing.expect(verifySessionWithSecret(a, secret, ancient, issued) == null);
 }
 
 test "apiKeyMatches: plaintext constant-time arm and legacy sha256-hex arm" {
