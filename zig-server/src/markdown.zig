@@ -111,14 +111,15 @@ pub const malformed_html = "<p class=\"md-malformed\">⚠️ malformed markdown 
 /// drift from the parser; the parser IS the judge. Costs one render of `md`
 /// (cheap for legit input, and bounded for hostile input — that's the trade:
 /// we start the parse in good faith rather than pre-screening). OOM is not
-/// "hostile" — we report null and let the real render path surface it.
-pub fn hostileReason(a: std.mem.Allocator, md: []const u8) ?[]const u8 {
+/// "hostile", nor "safe": it is the error (metal-vmm QUEUE 172: a message the
+/// judge could not judge was stored, and every replay of it then failed).
+pub fn hostileReason(a: std.mem.Allocator, md: []const u8) error{OutOfMemory}!?[]const u8 {
     var arena = std.heap.ArenaAllocator.init(a);
     defer arena.deinit();
     var budget = Budget.forInput(md);
     _ = renderBlocks(arena.allocator(), md, false, &budget) catch |e| switch (e) {
         error.Hostile => return "too much markdown formatting",
-        error.OutOfMemory => return null,
+        error.OutOfMemory => return error.OutOfMemory,
     };
     return null;
 }
@@ -770,5 +771,10 @@ test "budget: linear content never trips, regardless of size" {
     while (i < 4000) : (i += 1) try buf.appendSlice(a, "word **bold** [t](http://x.com) ");
     const html = try render(a, buf.items);
     try testing.expect(!std.mem.eql(u8, html, malformed_html));
-    try testing.expect(hostileReason(a, buf.items) == null);
+    try testing.expect(try hostileReason(a, buf.items) == null);
+}
+
+test "hostileReason: memory that runs out is an error, never \"not hostile\" (metal-vmm QUEUE 172: such a message was stored, and every replay of it failed)" {
+    var failing = std.testing.FailingAllocator.init(std.testing.allocator, .{ .fail_index = 0 });
+    try std.testing.expectError(error.OutOfMemory, hostileReason(failing.allocator(), "some **bold** text and a [link](http://x.com)"));
 }

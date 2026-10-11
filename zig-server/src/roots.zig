@@ -137,6 +137,8 @@ pub fn point(alloc: std.mem.Allocator, r: Roots) !void {
 /// read back before the old one in data/chat/ is removed; a stop in between
 /// leaves both, and the next startup finishes the job (auth/ already has it, so
 /// the old is just removed). The end state is always the secret in auth/ alone.
+/// A copy in auth/ that a failed write cut short is copied again, never kept
+/// over the whole one.
 pub fn migrateSecret(io: Io, alloc: std.mem.Allocator) void {
     const new_dir = users.session_secret_dir; // auth/, after point()
     const old_dir = chat_store.chat_root; // data/chat/, the old home
@@ -151,7 +153,19 @@ pub fn migrateSecret(io: Io, alloc: std.mem.Allocator) void {
         if (!(store.has(io, alloc, old_path) catch continue)) continue;
         const new_path = std.fs.path.join(alloc, &.{ new_dir, name }) catch continue;
         // absent-ok: an error is not "absent": nothing is written over what may be there.
-        if (!(store.has(io, alloc, new_path) catch continue)) {
+        const there = store.has(io, alloc, new_path) catch continue;
+        // **A COPY CUT SHORT IS COPIED AGAIN** (metal-vmm QUEUE 172): a write
+        // truncates, then writes, so one that failed part way left the old
+        // file's first bytes (or none) in auth/. Trusting it would remove the
+        // only whole copy; a new copy that differs otherwise is the newer one
+        // (rotated since), and the old is stale.
+        // absent-ok: a copy that cannot be read is not judged torn, and the old one stays.
+        const torn = there and blk: {
+            const old_bytes = store.read(io, alloc, old_path, .unlimited) catch continue;
+            const new_bytes = store.read(io, alloc, new_path, .unlimited) catch continue;
+            break :blk new_bytes.len < old_bytes.len and std.mem.startsWith(u8, old_bytes, new_bytes);
+        };
+        if (!there or torn) {
             // absent-ok: nothing read is nothing written, and the old copy stays.
             const bytes = store.read(io, alloc, old_path, .unlimited) catch continue;
             store.write(io, alloc, new_path, bytes, .{ .private = true }) catch continue;
@@ -225,6 +239,31 @@ test "migrateSecret moves the secret from data/chat to auth once, and never leav
     migrateSecret(io, a);
     try testing.expect(!try store.has(io, a, try join(a, old, "_session_secret")));
     try testing.expectEqualStrings(secret, (try users.sessionSecret(io, a)).?);
+}
+
+test "migrateSecret: a copy in auth/ cut short by a failed write is copied again, never trusted over the whole old one (metal-vmm QUEUE 172)" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var tmp = testing.tmpDir(.{});
+    defer tmp.cleanup();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    const saved = try pointForTest(a, try std.fs.path.join(a, &.{ ".zig-cache", "tmp", &tmp.sub_path }));
+    defer saved.restore();
+    const secret = "a session secret at least thirty-two bytes!";
+    const old_path = try std.fs.path.join(a, &.{ chat_store.chat_root, "_session_secret" });
+    const new_path = try std.fs.path.join(a, &.{ users.session_secret_dir, "_session_secret" });
+    try store.write(io, a, old_path, secret, .{});
+    // An earlier start's copy, torn: its first bytes only (or none).
+    for ([_][]const u8{ secret[0..10], "" }) |torn| {
+        try store.write(io, a, old_path, secret, .{});
+        try store.write(io, a, new_path, torn, .{ .private = true });
+        migrateSecret(io, a);
+        try testing.expectEqualStrings(secret, try store.read(io, a, new_path, .unlimited));
+        try testing.expect(!try store.has(io, a, old_path));
+    }
 }
 
 test "point takes the relative paths a kernel uses on its own volume" {

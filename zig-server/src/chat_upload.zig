@@ -163,7 +163,10 @@ pub fn serveUpload(req: *Request, io: Io, alloc: Alloc, conv_dir: []const u8, si
             error.FileNotFound => return http.notFound(req), // gone since its stat
             else => return e,
         };
-        return req.respond(data[0..n], .{ .extra_headers = &headers });
+        // As for a range: a file shorter than its stat is a fault, never
+        // served as the whole file (metal-vmm QUEUE 172).
+        if (n != data.len) return error.UploadShorterThanItsStat;
+        return req.respond(data, .{ .extra_headers = &headers });
     }
     return streamFile(req, io, alloc, path, size, &headers);
 }
@@ -176,8 +179,9 @@ pub fn serveUpload(req: *Request, io: Io, alloc: Alloc, conv_dir: []const u8, si
 /// stream (the same bargain admin_backup.zig makes). A content-length header
 /// would then be a promise broken by a short body — std's `end()` asserts every
 /// promised byte was written — so a device fault mid-serve would panic the
-/// machine. Chunked has no such promise: a truncated stream is simply missing
-/// its terminator, which the client reads as the error it is. A HEAD gets the
+/// machine. Chunked has no such promise: a truncated stream is cut with no
+/// terminator, which the client reads as the error it is, and the error goes
+/// on to the host's log. A HEAD gets the
 /// headers and no body, and reads nothing.
 fn streamFile(req: *Request, io: Io, alloc: Alloc, path: []const u8, len: u64, headers: []const std.http.Header) !void {
     var hbuf: [1024]u8 = undefined;
@@ -189,10 +193,13 @@ fn streamFile(req: *Request, io: Io, alloc: Alloc, path: []const u8, len: u64, h
         var at: u64 = 0;
         while (at < len) {
             const want: usize = @intCast(@min(@as(u64, buf.len), len - at));
-            // absent-ok: the headers are out: a read that fails can only end the stream short of its length.
-            const n = disk.readAt(io, alloc, path, at, buf[0..want]) catch break;
-            if (n == 0) break; // the file shrank under us — stop where we are
-            body.writer.writeAll(buf[0..n]) catch break;
+            // The headers are out: a read that fails, or a file shorter than
+            // its stat, cuts the stream with no last chunk, and its error
+            // goes to the host's log (metal-vmm QUEUE 172: `end()` here wrote
+            // the last chunk, a truncated file delivered as whole).
+            const n = try disk.readAt(io, alloc, path, at, buf[0..want]);
+            if (n == 0) return error.UploadShorterThanItsStat;
+            body.writer.writeAll(buf[0..n]) catch return; // the client is gone
             at += n;
         }
     }
@@ -529,4 +536,26 @@ test "parseMultipartFile: a delimiter at the very end of the body closes the par
     // A body that is the delimiter alone, and one byte short of it.
     try testing.expect(parseMultipartFile(a, "--B", "B") == null);
     try testing.expect(parseMultipartFile(a, "--", "B") == null);
+}
+
+test "a stream whose file ends before its length is cut, never ended as whole: no last chunk, and an error for the host's log (metal-vmm QUEUE 172)" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    const path = try std.fs.path.join(a, &.{ ".zig-cache", "tmp", &tmp.sub_path, "clip.webm" });
+    try Io.Dir.cwd().writeFile(io, .{ .sub_path = path, .data = "x" ** 1000 });
+
+    var reader: std.Io.Reader = .fixed("GET /u/clip.webm HTTP/1.1\r\nHost: x\r\n\r\n");
+    var out: std.Io.Writer.Allocating = .init(a);
+    var server = std.http.Server.init(&reader, &out.writer);
+    var req = try server.receiveHead();
+    // Its stat said 2000 bytes; 1000 are there.
+    try std.testing.expectError(error.UploadShorterThanItsStat, streamFile(&req, io, a, path, 2000, &.{}));
+    out.writer.flush() catch {};
+    try std.testing.expect(!std.mem.endsWith(u8, out.written(), "0\r\n\r\n"));
 }

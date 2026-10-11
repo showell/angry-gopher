@@ -251,7 +251,7 @@ fn docsRender(req: *Request, alloc: Alloc) !void {
     // The live-preview fuzz path. markdown.render returns the visible
     // malformed_html placeholder for hostile input (the existing observable);
     // count it too so /version reflects preview probing, not just POST rejects.
-    if (markdown.hostileReason(alloc, md) != null) edge.count(.malformed_markdown);
+    if (try markdown.hostileReason(alloc, md) != null) edge.count(.malformed_markdown);
     const rendered = try markdown.render(alloc, md);
     try req.respond(rendered, .{ .extra_headers = &.{http.html_ct} });
 }
@@ -271,7 +271,7 @@ fn docsPost(req: *Request, io: Io, alloc: Alloc, bus: *Bus, uid: []const u8) !vo
         return req.respond("doc is empty\n", .{ .status = .bad_request });
     }
     // Don't broadcast hostile / over-formatted markdown to a chat partner.
-    if (markdown.hostileReason(alloc, doc_body)) |_| {
+    if (try markdown.hostileReason(alloc, doc_body)) |_| {
         return edge.reject(req, .malformed_markdown, "not posted: too much markdown formatting; break the doc up\n");
     }
 
