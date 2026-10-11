@@ -293,3 +293,52 @@ test "an excerpt of a word that begins with a stray continuation byte never star
     const mid = try excerptOf(a, "x" ** 100 ++ " \x80\x80ab", "\x80\x80ab");
     try testing.expectEqualStrings("\x80\x80ab", mid.mark);
 }
+
+test "the rate limit's second: its last millisecond still refuses, the next admits" {
+    const meter = mem_meter.useForTest(testing.allocator);
+    defer meter.restore();
+    const forgot = forgetForTest();
+    defer forgot.end();
+    for (0..per_second - 1) |_| try testing.expect(admit("9", 1000));
+    try testing.expect(admit("9", 1999)); // the last of the second's share
+    try testing.expect(!admit("9", 1999));
+    try testing.expect(admit("9", 2000));
+}
+
+test "an excerpt: a match at offset 0 and one that ends the text are cut nowhere" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    const first = try excerptOf(a, "word then", "word");
+    try testing.expectEqualStrings("", first.before);
+    try testing.expectEqualStrings("word", first.mark);
+    try testing.expectEqualStrings(" then", first.after);
+    const last = try excerptOf(a, "then word", "word");
+    try testing.expectEqualStrings("then ", last.before);
+    try testing.expectEqualStrings("word", last.mark);
+    try testing.expectEqualStrings("", last.after);
+    const only = try excerptOf(a, "word", "word");
+    try testing.expectEqualStrings("", only.before);
+    try testing.expectEqualStrings("word", only.mark);
+    try testing.expectEqualStrings("", only.after);
+}
+
+test "an excerpt: a match excerpt_pad bytes in keeps all before it, one byte further is cut" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    const at = "b" ** (excerpt_pad - 1) ++ " ";
+    try testing.expectEqualStrings(at, (try excerptOf(a, at ++ "word", "word")).before);
+    const past = "b" ** excerpt_pad ++ " ";
+    try testing.expectEqualStrings("\u{2026}" ++ past[1..], (try excerptOf(a, past ++ "word", "word")).before);
+}
+
+test "an excerpt: excerpt_pad bytes after the match are kept whole, one byte more is cut" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    const at = " " ++ "b" ** (excerpt_pad - 1);
+    try testing.expectEqualStrings(at, (try excerptOf(a, "word" ++ at, "word")).after);
+    const past = " " ++ "b" ** excerpt_pad;
+    try testing.expectEqualStrings(past[0..excerpt_pad] ++ "\u{2026}", (try excerptOf(a, "word" ++ past, "word")).after);
+}
