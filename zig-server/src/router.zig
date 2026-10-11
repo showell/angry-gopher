@@ -122,7 +122,17 @@ const App = struct {
     pub const setup = app_start.setup;
     pub const StartReport = app_start.StartReport;
     pub const bodyLimit = routeBodyLimit;
+    pub const uploader = uploaderOf;
 };
+
+/// **WHO MAY HOLD AN UPLOAD SLOT** (metal-vmm QUEUE 169): anyone the request
+/// names (a member's session, an API key, a guest), from the head alone, so
+/// the sign-in is checked before a byte of the upload is read; a stranger
+/// is null, never holds a slot, and the upload route refuses them unread.
+fn uploaderOf(req: *std.http.Server.Request, io: Io, alloc: std.mem.Allocator) !?[]const u8 {
+    const uid = try users.currentUserID(io, alloc, req);
+    return if (uid.len == 0) null else uid;
+}
 
 /// **EACH ROUTE'S CAP ON A BODY, FROM ITS PATH** (metal-vmm QUEUE 167.2): the
 /// most any handler under the path reads, which the host reads the body by
@@ -149,6 +159,8 @@ pub const body_rule = @import("body.zig");
 /// The route's cap on a body, from the head's target: contract step 3's
 /// first half, before the body is read.
 pub const bodyLimit = Served.bodyLimit;
+/// Who is asking to upload, from the head (null: a stranger).
+pub const uploader = Served.uploader;
 const Served = webbox_site.Site(App);
 
 /// route picks the handler by path prefix, passing the remainder (the path with
