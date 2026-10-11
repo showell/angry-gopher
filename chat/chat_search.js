@@ -144,12 +144,15 @@ window.ChatSearch = (function(){
   /* PRODUCT_DECISION: the list empties as soon as the text changes, so Enter
      before the new words arrive searches what is typed, never a word left
      over from the last prefix. */
+  /* The server's shortest word is in UTF-8 bytes (search_tokens.min_len),
+     so a one-character 中 is a word there; a JS length counts UTF-16. */
+  function utf8Len(s){ return new TextEncoder().encode(s).length; }
   function scheduleSuggest(){
     if(SR.timer) clearTimeout(SR.timer);
     var q=SR.input.value.trim();
     asked++;
     SR.list.textContent=''; SR.items=[]; SR.sel=-1;
-    if(q.length<SEARCH_MIN){ renderPrompt(); return; }
+    if(utf8Len(q)<SEARCH_MIN){ renderPrompt(); return; }
     SR.status.textContent='Searching…';
     SR.timer=setTimeout(function(){ if(SR && SR.phase==='suggest'){ SR.timer=null; suggest(q); } }, DEBOUNCE_MS);
   }
@@ -212,7 +215,7 @@ window.ChatSearch = (function(){
   function finalizeSearch(){
     var it=SR.items[SR.sel];
     var word=(SR.sel>=0 && it && it.word) ? it.word : SR.input.value.trim();
-    if(word.length>=SEARCH_MIN) runResults(word);
+    if(utf8Len(word)>=SEARCH_MIN) runResults(word);
   }
   function chooseResult(){
     if(SR.sel<0||!SR.items[SR.sel]) return;

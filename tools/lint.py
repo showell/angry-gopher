@@ -137,7 +137,7 @@ JS_BUILTINS: set[str] = {
     "parseInt", "parseFloat", "isNaN", "isFinite",
     "encodeURIComponent", "decodeURIComponent", "encodeURI", "decodeURI",
     "fetch", "XMLHttpRequest", "EventSource", "WebSocket", "FormData",
-    "Blob", "File", "URL", "URLSearchParams", "Image", "Audio",
+    "Blob", "File", "URL", "URLSearchParams", "TextEncoder", "Image", "Audio",
     "alert", "confirm", "prompt",
 }
 
