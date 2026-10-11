@@ -2140,8 +2140,10 @@ test "route: a session under its legacy name is moved to __Host-gopher_auth by t
     var site = try UidSite.init(a, io);
     defer site.deinit();
     try users.setUserPassword(io, a, "2", "hunter2");
-    const now: i64 = @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
-    const value = try users.signSession(a, UidSite.secret, "2", now);
+    // Signed before the move, as a real legacy session was.
+    const now_s: i64 = @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
+    const before = @min(now_s, http.legacy_issued_before_unix) - 3600;
+    const value = try users.signSession(a, UidSite.secret, "2", before);
     const legacy = try std.fmt.allocPrint(a, "gopher_auth={s}", .{value});
     const moved = try UidSite.ask(a, io, "/play", legacy);
     try testing.expectEqualStrings("303 See Other", status(moved));
@@ -2161,7 +2163,7 @@ test "route: a signed gopher_uid under its old name is moved to __Host-gopher_ui
     var site = try UidSite.init(a, io);
     defer site.deinit();
     const id = try player.allocate(io, a, "Nikhil");
-    const value = try uid_cookie.sign(a, UidSite.secret, id, nowSecs(io));
+    const value = try uid_cookie.sign(a, UidSite.secret, id, @min(nowSecs(io), http.legacy_issued_before_unix) - 3600);
     const legacy = try std.fmt.allocPrint(a, "gopher_uid={s}", .{value});
     const moved = try UidSite.ask(a, io, "/play", legacy);
     try testing.expectEqualStrings("303 See Other", status(moved));
@@ -2169,7 +2171,7 @@ test "route: a signed gopher_uid under its old name is moved to __Host-gopher_ui
     // The legacy one cleared in the same answer (metal-vmm QUEUE 170.8): a
     // browser that drops the new one (plain http) is a new visitor, never
     // a loop of 303s.
-    try testing.expect(std.mem.indexOf(u8, moved, "set-cookie: gopher_uid=; Path=/; Max-Age=0") != null);
+    try testing.expect(std.mem.indexOf(u8, moved, "set-cookie: gopher_uid=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax\r\n") != null);
     // A POST is never redirected: the old name still names them there.
     try testing.expect(playingAs(try postForm(a, io, "/play", legacy, ""), "Nikhil"));
     // A sibling's plant under the old name, beside the site's own new one,

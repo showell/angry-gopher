@@ -116,12 +116,37 @@ fn sessionRead(io: Io, alloc: Alloc, req: *std.http.Server.Request) !?SessionRea
     // as signed_cookie.read).
     var verified: ?SessionRead = null; // the one that verified, until a second does
     for (values) |val| if (verifySessionWithSecret(alloc, secret, val, now)) |id| {
+        // A legacy-named session signed after the move is a plant: not read.
+        if (named.legacy and !legacyTaken(issuedOfSession(val))) continue;
         if (verified != null) return null;
         verified = .{ .id = id, .value = val, .legacy = named.legacy };
     };
     const s = verified orelse return null;
     if (!try userIsMember(io, alloc, s.id)) return null;
     return s;
+}
+
+/// Whether a legacy-named value signed at `issued` is read: only one signed
+/// before the move (`http.legacy_issued_before_unix`); a later one is a plant.
+fn legacyTaken(issued: i64) bool {
+    return issued < http.legacy_issued_before_unix;
+}
+
+test "a legacy session signed after the move is a plant, not read; one before it is (metal-vmm QUEUE 170.8)" {
+    try std.testing.expect(legacyTaken(http.legacy_issued_before_unix - 1));
+    try std.testing.expect(!legacyTaken(http.legacy_issued_before_unix));
+    try std.testing.expectEqual(@as(i64, 1790000000), issuedOfSession("MQ.1790000000.mac"));
+    try std.testing.expectEqual(@as(i64, std.math.maxInt(i64)), issuedOfSession("MQ"));
+    try std.testing.expectEqual(@as(i64, std.math.maxInt(i64)), issuedOfSession("MQ.x.mac"));
+}
+
+/// When a session value says it was signed (its middle part); a value that
+/// does not say is as new as can be.
+fn issuedOfSession(val: []const u8) i64 {
+    var it = std.mem.splitScalar(u8, val, '.');
+    _ = it.next();
+    const t = it.next() orelse return std.math.maxInt(i64);
+    return std.fmt.parseInt(i64, t, 10) catch std.math.maxInt(i64);
 }
 
 /// **A SESSION UNDER ITS LEGACY NAME IS MOVED ON ITS NEXT GET** (metal-vmm

@@ -229,7 +229,9 @@ pub fn reissue(io: Io, alloc: Alloc, req: *std.http.Server.Request, client: ?[]c
         .invalid => {},
     }
     // One unsigned value only: of several, which is meant cannot be told.
-    // Never issued unsigned under the new name.
+    // Never issued unsigned under the new name, and never read after the
+    // legacy names' end date (170.8's cold review).
+    if (now >= http.legacy_names_until_unix) return null;
     const value = switch (try http.cookie(req, alloc, legacy_cookie_name)) {
         .one => |v| v,
         .none, .several => return null,
