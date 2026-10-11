@@ -20,7 +20,6 @@ const Topic = @import("chat_conv.zig").Topic;
 const Alloc = std.mem.Allocator;
 const Request = std.http.Server.Request;
 const htmlEscape = html.htmlEscape; // internal alias; impl in html.zig
-const asset_v = chrome.asset_v; // internal alias; canonical const in chat_chrome.zig
 
 /// The sibling bundles the conversation page loads, in document order (after the
 /// head's colors.js + chat_theme.js).
@@ -46,8 +45,8 @@ pub fn firstTopicPage(req: *Request, io: Io, alloc: Alloc, uid: []const u8, base
     var page = try chrome.page(alloc, "Chat", title, viewer, "chat");
     const b = &page.body;
     try b.print(alloc, "<div id=\"chat-first-topic\" data-conv-base=\"{s}\"></div>", .{try htmlEscape(alloc, base)});
-    try b.print(alloc, "<script src=\"/chat/chat_add_topic.js?v={s}\"></script>", .{asset_v});
-    try b.print(alloc, "<script src=\"/chat/chat_first_topic.js?v={s}\"></script>", .{asset_v});
+    try b.appendSlice(alloc, try chrome.script(alloc, "chat_add_topic.js"));
+    try b.appendSlice(alloc, try chrome.script(alloc, "chat_first_topic.js"));
     try page.send(req, .ok);
 }
 
@@ -96,9 +95,7 @@ pub fn conversationPage(req: *Request, io: Io, alloc: Alloc, uid: []const u8, to
 
     // sibling bundles, in document order, then close #chat-root + the chrome.
     try b.appendSlice(alloc, "</div>");
-    for (page_scripts) |name| {
-        try b.print(alloc, "<script src=\"/chat/{s}?v={s}\"></script>", .{ name, asset_v });
-    }
+    inline for (page_scripts) |name| try b.appendSlice(alloc, try chrome.script(alloc, name));
     try page.send(req, .ok);
 }
 

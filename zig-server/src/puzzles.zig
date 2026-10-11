@@ -150,7 +150,15 @@ fn page(req: *std.http.Server.Request, io: Io, alloc: Alloc, user_id: []const u8
     const flag_dsl = try std.fmt.allocPrint(alloc, "session_id: {d}\n\ncatalog:\n{s}\n", .{ session_id, indented });
     const flag_json = try std.fmt.allocPrint(alloc, "{f}", .{std.json.fmt(flag_dsl, .{})});
 
-    const body = try std.fmt.allocPrint(alloc, "{s} {s}{s}", .{ page_pre, flag_json, page_post });
+    const body = try std.fmt.allocPrint(alloc, "{s}{s}{s}{s}{s} {s}{s}", .{
+        page_pre,
+        try http.scriptTag(alloc, "/puzzles/engine.js", engine_js),
+        try http.scriptTag(alloc, "/puzzles/puzzle.js", puzzle_js),
+        try http.scriptTag(alloc, "/puzzles/engine_glue.js", engine_glue_js),
+        page_pre_tail,
+        flag_json,
+        page_post,
+    });
     try req.respond(body, .{ .extra_headers = &.{http.html_ct} });
 }
 
@@ -202,9 +210,12 @@ const page_pre =
     \\</style>
     \\</head><body>
     \\<div id="root"></div>
-    \\<script src="/puzzles/engine.js"></script>
-    \\<script src="/puzzles/puzzle.js"></script>
-    \\<script src="/puzzles/engine_glue.js"></script>
+    \\
+;
+
+/// After the scripts (`page` names them by their bytes).
+const page_pre_tail =
+    \\
     \\<script>
     \\  var app = Elm.Puzzle.init({ node: document.getElementById("root"), flags:
 ;

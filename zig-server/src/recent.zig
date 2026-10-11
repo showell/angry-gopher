@@ -78,8 +78,7 @@ fn renderRecentPage(req: *Request, io: Io, alloc: Alloc, uid: []const u8) !void 
     try b.appendSlice(alloc, "<div class=\"chat-notify\" id=\"chat-notify\"></div>");
     try b.appendSlice(alloc, "<div id=\"recent-mount\"></div>");
     try emitRecentData(b, alloc, items);
-    try b.print(alloc, "<script src=\"/chat/recent.js?v={s}\"></script>" ++
-        "<script src=\"/chat/notify.js?v={s}\"></script>", .{ chrome.asset_v, chrome.asset_v });
+    inline for (.{ "recent.js", "notify.js" }) |name| try b.appendSlice(alloc, try chrome.script(alloc, name));
     try page.send(req, .ok);
 }
 

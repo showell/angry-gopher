@@ -42,7 +42,6 @@ const htmlEscape = html.htmlEscape; // internal alias; the impl lives in html.zi
 const chrome = @import("chat_chrome.zig");
 const page = @import("chat_page.zig");
 const sse = @import("chat_sse.zig");
-const asset_v = chrome.asset_v; // internal alias; the canonical const lives in chat_chrome.zig
 const edge = @import("edge.zig");
 const docs = @import("docs.zig");
 const reading_list = @import("reading_list.zig");
@@ -68,43 +67,6 @@ const max_message_bytes = limits.body.chat_message;
 // with the page renderer (chat_page.zig) so neither side re-discriminates kind.
 const Conv = @import("chat_conv.zig").Conv;
 const Topic = @import("chat_conv.zig").Topic;
-
-const Asset = struct { name: []const u8, body: []const u8 };
-
-/// The embedded prod client bundles (wired in build.zig). Served verbatim at
-/// /chat/<name> with a JS content type.
-const assets = [_]Asset{
-    .{ .name = "colors.js", .body = @embedFile("chat_js_colors") },
-    .{ .name = "viewport.js", .body = @embedFile("chat_js_viewport") },
-    .{ .name = "chat_theme.js", .body = @embedFile("chat_js_theme") },
-    .{ .name = "chrome_drawer.js", .body = @embedFile("chat_js_chrome_drawer") },
-    .{ .name = "chat_image_popup.js", .body = @embedFile("chat_js_image_popup") },
-    .{ .name = "chat_code_popup.js", .body = @embedFile("chat_js_code_popup") },
-    .{ .name = "chat_time_popup.js", .body = @embedFile("chat_js_time_popup") },
-    .{ .name = "chat_save_popup.js", .body = @embedFile("chat_js_save_popup") },
-    .{ .name = "message.js", .body = @embedFile("chat_js_message") },
-    .{ .name = "message_view.js", .body = @embedFile("chat_js_message_view") },
-    .{ .name = "nav_stack.js", .body = @embedFile("chat_js_nav_stack") },
-    .{ .name = "middle_pane.js", .body = @embedFile("chat_js_middle_pane") },
-    .{ .name = "chat_search.js", .body = @embedFile("chat_js_search") },
-    .{ .name = "chat_drag_to_pin.js", .body = @embedFile("chat_js_drag_to_pin") },
-    .{ .name = "chat_add_topic.js", .body = @embedFile("chat_js_add_topic") },
-    .{ .name = "chat_first_topic.js", .body = @embedFile("chat_js_first_topic") },
-    .{ .name = "chat_left_sidebar.js", .body = @embedFile("chat_js_left_sidebar") },
-    .{ .name = "chat_right_sidebar.js", .body = @embedFile("chat_js_right_sidebar") },
-    .{ .name = "chat_emoji.js", .body = @embedFile("chat_js_emoji") },
-    .{ .name = "chat_reactions.js", .body = @embedFile("chat_js_reactions") },
-    .{ .name = "chat_compose.js", .body = @embedFile("chat_js_compose") },
-    .{ .name = "chat_help.js", .body = @embedFile("chat_js_help") },
-    .{ .name = "chat_responsive.js", .body = @embedFile("chat_js_responsive") },
-    .{ .name = "chat.js", .body = @embedFile("chat_js_chat") },
-    .{ .name = "notify.js", .body = @embedFile("chat_js_notify") },
-    .{ .name = "docs.js", .body = @embedFile("chat_js_docs") },
-    .{ .name = "recent.js", .body = @embedFile("chat_js_recent") },
-    .{ .name = "styles.js", .body = @embedFile("chat_js_styles") },
-    .{ .name = "images.js", .body = @embedFile("chat_js_images") },
-    .{ .name = "code.js", .body = @embedFile("chat_js_code") },
-};
 
 // ── dispatch ───────────────────────────────────────────────────────────────
 
@@ -614,7 +576,7 @@ fn rawTranscript(req: *Request, io: Io, alloc: Alloc, conv_dir: []const u8, sid:
 
 /// serveAsset serves an embedded client bundle by file name (no leading slash).
 fn serveAsset(req: *Request, name: []const u8) !void {
-    for (assets) |a| {
+    for (chrome.assets) |a| {
         if (std.mem.eql(u8, a.name, name)) {
             return http.serveEmbedded(req, a.body, http.js_ct);
         }

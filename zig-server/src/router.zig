@@ -261,9 +261,9 @@ fn routed(req: *std.http.Server.Request, io: Io, alloc: std.mem.Allocator, bus: 
     const path = stripQuery(try http.target(req, alloc));
 
     if (matchPrefix(path, "/driving")) |sub| {
-        try driving.handle(req, sub);
+        try driving.handle(req, alloc, sub);
     } else if (matchPrefix(path, "/delivery")) |sub| {
-        try delivery.handle(req, sub);
+        try delivery.handle(req, alloc, sub);
     } else if (matchPrefix(path, "/chess")) |sub| {
         // Public + ungated like /driving: little chess toys (Knight's Tour,
         // Eight Queens) + /chess/code, the sources-as-exhibit page. The viewer
@@ -282,7 +282,7 @@ fn routed(req: *std.http.Server.Request, io: Io, alloc: std.mem.Allocator, bus: 
     } else if (matchPrefix(path, "/tutorial")) |sub| {
         // Public + ungated: the Lyn Rummy beginner tutorial — its audience
         // is people who haven't made an account yet.
-        try tutorial.handle(req, sub);
+        try tutorial.handle(req, alloc, sub);
     } else if (matchPrefix(path, "/gallery")) |sub| {
         // Hidden-for-now: unlinked but public + ungated. Serves the stylized app
         // images (free-standing content read from gallery/) for the home page.
@@ -365,7 +365,7 @@ fn matchPrefix(path: []const u8, prefix: []const u8) ?[]const u8 {
     return null;
 }
 
-/// stripQuery returns the target up to the first '?' (e.g. /driving/blitter.js?v=…).
+/// stripQuery returns the target up to the first '?' (e.g. /driving/blitter.js?h=…).
 fn stripQuery(target: []const u8) []const u8 {
     if (std.mem.indexOfScalar(u8, target, '?')) |q| return target[0..q];
     return target;
@@ -470,6 +470,66 @@ test "every embedded asset is kept by the browser and asked about each use: ETag
     }
 }
 
+test "every page names its scripts by their bytes, and a script asked for by its hash is never asked about again: immutable (no GET at all)" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var site = try UidSite.init(a, io);
+    defer site.deinit();
+    const meter = @import("mem_meter.zig").useForTest(std.heap.page_allocator); // a send allocates through it
+    defer meter.restore();
+    // A player for the games; two members and a topic between them for chat.
+    const me = try signedUid(a, try player.allocate(io, a, "Ada"));
+    const ada = try users.allocateUser(io, a, "Ada");
+    try users.setUserPassword(io, a, ada, "a password for Ada");
+    const bo = try users.allocateUser(io, a, "Bo");
+    try users.setUserPassword(io, a, bo, "a password for Bo");
+    const cookies = try std.fmt.allocPrint(a, "{s}; gopher_auth={s}", .{ me, (try users.signSessionNow(io, a, ada)).? });
+    const dm = try std.fmt.allocPrint(a, "/chat/c/{s}_{s}/scripts", .{ ada, bo });
+    const body = "markdown=hello";
+    const sent = try serve(a, io, try std.fmt.allocPrint(a, "POST {s}/send HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: {d}\r\n\r\n{s}", .{ dm, cookies, body.len, body }));
+    try testing.expect(status(sent)[0] == '2' or status(sent)[0] == '3');
+
+    const pages = [_][]const u8{
+        dm,          "/chat/recent", "/chat/images", "/chat/code",    "/chat/docs",    "/chat/links",
+        "/game",     "/puzzles",     "/driving",     "/chess/knight", "/chess/queens", "/delivery",
+        "/tutorial",
+    };
+    for (pages) |page| {
+        errdefer std.debug.print("page {s}\n", .{page});
+        const got = try UidSite.ask(a, io, page, cookies);
+        try testing.expectEqualStrings("200 OK", status(got));
+        const html = responseBody(got);
+        var scripts: u32 = 0;
+        var at: usize = 0;
+        while (std.mem.indexOfPos(u8, html, at, "<script")) |tag| {
+            const close = std.mem.indexOfScalarPos(u8, html, tag, '>') orelse return error.UnclosedTag;
+            at = close;
+            const attrs = html[tag..close];
+            const src_at = std.mem.indexOf(u8, attrs, "src=\"") orelse continue;
+            const src_from = src_at + "src=\"".len;
+            const src = attrs[src_from .. std.mem.indexOfScalarPos(u8, attrs, src_from, '"') orelse return error.UnclosedSrc];
+            if (src.len == 0 or src[0] != '/') continue;
+            errdefer std.debug.print("script {s}\n", .{src});
+            scripts += 1;
+            const q = std.mem.indexOf(u8, src, "?h=") orelse return error.NoHash;
+            const asked = try UidSite.ask(a, io, src, cookies);
+            try testing.expectEqualStrings("200 OK", status(asked));
+            try testing.expectEqualStrings("public, max-age=31536000, immutable", responseHeader(asked, "cache-control") orelse "");
+            try testing.expectEqualStrings(try std.fmt.allocPrint(a, "\"{s}\"", .{src[q + 3 ..]}), responseHeader(asked, "etag") orelse "");
+            // The same path with another hash: today's bytes, asked about each use.
+            const stale = try UidSite.ask(a, io, try std.fmt.allocPrint(a, "{s}?h=0", .{src[0..q]}), cookies);
+            try testing.expectEqualStrings("200 OK", status(stale));
+            try testing.expectEqualStrings("no-cache", responseHeader(stale, "cache-control") orelse "");
+            try testing.expectEqualStrings(responseBody(asked), responseBody(stale));
+        }
+        try testing.expect(scripts > 0);
+    }
+}
+
 test "route: the table answers, and an unknown path is a 404" {
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();
@@ -505,8 +565,8 @@ test "route: a query string never changes which arm is taken" {
     defer threaded.deinit();
     const io = threaded.io();
 
-    // stripQuery's whole job: the asset URLs carry a cache-busting ?v=.
-    try testing.expectEqualStrings("200 OK", status(try get(a, io, "/tutorial?v=zig")));
+    // stripQuery's whole job: the asset URLs carry their hash, ?h= (http.hashedSrc).
+    try testing.expectEqualStrings("200 OK", status(try get(a, io, "/tutorial?h=0")));
 }
 
 test "route: the game surfaces send a nameless visitor to /play, not into the store" {

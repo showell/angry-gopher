@@ -20,14 +20,14 @@ const page =
     "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">" ++
     "<title>Delivery Router</title>" ++
     "<style>html,body{margin:0;height:100%;background:#0d1b2a;overflow:hidden}canvas{display:block}</style>" ++
-    "</head><body>" ++
-    "<script src=\"/delivery/app.js\"></script>" ++
-    "</body></html>";
+    "</head><body>";
+const page_tail = "</body></html>";
 
 /// handle dispatches /delivery/* — the route table, a switch on the path tail.
-pub fn handle(req: *std.http.Server.Request, sub: []const u8) !void {
+pub fn handle(req: *std.http.Server.Request, alloc: std.mem.Allocator, sub: []const u8) !void {
     if (sub.len == 0 or std.mem.eql(u8, sub, "/")) {
-        try req.respond(page, .{ .extra_headers = &.{http.html_ct} });
+        const body = try std.mem.concat(alloc, u8, &.{ page, try http.scriptTag(alloc, "/delivery/app.js", app_js), page_tail });
+        try req.respond(body, .{ .extra_headers = &.{http.html_ct} });
     } else if (std.mem.eql(u8, sub, "/app.js")) {
         try http.serveEmbedded(req, app_js, http.js_ct);
     } else if (std.mem.eql(u8, sub, "/solver.wasm")) {

@@ -155,11 +155,11 @@ fn renderDocsPage(req: *Request, io: Io, alloc: Alloc, uid: []const u8, list: []
     if (slug.len != 0) {
         try b.appendSlice(alloc, "<dialog id=\"docs-posted-dialog\" class=\"docs-alert-dialog\">" ++
             "<p>Doc sent to chat.</p><button type=\"button\" id=\"docs-posted-ok\">OK</button></dialog>");
-        try b.print(alloc, "<script src=\"/chat/docs.js?v={s}\"></script>", .{chrome.asset_v});
+        try b.appendSlice(alloc, try chrome.script(alloc, "docs.js"));
     }
     // notify.js loads even on the docs landing (the favicon alert + #chat-notify
     // strip should work here too).
-    try b.print(alloc, "<script src=\"/chat/notify.js?v={s}\"></script>", .{chrome.asset_v});
+    try b.appendSlice(alloc, try chrome.script(alloc, "notify.js"));
     try page.send(req, .ok);
 }
 

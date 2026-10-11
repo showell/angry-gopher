@@ -24,12 +24,11 @@ const page =
     "<!DOCTYPE html>\n" ++
     "<html lang=\"en\"><head><meta charset=\"utf-8\">" ++
     "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">" ++
-    "<title>Safari Screensaver</title></head><body>" ++
-    "<script src=\"/driving/blitter.js\"></script>" ++
-    "</body></html>";
+    "<title>Safari Screensaver</title></head><body>";
+const page_tail = "</body></html>";
 
 /// handle dispatches /driving/* — the route table, a switch on the path tail.
-pub fn handle(req: *std.http.Server.Request, sub: []const u8) !void {
+pub fn handle(req: *std.http.Server.Request, alloc: std.mem.Allocator, sub: []const u8) !void {
     // -Dfake_leak only: leak a few bytes per hit on the metered base allocator and
     // drop the pointer, so /debug/mem climbs ~linearly and the stress harness's
     // detector can be validated against a known leak. Compiled out of normal builds
@@ -41,7 +40,8 @@ pub fn handle(req: *std.http.Server.Request, sub: []const u8) !void {
     }
 
     if (sub.len == 0 or std.mem.eql(u8, sub, "/")) {
-        try req.respond(page, .{ .extra_headers = &.{http.html_ct} });
+        const body = try std.mem.concat(alloc, u8, &.{ page, try http.scriptTag(alloc, "/driving/blitter.js", safari_blitter_js), page_tail });
+        try req.respond(body, .{ .extra_headers = &.{http.html_ct} });
     } else if (std.mem.eql(u8, sub, "/blitter.js")) {
         try http.serveEmbedded(req, safari_blitter_js, http.js_ct);
     } else if (std.mem.eql(u8, sub, "/safari.wasm")) {

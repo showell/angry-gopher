@@ -46,10 +46,7 @@ fn renderImagesPage(req: *Request, io: Io, alloc: Alloc, uid: []const u8) !void 
     try b.appendSlice(alloc, "<div class=\"chat-notify\" id=\"chat-notify\"></div>");
     try b.appendSlice(alloc, "<div id=\"images-mount\"></div>");
     try emitImagesData(b, alloc, entries);
-    try b.print(alloc, "<script src=\"/chat/styles.js?v={s}\"></script>" ++
-        "<script src=\"/chat/chat_image_popup.js?v={s}\"></script>" ++
-        "<script src=\"/chat/images.js?v={s}\"></script>" ++
-        "<script src=\"/chat/notify.js?v={s}\"></script>", .{ chrome.asset_v, chrome.asset_v, chrome.asset_v, chrome.asset_v });
+    inline for (.{ "styles.js", "chat_image_popup.js", "images.js", "notify.js" }) |name| try b.appendSlice(alloc, try chrome.script(alloc, name));
     try page.send(req, .ok);
 }
 

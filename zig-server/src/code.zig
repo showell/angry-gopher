@@ -39,10 +39,7 @@ fn renderCodePage(req: *Request, io: Io, alloc: Alloc, uid: []const u8) !void {
     try b.appendSlice(alloc, "<div class=\"chat-notify\" id=\"chat-notify\"></div>");
     try b.appendSlice(alloc, "<div id=\"code-mount\"></div>");
     try emitCodeData(b, alloc, entries);
-    try b.print(alloc, "<script src=\"/chat/styles.js?v={s}\"></script>" ++
-        "<script src=\"/chat/chat_code_popup.js?v={s}\"></script>" ++
-        "<script src=\"/chat/code.js?v={s}\"></script>" ++
-        "<script src=\"/chat/notify.js?v={s}\"></script>", .{ chrome.asset_v, chrome.asset_v, chrome.asset_v, chrome.asset_v });
+    inline for (.{ "styles.js", "chat_code_popup.js", "code.js", "notify.js" }) |name| try b.appendSlice(alloc, try chrome.script(alloc, name));
     try page.send(req, .ok);
 }
 

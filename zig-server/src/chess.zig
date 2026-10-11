@@ -31,9 +31,13 @@ fn shell(comptime title: []const u8, comptime config: []const u8) []const u8 {
         "<html lang=\"en\"><head><meta charset=\"utf-8\">" ++
         "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">" ++
         "<title>" ++ title ++ "</title></head><body>" ++
-        "<script>window.CHESS_TOY = " ++ config ++ ";</script>" ++
-        "<script src=\"/chess/board.js\"></script>" ++
-        "</body></html>";
+        "<script>window.CHESS_TOY = " ++ config ++ ";</script>";
+}
+
+/// A toy's page: its shell, then board.js named by its bytes.
+fn toy(req: *std.http.Server.Request, alloc: std.mem.Allocator, shell_html: []const u8) !void {
+    const body = try std.mem.concat(alloc, u8, &.{ shell_html, try http.scriptTag(alloc, "/chess/board.js", chess_board_js), "</body></html>" });
+    try req.respond(body, .{ .extra_headers = &.{http.html_ct} });
 }
 
 const knight_page = shell("Knight's Tour",
@@ -194,9 +198,9 @@ pub fn handle(req: *std.http.Server.Request, alloc: std.mem.Allocator, name: []c
     if (sub.len == 0 or std.mem.eql(u8, sub, "/")) {
         try respondIndex(req, alloc, name);
     } else if (std.mem.eql(u8, sub, "/knight")) {
-        try req.respond(knight_page, .{ .extra_headers = &.{http.html_ct} });
+        try toy(req, alloc, knight_page);
     } else if (std.mem.eql(u8, sub, "/queens")) {
-        try req.respond(queens_page, .{ .extra_headers = &.{http.html_ct} });
+        try toy(req, alloc, queens_page);
     } else if (std.mem.eql(u8, sub, "/code")) {
         try respondCodePage(req, alloc);
     } else if (std.mem.eql(u8, sub, "/board.js")) {

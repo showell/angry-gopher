@@ -250,7 +250,17 @@ fn playPage(req: *Request, io: Io, alloc: Alloc, user_id: []const u8, session_id
     // The two spaces in the format are the literal spaces after `=` and after
     // `playerName:`; keeping them here avoids fragile trailing spaces in the
     // play_a / play_b multiline literals.
-    const body = try std.fmt.allocPrint(alloc, "{s} {s}{s} {s}{s}", .{ play_a, initial, play_b, name_json, play_c });
+    const body = try std.fmt.allocPrint(alloc, "{s}{s}{s}{s}{s} {s}{s} {s}{s}", .{
+        play_a,
+        try http.scriptTag(alloc, "/game/engine.js", engine_js),
+        try http.scriptTag(alloc, "/game/elm.js", elm_js),
+        try http.scriptTag(alloc, "/game/engine_glue.js", engine_glue_js),
+        play_a_tail,
+        initial,
+        play_b,
+        name_json,
+        play_c,
+    });
     try req.respond(body, .{ .extra_headers = &.{http.html_ct} });
 }
 
@@ -412,9 +422,12 @@ const play_a =
     \\</div>
     \\<div class="app-main">
     \\<div id="root"></div>
-    \\<script src="/game/engine.js"></script>
-    \\<script src="/game/elm.js"></script>
-    \\<script src="/game/engine_glue.js"></script>
+    \\
+;
+
+/// After the scripts (`playPage` names them by their bytes).
+const play_a_tail =
+    \\
     \\<script>
     \\  var initialSessionId =
 ;
