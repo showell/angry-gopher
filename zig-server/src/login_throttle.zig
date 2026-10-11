@@ -324,3 +324,74 @@ test "a full table never evicts a throttled slot, so a flood cannot flush an acc
     }
     try testing.expect(check(tio, victim, "1") == .address); // still throttled
 }
+
+test "each bound: one failure under it is checked, the bound itself is refused" {
+    reset();
+    defer reset();
+    at(11_000);
+    const addr = "203.0.113.30";
+    for (0..addr_fails - 1) |_| recordFailure(tio, addr, "5");
+    try testing.expect(check(tio, addr, "5") == null);
+    recordFailure(tio, addr, "5");
+    try testing.expect(check(tio, addr, "5") == .address);
+
+    const acct = "6";
+    for (0..account_fails - 1) |i| {
+        var buf: [20]u8 = undefined;
+        recordFailure(tio, std.fmt.bufPrint(&buf, "10.2.{d}.{d}", .{ i / 250, i % 250 }) catch unreachable, acct);
+    }
+    try testing.expect(check(tio, null, acct) == null);
+    recordFailure(tio, null, acct);
+    try testing.expect(check(tio, null, acct) == .account);
+
+    const creator = "203.0.113.31";
+    for (0..create_max - 1) |_| recordCreate(tio, creator);
+    try testing.expect(createAllowed(tio, creator) == null);
+    recordCreate(tio, creator);
+    try testing.expect(createAllowed(tio, creator) == .creates);
+}
+
+test "each window: its last second still refuses, the second it ends admits" {
+    reset();
+    defer reset();
+    const t: i64 = 13_000;
+    at(t);
+    const addr = "198.51.100.30";
+    for (0..addr_fails) |_| recordFailure(tio, addr, "7");
+    for (0..account_fails) |_| recordFailure(tio, null, "8");
+    for (0..create_max) |_| recordCreate(tio, addr);
+
+    at(t + addr_window_s - 1);
+    try testing.expect(check(tio, addr, "7") == .address);
+    at(t + addr_window_s);
+    try testing.expect(check(tio, addr, "7") == null);
+
+    at(t + account_window_s - 1);
+    try testing.expect(check(tio, null, "8") == .account);
+    at(t + account_window_s);
+    try testing.expect(check(tio, null, "8") == null);
+
+    at(t + create_window_s - 1);
+    try testing.expect(createAllowed(tio, addr) == .creates);
+    at(t + create_window_s);
+    try testing.expect(createAllowed(tio, addr) == null);
+}
+
+test "a failure in a window's last second counts in it; one in the second it ends starts a new window" {
+    reset();
+    defer reset();
+    const t: i64 = 17_000;
+    const inside = "198.51.100.40";
+    const after = "198.51.100.41";
+    at(t);
+    for (0..addr_fails - 1) |_| {
+        recordFailure(tio, inside, "9");
+        recordFailure(tio, after, "9");
+    }
+    at(t + addr_window_s - 1);
+    recordFailure(tio, inside, "9");
+    try testing.expect(check(tio, inside, "9") == .address);
+    at(t + addr_window_s);
+    recordFailure(tio, after, "9");
+    try testing.expect(check(tio, after, "9") == null);
+}
