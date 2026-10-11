@@ -234,10 +234,12 @@ pub fn appendMessage(io: Io, alloc: Alloc, bus: *Bus, meta: ConvMeta, conv_dir: 
     // takes the message, or drops itself whole if it cannot.
     search_index.noteAppend(io, conv_dir, sid, msg);
 
-    // Fan out to live subscribers on this conv/sid (best-effort).
-    const key = try std.fmt.allocPrint(alloc, "{s}/{s}", .{ conv_key, sid });
-    const blob = try busBlob(alloc, index, from_name, at, id, cid, markdown);
-    bus.publish(key, blob);
+    // **STORED IS DONE** (metal-vmm QUEUE 172): from here nothing fails the
+    // send, which a client would answer by sending the message again. The
+    // live publish and every surface after it are best-effort, each failure
+    // counted and said (/admin/host).
+    publishLive(alloc, bus, conv_key, sid, index, from_name, at, id, cid, markdown) catch |e|
+        fanoutFailed("live", "every viewer", e, conv_key, sid);
 
     // Cross-page fanout: notify + recent + images + code,
     // per member, to their per-uid bus, plus a sidebar topic-added on the
@@ -281,9 +283,14 @@ pub fn appendReaction(io: Io, alloc: Alloc, bus: *Bus, conv_dir: []const u8, con
     const line = try reactionLine(alloc, msg_num, uid, from_name, emoji, on, at);
     _ = try store.append(io, alloc, try reactionsPath(alloc, conv_dir, sid), try std.fmt.allocPrint(alloc, "{s}\n", .{line}));
 
+    // Stored is done (as for a message): the live publish is best-effort.
+    publishReaction(alloc, bus, conv_key, sid, line) catch |e| fanoutFailed("live reaction", "every viewer", e, conv_key, sid);
+    return line;
+}
+
+fn publishReaction(alloc: Alloc, bus: *Bus, conv_key: []const u8, sid: []const u8, line: []const u8) !void {
     const key = try std.fmt.allocPrint(alloc, "{s}/{s}", .{ conv_key, sid });
     bus.publish(key, try std.fmt.allocPrint(alloc, "{{\"reaction\":{s}}}", .{line}));
-    return line;
 }
 
 /// reactionLine is the ONE place the sidecar's line shape is written. `on`
@@ -354,6 +361,18 @@ pub var fanout_failures: usize = 0;
 var fanout_last_buf: [192]u8 = undefined;
 var fanout_last: []const u8 = "";
 
+/// A fan-out step that failed, counted and said.
+fn fanoutFailed(surface: []const u8, who: []const u8, e: anyerror, conv_key: []const u8, sid: []const u8) void {
+    fanout_failures += 1;
+    fanout_last = std.fmt.bufPrint(&fanout_last_buf, "{s} for member {s}, {s}, on {s}/{s}", .{ surface, who, @errorName(e), conv_key, sid }) catch surface;
+}
+
+/// The new message to the topic's live subscribers.
+fn publishLive(alloc: Alloc, bus: *Bus, conv_key: []const u8, sid: []const u8, index: usize, from: []const u8, at: []const u8, id: []const u8, cid: []const u8, markdown: []const u8) !void {
+    const key = try std.fmt.allocPrint(alloc, "{s}/{s}", .{ conv_key, sid });
+    bus.publish(key, try busBlob(alloc, index, from, at, id, cid, markdown));
+}
+
 /// The fan-out's failures as /admin/host shows them.
 pub fn fanoutText(alloc: Alloc) ![]const u8 {
     if (fanout_failures == 0) return "none";
@@ -367,25 +386,28 @@ pub fn fanoutText(alloc: Alloc) ![]const u8 {
 /// before; a failure for one member's surface is counted and said, and never
 /// blocks the write or that member's other surfaces.
 fn fanoutCrossPage(io: Io, alloc: Alloc, bus: *Bus, meta: ConvMeta, conv_key: []const u8, sid: []const u8, msg: ChatMessage, from_id: []const u8, index: usize) void {
-    const base = convKeyBaseURL(alloc, conv_key) catch return;
-    const rec_url = std.fmt.allocPrint(alloc, "{s}/{s}", .{ base, sid }) catch return;
-    const excerpt = recent_feed.recentExcerpt(alloc, msg.markdown) catch "";
-    const tags = images_store.extractImageTags(alloc, msg.markdown) catch &.{};
-    const blocks = code_store.extractCodeBlocks(alloc, msg.markdown) catch &.{};
-    const src_url = images_store.imagesSourceURL(alloc, base, msg.id) catch base;
+    // What every surface shares: a failure here is counted, never a surface
+    // skipped in silence (metal-vmm QUEUE 172: images and code, durable and
+    // with no rebuild, were lost uncounted).
+    const base = convKeyBaseURL(alloc, conv_key) catch |e| return fanoutFailed("every surface", "every member", e, conv_key, sid);
+    const rec_url = std.fmt.allocPrint(alloc, "{s}/{s}", .{ base, sid }) catch |e| return fanoutFailed("every surface", "every member", e, conv_key, sid);
+    const excerpt = recent_feed.recentExcerpt(alloc, msg.markdown);
+    const tags = images_store.extractImageTags(alloc, msg.markdown);
+    const blocks = code_store.extractCodeBlocks(alloc, msg.markdown);
+    const src_url = images_store.imagesSourceURL(alloc, base, msg.id);
 
     // notify text is viewer-invariant (rec_url is the per-conv topic URL, the
     // notify-strip link). DMs read "X sent you a message on <sid>."; channels
     // read "X posted to <key> > <sid>."
-    const notify_text = (if (meta.kind == .channel)
+    const notify_text = if (meta.kind == .channel)
         std.fmt.allocPrint(alloc, "{s} posted to {s} > {s}.", .{ msg.from, conv_key, sid })
     else
-        std.fmt.allocPrint(alloc, "{s} sent you a message on {s}.", .{ msg.from, sid })) catch "";
+        std.fmt.allocPrint(alloc, "{s} sent you a message on {s}.", .{ msg.from, sid });
     // topic-added (sidebar) — only on the session's first message; viewer-invariant.
-    const topic_added = if (index == 0)
+    const topic_added: Alloc.Error![]const u8 = if (index == 0)
         std.fmt.allocPrint(alloc, "{{\"kind\":\"topic-added\",\"conv\":{f},\"sid\":{f},\"url\":{f}}}", .{
             std.json.fmt(conv_key, .{}), std.json.fmt(sid, .{}), std.json.fmt(rec_url, .{}),
-        }) catch ""
+        })
     else
         "";
 
@@ -412,10 +434,7 @@ fn fanoutCrossPage(io: Io, alloc: Alloc, bus: *Bus, meta: ConvMeta, conv_key: []
     // no rebuild).
     for (meta.members) |uid| {
         inline for (.{ "notify", "sidebar", "recent", "images", "code" }) |surface| {
-            @field(Fan, surface)(&fan, uid) catch |e| {
-                fanout_failures += 1;
-                fanout_last = std.fmt.bufPrint(&fanout_last_buf, "{s} for member {s}, {s}, on {s}/{s}", .{ surface, uid, @errorName(e), conv_key, sid }) catch surface;
-            };
+            @field(Fan, surface)(&fan, uid) catch |e| fanoutFailed(surface, uid, e, conv_key, sid);
         }
     }
 }
@@ -431,12 +450,14 @@ const Fan = struct {
     msg: ChatMessage,
     from_id: []const u8,
     rec_url: []const u8,
-    src_url: []const u8,
-    excerpt: []const u8,
-    tags: []const []const u8,
-    blocks: []const code_store.CodeBlock,
-    notify_text: []const u8,
-    topic_added: []const u8,
+    // What each surface needs, or why it could not be had: the surfaces
+    // that need it fail, counted, one member at a time.
+    src_url: Alloc.Error![]const u8,
+    excerpt: @typeInfo(@TypeOf(recent_feed.recentExcerpt)).@"fn".return_type.?,
+    tags: @typeInfo(@TypeOf(images_store.extractImageTags)).@"fn".return_type.?,
+    blocks: @typeInfo(@TypeOf(code_store.extractCodeBlocks)).@"fn".return_type.?,
+    notify_text: Alloc.Error![]const u8,
+    topic_added: Alloc.Error![]const u8,
 
     /// Every member EXCEPT the author is pinged. The favicon dot means "a
     /// partner did something"; you don't notify yourself about your own
@@ -450,15 +471,16 @@ const Fan = struct {
         var nj: std.ArrayList(u8) = .empty;
         try nj.print(f.alloc, "{{\"conv\":{f},\"session\":{f},\"text\":{f},\"link_url\":{f}}}", .{
             std.json.fmt(f.conv_key, .{}),    std.json.fmt(f.sid, .{}),
-            std.json.fmt(f.notify_text, .{}), std.json.fmt(f.rec_url, .{}),
+            std.json.fmt(try f.notify_text, .{}), std.json.fmt(f.rec_url, .{}),
         });
         f.bus.publish(try notifyBusKey(f.alloc, uid), nj.items);
     }
 
     /// topic-added to every member on the first message only.
     fn sidebar(f: *const Fan, uid: []const u8) !void {
-        if (f.topic_added.len == 0) return;
-        f.bus.publish(try sidebarBusKey(f.alloc, uid), f.topic_added);
+        const topic_added = try f.topic_added;
+        if (topic_added.len == 0) return;
+        f.bus.publish(try sidebarBusKey(f.alloc, uid), topic_added);
     }
 
     /// Every member sees the row (sender included). `who` renders "You" for
@@ -468,27 +490,29 @@ const Fan = struct {
         const where = recentWhere(f.io, f.alloc, f.meta, f.conv_key, uid) catch "";
         const who = if (std.mem.eql(u8, uid, f.from_id)) "You" else f.msg.from;
         var rj: std.ArrayList(u8) = .empty;
-        try recent_feed.encodeChatEvent(&rj, f.alloc, f.msg.date, f.rec_url, who, where, f.sid, f.excerpt, f.meta.kind == .dm);
+        try recent_feed.encodeChatEvent(&rj, f.alloc, f.msg.date, f.rec_url, who, where, f.sid, try f.excerpt, f.meta.kind == .dm);
         f.bus.publish(try recentBusKey(f.alloc, uid), rj.items);
     }
 
     /// Only when the message carried <img> tags.
     fn images(f: *const Fan, uid: []const u8) !void {
-        if (f.tags.len == 0) return;
-        const e = images_store.ImagesEntry{ .source_id = f.msg.id, .from = f.msg.from, .conv = f.conv_key, .at = f.msg.date, .images = f.tags };
+        const tags = try f.tags;
+        if (tags.len == 0) return;
+        const e = images_store.ImagesEntry{ .source_id = f.msg.id, .from = f.msg.from, .conv = f.conv_key, .at = f.msg.date, .images = tags };
         try images_store.appendImagesEntry(f.io, f.alloc, uid, e);
         var ij: std.ArrayList(u8) = .empty;
-        try images_store.encodeImagesEvent(&ij, f.alloc, e, f.src_url);
+        try images_store.encodeImagesEvent(&ij, f.alloc, e, try f.src_url);
         f.bus.publish(try imagesBusKey(f.alloc, uid), ij.items);
     }
 
     /// Only when the message carried fenced code blocks.
     fn code(f: *const Fan, uid: []const u8) !void {
-        if (f.blocks.len == 0) return;
-        const e = code_store.CodeEntry{ .source_id = f.msg.id, .from = f.msg.from, .conv = f.conv_key, .at = f.msg.date, .blocks = f.blocks };
+        const blocks = try f.blocks;
+        if (blocks.len == 0) return;
+        const e = code_store.CodeEntry{ .source_id = f.msg.id, .from = f.msg.from, .conv = f.conv_key, .at = f.msg.date, .blocks = blocks };
         try code_store.appendCodeEntry(f.io, f.alloc, uid, e);
         var cj: std.ArrayList(u8) = .empty;
-        try code_store.encodeCodeEvent(&cj, f.alloc, e, f.src_url);
+        try code_store.encodeCodeEvent(&cj, f.alloc, e, try f.src_url);
         f.bus.publish(try codeBusKey(f.alloc, uid), cj.items);
     }
 };
@@ -1893,4 +1917,57 @@ test "a refused block keeps its number: a recount counts blocks, so no id is giv
     _ = backfillSidecars(f.io, a, &dirs);
     try testing.expectEqual(@as(usize, 4), readCount(f.io, a, f.dir, "topic").?.count);
     try testing.expectEqual(@as(usize, 3), indexOf("topic_4", "topic").?);
+}
+
+test "a send that answers an error stored nothing, and one that stored answers success: memory that runs out after the append is a counted fan-out failure (metal-vmm QUEUE 172)" {
+    var threaded = std.Io.Threaded.init(testing.allocator, .{});
+    defer threaded.deinit();
+    var f: CountFixture = undefined;
+    try f.init(threaded.io());
+    defer f.deinit();
+    const a = f.arena.allocator();
+    const meta = ConvMeta{ .kind = .dm, .members = &[_][]const u8{ "1", "2" } };
+    const text = "a message with <img src=\"/x.png\"> and\n\n```\ncode\n```";
+    var fail_at: usize = 0;
+    var stored_one = false;
+    while (fail_at < 400) : (fail_at += 1) {
+        var failing = std.testing.FailingAllocator.init(a, .{ .fail_index = fail_at });
+        const before = try messageCount(f.io, a, f.dir, "topic");
+        const sent = appendMessage(f.io, failing.allocator(), &f.bus, meta, f.dir, "1_2", "topic", "Tester", "1", text, "");
+        const after = try messageCount(f.io, a, f.dir, "topic");
+        if (sent) |_| {
+            try testing.expectEqual(before + 1, after);
+            if (!failing.has_induced_failure) break; // every allocation passed
+            stored_one = true;
+        } else |_| {
+            if (after != before) {
+                std.debug.print("allocation {d} failed after the append: stored, and answered an error\n", .{fail_at});
+                return error.TestUnexpectedResult;
+            }
+        }
+    }
+    try testing.expect(stored_one);
+}
+
+test "a reaction that answers an error stored nothing (metal-vmm QUEUE 172)" {
+    var threaded = std.Io.Threaded.init(testing.allocator, .{});
+    defer threaded.deinit();
+    var f: CountFixture = undefined;
+    try f.init(threaded.io());
+    defer f.deinit();
+    const a = f.arena.allocator();
+    _ = try f.send("something to react to");
+    var fail_at: usize = 0;
+    while (fail_at < 100) : (fail_at += 1) {
+        var failing = std.testing.FailingAllocator.init(a, .{ .fail_index = fail_at });
+        const before = (try readReactions(f.io, a, f.dir, "topic")).len;
+        const got = appendReaction(f.io, failing.allocator(), &f.bus, f.dir, "1_2", "topic", 1, "1", "Tester", "👍", true);
+        const after = (try readReactions(f.io, a, f.dir, "topic")).len;
+        if (got) |_| {
+            if (!failing.has_induced_failure) break;
+        } else |_| if (after != before) {
+            std.debug.print("allocation {d} failed after the append: stored, and answered an error\n", .{fail_at});
+            return error.TestUnexpectedResult;
+        }
+    }
 }
