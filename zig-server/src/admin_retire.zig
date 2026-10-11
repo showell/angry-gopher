@@ -40,7 +40,7 @@ pub fn render(req: *Request, io: Io, alloc: Alloc, client: ?[]const u8) !void {
     const sent = (try http.readLimitedBody(req, alloc, limits.body.retire_form)) orelse return;
     const password = (try chat.formField(alloc, sent, "password")) orelse "";
     const in = try readForm(alloc, sent);
-    if (!users.checkUserPassword(io, alloc, ui.admin_uid, password)) {
+    if (!try users.checkUserPassword(io, alloc, ui.admin_uid, password)) {
         throttle.recordFailure(io, client, ui.admin_uid);
         return form(req, alloc, in, "That is not the password.", .forbidden);
     }

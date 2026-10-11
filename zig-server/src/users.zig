@@ -605,10 +605,11 @@ pub fn setUserPassword(io: Io, alloc: Alloc, id: []const u8, password: []const u
 }
 
 /// checkUserPassword verifies `password` against a member's stored bcrypt hash.
-/// false when the member has no password file.
-pub fn checkUserPassword(io: Io, alloc: Alloc, id: []const u8, password: []const u8) bool {
-    // absent-ok: fails closed: a password that cannot be read admits no one.
-    const stored = (readAuthFile(io, alloc, id, "password") catch return false) orelse return false;
+/// false when the member has no password file. A password that cannot be read,
+/// or a hash that is no hash, admits no one and is an error (a 500), never a
+/// wrong password counted toward the lockout (metal-vmm QUEUE 172).
+pub fn checkUserPassword(io: Io, alloc: Alloc, id: []const u8, password: []const u8) !bool {
+    const stored = (try readAuthFile(io, alloc, id, "password")) orelse return false;
     return auth.verifyPassword(std.mem.trimEnd(u8, stored, "\r\n"), password);
 }
 
@@ -791,9 +792,31 @@ test "fs: password set then verify; wrong and missing both reject" {
     try testing.expect(!try isMember(io, a, "100")); // a name, but no password yet
     try setUserPassword(io, a, "100", "hunter2");
     try testing.expect(try isMember(io, a, "100"));
-    try testing.expect(checkUserPassword(io, a, "100", "hunter2"));
-    try testing.expect(!checkUserPassword(io, a, "100", "wrong")); // wrong password
-    try testing.expect(!checkUserPassword(io, a, "999", "anything")); // no such member
+    try testing.expect(try checkUserPassword(io, a, "100", "hunter2"));
+    try testing.expect(!try checkUserPassword(io, a, "100", "wrong")); // wrong password
+    try testing.expect(!try checkUserPassword(io, a, "999", "anything")); // no such member
+}
+
+test "fs: a password that cannot be read, or a stored hash that is no hash, is an error, never a wrong password (metal-vmm QUEUE 172: one counted toward the lockout)" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var tmp = testing.tmpDir(.{});
+    defer tmp.cleanup();
+    const saved_roots = try tmpRoots(&tmp, a);
+    defer saved_roots.restore();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+
+    try setUserName(io, a, "100", "Tester");
+    // Its password file a folder: there, and unreadable.
+    try Io.Dir.cwd().createDirPath(io, try std.fs.path.join(a, &.{ auth_root, "100", "password" }));
+    try testing.expect(std.meta.isError(checkUserPassword(io, a, "100", "hunter2")));
+    // A hash torn or overwritten: no bcrypt string.
+    try setUserName(io, a, "101", "Other");
+    try store.write(io, a, try std.fs.path.join(a, &.{ auth_root, "101", "password" }), "$2b$12$" ++ "!" ** 53, .{ .private = true });
+    try testing.expect(std.meta.isError(checkUserPassword(io, a, "101", "hunter2")));
 }
 
 test "fs: upload quota reserves under the cap, refuses over it without mutating" {

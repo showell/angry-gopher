@@ -1731,7 +1731,7 @@ test "route: a release whose removals fail is not answered as done, and the acco
     try testing.expect(std.mem.startsWith(u8, status(out.written()), "500"));
     // The account is there, and still logs in.
     try testing.expect(try users.principalExists(io, a, "2"));
-    try testing.expect(users.checkUserPassword(io, a, "2", "hunter2"));
+    try testing.expect(try users.checkUserPassword(io, a, "2", "hunter2"));
     _ = try UidSite.disk.stat(io, a, data); // and its data, which the release could not remove
 }
 
@@ -1773,7 +1773,7 @@ test "route: a release whose last removal fails leaves an account that can relea
     try out.writer.flush();
     try testing.expect(std.mem.startsWith(u8, status(out.written()), "500"));
     // Still an account that logs in, to release again.
-    try testing.expect(users.checkUserPassword(io, a, "2", "hunter2"));
+    try testing.expect(try users.checkUserPassword(io, a, "2", "hunter2"));
     // And again, the disk willing: released, nothing left.
     refuse_under = "";
     try testing.expect(std.mem.indexOf(u8, try postForm(a, io, "/logout", member, "release=yes"), "500") == null);
@@ -1826,7 +1826,7 @@ test "route: a release whose removal inside the account fails keeps the password
         try out.writer.flush();
         try testing.expect(std.mem.startsWith(u8, status(out.written()), "500"));
         // Still an account that logs in, to release again.
-        try testing.expect(users.checkUserPassword(io, a, "2", "hunter2"));
+        try testing.expect(try users.checkUserPassword(io, a, "2", "hunter2"));
         // And again, the disk willing: released, nothing left.
         refuse_named = "";
         try testing.expect(std.mem.indexOf(u8, try postForm(a, io, "/logout", member, "release=yes"), "500") == null);

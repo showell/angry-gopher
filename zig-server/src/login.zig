@@ -194,7 +194,7 @@ fn gatedCheck(req: *Request, io: Io, alloc: Alloc, address: ?[]const u8, member_
         try req.respond(bound.text(), .{ .status = .too_many_requests });
         return .refused;
     }
-    if (!users.checkUserPassword(io, alloc, member_id, password)) {
+    if (!try users.checkUserPassword(io, alloc, member_id, password)) {
         throttle.recordFailure(io, address, member_id);
         return .wrong;
     }

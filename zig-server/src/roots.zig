@@ -159,9 +159,10 @@ pub fn migrateSecret(io: Io, alloc: std.mem.Allocator) void {
         // file's first bytes (or none) in auth/. Trusting it would remove the
         // only whole copy; a new copy that differs otherwise is the newer one
         // (rotated since), and the old is stale.
-        // absent-ok: a copy that cannot be read is not judged torn, and the old one stays.
         const torn = there and blk: {
+            // absent-ok: a copy that cannot be read is not judged torn, and the old one stays.
             const old_bytes = store.read(io, alloc, old_path, .unlimited) catch continue;
+            // absent-ok: as above: nothing is removed on a guess.
             const new_bytes = store.read(io, alloc, new_path, .unlimited) catch continue;
             break :blk new_bytes.len < old_bytes.len and std.mem.startsWith(u8, old_bytes, new_bytes);
         };
