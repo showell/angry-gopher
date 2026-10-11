@@ -99,45 +99,70 @@ window.ChatCompose = (function(){
   /* PRODUCT_DECISION: one upload path for images AND screencasts. The per-kind
      size limit is checked up front; the server's "kind" in the response decides
      whether we insert an <img> or a <video>. Other failures (e.g. the shared
-     lifetime cap) surface the server's own message. */
+     lifetime cap) surface the server's own message.
+     PRODUCT_DECISION: an upload is PATIENT and VISIBLE. A slow link (a 1.8 MB
+     photo from India took 27 s, 2026-10-11) shows its progress, by percent and
+     megabytes, and then "Saving"; one upload at a time, the Upload button off
+     while it runs; it gives up only after `upload_patience_ms`. XMLHttpRequest,
+     not fetch: fetch cannot report how much of a body has gone. */
+  var upload_patience_ms=5*60*1000;
+  var uploading=false;
+  function megabytes(n){ return (n/1048576).toFixed(1)+' MB'; }
   function uploadFile(file){
     if(!file) return;
+    if(uploading){
+      status.style.color=''; status.textContent='Still sending the last upload — one at a time, please.';
+      return;
+    }
     var isVideo=file.type.indexOf('video/')===0;
     var noun=isVideo?'screencast':'image';
     var cap=isVideo?MAX_VIDEO_BYTES:MAX_IMAGE_BYTES;
     if(file.size > cap){
       status.style.color='';
-      status.textContent='That '+noun+' is '+(file.size/1048576).toFixed(1)+' MB — too big to send (limit '+(cap/1048576)+' MB).'+(isVideo?'':' Try compressing or resizing it.');
+      status.textContent='That '+noun+' is '+megabytes(file.size)+' — too big to send (limit '+(cap/1048576)+' MB).'+(isVideo?'':' Try compressing or resizing it.');
       return;
     }
-    status.style.color=ChatColors.mutedFg; status.textContent='Uploading '+noun+'…';
+    uploading=true; uploadBtn.disabled=true;
+    status.style.color=ChatColors.mutedFg;
+    status.textContent='Uploading '+noun+': 0% of '+megabytes(file.size)+'…';
     var fd=new FormData(); fd.append('file',file);
-    fetch(SESSION_BASE+'/upload',{method:'POST',body:fd})
-      .then(function(r){
-        if(r.ok) return r.json();
-        return r.text().then(function(t){
-          t=(t||'').trim();
-          throw (t && t.charAt(0)!=='<' && t.length<200) ? t : 'Upload failed.';
-        });
-      })
-      .then(function(d){
-        if(d.kind==='video'){
-          insertAtCursor('<video src="'+d.url+'"></video>');
-        } else {
-          /* BROWSER_WORKAROUND: HTML <img> with width/height so browsers reserve
-             layout space before decode — keeps "scroll to bottom" stable when
-             the image lands. Server may return 0 for unknown dims (e.g. webp
-             without stdlib decoder); we omit the attrs in that case. */
-          var alt=(d.name||'image').replace(/["<>\r\n]/g,'');
-          var dims=(d.width>0 && d.height>0) ? ' width="'+d.width+'" height="'+d.height+'"' : '';
-          insertAtCursor('<img src="'+d.url+'" alt="'+alt+'"'+dims+'>');
-        }
-        status.textContent=''; status.style.color='';
-      })
-      .catch(function(msg){
-        status.style.color='';
-        status.textContent = (typeof msg==='string' && msg) ? msg : 'Upload failed.';
-      });
+    var xhr=new XMLHttpRequest();
+    xhr.open('POST', SESSION_BASE+'/upload');
+    xhr.timeout=upload_patience_ms;
+    xhr.upload.onprogress=function(e){
+      if(!e.lengthComputable) return;
+      var pct=Math.floor(100*e.loaded/e.total);
+      status.textContent = pct<100
+        ? 'Uploading '+noun+': '+pct+'% of '+megabytes(e.total)+'…'
+        : 'Saving '+noun+'…';
+    };
+    function done(msg){
+      uploading=false; uploadBtn.disabled=false;
+      status.style.color=''; status.textContent=msg;
+    }
+    xhr.onload=function(){
+      if(xhr.status<200 || xhr.status>=300){
+        var t=(xhr.responseText||'').trim();
+        return done((t && t.charAt(0)!=='<' && t.length<200) ? t : 'Upload failed.');
+      }
+      var d;
+      try { d=JSON.parse(xhr.responseText); } catch(e){ done('Upload failed: the answer did not read ('+e.message+').'); return; }
+      if(d.kind==='video'){
+        insertAtCursor('<video src="'+d.url+'"></video>');
+      } else {
+        /* BROWSER_WORKAROUND: HTML <img> with width/height so browsers reserve
+           layout space before decode — keeps "scroll to bottom" stable when
+           the image lands. Server may return 0 for unknown dims (e.g. webp
+           without stdlib decoder); we omit the attrs in that case. */
+        var alt=(d.name||'image').replace(/["<>\r\n]/g,'');
+        var dims=(d.width>0 && d.height>0) ? ' width="'+d.width+'" height="'+d.height+'"' : '';
+        insertAtCursor('<img src="'+d.url+'" alt="'+alt+'"'+dims+'>');
+      }
+      done('');
+    };
+    xhr.onerror=function(){ done('Upload failed: the connection dropped. Please try again.'); };
+    xhr.ontimeout=function(){ done('Upload gave up after '+(upload_patience_ms/60000)+' minutes. Please try again.'); };
+    xhr.send(fd);
   }
 
   function focus(){ textarea.focus(); }
