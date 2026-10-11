@@ -130,124 +130,23 @@ fn localTarget(target: []const u8) []const u8 {
     return target;
 }
 
+/// **THIS APPLICATION, AS THE LIBRARY SERVES IT** (webbox's site.zig): its
+/// route table is `routed`, private, so no host calls the table without the
+/// serving around it. A malformed form is the client's mistake, a 400, on
+/// every form (metal-vmm QUEUE 156(i)): one decoder (http.formField), where
+/// chat's own took a bad escape as text and the first of two fields, while
+/// players' refused the escape as a 500.
+const App = struct {
+    pub const routes = routed;
+};
+const Served = @import("site.zig").Site(App);
+
 /// route picks the handler by path prefix, passing the remainder (the path with
 /// the prefix stripped, e.g. "/app.js" or "/sessions/3/..."). The table below IS
 /// the site: every surface appears exactly once, and the comment on each arm
-/// says who may reach it.
-///
-/// **THE KEPT STREAM IS ITS ANSWER** (metal-vmm QUEUE 157(a)): the stream a
-/// handler kept, which the host must serve or drop (`streams.serveKept`,
-/// `streams.nextFrame`, `streams.drop`); Zig makes the caller use it. On an
-/// error it is dropped here, where a host that read `bus.kept` after `try`
-/// left a kept stream's subscriber in the Hub for ever.
-pub fn route(req: *std.http.Server.Request, io: Io, alloc: std.mem.Allocator, bus: *Bus) !?streams.Kept {
-    var sent: Sent = undefined;
-    // Small, on the stack: only a chunk's header is formatted in place, and
-    // anything longer passes straight to the connection's own buffer.
-    var buffer: [1024]u8 = undefined;
-    sent.lend(req, &buffer);
-    const done = routed(req, io, alloc, bus);
-    sent.giveBack(req);
-    return settle(bus, done) catch |e| {
-        // **A FAILURE IS A 500, NEVER SILENCE** (metal-vmm QUEUE 123, Steve:
-        // louder is better): an error that escapes a handler before its
-        // head is sent is answered here, for both hosts, and still goes on
-        // to the host to log. Once the head is out, the answer is the
-        // handler's, cut short, and only the connection's close can say so.
-        if (e == error.MalformedForm) {
-            // The client's, not the server's (http.formField): said as such,
-            // and nothing for the host to log. One decoder for every form
-            // (metal-vmm QUEUE 156(i)): chat's own took a bad escape as text
-            // and the first of two fields, while players' refused the escape
-            // as a 500.
-            if (!sent.any) req.respond("The form was malformed.\n", .{ .status = .bad_request, .keep_alive = false }) catch {};
-            return null;
-        }
-        answerFailure(req, &sent);
-        return e;
-    };
-}
-
-/// What `route` hands the host: the kept stream on success, taken off the
-/// bus; on an error, none, and a stream the handler kept before it failed is
-/// dropped, never left for a host to forget.
-fn settle(bus: *Bus, done: anyerror!void) anyerror!?streams.Kept {
-    const kept = bus.kept;
-    bus.kept = null;
-    done catch |e| {
-        if (kept) |k| streams.drop(bus.hub, k);
-        return e;
-    };
-    return kept;
-}
-
-/// **WHETHER ANY OF THE ANSWER WENT OUT** (metal-vmm QUEUE 127(b)): the
-/// reader's state cannot say, since reading a body moves it on as answering
-/// does. So the router lends each handler a writer of its own in place of
-/// the connection's, which passes every byte through to it, and notes that
-/// one was written. It buffers as the connection's does (the protocol's
-/// writers format chunk headers in place), and is given back, its buffer
-/// passed on unflushed, when the handler returns: before the host flushes
-/// or serves a kept stream, on the connection's own writer.
-const Sent = struct {
-    to: *std.Io.Writer,
-    any: bool,
-    writer: std.Io.Writer,
-
-    const vtable: std.Io.Writer.VTable = .{ .drain = drain, .sendFile = sendFile, .flush = flush };
-
-    fn lend(self: *Sent, req: *std.http.Server.Request, buffer: []u8) void {
-        self.* = .{ .to = req.server.out, .any = false, .writer = .{ .buffer = buffer, .vtable = &vtable } };
-        req.server.out = &self.writer;
-    }
-
-    /// Back to the connection's writer, with what this one still holds.
-    fn giveBack(self: *Sent, req: *std.http.Server.Request) void {
-        self.pass() catch {};
-        req.server.out = self.to;
-    }
-
-    /// What is buffered, to the connection's writer.
-    fn pass(self: *Sent) std.Io.Writer.Error!void {
-        const w = &self.writer;
-        if (w.end == 0) return;
-        self.any = true;
-        defer w.end = 0;
-        try self.to.writeAll(w.buffer[0..w.end]);
-    }
-
-    fn drain(w: *std.Io.Writer, data: []const []const u8, splat: usize) std.Io.Writer.Error!usize {
-        const self: *Sent = @alignCast(@fieldParentPtr("writer", w));
-        try self.pass();
-        const n = try self.to.writeSplat(data, splat);
-        if (n > 0) self.any = true;
-        return n;
-    }
-
-    fn sendFile(w: *std.Io.Writer, file_reader: *std.Io.File.Reader, limit: std.Io.Limit) std.Io.Writer.FileError!usize {
-        const self: *Sent = @alignCast(@fieldParentPtr("writer", w));
-        try self.pass();
-        const n = try self.to.sendFile(file_reader, limit);
-        if (n > 0) self.any = true;
-        return n;
-    }
-
-    fn flush(w: *std.Io.Writer) std.Io.Writer.Error!void {
-        const self: *Sent = @alignCast(@fieldParentPtr("writer", w));
-        try self.pass();
-        return self.to.flush();
-    }
-};
-
-/// The 500 for an error no byte of an answer went out before; nothing once
-/// one did. Not kept alive, so whatever of the request's body is unread
-/// stays unread. **ITS BODY NAMES NOTHING** (metal-vmm QUEUE 134(f)): an
-/// error's name says what of the server failed, which is the log's to know,
-/// not a client's; `route` returns the error for the host to log.
-fn answerFailure(req: *std.http.Server.Request, sent: *const Sent) void {
-    if (sent.any) return;
-    req.respond("The server failed.\n", .{ .status = .internal_server_error, .keep_alive = false }) catch {};
-}
+/// says who may reach it. The serving around it (the 500 for a failure, the
+/// 400 for a malformed form, the kept stream as the answer) is site.zig's.
+pub const route = Served.route;
 
 fn routed(req: *std.http.Server.Request, io: Io, alloc: std.mem.Allocator, bus: *Bus) !void {
     // **AN UNSIGNED gopher_uid IS RE-IDENTIFIED ONCE** (uid_cookie.zig): its
@@ -1887,36 +1786,6 @@ test "route: an error after a request's body was read is answered 500 too, never
     try testing.expect(server.out == &out.writer);
 }
 
-test "route: an error after the head went out is not answered again (metal-vmm QUEUE 127(b))" {
-    // A handler that answered, then failed: the answer stands, cut short or
-    // whole, and no second head follows it.
-    var arena = std.heap.ArenaAllocator.init(testing.allocator);
-    defer arena.deinit();
-    const a = arena.allocator();
-    var out: std.Io.Writer.Allocating = .init(a);
-    var reader: std.Io.Reader = .fixed("GET / HTTP/1.1\r\nHost: x\r\n\r\n");
-    var server = std.http.Server.init(&reader, &out.writer);
-    var req = try server.receiveHead();
-    req.head.keep_alive = false;
-    const failing = struct {
-        fn handle(r: *std.http.Server.Request) !void {
-            try r.respond("fine", .{ .keep_alive = false });
-            return error.AfterTheHead;
-        }
-    };
-    var sent: Sent = undefined;
-    var buffer: [4096]u8 = undefined;
-    sent.lend(&req, &buffer);
-    const got = failing.handle(&req);
-    sent.giveBack(&req);
-    try testing.expectError(error.AfterTheHead, got);
-    try testing.expect(sent.any);
-    answerFailure(&req, &sent);
-    try out.writer.flush();
-    try testing.expect(std.mem.startsWith(u8, out.written(), "HTTP/1.1 200"));
-    try testing.expect(std.mem.indexOf(u8, out.written(), "500") == null);
-}
-
 test "fs: a handler's error is answered 500, never with silence (metal-vmm QUEUE 123)" {
     // On metal, `GET /puzzles -> ReadFailed` reached the console and the
     // client got nothing (the box's durable sweep, seed 173): an error that
@@ -2197,26 +2066,6 @@ test "route: a GET re-signs a gopher_uid past half its life, so an active player
     try testing.expect(playingAs(try postForm(a, io, "/play", old, ""), "Nikhil"));
     // Young: no re-sign.
     try testing.expect(setUid(try UidSite.ask(a, io, "/play", try signedUid(a, id))) == null);
-}
-
-test "a stream a handler kept and then failed is dropped, and a kept one is the host's to take (metal-vmm QUEUE 157(a))" {
-    var threaded = std.Io.Threaded.init(testing.allocator, .{});
-    defer threaded.deinit();
-    var hub = Hub.init(threaded.io(), testing.allocator);
-    defer hub.entries.deinit(testing.allocator);
-    var b = Bus.of(&hub);
-    const sub = try b.open("k");
-    b.keep(.{ .sub = sub, .render = undefined });
-    try testing.expectError(error.HandlerFailed, settle(&b, error.HandlerFailed));
-    try testing.expectEqual(@as(usize, 0), hub.entries.items.len);
-    try testing.expect(b.kept == null);
-    // On success the stream is the answer, and off the bus.
-    const sub2 = try b.open("k");
-    b.keep(.{ .sub = sub2, .render = undefined });
-    const k = (try settle(&b, {})).?;
-    try testing.expect(b.kept == null);
-    streams.drop(&hub, k);
-    try testing.expectEqual(@as(usize, 0), hub.entries.items.len);
 }
 
 test "route: every game write is counted as exactly what it wrote: an annotation compacted, a line trimmed, a puzzle's first move with its meta (metal-vmm QUEUE 157(b))" {
