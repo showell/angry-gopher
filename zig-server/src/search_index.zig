@@ -451,6 +451,20 @@ pub fn rebuild(io: Io, scratch: Alloc) void {
     _ = buildAll(io, scratch);
 }
 
+/// **FOR A TEST: NO INDEX NOW, AND NONE AFTER** (`defer emptied.end()`;
+/// 157(e)), where tests dropped it at their start and deferred a second drop
+/// by hand.
+pub fn emptyForTest() Emptied {
+    drop();
+    return .{};
+}
+
+pub const Emptied = struct {
+    pub fn end(_: Emptied) void {
+        drop();
+    }
+};
+
 /// No index: the next search builds one. For tests, and failures.
 pub fn drop() void {
     if (the) |*i| i.deinit();
@@ -555,9 +569,10 @@ test "fs: a build out of memory fails, never an index missing what it could not 
     try store.write(io, a, try chat_store.sessionMdPath(a, try chat_store.dmConvDir(a, "1_2"), "t"), body.items, .{});
 
     var failing = testing.FailingAllocator.init(testing.allocator, .{});
-    const prev = mem_meter.replace(failing.allocator());
-    defer _ = mem_meter.replace(prev);
-    defer drop();
+    const meter = mem_meter.useForTest(failing.allocator());
+    defer meter.restore();
+    const emptied = emptyForTest();
+    defer emptied.end();
 
     // A scratch too small for the transcript: no index, not one without it.
     var small: [512]u8 = undefined;

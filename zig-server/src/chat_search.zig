@@ -207,6 +207,18 @@ pub fn admit(uid: []const u8, now_ms: i64) bool {
     return true;
 }
 
+/// **FOR A TEST: NO WINDOW NOW, AND NONE AFTER** (`defer forgot.end()`; 157(e)).
+pub fn forgetForTest() Forgot {
+    forgetAll();
+    return .{};
+}
+
+pub const Forgot = struct {
+    pub fn end(_: Forgot) void {
+        forgetAll();
+    }
+};
+
 /// Every window forgotten. For tests.
 pub fn forgetAll() void {
     const gpa = mem_meter.base();
@@ -230,9 +242,10 @@ test "a string in the answer is always a JSON string, its bytes that are not UTF
 }
 
 test "a few searches a second, then 429 until the second is over" {
-    const prev = mem_meter.replace(testing.allocator);
-    defer _ = mem_meter.replace(prev);
-    defer forgetAll();
+    const meter = mem_meter.useForTest(testing.allocator);
+    defer meter.restore();
+    const forgot = forgetForTest();
+    defer forgot.end();
     for (0..per_second) |_| try testing.expect(admit("7", 1000));
     try testing.expect(!admit("7", 1500));
     // Another person's searches are their own.

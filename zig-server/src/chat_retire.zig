@@ -529,9 +529,10 @@ test "fs: the dry run lists exactly what a confirm removes, and a second confirm
 
     // Search's index, built before the confirm (metal-vmm 155(b)).
     const mem_meter = @import("mem_meter.zig");
-    const prev = mem_meter.replace(testing.allocator);
-    defer _ = mem_meter.replace(prev);
-    defer search_index.drop();
+    const meter = mem_meter.useForTest(testing.allocator);
+    defer meter.restore();
+    const emptied = search_index.emptyForTest();
+    defer emptied.end();
     _ = search_index.buildAll(io, a).?;
     const dm12_reach = [_]chat_store.Reach{.{ .dir = try chat_store.dmConvDir(a, "1_2"), .base = "/chat/c/1_2", .kind = .dm }};
     const dm19_reach = [_]chat_store.Reach{.{ .dir = try chat_store.dmConvDir(a, "1_9"), .base = "/chat/c/1_9", .kind = .dm }};

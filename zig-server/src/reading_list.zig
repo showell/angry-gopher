@@ -354,8 +354,8 @@ test "savedIdsFor: filters by conv+sid, re-parses only when mtime advances" {
     // Be the host: name the base allocator before anything allocates through it.
     // testing.allocator, so that dropCache() below turns any refresh that failed
     // to free its predecessor into a reported leak.
-    const prev = mem_meter.replace(testing.allocator);
-    defer _ = mem_meter.replace(prev);
+    const meter = mem_meter.useForTest(testing.allocator);
+    defer meter.restore();
     defer dropCache();
 
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
@@ -402,8 +402,8 @@ test "savedIdsFor: filters by conv+sid, re-parses only when mtime advances" {
 }
 
 test "savedIdsFor: a missing doc is nothing saved, and allocates nothing process-wide" {
-    const prev = mem_meter.replace(testing.allocator);
-    defer _ = mem_meter.replace(prev);
+    const meter = mem_meter.useForTest(testing.allocator);
+    defer meter.restore();
     defer dropCache();
 
     var arena = std.heap.ArenaAllocator.init(testing.allocator);

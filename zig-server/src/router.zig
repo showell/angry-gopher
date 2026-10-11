@@ -980,9 +980,10 @@ test "route: start does the host's setup in one call: the data pointed at, every
     const io = threaded.io();
     var site = try UidSite.init(a, io);
     defer site.deinit();
-    const prev = mem_meter.replace(a);
-    defer _ = mem_meter.replace(prev);
-    defer search_index.drop();
+    const meter = mem_meter.useForTest(a);
+    defer meter.restore();
+    const emptied = search_index.emptyForTest();
+    defer emptied.end();
     const saved_floor = game_limits.free_space;
     const saved_proxy = game_limits.trusted_proxy;
     defer game_limits.free_space = saved_floor;
@@ -1072,8 +1073,8 @@ test "route: Recent's Who cell names the last author where the .count is behind 
     const io = threaded.io();
     var site = try UidSite.init(a, io);
     defer site.deinit();
-    const prev = mem_meter.replace(std.heap.page_allocator); // presence outlives the test
-    defer _ = mem_meter.replace(prev);
+    const meter = mem_meter.useForTest(std.heap.page_allocator); // presence outlives the test
+    defer meter.restore();
     const chat_store = @import("chat_store.zig");
     const steve = try memberSession(a, io, "1", "Steve");
     const debbie = try memberSession(a, io, "2", "Debbie");
@@ -1121,13 +1122,13 @@ test "route: search suggests and finds only in what the viewer can see; a word o
     const io = threaded.io();
     var site = try UidSite.init(a, io);
     defer site.deinit();
-    const prev = mem_meter.replace(std.heap.page_allocator); // presence outlives the test
-    defer _ = mem_meter.replace(prev);
+    const meter = mem_meter.useForTest(std.heap.page_allocator); // presence outlives the test
+    defer meter.restore();
     const chat_search = @import("chat_search.zig");
-    search_index.drop();
-    defer search_index.drop();
-    chat_search.forgetAll();
-    defer chat_search.forgetAll();
+    const emptied = search_index.emptyForTest();
+    defer emptied.end();
+    const forgot = chat_search.forgetForTest();
+    defer forgot.end();
     const chat_store = @import("chat_store.zig");
 
     const me = try memberSession(a, io, "1", "Steve");
@@ -1203,10 +1204,10 @@ test "search agrees with /admin/search: for every word, the baseline's messages 
     const tokens = @import("search_tokens.zig");
     const admin_search = @import("admin_search.zig");
     const chat_store = @import("chat_store.zig");
-    const prev = mem_meter.replace(testing.allocator);
-    defer _ = mem_meter.replace(prev);
-    search_index.drop();
-    defer search_index.drop();
+    const meter = mem_meter.useForTest(testing.allocator);
+    defer meter.restore();
+    const emptied = search_index.emptyForTest();
+    defer emptied.end();
 
     for ([_][2][]const u8{ .{ "1", "Steve" }, .{ "2", "Debbie" }, .{ "3", "Apoorva" } }) |m| {
         try users.setUserName(io, a, m[0], m[1]);
@@ -1518,8 +1519,8 @@ test "fs: a doc that cannot be looked at is a server error, never a 404 (metal-v
     // The docs page allocates through it, and presence keeps a map in it for
     // the life of the process: an arena freed at the test's end would leave
     // the next test that marks someone active a map in freed memory.
-    const prev = mem_meter.replace(std.heap.page_allocator);
-    defer _ = mem_meter.replace(prev);
+    const meter = mem_meter.useForTest(std.heap.page_allocator);
+    defer meter.restore();
 
     try users.setUserPassword(io, a, "2", "hunter2");
     const now: i64 = @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
@@ -1575,8 +1576,8 @@ test "route: a key revoke whose removal fails is not answered as revoked, and th
     const io = threaded.io();
     var site = try UidSite.init(a, io);
     defer site.deinit();
-    const prev = mem_meter.replace(std.heap.page_allocator); // presence outlives the test
-    defer _ = mem_meter.replace(prev);
+    const meter = mem_meter.useForTest(std.heap.page_allocator); // presence outlives the test
+    defer meter.restore();
 
     try users.setUserPassword(io, a, "2", "hunter2");
     const now: i64 = @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
@@ -1614,8 +1615,8 @@ test "route: a release whose removals fail is not answered as done, and the acco
     const io = threaded.io();
     var site = try UidSite.init(a, io);
     defer site.deinit();
-    const prev = mem_meter.replace(std.heap.page_allocator); // presence outlives the test
-    defer _ = mem_meter.replace(prev);
+    const meter = mem_meter.useForTest(std.heap.page_allocator); // presence outlives the test
+    defer meter.restore();
 
     try users.setUserPassword(io, a, "2", "hunter2");
     const now: i64 = @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
@@ -1655,8 +1656,8 @@ test "route: a release whose last removal fails leaves an account that can relea
     const io = threaded.io();
     var site = try UidSite.init(a, io);
     defer site.deinit();
-    const prev = mem_meter.replace(std.heap.page_allocator); // presence outlives the test
-    defer _ = mem_meter.replace(prev);
+    const meter = mem_meter.useForTest(std.heap.page_allocator); // presence outlives the test
+    defer meter.restore();
 
     try users.setUserPassword(io, a, "2", "hunter2");
     const now: i64 = @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
@@ -1703,8 +1704,8 @@ test "route: a release whose removal inside the account fails keeps the password
     const io = threaded.io();
     var site = try UidSite.init(a, io);
     defer site.deinit();
-    const prev = mem_meter.replace(std.heap.page_allocator); // presence outlives the test
-    defer _ = mem_meter.replace(prev);
+    const meter = mem_meter.useForTest(std.heap.page_allocator); // presence outlives the test
+    defer meter.restore();
 
     const account = try std.fs.path.join(a, &.{ users.auth_root, "2" });
     // Thirty files besides it: whatever order a folder is read in, the
@@ -1821,8 +1822,8 @@ test "fs: a handler's error is answered 500, never with silence (metal-vmm QUEUE
     var site = try UidSite.init(a, io);
     defer site.deinit();
     const docs_store = @import("docs_store.zig");
-    const prev = mem_meter.replace(std.heap.page_allocator); // as above: presence outlives the test
-    defer _ = mem_meter.replace(prev);
+    const meter = mem_meter.useForTest(std.heap.page_allocator); // as above: presence outlives the test
+    defer meter.restore();
 
     try users.setUserPassword(io, a, "2", "hunter2");
     const now: i64 = @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
@@ -1856,8 +1857,8 @@ test "route: a new topic differing only in case from one there is refused, 409, 
     const io = threaded.io();
     var site = try UidSite.init(a, io);
     defer site.deinit();
-    const prev = mem_meter.replace(std.heap.page_allocator); // presence outlives the test
-    defer _ = mem_meter.replace(prev);
+    const meter = mem_meter.useForTest(std.heap.page_allocator); // presence outlives the test
+    defer meter.restore();
     const steve = try memberSession(a, io, "1", "Steve");
     _ = try memberSession(a, io, "2", "Debbie");
     try testing.expectEqualStrings("200 OK", status(try postAs(a, io, "/chat/c/1_2/new", steve, "topic=Plans")));
@@ -1875,8 +1876,8 @@ test "route: a send that would store nothing is refused, 400, and a message is s
     const io = threaded.io();
     var site = try UidSite.init(a, io);
     defer site.deinit();
-    const prev = mem_meter.replace(std.heap.page_allocator);
-    defer _ = mem_meter.replace(prev);
+    const meter = mem_meter.useForTest(std.heap.page_allocator);
+    defer meter.restore();
     const chat_store = @import("chat_store.zig");
     const steve = try memberSession(a, io, "1", "Steve");
     _ = try memberSession(a, io, "2", "Debbie");
@@ -1904,8 +1905,8 @@ test "route: sign-up refuses a name it would have to change, never registering a
     const io = threaded.io();
     var site = try UidSite.init(a, io);
     defer site.deinit();
-    const prev = mem_meter.replace(std.heap.page_allocator);
-    defer _ = mem_meter.replace(prev);
+    const meter = mem_meter.useForTest(std.heap.page_allocator);
+    defer meter.restore();
     const page = try postForm(a, io, "/login/full", "x=y", "name=Bob%3Cx%3E&password=pw&action=register");
     try testing.expect(std.mem.indexOf(u8, page, "set-cookie: gopher_auth=") == null);
     try testing.expect(std.mem.indexOf(u8, page, "Names can use only") != null);
@@ -1941,8 +1942,8 @@ test "route: a pin, a bookmark or the login mirror that will not write is a 500,
     const io = threaded.io();
     var site = try UidSite.init(a, io);
     defer site.deinit();
-    const prev = mem_meter.replace(std.heap.page_allocator);
-    defer _ = mem_meter.replace(prev);
+    const meter = mem_meter.useForTest(std.heap.page_allocator);
+    defer meter.restore();
     const chat_store = @import("chat_store.zig");
     const steve = try memberSession(a, io, "1", "Steve");
     _ = try memberSession(a, io, "2", "Debbie");
@@ -1971,8 +1972,8 @@ test "route: one form decoder: a bad escape or a field sent twice is a 400 on ev
     const io = threaded.io();
     var site = try UidSite.init(a, io);
     defer site.deinit();
-    const prev = mem_meter.replace(std.heap.page_allocator);
-    defer _ = mem_meter.replace(prev);
+    const meter = mem_meter.useForTest(std.heap.page_allocator);
+    defer meter.restore();
     const chat_store = @import("chat_store.zig");
     const steve = try memberSession(a, io, "1", "Steve");
     _ = try memberSession(a, io, "2", "Debbie");
@@ -2012,8 +2013,8 @@ test "route: a topic that is not there is a 404 that says so, on every tail but 
     const io = threaded.io();
     var site = try UidSite.init(a, io);
     defer site.deinit();
-    const prev = mem_meter.replace(std.heap.page_allocator);
-    defer _ = mem_meter.replace(prev);
+    const meter = mem_meter.useForTest(std.heap.page_allocator);
+    defer meter.restore();
     const chat_store = @import("chat_store.zig");
     const steve = try memberSession(a, io, "1", "Steve");
     _ = try memberSession(a, io, "2", "Debbie");
@@ -2049,8 +2050,8 @@ test "route: a send makes the topic it names, and /chat over a conversation with
     const io = threaded.io();
     var site = try UidSite.init(a, io);
     defer site.deinit();
-    const prev = mem_meter.replace(std.heap.page_allocator);
-    defer _ = mem_meter.replace(prev);
+    const meter = mem_meter.useForTest(std.heap.page_allocator);
+    defer meter.restore();
     const chat_store = @import("chat_store.zig");
     const chat_state = @import("chat_state.zig");
     const steve = try memberSession(a, io, "1", "Steve");
@@ -2150,8 +2151,8 @@ test "route: the conversation page hands the client the upload caps and the acce
     const io = threaded.io();
     var site = try UidSite.init(a, io);
     defer site.deinit();
-    const prev = mem_meter.replace(std.heap.page_allocator);
-    defer _ = mem_meter.replace(prev);
+    const meter = mem_meter.useForTest(std.heap.page_allocator);
+    defer meter.restore();
     const chat_upload = @import("chat_upload.zig");
     const steve = try memberSession(a, io, "1", "Steve");
     _ = try memberSession(a, io, "2", "Debbie");
@@ -2176,13 +2177,13 @@ test "route: search answers each message's excerpt cut, the word marked as the i
     const io = threaded.io();
     var site = try UidSite.init(a, io);
     defer site.deinit();
-    const prev = mem_meter.replace(std.heap.page_allocator);
-    defer _ = mem_meter.replace(prev);
+    const meter = mem_meter.useForTest(std.heap.page_allocator);
+    defer meter.restore();
     const chat_search = @import("chat_search.zig");
-    search_index.drop();
-    defer search_index.drop();
-    chat_search.forgetAll();
-    defer chat_search.forgetAll();
+    const emptied = search_index.emptyForTest();
+    defer emptied.end();
+    const forgot = chat_search.forgetForTest();
+    defer forgot.end();
     const me = try memberSession(a, io, "1", "Steve");
     _ = try memberSession(a, io, "2", "Debbie");
     // The word inside curly quotes and a comma, after a word that holds it

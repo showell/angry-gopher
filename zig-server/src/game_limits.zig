@@ -198,6 +198,19 @@ pub fn countedBytes(io: Io, id: []const u8) ?u64 {
     return null;
 }
 
+/// **FOR A TEST: NOTHING KEPT NOW, AND NOTHING AFTER** (`defer forgot.end()`;
+/// 157(e)).
+pub fn forgetForTest() Forgot {
+    forgetAll();
+    return .{};
+}
+
+pub const Forgot = struct {
+    pub fn end(_: Forgot) void {
+        forgetAll();
+    }
+};
+
 /// Forgets everyone, and every address: for a test that moves the data root.
 pub fn forgetAll() void {
     table = @splat(.{});
@@ -321,8 +334,8 @@ test "fs: a player is measured once, counted up, and refused at each bound" {
     const io = threaded.io();
     const saved = try roots.pointForTest(a, try std.fs.path.join(a, &.{ ".zig-cache", "tmp", &tmp.sub_path }));
     defer saved.restore();
-    forgetAll();
-    defer forgetAll();
+    const forgot = forgetForTest();
+    defer forgot.end();
 
     // On disk already: two game sessions and a puzzle session, 30 bytes.
     for ([_][]const u8{ "lynrummy-elm/sessions/1/meta", "lynrummy-elm/sessions/2/meta", "puzzle/sessions/1/meta" }) |rel| {
@@ -366,8 +379,8 @@ test "fs: the floor refuses every game write below a quarter free, and only then
     const io = threaded.io();
     const saved = try roots.pointForTest(a, try std.fs.path.join(a, &.{ ".zig-cache", "tmp", &tmp.sub_path }));
     defer saved.restore();
-    forgetAll();
-    defer forgetAll();
+    const forgot = forgetForTest();
+    defer forgot.end();
     free_space = testSpace;
     defer free_space = null;
 
@@ -388,8 +401,8 @@ test "slots: the least recently asked player is the one pushed out" {
     const io = threaded.io();
     const saved = try roots.pointForTest(a, ".zig-cache/tmp/game-limits-nowhere"); // nobody has anything
     defer saved.restore();
-    forgetAll();
-    defer forgetAll();
+    const forgot = forgetForTest();
+    defer forgot.end();
 
     var buf: [16]u8 = undefined;
     for (0..slots) |i| _ = try admit(io, a, try std.fmt.bufPrint(&buf, "p{d}", .{i}), null, false, 1);
@@ -406,8 +419,8 @@ test "slots: the least recently asked player is the one pushed out" {
 }
 
 test "an address's hour: counted, started again after it, and the oldest given up when full" {
-    forgetAll();
-    defer forgetAll();
+    const forgot = forgetForTest();
+    defer forgot.end();
     const t0: i64 = 1_790_000_000;
     const s = seenSlot("203.0.113.7", t0);
     s.players = 5;
