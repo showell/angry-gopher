@@ -24,8 +24,9 @@ pub fn build(b: *std.Build) void {
     // an application built on this server imports as one module, dog-park
     // first, and angry-gopher itself: no file of the application imports a
     // file of the library by path. ops/check_zig holds the library's files
-    // to importing std and one another (tools/lint_webbox_library.py), so
-    // nothing else of angry-gopher's rides along.
+    // to importing std and one another, and the Linux half's also to the
+    // `webbox` module (tools/lint_webbox_library.py), so nothing else of
+    // angry-gopher's rides along.
     //
     // **TWO MODULES**: `webbox`, portable, which everything imports; and
     // `webbox_linux` (src/webbox_linux.zig), the Linux host, which only a
@@ -159,7 +160,6 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
-    stress_mod.addImport("webbox", webbox);
     const stress_exe = b.addExecutable(.{ .name = "stress", .root_module = stress_mod });
     // Build (don't run) the harness to zig-out/bin/stress. The ops scripts run the
     // binary directly so they own the exit-code semantics — a `zig build run` step
@@ -179,6 +179,23 @@ pub fn build(b: *std.Build) void {
     hash_mod.addImport("webbox", webbox);
     const hash_exe = b.addExecutable(.{ .name = "hash-password", .root_module = hash_mod });
     b.step("hash-password", "Build zig-out/bin/hash-password").dependOn(&b.addInstallArtifact(hash_exe, .{}).step);
+
+    // **THE TOOLS RUN BY HAND**: measuring sticks and probes, not gates. Each
+    // reaches the library, so each is built here, where the `webbox` module
+    // is, and run by name: `zig build search-bench`, and so on.
+    const Tool = struct { step: []const u8, path: []const u8, optimize: std.builtin.OptimizeMode, help: []const u8 };
+    for ([_]Tool{
+        .{ .step = "search-bench", .path = "src/search_bench.zig", .optimize = .ReleaseFast, .help = "Measure what search's index costs to build (src/search_bench.zig)" },
+        .{ .step = "markdown-bench", .path = "src/markdown_bench.zig", .optimize = optimize, .help = "Render a corpus and report the slowest messages (src/markdown_bench.zig)" },
+        .{ .step = "markdown-probe", .path = "src/markdown_hostile_probe.zig", .optimize = optimize, .help = "Check the renderer stays linear on hostile shapes (src/markdown_hostile_probe.zig)" },
+    }) |tool| {
+        const tool_mod = b.createModule(.{ .root_source_file = b.path(tool.path), .target = target, .optimize = tool.optimize });
+        tool_mod.addImport("webbox", webbox);
+        const tool_exe = b.addExecutable(.{ .name = tool.step, .root_module = tool_mod });
+        const tool_run = b.addRunArtifact(tool_exe);
+        if (b.args) |args| tool_run.addArgs(args);
+        b.step(tool.step, tool.help).dependOn(&tool_run.step);
+    }
 
     // Unit tests (`zig build test`). Each listed module is a test root; a module
     // must be in this list for its `test {}` blocks to actually run under the

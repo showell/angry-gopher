@@ -15,6 +15,11 @@ host, which only a Linux `main` imports). For each root:
 - no file embeds a file (`@embedFile`): what a page serves is the
   application's.
 
+And for every other file in the folder, the application's (whatever builds
+it, or nothing does: a bench run by hand): it imports the library by name,
+`@import("webbox").x` or `@import("webbox_linux").x`, never a library file by
+path. One file belongs to one module.
+
 Imports are read by zig_source, the reading the portability lint shares: an
 import split over lines counts, one in a comment does not.
 
@@ -49,6 +54,23 @@ def problems(src):
     out = []
     for root, may in ROOTS.items():
         out += problems_of(src, root, may)
+    library = members(src)
+    for name in sorted(os.listdir(src)):
+        if not name.endswith(".zig") or name in library:
+            continue
+        for dep in imports(os.path.join(src, name)):
+            if os.path.basename(dep) in library:
+                out.append(f"{name} imports {dep} by path: an application imports the library by name (@import(\"webbox\") or @import(\"webbox_linux\"))")
+    return out
+
+
+def members(src):
+    """The library's files: each root and the files it names."""
+    out = set()
+    for root in ROOTS:
+        path = os.path.join(src, root)
+        if os.path.exists(path):
+            out |= {root} | set(imports(path))
     return out
 
 
@@ -117,7 +139,23 @@ def self_test():
         write("b.zig", 'const l = @import("webbox_linux");\n')
         got = problems(d)
         assert len(got) == 1 and "b.zig imports the module webbox_linux" in got[0], got
-    print("lint_webbox_library: its self-test passes (a clean library; one reaching outside, on one line or split; a commented import; an embedded file; the Linux half through the module, not by path; the portable half reaching for the Linux one)")
+        # A portable file importing its own module: the module is not one its
+        # files may name.
+        write("b.zig", 'const w = @import("webbox");\n')
+        got = problems(d)
+        assert len(got) == 1 and "b.zig imports the module webbox" in got[0], got
+        write("b.zig", 'const std = @import("std");\n')
+        # An application's file, built by something or nothing, imports the
+        # library by name; by path, or by "./", is a finding.
+        write("app.zig", 'const a = @import("webbox").a;\nconst l = @import("webbox_linux").host;\n')
+        assert problems(d) == [], problems(d)
+        for spelling in ("a.zig", "./a.zig", "host.zig", "webbox.zig"):
+            write("app.zig", f'const a = @import("{spelling}");\n')
+            got = problems(d)
+            assert len(got) == 1 and f"app.zig imports {spelling} by path" in got[0], (spelling, got)
+        write("app.zig", 'const u = @import("users.zig");\n')
+        assert problems(d) == [], problems(d)
+    print("lint_webbox_library: its self-test passes (a clean library; one reaching outside, on one line or split; a commented import; an embedded file; the Linux half through the module, not by path; the portable half reaching for the Linux one, or for itself; an application's file by name, never by path)")
 
 
 def main():

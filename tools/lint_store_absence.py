@@ -63,8 +63,13 @@ from lint_portable import test_lines, test_only_lines  # noqa: E402
 
 STORE = "store.zig"
 READS = ("read", "readOrEmpty", "readOrNull", "readAt", "stat", "statOrNull", "has", "list")
-ALIAS = re.compile(r'\bconst\s+([A-Za-z_]\w*)\s*=\s*@import\("store\.zig"\)')
+# A file's name for the store: by its path (inside the library), or through
+# the webbox module (an application: `@import("webbox").store`).
+ALIAS = re.compile(r'\bconst\s+([A-Za-z_]\w*)\s*=\s*@import\((?:"store\.zig"\)|"webbox"\)\.store\s*;)')
+# A file another names, to follow its calls: by path, or a member of the
+# webbox module, which is the library's file of that name.
 IMPORT = re.compile(r'\bconst\s+([A-Za-z_]\w*)\s*=\s*@import\("([\w.]+\.zig)"\)')
+MEMBER = re.compile(r'\bconst\s+([A-Za-z_]\w*)\s*=\s*@import\("webbox"\)\.([A-Za-z_]\w*)\s*;')
 FN = re.compile(r"^\s*(?:pub\s+)?(?:inline\s+)?fn\s+([A-Za-z_]\w*)\s*\(")
 
 
@@ -287,9 +292,15 @@ def dropped_by_else(rest: str, own=frozenset()) -> bool:
 
 
 def imports(lines):
-    """{alias: file} for each `const x = @import("y.zig")`, read from the
+    """{alias: file} for each `const x = @import("y.zig")`, and each
+    `const x = @import("webbox").y;` (the library's y.zig), read from the
     lines themselves: blanking empties the strings."""
-    return {m.group(1): m.group(2) for l in lines for m in IMPORT.finditer(l.split("//")[0])}
+    found = {}
+    for l in lines:
+        code = l.split("//")[0]
+        found.update({m.group(1): m.group(2) for m in IMPORT.finditer(code)})
+        found.update({m.group(1): m.group(2) + ".zig" for m in MEMBER.finditer(code)})
+    return found
 
 
 def functions(lines):

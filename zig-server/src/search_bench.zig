@@ -1,7 +1,7 @@
 //! search_bench: what search's index costs to build, on the host (metal-vmm
 //! QUEUE 155(e)). A measuring stick, not a gate.
 //!
-//!   cd zig-server && zig run -OReleaseFast src/search_bench.zig
+//!   cd zig-server && zig build search-bench
 //!
 //! A synthetic corpus of about `corpus_bytes` (Steve: four people, ~10 MB of
 //! chat), written as the store lays transcripts out, under .zig-cache/tmp:

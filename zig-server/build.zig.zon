@@ -1,6 +1,8 @@
 .{
-    // angry-gopher's server as a package: the `webbox` library module
-    // (src/webbox.zig) is what an application built on it depends on.
+    // angry-gopher's server as a package: the `webbox` library, two modules
+    // an application built on it depends on: `webbox` (src/webbox.zig,
+    // portable, what its code imports) and `webbox_linux`
+    // (src/webbox_linux.zig, the Linux host, for its Linux `main`).
     .name = .webbox,
     .version = "0.1.0",
     .fingerprint = 0x90f0ca47715bdd8d,
