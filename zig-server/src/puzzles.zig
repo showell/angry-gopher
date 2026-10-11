@@ -66,13 +66,13 @@ pub fn handle(req: *std.http.Server.Request, io: Io, alloc: Alloc, sub: []const 
     if (sub.len == 0 or std.mem.eql(u8, sub, "/")) {
         try page(req, io, alloc, user_id);
     } else if (std.mem.eql(u8, sub, "/puzzle.js")) {
-        try req.respond(puzzle_js, .{ .extra_headers = &.{http.js_ct} });
+        try http.serveEmbedded(req, puzzle_js, http.js_ct);
     } else if (std.mem.eql(u8, sub, "/engine.js")) {
-        try req.respond(engine_js, .{ .extra_headers = &.{http.js_ct} });
+        try http.serveEmbedded(req, engine_js, http.js_ct);
     } else if (std.mem.eql(u8, sub, "/engine_glue.js")) {
-        try req.respond(engine_glue_js, .{ .extra_headers = &.{http.js_ct} });
+        try http.serveEmbedded(req, engine_glue_js, http.js_ct);
     } else if (std.mem.eql(u8, sub, "/solver.wasm")) {
-        try req.respond(solver_wasm, .{ .extra_headers = &.{http.wasm_ct} });
+        try http.serveEmbedded(req, solver_wasm, http.wasm_ct);
     } else if (std.mem.startsWith(u8, sub, "/sessions/")) {
         try sessionRoute(req, io, alloc, user_id, client, sub["/sessions/".len..]);
     } else {

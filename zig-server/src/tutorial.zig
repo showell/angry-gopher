@@ -21,7 +21,7 @@ pub fn handle(req: *Request, sub: []const u8) !void {
         return req.respond(tutorial_html, .{ .extra_headers = &.{http.html_ct} });
     }
     if (std.mem.eql(u8, sub, "/tutorial.js")) {
-        return req.respond(tutorial_js, .{ .extra_headers = &.{http.js_ct} });
+        return http.serveEmbedded(req, tutorial_js, http.js_ct);
     }
     return http.notFound(req);
 }
