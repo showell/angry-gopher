@@ -80,6 +80,13 @@ ROOT_MODULE = "router.zig"
 # The roots the real tree is checked from: the route table, and the webbox
 # library. Both must be there.
 ROOTS = (ROOT_MODULE, "webbox.zig")
+# The library's host-only files: a site served as a Linux process. webbox.zig
+# names them, for an application's Linux `main`; Zig analyses only what a
+# program uses, so the metal port never compiles them. Only webbox.zig may
+# import one: the closure stops at them there, and any other file reaching
+# one is a finding (HOST_ONLY_REACHED).
+LIBRARY_ROOT = "webbox.zig"
+HOST_ONLY = frozenset({"linux_host.zig", "bind.zig", "linux_config.zig"})
 
 
 # (pattern, advice). Checked in order; one finding per match.
@@ -230,6 +237,8 @@ def closure(src_dir: str, root=ROOT_MODULE):
         seen.add(name)
         with open(path, encoding="utf-8") as f:
             for dep in zig_source.imports(f.read()):
+                if name == LIBRARY_ROOT and dep in HOST_ONLY:
+                    continue  # the library's host-only part: not portable, by design
                 if dep not in seen:
                     todo.append(dep)
     return seen
@@ -239,6 +248,15 @@ def scan(src_dir: str, root=ROOT_MODULE):
     """Findings as (file, line, text, advice), in file then line order."""
     found = []
     for name in sorted(closure(src_dir, root)):
+        if name in HOST_ONLY:
+            continue  # reached from a file not allowed it: said below, not scanned
+        with open(os.path.join(src_dir, name), encoding="utf-8") as f:
+            text = f.read()
+        if name != LIBRARY_ROOT:
+            for dep in zig_source.imports(text):
+                if dep in HOST_ONLY:
+                    found.append((name, 0, f'@import("{dep}")',
+                                  f"{dep} is the library's host-only part: only webbox.zig may import it"))
         with open(os.path.join(src_dir, name), encoding="utf-8") as f:
             lines = f.readlines()
         tests = test_lines(lines)

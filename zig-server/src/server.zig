@@ -1,317 +1,63 @@
-//! server: HOW THIS PROCESS STARTS. The allocator, the thread pool, the
-//! environment, the config file, the socket, and one request per accepted
-//! connection — then it hands that request to router.zig, which is the only
-//! thing here that knows what the site serves.
+//! server: this site served as a Linux process. Everything a Linux host does
+//! is webbox's (linux_host.zig); this is what is angry-gopher's about it: the
+//! name it goes by, its environment variables (GOPHER_*, which gopher-metal's
+//! judge and gates, the deploy service, the stress harness and metal-vmm's
+//! plants set), the game store's floor, and the lines its setup's report
+//! prints.
 //!
-//! That division is the whole point of the file: everything below is a Linux
-//! process detail, and a machine with no operating system replaces all of it
-//! while calling the same `router.route`.
-//!
-//! Concurrency: each accepted connection runs as its own task on the std.Io
-//! thread pool (a never-awaited Io.Group + group.concurrent — see main). The
-//! pool grows on demand and finished tasks self-reap, so it's effectively
-//! goroutine-per-connection: connections are accepted, read and written at
-//! once, and a kept stream is served on its own task (bus.zig). **But only
-//! one handler runs at a time** (`turn`): the route table runs as it does on
-//! gopher-metal's single loop, so the two hosts are one machine (Steve,
-//! 2026-10-07; gopher-metal HOST.md). Each connection still serves ONE
-//! request then closes (keep-alive off): see handleConn.
+//! Prod runs on gopher-metal, which calls the same `router.start` and
+//! `router.route` with no operating system. On a Linux box the default bind
+//! is every interface; a firewall keeps 9001 private and Caddy reaches it on
+//! localhost, and with GOPHER_BIND=127.0.0.1 a rehearsal on real data answers
+//! on loopback only.
 //!
 //! Run:  ops/build_elm && ops/build_safari_wasm && ops/build_delivery
 //!         (from the repo root, for the embedded bundles)
 //!       cd zig-server && zig build run        (serves on http://localhost:9001)
 
 const std = @import("std");
-const Io = std.Io;
-const net = std.Io.net;
 const router = @import("router.zig");
-const config = @import("config.zig");
-const edge = @import("edge.zig");
-const mem_meter = @import("mem_meter.zig");
-const bind = @import("bind.zig");
-const bus_mod = @import("bus.zig");
-const chat_store = @import("chat_store.zig");
-const host_facts = router.host_facts;
-const Hub = bus_mod.Hub;
-const Bus = bus_mod.Bus;
-
-const default_port: u16 = 9001;
-
-/// portFromEnv reads GOPHER_PORT (default 9001). A port override is load-bearing
-/// for running more than one server at once — e.g. the stress harness spins a
-/// hermetic sandbox instance on a side port so the :9001 dev server keeps running.
-fn portFromEnv(env: std.process.Environ.Map) u16 {
-    const s = env.get("GOPHER_PORT") orelse return default_port;
-    return std.fmt.parseInt(u16, std.mem.trim(u8, s, " \t\r\n"), 10) catch default_port;
-}
+const linux_host = @import("linux_host.zig");
+const free_space = @import("free_space.zig");
 
 pub fn main(init: std.process.Init.Minimal) !void {
-    // The metered allocator wraps page_allocator and counts live bytes/allocs for
-    // /debug/mem + /version (the leak smoke detector — see mem_meter.zig). It IS
-    // the process base allocator: everything downstream (the IO pool, the bus, the
-    // per-request arenas) allocates through it, so the meter sees the whole
-    // leakable surface. presence/reading_list capture mem_meter.base() directly.
-    const alloc = mem_meter.init(std.heap.page_allocator);
-    var threaded = std.Io.Threaded.init(alloc, .{ .environ = init.environ });
-    defer threaded.deinit();
-    const io = threaded.io();
+    try linux_host.Server(router).run(init, .{
+        .name = "zig-server",
+        .env = .{
+            .port = "GOPHER_PORT",
+            .bind = "GOPHER_BIND",
+            .config = "GOPHER_CONFIG",
+            .trusted_proxy = "GOPHER_TRUSTED_PROXY",
+            .keepalive_ms = "GOPHER_KEEPALIVE_MS",
+        },
+        .default_port = 9001,
+        // Caddy, on the same machine.
+        .default_trusted_proxy = "127.0.0.1",
+        .default_auth_dir = "~/Auth",
+        .routes_hint = "(/driving, /puzzles, /game, /chat, /channel)",
+        .free_space = gameFloor,
+    }, report);
+}
 
-    // Point storage + identity at the live data tree (GOPHER_CONFIG). No-op
-    // when unset — repo-relative defaults keep /driving working standalone.
-    // (0.16 routes the OS environment through main's Init, not a global.)
-    var env = try std.process.Environ.createMap(init.environ, alloc);
-    defer env.deinit();
-    // **THE HOST CONTRACT, ONE CALL** (router.zig, webbox's site.zig): where
-    // the data is (GOPHER_CONFIG; null: repo-relative defaults, which keep
-    // /driving working standalone), how its free space is read, whose
-    // X-Forwarded-For is believed (Caddy, on this machine), and this host's
-    // facts for /admin/host; `start` does the setup in its one order (the
-    // session secret's move, every session's last-message record, search's
-    // index) before the first request.
-    started_unix = nowUnix(io);
-    // The game store's floor reads the data volume's free space. A test host
-    // whose data sits on a full development disk turns it off, out loud:
-    // the floor is then about that disk, not about the server under test.
-    const no_floor = std.mem.eql(u8, env.get("GOPHER_GAME_FLOOR") orelse "", "off");
-    if (no_floor) std.debug.print("zig-server: GOPHER_GAME_FLOOR=off: game writes have no free-space floor\n", .{});
-    var started = try router.start(io, .{
-        .roots = try config.load(io, alloc, env),
-        .free_space = if (no_floor) .unknown else .{ .reader = linuxFreeSpace },
-        .trusted_proxy = env.get("GOPHER_TRUSTED_PROXY") orelse "127.0.0.1",
-        .facts = linuxFacts,
-    });
+/// The game store's floor reads the data volume's free space, at the game
+/// store's folder. A test host whose data sits on a full development disk
+/// turns it off, out loud: the floor is then about that disk, not about the
+/// server under test.
+fn gameFloor(env: *const std.process.Environ.Map) free_space.FreeSpace {
+    const off = std.mem.eql(u8, env.get("GOPHER_GAME_FLOOR") orelse "", "off");
+    if (off) std.debug.print("zig-server: GOPHER_GAME_FLOOR=off: game writes have no free-space floor\n", .{});
+    return if (off) .unknown else .{ .reader = gameStoreSpace };
+}
+
+fn gameStoreSpace() ?free_space.Space {
+    return linux_host.freeSpaceAt(router.dataRoot());
+}
+
+/// What this application's setup did (app_start.zig), said before the
+/// listener opens.
+fn report(started: *const router.Started) void {
     if (started.app.backfilled > 0) std.debug.print("zig-server: wrote a last-message record for {d} session(s)\n", .{started.app.backfilled});
     if (started.app.search) |st| {
         std.debug.print("zig-server: search index: {d} messages in {d} transcripts ({d} bytes, {d} words, {d} unreadable) in {d} ms\n", .{ st.messages, st.transcripts, st.bytes, st.words, st.unreadable, started.app.search_ms });
     } else std.debug.print("zig-server: search index not built (out of memory?): the first search builds it\n", .{});
-    // The pub/sub fan-out shared across all connections, for the process's
-    // lifetime: chat's SSE streams. Each request gets its own handle on it (a
-    // Bus), which is where a stream handler leaves the stream it kept.
-    const hub = &started.hub;
-
-    // How long a quiet stream waits before a ping (metal-vmm QUEUE 137): for
-    // tests; unset is 25 s. A value that is not a whole number of milliseconds
-    // above zero stops the server, as for GOPHER_BIND. gopher-metal's kernel
-    // has the same knob (`keepalive_ms`).
-    if (bus_mod.keepaliveSetting(env.get("GOPHER_KEEPALIVE_MS")) catch |e| {
-        std.debug.print("zig-server: GOPHER_KEEPALIVE_MS={s} is not a number of milliseconds above zero; not starting\n", .{env.get("GOPHER_KEEPALIVE_MS") orelse ""});
-        return e;
-    }) |ms| {
-        bus_mod.Subscriber.keepalive_ms = ms;
-        std.debug.print("zig-server: GOPHER_KEEPALIVE_MS={d}: a quiet stream pings after {d} ms\n", .{ ms, ms });
-    }
-
-    const port = portFromEnv(env);
-    const addr = bind.address(env.get("GOPHER_BIND"), port) catch |e| {
-        std.debug.print("zig-server: GOPHER_BIND={s} is not an IP address; not starting\n", .{env.get("GOPHER_BIND") orelse ""});
-        return e;
-    };
-    var listener = try addr.listen(io, .{ .reuse_address = true });
-    defer listener.deinit(io);
-
-    std.debug.print("zig-server: http://localhost:{d}, bound to {f}  (/driving, /puzzles, /game, /chat, /channel)\n", .{ port, addr });
-
-    // Each connection becomes a concurrent task in this group. We never await it
-    // — the server runs forever and completed tasks self-reap (see file header).
-    var conns: Io.Group = .init;
-    while (true) {
-        const stream = listener.accept(io) catch |e| {
-            std.debug.print("accept failed: {s}\n", .{@errorName(e)});
-            continue;
-        };
-        conns.concurrent(io, serveConn, .{ io, alloc, hub, stream }) catch |e| {
-            // Pool exhausted / concurrency unavailable: fall back to serving
-            // this one inline rather than dropping it.
-            std.debug.print("spawn failed ({s}); serving inline\n", .{@errorName(e)});
-            serveConn(io, alloc, hub, stream);
-        };
-    }
-}
-
-/// **ONE HANDLER AT A TIME** (gopher-metal HOST.md): held while `route`
-/// runs, so no two handlers interleave, as on gopher-metal, where one loop
-/// runs each to its end. Reading the head comes before it and serving a kept
-/// stream after it, so a slow client holds nobody up but a handler reading
-/// its body, which is metal's rule too (ready.zig: a body too big to wait for
-/// is read by the handler as it arrives).
-var turn: Io.Mutex = .init;
-
-/// serveConn is the per-connection task body. It returns void (swallowing all
-/// errors) so it coerces to the Cancelable!void that Io.Group requires.
-fn serveConn(io: std.Io, alloc: std.mem.Allocator, hub: *Hub, stream: net.Stream) void {
-    // absent-ok: the connection's own task: the error is logged, and the connection closes without an answer.
-    handleConn(io, alloc, hub, stream) catch |e| {
-        std.debug.print("connection error: {s}\n", .{@errorName(e)});
-    };
-}
-
-/// handleConn serves exactly ONE request, then closes the connection
-/// (`connection: close`). Keep-alive is OFF. It was first turned off when the
-/// accept loop was single-threaded and a held-open idle connection deadlocked
-/// /game's three parallel script loads; connections now run concurrently (the
-/// file header), and keep-alive is still off. gopher-metal serves the same
-/// route table one request per connection too, so the two hosts answer alike.
-fn handleConn(io: std.Io, alloc: std.mem.Allocator, hub: *Hub, stream: net.Stream) !void {
-    defer stream.close(io);
-
-    var read_buf: [router.request_limits.head_bytes]u8 = undefined; // must hold the full request header
-    var write_buf: [64 * 1024]u8 = undefined;
-    var sr = stream.reader(io, &read_buf);
-    var sw = stream.writer(io, &write_buf);
-    var server = std.http.Server.init(&sr.interface, &sw.interface);
-
-    var arena = std.heap.ArenaAllocator.init(alloc);
-    defer arena.deinit();
-
-    var req = server.receiveHead() catch |e| switch (e) {
-        error.HttpConnectionClosing => return,
-        // A request head larger than read_buf (16 KB). Count it (the guaranteed
-        // observable, surfaced in /version) and best-effort a 431 before closing.
-        // The reader/writer may be mid-stream after an oversize head, so the raw
-        // write is swallowed on failure — the count is the part we rely on.
-        error.HttpHeadersOversize => {
-            edge.count(.header_too_large);
-            sw.interface.writeAll("HTTP/1.1 431 Request Header Fields Too Large\r\n" ++
-                "connection: close\r\ncontent-length: 0\r\n\r\n") catch {};
-            sw.interface.flush() catch {};
-            return;
-        },
-        else => return e,
-    };
-    // **A SMALL BODY ARRIVES BEFORE THE TURN** (gopher-metal HOST.md; metal's
-    // ready.zig waits the same way): a body of a stated length, not chunked,
-    // not waiting on `100-continue`, that fits the buffer after the head, is
-    // read in here, so a client slow to send it holds up no other handler.
-    // Any other body is read by its handler inside the turn, as on metal.
-    //
-    // **THE HEAD IS COPIED OUT FIRST.** Its strings point into the read
-    // buffer, and a read into that buffer starts over from its beginning
-    // when all it held has been taken (std.Io.Reader.writableVectorPosix):
-    // a body sent after its head, as most clients send one, was read over
-    // the head, and the request was routed by its body's bytes (a login
-    // answered 404, or a header lookup that panicked).
-    if (req.head.content_length) |len| {
-        const r = &sr.interface;
-        if (req.head.transfer_encoding == .none and req.head.expect == null and len <= r.buffer.len - r.seek) {
-            const head = try arena.allocator().dupe(u8, req.head_buffer);
-            req.head_buffer = head;
-            req.head = std.http.Server.Request.Head.parse(head) catch return error.HttpHeadersInvalid;
-            r.fill(@intCast(len)) catch {};
-        }
-    }
-    req.head.keep_alive = false; // force `connection: close` without touching each handler
-    var bus = Bus.of(hub);
-    var peer_buf: [64]u8 = undefined;
-    bus.peer = peerText(&peer_buf, stream.socket.address);
-    turn.lockUncancelable(io);
-    const routed = router.route(&req, io, arena.allocator(), &bus);
-    turn.unlock(io);
-    // A stream the handler kept is route's answer, served here, on this
-    // connection's own task, until its client goes away; on an error route
-    // has dropped it (metal-vmm QUEUE 157(a)).
-    if (try routed) |kept| bus_mod.serveKept(hub, kept, &sw.interface);
-}
-
-/// The connection's address as text with no port (`203.0.113.7`,
-/// `2001:db8::1`): what the game store's per-address bounds count.
-fn peerText(buf: []u8, a: net.IpAddress) ?[]const u8 {
-    switch (a) {
-        .ip4 => |v| return std.fmt.bufPrint(buf, "{d}.{d}.{d}.{d}", .{ v.bytes[0], v.bytes[1], v.bytes[2], v.bytes[3] }) catch null,
-        .ip6 => {
-            const t = std.fmt.bufPrint(buf, "{f}", .{a}) catch return null; // "[addr]:port"
-            const close = std.mem.indexOfScalar(u8, t, ']') orelse return null;
-            if (t.len == 0 or t[0] != '[') return null;
-            return t[1..close];
-        },
-    }
-}
-
-// ── the data volume's free space, for the game store's floor ─────────────────
-
-/// statfs(2)'s answer, as the kernel lays it out on a 64-bit machine. std has
-/// no statfs, so it is asked directly.
-const Statfs = extern struct {
-    type: i64,
-    bsize: i64,
-    blocks: u64,
-    bfree: u64,
-    bavail: u64,
-    files: u64,
-    ffree: u64,
-    fsid: [2]i32,
-    namelen: i64,
-    frsize: i64,
-    flags: i64,
-    spare: [4]i64,
-};
-
-/// Free (to an unprivileged writer) and total bytes on the volume the game
-/// store is on; null when statfs will not say.
-fn linuxFreeSpace() ?router.Space {
-    if (@import("builtin").os.tag != .linux or @sizeOf(usize) != 8) return null;
-    const linux = std.os.linux;
-    var path: [std.fs.max_path_bytes:0]u8 = undefined;
-    const root = router.dataRoot();
-    if (root.len >= path.len) return null;
-    @memcpy(path[0..root.len], root);
-    path[root.len] = 0;
-    var st: Statfs = undefined;
-    const rc = linux.syscall2(.statfs, @intFromPtr(&path), @intFromPtr(&st));
-    if (linux.errno(rc) != .SUCCESS or st.bsize <= 0) return null;
-    const bsize: u64 = @intCast(st.bsize);
-    return .{ .free = st.bavail * bsize, .total = st.blocks * bsize };
-}
-
-// ── /admin/host: what this Linux process says about itself ───────────────────
-
-var started_unix: i64 = 0;
-
-fn nowUnix(io: Io) i64 {
-    return @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));
-}
-
-/// This process's facts for /admin/host. Memory is the kernel's own account of
-/// it (/proc/self/status), which is the whole process, not just what the
-/// meter sees. Free disk is not here: std has no statfs, and `df` on the box
-/// answers it.
-fn linuxFacts(io: Io, alloc: std.mem.Allocator) anyerror![]const host_facts.Fact {
-    var facts: std.ArrayList(host_facts.Fact) = .empty;
-    try facts.append(alloc, .{ .label = "host", .value = try std.fmt.allocPrint(alloc, "Linux, zig-server, pid {d}", .{std.os.linux.getpid()}) });
-    try facts.append(alloc, .{ .label = "started", .value = try host_facts.utc(alloc, started_unix) });
-    try facts.append(alloc, .{ .label = "up for", .value = try host_facts.duration(alloc, nowUnix(io) - started_unix) });
-    try facts.append(alloc, .{ .label = "data directory", .value = config.data_dir_shown });
-    const status = readProcFile(alloc, "/proc/self/status") catch |e| {
-        try facts.append(alloc, .{ .label = "memory", .value = try std.fmt.allocPrint(alloc, "/proc/self/status: {s}", .{@errorName(e)}) });
-        return facts.items;
-    };
-    var lines = std.mem.splitScalar(u8, status, '\n');
-    while (lines.next()) |line| {
-        const label: []const u8 = if (std.mem.startsWith(u8, line, "VmRSS:"))
-            "memory now (resident)"
-        else if (std.mem.startsWith(u8, line, "VmHWM:"))
-            "memory at most (resident)"
-        else
-            continue;
-        const colon = std.mem.indexOfScalar(u8, line, ':').?;
-        try facts.append(alloc, .{ .label = label, .value = std.mem.trim(u8, line[colon + 1 ..], " \t") });
-    }
-    return facts.items;
-}
-
-/// A /proc file, read to its end. Not `readFileAlloc`: /proc files say their
-/// size is zero, and a read sized by that comes back empty.
-fn readProcFile(alloc: std.mem.Allocator, path: [*:0]const u8) ![]u8 {
-    const linux = std.os.linux;
-    const rc = linux.open(path, .{ .ACCMODE = .RDONLY }, 0);
-    if (linux.errno(rc) != .SUCCESS) return error.OpenFailed;
-    const fd: i32 = @intCast(rc);
-    defer _ = linux.close(fd);
-    var out: std.ArrayList(u8) = .empty;
-    var buf: [4096]u8 = undefined;
-    while (true) {
-        const n = linux.read(fd, &buf, buf.len);
-        if (linux.errno(n) != .SUCCESS) return error.ReadFailed;
-        if (n == 0) return out.items;
-        try out.appendSlice(alloc, buf[0..n]);
-    }
 }

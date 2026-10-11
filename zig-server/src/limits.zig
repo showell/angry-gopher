@@ -18,8 +18,10 @@
 //! store.zig, checked against gopher-metal's by its tools/check_limits.py.
 
 /// The request line and headers together, the most either host reads before
-/// answering 431.
-pub const head_bytes = 16 * 1024;
+/// answering 431 (webbox's http.zig: a request head's size for any host).
+/// Here, above `body`: tools/check_caddy_limits.py evaluates every `pub
+/// const` after `body` begins.
+pub const head_bytes = @import("http.zig").head_bytes;
 
 /// Each route's body cap, in bytes: a body past it is refused with 413.
 pub const body = struct {

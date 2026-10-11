@@ -80,7 +80,7 @@ class Clean(unittest.TestCase):
         every = {f for f in os.listdir(src) if f.endswith(".zig")}
         outside = every - L.closure(src, L.ROOTS)
         self.assertEqual(outside, {
-            "server.zig", "config.zig", "bind.zig", "stress.zig", "hash_password.zig",
+            "server.zig", "linux_host.zig", "linux_config.zig", "bind.zig", "stress.zig", "hash_password.zig",
             "markdown_bench.zig", "markdown_hostile_probe.zig", "markdown_regression_test.zig",
             "search_bench.zig",
         })
@@ -239,6 +239,26 @@ class Reach(unittest.TestCase):
         files = {"router.zig": 'const u = "http://x"; const p = std.heap.page_allocator;\n'}
         with Tree(files) as t:
             self.assertEqual([n for n, _, _, _ in t.scan()], ["router.zig"])
+
+    def test_the_librarys_host_only_part_is_not_followed_from_its_root(self):
+        files = {
+            "router.zig": "\n",
+            "webbox.zig": 'pub const linux_host = @import("linux_host.zig");\n',
+            "linux_host.zig": "var t = std.Io.Threaded.init(a, .{});\n",
+        }
+        with Tree(files) as t:
+            self.assertEqual(L.closure(t.dir, L.ROOTS), {"router.zig", "webbox.zig"})
+            self.assertEqual(L.scan(t.dir, L.ROOTS), [])
+
+    def test_a_portable_file_reaching_the_host_only_part_is_a_finding(self):
+        files = {
+            "router.zig": 'const h = @import("linux_host.zig");\n',
+            "webbox.zig": "\n",
+            "linux_host.zig": "var t = std.Io.Threaded.init(a, .{});\n",
+        }
+        with Tree(files) as t:
+            found = L.scan(t.dir, L.ROOTS)
+            self.assertEqual([(n, text) for n, _, text, _ in found], [("router.zig", '@import("linux_host.zig")')])
 
     def test_a_missing_library_root_is_loud(self):
         with Tree({"router.zig": "\n"}) as t:
