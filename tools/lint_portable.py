@@ -120,6 +120,9 @@ RULES = [
      "spell it Io.{0}, with Io from host_io: the build chooses the host there"),
     (re.compile(r"\bstd\.Io\b(?!\s*\.)"),
      'take it from host_io (const Io = @import("host_io").Io;): the build chooses the host there'),
+    # std's Io reached through the import itself, which `std.` never names.
+    (re.compile(r'@import\(\s*"std"\s*\)\s*\.\s*Io\b(?!\s*\.\s*(?:Reader|Writer|Limit)\b)'),
+     'take it from host_io (const Io = @import("host_io").Io;): the build chooses the host there'),
     # The host.
     (re.compile(r"\bstd\.Io\.(Threaded|net)\b"),
      "std.Io.{0} is the host's thread pool / sockets"),
@@ -139,8 +142,8 @@ RULES = [
      "std.fs.{0} is the old host file API — use Io.Dir"),
     (re.compile(r"\bstd\.debug\.print\b"),
      "std.debug.print writes the host's stderr"),
-    # std functions that take a REAL std.Io. Our `io` is only std.Io where the
-    # alias happens to be std's, so passing it compiles on Linux and nowhere
+    # std functions that take a REAL std.Io. Our `io` is only std.Io where
+    # host_io is std's, so passing it compiles on Linux and nowhere
     # else. The password hashers draw their salt through it.
     (re.compile(r"\b(?:bcrypt|scrypt|argon2|pwhash\.[a-z0-9]+)\.strHash\s*\("),
      "strHash takes a real std.Io — draw the salt with io.random and call strHashWithSalt"),

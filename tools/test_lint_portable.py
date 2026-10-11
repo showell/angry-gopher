@@ -106,6 +106,17 @@ class Seam(unittest.TestCase):
         with Tree(with_router(**{"a.zig": body})) as t:
             self.assertEqual(t.scan(), [])
 
+    def test_std_io_through_the_import_itself_is_a_finding(self):
+        # `@import("std").Io` never spells `std.`, and is std's on every host.
+        for line, want in (('const Io = @import("std").Io;', '@import("std").Io'),
+                           ('const d = @import( "std" ).Io.Dir;', '@import( "std" ).Io')):
+            with self.subTest(line=line):
+                with Tree(with_router(**{"a.zig": line + "\n"})) as t:
+                    self.assertEqual(t.texts(), [("a.zig", want)])
+        # Its genuine interfaces stay allowed, as through `std.`.
+        with Tree(with_router(**{"a.zig": 'const W = @import("std").Io.Writer;\n'})) as t:
+            self.assertEqual(t.scan(), [])
+
     def test_the_old_alias_to_std_is_a_finding_however_spaced(self):
         # Io comes from host_io, the one file the build swaps; an alias
         # straight to std's would be std's on every host, the machine too.

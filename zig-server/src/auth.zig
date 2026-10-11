@@ -69,8 +69,8 @@ pub fn verifyPassword(stored: []const u8, password: []const u8) bool {
 /// .create). Doing those two steps here is the same bytes on Linux, and it lets
 /// this module run on a machine whose `Io` is not std's: `io.random` is one of
 /// the few things such a machine must provide, and `strHashWithSalt` needs no
-/// `Io` at all. Passing our `io` straight to std compiled only where the alias
-/// happened to BE std.Io.
+/// `Io` at all. Passing our `io` straight to std compiled only where host_io
+/// is std's.
 pub fn hashPassword(password: []const u8, out: []u8, io: Io) ![]const u8 {
     var salt: [bcrypt.salt_length]u8 = undefined;
     io.random(&salt);
