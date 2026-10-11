@@ -125,13 +125,15 @@ const App = struct {
     pub const uploader = uploaderOf;
 };
 
-/// **WHO MAY HOLD AN UPLOAD SLOT** (metal-vmm QUEUE 169): anyone the request
-/// names (a member's session, an API key, a guest), from the head alone, so
-/// the sign-in is checked before a byte of the upload is read; a stranger
-/// is null, never holds a slot, and the upload route refuses them unread.
+/// **WHO MAY HOLD AN UPLOAD SLOT** (metal-vmm QUEUE 169): whom the upload's
+/// routes take, by the same gate (chat and channels: a member or an agent,
+/// `principalAuthorized`), from the head alone, so the sign-in is checked
+/// before a byte of the upload is read. Anyone else (a stranger, a guest)
+/// is null, never holds a slot, and the route refuses them unread.
 fn uploaderOf(req: *std.http.Server.Request, io: Io, alloc: std.mem.Allocator) !?[]const u8 {
     const uid = try users.currentUserID(io, alloc, req);
-    return if (uid.len == 0) null else uid;
+    if (uid.len == 0 or !try users.principalAuthorized(io, alloc, uid)) return null;
+    return uid;
 }
 
 /// **EACH ROUTE'S CAP ON A BODY, FROM ITS PATH** (metal-vmm QUEUE 167.2): the
