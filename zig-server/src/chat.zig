@@ -43,7 +43,8 @@ const html = @import("html.zig");
 const htmlEscape = html.htmlEscape; // internal alias; the impl lives in html.zig
 const chrome = @import("chat_chrome.zig");
 const page = @import("chat_page.zig");
-const sse = @import("chat_sse.zig");
+const chat_sse = @import("chat_sse.zig");
+const sse = @import("sse.zig");
 const edge = @import("edge.zig");
 const docs = @import("docs.zig");
 const reading_list = @import("reading_list.zig");
@@ -156,10 +157,10 @@ pub fn handle(req: *Request, io: Io, alloc: Alloc, bus: *Bus, sub: []const u8) !
     // (notify: status-strip pings + came-online; sidebar: topic-added +
     // user-online). Live-only — the server-rendered page is the backlog.
     if (std.mem.eql(u8, sub, "/notifications")) {
-        return sse.forwardUserStream(req, alloc, bus, try store.notifyBusKey(alloc, uid));
+        return sse.forward(req, bus, try store.notifyBusKey(alloc, uid));
     }
     if (std.mem.eql(u8, sub, "/sidebar/stream")) {
-        return sse.forwardUserStream(req, alloc, bus, try store.sidebarBusKey(alloc, uid));
+        return sse.forward(req, bus, try store.sidebarBusKey(alloc, uid));
     }
     try http.notFound(req);
 }
@@ -288,7 +289,7 @@ fn topicRoute(req: *Request, io: Io, alloc: Alloc, bus: *Bus, segs: *SegIter, ui
     }
     if (segs.next() != null) return http.notFound(req); // the rest take no further segment
     if (std.mem.eql(u8, tail, "stream")) {
-        try sse.streamTranscript(req, io, alloc, bus, conv.dir, conv.key, topic.sid, uid);
+        try chat_sse.streamTranscript(req, io, alloc, bus, conv.dir, conv.key, topic.sid, uid);
     } else if (std.mem.eql(u8, tail, "send")) {
         try sendMessage(req, io, alloc, bus, topic, uid);
     } else if (std.mem.eql(u8, tail, "upload")) {

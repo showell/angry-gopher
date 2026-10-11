@@ -4,20 +4,19 @@
 //!   streamTranscript   /<conv>/<sid>/stream — per-topic: a `backlog-size`
 //!                      preamble, backlog replay from the cursor, then LIVE
 //!                      messages off the bus, with `: ping` keepalives.
-//!   forwardUserStream  the per-uid cross-page streams (notifications, sidebar,
-//!                      recent, images, code) — subscribe to one bus key and
-//!                      forward each published blob verbatim as one SSE frame.
+//!   the per-uid cross-page streams (notifications, sidebar, recent, images,
+//!                      code) are webbox's sse.forward over one bus key each:
+//!                      each published blob verbatim as one SSE frame.
 //!
 //! emitWire/liveFrame/BusMsg are the per-topic framing (render markdown → html,
-//! compute viewer-relative `mine`); parseSince is the replay cursor. The bus
+//! compute viewer-relative `mine`); the replay cursor is sse.readResume. The bus
 //! fan-out itself lives in bus.zig; openStream (decode backlog + subscribe
 //! atomically) in chat_store.zig — this module is purely the HTTP/SSE edge.
 //! The bus was prototyped on a standalone concurrency spike (since removed)
 //! before chat was ported onto it.
 //!
-//! This module is the only caller of http.zig's Server-Sent Events pieces
-//! (`sse_headers`, `pushFrame`): every chat stream's head, preamble and backlog
-//! go through them; the live frames are the host's (bus.zig's `Kept`).
+//! Every chat stream's head, preamble and backlog go through webbox's sse.zig
+//! (`respond`, `push`); the live frames are the host's (bus.zig's `Kept`).
 
 const std = @import("std");
 const Io = std.Io;
@@ -26,6 +25,7 @@ const users = @import("users.zig");
 const store = @import("chat_store.zig");
 const markdown = @import("markdown.zig");
 const Bus = @import("bus.zig").Bus;
+const sse = @import("sse.zig");
 
 const Alloc = std.mem.Allocator;
 const Request = std.http.Server.Request;
@@ -43,7 +43,7 @@ const Request = std.http.Server.Request;
 /// writes each live frame as it is, long after this handler has returned, and
 /// there is no chunk framing for it to carry on.
 pub fn streamTranscript(req: *Request, io: Io, alloc: Alloc, bus: *Bus, conv_dir: []const u8, conv_key: []const u8, sid: []const u8, uid: []const u8) !void {
-    const since = try parseSince(req, alloc);
+    const since = try sse.readResume(req, alloc);
     const viewer = try users.getUserName(io, alloc, uid);
 
     const stream = try store.openStream(io, alloc, bus, conv_dir, conv_key, sid);
@@ -52,14 +52,12 @@ pub fn streamTranscript(req: *Request, io: Io, alloc: Alloc, bus: *Bus, conv_dir
     defer held.release();
 
     var hbuf: [4096]u8 = undefined;
-    var body = req.respondStreaming(&hbuf, .{
-        .respond_options = .{ .extra_headers = &http.sse_headers, .transfer_encoding = .none },
-    }) catch return;
+    var body = sse.respond(req, &hbuf) catch return;
 
     const rest = backlogFrom(stream.backlog, sid, since);
     {
         const pre = try std.fmt.allocPrint(alloc, "event: backlog-size\ndata: {d}\n\n", .{rest.len});
-        http.pushFrame(&body, pre) catch return;
+        sse.push(&body, pre) catch return;
     }
 
     const first = stream.backlog.len - rest.len;
@@ -68,7 +66,7 @@ pub fn streamTranscript(req: *Request, io: Io, alloc: Alloc, bus: *Bus, conv_dir
         // it keeps its number (chat_store.countBlocks).
         const index = store.indexOf(m.id, sid) orelse i;
         const frame = try emitWire(alloc, index, m.from, m.date, m.markdown, m.id, std.mem.eql(u8, m.from, viewer), "");
-        http.pushFrame(&body, frame) catch return;
+        sse.push(&body, frame) catch return;
     }
 
     // Live: the host's. The viewer outlives this request's arena.
@@ -132,40 +130,10 @@ fn emitWire(alloc: Alloc, index: usize, from: []const u8, at: []const u8, md: []
     });
 }
 
-// ── per-uid cross-page stream ─────────────────────────────────────────────────
-
-/// forwardUserStream subscribes to a per-uid cross-page bus key (recent/images)
-/// and hands it to the host, which forwards each published blob verbatim as one
-/// SSE `data:` frame. Live-only (the server-rendered page is the backlog); the
-/// host sends the `: ping` keepalives. The published blob is already the exact
-/// event JSON the page's client parses.
-pub fn forwardUserStream(req: *Request, alloc: Alloc, bus: *Bus, key: []const u8) !void {
-    _ = alloc;
-    const sub = try bus.open(key);
-    var held = bus.hold(sub);
-    defer held.release();
-
-    var hbuf: [4096]u8 = undefined;
-    var body = req.respondStreaming(&hbuf, .{
-        .respond_options = .{ .extra_headers = &http.sse_headers, .transfer_encoding = .none },
-    }) catch return;
-    // Send the head now: a live-only stream may have nothing to say for a
-    // while, and the browser should know it is connected.
-    body.flush() catch return;
-
-    held.keep(renderForward, "");
-}
-
-fn renderForward(_: []const u8, arena: Alloc, blob: []const u8) ?[]const u8 {
-    return std.fmt.allocPrint(arena, "data: {s}\n\n", .{blob}) catch null;
-}
-
 // ── replay cursor ──────────────────────────────────────────────────────────────
 
-/// parseSince extracts the replay cursor from the request: Last-Event-ID
-/// (reconnect) → n+1, else ?since=N (initial load) → n, else 0. The decision is
-/// sinceFrom; this is just the Io-free read of the two header/query sources.
-/// The backlog from index `since` on. **AN INDEX, NOT A POSITION**: a frame's
+/// The backlog from index `since` on (webbox's sse.readResume says where a
+/// stream resumes). **AN INDEX, NOT A POSITION**: a frame's
 /// `id:` is its message's index, so a refused block before it leaves the
 /// backlog's positions behind the indexes after it.
 fn backlogFrom(backlog: []const store.ChatMessage, sid: []const u8, since: usize) []const store.ChatMessage {
@@ -173,25 +141,6 @@ fn backlogFrom(backlog: []const store.ChatMessage, sid: []const u8, since: usize
         if ((store.indexOf(m.id, sid) orelse i) >= since) return backlog[i..];
     }
     return backlog[backlog.len..];
-}
-
-fn parseSince(req: *Request, alloc: Alloc) !usize {
-    return sinceFrom(try http.header(req, alloc, "last-event-id"), http.queryValue(try http.target(req, alloc), "since"));
-}
-
-/// sinceFrom is the pure replay-cursor decision: a parseable Last-Event-ID wins
-/// (reconnect resumes AFTER the last delivered id → n+1); else a parseable
-/// ?since=N (initial load resumes AT n); else 0. A malformed source falls through
-/// to the next, so a junk Last-Event-ID doesn't strand a valid ?since.
-fn sinceFrom(last_event_id: ?[]const u8, since_q: ?[]const u8) usize {
-    if (last_event_id) |lei| {
-        const t = std.mem.trim(u8, lei, " \t");
-        if (std.fmt.parseInt(usize, t, 10)) |n| return n + 1 else |_| {}
-    }
-    if (since_q) |q| {
-        if (std.fmt.parseInt(usize, q, 10)) |n| return n else |_| {}
-    }
-    return 0;
 }
 
 // ── tests ────────────────────────────────────────────────────────────────────
@@ -213,22 +162,6 @@ test "a reconnect past a refused block misses nothing: since is an index, not a 
     try testing.expectEqual(@as(usize, 3), backlogFrom(&backlog, "t", 0).len);
     try testing.expectEqual(@as(usize, 2), backlogFrom(&backlog, "t", 1).len); // t_3 is index 2
     try testing.expectEqual(@as(usize, 0), backlogFrom(&backlog, "t", 4).len);
-}
-
-test "sinceFrom: Last-Event-ID resumes after n; ?since resumes at n; junk falls through" {
-    // Last-Event-ID (reconnect) → n+1
-    try testing.expectEqual(@as(usize, 6), sinceFrom("5", null));
-    try testing.expectEqual(@as(usize, 6), sinceFrom("  5 ", null)); // trimmed
-    // ?since (initial load) → n
-    try testing.expectEqual(@as(usize, 5), sinceFrom(null, "5"));
-    // neither present → 0
-    try testing.expectEqual(@as(usize, 0), sinceFrom(null, null));
-    // Last-Event-ID wins over ?since when both are present and valid
-    try testing.expectEqual(@as(usize, 6), sinceFrom("5", "99"));
-    // a junk Last-Event-ID must NOT strand a valid ?since — it falls through
-    try testing.expectEqual(@as(usize, 5), sinceFrom("garbage", "5"));
-    // both unparseable → 0
-    try testing.expectEqual(@as(usize, 0), sinceFrom("x", "y"));
 }
 
 /// wireField pulls one field out of an emitted SSE message frame for assertions:
@@ -310,11 +243,10 @@ test "liveFrame computes mine against the viewer from a bus blob" {
     try testing.expect(!theirs.value.mine);
 }
 
-test "renderForward wraps a blob as one data frame; renderLive passes the viewer through" {
+test "renderLive passes the viewer through" {
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();
     const a = arena.allocator();
-    try testing.expectEqualStrings("data: {\"x\":1}\n\n", renderForward("", a, "{\"x\":1}").?);
     const blob = "{\"index\":0,\"from\":\"Ann\",\"at\":\"2pm\",\"id\":\"general_1\",\"cid\":\"\",\"markdown\":\"hi\"}";
     // A blob that does not parse renders nothing, rather than a broken frame.
     try testing.expect(renderLive("Ann", a, "{\"index\":0}") == null);
