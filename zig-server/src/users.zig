@@ -3,7 +3,7 @@
 //! issuance half (account creation, password set/verify, session signing, name
 //! validation) landed with the front-door login port (login.zig).
 //!
-//! Three roots, three concerns (config.zig sets all three at startup; nothing
+//! Three roots, three concerns (roots.point sets all three at startup; nothing
 //! else reaches past this module's API to touch their files):
 //!   • auth_root          — the SHARED account store: name, password, api-key,
 //!                          next-id. Identity + credentials + issuance.
@@ -41,7 +41,7 @@ const uid_cookie = @import("uid_cookie.zig");
 const HmacSha256 = std.crypto.auth.hmac.sha2.HmacSha256;
 const b64 = std.base64.url_safe_no_pad;
 
-// Roots (config.zig overrides these at startup from GOPHER_CONFIG). Defaults are
+// Roots (roots.point overrides these at startup, from the host's roots). Defaults are
 // repo-relative, adjusted for the zig-server cwd.
 pub var auth_root: []const u8 = "../games/lynrummy/auth-data"; // shared account store (name/password/api-key)
 pub var users_root: []const u8 = "../games/lynrummy/users-data"; // gopher-private (upload-bytes)

@@ -2,7 +2,8 @@
 """Poka-yoke lint: nothing the route table reaches may reach for the host.
 
 `zig-server/src/router.zig` is WHAT THIS SITE SERVES, and it is deliberately
-separate from `server.zig`, which is HOW THIS PROCESS STARTS. The point of the
+separate from how a Linux process starts (webbox's `linux_host.zig`, which
+`server.zig` calls). The point of the
 split is that the route table can be called by a host that is not Linux:
 gopher-metal boots it on a machine with no operating system. That only works if
 every module the route table transitively imports stays off the host — and a
@@ -11,9 +12,9 @@ module that does not is not a slower path there. It FAILS TO COMPILE.
 This lint computes that set from the import graph, starting at router.zig and
 at webbox.zig (the library an application built on this server imports, which
 the metal port carries too, whether or not this site's routes reach a file of
-it), and checks every file in it. A module outside the set (server.zig, config.zig, the
-stress harness, the markdown tools) is host-side by definition and is not
-checked. There is no hardcoded list of exemptions to fall out of date.
+it), and checks every file in it. A module outside the set (server.zig, the
+library's host-only part, the stress harness, the markdown tools) is
+host-side by definition and is not checked. There is no hardcoded list of exemptions to fall out of date.
 
 WHAT IT FORBIDS, inside the set and outside `test {}` blocks:
 
@@ -254,9 +255,17 @@ def scan(src_dir: str, root=ROOT_MODULE):
             text = f.read()
         if name != LIBRARY_ROOT:
             for dep in zig_source.imports(text):
-                if dep in HOST_ONLY:
+                base = os.path.basename(dep)
+                if base in HOST_ONLY:
                     found.append((name, 0, f'@import("{dep}")',
-                                  f"{dep} is the library's host-only part: only webbox.zig may import it"))
+                                  f"{base} is the library's host-only part: only webbox.zig may import it"))
+                elif base == LIBRARY_ROOT:
+                    # Through the library's front door the host-only part is
+                    # one field away (`.linux_host`), and on the bare-metal
+                    # host it still compiles: a portable file imports the
+                    # library's members by their own files.
+                    found.append((name, 0, f'@import("{dep}")',
+                                  "a portable file imports a library member by its own file, never webbox.zig, which names the host-only part too"))
         with open(os.path.join(src_dir, name), encoding="utf-8") as f:
             lines = f.readlines()
         tests = test_lines(lines)

@@ -1,5 +1,5 @@
 //! chat_store: the on-disk chat storage layer — reading and appending transcripts
-//! (1:1 DMs and channels) under chat_root ({data_dir}/chat, wired by config.zig).
+//! (1:1 DMs and channels) under chat_root ({data_dir}/chat, wired by roots.point).
 //! decodeChatFile parses a transcript off disk; appendMessage adds a message and
 //! fans it out to live streams.
 //!
@@ -28,7 +28,7 @@ const images_store = @import("images_store.zig");
 const code_store = @import("code_store.zig");
 const search_index = @import("search_index.zig");
 
-/// chat_root is {data_dir}/chat. config.zig overrides this at startup; the
+/// chat_root is {data_dir}/chat. roots.point overrides this at startup; the
 /// default is repo-relative-from-zig-server like the others.
 pub var chat_root: []const u8 = "../games/lynrummy/chat-data";
 

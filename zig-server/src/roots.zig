@@ -15,13 +15,15 @@
 //! password hashes and API keys in auth/, so a leak surface is one tree, not
 //! two. `migrateSecret` moves an existing secret there once at startup.
 //!
-//! **IT IS SEPARATE FROM config.zig BECAUSE IT CAN CROSS.** config.zig reads an
-//! environment variable and opens the file it names — which is how a Linux
-//! process learns where its data is, and which does not exist on a machine with
-//! no operating system. This is the part that was never about the environment:
-//! the mapping from two directories to six roots. config.zig calls it after
-//! parsing; a kernel calls it with paths on its own volume. Neither restates the
-//! mapping, so the two hosts cannot disagree about where a store lives.
+//! **IT IS SEPARATE FROM THE CONFIG FILE'S READING BECAUSE IT CAN CROSS.**
+//! webbox's linux_config.zig reads an environment variable and opens the file
+//! it names, which is how a Linux process learns where its data is, and which
+//! does not exist on a machine with no operating system. This is the part
+//! that was never about the environment: the mapping from two directories to
+//! six roots. This application's setup (app_start.zig) calls it with the roots
+//! the host gave `start`: a Linux host's from its config, a kernel's on its
+//! own volume. Neither restates the mapping, so the two hosts cannot disagree
+//! about where a store lives.
 //!
 //! **HOW FAR THESE FOLDERS CAN GROW** (the store's 65,536-entry bound on a
 //! FAT folder, store.zig; gopher-metal QUEUE item 68; prod's counts from

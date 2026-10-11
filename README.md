@@ -40,7 +40,7 @@ it, on its own DigitalOcean droplet. The two repos stay separate:
   it.
 - **The two hosts are one machine, by contract** (gopher-metal `HOST.md`,
   `STORE.md`): Linux runs **one handler at a time** as metal's single loop
-  does (`server.zig`'s turn); every bound on a request is in
+  does (the turn in webbox's `linux_host.zig`); every bound on a request is in
   [`zig-server/src/limits.zig`](zig-server/src/limits.zig), which both hosts
   size their buffers from and `tools/check_caddy_limits.py` holds the
   Caddyfile to; and `store.zig` answers the same on Linux and on metal, which
@@ -165,7 +165,8 @@ honors exactly **two** keys — everything else (including any `port =`
 line) is ignored. The listen port is `:9001` unless `GOPHER_PORT` says
 otherwise; `GOPHER_BIND` picks the address, and `GOPHER_TRUSTED_PROXY`
 whose `X-Forwarded-For` names the client (default `127.0.0.1`, the
-local Caddy). All three are read in `zig-server/src/server.zig`.
+local Caddy). `zig-server/src/server.zig` names all three, and webbox's
+`linux_host.zig` reads them.
 
 ```
 data_dir = /home/steve/AngryGopher/local  # all writable state lives here

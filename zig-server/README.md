@@ -11,12 +11,15 @@ zig **0.16.0** (`zig version`).
 
 ## Server (`src/server.zig`)
 
-`server.zig` is the entry point: it listens on **:9001**, runs each accepted
-connection as its own task on the `std.Io` thread pool (so long-lived SSE
-streams don't starve other connections), and hands each request to
-`router.zig`, which routes by path prefix to the per-surface handlers
-(`chat.zig`, `puzzles.zig`, `game.zig`, `driving.zig`, …). The port is
-`GOPHER_PORT` (default 9001); `data_dir` + auth come from `GOPHER_CONFIG`.
+`server.zig` is the entry point, and the `webbox` library (`src/webbox.zig`)
+does the serving. Its Linux host (`linux_host.zig`) listens on **:9001**,
+runs each accepted connection as its own task on the `std.Io` thread pool (so
+long-lived SSE streams don't starve other connections), and hands each
+request to `router.zig`, which routes by path prefix to the per-surface
+handlers (`chat.zig`, `puzzles.zig`, `game.zig`, `driving.zig`, …). The port
+is `GOPHER_PORT` (default 9001); `data_dir` + auth come from
+`GOPHER_CONFIG`. `server.zig` holds what is this application's own about
+that: its name, its variables, the game store's floor, its startup lines.
 
 Front-end assets that live elsewhere in the repo (the Elm/TS bundles, the
 Safari and chess WASM cores, the chat client, the puzzle catalogs) are baked

@@ -48,7 +48,7 @@ const uid_cookie = @import("uid_cookie.zig");
 const game_limits = @import("game_limits.zig");
 const users = @import("users.zig");
 
-/// player_root is the local player directory (config.zig points it at
+/// player_root is the local player directory (roots.point points it at
 /// {data_dir}/players at startup; the default is repo-relative from zig-server/).
 pub var player_root: []const u8 = "../games/lynrummy/players-data";
 

@@ -48,7 +48,8 @@ Three things carry the whole seam:
   two hosts.
 
 Config is a near-miss worth naming: the *source* differs (Linux reads
-environment variables in `config.zig`; metal reads `gopher-metal.conf`), but
+environment variables and a config file in webbox's `linux_config.zig`; metal
+reads `gopher-metal.conf`), but
 both end at `roots.point`, so the application proper never sees the
 difference — only the two `main`s do. That is the seam working as intended:
 the host-specific part is confined to the host's entry point.

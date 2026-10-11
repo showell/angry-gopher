@@ -11,6 +11,14 @@
 //! localhost, and with GOPHER_BIND=127.0.0.1 a rehearsal on real data answers
 //! on loopback only.
 //!
+//! **KEEP-ALIVE IS OFF** (linux_host.zig serves one request a connection). It
+//! was first turned off when the accept loop was single-threaded and a
+//! held-open idle connection deadlocked /game's three parallel script loads;
+//! connections now run concurrently, and it is still off, as gopher-metal
+//! serves one request per connection too. The rules both hosts keep (one
+//! handler at a time, a small body read before the turn, as gopher-metal's
+//! ready.zig waits) are gopher-metal's HOST.md.
+//!
 //! Run:  ops/build_elm && ops/build_safari_wasm && ops/build_delivery
 //!         (from the repo root, for the embedded bundles)
 //!       cd zig-server && zig build run        (serves on http://localhost:9001)

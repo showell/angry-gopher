@@ -260,6 +260,26 @@ class Reach(unittest.TestCase):
             found = L.scan(t.dir, L.ROOTS)
             self.assertEqual([(n, text) for n, _, text, _ in found], [("router.zig", '@import("linux_host.zig")')])
 
+    def test_a_portable_file_reaching_the_host_through_the_library_root_is_a_finding(self):
+        # `@import("webbox.zig").linux_host` is one field from the host, and
+        # on the bare-metal host it still compiles (freeSpaceAt answers null).
+        files = {
+            "router.zig": 'const space = @import("webbox.zig").linux_host.freeSpaceAt("x");\n',
+            "webbox.zig": 'pub const linux_host = @import("linux_host.zig");\n',
+            "linux_host.zig": "var t = std.Io.Threaded.init(a, .{});\n",
+        }
+        with Tree(files) as t:
+            self.assertEqual([(n, text) for n, _, text, _ in L.scan(t.dir, L.ROOTS)], [("router.zig", '@import("webbox.zig")')])
+
+    def test_a_host_only_file_named_by_a_path_is_still_a_finding(self):
+        files = {
+            "router.zig": 'const h = @import("./linux_host.zig");\n',
+            "webbox.zig": "\n",
+            "linux_host.zig": "\n",
+        }
+        with Tree(files) as t:
+            self.assertEqual([n for n, _, _, _ in L.scan(t.dir, L.ROOTS)], ["router.zig"])
+
     def test_a_missing_library_root_is_loud(self):
         with Tree({"router.zig": "\n"}) as t:
             with self.assertRaises(FileNotFoundError):
