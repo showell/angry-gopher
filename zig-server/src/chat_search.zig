@@ -83,13 +83,13 @@ pub fn handle(req: *Request, io: Io, alloc: Alloc, uid: []const u8, rest: []cons
             try b.print(alloc, ",\"count\":{d}}}", .{w.count});
         }
     } else {
-        const f = if (key.len < tokens.min_len) search_index.Found{ .hits = &.{}, .matched = 0 } else try idx.messagesFor(alloc, reach, key, most_messages, most_bytes);
+        const f = if (key.len < tokens.min_len) search_index.Found{ .hits = &.{}, .matched = 0 } else try idx.messagesFor(alloc, reach, key, most_messages, .{ .bytes = most_bytes, .cost = excerptCost });
         try b.appendSlice(alloc, "{\"word\":");
         try str(&b, alloc, key);
         // **SIZED ONCE**: grown as it is written, the request's arena would
         // keep every smaller copy of the answer besides the last.
         var size: usize = 128;
-        for (f.hits) |h| size += 128 + search_index.jsonCost(h.msg.markdown) + search_index.jsonCost(h.msg.from) +
+        for (f.hits) |h| size += 128 + excerptCost(h.msg.markdown, key) + search_index.jsonCost(h.msg.from) +
             search_index.jsonCost(h.msg.sid) + search_index.jsonCost(h.msg.id) + search_index.jsonCost(h.msg.date) + search_index.jsonCost(h.conv.base);
         try b.ensureTotalCapacity(alloc, b.items.len + size);
         try b.print(alloc, ",\"matched\":{d},\"unreadable\":{d},\"messages\":[", .{ f.matched, idx.unreadableFor(reach) });
@@ -140,6 +140,15 @@ pub fn excerptOf(alloc: Alloc, md: []const u8, key: []const u8) !Excerpt {
         .mark = md[at .. at + key.len],
         .after = try cut(alloc, "", md[at + key.len .. end], end < md.len),
     };
+}
+
+/// What a message's excerpt costs as JSON, at most: the window `excerptOf`
+/// cuts, and its two marks of a cut. What the route charges its budget.
+pub fn excerptCost(md: []const u8, key: []const u8) usize {
+    const at = search_index.wordAt(md, key) orelse 0;
+    const lo = at -| excerpt_pad;
+    const hi = @min(md.len, at + key.len + excerpt_pad);
+    return search_index.jsonCost(md[@min(lo, hi)..hi]) + 2 * "\u{2026}".len + 32;
 }
 
 fn cut(alloc: Alloc, lead: []const u8, s: []const u8, trailing: bool) ![]const u8 {

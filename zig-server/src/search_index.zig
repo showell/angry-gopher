@@ -145,6 +145,19 @@ fn inPlaceRead(piece: []const u8) chat_store.ChatMessage {
     return m;
 }
 
+/// What a listing of messages may cost: `bytes` of what `cost` says each
+/// message costs, which is what its caller sends of it (the review of 157:
+/// the route sends an excerpt, and was charged the whole message).
+pub const Budget = struct {
+    bytes: usize = std.math.maxInt(usize),
+    cost: *const fn (markdown: []const u8, word: []const u8) usize = wholeCost,
+};
+
+/// A message sent whole: its text as a JSON string writes it.
+pub fn wholeCost(markdown: []const u8, _: []const u8) usize {
+    return jsonCost(markdown);
+}
+
 /// **WHAT `s` COSTS AS A JSON STRING, AT MOST** (the review of 155's
 /// follow-ups): a control byte as `\u00XX` (6), a quote or backslash
 /// escaped (2), a byte >= 0x80 as U+FFFD if it is not UTF-8 (3, so every
@@ -346,10 +359,10 @@ pub const Index = struct {
 
     /// The messages holding `word` (a key, folded) in the conversations of
     /// `reach` and no others, in `reach`'s order, each conversation's in the
-    /// order they came; at most `most` listed, and their text at most
-    /// `budget` bytes as a JSON string writes it (`jsonCost`; past it the
-    /// listing stops; the first is always listed), every one counted.
-    pub fn messagesFor(self: *const Index, alloc: Alloc, reach: []const chat_store.Reach, word: []const u8, most: usize, budget: usize) !Found {
+    /// order they came; at most `most` listed, and what they cost at most
+    /// `budget.bytes` (past it the listing stops; the first is always
+    /// listed), every one counted.
+    pub fn messagesFor(self: *const Index, alloc: Alloc, reach: []const chat_store.Reach, word: []const u8, most: usize, budget: Budget) !Found {
         var hits: std.ArrayList(Found.Hit) = .empty;
         var matched: usize = 0;
         var bytes: usize = 0;
@@ -365,8 +378,8 @@ pub const Index = struct {
                 const m = c.msg(ref);
                 if (!holds(m.markdown, word)) continue;
                 left -= 1;
-                const cost = jsonCost(m.markdown);
-                if (hits.items.len > 0 and bytes + cost > budget) {
+                const cost = budget.cost(m.markdown, word);
+                if (hits.items.len > 0 and bytes + cost > budget.bytes) {
                     full = true;
                     break;
                 }
@@ -524,14 +537,14 @@ test "messages for a word, at most so many listed and every one counted" {
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();
     const mine = [_]chat_store.Reach{.{ .dir = "c/1_2", .base = "/chat/c/1_2", .kind = .dm }};
-    const f = try idx.messagesFor(arena.allocator(), &mine, "tonight", 3, std.math.maxInt(usize));
+    const f = try idx.messagesFor(arena.allocator(), &mine, "tonight", 3, .{});
     try testing.expectEqual(@as(usize, 4), f.matched);
     try testing.expectEqual(@as(usize, 3), f.hits.len);
     try testing.expectEqualStrings("t_1", f.hits[0].msg.id);
     try testing.expectEqualStrings("t_3", f.hits[1].msg.id);
     try testing.expectEqualStrings("dinner tonight?", f.hits[0].msg.markdown);
     // A word that is only a prefix finds nothing: words are whole.
-    try testing.expectEqual(@as(usize, 0), (try idx.messagesFor(arena.allocator(), &mine, "tonig", 10, std.math.maxInt(usize))).matched);
+    try testing.expectEqual(@as(usize, 0), (try idx.messagesFor(arena.allocator(), &mine, "tonig", 10, .{})).matched);
 }
 
 test "an index that runs out of memory part way can be dropped without a leak" {
@@ -636,11 +649,11 @@ test "messages for a word stop at a byte budget, every one still counted (the bo
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();
     const mine = [_]chat_store.Reach{.{ .dir = "c/1_2", .base = "/chat/c/1_2", .kind = .dm }};
-    const f = try idx.messagesFor(arena.allocator(), &mine, "word", 10, 2500);
+    const f = try idx.messagesFor(arena.allocator(), &mine, "word", 10, .{ .bytes = 2500 });
     try testing.expectEqual(@as(usize, 3), f.matched);
     try testing.expectEqual(@as(usize, 2), f.hits.len);
     // One message past the whole budget is still listed: the first always is.
-    try testing.expectEqual(@as(usize, 1), (try idx.messagesFor(arena.allocator(), &mine, "word", 10, 10)).hits.len);
+    try testing.expectEqual(@as(usize, 1), (try idx.messagesFor(arena.allocator(), &mine, "word", 10, .{ .bytes = 10 })).hits.len);
 }
 
 test "a word too long to ask for is never suggested (the box's review of 155, 2)" {
@@ -656,7 +669,7 @@ test "a word too long to ask for is never suggested (the box's review of 155, 2)
     // And what is suggested, a key of it finds.
     var buf: [tokens.max_word]u8 = undefined;
     const k = tokens.key(got[0].word, &buf);
-    try testing.expectEqual(@as(usize, 1), (try idx.messagesFor(arena.allocator(), &mine, k, 10, std.math.maxInt(usize))).matched);
+    try testing.expectEqual(@as(usize, 1), (try idx.messagesFor(arena.allocator(), &mine, k, 10, .{})).matched);
 }
 
 test "the budget is charged what the JSON costs, not the raw bytes (the review of 155's follow-ups)" {
@@ -670,7 +683,7 @@ test "the budget is charged what the JSON costs, not the raw bytes (the review o
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();
     const mine = [_]chat_store.Reach{.{ .dir = "c/1_2", .base = "/chat/c/1_2", .kind = .dm }};
-    const f = try idx.messagesFor(arena.allocator(), &mine, "word", 10, 8000);
+    const f = try idx.messagesFor(arena.allocator(), &mine, "word", 10, .{ .bytes = 8000 });
     try testing.expectEqual(@as(usize, 2), f.matched);
     try testing.expectEqual(@as(usize, 1), f.hits.len);
 }

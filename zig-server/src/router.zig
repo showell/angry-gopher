@@ -1290,7 +1290,7 @@ test "search agrees with /admin/search: for every word, the baseline's messages 
                 }
                 if (has) try want.put(a, where, {});
             }
-            const got = try idx.messagesFor(a, reach, k.*, 10_000, std.math.maxInt(usize));
+            const got = try idx.messagesFor(a, reach, k.*, 10_000, .{});
             try testing.expectEqual(got.matched, got.hits.len);
             var got_set: std.StringHashMapUnmanaged(void) = .empty;
             for (got.hits) |h| try got_set.put(a, try std.fmt.allocPrint(a, "{s} {s} {s}", .{ h.conv.base, h.msg.sid, h.msg.id }), {});
@@ -2201,4 +2201,34 @@ test "route: search answers each message's excerpt cut, the word marked as the i
     try testing.expectEqualStrings("200 OK", status(try postAs(a, io, "/chat/c/1_2/new", me, "topic=Plans")));
     const page = try UidSite.ask(a, io, "/chat/c/1_2/Plans", me);
     try testing.expect(std.mem.indexOf(u8, page, try std.fmt.allocPrint(a, "data-search-min=\"{d}\"", .{@import("search_tokens.zig").min_len})) != null);
+}
+
+test "route: search's budget charges the excerpts it sends, not the whole messages, so big messages do not cut the list short (the review of 157)" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var site = try UidSite.init(a, io);
+    defer site.deinit();
+    const meter = mem_meter.useForTest(std.heap.page_allocator);
+    defer meter.restore();
+    const chat_search = @import("chat_search.zig");
+    const emptied = search_index.emptyForTest();
+    defer emptied.end();
+    const forgot = chat_search.forgetForTest();
+    defer forgot.end();
+    const me = try memberSession(a, io, "1", "Steve");
+    _ = try memberSession(a, io, "2", "Debbie");
+    // Thirty messages of 100 KB, each holding the word: 3 MB whole, past the
+    // 2 MiB budget; their excerpts are a few KB.
+    const big = "zeppelin " ++ "x" ** (100 << 10);
+    var bodies: [30][]const u8 = undefined;
+    for (&bodies) |*b| b.* = big;
+    try writeTranscript(a, io, "1_2", "Docs", &bodies);
+    const found = try UidSite.ask(a, io, "/chat/search/messages?word=zeppelin", me);
+    try testing.expect(std.mem.indexOf(u8, found, "\"matched\":30") != null);
+    try testing.expectEqual(@as(usize, 30), std.mem.count(u8, found, "\"mark\":\"zeppelin\""));
+    try testing.expect(found.len < 64 << 10);
 }
