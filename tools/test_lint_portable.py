@@ -83,6 +83,9 @@ class Clean(unittest.TestCase):
             "server.zig", "config.zig", "bind.zig", "stress.zig", "hash_password.zig",
             "markdown_bench.zig", "markdown_hostile_probe.zig", "markdown_regression_test.zig",
             "search_bench.zig",
+            # The `gopher` library's root: what it names (http, edge, signed)
+            # the route table reaches, so it is portable by that alone.
+            "gopher.zig",
         })
 
 

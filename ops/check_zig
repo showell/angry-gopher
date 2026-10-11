@@ -25,6 +25,12 @@ cd "$REPO_DIR"
 # copy of the list here had lost delivery/app.js).
 python3 "$REPO_DIR/tools/embedded_assets.py" check
 
+# The `gopher` library (zig-server/src/gopher.zig) is the files it names, and
+# they import std and one another only: what a program built on gopher gets.
+echo "==> gopher library lint (its test, then the tree)"
+python3 "$REPO_DIR/tools/lint_gopher_library.py" --self-test
+python3 "$REPO_DIR/tools/lint_gopher_library.py"
+
 # Poka-yoke lint: raw request-head access (req.head.target / iterateHeaders) is
 # confined to http.zig, whose accessors return OWNED copies — so a head value can
 # never dangle past the body read that invalidates it (the empty/wrong-author bug).

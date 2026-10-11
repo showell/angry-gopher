@@ -49,8 +49,7 @@ const users = @import("users.zig");
 const player = @import("player.zig");
 const game_limits = @import("game_limits.zig");
 
-const HmacSha256 = std.crypto.auth.hmac.sha2.HmacSha256;
-const b64 = std.base64.url_safe_no_pad;
+const signed = @import("signed.zig");
 
 pub const cookie_name = "gopher_uid";
 const label = "gopher_uid\n";
@@ -71,52 +70,25 @@ pub fn validId(id: []const u8) bool {
     return true;
 }
 
-fn mac(secret: []const u8, id: []const u8, issued: []const u8, out: *[HmacSha256.mac_length]u8) void {
-    var ctx = HmacSha256.init(secret);
-    ctx.update(label);
-    ctx.update(id);
-    ctx.update("\n");
-    ctx.update(issued);
-    ctx.final(out);
-}
-
 /// The cookie's value for `id`, issued at `issued_unix`.
 pub fn sign(alloc: Alloc, secret: []const u8, id: []const u8, issued_unix: i64) ![]const u8 {
-    const issued = try std.fmt.allocPrint(alloc, "{d}", .{issued_unix});
-    var m: [HmacSha256.mac_length]u8 = undefined;
-    mac(secret, id, issued, &m);
-    var enc: [b64.Encoder.calcSize(HmacSha256.mac_length)]u8 = undefined;
-    return std.fmt.allocPrint(alloc, "{s}.{s}.{s}", .{ id, issued, b64.Encoder.encode(&enc, &m) });
+    return signed.sign(alloc, kind, secret, id, issued_unix);
 }
 
 /// How long a signed value names its id, from its signing: the Set-Cookie's
 /// Max-Age, and `verify`'s bound.
 pub const lifetime_secs: i64 = 365 * 24 * 60 * 60;
 
+/// This cookie's rules for the `gopher` library's signing (signed.zig).
+const kind: signed.Kind = .{ .label = label, .lifetime_secs = lifetime_secs, .skew_secs = users.clock_skew_secs, .validId = validId };
+
 /// The id a signed value carries at `now_unix`, or null: one past its
 /// lifetime, or issued further ahead than a clock's skew, is no one.
 pub fn verify(secret: []const u8, value: []const u8, now_unix: i64) ?[]const u8 {
-    var it = std.mem.splitScalar(u8, value, '.');
-    const id = it.next() orelse return null;
-    const issued = it.next() orelse return null;
-    const m64 = it.next() orelse return null;
-    if (it.next() != null or !validId(id)) return null;
-    const n = std.fmt.parseInt(i64, issued, 10) catch return null;
-    if (now_unix -| n > lifetime_secs or n -| now_unix > users.clock_skew_secs) return null;
-    var want: [HmacSha256.mac_length]u8 = undefined;
-    mac(secret, id, issued, &want);
-    var got: [HmacSha256.mac_length]u8 = undefined;
-    b64.Decoder.decode(&got, m64) catch return null;
-    if (!std.crypto.timing_safe.eql([HmacSha256.mac_length]u8, want, got)) return null;
-    return id;
+    return signed.verify(kind, secret, value, now_unix);
 }
 
-/// The second a value verify has passed was signed.
-fn issuedOf(value: []const u8) i64 {
-    var it = std.mem.splitScalar(u8, value, '.');
-    _ = it.next();
-    return std.fmt.parseInt(i64, it.next() orelse return 0, 10) catch 0;
-}
+const issuedOf = signed.issuedOf;
 
 fn nowUnix(io: Io) i64 {
     return @intCast(@divFloor(Io.Clock.now(.real, io).nanoseconds, std.time.ns_per_s));

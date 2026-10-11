@@ -20,6 +20,11 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
+    // **THE `gopher` LIBRARY** (src/gopher.zig): what an application built on
+    // gopher imports as one module, dog-park first. ops/check_zig holds its
+    // files to importing std and one another only.
+    _ = b.addModule("gopher", .{ .root_source_file = b.path("src/gopher.zig") });
+
     // Bake the deploy's git short-hash into the binary so /version (and thus the
     // watchdog) reports exactly which commit is serving. ops/deploy passes
     // -Dcommit=$(git rev-parse --short HEAD); local/dev builds fall back to "dev".
@@ -180,7 +185,7 @@ pub fn build(b: *std.Build) void {
 
     const test_step = b.step("test", "Run unit tests");
     test_step.dependOn(&b.addRunArtifact(router_tests).step);
-    for ([_][]const u8{ "src/auth.zig", "src/users.zig", "src/store.zig", "src/login.zig", "src/names.zig", "src/player.zig", "src/counter.zig", "src/admin_ui.zig", "src/roots.zig", "src/markdown_fence.zig", "src/recent_feed.zig", "src/code_store.zig", "src/chat_upload.zig", "src/markdown.zig", "src/markdown_media.zig", "src/bus.zig", "src/chat_sse.zig", "src/docs_store.zig", "src/reading_list.zig", "src/chat_store.zig", "src/reactions.zig", "src/mem_meter.zig", "src/stress.zig", "src/host_status.zig", "src/bind.zig", "src/admin_backup.zig", "src/ustar.zig", "src/storage.zig", "src/uid_cookie.zig", "src/game_limits.zig", "src/admin_secret.zig", "src/login_throttle.zig", "src/chat_retire.zig", "src/admin_retire.zig", "src/search_tokens.zig", "src/search_index.zig", "src/chat_search.zig" }) |path| {
+    for ([_][]const u8{ "src/auth.zig", "src/users.zig", "src/store.zig", "src/login.zig", "src/names.zig", "src/player.zig", "src/counter.zig", "src/admin_ui.zig", "src/roots.zig", "src/markdown_fence.zig", "src/recent_feed.zig", "src/code_store.zig", "src/chat_upload.zig", "src/markdown.zig", "src/markdown_media.zig", "src/bus.zig", "src/chat_sse.zig", "src/docs_store.zig", "src/reading_list.zig", "src/chat_store.zig", "src/reactions.zig", "src/mem_meter.zig", "src/stress.zig", "src/host_status.zig", "src/bind.zig", "src/admin_backup.zig", "src/ustar.zig", "src/storage.zig", "src/uid_cookie.zig", "src/game_limits.zig", "src/admin_secret.zig", "src/login_throttle.zig", "src/chat_retire.zig", "src/admin_retire.zig", "src/search_tokens.zig", "src/search_index.zig", "src/chat_search.zig", "src/gopher.zig" }) |path| {
         const unit = b.addTest(.{ .root_module = b.createModule(.{
             .root_source_file = b.path(path),
             .target = target,
