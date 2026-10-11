@@ -101,6 +101,11 @@ MUTANTS = [
      "if (rest.len != 0 and rest[0] != '/') continue;", ""),
     ("store", "case-not-folded", "a name in another case is a new file",
      "if (std.ascii.eqlIgnoreCase(entry.name, name))", "if (std.mem.eql(u8, entry.name, name))"),
+    # ── Server-Sent Events ──
+    ("sse", "push-no-drain", "a frame left in the writer's buffer, never sent live",
+     "    try body.writer.flush();\n    try body.flush();", "    try body.flush();"),
+    ("sse", "resume-at-the-last", "a reconnect replays the frame it already had",
+     "if (std.fmt.parseInt(usize, t, 10)) |n| return n + 1 else |_| {}", "if (std.fmt.parseInt(usize, t, 10)) |n| return n else |_| {}"),
     # ── which address a request is from ──
     ("client_address", "xff-from-anyone", "anyone's X-Forwarded-For believed",
      "if (!std.mem.eql(u8, p, proxy)) return try alloc.dupe(u8, p);", "_ = proxy;"),

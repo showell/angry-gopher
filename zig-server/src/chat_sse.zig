@@ -20,7 +20,6 @@
 
 const std = @import("std");
 const Io = std.Io;
-const http = @import("http.zig");
 const users = @import("users.zig");
 const store = @import("chat_store.zig");
 const markdown = @import("markdown.zig");
