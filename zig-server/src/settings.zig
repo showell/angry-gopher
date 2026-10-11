@@ -50,8 +50,8 @@ fn handleAPIKey(req: *Request, io: Io, alloc: Alloc, uid: []const u8) !void {
 
 fn renderSettings(req: *Request, io: Io, alloc: Alloc, uid: []const u8) !void {
     const viewer = try users.getUserName(io, alloc, uid);
-    var b: std.ArrayList(u8) = .empty;
-    try chrome.begin(&b, alloc, "Settings", "Settings", viewer, "settings");
+    var page = try chrome.page(alloc, "Settings", "Settings", viewer, "settings");
+    const b = &page.body;
 
     if (try queryFlag(req, alloc, "keyrevoked")) {
         try b.appendSlice(alloc, "<p class=\"flash\">Your API key was revoked.</p>");
@@ -62,8 +62,7 @@ fn renderSettings(req: *Request, io: Io, alloc: Alloc, uid: []const u8) !void {
     if (!users.userHasAPIKey(io, alloc, uid)) {
         try b.appendSlice(alloc, "<p>You don't have an API key yet.</p>\n" ++
             "<form method=\"post\" action=\"/settings/apikey\" style=\"display:inline\"><button type=\"submit\">Generate key</button></form>");
-        try chrome.end(&b, alloc);
-        return req.respond(b.items, .{ .extra_headers = &.{http.html_ct} });
+        return page.send(req, .ok);
     }
 
     // Has a key. Reveal it on ?show=1; otherwise just the buttons.
@@ -77,8 +76,7 @@ fn renderSettings(req: *Request, io: Io, alloc: Alloc, uid: []const u8) !void {
         try b.appendSlice(alloc, "<p>You have an API key.</p>");
     }
     try b.appendSlice(alloc, key_buttons_html);
-    try chrome.end(&b, alloc);
-    return req.respond(b.items, .{ .extra_headers = &.{http.html_ct} });
+    return page.send(req, .ok);
 }
 
 /// renderKeyShown displays a freshly generated key once.

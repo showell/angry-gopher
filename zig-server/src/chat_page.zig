@@ -43,24 +43,22 @@ const page_scripts = [_][]const u8{
 /// "/channel/<name>"; the widget is base-shape-agnostic.
 pub fn firstTopicPage(req: *Request, io: Io, alloc: Alloc, uid: []const u8, base: []const u8, title: []const u8) !void {
     const viewer = try users.getUserName(io, alloc, uid);
-    var b: std.ArrayList(u8) = .empty;
-    try chrome.begin(&b, alloc, "Chat", title, viewer, "chat");
+    var page = try chrome.page(alloc, "Chat", title, viewer, "chat");
+    const b = &page.body;
     try b.print(alloc, "<div id=\"chat-first-topic\" data-conv-base=\"{s}\"></div>", .{try htmlEscape(alloc, base)});
     try b.print(alloc, "<script src=\"/chat/chat_add_topic.js?v={s}\"></script>", .{asset_v});
     try b.print(alloc, "<script src=\"/chat/chat_first_topic.js?v={s}\"></script>", .{asset_v});
-    try chrome.end(&b, alloc);
-    try req.respond(b.items, .{ .extra_headers = &.{http.html_ct} });
+    try page.send(req, .ok);
 }
 
 /// **A 404 THAT SAYS WHY** (metal-vmm QUEUE 156(j)): `what` names what is not
 /// there, and `back` is where to go instead. A page, not a bare "not found".
 pub fn notFoundPage(req: *Request, io: Io, alloc: Alloc, uid: []const u8, what: []const u8, back: []const u8) !void {
     const viewer = try users.getUserName(io, alloc, uid);
-    var b: std.ArrayList(u8) = .empty;
-    try chrome.begin(&b, alloc, "Chat", "Not here", viewer, "chat");
+    var page = try chrome.page(alloc, "Chat", "Not here", viewer, "chat");
+    const b = &page.body;
     try b.print(alloc, "<p>{s}</p><p><a href=\"{s}\">Go back</a></p>", .{ try htmlEscape(alloc, what), try htmlEscape(alloc, back) });
-    try chrome.end(&b, alloc);
-    try req.respond(b.items, .{ .status = .not_found, .extra_headers = &.{http.html_ct} });
+    try page.send(req, .not_found);
 }
 
 // ── the conversation page (boots the prod JS) ────────────────────────────────
@@ -73,10 +71,10 @@ pub fn conversationPage(req: *Request, io: Io, alloc: Alloc, uid: []const u8, to
     const viewer = try users.getUserName(io, alloc, uid);
     const sidebar_json = try buildSidebarJSON(io, alloc, uid, topic);
 
-    var b: std.ArrayList(u8) = .empty;
+    var page = try chrome.page(alloc, "Chat", topic.title, viewer, "");
     // doctype + <head> + platform style + colors/theme scripts + top bar +
     // open .app-body-wrap. active="" so no nav link is bolded inside a conv.
-    try chrome.begin(&b, alloc, "Chat", topic.title, viewer, "");
+    const b = &page.body;
 
     try b.appendSlice(alloc, chat_css);
     // data-me: the viewer's uid, so the client can tell its own reactions apart.
@@ -101,9 +99,7 @@ pub fn conversationPage(req: *Request, io: Io, alloc: Alloc, uid: []const u8, to
     for (page_scripts) |name| {
         try b.print(alloc, "<script src=\"/chat/{s}?v={s}\"></script>", .{ name, asset_v });
     }
-    try chrome.end(&b, alloc);
-
-    try req.respond(b.items, .{ .extra_headers = &.{http.html_ct} });
+    try page.send(req, .ok);
 }
 
 /// buildSidebarJSON is the inline left-rail payload:
@@ -183,11 +179,10 @@ fn emitSessionItem(b: *std.ArrayList(u8), alloc: Alloc, base: []const u8, s: []c
 /// honest empty case — a real page, not a redirect into a half-real index.
 pub fn noConversationsPage(req: *Request, io: Io, alloc: Alloc, uid: []const u8) !void {
     const viewer = try users.getUserName(io, alloc, uid);
-    var b: std.ArrayList(u8) = .empty;
-    try chrome.begin(&b, alloc, "Chat", "Chat", viewer, "chat");
+    var page = try chrome.page(alloc, "Chat", "Chat", viewer, "chat");
+    const b = &page.body;
     try b.appendSlice(alloc, "<p>You do not have any conversations.</p>");
-    try chrome.end(&b, alloc);
-    try req.respond(b.items, .{ .extra_headers = &.{http.html_ct} });
+    try page.send(req, .ok);
 }
 
 // ── chat-specific templates (shared chrome lives in chat_chrome.zig) ──────────────

@@ -41,18 +41,16 @@ fn renderImagesPage(req: *Request, io: Io, alloc: Alloc, uid: []const u8) !void 
     // Oldest-first on disk; keep only the most-recent imagesPageLimit (the tail).
     if (entries.len > images_page_limit) entries = entries[entries.len - images_page_limit ..];
 
-    var b: std.ArrayList(u8) = .empty;
-    try chrome.begin(&b, alloc, "Images", "Images", viewer, "images");
+    var page = try chrome.page(alloc, "Images", "Images", viewer, "images");
+    const b = &page.body;
     try b.appendSlice(alloc, "<div class=\"chat-notify\" id=\"chat-notify\"></div>");
     try b.appendSlice(alloc, "<div id=\"images-mount\"></div>");
-    try emitImagesData(&b, alloc, entries);
+    try emitImagesData(b, alloc, entries);
     try b.print(alloc, "<script src=\"/chat/styles.js?v={s}\"></script>" ++
         "<script src=\"/chat/chat_image_popup.js?v={s}\"></script>" ++
         "<script src=\"/chat/images.js?v={s}\"></script>" ++
         "<script src=\"/chat/notify.js?v={s}\"></script>", .{ chrome.asset_v, chrome.asset_v, chrome.asset_v, chrome.asset_v });
-    try chrome.end(&b, alloc);
-
-    try req.respond(b.items, .{ .extra_headers = &.{http.html_ct} });
+    try page.send(req, .ok);
 }
 
 /// emitImagesData ships the initial transcript as inline JSON. The `</`→`<\/`

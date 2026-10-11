@@ -70,19 +70,17 @@ fn renderRecentPage(req: *Request, io: Io, alloc: Alloc, uid: []const u8) !void 
     const viewer = try users.getUserName(io, alloc, uid);
     const items = try gatherRecentItems(io, alloc, uid);
 
-    var b: std.ArrayList(u8) = .empty;
-    try chrome.begin(&b, alloc, "Recent", "Recent", viewer, "recent");
+    var page = try chrome.page(alloc, "Recent", "Recent", viewer, "recent");
+    const b = &page.body;
     // Cross-page attention strip + favicon alert on incoming pings (notify.js
     // no-ops when #chat-notify is absent). Recent users camp here, so the tab
     // needs to alert too.
     try b.appendSlice(alloc, "<div class=\"chat-notify\" id=\"chat-notify\"></div>");
     try b.appendSlice(alloc, "<div id=\"recent-mount\"></div>");
-    try emitRecentData(&b, alloc, items);
+    try emitRecentData(b, alloc, items);
     try b.print(alloc, "<script src=\"/chat/recent.js?v={s}\"></script>" ++
         "<script src=\"/chat/notify.js?v={s}\"></script>", .{ chrome.asset_v, chrome.asset_v });
-    try chrome.end(&b, alloc);
-
-    try req.respond(b.items, .{ .extra_headers = &.{http.html_ct} });
+    try page.send(req, .ok);
 }
 
 /// emitRecentData ships the initial feed as inline JSON next to the mount slot.

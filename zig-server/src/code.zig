@@ -34,18 +34,16 @@ fn renderCodePage(req: *Request, io: Io, alloc: Alloc, uid: []const u8) !void {
     const viewer = try users.getUserName(io, alloc, uid);
     const entries = try code_store.readCodeForUser(io, alloc, uid);
 
-    var b: std.ArrayList(u8) = .empty;
-    try chrome.begin(&b, alloc, "Code", "Code", viewer, "code");
+    var page = try chrome.page(alloc, "Code", "Code", viewer, "code");
+    const b = &page.body;
     try b.appendSlice(alloc, "<div class=\"chat-notify\" id=\"chat-notify\"></div>");
     try b.appendSlice(alloc, "<div id=\"code-mount\"></div>");
-    try emitCodeData(&b, alloc, entries);
+    try emitCodeData(b, alloc, entries);
     try b.print(alloc, "<script src=\"/chat/styles.js?v={s}\"></script>" ++
         "<script src=\"/chat/chat_code_popup.js?v={s}\"></script>" ++
         "<script src=\"/chat/code.js?v={s}\"></script>" ++
         "<script src=\"/chat/notify.js?v={s}\"></script>", .{ chrome.asset_v, chrome.asset_v, chrome.asset_v, chrome.asset_v });
-    try chrome.end(&b, alloc);
-
-    try req.respond(b.items, .{ .extra_headers = &.{http.html_ct} });
+    try page.send(req, .ok);
 }
 
 /// emitCodeData ships the initial transcript as inline JSON. The `</`→`<\/` pass

@@ -17,7 +17,7 @@
 //!   POST /chat/docs/post          append the doc to the default chat partner → JSON
 //!   GET  /chat/docs.js            the client bundle (served by chat.serveAsset, public)
 //!
-//! The page chrome (head + top bar + .app-body-wrap) is chrome.begin with
+//! The page chrome (head + top bar + .app-body-wrap) is chrome.page with
 //! active="docs"; the rest of the layout/CSS is rendered below.
 
 const std = @import("std");
@@ -96,8 +96,8 @@ fn slugInList(list: []docs_store.DocSummary, slug: []const u8) bool {
 fn renderDocsPage(req: *Request, io: Io, alloc: Alloc, uid: []const u8, list: []docs_store.DocSummary, slug: []const u8, body: []const u8) !void {
     const viewer = try users.getUserName(io, alloc, uid);
 
-    var b: std.ArrayList(u8) = .empty;
-    try chrome.begin(&b, alloc, "Docs", "Docs", viewer, "docs");
+    var page = try chrome.page(alloc, "Docs", "Docs", viewer, "docs");
+    const b = &page.body;
     try b.appendSlice(alloc, docs_css);
 
     // Cross-session new-message strip + favicon alert, shared with chat via
@@ -160,9 +160,7 @@ fn renderDocsPage(req: *Request, io: Io, alloc: Alloc, uid: []const u8, list: []
     // notify.js loads even on the docs landing (the favicon alert + #chat-notify
     // strip should work here too).
     try b.print(alloc, "<script src=\"/chat/notify.js?v={s}\"></script>", .{chrome.asset_v});
-    try chrome.end(&b, alloc);
-
-    try req.respond(b.items, .{ .extra_headers = &.{http.html_ct} });
+    try page.send(req, .ok);
 }
 
 // ── raw + list (API clients) ──────────────────────────────────────────────────

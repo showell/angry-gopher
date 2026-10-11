@@ -24,8 +24,8 @@ pub fn handle(req: *Request, io: Io, alloc: Alloc, uid: []const u8, rest: []cons
     const path = try std.fs.path.join(alloc, &.{ store.chat_root, "users", uid, "links.md" });
     const md: ?[]u8 = try disk.readOrNull(io, alloc, path, .unlimited);
 
-    var b: std.ArrayList(u8) = .empty;
-    try chrome.begin(&b, alloc, "Links", "Links", viewer, "links");
+    var page = try chrome.page(alloc, "Links", "Links", viewer, "links");
+    const b = &page.body;
     try b.appendSlice(alloc, links_css ++ "<div class=\"links-page\">");
     if (md) |src| {
         // renderTrusted: links.md is server-curated (Steve scp's it), not request
@@ -36,8 +36,7 @@ pub fn handle(req: *Request, io: Io, alloc: Alloc, uid: []const u8, rest: []cons
         try b.appendSlice(alloc, "<p>No links yet — ask Steve to curate links.</p>");
     }
     try b.appendSlice(alloc, "</div>"); // close .links-page
-    try chrome.end(&b, alloc);
-    try req.respond(b.items, .{ .extra_headers = &.{http.html_ct} });
+    try page.send(req, .ok);
 }
 
 // A readable text column — .app-body-wrap is the full-width chat-layout shell,

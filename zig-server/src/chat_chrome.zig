@@ -3,15 +3,17 @@
 //! Settings). Single owner for the head, the platform stylesheet, the top bar +
 //! sub-nav, and the `.app-body-wrap` content column.
 //!
-//! The contract is PAIRED. `begin()` emits everything down to the open
-//! `<div class="app-body-wrap">`; the page emits its body (closing any inner
-//! wrappers it opened); `end()` closes app-body-wrap + body + html. No page
-//! hand-writes `</body></html>` anymore — that open-here/close-there seam used to
-//! drift per page (a mobile-break source). It lives here once now, which is also
-//! the single place to land a responsive/mobile rule when we want one.
+//! **A PAGE IS OPENED AND SENT** (metal-vmm QUEUE 157(e)): `page()` emits
+//! everything down to the open `<div class="app-body-wrap">` and answers a
+//! `Page`; the page writes its body into `Page.body` (closing any inner
+//! wrappers it opened); `Page.send` closes app-body-wrap + body + html and
+//! responds. No page hand-writes `</body></html>`, and none calls a closing
+//! half by hand: the pair was `begin()`/`end()`, kept by each page, and the
+//! open-here/close-there seam used to drift per page (a mobile-break source).
 
 const std = @import("std");
 const html = @import("html.zig");
+const http = @import("http.zig");
 const Alloc = std.mem.Allocator;
 
 /// Asset version (cache-buster) for the chrome's <script> tags and the per-page
@@ -23,7 +25,7 @@ pub const asset_v = "zig";
 /// stylesheet (its <title> = `tab_title`), colors.js (sync, palette pre-paint) +
 /// chat_theme.js (deferred), the top bar (Home + `title` + the sub-nav with
 /// `active` bolded + identity), and the open `.app-body-wrap`. Pair with end().
-pub fn begin(b: *std.ArrayList(u8), alloc: Alloc, tab_title: []const u8, title: []const u8, viewer: []const u8, active: []const u8) !void {
+fn begin(b: *std.ArrayList(u8), alloc: Alloc, tab_title: []const u8, title: []const u8, viewer: []const u8, active: []const u8) !void {
     try b.appendSlice(alloc, page_head_a);
     try b.appendSlice(alloc, tab_title);
     try b.appendSlice(alloc, page_head_b);
@@ -35,11 +37,28 @@ pub fn begin(b: *std.ArrayList(u8), alloc: Alloc, tab_title: []const u8, title: 
 }
 
 /// end closes what begin() opened: the `.app-body-wrap` column, then </body> and
-/// </html>. A page that opened inner wrappers inside .app-body-wrap closes those
-/// itself first, then calls end() — so the body/html close lives in exactly one
-/// place.
-pub fn end(b: *std.ArrayList(u8), alloc: Alloc) !void {
+/// </html>. Only `Page.send` calls it.
+fn end(b: *std.ArrayList(u8), alloc: Alloc) !void {
     try b.appendSlice(alloc, "</div></body></html>");
+}
+
+/// A chrome page, open: write the page's own body into `body`, then `send`.
+pub const Page = struct {
+    alloc: Alloc,
+    body: std.ArrayList(u8),
+
+    /// Closes the page and answers it, HTML, with `status`.
+    pub fn send(self: *Page, req: *std.http.Server.Request, status: std.http.Status) !void {
+        try end(&self.body, self.alloc);
+        try req.respond(self.body.items, .{ .status = status, .extra_headers = &.{http.html_ct} });
+    }
+};
+
+/// Opens a chrome page (see `begin` for what it emits).
+pub fn page(alloc: Alloc, tab_title: []const u8, title: []const u8, viewer: []const u8, active: []const u8) !Page {
+    var p: Page = .{ .alloc = alloc, .body = .empty };
+    try begin(&p.body, alloc, tab_title, title, viewer, active);
+    return p;
 }
 
 const NavItem = struct { href: []const u8, label: []const u8, key: []const u8 };
