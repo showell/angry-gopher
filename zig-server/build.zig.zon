@@ -1,9 +1,9 @@
 .{
-    // angry-gopher's server as a package: the `gopher` library module
-    // (src/gopher.zig) is what an application built on gopher depends on.
-    .name = .gopher,
+    // angry-gopher's server as a package: the `webbox` library module
+    // (src/webbox.zig) is what an application built on it depends on.
+    .name = .webbox,
     .version = "0.1.0",
-    .fingerprint = 0x342bcb2b55037488,
+    .fingerprint = 0x90f0ca47715bdd8d,
     .minimum_zig_version = "0.16.0",
     .paths = .{ "build.zig", "build.zig.zon", "src" },
 }

@@ -79,7 +79,7 @@ pub fn sign(alloc: Alloc, secret: []const u8, id: []const u8, issued_unix: i64) 
 /// Max-Age, and `verify`'s bound.
 pub const lifetime_secs: i64 = 365 * 24 * 60 * 60;
 
-/// This cookie's rules for the `gopher` library's signing (signed.zig).
+/// This cookie's rules for the `webbox` library's signing (signed.zig).
 const kind: signed.Kind = .{ .label = label, .lifetime_secs = lifetime_secs, .skew_secs = users.clock_skew_secs, .validId = validId };
 
 /// The id a signed value carries at `now_unix`, or null: one past its
