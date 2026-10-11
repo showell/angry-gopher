@@ -9,7 +9,7 @@
 //! `checkUserPassword` is ever called — a hash-table probe, not a hash.
 //!
 //! Two windowed counters, like game_limits' per-address table:
-//!   - **by ADDRESS** (`game_limits.clientAddress`: the peer, or the trusted
+//!   - **by ADDRESS** (`client_address.resolve`: the peer, or the trusted
 //!     proxy's last X-Forwarded-For): one place hammering any account. The CPU
 //!     guard against a single flooder.
 //!   - **by ACCOUNT** (the resolved member id, so two spellings or cases of the

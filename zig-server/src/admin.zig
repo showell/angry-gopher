@@ -35,7 +35,7 @@ const admin_search = @import("admin_search.zig");
 const Request = std.http.Server.Request;
 
 /// handle dispatches /admin* — `sub` is the path after "/admin". `client` is the
-/// request's address (router.zig's resolved `clientAddress`), for the login
+/// request's address (router.zig's resolved `client_address`), for the login
 /// throttle on the password re-entries (QUEUE.md item 100).
 pub fn handle(req: *Request, io: Io, alloc: Alloc, client: ?[]const u8, sub: []const u8) !void {
     if (!try ui.requireAdmin(req, io, alloc)) return;

@@ -18,14 +18,15 @@ const roots = @import("roots.zig");
 const chat_store = @import("chat_store.zig");
 const search_index = @import("search_index.zig");
 const host_facts = @import("host_facts.zig");
-const game_limits = @import("game_limits.zig");
 const bus = @import("bus.zig");
+const free_space = @import("free_space.zig");
+const client_address = @import("client_address.zig");
 
 /// The game store's floor: the data volume's free space as the host reads
 /// it, or none, which only a test host says (its data on a development disk
 /// whose fullness is no fact about the server).
 pub const Floor = union(enum) {
-    free_space: *const fn () ?game_limits.Space,
+    free_space: *const fn () ?free_space.Space,
     none_for_a_test,
 };
 
@@ -86,10 +87,10 @@ pub fn start(io: Io, host: Host) !Started {
     // if it gives them.
     if (host.facts) |f| host_facts.provide(f);
     if (host.log) |l| host_facts.provideLog(l);
-    game_limits.free_space = switch (host.floor) {
+    free_space.reader = switch (host.floor) {
         .free_space => |f| f,
         .none_for_a_test => null,
     };
-    game_limits.trusted_proxy = host.trusted_proxy;
+    client_address.trusted_proxy = host.trusted_proxy;
     return .{ .hub = bus.Hub.init(io, base), .backfilled = backfilled, .search = search, .search_ms = search_ms };
 }

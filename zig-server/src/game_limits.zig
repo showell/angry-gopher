@@ -11,16 +11,16 @@
 //!     and `max_bytes` bytes under {data_root}/<id>. Prod's largest player,
 //!     uid 1, is 75 files and 1.3 MB.
 //!   - **the floor:** no game write while the data volume has less than a
-//!     quarter of itself free, as the host reports it (`free_space`). Chat,
+//!     quarter of itself free, as the host reports it (free_space.zig). Chat,
 //!     accounts and uploads do not ask, so they carry on.
 //!   - **per address, an hour:** `players_per_hour` new players (/play),
 //!     `bytes_per_hour` bytes of game writes, and `resigns_per_hour` re-signs
 //!     of a legacy unsigned cookie (uid_cookie.zig); past any, a 429. The address
-//!     is the connection's (the host's `Bus.peer`), or, when that is the
-//!     reverse proxy in front (`trusted_proxy`: Caddy), the last address in
-//!     its X-Forwarded-For, which is the one Caddy added. Kept in a fixed
-//!     table of `addresses`; an hour after an address's first count, its
-//!     counts start again, and a full table gives up its oldest.
+//!     is client_address.zig's: the connection's, or, behind the trusted
+//!     reverse proxy (Caddy: Linux sets 127.0.0.1, Caddy on the same machine;
+//!     gopher-metal sets prod's private address), the one Caddy added. Kept
+//!     in a fixed table of `addresses`; an hour after an address's first
+//!     count, its counts start again, and a full table gives up its oldest.
 //!
 //! **WHAT A PLAYER HOLDS IS KEPT IN MEMORY**, in a fixed table: measured by a
 //! walk of their folder the first time they write after a start (or after
@@ -34,7 +34,8 @@ const Io = std.Io;
 const Alloc = std.mem.Allocator;
 const store = @import("store.zig");
 const storage = @import("storage.zig");
-const http = @import("http.zig");
+const client_address = @import("client_address.zig");
+const free_space = @import("free_space.zig");
 
 pub const max_sessions: u32 = 500;
 pub const max_bytes: u64 = 16 << 20;
@@ -47,18 +48,6 @@ pub const players_per_hour: u32 = 5;
 pub const resigns_per_hour: u32 = 3;
 pub const bytes_per_hour: u64 = 20_000_000;
 const hour: i64 = 60 * 60;
-
-/// The reverse proxy whose X-Forwarded-For is believed, as text. Null: none
-/// is, and every request is its connection's address. Linux sets 127.0.0.1
-/// (Caddy on the same machine); gopher-metal sets prod's private address.
-pub var trusted_proxy: ?[]const u8 = null;
-
-pub const Space = struct { free: u64, total: u64 };
-
-/// The data volume's free space, as the host knows it; null (or a host that
-/// sets nothing) means it cannot say, and then there is no floor. Linux asks
-/// statfs; gopher-metal reads its FAT's free count.
-pub var free_space: ?*const fn () ?Space = null;
 
 /// Where the game store is, for a host asking its volume's free space.
 pub fn dataRoot() []const u8 {
@@ -95,29 +84,6 @@ pub fn refuse(req: *std.http.Server.Request, r: Refusal) !void {
     try req.respond(r.text(), .{ .status = status });
 }
 
-/// The address a request is from, for the per-address bounds: `peer`, or the
-/// last X-Forwarded-For entry when `peer` is the trusted proxy. Null when the
-/// host gave no peer. Owned by `alloc`, so it outlives a body read.
-pub fn clientAddress(alloc: Alloc, req: *std.http.Server.Request, peer: ?[]const u8) !?[]const u8 {
-    const p = peer orelse return null;
-    const proxy = trusted_proxy orelse return try alloc.dupe(u8, p);
-    if (!std.mem.eql(u8, p, proxy)) return try alloc.dupe(u8, p);
-    if (try http.header(req, alloc, "x-forwarded-for")) |xff| {
-        var parts = std.mem.splitBackwardsScalar(u8, xff, ',');
-        const last = std.mem.trim(u8, parts.first(), " \t");
-        if (plausibleAddress(last)) return last;
-    }
-    return try alloc.dupe(u8, p); // the proxy, with nothing usable said: count it as itself
-}
-
-/// An IPv4 or IPv6 address's characters, at an address's length: enough to
-/// keep a header from naming a slot with anything else.
-fn plausibleAddress(s: []const u8) bool {
-    if (s.len == 0 or s.len > addr_max) return false;
-    for (s) |c| if (!(std.ascii.isHex(c) or c == '.' or c == ':')) return false;
-    return true;
-}
-
 const id_max = 24; // player.isSafeID's bound
 const slots = 256;
 
@@ -136,7 +102,7 @@ var mu: Io.Mutex = .init;
 /// Whether `id`, from `client`, may add `bytes`, and a session if
 /// `new_session`; null when it may, and then it is counted against both.
 pub fn admit(io: Io, alloc: Alloc, id: []const u8, client: ?[]const u8, new_session: bool, bytes: u64) !?Refusal {
-    if (free_space) |f| if (f()) |s| if (s.free < s.total / 4) return .floor;
+    if (free_space.read()) |s| if (s.free < s.total / 4) return .floor;
     if (id.len == 0 or id.len > id_max) return .bytes; // never a player's: refuse rather than miscount
     mu.lockUncancelable(io);
     defer mu.unlock(io);
@@ -198,21 +164,6 @@ pub fn countedBytes(io: Io, id: []const u8) ?u64 {
     return null;
 }
 
-/// The two settings a host hands over (host_start), as they stood: for a
-/// test that sets one, to `defer` both back (the review of 157).
-pub const Settings = struct {
-    free_space: @TypeOf(free_space),
-    trusted_proxy: @TypeOf(trusted_proxy),
-    pub fn restore(self: Settings) void {
-        free_space = self.free_space;
-        trusted_proxy = self.trusted_proxy;
-    }
-};
-
-pub fn saveSettings() Settings {
-    return .{ .free_space = free_space, .trusted_proxy = trusted_proxy };
-}
-
 /// **FOR A TEST: NOTHING KEPT NOW, AND NOTHING AFTER** (`defer forgot.end()`;
 /// 157(e)).
 pub fn forgetForTest() Forgot {
@@ -234,7 +185,7 @@ pub fn forgetAll() void {
 
 // ── per address ──────────────────────────────────────────────────────────────
 
-const addr_max = 45; // the longest IPv6 text
+const addr_max = client_address.addr_max;
 const addresses = 1024;
 
 const Seen = struct {
@@ -333,8 +284,8 @@ fn sizeOf(io: Io, alloc: Alloc, dir: []const u8, depth: u8) !u64 {
 const testing = std.testing;
 const roots = @import("roots.zig");
 
-var test_space: ?Space = null;
-fn testSpace() ?Space {
+var test_space: ?free_space.Space = null;
+fn testSpace() ?free_space.Space {
     return test_space;
 }
 
@@ -396,9 +347,9 @@ test "fs: the floor refuses every game write below a quarter free, and only then
     defer saved.restore();
     const forgot = forgetForTest();
     defer forgot.end();
-    const host_settings = saveSettings();
-    defer host_settings.restore();
-    free_space = testSpace;
+    const host_space = free_space.save();
+    defer host_space.restore();
+    free_space.reader = testSpace;
 
     test_space = .{ .free = 25, .total = 100 }; // exactly a quarter: allowed
     try testing.expect((try admit(io, a, "p1", null, true, 10)) == null);
@@ -455,10 +406,4 @@ test "an address's hour: counted, started again after it, and the oldest given u
     try testing.expectEqual(@as(i64, t0 + 2000), newcomer.since);
     try testing.expect(newcomer == &seen[0]); // 10.0.0.0, the first counted
     try testing.expectEqual(@as(u32, 1), seenSlot("10.0.0.1", t0 + 2000).players); // the rest kept
-}
-
-test "an address too long or not an address's characters is not believed" {
-    try testing.expect(plausibleAddress("203.0.113.7"));
-    try testing.expect(plausibleAddress("2001:db8::1"));
-    for ([_][]const u8{ "", "unknown", "1.2.3.4 ", "a" ** 46, "../x" }) |bad| try testing.expect(!plausibleAddress(bad));
 }

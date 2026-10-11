@@ -31,7 +31,7 @@ const names = @import("names.zig");
 const player = @import("player.zig");
 const uid_cookie = @import("uid_cookie.zig");
 const storage = @import("storage.zig");
-const game_limits = @import("game_limits.zig");
+const client_address = @import("client_address.zig");
 const throttle = @import("login_throttle.zig");
 const chat = @import("chat.zig");
 const html = @import("html.zig");
@@ -82,8 +82,8 @@ fn handleLoginFull(req: *Request, io: Io, alloc: Alloc, bus: *Bus) !void {
     const target = try http.target(req, alloc);
     // The login throttle's address must be read from the headers BEFORE the
     // body read invalidates them (the gotcha this whole function opens with);
-    // clientAddress dups into `alloc`, so it outlives the read.
-    const address = game_limits.clientAddress(alloc, req, bus.peer) catch null;
+    // client_address.resolve dups into `alloc`, so it outlives the read.
+    const address = client_address.resolve(alloc, req, bus.peer) catch null;
     var body: []const u8 = "";
     if (req.head.method == .POST) {
         body = (try http.readLimitedBody(req, alloc, limits.body.form)) orelse return;

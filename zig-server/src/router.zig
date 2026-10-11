@@ -41,6 +41,8 @@ const player = @import("player.zig");
 const brand = @import("brand.zig");
 const users = @import("users.zig");
 const uid_cookie = @import("uid_cookie.zig");
+const client_address = @import("client_address.zig");
+const free_space = @import("free_space.zig");
 // ── THE HOST CONTRACT ────────────────────────────────────────────────────────
 //
 // What any host does to serve this table. A kernel that boots it has no other
@@ -82,7 +84,7 @@ pub const Host = host_start.Host;
 /// host's facts are written in. The setup's modules (roots, the stores, the
 /// search index, the game limits) are not, so nothing but `start` sets them.
 pub const Roots = roots.Roots;
-pub const Space = game_limits.Space;
+pub const Space = free_space.Space;
 /// Where the game store is, for a host's `Host.floor` to read the free space
 /// of (read only).
 pub const dataRoot = game_limits.dataRoot;
@@ -253,7 +255,7 @@ fn routed(req: *std.http.Server.Request, io: Io, alloc: std.mem.Allocator, bus: 
     // signed cookie set, and the unsigned spelling is refused from then on.
     // Who is asking, for the bounds on what one address may make and write
     // (game_limits.zig). Read with the head, which a body read invalidates.
-    const client = try game_limits.clientAddress(alloc, req, bus.peer);
+    const client = try client_address.resolve(alloc, req, bus.peer);
     if (try uid_cookie.reissue(io, alloc, req, client)) |re| switch (re) {
         .cookie => |set_cookie| return req.respond("", .{ .status = .see_other, .extra_headers = &.{
             .{ .name = "location", .value = localTarget(try http.target(req, alloc)) },
@@ -261,55 +263,55 @@ fn routed(req: *std.http.Server.Request, io: Io, alloc: std.mem.Allocator, bus: 
         } }),
         .refused => |r| return game_limits.refuse(req, r),
     };
-    const path = stripQuery(try http.target(req, alloc));
+    const path = http.pathOf(try http.target(req, alloc));
 
-    if (matchPrefix(path, "/driving")) |sub| {
+    if (http.pathUnder(path, "/driving")) |sub| {
         try driving.handle(req, alloc, sub);
-    } else if (matchPrefix(path, "/delivery")) |sub| {
+    } else if (http.pathUnder(path, "/delivery")) |sub| {
         try delivery.handle(req, alloc, sub);
-    } else if (matchPrefix(path, "/chess")) |sub| {
+    } else if (http.pathUnder(path, "/chess")) |sub| {
         // Public + ungated like /driving: little chess toys (Knight's Tour,
         // Eight Queens) + /chess/code, the sources-as-exhibit page. The viewer
         // is resolved for the index's top-bar chip, never gated.
         try chess.handle(req, alloc, (try viewer(io, alloc, req)).name, sub);
-    } else if (matchPrefix(path, "/puzzles")) |sub| {
+    } else if (http.pathUnder(path, "/puzzles")) |sub| {
         try puzzles.handle(req, io, alloc, sub, client);
-    } else if (matchPrefix(path, "/game")) |sub| {
+    } else if (http.pathUnder(path, "/game")) |sub| {
         try game.handle(req, io, alloc, sub, client);
-    } else if (matchPrefix(path, "/chat")) |sub| {
+    } else if (http.pathUnder(path, "/chat")) |sub| {
         try chat.handle(req, io, alloc, bus, sub);
-    } else if (matchPrefix(path, "/channel")) |sub| {
+    } else if (http.pathUnder(path, "/channel")) |sub| {
         try chat.handleChannel(req, io, alloc, bus, sub);
-    } else if (matchPrefix(path, "/settings")) |sub| {
+    } else if (http.pathUnder(path, "/settings")) |sub| {
         try settings.handle(req, io, alloc, bus, sub);
-    } else if (matchPrefix(path, "/tutorial")) |sub| {
+    } else if (http.pathUnder(path, "/tutorial")) |sub| {
         // Public + ungated: the Lyn Rummy beginner tutorial — its audience
         // is people who haven't made an account yet.
         try tutorial.handle(req, alloc, sub);
-    } else if (matchPrefix(path, "/gallery")) |sub| {
+    } else if (http.pathUnder(path, "/gallery")) |sub| {
         // Hidden-for-now: unlinked but public + ungated. Serves the stylized app
         // images (free-standing content read from gallery/) for the home page.
         try gallery.handle(req, io, alloc, sub);
-    } else if (matchPrefix(path, "/downloads")) |sub| {
+    } else if (http.pathUnder(path, "/downloads")) |sub| {
         // Public + ungated: downloadable artifacts (the native Linux Safari
         // executable) read from downloads/, rsync'd on deploy — see downloads.zig.
         try downloads.handle(req, io, alloc, sub);
-    } else if (matchPrefix(path, "/admin/lynrummy")) |sub| {
+    } else if (http.pathUnder(path, "/admin/lynrummy")) |sub| {
         // The GAME roster. Checked before /admin, which would otherwise swallow
-        // it: matchPrefix takes the first arm that matches.
+        // it: http.pathUnder takes the first arm that matches.
         try admin_lynrummy.handle(req, io, alloc, sub);
-    } else if (matchPrefix(path, "/admin")) |sub| {
+    } else if (http.pathUnder(path, "/admin")) |sub| {
         try admin.handle(req, io, alloc, client, sub);
     } else if (std.mem.eql(u8, path, "/play") or std.mem.eql(u8, path, "/play/")) {
         // The LOCAL identity: a name, no password, for /game and /puzzles. It
         // reads its own small store and never touches the chat account store —
         // see player.zig.
         try player.handle(req, io, alloc, client);
-    } else if (matchPrefix(path, "/login")) |sub| {
+    } else if (http.pathUnder(path, "/login")) |sub| {
         try login.handle(req, io, alloc, bus, sub);
     } else if (std.mem.eql(u8, path, "/logout")) {
         try login.handleLogout(req, io, alloc);
-    } else if (matchPrefix(path, "/images")) |sub| {
+    } else if (http.pathUnder(path, "/images")) |sub| {
         try brand.handle(req, sub);
     } else if (std.mem.eql(u8, path, "/safari_download") or std.mem.eql(u8, path, "/safari_download/")) {
         // Public, read-only. The "Install locally" landing page for the Safari
@@ -356,22 +358,6 @@ fn viewer(io: Io, alloc: std.mem.Allocator, req: *std.http.Server.Request) !View
         .is_admin = std.mem.eql(u8, uid, "1"),
     };
     return .{ .name = (try player.current(io, alloc, req)).name, .is_admin = false };
-}
-
-/// matchPrefix returns the path tail after `prefix` when `path` is exactly
-/// `prefix` or `prefix` followed by '/'. Returns null otherwise — so "/drivingX"
-/// does NOT match "/driving". The tail keeps its leading '/' (or is empty).
-fn matchPrefix(path: []const u8, prefix: []const u8) ?[]const u8 {
-    if (!std.mem.startsWith(u8, path, prefix)) return null;
-    const tail = path[prefix.len..];
-    if (tail.len == 0 or tail[0] == '/') return tail;
-    return null;
-}
-
-/// stripQuery returns the target up to the first '?' (e.g. /driving/blitter.js?h=…).
-fn stripQuery(target: []const u8) []const u8 {
-    if (std.mem.indexOfScalar(u8, target, '?')) |q| return target[0..q];
-    return target;
 }
 
 // ══ TESTS ════════════════════════════════════════════════════════════════════
@@ -544,7 +530,7 @@ test "route: the table answers, and an unknown path is a 404" {
     // A surface with no identity and no store behind it: pure embedded bytes.
     try testing.expectEqualStrings("200 OK", status(try get(a, io, "/tutorial")));
 
-    // The fallthrough. "/drivingX" must NOT reach /driving — matchPrefix wants a
+    // The fallthrough. "/drivingX" must NOT reach /driving — http.pathUnder wants a
     // boundary, and this is the case that rule exists for.
     try testing.expectEqualStrings("404 Not Found", status(try get(a, io, "/nope")));
     try testing.expectEqualStrings("404 Not Found", status(try get(a, io, "/drivingX")));
@@ -568,7 +554,7 @@ test "route: a query string never changes which arm is taken" {
     defer threaded.deinit();
     const io = threaded.io();
 
-    // stripQuery's whole job: the asset URLs carry their hash, ?h= (http.hashedSrc).
+    // http.pathOf's whole job: the asset URLs carry their hash, ?h= (http.hashedSrc).
     try testing.expectEqualStrings("200 OK", status(try get(a, io, "/tutorial?h=0")));
 }
 
@@ -978,9 +964,9 @@ test "route: a player's games are refused, 507, past 16 MiB or 500 sessions, and
 
     // The floor: below a quarter free, nobody's game is saved; /play still
     // names a new player (the player store is not the game store).
-    const host_settings = limits.saveSettings();
-    defer host_settings.restore();
-    limits.free_space = lowDisk;
+    const host_space = free_space.save();
+    defer host_space.restore();
+    free_space.reader = lowDisk;
     const third = try player.allocate(io, a, "Gus");
     const floor = try postAs(a, io, "/game/new-session", try signedUid(a, third), "state");
     try testing.expectEqualStrings("507 Insufficient Storage", status(floor));
@@ -989,7 +975,7 @@ test "route: a player's games are refused, 507, past 16 MiB or 500 sessions, and
     try testing.expectEqualStrings("303 See Other", status(named));
 }
 
-fn lowDisk() ?@import("game_limits.zig").Space {
+fn lowDisk() ?free_space.Space {
     return .{ .free = 1 << 30, .total = 5 << 30 };
 }
 
@@ -1003,9 +989,9 @@ test "route: an address names 5 players an hour and saves 20 MB of games, then 4
     var site = try UidSite.init(a, io);
     defer site.deinit();
     const limits = UidSite.game_limits;
-    const host_settings = limits.saveSettings();
-    defer host_settings.restore();
-    limits.trusted_proxy = "10.0.0.1";
+    const host_proxy = client_address.save();
+    defer host_proxy.restore();
+    client_address.trusted_proxy = "10.0.0.1";
 
     const Name = struct {
         fn post(al: std.mem.Allocator, i: Io, peer: []const u8, xff: []const u8) ![]const u8 {
@@ -1107,8 +1093,10 @@ test "route: start does the host's setup in one call: the data pointed at, every
     defer meter.restore();
     const emptied = search_index.emptyForTest();
     defer emptied.end();
-    const host_settings = game_limits.saveSettings();
-    defer host_settings.restore();
+    const host_space = free_space.save();
+    defer host_space.restore();
+    const host_proxy = client_address.save();
+    defer host_proxy.restore();
     const chat_store = @import("chat_store.zig");
     const disk = @import("store.zig");
     const md = try std.fs.path.join(a, &.{ chat_store.chat_root, "1_2", "sessions", "ChitChat.md" });
@@ -1122,8 +1110,8 @@ test "route: start does the host's setup in one call: the data pointed at, every
     try testing.expectEqual(@as(usize, 1), started.backfilled);
     try testing.expect(try disk.has(io, a, try std.fs.path.join(a, &.{ chat_store.chat_root, "1_2", "sessions", "ChitChat.count" })));
     try testing.expectEqual(@as(usize, 1), started.search.?.messages);
-    try testing.expectEqual(@as(?*const fn () ?game_limits.Space, null), game_limits.free_space);
-    try testing.expectEqualStrings("10.0.0.2", game_limits.trusted_proxy.?);
+    try testing.expectEqual(@as(?*const fn () ?free_space.Space, null), free_space.reader);
+    try testing.expectEqualStrings("10.0.0.2", client_address.trusted_proxy.?);
 }
 
 test "route: /admin/search finds a key in every conversation the admin can see, DMs and channels, ASCII case folded, and nowhere else" {
