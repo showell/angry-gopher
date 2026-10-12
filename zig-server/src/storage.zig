@@ -191,7 +191,10 @@ pub fn appendPuzzleMove(io: Io, alloc: Alloc, payer: Payer, session_id: i64, puz
     const line = try lineOf(alloc, .actions, body);
     if (new_meta) |meta| {
         if (try game_limits.admit(io, alloc, payer.id, payer.client, true, meta.len + line.len)) |r| return .{ .refused = r };
-        if (!try ensurePuzzleSession(io, alloc, payer.id, session_id, meta)) return .not_offered;
+        if (!try ensurePuzzleSession(io, alloc, payer.id, session_id, meta)) {
+            try game_limits.giveBack(io, alloc, payer.id, payer.client, true, meta.len + line.len);
+            return .not_offered;
+        }
     } else if (try game_limits.admit(io, alloc, payer.id, payer.client, false, line.len)) |r| return .{ .refused = r };
     const rel = try std.fmt.allocPrint(alloc, "puzzle_{d}/actions.dsl", .{puzzle_idx});
     try appendLine(io, alloc, try join(alloc, &.{ try puzzleSessionDir(alloc, payer.id, session_id), rel }), line);
@@ -396,4 +399,25 @@ test "fs: a session file that cannot be read is an error, never a fresh game" {
     try testing.expectEqual(@as(?[]u8, null), try readSessionFile(io, a, "p1", id, "meta")); // not there
     try store.makeDir(io, a, try join(a, &.{ try sessionDir(a, "p1", id), "actions.dsl" }));
     try testing.expect(std.meta.isError(readSessionFile(io, a, "p1", id, "actions.dsl")));
+}
+
+test "fs: a first move for a session the page did not offer counts nothing against its player (metal-vmm QUEUE 172)" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    const saved = try roots.pointForTest(a, try std.fs.path.join(a, &.{ ".zig-cache", "tmp", &tmp.sub_path }));
+    defer saved.restore();
+    const forgot = game_limits.forgetForTest();
+    defer forgot.end();
+    const payer = Payer{ .id = "p1", .client = null };
+    // Session 99 was never offered: refused, and nothing counted.
+    try std.testing.expect(try appendPuzzleMove(io, a, payer, 99, 0, "move", "the meta") == .not_offered);
+    // Its whole allowance is still there, its sessions too.
+    try std.testing.expect((try game_limits.admit(io, a, "p1", null, false, game_limits.max_bytes)) == null);
+    for (0..game_limits.max_sessions) |_| try std.testing.expect((try game_limits.admit(io, a, "p1", null, true, 0)) == null);
 }

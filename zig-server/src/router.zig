@@ -2410,3 +2410,22 @@ test "an upload that cannot be stored gives its bytes back to the allowance: the
     try testing.expect(std.meta.isError(got));
     try testing.expectEqual(before, try users.userUploadBytes(io, a, ada));
 }
+
+test "a release that can release nothing says so, never the page a release that deleted gets (metal-vmm QUEUE 172)" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var site = try UidSite.init(a, io);
+    defer site.deinit();
+    // A member's id in the player cookie and no session (it lapsed): the
+    // account is not this cookie's to release.
+    const ada = try users.allocateUser(io, a, "Ada");
+    try users.setUserPassword(io, a, ada, "a password for Ada");
+    try player.mirror(io, a, ada, "Ada");
+    const got = try postAs(a, io, "/logout", try signedUid(a, ada), "release=yes");
+    try testing.expectEqualStrings("403 Forbidden", status(got));
+    try testing.expect(try users.principalExists(io, a, ada));
+}
