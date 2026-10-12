@@ -27,6 +27,7 @@ const std = @import("std");
 const router = @import("router.zig");
 const linux_host = @import("linux_host.zig");
 const free_space = @import("free_space.zig");
+const search_index = @import("search_index.zig");
 
 pub fn main(init: std.process.Init.Minimal) !void {
     try linux_host.Server(router).run(init, .{
@@ -67,5 +68,5 @@ fn report(started: *const router.Started) void {
     if (started.app.backfilled > 0) std.debug.print("zig-server: wrote a last-message record for {d} session(s)\n", .{started.app.backfilled});
     if (started.app.search) |st| {
         std.debug.print("zig-server: search index: {d} messages in {d} transcripts ({d} bytes, {d} words, {d} unreadable) in {d} ms\n", .{ st.messages, st.transcripts, st.bytes, st.words, st.unreadable, started.app.search_ms });
-    } else std.debug.print("zig-server: search index not built (out of memory?): the first search builds it\n", .{});
+    } else std.debug.print("zig-server: search index not built ({s}): the first search builds it\n", .{if (search_index.failed_with) |e| @errorName(e) else "unknown"});
 }

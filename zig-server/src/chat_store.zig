@@ -736,7 +736,10 @@ pub fn backfillSidecars(io: Io, alloc: Alloc, conv_dirs: []const []const u8) usi
             // writes nothing: the next boot asks again.
             // absent-ok: the startup backfill skips a session whose author it cannot look up; reads find the author by name meanwhile.
             const uid = lookupAuthor(io, a, msgs[msgs.len - 1].from) catch continue;
-            writeCount(io, a, dir, sid, countBlocks(raw), raw.len, .{ .offset = offset, .uid = uid });
+            // Counted only when written (metal-vmm QUEUE 172): the start's
+            // report said "backfilled N" for writes that failed.
+            // absent-ok: a sidecar that will not write is recounted by the next read, and asked again next boot.
+            tryWriteCount(io, a, dir, sid, countBlocks(raw), raw.len, .{ .offset = offset, .uid = uid }) catch continue;
             wrote += 1;
         }
     }
@@ -923,12 +926,18 @@ fn parseLast(line: []const u8) ?Last {
 /// begins. Best effort: a sidecar that fails to write is one recomputed next
 /// time, never a wrong one.
 fn writeCount(io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8, count: usize, size: u64, last: ?Last) void {
-    const path = countPath(alloc, conv_dir, sid) catch return;
-    const head = std.fmt.allocPrint(alloc, "{d} {d}\n", .{ count, size }) catch return;
+    // absent-ok: a cache, checked against the transcript's size: one not written is recounted.
+    tryWriteCount(io, alloc, conv_dir, sid, count, size, last) catch {};
+}
+
+/// writeCount, saying whether it wrote (the backfill counts only what did).
+fn tryWriteCount(io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8, count: usize, size: u64, last: ?Last) !void {
+    const path = try countPath(alloc, conv_dir, sid);
+    const head = try std.fmt.allocPrint(alloc, "{d} {d}\n", .{ count, size });
     const text = if (last) |l|
-        std.fmt.allocPrint(alloc, "{s}{d} {s}\n", .{
+        try std.fmt.allocPrint(alloc, "{s}{d} {s}\n", .{
             head, l.offset, if (l.uid.len > 0) l.uid else no_uid,
-        }) catch return
+        })
     else
         head;
     // **A `write`, NOT A `replace`** (gopher-metal 153(1)): the sidecar is a
@@ -936,7 +945,7 @@ fn writeCount(io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8, count
     // empty or torn is recounted, on either host (and `readCount` refuses
     // one cut short of its newline); on gopher-metal a write is as safe as a
     // replace besides (STORE.md), at about half the disk requests.
-    store.write(io, alloc, path, text, .{}) catch {};
+    try store.write(io, alloc, path, text, .{});
 }
 
 fn nowUnix(io: Io) i64 {
@@ -1970,4 +1979,20 @@ test "a reaction that answers an error stored nothing (metal-vmm QUEUE 172)" {
             return error.TestUnexpectedResult;
         }
     }
+}
+
+test "backfill: a sidecar that will not write is not counted as written (metal-vmm QUEUE 172: the start's report said 'backfilled N' for writes that failed)" {
+    var threaded = std.Io.Threaded.init(testing.allocator, .{});
+    defer threaded.deinit();
+    var f: CountFixture = undefined;
+    try f.init(threaded.io());
+    defer f.deinit();
+    _ = try f.send("only");
+    const a = f.arena.allocator();
+    // The sidecar's place is a folder: its write fails.
+    const sidecar = try countPath(a, f.dir, "topic");
+    try Io.Dir.cwd().deleteFile(f.io, sidecar);
+    try Io.Dir.cwd().createDirPath(f.io, sidecar);
+    const dirs = [_][]const u8{f.dir};
+    try testing.expectEqual(@as(usize, 0), backfillSidecars(f.io, a, &dirs));
 }
