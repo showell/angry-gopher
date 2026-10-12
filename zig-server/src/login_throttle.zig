@@ -41,8 +41,9 @@ pub const account_window_s: i64 = 60 * 60;
 /// Accounts one address may CREATE in a window before it is refused (QUEUE.md
 /// item 100). Every creation is a bcrypt (`setUserPassword`), so an unbounded
 /// creator is a CPU flood on metal's one core and a way to fill the account
-/// table; a real person makes one account, so five an hour is generous.
-pub const create_max: u32 = 5;
+/// table; a real person makes one account, so two an hour is generous (Steve,
+/// 2026-10-13).
+pub const create_max: u32 = 2;
 pub const create_window_s: i64 = 60 * 60;
 
 pub const Bound = enum {
