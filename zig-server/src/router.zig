@@ -2442,6 +2442,9 @@ test "a release that can release nothing says so, never the page a release that 
     const got = try postAs(a, io, "/logout", try signedUid(a, ada), "release=yes");
     try testing.expectEqualStrings("403 Forbidden", status(got));
     try testing.expect(try users.principalExists(io, a, ada));
+    // The logout half still happens (its cold review): every identity
+    // cookie is cleared, as a logout without a release clears them.
+    try testing.expect(std.mem.indexOf(u8, got, uid_cookie.cookie_name ++ "=; Path=/; Max-Age=0") != null);
 }
 
 test "a stream is a GET's: a POST to one is 405, its body never read nor held (metal-vmm QUEUE 176.3)" {
