@@ -108,21 +108,88 @@ window.ChatCompose = (function(){
   var upload_patience_ms=5*60*1000;
   var uploading=false;
   function megabytes(n){ return (n/1048576).toFixed(1)+' MB'; }
+
+  /* PRODUCT_DECISION: a photo is SHRUNK IN THE BROWSER before it is sent
+     (Steve, 2026-10-12): a phone's 10 MB photo becomes about 1 MB, ten times
+     less to send on a slow link and to write on the server. Its longest side
+     is at most `photo_longest_px`; a JPEG or WebP over
+     `photo_reencode_over_bytes` is re-encoded even at that size. Photos go
+     as JPEG at `photo_jpeg_quality` (a WebP's transparency is lost, on
+     white); a PNG (a screenshot: text, transparency) stays PNG and is only
+     scaled; a GIF is sent as it is (its animation). Drawing through a canvas
+     drops the photo's metadata, its location included. The original goes
+     when the shrunk one is no smaller, or the browser cannot decode it. */
+  var photo_longest_px=2048;
+  var photo_reencode_over_bytes=1.5*1048576;
+  var photo_jpeg_quality=0.85;
+  /* The resize a picture gets: null to send it as it is, else the size and
+     type to draw it at. Pure, for tools/test_chat_resize.mjs. */
+  function resizePlan(type, bytes, width, height){
+    var photo = type==='image/jpeg' || type==='image/webp';
+    if(!(photo || type==='image/png') || !(width>0 && height>0)) return null;
+    var longest=Math.max(width, height);
+    var scale = longest>photo_longest_px ? photo_longest_px/longest : 1;
+    if(scale===1 && !(photo && bytes>photo_reencode_over_bytes)) return null;
+    return { width: Math.max(1, Math.round(width*scale)),
+             height: Math.max(1, Math.round(height*scale)),
+             type: photo ? 'image/jpeg' : 'image/png' };
+  }
+  // lint:called-once the decode and its fallback for browsers without createImageBitmap
+  function decodePicture(file, then){
+    if(window.createImageBitmap){
+      window.createImageBitmap(file, { imageOrientation:'from-image' }).then(then, function(){ then(null); });
+      return;
+    }
+    var url=URL.createObjectURL(file), img=new Image();
+    img.onload=function(){ URL.revokeObjectURL(url); then(img); };
+    img.onerror=function(){ URL.revokeObjectURL(url); then(null); };
+    img.src=url;
+  }
+  /* Hands `then` the file to send: the shrunk one, or the original. */
+  // lint:called-once the resize apart from the send, which never waits on it
+  function shrinkPicture(file, then){
+    if(file.type.indexOf('image/')!==0) return then(file);
+    decodePicture(file, function(pic){
+      if(!pic) return then(file);
+      var plan=resizePlan(file.type, file.size, pic.width, pic.height);
+      if(!plan) return then(file);
+      var canvas=document.createElement('canvas');
+      canvas.width=plan.width; canvas.height=plan.height;
+      var g=canvas.getContext('2d');
+      if(plan.type==='image/jpeg'){ g.fillStyle='#fff'; g.fillRect(0, 0, plan.width, plan.height); }
+      g.imageSmoothingQuality='high';
+      g.drawImage(pic, 0, 0, plan.width, plan.height);
+      if(pic.close) pic.close();
+      canvas.toBlob(function(blob){
+        if(!blob || blob.size>=file.size) return then(file);
+        var name=(file.name||'image').replace(/\.[^.]*$/, '')+(plan.type==='image/jpeg' ? '.jpg' : '.png');
+        then(new File([blob], name, { type:plan.type }));
+      }, plan.type, photo_jpeg_quality);
+    });
+  }
+
   function uploadFile(file){
     if(!file) return;
     if(uploading){
       status.style.color=''; status.textContent='Still sending the last upload — one at a time, please.';
       return;
     }
+    uploading=true; uploadBtn.disabled=true;
+    status.style.color=ChatColors.mutedFg;
+    if(file.type.indexOf('image/')===0) status.textContent='Preparing image…';
+    shrinkPicture(file, sendFile);
+  }
+  function done(msg){
+    uploading=false; uploadBtn.disabled=false;
+    status.style.color=''; status.textContent=msg;
+  }
+  function sendFile(file){
     var isVideo=file.type.indexOf('video/')===0;
     var noun=isVideo?'screencast':'image';
     var cap=isVideo?MAX_VIDEO_BYTES:MAX_IMAGE_BYTES;
     if(file.size > cap){
-      status.style.color='';
-      status.textContent='That '+noun+' is '+megabytes(file.size)+' — too big to send (limit '+(cap/1048576)+' MB).'+(isVideo?'':' Try compressing or resizing it.');
-      return;
+      return done('That '+noun+' is '+megabytes(file.size)+' — too big to send (limit '+(cap/1048576)+' MB).'+(isVideo?'':' Try compressing or resizing it.'));
     }
-    uploading=true; uploadBtn.disabled=true;
     status.style.color=ChatColors.mutedFg;
     status.textContent='Uploading '+noun+': 0% of '+megabytes(file.size)+'…';
     var fd=new FormData(); fd.append('file',file);
@@ -136,10 +203,6 @@ window.ChatCompose = (function(){
         ? 'Uploading '+noun+': '+pct+'% of '+megabytes(e.total)+'…'
         : 'Saving '+noun+'…';
     };
-    function done(msg){
-      uploading=false; uploadBtn.disabled=false;
-      status.style.color=''; status.textContent=msg;
-    }
     xhr.onload=function(){
       if(xhr.status<200 || xhr.status>=300){
         var t=(xhr.responseText||'').trim();
@@ -254,5 +317,6 @@ window.ChatCompose = (function(){
   }
 
   return { init:init, isPending:isPending, ackIfPending:ackIfPending,
-           insertAtCursor:insertAtCursor, setMarkdown:setMarkdown, focus:focus };
+           insertAtCursor:insertAtCursor, setMarkdown:setMarkdown, focus:focus,
+           resizePlan:resizePlan };
 })();
