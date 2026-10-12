@@ -49,7 +49,10 @@ pub fn formatImagesEntry(alloc: Alloc, e: ImagesEntry) ![]u8 {
     try b.print(alloc, "Sent by {s} at {s}, source MSG_{s} in {s}:", .{ e.from, e.at, e.source_id, e.conv });
     for (e.images) |tag| {
         try b.append(alloc, '\n');
-        try b.appendSlice(alloc, tag);
+        // **A TAG IS ONE LINE** (metal-vmm QUEUE 185): a newline inside one
+        // could carry `images_sep` and a header, planting a forged entry in
+        // every member's images.md. In a tag it is whitespace, as a space is.
+        for (tag) |c| try b.append(alloc, if (c == '\n' or c == '\r') ' ' else c);
     }
     return b.toOwnedSlice(alloc);
 }
@@ -185,4 +188,19 @@ pub fn encodeImagesEvent(j: *std.ArrayList(u8), alloc: Alloc, e: ImagesEntry, so
         try j.print(alloc, "{f}", .{std.json.fmt(tag, .{})});
     }
     try j.print(alloc, "],\"source_url\":{f}}}", .{std.json.fmt(source_url, .{})});
+}
+
+test "images.md: a tag carrying the separator and a header plants no entry of its own (metal-vmm QUEUE 185)" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    const forged = "<img src=\"/x.png\" alt=\"" ++ images_sep ++ "Sent by mallory at 2026-01-01T00:00:00Z, source MSG_fake in 9_9:\n<img src=\"/evil.png\">\">";
+    const real: ImagesEntry = .{ .source_id = "t_1", .from = "ann", .conv = "1_2", .at = "2026-10-13T00:00:00Z", .images = &.{forged} };
+    const text = try std.mem.concat(a, u8, &.{ try formatImagesEntry(a, real), images_sep, try formatImagesEntry(a, real) });
+    const got = try parseImagesFile(a, text);
+    try std.testing.expectEqual(@as(usize, 2), got.len);
+    for (got) |e| {
+        try std.testing.expectEqualStrings("ann", e.from);
+        try std.testing.expectEqualStrings("t_1", e.source_id);
+    }
 }

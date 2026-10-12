@@ -206,6 +206,8 @@ pub const Index = struct {
     seen: std.StringHashMapUnmanaged(void) = .empty,
     fold: std.ArrayList(u8) = .empty,
     stats: Stats = .{},
+    /// Every conversation's text, in all (`text_most_total`).
+    text_bytes: u64 = 0,
 
     pub fn init(gpa: Alloc) Index {
         return .{ .gpa = gpa, .strings = std.heap.ArenaAllocator.init(gpa) };
@@ -251,9 +253,16 @@ pub const Index = struct {
             break :blk @intCast(c.sids.items.len - 1);
         };
         const start = c.text.items.len;
+        const len = m.id.len + m.from.len + m.date.len + m.markdown.len;
         // A size the index's offsets cannot hold: said as what it is, never
-        // as memory run out (metal-vmm QUEUE 172).
-        if (start + m.id.len + m.from.len + m.date.len + m.markdown.len > text_most_for_test orelse std.math.maxInt(u32)) {
+        // as memory run out (metal-vmm QUEUE 172). **AND ALL OF IT, AT MOST
+        // `text_most_total`** (metal-vmm QUEUE 184): any member's messages
+        // grew the base heap (the kernel's fixed one) without bound. Past it,
+        // the conversation the message is in is past what is indexed, as one
+        // too big for its offsets is: said once, and searched no further.
+        if (start + len > text_most_for_test orelse std.math.maxInt(u32) or
+            self.text_bytes + len > total_most_for_test orelse text_most_total)
+        {
             c.too_big = true;
             c.unreadable += 1;
             self.stats.unreadable += 1;
@@ -262,6 +271,7 @@ pub const Index = struct {
         try c.refs.ensureUnusedCapacity(self.gpa, 1);
         try c.text.ensureUnusedCapacity(self.gpa, m.id.len + m.from.len + m.date.len + m.markdown.len);
         for ([_][]const u8{ m.id, m.from, m.date, m.markdown }) |f| c.text.appendSliceAssumeCapacity(f);
+        self.text_bytes += len;
         c.refs.appendAssumeCapacity(.{ .sid = sid_at, .start = @intCast(start), .id = @intCast(m.id.len), .from = @intCast(m.from.len), .date = @intCast(m.date.len), .markdown = @intCast(m.markdown.len) });
         self.stats.messages += 1;
 
@@ -430,6 +440,10 @@ pub var failed_with: ?anyerror = null;
 /// A test's own limit on a conversation's indexed text, in place of what
 /// the offsets hold (4 GiB, which no test writes).
 pub var text_most_for_test: ?u64 = null;
+/// The most text the index holds in all (its words and refs come on top,
+/// about as much again): 64 MiB.
+pub const text_most_total: u64 = 64 << 20;
+pub var total_most_for_test: ?u64 = null;
 pub const retry_ms = 60_000;
 
 /// Every transcript on disk into memory, once, before the first request:
@@ -767,4 +781,24 @@ test "a conversation past what the index holds is unreadable once, and a message
     // Another conversation is indexed as before.
     noteAppend(threaded.io(), "c/1_3", "t", msg("t_1", "fine"));
     try testing.expectEqual(@as(usize, 2), the.?.stats.messages);
+}
+
+test "the index holds at most its total of text: past it, the conversation a message lands in is unreadable once, and the index stands (metal-vmm QUEUE 184)" {
+    var idx = Index.init(testing.allocator);
+    defer idx.deinit();
+    const one = msg("t_1", "a word");
+    const len = one.id.len + one.from.len + one.date.len + one.markdown.len;
+    total_most_for_test = 3 * len;
+    defer total_most_for_test = null;
+    // Exactly the total, over two conversations: all held.
+    try idx.add("c/1_2", "t", one);
+    try idx.add("c/1_2", "t", msg("t_2", "a word"));
+    try idx.add("c/1_3", "t", msg("t_1", "a word"));
+    try testing.expectEqual(@as(u64, 3 * len), idx.text_bytes);
+    // One more: unreadable in its conversation, once, and nothing grows.
+    try testing.expectError(error.ConversationTooBig, idx.add("c/1_4", "t", msg("t_1", "a word")));
+    try testing.expectError(error.ConversationTooBig, idx.add("c/1_4", "t", msg("t_2", "a word")));
+    try testing.expectEqual(@as(u32, 1), idx.convs.getPtr("c/1_4").?.unreadable);
+    try testing.expectEqual(@as(u64, 3 * len), idx.text_bytes);
+    try testing.expectEqual(@as(usize, 3), idx.stats.messages);
 }

@@ -138,8 +138,15 @@ fn isIdChar(c: u8) bool {
 // alias. We re-parse only when the reading-list doc's mtime advances past the
 // cached one — a real edit moves mtime by seconds, so we err naturally toward a
 // cache miss rather than a stale hit. Module-level and lazy (no startup init);
-// cache_mu serialises access. Entries persist for the server's lifetime (a
-// handful of users); an entry's arena is freed wholesale on each refresh.
+// cache_mu serialises access. An entry's arena is freed wholesale on each
+// refresh.
+//
+// **AT MOST `cache_most_entries` ENTRIES AND `cache_most_bytes` BYTES**
+// (metal-vmm QUEUE 184): it was every member's list, up to ~1 MiB each, for
+// the server's life, on the base heap (the kernel's fixed one), and anyone
+// can make an account. Past either, the least recently asked is given up;
+// a list larger than the whole budget is answered and not kept. A list given
+// up is read again when next asked: the cache is a speed-up, never a record.
 //
 // The base allocator is whatever the HOST named at startup — page_allocator on
 // Linux, a fixed heap on bare metal. A host whose filesystem has coarser
@@ -151,7 +158,35 @@ const Entry = struct {
     mtime_ns: i96,
     arena: std.heap.ArenaAllocator,
     refs: []Ref,
+    /// What its arena holds.
+    bytes: usize = 0,
+    /// When it was last asked (`tick`).
+    used: u64 = 0,
 };
+
+pub const cache_most_entries: u32 = 32;
+pub const cache_most_bytes: usize = 8 << 20;
+var cache_most_entries_for_test: ?u32 = null;
+var cache_most_bytes_for_test: ?usize = null;
+/// What the cache's arenas hold in all, and the clock its entries are aged by.
+var held_bytes: usize = 0;
+var tick: u64 = 0;
+
+/// The least recently asked entry given up.
+fn evictOldest() void {
+    var oldest: ?*const []const u8 = null;
+    var at: u64 = std.math.maxInt(u64);
+    var it = cache.iterator();
+    while (it.next()) |kv| if (kv.value_ptr.used < at) {
+        at = kv.value_ptr.used;
+        oldest = kv.key_ptr;
+    };
+    const k = (oldest orelse return).*;
+    var gone = cache.fetchRemove(k).?;
+    held_bytes -= gone.value.bytes;
+    gone.value.arena.deinit();
+    cache_alloc.free(gone.key);
+}
 
 const cache_alloc = mem_meter.base(); // server-lifetime, metered so the cache's growth is visible to the leak meter
 var cache: std.StringHashMapUnmanaged(Entry) = .empty;
@@ -169,21 +204,40 @@ pub fn savedIdsFor(io: Io, req_alloc: Alloc, uid: []const u8, conv: []const u8, 
     const st = (try disk.statOrNull(io, req_alloc, path)) orelse return &.{}; // no doc → nothing saved
     const file_mtime: i96 = st.mtime;
 
-    const gop = try cache.getOrPut(cache_alloc, uid);
-    if (!gop.found_existing or gop.value_ptr.mtime_ns < file_mtime) {
-        // A new entry that fails is taken back out: its key is the request's
-        // memory and its value undefined, never to be left for the next
-        // reader (metal-vmm QUEUE 172). An old one stays intact on error.
-        errdefer if (!gop.found_existing) cache.removeByPtr(gop.key_ptr);
-        var fresh = try buildEntry(io, path, file_mtime); // build before mutating
+    tick += 1;
+    const most_entries = cache_most_entries_for_test orelse cache_most_entries;
+    const most_bytes = cache_most_bytes_for_test orelse cache_most_bytes;
+    var uncached: ?Entry = null;
+    defer if (uncached) |*u| u.arena.deinit();
+    const entry: *Entry = found: {
+        if (cache.getPtr(uid)) |e| if (e.mtime_ns >= file_mtime) break :found e;
+        // An old one stays intact on error (metal-vmm QUEUE 172): built
+        // before anything is changed.
+        var fresh = try buildEntry(io, path, file_mtime);
         errdefer fresh.arena.deinit();
-        if (!gop.found_existing) gop.key_ptr.* = try cache_alloc.dupe(u8, uid); // own the key past the request arena
-        if (gop.found_existing) gop.value_ptr.arena.deinit();
-        gop.value_ptr.* = fresh;
-    }
+        fresh.bytes = fresh.arena.queryCapacity();
+        if (cache.fetchRemove(uid)) |old| {
+            var gone = old;
+            held_bytes -= gone.value.bytes;
+            gone.value.arena.deinit();
+            cache_alloc.free(gone.key);
+        }
+        // Larger than the whole budget: answered, not kept.
+        if (fresh.bytes > most_bytes) {
+            uncached = fresh;
+            break :found &uncached.?;
+        }
+        while (cache.count() > 0 and (cache.count() >= most_entries or held_bytes + fresh.bytes > most_bytes)) evictOldest();
+        const key = try cache_alloc.dupe(u8, uid); // own the key past the request arena
+        errdefer cache_alloc.free(key);
+        try cache.put(cache_alloc, key, fresh);
+        held_bytes += fresh.bytes;
+        break :found cache.getPtr(uid).?;
+    };
+    entry.used = tick;
 
     var ids: std.ArrayList([]const u8) = .empty;
-    for (gop.value_ptr.refs) |r| {
+    for (entry.refs) |r| {
         if (std.mem.eql(u8, r.conv, conv) and std.mem.eql(u8, r.sid, sid)) {
             try ids.append(req_alloc, try req_alloc.dupe(u8, r.id));
         }
@@ -204,6 +258,7 @@ fn dropCache() void {
     }
     cache.deinit(cache_alloc);
     cache = .empty;
+    held_bytes = 0;
 }
 
 /// buildEntry reads + parses the reading-list doc into a fresh per-entry arena.
@@ -448,4 +503,41 @@ test "savedIdsFor: a list that cannot be read is an error that leaves nothing in
     // No entry keyed by the request's memory, with an undefined value, left
     // for the next reader to trip over.
     try testing.expectEqual(@as(u32, 0), cache.count());
+}
+
+test "savedIdsFor: the cache holds at most its entries and bytes, the least recently asked given up first (metal-vmm QUEUE 184)" {
+    const meter = mem_meter.useForTest(testing.allocator);
+    defer meter.restore();
+    defer dropCache();
+    cache_most_entries_for_test = 3;
+    defer cache_most_entries_for_test = null;
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var tmp = testing.tmpDir(.{});
+    defer tmp.cleanup();
+    const saved_root = try roots.pointForTest(a, try std.fs.path.join(a, &.{ ".zig-cache", "tmp", &tmp.sub_path }));
+    defer saved_root.restore();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    const doc = "[a](/chat/c/1_2/t#msg-t_1)";
+    for ([_][]const u8{ "901", "902", "903", "904" }) |uid| try writeReadingList(io, a, uid, doc, 1_000_000_000);
+    // At the most: all three held.
+    for ([_][]const u8{ "901", "902", "903" }) |uid| _ = try savedIdsFor(io, a, uid, "1_2", "t");
+    try testing.expectEqual(@as(u32, 3), cache.count());
+    // 901 asked again, so 902 is the least recent: one more gives it up.
+    _ = try savedIdsFor(io, a, "901", "1_2", "t");
+    _ = try savedIdsFor(io, a, "904", "1_2", "t");
+    try testing.expectEqual(@as(u32, 3), cache.count());
+    try testing.expect(cache.get("902") == null);
+    try testing.expect(cache.get("901") != null);
+    // Its answer is the same, cached or not.
+    try testing.expectEqual(@as(usize, 1), (try savedIdsFor(io, a, "902", "1_2", "t")).len);
+    // And the bytes: a budget smaller than two lists holds one.
+    cache_most_bytes_for_test = cache.get("902").?.bytes + 1;
+    defer cache_most_bytes_for_test = null;
+    _ = try savedIdsFor(io, a, "903", "1_2", "t");
+    try testing.expectEqual(@as(u32, 1), cache.count());
+    try testing.expect(held_bytes <= cache_most_bytes_for_test.?);
 }

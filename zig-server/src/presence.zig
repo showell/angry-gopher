@@ -42,8 +42,11 @@ var last_seen: std.StringHashMapUnmanaged(i128) = .empty;
 /// an active user stays online while it is owed. Keys are `last_seen`'s.
 var owed: std.StringHashMapUnmanaged(i128) = .empty;
 /// How long an owed broadcast waits before it is tried again: a lasting
-/// failure (the user list unreadable) is not read on every request. A test
-/// sets 0 to try again at once.
+/// failure (the user list unreadable) is not read on every request. **IT IS
+/// TRIED ON THE USER'S NEXT REQUEST PAST THE WAIT**, never by a timer
+/// (metal-vmm QUEUE 180.6): a user who goes quiet is told to no one, and
+/// shows online to whoever renders a page, by `isOnline`. A test sets 0 to
+/// try again at once.
 pub var owed_retry_ns: i128 = 30 * std.time.ns_per_s;
 
 fn nowNs(io: Io) i128 {
@@ -84,8 +87,8 @@ pub fn markActive(io: Io, uid: []const u8) bool {
     return false;
 }
 
-/// `uid`'s came-online edge given back, owed: a markActive after
-/// `owed_retry_ns` is the edge again. Its last sighting stands, so it is
+/// `uid`'s came-online edge given back, owed: their first markActive (a
+/// request) after `owed_retry_ns` is the edge again. Its last sighting stands, so it is
 /// still online (177.6: it was set back a window, which showed an active
 /// user offline).
 fn unmark(io: Io, uid: []const u8) void {

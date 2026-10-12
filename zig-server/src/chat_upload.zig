@@ -92,9 +92,29 @@ pub fn handleUpload(req: *Request, io: Io, alloc: Alloc, uid: []const u8, conv_d
     };
 
     const out = try std.fmt.allocPrint(alloc, "{{\"url\":\"{s}/{s}/uploads/{s}\",\"name\":{f},\"kind\":\"{s}\",\"width\":0,\"height\":0}}", .{
-        base, sid, name, std.json.fmt(part.filename, .{}), @tagName(sniff.kind),
+        base, sid, name, std.json.fmt(try displayName(alloc, part.filename), .{}), @tagName(sniff.kind),
     });
     try req.respond(out, .{ .extra_headers = &.{http.json_ct} });
+}
+
+/// **THE CLIENT'S NAME, AS TEXT** (metal-vmm QUEUE 185): a name that is not
+/// UTF-8 came back in the JSON as an array of numbers. Each sequence that
+/// does not decode is replaced with U+FFFD.
+fn displayName(alloc: Alloc, raw: []const u8) ![]const u8 {
+    if (std.unicode.utf8ValidateSlice(raw)) return raw;
+    var out: std.ArrayList(u8) = .empty;
+    var i: usize = 0;
+    while (i < raw.len) {
+        const n = std.unicode.utf8ByteSequenceLength(raw[i]) catch 0;
+        if (n != 0 and i + n <= raw.len and std.meta.isError(std.unicode.utf8Decode(raw[i..][0..n])) == false) {
+            try out.appendSlice(alloc, raw[i..][0..n]);
+            i += n;
+        } else {
+            try out.appendSlice(alloc, "\u{FFFD}");
+            i += 1;
+        }
+    }
+    return out.toOwnedSlice(alloc);
 }
 
 /// The upload written under its topic, by a fresh name.
@@ -572,4 +592,17 @@ test "a stream whose file ends before its length is cut, never ended as whole: n
 test "parseMultipartFile allocates nothing: memory that runs out is never 'no file', a 400 (metal-vmm QUEUE 172)" {
     const body = "--B\r\nContent-Disposition: form-data; name=\"file\"; filename=\"a.png\"\r\n\r\nZ\r\n--B--\r\n";
     try std.testing.expectEqualStrings("Z", parseMultipartFile(body, "B").?.data);
+}
+
+test "an upload's name that is not UTF-8 is answered as a JSON string, what does not decode replaced (metal-vmm QUEUE 185)" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    const name = try displayName(a, "caf\xe9 \xff.png");
+    try std.testing.expect(std.unicode.utf8ValidateSlice(name));
+    try std.testing.expectEqualStrings("caf\u{FFFD} \u{FFFD}.png", name);
+    const json = try std.fmt.allocPrint(a, "{f}", .{std.json.fmt(name, .{})});
+    try std.testing.expect(json[0] == '"');
+    // Valid names pass as they are.
+    try std.testing.expectEqualStrings("é.png", try displayName(a, "é.png"));
 }
