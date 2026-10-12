@@ -100,8 +100,11 @@ pub fn render(req: *Request, io: Io, alloc: Alloc, client: ?[]const u8) !void {
     var body = req.respondStreaming(&hbuf, .{
         .respond_options = .{ .extra_headers = &tar_headers },
     }) catch return;
-    // absent-ok: the 200 and the archive have begun; a failure from here cuts the archive short where the client sees it.
-    archive(io, alloc, &body.writer, data, auth) catch return;
+    // The 200 and the archive have begun: a failure from here cuts the
+    // archive short where the client sees it (no manifest, no last chunk),
+    // and goes on to the host's log (metal-vmm QUEUE 172: it was dropped, so
+    // a failed backup left no line anywhere an operator looks).
+    try archive(io, alloc, &body.writer, data, auth);
     body.end() catch return;
 }
 
