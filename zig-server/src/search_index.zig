@@ -245,7 +245,9 @@ pub const Index = struct {
             break :blk @intCast(c.sids.items.len - 1);
         };
         const start = c.text.items.len;
-        if (start + m.id.len + m.from.len + m.date.len + m.markdown.len > std.math.maxInt(u32)) return error.OutOfMemory;
+        // A size the index's offsets cannot hold: said as what it is, never
+        // as memory run out (metal-vmm QUEUE 172).
+        if (start + m.id.len + m.from.len + m.date.len + m.markdown.len > std.math.maxInt(u32)) return error.ConversationTooBig;
         try c.refs.ensureUnusedCapacity(self.gpa, 1);
         try c.text.ensureUnusedCapacity(self.gpa, m.id.len + m.from.len + m.date.len + m.markdown.len);
         for ([_][]const u8{ m.id, m.from, m.date, m.markdown }) |f| c.text.appendSliceAssumeCapacity(f);
@@ -308,7 +310,15 @@ pub const Index = struct {
                 var blocks = std.mem.splitSequence(u8, raw, chat_store.sep);
                 while (blocks.next()) |piece| {
                     if (std.mem.trim(u8, piece, " \t\r\n").len == 0) continue;
-                    if (try inPlace(a, piece)) |m| try self.add(dir, sid, m);
+                    if (try inPlace(a, piece)) |m| self.add(dir, sid, m) catch |e| switch (e) {
+                        // That conversation is past what is indexed: unreadable
+                        // in it, and the rest of the site still searched.
+                        error.ConversationTooBig => {
+                            try self.unreadableIn(dir);
+                            break;
+                        },
+                        else => return e,
+                    };
                 }
             }
         }
@@ -403,6 +413,9 @@ var the: ?Index = null;
 /// does not build again until `retry_ms` after, so a corpus too big for the
 /// memory is not read whole on every search.
 var failed_at_ms: ?i64 = null;
+/// Why the last build failed, for the start's report (it guessed "out of
+/// memory?" for every failure: metal-vmm QUEUE 172).
+pub var failed_with: ?anyerror = null;
 pub const retry_ms = 60_000;
 
 /// Every transcript on disk into memory, once, before the first request:
@@ -415,18 +428,21 @@ pub fn buildAll(io: Io, scratch: Alloc) ?Stats {
     drop();
     var idx = Index.init(mem_meter.base());
     // absent-ok: no conversations listed is no index, and the first search builds again; nothing is written.
-    const dirs = chat_store.listConvDirs(io, scratch) catch {
+    const dirs = chat_store.listConvDirs(io, scratch) catch |e| {
         idx.deinit();
         failed_at_ms = nowMs(io);
+        failed_with = e;
         return null;
     };
-    idx.build(io, scratch, dirs) catch {
+    idx.build(io, scratch, dirs) catch |e| {
         idx.deinit();
         failed_at_ms = nowMs(io);
+        failed_with = e;
         return null;
     };
     the = idx;
     failed_at_ms = null;
+    failed_with = null;
     return idx.stats;
 }
 
@@ -686,4 +702,25 @@ test "the budget is charged what the JSON costs, not the raw bytes (the review o
     const f = try idx.messagesFor(arena.allocator(), &mine, "word", 10, .{ .bytes = 8000 });
     try testing.expectEqual(@as(usize, 2), f.matched);
     try testing.expectEqual(@as(usize, 1), f.hits.len);
+}
+
+test "a build that cannot list the conversations says why: its error, never a guess of memory (metal-vmm QUEUE 172)" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    const saved = try @import("roots.zig").pointForTest(a, try std.fs.path.join(a, &.{ ".zig-cache", "tmp", &tmp.sub_path }));
+    defer saved.restore();
+    const meter = mem_meter.useForTest(std.testing.allocator);
+    defer meter.restore();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    // The chat root is a file: it cannot be listed.
+    try Io.Dir.cwd().createDirPath(io, std.fs.path.dirname(chat_store.chat_root).?);
+    try Io.Dir.cwd().writeFile(io, .{ .sub_path = chat_store.chat_root, .data = "not a folder" });
+    try std.testing.expect(buildAll(io, a) == null);
+    try std.testing.expect(failed_with != null);
+    try std.testing.expect(failed_with.? != error.OutOfMemory);
 }

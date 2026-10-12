@@ -1745,7 +1745,7 @@ test "route: a release whose removals fail is not answered as done, and the acco
     try testing.expect(std.mem.startsWith(u8, status(out.written()), "500"));
     // The account is there, and still logs in.
     try testing.expect(try users.principalExists(io, a, "2"));
-    try testing.expect(users.checkUserPassword(io, a, "2", "hunter2"));
+    try testing.expect(try users.checkUserPassword(io, a, "2", "hunter2"));
     _ = try UidSite.disk.stat(io, a, data); // and its data, which the release could not remove
 }
 
@@ -1787,7 +1787,7 @@ test "route: a release whose last removal fails leaves an account that can relea
     try out.writer.flush();
     try testing.expect(std.mem.startsWith(u8, status(out.written()), "500"));
     // Still an account that logs in, to release again.
-    try testing.expect(users.checkUserPassword(io, a, "2", "hunter2"));
+    try testing.expect(try users.checkUserPassword(io, a, "2", "hunter2"));
     // And again, the disk willing: released, nothing left.
     refuse_under = "";
     try testing.expect(std.mem.indexOf(u8, try postForm(a, io, "/logout", member, "release=yes"), "500") == null);
@@ -1840,7 +1840,7 @@ test "route: a release whose removal inside the account fails keeps the password
         try out.writer.flush();
         try testing.expect(std.mem.startsWith(u8, status(out.written()), "500"));
         // Still an account that logs in, to release again.
-        try testing.expect(users.checkUserPassword(io, a, "2", "hunter2"));
+        try testing.expect(try users.checkUserPassword(io, a, "2", "hunter2"));
         // And again, the disk willing: released, nothing left.
         refuse_named = "";
         try testing.expect(std.mem.indexOf(u8, try postForm(a, io, "/logout", member, "release=yes"), "500") == null);
@@ -2144,7 +2144,7 @@ test "route: a send makes the topic it names, and /chat over a conversation with
     _ = chat_state;
 }
 
-test "route: a session under its legacy name is moved to __Host-gopher_auth by the next GET, the legacy one cleared; a POST is still read (metal-vmm QUEUE 170.8)" {
+test "route: a session under its legacy name is moved to __Host-gopher_auth by the next GET, the legacy one cleared (metal-vmm QUEUE 170.8)" {
     var arena = std.heap.ArenaAllocator.init(testing.allocator);
     defer arena.deinit();
     const a = arena.allocator();
@@ -2338,4 +2338,186 @@ test "route: search's budget charges the excerpts it sends, not the whole messag
     try testing.expect(std.mem.indexOf(u8, found, "\"matched\":30") != null);
     try testing.expectEqual(@as(usize, 30), std.mem.count(u8, found, "\"mark\":\"zeppelin\""));
     try testing.expect(found.len < 64 << 10);
+}
+
+test "a doc's save: a missing body is 400 and the doc is kept; a doc that is gone is 404; a full reading list is 413, never 'save failed' 500 (metal-vmm QUEUE 172)" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var uid_site = try UidSite.init(a, io);
+    defer uid_site.deinit();
+    const docs_store = @import("docs_store.zig");
+    const reading_list = @import("reading_list.zig");
+    const me = try signedUid(a, try player.allocate(io, a, "Ada"));
+    const ada = try users.allocateUser(io, a, "Ada");
+    try users.setUserPassword(io, a, ada, "a password for Ada");
+    const cookies = try std.fmt.allocPrint(a, "{s}; __Host-gopher_auth={s}", .{ me, (try users.signSessionNow(io, a, ada)).? });
+    const slug = try docs_store.createUserDoc(io, a, ada, "Notes");
+    try docs_store.writeUserDoc(io, a, ada, slug, "what Ada wrote");
+    const post = struct {
+        fn f(al: std.mem.Allocator, i: Io, c: []const u8, path: []const u8, body: []const u8) ![]const u8 {
+            return serve(al, i, try std.fmt.allocPrint(al, "POST {s} HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: {d}\r\n\r\n{s}", .{ path, c, body.len, body }));
+        }
+    }.f;
+
+    const no_body = try post(a, io, cookies, "/chat/docs/save", try std.fmt.allocPrint(a, "slug={s}", .{slug}));
+    try testing.expectEqualStrings("400 Bad Request", status(no_body));
+    try testing.expectEqualStrings("what Ada wrote", try docs_store.readUserDoc(io, a, ada, slug));
+
+    const gone = try post(a, io, cookies, "/chat/docs/save", "slug=never-made&body=x");
+    try testing.expectEqualStrings("404 Not Found", status(gone));
+
+    // A reading list at its cap: the next save is the client's limit.
+    try docs_store.appendToUserDoc(io, a, ada, reading_list.reading_list_slug, "x" ** reading_list.max_reading_list_bytes, 0);
+    const full = try post(a, io, cookies, "/chat/docs/save_to_reading_list", "conv=1_2&sid=s&id=s_1&body=hello");
+    try testing.expectEqualStrings("413 Payload Too Large", status(full));
+}
+
+test "a gallery that cannot read pages/home.txt is a 500 that names it, never a 200 (metal-vmm QUEUE 172, as the home page's)" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    // The tests run in zig-server/, where there is no pages/home.txt.
+    if (Io.Dir.cwd().access(io, "pages/home.txt", .{})) |_| return error.SkipZigTest else |_| {}
+    const got = try get(a, io, "/gallery");
+    try testing.expectEqualStrings("500 Internal Server Error", status(got));
+    try testing.expect(std.mem.indexOf(u8, got, "could not be parsed") != null);
+}
+
+test "an upload that cannot be stored gives its bytes back to the allowance: the quota is never spent on a file that is not there (metal-vmm QUEUE 172)" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var uid_site = try UidSite.init(a, io);
+    defer uid_site.deinit();
+    const meter = @import("webbox").mem_meter.useForTest(std.heap.page_allocator);
+    defer meter.restore();
+    const chat_store = @import("chat_store.zig");
+    const me = try signedUid(a, try player.allocate(io, a, "Ada"));
+    const ada = try users.allocateUser(io, a, "Ada");
+    try users.setUserPassword(io, a, ada, "a password for Ada");
+    const bo = try users.allocateUser(io, a, "Bo");
+    try users.setUserPassword(io, a, bo, "a password for Bo");
+    const cookies = try std.fmt.allocPrint(a, "{s}; __Host-gopher_auth={s}", .{ me, (try users.signSessionNow(io, a, ada)).? });
+    const key = try std.fmt.allocPrint(a, "{s}_{s}", .{ ada, bo });
+    const dm = try std.fmt.allocPrint(a, "/chat/c/{s}/scripts", .{key});
+    const hello = "markdown=hello";
+    _ = try serve(a, io, try std.fmt.allocPrint(a, "POST {s}/send HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: {d}\r\n\r\n{s}", .{ dm, cookies, hello.len, hello }));
+    // Where the topic's uploads go is a file: the upload cannot be stored.
+    const updir = try std.fs.path.join(a, &.{ try chat_store.dmConvDir(a, key), "sessions", "scripts.uploads" });
+    try Io.Dir.cwd().writeFile(io, .{ .sub_path = updir, .data = "in the way" });
+    const before = try users.userUploadBytes(io, a, ada);
+    const png = "\x89PNG\r\n\x1a\n" ++ "\x00" ** 64;
+    const body = "--B\r\nContent-Disposition: form-data; name=\"file\"; filename=\"a.png\"\r\nContent-Type: image/png\r\n\r\n" ++ png ++ "\r\n--B--\r\n";
+    // The handler's error goes on to the host (site.zig answers it 500 and
+    // hands it on to be logged): here, to the test.
+    const got = serve(a, io, try std.fmt.allocPrint(a, "POST {s}/upload HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\nContent-Type: multipart/form-data; boundary=B\r\nContent-Length: {d}\r\n\r\n{s}", .{ dm, cookies, body.len, body }));
+    try testing.expect(std.meta.isError(got));
+    try testing.expectEqual(before, try users.userUploadBytes(io, a, ada));
+}
+
+test "a release that can release nothing says so, never the page a release that deleted gets (metal-vmm QUEUE 172)" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var uid_site = try UidSite.init(a, io);
+    defer uid_site.deinit();
+    // A member's id in the player cookie and no session (it lapsed): the
+    // account is not this cookie's to release.
+    const ada = try users.allocateUser(io, a, "Ada");
+    try users.setUserPassword(io, a, ada, "a password for Ada");
+    try player.mirror(io, a, ada, "Ada");
+    const got = try postAs(a, io, "/logout", try signedUid(a, ada), "release=yes");
+    try testing.expectEqualStrings("403 Forbidden", status(got));
+    try testing.expect(try users.principalExists(io, a, ada));
+}
+
+test "a stream is a GET's: a POST to one is 405, its body never read nor held (metal-vmm QUEUE 176.3)" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var uid_site = try UidSite.init(a, io);
+    defer uid_site.deinit();
+    const me = try signedUid(a, try player.allocate(io, a, "Ada"));
+    const ada = try users.allocateUser(io, a, "Ada");
+    try users.setUserPassword(io, a, ada, "a password for Ada");
+    const cookies = try std.fmt.allocPrint(a, "{s}; __Host-gopher_auth={s}", .{ me, (try users.signSessionNow(io, a, ada)).? });
+    const got = try postAs(a, io, "/chat/notifications", cookies, "x" ** 100);
+    try testing.expectEqualStrings("405 Method Not Allowed", status(got));
+}
+
+/// Who `users.currentUser` says a raw request is for.
+fn currentId(a: std.mem.Allocator, io: Io, raw: []const u8) ![]const u8 {
+    var reader: std.Io.Reader = .fixed(raw);
+    var out_buf: [64]u8 = undefined;
+    var out: std.Io.Writer = .fixed(&out_buf);
+    var server = std.http.Server.init(&reader, &out);
+    var req = try server.receiveHead();
+    return (try users.currentUser(io, a, &req)).id;
+}
+
+test "route: a legacy session is read on a POST (never redirected), not read past the end date, and not read nor moved when signed after the cutoff (metal-vmm QUEUE 176.1, 176.8)" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var uid_site = try UidSite.init(a, io);
+    defer uid_site.deinit();
+    try users.setUserPassword(io, a, "2", "hunter2");
+    const before = @min(nowSecs(io), http.legacy_issued_before_unix) - 3600;
+    const legacy = try std.fmt.allocPrint(a, "gopher_auth={s}", .{try users.signSession(a, UidSite.secret, "2", before)});
+    const post = try std.fmt.allocPrint(a, "POST /play HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\nContent-Length: 0\r\n\r\n", .{legacy});
+    // A POST: read under the old name, as it was meant.
+    try testing.expectEqualStrings("2", try currentId(a, io, post));
+    try testing.expect(!std.mem.startsWith(u8, status(try postForm(a, io, "/play", legacy, "")), "303"));
+    // Signed after the cutoff: a plant, read as no one, never moved.
+    const late = try std.fmt.allocPrint(a, "gopher_auth={s}", .{try users.signSession(a, UidSite.secret, "2", http.legacy_issued_before_unix + 60)});
+    try testing.expectEqualStrings("", try currentId(a, io, try std.fmt.allocPrint(a, "POST /play HTTP/1.1\r\nHost: x\r\nCookie: {s}\r\nContent-Length: 0\r\n\r\n", .{late})));
+    try testing.expect(std.mem.indexOf(u8, try UidSite.ask(a, io, "/play", late), "set-cookie: __Host-gopher_auth=") == null);
+    // Past the end date: the legacy name is not read at all.
+    const saved_clock = http.names_clock_for_test;
+    defer http.names_clock_for_test = saved_clock;
+    http.names_clock_for_test = http.legacy_names_until_unix;
+    try testing.expectEqualStrings("", try currentId(a, io, post));
+    try testing.expect(std.mem.indexOf(u8, try UidSite.ask(a, io, "/play", legacy), "set-cookie: __Host-gopher_auth=") == null);
+}
+
+test "route: a legacy uid signed after the cutoff names no one and is not moved; past the end date no legacy uid is read (metal-vmm QUEUE 176.1, 176.8)" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var uid_site = try UidSite.init(a, io);
+    defer uid_site.deinit();
+    const id = try player.allocate(io, a, "Nikhil");
+    const late = try std.fmt.allocPrint(a, "gopher_uid={s}", .{try uid_cookie.sign(a, UidSite.secret, id, http.legacy_issued_before_unix + 60)});
+    const got = try UidSite.ask(a, io, "/play", late);
+    try testing.expect(!playingAs(got, "Nikhil"));
+    try testing.expect(setUid(got) == null);
+    const ok = try std.fmt.allocPrint(a, "gopher_uid={s}", .{try uid_cookie.sign(a, UidSite.secret, id, @min(nowSecs(io), http.legacy_issued_before_unix) - 3600)});
+    const saved_clock = http.names_clock_for_test;
+    defer http.names_clock_for_test = saved_clock;
+    http.names_clock_for_test = http.legacy_names_until_unix;
+    const ended = try UidSite.ask(a, io, "/play", ok);
+    try testing.expect(!playingAs(ended, "Nikhil"));
+    try testing.expect(setUid(ended) == null);
 }

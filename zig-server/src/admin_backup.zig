@@ -83,7 +83,7 @@ pub fn render(req: *Request, io: Io, alloc: Alloc, client: ?[]const u8) !void {
     if (throttle.check(io, client, ui.admin_uid)) |b| return form(req, alloc, b.text(), .too_many_requests);
     const sent = (try http.readLimitedBody(req, alloc, limits.body.secret_form)) orelse return;
     const password = (try chat.formField(alloc, sent, "password")) orelse "";
-    if (!users.checkUserPassword(io, alloc, ui.admin_uid, password)) {
+    if (!try users.checkUserPassword(io, alloc, ui.admin_uid, password)) {
         throttle.recordFailure(io, client, ui.admin_uid);
         return form(req, alloc, "That is not the password.", .forbidden);
     }
@@ -100,8 +100,11 @@ pub fn render(req: *Request, io: Io, alloc: Alloc, client: ?[]const u8) !void {
     var body = req.respondStreaming(&hbuf, .{
         .respond_options = .{ .extra_headers = &tar_headers },
     }) catch return;
-    // absent-ok: the 200 and the archive have begun; a failure from here cuts the archive short where the client sees it.
-    archive(io, alloc, &body.writer, data, auth) catch return;
+    // The 200 and the archive have begun: a failure from here cuts the
+    // archive short where the client sees it (no manifest, no last chunk),
+    // and goes on to the host's log (metal-vmm QUEUE 172: it was dropped, so
+    // a failed backup left no line anywhere an operator looks).
+    try archive(io, alloc, &body.writer, data, auth);
     body.end() catch return;
 }
 

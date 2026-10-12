@@ -171,12 +171,14 @@ pub fn savedIdsFor(io: Io, req_alloc: Alloc, uid: []const u8, conv: []const u8, 
 
     const gop = try cache.getOrPut(cache_alloc, uid);
     if (!gop.found_existing or gop.value_ptr.mtime_ns < file_mtime) {
-        const fresh = try buildEntry(io, path, file_mtime); // build before mutating: old stays intact on error
-        if (gop.found_existing) {
-            gop.value_ptr.arena.deinit();
-        } else {
-            gop.key_ptr.* = try cache_alloc.dupe(u8, uid); // own the key past the request arena
-        }
+        // A new entry that fails is taken back out: its key is the request's
+        // memory and its value undefined, never to be left for the next
+        // reader (metal-vmm QUEUE 172). An old one stays intact on error.
+        errdefer if (!gop.found_existing) cache.removeByPtr(gop.key_ptr);
+        var fresh = try buildEntry(io, path, file_mtime); // build before mutating
+        errdefer fresh.arena.deinit();
+        if (!gop.found_existing) gop.key_ptr.* = try cache_alloc.dupe(u8, uid); // own the key past the request arena
+        if (gop.found_existing) gop.value_ptr.arena.deinit();
         gop.value_ptr.* = fresh;
     }
 
@@ -421,5 +423,29 @@ test "savedIdsFor: a missing doc is nothing saved, and allocates nothing process
     try testing.expectEqual(@as(usize, 0), (try savedIdsFor(io, a, "888", "1_2", "x")).len);
     // No doc → an early return, before the cache is touched.
     try testing.expectEqual(before.total_allocs, mem_meter.snapshot().total_allocs);
+    try testing.expectEqual(@as(u32, 0), cache.count());
+}
+
+test "savedIdsFor: a list that cannot be read is an error that leaves nothing in the cache, for a new reader (metal-vmm QUEUE 172)" {
+    const meter = mem_meter.useForTest(testing.allocator);
+    defer meter.restore();
+    defer dropCache();
+
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var tmp = testing.tmpDir(.{});
+    defer tmp.cleanup();
+    const saved_root = try roots.pointForTest(a, try std.fs.path.join(a, &.{ ".zig-cache", "tmp", &tmp.sub_path }));
+    defer saved_root.restore();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+
+    // The doc's path is a folder: it stats, and cannot be read.
+    try Io.Dir.cwd().createDirPath(io, try docs_store.docPath(a, "999", reading_list_slug));
+    try testing.expect(std.meta.isError(savedIdsFor(io, a, "999", "1_2", "x")));
+    // No entry keyed by the request's memory, with an undefined value, left
+    // for the next reader to trip over.
     try testing.expectEqual(@as(u32, 0), cache.count());
 }

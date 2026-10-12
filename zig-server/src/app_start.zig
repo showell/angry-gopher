@@ -28,7 +28,7 @@ pub fn describeStart(r: StartReport, w: *std.Io.Writer) std.Io.Writer.Error!void
     if (r.backfilled > 0) try w.print("wrote a last-message record for {d} chat session(s)\n", .{r.backfilled});
     if (r.search) |st| {
         try w.print("search index: {d} messages in {d} transcripts ({d} bytes, {d} words, {d} unreadable) in {d} ms\n", .{ st.messages, st.transcripts, st.bytes, st.words, st.unreadable, r.search_ms });
-    } else try w.writeAll("search index: not built (out of memory); the first search builds it\n");
+    } else try w.print("search index: not built ({s}); the first search builds it\n", .{if (search_index.failed_with) |e| @errorName(e) else "unknown"});
 }
 
 pub fn setup(io: Io, base: std.mem.Allocator, host_roots: ?roots.Roots) !StartReport {

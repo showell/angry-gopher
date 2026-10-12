@@ -64,7 +64,7 @@ pub fn handleUpload(req: *Request, io: Io, alloc: Alloc, uid: []const u8, conv_d
     const boundary = multipartBoundary(ct) orelse return edge.reject(req, .malformed_multipart, "no file\n");
 
     const body = (try http.readLimitedBody(req, alloc, max_any_upload)) orelse return;
-    const part = parseMultipartFile(alloc, body, boundary) orelse
+    const part = parseMultipartFile(body, boundary) orelse
         return edge.reject(req, .malformed_multipart, "no file\n");
 
     // Sniff the kind FIRST — it carries the per-file cap and the user-facing noun.
@@ -82,18 +82,29 @@ pub fn handleUpload(req: *Request, io: Io, alloc: Alloc, uid: []const u8, conv_d
         return req.respond(msg, .{ .status = .forbidden });
     }
 
-    const token = randHex16(io, alloc) catch return req.respond("token\n", .{ .status = .internal_server_error });
-    const name = try std.fmt.allocPrint(alloc, "{s}.{s}", .{ token, sniff.ext });
-    const dir = try std.fs.path.join(alloc, &.{ conv_dir, "sessions", try std.fmt.allocPrint(alloc, "{s}.uploads", .{sid}) });
-    disk.makeDir(io, alloc, dir) catch return req.respond("mkdir\n", .{ .status = .internal_server_error });
-    const path = try std.fs.path.join(alloc, &.{ dir, name });
-    disk.write(io, alloc, path, part.data, .{}) catch
-        return req.respond("write\n", .{ .status = .internal_server_error });
+    // **THE ALLOWANCE IS SPENT ON A FILE THAT IS THERE** (metal-vmm QUEUE
+    // 172): one that cannot be stored gives its bytes back, and its error goes
+    // on to the host's log (it was a 500 that said "write", unlogged, with the
+    // bytes spent for good).
+    const name = storeUpload(io, alloc, conv_dir, sid, sniff.ext, part.data) catch |e| {
+        _ = try users.reserveUploadBytes(io, alloc, uid, -@as(i64, @intCast(part.data.len)));
+        return e;
+    };
 
     const out = try std.fmt.allocPrint(alloc, "{{\"url\":\"{s}/{s}/uploads/{s}\",\"name\":{f},\"kind\":\"{s}\",\"width\":0,\"height\":0}}", .{
         base, sid, name, std.json.fmt(part.filename, .{}), @tagName(sniff.kind),
     });
     try req.respond(out, .{ .extra_headers = &.{http.json_ct} });
+}
+
+/// The upload written under its topic, by a fresh name.
+fn storeUpload(io: Io, alloc: Alloc, conv_dir: []const u8, sid: []const u8, ext: []const u8, data: []const u8) ![]const u8 {
+    const token = try randHex16(io, alloc);
+    const name = try std.fmt.allocPrint(alloc, "{s}.{s}", .{ token, ext });
+    const dir = try std.fs.path.join(alloc, &.{ conv_dir, "sessions", try std.fmt.allocPrint(alloc, "{s}.uploads", .{sid}) });
+    try disk.makeDir(io, alloc, dir);
+    try disk.write(io, alloc, try std.fs.path.join(alloc, &.{ dir, name }), data, .{});
+    return name;
 }
 
 // ── serve path (GET <base>/<sid>/uploads/<file>) ──────────────────────────────
@@ -163,7 +174,10 @@ pub fn serveUpload(req: *Request, io: Io, alloc: Alloc, conv_dir: []const u8, si
             error.FileNotFound => return http.notFound(req), // gone since its stat
             else => return e,
         };
-        return req.respond(data[0..n], .{ .extra_headers = &headers });
+        // As for a range: a file shorter than its stat is a fault, never
+        // served as the whole file (metal-vmm QUEUE 172).
+        if (n != data.len) return error.UploadShorterThanItsStat;
+        return req.respond(data, .{ .extra_headers = &headers });
     }
     return streamFile(req, io, alloc, path, size, &headers);
 }
@@ -176,8 +190,9 @@ pub fn serveUpload(req: *Request, io: Io, alloc: Alloc, conv_dir: []const u8, si
 /// stream (the same bargain admin_backup.zig makes). A content-length header
 /// would then be a promise broken by a short body — std's `end()` asserts every
 /// promised byte was written — so a device fault mid-serve would panic the
-/// machine. Chunked has no such promise: a truncated stream is simply missing
-/// its terminator, which the client reads as the error it is. A HEAD gets the
+/// machine. Chunked has no such promise: a truncated stream is cut with no
+/// terminator, which the client reads as the error it is, and the error goes
+/// on to the host's log. A HEAD gets the
 /// headers and no body, and reads nothing.
 fn streamFile(req: *Request, io: Io, alloc: Alloc, path: []const u8, len: u64, headers: []const std.http.Header) !void {
     var hbuf: [1024]u8 = undefined;
@@ -189,10 +204,13 @@ fn streamFile(req: *Request, io: Io, alloc: Alloc, path: []const u8, len: u64, h
         var at: u64 = 0;
         while (at < len) {
             const want: usize = @intCast(@min(@as(u64, buf.len), len - at));
-            // absent-ok: the headers are out: a read that fails can only end the stream short of its length.
-            const n = disk.readAt(io, alloc, path, at, buf[0..want]) catch break;
-            if (n == 0) break; // the file shrank under us — stop where we are
-            body.writer.writeAll(buf[0..n]) catch break;
+            // The headers are out: a read that fails, or a file shorter than
+            // its stat, cuts the stream with no last chunk, and its error
+            // goes to the host's log (metal-vmm QUEUE 172: `end()` here wrote
+            // the last chunk, a truncated file delivered as whole).
+            const n = try disk.readAt(io, alloc, path, at, buf[0..want]);
+            if (n == 0) return error.UploadShorterThanItsStat;
+            body.writer.writeAll(buf[0..n]) catch return; // the client is gone
             at += n;
         }
     }
@@ -368,8 +386,12 @@ fn multipartBoundary(ct: []const u8) ?[]const u8 {
 /// parseMultipartFile returns the first part whose Content-Disposition name is
 /// "file" (its filename + raw bytes), or null. A focused parser for the single
 /// FormData field the compose client sends — not a general multipart decoder.
-fn parseMultipartFile(alloc: Alloc, body: []const u8, boundary: []const u8) ?Part {
-    const delim = std.fmt.allocPrint(alloc, "--{s}", .{boundary}) catch return null;
+fn parseMultipartFile(body: []const u8, boundary: []const u8) ?Part {
+    // No allocation, so memory that runs out is never "no file" (metal-vmm
+    // QUEUE 172): a boundary is at most 70 bytes (RFC 2046 §5.1.1), and one
+    // longer is no multipart we read.
+    var delim_buf: [2 + 70]u8 = undefined;
+    const delim = std.fmt.bufPrint(&delim_buf, "--{s}", .{boundary}) catch return null;
     var pos = std.mem.indexOf(u8, body, delim) orelse return null;
     while (true) {
         var i = pos + delim.len;
@@ -501,32 +523,53 @@ test "the sniffers: data exactly a magic's length is found, one byte less is not
 }
 
 test "parseMultipartFile: a part of no bytes is empty, a part of one byte is that byte" {
-    var arena = std.heap.ArenaAllocator.init(testing.allocator);
-    defer arena.deinit();
-    const a = arena.allocator();
     const head = "--B\r\nContent-Disposition: form-data; name=\"file\"; filename=\"x.png\"\r\n\r\n";
-    try testing.expectEqualStrings("", parseMultipartFile(a, head ++ "\r\n--B--\r\n", "B").?.data);
-    try testing.expectEqualStrings("Z", parseMultipartFile(a, head ++ "Z\r\n--B--\r\n", "B").?.data);
+    try testing.expectEqualStrings("", parseMultipartFile(head ++ "\r\n--B--\r\n", "B").?.data);
+    try testing.expectEqualStrings("Z", parseMultipartFile(head ++ "Z\r\n--B--\r\n", "B").?.data);
     // Data that is itself a CRLF keeps it: only the delimiter's CRLF is trimmed.
-    try testing.expectEqualStrings("\r\n", parseMultipartFile(a, head ++ "\r\n\r\n--B--\r\n", "B").?.data);
+    try testing.expectEqualStrings("\r\n", parseMultipartFile(head ++ "\r\n\r\n--B--\r\n", "B").?.data);
     // A delimiter with no CRLF before it trims nothing, at one byte or none.
-    try testing.expectEqualStrings("Z", parseMultipartFile(a, head ++ "Z--B--", "B").?.data);
-    try testing.expectEqualStrings("", parseMultipartFile(a, head ++ "--B--", "B").?.data);
+    try testing.expectEqualStrings("Z", parseMultipartFile(head ++ "Z--B--", "B").?.data);
+    try testing.expectEqualStrings("", parseMultipartFile(head ++ "--B--", "B").?.data);
 }
 
 test "parseMultipartFile: a delimiter at the very end of the body closes the part; a body ending inside a part has none" {
-    var arena = std.heap.ArenaAllocator.init(testing.allocator);
-    defer arena.deinit();
-    const a = arena.allocator();
     const head = "--B\r\nContent-Disposition: form-data; name=\"file\"\r\n\r\n";
-    try testing.expectEqualStrings("abc", parseMultipartFile(a, head ++ "abc\r\n--B", "B").?.data);
-    try testing.expect(parseMultipartFile(a, head ++ "abc\r\n--", "B") == null);
+    try testing.expectEqualStrings("abc", parseMultipartFile(head ++ "abc\r\n--B", "B").?.data);
+    try testing.expect(parseMultipartFile(head ++ "abc\r\n--", "B") == null);
     // Another field first, the body ending at its closing delimiter: no file.
     const other = "--B\r\nContent-Disposition: form-data; name=\"note\"\r\n\r\nhi\r\n--B";
-    try testing.expect(parseMultipartFile(a, other, "B") == null);
-    try testing.expect(parseMultipartFile(a, other ++ "-", "B") == null);
-    try testing.expect(parseMultipartFile(a, other ++ "--", "B") == null);
+    try testing.expect(parseMultipartFile(other, "B") == null);
+    try testing.expect(parseMultipartFile(other ++ "-", "B") == null);
+    try testing.expect(parseMultipartFile(other ++ "--", "B") == null);
     // A body that is the delimiter alone, and one byte short of it.
-    try testing.expect(parseMultipartFile(a, "--B", "B") == null);
-    try testing.expect(parseMultipartFile(a, "--", "B") == null);
+    try testing.expect(parseMultipartFile("--B", "B") == null);
+    try testing.expect(parseMultipartFile("--", "B") == null);
+}
+
+test "a stream whose file ends before its length is cut, never ended as whole: no last chunk, and an error for the host's log (metal-vmm QUEUE 172)" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    const path = try std.fs.path.join(a, &.{ ".zig-cache", "tmp", &tmp.sub_path, "clip.webm" });
+    try Io.Dir.cwd().writeFile(io, .{ .sub_path = path, .data = "x" ** 1000 });
+
+    var reader: std.Io.Reader = .fixed("GET /u/clip.webm HTTP/1.1\r\nHost: x\r\n\r\n");
+    var out: std.Io.Writer.Allocating = .init(a);
+    var server = std.http.Server.init(&reader, &out.writer);
+    var req = try server.receiveHead();
+    // Its stat said 2000 bytes; 1000 are there.
+    try std.testing.expectError(error.UploadShorterThanItsStat, streamFile(&req, io, a, path, 2000, &.{}));
+    out.writer.flush() catch {};
+    try std.testing.expect(!std.mem.endsWith(u8, out.written(), "0\r\n\r\n"));
+}
+
+test "parseMultipartFile allocates nothing: memory that runs out is never 'no file', a 400 (metal-vmm QUEUE 172)" {
+    const body = "--B\r\nContent-Disposition: form-data; name=\"file\"; filename=\"a.png\"\r\n\r\nZ\r\n--B--\r\n";
+    try std.testing.expectEqualStrings("Z", parseMultipartFile(body, "B").?.data);
 }

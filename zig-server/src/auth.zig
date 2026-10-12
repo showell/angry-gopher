@@ -43,7 +43,9 @@ const crypt_len: usize = 60; // a modular-crypt bcrypt string is exactly 60 byte
 /// is normalized to `b` so std's strict full-string compare lines up with the
 /// matching ciphertext. silently_truncate_password is false (long passwords are
 /// pre-hashed, not silently cut at 72 bytes).
-pub fn verifyPassword(stored: []const u8, password: []const u8) bool {
+/// A stored hash that is no hash (torn, overwritten) is an error, never a
+/// wrong password (metal-vmm QUEUE 172: one was counted toward the lockout).
+pub fn verifyPassword(stored: []const u8, password: []const u8) error{StoredHashUnreadable}!bool {
     const opts = bcrypt.VerifyOptions{ .silently_truncate_password = false };
 
     // Normalize the version byte for crypt-format ($2x$) strings; pass anything
@@ -52,11 +54,17 @@ pub fn verifyPassword(stored: []const u8, password: []const u8) bool {
         var buf: [crypt_len]u8 = undefined;
         @memcpy(&buf, stored);
         buf[2] = 'b';
-        bcrypt.strVerify(&buf, password, opts) catch return false;
-        return true;
+        return verdict(bcrypt.strVerify(&buf, password, opts));
     }
 
-    bcrypt.strVerify(stored, password, opts) catch return false;
+    return verdict(bcrypt.strVerify(stored, password, opts));
+}
+
+fn verdict(checked: anytype) error{StoredHashUnreadable}!bool {
+    checked catch |e| return switch (e) {
+        error.PasswordVerificationFailed => false,
+        else => error.StoredHashUnreadable,
+    };
     return true;
 }
 
@@ -99,8 +107,8 @@ test "verifyPassword reads legacy $2a$ hashes" {
     // member could log in. No Go, no oracle — just the durable read-the-legacy-
     // data property.
     const hash = "$2a$10$TC9LJ0KU0TIrFl9Hk8FCAeU1bThg2GoSYXAqsjQLdIBSHIxGVfDza";
-    try std.testing.expect(verifyPassword(hash, "correct horse battery staple"));
-    try std.testing.expect(!verifyPassword(hash, "correct horse battery stapleX"));
+    try std.testing.expect(try verifyPassword(hash, "correct horse battery staple"));
+    try std.testing.expect(!try verifyPassword(hash, "correct horse battery stapleX"));
 }
 
 // ── the hashing half ─────────────────────────────────────────────────────────
@@ -149,7 +157,7 @@ test "the cost: a deployed build writes at 10, the cost the existing hashes have
     var out: [crypt_len]u8 = undefined;
     const h = try hashPasswordWithSaltAt("hunter2", &out, try saltOf(legacy_hash), cost);
     try std.testing.expect(std.mem.startsWith(u8, h, "$2b$10$"));
-    try std.testing.expect(verifyPassword(h, "hunter2"));
+    try std.testing.expect(try verifyPassword(h, "hunter2"));
 }
 
 test "hashPassword: the form, the cost, and it verifies" {
@@ -161,9 +169,9 @@ test "hashPassword: the form, the cost, and it verifies" {
     const h = try hashPassword("hunter2", &out, io);
     try std.testing.expectEqual(crypt_len, h.len);
     try std.testing.expect(std.mem.startsWith(u8, h, "$2b$04$")); // hashing_cost, in a test build
-    try std.testing.expect(verifyPassword(h, "hunter2"));
-    try std.testing.expect(!verifyPassword(h, "hunter3"));
-    try std.testing.expect(!verifyPassword(h, ""));
+    try std.testing.expect(try verifyPassword(h, "hunter2"));
+    try std.testing.expect(!try verifyPassword(h, "hunter3"));
+    try std.testing.expect(!try verifyPassword(h, ""));
 }
 
 test "hashPassword draws a fresh salt every time" {
@@ -179,8 +187,8 @@ test "hashPassword draws a fresh salt every time" {
     const hb = try hashPassword("same password", &b, io);
     try std.testing.expect(!std.mem.eql(u8, ha[7..29], hb[7..29])); // the salts differ
     try std.testing.expect(!std.mem.eql(u8, ha, hb));
-    try std.testing.expect(verifyPassword(ha, "same password"));
-    try std.testing.expect(verifyPassword(hb, "same password"));
+    try std.testing.expect(try verifyPassword(ha, "same password"));
+    try std.testing.expect(try verifyPassword(hb, "same password"));
 }
 
 test "hashPassword: the salt it embeds is the salt it used" {
@@ -203,14 +211,15 @@ test "a password past 72 bytes is pre-hashed, not cut" {
     const long_b = "a" ** 72 ++ "tail-two";
     var out: [crypt_len]u8 = undefined;
     const h = try hashPasswordWithSalt(long_a, &out, try saltOf(legacy_hash));
-    try std.testing.expect(verifyPassword(h, long_a));
-    try std.testing.expect(!verifyPassword(h, long_b));
+    try std.testing.expect(try verifyPassword(h, long_a));
+    try std.testing.expect(!try verifyPassword(h, long_b));
 }
 
-test "verifyPassword refuses what is not a hash" {
-    try std.testing.expect(!verifyPassword("", "x"));
-    try std.testing.expect(!verifyPassword("not a hash at all", "not a hash at all"));
-    try std.testing.expect(!verifyPassword(legacy_hash[0..59], legacy_password)); // truncated
+test "verifyPassword refuses what is not a hash: never admitted, and an error, not a wrong password (metal-vmm QUEUE 172)" {
+    const unreadable = error.StoredHashUnreadable;
+    try std.testing.expectError(unreadable, verifyPassword("", "x"));
+    try std.testing.expectError(unreadable, verifyPassword("not a hash at all", "not a hash at all"));
+    try std.testing.expectError(unreadable, verifyPassword(legacy_hash[0..59], legacy_password)); // truncated
     // The right length and prefix, but garbage inside.
-    try std.testing.expect(!verifyPassword("$2a$10$" ++ "!" ** 53, legacy_password));
+    try std.testing.expectError(unreadable, verifyPassword("$2a$10$" ++ "!" ** 53, legacy_password));
 }

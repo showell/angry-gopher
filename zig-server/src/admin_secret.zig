@@ -36,7 +36,7 @@ pub fn render(req: *Request, io: Io, alloc: Alloc, client: ?[]const u8) !void {
     if (throttle.check(io, client, ui.admin_uid)) |b| return form(req, alloc, b.text(), .too_many_requests);
     const sent = (try http.readLimitedBody(req, alloc, limits.body.secret_form)) orelse return;
     const password = (try chat.formField(alloc, sent, "password")) orelse "";
-    if (!users.checkUserPassword(io, alloc, ui.admin_uid, password)) {
+    if (!try users.checkUserPassword(io, alloc, ui.admin_uid, password)) {
         throttle.recordFailure(io, client, ui.admin_uid);
         return form(req, alloc, "That is not the password.", .forbidden);
     }

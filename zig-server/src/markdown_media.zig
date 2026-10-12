@@ -260,8 +260,13 @@ fn setImgAttr(attrs: *ImgAttrs, name: []const u8, value: []const u8) void {
 
 /// isLocalUrl accepts only same-origin, root-relative URLs ("/…", but not
 /// "//…" or "/\…"). The same-origin gate for both <img src> and <video src>.
+/// **NO CONTROL BYTE OR BACKSLASH ANYWHERE** (metal-vmm QUEUE 172): a browser
+/// strips tabs and newlines from inside a URL and reads a backslash as a
+/// slash, so "/\t/evil.example" is "//evil.example", a fetch off-site.
 fn isLocalUrl(src: []const u8) bool {
-    return src.len >= 2 and src[0] == '/' and src[1] != '/' and src[1] != '\\';
+    if (!(src.len >= 2 and src[0] == '/' and src[1] != '/' and src[1] != '\\')) return false;
+    for (src) |c| if (c < 0x20 or c == 0x7f or c == '\\') return false;
+    return true;
 }
 
 // ── tests ────────────────────────────────────────────────────────────────────
@@ -333,4 +338,17 @@ test "safeVideoAt rebuilds a locked player; cross-origin/unclosed are rejected" 
     // cross-origin and a tag with no closing </video> both reject
     try testing.expectEqualStrings("", videoHtml(a, "<video src=\"https://evil/x.mp4\"></video>"));
     try testing.expectEqualStrings("", videoHtml(a, "<video src=\"/u/x.mp4\">")); // unclosed
+}
+
+test "a src with a tab, newline or backslash inside it is refused: browsers strip the first two and turn the last, so /\\t/host is //host (metal-vmm QUEUE 172)" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    try testing.expectEqualStrings("", imgHtml(a, "<img src=\"/\t/evil.example/x.png\">"));
+    try testing.expectEqualStrings("", imgHtml(a, "<img src=\"/\n/evil.example/x.png\">"));
+    try testing.expectEqualStrings("", imgHtml(a, "<img src=\"/\r\n/evil.example/x.png\">"));
+    try testing.expectEqualStrings("", imgHtml(a, "<img src=\"/u/\\\\evil.example/x.png\">"));
+    try testing.expectEqualStrings("", videoHtml(a, "<video src=\"/\t/evil.example/x.mp4\"></video>"));
+    // Ends trimmed as before: a same-origin src with a space around it stays.
+    try testing.expect(imgHtml(a, "<img src=\" /u/cat.png \">").len > 0);
 }

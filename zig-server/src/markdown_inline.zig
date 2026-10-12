@@ -524,8 +524,21 @@ fn mdLinkAt(a: std.mem.Allocator, text: []const u8, i: usize, rb: *usize, rp: *u
 }
 
 /// isDangerousUrl blocks the dangerous URL schemes javascript:, vbscript:,
-/// file:, and data: except for image data URIs.
-fn isDangerousUrl(url: []const u8) bool {
+/// file:, and data: except for image data URIs. **READ AS A BROWSER READS IT**
+/// (metal-vmm QUEUE 172): the URL parser drops leading and trailing C0
+/// controls and spaces, and every tab and newline inside, before it looks
+/// for a scheme, so "java\tscript:" and " javascript:" are javascript:.
+fn isDangerousUrl(raw: []const u8) bool {
+    var seen: [32]u8 = undefined;
+    var n: usize = 0;
+    const trimmed = std.mem.trim(u8, raw, &c0_and_space);
+    for (trimmed) |c| {
+        if (c == '\t' or c == '\n' or c == '\r') continue;
+        if (n == seen.len) break;
+        seen[n] = c;
+        n += 1;
+    }
+    const url = seen[0..n];
     if (startsWithCI(url, "data:image/")) {
         const v = url[11..];
         if (startsWithCI(v, "png") or startsWithCI(v, "gif") or startsWithCI(v, "jpeg") or
@@ -535,6 +548,13 @@ fn isDangerousUrl(url: []const u8) bool {
     return startsWithCI(url, "javascript:") or startsWithCI(url, "vbscript:") or
         startsWithCI(url, "file:") or startsWithCI(url, "data:");
 }
+
+/// What the URL parser trims from a URL's ends: C0 controls and space.
+const c0_and_space = blk: {
+    var all: [0x21]u8 = undefined;
+    for (&all, 0..) |*c, k| c.* = k;
+    break :blk all;
+};
 
 fn isEmailLocalChar(c: u8) bool {
     return isAsciiAlnum(c) or c == '.' or c == '_' or c == '+' or c == '-';
@@ -546,4 +566,24 @@ fn countByte(s: []const u8, b: u8) usize {
         if (c == b) n += 1;
     }
     return n;
+}
+
+test "a link's dangerous scheme is caught as a browser reads it: tabs and newlines inside, spaces and control bytes before (metal-vmm QUEUE 172)" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    const markdown = @import("markdown.zig");
+    for ([_][]const u8{
+        "[x](java\tscript:alert(1))",
+        "[x](java\nscript:alert(1))",
+        "[x]( javascript:alert(1))",
+        "[x](\x01javascript:alert(1))",
+        "[x](JaVa\r\nScRiPt:alert(1))",
+        "[x](vb\tscript:x)",
+    }) |md| {
+        const html = try markdown.render(a, md);
+        const href_at = std.mem.indexOf(u8, html, "href=\"") orelse continue;
+        const end = std.mem.indexOfScalarPos(u8, html, href_at + 6, '"').?;
+        try std.testing.expectEqualStrings("", html[href_at + 6 .. end]);
+    }
 }

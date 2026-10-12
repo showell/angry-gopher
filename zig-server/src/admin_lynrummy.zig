@@ -88,6 +88,10 @@ const PlayerStats = struct {
     puzzle_sessions: i64,
     total_actions: i64,
     disk_bytes: i64,
+    /// Folders and files that could not be read: the counts above are short
+    /// by what they held (metal-vmm QUEUE 172: the delete-confirm page showed
+    /// zeros for a player whose data would not read, above "Yes, delete").
+    unreadable: u32 = 0,
 };
 
 fn renderRoster(req: *Request, io: Io, alloc: Alloc) !void {
@@ -156,6 +160,7 @@ fn renderDeleteConfirm(req: *Request, io: Io, alloc: Alloc, id: []const u8) !voi
         st.puzzle_sessions,
         st.total_actions,
         try ui.humanBytes(alloc, st.disk_bytes),
+        if (st.unreadable == 0) "" else try std.fmt.allocPrint(alloc, "<p class=\"warn\">{d} folders or files could not be read: there is more than this, uncounted.</p>", .{st.unreadable}),
         try html.htmlEscape(alloc, id),
     });
     try req.respond(page, .{ .extra_headers = &.{http.html_ct} });
@@ -164,8 +169,8 @@ fn renderDeleteConfirm(req: *Request, io: Io, alloc: Alloc, id: []const u8) !voi
 // ── stats: the directory walk IS the query ───────────────────────────────────
 
 /// gatherStats walks one player's subtree for game/puzzle session counts, total
-/// action lines, and disk bytes. Every failure reads as zero: an admin page must
-/// render even when a player has nothing on disk yet.
+/// action lines, and disk bytes. A player with nothing on disk yet is all
+/// zeros; what could not be read is counted as such, never as zero (172).
 fn gatherStats(io: Io, alloc: Alloc, p: player.Player) PlayerStats {
     var st = PlayerStats{
         .id = p.id,
@@ -175,46 +180,76 @@ fn gatherStats(io: Io, alloc: Alloc, p: player.Player) PlayerStats {
         .total_actions = 0,
         .disk_bytes = 0,
     };
-    const uroot = storage.userDataDir(alloc, p.id) catch return st;
-    const games_dir = std.fs.path.join(alloc, &.{ uroot, "lynrummy-elm", "sessions" }) catch return st;
-    const puzzles_dir = std.fs.path.join(alloc, &.{ uroot, "puzzle", "sessions" }) catch return st;
+    const uroot = storage.userDataDir(alloc, p.id) catch {
+        st.unreadable += 1;
+        return st;
+    };
+    const games_dir = std.fs.path.join(alloc, &.{ uroot, "lynrummy-elm", "sessions" }) catch {
+        st.unreadable += 1;
+        return st;
+    };
+    const puzzles_dir = std.fs.path.join(alloc, &.{ uroot, "puzzle", "sessions" }) catch {
+        st.unreadable += 1;
+        return st;
+    };
 
-    st.game_sessions = countSubdirs(io, alloc, games_dir);
-    st.puzzle_sessions = countSubdirs(io, alloc, puzzles_dir);
-    st.disk_bytes = dirBytes(io, alloc, uroot);
+    st.game_sessions = countSubdirs(io, alloc, games_dir, &st.unreadable);
+    st.puzzle_sessions = countSubdirs(io, alloc, puzzles_dir, &st.unreadable);
+    st.disk_bytes = dirBytes(io, alloc, uroot, &st.unreadable);
 
     // Total actions = nonempty lines across every game session's actions.dsl.
-    // absent-ok: an admin count; a folder that will not list counts nothing, on this page only.
-    for (store.list(io, alloc, games_dir) catch &.{}) |entry| {
+    // absent-ok: an admin count; a folder that will not list is counted as such.
+    const games = store.list(io, alloc, games_dir) catch blk: {
+        st.unreadable += 1;
+        break :blk &.{};
+    };
+    for (games) |entry| {
         if (entry.kind != .directory) continue;
-        const dsl = std.fs.path.join(alloc, &.{ games_dir, entry.name, "actions.dsl" }) catch continue;
-        st.total_actions += countTextLines(io, alloc, dsl);
+        const dsl = std.fs.path.join(alloc, &.{ games_dir, entry.name, "actions.dsl" }) catch {
+            st.unreadable += 1;
+            continue;
+        };
+        st.total_actions += countTextLines(io, alloc, dsl, &st.unreadable);
     }
     return st;
 }
 
 /// countSubdirs counts immediate subdirectories of `dir_path` (0 if missing).
-fn countSubdirs(io: Io, alloc: Alloc, dir_path: []const u8) i64 {
+fn countSubdirs(io: Io, alloc: Alloc, dir_path: []const u8, unreadable: *u32) i64 {
     var n: i64 = 0;
-    // absent-ok: an admin count: a folder that will not list counts nothing, on this page only.
-    for (store.list(io, alloc, dir_path) catch return 0) |entry| {
+    // absent-ok: an admin count: a folder that will not list is counted as such.
+    for (store.list(io, alloc, dir_path) catch {
+        unreadable.* += 1;
+        return 0;
+    }) |entry| {
         if (entry.kind == .directory) n += 1;
     }
     return n;
 }
 
 /// dirBytes sums file sizes under `path`, recursively (0 if missing).
-fn dirBytes(io: Io, alloc: Alloc, path: []const u8) i64 {
+fn dirBytes(io: Io, alloc: Alloc, path: []const u8, unreadable: *u32) i64 {
     var total: i64 = 0;
-    // absent-ok: an admin size: a folder that will not list counts nothing, on this page only.
-    for (store.list(io, alloc, path) catch return 0) |entry| {
-        const child = std.fs.path.join(alloc, &.{ path, entry.name }) catch continue;
+    // absent-ok: an admin size: a folder that will not list is counted as such.
+    for (store.list(io, alloc, path) catch {
+        unreadable.* += 1;
+        return 0;
+    }) |entry| {
+        const child = std.fs.path.join(alloc, &.{ path, entry.name }) catch {
+            unreadable.* += 1;
+            continue;
+        };
         switch (entry.kind) {
-            .directory => total += dirBytes(io, alloc, child),
+            .directory => total += dirBytes(io, alloc, child, unreadable),
             .file => {
-                // absent-ok: an admin size: a file that will not read counts nothing, on this page only.
-                const body = store.read(io, alloc, child, .unlimited) catch continue;
-                total += @intCast(body.len);
+                // A size by its stat, never by reading the file whole (memory
+                // that ran out on a big one counted it as nothing).
+                // absent-ok: an admin size: a file that will not stat is counted as such.
+                const st = store.stat(io, alloc, child) catch {
+                    unreadable.* += 1;
+                    continue;
+                };
+                total += @intCast(st.size);
             },
             else => {},
         }
@@ -223,9 +258,12 @@ fn dirBytes(io: Io, alloc: Alloc, path: []const u8) i64 {
 }
 
 /// countTextLines counts nonempty lines in a file (0 if missing).
-fn countTextLines(io: Io, alloc: Alloc, path: []const u8) i64 {
-    // absent-ok: an admin count: a file that will not read counts nothing, on this page only.
-    const body = store.read(io, alloc, path, .unlimited) catch return 0;
+fn countTextLines(io: Io, alloc: Alloc, path: []const u8, unreadable: *u32) i64 {
+    // absent-ok: a game with no actions yet is none; one that will not read is counted as such.
+    const body = store.readOrNull(io, alloc, path, .unlimited) catch {
+        unreadable.* += 1;
+        return 0;
+    } orelse return 0;
     var n: i64 = 0;
     var it = std.mem.splitScalar(u8, body, '\n');
     while (it.next()) |line| {
@@ -256,7 +294,7 @@ const roster_head =
     \\<tr><th>Player</th><th class="n">Games</th><th class="n">Puzzles</th><th class="n">Actions</th><th class="n">Disk</th><th></th></tr>
 ;
 
-// delete_confirm_template. Args: name, games, puzzles, actions, disk, id.
+// delete_confirm_template. Args: name, games, puzzles, actions, disk, what could not be read, id.
 // {{ }} escape the CSS braces for std.fmt.
 const delete_confirm_template =
     \\<!DOCTYPE html>
@@ -278,7 +316,7 @@ const delete_confirm_template =
     \\<h1>Delete sessions for &ldquo;{s}&rdquo;?</h1>
     \\<div class="box">
     \\<p>This permanently removes <strong>all</strong> on-disk game data for this player:</p>
-    \\<p><strong>{d}</strong> games · <strong>{d}</strong> puzzles · {d} actions · {s} on disk</p>
+    \\<p><strong>{d}</strong> games · <strong>{d}</strong> puzzles · {d} actions · {s} on disk</p>{s}
     \\<p class="warn">This cannot be undone. Their name is kept, so they keep playing under the same id with a fresh, empty history.</p>
     \\<form method="post" action="/admin/lynrummy/delete">
     \\  <input type="hidden" name="user" value="{s}">
@@ -288,3 +326,25 @@ const delete_confirm_template =
     \\</div>
     \\</body></html>
 ;
+
+test "the delete-confirm counts say what could not be read, never zero for it (metal-vmm QUEUE 172)" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    const saved = try @import("roots.zig").pointForTest(a, try std.fs.path.join(a, &.{ ".zig-cache", "tmp", &tmp.sub_path }));
+    defer saved.restore();
+    var threaded = std.Io.Threaded.init(a, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    // A player with nothing yet: all zeros, nothing unreadable.
+    const none = gatherStats(io, a, .{ .id = "p1", .name = "Ada" });
+    try std.testing.expectEqual(@as(u32, 0), none.unreadable);
+    // Their games folder is a file: it will not list.
+    const games = try std.fs.path.join(a, &.{ try storage.userDataDir(a, "p1"), "lynrummy-elm", "sessions" });
+    try Io.Dir.cwd().createDirPath(io, std.fs.path.dirname(games).?);
+    try Io.Dir.cwd().writeFile(io, .{ .sub_path = games, .data = "not a folder" });
+    const st = gatherStats(io, a, .{ .id = "p1", .name = "Ada" });
+    try std.testing.expect(st.unreadable > 0);
+}

@@ -86,7 +86,9 @@ fn handleLoginFull(req: *Request, io: Io, alloc: Alloc, bus: *Bus) !void {
     // The login throttle's address must be read from the headers BEFORE the
     // body read invalidates them (the gotcha this whole function opens with);
     // client_address.resolve dups into `alloc`, so it outlives the read.
-    const address = client_address.resolve(alloc, req, bus.peer) catch null;
+    // Its only error is memory: an error, never "no address", which would
+    // skip the per-address throttle (metal-vmm QUEUE 172), as the router has it.
+    const address = try client_address.resolve(alloc, req, bus.peer);
     var body: []const u8 = "";
     if (req.head.method == .POST) {
         body = (try http.readLimitedBody(req, alloc, limits.body.form)) orelse return;
@@ -194,7 +196,7 @@ fn gatedCheck(req: *Request, io: Io, alloc: Alloc, address: ?[]const u8, member_
         try req.respond(bound.text(), .{ .status = .too_many_requests });
         return .refused;
     }
-    if (!users.checkUserPassword(io, alloc, member_id, password)) {
+    if (!try users.checkUserPassword(io, alloc, member_id, password)) {
         throttle.recordFailure(io, address, member_id);
         return .wrong;
     }
@@ -250,6 +252,12 @@ pub fn handleLogout(req: *Request, io: Io, alloc: Alloc) !void {
         const body = (try http.readLimitedBody(req, alloc, limits.body.form)) orelse return;
         const release = (try chat.formField(alloc, body, "release")) orelse "";
         const target = releaseTarget(user.id, local.id, local.id.len != 0 and try users.principalExists(io, alloc, local.id));
+        // **A RELEASE THAT CAN RELEASE NOTHING SAYS SO** (metal-vmm QUEUE
+        // 172): a player cookie naming an account (its session lapsed) is
+        // not that account's to release, and the answer a release that
+        // deleted gets would tell its owner their data is gone.
+        if (std.mem.eql(u8, release, "yes") and target == null and id.len != 0)
+            return req.respond("Nothing was released: log in to release your account.\n", .{ .status = .forbidden });
         if (std.mem.eql(u8, release, "yes")) if (target) |t| {
             // Release: delete game data and the identity record (frees the name;
             // no id is ever reissued, so no name-backdoor remains).

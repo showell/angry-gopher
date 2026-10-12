@@ -117,6 +117,18 @@ pub fn admit(io: Io, alloc: Alloc, id: []const u8, client: ?[]const u8, new_sess
     return null;
 }
 
+/// What `admit` counted for a write that then did not happen, given back
+/// (metal-vmm QUEUE 172: a first move for a session not offered was counted
+/// as written).
+pub fn giveBack(io: Io, alloc: Alloc, id: []const u8, client: ?[]const u8, new_session: bool, bytes: u64) !void {
+    mu.lockUncancelable(io);
+    defer mu.unlock(io);
+    const u = try slot(io, alloc, id);
+    if (new_session) u.sessions -|= 1;
+    u.bytes -|= bytes;
+    if (client) |c| seenSlot(c, now(io)).bytes -|= bytes;
+}
+
 /// Whether `client` may have another legacy cookie re-signed this hour; null
 /// when it may, and then it is counted.
 pub fn admitResign(io: Io, client: ?[]const u8) !?Refusal {

@@ -67,6 +67,13 @@ pub fn markActive(io: Io, uid: []const u8) bool {
     return (now - prev) >= window_ns;
 }
 
+/// `uid`'s came-online edge given back: its next markActive is the edge again.
+fn unmark(io: Io, uid: []const u8) void {
+    mu.lockUncancelable(io);
+    defer mu.unlock(io);
+    if (last_seen.getPtr(uid)) |v| v.* = nowNs(io) - window_ns;
+}
+
 /// isOnline reports whether `uid` was markActive'd within PresenceWindow.
 /// Read-only; called by the sidebar payload to compute each partner row's
 /// first-paint Online flag.
@@ -85,11 +92,14 @@ pub fn isOnline(io: Io, uid: []const u8) bool {
 /// swallowed.
 pub fn markActiveAndBroadcast(io: Io, alloc: Alloc, bus: *Bus, uid: []const u8) void {
     if (!markActive(io, uid)) return;
-    // absent-ok: a best-effort online broadcast: nothing is written from it.
-    const name = users.getUserName(io, alloc, uid) catch return;
+    // **AN EDGE NOT TOLD IS NOT SPENT** (metal-vmm QUEUE 172): a broadcast
+    // that cannot start gives the edge back, so the next request tries again
+    // (it was lost until the user had been idle five minutes).
+    // absent-ok: a best-effort online broadcast: nothing is written from it, and the edge is kept.
+    const name = users.getUserName(io, alloc, uid) catch return unmark(io, uid);
     // absent-ok: the same.
-    const authorized = users.listAuthorized(io, alloc) catch return;
-    const text = std.fmt.allocPrint(alloc, "{s} has come online.", .{name}) catch return;
+    const authorized = users.listAuthorized(io, alloc) catch return unmark(io, uid);
+    const text = std.fmt.allocPrint(alloc, "{s} has come online.", .{name}) catch return unmark(io, uid);
 
     for (authorized) |other| {
         if (std.mem.eql(u8, other.id, uid)) continue;
@@ -113,4 +123,21 @@ pub fn markActiveAndBroadcast(io: Io, alloc: Alloc, bus: *Bus, uid: []const u8) 
             bus.publish(k, ev);
         } else |_| {}
     }
+}
+
+test "presence: a came-online edge whose broadcast could not start is not spent: the next request tries again (metal-vmm QUEUE 172)" {
+    const meter = mem_meter.useForTest(std.heap.page_allocator);
+    defer meter.restore();
+    var threaded = std.Io.Threaded.init(std.testing.allocator, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var hub = @import("webbox").bus.Hub.init(io, std.testing.allocator);
+    defer hub.entries.deinit(std.testing.allocator);
+    var bus = Bus.of(&hub);
+    // Nothing to be had: the name, the members, the text.
+    var failing = std.testing.FailingAllocator.init(std.testing.allocator, .{ .fail_index = 0 });
+    const uid = "presence-edge-172";
+    markActiveAndBroadcast(io, failing.allocator(), &bus, uid);
+    // Not told to anyone, so still the edge.
+    try std.testing.expect(markActive(io, uid));
 }
