@@ -62,7 +62,7 @@ Available ops commands (run from repo root):
                          Do not replace with ad-hoc 'zig build run' —
                          you will skip those steps.
 
-  ops/build_embedded     Run every builder build.zig's asset table names
+  ops/build_embedded     Run every builder zig-server/assets.zon names
                          (.built_by), once each: what zig build embeds.
                          Called by ops/start and the stress harness.
   ops/build_elm          Compile Game.elm + Puzzle.elm into elm.js and
