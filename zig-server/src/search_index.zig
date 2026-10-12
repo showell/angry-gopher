@@ -57,6 +57,11 @@ const Conv = struct {
     /// Transcripts of it the build could not read or decode (or the
     /// conversation itself, unlisted): a search here may miss their words.
     unreadable: u32 = 0,
+    /// Past what the index's offsets hold (`add`): counted unreadable once,
+    /// and nothing more of it indexed or read (metal-vmm QUEUE 177.6: each
+    /// later topic was counted again, and each message landing there dropped
+    /// the whole index).
+    too_big: bool = false,
 
     fn deinit(c: *Conv, gpa: Alloc) void {
         c.text.deinit(gpa);
@@ -236,6 +241,7 @@ pub const Index = struct {
     pub fn add(self: *Index, conv_dir: []const u8, sid: []const u8, m: chat_store.ChatMessage) !void {
         const s = self.strings.allocator();
         const c = try self.convOf(conv_dir);
+        if (c.too_big) return error.ConversationTooBig;
         // The topic: the last one named, as a build names them in turn.
         const sid_at: u32 = for (0..c.sids.items.len) |k| {
             const back = c.sids.items.len - 1 - k;
@@ -247,7 +253,12 @@ pub const Index = struct {
         const start = c.text.items.len;
         // A size the index's offsets cannot hold: said as what it is, never
         // as memory run out (metal-vmm QUEUE 172).
-        if (start + m.id.len + m.from.len + m.date.len + m.markdown.len > std.math.maxInt(u32)) return error.ConversationTooBig;
+        if (start + m.id.len + m.from.len + m.date.len + m.markdown.len > text_most_for_test orelse std.math.maxInt(u32)) {
+            c.too_big = true;
+            c.unreadable += 1;
+            self.stats.unreadable += 1;
+            return error.ConversationTooBig;
+        }
         try c.refs.ensureUnusedCapacity(self.gpa, 1);
         try c.text.ensureUnusedCapacity(self.gpa, m.id.len + m.from.len + m.date.len + m.markdown.len);
         for ([_][]const u8{ m.id, m.from, m.date, m.markdown }) |f| c.text.appendSliceAssumeCapacity(f);
@@ -294,6 +305,8 @@ pub const Index = struct {
                 continue;
             };
             for (sids) |sid| {
+                // Past what is indexed: its later topics are not read.
+                if (self.convs.getPtr(dir)) |c| if (c.too_big) break;
                 _ = per.reset(.retain_capacity);
                 const a = per.allocator();
                 self.stats.transcripts += 1;
@@ -312,11 +325,9 @@ pub const Index = struct {
                     if (std.mem.trim(u8, piece, " \t\r\n").len == 0) continue;
                     if (try inPlace(a, piece)) |m| self.add(dir, sid, m) catch |e| switch (e) {
                         // That conversation is past what is indexed: unreadable
-                        // in it, and the rest of the site still searched.
-                        error.ConversationTooBig => {
-                            try self.unreadableIn(dir);
-                            break;
-                        },
+                        // in it (once, `add`), and the rest of the site still
+                        // searched.
+                        error.ConversationTooBig => break,
                         else => return e,
                     };
                 }
@@ -416,6 +427,9 @@ var failed_at_ms: ?i64 = null;
 /// Why the last build failed, for the start's report (it guessed "out of
 /// memory?" for every failure: metal-vmm QUEUE 172).
 pub var failed_with: ?anyerror = null;
+/// A test's own limit on a conversation's indexed text, in place of what
+/// the offsets hold (4 GiB, which no test writes).
+pub var text_most_for_test: ?u64 = null;
 pub const retry_ms = 60_000;
 
 /// Every transcript on disk into memory, once, before the first request:
@@ -467,9 +481,13 @@ pub fn ready(io: Io, scratch: Alloc) ?*Index {
 /// waits `retry_ms` as a failed build does: the memory that refused one
 /// message would refuse a build at once (the box's review of 155).
 pub fn noteAppend(io: Io, conv_dir: []const u8, sid: []const u8, m: chat_store.ChatMessage) void {
-    if (the) |*i| i.add(conv_dir, sid, m) catch {
-        drop();
-        failed_at_ms = nowMs(io);
+    if (the) |*i| i.add(conv_dir, sid, m) catch |e| switch (e) {
+        // Past what is indexed: the index says so, once, and stands (177.6).
+        error.ConversationTooBig => {},
+        else => {
+            drop();
+            failed_at_ms = nowMs(io);
+        },
     };
 }
 
@@ -723,4 +741,30 @@ test "a build that cannot list the conversations says why: its error, never a gu
     try std.testing.expect(buildAll(io, a) == null);
     try std.testing.expect(failed_with != null);
     try std.testing.expect(failed_with.? != error.OutOfMemory);
+}
+
+test "a conversation past what the index holds is unreadable once, and a message landing there keeps the index (metal-vmm QUEUE 177.6)" {
+    text_most_for_test = 64;
+    defer text_most_for_test = null;
+    var threaded = std.Io.Threaded.init(testing.allocator, .{});
+    defer threaded.deinit();
+    const meter = mem_meter.useForTest(testing.allocator);
+    defer meter.restore();
+    const emptied = emptyForTest();
+    defer emptied.end();
+    the = Index.init(testing.allocator);
+    try the.?.add("c/1_2", "t", msg("t_1", "a word"));
+    // Past the limit: unreadable in it, once, whatever lands after, in that
+    // topic or a later one.
+    try testing.expectError(error.ConversationTooBig, the.?.add("c/1_2", "t", msg("t_2", "x" ** 80)));
+    try testing.expectError(error.ConversationTooBig, the.?.add("c/1_2", "u", msg("u_1", "y")));
+    try testing.expectEqual(@as(u32, 1), the.?.convs.getPtr("c/1_2").?.unreadable);
+    // A message landing there: the index stands (it was dropped, and built
+    // again, for every message), and says the conversation once.
+    noteAppend(threaded.io(), "c/1_2", "t", msg("t_3", "z"));
+    try testing.expect(the != null);
+    try testing.expectEqual(@as(u32, 1), the.?.convs.getPtr("c/1_2").?.unreadable);
+    // Another conversation is indexed as before.
+    noteAppend(threaded.io(), "c/1_3", "t", msg("t_1", "fine"));
+    try testing.expectEqual(@as(usize, 2), the.?.stats.messages);
 }
