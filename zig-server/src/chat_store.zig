@@ -19,7 +19,7 @@ const chat_codec = @import("chat_codec.zig");
 const chatStoredForm = chat_codec.chatStoredForm;
 const chat_fanout = @import("chat_fanout.zig");
 const fanoutCrossPage = chat_fanout.fanoutCrossPage;
-const publishLive = chat_fanout.publishLive;
+const busBlob = chat_fanout.busBlob;
 const fanoutFailed = chat_fanout.fanoutFailed;
 const chat_count = @import("chat_count.zig");
 const writeCount = chat_count.writeCount;
@@ -175,6 +175,13 @@ pub fn appendMessage(io: Io, alloc: Alloc, bus: *Bus, meta: ConvMeta, conv_dir: 
     const msg = ChatMessage{ .id = id, .from = from_name, .date = at, .markdown = markdown };
 
     const stored = try chatStoredForm(alloc, index, msg);
+    // **THE ECHO IS MADE BEFORE THE STORE** (metal-vmm QUEUE 177.1): the live
+    // publish's key and blob, so nothing can fail between the append and the
+    // (void) publish. A live publish that failed after the append answered
+    // success with no echo on the sender's stream, whose client then sent the
+    // message again: a duplicate.
+    const live_key = try std.fmt.allocPrint(alloc, "{s}/{s}", .{ conv_key, sid });
+    const live_blob = try busBlob(alloc, index, from_name, at, id, cid, markdown);
     // **NO `.lastauthor`** (gopher-metal 153(1)): the `.count` carries the
     // author, and nothing reads one an older server left.
     const new_size = try store.append(io, alloc, path, stored);
@@ -191,10 +198,9 @@ pub fn appendMessage(io: Io, alloc: Alloc, bus: *Bus, meta: ConvMeta, conv_dir: 
 
     // **STORED IS DONE** (metal-vmm QUEUE 172): from here nothing fails the
     // send, which a client would answer by sending the message again. The
-    // live publish and every surface after it are best-effort, each failure
-    // counted and said (/admin/host).
-    publishLive(alloc, bus, conv_key, sid, index, from_name, at, id, cid, markdown) catch |e|
-        fanoutFailed("live", "every viewer", e, conv_key, sid);
+    // live publish cannot fail (it was made above); every surface after it
+    // is best-effort, each failure counted and said (/admin/host).
+    bus.publish(live_key, live_blob);
 
     // Cross-page fanout: notify + recent + images + code,
     // per member, to their per-uid bus, plus a sidebar topic-added on the
@@ -236,16 +242,14 @@ pub fn appendReaction(io: Io, alloc: Alloc, bus: *Bus, conv_dir: []const u8, con
 
     const at = try timefmt.formatRFC3339UTC(alloc, nowUnix(io));
     const line = try reactionLine(alloc, msg_num, uid, from_name, emoji, on, at);
+    // The echo made before the store, as a message's (177.1).
+    const live_key = try std.fmt.allocPrint(alloc, "{s}/{s}", .{ conv_key, sid });
+    const live_blob = try std.fmt.allocPrint(alloc, "{{\"reaction\":{s}}}", .{line});
     _ = try store.append(io, alloc, try reactionsPath(alloc, conv_dir, sid), try std.fmt.allocPrint(alloc, "{s}\n", .{line}));
 
-    // Stored is done (as for a message): the live publish is best-effort.
-    publishReaction(alloc, bus, conv_key, sid, line) catch |e| fanoutFailed("live reaction", "every viewer", e, conv_key, sid);
+    // Stored is done (as for a message): the live publish cannot fail.
+    bus.publish(live_key, live_blob);
     return line;
-}
-
-fn publishReaction(alloc: Alloc, bus: *Bus, conv_key: []const u8, sid: []const u8, line: []const u8) !void {
-    const key = try std.fmt.allocPrint(alloc, "{s}/{s}", .{ conv_key, sid });
-    bus.publish(key, try std.fmt.allocPrint(alloc, "{{\"reaction\":{s}}}", .{line}));
 }
 
 /// reactionLine is the ONE place the sidecar's line shape is written. `on`
@@ -380,7 +384,7 @@ pub const CountFixture = struct {
     }
 };
 
-test "a send that answers an error stored nothing, and one that stored answers success: memory that runs out after the append is a counted fan-out failure (metal-vmm QUEUE 172)" {
+test "a send that answers an error stored nothing, and one that stored answers success and is echoed: memory that runs out after the append is a counted fan-out failure (metal-vmm QUEUE 172, 177.1)" {
     var threaded = std.Io.Threaded.init(testing.allocator, .{});
     defer threaded.deinit();
     var f: CountFixture = undefined;
@@ -389,6 +393,8 @@ test "a send that answers an error stored nothing, and one that stored answers s
     const a = f.arena.allocator();
     const meta = ConvMeta{ .kind = .dm, .members = &[_][]const u8{ "1", "2" } };
     const text = "a message with <img src=\"/x.png\"> and\n\n```\ncode\n```";
+    const live = try f.bus.open("1_2/topic");
+    defer f.bus.close(live);
     var fail_at: usize = 0;
     var stored_one = false;
     while (fail_at < 400) : (fail_at += 1) {
@@ -396,8 +402,15 @@ test "a send that answers an error stored nothing, and one that stored answers s
         const before = try messageCount(f.io, a, f.dir, "topic");
         const sent = appendMessage(f.io, failing.allocator(), &f.bus, meta, f.dir, "1_2", "topic", "Tester", "1", text, "");
         const after = try messageCount(f.io, a, f.dir, "topic");
-        if (sent) |_| {
+        if (sent) |m| {
             try testing.expectEqual(before + 1, after);
+            // **A STORED MESSAGE IS ECHOED** (metal-vmm QUEUE 177.1): the
+            // sender's own stream shows it, or the client, with no echo,
+            // sends it again.
+            if (!echoed(live, m.id)) {
+                std.debug.print("allocation {d} failed: stored, answered success, and never echoed\n", .{fail_at});
+                return error.TestUnexpectedResult;
+            }
             if (!failing.has_induced_failure) break; // every allocation passed
             stored_one = true;
         } else |_| {
@@ -410,7 +423,18 @@ test "a send that answers an error stored nothing, and one that stored answers s
     try testing.expect(stored_one);
 }
 
-test "a reaction that answers an error stored nothing (metal-vmm QUEUE 172)" {
+/// Whether the subscriber has been sent a blob holding `needle` since it was
+/// last drained; drains it.
+fn echoed(sub: *bus_mod.Subscriber, needle: []const u8) bool {
+    var found = false;
+    while (sub.poll()) |blob| {
+        defer sub.gpa.free(blob);
+        if (std.mem.indexOf(u8, blob, needle) != null) found = true;
+    }
+    return found;
+}
+
+test "a reaction that answers an error stored nothing, and one that answers success is echoed (metal-vmm QUEUE 172, 177.1)" {
     var threaded = std.Io.Threaded.init(testing.allocator, .{});
     defer threaded.deinit();
     var f: CountFixture = undefined;
@@ -418,6 +442,8 @@ test "a reaction that answers an error stored nothing (metal-vmm QUEUE 172)" {
     defer f.deinit();
     const a = f.arena.allocator();
     _ = try f.send("something to react to");
+    const live = try f.bus.open("1_2/topic");
+    defer f.bus.close(live);
     var fail_at: usize = 0;
     while (fail_at < 100) : (fail_at += 1) {
         var failing = std.testing.FailingAllocator.init(a, .{ .fail_index = fail_at });
@@ -425,6 +451,10 @@ test "a reaction that answers an error stored nothing (metal-vmm QUEUE 172)" {
         const got = appendReaction(f.io, failing.allocator(), &f.bus, f.dir, "1_2", "topic", 1, "1", "Tester", "👍", true);
         const after = (try readReactions(f.io, a, f.dir, "topic")).len;
         if (got) |_| {
+            if (!echoed(live, "\"reaction\"")) {
+                std.debug.print("allocation {d} failed: stored, answered success, and never echoed\n", .{fail_at});
+                return error.TestUnexpectedResult;
+            }
             if (!failing.has_induced_failure) break;
         } else |_| if (after != before) {
             std.debug.print("allocation {d} failed after the append: stored, and answered an error\n", .{fail_at});

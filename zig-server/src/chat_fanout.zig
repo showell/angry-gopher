@@ -74,12 +74,6 @@ pub fn fanoutFailed(surface: []const u8, who: []const u8, e: anyerror, conv_key:
     fanout_last = std.fmt.bufPrint(&fanout_last_buf, "{s} for member {s}, {s}, on {s}/{s}", .{ surface, who, @errorName(e), conv_key, sid }) catch surface;
 }
 
-/// The new message to the topic's live subscribers.
-pub fn publishLive(alloc: Alloc, bus: *Bus, conv_key: []const u8, sid: []const u8, index: usize, from: []const u8, at: []const u8, id: []const u8, cid: []const u8, markdown: []const u8) !void {
-    const key = try std.fmt.allocPrint(alloc, "{s}/{s}", .{ conv_key, sid });
-    bus.publish(key, try busBlob(alloc, index, from, at, id, cid, markdown));
-}
-
 /// The fan-out's failures as /admin/host shows them.
 pub fn fanoutText(alloc: Alloc) ![]const u8 {
     if (fanout_failures == 0) return "none";
@@ -240,7 +234,7 @@ fn recentWhere(io: Io, alloc: Alloc, meta: ConvMeta, conv_key: []const u8, viewe
 /// busBlob is the internal fan-out payload — every field a stream needs to build
 /// its per-viewer wire event EXCEPT `mine` (viewer-relative) and `html` (rendered
 /// per-stream from `markdown`). JSON for robustness over arbitrary markdown bytes.
-fn busBlob(alloc: Alloc, index: usize, from: []const u8, at: []const u8, id: []const u8, cid: []const u8, markdown: []const u8) ![]u8 {
+pub fn busBlob(alloc: Alloc, index: usize, from: []const u8, at: []const u8, id: []const u8, cid: []const u8, markdown: []const u8) ![]u8 {
     return std.fmt.allocPrint(alloc, "{{\"index\":{d},\"from\":{f},\"at\":{f},\"id\":{f},\"cid\":{f},\"markdown\":{f}}}", .{
         index,
         std.json.fmt(from, .{}),

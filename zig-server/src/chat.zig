@@ -377,8 +377,11 @@ fn sendMessage(req: *Request, io: Io, alloc: Alloc, bus: *Bus, topic: Topic, uid
     // with nothing stored, never a 500 for a message that was, which the
     // client would send again.
     if (conv.persistsCursor()) try chat_state.setUserLastSession(io, alloc, uid, conv.key, topic.sid);
+    // Where a plain form post goes back to, made before the store (177.1):
+    // made after, an allocation that failed was a 500 for a stored message.
+    const back = try std.fmt.allocPrint(alloc, "{s}/{s}", .{ conv.base, topic.sid });
     _ = try store.appendMessage(io, alloc, bus, conv.meta, conv.dir, conv.key, topic.sid, from_name, uid, md, cid);
-    return sendDone(req, alloc, is_async, conv.base, topic.sid);
+    return sendDone(req, is_async, back);
 }
 
 /// pinSession handles POST /<…>/<sid>/{pin,unpin}: toggle
@@ -392,10 +395,11 @@ fn pinSession(req: *Request, io: Io, alloc: Alloc, uid: []const u8, conv_key: []
 
 /// sendDone reports a send: 204 for async fetch callers, else a
 /// 303 back to the topic page (the no-JS form-post fallback).
-fn sendDone(req: *Request, alloc: Alloc, is_async: bool, base: []const u8, sid: []const u8) !void {
+/// The answer to a stored send: allocates nothing, so a send stored is never
+/// answered 500 for memory (177.1).
+fn sendDone(req: *Request, is_async: bool, back: []const u8) !void {
     if (is_async) return req.respond("", .{ .status = .no_content });
-    const loc = try std.fmt.allocPrint(alloc, "{s}/{s}", .{ base, sid });
-    return http.redirect(req, loc);
+    return http.redirect(req, back);
 }
 
 // ── new topic ─────────────────────────────────────────────────────────────────
