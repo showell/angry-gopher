@@ -182,11 +182,6 @@ pub const body_rule = @import("webbox").body;
 pub const bodyLimit = Served.bodyLimit;
 /// Who is asking to upload, from the head (null: a stranger).
 pub const uploader = Served.uploader;
-/// The body a host holds in memory for the request it is about to route,
-/// handed to the handler's read as it is (metal-vmm QUEUE 170.5); null after.
-pub fn holdBody(body: ?[]u8) void {
-    http.held_body = body;
-}
 const Served = webbox_site.Site(App);
 
 /// route picks the handler by path prefix, passing the remainder (the path with
